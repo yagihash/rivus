@@ -50,7 +50,7 @@ Go / Rust / Dart extractor ──→ 中立 IR (CFG, JSON Lines) ──→ Go �
 
 | フェーズ | 内容 | 状態 |
 |---|---|---|
-| Phase 1 | Go のみで完結（`go/ssa` から直接 taint 解析） | 進行中。ステップ 1.0〜1.9（1.8b を除く）まで実装済み。15.6 万行の x/tools を約 91 秒で解析（[計測](docs/DECISIONS.md)） |
+| Phase 1 | Go のみで完結（`go/ssa` から直接 taint 解析） | 進行中。ステップ 1.0〜1.9（1.8b を含む）まで実装済み。15.6 万行の x/tools を約 91 秒で解析（[計測](docs/DECISIONS.md)） |
 | Phase 2 | 中立 IR の切り出し | 未着手 |
 | Phase 3 | Rust 対応（固定 nightly 前提） | 未着手 |
 | Phase 4 | Dart 対応 | 未着手 |
@@ -88,6 +88,7 @@ rivus query -sink 'os/exec.Command' ./...  # この sink に届き得る source 
 rivus query -source '(*net/http.Request).FormValue' ./...  # この source が届き得る sink を列挙
 rivus index -o idx.json ./...              # 解析結果を保存
 rivus query -index idx.json -site <ID>     # 保存した結果から、ソースを読み込まずに答える
+rivus resolve -bookmarks seen.json ./...   # 前に見た箇所（サイト・検出結果）が、今のコードのどこにあるかを答える
 ```
 
 - 共通のフラグ: `-C <dir>`（解析の起点）、`-rules <file>`（ルールの追加。繰り返し可）、`-no-builtin-rules`、`-tests`、`-k <depth>`、`-v`（段階ごとの時間と遅い関数）、`-timeout <時間>`（時間切れでも、解析できた範囲を出して `depth_limit` として記録）、`-max-passes <n>`
@@ -96,6 +97,7 @@ rivus query -index idx.json -site <ID>     # 保存した結果から、ソー�
 - 注意: `(error).Error` のように至る所で呼ばれるメソッドを sink にすると、解析が大幅に遅くなる（[ADR-032](docs/DECISIONS.md)）。ルールは狭く書く
 - ルールに `match: implementations` と書くと、インタフェースのメソッドを、自モジュールの実装に展開する（上限 `-max-implementations`、既定 300）
 - シンボルは `go/types` の形式（`(*net/http.Request).FormValue`、`os/exec.Command`）。ルールの書式は [組み込みルール](internal/model/builtin) を参照
+- `resolve` には、前に出力された検出結果やサイトの JSON をそのまま渡せる。状態は `unchanged` / `changed` / `rematched` / `ambiguous` / `unresolved`。検出結果には、今も届くか（`flow`）も返す
 - 出力は構造化 JSON。SARIF は未対応（副次出力として後で作る。GitHub のプライベートリポジトリの Security タブには Code Security が必要）
 
 ### 開発

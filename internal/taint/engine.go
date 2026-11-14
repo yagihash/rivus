@@ -598,7 +598,7 @@ func (e *Engine) fill(u *Uncertainty) {
 }
 
 func (e *Engine) siteRef(s *sites.Site) SiteRef {
-	return SiteRef{ID: s.ID, Symbol: s.Symbol, Func: s.Func, Position: s.Position, Snippet: s.Snippet}
+	return SiteRef{ID: s.ID, Symbol: s.Symbol, Func: s.Func, Position: s.Position, Snippet: s.Snippet, Fingerprint: s.Fingerprint}
 }
 
 func (e *Engine) buildFinding(rf *rawFinding) *Finding {

@@ -203,3 +203,29 @@ func adHocRules(q report.Query) []*model.RuleSet {
 	}
 	return []*model.RuleSet{rs}
 }
+
+func runResolve(args []string) error {
+	fs := flag.NewFlagSet("resolve", flag.ExitOnError)
+	var o analyzeOpts
+	o.register(fs)
+	bookmarks := fs.String("bookmarks", "", "file with the bookmarks: sites or findings as rivus printed them (- for stdin)")
+	index := fs.String("index", "", "resolve against a saved index of the current code instead of analysing the source")
+	fs.Parse(args)
+	if *bookmarks == "" {
+		return fmt.Errorf("resolve needs -bookmarks")
+	}
+	bms, err := report.ReadBookmarks(*bookmarks)
+	if err != nil {
+		return err
+	}
+	var rep *report.Report
+	if *index != "" {
+		rep, err = report.Load(*index)
+	} else {
+		rep, err = o.analyze(fs.Args())
+	}
+	if err != nil {
+		return err
+	}
+	return writeJSON(os.Stdout, rep.Resolve(bms))
+}

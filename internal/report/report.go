@@ -24,8 +24,11 @@ const SchemaVersion = "rivus.result/0"
 
 // Report is the result of an analysis.
 type Report struct {
-	SchemaVersion string               `json:"schema_version"`
-	Rules         []string             `json:"rules"`
+	SchemaVersion string   `json:"schema_version"`
+	Rules         []string `json:"rules"`
+	// Packages lists the packages that were analysed, so that a site that
+	// is missing can be told from a package that was not looked at.
+	Packages      []string             `json:"packages"`
 	Sites         []*sites.Site        `json:"sites,omitempty"`
 	Findings      []*taint.Finding     `json:"findings"`
 	Uncertainties []*taint.Uncertainty `json:"uncertainties"`
@@ -165,6 +168,10 @@ func Build(p *gossa.Program, st *sites.Result, res *taint.Result, rules *model.R
 				fmt.Sprintf("expansion_limit: %d implementations exceed the limit of %d; the rule applies to the interface method only", e.Count, e.Max), e.Symbol))
 		}
 	}
+	for _, pkg := range p.Initial {
+		r.Packages = append(r.Packages, pkg.PkgPath)
+	}
+	sort.Strings(r.Packages)
 	for _, rs := range rules.Sets {
 		name := rs.Name
 		if name == "" {

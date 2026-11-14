@@ -80,6 +80,8 @@ type SiteRef struct {
 	Func     string         `json:"func"`
 	Position gossa.Position `json:"position"`
 	Snippet  string         `json:"snippet"`
+	// Fingerprint lets a later run find the same site again (rivus resolve).
+	Fingerprint map[string]string `json:"fingerprint,omitempty"`
 }
 
 // Finding is the fact that data from a source site can reach a sink site.
