@@ -1,0 +1,81 @@
+# net/http: where untrusted requests come from, how data moves through the
+# request, and the dangerous operations.
+ruleset: rivus/go/net-http@1
+
+sources:
+  # Every parameter of type *http.Request is attacker controlled. This covers
+  # handlers however they are registered.
+  - kind: param_type
+    type: "*net/http.Request"
+    labels: [user_input]
+
+propagators:
+  - symbol: (*net/http.Request).FormValue
+    flows: [{from: recv, to: result}]
+  - symbol: (*net/http.Request).PostFormValue
+    flows: [{from: recv, to: result}]
+  - symbol: (*net/http.Request).Cookie
+    flows: [{from: recv, to: result0}]
+  - symbol: (*net/http.Request).Cookies
+    flows: [{from: recv, to: result}]
+  - symbol: (*net/http.Request).PathValue
+    flows: [{from: recv, to: result}]
+  - symbol: (*net/http.Request).BasicAuth
+    flows: [{from: recv, to: result0}, {from: recv, to: result1}]
+  - symbol: (*net/http.Request).ParseForm
+    flows: [{from: recv, to: recv}]
+  - symbol: (net/http.Header).Get
+    flows: [{from: recv, to: result}]
+  - symbol: (net/http.Header).Values
+    flows: [{from: recv, to: result}]
+  - symbol: (net/http.Header).Set
+    flows: [{from: arg1, to: recv}]
+  - symbol: (net/http.Header).Add
+    flows: [{from: arg1, to: recv}]
+  - symbol: net/http.MaxBytesReader
+    flows: [{from: arg1, to: result}]
+  - symbol: net/http.NewRequest
+    flows: [{from: args, to: result0}]
+  - symbol: net/http.NewRequestWithContext
+    flows: [{from: args, to: result0}]
+
+sinks:
+  # SSRF: outgoing requests to attacker controlled URLs.
+  - symbol: net/http.Get
+    args: [0]
+    category: ssrf
+  - symbol: net/http.Head
+    args: [0]
+    category: ssrf
+  - symbol: net/http.Post
+    args: [0]
+    category: ssrf
+  - symbol: net/http.PostForm
+    args: [0]
+    category: ssrf
+  - symbol: (*net/http.Client).Get
+    args: [0]
+    category: ssrf
+  - symbol: (*net/http.Client).Head
+    args: [0]
+    category: ssrf
+  - symbol: (*net/http.Client).Post
+    args: [0]
+    category: ssrf
+  - symbol: net/http.NewRequest
+    args: [1]
+    category: ssrf
+  - symbol: net/http.NewRequestWithContext
+    args: [2]
+    category: ssrf
+
+  # Open redirect.
+  - symbol: net/http.Redirect
+    args: [2]
+    category: open_redirect
+
+  # XSS: only data that has not been HTML-escaped.
+  - symbol: (net/http.ResponseWriter).Write
+    args: [0]
+    accepts: [user_input]
+    category: xss

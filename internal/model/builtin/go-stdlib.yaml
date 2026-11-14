@@ -1,0 +1,279 @@
+# Models for the Go standard library: how taint moves through functions that
+# rivus does not analyse (dependencies are boundaries; see ADR-015).
+ruleset: rivus/go/stdlib@1
+
+sanitizers:
+  - symbol: html.EscapeString
+    drops: [user_input]
+    adds: [html_escaped]
+  - symbol: html/template.HTMLEscapeString
+    drops: [user_input]
+    adds: [html_escaped]
+  - symbol: html/template.JSEscapeString
+    drops: [user_input]
+    adds: [js_escaped]
+
+propagators:
+  # strings
+  - symbol: strings.Join
+    flows: [{from: args, to: result}]
+  - symbol: strings.Replace
+    flows: [{from: args, to: result}]
+  - symbol: strings.ReplaceAll
+    flows: [{from: args, to: result}]
+  - symbol: strings.ToUpper
+    flows: [{from: args, to: result}]
+  - symbol: strings.ToLower
+    flows: [{from: args, to: result}]
+  - symbol: strings.TrimSpace
+    flows: [{from: args, to: result}]
+  - symbol: strings.Trim
+    flows: [{from: arg0, to: result}]
+  - symbol: strings.TrimLeft
+    flows: [{from: arg0, to: result}]
+  - symbol: strings.TrimRight
+    flows: [{from: arg0, to: result}]
+  - symbol: strings.TrimPrefix
+    flows: [{from: arg0, to: result}]
+  - symbol: strings.TrimSuffix
+    flows: [{from: arg0, to: result}]
+  - symbol: strings.Repeat
+    flows: [{from: arg0, to: result}]
+  - symbol: strings.Split
+    flows: [{from: arg0, to: result}]
+  - symbol: strings.SplitN
+    flows: [{from: arg0, to: result}]
+  - symbol: strings.Fields
+    flows: [{from: arg0, to: result}]
+  - symbol: strings.Cut
+    flows: [{from: arg0, to: result0}, {from: arg0, to: result1}]
+  - symbol: strings.NewReader
+    flows: [{from: arg0, to: result}]
+  - symbol: (*strings.Builder).WriteString
+    flows: [{from: arg0, to: recv}]
+  - symbol: (*strings.Builder).WriteByte
+    flows: [{from: arg0, to: recv}]
+  - symbol: (*strings.Builder).WriteRune
+    flows: [{from: arg0, to: recv}]
+  - symbol: (*strings.Builder).Write
+    flows: [{from: arg0, to: recv}]
+  - symbol: (*strings.Builder).String
+    flows: [{from: recv, to: result}]
+
+  # bytes
+  - symbol: bytes.NewBufferString
+    flows: [{from: arg0, to: result}]
+  - symbol: bytes.NewBuffer
+    flows: [{from: arg0, to: result}]
+  - symbol: bytes.NewReader
+    flows: [{from: arg0, to: result}]
+  - symbol: (*bytes.Buffer).WriteString
+    flows: [{from: arg0, to: recv}]
+  - symbol: (*bytes.Buffer).Write
+    flows: [{from: arg0, to: recv}]
+  - symbol: (*bytes.Buffer).WriteByte
+    flows: [{from: arg0, to: recv}]
+  - symbol: (*bytes.Buffer).String
+    flows: [{from: recv, to: result}]
+  - symbol: (*bytes.Buffer).Bytes
+    flows: [{from: recv, to: result}]
+  - symbol: bytes.ToUpper
+    flows: [{from: arg0, to: result}]
+  - symbol: bytes.ToLower
+    flows: [{from: arg0, to: result}]
+  - symbol: bytes.TrimSpace
+    flows: [{from: arg0, to: result}]
+
+  # fmt and errors
+  - symbol: fmt.Sprintf
+    flows: [{from: args, to: result}]
+  - symbol: fmt.Sprint
+    flows: [{from: args, to: result}]
+  - symbol: fmt.Sprintln
+    flows: [{from: args, to: result}]
+  - symbol: fmt.Errorf
+    flows: [{from: args, to: result}]
+  - symbol: errors.New
+    flows: [{from: args, to: result}]
+  - symbol: (error).Error
+    flows: [{from: recv, to: result}]
+
+  # strconv, path, filepath
+  - symbol: strconv.Quote
+    flows: [{from: arg0, to: result}]
+  - symbol: path.Join
+    flows: [{from: args, to: result}]
+  - symbol: path.Clean
+    flows: [{from: arg0, to: result}]
+  - symbol: path.Base
+    flows: [{from: arg0, to: result}]
+  - symbol: path.Dir
+    flows: [{from: arg0, to: result}]
+  - symbol: path/filepath.Join
+    flows: [{from: args, to: result}]
+  - symbol: path/filepath.Clean
+    flows: [{from: arg0, to: result}]
+  - symbol: path/filepath.Base
+    flows: [{from: arg0, to: result}]
+  - symbol: path/filepath.Dir
+    flows: [{from: arg0, to: result}]
+  - symbol: path/filepath.Abs
+    flows: [{from: arg0, to: result0}]
+
+  # io and bufio
+  - symbol: io.ReadAll
+    flows: [{from: arg0, to: result0}]
+  - symbol: io.LimitReader
+    flows: [{from: arg0, to: result}]
+  - symbol: io.Copy
+    flows: [{from: arg1, to: arg0}]
+  - symbol: (io.Reader).Read
+    flows: [{from: recv, to: arg0}]
+  - symbol: bufio.NewReader
+    flows: [{from: arg0, to: result}]
+  - symbol: bufio.NewScanner
+    flows: [{from: arg0, to: result}]
+  - symbol: (*bufio.Reader).ReadString
+    flows: [{from: recv, to: result0}]
+  - symbol: (*bufio.Reader).ReadBytes
+    flows: [{from: recv, to: result0}]
+  - symbol: (*bufio.Scanner).Text
+    flows: [{from: recv, to: result}]
+  - symbol: (*bufio.Scanner).Bytes
+    flows: [{from: recv, to: result}]
+
+  # encoding/json
+  - symbol: encoding/json.Unmarshal
+    flows: [{from: arg0, to: arg1}]
+  - symbol: encoding/json.NewDecoder
+    flows: [{from: arg0, to: result}]
+  - symbol: (*encoding/json.Decoder).Decode
+    flows: [{from: recv, to: arg0}]
+  - symbol: encoding/json.Marshal
+    flows: [{from: arg0, to: result0}]
+  - symbol: encoding/json.MarshalIndent
+    flows: [{from: arg0, to: result0}]
+
+  # encoding/base64, encoding/hex
+  - symbol: (*encoding/base64.Encoding).DecodeString
+    flows: [{from: arg0, to: result0}]
+  - symbol: (*encoding/base64.Encoding).EncodeToString
+    flows: [{from: arg0, to: result}]
+  - symbol: encoding/hex.DecodeString
+    flows: [{from: arg0, to: result0}]
+  - symbol: encoding/hex.EncodeToString
+    flows: [{from: arg0, to: result}]
+
+  # net/url
+  - symbol: net/url.Parse
+    flows: [{from: arg0, to: result0}]
+  - symbol: net/url.ParseRequestURI
+    flows: [{from: arg0, to: result0}]
+  - symbol: net/url.ParseQuery
+    flows: [{from: arg0, to: result0}]
+  - symbol: net/url.QueryEscape
+    flows: [{from: arg0, to: result}]
+  - symbol: net/url.PathEscape
+    flows: [{from: arg0, to: result}]
+  - symbol: net/url.QueryUnescape
+    flows: [{from: arg0, to: result0}]
+  - symbol: (*net/url.URL).String
+    flows: [{from: recv, to: result}]
+  - symbol: (*net/url.URL).Query
+    flows: [{from: recv, to: result}]
+  - symbol: (*net/url.URL).JoinPath
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: (net/url.Values).Get
+    flows: [{from: recv, to: result}]
+  - symbol: (net/url.Values).Encode
+    flows: [{from: recv, to: result}]
+  - symbol: (net/url.Values).Set
+    flows: [{from: arg1, to: recv}]
+  - symbol: (net/url.Values).Add
+    flows: [{from: arg1, to: recv}]
+  - symbol: mime.ParseMediaType
+    flows: [{from: arg0, to: result0}, {from: arg0, to: result1}]
+
+sinks:
+  # command injection
+  - symbol: os/exec.Command
+    category: command_injection
+  - symbol: os/exec.CommandContext
+    args: [1, 2]
+    category: command_injection
+
+  # SQL injection: only the query string is dangerous, not the bound args.
+  - symbol: (*database/sql.DB).Query
+    args: [0]
+    category: sql_injection
+  - symbol: (*database/sql.DB).QueryRow
+    args: [0]
+    category: sql_injection
+  - symbol: (*database/sql.DB).Exec
+    args: [0]
+    category: sql_injection
+  - symbol: (*database/sql.DB).Prepare
+    args: [0]
+    category: sql_injection
+  - symbol: (*database/sql.DB).QueryContext
+    args: [1]
+    category: sql_injection
+  - symbol: (*database/sql.DB).QueryRowContext
+    args: [1]
+    category: sql_injection
+  - symbol: (*database/sql.DB).ExecContext
+    args: [1]
+    category: sql_injection
+  - symbol: (*database/sql.DB).PrepareContext
+    args: [1]
+    category: sql_injection
+  - symbol: (*database/sql.Tx).Query
+    args: [0]
+    category: sql_injection
+  - symbol: (*database/sql.Tx).QueryRow
+    args: [0]
+    category: sql_injection
+  - symbol: (*database/sql.Tx).Exec
+    args: [0]
+    category: sql_injection
+  - symbol: (*database/sql.Tx).QueryContext
+    args: [1]
+    category: sql_injection
+  - symbol: (*database/sql.Tx).QueryRowContext
+    args: [1]
+    category: sql_injection
+  - symbol: (*database/sql.Tx).ExecContext
+    args: [1]
+    category: sql_injection
+
+  # path traversal
+  - symbol: os.Open
+    args: [0]
+    category: path_traversal
+  - symbol: os.OpenFile
+    args: [0]
+    category: path_traversal
+  - symbol: os.ReadFile
+    args: [0]
+    category: path_traversal
+  - symbol: os.WriteFile
+    args: [0]
+    category: path_traversal
+  - symbol: os.Create
+    args: [0]
+    category: path_traversal
+  - symbol: os.Remove
+    args: [0]
+    category: path_traversal
+  - symbol: os.RemoveAll
+    args: [0]
+    category: path_traversal
+  - symbol: os.Mkdir
+    args: [0]
+    category: path_traversal
+  - symbol: os.MkdirAll
+    args: [0]
+    category: path_traversal
+  - symbol: os.Rename
+    args: [0, 1]
+    category: path_traversal
