@@ -559,9 +559,20 @@ type ResolveResult struct {
   match: exact
 
 # インタフェースのメソッドにマッチし、コールグラフ経由で実装に展開
-- symbol: "io.Writer.Write"
-  match: implementations     # 展開数の上限と dynamic_dispatch の記録を伴う
+- symbol: "net/http.Handler.ServeHTTP"
+  match: implementations
+  max_implementations: 300   # 省略時は全体の既定値（暫定 100）
 ```
+
+#### `match: implementations` の展開
+
+- 展開先は、コールグラフ（呼び先の候補）から求める
+- **上限を超えたら、展開を中止する。** 先頭 N 個だけ展開する（切り捨てる）ことはしない。部分的に展開すると「見ている部分」と「見ていない部分」の境界が見えなくなり、
+  「列挙は網羅的に」に反するため。中止したときは `exact` と同じ扱いに縮退し、総数を `dynamic_dispatch`（`attributable_to: mixed`、サブ理由 `expansion_limit`）として記録する
+- 上限の既定値は**暫定 100**。ステップ 1.9 で参照コーパスを使って実測してから確定する（項目 5 と同じ進め方）。ルールごとに `max_implementations` で上書きできる
+- **sanitizer への `implementations` は既定で禁止。** source / sink / propagator の展開が広すぎるとノイズが増えるだけだが、
+  sanitizer を広げ過ぎると、本当は sanitize していない実装にまで「通れば安全」が及び、汚染が消えて見逃しが生まれるため。
+  許可するときはルール側で明示する（`allow_sanitizer_expansion: true`）
 
 - ジェネリクスは**型引数を消去して一致**させる
 - 各モデルに `origin: builtin | human | llm`。`llm` の場合は `decided_at`、`rationale`、`model_version` が必須
@@ -719,7 +730,7 @@ Phase 1 では中立 IR を経由せず、`go/ssa` から直接 taint 解析ま�
 | ★ Dart スパイク | **1.5〜1.7 のあいだ、ただし Phase 2 の前に**。2 日のタイムボックス（下記） | 可否の判断 ＋ IR 設計に反映すべき難所のリスト |
 | 1.8 | 一方向クエリ: sink から source を引く / source から sink を引く。サイト ID を seed に取れる | seed なしのクエリと、サイト起点のクエリが動く。サマリの保存・再利用と、応答時間の初回計測 |
 | 1.8b | ブックマークの解決（`rivus resolve`）: 指紋による対応付け（内容 → 構造）、状態の返却（`unchanged` / `changed` / `rematched` / `ambiguous` / `unresolved`）、検出結果の `flow` と `path@1` | ブックマークをした後でコードを変更（行の挿入、引数の書き換え、関数の削除、sanitizer の追加）しても、期待どおりの状態が返る |
-| 1.9 | 不確実性の記録: terminal kind、`attributable_to`、`dynamic_dispatch` の候補列挙、`match: implementations` | すべての打ち切りが分類されて出る |
+| 1.9 | 不確実性の記録: terminal kind、`attributable_to`、`dynamic_dispatch` の候補列挙、`match: implementations`（展開上限と中止時の記録を含む） | すべての打ち切りが分類されて出る。参照コーパスで展開数を実測し、`max_implementations` の既定値を確定する |
 | 1.10 | 値依存: 引数由来のガード抽出（taint ソルバ流用）、`conditional_nodes`、provenance、ガード上限 | ブリーフの `render` の例が期待どおりに出る |
 | 1.11 | 運用機能: モデルカバレッジレポート、`origin` と `--deterministic-only`、結果のグループ化・安定 ID・経路数上限、`entrypoints` | `rivus models coverage` が動く |
 | 1.11b | 自作 SSA 化（`ssabuild`）と differential test: `go/ssa` の NaiveForm 出力から SSA 化し、lifted `go/ssa` と φ の配置・到達定義を突き合わせる。Phase 1 の `testdata` を回帰テストにする | differential test が全 `testdata` で一致し、解析結果が変わらない |
@@ -760,4 +771,4 @@ SARIF 出力は Phase 1 のスコープ外。JSON が固まってから。
 4. `finally` の表現（経路ごとにブロック複製 / 行き先を値で分岐）は、Dart スパイクの結果で決める
 5. **【決定済み】** 性能目標は仮説として置き、ステップ 1.8 の実測で確定する（9 節、ADR-027）。20 万行は目標の上限。Go のみが当面の対象
 6. **【決定済み】** ID と指紋の設計は 4.6 と ADR-028。検出結果の単位は (source サイト, sink サイト) の組
-7. `match: implementations` の展開数の既定上限（案: 20）
+7. **【決定済み】** 上限を超えたら展開を中止して記録する。既定値は暫定 100 で、ステップ 1.9 の実測で確定する。sanitizer への展開は既定で禁止（5.4、ADR-030）
