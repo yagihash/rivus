@@ -63,12 +63,16 @@ func (r *Rules) Expand(res Resolver, defaultMax int) []Expansion {
 	}
 	for _, rs := range r.Sets {
 		for _, s := range rs.Sources {
-			if s.Match == MatchImplementations && s.Kind == KindCallResult {
+			if s.Match == MatchImplementations && (s.Kind == KindCallResult || s.Kind == KindParam) {
 				s := s
 				expand("source", s.Symbol, s.MaxImplementations, func(c string) {
 					cp := s
 					cp.Symbol, cp.Match = c, MatchExact
-					r.CallSources[c] = append(r.CallSources[c], cp)
+					if s.Kind == KindParam {
+						r.ParamFuncs[c] = append(r.ParamFuncs[c], cp)
+					} else {
+						r.CallSources[c] = append(r.CallSources[c], cp)
+					}
 				})
 			}
 		}

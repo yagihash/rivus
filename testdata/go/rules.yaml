@@ -7,6 +7,17 @@ sources:
   - symbol: example.com/cases/lib.SourceBytes
     labels: [user_input]
 
+  # Entry points declared by function (testdata/go/cases/entry).
+  - kind: param
+    symbol: example.com/cases/cases/entry.Handle
+    params: [1]
+    labels: [user_input]
+  - kind: param
+    symbol: (*example.com/cases/cases/entry.Server).Serve
+    recv: true
+    params: [0]
+    labels: [user_input]
+
 sinks:
   - symbol: example.com/cases/lib.Sink
     category: test

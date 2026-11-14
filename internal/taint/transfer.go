@@ -50,7 +50,7 @@ func (s *state) seedParam(v ssa.Value, idx int) {
 	s.paramRoot[r] = idx
 	s.add(Loc{r, ""}, Elem{Kind: Param, Param: idx}, s.origin(v.Pos(), "param"))
 	if p, ok := v.(*ssa.Parameter); ok {
-		if site := s.eng.sites.ByParam[p]; site != nil {
+		for _, site := range s.eng.sites.ByParam[p] {
 			for _, l := range site.Labels {
 				s.add(Loc{r, ""}, Elem{Kind: Real, Label: l, Origin: site.ID}, s.origin(p.Pos(), "source: parameter "+site.Symbol))
 			}

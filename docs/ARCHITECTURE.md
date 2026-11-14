@@ -735,7 +735,7 @@ Phase 1 では中立 IR を経由せず、`go/ssa` から直接 taint 解析ま�
 | 1.8b | **（実装済み。ADR-033）** ブックマークの解決（`rivus resolve`）: 指紋による対応付け（内容 → 構造）、状態の返却（`unchanged` / `changed` / `rematched` / `ambiguous` / `unresolved`）、検出結果の `flow` と `path@1` | ブックマークをした後でコードを変更（行の挿入、引数の書き換え、関数の削除、sanitizer の追加）しても、期待どおりの状態が返る |
 | 1.9 | 不確実性の記録: terminal kind、`attributable_to`、`dynamic_dispatch` の候補列挙、`match: implementations`（展開上限と中止時の記録を含む） | すべての打ち切りが分類されて出る。参照コーパスで展開数を実測し、`max_implementations` の既定値を確定する。**実装済み（ADR-030 の追記、ADR-032）。既定値と `mixed` の割り当ての確定はレビュー待ち** |
 | 1.10 | 値依存: 引数由来のガード抽出（taint ソルバ流用）、`conditional_nodes`、provenance、ガード上限 | ブリーフの `render` の例が期待どおりに出る |
-| 1.11 | 運用機能: モデルカバレッジレポート、`origin` と `--deterministic-only`、結果のグループ化・安定 ID・経路数上限、`entrypoints` | `rivus models coverage` が動く |
+| 1.11 | **（実装済み、複数経路を除く。ADR-034）** 運用機能: モデルカバレッジレポート、`origin` と `--deterministic-only`、結果のグループ化・安定 ID・経路数上限、`entrypoints` | `rivus models coverage` が動く |
 | 1.11b | 自作 SSA 化（`ssabuild`）と differential test: `go/ssa` の NaiveForm 出力から SSA 化し、lifted `go/ssa` と φ の配置・到達定義を突き合わせる。Phase 1 の `testdata` を回帰テストにする | differential test が全 `testdata` で一致し、解析結果が変わらない |
 | 1.12 | ドッグフーディング: rivus 自身を解析。`depth_limit` と `attributable_to: rivus` の比率を計測 | 計測値を README に記録 |
 

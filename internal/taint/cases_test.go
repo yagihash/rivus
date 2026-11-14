@@ -359,3 +359,5 @@ func TestDispatchWithOneCandidateStaysMixed(t *testing.T) {
 	}
 	t.Fatal("a call with one candidate should stay mixed")
 }
+
+func TestEntryPoints(t *testing.T) { checkCase(t, "entry") }

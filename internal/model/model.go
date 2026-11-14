@@ -26,6 +26,7 @@ const (
 	KindCallResult = "call_result" // the result of calling Symbol
 	KindParamType  = "param_type"  // every parameter whose type is Type
 	KindField      = "field"       // reads of the struct field Field
+	KindParam      = "param"       // parameters of the function Symbol (an entry point)
 )
 
 // Match modes of a symbol.
@@ -69,12 +70,17 @@ type RuleSet struct {
 // Source introduces taint.
 type Source struct {
 	Provenance `yaml:",inline"`
-	Kind       string   `yaml:"kind"`
-	Symbol     string   `yaml:"symbol"` // call_result
-	Type       string   `yaml:"type"`   // param_type, e.g. "*net/http.Request"
-	Field      string   `yaml:"field"`  // field, e.g. "net/http.Request.Body"
-	Labels     []string `yaml:"labels"`
-	Match      string   `yaml:"match"`
+	Kind       string `yaml:"kind"`
+	Symbol     string `yaml:"symbol"` // call_result
+	Type       string `yaml:"type"`   // param_type, e.g. "*net/http.Request"
+	Field      string `yaml:"field"`  // field, e.g. "net/http.Request.Body"
+	// Params are the positions (receiver excluded) of the parameters of the
+	// function Symbol that carry taint; Recv adds the receiver. It declares
+	// an entry point of a framework: what the framework hands to the code.
+	Params []int    `yaml:"params"`
+	Recv   bool     `yaml:"recv"`
+	Labels []string `yaml:"labels"`
+	Match  string   `yaml:"match"`
 	// MaxImplementations bounds the expansion of match: implementations.
 	MaxImplementations int `yaml:"max_implementations"`
 }
@@ -324,6 +330,13 @@ func (rs *RuleSet) validate() error {
 			if s.Field == "" {
 				return fmt.Errorf("%s: field is required for kind %s", what, s.Kind)
 			}
+		case KindParam:
+			if s.Symbol == "" {
+				return fmt.Errorf("%s: symbol is required for kind %s", what, s.Kind)
+			}
+			if len(s.Params) == 0 && !s.Recv {
+				return fmt.Errorf("%s: kind %s needs params or recv", what, s.Kind)
+			}
 		default:
 			return fmt.Errorf("%s: unknown kind %q", what, s.Kind)
 		}
@@ -406,6 +419,7 @@ type Rules struct {
 
 	CallSources map[string][]Source // by symbol
 	ParamTypes  []Source            // param_type sources
+	ParamFuncs  map[string][]Source // param sources, by function symbol
 	Fields      map[string][]Source // by "pkg.Type.Field"
 	Sinks       map[string][]Sink
 	Sanitizers  map[string][]Sanitizer
@@ -444,6 +458,7 @@ func Merge(sets ...*RuleSet) *Rules {
 		Sets:        sets,
 		CallSources: map[string][]Source{},
 		Fields:      map[string][]Source{},
+		ParamFuncs:  map[string][]Source{},
 		Sinks:       map[string][]Sink{},
 		Sanitizers:  map[string][]Sanitizer{},
 		Propagators: map[string][]Propagator{},
@@ -455,6 +470,8 @@ func Merge(sets ...*RuleSet) *Rules {
 				r.CallSources[s.Symbol] = append(r.CallSources[s.Symbol], s)
 			case KindParamType:
 				r.ParamTypes = append(r.ParamTypes, s)
+			case KindParam:
+				r.ParamFuncs[s.Symbol] = append(r.ParamFuncs[s.Symbol], s)
 			case KindField:
 				r.Fields[s.Field] = append(r.Fields[s.Field], s)
 			}

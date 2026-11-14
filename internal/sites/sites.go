@@ -53,8 +53,8 @@ type Result struct {
 	Sites []*Site
 	// ByInstr maps a call or field instruction to the sites it carries.
 	ByInstr map[ssa.Instruction][]*Site
-	// ByParam maps a parameter to its param_type source site.
-	ByParam map[*ssa.Parameter]*Site
+	// ByParam maps a parameter to its source sites (param_type and param).
+	ByParam map[*ssa.Parameter][]*Site
 	// ByID finds a site by ID.
 	ByID map[string]*Site
 }
@@ -64,7 +64,7 @@ type Result struct {
 func Enumerate(p *gossa.Program, rules *model.Rules) *Result {
 	res := &Result{
 		ByInstr: map[ssa.Instruction][]*Site{},
-		ByParam: map[*ssa.Parameter]*Site{},
+		ByParam: map[*ssa.Parameter][]*Site{},
 		ByID:    map[string]*Site{},
 	}
 	for _, fn := range p.Funcs {
@@ -81,6 +81,25 @@ func Enumerate(p *gossa.Program, rules *model.Rules) *Result {
 			raw = append(raw, s)
 		}
 
+		// Entry points declared by function: the framework hands taint to
+		// these parameters.
+		if sym := gossa.Symbol(fn); sym != "" {
+			for _, src := range rules.ParamFuncs[sym] {
+				off := 0
+				if fn.Signature.Recv() != nil {
+					off = 1
+					if src.Recv && len(fn.Params) > 0 {
+						add(&Site{Role: RoleSource, Kind: model.KindParam, Symbol: sym, Labels: src.Labels, Param: fn.Params[0], Src: []model.Source{src}, pos: fn.Params[0].Pos()})
+					}
+				}
+				for _, i := range src.Params {
+					if i >= 0 && i+off < len(fn.Params) {
+						prm := fn.Params[i+off]
+						add(&Site{Role: RoleSource, Kind: model.KindParam, Symbol: sym, Labels: src.Labels, Param: prm, Src: []model.Source{src}, pos: prm.Pos()})
+					}
+				}
+			}
+		}
 		for _, prm := range fn.Params {
 			t := types.TypeString(prm.Type(), nil)
 			for _, src := range rules.ParamTypes {
@@ -182,7 +201,7 @@ func (res *Result) finish(p *gossa.Program, fn *ssa.Function, raw []*Site) {
 			res.ByInstr[s.Instr] = append(res.ByInstr[s.Instr], s)
 		}
 		if s.Param != nil {
-			res.ByParam[s.Param] = s
+			res.ByParam[s.Param] = append(res.ByParam[s.Param], s)
 		}
 	}
 }
