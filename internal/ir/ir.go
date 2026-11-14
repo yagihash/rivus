@@ -225,9 +225,14 @@ const (
 
 // Callee is the target of a call.
 type Callee struct {
-	Kind       CalleeKind `json:"kind"`
-	Symbol     string     `json:"symbol,omitempty"`
-	Candidates []FuncID   `json:"candidates,omitempty"`
+	Kind CalleeKind `json:"kind"`
+	// Func is the function a static call reaches (empty for a builtin).
+	Func FuncID `json:"func,omitempty"`
+	// Symbol is the name the rules use: for a static call, the declared
+	// function or method (empty for an anonymous function); for a dynamic
+	// call, the interface or virtual method; for a builtin, "builtin.<name>".
+	Symbol     string   `json:"symbol,omitempty"`
+	Candidates []FuncID `json:"candidates,omitempty"`
 }
 
 // Instr is an instruction. Which fields are used depends on Op (see Validate
@@ -251,7 +256,8 @@ type Instr struct {
 	Field string `json:"field,omitempty"`
 	// Path is the path of an addr_of.
 	Path []Step `json:"path,omitempty"`
-	// Global is the variable of a global_load or a global_store.
+	// Global is the variable of a global_load, a global_store, or an addr_of
+	// that takes the address of a global (no argument then).
 	Global string `json:"global,omitempty"`
 	// Func is the function of a make_closure.
 	Func FuncID `json:"func,omitempty"`

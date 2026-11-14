@@ -18,10 +18,10 @@ var shapes = map[Op]shape{
 	OpAlloc:          {1, 0},
 	OpLoad:           {1, 1},
 	OpStore:          {0, 2},
-	OpAddrOf:         {1, 1},
+	OpAddrOf:         {1, -1}, // 1 argument, or none for the address of a global
 	OpFieldLoad:      {1, 1},
 	OpFieldStore:     {0, 2},
-	OpIndexLoad:      {1, 2},
+	OpIndexLoad:      {-1, 2}, // 1 or 2 dsts: the value, and the found flag of the comma-ok form
 	OpIndexStore:     {0, 3},
 	OpGlobalLoad:     {1, 0},
 	OpGlobalStore:    {0, 1},
@@ -163,6 +163,13 @@ func validateInstr(in Instr, nparams int, w string, local func(LocalID, string) 
 	case OpAlloc:
 		return need(in.Type != "", "no type")
 	case OpAddrOf:
+		if in.Global != "" {
+			if err := need(len(in.Args) == 0, "the address of a global has no argument"); err != nil {
+				return err
+			}
+		} else if err := need(len(in.Args) == 1, "the address of a local needs a base"); err != nil {
+			return err
+		}
 		for _, s := range in.Path {
 			switch s.Kind {
 			case StepField:
@@ -174,6 +181,8 @@ func validateInstr(in Instr, nparams int, w string, local func(LocalID, string) 
 				return need(false, "unknown path step "+string(s.Kind))
 			}
 		}
+	case OpIndexLoad:
+		return need(len(in.Dsts) == 1 || len(in.Dsts) == 2, "writes the value, and the flag of the comma-ok form")
 	case OpFieldLoad, OpFieldStore:
 		return need(in.Field != "", "no field")
 	case OpGlobalLoad, OpGlobalStore:
@@ -186,7 +195,7 @@ func validateInstr(in Instr, nparams int, w string, local func(LocalID, string) 
 		}
 		switch in.Callee.Kind {
 		case CalleeStatic:
-			return need(in.Callee.Symbol != "", "a static callee without a symbol")
+			return need(in.Callee.Symbol != "" || in.Callee.Func != "", "a static callee with neither a function nor a symbol")
 		case CalleeDynamic:
 			if err := need(in.Callee.Symbol != "", "a dynamic callee without a method"); err != nil {
 				return err

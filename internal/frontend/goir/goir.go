@@ -1,0 +1,387 @@
+// Package goir is the Go extractor: it turns a go/ssa program built with
+// NaiveForm into the neutral IR (ARCHITECTURE 2.7.4).
+//
+// NaiveForm keeps local variables in memory (Alloc, Load, Store); the φ
+// functions that go/ssa still makes for short-circuit operators are lowered
+// to copies into a mutable local at the end of each predecessor. The SSA form
+// is built later, by the core.
+package goir
+
+import (
+	"fmt"
+	"go/token"
+	"go/types"
+	"sort"
+
+	"golang.org/x/tools/go/ssa"
+
+	"github.com/yagihash/rivus/internal/frontend/gossa"
+	"github.com/yagihash/rivus/internal/ir"
+)
+
+// Options controls the extraction.
+type Options struct {
+	// All also extracts the functions of dependencies; by default only the
+	// functions of the loaded packages.
+	All bool
+	// Implementations lists the interface methods (rule symbols) whose
+	// implementations go into the stream.
+	Implementations []string
+}
+
+// MaxConstString is the longest string constant kept whole; a longer one is
+// cut and marked truncated.
+const MaxConstString = 1 << 16
+
+// Extract converts the program. The program must have been loaded with
+// gossa.Options{NaiveForm: true}.
+func Extract(p *gossa.Program, opts Options) (*ir.Program, error) {
+	out := &ir.Program{}
+	for _, fn := range p.Funcs {
+		if !opts.All && !p.Own[fn] {
+			continue
+		}
+		out.Funcs = append(out.Funcs, convertFunc(p, fn))
+	}
+	for _, sym := range opts.Implementations {
+		impls, err := p.Implementations(sym)
+		if err != nil {
+			return nil, fmt.Errorf("implementations of %s: %w", sym, err)
+		}
+		rec := ir.Implementations{Method: sym}
+		for _, i := range impls {
+			rec.Impls = append(rec.Impls, ir.FuncID(i))
+		}
+		sort.Slice(rec.Impls, func(i, j int) bool { return rec.Impls[i] < rec.Impls[j] })
+		out.Impls = append(out.Impls, rec)
+	}
+	return out, nil
+}
+
+// Func converts one function.
+func Func(p *gossa.Program, fn *ssa.Function) *ir.Func { return convertFunc(p, fn) }
+
+type conv struct {
+	p      *gossa.Program
+	fn     *ssa.Function
+	out    *ir.Func
+	locals map[ssa.Value]ir.LocalID
+	tuples map[ssa.Value][]ir.LocalID
+	fused  map[ssa.Value]bool // address instructions folded into a load or a store
+	addr   map[ssa.Value]addrInfo
+	cur    *[]ir.Instr
+}
+
+// addrInfo is what a fused address computation contributes to the load or
+// store that uses it.
+type addrInfo struct {
+	base  ir.LocalID
+	field string
+	index ir.LocalID
+	isIdx bool
+}
+
+func convertFunc(p *gossa.Program, fn *ssa.Function) *ir.Func {
+	c := &conv{
+		p:      p,
+		fn:     fn,
+		locals: map[ssa.Value]ir.LocalID{},
+		tuples: map[ssa.Value][]ir.LocalID{},
+		fused:  map[ssa.Value]bool{},
+		addr:   map[ssa.Value]addrInfo{},
+	}
+	c.out = &ir.Func{
+		ID:     ir.FuncID(gossa.FuncID(fn)),
+		Pos:    c.pos(fn.Pos()),
+		Blocks: make([]ir.Block, len(fn.Blocks)),
+	}
+	if o := fn.Object(); o != nil {
+		c.out.Exported = o.Exported()
+	}
+	res := fn.Signature.Results()
+	for i := 0; i < res.Len(); i++ {
+		c.out.Results = append(c.out.Results, ir.TypeID(typeString(res.At(i).Type())))
+	}
+	c.out.Roots = []ir.BlockID{0}
+	if fn.Recover != nil {
+		c.out.Roots = append(c.out.Roots, ir.BlockID(fn.Recover.Index))
+	}
+
+	c.findFused()
+
+	// Parameters first, in block 0.
+	var entry []ir.Instr
+	c.cur = &entry
+	for i, prm := range fn.Params {
+		c.out.Params = append(c.out.Params, ir.Param{Name: prm.Name(), Type: ir.TypeID(typeString(prm.Type())), Class: classOf(prm.Type())})
+		c.emit(ir.Instr{Op: ir.OpParam, Dsts: []ir.LocalID{c.local(prm)}, Index: i, Pos: c.pos(prm.Pos())})
+	}
+	for i, fv := range fn.FreeVars {
+		c.out.Params = append(c.out.Params, ir.Param{Name: fv.Name(), Type: ir.TypeID(typeString(fv.Type())), Class: classOf(fv.Type()), Captured: true})
+		c.emit(ir.Instr{Op: ir.OpParam, Dsts: []ir.LocalID{c.local(fv)}, Index: len(fn.Params) + i, Pos: c.pos(fv.Pos())})
+	}
+
+	for bi, b := range fn.Blocks {
+		blk := &c.out.Blocks[bi]
+		blk.ID = ir.BlockID(bi)
+		if bi == 0 {
+			blk.Instrs = entry
+		}
+		c.cur = &blk.Instrs
+		for _, in := range b.Instrs {
+			c.instr(in, blk, b)
+		}
+	}
+	c.lowerPhis()
+	return c.out
+}
+
+// findFused marks the address computations whose only use is as the address
+// of a load or a store: they become field_load / field_store and
+// index_load / index_store.
+func (c *conv) findFused() {
+	for _, b := range c.fn.Blocks {
+		for _, in := range b.Instrs {
+			switch in.(type) {
+			case *ssa.FieldAddr, *ssa.IndexAddr:
+			default:
+				continue
+			}
+			v := in.(ssa.Value)
+			ok := true
+			refs := v.Referrers()
+			if refs == nil {
+				continue
+			}
+			n := 0
+			for _, r := range *refs {
+				switch r := r.(type) {
+				case *ssa.UnOp:
+					if r.Op != token.MUL {
+						ok = false
+					}
+					n++
+				case *ssa.Store:
+					if r.Addr != v || r.Val == v {
+						ok = false
+					}
+					n++
+				case *ssa.DebugRef:
+				default:
+					ok = false
+				}
+			}
+			if ok && n > 0 {
+				c.fused[v] = true
+			}
+		}
+	}
+}
+
+func (c *conv) emit(in ir.Instr) { *c.cur = append(*c.cur, in) }
+
+func (c *conv) newLocal(name string, t types.Type) ir.LocalID {
+	l := ir.Local{Name: name}
+	if t != nil {
+		l.Type = ir.TypeID(typeString(t))
+		l.Class = classOf(t)
+	}
+	c.out.Locals = append(c.out.Locals, l)
+	return ir.LocalID(len(c.out.Locals) - 1)
+}
+
+// local is the local that holds the value of an instruction, a parameter or
+// a free variable.
+func (c *conv) local(v ssa.Value) ir.LocalID {
+	if id, ok := c.locals[v]; ok {
+		return id
+	}
+	name := ""
+	switch v := v.(type) {
+	case *ssa.Parameter:
+		name = v.Name()
+	case *ssa.FreeVar:
+		name = v.Name()
+	case *ssa.Alloc:
+		name = v.Comment
+	}
+	id := c.newLocal(name, v.Type())
+	c.locals[v] = id
+	return id
+}
+
+// val gives the local that holds an operand. A constant, a function, a
+// global and a builtin are not instructions: they are materialised where they
+// are used.
+func (c *conv) val(v ssa.Value) ir.LocalID {
+	switch v := v.(type) {
+	case *ssa.Const:
+		id := c.newLocal("", v.Type())
+		c.emit(ir.Instr{Op: ir.OpConst, Dsts: []ir.LocalID{id}, Const: constOf(v), Pos: c.pos(v.Pos())})
+		return id
+	case *ssa.Function:
+		id := c.newLocal("", v.Type())
+		c.emit(ir.Instr{Op: ir.OpMakeClosure, Dsts: []ir.LocalID{id}, Func: ir.FuncID(gossa.FuncID(v))})
+		return id
+	case *ssa.Global:
+		id := c.newLocal("", v.Type())
+		c.emit(ir.Instr{Op: ir.OpAddrOf, Dsts: []ir.LocalID{id}, Global: globalName(v)})
+		return id
+	case *ssa.Builtin:
+		id := c.newLocal("", v.Type())
+		c.emit(ir.Instr{Op: ir.OpUnsupported, Reason: "a builtin used as a value: " + v.Name()})
+		return id
+	}
+	return c.local(v)
+}
+
+func (c *conv) vals(vs []ssa.Value) []ir.LocalID {
+	out := make([]ir.LocalID, len(vs))
+	for i, v := range vs {
+		out[i] = c.val(v)
+	}
+	return out
+}
+
+func globalName(g *ssa.Global) string {
+	if g.Pkg != nil {
+		return g.Pkg.Pkg.Path() + "." + g.Name()
+	}
+	return g.Name()
+}
+
+func (c *conv) pos(p token.Pos) ir.Pos {
+	if !p.IsValid() {
+		return ir.Pos{}
+	}
+	gp := c.p.Position(p)
+	return ir.Pos{File: gp.File, Offset: gp.Offset}
+}
+
+func (c *conv) dst(v ssa.Value) []ir.LocalID { return []ir.LocalID{c.local(v)} }
+
+// tupleDsts makes the locals of a value that is a tuple: one per element.
+func (c *conv) tupleDsts(v ssa.Value, n int) []ir.LocalID {
+	ids := make([]ir.LocalID, n)
+	tup, _ := v.Type().(*types.Tuple)
+	for i := range ids {
+		var t types.Type
+		if tup != nil && i < tup.Len() {
+			t = tup.At(i).Type()
+		}
+		ids[i] = c.newLocal("", t)
+	}
+	c.tuples[v] = ids
+	return ids
+}
+
+func (c *conv) instr(in ssa.Instruction, blk *ir.Block, b *ssa.BasicBlock) {
+	pos := c.pos(in.Pos())
+	switch in := in.(type) {
+	case *ssa.Alloc:
+		t := in.Type()
+		if pt, ok := t.Underlying().(*types.Pointer); ok {
+			t = pt.Elem()
+		}
+		c.emit(ir.Instr{Op: ir.OpAlloc, Dsts: c.dst(in), Type: ir.TypeID(typeString(t)), Pos: pos})
+	case *ssa.MakeSlice, *ssa.MakeMap, *ssa.MakeChan:
+		v := in.(ssa.Value)
+		c.emit(ir.Instr{Op: ir.OpAlloc, Dsts: c.dst(v), Type: ir.TypeID(typeString(v.Type())), Pos: pos})
+	case *ssa.Phi:
+		c.local(in) // lowered later
+	case *ssa.Call:
+		c.call(in, in.Common(), pos, false, false)
+	case *ssa.Go:
+		c.call(nil, in.Common(), pos, true, false)
+	case *ssa.Defer:
+		c.call(nil, in.Common(), pos, false, true)
+	case *ssa.RunDefers:
+		c.emit(ir.Instr{Op: ir.OpCall, Callee: &ir.Callee{Kind: ir.CalleeStatic, Symbol: "go.rundefers"}, Pos: pos})
+	case *ssa.BinOp:
+		c.emit(ir.Instr{Op: ir.OpBinop, Dsts: c.dst(in), Args: []ir.LocalID{c.val(in.X), c.val(in.Y)}, Operator: in.Op.String(), Pos: pos})
+	case *ssa.UnOp:
+		c.unop(in, pos)
+	case *ssa.ChangeType, *ssa.Convert, *ssa.ChangeInterface, *ssa.MakeInterface, *ssa.SliceToArrayPointer, *ssa.MultiConvert:
+		v := in.(ssa.Value)
+		c.emit(ir.Instr{Op: ir.OpConvert, Dsts: c.dst(v), Args: []ir.LocalID{c.val(convOperand(in))}, Type: ir.TypeID(typeString(v.Type())), Pos: pos})
+	case *ssa.Slice:
+		c.emit(ir.Instr{Op: ir.OpCopy, Dsts: c.dst(in), Args: []ir.LocalID{c.val(in.X)}, View: true, Pos: pos})
+	case *ssa.FieldAddr:
+		base := c.val(in.X)
+		name := fieldName(in.X.Type(), in.Field)
+		if !c.fused[in] {
+			c.emit(ir.Instr{Op: ir.OpAddrOf, Dsts: c.dst(in), Args: []ir.LocalID{base}, Path: []ir.Step{{Kind: ir.StepField, Field: name}}, Pos: pos})
+		} else {
+			c.addr[in] = addrInfo{base: base, field: name}
+		}
+	case *ssa.Field:
+		c.emit(ir.Instr{Op: ir.OpFieldLoad, Dsts: c.dst(in), Args: []ir.LocalID{c.val(in.X)}, Field: fieldName(in.X.Type(), in.Field), Pos: pos})
+	case *ssa.IndexAddr:
+		base, idx := c.val(in.X), c.val(in.Index)
+		if !c.fused[in] {
+			c.emit(ir.Instr{Op: ir.OpAddrOf, Dsts: c.dst(in), Args: []ir.LocalID{base}, Path: []ir.Step{{Kind: ir.StepIndex}}, Pos: pos})
+		} else {
+			c.addr[in] = addrInfo{base: base, index: idx, isIdx: true}
+		}
+	case *ssa.Index:
+		c.emit(ir.Instr{Op: ir.OpIndexLoad, Dsts: c.dst(in), Args: []ir.LocalID{c.val(in.X), c.val(in.Index)}, Pos: pos})
+	case *ssa.Lookup:
+		dsts := c.dst(in)
+		if in.CommaOk {
+			dsts = c.tupleDsts(in, 2)
+		}
+		c.emit(ir.Instr{Op: ir.OpIndexLoad, Dsts: dsts, Args: []ir.LocalID{c.val(in.X), c.val(in.Index)}, Pos: pos})
+	case *ssa.MapUpdate:
+		c.emit(ir.Instr{Op: ir.OpIndexStore, Args: []ir.LocalID{c.val(in.Map), c.val(in.Key), c.val(in.Value)}, Pos: pos})
+	case *ssa.Store:
+		c.store(in, pos)
+	case *ssa.TypeAssert:
+		dsts := c.dst(in)
+		if in.CommaOk {
+			dsts = c.tupleDsts(in, 2)
+		}
+		c.emit(ir.Instr{Op: ir.OpTypeAssert, Dsts: dsts, Args: []ir.LocalID{c.val(in.X)}, Type: ir.TypeID(typeString(in.AssertedType)), Pos: pos})
+	case *ssa.Extract:
+		ids := c.tuples[in.Tuple]
+		if in.Index >= len(ids) {
+			c.emit(ir.Instr{Op: ir.OpUnsupported, Reason: "extract from an unknown tuple", Pos: pos})
+			return
+		}
+		c.emit(ir.Instr{Op: ir.OpCopy, Dsts: c.dst(in), Args: []ir.LocalID{ids[in.Index]}, Pos: pos})
+	case *ssa.MakeClosure:
+		fn := in.Fn.(*ssa.Function)
+		c.emit(ir.Instr{Op: ir.OpMakeClosure, Dsts: c.dst(in), Args: c.vals(in.Bindings), Func: ir.FuncID(gossa.FuncID(fn)), Pos: pos})
+	case *ssa.Send:
+		c.emit(ir.Instr{Op: ir.OpCall, Args: []ir.LocalID{c.val(in.Chan), c.val(in.X)}, Callee: &ir.Callee{Kind: ir.CalleeStatic, Symbol: "go/chan.send"}, Pos: pos})
+	case *ssa.Range:
+		c.emit(ir.Instr{Op: ir.OpCall, Dsts: c.dst(in), Args: []ir.LocalID{c.val(in.X)}, Callee: &ir.Callee{Kind: ir.CalleeStatic, Symbol: "go/range.start"}, Pos: pos})
+	case *ssa.Next:
+		c.emit(ir.Instr{Op: ir.OpCall, Dsts: c.tupleDsts(in, 3), Args: []ir.LocalID{c.val(in.Iter)}, Callee: &ir.Callee{Kind: ir.CalleeStatic, Symbol: "go/range.next"}, Pos: pos})
+	case *ssa.Select:
+		n := 1
+		if tup, ok := in.Type().(*types.Tuple); ok {
+			n = tup.Len()
+		}
+		var args []ir.LocalID
+		for _, s := range in.States {
+			args = append(args, c.val(s.Chan))
+			if s.Send != nil {
+				args = append(args, c.val(s.Send))
+			}
+		}
+		c.emit(ir.Instr{Op: ir.OpCall, Dsts: c.tupleDsts(in, n), Args: args, Callee: &ir.Callee{Kind: ir.CalleeStatic, Symbol: "go/chan.select"}, Pos: pos})
+	case *ssa.DebugRef:
+	case *ssa.If:
+		blk.Term = ir.Term{Kind: ir.TermBranch, Cond: c.val(in.Cond), CondPos: pos, Pos: pos}
+		blk.Succs = []ir.Edge{{To: ir.BlockID(b.Succs[0].Index), Kind: ir.EdgeTrue}, {To: ir.BlockID(b.Succs[1].Index), Kind: ir.EdgeFalse}}
+	case *ssa.Jump:
+		blk.Term = ir.Term{Kind: ir.TermJump, Pos: pos}
+		blk.Succs = []ir.Edge{{To: ir.BlockID(b.Succs[0].Index), Kind: ir.EdgeNormal}}
+	case *ssa.Return:
+		blk.Term = ir.Term{Kind: ir.TermReturn, Values: c.vals(in.Results), Pos: pos}
+	case *ssa.Panic:
+		blk.Term = ir.Term{Kind: ir.TermThrow, Values: []ir.LocalID{c.val(in.X)}, Pos: pos}
+	default:
+		c.emit(ir.Instr{Op: ir.OpUnsupported, Reason: fmt.Sprintf("go/ssa instruction %T", in), Pos: pos})
+	}
+}

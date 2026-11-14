@@ -259,6 +259,14 @@ Phase 1 のエンジンが型について実際に問うのは、この分類（
 
 NaiveForm のローカルは、`Alloc` の結果がそのままローカル変数になる。コアの `ssabuild` が、ローカルの代入 ＋ 使用から φ と到達定義を作る（Phase 1 で検証済み。ADR-036）。
 
+**2.1 で分かったこと（実装メモ）:**
+- `rivus extract [-text] [-func 部分文字列] [-all]` で、IR を JSON Lines か人間向けの文字列で出せる。`testdata`、ghmint、rivus 自身、x/tools（5,258 関数、87MB、約 2 秒）が、検証つきで通り、`unsupported` は 0 件
+- go/ssa の内部用の呼び出し（`ssa:deferstack`、`ssa:wrapnilchk`）は、シンボル `builtin.ssa:...` の静的な `call` として、そのまま出る。`defer` を持つ関数の出口には `go.rundefers` の `call` が出る
+- アドレス計算（`FieldAddr` / `IndexAddr`）は、使い道が `load` / `store` だけなら畳み込む。アドレスが値として渡るときだけ `addr_of` になる。グローバルのアドレスは、引数のない `addr_of`（`global` つき）
+- `call` の `callee` は、静的な呼び出しで `func`（呼び先の関数 ID）と `symbol`（ルールのシンボル。無名関数では空）の両方を持つ。クロージャの直接呼び出しは、`value` の呼び出しにする（束縛した値を失わないため）
+- φ は、前任ブロックの末尾の `copy` に落とす。1 つの前任が複数の φ に値を渡すときは、一時変数を経由する
+- **まだ入れていないもの:** `ArgPos`（2.3 でサイトを IR の上に載せるときに入れる）、`dynamic` の `candidates`（2.5）、`implementations`（`-implementations` で指定したメソッドだけ）
+
 #### 2.7.5 構成（案）
 
 - `internal/ir`: 型（`Func`、`Block`、`Instr`）、JSON Lines の符号化・復号、検証（全ブロックに終端がある、`Dst` が宣言済み、など）
@@ -852,7 +860,7 @@ Phase 2 のステップ（案。2.7 のレビュー後に確定する）:
 | ステップ | 内容 | 完了の目安 |
 |---|---|---|
 | 2.0 | **（実装済み）** `internal/ir`: 型、JSON Lines の符号化・復号、検証、人間が読める整形 | 手書きの IR が往復でき、不正な IR が検証で落ちる |
-| 2.1 | Go extractor（`goir`）: NaiveForm → IR。`rivus extract` | `testdata` の全関数が IR になり、検証を通る。目視用の出力が読める。SQL への補間（`+`、`Sprintf`、`strings.Builder`）のケースで、`const` の中身と補間の形が IR に残ることを確かめる |
+| 2.1 | **（実装済み）** Go extractor（`goir`）: NaiveForm → IR。`rivus extract` | `testdata` の全関数が IR になり、検証を通る。目視用の出力が読める。SQL への補間（`+`、`Sprintf`、`strings.Builder`）のケースで、`const` の中身と補間の形が IR に残ることを確かめる |
 | 2.2 | IR → SSA 形（`ssabuild` の接続）。`testdata` と `x/tools` で、旧経路の SSA の値の使用関係と一致 | differential test が IR 経由でも通る |
 | 2.3 | `sites` と指紋を IR の上へ。**ID と指紋が、旧経路と全ケースで一致** | `rivus sites` / `resolve` の出力が変わらない |
 | 2.4 | `taint` の移植（手続き内 → 手続き間 → ヒープ → ガード）。旧経路との `Report` の突き合わせ | `testdata`・ghmint・dogfood で一致 |
