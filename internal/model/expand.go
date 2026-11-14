@@ -6,8 +6,11 @@ import (
 )
 
 // DefaultMaxImplementations is the default bound of match: implementations.
-// It is provisional and is meant to be settled by measurement (ADR-030).
-const DefaultMaxImplementations = 100
+// It protects against a rule that expands over an interface implemented
+// everywhere. In the code measured so far, the interfaces that taint rules
+// are written for have at most about twenty implementations; fmt.Stringer
+// had 165 (ADR-030).
+const DefaultMaxImplementations = 300
 
 // Resolver finds the implementations of an interface method.
 type Resolver interface {

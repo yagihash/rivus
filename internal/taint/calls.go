@@ -117,13 +117,22 @@ func (s *state) callBody(cc *callCtx) {
 	ruleOnly := cc.sym != "" && (len(rules.CallSources[cc.sym]) > 0 || len(rules.Sinks[cc.sym]) > 0)
 
 	var notes []*Uncertainty
+	var dispatch *Uncertainty
 	if common.IsInvoke() || len(fns) > 1 {
-		note := s.newNote(ci, KindDynamicDispatch, "call through an interface or function value", cc.sym)
+		dispatch = s.newNote(ci, KindDynamicDispatch, "call through an interface or function value", cc.sym)
 		for _, fn := range fns {
-			note.Candidates = append(note.Candidates, s.eng.funcID(fn))
+			dispatch.Candidates = append(dispatch.Candidates, s.eng.funcID(fn))
 		}
-		sort.Strings(note.Candidates)
-		notes = append(notes, note)
+		sort.Strings(dispatch.Candidates)
+		if len(fns) == 0 {
+			// The implementations are outside the loaded code (typically
+			// the standard library or a dependency). A model for the
+			// interface method removes the uncertainty, so this is rivus'
+			// to improve, like an unmodeled library call.
+			dispatch.Detail = "no implementation is known: the implementations are outside the loaded code; a model for the interface method would resolve this"
+			dispatch.AttributableTo = AttributableRivus
+		}
+		notes = append(notes, dispatch)
 	}
 	if _, ok := ci.(*ssa.Go); ok {
 		notes = append(notes, s.pathNote(KindConcurrency, "the callee runs in another goroutine; the order of effects is not modelled", ci.Pos()))
@@ -135,7 +144,7 @@ func (s *state) callBody(cc *callCtx) {
 	case ruleOnly:
 		// the rule is the model
 	case len(fns) == 0 && common.IsInvoke():
-		s.unmodeled(cc, s.newNote(ci, KindDynamicDispatch, "no implementation with a body is known", cc.sym))
+		s.unmodeled(cc, dispatch)
 	case len(fns) == 0:
 		s.unmodeled(cc, s.newNote(ci, KindUnresolvedCallee, "the called function is not known", cc.sym))
 	case external:

@@ -194,3 +194,14 @@ func TestSummaryCountsUncertainties(t *testing.T) {
 		t.Errorf("total %d != %d", rep.Summary.Program.Total, len(rep.Uncertainties))
 	}
 }
+
+func TestSummaryShowsDispatchCandidatesAndTopSymbols(t *testing.T) {
+	var rep report.Report
+	rivusJSON(t, &rep, "analyze", "-rules", "rules.yaml", "./cases/uncertain")
+	if rep.Summary.DispatchCandidates["0"] == 0 {
+		t.Errorf("the call without implementation is not counted: %+v", rep.Summary.DispatchCandidates)
+	}
+	if len(rep.Summary.TopSymbols["dynamic_dispatch_without_implementation"]) == 0 {
+		t.Errorf("top symbols missing: %+v", rep.Summary.TopSymbols)
+	}
+}

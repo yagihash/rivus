@@ -324,3 +324,38 @@ func TestImplementationsStopAtTheLimit(t *testing.T) {
 		t.Errorf("without the expansion only the interface call is a sink, got findings at %v", lines)
 	}
 }
+
+func TestDispatchWithoutImplementationIsRivusToImprove(t *testing.T) {
+	res, _ := runCase(t, "uncertain")
+	for _, f := range res.Findings {
+		if !strings.Contains(f.Sink.Snippet, "@sink(opaque)") {
+			continue
+		}
+		for _, u := range f.Uncertainties {
+			if u.Kind != KindDynamicDispatch {
+				continue
+			}
+			if u.AttributableTo != AttributableRivus || len(u.Candidates) != 0 || !strings.Contains(u.Detail, "no implementation is known") {
+				t.Errorf("a call without known implementation should be attributable to rivus: %+v", u)
+			}
+			return
+		}
+		t.Fatalf("no dynamic_dispatch on the path: %+v", f.Uncertainties)
+	}
+	t.Fatal("finding not found")
+}
+
+func TestDispatchWithOneCandidateStaysMixed(t *testing.T) {
+	res, _ := runCase(t, "inter")
+	for _, f := range res.Findings {
+		if f.Sink.Snippet != "lib.Sink(s) // @sink(disp)" {
+			continue
+		}
+		for _, u := range f.Uncertainties {
+			if u.Kind == KindDynamicDispatch && u.AttributableTo == AttributableMixed && len(u.Candidates) == 1 {
+				return
+			}
+		}
+	}
+	t.Fatal("a call with one candidate should stay mixed")
+}

@@ -63,3 +63,12 @@ func Plain() {
 	s := lib.Source() // @source(plain)
 	lib.Sink(s)       // @sink(plain)
 }
+
+// Opaque has no implementation in the loaded code, like most interfaces of
+// the standard library seen from user code.
+type Opaque interface{ Do(s string) string }
+
+func ViaOpaque(o Opaque) {
+	s := lib.Source() // @source(opaque)
+	lib.Sink(o.Do(s)) // @sink(opaque)
+}

@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 
 	"github.com/yagihash/rivus/internal/frontend/gossa"
 	"github.com/yagihash/rivus/internal/model"
@@ -49,6 +51,21 @@ type Summary struct {
 	// attributable to rivus, DepthLimitShare the share of depth_limit.
 	RivusShare      float64 `json:"rivus_share"`
 	DepthLimitShare float64 `json:"depth_limit_share"`
+	// DispatchCandidates tells how many candidates the calls through
+	// interfaces and function values have (0, 1, 2-5, 6-20, 21+). A call with
+	// no candidate needs a model; many candidates call for a more precise
+	// call graph.
+	DispatchCandidates map[string]int `json:"dispatch_candidates"`
+	// TopSymbols lists the symbols behind the uncertainties rivus can
+	// reduce itself: library calls without a model, and interface methods
+	// without a known implementation. They show where a model helps most.
+	TopSymbols map[string][]SymbolCount `json:"top_symbols"`
+}
+
+// SymbolCount is a symbol and how often it was uncertain.
+type SymbolCount struct {
+	Symbol string `json:"symbol"`
+	Count  int    `json:"count"`
 }
 
 // Counts is a tally of uncertainties.
@@ -58,13 +75,60 @@ type Counts struct {
 	ByAttribution map[string]int `json:"by_attribution"`
 }
 
+func bucket(n int) string {
+	switch {
+	case n == 0:
+		return "0"
+	case n == 1:
+		return "1"
+	case n <= 5:
+		return "2-5"
+	case n <= 20:
+		return "6-20"
+	}
+	return "21+"
+}
+
 func summarize(r *Report) Summary {
 	s := Summary{Findings: len(r.Findings), OnFindings: map[string]int{},
-		Program: Counts{ByKind: map[string]int{}, ByAttribution: map[string]int{}}}
+		Program:            Counts{ByKind: map[string]int{}, ByAttribution: map[string]int{}},
+		DispatchCandidates: map[string]int{}, TopSymbols: map[string][]SymbolCount{}}
+	tally := map[string]map[string]int{}
+	count := func(group, symbol string) {
+		if tally[group] == nil {
+			tally[group] = map[string]int{}
+		}
+		tally[group][symbol]++
+	}
 	for _, u := range r.Uncertainties {
 		s.Program.Total++
 		s.Program.ByKind[u.Kind]++
 		s.Program.ByAttribution[u.AttributableTo]++
+		switch {
+		case u.Kind == taint.KindDynamicDispatch && !strings.HasPrefix(u.Detail, "expansion_limit"):
+			n := len(u.Candidates)
+			s.DispatchCandidates[bucket(n)]++
+			if n == 0 {
+				count("dynamic_dispatch_without_implementation", u.Symbol)
+			}
+		case u.Kind == taint.KindUnmodeledLibraryCall:
+			count(u.Kind, u.Symbol)
+		}
+	}
+	for group, m := range tally {
+		for sym, n := range m {
+			s.TopSymbols[group] = append(s.TopSymbols[group], SymbolCount{sym, n})
+		}
+		sort.Slice(s.TopSymbols[group], func(i, j int) bool {
+			a, b := s.TopSymbols[group][i], s.TopSymbols[group][j]
+			if a.Count != b.Count {
+				return a.Count > b.Count
+			}
+			return a.Symbol < b.Symbol
+		})
+		if len(s.TopSymbols[group]) > 10 {
+			s.TopSymbols[group] = s.TopSymbols[group][:10]
+		}
 	}
 	for _, f := range r.Findings {
 		seen := map[string]bool{}

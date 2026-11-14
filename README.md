@@ -92,8 +92,9 @@ rivus query -index idx.json -site <ID>     # 保存した結果から、ソー�
 
 - 共通のフラグ: `-C <dir>`（解析の起点）、`-rules <file>`（ルールの追加。繰り返し可）、`-no-builtin-rules`、`-tests`、`-k <depth>`、`-v`（段階ごとの時間と遅い関数）、`-timeout <時間>`（時間切れでも、解析できた範囲を出して `depth_limit` として記録）、`-max-passes <n>`
 - `analyze` と `query` の `-detail summary` は、経路とスニペットを省いた概要だけを出す
-- 出力の `summary` は、不確実性を kind と `attributable_to`（`target` / `rivus` / `mixed`）ごとに数える
-- ルールに `match: implementations` と書くと、インタフェースのメソッドを、自モジュールの実装に展開する（上限 `-max-implementations`、既定 100）
+- 出力の `summary` は、不確実性を kind と `attributable_to`（`target` / `rivus` / `mixed`）ごとに数え、モデルを書くと減るシンボルの上位（`top_symbols`）も出す
+- 注意: `(error).Error` のように至る所で呼ばれるメソッドを sink にすると、解析が大幅に遅くなる（[ADR-032](docs/DECISIONS.md)）。ルールは狭く書く
+- ルールに `match: implementations` と書くと、インタフェースのメソッドを、自モジュールの実装に展開する（上限 `-max-implementations`、既定 300）
 - シンボルは `go/types` の形式（`(*net/http.Request).FormValue`、`os/exec.Command`）。ルールの書式は [組み込みルール](internal/model/builtin) を参照
 - 出力は構造化 JSON。SARIF は未対応（副次出力として後で作る。GitHub のプライベートリポジトリの Security タブには Code Security が必要）
 

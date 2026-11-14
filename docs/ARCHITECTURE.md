@@ -400,7 +400,7 @@ type Uncertainty struct {
 | `reflection` | target | |
 | `ffi_boundary` | target | |
 | `missing_source` | target | ワークフロー前提（`go generate` / `build_runner` 未実行）に由来 |
-| `dynamic_dispatch` | mixed | 言語機能として呼び先が決まらないが、候補の絞り込み精度（VTA など）は rivus の改善余地がある |
+| `dynamic_dispatch` | 候補 1 件以上: mixed／候補 0 件: rivus | 言語機能として呼び先が決まらないが、候補の絞り込み精度（VTA など）は rivus の改善余地がある。候補が 0 件なのは、実装が読み込んだコードの外にあるときで、モデルを書けば減る（rivus） |
 | `unresolved_callee` | mixed | 関数値は実行時に決まるが、生成箇所を追う型フロー解析で候補を絞れる |
 | `concurrency` | mixed | 実行順序に依存するが、channel を単純なキューとしてモデル化すれば追える範囲が広がる |
 | `unmodeled_library_call` | rivus | モデルを書けば減る |
@@ -411,7 +411,7 @@ type Uncertainty struct {
 
 `mixed` は「言語機能由来で、かつ rivus の精度向上でも減らせる」もの。
 集計では `target` / `rivus` / `mixed` を**別々に**出し、`mixed` を `rivus` に含めない（投資で減らせる量を過大に見積もらないため）。
-`mixed` の割り当ては暫定で、Phase 1 のステップ 1.12（ドッグフーディング）で実測してから見直す。
+`mixed` の割り当ては暫定で、Phase 1 のステップ 1.12（ドッグフーディング）で実測してから見直す（`dynamic_dispatch` の候補 0 件を `rivus` にしたのはステップ 1.9 の実測による。ADR-032）。
 
 ### 4.5 出力
 
