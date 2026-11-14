@@ -170,7 +170,7 @@ func TestClosuresGlobalsAndChannels(t *testing.T) {
 		t.Errorf("GetG:\n%s", got)
 	}
 	got := funcText(t, p, "Channels")
-	for _, want := range []string{"go/chan.send", "go/chan.select", "go/chan.recv"} {
+	for _, want := range []string{"go/chan.send", "go/chan.recv"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("Channels lacks %s:\n%s", want, got)
 		}

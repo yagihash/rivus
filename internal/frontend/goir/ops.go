@@ -37,9 +37,9 @@ func (c *conv) unop(in *ssa.UnOp, pos ir.Pos) {
 	case token.MUL:
 		if info, ok := c.addr[in.X]; ok {
 			if info.isIdx {
-				c.emit(ir.Instr{Op: ir.OpIndexLoad, Dsts: c.dst(in), Args: []ir.LocalID{info.base, info.index}, Pos: pos, AddrPos: info.pos})
+				c.emit(ir.Instr{Op: ir.OpIndexLoad, Dsts: c.dst(in), Args: []ir.LocalID{info.base, info.index}, Pos: pos, AddrPos: info.pos, Folded: true})
 			} else {
-				c.emit(ir.Instr{Op: ir.OpFieldLoad, Dsts: c.dst(in), Args: []ir.LocalID{info.base}, Field: info.field, Pos: pos, AddrPos: info.pos})
+				c.emit(ir.Instr{Op: ir.OpFieldLoad, Dsts: c.dst(in), Args: []ir.LocalID{info.base}, Field: info.field, Pos: pos, AddrPos: info.pos, Folded: true})
 			}
 			return
 		}
@@ -63,9 +63,9 @@ func (c *conv) store(in *ssa.Store, pos ir.Pos) {
 	if info, ok := c.addr[in.Addr]; ok {
 		val := c.val(in.Val)
 		if info.isIdx {
-			c.emit(ir.Instr{Op: ir.OpIndexStore, Args: []ir.LocalID{info.base, info.index, val}, Pos: pos, AddrPos: info.pos})
+			c.emit(ir.Instr{Op: ir.OpIndexStore, Args: []ir.LocalID{info.base, info.index, val}, Pos: pos, AddrPos: info.pos, Folded: true})
 		} else {
-			c.emit(ir.Instr{Op: ir.OpFieldStore, Args: []ir.LocalID{info.base, val}, Field: info.field, Pos: pos, AddrPos: info.pos})
+			c.emit(ir.Instr{Op: ir.OpFieldStore, Args: []ir.LocalID{info.base, val}, Field: info.field, Pos: pos, AddrPos: info.pos, Folded: true})
 		}
 		return
 	}
@@ -79,7 +79,7 @@ func (c *conv) store(in *ssa.Store, pos ir.Pos) {
 
 // call converts a call, a go statement or a defer statement. v is the value
 // of an ordinary call, nil for the others.
-func (c *conv) call(v *ssa.Call, cc *ssa.CallCommon, pos ir.Pos, goStmt, deferStmt bool) {
+func (c *conv) call(ci ssa.CallInstruction, v *ssa.Call, cc *ssa.CallCommon, pos ir.Pos, goStmt, deferStmt bool) {
 	in := ir.Instr{Op: ir.OpCall, Go: goStmt, Defer: deferStmt, Pos: pos}
 	if v != nil {
 		if tup, ok := v.Type().(*types.Tuple); ok {
@@ -92,7 +92,7 @@ func (c *conv) call(v *ssa.Call, cc *ssa.CallCommon, pos ir.Pos, goStmt, deferSt
 	}
 	switch {
 	case cc.IsInvoke():
-		in.Callee = &ir.Callee{Kind: ir.CalleeDynamic, Symbol: cc.Method.FullName()}
+		in.Callee = &ir.Callee{Kind: ir.CalleeDynamic, Symbol: cc.Method.FullName(), Candidates: c.candidates(ci)}
 		in.Args = append([]ir.LocalID{c.val(cc.Value)}, c.vals(cc.Args)...)
 	default:
 		switch fn := cc.Value.(type) {
@@ -104,6 +104,9 @@ func (c *conv) call(v *ssa.Call, cc *ssa.CallCommon, pos ir.Pos, goStmt, deferSt
 			in.Args = c.vals(cc.Args)
 		default:
 			in.Callee = &ir.Callee{Kind: ir.CalleeValue}
+			if _, closure := cc.Value.(*ssa.MakeClosure); !closure {
+				in.Callee.Candidates = c.candidates(ci)
+			}
 			in.Args = append([]ir.LocalID{c.val(cc.Value)}, c.vals(cc.Args)...)
 		}
 	}
@@ -182,15 +185,19 @@ func classOf(t types.Type) ir.TypeClass {
 		return ir.ClassInterface
 	case *types.Signature:
 		return ir.ClassFunc
-	case *types.Slice, *types.Array, *types.Map, *types.Chan:
+	case *types.Slice, *types.Map, *types.Chan:
 		return ir.ClassContainer
-	case *types.Struct:
+	case *types.Struct, *types.Array:
 		return ir.ClassStruct
 	case *types.Basic:
-		if u.Kind() == types.UnsafePointer {
-			return ir.ClassPointer
+		switch {
+		case u.Info()&types.IsBoolean != 0:
+			return ir.ClassBool
+		case u.Info()&types.IsString != 0:
+			return ir.ClassString
+		case u.Info()&types.IsNumeric != 0:
+			return ir.ClassNumber
 		}
-		return ir.ClassScalar
 	}
 	return ir.ClassOther
 }
@@ -208,4 +215,34 @@ func fieldName(x types.Type, i int) string {
 		}
 	}
 	return "#" + strconv.Itoa(i)
+}
+
+// convKind names the kind of a conversion, as the engine tells them apart.
+func convKind(in ssa.Instruction) string {
+	switch in.(type) {
+	case *ssa.MakeInterface:
+		return "make_interface"
+	case *ssa.ChangeInterface:
+		return "change_interface"
+	case *ssa.SliceToArrayPointer:
+		return "slice_to_array_pointer"
+	}
+	return "convert"
+}
+
+// displayString is a type as a reader writes it: package names, not paths.
+func displayString(t types.Type) string {
+	return types.TypeString(t, func(p *types.Package) string { return p.Name() })
+}
+
+// candidates are the functions the call graph says a call may reach.
+func (c *conv) candidates(ci ssa.CallInstruction) []ir.FuncID {
+	if c.graph == nil {
+		return nil
+	}
+	var out []ir.FuncID
+	for _, fn := range c.graph.Callees(ci) {
+		out = append(out, ir.FuncID(gossa.FuncID(fn)))
+	}
+	return out
 }

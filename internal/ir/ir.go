@@ -49,15 +49,20 @@ const (
 	ClassPointer   TypeClass = "pointer"   // the location of the value is what it points to
 	ClassInterface TypeClass = "interface" // calls through it are dynamic
 	ClassFunc      TypeClass = "func"
-	ClassContainer TypeClass = "container" // slice, array, map, collection
-	ClassStruct    TypeClass = "struct"
-	ClassScalar    TypeClass = "scalar"
+	// ClassContainer is a value that refers to elements stored elsewhere (a
+	// slice, a map, a channel, a list): like a pointer, its location is what
+	// it refers to. An array held by value is a struct.
+	ClassContainer TypeClass = "container"
+	ClassStruct    TypeClass = "struct" // an aggregate held by value: a struct, an array
+	ClassBool      TypeClass = "bool"
+	ClassString    TypeClass = "string"
+	ClassNumber    TypeClass = "number"
 	ClassOther     TypeClass = "other"
 )
 
 func (c TypeClass) valid() bool {
 	switch c {
-	case ClassPointer, ClassInterface, ClassFunc, ClassContainer, ClassStruct, ClassScalar, ClassOther, "":
+	case ClassPointer, ClassInterface, ClassFunc, ClassContainer, ClassStruct, ClassBool, ClassString, ClassNumber, ClassOther, "":
 		return true
 	}
 	return false
@@ -73,10 +78,13 @@ type Local struct {
 // Param is a parameter. The receiver is parameter 0. The captured values of a
 // closure follow the declared parameters.
 type Param struct {
-	Name     string    `json:"name,omitempty"`
-	Type     TypeID    `json:"type,omitempty"`
-	Class    TypeClass `json:"class,omitempty"`
-	Captured bool      `json:"captured,omitempty"`
+	Name  string    `json:"name,omitempty"`
+	Type  TypeID    `json:"type,omitempty"`
+	Class TypeClass `json:"class,omitempty"`
+	// Display is the type as a reader writes it (package names, not import
+	// paths).
+	Display  string `json:"display,omitempty"`
+	Captured bool   `json:"captured,omitempty"`
 }
 
 // Func is a function.
@@ -261,7 +269,10 @@ type Instr struct {
 	Args []LocalID `json:"args,omitempty"`
 
 	Const *Const `json:"const,omitempty"`
-	// Operator is the operator of a unop or a binop, as the language writes it.
+	// Operator is the operator of a unop or a binop, as the language writes
+	// it. For a convert it names the kind of conversion: "convert" (a value
+	// of another type), "make_interface", "change_interface" or
+	// "slice_to_array_pointer".
 	Operator string `json:"operator,omitempty"`
 	// Index is the position of a param.
 	Index int `json:"index,omitempty"`
@@ -279,6 +290,13 @@ type Instr struct {
 	// View marks a copy that shares memory with its source (a slice of an
 	// array): the elements are the same elements.
 	View bool `json:"view,omitempty"`
+	// Folded marks a field or index access that went through an address: a
+	// load or a store of x.f or x[i], where the address computation was
+	// folded into the access.
+	Folded bool `json:"folded,omitempty"`
+	// Keyed marks an index access by key: a lookup in a map or a string, or
+	// a store into a map. The index is a key, not a position.
+	Keyed bool `json:"keyed,omitempty"`
 
 	Callee *Callee `json:"callee,omitempty"`
 	// Go, Defer and Await are the flags of a call.

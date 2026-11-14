@@ -15,6 +15,7 @@ import (
 
 	"golang.org/x/tools/go/ssa"
 
+	"github.com/yagihash/rivus/internal/callgraph"
 	"github.com/yagihash/rivus/internal/frontend/gossa"
 	"github.com/yagihash/rivus/internal/ir"
 )
@@ -24,6 +25,9 @@ type Options struct {
 	// All also extracts the functions of dependencies; by default only the
 	// functions of the loaded packages.
 	All bool
+	// NoCandidates leaves out the call graph: the calls through interfaces
+	// and function values then have no candidates.
+	NoCandidates bool
 	// Implementations lists the interface methods (rule symbols) whose
 	// implementations go into the stream.
 	Implementations []string
@@ -37,11 +41,15 @@ const MaxConstString = 1 << 16
 // gossa.Options{NaiveForm: true}.
 func Extract(p *gossa.Program, opts Options) (*ir.Program, error) {
 	out := &ir.Program{}
+	var graph callgraph.Graph
+	if !opts.NoCandidates {
+		graph = callgraph.BuildGo(p)
+	}
 	for _, fn := range p.Funcs {
 		if !opts.All && !p.Own[fn] {
 			continue
 		}
-		out.Funcs = append(out.Funcs, convertFunc(p, fn))
+		out.Funcs = append(out.Funcs, convertFunc(p, fn, graph))
 	}
 	for _, sym := range opts.Implementations {
 		impls, err := p.Implementations(sym)
@@ -59,7 +67,7 @@ func Extract(p *gossa.Program, opts Options) (*ir.Program, error) {
 }
 
 // Func converts one function.
-func Func(p *gossa.Program, fn *ssa.Function) *ir.Func { return convertFunc(p, fn) }
+func Func(p *gossa.Program, fn *ssa.Function) *ir.Func { return convertFunc(p, fn, nil) }
 
 type conv struct {
 	p      *gossa.Program
@@ -69,6 +77,7 @@ type conv struct {
 	tuples map[ssa.Value][]ir.LocalID
 	fused  map[ssa.Value]bool // address instructions folded into a load or a store
 	addr   map[ssa.Value]addrInfo
+	graph  callgraph.Graph
 	cur    *[]ir.Instr
 }
 
@@ -82,7 +91,7 @@ type addrInfo struct {
 	pos   ir.Pos
 }
 
-func convertFunc(p *gossa.Program, fn *ssa.Function) *ir.Func {
+func convertFunc(p *gossa.Program, fn *ssa.Function, graph callgraph.Graph) *ir.Func {
 	c := &conv{
 		p:      p,
 		fn:     fn,
@@ -90,6 +99,7 @@ func convertFunc(p *gossa.Program, fn *ssa.Function) *ir.Func {
 		tuples: map[ssa.Value][]ir.LocalID{},
 		fused:  map[ssa.Value]bool{},
 		addr:   map[ssa.Value]addrInfo{},
+		graph:  graph,
 	}
 	c.out = &ir.Func{
 		ID:     ir.FuncID(gossa.FuncID(fn)),
@@ -117,11 +127,11 @@ func convertFunc(p *gossa.Program, fn *ssa.Function) *ir.Func {
 	var entry []ir.Instr
 	c.cur = &entry
 	for i, prm := range fn.Params {
-		c.out.Params = append(c.out.Params, ir.Param{Name: prm.Name(), Type: ir.TypeID(typeString(prm.Type())), Class: classOf(prm.Type())})
+		c.out.Params = append(c.out.Params, ir.Param{Name: prm.Name(), Type: ir.TypeID(typeString(prm.Type())), Class: classOf(prm.Type()), Display: displayString(prm.Type())})
 		c.emit(ir.Instr{Op: ir.OpParam, Dsts: []ir.LocalID{c.local(prm)}, Index: i, Pos: c.pos(prm.Pos())})
 	}
 	for i, fv := range fn.FreeVars {
-		c.out.Params = append(c.out.Params, ir.Param{Name: fv.Name(), Type: ir.TypeID(typeString(fv.Type())), Class: classOf(fv.Type()), Captured: true})
+		c.out.Params = append(c.out.Params, ir.Param{Name: fv.Name(), Type: ir.TypeID(typeString(fv.Type())), Class: classOf(fv.Type()), Display: displayString(fv.Type()), Captured: true})
 		c.emit(ir.Instr{Op: ir.OpParam, Dsts: []ir.LocalID{c.local(fv)}, Index: len(fn.Params) + i, Pos: c.pos(fv.Pos())})
 	}
 
@@ -202,6 +212,12 @@ func (c *conv) local(v ssa.Value) ir.LocalID {
 	if id, ok := c.locals[v]; ok {
 		return id
 	}
+	if x, ok := v.(*ssa.Extract); ok {
+		// An element of a tuple is the local that the instruction wrote.
+		id := c.tupleDsts(x.Tuple, tupleLen(x.Tuple))[x.Index]
+		c.locals[v] = id
+		return id
+	}
 	name := ""
 	switch v := v.(type) {
 	case *ssa.Parameter:
@@ -266,8 +282,12 @@ func (c *conv) pos(p token.Pos) ir.Pos {
 
 func (c *conv) dst(v ssa.Value) []ir.LocalID { return []ir.LocalID{c.local(v)} }
 
-// tupleDsts makes the locals of a value that is a tuple: one per element.
+// tupleDsts gives the locals of a value that is a tuple: one per element,
+// made on first use (an Extract may be met before the instruction).
 func (c *conv) tupleDsts(v ssa.Value, n int) []ir.LocalID {
+	if ids, ok := c.tuples[v]; ok {
+		return ids
+	}
 	ids := make([]ir.LocalID, n)
 	tup, _ := v.Type().(*types.Tuple)
 	for i := range ids {
@@ -279,6 +299,13 @@ func (c *conv) tupleDsts(v ssa.Value, n int) []ir.LocalID {
 	}
 	c.tuples[v] = ids
 	return ids
+}
+
+func tupleLen(v ssa.Value) int {
+	if tup, ok := v.Type().(*types.Tuple); ok {
+		return tup.Len()
+	}
+	return 1
 }
 
 func (c *conv) instr(in ssa.Instruction, blk *ir.Block, b *ssa.BasicBlock) {
@@ -296,11 +323,11 @@ func (c *conv) instr(in ssa.Instruction, blk *ir.Block, b *ssa.BasicBlock) {
 	case *ssa.Phi:
 		c.local(in) // lowered later
 	case *ssa.Call:
-		c.call(in, in.Common(), pos, false, false)
+		c.call(in, in, in.Common(), pos, false, false)
 	case *ssa.Go:
-		c.call(nil, in.Common(), pos, true, false)
+		c.call(in, nil, in.Common(), pos, true, false)
 	case *ssa.Defer:
-		c.call(nil, in.Common(), pos, false, true)
+		c.call(in, nil, in.Common(), pos, false, true)
 	case *ssa.RunDefers:
 		c.emit(ir.Instr{Op: ir.OpCall, Callee: &ir.Callee{Kind: ir.CalleeStatic, Symbol: "go.rundefers"}, Pos: pos})
 	case *ssa.BinOp:
@@ -309,7 +336,7 @@ func (c *conv) instr(in ssa.Instruction, blk *ir.Block, b *ssa.BasicBlock) {
 		c.unop(in, pos)
 	case *ssa.ChangeType, *ssa.Convert, *ssa.ChangeInterface, *ssa.MakeInterface, *ssa.SliceToArrayPointer, *ssa.MultiConvert:
 		v := in.(ssa.Value)
-		c.emit(ir.Instr{Op: ir.OpConvert, Dsts: c.dst(v), Args: []ir.LocalID{c.val(convOperand(in))}, Type: ir.TypeID(typeString(v.Type())), Pos: pos})
+		c.emit(ir.Instr{Op: ir.OpConvert, Dsts: c.dst(v), Args: []ir.LocalID{c.val(convOperand(in))}, Operator: convKind(in), Type: ir.TypeID(typeString(v.Type())), Pos: pos})
 	case *ssa.Slice:
 		c.emit(ir.Instr{Op: ir.OpCopy, Dsts: c.dst(in), Args: []ir.LocalID{c.val(in.X)}, View: true, Pos: pos})
 	case *ssa.FieldAddr:
@@ -336,9 +363,9 @@ func (c *conv) instr(in ssa.Instruction, blk *ir.Block, b *ssa.BasicBlock) {
 		if in.CommaOk {
 			dsts = c.tupleDsts(in, 2)
 		}
-		c.emit(ir.Instr{Op: ir.OpIndexLoad, Dsts: dsts, Args: []ir.LocalID{c.val(in.X), c.val(in.Index)}, Pos: pos})
+		c.emit(ir.Instr{Op: ir.OpIndexLoad, Dsts: dsts, Args: []ir.LocalID{c.val(in.X), c.val(in.Index)}, Keyed: true, Pos: pos})
 	case *ssa.MapUpdate:
-		c.emit(ir.Instr{Op: ir.OpIndexStore, Args: []ir.LocalID{c.val(in.Map), c.val(in.Key), c.val(in.Value)}, Pos: pos})
+		c.emit(ir.Instr{Op: ir.OpIndexStore, Args: []ir.LocalID{c.val(in.Map), c.val(in.Key), c.val(in.Value)}, Keyed: true, Pos: pos})
 	case *ssa.Store:
 		c.store(in, pos)
 	case *ssa.TypeAssert:
@@ -348,12 +375,7 @@ func (c *conv) instr(in ssa.Instruction, blk *ir.Block, b *ssa.BasicBlock) {
 		}
 		c.emit(ir.Instr{Op: ir.OpTypeAssert, Dsts: dsts, Args: []ir.LocalID{c.val(in.X)}, Type: ir.TypeID(typeString(in.AssertedType)), Pos: pos})
 	case *ssa.Extract:
-		ids := c.tuples[in.Tuple]
-		if in.Index >= len(ids) {
-			c.emit(ir.Instr{Op: ir.OpUnsupported, Reason: "extract from an unknown tuple", Pos: pos})
-			return
-		}
-		c.emit(ir.Instr{Op: ir.OpCopy, Dsts: c.dst(in), Args: []ir.LocalID{ids[in.Index]}, Pos: pos})
+		// An alias of the tuple element: see local.
 	case *ssa.MakeClosure:
 		fn := in.Fn.(*ssa.Function)
 		c.emit(ir.Instr{Op: ir.OpMakeClosure, Dsts: c.dst(in), Args: c.vals(in.Bindings), Func: ir.FuncID(gossa.FuncID(fn)), Pos: pos})
@@ -362,20 +384,29 @@ func (c *conv) instr(in ssa.Instruction, blk *ir.Block, b *ssa.BasicBlock) {
 	case *ssa.Range:
 		c.emit(ir.Instr{Op: ir.OpCall, Dsts: c.dst(in), Args: []ir.LocalID{c.val(in.X)}, Callee: &ir.Callee{Kind: ir.CalleeStatic, Symbol: "go/range.start"}, Pos: pos})
 	case *ssa.Next:
-		c.emit(ir.Instr{Op: ir.OpCall, Dsts: c.tupleDsts(in, 3), Args: []ir.LocalID{c.val(in.Iter)}, Callee: &ir.Callee{Kind: ir.CalleeStatic, Symbol: "go/range.next"}, Pos: pos})
+		sym := "go/range.next"
+		if in.IsString {
+			sym = "go/range.next_string"
+		}
+		c.emit(ir.Instr{Op: ir.OpCall, Dsts: c.tupleDsts(in, 3), Args: []ir.LocalID{c.val(in.Iter)}, Callee: &ir.Callee{Kind: ir.CalleeStatic, Symbol: sym}, Pos: pos})
 	case *ssa.Select:
+		// A select is its communications, one after the other: the sends
+		// and the receives. Which one happens is not data.
 		n := 1
 		if tup, ok := in.Type().(*types.Tuple); ok {
 			n = tup.Len()
 		}
-		var args []ir.LocalID
-		for _, s := range in.States {
-			args = append(args, c.val(s.Chan))
-			if s.Send != nil {
-				args = append(args, c.val(s.Send))
+		elems := c.tupleDsts(in, n)
+		k := 0
+		for _, st := range in.States {
+			if st.Dir == types.SendOnly {
+				c.emit(ir.Instr{Op: ir.OpCall, Args: []ir.LocalID{c.val(st.Chan), c.val(st.Send)}, Callee: &ir.Callee{Kind: ir.CalleeStatic, Symbol: "go/chan.send"}, Pos: pos})
+				continue
 			}
+			ok := c.newLocal("", types.Typ[types.Bool])
+			c.emit(ir.Instr{Op: ir.OpCall, Dsts: []ir.LocalID{elems[2+k], ok}, Args: []ir.LocalID{c.val(st.Chan)}, Callee: &ir.Callee{Kind: ir.CalleeStatic, Symbol: "go/chan.recv"}, Pos: pos})
+			k++
 		}
-		c.emit(ir.Instr{Op: ir.OpCall, Dsts: c.tupleDsts(in, n), Args: args, Callee: &ir.Callee{Kind: ir.CalleeStatic, Symbol: "go/chan.select"}, Pos: pos})
 	case *ssa.DebugRef:
 	case *ssa.If:
 		blk.Term = ir.Term{Kind: ir.TermBranch, Cond: c.val(in.Cond), CondPos: pos, Pos: pos}
