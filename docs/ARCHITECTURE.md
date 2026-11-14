@@ -851,7 +851,7 @@ Phase 2 のステップ（案。2.7 のレビュー後に確定する）:
 
 | ステップ | 内容 | 完了の目安 |
 |---|---|---|
-| 2.0 | `internal/ir`: 型、JSON Lines の符号化・復号、検証、人間が読める整形 | 手書きの IR が往復でき、不正な IR が検証で落ちる |
+| 2.0 | **（実装済み）** `internal/ir`: 型、JSON Lines の符号化・復号、検証、人間が読める整形 | 手書きの IR が往復でき、不正な IR が検証で落ちる |
 | 2.1 | Go extractor（`goir`）: NaiveForm → IR。`rivus extract` | `testdata` の全関数が IR になり、検証を通る。目視用の出力が読める。SQL への補間（`+`、`Sprintf`、`strings.Builder`）のケースで、`const` の中身と補間の形が IR に残ることを確かめる |
 | 2.2 | IR → SSA 形（`ssabuild` の接続）。`testdata` と `x/tools` で、旧経路の SSA の値の使用関係と一致 | differential test が IR 経由でも通る |
 | 2.3 | `sites` と指紋を IR の上へ。**ID と指紋が、旧経路と全ケースで一致** | `rivus sites` / `resolve` の出力が変わらない |
