@@ -75,3 +75,31 @@ func TestLoadErrorsAreRecorded(t *testing.T) {
 		t.Fatal("expected a recorded load error")
 	}
 }
+
+func TestImplementations(t *testing.T) {
+	p, err := Load(testdata, []string{"./cases/impl"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := p.Implementations("(example.com/cases/cases/impl.Store).Save")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"(*example.com/cases/cases/impl.memStore).Save",
+		"(example.com/cases/cases/impl.fileStore).Save",
+	}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("got %v, want %v", got, want)
+	}
+
+	// A type of the universe has no package.
+	if _, err := p.Implementations("(error).Error"); err != nil {
+		t.Errorf("(error).Error: %v", err)
+	}
+	for _, bad := range []string{"os.Open", "(*impl.Store).Save", "(example.com/cases/cases/impl.Store).Nope", "(example.com/cases/cases/impl.memStore).Save", "(no/such.Pkg).M"} {
+		if _, err := p.Implementations(bad); err == nil {
+			t.Errorf("%q should not be accepted", bad)
+		}
+	}
+}

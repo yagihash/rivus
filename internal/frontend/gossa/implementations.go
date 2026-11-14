@@ -20,22 +20,29 @@ func (p *Program) Implementations(symbol string) ([]string, error) {
 	if !ok {
 		return nil, fmt.Errorf("%q is not the symbol of an interface method, which looks like \"(pkg.Interface).Method\"", symbol)
 	}
-	dot := strings.LastIndex(typeStr, ".")
-	if dot < 0 {
-		return nil, fmt.Errorf("%q: the type has no package", symbol)
+	var named types.Type
+	if dot := strings.LastIndex(typeStr, "."); dot < 0 {
+		// A type of the universe, such as error, has no package.
+		obj, ok := types.Universe.Lookup(typeStr).(*types.TypeName)
+		if !ok {
+			return nil, fmt.Errorf("%q: %s is not a type", symbol, typeStr)
+		}
+		named = obj.Type()
+	} else {
+		pkgPath, name := typeStr[:dot], typeStr[dot+1:]
+		pkg := p.SSA.ImportedPackage(pkgPath)
+		if pkg == nil {
+			return nil, fmt.Errorf("%q: the package %s is not loaded", symbol, pkgPath)
+		}
+		mem, ok := pkg.Members[name].(*ssa.Type)
+		if !ok {
+			return nil, fmt.Errorf("%q: %s.%s is not a type", symbol, pkgPath, name)
+		}
+		named = mem.Type()
 	}
-	pkgPath, name := typeStr[:dot], typeStr[dot+1:]
-	pkg := p.SSA.ImportedPackage(pkgPath)
-	if pkg == nil {
-		return nil, fmt.Errorf("%q: the package %s is not loaded", symbol, pkgPath)
-	}
-	mem, ok := pkg.Members[name].(*ssa.Type)
+	iface, ok := named.Underlying().(*types.Interface)
 	if !ok {
-		return nil, fmt.Errorf("%q: %s.%s is not a type", symbol, pkgPath, name)
-	}
-	iface, ok := mem.Type().Underlying().(*types.Interface)
-	if !ok {
-		return nil, fmt.Errorf("%q: %s.%s is not an interface", symbol, pkgPath, name)
+		return nil, fmt.Errorf("%q: %s is not an interface", symbol, typeStr)
 	}
 	var target *types.Func
 	for i := 0; i < iface.NumMethods(); i++ {

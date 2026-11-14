@@ -41,6 +41,7 @@ rivus の設計判断を、後から経緯を追えるように記録する。
 | 029 | エージェントのブックマークと `rivus resolve` | レビュー(項目 6) |
 | 030 | `match: implementations` の展開上限と sanitizer への展開の禁止 | レビュー(項目 7) |
 | 031 | Phase 1 の解析エンジンの実装方式（M2 時点） | 実装 |
+| 032 | 不確実性の記録の範囲と集計（ステップ 1.9） | 実装 |
 
 ---
 
@@ -465,3 +466,48 @@ ADR-003〜006、014、015 の方針を具体化したもので、方針自体は
 - **ここに至るまでの経緯:** 最初の実装では、ghmint は約 0.5 秒で終わったが、x/tools は 280 秒でも終わらなかった（途中でメモリが数 GB になった）。ADR-031 の「性能のために入れた仕組み」で解決した。
   ghmint では、パスの長さとサニタイズ操作の無限増殖が原因で、止まらずメモリが 5GB に達していた
 - **見直しが要るもの:** メモリ使用量の計測、20 万行を超える規模、Dart と Rust の数字。widening と予算が粗くした結果の精度への影響（x/tools は検出が少なく、正解がないので、精度は測れていない）
+
+### ADR-030 の追記: 実装と実測（ステップ 1.9）
+
+- **実装:** ルール（source の `call_result`、sink、sanitizer、propagator）に `match: implementations` と `max_implementations` を書ける。
+  sanitizer は `allow_sanitizer_expansion: true` がないとルールの読み込みでエラーになる。
+  展開は `go/types` で行い、**読み込んだパッケージ（自モジュール）の型だけ**を探す（依存は境界で、モデルを別に持つため、ADR-015）。
+  `(error).Error` のようにパッケージを持たない型も扱える。展開した結果は `Rules.Expansions` とレポートの `expansions` に残り、上限超過は `dynamic_dispatch`（サブ理由 `expansion_limit`、`mixed`）として出力に出る
+- **実測（自モジュールの型の中の実装数）:**
+
+  | インタフェースのメソッド | ghmint | rivus 自身 | x/tools |
+  |---|---|---|---|
+  | `(fmt.Stringer).String` | 0 | 4 | 165 |
+  | `(sort.Interface).Len` | 0 | 0 | 21 |
+  | `(io.Reader).Read` | 0 | 0 | 6 |
+  | `(io.Writer).Write` | 1 | 0 | 3 |
+  | `(net/http.Handler).ServeHTTP` | 1 | （net/http を読み込んでいない） | 1 |
+
+  taint のルールに使いそうなインタフェース（`Reader`、`Writer`、`Handler`）は、実装が 1 桁にとどまった。
+  100 を超えたのは `Stringer` だけで、これは汚染のルールの対象になりにくい、どこにでもあるインタフェース。
+  既定の上限 100 は、この 3 つのコードでは問題なく働く。確定するかは、より多様なコードで見る必要がある（レビュー待ち）
+
+## ADR-032: 不確実性の記録の範囲と集計（ステップ 1.9）
+
+- **状況:** ADR-007 は「扱わなかった箇所は必ず出力に記録する」とした。ステップ 1.3〜1.8 までは、呼び出し関連（モデルなし、解決できない、インタフェース越し）しか記録していなかった。
+  別名を介した書き込み、goroutine と channel、パッケージ変数、reflection は、黙って通り過ぎていた。
+- **決定:** 記録の置き場所を 2 つに分け、kind を次のように記録する。
+  - **プログラム全体の一覧（`uncertainties`）:** その場所そのものが分かっていないもの。`unmodeled_library_call`（`rivus`）、`dynamic_dispatch`（`mixed`、候補つき）、`unresolved_callee`（`mixed`）、`reflection`（`target`）、`ffi_boundary`（`target`）、`depth_limit`（`rivus`、関数の予算超過、時間切れ、展開の上限超過）、`recursion_approximation`（`rivus`）、`missing_source`（`target`、ロードエラー）
+  - **検出結果の経路の区間（`findings[].uncertainties`、各ステップの `notes`）:** その区間を通った検出結果にだけ付く。`container_element_imprecision`（`rivus`。スライス・配列・map・channel の要素の出入り）、`concurrency`（`mixed`。channel、`select`、`go` 文）、`global_var`（`target`。パッケージ変数の読み出し。直接の書き手を候補として列挙する）、ほか `dynamic_dispatch` と `unmodeled_library_call`
+    「結論に影響した場合だけ」記録するというルール（ADR-014）を、経路上にあるかどうかで実現した。1 つの区間が複数の不確実性を持てる
+  - **集計（`summary`）:** プログラム全体の一覧を kind と `attributable_to` ごとに数え、`rivus` の比率と `depth_limit` の比率、各 kind が付いた検出結果の数を出す。ADR-008 のフィードバックループ
+- **未実装・未検証:**
+  - `exported_api_param`、`config_read`、`literal` は、由来追跡（ステップ 1.10）の打ち切りの種類で、まだ出ない
+  - cgo（`C` パッケージ、`_Cfunc_`）の検出は実装したが、cgo を使ったテストは書いていない。アセンブリやリンクネームで本体のない関数は、`unmodeled_library_call` になる
+  - `container_element_imprecision` は、要素への出入りに必ず付くので、スライスを使う経路ではほぼ毎回付く。見た目のノイズになるか、実測と運用で見る
+- **実測（ステップ 1.9 時点、プログラム全体の一覧の内訳）:**
+
+  | 対象 | 件数 | `rivus` | `mixed` | `target` | `depth_limit` の比率 |
+  |---|---|---|---|---|---|
+  | ghmint | 287 | 76% | 24% | 0% | 0% |
+  | rivus 自身 | 386 | 80% | 20% | 0% | 0% |
+  | x/tools（15.6 万行） | 5,444 | 67% | 30% | 3.5% | 0.04% |
+
+  `rivus` の大半は `unmodeled_library_call` で、モデルを書けば減る（モデルカバレッジレポート、ステップ 1.11 が効く）。`mixed` は 2〜3 割で、`dynamic_dispatch` が大半
+- **帰結:** 経路の区間に付く不確実性は、出力の `notes` を見れば、LLM が「この経路のどこが怪しいか」を種類別に読める。
+  `mixed` の割り当て（ADR-008）を見直す材料として、`dynamic_dispatch` の候補数の分布などの追加の計測が要る（レビュー待ち）
