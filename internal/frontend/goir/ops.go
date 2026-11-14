@@ -44,6 +44,7 @@ func (c *conv) unop(in *ssa.UnOp, pos ir.Pos) {
 			return
 		}
 		if g, ok := in.X.(*ssa.Global); ok {
+			c.noteGlobal(g)
 			c.emit(ir.Instr{Op: ir.OpGlobalLoad, Dsts: c.dst(in), Global: globalName(g), Pos: pos})
 			return
 		}
@@ -70,6 +71,7 @@ func (c *conv) store(in *ssa.Store, pos ir.Pos) {
 		return
 	}
 	if g, ok := in.Addr.(*ssa.Global); ok {
+		c.noteGlobal(g)
 		c.emit(ir.Instr{Op: ir.OpGlobalStore, Args: []ir.LocalID{c.val(in.Val)}, Global: globalName(g), Pos: pos})
 		return
 	}

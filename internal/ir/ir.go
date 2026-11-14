@@ -276,8 +276,11 @@ type Instr struct {
 	Operator string `json:"operator,omitempty"`
 	// Index is the position of a param.
 	Index int `json:"index,omitempty"`
-	// Type is the type of an alloc, a convert or a type_assert.
-	Type TypeID `json:"type,omitempty"`
+	// Type is the type of an alloc, a convert or a type_assert. Class is the
+	// class of the type an alloc allocates (the value it holds), which tells
+	// what the zero value of a promoted variable is.
+	Type  TypeID    `json:"type,omitempty"`
+	Class TypeClass `json:"class,omitempty"`
 	// Field is the field of a field_load or a field_store.
 	Field string `json:"field,omitempty"`
 	// Path is the path of an addr_of.
@@ -330,4 +333,13 @@ type Implementations struct {
 type Program struct {
 	Funcs []*Func           `json:"funcs"`
 	Impls []Implementations `json:"implementations,omitempty"`
+	// Globals are the package variables the functions use.
+	Globals []Global `json:"globals,omitempty"`
+}
+
+// Global is a package variable (or a static): where it is declared.
+type Global struct {
+	Name string `json:"name"`
+	Type TypeID `json:"type,omitempty"`
+	Pos  Pos    `json:"pos,omitempty"`
 }

@@ -11,7 +11,7 @@ import (
 func sample() *Program {
 	f := &Func{
 		ID:      "example.com/m.Query",
-		Params:  []Param{{Name: "id", Type: "string", Class: ClassScalar}},
+		Params:  []Param{{Name: "id", Type: "string", Class: ClassString}},
 		Results: []TypeID{"error"},
 		Locals: []Local{
 			{Name: "id", Type: "string"},           // 0

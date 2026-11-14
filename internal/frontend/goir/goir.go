@@ -41,6 +41,7 @@ const MaxConstString = 1 << 16
 // gossa.Options{NaiveForm: true}.
 func Extract(p *gossa.Program, opts Options) (*ir.Program, error) {
 	out := &ir.Program{}
+	globals := map[string]ir.Global{}
 	var graph callgraph.Graph
 	if !opts.NoCandidates {
 		graph = callgraph.BuildGo(p)
@@ -49,8 +50,12 @@ func Extract(p *gossa.Program, opts Options) (*ir.Program, error) {
 		if !opts.All && !p.Own[fn] {
 			continue
 		}
-		out.Funcs = append(out.Funcs, convertFunc(p, fn, graph))
+		out.Funcs = append(out.Funcs, convertFunc(p, fn, graph, globals))
 	}
+	for _, g := range globals {
+		out.Globals = append(out.Globals, g)
+	}
+	sort.Slice(out.Globals, func(i, j int) bool { return out.Globals[i].Name < out.Globals[j].Name })
 	for _, sym := range opts.Implementations {
 		impls, err := p.Implementations(sym)
 		if err != nil {
@@ -67,7 +72,9 @@ func Extract(p *gossa.Program, opts Options) (*ir.Program, error) {
 }
 
 // Func converts one function.
-func Func(p *gossa.Program, fn *ssa.Function) *ir.Func { return convertFunc(p, fn, nil) }
+func Func(p *gossa.Program, fn *ssa.Function) *ir.Func {
+	return convertFunc(p, fn, nil, map[string]ir.Global{})
+}
 
 type conv struct {
 	p      *gossa.Program
@@ -78,6 +85,7 @@ type conv struct {
 	fused  map[ssa.Value]bool // address instructions folded into a load or a store
 	addr   map[ssa.Value]addrInfo
 	graph  callgraph.Graph
+	global map[string]ir.Global
 	cur    *[]ir.Instr
 }
 
@@ -91,7 +99,7 @@ type addrInfo struct {
 	pos   ir.Pos
 }
 
-func convertFunc(p *gossa.Program, fn *ssa.Function, graph callgraph.Graph) *ir.Func {
+func convertFunc(p *gossa.Program, fn *ssa.Function, graph callgraph.Graph, globals map[string]ir.Global) *ir.Func {
 	c := &conv{
 		p:      p,
 		fn:     fn,
@@ -100,6 +108,7 @@ func convertFunc(p *gossa.Program, fn *ssa.Function, graph callgraph.Graph) *ir.
 		fused:  map[ssa.Value]bool{},
 		addr:   map[ssa.Value]addrInfo{},
 		graph:  graph,
+		global: globals,
 	}
 	c.out = &ir.Func{
 		ID:     ir.FuncID(gossa.FuncID(fn)),
@@ -246,6 +255,7 @@ func (c *conv) val(v ssa.Value) ir.LocalID {
 		c.emit(ir.Instr{Op: ir.OpMakeClosure, Dsts: []ir.LocalID{id}, Func: ir.FuncID(gossa.FuncID(v))})
 		return id
 	case *ssa.Global:
+		c.noteGlobal(v)
 		id := c.newLocal("", v.Type())
 		c.emit(ir.Instr{Op: ir.OpAddrOf, Dsts: []ir.LocalID{id}, Global: globalName(v)})
 		return id
@@ -316,7 +326,7 @@ func (c *conv) instr(in ssa.Instruction, blk *ir.Block, b *ssa.BasicBlock) {
 		if pt, ok := t.Underlying().(*types.Pointer); ok {
 			t = pt.Elem()
 		}
-		c.emit(ir.Instr{Op: ir.OpAlloc, Dsts: c.dst(in), Type: ir.TypeID(typeString(t)), Pos: pos})
+		c.emit(ir.Instr{Op: ir.OpAlloc, Dsts: c.dst(in), Type: ir.TypeID(typeString(t)), Class: classOf(t), Pos: pos})
 	case *ssa.MakeSlice, *ssa.MakeMap, *ssa.MakeChan:
 		v := in.(ssa.Value)
 		c.emit(ir.Instr{Op: ir.OpAlloc, Dsts: c.dst(v), Type: ir.TypeID(typeString(v.Type())), Pos: pos})
@@ -420,5 +430,13 @@ func (c *conv) instr(in ssa.Instruction, blk *ir.Block, b *ssa.BasicBlock) {
 		blk.Term = ir.Term{Kind: ir.TermThrow, Values: []ir.LocalID{c.val(in.X)}, Pos: pos}
 	default:
 		c.emit(ir.Instr{Op: ir.OpUnsupported, Reason: fmt.Sprintf("go/ssa instruction %T", in), Pos: pos})
+	}
+}
+
+// noteGlobal records a package variable the function uses.
+func (c *conv) noteGlobal(g *ssa.Global) {
+	name := globalName(g)
+	if _, ok := c.global[name]; !ok {
+		c.global[name] = ir.Global{Name: name, Type: ir.TypeID(typeString(g.Type())), Pos: c.pos(g.Pos())}
 	}
 }

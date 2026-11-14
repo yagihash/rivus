@@ -410,3 +410,15 @@ func (s *Form) allocInstr(l ir.LocalID) ir.Instr {
 	d := s.allocPos[l]
 	return s.Func.Blocks[d.block].Instrs[d.instr]
 }
+
+// AllocInstr is the instruction that allocates a promoted variable.
+func (s *Form) AllocInstr(l ir.LocalID) ir.Instr { return s.allocInstr(l) }
+
+// Idom is the immediate dominator of a block (-1 for a root or a block that
+// is not reached).
+func (s *Form) Idom(block int) int {
+	if d := s.res.Idom[block]; d >= 0 {
+		return d
+	}
+	return -1
+}

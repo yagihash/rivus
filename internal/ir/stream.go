@@ -15,14 +15,16 @@ type header struct {
 }
 
 type record struct {
-	Kind  string           `json:"kind"`
-	Func  *Func            `json:"func,omitempty"`
-	Impls *Implementations `json:"implementations,omitempty"`
+	Kind   string           `json:"kind"`
+	Func   *Func            `json:"func,omitempty"`
+	Impls  *Implementations `json:"implementations,omitempty"`
+	Global *Global          `json:"global,omitempty"`
 }
 
 const (
-	recFunc  = "func"
-	recImpls = "implementations"
+	recFunc   = "func"
+	recImpls  = "implementations"
+	recGlobal = "global"
 )
 
 // Write writes the program as a stream. It does not validate: Validate is
@@ -40,6 +42,11 @@ func Write(w io.Writer, p *Program) error {
 	}
 	for i := range p.Impls {
 		if err := enc.Encode(record{Kind: recImpls, Impls: &p.Impls[i]}); err != nil {
+			return err
+		}
+	}
+	for i := range p.Globals {
+		if err := enc.Encode(record{Kind: recGlobal, Global: &p.Globals[i]}); err != nil {
 			return err
 		}
 	}
@@ -73,6 +80,8 @@ func Read(r io.Reader) (*Program, error) {
 			p.Funcs = append(p.Funcs, rec.Func)
 		case rec.Kind == recImpls && rec.Impls != nil:
 			p.Impls = append(p.Impls, *rec.Impls)
+		case rec.Kind == recGlobal && rec.Global != nil:
+			p.Globals = append(p.Globals, *rec.Global)
 		default:
 			return nil, fmt.Errorf("ir: record %d: unknown record %q", n, rec.Kind)
 		}
