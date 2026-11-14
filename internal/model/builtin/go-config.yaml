@@ -1,0 +1,20 @@
+# Functions that read configuration. A value traced back to one of them is in
+# the configuration of the deployment, not in the code: rivus stops there and
+# says so (terminal kind config_read), so that a reader looks at the
+# configuration.
+ruleset: rivus/go/config@1
+
+config_reads:
+  - symbol: os.Getenv
+  - symbol: os.LookupEnv
+  - symbol: os.Environ
+  - symbol: os.ReadFile
+  - symbol: os.Open
+  - symbol: flag.Bool
+  - symbol: flag.String
+  - symbol: flag.Int
+  - symbol: flag.Duration
+  - symbol: (*flag.FlagSet).Bool
+  - symbol: (*flag.FlagSet).String
+  - symbol: (*flag.FlagSet).Int
+  - symbol: (*flag.FlagSet).Duration

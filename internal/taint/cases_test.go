@@ -361,3 +361,163 @@ func TestDispatchWithOneCandidateStaysMixed(t *testing.T) {
 }
 
 func TestEntryPoints(t *testing.T) { checkCase(t, "entry") }
+
+func TestGuard(t *testing.T) { checkCase(t, "guard") }
+
+func findingWithSink(t *testing.T, res *Result, marker string) *Finding {
+	t.Helper()
+	for _, f := range res.Findings {
+		if strings.Contains(f.Sink.Snippet, marker) {
+			return f
+		}
+	}
+	t.Fatalf("no finding for %q", marker)
+	return nil
+}
+
+func TestConditionalNodeForAValueDependentSanitizer(t *testing.T) {
+	res, _ := runCase(t, "guard")
+	f := findingWithSink(t, res, "@sink(dyn)")
+	if len(f.ConditionalNodes) != 1 {
+		t.Fatalf("want 1 conditional node, got %+v", f.ConditionalNodes)
+	}
+	n := f.ConditionalNodes[0]
+	if n.Kind != CondSanitization || n.BranchCondition != "escape" || !strings.HasSuffix(n.Function, "guard.render") {
+		t.Errorf("node = %+v", n)
+	}
+	if n.DerivedFrom != "parameter 1 (escape bool)" {
+		t.Errorf("derived_from = %q", n.DerivedFrom)
+	}
+	if got := n.Outcomes["escape == true"]; got != "sanitized by example.com/cases/lib.Sanitize" {
+		t.Errorf("true outcome = %q", got)
+	}
+	if got := n.Outcomes["escape == false"]; got != "tainted (passthrough)" {
+		t.Errorf("false outcome = %q", got)
+	}
+	if n.CallSiteArgument != "render(s, flag)" || n.Argument != "flag" || n.Resolved {
+		t.Errorf("call site: %q argument %q resolved %v", n.CallSiteArgument, n.Argument, n.Resolved)
+	}
+	if !strings.Contains(n.FunctionSource, "func render(") {
+		t.Errorf("function source = %q", n.FunctionSource)
+	}
+}
+
+func TestConditionalNodeWithAConstantArgumentIsResolved(t *testing.T) {
+	res, _ := runCase(t, "guard")
+	f := findingWithSink(t, res, "@sink(const)")
+	if len(f.ConditionalNodes) != 1 || !f.ConditionalNodes[0].Resolved || f.ConditionalNodes[0].Argument != "false" {
+		t.Fatalf("nodes = %+v", f.ConditionalNodes)
+	}
+}
+
+func TestEarlyReturnIsNotAConditionalNode(t *testing.T) {
+	res, _ := runCase(t, "guard")
+	if f := findingWithSink(t, res, "@sink(early)"); len(f.ConditionalNodes) != 0 {
+		t.Errorf("a condition with a flow on one side only says nothing: %+v", f.ConditionalNodes)
+	}
+}
+
+func guardLimitFunctions(res *Result) map[string]*Uncertainty {
+	out := map[string]*Uncertainty{}
+	for _, u := range res.Uncertainties {
+		if u.Kind == KindDepthLimit && strings.HasPrefix(u.Detail, "guard_limit") {
+			out[u.Func] = u
+		}
+	}
+	return out
+}
+
+func TestTooManyGuardsAreDroppedAndSaidWhereTheyWouldMatter(t *testing.T) {
+	res, _ := runCase(t, "guard")
+	for _, marker := range []string{"@sink(deep)", "@sink(deepsan)"} {
+		if f := findingWithSink(t, res, marker); len(f.ConditionalNodes) != 0 {
+			t.Errorf("%s: guards beyond the limit must be dropped: %+v", marker, f.ConditionalNodes)
+		}
+	}
+	limited := guardLimitFunctions(res)
+	var sanitizing *Uncertainty
+	for fn, u := range limited {
+		if strings.HasSuffix(fn, "guard.deepSanitized") {
+			sanitizing = u
+		}
+		if strings.HasSuffix(fn, "guard.deep") {
+			t.Errorf("a function that sanitizes nothing loses nothing by dropping guards: %+v", u)
+		}
+	}
+	if sanitizing == nil {
+		t.Fatalf("the function that sanitizes and exceeded the guard limit must be recorded: %v", limited)
+	}
+	if sanitizing.AttributableTo != AttributableRivus {
+		t.Errorf("guard_limit is rivus' to improve: %+v", sanitizing)
+	}
+}
+
+func provenanceOf(t *testing.T, marker string) *Provenance {
+	t.Helper()
+	res, _ := runCase(t, "guard")
+	f := findingWithSink(t, res, marker)
+	if len(f.ConditionalNodes) != 1 || f.ConditionalNodes[0].Provenance == nil {
+		t.Fatalf("%s: nodes = %+v", marker, f.ConditionalNodes)
+	}
+	return f.ConditionalNodes[0].Provenance
+}
+
+func terminalKinds(p *Provenance) map[string]string {
+	out := map[string]string{}
+	for _, u := range p.Unresolved {
+		out[u.TerminalKind] = u.AttributableTo
+	}
+	return out
+}
+
+func TestProvenanceStopsAtAPackageVariable(t *testing.T) {
+	p := provenanceOf(t, "@sink(pv)")
+	if terminalKinds(p)[KindGlobalVar] != AttributableTarget || len(p.Resolved) != 0 {
+		t.Errorf("provenance = %+v", p)
+	}
+}
+
+func TestProvenanceStopsAtConfiguration(t *testing.T) {
+	p := provenanceOf(t, "@sink(env)")
+	if terminalKinds(p)[KindConfigRead] != AttributableTarget {
+		t.Errorf("provenance = %+v", p)
+	}
+	for _, u := range p.Unresolved {
+		if u.TerminalKind == KindConfigRead && u.Detail == "" {
+			t.Errorf("the configuration read must say which function: %+v", u)
+		}
+	}
+	// The "1" compared with is not where the value comes from.
+	if len(p.Resolved) != 0 {
+		t.Errorf("a compared constant was reported as the value: %+v", p.Resolved)
+	}
+}
+
+func TestProvenanceFollowsAParameterToItsCallers(t *testing.T) {
+	p := provenanceOf(t, "@sink(wrap)")
+	if len(p.Resolved) != 1 || p.Resolved[0].Value != "false" || p.Resolved[0].Certainty != "literal" || len(p.Unresolved) != 0 {
+		t.Fatalf("provenance = %+v", p)
+	}
+	if p.Resolved[0].CallSite.Line == 0 {
+		t.Error("the resolved value must say where it was passed")
+	}
+	if len(p.Argument) == 0 {
+		t.Error("the argument must be named")
+	}
+}
+
+func TestProvenanceFollowsAFieldToWhereItIsSet(t *testing.T) {
+	p := provenanceOf(t, "@sink(sf)")
+	if len(p.Resolved) != 1 || p.Resolved[0].Value != "false" || p.Resolved[0].Certainty != CertaintyZeroValue {
+		t.Errorf("provenance = %+v", p)
+	}
+}
+
+func TestProvenanceOfAnExportedFunctionsParameter(t *testing.T) {
+	// Dynamic is exported and nothing in the code calls it: its argument
+	// comes from outside.
+	p := provenanceOf(t, "@sink(dyn)")
+	if terminalKinds(p)[KindExportedAPIParam] != AttributableTarget {
+		t.Errorf("provenance = %+v", p)
+	}
+}

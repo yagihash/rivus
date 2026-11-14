@@ -20,6 +20,8 @@ const (
 	KindConcurrency            = "concurrency"
 	KindFFIBoundary            = "ffi_boundary"
 	KindGlobalVar              = "global_var"
+	KindConfigRead             = "config_read"
+	KindExportedAPIParam       = "exported_api_param"
 	AttributableTarget         = "target"
 	AttributableRivus          = "rivus"
 	AttributableMixed          = "mixed"
@@ -32,7 +34,7 @@ func attributable(kind string) string {
 	switch kind {
 	case KindDynamicDispatch, KindUnresolvedCallee, KindConcurrency:
 		return AttributableMixed
-	case KindMissingSource, KindReflection, KindFFIBoundary, KindGlobalVar:
+	case KindMissingSource, KindReflection, KindFFIBoundary, KindGlobalVar, KindConfigRead, KindExportedAPIParam:
 		return AttributableTarget
 	default:
 		return AttributableRivus
@@ -99,6 +101,8 @@ type Step struct {
 	// Model is set when a model decided this hop.
 	Model *ModelRef `json:"model,omitempty"`
 
+	guards []Guard
+
 	pos token.Pos
 }
 
@@ -131,9 +135,71 @@ type Finding struct {
 	Models []ModelRef `json:"models,omitempty"`
 	// LLMInfluenced is true when one of them was decided by an LLM.
 	LLMInfluenced bool `json:"llm_influenced,omitempty"`
+	// ConditionalNodes are the places on the path where the outcome
+	// depends on a value the caller passes.
+	ConditionalNodes []ConditionalNode `json:"conditional_nodes,omitempty"`
 }
 
 // Path is one way the data gets from the source to the sink.
 type Path struct {
 	Steps []Step `json:"steps"`
+}
+
+// Kinds of conditional node.
+const (
+	// CondSanitization: depending on the condition, taint is removed or kept.
+	CondSanitization = "value_dependent_sanitization"
+	// CondFlow: the flow differs, in some other way, with the condition.
+	CondFlow = "value_dependent_flow"
+)
+
+// ConditionalNode says: here the outcome depends on a value the caller
+// passes. It lists which outcome goes with which value and shows what the
+// caller passes. It does not say which outcome happens (ADR-001, ADR-006).
+type ConditionalNode struct {
+	Function        string         `json:"function"`
+	Location        gossa.Position `json:"location"`
+	Kind            string         `json:"kind"`
+	BranchCondition string         `json:"branch_condition"`
+	DerivedFrom     string         `json:"derived_from"`
+	// Outcomes maps "<condition> == true" and "<condition> == false" to
+	// what happens on that side.
+	Outcomes map[string]string `json:"outcomes"`
+	// CallSite is where the condition's parameter gets its value on the
+	// path of the finding; CallSiteArgument is the call as written and
+	// Argument the expression passed.
+	CallSite         *gossa.Position `json:"call_site,omitempty"`
+	CallSiteArgument string          `json:"call_site_argument,omitempty"`
+	Argument         string          `json:"argument,omitempty"`
+	// Resolved is true when the argument is a constant, which is then in
+	// Provenance.
+	Resolved       bool        `json:"resolved"`
+	FunctionSource string      `json:"function_source,omitempty"`
+	Provenance     *Provenance `json:"provenance,omitempty"`
+}
+
+// Provenance traces where the value of an argument comes from, and says why
+// the tracing stopped where it did (ADR-008).
+type Provenance struct {
+	Argument   string            `json:"argument"`
+	Resolved   []ResolvedValue   `json:"resolved"`
+	Unresolved []UnresolvedValue `json:"unresolved"`
+}
+
+// ResolvedValue is a value the tracing found for certain.
+type ResolvedValue struct {
+	Value     string         `json:"value"`
+	CallSite  gossa.Position `json:"call_site"`
+	Certainty string         `json:"certainty"`
+}
+
+// UnresolvedValue is a place where the tracing stopped.
+type UnresolvedValue struct {
+	TerminalKind   string         `json:"terminal_kind"`
+	AttributableTo string         `json:"attributable_to"`
+	Chain          []string       `json:"chain"`
+	Detail         string         `json:"detail,omitempty"`
+	Candidates     []string       `json:"candidates,omitempty"`
+	Position       gossa.Position `json:"position"`
+	Snippet        string         `json:"snippet,omitempty"`
 }

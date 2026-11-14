@@ -393,3 +393,73 @@ propagators:
 		t.Errorf("models = %+v", f.Models)
 	}
 }
+
+// The example of the brief (section 7.3): an HTML page that is escaped only
+// when the caller says so.
+const wsRender = `package main
+
+import (
+	"html"
+	"net/http"
+)
+
+type config struct{ AllowHTML bool }
+
+var cfg config
+
+func render(s string, escape bool) string {
+	if escape {
+		return html.EscapeString(s)
+	}
+	return s
+}
+
+func handler(w http.ResponseWriter, r *http.Request) {
+	bio := r.FormValue("bio")
+	out := render(bio, cfg.AllowHTML)
+	w.Write([]byte(out))
+}
+`
+
+func TestConditionalNodeInTheBriefsExample(t *testing.T) {
+	w := newWorkspace(t)
+	w.write("main/main.go", wsRender)
+	w.write("rules.yaml", "ruleset: empty\n")
+
+	var rep report.Report
+	if err := json.Unmarshal(w.run("analyze", "-rules", "rules.yaml", "./main"), &rep); err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, f := range rep.Findings {
+		if f.Category != "xss" {
+			continue
+		}
+		if len(f.ConditionalNodes) != 1 {
+			t.Fatalf("nodes = %+v", f.ConditionalNodes)
+		}
+		n := f.ConditionalNodes[0]
+		found = true
+		if n.Kind != "value_dependent_sanitization" || n.BranchCondition != "escape" ||
+			n.DerivedFrom != "parameter 1 (escape bool)" {
+			t.Errorf("node = %+v", n)
+		}
+		if n.Outcomes["escape == true"] != "sanitized by html.EscapeString" || n.Outcomes["escape == false"] != "tainted (passthrough)" {
+			t.Errorf("outcomes = %+v", n.Outcomes)
+		}
+		if n.CallSiteArgument != "render(bio, cfg.AllowHTML)" || n.Argument != "cfg.AllowHTML" || n.Resolved {
+			t.Errorf("call site: %q argument %q resolved %v", n.CallSiteArgument, n.Argument, n.Resolved)
+		}
+		p := n.Provenance
+		if p == nil || len(p.Resolved) != 0 || len(p.Unresolved) != 1 || p.Unresolved[0].TerminalKind != "global_var" ||
+			p.Unresolved[0].AttributableTo != "target" {
+			t.Errorf("provenance = %+v", p)
+		}
+		if !strings.Contains(n.FunctionSource, "html.EscapeString") {
+			t.Errorf("the function source is part of the facts: %q", n.FunctionSource)
+		}
+	}
+	if !found {
+		t.Fatalf("no xss finding in %d findings", len(rep.Findings))
+	}
+}

@@ -2,9 +2,11 @@ package gossa
 
 import (
 	"bytes"
+	"fmt"
 	"go/ast"
 	"go/scanner"
 	"go/token"
+	"go/types"
 	"strings"
 
 	"golang.org/x/tools/go/ast/astutil"
@@ -182,4 +184,88 @@ func (p *Program) normalize(start, end token.Pos) string {
 		}
 	}
 	return buf.String()
+}
+
+// rawText returns the source text of [start, end) as written.
+func (p *Program) rawText(start, end token.Pos) string {
+	tf := p.Fset.File(start)
+	if tf == nil || end <= start {
+		return ""
+	}
+	src := p.source(tf.Name())
+	so, eo := tf.Offset(start), tf.Offset(end)
+	if src == nil || so < 0 || eo > len(src) || so >= eo {
+		return ""
+	}
+	return string(src[so:eo])
+}
+
+// CondText returns the source text of the condition of a branch, given a
+// position taken from inside the branch: the first instruction of the block
+// it leads to. An "if" has no position of its own in go/ssa, and when the
+// condition is a plain variable no instruction evaluates it.
+func (p *Program) CondText(inside token.Pos) string {
+	f := p.File(inside)
+	if f == nil || !inside.IsValid() {
+		return ""
+	}
+	path, _ := astutil.PathEnclosingInterval(f, inside, inside)
+	for _, n := range path {
+		switch s := n.(type) {
+		case *ast.IfStmt:
+			if s.Cond != nil {
+				return p.rawText(s.Cond.Pos(), s.Cond.End())
+			}
+		case *ast.ForStmt:
+			if s.Cond != nil {
+				return p.rawText(s.Cond.Pos(), s.Cond.End())
+			}
+		}
+	}
+	return ""
+}
+
+// CallArgText returns the source text of the i-th argument (receiver
+// excluded) of the call whose opening parenthesis is at lparen, and of the
+// whole call.
+func (p *Program) CallArgText(lparen token.Pos, i int) (arg, call string) {
+	f := p.File(lparen)
+	if f == nil || !lparen.IsValid() {
+		return "", ""
+	}
+	path, _ := astutil.PathEnclosingInterval(f, lparen, lparen)
+	for _, n := range path {
+		if c, ok := n.(*ast.CallExpr); ok && c.Lparen == lparen {
+			call = p.rawText(c.Pos(), c.End())
+			if i >= 0 && i < len(c.Args) {
+				arg = p.rawText(c.Args[i].Pos(), c.Args[i].End())
+			}
+			return arg, call
+		}
+	}
+	return "", ""
+}
+
+// FuncSource returns the source of a function, cut at maxLines lines.
+func (p *Program) FuncSource(fn *ssa.Function, maxLines int) string {
+	n := fn.Syntax()
+	if n == nil {
+		return ""
+	}
+	s := p.rawText(n.Pos(), n.End())
+	lines := strings.Split(s, "\n")
+	if len(lines) > maxLines {
+		lines = append(lines[:maxLines], "// ... (cut)")
+	}
+	return strings.Join(lines, "\n")
+}
+
+// ParamLabel describes a parameter of a function for a reader, such as
+// "parameter 1 (escape bool)". Parameters count from 0, the receiver first.
+func ParamLabel(fn *ssa.Function, i int) string {
+	if i >= 0 && i < len(fn.Params) {
+		prm := fn.Params[i]
+		return fmt.Sprintf("parameter %d (%s %s)", i, prm.Name(), types.TypeString(prm.Type(), func(pkg *types.Package) string { return pkg.Name() }))
+	}
+	return fmt.Sprintf("parameter %d", i)
 }

@@ -62,6 +62,11 @@ type RuleSet struct {
 	Sinks       []Sink       `yaml:"sinks"`
 	Sanitizers  []Sanitizer  `yaml:"sanitizers"`
 	Propagators []Propagator `yaml:"propagators"`
+	// ConfigReads are functions that read configuration: files, the
+	// environment, flags. When rivus traces a value back to such a call, it
+	// stops and says config_read: the value is in the repository's
+	// configuration, not in its code.
+	ConfigReads []ConfigRead `yaml:"config_reads"`
 
 	// Origin is where the rule set came from (file name or "builtin:...").
 	Origin string `yaml:"-"`
@@ -136,6 +141,11 @@ type Propagator struct {
 	Match string `yaml:"match"`
 	// MaxImplementations bounds the expansion of match: implementations.
 	MaxImplementations int `yaml:"max_implementations"`
+}
+
+// ConfigRead names a function that reads configuration.
+type ConfigRead struct {
+	Symbol string `yaml:"symbol"`
 }
 
 // Flow moves taint between two positions of a call.
@@ -375,6 +385,11 @@ func (rs *RuleSet) validate() error {
 			return err
 		}
 	}
+	for i, c := range rs.ConfigReads {
+		if c.Symbol == "" {
+			return fmt.Errorf("config_reads[%d]: symbol is required", i)
+		}
+	}
 	for i, p := range rs.Propagators {
 		what := fmt.Sprintf("propagators[%d]", i)
 		if err := p.Provenance.validate(what); err != nil {
@@ -424,6 +439,7 @@ type Rules struct {
 	Sinks       map[string][]Sink
 	Sanitizers  map[string][]Sanitizer
 	Propagators map[string][]Propagator
+	ConfigReads map[string]bool
 
 	// Expansions records what Expand did with match: implementations rules.
 	Expansions []Expansion
@@ -462,6 +478,7 @@ func Merge(sets ...*RuleSet) *Rules {
 		Sinks:       map[string][]Sink{},
 		Sanitizers:  map[string][]Sanitizer{},
 		Propagators: map[string][]Propagator{},
+		ConfigReads: map[string]bool{},
 	}
 	for _, rs := range sets {
 		for _, s := range rs.Sources {
@@ -484,6 +501,9 @@ func Merge(sets ...*RuleSet) *Rules {
 		}
 		for _, p := range rs.Propagators {
 			r.Propagators[p.Symbol] = append(r.Propagators[p.Symbol], p)
+		}
+		for _, c := range rs.ConfigReads {
+			r.ConfigReads[c.Symbol] = true
 		}
 	}
 	return r

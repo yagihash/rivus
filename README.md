@@ -50,7 +50,7 @@ Go / Rust / Dart extractor ──→ 中立 IR (CFG, JSON Lines) ──→ Go �
 
 | フェーズ | 内容 | 状態 |
 |---|---|---|
-| Phase 1 | Go のみで完結（`go/ssa` から直接 taint 解析） | 進行中。ステップ 1.0〜1.9、1.8b、1.11（1.11b を除く）まで実装済み。15.6 万行の x/tools を約 91 秒で解析（[計測](docs/DECISIONS.md)） |
+| Phase 1 | Go のみで完結（`go/ssa` から直接 taint 解析） | 進行中。ステップ 1.0〜1.11（1.11b を除く）まで実装済み。15.6 万行の x/tools を約 91 秒で解析（[計測](docs/DECISIONS.md)） |
 | Phase 2 | 中立 IR の切り出し | 未着手 |
 | Phase 3 | Rust 対応（固定 nightly 前提） | 未着手 |
 | Phase 4 | Dart 対応 | 未着手 |
@@ -100,6 +100,7 @@ rivus models coverage -yaml -top 20 ./...  # 埋めるためのルールのひ�
 - ルールに `match: implementations` と書くと、インタフェースのメソッドを、自モジュールの実装に展開する（上限 `-max-implementations`、既定 300）
 - シンボルは `go/types` の形式（`(*net/http.Request).FormValue`、`os/exec.Command`）。ルールの書式は [組み込みルール](internal/model/builtin) を参照
 - `resolve` には、前に出力された検出結果やサイトの JSON をそのまま渡せる。状態は `unchanged` / `changed` / `rematched` / `ambiguous` / `unresolved`。検出結果には、今も届くか（`flow`）も返す
+- 値によってサニタイズされるかが変わる関数（`render(s, escape bool)` のようなもの）は、検出結果の `conditional_nodes` に、条件・条件ごとの結果・呼び出し側が渡している式・引数の由来（`provenance`。定数、設定の読み出し、パッケージ変数、公開関数の引数など、辿れなくなった理由つき）を書き出す。どちらが起こるかは判定しない。引数が定数のときは、起こりえない側の流れを捨てる
 - ルールの `origin: builtin | human | llm` で、モデルを決めた主体を区別できる。`-deterministic-only` で `llm` のルールを無視する。LLM 由来のモデルが影響した検出結果は `llm_influenced`、検出結果を消した場所は `suppressions` に残る
 - ルールには `pure: true`（その関数を通って汚染は流れない）と、フレームワークの入口を宣言する `kind: param` が書ける
 - 出力は構造化 JSON。SARIF は未対応（副次出力として後で作る。GitHub のプライベートリポジトリの Security タブには Code Security が必要）

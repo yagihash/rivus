@@ -58,8 +58,13 @@ type Engine struct {
 	// degraded lists the functions whose analysis hit the budget. They are
 	// analysed once and then left alone.
 	degraded map[*ssa.Function]bool
+	// guardLimit lists the functions with a flow that had more guards than
+	// maxGuards: the flow is kept without guards (ADR-006).
+	guardLimit map[*ssa.Function]bool
 	// writers lists, for each package variable, the functions that store to it.
 	writers map[*ssa.Global][]string
+	// callSites lists, for each function, the calls that may reach it.
+	callSites map[*ssa.Function][]ssa.CallInstruction
 }
 
 // writersOf lists the functions that directly store to the package variable.
@@ -124,16 +129,37 @@ func New(p *gossa.Program, st *sites.Result, rules *model.Rules, graph Graph, op
 	}
 	return &Engine{
 		prog: p, sites: st, rules: rules, graph: graph, opts: opts,
-		summaries: map[*ssa.Function]*Summary{},
-		states:    map[*ssa.Function]*state{},
-		degraded:  map[*ssa.Function]bool{},
-		globals:   newGlobalStore(),
+		summaries:  map[*ssa.Function]*Summary{},
+		states:     map[*ssa.Function]*state{},
+		degraded:   map[*ssa.Function]bool{},
+		guardLimit: map[*ssa.Function]bool{},
+		globals:    newGlobalStore(),
 	}
 }
 
 func (e *Engine) funcID(fn *ssa.Function) string { return gossa.FuncID(fn) }
 
 func (e *Engine) hasBody(fn *ssa.Function) bool { return fn != nil && len(fn.Blocks) > 0 }
+
+func (e *Engine) noteGuardLimit(fn *ssa.Function) { e.guardLimit[fn] = true }
+
+// sanitizes reports whether the summary has a flow that passes a sanitizer
+// or carries a label of a source.
+func sanitizes(sum *Summary) bool {
+	for _, o := range sum.Outputs {
+		for _, oe := range o.Elems {
+			if oe.E.Kind == Real || oe.E.Mods != "" {
+				return true
+			}
+		}
+	}
+	for _, sr := range sum.Sinks {
+		if sr.Elem.Mods != "" {
+			return true
+		}
+	}
+	return false
+}
 
 func (e *Engine) noteNotConverged(fn *ssa.Function) {
 	e.notConverged = append(e.notConverged, e.funcID(fn))
@@ -289,7 +315,6 @@ func (e *Engine) analyzeFunc(fn *ssa.Function, dirty map[*ssa.Function]bool, cal
 	s := &state{
 		eng: e, fn: fn,
 		cells:       map[Root]map[string]Set{},
-		whys:        map[ref]*why{},
 		paramRoot:   map[Root]int{},
 		findings:    map[findingKey]*rawFinding{},
 		sinkReaches: map[sinkKey]*SinkReach{},
@@ -300,6 +325,11 @@ func (e *Engine) analyzeFunc(fn *ssa.Function, dirty map[*ssa.Function]bool, cal
 		e.degraded[fn] = true
 	}
 	sum := joinSummaries(e.summaries[fn], s.summarize())
+	// Too many guards matter only where taint is told apart by them: where
+	// something is sanitized, or a source's own label is returned.
+	if s.guardOverflow && sanitizes(sum) {
+		e.noteGuardLimit(fn)
+	}
 	e.states[fn] = s
 	if e.opts.SlowFunc != nil {
 		if d := time.Since(began); d > e.opts.SlowThreshold {
@@ -327,8 +357,8 @@ func (e *Engine) analyzeFunc(fn *ssa.Function, dirty map[*ssa.Function]bool, cal
 				if el.Kind != Real {
 					continue
 				}
-				if _, produced := s.whys[ref{Loc{r, path}, el}]; !produced {
-					continue
+				if set[el] == nil {
+					continue // read from the global state, not produced here
 				}
 				if e.globals.merge(g, path, el) {
 					changed = true
@@ -449,7 +479,7 @@ func (g *globalStore) merge(v *ssa.Global, path string, e Elem) bool {
 	if _, ok := set[e]; ok {
 		return false
 	}
-	set[e] = struct{}{}
+	set[e] = nil
 	return true
 }
 
@@ -516,6 +546,7 @@ func (e *Engine) collect(st Stats) *Result {
 			}
 			if rf.steps.len() < cur.steps.len() {
 				cur.steps = rf.steps
+				cur.guards = rf.guards
 			}
 		}
 		if !e.prog.Own[fn] {
@@ -538,6 +569,19 @@ func (e *Engine) collect(st Stats) *Result {
 	}
 	for _, pe := range e.prog.LoadErrors {
 		u := newUncertainty(KindMissingSource, pe.Message, pe.Package)
+		res.Uncertainties = append(res.Uncertainties, u)
+	}
+	var limited []*ssa.Function
+	for fn := range e.guardLimit {
+		limited = append(limited, fn)
+	}
+	sort.Slice(limited, func(i, j int) bool { return gossa.FuncID(limited[i]) < gossa.FuncID(limited[j]) })
+	for _, fn := range limited {
+		u := newUncertainty(KindDepthLimit, "guard_limit: a flow in this function depends on more than "+itoa(maxGuards)+
+			" conditions on parameters; it is kept without them, as possible under any condition", "")
+		u.Func = e.funcID(fn)
+		u.pos = fn.Pos()
+		e.fill(u)
 		res.Uncertainties = append(res.Uncertainties, u)
 	}
 	var degraded []*ssa.Function
@@ -659,6 +703,7 @@ func (e *Engine) buildFinding(rf *rawFinding) *Finding {
 		}
 	}
 	f.Paths = []Path{{Steps: steps}}
+	f.ConditionalNodes = e.conditionalNodes(rf.guards)
 
 	// Which models decided something on the path, and who decided them.
 	seenModel := map[string]bool{}

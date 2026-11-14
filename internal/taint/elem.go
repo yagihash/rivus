@@ -32,8 +32,10 @@ type Elem struct {
 	Mods   string // Param: sanitizer operations applied since (see applyMods)
 }
 
-// Set is a set of taint elements.
-type Set map[Elem]struct{}
+// Set is a set of taint elements. Each element carries the reason it first
+// got into the set, which is nil for an element that was not produced by
+// the analysis of the function (one read from the global state).
+type Set map[Elem]*why
 
 func (s Set) sorted() []Elem {
 	out := make([]Elem, 0, len(s))

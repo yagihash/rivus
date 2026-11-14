@@ -231,6 +231,7 @@ type rawFinding struct {
 	site   *sites.Site
 	labels map[string]bool
 	steps  *rope
+	guards []Guard
 }
 
 type sinkKey struct {
@@ -244,6 +245,7 @@ type SinkReach struct {
 	Site    string
 	Accepts []string
 	Steps   *rope
+	Guards  []Guard
 }
 
 func (s *state) checkSink(cc *callCtx, site *sites.Site) {
@@ -278,16 +280,17 @@ func accepted(accepts []string, label string) bool {
 
 func (s *state) reach(site *sites.Site, f found, in ssa.Instruction) {
 	steps := cat(s.trace(f.Cell, f.Orig), leaf(s.sinkStep(site, in)))
+	gs := s.guardsAtSink(in, f)
 	switch f.E.Kind {
 	case Real:
 		if !accepted(site.Labels, f.E.Label) {
 			return
 		}
-		s.recordFinding(f.E.Origin, site, f.E.Label, steps)
+		s.recordFinding(f.E.Origin, site, f.E.Label, steps, gs)
 	case Param:
 		k := sinkKey{f.E, site.ID}
 		if old, ok := s.sinkReaches[k]; !ok || steps.len() < old.Steps.len() {
-			s.sinkReaches[k] = &SinkReach{Elem: f.E, Site: site.ID, Accepts: site.Labels, Steps: steps}
+			s.sinkReaches[k] = &SinkReach{Elem: f.E, Site: site.ID, Accepts: site.Labels, Steps: steps, Guards: gs}
 		}
 	}
 }
@@ -296,7 +299,20 @@ func (s *state) sinkStep(site *sites.Site, in ssa.Instruction) Step {
 	return Step{Func: s.eng.funcID(s.fn), Desc: "sink: " + site.Symbol, pos: in.Pos()}
 }
 
-func (s *state) recordFinding(origin string, site *sites.Site, label string, steps *rope) {
+// guardsAtSink are the conditions under which the flow reaches the sink: those
+// of the block with the call, and those along the way. More than maxGuards
+// of them are dropped (ADR-006), and the function is marked.
+func (s *state) guardsAtSink(in ssa.Instruction, f found) []Guard {
+	chain, over := s.guardsOfChain(f.Cell, f.Orig)
+	all := unionGuards(s.blockGuards(in.Block()), chain)
+	if over || len(all) > maxGuards {
+		s.guardOverflow = true
+		return nil
+	}
+	return all
+}
+
+func (s *state) recordFinding(origin string, site *sites.Site, label string, steps *rope, guards []Guard) {
 	k := findingKey{origin, site.ID}
 	rf := s.findings[k]
 	if rf == nil {
@@ -306,6 +322,7 @@ func (s *state) recordFinding(origin string, site *sites.Site, label string, ste
 	rf.labels[label] = true
 	if rf.steps == nil || steps.len() < rf.steps.len() {
 		rf.steps = steps
+		rf.guards = guards
 	}
 }
 

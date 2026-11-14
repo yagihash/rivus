@@ -40,6 +40,16 @@ type why struct {
 	steps *rope // steps taken inside a callee, spliced in from its summary
 	notes []*Uncertainty
 	model *ModelRef
+	// guards are the parameter dependent conditions under which this hop
+	// happens. They are recorded where flows meet or leave: at a phi, a
+	// return and a sink. unguarded is set when the same element also gets
+	// here without them, so that the guards no longer describe it.
+	guards    []Guard
+	unguarded bool
+	// calleeGuards are the guards of a summary applied here, in the callee's
+	// terms; call tells how to read them from this side.
+	calleeGuards []Guard
+	call         *callInfo
 }
 
 // found is an element read from some cell.
@@ -56,7 +66,6 @@ type state struct {
 	fn  *ssa.Function
 
 	cells   map[Root]map[string]Set
-	whys    map[ref]*why
 	changed bool
 
 	paramRoot map[Root]int // parameter and free variable roots -> index
@@ -64,12 +73,17 @@ type state struct {
 	locSet    map[ssa.Value]map[Loc]bool
 	locCache  map[ssa.Value][]Loc
 
-	rootVer     map[Root]int // number of elements added to each root: change detector
-	callSigs    map[ssa.CallInstruction]int
-	sortedElems map[Loc]cachedElems
-	sortedPaths map[Root]cachedPaths
-	collectMemo map[Loc][]found // active during one summary application
-	expandMemo  map[Elem][]expanded
+	branches        *[]*ssa.BasicBlock
+	edgeGuardCache  map[[2]*ssa.BasicBlock][]Guard
+	guardOverflow   bool
+	condCache       map[*ssa.BasicBlock]*Guard
+	blockGuardCache map[*ssa.BasicBlock][]Guard
+	rootVer         map[Root]int // number of elements added to each root: change detector
+	callSigs        map[ssa.CallInstruction]int
+	sortedElems     map[Loc]cachedElems
+	sortedPaths     map[Root]cachedPaths
+	collectMemo     map[Loc][]found // active during one summary application
+	expandMemo      map[Elem][]expanded
 
 	suppressions map[string]*Suppression
 	findings     map[findingKey]*rawFinding
@@ -130,7 +144,7 @@ func (s *state) cellsOf(r Root) map[string]Set {
 			for path, set := range s.eng.globals.cellsOf(g) {
 				cp := Set{}
 				for e := range set {
-					cp[e] = struct{}{}
+					cp[e] = nil
 				}
 				m[path] = cp
 			}
@@ -152,19 +166,35 @@ func (s *state) add(l Loc, e Elem, w *why) {
 		set = Set{}
 		cm[l.Path] = set
 	}
-	if _, ok := set[e]; ok {
+	if old, ok := set[e]; ok {
+		// The element is already here. If it came with other guards, the
+		// guards recorded for it do not describe it any more.
+		if old != nil && w != nil && !(sameGuards(old.guards, w.guards) && sameGuards(old.calleeGuards, w.calleeGuards) && old.call == w.call) {
+			old.unguarded = true
+		}
 		return
 	}
-	set[e] = struct{}{}
+	set[e] = w
 	s.changed = true
 	s.adds++
 	if s.rootVer == nil {
 		s.rootVer = map[Root]int{}
 	}
 	s.rootVer[l.Root]++
-	if _, ok := s.whys[ref{l, e}]; !ok {
-		s.whys[ref{l, e}] = w
+}
+
+// whyOf returns the reason the element got into the cell, if the analysis
+// of the function put it there.
+func (s *state) whyOf(r ref) *why {
+	cm := s.cells[r.Loc.Root]
+	if cm == nil {
+		return nil
 	}
+	set := cm[r.Loc.Path]
+	if set == nil {
+		return nil
+	}
+	return set[r.E]
 }
 
 // collect reads everything that is known about the location: the taint of
@@ -302,6 +332,29 @@ func (s *state) whyFn(in ssa.Instruction, kind string) func(f found) *why {
 	}
 }
 
+// whyGuarded is whyFn with guards.
+func (s *state) whyGuarded(in ssa.Instruction, kind string, gs []Guard) func(f found) *why {
+	base := s.whyFn(in, kind)
+	return func(f found) *why {
+		w := base(f)
+		w.guards = gs
+		return w
+	}
+}
+
+// copyLocsGuarded copies like copyLocs and records the guards of the hop.
+func (s *state) copyLocsGuarded(src []Loc, dst []Loc, kind string, in ssa.Instruction, gs []Guard) {
+	if len(gs) == 0 {
+		s.copyLocs(src, dst, kind, in)
+		return
+	}
+	for _, d := range dst {
+		for _, sl := range src {
+			s.copyLoc(sl, d, s.whyGuarded(in, kind, gs))
+		}
+	}
+}
+
 func (s *state) whyNote(in ssa.Instruction, kind string, u *Uncertainty) func(f found) *why {
 	base := s.whyFn(in, kind)
 	return func(f found) *why {
@@ -327,7 +380,7 @@ func (s *state) trace(l Loc, e Elem) *rope {
 			break
 		}
 		seen[cur] = true
-		w := s.whys[cur]
+		w := s.whyOf(cur)
 		if w == nil {
 			break
 		}
@@ -347,7 +400,7 @@ func (s *state) trace(l Loc, e Elem) *rope {
 func (s *state) stepsOf(w *why) *rope {
 	var out *rope
 	if w.desc != "" && !skipStep(w.desc) {
-		st := Step{Func: s.eng.funcID(w.fn), Desc: w.desc, pos: w.pos, Model: w.model}
+		st := Step{Func: s.eng.funcID(w.fn), Desc: w.desc, pos: w.pos, Model: w.model, guards: w.guards}
 		st.Notes = w.notes
 		out = leaf(st)
 	} else if len(w.notes) > 0 {

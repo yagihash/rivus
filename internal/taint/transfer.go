@@ -72,8 +72,13 @@ func (s *state) transfer(in ssa.Instruction) {
 		if pointerLike(in.Type()) {
 			return
 		}
-		for _, e := range in.Edges {
-			s.copyLocs(s.locs(e), []Loc{{own(in), ""}}, "phi", in)
+		preds := in.Block().Preds
+		for i, e := range in.Edges {
+			var gs []Guard
+			if i < len(preds) {
+				gs = s.edgeGuards(preds[i], in.Block())
+			}
+			s.copyLocsGuarded(s.locs(e), []Loc{{own(in), ""}}, "phi", in, gs)
 		}
 
 	case *ssa.UnOp:
@@ -179,8 +184,9 @@ func (s *state) transfer(in ssa.Instruction) {
 		}
 
 	case *ssa.Return:
+		gs := s.blockGuards(in.Block())
 		for i, r := range in.Results {
-			s.copyLocs(s.locs(r), []Loc{{Root{nil, i}, ""}}, "return", in)
+			s.copyLocsGuarded(s.locs(r), []Loc{{Root{nil, i}, ""}}, "return", in, gs)
 		}
 
 	case ssa.CallInstruction:

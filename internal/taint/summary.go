@@ -21,6 +21,9 @@ const (
 type OutElem struct {
 	E     Elem
 	Steps *rope
+	// Guards are the conditions, depending on parameters, under which this
+	// element reaches the output.
+	Guards []Guard
 }
 
 // Output says which taint ends up in a result, in (the object behind) a
@@ -79,10 +82,14 @@ func (s *state) summarize() *Summary {
 				if kind == OutParam && p == "" && e == (Elem{Kind: Param, Param: idx}) {
 					continue // the parameter's own taint: no flow
 				}
-				if _, ok := s.whys[ref{Loc{r, p}, e}]; !ok {
+				if cm[p][e] == nil {
 					continue // read from the global store, not produced here
 				}
-				elems = append(elems, OutElem{E: e, Steps: s.trace(Loc{r, p}, e)})
+				gs, over := s.guardsOfChain(Loc{r, p}, e)
+				if over {
+					s.guardOverflow = true
+				}
+				elems = append(elems, OutElem{E: e, Steps: s.trace(Loc{r, p}, e), Guards: gs})
 			}
 			if len(elems) > 0 {
 				sum.Outputs = append(sum.Outputs, Output{Kind: kind, Index: idx, Global: glob, Path: p, Elems: widen(elems)})
@@ -142,8 +149,11 @@ func widen(elems []OutElem) []OutElem {
 		}
 		if oe.Steps.len() < cur.Steps.len() {
 			cur.Steps = oe.Steps
-			merged[k] = cur
 		}
+		if !sameGuards(cur.Guards, oe.Guards) {
+			cur.Guards = nil // merged: no single condition describes them
+		}
+		merged[k] = cur
 	}
 	for _, k := range order {
 		out = append(out, merged[k])
@@ -166,11 +176,11 @@ func (sum *Summary) signature() string {
 		}
 		parts = append(parts, "out", o.Kind, strconv.Itoa(o.Index), g, o.Path)
 		for _, e := range o.Elems {
-			parts = append(parts, e.E.String())
+			parts = append(parts, e.E.String(), guardsKey(e.Guards))
 		}
 	}
 	for _, k := range sum.Sinks {
-		parts = append(parts, "sink", k.Site, k.Elem.String())
+		parts = append(parts, "sink", k.Site, k.Elem.String(), guardsKey(k.Guards))
 	}
 	return fingerprint.Hash(parts...)
 }
@@ -233,6 +243,7 @@ func (s *state) applySummary(cc *callCtx, fn *ssa.Function, bindings []ssa.Value
 		return
 	}
 	desc := "call " + s.eng.funcID(fn)
+	info := s.newCallInfo(cc, argv)
 	// Within one application the same symbolic element is expanded many
 	// times; the actual arguments do not change meanwhile.
 	s.collectMemo = map[Loc][]found{}
@@ -255,8 +266,14 @@ func (s *state) applySummary(cc *callCtx, fn *ssa.Function, bindings []ssa.Value
 			dsts = []Loc{{own(o.Global), o.Path}}
 		}
 		for _, oe := range o.Elems {
+			if len(oe.Guards) > 0 && !info.feasible(oe.Guards) {
+				continue // the call passes constants that rule this flow out
+			}
 			for _, x := range s.expandElem(oe.E, argv) {
 				w := &why{fn: s.fn, pos: cc.in.Pos(), desc: desc, steps: oe.Steps, notes: notes}
+				if len(oe.Guards) > 0 {
+					w.calleeGuards, w.call = oe.Guards, info
+				}
 				if x.From != nil {
 					w.from = &ref{x.From.Cell, x.From.Orig}
 				}
@@ -267,6 +284,10 @@ func (s *state) applySummary(cc *callCtx, fn *ssa.Function, bindings []ssa.Value
 		}
 	}
 	for _, sr := range sum.Sinks {
+		if len(sr.Guards) > 0 && !info.feasible(sr.Guards) {
+			continue
+		}
+		srGuards := s.instantiate(info, sr.Guards)
 		for _, x := range s.expandElem(sr.Elem, argv) {
 			var steps *rope
 			if x.From != nil {
@@ -275,15 +296,25 @@ func (s *state) applySummary(cc *callCtx, fn *ssa.Function, bindings []ssa.Value
 			call := Step{Func: s.eng.funcID(s.fn), Desc: desc, pos: cc.in.Pos()}
 			call.Notes = notes
 			steps = cat(cat(steps, leaf(call)), sr.Steps)
+			var chain []Guard
+			var over bool
+			if x.From != nil {
+				chain, over = s.guardsOfChain(x.From.Cell, x.From.Orig)
+			}
+			gs := unionGuards(srGuards, chain, s.blockGuards(cc.in.Block()))
+			if over || len(gs) > maxGuards {
+				s.guardOverflow = true
+				gs = nil
+			}
 			switch x.E.Kind {
 			case Real:
 				if accepted(sr.Accepts, x.E.Label) {
-					s.recordFinding(x.E.Origin, s.eng.sites.ByID[sr.Site], x.E.Label, steps)
+					s.recordFinding(x.E.Origin, s.eng.sites.ByID[sr.Site], x.E.Label, steps, gs)
 				}
 			case Param:
 				k := sinkKey{x.E, sr.Site}
 				if old, ok := s.sinkReaches[k]; !ok || steps.len() < old.Steps.len() {
-					s.sinkReaches[k] = &SinkReach{Elem: x.E, Site: sr.Site, Accepts: sr.Accepts, Steps: steps}
+					s.sinkReaches[k] = &SinkReach{Elem: x.E, Site: sr.Site, Accepts: sr.Accepts, Steps: steps, Guards: gs}
 				}
 			}
 		}
@@ -317,7 +348,18 @@ func joinSummaries(old, cur *Summary) *Summary {
 				keys = append(keys, k)
 			}
 			for _, oe := range o.Elems {
-				if have, ok := m[oe.E]; !ok || oe.Steps.len() < have.Steps.len() {
+				have, ok := m[oe.E]
+				switch {
+				case !ok:
+					m[oe.E] = oe
+				case !sameGuards(have.Guards, oe.Guards):
+					// Seen under different conditions: under none in particular.
+					if oe.Steps.len() < have.Steps.len() {
+						have.Steps = oe.Steps
+					}
+					have.Guards = nil
+					m[oe.E] = have
+				case oe.Steps.len() < have.Steps.len():
 					m[oe.E] = oe
 				}
 			}
