@@ -348,7 +348,7 @@ const (
 
 type Uncertainty struct {
     Kind          TerminalKind
-    AttributableTo string      // "target" | "rivus"
+    AttributableTo string      // "target" | "rivus" | "mixed"
     Detail        string       // サブ理由（missing_source など）
     Chain         []string     // 辿った式の連鎖
     Candidates    []FuncID     // dynamic_dispatch の候補
@@ -368,16 +368,18 @@ type Uncertainty struct {
 | `reflection` | target | |
 | `ffi_boundary` | target | |
 | `missing_source` | target | ワークフロー前提（`go generate` / `build_runner` 未実行）に由来 |
-| `dynamic_dispatch` | **要確認** | 候補の絞り込み精度は rivus の改善余地があるが、言語機能由来でもある |
-| `unresolved_callee` | **要確認** | 同上 |
-| `concurrency` | **要確認** | モデル化の余地はある |
+| `dynamic_dispatch` | mixed | 言語機能として呼び先が決まらないが、候補の絞り込み精度（VTA など）は rivus の改善余地がある |
+| `unresolved_callee` | mixed | 関数値は実行時に決まるが、生成箇所を追う型フロー解析で候補を絞れる |
+| `concurrency` | mixed | 実行順序に依存するが、channel を単純なキューとしてモデル化すれば追える範囲が広がる |
 | `unmodeled_library_call` | rivus | モデルを書けば減る |
 | `container_element_imprecision` | rivus | 結論に影響した場合のみ記録（ノイズ防止） |
 | `depth_limit` | rivus | |
 | `recursion_approximation` | rivus | |
 | `guard_limit`（サブ理由） | rivus | ガード上限超過。専用 kind にはせず、`depth_limit` ではない別の記録として残す |
 
-「要確認」の 3 つは、レビューで割り当てを決めたい（11 節）。
+`mixed` は「言語機能由来で、かつ rivus の精度向上でも減らせる」もの。
+集計では `target` / `rivus` / `mixed` を**別々に**出し、`mixed` を `rivus` に含めない（投資で減らせる量を過大に見積もらないため）。
+`mixed` の割り当ては暫定で、Phase 1 のステップ 1.12（ドッグフーディング）で実測してから見直す。
 
 ### 4.5 出力
 
@@ -598,8 +600,8 @@ SARIF 出力は Phase 1 のスコープ外。JSON が固まってから。
 
 ## 11. レビューで確認したい点
 
-1. 4.4 の `dynamic_dispatch` / `unresolved_callee` / `concurrency` の `attributable_to` 割り当て。
-   私の案は「3 つとも `target`」だが、いずれも rivus 側の改善余地があるため `rivus` とする見方もある
+1. **【決定済み】** 4.4 の `dynamic_dispatch` / `unresolved_callee` / `concurrency` は `attributable_to: mixed`（3 値化）。
+   Phase 1 のステップ 1.12 の実測後に見直す
 2. Phase 1 の間は lifted の `go/ssa` を直接使い、**自作の SSA 化（`ssabuild`）と differential test は Phase 2 に回す**構成にした。
    Phase 1 のうちに自作 SSA 化まで入れ、最初から同じ経路を通す案もある（ブリーフの Phase 1「IR を経由しない」とは外れる）
 3. IR の命令数は 27（2.3）。`slice` や `global_load/store` を独立命令にしたが、`index_*` / `field_*` に畳む選択もある

@@ -322,7 +322,7 @@ SARIF に載せる場合、LLM 向けの付加情報は `properties` バッグ�
   **rivus のどこに投資すべきかが分かる**。既製 SAST では得られないフィードバックループ
 
 > 【改訂注記】レビューで 4 種を追加し（`ffi_boundary`、`unresolved_callee`、`missing_source`、
-> `recursion_approximation`）、各 kind に `attributable_to: target | rivus` を持たせた。
+> `recursion_approximation`）、各 kind に `attributable_to: target | rivus | mixed` を持たせた。
 > 列挙は閉じた集合とし、追加はスキーマのバージョンを上げて行う。
 > → [DECISIONS.md ADR-008](DECISIONS.md)、[ARCHITECTURE.md 4.4](ARCHITECTURE.md)
 

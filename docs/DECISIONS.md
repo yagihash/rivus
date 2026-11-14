@@ -119,10 +119,12 @@ rivus の設計判断を、後から経緯を追えるように記録する。
 - **決定:**
   - ブリーフの 10 種に 4 種を追加する: `ffi_boundary`、`unresolved_callee`、`missing_source`（サブ理由を文字列で持つ。proc-macro 展開結果や未生成コードを含む）、`recursion_approximation`
   - 集合は**閉じる**。追加はスキーマのバージョンを上げて行う
-  - 各 kind に `attributable_to: target | rivus` を持たせる
+  - 各 kind に `attributable_to: target | rivus | mixed` を持たせる。
+    `mixed` は「言語機能由来だが rivus の精度向上でも減らせる」もの。集計では `rivus` と別々に出す
 - **理由:** これらを `depth_limit` に押し込むと「rivus の都合」と「対象の性質」が混ざる。
   `attributable_to: rivus` の比率がそのまま「rivus の未熟さの指標」になり、どこに投資すべきかが数字で出る。既製 SAST では得られないフィードバックループ。
-- **帰結:** kind ごとの割り当て初版は ARCHITECTURE.md 4.4。`dynamic_dispatch` / `unresolved_callee` / `concurrency` は割り当て未確定でレビュー待ち。
+- **帰結:** kind ごとの割り当て初版は ARCHITECTURE.md 4.4。`dynamic_dispatch` / `unresolved_callee` / `concurrency` は `mixed`。
+  コールグラフの精度を実装前に見積もれないため、2 値に決め打ちせず 3 値で様子を見る。Phase 1 のステップ 1.12 の実測後に見直す（レビューで決定）。
   `container_element_imprecision` は結論に影響した場合のみ記録する（ノイズで集計が無意味にならないように）。
   ガード上限の超過は専用 kind にせず、サブ理由 `guard_limit` として別の記録に残す。
   `depth_limit` の比率は上限チューニングの指標として監視する。

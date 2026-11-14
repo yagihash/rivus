@@ -498,9 +498,10 @@ LLM に判定を委譲する設計では、由来そのものより「不確実�
 | `recursion_approximation` | SCC を近似で閉じた（追加） |
 
 **`attributable_to`**
-各 kind に付ける属性。`target` または `rivus`。
-- `target`: 対象コードの性質に由来し、rivus を改善しても解決しない
+各 kind に付ける属性。`target`、`rivus`、`mixed` のいずれか。
+- `target`: 対象（解析される側のコード）の性質に由来し、rivus を改善しても解決しない
 - `rivus`: rivus 側の都合であり、改善すれば減らせる
+- `mixed`: 言語機能に由来するが、rivus の精度向上でも減らせる（`dynamic_dispatch` など）。集計では `rivus` と別に出す
 
 `attributable_to: rivus` の比率がそのまま「rivus の未熟さの指標」になり、投資先を数字で示す。
 kind ごとの割り当ては ARCHITECTURE.md を参照。
