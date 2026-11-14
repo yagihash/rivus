@@ -335,7 +335,6 @@ func (e *Engine) analyzeFunc(fn *sg.Func, dirty map[*sg.Func]bool, callers map[*
 	if s.guardOverflow && sanitizes(sum) {
 		e.noteGuardLimit(fn)
 	}
-	e.states[fn] = s
 	if e.opts.SlowFunc != nil {
 		if d := time.Since(began); d > e.opts.SlowThreshold {
 			e.opts.SlowFunc(e.funcID(fn), d, len(sum.Outputs), len(s.cells))
@@ -380,6 +379,11 @@ func (e *Engine) analyzeFunc(fn *sg.Func, dirty map[*sg.Func]bool, callers map[*
 			e.globals.noteReader(r.V, fn)
 		}
 	}
+	// What the result needs of the analysis is the findings, the
+	// suppressions and the uncertainties. The cells and the caches are the
+	// bulk of the memory, and the function is analysed afresh if it is
+	// visited again.
+	e.states[fn] = &state{eng: e, fn: fn, findings: s.findings, suppressions: s.suppressions, uncertain: s.uncertain}
 	return changed
 }
 

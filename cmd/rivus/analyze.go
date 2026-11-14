@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"runtime/pprof"
 	"time"
 
@@ -109,7 +110,11 @@ func (o *analyzeOpts) phaseTimer() func(string) {
 	last := time.Now()
 	return func(name string) {
 		if o.verbose {
-			fmt.Fprintf(os.Stderr, "rivus: %-10s %v\n", name, time.Since(last).Round(time.Millisecond))
+			// The live heap after a collection: what each phase leaves behind.
+			var m runtime.MemStats
+			runtime.GC()
+			runtime.ReadMemStats(&m)
+			fmt.Fprintf(os.Stderr, "rivus: %-10s %v  (heap %d MB)\n", name, time.Since(last).Round(time.Millisecond), m.HeapAlloc>>20)
 		}
 		last = time.Now()
 	}

@@ -51,7 +51,7 @@ Go / Rust / Dart extractor ──→ 中立 IR (CFG, JSON Lines) ──→ Go �
 | フェーズ | 内容 | 状態 |
 |---|---|---|
 | Phase 1 | Go のみで完結（`go/ssa` から直接 taint 解析） | 完了（ステップ 1.0〜1.12） |
-| Phase 2 | 中立 IR の切り出し | 完了（ステップ 2.0〜2.6）。コアは `go/ssa` を知らない。15.6 万行の x/tools を約 100 秒で解析（[ADR-040](docs/DECISIONS.md)） |
+| Phase 2 | 中立 IR の切り出し | 完了（ステップ 2.0〜2.6）。コアは `go/ssa` を知らない。15.6 万行の x/tools を約 97 秒・2.4 GB で解析（[ADR-040](docs/DECISIONS.md)） |
 | Phase 3 | Rust 対応（固定 nightly 前提） | 未着手 |
 | Phase 4 | Dart 対応 | 未着手 |
 
