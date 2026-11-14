@@ -24,6 +24,7 @@
 ## 特徴
 
 - **ファイルを跨ぐ** source → sink の経路解析
+- **疑わしい箇所の軽量な列挙**（`rivus sites`）と、そこを起点にした詳細分析（`rivus query --site`）。LLM エージェントの道具として使うことを想定
 - **片側だけのクエリ**: 「この sink に到達し得る source の列挙」「この source が到達し得る sink の列挙」
 - source / sink / sanitizer / propagator を **YAML のルール**で定義（組み込みルールも同じ形式）
 - **LLM 検証を支援する出力**
@@ -79,6 +80,8 @@ Go / Rust / Dart extractor ──→ 中立 IR (CFG, JSON Lines) ──→ Go �
 ## 使い方（予定）
 
 ```sh
+rivus sites ./...                         # 疑わしい箇所（サイト）の軽量な列挙
+rivus query --site <ID> ./...             # そのサイトの詳細分析
 rivus analyze ./...                       # source/sink/sanitizer ルールで検出
 rivus query --sink 'os/exec.Command' ./...  # この sink に到達し得る source を列挙
 rivus models coverage ./...               # モデル未定義の外部関数を頻度順に表示

@@ -38,6 +38,28 @@ rivus は「脆弱性を報告する SAST」ではなく、**到達可能性に�
 
 責務の境界は「**言語固有の知識が要るか**」で引く。CFG 構築まで（言語固有の脱糖を含む）は extractor、SSA 化から先はコア。
 
+### 想定する使われ方（エージェントの道具）
+
+rivus の主な利用者の 1 つは、脆弱性の有無を判定する **LLM エージェント**である。
+エージェントは「疑わしい箇所を軽く洗い出し → 気になる箇所だけ詳細に分析する」という 2 段構えで使う。
+
+| レベル | 内容 | 必要な処理 |
+|---|---|---|
+| L0 | ルールの source / sink にマッチする**サイト**（箇所）を列挙する | ローダ ＋ シンボル照合のみ（ほぼ即時） |
+| L1 | L0 に加えて、sink の引数が**リテラル定数だけ**のものに印を付ける。落とさず、事実として印を付けるだけ | 手続き内の簡単な確認 |
+| L2 | 詳細分析（サマリ、ラベル、由来追跡、不確実性の記録） | 全部 |
+
+```
+rivus sites ./...                   # L0 / L1: 疑わしい箇所（サイト）の列挙
+rivus query --site <ID> ./...       # L2: そのサイトの詳細分析
+```
+
+- L0 / L1 は判定ではなく**列挙**であり、ADR-001（事実を出し、判定はしない）と矛盾しない
+- サイトには**安定した ID**（関数 ID ＋ 位置）を振り、L2 のクエリの seed として受け取れるようにする
+- サイトの列挙は IR の `call`（呼び先 `FuncID`）で行うので、言語中立
+- 呼び出し口は、まず **CLI ＋ JSON 出力**。`query` 層は差し替え可能に保ち、必要になれば常駐サーバ（MCP など）を足す
+- エージェントのコンテキストを圧迫しないよう、出力の詳細度を選べるようにする（7 節）
+
 ### 設計上の要点
 
 - **IR は CFG の高さで切る。φ なしの CFG ＋ 書き換え可能なローカル変数。** SSA 化はコアに一本化する
@@ -179,7 +201,8 @@ internal/
   guard/                  引数由来の条件ガードの抽出と上限制御
   provenance/             引数の由来追跡（後ろ向き）
   uncertainty/            terminal kind、attributable_to、記録
-  query/                  前向き / 後ろ向き / source-sink 組
+  sites/                  サイト（source / sink の候補箇所）の列挙と ID 付け。L0 / L1
+  query/                  前向き / 後ろ向き / source-sink 組。サイト ID を seed に取れる
   report/                 結果のグループ化、安定 ID、経路数の上限、JSON 出力
     sarif/                副次出力（JSON が固まってから）
   testutil/               testdata ハーネス
@@ -521,6 +544,8 @@ rivus models coverage ./...
 - 検出結果を **(source シンボル, sink シンボル) の組でグループ化**し、経路はその中に入れる
 - 1 グループあたりの経路数に上限（既定 3）。超えたら代表経路だけ出し、`omitted_paths` に残件数を記録
 - グループ単位で**安定した ID** を振る。同じ source/sink 組・同じ関数シグネチャなら、行番号が動いても同じ ID になるようにする。「前回から新規に増えたもの」を CI で扱えるようにする
+- **サイト ID**（`rivus sites` の各項目）も同じ方針で安定させる。ID を `rivus query --site` の seed に使える
+- **出力の詳細度を選べる**ようにする（概要のみ / スニペット付き / 関数全文付き）。エージェントのコンテキストを圧迫しないため
 
 ---
 
@@ -535,7 +560,8 @@ rivus models coverage ./...
    - (1) NaiveForm → IR → コアの SSA 化
    - (2) `go/ssa` の lifted 出力
    - 上記の φ の配置と到達定義が一致することを確認する
-   SSA 化は自作部分で最もバグを埋め込みやすく、症状が「なぜか汚染が消える / 増える」という分かりにくい形で出るため
+   SSA 化は自作部分で最もバグを埋め込みやすく、症状が「なぜか汚染が消える / 増える」という分かりにくい形で出るため。
+   導入時期は Phase 1 の終盤（1.11b）。Phase 1 の `testdata` が揃った段階で差し込み、SSA 化の問題を「検出結果の変化」として検知できるようにする
 3. **クロス言語の等価性テスト** — Phase が進むごとに、同じ意味のコードを複数言語で書いて同じ結果を期待する。IR の中立性の検証になる
 4. **ドッグフーディング** — rivus 自身を rivus で解析する。`attributable_to: rivus` の比率を監視する
 
@@ -543,8 +569,14 @@ rivus models coverage ./...
 
 ## 9. 性能目標
 
-叩き台: **20 万行規模のプロジェクトを、ノート PC で 5 分以内**。CI の PR チェックで回せる上限として置く。
-現実的でないと分かったらレビューで見直す。
+叩き台（現実的でないと分かったらレビューで見直す）は 2 軸で置く。
+
+1. **一括解析**: 20 万行規模のプロジェクトを、ノート PC で 5 分以内。CI の PR チェックで回せる上限として置く
+2. **問い合わせ**: サマリが揃った後の 1 回のクエリ（`rivus query --site`）の応答時間。
+   エージェントが対話的に何度も呼ぶため、数秒以内を目標にする（数値はステップ 1.8 の実測後に決める）。
+   `rivus sites`（L0 / L1）はそれより速く、ほぼ即時を目標にする
+
+問い合わせ型の使い方では、重いサマリ算出と軽いクエリ応答を分け、**サマリを保存して再利用できる**形にする必要がある。
 
 - 増分解析は Phase 1〜4 のスコープ外。ただしサマリの関数単位の独立性は壊さない
 - メモリに全部載せてよい前提で始める
@@ -561,16 +593,18 @@ Phase 1 では中立 IR を経由せず、`go/ssa` から直接 taint 解析ま�
 | 1.0 | 足場: `go.mod`（Go 1.27、`golang.org/x/tools` 最新）、CI（GitHub Actions）、LICENSE（Apache-2.0）、`testdata/` ハーネス | `go test ./...` が通る CI |
 | 1.1 | ローダ: `go/packages` → `go/ssa`（`InstantiateGenerics` 付き）、`FuncID` 付与、ソース位置とスニペット切り出し | 小さな Go プロジェクトの全関数と位置を列挙できる |
 | 1.2 | モデル: YAML 読み込み、シンボル照合（`exact` のみ先に）、組み込みの最小セット | source/sink/sanitizer を YAML で書いて照合できる |
+| 1.2b | サイト列挙（`rivus sites`）: L0 の列挙、L1 のリテラル印、サイト ID、JSON 出力 | 型解決つきで sink の呼び出し箇所を列挙でき、grep との差（別名インポートなど）がテストで示せる |
 | 1.3 | 手続き内 taint: ラベル、worklist、φ 相当の合流、sanitizer の `Drop` | 1 関数内の `testdata` ケース（検出する / しない）が通る |
 | 1.4 | 出力 v0: 構造化 JSON（経路ノードとスニペット） | 1.3 の結果が JSON で読める |
 | 1.5 | コールグラフ: `CallGraphBuilder` インタフェース、Go 実装（CHA → VTA）、SCC 縮約、トポロジカル順 | 呼び先から順に関数を列挙できる |
 | 1.6 | 関数サマリ: 算出、展開、SCC 内の不動点。ファイル・パッケージ跨ぎ | 複数ファイル・複数パッケージにまたがる `testdata` が通る |
 | 1.7 | ヒープ: フィールド感度（k=3）、クロージャ、グローバル、コンテナの扱い | 構造体・クロージャ経由のケースが通る |
 | ★ Dart スパイク | **1.5〜1.7 のあいだ、ただし Phase 2 の前に**。2 日のタイムボックス（下記） | 可否の判断 ＋ IR 設計に反映すべき難所のリスト |
-| 1.8 | 一方向クエリ: sink から source を引く / source から sink を引く | seed なしのクエリが動く |
+| 1.8 | 一方向クエリ: sink から source を引く / source から sink を引く。サイト ID を seed に取れる | seed なしのクエリと、サイト起点のクエリが動く。サマリの保存・再利用と、応答時間の初回計測 |
 | 1.9 | 不確実性の記録: terminal kind、`attributable_to`、`dynamic_dispatch` の候補列挙、`match: implementations` | すべての打ち切りが分類されて出る |
 | 1.10 | 値依存: 引数由来のガード抽出（taint ソルバ流用）、`conditional_nodes`、provenance、ガード上限 | ブリーフの `render` の例が期待どおりに出る |
 | 1.11 | 運用機能: モデルカバレッジレポート、`origin` と `--deterministic-only`、結果のグループ化・安定 ID・経路数上限、`entrypoints` | `rivus models coverage` が動く |
+| 1.11b | 自作 SSA 化（`ssabuild`）と differential test: `go/ssa` の NaiveForm 出力から SSA 化し、lifted `go/ssa` と φ の配置・到達定義を突き合わせる。Phase 1 の `testdata` を回帰テストにする | differential test が全 `testdata` で一致し、解析結果が変わらない |
 | 1.12 | ドッグフーディング: rivus 自身を解析。`depth_limit` と `attributable_to: rivus` の比率を計測 | 計測値を README に記録 |
 
 SARIF 出力は Phase 1 のスコープ外。JSON が固まってから。
@@ -592,7 +626,7 @@ SARIF 出力は Phase 1 のスコープ外。JSON が固まってから。
 
 ### Phase 2 以降の見通し
 
-- **Phase 2:** 中立 IR の切り出し。Go extractor（NaiveForm）が最初の実装例。`ssabuild` 実装と differential test を導入し、`gossa` を extractor に置き換える。Phase 1 の `testdata` がそのまま回帰テストになる
+- **Phase 2:** 中立 IR の切り出し。Go extractor（NaiveForm）が最初の実装例。`ssabuild` と differential test は Phase 1 のステップ 1.11b で導入済みなので、ここでは `gossa` を extractor に置き換えて IR を挟むことだけに集中する。Phase 1 の `testdata` がそのまま回帰テストになる
 - **Phase 3:** Rust。最初のタスクは「`stable-mir-json` 等の既存ツールで、実在のクレートがどれくらい通るかの確認」。成果物は「固定した nightly でビルドが通る Rust プロジェクトを解析できるツール」。想定より通らなければ、Rust の優先度を下げる判断もあり得る
 - **Phase 4:** Dart。解決済み AST → CFG → IR。まず関数内、それからコールグラフ
 
@@ -602,8 +636,8 @@ SARIF 出力は Phase 1 のスコープ外。JSON が固まってから。
 
 1. **【決定済み】** 4.4 の `dynamic_dispatch` / `unresolved_callee` / `concurrency` は `attributable_to: mixed`（3 値化）。
    Phase 1 のステップ 1.12 の実測後に見直す
-2. Phase 1 の間は lifted の `go/ssa` を直接使い、**自作の SSA 化（`ssabuild`）と differential test は Phase 2 に回す**構成にした。
-   Phase 1 のうちに自作 SSA 化まで入れ、最初から同じ経路を通す案もある（ブリーフの Phase 1「IR を経由しない」とは外れる）
+2. **【決定済み】** 自作 SSA 化と differential test は **Phase 1 の終盤（ステップ 1.11b）**で導入する（ADR-026）。
+   Phase 1 の間は lifted の `go/ssa` を使い、`testdata` が揃ってから差し込む
 3. IR の命令数は 27（2.3）。`slice` や `global_load/store` を独立命令にしたが、`index_*` / `field_*` に畳む選択もある
 4. `finally` の表現（経路ごとにブロック複製 / 行き先を値で分岐）は、Dart スパイクの結果で決める
 5. 性能目標（20 万行 / 5 分 / ノート PC）が現実的か
