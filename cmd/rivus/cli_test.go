@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/yagihash/rivus/internal/model"
 	"github.com/yagihash/rivus/internal/report"
 	"github.com/yagihash/rivus/internal/testutil"
 )
@@ -203,5 +204,54 @@ func TestSummaryShowsDispatchCandidatesAndTopSymbols(t *testing.T) {
 	}
 	if len(rep.Summary.TopSymbols["dynamic_dispatch_without_implementation"]) == 0 {
 		t.Errorf("top symbols missing: %+v", rep.Summary.TopSymbols)
+	}
+}
+
+func TestModelsCoverageRanksByFindings(t *testing.T) {
+	var cov report.Coverage
+	rivusJSON(t, &cov, "models", "coverage", "-rules", "rules.yaml", "./cases/heap")
+	if len(cov.Symbols) == 0 {
+		t.Fatal("no symbols")
+	}
+	first := cov.Symbols[0]
+	// strings.ToValidUTF8 has no model and lies on a finding's path: it must
+	// come before the calls that no finding depends on.
+	if first.Symbol != "strings.ToValidUTF8" || first.Findings != 1 || first.Kind != "unmodeled_library_call" {
+		t.Errorf("first = %+v", first)
+	}
+	if first.AttributableTo != "rivus" || first.Stub == "" {
+		t.Errorf("first = %+v", first)
+	}
+	for i := 1; i < len(cov.Symbols); i++ {
+		a, b := cov.Symbols[i-1], cov.Symbols[i]
+		if a.Findings < b.Findings || a.Findings == b.Findings && a.Calls < b.Calls {
+			t.Errorf("not sorted: %+v before %+v", a, b)
+		}
+	}
+}
+
+func TestModelsCoverageYAMLIsAValidRuleFile(t *testing.T) {
+	out := rivus(t, "models", "coverage", "-rules", "rules.yaml", "-yaml", "-top", "5", "./cases/heap")
+	rs, err := model.Parse(strings.NewReader(string(out)), "generated")
+	if err != nil {
+		t.Fatalf("the generated stub must load as rules: %v\n%s", err, out)
+	}
+	if len(rs.Propagators) == 0 || len(rs.Propagators) > 5 {
+		t.Errorf("propagators = %d", len(rs.Propagators))
+	}
+	if !strings.Contains(string(out), "TODO") {
+		t.Error("the placeholders must be marked")
+	}
+}
+
+func TestModelsCoverageFromAnIndex(t *testing.T) {
+	idx := filepath.Join(t.TempDir(), "index.json")
+	rivus(t, "index", "-rules", "rules.yaml", "-o", idx, "./cases/heap")
+	var cov report.Coverage
+	if err := json.Unmarshal(rivus(t, "models", "coverage", "-index", idx), &cov); err != nil {
+		t.Fatal(err)
+	}
+	if len(cov.Symbols) == 0 || cov.Total == 0 {
+		t.Errorf("empty coverage from the index: %+v", cov)
 	}
 }

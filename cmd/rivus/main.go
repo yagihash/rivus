@@ -18,6 +18,7 @@ Commands:
   query     answer a one-sided question about a sink or a source
   index     run the analysis once and save the result for later queries
   resolve   find where the places seen earlier (bookmarks) are in the current code
+  models    "rivus models coverage": which functions need a model most
 
 Run "rivus <command> -h" for the flags of a command.
 `
@@ -39,6 +40,8 @@ func main() {
 		err = runIndex(os.Args[2:])
 	case "resolve":
 		err = runResolve(os.Args[2:])
+	case "models":
+		err = runModels(os.Args[2:])
 	case "-h", "--help", "help":
 		fmt.Print(usage)
 		return
