@@ -16,6 +16,10 @@ const (
 	KindDepthLimit             = "depth_limit"
 	KindRecursionApproximation = "recursion_approximation"
 	KindMissingSource          = "missing_source"
+	KindReflection             = "reflection"
+	KindConcurrency            = "concurrency"
+	KindFFIBoundary            = "ffi_boundary"
+	KindGlobalVar              = "global_var"
 	AttributableTarget         = "target"
 	AttributableRivus          = "rivus"
 	AttributableMixed          = "mixed"
@@ -26,9 +30,9 @@ const (
 // (docs/ARCHITECTURE.md section 4.4).
 func attributable(kind string) string {
 	switch kind {
-	case KindDynamicDispatch, KindUnresolvedCallee:
+	case KindDynamicDispatch, KindUnresolvedCallee, KindConcurrency:
 		return AttributableMixed
-	case KindMissingSource:
+	case KindMissingSource, KindReflection, KindFFIBoundary, KindGlobalVar:
 		return AttributableTarget
 	default:
 		return AttributableRivus

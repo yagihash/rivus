@@ -3,6 +3,7 @@ package taint
 import (
 	"go/token"
 	"sort"
+	"strings"
 
 	"golang.org/x/tools/go/ssa"
 )
@@ -37,7 +38,7 @@ type why struct {
 	desc  string
 	from  *ref
 	steps *rope // steps taken inside a callee, spliced in from its summary
-	note  *Uncertainty
+	notes []*Uncertainty
 }
 
 // found is an element read from some cell.
@@ -210,15 +211,65 @@ func (s *state) collectUncached(l Loc) []found {
 // copyLoc copies the structure below src to dst.
 func (s *state) copyLoc(src, dst Loc, w func(f found) *why) {
 	for _, f := range s.collect(src) {
-		s.add(Loc{dst.Root, dst.Path + f.Rel}, f.E, w(f))
+		dl := Loc{dst.Root, dst.Path + f.Rel}
+		s.add(dl, f.E, s.withContainerNote(w(f), f.Cell.Path, dl.Path))
 	}
+}
+
+// pathNote is an uncertainty that belongs to one hop of a path. It is shown
+// with the findings whose path contains the hop, not in the program-level
+// list: "container_element_imprecision" only matters where it influenced a
+// result.
+func (s *state) pathNote(kind, detail string, pos token.Pos) *Uncertainty {
+	u := newUncertainty(kind, detail, "")
+	u.Func = s.eng.funcID(s.fn)
+	u.pos = pos
+	return u
+}
+
+func hasKind(notes []*Uncertainty, kind string) bool {
+	for _, n := range notes {
+		if n.Kind == kind {
+			return true
+		}
+	}
+	return false
+}
+
+// appendNote adds a note without touching the slice other hops share.
+func appendNote(notes []*Uncertainty, u *Uncertainty) []*Uncertainty {
+	if u == nil {
+		return notes
+	}
+	return append(append([]*Uncertainty(nil), notes...), u)
+}
+
+func hasElementSegment(p string) bool {
+	return strings.Contains(p, "/[]") || strings.HasSuffix(p, "/[k]") || strings.Contains(p, "/[k]/")
+}
+
+// withContainerNote marks a hop that moves data in or out of the elements of
+// a slice, array, map or channel: the elements are not told apart, and
+// writes through aliases of the container are not followed.
+func (s *state) withContainerNote(w *why, from, to string) *why {
+	if w == nil || hasKind(w.notes, KindContainerImprecision) || !(hasElementSegment(from) || hasElementSegment(to)) {
+		return w
+	}
+	w.notes = appendNote(w.notes, s.pathNote(KindContainerImprecision,
+		"the elements of the container are not told apart, and writes through other references to it are not followed", w.pos))
+	return w
 }
 
 // copyLocs copies from every source location to every destination.
 func (s *state) copyLocs(src []Loc, dst []Loc, kind string, in ssa.Instruction) {
+	s.copyLocsNoted(src, dst, kind, in, nil)
+}
+
+// copyLocsNoted is copyLocs with an uncertainty attached to the hop.
+func (s *state) copyLocsNoted(src []Loc, dst []Loc, kind string, in ssa.Instruction, note *Uncertainty) {
 	for _, d := range dst {
 		for _, sl := range src {
-			s.copyLoc(sl, d, s.whyFn(in, kind))
+			s.copyLoc(sl, d, s.whyNote(in, kind, note))
 		}
 	}
 }
@@ -235,7 +286,7 @@ func (s *state) flatten(locs []Loc) []found {
 // put adds the found elements to the destination, collapsed.
 func (s *state) put(dst Loc, fs []found, w func(f found) *why) {
 	for _, f := range fs {
-		s.add(dst, f.E, w(f))
+		s.add(dst, f.E, s.withContainerNote(w(f), f.Cell.Path, dst.Path))
 	}
 }
 
@@ -253,7 +304,7 @@ func (s *state) whyNote(in ssa.Instruction, kind string, u *Uncertainty) func(f 
 	base := s.whyFn(in, kind)
 	return func(f found) *why {
 		w := base(f)
-		w.note = u
+		w.notes = appendNote(w.notes, u)
 		return w
 	}
 }
@@ -295,12 +346,10 @@ func (s *state) stepsOf(w *why) *rope {
 	var out *rope
 	if w.desc != "" && !skipStep(w.desc) {
 		st := Step{Func: s.eng.funcID(w.fn), Desc: w.desc, pos: w.pos}
-		if w.note != nil {
-			st.Notes = []*Uncertainty{w.note}
-		}
+		st.Notes = w.notes
 		out = leaf(st)
-	} else if w.note != nil {
-		out = leaf(Step{Func: s.eng.funcID(w.fn), Desc: w.desc, pos: w.pos, Notes: []*Uncertainty{w.note}})
+	} else if len(w.notes) > 0 {
+		out = leaf(Step{Func: s.eng.funcID(w.fn), Desc: w.desc, pos: w.pos, Notes: w.notes})
 	}
 	return cat(out, w.steps)
 }

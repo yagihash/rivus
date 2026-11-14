@@ -82,9 +82,10 @@ func (s *state) transfer(in ssa.Instruction) {
 			if pointerLike(in.Type()) {
 				return
 			}
-			s.copyLocs(s.locs(in.X), []Loc{{own(in), ""}}, "load", in)
+			src := s.locs(in.X)
+			s.copyLocsNoted(src, []Loc{{own(in), ""}}, "load", in, s.globalNote(src, in.Pos()))
 		case token.ARROW:
-			s.loadInto(in, Loc{resRoot(in), ""}, suffix(s.locs(in.X), "[]"), tupleElem(in.Type(), 0), "receive")
+			s.loadInto(in, Loc{resRoot(in), ""}, suffix(s.locs(in.X), "[]"), tupleElem(in.Type(), 0), "receive", s.channelNote(in.Pos()))
 		default:
 			s.put(Loc{own(in), ""}, s.flatten(s.locs(in.X)), s.whyFn(in, "unary operation"))
 		}
@@ -116,7 +117,7 @@ func (s *state) transfer(in ssa.Instruction) {
 		if !in.CommaOk && pointerLike(in.Type()) {
 			return
 		}
-		s.loadInto(in, Loc{resRoot(in), ""}, s.locs(in.X), tupleElem(in.Type(), 0), "type assertion")
+		s.loadInto(in, Loc{resRoot(in), ""}, s.locs(in.X), tupleElem(in.Type(), 0), "type assertion", nil)
 
 	case *ssa.Slice:
 		if pointerLike(in.Type()) && pointerLike(in.X.Type()) {
@@ -141,7 +142,7 @@ func (s *state) transfer(in ssa.Instruction) {
 		s.copyLocs(suffix(s.locs(in.X), "[]"), []Loc{{own(in), ""}}, "read element", in)
 
 	case *ssa.Lookup:
-		s.loadInto(in, Loc{resRoot(in), ""}, suffix(s.locs(in.X), "[]"), tupleElem(in.Type(), 0), "read element")
+		s.loadInto(in, Loc{resRoot(in), ""}, suffix(s.locs(in.X), "[]"), tupleElem(in.Type(), 0), "read element", nil)
 
 	case *ssa.Range:
 		s.copyLocs(s.locs(in.X), []Loc{{own(in), ""}}, "range", in)
@@ -152,19 +153,30 @@ func (s *state) transfer(in ssa.Instruction) {
 		if in.IsString {
 			s.copyLocs(iter, []Loc{{Root{in, 2}, ""}}, "range value", in)
 		} else {
-			s.loadInto(in, Loc{Root{in, 2}, ""}, suffix(iter, "[]"), tupleElem(in.Type(), 2), "range value")
+			s.loadInto(in, Loc{Root{in, 2}, ""}, suffix(iter, "[]"), tupleElem(in.Type(), 2), "range value", nil)
 		}
 
 	case *ssa.Store:
-		s.store(in, s.locs(in.Addr), in.Val, "")
+		s.store(in, s.locs(in.Addr), in.Val, "", nil)
 	case *ssa.MapUpdate:
 		m := s.locs(in.Map)
 		for _, l := range m {
 			s.put(Loc{l.Root, pathJoin(l.Path, "[k]")}, s.flatten(s.locs(in.Key)), s.whyFn(in, "map key"))
 		}
-		s.store(in, m, in.Value, "[]")
+		s.store(in, m, in.Value, "[]", nil)
 	case *ssa.Send:
-		s.store(in, s.locs(in.Chan), in.X, "[]")
+		s.store(in, s.locs(in.Chan), in.X, "[]", s.channelNote(in.Pos()))
+	case *ssa.Select:
+		note := s.channelNote(in.Pos())
+		k := 0
+		for _, st := range in.States {
+			if st.Dir == types.SendOnly {
+				s.store(in, s.locs(st.Chan), st.Send, "[]", note)
+				continue
+			}
+			s.loadInto(in, Loc{Root{in, 2 + k}, ""}, suffix(s.locs(st.Chan), "[]"), tupleElem(in.Type(), 2+k), "receive", note)
+			k++
+		}
 
 	case *ssa.Return:
 		for i, r := range in.Results {
@@ -178,11 +190,30 @@ func (s *state) transfer(in ssa.Instruction) {
 
 // loadInto copies the value stored at src into dst, for results that are
 // distinct roots (tuples). Pointer-like values are read through the pointer.
-func (s *state) loadInto(in ssa.Instruction, dst Loc, src []Loc, t types.Type, kind string) {
+func (s *state) loadInto(in ssa.Instruction, dst Loc, src []Loc, t types.Type, kind string, note *Uncertainty) {
 	if pointerLike(t) {
 		src = suffix(src, "*")
 	}
-	s.copyLocs(src, []Loc{dst}, kind, in)
+	s.copyLocsNoted(src, []Loc{dst}, kind, in, note)
+}
+
+// channelNote marks a hop through a channel: goroutines are not modelled, so
+// the order in which values arrive is unknown.
+func (s *state) channelNote(pos token.Pos) *Uncertainty {
+	return s.pathNote(KindConcurrency, "the value crosses a channel; the order of effects between goroutines is not modelled", pos)
+}
+
+// globalNote marks a read of a package variable, listing who writes it.
+func (s *state) globalNote(src []Loc, pos token.Pos) *Uncertainty {
+	for _, l := range src {
+		if g, ok := l.Root.V.(*ssa.Global); ok {
+			u := s.pathNote(KindGlobalVar, "the value is read from the package variable "+g.String(), pos)
+			u.Symbol = g.String()
+			u.Candidates = s.eng.writersOf(g)
+			return u
+		}
+	}
+	return nil
 }
 
 func (s *state) convert(in ssa.Value, x ssa.Value) {
@@ -198,7 +229,7 @@ func (s *state) convert(in ssa.Value, x ssa.Value) {
 }
 
 // store writes val to the cells addr refers to (below the extra segment).
-func (s *state) store(in ssa.Instruction, addr []Loc, val ssa.Value, seg string) {
+func (s *state) store(in ssa.Instruction, addr []Loc, val ssa.Value, seg string, note *Uncertainty) {
 	var dst []Loc
 	for _, l := range addr {
 		p := l.Path
@@ -210,7 +241,7 @@ func (s *state) store(in ssa.Instruction, addr []Loc, val ssa.Value, seg string)
 		}
 		dst = append(dst, Loc{l.Root, p})
 	}
-	s.copyLocs(s.locs(val), dst, "store", in)
+	s.copyLocsNoted(s.locs(val), dst, "store", in, note)
 }
 
 // fieldSources applies field rules: reading a field that is declared a

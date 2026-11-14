@@ -222,7 +222,7 @@ func (s *state) expandParam(e Elem, argv []ssa.Value) []expanded {
 }
 
 // applySummary applies the summary of a callee at a call site.
-func (s *state) applySummary(cc *callCtx, fn *ssa.Function, bindings []ssa.Value, note *Uncertainty) {
+func (s *state) applySummary(cc *callCtx, fn *ssa.Function, bindings []ssa.Value, notes []*Uncertainty) {
 	sum := s.eng.summaries[fn]
 	if sum == nil {
 		return // not analysed yet; a later round picks it up
@@ -256,7 +256,7 @@ func (s *state) applySummary(cc *callCtx, fn *ssa.Function, bindings []ssa.Value
 		}
 		for _, oe := range o.Elems {
 			for _, x := range s.expandElem(oe.E, argv) {
-				w := &why{fn: s.fn, pos: cc.in.Pos(), desc: desc, steps: oe.Steps, note: note}
+				w := &why{fn: s.fn, pos: cc.in.Pos(), desc: desc, steps: oe.Steps, notes: notes}
 				if x.From != nil {
 					w.from = &ref{x.From.Cell, x.From.Orig}
 				}
@@ -273,9 +273,7 @@ func (s *state) applySummary(cc *callCtx, fn *ssa.Function, bindings []ssa.Value
 				steps = s.trace(x.From.Cell, x.From.Orig)
 			}
 			call := Step{Func: s.eng.funcID(s.fn), Desc: desc, pos: cc.in.Pos()}
-			if note != nil {
-				call.Notes = []*Uncertainty{note}
-			}
+			call.Notes = notes
 			steps = cat(cat(steps, leaf(call)), sr.Steps)
 			switch x.E.Kind {
 			case Real:

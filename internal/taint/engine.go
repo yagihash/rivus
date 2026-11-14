@@ -58,6 +58,56 @@ type Engine struct {
 	// degraded lists the functions whose analysis hit the budget. They are
 	// analysed once and then left alone.
 	degraded map[*ssa.Function]bool
+	// writers lists, for each package variable, the functions that store to it.
+	writers map[*ssa.Global][]string
+}
+
+// writersOf lists the functions that directly store to the package variable.
+func (e *Engine) writersOf(g *ssa.Global) []string {
+	if e.writers == nil {
+		e.writers = map[*ssa.Global][]string{}
+		seen := map[*ssa.Global]map[string]bool{}
+		for _, fn := range e.prog.Funcs {
+			for _, b := range fn.Blocks {
+				for _, in := range b.Instrs {
+					st, ok := in.(*ssa.Store)
+					if !ok {
+						continue
+					}
+					if gl := globalRoot(st.Addr); gl != nil {
+						id := e.funcID(fn)
+						if seen[gl] == nil {
+							seen[gl] = map[string]bool{}
+						}
+						if !seen[gl][id] {
+							seen[gl][id] = true
+							e.writers[gl] = append(e.writers[gl], id)
+						}
+					}
+				}
+			}
+		}
+		for _, l := range e.writers {
+			sort.Strings(l)
+		}
+	}
+	return e.writers[g]
+}
+
+// globalRoot follows field and element addresses back to a package variable.
+func globalRoot(v ssa.Value) *ssa.Global {
+	for {
+		switch a := v.(type) {
+		case *ssa.Global:
+			return a
+		case *ssa.FieldAddr:
+			v = a.X
+		case *ssa.IndexAddr:
+			v = a.X
+		default:
+			return nil
+		}
+	}
 }
 
 // New creates an engine. graph may be nil: calls through interfaces and

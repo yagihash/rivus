@@ -4,6 +4,7 @@ import (
 	"go/token"
 	"go/types"
 	"sort"
+	"strings"
 
 	"golang.org/x/tools/go/ssa"
 
@@ -115,16 +116,20 @@ func (s *state) callBody(cc *callCtx) {
 	}
 	ruleOnly := cc.sym != "" && (len(rules.CallSources[cc.sym]) > 0 || len(rules.Sinks[cc.sym]) > 0)
 
-	var note *Uncertainty
+	var notes []*Uncertainty
 	if common.IsInvoke() || len(fns) > 1 {
-		note = s.newNote(ci, KindDynamicDispatch, "call through an interface or function value", cc.sym)
+		note := s.newNote(ci, KindDynamicDispatch, "call through an interface or function value", cc.sym)
 		for _, fn := range fns {
 			note.Candidates = append(note.Candidates, s.eng.funcID(fn))
 		}
 		sort.Strings(note.Candidates)
+		notes = append(notes, note)
+	}
+	if _, ok := ci.(*ssa.Go); ok {
+		notes = append(notes, s.pathNote(KindConcurrency, "the callee runs in another goroutine; the order of effects is not modelled", ci.Pos()))
 	}
 	for _, fn := range withBody {
-		s.applySummary(cc, fn, bindings, note)
+		s.applySummary(cc, fn, bindings, notes)
 	}
 	switch {
 	case ruleOnly:
@@ -134,8 +139,23 @@ func (s *state) callBody(cc *callCtx) {
 	case len(fns) == 0:
 		s.unmodeled(cc, s.newNote(ci, KindUnresolvedCallee, "the called function is not known", cc.sym))
 	case external:
-		s.unmodeled(cc, s.newNote(ci, KindUnmodeledLibraryCall, "the function has no body and no model", cc.sym))
+		kind, detail := externalKind(fns, cc.sym)
+		s.unmodeled(cc, s.newNote(ci, kind, detail, cc.sym))
 	}
+}
+
+// externalKind tells why a call to a function without a body cannot be
+// followed: a missing model, reflection, or a foreign function interface.
+func externalKind(fns []*ssa.Function, sym string) (kind, detail string) {
+	for _, fn := range fns {
+		if fn.Pkg != nil && fn.Pkg.Pkg != nil && fn.Pkg.Pkg.Path() == "C" || strings.HasPrefix(fn.Name(), "_Cfunc_") || strings.HasPrefix(fn.Name(), "_Cgo_") {
+			return KindFFIBoundary, "the call leaves Go (cgo)"
+		}
+	}
+	if strings.HasPrefix(sym, "reflect.") || strings.HasPrefix(sym, "(reflect.") || strings.HasPrefix(sym, "(*reflect.") {
+		return KindReflection, "reflection decides at run time what happens"
+	}
+	return KindUnmodeledLibraryCall, "the function has no body and no model"
 }
 
 func callRoots(ci ssa.CallInstruction) []Root {

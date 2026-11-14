@@ -236,3 +236,63 @@ func TestTimeoutStopsTheRunAndSaysSo(t *testing.T) {
 		t.Error("a timed out run must record depth_limit")
 	}
 }
+
+func TestUncertain(t *testing.T) { checkCase(t, "uncertain") }
+
+// kindsOn returns the uncertainty kinds on the path of the finding whose
+// sink line contains the marker.
+func kindsOn(t *testing.T, res *Result, marker string) map[string]string {
+	t.Helper()
+	for _, f := range res.Findings {
+		if strings.Contains(f.Sink.Snippet, marker) {
+			out := map[string]string{}
+			for _, u := range f.Uncertainties {
+				out[u.Kind] = u.AttributableTo
+			}
+			return out
+		}
+	}
+	t.Fatalf("no finding for %q", marker)
+	return nil
+}
+
+func TestPathUncertaintyKinds(t *testing.T) {
+	res, _ := runCase(t, "uncertain")
+	want := map[string]map[string]string{
+		"@sink(chan)":      {KindConcurrency: AttributableMixed},
+		"@sink(goroutine)": {KindConcurrency: AttributableMixed},
+		"@sink(select)":    {KindConcurrency: AttributableMixed},
+		"@sink(slice)":     {KindContainerImprecision: AttributableRivus},
+		"@sink(global)":    {KindGlobalVar: AttributableTarget},
+		"@sink(reflect)":   {KindReflection: AttributableTarget},
+	}
+	for marker, kinds := range want {
+		got := kindsOn(t, res, marker)
+		for k, attr := range kinds {
+			if got[k] != attr {
+				t.Errorf("%s: want %s (%s) on the path, got %v", marker, k, attr, got)
+			}
+		}
+	}
+	if got := kindsOn(t, res, "@sink(plain)"); len(got) != 0 {
+		t.Errorf("a plain flow carries no uncertainty, got %v", got)
+	}
+}
+
+func TestGlobalVarNoteListsTheWriters(t *testing.T) {
+	res, _ := runCase(t, "uncertain")
+	for _, f := range res.Findings {
+		if !strings.Contains(f.Sink.Snippet, "@sink(global)") {
+			continue
+		}
+		for _, u := range f.Uncertainties {
+			if u.Kind == KindGlobalVar {
+				if len(u.Candidates) != 1 || !strings.HasSuffix(u.Candidates[0], "uncertain.SetShared") {
+					t.Errorf("writers = %v, want [..uncertain.SetShared]", u.Candidates)
+				}
+				return
+			}
+		}
+	}
+	t.Fatal("global_var note not found")
+}
