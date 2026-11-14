@@ -82,7 +82,7 @@ func runOld(t *testing.T, dir string, patterns []string, rules *model.Rules) out
 
 func runNew(t *testing.T, dir string, patterns []string, rules *model.Rules) outcome {
 	t.Helper()
-	p, err := gossa.Load(dir, patterns, gossa.Options{NaiveForm: true})
+	p, err := gossa.Load(dir, patterns, gossa.Options{NaiveForm: true, WithLifted: true})
 	if err != nil {
 		t.Fatal(err)
 	}

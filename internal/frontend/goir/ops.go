@@ -242,6 +242,11 @@ func (c *conv) candidates(ci ssa.CallInstruction) []ir.FuncID {
 	if c.graph == nil {
 		return nil
 	}
+	if c.liftedCall != nil {
+		if l, ok := c.liftedCall[ci]; ok {
+			ci = l
+		}
+	}
 	var out []ir.FuncID
 	for _, fn := range c.graph.Callees(ci) {
 		out = append(out, ir.FuncID(gossa.FuncID(fn)))

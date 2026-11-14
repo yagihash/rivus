@@ -17,6 +17,8 @@ import (
 	"golang.org/x/tools/go/packages"
 	"golang.org/x/tools/go/ssa"
 	"golang.org/x/tools/go/ssa/ssautil"
+
+	"github.com/yagihash/rivus/internal/ir"
 )
 
 // Options controls loading.
@@ -28,14 +30,15 @@ type Options struct {
 	// is the form the neutral IR will have (ADR-003); the SSA is then built by
 	// the core, and go/ssa's own lifting serves to check it.
 	NaiveForm bool
+	// WithLifted also builds the program with go/ssa's lifting, for the call
+	// graph: variable type analysis is more precise on the lifted form, and
+	// the call graph is the one thing that is taken from it.
+	WithLifted bool
 }
 
 // LoadError records something rivus could not see. It maps to the
 // missing_source terminal kind.
-type LoadError struct {
-	Package string `json:"package"`
-	Message string `json:"message"`
-}
+type LoadError = ir.LoadError
 
 // Program is a loaded and built Go program.
 type Program struct {
@@ -55,6 +58,9 @@ type Program struct {
 	// OwnPkgs are the packages that were loaded from source, as opposed to
 	// their dependencies.
 	OwnPkgs []*ssa.Package
+
+	// Lifted is the program built with lifting (Options.WithLifted).
+	Lifted *ssa.Program
 
 	files   map[string]*ast.File // absolute file name -> syntax
 	sources map[string][]byte
@@ -122,6 +128,11 @@ func Load(dir string, patterns []string, opts Options) (*Program, error) {
 		}
 	}
 	prog.Build()
+	if opts.WithLifted {
+		lifted, _ := ssautil.Packages(pkgs, ssa.InstantiateGenerics)
+		lifted.Build()
+		p.Lifted = lifted
+	}
 
 	own := map[*ssa.Package]bool{}
 	for _, sp := range ssaPkgs {
@@ -149,14 +160,7 @@ func Load(dir string, patterns []string, opts Options) (*Program, error) {
 func FuncID(fn *ssa.Function) string { return fn.String() }
 
 // Position is a source position relative to the load directory.
-type Position struct {
-	File   string `json:"file"`
-	Line   int    `json:"line"`
-	Column int    `json:"column"`
-	Offset int    `json:"offset"`
-}
-
-func (p Position) String() string { return fmt.Sprintf("%s:%d", p.File, p.Line) }
+type Position = ir.Position
 
 // Position converts a token.Pos.
 func (p *Program) Position(pos token.Pos) Position {

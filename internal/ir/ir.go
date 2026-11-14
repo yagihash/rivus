@@ -10,6 +10,8 @@
 // core. It does carry the full content of constants.
 package ir
 
+import "fmt"
+
 // SchemaVersion identifies the format of the stream.
 const SchemaVersion = "rivus.ir/0"
 
@@ -40,6 +42,28 @@ type Pos struct {
 
 // IsZero reports whether the position is unknown.
 func (p Pos) IsZero() bool { return p == Pos{} }
+
+// Position is a position as the output shows it.
+type Position struct {
+	File   string `json:"file"`
+	Line   int    `json:"line"`
+	Column int    `json:"column"`
+	Offset int    `json:"offset"`
+}
+
+func (p Position) String() string { return fmt.Sprintf("%s:%d", p.File, p.Line) }
+
+// Position converts a position of the IR to the one the output shows.
+func (p Pos) Position() Position {
+	return Position{File: p.File, Line: p.Line, Column: p.Col, Offset: p.Offset}
+}
+
+// LoadError records something that could not be read: it maps to the
+// missing_source terminal kind.
+type LoadError struct {
+	Package string `json:"package"`
+	Message string `json:"message"`
+}
 
 // TypeClass is what the engine asks of a type; the structure of types is not
 // carried (ADR-039).

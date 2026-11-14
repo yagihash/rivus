@@ -14,6 +14,7 @@ import (
 	"sort"
 
 	"golang.org/x/tools/go/ssa"
+	"golang.org/x/tools/go/ssa/ssautil"
 
 	"github.com/yagihash/rivus/internal/callgraph"
 	"github.com/yagihash/rivus/internal/frontend/gossa"
@@ -43,14 +44,23 @@ func Extract(p *gossa.Program, opts Options) (*ir.Program, error) {
 	out := &ir.Program{}
 	globals := map[string]ir.Global{}
 	var graph callgraph.Graph
+	var lifted map[string]*ssa.Function
 	if !opts.NoCandidates {
-		graph = callgraph.BuildGo(p)
+		if p.Lifted != nil {
+			graph = callgraph.BuildGoOn(p.Lifted)
+			lifted = map[string]*ssa.Function{}
+			for fn := range ssautil.AllFunctions(p.Lifted) {
+				lifted[gossa.FuncID(fn)] = fn
+			}
+		} else {
+			graph = callgraph.BuildGo(p)
+		}
 	}
 	for _, fn := range p.Funcs {
 		if !opts.All && !p.Own[fn] {
 			continue
 		}
-		out.Funcs = append(out.Funcs, convertFunc(p, fn, graph, globals))
+		out.Funcs = append(out.Funcs, convertFunc(p, fn, graph, lifted[gossa.FuncID(fn)], globals))
 	}
 	for _, g := range globals {
 		out.Globals = append(out.Globals, g)
@@ -73,7 +83,7 @@ func Extract(p *gossa.Program, opts Options) (*ir.Program, error) {
 
 // Func converts one function.
 func Func(p *gossa.Program, fn *ssa.Function) *ir.Func {
-	return convertFunc(p, fn, nil, map[string]ir.Global{})
+	return convertFunc(p, fn, nil, nil, map[string]ir.Global{})
 }
 
 type conv struct {
@@ -85,8 +95,11 @@ type conv struct {
 	fused  map[ssa.Value]bool // address instructions folded into a load or a store
 	addr   map[ssa.Value]addrInfo
 	graph  callgraph.Graph
-	global map[string]ir.Global
-	cur    *[]ir.Instr
+	// liftedCall maps a call of this function to the same call in the
+	// lifted build, which the call graph is about.
+	liftedCall map[ssa.CallInstruction]ssa.CallInstruction
+	global     map[string]ir.Global
+	cur        *[]ir.Instr
 }
 
 // addrInfo is what a fused address computation contributes to the load or
@@ -99,7 +112,7 @@ type addrInfo struct {
 	pos   ir.Pos
 }
 
-func convertFunc(p *gossa.Program, fn *ssa.Function, graph callgraph.Graph, globals map[string]ir.Global) *ir.Func {
+func convertFunc(p *gossa.Program, fn *ssa.Function, graph callgraph.Graph, liftedFn *ssa.Function, globals map[string]ir.Global) *ir.Func {
 	c := &conv{
 		p:      p,
 		fn:     fn,
@@ -130,6 +143,7 @@ func convertFunc(p *gossa.Program, fn *ssa.Function, graph callgraph.Graph, glob
 		c.out.Roots = append(c.out.Roots, ir.BlockID(fn.Recover.Index))
 	}
 
+	c.matchCalls(liftedFn)
 	c.findFused()
 
 	// Parameters first, in block 0.
@@ -438,5 +452,61 @@ func (c *conv) noteGlobal(g *ssa.Global) {
 	name := globalName(g)
 	if _, ok := c.global[name]; !ok {
 		c.global[name] = ir.Global{Name: name, Type: ir.TypeID(typeString(g.Type())), Pos: c.pos(g.Pos())}
+	}
+}
+
+// matchCalls pairs the calls that go through an interface or a function value
+// with the same calls of the same function in the lifted build, which the
+// call graph is about. Lifting does not move or drop them, but it does drop
+// bookkeeping calls, so they are paired by where they are and what they are
+// (in order, when several are at the same place).
+func (c *conv) matchCalls(lifted *ssa.Function) {
+	if lifted == nil {
+		return
+	}
+	type key struct {
+		pos    token.Pos
+		invoke bool
+		name   string
+	}
+	keyOf := func(ci ssa.CallInstruction) (key, bool) {
+		cc := ci.Common()
+		switch {
+		case cc.IsInvoke():
+			return key{ci.Pos(), true, cc.Method.FullName()}, true
+		case cc.StaticCallee() != nil:
+			return key{}, false
+		}
+		if _, ok := cc.Value.(*ssa.Builtin); ok {
+			return key{}, false
+		}
+		return key{ci.Pos(), false, ""}, true
+	}
+	pool := map[key][]ssa.CallInstruction{}
+	for _, b := range lifted.Blocks {
+		for _, in := range b.Instrs {
+			if ci, ok := in.(ssa.CallInstruction); ok {
+				if k, ok := keyOf(ci); ok {
+					pool[k] = append(pool[k], ci)
+				}
+			}
+		}
+	}
+	c.liftedCall = map[ssa.CallInstruction]ssa.CallInstruction{}
+	for _, b := range c.fn.Blocks {
+		for _, in := range b.Instrs {
+			ci, ok := in.(ssa.CallInstruction)
+			if !ok {
+				continue
+			}
+			k, ok := keyOf(ci)
+			if !ok {
+				continue
+			}
+			if list := pool[k]; len(list) > 0 {
+				c.liftedCall[ci] = list[0]
+				pool[k] = list[1:]
+			}
+		}
 	}
 }

@@ -45,7 +45,11 @@ func (p *Program) link() {
 				case ir.CalleeValue:
 					// A closure made right there is a static call with the
 					// captured values (as go/ssa has it).
-					if len(in.Args) > 0 && in.Args[0].Kind == KResult && in.Args[0].Instr != nil &&
+					if len(in.Args) > 0 && in.Args[0].Kind == KFunc {
+						// A function with nothing captured, held in a variable.
+						in.StaticID = in.Args[0].FuncID
+						in.Static = p.ByID[string(in.Args[0].FuncID)]
+					} else if len(in.Args) > 0 && in.Args[0].Kind == KResult && in.Args[0].Instr != nil &&
 						in.Args[0].Instr.Op == ir.OpMakeClosure && in.Args[0].Instr.IR != nil {
 						mc := in.Args[0].Instr
 						in.StaticID = mc.IR.Func

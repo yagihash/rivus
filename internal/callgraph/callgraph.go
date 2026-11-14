@@ -28,9 +28,12 @@ type Graph interface {
 // BuildGo builds the call graph of a Go program: the class hierarchy
 // analysis gives a sound but coarse graph, which variable type analysis then
 // narrows down.
-func BuildGo(p *gossa.Program) Graph {
-	initial := cha.CallGraph(p.SSA)
-	funcs := ssautil.AllFunctions(p.SSA)
+func BuildGo(p *gossa.Program) Graph { return BuildGoOn(p.SSA) }
+
+// BuildGoOn builds the call graph of a go/ssa program.
+func BuildGoOn(prog *ssa.Program) Graph {
+	initial := cha.CallGraph(prog)
+	funcs := ssautil.AllFunctions(prog)
 	g := vta.CallGraph(funcs, initial)
 	return newGraph(g)
 }
