@@ -53,6 +53,11 @@ type Uncertainty struct {
 	pos token.Pos
 }
 
+// NewUncertainty creates an uncertainty with the attributable_to of its kind.
+func NewUncertainty(kind, detail, symbol string) *Uncertainty {
+	return newUncertainty(kind, detail, symbol)
+}
+
 func newUncertainty(kind, detail, symbol string) *Uncertainty {
 	return &Uncertainty{Kind: kind, AttributableTo: attributable(kind), Detail: detail, Symbol: symbol}
 }

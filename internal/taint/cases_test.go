@@ -96,6 +96,7 @@ func runCase(t testing.TB, name string) (*Result, *sites.Result) {
 	t.Helper()
 	prog := testutil.Load(t, "./cases/"+name+"/...")
 	rules := testutil.Rules(t)
+	rules.Expand(prog, 0)
 	st := sites.Enumerate(prog, rules)
 	eng := New(prog, st, rules, callgraph.BuildGo(prog), DefaultOptions())
 	return eng.Run(), st
@@ -295,4 +296,31 @@ func TestGlobalVarNoteListsTheWriters(t *testing.T) {
 		}
 	}
 	t.Fatal("global_var note not found")
+}
+
+func TestImplementations(t *testing.T) { checkCase(t, "impl") }
+
+func TestImplementationsStopAtTheLimit(t *testing.T) {
+	prog := testutil.Load(t, "./cases/impl/...")
+	rules := testutil.Rules(t)
+	exp := rules.Expand(prog, 1) // the interface has two implementations
+	var limited bool
+	for _, e := range exp {
+		if strings.HasSuffix(e.Symbol, "impl.Store).Save") {
+			limited = e.Limited && e.Count == 2
+		}
+	}
+	if !limited {
+		t.Fatalf("expected a limited expansion with 2 implementations, got %+v", exp)
+	}
+	st := sites.Enumerate(prog, rules)
+	res := New(prog, st, rules, callgraph.BuildGo(prog), DefaultOptions()).Run()
+	// Only the call through the interface itself is still a sink.
+	var lines []int
+	for _, f := range res.Findings {
+		lines = append(lines, f.Sink.Position.Line)
+	}
+	if len(lines) != 1 {
+		t.Errorf("without the expansion only the interface call is a sink, got findings at %v", lines)
+	}
 }

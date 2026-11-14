@@ -17,6 +17,12 @@ sinks:
   - symbol: (example.com/cases/lib.Runner).Run
     category: test
 
+  # match: implementations: the implementations of the interface method are
+  # sinks as well (testdata/go/cases/impl).
+  - symbol: (example.com/cases/cases/impl.Store).Save
+    match: implementations
+    category: test
+
 sanitizers:
   - symbol: example.com/cases/lib.Sanitize
     drops: [user_input]

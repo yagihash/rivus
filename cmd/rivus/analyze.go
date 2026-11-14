@@ -24,12 +24,14 @@ type analyzeOpts struct {
 	cpuProf string
 	timeout time.Duration
 	passes  int
+	maxImpl int
 }
 
 func (o *analyzeOpts) register(fs *flag.FlagSet) {
 	o.common.register(fs)
 	fs.IntVar(&o.k, "k", taint.DefaultOptions().K, "maximum access path depth")
 	fs.BoolVar(&o.verbose, "v", false, "print the time of each phase to stderr")
+	fs.IntVar(&o.maxImpl, "max-implementations", model.DefaultMaxImplementations, "default limit of match: implementations")
 	fs.IntVar(&o.passes, "max-passes", taint.DefaultOptions().MaxPasses, "maximum number of passes over the program while summaries change")
 	fs.DurationVar(&o.timeout, "timeout", 0, "stop the analysis after this long and report what was found (0: no limit)")
 	fs.StringVar(&o.cpuProf, "cpuprofile", "", "write a CPU profile of the taint phase to this file (development)")
@@ -51,6 +53,11 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 		return nil, err
 	}
 	phase("load")
+	for _, e := range rules.Expand(prog, o.maxImpl) {
+		if e.Limited || e.Note != "" {
+			fmt.Fprintf(os.Stderr, "rivus: %s\n", e)
+		}
+	}
 	st := sites.Enumerate(prog, rules)
 	phase("sites")
 	opts := taint.DefaultOptions()

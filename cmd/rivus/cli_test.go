@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/yagihash/rivus/internal/report"
@@ -151,5 +152,45 @@ func rivusJSON(t *testing.T, v any, args ...string) {
 	t.Helper()
 	if err := json.Unmarshal(rivus(t, args...), v); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestImplementationLimitIsReported(t *testing.T) {
+	var rep report.Report
+	rivusJSON(t, &rep, "analyze", "-rules", "rules.yaml", "-max-implementations", "1", "./cases/impl")
+	var limited bool
+	for _, e := range rep.Expansions {
+		if e.Limited && e.Count == 2 {
+			limited = true
+		}
+	}
+	if !limited {
+		t.Fatalf("the limited expansion is not in the report: %+v", rep.Expansions)
+	}
+	var recorded bool
+	for _, u := range rep.Uncertainties {
+		if u.Kind == "dynamic_dispatch" && strings.HasPrefix(u.Detail, "expansion_limit") {
+			recorded = true
+		}
+	}
+	if !recorded {
+		t.Error("the report must record that the rule was not expanded")
+	}
+
+	var all report.Report
+	rivusJSON(t, &all, "analyze", "-rules", "rules.yaml", "./cases/impl")
+	if len(all.Findings) != 3 {
+		t.Errorf("with the expansion there are 3 findings, got %d", len(all.Findings))
+	}
+}
+
+func TestSummaryCountsUncertainties(t *testing.T) {
+	var rep report.Report
+	rivusJSON(t, &rep, "analyze", "-rules", "rules.yaml", "./cases/uncertain")
+	if rep.Summary.Findings != len(rep.Findings) || rep.Summary.OnFindings["concurrency"] == 0 {
+		t.Errorf("summary = %+v", rep.Summary)
+	}
+	if rep.Summary.Program.Total != len(rep.Uncertainties) {
+		t.Errorf("total %d != %d", rep.Summary.Program.Total, len(rep.Uncertainties))
 	}
 }

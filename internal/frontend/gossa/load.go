@@ -47,6 +47,10 @@ type Program struct {
 
 	LoadErrors []LoadError
 
+	// OwnPkgs are the packages that were loaded from source, as opposed to
+	// their dependencies.
+	OwnPkgs []*ssa.Package
+
 	files   map[string]*ast.File // absolute file name -> syntax
 	sources map[string][]byte
 }
@@ -113,6 +117,7 @@ func Load(dir string, patterns []string, opts Options) (*Program, error) {
 	for _, sp := range ssaPkgs {
 		if sp != nil {
 			own[sp] = true
+			p.OwnPkgs = append(p.OwnPkgs, sp)
 		}
 	}
 	for fn := range ssautil.AllFunctions(prog) {

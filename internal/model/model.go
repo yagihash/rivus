@@ -31,7 +31,7 @@ const (
 // Match modes of a symbol.
 const (
 	MatchExact           = "exact"
-	MatchImplementations = "implementations" // not supported yet (step 1.9)
+	MatchImplementations = "implementations" // an interface method: expands to its implementations
 )
 
 // RuleSet is one parsed rule file.
@@ -54,6 +54,8 @@ type Source struct {
 	Field  string   `yaml:"field"`  // field, e.g. "net/http.Request.Body"
 	Labels []string `yaml:"labels"`
 	Match  string   `yaml:"match"`
+	// MaxImplementations bounds the expansion of match: implementations.
+	MaxImplementations int `yaml:"max_implementations"`
 }
 
 // Sink is a dangerous operation.
@@ -68,6 +70,8 @@ type Sink struct {
 	Accepts  []string `yaml:"accepts"`
 	Category string   `yaml:"category"`
 	Match    string   `yaml:"match"`
+	// MaxImplementations bounds the expansion of match: implementations.
+	MaxImplementations int `yaml:"max_implementations"`
 }
 
 // Sanitizer removes labels (and optionally adds others) from what flows from
@@ -82,6 +86,12 @@ type Sanitizer struct {
 	// Flows overrides the default "all arguments flow to result0".
 	Flows []Flow `yaml:"flows"`
 	Match string `yaml:"match"`
+	// MaxImplementations bounds the expansion of match: implementations.
+	MaxImplementations int `yaml:"max_implementations"`
+	// AllowSanitizerExpansion must be set to expand a sanitizer over the
+	// implementations of an interface. Over-matching a sanitizer makes taint
+	// disappear (a missed flow), so it is off unless asked for (ADR-030).
+	AllowSanitizerExpansion bool `yaml:"allow_sanitizer_expansion"`
 }
 
 // Propagator describes how taint moves through a function without a body.
@@ -89,6 +99,8 @@ type Propagator struct {
 	Symbol string `yaml:"symbol"`
 	Flows  []Flow `yaml:"flows"`
 	Match  string `yaml:"match"`
+	// MaxImplementations bounds the expansion of match: implementations.
+	MaxImplementations int `yaml:"max_implementations"`
 }
 
 // Flow moves taint between two positions of a call.
@@ -160,7 +172,7 @@ func (rs *RuleSet) validate() error {
 		case "", MatchExact:
 			return nil
 		case MatchImplementations:
-			return fmt.Errorf("%s: match: implementations is not supported yet", what)
+			return nil
 		}
 		return fmt.Errorf("%s: unknown match %q", what, m)
 	}
@@ -213,6 +225,10 @@ func (rs *RuleSet) validate() error {
 		if err := checkMatch(s.Match, what); err != nil {
 			return err
 		}
+		if s.Match == MatchImplementations && !s.AllowSanitizerExpansion {
+			return fmt.Errorf("%s: match: implementations on a sanitizer needs allow_sanitizer_expansion: true "+
+				"(a sanitizer that matches too much hides real flows)", what)
+		}
 		if err := validateFlows(s.Flows, what); err != nil {
 			return err
 		}
@@ -259,6 +275,9 @@ type Rules struct {
 	Sinks       map[string][]Sink
 	Sanitizers  map[string][]Sanitizer
 	Propagators map[string][]Propagator
+
+	// Expansions records what Expand did with match: implementations rules.
+	Expansions []Expansion
 }
 
 // Merge indexes the rule sets. Order does not matter; entries for the same

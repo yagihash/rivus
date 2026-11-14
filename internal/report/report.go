@@ -28,7 +28,58 @@ type Report struct {
 	Findings      []*taint.Finding     `json:"findings"`
 	Uncertainties []*taint.Uncertainty `json:"uncertainties"`
 	LoadErrors    []gossa.LoadError    `json:"load_errors,omitempty"`
-	Stats         taint.Stats          `json:"stats"`
+	// Expansions says what happened to the rules with match: implementations.
+	Expansions []model.Expansion `json:"expansions,omitempty"`
+	Stats      taint.Stats       `json:"stats"`
+	Summary    Summary           `json:"summary"`
+}
+
+// Summary counts the uncertainties. It is the feedback loop of ADR-008: the
+// share of uncertainty attributable to rivus says where to invest, and the
+// share of depth_limit is the number that should go down.
+type Summary struct {
+	Findings int `json:"findings"`
+	// Program counts the uncertainties of the program, by kind and by
+	// attributable_to.
+	Program Counts `json:"program"`
+	// OnFindings counts, by kind, the findings whose path has such an
+	// uncertainty (a finding is counted once per kind).
+	OnFindings map[string]int `json:"on_findings"`
+	// RivusShare is the share of the program-level uncertainties
+	// attributable to rivus, DepthLimitShare the share of depth_limit.
+	RivusShare      float64 `json:"rivus_share"`
+	DepthLimitShare float64 `json:"depth_limit_share"`
+}
+
+// Counts is a tally of uncertainties.
+type Counts struct {
+	Total         int            `json:"total"`
+	ByKind        map[string]int `json:"by_kind"`
+	ByAttribution map[string]int `json:"by_attribution"`
+}
+
+func summarize(r *Report) Summary {
+	s := Summary{Findings: len(r.Findings), OnFindings: map[string]int{},
+		Program: Counts{ByKind: map[string]int{}, ByAttribution: map[string]int{}}}
+	for _, u := range r.Uncertainties {
+		s.Program.Total++
+		s.Program.ByKind[u.Kind]++
+		s.Program.ByAttribution[u.AttributableTo]++
+	}
+	for _, f := range r.Findings {
+		seen := map[string]bool{}
+		for _, u := range f.Uncertainties {
+			if !seen[u.Kind] {
+				seen[u.Kind] = true
+				s.OnFindings[u.Kind]++
+			}
+		}
+	}
+	if s.Program.Total > 0 {
+		s.RivusShare = float64(s.Program.ByAttribution[taint.AttributableRivus]) / float64(s.Program.Total)
+		s.DepthLimitShare = float64(s.Program.ByKind[taint.KindDepthLimit]) / float64(s.Program.Total)
+	}
+	return s
 }
 
 // Build assembles a report.
@@ -40,6 +91,15 @@ func Build(p *gossa.Program, st *sites.Result, res *taint.Result, rules *model.R
 		Uncertainties: res.Uncertainties,
 		LoadErrors:    p.LoadErrors,
 		Stats:         res.Stats,
+		Expansions:    rules.Expansions,
+	}
+	// A rule that was not expanded because it had too many implementations
+	// leaves flows through those implementations unseen: say so.
+	for _, e := range rules.Expansions {
+		if e.Limited {
+			r.Uncertainties = append(r.Uncertainties, taint.NewUncertainty(taint.KindDynamicDispatch,
+				fmt.Sprintf("expansion_limit: %d implementations exceed the limit of %d; the rule applies to the interface method only", e.Count, e.Max), e.Symbol))
+		}
 	}
 	for _, rs := range rules.Sets {
 		name := rs.Name
@@ -48,6 +108,7 @@ func Build(p *gossa.Program, st *sites.Result, res *taint.Result, rules *model.R
 		}
 		r.Rules = append(r.Rules, name)
 	}
+	r.Summary = summarize(r)
 	return r
 }
 

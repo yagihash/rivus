@@ -30,16 +30,16 @@ func TestParseSelector(t *testing.T) {
 
 func TestParseErrors(t *testing.T) {
 	cases := map[string]string{
-		"unknown field":      "ruleset: x\nbogus: 1\n",
-		"source no labels":   "sources:\n  - symbol: a.B\n",
-		"source no symbol":   "sources:\n  - labels: [x]\n",
-		"sink no symbol":     "sinks:\n  - category: x\n",
-		"sanitizer no drops": "sanitizers:\n  - symbol: a.B\n",
-		"propagator no flow": "propagators:\n  - symbol: a.B\n",
-		"bad selector":       "propagators:\n  - symbol: a.B\n    flows: [{from: nope, to: result}]\n",
-		"implementations":    "sinks:\n  - symbol: a.B\n    match: implementations\n",
-		"unknown match":      "sinks:\n  - symbol: a.B\n    match: fuzzy\n",
-		"unknown kind":       "sources:\n  - kind: magic\n    labels: [x]\n",
+		"unknown field":       "ruleset: x\nbogus: 1\n",
+		"source no labels":    "sources:\n  - symbol: a.B\n",
+		"source no symbol":    "sources:\n  - labels: [x]\n",
+		"sink no symbol":      "sinks:\n  - category: x\n",
+		"sanitizer no drops":  "sanitizers:\n  - symbol: a.B\n",
+		"propagator no flow":  "propagators:\n  - symbol: a.B\n",
+		"bad selector":        "propagators:\n  - symbol: a.B\n    flows: [{from: nope, to: result}]\n",
+		"sanitizer expansion": "sanitizers:\n  - symbol: (a.I).M\n    drops: [x]\n    match: implementations\n",
+		"unknown match":       "sinks:\n  - symbol: a.B\n    match: fuzzy\n",
+		"unknown kind":        "sources:\n  - kind: magic\n    labels: [x]\n",
 	}
 	for name, src := range cases {
 		if _, err := Parse(strings.NewReader(src), name); err == nil {
