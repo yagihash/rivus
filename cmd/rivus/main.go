@@ -30,6 +30,12 @@ func main() {
 	switch os.Args[1] {
 	case "sites":
 		err = runSites(os.Args[2:])
+	case "analyze":
+		err = runAnalyze(os.Args[2:])
+	case "query":
+		err = runQuery(os.Args[2:])
+	case "index":
+		err = runIndex(os.Args[2:])
 	case "-h", "--help", "help":
 		fmt.Print(usage)
 		return
