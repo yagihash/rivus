@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/yagihash/rivus/internal/fingerprint"
-	"github.com/yagihash/rivus/internal/frontend/gossa"
 	"github.com/yagihash/rivus/internal/ir"
 	"github.com/yagihash/rivus/internal/irssa"
 	"github.com/yagihash/rivus/internal/model"
@@ -32,12 +31,13 @@ type IRParam struct {
 	Index int
 }
 
-// EnumerateIR is Enumerate over the neutral IR. The texts come from the
-// language's Texts; the IDs and the fingerprints are the same as the
-// ones Enumerate gives for the same code (ADR-028).
-func EnumerateIR(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
+// Enumerate finds all source and sink sites in the functions of the program
+// that belong to the code being analysed. The texts come from the language's
+// Texts. Level L0 (rule matching on resolved symbols) plus the L1 literal
+// mark: it needs neither a call graph nor any data flow analysis, so it is
+// fast. Every site has a stable ID and a fingerprint (ADR-028).
+func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 	res := &Result{
-		ByInstr:   nil,
 		ByIRInstr: map[IRInstr][]*Site{},
 		ByIRParam: map[IRParam][]*Site{},
 		ByID:      map[string]*Site{},
@@ -173,10 +173,6 @@ func fieldKeyOf(typ, field string) string {
 	return typ + "." + field
 }
 
-func irPosition(p ir.Pos) gossa.Position {
-	return gossa.Position{File: p.File, Line: p.Line, Column: p.Col, Offset: p.Offset}
-}
-
 func posLess(a, b ir.Pos) bool {
 	if a.File != b.File {
 		return a.File < b.File
@@ -196,7 +192,7 @@ func (res *Result) finishIR(fn *ir.Func, texts ir.Texts, raw []*Site) {
 	identical := map[string]int{}
 	var form *irssa.Form
 	for _, s := range raw {
-		s.Position = irPosition(s.irpos)
+		s.Position = s.irpos.Position()
 		s.Snippet = texts.Snippet(s.irpos)
 		expr := texts.Expr(s.irpos)
 		exprHash := fingerprint.Hash(expr)

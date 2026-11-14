@@ -1,9 +1,7 @@
 package taint
 
 import (
-	"go/token"
-
-	"github.com/yagihash/rivus/internal/frontend/gossa"
+	"github.com/yagihash/rivus/internal/ir"
 )
 
 // Terminal kinds recorded as uncertainty (ADR-008). Only the ones the
@@ -43,16 +41,16 @@ func attributable(kind string) string {
 
 // Uncertainty records a place where rivus could not know, and why.
 type Uncertainty struct {
-	Kind           string         `json:"kind"`
-	AttributableTo string         `json:"attributable_to"`
-	Detail         string         `json:"detail,omitempty"`
-	Symbol         string         `json:"symbol,omitempty"`
-	Candidates     []string       `json:"candidates,omitempty"`
-	Func           string         `json:"func,omitempty"`
-	Position       gossa.Position `json:"position"`
-	Snippet        string         `json:"snippet,omitempty"`
+	Kind           string      `json:"kind"`
+	AttributableTo string      `json:"attributable_to"`
+	Detail         string      `json:"detail,omitempty"`
+	Symbol         string      `json:"symbol,omitempty"`
+	Candidates     []string    `json:"candidates,omitempty"`
+	Func           string      `json:"func,omitempty"`
+	Position       ir.Position `json:"position"`
+	Snippet        string      `json:"snippet,omitempty"`
 
-	pos token.Pos
+	pos ir.Pos
 }
 
 // NewUncertainty creates an uncertainty with the attributable_to of its kind.
@@ -80,21 +78,21 @@ type ModelRef struct {
 // without the model, the data would have gone on. A finding that does not
 // exist cannot say that, so the place is listed on its own (ADR-010).
 type Suppression struct {
-	Model    ModelRef       `json:"model"`
-	Func     string         `json:"func"`
-	Position gossa.Position `json:"position"`
-	Snippet  string         `json:"snippet,omitempty"`
+	Model    ModelRef    `json:"model"`
+	Func     string      `json:"func"`
+	Position ir.Position `json:"position"`
+	Snippet  string      `json:"snippet,omitempty"`
 	// Labels were removed; Origins are the source sites they came from.
 	Labels  []string `json:"labels"`
 	Origins []string `json:"origins"`
 
-	pos token.Pos
+	pos ir.Pos
 }
 
 // Step is one hop of a taint path.
 type Step struct {
 	Func     string         `json:"func"`
-	Position gossa.Position `json:"position"`
+	Position ir.Position    `json:"position"`
 	Snippet  string         `json:"snippet,omitempty"`
 	Desc     string         `json:"desc"`
 	Notes    []*Uncertainty `json:"notes,omitempty"`
@@ -103,16 +101,16 @@ type Step struct {
 
 	guards []Guard
 
-	pos token.Pos
+	pos ir.Pos
 }
 
 // SiteRef identifies a site in a finding.
 type SiteRef struct {
-	ID       string         `json:"id"`
-	Symbol   string         `json:"symbol"`
-	Func     string         `json:"func"`
-	Position gossa.Position `json:"position"`
-	Snippet  string         `json:"snippet"`
+	ID       string      `json:"id"`
+	Symbol   string      `json:"symbol"`
+	Func     string      `json:"func"`
+	Position ir.Position `json:"position"`
+	Snippet  string      `json:"snippet"`
 	// Fingerprint lets a later run find the same site again (rivus resolve).
 	Fingerprint map[string]string `json:"fingerprint,omitempty"`
 }
@@ -157,20 +155,20 @@ const (
 // passes. It lists which outcome goes with which value and shows what the
 // caller passes. It does not say which outcome happens (ADR-001, ADR-006).
 type ConditionalNode struct {
-	Function        string         `json:"function"`
-	Location        gossa.Position `json:"location"`
-	Kind            string         `json:"kind"`
-	BranchCondition string         `json:"branch_condition"`
-	DerivedFrom     string         `json:"derived_from"`
+	Function        string      `json:"function"`
+	Location        ir.Position `json:"location"`
+	Kind            string      `json:"kind"`
+	BranchCondition string      `json:"branch_condition"`
+	DerivedFrom     string      `json:"derived_from"`
 	// Outcomes maps "<condition> == true" and "<condition> == false" to
 	// what happens on that side.
 	Outcomes map[string]string `json:"outcomes"`
 	// CallSite is where the condition's parameter gets its value on the
 	// path of the finding; CallSiteArgument is the call as written and
 	// Argument the expression passed.
-	CallSite         *gossa.Position `json:"call_site,omitempty"`
-	CallSiteArgument string          `json:"call_site_argument,omitempty"`
-	Argument         string          `json:"argument,omitempty"`
+	CallSite         *ir.Position `json:"call_site,omitempty"`
+	CallSiteArgument string       `json:"call_site_argument,omitempty"`
+	Argument         string       `json:"argument,omitempty"`
 	// Resolved is true when the argument is a constant, which is then in
 	// Provenance.
 	Resolved       bool        `json:"resolved"`
@@ -188,18 +186,18 @@ type Provenance struct {
 
 // ResolvedValue is a value the tracing found for certain.
 type ResolvedValue struct {
-	Value     string         `json:"value"`
-	CallSite  gossa.Position `json:"call_site"`
-	Certainty string         `json:"certainty"`
+	Value     string      `json:"value"`
+	CallSite  ir.Position `json:"call_site"`
+	Certainty string      `json:"certainty"`
 }
 
 // UnresolvedValue is a place where the tracing stopped.
 type UnresolvedValue struct {
-	TerminalKind   string         `json:"terminal_kind"`
-	AttributableTo string         `json:"attributable_to"`
-	Chain          []string       `json:"chain"`
-	Detail         string         `json:"detail,omitempty"`
-	Candidates     []string       `json:"candidates,omitempty"`
-	Position       gossa.Position `json:"position"`
-	Snippet        string         `json:"snippet,omitempty"`
+	TerminalKind   string      `json:"terminal_kind"`
+	AttributableTo string      `json:"attributable_to"`
+	Chain          []string    `json:"chain"`
+	Detail         string      `json:"detail,omitempty"`
+	Candidates     []string    `json:"candidates,omitempty"`
+	Position       ir.Position `json:"position"`
+	Snippet        string      `json:"snippet,omitempty"`
 }

@@ -5,9 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"golang.org/x/tools/go/ssa"
-
-	"github.com/yagihash/rivus/internal/frontend/gossa"
+	"github.com/yagihash/rivus/internal/sg"
 )
 
 // conditionalNodes turns the guards of a finding into nodes. A guard is
@@ -109,13 +107,13 @@ func joinSet(m map[string]bool) string {
 func (e *Engine) node(g Guard, outcomes map[bool]map[string]bool) ConditionalNode {
 	n := ConditionalNode{
 		Function:        g.Func,
-		Location:        e.prog.Position(g.pos),
+		Location:        position(g.pos),
 		BranchCondition: g.Cond,
 		Outcomes: map[string]string{
 			g.Cond + " == true":  joinSet(outcomes[true]),
 			g.Cond + " == false": joinSet(outcomes[false]),
 		},
-		FunctionSource: e.prog.FuncSource(g.fn, 80),
+		FunctionSource: e.texts.FuncSource(g.fn.IR.ID, 80),
 	}
 	n.Kind = CondFlow
 	for _, side := range []bool{true, false} {
@@ -127,26 +125,26 @@ func (e *Engine) node(g Guard, outcomes map[bool]map[string]bool) ConditionalNod
 	}
 	var labels []string
 	for _, p := range g.Params {
-		labels = append(labels, gossa.ParamLabel(g.fn, p))
+		labels = append(labels, paramLabel(g.fn, p))
 	}
 	n.DerivedFrom = strings.Join(labels, ", ")
 
 	if g.Call != nil {
-		pos := e.prog.Position(g.Call.pos)
+		pos := position(g.Call.pos)
 		n.CallSite = &pos
 		var args []string
 		for _, a := range g.Call.Args {
 			if a.ArgIndex < 0 {
 				continue
 			}
-			arg, call := e.prog.CallArgText(g.Call.pos, a.ArgIndex)
+			arg, call := e.texts.CallArg(g.Call.pos, a.ArgIndex)
 			n.CallSiteArgument = call
 			args = append(args, arg)
 		}
 		n.Argument = strings.Join(args, ", ")
 		n.Resolved = len(g.Call.Args) > 0
 		for _, a := range g.Call.Args {
-			if _, ok := a.value.(*ssa.Const); !ok {
+			if a.value.Kind != sg.KConst {
 				n.Resolved = false
 			}
 		}
@@ -156,3 +154,13 @@ func (e *Engine) node(g Guard, outcomes map[bool]map[string]bool) ConditionalNod
 }
 
 var _ = fmt.Sprintf
+
+// paramLabel describes a parameter of a function for a reader, such as
+// "parameter 1 (escape bool)". Parameters count from 0, the receiver first.
+func paramLabel(fn *sg.Func, i int) string {
+	if i >= 0 && i < len(fn.IR.Params) {
+		p := fn.IR.Params[i]
+		return fmt.Sprintf("parameter %d (%s %s)", i, p.Name, p.Display)
+	}
+	return fmt.Sprintf("parameter %d", i)
+}

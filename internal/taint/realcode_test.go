@@ -5,11 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yagihash/rivus/internal/callgraph"
-	"github.com/yagihash/rivus/internal/frontend/gossa"
 	"github.com/yagihash/rivus/internal/model"
 	"github.com/yagihash/rivus/internal/model/builtin"
-	"github.com/yagihash/rivus/internal/sites"
 )
 
 // TestRealCode runs the analysis on a real module to check that it neither
@@ -21,18 +18,15 @@ func TestRealCode(t *testing.T) {
 	if dir == "" {
 		t.Skip("RIVUS_TEST_MODULE is not set")
 	}
-	prog, err := gossa.Load(dir, []string{"./..."}, gossa.Options{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	prog := loadIR(t, dir, "./...")
 	b, err := builtin.Load()
 	if err != nil {
 		t.Fatal(err)
 	}
 	rules := model.Merge(b...)
-	st := sites.Enumerate(prog, rules)
+	st := prog.sites(rules)
 	start := time.Now()
-	res := New(prog, st, rules, callgraph.BuildGo(prog), DefaultOptions()).Run()
+	res := prog.engine(st, rules, DefaultOptions()).Run()
 	elapsed := time.Since(start)
 	t.Logf("%d sites, %d functions, %d findings, %d uncertainties, %d passes, %v",
 		len(st.Sites), res.Stats.Functions, len(res.Findings), len(res.Uncertainties), res.Stats.Passes, elapsed)

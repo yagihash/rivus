@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strconv"
 
-	"golang.org/x/tools/go/ssa"
+	"github.com/yagihash/rivus/internal/sg"
 
 	"github.com/yagihash/rivus/internal/fingerprint"
 )
@@ -30,8 +30,8 @@ type OutElem struct {
 // parameter, or in a global variable.
 type Output struct {
 	Kind   string
-	Index  int         // result or parameter index
-	Global *ssa.Global // OutGlobal
+	Index  int       // result or parameter index
+	Global *sg.Value // OutGlobal
 	Path   string
 	Elems  []OutElem
 }
@@ -62,18 +62,17 @@ func (s *state) summarize() *Summary {
 	for _, r := range roots {
 		var kind string
 		var idx int
-		var glob *ssa.Global
+		var glob *sg.Value
 		switch {
 		case r.V == nil:
 			kind, idx = OutResult, r.Idx
 		case s.paramRoot[r] != 0 || s.isParamRoot(r):
 			kind, idx = OutParam, s.paramRoot[r]
 		default:
-			g, ok := r.V.(*ssa.Global)
-			if !ok {
+			if r.V.Kind != sg.KGlobal {
 				continue
 			}
-			kind, glob = OutGlobal, g
+			kind, glob = OutGlobal, r.V
 		}
 		cm := s.cells[r]
 		for _, p := range s.pathsOf(r, cm) {
@@ -172,7 +171,7 @@ func (sum *Summary) signature() string {
 	for _, o := range sum.Outputs {
 		g := ""
 		if o.Global != nil {
-			g = o.Global.String()
+			g = o.Global.Name
 		}
 		parts = append(parts, "out", o.Kind, strconv.Itoa(o.Index), g, o.Path)
 		for _, e := range o.Elems {
@@ -193,7 +192,7 @@ type expanded struct {
 
 // expandElem translates an element of a callee summary using the actual
 // arguments of the call.
-func (s *state) expandElem(e Elem, argv []ssa.Value) []expanded {
+func (s *state) expandElem(e Elem, argv []*sg.Value) []expanded {
 	if e.Kind == Real {
 		return []expanded{{E: e}}
 	}
@@ -209,7 +208,7 @@ func (s *state) expandElem(e Elem, argv []ssa.Value) []expanded {
 	return r
 }
 
-func (s *state) expandParam(e Elem, argv []ssa.Value) []expanded {
+func (s *state) expandParam(e Elem, argv []*sg.Value) []expanded {
 	if e.Param < 0 || e.Param >= len(argv) {
 		return nil
 	}
@@ -232,7 +231,7 @@ func (s *state) expandParam(e Elem, argv []ssa.Value) []expanded {
 }
 
 // applySummary applies the summary of a callee at a call site.
-func (s *state) applySummary(cc *callCtx, fn *ssa.Function, bindings []ssa.Value, notes []*Uncertainty) {
+func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, notes []*Uncertainty) {
 	sum := s.eng.summaries[fn]
 	if sum == nil {
 		return // not analysed yet; a later round picks it up
@@ -270,7 +269,7 @@ func (s *state) applySummary(cc *callCtx, fn *ssa.Function, bindings []ssa.Value
 				continue // the call passes constants that rule this flow out
 			}
 			for _, x := range s.expandElem(oe.E, argv) {
-				w := &why{fn: s.fn, pos: cc.in.Pos(), desc: desc, steps: oe.Steps, notes: notes}
+				w := &why{fn: s.fn, pos: cc.in.Pos, desc: desc, steps: oe.Steps, notes: notes}
 				if len(oe.Guards) > 0 {
 					w.calleeGuards, w.call = oe.Guards, info
 				}
@@ -293,7 +292,7 @@ func (s *state) applySummary(cc *callCtx, fn *ssa.Function, bindings []ssa.Value
 			if x.From != nil {
 				steps = s.trace(x.From.Cell, x.From.Orig)
 			}
-			call := Step{Func: s.eng.funcID(s.fn), Desc: desc, pos: cc.in.Pos()}
+			call := Step{Func: s.eng.funcID(s.fn), Desc: desc, pos: cc.in.Pos}
 			call.Notes = notes
 			steps = cat(cat(steps, leaf(call)), sr.Steps)
 			var chain []Guard
@@ -301,7 +300,7 @@ func (s *state) applySummary(cc *callCtx, fn *ssa.Function, bindings []ssa.Value
 			if x.From != nil {
 				chain, over = s.guardsOfChain(x.From.Cell, x.From.Orig)
 			}
-			gs := unionGuards(srGuards, chain, s.blockGuards(cc.in.Block()))
+			gs := unionGuards(srGuards, chain, s.blockGuards(cc.in.Block))
 			if over || len(gs) > maxGuards {
 				s.guardOverflow = true
 				gs = nil
@@ -333,7 +332,7 @@ func joinSummaries(old, cur *Summary) *Summary {
 	type okey struct {
 		kind  string
 		index int
-		glob  *ssa.Global
+		glob  *sg.Value
 		path  string
 	}
 	elems := map[okey]map[Elem]OutElem{}
@@ -377,10 +376,10 @@ func joinSummaries(old, cur *Summary) *Summary {
 		}
 		ga, gb := "", ""
 		if a.glob != nil {
-			ga = a.glob.String()
+			ga = a.glob.Name
 		}
 		if b.glob != nil {
-			gb = b.glob.String()
+			gb = b.glob.Name
 		}
 		if ga != gb {
 			return ga < gb

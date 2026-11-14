@@ -138,8 +138,10 @@ func (p *Program) ExprText(pos token.Pos) string {
 
 // BodyText returns the normalized token text of a function declaration or
 // literal, used for the body fingerprint.
-func (p *Program) BodyText(fn *ssa.Function) string {
-	n := fn.Syntax()
+func (p *Program) BodyText(fn *ssa.Function) string { return p.BodyTextOf(fn.Syntax()) }
+
+// BodyTextOf is BodyText for the syntax of a function.
+func (p *Program) BodyTextOf(n ast.Node) string {
 	if n == nil {
 		return ""
 	}
@@ -248,7 +250,11 @@ func (p *Program) CallArgText(lparen token.Pos, i int) (arg, call string) {
 
 // FuncSource returns the source of a function, cut at maxLines lines.
 func (p *Program) FuncSource(fn *ssa.Function, maxLines int) string {
-	n := fn.Syntax()
+	return p.FuncSourceOf(fn.Syntax(), maxLines)
+}
+
+// FuncSourceOf is FuncSource for the syntax of a function.
+func (p *Program) FuncSourceOf(n ast.Node, maxLines int) string {
 	if n == nil {
 		return ""
 	}

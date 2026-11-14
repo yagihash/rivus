@@ -5,12 +5,29 @@ import (
 	"testing"
 
 	"github.com/yagihash/rivus/internal/fingerprint"
+	"github.com/yagihash/rivus/internal/frontend/goir"
+	"github.com/yagihash/rivus/internal/frontend/gossa"
+	"github.com/yagihash/rivus/internal/model"
 	"github.com/yagihash/rivus/internal/testutil"
 )
 
 func enumerate(t *testing.T, pattern string) *Result {
 	t.Helper()
-	return Enumerate(testutil.Load(t, pattern), testutil.Rules(t))
+	return enumerateGo(t, testutil.Testdata(), []string{pattern}, testutil.Rules(t))
+}
+
+// enumerateGo reads Go code into the neutral IR and enumerates its sites.
+func enumerateGo(t testing.TB, dir string, patterns []string, rules *model.Rules) *Result {
+	t.Helper()
+	p, err := gossa.Load(dir, patterns, gossa.Options{NaiveForm: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	prog, err := goir.Extract(p, goir.Options{NoCandidates: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return Enumerate(prog, goir.NewTexts(p), rules)
 }
 
 func find(res *Result, fn, role, symbol string, ordinal int) *Site {

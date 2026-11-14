@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yagihash/rivus/internal/callgraph"
 	"github.com/yagihash/rivus/internal/sites"
 	"github.com/yagihash/rivus/internal/testutil"
 )
@@ -94,11 +93,11 @@ func pairKey(src, sink line) string {
 // runCase analyses testdata/go/cases/<name>/... and returns the result.
 func runCase(t testing.TB, name string) (*Result, *sites.Result) {
 	t.Helper()
-	prog := testutil.Load(t, "./cases/"+name+"/...")
+	prog := loadIR(t, testutil.Testdata(), "./cases/"+name+"/...")
 	rules := testutil.Rules(t)
-	rules.Expand(prog, 0)
-	st := sites.Enumerate(prog, rules)
-	eng := New(prog, st, rules, callgraph.BuildGo(prog), DefaultOptions())
+	rules.Expand(prog.gossa, 0)
+	st := prog.sites(rules)
+	eng := prog.engine(st, rules, DefaultOptions())
 	return eng.Run(), st
 }
 
@@ -190,12 +189,12 @@ func TestDispatchIsRecordedWithCandidates(t *testing.T) {
 }
 
 func TestBudgetCutsAFunctionShortAndRecordsIt(t *testing.T) {
-	prog := testutil.Load(t, "./cases/inter/...")
+	prog := loadIR(t, testutil.Testdata(), "./cases/inter/...")
 	rules := testutil.Rules(t)
-	st := sites.Enumerate(prog, rules)
+	st := prog.sites(rules)
 	opts := DefaultOptions()
 	opts.Budget = 3 // far too small for any real function
-	res := New(prog, st, rules, callgraph.BuildGo(prog), opts).Run()
+	res := prog.engine(st, rules, opts).Run()
 
 	var degraded int
 	for _, u := range res.Uncertainties {
@@ -218,12 +217,12 @@ func TestBudgetCutsAFunctionShortAndRecordsIt(t *testing.T) {
 }
 
 func TestTimeoutStopsTheRunAndSaysSo(t *testing.T) {
-	prog := testutil.Load(t, "./cases/inter/...")
+	prog := loadIR(t, testutil.Testdata(), "./cases/inter/...")
 	rules := testutil.Rules(t)
-	st := sites.Enumerate(prog, rules)
+	st := prog.sites(rules)
 	opts := DefaultOptions()
 	opts.Timeout = time.Nanosecond
-	res := New(prog, st, rules, callgraph.BuildGo(prog), opts).Run()
+	res := prog.engine(st, rules, opts).Run()
 	if !res.Stats.TimedOut {
 		t.Fatal("the run should have timed out")
 	}
@@ -301,9 +300,9 @@ func TestGlobalVarNoteListsTheWriters(t *testing.T) {
 func TestImplementations(t *testing.T) { checkCase(t, "impl") }
 
 func TestImplementationsStopAtTheLimit(t *testing.T) {
-	prog := testutil.Load(t, "./cases/impl/...")
+	prog := loadIR(t, testutil.Testdata(), "./cases/impl/...")
 	rules := testutil.Rules(t)
-	exp := rules.Expand(prog, 1) // the interface has two implementations
+	exp := rules.Expand(prog.gossa, 1) // the interface has two implementations
 	var limited bool
 	for _, e := range exp {
 		if strings.HasSuffix(e.Symbol, "impl.Store).Save") {
@@ -313,8 +312,8 @@ func TestImplementationsStopAtTheLimit(t *testing.T) {
 	if !limited {
 		t.Fatalf("expected a limited expansion with 2 implementations, got %+v", exp)
 	}
-	st := sites.Enumerate(prog, rules)
-	res := New(prog, st, rules, callgraph.BuildGo(prog), DefaultOptions()).Run()
+	st := prog.sites(rules)
+	res := prog.engine(st, rules, DefaultOptions()).Run()
 	// Only the call through the interface itself is still a sink.
 	var lines []int
 	for _, f := range res.Findings {

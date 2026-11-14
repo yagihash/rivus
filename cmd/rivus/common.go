@@ -8,7 +8,9 @@ import (
 	"os"
 	"strings"
 
+	"github.com/yagihash/rivus/internal/frontend/goir"
 	"github.com/yagihash/rivus/internal/frontend/gossa"
+	"github.com/yagihash/rivus/internal/ir"
 	"github.com/yagihash/rivus/internal/model"
 	"github.com/yagihash/rivus/internal/model/builtin"
 )
@@ -65,11 +67,50 @@ func (c *common) loadRules(extra ...*model.RuleSet) (*model.Rules, error) {
 	return model.Merge(sets...), nil
 }
 
-func (c *common) load(patterns []string) (*gossa.Program, error) {
+// load reads the code: the Go packages, and the neutral IR made of them.
+// withGraph also builds what the call graph needs (the analysis does; the
+// listing of sites does not).
+func (c *common) load(patterns []string, withGraph bool) (*loaded, error) {
 	if len(patterns) == 0 {
 		patterns = []string{"./..."}
 	}
-	return gossa.Load(c.dir, patterns, gossa.Options{Tests: c.tests})
+	p, err := gossa.Load(c.dir, patterns, gossa.Options{Tests: c.tests, NaiveForm: true, WithLifted: withGraph})
+	if err != nil {
+		return nil, err
+	}
+	return &loaded{gossa: p}, nil
+}
+
+// loaded is the code read from Go packages.
+type loaded struct {
+	gossa *gossa.Program
+	ir    *ir.Program
+	texts ir.Texts
+}
+
+// packages lists the import paths of the packages that were analysed.
+func (l *loaded) packages() []string {
+	var out []string
+	for _, pkg := range l.gossa.Initial {
+		out = append(out, pkg.PkgPath)
+	}
+	return out
+}
+
+// extract makes the IR. The analysis needs every function with a body, the
+// dependencies included, and the call graph; the listing of sites needs the
+// functions of the loaded packages only.
+func (l *loaded) extract(withGraph bool) error {
+	prog, err := goir.Extract(l.gossa, goir.Options{All: withGraph, NoCandidates: !withGraph})
+	if err != nil {
+		return err
+	}
+	l.ir = prog
+	l.texts = goir.NewTexts(l.gossa)
+	// The go/ssa programs are the largest thing in memory, and nothing needs
+	// them from here on.
+	l.gossa.ReleaseSSA()
+	return nil
 }
 
 func writeJSON(w io.Writer, v any) error {

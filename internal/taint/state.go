@@ -1,18 +1,18 @@
 package taint
 
 import (
-	"go/token"
 	"sort"
 	"strings"
 
-	"golang.org/x/tools/go/ssa"
+	"github.com/yagihash/rivus/internal/ir"
+	"github.com/yagihash/rivus/internal/sg"
 )
 
 // Root is where a cell tree is anchored: an SSA value (Idx -1), one result of
 // a multi-valued instruction (Idx >= 0), or one result of the analysed
 // function (V == nil).
 type Root struct {
-	V   ssa.Value
+	V   *sg.Value
 	Idx int
 }
 
@@ -22,7 +22,7 @@ type Loc struct {
 	Path string
 }
 
-func own(v ssa.Value) Root { return Root{V: v, Idx: -1} }
+func own(v *sg.Value) Root { return Root{V: v, Idx: -1} }
 
 // ref names an element in a cell.
 type ref struct {
@@ -33,8 +33,8 @@ type ref struct {
 // why records how an element first got into a cell, so that a path from a
 // source to a sink can be reconstructed.
 type why struct {
-	fn    *ssa.Function
-	pos   token.Pos
+	fn    *sg.Func
+	pos   ir.Pos
 	desc  string
 	from  *ref
 	steps *rope // steps taken inside a callee, spliced in from its summary
@@ -63,23 +63,23 @@ type found struct {
 // state is the analysis state of one function.
 type state struct {
 	eng *Engine
-	fn  *ssa.Function
+	fn  *sg.Func
 
 	cells   map[Root]map[string]Set
 	changed bool
 
 	paramRoot map[Root]int // parameter and free variable roots -> index
-	numbering map[ssa.Value]int
-	locSet    map[ssa.Value]map[Loc]bool
-	locCache  map[ssa.Value][]Loc
+	numbering map[*sg.Value]int
+	locSet    map[*sg.Value]map[Loc]bool
+	locCache  map[*sg.Value][]Loc
 
-	branches        *[]*ssa.BasicBlock
-	edgeGuardCache  map[[2]*ssa.BasicBlock][]Guard
+	branches        *[]*sg.Block
+	edgeGuardCache  map[[2]*sg.Block][]Guard
 	guardOverflow   bool
-	condCache       map[*ssa.BasicBlock]*Guard
-	blockGuardCache map[*ssa.BasicBlock][]Guard
+	condCache       map[*sg.Block]*Guard
+	blockGuardCache map[*sg.Block][]Guard
 	rootVer         map[Root]int // number of elements added to each root: change detector
-	callSigs        map[ssa.CallInstruction]int
+	callSigs        map[*sg.Instr]int
 	sortedElems     map[Loc]cachedElems
 	sortedPaths     map[Root]cachedPaths
 	collectMemo     map[Loc][]found // active during one summary application
@@ -140,8 +140,8 @@ func (s *state) cellsOf(r Root) map[string]Set {
 	if m == nil {
 		m = map[string]Set{}
 		s.cells[r] = m
-		if g, ok := r.V.(*ssa.Global); ok {
-			for path, set := range s.eng.globals.cellsOf(g) {
+		if r.V != nil && r.V.Kind == sg.KGlobal {
+			for path, set := range s.eng.globals.cellsOf(r.V) {
 				cp := Set{}
 				for e := range set {
 					cp[e] = nil
@@ -252,7 +252,7 @@ func (s *state) copyLoc(src, dst Loc, w func(f found) *why) {
 // with the findings whose path contains the hop, not in the program-level
 // list: "container_element_imprecision" only matters where it influenced a
 // result.
-func (s *state) pathNote(kind, detail string, pos token.Pos) *Uncertainty {
+func (s *state) pathNote(kind, detail string, pos ir.Pos) *Uncertainty {
 	u := newUncertainty(kind, detail, "")
 	u.Func = s.eng.funcID(s.fn)
 	u.pos = pos
@@ -293,12 +293,12 @@ func (s *state) withContainerNote(w *why, from, to string) *why {
 }
 
 // copyLocs copies from every source location to every destination.
-func (s *state) copyLocs(src []Loc, dst []Loc, kind string, in ssa.Instruction) {
+func (s *state) copyLocs(src []Loc, dst []Loc, kind string, in *sg.Instr) {
 	s.copyLocsNoted(src, dst, kind, in, nil)
 }
 
 // copyLocsNoted is copyLocs with an uncertainty attached to the hop.
-func (s *state) copyLocsNoted(src []Loc, dst []Loc, kind string, in ssa.Instruction, note *Uncertainty) {
+func (s *state) copyLocsNoted(src []Loc, dst []Loc, kind string, in *sg.Instr, note *Uncertainty) {
 	for _, d := range dst {
 		for _, sl := range src {
 			s.copyLoc(sl, d, s.whyNote(in, kind, note))
@@ -322,18 +322,18 @@ func (s *state) put(dst Loc, fs []found, w func(f found) *why) {
 	}
 }
 
-func (s *state) whyFn(in ssa.Instruction, kind string) func(f found) *why {
+func (s *state) whyFn(in *sg.Instr, kind string) func(f found) *why {
 	return func(f found) *why {
 		w := &why{fn: s.fn, desc: kind, from: &ref{f.Cell, f.Orig}}
 		if in != nil {
-			w.pos = in.Pos()
+			w.pos = in.Pos
 		}
 		return w
 	}
 }
 
 // whyGuarded is whyFn with guards.
-func (s *state) whyGuarded(in ssa.Instruction, kind string, gs []Guard) func(f found) *why {
+func (s *state) whyGuarded(in *sg.Instr, kind string, gs []Guard) func(f found) *why {
 	base := s.whyFn(in, kind)
 	return func(f found) *why {
 		w := base(f)
@@ -343,7 +343,7 @@ func (s *state) whyGuarded(in ssa.Instruction, kind string, gs []Guard) func(f f
 }
 
 // copyLocsGuarded copies like copyLocs and records the guards of the hop.
-func (s *state) copyLocsGuarded(src []Loc, dst []Loc, kind string, in ssa.Instruction, gs []Guard) {
+func (s *state) copyLocsGuarded(src []Loc, dst []Loc, kind string, in *sg.Instr, gs []Guard) {
 	if len(gs) == 0 {
 		s.copyLocs(src, dst, kind, in)
 		return
@@ -355,7 +355,7 @@ func (s *state) copyLocsGuarded(src []Loc, dst []Loc, kind string, in ssa.Instru
 	}
 }
 
-func (s *state) whyNote(in ssa.Instruction, kind string, u *Uncertainty) func(f found) *why {
+func (s *state) whyNote(in *sg.Instr, kind string, u *Uncertainty) func(f found) *why {
 	base := s.whyFn(in, kind)
 	return func(f found) *why {
 		w := base(f)
@@ -366,7 +366,7 @@ func (s *state) whyNote(in ssa.Instruction, kind string, u *Uncertainty) func(f 
 
 // origin is the reason for an element that appears out of nothing (a source
 // or a parameter).
-func (s *state) origin(pos token.Pos, kind string) *why {
+func (s *state) origin(pos ir.Pos, kind string) *why {
 	return &why{fn: s.fn, pos: pos, desc: kind}
 }
 
@@ -417,3 +417,6 @@ func skipStep(desc string) bool {
 	}
 	return false
 }
+
+// posKey names a position, for keys.
+func posKey(p ir.Pos) string { return p.File + ":" + itoa(p.Offset) }

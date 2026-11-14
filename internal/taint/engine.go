@@ -4,19 +4,13 @@ import (
 	"sort"
 	"time"
 
-	"golang.org/x/tools/go/ssa"
+	"github.com/yagihash/rivus/internal/sg"
 
 	"github.com/yagihash/rivus/internal/fingerprint"
-	"github.com/yagihash/rivus/internal/frontend/gossa"
+	"github.com/yagihash/rivus/internal/ir"
 	"github.com/yagihash/rivus/internal/model"
 	"github.com/yagihash/rivus/internal/sites"
 )
-
-// Graph resolves the possible callees of calls whose target is not static
-// (interface methods and function values).
-type Graph interface {
-	Callees(ci ssa.CallInstruction) []*ssa.Function
-}
 
 // Options tunes the analysis.
 type Options struct {
@@ -44,50 +38,58 @@ func DefaultOptions() Options { return Options{K: 3, MaxPasses: 12, Budget: 4000
 
 // Engine runs the whole-program analysis.
 type Engine struct {
-	prog  *gossa.Program
+	prog  *sg.Program
+	texts ir.Texts
 	sites *sites.Result
 	rules *model.Rules
-	graph Graph
 	opts  Options
 
-	summaries map[*ssa.Function]*Summary
-	states    map[*ssa.Function]*state
+	summaries map[*sg.Func]*Summary
+	states    map[*sg.Func]*state
 	globals   *globalStore
 
 	notConverged []string
 	// degraded lists the functions whose analysis hit the budget. They are
 	// analysed once and then left alone.
-	degraded map[*ssa.Function]bool
+	degraded map[*sg.Func]bool
 	// guardLimit lists the functions with a flow that had more guards than
 	// maxGuards: the flow is kept without guards (ADR-006).
-	guardLimit map[*ssa.Function]bool
+	guardLimit map[*sg.Func]bool
 	// writers lists, for each package variable, the functions that store to it.
-	writers map[*ssa.Global][]string
+	writers map[*sg.Value][]string
+	// loadErrors are the problems the loading of the code had.
+	loadErrors []ir.LoadError
 	// callSites lists, for each function, the calls that may reach it.
-	callSites map[*ssa.Function][]ssa.CallInstruction
+	callSites map[*sg.Func][]*sg.Instr
 }
 
 // writersOf lists the functions that directly store to the package variable.
-func (e *Engine) writersOf(g *ssa.Global) []string {
+func (e *Engine) writersOf(g *sg.Value) []string {
 	if e.writers == nil {
-		e.writers = map[*ssa.Global][]string{}
-		seen := map[*ssa.Global]map[string]bool{}
+		e.writers = map[*sg.Value][]string{}
+		seen := map[*sg.Value]map[string]bool{}
 		for _, fn := range e.prog.Funcs {
 			for _, b := range fn.Blocks {
 				for _, in := range b.Instrs {
-					st, ok := in.(*ssa.Store)
-					if !ok {
+					var gl *sg.Value
+					switch in.Op {
+					case ir.OpGlobalStore:
+						gl = e.prog.Global(in.IR.Global)
+					case ir.OpStore, ir.OpFieldStore, ir.OpIndexStore:
+						gl = globalRoot(in.Args[0])
+					default:
 						continue
 					}
-					if gl := globalRoot(st.Addr); gl != nil {
-						id := e.funcID(fn)
-						if seen[gl] == nil {
-							seen[gl] = map[string]bool{}
-						}
-						if !seen[gl][id] {
-							seen[gl][id] = true
-							e.writers[gl] = append(e.writers[gl], id)
-						}
+					if gl == nil {
+						continue
+					}
+					id := e.funcID(fn)
+					if seen[gl] == nil {
+						seen[gl] = map[string]bool{}
+					}
+					if !seen[gl][id] {
+						seen[gl][id] = true
+						e.writers[gl] = append(e.writers[gl], id)
 					}
 				}
 			}
@@ -100,24 +102,23 @@ func (e *Engine) writersOf(g *ssa.Global) []string {
 }
 
 // globalRoot follows field and element addresses back to a package variable.
-func globalRoot(v ssa.Value) *ssa.Global {
-	for {
-		switch a := v.(type) {
-		case *ssa.Global:
-			return a
-		case *ssa.FieldAddr:
-			v = a.X
-		case *ssa.IndexAddr:
-			v = a.X
-		default:
-			return nil
+func globalRoot(v *sg.Value) *sg.Value {
+	for v != nil {
+		if v.Kind == sg.KGlobal {
+			return v
 		}
+		if v.Instr != nil && v.Instr.Op == ir.OpAddrOf && len(v.Instr.Args) == 1 {
+			v = v.Instr.Args[0]
+			continue
+		}
+		return nil
 	}
+	return nil
 }
 
 // New creates an engine. graph may be nil: calls through interfaces and
 // function values are then reported as unresolved.
-func New(p *gossa.Program, st *sites.Result, rules *model.Rules, graph Graph, opts Options) *Engine {
+func New(p *sg.Program, texts ir.Texts, st *sites.Result, rules *model.Rules, opts Options) *Engine {
 	if opts.K <= 0 {
 		opts.K = DefaultOptions().K
 	}
@@ -128,20 +129,22 @@ func New(p *gossa.Program, st *sites.Result, rules *model.Rules, graph Graph, op
 		opts.Budget = DefaultOptions().Budget
 	}
 	return &Engine{
-		prog: p, sites: st, rules: rules, graph: graph, opts: opts,
-		summaries:  map[*ssa.Function]*Summary{},
-		states:     map[*ssa.Function]*state{},
-		degraded:   map[*ssa.Function]bool{},
-		guardLimit: map[*ssa.Function]bool{},
+		prog: p, texts: texts, sites: st, rules: rules, opts: opts,
+		summaries:  map[*sg.Func]*Summary{},
+		states:     map[*sg.Func]*state{},
+		degraded:   map[*sg.Func]bool{},
+		guardLimit: map[*sg.Func]bool{},
 		globals:    newGlobalStore(),
 	}
 }
 
-func (e *Engine) funcID(fn *ssa.Function) string { return gossa.FuncID(fn) }
+func (e *Engine) funcID(fn *sg.Func) string { return fn.ID }
 
-func (e *Engine) hasBody(fn *ssa.Function) bool { return fn != nil && len(fn.Blocks) > 0 }
+// SetLoadErrors tells the engine what the loading of the code could not see:
+// they become missing_source uncertainties.
+func (e *Engine) SetLoadErrors(errs []ir.LoadError) { e.loadErrors = errs }
 
-func (e *Engine) noteGuardLimit(fn *ssa.Function) { e.guardLimit[fn] = true }
+func (e *Engine) noteGuardLimit(fn *sg.Func) { e.guardLimit[fn] = true }
 
 // sanitizes reports whether the summary has a flow that passes a sanitizer
 // or carries a label of a source.
@@ -161,7 +164,7 @@ func sanitizes(sum *Summary) bool {
 	return false
 }
 
-func (e *Engine) noteNotConverged(fn *ssa.Function) {
+func (e *Engine) noteNotConverged(fn *sg.Func) {
 	e.notConverged = append(e.notConverged, e.funcID(fn))
 }
 
@@ -200,18 +203,18 @@ type Result struct {
 func (e *Engine) Run() *Result {
 	start := time.Now()
 	fns := e.prog.Funcs
-	callees := func(ci ssa.CallInstruction) []*ssa.Function {
-		if fn := ci.Common().StaticCallee(); fn != nil {
-			return []*ssa.Function{fn}
+	callees := func(ci *sg.Instr) []*sg.Func {
+		if ci.StaticID != "" {
+			if ci.Static != nil {
+				return []*sg.Func{ci.Static}
+			}
+			return nil
 		}
-		if e.graph != nil {
-			return e.graph.Callees(ci)
-		}
-		return nil
+		return ci.CandidateFns
 	}
 	sccs, callers := order(fns, callees)
 
-	dirty := map[*ssa.Function]bool{}
+	dirty := map[*sg.Func]bool{}
 	for _, fn := range fns {
 		dirty[fn] = true
 	}
@@ -277,7 +280,9 @@ func (e *Engine) Run() *Result {
 		}
 		st.SummaryElems += n
 		st.SummarySteps += steps
-		if n > st.LargestElems {
+		// The summaries are in a map: ties go to the smaller name, so that
+		// the same code always gives the same answer.
+		if n > st.LargestElems || (n == st.LargestElems && n > 0 && sum.Func < st.LargestSummary) {
 			st.LargestElems, st.LargestSummary = n, sum.Func
 		}
 	}
@@ -285,7 +290,7 @@ func (e *Engine) Run() *Result {
 	return e.collect(st)
 }
 
-func (e *Engine) anyDirty(dirty map[*ssa.Function]bool) bool {
+func (e *Engine) anyDirty(dirty map[*sg.Func]bool) bool {
 	for _, d := range dirty {
 		if d {
 			return true
@@ -294,11 +299,11 @@ func (e *Engine) anyDirty(dirty map[*ssa.Function]bool) bool {
 	return false
 }
 
-func selfCalls(fn *ssa.Function, callees func(ssa.CallInstruction) []*ssa.Function) bool {
+func selfCalls(fn *sg.Func, callees func(*sg.Instr) []*sg.Func) bool {
 	for _, b := range fn.Blocks {
 		for _, in := range b.Instrs {
-			if ci, ok := in.(ssa.CallInstruction); ok {
-				for _, c := range callees(ci) {
+			if in.Op == ir.OpCall {
+				for _, c := range callees(in) {
 					if c == fn {
 						return true
 					}
@@ -311,7 +316,7 @@ func selfCalls(fn *ssa.Function, callees func(ssa.CallInstruction) []*ssa.Functi
 
 // analyzeFunc analyses one function and reports whether its summary or the
 // global state changed. Dependents are marked dirty.
-func (e *Engine) analyzeFunc(fn *ssa.Function, dirty map[*ssa.Function]bool, callers map[*ssa.Function][]*ssa.Function) bool {
+func (e *Engine) analyzeFunc(fn *sg.Func, dirty map[*sg.Func]bool, callers map[*sg.Func][]*sg.Func) bool {
 	s := &state{
 		eng: e, fn: fn,
 		cells:       map[Root]map[string]Set{},
@@ -348,8 +353,8 @@ func (e *Engine) analyzeFunc(fn *ssa.Function, dirty map[*ssa.Function]bool, cal
 
 	// Publish what the function writes to global variables.
 	for r, cm := range s.cells {
-		g, ok := r.V.(*ssa.Global)
-		if !ok {
+		g := r.V
+		if g == nil || g.Kind != sg.KGlobal {
 			continue
 		}
 		for path, set := range cm {
@@ -371,8 +376,8 @@ func (e *Engine) analyzeFunc(fn *ssa.Function, dirty map[*ssa.Function]bool, cal
 	}
 	// Remember which functions read which globals.
 	for r := range s.cells {
-		if g, ok := r.V.(*ssa.Global); ok {
-			e.globals.noteReader(g, fn)
+		if r.V != nil && r.V.Kind == sg.KGlobal {
+			e.globals.noteReader(r.V, fn)
 		}
 	}
 	return changed
@@ -380,22 +385,21 @@ func (e *Engine) analyzeFunc(fn *ssa.Function, dirty map[*ssa.Function]bool, cal
 
 // order computes the strongly connected components of the call graph with
 // callees before callers, and the reverse edges.
-func order(fns []*ssa.Function, callees func(ssa.CallInstruction) []*ssa.Function) ([][]*ssa.Function, map[*ssa.Function][]*ssa.Function) {
-	inSet := map[*ssa.Function]bool{}
+func order(fns []*sg.Func, callees func(*sg.Instr) []*sg.Func) ([][]*sg.Func, map[*sg.Func][]*sg.Func) {
+	inSet := map[*sg.Func]bool{}
 	for _, fn := range fns {
 		inSet[fn] = true
 	}
-	succ := map[*ssa.Function][]*ssa.Function{}
-	callers := map[*ssa.Function][]*ssa.Function{}
+	succ := map[*sg.Func][]*sg.Func{}
+	callers := map[*sg.Func][]*sg.Func{}
 	for _, fn := range fns {
-		seen := map[*ssa.Function]bool{}
+		seen := map[*sg.Func]bool{}
 		for _, b := range fn.Blocks {
 			for _, in := range b.Instrs {
-				ci, ok := in.(ssa.CallInstruction)
-				if !ok {
+				if in.Op != ir.OpCall {
 					continue
 				}
-				for _, c := range callees(ci) {
+				for _, c := range callees(in) {
 					if inSet[c] && !seen[c] {
 						seen[c] = true
 						succ[fn] = append(succ[fn], c)
@@ -407,14 +411,14 @@ func order(fns []*ssa.Function, callees func(ssa.CallInstruction) []*ssa.Functio
 	}
 	// Tarjan's algorithm yields components in reverse topological order,
 	// that is, callees first.
-	index := map[*ssa.Function]int{}
-	low := map[*ssa.Function]int{}
-	on := map[*ssa.Function]bool{}
-	var stack []*ssa.Function
-	var sccs [][]*ssa.Function
+	index := map[*sg.Func]int{}
+	low := map[*sg.Func]int{}
+	on := map[*sg.Func]bool{}
+	var stack []*sg.Func
+	var sccs [][]*sg.Func
 	n := 0
-	var visit func(v *ssa.Function)
-	visit = func(v *ssa.Function) {
+	var visit func(v *sg.Func)
+	visit = func(v *sg.Func) {
 		index[v], low[v] = n, n
 		n++
 		stack = append(stack, v)
@@ -430,7 +434,7 @@ func order(fns []*ssa.Function, callees func(ssa.CallInstruction) []*ssa.Functio
 			}
 		}
 		if low[v] == index[v] {
-			var comp []*ssa.Function
+			var comp []*sg.Func
 			for {
 				w := stack[len(stack)-1]
 				stack = stack[:len(stack)-1]
@@ -440,7 +444,7 @@ func order(fns []*ssa.Function, callees func(ssa.CallInstruction) []*ssa.Functio
 					break
 				}
 			}
-			sort.Slice(comp, func(i, j int) bool { return gossa.FuncID(comp[i]) < gossa.FuncID(comp[j]) })
+			sort.Slice(comp, func(i, j int) bool { return comp[i].ID < comp[j].ID })
 			sccs = append(sccs, comp)
 		}
 	}
@@ -455,17 +459,17 @@ func order(fns []*ssa.Function, callees func(ssa.CallInstruction) []*ssa.Functio
 // --- globals ---
 
 type globalStore struct {
-	cells    map[*ssa.Global]map[string]Set
-	readers_ map[*ssa.Global]map[*ssa.Function]bool
+	cells    map[*sg.Value]map[string]Set
+	readers_ map[*sg.Value]map[*sg.Func]bool
 }
 
 func newGlobalStore() *globalStore {
-	return &globalStore{cells: map[*ssa.Global]map[string]Set{}, readers_: map[*ssa.Global]map[*ssa.Function]bool{}}
+	return &globalStore{cells: map[*sg.Value]map[string]Set{}, readers_: map[*sg.Value]map[*sg.Func]bool{}}
 }
 
-func (g *globalStore) cellsOf(v *ssa.Global) map[string]Set { return g.cells[v] }
+func (g *globalStore) cellsOf(v *sg.Value) map[string]Set { return g.cells[v] }
 
-func (g *globalStore) merge(v *ssa.Global, path string, e Elem) bool {
+func (g *globalStore) merge(v *sg.Value, path string, e Elem) bool {
 	cm := g.cells[v]
 	if cm == nil {
 		cm = map[string]Set{}
@@ -483,21 +487,21 @@ func (g *globalStore) merge(v *ssa.Global, path string, e Elem) bool {
 	return true
 }
 
-func (g *globalStore) noteReader(v *ssa.Global, fn *ssa.Function) {
+func (g *globalStore) noteReader(v *sg.Value, fn *sg.Func) {
 	m := g.readers_[v]
 	if m == nil {
-		m = map[*ssa.Function]bool{}
+		m = map[*sg.Func]bool{}
 		g.readers_[v] = m
 	}
 	m[fn] = true
 }
 
-func (g *globalStore) readers(v *ssa.Global) []*ssa.Function {
-	var out []*ssa.Function
+func (g *globalStore) readers(v *sg.Value) []*sg.Func {
+	var out []*sg.Func
 	for fn := range g.readers_[v] {
 		out = append(out, fn)
 	}
-	sort.Slice(out, func(i, j int) bool { return gossa.FuncID(out[i]) < gossa.FuncID(out[j]) })
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out
 }
 
@@ -510,11 +514,11 @@ func (e *Engine) collect(st Stats) *Result {
 		rf *rawFinding
 	}
 	merged := map[findingKey]*rawFinding{}
-	fnList := make([]*ssa.Function, 0, len(e.states))
+	fnList := make([]*sg.Func, 0, len(e.states))
 	for fn := range e.states {
 		fnList = append(fnList, fn)
 	}
-	sort.Slice(fnList, func(i, j int) bool { return gossa.FuncID(fnList[i]) < gossa.FuncID(fnList[j]) })
+	sort.Slice(fnList, func(i, j int) bool { return fnList[i].ID < fnList[j].ID })
 
 	seenU := map[string]bool{}
 	for _, fn := range fnList {
@@ -549,16 +553,16 @@ func (e *Engine) collect(st Stats) *Result {
 				cur.guards = rf.guards
 			}
 		}
-		if !e.prog.Own[fn] {
+		if fn.Dep {
 			continue
 		}
 		for _, sp := range s.suppressions {
-			sp.Position = e.prog.Position(sp.pos)
-			sp.Snippet = e.prog.Snippet(sp.pos)
+			sp.Position = position(sp.pos)
+			sp.Snippet = e.texts.Snippet(sp.pos)
 			res.Suppressions = append(res.Suppressions, sp)
 		}
 		for _, u := range s.uncertain {
-			key := u.Kind + "|" + u.Symbol + "|" + u.Func + "|" + itoa(int(u.pos))
+			key := u.Kind + "|" + u.Symbol + "|" + u.Func + "|" + posKey(u.pos)
 			if seenU[key] {
 				continue
 			}
@@ -567,32 +571,32 @@ func (e *Engine) collect(st Stats) *Result {
 			res.Uncertainties = append(res.Uncertainties, u)
 		}
 	}
-	for _, pe := range e.prog.LoadErrors {
+	for _, pe := range e.loadErrors {
 		u := newUncertainty(KindMissingSource, pe.Message, pe.Package)
 		res.Uncertainties = append(res.Uncertainties, u)
 	}
-	var limited []*ssa.Function
+	var limited []*sg.Func
 	for fn := range e.guardLimit {
 		limited = append(limited, fn)
 	}
-	sort.Slice(limited, func(i, j int) bool { return gossa.FuncID(limited[i]) < gossa.FuncID(limited[j]) })
+	sort.Slice(limited, func(i, j int) bool { return limited[i].ID < limited[j].ID })
 	for _, fn := range limited {
 		u := newUncertainty(KindDepthLimit, "guard_limit: a flow in this function depends on more than "+itoa(maxGuards)+
 			" conditions on parameters; it is kept without them, as possible under any condition", "")
 		u.Func = e.funcID(fn)
-		u.pos = fn.Pos()
+		u.pos = fn.Pos
 		e.fill(u)
 		res.Uncertainties = append(res.Uncertainties, u)
 	}
-	var degraded []*ssa.Function
+	var degraded []*sg.Func
 	for fn := range e.degraded {
 		degraded = append(degraded, fn)
 	}
-	sort.Slice(degraded, func(i, j int) bool { return gossa.FuncID(degraded[i]) < gossa.FuncID(degraded[j]) })
+	sort.Slice(degraded, func(i, j int) bool { return degraded[i].ID < degraded[j].ID })
 	for _, fn := range degraded {
 		u := newUncertainty(KindDepthLimit, "the analysis budget of this function was exhausted; its summary may miss flows", "")
 		u.Func = e.funcID(fn)
-		u.pos = fn.Pos()
+		u.pos = fn.Pos
 		e.fill(u)
 		res.Uncertainties = append(res.Uncertainties, u)
 	}
@@ -650,11 +654,14 @@ func (e *Engine) collect(st Stats) *Result {
 }
 
 func (e *Engine) fill(u *Uncertainty) {
-	if u.pos.IsValid() {
-		u.Position = e.prog.Position(u.pos)
-		u.Snippet = e.prog.Snippet(u.pos)
+	if !u.pos.IsZero() {
+		u.Position = position(u.pos)
+		u.Snippet = e.texts.Snippet(u.pos)
 	}
 }
+
+// position converts a position of the IR to the one the output has.
+func position(p ir.Pos) ir.Position { return p.Position() }
 
 func (e *Engine) siteRef(s *sites.Site) SiteRef {
 	return SiteRef{ID: s.ID, Symbol: s.Symbol, Func: s.Func, Position: s.Position, Snippet: s.Snippet, Fingerprint: s.Fingerprint}
@@ -680,7 +687,7 @@ func (e *Engine) buildFinding(rf *rawFinding) *Finding {
 	// nothing, unless they carry an uncertainty.
 	steps := make([]Step, 0, rf.steps.len())
 	for _, st := range rf.steps.flatten(maxPathSteps) {
-		if st.pos.IsValid() || len(st.Notes) > 0 {
+		if !st.pos.IsZero() || len(st.Notes) > 0 {
 			steps = append(steps, st)
 		}
 	}
@@ -688,14 +695,14 @@ func (e *Engine) buildFinding(rf *rawFinding) *Finding {
 	seen := map[string]bool{}
 	for i := range steps {
 		st := &steps[i]
-		if st.pos.IsValid() {
-			st.Position = e.prog.Position(st.pos)
-			st.Snippet = e.prog.Snippet(st.pos)
+		if !st.pos.IsZero() {
+			st.Position = position(st.pos)
+			st.Snippet = e.texts.Snippet(st.pos)
 		}
 		funcs = append(funcs, st.Func)
 		for _, n := range st.Notes {
 			e.fill(n)
-			k := n.Kind + "|" + n.Symbol + "|" + itoa(int(n.pos))
+			k := n.Kind + "|" + n.Symbol + "|" + posKey(n.pos)
 			if !seen[k] {
 				seen[k] = true
 				f.Uncertainties = append(f.Uncertainties, n)

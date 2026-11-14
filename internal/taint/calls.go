@@ -1,40 +1,48 @@
 package taint
 
 import (
-	"go/token"
-	"go/types"
 	"sort"
 	"strings"
 
-	"golang.org/x/tools/go/ssa"
+	"github.com/yagihash/rivus/internal/ir"
+	"github.com/yagihash/rivus/internal/sg"
 
-	"github.com/yagihash/rivus/internal/frontend/gossa"
 	"github.com/yagihash/rivus/internal/model"
 	"github.com/yagihash/rivus/internal/sites"
 )
 
 // callCtx is a call with its operands laid out.
 type callCtx struct {
-	in    ssa.CallInstruction
-	recv  ssa.Value   // nil for plain functions
-	args  []ssa.Value // receiver excluded
+	in    *sg.Instr
+	recv  *sg.Value   // nil for plain functions
+	args  []*sg.Value // receiver excluded
 	roots []Root      // one per result
 	sym   string
 }
 
 // argv lists the operands in parameter order (receiver first).
-func (c *callCtx) argv() []ssa.Value {
-	var out []ssa.Value
+func (c *callCtx) argv() []*sg.Value {
+	var out []*sg.Value
 	if c.recv != nil {
 		out = append(out, c.recv)
 	}
 	return append(out, c.args...)
 }
 
-func (s *state) call(ci ssa.CallInstruction) {
-	common := ci.Common()
-	cc := &callCtx{in: ci, sym: gossa.CalleeSymbol(common)}
-	cc.recv, cc.args = gossa.CallArgs(common)
+// builtinName is the name of the builtin a call is of, or "".
+func builtinName(ci *sg.Instr) string {
+	if ci.Callee.Kind == ir.CalleeStatic && ci.Callee.Func == "" && strings.HasPrefix(ci.Callee.Symbol, "builtin.") {
+		return strings.TrimPrefix(ci.Callee.Symbol, "builtin.")
+	}
+	return ""
+}
+
+func (s *state) call(ci *sg.Instr) {
+	cc := &callCtx{in: ci, sym: ci.Callee.Symbol}
+	if builtinName(ci) != "" {
+		cc.sym = "" // a builtin has no symbol the rules could name
+	}
+	cc.recv, cc.args = ci.Recv(), ci.CallArgs()
 	cc.roots = callRoots(ci)
 
 	// A call only reads the cells its operands point to. If none of them
@@ -48,7 +56,7 @@ func (s *state) call(ci ssa.CallInstruction) {
 	s.callBody(cc)
 	if s.callSig(cc) == before {
 		if s.callSigs == nil {
-			s.callSigs = map[ssa.CallInstruction]int{}
+			s.callSigs = map[*sg.Instr]int{}
 		}
 		s.callSigs[ci] = before
 	} else {
@@ -60,7 +68,7 @@ func (s *state) call(ci ssa.CallInstruction) {
 // versions only grow, so their sum is enough.
 func (s *state) callSig(cc *callCtx) int {
 	sum := 1
-	add := func(v ssa.Value) {
+	add := func(v *sg.Value) {
 		for _, l := range s.locs(v) {
 			sum += s.rootVer[l.Root]
 		}
@@ -68,25 +76,29 @@ func (s *state) callSig(cc *callCtx) int {
 	for _, v := range cc.argv() {
 		add(v)
 	}
-	if mc, ok := cc.in.Common().Value.(*ssa.MakeClosure); ok {
-		for _, b := range mc.Bindings {
-			add(b)
-		}
+	for _, b := range cc.in.Bindings {
+		add(b)
 	}
 	return sum
 }
 
+// callee is a function a call may reach; fn is nil when it has no body in
+// the program.
+type callee struct {
+	id string
+	fn *sg.Func
+}
+
 func (s *state) callBody(cc *callCtx) {
 	ci := cc.in
-	common := ci.Common()
 
 	// Sources and sinks matched by the rules at this call.
-	for _, site := range s.eng.sites.ByInstr[ci] {
+	for _, site := range s.eng.sites.ByIRInstr[sites.IRInstr{Func: s.fn.IR.ID, Block: ci.IRBlock, Instr: ci.IRIndex}] {
 		switch site.Role {
 		case sites.RoleSource:
 			for _, r := range cc.roots {
 				for _, l := range site.Labels {
-					s.add(Loc{r, ""}, Elem{Kind: Real, Label: l, Origin: site.ID}, s.origin(ci.Pos(), "source: "+site.Symbol))
+					s.add(Loc{r, ""}, Elem{Kind: Real, Label: l, Origin: site.ID}, s.origin(ci.Pos, "source: "+site.Symbol))
 				}
 			}
 		case sites.RoleSink:
@@ -94,8 +106,8 @@ func (s *state) callBody(cc *callCtx) {
 		}
 	}
 
-	if b, ok := common.Value.(*ssa.Builtin); ok {
-		s.builtin(cc, b)
+	if name := builtinName(ci); name != "" {
+		s.builtin(cc, name)
 		return
 	}
 	rules := s.eng.rules
@@ -106,10 +118,10 @@ func (s *state) callBody(cc *callCtx) {
 
 	fns, bindings := s.callees(ci)
 	var external bool
-	var withBody []*ssa.Function
-	for _, fn := range fns {
-		if s.eng.hasBody(fn) {
-			withBody = append(withBody, fn)
+	var withBody []*sg.Func
+	for _, c := range fns {
+		if c.fn != nil {
+			withBody = append(withBody, c.fn)
 		} else {
 			external = true
 		}
@@ -118,10 +130,11 @@ func (s *state) callBody(cc *callCtx) {
 
 	var notes []*Uncertainty
 	var dispatch *Uncertainty
-	if common.IsInvoke() || len(fns) > 1 {
+	invoke := ci.Callee.Kind == ir.CalleeDynamic
+	if invoke || len(fns) > 1 {
 		dispatch = s.newNote(ci, KindDynamicDispatch, "call through an interface or function value", cc.sym)
-		for _, fn := range fns {
-			dispatch.Candidates = append(dispatch.Candidates, s.eng.funcID(fn))
+		for _, c := range fns {
+			dispatch.Candidates = append(dispatch.Candidates, c.id)
 		}
 		sort.Strings(dispatch.Candidates)
 		if len(fns) == 0 {
@@ -134,8 +147,8 @@ func (s *state) callBody(cc *callCtx) {
 		}
 		notes = append(notes, dispatch)
 	}
-	if _, ok := ci.(*ssa.Go); ok {
-		notes = append(notes, s.pathNote(KindConcurrency, "the callee runs in another goroutine; the order of effects is not modelled", ci.Pos()))
+	if ci.IR.Go {
+		notes = append(notes, s.pathNote(KindConcurrency, "the callee runs in another goroutine; the order of effects is not modelled", ci.Pos))
 	}
 	for _, fn := range withBody {
 		s.applySummary(cc, fn, bindings, notes)
@@ -143,21 +156,25 @@ func (s *state) callBody(cc *callCtx) {
 	switch {
 	case ruleOnly:
 		// the rule is the model
-	case len(fns) == 0 && common.IsInvoke():
+	case len(fns) == 0 && invoke:
 		s.unmodeled(cc, dispatch)
 	case len(fns) == 0:
 		s.unmodeled(cc, s.newNote(ci, KindUnresolvedCallee, "the called function is not known", cc.sym))
 	case external:
-		kind, detail := externalKind(fns, cc.sym)
+		ids := make([]string, len(fns))
+		for i, c := range fns {
+			ids[i] = c.id
+		}
+		kind, detail := externalKind(ids, cc.sym)
 		s.unmodeled(cc, s.newNote(ci, kind, detail, cc.sym))
 	}
 }
 
 // externalKind tells why a call to a function without a body cannot be
 // followed: a missing model, reflection, or a foreign function interface.
-func externalKind(fns []*ssa.Function, sym string) (kind, detail string) {
-	for _, fn := range fns {
-		if fn.Pkg != nil && fn.Pkg.Pkg != nil && fn.Pkg.Pkg.Path() == "C" || strings.HasPrefix(fn.Name(), "_Cfunc_") || strings.HasPrefix(fn.Name(), "_Cgo_") {
+func externalKind(ids []string, sym string) (kind, detail string) {
+	for _, id := range ids {
+		if strings.HasPrefix(id, "C.") || strings.Contains(id, "._Cfunc_") || strings.Contains(id, "._Cgo_") {
 			return KindFFIBoundary, "the call leaves Go (cgo)"
 		}
 	}
@@ -167,57 +184,31 @@ func externalKind(fns []*ssa.Function, sym string) (kind, detail string) {
 	return KindUnmodeledLibraryCall, "the function has no body and no model"
 }
 
-func callRoots(ci ssa.CallInstruction) []Root {
-	v, ok := ci.(*ssa.Call)
-	if !ok {
-		return nil
+func callRoots(ci *sg.Instr) []Root {
+	out := make([]Root, len(ci.Dsts))
+	for i, d := range ci.Dsts {
+		out[i] = own(d)
 	}
-	if tt, ok := v.Type().(*types.Tuple); ok {
-		out := make([]Root, tt.Len())
-		for i := range out {
-			out[i] = Root{v, i}
-		}
-		return out
-	}
-	return []Root{own(v)}
-}
-
-func resultTypes(ci ssa.CallInstruction) []types.Type {
-	v, ok := ci.(*ssa.Call)
-	if !ok {
-		return nil
-	}
-	if tt, ok := v.Type().(*types.Tuple); ok {
-		out := make([]types.Type, tt.Len())
-		for i := range out {
-			out[i] = tt.At(i).Type()
-		}
-		return out
-	}
-	return []types.Type{v.Type()}
+	return out
 }
 
 // callees resolves the possible functions called, and the values captured
 // by the closure when the callee is a closure created right there.
-func (s *state) callees(ci ssa.CallInstruction) ([]*ssa.Function, []ssa.Value) {
-	c := ci.Common()
-	if fn := c.StaticCallee(); fn != nil {
-		var binds []ssa.Value
-		if mc, ok := c.Value.(*ssa.MakeClosure); ok {
-			binds = mc.Bindings
-		}
-		return []*ssa.Function{fn}, binds
+func (s *state) callees(ci *sg.Instr) ([]callee, []*sg.Value) {
+	if ci.StaticID != "" {
+		return []callee{{string(ci.StaticID), ci.Static}}, ci.Bindings
 	}
-	if s.eng.graph != nil {
-		return s.eng.graph.Callees(ci), nil
+	var out []callee
+	for _, id := range ci.Candidates {
+		out = append(out, callee{string(id), s.eng.prog.ByID[string(id)]})
 	}
-	return nil, nil
+	return out, nil
 }
 
-func (s *state) newNote(in ssa.Instruction, kind, detail, symbol string) *Uncertainty {
+func (s *state) newNote(in *sg.Instr, kind, detail, symbol string) *Uncertainty {
 	u := newUncertainty(kind, detail, symbol)
 	u.Func = s.eng.funcID(s.fn)
-	u.pos = in.Pos()
+	u.pos = in.Pos
 	s.uncertain = append(s.uncertain, u)
 	return u
 }
@@ -249,7 +240,7 @@ type SinkReach struct {
 }
 
 func (s *state) checkSink(cc *callCtx, site *sites.Site) {
-	var vals []ssa.Value
+	var vals []*sg.Value
 	for _, i := range sites.SinkArgs(site.Sink, len(cc.args)) {
 		vals = append(vals, cc.args[i])
 	}
@@ -278,7 +269,7 @@ func accepted(accepts []string, label string) bool {
 	return false
 }
 
-func (s *state) reach(site *sites.Site, f found, in ssa.Instruction) {
+func (s *state) reach(site *sites.Site, f found, in *sg.Instr) {
 	steps := cat(s.trace(f.Cell, f.Orig), leaf(s.sinkStep(site, in)))
 	gs := s.guardsAtSink(in, f)
 	switch f.E.Kind {
@@ -295,16 +286,16 @@ func (s *state) reach(site *sites.Site, f found, in ssa.Instruction) {
 	}
 }
 
-func (s *state) sinkStep(site *sites.Site, in ssa.Instruction) Step {
-	return Step{Func: s.eng.funcID(s.fn), Desc: "sink: " + site.Symbol, pos: in.Pos()}
+func (s *state) sinkStep(site *sites.Site, in *sg.Instr) Step {
+	return Step{Func: s.eng.funcID(s.fn), Desc: "sink: " + site.Symbol, pos: in.Pos}
 }
 
 // guardsAtSink are the conditions under which the flow reaches the sink: those
 // of the block with the call, and those along the way. More than maxGuards
 // of them are dropped (ADR-006), and the function is marked.
-func (s *state) guardsAtSink(in ssa.Instruction, f found) []Guard {
+func (s *state) guardsAtSink(in *sg.Instr, f found) []Guard {
 	chain, over := s.guardsOfChain(f.Cell, f.Orig)
-	all := unionGuards(s.blockGuards(in.Block()), chain)
+	all := unionGuards(s.blockGuards(in.Block), chain)
 	if over || len(all) > maxGuards {
 		s.guardOverflow = true
 		return nil
@@ -328,9 +319,9 @@ func (s *state) recordFinding(origin string, site *sites.Site, label string, ste
 
 // --- builtins ---
 
-func (s *state) builtin(cc *callCtx, b *ssa.Builtin) {
+func (s *state) builtin(cc *callCtx, name string) {
 	args := cc.args
-	switch b.Name() {
+	switch name {
 	case "append":
 		if len(args) == 0 || len(cc.roots) == 0 {
 			return
@@ -338,7 +329,7 @@ func (s *state) builtin(cc *callCtx, b *ssa.Builtin) {
 		res := []Loc{{cc.roots[0], ""}}
 		s.copyLocs(s.locs(args[0]), res, "append", cc.in)
 		if len(args) > 1 {
-			if pointerLike(args[1].Type()) {
+			if pointerLike(args[1]) {
 				s.copyLocs(s.locs(args[1]), res, "append", cc.in)
 			} else {
 				s.put(Loc{cc.roots[0], "/[]"}, s.flatten(s.locs(args[1])), s.whyFn(cc.in, "append"))
@@ -348,7 +339,7 @@ func (s *state) builtin(cc *callCtx, b *ssa.Builtin) {
 		if len(args) < 2 {
 			return
 		}
-		if pointerLike(args[1].Type()) {
+		if pointerLike(args[1]) {
 			s.copyLocs(s.locs(args[1]), s.locs(args[0]), "copy", cc.in)
 		} else {
 			for _, d := range s.locs(args[0]) {
@@ -382,18 +373,18 @@ func (s *state) applyModel(cc *callCtx) {
 	}
 }
 
-func (s *state) selectVals(cc *callCtx, sel model.Selector) []ssa.Value {
+func (s *state) selectVals(cc *callCtx, sel model.Selector) []*sg.Value {
 	switch sel.Kind {
 	case model.SelRecv:
 		if cc.recv != nil {
-			return []ssa.Value{cc.recv}
+			return []*sg.Value{cc.recv}
 		}
 	case model.SelArg:
 		if sel.All {
 			return cc.args
 		}
 		if sel.Index < len(cc.args) {
-			return []ssa.Value{cc.args[sel.Index]}
+			return []*sg.Value{cc.args[sel.Index]}
 		}
 	}
 	return nil
@@ -404,10 +395,10 @@ func (s *state) suppressed(cc *callCtx, m *ModelRef, e Elem) {
 	if s.suppressions == nil {
 		s.suppressions = map[string]*Suppression{}
 	}
-	key := m.Symbol + "|" + itoa(int(cc.in.Pos()))
+	key := m.Symbol + "|" + posKey(cc.in.Pos)
 	sp := s.suppressions[key]
 	if sp == nil {
-		sp = &Suppression{Model: *m, Func: s.eng.funcID(s.fn), pos: cc.in.Pos()}
+		sp = &Suppression{Model: *m, Func: s.eng.funcID(s.fn), pos: cc.in.Pos}
 		s.suppressions[key] = sp
 	}
 	sp.Labels = addSorted(sp.Labels, e.Label)
@@ -469,7 +460,7 @@ func (s *state) applyFlows(cc *callCtx, flows []model.Flow, o *op, desc string, 
 					}
 				}
 				for _, e := range elems {
-					s.add(d, e, &why{fn: s.fn, pos: cc.in.Pos(), desc: kind, from: &ref{f.Cell, f.Orig}, model: mref})
+					s.add(d, e, &why{fn: s.fn, pos: cc.in.Pos, desc: kind, from: &ref{f.Cell, f.Orig}, model: mref})
 				}
 			}
 		}
@@ -481,26 +472,20 @@ func (s *state) applyFlows(cc *callCtx, flows []model.Flow, o *op, desc string, 
 // uncertainty so that a reviewer sees the guess.
 func (s *state) unmodeled(cc *callCtx, note *Uncertainty) {
 	src := s.flatten(valuesLocs(s, cc.argv()))
-	types := resultTypes(cc.in)
 	for i, r := range cc.roots {
-		if i < len(types) && isBool(types[i]) {
+		if i < len(cc.in.Dsts) && cc.in.Dsts[i].Class == ir.ClassBool {
 			continue
 		}
 		s.put(Loc{r, ""}, src, s.whyNote(cc.in, "call "+orUnknown(cc.sym)+" (unmodeled)", note))
 	}
 }
 
-func valuesLocs(s *state, vals []ssa.Value) []Loc {
+func valuesLocs(s *state, vals []*sg.Value) []Loc {
 	var out []Loc
 	for _, v := range vals {
 		out = append(out, s.locs(v)...)
 	}
 	return out
-}
-
-func isBool(t types.Type) bool {
-	b, ok := t.Underlying().(*types.Basic)
-	return ok && b.Info()&types.IsBoolean != 0
 }
 
 func orUnknown(s string) string {
@@ -509,5 +494,3 @@ func orUnknown(s string) string {
 	}
 	return s
 }
-
-var _ = token.ADD

@@ -7,7 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"golang.org/x/tools/go/ssa"
+	"github.com/yagihash/rivus/internal/ir"
+	"github.com/yagihash/rivus/internal/sg"
 )
 
 // maxGuards bounds the guards of one flow (ADR-006). Beyond it the flow is
@@ -31,10 +32,10 @@ type Guard struct {
 	// parameters their values.
 	Call *GuardCall
 
-	fn    *ssa.Function
-	pos   token.Pos // where the condition is
+	fn    *sg.Func
+	pos   ir.Pos    // where the condition is
 	block int       // the block holding the branch
-	cond  ssa.Value // the condition itself, to evaluate it for constants
+	cond  *sg.Value // the condition itself, to evaluate it for constants
 	k     string    // the key, computed once
 }
 
@@ -44,9 +45,9 @@ type GuardCall struct {
 	Snippet string // the call as written
 	Args    []GuardArg
 
-	fn    *ssa.Function
-	instr ssa.CallInstruction
-	pos   token.Pos
+	fn    *sg.Func
+	instr *sg.Instr
+	pos   ir.Pos
 }
 
 // GuardArg is the argument passed for a parameter the guard depends on.
@@ -56,12 +57,12 @@ type GuardArg struct {
 	// (the receiver is not counted; -1 for the receiver).
 	ArgIndex int
 
-	value ssa.Value
+	value *sg.Value
 }
 
 // key identifies the condition (without the branch taken).
 func (g Guard) condKey() string {
-	return g.Func + "|" + strconv.Itoa(g.block) + "|" + strconv.Itoa(int(g.pos))
+	return g.Func + "|" + strconv.Itoa(g.block) + "|" + posKey(g.pos)
 }
 
 func (g Guard) key() string {
@@ -74,7 +75,7 @@ func (g Guard) key() string {
 func (g Guard) computeKey() string {
 	k := g.condKey() + "|" + strconv.FormatBool(g.Polarity)
 	if g.Call != nil {
-		k += "|" + strconv.Itoa(int(g.Call.pos))
+		k += "|" + posKey(g.Call.pos)
 	}
 	return k
 }
@@ -146,32 +147,29 @@ func unionGuards(lists ...[]Guard) []Guard {
 // condParams returns the parameters (and free variables) the value is
 // computed from, within the function. The recursion stays inside the
 // function: it follows operands only.
-func (s *state) condParams(v ssa.Value) []int {
+func (s *state) condParams(v *sg.Value) []int {
 	set := map[int]bool{}
-	seen := map[ssa.Value]bool{}
-	var walk func(v ssa.Value, depth int)
-	walk = func(v ssa.Value, depth int) {
+	seen := map[*sg.Value]bool{}
+	var walk func(v *sg.Value, depth int)
+	walk = func(v *sg.Value, depth int) {
 		if v == nil || seen[v] || depth > 10 {
 			return
 		}
 		seen[v] = true
-		switch x := v.(type) {
-		case *ssa.Parameter, *ssa.FreeVar:
-			if i, ok := s.paramRoot[own(x)]; ok {
+		switch v.Kind {
+		case sg.KParam, sg.KFreeVar:
+			if i, ok := s.paramRoot[own(v)]; ok {
 				set[i] = true
 			}
 			return
-		case *ssa.Const, *ssa.Global, *ssa.Function, *ssa.Builtin:
+		case sg.KConst, sg.KGlobal, sg.KFunc, sg.KUndef:
 			return
 		}
-		in, ok := v.(ssa.Instruction)
-		if !ok {
+		if v.Instr == nil {
 			return
 		}
-		for _, op := range in.Operands(nil) {
-			if op != nil {
-				walk(*op, depth+1)
-			}
+		for _, op := range v.Instr.Args {
+			walk(op, depth+1)
 		}
 	}
 	walk(v, 0)
@@ -186,24 +184,24 @@ func (s *state) condParams(v ssa.Value) []int {
 // branchGuard builds the guard of the branch that ends block d, for the
 // side taken (true: the "then" successor). The result is empty when the
 // condition does not depend on a parameter.
-func (s *state) branchGuard(d *ssa.BasicBlock, side bool) (Guard, bool) {
+func (s *state) branchGuard(d *sg.Block, side bool) (Guard, bool) {
 	if len(d.Instrs) == 0 {
 		return Guard{}, false
 	}
-	ifi, ok := d.Instrs[len(d.Instrs)-1].(*ssa.If)
-	if !ok || len(d.Succs) != 2 {
+	ifi := d.Instrs[len(d.Instrs)-1]
+	if ifi.Op != sg.OpBranch || len(d.Succs) != 2 {
 		return Guard{}, false
 	}
 	if s.condCache == nil {
-		s.condCache = map[*ssa.BasicBlock]*Guard{}
+		s.condCache = map[*sg.Block]*Guard{}
 	}
 	base, cached := s.condCache[d]
 	if !cached {
-		params := s.condParams(ifi.Cond)
+		params := s.condParams(ifi.Args[0])
 		if len(params) == 0 {
 			s.condCache[d] = nil
 		} else {
-			g := &Guard{Func: s.eng.funcID(s.fn), Params: params, fn: s.fn, block: d.Index, cond: ifi.Cond}
+			g := &Guard{Func: s.eng.funcID(s.fn), Params: params, fn: s.fn, block: d.Index, cond: ifi.Args[0]}
 			g.pos, g.Cond = s.condSource(d)
 			s.condCache[d] = g
 		}
@@ -220,27 +218,27 @@ func (s *state) branchGuard(d *ssa.BasicBlock, side bool) (Guard, bool) {
 
 // condSource finds the source text of the condition of the branch ending d,
 // from a position inside one of its successors.
-func (s *state) condSource(d *ssa.BasicBlock) (token.Pos, string) {
+func (s *state) condSource(d *sg.Block) (ir.Pos, string) {
 	for _, succ := range d.Succs {
 		for _, in := range succ.Instrs {
-			if p := in.Pos(); p.IsValid() {
-				if txt := s.eng.prog.CondText(p); txt != "" {
+			if p := in.Pos; !p.IsZero() {
+				if txt := s.eng.texts.Cond(p); txt != "" {
 					return p, txt
 				}
 			}
 		}
 	}
-	return token.NoPos, ""
+	return ir.Pos{}, ""
 }
 
 // blockGuards are the parameter dependent conditions every execution of the
 // block has passed: those of the branches whose side leads only to it.
-func (s *state) blockGuards(b *ssa.BasicBlock) []Guard {
+func (s *state) blockGuards(b *sg.Block) []Guard {
 	if len(s.guardBranches()) == 0 {
 		return nil
 	}
 	if s.blockGuardCache == nil {
-		s.blockGuardCache = map[*ssa.BasicBlock][]Guard{}
+		s.blockGuardCache = map[*sg.Block][]Guard{}
 	}
 	if gs, ok := s.blockGuardCache[b]; ok {
 		return gs
@@ -266,11 +264,11 @@ func (s *state) blockGuards(b *ssa.BasicBlock) []Guard {
 
 // guardBranches lists the blocks that end in a branch on a parameter. Most
 // blocks do not, and the guards of every block are looked for among them.
-func (s *state) guardBranches() []*ssa.BasicBlock {
+func (s *state) guardBranches() []*sg.Block {
 	if s.branches != nil {
 		return *s.branches
 	}
-	var out []*ssa.BasicBlock
+	var out []*sg.Block
 	for _, d := range s.fn.Blocks {
 		if len(d.Succs) != 2 || d.Succs[0] == d.Succs[1] {
 			continue
@@ -285,23 +283,23 @@ func (s *state) guardBranches() []*ssa.BasicBlock {
 
 // edgeGuards are the guards of the control flow edge from pred to b: those of
 // pred and the branch that leads from pred to b, if there is one.
-func (s *state) edgeGuards(pred, b *ssa.BasicBlock) []Guard {
+func (s *state) edgeGuards(pred, b *sg.Block) []Guard {
 	if len(s.guardBranches()) == 0 {
 		return nil // no condition of the function depends on a parameter
 	}
-	k := [2]*ssa.BasicBlock{pred, b}
+	k := [2]*sg.Block{pred, b}
 	if gs, ok := s.edgeGuardCache[k]; ok {
 		return gs
 	}
 	if s.edgeGuardCache == nil {
-		s.edgeGuardCache = map[[2]*ssa.BasicBlock][]Guard{}
+		s.edgeGuardCache = map[[2]*sg.Block][]Guard{}
 	}
 	gs := s.computeEdgeGuards(pred, b)
 	s.edgeGuardCache[k] = gs
 	return gs
 }
 
-func (s *state) computeEdgeGuards(pred, b *ssa.BasicBlock) []Guard {
+func (s *state) computeEdgeGuards(pred, b *sg.Block) []Guard {
 	out := append([]Guard(nil), s.blockGuards(pred)...)
 	if len(pred.Succs) == 2 && pred.Succs[0] != pred.Succs[1] {
 		for side, succ := range pred.Succs {
@@ -355,18 +353,18 @@ func (s *state) guardsOfChain(l Loc, e Elem) (gs []Guard, overflow bool) {
 // callInfo is what a call site contributes to the guards that come from the
 // callee: the parameters get its arguments.
 type callInfo struct {
-	fn       *ssa.Function
-	instr    ssa.CallInstruction
-	pos      token.Pos
-	argv     []ssa.Value
+	fn       *sg.Func
+	instr    *sg.Instr
+	pos      ir.Pos
+	argv     []*sg.Value
 	hasRecv  bool
 	anyConst bool // some argument is a constant: the guards may be decided
 }
 
-func (s *state) newCallInfo(cc *callCtx, argv []ssa.Value) *callInfo {
-	ci := &callInfo{fn: s.fn, instr: cc.in, pos: cc.in.Pos(), argv: argv, hasRecv: cc.recv != nil}
+func (s *state) newCallInfo(cc *callCtx, argv []*sg.Value) *callInfo {
+	ci := &callInfo{fn: s.fn, instr: cc.in, pos: cc.in.Pos, argv: argv, hasRecv: cc.recv != nil}
 	for _, a := range argv {
-		if c, ok := a.(*ssa.Const); ok && c.Value != nil {
+		if a.Kind == sg.KConst && a.Const != nil {
 			ci.anyConst = true
 			break
 		}
@@ -428,24 +426,46 @@ func (s *state) instantiate(ci *callInfo, gs []Guard) []Guard {
 
 // constEnv maps the parameters of the guard to the constants the call passes,
 // when all of them are constants.
-func constEnv(g Guard, argv []ssa.Value) (map[int]constant.Value, bool) {
+func constEnv(g Guard, argv []*sg.Value) (map[int]constant.Value, bool) {
 	env := map[int]constant.Value{}
 	for _, p := range g.Params {
 		if p >= len(argv) {
 			return nil, false
 		}
-		c, ok := argv[p].(*ssa.Const)
-		if !ok || c.Value == nil {
+		a := argv[p]
+		if a.Kind != sg.KConst || a.Const == nil {
 			return nil, false
 		}
-		env[p] = c.Value
+		cv := constValue(a.Const)
+		if cv == nil {
+			return nil, false
+		}
+		env[p] = cv
 	}
 	return env, true
 }
 
+// constValue turns a literal of the IR into a constant to evaluate with. A
+// literal that is not an integer, a string or a boolean is not evaluated.
+func constValue(c *ir.Const) constant.Value {
+	switch c.Kind {
+	case ir.ConstBool:
+		return constant.MakeBool(c.Value == "true")
+	case ir.ConstString:
+		return constant.MakeString(c.Value)
+	case ir.ConstInt:
+		v := constant.MakeFromLiteral(c.Value, token.INT, 0)
+		if v.Kind() == constant.Unknown {
+			return nil
+		}
+		return v
+	}
+	return nil
+}
+
 // evalCond evaluates a condition made of parameters, constants, negation and
 // comparisons. It reports false for anything else: then nothing is decided.
-func evalCond(v ssa.Value, env map[int]constant.Value) (bool, bool) {
+func evalCond(v *sg.Value, env map[int]constant.Value) (bool, bool) {
 	val, ok := evalValue(v, env, 0)
 	if !ok || val.Kind() != constant.Bool {
 		return false, false
@@ -453,39 +473,55 @@ func evalCond(v ssa.Value, env map[int]constant.Value) (bool, bool) {
 	return constant.BoolVal(val), true
 }
 
-func evalValue(v ssa.Value, env map[int]constant.Value, depth int) (constant.Value, bool) {
+var comparisons = map[string]token.Token{
+	"==": token.EQL, "!=": token.NEQ, "<": token.LSS, "<=": token.LEQ, ">": token.GTR, ">=": token.GEQ,
+}
+
+func evalValue(v *sg.Value, env map[int]constant.Value, depth int) (constant.Value, bool) {
 	if depth > 8 {
 		return nil, false
 	}
-	switch x := v.(type) {
-	case *ssa.Const:
-		if x.Value == nil {
+	switch v.Kind {
+	case sg.KConst:
+		if v.Const == nil {
 			return nil, false
 		}
-		return x.Value, true
-	case *ssa.Parameter:
+		if cv := constValue(v.Const); cv != nil {
+			return cv, true
+		}
+		return nil, false
+	case sg.KParam:
 		for i, c := range env {
-			if x.Parent() != nil && i < len(x.Parent().Params) && x.Parent().Params[i] == x {
+			if v.Func != nil && i < len(v.Func.Params) && v.Func.Params[i] == v {
 				return c, true
 			}
 		}
-	case *ssa.ChangeType:
-		return evalValue(x.X, env, depth+1)
-	case *ssa.Convert:
-		return evalValue(x.X, env, depth+1)
-	case *ssa.UnOp:
-		if x.Op == token.NOT {
-			if b, ok := evalValue(x.X, env, depth+1); ok && b.Kind() == constant.Bool {
+		return nil, false
+	case sg.KResult:
+	default:
+		return nil, false
+	}
+	in := v.Instr
+	if in == nil || in.IR == nil {
+		return nil, false
+	}
+	switch in.Op {
+	case ir.OpConvert:
+		if in.IR.Operator == "convert" {
+			return evalValue(in.Args[0], env, depth+1)
+		}
+	case ir.OpUnop:
+		if in.IR.Operator == "!" {
+			if b, ok := evalValue(in.Args[0], env, depth+1); ok && b.Kind() == constant.Bool {
 				return constant.MakeBool(!constant.BoolVal(b)), true
 			}
 		}
-	case *ssa.BinOp:
-		switch x.Op {
-		case token.EQL, token.NEQ, token.LSS, token.LEQ, token.GTR, token.GEQ:
-			l, ok1 := evalValue(x.X, env, depth+1)
-			r, ok2 := evalValue(x.Y, env, depth+1)
+	case ir.OpBinop:
+		if op, ok := comparisons[in.IR.Operator]; ok {
+			l, ok1 := evalValue(in.Args[0], env, depth+1)
+			r, ok2 := evalValue(in.Args[1], env, depth+1)
 			if ok1 && ok2 {
-				return constant.MakeBool(constant.Compare(l, x.Op, r)), true
+				return constant.MakeBool(constant.Compare(l, op, r)), true
 			}
 		}
 	}

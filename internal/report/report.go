@@ -13,7 +13,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/yagihash/rivus/internal/frontend/gossa"
+	"github.com/yagihash/rivus/internal/ir"
 	"github.com/yagihash/rivus/internal/model"
 	"github.com/yagihash/rivus/internal/sites"
 	"github.com/yagihash/rivus/internal/taint"
@@ -39,7 +39,7 @@ type Report struct {
 	// Suppressions are the places where a model decided by an LLM removed
 	// taint: findings that exist only without the model.
 	Suppressions []*taint.Suppression `json:"suppressions,omitempty"`
-	LoadErrors   []gossa.LoadError    `json:"load_errors,omitempty"`
+	LoadErrors   []ir.LoadError       `json:"load_errors,omitempty"`
 	// Expansions says what happened to the rules with match: implementations.
 	Expansions []model.Expansion `json:"expansions,omitempty"`
 	// DeterministicOnly is true when the rules decided by an LLM were left
@@ -162,14 +162,14 @@ func summarize(r *Report) Summary {
 }
 
 // Build assembles a report.
-func Build(p *gossa.Program, st *sites.Result, res *taint.Result, rules *model.Rules) *Report {
+func Build(packages []string, loadErrors []ir.LoadError, st *sites.Result, res *taint.Result, rules *model.Rules) *Report {
 	r := &Report{
 		SchemaVersion: SchemaVersion,
 		Sites:         st.Sites,
 		Findings:      res.Findings,
 		Uncertainties: res.Uncertainties,
 		Suppressions:  res.Suppressions,
-		LoadErrors:    p.LoadErrors,
+		LoadErrors:    loadErrors,
 		Stats:         res.Stats,
 		Expansions:    rules.Expansions,
 
@@ -184,9 +184,7 @@ func Build(p *gossa.Program, st *sites.Result, res *taint.Result, rules *model.R
 				fmt.Sprintf("expansion_limit: %d implementations exceed the limit of %d; the rule applies to the interface method only", e.Count, e.Max), e.Symbol))
 		}
 	}
-	for _, pkg := range p.Initial {
-		r.Packages = append(r.Packages, pkg.PkgPath)
-	}
+	r.Packages = append(r.Packages, packages...)
 	sort.Strings(r.Packages)
 	for _, rs := range rules.Sets {
 		name := rs.Name

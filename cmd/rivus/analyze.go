@@ -9,9 +9,9 @@ import (
 	"runtime/pprof"
 	"time"
 
-	"github.com/yagihash/rivus/internal/callgraph"
 	"github.com/yagihash/rivus/internal/model"
 	"github.com/yagihash/rivus/internal/report"
+	"github.com/yagihash/rivus/internal/sg"
 	"github.com/yagihash/rivus/internal/sites"
 	"github.com/yagihash/rivus/internal/taint"
 	"github.com/yagihash/rivus/internal/vcs"
@@ -46,17 +46,26 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	if err != nil {
 		return nil, err
 	}
-	prog, err := o.load(patterns)
+	l, err := o.load(patterns, true)
 	if err != nil {
 		return nil, err
 	}
 	phase("load")
-	for _, e := range rules.Expand(prog, o.maxImpl) {
+	for _, e := range rules.Expand(l.gossa, o.maxImpl) {
 		if e.Limited || e.Note != "" {
 			fmt.Fprintf(os.Stderr, "rivus: %s\n", e)
 		}
 	}
-	st := sites.Enumerate(prog, rules)
+	if err := l.extract(true); err != nil {
+		return nil, err
+	}
+	phase("ir")
+	graph, err := sg.Build(l.ir)
+	if err != nil {
+		return nil, err
+	}
+	phase("graph")
+	st := sites.Enumerate(l.ir, l.texts, rules)
 	phase("sites")
 	opts := taint.DefaultOptions()
 	opts.K = o.k
@@ -68,8 +77,6 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 			fmt.Fprintf(os.Stderr, "rivus: slow function %s: %v (%d outputs, %d roots)\n", fn, d.Round(time.Millisecond), outputs, roots)
 		}
 	}
-	cg := callgraph.BuildGo(prog)
-	phase("callgraph")
 	var res *taint.Result
 	if o.cpuProf != "" {
 		f, err := os.Create(o.cpuProf)
@@ -88,9 +95,11 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 			os.Exit(130)
 		}()
 	}
-	res = taint.New(prog, st, rules, cg, opts).Run()
+	eng := taint.New(graph, l.texts, st, rules, opts)
+	eng.SetLoadErrors(l.gossa.LoadErrors)
+	res = eng.Run()
 	phase("taint")
-	rep := report.Build(prog, st, res, rules)
+	rep := report.Build(l.packages(), l.gossa.LoadErrors, st, res, rules)
 	rep.Target = vcs.Detect(o.dir)
 	return rep, nil
 }

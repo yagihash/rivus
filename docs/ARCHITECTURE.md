@@ -232,7 +232,7 @@ IR からテキストを落としても、「SQL 文に変数が直接展開さ�
 
 IR の型は `TypeID`（同一性だけ）に加えて、**エンジンが問う分類**を 1 つ持つ。構造は持たない。
 
-`TypeClass`: `pointer`（指す先が位置になる）/ `interface`（動的ディスパッチ）/ `func` / `container`（スライス・配列・map・コレクション）/ `struct` / `scalar` / `other`
+`TypeClass`: `pointer`（指す先が位置になる）/ `interface`（動的ディスパッチ）/ `func` / `container`（スライス・map・チャネル・リスト。値が、別の場所にある要素を指す）/ `struct`（値として持つ集合体。構造体と配列）/ `bool` / `string` / `number` / `other`（2.4 で `scalar` を `bool` / `string` / `number` に分け、配列を `container` から `struct` に移した。エンジンが問うのは「指す型か」「真偽値か」と、ゼロ値の綴り）
 
 Phase 1 のエンジンが型について実際に問うのは、この分類（と型の同一性）だけだった。`ParamLabel` などの表示用の名前は、extractor がシンボル文字列にして渡す。
 
@@ -278,6 +278,16 @@ NaiveForm のローカルは、`Alloc` の結果がそのままローカル変�
 - アドレス計算を畳むのは、使い道が 1 つの `load` か `store` のときだけにした（`x.f += 1` のように 2 つあるときは `addr_of`。ソース上で触るのは 1 回なので、サイトも 1 つにするため）
 - **検証:** 同じコードを go/ssa 経路と IR 経路で列挙し、サイトの ID・指紋 4 種・位置・スニペット・ラベル・`literal_only`・並び順が完全に一致することを、testdata（212 サイト、フィールド 7）、rivus 自身、ghmint、x/tools（243 サイト）で確かめた
 
+**2.4〜2.6 で分かったこと（実装メモ）:**
+- **新しいパッケージ:** `internal/irssa`（2.2）、`internal/sg`（SSA グラフ。IR ＋ `irssa` から、値・命令・ブロック・支配木を作る。昇格した変数の `load` / `store` と、φ を落とした `copy` は消え、定数・パラメータは値になる）、`internal/taint`（エンジン。`go/ssa` の値の代わりに `sg` の値を使う）
+- **エンジンを動かす言語固有の操作は、シンボル付きの `call`:** `go/chan.send` / `go/chan.recv`、`go/range.start` / `go/range.next` / `go/range.next_string`、`go.rundefers`。`select` は、extractor が送信と受信の `call` に分ける（どれが起きるかはデータではない）。`index_load` / `index_store` の `Keyed` は、キーで引くこと（map、文字列）。`Folded` は、アドレス計算を畳んだ `load` / `store`。`convert` の `Operator` は、変換の種類
+- **値の同一性:** `go/ssa` のタプル（複数戻り値）は、`call` の `Dsts` の 1 つずつが値になる。`Extract` は消える
+- **コールグラフ:** VTA は NaiveForm の上だと lifted の上より粗い（`(go/types.Object).Name` の候補が増える）。そこで `gossa.Options.WithLifted` で lifted 版も作り、グラフはそちらから取って、NaiveForm の `call` へ位置と種類で対応づけて `candidates` に入れる。この対応づけで、`ssa:deferstack` のような lifting で消える呼び出しを避ける
+- **関数だけの値:** 何も捕捉しない無名関数を変数に入れて呼ぶ場合、`sg` が `make_closure`（捕捉なし）から呼び先を静的に解く（これを落とすと、`unresolved_callee` が増えた）
+- **検証（旧経路との突き合わせ。JSON を比べた）:** `testdata` の全ケース、rivus 自身（36 検出、614 不確実性）、ghmint（15 検出、176 不確実性）で完全に一致。x/tools（4 検出、10,628 不確実性）も、検出・抑制・収束は一致し、不確実性は 1 件だけ違う（generic な関数の中の range-over-func で、位置のない合成された呼び出し。`excfg.CFG.Out$1` を呼ぶ側）。許容する
+- **性能（x/tools、15.6 万行）:** 107 秒・最大 4.9 GB → 100 秒・最大 6.2 GB。時間は縮んだが、メモリは増えた（IR と `sg` の分）。`gossa.Program.ReleaseSSA` で go/ssa を手放しても、ほとんど変わらなかったので、増えた分の中心は IR と `sg` と解析の状態。メモリの削減は未着手
+- **依存:** `go list -deps` で、`taint`・`sites`・`sg`・`irssa`・`ir`・`report`・`model` に `go/ssa`・`x/tools`・`gossa`・`go/types`・`go/ast` は入っていない。`taint`（ガードの定数評価）と `report` には `go/token` と `go/constant` が入る（標準ライブラリの、言語に依らない部分。いずれ自前にできる）。`gossa` は、Go の extractor と、`rules.Expand`（実装列挙。Go のパッケージを引く）からだけ使われる
+
 #### 2.7.5 構成（案）
 
 - `internal/ir`: 型（`Func`、`Block`、`Instr`）、JSON Lines の符号化・復号、検証（全ブロックに終端がある、`Dst` が宣言済み、など）
@@ -286,7 +296,7 @@ NaiveForm のローカルは、`Alloc` の結果がそのままローカル変�
 - `internal/taint` / `internal/sites`: **`go/ssa` を import しない。** IR の SSA 形だけを見る。`gossa` への依存も取り除く
 - **Go では、同じプロセスの中で IR の型を直接渡す。** JSON Lines は `rivus extract` の出力と、Rust / Dart extractor（別プロセス）の入力のためだけに使う。ただし、直接渡す経路と JSON を経由する経路の結果が一致することをテストする
 
-#### 2.7.6 移行の戦略
+#### 2.7.6 移行の戦略（実施済み）
 
 エンジンの移植は大きい（`taint` 約 4,800 行）。壊さないために、**旧経路（`go/ssa` 直）と新経路（IR 経由）を、移行が終わるまで両方動かし、`Report` を突き合わせる。**
 対象は `testdata` の全ケース、ghmint、rivus 自身、`x/tools`。結果が一致するまでは旧経路を消さない。
@@ -299,27 +309,23 @@ NaiveForm のローカルは、`Alloc` の結果がそのままローカル変�
 Go モジュール `github.com/yagihash/rivus`。依存は標準ライブラリ ＋ `golang.org/x/tools`（最新）＋ YAML パーサ。
 
 ```
-cmd/rivus/                CLI（extract / analyze / query / models）
+cmd/rivus/                CLI（sites / analyze / query / index / resolve / extract / models）
 internal/
-  ir/                     IR の型定義、JSON Lines の読み書き、検証、ダンプ
-  extractor/              extractor の解決層（Locator）と起動・ストリーム読み取り
-    gosrc/                Go extractor（Phase 2 以降。Phase 1 では frontend/gossa）
-  frontend/gossa/         Phase 1: go/packages → go/ssa。go/ssa に触れるコードはここだけ
-  ssabuild/               CFG → SSA（dominator tree、dominance frontier、φ 挿入）。言語非依存。実装済み
+  ir/                     IR の型定義、JSON Lines の読み書き、検証、ダンプ、ir.Texts
+  irssa/                  IR の SSA 形（ssabuild をつなぐ。昇格、φ、到達定義）
+  sg/                     SSA グラフ（値・命令・ブロック・支配木）。エンジンが走る面
+  ssabuild/               CFG → SSA（dominator tree、dominance frontier、φ 挿入）。言語非依存
   ssacheck/               ssabuild の検証（go/ssa の lifting、独立な到達定義との比較）。テストのみ
-  callgraph/              CallGraphBuilder インタフェース、SCC 縮約、トポロジカル順
-    gocg/                 Go 用: CHA → VTA
+  frontend/gossa/         go/packages → go/ssa。go/ssa に触れるコードはここと goir だけ
+  frontend/goir/          Go extractor（NaiveForm → IR）と、Go の ir.Texts
+  callgraph/              Go 用: CHA → VTA（extractor が使う）
   model/                  YAML ルールの読み込み、シンボル照合（exact / implementations）
     builtin/              組み込みルール（YAML。ユーザー定義と同形式）
-  taint/                  手続き内ソルバ（worklist）、ラベル、アクセスパス
-  summary/                関数サマリの定義、算出、呼び出し側での展開、SCC 内の不動点
-  guard/                  引数由来の条件ガードの抽出と上限制御
-  provenance/             引数の由来追跡（後ろ向き）
-  uncertainty/            terminal kind、attributable_to、記録
+  taint/                  エンジン（手続き内、サマリ、ガード、由来追跡、不確実性）
   sites/                  サイト（source / sink の候補箇所）の列挙と ID 付け。L0 / L1
-  query/                  前向き / 後ろ向き / source-sink 組。サイト ID を seed に取れる
-  report/                 結果のグループ化、安定 ID、経路数の上限、JSON 出力
-    sarif/                副次出力（JSON が固まってから）
+  fingerprint/            指紋の鍵とハッシュ
+  report/                 結果のグループ化、クエリ、resolve、モデルカバレッジ、JSON 出力
+  vcs/                    解析したコードのリビジョン
   testutil/               testdata ハーネス
 testdata/
   go/ …                   マイクロベンチマーク（検出すべき / 意図的に検出しない）
@@ -330,15 +336,15 @@ docs/
 ### 依存の向き
 
 ```
-cmd → query → summary → taint → ssabuild → ir
-                 ↘ callgraph        ↗
-        model ──→ (taint, summary から参照)
-        uncertainty ──→ (taint, summary, provenance, query から記録)
-extractor / frontend/gossa → ir          ← Go 固有の型は gossa 内で完結させ、外へ出さない
+cmd → report → taint → sg → irssa → ssabuild
+                 ↘ sites ↗     ↘ ir
+        model ──→ (taint, sites から参照)
+cmd → frontend/goir → frontend/gossa (go/ssa), callgraph → ir
 ```
 
-**コアから `go/ssa` や `go/callgraph` を直接 import してよいのは `frontend/gossa` と `callgraph/gocg` のみ。**
-これを守れば Phase 2 の IR 切り出しは「gossa を extractor に置き換える」作業に収まる。
+**`go/ssa` や `go/callgraph` を import してよいのは `frontend/gossa`、`frontend/goir`、`callgraph` と、そのテストのみ。**
+コア（`ir`、`irssa`、`sg`、`ssabuild`、`sites`、`taint`、`model`、`report`）は IR だけを見る。
+Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えずにつなげられる。
 
 ### 差し替えを前提にする境界
 
@@ -874,9 +880,9 @@ Phase 2 のステップ（案。2.7 のレビュー後に確定する）:
 | 2.1 | **（実装済み）** Go extractor（`goir`）: NaiveForm → IR。`rivus extract` | `testdata` の全関数が IR になり、検証を通る。目視用の出力が読める。SQL への補間（`+`、`Sprintf`、`strings.Builder`）のケースで、`const` の中身と補間の形が IR に残ることを確かめる |
 | 2.2 | **（実装済み）** IR → SSA 形（`ssabuild` の接続）。`testdata` と `x/tools` で、旧経路の SSA の値の使用関係と一致 | differential test が IR 経由でも通る |
 | 2.3 | **（実装済み）** `sites` と指紋を IR の上へ。**ID と指紋が、旧経路と全ケースで一致** | `rivus sites` / `resolve` の出力が変わらない |
-| 2.4 | `taint` の移植（手続き内 → 手続き間 → ヒープ → ガード）。旧経路との `Report` の突き合わせ | `testdata`・ghmint・dogfood で一致 |
-| 2.5 | コールグラフ・実装列挙を extractor へ。コアは IR だけから SCC を作る | 同上 ＋ `x/tools` で一致し、時間が Phase 1 の ±20% 以内 |
-| 2.6 | 旧経路の除去。`taint` / `sites` から `go/ssa` と `gossa` の import を消す | `go list -deps` で確認。ADR で結果を記録 |
+| 2.4 | **（実装済み）** `taint` の移植（手続き内 → 手続き間 → ヒープ → ガード）。旧経路との `Report` の突き合わせ | `testdata`・ghmint・dogfood で一致 |
+| 2.5 | **（実装済み。2.4 の中でやった）** コールグラフを extractor へ。`call` の `candidates` として IR に入れ、コアは IR だけから SCC を作る | `x/tools` で一致し、時間が Phase 1 の ±20% 以内（実測: 107 秒 → 100 秒） |
+| 2.6 | **（実装済み）** 旧経路の除去。`taint` / `sites` / `report` から `go/ssa` と `gossa` の import を消す | `go list -deps` で確認（`taint` に `go/token`・`go/constant` が残る。下記） |
 - **Phase 3:** Rust。最初のタスクは「`stable-mir-json` 等の既存ツールで、実在のクレートがどれくらい通るかの確認」。成果物は「固定した nightly でビルドが通る Rust プロジェクトを解析できるツール」。想定より通らなければ、Rust の優先度を下げる判断もあり得る
 - **Phase 4:** Dart。解決済み AST → CFG → IR。まず関数内、それからコールグラフ
 

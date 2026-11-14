@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/yagihash/rivus/internal/fingerprint"
-	"github.com/yagihash/rivus/internal/frontend/gossa"
 	"github.com/yagihash/rivus/internal/model"
 )
 
@@ -41,18 +40,11 @@ func sitesOf(t *testing.T, src string) []*Site {
 	write("go.mod", "module example.com/tmp\n\ngo 1.27\n")
 	write("lib/lib.go", tmpLib)
 	write("main/main.go", src)
-	p, err := gossa.Load(dir, []string{"./main"}, gossa.Options{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(p.LoadErrors) != 0 {
-		t.Fatalf("load errors: %v", p.LoadErrors)
-	}
 	rs, err := model.Parse(strings.NewReader(tmpRules), "tmp")
 	if err != nil {
 		t.Fatal(err)
 	}
-	return Enumerate(p, model.Merge(rs)).Sites
+	return enumerateGo(t, dir, []string{"./main"}, model.Merge(rs)).Sites
 }
 
 func sinks(ss []*Site) []*Site {

@@ -200,6 +200,16 @@ func (p *Program) File(pos token.Pos) *ast.File {
 	return p.files[tf.Name()]
 }
 
+// ReleaseSSA lets go of the go/ssa programs (and what hangs on them), which
+// are large, once the IR has been made and the texts have been taken. What
+// is left is what the text of the code and the output need: the syntax, the
+// positions, the loading errors.
+func (p *Program) ReleaseSSA() {
+	p.SSA, p.Lifted = nil, nil
+	p.Funcs, p.Own, p.OwnPkgs = nil, nil, nil
+	p.byID = nil
+}
+
 // TokenPos is the inverse of Position: the token.Pos of a byte offset in a
 // file given by the name Position uses. It returns token.NoPos for a file it
 // does not know.

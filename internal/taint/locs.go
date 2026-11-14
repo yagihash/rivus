@@ -1,48 +1,15 @@
 package taint
 
 import (
-	"go/token"
-	"go/types"
 	"sort"
 
-	"golang.org/x/tools/go/ssa"
+	"github.com/yagihash/rivus/internal/ir"
+	"github.com/yagihash/rivus/internal/sg"
 )
 
-// pointerLike reports whether values of the type refer to storage: the
-// location of such a value is the thing it points to, not the value itself.
-func pointerLike(t types.Type) bool {
-	switch t.Underlying().(type) {
-	case *types.Pointer, *types.Slice, *types.Map, *types.Chan:
-		return true
-	}
-	return false
-}
-
-// resRoot is the root that holds the (first) result value of an instruction.
-func resRoot(v ssa.Value) Root {
-	switch v := v.(type) {
-	case *ssa.TypeAssert:
-		if v.CommaOk {
-			return Root{v, 0}
-		}
-	case *ssa.Lookup:
-		if v.CommaOk {
-			return Root{v, 0}
-		}
-	case *ssa.UnOp:
-		if v.Op == token.ARROW && v.CommaOk {
-			return Root{v, 0}
-		}
-	}
-	return own(v)
-}
-
-func tupleElem(t types.Type, i int) types.Type {
-	if tt, ok := t.(*types.Tuple); ok && i < tt.Len() {
-		return tt.At(i).Type()
-	}
-	return t
-}
+// pointerLike reports whether the value refers to storage: the location of
+// such a value is the thing it points to, not the value itself.
+func pointerLike(v *sg.Value) bool { return v != nil && v.IsPointerLike() }
 
 func suffix(locs []Loc, seg string) []Loc {
 	out := make([]Loc, len(locs))
@@ -55,9 +22,9 @@ func suffix(locs []Loc, seg string) []Loc {
 // prepareLocs numbers the values of the function and computes, to a fixed
 // point, the locations every value refers to.
 func (s *state) prepareLocs() {
-	s.numbering = map[ssa.Value]int{}
-	s.locSet = map[ssa.Value]map[Loc]bool{}
-	s.locCache = map[ssa.Value][]Loc{}
+	s.numbering = map[*sg.Value]int{}
+	s.locSet = map[*sg.Value]map[Loc]bool{}
+	s.locCache = map[*sg.Value][]Loc{}
 	n := 0
 	for _, p := range s.fn.Params {
 		s.numbering[p] = n
@@ -67,19 +34,19 @@ func (s *state) prepareLocs() {
 		s.numbering[p] = n
 		n++
 	}
-	var instrs []ssa.Value
+	var vals []*sg.Value
 	for _, b := range s.fn.Blocks {
 		for _, in := range b.Instrs {
-			if v, ok := in.(ssa.Value); ok {
+			for _, v := range in.Dsts {
 				s.numbering[v] = n
 				n++
-				instrs = append(instrs, v)
+				vals = append(vals, v)
 			}
 		}
 	}
 	for {
 		changed := false
-		for _, v := range instrs {
+		for _, v := range vals {
 			for _, l := range s.computeLocs(v) {
 				m := s.locSet[v]
 				if m == nil {
@@ -99,13 +66,11 @@ func (s *state) prepareLocs() {
 }
 
 // locs returns the locations value v refers to, in a stable order.
-func (s *state) locs(v ssa.Value) []Loc {
-	switch v.(type) {
-	case *ssa.Const, *ssa.Function, *ssa.Builtin:
+func (s *state) locs(v *sg.Value) []Loc {
+	switch v.Kind {
+	case sg.KConst, sg.KFunc, sg.KUndef:
 		return nil
-	case *ssa.Parameter, *ssa.FreeVar:
-		return []Loc{{own(v), ""}}
-	case *ssa.Global:
+	case sg.KParam, sg.KFreeVar, sg.KGlobal:
 		return []Loc{{own(v), ""}}
 	}
 	if c, ok := s.locCache[v]; ok {
@@ -142,75 +107,107 @@ func (s *state) rootNum(r Root) int {
 	return 1 << 30 // globals and other roots outside the function
 }
 
+// pathSegs spells the access path of an addr_of.
+func pathSegs(path []ir.Step) []string {
+	var out []string
+	for _, st := range path {
+		switch st.Kind {
+		case ir.StepField:
+			out = append(out, st.Field)
+		case ir.StepIndex:
+			out = append(out, "[]")
+		case ir.StepDeref:
+			out = append(out, "*")
+		}
+	}
+	return out
+}
+
+// Names of the operations a call stands for (see internal/frontend/goir).
+const (
+	symChanSend   = "go/chan.send"
+	symChanRecv   = "go/chan.recv"
+	symRangeStart = "go/range.start"
+	symRangeNext  = "go/range.next"
+	symRangeNextS = "go/range.next_string"
+	symRunDefers  = "go.rundefers"
+)
+
 // computeLocs derives the locations of an instruction's result from the
 // current locations of its operands. It is monotone, so iterating it reaches
 // a fixed point even through loops.
-func (s *state) computeLocs(v ssa.Value) []Loc {
+func (s *state) computeLocs(v *sg.Value) []Loc {
 	ownRoot := []Loc{{own(v), ""}}
-	switch v := v.(type) {
-	case *ssa.FieldAddr:
-		return suffix(s.locs(v.X), fieldName(v.X.Type(), v.Field))
-	case *ssa.IndexAddr:
-		return suffix(s.locs(v.X), "[]")
-	case *ssa.Field:
-		if pointerLike(v.Type()) {
-			return suffix(suffix(s.locs(v.X), fieldName(v.X.Type(), v.Field)), "*")
-		}
-	case *ssa.Index:
-		if pointerLike(v.Type()) {
-			return suffix(suffix(s.locs(v.X), "[]"), "*")
-		}
-	case *ssa.Lookup:
-		if !v.CommaOk && pointerLike(v.Type()) {
-			return suffix(suffix(s.locs(v.X), "[]"), "*")
-		}
-	case *ssa.UnOp:
-		switch {
-		case v.Op == token.MUL && pointerLike(v.Type()):
-			return suffix(s.locs(v.X), "*")
-		case v.Op == token.ARROW && !v.CommaOk && pointerLike(v.Type()):
-			return suffix(suffix(s.locs(v.X), "[]"), "*")
-		}
-	case *ssa.Phi:
-		if pointerLike(v.Type()) {
+	in := v.Instr
+	if in == nil {
+		return ownRoot
+	}
+	if in.Op == sg.OpPhi {
+		if pointerLike(v) {
 			var out []Loc
-			for _, e := range v.Edges {
+			for _, e := range in.Args {
 				out = append(out, s.locs(e)...)
 			}
 			return out
 		}
-	case *ssa.ChangeType:
-		if pointerLike(v.Type()) && pointerLike(v.X.Type()) {
-			return s.locs(v.X)
-		}
-	case *ssa.Convert:
-		if pointerLike(v.Type()) && pointerLike(v.X.Type()) {
-			return s.locs(v.X)
-		}
-	case *ssa.ChangeInterface:
 		return ownRoot
-	case *ssa.SliceToArrayPointer:
-		return s.locs(v.X)
-	case *ssa.Slice:
-		if pointerLike(v.Type()) && pointerLike(v.X.Type()) {
-			return s.locs(v.X)
+	}
+	if len(in.Dsts) == 0 || in.Dsts[0] != v {
+		return ownRoot // a result after the first: its own root
+	}
+	switch in.Op {
+	case ir.OpAddrOf:
+		if in.IR.Global != "" || len(in.Args) == 0 {
+			return ownRoot
 		}
-	case *ssa.TypeAssert:
-		if !v.CommaOk && pointerLike(v.Type()) {
-			return suffix(s.locs(v.X), "*")
+		out := s.locs(in.Args[0])
+		for _, seg := range pathSegs(in.IR.Path) {
+			out = suffix(out, seg)
 		}
-	case *ssa.Extract:
-		return []Loc{{Root{v.Tuple, v.Index}, ""}}
+		return out
+	case ir.OpFieldLoad:
+		if pointerLike(v) {
+			return suffix(suffix(s.locs(in.Args[0]), in.IR.Field), "*")
+		}
+	case ir.OpIndexLoad:
+		if len(in.Dsts) == 1 && pointerLike(v) {
+			return suffix(suffix(s.locs(in.Args[0]), "[]"), "*")
+		}
+	case ir.OpLoad, ir.OpGlobalLoad:
+		if pointerLike(v) {
+			return suffix(s.loadAddr(in), "*")
+		}
+	case ir.OpConvert:
+		switch in.IR.Operator {
+		case "change_interface", "make_interface":
+		case "slice_to_array_pointer":
+			return s.locs(in.Args[0])
+		default:
+			if pointerLike(v) && pointerLike(in.Args[0]) {
+				return s.locs(in.Args[0])
+			}
+		}
+	case ir.OpCopy:
+		if in.IR.View && pointerLike(v) && pointerLike(in.Args[0]) {
+			return s.locs(in.Args[0])
+		}
+	case ir.OpTypeAssert:
+		if len(in.Dsts) == 1 && pointerLike(v) {
+			return suffix(s.locs(in.Args[0]), "*")
+		}
+	case ir.OpCall:
+		if in.Callee.Symbol == symChanRecv && len(in.Dsts) == 1 && pointerLike(v) {
+			return suffix(suffix(s.locs(in.Args[0]), "[]"), "*")
+		}
 	}
 	return ownRoot
 }
 
-func fieldName(t types.Type, idx int) string {
-	if p, ok := t.Underlying().(*types.Pointer); ok {
-		t = p.Elem()
+// loadAddr is where a load reads: the locations of its address operand, or
+// of the package variable.
+func (s *state) loadAddr(in *sg.Instr) []Loc {
+	if in.Op == ir.OpGlobalLoad {
+		return s.locs(s.eng.prog.Global(in.IR.Global))
 	}
-	if st, ok := t.Underlying().(*types.Struct); ok && idx >= 0 && idx < st.NumFields() {
-		return st.Field(idx).Name()
-	}
-	return "?"
+	return s.locs(in.Args[0])
 }
