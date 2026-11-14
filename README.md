@@ -50,7 +50,7 @@ Go / Rust / Dart extractor ──→ 中立 IR (CFG, JSON Lines) ──→ Go �
 
 | フェーズ | 内容 | 状態 |
 |---|---|---|
-| Phase 1 | Go のみで完結（`go/ssa` から直接 taint 解析） | 進行中。ステップ 1.0〜1.11（1.11b を除く）まで実装済み。15.6 万行の x/tools を約 91 秒で解析（[計測](docs/DECISIONS.md)） |
+| Phase 1 | Go のみで完結（`go/ssa` から直接 taint 解析） | 進行中。ステップ 1.0〜1.11b まで実装済み（残りは 1.12 のドッグフーディング）。15.6 万行の x/tools を約 91 秒で解析（[計測](docs/DECISIONS.md)） |
 | Phase 2 | 中立 IR の切り出し | 未着手 |
 | Phase 3 | Rust 対応（固定 nightly 前提） | 未着手 |
 | Phase 4 | Dart 対応 | 未着手 |
@@ -110,6 +110,7 @@ rivus models coverage -yaml -top 20 ./...  # 埋めるためのルールのひ�
 ```sh
 go test ./...                                              # 単体テストとマイクロベンチマーク
 RIVUS_TEST_MODULE=/path/to/module go test ./internal/taint -run TestRealCode -v   # 実在のモジュールで頑健性を確認
+RIVUS_TEST_MODULE=/path/to/module go test ./internal/ssacheck -run TestAgainstGoSSAOnAModule -v   # 自作の SSA 化を go/ssa と比べる
 ```
 
 マイクロベンチマークは `testdata/go/cases` にあり、ソース中の `// @source(tag)` と `// @sink(tag)` が期待値になります。

@@ -200,7 +200,8 @@ internal/
   extractor/              extractor の解決層（Locator）と起動・ストリーム読み取り
     gosrc/                Go extractor（Phase 2 以降。Phase 1 では frontend/gossa）
   frontend/gossa/         Phase 1: go/packages → go/ssa。go/ssa に触れるコードはここだけ
-  ssabuild/               IR → SSA（dominator tree、dominance frontier、φ 挿入）
+  ssabuild/               CFG → SSA（dominator tree、dominance frontier、φ 挿入）。言語非依存。実装済み
+  ssacheck/               ssabuild の検証（go/ssa の lifting、独立な到達定義との比較）。テストのみ
   callgraph/              CallGraphBuilder インタフェース、SCC 縮約、トポロジカル順
     gocg/                 Go 用: CHA → VTA
   model/                  YAML ルールの読み込み、シンボル照合（exact / implementations）
@@ -736,7 +737,7 @@ Phase 1 では中立 IR を経由せず、`go/ssa` から直接 taint 解析ま�
 | 1.9 | 不確実性の記録: terminal kind、`attributable_to`、`dynamic_dispatch` の候補列挙、`match: implementations`（展開上限と中止時の記録を含む） | すべての打ち切りが分類されて出る。参照コーパスで展開数を実測し、`max_implementations` の既定値を確定する。**実装済み（ADR-030 の追記、ADR-032）。既定値と `mixed` の割り当ての確定はレビュー待ち** |
 | 1.10 | **（実装済み。ADR-035）** 値依存: 引数由来のガード抽出（taint ソルバ流用）、`conditional_nodes`、provenance、ガード上限 | ブリーフの `render` の例が期待どおりに出る |
 | 1.11 | **（実装済み、複数経路を除く。ADR-034）** 運用機能: モデルカバレッジレポート、`origin` と `--deterministic-only`、結果のグループ化・安定 ID・経路数上限、`entrypoints` | `rivus models coverage` が動く |
-| 1.11b | 自作 SSA 化（`ssabuild`）と differential test: `go/ssa` の NaiveForm 出力から SSA 化し、lifted `go/ssa` と φ の配置・到達定義を突き合わせる。Phase 1 の `testdata` を回帰テストにする | differential test が全 `testdata` で一致し、解析結果が変わらない |
+| 1.11b | **（実装済み。ADR-036）** 自作 SSA 化（`ssabuild`）と differential test: `go/ssa` の NaiveForm 出力から SSA 化し、lifted `go/ssa` と φ の配置・到達定義を突き合わせる。Phase 1 の `testdata` を回帰テストにする | differential test が全 `testdata` で一致し、解析結果が変わらない |
 | 1.12 | ドッグフーディング: rivus 自身を解析。`depth_limit` と `attributable_to: rivus` の比率を計測 | 計測値を README に記録 |
 
 SARIF 出力は Phase 1 のスコープ外。JSON が固まってから。

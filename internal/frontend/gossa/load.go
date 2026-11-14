@@ -23,6 +23,11 @@ import (
 type Options struct {
 	// Tests also loads _test.go files of the matched packages.
 	Tests bool
+	// NaiveForm builds go/ssa without lifting: local variables stay in
+	// memory (Alloc, Store, Load) and there are no φ nodes of its own. This
+	// is the form the neutral IR will have (ADR-003); the SSA is then built by
+	// the core, and go/ssa's own lifting serves to check it.
+	NaiveForm bool
 }
 
 // LoadError records something rivus could not see. It maps to the
@@ -97,6 +102,9 @@ func Load(dir string, patterns []string, opts Options) (*Program, error) {
 	})
 
 	var mode ssa.BuilderMode = ssa.InstantiateGenerics
+	if opts.NaiveForm {
+		mode |= ssa.NaiveForm
+	}
 	prog, ssaPkgs := ssautil.Packages(pkgs, mode)
 	p.SSA = prog
 	if len(pkgs) > 0 {
