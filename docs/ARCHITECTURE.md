@@ -94,7 +94,7 @@ rivus query --site <ID> ./...       # L2: そのサイトの詳細分析
 | `LocalID` | 関数内ローカルの番号 |
 | `BlockID` | 関数内ブロックの番号 |
 
-### 2.3 命令セット v0（27 種）
+### 2.3 命令セット v0（26 種）
 
 「15 種類程度」という当初の見積もりは過小だった。以下を初版とする。
 
@@ -104,7 +104,7 @@ rivus query --site <ID> ./...       # L2: そのサイトの詳細分析
 |---|---|
 | `const` | リテラル定数。値と型を持つ |
 | `param` | 関数引数の受け取り。位置番号を持つ（レシーバは 0 番） |
-| `copy` | 単純代入 `dst = src` |
+| `copy` | 単純代入 `dst = src`。`view` フラグを立てると「元と同じメモリを共有する部分参照」を表す（Go の `base[lo:hi]` など。添字の値は伝播しない） |
 | `unop` | 単項演算 |
 | `binop` | 二項演算。文字列結合もここ |
 | `convert` | 型変換（数値変換、型アサーション成功時の値など） |
@@ -122,7 +122,6 @@ rivus query --site <ID> ./...       # L2: そのサイトの詳細分析
 | `field_store` | `base.f = v` |
 | `index_load` | `dst = base[i]`（配列・スライス・map・コレクション） |
 | `index_store` | `base[i] = v` |
-| `slice` | 部分スライス `base[lo:hi]`。要素への汚染をそのまま引き継ぐ |
 | `global_load` | パッケージ変数・static の読み出し |
 | `global_store` | パッケージ変数・static への書き込み |
 
@@ -150,7 +149,16 @@ rivus query --site <ID> ./...       # L2: そのサイトの詳細分析
 | `throw` | 例外送出 |
 | `unreachable` | 到達不能（`panic` 後など） |
 
-合計: 値 7 ＋ メモリ 11 ＋ 関数 2 ＋ 例外・不明 2 ＋ 終端 5 ＝ 27。「25 前後」の想定内。
+合計: 値 7 ＋ メモリ 10 ＋ 関数 2 ＋ 例外・不明 2 ＋ 終端 5 ＝ 26。「25 前後」の想定内。
+
+**`slice` を独立命令にしなかった理由:** 構文として存在するのは主に Go で、Rust は範囲インデックス（MIR では `Index::index` の呼び出し）、
+Dart の `sublist` / `substring` はただのメソッド呼び出しになる。汚染の意味は `copy` と同じ（`base` の汚染を引き継ぐだけ）なので、`copy` の `view` フラグで表す。
+スライスは元の配列とメモリを共有するため、`s2 := s[1:]; s2[0] = tainted` のように**ビュー経由の書き込みが元に及ぶ**ケースは、
+エイリアス解析を作らない方針のため追えない。結論に影響した場合は `container_element_imprecision` として記録する。
+
+**`global_load` / `global_store` を独立命令にした理由:** 関数サマリの境界には引数・戻り値に加えてグローバル変数が含まれ、
+`global_store` が独立していれば「この関数は `G` に書く」が構文的に分かる。
+terminal kind `global_var` の「書き込み箇所は列挙済み」も、全関数から `global_store` を拾うだけで実現できる。
 
 `switch` と `match` は extractor が `branch` の連鎖に落とす。パターンマッチは `type_assert` ＋ `branch` に展開する。
 
@@ -638,7 +646,7 @@ SARIF 出力は Phase 1 のスコープ外。JSON が固まってから。
    Phase 1 のステップ 1.12 の実測後に見直す
 2. **【決定済み】** 自作 SSA 化と differential test は **Phase 1 の終盤（ステップ 1.11b）**で導入する（ADR-026）。
    Phase 1 の間は lifted の `go/ssa` を使い、`testdata` が揃ってから差し込む
-3. IR の命令数は 27（2.3）。`slice` や `global_load/store` を独立命令にしたが、`index_*` / `field_*` に畳む選択もある
+3. **【決定済み】** `global_load/store` は独立のまま、`slice` は `copy` の `view` フラグに畳む。命令数は 26（2.3）
 4. `finally` の表現（経路ごとにブロック複製 / 行き先を値で分岐）は、Dart スパイクの結果で決める
 5. 性能目標（20 万行 / 5 分 / ノート PC）が現実的か
 6. 出力 `Finding.ID` の安定性の定義（関数シグネチャのみ、ボディハッシュ込み、など）
