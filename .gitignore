@@ -1,3 +1,4 @@
 /.rivus/
 /rivus
 *.test
+/rust/target/
