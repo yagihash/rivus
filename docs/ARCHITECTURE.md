@@ -267,6 +267,11 @@ NaiveForm のローカルは、`Alloc` の結果がそのままローカル変�
 - φ は、前任ブロックの末尾の `copy` に落とす。1 つの前任が複数の φ に値を渡すときは、一時変数を経由する
 - **まだ入れていないもの:** `ArgPos`（2.3 でサイトを IR の上に載せるときに入れる）、`dynamic` の `candidates`（2.5）、`implementations`（`-implementations` で指定したメソッドだけ）
 
+**2.2 で分かったこと（実装メモ）:** `internal/irssa`。
+- 変数になるのは、(a) 2 回以上書かれるローカル（φ を落とした `copy` の宛先）と、(b) `load` / `store` のアドレスとしてしか使われない `alloc`（昇格。go/ssa の lifting と同じ基準）。`recover` の root があるとき、entry から届かないブロックで `load` される `alloc`（名前つきの結果）は昇格しない
+- 答えは `Ref`（命令の結果、φ、昇格した変数のゼロ値、未定義）。`Form.Operand(block, instr, k)` が、命令の k 番目の引数の定義を返す。昇格した変数の `load` は、その場所で変数が持つ値（直前の `store` の値、または φ）に解決される
+- 検証は、go/ssa の lifting（昇格した `alloc` の φ の位置）、ナイーブな go/ssa の φ（落とした φ の位置）、独立な到達定義解析（使用ごと）。testdata、rivus 自身、x/tools（5,256 関数、φ 4,646 個、使用 67,640 箇所）で一致
+
 #### 2.7.5 構成（案）
 
 - `internal/ir`: 型（`Func`、`Block`、`Instr`）、JSON Lines の符号化・復号、検証（全ブロックに終端がある、`Dst` が宣言済み、など）
@@ -861,7 +866,7 @@ Phase 2 のステップ（案。2.7 のレビュー後に確定する）:
 |---|---|---|
 | 2.0 | **（実装済み）** `internal/ir`: 型、JSON Lines の符号化・復号、検証、人間が読める整形 | 手書きの IR が往復でき、不正な IR が検証で落ちる |
 | 2.1 | **（実装済み）** Go extractor（`goir`）: NaiveForm → IR。`rivus extract` | `testdata` の全関数が IR になり、検証を通る。目視用の出力が読める。SQL への補間（`+`、`Sprintf`、`strings.Builder`）のケースで、`const` の中身と補間の形が IR に残ることを確かめる |
-| 2.2 | IR → SSA 形（`ssabuild` の接続）。`testdata` と `x/tools` で、旧経路の SSA の値の使用関係と一致 | differential test が IR 経由でも通る |
+| 2.2 | **（実装済み）** IR → SSA 形（`ssabuild` の接続）。`testdata` と `x/tools` で、旧経路の SSA の値の使用関係と一致 | differential test が IR 経由でも通る |
 | 2.3 | `sites` と指紋を IR の上へ。**ID と指紋が、旧経路と全ケースで一致** | `rivus sites` / `resolve` の出力が変わらない |
 | 2.4 | `taint` の移植（手続き内 → 手続き間 → ヒープ → ガード）。旧経路との `Report` の突き合わせ | `testdata`・ghmint・dogfood で一致 |
 | 2.5 | コールグラフ・実装列挙を extractor へ。コアは IR だけから SCC を作る | 同上 ＋ `x/tools` で一致し、時間が Phase 1 の ±20% 以内 |

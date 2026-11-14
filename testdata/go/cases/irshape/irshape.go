@@ -99,3 +99,36 @@ func Dynamic(r io.Reader, f func(string), buf []byte) {
 func Generic[S ~[]E, E any](s S) E { return s[0] }
 
 func UseGeneric() string { return Generic([]string{"a"}) }
+
+func Straight() {
+	x := lib.Source()
+	lib.Sink(x)
+}
+
+func Loop(n int) {
+	s := lib.Source()
+	for i := 0; i < n; i++ {
+		s = s + "x"
+	}
+	lib.Sink(s)
+}
+
+func Zero() {
+	var s string
+	lib.Sink(s)
+}
+
+func Either(c bool) {
+	s := "a"
+	if c {
+		s = lib.Source()
+	}
+	lib.Sink(s)
+}
+
+func AddrTaken() {
+	s := ""
+	p := &s
+	*p = lib.Source()
+	lib.Sink(s)
+}
