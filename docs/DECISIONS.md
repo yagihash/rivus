@@ -717,7 +717,8 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
 3. テキスト（スニペット、式、本体）は IR に運ばない。IR は `Pos` を持ち、コアがソースから切り出す
 4. コールグラフと実装列挙は extractor の責務。結果は `call` の `dynamic(candidates)` と `implementations` レコードで IR に入る
 5. Go は同じプロセスの中で IR の型を直接渡す。JSON Lines は `rivus extract` と、他言語の extractor のためだけに使う。両経路の一致をテストする
-6. 移行中は旧経路（`go/ssa` 直）と新経路を並走させ、`Report` を突き合わせる。一致するまで旧経路を消さない
+6. `const` は文字列の中身を省略せず持ち（上限を超えるときは `truncated` を明示）、文字列補間は extractor が `binop` か補間専用の `call` に展開する。テキストの切り出しは表示と指紋のためだけで、判定には使わない（ARCHITECTURE 2.7.2b）
+7. 移行中は旧経路（`go/ssa` 直）と新経路を並走させ、`Report` を突き合わせる。一致するまで旧経路を消さない
 
 **未確定（レビューで決めたい）:**
 - `TypeClass` の分類が足りるか（たとえば Rust の `Box` / `Rc` / 参照、Dart の `Future` / `Stream` をどの分類にするか）。Phase 3 の入口で Rust を見てから変えうる
