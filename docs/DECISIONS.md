@@ -706,3 +706,20 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
 5. スキーマ版数を上げる: `rivus.result/1`、`rivus.query/1`、`rivus.sites/1`、`rivus.resolve/1`（フィールドの追加のみで、既存のフィールドは変えていない）
 
 **限界:** `dirty` は変更の中身を区別しない（追跡されていないファイルは見ない）。dirty な作業ツリー同士は、同じコミットでも `unknown` になる。古いリビジョンを自分で展開して解く `resolve --from <rev>` は、まだ作らない（ブックマークのスニペットとフィンガープリントで足りるうちは不要）。
+
+## ADR-039: Phase 2 の IR を、Phase 1 の実測から具体化する（案）
+
+**状況:** 2.3 の命令セット（26 種）は Phase 1 の前に書いた。Phase 1 で、エンジンが `go/ssa` から使っているものが分かった（ARCHITECTURE 2.7.1）。
+
+**案:**
+1. 命令数は 26 のまま。`call` の戻り値をリストにし、`addr_of` に経路を持たせ、クロージャの捕捉値を `param` で受け、引数ごとのソース範囲を持たせる（フィールドの追加だけ）
+2. 型は `TypeID` に加えて `TypeClass`（`pointer` / `interface` / `func` / `container` / `struct` / `scalar` / `other`）だけを持つ。構造は持たない
+3. テキスト（スニペット、式、本体）は IR に運ばない。IR は `Pos` を持ち、コアがソースから切り出す
+4. コールグラフと実装列挙は extractor の責務。結果は `call` の `dynamic(candidates)` と `implementations` レコードで IR に入る
+5. Go は同じプロセスの中で IR の型を直接渡す。JSON Lines は `rivus extract` と、他言語の extractor のためだけに使う。両経路の一致をテストする
+6. 移行中は旧経路（`go/ssa` 直）と新経路を並走させ、`Report` を突き合わせる。一致するまで旧経路を消さない
+
+**未確定（レビューで決めたい）:**
+- `TypeClass` の分類が足りるか（たとえば Rust の `Box` / `Rc` / 参照、Dart の `Future` / `Stream` をどの分類にするか）。Phase 3 の入口で Rust を見てから変えうる
+- 「テキストは IR に運ばない」ことで、extractor を別プロセスにしたとき、コアが同じソースを読める前提が要る。コンテナ越しなどでは崩れる
+- `Select` / `Send` / `Recv` を、命令にせずシンボル付きの `call` にしてよいか（`concurrency` の不確実性の出し方が、シンボルの名前に依存する）

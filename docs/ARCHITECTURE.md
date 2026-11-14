@@ -188,6 +188,82 @@ call dst? callee args flags
 JSON Lines。**先頭行は必ず `{"schema_version": ...}`**。以降は関数ごとに 1 行以上。
 `rivus extract --lang=... --output=ir.jsonl` で IR を単独で出力でき、人間が読んで検証できることを一級の要件とする。
 
+### 2.7 Phase 2 に向けた具体化（案。レビュー待ち）
+
+2.1〜2.6 は Phase 1 の前に書いた。Phase 1 で解析エンジン（約 4,800 行）が実際に `go/ssa` から何を使っているかが分かったので、
+IR が運ぶべきものを実測から決め直す。**ここに書くのは案で、ユーザーのレビューで確定する（ADR-039）。**
+
+#### 2.7.1 エンジンが IR に要求するもの（Phase 1 の実装から）
+
+| 要求 | 今の使い方 | IR での持たせ方 |
+|---|---|---|
+| 値の同一性 | セルの根 `Root{ssa.Value, Idx}` | コアが SSA 化した値（`ValueID`）。`ssabuild` の結果から作る |
+| 呼び出し | `CalleeSymbol`、`CallArgs`、静的 / インタフェース / 関数値の別 | `call`（2.4）。`callee` はシンボル文字列を持つ。複数の戻り値のため `dsts` はリスト（下記の変更点） |
+| ポインタ様の値の位置 | ポインタ型なら位置は指す先 | `alloc` / `load` / `store` / `addr_of` と、**値の型の分類**（2.7.3） |
+| フィールド・添字経路 | `FieldAddr` / `IndexAddr` / `Field` / `Index`、k=3 の切り詰め | `field_load/store`、`index_load/store`。アドレスが値として渡る場合は `addr_of`（base と経路を持つ） |
+| グローバル | `ssa.Global` | `global_load` / `global_store`（2.3） |
+| クロージャ | `MakeClosure`、`FreeVar` | `make_closure`（呼び先と捕捉値）。呼び先の関数は捕捉値を `param` の続きとして受ける |
+| ガード | `If` の条件と、`BinOp` の木 | `branch` の `cond` ＋ `CondPos`。条件の値は SSA 上の `binop` / `unop` / `call` の木として辿れる |
+| 定数 | `Const`、`IsConstant` | `const`（値と型） |
+| スニペット・式テキスト | AST から切り出す（`text.go`） | 命令の `Pos`、呼び出しの引数ごとの `Pos`、`branch` の `CondPos`。**コアがソースファイルから切り出す**（extractor はテキストを運ばない） |
+| 指紋 | シンボル、関数、出現順、式テキスト、本体テキスト | すべて `Pos` とシンボルから作れる。コアに置く |
+| 実装列挙 | `Implementations(symbol)`（`match: implementations`） | extractor が提供する問い合わせ。ストリームでは、インタフェースメソッドごとの `implementations` レコード |
+| コールグラフ | `callgraph.BuildGo`（CHA → VTA） | **extractor 側**。結果は `call` の `dynamic(candidates)` として IR に埋める。コアは IR だけから SCC を作る |
+| `defer` / `recover` | `ssabuild` の `Roots`（recover 後のブロック） | `defer` フラグのエッジと、`roots` を持つ関数（2.5） |
+
+#### 2.7.2 2.3 からの変更点
+
+1. **`call` の戻り値はリスト**（`dsts []LocalID`）。Go の複数戻り値と `Extract` を、IR の側で「`call` の n 番目の戻り値」として持つ。タプル型の値は作らない
+2. **`addr_of` は base と経路を持つ**（`&x.f[i]`）。経路は `field` と `index` の列で、`taint` のセルの経路表現と同じ
+3. **`param` はクロージャの捕捉値も受ける。** 位置番号の後ろに、捕捉値の番号を並べる
+4. **`call` / `branch` / `return` に、引数ごとのソース範囲**（`ArgPos`）を持たせる。テキストの切り出しとガードの対応づけに必要
+5. 命令数は 26 のまま。上の 1〜4 はどれもフィールドの追加で、命令は増やさない
+
+#### 2.7.3 型の扱い
+
+IR の型は `TypeID`（同一性だけ）に加えて、**エンジンが問う分類**を 1 つ持つ。構造は持たない。
+
+`TypeClass`: `pointer`（指す先が位置になる）/ `interface`（動的ディスパッチ）/ `func` / `container`（スライス・配列・map・コレクション）/ `struct` / `scalar` / `other`
+
+Phase 1 のエンジンが型について実際に問うのは、この分類（と型の同一性）だけだった。`ParamLabel` などの表示用の名前は、extractor がシンボル文字列にして渡す。
+
+#### 2.7.4 Go extractor の対応表（NaiveForm → IR）
+
+| go/ssa | IR |
+|---|---|
+| `Alloc` / `Load` / `Store` | `alloc` / `load` / `store` |
+| `FieldAddr`＋`Load/Store` | `field_load` / `field_store`（融合）。アドレスが逃げるときは `addr_of` |
+| `IndexAddr` / `Lookup` / `MapUpdate` | `index_load` / `index_store` |
+| `Field` / `Index` | `field_load` / `index_load` |
+| `Slice` | `copy`（`view`） |
+| `Convert` / `ChangeType` / `ChangeInterface` / `MakeInterface` / `SliceToArrayPointer` | `convert` |
+| `TypeAssert` | `type_assert` ＋ `branch`（`comma-ok` の場合） |
+| `BinOp` / `UnOp` | `binop` / `unop` |
+| `Call`（静的 / インタフェース / 関数値） | `call`（`static` / `dynamic` / `value`）。`Builtin` はシンボル付きの静的な `call` |
+| `Go` / `Defer` | `call` の `go` / `defer` フラグ |
+| `MakeClosure` / `FreeVar` | `make_closure` / `param`（捕捉値） |
+| `Range` / `Next` | イテレータ取得の `call` ＋ `next` の `call` ＋ 後方エッジ |
+| `Select` / `Send` / `Recv` | `call`（シンボル `go/chan.send` など）。`concurrency` の不確実性は、コアがこのシンボルから出す |
+| `Phi` | **出さない**（NaiveForm には出ない。φ はコアが作る） |
+| `Panic` / `Return` / `If` / `Jump` | `throw`（または `unreachable`）/ `return` / `branch` / `jump` |
+| `DebugRef` | 捨てる（位置は命令の `Pos` に持つ） |
+
+NaiveForm のローカルは、`Alloc` の結果がそのままローカル変数になる。コアの `ssabuild` が、ローカルの代入 ＋ 使用から φ と到達定義を作る（Phase 1 で検証済み。ADR-036）。
+
+#### 2.7.5 構成（案）
+
+- `internal/ir`: 型（`Func`、`Block`、`Instr`）、JSON Lines の符号化・復号、検証（全ブロックに終端がある、`Dst` が宣言済み、など）
+- `internal/frontend/goir`: `go/packages` ＋ `go/ssa`（NaiveForm）→ IR。`gossa` の下の層（ロード、型、コールグラフ、実装列挙）を使う
+- `internal/ir/ssa`（名前は未定）: IR ＋ `ssabuild` → 値の名前つきの SSA 形
+- `internal/taint` / `internal/sites`: **`go/ssa` を import しない。** IR の SSA 形だけを見る。`gossa` への依存も取り除く
+- **Go では、同じプロセスの中で IR の型を直接渡す。** JSON Lines は `rivus extract` の出力と、Rust / Dart extractor（別プロセス）の入力のためだけに使う。ただし、直接渡す経路と JSON を経由する経路の結果が一致することをテストする
+
+#### 2.7.6 移行の戦略
+
+エンジンの移植は大きい（`taint` 約 4,800 行）。壊さないために、**旧経路（`go/ssa` 直）と新経路（IR 経由）を、移行が終わるまで両方動かし、`Report` を突き合わせる。**
+対象は `testdata` の全ケース、ghmint、rivus 自身、`x/tools`。結果が一致するまでは旧経路を消さない。
+意図した差（IR で表せなくなったもの、位置の表現）が出たら、ADR に書いてから許容する。
+
 ---
 
 ## 3. コアエンジンのパッケージ構成
@@ -761,6 +837,18 @@ SARIF 出力は Phase 1 のスコープ外。JSON が固まってから。
 ### Phase 2 以降の見通し
 
 - **Phase 2:** 中立 IR の切り出し。Go extractor（NaiveForm）が最初の実装例。`ssabuild` と differential test は Phase 1 のステップ 1.11b で導入済みなので、ここでは `gossa` を extractor に置き換えて IR を挟むことだけに集中する。Phase 1 の `testdata` がそのまま回帰テストになる
+
+Phase 2 のステップ（案。2.7 のレビュー後に確定する）:
+
+| ステップ | 内容 | 完了の目安 |
+|---|---|---|
+| 2.0 | `internal/ir`: 型、JSON Lines の符号化・復号、検証、人間が読める整形 | 手書きの IR が往復でき、不正な IR が検証で落ちる |
+| 2.1 | Go extractor（`goir`）: NaiveForm → IR。`rivus extract` | `testdata` の全関数が IR になり、検証を通る。目視用の出力が読める |
+| 2.2 | IR → SSA 形（`ssabuild` の接続）。`testdata` と `x/tools` で、旧経路の SSA の値の使用関係と一致 | differential test が IR 経由でも通る |
+| 2.3 | `sites` と指紋を IR の上へ。**ID と指紋が、旧経路と全ケースで一致** | `rivus sites` / `resolve` の出力が変わらない |
+| 2.4 | `taint` の移植（手続き内 → 手続き間 → ヒープ → ガード）。旧経路との `Report` の突き合わせ | `testdata`・ghmint・dogfood で一致 |
+| 2.5 | コールグラフ・実装列挙を extractor へ。コアは IR だけから SCC を作る | 同上 ＋ `x/tools` で一致し、時間が Phase 1 の ±20% 以内 |
+| 2.6 | 旧経路の除去。`taint` / `sites` から `go/ssa` と `gossa` の import を消す | `go list -deps` で確認。ADR で結果を記録 |
 - **Phase 3:** Rust。最初のタスクは「`stable-mir-json` 等の既存ツールで、実在のクレートがどれくらい通るかの確認」。成果物は「固定した nightly でビルドが通る Rust プロジェクトを解析できるツール」。想定より通らなければ、Rust の優先度を下げる判断もあり得る
 - **Phase 4:** Dart。解決済み AST → CFG → IR。まず関数内、それからコールグラフ
 
