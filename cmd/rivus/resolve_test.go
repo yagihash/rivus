@@ -463,3 +463,82 @@ func TestConditionalNodeInTheBriefsExample(t *testing.T) {
 		t.Fatalf("no xss finding in %d findings", len(rep.Findings))
 	}
 }
+
+// git runs git in the workspace, with an identity of its own.
+func (w *workspace) git(args ...string) {
+	w.t.Helper()
+	cmd := exec.Command("git", append([]string{"-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false"}, args...)...)
+	cmd.Dir = w.dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		w.t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+}
+
+// The revision is not in the IDs, but it is in every output, and a bookmark
+// carries the revision it was taken from: the "target" of the output it was
+// copied from.
+func TestResolveRecordsTheRevision(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not available")
+	}
+	w := newWorkspace(t)
+	w.git("init", "-q")
+	w.git("add", "-A")
+	w.git("commit", "-q", "-m", "base")
+
+	var rep report.Report
+	if err := json.Unmarshal(w.run("analyze", "-rules", "rules.yaml", "-sites", "./main"), &rep); err != nil {
+		t.Fatal(err)
+	}
+	if rep.Target == nil || rep.Target.Revision == "" || rep.Target.Dirty {
+		t.Fatalf("target of a clean tree: %+v", rep.Target)
+	}
+	// An agent keeps the findings together with the target they came from.
+	data, _ := json.Marshal(map[string]any{"target": rep.Target, "bookmarks": rep.Findings})
+	bm := filepath.Join(w.dir, "wrapped.json")
+	if err := os.WriteFile(bm, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	resolve := func() (report.ResolveResult, *report.Resolution) {
+		var res report.ResolveResult
+		if err := json.Unmarshal(w.run("resolve", "-rules", "rules.yaml", "-bookmarks", bm, "./main"), &res); err != nil {
+			t.Fatal(err)
+		}
+		return res, res.Results[0]
+	}
+
+	res, r := resolve()
+	if r.RevisionChange != "same" || r.FromRevision == nil || r.FromRevision.Revision != rep.Target.Revision || res.Target.Revision != rep.Target.Revision {
+		t.Errorf("same commit: %+v from %+v to %+v", r.RevisionChange, r.FromRevision, res.Target)
+	}
+
+	// A new commit: the revision differs, the ID does not.
+	w.write("main/main.go", strings.Replace(wsBase, "func Other() {", "func Another() {}\n\nfunc Other() {", 1))
+	w.git("commit", "-q", "-am", "next")
+	res, r = resolve()
+	if r.RevisionChange != "different" || res.Target.Revision == rep.Target.Revision {
+		t.Errorf("new commit: %+v to %+v", r.RevisionChange, res.Target)
+	}
+	if r.Bookmark != rep.Findings[0].ID {
+		t.Errorf("the ID changed with the revision: %s", r.Bookmark)
+	}
+
+	// A modified tree: the commit is not what was analysed.
+	w.write("main/main.go", wsBase)
+	res, r = resolve()
+	if r.RevisionChange != "unknown" || !res.Target.Dirty {
+		t.Errorf("dirty tree: %+v to %+v", r.RevisionChange, res.Target)
+	}
+
+	// A bookmark with no revision, or outside git: unknown, and no target.
+	bare := filepath.Join(w.dir, "bare.json")
+	data, _ = json.Marshal(rep.Findings)
+	os.WriteFile(bare, data, 0o644)
+	var plain report.ResolveResult
+	if err := json.Unmarshal(w.run("resolve", "-rules", "rules.yaml", "-bookmarks", bare, "./main"), &plain); err != nil {
+		t.Fatal(err)
+	}
+	if plain.Results[0].RevisionChange != "unknown" || plain.Results[0].FromRevision != nil {
+		t.Errorf("no revision: %+v", plain.Results[0])
+	}
+}

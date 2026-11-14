@@ -55,7 +55,7 @@ func TestSitesCommand(t *testing.T) {
 	if err := json.Unmarshal(rivus(t, "sites", "-rules", "rules.yaml", "-role", "sink", "./cases/hello"), &out); err != nil {
 		t.Fatal(err)
 	}
-	if out.SchemaVersion != "rivus.sites/0" || len(out.Sites) != 1 || out.Sites[0].Role != "sink" {
+	if out.SchemaVersion != "rivus.sites/1" || len(out.Sites) != 1 || out.Sites[0].Role != "sink" {
 		t.Fatalf("unexpected output: %+v", out)
 	}
 }

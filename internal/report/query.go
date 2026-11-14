@@ -5,10 +5,11 @@ import (
 	"sort"
 
 	"github.com/yagihash/rivus/internal/taint"
+	"github.com/yagihash/rivus/internal/vcs"
 )
 
 // QuerySchemaVersion identifies the format of QueryResult.
-const QuerySchemaVersion = "rivus.query/0"
+const QuerySchemaVersion = "rivus.query/1"
 
 // Query is a one-sided question (ADR-004 makes it possible: the summaries of
 // all functions already exist, so no seed is needed).
@@ -36,6 +37,8 @@ type Group struct {
 type QueryResult struct {
 	SchemaVersion string `json:"schema_version"`
 	Query         Query  `json:"query"`
+	// Target is the revision of the code the answer is about.
+	Target *vcs.Target `json:"target,omitempty"`
 	// Matched are the sites the question is about.
 	Matched  []taint.SiteRef  `json:"matched"`
 	Groups   []Group          `json:"groups"`
@@ -54,7 +57,7 @@ func (r *Report) Run(q Query) (*QueryResult, error) {
 	if n != 1 {
 		return nil, fmt.Errorf("exactly one of sink, source and site is required")
 	}
-	out := &QueryResult{SchemaVersion: QuerySchemaVersion, Query: q, Stats: r.Stats, Matched: []taint.SiteRef{}, Groups: []Group{}, Findings: []*taint.Finding{}}
+	out := &QueryResult{SchemaVersion: QuerySchemaVersion, Query: q, Target: r.Target, Stats: r.Stats, Matched: []taint.SiteRef{}, Groups: []Group{}, Findings: []*taint.Finding{}}
 
 	matched := map[string]bool{}
 	note := func(s taint.SiteRef) {

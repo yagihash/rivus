@@ -17,15 +17,19 @@ import (
 	"github.com/yagihash/rivus/internal/model"
 	"github.com/yagihash/rivus/internal/sites"
 	"github.com/yagihash/rivus/internal/taint"
+	"github.com/yagihash/rivus/internal/vcs"
 )
 
 // SchemaVersion identifies the format of Report.
-const SchemaVersion = "rivus.result/0"
+const SchemaVersion = "rivus.result/1"
 
 // Report is the result of an analysis.
 type Report struct {
 	SchemaVersion string   `json:"schema_version"`
 	Rules         []string `json:"rules"`
+	// Target is the revision of the code that was analysed (absent outside a
+	// git working tree).
+	Target *vcs.Target `json:"target,omitempty"`
 	// Packages lists the packages that were analysed, so that a site that
 	// is missing can be told from a package that was not looked at.
 	Packages      []string             `json:"packages"`

@@ -11,10 +11,11 @@ import (
 	"github.com/yagihash/rivus/internal/fingerprint"
 	"github.com/yagihash/rivus/internal/sites"
 	"github.com/yagihash/rivus/internal/taint"
+	"github.com/yagihash/rivus/internal/vcs"
 )
 
 // ResolveSchemaVersion identifies the format of ResolveResult.
-const ResolveSchemaVersion = "rivus.resolve/0"
+const ResolveSchemaVersion = "rivus.resolve/1"
 
 // Bookmark is what an agent keeps of a place it has looked at: a site, or a
 // finding, exactly as rivus printed it. Nothing else is needed: the
@@ -26,6 +27,9 @@ type Bookmark struct {
 	Func        string            `json:"func,omitempty"`
 	Snippet     string            `json:"snippet,omitempty"`
 	Fingerprint map[string]string `json:"fingerprint,omitempty"`
+	// Revision is the code the bookmark was taken from: the "target" of the
+	// output it was copied from. Optional; see ReadBookmarks.
+	Revision *vcs.Target `json:"revision,omitempty"`
 
 	// Source and Sink are set for a finding.
 	Source *Bookmark `json:"source,omitempty"`
@@ -53,9 +57,17 @@ func ReadBookmarks(path string) ([]*Bookmark, error) {
 		return list, validate(list)
 	}
 	var wrapped struct {
+		// Target is the "target" of the output the bookmarks were copied
+		// from; it is the revision of every bookmark that has none of its own.
+		Target    *vcs.Target `json:"target"`
 		Bookmarks []*Bookmark `json:"bookmarks"`
 	}
 	if err := json.Unmarshal(data, &wrapped); err == nil && wrapped.Bookmarks != nil {
+		for _, b := range wrapped.Bookmarks {
+			if b != nil && b.Revision == nil {
+				b.Revision = wrapped.Target
+			}
+		}
 		return wrapped.Bookmarks, validate(wrapped.Bookmarks)
 	}
 	var one Bookmark
@@ -75,6 +87,16 @@ func validate(list []*Bookmark) error {
 		}
 	}
 	return nil
+}
+
+func revisionChange(from, to *vcs.Target) string {
+	switch {
+	case from == nil || to == nil || from.Dirty || to.Dirty:
+		return "unknown"
+	case from.Revision == to.Revision:
+		return "same"
+	}
+	return "different"
 }
 
 // Statuses of a resolved bookmark.
@@ -137,6 +159,12 @@ type Resolution struct {
 	Bookmark string `json:"bookmark"`
 	Kind     string `json:"kind"` // site or finding
 	Status   string `json:"status"`
+	// FromRevision is the code the bookmark was taken from, when known.
+	FromRevision *vcs.Target `json:"from_revision,omitempty"`
+	// RevisionChange says how that code relates to the code now: "same"
+	// (the same commit, both trees clean), "different", or "unknown" (one
+	// of the two is not known, or one tree was modified).
+	RevisionChange string `json:"revision_change"`
 	SiteResult
 	Source *SiteResult `json:"source,omitempty"`
 	Sink   *SiteResult `json:"sink,omitempty"`
@@ -145,9 +173,11 @@ type Resolution struct {
 
 // ResolveResult answers a set of bookmarks.
 type ResolveResult struct {
-	SchemaVersion string        `json:"schema_version"`
-	Results       []*Resolution `json:"results"`
-	Stats         taint.Stats   `json:"stats"`
+	SchemaVersion string `json:"schema_version"`
+	// Target is the code the bookmarks were resolved against.
+	Target  *vcs.Target   `json:"target,omitempty"`
+	Results []*Resolution `json:"results"`
+	Stats   taint.Stats   `json:"stats"`
 }
 
 // Resolve finds where the bookmarks are in the code this report describes.
@@ -158,9 +188,12 @@ type ResolveResult struct {
 // structural key alone, both snippets are returned so that a reader can see.
 func (r *Report) Resolve(bms []*Bookmark) *ResolveResult {
 	idx := newSiteIndex(r)
-	out := &ResolveResult{SchemaVersion: ResolveSchemaVersion, Stats: r.Stats, Results: []*Resolution{}}
+	out := &ResolveResult{SchemaVersion: ResolveSchemaVersion, Target: r.Target, Stats: r.Stats, Results: []*Resolution{}}
 	for _, b := range bms {
-		out.Results = append(out.Results, r.resolveOne(idx, b))
+		res := r.resolveOne(idx, b)
+		res.FromRevision = b.Revision
+		res.RevisionChange = revisionChange(b.Revision, r.Target)
+		out.Results = append(out.Results, res)
 	}
 	return out
 }

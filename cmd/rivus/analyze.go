@@ -14,6 +14,7 @@ import (
 	"github.com/yagihash/rivus/internal/report"
 	"github.com/yagihash/rivus/internal/sites"
 	"github.com/yagihash/rivus/internal/taint"
+	"github.com/yagihash/rivus/internal/vcs"
 )
 
 // analyzeOpts are the flags common to the commands that run the analysis.
@@ -89,7 +90,9 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	}
 	res = taint.New(prog, st, rules, cg, opts).Run()
 	phase("taint")
-	return report.Build(prog, st, res, rules), nil
+	rep := report.Build(prog, st, res, rules)
+	rep.Target = vcs.Detect(o.dir)
+	return rep, nil
 }
 
 // phaseTimer returns a function that prints the time since the previous call.
