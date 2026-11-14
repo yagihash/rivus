@@ -20,7 +20,7 @@ const (
 // the function.
 type OutElem struct {
 	E     Elem
-	Steps []Step
+	Steps *rope
 }
 
 // Output says which taint ends up in a result, in (the object behind) a
@@ -73,14 +73,9 @@ func (s *state) summarize() *Summary {
 			kind, glob = OutGlobal, g
 		}
 		cm := s.cells[r]
-		paths := make([]string, 0, len(cm))
-		for p := range cm {
-			paths = append(paths, p)
-		}
-		sort.Strings(paths)
-		for _, p := range paths {
+		for _, p := range s.pathsOf(r, cm) {
 			var elems []OutElem
-			for _, e := range cm[p].sorted() {
+			for _, e := range s.elemsOf(r, p, cm[p]) {
 				if kind == OutParam && p == "" && e == (Elem{Kind: Param, Param: idx}) {
 					continue // the parameter's own taint: no flow
 				}
@@ -90,7 +85,7 @@ func (s *state) summarize() *Summary {
 				elems = append(elems, OutElem{E: e, Steps: s.trace(Loc{r, p}, e)})
 			}
 			if len(elems) > 0 {
-				sum.Outputs = append(sum.Outputs, Output{Kind: kind, Index: idx, Global: glob, Path: p, Elems: elems})
+				sum.Outputs = append(sum.Outputs, Output{Kind: kind, Index: idx, Global: glob, Path: p, Elems: widen(elems)})
 			}
 		}
 	}
@@ -110,6 +105,50 @@ func (s *state) summarize() *Summary {
 	}
 	sum.Sig = sum.signature()
 	return sum
+}
+
+// maxOutElems bounds the elements of one output. Beyond it, the symbolic
+// elements that stand for different parts of the same parameter are merged
+// into one that stands for the whole parameter. That says "may come from
+// anywhere in this parameter", which is more than the truth and never less,
+// and it keeps the summaries of pointer-heavy code from growing with the
+// number of fields (ADR-014, ADR-031).
+const maxOutElems = 24
+
+func widen(elems []OutElem) []OutElem {
+	if len(elems) <= maxOutElems {
+		return elems
+	}
+	type key struct {
+		param int
+		mods  string
+	}
+	merged := map[key]OutElem{}
+	var order []key
+	var out []OutElem
+	for _, oe := range elems {
+		if oe.E.Kind != Param {
+			out = append(out, oe)
+			continue
+		}
+		k := key{oe.E.Param, oe.E.Mods}
+		cur, ok := merged[k]
+		if !ok {
+			order = append(order, k)
+			w := oe
+			w.E.Path = ""
+			merged[k] = w
+			continue
+		}
+		if oe.Steps.len() < cur.Steps.len() {
+			cur.Steps = oe.Steps
+			merged[k] = cur
+		}
+	}
+	for _, k := range order {
+		out = append(out, merged[k])
+	}
+	return out
 }
 
 func (s *state) isParamRoot(r Root) bool {
@@ -148,6 +187,19 @@ func (s *state) expandElem(e Elem, argv []ssa.Value) []expanded {
 	if e.Kind == Real {
 		return []expanded{{E: e}}
 	}
+	if s.expandMemo != nil {
+		if r, ok := s.expandMemo[e]; ok {
+			return r
+		}
+	}
+	r := s.expandParam(e, argv)
+	if s.expandMemo != nil {
+		s.expandMemo[e] = r
+	}
+	return r
+}
+
+func (s *state) expandParam(e Elem, argv []ssa.Value) []expanded {
 	if e.Param < 0 || e.Param >= len(argv) {
 		return nil
 	}
@@ -181,6 +233,11 @@ func (s *state) applySummary(cc *callCtx, fn *ssa.Function, bindings []ssa.Value
 		return
 	}
 	desc := "call " + s.eng.funcID(fn)
+	// Within one application the same symbolic element is expanded many
+	// times; the actual arguments do not change meanwhile.
+	s.collectMemo = map[Loc][]found{}
+	s.expandMemo = map[Elem][]expanded{}
+	defer func() { s.collectMemo, s.expandMemo = nil, nil }()
 	for _, o := range sum.Outputs {
 		var dsts []Loc
 		switch o.Kind {
@@ -211,16 +268,15 @@ func (s *state) applySummary(cc *callCtx, fn *ssa.Function, bindings []ssa.Value
 	}
 	for _, sr := range sum.Sinks {
 		for _, x := range s.expandElem(sr.Elem, argv) {
-			steps := []Step{}
+			var steps *rope
 			if x.From != nil {
-				steps = append(steps, s.trace(x.From.Cell, x.From.Orig)...)
+				steps = s.trace(x.From.Cell, x.From.Orig)
 			}
 			call := Step{Func: s.eng.funcID(s.fn), Desc: desc, pos: cc.in.Pos()}
 			if note != nil {
 				call.Notes = []*Uncertainty{note}
 			}
-			steps = append(steps, call)
-			steps = append(steps, sr.Steps...)
+			steps = cat(cat(steps, leaf(call)), sr.Steps)
 			switch x.E.Kind {
 			case Real:
 				if accepted(sr.Accepts, x.E.Label) {
@@ -228,10 +284,100 @@ func (s *state) applySummary(cc *callCtx, fn *ssa.Function, bindings []ssa.Value
 				}
 			case Param:
 				k := sinkKey{x.E, sr.Site}
-				if old, ok := s.sinkReaches[k]; !ok || len(steps) < len(old.Steps) {
+				if old, ok := s.sinkReaches[k]; !ok || steps.len() < old.Steps.len() {
 					s.sinkReaches[k] = &SinkReach{Elem: x.E, Site: sr.Site, Accepts: sr.Accepts, Steps: steps}
 				}
 			}
 		}
 	}
+}
+
+// joinSummaries merges a new summary into the previous one of the same
+// function. The analysis is monotone in the summaries of the callees, so the
+// join normally changes nothing; its job is to make termination certain when
+// widening or mutual recursion would otherwise make a summary flip back and
+// forth: the result can only grow, and the set of possible elements is finite.
+func joinSummaries(old, cur *Summary) *Summary {
+	if old == nil {
+		return cur
+	}
+	type okey struct {
+		kind  string
+		index int
+		glob  *ssa.Global
+		path  string
+	}
+	elems := map[okey]map[Elem]OutElem{}
+	var keys []okey
+	addAll := func(sum *Summary) {
+		for _, o := range sum.Outputs {
+			k := okey{o.Kind, o.Index, o.Global, o.Path}
+			m := elems[k]
+			if m == nil {
+				m = map[Elem]OutElem{}
+				elems[k] = m
+				keys = append(keys, k)
+			}
+			for _, oe := range o.Elems {
+				if have, ok := m[oe.E]; !ok || oe.Steps.len() < have.Steps.len() {
+					m[oe.E] = oe
+				}
+			}
+		}
+	}
+	addAll(old)
+	addAll(cur)
+	sort.Slice(keys, func(i, j int) bool {
+		a, b := keys[i], keys[j]
+		if a.kind != b.kind {
+			return a.kind < b.kind
+		}
+		if a.index != b.index {
+			return a.index < b.index
+		}
+		ga, gb := "", ""
+		if a.glob != nil {
+			ga = a.glob.String()
+		}
+		if b.glob != nil {
+			gb = b.glob.String()
+		}
+		if ga != gb {
+			return ga < gb
+		}
+		return a.path < b.path
+	})
+	out := &Summary{Func: cur.Func}
+	for _, k := range keys {
+		list := make([]OutElem, 0, len(elems[k]))
+		for _, oe := range elems[k] {
+			list = append(list, oe)
+		}
+		sort.Slice(list, func(i, j int) bool { return lessElem(list[i].E, list[j].E) })
+		out.Outputs = append(out.Outputs, Output{Kind: k.kind, Index: k.index, Global: k.glob, Path: k.path, Elems: widen(list)})
+	}
+	sinks := map[sinkKey]*SinkReach{}
+	for _, sum := range []*Summary{old, cur} {
+		for _, sr := range sum.Sinks {
+			k := sinkKey{sr.Elem, sr.Site}
+			if have, ok := sinks[k]; !ok || sr.Steps.len() < have.Steps.len() {
+				sinks[k] = sr
+			}
+		}
+	}
+	skeys := make([]sinkKey, 0, len(sinks))
+	for k := range sinks {
+		skeys = append(skeys, k)
+	}
+	sort.Slice(skeys, func(i, j int) bool {
+		if skeys[i].site != skeys[j].site {
+			return skeys[i].site < skeys[j].site
+		}
+		return lessElem(skeys[i].e, skeys[j].e)
+	})
+	for _, k := range skeys {
+		out.Sinks = append(out.Sinks, sinks[k])
+	}
+	out.Sig = out.signature()
+	return out
 }

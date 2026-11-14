@@ -110,14 +110,37 @@ func decodeOps(mods string) []op {
 	return out
 }
 
+// maxOps bounds the sanitizer operations remembered by a symbolic element.
+// Beyond it the operations are forgotten, which can only keep more taint:
+// the safe direction. Without a bound a sanitizer in a loop would create a
+// new element in every iteration.
+const maxOps = 4
+
 func joinMods(a, b string) string {
 	switch {
 	case a == "":
-		return b
+		return capMods(b)
 	case b == "":
 		return a
 	}
-	return a + ";" + b
+	for _, o := range strings.Split(b, ";") {
+		if a == o || strings.HasSuffix(a, ";"+o) {
+			continue // applying the same operation twice changes nothing
+		}
+		if strings.Count(a, ";") >= maxOps-1 {
+			break
+		}
+		a = a + ";" + o
+	}
+	return a
+}
+
+func capMods(m string) string {
+	parts := strings.Split(m, ";")
+	if len(parts) > maxOps {
+		parts = parts[:maxOps]
+	}
+	return strings.Join(parts, ";")
 }
 
 // sanitize applies a sanitizer to the elements: concrete labels are dropped

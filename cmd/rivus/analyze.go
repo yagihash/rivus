@@ -4,7 +4,10 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"runtime/pprof"
+	"time"
 
 	"github.com/yagihash/rivus/internal/callgraph"
 	"github.com/yagihash/rivus/internal/model"
@@ -16,17 +19,26 @@ import (
 // analyzeOpts are the flags common to the commands that run the analysis.
 type analyzeOpts struct {
 	common
-	k int
+	k       int
+	verbose bool
+	cpuProf string
+	timeout time.Duration
+	passes  int
 }
 
 func (o *analyzeOpts) register(fs *flag.FlagSet) {
 	o.common.register(fs)
 	fs.IntVar(&o.k, "k", taint.DefaultOptions().K, "maximum access path depth")
+	fs.BoolVar(&o.verbose, "v", false, "print the time of each phase to stderr")
+	fs.IntVar(&o.passes, "max-passes", taint.DefaultOptions().MaxPasses, "maximum number of passes over the program while summaries change")
+	fs.DurationVar(&o.timeout, "timeout", 0, "stop the analysis after this long and report what was found (0: no limit)")
+	fs.StringVar(&o.cpuProf, "cpuprofile", "", "write a CPU profile of the taint phase to this file (development)")
 }
 
 // analyze runs the whole pipeline. extra rule sets are added to the ones
 // loaded from the flags.
 func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*report.Report, error) {
+	phase := o.phaseTimer()
 	rules, err := o.loadRules()
 	if err != nil {
 		return nil, err
@@ -38,11 +50,53 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	if err != nil {
 		return nil, err
 	}
+	phase("load")
 	st := sites.Enumerate(prog, rules)
+	phase("sites")
 	opts := taint.DefaultOptions()
 	opts.K = o.k
-	eng := taint.New(prog, st, rules, callgraph.BuildGo(prog), opts)
-	return report.Build(prog, st, eng.Run(), rules), nil
+	opts.Timeout = o.timeout
+	opts.MaxPasses = o.passes
+	if o.verbose {
+		opts.SlowThreshold = 300 * time.Millisecond
+		opts.SlowFunc = func(fn string, d time.Duration, outputs, roots int) {
+			fmt.Fprintf(os.Stderr, "rivus: slow function %s: %v (%d outputs, %d roots)\n", fn, d.Round(time.Millisecond), outputs, roots)
+		}
+	}
+	cg := callgraph.BuildGo(prog)
+	phase("callgraph")
+	var res *taint.Result
+	if o.cpuProf != "" {
+		f, err := os.Create(o.cpuProf)
+		if err != nil {
+			return nil, err
+		}
+		pprof.StartCPUProfile(f)
+		defer func() { pprof.StopCPUProfile(); f.Close() }()
+		// A run that does not finish still leaves a usable profile.
+		sig := make(chan os.Signal, 1)
+		signal.Notify(sig, os.Interrupt)
+		go func() {
+			<-sig
+			pprof.StopCPUProfile()
+			f.Close()
+			os.Exit(130)
+		}()
+	}
+	res = taint.New(prog, st, rules, cg, opts).Run()
+	phase("taint")
+	return report.Build(prog, st, res, rules), nil
+}
+
+// phaseTimer returns a function that prints the time since the previous call.
+func (o *analyzeOpts) phaseTimer() func(string) {
+	last := time.Now()
+	return func(name string) {
+		if o.verbose {
+			fmt.Fprintf(os.Stderr, "rivus: %-10s %v\n", name, time.Since(last).Round(time.Millisecond))
+		}
+		last = time.Now()
+	}
 }
 
 func runAnalyze(args []string) error {

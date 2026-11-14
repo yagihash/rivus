@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/yagihash/rivus/internal/callgraph"
 	"github.com/yagihash/rivus/internal/sites"
@@ -140,3 +141,98 @@ func checkCase(t *testing.T, name string) {
 func TestIntra(t *testing.T) { checkCase(t, "intra") }
 
 func TestInter(t *testing.T) { checkCase(t, "inter") }
+
+func TestHeap(t *testing.T) { checkCase(t, "heap") }
+
+func TestUnmodeledCallIsRecordedOnThePath(t *testing.T) {
+	res, _ := runCase(t, "heap")
+	for _, f := range res.Findings {
+		if f.Source.Snippet == "" || f.Source.Position.Line == 0 {
+			continue
+		}
+		if f.Sink.Snippet != "lib.Sink(strings.ToValidUTF8(s, \"?\")) // @sink(unmodeled)" {
+			continue
+		}
+		for _, u := range f.Uncertainties {
+			if u.Kind == KindUnmodeledLibraryCall {
+				if u.AttributableTo != AttributableRivus {
+					t.Errorf("unmodeled_library_call must be attributable to rivus, got %q", u.AttributableTo)
+				}
+				if u.Symbol != "strings.ToValidUTF8" {
+					t.Errorf("symbol = %q", u.Symbol)
+				}
+				return
+			}
+		}
+		t.Fatalf("finding through an unmodeled call has no such uncertainty: %+v", f.Uncertainties)
+	}
+	t.Fatal("finding not found")
+}
+
+func TestDispatchIsRecordedWithCandidates(t *testing.T) {
+	res, _ := runCase(t, "inter")
+	for _, f := range res.Findings {
+		if f.Sink.Snippet != "lib.Sink(s) // @sink(disp)" {
+			continue
+		}
+		for _, u := range f.Uncertainties {
+			if u.Kind == KindDynamicDispatch {
+				if len(u.Candidates) != 1 || u.AttributableTo != AttributableMixed {
+					t.Errorf("unexpected uncertainty: %+v", u)
+				}
+				return
+			}
+		}
+		t.Fatalf("no dynamic_dispatch uncertainty: %+v", f.Uncertainties)
+	}
+	t.Fatal("dispatch finding not found")
+}
+
+func TestBudgetCutsAFunctionShortAndRecordsIt(t *testing.T) {
+	prog := testutil.Load(t, "./cases/inter/...")
+	rules := testutil.Rules(t)
+	st := sites.Enumerate(prog, rules)
+	opts := DefaultOptions()
+	opts.Budget = 3 // far too small for any real function
+	res := New(prog, st, rules, callgraph.BuildGo(prog), opts).Run()
+
+	var degraded int
+	for _, u := range res.Uncertainties {
+		if u.Kind == KindDepthLimit {
+			degraded++
+			if u.AttributableTo != AttributableRivus {
+				t.Errorf("depth_limit must be attributable to rivus: %+v", u)
+			}
+			if u.Func == "" {
+				t.Error("the degraded function is not named")
+			}
+		}
+	}
+	if degraded == 0 {
+		t.Fatal("no depth_limit recorded although the budget was exhausted")
+	}
+	if !res.Stats.Converged {
+		t.Error("a degraded run must still terminate normally")
+	}
+}
+
+func TestTimeoutStopsTheRunAndSaysSo(t *testing.T) {
+	prog := testutil.Load(t, "./cases/inter/...")
+	rules := testutil.Rules(t)
+	st := sites.Enumerate(prog, rules)
+	opts := DefaultOptions()
+	opts.Timeout = time.Nanosecond
+	res := New(prog, st, rules, callgraph.BuildGo(prog), opts).Run()
+	if !res.Stats.TimedOut {
+		t.Fatal("the run should have timed out")
+	}
+	var recorded bool
+	for _, u := range res.Uncertainties {
+		if u.Kind == KindDepthLimit && u.AttributableTo == AttributableRivus {
+			recorded = true
+		}
+	}
+	if !recorded {
+		t.Error("a timed out run must record depth_limit")
+	}
+}

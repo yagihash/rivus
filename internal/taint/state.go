@@ -36,7 +36,7 @@ type why struct {
 	pos   token.Pos
 	desc  string
 	from  *ref
-	steps []Step // steps taken inside a callee, spliced in from its summary
+	steps *rope // steps taken inside a callee, spliced in from its summary
 	note  *Uncertainty
 }
 
@@ -62,10 +62,60 @@ type state struct {
 	locSet    map[ssa.Value]map[Loc]bool
 	locCache  map[ssa.Value][]Loc
 
+	rootVer     map[Root]int // number of elements added to each root: change detector
+	callSigs    map[ssa.CallInstruction]int
+	sortedElems map[Loc]cachedElems
+	sortedPaths map[Root]cachedPaths
+	collectMemo map[Loc][]found // active during one summary application
+	expandMemo  map[Elem][]expanded
+
 	findings    map[findingKey]*rawFinding
 	sinkReaches map[sinkKey]*SinkReach
 	uncertain   []*Uncertainty
 	truncated   bool
+	adds        int
+	exceeded    bool
+}
+
+// cachedElems and cachedPaths remember sorted views of cells. Sets only
+// ever grow, so a cache is valid as long as its length matches.
+type cachedElems struct {
+	n     int
+	elems []Elem
+}
+
+type cachedPaths struct {
+	n     int
+	paths []string
+}
+
+func (s *state) elemsOf(r Root, path string, set Set) []Elem {
+	if s.sortedElems == nil {
+		s.sortedElems = map[Loc]cachedElems{}
+	}
+	k := Loc{r, path}
+	if c, ok := s.sortedElems[k]; ok && c.n == len(set) {
+		return c.elems
+	}
+	e := set.sorted()
+	s.sortedElems[k] = cachedElems{len(set), e}
+	return e
+}
+
+func (s *state) pathsOf(r Root, cm map[string]Set) []string {
+	if s.sortedPaths == nil {
+		s.sortedPaths = map[Root]cachedPaths{}
+	}
+	if c, ok := s.sortedPaths[r]; ok && c.n == len(cm) {
+		return c.paths
+	}
+	paths := make([]string, 0, len(cm))
+	for p := range cm {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths)
+	s.sortedPaths[r] = cachedPaths{len(cm), paths}
+	return paths
 }
 
 func (s *state) cellsOf(r Root) map[string]Set {
@@ -104,6 +154,11 @@ func (s *state) add(l Loc, e Elem, w *why) {
 	}
 	set[e] = struct{}{}
 	s.changed = true
+	s.adds++
+	if s.rootVer == nil {
+		s.rootVer = map[Root]int{}
+	}
+	s.rootVer[l.Root]++
 	if _, ok := s.whys[ref{l, e}]; !ok {
 		s.whys[ref{l, e}] = w
 	}
@@ -113,28 +168,38 @@ func (s *state) add(l Loc, e Elem, w *why) {
 // enclosing objects (extended to the path being read), the cell itself, and
 // everything stored below it.
 func (s *state) collect(l Loc) []found {
-	cm := s.cellsOf(l.Root)
-	paths := make([]string, 0, len(cm))
-	for p := range cm {
-		paths = append(paths, p)
+	if s.collectMemo != nil {
+		if c, ok := s.collectMemo[l]; ok {
+			return c
+		}
 	}
-	sort.Strings(paths)
+	out := s.collectUncached(l)
+	if s.collectMemo != nil {
+		s.collectMemo[l] = out
+	}
+	return out
+}
+
+func (s *state) collectUncached(l Loc) []found {
+	cm := s.cellsOf(l.Root)
 	var out []found
-	for _, p := range paths {
+	for _, p := range s.pathsOf(l.Root, cm) {
 		switch {
 		case pathHasPrefix(l.Path, p) && p != l.Path:
 			// An enclosing object is tainted as a whole: so is this part.
 			rest := l.Path[len(p):]
-			for _, e := range cm[p].sorted() {
+			for _, e := range s.elemsOf(l.Root, p, cm[p]) {
 				ext := e
 				if e.Kind == Param {
-					ext.Path = e.Path + rest
+					// Without the bound a recursive structure would extend
+					// the path in every pass, forever.
+					ext.Path, _ = pathTrunc(e.Path+rest, s.eng.opts.K)
 				}
 				out = append(out, found{E: ext, Cell: Loc{l.Root, p}, Orig: e})
 			}
 		case pathHasPrefix(p, l.Path):
 			rel := p[len(l.Path):]
-			for _, e := range cm[p].sorted() {
+			for _, e := range s.elemsOf(l.Root, p, cm[p]) {
 				out = append(out, found{E: e, Cell: Loc{l.Root, p}, Orig: e, Rel: rel})
 			}
 		}
@@ -200,8 +265,8 @@ func (s *state) origin(pos token.Pos, kind string) *why {
 }
 
 // trace reconstructs the steps that led to the element in the cell.
-func (s *state) trace(l Loc, e Elem) []Step {
-	var chunks [][]Step
+func (s *state) trace(l Loc, e Elem) *rope {
+	var chunks []*rope
 	seen := map[ref]bool{}
 	cur := ref{l, e}
 	for len(chunks) < maxPathSteps {
@@ -219,26 +284,25 @@ func (s *state) trace(l Loc, e Elem) []Step {
 		}
 		cur = *w.from
 	}
-	var out []Step
+	var out *rope
 	for i := len(chunks) - 1; i >= 0; i-- {
-		out = append(out, chunks[i]...)
+		out = cat(out, chunks[i])
 	}
 	return out
 }
 
-func (s *state) stepsOf(w *why) []Step {
-	var out []Step
+func (s *state) stepsOf(w *why) *rope {
+	var out *rope
 	if w.desc != "" && !skipStep(w.desc) {
 		st := Step{Func: s.eng.funcID(w.fn), Desc: w.desc, pos: w.pos}
 		if w.note != nil {
 			st.Notes = []*Uncertainty{w.note}
 		}
-		out = append(out, st)
+		out = leaf(st)
 	} else if w.note != nil {
-		out = append(out, Step{Func: s.eng.funcID(w.fn), Desc: w.desc, pos: w.pos, Notes: []*Uncertainty{w.note}})
+		out = leaf(Step{Func: s.eng.funcID(w.fn), Desc: w.desc, pos: w.pos, Notes: []*Uncertainty{w.note}})
 	}
-	out = append(out, w.steps...)
-	return out
+	return cat(out, w.steps)
 }
 
 // skipStep hides bookkeeping hops that carry no information for a reader.

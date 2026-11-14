@@ -264,9 +264,14 @@ func labelsOf(srcs []model.Source) []string {
 	return sortedKeys(set)
 }
 
+// acceptsOf merges the labels the sink rules react to. A rule without a
+// label list reacts to every label, so the merged answer is "any" (nil).
 func acceptsOf(sinks []model.Sink) []string {
 	set := map[string]bool{}
 	for _, s := range sinks {
+		if len(s.Accepts) == 0 {
+			return nil
+		}
 		for _, l := range s.Accepts {
 			set[l] = true
 		}

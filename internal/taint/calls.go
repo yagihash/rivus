@@ -36,6 +36,49 @@ func (s *state) call(ci ssa.CallInstruction) {
 	cc.recv, cc.args = gossa.CallArgs(common)
 	cc.roots = callRoots(ci)
 
+	// A call only reads the cells its operands point to. If none of them
+	// changed since the last time, applying the callee again would add
+	// nothing: skip it. This matters for functions with many calls, which
+	// are otherwise revisited in every iteration of the fixed point.
+	before := s.callSig(cc)
+	if prev, ok := s.callSigs[ci]; ok && prev == before {
+		return
+	}
+	s.callBody(cc)
+	if s.callSig(cc) == before {
+		if s.callSigs == nil {
+			s.callSigs = map[ssa.CallInstruction]int{}
+		}
+		s.callSigs[ci] = before
+	} else {
+		delete(s.callSigs, ci)
+	}
+}
+
+// callSig changes whenever something is added to a cell the call reads. The
+// versions only grow, so their sum is enough.
+func (s *state) callSig(cc *callCtx) int {
+	sum := 1
+	add := func(v ssa.Value) {
+		for _, l := range s.locs(v) {
+			sum += s.rootVer[l.Root]
+		}
+	}
+	for _, v := range cc.argv() {
+		add(v)
+	}
+	if mc, ok := cc.in.Common().Value.(*ssa.MakeClosure); ok {
+		for _, b := range mc.Bindings {
+			add(b)
+		}
+	}
+	return sum
+}
+
+func (s *state) callBody(cc *callCtx) {
+	ci := cc.in
+	common := ci.Common()
+
 	// Sources and sinks matched by the rules at this call.
 	for _, site := range s.eng.sites.ByInstr[ci] {
 		switch site.Role {
@@ -158,7 +201,7 @@ type rawFinding struct {
 	origin string
 	site   *sites.Site
 	labels map[string]bool
-	steps  []Step
+	steps  *rope
 }
 
 type sinkKey struct {
@@ -171,7 +214,7 @@ type SinkReach struct {
 	Elem    Elem
 	Site    string
 	Accepts []string
-	Steps   []Step
+	Steps   *rope
 }
 
 func (s *state) checkSink(cc *callCtx, site *sites.Site) {
@@ -205,11 +248,7 @@ func accepted(accepts []string, label string) bool {
 }
 
 func (s *state) reach(site *sites.Site, f found, in ssa.Instruction) {
-	steps := s.trace(f.Cell, f.Orig)
-	if f.E.Path != f.Orig.Path {
-		// nothing to add: the extension is a read of an enclosing object
-	}
-	steps = append(steps, s.sinkStep(site, in))
+	steps := cat(s.trace(f.Cell, f.Orig), leaf(s.sinkStep(site, in)))
 	switch f.E.Kind {
 	case Real:
 		if !accepted(site.Labels, f.E.Label) {
@@ -218,7 +257,7 @@ func (s *state) reach(site *sites.Site, f found, in ssa.Instruction) {
 		s.recordFinding(f.E.Origin, site, f.E.Label, steps)
 	case Param:
 		k := sinkKey{f.E, site.ID}
-		if old, ok := s.sinkReaches[k]; !ok || len(steps) < len(old.Steps) {
+		if old, ok := s.sinkReaches[k]; !ok || steps.len() < old.Steps.len() {
 			s.sinkReaches[k] = &SinkReach{Elem: f.E, Site: site.ID, Accepts: site.Labels, Steps: steps}
 		}
 	}
@@ -228,7 +267,7 @@ func (s *state) sinkStep(site *sites.Site, in ssa.Instruction) Step {
 	return Step{Func: s.eng.funcID(s.fn), Desc: "sink: " + site.Symbol, pos: in.Pos()}
 }
 
-func (s *state) recordFinding(origin string, site *sites.Site, label string, steps []Step) {
+func (s *state) recordFinding(origin string, site *sites.Site, label string, steps *rope) {
 	k := findingKey{origin, site.ID}
 	rf := s.findings[k]
 	if rf == nil {
@@ -236,7 +275,7 @@ func (s *state) recordFinding(origin string, site *sites.Site, label string, ste
 		s.findings[k] = rf
 	}
 	rf.labels[label] = true
-	if rf.steps == nil || len(steps) < len(rf.steps) {
+	if rf.steps == nil || steps.len() < rf.steps.len() {
 		rf.steps = steps
 	}
 }

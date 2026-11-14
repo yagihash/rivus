@@ -555,11 +555,11 @@ type ResolveResult struct {
 
 ```yaml
 # 具体的な関数だけにマッチ
-- symbol: "database/sql.(*DB).Query"
+- symbol: "(*database/sql.DB).Query"
   match: exact
 
 # インタフェースのメソッドにマッチし、コールグラフ経由で実装に展開
-- symbol: "net/http.Handler.ServeHTTP"
+- symbol: "(net/http.Handler).ServeHTTP"
   match: implementations
   max_implementations: 300   # 省略時は全体の既定値（暫定 100）
 ```
@@ -574,6 +574,9 @@ type ResolveResult struct {
   sanitizer を広げ過ぎると、本当は sanitize していない実装にまで「通れば安全」が及び、汚染が消えて見逃しが生まれるため。
   許可するときはルール側で明示する（`allow_sanitizer_expansion: true`）
 
+- シンボルは `go/types` の `FullName` 形式（`(*net/http.Request).FormValue`、`os/exec.Command`、`(io.Writer).Write`）
+- source の種類は `call_result`（呼び出しの結果）、`param_type`（その型の引数すべて）、`field`（構造体フィールドの読み出し）。
+  sanitizer は `drops`（落とすラベル。`"*"` は全部）と `adds`（落とした値に付くラベル。`html_escaped` など）を持つ
 - ジェネリクスは**型引数を消去して一致**させる
 - 各モデルに `origin: builtin | human | llm`。`llm` の場合は `decided_at`、`rationale`、`model_version` が必須
 

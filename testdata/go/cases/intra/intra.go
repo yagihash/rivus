@@ -95,7 +95,7 @@ func BytesToString() {
 }
 
 func StringToBytes() {
-	s := lib.Source()         // @source(s2b)
+	s := lib.Source()        // @source(s2b)
 	lib.SinkBytes([]byte(s)) // @sink(s2b)
 }
 
@@ -123,7 +123,7 @@ func Append() {
 }
 
 func Join() {
-	s := lib.Source() // @source(join)
+	s := lib.Source()                             // @source(join)
 	lib.Sink(strings.Join([]string{"a", s}, ",")) // @sink(join)
 }
 

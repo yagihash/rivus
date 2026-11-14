@@ -17,6 +17,10 @@ func (s *state) analyze() {
 		s.changed = false
 		for _, b := range s.fn.Blocks {
 			for _, in := range b.Instrs {
+				if s.adds > s.eng.opts.Budget {
+					s.exceeded = true
+					return
+				}
 				s.transfer(in)
 			}
 		}

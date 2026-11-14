@@ -25,10 +25,22 @@ type Options struct {
 	// MaxPasses bounds the number of times the whole program is revisited
 	// while summaries change.
 	MaxPasses int
+	// Timeout bounds the whole run. When it expires, the functions not yet
+	// analysed are left out and the result says so (depth_limit). Zero means
+	// no limit.
+	Timeout time.Duration
+	// Budget bounds the number of elements added while analysing one
+	// function. A function that exceeds it is cut short and recorded as
+	// depth_limit; its summary may then miss flows. Zero means the default.
+	Budget int
+	// SlowFunc, if set, is called for functions whose analysis took longer
+	// than SlowThreshold. It is a development aid.
+	SlowFunc      func(fn string, d time.Duration, outputs, roots int)
+	SlowThreshold time.Duration
 }
 
 // DefaultOptions are the defaults.
-func DefaultOptions() Options { return Options{K: 3, MaxPasses: 12} }
+func DefaultOptions() Options { return Options{K: 3, MaxPasses: 12, Budget: 400000} }
 
 // Engine runs the whole-program analysis.
 type Engine struct {
@@ -43,6 +55,9 @@ type Engine struct {
 	globals   *globalStore
 
 	notConverged []string
+	// degraded lists the functions whose analysis hit the budget. They are
+	// analysed once and then left alone.
+	degraded map[*ssa.Function]bool
 }
 
 // New creates an engine. graph may be nil: calls through interfaces and
@@ -54,10 +69,14 @@ func New(p *gossa.Program, st *sites.Result, rules *model.Rules, graph Graph, op
 	if opts.MaxPasses <= 0 {
 		opts.MaxPasses = DefaultOptions().MaxPasses
 	}
+	if opts.Budget <= 0 {
+		opts.Budget = DefaultOptions().Budget
+	}
 	return &Engine{
 		prog: p, sites: st, rules: rules, graph: graph, opts: opts,
 		summaries: map[*ssa.Function]*Summary{},
 		states:    map[*ssa.Function]*state{},
+		degraded:  map[*ssa.Function]bool{},
 		globals:   newGlobalStore(),
 	}
 }
@@ -78,6 +97,16 @@ type Stats struct {
 	Reanalyses    int      `json:"reanalyses"`
 	DurationMilli int64    `json:"duration_ms"`
 	NotConverged  []string `json:"not_converged,omitempty"`
+	TimedOut      bool     `json:"timed_out,omitempty"`
+	// Unstable lists (up to ten) functions whose summary still changed in
+	// the last pass, when the run did not converge.
+	Unstable []string `json:"unstable,omitempty"`
+
+	// Sizes of the summaries, to see where the time goes.
+	SummaryElems   int    `json:"summary_elems"`
+	SummarySteps   int    `json:"summary_steps"`
+	LargestSummary string `json:"largest_summary,omitempty"`
+	LargestElems   int    `json:"largest_summary_elems,omitempty"`
 }
 
 // Result is the outcome of a run.
@@ -109,14 +138,25 @@ func (e *Engine) Run() *Result {
 	}
 	var st Stats
 	st.Functions = len(fns)
+	var deadline time.Time
+	if e.opts.Timeout > 0 {
+		deadline = start.Add(e.opts.Timeout)
+	}
+	expired := func() bool { return !deadline.IsZero() && time.Now().After(deadline) }
 	for pass := 0; pass < e.opts.MaxPasses; pass++ {
 		st.Passes = pass + 1
 		any := false
+		var changedNow []string
 		for _, scc := range sccs {
 			for iter := 0; iter < 8; iter++ {
 				progress := false
 				for _, fn := range scc {
-					if !dirty[fn] {
+					if expired() {
+						st.TimedOut = true
+						break
+					}
+					if !dirty[fn] || e.degraded[fn] {
+						dirty[fn] = false
 						continue
 					}
 					dirty[fn] = false
@@ -124,12 +164,19 @@ func (e *Engine) Run() *Result {
 					st.Reanalyses++
 					if e.analyzeFunc(fn, dirty, callers) {
 						progress = true
+						if len(changedNow) < 10 {
+							changedNow = append(changedNow, e.funcID(fn))
+						}
 					}
 				}
 				if !progress || len(scc) == 1 && !selfCalls(scc[0], callees) {
 					break
 				}
 			}
+		}
+		st.Unstable = changedNow
+		if st.TimedOut {
+			break
 		}
 		if !any {
 			st.Converged = true
@@ -141,6 +188,20 @@ func (e *Engine) Run() *Result {
 		}
 	}
 	st.NotConverged = e.notConverged
+	for _, sum := range e.summaries {
+		n, steps := 0, 0
+		for _, o := range sum.Outputs {
+			n += len(o.Elems)
+			for _, oe := range o.Elems {
+				steps += oe.Steps.len()
+			}
+		}
+		st.SummaryElems += n
+		st.SummarySteps += steps
+		if n > st.LargestElems {
+			st.LargestElems, st.LargestSummary = n, sum.Func
+		}
+	}
 	st.DurationMilli = time.Since(start).Milliseconds()
 	return e.collect(st)
 }
@@ -180,9 +241,18 @@ func (e *Engine) analyzeFunc(fn *ssa.Function, dirty map[*ssa.Function]bool, cal
 		findings:    map[findingKey]*rawFinding{},
 		sinkReaches: map[sinkKey]*SinkReach{},
 	}
+	began := time.Now()
 	s.analyze()
-	sum := s.summarize()
+	if s.exceeded {
+		e.degraded[fn] = true
+	}
+	sum := joinSummaries(e.summaries[fn], s.summarize())
 	e.states[fn] = s
+	if e.opts.SlowFunc != nil {
+		if d := time.Since(began); d > e.opts.SlowThreshold {
+			e.opts.SlowFunc(e.funcID(fn), d, len(sum.Outputs), len(s.cells))
+		}
+	}
 
 	changed := false
 	if old := e.summaries[fn]; old == nil || old.Sig != sum.Sig {
@@ -391,7 +461,7 @@ func (e *Engine) collect(st Stats) *Result {
 			for l := range rf.labels {
 				cur.labels[l] = true
 			}
-			if len(rf.steps) < len(cur.steps) {
+			if rf.steps.len() < cur.steps.len() {
 				cur.steps = rf.steps
 			}
 		}
@@ -412,12 +482,28 @@ func (e *Engine) collect(st Stats) *Result {
 		u := newUncertainty(KindMissingSource, pe.Message, pe.Package)
 		res.Uncertainties = append(res.Uncertainties, u)
 	}
+	var degraded []*ssa.Function
+	for fn := range e.degraded {
+		degraded = append(degraded, fn)
+	}
+	sort.Slice(degraded, func(i, j int) bool { return gossa.FuncID(degraded[i]) < gossa.FuncID(degraded[j]) })
+	for _, fn := range degraded {
+		u := newUncertainty(KindDepthLimit, "the analysis budget of this function was exhausted; its summary may miss flows", "")
+		u.Func = e.funcID(fn)
+		u.pos = fn.Pos()
+		e.fill(u)
+		res.Uncertainties = append(res.Uncertainties, u)
+	}
 	if len(e.notConverged) > 0 {
 		u := newUncertainty(KindRecursionApproximation, "the local analysis of these functions did not reach a fixed point", "")
 		u.Candidates = append([]string(nil), e.notConverged...)
 		res.Uncertainties = append(res.Uncertainties, u)
 	}
-	if !st.Converged {
+	switch {
+	case st.TimedOut:
+		res.Uncertainties = append(res.Uncertainties, newUncertainty(KindDepthLimit,
+			"the time limit was reached; functions not analysed yet are missing from the result", ""))
+	case !st.Converged:
 		res.Uncertainties = append(res.Uncertainties, newUncertainty(KindRecursionApproximation, "the summaries did not stabilise within the pass limit", ""))
 	}
 	sort.SliceStable(res.Uncertainties, func(i, j int) bool {
@@ -481,8 +567,14 @@ func (e *Engine) buildFinding(rf *rawFinding) *Finding {
 	}
 	sort.Strings(f.Labels)
 
-	steps := make([]Step, len(rf.steps))
-	copy(steps, rf.steps)
+	// Steps without a position (compiler generated hops) tell a reader
+	// nothing, unless they carry an uncertainty.
+	steps := make([]Step, 0, rf.steps.len())
+	for _, st := range rf.steps.flatten(maxPathSteps) {
+		if st.pos.IsValid() || len(st.Notes) > 0 {
+			steps = append(steps, st)
+		}
+	}
 	var funcs []string
 	seen := map[string]bool{}
 	for i := range steps {

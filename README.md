@@ -1,6 +1,6 @@
 # rivus
 
-> ⚠️ 設計段階です。実装はまだありません。
+> ⚠️ 開発初期です。Phase 1（Go のみ）の途中で、API とコマンドは変わります。
 
 `rivus` は **Dart / Go / Rust に対応予定の taint 解析（汚染解析）ツール**です。
 ただし「脆弱性を報告する SAST」ではなく、**到達可能性に関する事実を問い合わせるクエリエンジン**として設計します。
@@ -50,7 +50,7 @@ Go / Rust / Dart extractor ──→ 中立 IR (CFG, JSON Lines) ──→ Go �
 
 | フェーズ | 内容 | 状態 |
 |---|---|---|
-| Phase 1 | Go のみで完結（`go/ssa` から直接 taint 解析） | 未着手 |
+| Phase 1 | Go のみで完結（`go/ssa` から直接 taint 解析） | 進行中。ステップ 1.0〜1.8（1.8b を除く）まで実装済み。15.6 万行の x/tools を約 91 秒で解析（[計測](docs/DECISIONS.md)） |
 | Phase 2 | 中立 IR の切り出し | 未着手 |
 | Phase 3 | Rust 対応（固定 nightly 前提） | 未着手 |
 | Phase 4 | Dart 対応 | 未着手 |
@@ -77,18 +77,33 @@ Go / Rust / Dart extractor ──→ 中立 IR (CFG, JSON Lines) ──→ Go �
 }
 ```
 
-## 使い方（予定）
+## 使い方（Go）
 
 ```sh
-rivus sites ./...                         # 疑わしい箇所（サイト）の軽量な列挙
-rivus query --site <ID> ./...             # そのサイトの詳細分析
-rivus analyze ./...                       # source/sink/sanitizer ルールで検出
-rivus query --sink 'os/exec.Command' ./...  # この sink に到達し得る source を列挙
-rivus models coverage ./...               # モデル未定義の外部関数を頻度順に表示
-rivus extract --lang=go --output=ir.jsonl ./   # 中立 IR を出力
+go build -o rivus ./cmd/rivus
+
+rivus sites ./...                          # source / sink のサイトの列挙（解析なしで高速）
+rivus analyze ./...                        # source から sink への経路を、関数・パッケージを跨いで検出
+rivus query -sink 'os/exec.Command' ./...  # この sink に届き得る source を列挙
+rivus query -source '(*net/http.Request).FormValue' ./...  # この source が届き得る sink を列挙
+rivus index -o idx.json ./...              # 解析結果を保存
+rivus query -index idx.json -site <ID>     # 保存した結果から、ソースを読み込まずに答える
 ```
 
-コマンド体系は仮置きで、実装時に変わります。
+- 共通のフラグ: `-C <dir>`（解析の起点）、`-rules <file>`（ルールの追加。繰り返し可）、`-no-builtin-rules`、`-tests`、`-k <depth>`、`-v`（段階ごとの時間と遅い関数）、`-timeout <時間>`（時間切れでも、解析できた範囲を出して `depth_limit` として記録）、`-max-passes <n>`
+- `analyze` と `query` の `-detail summary` は、経路とスニペットを省いた概要だけを出す
+- シンボルは `go/types` の形式（`(*net/http.Request).FormValue`、`os/exec.Command`）。ルールの書式は [組み込みルール](internal/model/builtin) を参照
+- 出力は構造化 JSON。SARIF は未対応（副次出力として後で作る。GitHub のプライベートリポジトリの Security タブには Code Security が必要）
+
+### 開発
+
+```sh
+go test ./...                                              # 単体テストとマイクロベンチマーク
+RIVUS_TEST_MODULE=/path/to/module go test ./internal/taint -run TestRealCode -v   # 実在のモジュールで頑健性を確認
+```
+
+マイクロベンチマークは `testdata/go/cases` にあり、ソース中の `// @source(tag)` と `// @sink(tag)` が期待値になります。
+`@sink(none)` は「検出されないこと」を表します。
 
 ## 前提条件
 
