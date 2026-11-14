@@ -79,6 +79,7 @@ type addrInfo struct {
 	field string
 	index ir.LocalID
 	isIdx bool
+	pos   ir.Pos
 }
 
 func convertFunc(p *gossa.Program, fn *ssa.Function) *ir.Func {
@@ -94,6 +95,9 @@ func convertFunc(p *gossa.Program, fn *ssa.Function) *ir.Func {
 		ID:     ir.FuncID(gossa.FuncID(fn)),
 		Pos:    c.pos(fn.Pos()),
 		Blocks: make([]ir.Block, len(fn.Blocks)),
+		Symbol: gossa.Symbol(fn),
+		Recv:   fn.Signature.Recv() != nil,
+		Dep:    !p.Own[fn],
 	}
 	if o := fn.Object(); o != nil {
 		c.out.Exported = o.Exported()
@@ -171,7 +175,9 @@ func (c *conv) findFused() {
 					ok = false
 				}
 			}
-			if ok && n > 0 {
+			// Only an address with one use is folded: with two (x.f += 1) the
+			// field is touched once in the source, and addr_of keeps it so.
+			if ok && n == 1 {
 				c.fused[v] = true
 			}
 		}
@@ -255,7 +261,7 @@ func (c *conv) pos(p token.Pos) ir.Pos {
 		return ir.Pos{}
 	}
 	gp := c.p.Position(p)
-	return ir.Pos{File: gp.File, Offset: gp.Offset}
+	return ir.Pos{File: gp.File, Offset: gp.Offset, Line: gp.Line, Col: gp.Column}
 }
 
 func (c *conv) dst(v ssa.Value) []ir.LocalID { return []ir.LocalID{c.local(v)} }
@@ -312,7 +318,7 @@ func (c *conv) instr(in ssa.Instruction, blk *ir.Block, b *ssa.BasicBlock) {
 		if !c.fused[in] {
 			c.emit(ir.Instr{Op: ir.OpAddrOf, Dsts: c.dst(in), Args: []ir.LocalID{base}, Path: []ir.Step{{Kind: ir.StepField, Field: name}}, Pos: pos})
 		} else {
-			c.addr[in] = addrInfo{base: base, field: name}
+			c.addr[in] = addrInfo{base: base, field: name, pos: pos}
 		}
 	case *ssa.Field:
 		c.emit(ir.Instr{Op: ir.OpFieldLoad, Dsts: c.dst(in), Args: []ir.LocalID{c.val(in.X)}, Field: fieldName(in.X.Type(), in.Field), Pos: pos})
@@ -321,7 +327,7 @@ func (c *conv) instr(in ssa.Instruction, blk *ir.Block, b *ssa.BasicBlock) {
 		if !c.fused[in] {
 			c.emit(ir.Instr{Op: ir.OpAddrOf, Dsts: c.dst(in), Args: []ir.LocalID{base}, Path: []ir.Step{{Kind: ir.StepIndex}}, Pos: pos})
 		} else {
-			c.addr[in] = addrInfo{base: base, index: idx, isIdx: true}
+			c.addr[in] = addrInfo{base: base, index: idx, isIdx: true, pos: pos}
 		}
 	case *ssa.Index:
 		c.emit(ir.Instr{Op: ir.OpIndexLoad, Dsts: c.dst(in), Args: []ir.LocalID{c.val(in.X), c.val(in.Index)}, Pos: pos})

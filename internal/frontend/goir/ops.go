@@ -37,9 +37,9 @@ func (c *conv) unop(in *ssa.UnOp, pos ir.Pos) {
 	case token.MUL:
 		if info, ok := c.addr[in.X]; ok {
 			if info.isIdx {
-				c.emit(ir.Instr{Op: ir.OpIndexLoad, Dsts: c.dst(in), Args: []ir.LocalID{info.base, info.index}, Pos: pos})
+				c.emit(ir.Instr{Op: ir.OpIndexLoad, Dsts: c.dst(in), Args: []ir.LocalID{info.base, info.index}, Pos: pos, AddrPos: info.pos})
 			} else {
-				c.emit(ir.Instr{Op: ir.OpFieldLoad, Dsts: c.dst(in), Args: []ir.LocalID{info.base}, Field: info.field, Pos: pos})
+				c.emit(ir.Instr{Op: ir.OpFieldLoad, Dsts: c.dst(in), Args: []ir.LocalID{info.base}, Field: info.field, Pos: pos, AddrPos: info.pos})
 			}
 			return
 		}
@@ -63,9 +63,9 @@ func (c *conv) store(in *ssa.Store, pos ir.Pos) {
 	if info, ok := c.addr[in.Addr]; ok {
 		val := c.val(in.Val)
 		if info.isIdx {
-			c.emit(ir.Instr{Op: ir.OpIndexStore, Args: []ir.LocalID{info.base, info.index, val}, Pos: pos})
+			c.emit(ir.Instr{Op: ir.OpIndexStore, Args: []ir.LocalID{info.base, info.index, val}, Pos: pos, AddrPos: info.pos})
 		} else {
-			c.emit(ir.Instr{Op: ir.OpFieldStore, Args: []ir.LocalID{info.base, val}, Field: info.field, Pos: pos})
+			c.emit(ir.Instr{Op: ir.OpFieldStore, Args: []ir.LocalID{info.base, val}, Field: info.field, Pos: pos, AddrPos: info.pos})
 		}
 		return
 	}
@@ -100,7 +100,7 @@ func (c *conv) call(v *ssa.Call, cc *ssa.CallCommon, pos ir.Pos, goStmt, deferSt
 			in.Callee = &ir.Callee{Kind: ir.CalleeStatic, Symbol: "builtin." + fn.Name()}
 			in.Args = c.vals(cc.Args)
 		case *ssa.Function:
-			in.Callee = &ir.Callee{Kind: ir.CalleeStatic, Func: ir.FuncID(gossa.FuncID(fn)), Symbol: gossa.Symbol(fn)}
+			in.Callee = &ir.Callee{Kind: ir.CalleeStatic, Func: ir.FuncID(gossa.FuncID(fn)), Symbol: gossa.Symbol(fn), Recv: fn.Signature.Recv() != nil && len(cc.Args) > 0}
 			in.Args = c.vals(cc.Args)
 		default:
 			in.Callee = &ir.Callee{Kind: ir.CalleeValue}

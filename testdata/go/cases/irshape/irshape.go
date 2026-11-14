@@ -132,3 +132,13 @@ func AddrTaken() {
 	*p = lib.Source()
 	lib.Sink(s)
 }
+
+type W struct{ in T }
+
+func ReadsField(p *T) string { return p.a }
+
+func AppendsField(p *T) { p.a += "x" }
+
+func ValueField(t T) string { return t.a }
+
+func NestedField(w *W) string { return w.in.a }

@@ -205,7 +205,7 @@ IR が運ぶべきものを実測から決め直す。**ここに書くのは案
 | クロージャ | `MakeClosure`、`FreeVar` | `make_closure`（呼び先と捕捉値）。呼び先の関数は捕捉値を `param` の続きとして受ける |
 | ガード | `If` の条件と、`BinOp` の木 | `branch` の `cond` ＋ `CondPos`。条件の値は SSA 上の `binop` / `unop` / `call` の木として辿れる |
 | 定数 | `Const`、`IsConstant` | `const`（値と型） |
-| スニペット・式テキスト | AST から切り出す（`text.go`） | 命令の `Pos`、呼び出しの引数ごとの `Pos`、`branch` の `CondPos`。**コアがソースファイルから切り出す**（extractor はテキストを運ばない） |
+| スニペット・式テキスト | AST から切り出す（`text.go`） | 命令の `Pos`、呼び出しの引数ごとの `Pos`、`branch` の `CondPos`。**言語ごとの `ir.Texts` が位置から切り出す**（IR 自体はテキストを運ばない。2.3 で修正。下の実装メモ） |
 | 指紋 | シンボル、関数、出現順、式テキスト、本体テキスト | すべて `Pos` とシンボルから作れる。コアに置く |
 | 実装列挙 | `Implementations(symbol)`（`match: implementations`） | extractor が提供する問い合わせ。ストリームでは、インタフェースメソッドごとの `implementations` レコード |
 | コールグラフ | `callgraph.BuildGo`（CHA → VTA） | **extractor 側**。結果は `call` の `dynamic(candidates)` として IR に埋める。コアは IR だけから SCC を作る |
@@ -271,6 +271,12 @@ NaiveForm のローカルは、`Alloc` の結果がそのままローカル変�
 - 変数になるのは、(a) 2 回以上書かれるローカル（φ を落とした `copy` の宛先）と、(b) `load` / `store` のアドレスとしてしか使われない `alloc`（昇格。go/ssa の lifting と同じ基準）。`recover` の root があるとき、entry から届かないブロックで `load` される `alloc`（名前つきの結果）は昇格しない
 - 答えは `Ref`（命令の結果、φ、昇格した変数のゼロ値、未定義）。`Form.Operand(block, instr, k)` が、命令の k 番目の引数の定義を返す。昇格した変数の `load` は、その場所で変数が持つ値（直前の `store` の値、または φ）に解決される
 - 検証は、go/ssa の lifting（昇格した `alloc` の φ の位置）、ナイーブな go/ssa の φ（落とした φ の位置）、独立な到達定義解析（使用ごと）。testdata、rivus 自身、x/tools（5,256 関数、φ 4,646 個、使用 67,640 箇所）で一致
+
+**2.3 で分かったこと（実装メモ）:**
+- **テキストの切り出しは、コアではなく言語ごとの `ir.Texts` が行う（ADR-039 の修正）。** スニペットの範囲（複合文は見出しだけ）、式の正規化（コメントと空白に依らない）、本体の正規化は、言語の構文の問題で、`expr@1` / `body@1` はこの出力のハッシュだから。IR は位置（`File`、`Offset`、`Line`、`Col`）だけを運び、`Texts` は extractor と同じプロセスで、同じ構文木を使う。別プロセスの extractor を作るときは、`Texts` を同じ extractor が提供する形を考える
+- 追加したフィールド: `Func.Symbol` / `Recv` / `Dep`、`Callee.Recv`、`Instr.AddrPos`（`load` / `store` に畳んだアドレス計算の位置。フィールドの source のサイトの位置に使う）、`Pos.Line` / `Col`
+- アドレス計算を畳むのは、使い道が 1 つの `load` か `store` のときだけにした（`x.f += 1` のように 2 つあるときは `addr_of`。ソース上で触るのは 1 回なので、サイトも 1 つにするため）
+- **検証:** 同じコードを go/ssa 経路と IR 経路で列挙し、サイトの ID・指紋 4 種・位置・スニペット・ラベル・`literal_only`・並び順が完全に一致することを、testdata（212 サイト、フィールド 7）、rivus 自身、ghmint、x/tools（243 サイト）で確かめた
 
 #### 2.7.5 構成（案）
 
@@ -867,7 +873,7 @@ Phase 2 のステップ（案。2.7 のレビュー後に確定する）:
 | 2.0 | **（実装済み）** `internal/ir`: 型、JSON Lines の符号化・復号、検証、人間が読める整形 | 手書きの IR が往復でき、不正な IR が検証で落ちる |
 | 2.1 | **（実装済み）** Go extractor（`goir`）: NaiveForm → IR。`rivus extract` | `testdata` の全関数が IR になり、検証を通る。目視用の出力が読める。SQL への補間（`+`、`Sprintf`、`strings.Builder`）のケースで、`const` の中身と補間の形が IR に残ることを確かめる |
 | 2.2 | **（実装済み）** IR → SSA 形（`ssabuild` の接続）。`testdata` と `x/tools` で、旧経路の SSA の値の使用関係と一致 | differential test が IR 経由でも通る |
-| 2.3 | `sites` と指紋を IR の上へ。**ID と指紋が、旧経路と全ケースで一致** | `rivus sites` / `resolve` の出力が変わらない |
+| 2.3 | **（実装済み）** `sites` と指紋を IR の上へ。**ID と指紋が、旧経路と全ケースで一致** | `rivus sites` / `resolve` の出力が変わらない |
 | 2.4 | `taint` の移植（手続き内 → 手続き間 → ヒープ → ガード）。旧経路との `Report` の突き合わせ | `testdata`・ghmint・dogfood で一致 |
 | 2.5 | コールグラフ・実装列挙を extractor へ。コアは IR だけから SCC を作る | 同上 ＋ `x/tools` で一致し、時間が Phase 1 の ±20% 以内 |
 | 2.6 | 旧経路の除去。`taint` / `sites` から `go/ssa` と `gossa` の import を消す | `go list -deps` で確認。ADR で結果を記録 |

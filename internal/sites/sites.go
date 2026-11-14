@@ -15,6 +15,7 @@ import (
 
 	"github.com/yagihash/rivus/internal/fingerprint"
 	"github.com/yagihash/rivus/internal/frontend/gossa"
+	"github.com/yagihash/rivus/internal/ir"
 	"github.com/yagihash/rivus/internal/model"
 )
 
@@ -39,12 +40,16 @@ type Site struct {
 	Fingerprint map[string]string `json:"fingerprint"`
 
 	// Internal references for the analysis engine.
+	// IR is where the site is in the neutral IR (the IR path).
+	IR *IRRef `json:"-"`
+
 	Fn    *ssa.Function   `json:"-"`
 	Instr ssa.Instruction `json:"-"`
 	Param *ssa.Parameter  `json:"-"`
 	Sink  []model.Sink    `json:"-"`
 	Src   []model.Source  `json:"-"`
 	pos   token.Pos
+	irpos ir.Pos
 	order int
 }
 
@@ -57,6 +62,10 @@ type Result struct {
 	ByParam map[*ssa.Parameter][]*Site
 	// ByID finds a site by ID.
 	ByID map[string]*Site
+	// ByIRInstr maps an instruction of the IR to the sites it carries, and
+	// ByIRParam a parameter (the IR path).
+	ByIRInstr map[IRInstr][]*Site
+	ByIRParam map[IRParam][]*Site
 }
 
 // Enumerate finds all source and sink sites in the functions of the program

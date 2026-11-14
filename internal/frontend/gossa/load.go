@@ -58,6 +58,8 @@ type Program struct {
 
 	files   map[string]*ast.File // absolute file name -> syntax
 	sources map[string][]byte
+	byRel   map[string]*token.File
+	byID    map[string]*ssa.Function
 }
 
 // Load loads the packages matching patterns relative to dir.
@@ -192,4 +194,36 @@ func (p *Program) File(pos token.Pos) *ast.File {
 		return nil
 	}
 	return p.files[tf.Name()]
+}
+
+// TokenPos is the inverse of Position: the token.Pos of a byte offset in a
+// file given by the name Position uses. It returns token.NoPos for a file it
+// does not know.
+func (p *Program) TokenPos(file string, offset int) token.Pos {
+	if file == "" {
+		return token.NoPos
+	}
+	if p.byRel == nil {
+		p.byRel = map[string]*token.File{}
+		p.Fset.Iterate(func(f *token.File) bool {
+			p.byRel[p.rel(f.Name())] = f
+			return true
+		})
+	}
+	f := p.byRel[file]
+	if f == nil || offset < 0 || offset > f.Size() {
+		return token.NoPos
+	}
+	return f.Pos(offset)
+}
+
+// FuncByID finds a function by its FuncID.
+func (p *Program) FuncByID(id string) *ssa.Function {
+	if p.byID == nil {
+		p.byID = map[string]*ssa.Function{}
+		for _, fn := range p.Funcs {
+			p.byID[FuncID(fn)] = fn
+		}
+	}
+	return p.byID[id]
 }

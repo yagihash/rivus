@@ -32,6 +32,10 @@ type Pos struct {
 	File   string `json:"file,omitempty"`
 	Offset int    `json:"offset,omitempty"`
 	Length int    `json:"length,omitempty"`
+	// Line and Col (1-based) are for the reader of the stream; the offset is
+	// what identifies the place.
+	Line int `json:"line,omitempty"`
+	Col  int `json:"col,omitempty"`
 }
 
 // IsZero reports whether the position is unknown.
@@ -89,6 +93,14 @@ type Func struct {
 	Roots    []BlockID `json:"roots,omitempty"`
 	Pos      Pos       `json:"pos,omitempty"`
 	Exported bool      `json:"exported,omitempty"`
+	// Symbol is the name the rules use for the function: the declared
+	// function or method (empty for an anonymous or a synthetic function).
+	Symbol string `json:"symbol,omitempty"`
+	// Recv is true when parameter 0 is the receiver of a method.
+	Recv bool `json:"recv,omitempty"`
+	// Dep marks a function of a dependency: it is there so that calls into
+	// it can be followed, but it is not part of the code being analysed.
+	Dep bool `json:"dep,omitempty"`
 }
 
 // EdgeKind says how control goes from a block to another.
@@ -231,7 +243,10 @@ type Callee struct {
 	// Symbol is the name the rules use: for a static call, the declared
 	// function or method (empty for an anonymous function); for a dynamic
 	// call, the interface or virtual method; for a builtin, "builtin.<name>".
-	Symbol     string   `json:"symbol,omitempty"`
+	Symbol string `json:"symbol,omitempty"`
+	// Recv is true when Args[0] of a static call is the receiver of the
+	// method (a dynamic call always has the receiver first).
+	Recv       bool     `json:"recv,omitempty"`
 	Candidates []FuncID `json:"candidates,omitempty"`
 }
 
@@ -276,6 +291,9 @@ type Instr struct {
 	Reason string `json:"reason,omitempty"`
 
 	Pos Pos `json:"pos,omitempty"`
+	// AddrPos is the position of the address computation that a field or an
+	// index access folded into itself (&x.f in *&x.f).
+	AddrPos Pos `json:"addr_pos,omitempty"`
 	// ArgPos are the source ranges of the arguments of a call, when the
 	// extractor knows them (parallel to Args, or empty).
 	ArgPos []Pos `json:"arg_pos,omitempty"`
