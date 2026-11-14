@@ -1,0 +1,22 @@
+# Rules for the test cases. The symbols refer to testdata/go/lib.
+ruleset: rivus/testdata@1
+
+sources:
+  - symbol: example.com/cases/lib.Source
+    labels: [user_input]
+  - symbol: example.com/cases/lib.SourceBytes
+    labels: [user_input]
+
+sinks:
+  - symbol: example.com/cases/lib.Sink
+    category: test
+  - symbol: example.com/cases/lib.SinkBytes
+    category: test
+  - symbol: example.com/cases/lib.SinkAny
+    category: test
+  - symbol: (example.com/cases/lib.Runner).Run
+    category: test
+
+sanitizers:
+  - symbol: example.com/cases/lib.Sanitize
+    drops: [user_input]

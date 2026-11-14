@@ -1,4 +1,5 @@
-// Command rivus is a taint analysis query engine.
+// Command rivus is a taint analysis query engine: it reports facts about
+// where untrusted data can reach, and why it could not tell in some places.
 package main
 
 import (
@@ -6,7 +7,38 @@ import (
 	"os"
 )
 
+const usage = `rivus - taint analysis query engine
+
+Usage:
+  rivus <command> [flags] [packages]
+
+Commands:
+  sites     list the places where source and sink rules match (fast)
+  analyze   find the flows from sources to sinks across functions and packages
+  query     answer a one-sided question about a sink or a source
+  index     run the analysis once and save the result for later queries
+
+Run "rivus <command> -h" for the flags of a command.
+`
+
 func main() {
-	fmt.Fprintln(os.Stderr, "rivus: not implemented yet")
-	os.Exit(2)
+	if len(os.Args) < 2 {
+		fmt.Fprint(os.Stderr, usage)
+		os.Exit(2)
+	}
+	var err error
+	switch os.Args[1] {
+	case "sites":
+		err = runSites(os.Args[2:])
+	case "-h", "--help", "help":
+		fmt.Print(usage)
+		return
+	default:
+		fmt.Fprintf(os.Stderr, "rivus: unknown command %q\n\n%s", os.Args[1], usage)
+		os.Exit(2)
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "rivus: %v\n", err)
+		os.Exit(1)
+	}
 }
