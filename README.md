@@ -94,6 +94,7 @@ rivus extract --lang=go --output=ir.jsonl ./   # 中立 IR を出力
 
 ## ドキュメント
 
+- [docs/BRIEF.md](docs/BRIEF.md): 初期ブリーフ（改訂注記つき）
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): 全体構成、IR、パッケージ構成、データ構造、Phase 1 の分解
 - [docs/DECISIONS.md](docs/DECISIONS.md): 設計判断の記録（ADR）
 - [docs/GLOSSARY.md](docs/GLOSSARY.md): 用語集
