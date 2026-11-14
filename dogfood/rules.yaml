@@ -1,0 +1,47 @@
+# Rules for analysing rivus with rivus. What a user or an agent types on the
+# command line reaches the commands as the argument of the run* functions.
+# The sinks that matter for rivus (file access, process execution) are the
+# built-in ones.
+ruleset: rivus/dogfood@1
+
+sources:
+  - kind: param
+    symbol: github.com/yagihash/rivus/cmd/rivus.runSites
+    params: [0]
+    labels: [user_input]
+  - kind: param
+    symbol: github.com/yagihash/rivus/cmd/rivus.runAnalyze
+    params: [0]
+    labels: [user_input]
+  - kind: param
+    symbol: github.com/yagihash/rivus/cmd/rivus.runQuery
+    params: [0]
+    labels: [user_input]
+  - kind: param
+    symbol: github.com/yagihash/rivus/cmd/rivus.runIndex
+    params: [0]
+    labels: [user_input]
+  - kind: param
+    symbol: github.com/yagihash/rivus/cmd/rivus.runResolve
+    params: [0]
+    labels: [user_input]
+  - kind: param
+    symbol: github.com/yagihash/rivus/cmd/rivus.runModels
+    params: [0]
+    labels: [user_input]
+
+# Models found with "rivus models coverage -rules dogfood/rules.yaml ./...":
+# the functions on the paths of the findings that rivus had to guess about.
+propagators:
+  # Which package files are read is decided by the patterns given to Load.
+  - symbol: golang.org/x/tools/go/packages.Load
+    flows: [{from: args, to: result0}]
+    origin: human
+  # A position and a file set are numbers and a table of the loaded program:
+  # looking a file up does not make the file name depend on the position.
+  - symbol: (*go/token.FileSet).File
+    pure: true
+    origin: human
+  - symbol: (*go/token.File).Name
+    pure: true
+    origin: human

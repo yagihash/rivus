@@ -126,6 +126,32 @@ propagators:
   - symbol: path/filepath.Abs
     flows: [{from: arg0, to: result0}]
 
+  # flag: what the command line says ends up in the variables of the flag set
+  - symbol: (*flag.FlagSet).Parse
+    flows: [{from: arg0, to: recv}]
+  - symbol: (*flag.FlagSet).Args
+    flows: [{from: recv, to: result}]
+  - symbol: (*flag.FlagSet).Arg
+    flows: [{from: recv, to: result}]
+  - symbol: (*flag.FlagSet).String
+    flows: [{from: recv, to: result}]
+  - symbol: (*flag.FlagSet).Int
+    flows: [{from: recv, to: result}]
+  - symbol: (*flag.FlagSet).Bool
+    flows: [{from: recv, to: result}]
+  - symbol: (*flag.FlagSet).Duration
+    flows: [{from: recv, to: result}]
+  - symbol: (*flag.FlagSet).StringVar
+    flows: [{from: recv, to: arg0}]
+  - symbol: (*flag.FlagSet).IntVar
+    flows: [{from: recv, to: arg0}]
+  - symbol: (*flag.FlagSet).BoolVar
+    flows: [{from: recv, to: arg0}]
+  - symbol: (*flag.FlagSet).DurationVar
+    flows: [{from: recv, to: arg0}]
+  - symbol: (*flag.FlagSet).Var
+    flows: [{from: recv, to: arg0}]
+
   # io and bufio
   - symbol: io.ReadAll
     flows: [{from: arg0, to: result0}]
