@@ -34,9 +34,29 @@ const (
 	MatchImplementations = "implementations" // an interface method: expands to its implementations
 )
 
+// Origins of a model (ADR-010): who decided that a rule is right.
+const (
+	OriginBuiltin = "builtin"
+	OriginHuman   = "human"
+	OriginLLM     = "llm"
+)
+
+// Provenance says where a rule comes from. A rule decided by an LLM must say
+// when, why and by which model, so that it can be audited and, with
+// --deterministic-only, left out.
+type Provenance struct {
+	Origin       string `yaml:"origin" json:"origin,omitempty"`
+	DecidedAt    string `yaml:"decided_at" json:"decided_at,omitempty"`
+	Rationale    string `yaml:"rationale" json:"rationale,omitempty"`
+	ModelVersion string `yaml:"model_version" json:"model_version,omitempty"`
+}
+
 // RuleSet is one parsed rule file.
 type RuleSet struct {
-	Name        string       `yaml:"ruleset"`
+	Name string `yaml:"ruleset"`
+	// DefaultOrigin is the origin of the rules that do not say their own.
+	DefaultOrigin string `yaml:"origin"`
+	// The rules.
 	Sources     []Source     `yaml:"sources"`
 	Sinks       []Sink       `yaml:"sinks"`
 	Sanitizers  []Sanitizer  `yaml:"sanitizers"`
@@ -48,19 +68,21 @@ type RuleSet struct {
 
 // Source introduces taint.
 type Source struct {
-	Kind   string   `yaml:"kind"`
-	Symbol string   `yaml:"symbol"` // call_result
-	Type   string   `yaml:"type"`   // param_type, e.g. "*net/http.Request"
-	Field  string   `yaml:"field"`  // field, e.g. "net/http.Request.Body"
-	Labels []string `yaml:"labels"`
-	Match  string   `yaml:"match"`
+	Provenance `yaml:",inline"`
+	Kind       string   `yaml:"kind"`
+	Symbol     string   `yaml:"symbol"` // call_result
+	Type       string   `yaml:"type"`   // param_type, e.g. "*net/http.Request"
+	Field      string   `yaml:"field"`  // field, e.g. "net/http.Request.Body"
+	Labels     []string `yaml:"labels"`
+	Match      string   `yaml:"match"`
 	// MaxImplementations bounds the expansion of match: implementations.
 	MaxImplementations int `yaml:"max_implementations"`
 }
 
 // Sink is a dangerous operation.
 type Sink struct {
-	Symbol string `yaml:"symbol"`
+	Provenance `yaml:",inline"`
+	Symbol     string `yaml:"symbol"`
 	// Args are the argument positions (receiver excluded) that are dangerous.
 	// Empty means every argument. Use "recv" in Selectors for the receiver.
 	Args []int `yaml:"args"`
@@ -77,7 +99,8 @@ type Sink struct {
 // Sanitizer removes labels (and optionally adds others) from what flows from
 // its inputs to its result.
 type Sanitizer struct {
-	Symbol string `yaml:"symbol"`
+	Provenance `yaml:",inline"`
+	Symbol     string `yaml:"symbol"`
 	// Drops lists the removed labels. "*" removes every label.
 	Drops []string `yaml:"drops"`
 	// Adds lists labels attached to values that had a dropped label, e.g.
@@ -96,9 +119,15 @@ type Sanitizer struct {
 
 // Propagator describes how taint moves through a function without a body.
 type Propagator struct {
-	Symbol string `yaml:"symbol"`
-	Flows  []Flow `yaml:"flows"`
-	Match  string `yaml:"match"`
+	Provenance `yaml:",inline"`
+	Symbol     string `yaml:"symbol"`
+	Flows      []Flow `yaml:"flows"`
+	// Pure says that no taint flows through the function: it neither
+	// returns nor stores anything derived from its arguments (a mutex lock,
+	// the clock). It replaces the guess that everything flows, and the
+	// uncertainty that goes with the guess.
+	Pure  bool   `yaml:"pure"`
+	Match string `yaml:"match"`
 	// MaxImplementations bounds the expansion of match: implementations.
 	MaxImplementations int `yaml:"max_implementations"`
 }
@@ -160,10 +189,101 @@ func Parse(r io.Reader, origin string) (*RuleSet, error) {
 		return nil, fmt.Errorf("%s: %w", origin, err)
 	}
 	rs.Origin = origin
+	rs.fillOrigins()
 	if err := rs.validate(); err != nil {
 		return nil, fmt.Errorf("%s: %w", origin, err)
 	}
 	return &rs, nil
+}
+
+// fillOrigins gives every rule an origin: its own, else the rule set's, else
+// builtin for the embedded rule sets and human for the others.
+func (rs *RuleSet) fillOrigins() {
+	def := rs.DefaultOrigin
+	if def == "" {
+		def = OriginHuman
+		if strings.HasPrefix(rs.Origin, "builtin:") {
+			def = OriginBuiltin
+		}
+		rs.DefaultOrigin = def
+	}
+	fill := func(p *Provenance) {
+		if p.Origin == "" {
+			p.Origin = def
+		}
+	}
+	for i := range rs.Sources {
+		fill(&rs.Sources[i].Provenance)
+	}
+	for i := range rs.Sinks {
+		fill(&rs.Sinks[i].Provenance)
+	}
+	for i := range rs.Sanitizers {
+		fill(&rs.Sanitizers[i].Provenance)
+	}
+	for i := range rs.Propagators {
+		fill(&rs.Propagators[i].Provenance)
+	}
+}
+
+func (p Provenance) validate(what string) error {
+	switch p.Origin {
+	case OriginBuiltin, OriginHuman:
+		return nil
+	case OriginLLM:
+		var missing []string
+		if p.DecidedAt == "" {
+			missing = append(missing, "decided_at")
+		}
+		if p.Rationale == "" {
+			missing = append(missing, "rationale")
+		}
+		if p.ModelVersion == "" {
+			missing = append(missing, "model_version")
+		}
+		if len(missing) > 0 {
+			return fmt.Errorf("%s: a rule decided by an LLM needs %s", what, strings.Join(missing, ", "))
+		}
+		return nil
+	}
+	return fmt.Errorf("%s: unknown origin %q (want %s, %s or %s)", what, p.Origin, OriginBuiltin, OriginHuman, OriginLLM)
+}
+
+// WithoutOrigin returns a copy of the rule set without the rules of the
+// given origin, and the number of rules left out.
+func (rs *RuleSet) WithoutOrigin(origin string) (*RuleSet, int) {
+	out := *rs
+	out.Sources, out.Sinks, out.Sanitizers, out.Propagators = nil, nil, nil, nil
+	n := 0
+	for _, r := range rs.Sources {
+		if r.Origin == origin {
+			n++
+		} else {
+			out.Sources = append(out.Sources, r)
+		}
+	}
+	for _, r := range rs.Sinks {
+		if r.Origin == origin {
+			n++
+		} else {
+			out.Sinks = append(out.Sinks, r)
+		}
+	}
+	for _, r := range rs.Sanitizers {
+		if r.Origin == origin {
+			n++
+		} else {
+			out.Sanitizers = append(out.Sanitizers, r)
+		}
+	}
+	for _, r := range rs.Propagators {
+		if r.Origin == origin {
+			n++
+		} else {
+			out.Propagators = append(out.Propagators, r)
+		}
+	}
+	return &out, n
 }
 
 func (rs *RuleSet) validate() error {
@@ -182,6 +302,9 @@ func (rs *RuleSet) validate() error {
 			s.Kind = KindCallResult
 		}
 		what := fmt.Sprintf("sources[%d]", i)
+		if err := s.Provenance.validate(what); err != nil {
+			return err
+		}
 		if err := checkMatch(s.Match, what); err != nil {
 			return err
 		}
@@ -207,6 +330,9 @@ func (rs *RuleSet) validate() error {
 	}
 	for i, s := range rs.Sinks {
 		what := fmt.Sprintf("sinks[%d]", i)
+		if err := s.Provenance.validate(what); err != nil {
+			return err
+		}
 		if s.Symbol == "" {
 			return fmt.Errorf("%s: symbol is required", what)
 		}
@@ -216,6 +342,9 @@ func (rs *RuleSet) validate() error {
 	}
 	for i, s := range rs.Sanitizers {
 		what := fmt.Sprintf("sanitizers[%d]", i)
+		if err := s.Provenance.validate(what); err != nil {
+			return err
+		}
 		if s.Symbol == "" {
 			return fmt.Errorf("%s: symbol is required", what)
 		}
@@ -235,11 +364,17 @@ func (rs *RuleSet) validate() error {
 	}
 	for i, p := range rs.Propagators {
 		what := fmt.Sprintf("propagators[%d]", i)
+		if err := p.Provenance.validate(what); err != nil {
+			return err
+		}
 		if p.Symbol == "" {
 			return fmt.Errorf("%s: symbol is required", what)
 		}
-		if len(p.Flows) == 0 {
-			return fmt.Errorf("%s: flows is required", what)
+		if len(p.Flows) == 0 && !p.Pure {
+			return fmt.Errorf("%s: flows is required (or pure: true when nothing flows)", what)
+		}
+		if len(p.Flows) > 0 && p.Pure {
+			return fmt.Errorf("%s: pure: true and flows contradict each other", what)
 		}
 		if err := checkMatch(p.Match, what); err != nil {
 			return err
@@ -278,6 +413,28 @@ type Rules struct {
 
 	// Expansions records what Expand did with match: implementations rules.
 	Expansions []Expansion
+
+	// DeterministicOnly is set when the rules decided by an LLM were left
+	// out, and IgnoredModels says how many (ADR-010).
+	DeterministicOnly bool
+	IgnoredModels     int
+}
+
+// WithoutOrigin merges the rule sets after leaving out the rules of one
+// origin. It is how --deterministic-only works: with the rules decided by an
+// LLM removed, rivus alone is deterministic.
+func WithoutOrigin(origin string, sets ...*RuleSet) *Rules {
+	var kept []*RuleSet
+	ignored := 0
+	for _, rs := range sets {
+		k, n := rs.WithoutOrigin(origin)
+		ignored += n
+		kept = append(kept, k)
+	}
+	r := Merge(kept...)
+	r.DeterministicOnly = origin == OriginLLM
+	r.IgnoredModels = ignored
+	return r
 }
 
 // Merge indexes the rule sets. Order does not matter; entries for the same

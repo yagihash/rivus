@@ -25,6 +25,8 @@ type common struct {
 	rules     multiFlag
 	noBuiltin bool
 	tests     bool
+	// deterministic leaves out the rules decided by an LLM.
+	deterministic bool
 }
 
 func (c *common) register(fs *flag.FlagSet) {
@@ -32,9 +34,10 @@ func (c *common) register(fs *flag.FlagSet) {
 	fs.Var(&c.rules, "rules", "additional rule file (repeatable)")
 	fs.BoolVar(&c.noBuiltin, "no-builtin-rules", false, "do not load the built-in rules")
 	fs.BoolVar(&c.tests, "tests", false, "include _test.go files")
+	fs.BoolVar(&c.deterministic, "deterministic-only", false, "ignore the rules decided by an LLM (origin: llm)")
 }
 
-func (c *common) loadRules() (*model.Rules, error) {
+func (c *common) loadRules(extra ...*model.RuleSet) (*model.Rules, error) {
 	var sets []*model.RuleSet
 	if !c.noBuiltin {
 		b, err := builtin.Load()
@@ -54,6 +57,10 @@ func (c *common) loadRules() (*model.Rules, error) {
 			return nil, err
 		}
 		sets = append(sets, rs)
+	}
+	sets = append(sets, extra...)
+	if c.deterministic {
+		return model.WithoutOrigin(model.OriginLLM, sets...), nil
 	}
 	return model.Merge(sets...), nil
 }

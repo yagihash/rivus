@@ -163,7 +163,10 @@ type Stats struct {
 type Result struct {
 	Findings      []*Finding     `json:"findings"`
 	Uncertainties []*Uncertainty `json:"uncertainties"`
-	Stats         Stats          `json:"stats"`
+	// Suppressions are the places where a model decided by an LLM removed
+	// taint.
+	Suppressions []*Suppression `json:"suppressions,omitempty"`
+	Stats        Stats          `json:"stats"`
 }
 
 // Run analyses every function with a body, callees before callers, until the
@@ -518,6 +521,11 @@ func (e *Engine) collect(st Stats) *Result {
 		if !e.prog.Own[fn] {
 			continue
 		}
+		for _, sp := range s.suppressions {
+			sp.Position = e.prog.Position(sp.pos)
+			sp.Snippet = e.prog.Snippet(sp.pos)
+			res.Suppressions = append(res.Suppressions, sp)
+		}
 		for _, u := range s.uncertain {
 			key := u.Kind + "|" + u.Symbol + "|" + u.Func + "|" + itoa(int(u.pos))
 			if seenU[key] {
@@ -556,6 +564,13 @@ func (e *Engine) collect(st Stats) *Result {
 	case !st.Converged:
 		res.Uncertainties = append(res.Uncertainties, newUncertainty(KindRecursionApproximation, "the summaries did not stabilise within the pass limit", ""))
 	}
+	sort.SliceStable(res.Suppressions, func(i, j int) bool {
+		a, b := res.Suppressions[i], res.Suppressions[j]
+		if a.Position.File != b.Position.File {
+			return a.Position.File < b.Position.File
+		}
+		return a.Position.Offset < b.Position.Offset
+	})
 	sort.SliceStable(res.Uncertainties, func(i, j int) bool {
 		a, b := res.Uncertainties[i], res.Uncertainties[j]
 		if a.Position.File != b.Position.File {
@@ -644,6 +659,31 @@ func (e *Engine) buildFinding(rf *rawFinding) *Finding {
 		}
 	}
 	f.Paths = []Path{{Steps: steps}}
+
+	// Which models decided something on the path, and who decided them.
+	seenModel := map[string]bool{}
+	addModel := func(m ModelRef) {
+		k := m.Role + "|" + m.Symbol + "|" + m.Origin
+		if seenModel[k] {
+			return
+		}
+		seenModel[k] = true
+		f.Models = append(f.Models, m)
+		if m.Origin == "llm" {
+			f.LLMInfluenced = true
+		}
+	}
+	for _, s := range src.Src {
+		addModel(*modelRef(src.Symbol, "source", s.Provenance))
+	}
+	for _, st := range steps {
+		if st.Model != nil {
+			addModel(*st.Model)
+		}
+	}
+	for _, k := range rf.site.Sink {
+		addModel(*modelRef(rf.site.Symbol, "sink", k.Provenance))
+	}
 
 	fp := fingerprint.Combine(src.Fingerprint, rf.site.Fingerprint)
 	fp[fingerprint.Path] = fingerprint.Hash(append([]string{src.Func}, append(funcs, rf.site.Func)...)...)

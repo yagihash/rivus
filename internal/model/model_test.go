@@ -82,3 +82,90 @@ sanitizers:
 		t.Errorf("HasModel is wrong")
 	}
 }
+
+func TestPureModel(t *testing.T) {
+	rs, err := Parse(strings.NewReader("propagators:\n  - symbol: a.Lock\n    pure: true\n"), "t")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := Merge(rs)
+	if !r.HasModel("a.Lock") {
+		t.Error("a pure function is modelled")
+	}
+	for name, src := range map[string]string{
+		"neither":     "propagators:\n  - symbol: a.F\n",
+		"contradicts": "propagators:\n  - symbol: a.F\n    pure: true\n    flows: [{from: arg0, to: result}]\n",
+	} {
+		if _, err := Parse(strings.NewReader(src), name); err == nil {
+			t.Errorf("%s: expected an error", name)
+		}
+	}
+}
+
+func TestOrigins(t *testing.T) {
+	rs, err := Parse(strings.NewReader("sinks:\n  - symbol: a.S\n"), "rules.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rs.Sinks[0].Origin != OriginHuman {
+		t.Errorf("a user rule defaults to human, got %q", rs.Sinks[0].Origin)
+	}
+	b, err := Parse(strings.NewReader("sinks:\n  - symbol: a.S\n"), "builtin:x.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b.Sinks[0].Origin != OriginBuiltin {
+		t.Errorf("a built-in rule defaults to builtin, got %q", b.Sinks[0].Origin)
+	}
+	d, err := Parse(strings.NewReader("origin: llm\nsinks:\n  - symbol: a.S\n    decided_at: \"2026-11-20\"\n    rationale: r\n    model_version: m\n  - symbol: a.T\n    origin: human\n"), "x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Sinks[0].Origin != OriginLLM || d.Sinks[1].Origin != OriginHuman {
+		t.Errorf("origins = %q, %q", d.Sinks[0].Origin, d.Sinks[1].Origin)
+	}
+}
+
+func TestLLMRulesNeedTheirWhy(t *testing.T) {
+	for name, src := range map[string]string{
+		"nothing":      "sinks:\n  - symbol: a.S\n    origin: llm\n",
+		"no rationale": "sinks:\n  - symbol: a.S\n    origin: llm\n    decided_at: d\n    model_version: m\n",
+		"no version":   "sinks:\n  - symbol: a.S\n    origin: llm\n    decided_at: d\n    rationale: r\n",
+		"unknown":      "sinks:\n  - symbol: a.S\n    origin: oracle\n",
+	} {
+		if _, err := Parse(strings.NewReader(src), name); err == nil {
+			t.Errorf("%s: expected an error", name)
+		}
+	}
+}
+
+func TestWithoutOriginLeavesTheLLMRulesOut(t *testing.T) {
+	rs, err := Parse(strings.NewReader(`
+sanitizers:
+  - symbol: a.Human
+    drops: [x]
+  - symbol: a.Machine
+    drops: [x]
+    origin: llm
+    decided_at: d
+    rationale: r
+    model_version: m
+propagators:
+  - symbol: a.P
+    pure: true
+    origin: llm
+    decided_at: d
+    rationale: r
+    model_version: m
+`), "x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := WithoutOrigin(OriginLLM, rs)
+	if !r.DeterministicOnly || r.IgnoredModels != 2 {
+		t.Errorf("deterministic = %v, ignored = %d", r.DeterministicOnly, r.IgnoredModels)
+	}
+	if !r.HasModel("a.Human") || r.HasModel("a.Machine") || r.HasModel("a.P") {
+		t.Error("only the rules decided by an LLM must be gone")
+	}
+}

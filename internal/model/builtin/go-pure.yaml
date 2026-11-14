@@ -1,0 +1,105 @@
+# Functions through which no taint flows: locks, clocks, logging, predicates.
+# Saying so removes the conservative guess (everything that goes in may come
+# out) and the uncertainty that guess would leave on every path.
+ruleset: rivus/go/pure@1
+
+propagators:
+  # sync
+  - symbol: (*sync.Mutex).Lock
+    pure: true
+  - symbol: (*sync.Mutex).Unlock
+    pure: true
+  - symbol: (*sync.Mutex).TryLock
+    pure: true
+  - symbol: (*sync.RWMutex).Lock
+    pure: true
+  - symbol: (*sync.RWMutex).Unlock
+    pure: true
+  - symbol: (*sync.RWMutex).RLock
+    pure: true
+  - symbol: (*sync.RWMutex).RUnlock
+    pure: true
+  - symbol: (*sync.WaitGroup).Add
+    pure: true
+  - symbol: (*sync.WaitGroup).Done
+    pure: true
+  - symbol: (*sync.WaitGroup).Wait
+    pure: true
+  - symbol: (sync.Locker).Lock
+    pure: true
+  - symbol: (sync.Locker).Unlock
+    pure: true
+
+  # time
+  - symbol: time.Now
+    pure: true
+  - symbol: time.Since
+    pure: true
+  - symbol: time.Until
+    pure: true
+  - symbol: time.Sleep
+    pure: true
+  - symbol: (time.Time).Add
+    pure: true
+  - symbol: (time.Time).Sub
+    pure: true
+  - symbol: (time.Time).After
+    pure: true
+  - symbol: (time.Time).Before
+    pure: true
+  - symbol: (time.Time).Equal
+    pure: true
+  - symbol: (time.Time).IsZero
+    pure: true
+  - symbol: (time.Time).Unix
+    pure: true
+  - symbol: (time.Time).UTC
+    pure: true
+
+  # logging: output is not modelled as a sink; nothing flows back
+  - symbol: log.Printf
+    pure: true
+  - symbol: log.Println
+    pure: true
+  - symbol: log.Print
+    pure: true
+  - symbol: log.Fatalf
+    pure: true
+  - symbol: log.Fatal
+    pure: true
+  - symbol: log.Panicf
+    pure: true
+
+  # predicates and in-place helpers
+  - symbol: strings.HasPrefix
+    pure: true
+  - symbol: strings.HasSuffix
+    pure: true
+  - symbol: strings.Contains
+    pure: true
+  - symbol: strings.EqualFold
+    pure: true
+  - symbol: strings.Index
+    pure: true
+  - symbol: strings.Count
+    pure: true
+  - symbol: bytes.Equal
+    pure: true
+  - symbol: sort.Strings
+    pure: true
+  - symbol: sort.Ints
+    pure: true
+  - symbol: sort.Slice
+    pure: true
+  - symbol: errors.Is
+    pure: true
+  - symbol: (io.Closer).Close
+    pure: true
+  - symbol: (net/http.ResponseWriter).WriteHeader
+    pure: true
+  - symbol: (context.Context).Done
+    pure: true
+  - symbol: (context.Context).Err
+    pure: true
+  - symbol: (*net/http.Client).CloseIdleConnections
+    pure: true

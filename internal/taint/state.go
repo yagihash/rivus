@@ -39,6 +39,7 @@ type why struct {
 	from  *ref
 	steps *rope // steps taken inside a callee, spliced in from its summary
 	notes []*Uncertainty
+	model *ModelRef
 }
 
 // found is an element read from some cell.
@@ -70,12 +71,13 @@ type state struct {
 	collectMemo map[Loc][]found // active during one summary application
 	expandMemo  map[Elem][]expanded
 
-	findings    map[findingKey]*rawFinding
-	sinkReaches map[sinkKey]*SinkReach
-	uncertain   []*Uncertainty
-	truncated   bool
-	adds        int
-	exceeded    bool
+	suppressions map[string]*Suppression
+	findings     map[findingKey]*rawFinding
+	sinkReaches  map[sinkKey]*SinkReach
+	uncertain    []*Uncertainty
+	truncated    bool
+	adds         int
+	exceeded     bool
 }
 
 // cachedElems and cachedPaths remember sorted views of cells. Sets only
@@ -345,7 +347,7 @@ func (s *state) trace(l Loc, e Elem) *rope {
 func (s *state) stepsOf(w *why) *rope {
 	var out *rope
 	if w.desc != "" && !skipStep(w.desc) {
-		st := Step{Func: s.eng.funcID(w.fn), Desc: w.desc, pos: w.pos}
+		st := Step{Func: s.eng.funcID(w.fn), Desc: w.desc, pos: w.pos, Model: w.model}
 		st.Notes = w.notes
 		out = leaf(st)
 	} else if len(w.notes) > 0 {

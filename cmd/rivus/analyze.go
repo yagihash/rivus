@@ -41,12 +41,9 @@ func (o *analyzeOpts) register(fs *flag.FlagSet) {
 // loaded from the flags.
 func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*report.Report, error) {
 	phase := o.phaseTimer()
-	rules, err := o.loadRules()
+	rules, err := o.loadRules(extra...)
 	if err != nil {
 		return nil, err
-	}
-	if len(extra) > 0 {
-		rules = model.Merge(append(append([]*model.RuleSet{}, rules.Sets...), extra...)...)
 	}
 	prog, err := o.load(patterns)
 	if err != nil {

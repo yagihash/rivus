@@ -62,6 +62,33 @@ func newUncertainty(kind, detail, symbol string) *Uncertainty {
 	return &Uncertainty{Kind: kind, AttributableTo: attributable(kind), Detail: detail, Symbol: symbol}
 }
 
+// ModelRef says which model decided a hop (or an end) of a path, and who
+// decided the model. It is how a reader sees that an LLM influenced a result
+// (ADR-010).
+type ModelRef struct {
+	Symbol       string `json:"symbol"`
+	Role         string `json:"role"` // source, sink, sanitizer or propagator
+	Origin       string `json:"origin"`
+	DecidedAt    string `json:"decided_at,omitempty"`
+	ModelVersion string `json:"model_version,omitempty"`
+	Rationale    string `json:"rationale,omitempty"`
+}
+
+// Suppression records a place where a model decided by an LLM removed taint:
+// without the model, the data would have gone on. A finding that does not
+// exist cannot say that, so the place is listed on its own (ADR-010).
+type Suppression struct {
+	Model    ModelRef       `json:"model"`
+	Func     string         `json:"func"`
+	Position gossa.Position `json:"position"`
+	Snippet  string         `json:"snippet,omitempty"`
+	// Labels were removed; Origins are the source sites they came from.
+	Labels  []string `json:"labels"`
+	Origins []string `json:"origins"`
+
+	pos token.Pos
+}
+
 // Step is one hop of a taint path.
 type Step struct {
 	Func     string         `json:"func"`
@@ -69,6 +96,8 @@ type Step struct {
 	Snippet  string         `json:"snippet,omitempty"`
 	Desc     string         `json:"desc"`
 	Notes    []*Uncertainty `json:"notes,omitempty"`
+	// Model is set when a model decided this hop.
+	Model *ModelRef `json:"model,omitempty"`
 
 	pos token.Pos
 }
@@ -97,6 +126,11 @@ type Finding struct {
 	// resolve; it is the part a reviewer should look at first.
 	Uncertainties []*Uncertainty `json:"uncertainties,omitempty"`
 	Confidence    string         `json:"confidence"`
+	// Models are the models that decided something on the path: the source
+	// and sink rules, and the sanitizers and propagators passed.
+	Models []ModelRef `json:"models,omitempty"`
+	// LLMInfluenced is true when one of them was decided by an LLM.
+	LLMInfluenced bool `json:"llm_influenced,omitempty"`
 }
 
 // Path is one way the data gets from the source to the sink.

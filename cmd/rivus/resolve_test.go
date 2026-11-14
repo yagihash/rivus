@@ -305,3 +305,91 @@ func TestResolveRejectsBookmarksWithoutFingerprints(t *testing.T) {
 		t.Fatal("a bookmark that is only an ID cannot be resolved and must be refused")
 	}
 }
+
+const wsLLMRules = wsRules + `
+  - symbol: example.com/tmp/lib.Clean
+    drops: [user_input]
+    origin: llm
+    decided_at: "2026-11-20"
+    rationale: "Clean escapes everything; checked in lib/clean.go"
+    model_version: test-model
+`
+
+const wsLLMMain = `package main
+
+import "example.com/tmp/lib"
+
+func F() {
+	a := lib.Source()
+	lib.Sink(lib.Clean(a))
+}
+`
+
+func TestLLMModelSuppressesAndIsRecorded(t *testing.T) {
+	w := newWorkspace(t)
+	w.write("lib/lib.go", wsLib+"\nfunc Clean(s string) string { return s }\n")
+	w.write("rules.yaml", wsLLMRules)
+	w.write("main/main.go", wsLLMMain)
+
+	var rep report.Report
+	if err := json.Unmarshal(w.run("analyze", "-rules", "rules.yaml", "./main"), &rep); err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Findings) != 0 {
+		t.Fatalf("the model removes the taint, so there is no finding: %d", len(rep.Findings))
+	}
+	if len(rep.Suppressions) != 1 {
+		t.Fatalf("the suppression must be recorded: %+v", rep.Suppressions)
+	}
+	sp := rep.Suppressions[0]
+	if sp.Model.Origin != "llm" || sp.Model.ModelVersion != "test-model" || sp.Model.Rationale == "" ||
+		sp.Labels[0] != "user_input" || !strings.Contains(sp.Snippet, "lib.Clean") {
+		t.Errorf("suppression = %+v", sp)
+	}
+
+	// Without the rules decided by an LLM, the flow is there.
+	var det report.Report
+	if err := json.Unmarshal(w.run("analyze", "-rules", "rules.yaml", "-deterministic-only", "./main"), &det); err != nil {
+		t.Fatal(err)
+	}
+	if len(det.Findings) != 1 || !det.DeterministicOnly || det.IgnoredModels != 1 || len(det.Suppressions) != 0 {
+		t.Errorf("deterministic run: findings=%d deterministic=%v ignored=%d suppressions=%d",
+			len(det.Findings), det.DeterministicOnly, det.IgnoredModels, len(det.Suppressions))
+	}
+}
+
+func TestFindingNamesTheModelsOnItsPath(t *testing.T) {
+	w := newWorkspace(t)
+	w.write("lib/lib.go", wsLib+"\nfunc Wrap(s string) string { return s }\n")
+	w.write("rules.yaml", wsRules+`
+propagators:
+  - symbol: example.com/tmp/lib.Wrap
+    flows: [{from: arg0, to: result}]
+    origin: llm
+    decided_at: "2026-11-20"
+    rationale: "Wrap returns its argument unchanged"
+    model_version: test-model
+`)
+	w.write("main/main.go", "package main\n\nimport \"example.com/tmp/lib\"\n\nfunc F() {\n\tlib.Sink(lib.Wrap(lib.Source()))\n}\n")
+
+	var rep report.Report
+	if err := json.Unmarshal(w.run("analyze", "-rules", "rules.yaml", "./main"), &rep); err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Findings) != 1 {
+		t.Fatalf("findings = %d", len(rep.Findings))
+	}
+	f := rep.Findings[0]
+	if !f.LLMInfluenced {
+		t.Error("the path goes through a model decided by an LLM")
+	}
+	var wrap bool
+	for _, m := range f.Models {
+		if m.Symbol == "example.com/tmp/lib.Wrap" && m.Role == "propagator" && m.Origin == "llm" {
+			wrap = true
+		}
+	}
+	if !wrap {
+		t.Errorf("models = %+v", f.Models)
+	}
+}

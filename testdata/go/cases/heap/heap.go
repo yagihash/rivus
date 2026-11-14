@@ -2,7 +2,9 @@ package heap
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
 
 	"example.com/cases/lib"
 )
@@ -171,4 +173,11 @@ func VariadicArguments() {
 func VariadicOnlyConstants() {
 	_ = lib.Source()
 	lib.Sink(Variadic("a", "b")) // @sink(none)
+}
+
+func PureFunctionsDoNotPropagate() {
+	s := lib.Source()
+	n, _ := strconv.Atoi(s) // an unmodeled function: the number is tainted
+	deadline := time.Now().Add(time.Duration(n))
+	lib.SinkAny(deadline) // @sink(none)
 }

@@ -32,11 +32,19 @@ type Report struct {
 	Sites         []*sites.Site        `json:"sites,omitempty"`
 	Findings      []*taint.Finding     `json:"findings"`
 	Uncertainties []*taint.Uncertainty `json:"uncertainties"`
-	LoadErrors    []gossa.LoadError    `json:"load_errors,omitempty"`
+	// Suppressions are the places where a model decided by an LLM removed
+	// taint: findings that exist only without the model.
+	Suppressions []*taint.Suppression `json:"suppressions,omitempty"`
+	LoadErrors   []gossa.LoadError    `json:"load_errors,omitempty"`
 	// Expansions says what happened to the rules with match: implementations.
 	Expansions []model.Expansion `json:"expansions,omitempty"`
-	Stats      taint.Stats       `json:"stats"`
-	Summary    Summary           `json:"summary"`
+	// DeterministicOnly is true when the rules decided by an LLM were left
+	// out (IgnoredModels of them), so that the result depends on rivus and
+	// on rules written or built in, and on nothing else.
+	DeterministicOnly bool        `json:"deterministic_only,omitempty"`
+	IgnoredModels     int         `json:"ignored_models,omitempty"`
+	Stats             taint.Stats `json:"stats"`
+	Summary           Summary     `json:"summary"`
 }
 
 // Summary counts the uncertainties. It is the feedback loop of ADR-008: the
@@ -156,9 +164,13 @@ func Build(p *gossa.Program, st *sites.Result, res *taint.Result, rules *model.R
 		Sites:         st.Sites,
 		Findings:      res.Findings,
 		Uncertainties: res.Uncertainties,
+		Suppressions:  res.Suppressions,
 		LoadErrors:    p.LoadErrors,
 		Stats:         res.Stats,
 		Expansions:    rules.Expansions,
+
+		DeterministicOnly: rules.DeterministicOnly,
+		IgnoredModels:     rules.IgnoredModels,
 	}
 	// A rule that was not expanded because it had too many implementations
 	// leaves flows through those implementations unseen: say so.

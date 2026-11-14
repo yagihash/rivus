@@ -95,6 +95,12 @@ propagators:
     flows: [{from: args, to: result}]
   - symbol: errors.New
     flows: [{from: args, to: result}]
+  - symbol: fmt.Fprintf
+    flows: [{from: args, to: arg0}]
+  - symbol: fmt.Fprint
+    flows: [{from: args, to: arg0}]
+  - symbol: fmt.Fprintln
+    flows: [{from: args, to: arg0}]
   - symbol: (error).Error
     flows: [{from: recv, to: result}]
 

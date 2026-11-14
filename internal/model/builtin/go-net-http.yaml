@@ -32,6 +32,12 @@ propagators:
     flows: [{from: arg1, to: recv}]
   - symbol: (net/http.Header).Add
     flows: [{from: arg1, to: recv}]
+  - symbol: (*net/http.Request).Context
+    flows: [{from: recv, to: result}]
+  - symbol: (net/http.ResponseWriter).Header
+    flows: [{from: recv, to: result}]
+  - symbol: (*net/http.Client).Do
+    flows: [{from: arg0, to: result0}]
   - symbol: net/http.MaxBytesReader
     flows: [{from: arg1, to: result}]
   - symbol: net/http.NewRequest

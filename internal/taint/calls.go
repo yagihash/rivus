@@ -355,10 +355,13 @@ func (s *state) applyModel(cc *callCtx) {
 			flows = []model.Flow{{From: "args", To: "result"}}
 		}
 		o := op{drops: san.Drops, adds: san.Adds}
-		s.applyFlows(cc, flows, &o, "sanitized by "+cc.sym)
+		s.applyFlows(cc, flows, &o, "sanitized by "+cc.sym, modelRef(cc.sym, "sanitizer", san.Provenance))
 	}
 	for _, p := range rules.Propagators[cc.sym] {
-		s.applyFlows(cc, p.Flows, nil, "")
+		if p.Pure {
+			continue // nothing flows: that is the model
+		}
+		s.applyFlows(cc, p.Flows, nil, "", modelRef(cc.sym, "propagator", p.Provenance))
 	}
 }
 
@@ -379,7 +382,37 @@ func (s *state) selectVals(cc *callCtx, sel model.Selector) []ssa.Value {
 	return nil
 }
 
-func (s *state) applyFlows(cc *callCtx, flows []model.Flow, o *op, desc string) {
+// suppressed records that a model decided by an LLM removed a label.
+func (s *state) suppressed(cc *callCtx, m *ModelRef, e Elem) {
+	if s.suppressions == nil {
+		s.suppressions = map[string]*Suppression{}
+	}
+	key := m.Symbol + "|" + itoa(int(cc.in.Pos()))
+	sp := s.suppressions[key]
+	if sp == nil {
+		sp = &Suppression{Model: *m, Func: s.eng.funcID(s.fn), pos: cc.in.Pos()}
+		s.suppressions[key] = sp
+	}
+	sp.Labels = addSorted(sp.Labels, e.Label)
+	sp.Origins = addSorted(sp.Origins, e.Origin)
+}
+
+func addSorted(list []string, v string) []string {
+	for _, x := range list {
+		if x == v {
+			return list
+		}
+	}
+	list = append(list, v)
+	sort.Strings(list)
+	return list
+}
+
+func modelRef(symbol, role string, p model.Provenance) *ModelRef {
+	return &ModelRef{Symbol: symbol, Role: role, Origin: p.Origin, DecidedAt: p.DecidedAt, ModelVersion: p.ModelVersion, Rationale: p.Rationale}
+}
+
+func (s *state) applyFlows(cc *callCtx, flows []model.Flow, o *op, desc string, mref *ModelRef) {
 	for _, fl := range flows {
 		from, err1 := model.ParseSelector(fl.From)
 		to, err2 := model.ParseSelector(fl.To)
@@ -414,9 +447,12 @@ func (s *state) applyFlows(cc *callCtx, flows []model.Flow, o *op, desc string) 
 				if o != nil {
 					elems = sanitize(elems, *o)
 					kind = desc
+					if mref != nil && mref.Origin == model.OriginLLM && f.E.Kind == Real && o.drops1(f.E.Label) {
+						s.suppressed(cc, mref, f.E)
+					}
 				}
 				for _, e := range elems {
-					s.add(d, e, &why{fn: s.fn, pos: cc.in.Pos(), desc: kind, from: &ref{f.Cell, f.Orig}})
+					s.add(d, e, &why{fn: s.fn, pos: cc.in.Pos(), desc: kind, from: &ref{f.Cell, f.Orig}, model: mref})
 				}
 			}
 		}
