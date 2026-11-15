@@ -57,36 +57,89 @@ func Extract(p *gossa.Program, opts Options) (*ir.Program, error) {
 			graph = callgraph.BuildGo(p)
 		}
 	}
-	for _, fn := range p.Funcs {
-		if !opts.All && !p.Own[fn] {
-			continue
-		}
-		// Synthetic wrappers (thunks) of the same method are made once per
-		// package that uses them, under one name: they are the same function.
-		if id := ir.FuncID(gossa.FuncID(fn)); !seen[id] {
+	// With All, a function of a dependency is converted only when something
+	// the project does can reach it (a call, a candidate of a call through an
+	// interface or a function value, a function named as a value): the rest
+	// cannot change the analysis, and converting all of a dependency is most
+	// of the memory.
+	byID := map[ir.FuncID]*ssa.Function{}
+	var work []*ssa.Function
+	push := func(id ir.FuncID, fn *ssa.Function) {
+		if !seen[id] {
 			seen[id] = true
-			out.Funcs = append(out.Funcs, convertFunc(p, fn, graph, lifted[gossa.FuncID(fn)], globals))
+			work = append(work, fn)
 		}
 	}
-	for _, g := range globals {
-		out.Globals = append(out.Globals, g)
-	}
-	sort.Slice(out.Globals, func(i, j int) bool { return out.Globals[i].Name < out.Globals[j].Name })
+	var impls []ir.Implementations
 	for _, sym := range opts.Implementations {
-		impls, err := p.Implementations(sym)
+		is, err := p.Implementations(sym)
 		if err != nil {
 			return nil, fmt.Errorf("implementations of %s: %w", sym, err)
 		}
 		rec := ir.Implementations{Method: sym}
-		for _, i := range impls {
+		for _, i := range is {
 			rec.Impls = append(rec.Impls, ir.FuncID(i))
 		}
 		sort.Slice(rec.Impls, func(i, j int) bool { return rec.Impls[i] < rec.Impls[j] })
-		out.Impls = append(out.Impls, rec)
+		impls = append(impls, rec)
+	}
+	for _, fn := range p.Funcs {
+		// Synthetic wrappers (thunks) of the same method are made once per
+		// package that uses them, under one name: they are the same function
+		// (the first, the biggest, stands for it).
+		id := ir.FuncID(gossa.FuncID(fn))
+		if _, ok := byID[id]; ok {
+			continue
+		}
+		byID[id] = fn
+		if p.Own[fn] || !opts.All {
+			push(id, fn)
+		}
 	}
 	if opts.All {
-		out.PruneDeps()
+		for _, rec := range impls {
+			for _, id := range rec.Impls {
+				if fn := byID[id]; fn != nil {
+					push(id, fn)
+				}
+			}
+		}
 	}
+	for len(work) > 0 {
+		fn := work[len(work)-1]
+		work = work[:len(work)-1]
+		if !opts.All && !p.Own[fn] {
+			continue
+		}
+		f := convertFunc(p, fn, graph, lifted[gossa.FuncID(fn)], globals)
+		out.Funcs = append(out.Funcs, f)
+		if !opts.All {
+			continue
+		}
+		visit := func(id ir.FuncID) {
+			if id != "" && byID[id] != nil {
+				push(id, byID[id])
+			}
+		}
+		for bi := range f.Blocks {
+			for ii := range f.Blocks[bi].Instrs {
+				in := &f.Blocks[bi].Instrs[ii]
+				visit(in.Func)
+				if c := in.Callee; c != nil {
+					visit(c.Func)
+					for _, id := range c.Candidates {
+						visit(id)
+					}
+				}
+			}
+		}
+	}
+	sort.Slice(out.Funcs, func(i, j int) bool { return out.Funcs[i].ID < out.Funcs[j].ID })
+	for _, g := range globals {
+		out.Globals = append(out.Globals, g)
+	}
+	sort.Slice(out.Globals, func(i, j int) bool { return out.Globals[i].Name < out.Globals[j].Name })
+	out.Impls = impls
 	return out, nil
 }
 
