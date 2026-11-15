@@ -13,7 +13,7 @@
 //!    arguments is taken apart.
 
 use crate::irjson::{Block, Func, Local, Pos, Texts};
-use rustc_public::mir::mono::Instance;
+use rustc_public::mir::mono::{Instance, InstanceKind};
 use rustc_public::mir::*;
 use rustc_public::ty::*;
 use rustc_public::CrateDef;
@@ -141,6 +141,9 @@ fn clean_symbol(name: &str) -> String {
     if name.starts_with('<') {
         return name.to_string();
     }
+    // core and alloc are the parts of std that std re-exports: rules say std
+    let name = if let Some(r) = name.strip_prefix("core::").or_else(|| name.strip_prefix("alloc::")) { format!("std::{}", r) } else { name.to_string() };
+    let name = name.as_str();
     let mut out = String::new();
     let b: Vec<char> = name.chars().collect();
     let mut i = 0;
@@ -173,6 +176,16 @@ fn clean_symbol(name: &str) -> String {
         i += 1;
     }
     out
+}
+
+/// A type whose fields are the machinery of a pointer, not data.
+fn is_smart_pointer(ty: &Ty) -> bool {
+    if let TyKind::RigidTy(RigidTy::Adt(def, _)) = ty.kind() {
+        let name = def.name();
+        let last = name.rsplit("::").next().unwrap_or("");
+        return matches!(last, "Box" | "BoxRaw" | "Unique" | "NonNull" | "Rc" | "Arc");
+    }
+    false
 }
 
 fn type_id(ty: &Ty) -> String {
@@ -451,6 +464,16 @@ impl<'a> Lower<'a> {
                     _ => w.ty,
                 };
                 w.cur = Cur::Ptr(ptr);
+                w.variant = None;
+            }
+            ProjectionElem::Field(_, fty) if is_smart_pointer(&w.ty) => {
+                // The inside of a Box, a Unique, a NonNull: they are the
+                // pointer itself, as far as the data is concerned.
+                if let Cur::Ptr(_) = w.cur {
+                    let v = self.pointee_value(w, pos);
+                    w.cur = Cur::Val(v);
+                }
+                w.ty = *fty;
                 w.variant = None;
             }
             ProjectionElem::Field(i, fty) => {
@@ -784,7 +807,9 @@ impl<'a> Lower<'a> {
         match fty.as_ref().map(|t| t.kind()) {
             Some(TyKind::RigidTy(RigidTy::FnDef(def, gargs))) => {
                 let def_name = clean_symbol(&def.name());
-                let inst = Instance::resolve(def, &gargs).ok().map(|i| i.name());
+                let resolved = Instance::resolve(def, &gargs).ok();
+                let virtual_call = resolved.as_ref().map(|i| matches!(i.kind, InstanceKind::Virtual { .. })).unwrap_or(false);
+                let inst = resolved.map(|i| i.name());
                 let is_trait = inst.as_ref().map(|n| n.starts_with('<')).unwrap_or(false) && !def_name.starts_with('<');
                 // a closure called through Fn::call: its arguments come in a tuple
                 if matches!(def_name.as_str(), "std::ops::Fn::call" | "std::ops::FnMut::call_mut" | "std::ops::FnOnce::call_once") && args.len() == 2 {
@@ -801,9 +826,17 @@ impl<'a> Lower<'a> {
                         }
                     }
                 }
+                let raw_def = def.name();
                 match inst {
-                    Some(name) if self.cx.bodies.contains(&name) => {
-                        callee = json!({"kind": "static", "func": name, "symbol": if is_trait { def_name.clone() } else { name.clone() }});
+                    // a call through a trait object: whichever impl the object has
+                    _ if virtual_call => {
+                        let cands = self.candidates(&def_name);
+                        callee = json!({"kind": "dynamic", "symbol": def_name, "candidates": cands});
+                    }
+                    Some(name) if self.cx.bodies.contains(&name) || self.cx.bodies.contains(&raw_def) => {
+                        let func = if self.cx.bodies.contains(&name) { name.clone() } else { raw_def.clone() };
+                        let sym = if is_trait { def_name.clone() } else { clean_symbol(&func) };
+                        callee = json!({"kind": "static", "func": func, "symbol": sym});
                     }
                     Some(name) => {
                         // a function that has no body here: the core finds it
@@ -811,7 +844,7 @@ impl<'a> Lower<'a> {
                         callee = json!({"kind": "static", "func": name, "symbol": def_name});
                     }
                     None => {
-                        // a call that cannot be resolved here: through a type parameter or a trait object
+                        // a call that cannot be resolved here: through a type parameter
                         let cands = self.candidates(&def_name);
                         callee = json!({"kind": "dynamic", "symbol": def_name, "candidates": cands});
                     }

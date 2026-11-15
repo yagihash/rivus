@@ -324,13 +324,13 @@ propagators:
     flows: [{from: args, to: result}]
   - symbol: std::fmt::Arguments::new_v1_formatted
     flows: [{from: args, to: result}]
-  - symbol: core::fmt::rt::Argument::new_display
+  - symbol: std::fmt::rt::Argument::new_display
     flows: [{from: args, to: result}]
-  - symbol: core::fmt::rt::Argument::new_debug
+  - symbol: std::fmt::rt::Argument::new_debug
     flows: [{from: args, to: result}]
-  - symbol: core::fmt::rt::Argument::new_lower_hex
+  - symbol: std::fmt::rt::Argument::new_lower_hex
     flows: [{from: args, to: result}]
-  - symbol: core::fmt::rt::Argument::from_usize
+  - symbol: std::fmt::rt::Argument::from_usize
     flows: [{from: args, to: result}]
   - symbol: std::fmt::Arguments::as_str
     flows: [{from: args, to: result}]
@@ -370,6 +370,78 @@ propagators:
   - symbol: std::io::Write::write
     flows: [{from: arg1, to: arg0}]
   - symbol: std::fs::File::open
+    flows: [{from: args, to: result}]
+  - symbol: std::boxed::box_assume_init_into_vec_unsafe
+    flows: [{from: args, to: result}]
+  - symbol: std::boxed::Box::new_uninit
+    flows: [{from: args, to: result}]
+  - symbol: std::boxed::Box::new_uninit_slice
+    flows: [{from: args, to: result}]
+  - symbol: std::boxed::Box::assume_init
+    flows: [{from: args, to: result}]
+  - symbol: std::slice::into_vec
+    flows: [{from: args, to: result}]
+  - symbol: std::vec::from_elem
+    flows: [{from: args, to: result}]
+  - symbol: std::slice::iter_mut
+    flows: [{from: args, to: result}]
+  - symbol: std::vec::Vec::iter_mut
+    flows: [{from: args, to: result}]
+  - symbol: std::vec::Vec::as_slice
+    flows: [{from: args, to: result}]
+  - symbol: std::vec::Vec::as_mut_slice
+    flows: [{from: args, to: result}]
+  - symbol: std::vec::Vec::into_boxed_slice
+    flows: [{from: args, to: result}]
+  - symbol: std::vec::Vec::as_ptr
+    flows: [{from: args, to: result}]
+  - symbol: std::vec::Vec::from
+    flows: [{from: args, to: result}]
+  - symbol: std::slice::as_ptr
+    flows: [{from: args, to: result}]
+  - symbol: std::ptr::read
+    flows: [{from: args, to: result}]
+  - symbol: std::ptr::write
+    flows: [{from: args, to: result}]
+  - symbol: std::mem::replace
+    flows: [{from: args, to: result}]
+  - symbol: std::mem::take
+    flows: [{from: args, to: result}]
+  - symbol: std::mem::swap
+    flows: [{from: args, to: result}]
+  - symbol: std::mem::transmute
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::sum
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::count
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::min
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::max
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::find
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::position
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::any
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::all
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::for_each
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::filter_map
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::take_while
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::skip_while
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::by_ref
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::repeat
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::once
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::empty
     flows: [{from: args, to: result}]
 
 sinks:

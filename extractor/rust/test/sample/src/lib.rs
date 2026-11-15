@@ -1,4 +1,5 @@
 pub mod std_flows;
+pub mod traits;
 
 pub fn source() -> String {
     String::from("x")

@@ -30,5 +30,5 @@ func TestRustExtractor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the extractor failed: %v", err)
 	}
-	checkSampleFlows(t, stream, filepath.Join(root, "rules.yaml"), root, []string{"src/lib.rs", "src/std_flows.rs"}, 12)
+	checkSampleFlows(t, stream, filepath.Join(root, "rules.yaml"), root, []string{"src/lib.rs", "src/std_flows.rs", "src/traits.rs"}, 20)
 }
