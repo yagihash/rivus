@@ -127,10 +127,10 @@ func Load(dir string, patterns []string, opts Options) (*Program, error) {
 			}
 		}
 	}
-	prog.Build()
+	buildInOrder(prog)
 	if opts.WithLifted {
 		lifted, _ := ssautil.Packages(pkgs, ssa.InstantiateGenerics)
-		lifted.Build()
+		buildInOrder(lifted)
 		p.Lifted = lifted
 	}
 
@@ -150,7 +150,45 @@ func Load(dir string, patterns []string, opts Options) (*Program, error) {
 			p.Own[fn] = true
 		}
 	}
-	sort.Slice(p.Funcs, func(i, j int) bool { return FuncID(p.Funcs[i]) < FuncID(p.Funcs[j]) })
+	// Functions of one name can be several (a wrapper made once for each
+	// package that needs it, a generic function and its instances): the
+	// order among them must not depend on the order go/ssa made them in, so
+	// the bigger body comes first, and then the position.
+	size := func(fn *ssa.Function) (blocks, instrs int) {
+		for _, b := range fn.Blocks {
+			instrs += len(b.Instrs)
+		}
+		return len(fn.Blocks), instrs
+	}
+	sort.Slice(p.Funcs, func(i, j int) bool {
+		a, b := p.Funcs[i], p.Funcs[j]
+		if ia, ib := FuncID(a), FuncID(b); ia != ib {
+			return ia < ib
+		}
+		ab, ai := size(a)
+		bb, bi := size(b)
+		if ab != bb {
+			return ab > bb
+		}
+		if ai != bi {
+			return ai > bi
+		}
+		if a.Pos() != b.Pos() {
+			return a.Pos() < b.Pos()
+		}
+		// an instance of a generic function after the function itself, then
+		// by what each is made of
+		if (a.Origin() == nil) != (b.Origin() == nil) {
+			return a.Origin() == nil
+		}
+		if sa, sb := a.Signature.String(), b.Signature.String(); sa != sb {
+			return sa < sb
+		}
+		if len(a.Locals) != len(b.Locals) {
+			return len(a.Locals) > len(b.Locals)
+		}
+		return len(a.AnonFuncs) > len(b.AnonFuncs)
+	})
 	return p, nil
 }
 
@@ -240,4 +278,17 @@ func (p *Program) FuncByID(id string) *ssa.Function {
 		}
 	}
 	return p.byID[id]
+}
+
+// buildInOrder builds every package, one after the other, in the order of
+// their paths. Program.Build builds them at the same time, and what it makes
+// on demand (the instances of generic functions, the wrappers of methods)
+// then depends on which package got there first: the same code would not give
+// the same IR twice.
+func buildInOrder(prog *ssa.Program) {
+	pkgs := prog.AllPackages()
+	sort.Slice(pkgs, func(i, j int) bool { return pkgs[i].Pkg.Path() < pkgs[j].Pkg.Path() })
+	for _, pkg := range pkgs {
+		pkg.Build()
+	}
 }

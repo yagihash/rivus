@@ -57,7 +57,14 @@ func (s *state) summarize() *Summary {
 		if s.rootNum(a) != s.rootNum(b) {
 			return s.rootNum(a) < s.rootNum(b)
 		}
-		return a.Idx < b.Idx
+		if a.Idx != b.Idx {
+			return a.Idx < b.Idx
+		}
+		// package variables have no number: by name
+		if a.V != nil && b.V != nil {
+			return a.V.Less(b.V)
+		}
+		return false
 	})
 	for _, r := range roots {
 		var kind string

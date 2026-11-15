@@ -220,3 +220,42 @@ func (p *Program) Global(name string) *Value {
 	p.Globals[name] = g
 	return g
 }
+
+// Less is a fixed order of values, for places that must not depend on the
+// order of a map: by the function, the kind, the name, and where the value is
+// defined.
+func (v *Value) Less(o *Value) bool {
+	fid := func(x *Value) string {
+		if x.Func != nil {
+			return x.Func.ID
+		}
+		return ""
+	}
+	if a, b := fid(v), fid(o); a != b {
+		return a < b
+	}
+	if v.Kind != o.Kind {
+		return v.Kind < o.Kind
+	}
+	if v.Name != o.Name {
+		return v.Name < o.Name
+	}
+	if v.Param != o.Param {
+		return v.Param < o.Param
+	}
+	site := func(x *Value) (int, int, int) {
+		if x.Instr != nil {
+			return x.Instr.IRBlock, x.Instr.IRIndex, x.Index
+		}
+		return -1, -1, x.Index
+	}
+	ab, ai, ad := site(v)
+	bb, bi, bd := site(o)
+	if ab != bb {
+		return ab < bb
+	}
+	if ai != bi {
+		return ai < bi
+	}
+	return ad < bd
+}

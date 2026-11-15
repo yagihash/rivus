@@ -347,8 +347,9 @@ func (e *Engine) analyzeFunc(fn *sg.Func, dirty map[*sg.Func]bool, callers map[*
 	}
 	// A function that keeps costing time (its callees' summaries change and
 	// it is visited again) is not visited again once it has used what one
-	// analysis is allowed: its summary may miss flows, and says so.
-	if e.spent[fn] > e.opts.FuncTimeout {
+	// analysis is allowed (four times the limit of one): its summary may miss flows,
+	// and says so.
+	if e.spent[fn] > 4*e.opts.FuncTimeout {
 		e.degraded[fn] = true
 	}
 	sum := joinSummaries(e.summaries[fn], s.summarize())

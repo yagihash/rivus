@@ -83,6 +83,7 @@ type state struct {
 	sortedElems     map[Loc]cachedElems
 	sortedPaths     map[Root]cachedPaths
 	collectMemo     map[Loc][]found // active during one summary application
+	collectCache    map[Loc]cachedCollect
 	traceMemo       map[ref]*rope
 	guardMemo       map[ref]guardAnswer
 	guardEpoch      int // changes when an element loses the guards recorded for it
@@ -210,7 +211,17 @@ func (s *state) collect(l Loc) []found {
 			return c
 		}
 	}
+	// What is known of a location changes only when something is added to
+	// its root: until then, the answer stands.
+	ver := s.rootVer[l.Root]
+	if c, ok := s.collectCache[l]; ok && c.ver == ver {
+		return c.found
+	}
 	out := s.collectUncached(l)
+	if s.collectCache == nil {
+		s.collectCache = map[Loc]cachedCollect{}
+	}
+	s.collectCache[l] = cachedCollect{ver, out}
 	if s.collectMemo != nil {
 		s.collectMemo[l] = out
 	}
@@ -466,4 +477,11 @@ type guardAnswer struct {
 	epoch    int
 	gs       []Guard
 	overflow bool
+}
+
+// cachedCollect is a remembered answer of collect, valid while the root has
+// the version it had.
+type cachedCollect struct {
+	ver   int
+	found []found
 }

@@ -94,6 +94,10 @@ func (s *state) lessLoc(a, b Loc) bool {
 	if a.Root.Idx != b.Root.Idx {
 		return a.Root.Idx < b.Root.Idx
 	}
+	// Roots outside the function (package variables) have no number: by name.
+	if a.Root.V != nil && b.Root.V != nil && a.Root.V != b.Root.V {
+		return a.Root.V.Less(b.Root.V)
+	}
 	return a.Path < b.Path
 }
 
