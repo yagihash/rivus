@@ -84,6 +84,9 @@ func Extract(p *gossa.Program, opts Options) (*ir.Program, error) {
 		sort.Slice(rec.Impls, func(i, j int) bool { return rec.Impls[i] < rec.Impls[j] })
 		out.Impls = append(out.Impls, rec)
 	}
+	if opts.All {
+		out.PruneDeps()
+	}
 	return out, nil
 }
 

@@ -111,3 +111,62 @@ func (fn *Func) intern(in interner) {
 		}
 	}
 }
+
+// PruneDeps drops the functions of dependencies that nothing the project's own
+// functions do can reach (through calls, the candidates of calls through
+// interfaces and function values, and the functions named as values). A
+// dependency is read for what the project uses of it; the rest of it cannot
+// change the analysis.
+func (p *Program) PruneDeps() {
+	byID := make(map[FuncID][]*Func, len(p.Funcs))
+	for _, f := range p.Funcs {
+		byID[f.ID] = append(byID[f.ID], f)
+	}
+	keep := map[FuncID]bool{}
+	var work []*Func
+	visit := func(id FuncID) {
+		if id == "" || keep[id] {
+			return
+		}
+		if fs := byID[id]; fs != nil {
+			keep[id] = true
+			work = append(work, fs...)
+		}
+	}
+	for _, f := range p.Funcs {
+		if !f.Dep && !keep[f.ID] {
+			visit(f.ID)
+		}
+	}
+	for _, im := range p.Impls {
+		for _, id := range im.Impls {
+			visit(id)
+		}
+	}
+	for len(work) > 0 {
+		f := work[len(work)-1]
+		work = work[:len(work)-1]
+		for bi := range f.Blocks {
+			for ii := range f.Blocks[bi].Instrs {
+				in := &f.Blocks[bi].Instrs[ii]
+				visit(in.Func)
+				if c := in.Callee; c != nil {
+					visit(c.Func)
+					for _, id := range c.Candidates {
+						visit(id)
+					}
+				}
+			}
+		}
+	}
+	out := p.Funcs[:0]
+	for _, f := range p.Funcs {
+		if keep[f.ID] {
+			out = append(out, f)
+		}
+	}
+	for i := len(out); i < len(p.Funcs); i++ {
+		p.Funcs[i] = nil
+	}
+	p.Funcs = out
+}

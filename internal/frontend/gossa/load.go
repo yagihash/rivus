@@ -34,6 +34,12 @@ type Options struct {
 	// graph: variable type analysis is more precise on the lifted form, and
 	// the call graph is the one thing that is taken from it.
 	WithLifted bool
+	// Deps also reads the source of the dependencies that are not in the
+	// standard library, so that their functions have bodies and the analysis
+	// follows data through them (a function without a body is a guess).
+	// The standard library keeps to the models: its bodies are large, full of
+	// unsafe and assembly, and the common calls are modelled.
+	Deps bool
 }
 
 // LoadError records something rivus could not see. It maps to the
@@ -85,6 +91,9 @@ func Load(dir string, patterns []string, opts Options) (*Program, error) {
 		Dir:   absDir,
 		Tests: opts.Tests,
 	}
+	if opts.Deps {
+		cfg.Mode |= packages.NeedDeps
+	}
 	pkgs, err := packages.Load(cfg, patterns...)
 	if err != nil {
 		return nil, fmt.Errorf("load packages: %w", err)
@@ -109,11 +118,26 @@ func Load(dir string, patterns []string, opts Options) (*Program, error) {
 		}
 	})
 
+	// With dependencies read from source, the standard library is not built
+	// (it has no module): the models stand for it.
+	var skip map[string]bool
+	if opts.Deps {
+		skip = map[string]bool{}
+		packages.Visit(pkgs, nil, func(pkg *packages.Package) {
+			if pkg.Module == nil {
+				skip[pkg.PkgPath] = true
+			}
+		})
+	}
 	var mode ssa.BuilderMode = ssa.InstantiateGenerics
 	if opts.NaiveForm {
 		mode |= ssa.NaiveForm
 	}
-	prog, ssaPkgs := ssautil.Packages(pkgs, mode)
+	mk := ssautil.Packages
+	if opts.Deps {
+		mk = ssautil.AllPackages
+	}
+	prog, ssaPkgs := mk(pkgs, mode)
 	p.SSA = prog
 	if len(pkgs) > 0 {
 		p.Fset = pkgs[0].Fset
@@ -127,10 +151,10 @@ func Load(dir string, patterns []string, opts Options) (*Program, error) {
 			}
 		}
 	}
-	buildInOrder(prog)
+	buildInOrder(prog, skip)
 	if opts.WithLifted {
-		lifted, _ := ssautil.Packages(pkgs, ssa.InstantiateGenerics)
-		buildInOrder(lifted)
+		lifted, _ := mk(pkgs, ssa.InstantiateGenerics)
+		buildInOrder(lifted, skip)
 		p.Lifted = lifted
 	}
 
@@ -285,10 +309,13 @@ func (p *Program) FuncByID(id string) *ssa.Function {
 // on demand (the instances of generic functions, the wrappers of methods)
 // then depends on which package got there first: the same code would not give
 // the same IR twice.
-func buildInOrder(prog *ssa.Program) {
+func buildInOrder(prog *ssa.Program, skip map[string]bool) {
 	pkgs := prog.AllPackages()
 	sort.Slice(pkgs, func(i, j int) bool { return pkgs[i].Pkg.Path() < pkgs[j].Pkg.Path() })
 	for _, pkg := range pkgs {
+		if skip[pkg.Pkg.Path()] {
+			continue
+		}
 		pkg.Build()
 	}
 }
