@@ -23,6 +23,10 @@ type Options struct {
 	// analysed are left out and the result says so (depth_limit). Zero means
 	// no limit.
 	Timeout time.Duration
+	// FuncTimeout bounds the time of the analysis of one function, whatever
+	// the budget; a function that exceeds it is treated like one that
+	// exceeded the budget (depth_limit). Zero means the default.
+	FuncTimeout time.Duration
 	// Budget bounds the number of elements added while analysing one
 	// function. A function that exceeds it is cut short and recorded as
 	// depth_limit; its summary may then miss flows. Zero means the default.
@@ -34,7 +38,9 @@ type Options struct {
 }
 
 // DefaultOptions are the defaults.
-func DefaultOptions() Options { return Options{K: 3, MaxPasses: 12, Budget: 400000} }
+func DefaultOptions() Options {
+	return Options{K: 3, MaxPasses: 12, Budget: 400000, FuncTimeout: 30 * time.Second}
+}
 
 // Engine runs the whole-program analysis.
 type Engine struct {
@@ -52,11 +58,15 @@ type Engine struct {
 	// degraded lists the functions whose analysis hit the budget. They are
 	// analysed once and then left alone.
 	degraded map[*sg.Func]bool
+	// spent is the time each function has used so far.
+	spent map[*sg.Func]time.Duration
 	// guardLimit lists the functions with a flow that had more guards than
 	// maxGuards: the flow is kept without guards (ADR-006).
 	guardLimit map[*sg.Func]bool
 	// writers lists, for each package variable, the functions that store to it.
-	writers map[*sg.Value][]string
+	// deadline is when the whole run has to stop (zero: no limit).
+	deadline time.Time
+	writers  map[*sg.Value][]string
 	// loadErrors are the problems the loading of the code had.
 	loadErrors []ir.LoadError
 	// callSites lists, for each function, the calls that may reach it.
@@ -128,11 +138,15 @@ func New(p *sg.Program, texts ir.Texts, st *sites.Result, rules *model.Rules, op
 	if opts.Budget <= 0 {
 		opts.Budget = DefaultOptions().Budget
 	}
+	if opts.FuncTimeout <= 0 {
+		opts.FuncTimeout = DefaultOptions().FuncTimeout
+	}
 	return &Engine{
 		prog: p, texts: texts, sites: st, rules: rules, opts: opts,
 		summaries:  map[*sg.Func]*Summary{},
 		states:     map[*sg.Func]*state{},
 		degraded:   map[*sg.Func]bool{},
+		spent:      map[*sg.Func]time.Duration{},
 		guardLimit: map[*sg.Func]bool{},
 		globals:    newGlobalStore(),
 	}
@@ -223,6 +237,7 @@ func (e *Engine) Run() *Result {
 	var deadline time.Time
 	if e.opts.Timeout > 0 {
 		deadline = start.Add(e.opts.Timeout)
+		e.deadline = deadline
 	}
 	expired := func() bool { return !deadline.IsZero() && time.Now().After(deadline) }
 	for pass := 0; pass < e.opts.MaxPasses; pass++ {
@@ -326,7 +341,14 @@ func (e *Engine) analyzeFunc(fn *sg.Func, dirty map[*sg.Func]bool, callers map[*
 	}
 	began := time.Now()
 	s.analyze()
+	e.spent[fn] += time.Since(began)
 	if s.exceeded {
+		e.degraded[fn] = true
+	}
+	// A function that keeps costing time (its callees' summaries change and
+	// it is visited again) is not visited again once it has used what one
+	// analysis is allowed: its summary may miss flows, and says so.
+	if e.spent[fn] > e.opts.FuncTimeout {
 		e.degraded[fn] = true
 	}
 	sum := joinSummaries(e.summaries[fn], s.summarize())

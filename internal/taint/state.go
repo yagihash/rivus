@@ -83,6 +83,9 @@ type state struct {
 	sortedElems     map[Loc]cachedElems
 	sortedPaths     map[Root]cachedPaths
 	collectMemo     map[Loc][]found // active during one summary application
+	traceMemo       map[ref]*rope
+	guardMemo       map[ref]guardAnswer
+	guardEpoch      int // changes when an element loses the guards recorded for it
 	expandMemo      map[Elem][]expanded
 
 	suppressions map[string]*Suppression
@@ -171,6 +174,7 @@ func (s *state) add(l Loc, e Elem, w *why) {
 		// guards recorded for it do not describe it any more.
 		if old != nil && w != nil && !(sameGuards(old.guards, w.guards) && sameGuards(old.calleeGuards, w.calleeGuards) && old.call == w.call) {
 			old.unguarded = true
+			s.guardEpoch++
 		}
 		return
 	}
@@ -216,25 +220,43 @@ func (s *state) collect(l Loc) []found {
 func (s *state) collectUncached(l Loc) []found {
 	cm := s.cellsOf(l.Root)
 	var out []found
-	for _, p := range s.pathsOf(l.Root, cm) {
-		switch {
-		case pathHasPrefix(l.Path, p) && p != l.Path:
-			// An enclosing object is tainted as a whole: so is this part.
-			rest := l.Path[len(p):]
-			for _, e := range s.elemsOf(l.Root, p, cm[p]) {
-				ext := e
-				if e.Kind == Param {
-					// Without the bound a recursive structure would extend
-					// the path in every pass, forever.
-					ext.Path, _ = pathTrunc(e.Path+rest, s.eng.opts.K)
-				}
-				out = append(out, found{E: ext, Cell: Loc{l.Root, p}, Orig: e})
+	// The enclosing objects, outermost first: an enclosing object that is
+	// tainted as a whole taints this part.
+	enclosing := func(p string) {
+		set := cm[p]
+		if set == nil {
+			return
+		}
+		rest := l.Path[len(p):]
+		for _, e := range s.elemsOf(l.Root, p, set) {
+			ext := e
+			if e.Kind == Param {
+				// Without the bound a recursive structure would extend
+				// the path in every pass, forever.
+				ext.Path, _ = pathTrunc(e.Path+rest, s.eng.opts.K)
 			}
-		case pathHasPrefix(p, l.Path):
-			rel := p[len(l.Path):]
-			for _, e := range s.elemsOf(l.Root, p, cm[p]) {
-				out = append(out, found{E: e, Cell: Loc{l.Root, p}, Orig: e, Rel: rel})
+			out = append(out, found{E: ext, Cell: Loc{l.Root, p}, Orig: e})
+		}
+	}
+	if l.Path != "" {
+		enclosing("")
+		for i := 1; i < len(l.Path); i++ {
+			if l.Path[i] == '/' {
+				enclosing(l.Path[:i])
 			}
+		}
+	}
+	// The cell itself and everything stored below it: the paths are sorted,
+	// so they are one run.
+	paths := s.pathsOf(l.Root, cm)
+	for i := sort.SearchStrings(paths, l.Path); i < len(paths) && strings.HasPrefix(paths[i], l.Path); i++ {
+		p := paths[i]
+		if !pathHasPrefix(p, l.Path) {
+			continue
+		}
+		rel := p[len(l.Path):]
+		for _, e := range s.elemsOf(l.Root, p, cm[p]) {
+			out = append(out, found{E: e, Cell: Loc{l.Root, p}, Orig: e, Rel: rel})
 		}
 	}
 	return out
@@ -372,6 +394,23 @@ func (s *state) origin(pos ir.Pos, kind string) *why {
 
 // trace reconstructs the steps that led to the element in the cell.
 func (s *state) trace(l Loc, e Elem) *rope {
+	key := ref{l, e}
+	if r, ok := s.traceMemo[key]; ok {
+		return r
+	}
+	r := s.traceUncached(l, e)
+	// The reason an element got into a cell never changes, so the steps do
+	// not; but an element that is not there yet has none to give.
+	if s.whyOf(key) != nil {
+		if s.traceMemo == nil {
+			s.traceMemo = map[ref]*rope{}
+		}
+		s.traceMemo[key] = r
+	}
+	return r
+}
+
+func (s *state) traceUncached(l Loc, e Elem) *rope {
 	var chunks []*rope
 	seen := map[ref]bool{}
 	cur := ref{l, e}
@@ -420,3 +459,11 @@ func skipStep(desc string) bool {
 
 // posKey names a position, for keys.
 func posKey(p ir.Pos) string { return p.File + ":" + itoa(p.Offset) }
+
+// guardAnswer is a remembered answer of guardsOfChain; it holds until a
+// guard is dropped from some element (the epoch changes).
+type guardAnswer struct {
+	epoch    int
+	gs       []Guard
+	overflow bool
+}

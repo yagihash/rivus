@@ -213,18 +213,28 @@ func (s *state) expandParam(e Elem, argv []*sg.Value) []expanded {
 		return nil
 	}
 	var out []expanded
+	// The same element found in several cells is one element: the first
+	// reason stays (a cell keeps the first reason an element got into it).
+	seen := map[Elem]bool{}
 	for _, l := range s.locs(argv[e.Param]) {
-		for _, f := range s.collect(Loc{l.Root, l.Path + e.Path}) {
-			f := f
+		found := s.collect(Loc{l.Root, l.Path + e.Path})
+		for i := range found {
+			f := &found[i]
 			if f.E.Kind == Real {
 				for _, x := range applyMods(f.E, e.Mods) {
-					out = append(out, expanded{E: x, From: &f})
+					if !seen[x] {
+						seen[x] = true
+						out = append(out, expanded{E: x, From: f})
+					}
 				}
 				continue
 			}
 			x := f.E
 			x.Mods = joinMods(f.E.Mods, e.Mods)
-			out = append(out, expanded{E: x, From: &f})
+			if !seen[x] {
+				seen[x] = true
+				out = append(out, expanded{E: x, From: f})
+			}
 		}
 	}
 	return out
@@ -294,6 +304,7 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 			continue
 		}
 		srGuards := s.instantiate(info, sr.Guards)
+		callGuards := s.blockGuards(cc.in.Block)
 		for _, x := range s.expandElem(sr.Elem, argv) {
 			var steps *rope
 			if x.From != nil {
@@ -302,12 +313,36 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 			call := Step{Func: s.eng.funcID(s.fn), Desc: desc, pos: cc.in.Pos}
 			call.Notes = notes
 			steps = cat(cat(steps, leaf(call)), sr.Steps)
+			// The guards are worked out only for a flow that is kept: one
+			// that is not shorter than what is already known is dropped, and
+			// only its label counts.
+			switch x.E.Kind {
+			case Real:
+				if !accepted(sr.Accepts, x.E.Label) {
+					continue
+				}
+				if rf := s.findings[findingKey{x.E.Origin, sr.Site}]; rf != nil && rf.steps != nil && steps.len() >= rf.steps.len() {
+					rf.labels[x.E.Label] = true
+					continue
+				}
+			case Param:
+				if old, ok := s.sinkReaches[sinkKey{x.E, sr.Site}]; ok && steps.len() >= old.Steps.len() {
+					continue
+				}
+			}
 			var chain []Guard
 			var over bool
 			if x.From != nil {
 				chain, over = s.guardsOfChain(x.From.Cell, x.From.Orig)
 			}
-			gs := unionGuards(srGuards, chain, s.blockGuards(cc.in.Block))
+			var gs []Guard
+			// Far more guards than are kept: do not merge them just to drop
+			// them (the flow is kept without guards: under any condition).
+			if !over && len(srGuards)+len(chain)+len(callGuards) <= 4*maxGuards {
+				gs = unionGuards(srGuards, chain, callGuards)
+			} else {
+				over = true
+			}
 			if over || len(gs) > maxGuards {
 				s.guardOverflow = true
 				gs = nil

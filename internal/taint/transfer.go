@@ -4,17 +4,23 @@ import (
 	"github.com/yagihash/rivus/internal/ir"
 	"github.com/yagihash/rivus/internal/sg"
 	"github.com/yagihash/rivus/internal/sites"
+	"time"
 )
 
 // analyze runs the function-local analysis to a fixed point.
 func (s *state) analyze() {
 	s.prepareLocs()
 	s.seed()
+	limit := time.Now().Add(s.eng.opts.FuncTimeout)
+	if d := s.eng.deadline; !d.IsZero() && d.Before(limit) {
+		limit = d
+	}
+	steps := 0
 	for iter := 0; iter < 50; iter++ {
 		s.changed = false
 		for _, b := range s.fn.Blocks {
 			for _, in := range b.Instrs {
-				if s.adds > s.eng.opts.Budget {
+				if steps++; s.adds > s.eng.opts.Budget || steps%64 == 0 && time.Now().After(limit) {
 					s.exceeded = true
 					return
 				}

@@ -24,9 +24,12 @@ type analyzeOpts struct {
 	k       int
 	verbose bool
 	cpuProf string
+	memProf string
 	timeout time.Duration
-	passes  int
-	maxImpl int
+	// funcTimeout bounds the analysis of one function.
+	funcTimeout time.Duration
+	passes      int
+	maxImpl     int
 	// irFile is a stream of the neutral IR made by an extractor of another
 	// language (rivus extract writes the same form): the analysis starts there.
 	irFile string
@@ -39,7 +42,9 @@ func (o *analyzeOpts) register(fs *flag.FlagSet) {
 	fs.IntVar(&o.maxImpl, "max-implementations", model.DefaultMaxImplementations, "default limit of match: implementations")
 	fs.IntVar(&o.passes, "max-passes", taint.DefaultOptions().MaxPasses, "maximum number of passes over the program while summaries change")
 	fs.DurationVar(&o.timeout, "timeout", 0, "stop the analysis after this long and report what was found (0: no limit)")
+	fs.DurationVar(&o.funcTimeout, "func-timeout", taint.DefaultOptions().FuncTimeout, "stop the analysis of one function after this long (it is then recorded as depth_limit)")
 	fs.StringVar(&o.irFile, "ir", "", "analyse the neutral IR in this JSON Lines file (from an extractor of another language) instead of Go packages")
+	fs.StringVar(&o.memProf, "memprofile", "", "write a heap profile (allocations) to this file after the taint phase (development)")
 	fs.StringVar(&o.cpuProf, "cpuprofile", "", "write a CPU profile of the taint phase to this file (development)")
 }
 
@@ -84,6 +89,7 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	opts := taint.DefaultOptions()
 	opts.K = o.k
 	opts.Timeout = o.timeout
+	opts.FuncTimeout = o.funcTimeout
 	opts.MaxPasses = o.passes
 	if o.verbose {
 		opts.SlowThreshold = 300 * time.Millisecond
@@ -113,6 +119,12 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	eng.SetLoadErrors(l.loadErrors())
 	res = eng.Run()
 	phase("taint")
+	if o.memProf != "" {
+		if f, err := os.Create(o.memProf); err == nil {
+			pprof.Lookup("allocs").WriteTo(f, 0)
+			f.Close()
+		}
+	}
 	rep := report.Build(l.packages(), l.loadErrors(), st, res, rules)
 	rep.Target = vcs.Detect(o.dir)
 	return rep, nil

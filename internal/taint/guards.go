@@ -316,7 +316,22 @@ func (s *state) computeEdgeGuards(pred, b *sg.Block) []Guard {
 // guardsOfChain collects the guards recorded along the reasons that led to
 // the element in the cell. More than maxGuards of them is too many to be
 // told apart: the flow then has none, and the caller is told.
-func (s *state) guardsOfChain(l Loc, e Elem) (gs []Guard, overflow bool) {
+func (s *state) guardsOfChain(l Loc, e Elem) ([]Guard, bool) {
+	key := ref{l, e}
+	if m, ok := s.guardMemo[key]; ok && m.epoch == s.guardEpoch {
+		return m.gs, m.overflow
+	}
+	gs, over := s.guardsOfChainUncached(l, e)
+	if s.whyOf(key) != nil {
+		if s.guardMemo == nil {
+			s.guardMemo = map[ref]guardAnswer{}
+		}
+		s.guardMemo[key] = guardAnswer{s.guardEpoch, gs, over}
+	}
+	return gs, over
+}
+
+func (s *state) guardsOfChainUncached(l Loc, e Elem) (gs []Guard, overflow bool) {
 	seen := map[ref]bool{}
 	cur := ref{l, e}
 	var lists [][]Guard
