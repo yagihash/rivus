@@ -443,6 +443,30 @@ propagators:
     flows: [{from: args, to: result}]
   - symbol: std::iter::empty
     flows: [{from: args, to: result}]
+  - symbol: std::future::IntoFuture::into_future
+    flows: [{from: args, to: result}]
+  - symbol: std::pin::Pin::new_unchecked
+    flows: [{from: args, to: result}]
+  - symbol: std::pin::Pin::new
+    flows: [{from: args, to: result}]
+  - symbol: std::pin::Pin::as_mut
+    flows: [{from: args, to: result}]
+  - symbol: std::pin::Pin::get_mut
+    flows: [{from: args, to: result}]
+  - symbol: std::pin::Pin::get_unchecked_mut
+    flows: [{from: args, to: result}]
+  - symbol: std::pin::Pin::into_inner
+    flows: [{from: args, to: result}]
+  - symbol: std::future::Future::poll
+    flows: [{from: args, to: result}]
+  - symbol: std::future::ready
+    flows: [{from: args, to: result}]
+  - symbol: std::task::Poll::map
+    flows: [{from: args, to: result}]
+  - symbol: std::task::Context::from_waker
+    flows: [{from: args, to: result}]
+  - symbol: std::pin::pin
+    flows: [{from: args, to: result}]
 
 sinks:
   - symbol: std::process::Command::new

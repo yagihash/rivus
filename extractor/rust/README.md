@@ -58,9 +58,11 @@ receiver apart from the arguments), and a sink's `args: [1]` is the first argume
 
 ## Not done
 
-- `async` (coroutines), generics are analysed as written (not per instance), `unsafe`
-  pointer arithmetic, inline assembly, `dyn Trait` method candidates beyond the
-  workspace.
+- `async` works where the future is awaited in the code that is read (the coroutine is
+  resolved by `Future::poll`; `std::future::IntoFuture`, `Pin` are modeled); the executor
+  that runs the futures of a framework is not. Generics are analysed as written (not per
+  instance), `unsafe` pointer arithmetic is not followed, inline assembly is not read,
+  `dyn Trait` methods have the impls of the workspace as candidates only.
 - The text of the arguments of a call (the stream has the call as written only), and the
   body in the token-normalized form.
 - Models: `internal/model/builtin/rust-*.yaml` cover the common part of `std`. Others
