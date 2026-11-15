@@ -1,7 +1,7 @@
 #![feature(rustc_private)]
 //! rivus-rust: the Rust extractor of rivus.
 //!
-//! `rivus-rust [directory]` writes the neutral IR of the Rust crates of the
+//! `rivus-rust [--include-tests] [directory]` writes the neutral IR of the Rust crates of the
 //! workspace in the directory (the current one by default) to the standard
 //! output, as JSON Lines. It builds the workspace with `cargo check`, running
 //! itself in place of rustc for the crates of the workspace: it compiles them
@@ -85,7 +85,19 @@ fn extract(root: &str) -> Vec<Value> {
 // --- the command: builds the workspace with the driver in place of rustc ------
 
 fn cli() -> ExitCode {
-    let dir = std::env::args().nth(1).unwrap_or_else(|| ".".into());
+    // `--include-tests` also builds the tests, examples and benchmarks (what
+    // `cargo check --all-targets` builds). Without it only the library and the
+    // binaries are built: the code that is shipped, and nothing else, by
+    // construction (a `#[cfg(test)]` item is not compiled at all).
+    let mut include_tests = false;
+    let mut dir = None;
+    for a in std::env::args().skip(1) {
+        match a.as_str() {
+            "--include-tests" => include_tests = true,
+            _ => dir = Some(a),
+        }
+    }
+    let dir = dir.unwrap_or_else(|| ".".into());
     let root = match std::fs::canonicalize(&dir) {
         Ok(p) => p,
         Err(e) => {
@@ -103,9 +115,13 @@ fn cli() -> ExitCode {
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .unwrap_or_default();
 
+    let mut check = vec!["check", "--workspace", "--quiet"];
+    if include_tests {
+        check.push("--all-targets");
+    }
     let status = Command::new("cargo")
         .arg(format!("+{}", TOOLCHAIN))
-        .args(["check", "--workspace", "--all-targets", "--quiet"])
+        .args(&check)
         .current_dir(&root)
         .env("CARGO_TARGET_DIR", tmp.join("target"))
         .env("RUSTC_WORKSPACE_WRAPPER", &exe)
