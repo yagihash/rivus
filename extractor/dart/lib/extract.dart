@@ -229,10 +229,8 @@ class _Lower extends RecursiveAstVisitor<void> {
 
     final params = <(Object, String, DartType?)>[];
     if (thisType != null) params.add((thisKey, 'this', thisType));
-    for (final fp in list?.parameters ?? const <FormalParameter>[]) {
-      final pe = fp.declaredFragment?.element;
-      if (pe == null) continue;
-      params.add((pe.baseElement, fp.name?.lexeme ?? '', pe.type));
+    for (final pe in orderedParams(el)) {
+      params.add((pe, pe.name ?? '', pe.type));
     }
     int? self;
     f.lowerBody(

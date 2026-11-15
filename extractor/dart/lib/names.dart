@@ -88,5 +88,15 @@ String typeClass(DartType? t) {
   return 'other';
 }
 
+/// The parameters in the order the IR has them: the positional ones as
+/// declared, then the named ones by name. A method and its overrides may
+/// declare the named parameters in another order; by name they line up.
+List<FormalParameterElement> orderedParams(ExecutableElement el) {
+  final all = el.formalParameters.map((p) => p.baseElement).toList();
+  final positional = all.where((p) => !p.isNamed).toList();
+  final named = all.where((p) => p.isNamed).toList()..sort((a, b) => (a.name ?? '').compareTo(b.name ?? ''));
+  return [...positional, ...named];
+}
+
 /// The type as a reader writes it.
 String displayType(DartType? t) => t?.getDisplayString() ?? '';

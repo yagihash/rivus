@@ -209,7 +209,7 @@ void _globalStore(FnLower f, Element variable, int value, Pos at) {
 /// The arguments in the order of the parameters of the callee; what the call
 /// leaves out is nil. Evaluated in the order of the source.
 (List<int>, List<AstNode?>) _arguments(FnLower f, ExecutableElement? callee, ArgumentList list) {
-  final params = callee?.formalParameters.map((p) => p.baseElement).toList() ?? const <FormalParameterElement>[];
+  final params = callee == null ? const <FormalParameterElement>[] : orderedParams(callee);
   final slots = List<int?>.filled(params.length > list.arguments.length ? params.length : list.arguments.length, null);
   final nodes = List<AstNode?>.filled(slots.length, null);
   var next = 0;
@@ -603,10 +603,9 @@ int lowerClosure(FnLower f, FunctionExpression fe, {String? name}) {
   out.pos = f.pos(fe);
   final child = FnLower(f.prog, f.unit, out, parent: f, cells: f.cells, assigned: f.assigned);
   final params = <(Object, String, DartType?)>[];
-  for (final p in fe.parameters?.parameters ?? const <FormalParameter>[]) {
-    final el = p.declaredFragment?.element;
-    if (el == null) continue;
-    params.add((el.baseElement, p.name?.lexeme ?? '', el.type));
+  final fel = fe.declaredFragment?.element;
+  for (final p in fel == null ? const <FormalParameterElement>[] : orderedParams(fel)) {
+    params.add((p, p.name ?? '', p.type));
   }
   child.lowerBody(params: params, body: fe.body, at: out.pos);
   f.unit.funcTexts(id, fe);

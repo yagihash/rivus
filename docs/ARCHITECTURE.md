@@ -914,7 +914,7 @@ Phase 2 のステップ（案。2.7 のレビュー後に確定する）:
 | 2.5 | **（実装済み。2.4 の中でやった）** コールグラフを extractor へ。`call` の `candidates` として IR に入れ、コアは IR だけから SCC を作る | `x/tools` で一致し、時間が Phase 1 の ±20% 以内（実測: 107 秒 → 100 秒） |
 | 2.6 | **（実装済み）** 旧経路の除去。`taint` / `sites` / `report` から `go/ssa` と `gossa` の import を消す | `go list -deps` で確認（`taint` に `go/token`・`go/constant` が残る。下記） |
 - **Phase 3:** Rust。最初のタスクは「`stable-mir-json` 等の既存ツールで、実在のクレートがどれくらい通るかの確認」。成果物は「固定した nightly でビルドが通る Rust プロジェクトを解析できるツール」。想定より通らなければ、Rust の優先度を下げる判断もあり得る
-- **Phase 4:** Dart。解決済み AST → CFG → IR。まず関数内、それからコールグラフ
+- **Phase 4:** Dart。解決済み AST → CFG → IR。**最初の版を実装済み**（`extractor/dart`、ADR-041）。残りは、パターン、関数値のコールグラフ、`Stream`、依存パッケージのモデル
 
 ---
 

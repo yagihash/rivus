@@ -237,6 +237,13 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 		return // not analysed yet; a later round picks it up
 	}
 	argv := append(cc.argv(), bindings...)
+	// A callee may take optional parameters that the call leaves out (an
+	// override can add them): what is not passed carries nothing.
+	if want := len(fn.Params) + len(fn.FreeVars); len(argv) < want && len(bindings) == 0 {
+		for len(argv) < want {
+			argv = append(argv, &sg.Value{Kind: sg.KUndef})
+		}
+	}
 	if len(argv) != len(fn.Params)+len(fn.FreeVars) {
 		s.unmodeled(cc, s.newNote(cc.in, KindUnresolvedCallee, "the arguments do not match the parameters of "+s.eng.funcID(fn), cc.sym))
 		return

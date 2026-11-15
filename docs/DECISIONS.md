@@ -745,3 +745,18 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
 **残る課題:**
 - `taint` の `go/token` と `go/constant`（ガードの定数評価）。言語に依らないので、後回し
 - 別プロセスの extractor（Rust、Dart）は、`Texts` と `rules.Expand` の相当を、extractor が提供する形が要る
+
+## ADR-041: Dart の extractor の最初の版（Phase 4）
+
+**結果:** `extractor/dart`（Dart 製）が、`package:analyzer` の解決済み AST から、中立 IR を JSON Lines で出す。コアは `rivus analyze -ir` と `rivus sites -ir` で読む。`testdata` の Go のケースと同じ形の、Dart のサンプル（`extractor/dart/test/sample`）で、注釈に書いた 10 本の流れがすべて見つかり、静かなはずの sink（サニタイズ後、定数、`catch` の中の `toString()`）には届かない（`cmd/rivus/dart_test.go`。`RIVUS_DART` を設定すると走る）。実在の `args` パッケージ（663 関数）では、収束し、10 ミリ秒で終わる。
+
+**決めたこと:**
+1. **シンボルは `<ライブラリの URI>#<型>.<メンバー>`**（コンストラクタは `Type.new` / `Type.name`、クロージャは `<外側>$N`）。ルールのフィールドも同じ形
+2. **変数は書き換え可能なローカル。** クロージャが捕捉し、かつ宣言の後に代入される変数だけ、セル（`alloc` / `load` / `store`）に置く。それ以外の捕捉は値の捕捉
+3. **名前つきの引数は、位置の引数の後ろに、名前の順で並べる。** メソッドとそのオーバーライドで、宣言の順が違っても揃う。呼び出しが渡さなかった引数は nil。エンジンは、渡された引数が呼び先の引数より少ないとき、足りない分を何も運ばない値として扱う（オーバーライドが任意の引数を足す Dart の形に合わせた。Go では起きない）
+4. **オブジェクトは `pointer`、コレクションは `container`、`Future` と `Stream` は `other`**（`await` が中の値を取り出す）。`await` は、呼び出しの `await` フラグと、ブロックの切れ目
+5. **コールグラフは extractor が作る。** 読んだコードの中のクラス階層（CHA）で、`dynamic` な呼び出しの `candidates` を決める。関数値の呼び出しは、候補なし
+6. **`go/chan.*` と `go/range.*` を `chan.*`、`iter.*` に改名した。** 言語に依らない操作の名前にするため。同じ理由で、`binop` の `is` / `is!` を比較として扱う
+7. **クロージャを、コピーされた変数の経由でも静的に解く**（`sg`）。ローカルの関数宣言が変数に入るため
+
+**残る課題:** `extractor/dart/README.md` の「Not done」。パターン、switch 式、関数値のコールグラフ、`Stream` と `yield` のモデル、依存パッケージのモデル（`dart:*`、`package:flutter`）。
