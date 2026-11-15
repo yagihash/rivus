@@ -45,7 +45,10 @@ func Write(w io.Writer, p *Program) error {
 		return err
 	}
 	for _, f := range p.Funcs {
-		if err := enc.Encode(record{Kind: recFunc, Func: f}); err != nil {
+		restore := f.compact()
+		err := enc.Encode(record{Kind: recFunc, Func: f})
+		restore()
+		if err != nil {
 			return err
 		}
 	}
@@ -95,6 +98,7 @@ func Read(r io.Reader) (*Program, error) {
 		return nil, fmt.Errorf("ir: unsupported schema %q (want %q)", h.SchemaVersion, SchemaVersion)
 	}
 	p := &Program{}
+	shared := interner{}
 	for n := 2; ; n++ {
 		var rec record
 		err := dec.Decode(&rec)
@@ -106,6 +110,8 @@ func Read(r io.Reader) (*Program, error) {
 		}
 		switch {
 		case rec.Kind == recFunc && rec.Func != nil:
+			rec.Func.expand()
+			rec.Func.intern(shared)
 			p.Funcs = append(p.Funcs, rec.Func)
 		case rec.Kind == recImpls && rec.Impls != nil:
 			p.Impls = append(p.Impls, *rec.Impls)

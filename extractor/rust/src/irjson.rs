@@ -104,6 +104,7 @@ impl Func {
         m.insert("roots".into(), json!([0]));
         if !self.pos.is_none() {
             m.insert("pos".into(), self.pos.to_json());
+            m.insert("file".into(), json!(self.pos.file));
         }
         if self.exported {
             m.insert("exported".into(), json!(true));
@@ -111,7 +112,31 @@ impl Func {
         if !self.symbol.is_empty() {
             m.insert("symbol".into(), json!(self.symbol));
         }
-        Value::Object(m)
+        let mut v = Value::Object(m);
+        if !self.pos.is_none() {
+            strip_file(&mut v, &self.pos.file, true);
+        }
+        v
+    }
+}
+
+/// Leaves the file out of the positions that are in the file of the function
+/// (the function says it once). `top` keeps the file of the function itself.
+fn strip_file(v: &mut Value, file: &str, top: bool) {
+    match v {
+        Value::Object(m) => {
+            if !top && m.contains_key("offset") && m.get("file").and_then(|f| f.as_str()) == Some(file) {
+                m.remove("file");
+            }
+            for (k, x) in m.iter_mut() {
+                if top && k == "file" {
+                    continue;
+                }
+                strip_file(x, file, false);
+            }
+        }
+        Value::Array(a) => a.iter_mut().for_each(|x| strip_file(x, file, false)),
+        _ => {}
     }
 }
 

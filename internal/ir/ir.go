@@ -122,9 +122,13 @@ type Func struct {
 	// Roots lists the blocks where execution can begin: the entry, and for a
 	// function with a deferred recover the block that runs after a panic.
 	// The entry is always a root. A root has no predecessor.
-	Roots    []BlockID `json:"roots,omitempty"`
-	Pos      Pos       `json:"pos,omitempty"`
-	Exported bool      `json:"exported,omitempty"`
+	Roots []BlockID `json:"roots,omitempty"`
+	Pos   Pos       `json:"pos,omitempty"`
+	// File is the file the positions of the function are in, unless one
+	// says otherwise: a position without a file has this one. It keeps the
+	// stream small (a path is most of a position).
+	File     string `json:"file,omitempty"`
+	Exported bool   `json:"exported,omitempty"`
 	// Symbol is the name the rules use for the function: the declared
 	// function or method (empty for an anonymous or a synthetic function).
 	Symbol string `json:"symbol,omitempty"`
