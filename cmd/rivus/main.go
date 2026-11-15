@@ -5,6 +5,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime/debug"
 )
 
 const usage = `rivus - taint analysis query engine
@@ -25,6 +26,7 @@ Run "rivus <command> -h" for the flags of a command.
 `
 
 func main() {
+	tuneGC()
 	if len(os.Args) < 2 {
 		fmt.Fprint(os.Stderr, usage)
 		os.Exit(2)
@@ -55,5 +57,15 @@ func main() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "rivus: %v\n", err)
 		os.Exit(1)
+	}
+}
+
+// tuneGC makes the collector keep less garbage than its default. The analysis
+// holds a few GB of live data on a large program, and the default (let the heap
+// double before a collection) doubled the peak; half costs almost no time.
+// GOGC set in the environment wins.
+func tuneGC() {
+	if os.Getenv("GOGC") == "" {
+		debug.SetGCPercent(50)
 	}
 }

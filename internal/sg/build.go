@@ -9,18 +9,31 @@ import (
 )
 
 // Build makes the SSA graph of every function of the program.
-func Build(p *ir.Program) (*Program, error) {
+func Build(p *ir.Program) (*Program, error) { return build(p, false) }
+
+// BuildConsuming is Build that drops the functions of the IR program as it
+// goes (p.Funcs is empty afterwards): the graph keeps what it needs, and the
+// program is not in memory twice.
+func BuildConsuming(p *ir.Program) (*Program, error) { return build(p, true) }
+
+func build(p *ir.Program, consume bool) (*Program, error) {
 	out := &Program{IR: p, ByID: map[string]*Func{}, Globals: map[string]*Value{}, GlobalPos: map[string]ir.Pos{}}
 	for _, g := range p.Globals {
 		out.GlobalPos[g.Name] = g.Pos
 	}
-	for _, f := range p.Funcs {
+	for i, f := range p.Funcs {
 		fn, err := buildFunc(out, f)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", f.ID, err)
 		}
 		out.Funcs = append(out.Funcs, fn)
 		out.ByID[fn.ID] = fn
+		if consume {
+			p.Funcs[i] = nil
+		}
+	}
+	if consume {
+		p.Funcs = nil
 	}
 	out.link()
 	out.resolveValueCalls()
@@ -101,8 +114,8 @@ func buildFunc(p *Program, f *ir.Func) (*Func, error) {
 	b := &builder{
 		prog: p, f: f, form: form,
 		fn: &Func{
-			ID: string(f.ID), IR: f, Prog: p, Symbol: f.Symbol, Recv: f.Recv, Dep: f.Dep,
-			Exported: f.Exported, Pos: f.Pos, Form: form,
+			ID: string(f.ID), IR: slimFunc(f), Prog: p, Symbol: f.Symbol, Recv: f.Recv, Dep: f.Dep,
+			Exported: f.Exported, Pos: f.Pos,
 		},
 		values: map[valueKey]*Value{},
 		alias:  map[valueKey]irssa.Ref{},
@@ -281,7 +294,7 @@ func (b *builder) buildInstrs() {
 					continue
 				}
 			}
-			in := &Instr{Op: irin.Op, IR: irin, IRBlock: bi, IRIndex: ii, Pos: irin.Pos, AddrPos: irin.AddrPos, Callee: irin.Callee}
+			in := &Instr{Op: irin.Op, IR: infoOf(irin), IRBlock: bi, IRIndex: ii, Pos: irin.Pos, AddrPos: irin.AddrPos, Callee: irin.Callee}
 			for k := range irin.Dsts {
 				in.Dsts = append(in.Dsts, b.values[valueKey{bi, ii, k}])
 			}
@@ -431,4 +444,17 @@ func (p *Program) funcsOf(v *Value, home *Func, callers map[*Func][]*Instr, foun
 			}
 		}
 	}
+}
+
+// slimFunc is the function without its blocks and locals.
+func slimFunc(f *ir.Func) *ir.Func {
+	c := *f
+	c.Blocks = nil
+	c.Locals = nil
+	return &c
+}
+
+func infoOf(in *ir.Instr) *InstrInfo {
+	return &InstrInfo{Operator: in.Operator, Field: in.Field, Global: in.Global, Path: in.Path, Func: in.Func,
+		View: in.View, Folded: in.Folded, Keyed: in.Keyed, Go: in.Go}
 }

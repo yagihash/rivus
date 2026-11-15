@@ -12,7 +12,6 @@ package sg
 
 import (
 	"github.com/yagihash/rivus/internal/ir"
-	"github.com/yagihash/rivus/internal/irssa"
 )
 
 // Op is what an instruction does. It is an IR op, or one of the following.
@@ -92,8 +91,10 @@ type Instr struct {
 	Index int
 	Dsts  []*Value
 	Args  []*Value
-	// IR is the IR instruction (nil for a φ and a terminator).
-	IR *ir.Instr
+	// IR is what the analysis reads of the IR instruction (nil for a φ and a
+	// terminator). It is a copy of the few fields: the instruction itself is
+	// not kept, so that the IR of the program can be dropped.
+	IR *InstrInfo
 	// IRBlock and IRIndex are where it is in the IR (-1 for a φ).
 	IRBlock, IRIndex int
 	Pos              ir.Pos
@@ -183,9 +184,23 @@ func (b *Block) Terminator() *Instr {
 	return b.Instrs[len(b.Instrs)-1]
 }
 
+// InstrInfo is the part of an IR instruction that the analysis reads.
+type InstrInfo struct {
+	Operator string
+	Field    string
+	Global   string
+	Path     []ir.Step
+	Func     ir.FuncID
+	View     bool
+	Folded   bool
+	Keyed    bool
+	Go       bool
+}
+
 // Func is a function of the program.
 type Func struct {
-	ID     string
+	ID string
+	// IR is the function without its blocks and locals (they are in Blocks).
 	IR     *ir.Func
 	Prog   *Program
 	Symbol string
@@ -197,8 +212,6 @@ type Func struct {
 	Params   []*Value
 	FreeVars []*Value
 	Blocks   []*Block
-	// Form is the SSA form the graph was made from.
-	Form *irssa.Form
 }
 
 // Program is the set of functions.

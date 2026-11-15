@@ -79,13 +79,14 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 		}
 		phase("ir")
 	}
-	graph, err := sg.Build(l.ir)
+	// The sites read the IR, and the graph drops it as it is built.
+	st := sites.Enumerate(l.ir, l.texts, rules)
+	phase("sites")
+	graph, err := sg.BuildConsuming(l.ir)
 	if err != nil {
 		return nil, err
 	}
 	phase("graph")
-	st := sites.Enumerate(l.ir, l.texts, rules)
-	phase("sites")
 	opts := taint.DefaultOptions()
 	opts.K = o.k
 	opts.Timeout = o.timeout
