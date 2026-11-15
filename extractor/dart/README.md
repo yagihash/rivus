@@ -51,6 +51,14 @@ Field rules use the same form (`field: package:app/a.dart#Request.url`).
   (initializers of the class, `this.x` parameters, the initializer list) and returns it.
 - `for (x in xs)` is `iter.start` / `iter.next` (the symbols of the engine).
 
+## Models
+
+The built-in rule sets `dart-*.yaml` (`internal/model/builtin`) cover `dart:core`,
+`dart:convert`, `dart:io`, `dart:html` and, for `package:shelf`, `package:http` and
+`sqflite`, the sources and the sinks. An SDK library that others export is named by the
+one people import (`dart:_http` is `dart:io`). A sink takes `accepts: [user_input,
+file_content]`, so that the label a sanitizer adds does not make it fire.
+
 ## Not done
 
 - **Patterns** (pattern matching in `switch`, `if-case`, destructuring), **switch

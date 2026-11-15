@@ -1,0 +1,10 @@
+# Dart functions that read configuration (see go-config.yaml).
+ruleset: rivus/dart/config@1
+
+config_reads:
+  - symbol: dart:io#Platform.environment
+  - symbol: dart:core#String.fromEnvironment
+  - symbol: dart:core#bool.fromEnvironment
+  - symbol: dart:core#int.fromEnvironment
+  - symbol: dart:io#File.readAsString
+  - symbol: dart:io#File.readAsStringSync

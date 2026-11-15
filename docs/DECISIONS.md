@@ -760,3 +760,8 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
 7. **クロージャを、コピーされた変数の経由でも静的に解く**（`sg`）。ローカルの関数宣言が変数に入るため
 
 **残る課題:** `extractor/dart/README.md` の「Not done」。パターン、switch 式、関数値のコールグラフ、`Stream` と `yield` のモデル、依存パッケージのモデル（`dart:*`、`package:flutter`）。
+
+**追記（Dart のモデル）:** 組み込みのモデルに、`dart-core`（文字列・`Uri`・コレクション・`dart:convert` の伝播と、`Uri.encodeComponent` / `HtmlEscape` のサニタイザ）、`dart-io`（`HttpRequest` を source、`Process.run`・`File.new`・`HttpClient.*Url`・`dart:html` の `innerHtml` を sink、ファイルの読み取りを source）、`dart-packages`（`package:shelf` の `Request` を source、`package:http` と `sqflite` を sink）、`dart-config`、`dart-pure` を足した。分かったこと:
+- **SDK の内部ライブラリは、公開されているライブラリの名前にする**（`dart:_http` → `dart:io`）。`HttpRequest` が `dart:_http` に宣言されているため、そのままでは型もシンボルも一致しなかった
+- **サニタイザが `adds` で付けるラベルを、sink が拾う。** `accepts` のない sink は、どのラベルでも検出するため、Dart の sink には `accepts: [user_input, file_content]` を付けた（Go では、`adds` は HTML の文脈だけだった）
+- サンプルの `server.dart`（shelf と http）を含め、`cmd/rivus/dart_test.go` が 15 本の流れを確かめる

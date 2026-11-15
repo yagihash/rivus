@@ -1,0 +1,237 @@
+# dart:core and dart:convert: how data moves through strings, URIs, lists and
+# maps. Symbols are "<library uri>#<Type>.<member>" (extractor/dart/README.md).
+ruleset: rivus/dart/core@1
+
+propagators:
+  # strings: the result is made of the receiver (and the arguments)
+  - symbol: dart:core#String.trim
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#String.trimLeft
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#String.trimRight
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#String.toLowerCase
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#String.toUpperCase
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#String.substring
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#String.replaceAll
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#String.replaceFirst
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#String.replaceFirstMapped
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#String.replaceAllMapped
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#String.split
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#String.padLeft
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#String.padRight
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#String.splitMapJoin
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#String.toString
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#String.codeUnits
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#String.runes
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#String.characters
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#Object.toString
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Uri.toString
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Uri.path
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Uri.query
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Uri.queryParameters
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Uri.queryParametersAll
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Uri.pathSegments
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Uri.host
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Uri.authority
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Uri.fragment
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Uri.userInfo
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Uri.origin
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Uri.data
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Uri.removeFragment
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Uri.normalizePath
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Uri.parse
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#Uri.tryParse
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#Uri.new
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#Uri.http
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#Uri.https
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#Uri.file
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#Uri.dataFromString
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#Uri.resolve
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#Uri.replace
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#Uri.decodeComponent
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#Uri.decodeFull
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#Uri.decodeQueryComponent
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#int.parse
+    flows: [{from: args, to: result}]
+  - symbol: dart:core#int.tryParse
+    flows: [{from: args, to: result}]
+  - symbol: dart:core#double.parse
+    flows: [{from: args, to: result}]
+  - symbol: dart:core#num.parse
+    flows: [{from: args, to: result}]
+  # collections: what is put in is in the collection
+  - symbol: dart:core#List.add
+    flows: [{from: arg0, to: recv}]
+  - symbol: dart:core#List.addAll
+    flows: [{from: arg0, to: recv}]
+  - symbol: dart:core#List.insert
+    flows: [{from: arg1, to: recv}]
+  - symbol: dart:core#Set.add
+    flows: [{from: arg0, to: recv}]
+  - symbol: dart:core#Set.addAll
+    flows: [{from: arg0, to: recv}]
+  - symbol: dart:core#Map.addAll
+    flows: [{from: arg0, to: recv}]
+  - symbol: dart:core#Map.putIfAbsent
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Iterable.first
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Iterable.last
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Iterable.single
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Iterable.join
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Iterable.toList
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Iterable.toSet
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Iterable.elementAt
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Iterable.reversed
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Iterable.skip
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Iterable.take
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Iterable.where
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Iterable.firstWhere
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Iterable.lastWhere
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Iterable.singleWhere
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Iterable.whereType
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Iterable.iterator
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Iterable.followedBy
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Iterable.cast
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#List.first
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#List.last
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#List.single
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#List.join
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#List.toList
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#List.elementAt
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#List.reversed
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#List.sublist
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#List.getRange
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#List.removeLast
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#List.removeAt
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#List.removeFirst
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#List.toSet
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Map.values
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Map.keys
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Map.entries
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Map.remove
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Set.first
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Set.last
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Set.single
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Set.join
+    flows: [{from: recv, to: result}]
+  - symbol: dart:core#Set.toList
+    flows: [{from: recv, to: result}]
+  - symbol: dart:convert#jsonDecode
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:convert#jsonEncode
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:convert#JsonCodec.decode
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:convert#JsonCodec.encode
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:convert#Utf8Codec.decode
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:convert#Utf8Codec.encode
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:convert#Base64Codec.encode
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:convert#Base64Codec.decode
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:convert#Converter.convert
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:convert#Codec.decode
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:convert#Codec.encode
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+
+sanitizers:
+  # percent encoding makes a value safe in a URL
+  - symbol: dart:core#Uri.encodeComponent
+    drops: [user_input]
+    adds: [url_encoded]
+  - symbol: dart:core#Uri.encodeFull
+    drops: [user_input]
+    adds: [url_encoded]
+  - symbol: dart:core#Uri.encodeQueryComponent
+    drops: [user_input]
+    adds: [url_encoded]
+  # HTML escaping
+  - symbol: dart:convert#HtmlEscape.convert
+    drops: [user_input]
+    adds: [html_escaped]

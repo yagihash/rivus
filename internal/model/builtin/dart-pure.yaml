@@ -1,0 +1,40 @@
+# Dart functions through which no taint flows (see go-pure.yaml).
+ruleset: rivus/dart/pure@1
+
+propagators:
+  - symbol: dart:core#print
+    pure: true
+  - symbol: dart:core#Object.hashCode
+    pure: true
+  - symbol: dart:core#Object.runtimeType
+    pure: true
+  - symbol: dart:core#DateTime.now
+    pure: true
+  - symbol: dart:core#Stopwatch.start
+    pure: true
+  - symbol: dart:core#Stopwatch.stop
+    pure: true
+  - symbol: dart:core#List.length
+    pure: true
+  - symbol: dart:core#String.length
+    pure: true
+  - symbol: dart:core#Iterable.length
+    pure: true
+  - symbol: dart:core#Map.length
+    pure: true
+  - symbol: dart:core#String.isEmpty
+    pure: true
+  - symbol: dart:core#String.isNotEmpty
+    pure: true
+  - symbol: dart:core#String.contains
+    pure: true
+  - symbol: dart:core#String.startsWith
+    pure: true
+  - symbol: dart:core#String.endsWith
+    pure: true
+  - symbol: dart:core#Map.containsKey
+    pure: true
+  - symbol: dart:core#List.contains
+    pure: true
+  - symbol: dart:io#HttpResponse.close
+    pure: true

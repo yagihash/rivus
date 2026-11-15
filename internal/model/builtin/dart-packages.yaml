@@ -1,0 +1,140 @@
+# package:shelf and package:http, package:sqflite: the common server side
+# libraries.
+ruleset: rivus/dart/packages@1
+
+sources:
+  - kind: param_type
+    type: "package:shelf/src/request.dart#Request"
+    labels: [user_input]
+
+propagators:
+  - symbol: package:shelf/src/request.dart#Request.url
+    flows: [{from: recv, to: result}]
+  - symbol: package:shelf/src/request.dart#Request.requestedUri
+    flows: [{from: recv, to: result}]
+  - symbol: package:shelf/src/request.dart#Request.headers
+    flows: [{from: recv, to: result}]
+  - symbol: package:shelf/src/request.dart#Request.headersAll
+    flows: [{from: recv, to: result}]
+  - symbol: package:shelf/src/request.dart#Request.context
+    flows: [{from: recv, to: result}]
+  - symbol: package:shelf/src/request.dart#Request.method
+    flows: [{from: recv, to: result}]
+  - symbol: package:shelf/src/request.dart#Request.handlerPath
+    flows: [{from: recv, to: result}]
+  - symbol: package:shelf/src/request.dart#Request.change
+    flows: [{from: recv, to: result}]
+  - symbol: package:shelf/src/request.dart#Request.read
+    flows: [{from: recv, to: result}]
+  - symbol: package:shelf/src/request.dart#Request.readAsString
+    flows: [{from: recv, to: result}]
+  - symbol: package:shelf/src/request.dart#Request.encoding
+    flows: [{from: recv, to: result}]
+  - symbol: package:shelf/src/request.dart#Request.mimeType
+    flows: [{from: recv, to: result}]
+  - symbol: package:shelf/src/request.dart#Request.contentLength
+    flows: [{from: recv, to: result}]
+  - symbol: package:http/src/response.dart#Response.body
+    flows: [{from: recv, to: result}]
+  - symbol: package:http/src/response.dart#Response.bodyBytes
+    flows: [{from: recv, to: result}]
+  - symbol: package:http/src/response.dart#Response.headers
+    flows: [{from: recv, to: result}]
+  - symbol: package:http/src/base_response.dart#BaseResponse.headers
+    flows: [{from: recv, to: result}]
+  - symbol: package:http/src/streamed_response.dart#StreamedResponse.stream
+    flows: [{from: recv, to: result}]
+  - symbol: package:http/src/client.dart#Client.get
+    flows: [{from: args, to: result}]
+  - symbol: package:http/src/client.dart#Client.post
+    flows: [{from: args, to: result}]
+  - symbol: package:http/http.dart#get
+    flows: [{from: args, to: result}]
+  - symbol: package:http/http.dart#post
+    flows: [{from: args, to: result}]
+  - symbol: package:http/http.dart#read
+    flows: [{from: args, to: result}]
+
+sinks:
+  # SSRF
+  - symbol: package:http/http.dart#get
+    args: [0]
+    category: ssrf
+    accepts: [user_input, file_content]
+  - symbol: package:http/http.dart#post
+    args: [0]
+    category: ssrf
+    accepts: [user_input, file_content]
+  - symbol: package:http/http.dart#put
+    args: [0]
+    category: ssrf
+    accepts: [user_input, file_content]
+  - symbol: package:http/http.dart#delete
+    args: [0]
+    category: ssrf
+    accepts: [user_input, file_content]
+  - symbol: package:http/http.dart#head
+    args: [0]
+    category: ssrf
+    accepts: [user_input, file_content]
+  - symbol: package:http/http.dart#patch
+    args: [0]
+    category: ssrf
+    accepts: [user_input, file_content]
+  - symbol: package:http/http.dart#read
+    args: [0]
+    category: ssrf
+    accepts: [user_input, file_content]
+  - symbol: package:http/src/client.dart#Client.get
+    args: [0]
+    category: ssrf
+    accepts: [user_input, file_content]
+  - symbol: package:http/src/client.dart#Client.post
+    args: [0]
+    category: ssrf
+    accepts: [user_input, file_content]
+  - symbol: package:http/src/client.dart#Client.send
+    args: [0]
+    category: ssrf
+    accepts: [user_input, file_content]
+  # SQL injection: only the query text is dangerous, not the bound arguments
+  - symbol: package:sqflite_common/src/database_mixin.dart#SqfliteDatabaseMixin.rawQuery
+    args: [0]
+    category: sql_injection
+    accepts: [user_input, file_content]
+  - symbol: package:sqflite_common/src/database_mixin.dart#SqfliteDatabaseMixin.rawInsert
+    args: [0]
+    category: sql_injection
+    accepts: [user_input, file_content]
+  - symbol: package:sqflite_common/src/database_mixin.dart#SqfliteDatabaseMixin.rawUpdate
+    args: [0]
+    category: sql_injection
+    accepts: [user_input, file_content]
+  - symbol: package:sqflite_common/src/database_mixin.dart#SqfliteDatabaseMixin.rawDelete
+    args: [0]
+    category: sql_injection
+    accepts: [user_input, file_content]
+  - symbol: package:sqflite_common/src/database_mixin.dart#SqfliteDatabaseMixin.execute
+    args: [0]
+    category: sql_injection
+    accepts: [user_input, file_content]
+  - symbol: package:sqflite_common/sqlite_api.dart#DatabaseExecutor.rawQuery
+    args: [0]
+    category: sql_injection
+    accepts: [user_input, file_content]
+  - symbol: package:sqflite_common/sqlite_api.dart#DatabaseExecutor.rawInsert
+    args: [0]
+    category: sql_injection
+    accepts: [user_input, file_content]
+  - symbol: package:sqflite_common/sqlite_api.dart#DatabaseExecutor.rawUpdate
+    args: [0]
+    category: sql_injection
+    accepts: [user_input, file_content]
+  - symbol: package:sqflite_common/sqlite_api.dart#DatabaseExecutor.rawDelete
+    args: [0]
+    category: sql_injection
+    accepts: [user_input, file_content]
+  - symbol: package:sqflite_common/sqlite_api.dart#DatabaseExecutor.execute
+    args: [0]
+    category: sql_injection
+    accepts: [user_input, file_content]

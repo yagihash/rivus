@@ -6,9 +6,18 @@
 import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/dart/element/type.dart';
 
+/// The libraries of the SDK that others export are named by the library
+/// people import: HttpRequest is declared in dart:_http and imported from
+/// dart:io.
+const _publicLibrary = {
+  'dart:_http': 'dart:io',
+};
+
 String libraryUri(Element e) {
   final lib = e.library;
-  return lib == null ? '' : lib.uri.toString();
+  if (lib == null) return '';
+  final uri = lib.uri.toString();
+  return _publicLibrary[uri] ?? uri;
 }
 
 String _name(Element e) => e.name ?? '';
