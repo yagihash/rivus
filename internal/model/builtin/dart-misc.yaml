@@ -1,0 +1,173 @@
+# More of the Dart SDK, found by "rivus models coverage" on real packages:
+# sinks of text (what is written is in the sink), typed data, dates, math.
+ruleset: rivus/dart/misc@1
+
+propagators:
+  - symbol: dart:core#StringSink.write
+    flows: [{from: arg0, to: recv}]
+  - symbol: dart:core#StringSink.writeln
+    flows: [{from: arg0, to: recv}]
+  - symbol: dart:core#StringSink.writeAll
+    flows: [{from: arg0, to: recv}]
+  - symbol: dart:core#StringSink.writeCharCode
+    flows: [{from: arg0, to: recv}]
+  - symbol: dart:io#IOSink.write
+    flows: [{from: arg0, to: recv}]
+  - symbol: dart:io#IOSink.writeln
+    flows: [{from: arg0, to: recv}]
+  - symbol: dart:io#IOSink.writeAll
+    flows: [{from: arg0, to: recv}]
+  - symbol: dart:io#IOSink.add
+    flows: [{from: arg0, to: recv}]
+  - symbol: dart:io#IOSink.addStream
+    flows: [{from: arg0, to: recv}]
+  - symbol: dart:io#_StdSink.write
+    flows: [{from: arg0, to: recv}]
+  - symbol: dart:io#_StdSink.writeln
+    flows: [{from: arg0, to: recv}]
+  - symbol: dart:io#_StdSink.writeAll
+    flows: [{from: arg0, to: recv}]
+  - symbol: dart:async#EventSink.add
+    flows: [{from: arg0, to: recv}]
+  - symbol: dart:async#EventSink.addError
+    flows: [{from: arg0, to: recv}]
+  - symbol: dart:convert#ChunkedConversionSink.add
+    flows: [{from: arg0, to: recv}]
+  - symbol: dart:typed_data#Uint8List.new
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:typed_data#Uint8List.view
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:typed_data#Uint8List.sublistView
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:typed_data#Uint32List.new
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:typed_data#Uint32List.fromList
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:typed_data#Uint16List.new
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:typed_data#Int32List.new
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:typed_data#ByteData.new
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:typed_data#ByteData.view
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:typed_data#ByteData.sublistView
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:typed_data#ByteBuffer.asUint8List
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:typed_data#TypedData.buffer
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:collection#HashMap.new
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:collection#HashSet.new
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:collection#LinkedHashMap.new
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:collection#LinkedHashSet.new
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:collection#Queue.new
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:convert#ChunkedConversionSink.withCallback
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:async#StreamIterator.new
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:math#min
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:math#max
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#Uri.scheme
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#Uri.port
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:io#HttpClientResponse.headers
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:io#HttpClientResponse.transform
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:io#HttpClientResponse.listen
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:io#HttpClientResponse.cast
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:io#HttpRequest.response
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:convert#Encoding.decodeStream
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#num.toStringAsFixed
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#int.toRadixString
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#int.abs
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#num.abs
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#int.toString
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#double.toString
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#bool.hashCode
+    pure: true
+  - symbol: dart:core#String.hashCode
+    pure: true
+  - symbol: dart:core#int.hashCode
+    pure: true
+  - symbol: dart:core#DateTime.new
+    pure: true
+  - symbol: dart:core#DateTime.utc
+    pure: true
+  - symbol: dart:core#DateTime.add
+    pure: true
+  - symbol: dart:core#DateTime.subtract
+    pure: true
+  - symbol: dart:core#DateTime.year
+    pure: true
+  - symbol: dart:core#DateTime.month
+    pure: true
+  - symbol: dart:core#DateTime.day
+    pure: true
+  - symbol: dart:core#DateTime.hour
+    pure: true
+  - symbol: dart:core#DateTime.minute
+    pure: true
+  - symbol: dart:core#DateTime.second
+    pure: true
+  - symbol: dart:core#DateTime.microsecond
+    pure: true
+  - symbol: dart:core#DateTime.millisecond
+    pure: true
+  - symbol: dart:core#DateTime.parse
+    pure: true
+  - symbol: dart:core#DateTime.fromMillisecondsSinceEpoch
+    pure: true
+  - symbol: dart:core#Stopwatch.new
+    pure: true
+  - symbol: dart:core#num.isNaN
+    pure: true
+  - symbol: dart:core#num.isFinite
+    pure: true
+  - symbol: dart:core#Iterable.contains
+    pure: true
+  - symbol: dart:async#Stream.empty
+    pure: true
+  - symbol: dart:async#Zone.current
+    pure: true
+  - symbol: dart:async#runZonedGuarded
+    pure: true
+  - symbol: dart:async#scheduleMicrotask
+    pure: true
+  - symbol: dart:io#stderr
+    pure: true
+  - symbol: dart:io#stdout
+    pure: true
+  - symbol: dart:io#HttpClientResponse.statusCode
+    pure: true
+  - symbol: dart:io#HttpClient.new
+    pure: true
+  - symbol: dart:io#HttpServer.address
+    pure: true
+  - symbol: dart:io#IOSink.close
+    pure: true
+  - symbol: dart:io#IOSink.flush
+    pure: true
+  - symbol: dart:core#ConcurrentModificationError.new
+    pure: true
+  - symbol: dart:core#RangeError.checkValidIndex
+    pure: true
