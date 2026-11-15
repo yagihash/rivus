@@ -19,12 +19,21 @@ type record struct {
 	Func   *Func            `json:"func,omitempty"`
 	Impls  *Implementations `json:"implementations,omitempty"`
 	Global *Global          `json:"global,omitempty"`
+
+	Text      *TextGroup `json:"text,omitempty"`
+	CallText  *CallText  `json:"call_text,omitempty"`
+	FuncText  *FuncText  `json:"func_text,omitempty"`
+	LoadError *LoadError `json:"load_error,omitempty"`
 }
 
 const (
 	recFunc   = "func"
 	recImpls  = "implementations"
 	recGlobal = "global"
+	recText   = "text"
+	recCall   = "call_text"
+	recFunc2  = "func_text"
+	recLoad   = "load_error"
 )
 
 // Write writes the program as a stream. It does not validate: Validate is
@@ -47,6 +56,26 @@ func Write(w io.Writer, p *Program) error {
 	}
 	for i := range p.Globals {
 		if err := enc.Encode(record{Kind: recGlobal, Global: &p.Globals[i]}); err != nil {
+			return err
+		}
+	}
+	for i := range p.Texts {
+		if err := enc.Encode(record{Kind: recText, Text: &p.Texts[i]}); err != nil {
+			return err
+		}
+	}
+	for i := range p.CallTexts {
+		if err := enc.Encode(record{Kind: recCall, CallText: &p.CallTexts[i]}); err != nil {
+			return err
+		}
+	}
+	for i := range p.FuncTexts {
+		if err := enc.Encode(record{Kind: recFunc2, FuncText: &p.FuncTexts[i]}); err != nil {
+			return err
+		}
+	}
+	for i := range p.LoadErrors {
+		if err := enc.Encode(record{Kind: recLoad, LoadError: &p.LoadErrors[i]}); err != nil {
 			return err
 		}
 	}
@@ -82,6 +111,14 @@ func Read(r io.Reader) (*Program, error) {
 			p.Impls = append(p.Impls, *rec.Impls)
 		case rec.Kind == recGlobal && rec.Global != nil:
 			p.Globals = append(p.Globals, *rec.Global)
+		case rec.Kind == recText && rec.Text != nil:
+			p.Texts = append(p.Texts, *rec.Text)
+		case rec.Kind == recCall && rec.CallText != nil:
+			p.CallTexts = append(p.CallTexts, *rec.CallText)
+		case rec.Kind == recFunc2 && rec.FuncText != nil:
+			p.FuncTexts = append(p.FuncTexts, *rec.FuncText)
+		case rec.Kind == recLoad && rec.LoadError != nil:
+			p.LoadErrors = append(p.LoadErrors, *rec.LoadError)
 		default:
 			return nil, fmt.Errorf("ir: record %d: unknown record %q", n, rec.Kind)
 		}

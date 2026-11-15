@@ -60,6 +60,9 @@ func TestTheStreamGivesTheSameResultAsTheDirectIR(t *testing.T) {
 	for _, name := range []string{"inter", "heap", "guard", "entry"} {
 		t.Run(name, func(t *testing.T) {
 			direct := loadIR(t, testutil.Testdata(), "./cases/"+name+"/...")
+			// Everything the core needs now comes through the stream: the
+			// texts too, which are not asked of the extractor.
+			goir.AddTexts(direct.texts.(*goir.Texts), direct.ir)
 			var buf bytes.Buffer
 			if err := ir.Write(&buf, direct.ir); err != nil {
 				t.Fatal(err)
@@ -72,7 +75,7 @@ func TestTheStreamGivesTheSameResultAsTheDirectIR(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			viaStream := &loaded{gossa: direct.gossa, ir: back, texts: direct.texts, sg: g}
+			viaStream := &loaded{gossa: direct.gossa, ir: back, texts: ir.NewStreamTexts(back), sg: g}
 
 			run := func(l *loaded) []byte {
 				st := l.sites(rules)

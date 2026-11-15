@@ -359,6 +359,46 @@ type Program struct {
 	Impls []Implementations `json:"implementations,omitempty"`
 	// Globals are the package variables the functions use.
 	Globals []Global `json:"globals,omitempty"`
+	// The texts an extractor in another process writes, because the core
+	// cannot ask it for them (see StreamTexts).
+	Texts     []TextGroup `json:"texts,omitempty"`
+	CallTexts []CallText  `json:"call_texts,omitempty"`
+	FuncTexts []FuncText  `json:"func_texts,omitempty"`
+	// LoadErrors are what the extractor could not read.
+	LoadErrors []LoadError `json:"load_errors,omitempty"`
+}
+
+// Kinds of text.
+const (
+	TextSnippet = "snippet" // the statement around a position
+	TextExpr    = "expr"    // the normalized expression at a position
+	TextCond    = "cond"    // the condition of the branch around a position
+)
+
+// TextGroup is one text and every position it is the text of. Many
+// positions share a statement, so the text is written once.
+type TextGroup struct {
+	Kind    string `json:"kind"`
+	File    string `json:"file"`
+	Text    string `json:"text"`
+	Offsets []int  `json:"offsets"`
+}
+
+// CallText is the text of a call as written, and of each of its arguments
+// (the receiver is not counted).
+type CallText struct {
+	File   string   `json:"file"`
+	Offset int      `json:"offset"`
+	Call   string   `json:"call,omitempty"`
+	Args   []string `json:"args,omitempty"`
+}
+
+// FuncText is the normalized body of a function (what the body fingerprint is
+// made of) and its source, cut at a number of lines.
+type FuncText struct {
+	Func   FuncID `json:"func"`
+	Body   string `json:"body,omitempty"`
+	Source string `json:"source,omitempty"`
 }
 
 // Global is a package variable (or a static): where it is declared.

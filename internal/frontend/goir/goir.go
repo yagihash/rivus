@@ -43,6 +43,7 @@ const MaxConstString = 1 << 16
 func Extract(p *gossa.Program, opts Options) (*ir.Program, error) {
 	out := &ir.Program{}
 	globals := map[string]ir.Global{}
+	seen := map[ir.FuncID]bool{}
 	var graph callgraph.Graph
 	var lifted map[string]*ssa.Function
 	if !opts.NoCandidates {
@@ -60,7 +61,12 @@ func Extract(p *gossa.Program, opts Options) (*ir.Program, error) {
 		if !opts.All && !p.Own[fn] {
 			continue
 		}
-		out.Funcs = append(out.Funcs, convertFunc(p, fn, graph, lifted[gossa.FuncID(fn)], globals))
+		// Synthetic wrappers (thunks) of the same method are made once per
+		// package that uses them, under one name: they are the same function.
+		if id := ir.FuncID(gossa.FuncID(fn)); !seen[id] {
+			seen[id] = true
+			out.Funcs = append(out.Funcs, convertFunc(p, fn, graph, lifted[gossa.FuncID(fn)], globals))
+		}
 	}
 	for _, g := range globals {
 		out.Globals = append(out.Globals, g)

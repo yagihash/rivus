@@ -24,3 +24,7 @@ type Texts interface {
 	// FuncSource is the source of a function, cut at maxLines lines.
 	FuncSource(FuncID, int) string
 }
+
+// SourceLines is the number of lines of a function the output shows. An
+// extractor that writes the source into the stream cuts it at this length.
+const SourceLines = 80

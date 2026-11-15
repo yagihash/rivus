@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/yagihash/rivus/internal/ir"
 	"github.com/yagihash/rivus/internal/sg"
 )
 
@@ -113,7 +114,7 @@ func (e *Engine) node(g Guard, outcomes map[bool]map[string]bool) ConditionalNod
 			g.Cond + " == true":  joinSet(outcomes[true]),
 			g.Cond + " == false": joinSet(outcomes[false]),
 		},
-		FunctionSource: e.texts.FuncSource(g.fn.IR.ID, 80),
+		FunctionSource: e.texts.FuncSource(g.fn.IR.ID, ir.SourceLines),
 	}
 	n.Kind = CondFlow
 	for _, side := range []bool{true, false} {

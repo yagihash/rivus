@@ -22,6 +22,7 @@ func runExtract(args []string) error {
 	filter := fs.String("func", "", "only the functions whose ID contains this text")
 	impls := multiFlag{}
 	fs.Var(&impls, "implementations", "interface method whose implementations are recorded (repeatable)")
+	texts := fs.Bool("texts", false, "also write the texts the core needs (snippets, expressions, bodies), as an extractor in another process has to")
 	check := fs.Bool("check", true, "validate the IR before writing it")
 	fs.Parse(args)
 
@@ -39,6 +40,9 @@ func runExtract(args []string) error {
 	out, err := goir.Extract(prog, goir.Options{All: *all, Implementations: impls})
 	if err != nil {
 		return err
+	}
+	if *texts {
+		goir.AddTexts(goir.NewTexts(prog), out)
 	}
 	if *check {
 		if err := out.Validate(); err != nil {
