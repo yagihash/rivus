@@ -19,11 +19,12 @@ use rustc_public::ty::*;
 use rustc_public::CrateDef;
 use serde_json::{json, Map, Value};
 use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
 
 /// What lowering needs of the whole crate.
 pub struct Ctx {
     pub root: String,
-    pub files: HashMap<String, Vec<String>>,
+    pub files: HashMap<String, Rc<Vec<String>>>,
     pub texts: Texts,
     /// The names of the items that have a body here.
     pub bodies: HashSet<String>,
@@ -34,12 +35,12 @@ impl Ctx {
         Ctx { root, files: HashMap::new(), texts: Texts::default(), bodies }
     }
 
-    fn lines(&mut self, path: &str) -> &Vec<String> {
+    fn lines(&mut self, path: &str) -> Rc<Vec<String>> {
         if !self.files.contains_key(path) {
             let text = std::fs::read_to_string(path).unwrap_or_default();
-            self.files.insert(path.to_string(), text.lines().map(|l| l.to_string()).collect());
+            self.files.insert(path.to_string(), Rc::new(text.lines().map(|l| l.to_string()).collect()));
         }
-        &self.files[path]
+        self.files[path].clone()
     }
 
     /// The position of a span, and the texts the core will ask for.
@@ -54,7 +55,7 @@ impl Ctx {
             Err(_) => file.clone(),
         };
         let p = Pos { file: rel, line: li.start_line, col: li.start_col };
-        let lines = self.lines(&file).clone();
+        let lines = self.lines(&file);
         self.texts.add("snippet", &p, snippet(&lines, li.start_line, li.end_line));
         self.texts.add("cond", &p, cond_of(&lines, li.start_line));
         p
@@ -63,7 +64,7 @@ impl Ctx {
     pub fn expr_text(&mut self, span: &Span) -> String {
         let file = span.get_filename().to_string();
         let li = span.get_lines();
-        let lines = self.lines(&file).clone();
+        let lines = self.lines(&file);
         span_text(&lines, li.start_line, li.start_col, li.end_line, li.end_col)
     }
 }

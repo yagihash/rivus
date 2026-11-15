@@ -1,0 +1,269 @@
+# More of Rust, found by "rivus models coverage" on a real program (a browser
+# automation CLI, 148,000 lines): formatting machinery, serde, tokio, futures.
+ruleset: rivus/rust/misc@1
+
+propagators:
+  - symbol: std::future::Future::poll
+    flows: [{from: args, to: result}]
+  - symbol: futures_util::Future::poll
+    flows: [{from: args, to: result}]
+  - symbol: std::task::Poll::Ready
+    flows: [{from: args, to: result}]
+  - symbol: serde_json::to_value
+    flows: [{from: args, to: result}]
+  - symbol: serde_json::to_string_pretty
+    flows: [{from: args, to: result}]
+  - symbol: serde_json::to_writer
+    flows: [{from: args, to: result}]
+  - symbol: serde_json::from_reader
+    flows: [{from: args, to: result}]
+  - symbol: serde_json::Map::new
+    flows: [{from: args, to: result}]
+  - symbol: serde_json::Value::as_bool
+    flows: [{from: args, to: result}]
+  - symbol: serde_json::Value::as_f64
+    flows: [{from: args, to: result}]
+  - symbol: serde_json::Value::as_i64
+    flows: [{from: args, to: result}]
+  - symbol: serde_json::Value::as_u64
+    flows: [{from: args, to: result}]
+  - symbol: serde_json::Value::as_array
+    flows: [{from: args, to: result}]
+  - symbol: serde_json::Value::as_object
+    flows: [{from: args, to: result}]
+  - symbol: serde_json::Value::as_str
+    flows: [{from: args, to: result}]
+  - symbol: serde_json::Value::get
+    flows: [{from: args, to: result}]
+  - symbol: serde_json::Value::pointer
+    flows: [{from: args, to: result}]
+  - symbol: serde::__private::from_utf8_lossy
+    flows: [{from: args, to: result}]
+  - symbol: std::str::to_ascii_lowercase
+    flows: [{from: args, to: result}]
+  - symbol: std::str::to_ascii_uppercase
+    flows: [{from: args, to: result}]
+  - symbol: std::string::String::to_ascii_lowercase
+    flows: [{from: args, to: result}]
+  - symbol: std::option::Option::is_some_and
+    flows: [{from: args, to: result}]
+  - symbol: std::option::Option::map_or
+    flows: [{from: args, to: result}]
+  - symbol: std::option::Option::map_or_else
+    flows: [{from: args, to: result}]
+  - symbol: std::option::Option::zip
+    flows: [{from: args, to: result}]
+  - symbol: std::option::Option::get_or_insert_with
+    flows: [{from: args, to: result}]
+  - symbol: std::result::Result::map_or
+    flows: [{from: args, to: result}]
+  - symbol: std::result::Result::map_or_else
+    flows: [{from: args, to: result}]
+  - symbol: std::result::Result::or_else
+    flows: [{from: args, to: result}]
+  - symbol: std::result::Result::unwrap_err
+    flows: [{from: args, to: result}]
+  - symbol: std::result::Result::expect_err
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::unzip
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::rposition
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::max_by_key
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::min_by_key
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::sum
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::product
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::step_by
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::windows
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::last
+    flows: [{from: args, to: result}]
+  - symbol: std::slice::chunks
+    flows: [{from: args, to: result}]
+  - symbol: std::slice::windows
+    flows: [{from: args, to: result}]
+  - symbol: std::slice::split
+    flows: [{from: args, to: result}]
+  - symbol: std::slice::iter
+    flows: [{from: args, to: result}]
+  - symbol: std::vec::Vec::drain
+    flows: [{from: args, to: result}]
+  - symbol: std::vec::Vec::split_off
+    flows: [{from: args, to: result}]
+  - symbol: std::vec::Vec::retain
+    flows: [{from: args, to: result}]
+  - symbol: std::vec::Vec::dedup
+    flows: [{from: args, to: result}]
+  - symbol: std::vec::Vec::sort
+    flows: [{from: args, to: result}]
+  - symbol: std::vec::Vec::truncate
+    flows: [{from: args, to: result}]
+  - symbol: std::vec::Vec::reverse
+    flows: [{from: args, to: result}]
+  - symbol: std::collections::HashSet::new
+    flows: [{from: args, to: result}]
+  - symbol: std::collections::HashSet::iter
+    flows: [{from: args, to: result}]
+  - symbol: std::collections::HashSet::get
+    flows: [{from: args, to: result}]
+  - symbol: std::collections::BTreeMap::get
+    flows: [{from: args, to: result}]
+  - symbol: std::collections::BTreeMap::new
+    flows: [{from: args, to: result}]
+  - symbol: std::collections::BTreeMap::iter
+    flows: [{from: args, to: result}]
+  - symbol: std::collections::BTreeMap::values
+    flows: [{from: args, to: result}]
+  - symbol: std::collections::BTreeMap::keys
+    flows: [{from: args, to: result}]
+  - symbol: std::collections::VecDeque::pop_front
+    flows: [{from: args, to: result}]
+  - symbol: std::collections::VecDeque::pop_back
+    flows: [{from: args, to: result}]
+  - symbol: std::collections::VecDeque::front
+    flows: [{from: args, to: result}]
+  - symbol: std::collections::VecDeque::back
+    flows: [{from: args, to: result}]
+  - symbol: std::collections::VecDeque::new
+    flows: [{from: args, to: result}]
+  - symbol: std::default::Default::default
+    flows: [{from: args, to: result}]
+  - symbol: tokio::net::TcpListener::bind
+    flows: [{from: args, to: result}]
+  - symbol: tokio::net::TcpListener::accept
+    flows: [{from: args, to: result}]
+  - symbol: tokio::net::TcpStream::connect
+    flows: [{from: args, to: result}]
+  - symbol: tokio::sync::Mutex::new
+    flows: [{from: args, to: result}]
+  - symbol: tokio::sync::Mutex::lock
+    flows: [{from: args, to: result}]
+  - symbol: tokio::sync::RwLock::new
+    flows: [{from: args, to: result}]
+  - symbol: tokio::sync::RwLock::read
+    flows: [{from: args, to: result}]
+  - symbol: tokio::sync::RwLock::write
+    flows: [{from: args, to: result}]
+  - symbol: tokio::sync::mpsc::channel
+    flows: [{from: args, to: result}]
+  - symbol: tokio::sync::oneshot::channel
+    flows: [{from: args, to: result}]
+  - symbol: tokio::spawn
+    flows: [{from: args, to: result}]
+  - symbol: tokio::task::spawn
+    flows: [{from: args, to: result}]
+  - symbol: tokio::task::spawn_blocking
+    flows: [{from: args, to: result}]
+  - symbol: tokio::process::Command::new
+    flows: [{from: args, to: result}]
+  - symbol: serde_json::Map::insert
+    flows: [{from: arg1, to: arg0}, {from: arg2, to: arg0}]
+  - symbol: tokio::io::AsyncWriteExt::write_all
+    flows: [{from: arg1, to: arg0}]
+  - symbol: tokio::io::AsyncWriteExt::write
+    flows: [{from: arg1, to: arg0}]
+  - symbol: tokio::io::AsyncReadExt::read_to_string
+    flows: [{from: arg0, to: arg1}]
+  - symbol: tokio::io::AsyncReadExt::read_to_end
+    flows: [{from: arg0, to: arg1}]
+  - symbol: tokio::io::AsyncReadExt::read
+    flows: [{from: arg0, to: arg1}]
+  - symbol: tokio::sync::mpsc::Sender::send
+    flows: [{from: arg1, to: arg0}]
+  - symbol: tokio::sync::mpsc::Receiver::recv
+    flows: [{from: arg0, to: result}]
+  - symbol: tokio::sync::oneshot::Sender::send
+    flows: [{from: arg1, to: arg0}]
+  - symbol: std::fmt::Formatter::write_str
+    pure: true
+  - symbol: std::fmt::Formatter::write_fmt
+    pure: true
+  - symbol: std::fmt::Formatter::debug_struct
+    pure: true
+  - symbol: std::fmt::Formatter::debug_struct_field1_finish
+    pure: true
+  - symbol: std::fmt::Formatter::debug_struct_field2_finish
+    pure: true
+  - symbol: std::fmt::Formatter::debug_struct_field3_finish
+    pure: true
+  - symbol: std::fmt::Formatter::debug_struct_field4_finish
+    pure: true
+  - symbol: std::fmt::Formatter::debug_struct_field5_finish
+    pure: true
+  - symbol: std::fmt::Formatter::debug_struct_fields_finish
+    pure: true
+  - symbol: std::fmt::Formatter::debug_tuple_field1_finish
+    pure: true
+  - symbol: std::fmt::Formatter::debug_tuple_field2_finish
+    pure: true
+  - symbol: std::fmt::Formatter::debug_tuple
+    pure: true
+  - symbol: std::fmt::Formatter::debug_list
+    pure: true
+  - symbol: std::fmt::Formatter::pad
+    pure: true
+  - symbol: test::assert_test_result
+    pure: true
+  - symbol: serde::__private::missing_field
+    pure: true
+  - symbol: serde::de::Error::custom
+    pure: true
+  - symbol: serde::de::Error::missing_field
+    pure: true
+  - symbol: serde::de::Error::unknown_field
+    pure: true
+  - symbol: serde::de::Error::invalid_type
+    pure: true
+  - symbol: tokio::time::sleep
+    pure: true
+  - symbol: tokio::time::timeout
+    pure: true
+  - symbol: tokio::time::interval
+    pure: true
+  - symbol: tokio::time::Instant::now
+    pure: true
+  - symbol: std::sync::atomic::AtomicBool::load
+    pure: true
+  - symbol: std::sync::atomic::AtomicBool::store
+    pure: true
+  - symbol: std::sync::atomic::AtomicUsize::load
+    pure: true
+  - symbol: std::sync::atomic::AtomicUsize::store
+    pure: true
+  - symbol: std::sync::atomic::AtomicUsize::fetch_add
+    pure: true
+  - symbol: std::sync::atomic::AtomicU64::load
+    pure: true
+  - symbol: std::sync::atomic::AtomicU64::store
+    pure: true
+  - symbol: std::sync::atomic::AtomicU64::fetch_add
+    pure: true
+  - symbol: std::sync::atomic::AtomicI64::load
+    pure: true
+  - symbol: std::sync::atomic::AtomicI64::store
+    pure: true
+  - symbol: std::sync::atomic::AtomicI64::fetch_add
+    pure: true
+  - symbol: std::sync::atomic::AtomicBool::swap
+    pure: true
+  - symbol: std::thread::spawn
+    pure: true
+  - symbol: std::thread::yield_now
+    pure: true
+  - symbol: log::info
+    pure: true
+  - symbol: log::warn
+    pure: true
+  - symbol: log::error
+    pure: true
+  - symbol: log::debug
+    pure: true
+  - symbol: log::trace
+    pure: true
+  - symbol: tracing::event
+    pure: true

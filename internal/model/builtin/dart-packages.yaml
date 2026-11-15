@@ -60,81 +60,81 @@ sinks:
   - symbol: package:http/http.dart#get
     args: [0]
     category: ssrf
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: package:http/http.dart#post
     args: [0]
     category: ssrf
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: package:http/http.dart#put
     args: [0]
     category: ssrf
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: package:http/http.dart#delete
     args: [0]
     category: ssrf
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: package:http/http.dart#head
     args: [0]
     category: ssrf
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: package:http/http.dart#patch
     args: [0]
     category: ssrf
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: package:http/http.dart#read
     args: [0]
     category: ssrf
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: package:http/src/client.dart#Client.get
     args: [0]
     category: ssrf
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: package:http/src/client.dart#Client.post
     args: [0]
     category: ssrf
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: package:http/src/client.dart#Client.send
     args: [0]
     category: ssrf
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   # SQL injection: only the query text is dangerous, not the bound arguments
   - symbol: package:sqflite_common/src/database_mixin.dart#SqfliteDatabaseMixin.rawQuery
     args: [0]
     category: sql_injection
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: package:sqflite_common/src/database_mixin.dart#SqfliteDatabaseMixin.rawInsert
     args: [0]
     category: sql_injection
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: package:sqflite_common/src/database_mixin.dart#SqfliteDatabaseMixin.rawUpdate
     args: [0]
     category: sql_injection
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: package:sqflite_common/src/database_mixin.dart#SqfliteDatabaseMixin.rawDelete
     args: [0]
     category: sql_injection
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: package:sqflite_common/src/database_mixin.dart#SqfliteDatabaseMixin.execute
     args: [0]
     category: sql_injection
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: package:sqflite_common/sqlite_api.dart#DatabaseExecutor.rawQuery
     args: [0]
     category: sql_injection
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: package:sqflite_common/sqlite_api.dart#DatabaseExecutor.rawInsert
     args: [0]
     category: sql_injection
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: package:sqflite_common/sqlite_api.dart#DatabaseExecutor.rawUpdate
     args: [0]
     category: sql_injection
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: package:sqflite_common/sqlite_api.dart#DatabaseExecutor.rawDelete
     args: [0]
     category: sql_injection
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: package:sqflite_common/sqlite_api.dart#DatabaseExecutor.execute
     args: [0]
     category: sql_injection
-    accepts: [user_input, file_content]
+    accepts: [user_input]

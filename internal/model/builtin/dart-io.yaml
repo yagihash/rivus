@@ -97,71 +97,71 @@ sinks:
   - symbol: dart:io#Process.run
     args: [0, 1]
     category: command_injection
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: dart:io#Process.runSync
     args: [0, 1]
     category: command_injection
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: dart:io#Process.start
     args: [0, 1]
     category: command_injection
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   # path traversal: the path a file or a directory is made from
   - symbol: dart:io#File.new
     args: [0]
     category: path_traversal
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: dart:io#Directory.new
     args: [0]
     category: path_traversal
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: dart:io#Link.new
     args: [0]
     category: path_traversal
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   # SSRF: outgoing requests to attacker controlled URLs
   - symbol: dart:io#HttpClient.getUrl
     args: [0]
     category: ssrf
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: dart:io#HttpClient.postUrl
     args: [0]
     category: ssrf
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: dart:io#HttpClient.openUrl
     args: [1]
     category: ssrf
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: dart:io#HttpClient.get
     args: [0, 1]
     category: ssrf
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: dart:io#HttpClient.post
     args: [0, 1]
     category: ssrf
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: dart:io#HttpClient.open
     args: [1, 2]
     category: ssrf
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: dart:io#Socket.connect
     args: [0]
     category: ssrf
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   # HTML injection in the browser
   - symbol: dart:html#Element.innerHtml
     args: [0]
     category: xss
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: dart:html#Element.outerHtml
     args: [0]
     category: xss
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: dart:html#Element.setInnerHtml
     args: [0]
     category: xss
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: dart:html#Element.insertAdjacentHtml
     args: [1]
     category: xss
-    accepts: [user_input, file_content]
+    accepts: [user_input]

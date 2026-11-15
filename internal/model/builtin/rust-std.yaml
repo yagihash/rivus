@@ -472,136 +472,136 @@ sinks:
   - symbol: std::process::Command::new
     args: [0]
     category: command_injection
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: std::process::Command::arg
     args: [1]
     category: command_injection
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: std::process::Command::args
     args: [1]
     category: command_injection
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: std::fs::File::open
     args: [0]
     category: path_traversal
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: std::fs::File::create
     args: [0]
     category: path_traversal
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: std::fs::read_to_string
     args: [0]
     category: path_traversal
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: std::fs::read
     args: [0]
     category: path_traversal
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: std::fs::write
     args: [0]
     category: path_traversal
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: std::fs::remove_file
     args: [0]
     category: path_traversal
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: std::fs::remove_dir
     args: [0]
     category: path_traversal
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: std::fs::remove_dir_all
     args: [0]
     category: path_traversal
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: std::fs::create_dir
     args: [0]
     category: path_traversal
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: std::fs::create_dir_all
     args: [0]
     category: path_traversal
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: std::fs::copy
     args: [0]
     category: path_traversal
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: std::fs::rename
     args: [0]
     category: path_traversal
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: std::fs::read_dir
     args: [0]
     category: path_traversal
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: std::fs::metadata
     args: [0]
     category: path_traversal
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: std::fs::OpenOptions::open
     args: [1]
     category: path_traversal
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: std::net::TcpStream::connect
     args: [0]
     category: ssrf
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: std::net::UdpSocket::connect
     args: [0]
     category: ssrf
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: reqwest::get
     args: [0]
     category: ssrf
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: reqwest::blocking::get
     args: [0]
     category: ssrf
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: ureq::get
     args: [0]
     category: ssrf
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: ureq::post
     args: [0]
     category: ssrf
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: reqwest::Client::get
     args: [1]
     category: ssrf
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: reqwest::Client::post
     args: [1]
     category: ssrf
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: reqwest::blocking::Client::get
     args: [1]
     category: ssrf
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: reqwest::blocking::Client::post
     args: [1]
     category: ssrf
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: rusqlite::Connection::execute
     args: [1]
     category: sql_injection
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: rusqlite::Connection::prepare
     args: [1]
     category: sql_injection
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: rusqlite::Connection::execute_batch
     args: [1]
     category: sql_injection
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: sqlx::query
     args: [0]
     category: sql_injection
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: sqlx::query_as
     args: [0]
     category: sql_injection
-    accepts: [user_input, file_content]
+    accepts: [user_input]
   - symbol: sqlx::query_scalar
     args: [0]
     category: sql_injection
-    accepts: [user_input, file_content]
+    accepts: [user_input]
