@@ -108,7 +108,7 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 					if srcs := rules.CallSources[sym]; len(srcs) > 0 {
 						add(&Site{Role: RoleSource, Kind: model.KindCallResult, Symbol: sym, Labels: labelsOf(srcs), IR: at, Src: srcs, irpos: in.Pos})
 					}
-					if sinks := rules.Sinks[sym]; len(sinks) > 0 {
+					if sinks := sinksAt(fn, in, rules.Sinks[sym]); len(sinks) > 0 {
 						add(&Site{Role: RoleSink, Kind: "call", Symbol: sym, Category: sinks[0].Category, Labels: acceptsOf(sinks), IR: at, Sink: sinks, irpos: in.Pos})
 					}
 				case ir.OpFieldLoad, ir.OpFieldStore, ir.OpAddrOf:
@@ -324,6 +324,53 @@ func isConstantRef(form *irssa.Form, r irssa.Ref, depth int) bool {
 			}
 		}
 		return true
+	}
+	return false
+}
+
+// sinksAt keeps the sinks whose condition on the type of an argument holds at
+// this call.
+func sinksAt(fn *ir.Func, in ir.Instr, sinks []model.Sink) []model.Sink {
+	var out []model.Sink
+	for _, s := range sinks {
+		if c := s.WhenArgType; c != nil {
+			if c.Arg < 0 || c.Arg >= len(in.Args) || !argTypeHolds(fn, in.Args[c.Arg], c) {
+				continue
+			}
+		}
+		out = append(out, s)
+	}
+	return out
+}
+
+// argTypeHolds checks the condition against the type of the local and, when the
+// local is an interface made by a conversion (an http.ResponseWriter passed as
+// an io.Writer), against the type that was converted.
+func argTypeHolds(fn *ir.Func, l ir.LocalID, c *model.ArgTypeCond) bool {
+	if c.Holds(string(fn.Locals[l].Type)) {
+		return true
+	}
+	for depth := 0; depth < 4; depth++ {
+		src := ir.LocalID(-1)
+		for _, b := range fn.Blocks {
+			for _, in := range b.Instrs {
+				if in.Op != ir.OpConvert || len(in.Args) != 1 {
+					continue
+				}
+				for _, d := range in.Dsts {
+					if d == l {
+						src = in.Args[0]
+					}
+				}
+			}
+		}
+		if src < 0 {
+			return false
+		}
+		if c.Holds(string(fn.Locals[src].Type)) {
+			return true
+		}
+		l = src
 	}
 	return false
 }

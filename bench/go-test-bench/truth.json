@@ -22,6 +22,6 @@
     {"file": "pkg/servechi/servechi.go", "line": 59, "label": "vuln", "category": "xss"},
     {"file": "pkg/servejschmidt/servejschmidt.go", "line": 60, "label": "vuln", "category": "xss"},
     {"file": "pkg/serveswagger/setup.go", "line": 172, "label": "vuln", "category": "xss"},
-    {"file": "pkg/servegin/servegin.go", "line": 91, "label": "vuln", "category": "xss", "note": "gin: c.String"}
+    {"file": "pkg/servegin/servegin.go", "line": 92, "label": "vuln", "category": "xss", "note": "gin: c.String"}
   ]
 }

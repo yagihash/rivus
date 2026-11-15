@@ -103,8 +103,32 @@ type Sink struct {
 	Accepts  []string `yaml:"accepts"`
 	Category string   `yaml:"category"`
 	Match    string   `yaml:"match"`
+	// WhenArgType makes the sink apply only to calls whose argument Arg has
+	// one of Types as its static type (as the IR writes the type): fmt.Fprint
+	// writes to a response only when its first argument is a
+	// net/http.ResponseWriter, not when it is os.Stderr.
+	WhenArgType *ArgTypeCond `yaml:"when_arg_type"`
 	// MaxImplementations bounds the expansion of match: implementations.
 	MaxImplementations int `yaml:"max_implementations"`
+}
+
+// ArgTypeCond is a condition on the static type of an argument.
+type ArgTypeCond struct {
+	Arg   int      `yaml:"arg"`
+	Types []string `yaml:"types"`
+}
+
+// Holds reports whether the type satisfies the condition.
+func (c *ArgTypeCond) Holds(t string) bool {
+	if c == nil {
+		return true
+	}
+	for _, x := range c.Types {
+		if x == t {
+			return true
+		}
+	}
+	return false
 }
 
 // Sanitizer removes labels (and optionally adds others) from what flows from

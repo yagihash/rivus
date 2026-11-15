@@ -1,0 +1,55 @@
+# gin (github.com/gin-gonic/gin): where untrusted requests come from, and the
+# dangerous operations. A handler gets a *gin.Context, whose getters return
+# what the client sent.
+ruleset: rivus/go/gin@1
+
+sources:
+  - symbol: (*github.com/gin-gonic/gin.Context).Query
+    labels: [user_input]
+  - symbol: (*github.com/gin-gonic/gin.Context).DefaultQuery
+    labels: [user_input]
+  - symbol: (*github.com/gin-gonic/gin.Context).GetQuery
+    labels: [user_input]
+  - symbol: (*github.com/gin-gonic/gin.Context).QueryArray
+    labels: [user_input]
+  - symbol: (*github.com/gin-gonic/gin.Context).Param
+    labels: [user_input]
+  - symbol: (*github.com/gin-gonic/gin.Context).PostForm
+    labels: [user_input]
+  - symbol: (*github.com/gin-gonic/gin.Context).DefaultPostForm
+    labels: [user_input]
+  - symbol: (*github.com/gin-gonic/gin.Context).GetPostForm
+    labels: [user_input]
+  - symbol: (*github.com/gin-gonic/gin.Context).PostFormArray
+    labels: [user_input]
+  - symbol: (*github.com/gin-gonic/gin.Context).GetHeader
+    labels: [user_input]
+  - symbol: (*github.com/gin-gonic/gin.Context).Cookie
+    labels: [user_input]
+  - symbol: (*github.com/gin-gonic/gin.Context).GetRawData
+    labels: [user_input]
+  - symbol: (*github.com/gin-gonic/gin.Context).ClientIP
+    labels: [user_input]
+
+sinks:
+  - symbol: (*github.com/gin-gonic/gin.Context).Redirect
+    args: [1]
+    category: open_redirect
+  - symbol: (*github.com/gin-gonic/gin.Context).File
+    args: [0]
+    category: path_traversal
+  - symbol: (*github.com/gin-gonic/gin.Context).FileAttachment
+    args: [0]
+    category: path_traversal
+  - symbol: (*github.com/gin-gonic/gin.Context).SaveUploadedFile
+    args: [1]
+    category: path_traversal
+  # XSS: what is written to the response as it is.
+  - symbol: (*github.com/gin-gonic/gin.Context).String
+    args: [1, 2]
+    accepts: [user_input]
+    category: xss
+  - symbol: (*github.com/gin-gonic/gin.Context).Data
+    args: [2]
+    accepts: [user_input]
+    category: xss

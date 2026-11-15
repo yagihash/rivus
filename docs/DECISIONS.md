@@ -844,3 +844,9 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
 - **見つけたもの:** コマンド注入 2、SQL インジェクション 1（パラメータ化した安全な枝は報告しなかった）、パス・トラバーサル 4、SSRF 1、オープンリダイレクト 3（net/http の 3 つのフレームワーク）
 - **誤検出（2 件）:** `exec.Command("echo", in)`（定数のコマンドに、入力を引数で渡す）。ベンチマークは安全とするが、rivus は「コマンドの引数」を sink としているので、報告する。**方針の問題で、バグではない**。引数注入を報告したくなければ、ルールで外せる
 - **見逃し（7 件、すべてモデルの不足）:** (1) gin の `c.Redirect`、`c.File`、`c.String` のモデルがない。(2) `fmt.Fprint(w, data)` で、`ResponseWriter` に書く XSS が見えない（モデルは `ResponseWriter.Write` だけ）
+
+**追記（ベンチマークで見つけたモデルの不足を直した）:**
+- **sink の条件 `when_arg_type`** を足した。引数の静的な型が、指定した型のときだけ、sink になる。`fmt.Fprint(w, data)` は、`w` が `net/http.ResponseWriter` のときだけ XSS の sink（`os.Stderr` や `bytes.Buffer` への出力は対象外）。`io.Writer` に変換されてから渡される（`ResponseWriter` → `io.Writer`）ので、変換の元の型までたどる（最大 4 段）。`fmt.Fprint`/`Fprintln`/`Fprintf`、`io.WriteString` に使った
+- **gin のモデル** `go-gin.yaml` を足した（source: `Query`、`Param`、`PostForm`、`GetHeader`、`Cookie` など。sink: `Redirect`、`File`、`FileAttachment`、`SaveUploadedFile`、`String`、`Data`）
+- **結果:** 再現率 0.61 → **1.00**（18 件中 18 件）、適合率 0.85 → **0.90**（誤検出は、`exec.Command("echo", in)` の 2 件のまま）。不確実性は 585 → 573
+- **この数字の読み方（重要）:** モデルを、**同じベンチマークの見逃しを見て足した**ので、再現率 1.00 は、「このベンチマークに合わせた」結果で、一般の精度ではない。ベンチマークが教えてくれたのは、**「どのモデルが足りないか」**であって、「未知のコードでの精度」ではない。後者を測るには、モデルを足すときに見ていない、別の対象（Go の CVE の修正前のコミットなど）が要る。また、ラベルのない sink（`servechi.go:87`、`servestd.go:119`）の報告は、採点していない

@@ -85,3 +85,25 @@ sinks:
     args: [0]
     accepts: [user_input]
     category: xss
+  # The same, written with fmt or io: only when the writer is a response (not
+  # os.Stderr or a buffer).
+  - symbol: fmt.Fprint
+    args: [1]
+    accepts: [user_input]
+    category: xss
+    when_arg_type: {arg: 0, types: [net/http.ResponseWriter]}
+  - symbol: fmt.Fprintln
+    args: [1]
+    accepts: [user_input]
+    category: xss
+    when_arg_type: {arg: 0, types: [net/http.ResponseWriter]}
+  - symbol: fmt.Fprintf
+    args: [1, 2]
+    accepts: [user_input]
+    category: xss
+    when_arg_type: {arg: 0, types: [net/http.ResponseWriter]}
+  - symbol: io.WriteString
+    args: [1]
+    accepts: [user_input]
+    category: xss
+    when_arg_type: {arg: 0, types: [net/http.ResponseWriter]}
