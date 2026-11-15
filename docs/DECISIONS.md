@@ -790,3 +790,19 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
 - 時間の上限（`-func-timeout`、`-timeout`）が効いた関数は、時間に依存するので、結果は実行ごとに違いうる。上限に達した関数は、`depth_limit` で記録される
 
 **追記（セルの要素の上限）:** セルが、1 つの引数についての記号的な要素を、部分ごとに 96 個より多く持つとき、部分を引数全体（パス `""`）にまとめる（真より多く、少なくはない）。引数の部分と、要約が尋ねる部分の積が、作業量を決めていた。x/tools は 28 秒 → **12 秒**（検出は同じ 4 件）、Dart の `archive`（4 分半だった）は **97 秒**で、`depth_limit` なしに収束する。上限の数は、実測で決めた（`maxCellElems`）。
+
+## ADR-042: Rust の extractor の最初の版（Phase 3）
+
+**結果:** `extractor/rust`（Rust 製）が、`rustc_public` で MIR を読み、中立 IR を JSON Lines で出す。ワークスペースを `cargo check` で、`RUSTC_WORKSPACE_WRAPPER` に自分を指して走らせ、rustc は普通にコンパイルし、ドライバが各クレートの IR を書く。`rivus analyze -ir` で読む。サンプル（`extractor/rust/test/sample`）の注釈つきの 12 本の流れ（直接、フィールド、クロージャ、分岐、関数、`&mut` を渡す、`Vec`、`enum`、`format!`、`String::push_str`、`std::env::args` から `Command::new`、`fs::read_to_string`）がすべて見つかり、静かなはずの sink（定数、`len()` を通したもの）には届かない（`cmd/rivus/rust_test.go`）。
+
+**決めたこと:**
+1. **nightly を 1 つに固定する**（`nightly-2026-11-15`）。`rustc_public` は不安定で、コンパイラと一緒に動く。更新は意図して行う
+2. **MIR は IR にほぼそのまま下りる**（ブロックの CFG、書き換え可能なローカル）。アドレスを取ったローカル（`&x`）だけセル（`alloc` / `load` / `store`）に置く。射影のある場所は `field_load` など。`(*p).f` は 1 回のアクセス
+3. **シンボルは関数のパス**（`std::fs::read_to_string`）。トレイトのメソッドは、実装でなくトレイトの名前（`std::ops::Deref::deref`）で、どの実装にも効く。実装のジェネリクスは落とす。**レシーバは最初の引数**（`arg0`）
+4. **呼び出しは `Instance::resolve` で解く:** 本体のあるもの → 静的。ないもの → 外部の静的（モデルが決める）。解けないもの（型パラメータ、トレイトオブジェクト）→ `dynamic`（ワークスペースの impl を候補に）。クロージャは `Fn::call` を型で解き、引数のタプルをほどく
+5. **巻き戻し（`drop`、`assert`、クリーンアップ）は描かない。** パニックは関数の中の流れではない
+6. **位置は行と列**（`rustc_public` はバイトのオフセットをくれない）。ストリームのオフセットは `行 * 100000 + 列`
+7. **コアの修正（Rust で見つかった）:** ポインタの `copy` は同じポインタ（別名）として扱う。以前は、コピーを通した書き込みが元に届かなかった（Dart のオブジェクトの別名にも効く）
+8. **Mac の SDK:** 最新の SDK（27.0）をリンカが読めず、`tapi error` で、stable の hello world も通らなかった。`SDKROOT` を古い SDK にすると通る（環境の問題。README に書いた）
+
+**残る課題:** `extractor/rust/README.md` の「Not done」。`async`、ジェネリクスの単相化、フレームワーク（actix-web、axum）の入口、引数のテキスト。

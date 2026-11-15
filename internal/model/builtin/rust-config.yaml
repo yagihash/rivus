@@ -1,0 +1,9 @@
+# Rust functions that read configuration (see go-config.yaml).
+ruleset: rivus/rust/config@1
+
+config_reads:
+  - symbol: std::env::var
+  - symbol: std::env::var_os
+  - symbol: std::env::vars
+  - symbol: std::env::current_dir
+  - symbol: std::env::current_exe

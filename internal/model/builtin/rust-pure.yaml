@@ -1,0 +1,89 @@
+# Rust functions through which no taint flows: sizes, predicates, comparisons,
+# printing (see go-pure.yaml).
+ruleset: rivus/rust/pure@1
+
+propagators:
+  - symbol: std::string::String::len
+    pure: true
+  - symbol: std::string::String::is_empty
+    pure: true
+  - symbol: std::str::len
+    pure: true
+  - symbol: std::str::is_empty
+    pure: true
+  - symbol: std::str::contains
+    pure: true
+  - symbol: std::str::starts_with
+    pure: true
+  - symbol: std::str::ends_with
+    pure: true
+  - symbol: std::str::eq_ignore_ascii_case
+    pure: true
+  - symbol: std::vec::Vec::len
+    pure: true
+  - symbol: std::vec::Vec::is_empty
+    pure: true
+  - symbol: std::vec::Vec::contains
+    pure: true
+  - symbol: std::vec::Vec::capacity
+    pure: true
+  - symbol: std::slice::len
+    pure: true
+  - symbol: std::slice::is_empty
+    pure: true
+  - symbol: std::slice::contains
+    pure: true
+  - symbol: std::collections::HashMap::len
+    pure: true
+  - symbol: std::collections::HashMap::is_empty
+    pure: true
+  - symbol: std::collections::HashMap::contains_key
+    pure: true
+  - symbol: std::option::Option::is_some
+    pure: true
+  - symbol: std::option::Option::is_none
+    pure: true
+  - symbol: std::result::Result::is_ok
+    pure: true
+  - symbol: std::result::Result::is_err
+    pure: true
+  - symbol: std::cmp::PartialEq::eq
+    pure: true
+  - symbol: std::cmp::PartialEq::ne
+    pure: true
+  - symbol: std::cmp::PartialOrd::partial_cmp
+    pure: true
+  - symbol: std::cmp::PartialOrd::lt
+    pure: true
+  - symbol: std::cmp::PartialOrd::le
+    pure: true
+  - symbol: std::cmp::PartialOrd::gt
+    pure: true
+  - symbol: std::cmp::PartialOrd::ge
+    pure: true
+  - symbol: std::cmp::Ord::cmp
+    pure: true
+  - symbol: std::cmp::min
+    pure: true
+  - symbol: std::cmp::max
+    pure: true
+  - symbol: std::fmt::Arguments::new_const
+    pure: true
+  - symbol: std::io::_print
+    pure: true
+  - symbol: std::io::_eprint
+    pure: true
+  - symbol: std::time::Instant::now
+    pure: true
+  - symbol: std::time::Instant::elapsed
+    pure: true
+  - symbol: std::time::SystemTime::now
+    pure: true
+  - symbol: std::time::Duration::from_secs
+    pure: true
+  - symbol: std::time::Duration::from_millis
+    pure: true
+  - symbol: std::thread::sleep
+    pure: true
+  - symbol: std::mem::drop
+    pure: true

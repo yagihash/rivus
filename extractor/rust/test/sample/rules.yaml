@@ -1,0 +1,10 @@
+ruleset: rivus/rust-sample@1
+
+sources:
+  - symbol: sample::source
+    labels: [user_input]
+
+sinks:
+  - symbol: sample::sink
+    category: test
+    accepts: [user_input]

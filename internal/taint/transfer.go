@@ -122,6 +122,9 @@ func (s *state) transfer(in *sg.Instr) {
 			s.copyLocs(s.locs(x), []Loc{{own(dst), ""}}, "slice", in)
 			return
 		}
+		if pointerLike(dst) && pointerLike(x) {
+			return // the same pointer
+		}
 		s.copyLocs(s.locs(x), []Loc{{own(dst), ""}}, "copy", in)
 
 	case ir.OpFieldLoad:

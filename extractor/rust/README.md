@@ -1,0 +1,68 @@
+# The Rust extractor of rivus
+
+Reads Rust through the compiler: MIR, by way of `rustc_public` (the stable interface of
+`rustc`'s MIR), and writes the neutral IR (`docs/ARCHITECTURE.md` 2) as JSON Lines. The
+core reads it with `rivus analyze -ir`.
+
+```sh
+cd extractor/rust
+cargo build                                   # needs the pinned nightly (rust-toolchain.toml)
+target/debug/rivus-rust path/to/workspace > workspace.jsonl
+rivus analyze -ir workspace.jsonl -rules rules.yaml
+```
+
+It builds the workspace with `cargo check`, running itself in place of rustc for the crates
+of the workspace (`RUSTC_WORKSPACE_WRAPPER`): rustc compiles them as usual, and the driver
+writes the IR of each crate on the way. The code has to compile. Dependencies are not read:
+calls into them are unmodeled library calls, until a model says what they do.
+
+The extractor is pinned to one nightly (`rust-toolchain.toml`, `TOOLCHAIN` in `src/main.rs`):
+`rustc_public` is unstable, and moves with the compiler. To move it, change the two, and
+fix what the new compiler broke.
+
+Test: `RIVUS_RUST=$PWD/extractor/rust/target/debug/rivus-rust go test -run TestRustExtractor ./cmd/rivus`.
+The sample is `test/sample`, with `@source(tag)` and `@sink(tag)` annotations.
+
+**On a Mac:** if linking fails with `tapi error: malformed file ... unknown architecture`,
+the newest SDK of the Command Line Tools is newer than its linker. Set
+`SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk` (an older one).
+
+## Symbols
+
+The rules name Rust things by the path of the function: `std::fs::read_to_string`,
+`std::process::Command::new`. A trait method is named by the trait, not by the impl
+(`std::ops::Deref::deref`, `std::iter::Iterator::next`): a rule on it applies to every
+impl. Generic parameters of the impl are left out (`std::option::Option::unwrap`).
+**The receiver is the first argument**: a model says `arg0` for `self` (Rust has no
+receiver apart from the arguments), and a sink's `args: [1]` is the first argument after
+`self`.
+
+## How MIR is lowered (what is decided)
+
+- A local whose address is taken (`&x`) lives in a cell (`alloc`, `load`, `store`); the
+  others are IR locals. A place with a projection is read and written through
+  `field_load`, `field_store`, `index_*`, `load`, `store`; `(*p).f` is one access.
+- An enum variant's field is named `Variant.field`, a tuple's and a closure's fields `0`,
+  `1`, ...
+- A call is resolved by `Instance::resolve`: a function with a body in the workspace is a
+  static call (`func` is the instance, `symbol` the path or the trait method); one without
+  is an external static call (a model says what it does); one that cannot be resolved
+  (a type parameter, a trait object) is `dynamic`, with the impls of the workspace as
+  candidates.
+- A closure is called through `Fn::call` and the like: resolved by its type, with the tuple
+  of arguments taken apart.
+- Unwinding (cleanup blocks, `drop`, `assert`) is not drawn: a panic is not a flow inside
+  the function. A call that does not return ends in `unreachable`.
+- Positions are lines and columns (rustc_public gives no byte offsets): the offset in the
+  stream is `line * 100000 + column`.
+
+## Not done
+
+- `async` (coroutines), generics are analysed as written (not per instance), `unsafe`
+  pointer arithmetic, inline assembly, `dyn Trait` method candidates beyond the
+  workspace.
+- The text of the arguments of a call (the stream has the call as written only), and the
+  body in the token-normalized form.
+- Models: `internal/model/builtin/rust-*.yaml` cover the common part of `std`. Others
+  (`reqwest`, `sqlx`, `actix-web`, `axum`) are sinks only, and no framework's request
+  type is a source yet.

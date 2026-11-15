@@ -3,3 +3,4 @@
 *.test
 /rust/target/
 .dart_tool/
+/extractor/rust/target/

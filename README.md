@@ -52,7 +52,7 @@ Go / Rust / Dart extractor ──→ 中立 IR (CFG, JSON Lines) ──→ Go �
 |---|---|---|
 | Phase 1 | Go のみで完結（`go/ssa` から直接 taint 解析） | 完了（ステップ 1.0〜1.12） |
 | Phase 2 | 中立 IR の切り出し | 完了（ステップ 2.0〜2.6）。コアは `go/ssa` を知らない。15.6 万行の x/tools を約 29 秒・2.4 GB で解析（[ADR-040](docs/DECISIONS.md)） |
-| Phase 3 | Rust 対応（固定 nightly 前提） | 未着手 |
+| Phase 3 | Rust 対応（固定 nightly 前提） | 最初の版を実装済み（[`extractor/rust`](extractor/rust/README.md)、[ADR-042](docs/DECISIONS.md)）。MIR を `rustc_public` で読む。`async` とフレームワークの入口は未対応 |
 | Phase 4 | Dart 対応 | 最初の版を実装済み（[`extractor/dart`](extractor/dart/README.md)、[ADR-041](docs/DECISIONS.md)）。`rivus analyze -ir` で読む。パターンと関数値のコールグラフは未対応 |
 
 ## 出力のイメージ

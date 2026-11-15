@@ -1,0 +1,511 @@
+# The Rust standard library: where untrusted data comes from, how it moves
+# through strings, options, results and collections, and the dangerous
+# operations. The symbols are what the extractor writes: the path of the
+# function, or of the trait method (std::ops::Deref::deref), without generics.
+# The receiver is the first argument: arg0.
+ruleset: rivus/rust/std@1
+
+sources:
+  - symbol: std::env::args
+    labels: [user_input]
+  - symbol: std::io::stdin
+    labels: [user_input]
+  - symbol: std::fs::read_to_string
+    labels: [file_content]
+  - symbol: std::fs::read
+    labels: [file_content]
+
+propagators:
+  # conversions and views: the result is made of the argument
+  - symbol: std::convert::From::from
+    flows: [{from: args, to: result}]
+  - symbol: std::convert::Into::into
+    flows: [{from: args, to: result}]
+  - symbol: std::convert::TryFrom::try_from
+    flows: [{from: args, to: result}]
+  - symbol: std::convert::TryInto::try_into
+    flows: [{from: args, to: result}]
+  - symbol: std::string::ToString::to_string
+    flows: [{from: args, to: result}]
+  - symbol: std::borrow::ToOwned::to_owned
+    flows: [{from: args, to: result}]
+  - symbol: std::clone::Clone::clone
+    flows: [{from: args, to: result}]
+  - symbol: std::ops::Deref::deref
+    flows: [{from: args, to: result}]
+  - symbol: std::ops::DerefMut::deref_mut
+    flows: [{from: args, to: result}]
+  - symbol: std::convert::AsRef::as_ref
+    flows: [{from: args, to: result}]
+  - symbol: std::convert::AsMut::as_mut
+    flows: [{from: args, to: result}]
+  - symbol: std::borrow::Borrow::borrow
+    flows: [{from: args, to: result}]
+  - symbol: std::str::FromStr::from_str
+    flows: [{from: args, to: result}]
+  - symbol: std::string::String::from_utf8
+    flows: [{from: args, to: result}]
+  - symbol: std::string::String::from_utf8_lossy
+    flows: [{from: args, to: result}]
+  - symbol: std::string::String::as_str
+    flows: [{from: args, to: result}]
+  - symbol: std::string::String::into_bytes
+    flows: [{from: args, to: result}]
+  - symbol: std::string::String::as_bytes
+    flows: [{from: args, to: result}]
+  - symbol: std::string::String::into_boxed_str
+    flows: [{from: args, to: result}]
+  - symbol: std::str::from_utf8
+    flows: [{from: args, to: result}]
+  - symbol: std::path::Path::new
+    flows: [{from: args, to: result}]
+  - symbol: std::path::PathBuf::from
+    flows: [{from: args, to: result}]
+  - symbol: std::path::Path::to_path_buf
+    flows: [{from: args, to: result}]
+  - symbol: std::path::Path::to_str
+    flows: [{from: args, to: result}]
+  - symbol: std::path::Path::to_string_lossy
+    flows: [{from: args, to: result}]
+  - symbol: std::path::Path::display
+    flows: [{from: args, to: result}]
+  - symbol: std::ffi::OsStr::new
+    flows: [{from: args, to: result}]
+  - symbol: std::ffi::OsString::from
+    flows: [{from: args, to: result}]
+  - symbol: std::hint::must_use
+    flows: [{from: args, to: result}]
+  - symbol: std::boxed::Box::new
+    flows: [{from: args, to: result}]
+  - symbol: std::rc::Rc::new
+    flows: [{from: args, to: result}]
+  - symbol: std::sync::Arc::new
+    flows: [{from: args, to: result}]
+  - symbol: std::cell::RefCell::new
+    flows: [{from: args, to: result}]
+  - symbol: std::sync::Mutex::new
+    flows: [{from: args, to: result}]
+  - symbol: std::cell::RefCell::borrow
+    flows: [{from: args, to: result}]
+  - symbol: std::cell::RefCell::borrow_mut
+    flows: [{from: args, to: result}]
+  - symbol: std::sync::Mutex::lock
+    flows: [{from: args, to: result}]
+  - symbol: std::string::String::new
+    flows: [{from: args, to: result}]
+  - symbol: std::string::String::with_capacity
+    flows: [{from: args, to: result}]
+  - symbol: std::str::trim
+    flows: [{from: args, to: result}]
+  - symbol: std::str::trim_start
+    flows: [{from: args, to: result}]
+  - symbol: std::str::trim_end
+    flows: [{from: args, to: result}]
+  - symbol: std::str::to_lowercase
+    flows: [{from: args, to: result}]
+  - symbol: std::str::to_uppercase
+    flows: [{from: args, to: result}]
+  - symbol: std::str::to_string
+    flows: [{from: args, to: result}]
+  - symbol: std::str::replace
+    flows: [{from: args, to: result}]
+  - symbol: std::str::replacen
+    flows: [{from: args, to: result}]
+  - symbol: std::str::split
+    flows: [{from: args, to: result}]
+  - symbol: std::str::splitn
+    flows: [{from: args, to: result}]
+  - symbol: std::str::split_whitespace
+    flows: [{from: args, to: result}]
+  - symbol: std::str::lines
+    flows: [{from: args, to: result}]
+  - symbol: std::str::chars
+    flows: [{from: args, to: result}]
+  - symbol: std::str::bytes
+    flows: [{from: args, to: result}]
+  - symbol: std::str::parse
+    flows: [{from: args, to: result}]
+  - symbol: std::str::strip_prefix
+    flows: [{from: args, to: result}]
+  - symbol: std::str::strip_suffix
+    flows: [{from: args, to: result}]
+  - symbol: std::str::split_once
+    flows: [{from: args, to: result}]
+  - symbol: std::str::get
+    flows: [{from: args, to: result}]
+  - symbol: std::str::to_owned
+    flows: [{from: args, to: result}]
+  - symbol: std::string::String::trim
+    flows: [{from: args, to: result}]
+  - symbol: std::string::String::to_lowercase
+    flows: [{from: args, to: result}]
+  - symbol: std::string::String::to_uppercase
+    flows: [{from: args, to: result}]
+  - symbol: std::slice::join
+    flows: [{from: args, to: result}]
+  - symbol: std::slice::concat
+    flows: [{from: args, to: result}]
+  - symbol: std::vec::Vec::join
+    flows: [{from: args, to: result}]
+  - symbol: std::vec::Vec::concat
+    flows: [{from: args, to: result}]
+  - symbol: std::path::Path::join
+    flows: [{from: args, to: result}]
+  - symbol: std::path::PathBuf::join
+    flows: [{from: args, to: result}]
+  - symbol: std::path::Path::parent
+    flows: [{from: args, to: result}]
+  - symbol: std::path::Path::file_name
+    flows: [{from: args, to: result}]
+  - symbol: std::path::Path::extension
+    flows: [{from: args, to: result}]
+  - symbol: std::path::PathBuf::push
+    flows: [{from: args, to: result}]
+  - symbol: std::option::Option::unwrap
+    flows: [{from: args, to: result}]
+  - symbol: std::option::Option::expect
+    flows: [{from: args, to: result}]
+  - symbol: std::option::Option::unwrap_or
+    flows: [{from: args, to: result}]
+  - symbol: std::option::Option::unwrap_or_default
+    flows: [{from: args, to: result}]
+  - symbol: std::option::Option::unwrap_or_else
+    flows: [{from: args, to: result}]
+  - symbol: std::option::Option::map
+    flows: [{from: args, to: result}]
+  - symbol: std::option::Option::and_then
+    flows: [{from: args, to: result}]
+  - symbol: std::option::Option::ok_or
+    flows: [{from: args, to: result}]
+  - symbol: std::option::Option::ok_or_else
+    flows: [{from: args, to: result}]
+  - symbol: std::option::Option::as_ref
+    flows: [{from: args, to: result}]
+  - symbol: std::option::Option::as_deref
+    flows: [{from: args, to: result}]
+  - symbol: std::option::Option::as_mut
+    flows: [{from: args, to: result}]
+  - symbol: std::option::Option::cloned
+    flows: [{from: args, to: result}]
+  - symbol: std::option::Option::copied
+    flows: [{from: args, to: result}]
+  - symbol: std::option::Option::take
+    flows: [{from: args, to: result}]
+  - symbol: std::option::Option::or
+    flows: [{from: args, to: result}]
+  - symbol: std::option::Option::or_else
+    flows: [{from: args, to: result}]
+  - symbol: std::option::Option::filter
+    flows: [{from: args, to: result}]
+  - symbol: std::result::Result::unwrap
+    flows: [{from: args, to: result}]
+  - symbol: std::result::Result::expect
+    flows: [{from: args, to: result}]
+  - symbol: std::result::Result::unwrap_or
+    flows: [{from: args, to: result}]
+  - symbol: std::result::Result::unwrap_or_default
+    flows: [{from: args, to: result}]
+  - symbol: std::result::Result::unwrap_or_else
+    flows: [{from: args, to: result}]
+  - symbol: std::result::Result::ok
+    flows: [{from: args, to: result}]
+  - symbol: std::result::Result::err
+    flows: [{from: args, to: result}]
+  - symbol: std::result::Result::map
+    flows: [{from: args, to: result}]
+  - symbol: std::result::Result::map_err
+    flows: [{from: args, to: result}]
+  - symbol: std::result::Result::and_then
+    flows: [{from: args, to: result}]
+  - symbol: std::result::Result::as_ref
+    flows: [{from: args, to: result}]
+  - symbol: std::ops::Index::index
+    flows: [{from: args, to: result}]
+  - symbol: std::ops::IndexMut::index_mut
+    flows: [{from: args, to: result}]
+  - symbol: std::ops::Try::branch
+    flows: [{from: args, to: result}]
+  - symbol: std::ops::FromResidual::from_residual
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::next
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::nth
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::last
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::collect
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::map
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::filter
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::cloned
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::copied
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::skip
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::take
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::chain
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::rev
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::enumerate
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::zip
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::fold
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::flat_map
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Iterator::peekable
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::IntoIterator::into_iter
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::FromIterator::from_iter
+    flows: [{from: args, to: result}]
+  - symbol: std::iter::Extend::extend
+    flows: [{from: args, to: result}]
+  - symbol: std::vec::Vec::new
+    flows: [{from: args, to: result}]
+  - symbol: std::vec::Vec::with_capacity
+    flows: [{from: args, to: result}]
+  - symbol: std::vec::Vec::first
+    flows: [{from: args, to: result}]
+  - symbol: std::vec::Vec::last
+    flows: [{from: args, to: result}]
+  - symbol: std::vec::Vec::get
+    flows: [{from: args, to: result}]
+  - symbol: std::vec::Vec::iter
+    flows: [{from: args, to: result}]
+  - symbol: std::vec::Vec::into_iter
+    flows: [{from: args, to: result}]
+  - symbol: std::vec::Vec::pop
+    flows: [{from: args, to: result}]
+  - symbol: std::vec::Vec::remove
+    flows: [{from: args, to: result}]
+  - symbol: std::vec::Vec::clone
+    flows: [{from: args, to: result}]
+  - symbol: std::collections::HashMap::get
+    flows: [{from: args, to: result}]
+  - symbol: std::collections::HashMap::remove
+    flows: [{from: args, to: result}]
+  - symbol: std::collections::HashMap::values
+    flows: [{from: args, to: result}]
+  - symbol: std::collections::HashMap::keys
+    flows: [{from: args, to: result}]
+  - symbol: std::collections::HashMap::iter
+    flows: [{from: args, to: result}]
+  - symbol: std::collections::HashMap::into_iter
+    flows: [{from: args, to: result}]
+  - symbol: std::collections::HashMap::entry
+    flows: [{from: args, to: result}]
+  - symbol: std::collections::HashMap::new
+    flows: [{from: args, to: result}]
+  - symbol: std::slice::iter
+    flows: [{from: args, to: result}]
+  - symbol: std::slice::first
+    flows: [{from: args, to: result}]
+  - symbol: std::slice::last
+    flows: [{from: args, to: result}]
+  - symbol: std::slice::get
+    flows: [{from: args, to: result}]
+  - symbol: std::slice::to_vec
+    flows: [{from: args, to: result}]
+  - symbol: std::slice::to_owned
+    flows: [{from: args, to: result}]
+  # formatting: format!(...) is built from its arguments
+  - symbol: std::fmt::format
+    flows: [{from: args, to: result}]
+  - symbol: std::fmt::Arguments::new
+    flows: [{from: args, to: result}]
+  - symbol: std::fmt::Arguments::new_v1
+    flows: [{from: args, to: result}]
+  - symbol: std::fmt::Arguments::new_v1_formatted
+    flows: [{from: args, to: result}]
+  - symbol: core::fmt::rt::Argument::new_display
+    flows: [{from: args, to: result}]
+  - symbol: core::fmt::rt::Argument::new_debug
+    flows: [{from: args, to: result}]
+  - symbol: core::fmt::rt::Argument::new_lower_hex
+    flows: [{from: args, to: result}]
+  - symbol: core::fmt::rt::Argument::from_usize
+    flows: [{from: args, to: result}]
+  - symbol: std::fmt::Arguments::as_str
+    flows: [{from: args, to: result}]
+  - symbol: std::fmt::Display::fmt
+    flows: [{from: args, to: result}]
+  - symbol: std::fmt::Debug::fmt
+    flows: [{from: args, to: result}]
+  # what is put into a container or a string is in it
+  - symbol: std::string::String::push_str
+    flows: [{from: arg1, to: arg0}]
+  - symbol: std::string::String::push
+    flows: [{from: arg1, to: arg0}]
+  - symbol: std::string::String::insert_str
+    flows: [{from: arg2, to: arg0}]
+  - symbol: std::string::String::insert
+    flows: [{from: arg2, to: arg0}]
+  - symbol: std::vec::Vec::push
+    flows: [{from: arg1, to: arg0}]
+  - symbol: std::vec::Vec::insert
+    flows: [{from: arg2, to: arg0}]
+  - symbol: std::vec::Vec::extend
+    flows: [{from: arg1, to: arg0}]
+  - symbol: std::vec::Vec::extend_from_slice
+    flows: [{from: arg1, to: arg0}]
+  - symbol: std::collections::HashMap::insert
+    flows: [{from: arg1, to: arg0}, {from: arg2, to: arg0}]
+  - symbol: std::io::Stdin::read_line
+    flows: [{from: arg0, to: arg1}]
+  - symbol: std::io::Read::read_to_string
+    flows: [{from: arg0, to: arg1}]
+  - symbol: std::io::Read::read_to_end
+    flows: [{from: arg0, to: arg1}]
+  - symbol: std::io::BufRead::read_line
+    flows: [{from: arg0, to: arg1}]
+  - symbol: std::io::Write::write_all
+    flows: [{from: arg1, to: arg0}]
+  - symbol: std::io::Write::write
+    flows: [{from: arg1, to: arg0}]
+  - symbol: std::fs::File::open
+    flows: [{from: args, to: result}]
+
+sinks:
+  - symbol: std::process::Command::new
+    args: [0]
+    category: command_injection
+    accepts: [user_input, file_content]
+  - symbol: std::process::Command::arg
+    args: [1]
+    category: command_injection
+    accepts: [user_input, file_content]
+  - symbol: std::process::Command::args
+    args: [1]
+    category: command_injection
+    accepts: [user_input, file_content]
+  - symbol: std::fs::File::open
+    args: [0]
+    category: path_traversal
+    accepts: [user_input, file_content]
+  - symbol: std::fs::File::create
+    args: [0]
+    category: path_traversal
+    accepts: [user_input, file_content]
+  - symbol: std::fs::read_to_string
+    args: [0]
+    category: path_traversal
+    accepts: [user_input, file_content]
+  - symbol: std::fs::read
+    args: [0]
+    category: path_traversal
+    accepts: [user_input, file_content]
+  - symbol: std::fs::write
+    args: [0]
+    category: path_traversal
+    accepts: [user_input, file_content]
+  - symbol: std::fs::remove_file
+    args: [0]
+    category: path_traversal
+    accepts: [user_input, file_content]
+  - symbol: std::fs::remove_dir
+    args: [0]
+    category: path_traversal
+    accepts: [user_input, file_content]
+  - symbol: std::fs::remove_dir_all
+    args: [0]
+    category: path_traversal
+    accepts: [user_input, file_content]
+  - symbol: std::fs::create_dir
+    args: [0]
+    category: path_traversal
+    accepts: [user_input, file_content]
+  - symbol: std::fs::create_dir_all
+    args: [0]
+    category: path_traversal
+    accepts: [user_input, file_content]
+  - symbol: std::fs::copy
+    args: [0]
+    category: path_traversal
+    accepts: [user_input, file_content]
+  - symbol: std::fs::rename
+    args: [0]
+    category: path_traversal
+    accepts: [user_input, file_content]
+  - symbol: std::fs::read_dir
+    args: [0]
+    category: path_traversal
+    accepts: [user_input, file_content]
+  - symbol: std::fs::metadata
+    args: [0]
+    category: path_traversal
+    accepts: [user_input, file_content]
+  - symbol: std::fs::OpenOptions::open
+    args: [1]
+    category: path_traversal
+    accepts: [user_input, file_content]
+  - symbol: std::net::TcpStream::connect
+    args: [0]
+    category: ssrf
+    accepts: [user_input, file_content]
+  - symbol: std::net::UdpSocket::connect
+    args: [0]
+    category: ssrf
+    accepts: [user_input, file_content]
+  - symbol: reqwest::get
+    args: [0]
+    category: ssrf
+    accepts: [user_input, file_content]
+  - symbol: reqwest::blocking::get
+    args: [0]
+    category: ssrf
+    accepts: [user_input, file_content]
+  - symbol: ureq::get
+    args: [0]
+    category: ssrf
+    accepts: [user_input, file_content]
+  - symbol: ureq::post
+    args: [0]
+    category: ssrf
+    accepts: [user_input, file_content]
+  - symbol: reqwest::Client::get
+    args: [1]
+    category: ssrf
+    accepts: [user_input, file_content]
+  - symbol: reqwest::Client::post
+    args: [1]
+    category: ssrf
+    accepts: [user_input, file_content]
+  - symbol: reqwest::blocking::Client::get
+    args: [1]
+    category: ssrf
+    accepts: [user_input, file_content]
+  - symbol: reqwest::blocking::Client::post
+    args: [1]
+    category: ssrf
+    accepts: [user_input, file_content]
+  - symbol: rusqlite::Connection::execute
+    args: [1]
+    category: sql_injection
+    accepts: [user_input, file_content]
+  - symbol: rusqlite::Connection::prepare
+    args: [1]
+    category: sql_injection
+    accepts: [user_input, file_content]
+  - symbol: rusqlite::Connection::execute_batch
+    args: [1]
+    category: sql_injection
+    accepts: [user_input, file_content]
+  - symbol: sqlx::query
+    args: [0]
+    category: sql_injection
+    accepts: [user_input, file_content]
+  - symbol: sqlx::query_as
+    args: [0]
+    category: sql_injection
+    accepts: [user_input, file_content]
+  - symbol: sqlx::query_scalar
+    args: [0]
+    category: sql_injection
+    accepts: [user_input, file_content]

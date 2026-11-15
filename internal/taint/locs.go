@@ -192,7 +192,9 @@ func (s *state) computeLocs(v *sg.Value) []Loc {
 			}
 		}
 	case ir.OpCopy:
-		if in.IR.View && pointerLike(v) && pointerLike(in.Args[0]) {
+		// A copy of a pointer is the same pointer: what is written through
+		// one is read through the other.
+		if pointerLike(v) && pointerLike(in.Args[0]) {
 			return s.locs(in.Args[0])
 		}
 	case ir.OpTypeAssert:
