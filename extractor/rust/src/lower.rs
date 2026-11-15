@@ -331,12 +331,6 @@ impl<'a> Lower<'a> {
         d
     }
 
-    fn nil(&mut self, pos: &Pos) -> usize {
-        let d = self.new_local("", None);
-        self.emit("const", &[d], &[], pos, json!({"const": {"kind": "nil"}}));
-        d
-    }
-
     // --- the body -------------------------------------------------------------
 
     fn run(&mut self) {

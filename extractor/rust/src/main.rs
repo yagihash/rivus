@@ -20,7 +20,6 @@ mod lower;
 use rustc_public::CrateDef;
 use serde_json::{json, Value};
 use std::collections::HashSet;
-use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
