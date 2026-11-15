@@ -125,12 +125,12 @@ func pathSegs(path []ir.Step) []string {
 
 // Names of the operations a call stands for (see internal/frontend/goir).
 const (
-	symChanSend   = "go/chan.send"
-	symChanRecv   = "go/chan.recv"
-	symRangeStart = "go/range.start"
-	symRangeNext  = "go/range.next"
-	symRangeNextS = "go/range.next_string"
-	symRunDefers  = "go.rundefers"
+	symChanSend   = "chan.send"
+	symChanRecv   = "chan.recv"
+	symRangeStart = "iter.start"
+	symRangeNext  = "iter.next"
+	symRangeNextS = "iter.next_string"
+	symRunDefers  = "rt.rundefers"
 )
 
 // computeLocs derives the locations of an instruction's result from the

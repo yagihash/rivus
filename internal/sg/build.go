@@ -44,14 +44,22 @@ func (p *Program) link() {
 					in.Static = p.ByID[string(in.Callee.Func)]
 				case ir.CalleeValue:
 					// A closure made right there is a static call with the
-					// captured values (as go/ssa has it).
-					if len(in.Args) > 0 && in.Args[0].Kind == KFunc {
+					// captured values (as go/ssa has it). It may have been
+					// copied into a variable on the way.
+					fn := (*Value)(nil)
+					if len(in.Args) > 0 {
+						fn = in.Args[0]
+						for i := 0; i < 8 && fn.Kind == KResult && fn.Instr != nil && fn.Instr.Op == ir.OpCopy && !fn.Instr.IR.View && len(fn.Instr.Args) == 1; i++ {
+							fn = fn.Instr.Args[0]
+						}
+					}
+					if fn != nil && fn.Kind == KFunc {
 						// A function with nothing captured, held in a variable.
-						in.StaticID = in.Args[0].FuncID
-						in.Static = p.ByID[string(in.Args[0].FuncID)]
-					} else if len(in.Args) > 0 && in.Args[0].Kind == KResult && in.Args[0].Instr != nil &&
-						in.Args[0].Instr.Op == ir.OpMakeClosure && in.Args[0].Instr.IR != nil {
-						mc := in.Args[0].Instr
+						in.StaticID = fn.FuncID
+						in.Static = p.ByID[string(fn.FuncID)]
+					} else if fn != nil && fn.Kind == KResult && fn.Instr != nil &&
+						fn.Instr.Op == ir.OpMakeClosure && fn.Instr.IR != nil {
+						mc := fn.Instr
 						in.StaticID = mc.IR.Func
 						in.Static = p.ByID[string(mc.IR.Func)]
 						in.Bindings = mc.Args

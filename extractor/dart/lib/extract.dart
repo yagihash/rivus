@@ -1,0 +1,308 @@
+// The driver: resolves the code, lowers every function with a body and writes
+// the stream.
+import 'package:analyzer/dart/analysis/analysis_context_collection.dart';
+import 'package:analyzer/dart/analysis/results.dart';
+import 'package:analyzer/dart/ast/ast.dart';
+import 'package:analyzer/dart/ast/visitor.dart';
+import 'package:analyzer/dart/element/element.dart';
+import 'package:analyzer/dart/element/type.dart';
+import 'package:path/path.dart' as p;
+
+import 'irjson.dart';
+import 'lower.dart';
+import 'names.dart';
+import 'program.dart';
+
+/// Extracts the Dart code under [root] (the files that are not under a hidden
+/// or a build directory) and writes the stream to [sink].
+Future<void> extract(String root, StringSink sink) async {
+  root = p.normalize(p.absolute(root));
+  final out = StreamOut(sink);
+  final prog = Program(root, out);
+  final collection = AnalysisContextCollection(includedPaths: [root]);
+
+  // Resolve everything first: the call graph needs all of the classes.
+  final units = <UnitInfo>[];
+  for (final context in collection.contexts) {
+    for (final path in context.contextRoot.analyzedFiles()) {
+      if (!path.endsWith('.dart') || !p.isWithin(root, path) || _skipped(root, path)) continue;
+      final r = await context.currentSession.getResolvedUnit(path);
+      if (r is! ResolvedUnitResult) {
+        out.loadError(p.relative(path, from: root), 'could not be resolved');
+        continue;
+      }
+      for (final d in r.diagnostics) {
+        if (d.diagnosticCode.type.name == 'COMPILE_TIME_ERROR') {
+          out.loadError(p.relative(path, from: root), d.message);
+        }
+      }
+      units.add(UnitInfo(prog, p.relative(path, from: root), r.unit, r.content, r.lineInfo));
+    }
+  }
+  units.sort((a, b) => a.file.compareTo(b.file));
+  for (final u in units) {
+    u.unit.accept(_Index(prog));
+  }
+  for (final u in units) {
+    u.unit.accept(_Lower(prog, u));
+  }
+  for (final e in prog.globals.entries) {
+    out.global(e.key, e.value.$1, e.value.$2);
+  }
+  prog.texts.write(out);
+}
+
+bool _skipped(String root, String path) {
+  final rel = p.relative(path, from: root);
+  return p.split(rel).any((s) => s.startsWith('.') || s == 'build');
+}
+
+/// Pass 1: which functions have a body, and which class has which method.
+class _Index extends RecursiveAstVisitor<void> {
+  _Index(this.prog);
+  final Program prog;
+
+  void _note(Element? el, FunctionBody? body) {
+    if (el == null || body == null || body is EmptyFunctionBody || body is NativeFunctionBody) return;
+    final base = el.baseElement;
+    final id = symbolOf(base);
+    prog.bodies.add(id);
+    final cls = base.enclosingElement;
+    if (cls is InterfaceElement && base is! ConstructorElement) {
+      (prog.methods[(base.name ?? '').replaceAll('=', '')] ??= []).add(MethodImpl(cls, id));
+    }
+  }
+
+  @override
+  void visitMethodDeclaration(MethodDeclaration node) {
+    _note(node.declaredFragment?.element, node.body);
+  }
+
+  @override
+  void visitConstructorDeclaration(ConstructorDeclaration node) {
+    _note(node.declaredFragment?.element, node.body);
+  }
+
+  @override
+  void visitFunctionDeclaration(FunctionDeclaration node) {
+    if (node.parent is CompilationUnit) _note(node.declaredFragment?.element, node.functionExpression.body);
+  }
+}
+
+/// What a function holds in a cell: the variables that a closure captures
+/// and that are assigned after their declaration.
+class _Scan extends RecursiveAstVisitor<void> {
+  final captured = <Object>{};
+  final assigned = <Object>{};
+  final _declIn = <Object, AstNode>{};
+  final _stack = <AstNode>[];
+
+  void _push(AstNode n, void Function() f) {
+    _stack.add(n);
+    f();
+    _stack.removeLast();
+  }
+
+  @override
+  void visitFunctionExpression(FunctionExpression node) => _push(node, () => super.visitFunctionExpression(node));
+
+  @override
+  void visitVariableDeclaration(VariableDeclaration node) {
+    final el = node.declaredFragment?.element;
+    if (el != null && _stack.isNotEmpty) _declIn[el.baseElement] = _stack.last;
+    super.visitVariableDeclaration(node);
+  }
+
+  @override
+  void visitFormalParameterList(FormalParameterList node) {
+    for (final fp in node.parameters) {
+      _declare(fp.declaredFragment?.element);
+    }
+    super.visitFormalParameterList(node);
+  }
+
+  void _declare(Element? el) {
+    if (el != null && _stack.isNotEmpty) _declIn[el.baseElement] = _stack.last;
+  }
+
+  @override
+  void visitSimpleIdentifier(SimpleIdentifier node) {
+    final el = node.element?.baseElement;
+    if (el != null && _stack.isNotEmpty && _declIn[el] != null && _declIn[el] != _stack.last) captured.add(el);
+    super.visitSimpleIdentifier(node);
+  }
+
+  void _write(Expression? target) {
+    var t = target;
+    while (t is ParenthesizedExpression) {
+      t = t.expression;
+    }
+    if (t is SimpleIdentifier) {
+      final el = t.element?.baseElement;
+      if (el != null) assigned.add(el);
+    }
+  }
+
+  @override
+  void visitAssignmentExpression(AssignmentExpression node) {
+    _write(node.leftHandSide);
+    super.visitAssignmentExpression(node);
+  }
+
+  @override
+  void visitPrefixExpression(PrefixExpression node) {
+    final t = node.operator.lexeme;
+    if (t == '++' || t == '--') _write(node.operand);
+    super.visitPrefixExpression(node);
+  }
+
+  @override
+  void visitPostfixExpression(PostfixExpression node) {
+    final t = node.operator.lexeme;
+    if (t == '++' || t == '--') _write(node.operand);
+    super.visitPostfixExpression(node);
+  }
+}
+
+/// Pass 2: lowers every top level function, method and constructor with a
+/// body. Local functions and closures are lowered with the function around.
+class _Lower extends RecursiveAstVisitor<void> {
+  _Lower(this.prog, this.unit);
+  final Program prog;
+  final UnitInfo unit;
+
+  @override
+  void visitFunctionDeclaration(FunctionDeclaration node) {
+    if (node.parent is! CompilationUnit) return;
+    final el = node.declaredFragment?.element;
+    final fe = node.functionExpression;
+    if (el == null || !_hasBody(fe.body)) return;
+    _function(
+      el,
+      node,
+      fe.parameters,
+      fe.body,
+      thisType: null,
+    );
+  }
+
+  @override
+  void visitMethodDeclaration(MethodDeclaration node) {
+    final el = node.declaredFragment?.element;
+    if (el == null || !_hasBody(node.body)) return;
+    final cls = el.enclosingElement;
+    _function(
+      el,
+      node,
+      node.parameters,
+      node.body,
+      thisType: node.isStatic || cls is! InterfaceElement ? null : cls.thisType,
+    );
+  }
+
+  @override
+  void visitConstructorDeclaration(ConstructorDeclaration node) {
+    final el = node.declaredFragment?.element;
+    if (el == null || !_hasBody(node.body) && node.initializers.isEmpty && node.parameters.parameters.isEmpty) return;
+    final cls = el.enclosingElement;
+    _function(el, node, node.parameters, node.body, thisType: null, constructorOf: cls, ctor: node);
+  }
+
+  bool _hasBody(FunctionBody b) => b is! EmptyFunctionBody && b is! NativeFunctionBody;
+
+  void _function(ExecutableElement el, AstNode node, FormalParameterList? list, FunctionBody body,
+      {required InterfaceType? thisType, InterfaceElement? constructorOf, ConstructorDeclaration? ctor}) {
+    final id = symbolOf(el);
+    final out = FuncOut(id)
+      ..symbol = id
+      ..recv = thisType != null
+      ..exported = !(el.name ?? '').startsWith('_');
+    final at = unit.at(node.offset);
+    out.pos = unit.pos(node, node.offset);
+
+    final scan = _Scan();
+    // the function itself is the outermost one: its parameters and variables
+    // are its own
+    scan._stack.add(node);
+    node.accept(scan);
+    final f = FnLower(prog, unit, out, cells: scan.captured, assigned: scan.assigned);
+
+    final params = <(Object, String, DartType?)>[];
+    if (thisType != null) params.add((thisKey, 'this', thisType));
+    for (final fp in list?.parameters ?? const <FormalParameter>[]) {
+      final pe = fp.declaredFragment?.element;
+      if (pe == null) continue;
+      params.add((pe.baseElement, fp.name?.lexeme ?? '', pe.type));
+    }
+    int? self;
+    f.lowerBody(
+      params: params,
+      body: body,
+      at: at,
+      preamble: constructorOf == null
+          ? null
+          : () {
+              // a constructor makes the object, sets its fields, and returns it
+              final d = f.tmp(constructorOf.thisType);
+              f.emit('alloc', dsts: [d], at: out.pos, more: {'type': typeId(constructorOf.thisType), 'class': 'pointer'});
+              self = d;
+              f.bind(thisKey, d);
+              _constructorPrologue(f, constructorOf, ctor!, d, params);
+            },
+    );
+    if (constructorOf != null) _returnSelf(out, self);
+    unit.funcTexts(id, node);
+    prog.out.func(out);
+  }
+
+  void _constructorPrologue(FnLower f, InterfaceElement cls, ConstructorDeclaration ctor, int self, List<(Object, String, DartType?)> params) {
+    // fields with an initializer in the class
+    for (final m in _fieldsOf(cls)) {
+      final init = m.initializer;
+      final el = m.declaredFragment?.element;
+      if (init == null || el == null) continue;
+      final v = f.expr(init);
+      f.emit('field_store', args: [self, v], at: f.pos(m), more: {'field': el.name ?? ''});
+    }
+    // this.x parameters
+    for (final fp in ctor.parameters.parameters) {
+      final x = fp;
+      if (x is FieldFormalParameter) {
+        final pe = x.declaredFragment?.element;
+        if (pe == null) continue;
+        final v = f.readVar(pe.baseElement, pe.type, f.pos(x));
+        f.emit('field_store', args: [self, v], at: f.pos(x), more: {'field': x.name.lexeme});
+      }
+    }
+    // the initializer list
+    for (final i in ctor.initializers) {
+      if (i is ConstructorFieldInitializer) {
+        final v = f.expr(i.expression);
+        f.emit('field_store', args: [self, v], at: f.pos(i), more: {'field': i.fieldName.name});
+      }
+    }
+  }
+
+  Iterable<VariableDeclaration> _fieldsOf(InterfaceElement cls) sync* {
+    final decl = unit.unit.declarations;
+    for (final d in decl) {
+      if (d is ClassDeclaration && d.declaredFragment?.element == cls) {
+        for (final m in d.body is BlockClassBody ? (d.body as BlockClassBody).members : const <ClassMember>[]) {
+          if (m is FieldDeclaration && !m.isStatic) yield* m.fields.variables;
+        }
+      }
+    }
+  }
+
+  /// The last block of a constructor returns the object: every `return` of
+  /// the lowered body returned nothing.
+  void _returnSelf(FuncOut out, int? self) {
+    if (self == null) return;
+    for (final b in out.blocks) {
+      final t = b.term;
+      if (t != null && t['kind'] == 'return') {
+        t['values'] = [self];
+      }
+    }
+  }
+}

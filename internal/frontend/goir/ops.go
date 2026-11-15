@@ -54,7 +54,7 @@ func (c *conv) unop(in *ssa.UnOp, pos ir.Pos) {
 		if in.CommaOk {
 			dsts = c.tupleDsts(in, 2)
 		}
-		c.emit(ir.Instr{Op: ir.OpCall, Dsts: dsts, Args: []ir.LocalID{c.val(in.X)}, Callee: &ir.Callee{Kind: ir.CalleeStatic, Symbol: "go/chan.recv"}, Pos: pos})
+		c.emit(ir.Instr{Op: ir.OpCall, Dsts: dsts, Args: []ir.LocalID{c.val(in.X)}, Callee: &ir.Callee{Kind: ir.CalleeStatic, Symbol: "chan.recv"}, Pos: pos})
 	default:
 		c.emit(ir.Instr{Op: ir.OpUnop, Dsts: c.dst(in), Args: []ir.LocalID{c.val(in.X)}, Operator: in.Op.String(), Pos: pos})
 	}

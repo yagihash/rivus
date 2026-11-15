@@ -252,7 +252,7 @@ Phase 1 のエンジンが型について実際に問うのは、この分類（
 | `Go` / `Defer` | `call` の `go` / `defer` フラグ |
 | `MakeClosure` / `FreeVar` | `make_closure` / `param`（捕捉値） |
 | `Range` / `Next` | イテレータ取得の `call` ＋ `next` の `call` ＋ 後方エッジ |
-| `Select` / `Send` / `Recv` | `call`（シンボル `go/chan.send` など）。`concurrency` の不確実性は、コアがこのシンボルから出す |
+| `Select` / `Send` / `Recv` | `call`（シンボル `chan.send` など）。`concurrency` の不確実性は、コアがこのシンボルから出す |
 | `Phi` | **出さない**（NaiveForm には出ない。φ はコアが作る） |
 | `Panic` / `Return` / `If` / `Jump` | `throw`（または `unreachable`）/ `return` / `branch` / `jump` |
 | `DebugRef` | 捨てる（位置は命令の `Pos` に持つ） |
@@ -261,7 +261,7 @@ NaiveForm のローカルは、`Alloc` の結果がそのままローカル変�
 
 **2.1 で分かったこと（実装メモ）:**
 - `rivus extract [-text] [-func 部分文字列] [-all]` で、IR を JSON Lines か人間向けの文字列で出せる。`testdata`、ghmint、rivus 自身、x/tools（5,258 関数、87MB、約 2 秒）が、検証つきで通り、`unsupported` は 0 件
-- go/ssa の内部用の呼び出し（`ssa:deferstack`、`ssa:wrapnilchk`）は、シンボル `builtin.ssa:...` の静的な `call` として、そのまま出る。`defer` を持つ関数の出口には `go.rundefers` の `call` が出る
+- go/ssa の内部用の呼び出し（`ssa:deferstack`、`ssa:wrapnilchk`）は、シンボル `builtin.ssa:...` の静的な `call` として、そのまま出る。`defer` を持つ関数の出口には `rt.rundefers` の `call` が出る
 - アドレス計算（`FieldAddr` / `IndexAddr`）は、使い道が `load` / `store` だけなら畳み込む。アドレスが値として渡るときだけ `addr_of` になる。グローバルのアドレスは、引数のない `addr_of`（`global` つき）
 - `call` の `callee` は、静的な呼び出しで `func`（呼び先の関数 ID）と `symbol`（ルールのシンボル。無名関数では空）の両方を持つ。クロージャの直接呼び出しは、`value` の呼び出しにする（束縛した値を失わないため）
 - φ は、前任ブロックの末尾の `copy` に落とす。1 つの前任が複数の φ に値を渡すときは、一時変数を経由する
@@ -280,7 +280,7 @@ NaiveForm のローカルは、`Alloc` の結果がそのままローカル変�
 
 **2.4〜2.6 で分かったこと（実装メモ）:**
 - **新しいパッケージ:** `internal/irssa`（2.2）、`internal/sg`（SSA グラフ。IR ＋ `irssa` から、値・命令・ブロック・支配木を作る。昇格した変数の `load` / `store` と、φ を落とした `copy` は消え、定数・パラメータは値になる）、`internal/taint`（エンジン。`go/ssa` の値の代わりに `sg` の値を使う）
-- **エンジンを動かす言語固有の操作は、シンボル付きの `call`:** `go/chan.send` / `go/chan.recv`、`go/range.start` / `go/range.next` / `go/range.next_string`、`go.rundefers`。`select` は、extractor が送信と受信の `call` に分ける（どれが起きるかはデータではない）。`index_load` / `index_store` の `Keyed` は、キーで引くこと（map、文字列）。`Folded` は、アドレス計算を畳んだ `load` / `store`。`convert` の `Operator` は、変換の種類
+- **エンジンを動かす言語固有の操作は、シンボル付きの `call`:** `chan.send` / `chan.recv`、`iter.start` / `iter.next` / `iter.next_string`、`rt.rundefers`。`select` は、extractor が送信と受信の `call` に分ける（どれが起きるかはデータではない）。`index_load` / `index_store` の `Keyed` は、キーで引くこと（map、文字列）。`Folded` は、アドレス計算を畳んだ `load` / `store`。`convert` の `Operator` は、変換の種類
 - **値の同一性:** `go/ssa` のタプル（複数戻り値）は、`call` の `Dsts` の 1 つずつが値になる。`Extract` は消える
 - **コールグラフ:** VTA は NaiveForm の上だと lifted の上より粗い（`(go/types.Object).Name` の候補が増える）。そこで `gossa.Options.WithLifted` で lifted 版も作り、グラフはそちらから取って、NaiveForm の `call` へ位置と種類で対応づけて `candidates` に入れる。この対応づけで、`ssa:deferstack` のような lifting で消える呼び出しを避ける
 - **関数だけの値:** 何も捕捉しない無名関数を変数に入れて呼ぶ場合、`sg` が `make_closure`（捕捉なし）から呼び先を静的に解く（これを落とすと、`unresolved_callee` が増えた）

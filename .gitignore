@@ -2,3 +2,4 @@
 /rivus
 *.test
 /rust/target/
+.dart_tool/

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -88,8 +89,34 @@ type loaded struct {
 	texts ir.Texts
 }
 
+// readIR reads a stream of the IR written by an extractor. The texts come from
+// the stream too.
+func readIR(path string) (*loaded, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	prog, err := ir.Read(bufio.NewReaderSize(f, 1<<20))
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	return &loaded{ir: prog, texts: ir.NewStreamTexts(prog)}, nil
+}
+
+// loadErrors are what could not be read, from the packages or the stream.
+func (l *loaded) loadErrors() []ir.LoadError {
+	if l.gossa != nil {
+		return l.gossa.LoadErrors
+	}
+	return l.ir.LoadErrors
+}
+
 // packages lists the import paths of the packages that were analysed.
 func (l *loaded) packages() []string {
+	if l.gossa == nil {
+		return nil
+	}
 	var out []string
 	for _, pkg := range l.gossa.Initial {
 		out = append(out, pkg.PkgPath)

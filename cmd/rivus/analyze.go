@@ -27,6 +27,9 @@ type analyzeOpts struct {
 	timeout time.Duration
 	passes  int
 	maxImpl int
+	// irFile is a stream of the neutral IR made by an extractor of another
+	// language (rivus extract writes the same form): the analysis starts there.
+	irFile string
 }
 
 func (o *analyzeOpts) register(fs *flag.FlagSet) {
@@ -36,6 +39,7 @@ func (o *analyzeOpts) register(fs *flag.FlagSet) {
 	fs.IntVar(&o.maxImpl, "max-implementations", model.DefaultMaxImplementations, "default limit of match: implementations")
 	fs.IntVar(&o.passes, "max-passes", taint.DefaultOptions().MaxPasses, "maximum number of passes over the program while summaries change")
 	fs.DurationVar(&o.timeout, "timeout", 0, "stop the analysis after this long and report what was found (0: no limit)")
+	fs.StringVar(&o.irFile, "ir", "", "analyse the neutral IR in this JSON Lines file (from an extractor of another language) instead of Go packages")
 	fs.StringVar(&o.cpuProf, "cpuprofile", "", "write a CPU profile of the taint phase to this file (development)")
 }
 
@@ -47,20 +51,29 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	if err != nil {
 		return nil, err
 	}
-	l, err := o.load(patterns, true)
-	if err != nil {
-		return nil, err
-	}
-	phase("load")
-	for _, e := range rules.Expand(l.gossa, o.maxImpl) {
-		if e.Limited || e.Note != "" {
-			fmt.Fprintf(os.Stderr, "rivus: %s\n", e)
+	var l *loaded
+	if o.irFile != "" {
+		l, err = readIR(o.irFile)
+		if err != nil {
+			return nil, err
 		}
+		phase("ir")
+	} else {
+		l, err = o.load(patterns, true)
+		if err != nil {
+			return nil, err
+		}
+		phase("load")
+		for _, e := range rules.Expand(l.gossa, o.maxImpl) {
+			if e.Limited || e.Note != "" {
+				fmt.Fprintf(os.Stderr, "rivus: %s\n", e)
+			}
+		}
+		if err := l.extract(true); err != nil {
+			return nil, err
+		}
+		phase("ir")
 	}
-	if err := l.extract(true); err != nil {
-		return nil, err
-	}
-	phase("ir")
 	graph, err := sg.Build(l.ir)
 	if err != nil {
 		return nil, err
@@ -97,10 +110,10 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 		}()
 	}
 	eng := taint.New(graph, l.texts, st, rules, opts)
-	eng.SetLoadErrors(l.gossa.LoadErrors)
+	eng.SetLoadErrors(l.loadErrors())
 	res = eng.Run()
 	phase("taint")
-	rep := report.Build(l.packages(), l.gossa.LoadErrors, st, res, rules)
+	rep := report.Build(l.packages(), l.loadErrors(), st, res, rules)
 	rep.Target = vcs.Detect(o.dir)
 	return rep, nil
 }

@@ -359,7 +359,7 @@ func (c *conv) instr(in ssa.Instruction, blk *ir.Block, b *ssa.BasicBlock) {
 	case *ssa.Defer:
 		c.call(in, nil, in.Common(), pos, false, true)
 	case *ssa.RunDefers:
-		c.emit(ir.Instr{Op: ir.OpCall, Callee: &ir.Callee{Kind: ir.CalleeStatic, Symbol: "go.rundefers"}, Pos: pos})
+		c.emit(ir.Instr{Op: ir.OpCall, Callee: &ir.Callee{Kind: ir.CalleeStatic, Symbol: "rt.rundefers"}, Pos: pos})
 	case *ssa.BinOp:
 		c.emit(ir.Instr{Op: ir.OpBinop, Dsts: c.dst(in), Args: []ir.LocalID{c.val(in.X), c.val(in.Y)}, Operator: in.Op.String(), Pos: pos})
 	case *ssa.UnOp:
@@ -410,13 +410,13 @@ func (c *conv) instr(in ssa.Instruction, blk *ir.Block, b *ssa.BasicBlock) {
 		fn := in.Fn.(*ssa.Function)
 		c.emit(ir.Instr{Op: ir.OpMakeClosure, Dsts: c.dst(in), Args: c.vals(in.Bindings), Func: ir.FuncID(gossa.FuncID(fn)), Pos: pos})
 	case *ssa.Send:
-		c.emit(ir.Instr{Op: ir.OpCall, Args: []ir.LocalID{c.val(in.Chan), c.val(in.X)}, Callee: &ir.Callee{Kind: ir.CalleeStatic, Symbol: "go/chan.send"}, Pos: pos})
+		c.emit(ir.Instr{Op: ir.OpCall, Args: []ir.LocalID{c.val(in.Chan), c.val(in.X)}, Callee: &ir.Callee{Kind: ir.CalleeStatic, Symbol: "chan.send"}, Pos: pos})
 	case *ssa.Range:
-		c.emit(ir.Instr{Op: ir.OpCall, Dsts: c.dst(in), Args: []ir.LocalID{c.val(in.X)}, Callee: &ir.Callee{Kind: ir.CalleeStatic, Symbol: "go/range.start"}, Pos: pos})
+		c.emit(ir.Instr{Op: ir.OpCall, Dsts: c.dst(in), Args: []ir.LocalID{c.val(in.X)}, Callee: &ir.Callee{Kind: ir.CalleeStatic, Symbol: "iter.start"}, Pos: pos})
 	case *ssa.Next:
-		sym := "go/range.next"
+		sym := "iter.next"
 		if in.IsString {
-			sym = "go/range.next_string"
+			sym = "iter.next_string"
 		}
 		c.emit(ir.Instr{Op: ir.OpCall, Dsts: c.tupleDsts(in, 3), Args: []ir.LocalID{c.val(in.Iter)}, Callee: &ir.Callee{Kind: ir.CalleeStatic, Symbol: sym}, Pos: pos})
 	case *ssa.Select:
@@ -430,11 +430,11 @@ func (c *conv) instr(in ssa.Instruction, blk *ir.Block, b *ssa.BasicBlock) {
 		k := 0
 		for _, st := range in.States {
 			if st.Dir == types.SendOnly {
-				c.emit(ir.Instr{Op: ir.OpCall, Args: []ir.LocalID{c.val(st.Chan), c.val(st.Send)}, Callee: &ir.Callee{Kind: ir.CalleeStatic, Symbol: "go/chan.send"}, Pos: pos})
+				c.emit(ir.Instr{Op: ir.OpCall, Args: []ir.LocalID{c.val(st.Chan), c.val(st.Send)}, Callee: &ir.Callee{Kind: ir.CalleeStatic, Symbol: "chan.send"}, Pos: pos})
 				continue
 			}
 			ok := c.newLocal("", types.Typ[types.Bool])
-			c.emit(ir.Instr{Op: ir.OpCall, Dsts: []ir.LocalID{elems[2+k], ok}, Args: []ir.LocalID{c.val(st.Chan)}, Callee: &ir.Callee{Kind: ir.CalleeStatic, Symbol: "go/chan.recv"}, Pos: pos})
+			c.emit(ir.Instr{Op: ir.OpCall, Dsts: []ir.LocalID{elems[2+k], ok}, Args: []ir.LocalID{c.val(st.Chan)}, Callee: &ir.Callee{Kind: ir.CalleeStatic, Symbol: "chan.recv"}, Pos: pos})
 			k++
 		}
 	case *ssa.DebugRef:

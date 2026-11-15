@@ -57,7 +57,7 @@ func (s *state) seedParam(v *sg.Value, idx int) {
 
 func isComparison(op string) bool {
 	switch op {
-	case "==", "!=", "<", "<=", ">", ">=":
+	case "==", "!=", "<", "<=", ">", ">=", "is", "is!":
 		return true
 	}
 	return false

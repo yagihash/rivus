@@ -170,7 +170,7 @@ func TestClosuresGlobalsAndChannels(t *testing.T) {
 		t.Errorf("GetG:\n%s", got)
 	}
 	got := funcText(t, p, "Channels")
-	for _, want := range []string{"go/chan.send", "go/chan.recv"} {
+	for _, want := range []string{"chan.send", "chan.recv"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("Channels lacks %s:\n%s", want, got)
 		}
@@ -179,7 +179,7 @@ func TestClosuresGlobalsAndChannels(t *testing.T) {
 
 func TestRangesAssertsAndCalls(t *testing.T) {
 	p := extract(t, "./cases/irshape")
-	if got := funcText(t, p, "Ranges"); !strings.Contains(got, "go/range.next") || !strings.Contains(got, "go/range.start") {
+	if got := funcText(t, p, "Ranges"); !strings.Contains(got, "iter.next") || !strings.Contains(got, "iter.start") {
 		t.Errorf("Ranges:\n%s", got)
 	}
 	if got := funcText(t, p, "Asserts"); strings.Count(got, "type_assert string") != 2 {
