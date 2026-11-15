@@ -52,6 +52,8 @@ type Program struct {
 	Fset    *token.FileSet
 	SSA     *ssa.Program
 	Initial []*packages.Package
+	// PkgPaths are the import paths of Initial (which ReleaseSSA lets go of).
+	PkgPaths []string
 
 	// Funcs lists every function that has a body, sorted by FuncID.
 	Funcs []*ssa.Function
@@ -106,6 +108,9 @@ func Load(dir string, patterns []string, opts Options) (*Program, error) {
 		files:   map[string]*ast.File{},
 		sources: map[string][]byte{},
 	}
+	for _, pkg := range pkgs {
+		p.PkgPaths = append(p.PkgPaths, pkg.PkgPath)
+	}
 	seenErr := map[string]bool{}
 	packages.Visit(pkgs, nil, func(pkg *packages.Package) {
 		for _, e := range pkg.Errors {
@@ -151,12 +156,32 @@ func Load(dir string, patterns []string, opts Options) (*Program, error) {
 			}
 		}
 	}
-	buildInOrder(prog, skip)
+	progs := []*ssa.Program{prog}
 	if opts.WithLifted {
 		lifted, _ := mk(pkgs, ssa.InstantiateGenerics)
-		buildInOrder(lifted, skip)
 		p.Lifted = lifted
+		progs = append(progs, lifted)
 	}
+	// The syntax and the type information of a dependency are of no use once
+	// its package is built (go/ssa keeps what it needs): letting go of them
+	// package by package keeps the peak low.
+	deps := map[string]*packages.Package{}
+	if opts.Deps {
+		initial := map[*packages.Package]bool{}
+		for _, pkg := range pkgs {
+			initial[pkg] = true
+		}
+		packages.Visit(pkgs, nil, func(pkg *packages.Package) {
+			if !initial[pkg] {
+				deps[pkg.PkgPath] = pkg
+			}
+		})
+	}
+	buildInOrder(progs, skip, func(path string) {
+		if pkg := deps[path]; pkg != nil {
+			pkg.Syntax, pkg.TypesInfo = nil, nil
+		}
+	})
 
 	own := map[*ssa.Package]bool{}
 	for _, sp := range ssaPkgs {
@@ -269,6 +294,9 @@ func (p *Program) File(pos token.Pos) *ast.File {
 func (p *Program) ReleaseSSA() {
 	p.SSA, p.Lifted = nil, nil
 	p.Funcs, p.Own, p.OwnPkgs = nil, nil, nil
+	// the loaded packages carry the types and the syntax of every dependency
+	p.Initial = nil
+	// the loaded packages carry the types and the syntax of every dependency
 	p.byID = nil
 }
 
@@ -309,13 +337,20 @@ func (p *Program) FuncByID(id string) *ssa.Function {
 // on demand (the instances of generic functions, the wrappers of methods)
 // then depends on which package got there first: the same code would not give
 // the same IR twice.
-func buildInOrder(prog *ssa.Program, skip map[string]bool) {
-	pkgs := prog.AllPackages()
-	sort.Slice(pkgs, func(i, j int) bool { return pkgs[i].Pkg.Path() < pkgs[j].Pkg.Path() })
+func buildInOrder(progs []*ssa.Program, skip map[string]bool, built func(path string)) {
+	pkgs := progs[0].AllPackages()
+	sort.SliceStable(pkgs, func(i, j int) bool { return pkgs[i].Pkg.Path() < pkgs[j].Pkg.Path() })
 	for _, pkg := range pkgs {
-		if skip[pkg.Pkg.Path()] {
+		path := pkg.Pkg.Path()
+		if skip[path] {
 			continue
 		}
 		pkg.Build()
+		for _, prog := range progs[1:] {
+			if q := prog.Package(pkg.Pkg); q != nil {
+				q.Build()
+			}
+		}
+		built(path)
 	}
 }

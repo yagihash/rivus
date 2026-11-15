@@ -137,11 +137,7 @@ func (l *loaded) packages() []string {
 	if l.gossa == nil {
 		return nil
 	}
-	var out []string
-	for _, pkg := range l.gossa.Initial {
-		out = append(out, pkg.PkgPath)
-	}
-	return out
+	return l.gossa.PkgPaths
 }
 
 // extract makes the IR. The analysis needs every function with a body, the
