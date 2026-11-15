@@ -47,6 +47,9 @@ Field rules use the same form (`field: package:app/a.dart#Request.url`).
 - A class instance is a `pointer`; `List`, `Set`, `Map`, `Iterable` are `container`.
 - Calls on an instance go through the receiver (`dynamic`), with the candidates found
   by class hierarchy analysis over the code that was read.
+- Patterns (`switch`, `if-case`, destructuring, switch expressions) are tests on the
+  value, reads of its parts (`field_load`, `index_load`) and the variables they bind.
+  Records are values with fields `$1`, `$2`, ... and by name.
 - A constructor is a function that allocates the object, sets the fields
   (initializers of the class, `this.x` parameters, the initializer list) and returns it.
 - `for (x in xs)` is `iter.start` / `iter.next` (the symbols of the engine).
@@ -61,11 +64,13 @@ file_content]`, so that the label a sanitizer adds does not make it fire.
 
 ## Not done
 
-- **Patterns** (pattern matching in `switch`, `if-case`, destructuring), **switch
-  expressions**, collection `for`: marked `unsupported`, or the cases are assumed
-  reachable. Records are not lowered.
-- **Calls through function values** (a function-typed parameter) have no candidates:
-  there is no call graph over function values (Dart's type flow analysis would give it).
+- **Collection `for`** (`[for (...) x]`) is `unsupported`. A pattern's shape tests (the
+  length of a list, whether a key exists) are not made; the type test of an object
+  pattern and the constants are.
+- **Calls through function values**: the core finds the functions that flow to the value
+  through copies, φ functions and the arguments of the callers of the parameter. A
+  function kept in a field or a list is not found. A closure found that way does not get
+  the values it captured (they carry nothing).
 - **Streams and `yield`**: the values do not flow from a producer to the
   `await for` that reads it; that needs a model.
 - **Named parameters** of an override that adds one the base does not have may shift

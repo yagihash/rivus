@@ -2,6 +2,7 @@ package sg
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/yagihash/rivus/internal/ir"
 	"github.com/yagihash/rivus/internal/irssa"
@@ -22,6 +23,7 @@ func Build(p *ir.Program) (*Program, error) {
 		out.ByID[fn.ID] = fn
 	}
 	out.link()
+	out.resolveValueCalls()
 	return out, nil
 }
 
@@ -314,5 +316,104 @@ func (b *builder) buildInstrs() {
 			term.Args = append(term.Args, b.valueOf(b.form.Operand(bi, len(blk.Instrs), k)))
 		}
 		add(term)
+	}
+}
+
+// resolveValueCalls finds the functions a call of a function value may reach,
+// for the calls that nothing else resolved: the functions that flow to the
+// value, through copies, φ functions and the parameters of the function (the
+// arguments its callers pass). It follows no memory: a function kept in a
+// field or a list is not found, and the call stays unresolved.
+func (p *Program) resolveValueCalls() {
+	callers := map[*Func][]*Instr{}
+	for _, fn := range p.Funcs {
+		for _, b := range fn.Blocks {
+			for _, in := range b.Instrs {
+				if in.Op != ir.OpCall {
+					continue
+				}
+				if in.Static != nil {
+					callers[in.Static] = append(callers[in.Static], in)
+				}
+				for _, c := range in.CandidateFns {
+					callers[c] = append(callers[c], in)
+				}
+			}
+		}
+	}
+	const most = 8
+	for _, fn := range p.Funcs {
+		for _, b := range fn.Blocks {
+			for _, in := range b.Instrs {
+				if in.Op != ir.OpCall || in.Callee.Kind != ir.CalleeValue || in.Static != nil || len(in.CandidateFns) > 0 || len(in.Args) == 0 {
+					continue
+				}
+				found := map[*Func]bool{}
+				p.funcsOf(in.Args[0], callers, found, map[*Value]bool{}, 0)
+				if len(found) == 0 || len(found) > most {
+					continue
+				}
+				for f := range found {
+					in.CandidateFns = append(in.CandidateFns, f)
+				}
+				sort.Slice(in.CandidateFns, func(i, j int) bool { return in.CandidateFns[i].ID < in.CandidateFns[j].ID })
+				for _, f := range in.CandidateFns {
+					in.Candidates = append(in.Candidates, ir.FuncID(f.ID))
+				}
+			}
+		}
+	}
+}
+
+// callArgv is what a call passes, in the order of the parameters of the
+// callee (the receiver first).
+func callArgv(in *Instr) []*Value {
+	if in.Callee.Kind == ir.CalleeValue && len(in.Args) > 0 {
+		return in.Args[1:]
+	}
+	return in.Args
+}
+
+func (p *Program) funcsOf(v *Value, callers map[*Func][]*Instr, found map[*Func]bool, seen map[*Value]bool, depth int) {
+	if v == nil || seen[v] || depth > 3 {
+		return
+	}
+	seen[v] = true
+	switch v.Kind {
+	case KFunc:
+		if v.Fn != nil {
+			found[v.Fn] = true
+		}
+	case KPhi:
+		if v.Instr != nil {
+			for _, a := range v.Instr.Args {
+				p.funcsOf(a, callers, found, seen, depth)
+			}
+		}
+	case KResult:
+		in := v.Instr
+		if in == nil || in.IR == nil {
+			return
+		}
+		switch in.Op {
+		case ir.OpMakeClosure:
+			if f := p.ByID[string(in.IR.Func)]; f != nil {
+				found[f] = true
+			}
+		case ir.OpCopy:
+			if !in.IR.View && len(in.Args) == 1 {
+				p.funcsOf(in.Args[0], callers, found, seen, depth)
+			}
+		}
+	case KParam:
+		if v.Func == nil {
+			return
+		}
+		for _, c := range callers[v.Func] {
+			args := callArgv(c)
+			if v.Param < len(args) {
+				p.funcsOf(args[v.Param], callers, found, seen, depth+1)
+			}
+		}
 	}
 }

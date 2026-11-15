@@ -63,7 +63,7 @@ func TestDartExtractor(t *testing.T) {
 	}
 	src, sinks := map[string]at{}, map[string]at{}
 	var none []at
-	for _, name := range []string{"app.dart", "web.dart", "server.dart", "patterns.dart"} {
+	for _, name := range []string{"app.dart", "web.dart", "server.dart", "patterns.dart", "callbacks.dart"} {
 		rel := "lib/" + name
 		f, err := os.Open(filepath.Join(extractor, "test", "sample", rel))
 		if err != nil {
@@ -108,7 +108,7 @@ func TestDartExtractor(t *testing.T) {
 			t.Errorf("unexpected flow %s", k)
 		}
 	}
-	if len(want) < 21 {
+	if len(want) < 23 {
 		t.Errorf("the sample has only %d flows", len(want))
 	}
 }

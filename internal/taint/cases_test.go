@@ -299,6 +299,8 @@ func TestGlobalVarNoteListsTheWriters(t *testing.T) {
 
 func TestImplementations(t *testing.T) { checkCase(t, "impl") }
 
+func TestFunctionValues(t *testing.T) { checkCase(t, "funcvalue") }
+
 func TestImplementationsStopAtTheLimit(t *testing.T) {
 	prog := loadIR(t, testutil.Testdata(), "./cases/impl/...")
 	rules := testutil.Rules(t)
