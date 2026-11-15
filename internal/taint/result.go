@@ -124,6 +124,14 @@ type Finding struct {
 	Category    string            `json:"category,omitempty"`
 	Labels      []string          `json:"labels"`
 	Paths       []Path            `json:"paths"`
+	// OtherSources are more sources of the same kind (a parameter of the same
+	// type, in other functions) that reach this sink with the same labels. The
+	// finding shows the shortest path; the rest are not repeated as findings,
+	// since a request type is a source in every function that takes it, and
+	// the same flow would be reported once per function. At most
+	// maxOtherSources are listed (without snippets); the count has them all.
+	OtherSources      []SiteRef `json:"other_sources,omitempty"`
+	OtherSourcesCount int       `json:"other_sources_count,omitempty"`
 	// Uncertainties lists everything on the path that rivus could not
 	// resolve; it is the part a reviewer should look at first.
 	Uncertainties []*Uncertainty `json:"uncertainties,omitempty"`

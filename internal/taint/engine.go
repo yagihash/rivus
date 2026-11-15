@@ -2,6 +2,7 @@ package taint
 
 import (
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/yagihash/rivus/internal/sg"
@@ -667,6 +668,7 @@ func (e *Engine) collect(st Stats) *Result {
 			res.Findings = append(res.Findings, f)
 		}
 	}
+	res.Findings = e.mergeParamSources(res.Findings)
 	sort.SliceStable(res.Findings, func(i, j int) bool {
 		a, b := res.Findings[i], res.Findings[j]
 		if a.Sink.Position.File != b.Sink.Position.File {
@@ -791,4 +793,56 @@ func itoa(n int) string {
 		b[i] = '-'
 	}
 	return string(b[i:])
+}
+
+// maxOtherSources bounds the other sources a finding lists.
+const maxOtherSources = 5
+
+// mergeParamSources merges the findings that differ only in the function the
+// source parameter is in: a parameter of a request type is a source in every
+// function that takes one, so a handler and the helpers it calls (and, when a
+// function value is resolved to every candidate, other handlers) each give
+// the same flow. The finding with the shortest path stays; the others are
+// listed in it.
+func (e *Engine) mergeParamSources(fs []*Finding) []*Finding {
+	type key struct{ sink, category, labels, symbol string }
+	groups := map[key][]*Finding{}
+	var order []key
+	var out []*Finding
+	for _, f := range fs {
+		src := e.sites.ByID[f.Source.ID]
+		if src == nil || (src.Kind != model.KindParam && src.Kind != model.KindParamType) {
+			out = append(out, f)
+			continue
+		}
+		k := key{f.Sink.ID, f.Category, strings.Join(f.Labels, ","), f.Source.Symbol}
+		if _, ok := groups[k]; !ok {
+			order = append(order, k)
+		}
+		groups[k] = append(groups[k], f)
+	}
+	for _, k := range order {
+		g := groups[k]
+		sort.SliceStable(g, func(i, j int) bool {
+			a, b := g[i], g[j]
+			if la, lb := len(a.Paths[0].Steps), len(b.Paths[0].Steps); la != lb {
+				return la < lb
+			}
+			if a.Source.Func != b.Source.Func {
+				return a.Source.Func < b.Source.Func
+			}
+			return a.ID < b.ID
+		})
+		rep := g[0]
+		for _, o := range g[1:] {
+			rep.OtherSourcesCount++
+			if len(rep.OtherSources) < maxOtherSources {
+				ref := o.Source
+				ref.Snippet = ""
+				rep.OtherSources = append(rep.OtherSources, ref)
+			}
+		}
+		out = append(out, rep)
+	}
+	return out
 }
