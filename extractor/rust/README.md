@@ -1,3 +1,13 @@
+# rivus for Rust
+
+(The crate `rivus` on crates.io is this extractor: it installs the command `rivus-rust`. The
+analysis engine `rivus` itself is a Go program, <https://github.com/yagihash/rivus>.)
+
+```sh
+rustup toolchain install nightly-2026-11-15 --profile minimal -c rustc-dev -c llvm-tools -c rust-src
+cargo +nightly-2026-11-15 install rivus     # the command: rivus-rust
+```
+
 # The Rust extractor of rivus
 
 Reads Rust through the compiler: MIR, by way of `rustc_public` (the stable interface of

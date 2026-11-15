@@ -1,14 +1,19 @@
 [package]
-name = "rivus-rust"
-version = "0.0.0"
+name = "rivus"
+version = "0.1.0"
 edition = "2021"
-description = "The Rust extractor of rivus: MIR (rustc_public) to the neutral IR, as JSON Lines."
+description = "rivus for Rust: reads MIR through rustc_public and writes the neutral IR of the taint analysis engine rivus. Needs a pinned nightly."
 license = "Apache-2.0"
-publish = false
+repository = "https://github.com/yagihash/rivus"
+readme = "README.md"
+keywords = ["taint-analysis", "static-analysis", "security", "mir", "rustc"]
+categories = ["development-tools", "command-line-utilities"]
+include = ["src/**", "build.rs", "rust-toolchain.toml", "Cargo.toml", "README.md", "LICENSE"]
 
 [dependencies]
 serde_json = "1"
 
+# The binary keeps its name: `rivus` is the command of the analysis engine itself.
 [[bin]]
 name = "rivus-rust"
 path = "src/main.rs"
