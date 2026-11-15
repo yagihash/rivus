@@ -1,0 +1,27 @@
+{
+  "target": "https://github.com/Contrast-Security-OSS/go-test-bench (checked out at the commit in 'commit')",
+  "how": "Each entry is a sink call site. 'vuln' = the benchmark reaches it with the payload in Unsafe mode; 'safe' = the benchmark's Safe branch (constant command, parameterized query). Labels come from reading the code, not from the benchmark (it has none); judgement calls are in 'note'.",
+  "sites": [
+    {"file": "internal/injection/cmdi/cmd-injection.go", "line": 47, "label": "safe", "category": "command_injection", "note": "Safe branch: exec.Command(\"echo\", in): constant program, the input is an argument. Whether argument injection counts is a policy question; the benchmark calls it safe."},
+    {"file": "internal/injection/cmdi/cmd-injection.go", "line": 53, "label": "vuln", "category": "command_injection"},
+    {"file": "internal/injection/cmdi/cmd-injection.go", "line": 78, "label": "safe", "category": "command_injection", "note": "as line 47, CommandContext"},
+    {"file": "internal/injection/cmdi/cmd-injection.go", "line": 84, "label": "vuln", "category": "command_injection"},
+    {"file": "internal/injection/sqli/sql-injection.go", "line": 57, "label": "vuln", "category": "sql_injection"},
+    {"file": "internal/injection/sqli/sql-injection.go", "line": 62, "label": "safe", "category": "sql_injection", "note": "parameterized query"},
+    {"file": "internal/pathtraversal/path-traversal.go", "line": 74, "label": "vuln", "category": "path_traversal"},
+    {"file": "internal/pathtraversal/path-traversal.go", "line": 87, "label": "vuln", "category": "path_traversal"},
+    {"file": "internal/pathtraversal/path-traversal.go", "line": 103, "label": "vuln", "category": "path_traversal"},
+    {"file": "internal/pathtraversal/path-traversal.go", "line": 110, "label": "vuln", "category": "path_traversal"},
+    {"file": "internal/ssrf/ssrf.go", "line": 51, "label": "vuln", "category": "ssrf"},
+    {"file": "pkg/servestd/servestd.go", "line": 147, "label": "vuln", "category": "open_redirect"},
+    {"file": "pkg/servechi/servechi.go", "line": 141, "label": "vuln", "category": "open_redirect"},
+    {"file": "pkg/servejschmidt/servejschmidt.go", "line": 130, "label": "vuln", "category": "open_redirect"},
+    {"file": "pkg/servegin/servegin.go", "line": 129, "label": "vuln", "category": "open_redirect", "note": "gin: c.Redirect"},
+    {"file": "pkg/servegin/servegin.go", "line": 116, "label": "vuln", "category": "path_traversal", "note": "gin: c.File"},
+    {"file": "pkg/servestd/servestd.go", "line": 56, "label": "vuln", "category": "xss", "note": "reflectedXss: the raw payload is written with fmt.Fprint"},
+    {"file": "pkg/servechi/servechi.go", "line": 59, "label": "vuln", "category": "xss"},
+    {"file": "pkg/servejschmidt/servejschmidt.go", "line": 60, "label": "vuln", "category": "xss"},
+    {"file": "pkg/serveswagger/setup.go", "line": 172, "label": "vuln", "category": "xss"},
+    {"file": "pkg/servegin/servegin.go", "line": 91, "label": "vuln", "category": "xss", "note": "gin: c.String"}
+  ]
+}
