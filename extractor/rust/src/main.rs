@@ -93,7 +93,7 @@ fn cli() -> ExitCode {
     let mut dir = None;
     for a in std::env::args().skip(1) {
         match a.as_str() {
-            "--include-tests" => include_tests = true,
+            "--include-tests" | "--tests" | "-tests" => include_tests = true,
             _ => dir = Some(a),
         }
     }
