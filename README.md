@@ -77,6 +77,20 @@ Go / Rust / Dart extractor ──→ 中立 IR (CFG, JSON Lines) ──→ Go �
 }
 ```
 
+## プロジェクトに合わせてモデルを足す
+
+source・sink・sanitizer と、使っているライブラリの伝播（モデル）は、解析するプロジェクトの側に置ける。
+
+1. 解析するディレクトリの `.rivus/rules/*.yaml` に、ルールを書く（組み込みと同じ形式。[models](docs/ARCHITECTURE.md)）。フラグなしで読まれる（`-no-project-rules` で外せる）。`-rules file.yaml` でも足せる
+2. 何を書くとよいかは `rivus models coverage` が、検出結果の経路に載っているのにモデルがない関数を、効く順に出す。`-yaml` で、埋めるひな形が出る
+
+```sh
+rivus models coverage -yaml -top 20 ./...                       # Go
+rivus models coverage -yaml -top 20 -ir package.jsonl           # Dart など
+```
+
+モデルはライブラリの API についての知識なので、書いたものは、そのライブラリを使う他のプロジェクトでも使える。広く使えるものは、組み込み（`internal/model/builtin`）に入れる。
+
 ## 使い方（Go）
 
 ```sh

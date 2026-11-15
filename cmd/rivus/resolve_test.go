@@ -542,3 +542,26 @@ func TestResolveRecordsTheRevision(t *testing.T) {
 		t.Errorf("no revision: %+v", plain.Results[0])
 	}
 }
+
+// The rules of a project live in <dir>/.rivus/rules and are read without a
+// flag; -no-project-rules leaves them out.
+func TestProjectRulesArePluggedIn(t *testing.T) {
+	w := newWorkspace(t)
+	count := func(args ...string) int {
+		var rep report.Report
+		if err := json.Unmarshal(w.run(append([]string{"analyze", "-no-builtin-rules"}, args...)...), &rep); err != nil {
+			t.Fatal(err)
+		}
+		return len(rep.Findings)
+	}
+	if n := count("./main"); n != 0 {
+		t.Fatalf("no rules at all, and %d findings", n)
+	}
+	w.write(".rivus/rules/project.yaml", wsRules)
+	if n := count("./main"); n != 1 {
+		t.Errorf("the project's rules were not read: %d findings", n)
+	}
+	if n := count("-no-project-rules", "./main"); n != 0 {
+		t.Errorf("-no-project-rules still read them: %d findings", n)
+	}
+}

@@ -183,7 +183,7 @@ int _readMember(FnLower f, Element? el, int? base, AstNode n, DartType? t, Pos a
       if (!target.isStatic && target.enclosingElement is InterfaceElement) {
         args.add(base ?? f.readVar(thisKey, null, at));
       }
-      f.emit('make_closure', dsts: [d], args: args, at: at, more: {'func': symbolOf(target)});
+      f.emit('make_closure', dsts: [d], args: args, at: at, more: {'func': funcId(target)});
       return d;
     default:
       return f.nilConst(at);
@@ -256,7 +256,7 @@ int _call(FnLower f, ExecutableElement callee, int? base, List<int> args, DartTy
   } else {
     callee_
       ..['kind'] = 'static'
-      ..['func'] = sym
+      ..['func'] = funcId(el)
       ..['symbol'] = sym;
     if (isMethod) callee_['recv'] = true;
   }
@@ -333,7 +333,7 @@ int _creation(FnLower f, InstanceCreationExpression e) {
   final pos = f.unit.callPos(e, e.argumentList, nodes);
   final sym = symbolOf(ctor);
   final instr = f.emit('call', dsts: [d], args: args, at: pos, more: {
-    'callee': {'kind': 'static', 'func': sym, 'symbol': sym}
+    'callee': {'kind': 'static', 'func': funcId(ctor), 'symbol': sym}
   });
   f._lastCall = instr;
   f.mayThrow();

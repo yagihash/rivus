@@ -65,7 +65,7 @@ class _Index extends RecursiveAstVisitor<void> {
   void _note(Element? el, FunctionBody? body) {
     if (el == null || body == null || body is EmptyFunctionBody || body is NativeFunctionBody) return;
     final base = el.baseElement;
-    final id = symbolOf(base);
+    final id = funcId(base);
     prog.bodies.add(id);
     final cls = base.enclosingElement;
     if (cls is InterfaceElement && base is! ConstructorElement) {
@@ -212,9 +212,9 @@ class _Lower extends RecursiveAstVisitor<void> {
 
   void _function(ExecutableElement el, AstNode node, FormalParameterList? list, FunctionBody body,
       {required InterfaceType? thisType, InterfaceElement? constructorOf, ConstructorDeclaration? ctor}) {
-    final id = symbolOf(el);
+    final id = funcId(el);
     final out = FuncOut(id)
-      ..symbol = id
+      ..symbol = symbolOf(el)
       ..recv = thisType != null
       ..exported = !(el.name ?? '').startsWith('_');
     final at = unit.at(node.offset);

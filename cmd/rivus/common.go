@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/yagihash/rivus/internal/frontend/goir"
@@ -27,6 +29,8 @@ type common struct {
 	dir       string
 	rules     multiFlag
 	noBuiltin bool
+	// noProject leaves out the rules found in the analysed directory.
+	noProject bool
 	tests     bool
 	// deterministic leaves out the rules decided by an LLM.
 	deterministic bool
@@ -36,6 +40,7 @@ func (c *common) register(fs *flag.FlagSet) {
 	fs.StringVar(&c.dir, "C", ".", "directory to analyse from")
 	fs.Var(&c.rules, "rules", "additional rule file (repeatable)")
 	fs.BoolVar(&c.noBuiltin, "no-builtin-rules", false, "do not load the built-in rules")
+	fs.BoolVar(&c.noProject, "no-project-rules", false, "do not load the rules found in <dir>/.rivus/rules/*.yaml")
 	fs.BoolVar(&c.tests, "tests", false, "include _test.go files")
 	fs.BoolVar(&c.deterministic, "deterministic-only", false, "ignore the rules decided by an LLM (origin: llm)")
 }
@@ -49,7 +54,19 @@ func (c *common) loadRules(extra ...*model.RuleSet) (*model.Rules, error) {
 		}
 		sets = append(sets, b...)
 	}
-	for _, path := range c.rules {
+	// The rules of the project: the sources, sinks and sanitizers of its own
+	// code, and the models of the libraries it uses that the built-in ones do
+	// not cover. They live with the code and are read without a flag.
+	paths := append([]string(nil), c.rules...)
+	if !c.noProject {
+		found, _ := filepath.Glob(filepath.Join(c.dir, ".rivus", "rules", "*.y*ml"))
+		sort.Strings(found)
+		for _, p := range found {
+			fmt.Fprintf(os.Stderr, "rivus: project rules: %s\n", p)
+		}
+		paths = append(found, paths...)
+	}
+	for _, path := range paths {
 		f, err := os.Open(path)
 		if err != nil {
 			return nil, err

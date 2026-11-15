@@ -220,6 +220,114 @@ propagators:
   - symbol: dart:convert#Codec.encode
     flows: [{from: recv, to: result}, {from: args, to: result}]
 
+  # errors, builders, small value types: the message is made of the arguments
+  - symbol: dart:core#StateError.new
+    flows: [{from: args, to: result}]
+  - symbol: dart:core#ArgumentError.new
+    flows: [{from: args, to: result}]
+  - symbol: dart:core#ArgumentError.value
+    flows: [{from: args, to: result}]
+  - symbol: dart:core#UnsupportedError.new
+    flows: [{from: args, to: result}]
+  - symbol: dart:core#UnimplementedError.new
+    flows: [{from: args, to: result}]
+  - symbol: dart:core#RangeError.new
+    flows: [{from: args, to: result}]
+  - symbol: dart:core#RangeError.value
+    flows: [{from: args, to: result}]
+  - symbol: dart:core#RangeError.range
+    flows: [{from: args, to: result}]
+  - symbol: dart:core#FormatException.new
+    flows: [{from: args, to: result}]
+  - symbol: dart:core#Exception.new
+    flows: [{from: args, to: result}]
+  - symbol: dart:core#MapEntry.new
+    flows: [{from: args, to: result}]
+  - symbol: dart:core#List.generate
+    flows: [{from: args, to: result}]
+  - symbol: dart:core#List.filled
+    flows: [{from: args, to: result}]
+  - symbol: dart:core#List.from
+    flows: [{from: args, to: result}]
+  - symbol: dart:core#List.of
+    flows: [{from: args, to: result}]
+  - symbol: dart:core#List.unmodifiable
+    flows: [{from: args, to: result}]
+  - symbol: dart:core#Iterable.generate
+    flows: [{from: args, to: result}]
+  - symbol: dart:core#Set.from
+    flows: [{from: args, to: result}]
+  - symbol: dart:core#Set.of
+    flows: [{from: args, to: result}]
+  - symbol: dart:core#Map.from
+    flows: [{from: args, to: result}]
+  - symbol: dart:core#Map.of
+    flows: [{from: args, to: result}]
+  - symbol: dart:core#Map.fromIterable
+    flows: [{from: args, to: result}]
+  - symbol: dart:core#Map.fromEntries
+    flows: [{from: args, to: result}]
+  - symbol: dart:core#StringBuffer.new
+    flows: [{from: args, to: result}]
+  - symbol: dart:core#String.fromCharCodes
+    flows: [{from: args, to: result}]
+  - symbol: dart:core#String.fromCharCode
+    flows: [{from: args, to: result}]
+  - symbol: dart:typed_data#Uint8List.fromList
+    flows: [{from: args, to: result}]
+  - symbol: dart:collection#UnmodifiableMapView.new
+    flows: [{from: args, to: result}]
+  - symbol: dart:collection#UnmodifiableListView.new
+    flows: [{from: args, to: result}]
+  - symbol: dart:collection#Queue.from
+    flows: [{from: args, to: result}]
+  - symbol: dart:collection#Queue.of
+    flows: [{from: args, to: result}]
+  - symbol: dart:core#String.codeUnitAt
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#StringBuffer.toString
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#Iterable.map
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#Iterable.expand
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#Iterable.fold
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#Iterable.reduce
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#Iterable.any
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#Iterable.every
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#List.map
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#List.sort
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:collection#Queue.removeFirst
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:collection#Queue.removeLast
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:collection#Queue.first
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:collection#Queue.last
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:core#StringBuffer.write
+    flows: [{from: arg0, to: recv}]
+  - symbol: dart:core#StringBuffer.writeln
+    flows: [{from: arg0, to: recv}]
+  - symbol: dart:core#StringBuffer.writeAll
+    flows: [{from: arg0, to: recv}]
+  - symbol: dart:core#StringBuffer.writeCharCode
+    flows: [{from: arg0, to: recv}]
+  - symbol: dart:collection#Queue.add
+    flows: [{from: arg0, to: recv}]
+  - symbol: dart:collection#Queue.addAll
+    flows: [{from: arg0, to: recv}]
+  - symbol: dart:collection#Queue.addFirst
+    flows: [{from: arg0, to: recv}]
+  - symbol: dart:collection#Queue.addLast
+    flows: [{from: arg0, to: recv}]
+
 sanitizers:
   # percent encoding makes a value safe in a URL
   - symbol: dart:core#Uri.encodeComponent

@@ -32,8 +32,8 @@ String symbolOf(Element e) {
     name = name.isEmpty ? 'new' : name;
   }
   // The setter of a field is named "x=" by the analyzer; the rules speak of
-  // the field.
-  if (name.endsWith('=')) name = name.substring(0, name.length - 1);
+  // the field. (The operator "[]=" is a method and keeps its name.)
+  if (base is SetterElement && name.endsWith('=')) name = name.substring(0, name.length - 1);
   if (enclosing is InterfaceElement) {
     return '$uri#${_name(enclosing)}.$name';
   }
@@ -41,6 +41,13 @@ String symbolOf(Element e) {
     return '$uri#${_name(enclosing)}.$name';
   }
   return '$uri#$name';
+}
+
+/// The identity of a function: its symbol, and "=" for a setter, which the
+/// getter of the same name would otherwise share.
+String funcId(Element e) {
+  final base = e.baseElement;
+  return base is SetterElement ? '${symbolOf(base)}=' : symbolOf(base);
 }
 
 /// The identity of a type for the IR: "<library uri>#<Name>", without the

@@ -765,3 +765,8 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
 - **SDK の内部ライブラリは、公開されているライブラリの名前にする**（`dart:_http` → `dart:io`）。`HttpRequest` が `dart:_http` に宣言されているため、そのままでは型もシンボルも一致しなかった
 - **サニタイザが `adds` で付けるラベルを、sink が拾う。** `accepts` のない sink は、どのラベルでも検出するため、Dart の sink には `accepts: [user_input, file_content]` を付けた（Go では、`adds` は HTML の文脈だけだった）
 - サンプルの `server.dart`（shelf と http）を含め、`cmd/rivus/dart_test.go` が 15 本の流れを確かめる
+
+**追記（モデルを育てる道具、プロジェクトのルール）:**
+- `rivus models coverage` は、`-ir` でも動く。shelf、http、collection、async、path、args の 6 パッケージ（延べ約 3 万行）で回したところ、SDK（`dart:*`）のモデルのない呼び出しは 3,014 回（323 シンボル）あった。上位を `dart-async`（新設）、`dart-core`、`dart-pure`、`dart-config` に足して、534 回（215 シンボル）に減った。残りは長い裾（`Stream.empty`、`Map.forEach` など）
+- **解析するディレクトリの `.rivus/rules/*.yaml` を、フラグなしで読む**（`-no-project-rules` で外せる）。プロジェクトの固有の source・sink と、組み込みにないライブラリのモデルを、コードと一緒に置ける
+- setter の関数 ID に `=` を付けた（getter と同じ名前が衝突していた。シンボルは変えない）

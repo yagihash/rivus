@@ -68,7 +68,7 @@ class Program {
   List<String> candidates(ExecutableElement m, InterfaceElement? receiver) {
     final base = m.baseElement;
     final out = <String>{};
-    final self = symbolOf(base);
+    final self = funcId(base);
     if (bodies.contains(self)) out.add(self);
     final name = (base.name ?? '').replaceAll('=', '');
     for (final impl in methods[name] ?? const <MethodImpl>[]) {

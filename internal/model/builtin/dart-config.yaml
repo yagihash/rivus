@@ -8,3 +8,6 @@ config_reads:
   - symbol: dart:core#int.fromEnvironment
   - symbol: dart:io#File.readAsString
   - symbol: dart:io#File.readAsStringSync
+  - symbol: dart:io#Directory.current
+  - symbol: dart:io#Platform.executable
+  - symbol: dart:io#Platform.script

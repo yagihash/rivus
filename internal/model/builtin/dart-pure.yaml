@@ -38,3 +38,65 @@ propagators:
     pure: true
   - symbol: dart:io#HttpResponse.close
     pure: true
+  - symbol: dart:core#int.isEven
+    pure: true
+  - symbol: dart:core#int.isOdd
+    pure: true
+  - symbol: dart:core#int.sign
+    pure: true
+  - symbol: dart:core#int.isNegative
+    pure: true
+  - symbol: dart:core#Iterable.isEmpty
+    pure: true
+  - symbol: dart:core#Iterable.isNotEmpty
+    pure: true
+  - symbol: dart:core#List.isEmpty
+    pure: true
+  - symbol: dart:core#List.isNotEmpty
+    pure: true
+  - symbol: dart:core#Map.isEmpty
+    pure: true
+  - symbol: dart:core#Map.isNotEmpty
+    pure: true
+  - symbol: dart:core#String.compareTo
+    pure: true
+  - symbol: dart:core#identical
+    pure: true
+  - symbol: dart:core#Duration.new
+    pure: true
+  - symbol: dart:core#Duration.inMilliseconds
+    pure: true
+  - symbol: dart:core#Duration.inSeconds
+    pure: true
+  - symbol: dart:core#DateTime.millisecondsSinceEpoch
+    pure: true
+  - symbol: dart:core#StringBuffer.isEmpty
+    pure: true
+  - symbol: dart:core#StringBuffer.length
+    pure: true
+  - symbol: dart:core#StringBuffer.clear
+    pure: true
+  - symbol: dart:core#RangeError.checkValidRange
+    pure: true
+  - symbol: dart:core#RangeError.checkNotNegative
+    pure: true
+  - symbol: dart:core#RangeError.checkValueInInterval
+    pure: true
+  - symbol: dart:core#Stopwatch.elapsed
+    pure: true
+  - symbol: dart:core#Stopwatch.elapsedMilliseconds
+    pure: true
+  - symbol: dart:math#Random.new
+    pure: true
+  - symbol: dart:math#Random.nextInt
+    pure: true
+  - symbol: dart:math#Random.nextDouble
+    pure: true
+  - symbol: dart:math#Random.secure
+    pure: true
+  - symbol: dart:convert#Encoding.name
+    pure: true
+  - symbol: dart:io#HttpServer.port
+    pure: true
+  - symbol: dart:io#HttpServer.close
+    pure: true

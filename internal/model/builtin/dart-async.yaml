@@ -1,0 +1,131 @@
+# dart:async: streams, futures and completers. The value put into a controller
+# or a completer comes out of its stream or its future.
+ruleset: rivus/dart/async@1
+
+propagators:
+  - symbol: dart:async#StreamController.new
+    flows: [{from: args, to: result}]
+  - symbol: dart:async#StreamController.broadcast
+    flows: [{from: args, to: result}]
+  - symbol: dart:async#Completer.new
+    flows: [{from: args, to: result}]
+  - symbol: dart:async#Completer.sync
+    flows: [{from: args, to: result}]
+  - symbol: dart:async#Future.new
+    flows: [{from: args, to: result}]
+  - symbol: dart:async#Future.value
+    flows: [{from: args, to: result}]
+  - symbol: dart:async#Future.error
+    flows: [{from: args, to: result}]
+  - symbol: dart:async#Future.delayed
+    flows: [{from: args, to: result}]
+  - symbol: dart:async#Future.microtask
+    flows: [{from: args, to: result}]
+  - symbol: dart:async#Future.sync
+    flows: [{from: args, to: result}]
+  - symbol: dart:async#Stream.fromIterable
+    flows: [{from: args, to: result}]
+  - symbol: dart:async#Stream.fromFuture
+    flows: [{from: args, to: result}]
+  - symbol: dart:async#Stream.value
+    flows: [{from: args, to: result}]
+  - symbol: dart:async#Stream.error
+    flows: [{from: args, to: result}]
+  - symbol: dart:async#StreamTransformer.fromHandlers
+    flows: [{from: args, to: result}]
+  - symbol: dart:async#StreamTransformer.fromBind
+    flows: [{from: args, to: result}]
+  - symbol: dart:async#StreamController.stream
+    flows: [{from: recv, to: result}]
+  - symbol: dart:async#StreamController.sink
+    flows: [{from: recv, to: result}]
+  - symbol: dart:async#Completer.future
+    flows: [{from: recv, to: result}]
+  - symbol: dart:async#StreamIterator.current
+    flows: [{from: recv, to: result}]
+  - symbol: dart:async#StreamSink.add
+    flows: [{from: recv, to: result}]
+  - symbol: dart:async#Stream.first
+    flows: [{from: recv, to: result}]
+  - symbol: dart:async#Stream.last
+    flows: [{from: recv, to: result}]
+  - symbol: dart:async#Stream.single
+    flows: [{from: recv, to: result}]
+  - symbol: dart:async#Stream.toList
+    flows: [{from: recv, to: result}]
+  - symbol: dart:async#Stream.toSet
+    flows: [{from: recv, to: result}]
+  - symbol: dart:async#Stream.join
+    flows: [{from: recv, to: result}]
+  - symbol: dart:async#Stream.asBroadcastStream
+    flows: [{from: recv, to: result}]
+  - symbol: dart:async#Stream.take
+    flows: [{from: recv, to: result}]
+  - symbol: dart:async#Stream.skip
+    flows: [{from: recv, to: result}]
+  - symbol: dart:async#Stream.where
+    flows: [{from: recv, to: result}]
+  - symbol: dart:async#Stream.expand
+    flows: [{from: recv, to: result}]
+  - symbol: dart:async#Stream.cast
+    flows: [{from: recv, to: result}]
+  - symbol: dart:async#Stream.distinct
+    flows: [{from: recv, to: result}]
+  - symbol: dart:async#Stream.handleError
+    flows: [{from: recv, to: result}]
+  - symbol: dart:async#Stream.timeout
+    flows: [{from: recv, to: result}]
+  - symbol: dart:async#Stream.transform
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:async#Stream.map
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:async#Stream.asyncMap
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:async#Stream.asyncExpand
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:async#Future.then
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:async#Future.catchError
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:async#Future.whenComplete
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:async#Future.timeout
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:async#Future.wait
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:async#Future.any
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:async#StreamController.add
+    flows: [{from: arg0, to: recv}]
+  - symbol: dart:async#StreamController.addError
+    flows: [{from: arg0, to: recv}]
+  - symbol: dart:async#StreamController.addStream
+    flows: [{from: arg0, to: recv}]
+  - symbol: dart:async#StreamSink.addError
+    flows: [{from: arg0, to: recv}]
+  - symbol: dart:async#Completer.complete
+    flows: [{from: arg0, to: recv}]
+  - symbol: dart:async#Completer.completeError
+    flows: [{from: arg0, to: recv}]
+  - symbol: dart:async#StreamController.close
+    pure: true
+  - symbol: dart:async#StreamController.hasListener
+    pure: true
+  - symbol: dart:async#StreamController.isPaused
+    pure: true
+  - symbol: dart:async#StreamController.isClosed
+    pure: true
+  - symbol: dart:async#Completer.isCompleted
+    pure: true
+  - symbol: dart:async#StreamIterator.moveNext
+    pure: true
+  - symbol: dart:async#StreamIterator.cancel
+    pure: true
+  - symbol: dart:async#Stream.isBroadcast
+    pure: true
+  - symbol: dart:async#StreamSink.close
+    pure: true
+  - symbol: dart:async#unawaited
+    pure: true
+  - symbol: dart:async#Timer.cancel
+    pure: true
