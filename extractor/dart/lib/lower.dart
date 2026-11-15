@@ -23,6 +23,8 @@ import 'names.dart';
 import 'program.dart';
 
 part 'exprs.dart';
+part 'patterns.dart';
+part 'switches.dart';
 
 class _Try {
   _Try({this.catches, this.fin});
@@ -356,6 +358,17 @@ class FnLower {
       case YieldStatement():
         final v = expr(s.expression);
         _yield(v, s);
+      case PatternVariableDeclarationStatement():
+        final d = s.declaration;
+        final v = expr(d.expression);
+        final miss = newBlock();
+        bindPattern(d.pattern, v, miss);
+        // a pattern that does not match throws
+        final matched = newBlock();
+        jump(matched);
+        cur = miss;
+        thr(constant('string', 'pattern did not match', null, pos(s)), pos(s));
+        cur = matched;
       case EmptyStatement():
         break;
       case AssertStatement():
@@ -389,7 +402,15 @@ class FnLower {
     final thenB = newBlock();
     final elseB = newBlock();
     final join = newBlock();
-    cond(s.expression, thenB, elseB);
+    final cc = s.caseClause;
+    if (cc != null) {
+      // if (value case pattern when guard)
+      final v = expr(s.expression);
+      bindGuarded(cc.guardedPattern, v, elseB);
+      jump(thenB);
+    } else {
+      cond(s.expression, thenB, elseB);
+    }
     cur = thenB;
     stmt(s.thenStatement);
     jump(join);
@@ -554,11 +575,9 @@ class FnLower {
         branch(eq, bodies[i], miss, pos(m));
         cur = miss;
       } else if (m is SwitchPatternCase) {
-        // A pattern is a type test and reads: not lowered. The case may
-        // match, and the body is reached.
         final miss = newBlock();
-        final c = constant('bool', 'true', null, pos(m));
-        branch(c, bodies[i], miss, pos(m));
+        bindGuarded(m.guardedPattern, subject, miss);
+        jump(bodies[i]);
         cur = miss;
       }
     }

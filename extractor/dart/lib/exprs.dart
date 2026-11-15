@@ -81,8 +81,19 @@ int lowerExpr(FnLower f, Expression e) {
     case FunctionExpression():
       return lowerClosure(f, e);
     case SwitchExpression():
-      f.emit('unsupported', at: f.pos(e), more: {'reason': 'switch expression'});
-      return f.nilConst(f.pos(e));
+      return _switchExpression(f, e);
+    case RecordLiteral():
+      return _record(f, e);
+    case PatternAssignment():
+      final v = lowerExpr(f, e.expression);
+      final miss = f.newBlock();
+      f.bindPattern(e.pattern, v, miss);
+      final matched = f.newBlock();
+      f.jump(matched);
+      f.cur = miss;
+      f.thr(f.constant('string', 'pattern did not match', null, f.pos(e)), f.pos(e));
+      f.cur = matched;
+      return v;
     default:
       f.emit('unsupported', at: f.pos(e), more: {'reason': 'expression ${e.runtimeType}'});
       return f.nilConst(f.pos(e));
@@ -136,6 +147,9 @@ int _prefixed(FnLower f, PrefixedIdentifier e) {
     return _readMember(f, id, null, e, e.staticType, f.pos(e, e.identifier.offset));
   }
   final base = lowerExpr(f, e.prefix);
+  if (id == null && e.prefix.staticType is RecordType) {
+    return _recordField(f, base, e.identifier.name, e.staticType, f.pos(e, e.identifier.offset));
+  }
   return _readMember(f, id, base, e, e.staticType, f.pos(e, e.identifier.offset));
 }
 
@@ -150,7 +164,16 @@ int _propertyAccess(FnLower f, PropertyAccess e) {
   } else {
     base = lowerExpr(f, t);
   }
+  if (id == null && base != null && t?.staticType is RecordType) {
+    return _recordField(f, base, e.propertyName.name, e.staticType, f.pos(e, e.propertyName.offset));
+  }
   return _readMember(f, id, base, e, e.staticType, f.pos(e, e.propertyName.offset));
+}
+
+int _recordField(FnLower f, int base, String name, DartType? t, Pos at) {
+  final d = f.tmp(t);
+  f.emit('field_load', dsts: [d], args: [base], at: at, more: {'field': name});
+  return d;
 }
 
 /// Reads a member (a field, a getter, a tear-off) of [base], or of `this`
