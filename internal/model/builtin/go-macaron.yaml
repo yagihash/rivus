@@ -1,0 +1,54 @@
+# macaron (gopkg.in/macaron.v1, used by Gogs and, in older versions, Grafana): a
+# handler gets a *macaron.Context, which is the request. Wrappers that embed
+# it (Gogs: *context.Context) need a project rule that names them as sources.
+ruleset: rivus/go/macaron@1
+
+sources:
+  - kind: param_type
+    type: "*gopkg.in/macaron.v1.Context"
+    labels: [user_input]
+
+propagators:
+  - symbol: (*gopkg.in/macaron.v1.Context).Query
+    flows: [{from: recv, to: result}]
+  - symbol: (*gopkg.in/macaron.v1.Context).QueryTrim
+    flows: [{from: recv, to: result}]
+  - symbol: (*gopkg.in/macaron.v1.Context).QueryStrings
+    flows: [{from: recv, to: result}]
+  - symbol: (*gopkg.in/macaron.v1.Context).QueryEscape
+    flows: [{from: recv, to: result}]
+  - symbol: (*gopkg.in/macaron.v1.Context).QueryInt
+    flows: [{from: recv, to: result}]
+  - symbol: (*gopkg.in/macaron.v1.Context).QueryInt64
+    flows: [{from: recv, to: result}]
+  - symbol: (*gopkg.in/macaron.v1.Context).QueryFloat64
+    flows: [{from: recv, to: result}]
+  - symbol: (*gopkg.in/macaron.v1.Context).QueryBool
+    flows: [{from: recv, to: result}]
+  - symbol: (*gopkg.in/macaron.v1.Context).Params
+    flows: [{from: recv, to: result}]
+  - symbol: (*gopkg.in/macaron.v1.Context).ParamsEscape
+    flows: [{from: recv, to: result}]
+  - symbol: (*gopkg.in/macaron.v1.Context).ParamsInt
+    flows: [{from: recv, to: result}]
+  - symbol: (*gopkg.in/macaron.v1.Context).ParamsInt64
+    flows: [{from: recv, to: result}]
+  - symbol: (*gopkg.in/macaron.v1.Context).GetCookie
+    flows: [{from: recv, to: result}]
+  - symbol: (*gopkg.in/macaron.v1.Context).GetSecureCookie
+    flows: [{from: recv, to: result0}]
+  - symbol: (*gopkg.in/macaron.v1.Context).GetCookieInt
+    flows: [{from: recv, to: result}]
+  - symbol: (*gopkg.in/macaron.v1.Context).RemoteAddr
+    flows: [{from: recv, to: result}]
+
+sinks:
+  - symbol: (*gopkg.in/macaron.v1.Context).Redirect
+    args: [0]
+    category: open_redirect
+  - symbol: (*gopkg.in/macaron.v1.Context).ServeFile
+    args: [0]
+    category: path_traversal
+  - symbol: (*gopkg.in/macaron.v1.Context).ServeFileContent
+    args: [0]
+    category: path_traversal

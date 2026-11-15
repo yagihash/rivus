@@ -1,0 +1,30 @@
+{
+ "target": "https://github.com/gogs/gogs at 8a3b8198a (the parent of the fix 9a9388ace25b, GHSA-qf5v-rp47-55gg / CVE-2024-55947 / GO-2024-3356)",
+ "how": "Matched by the handler the data comes from (source_func is a suffix of the function) and the category: the vulnerable sinks are deep in internal/database, and the fix cleans the path in the handlers, so the handlers are what the fix names. GetContents (also patched) only reads through git and has no file system sink: not labelled.",
+ "sites": [
+  {
+   "source_func": ".PutContents",
+   "label": "vuln",
+   "category": "path_traversal",
+   "note": "the API of the advisory: treePath = c.Params(\"*\") reaches UpdateRepoFile"
+  },
+  {
+   "source_func": ".editFilePost",
+   "label": "vuln",
+   "category": "path_traversal",
+   "note": "patched by the same commit"
+  },
+  {
+   "source_func": ".UploadFilePost",
+   "label": "vuln",
+   "category": "path_traversal",
+   "note": "patched by the same commit"
+  },
+  {
+   "source_func": ".DeleteFilePost",
+   "label": "vuln",
+   "category": "path_traversal",
+   "note": "patched by the same commit"
+  }
+ ]
+}

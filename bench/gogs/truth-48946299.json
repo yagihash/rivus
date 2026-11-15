@@ -1,0 +1,18 @@
+{
+ "target": "https://github.com/gogs/gogs at ca59e76a5 (the parent of the fix 4894629903f9, GHSA-mrph-w4hh-gx3g / CVE-2026-23633)",
+ "how": "As truth-9a9388ac.json. The hook file is read and written inside the dependency git-module, where sinks are not looked for: the project rule names Repository.Hook as the sink.",
+ "sites": [
+  {
+   "source_func": ".SettingsGitHooksEdit",
+   "label": "vuln",
+   "category": "path_traversal",
+   "note": "name = c.Params(\":name\") reaches Repository.Hook (read)"
+  },
+  {
+   "source_func": ".SettingsGitHooksEditPost",
+   "label": "vuln",
+   "category": "path_traversal",
+   "note": "reaches Repository.Hook, then Update (write)"
+  }
+ ]
+}

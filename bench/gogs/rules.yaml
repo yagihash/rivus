@@ -1,0 +1,135 @@
+# Rules for Gogs (the project's own: it wraps macaron.Context in its own
+# Context types, and binds request bodies to structs). Used with
+#   rivus analyze -rules bench/gogs/rules.yaml ./...
+ruleset: project/gogs@1
+
+sources:
+  # the request, through the wrappers of macaron.Context
+  - kind: param_type
+    type: "*gogs.io/gogs/internal/context.Context"
+    labels: [user_input]
+  - kind: param_type
+    type: "*gogs.io/gogs/internal/context.APIContext"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/route/api/v1/repo.PutContentsRequest"
+    labels: [user_input]
+  # request bodies bound to structs (internal/form): every field is attacker controlled
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.AddEmail"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.AddSSHKey"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.AdminCrateUser"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.AdminEditUser"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.Authentication"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.Avatar"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.ChangePassword"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.CreateComment"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.CreateLabel"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.CreateMilestone"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.CreateOrg"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.CreateRepo"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.CreateTeam"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.DeleteRepoFile"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.EditPreviewDiff"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.EditRelease"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.EditRepoFile"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.InitializeLabels"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.Install"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.MigrateRepo"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.NewAccessToken"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.NewDingtalkHook"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.NewDiscordHook"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.NewIssue"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.NewRelease"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.NewSlackHook"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.NewWebhook"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.NewWiki"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.ProtectBranch"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.Register"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.RemoveUploadFile"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.RepoSetting"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.SignIn"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.UpdateOrgSetting"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.UpdateProfile"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.UploadRepoFile"
+    labels: [user_input]
+  - kind: param_type
+    type: "gogs.io/gogs/internal/form.Webhook"
+    labels: [user_input]
+
+sinks:
+  # git-module reads and writes the hook file inside the dependency: sinks in
+  # dependencies are not looked for, so the call is the sink.
+  - symbol: (*github.com/gogs/git-module.Repository).Hook
+    args: [1]
+    category: path_traversal

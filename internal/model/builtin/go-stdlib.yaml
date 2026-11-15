@@ -309,3 +309,28 @@ sinks:
   - symbol: os.Rename
     args: [0, 1]
     category: path_traversal
+  - symbol: os.ReadDir
+    args: [0]
+    category: path_traversal
+  - symbol: os.Chmod
+    args: [0]
+    category: path_traversal
+  - symbol: os.Truncate
+    args: [0]
+    category: path_traversal
+  - symbol: os.Symlink
+    args: [0, 1]
+    category: path_traversal
+  - symbol: os.Link
+    args: [0, 1]
+    category: path_traversal
+  # io/ioutil: the same operations (deprecated, and still everywhere)
+  - symbol: io/ioutil.ReadFile
+    args: [0]
+    category: path_traversal
+  - symbol: io/ioutil.WriteFile
+    args: [0]
+    category: path_traversal
+  - symbol: io/ioutil.ReadDir
+    args: [0]
+    category: path_traversal
