@@ -188,8 +188,16 @@ fn is_smart_pointer(ty: &Ty) -> bool {
     false
 }
 
+/// The identity of a type for the IR: the path of a struct or an enum without
+/// its type arguments, `&` and `*` kept: `axum::extract::Query<P>` is
+/// `axum::extract::Query`, the type a rule names.
 fn type_id(ty: &Ty) -> String {
-    format!("{}", ty)
+    match ty.kind() {
+        TyKind::RigidTy(RigidTy::Adt(def, _)) => clean_symbol(&def.name()),
+        TyKind::RigidTy(RigidTy::Ref(_, t, m)) => format!("&{}{}", if matches!(m, Mutability::Mut) { "mut " } else { "" }, type_id(&t)),
+        TyKind::RigidTy(RigidTy::RawPtr(t, _)) => format!("*{}", type_id(&t)),
+        _ => format!("{}", ty),
+    }
 }
 
 fn bin_op(op: &BinOp) -> &'static str {
