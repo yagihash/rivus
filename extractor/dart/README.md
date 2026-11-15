@@ -69,10 +69,11 @@ file_content]`, so that the label a sanitizer adds does not make it fire.
   pattern and the constants are.
 - **Calls through function values**: the core finds the functions that flow to the value
   through copies, φ functions and the arguments of the callers of the parameter. A
-  function kept in a field or a list is not found. A closure found that way does not get
-  the values it captured (they carry nothing).
-- **Streams and `yield`**: the values do not flow from a producer to the
-  `await for` that reads it; that needs a model.
+  function kept in a field or a list is not found. A closure found from another function does not get
+  the values it captured (they carry nothing); one made in the function that calls it does.
+- **Streams**: what a generator (`async*`, `sync*`) yields is collected in its result, so
+  `await for` and `for` over a call of it see the values. A stream passed through a
+  `StreamController` is modeled (`dart-async.yaml`); `listen` with a callback is not.
 - **Named parameters** of an override that adds one the base does not have may shift
   the others (by name, the usual case lines up).
 - **Dependencies** (`package:flutter`, `dart:*`) are not read: calls into them are

@@ -16,3 +16,29 @@ void viaLiteral() {
   final x = source(); // @source(cb-literal)
   sink(apply((s) => s, x)); // @sink(cb-literal)
 }
+
+Stream<String> produce() async* {
+  yield source(); // @source(yield)
+}
+
+Future<void> consume() async {
+  await for (final x in produce()) {
+    sink(x); // @sink(yield)
+  }
+}
+
+Iterable<String> numbers() sync* {
+  yield source(); // @source(syncyield)
+}
+
+void readNumbers() {
+  for (final n in numbers()) {
+    sink(n); // @sink(syncyield)
+  }
+}
+
+void viaCapturedCallback() {
+  final t = source(); // @source(cb-capture)
+  String Function() get = () => t;
+  sink(get()); // @sink(cb-capture)
+}

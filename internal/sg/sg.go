@@ -112,6 +112,10 @@ type Instr struct {
 	// functions that have a body).
 	Candidates   []ir.FuncID
 	CandidateFns []*Func
+	// CandidateBindings are the values a candidate closure captured, when the
+	// candidate was found from the closure being made (a call of a function
+	// value).
+	CandidateBindings map[*Func][]*Value
 }
 
 // Recv is the receiver of a call, or nil.

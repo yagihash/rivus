@@ -151,7 +151,11 @@ func (s *state) callBody(cc *callCtx) {
 		notes = append(notes, s.pathNote(KindConcurrency, "the callee runs in another goroutine; the order of effects is not modelled", ci.Pos))
 	}
 	for _, fn := range withBody {
-		s.applySummary(cc, fn, bindings, notes)
+		b := bindings
+		if cb, ok := ci.CandidateBindings[fn]; ok {
+			b = cb
+		}
+		s.applySummary(cc, fn, b, notes)
 	}
 	switch {
 	case ruleOnly:

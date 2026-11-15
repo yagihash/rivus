@@ -599,7 +599,7 @@ int _collection(FnLower f, TypedLiteral e, NodeList<CollectionElement> elements,
       final other = el.elseElement;
       if (other != null) add(other);
     } else if (el is ForElement) {
-      f.emit('unsupported', at: f.pos(el), more: {'reason': 'collection for'});
+      _forElement(f, el, add);
     } else {
       add(el);
     }
@@ -641,4 +641,19 @@ int lowerClosure(FnLower f, FunctionExpression fe, {String? name}) {
   }
   f.emit('make_closure', dsts: [d], args: args, at: out.pos, more: {'func': id});
   return d;
+}
+
+/// `[for (final x in xs) element]`: the element is made once per step of the
+/// loop, with the variable bound.
+void _forElement(FnLower f, ForElement el, void Function(CollectionElement) add) {
+  final parts = el.forLoopParts;
+  if (parts is ForEachPartsWithDeclaration) {
+    final it = lowerExpr(f, parts.iterable);
+    final v = parts.loopVariable.declaredFragment?.element;
+    f.forEachLoop({}, it, () => add(el.body), el.awaitKeyword != null, (value) {
+      if (v != null) f.declare(v.baseElement, parts.loopVariable.name.lexeme, v.type, value, f.pos(parts.loopVariable));
+    });
+    return;
+  }
+  f.emit('unsupported', at: f.pos(el), more: {'reason': 'collection for ${parts.runtimeType}'});
 }

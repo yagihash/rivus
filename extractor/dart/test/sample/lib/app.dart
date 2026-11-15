@@ -98,3 +98,14 @@ void tryCatch() {
     sink('done'); // @sink(none)
   }
 }
+
+void viaCollectionFor() {
+  final xs = [source()]; // @source(for-elem)
+  final ys = [for (final x in xs) x.trim()];
+  sink(ys.first); // @sink(for-elem)
+}
+
+void viaIfElement(bool c) {
+  final ys = [if (c) source() else 'safe']; // @source(if-elem)
+  sink(ys.first); // @sink(if-elem)
+}

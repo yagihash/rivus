@@ -348,13 +348,19 @@ func (p *Program) resolveValueCalls() {
 				if in.Op != ir.OpCall || in.Callee.Kind != ir.CalleeValue || in.Static != nil || len(in.CandidateFns) > 0 || len(in.Args) == 0 {
 					continue
 				}
-				found := map[*Func]bool{}
-				p.funcsOf(in.Args[0], callers, found, map[*Value]bool{}, 0)
+				found := map[*Func][]*Value{}
+				p.funcsOf(in.Args[0], in.Block.Func, callers, found, map[*Value]bool{}, 0)
 				if len(found) == 0 || len(found) > most {
 					continue
 				}
-				for f := range found {
+				for f, binds := range found {
 					in.CandidateFns = append(in.CandidateFns, f)
+					if len(binds) > 0 {
+						if in.CandidateBindings == nil {
+							in.CandidateBindings = map[*Func][]*Value{}
+						}
+						in.CandidateBindings[f] = binds
+					}
 				}
 				sort.Slice(in.CandidateFns, func(i, j int) bool { return in.CandidateFns[i].ID < in.CandidateFns[j].ID })
 				for _, f := range in.CandidateFns {
@@ -374,7 +380,7 @@ func callArgv(in *Instr) []*Value {
 	return in.Args
 }
 
-func (p *Program) funcsOf(v *Value, callers map[*Func][]*Instr, found map[*Func]bool, seen map[*Value]bool, depth int) {
+func (p *Program) funcsOf(v *Value, home *Func, callers map[*Func][]*Instr, found map[*Func][]*Value, seen map[*Value]bool, depth int) {
 	if v == nil || seen[v] || depth > 3 {
 		return
 	}
@@ -382,12 +388,14 @@ func (p *Program) funcsOf(v *Value, callers map[*Func][]*Instr, found map[*Func]
 	switch v.Kind {
 	case KFunc:
 		if v.Fn != nil {
-			found[v.Fn] = true
+			if _, ok := found[v.Fn]; !ok {
+				found[v.Fn] = nil
+			}
 		}
 	case KPhi:
 		if v.Instr != nil {
 			for _, a := range v.Instr.Args {
-				p.funcsOf(a, callers, found, seen, depth)
+				p.funcsOf(a, home, callers, found, seen, depth)
 			}
 		}
 	case KResult:
@@ -398,11 +406,18 @@ func (p *Program) funcsOf(v *Value, callers map[*Func][]*Instr, found map[*Func]
 		switch in.Op {
 		case ir.OpMakeClosure:
 			if f := p.ByID[string(in.IR.Func)]; f != nil {
-				found[f] = true
+				// The values it captured go with it when the closure is made
+				// in the function that calls it (they are values of that
+				// function); from another function they are not at hand.
+				if old, ok := found[f]; (!ok || len(old) == 0) && in.Block.Func == home {
+					found[f] = in.Args
+				} else if !ok {
+					found[f] = nil
+				}
 			}
 		case ir.OpCopy:
 			if !in.IR.View && len(in.Args) == 1 {
-				p.funcsOf(in.Args[0], callers, found, seen, depth)
+				p.funcsOf(in.Args[0], home, callers, found, seen, depth)
 			}
 		}
 	case KParam:
@@ -412,7 +427,7 @@ func (p *Program) funcsOf(v *Value, callers map[*Func][]*Instr, found map[*Func]
 		for _, c := range callers[v.Func] {
 			args := callArgv(c)
 			if v.Param < len(args) {
-				p.funcsOf(args[v.Param], callers, found, seen, depth+1)
+				p.funcsOf(args[v.Param], home, callers, found, seen, depth+1)
 			}
 		}
 	}

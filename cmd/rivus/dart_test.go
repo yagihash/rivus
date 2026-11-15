@@ -108,7 +108,7 @@ func TestDartExtractor(t *testing.T) {
 			t.Errorf("unexpected flow %s", k)
 		}
 	}
-	if len(want) < 23 {
+	if len(want) < 28 {
 		t.Errorf("the sample has only %d flows", len(want))
 	}
 }

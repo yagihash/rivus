@@ -67,6 +67,7 @@ class FnLower {
   var _pendingLabels = <String>{};
   final caught = <int>[]; // the exceptions of the catch clauses we are in
   int? cascade; // the value a cascade section works on
+  int? generated; // the collection a generator (sync*, async*) yields into
   Blk? cur;
   Instr? _lastCall;
   int _closures = 0;
@@ -142,6 +143,7 @@ class FnLower {
   }
 
   void ret(List<int> values, Pos at) {
+    if (generated != null && values.isEmpty) values = [generated!];
     runFinallies(0);
     final c = cur;
     if (c == null) return;
@@ -205,6 +207,13 @@ class FnLower {
       bind(key, l);
     }
     preamble?.call();
+    if (body.isGenerator) {
+      // What a generator yields is its result: a collection of the values.
+      final g = tmp(null);
+      out.locals[g] = Local('', '', 'container');
+      emit('alloc', dsts: [g], at: at, more: {'type': 'generated', 'class': 'container'});
+      generated = g;
+    }
     if (body is BlockFunctionBody) {
       stmt(body.block);
       if (cur != null) ret([], Pos.none);
@@ -384,9 +393,13 @@ class FnLower {
   }
 
   void _yield(int v, YieldStatement s) {
-    // The value goes to whoever consumes the stream or the iterable: that
-    // needs a model or a call graph that links the two; here the value leaves
-    // through the return of the function, and the block ends in a suspension.
+    // The value goes into the result of the generator, where whoever reads
+    // the stream or the iterable finds it; then the function is suspended.
+    final g = generated;
+    if (g != null) {
+      final i = constant('int', '0', null, pos(s));
+      emit('index_store', args: [g, i, v], at: pos(s));
+    }
     final next = newBlock();
     jump(next);
     cur = next;
@@ -474,12 +487,23 @@ class FnLower {
       case ForEachPartsWithDeclaration():
         final it = expr(parts.iterable);
         final el = parts.loopVariable.declaredFragment?.element;
-        _forEach(labels, it, s.body, s.awaitKeyword != null, (value) {
+        forEachLoop(labels, it, () => stmt(s.body), s.awaitKeyword != null, (value) {
           if (el != null) declare(el.baseElement, parts.loopVariable.name.lexeme, el.type, value, pos(parts.loopVariable));
         });
       case ForEachPartsWithIdentifier():
         final it = expr(parts.iterable);
-        _forEach(labels, it, s.body, s.awaitKeyword != null, (value) => assign(parts.identifier, value));
+        forEachLoop(labels, it, () => stmt(s.body), s.awaitKeyword != null, (value) => assign(parts.identifier, value));
+      case ForEachPartsWithPattern():
+        final it = expr(parts.iterable);
+        forEachLoop(labels, it, () => stmt(s.body), s.awaitKeyword != null, (value) {
+          final miss = newBlock();
+          bindPattern(parts.pattern, value, miss);
+          final matched = newBlock();
+          jump(matched);
+          cur = miss;
+          jump(matched);
+          cur = matched;
+        });
       default:
         emit('unsupported', at: pos(s), more: {'reason': 'for loop ${parts.runtimeType}'});
     }
@@ -510,7 +534,7 @@ class FnLower {
     cur = _reached(after) ? after : null;
   }
 
-  void _forEach(Set<String> labels, int iterable, Statement body, bool isAwait, void Function(int) bind) {
+  void forEachLoop(Set<String> labels, int iterable, void Function() body, bool isAwait, void Function(int) bind) {
     final it = tmp(null);
     emit('call', dsts: [it], args: [iterable], more: {
       'callee': {'kind': 'static', 'symbol': 'iter.start'},
@@ -532,7 +556,7 @@ class FnLower {
     cur = bodyB;
     _jumps.add(_Jump(labels, after, head, _handlers.length));
     bind(v);
-    stmt(body);
+    body();
     _jumps.removeLast();
     jump(head, kind: 'back');
     cur = _reached(after) ? after : null;
