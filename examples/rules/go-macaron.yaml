@@ -1,7 +1,7 @@
 # macaron (gopkg.in/macaron.v1, used by Gogs and, in older versions, Grafana): a
 # handler gets a *macaron.Context, which is the request. Wrappers that embed
 # it (Gogs: *context.Context) need a project rule that names them as sources.
-ruleset: rivus/go/macaron@1
+ruleset: example/go/macaron@1
 
 sources:
   - kind: param_type

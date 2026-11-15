@@ -2,7 +2,7 @@
 # dangerous operations. A handler gets a *gin.Context: it is the request (as
 # *http.Request is for net/http), and what its getters return, and what the
 # Bind functions fill in, comes from it.
-ruleset: rivus/go/gin@1
+ruleset: example/go/gin@1
 
 sources:
   - kind: param_type
