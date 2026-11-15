@@ -105,7 +105,7 @@ rivus query -index idx.json -site <ID>     # 保存した結果から、ソー�
 rivus resolve -bookmarks seen.json ./...   # 前に見た箇所（サイト・検出結果）が、今のコードのどこにあるかを答える
 rivus models coverage ./...                # どの関数にモデルを書くと効くか（検出結果の経路に載っている順）
 rivus extract -text -func Handle ./...     # 中立 IR を、人が読める形で出す（-text なしで JSON Lines）
-rivus analyze -ir package.jsonl            # 他言語の extractor（Dart）が書いた IR を解析する
+rivus analyze -ir package.jsonl            # 他言語の extractor（Dart）が書いた IR を解析する（sites / query / index / resolve / models coverage も -ir で動く）
 rivus models coverage -yaml -top 20 ./...  # 埋めるためのルールのひな形を出す
 ```
 
