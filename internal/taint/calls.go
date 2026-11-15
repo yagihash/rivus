@@ -450,6 +450,7 @@ func (s *state) applyFlows(cc *callCtx, flows []model.Flow, o *op, desc string, 
 		} else {
 			for _, v := range s.selectVals(cc, to) {
 				dsts = append(dsts, s.locs(v)...)
+				dsts = append(dsts, s.pointeeOfInterface(v)...)
 			}
 		}
 		for _, d := range dsts {
@@ -497,4 +498,29 @@ func orUnknown(s string) string {
 		return "<unknown>"
 	}
 	return s
+}
+
+// pointeeOfInterface is where a pointer that was converted to an interface
+// (json.Unmarshal(b, &x): the argument is any(&x)) points: a model that writes
+// to the argument writes to what the pointer refers to.
+func (s *state) pointeeOfInterface(v *sg.Value) []Loc {
+	var out []Loc
+	for i := 0; i < 4 && v != nil && v.Kind == sg.KResult && v.Instr != nil; i++ {
+		in := v.Instr
+		if in.Op != ir.OpConvert || in.IR == nil || len(in.Args) != 1 {
+			break
+		}
+		switch in.IR.Operator {
+		case "make_interface":
+			if pointerLike(in.Args[0]) {
+				out = append(out, s.locs(in.Args[0])...)
+			}
+			return out
+		case "change_interface":
+			v = in.Args[0]
+		default:
+			return out
+		}
+	}
+	return out
 }

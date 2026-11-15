@@ -1,6 +1,7 @@
 package heap
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -180,4 +181,20 @@ func PureFunctionsDoNotPropagate() {
 	n, _ := strconv.Atoi(s) // an unmodeled function: the number is tainted
 	deadline := time.Now().Add(time.Duration(n))
 	lib.SinkAny(deadline) // @sink(none)
+}
+
+// A model that writes to an argument writes to what the pointer refers to,
+// also when the pointer went through an interface (any(&b)).
+func UnmarshalIntoPointer() {
+	s := lib.Source() // @source(unmarshal)
+	var b box
+	_ = json.Unmarshal([]byte(s), &b)
+	lib.Sink(b.a) // @sink(unmarshal)
+}
+
+func UnmarshalIntoString() {
+	s := lib.Source() // @source(unmarshalstr)
+	var t string
+	_ = json.Unmarshal([]byte(s), &t)
+	lib.Sink(t) // @sink(unmarshalstr)
 }

@@ -1,35 +1,83 @@
 # gin (github.com/gin-gonic/gin): where untrusted requests come from, and the
-# dangerous operations. A handler gets a *gin.Context, whose getters return
-# what the client sent.
+# dangerous operations. A handler gets a *gin.Context: it is the request (as
+# *http.Request is for net/http), and what its getters return, and what the
+# Bind functions fill in, comes from it.
 ruleset: rivus/go/gin@1
 
 sources:
+  - kind: param_type
+    type: "*github.com/gin-gonic/gin.Context"
+    labels: [user_input]
+
+propagators:
   - symbol: (*github.com/gin-gonic/gin.Context).Query
-    labels: [user_input]
+    flows: [{from: recv, to: result}]
   - symbol: (*github.com/gin-gonic/gin.Context).DefaultQuery
-    labels: [user_input]
+    flows: [{from: recv, to: result}]
   - symbol: (*github.com/gin-gonic/gin.Context).GetQuery
-    labels: [user_input]
+    flows: [{from: recv, to: result0}]
   - symbol: (*github.com/gin-gonic/gin.Context).QueryArray
-    labels: [user_input]
+    flows: [{from: recv, to: result}]
+  - symbol: (*github.com/gin-gonic/gin.Context).GetQueryArray
+    flows: [{from: recv, to: result0}]
+  - symbol: (*github.com/gin-gonic/gin.Context).QueryMap
+    flows: [{from: recv, to: result}]
   - symbol: (*github.com/gin-gonic/gin.Context).Param
-    labels: [user_input]
+    flows: [{from: recv, to: result}]
   - symbol: (*github.com/gin-gonic/gin.Context).PostForm
-    labels: [user_input]
+    flows: [{from: recv, to: result}]
   - symbol: (*github.com/gin-gonic/gin.Context).DefaultPostForm
-    labels: [user_input]
+    flows: [{from: recv, to: result}]
   - symbol: (*github.com/gin-gonic/gin.Context).GetPostForm
-    labels: [user_input]
+    flows: [{from: recv, to: result0}]
   - symbol: (*github.com/gin-gonic/gin.Context).PostFormArray
-    labels: [user_input]
+    flows: [{from: recv, to: result}]
+  - symbol: (*github.com/gin-gonic/gin.Context).PostFormMap
+    flows: [{from: recv, to: result}]
+  - symbol: (*github.com/gin-gonic/gin.Context).FormFile
+    flows: [{from: recv, to: result0}]
+  - symbol: (*github.com/gin-gonic/gin.Context).MultipartForm
+    flows: [{from: recv, to: result}]
   - symbol: (*github.com/gin-gonic/gin.Context).GetHeader
-    labels: [user_input]
+    flows: [{from: recv, to: result}]
   - symbol: (*github.com/gin-gonic/gin.Context).Cookie
-    labels: [user_input]
+    flows: [{from: recv, to: result0}]
   - symbol: (*github.com/gin-gonic/gin.Context).GetRawData
-    labels: [user_input]
+    flows: [{from: recv, to: result}]
   - symbol: (*github.com/gin-gonic/gin.Context).ClientIP
-    labels: [user_input]
+    flows: [{from: recv, to: result}]
+  - symbol: (*github.com/gin-gonic/gin.Context).FullPath
+    flows: [{from: recv, to: result}]
+  - symbol: (*github.com/gin-gonic/gin.Context).Bind
+    flows: [{from: recv, to: arg0}]
+  - symbol: (*github.com/gin-gonic/gin.Context).BindJSON
+    flows: [{from: recv, to: arg0}]
+  - symbol: (*github.com/gin-gonic/gin.Context).BindXML
+    flows: [{from: recv, to: arg0}]
+  - symbol: (*github.com/gin-gonic/gin.Context).BindQuery
+    flows: [{from: recv, to: arg0}]
+  - symbol: (*github.com/gin-gonic/gin.Context).BindYAML
+    flows: [{from: recv, to: arg0}]
+  - symbol: (*github.com/gin-gonic/gin.Context).BindHeader
+    flows: [{from: recv, to: arg0}]
+  - symbol: (*github.com/gin-gonic/gin.Context).BindUri
+    flows: [{from: recv, to: arg0}]
+  - symbol: (*github.com/gin-gonic/gin.Context).ShouldBind
+    flows: [{from: recv, to: arg0}]
+  - symbol: (*github.com/gin-gonic/gin.Context).ShouldBindJSON
+    flows: [{from: recv, to: arg0}]
+  - symbol: (*github.com/gin-gonic/gin.Context).ShouldBindXML
+    flows: [{from: recv, to: arg0}]
+  - symbol: (*github.com/gin-gonic/gin.Context).ShouldBindQuery
+    flows: [{from: recv, to: arg0}]
+  - symbol: (*github.com/gin-gonic/gin.Context).ShouldBindYAML
+    flows: [{from: recv, to: arg0}]
+  - symbol: (*github.com/gin-gonic/gin.Context).ShouldBindHeader
+    flows: [{from: recv, to: arg0}]
+  - symbol: (*github.com/gin-gonic/gin.Context).ShouldBindUri
+    flows: [{from: recv, to: arg0}]
+  - symbol: (*github.com/gin-gonic/gin.Context).ShouldBindBodyWith
+    flows: [{from: recv, to: arg0}]
 
 sinks:
   - symbol: (*github.com/gin-gonic/gin.Context).Redirect

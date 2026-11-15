@@ -1,0 +1,8 @@
+{
+  "target": "https://github.com/flipped-aurora/gin-vue-admin, module server/, commit 7bc7c3051067 (the parent of the fix b1b7427c6ea6)",
+  "how": "GHSA-gv3w-m57p-3wc4 / CVE-2024-31457 / GO-2024-2702: the plugName of the plugin template (AutoPlug) reaches the file system in CreatePlug. The fix is a check in the handler; the sites are where the path is used. Only these sites are labelled. The other findings (the zip, upload and breakpoint code of the same project) were not reviewed, so they are not counted either way.",
+  "sites": [
+    {"file": "service/system/sys_auto_code.go", "line": 762, "label": "vuln", "category": "path_traversal", "note": "os.MkdirAll(dirPath): dirPath is built from plug.Snake (= lower-cased plugName)"},
+    {"file": "service/system/sys_auto_code.go", "line": 765, "label": "vuln", "category": "path_traversal", "note": "os.OpenFile(file)"}
+  ]
+}
