@@ -94,9 +94,14 @@ type state struct {
 	sinkReaches  map[sinkKey]*SinkReach
 	uncertain    []*Uncertainty
 	truncated    bool
+	widened      bool
 	adds         int
 	exceeded     bool
 }
+
+// maxCellElems is the number of elements a cell may hold before the symbolic
+// ones are widened to the whole parameter.
+const maxCellElems = 96
 
 // cachedElems and cachedPaths remember sorted views of cells. Sets only
 // ever grow, so a cache is valid as long as its length matches.
@@ -169,6 +174,15 @@ func (s *state) add(l Loc, e Elem, w *why) {
 	if set == nil {
 		set = Set{}
 		cm[l.Path] = set
+	}
+	// A cell that holds very many symbolic elements of one parameter, each
+	// for another part of it, says "something from this parameter": the parts
+	// are merged into the whole (more than the truth, never less). Without it
+	// the work grows with the product of what the cell holds and what the
+	// summaries ask of it.
+	if e.Kind == Param && e.Path != "" && len(set) > maxCellElems {
+		e.Path = ""
+		s.widened = true
 	}
 	if old, ok := set[e]; ok {
 		// The element is already here. If it came with other guards, the
