@@ -252,7 +252,29 @@ func (s *state) collect(l Loc) []found {
 
 func (s *state) collectUncached(l Loc) []found {
 	cm := s.cellsOf(l.Root)
+	// The answer is made once, at its size: growing it by appending leaves the
+	// smaller arrays behind as garbage, and these slices are what the analysis
+	// makes the most of.
+	paths := s.pathsOf(l.Root, cm)
+	first := sort.SearchStrings(paths, l.Path)
+	n := 0
+	if l.Path != "" {
+		n += len(cm[""])
+		for i := 1; i < len(l.Path); i++ {
+			if l.Path[i] == '/' {
+				n += len(cm[l.Path[:i]])
+			}
+		}
+	}
+	for i := first; i < len(paths) && strings.HasPrefix(paths[i], l.Path); i++ {
+		if pathHasPrefix(paths[i], l.Path) {
+			n += len(cm[paths[i]])
+		}
+	}
 	var out []found
+	if n > 0 {
+		out = make([]found, 0, n)
+	}
 	// The enclosing objects, outermost first: an enclosing object that is
 	// tainted as a whole taints this part.
 	enclosing := func(p string) {
@@ -282,8 +304,7 @@ func (s *state) collectUncached(l Loc) []found {
 	}
 	// The cell itself and everything stored below it: the paths are sorted,
 	// so they are one run.
-	paths := s.pathsOf(l.Root, cm)
-	for i := sort.SearchStrings(paths, l.Path); i < len(paths) && strings.HasPrefix(paths[i], l.Path); i++ {
+	for i := first; i < len(paths) && strings.HasPrefix(paths[i], l.Path); i++ {
 		p := paths[i]
 		if !pathHasPrefix(p, l.Path) {
 			continue
@@ -393,6 +414,43 @@ func (s *state) plainExists(l Loc, e Elem) bool {
 	}
 	old, ok := set[e]
 	return ok && old != nil && len(old.guards) == 0 && len(old.calleeGuards) == 0 && old.call == nil
+}
+
+// addsNothing reports whether adding the element, with a plain reason (no
+// guards, no summary applied), to every one of the locations would change
+// nothing at all: it is there already with a plain reason, and the path and the
+// cell are as they would be left (add also records that a path was cut short and
+// that a cell was widened, which is why those are not skipped).
+func (s *state) addsNothing(dsts []Loc, e Elem) bool {
+	if len(dsts) == 0 {
+		return false
+	}
+	for _, l := range dsts {
+		if v := l.Root.V; v != nil && l.Root.Idx < 0 && l.Path == "" && !s.eng.opts.NumericTaint &&
+			(v.Class == ir.ClassNumber || v.Class == ir.ClassBool) {
+			continue // add leaves it out
+		}
+		p, trunc := pathTrunc(l.Path, s.eng.opts.K)
+		if trunc {
+			return false
+		}
+		cm, ok := s.cells[l.Root]
+		if !ok {
+			return false
+		}
+		set := cm[p]
+		if set == nil {
+			return false
+		}
+		if e.Kind == Param && e.path != 0 && len(set) > maxCellElems {
+			return false
+		}
+		old, ok := set[e]
+		if !ok || old == nil || len(old.guards) != 0 || len(old.calleeGuards) != 0 || old.call != nil {
+			return false
+		}
+	}
+	return true
 }
 
 // put adds the found elements to the destination, collapsed.

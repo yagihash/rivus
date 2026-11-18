@@ -293,6 +293,12 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 				continue // the call passes constants that rule this flow out
 			}
 			for _, x := range s.expandElem(oe.E, argv) {
+				// Most of what a summary says is already known here: then adding
+				// it changes nothing, and its reason (the largest thing made) is
+				// not needed.
+				if len(oe.Guards) == 0 && s.addsNothing(dsts, x.E) {
+					continue
+				}
 				w := &why{fn: s.fn, pos: cc.in.Pos, desc: desc, steps: oe.Steps, notes: notes}
 				if len(oe.Guards) > 0 {
 					w.calleeGuards, w.call = oe.Guards, info
