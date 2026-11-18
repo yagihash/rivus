@@ -130,7 +130,7 @@ func readIR(path string) (*loaded, error) {
 // loadErrors are what could not be read, from the packages or the stream.
 func (l *loaded) loadErrors() []ir.LoadError {
 	if l.gossa != nil {
-		return l.gossa.LoadErrors
+		return append(append([]ir.LoadError(nil), l.gossa.LoadErrors...), l.ir.LoadErrors...)
 	}
 	return l.ir.LoadErrors
 }

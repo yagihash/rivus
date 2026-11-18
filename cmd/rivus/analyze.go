@@ -30,7 +30,10 @@ type analyzeOpts struct {
 	funcTimeout time.Duration
 	passes      int
 	numeric     bool
-	maxImpl     int
+	// lang is the language to read: auto (what the directory holds), or a list.
+	lang                         string
+	dartExtractor, rustExtractor string
+	maxImpl                      int
 	// irFile is a stream of the neutral IR made by an extractor of another
 	// language (rivus extract writes the same form): the analysis starts there.
 	irFile string
@@ -39,6 +42,9 @@ type analyzeOpts struct {
 func (o *analyzeOpts) register(fs *flag.FlagSet) {
 	o.common.register(fs)
 	fs.IntVar(&o.k, "k", taint.DefaultOptions().K, "maximum access path depth")
+	fs.StringVar(&o.lang, "lang", "auto", "languages to read: auto (what the directory holds: go.mod, pubspec.yaml, Cargo.toml), or go, dart, rust, separated by commas")
+	fs.StringVar(&o.dartExtractor, "dart-extractor", "", "command of the Dart extractor (default: $RIVUS_DART_EXTRACTOR, then rivus-dart)")
+	fs.StringVar(&o.rustExtractor, "rust-extractor", "", "command of the Rust extractor (default: $RIVUS_RUST_EXTRACTOR, then rivus-rust)")
 	fs.BoolVar(&o.numeric, "numeric-taint", false, "follow taint through numbers and bools (by default it stops there: they cannot carry an injection)")
 	fs.BoolVar(&o.verbose, "v", false, "print the time of each phase to stderr")
 	fs.IntVar(&o.maxImpl, "max-implementations", model.DefaultMaxImplementations, "default limit of match: implementations")
@@ -65,6 +71,14 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 			return nil, err
 		}
 		phase("ir")
+	} else if langs, lerr := o.languages(); lerr != nil {
+		return nil, lerr
+	} else if len(langs) != 1 || langs[0] != langGo {
+		l, err = o.loadLangs(langs, patterns, rules)
+		if err != nil {
+			return nil, err
+		}
+		phase("load")
 	} else {
 		l, err = o.load(patterns, true)
 		if err != nil {

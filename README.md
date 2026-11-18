@@ -97,7 +97,9 @@ rivus models coverage -yaml -top 20 -ir package.jsonl           # Dart など
 go build -o rivus ./cmd/rivus
 
 rivus sites ./...                          # source / sink のサイトの列挙（解析なしで高速）
-rivus analyze ./...                        # source から sink への経路を、関数・パッケージを跨いで検出
+rivus analyze ./...                        # source から sink への経路を、関数・パッケージを跨いで検出（Go。依存も読む。外すなら -no-deps）
+rivus analyze -C path/to/project           # ディレクトリの言語を自動で判別（go.mod、pubspec.yaml、Cargo.toml）。複数あれば全部読んで 1 つの結果にする。-lang go,dart,rust で指定
+                                           # Dart と Rust は extractor（rivus-dart、rivus-rust）が PATH にいること。-dart-extractor / -rust-extractor か、RIVUS_DART_EXTRACTOR / RIVUS_RUST_EXTRACTOR で指定
 rivus query -sink 'os/exec.Command' ./...  # この sink に届き得る source を列挙
 rivus query -source '(*net/http.Request).FormValue' ./...  # この source が届き得る sink を列挙
 rivus index -o idx.json ./...              # 解析結果を保存

@@ -906,3 +906,7 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
   - **確かめたこと:** Rust のサンプルに、ワークスペースの外の依存クレートを足した。依存を通る流れ（`wrap`）は追われ、中で値を捨てる関数（`constant`）の後ろは、`--no-deps` では誤検出になるが、読むと正しく消える。呼ばれない関数（`never_called`）は IR から落ちる。Dart は、サンプルの findings が同じ 28 件のまま
   - **注意:** Dart で不確実性の合計が増える（shelf 単体で 154 → 382）のは、読むコードが増えて、依存の中の `dynamic_dispatch` が数えられるため（`unmodeled_library_call` は 36 → 14 に減る）。Go と違い、合計は良い指標ではない。Rust の `dyn Trait` の候補は、そのクレートの実装だけ（依存の実装は入らない）。実在の大きなプロジェクトでの測定は、まだ
 - **追記（オプション名）:** Go の `-deps`（既定オン）を、`-no-deps`（無効にする）に改めた。3 言語（Go の `-no-deps`、Dart と Rust extractor の `--no-deps`）で、読むのが既定で、外すオプションの名前が揃った
+- **追記（`rivus` コマンドから全言語を呼ぶ）:** `rivus analyze`（`query`、`index`、`resolve` も）が、ディレクトリの言語を、マーカーのファイルで自動で判別する（`go.mod`/`go.work`、`pubspec.yaml`、`Cargo.toml`）。`-lang auto|go,dart,rust` で指定できる。Go はこのプロセスの中で読み、Dart と Rust は extractor（`rivus-dart`、`rivus-rust`）をサブプロセスで呼んで、IR のストリームを読む。**複数の言語があれば、IR を 1 つにつなげて、1 回で解析する**（関数の名前は言語ごとに重ならないので、IR のレベルでつなぐだけでよい。結果のレポートを混ぜる必要がない）。混ぜるときは、Go のテキストもストリームの形（`goir.AddTexts`）にする
+  - extractor の場所: `-dart-extractor`/`-rust-extractor`、なければ `RIVUS_DART_EXTRACTOR`/`RIVUS_RUST_EXTRACTOR`、なければ PATH の `rivus-dart`/`rivus-rust`。Dart は `pubspec.yaml` に `executables` を足したので、`dart pub global activate --source path extractor/dart` で `rivus-dart` が入る
+  - **自動で見つけた言語の extractor がなければ、警告を出して飛ばす**（Go のプロジェクトに、道具の `pubspec.yaml` があるだけ、という場合）。`-lang` で明示した言語は、エラーにする
+  - `-no-deps` と `-tests` は、extractor にも渡す

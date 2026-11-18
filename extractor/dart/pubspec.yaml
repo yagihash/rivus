@@ -8,3 +8,5 @@ dependencies:
   path: ^1.9.0
 dev_dependencies:
   test: ^1.33.0
+executables:
+  rivus-dart: rivus_dart
