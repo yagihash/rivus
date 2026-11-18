@@ -44,7 +44,7 @@ func (c *common) register(fs *flag.FlagSet) {
 	fs.BoolVar(&c.noBuiltin, "no-builtin-rules", false, "do not load the built-in rules")
 	fs.BoolVar(&c.noProject, "no-project-rules", false, "do not load the rules found in <dir>/.rivus/rules/*.yaml")
 	fs.BoolVar(&c.tests, "tests", false, "include _test.go files")
-	fs.BoolVar(&c.deps, "deps", false, "read the source of the dependencies (not the standard library), so that calls into them are followed instead of guessed")
+	fs.BoolVar(&c.deps, "deps", true, "read the source of the dependencies (not the standard library), so that calls into them are followed instead of guessed; -deps=false is lighter (about a sixth of the memory) and guesses at every call into a dependency")
 	fs.BoolVar(&c.deterministic, "deterministic-only", false, "ignore the rules decided by an LLM (origin: llm)")
 }
 
@@ -95,7 +95,7 @@ func (c *common) load(patterns []string, withGraph bool) (*loaded, error) {
 	if len(patterns) == 0 {
 		patterns = []string{"./..."}
 	}
-	p, err := gossa.Load(c.dir, patterns, gossa.Options{Tests: c.tests, NaiveForm: true, WithLifted: withGraph, Deps: c.deps})
+	p, err := gossa.Load(c.dir, patterns, gossa.Options{Tests: c.tests, NaiveForm: true, WithLifted: withGraph, Deps: c.deps && withGraph})
 	if err != nil {
 		return nil, err
 	}
