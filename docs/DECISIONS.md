@@ -928,3 +928,8 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
   3. **`boundary: stored_data`（propagator）:** 呼び出しが、DB のようなストアとの境界であることを示す。呼び出しの場所に、`stored_data_boundary`（`attributable_to: target`）を、不確実性として記録する。組み込みでは、`database/sql` の `Row.Scan` と `Rows.Scan` に付けた。`pure` と同時に使う
   - 組み込みの `database/sql` は、**既定では source にしない**（誤検出を減らす方針は変えない。DB 経由の長い経路が、Gogs で偽の findings を出していた）。使うなら、`examples/rules/go-database-sql.yaml` を、`-rules` で足す。`stored` というラベルで出るので、シンクの `accepts` で、`user_input` と区別できる
   - テスト: `testdata/go/cases/dbsrc`（文字列、`any` 経由の構造体、スライス、`sql.Rows.Scan` の可変長、型のワイルドカード、境界の記録）
+- **追記（Gitea の性能調査、Go 1.27）:** Gitea v1.26.4（約 35 万行）の解析は 900〜980 秒（ロード 10〜30 秒、IR 20〜30 秒、グラフ 7〜10 秒、**taint が約 15 分**）、ピーク 9〜10 GB、`depth_limit` 約 1,500 件。測った結果:
+  - **GC の設定（`GOGC` 25〜200、`GOMEMLIMIT`、Green Tea GC を外す）では、速くならない**。1 秒あたりの再解析数（`reanalyses`）は、GOGC=25: 465、50: 511、100: 529 で、ほぼ同じ。Green Tea を外すと、`heapBitsSmallForAddr`（小さなオブジェクトの走査）が 65% になり、むしろ重い。`GOGC=50` の既定は、そのままにした
+  - CPU プロファイルでは、約半分が GC の走査（ヒープ 3.4 GB の小さなポインタ付きオブジェクト）、`sys` 時間も `user` の 2 倍ほど出る（原因は、まだ分からない。ページフォルトか、GC のスピン）
+  - **割り当てのプロファイル（100 秒で約 110 GB）:** 最大は、`why`（経路の 1 ホップ。約 170 バイト）の割り当て 21%。要素がすでにセルにあっても、先に `why` を作っていた。**作る前に、「すでに普通の理由で入っている」かを調べて、飛ばすようにした**（`plainExists`）。再解析数 472 → 511（+8%）。次に、`collectUncached`（14%）、IR 変換の `emit`（11%、ロード時）
+  - サンプリング（`sample`）では、`Elem`（`Label`、`Origin`、`Path`、`Mods` の文字列 4 つ）をキーにしたマップの**ハッシュと比較**（`mapaccess2`、`MemHash`、`strhash`）が、`copyLoc` の中で大きい。**次の一手は、`Elem` を整数の ID に直す（文字列を 1 回だけ内部化する）こと**。ハッシュが 1 回の整数になり、`why` の割り当ても減る。見込みは 2 倍前後だが、エンジンの中心の型の変更なので、設計を示してから進める

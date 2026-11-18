@@ -299,6 +299,9 @@ func (s *state) collectUncached(l Loc) []found {
 func (s *state) copyLoc(src, dst Loc, w func(f found) *why) {
 	for _, f := range s.collect(src) {
 		dl := Loc{dst.Root, dst.Path + f.Rel}
+		if s.plainExists(dl, f.E) {
+			continue
+		}
 		s.add(dl, f.E, s.withContainerNote(w(f), f.Cell.Path, dl.Path))
 	}
 }
@@ -370,9 +373,33 @@ func (s *state) flatten(locs []Loc) []found {
 	return out
 }
 
+// plainExists reports whether the element is already in the cell with a plain
+// reason (no guards, no summary applied). Adding it again changes nothing, and
+// the reason for the second time need not be made: most additions of a fixed
+// point iteration are of this kind, and a reason is the largest thing made.
+func (s *state) plainExists(l Loc, e Elem) bool {
+	p, _ := pathTrunc(l.Path, s.eng.opts.K)
+	cm, ok := s.cells[l.Root]
+	if !ok {
+		return false
+	}
+	set := cm[p]
+	if set == nil {
+		return false
+	}
+	if e.Kind == Param && e.Path != "" && len(set) > maxCellElems {
+		e.Path = ""
+	}
+	old, ok := set[e]
+	return ok && old != nil && len(old.guards) == 0 && len(old.calleeGuards) == 0 && old.call == nil
+}
+
 // put adds the found elements to the destination, collapsed.
 func (s *state) put(dst Loc, fs []found, w func(f found) *why) {
 	for _, f := range fs {
+		if s.plainExists(dst, f.E) {
+			continue
+		}
 		s.add(dst, f.E, s.withContainerNote(w(f), f.Cell.Path, dst.Path))
 	}
 }
