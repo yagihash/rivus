@@ -3,5 +3,12 @@
 version = 4
 
 [[package]]
+name = "depcrate"
+version = "0.0.0"
+
+[[package]]
 name = "sample"
 version = "0.0.0"
+dependencies = [
+ "depcrate",
+]

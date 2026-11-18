@@ -45,9 +45,15 @@ fn driver() -> ExitCode {
     let root = std::env::var("RIVUS_ROOT").unwrap_or_default();
     let crate_name = args.iter().position(|a| a == "--crate-name").and_then(|i| args.get(i + 1)).cloned().unwrap_or_default();
 
+    // A crate that is not a member of the workspace is a dependency: cargo
+    // says which are members. A proc macro runs in the compiler, not in the
+    // program: it is not read.
+    let dep = std::env::var_os("CARGO_PRIMARY_PACKAGE").is_none();
+    let proc_macro = args.windows(2).any(|w| w[0] == "--crate-type" && w[1] == "proc-macro");
+
     let result = run!(&args, || {
-        if !probing && !skipped && !out_dir.is_empty() {
-            let records = extract(&root);
+        if !probing && !skipped && !proc_macro && !out_dir.is_empty() {
+            let records = extract(&root, dep);
             let path = PathBuf::from(&out_dir).join(format!("{}-{}.jsonl", crate_name, std::process::id()));
             let mut text = String::new();
             for r in records {
@@ -65,7 +71,7 @@ fn driver() -> ExitCode {
 }
 
 /// The records of the crate being compiled: its functions, and the texts.
-fn extract(root: &str) -> Vec<Value> {
+fn extract(root: &str, dep: bool) -> Vec<Value> {
     let items: Vec<_> = rustc_public::all_local_items().into_iter().filter(|i| i.has_body()).collect();
     let bodies: HashSet<String> = items.iter().map(|i| i.name()).collect();
     let mut cx = lower::Ctx::new(root.to_string(), bodies);
@@ -74,11 +80,20 @@ fn extract(root: &str) -> Vec<Value> {
         let Some(body) = item.body() else { continue };
         let name = item.name();
         let f = lower::Lower::lower(&mut cx, name.clone(), &body, item.span());
-        let source = cx.expr_text(&item.span());
-        cx.texts.func(name.clone(), source.clone(), source);
-        out.push(json!({"kind": "func", "func": f.to_json()}));
+        let mut j = f.to_json();
+        if dep {
+            // the texts of a dependency are not wanted: the core keeps only
+            // the functions the code reaches
+            j["dep"] = json!(true);
+        } else {
+            let source = cx.expr_text(&item.span());
+            cx.texts.func(name.clone(), source.clone(), source);
+        }
+        out.push(json!({"kind": "func", "func": j}));
     }
-    cx.texts.write(&mut out);
+    if !dep {
+        cx.texts.write(&mut out);
+    }
     out
 }
 
@@ -90,10 +105,12 @@ fn cli() -> ExitCode {
     // binaries are built: the code that is shipped, and nothing else, by
     // construction (a `#[cfg(test)]` item is not compiled at all).
     let mut include_tests = false;
+    let mut deps = true;
     let mut dir = None;
     for a in std::env::args().skip(1) {
         match a.as_str() {
             "--include-tests" | "--tests" | "-tests" => include_tests = true,
+            "--no-deps" => deps = false,
             _ => dir = Some(a),
         }
     }
@@ -119,12 +136,15 @@ fn cli() -> ExitCode {
     if include_tests {
         check.push("--all-targets");
     }
+    // With the dependencies, the driver stands in for rustc for every crate (cargo
+    // tells the members of the workspace apart); without, for the members only.
+    let wrapper = if deps { "RUSTC_WRAPPER" } else { "RUSTC_WORKSPACE_WRAPPER" };
     let status = Command::new("cargo")
         .arg(format!("+{}", TOOLCHAIN))
         .args(&check)
         .current_dir(&root)
         .env("CARGO_TARGET_DIR", tmp.join("target"))
-        .env("RUSTC_WORKSPACE_WRAPPER", &exe)
+        .env(wrapper, &exe)
         .env("RIVUS_RUST_DRIVER", "1")
         .env("RIVUS_IR_DIR", &frags)
         .env("RIVUS_ROOT", &root)

@@ -3,4 +3,7 @@ name = "sample"
 version = "0.0.0"
 edition = "2021"
 
+[dependencies]
+depcrate = { path = "../dep" }
+
 [workspace]

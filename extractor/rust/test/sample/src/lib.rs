@@ -22,6 +22,18 @@ pub fn field() {
     sink(&b.value); // @sink(field)
 }
 
+pub fn through_dependency() {
+    let s = source(); // @source(dep)
+    let w = depcrate::wrap(&s);
+    sink(&w); // @sink(dep)
+}
+
+pub fn dependency_drops_it() {
+    let s = source();
+    let w = depcrate::constant(&s);
+    sink(&w); // @sink(none)
+}
+
 pub fn closure() {
     let s = source(); // @source(closure)
     let f = || sink(&s); // @sink(closure)

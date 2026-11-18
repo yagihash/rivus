@@ -27,8 +27,13 @@ benchmarks are not even compiled, so `#[cfg(test)]` code cannot get in. `--inclu
 
 It builds the workspace with `cargo check`, running itself in place of rustc for the crates
 of the workspace (`RUSTC_WORKSPACE_WRAPPER`): rustc compiles them as usual, and the driver
-writes the IR of each crate on the way. The code has to compile. Dependencies are not read:
-calls into them are unmodeled library calls, until a model says what they do.
+writes the IR of each crate on the way. The code has to compile. The dependencies are read too
+(the driver stands in for rustc for every crate; cargo tells the members of the workspace apart
+by `CARGO_PRIMARY_PACKAGE`): their functions are marked `dep`, and `rivus analyze` keeps the ones
+the code reaches, so a flow goes through a dependency instead of being guessed at. Proc macros are
+not read, nor is `std` (the models stand for it). `--no-deps` reads the members only: calls into a
+dependency are then unmodeled library calls, until a model says what they do. The trait
+implementations of a dependency are not candidates of a call through `dyn Trait` yet.
 
 The extractor is pinned to one nightly (`rust-toolchain.toml`, `TOOLCHAIN` in `src/main.rs`):
 `rustc_public` is unstable, and moves with the compiler. To move it, change the two, and
