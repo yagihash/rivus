@@ -192,11 +192,14 @@ func (e *Engine) noteNotConverged(fn *sg.Func) {
 
 // Stats describes a run.
 type Stats struct {
-	Functions     int      `json:"functions"`
-	Passes        int      `json:"passes"`
-	Converged     bool     `json:"converged"`
-	Reanalyses    int      `json:"reanalyses"`
-	DurationMilli int64    `json:"duration_ms"`
+	Functions     int   `json:"functions"`
+	Passes        int   `json:"passes"`
+	Converged     bool  `json:"converged"`
+	Reanalyses    int   `json:"reanalyses"`
+	DurationMilli int64 `json:"duration_ms"`
+	// DepSpentMilli and OwnSpentMilli are the time spent analysing the functions of the dependencies and of the code itself (the sum over all workers).
+	DepSpentMilli int64    `json:"dep_spent_ms,omitempty"`
+	OwnSpentMilli int64    `json:"own_spent_ms,omitempty"`
 	NotConverged  []string `json:"not_converged,omitempty"`
 	TimedOut      bool     `json:"timed_out,omitempty"`
 	// Unstable lists (up to ten) functions whose summary still changed in
@@ -310,6 +313,15 @@ func (e *Engine) Run() *Result {
 			st.LargestElems, st.LargestSummary = n, sum.Func
 		}
 	}
+	var depSpent, ownSpent time.Duration
+	for fn, d := range e.spent {
+		if fn.Dep {
+			depSpent += d
+		} else {
+			ownSpent += d
+		}
+	}
+	st.DepSpentMilli, st.OwnSpentMilli = depSpent.Milliseconds(), ownSpent.Milliseconds()
 	st.DurationMilli = time.Since(start).Milliseconds()
 	return e.collect(st)
 }
