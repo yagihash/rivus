@@ -115,7 +115,7 @@ func buildFunc(p *Program, f *ir.Func) (*Func, error) {
 		prog: p, f: f, form: form,
 		fn: &Func{
 			ID: string(f.ID), IR: slimFunc(f), Prog: p, Symbol: f.Symbol, Recv: f.Recv, Dep: f.Dep,
-			Exported: f.Exported, Pos: f.Pos,
+			Exported: f.Exported, Entry: f.Entry, Pos: f.Pos,
 		},
 		values: map[valueKey]*Value{},
 		alias:  map[valueKey]irssa.Ref{},

@@ -253,7 +253,7 @@ impl<'a> Lower<'a> {
         let mut l = Lower {
             cx,
             body,
-            f: Func { id: id.clone(), symbol: id, exported: true, pos, params: vec![], results: vec![], locals: vec![], blocks: vec![] },
+            f: Func { id: id.clone(), symbol: id, exported: true, entry: false, pos, params: vec![], results: vec![], locals: vec![], blocks: vec![] },
             cur: 0,
             var: vec![],
             cells: HashSet::new(),

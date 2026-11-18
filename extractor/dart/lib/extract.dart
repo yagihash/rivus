@@ -253,6 +253,7 @@ class _Lower extends RecursiveAstVisitor<void> {
       ..symbol = symbolOf(el)
       ..recv = thisType != null
       ..dep = unit.dep
+      ..entry = !unit.dep && el is TopLevelFunctionElement && el.name == 'main'
       ..exported = !(el.name ?? '').startsWith('_');
     final at = unit.at(node.offset);
     out.pos = unit.pos(node, node.offset);

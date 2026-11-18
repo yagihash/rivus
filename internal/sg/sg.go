@@ -208,6 +208,7 @@ type Func struct {
 	Recv     bool
 	Dep      bool
 	Exported bool
+	Entry    bool
 	Pos      ir.Pos
 	Params   []*Value
 	FreeVars []*Value
@@ -271,4 +272,54 @@ func (v *Value) Less(o *Value) bool {
 		return ai < bi
 	}
 	return ad < bd
+}
+
+// Reachable is the set of functions the program can reach from where it
+// starts: the entry points (main, the initialisation of the packages), or, for
+// a program that has none (a library), the exported functions of the code that
+// was read. The edges are the calls, the candidates of the calls through
+// interfaces and function values, and the functions named as values. It is nil
+// when nothing says where the program starts.
+func (p *Program) Reachable() map[*Func]bool {
+	var work []*Func
+	reach := map[*Func]bool{}
+	add := func(f *Func) {
+		if f != nil && !reach[f] {
+			reach[f] = true
+			work = append(work, f)
+		}
+	}
+	for _, f := range p.Funcs {
+		if f.Entry {
+			add(f)
+		}
+	}
+	if len(work) == 0 {
+		for _, f := range p.Funcs {
+			if f.Exported && !f.Dep {
+				add(f)
+			}
+		}
+	}
+	if len(work) == 0 {
+		return nil
+	}
+	for len(work) > 0 {
+		f := work[len(work)-1]
+		work = work[:len(work)-1]
+		for _, b := range f.Blocks {
+			for _, in := range b.Instrs {
+				add(in.Static)
+				for _, c := range in.CandidateFns {
+					add(c)
+				}
+				for _, a := range in.Args {
+					if a != nil && a.Kind == KFunc {
+						add(a.Fn)
+					}
+				}
+			}
+		}
+	}
+	return reach
 }

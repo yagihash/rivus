@@ -139,6 +139,14 @@ type Finding struct {
 	// longer a path, the more of its hops can be a guess; this is a fact for
 	// ranking, not a verdict.
 	PathSteps int `json:"path_steps"`
+	// Reachability says whether every function on the path can be reached from
+	// where the program starts (its entry points: main and the initialisation
+	// of the packages; for a library, its exported functions). A path that
+	// cannot is in code that does not run in the program: a helper that only
+	// the tests use, a mock, or a handler that is registered by reflection
+	// (which rivus does not follow). Absent when nothing says where the
+	// program starts.
+	Reachability string `json:"reachability,omitempty"`
 	// Confidence classifies what is known about the path, and does not judge
 	// it: ConfidenceClear when nothing on it was left unresolved,
 	// ConfidenceReview otherwise.
@@ -157,6 +165,12 @@ type Finding struct {
 const (
 	ConfidenceClear  = "no_uncertainty_on_path"
 	ConfidenceReview = "requires_review"
+)
+
+// Values of Finding.Reachability.
+const (
+	ReachFromEntry    = "from_entry"
+	ReachNotFromEntry = "not_from_entry"
 )
 
 // Path is one way the data gets from the source to the sink.

@@ -50,7 +50,9 @@ func DefaultOptions() Options {
 
 // Engine runs the whole-program analysis.
 type Engine struct {
-	prog  *sg.Program
+	prog *sg.Program
+	// reach is what the program can reach from its entry points (nil: unknown).
+	reach map[*sg.Func]bool
 	texts ir.Texts
 	sites *sites.Result
 	rules *model.Rules
@@ -222,6 +224,7 @@ type Result struct {
 // summaries stop changing.
 func (e *Engine) Run() *Result {
 	start := time.Now()
+	e.reach = e.prog.Reachable()
 	fns := e.prog.Funcs
 	callees := func(ci *sg.Instr) []*sg.Func {
 		if ci.StaticID != "" {
@@ -745,6 +748,15 @@ func (e *Engine) buildFinding(rf *rawFinding) *Finding {
 	}
 	f.Paths = []Path{{Steps: steps}}
 	f.PathSteps = len(steps)
+	if e.reach != nil {
+		f.Reachability = ReachFromEntry
+		for _, id := range append(append([]string{src.Func, rf.site.Func}, funcs...)) {
+			if fn := e.prog.ByID[id]; fn != nil && !e.reach[fn] {
+				f.Reachability = ReachNotFromEntry
+				break
+			}
+		}
+	}
 	if len(f.Uncertainties) == 0 {
 		f.Confidence = ConfidenceClear
 	}

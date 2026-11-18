@@ -12,6 +12,7 @@ import (
 	"go/token"
 	"go/types"
 	"sort"
+	"strings"
 
 	"golang.org/x/tools/go/ssa"
 	"golang.org/x/tools/go/ssa/ssautil"
@@ -196,6 +197,7 @@ func convertFunc(p *gossa.Program, fn *ssa.Function, graph callgraph.Graph, lift
 	if o := fn.Object(); o != nil {
 		c.out.Exported = o.Exported()
 	}
+	c.out.Entry = isEntry(fn)
 	res := fn.Signature.Results()
 	for i := 0; i < res.Len(); i++ {
 		c.out.Results = append(c.out.Results, ir.TypeID(typeString(res.At(i).Type())))
@@ -571,4 +573,17 @@ func (c *conv) matchCalls(lifted *ssa.Function) {
 			}
 		}
 	}
+}
+
+// isEntry reports whether the function is where a Go program starts: main of
+// a main package, or the initialisation of a package.
+func isEntry(fn *ssa.Function) bool {
+	if fn.Signature.Recv() != nil || fn.Parent() != nil {
+		return false
+	}
+	name := fn.Name()
+	if name == "init" || strings.HasPrefix(name, "init#") {
+		return true
+	}
+	return name == "main" && fn.Pkg != nil && fn.Pkg.Pkg.Name() == "main"
 }

@@ -129,6 +129,10 @@ type Func struct {
 	// stream small (a path is most of a position).
 	File     string `json:"file,omitempty"`
 	Exported bool   `json:"exported,omitempty"`
+	// Entry marks where the program starts: main, and the initialisation of a
+	// package. What no entry reaches (a helper that only the tests use, a
+	// mock) is not part of the program that runs.
+	Entry bool `json:"entry,omitempty"`
 	// Symbol is the name the rules use for the function: the declared
 	// function or method (empty for an anonymous or a synthetic function).
 	Symbol string `json:"symbol,omitempty"`

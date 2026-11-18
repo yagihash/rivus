@@ -82,6 +82,7 @@ class FuncOut {
   bool recv = false;
   bool exported = false;
   bool dep = false; // a function of a dependency
+  bool entry = false; // where the program starts: main
   Pos pos = Pos.none;
   final List<Param> params = [];
   final List<String> results = [];
@@ -98,6 +99,7 @@ class FuncOut {
         if (!pos.isNone) 'pos': pos.toJson(),
         if (exported) 'exported': true,
         if (dep) 'dep': true,
+        if (entry) 'entry': true,
         if (symbol.isNotEmpty) 'symbol': symbol,
         if (recv) 'recv': true,
       };

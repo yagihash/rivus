@@ -76,11 +76,16 @@ fn extract(root: &str, dep: bool) -> Vec<Value> {
     let bodies: HashSet<String> = items.iter().map(|i| i.name()).collect();
     let mut cx = lower::Ctx::new(root.to_string(), bodies);
     let mut out = Vec::new();
+    // main of a binary crate: where the program starts
+    let entry = rustc_public::entry_fn().map(|e| e.name());
     for item in &items {
         let Some(body) = item.body() else { continue };
         let name = item.name();
         let f = lower::Lower::lower(&mut cx, name.clone(), &body, item.span());
         let mut j = f.to_json();
+        if !dep && entry.as_deref() == Some(name.as_str()) {
+            j["entry"] = json!(true);
+        }
         if dep {
             // the texts of a dependency are not wanted: the core keeps only
             // the functions the code reaches

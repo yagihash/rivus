@@ -1,0 +1,9 @@
+{
+  "target": "https://github.com/go-gitea/gitea at v1.26.4 (vulnerable to GHSA-4p89-xcq8-xfhm, GHSA-x77v-q46j-393g and GHSA-8vmh-w35x-73qr, all fixed in later releases)",
+  "how": "Each entry is a sink call site named by the advisory. The advisories describe the code; the labels were made by reading it at v1.26.4. Matched by (file, line, category). Only these three sites are labelled: the rest of the findings were not read, so precision is not measured.",
+  "sites": [
+    {"file": "services/release/release.go", "line": 338, "label": "vuln", "category": "path_traversal", "note": "GHSA-4p89: the keys of the release edit form (attachment-del-<uuid>) are collected raw and passed to storage.Attachments.Delete"},
+    {"file": "routers/web/auth/oauth.go", "line": 311, "label": "vuln", "category": "ssrf", "note": "GHSA-x77v: the avatar URL of the OIDC provider (goth.User.AvatarURL) is fetched without the host filter"},
+    {"file": "modules/auth/openid/openid.go", "line": 26, "label": "vuln", "category": "ssrf", "note": "GHSA-8vmh: the assertion of the request goes to openid.Verify, which posts to the op_endpoint it names (a dependency: the entry point is the sink in the rules)"}
+  ]
+}

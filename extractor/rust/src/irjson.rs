@@ -82,6 +82,7 @@ pub struct Func {
     pub id: String,
     pub symbol: String,
     pub exported: bool,
+    pub entry: bool,
     pub pos: Pos,
     pub params: Vec<Value>,
     pub results: Vec<String>,
@@ -105,6 +106,9 @@ impl Func {
         if !self.pos.is_none() {
             m.insert("pos".into(), self.pos.to_json());
             m.insert("file".into(), json!(self.pos.file));
+        }
+        if self.entry {
+            m.insert("entry".into(), json!(true));
         }
         if self.exported {
             m.insert("exported".into(), json!(true));
