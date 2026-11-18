@@ -142,3 +142,82 @@ propagators:
     pure: true
   - symbol: (hash.Hash).Size
     pure: true
+  # standard functions the benchmarks call and nothing said what they do
+  - symbol: context.TODO
+    pure: true
+  - symbol: context.Background
+    pure: true
+  - symbol: time.Unix
+    pure: true
+  - symbol: (time.Time).Local
+    pure: true
+  - symbol: (time.Time).Format
+    pure: true
+  - symbol: (time.Time).UnixNano
+    pure: true
+  - symbol: (time.Time).Year
+    pure: true
+  - symbol: (time.Time).Nanosecond
+    pure: true
+  - symbol: time.ParseInLocation
+    pure: true
+  - symbol: (*os.File).Close
+    pure: true
+  - symbol: os.TempDir
+    pure: true
+  - symbol: bytes.Index
+    pure: true
+  - symbol: bytes.HasPrefix
+    pure: true
+  - symbol: strings.ContainsAny
+    pure: true
+  - symbol: strings.IndexByte
+    pure: true
+  - symbol: net/http.DetectContentType
+    pure: true
+  - symbol: (*bufio.Scanner).Scan
+    pure: true
+  - symbol: (*database/sql.DB).Close
+    pure: true
+  - symbol: (*database/sql.Rows).Close
+    pure: true
+  - symbol: (*database/sql.Rows).Next
+    pure: true
+  - symbol: (*database/sql.Rows).Err
+    pure: true
+  - symbol: (*os/exec.Cmd).Run
+    pure: true
+  - symbol: (*os/exec.Cmd).Start
+    pure: true
+  - symbol: (*os/exec.Cmd).Wait
+    pure: true
+  - symbol: os/exec.LookPath
+    pure: true
+  - symbol: os.Stat
+    pure: true
+  - symbol: (*regexp.Regexp).MatchString
+    pure: true
+  - symbol: (*net/smtp.Client).Extension
+    pure: true
+  - symbol: strconv.FormatInt
+    pure: true
+  - symbol: strings.Title
+    flows: [{from: arg0, to: result}]
+  - symbol: bytes.ReplaceAll
+    flows: [{from: arg0, to: result}]
+  - symbol: strings.TrimRightFunc
+    flows: [{from: arg0, to: result}]
+  - symbol: path/filepath.Ext
+    flows: [{from: arg0, to: result}]
+  - symbol: io.NopCloser
+    flows: [{from: arg0, to: result}]
+  - symbol: (*net/url.URL).Hostname
+    flows: [{from: recv, to: result}]
+  - symbol: (embed.FS).ReadFile
+    flows: [{from: recv, to: result0}]
+  - symbol: (*os.File).WriteString
+    pure: true
+  - symbol: (*os.File).Write
+    pure: true
+  - symbol: strconv.ParseInt
+    flows: [{from: arg0, to: result0}]
