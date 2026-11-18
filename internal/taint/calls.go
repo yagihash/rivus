@@ -105,7 +105,7 @@ func (s *state) callBody(cc *callCtx) {
 			if !outOnly {
 				for _, r := range cc.roots {
 					for _, l := range site.Labels {
-						s.add(Loc{r, ""}, Elem{Kind: Real, Label: l, Origin: site.ID}, s.origin(ci.Pos, "source: "+site.Symbol))
+						s.add(Loc{r, ""}, RealElem(l, site.ID), s.origin(ci.Pos, "source: "+site.Symbol))
 					}
 				}
 			}
@@ -124,7 +124,7 @@ func (s *state) callBody(cc *callCtx) {
 					}
 					for _, d := range dsts {
 						for _, l := range site.Labels {
-							s.add(d, Elem{Kind: Real, Label: l, Origin: site.ID}, s.origin(ci.Pos, "source: "+site.Symbol+" (fills an argument)"))
+							s.add(d, RealElem(l, site.ID), s.origin(ci.Pos, "source: "+site.Symbol+" (fills an argument)"))
 						}
 					}
 				}
@@ -306,10 +306,10 @@ func (s *state) reach(site *sites.Site, f found, in *sg.Instr) {
 	gs := s.guardsAtSink(in, f)
 	switch f.E.Kind {
 	case Real:
-		if !accepted(site.Labels, f.E.Label) {
+		if !accepted(site.Labels, f.E.Label()) {
 			return
 		}
-		s.recordFinding(f.E.Origin, site, f.E.Label, steps, gs)
+		s.recordFinding(f.E.Origin(), site, f.E.Label(), steps, gs)
 	case Param:
 		k := sinkKey{f.E, site.ID}
 		if old, ok := s.sinkReaches[k]; !ok || steps.len() < old.Steps.len() {
@@ -436,8 +436,8 @@ func (s *state) suppressed(cc *callCtx, m *ModelRef, e Elem) {
 		sp = &Suppression{Model: *m, Func: s.eng.funcID(s.fn), pos: cc.in.Pos}
 		s.suppressions[key] = sp
 	}
-	sp.Labels = addSorted(sp.Labels, e.Label)
-	sp.Origins = addSorted(sp.Origins, e.Origin)
+	sp.Labels = addSorted(sp.Labels, e.Label())
+	sp.Origins = addSorted(sp.Origins, e.Origin())
 }
 
 func addSorted(list []string, v string) []string {
@@ -491,7 +491,7 @@ func (s *state) applyFlows(cc *callCtx, flows []model.Flow, o *op, desc string, 
 				if o != nil {
 					elems = sanitize(elems, *o)
 					kind = desc
-					if mref != nil && mref.Origin == model.OriginLLM && f.E.Kind == Real && o.drops1(f.E.Label) {
+					if mref != nil && mref.Origin == model.OriginLLM && f.E.Kind == Real && o.drops1(f.E.Label()) {
 						s.suppressed(cc, mref, f.E)
 					}
 				}

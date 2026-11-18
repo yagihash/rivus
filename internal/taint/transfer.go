@@ -51,11 +51,11 @@ func (s *state) seed() {
 func (s *state) seedParam(v *sg.Value, idx int) {
 	r := own(v)
 	s.paramRoot[r] = idx
-	s.add(Loc{r, ""}, Elem{Kind: Param, Param: idx}, s.origin(v.Pos, "param"))
+	s.add(Loc{r, ""}, ParamElem(idx, ""), s.origin(v.Pos, "param"))
 	if v.Kind == sg.KParam {
 		for _, site := range s.eng.sites.ByIRParam[sites.IRParam{Func: s.fn.IR.ID, Index: idx}] {
 			for _, l := range site.Labels {
-				s.add(Loc{r, ""}, Elem{Kind: Real, Label: l, Origin: site.ID}, s.origin(v.Pos, "source: parameter "+site.Symbol))
+				s.add(Loc{r, ""}, RealElem(l, site.ID), s.origin(v.Pos, "source: parameter "+site.Symbol))
 			}
 		}
 	}
@@ -308,7 +308,7 @@ func (s *state) fieldSources(in *sg.Instr, base []Loc, field string) {
 		}
 		for _, l := range base {
 			for _, label := range site.Labels {
-				s.add(Loc{l.Root, pathJoin(l.Path, field)}, Elem{Kind: Real, Label: label, Origin: site.ID},
+				s.add(Loc{l.Root, pathJoin(l.Path, field)}, RealElem(label, site.ID),
 					s.origin(pos, "source: field "+site.Symbol))
 			}
 		}

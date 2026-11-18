@@ -72,16 +72,16 @@ func describe(oe OutElem) string {
 	switch {
 	case by != "":
 		return "sanitized by " + by
-	case oe.E.Kind == Param && oe.E.Mods != "":
+	case oe.E.Kind == Param && oe.E.Mods() != "":
 		var drops []string
-		for _, o := range decodeOps(oe.E.Mods) {
+		for _, o := range decodeOps(oe.E.Mods()) {
 			drops = append(drops, o.drops...)
 		}
 		return "labels dropped: " + strings.Join(drops, ", ")
 	case oe.E.Kind == Param:
 		return "tainted (passthrough)"
 	}
-	return "tainted (" + oe.E.Label + ")"
+	return "tainted (" + oe.E.Label() + ")"
 }
 
 func sameSet(a, b map[string]bool) bool {

@@ -146,6 +146,9 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	eng.SetLoadErrors(l.loadErrors())
 	res = eng.Run()
 	phase("taint")
+	if o.verbose {
+		fmt.Fprintf(os.Stderr, "rivus: %d distinct strings in the elements\n", taint.InternedStrings())
+	}
 	if o.lockProf != "" {
 		for _, n := range []string{"mutex", "block"} {
 			if f, err := os.Create(o.lockProf + "." + n); err == nil {

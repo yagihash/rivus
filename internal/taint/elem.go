@@ -23,13 +23,47 @@ const (
 )
 
 // Elem is one unit of taint.
+//
+// It is small and comparable: the strings it is made of (the label, the
+// origin, the path, the sanitizer operations) are kept once in a table and the
+// element holds their numbers. An analysis makes and copies and hashes
+// millions of elements, and as a struct of strings each of them was 80 bytes.
+// The numbers say nothing about order: elements are sorted by their strings.
 type Elem struct {
 	Kind   ElemKind
-	Label  string // Real: the label name
-	Origin string // Real: ID of the source site that introduced it
-	Param  int    // Param: parameter index (receiver first, then free variables)
-	Path   string // Param: access path inside the parameter object
-	Mods   string // Param: sanitizer operations applied since (see applyMods)
+	Param  int32 // Param: parameter index (receiver first, then free variables)
+	label  strID // Real: the label name
+	origin strID // Real: ID of the source site that introduced it
+	path   strID // Param: access path inside the parameter object
+	mods   strID // Param: sanitizer operations applied since (see applyMods)
+}
+
+// Label is, for a Real element, the label name.
+func (e Elem) Label() string { return e.label.str() }
+
+// Origin is, for a Real element, the ID of the source site that introduced it.
+func (e Elem) Origin() string { return e.origin.str() }
+
+// Path is, for a Param element, the access path inside the parameter object.
+func (e Elem) Path() string { return e.path.str() }
+
+// Mods is, for a Param element, the sanitizer operations applied since.
+func (e Elem) Mods() string { return e.mods.str() }
+
+// WithPath is the element with another path.
+func (e Elem) WithPath(p string) Elem { e.path = intern(p); return e }
+
+// WithMods is the element with other sanitizer operations.
+func (e Elem) WithMods(m string) Elem { e.mods = intern(m); return e }
+
+// RealElem makes a concrete label that came from a source site.
+func RealElem(label, origin string) Elem {
+	return Elem{Kind: Real, label: intern(label), origin: intern(origin)}
+}
+
+// ParamElem makes the symbolic taint of a parameter, below path.
+func ParamElem(idx int, path string) Elem {
+	return Elem{Kind: Param, Param: int32(idx), path: intern(path)}
 }
 
 // Set is a set of taint elements. Each element carries the reason it first
@@ -50,26 +84,32 @@ func lessElem(a, b Elem) bool {
 	if a.Kind != b.Kind {
 		return a.Kind < b.Kind
 	}
-	if a.Label != b.Label {
-		return a.Label < b.Label
+	if a.label != b.label {
+		if x, y := a.Label(), b.Label(); x != y {
+			return x < y
+		}
 	}
-	if a.Origin != b.Origin {
-		return a.Origin < b.Origin
+	if a.origin != b.origin {
+		if x, y := a.Origin(), b.Origin(); x != y {
+			return x < y
+		}
 	}
 	if a.Param != b.Param {
 		return a.Param < b.Param
 	}
-	if a.Path != b.Path {
-		return a.Path < b.Path
+	if a.path != b.path {
+		if x, y := a.Path(), b.Path(); x != y {
+			return x < y
+		}
 	}
-	return a.Mods < b.Mods
+	return a.mods != b.mods && a.Mods() < b.Mods()
 }
 
 func (e Elem) String() string {
 	if e.Kind == Real {
-		return "real(" + e.Label + "@" + e.Origin + ")"
+		return "real(" + e.Label() + "@" + e.Origin() + ")"
 	}
-	return "param" + strconv.Itoa(e.Param) + e.Path + "[" + e.Mods + "]"
+	return "param" + strconv.Itoa(int(e.Param)) + e.Path() + "[" + e.Mods() + "]"
 }
 
 // --- sanitizer operations ---
@@ -152,16 +192,16 @@ func sanitize(in []Elem, o op) []Elem {
 	var out []Elem
 	for _, e := range in {
 		if e.Kind == Param {
-			e.Mods = joinMods(e.Mods, encodeOp(o))
+			e = e.WithMods(joinMods(e.Mods(), encodeOp(o)))
 			out = append(out, e)
 			continue
 		}
-		if !o.drops1(e.Label) {
+		if !o.drops1(e.Label()) {
 			out = append(out, e)
 			continue
 		}
 		for _, a := range o.adds {
-			out = append(out, Elem{Kind: Real, Label: a, Origin: e.Origin})
+			out = append(out, RealElem(a, e.Origin()))
 		}
 	}
 	return out

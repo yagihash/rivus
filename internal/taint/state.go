@@ -188,8 +188,8 @@ func (s *state) add(l Loc, e Elem, w *why) {
 	// are merged into the whole (more than the truth, never less). Without it
 	// the work grows with the product of what the cell holds and what the
 	// summaries ask of it.
-	if e.Kind == Param && e.Path != "" && len(set) > maxCellElems {
-		e.Path = ""
+	if e.Kind == Param && e.path != 0 && len(set) > maxCellElems {
+		e.path = 0
 		s.widened = true
 	}
 	if old, ok := set[e]; ok {
@@ -266,7 +266,8 @@ func (s *state) collectUncached(l Loc) []found {
 			if e.Kind == Param {
 				// Without the bound a recursive structure would extend
 				// the path in every pass, forever.
-				ext.Path, _ = pathTrunc(e.Path+rest, s.eng.opts.K)
+				tp, _ := pathTrunc(e.Path()+rest, s.eng.opts.K)
+				ext = ext.WithPath(tp)
 			}
 			out = append(out, found{E: ext, Cell: Loc{l.Root, p}, Orig: e})
 		}
@@ -387,8 +388,8 @@ func (s *state) plainExists(l Loc, e Elem) bool {
 	if set == nil {
 		return false
 	}
-	if e.Kind == Param && e.Path != "" && len(set) > maxCellElems {
-		e.Path = ""
+	if e.Kind == Param && e.path != 0 && len(set) > maxCellElems {
+		e.path = 0
 	}
 	old, ok := set[e]
 	return ok && old != nil && len(old.guards) == 0 && len(old.calleeGuards) == 0 && old.call == nil

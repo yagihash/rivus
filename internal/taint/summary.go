@@ -85,7 +85,7 @@ func (s *state) summarize() *Summary {
 		for _, p := range s.pathsOf(r, cm) {
 			var elems []OutElem
 			for _, e := range s.elemsOf(r, p, cm[p]) {
-				if kind == OutParam && p == "" && e == (Elem{Kind: Param, Param: idx}) {
+				if kind == OutParam && p == "" && e == (ParamElem(idx, "")) {
 					continue // the parameter's own taint: no flow
 				}
 				if cm[p][e] == nil {
@@ -144,12 +144,12 @@ func widen(elems []OutElem) []OutElem {
 			out = append(out, oe)
 			continue
 		}
-		k := key{oe.E.Param, oe.E.Mods}
+		k := key{int(oe.E.Param), oe.E.Mods()}
 		cur, ok := merged[k]
 		if !ok {
 			order = append(order, k)
 			w := oe
-			w.E.Path = ""
+			w.E.path = 0
 			merged[k] = w
 			continue
 		}
@@ -216,7 +216,7 @@ func (s *state) expandElem(e Elem, argv []*sg.Value) []expanded {
 }
 
 func (s *state) expandParam(e Elem, argv []*sg.Value) []expanded {
-	if e.Param < 0 || e.Param >= len(argv) {
+	if e.Param < 0 || int(e.Param) >= len(argv) {
 		return nil
 	}
 	var out []expanded
@@ -224,11 +224,11 @@ func (s *state) expandParam(e Elem, argv []*sg.Value) []expanded {
 	// reason stays (a cell keeps the first reason an element got into it).
 	seen := map[Elem]bool{}
 	for _, l := range s.locs(argv[e.Param]) {
-		found := s.collect(Loc{l.Root, l.Path + e.Path})
+		found := s.collect(Loc{l.Root, l.Path + e.Path()})
 		for i := range found {
 			f := &found[i]
 			if f.E.Kind == Real {
-				for _, x := range applyMods(f.E, e.Mods) {
+				for _, x := range applyMods(f.E, e.Mods()) {
 					if !seen[x] {
 						seen[x] = true
 						out = append(out, expanded{E: x, From: f})
@@ -237,7 +237,7 @@ func (s *state) expandParam(e Elem, argv []*sg.Value) []expanded {
 				continue
 			}
 			x := f.E
-			x.Mods = joinMods(f.E.Mods, e.Mods)
+			x = x.WithMods(joinMods(f.E.Mods(), e.Mods()))
 			if !seen[x] {
 				seen[x] = true
 				out = append(out, expanded{E: x, From: f})
@@ -325,11 +325,11 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 			// only its label counts.
 			switch x.E.Kind {
 			case Real:
-				if !accepted(sr.Accepts, x.E.Label) {
+				if !accepted(sr.Accepts, x.E.Label()) {
 					continue
 				}
-				if rf := s.findings[findingKey{x.E.Origin, sr.Site}]; rf != nil && rf.steps != nil && steps.len() >= rf.steps.len() {
-					rf.labels[x.E.Label] = true
+				if rf := s.findings[findingKey{x.E.Origin(), sr.Site}]; rf != nil && rf.steps != nil && steps.len() >= rf.steps.len() {
+					rf.labels[x.E.Label()] = true
 					continue
 				}
 			case Param:
@@ -356,8 +356,8 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 			}
 			switch x.E.Kind {
 			case Real:
-				if accepted(sr.Accepts, x.E.Label) {
-					s.recordFinding(x.E.Origin, s.eng.sites.ByID[sr.Site], x.E.Label, steps, gs)
+				if accepted(sr.Accepts, x.E.Label()) {
+					s.recordFinding(x.E.Origin(), s.eng.sites.ByID[sr.Site], x.E.Label(), steps, gs)
 				}
 			case Param:
 				k := sinkKey{x.E, sr.Site}

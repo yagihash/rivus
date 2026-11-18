@@ -214,13 +214,13 @@ type globalReader struct {
 func sanitizes(sum *Summary) bool {
 	for _, o := range sum.Outputs {
 		for _, oe := range o.Elems {
-			if oe.E.Kind == Real || oe.E.Mods != "" {
+			if oe.E.Kind == Real || oe.E.Mods() != "" {
 				return true
 			}
 		}
 	}
 	for _, sr := range sum.Sinks {
-		if sr.Elem.Mods != "" {
+		if sr.Elem.Mods() != "" {
 			return true
 		}
 	}
