@@ -16,3 +16,11 @@ the extraction takes 174 s and the findings are the same, 24 against 24 at the t
 `rules.yaml`, the default of `rivus analyze`.
 
 Results are in `docs/DECISIONS.md`.
+
+## Precision
+
+The 25 sink sites that rivus reported were read by an independent reviewer (`review-5c20b8e4.json`):
+5 are vulnerabilities, 19 are tainted but stopped by a check the tool does not see (the stream has to
+exist, its name is validated, the header is rewritten by the authentication), 1 is wrong. So "the
+input reaches the sink" holds for 24 of 25, and "this can be exploited" for 5 of 25. One reviewer,
+and some of its claims are marked unverified in the file.

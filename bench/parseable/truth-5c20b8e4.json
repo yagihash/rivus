@@ -1,9 +1,34 @@
 {
   "target": "https://github.com/parseablehq/parseable at 5c20b8e477be162238037e202cea1869d657017b (2026-07-02, v2.9.3: the parent of the fixes of GHSA-64vg-fp53-frjx, GHSA-q8xx-r33r-6mwv and GHSA-mh89-vfm3-c9q6)",
-  "how": "Each entry is a sink site named by an advisory, found by reading the code at this commit. Matched by (file, line, category). Only these are labelled: the other findings were not read, so precision is not measured. Measured with: rivus-rust --no-deps (LOCAL_ASSETS_PATH set to an empty directory, so that build.rs does not fetch the UI), then rivus analyze -ir with bench/parseable/rules.yaml.",
+  "how": "Each entry is a sink site named by an advisory, found by reading the code at this commit. Matched by (file, line, category). The 25 sink sites the tool reported were also read by an independent reviewer (review-5c20b8e4.json): the sites that are real vulnerabilities are labelled `vuln` here; a site that is tainted but harmless is not labelled (it is not a vulnerability, and not a wrong report either). Measured with: rivus-rust --no-deps (LOCAL_ASSETS_PATH set to an empty directory, so that build.rs does not fetch the UI), then rivus analyze -ir with bench/parseable/rules.yaml.",
   "sites": [
-    {"file": "src/handlers/http/oidc.rs", "line": 443, "label": "vuln", "category": "open_redirect", "note": "GHSA-mh89-vfm3-c9q6: redirect_to_client puts the url of the logout query (`redirect`) in the Location header"},
-    {"file": "src/storage/localfs.rs", "line": 383, "label": "vuln", "category": "path_traversal", "note": "GHSA-q8xx-r33r-6mwv: put_object writes the object path built from the stream_name of the request body (Filters API)"},
-    {"file": "src/alerts/target.rs", "line": 494, "label": "vuln", "category": "ssrf", "note": "GHSA-64vg-fp53-frjx and two more: the alert target posts to the endpoint the user gave (POST /api/v1/targets)"}
+    {
+      "file": "src/handlers/http/oidc.rs",
+      "line": 443,
+      "label": "vuln",
+      "category": "open_redirect",
+      "note": "GHSA-mh89-vfm3-c9q6: redirect_to_client puts the url of the logout query (`redirect`) in the Location header"
+    },
+    {
+      "file": "src/storage/localfs.rs",
+      "line": 383,
+      "label": "vuln",
+      "category": "path_traversal",
+      "note": "GHSA-q8xx-r33r-6mwv: put_object writes the object path built from the stream_name of the request body (Filters API); the sink site is reached by the tool, but through other handlers (filters::update with web::Path, alerts::modify_alert with web::Json), not through filters::post with the body of the filter, which is the real flow: the site matches, the flow itself is not shown"
+    },
+    {
+      "file": "src/alerts/target.rs",
+      "line": 494,
+      "label": "vuln",
+      "category": "ssrf",
+      "note": "GHSA-64vg-fp53-frjx and two more: the alert target posts to the endpoint the user gave (POST /api/v1/targets)"
+    },
+    {
+      "file": "(omitted)",
+      "line": 0,
+      "label": "vuln",
+      "category": "ssrf",
+      "note": "(omitted: not public)"
+    }
   ]
 }
