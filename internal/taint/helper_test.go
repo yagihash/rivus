@@ -84,7 +84,7 @@ func TestTheStreamGivesTheSameResultAsTheDirectIR(t *testing.T) {
 					t.Fatal(err)
 				}
 				// The run time is the one thing that differs.
-				return regexp.MustCompile(`"duration_ms":\d+`).ReplaceAll(data, nil)
+				return regexp.MustCompile(`,"(duration|dep_spent|own_spent)_ms":\d+`).ReplaceAll(data, nil)
 			}
 			a, b := run(direct), run(viaStream)
 			if !bytes.Equal(a, b) {

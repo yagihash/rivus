@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"golang.org/x/tools/go/packages"
 	"golang.org/x/tools/go/ssa"
@@ -70,6 +71,7 @@ type Program struct {
 	// Lifted is the program built with lifting (Options.WithLifted).
 	Lifted *ssa.Program
 
+	mu      sync.Mutex           // guards sources and byRel, which fill as they are asked for
 	files   map[string]*ast.File // absolute file name -> syntax
 	sources map[string][]byte
 	byRel   map[string]*token.File
@@ -266,6 +268,9 @@ func (p *Program) rel(name string) string {
 }
 
 func (p *Program) source(name string) []byte {
+	// the analysis asks for the text of the code from several goroutines
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	if b, ok := p.sources[name]; ok {
 		return b
 	}
@@ -307,6 +312,8 @@ func (p *Program) TokenPos(file string, offset int) token.Pos {
 	if file == "" {
 		return token.NoPos
 	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	if p.byRel == nil {
 		p.byRel = map[string]*token.File{}
 		p.Fset.Iterate(func(f *token.File) bool {

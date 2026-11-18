@@ -933,3 +933,12 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
   - CPU プロファイルでは、約半分が GC の走査（ヒープ 3.4 GB の小さなポインタ付きオブジェクト）、`sys` 時間も `user` の 2 倍ほど出る（原因は、まだ分からない。ページフォルトか、GC のスピン）
   - **割り当てのプロファイル（100 秒で約 110 GB）:** 最大は、`why`（経路の 1 ホップ。約 170 バイト）の割り当て 21%。要素がすでにセルにあっても、先に `why` を作っていた。**作る前に、「すでに普通の理由で入っている」かを調べて、飛ばすようにした**（`plainExists`）。再解析数 472 → 511（+8%）。次に、`collectUncached`（14%）、IR 変換の `emit`（11%、ロード時）
   - サンプリング（`sample`）では、`Elem`（`Label`、`Origin`、`Path`、`Mods` の文字列 4 つ）をキーにしたマップの**ハッシュと比較**（`mapaccess2`、`MemHash`、`strhash`）が、`copyLoc` の中で大きい。**次の一手は、`Elem` を整数の ID に直す（文字列を 1 回だけ内部化する）こと**。ハッシュが 1 回の整数になり、`why` の割り当ても減る。見込みは 2 倍前後だが、エンジンの中心の型の変更なので、設計を示してから進める
+- **追記（並列化: 呼び出しグラフの段ごと、大きな SCC は中も並列。結果は決定的）:** 解析（`Engine.Run`）は、1 コアでしか動いていなかった（SCC を順に処理するループ）。Gitea では、呼び出しグラフが 92 段あり、一番広い段に 16,742 個の SCC がある一方、**最大の SCC が 907 関数**（325、395 関数のものも）で、これらを直列に反復する段に、44 秒、18 秒、15 秒がかかっていた。
+  - **段（`levelsOf`）:** SCC は、呼ぶ SCC の 1 つ上の段に置く。同じ段の SCC は、互いに依存しないので、`-workers`（既定は CPU の数）で、並列に解析する。共有状態（要約、`dirty`、`spent`、`degraded`、`states`、`notConverged`）は `Engine.mu` で守る。**グローバル変数への書き込みは、段の間は保留して、段の終わりにまとめて反映する**（集合の和なので、順序に依らない）
+  - **大きな SCC（8 関数以上）:** 反復のたびに、全メンバーを、前の反復の要約を見て、並列に計算（`compute`）してから、SCC の順に反映（`commit`）する（Jacobi 型）。Gauss-Seidel より反復は増えうるが、メンバーは並列に動く
+  - **決定性:** ワーカー数 1、4、12 で、finding の ID、不確実性、パス数が完全に同じ（Gogs で確認）。`go test -race` も通る（`gossa.Program` のソースのキャッシュ、`sg.Program.Global` の遅延作成に、ロックを足した）。採点は同じ（Gogs 4/4）
+  - **速さ:** Gogs の taint は 5.3 → 3.6 秒。Gitea の 90 秒の窓で、再解析数 510/s → 745/s。**最初のパスが、窓の中で終わるようになった**（前は 1 パスの途中）。全体の時間は、実行して確かめる
+  - `Stats` に `levels`、`largest_scc`、`widest_level`、`dep_spent_ms`、`own_spent_ms` を足した
+- **追記（Rust extractor が parseable で動く）:** fork の確認で、parseable（actix-web、約 6.8 万行）の抽出が、`Instance::resolve` の panic（const generics の呼び出し）で失敗した。**panic を `catch_unwind` で握りつぶすと、rustc のクエリが「実行中」のまま残り、最後に別の assertion で落ちる**ので、**panic を起こす呼び出しを避ける**ことにした: 総称引数に、値でない const（const パラメータ、束縛された const）が入る呼び出しは、`resolve` を呼ばず、「解決できない呼び出し」にする。受け手のない、解決できない呼び出し（`T::default()`）は、`dynamic`（受け手が要る）ではなく、外部の `static` にする。
+  - 結果: `--no-deps` で、抽出 138 秒、IR 141 MB（8,557 関数）、解析 4 秒、findings 24 件（path_traversal 19、ssrf 4、open_redirect 1）。脆弱な関数（`alerts::target`、`filters`、`oidc`、`redirect_to_client`、`list_condition_expr`）は、IR に出ている
+  - **まだ分かっていないこと:** 既知の 3 つの流れ（アラートの SSRF、Filters のパス操作、`redirect_to_client` の open redirect）が、見つかっているかは、これから調べる。findings の `reachability` は、すべて `not_from_entry`（ハンドラーが、フレームワークの登録の呼び出しを通ってしか、`main` から届かない。依存を読まない設定では、届く経路が切れる）

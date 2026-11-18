@@ -30,6 +30,7 @@ type analyzeOpts struct {
 	funcTimeout time.Duration
 	passes      int
 	numeric     bool
+	workers     int
 	// lang is the language to read: auto (what the directory holds), or a list.
 	lang                         string
 	dartExtractor, rustExtractor string
@@ -45,6 +46,7 @@ func (o *analyzeOpts) register(fs *flag.FlagSet) {
 	fs.StringVar(&o.lang, "lang", "auto", "languages to read: auto (what the directory holds: go.mod, pubspec.yaml, Cargo.toml), or go, dart, rust, separated by commas")
 	fs.StringVar(&o.dartExtractor, "dart-extractor", "", "command of the Dart extractor (default: $RIVUS_DART_EXTRACTOR, then rivus-dart)")
 	fs.StringVar(&o.rustExtractor, "rust-extractor", "", "command of the Rust extractor (default: $RIVUS_RUST_EXTRACTOR, then rivus-rust)")
+	fs.IntVar(&o.workers, "workers", 0, "functions analysed at the same time (0: one per CPU; 1: one at a time). The result does not depend on it")
 	fs.BoolVar(&o.numeric, "numeric-taint", false, "follow taint through numbers and bools (by default it stops there: they cannot carry an injection)")
 	fs.BoolVar(&o.verbose, "v", false, "print the time of each phase to stderr")
 	fs.IntVar(&o.maxImpl, "max-implementations", model.DefaultMaxImplementations, "default limit of match: implementations")
@@ -109,6 +111,7 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	opts.FuncTimeout = o.funcTimeout
 	opts.MaxPasses = o.passes
 	opts.NumericTaint = o.numeric
+	opts.Workers = o.workers
 	if o.verbose {
 		opts.SlowThreshold = 300 * time.Millisecond
 		opts.SlowFunc = func(fn string, d time.Duration, outputs, roots int) {

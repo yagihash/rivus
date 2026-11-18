@@ -11,6 +11,8 @@
 package sg
 
 import (
+	"sync"
+
 	"github.com/yagihash/rivus/internal/ir"
 )
 
@@ -223,10 +225,14 @@ type Program struct {
 	Globals map[string]*Value
 	// GlobalPos is where each package variable is declared.
 	GlobalPos map[string]ir.Pos
+
+	globalMu sync.Mutex // Global makes a value the first time it is asked for
 }
 
 // Global is the value that stands for a package variable.
 func (p *Program) Global(name string) *Value {
+	p.globalMu.Lock()
+	defer p.globalMu.Unlock()
 	if g, ok := p.Globals[name]; ok {
 		return g
 	}

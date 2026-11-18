@@ -249,7 +249,7 @@ func (s *state) expandParam(e Elem, argv []*sg.Value) []expanded {
 
 // applySummary applies the summary of a callee at a call site.
 func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, notes []*Uncertainty) {
-	sum := s.eng.summaries[fn]
+	sum := s.eng.summaryOf(fn)
 	if sum == nil {
 		return // not analysed yet; a later round picks it up
 	}

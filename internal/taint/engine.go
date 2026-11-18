@@ -1,8 +1,11 @@
 package taint
 
 import (
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/yagihash/rivus/internal/sg"
@@ -34,6 +37,11 @@ type Options struct {
 	Budget int
 	// SlowFunc, if set, is called for functions whose analysis took longer
 	// than SlowThreshold. It is a development aid.
+	// Workers is the number of functions analysed at the same time: the
+	// strongly connected components of one level of the call graph (the ones
+	// that do not call each other) run together. Zero is the number of CPUs.
+	// The result does not depend on it.
+	Workers int
 	// NumericTaint follows taint through values of a number or bool type.
 	// By default it stops there: the sinks of the injection categories take
 	// text, and a number made from a request has no text to inject. Turn it
@@ -58,9 +66,19 @@ type Engine struct {
 	rules *model.Rules
 	opts  Options
 
-	summaries map[*sg.Func]*Summary
-	states    map[*sg.Func]*state
-	globals   *globalStore
+	// mu guards what the analyses of the functions of one level write together:
+	// the summaries, the states, the marks of the functions to analyse again,
+	// the time spent and the notes. The global state is not written during a
+	// level: what a function writes to it waits in pendingGlobals and
+	// pendingReaders, and is merged when the level is done, so that what a
+	// function reads of it does not depend on who ran first.
+	mu             sync.RWMutex
+	pendingGlobals []globalWrite
+	pendingReaders []globalReader
+	dirty          map[*sg.Func]bool
+	summaries      map[*sg.Func]*Summary
+	states         map[*sg.Func]*state
+	globals        *globalStore
 
 	notConverged []string
 	// degraded lists the functions whose analysis hit the budget. They are
@@ -166,7 +184,30 @@ func (e *Engine) funcID(fn *sg.Func) string { return fn.ID }
 // they become missing_source uncertainties.
 func (e *Engine) SetLoadErrors(errs []ir.LoadError) { e.loadErrors = errs }
 
-func (e *Engine) noteGuardLimit(fn *sg.Func) { e.guardLimit[fn] = true }
+func (e *Engine) noteGuardLimit(fn *sg.Func) {
+	e.mu.Lock()
+	e.guardLimit[fn] = true
+	e.mu.Unlock()
+}
+
+// summaryOf is the summary of a function that has been analysed, or nil.
+func (e *Engine) summaryOf(fn *sg.Func) *Summary {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.summaries[fn]
+}
+
+// globalWrite and globalReader wait for the end of the level (see mu).
+type globalWrite struct {
+	g    *sg.Value
+	path string
+	e    Elem
+}
+
+type globalReader struct {
+	g  *sg.Value
+	fn *sg.Func
+}
 
 // sanitizes reports whether the summary has a flow that passes a sanitizer
 // or carries a label of a source.
@@ -187,7 +228,9 @@ func sanitizes(sum *Summary) bool {
 }
 
 func (e *Engine) noteNotConverged(fn *sg.Func) {
+	e.mu.Lock()
 	e.notConverged = append(e.notConverged, e.funcID(fn))
+	e.mu.Unlock()
 }
 
 // Stats describes a run.
@@ -198,6 +241,12 @@ type Stats struct {
 	Reanalyses    int   `json:"reanalyses"`
 	DurationMilli int64 `json:"duration_ms"`
 	// DepSpentMilli and OwnSpentMilli are the time spent analysing the functions of the dependencies and of the code itself (the sum over all workers).
+	// The shape of the call graph: the levels of components, the size of the
+	// largest component (functions that call each other, analysed one after the
+	// other) and the most components in one level.
+	Levels        int      `json:"levels,omitempty"`
+	LargestSCC    int      `json:"largest_scc,omitempty"`
+	WidestLevel   int      `json:"widest_level,omitempty"`
 	DepSpentMilli int64    `json:"dep_spent_ms,omitempty"`
 	OwnSpentMilli int64    `json:"own_spent_ms,omitempty"`
 	NotConverged  []string `json:"not_converged,omitempty"`
@@ -239,12 +288,25 @@ func (e *Engine) Run() *Result {
 		return ci.CandidateFns
 	}
 	sccs, callers := order(fns, callees)
-
-	dirty := map[*sg.Func]bool{}
-	for _, fn := range fns {
-		dirty[fn] = true
+	levels := levelsOf(sccs, callees)
+	st0 := Stats{Levels: len(levels)}
+	for _, lv := range levels {
+		if len(lv) > st0.WidestLevel {
+			st0.WidestLevel = len(lv)
+		}
+		for _, scc := range lv {
+			if len(scc) > st0.LargestSCC {
+				st0.LargestSCC = len(scc)
+			}
+		}
 	}
-	var st Stats
+	e.writersOf(nil) // made now: the analyses read it together
+
+	e.dirty = map[*sg.Func]bool{}
+	for _, fn := range fns {
+		e.dirty[fn] = true
+	}
+	st := st0
 	st.Functions = len(fns)
 	var deadline time.Time
 	if e.opts.Timeout > 0 {
@@ -252,50 +314,105 @@ func (e *Engine) Run() *Result {
 		e.deadline = deadline
 	}
 	expired := func() bool { return !deadline.IsZero() && time.Now().After(deadline) }
+	workers := e.opts.Workers
+	if workers <= 0 {
+		workers = runtime.NumCPU()
+	}
+	var timedOut atomic.Bool
+	var reanalyses atomic.Int64
 	for pass := 0; pass < e.opts.MaxPasses; pass++ {
 		st.Passes = pass + 1
-		any := false
+		var anyDone atomic.Bool
 		var changedNow []string
-		for _, scc := range sccs {
-			for iter := 0; iter < 8; iter++ {
-				progress := false
-				for _, fn := range scc {
-					if expired() {
-						st.TimedOut = true
-						break
-					}
-					if !dirty[fn] || e.degraded[fn] {
-						dirty[fn] = false
-						continue
-					}
-					dirty[fn] = false
-					any = true
-					st.Reanalyses++
-					if e.analyzeFunc(fn, dirty, callers) {
-						progress = true
-						if len(changedNow) < 10 {
-							changedNow = append(changedNow, e.funcID(fn))
+		var changedMu sync.Mutex
+		for _, level := range levels {
+			// the components of a level do not call each other: they run
+			// together, and what they write to the global state is merged
+			// after them
+			runLevel(level, workers, func(scc []*sg.Func) {
+				if workers > 1 && len(scc) >= parallelSCC {
+					// A large component: its functions are analysed together, each
+					// against the summaries the last round left, and published
+					// in the order of the component after the round.
+					for iter := 0; iter < 8; iter++ {
+						var todo []*sg.Func
+						for _, fn := range scc {
+							if expired() {
+								timedOut.Store(true)
+								break
+							}
+							if e.takeDirty(fn) {
+								todo = append(todo, fn)
+							}
+						}
+						if len(todo) == 0 {
+							break
+						}
+						anyDone.Store(true)
+						reanalyses.Add(int64(len(todo)))
+						results := make([]*fnResult, len(todo))
+						runParallel(len(todo), workers, func(i int) { results[i] = e.compute(todo[i]) })
+						progress := false
+						for i, fn := range todo {
+							if e.commit(fn, results[i], callers) {
+								progress = true
+								changedMu.Lock()
+								changedNow = append(changedNow, e.funcID(fn))
+								changedMu.Unlock()
+							}
+						}
+						if !progress {
+							break
 						}
 					}
+					return
 				}
-				if !progress || len(scc) == 1 && !selfCalls(scc[0], callees) {
-					break
+				for iter := 0; iter < 8; iter++ {
+					progress := false
+					for _, fn := range scc {
+						if expired() {
+							timedOut.Store(true)
+							break
+						}
+						if !e.takeDirty(fn) {
+							continue
+						}
+						anyDone.Store(true)
+						reanalyses.Add(1)
+						if e.analyzeFunc(fn, callers) {
+							progress = true
+							changedMu.Lock()
+							changedNow = append(changedNow, e.funcID(fn))
+							changedMu.Unlock()
+						}
+					}
+					if !progress || len(scc) == 1 && !selfCalls(scc[0], callees) {
+						break
+					}
 				}
-			}
+			})
+			e.commitGlobals()
+		}
+		sort.Strings(changedNow)
+		if len(changedNow) > 10 {
+			changedNow = changedNow[:10]
 		}
 		st.Unstable = changedNow
-		if st.TimedOut {
+		if timedOut.Load() {
+			st.TimedOut = true
 			break
 		}
-		if !any {
+		if !anyDone.Load() {
 			st.Converged = true
 			break
 		}
-		if !e.anyDirty(dirty) {
+		if !e.anyDirty(e.dirty) {
 			st.Converged = true
 			break
 		}
 	}
+	st.Reanalyses = int(reanalyses.Load())
+	sort.Strings(e.notConverged)
 	st.NotConverged = e.notConverged
 	for _, sum := range e.summaries {
 		n, steps := 0, 0
@@ -326,6 +443,110 @@ func (e *Engine) Run() *Result {
 	return e.collect(st)
 }
 
+// parallelSCC is the size from which the functions of a strongly connected
+// component are analysed together.
+const parallelSCC = 8
+
+// takeDirty says whether the function is to be analysed (it is marked, and
+// not given up), and clears the mark.
+func (e *Engine) takeDirty(fn *sg.Func) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	d := e.dirty[fn]
+	e.dirty[fn] = false
+	return d && !e.degraded[fn]
+}
+
+// runLevel runs f on the components, at most workers at a time, and waits.
+func runLevel(level [][]*sg.Func, workers int, f func(scc []*sg.Func)) {
+	runParallel(len(level), workers, func(i int) { f(level[i]) })
+}
+
+// runParallel runs f(0) ... f(n-1), at most workers at a time, and waits.
+func runParallel(n, workers int, f func(i int)) {
+	if workers <= 1 || n == 1 {
+		for i := 0; i < n; i++ {
+			f(i)
+		}
+		return
+	}
+	if workers > n {
+		workers = n
+	}
+	var wg sync.WaitGroup
+	var next atomic.Int64
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				i := int(next.Add(1)) - 1
+				if i >= n {
+					return
+				}
+				f(i)
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+// levelsOf groups the components (callees first) into levels: a component is
+// one level above the highest component it calls, so the components of a level
+// do not depend on each other, and a level depends only on the ones before it.
+func levelsOf(sccs [][]*sg.Func, callees func(*sg.Instr) []*sg.Func) [][][]*sg.Func {
+	of := map[*sg.Func]int{}
+	for i, scc := range sccs {
+		for _, fn := range scc {
+			of[fn] = i
+		}
+	}
+	level := make([]int, len(sccs))
+	top := 0
+	for i, scc := range sccs {
+		for _, fn := range scc {
+			for _, b := range fn.Blocks {
+				for _, in := range b.Instrs {
+					if in.Op != ir.OpCall {
+						continue
+					}
+					for _, c := range callees(in) {
+						if j, ok := of[c]; ok && j != i && level[j]+1 > level[i] {
+							level[i] = level[j] + 1
+						}
+					}
+				}
+			}
+		}
+		if level[i] > top {
+			top = level[i]
+		}
+	}
+	out := make([][][]*sg.Func, top+1)
+	for i, scc := range sccs {
+		out[level[i]] = append(out[level[i]], scc)
+	}
+	return out
+}
+
+// commitGlobals merges what the functions of the level wrote to the global
+// state, and marks the functions that read a global that grew.
+func (e *Engine) commitGlobals() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for _, r := range e.pendingReaders {
+		e.globals.noteReader(r.g, r.fn)
+	}
+	for _, w := range e.pendingGlobals {
+		if e.globals.merge(w.g, w.path, w.e) {
+			for _, other := range e.globals.readers(w.g) {
+				e.dirty[other] = true
+			}
+		}
+	}
+	e.pendingGlobals, e.pendingReaders = e.pendingGlobals[:0], e.pendingReaders[:0]
+}
+
 func (e *Engine) anyDirty(dirty map[*sg.Func]bool) bool {
 	for _, d := range dirty {
 		if d {
@@ -352,7 +573,23 @@ func selfCalls(fn *sg.Func, callees func(*sg.Instr) []*sg.Func) bool {
 
 // analyzeFunc analyses one function and reports whether its summary or the
 // global state changed. Dependents are marked dirty.
-func (e *Engine) analyzeFunc(fn *sg.Func, dirty map[*sg.Func]bool, callers map[*sg.Func][]*sg.Func) bool {
+func (e *Engine) analyzeFunc(fn *sg.Func, callers map[*sg.Func][]*sg.Func) bool {
+	return e.commit(fn, e.compute(fn), callers)
+}
+
+// fnResult is what the analysis of a function leaves, before it is published.
+type fnResult struct {
+	s       *state
+	sum     *Summary
+	took    time.Duration
+	changed bool // the global state would grow
+	writes  []globalWrite
+	reads   []globalReader
+}
+
+// compute analyses a function. It writes nothing that another function reads:
+// it reads the summaries of the callees and the global state as they are.
+func (e *Engine) compute(fn *sg.Func) *fnResult {
 	s := &state{
 		eng: e, fn: fn,
 		cells:       map[Root]map[string]Set{},
@@ -362,18 +599,9 @@ func (e *Engine) analyzeFunc(fn *sg.Func, dirty map[*sg.Func]bool, callers map[*
 	}
 	began := time.Now()
 	s.analyze()
-	e.spent[fn] += time.Since(began)
-	if s.exceeded {
-		e.degraded[fn] = true
-	}
-	// A function that keeps costing time (its callees' summaries change and
-	// it is visited again) is not visited again once it has used what one
-	// analysis is allowed (four times the limit of one): its summary may miss flows,
-	// and says so.
-	if e.spent[fn] > 4*e.opts.FuncTimeout {
-		e.degraded[fn] = true
-	}
-	sum := joinSummaries(e.summaries[fn], s.summarize())
+	took := time.Since(began)
+	// the summary is joined with the one of the earlier visits
+	sum := joinSummaries(e.summaryOf(fn), s.summarize())
 	// Too many guards matter only where taint is told apart by them: where
 	// something is sanitized, or a source's own label is returned.
 	if s.guardOverflow && sanitizes(sum) {
@@ -384,22 +612,16 @@ func (e *Engine) analyzeFunc(fn *sg.Func, dirty map[*sg.Func]bool, callers map[*
 			e.opts.SlowFunc(e.funcID(fn), d, len(sum.Outputs), len(s.cells))
 		}
 	}
-
-	changed := false
-	if old := e.summaries[fn]; old == nil || old.Sig != sum.Sig {
-		changed = true
-		for _, c := range callers[fn] {
-			dirty[c] = true
-		}
-	}
-	e.summaries[fn] = sum
-
-	// Publish what the function writes to global variables.
-	for r, cm := range s.cells {
-		g := r.V
+	// What the function writes to global variables waits for the end of the
+	// level; whether it adds anything is read from the global state, which
+	// does not change while a level runs.
+	r := &fnResult{s: s, sum: sum, took: took}
+	for root, cm := range s.cells {
+		g := root.V
 		if g == nil || g.Kind != sg.KGlobal {
 			continue
 		}
+		r.reads = append(r.reads, globalReader{g, fn})
 		for path, set := range cm {
 			for el := range set {
 				if el.Kind != Real {
@@ -408,21 +630,42 @@ func (e *Engine) analyzeFunc(fn *sg.Func, dirty map[*sg.Func]bool, callers map[*
 				if set[el] == nil {
 					continue // read from the global state, not produced here
 				}
-				if e.globals.merge(g, path, el) {
-					changed = true
-					for _, other := range e.globals.readers(g) {
-						dirty[other] = true
-					}
+				r.writes = append(r.writes, globalWrite{g, path, el})
+				if !e.globals.has(g, path, el) {
+					r.changed = true
 				}
 			}
 		}
 	}
-	// Remember which functions read which globals.
-	for r := range s.cells {
-		if r.V != nil && r.V.Kind == sg.KGlobal {
-			e.globals.noteReader(r.V, fn)
+	return r
+}
+
+// commit publishes the result of the analysis of a function, and reports
+// whether its summary or the global state changed. Dependents are marked.
+func (e *Engine) commit(fn *sg.Func, r *fnResult, callers map[*sg.Func][]*sg.Func) bool {
+	s, sum, changed := r.s, r.sum, r.changed
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.spent[fn] += r.took
+	if s.exceeded {
+		e.degraded[fn] = true
+	}
+	// A function that keeps costing time (its callees' summaries change and
+	// it is visited again) is not visited again once it has used what one
+	// analysis is allowed (four times the limit of one): its summary may miss flows,
+	// and says so.
+	if e.spent[fn] > 4*e.opts.FuncTimeout {
+		e.degraded[fn] = true
+	}
+	if old := e.summaries[fn]; old == nil || old.Sig != sum.Sig {
+		changed = true
+		for _, c := range callers[fn] {
+			e.dirty[c] = true
 		}
 	}
+	e.summaries[fn] = sum
+	e.pendingGlobals = append(e.pendingGlobals, r.writes...)
+	e.pendingReaders = append(e.pendingReaders, r.reads...)
 	// What the result needs of the analysis is the findings, the
 	// suppressions and the uncertainties. The cells and the caches are the
 	// bulk of the memory, and the function is analysed afresh if it is
@@ -516,6 +759,12 @@ func newGlobalStore() *globalStore {
 }
 
 func (g *globalStore) cellsOf(v *sg.Value) map[string]Set { return g.cells[v] }
+
+// has reports whether the element is in the cell already.
+func (g *globalStore) has(v *sg.Value, path string, e Elem) bool {
+	_, ok := g.cells[v][path][e]
+	return ok
+}
 
 func (g *globalStore) merge(v *sg.Value, path string, e Elem) bool {
 	cm := g.cells[v]

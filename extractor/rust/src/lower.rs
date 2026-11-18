@@ -650,7 +650,7 @@ impl<'a> Lower<'a> {
         let d = self.new_local("", Some(&ty));
         // a function used as a value
         if let TyKind::RigidTy(RigidTy::FnDef(def, args)) = ty.kind() {
-            let name = Instance::resolve(def, &args).map(|i| i.name()).unwrap_or_else(|_| def.name());
+            let name = resolve(def, &args).map(|i| i.name()).unwrap_or_else(|| def.name());
             self.emit("make_closure", &[d], &[], pos, json!({"func": name}));
             return d;
         }
@@ -810,7 +810,7 @@ impl<'a> Lower<'a> {
         match fty.as_ref().map(|t| t.kind()) {
             Some(TyKind::RigidTy(RigidTy::FnDef(def, gargs))) => {
                 let def_name = clean_symbol(&def.name());
-                let resolved = Instance::resolve(def, &gargs).ok();
+                let resolved = resolve(def, &gargs);
                 let virtual_call = resolved.as_ref().map(|i| matches!(i.kind, InstanceKind::Virtual { .. })).unwrap_or(false);
                 let inst = resolved.map(|i| i.name());
                 let is_trait = inst.as_ref().map(|n| n.starts_with('<')).unwrap_or(false) && !def_name.starts_with('<');
@@ -845,6 +845,12 @@ impl<'a> Lower<'a> {
                         // a function that has no body here: the core finds it
                         // missing and the models say what it does
                         callee = json!({"kind": "static", "func": name, "symbol": def_name});
+                    }
+                    None if vals.is_empty() => {
+                        // a call that cannot be resolved here and has no receiver
+                        // (T::default()): there is no value to dispatch on, so it
+                        // is a call of a function the models have to know
+                        callee = json!({"kind": "static", "func": def_name, "symbol": def_name});
                     }
                     None => {
                         // a call that cannot be resolved here: through a type parameter
@@ -931,5 +937,38 @@ fn const_of(ty: &Ty, alloc: &Allocation) -> Value {
             json!({"kind": "string", "value": ""})
         }
         _ => json!({"kind": "nil"}),
+    }
+}
+
+/// `Instance::resolve`, which rustc aborts on (an internal error) for the calls
+/// of a generic function that is analysed as written, when a generic argument
+/// is a const parameter or a bound const (`[T; N]`, `Foo<N>`): rustc cannot
+/// find it in the parameter environment of the function. Such a call is as
+/// unresolved as one through a type parameter: `None`. (A panic is not caught: it leaves the
+/// queries of rustc active, and the compiler then aborts at the end.)
+pub fn resolve(def: FnDef, args: &GenericArgs) -> Option<Instance> {
+    if args.0.iter().any(has_open_const) {
+        return None;
+    }
+    Instance::resolve(def, args).ok()
+}
+
+/// Whether a generic argument holds a const that is not a value yet.
+fn has_open_const(a: &GenericArgKind) -> bool {
+    match a {
+        GenericArgKind::Const(c) => !matches!(c.kind(), TyConstKind::Value(..) | TyConstKind::ZSTValue(..)),
+        GenericArgKind::Type(t) => ty_has_open_const(t),
+        _ => false,
+    }
+}
+
+/// A type that has a const argument that is not a value: an array `[T; N]`, or a generic
+/// type applied to one.
+fn ty_has_open_const(t: &Ty) -> bool {
+    match t.kind() {
+        TyKind::RigidTy(RigidTy::Array(inner, len)) => !matches!(len.kind(), TyConstKind::Value(..) | TyConstKind::ZSTValue(..)) || ty_has_open_const(&inner),
+        TyKind::RigidTy(RigidTy::Adt(_, args)) => args.0.iter().any(has_open_const),
+        TyKind::RigidTy(RigidTy::Ref(_, inner, _)) | TyKind::RigidTy(RigidTy::Slice(inner)) => ty_has_open_const(&inner),
+        _ => false,
     }
 }
