@@ -19,3 +19,14 @@ pub async fn chain() {
     let s = pass_through(source()).await; // @source(async-chain)
     sink(&s); // @sink(async-chain)
 }
+
+// A handler that a framework runs: nothing in this crate awaits it, and the
+// body still runs with the argument it was given.
+pub async fn handler(input: String) { // @source(handler)
+    sink(&input); // @sink(handler)
+}
+
+pub async fn handler_ignores(input: String) {
+    let _ = input;
+    sink("constant"); // @sink(none)
+}

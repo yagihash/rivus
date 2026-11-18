@@ -372,7 +372,9 @@ impl<'a> Lower<'a> {
         self.f.results = vec![type_id(&body.ret_local().ty)];
         // the prologue: parameters, and the cells
         self.cur = 0;
-        let pos = Pos::none();
+        // the parameters are where the function is: a source that is a parameter is
+        // shown there
+        let pos = self.here();
         let nargs = body.arg_locals().len();
         for i in 1..=nargs {
             let d = &body.locals()[i];
@@ -742,6 +744,29 @@ impl<'a> Lower<'a> {
                         self.emit("index_store", &[], &[d, idx, *v], pos, json!({}));
                     } else {
                         self.emit("field_store", &[], &[d, *v], pos, json!({"field": name}));
+                    }
+                }
+                // An `async fn` makes a coroutine that holds its arguments, and its
+                // body runs when something polls it: a framework's executor, which
+                // is not in the code that is read. The body is run here, as if the
+                // coroutine were polled at once: whatever the executor does with it,
+                // the body does with the arguments it was given.
+                if let AggregateKind::Coroutine(def, _) = kind {
+                    let body = def.name();
+                    if self.cx.bodies.contains(&body) {
+                        // the body takes the coroutine as `Pin<&mut Self>`: a box with the
+                        // pointer in its field, as the body reads it
+                        // (`&mut coroutine` is the cell the coroutine is in)
+                        let cell = self.new_local("", None);
+                        self.f.locals[cell].class = "pointer";
+                        self.emit("alloc", &[cell], &[], pos, json!({"type": ty.as_ref().map(type_id).unwrap_or_default(), "class": "pointer"}));
+                        self.emit("store", &[], &[cell, d], pos, json!({}));
+                        let pin = self.new_local("", None);
+                        self.emit("alloc", &[pin], &[], pos, json!({"type": "std::pin::Pin", "class": "struct"}));
+                        self.emit("field_store", &[], &[pin, cell], pos, json!({"field": "pointer"}));
+                        let resume = self.constant_int(0, pos);
+                        let r = self.new_local("", None);
+                        self.emit("call", &[r], &[pin, resume], pos, json!({"callee": {"kind": "static", "func": body, "symbol": clean_symbol(&body)}}));
                     }
                 }
                 d

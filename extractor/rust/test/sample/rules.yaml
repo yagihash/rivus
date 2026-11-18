@@ -4,6 +4,16 @@ sources:
   - symbol: sample::source
     labels: [user_input]
 
+  # an entry point of a framework: the handler is given the input
+  - kind: param
+    symbol: sample::async_flows::handler
+    params: [0]
+    labels: [user_input]
+  - kind: param
+    symbol: sample::async_flows::handler_ignores
+    params: [0]
+    labels: [user_input]
+
 sinks:
   - symbol: sample::sink
     category: test
