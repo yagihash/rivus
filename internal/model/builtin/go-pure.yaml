@@ -103,3 +103,42 @@ propagators:
     pure: true
   - symbol: (*net/http.Client).CloseIdleConnections
     pure: true
+  # methods of standard interfaces, whose implementations are outside the code
+  - symbol: (io/fs.FileInfo).IsDir
+    pure: true
+  - symbol: (io/fs.FileInfo).Size
+    pure: true
+  - symbol: (io/fs.FileInfo).ModTime
+    pure: true
+  - symbol: (io/fs.FileInfo).Mode
+    pure: true
+  - symbol: (io/fs.DirEntry).IsDir
+    pure: true
+  - symbol: (io/fs.DirEntry).Type
+    pure: true
+  - symbol: (io.Closer).Close
+    pure: true
+  - symbol: (reflect.Type).Elem
+    pure: true
+  - symbol: (reflect.Type).Kind
+    pure: true
+  - symbol: (reflect.Type).NumField
+    pure: true
+  - symbol: (reflect.Type).Name
+    pure: true
+  - symbol: (testing.TB).Fatalf
+    pure: true
+  - symbol: (testing.TB).Errorf
+    pure: true
+  - symbol: (testing.TB).Logf
+    pure: true
+  - symbol: (testing.TB).Helper
+    pure: true
+  - symbol: (crypto/cipher.AEAD).NonceSize
+    pure: true
+  - symbol: (crypto/cipher.AEAD).Overhead
+    pure: true
+  - symbol: (hash.Hash).Reset
+    pure: true
+  - symbol: (hash.Hash).Size
+    pure: true

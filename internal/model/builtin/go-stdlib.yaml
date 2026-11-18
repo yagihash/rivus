@@ -161,6 +161,18 @@ propagators:
     flows: [{from: arg1, to: arg0}]
   - symbol: (io.Reader).Read
     flows: [{from: recv, to: arg0}]
+  - symbol: (io.Writer).Write
+    flows: [{from: arg0, to: recv}]
+  - symbol: (io/fs.DirEntry).Name
+    flows: [{from: recv, to: result}]
+  - symbol: (io/fs.FileInfo).Name
+    flows: [{from: recv, to: result}]
+  - symbol: (io/fs.DirEntry).Info
+    flows: [{from: recv, to: result0}]
+  - symbol: (hash.Hash).Write
+    flows: [{from: arg0, to: recv}]
+  - symbol: (hash.Hash).Sum
+    flows: [{from: recv, to: result}, {from: arg0, to: result}]
   - symbol: bufio.NewReader
     flows: [{from: arg0, to: result}]
   - symbol: bufio.NewScanner
