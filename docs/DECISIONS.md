@@ -905,3 +905,4 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
   - **Rust:** `RUSTC_WORKSPACE_WRAPPER` を `RUSTC_WRAPPER` に変えて、すべてのクレートに extractor を通す。ワークスペースのメンバーかどうかは、cargo が付ける `CARGO_PRIMARY_PACKAGE` で見分ける。proc-macro は読まない。`--no-deps` で、メンバーだけ
   - **確かめたこと:** Rust のサンプルに、ワークスペースの外の依存クレートを足した。依存を通る流れ（`wrap`）は追われ、中で値を捨てる関数（`constant`）の後ろは、`--no-deps` では誤検出になるが、読むと正しく消える。呼ばれない関数（`never_called`）は IR から落ちる。Dart は、サンプルの findings が同じ 28 件のまま
   - **注意:** Dart で不確実性の合計が増える（shelf 単体で 154 → 382）のは、読むコードが増えて、依存の中の `dynamic_dispatch` が数えられるため（`unmodeled_library_call` は 36 → 14 に減る）。Go と違い、合計は良い指標ではない。Rust の `dyn Trait` の候補は、そのクレートの実装だけ（依存の実装は入らない）。実在の大きなプロジェクトでの測定は、まだ
+- **追記（オプション名）:** Go の `-deps`（既定オン）を、`-no-deps`（無効にする）に改めた。3 言語（Go の `-no-deps`、Dart と Rust extractor の `--no-deps`）で、読むのが既定で、外すオプションの名前が揃った

@@ -32,8 +32,8 @@ type common struct {
 	// noProject leaves out the rules found in the analysed directory.
 	noProject bool
 	tests     bool
-	// deps reads the source of the dependencies (not the standard library).
-	deps bool
+	// noDeps leaves out the source of the dependencies (the default reads it, the standard library excepted).
+	noDeps bool
 	// deterministic leaves out the rules decided by an LLM.
 	deterministic bool
 }
@@ -44,7 +44,7 @@ func (c *common) register(fs *flag.FlagSet) {
 	fs.BoolVar(&c.noBuiltin, "no-builtin-rules", false, "do not load the built-in rules")
 	fs.BoolVar(&c.noProject, "no-project-rules", false, "do not load the rules found in <dir>/.rivus/rules/*.yaml")
 	fs.BoolVar(&c.tests, "tests", false, "include _test.go files")
-	fs.BoolVar(&c.deps, "deps", true, "read the source of the dependencies (not the standard library), so that calls into them are followed instead of guessed; -deps=false is lighter (about a sixth of the memory) and guesses at every call into a dependency")
+	fs.BoolVar(&c.noDeps, "no-deps", false, "do not read the source of the dependencies (which is done by default, except for the standard library, so that calls into them are followed instead of guessed): lighter (about a sixth of the memory), and every call into a dependency is a guess")
 	fs.BoolVar(&c.deterministic, "deterministic-only", false, "ignore the rules decided by an LLM (origin: llm)")
 }
 
@@ -95,7 +95,7 @@ func (c *common) load(patterns []string, withGraph bool) (*loaded, error) {
 	if len(patterns) == 0 {
 		patterns = []string{"./..."}
 	}
-	p, err := gossa.Load(c.dir, patterns, gossa.Options{Tests: c.tests, NaiveForm: true, WithLifted: withGraph, Deps: c.deps && withGraph})
+	p, err := gossa.Load(c.dir, patterns, gossa.Options{Tests: c.tests, NaiveForm: true, WithLifted: withGraph, Deps: !c.noDeps && withGraph})
 	if err != nil {
 		return nil, err
 	}

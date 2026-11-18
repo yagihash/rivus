@@ -1,6 +1,6 @@
 # Memory: where it goes, and the designs to bring it down
 
-Measured on Go with `-deps` (the default): Gogs peaks at 3.3 GB, gin-vue-admin at 5.5 GB; after the
+Measured on Go with the dependencies read (the default; `-no-deps` leaves them out): Gogs peaks at 3.3 GB, gin-vue-admin at 5.5 GB; after the
 IR is made the live heap is 1.8 GB. **The peak is in loading and in building go/ssa**, not in the
 analysis.
 
