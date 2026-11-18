@@ -5,7 +5,7 @@ next to this repository, run `rivus analyze`, and score the result.
 
 ```sh
 git clone https://github.com/Contrast-Security-OSS/go-test-bench && cd go-test-bench
-rivus analyze -rules /path/to/rivus/examples/rules/go-gin.yaml ./... > result.json   # the rules the target needs
+rivus analyze ./... > result.json   # gin is built in; a target with other frameworks needs rules (-rules)
 python3 /path/to/rivus/bench/score.py /path/to/rivus/bench/go-test-bench/truth.json result.json
 ```
 
