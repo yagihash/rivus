@@ -1011,7 +1011,7 @@ func (e *Engine) buildFinding(rf *rawFinding) *Finding {
 	f.PathSteps = len(steps)
 	if e.reach != nil {
 		f.Reachability = ReachFromEntry
-		for _, id := range append(append([]string{src.Func, rf.site.Func}, funcs...)) {
+		for _, id := range append([]string{src.Func, rf.site.Func}, funcs...) {
 			if fn := e.prog.ByID[id]; fn != nil && !e.reach[fn] {
 				f.Reachability = ReachNotFromEntry
 				break
