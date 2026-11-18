@@ -44,10 +44,17 @@ func (s *state) prepareLocs() {
 			}
 		}
 	}
+	// The cache holds the locations once they are final: a value read before
+	// the iteration has reached it (a φ of a loop reads what comes round
+	// from the end of the body) must not be remembered as having none.
+	s.locsFinal = false
 	for {
 		changed := false
 		for _, v := range vals {
 			for _, l := range s.computeLocs(v) {
+				// a path that grows round a loop (a load of a load of ...)
+				// is cut where the cells are: the fixed point must exist
+				l.Path, _ = pathTrunc(l.Path, s.eng.opts.K)
 				m := s.locSet[v]
 				if m == nil {
 					m = map[Loc]bool{}
@@ -63,6 +70,7 @@ func (s *state) prepareLocs() {
 			break
 		}
 	}
+	s.locsFinal = true
 }
 
 // locs returns the locations value v refers to, in a stable order.
@@ -73,7 +81,7 @@ func (s *state) locs(v *sg.Value) []Loc {
 	case sg.KParam, sg.KFreeVar, sg.KGlobal:
 		return []Loc{{own(v), ""}}
 	}
-	if c, ok := s.locCache[v]; ok {
+	if c, ok := s.locCache[v]; ok && s.locsFinal {
 		return c
 	}
 	set := s.locSet[v]
@@ -82,7 +90,9 @@ func (s *state) locs(v *sg.Value) []Loc {
 		out = append(out, l)
 	}
 	sort.Slice(out, func(i, j int) bool { return s.lessLoc(out[i], out[j]) })
-	s.locCache[v] = out
+	if s.locsFinal {
+		s.locCache[v] = out
+	}
 	return out
 }
 

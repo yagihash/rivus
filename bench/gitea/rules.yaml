@@ -1,0 +1,42 @@
+# Rules for Gitea (the project's own: its handlers take its own Context types, forms are
+# handed over by web.GetForm, files go through its storage layer). Used with
+#   rivus analyze -rules bench/gitea/rules.yaml ./...
+ruleset: project/gitea@1
+
+sources:
+  # the request, through the wrappers of net/http
+  - kind: param_type
+    type: "*code.gitea.io/gitea/services/context.Context"
+    labels: [user_input]
+  - kind: param_type
+    type: "*code.gitea.io/gitea/services/context.APIContext"
+    labels: [user_input]
+  - kind: param_type
+    type: "*code.gitea.io/gitea/services/context.PrivateContext"
+    labels: [user_input]
+  # what an OAuth2 / OIDC provider says about the user (its claims are the user's to set)
+  - kind: param_type
+    type: "github.com/markbates/goth.User"
+    labels: [user_input]
+
+propagators:
+  # the form bound from the request is kept in the data store of the request
+  - symbol: code.gitea.io/gitea/modules/web.GetForm
+    flows: [{from: arg0, to: result}]
+
+sinks:
+  # the storage layer: a path under the storage root
+  - symbol: (code.gitea.io/gitea/modules/storage.ObjectStorage).Delete
+    args: [0]
+    category: path_traversal
+  - symbol: (code.gitea.io/gitea/modules/storage.ObjectStorage).Open
+    args: [0]
+    category: path_traversal
+  - symbol: (code.gitea.io/gitea/modules/storage.ObjectStorage).Save
+    args: [0]
+    category: path_traversal
+  # the OpenID library sends a request to the endpoint named in the assertion (a dependency:
+  # sinks inside dependencies are not looked for, so the entry point is named)
+  - symbol: github.com/yohcop/openid-go.Verify
+    args: [0]
+    category: ssrf

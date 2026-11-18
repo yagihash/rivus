@@ -72,6 +72,7 @@ type state struct {
 	numbering map[*sg.Value]int
 	locSet    map[*sg.Value]map[Loc]bool
 	locCache  map[*sg.Value][]Loc
+	locsFinal bool // locCache may be filled: the fixed point of the locations is reached
 
 	branches        *[]*sg.Block
 	edgeGuardCache  map[[2]*sg.Block][]Guard

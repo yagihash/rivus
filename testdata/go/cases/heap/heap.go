@@ -207,3 +207,57 @@ func UnmarshalIntoString() {
 	_ = json.Unmarshal([]byte(s), &t)
 	lib.Sink(t) // @sink(unmarshalstr)
 }
+
+// A slice that grows in a loop keeps what was appended in every round.
+func AppendInLoop() {
+	s := lib.Source() // @source(apploop)
+	var out []string
+	for i := 0; i < 3; i++ {
+		out = append(out, s)
+	}
+	lib.Sink(out[0]) // @sink(apploop)
+}
+
+func AppendInRangeLoop() {
+	s := lib.Source() // @source(apprange)
+	var out []string
+	for _, w := range strings.Split(s, ",") {
+		out = append(out, w)
+	}
+	lib.Sink(out[0]) // @sink(apprange)
+}
+
+func ExpIndexStoreInLoop() {
+	s := lib.Source() // @source(exp1)
+	out := make([]string, 3)
+	for i := 0; i < 3; i++ {
+		out[i] = s
+	}
+	lib.Sink(out[0]) // @sink(exp1)
+}
+
+func ExpAppendTwiceNoLoop() {
+	s := lib.Source() // @source(exp2)
+	var out []string
+	out = append(out, "a")
+	out = append(out, s)
+	lib.Sink(out[0]) // @sink(exp2)
+}
+
+func ExpAppendIfBranch(c bool) {
+	s := lib.Source() // @source(exp3)
+	var out []string
+	if c {
+		out = append(out, s)
+	}
+	lib.Sink(out[0]) // @sink(exp3)
+}
+
+func ExpAppendLoopSinkInside() {
+	s := lib.Source() // @source(exp4)
+	var out []string
+	for i := 0; i < 3; i++ {
+		out = append(out, s)
+		lib.Sink(out[0]) // @sink(exp4)
+	}
+}
