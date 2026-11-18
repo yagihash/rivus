@@ -1,0 +1,21 @@
+# What comes back from a database is data that someone stored: an attacker may have written it
+# through another request. rivus does not follow a value through the database (what was written
+# where is not known), so a read is a source of its own label, `stored`, and the places that
+# write to the database stay recorded as stored_data_boundary uncertainties.
+#
+# Use it with a sink that accepts the label (a sink with no `accepts` reacts to any label).
+# A rule of your own says which reads you trust: here, all of database/sql.
+ruleset: example/go/database-sql@1
+
+sources:
+  # rows.Scan(&a, &b) and row.Scan(&a): the destinations are filled
+  - symbol: (*database/sql.Rows).Scan
+    out: [0]
+    labels: [stored]
+  - symbol: (*database/sql.Row).Scan
+    out: [0]
+    labels: [stored]
+  # a struct that the project defines for its rows: any field it holds came from the store
+  # - kind: field
+  #   field: example.com/app/models.Comment.*
+  #   labels: [stored]

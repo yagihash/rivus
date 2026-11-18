@@ -18,6 +18,22 @@ sources:
     params: [0]
     labels: [user_input]
 
+  # A call that fills its argument (testdata/go/cases/dbsrc).
+  - symbol: example.com/cases/lib.Fill
+    out: [0]
+    labels: [stored]
+  - symbol: example.com/cases/lib.FillAny
+    out: [0]
+    labels: [stored]
+  # database/sql: Scan fills its (variadic) destinations (testdata/go/cases/dbsrc).
+  - symbol: (*database/sql.Rows).Scan
+    out: [0]
+    labels: [stored]
+  # Any field of a type (testdata/go/cases/dbsrc).
+  - kind: field
+    field: example.com/cases/cases/dbsrc.Row.*
+    labels: [stored]
+
   # A field of a struct (testdata/go/cases/irshape).
   - kind: field
     field: example.com/cases/cases/irshape.T.a
@@ -42,3 +58,10 @@ sinks:
 sanitizers:
   - symbol: example.com/cases/lib.Sanitize
     drops: [user_input]
+
+
+propagators:
+  # a call that moves data to or from the data store (testdata/go/cases/dbsrc)
+  - symbol: example.com/cases/lib.StoreRead
+    pure: true
+    boundary: stored_data

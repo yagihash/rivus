@@ -70,10 +70,12 @@ propagators:
     pure: true
   - symbol: (*database/sql.Row).Scan
     pure: true
+    boundary: stored_data
   - symbol: (*database/sql.Row).Err
     pure: true
   - symbol: (*database/sql.Rows).Scan
     pure: true
+    boundary: stored_data
   - symbol: (*database/sql.Tx).Commit
     pure: true
   - symbol: (*database/sql.Tx).Rollback

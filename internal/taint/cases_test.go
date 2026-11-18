@@ -522,3 +522,23 @@ func TestProvenanceOfAnExportedFunctionsParameter(t *testing.T) {
 		t.Errorf("provenance = %+v", p)
 	}
 }
+
+func TestDBSources(t *testing.T) { checkCase(t, "dbsrc") }
+
+// A call marked as a boundary of the data store is an uncertainty of its own
+// kind, at the place of the call, even though nothing flows through it.
+func TestStoredDataBoundaryIsRecorded(t *testing.T) {
+	prog := loadIR(t, testutil.Testdata(), "./cases/dbsrc")
+	rules := testutil.Rules(t)
+	st := prog.sites(rules)
+	res := prog.engine(st, rules, DefaultOptions()).Run()
+	for _, u := range res.Uncertainties {
+		if u.Kind == KindStoredDataBoundary {
+			if u.AttributableTo != AttributableTarget || u.Symbol != "example.com/cases/lib.StoreRead" {
+				t.Errorf("unexpected boundary note: %+v", u)
+			}
+			return
+		}
+	}
+	t.Fatal("no stored_data_boundary uncertainty was recorded")
+}

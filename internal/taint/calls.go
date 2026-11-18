@@ -96,9 +96,37 @@ func (s *state) callBody(cc *callCtx) {
 	for _, site := range s.eng.sites.ByIRInstr[sites.IRInstr{Func: s.fn.IR.ID, Block: ci.IRBlock, Instr: ci.IRIndex}] {
 		switch site.Role {
 		case sites.RoleSource:
-			for _, r := range cc.roots {
-				for _, l := range site.Labels {
-					s.add(Loc{r, ""}, Elem{Kind: Real, Label: l, Origin: site.ID}, s.origin(ci.Pos, "source: "+site.Symbol))
+			outOnly := false
+			for _, src := range site.Src {
+				outOnly = outOnly || len(src.Out) > 0
+			}
+			// a source with out: the call fills the arguments it names (the
+			// result is the error or the count, not the data)
+			if !outOnly {
+				for _, r := range cc.roots {
+					for _, l := range site.Labels {
+						s.add(Loc{r, ""}, Elem{Kind: Real, Label: l, Origin: site.ID}, s.origin(ci.Pos, "source: "+site.Symbol))
+					}
+				}
+			}
+			for _, src := range site.Src {
+				for _, i := range src.Out {
+					if i >= len(cc.args) {
+						continue
+					}
+					v := cc.args[i]
+					dsts := append(append([]Loc(nil), s.locs(v)...), s.pointeeOfInterface(v)...)
+					// variadic destinations: the pointers are the elements of
+					// the slice the call was given (rows.Scan(&a, &b))
+					for _, e := range s.variadicElems(v) {
+						dsts = append(dsts, s.locs(e)...)
+						dsts = append(dsts, s.pointeeOfInterface(e)...)
+					}
+					for _, d := range dsts {
+						for _, l := range site.Labels {
+							s.add(d, Elem{Kind: Real, Label: l, Origin: site.ID}, s.origin(ci.Pos, "source: "+site.Symbol+" (fills an argument)"))
+						}
+					}
 				}
 			}
 		case sites.RoleSink:
@@ -370,6 +398,9 @@ func (s *state) applyModel(cc *callCtx) {
 		s.applyFlows(cc, flows, &o, "sanitized by "+cc.sym, modelRef(cc.sym, "sanitizer", san.Provenance))
 	}
 	for _, p := range rules.Propagators[cc.sym] {
+		if p.Boundary != "" {
+			s.newNote(cc.in, KindStoredDataBoundary, "data moves between the code and a data store here; what is read back is not followed unless a source rule says what comes from it", cc.sym)
+		}
 		if p.Pure {
 			continue // nothing flows: that is the model
 		}
@@ -520,6 +551,29 @@ func (s *state) pointeeOfInterface(v *sg.Value) []Loc {
 			v = in.Args[0]
 		default:
 			return out
+		}
+	}
+	return out
+}
+
+// variadicElems are the values that were stored into the slice v is a view of,
+// when v is the slice of a variadic call made in this function: the pointers a
+// call like rows.Scan(&a, &b) is given. Memory does not alias in the
+// analysis (a pointer stored in a slice is its content), so the places they
+// point to are found here, where they were stored.
+func (s *state) variadicElems(v *sg.Value) []*sg.Value {
+	for i := 0; i < 4 && v != nil && v.Kind == sg.KResult && v.Instr != nil && v.Instr.Op == ir.OpCopy && len(v.Instr.Args) == 1; i++ {
+		v = v.Instr.Args[0]
+	}
+	if v == nil || v.Kind != sg.KResult || v.Instr == nil || v.Instr.Op != ir.OpAlloc {
+		return nil
+	}
+	var out []*sg.Value
+	for _, b := range s.fn.Blocks {
+		for _, in := range b.Instrs {
+			if in.Op == ir.OpIndexStore && len(in.Args) >= 3 && in.Args[0] == v {
+				out = append(out, in.Args[2])
+			}
 		}
 	}
 	return out

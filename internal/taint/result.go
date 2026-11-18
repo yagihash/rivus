@@ -20,6 +20,7 @@ const (
 	KindGlobalVar              = "global_var"
 	KindConfigRead             = "config_read"
 	KindExportedAPIParam       = "exported_api_param"
+	KindStoredDataBoundary     = "stored_data_boundary"
 	AttributableTarget         = "target"
 	AttributableRivus          = "rivus"
 	AttributableMixed          = "mixed"
@@ -32,7 +33,7 @@ func attributable(kind string) string {
 	switch kind {
 	case KindDynamicDispatch, KindUnresolvedCallee, KindConcurrency:
 		return AttributableMixed
-	case KindMissingSource, KindReflection, KindFFIBoundary, KindGlobalVar, KindConfigRead, KindExportedAPIParam:
+	case KindMissingSource, KindReflection, KindFFIBoundary, KindGlobalVar, KindConfigRead, KindExportedAPIParam, KindStoredDataBoundary:
 		return AttributableTarget
 	default:
 		return AttributableRivus

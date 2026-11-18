@@ -126,7 +126,12 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 					if key == "" {
 						continue
 					}
-					if srcs := rules.Fields[key]; len(srcs) > 0 {
+					srcs := rules.Fields[key]
+					if i := strings.LastIndexByte(key, '.'); i > 0 {
+						// "pkg.Type.*": any field of the type
+						srcs = append(append([]model.Source(nil), srcs...), rules.Fields[key[:i]+".*"]...)
+					}
+					if len(srcs) > 0 {
 						pos := in.Pos
 						if !in.AddrPos.IsZero() {
 							pos = in.AddrPos

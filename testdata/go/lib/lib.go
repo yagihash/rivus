@@ -31,3 +31,13 @@ type Pair struct {
 type Runner interface {
 	Run(s string)
 }
+
+// Fill writes attacker controlled data through the pointer, as a database read
+// does (rows.Scan(&x)).
+func Fill(dst *string) error { return nil }
+
+// FillAny is Fill for a destination given as any (db.Find(&rows)).
+func FillAny(dst any) error { return nil }
+
+// StoreRead reads from the data store; nothing is followed through it.
+func StoreRead() string { return "" }

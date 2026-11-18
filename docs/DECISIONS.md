@@ -922,3 +922,9 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
   - finding に `reachability` を足した: `from_entry`（経路のすべての関数が届く）、`not_from_entry`（届かない関数が経路にある）。起点が分からないときは付けない。**消さずに、事実として付ける**（リフレクションで登録されるハンドラーを、見逃さないため）
   - Gogs（78 件）と gin-vue-admin（29 件）は、すべて `from_entry`
   - Gitea v1.26.4 の結果（修正後）: CVE 3 件すべてを検出（3/3、GHSA-4p89 を含む）。ただし 955 秒、9.6 GB、`depth_limit` 1,499 件、タイムアウトで収束せず。**性能が次の課題**
+- **追記（DB を source にする、3 つのやり方。DB の中の流れは追わずに、出口側を見る）:** 保存された値が、あとで HTML やパスに使われる流れ（2 次の流れ）を、「DB から読んだ値は source」として見る。ルール側に、3 つを足した。
+  1. **`out`（引数を埋める source）:** `kind: call_result` の source に `out: [0]` と書くと、その呼び出しが、ポインタ経由で、引数の指す先にデータを書き込むものとして扱う（`rows.Scan(&x)`、`db.Find(&users)`）。`...any` の可変長引数（`Scan(&a, &b)`）は、渡したスライスの要素のポインタをたどる（メモリはエイリアスしないので、ポインタを書き込んだ場所で探す。`variadicElems`）。結果は、エラーや件数なので、`out` があるときは、結果には付けない
+  2. **型のワイルドカード（`field: pkg.Type.*`）:** その型の、どのフィールドを読んでも source。ORM のモデルの型を、ユーザーが 1 回書けば済む
+  3. **`boundary: stored_data`（propagator）:** 呼び出しが、DB のようなストアとの境界であることを示す。呼び出しの場所に、`stored_data_boundary`（`attributable_to: target`）を、不確実性として記録する。組み込みでは、`database/sql` の `Row.Scan` と `Rows.Scan` に付けた。`pure` と同時に使う
+  - 組み込みの `database/sql` は、**既定では source にしない**（誤検出を減らす方針は変えない。DB 経由の長い経路が、Gogs で偽の findings を出していた）。使うなら、`examples/rules/go-database-sql.yaml` を、`-rules` で足す。`stored` というラベルで出るので、シンクの `accepts` で、`user_input` と区別できる
+  - テスト: `testdata/go/cases/dbsrc`（文字列、`any` 経由の構造体、スライス、`sql.Rows.Scan` の可変長、型のワイルドカード、境界の記録）

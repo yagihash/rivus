@@ -25,8 +25,12 @@ import (
 const (
 	KindCallResult = "call_result" // the result of calling Symbol
 	KindParamType  = "param_type"  // every parameter whose type is Type
-	KindField      = "field"       // reads of the struct field Field
-	KindParam      = "param"       // parameters of the function Symbol (an entry point)
+	KindField      = "field"       // reads of the struct field Field ("pkg.Type.*": any field of the type)
+
+	// BoundaryStoredData is a call that moves data between the code and a data
+	// store that is not followed.
+	BoundaryStoredData = "stored_data"
+	KindParam          = "param" // parameters of the function Symbol (an entry point)
 )
 
 // Match modes of a symbol.
@@ -82,8 +86,14 @@ type Source struct {
 	// Params are the positions (receiver excluded) of the parameters of the
 	// function Symbol that carry taint; Recv adds the receiver. It declares
 	// an entry point of a framework: what the framework hands to the code.
-	Params []int    `yaml:"params"`
-	Recv   bool     `yaml:"recv"`
+	Params []int `yaml:"params"`
+	Recv   bool  `yaml:"recv"`
+	// Out are the argument positions (receiver excluded) that a call_result
+	// source fills with the data, by writing through the pointer: the way a
+	// database read hands rows back (rows.Scan(&x), db.Find(&users)). The
+	// pointee is what is tainted. The result of the call is tainted too, unless
+	// the rule says only out.
+	Out    []int    `yaml:"out"`
 	Labels []string `yaml:"labels"`
 	Match  string   `yaml:"match"`
 	// MaxImplementations bounds the expansion of match: implementations.
@@ -161,8 +171,14 @@ type Propagator struct {
 	// returns nor stores anything derived from its arguments (a mutex lock,
 	// the clock). It replaces the guess that everything flows, and the
 	// uncertainty that goes with the guess.
-	Pure  bool   `yaml:"pure"`
-	Match string `yaml:"match"`
+	Pure bool `yaml:"pure"`
+	// Boundary marks a call that moves data between the code and a store that
+	// rivus does not follow (a database, a cache): "stored_data". The call is
+	// recorded as an uncertainty (stored_data_boundary), so that a place where
+	// a second order flow may start or end is listed, not silent. A source
+	// rule (field, out) says what comes back from it.
+	Boundary string `yaml:"boundary"`
+	Match    string `yaml:"match"`
 	// MaxImplementations bounds the expansion of match: implementations.
 	MaxImplementations int `yaml:"max_implementations"`
 }
@@ -356,6 +372,11 @@ func (rs *RuleSet) validate() error {
 			if s.Symbol == "" {
 				return fmt.Errorf("%s: symbol is required for kind %s", what, s.Kind)
 			}
+			for _, o := range s.Out {
+				if o < 0 {
+					return fmt.Errorf("%s: out: %d is not an argument position", what, o)
+				}
+			}
 		case KindParamType:
 			if s.Type == "" {
 				return fmt.Errorf("%s: type is required for kind %s", what, s.Kind)
@@ -427,6 +448,9 @@ func (rs *RuleSet) validate() error {
 		}
 		if len(p.Flows) > 0 && p.Pure {
 			return fmt.Errorf("%s: pure: true and flows contradict each other", what)
+		}
+		if p.Boundary != "" && p.Boundary != BoundaryStoredData {
+			return fmt.Errorf("%s: unknown boundary %q (stored_data)", what, p.Boundary)
 		}
 		if err := checkMatch(p.Match, what); err != nil {
 			return err
