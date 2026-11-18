@@ -29,6 +29,7 @@ type analyzeOpts struct {
 	// funcTimeout bounds the analysis of one function.
 	funcTimeout time.Duration
 	passes      int
+	numeric     bool
 	maxImpl     int
 	// irFile is a stream of the neutral IR made by an extractor of another
 	// language (rivus extract writes the same form): the analysis starts there.
@@ -38,6 +39,7 @@ type analyzeOpts struct {
 func (o *analyzeOpts) register(fs *flag.FlagSet) {
 	o.common.register(fs)
 	fs.IntVar(&o.k, "k", taint.DefaultOptions().K, "maximum access path depth")
+	fs.BoolVar(&o.numeric, "numeric-taint", false, "follow taint through numbers and bools (by default it stops there: they cannot carry an injection)")
 	fs.BoolVar(&o.verbose, "v", false, "print the time of each phase to stderr")
 	fs.IntVar(&o.maxImpl, "max-implementations", model.DefaultMaxImplementations, "default limit of match: implementations")
 	fs.IntVar(&o.passes, "max-passes", taint.DefaultOptions().MaxPasses, "maximum number of passes over the program while summaries change")
@@ -92,6 +94,7 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	opts.Timeout = o.timeout
 	opts.FuncTimeout = o.funcTimeout
 	opts.MaxPasses = o.passes
+	opts.NumericTaint = o.numeric
 	if o.verbose {
 		opts.SlowThreshold = 300 * time.Millisecond
 		opts.SlowFunc = func(fn string, d time.Duration, outputs, roots int) {

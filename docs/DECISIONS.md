@@ -884,3 +884,7 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
   - **なくなった 3 件**（`download.go:36` の xss 2 件、`web.go:319` の path_traversal 1 件）: 以前は、本体のない `git-module` の `Blob.Bytes` などを「入ったものは出るかもしれない」という既定で通っていた。本体を読むと、リポジトリの中身は、リクエストの値からは流れてこない（外部コマンドの出力）。**推測による findings が、正しく消えた**
   - **新しい 6 件**（`repo.go:708/711` の `os.MkdirAll`/`WriteFile`、source は 3 種類）: 経路が 112〜113 歩で、xorm の `Insert`（DB への書き込み）を通り、`PatchPath` が `repo.Owner.Name`（DB から読んだ値）を使うところに着く。**DB を通る 2 次の流れ**で、リクエストの値が、直接パスに入るのではない（Gogs は名前を検証している）。エンジンは、DB の往復を、フィールドの共有で近似している。本物かどうかは確かめられない（推測だが、危険度の低い、長い経路の findings）
   - 次にやること候補: 経路が極端に長い findings の信頼度を下げて示す、整数型を通った値の扱い（`com.ToStr(index)` は整数から文字列を作る）
+- **追記（経路の段数と、数値型での停止）:**
+  - finding に `path_steps`（表示する最短経路の段数）を足した。`confidence` は、経路に未解決（不確実性）がなければ `no_uncertainty_on_path`、あれば `requires_review`（判定ではなく、分類）。Gogs では 105 件中 2 件だけが前者。実際の順位付けには `path_steps` が使える
+  - **数値型（number、bool）の値には、タイントを入れない**（`state.add`）。組み込みのシンクはすべて文字列を受ける（path、sql、command、xss、ssrf、redirect）ので、数値は注入を運べない。`com.ToStr(repo.ID)` のように、構造体全体のタイントが、整数のフィールドを通ってパスに入る誤検出が消える。数量をシンクにするルールのために、`-numeric-taint` で戻せる
+  - 結果: Gogs（`-deps`）108 → 76 件。**消えたのは path_traversal だけ**（`repo.ID`、`user.ID` などの整数を通る流れ。さきほどの DB 経由の 6 件も）。採点は変わらない（Gogs 4/4 と 2/2、go-test-bench 18/18、gin-vue-admin 2/2）。消えたものを読んだ範囲（wiki.go など）は、すべて整数の ID を通る経路だった（全 32 件は読んでいない）

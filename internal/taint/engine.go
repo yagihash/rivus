@@ -34,6 +34,11 @@ type Options struct {
 	Budget int
 	// SlowFunc, if set, is called for functions whose analysis took longer
 	// than SlowThreshold. It is a development aid.
+	// NumericTaint follows taint through values of a number or bool type.
+	// By default it stops there: the sinks of the injection categories take
+	// text, and a number made from a request has no text to inject. Turn it
+	// on for rules whose sinks are quantities (a size, a count, a delay).
+	NumericTaint  bool
 	SlowFunc      func(fn string, d time.Duration, outputs, roots int)
 	SlowThreshold time.Duration
 }

@@ -164,6 +164,13 @@ func (s *state) cellsOf(r Root) map[string]Set {
 
 // add puts an element into a cell. It records w as the reason the first time.
 func (s *state) add(l Loc, e Elem, w *why) {
+	// A number or a bool cannot carry an injection (a path, a query, a
+	// command, a URL): taint stops there, unless asked to follow it (a rule
+	// whose sink is a size or a count needs that).
+	if v := l.Root.V; v != nil && l.Root.Idx < 0 && l.Path == "" && !s.eng.opts.NumericTaint &&
+		(v.Class == ir.ClassNumber || v.Class == ir.ClassBool) {
+		return
+	}
 	p, trunc := pathTrunc(l.Path, s.eng.opts.K)
 	if trunc {
 		s.truncated = true

@@ -183,6 +183,15 @@ func PureFunctionsDoNotPropagate() {
 	lib.SinkAny(deadline) // @sink(none)
 }
 
+// A number made from a tainted string has no text to inject: taint stops at it
+// (unless -numeric-taint).
+func NumberStopsTaint() {
+	s := lib.Source() // @source(numstop)
+	n, _ := strconv.Atoi(s)
+	lib.Sink(strconv.Itoa(n)) // @sink(none)
+	lib.Sink(s)               // @sink(numstop)
+}
+
 // A model that writes to an argument writes to what the pointer refers to,
 // also when the pointer went through an interface (any(&b)).
 func UnmarshalIntoPointer() {

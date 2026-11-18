@@ -193,7 +193,7 @@ func TestBudgetCutsAFunctionShortAndRecordsIt(t *testing.T) {
 	rules := testutil.Rules(t)
 	st := prog.sites(rules)
 	opts := DefaultOptions()
-	opts.Budget = 3 // far too small for any real function
+	opts.Budget = 1 // far too small for any real function
 	res := prog.engine(st, rules, opts).Run()
 
 	var degraded int
