@@ -910,3 +910,6 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
   - extractor の場所: `-dart-extractor`/`-rust-extractor`、なければ `RIVUS_DART_EXTRACTOR`/`RIVUS_RUST_EXTRACTOR`、なければ PATH の `rivus-dart`/`rivus-rust`。Dart は `pubspec.yaml` に `executables` を足したので、`dart pub global activate --source path extractor/dart` で `rivus-dart` が入る
   - **自動で見つけた言語の extractor がなければ、警告を出して飛ばす**（Go のプロジェクトに、道具の `pubspec.yaml` があるだけ、という場合）。`-lang` で明示した言語は、エラーにする
   - `-no-deps` と `-tests` は、extractor にも渡す
+- **追記（Go の標準ライブラリのモデルを足す、2 回目。ZITADEL、Gogs、gin-vue-admin の、モデルのない標準の呼び出しを数えて）:** `go-stdlib-more.yaml`（約 280 のシンボル）を足した。頻度の高い順に、`fmt.Println`、`strconv`、`context`、`log/slog`、`database/sql`、`os`、`net`、`regexp`、`text/template`、`crypto/*`、`errors.As` など。流れのあるものは `flows`、ないものは `pure`、`net/http.ServeFile` は path_traversal のシンク。結果（findings と採点は同じ）: gin-vue-admin の不確実性 550 → 263、go-test-bench 274 → 228、Gogs の `unmodeled_library_call` 310 → 172。3 つのプロジェクトで、モデルのない標準の呼び出しは、残り約 120 件（約 110 種、ほとんど 1 件ずつ）
+  - **判断:** `database/sql` の読み取り（`Row.Scan`、`Rows.Scan`）は `pure`（DB を通る 2 次の流れは追わない）。`(*sync.Once).Do` と `Cleanup` は、引数の関数を呼ぶので、`pure` にすると関数の中の流れを捨てるおそれがあり、モデルを付けなかった。`template.Parse` はテンプレートの文字列の流れだけを足し、シンクにはしていない
+  - **ZITADEL の試し（このまま ./... で）:** 生成コード（gRPC の protobuf）が repo になく、`missing_source` が 8,668 件で、findings は 0 件。12 パスで収束せず（gRPC の要約が振動）、ピーク 8 GB、約 100 秒。ベンチには使えない。収束しない件は、別に調べる

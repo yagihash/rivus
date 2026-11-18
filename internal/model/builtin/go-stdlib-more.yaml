@@ -1,0 +1,565 @@
+# Standard library calls that the benchmarks (Gogs, gin-vue-admin, ZITADEL) call and that
+# nothing modelled: the most frequent first. A call without a model is a guess (everything
+# that goes in may come out), and the guess is an uncertainty on every path through it.
+ruleset: rivus/go/stdlib-more@1
+
+propagators:
+  - symbol: os.IsNotExist
+    pure: true
+  - symbol: os.IsExist
+    pure: true
+  - symbol: os.Exit
+    pure: true
+  - symbol: os.Hostname
+    pure: true
+  - symbol: fmt.Println
+    pure: true
+  - symbol: fmt.Printf
+    pure: true
+  - symbol: fmt.Print
+    pure: true
+  - symbol: strconv.Itoa
+    pure: true
+  - symbol: strconv.Atoi
+    pure: true
+  - symbol: strconv.ParseUint
+    pure: true
+  - symbol: strconv.FormatUint
+    pure: true
+  - symbol: strconv.ParseBool
+    pure: true
+  - symbol: strconv.FormatBool
+    pure: true
+  - symbol: strconv.ParseFloat
+    pure: true
+  - symbol: strconv.FormatFloat
+    pure: true
+  - symbol: log/slog.New
+    pure: true
+  - symbol: log/slog.Default
+    pure: true
+  - symbol: log/slog.NewTextHandler
+    pure: true
+  - symbol: log/slog.NewJSONHandler
+    pure: true
+  - symbol: (*log/slog.Logger).Debug
+    pure: true
+  - symbol: (*log/slog.Logger).Info
+    pure: true
+  - symbol: (*log/slog.Logger).Warn
+    pure: true
+  - symbol: (*log/slog.Logger).Error
+    pure: true
+  - symbol: (*log/slog.Logger).DebugContext
+    pure: true
+  - symbol: (*log/slog.Logger).InfoContext
+    pure: true
+  - symbol: (*log/slog.Logger).WarnContext
+    pure: true
+  - symbol: (*log/slog.Logger).ErrorContext
+    pure: true
+  - symbol: (*log/slog.Logger).Handler
+    pure: true
+  - symbol: log/slog.Debug
+    pure: true
+  - symbol: log/slog.Info
+    pure: true
+  - symbol: log/slog.Warn
+    pure: true
+  - symbol: log/slog.Error
+    pure: true
+  - symbol: (*database/sql.Row).Scan
+    pure: true
+  - symbol: (*database/sql.Row).Err
+    pure: true
+  - symbol: (*database/sql.Rows).Scan
+    pure: true
+  - symbol: (*database/sql.Tx).Commit
+    pure: true
+  - symbol: (*database/sql.Tx).Rollback
+    pure: true
+  - symbol: (*database/sql.DB).SetMaxOpenConns
+    pure: true
+  - symbol: (*database/sql.DB).SetMaxIdleConns
+    pure: true
+  - symbol: (*database/sql.DB).SetConnMaxLifetime
+    pure: true
+  - symbol: (*database/sql.DB).SetConnMaxIdleTime
+    pure: true
+  - symbol: (*database/sql.DB).BeginTx
+    pure: true
+  - symbol: (*database/sql.DB).Begin
+    pure: true
+  - symbol: (*database/sql.DB).Ping
+    pure: true
+  - symbol: (*database/sql.DB).PingContext
+    pure: true
+  - symbol: (*database/sql.DB).Stats
+    pure: true
+  - symbol: (*database/sql.DB).Conn
+    pure: true
+  - symbol: (*database/sql.Conn).Close
+    pure: true
+  - symbol: (*database/sql.Conn).BeginTx
+    pure: true
+  - symbol: database/sql.Open
+    pure: true
+  - symbol: database/sql/driver.IsValue
+    pure: true
+  - symbol: go/ast.Inspect
+    pure: true
+  - symbol: go/ast.Print
+    pure: true
+  - symbol: go/token.NewFileSet
+    pure: true
+  - symbol: go/parser.ParseFile
+    pure: true
+  - symbol: go/printer.Fprint
+    pure: true
+  - symbol: (*go/ast.CommentGroup).Pos
+    pure: true
+  - symbol: net.Listen
+    pure: true
+  - symbol: net/smtp.PlainAuth
+    pure: true
+  - symbol: net/smtp.Dial
+    pure: true
+  - symbol: net/smtp.NewClient
+    pure: true
+  - symbol: (*net/smtp.Client).Auth
+    pure: true
+  - symbol: (*net/smtp.Client).Close
+    pure: true
+  - symbol: (*net/smtp.Client).Mail
+    pure: true
+  - symbol: (*net/smtp.Client).Rcpt
+    pure: true
+  - symbol: (*net/smtp.Client).Data
+    pure: true
+  - symbol: (*net/smtp.Client).Quit
+    pure: true
+  - symbol: (*net/smtp.Client).StartTLS
+    pure: true
+  - symbol: (*net/smtp.Client).Hello
+    pure: true
+  - symbol: crypto/aes.NewCipher
+    pure: true
+  - symbol: crypto/hmac.New
+    pure: true
+  - symbol: crypto/hmac.Equal
+    pure: true
+  - symbol: crypto/rand.Read
+    pure: true
+  - symbol: crypto/rand.Int
+    pure: true
+  - symbol: crypto/rsa.GenerateKey
+    pure: true
+  - symbol: crypto/md5.New
+    pure: true
+  - symbol: crypto/sha1.New
+    pure: true
+  - symbol: crypto/sha256.New
+    pure: true
+  - symbol: crypto/sha512.New
+    pure: true
+  - symbol: crypto/x509.CreateCertificate
+    pure: true
+  - symbol: crypto/x509.ParsePKIXPublicKey
+    pure: true
+  - symbol: (*sync/atomic.Bool).Load
+    pure: true
+  - symbol: (*sync/atomic.Bool).Store
+    pure: true
+  - symbol: (*sync/atomic.Int64).Load
+    pure: true
+  - symbol: (*sync/atomic.Int64).Store
+    pure: true
+  - symbol: (*sync/atomic.Int64).Add
+    pure: true
+  - symbol: time.NewTimer
+    pure: true
+  - symbol: time.Parse
+    pure: true
+  - symbol: time.ParseDuration
+    pure: true
+  - symbol: time.Date
+    pure: true
+  - symbol: (time.Duration).String
+    pure: true
+  - symbol: regexp.MustCompile
+    pure: true
+  - symbol: regexp.Compile
+    pure: true
+  - symbol: (*regexp.Regexp).Match
+    pure: true
+  - symbol: strings.LastIndex
+    pure: true
+  - symbol: strings.Compare
+    pure: true
+  - symbol: unicode/utf8.Valid
+    pure: true
+  - symbol: sort.Sort
+    pure: true
+  - symbol: sort.SearchStrings
+    pure: true
+  - symbol: math.Log
+    pure: true
+  - symbol: math.Floor
+    pure: true
+  - symbol: math.Ceil
+    pure: true
+  - symbol: math.Max
+    pure: true
+  - symbol: math.Min
+    pure: true
+  - symbol: math/rand.Int63n
+    pure: true
+  - symbol: math/rand.Intn
+    pure: true
+  - symbol: math/rand.Int
+    pure: true
+  - symbol: math/big.NewInt
+    pure: true
+  - symbol: (*math/big.Int).Int64
+    pure: true
+  - symbol: (*math/big.Int).BitLen
+    pure: true
+  - symbol: runtime.FuncForPC
+    pure: true
+  - symbol: runtime.NumGoroutine
+    pure: true
+  - symbol: runtime.Version
+    pure: true
+  - symbol: runtime/debug.Stack
+    pure: true
+  - symbol: hash/fnv.New32
+    pure: true
+  - symbol: hash/fnv.New32a
+    pure: true
+  - symbol: hash/fnv.New64a
+    pure: true
+  - symbol: encoding/hex.EncodedLen
+    pure: true
+  - symbol: encoding/hex.DecodedLen
+    pure: true
+  - symbol: path/filepath.IsAbs
+    pure: true
+  - symbol: (io/fs.FileMode).Perm
+    pure: true
+  - symbol: (*archive/zip.Writer).Close
+    pure: true
+  - symbol: archive/zip.FileInfoHeader
+    pure: true
+  - symbol: (*os/exec.Cmd).StdoutPipe
+    pure: true
+  - symbol: (*os/exec.Cmd).StderrPipe
+    pure: true
+  - symbol: (net/http.File).Readdir
+    pure: true
+  - symbol: (log/slog.Record).NumAttrs
+    pure: true
+  - symbol: (net/url.Values).Del
+    pure: true
+  - symbol: (*net/url.URL).Port
+    pure: true
+  - symbol: flag.Parse
+    pure: true
+  - symbol: context.WithValue
+    flows: [{from: arg0, to: result}, {from: arg2, to: result}]
+  - symbol: context.WithCancel
+    flows: [{from: arg0, to: result0}]
+  - symbol: context.WithTimeout
+    flows: [{from: arg0, to: result0}]
+  - symbol: context.WithDeadline
+    flows: [{from: arg0, to: result0}]
+  - symbol: (context.Context).Value
+    flows: [{from: recv, to: result}]
+  - symbol: errors.As
+    flows: [{from: arg0, to: arg1}]
+  - symbol: errors.Join
+    flows: [{from: arg0, to: result}]
+  - symbol: log/slog.String
+    flows: [{from: arg1, to: result}]
+  - symbol: log/slog.Any
+    flows: [{from: arg1, to: result}]
+  - symbol: log/slog.Int
+    flows: [{from: arg1, to: result}]
+  - symbol: log/slog.Uint64
+    flows: [{from: arg1, to: result}]
+  - symbol: log/slog.Time
+    flows: [{from: arg1, to: result}]
+  - symbol: log/slog.Duration
+    flows: [{from: arg1, to: result}]
+  - symbol: log/slog.StringValue
+    flows: [{from: arg0, to: result}]
+  - symbol: log/slog.GroupValue
+    flows: [{from: arg0, to: result}]
+  - symbol: (*log/slog.Logger).With
+    flows: [{from: recv, to: result}, {from: arg0, to: result}]
+  - symbol: (*text/template.Template).Execute
+    flows: [{from: arg1, to: arg0}]
+  - symbol: (*html/template.Template).Execute
+    flows: [{from: arg1, to: arg0}]
+  - symbol: text/template.New
+    flows: [{from: arg0, to: result}]
+  - symbol: html/template.New
+    flows: [{from: arg0, to: result}]
+  - symbol: (*text/template.Template).Parse
+    flows: [{from: arg0, to: recv}, {from: recv, to: result0}]
+  - symbol: (*html/template.Template).Parse
+    flows: [{from: arg0, to: recv}, {from: recv, to: result0}]
+  - symbol: text/template.Must
+    flows: [{from: arg0, to: result}]
+  - symbol: (*html/template.Template).Funcs
+    flows: [{from: recv, to: result}]
+  - symbol: text/template.ParseFiles
+    flows: [{from: arg0, to: result0}]
+  - symbol: (*mime/multipart.FileHeader).Open
+    flows: [{from: recv, to: result0}]
+  - symbol: (*net/http.Request).FormFile
+    flows: [{from: recv, to: result0}, {from: recv, to: result1}]
+  - symbol: (*net/http.Request).UserAgent
+    flows: [{from: recv, to: result}]
+  - symbol: (*net/http.Request).WithContext
+    flows: [{from: recv, to: result}]
+  - symbol: net.ParseIP
+    flows: [{from: arg0, to: result}]
+  - symbol: net.SplitHostPort
+    flows: [{from: arg0, to: result0}, {from: arg0, to: result1}]
+  - symbol: net.JoinHostPort
+    flows: [{from: arg0, to: result}, {from: arg1, to: result}]
+  - symbol: net.ParseCIDR
+    flows: [{from: arg0, to: result0}, {from: arg0, to: result1}]
+  - symbol: encoding/pem.Decode
+    flows: [{from: arg0, to: result0}]
+  - symbol: encoding/pem.Encode
+    flows: [{from: arg1, to: arg0}]
+  - symbol: crypto/x509.ParseCertificate
+    flows: [{from: arg0, to: result0}]
+  - symbol: crypto/tls.X509KeyPair
+    flows: [{from: arg0, to: result0}, {from: arg1, to: result0}]
+  - symbol: crypto/cipher.NewGCM
+    flows: [{from: arg0, to: result0}]
+  - symbol: os.ExpandEnv
+    flows: [{from: arg0, to: result}]
+  - symbol: os.MkdirTemp
+    flows: [{from: arg0, to: result0}]
+  - symbol: (*regexp.Regexp).FindSubmatch
+    flows: [{from: arg0, to: result}]
+  - symbol: (*regexp.Regexp).ReplaceAll
+    flows: [{from: arg0, to: result}, {from: arg1, to: result}]
+  - symbol: (*regexp.Regexp).FindStringSubmatch
+    flows: [{from: arg0, to: result}]
+  - symbol: (*regexp.Regexp).FindAllString
+    flows: [{from: arg0, to: result}]
+  - symbol: (*regexp.Regexp).ReplaceAllString
+    flows: [{from: arg0, to: result}, {from: arg1, to: result}]
+  - symbol: strings.CutSuffix
+    flows: [{from: arg0, to: result0}]
+  - symbol: strings.NewReplacer
+    flows: [{from: arg0, to: result}]
+  - symbol: (*strings.Replacer).Replace
+    flows: [{from: arg0, to: result}]
+  - symbol: bytes.Fields
+    flows: [{from: arg0, to: result}]
+  - symbol: bytes.Replace
+    flows: [{from: arg0, to: result}, {from: arg2, to: result}]
+  - symbol: path.Ext
+    flows: [{from: arg0, to: result}]
+  - symbol: path/filepath.ToSlash
+    flows: [{from: arg0, to: result}]
+  - symbol: net/http.FS
+    flows: [{from: arg0, to: result}]
+  - symbol: net/http/httputil.DumpRequest
+    flows: [{from: arg0, to: result0}]
+  - symbol: image.Decode
+    flows: [{from: arg0, to: result0}]
+  - symbol: image/png.Encode
+    flows: [{from: arg1, to: arg0}]
+  - symbol: archive/zip.NewWriter
+    flows: [{from: arg0, to: result}]
+  - symbol: (*archive/zip.Writer).CreateHeader
+    flows: [{from: recv, to: result0}]
+  - symbol: (*encoding/xml.Decoder).Decode
+    flows: [{from: recv, to: arg0}]
+  - symbol: (*go/ast.CommentGroup).Text
+    flows: [{from: recv, to: result}]
+  - symbol: log/slog.NewRecord
+    pure: true
+  - symbol: log/slog.Group
+    pure: true
+  - symbol: log/slog.SetDefault
+    pure: true
+  - symbol: log/slog.Int64
+    pure: true
+  - symbol: log/slog.Bool
+    pure: true
+  - symbol: (*log/slog.Record).Add
+    pure: true
+  - symbol: (*log/slog.Record).AddAttrs
+    pure: true
+  - symbol: (log/slog.Record).Attrs
+    pure: true
+  - symbol: (log/slog.Value).Resolve
+    pure: true
+  - symbol: (log/slog.Value).Kind
+    pure: true
+  - symbol: (log/slog.Value).Group
+    pure: true
+  - symbol: (*log/slog.Logger).Enabled
+    pure: true
+  - symbol: (log/slog.Leveler).Level
+    pure: true
+  - symbol: (*log/slog.Level).UnmarshalText
+    pure: true
+  - symbol: net/http.Error
+    pure: true
+  - symbol: net/http.NotFoundHandler
+    pure: true
+  - symbol: net/http.SetCookie
+    pure: true
+  - symbol: net/http.ListenAndServe
+    pure: true
+  - symbol: net/http.Serve
+    pure: true
+  - symbol: (*net/http.Server).ListenAndServeTLS
+    pure: true
+  - symbol: (*net/http.ServeMux).Handle
+    pure: true
+  - symbol: net/http/fcgi.Serve
+    pure: true
+  - symbol: net/http.ParseHTTPVersion
+    pure: true
+  - symbol: (*net/http.Transport).Clone
+    pure: true
+  - symbol: (net/http.Handler).ServeHTTP
+    pure: true
+  - symbol: net/http/cookiejar.New
+    pure: true
+  - symbol: (*net/http.Request).ParseMultipartForm
+    pure: true
+  - symbol: (*net/http.Request).SetBasicAuth
+    pure: true
+  - symbol: (*net/http.Cookie).String
+    pure: true
+  - symbol: (*database/sql.Conn).PingContext
+    pure: true
+  - symbol: (*database/sql.Conn).Raw
+    pure: true
+  - symbol: database/sql.Named
+    pure: true
+  - symbol: crypto/cipher.NewCFBEncrypter
+    pure: true
+  - symbol: crypto/cipher.NewCFBDecrypter
+    pure: true
+  - symbol: crypto/x509.NewCertPool
+    pure: true
+  - symbol: crypto/x509.IsEncryptedPEMBlock
+    pure: true
+  - symbol: crypto/elliptic.P256
+    pure: true
+  - symbol: crypto/elliptic.P384
+    pure: true
+  - symbol: crypto/elliptic.P521
+    pure: true
+  - symbol: crypto/ecdsa.GenerateKey
+    pure: true
+  - symbol: crypto/ed25519.GenerateKey
+    pure: true
+  - symbol: crypto/tls.Dial
+    pure: true
+  - symbol: crypto/tls.Client
+    pure: true
+  - symbol: crypto/tls.LoadX509KeyPair
+    pure: true
+  - symbol: (*crypto/x509.CertPool).AppendCertsFromPEM
+    pure: true
+  - symbol: net/netip.ParseAddr
+    pure: true
+  - symbol: (net/netip.Addr).IsLoopback
+    pure: true
+  - symbol: net/smtp.CRAMMD5Auth
+    pure: true
+  - symbol: net/url.UserPassword
+    pure: true
+  - symbol: encoding/json.Valid
+    pure: true
+  - symbol: encoding/hex.Encode
+    pure: true
+  - symbol: encoding/hex.AppendEncode
+    pure: true
+  - symbol: unicode/utf8.ValidString
+    pure: true
+  - symbol: unicode/utf8.RuneCountInString
+    pure: true
+  - symbol: (encoding/binary.bigEndian).Uint32
+    pure: true
+  - symbol: math/rand.Float64
+    pure: true
+  - symbol: math/rand.Seed
+    pure: true
+  - symbol: hash/fnv.New128
+    pure: true
+  - symbol: (io/fs.FileMode).String
+    pure: true
+  - symbol: path/filepath.Walk
+    pure: true
+  - symbol: (*go/ast.CallExpr).Pos
+    pure: true
+  - symbol: (*go/ast.CallExpr).End
+    pure: true
+  - symbol: (go/ast.Node).Pos
+    pure: true
+  - symbol: (go/ast.Node).End
+    pure: true
+  - symbol: (*encoding/json.Decoder).Token
+    pure: true
+  - symbol: (*net/url.URL).RequestURI
+    pure: true
+  - symbol: mime/multipart.NewWriter
+    pure: true
+  - symbol: (*mime/multipart.Writer).Close
+    pure: true
+  - symbol: (*mime/multipart.Writer).FormDataContentType
+    pure: true
+  - symbol: crypto/x509.MarshalPKCS1PrivateKey
+    flows: [{from: arg0, to: result}]
+  - symbol: crypto/x509.MarshalPKCS8PrivateKey
+    flows: [{from: arg0, to: result0}]
+  - symbol: crypto/x509.MarshalPKIXPublicKey
+    flows: [{from: arg0, to: result0}]
+  - symbol: crypto/x509.ParsePKCS1PrivateKey
+    flows: [{from: arg0, to: result0}]
+  - symbol: crypto/x509.ParsePKCS8PrivateKey
+    flows: [{from: arg0, to: result0}]
+  - symbol: crypto/x509.DecryptPEMBlock
+    flows: [{from: arg0, to: result0}]
+  - symbol: encoding/pem.EncodeToMemory
+    flows: [{from: arg0, to: result}]
+  - symbol: net/mail.ParseAddress
+    flows: [{from: arg0, to: result0}]
+  - symbol: (*mime/multipart.Writer).CreateFormFile
+    flows: [{from: arg0, to: recv}, {from: arg1, to: recv}]
+  - symbol: (*mime/multipart.Writer).WriteField
+    flows: [{from: arg0, to: recv}, {from: arg1, to: recv}]
+  - symbol: (*encoding/xml.Decoder).Token
+    flows: [{from: recv, to: result0}]
+  - symbol: encoding/xml.NewDecoder
+    flows: [{from: arg0, to: result}]
+  - symbol: (*text/template.Template).ExecuteTemplate
+    flows: [{from: arg2, to: arg0}]
+  - symbol: (*html/template.Template).ExecuteTemplate
+    flows: [{from: arg2, to: arg0}]
+  - symbol: (*html/template.Template).Lookup
+    flows: [{from: recv, to: result}]
+  - symbol: (*html/template.Template).New
+    flows: [{from: recv, to: result}]
+  - symbol: text/template.ParseFS
+    flows: [{from: arg0, to: result0}]
+  - symbol: (log/slog.Record).Message
+    flows: [{from: recv, to: result}]
+
+sinks:
+  - symbol: net/http.ServeFile
+    args: [2]
+    category: path_traversal
