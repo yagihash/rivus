@@ -569,7 +569,8 @@ type Finding struct {
     Provenance   []Provenance
     Uncertain    []Uncertainty
     ModelsUsed   []ModelRef    // origin: llm のモデルが影響したらここに現れる
-    Confidence   string        // "requires_review" など。判定ではなく、確定度の分類
+    PathSteps    int           // 表示する経路（最短）の段数。順位付けのための事実
+    Confidence   string        // "no_uncertainty_on_path"（経路に未解決がない）か "requires_review"。判定ではなく、確定度の分類
 }
 ```
 

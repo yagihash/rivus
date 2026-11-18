@@ -72,8 +72,12 @@ func TestAnalyzeCommand(t *testing.T) {
 	if f.Source.Position.Line != 6 || f.Sink.Position.Line != 7 || len(f.Paths) != 1 || len(f.Paths[0].Steps) == 0 {
 		t.Errorf("unexpected finding: %+v", f)
 	}
-	if f.Confidence != "requires_review" {
-		t.Errorf("confidence = %q", f.Confidence)
+	want := "requires_review"
+	if len(f.Uncertainties) == 0 {
+		want = "no_uncertainty_on_path"
+	}
+	if f.Confidence != want || f.PathSteps != len(f.Paths[0].Steps) {
+		t.Errorf("confidence = %q, path_steps = %d", f.Confidence, f.PathSteps)
 	}
 	if !rep.Stats.Converged {
 		t.Error("analysis did not converge")

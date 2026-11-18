@@ -705,7 +705,7 @@ func (e *Engine) buildFinding(rf *rawFinding) *Finding {
 		Source:     e.siteRef(src),
 		Sink:       e.siteRef(rf.site),
 		Category:   rf.site.Category,
-		Confidence: "requires_review",
+		Confidence: ConfidenceReview,
 	}
 	for l := range rf.labels {
 		f.Labels = append(f.Labels, l)
@@ -739,6 +739,10 @@ func (e *Engine) buildFinding(rf *rawFinding) *Finding {
 		}
 	}
 	f.Paths = []Path{{Steps: steps}}
+	f.PathSteps = len(steps)
+	if len(f.Uncertainties) == 0 {
+		f.Confidence = ConfidenceClear
+	}
 	f.ConditionalNodes = e.conditionalNodes(rf.guards)
 
 	// Which models decided something on the path, and who decided them.

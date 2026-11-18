@@ -135,7 +135,14 @@ type Finding struct {
 	// Uncertainties lists everything on the path that rivus could not
 	// resolve; it is the part a reviewer should look at first.
 	Uncertainties []*Uncertainty `json:"uncertainties,omitempty"`
-	Confidence    string         `json:"confidence"`
+	// PathSteps is the number of steps of the (shortest) path shown. The
+	// longer a path, the more of its hops can be a guess; this is a fact for
+	// ranking, not a verdict.
+	PathSteps int `json:"path_steps"`
+	// Confidence classifies what is known about the path, and does not judge
+	// it: ConfidenceClear when nothing on it was left unresolved,
+	// ConfidenceReview otherwise.
+	Confidence string `json:"confidence"`
 	// Models are the models that decided something on the path: the source
 	// and sink rules, and the sanitizers and propagators passed.
 	Models []ModelRef `json:"models,omitempty"`
@@ -145,6 +152,12 @@ type Finding struct {
 	// depends on a value the caller passes.
 	ConditionalNodes []ConditionalNode `json:"conditional_nodes,omitempty"`
 }
+
+// Values of Finding.Confidence.
+const (
+	ConfidenceClear  = "no_uncertainty_on_path"
+	ConfidenceReview = "requires_review"
+)
 
 // Path is one way the data gets from the source to the sink.
 type Path struct {
