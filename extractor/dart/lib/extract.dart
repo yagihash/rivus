@@ -15,7 +15,7 @@ import 'program.dart';
 
 /// Extracts the Dart code under [root] (the files that are not under a hidden
 /// or a build directory) and writes the stream to [sink].
-Future<void> extract(String root, StringSink sink) async {
+Future<void> extract(String root, StringSink sink, {bool deps = true}) async {
   root = p.normalize(p.absolute(root));
   final out = StreamOut(sink);
   final prog = Program(root, out);
@@ -37,6 +37,42 @@ Future<void> extract(String root, StringSink sink) async {
         }
       }
       units.add(UnitInfo(prog, p.relative(path, from: root), r.unit, r.content, r.lineInfo));
+    }
+  }
+  // The dependencies (not the SDK): the libraries the code imports, and what
+  // they import. Their functions are marked dep; the core keeps the ones the
+  // code reaches.
+  if (deps) {
+    final seen = <String>{};
+    final files = <String>[];
+    void visit(LibraryElement lib) {
+      if (lib.uri.scheme == 'dart' || !seen.add(lib.uri.toString())) return;
+      for (final f in lib.fragments) {
+        final path = f.source.fullName;
+        if (!p.isWithin(root, path)) files.add(path);
+      }
+      for (final i in lib.firstFragment.libraryImports) {
+        final l = i.importedLibrary;
+        if (l != null) visit(l);
+      }
+      for (final e in lib.firstFragment.libraryExports) {
+        final l = e.exportedLibrary;
+        if (l != null) visit(l);
+      }
+    }
+    for (final context in collection.contexts) {
+      for (final u in List.of(units)) {
+        final r = await context.currentSession.getResolvedUnit(p.join(root, u.file));
+        if (r is ResolvedUnitResult) visit(r.libraryElement);
+      }
+    }
+    final done = <String>{};
+    for (final path in files) {
+      if (!path.endsWith('.dart') || !done.add(path)) continue;
+      final context = collection.contexts.first;
+      final r = await context.currentSession.getResolvedUnit(path);
+      if (r is! ResolvedUnitResult) continue;
+      units.add(UnitInfo(prog, path, r.unit, r.content, r.lineInfo, dep: true));
     }
   }
   units.sort((a, b) => a.file.compareTo(b.file));
@@ -216,6 +252,7 @@ class _Lower extends RecursiveAstVisitor<void> {
     final out = FuncOut(id)
       ..symbol = symbolOf(el)
       ..recv = thisType != null
+      ..dep = unit.dep
       ..exported = !(el.name ?? '').startsWith('_');
     final at = unit.at(node.offset);
     out.pos = unit.pos(node, node.offset);

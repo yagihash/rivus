@@ -118,6 +118,16 @@ func (fn *Func) intern(in interner) {
 // dependency is read for what the project uses of it; the rest of it cannot
 // change the analysis.
 func (p *Program) PruneDeps() {
+	any := false
+	for _, f := range p.Funcs {
+		if f.Dep {
+			any = true
+			break
+		}
+	}
+	if !any {
+		return
+	}
 	byID := make(map[FuncID][]*Func, len(p.Funcs))
 	for _, f := range p.Funcs {
 		byID[f.ID] = append(byID[f.ID], f)

@@ -11,6 +11,11 @@ dart run bin/rivus_dart.dart path/to/package > package.jsonl
 rivus analyze -ir package.jsonl -rules rules.yaml -no-builtin-rules
 ```
 
+The libraries the code imports (`package:` dependencies and what they import, not the SDK) are
+read too, and their functions are marked `dep`: `rivus analyze` keeps the ones that the code
+reaches, so that a flow is followed through a dependency instead of guessed at. `--no-deps`
+leaves them out.
+
 The package needs its `dart pub get` done (and `build_runner` if it has generated
 code): that is what makes `package:` imports and `part` files resolve.
 

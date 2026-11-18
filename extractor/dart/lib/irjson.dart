@@ -81,6 +81,7 @@ class FuncOut {
   String symbol = '';
   bool recv = false;
   bool exported = false;
+  bool dep = false; // a function of a dependency
   Pos pos = Pos.none;
   final List<Param> params = [];
   final List<String> results = [];
@@ -96,6 +97,7 @@ class FuncOut {
         'roots': [0],
         if (!pos.isNone) 'pos': pos.toJson(),
         if (exported) 'exported': true,
+        if (dep) 'dep': true,
         if (symbol.isNotEmpty) 'symbol': symbol,
         if (recv) 'recv': true,
       };

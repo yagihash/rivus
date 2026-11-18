@@ -18,12 +18,14 @@ class MethodImpl {
 /// The texts, grouped as the stream has them: the same text for every
 /// position it belongs to.
 class Texts {
+  /// Files of dependencies: the core wants no text of them.
+  final Set<String> skip = {};
   final Map<String, Map<String, Map<String, Set<int>>>> byKind = {}; // kind -> file -> text -> offsets
   final Map<String, (String call, List<String> args)> calls = {}; // "file\u0000offset"
   final List<(String id, String body, String source)> funcs = [];
 
   void add(String kind, String file, String text, int offset) {
-    if (text.isEmpty) return;
+    if (text.isEmpty || skip.contains(file)) return;
     ((byKind[kind] ??= {})[file] ??= {})[text] ??= <int>{};
     byKind[kind]![file]![text]!.add(offset);
   }
@@ -82,7 +84,10 @@ class Program {
 
 /// A unit being lowered: its syntax, and the conversion of positions.
 class UnitInfo {
-  UnitInfo(this.prog, this.file, this.unit, this.source, this.lines);
+  UnitInfo(this.prog, this.file, this.unit, this.source, this.lines, {this.dep = false}) {
+    if (dep) prog.texts.skip.add(file);
+  }
+  final bool dep; // a file of a dependency: read so that calls into it are followed
   final Program prog;
   final String file; // relative to the root
   final CompilationUnit unit;
@@ -109,7 +114,7 @@ class UnitInfo {
     final off = args.leftParenthesis.offset;
     final p = pos(call, off);
     prog.texts.add('expr', file, normalized(call.beginToken, call.endToken), off);
-    prog.texts.calls['$file\u0000$off'] = (
+    if (!prog.texts.skip.contains(file)) prog.texts.calls['$file\u0000$off'] = (
       raw(call),
       [for (final s in slots) s == null ? '' : raw(s)],
     );
@@ -222,5 +227,5 @@ class UnitInfo {
     return lines.join('\n');
   }
 
-  void funcTexts(String id, AstNode n) => prog.texts.funcs.add((id, bodyText(n), sourceText(n)));
+  void funcTexts(String id, AstNode n) => prog.texts.skip.contains(file) ? null : prog.texts.funcs.add((id, bodyText(n), sourceText(n)));
 }

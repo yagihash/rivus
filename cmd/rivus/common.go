@@ -121,6 +121,9 @@ func readIR(path string) (*loaded, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
+	// an extractor may write the functions of the dependencies (marked dep):
+	// the ones nothing of the project reaches change nothing
+	prog.PruneDeps()
 	return &loaded{ir: prog, texts: ir.NewStreamTexts(prog)}, nil
 }
 
