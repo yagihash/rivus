@@ -84,6 +84,7 @@ type Form struct {
 	sites    [][]site // per block: the ssabuild instruction -> the IR instruction
 	def      map[ir.LocalID]defSite
 	cache    map[opKey]Ref
+	busy     map[opKey]bool // operands being resolved: a re-entry is a cycle of a malformed IR
 	allocPos map[ir.LocalID]defSite
 }
 
@@ -119,6 +120,7 @@ func Build(f *ir.Func) (*Form, error) {
 		useIdx:    map[opKey]int{},
 		def:       map[ir.LocalID]defSite{},
 		cache:     map[opKey]Ref{},
+		busy:      map[opKey]bool{},
 		allocPos:  map[ir.LocalID]defSite{},
 	}
 	s.classify()
@@ -179,6 +181,11 @@ func (s *Form) classify() {
 					continue
 				}
 				switch {
+				case in.Op == ir.OpLoad && k == 0 && writes[in.Dsts[0]] > 1:
+					// The load would be one of several writes of its
+					// destination, which SSA form could not tell apart: the
+					// variable stays in memory.
+					cand[a] = false
 				case in.Op == ir.OpLoad && k == 0:
 					// With a recover root, a variable read where only the
 					// recover path leads is the named result that a
@@ -352,6 +359,14 @@ func (s *Form) Operand(block, instr, k int) Ref {
 	if r, ok := s.cache[key]; ok {
 		return r
 	}
+	if s.busy[key] {
+		// A use that comes before its definition can lead back to itself
+		// (a store of the load of the same variable); only a malformed IR
+		// does. Nothing reaches it.
+		return Ref{Kind: RefUndef}
+	}
+	s.busy[key] = true
+	defer delete(s.busy, key)
 	var l ir.LocalID
 	b := s.Func.Blocks[block]
 	if instr == len(b.Instrs) {
