@@ -9,12 +9,15 @@ import (
 
 // analyze runs the function-local analysis to a fixed point.
 func (s *state) analyze() {
-	s.prepareLocs()
-	s.seed()
 	limit := time.Now().Add(s.eng.opts.FuncTimeout)
 	if d := s.eng.deadline; !d.IsZero() && d.Before(limit) {
 		limit = d
 	}
+	if !s.prepareLocs(limit) {
+		s.exceeded = true
+		return
+	}
+	s.seed()
 	steps := 0
 	for iter := 0; iter < 50; iter++ {
 		s.changed = false

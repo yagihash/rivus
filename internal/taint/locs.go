@@ -2,6 +2,7 @@ package taint
 
 import (
 	"sort"
+	"time"
 
 	"github.com/yagihash/rivus/internal/ir"
 	"github.com/yagihash/rivus/internal/sg"
@@ -21,7 +22,13 @@ func suffix(locs []Loc, seg string) []Loc {
 
 // prepareLocs numbers the values of the function and computes, to a fixed
 // point, the locations every value refers to.
-func (s *state) prepareLocs() {
+//
+// The fixed point is bounded like the rest of the analysis of a function: it
+// answers to the time limits (FuncTimeout, and the time limit of the run), and
+// to a ceiling on the number of locations it holds (memory). It reports false
+// when it was cut; the analysis of the function is then given up as one that
+// exceeded its budget (depth_limit).
+func (s *state) prepareLocs(limit time.Time) bool {
 	s.numbering = map[*sg.Value]int{}
 	s.locSet = map[*sg.Value]map[Loc]bool{}
 	s.locCache = map[*sg.Value][]Loc{}
@@ -56,9 +63,15 @@ func (s *state) prepareLocs() {
 		}
 	}
 	s.locsFinal = false
-	for {
+	total := 0
+	ok := true
+	for ok {
 		changed := false
 		for _, v := range vals {
+			if time.Now().After(limit) {
+				ok = false
+				break
+			}
 			for _, l := range s.computeLocs(v) {
 				// a path that grows round a loop (a load of a load of ...)
 				// is cut where the cells are: the fixed point must exist
@@ -71,7 +84,13 @@ func (s *state) prepareLocs() {
 				if !m[l] {
 					m[l] = true
 					changed = true
+					if total++; total > maxLocPositions {
+						ok = false
+					}
 				}
+			}
+			if !ok {
+				break
 			}
 		}
 		if !changed {
@@ -79,7 +98,13 @@ func (s *state) prepareLocs() {
 		}
 	}
 	s.locsFinal = true
+	return ok
 }
+
+// maxLocPositions bounds the (value, location) pairs of one function. A
+// function of ordinary code holds thousands; this is where the memory of one
+// function, not its time, becomes the problem.
+const maxLocPositions = 5_000_000
 
 // locs returns the locations value v refers to, in a stable order.
 func (s *state) locs(v *sg.Value) []Loc {
