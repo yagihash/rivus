@@ -1,0 +1,63 @@
+name: corpus
+publish_to: none
+environment:
+  sdk: ^3.10.0
+# Popular pure-Dart packages of the pub ecosystem. The extractor reads the code
+# the project imports, and the code of what that imports: this project imports
+# every one of them, so all of it goes through the extractor.
+dependencies:
+  archive: any
+  args: any
+  async: any
+  build: any
+  built_collection: any
+  built_value: any
+  characters: any
+  charcode: any
+  collection: any
+  convert: any
+  crypto: any
+  csv: any
+  dart_jsonwebtoken: any
+  dart_style: any
+  dio: any
+  equatable: any
+  fixnum: any
+  glob: any
+  grpc: any
+  html: any
+  http: any
+  http_parser: any
+  intl: any
+  io: any
+  jose: any
+  json_annotation: any
+  logging: any
+  markdown: any
+  meta: any
+  mime: any
+  mustache_template: any
+  path: any
+  petitparser: any
+  postgres: any
+  protobuf: any
+  pub_semver: any
+  rxdart: any
+  shelf: any
+  shelf_router: any
+  shelf_static: any
+  shelf_web_socket: any
+  source_span: any
+  sqlite3: any
+  stack_trace: any
+  stream_channel: any
+  stream_transform: any
+  string_scanner: any
+  tar: any
+  test_api: any
+  uuid: any
+  watcher: any
+  web_socket_channel: any
+  xml: any
+  yaml: any
+  yaml_edit: any
