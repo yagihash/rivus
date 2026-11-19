@@ -35,8 +35,10 @@ class _Try {
 }
 
 class _Jump {
-  _Jump(this.labels, this.breakTo, this.continueTo, this.depth);
+  _Jump(this.labels, this.breakTo, this.continueTo, this.depth, {this.unlabeledBreak = true});
   final Set<String> labels;
+  /// An unlabeled `break` leaves the innermost loop or switch: a labeled block is not one (#59).
+  final bool unlabeledBreak;
   final Blk breakTo;
   final Blk? continueTo;
   final int depth; // the handlers above this depth run their finally
@@ -375,7 +377,7 @@ class FnLower {
           // a labeled block (`done: { ... break done; ... }`): the break goes to what follows it
           final labels = _takeLabels();
           final after = newBlock();
-          _jumps.add(_Jump(labels, after, null, _handlers.length));
+          _jumps.add(_Jump(labels, after, null, _handlers.length, unlabeledBreak: false));
           stmt(inner);
           _jumps.removeLast();
           jump(after);
@@ -622,7 +624,7 @@ class FnLower {
     _Jump? target;
     for (var i = _jumps.length - 1; i >= 0; i--) {
       final j = _jumps[i];
-      if (label == null ? (isBreak || j.continueTo != null) : j.labels.contains(label)) {
+      if (label == null ? (isBreak ? j.unlabeledBreak : j.continueTo != null) : j.labels.contains(label)) {
         target = j;
         break;
       }

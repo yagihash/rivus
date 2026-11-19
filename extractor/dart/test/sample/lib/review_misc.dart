@@ -157,3 +157,33 @@ void recordField() {
   final p = (source(), 'b'); // @source(rv-record)
   sink(p.first()); // @sink(rv-record)
 }
+
+// --- #59: an unlabeled break in a labeled block leaves the loop around it, not the block
+
+String breakInLabeledBlockWhile(bool b) {
+  var buf = '';
+  while (true) {
+    step:
+    {
+      final chunk = source(); // @source(rv-break-labeled-while)
+      if (b) break;
+      if (chunk.isEmpty) break step;
+      buf += chunk;
+    }
+  }
+  sink(buf); // @sink(rv-break-labeled-while)
+  return buf;
+}
+
+void breakInLabeledBlockFor(List<String> xs) {
+  var q = 'safe';
+  for (final x in xs) {
+    q = source(); // @source(rv-break-labeled-for)
+    blk:
+    {
+      if (x.isEmpty) break;
+    }
+    q = 'fixed';
+  }
+  sink(q); // @sink(rv-break-labeled-for)
+}
