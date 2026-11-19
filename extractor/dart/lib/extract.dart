@@ -1,5 +1,8 @@
 // The driver: resolves the code, lowers every function with a body and writes
 // the stream.
+import 'dart:io';
+
+import 'package:analyzer/dart/analysis/analysis_context.dart';
 import 'package:analyzer/dart/analysis/analysis_context_collection.dart';
 import 'package:analyzer/dart/analysis/results.dart';
 import 'package:analyzer/dart/ast/ast.dart';
@@ -23,21 +26,32 @@ Future<void> extract(String root, StringSink sink, {bool deps = true}) async {
 
   // Resolve everything first: the call graph needs all of the classes.
   final units = <UnitInfo>[];
+  // The files of the project: the ones the analysis takes, and the ones that
+  // analysis_options.yaml leaves out of it (the generated code: *.g.dart and
+  // *.freezed.dart are the usual `exclude`), which are code of the project all the same.
+  final paths = <String>{};
   for (final context in collection.contexts) {
     for (final path in context.contextRoot.analyzedFiles()) {
-      if (!path.endsWith('.dart') || !p.isWithin(root, path) || _skipped(root, path)) continue;
-      final r = await context.currentSession.getResolvedUnit(path);
-      if (r is! ResolvedUnitResult) {
-        out.loadError(p.relative(path, from: root), 'could not be resolved');
-        continue;
-      }
-      for (final d in r.diagnostics) {
-        if (d.diagnosticCode.type.name == 'COMPILE_TIME_ERROR') {
-          out.loadError(p.relative(path, from: root), d.message);
-        }
-      }
-      units.add(UnitInfo(prog, p.relative(path, from: root), r.unit, r.content, r.lineInfo));
+      if (path.endsWith('.dart') && p.isWithin(root, path) && !_skipped(root, path)) paths.add(path);
     }
+  }
+  for (final e in Directory(root).listSync(recursive: true, followLinks: false)) {
+    if (e is File && e.path.endsWith('.dart') && !_skipped(root, e.path)) paths.add(p.normalize(e.path));
+  }
+  for (final path in paths.toList()..sort()) {
+    final context = _contextOf(collection, path);
+    if (context == null) continue; // not in any package of the project
+    final r = await context.currentSession.getResolvedUnit(path);
+    if (r is! ResolvedUnitResult) {
+      out.loadError(p.relative(path, from: root), 'could not be resolved');
+      continue;
+    }
+    for (final d in r.diagnostics) {
+      if (d.diagnosticCode.type.name == 'COMPILE_TIME_ERROR') {
+        out.loadError(p.relative(path, from: root), d.message);
+      }
+    }
+    units.add(UnitInfo(prog, p.relative(path, from: root), r.unit, r.content, r.lineInfo));
   }
   // The dependencies (not the SDK): the libraries the code imports, and what
   // they import. Their functions are marked dep; the core keeps the ones the
@@ -89,6 +103,17 @@ Future<void> extract(String root, StringSink sink, {bool deps = true}) async {
     out.type(id, prog.types[id]!.toList()..sort());
   }
   prog.texts.write(out);
+}
+
+/// The context of the package the file is in: the one whose root is the closest
+/// above it. (`contextFor` does not find a file that analysis_options.yaml leaves out.)
+AnalysisContext? _contextOf(AnalysisContextCollection collection, String path) {
+  AnalysisContext? best;
+  for (final c in collection.contexts) {
+    final r = c.contextRoot.root.path;
+    if (p.isWithin(r, path) && (best == null || r.length > best.contextRoot.root.path.length)) best = c;
+  }
+  return best;
 }
 
 bool _skipped(String root, String path) {
