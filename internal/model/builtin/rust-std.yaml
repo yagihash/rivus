@@ -91,6 +91,22 @@ propagators:
     flows: [{from: args, to: result}]
   - symbol: std::sync::Mutex::lock
     flows: [{from: args, to: result}]
+  - symbol: std::sync::Mutex::try_lock
+    flows: [{from: args, to: result}]
+  - symbol: std::sync::Mutex::into_inner
+    flows: [{from: args, to: result}]
+  - symbol: std::sync::RwLock::new
+    flows: [{from: args, to: result}]
+  - symbol: std::sync::RwLock::read
+    flows: [{from: args, to: result}]
+  - symbol: std::sync::RwLock::write
+    flows: [{from: args, to: result}]
+  - symbol: std::sync::RwLock::try_read
+    flows: [{from: args, to: result}]
+  - symbol: std::sync::RwLock::try_write
+    flows: [{from: args, to: result}]
+  - symbol: std::sync::RwLock::into_inner
+    flows: [{from: args, to: result}]
   - symbol: std::string::String::new
     flows: [{from: args, to: result}]
   - symbol: std::string::String::with_capacity

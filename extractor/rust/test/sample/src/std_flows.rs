@@ -29,3 +29,10 @@ pub fn pushed() {
     s.push_str(&std::env::args().nth(1).unwrap()); // @source(std-push)
     let _ = Command::new(&s).output(); // @sink(std-push)
 }
+
+pub fn rwlock_value() {
+    let a = std::env::args().nth(1).unwrap(); // @source(std-rwlock)
+    let l = std::sync::RwLock::new(a);
+    let s = l.read().unwrap().clone();
+    let _ = Command::new(&s).output(); // @sink(std-rwlock)
+}
