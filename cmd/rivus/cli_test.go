@@ -338,3 +338,35 @@ func TestResolveFromAnIRIndexTellsGoneFromNotAnalysed(t *testing.T) {
 		t.Errorf("a package that is not in the stream: %q", r)
 	}
 }
+
+// The IR of -ir is not the code of the directory the command runs in, so
+// without an explicit -C the output names no revision; with -C it does (#12).
+func TestIRInputHasNoTargetUnlessDirIsGiven(t *testing.T) {
+	dir := t.TempDir()
+	irFile := filepath.Join(dir, "g.jsonl")
+	if err := os.WriteFile(irFile, rivus(t, "extract", "-texts", "./cases/grpcsrv"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	hasTarget := func(args ...string) bool {
+		var out struct {
+			Target *struct {
+				Revision string `json:"revision"`
+			} `json:"target"`
+		}
+		if err := json.Unmarshal(rivus(t, args...), &out); err != nil {
+			t.Fatal(err)
+		}
+		return out.Target != nil
+	}
+	if !hasTarget("sites", "-C", ".") {
+		t.Skip("the test data is not in a git working tree")
+	}
+	for _, cmd := range []string{"sites", "analyze"} {
+		if hasTarget(cmd, "-ir", irFile) {
+			t.Errorf("%s -ir: a target is recorded from the current directory", cmd)
+		}
+		if !hasTarget(cmd, "-ir", irFile, "-C", ".") {
+			t.Errorf("%s -ir -C .: the target the user asked for is missing", cmd)
+		}
+	}
+}

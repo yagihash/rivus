@@ -17,6 +17,7 @@ import (
 	"github.com/yagihash/rivus/internal/model"
 	"github.com/yagihash/rivus/internal/model/builtin"
 	"github.com/yagihash/rivus/internal/report"
+	"github.com/yagihash/rivus/internal/vcs"
 )
 
 // multiFlag collects a repeatable string flag.
@@ -27,7 +28,10 @@ func (m *multiFlag) Set(v string) error { *m = append(*m, v); return nil }
 
 // common holds the flags shared by the commands that analyse code.
 type common struct {
-	dir       string
+	dir string
+	// dirSet is whether -C was given. The IR of -ir does not come from the
+	// current directory, so the directory names no revision unless it is asked.
+	dirSet    bool
 	rules     multiFlag
 	noBuiltin bool
 	// noProject leaves out the rules found in the analysed directory.
@@ -42,7 +46,11 @@ type common struct {
 }
 
 func (c *common) register(fs *flag.FlagSet) {
-	fs.StringVar(&c.dir, "C", ".", "directory to analyse from")
+	c.dir = "."
+	fs.Func("C", "directory to analyse from (default \".\")", func(v string) error {
+		c.dir, c.dirSet = v, true
+		return nil
+	})
 	fs.Var(&c.rules, "rules", "additional rule file (repeatable)")
 	fs.BoolVar(&c.noBuiltin, "no-builtin-rules", false, "do not load the built-in rules")
 	fs.BoolVar(&c.noProject, "no-project-rules", false, "do not load the rules found in <dir>/.rivus/rules/*.yaml")
@@ -253,4 +261,14 @@ func writeJSON(w io.Writer, v any) error {
 		return fmt.Errorf("write output: %w", err)
 	}
 	return nil
+}
+
+// target is the revision of the code that was analysed. For an IR stream the
+// code is not in the directory the command runs in, so a revision is recorded
+// only when -C says where it is (#12).
+func (c *common) target(fromIR bool) *vcs.Target {
+	if fromIR && !c.dirSet {
+		return nil
+	}
+	return vcs.Detect(c.dir)
 }

@@ -42,7 +42,7 @@ func runSites(args []string) error {
 	}
 	expandSubtypes(rules, l.ir)
 	res := sites.Enumerate(l.ir, l.texts, rules)
-	out := sitesOutput{SchemaVersion: "rivus.sites/1", Target: vcs.Detect(c.dir), LoadErrors: l.loadErrors(), Sites: []*sites.Site{}}
+	out := sitesOutput{SchemaVersion: "rivus.sites/1", Target: c.target(*irFile != ""), LoadErrors: l.loadErrors(), Sites: []*sites.Site{}}
 	for _, s := range res.Sites {
 		if *role == "" || s.Role == *role {
 			out.Sites = append(out.Sites, s)

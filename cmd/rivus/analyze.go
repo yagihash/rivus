@@ -15,7 +15,6 @@ import (
 	"github.com/yagihash/rivus/internal/sg"
 	"github.com/yagihash/rivus/internal/sites"
 	"github.com/yagihash/rivus/internal/taint"
-	"github.com/yagihash/rivus/internal/vcs"
 )
 
 // analyzeOpts are the flags common to the commands that run the analysis.
@@ -158,7 +157,7 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 		}
 	}
 	rep := report.Build(packages, l.loadErrors(), st, res, rules)
-	rep.Target = vcs.Detect(o.dir)
+	rep.Target = o.target(o.irFile != "")
 	return rep, nil
 }
 
