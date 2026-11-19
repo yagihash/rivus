@@ -495,6 +495,14 @@ mod tests {
     }
 
     // a build script of another name was read as shipped code, and its main became an entry (yagihash/rivus #47)
+    // the library and its test build are one crate, told apart by the name of the fragment (yagihash/rivus #68)
+    #[test]
+    fn a_fragment_says_its_crate_and_whether_it_is_a_test_build() {
+        assert_eq!(fragment_origin(Path::new("/t/frags/app-1234.jsonl")), ("app".to_string(), false));
+        assert_eq!(fragment_origin(Path::new("/t/frags/app-test-1234.jsonl")), ("app".to_string(), true));
+        assert_eq!(fragment_origin(Path::new("/t/frags/my_crate-test-7.jsonl")), ("my_crate".to_string(), true));
+    }
+
     #[test]
     fn the_scratch_directory_is_private_exclusive_and_removed() {
         let (a, b) = (ScratchDir::create().unwrap(), ScratchDir::create().unwrap());

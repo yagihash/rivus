@@ -208,3 +208,29 @@ impl Texts {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn at(file: &str, line: usize, col: usize) -> Pos {
+        Pos { file: file.to_string(), line, col }
+    }
+
+    // a text is written once for all the positions it belongs to, in the order the stream has: cond, expr, snippet
+    #[test]
+    fn texts_are_grouped_by_text_and_written_in_the_order_of_kinds() {
+        let mut t = Texts::default();
+        t.add("snippet", &at("a.rs", 1, 10), "x();".into());
+        t.add("expr", &at("a.rs", 1, 10), "x()".into());
+        t.add("expr", &at("a.rs", 3, 30), "x()".into());
+        t.add("cond", &at("a.rs", 1, 5), "a".into());
+        t.add("expr", &Pos::none(), "nowhere".into());
+        t.add("expr", &at("a.rs", 4, 40), String::new());
+        let mut out = Vec::new();
+        t.write(&mut out);
+        let kinds: Vec<&str> = out.iter().map(|v| v["text"]["kind"].as_str().unwrap_or("")).collect();
+        assert_eq!(kinds, vec!["cond", "expr", "snippet"]);
+        assert_eq!(out[1]["text"]["offsets"], json!([100_010, 300_030]));
+    }
+}

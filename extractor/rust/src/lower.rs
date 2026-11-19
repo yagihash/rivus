@@ -1420,6 +1420,55 @@ mod tests {
 
     // a line that starts with a full-width space (U+3000, three bytes) in the middle of a statement
     // made the slice panic, and with it the extraction of the whole crate (yagihash/rivus #43)
+    fn lines(text: &str) -> Vec<String> {
+        text.lines().map(|l| l.to_string()).collect()
+    }
+
+    #[test]
+    fn clean_symbol_drops_the_generics_and_names_core_as_std() {
+        assert_eq!(clean_symbol("core::option::Option::<T>::unwrap"), "std::option::Option::unwrap");
+        assert_eq!(clean_symbol("alloc::vec::Vec::<u8, A>::push"), "std::vec::Vec::push");
+        assert_eq!(clean_symbol("crate_a::util::run"), "crate_a::util::run");
+        // an impl is named as it is
+        assert_eq!(clean_symbol("<W<T> as Tr>::m"), "<W<T> as Tr>::m");
+        assert_eq!(clean_symbol("a::f::<Vec<u8>>::g"), "a::f::g");
+    }
+
+    #[test]
+    fn snippet_takes_the_lines_and_removes_the_common_indent() {
+        let l = lines("fn f() {\n    if x {\n        y();\n    }\n}");
+        assert_eq!(snippet(&l, 2, 4), "if x {\n    y();\n}");
+        assert_eq!(snippet(&l, 0, 2), "");
+        assert_eq!(snippet(&l, 9, 10), "");
+        // at most twelve lines
+        let long = lines(&(0..30).map(|i| format!("l{}", i)).collect::<Vec<_>>().join("\n"));
+        assert_eq!(snippet(&long, 1, 30).lines().count(), 12);
+    }
+
+    #[test]
+    fn cond_of_finds_the_condition_of_an_if_or_a_while() {
+        let l = lines("    if a && b {\n    } else if c {\n    while let Some(x) = it.next() {\n    let y = 1;");
+        assert_eq!(cond_of(&l, 1), "a && b");
+        assert_eq!(cond_of(&l, 2), "c");
+        assert_eq!(cond_of(&l, 3), "Some(x) = it.next()");
+        assert_eq!(cond_of(&l, 4), "");
+        assert_eq!(cond_of(&l, 0), "");
+        assert_eq!(cond_of(&l, 99), "");
+    }
+
+    #[test]
+    fn span_text_joins_the_lines_of_a_span() {
+        let l = lines("let v = f(\n    a,\n    b,\n);");
+        assert_eq!(span_text(&l, 1, 9, 4, 2), "f( a, b, )");
+        assert_eq!(span_text(&l, 1, 9, 1, 12), "f(");
+        assert_eq!(span_text(&l, 0, 1, 1, 1), "");
+        assert_eq!(span_text(&l, 1, 1, 9, 1), "");
+        // a column past the end, and characters that are wider than a byte
+        let w = lines("let s = \"日本語\";");
+        assert_eq!(span_text(&w, 1, 10, 1, 13), "日本語");
+        assert_eq!(span_text(&w, 1, 10, 1, 99), "日本語\";");
+    }
+
     // two traits of the same name in two modules are two traits (yagihash/rivus #67)
     #[test]
     fn traits_are_compared_by_path() {
