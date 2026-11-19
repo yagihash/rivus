@@ -1,6 +1,9 @@
 package main
 
 import (
+	"bytes"
+
+	"github.com/yagihash/rivus/internal/ir"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -30,5 +33,29 @@ func TestRustExtractor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the extractor failed: %v", err)
 	}
-	checkSampleFlows(t, stream, filepath.Join(root, "rules.yaml"), root, []string{"src/lib.rs", "src/std_flows.rs", "src/traits.rs", "src/async_flows.rs", "src/unsafe_flows.rs", "src/global_flows.rs", "src/review_flows.rs"}, 30)
+	checkSampleFlows(t, stream, filepath.Join(root, "rules.yaml"), root, []string{"src/lib.rs", "src/std_flows.rs", "src/traits.rs", "src/async_flows.rs", "src/unsafe_flows.rs", "src/global_flows.rs", "src/review_flows.rs"}, 33)
+
+	// What the extractor could not express is said in the IR (REVIEW-2026-11-19, the rule
+	// that nothing is left out without a trace): the sample has nothing of the kind, and a
+	// call of a foreign function says that it leaves the language.
+	prog, err := ir.Read(bytes.NewReader(stream))
+	if err != nil {
+		t.Fatal(err)
+	}
+	foreign := false
+	for _, f := range prog.Funcs {
+		for _, b := range f.Blocks {
+			for _, in := range b.Instrs {
+				if in.Op == ir.OpUnsupported {
+					t.Errorf("%s: unsupported: %s", f.ID, in.Reason)
+				}
+				if in.Op == ir.OpCall && in.Callee != nil && in.Callee.FFI && f.ID == "sample::review_flows::foreign_call" {
+					foreign = true
+				}
+			}
+		}
+	}
+	if !foreign {
+		t.Error("the call of a foreign function is not marked ffi")
+	}
 }
