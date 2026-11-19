@@ -139,6 +139,25 @@ RIVUS_TEST_MODULE=/path/to/module go test ./internal/ssacheck -run TestAgainstGo
 - 対象言語のビルド・コード生成（`go generate`、`build_runner` など）は rivus の責務外。事前に済ませてください
 - Dart / Rust の解析には、それぞれのツールチェイン（Dart SDK、固定した nightly の Rust）が必要です
 
+## 信頼できないコードを解析するとき
+
+**解析する対象のコードが、解析する人のマシンで動くことがあります。** 採用前のサードパーティの確認や、怪しいリポジトリのトリアージにも使うツールなので、先に書いておきます。
+
+| 言語 | 何が動くか |
+|---|---|
+| Rust | extractor が、対象のワークスペースに `cargo check` を走らせます（rustc の代わりに driver を差し込むだけで、**対象をコンパイルする**）。`build.rs`、proc macro、`[build-dependencies]` が実行されます |
+| Go | `go/packages` が `go list` を走らせます。依存モジュールの取得（ネットワーク）が起きることがあります。cgo のあるパッケージは、cgo の前処理が走ります |
+| Dart | extractor 自身は、`package:analyzer` で静的に読むだけです。ただし、前提の手順（`dart pub get`、`build_runner` などのコード生成）は、対象の依存と生成器のコードを実行します |
+
+信頼できないリポジトリは、使い捨ての環境（コンテナや VM）で解析してください。たとえば、依存を先に取得してから、ネットワークを切ったコンテナで、ソースを読み取り専用で渡す形です（Rust の extractor は、作業用のディレクトリを、一時ディレクトリに作ります）。
+
+```sh
+# 例: 依存の取得は先に済ませ、解析はネットワークなしで、ソースは読み取り専用
+docker run --rm --network none -v "$PWD":/src:ro -w /src my-rivus-image rivus analyze ./...
+```
+
+`my-rivus-image` は、rivus と、対象の言語のツールチェインを入れた、自分で用意するイメージです。
+
 ## ドキュメント
 
 - [docs/BRIEF.md](docs/BRIEF.md): 初期ブリーフ（改訂注記つき）
