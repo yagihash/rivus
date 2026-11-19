@@ -262,15 +262,32 @@ fn cli() -> ExitCode {
             return ExitCode::from(1);
         }
     }
-    merge(&frags);
+    // a fragments directory that cannot be listed is a program that is gone: the stream would be the header alone
+    let files = match fragment_files(&frags) {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("rivus-rust: cannot read the extracted code in {}: {}", frags.display(), e);
+            return ExitCode::from(1);
+        }
+    };
+    merge(files);
     ExitCode::SUCCESS
+}
+
+/// The files the driver wrote, in name order. A directory that cannot be read, or an entry that cannot be
+/// read, is an error: nothing of the program may go missing without a trace.
+fn fragment_files(frags: &Path) -> std::io::Result<Vec<PathBuf>> {
+    let mut files = Vec::new();
+    for e in std::fs::read_dir(frags)? {
+        files.push(e?.path());
+    }
+    files.sort();
+    Ok(files)
 }
 
 /// Writes the stream: the header, the functions (a function the workspace
 /// compiled twice, as a library and as a test, once), and the rest.
-fn merge(frags: &Path) {
-    let mut files: Vec<PathBuf> = std::fs::read_dir(frags).map(|d| d.filter_map(|e| e.ok().map(|e| e.path())).collect()).unwrap_or_default();
-    files.sort();
+fn merge(files: Vec<PathBuf>) {
     println!("{}", json!({"schema_version": irjson::SCHEMA_VERSION}));
     // One function per name. Two crates that have a function of the same name (the same crate in two
     // versions that do not agree, or the library and its tests) cannot both be the program: the choice is
@@ -360,6 +377,17 @@ mod tests {
         let path = a.path().to_path_buf();
         drop(a);
         assert!(!path.exists(), "the directory is left behind");
+    }
+
+    // a directory that cannot be listed gave a stream of the header alone and the exit code 0 (yagihash/rivus #46)
+    #[test]
+    fn a_fragment_directory_that_cannot_be_read_is_an_error() {
+        let dir = ScratchDir::create().unwrap();
+        std::fs::write(dir.path().join("b"), "").unwrap();
+        std::fs::write(dir.path().join("a"), "").unwrap();
+        let names: Vec<_> = fragment_files(dir.path()).unwrap().iter().map(|p| p.file_name().unwrap().to_string_lossy().to_string()).collect();
+        assert_eq!(names, ["a", "b"]);
+        assert!(fragment_files(&dir.path().join("gone")).is_err());
     }
 
     #[test]
