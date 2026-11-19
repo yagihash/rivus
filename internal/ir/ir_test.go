@@ -110,6 +110,17 @@ func TestValidateRejects(t *testing.T) {
 		{"call without callee", func(f *Func) { f.Blocks[1].Instrs[0].Callee = nil }, "no callee"},
 		{"argument positions", func(f *Func) { f.Blocks[1].Instrs[0].ArgPos = []Pos{{}, {}} }, "argument positions"},
 		{"entry is not a root", func(f *Func) { f.Roots = []BlockID{3} }, "entry block is not a root"},
+		{"declared parameter without a param instruction", func(f *Func) { f.Params = append(f.Params, Param{Name: "y"}) }, "has 0 param instructions"},
+		{"two param instructions for one parameter", func(f *Func) {
+			f.Blocks[0].Instrs = append([]Instr{f.Blocks[0].Instrs[0]}, f.Blocks[0].Instrs...)
+		}, "has 2 param instructions"},
+		{"captured before a declared parameter", func(f *Func) {
+			f.Params = []Param{{Name: "c", Captured: true}, {Name: "y"}}
+			f.Blocks[0].Instrs[0].Index = 0
+			in := f.Blocks[0].Instrs[0]
+			in.Index = 1
+			f.Blocks[0].Instrs = append([]Instr{in}, f.Blocks[0].Instrs...)
+		}, "after a captured one"},
 		{"unknown type class", func(f *Func) { f.Locals[0].Class = "huge" }, "unknown type class"},
 	}
 	for _, c := range cases {

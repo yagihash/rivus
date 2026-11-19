@@ -81,9 +81,15 @@ func (f *Func) Validate() error {
 		}
 	}
 	nparams := 0
+	seenCaptured := false
 	for _, pa := range f.Params {
 		if !pa.Class.valid() {
 			return fmt.Errorf("parameter %q has the unknown type class %q", pa.Name, pa.Class)
+		}
+		if pa.Captured {
+			seenCaptured = true
+		} else if seenCaptured {
+			return fmt.Errorf("parameter %q is declared after a captured one (the captured values come last)", pa.Name)
 		}
 		nparams++
 	}
@@ -93,6 +99,7 @@ func (f *Func) Validate() error {
 		}
 		return nil
 	}
+	paramInstrs := make([]int, nparams)
 	for i, b := range f.Blocks {
 		where := fmt.Sprintf("block %d", i)
 		if b.ID != BlockID(i) {
@@ -103,9 +110,17 @@ func (f *Func) Validate() error {
 			if err := validateInstr(in, nparams, w, local); err != nil {
 				return err
 			}
+			if in.Op == OpParam {
+				paramInstrs[in.Index]++
+			}
 		}
 		if err := validateTerm(f, b, where, local, roots); err != nil {
 			return err
+		}
+	}
+	for i, n := range paramInstrs {
+		if n != 1 {
+			return fmt.Errorf("parameter %d has %d param instructions, want exactly 1", i, n)
 		}
 	}
 	return nil
