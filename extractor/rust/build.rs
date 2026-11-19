@@ -6,5 +6,13 @@ fn main() {
     let sysroot = String::from_utf8(out.stdout).unwrap();
     let lib = format!("{}/lib", sysroot.trim());
     println!("cargo:rustc-link-arg=-Wl,-rpath,{}", lib);
+    // the nightly the extractor is pinned to is written once, in rust-toolchain.toml
+    let toml = std::fs::read_to_string("rust-toolchain.toml").expect("rust-toolchain.toml");
+    let channel = toml
+        .lines()
+        .find_map(|l| l.trim().strip_prefix("channel").and_then(|r| r.trim().strip_prefix('=')).map(|r| r.trim().trim_matches('"').to_string()))
+        .expect("a channel in rust-toolchain.toml");
+    println!("cargo:rustc-env=RIVUS_TOOLCHAIN={}", channel);
+    println!("cargo:rerun-if-changed=rust-toolchain.toml");
     println!("cargo:rerun-if-changed=build.rs");
 }

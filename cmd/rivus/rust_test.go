@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -57,5 +59,54 @@ func TestRustExtractor(t *testing.T) {
 	}
 	if !foreign {
 		t.Error("the call of a foreign function is not marked ffi")
+	}
+}
+
+// A toolchain that is not there is said as that, not as code that does not compile
+// (yagihash/rivus #49): a rustc that fails stands for the missing nightly.
+func TestRustExtractorMissingToolchain(t *testing.T) {
+	bin := os.Getenv("RIVUS_RUST")
+	if bin == "" {
+		t.Skip("RIVUS_RUST is not set")
+	}
+	bin, err := filepath.Abs(bin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := filepath.Abs("../../extractor/rust/test/sample")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fake := t.TempDir()
+	if err := os.WriteFile(filepath.Join(fake, "rustc"), []byte("#!/bin/sh\necho 'error: toolchain is not installed' >&2\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(bin, root)
+	cmd.Env = append(os.Environ(), "PATH="+fake+string(os.PathListSeparator)+os.Getenv("PATH"))
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err == nil {
+		t.Fatal("the extractor succeeded without its toolchain")
+	}
+	if !bytes.Contains(stderr.Bytes(), []byte("rustup toolchain install")) || bytes.Contains(stderr.Bytes(), []byte("the code has to compile")) {
+		t.Errorf("the message does not say the toolchain is missing: %s", stderr.String())
+	}
+}
+
+// The nightly is written in one place, rust-toolchain.toml: the extractor reads it when it is built, and
+// the install hint of the command must name the same one.
+func TestRustToolchainHintMatches(t *testing.T) {
+	b, err := os.ReadFile("../../extractor/rust/rust-toolchain.toml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile(`channel\s*=\s*"([^"]+)"`).FindSubmatch(b)
+	if m == nil {
+		t.Fatal("no channel in rust-toolchain.toml")
+	}
+	o := &analyzeOpts{rustExtractor: "rivus-rust-does-not-exist-xyz"}
+	_, err = o.extractorCommand(langRust)
+	if err == nil || !strings.Contains(err.Error(), string(m[1])) {
+		t.Errorf("the install hint does not name %s: %v", m[1], err)
 	}
 }

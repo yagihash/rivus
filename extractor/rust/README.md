@@ -38,9 +38,10 @@ is compiled does not know the others, so the stream is merged first and the cand
 then (the same for `Drop::drop` of a type of another crate). Closures are the exception: the candidates
 of a call of a function value are the closures of the crate that makes the call.
 
-The extractor is pinned to one nightly (`rust-toolchain.toml`, `TOOLCHAIN` in `src/main.rs`):
-`rustc_public` is unstable, and moves with the compiler. To move it, change the two, and
-fix what the new compiler broke.
+The extractor is pinned to one nightly, written in `rust-toolchain.toml` (`build.rs` hands it to the code):
+`rustc_public` is unstable, and moves with the compiler. To move it, change that file and
+the install hint in `cmd/rivus/lang.go` (a test checks they agree), and fix what the new compiler
+broke. The extractor checks at start that the nightly is installed, and says how to install it if not.
 
 Test: `RIVUS_RUST=$PWD/extractor/rust/target/debug/rivus-rust go test -run TestRustExtractor ./cmd/rivus`.
 The sample is `test/sample`, with `@source(tag)` and `@sink(tag)` annotations.

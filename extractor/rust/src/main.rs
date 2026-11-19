@@ -24,7 +24,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
 /// The toolchain the extractor is built with and runs rustc with.
-const TOOLCHAIN: &str = "nightly-2026-11-15";
+/// It is read from rust-toolchain.toml by build.rs: the nightly is written in that one place.
+const TOOLCHAIN: &str = env!("RIVUS_TOOLCHAIN");
 
 /// Whether rustc is asked to compile the build script of a package: cargo names its crate `build_script_<name>`
 /// (`build_script_build` for build.rs, and the name of the file for `build = "codegen.rs"`).
@@ -226,11 +227,27 @@ fn cli() -> ExitCode {
         return ExitCode::from(1);
     }
     let exe = std::env::current_exe().expect("the path of the extractor");
-    let sysroot = Command::new("rustc")
-        .args([&format!("+{}", TOOLCHAIN), "--print", "sysroot"])
-        .output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-        .unwrap_or_default();
+    // The toolchain has to be there: a missing one is said as that, not as code that does not compile.
+    let sysroot = match Command::new("rustc").args([&format!("+{}", TOOLCHAIN), "--print", "sysroot"]).output() {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).trim().to_string(),
+        r => {
+            let why = match r {
+                Ok(o) => String::from_utf8_lossy(&o.stderr).trim().to_string(),
+                Err(e) => format!("cannot run rustc: {}", e),
+            };
+            eprintln!("rivus-rust: the toolchain {} is needed ({}); install it:", TOOLCHAIN, why);
+            eprintln!("  rustup toolchain install {} --profile minimal -c rustc-dev -c llvm-tools -c rust-src", TOOLCHAIN);
+            return ExitCode::from(1);
+        }
+    };
+    // the library path of the compiler goes in front of what the environment has, which stays
+    let with_lib = |var: &str| -> String {
+        let lib = format!("{}/lib", sysroot);
+        match std::env::var(var) {
+            Ok(old) if !old.is_empty() => format!("{}:{}", lib, old),
+            _ => lib,
+        }
+    };
 
     let mut check = vec!["check", "--workspace", "--quiet"];
     if include_tests {
@@ -248,8 +265,8 @@ fn cli() -> ExitCode {
         .env("RIVUS_RUST_DRIVER", "1")
         .env("RIVUS_IR_DIR", &frags)
         .env("RIVUS_ROOT", &root)
-        .env("DYLD_FALLBACK_LIBRARY_PATH", format!("{}/lib", sysroot))
-        .env("LD_LIBRARY_PATH", format!("{}/lib", sysroot))
+        .env("DYLD_FALLBACK_LIBRARY_PATH", with_lib("DYLD_FALLBACK_LIBRARY_PATH"))
+        .env("LD_LIBRARY_PATH", with_lib("LD_LIBRARY_PATH"))
         .status();
     match status {
         Ok(s) if s.success() => {}
