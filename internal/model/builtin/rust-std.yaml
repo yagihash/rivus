@@ -32,9 +32,9 @@ propagators:
   - symbol: std::clone::Clone::clone
     flows: [{from: args, to: result}]
   - symbol: std::ops::Deref::deref
-    flows: [{from: args, to: result}]
+    flows: [{from: args, to: result, alias: true}]
   - symbol: std::ops::DerefMut::deref_mut
-    flows: [{from: args, to: result}]
+    flows: [{from: args, to: result, alias: true}]
   - symbol: std::convert::AsRef::as_ref
     flows: [{from: args, to: result}]
   - symbol: std::convert::AsMut::as_mut
@@ -86,25 +86,25 @@ propagators:
   - symbol: std::sync::Mutex::new
     flows: [{from: args, to: result}]
   - symbol: std::cell::RefCell::borrow
-    flows: [{from: args, to: result}]
+    flows: [{from: args, to: result, alias: true}]
   - symbol: std::cell::RefCell::borrow_mut
-    flows: [{from: args, to: result}]
+    flows: [{from: args, to: result, alias: true}]
   - symbol: std::sync::Mutex::lock
-    flows: [{from: args, to: result}]
+    flows: [{from: args, to: result, alias: true}]
   - symbol: std::sync::Mutex::try_lock
-    flows: [{from: args, to: result}]
+    flows: [{from: args, to: result, alias: true}]
   - symbol: std::sync::Mutex::into_inner
     flows: [{from: args, to: result}]
   - symbol: std::sync::RwLock::new
     flows: [{from: args, to: result}]
   - symbol: std::sync::RwLock::read
-    flows: [{from: args, to: result}]
+    flows: [{from: args, to: result, alias: true}]
   - symbol: std::sync::RwLock::write
-    flows: [{from: args, to: result}]
+    flows: [{from: args, to: result, alias: true}]
   - symbol: std::sync::RwLock::try_read
-    flows: [{from: args, to: result}]
+    flows: [{from: args, to: result, alias: true}]
   - symbol: std::sync::RwLock::try_write
-    flows: [{from: args, to: result}]
+    flows: [{from: args, to: result, alias: true}]
   - symbol: std::sync::RwLock::into_inner
     flows: [{from: args, to: result}]
   - symbol: std::string::String::new
@@ -214,9 +214,9 @@ propagators:
   - symbol: std::option::Option::filter
     flows: [{from: args, to: result}]
   - symbol: std::result::Result::unwrap
-    flows: [{from: args, to: result}]
+    flows: [{from: args, to: result, alias: true}]
   - symbol: std::result::Result::expect
-    flows: [{from: args, to: result}]
+    flows: [{from: args, to: result, alias: true}]
   - symbol: std::result::Result::unwrap_or
     flows: [{from: args, to: result}]
   - symbol: std::result::Result::unwrap_or_default

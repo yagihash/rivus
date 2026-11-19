@@ -188,6 +188,7 @@ type state struct {
 
 	paramRoot map[Root]int // parameter and free variable roots -> index
 	numbering map[*sg.Value]int
+	stores    []*sg.Instr // the stores of the function (aliasLocs looks for what a cell holds)
 	locSet    map[*sg.Value]map[Loc]bool
 	locCache  map[*sg.Value][]Loc
 	locsFinal bool // locCache may be filled: the fixed point of the locations is reached

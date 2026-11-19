@@ -236,7 +236,8 @@ func (p *Program) Global(name string) *Value {
 	if g, ok := p.Globals[name]; ok {
 		return g
 	}
-	g := &Value{Kind: KGlobal, Name: name, Pos: p.GlobalPos[name]}
+	// the address of a variable: a pointer, so that a copy of it is the same pointer
+	g := &Value{Kind: KGlobal, Name: name, Class: ir.ClassPointer, Pos: p.GlobalPos[name]}
 	p.Globals[name] = g
 	return g
 }

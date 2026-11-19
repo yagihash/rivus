@@ -47,6 +47,14 @@ func (s *state) prepareLocs() {
 	// The cache holds the locations once they are final: a value read before
 	// the iteration has reached it (a φ of a loop reads what comes round
 	// from the end of the body) must not be remembered as having none.
+	s.stores = s.stores[:0]
+	for _, b := range s.fn.Blocks {
+		for _, in := range b.Instrs {
+			if in.Op == ir.OpStore {
+				s.stores = append(s.stores, in)
+			}
+		}
+	}
 	s.locsFinal = false
 	for {
 		changed := false
@@ -215,8 +223,34 @@ func (s *state) computeLocs(v *sg.Value) []Loc {
 		if in.Callee.Symbol == symChanRecv && len(in.Dsts) == 1 && pointerLike(v) {
 			return suffix(suffix(s.locs(in.Args[0]), "[]"), "*")
 		}
+		if i, ok := s.eng.aliasArgs[in.Callee.Symbol]; ok && i < len(in.Args) {
+			return s.aliasLocs(v, in.Args[i], ownRoot)
+		}
 	}
 	return ownRoot
+}
+
+// aliasLocs are the locations of the result of a call that hands back the
+// storage of its argument (a model flow with alias): the result's own, and the
+// argument's. An argument that is the address of a local cell (a guard kept in a
+// variable, and passed as &mut guard) stands for what was stored in the cell.
+func (s *state) aliasLocs(v, arg *sg.Value, own []Loc) []Loc {
+	base := s.locs(arg)
+	out := append(append([]Loc(nil), own...), base...)
+	for _, l := range base {
+		if l.Path != "" || l.Root.V == nil || l.Root.V.Instr == nil || l.Root.V.Instr.Op != ir.OpAlloc {
+			continue
+		}
+		for _, st := range s.stores {
+			for _, a := range s.locs(st.Args[0]) {
+				if a == l {
+					out = append(out, s.locs(st.Args[1])...)
+					break
+				}
+			}
+		}
+	}
+	return out
 }
 
 // loadAddr is where a load reads: the locations of its address operand, or

@@ -995,3 +995,11 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
 - **原因:** モデルの `flows: [{from: args, to: result}]` は、「引数の中身の taint を、結果にコピーする」意味で、`Deref::deref`、`Mutex::lock`、`RwLock::write`、`Result::unwrap`、`DerefMut::deref_mut` のように「同じ場所への参照を返す」関数の別名関係を持てない。だから、ガードを通した書き込み（`*guard = x`、`guard.push(x)`）が、元のグローバルの場所に届かない。
 - **案:** フローの属性に `alias: true`（結果は、引数が指す場所を指す）を足して、`locs(結果)` を `locs(引数)` と同じにする。Rust の標準ライブラリのモデルのうち、参照を返すものにだけ付ける。ほかのモデルと既存の結果には影響しない（付けたものだけ）。コスト: エンジンの別名の扱いに触れるので、`collect` のキャッシュ（root ごとのバージョン）との整合を確かめる必要がある。
 - **要判断:** エンジンの設計に触れるので、まだ入れていない。`std::sync::RwLock::read/write` のモデルが、標準のものにないことも見つかった（tokio のものだけある）。
+
+### 追記: モデルの `alias: true` を入れた（上の提案を実装）
+
+- **決定:** フロー `{from: args, to: result, alias: true}` は、「結果は、その引数と同じ場所を指す」を表す。`locs(結果)` に、引数の `locs` を足す（結果自身の root も残す）。引数が、ローカルのセルのアドレス（ガードを変数に入れて `&mut guard` で渡す形）なら、そのセルに `store` された値の `locs` も足す。taint のコピーは、`alias` が無いフローと同じに行う。
+- **付けたもの:** Rust の std の `Deref::deref`、`DerefMut::deref_mut`、`Mutex::lock`、`RwLock::read/write` と `try_*`、`Result::unwrap/expect`、`RefCell::borrow/borrow_mut`、tokio の `Mutex::lock`、`RwLock::read/write`。
+- **もう 1 つ直した:** `sg.Program.Global`（パッケージ変数のアドレスの値）に、クラス `pointer` を付けた。付いていなかったので、`p := &G` の `copy` が、ポインタのコピーとして扱われず、グローバルの場所がたどれなかった。
+- **確認:** Mutex / RwLock<HashMap> / RwLock<Vec> を持つ `static` に、一方の関数が書き、他方が読む 3 つの流れが通る（`extractor/rust/test/sample/src/global_flows.rs`）。go-test-bench（37 件）、gogs（78 件）、gin-vue-admin（28 件）、Gitea（246 件）、parseable（80 件）は、変更の前後で、finding が完全に同一。
+- **まだ届かない:** parseable の `src/alerts/target.rs:494`。tokio の `RwLock` と `.await`（async の状態機械）、`entry().or_default().insert()`、`Option::ok_or`、`call` の動的ディスパッチと、鎖がまだ長い。

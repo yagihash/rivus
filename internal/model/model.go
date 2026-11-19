@@ -215,6 +215,11 @@ type ConfigRead struct {
 type Flow struct {
 	From string `yaml:"from"`
 	To   string `yaml:"to"`
+	// Alias says that the result is the same storage as the argument (a call
+	// that hands back a reference to what it was given: Deref::deref, a lock
+	// guard): what is written through the result is written to the argument.
+	// Without it a flow copies the taint, and the result is a value of its own.
+	Alias bool `yaml:"alias"`
 }
 
 // Position kinds of a Selector.
@@ -506,9 +511,43 @@ func validateFlows(flows []Flow, what string) error {
 		if err != nil {
 			return fmt.Errorf("%s.flows[%d].to: %w", what, i, err)
 		}
-		_ = to
+		if f.Alias {
+			if to.Kind != SelResult || to.All {
+				return fmt.Errorf("%s.flows[%d]: alias goes with to: result", what, i)
+			}
+			from, _ := ParseSelector(f.From)
+			if from.Kind == SelResult {
+				return fmt.Errorf("%s.flows[%d]: alias needs an argument to be the same storage as", what, i)
+			}
+		}
 	}
 	return nil
+}
+
+// AliasArgs gives, for the functions that have a flow with alias, the position
+// of the argument their result is the same storage as (the receiver is the
+// argument 0 for the languages that pass it first).
+func (r *Rules) AliasArgs() map[string]int {
+	out := map[string]int{}
+	for sym, ps := range r.Propagators {
+		for _, p := range ps {
+			for _, f := range p.Flows {
+				if !f.Alias {
+					continue
+				}
+				sel, err := ParseSelector(f.From)
+				if err != nil {
+					continue
+				}
+				idx := 0
+				if sel.Kind == SelArg && !sel.All {
+					idx = sel.Index
+				}
+				out[sym] = idx
+			}
+		}
+	}
+	return out
 }
 
 // Rules is the merged, indexed view of several rule sets.

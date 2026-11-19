@@ -142,13 +142,13 @@ propagators:
   - symbol: tokio::sync::Mutex::new
     flows: [{from: args, to: result}]
   - symbol: tokio::sync::Mutex::lock
-    flows: [{from: args, to: result}]
+    flows: [{from: args, to: result, alias: true}]
   - symbol: tokio::sync::RwLock::new
     flows: [{from: args, to: result}]
   - symbol: tokio::sync::RwLock::read
-    flows: [{from: args, to: result}]
+    flows: [{from: args, to: result, alias: true}]
   - symbol: tokio::sync::RwLock::write
-    flows: [{from: args, to: result}]
+    flows: [{from: args, to: result, alias: true}]
   - symbol: tokio::sync::mpsc::channel
     flows: [{from: args, to: result}]
   - symbol: tokio::sync::oneshot::channel

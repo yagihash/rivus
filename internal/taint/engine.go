@@ -68,6 +68,9 @@ type Engine struct {
 	sites *sites.Result
 	rules *model.Rules
 	opts  Options
+	// aliasArgs: the calls whose result is the same storage as an argument
+	// (a model flow with alias), by symbol.
+	aliasArgs map[string]int
 
 	// mu guards what the analyses of the functions of one level write together:
 	// the summaries, the states, the marks of the functions to analyse again,
@@ -178,6 +181,7 @@ func New(p *sg.Program, texts ir.Texts, st *sites.Result, rules *model.Rules, op
 		spent:      map[*sg.Func]time.Duration{},
 		guardLimit: map[*sg.Func]bool{},
 		globals:    newGlobalStore(),
+		aliasArgs:  rules.AliasArgs(),
 	}
 }
 
