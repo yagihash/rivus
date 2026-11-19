@@ -98,7 +98,7 @@ go build -o rivus ./cmd/rivus
 
 rivus sites ./...                          # source / sink のサイトの列挙（解析なしで高速）
 rivus analyze ./...                        # source から sink への経路を、関数・パッケージを跨いで検出（Go。依存も読む。外すなら -no-deps）
-rivus analyze -C path/to/project           # ディレクトリの言語を自動で判別（go.mod、pubspec.yaml、Cargo.toml）。複数あれば全部読んで 1 つの結果にする。-lang go,dart,rust で指定
+rivus analyze -C path/to/project           # ディレクトリの言語を自動で判別（go.mod、pubspec.yaml）。複数あれば全部読んで 1 つの結果にする。-lang go,dart,rust で指定。Rust（Cargo.toml）は、読むとビルドが走るので、自動では読まず、-lang rust のときだけ読む
                                            # Dart と Rust は extractor（rivus-dart、rivus-rust）が PATH にいること。-dart-extractor / -rust-extractor か、RIVUS_DART_EXTRACTOR / RIVUS_RUST_EXTRACTOR で指定
 rivus query -sink 'os/exec.Command' ./...  # この sink に届き得る source を列挙
 rivus query -source '(*net/http.Request).FormValue' ./...  # この source が届き得る sink を列挙
@@ -148,6 +148,10 @@ RIVUS_TEST_MODULE=/path/to/module go test ./internal/ssacheck -run TestAgainstGo
 | Rust | extractor が、対象のワークスペースに `cargo check` を走らせます（rustc の代わりに driver を差し込むだけで、**対象をコンパイルする**）。`build.rs`、proc macro、`[build-dependencies]` が実行されます |
 | Go | `go/packages` が `go list` を走らせます。依存モジュールの取得（ネットワーク）が起きることがあります。cgo のあるパッケージは、cgo の前処理が走ります |
 | Dart | extractor 自身は、`package:analyzer` で静的に読むだけです。ただし、前提の手順（`dart pub get`、`build_runner` などのコード生成）は、対象の依存と生成器のコードを実行します |
+
+- **Rust は、`-lang rust` と書いたときだけ読みます。** `Cargo.toml` があるだけでは、読みません（Rust だけのディレクトリは、明示を求めるエラーになり、Go や Dart と一緒のときは、Rust を除いて、stderr に書きます）。
+- **ディレクトリに付いてくるルール（`<dir>/.rivus/rules/*.yaml`）は、フラグなしで読まれます。** それは、解析されるコードを書いた人が、そのコードについて言わせたいことなので、`sanitizers` や `pure: true` で、検出を消せます。読んだファイルと、消せるものの数（sanitizer、`drops: ["*"]` の sanitizer、`pure` のモデル）は、結果の `project_rules` に出ます。信頼できないコードでは、`-no-project-rules` を付けてください。
+- **Dart の依存は、プロジェクト、pub のキャッシュ、SDK の下のものだけ読みます。** `package_config.json` は、対象の一部で、どこでも指せるからです。ほかの場所（モノレポの隣のパッケージなど）は、`-allow-deps-under DIR` で足します。
 
 信頼できないリポジトリは、使い捨ての環境（コンテナや VM）で解析してください。たとえば、依存を先に取得してから、ネットワークを切ったコンテナで、ソースを読み取り専用で渡す形です（Rust の extractor は、作業用のディレクトリを、一時ディレクトリに作ります）。
 

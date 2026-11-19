@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -55,5 +56,89 @@ func TestDartExtractor(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// Where the dependencies of a project are is said by its .dart_tool/package_config.json, which is
+// not trusted: it can point at any directory. What is outside the project, the pub cache and the SDKs is
+// not read unless it is asked for (yagihash/rivus #39), and the stream says that it was left out.
+func TestDartDependenciesOutsideTheProjectAreNotReadUnlessAsked(t *testing.T) {
+	dart := os.Getenv("RIVUS_DART")
+	if dart == "" {
+		t.Skip("RIVUS_DART is not set")
+	}
+	extractor, err := filepath.Abs("../../extractor/dart")
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := t.TempDir()
+	outside := filepath.Join(base, "outside")
+	project := filepath.Join(base, "project")
+	for dir, files := range map[string]map[string]string{
+		filepath.Join(outside, "lib"): {"secret.dart": "String leak() => 'sensitive-value';\n"},
+		filepath.Join(project, "lib"): {"app.dart": "import 'package:other/secret.dart';\nString run() => leak();\n"},
+		filepath.Join(project, ".dart_tool"): {"package_config.json": `{"configVersion":2,"packages":[` +
+			`{"name":"other","rootUri":"` + (&url.URL{Scheme: "file", Path: outside + "/"}).String() + `","packageUri":"lib/"},` +
+			`{"name":"app","rootUri":"../","packageUri":"lib/"}]}`},
+	} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		for name, text := range files {
+			if err := os.WriteFile(filepath.Join(dir, name), []byte(text), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if err := os.WriteFile(filepath.Join(project, "pubspec.yaml"), []byte("name: app\nenvironment:\n  sdk: ^3.8.0\ndependencies:\n  other:\n    path: ../outside\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(outside, "pubspec.yaml"), []byte("name: other\nenvironment:\n  sdk: ^3.8.0\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	extract := func(extra ...string) *ir.Program {
+		words := strings.Fields(dart)
+		args := append(words[1:], "run", "bin/rivus_dart.dart")
+		args = append(args, extra...)
+		args = append(args, project)
+		cmd := exec.Command(words[0], args...)
+		cmd.Dir = extractor
+		out, err := cmd.Output()
+		if err != nil {
+			t.Fatalf("the extractor failed: %v", err)
+		}
+		prog, err := ir.Read(bytes.NewReader(out))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return prog
+	}
+	has := func(p *ir.Program, name string) bool {
+		for _, f := range p.Funcs {
+			if strings.HasSuffix(string(f.ID), name) {
+				return true
+			}
+		}
+		return false
+	}
+
+	refused := extract()
+	if !has(refused, "app.dart#run") {
+		t.Error("the project itself is not read")
+	}
+	if has(refused, "secret.dart#leak") {
+		t.Error("a dependency outside the project was read without being asked")
+	}
+	said := false
+	for _, e := range refused.LoadErrors {
+		if strings.Contains(e.Message, "--allow-deps-under") {
+			said = true
+		}
+	}
+	if !said {
+		t.Errorf("the stream does not say that a dependency was left out: %+v", refused.LoadErrors)
+	}
+	if allowed := extract("--allow-deps-under", outside); !has(allowed, "secret.dart#leak") {
+		t.Error("a dependency under a directory that was asked for is not read")
 	}
 }

@@ -50,11 +50,32 @@ func detectLangs(dir string) []string {
 func (o *analyzeOpts) languages() ([]string, error) {
 	if o.lang == "" || o.lang == "auto" {
 		langs := detectLangs(o.dir)
-		if len(langs) == 0 {
+		// Reading a Rust project builds it: cargo runs its build scripts and its proc macros, with the rights of
+		// whoever runs rivus. A Cargo.toml that happens to be in the directory is not a request for that, so Rust
+		// is read only when it is asked for (-lang rust). Go does not run the code, and Dart reads it with the
+		// analyzer; what they ask the user to prepare (go generate, build_runner) the user does.
+		var chosen []string
+		skippedRust := false
+		for _, l := range langs {
+			if l == langRust {
+				skippedRust = true
+				continue
+			}
+			chosen = append(chosen, l)
+		}
+		if skippedRust {
+			if len(chosen) == 0 {
+				return nil, fmt.Errorf("%s holds a Rust project (Cargo.toml), and reading it builds it: its build scripts and proc macros run, with your rights. "+
+					"Ask for it with -lang rust (for code you trust, or in a sandbox)", o.dir)
+			}
+			fmt.Fprintf(os.Stderr, "rivus: %s also holds a Rust project (Cargo.toml): it is not read, because reading it builds it (build scripts and proc macros run); ask for it with -lang %s,rust\n",
+				o.dir, strings.Join(chosen, ","))
+		}
+		if len(chosen) == 0 {
 			// nothing to tell by: Go, which also reads a pattern outside a module
 			return []string{langGo}, nil
 		}
-		return langs, nil
+		return chosen, nil
 	}
 	var out []string
 	for _, l := range strings.Split(o.lang, ",") {
@@ -105,6 +126,11 @@ func (o *analyzeOpts) runExtractor(lang string) (*ir.Program, error) {
 	args := append([]string(nil), words[1:]...)
 	if o.noDeps {
 		args = append(args, "--no-deps")
+	}
+	if lang == langDart {
+		for _, d := range o.allowDepsUnder {
+			args = append(args, "--allow-deps-under", d)
+		}
 	}
 	if lang == langRust && o.tests {
 		args = append(args, "--include-tests")

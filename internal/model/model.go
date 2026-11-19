@@ -80,6 +80,10 @@ type RuleSet struct {
 
 	// Origin is where the rule set came from (file name or "builtin:...").
 	Origin string `yaml:"-"`
+	// Project is true for a rule file that was found in the directory under analysis
+	// (<dir>/.rivus/rules): it is part of the code being analysed, and says what that code wants
+	// to have said about itself. The report counts what such a file removes (yagihash/rivus #57).
+	Project bool `yaml:"-"`
 }
 
 // Source introduces taint.

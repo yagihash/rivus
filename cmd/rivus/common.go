@@ -36,6 +36,8 @@ type common struct {
 	noDeps bool
 	// deterministic leaves out the rules decided by an LLM.
 	deterministic bool
+	// allowDepsUnder: directories outside the project from which the Dart extractor may read dependencies.
+	allowDepsUnder multiFlag
 }
 
 func (c *common) register(fs *flag.FlagSet) {
@@ -45,6 +47,7 @@ func (c *common) register(fs *flag.FlagSet) {
 	fs.BoolVar(&c.noProject, "no-project-rules", false, "do not load the rules found in <dir>/.rivus/rules/*.yaml")
 	fs.BoolVar(&c.tests, "tests", false, "include _test.go files")
 	fs.BoolVar(&c.noDeps, "no-deps", false, "do not read the source of the dependencies (which is done by default, except for the standard library, so that calls into them are followed instead of guessed): lighter (about a sixth of the memory), and every call into a dependency is a guess")
+	fs.Var(&c.allowDepsUnder, "allow-deps-under", "Dart: a directory outside the project whose packages may be read as dependencies (repeatable). The package_config.json of the project says where its dependencies are, and it is not trusted: only the project, the pub cache and the SDKs are read without being asked (a monorepo's sibling packages need this)")
 	fs.BoolVar(&c.deterministic, "deterministic-only", false, "ignore the rules decided by an LLM (origin: llm)")
 }
 
@@ -61,11 +64,13 @@ func (c *common) loadRules(extra ...*model.RuleSet) (*model.Rules, error) {
 	// code, and the models of the libraries it uses that the built-in ones do
 	// not cover. They live with the code and are read without a flag.
 	paths := append([]string(nil), c.rules...)
+	project := map[string]bool{}
 	if !c.noProject {
 		found, _ := filepath.Glob(filepath.Join(c.dir, ".rivus", "rules", "*.y*ml"))
 		sort.Strings(found)
 		for _, p := range found {
 			fmt.Fprintf(os.Stderr, "rivus: project rules: %s\n", p)
+			project[p] = true
 		}
 		paths = append(found, paths...)
 	}
@@ -79,6 +84,7 @@ func (c *common) loadRules(extra ...*model.RuleSet) (*model.Rules, error) {
 		if err != nil {
 			return nil, err
 		}
+		rs.Project = project[path]
 		sets = append(sets, rs)
 	}
 	sets = append(sets, extra...)

@@ -81,5 +81,10 @@ file_content]`, so that the label a sanitizer adds does not make it fire.
   callbacks of `Iterable` (`forEach`, `map`, `where`, ...) are called with what the receiver holds.
 - **Named parameters** of an override that adds one the base does not have may shift
   the others (by name, the usual case lines up).
-- **Dependencies** (`package:flutter`, `dart:*`) are not read: calls into them are
-  unmodeled library calls, until a model says what they do.
+- **Dependencies** are read by default (`--no-deps` leaves them out; `dart:*` is not read): calls into a
+  package are followed instead of guessed. Where a dependency is, is said by `.dart_tool/package_config.json`,
+  which is part of the project and is not trusted: it can point at any directory. What is under the project, the
+  pub cache (`PUB_CACHE`, or `~/.pub-cache`), the SDK that runs the extractor and the Flutter that holds it
+  (`FLUTTER_ROOT`) is read; anything else is left out and the stream says so (a `load_error` that names the
+  directory). `--allow-deps-under DIR` (repeatable; `rivus analyze -allow-deps-under DIR`) reads the packages
+  under `DIR` too: a monorepo whose packages are siblings of the one that is analysed needs it.

@@ -18,7 +18,7 @@ import 'program.dart';
 
 /// Extracts the Dart code under [root] (the files that are not under a hidden
 /// or a build directory) and writes the stream to [sink].
-Future<void> extract(String root, StringSink sink, {bool deps = true}) async {
+Future<void> extract(String root, StringSink sink, {bool deps = true, List<String> allowDepsUnder = const []}) async {
   root = p.normalize(p.absolute(root));
   final out = StreamOut(sink);
   final prog = Program(root, out);
@@ -56,6 +56,7 @@ Future<void> extract(String root, StringSink sink, {bool deps = true}) async {
   // The dependencies (not the SDK): the libraries the code imports, and what
   // they import. Their functions are marked dep; the core keeps the ones the
   // code reaches.
+  final refused = <String, String>{}; // the directory of a dependency that was not read -> a file in it
   if (deps) {
     final seen = <String>{};
     final files = <String>[];
@@ -81,13 +82,24 @@ Future<void> extract(String root, StringSink sink, {bool deps = true}) async {
       }
     }
     final done = <String>{};
+    final trusted = _trustedDependencyRoots(allowDepsUnder);
     for (final path in files) {
       if (!path.endsWith('.dart') || !done.add(path)) continue;
+      // Where a dependency is, is said by the package_config.json of the project, which is not trusted: it can
+      // point anywhere. What is read is under the project, the pub cache, the SDKs, or what is asked for.
+      if (!trusted.any((r) => p.equals(r, path) || p.isWithin(r, path))) {
+        refused.putIfAbsent(_packageDir(path), () => path);
+        continue;
+      }
       final context = collection.contexts.first;
       final r = await context.currentSession.getResolvedUnit(path);
       if (r is! ResolvedUnitResult) continue;
       units.add(UnitInfo(prog, path, r.unit, r.content, r.lineInfo, dep: true));
     }
+  }
+  for (final e in refused.entries) {
+    out.loadError(e.key,
+        'a dependency outside the project, the pub cache and the SDKs is not read (what package_config.json points to is not trusted): --allow-deps-under ${p.dirname(e.key)} reads it');
   }
   units.sort((a, b) => a.file.compareTo(b.file));
   for (final u in units) {
@@ -103,6 +115,33 @@ Future<void> extract(String root, StringSink sink, {bool deps = true}) async {
     out.type(id, prog.types[id]!.toList()..sort());
   }
   prog.texts.write(out);
+}
+
+/// The directories that a dependency may be read from, besides the project itself: the pub cache, the
+/// SDK that runs the extractor (and the Flutter that holds it, whose packages are `package:flutter`),
+/// and what the user asked for.
+List<String> _trustedDependencyRoots(List<String> extra) {
+  final env = Platform.environment;
+  final roots = <String>[];
+  final home = env['HOME'] ?? env['USERPROFILE'];
+  final cache = env['PUB_CACHE'] ??
+      (Platform.isWindows ? (env['LOCALAPPDATA'] == null ? null : p.join(env['LOCALAPPDATA']!, 'Pub', 'Cache')) : (home == null ? null : p.join(home, '.pub-cache')));
+  if (cache != null) roots.add(p.normalize(p.absolute(cache)));
+  final sdk = p.dirname(p.dirname(Platform.resolvedExecutable));
+  roots.add(sdk);
+  // <flutter>/bin/cache/dart-sdk
+  if (p.basename(sdk) == 'dart-sdk' && p.basename(p.dirname(sdk)) == 'cache') roots.add(p.dirname(p.dirname(p.dirname(sdk))));
+  final flutter = env['FLUTTER_ROOT'];
+  if (flutter != null && flutter.isNotEmpty) roots.add(p.normalize(p.absolute(flutter)));
+  roots.addAll(extra.map((d) => p.normalize(p.absolute(d))));
+  return roots;
+}
+
+/// The directory of the package a file is in: the one above its `lib` (or else the file's own).
+String _packageDir(String path) {
+  final parts = p.split(path);
+  final i = parts.lastIndexOf('lib');
+  return i > 0 ? p.joinAll(parts.sublist(0, i)) : p.dirname(path);
 }
 
 /// The context of the package the file is in: the one whose root is the closest

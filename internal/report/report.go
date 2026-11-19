@@ -42,6 +42,10 @@ type Report struct {
 	LoadErrors   []ir.LoadError       `json:"load_errors,omitempty"`
 	// Expansions says what happened to the rules with match: implementations.
 	Expansions []model.Expansion `json:"expansions,omitempty"`
+	// ProjectRules are the rule files that the analysed directory brought (<dir>/.rivus/rules), with what
+	// each of them can remove from the result: a sanitizer, a model that says that nothing flows. They are
+	// read without a flag, and they are written by whoever wrote the code under analysis.
+	ProjectRules []ProjectRules `json:"project_rules,omitempty"`
 	// DeterministicOnly is true when the rules decided by an LLM were left
 	// out (IgnoredModels of them), so that the result depends on rivus and
 	// on rules written or built in, and on nothing else.
@@ -49,6 +53,45 @@ type Report struct {
 	IgnoredModels     int         `json:"ignored_models,omitempty"`
 	Stats             taint.Stats `json:"stats"`
 	Summary           Summary     `json:"summary"`
+}
+
+// ProjectRules counts what a rule file of the analysed project holds.
+type ProjectRules struct {
+	File        string `json:"file"`
+	Sources     int    `json:"sources"`
+	Sinks       int    `json:"sinks"`
+	Sanitizers  int    `json:"sanitizers"`
+	Propagators int    `json:"propagators"`
+	// PureModels are the models that say that nothing flows through the function.
+	PureModels int `json:"pure_models"`
+	// DropAll are the sanitizers that remove every label ("*").
+	DropAll int `json:"drop_all_sanitizers"`
+}
+
+// projectRules summarizes the rule files that were found in the analysed directory.
+func projectRules(rules *model.Rules) []ProjectRules {
+	var out []ProjectRules
+	for _, rs := range rules.Sets {
+		if !rs.Project {
+			continue
+		}
+		p := ProjectRules{File: rs.Origin, Sources: len(rs.Sources), Sinks: len(rs.Sinks), Sanitizers: len(rs.Sanitizers), Propagators: len(rs.Propagators)}
+		for _, pr := range rs.Propagators {
+			if pr.Pure {
+				p.PureModels++
+			}
+		}
+		for _, s := range rs.Sanitizers {
+			for _, d := range s.Drops {
+				if d == "*" {
+					p.DropAll++
+					break
+				}
+			}
+		}
+		out = append(out, p)
+	}
+	return out
 }
 
 // Summary counts the uncertainties. It is the feedback loop of ADR-008: the
@@ -172,6 +215,7 @@ func Build(packages []string, loadErrors []ir.LoadError, st *sites.Result, res *
 		LoadErrors:    loadErrors,
 		Stats:         res.Stats,
 		Expansions:    rules.Expansions,
+		ProjectRules:  projectRules(rules),
 
 		DeterministicOnly: rules.DeterministicOnly,
 		IgnoredModels:     rules.IgnoredModels,

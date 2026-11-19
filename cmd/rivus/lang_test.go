@@ -40,6 +40,41 @@ func TestLanguagesFlag(t *testing.T) {
 	}
 }
 
+// A Cargo.toml in the directory is not a request to build the project (yagihash/rivus #57): Rust is read when it is asked for.
+func TestRustIsNotReadUnlessAsked(t *testing.T) {
+	write := func(dir string, files ...string) {
+		for _, f := range files {
+			if err := os.WriteFile(filepath.Join(dir, f), nil, 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	// Go and Rust: Go is read, and Rust is left out (and said)
+	o := analyzeOpts{}
+	o.dir = t.TempDir()
+	write(o.dir, "go.mod", "Cargo.toml")
+	o.lang = "auto"
+	got, err := o.languages()
+	if err != nil || !reflect.DeepEqual(got, []string{"go"}) {
+		t.Errorf("go and rust, auto: %v, %v", got, err)
+	}
+	// Rust alone: not an answer of "nothing found" but a request to ask for it
+	o.dir = t.TempDir()
+	write(o.dir, "Cargo.toml")
+	if got, err := o.languages(); err == nil {
+		t.Errorf("a Rust project alone is read without being asked: %v", got)
+	}
+	// asked for: it is read
+	o.lang = "rust"
+	if got, err := o.languages(); err != nil || !reflect.DeepEqual(got, []string{"rust"}) {
+		t.Errorf("-lang rust: %v, %v", got, err)
+	}
+	o.lang = "go,rust"
+	if got, err := o.languages(); err != nil || !reflect.DeepEqual(got, []string{"go", "rust"}) {
+		t.Errorf("-lang go,rust: %v, %v", got, err)
+	}
+}
+
 func TestMissingExtractorIsAnErrorWhenAsked(t *testing.T) {
 	o := analyzeOpts{}
 	o.dir = t.TempDir()
