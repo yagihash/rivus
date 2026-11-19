@@ -218,6 +218,9 @@ func (s *state) callBody(cc *callCtx) {
 			ids[i] = c.id
 		}
 		kind, detail := externalKind(ids, cc.sym)
+		if ci.Callee != nil && ci.Callee.FFI {
+			kind, detail = KindFFIBoundary, "the call leaves the language (a foreign function)"
+		}
 		s.unmodeled(cc, s.newNote(ci, kind, detail, cc.sym))
 	}
 }

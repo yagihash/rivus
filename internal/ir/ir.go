@@ -288,6 +288,9 @@ type Callee struct {
 	// method (a dynamic call always has the receiver first).
 	Recv       bool     `json:"recv,omitempty"`
 	Candidates []FuncID `json:"candidates,omitempty"`
+	// FFI marks a call of a foreign function (an extern "C" function of Rust): the
+	// call leaves the language, and what happens in it is not code that can be read.
+	FFI bool `json:"ffi,omitempty"`
 }
 
 // Instr is an instruction. Which fields are used depends on Op (see Validate

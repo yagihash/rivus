@@ -238,6 +238,10 @@ struct Walk {
     cur: Cur,
     ty: Ty,
     variant: Option<VariantIdx>,
+    /// The place is stored in memory by value (a local that has a cell, a field of one): an
+    /// array there is held as a pointer to its elements, which is one step further than the
+    /// place. After a dereference it is the pointer to the elements that is walked.
+    by_value: bool,
 }
 
 pub struct Lower<'a> {
@@ -449,7 +453,7 @@ impl<'a> Lower<'a> {
     fn start(&self, p: &Place) -> Walk {
         let ty = self.body.locals()[p.local].ty;
         let cur = if self.cells.contains(&p.local) { Cur::Ptr(self.var[p.local]) } else { Cur::Val(self.var[p.local]) };
-        Walk { cur, ty, variant: None }
+        Walk { cur, ty, variant: None, by_value: self.cells.contains(&p.local) }
     }
 
     fn field_name(&self, w: &Walk, i: usize) -> String {
@@ -497,6 +501,7 @@ impl<'a> Lower<'a> {
                 };
                 w.cur = Cur::Ptr(ptr);
                 w.variant = None;
+                w.by_value = false;
             }
             ProjectionElem::Field(_, fty) if is_smart_pointer(&w.ty) => {
                 // The inside of a Box, a Unique, a NonNull: they are the
@@ -548,7 +553,18 @@ impl<'a> Lower<'a> {
         }
     }
 
+    /// An array that the place holds by value: the walk goes on from the pointer to its elements.
+    fn into_array(&mut self, w: &mut Walk, pos: &Pos) {
+        if let (Cur::Ptr(p), TyKind::RigidTy(RigidTy::Array(..)), true) = (&w.cur, w.ty.kind(), w.by_value) {
+            let d = self.pointer_local("");
+            self.emit("addr_of", &[d], &[*p], pos, json!({"path": [{"kind": "deref"}]}));
+            w.cur = Cur::Ptr(d);
+            w.by_value = false;
+        }
+    }
+
     fn index_step(&mut self, w: &mut Walk, idx: usize, last: bool, pos: &Pos) {
+        self.into_array(w, pos);
         let elem = match w.ty.kind() {
             TyKind::RigidTy(RigidTy::Array(t, _)) | TyKind::RigidTy(RigidTy::Slice(t)) => t,
             _ => w.ty,
@@ -641,10 +657,12 @@ impl<'a> Lower<'a> {
             }
             ProjectionElem::Index(l) => {
                 let idx = self.read_local(*l, pos);
+                self.into_array(&mut w, pos);
                 self.index_store(&w, idx, value, pos);
             }
             ProjectionElem::ConstantIndex { offset, .. } => {
                 let idx = self.constant_int(*offset as i64, pos);
+                self.into_array(&mut w, pos);
                 self.index_store(&w, idx, value, pos);
             }
             other => {
@@ -780,7 +798,7 @@ impl<'a> Lower<'a> {
                         AggregateKind::Adt(_, vi, _, _, active) => match ty.as_ref() {
                             // a union holds one of its fields: the one that is written, not the operand's place
                             Some(t) => {
-                                let w = Walk { cur: Cur::Val(d), ty: *t, variant: Some(*vi) };
+                                let w = Walk { cur: Cur::Val(d), ty: *t, variant: Some(*vi), by_value: false };
                                 self.field_name(&w, active.unwrap_or(i))
                             }
                             None => i.to_string(),
@@ -962,8 +980,12 @@ impl<'a> Lower<'a> {
                     }
                     Some(name) => {
                         // a function that has no body here: the core finds it
-                        // missing and the models say what it does
+                        // missing and the models say what it does. One that is not Rust
+                        // (extern "C") is a call that leaves the language.
                         callee = json!({"kind": "static", "func": name, "symbol": def_name});
+                        if !has_rust_abi(def) {
+                            callee["ffi"] = json!(true);
+                        }
                     }
                     None if vals.is_empty() => {
                         // a call that cannot be resolved here and has no receiver
@@ -1147,6 +1169,15 @@ fn impl_of_trait<'a>(name: &'a str, suffix: &str) -> Option<&'a str> {
     let (_, tr) = inner.split_once(" as ")?;
     let tr = tr.split('<').next().unwrap_or(tr);
     tr.rsplit("::").next()
+}
+
+/// Whether the function is called with the ABI of Rust: one that is not is a
+/// foreign function (`extern "C"`).
+fn has_rust_abi(def: FnDef) -> bool {
+    matches!(
+        def.fn_sig().skip_binder().abi,
+        Abi::Rust | Abi::RustCall | Abi::RustCold | Abi::RustPreserveNone | Abi::RustTail | Abi::RustInvalid | Abi::Custom | Abi::LlvmIntrinsic
+    )
 }
 
 /// Whether the body is the body of a closure: its first parameter is the closure (or a

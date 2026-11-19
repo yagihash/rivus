@@ -200,7 +200,11 @@ fn merge(frags: &Path) {
     let mut files: Vec<PathBuf> = std::fs::read_dir(frags).map(|d| d.filter_map(|e| e.ok().map(|e| e.path())).collect()).unwrap_or_default();
     files.sort();
     println!("{}", json!({"schema_version": irjson::SCHEMA_VERSION}));
-    let mut seen = HashSet::new();
+    // One function per name. Two crates that have a function of the same name (the same crate in two
+    // versions that do not agree, or the library and its tests) cannot both be the program: the choice is
+    // by the content, not by the order the compiler processes (a process number in a file name), and it is said.
+    let mut funcs: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
+    let mut conflicts: Vec<String> = Vec::new();
     let mut rest = Vec::new();
     for f in files {
         let text = match std::fs::read_to_string(&f) {
@@ -220,13 +224,34 @@ fn merge(frags: &Path) {
             };
             if v["kind"] == "func" {
                 let id = v["func"]["id"].as_str().unwrap_or("").to_string();
-                if seen.insert(id) {
-                    println!("{}", line);
+                match funcs.get(&id) {
+                    None => {
+                        funcs.insert(id, line.to_string());
+                    }
+                    Some(old) if old == line => {}
+                    Some(old) => {
+                        // not the same function: the smaller line stays, whichever came first
+                        if conflicts.len() < 20 {
+                            conflicts.push(id.clone());
+                        }
+                        if line < old.as_str() {
+                            funcs.insert(id, line.to_string());
+                        }
+                    }
                 }
             } else {
                 rest.push(line.to_string());
             }
         }
+    }
+    for l in funcs.values() {
+        println!("{}", l);
+    }
+    for id in conflicts {
+        println!(
+            "{}",
+            json!({"kind": "load_error", "load_error": {"package": id, "message": "two crates have a function of this name and they differ (a crate in two versions?): one of them is in the program"}})
+        );
     }
     for l in rest {
         println!("{}", l);

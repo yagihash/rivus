@@ -96,3 +96,49 @@ pub fn union_flow() {
         sink(&u.s); // @sink(rv-union)
     }
 }
+
+// --- RUST-8: a foreign function is a call that leaves the language ----------
+
+extern "C" {
+    fn atoi(s: *const u8) -> i32;
+}
+
+pub fn foreign_call() -> i32 {
+    let s = source();
+    unsafe { atoi(s.as_ptr()) }
+}
+
+// --- RUST-9: a call with a const generic argument that is still open --------
+
+pub struct W<const N: usize> {
+    v: String,
+}
+
+fn pass_w<const N: usize>(w: W<N>) -> String {
+    w.v
+}
+
+fn outer_w<const N: usize>(w: W<N>) {
+    sink(&pass_w(w)); // @sink(rv-const-generic)
+}
+
+pub fn run_const_generic() {
+    let s = source(); // @source(rv-const-generic)
+    outer_w(W::<3> { v: s });
+}
+
+// An array that is made and read in one function, and one that is passed on.
+pub fn array_local() {
+    let s = source(); // @source(rv-array-local)
+    let a = [s];
+    sink(&a[0]); // @sink(rv-array-local)
+}
+
+fn first_of(a: [String; 1]) -> String {
+    a[0].clone()
+}
+
+pub fn array_passed() {
+    let s = source(); // @source(rv-array-passed)
+    sink(&first_of([s])); // @sink(rv-array-passed)
+}
