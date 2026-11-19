@@ -30,7 +30,7 @@ func NewTexts(p *gossa.Program) *Texts {
 
 var _ ir.Texts = (*Texts)(nil)
 
-func (t *Texts) tok(p ir.Pos) token.Pos { return t.p.TokenPos(p.File, p.Offset) }
+func (t *Texts) tok(p ir.Pos) token.Pos { return t.p.TokenPosAt(p.File, p.Offset, p.Line) }
 
 // Snippet implements ir.Texts.
 func (t *Texts) Snippet(p ir.Pos) string { return t.p.Snippet(t.tok(p)) }

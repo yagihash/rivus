@@ -76,7 +76,7 @@ type Program struct {
 	mu      sync.Mutex           // guards sources and byRel, which fill as they are asked for
 	files   map[string]*ast.File // absolute file name -> syntax
 	sources map[string][]byte
-	byRel   map[string]*token.File
+	byRel   map[string][]*token.File
 	byID    map[string]*ssa.Function
 }
 
@@ -317,23 +317,62 @@ func (p *Program) ReleaseSSA() {
 // file given by the name Position uses. It returns token.NoPos for a file it
 // does not know.
 func (p *Program) TokenPos(file string, offset int) token.Pos {
+	return p.TokenPosAt(file, offset, 0)
+}
+
+// TokenPosAt is TokenPos for a position whose line is known. The name that Position gives is the one
+// after the `//line` directives (and cgo's: the file that is compiled is a generated one, which says by
+// directives where it came from), while the offset is of the file that was read: so a name can be
+// that of several files, and the line tells which (yagihash/rivus #55).
+func (p *Program) TokenPosAt(file string, offset, line int) token.Pos {
 	if file == "" {
 		return token.NoPos
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.byRel == nil {
-		p.byRel = map[string]*token.File{}
+		p.byRel = map[string][]*token.File{}
+		add := func(name string, f *token.File) {
+			for _, g := range p.byRel[name] {
+				if g == f {
+					return
+				}
+			}
+			p.byRel[name] = append(p.byRel[name], f)
+		}
 		p.Fset.Iterate(func(f *token.File) bool {
-			p.byRel[p.rel(f.Name())] = f
+			real := p.rel(f.Name())
+			add(real, f)
+			// the names that line directives give to the lines of the file
+			last := ""
+			for l := 1; l <= f.LineCount(); l++ {
+				if adj := f.PositionFor(f.LineStart(l), true).Filename; adj != last {
+					last = adj
+					if r := p.rel(adj); r != real {
+						add(r, f)
+					}
+				}
+			}
 			return true
 		})
+		for _, fs := range p.byRel {
+			sort.Slice(fs, func(i, j int) bool { return fs[i].Name() < fs[j].Name() })
+		}
 	}
-	f := p.byRel[file]
-	if f == nil || offset < 0 || offset > f.Size() {
-		return token.NoPos
+	var fallback token.Pos
+	for _, f := range p.byRel[file] {
+		if offset < 0 || offset > f.Size() {
+			continue
+		}
+		pos := f.Pos(offset)
+		if line <= 0 || f.PositionFor(pos, true).Line == line {
+			return pos
+		}
+		if fallback == token.NoPos {
+			fallback = pos
+		}
 	}
-	return f.Pos(offset)
+	return fallback
 }
 
 // FuncByID finds a function by its FuncID.

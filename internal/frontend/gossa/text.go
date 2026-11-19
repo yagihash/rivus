@@ -71,8 +71,9 @@ func (p *Program) lines(start, end token.Pos) string {
 	if src == nil {
 		return ""
 	}
-	first := tf.Line(start)
-	last := tf.Line(end)
+	// the lines of the file that was read: tf.Line applies the //line directives, which LineStart does not
+	first := tf.PositionFor(start, false).Line
+	last := tf.PositionFor(end, false).Line
 	if end > start && last > first {
 		// end is exclusive; if it sits at column 1 the previous line is the last.
 		if tf.Offset(end) == tf.Offset(tf.LineStart(last)) {

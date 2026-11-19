@@ -2,6 +2,8 @@ package goir
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -220,5 +222,59 @@ func TestImplementationsRecord(t *testing.T) {
 	}
 	if len(out.Impls) != 1 || out.Impls[0].Method != sym {
 		t.Errorf("implementations: %+v", out.Impls)
+	}
+}
+
+// The text of a call is found by the position the IR gives, also when the file was not compiled as it
+// is on disk: a `//line` directive, and cgo (the generated file is what is compiled; yagihash/rivus #55).
+func TestTextsOfRelocatedFiles(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, src string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("go.mod", "module example.com/reloc\n\ngo 1.22\n")
+	write("sink.go", "package reloc\n\nfunc Sink(s string) {}\n")
+	write("line.go", "package reloc\n\n//line gram.y:100\nfunc FromLine(a string) {\n\tSink(a)\n}\n")
+	write("cgo.go", "package reloc\n\n/*\nstatic int one(void) { return 1; }\n*/\nimport \"C\"\n\nfunc FromCgo(a string) {\n\t_ = C.one()\n\tSink(a)\n}\n")
+	p, err := gossa.Load(dir, []string{"."}, gossa.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.LoadErrors) != 0 {
+		t.Skipf("the package does not load here (cgo?): %v", p.LoadErrors)
+	}
+	prog, err := Extract(p, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	texts := NewTexts(p)
+	seen := map[string]bool{}
+	for _, f := range prog.Funcs {
+		name := string(f.ID)
+		if !strings.HasSuffix(name, ".FromLine") && !strings.HasSuffix(name, ".FromCgo") {
+			continue
+		}
+		for _, b := range f.Blocks {
+			for _, in := range b.Instrs {
+				if in.Op != ir.OpCall || in.Callee == nil || !strings.HasSuffix(in.Callee.Symbol, ".Sink") {
+					continue
+				}
+				seen[name] = true
+				if got := texts.Snippet(in.Pos); !strings.Contains(got, "Sink(a)") {
+					t.Errorf("%s: snippet = %q (position %+v)", name, got, in.Pos)
+				}
+				if got := texts.Expr(in.Pos); got == "" {
+					t.Errorf("%s: no expression text (position %+v)", name, in.Pos)
+				}
+				if strings.Contains(in.Pos.File, "go-build") || filepath.IsAbs(in.Pos.File) {
+					t.Errorf("%s: the file is %q", name, in.Pos.File)
+				}
+			}
+		}
+	}
+	if len(seen) != 2 {
+		t.Errorf("calls found in %v", seen)
 	}
 }
