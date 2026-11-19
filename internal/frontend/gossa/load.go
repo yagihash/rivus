@@ -197,7 +197,7 @@ func Load(dir string, patterns []string, opts Options) (*Program, error) {
 			continue
 		}
 		p.Funcs = append(p.Funcs, fn)
-		if fn.Pkg != nil && own[fn.Pkg] {
+		if pkg := ownerPkg(fn); pkg != nil && own[pkg] {
 			p.Own[fn] = true
 		}
 	}
@@ -360,4 +360,25 @@ func buildInOrder(progs []*ssa.Program, skip map[string]bool, built func(path st
 		}
 		built(path)
 	}
+}
+
+// ownerPkg is the package whose code a function is. go/ssa makes the instance of a generic function or
+// of a generic type's method, and the wrappers ($bound, $thunk), without a package: the instance is the
+// code of the function it is made from, and a wrapper is the code of the method it wraps, so a sink
+// inside either is the program's own (yagihash/rivus #50).
+func ownerPkg(fn *ssa.Function) *ssa.Package {
+	if fn.Pkg != nil {
+		return fn.Pkg
+	}
+	if o := fn.Origin(); o != nil {
+		return ownerPkg(o)
+	}
+	if fn.Synthetic != "" {
+		if obj := fn.Object(); obj != nil && obj.Pkg() != nil {
+			if pkg := fn.Prog.ImportedPackage(obj.Pkg().Path()); pkg != nil {
+				return pkg
+			}
+		}
+	}
+	return nil
 }
