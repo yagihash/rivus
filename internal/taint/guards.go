@@ -412,15 +412,15 @@ func (s *state) guardsOfChain(l Loc, e Elem) ([]Guard, bool) {
 }
 
 func (s *state) guardsOfChainUncached(l Loc, e Elem) (gs []Guard, overflow bool) {
-	seen := map[ref]bool{}
-	cur := ref{l, e}
+	return s.guardsOfChainFrom(s.whyOf(ref{l, e}), ref{l, e})
+}
+
+// guardsOfChainFrom is guardsOfChain for the reason w, which is that of the
+// element at start (or of one that is about to be put there).
+func (s *state) guardsOfChainFrom(w *why, start ref) (gs []Guard, overflow bool) {
+	seen := map[ref]bool{start: true}
 	var lists [][]Guard
 	for i := 0; i < maxPathSteps; i++ {
-		if seen[cur] {
-			break
-		}
-		seen[cur] = true
-		w := s.whyOf(cur)
 		if w == nil {
 			break
 		}
@@ -436,7 +436,12 @@ func (s *state) guardsOfChainUncached(l Loc, e Elem) (gs []Guard, overflow bool)
 		if w.from == nil {
 			break
 		}
-		cur = *w.from
+		cur := *w.from
+		if seen[cur] {
+			break
+		}
+		seen[cur] = true
+		w = s.whyOf(cur)
 	}
 	all := unionGuards(lists...)
 	if len(all) > maxGuards {
@@ -611,7 +616,9 @@ func evalValue(v *sg.Value, env map[int]constant.Value, depth int) (constant.Val
 	}
 	switch in.Op {
 	case ir.OpConvert:
-		if in.IR.Operator == "convert" {
+		// A conversion may change the value (int8(n), string(r)): it is
+		// passed through only when the type does not change.
+		if in.IR.Operator == "convert" && len(in.Args) == 1 && in.Args[0].Type != "" && in.Args[0].Type == v.Type {
 			return evalValue(in.Args[0], env, depth+1)
 		}
 	case ir.OpUnop:
@@ -624,10 +631,29 @@ func evalValue(v *sg.Value, env map[int]constant.Value, depth int) (constant.Val
 		if op, ok := comparisons[in.IR.Operator]; ok {
 			l, ok1 := evalValue(in.Args[0], env, depth+1)
 			r, ok2 := evalValue(in.Args[1], env, depth+1)
-			if ok1 && ok2 {
+			if ok1 && ok2 && comparable(l, op, r) {
 				return constant.MakeBool(constant.Compare(l, op, r)), true
 			}
 		}
 	}
 	return nil, false
+}
+
+// comparable reports whether go/constant can compare the two values: it
+// takes no mixed kinds (an int against a string) and no order on bools.
+// Anything else is left undecided.
+func comparable(l constant.Value, op token.Token, r constant.Value) bool {
+	lk, rk := l.Kind(), r.Kind()
+	numeric := func(k constant.Kind) bool { return k == constant.Int || k == constant.Float }
+	switch {
+	case numeric(lk) && numeric(rk):
+		return true
+	case lk != rk:
+		return false
+	case lk == constant.Bool:
+		return op == token.EQL || op == token.NEQ
+	case lk == constant.String:
+		return true
+	}
+	return false
 }

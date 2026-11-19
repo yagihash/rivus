@@ -44,12 +44,20 @@ func (e *Engine) provenanceOf(g Guard) *Provenance {
 	return t.res
 }
 
+type objKey struct {
+	base  *sg.Value
+	field string
+}
+
 type tracer struct {
 	e      *Engine
 	res    *Provenance
 	nodes  int
 	keys   map[string]bool
 	inPath map[*sg.Value]bool
+	// objPath are the (object, field) pairs being followed, to cut a loop
+	// of calls that hand the same object on.
+	objPath map[objKey]bool
 }
 
 // Certainty of a resolved value.
@@ -391,6 +399,20 @@ func (t *tracer) walkAddr(addr *sg.Value, fn *sg.Func, chain []string, site ir.P
 // read is the value the field was read into: its type is the type of the
 // field.
 func (t *tracer) walkObject(base *sg.Value, field string, read *sg.Value, fn *sg.Func, chain []string, site ir.Pos, depth int) {
+	t.nodes++
+	if depth > maxProvDepth || t.nodes > maxProvNodes {
+		t.stop(KindDepthLimit, "the tracing was cut at its depth or size limit", "", base.Pos, chain, nil)
+		return
+	}
+	k := objKey{base, field}
+	if t.objPath == nil {
+		t.objPath = map[objKey]bool{}
+	}
+	if t.objPath[k] {
+		return // a loop
+	}
+	t.objPath[k] = true
+	defer delete(t.objPath, k)
 	chain = append(chain, "."+field)
 	switch {
 	case base.Kind == sg.KGlobal:
@@ -435,6 +457,7 @@ func (t *tracer) walkObject(base *sg.Value, field string, read *sg.Value, fn *sg
 			return
 		}
 		if len(sites) > maxProvCallers {
+			t.stop(KindDepthLimit, fmt.Sprintf("%s has %d callers; only the first %d are followed", fn.ID, len(sites), maxProvCallers), "", base.Pos, chain, nil)
 			sites = sites[:maxProvCallers]
 		}
 		for _, ci := range sites {

@@ -581,3 +581,12 @@ func TestMissingGeneratedCodeIsReported(t *testing.T) {
 		t.Error("a program with generated code was reported")
 	}
 }
+
+// An object handed down a recursion: the tracing of its field ends at the
+// limits instead of overflowing the stack, and says it was cut.
+func TestProvenanceThroughARecursiveObjectIsBounded(t *testing.T) {
+	p := provenanceOf(t, "@sink(recobj)")
+	if _, ok := terminalKinds(p)[KindDepthLimit]; !ok {
+		t.Errorf("the cut must be recorded as %s: %+v", KindDepthLimit, p.Unresolved)
+	}
+}

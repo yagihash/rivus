@@ -378,10 +378,40 @@ func (s *state) reach(site *sites.Site, f found, in *sg.Instr) {
 		s.recordFinding(f.E.Origin(), site, f.E.Label(), steps, gs)
 	case Param:
 		k := sinkKey{f.E, site.ID}
-		if old, ok := s.sinkReaches[k]; !ok || steps.len() < old.Steps.len() {
-			s.sinkReaches[k] = &SinkReach{Elem: f.E, Site: site.ID, Accepts: site.Labels, Steps: steps, Guards: gs}
-		}
+		s.noteSinkReach(k, &SinkReach{Elem: f.E, Site: site.ID, Accepts: site.Labels, Steps: steps, Guards: gs})
 	}
+}
+
+// noteSinkReach records that a parameter element reaches a sink. The shorter
+// path is kept; if the flow came under other guards than the one already
+// known, the guards are dropped, whatever the lengths (ADR-035).
+func (s *state) noteSinkReach(k sinkKey, sr *SinkReach) {
+	old, ok := s.sinkReaches[k]
+	if !ok {
+		s.sinkReaches[k] = sr
+		return
+	}
+	if m := mergeSinkReach(old, sr); m != old {
+		s.sinkReaches[k] = m
+	}
+}
+
+// mergeSinkReach joins two ways of reaching the same sink. It returns old
+// itself when nothing changes; it never changes either argument.
+func mergeSinkReach(old, nw *SinkReach) *SinkReach {
+	keep := old
+	if nw.Steps.len() < old.Steps.len() {
+		keep = nw
+	}
+	if sameGuards(old.Guards, nw.Guards) {
+		return keep
+	}
+	if len(keep.Guards) == 0 {
+		return keep
+	}
+	c := *keep
+	c.Guards = nil
+	return &c
 }
 
 func (s *state) sinkStep(site *sites.Site, in *sg.Instr) Step {
@@ -409,9 +439,20 @@ func (s *state) recordFinding(origin string, site *sites.Site, label string, ste
 		s.findings[k] = rf
 	}
 	rf.labels[label] = true
-	if rf.steps == nil || steps.len() < rf.steps.len() {
+	switch {
+	case rf.steps == nil:
 		rf.steps = steps
 		rf.guards = guards
+	default:
+		// The same flow came under other guards (or none): the guards of
+		// the one kept would not describe it (ADR-035: they are dropped).
+		if !sameGuards(rf.guards, guards) {
+			guards = nil
+		}
+		rf.guards = guards
+		if steps.len() < rf.steps.len() {
+			rf.steps = steps
+		}
 	}
 }
 

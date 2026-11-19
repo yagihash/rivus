@@ -348,9 +348,21 @@ func (s *state) add(l Loc, e Elem, w *why) {
 	if old, ok := set[e]; ok {
 		// The element is already here. If it came with other guards, the
 		// guards recorded for it do not describe it any more.
-		if old != nil && w != nil && !(sameGuards(old.guards(), w.guards()) && sameGuards(old.calleeGuards(), w.calleeGuards()) && old.call() == w.call()) {
-			old.markUnguarded()
-			s.guardEpoch++
+		if old != nil && w != nil {
+			differ := !(sameGuards(old.guards(), w.guards()) && sameGuards(old.calleeGuards(), w.calleeGuards()) && old.call() == w.call())
+			// The guards of a hop are not all: a φ or a return up the chain
+			// may hold others. If the two come from different places, the
+			// guards of the whole chains are compared.
+			if !differ && !old.unguarded() && !sameFrom(old.from, w.from) {
+				k := ref{l, e}
+				og, oo := s.guardsOfChain(l, e)
+				ng, no := s.guardsOfChainFrom(w, k)
+				differ = oo || no || !sameGuards(og, ng)
+			}
+			if differ {
+				old.markUnguarded()
+				s.guardEpoch++
+			}
 		}
 		return
 	}
@@ -510,7 +522,7 @@ func (s *state) collectUncached(l Loc) []found {
 func (s *state) copyLoc(src, dst Loc, w func(f found) *why) {
 	for _, f := range s.collect(src) {
 		dl := Loc{dst.Root, dst.Path + f.Rel}
-		if s.plainExists(dl, f.E) {
+		if s.plainExists(dl, f.E, ref{f.Cell, f.Orig}, true) {
 			continue
 		}
 		s.add(dl, f.E, s.withContainerNote(w(f), f.Cell.Path, dl.Path))
@@ -588,7 +600,7 @@ func (s *state) flatten(locs []Loc) []found {
 // reason (no guards, no summary applied). Adding it again changes nothing, and
 // the reason for the second time need not be made: most additions of a fixed
 // point iteration are of this kind, and a reason is the largest thing made.
-func (s *state) plainExists(l Loc, e Elem) bool {
+func (s *state) plainExists(l Loc, e Elem, from ref, hasFrom bool) bool {
 	p, _ := pathTrunc(l.Path, s.eng.opts.K)
 	cm, ok := s.cells[l.Root]
 	if !ok {
@@ -602,7 +614,25 @@ func (s *state) plainExists(l Loc, e Elem) bool {
 		e.path = 0
 	}
 	old, ok := set[e]
-	return ok && old != nil && old.plain()
+	return ok && old != nil && old.plain() && s.sameChainGuards(old, from, hasFrom)
+}
+
+// sameChainGuards reports whether the plain hop old and a hop that would
+// come from nf have the same guards up their chains. If not, the element
+// gets here under other conditions, and it has to be added to be told so.
+func (s *state) sameChainGuards(old *why, nf ref, hasNf bool) bool {
+	if old.unguarded() || (old.from == nil && !hasNf) || (old.from != nil && hasNf && *old.from == nf) {
+		return true
+	}
+	var og, ng []Guard
+	var oo, no bool
+	if old.from != nil {
+		og, oo = s.guardsOfChain(old.from.Loc, old.from.E)
+	}
+	if hasNf {
+		ng, no = s.guardsOfChain(nf.Loc, nf.E)
+	}
+	return !oo && !no && sameGuards(og, ng)
 }
 
 // addsNothing reports whether adding the element, with a plain reason (no
@@ -610,7 +640,7 @@ func (s *state) plainExists(l Loc, e Elem) bool {
 // nothing at all: it is there already with a plain reason, and the path and the
 // cell are as they would be left (add also records that a path was cut short and
 // that a cell was widened, which is why those are not skipped).
-func (s *state) addsNothing(dsts []Loc, e Elem) bool {
+func (s *state) addsNothing(dsts []Loc, e Elem, from ref, hasFrom bool) bool {
 	if len(dsts) == 0 {
 		return false
 	}
@@ -635,7 +665,7 @@ func (s *state) addsNothing(dsts []Loc, e Elem) bool {
 			return false
 		}
 		old, ok := set[e]
-		if !ok || old == nil || !old.plain() {
+		if !ok || old == nil || !old.plain() || !s.sameChainGuards(old, from, hasFrom) {
 			return false
 		}
 	}
@@ -645,7 +675,7 @@ func (s *state) addsNothing(dsts []Loc, e Elem) bool {
 // put adds the found elements to the destination, collapsed.
 func (s *state) put(dst Loc, fs []found, w func(f found) *why) {
 	for _, f := range fs {
-		if s.plainExists(dst, f.E) {
+		if s.plainExists(dst, f.E, ref{f.Cell, f.Orig}, true) {
 			continue
 		}
 		s.add(dst, f.E, s.withContainerNote(w(f), f.Cell.Path, dst.Path))
@@ -781,4 +811,11 @@ type guardAnswer struct {
 type cachedCollect struct {
 	ver   int
 	found []found
+}
+
+func sameFrom(a, b *ref) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
 }

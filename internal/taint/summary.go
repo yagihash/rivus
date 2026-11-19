@@ -322,7 +322,11 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 				// Most of what a summary says is already known here: then adding
 				// it changes nothing, and its reason (the largest thing made) is
 				// not needed.
-				if len(oe.Guards) == 0 && s.addsNothing(dsts, x.E) {
+				var nf ref
+				if x.From != nil {
+					nf = ref{x.From.Cell, x.From.Orig}
+				}
+				if len(oe.Guards) == 0 && s.addsNothing(dsts, x.E, nf, x.From != nil) {
 					continue
 				}
 				var w *why
@@ -372,12 +376,14 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 				if !accepted(sr.Accepts, x.E.Label()) {
 					continue
 				}
-				if rf := s.findings[findingKey{x.E.Origin(), sr.Site}]; rf != nil && rf.steps != nil && stepsLen >= rf.steps.len() {
+				// A flow that is not shorter is dropped, unless the guards of
+				// the one kept could differ from it: then they are compared.
+				if rf := s.findings[findingKey{x.E.Origin(), sr.Site}]; rf != nil && rf.steps != nil && stepsLen >= rf.steps.len() && len(rf.guards) == 0 {
 					rf.labels[x.E.Label()] = true
 					continue
 				}
 			case Param:
-				if old, ok := s.sinkReaches[sinkKey{x.E, sr.Site}]; ok && stepsLen >= old.Steps.len() {
+				if old, ok := s.sinkReaches[sinkKey{x.E, sr.Site}]; ok && stepsLen >= old.Steps.len() && len(old.Guards) == 0 {
 					continue
 				}
 			}
@@ -407,10 +413,7 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 					s.recordFinding(x.E.Origin(), s.eng.sites.ByID[sr.Site], x.E.Label(), steps, gs)
 				}
 			case Param:
-				k := sinkKey{x.E, sr.Site}
-				if old, ok := s.sinkReaches[k]; !ok || steps.len() < old.Steps.len() {
-					s.sinkReaches[k] = &SinkReach{Elem: x.E, Site: sr.Site, Accepts: sr.Accepts, Steps: steps, Guards: gs}
-				}
+				s.noteSinkReach(sinkKey{x.E, sr.Site}, &SinkReach{Elem: x.E, Site: sr.Site, Accepts: sr.Accepts, Steps: steps, Guards: gs})
 			}
 		}
 	}
@@ -495,8 +498,10 @@ func joinSummaries(old, cur *Summary) *Summary {
 	for _, sum := range []*Summary{old, cur} {
 		for _, sr := range sum.Sinks {
 			k := sinkKey{sr.Elem, sr.Site}
-			if have, ok := sinks[k]; !ok || sr.Steps.len() < have.Steps.len() {
+			if have, ok := sinks[k]; !ok {
 				sinks[k] = sr
+			} else {
+				sinks[k] = mergeSinkReach(have, sr)
 			}
 		}
 	}

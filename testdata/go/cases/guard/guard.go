@@ -125,3 +125,81 @@ func FromStructField() {
 	o := options{Escape: false}
 	lib.Sink(render(s, o.Escape)) // @sink(sf)
 }
+
+// A conversion can change the value: the comparison is on the converted one.
+func conv(s string, n int) string {
+	if int8(n) == 0 {
+		return s
+	}
+	return ""
+}
+
+func ConvertTruncates() {
+	s := lib.Source()      // @source(convtrunc)
+	lib.Sink(conv(s, 256)) // @sink(convtrunc)
+}
+
+func str(s string, r rune) string {
+	if string(r) != "a" {
+		return s
+	}
+	return ""
+}
+
+func ConvertToString() {
+	s := lib.Source()    // @source(convstr)
+	lib.Sink(str(s, 98)) // @sink(convstr)
+}
+
+// The same element reaches the sink under a guard on a short path and
+// without one on a longer path.
+func sinkIt(s string) { lib.Sink(s) } // @sink(twoguards)
+
+func twoPaths(x string, flag bool) {
+	if flag {
+		sinkIt(x)
+	}
+	sinkIt(x + "!")
+}
+
+func TwoGuardsAtTheSameSink() {
+	twoPaths(lib.Source(), false) // @source(twoguards)
+}
+
+// Guarded and unguarded paths into one cell.
+func oneCell(x string, flag bool) {
+	a := ""
+	if flag {
+		a = x
+	}
+	lib.Sink(a + x) // @sink(onecell)
+}
+
+func GuardedAndUnguardedInOneCell() {
+	oneCell(lib.Source(), false) // @source(onecell)
+}
+
+// An object that is handed down through a recursion, and a field of it that
+// decides: the tracing of where the field is set must end.
+type config struct{ Escape bool }
+
+func render2(s string, escape bool) string {
+	if escape {
+		return lib.Sanitize(s)
+	}
+	return s
+}
+
+func leafSink(cfg *config, s string) {
+	lib.Sink(render2(s, cfg.Escape)) // @sink(recobj)
+}
+
+func walkTree(cfg *config, s string, n int) {
+	leafSink(cfg, s)
+	walkTree(cfg, s, n-1)
+}
+
+func RecursiveObject(n int) {
+	cfg := &config{}
+	walkTree(cfg, lib.Source(), n) // @source(recobj)
+}
