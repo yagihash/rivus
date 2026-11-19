@@ -1,6 +1,8 @@
 package gossa
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -100,6 +102,31 @@ func TestImplementations(t *testing.T) {
 	for _, bad := range []string{"os.Open", "(*impl.Store).Save", "(example.com/cases/cases/impl.Store).Nope", "(example.com/cases/cases/impl.memStore).Save", "(no/such.Pkg).M"} {
 		if _, err := p.Implementations(bad); err == nil {
 			t.Errorf("%q should not be accepted", bad)
+		}
+	}
+}
+
+// A package outside a module (a file named on the command line) has no Module, as the standard library
+// has none: it is the code to analyse, so its bodies are built (yagihash/rivus #51).
+func TestLoadOutsideModuleWithDeps(t *testing.T) {
+	dir := t.TempDir()
+	src := "package main\n\nfunc Source() string { return \"x\" }\nfunc Sink(s string) {}\n\nfunc main() { Sink(Source()) }\n"
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, deps := range []bool{false, true} {
+		p, err := Load(dir, []string{"main.go"}, Options{Deps: deps})
+		if err != nil {
+			t.Fatal(err)
+		}
+		own := 0
+		for fn := range p.Own {
+			if len(fn.Blocks) > 0 {
+				own++
+			}
+		}
+		if own < 3 {
+			t.Errorf("deps=%v: %d own functions with a body, want at least 3 (load errors: %v)", deps, own, p.LoadErrors)
 		}
 	}
 }

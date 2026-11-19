@@ -10,7 +10,9 @@ import (
 	"go/ast"
 	"go/token"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -125,13 +127,19 @@ func Load(dir string, patterns []string, opts Options) (*Program, error) {
 		}
 	})
 
-	// With dependencies read from source, the standard library is not built
-	// (it has no module): the models stand for it.
+	// With dependencies read from source, the standard library is not built: the models stand for it.
+	// It is told by where it is (GOROOT), not by having no module: a package that is outside a module
+	// (a file named on the command line, GOPATH mode) has none either, and it is the code to analyse.
 	var skip map[string]bool
 	if opts.Deps {
 		skip = map[string]bool{}
+		initial := map[*packages.Package]bool{}
+		for _, pkg := range pkgs {
+			initial[pkg] = true
+		}
+		goroot := goRoot(absDir)
 		packages.Visit(pkgs, nil, func(pkg *packages.Package) {
-			if pkg.Module == nil {
+			if pkg.Module == nil && !initial[pkg] && isStdlib(pkg, goroot) {
 				skip[pkg.PkgPath] = true
 			}
 		})
@@ -381,4 +389,29 @@ func ownerPkg(fn *ssa.Function) *ssa.Package {
 		}
 	}
 	return nil
+}
+
+// goRoot is the GOROOT of the go command that loads the packages.
+func goRoot(dir string) string {
+	cmd := exec.Command("go", "env", "GOROOT")
+	cmd.Dir = dir
+	if out, err := cmd.Output(); err == nil {
+		if r := strings.TrimSpace(string(out)); r != "" {
+			return filepath.Join(r, "src") + string(filepath.Separator)
+		}
+	}
+	return filepath.Join(runtime.GOROOT(), "src") + string(filepath.Separator)
+}
+
+// isStdlib: a package without a module that is in GOROOT (or has no Go file at all, as unsafe has not).
+func isStdlib(pkg *packages.Package, gorootSrc string) bool {
+	if len(pkg.GoFiles) == 0 && len(pkg.CompiledGoFiles) == 0 {
+		return true
+	}
+	for _, f := range append(append([]string(nil), pkg.GoFiles...), pkg.CompiledGoFiles...) {
+		if strings.HasPrefix(f, gorootSrc) {
+			return true
+		}
+	}
+	return false
 }
