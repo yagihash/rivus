@@ -1,0 +1,37 @@
+# gRPC (google.golang.org/grpc) on the server side: where what a client sent comes
+# from, and the calls that go out to an address a client names.
+#
+# The request message of a unary call reaches the handler through generated code
+# and the registration of the service (a function value and an interface that
+# the call graph does not connect), so it is not a source here: a handler of
+# your own service is declared in the rules of the project. What the library
+# itself hands to the code is.
+ruleset: rivus/go/grpc@1
+
+sources:
+  # The metadata (the headers) of the call: what the client wrote.
+  - symbol: google.golang.org/grpc/metadata.FromIncomingContext
+    labels: [user_input]
+  - symbol: google.golang.org/grpc/metadata.ValueFromIncomingContext
+    labels: [user_input]
+  # A stream of requests: RecvMsg fills the message it is given with what the
+  # client sent. The generated Recv() of a client-streaming or bidirectional
+  # service calls it, and so does a handler that takes the stream.
+  - symbol: (google.golang.org/grpc.ServerStream).RecvMsg
+    out: [0]
+    labels: [user_input]
+  - symbol: (*google.golang.org/grpc.serverStream).RecvMsg
+    out: [0]
+    labels: [user_input]
+
+sinks:
+  # SSRF: a connection to an address the caller chose.
+  - symbol: google.golang.org/grpc.NewClient
+    args: [0]
+    category: ssrf
+  - symbol: google.golang.org/grpc.Dial
+    args: [0]
+    category: ssrf
+  - symbol: google.golang.org/grpc.DialContext
+    args: [1]
+    category: ssrf

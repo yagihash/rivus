@@ -547,3 +547,7 @@ func TestStoredDataBoundaryIsRecorded(t *testing.T) {
 // caller made the interface value right there: then only the implementation of
 // its type is called.
 func TestDispatchIsNarrowedByTheTypeTheCallerPassed(t *testing.T) { checkCase(t, "dispatch") }
+
+// gRPC: the metadata of a call and the messages of a stream are what a client
+// sent; a connection to an address from outside is a request forgery.
+func TestGRPCServerModels(t *testing.T) { checkCase(t, "grpcsrv") }
