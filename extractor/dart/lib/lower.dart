@@ -645,7 +645,10 @@ class FnLower {
       final exc = tmp(null);
       emit('exception_value', dsts: [exc]);
       caught.add(exc);
-      _handlers.add(_Try(fin: s.finallyBlock)); // a throw in a clause runs the finally
+      // a throw in a clause runs the finally: the same handler for every clause, and
+      // the block it makes is the one that the try makes at its end
+      final inClause = _Try(fin: s.finallyBlock);
+      _handlers.add(inClause);
       for (final c in s.catchClauses) {
         final body = newBlock();
         final next = newBlock();
@@ -679,12 +682,13 @@ class FnLower {
           }
           jump(after);
         }
-        _handlers.add(_Try(fin: s.finallyBlock));
+        _handlers.add(inClause);
         cur = type == null ? null : next;
         if (type == null) break;
       }
       _handlers.removeLast();
       caught.removeLast();
+      if (inClause.unwind != null) t.unwind ??= inClause.unwind;
       // no clause took the exception: it goes on, after the finally
       if (cur != null) {
         final fin = s.finallyBlock;
