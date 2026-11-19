@@ -105,7 +105,7 @@ func (r *Report) Run(q Query) (*QueryResult, error) {
 		if (q.Sink != "" && s.Role == "sink" && s.Symbol == q.Sink) ||
 			(q.Source != "" && s.Role == "source" && s.Symbol == q.Source) ||
 			(q.Site != "" && s.ID == q.Site) {
-			note(taint.SiteRef{ID: s.ID, Symbol: s.Symbol, Func: s.Func, Position: s.Position, Snippet: s.Snippet})
+			note(ref(s))
 		}
 	}
 	for _, g := range groups {
