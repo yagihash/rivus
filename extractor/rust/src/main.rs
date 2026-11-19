@@ -333,6 +333,7 @@ fn merge(files: Vec<PathBuf>) {
             }
         }
     }
+    link_across_crates(&mut funcs);
     for l in funcs.values() {
         println!("{}", l);
     }
@@ -344,6 +345,79 @@ fn merge(files: Vec<PathBuf>) {
     }
     for l in rest {
         println!("{}", l);
+    }
+}
+
+/// The calls through a trait (`dyn Trait`, a type parameter) and the drops of values of another crate, which
+/// one crate cannot resolve: it knows the impls of its own functions only. Here every crate is in, so the
+/// candidates are the impls of the whole program, and the marks the lowering left are removed.
+fn link_across_crates(funcs: &mut std::collections::BTreeMap<String, String>) {
+    let mut by_method: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+    let mut drops: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+    const DROP_TAIL: &str = " as std::ops::Drop>::drop";
+    for id in funcs.keys() {
+        if !id.starts_with('<') {
+            continue;
+        }
+        if let Some((_, method)) = id.rsplit_once(">::") {
+            by_method.entry(method.to_string()).or_default().push(id.clone());
+        }
+        if id.ends_with(DROP_TAIL) {
+            let inner = &id[1..id.len() - DROP_TAIL.len()];
+            drops.entry(inner.split('<').next().unwrap_or(inner).to_string()).or_default().push(id.clone());
+        }
+    }
+    let ids: HashSet<String> = funcs.keys().cloned().collect();
+    for line in funcs.values_mut() {
+        if !line.contains("\"by_trait\"") && !line.contains("\"drop_of\"") {
+            continue;
+        }
+        let Ok(mut v) = serde_json::from_str::<Value>(line) else { continue };
+        let Some(blocks) = v["func"]["blocks"].as_array_mut() else { continue };
+        for b in blocks {
+            let Some(instrs) = b["instrs"].as_array_mut() else { continue };
+            for in_ in instrs {
+                let Some(callee) = in_.get_mut("callee").and_then(|c| c.as_object_mut()) else { continue };
+                if callee.remove("by_trait").is_some() {
+                    let sym = callee.get("symbol").and_then(|s| s.as_str()).unwrap_or("").to_string();
+                    let mut cands: Vec<String> = callee.get("candidates").and_then(|c| c.as_array()).map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect()).unwrap_or_default();
+                    if let Some((trait_path, method)) = sym.rsplit_once("::") {
+                        let trait_name = trait_path.rsplit("::").next().unwrap_or(trait_path);
+                        let suffix = format!(">::{}", method);
+                        for n in by_method.get(method).map(|v| v.as_slice()).unwrap_or(&[]) {
+                            if lower::impl_of_trait(n, &suffix) == Some(trait_name) {
+                                cands.push(n.clone());
+                            }
+                        }
+                    }
+                    // the default body of the method, which an impl that does not override it uses
+                    if ids.contains(&sym) {
+                        cands.push(sym.clone());
+                    }
+                    cands.sort();
+                    cands.dedup();
+                    callee.insert("candidates".into(), json!(cands));
+                }
+                if let Some(want) = callee.remove("drop_of") {
+                    let found = want.as_str().and_then(|w| drops.get(w)).cloned().unwrap_or_default();
+                    match found.first() {
+                        Some(name) => {
+                            callee.clear();
+                            callee.insert("kind".into(), json!("static"));
+                            callee.insert("func".into(), json!(name));
+                            callee.insert("symbol".into(), json!("std::ops::Drop::drop"));
+                        }
+                        None => {
+                            // no impl: the call is not made (a value that nothing runs a destructor for)
+                            let pos = in_["pos"].clone();
+                            let dst = in_["dsts"].clone();
+                            *in_ = json!({"op": "const", "dsts": dst, "const": {"kind": "nil"}, "pos": pos});
+                        }
+                    }
+                }
+            }
+        }
+        *line = v.to_string();
     }
 }
 

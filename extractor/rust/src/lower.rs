@@ -981,7 +981,8 @@ impl<'a> Lower<'a> {
                     // a call through a trait object: whichever impl the object has
                     _ if virtual_call => {
                         let cands = self.candidates(&def_name);
-                        callee = json!({"kind": "dynamic", "symbol": def_name, "candidates": cands});
+                        // by_trait: the merge adds the impls of the other crates of the workspace (and removes the mark)
+                        callee = json!({"kind": "dynamic", "symbol": def_name, "candidates": cands, "by_trait": true});
                     }
                     // the body is the one of the definition the call resolves to. The trait's method of the same
                     // name is not it: an impl that overrides a default body is not the default
@@ -1009,13 +1010,17 @@ impl<'a> Lower<'a> {
                         // a call that cannot be resolved here: through a type parameter. For a
                         // call of a function value (`f(v)` with `F: Fn(String)`) the callee is
                         // one of the closures of the crate that takes as many arguments.
-                        let cands = if matches!(def_name.as_str(), "std::ops::Fn::call" | "std::ops::FnMut::call_mut" | "std::ops::FnOnce::call_once") {
+                        let is_fn = matches!(def_name.as_str(), "std::ops::Fn::call" | "std::ops::FnMut::call_mut" | "std::ops::FnOnce::call_once");
+                        let cands = if is_fn {
                             let tys: Vec<String> = vals.iter().skip(1).map(|v| self.f.locals[*v].ty.clone()).collect();
                             self.closure_candidates(&tys)
                         } else {
                             self.candidates(&def_name)
                         };
                         callee = json!({"kind": "dynamic", "symbol": def_name, "candidates": cands});
+                        if !is_fn {
+                            callee["by_trait"] = json!(true);
+                        }
                     }
                 }
             }
@@ -1066,7 +1071,20 @@ impl<'a> Lower<'a> {
                 inner.split('<').next().unwrap_or(inner) == want
             })
             .cloned();
-        let Some(name) = found else { return };
+        let Some(name) = found else {
+            // The impl of Drop is in the crate of the type. A type of another crate of the workspace (or a
+            // dependency) has it there: the merge finds it among the functions of all the crates, and
+            // leaves the call out when there is none (`drop_of` is the mark, and it is removed there).
+            if let TyKind::RigidTy(RigidTy::Adt(def, _)) = ty.kind() {
+                let krate = def.krate();
+                if !krate.is_local && !matches!(krate.name.as_str(), "std" | "core" | "alloc" | "proc_macro" | "test") {
+                    let ptr = self.ref_place(place, pos);
+                    let d = self.new_local("", None);
+                    self.emit("call", &[d], &[ptr], pos, json!({"callee": {"kind": "dynamic", "symbol": "std::ops::Drop::drop", "drop_of": want}}));
+                }
+            }
+            return;
+        };
         let ptr = self.ref_place(place, pos);
         let d = self.new_local("", None);
         self.emit("call", &[d], &[ptr], pos, json!({"callee": {"kind": "static", "func": name.clone(), "symbol": "std::ops::Drop::drop"}}));
@@ -1176,7 +1194,7 @@ impl<'a> Lower<'a> {
 
 /// The name of the trait of an `impl` function named `<Type as path::Trait<A>>::method`,
 /// without its path and its generic arguments.
-fn impl_of_trait<'a>(name: &'a str, suffix: &str) -> Option<&'a str> {
+pub(crate) fn impl_of_trait<'a>(name: &'a str, suffix: &str) -> Option<&'a str> {
     let inner = name.strip_suffix(suffix)?;
     let (_, tr) = inner.split_once(" as ")?;
     let tr = tr.split('<').next().unwrap_or(tr);

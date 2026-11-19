@@ -184,3 +184,40 @@ pub fn generic_as_value() {
     let f = ident::<String>;
     sink(&f(s)); // @sink(rv-generic-value)
 }
+
+// --- #41: the impls of a trait that another crate defines and calls through, and the destructor of its type
+
+struct Printer;
+
+impl depcrate::DepHandler for Printer {
+    fn handle(&self, s: &str) {
+        sink(s); // @sink(rv-dep-dyn)
+    }
+}
+
+pub fn dep_dyn() {
+    let s = source(); // @source(rv-dep-dyn)
+    depcrate::run(&Printer, s);
+}
+
+struct Printer2;
+
+impl depcrate::DepHandler2 for Printer2 {
+    fn handle2(&self, s: &str) {
+        sink(s); // @sink(rv-dep-generic-bound)
+    }
+}
+
+pub fn dep_generic_bound() {
+    let s = source(); // @source(rv-dep-generic-bound)
+    depcrate::run_generic(&Printer2, s);
+}
+
+pub fn dep_drop() {
+    {
+        let mut g = depcrate::Guard { buf: String::new() };
+        let s = source(); // @source(rv-dep-drop)
+        g.buf.push_str(&s);
+    }
+    sink(&depcrate::seen()[0]); // @sink(rv-dep-drop)
+}

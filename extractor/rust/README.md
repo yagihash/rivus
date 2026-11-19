@@ -32,8 +32,11 @@ writes the IR of each crate on the way. The code has to compile. The dependencie
 by `CARGO_PRIMARY_PACKAGE`): their functions are marked `dep`, and `rivus analyze` keeps the ones
 the code reaches, so a flow goes through a dependency instead of being guessed at. Proc macros are
 not read, nor is `std` (the models stand for it). `--no-deps` reads the members only: calls into a
-dependency are then unmodeled library calls, until a model says what they do. The trait
-implementations of a dependency are not candidates of a call through `dyn Trait` yet.
+dependency are then unmodeled library calls, until a model says what they do. The candidates of a
+call through `dyn Trait` (or a type parameter) are the impls of every crate that was read: the crate that
+is compiled does not know the others, so the stream is merged first and the candidates are completed
+then (the same for `Drop::drop` of a type of another crate). Closures are the exception: the candidates
+of a call of a function value are the closures of the crate that makes the call.
 
 The extractor is pinned to one nightly (`rust-toolchain.toml`, `TOOLCHAIN` in `src/main.rs`):
 `rustc_public` is unstable, and moves with the compiler. To move it, change the two, and
@@ -64,7 +67,7 @@ receiver apart from the arguments), and a sink's `args: [1]` is the first argume
 - An enum variant's field is named `Variant.field`, a tuple's and a closure's fields `0`,
   `1`, ...
 - A call is resolved by `Instance::resolve`: a function with a body in the workspace is a
-  static call (`func` is the instance, `symbol` the path or the trait method); one without
+  static call (`func` is the name of the definition, without type arguments; `symbol` the path or the trait method); one without
   is an external static call (a model says what it does); one that cannot be resolved
   (a type parameter, a trait object) is `dynamic`, with the impls of the workspace as
   candidates.
