@@ -183,6 +183,10 @@ type state struct {
 	condCache       map[*sg.Block]*Guard
 	blockGuardCache map[*sg.Block][]Guard
 	rootVer         map[Root]int // number of elements added to each root: change detector
+	// addLog is, for each root, the path of each element added to it, in
+	// order: rootVer[r] is the length of addLog[r], so a number of it is a place
+	// in the log, and what was added since is what follows.
+	addLog map[Root][]string
 	callSigs        map[*sg.Instr]int
 	sortedElems     map[Loc]cachedElems
 	sortedPaths     map[Root]cachedPaths
@@ -311,6 +315,23 @@ func (s *state) add(l Loc, e Elem, w *why) {
 		s.rootVer = map[Root]int{}
 	}
 	s.rootVer[l.Root]++
+	if s.addLog == nil {
+		s.addLog = map[Root][]string{}
+	}
+	s.addLog[l.Root] = append(s.addLog[l.Root], l.Path)
+}
+
+// touches reports whether an element added at the path p of a root changes what
+// collect says of the path l: it does when p is l, an object that encloses l, or
+// something stored below l (the three things collectUncached reads).
+func touches(l, p string) bool {
+	if pathHasPrefix(p, l) {
+		return true // l itself, or below it
+	}
+	if l == "" {
+		return false
+	}
+	return p == "" || (len(p) < len(l) && l[len(p)] == '/' && strings.HasPrefix(l, p))
 }
 
 // whyOf returns the reason the element got into the cell, if the analysis
@@ -339,8 +360,26 @@ func (s *state) collect(l Loc) []found {
 	// What is known of a location changes only when something is added to
 	// its root: until then, the answer stands.
 	ver := s.rootVer[l.Root]
-	if c, ok := s.collectCache[l]; ok && c.ver == ver {
-		return c.found
+	if c, ok := s.collectCache[l]; ok {
+		if c.ver == ver {
+			return c.found
+		}
+		// Something was added to the root, but not necessarily to what this
+		// location reads: if not, the answer stands.
+		stale := false
+		for _, p := range s.addLog[l.Root][c.ver:ver] {
+			if touches(l.Path, p) {
+				stale = true
+				break
+			}
+		}
+		if !stale {
+			s.collectCache[l] = cachedCollect{ver, c.found}
+			if s.collectMemo != nil {
+				s.collectMemo[l] = c.found
+			}
+			return c.found
+		}
 	}
 	out := s.collectUncached(l)
 	if s.collectCache == nil {
