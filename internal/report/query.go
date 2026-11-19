@@ -117,14 +117,20 @@ func (r *Report) Run(q Query) (*QueryResult, error) {
 		if a.File != b.File {
 			return a.File < b.File
 		}
-		return a.Offset < b.Offset
+		if a.Offset != b.Offset {
+			return a.Offset < b.Offset
+		}
+		return out.Groups[i].Site.ID < out.Groups[j].Site.ID
 	})
 	sort.Slice(out.Matched, func(i, j int) bool {
 		a, b := out.Matched[i].Position, out.Matched[j].Position
 		if a.File != b.File {
 			return a.File < b.File
 		}
-		return a.Offset < b.Offset
+		if a.Offset != b.Offset {
+			return a.Offset < b.Offset
+		}
+		return out.Matched[i].ID < out.Matched[j].ID
 	})
 	return out, nil
 }
