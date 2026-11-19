@@ -1,14 +1,21 @@
 # gRPC (google.golang.org/grpc) on the server side: where what a client sent comes
 # from, and the calls that go out to an address a client names.
 #
-# The request message of a unary call reaches the handler through generated code
-# and the registration of the service (a function value and an interface that
-# the call graph does not connect), so it is not a source here: a handler of
-# your own service is declared in the rules of the project. What the library
-# itself hands to the code is.
+# What a client sent to a service of the project. The generated code (protoc-gen-go-grpc)
+# has to exist when the analysis runs: it is what says which methods are the handlers
+# of a service. Every interface that has a method named mustEmbedUnimplemented...
+# is a service, and what its methods are given in parameters that are messages is
+# input. (The request reaches the handler through a function value and an interface
+# that the call graph does not connect, so the handlers are declared here.) A
+# service generated with require_unimplemented_servers=false has no such method:
+# declare its handlers in the rules of the project.
 ruleset: rivus/go/grpc@1
 
 sources:
+  - kind: param
+    match: implementations
+    marker: "mustEmbedUnimplemented*"
+    labels: [user_input]
   # The metadata (the headers) of the call: what the client wrote.
   - symbol: google.golang.org/grpc/metadata.FromIncomingContext
     labels: [user_input]

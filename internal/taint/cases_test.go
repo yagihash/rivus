@@ -551,3 +551,8 @@ func TestDispatchIsNarrowedByTheTypeTheCallerPassed(t *testing.T) { checkCase(t,
 // gRPC: the metadata of a call and the messages of a stream are what a client
 // sent; a connection to an address from outside is a request forgery.
 func TestGRPCServerModels(t *testing.T) { checkCase(t, "grpcsrv") }
+
+// The handlers of a gRPC service are found from the generated code (an
+// interface with a mustEmbedUnimplemented method): what they are given as
+// messages is input; a method of another interface is not.
+func TestGRPCHandlersAreFoundFromTheGeneratedCode(t *testing.T) { checkCase(t, "grpcunary") }

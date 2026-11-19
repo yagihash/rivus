@@ -1,0 +1,142 @@
+# gRPC servers in Rust (tonic): a handler of a service gets a tonic::Request<T>
+# for every call, and what the client sent is in it: the message (into_inner,
+# get_ref) and the metadata (the headers). A streaming handler gets
+# Request<Streaming<T>>, and the messages come out of the stream.
+#
+# The extractor writes the type of an `async fn` handler as `tonic::Request`
+# (the re-export), and the symbols of the methods the same way; the definition
+# path (`tonic::request::Request`) is given too, for the other readers.
+ruleset: rivus/rust/grpc@1
+
+sources:
+  - kind: param_type
+    type: "tonic::Request"
+    labels: [user_input]
+  - kind: param_type
+    type: "tonic::request::Request"
+    labels: [user_input]
+  - kind: param_type
+    type: "tonic::Streaming"
+    labels: [user_input]
+  - kind: param_type
+    type: "tonic::codec::decode::Streaming"
+    labels: [user_input]
+
+propagators:
+  # the message and the metadata of the request
+  - symbol: tonic::Request::into_inner
+    flows: [{from: args, to: result}]
+  - symbol: tonic::request::Request::into_inner
+    flows: [{from: args, to: result}]
+  - symbol: tonic::Request::get_ref
+    flows: [{from: args, to: result}]
+  - symbol: tonic::request::Request::get_ref
+    flows: [{from: args, to: result}]
+  - symbol: tonic::Request::get_mut
+    flows: [{from: args, to: result}]
+  - symbol: tonic::request::Request::get_mut
+    flows: [{from: args, to: result}]
+  - symbol: tonic::Request::metadata
+    flows: [{from: args, to: result}]
+  - symbol: tonic::request::Request::metadata
+    flows: [{from: args, to: result}]
+  - symbol: tonic::Request::metadata_mut
+    flows: [{from: args, to: result}]
+  - symbol: tonic::request::Request::metadata_mut
+    flows: [{from: args, to: result}]
+  - symbol: tonic::Request::into_parts
+    flows: [{from: args, to: result}]
+  - symbol: tonic::request::Request::into_parts
+    flows: [{from: args, to: result}]
+  - symbol: tonic::Request::remote_addr
+    flows: [{from: args, to: result}]
+  - symbol: tonic::request::Request::remote_addr
+    flows: [{from: args, to: result}]
+  # the metadata map and its values
+  - symbol: tonic::metadata::MetadataMap::get
+    flows: [{from: args, to: result}]
+  - symbol: tonic::metadata::map::MetadataMap::get
+    flows: [{from: args, to: result}]
+  - symbol: tonic::metadata::MetadataMap::get_all
+    flows: [{from: args, to: result}]
+  - symbol: tonic::metadata::map::MetadataMap::get_all
+    flows: [{from: args, to: result}]
+  - symbol: tonic::metadata::MetadataMap::get_bin
+    flows: [{from: args, to: result}]
+  - symbol: tonic::metadata::map::MetadataMap::get_bin
+    flows: [{from: args, to: result}]
+  - symbol: tonic::metadata::MetadataMap::iter
+    flows: [{from: args, to: result}]
+  - symbol: tonic::metadata::map::MetadataMap::iter
+    flows: [{from: args, to: result}]
+  - symbol: tonic::metadata::MetadataMap::values
+    flows: [{from: args, to: result}]
+  - symbol: tonic::metadata::map::MetadataMap::values
+    flows: [{from: args, to: result}]
+  - symbol: tonic::metadata::MetadataMap::into_headers
+    flows: [{from: args, to: result}]
+  - symbol: tonic::metadata::map::MetadataMap::into_headers
+    flows: [{from: args, to: result}]
+  - symbol: tonic::metadata::MetadataMap::as_ref
+    flows: [{from: args, to: result}]
+  - symbol: tonic::metadata::MetadataValue::to_str
+    flows: [{from: args, to: result}]
+  - symbol: tonic::metadata::value::MetadataValue::to_str
+    flows: [{from: args, to: result}]
+  - symbol: tonic::metadata::MetadataValue::as_bytes
+    flows: [{from: args, to: result}]
+  - symbol: tonic::metadata::value::MetadataValue::as_bytes
+    flows: [{from: args, to: result}]
+  - symbol: tonic::metadata::MetadataValue::to_bytes
+    flows: [{from: args, to: result}]
+  - symbol: tonic::metadata::value::MetadataValue::to_bytes
+    flows: [{from: args, to: result}]
+  # the messages of a stream of requests
+  - symbol: tonic::Streaming::message
+    flows: [{from: args, to: result}]
+  - symbol: tonic::codec::decode::Streaming::message
+    flows: [{from: args, to: result}]
+  - symbol: tonic::Streaming::trailers
+    flows: [{from: args, to: result}]
+  - symbol: tonic::codec::decode::Streaming::trailers
+    flows: [{from: args, to: result}]
+  - symbol: tonic::Streaming::into_inner
+    flows: [{from: args, to: result}]
+  - symbol: tonic::codec::decode::Streaming::into_inner
+    flows: [{from: args, to: result}]
+  # the results of the handler are built from what it is given
+  - symbol: tonic::Response::new
+    flows: [{from: args, to: result}]
+  - symbol: tonic::response::Response::new
+    flows: [{from: args, to: result}]
+
+sinks:
+  # the file functions of tokio (those of std are in rivus/rust/std)
+  - symbol: tokio::fs::read
+    args: [0]
+    category: path_traversal
+    accepts: [user_input]
+  - symbol: tokio::fs::read_to_string
+    args: [0]
+    category: path_traversal
+    accepts: [user_input]
+  - symbol: tokio::fs::write
+    args: [0]
+    category: path_traversal
+    accepts: [user_input]
+  - symbol: tokio::fs::remove_file
+    args: [0]
+    category: path_traversal
+    accepts: [user_input]
+  - symbol: tokio::fs::remove_dir_all
+    args: [0]
+    category: path_traversal
+    accepts: [user_input]
+  - symbol: tokio::fs::File::open
+    args: [0]
+    category: path_traversal
+    accepts: [user_input]
+  - symbol: tokio::fs::File::create
+    args: [0]
+    category: path_traversal
+    accepts: [user_input]

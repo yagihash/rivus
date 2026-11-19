@@ -19,6 +19,19 @@ type Resolver interface {
 	Implementations(symbol string) ([]string, error)
 }
 
+// MarkedMethod is an interface method found by a marker: the symbol, and the
+// positions (receiver excluded) of the parameters that are messages.
+type MarkedMethod struct {
+	Symbol string
+	Params []int
+}
+
+// MarkerResolver is a Resolver that can also list the methods of the
+// interfaces that have a method named by a marker (a glob).
+type MarkerResolver interface {
+	MarkedMethods(marker string) []MarkedMethod
+}
+
 // Expansion records what happened to one rule with match: implementations.
 type Expansion struct {
 	Symbol string `json:"symbol"`
@@ -63,6 +76,21 @@ func (r *Rules) Expand(res Resolver, defaultMax int) []Expansion {
 	}
 	for _, rs := range r.Sets {
 		for _, s := range rs.Sources {
+			if s.Marker != "" && s.Kind == KindParam {
+				mr, ok := res.(MarkerResolver)
+				if !ok {
+					continue
+				}
+				for _, m := range mr.MarkedMethods(s.Marker) {
+					m, s := m, s
+					expand("source", m.Symbol, s.MaxImplementations, func(c string) {
+						cp := s
+						cp.Symbol, cp.Match, cp.Marker, cp.Params = c, MatchExact, "", m.Params
+						r.ParamFuncs[c] = append(r.ParamFuncs[c], cp)
+					})
+				}
+				continue
+			}
 			if s.Match == MatchImplementations && (s.Kind == KindCallResult || s.Kind == KindParam) {
 				s := s
 				expand("source", s.Symbol, s.MaxImplementations, func(c string) {

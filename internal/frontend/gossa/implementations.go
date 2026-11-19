@@ -3,10 +3,13 @@ package gossa
 import (
 	"fmt"
 	"go/types"
+	"path"
 	"sort"
 	"strings"
 
 	"golang.org/x/tools/go/ssa"
+
+	"github.com/yagihash/rivus/internal/model"
 )
 
 // Implementations finds the methods that implement an interface method.
@@ -105,4 +108,60 @@ func splitMethodSymbol(symbol string) (typeStr, method string, ok bool) {
 		return "", "", false
 	}
 	return symbol[1:end], symbol[end+2:], true
+}
+
+// MarkedMethods lists the methods of the interfaces of the loaded packages that
+// have a method matching the marker (a glob, "mustEmbedUnimplemented*" for the
+// code of protoc-gen-go-grpc), with the positions of the parameters that are
+// messages (a pointer to a struct): the context and the streams are
+// interfaces, and are not. The methods that have no such parameter, and the
+// marker itself, are left out.
+func (p *Program) MarkedMethods(marker string) []model.MarkedMethod {
+	var out []model.MarkedMethod
+	for _, op := range p.OwnPkgs {
+		names := make([]string, 0, len(op.Members))
+		for n := range op.Members {
+			names = append(names, n)
+		}
+		sort.Strings(names)
+		for _, n := range names {
+			tm, ok := op.Members[n].(*ssa.Type)
+			if !ok {
+				continue
+			}
+			iface, ok := tm.Type().Underlying().(*types.Interface)
+			if !ok {
+				continue
+			}
+			marked := false
+			for i := 0; i < iface.NumMethods(); i++ {
+				if ok, _ := path.Match(marker, iface.Method(i).Name()); ok {
+					marked = true
+				}
+			}
+			if !marked {
+				continue
+			}
+			for i := 0; i < iface.NumMethods(); i++ {
+				m := iface.Method(i)
+				if ok, _ := path.Match(marker, m.Name()); ok || !m.Exported() {
+					continue
+				}
+				sig := m.Type().(*types.Signature)
+				var params []int
+				for j := 0; j < sig.Params().Len(); j++ {
+					if ptr, ok := sig.Params().At(j).Type().(*types.Pointer); ok {
+						if _, ok := ptr.Elem().Underlying().(*types.Struct); ok {
+							params = append(params, j)
+						}
+					}
+				}
+				if len(params) == 0 {
+					continue
+				}
+				out = append(out, model.MarkedMethod{Symbol: "(" + op.Pkg.Path() + "." + n + ")." + m.Name(), Params: params})
+			}
+		}
+	}
+	return out
 }

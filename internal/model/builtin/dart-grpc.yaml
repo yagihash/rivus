@@ -1,0 +1,23 @@
+# package:grpc (Dart) on the server side: what the library hands to the code,
+# and the calls that connect to an address.
+#
+# The request message of a handler is a generated class (protoc_plugin writes
+# `HelloRequest extends GeneratedMessage` into the project), so it cannot be named
+# here: a handler of your own service is declared in the rules of the project, with
+# `kind: param_type` and the generated type (for example
+# `package:app/src/generated/hello.pb.dart#HelloRequest`). What the library
+# itself hands to the code is a source here.
+ruleset: rivus/dart/grpc@1
+
+sources:
+  # The headers the client sent with the call: ServiceCall.clientMetadata
+  # (a Map<String, String>?). The extractor sees it as a call of a getter.
+  - symbol: package:grpc/src/server/call.dart#ServiceCall.clientMetadata
+    labels: [user_input]
+
+sinks:
+  # SSRF: a channel to a host the caller chose (ClientChannel(host, port: ...)).
+  - symbol: package:grpc/src/client/http2_channel.dart#ClientChannel.new
+    args: [0]
+    category: ssrf
+    accepts: [user_input]

@@ -31,6 +31,12 @@ String symbolOf(Element e) {
   if (base is ConstructorElement) {
     name = name.isEmpty ? 'new' : name;
   }
+  // The unary minus has no parameter and the binary one has one, and the
+  // analyzer gives both the name "-": they are two methods (Int32 of fixnum
+  // declares both), so the identity tells them apart as Dart's own name does.
+  if (base is MethodElement && name == '-' && base.formalParameters.isEmpty) {
+    name = 'unary-';
+  }
   // The setter of a field is named "x=" by the analyzer; the rules speak of
   // the field. (The operator "[]=" is a method and keeps its name.)
   if (base is SetterElement && name.endsWith('=')) name = name.substring(0, name.length - 1);

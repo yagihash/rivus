@@ -93,7 +93,14 @@ type Source struct {
 	// database read hands rows back (rows.Scan(&x), db.Find(&users)). The
 	// pointee is what is tainted. The result of the call is tainted too, unless
 	// the rule says only out.
-	Out    []int    `yaml:"out"`
+	Out []int `yaml:"out"`
+	// Marker, with kind: param and match: implementations (and no symbol), picks
+	// the interfaces that have a method of this name (a glob: for the code
+	// protoc-gen-go-grpc writes, "mustEmbedUnimplemented*"), and declares as
+	// entry points the implementations of each of their other methods: what the
+	// framework hands to them in parameters that are messages is the input. The
+	// generated code has to exist when the analysis runs.
+	Marker string   `yaml:"marker"`
 	Labels []string `yaml:"labels"`
 	Match  string   `yaml:"match"`
 	// MaxImplementations bounds the expansion of match: implementations.
@@ -386,6 +393,12 @@ func (rs *RuleSet) validate() error {
 				return fmt.Errorf("%s: field is required for kind %s", what, s.Kind)
 			}
 		case KindParam:
+			if s.Marker != "" {
+				if s.Symbol != "" || s.Match != MatchImplementations {
+					return fmt.Errorf("%s: marker goes with match: implementations and no symbol", what)
+				}
+				break
+			}
 			if s.Symbol == "" {
 				return fmt.Errorf("%s: symbol is required for kind %s", what, s.Kind)
 			}
@@ -536,6 +549,9 @@ func Merge(sets ...*RuleSet) *Rules {
 			case KindParamType:
 				r.ParamTypes = append(r.ParamTypes, s)
 			case KindParam:
+				if s.Marker != "" {
+					break // expanded over the interfaces the program has (Expand)
+				}
 				r.ParamFuncs[s.Symbol] = append(r.ParamFuncs[s.Symbol], s)
 			case KindField:
 				r.Fields[s.Field] = append(r.Fields[s.Field], s)
