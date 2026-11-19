@@ -57,6 +57,8 @@ class Program {
   Program(this.root, this.out);
   final String root;
   final StreamOut out;
+  /// For tests: a function whose id contains this fails, as one that cannot be lowered does.
+  String? failIn;
   final texts = Texts();
   final methods = <String, List<MethodImpl>>{}; // by member name
   final types = <String, Set<String>>{}; // a class -> the types it extends, implements, mixes in

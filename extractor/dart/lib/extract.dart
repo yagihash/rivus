@@ -18,10 +18,11 @@ import 'program.dart';
 
 /// Extracts the Dart code under [root] (the files that are not under a hidden
 /// or a build directory) and writes the stream to [sink].
-Future<void> extract(String root, StringSink sink, {bool deps = true, List<String> allowDepsUnder = const []}) async {
+Future<void> extract(String root, StringSink sink,
+    {bool deps = true, List<String> allowDepsUnder = const [], Future<void> Function()? drain, String? failIn}) async {
   root = p.normalize(p.absolute(root));
   final out = StreamOut(sink);
-  final prog = Program(root, out);
+  final prog = Program(root, out)..failIn = failIn;
   final collection = AnalysisContextCollection(includedPaths: [root]);
 
   // Resolve everything first: the call graph needs all of the classes.
@@ -110,6 +111,8 @@ Future<void> extract(String root, StringSink sink, {bool deps = true, List<Strin
   prog.closeCtors();
   for (final u in units) {
     u.unit.accept(_Lower(prog, u));
+    // what is written so far goes out: the stream is not kept whole in memory
+    if (drain != null) await drain();
   }
   for (final e in prog.globals.entries) {
     out.global(e.key, e.value.$1, e.value.$2);
@@ -368,6 +371,12 @@ class _Lower extends RecursiveAstVisitor<void> {
   /// own, which stores the value in the variable: the program starts there too (the
   /// variable is set when it is first read, and the code that reads it does not ask when).
   void _initializer(VariableDeclaration v) {
+    final el = v.declaredFragment?.element;
+    if (v.initializer == null || el == null) return;
+    _guarded('${symbolOf(el)}\$init', () => _initializerLower(v));
+  }
+
+  void _initializerLower(VariableDeclaration v) {
     final init = v.initializer;
     final el = v.declaredFragment?.element;
     if (init == null || el == null) return;
@@ -473,6 +482,12 @@ class _Lower extends RecursiveAstVisitor<void> {
   void _defaultConstructor(ClassElement cls) {
     final ctor = cls.unnamedConstructor;
     if (ctor == null) return;
+    _guarded(funcId(ctor), () => _defaultConstructorLower(cls));
+  }
+
+  void _defaultConstructorLower(ClassElement cls) {
+    final ctor = cls.unnamedConstructor;
+    if (ctor == null) return;
     final id = funcId(ctor);
     final out = FuncOut(id)
       ..symbol = symbolOf(ctor)
@@ -509,7 +524,24 @@ class _Lower extends RecursiveAstVisitor<void> {
 
   bool _hasBody(FunctionBody b) => b is! EmptyFunctionBody && b is! NativeFunctionBody;
 
+  /// A function that cannot be lowered (a null that the code did not expect, an analyzer that answers
+  /// otherwise than the extractor was written for) is said in the stream, and costs that function only:
+  /// not the whole package (ADR-007: what could not be expressed is recorded, not dropped).
+  void _guarded(String id, void Function() lower) {
+    try {
+      if (prog.failIn != null && id.contains(prog.failIn!)) throw StateError('injected failure in $id');
+      lower();
+    } catch (e, st) {
+      final where = st.toString().split('\n').take(3).join(' | ');
+      prog.out.loadError(id, 'the function could not be read by the extractor and is left out: $e ($where)');
+    }
+  }
+
   void _function(ExecutableElement el, AstNode node, FormalParameterList? list, FunctionBody body,
+          {required DartType? thisType, InterfaceElement? constructorOf, ConstructorDeclaration? ctor, ConstructorElement? redirect}) =>
+      _guarded(funcId(el), () => _functionLower(el, node, list, body, thisType: thisType, constructorOf: constructorOf, ctor: ctor, redirect: redirect));
+
+  void _functionLower(ExecutableElement el, AstNode node, FormalParameterList? list, FunctionBody body,
       {required DartType? thisType, InterfaceElement? constructorOf, ConstructorDeclaration? ctor, ConstructorElement? redirect}) {
     final id = funcId(el);
     final out = FuncOut(id)

@@ -23,7 +23,28 @@ Future<void> main(List<String> args) async {
     rest.add(args[i]);
   }
   final root = rest.isEmpty ? '.' : rest.first;
-  final sink = StringBuffer();
-  await extract(root, sink, deps: deps, allowDepsUnder: allow);
-  stdout.write(sink);
+  final sink = _Stdout();
+  await extract(root, sink, deps: deps, allowDepsUnder: allow, drain: sink.drain, failIn: Platform.environment['RIVUS_DART_FAIL_IN']); // RIVUS_DART_FAIL_IN: for the tests only (a function that fails)
+  await sink.drain();
+}
+
+/// The stream goes to the standard output as it is made, a unit at a time (not all at the end).
+class _Stdout implements StringSink {
+  final _buffer = StringBuffer();
+
+  @override
+  void write(Object? object) => _buffer.write(object);
+  @override
+  void writeAll(Iterable<dynamic> objects, [String separator = '']) => _buffer.writeAll(objects, separator);
+  @override
+  void writeCharCode(int charCode) => _buffer.writeCharCode(charCode);
+  @override
+  void writeln([Object? object = '']) => _buffer.writeln(object);
+
+  Future<void> drain() async {
+    if (_buffer.isEmpty) return;
+    stdout.write(_buffer);
+    _buffer.clear();
+    await stdout.flush();
+  }
 }

@@ -142,3 +142,47 @@ func TestDartDependenciesOutsideTheProjectAreNotReadUnlessAsked(t *testing.T) {
 		t.Error("a dependency under a directory that was asked for is not read")
 	}
 }
+
+// A function that cannot be lowered costs that function, not the package: it is said in the stream
+// (a load_error), and the rest is written (yagihash/rivus #37). RIVUS_DART_FAIL_IN makes one fail, as
+// an input that the extractor does not expect would.
+func TestDartExtractorLeavesOutAFunctionThatFails(t *testing.T) {
+	dart := os.Getenv("RIVUS_DART")
+	if dart == "" {
+		t.Skip("RIVUS_DART is not set")
+	}
+	extractor, err := filepath.Abs("../../extractor/dart")
+	if err != nil {
+		t.Fatal(err)
+	}
+	words := strings.Fields(dart)
+	cmd := exec.Command(words[0], append(words[1:], "run", "bin/rivus_dart.dart", "test/sample")...)
+	cmd.Dir = extractor
+	cmd.Env = append(os.Environ(), "RIVUS_DART_FAIL_IN=review_issues.dart#hiddenDirectory")
+	stream, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("the extractor failed as a whole: %v", err)
+	}
+	prog, err := ir.Read(bytes.NewReader(stream))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var failed, others int
+	for _, f := range prog.Funcs {
+		if strings.HasSuffix(string(f.ID), "review_issues.dart#hiddenDirectory") {
+			t.Errorf("%s is in the stream", f.ID)
+		}
+		others++
+	}
+	for _, e := range prog.LoadErrors {
+		if strings.HasSuffix(e.Package, "review_issues.dart#hiddenDirectory") && strings.Contains(e.Message, "left out") {
+			failed++
+		}
+	}
+	if failed != 1 {
+		t.Errorf("%d load_errors for the function that failed, want 1: %+v", failed, prog.LoadErrors)
+	}
+	if others < 100 {
+		t.Errorf("only %d functions were written: the rest of the package is lost", others)
+	}
+}
