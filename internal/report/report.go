@@ -240,6 +240,20 @@ func Build(packages []string, loadErrors []ir.LoadError, st *sites.Result, res *
 		}
 		r.Rules = append(r.Rules, name)
 	}
+	// The arrays of the output are arrays when they are empty, so that a reader
+	// does not have to take null for one (#15).
+	if r.Findings == nil {
+		r.Findings = []*taint.Finding{}
+	}
+	if r.Uncertainties == nil {
+		r.Uncertainties = []*taint.Uncertainty{}
+	}
+	if r.Packages == nil {
+		r.Packages = []string{}
+	}
+	if r.Rules == nil {
+		r.Rules = []string{}
+	}
 	r.Summary = summarize(r)
 	return r
 }
