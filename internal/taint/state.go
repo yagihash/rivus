@@ -319,38 +319,72 @@ func (s *state) numericRoot(r Root) bool {
 	return v != nil && r.Idx < 0 && !s.eng.opts.NumericTaint && (v.Class == ir.ClassNumber || v.Class == ir.ClassBool)
 }
 
-// add puts an element into a cell. It records w as the reason the first time.
-func (s *state) add(l Loc, e Elem, w *why) {
-	// A number or a bool cannot carry an injection (a path, a query, a
-	// command, a URL): taint stops there, unless asked to follow it (a rule
-	// whose sink is a size or a count needs that).
-	if v := l.Root.V; v != nil && l.Root.Idx < 0 && l.Path == "" && !s.eng.opts.NumericTaint &&
-		(v.Class == ir.ClassNumber || v.Class == ir.ClassBool) {
-		if e.Kind == Real {
-			s.noteNumericStop(e, w, v)
+// target is where `add` puts an element, worked out once: `add`, `plainExists` and `addsNothing` all
+// decide from it, so that a change of what add does (what it leaves out, how it cuts a path, when it
+// widens a cell) is a change of this function and of nothing else.
+type target struct {
+	loc     Loc  // the location, its path cut at K
+	trunc   bool // the path was cut
+	numeric bool // a number or a bool that is not followed: add leaves it out (and says so for a real element)
+	set     Set  // what the cell holds (nil: there is nothing there yet)
+	e       Elem // the element, widened when the cell holds very many symbolic elements of one parameter
+	widened bool // e was widened
+}
+
+// numericLoc reports whether the location is a number or a bool as a whole, which taint stops at
+// unless asked to follow it (a rule whose sink is a size or a count needs that): it cannot carry an
+// injection (a path, a query, a command, a URL).
+func (s *state) numericLoc(l Loc) bool {
+	return l.Path == "" && s.numericRoot(l.Root)
+}
+
+// targetOf works out where adding e at l would put it. With create the cell and its set are made, as
+// add needs; without, they are only looked up.
+func (s *state) targetOf(l Loc, e Elem, create bool) target {
+	t := target{loc: l, e: e}
+	if s.numericLoc(l) {
+		t.numeric = true
+		return t
+	}
+	t.loc.Path, t.trunc = pathTrunc(l.Path, s.eng.opts.K)
+	if create {
+		cm := s.cellsOf(l.Root)
+		t.set = cm[t.loc.Path]
+		if t.set == nil {
+			t.set = Set{}
+			cm[t.loc.Path] = t.set
 		}
-		return
-	}
-	p, trunc := pathTrunc(l.Path, s.eng.opts.K)
-	if trunc {
-		s.truncated = true
-	}
-	l.Path = p
-	cm := s.cellsOf(l.Root)
-	set := cm[l.Path]
-	if set == nil {
-		set = Set{}
-		cm[l.Path] = set
+	} else if cm, ok := s.cells[l.Root]; ok {
+		t.set = cm[t.loc.Path]
 	}
 	// A cell that holds very many symbolic elements of one parameter, each
 	// for another part of it, says "something from this parameter": the parts
 	// are merged into the whole (more than the truth, never less). Without it
 	// the work grows with the product of what the cell holds and what the
 	// summaries ask of it.
-	if e.Kind == Param && e.path != 0 && len(set) > maxCellElems {
-		e.path = 0
+	if e.Kind == Param && e.path != 0 && len(t.set) > maxCellElems {
+		t.e.path = 0
+		t.widened = true
+	}
+	return t
+}
+
+// add puts an element into a cell. It records w as the reason the first time.
+func (s *state) add(l Loc, e Elem, w *why) {
+	t := s.targetOf(l, e, true)
+	if t.numeric {
+		if e.Kind == Real {
+			s.noteNumericStop(e, w, l.Root.V)
+		}
+		return
+	}
+	if t.trunc {
+		s.truncated = true
+	}
+	if t.widened {
 		s.widened = true
 	}
+	l, e, set := t.loc, t.e, t.set
 	if old, ok := set[e]; ok {
 		// The element is already here. If it came with other guards, the
 		// guards recorded for it do not describe it any more.
@@ -607,19 +641,11 @@ func (s *state) flatten(locs []Loc) []found {
 // the reason for the second time need not be made: most additions of a fixed
 // point iteration are of this kind, and a reason is the largest thing made.
 func (s *state) plainExists(l Loc, e Elem, from ref, hasFrom bool) bool {
-	p, _ := pathTrunc(l.Path, s.eng.opts.K)
-	cm, ok := s.cells[l.Root]
-	if !ok {
-		return false
+	t := s.targetOf(l, e, false)
+	if t.numeric {
+		return false // add has something to say about it
 	}
-	set := cm[p]
-	if set == nil {
-		return false
-	}
-	if e.Kind == Param && e.path != 0 && len(set) > maxCellElems {
-		e.path = 0
-	}
-	old, ok := set[e]
+	old, ok := t.set[t.e]
 	return ok && old != nil && old.plain() && s.sameChainGuards(old, from, hasFrom)
 }
 
@@ -651,26 +677,15 @@ func (s *state) addsNothing(dsts []Loc, e Elem, from ref, hasFrom bool) bool {
 		return false
 	}
 	for _, l := range dsts {
-		if v := l.Root.V; v != nil && l.Root.Idx < 0 && l.Path == "" && !s.eng.opts.NumericTaint &&
-			(v.Class == ir.ClassNumber || v.Class == ir.ClassBool) {
+		t := s.targetOf(l, e, false)
+		if t.numeric {
 			continue // add leaves it out
 		}
-		p, trunc := pathTrunc(l.Path, s.eng.opts.K)
-		if trunc {
+		// add records that a path was cut and that a cell was widened
+		if t.trunc || t.widened || t.set == nil {
 			return false
 		}
-		cm, ok := s.cells[l.Root]
-		if !ok {
-			return false
-		}
-		set := cm[p]
-		if set == nil {
-			return false
-		}
-		if e.Kind == Param && e.path != 0 && len(set) > maxCellElems {
-			return false
-		}
-		old, ok := set[e]
+		old, ok := t.set[t.e]
 		if !ok || old == nil || !old.plain() || !s.sameChainGuards(old, from, hasFrom) {
 			return false
 		}
