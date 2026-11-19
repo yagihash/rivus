@@ -1,0 +1,32 @@
+# Rules for dart-lang/pub (the project's own): the name of an entry of a tar
+# archive is what the author of the package wrote, and the functions of pub's
+# io.dart are the file operations it treats as dangerous. Used with
+#   rivus analyze -ir pub.jsonl -rules bench/dart-pub/rules.yaml
+ruleset: project/pub@1
+
+sources:
+  # the name of an entry of a downloaded archive
+  - symbol: package:tar/src/entry.dart#TarEntry.name
+    labels: [user_input]
+
+sinks:
+  - symbol: package:pub/src/io.dart#ensureDir
+    args: [0]
+    category: path_traversal
+    accepts: [user_input]
+  - symbol: package:pub/src/io.dart#deleteIfLink
+    args: [0]
+    category: path_traversal
+    accepts: [user_input]
+  - symbol: package:pub/src/io.dart#createFileFromStream
+    args: [1]
+    category: path_traversal
+    accepts: [user_input]
+  - symbol: package:pub/src/io.dart#_chmod
+    args: [1]
+    category: path_traversal
+    accepts: [user_input]
+  - symbol: package:pub/src/io.dart#createSymlink
+    args: [1]
+    category: path_traversal
+    accepts: [user_input]

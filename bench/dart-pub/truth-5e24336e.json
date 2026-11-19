@@ -1,0 +1,69 @@
+{
+ "target": "https://github.com/dart-lang/pub at 5e24336e71a05a96b558d496953ebed223f6e40a (2026-02, the parent of the fix 26c6985c742593d081f8b58450f463a584a4203a of GHSA-q739-79rh-vmvp / CVE-2026-27704, fixed in Dart 3.11.0)",
+ "how": "Each entry is a sink site that the entry name of a tar archive reaches in extractTarGz, found by reading the code at this commit: the fix is one change (p.normalize around the join of the destination and the entry name), so every use of filePath before it is a site of the same defect. Matched by (file, line, category). Sites inside the helpers of io.dart that the same flow reaches (lines 80, 201, 328, 335, 637, 912) are tainted too but are not labelled: they are the same flow seen deeper. Measured with: dart run extractor/dart/bin/rivus_dart.dart --no-deps . > pub.jsonl (after dart pub get with Dart 3.13.6), then rivus analyze -ir pub.jsonl -rules bench/dart-pub/rules.yaml. The labels are one reader's judgement, made by reading the code and the fix; the source and the sink rules are in rules.yaml.",
+ "sites": [
+  {
+   "file": "lib/src/io.dart",
+   "line": 1203,
+   "label": "vuln",
+   "category": "path_traversal",
+   "note": "createFileFromStream(entry.contents, filePath): the file is written at the path built from the entry name, which is not normalized (the fix wraps it in p.normalize); the core of GHSA-q739-79rh-vmvp / CVE-2026-27704"
+  },
+  {
+   "file": "lib/src/io.dart",
+   "line": 1201,
+   "label": "vuln",
+   "category": "path_traversal",
+   "note": "deleteIfLink(filePath): a link at the path of the entry is deleted before the file is written"
+  },
+  {
+   "file": "lib/src/io.dart",
+   "line": 1202,
+   "label": "vuln",
+   "category": "path_traversal",
+   "note": "ensureDir(parentDirectory): the directories of the path are created; parentDirectory is p.dirname(filePath)"
+  },
+  {
+   "file": "lib/src/io.dart",
+   "line": 1196,
+   "label": "vuln",
+   "category": "path_traversal",
+   "note": "ensureDir(filePath) for a directory entry"
+  },
+  {
+   "file": "lib/src/io.dart",
+   "line": 1211,
+   "label": "vuln",
+   "category": "path_traversal",
+   "note": "_chmod(mode, filePath): the executable bits of the header are applied to the path of the entry"
+  },
+  {
+   "file": "lib/src/io.dart",
+   "line": 1226,
+   "label": "vuln",
+   "category": "path_traversal",
+   "note": "ensureDir(parentDirectory) before a symlink entry"
+  },
+  {
+   "file": "lib/src/io.dart",
+   "line": 1227,
+   "label": "vuln",
+   "category": "path_traversal",
+   "note": "createSymlink(..., filePath): the symlink entry is created at the path of the entry, which the advisory chains with a `../` name"
+  },
+  {
+   "file": "lib/src/io.dart",
+   "line": 1242,
+   "label": "vuln",
+   "category": "path_traversal",
+   "note": "ensureDir(parentDirectory) before a hard-link entry (made as a symlink)"
+  },
+  {
+   "file": "lib/src/io.dart",
+   "line": 1243,
+   "label": "vuln",
+   "category": "path_traversal",
+   "note": "createSymlink(fromFile, filePath): the hard-link entry is created as a symlink at the path of the entry"
+  }
+ ]
+}

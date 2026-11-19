@@ -37,6 +37,11 @@ String symbolOf(Element e) {
   if (base is MethodElement && name == '-' && base.formalParameters.isEmpty) {
     name = 'unary-';
   }
+  // A class can have a named constructor and a method of the same name
+  // (Utf8BytesScanner.createRecoveryOptionScanner; or a getter): the method gets a mark.
+  if ((base is MethodElement || base is GetterElement) && enclosing is InterfaceElement && enclosing.constructors.any((c) => (c.name ?? '') == name)) {
+    name = '$name()';
+  }
   // The setter of a field is named "x=" by the analyzer; the rules speak of
   // the field. (The operator "[]=" is a method and keeps its name.)
   if (base is SetterElement && name.endsWith('=')) name = name.substring(0, name.length - 1);
@@ -44,7 +49,10 @@ String symbolOf(Element e) {
     return '$uri#${_name(enclosing)}.$name';
   }
   if (enclosing is ExtensionElement) {
-    return '$uri#${_name(enclosing)}.$name';
+    // an extension without a name: several of them can be in one library,
+    // each with a member of the same name; the extended type and the place tell them apart
+    final ext = _name(enclosing).isNotEmpty ? _name(enclosing) : '(on ${typeId(enclosing.extendedType)}@${enclosing.firstFragment.offset})';
+    return '$uri#$ext.$name';
   }
   return '$uri#$name';
 }

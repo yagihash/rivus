@@ -982,3 +982,8 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
 - **ルール:** `kind: param` に、`extends: <型 ID>` と `with_param_type: <型 ID>` を足した。「`extends` のサブタイプ（推移的）の、解析対象のコードのメソッドのうち、`with_param_type` の型の引数を取るもの」が入口になり、その型の引数と受け手を除いた引数が入力になる。`exclude_methods`（glob）で、生成コードのラッパーを外す。`marker_call` は、Go の `marker:` と同じ使い方で、その関数を呼んでいるのに 1 つも見つからなければ、`generated_code_missing` を出す。
 - **Dart の gRPC:** `Service` のサブクラスで `ServiceCall` を取るメソッドが、ハンドラーになる（`dart-grpc.yaml`）。リクエストの型を、プロジェクトのルールに 1 つずつ書く必要はなくなった。生成コード（`.pb.dart`、`.pbgrpc.dart`）は、解析の前に済んでいる前提（コミット済み、または `protoc` の実行後）。
 - **しなかったこと:** Rust の tonic は、ハンドラーが `tonic::Request` を取るので、`param_type` で足りる。Go は、`gossa` が型の情報を持っているので、`marker:` のまま。
+
+### 追記: Dart のベンチマーク（dart-lang/pub）
+
+- `bench/dart-pub`: pub の `extractTarGz` の zip slip（GHSA-q739-79rh-vmvp / CVE-2026-27704）。修正の 1 つ前のコミット（`5e24336e`）で、正解にした 9 サイトを全部見つけた（recall 1.00）。ほかに 8 サイトを報告するが、正解には入れていない（同じ流れが届くヘルパー 5、Windows のシンボリックリンク作成 1、プロジェクトのテスト 2）。修正のコミットでも同じ結果になる（`p.normalize` と `p.isWithin` はサニタイザーとして知られていない）ので、精度ではなく、大きな実コードでの recall の動作確認である。pub のエコシステムには、このほかに、taint の流れとして測れる勧告がなかった（調査: GitHub の勧告 14 件）。
+- 実コードで、Dart extractor の不具合を 4 つ見つけて直した: 入れ子のコレクション要素、null-aware 要素（`?x`）、同名の名前付きコンストラクタとメソッド（またはゲッター）の ID の衝突、名前のない extension の ID の衝突。

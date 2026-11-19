@@ -90,3 +90,31 @@ void collectionNullAware() {
   final xs = [?s];
   sink(xs[0]); // @sink(syn-nullaware)
 }
+
+// A named constructor and a method of the same name are two functions.
+class Twin {
+  Twin.make(this.v);
+  Twin make() => Twin.make(v);
+  Twin get twin => Twin.make(v);
+  Twin.twin(this.v);
+  final String v;
+}
+
+void twinNames() {
+  final s = source(); // @source(syn-twin)
+  sink(Twin.make(s).make().v); // @sink(syn-twin)
+}
+
+// Two extensions without a name, with a member of the same name.
+extension on String {
+  String same() => this + 'a';
+}
+
+extension on int {
+  String same() => 'b';
+}
+
+void unnamedExtensions() {
+  final s = source(); // @source(syn-unnamed)
+  sink(s.same()); // @sink(syn-unnamed)
+}
