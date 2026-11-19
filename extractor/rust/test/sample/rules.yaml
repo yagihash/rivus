@@ -14,6 +14,11 @@ sources:
     params: [0]
     labels: [user_input]
 
+  - kind: param
+    symbol: sample::review_flows::Api::handle
+    params: [1]
+    labels: [user_input]
+
 sinks:
   - symbol: sample::sink
     category: test

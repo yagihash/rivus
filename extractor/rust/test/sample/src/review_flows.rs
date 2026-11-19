@@ -221,3 +221,14 @@ pub fn dep_drop() {
     }
     sink(&depcrate::seen()[0]); // @sink(rv-dep-drop)
 }
+
+// --- #48: the definition's symbol is cleaned like the call's: a kind: param rule that names
+// `sample::review_flows::Api::handle` matches a method of `impl<T> Api<T>`
+
+pub struct Api<T>(pub T);
+
+impl<T> Api<T> {
+    pub fn handle(&self, body: String) { // @source(rv-param-generic-impl)
+        sink(&body); // @sink(rv-param-generic-impl)
+    }
+}
