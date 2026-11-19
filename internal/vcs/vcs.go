@@ -11,6 +11,10 @@ import (
 	"strings"
 )
 
+// The code under analysis is not trusted, and its .git/config is part of it: git runs what the
+// configuration of a repository names (core.fsmonitor, and the filters that .gitattributes selects) when it
+// asks for the status. Every call here switches those off first (yagihash/rivus #6).
+
 // Target says which code an output describes.
 type Target struct {
 	// Revision is the commit the code is at (git HEAD).
@@ -47,7 +51,36 @@ func Detect(dir string) *Target {
 }
 
 func git(dir string, args ...string) (string, error) {
-	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	cmd := exec.Command("git", append(safeOptions(dir), args...)...)
 	out, err := cmd.Output()
 	return strings.TrimSpace(string(out)), err
+}
+
+// safeOptions are the options of git that keep the repository in dir from running a command of its own:
+// no file system monitor, no optional locks, and every filter of its configuration (clean, smudge, process)
+// emptied, so that a file whose stat differs is not passed through a program that the repository names.
+// Reading the configuration runs nothing.
+func safeOptions(dir string) []string {
+	opts := []string{"-C", dir, "--no-optional-locks", "-c", "core.fsmonitor=false"}
+	out, err := exec.Command("git", "-C", dir, "config", "--local", "--name-only", "--get-regexp", `^filter\.`).Output()
+	if err != nil {
+		return opts
+	}
+	seen := map[string]bool{}
+	for _, key := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		key = strings.TrimSpace(key)
+		i, j := strings.Index(key, "."), strings.LastIndex(key, ".")
+		if key == "" || i < 0 || j <= i {
+			continue
+		}
+		name := key[i+1 : j]
+		for _, what := range []string{"clean", "smudge", "process"} {
+			k := "filter." + name + "." + what
+			if !seen[k] {
+				seen[k] = true
+				opts = append(opts, "-c", k+"=")
+			}
+		}
+	}
+	return opts
 }
