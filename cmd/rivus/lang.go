@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -111,10 +112,17 @@ func (o *analyzeOpts) extractorCommand(lang string) ([]string, error) {
 	}
 	words := strings.Fields(cmd)
 	if _, err := exec.LookPath(words[0]); err != nil {
-		return nil, fmt.Errorf("the %s extractor %q is not found: install it (%s), or name it with -%s-extractor or %s", lang, words[0], how, lang, env)
+		return nil, &extractorMissingError{fmt.Errorf("the %s extractor %q is not found: install it (%s), or name it with -%s-extractor or %s", lang, words[0], how, lang, env)}
 	}
 	return words, nil
 }
+
+// extractorMissingError says that the extractor of a language is not
+// installed. That is the only failure of an extractor that a language found by
+// its marker file may skip (ADR-044); one that was run and failed is an error.
+type extractorMissingError struct{ error }
+
+func (e *extractorMissingError) Unwrap() error { return e.error }
 
 // runExtractor runs the extractor of a language on the directory and reads the
 // IR it writes.
@@ -176,12 +184,15 @@ func (o *analyzeOpts) loadLangs(langs []string, patterns []string, rules *model.
 		} else {
 			var err error
 			if p, err = o.runExtractor(lang); err != nil {
-				if o.lang != "" && o.lang != "auto" {
+				var missing *extractorMissingError
+				if (o.lang != "" && o.lang != "auto") || !errors.As(err, &missing) {
 					return nil, err
 				}
-				// found by its marker file, not asked for: a project of one
-				// language can hold a file of another (a tool, a site)
+				// found by its marker file, not asked for, and not installed: a
+				// project of one language can hold a file of another (a tool, a
+				// site). It is said in the result too: the language was not read.
 				fmt.Fprintf(os.Stderr, "rivus: skipping %s: %v\n", lang, err)
+				merged.LoadErrors = append(merged.LoadErrors, ir.LoadError{Package: lang, Message: fmt.Sprintf("%s was not analysed: %v", lang, err)})
 				continue
 			}
 		}

@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/yagihash/rivus/internal/testutil"
 )
 
 func TestDetectLangs(t *testing.T) {
@@ -123,5 +125,38 @@ func TestProjectRuleFileThatIsALinkIsNotRead(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "root:x") {
 		t.Errorf("the message of the error quotes the value: %v", err)
+	}
+}
+
+// A language found by its marker file may be skipped when its extractor is not
+// installed, and the result says so; an extractor that ran and failed is an
+// error, not a silent skip (#9).
+func TestAutoDetectedExtractorFailure(t *testing.T) {
+	o := analyzeOpts{}
+	o.dir = testutil.Testdata()
+	o.lang = "auto"
+	rules, err := o.loadRules()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	o.dartExtractor = "/nonexistent/rivus-dart"
+	l, err := o.loadLangs([]string{langGo, langDart}, []string{"./cases/hello"}, rules)
+	if err != nil {
+		t.Fatalf("a missing extractor is skipped: %v", err)
+	}
+	found := false
+	for _, le := range l.loadErrors() {
+		if le.Package == langDart && strings.Contains(le.Message, "not analysed") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("the skipped language is not in load_errors: %+v", l.loadErrors())
+	}
+
+	o.dartExtractor = "false"
+	if _, err := o.loadLangs([]string{langGo, langDart}, []string{"./cases/hello"}, rules); err == nil {
+		t.Error("an extractor that failed must not be skipped")
 	}
 }
