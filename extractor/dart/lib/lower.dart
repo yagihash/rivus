@@ -479,11 +479,11 @@ class FnLower {
           final el = v.declaredFragment?.element;
           if (el != null) declare(el.baseElement, v.name.lexeme, el.type, value, pos(v));
         }
-        _classicFor(labels, parts.condition, parts.updaters, s.body);
+        classicFor(labels, parts.condition, parts.updaters, () => stmt(s.body));
       case ForPartsWithExpression():
         final i = parts.initialization;
         if (i != null) expr(i);
-        _classicFor(labels, parts.condition, parts.updaters, s.body);
+        classicFor(labels, parts.condition, parts.updaters, () => stmt(s.body));
       case ForEachPartsWithDeclaration():
         final it = expr(parts.iterable);
         final el = parts.loopVariable.declaredFragment?.element;
@@ -495,21 +495,23 @@ class FnLower {
         forEachLoop(labels, it, () => stmt(s.body), s.awaitKeyword != null, (value) => assign(parts.identifier, value));
       case ForEachPartsWithPattern():
         final it = expr(parts.iterable);
-        forEachLoop(labels, it, () => stmt(s.body), s.awaitKeyword != null, (value) {
-          final miss = newBlock();
-          bindPattern(parts.pattern, value, miss);
-          final matched = newBlock();
-          jump(matched);
-          cur = miss;
-          jump(matched);
-          cur = matched;
-        });
+        forEachLoop(labels, it, () => stmt(s.body), s.awaitKeyword != null, (value) => bindLoopPattern(parts.pattern, value));
       default:
         emit('unsupported', at: pos(s), more: {'reason': 'for loop ${parts.runtimeType}'});
     }
   }
 
-  void _classicFor(Set<String> labels, Expression? c, NodeList<Expression> updaters, Statement body) {
+  void bindLoopPattern(DartPattern pattern, int value) {
+    final miss = newBlock();
+    bindPattern(pattern, value, miss);
+    final matched = newBlock();
+    jump(matched);
+    cur = miss;
+    jump(matched);
+    cur = matched;
+  }
+
+  void classicFor(Set<String> labels, Expression? c, NodeList<Expression> updaters, void Function() body) {
     final head = newBlock();
     final bodyB = newBlock();
     final update = newBlock();
@@ -523,7 +525,7 @@ class FnLower {
     }
     cur = bodyB;
     _jumps.add(_Jump(labels, after, update, _handlers.length));
-    stmt(body);
+    body();
     _jumps.removeLast();
     jump(update);
     cur = update;

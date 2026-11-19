@@ -407,13 +407,28 @@ impl<'a> Lower<'a> {
     }
 
     fn statement(&mut self, k: &StatementKind) {
-        if let StatementKind::Assign(place, rv) = k {
-            let pos = self.here();
-            let dst = if place.projection.is_empty() && !self.cells.contains(&place.local) { Some(self.var[place.local]) } else { None };
-            let v = self.rvalue(rv, dst, &pos);
-            if dst.is_none() || dst != Some(v) {
-                self.write_place(place, v, &pos);
+        match k {
+            StatementKind::Assign(place, rv) => {
+                let pos = self.here();
+                let dst = if place.projection.is_empty() && !self.cells.contains(&place.local) { Some(self.var[place.local]) } else { None };
+                let v = self.rvalue(rv, dst, &pos);
+                if dst.is_none() || dst != Some(v) {
+                    self.write_place(place, v, &pos);
+                }
             }
+            // ptr::copy_nonoverlapping (and what the standard library makes of
+            // it, in slice copies): what src points to is stored where dst points
+            StatementKind::Intrinsic(NonDivergingIntrinsic::CopyNonOverlapping(c)) => {
+                let pos = self.here();
+                let src = self.operand(&c.src, &pos);
+                let dst = self.operand(&c.dst, &pos);
+                let v = self.new_local("", None);
+                self.emit("load", &[v], &[src], &pos, json!({}));
+                self.emit("store", &[], &[dst, v], &pos, json!({}));
+            }
+            // the rest (storage markers, retags, assumptions, coverage, ...)
+            // moves no data of the program
+            _ => {}
         }
     }
 
@@ -819,8 +834,30 @@ impl<'a> Lower<'a> {
             TerminatorKind::Call { func, args, destination, target, .. } => {
                 self.call(func, args, destination, *target, &pos);
             }
+            TerminatorKind::InlineAsm { operands, destination, .. } => {
+                // what the assembly writes may come from anything it reads: a
+                // call of a function without a body, whose result goes to every
+                // output (what a model or the conservative default says of it)
+                let mut ins = Vec::new();
+                for o in operands {
+                    if let Some(v) = &o.in_value {
+                        ins.push(self.operand(v, &pos));
+                    }
+                }
+                let d = self.new_local("", None);
+                self.emit("call", &[d], &ins, &pos, json!({"callee": {"kind": "static", "func": "std::arch::asm", "symbol": "std::arch::asm"}}));
+                for o in operands {
+                    if let Some(p) = &o.out_place {
+                        self.write_place(p, d, &pos);
+                    }
+                }
+                match destination {
+                    Some(t) => self.jump(*t),
+                    None => self.f.blocks[self.cur].term = Some(json!({"kind": "unreachable"})),
+                }
+            }
             _ => {
-                // resume, abort, unreachable, inline assembly
+                // resume, abort, unreachable
                 self.f.blocks[self.cur].term = Some(json!({"kind": "unreachable"}));
             }
         }

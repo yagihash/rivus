@@ -964,3 +964,9 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
   - **Rust、Dart:** メッセージ型が生成型（Dart）、または `tonic::Request`（Rust）。Rust は `tonic::Request` などの `param_type` で、ハンドラーの引数が source になる（型の ID は、再エクスポートの `tonic::Request`）。Dart は、生成されたリクエストの型を、プロジェクトのルール（`kind: param_type`）に書く。マーカー方式は、まだ Go だけ（Dart の `ServiceBase` のサブクラス、Rust のトレイト実装は、別のリゾルバーが要る）
   - **直した不具合:** Dart の extractor が、単項と二項の `-`（`fixnum` の `Int32`）に同じ ID を付けて、`function ... is defined twice` で依存込みの抽出が失敗していた（protobuf を使う Dart プロジェクト全部が対象）。単項は `unary-` にした
   - テスト: `testdata/go/cases/grpcsrv`（メタデータ、`RecvMsg`、接続先）、`grpcunary`（生成コードの規約からのハンドラー）。テスト用に、同じ import パスのスタブ（`testdata/go/stubs/grpc`）を使う。**テストでは、ハンドラーの型が、インターフェースに変換されていないと、go/ssa がメソッドを作らない**（実際のプロジェクトは、`Register…Server(s, &impl{})` で変換される）
+
+### 追記: 言語の文法の取りこぼしを埋めた（Dart と Rust）
+
+- Dart extractor: extension のメンバーは、レシーバーを最初の引数に取る関数にした（今まではレシーバーが渡らず、`this` が nil で、extension を通る流れが全部切れていた）。`Ext(x).m()`（extension override）、コンストラクタの tear-off（`C.new`）、型引数付きの関数参照、dot shorthand（`.red`、`.make(x)`、`.new(x)`）、型リテラル、コレクションの `for`（古典的な形、識別子、パターン）を落とさず lower する。
+- Rust extractor: `ptr::copy_nonoverlapping` の MIR 文（最適化したビルドで出る）を、`load` と `store` にする。インラインアセンブリは、入力を引数、出力を結果にした `std::arch::asm` の呼び出しにする（今までは、ブロックを `unreachable` で終えて、それ以降のコードを落としていた）。モデルは `rust-std.yaml` に足した。
+- どれも、取りこぼしていたものを拾うだけの変更で、`unsupported` を出していた箇所は 0 になった。

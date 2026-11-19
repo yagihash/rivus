@@ -1,6 +1,7 @@
 pub mod async_flows;
 pub mod std_flows;
 pub mod traits;
+pub mod unsafe_flows;
 
 pub fn source() -> String {
     String::from("x")

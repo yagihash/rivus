@@ -94,6 +94,29 @@ int lowerExpr(FnLower f, Expression e) {
       f.thr(f.constant('string', 'pattern did not match', null, f.pos(e)), f.pos(e));
       f.cur = matched;
       return v;
+    case ExtensionOverride():
+      // `Ext(x).m()`: the receiver is the one argument
+      final args = e.argumentList.arguments;
+      return args.isEmpty ? f.nilConst(f.pos(e)) : lowerExpr(f, args.first.argumentExpression);
+    case FunctionReference():
+      // `f<T>`: a tear-off with its type arguments, the same function
+      return lowerExpr(f, e.function);
+    case ConstructorReference():
+      // `C.new`, `C<T>.named`: a tear-off of the constructor
+      final ctor = e.constructorName.element;
+      if (ctor == null) return f.nilConst(f.pos(e));
+      final d = f.tmp(e.staticType);
+      f.emit('make_closure', dsts: [d], args: const [], at: f.pos(e), more: {'func': funcId(ctor)});
+      return d;
+    case TypeLiteral():
+      return f.constant('string', e.toSource(), e.staticType, f.pos(e));
+    case DotShorthandPropertyAccess():
+      // `.red`: a static member of the type the context asks for
+      return _readMember(f, e.propertyName.element, null, e, e.staticType, f.pos(e, e.propertyName.offset));
+    case DotShorthandInvocation():
+      return _dotShorthandInvocation(f, e);
+    case DotShorthandConstructorInvocation():
+      return _dotShorthandConstructor(f, e);
     default:
       f.emit('unsupported', at: f.pos(e), more: {'reason': 'expression ${e.runtimeType}'});
       return f.nilConst(f.pos(e));
@@ -203,7 +226,7 @@ int _readMember(FnLower f, Element? el, int? base, AstNode n, DartType? t, Pos a
       // a method or a function used as a value
       final d = f.tmp(t);
       final args = <int>[];
-      if (!target.isStatic && target.enclosingElement is InterfaceElement) {
+      if (!target.isStatic && target is! ConstructorElement && (target.enclosingElement is InterfaceElement || target.enclosingElement is ExtensionElement)) {
         args.add(base ?? f.readVar(thisKey, null, at));
       }
       f.emit('make_closure', dsts: [d], args: args, at: at, more: {'func': funcId(target)});
@@ -263,7 +286,9 @@ int _call(FnLower f, ExecutableElement callee, int? base, List<int> args, DartTy
   final el = callee.baseElement;
   final sym = symbolOf(el);
   final isMethod = el.enclosingElement is InterfaceElement && !el.isStatic && el is! ConstructorElement;
-  final recv = isMethod ? (base ?? f.readVar(thisKey, null, at)) : null;
+  // an extension member is a function that takes the receiver first
+  final isExt = el.enclosingElement is ExtensionElement && !el.isStatic;
+  final recv = isMethod || isExt ? (base ?? f.readVar(thisKey, null, at)) : null;
   final d = f.tmp(resultType);
   final Pos pos = argList == null ? at : f.unit.callPos(n, argList, slots);
   final all = [if (recv != null) recv, ...args];
@@ -281,7 +306,7 @@ int _call(FnLower f, ExecutableElement callee, int? base, List<int> args, DartTy
       ..['kind'] = 'static'
       ..['func'] = funcId(el)
       ..['symbol'] = sym;
-    if (isMethod) callee_['recv'] = true;
+    if (isMethod || isExt) callee_['recv'] = true;
   }
   final instr = f.emit('call', dsts: [d], args: all, at: pos, more: {'callee': callee_});
   f._lastCall = instr;
@@ -319,6 +344,34 @@ int _methodInvocation(FnLower f, MethodInvocation e) {
   return _call(f, el, base, args, e.staticType, e, at, argList: e.argumentList, slots: nodes);
 }
 
+/// `.make(3)`: a static method (or a constructor) of the type the context asks for.
+int _dotShorthandInvocation(FnLower f, DotShorthandInvocation e) {
+  final el = e.memberName.element;
+  final at = f.pos(e, e.argumentList.leftParenthesis.offset);
+  if (el is ConstructorElement) return _constructorCall(f, el, e.argumentList, e, e.staticType, at);
+  if (el is! ExecutableElement) {
+    for (final a in e.argumentList.arguments) {
+      lowerExpr(f, a.argumentExpression);
+    }
+    return f.nilConst(at);
+  }
+  final (args, nodes) = _arguments(f, el, e.argumentList);
+  return _call(f, el, null, args, e.staticType, e, at, argList: e.argumentList, slots: nodes);
+}
+
+/// `.new(3)`, `.named(3)`.
+int _dotShorthandConstructor(FnLower f, DotShorthandConstructorInvocation e) {
+  final at = f.pos(e, e.argumentList.leftParenthesis.offset);
+  final ctor = e.constructorName.element;
+  if (ctor is! ConstructorElement) {
+    for (final a in e.argumentList.arguments) {
+      lowerExpr(f, a.argumentExpression);
+    }
+    return f.nilConst(at);
+  }
+  return _constructorCall(f, ctor, e.argumentList, e, e.staticType, at);
+}
+
 int _functionInvocation(FnLower f, FunctionExpressionInvocation e) {
   final fn = lowerExpr(f, e.function);
   return _callValue(f, fn, e.argumentList, e, e.staticType);
@@ -351,9 +404,13 @@ int _creation(FnLower f, InstanceCreationExpression e) {
     }
     return f.nilConst(at);
   }
-  final (args, nodes) = _arguments(f, ctor, e.argumentList);
-  final d = f.tmp(e.staticType);
-  final pos = f.unit.callPos(e, e.argumentList, nodes);
+  return _constructorCall(f, ctor, e.argumentList, e, e.staticType, at);
+}
+
+int _constructorCall(FnLower f, ConstructorElement ctor, ArgumentList list, AstNode n, DartType? t, Pos at) {
+  final (args, nodes) = _arguments(f, ctor, list);
+  final d = f.tmp(t);
+  final pos = f.unit.callPos(n, list, nodes);
   final sym = symbolOf(ctor);
   final instr = f.emit('call', dsts: [d], args: args, at: pos, more: {
     'callee': {'kind': 'static', 'func': funcId(ctor), 'symbol': sym}
@@ -647,13 +704,33 @@ int lowerClosure(FnLower f, FunctionExpression fe, {String? name}) {
 /// loop, with the variable bound.
 void _forElement(FnLower f, ForElement el, void Function(CollectionElement) add) {
   final parts = el.forLoopParts;
-  if (parts is ForEachPartsWithDeclaration) {
-    final it = lowerExpr(f, parts.iterable);
-    final v = parts.loopVariable.declaredFragment?.element;
-    f.forEachLoop({}, it, () => add(el.body), el.awaitKeyword != null, (value) {
-      if (v != null) f.declare(v.baseElement, parts.loopVariable.name.lexeme, v.type, value, f.pos(parts.loopVariable));
-    });
-    return;
+  final isAwait = el.awaitKeyword != null;
+  switch (parts) {
+    case ForEachPartsWithDeclaration():
+      final it = lowerExpr(f, parts.iterable);
+      final v = parts.loopVariable.declaredFragment?.element;
+      f.forEachLoop({}, it, () => add(el.body), isAwait, (value) {
+        if (v != null) f.declare(v.baseElement, parts.loopVariable.name.lexeme, v.type, value, f.pos(parts.loopVariable));
+      });
+    case ForEachPartsWithIdentifier():
+      final it = lowerExpr(f, parts.iterable);
+      f.forEachLoop({}, it, () => add(el.body), isAwait, (value) => f.assign(parts.identifier, value));
+    case ForEachPartsWithPattern():
+      final it = lowerExpr(f, parts.iterable);
+      f.forEachLoop({}, it, () => add(el.body), isAwait, (value) => f.bindLoopPattern(parts.pattern, value));
+    case ForPartsWithDeclarations():
+      for (final v in parts.variables.variables) {
+        final init = v.initializer;
+        final value = init == null ? null : lowerExpr(f, init);
+        final e = v.declaredFragment?.element;
+        if (e != null) f.declare(e.baseElement, v.name.lexeme, e.type, value, f.pos(v));
+      }
+      f.classicFor({}, parts.condition, parts.updaters, () => add(el.body));
+    case ForPartsWithExpression():
+      final i = parts.initialization;
+      if (i != null) lowerExpr(f, i);
+      f.classicFor({}, parts.condition, parts.updaters, () => add(el.body));
+    default:
+      f.emit('unsupported', at: f.pos(el), more: {'reason': 'collection for ${parts.runtimeType}'});
   }
-  f.emit('unsupported', at: f.pos(el), more: {'reason': 'collection for ${parts.runtimeType}'});
 }

@@ -232,7 +232,7 @@ class _Lower extends RecursiveAstVisitor<void> {
       node,
       node.parameters,
       node.body,
-      thisType: node.isStatic || cls is! InterfaceElement ? null : cls.thisType,
+      thisType: node.isStatic ? null : cls is InterfaceElement ? cls.thisType : cls is ExtensionElement ? cls.extendedType : null,
     );
   }
 
@@ -247,7 +247,7 @@ class _Lower extends RecursiveAstVisitor<void> {
   bool _hasBody(FunctionBody b) => b is! EmptyFunctionBody && b is! NativeFunctionBody;
 
   void _function(ExecutableElement el, AstNode node, FormalParameterList? list, FunctionBody body,
-      {required InterfaceType? thisType, InterfaceElement? constructorOf, ConstructorDeclaration? ctor}) {
+      {required DartType? thisType, InterfaceElement? constructorOf, ConstructorDeclaration? ctor}) {
     final id = funcId(el);
     final out = FuncOut(id)
       ..symbol = symbolOf(el)

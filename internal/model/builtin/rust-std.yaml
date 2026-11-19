@@ -403,6 +403,14 @@ propagators:
     flows: [{from: args, to: result}]
   - symbol: std::ptr::write
     flows: [{from: args, to: result}]
+  # the bytes src points to are written where dst points to
+  - symbol: std::ptr::copy
+    flows: [{from: arg0, to: arg1}]
+  - symbol: std::ptr::copy_nonoverlapping
+    flows: [{from: arg0, to: arg1}]
+  # what inline assembly writes may come from anything it reads
+  - symbol: std::arch::asm
+    flows: [{from: args, to: result}]
   - symbol: std::mem::replace
     flows: [{from: args, to: result}]
   - symbol: std::mem::take
