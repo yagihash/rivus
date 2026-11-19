@@ -10,6 +10,15 @@ cargo +nightly-2026-11-15 install rivus     # the command: rivus-rust
 
 # The Rust extractor of rivus
 
+**Reading a project builds it.** The extractor runs `cargo check` on the workspace, so the
+`build.rs` of the project and of its dependencies, its proc macros, and its `.cargo/config.toml`
+run with your rights. Use it on code you trust, or in a throwaway environment (a container or a VM,
+the dependencies fetched beforehand, no network), as the section "信頼できないコードを解析するとき" of the
+[README of rivus](../../README.md) says. Using `rivus-rust` by itself does not ask for `-lang rust`
+as `rivus analyze` does: running the command is the request. The build also sees where the IR is
+written (`RIVUS_IR_DIR`): a build script of the project can add to the fragments, or remove from them,
+so what the target built is not only what is analysed, it can also change what the analysis says.
+
 Reads Rust through the compiler: MIR, by way of `rustc_public` (the stable interface of
 `rustc`'s MIR), and writes the neutral IR (`docs/ARCHITECTURE.md` 2) as JSON Lines. The
 core reads it with `rivus analyze -ir`.

@@ -149,6 +149,7 @@ RIVUS_TEST_MODULE=/path/to/module go test ./internal/ssacheck -run TestAgainstGo
 | Go | `go/packages` が `go list` を走らせます。依存モジュールの取得（ネットワーク）が起きることがあります。cgo のあるパッケージは、cgo の前処理が走ります |
 | Dart | extractor 自身は、`package:analyzer` で静的に読むだけです。ただし、前提の手順（`dart pub get`、`build_runner` などのコード生成）は、対象の依存と生成器のコードを実行します |
 
+- **Rust は、対象のビルドが、解析結果そのものも書き換えられます。** extractor は、IR の断片を書くディレクトリ（`RIVUS_IR_DIR`）を、対象のビルドに見える環境で渡すので、対象の `build.rs` や proc macro は、断片を足したり消したりできます。「ビルドが実行される」ことの、もう1つの帰結です。
 - **Rust は、`-lang rust` と書いたときだけ読みます。** `Cargo.toml` があるだけでは、読みません（Rust だけのディレクトリは、明示を求めるエラーになり、Go や Dart と一緒のときは、Rust を除いて、stderr に書きます）。
 - **ディレクトリに付いてくるルール（`<dir>/.rivus/rules/*.yaml`）は、フラグなしで読まれます。** それは、解析されるコードを書いた人が、そのコードについて言わせたいことなので、`sanitizers` や `pure: true` で、検出を消せます。読んだファイルと、消せるものの数（sanitizer、`drops: ["*"]` の sanitizer、`pure` のモデル）は、結果の `project_rules` に出ます。信頼できないコードでは、`-no-project-rules` を付けてください。
 - **Dart の依存は、プロジェクト、pub のキャッシュ、SDK の下のものだけ読みます。** `package_config.json` は、対象の一部で、どこでも指せるからです。ほかの場所（モノレポの隣のパッケージなど）は、`-allow-deps-under DIR` で足します。

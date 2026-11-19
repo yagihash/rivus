@@ -44,7 +44,7 @@ type analyzeOpts struct {
 func (o *analyzeOpts) register(fs *flag.FlagSet) {
 	o.common.register(fs)
 	fs.IntVar(&o.k, "k", taint.DefaultOptions().K, "maximum access path depth")
-	fs.StringVar(&o.lang, "lang", "auto", "languages to read: auto (what the directory holds: go.mod, pubspec.yaml, Cargo.toml), or go, dart, rust, separated by commas")
+	fs.StringVar(&o.lang, "lang", "auto", "languages to read: auto (what the directory holds: go.mod / go.work, pubspec.yaml; Rust is read only when asked for, because reading it builds the project), or go, dart, rust, separated by commas")
 	fs.StringVar(&o.dartExtractor, "dart-extractor", "", "command of the Dart extractor (default: $RIVUS_DART_EXTRACTOR, then rivus-dart)")
 	fs.StringVar(&o.rustExtractor, "rust-extractor", "", "command of the Rust extractor (default: $RIVUS_RUST_EXTRACTOR, then rivus-rust)")
 	fs.IntVar(&o.workers, "workers", 0, "functions analysed at the same time (0: one per CPU; 1: one at a time). The result does not depend on it")
