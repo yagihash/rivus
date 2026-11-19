@@ -287,3 +287,33 @@ pub fn closure_unwrap_or_else() {
     let s = r.unwrap_or_else(|_| source()); // @source(rv-closure-or-else)
     sink(&s); // @sink(rv-closure-or-else)
 }
+
+// --- #66: the closures a call through a function value can reach, when the type is a parameter or a dyn
+// (a call whose argument types are not known is matched by the number of arguments: each case has its own)
+
+fn apply_t<T, F: FnOnce(T, u8)>(f: F, v: T) {
+    f(v, 0)
+}
+
+pub fn closure_generic_arg() {
+    let s = source(); // @source(rv-closure-t)
+    apply_t(|x: String, _n: u8| sink(&x), s); // @sink(rv-closure-t)
+}
+
+fn apply_ref<T, F: Fn(&T, u8, u8)>(f: F, v: T) {
+    f(&v, 0, 0)
+}
+
+pub fn closure_generic_ref() {
+    let s = source(); // @source(rv-closure-ref-t)
+    apply_ref(|x: &String, _n: u8, _m: u8| sink(x), s); // @sink(rv-closure-ref-t)
+}
+
+fn apply_dyn(f: &dyn Fn(String, u8, u8, u8), v: String) {
+    f(v, 0, 0, 0)
+}
+
+pub fn closure_dyn() {
+    let s = source(); // @source(rv-closure-dyn)
+    apply_dyn(&|x: String, _a: u8, _b: u8, _c: u8| sink(&x), s); // @sink(rv-closure-dyn)
+}

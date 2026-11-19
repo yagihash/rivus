@@ -206,6 +206,46 @@ pub fn type_id(ty: &Ty) -> String {
     }
 }
 
+/// The type of an argument of a closure, for choosing the closures a call through a function value can
+/// reach: the same text as `type_id`, and empty (any type) when it has a type parameter, an alias or a
+/// placeholder in it (the types the call has are those of the code written once for every `T`).
+pub fn closure_key(ty: &Ty) -> String {
+    match ty.kind() {
+        TyKind::Param(_) | TyKind::Alias(..) | TyKind::Bound(..) => String::new(),
+        TyKind::RigidTy(RigidTy::Ref(_, t, m)) => {
+            let k = closure_key(&t);
+            if k.is_empty() {
+                k
+            } else {
+                format!("&{}{}", if matches!(m, Mutability::Mut) { "mut " } else { "" }, k)
+            }
+        }
+        TyKind::RigidTy(RigidTy::RawPtr(t, _)) => {
+            let k = closure_key(&t);
+            if k.is_empty() {
+                k
+            } else {
+                format!("*{}", k)
+            }
+        }
+        TyKind::RigidTy(RigidTy::Slice(t)) | TyKind::RigidTy(RigidTy::Array(t, _)) => {
+            if closure_key(&t).is_empty() {
+                String::new()
+            } else {
+                type_id(ty)
+            }
+        }
+        TyKind::RigidTy(RigidTy::Tuple(ts)) => {
+            if ts.iter().any(|t| closure_key(t).is_empty()) {
+                String::new()
+            } else {
+                type_id(ty)
+            }
+        }
+        _ => type_id(ty),
+    }
+}
+
 fn bin_op(op: &BinOp) -> &'static str {
     match op {
         BinOp::Add | BinOp::AddUnchecked | BinOp::Offset => "+",
@@ -947,6 +987,8 @@ impl<'a> Lower<'a> {
     fn call(&mut self, func: &Operand, args: &[Operand], dest: &Place, target: Option<usize>, pos: &Pos) {
         let span = self.span.clone();
         let mut vals: Vec<usize> = args.iter().map(|a| self.operand(a, pos)).collect();
+        // the types of the arguments of a call through a function value: the closures are matched by them
+        let mut fn_keys: Option<Vec<String>> = None;
         let fty = func.ty(self.body.locals()).ok();
         let ret_ty = dest.ty(self.body.locals()).ok();
         let mut callee = json!({"kind": "value"});
@@ -964,6 +1006,7 @@ impl<'a> Lower<'a> {
                     if let Ok(tt) = args[1].ty(self.body.locals()) {
                         if let TyKind::RigidTy(RigidTy::Tuple(tys)) = tt.kind() {
                             let tup = vals[1];
+                            fn_keys = Some(tys.iter().map(closure_key).collect());
                             let mut spread = vec![vals[0]];
                             for (i, t) in tys.iter().enumerate() {
                                 let d = self.new_local("", Some(t));
@@ -983,6 +1026,11 @@ impl<'a> Lower<'a> {
                 };
                 match inst {
                     // a call through a trait object: whichever impl the object has
+                    _ if virtual_call && fn_keys.is_some() => {
+                        // `f: &dyn Fn(String)`: the callee is a closure (its body is not an impl of the trait)
+                        let cands = self.closure_candidates(&fn_keys.clone().unwrap_or_default());
+                        callee = json!({"kind": "dynamic", "symbol": def_name, "candidates": cands});
+                    }
                     _ if virtual_call => {
                         let cands = self.candidates(&def_name);
                         // by_trait: the merge adds the impls of the other crates of the workspace (and removes the mark)
@@ -1016,7 +1064,10 @@ impl<'a> Lower<'a> {
                         // one of the closures of the crate that takes as many arguments.
                         let is_fn = matches!(def_name.as_str(), "std::ops::Fn::call" | "std::ops::FnMut::call_mut" | "std::ops::FnOnce::call_once");
                         let cands = if is_fn {
-                            let tys: Vec<String> = vals.iter().skip(1).map(|v| self.f.locals[*v].ty.clone()).collect();
+                            let tys: Vec<String> = match &fn_keys {
+                                Some(k) => k.clone(),
+                                None => vals.iter().skip(1).map(|v| self.f.locals[*v].ty.clone()).collect(),
+                            };
                             self.closure_candidates(&tys)
                         } else {
                             self.candidates(&def_name)

@@ -154,7 +154,7 @@ fn extract(root: &str, dep: bool) -> Vec<Value> {
         if name.contains("{closure#") {
             if let Some(b) = item.body() {
                 if lower::is_closure_body(&b) {
-                    let tys = b.arg_locals().iter().skip(1).map(|l| lower::type_id(&l.ty)).collect();
+                    let tys = b.arg_locals().iter().skip(1).map(|l| lower::closure_key(&l.ty)).collect();
                     cx.closures.insert(name, tys);
                 }
             }
