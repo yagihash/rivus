@@ -1,9 +1,0 @@
-name: dart_cfg_spike
-description: "Throwaway spike: can a CFG be built from package:analyzer for the constructs that matter?"
-publish_to: none
-environment:
-  sdk: ^3.8.0
-dependencies:
-  analyzer: ^14.7.0
-dev_dependencies:
-  test: ^1.33.0

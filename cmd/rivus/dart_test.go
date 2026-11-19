@@ -186,3 +186,55 @@ func TestDartExtractorLeavesOutAFunctionThatFails(t *testing.T) {
 		t.Errorf("only %d functions were written: the rest of the package is lost", others)
 	}
 }
+
+// The shapes of control flow that the spike's tests checked (yagihash/rivus #38): the finally block is
+// copied for every way out of the try, and && || ?: are branches, not operators.
+func TestDartExtractorControlFlowShapes(t *testing.T) {
+	dart := os.Getenv("RIVUS_DART")
+	if dart == "" {
+		t.Skip("RIVUS_DART is not set")
+	}
+	extractor, err := filepath.Abs("../../extractor/dart")
+	if err != nil {
+		t.Fatal(err)
+	}
+	words := strings.Fields(dart)
+	cmd := exec.Command(words[0], append(words[1:], "run", "bin/rivus_dart.dart", "test/sample")...)
+	cmd.Dir = extractor
+	stream, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("the extractor failed: %v", err)
+	}
+	prog, err := ir.Read(bytes.NewReader(stream))
+	if err != nil {
+		t.Fatal(err)
+	}
+	callsOf := func(fn, callee string) (calls, branches int) {
+		for _, f := range prog.Funcs {
+			if f.ID != ir.FuncID("package:sample/cfg_shapes.dart#"+fn) {
+				continue
+			}
+			for _, b := range f.Blocks {
+				if b.Term.Kind == ir.TermBranch {
+					branches++
+				}
+				for _, in := range b.Instrs {
+					if in.Op == ir.OpCall && in.Callee != nil && strings.HasSuffix(in.Callee.Symbol, "#"+callee) {
+						calls++
+					}
+				}
+			}
+		}
+		return
+	}
+	if n, _ := callsOf("finallyManyExits", "fin"); n < 4 {
+		t.Errorf("finallyManyExits: the finally block is copied %d times, want one for each of the four ways out", n)
+	}
+	if n, _ := callsOf("nestedTry", "fin"); n < 2 {
+		t.Errorf("nestedTry: the inner finally block is copied %d times, want 2 (the normal end and the exception)", n)
+	}
+	// a && (b || cond()) is two branches, the if is one, and ?: is one
+	if calls, branches := callsOf("shortCircuit", "cond"); calls != 1 || branches < 4 {
+		t.Errorf("shortCircuit: %d calls of cond and %d branches, want 1 call (made only when needed) and 4 or more branches", calls, branches)
+	}
+}

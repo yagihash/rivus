@@ -359,7 +359,6 @@ internal/
   testutil/               testdata ハーネス
 testdata/
   go/ …                   マイクロベンチマーク（検出すべき / 意図的に検出しない）
-spike/dart-cfg/           Dart 実現性スパイク（捨てコード）
 docs/
 ```
 
@@ -875,7 +874,7 @@ Phase 1 では中立 IR を経由せず、`go/ssa` から直接 taint 解析ま�
 | 1.5 | コールグラフ: `CallGraphBuilder` インタフェース、Go 実装（CHA → VTA）、SCC 縮約、トポロジカル順 | 呼び先から順に関数を列挙できる |
 | 1.6 | 関数サマリ: 算出、展開、SCC 内の不動点。ファイル・パッケージ跨ぎ | 複数ファイル・複数パッケージにまたがる `testdata` が通る |
 | 1.7 | ヒープ: フィールド感度（k=3）、クロージャ、グローバル、コンテナの扱い | 構造体・クロージャ経由のケースが通る |
-| ★ Dart スパイク | **（実施済み。`spike/dart-cfg/`、ADR-037）** 1.5〜1.7 のあいだ、ただし Phase 2 の前に。2 日のタイムボックス（下記） | 可否の判断 ＋ IR 設計に反映すべき難所のリスト |
+| ★ Dart スパイク | **（実施済み。ADR-037。コードは削除した。git の履歴にある）** 1.5〜1.7 のあいだ、ただし Phase 2 の前に。2 日のタイムボックス（下記） | 可否の判断 ＋ IR 設計に反映すべき難所のリスト |
 | 1.8 | 一方向クエリ: sink から source を引く / source から sink を引く。サイト ID を seed に取れる | seed なしのクエリと、サイト起点のクエリが動く。サマリの保存・再利用と、応答時間の初回計測 |
 | 1.8b | **（実装済み。ADR-033）** ブックマークの解決（`rivus resolve`）: 指紋による対応付け（内容 → 構造）、状態の返却（`unchanged` / `changed` / `rematched` / `ambiguous` / `unresolved`）、検出結果の `flow` と `path@1` | ブックマークをした後でコードを変更（行の挿入、引数の書き換え、関数の削除、sanitizer の追加）しても、期待どおりの状態が返る |
 | 1.9 | 不確実性の記録: terminal kind、`attributable_to`、`dynamic_dispatch` の候補列挙、`match: implementations`（展開上限と中止時の記録を含む） | すべての打ち切りが分類されて出る。参照コーパスで展開数を実測し、`max_implementations` の既定値を確定する。**実装済み（ADR-030 の追記、ADR-032）。既定値と `mixed` の割り当ての確定はレビュー待ち** |
@@ -886,7 +885,7 @@ Phase 1 では中立 IR を経由せず、`go/ssa` から直接 taint 解析ま�
 
 SARIF 出力は Phase 1 のスコープ外。JSON が固まってから。
 
-### Dart スパイク（`spike/dart-cfg/`）
+### Dart スパイク（`spike/dart-cfg/`。削除済み、履歴にある）
 
 タイムボックスは 2 日。コードは捨ててよい。成果物は README に書く「可否の判断」と「IR 設計に反映すべき難所のリスト」。
 

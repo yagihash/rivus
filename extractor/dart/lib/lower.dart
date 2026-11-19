@@ -2,7 +2,7 @@
 // graph of blocks with mutable locals and no φ functions (ADR-003). The core
 // builds the SSA form.
 //
-// What is decided here (spike/dart-cfg/README.md, ADR-037):
+// What is decided here (ADR-037; the spike that tried it is gone from the tree, it is in the history):
 //  - a call that may throw, inside a try region, ends its block, with one edge
 //    for the exception and one for the continuation;
 //  - `finally` is copied once for every way out of the try;

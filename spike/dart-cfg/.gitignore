@@ -1,5 +1,0 @@
-.dart_tool/
-out/
-pubspec.lock
-samples/**/.dart_tool/
-samples/**/pubspec.lock
