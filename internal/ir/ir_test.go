@@ -171,3 +171,43 @@ func TestFormat(t *testing.T) {
 		t.Errorf("format:\n%s\nwant:\n%s", got, wantFormat)
 	}
 }
+
+// The calls that stand for operations of the language (channels, iteration)
+// have a fixed number of arguments and results; one of another shape is an
+// invalid IR, not something for the engine to index into (#17).
+func TestReservedCallsNeedTheirShape(t *testing.T) {
+	cases := []struct {
+		sym        string
+		dsts, args int
+		ok         bool
+	}{
+		{"chan.send", 0, 2, true}, {"chan.send", 0, 1, false}, {"chan.send", 0, 0, false},
+		{"chan.recv", 1, 1, true}, {"chan.recv", 2, 1, true}, {"chan.recv", 0, 1, false}, {"chan.recv", 1, 0, false},
+		{"iter.start", 1, 1, true}, {"iter.start", 0, 1, false}, {"iter.start", 1, 0, false},
+		{"iter.next", 3, 1, true}, {"iter.next", 2, 1, false}, {"iter.next", 3, 0, false}, {"iter.next", 0, 0, false},
+		{"iter.next_string", 3, 1, true}, {"iter.next_string", 0, 0, false},
+	}
+	for _, c := range cases {
+		p := sample()
+		in := &p.Funcs[0].Blocks[1].Instrs[0]
+		in.Callee = &Callee{Kind: CalleeStatic, Symbol: c.sym}
+		in.Dsts, in.Args, in.ArgPos = nil, nil, nil
+		for i := 0; i < c.dsts; i++ {
+			in.Dsts = append(in.Dsts, 4)
+		}
+		for i := 0; i < c.args; i++ {
+			in.Args = append(in.Args, 2)
+		}
+		// the block returns local 4: keep it written
+		if len(in.Dsts) == 0 {
+			p.Funcs[0].Blocks[1].Instrs = append([]Instr{{Op: OpConst, Dsts: []LocalID{4}, Const: &Const{Kind: ConstNil}}}, p.Funcs[0].Blocks[1].Instrs...)
+		}
+		err := p.Validate()
+		if c.ok && err != nil {
+			t.Errorf("%s with %d results and %d arguments: %v", c.sym, c.dsts, c.args, err)
+		}
+		if !c.ok && err == nil {
+			t.Errorf("%s with %d results and %d arguments is accepted", c.sym, c.dsts, c.args)
+		}
+	}
+}

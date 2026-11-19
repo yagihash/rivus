@@ -220,7 +220,7 @@ func (s *state) computeLocs(v *sg.Value) []Loc {
 			return suffix(s.locs(in.Args[0]), "*")
 		}
 	case ir.OpCall:
-		if in.Callee.Symbol == symChanRecv && len(in.Dsts) == 1 && pointerLike(v) {
+		if in.Callee.Symbol == symChanRecv && len(in.Dsts) == 1 && len(in.Args) >= 1 && pointerLike(v) {
 			return suffix(suffix(s.locs(in.Args[0]), "[]"), "*")
 		}
 		if i, ok := s.eng.aliasArgs[in.Callee.Symbol]; ok && i < len(in.Args) {

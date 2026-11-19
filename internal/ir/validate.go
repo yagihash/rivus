@@ -195,7 +195,22 @@ func validateInstr(in Instr, nparams int, w string, local func(LocalID, string) 
 		}
 		switch in.Callee.Kind {
 		case CalleeStatic:
-			return need(in.Callee.Symbol != "" || in.Callee.Func != "", "a static callee with neither a function nor a symbol")
+			if err := need(in.Callee.Symbol != "" || in.Callee.Func != "", "a static callee with neither a function nor a symbol"); err != nil {
+				return err
+			}
+			// The calls that stand for operations of the language have the shape the engine reads.
+			nd, na := len(in.Dsts), len(in.Args)
+			switch in.Callee.Symbol {
+			case "chan.send":
+				return need(na >= 2, "chan.send takes the channel and the value")
+			case "chan.recv":
+				return need(na >= 1 && nd >= 1, "chan.recv takes the channel and writes the value")
+			case "iter.start":
+				return need(na >= 1 && nd >= 1, "iter.start takes the collection and writes the iterator")
+			case "iter.next", "iter.next_string":
+				return need(na >= 1 && nd == 3, "an iter.next takes the iterator and writes the flag, the key and the value")
+			}
+			return nil
 		case CalleeDynamic:
 			if err := need(in.Callee.Symbol != "", "a dynamic callee without a method"); err != nil {
 				return err

@@ -232,6 +232,12 @@ func (s *state) transfer(in *sg.Instr) {
 // callInstr handles the calls that stand for operations of the language
 // (channels, iteration); the others are calls.
 func (s *state) callInstr(in *sg.Instr) {
+	if !reservedShapeOK(in) {
+		// ir.Validate refuses this; a program that did not pass through it is
+		// handled as a plain call rather than indexed into.
+		s.call(in)
+		return
+	}
 	switch in.Callee.Symbol {
 	case symChanSend:
 		s.store(in, s.locs(in.Args[0]), in.Args[1], "[]", s.channelNote(in.Pos))
@@ -343,4 +349,19 @@ func (s *state) fieldSources(in *sg.Instr, base []Loc, field string) {
 			}
 		}
 	}
+}
+
+// reservedShapeOK reports whether a call of one of the reserved symbols has the
+// arguments and results that callInstr reads.
+func reservedShapeOK(in *sg.Instr) bool {
+	na, nd := len(in.Args), len(in.Dsts)
+	switch in.Callee.Symbol {
+	case symChanSend:
+		return na >= 2
+	case symChanRecv, symRangeStart:
+		return na >= 1 && nd >= 1
+	case symRangeNext, symRangeNextS:
+		return na >= 1 && nd >= 3
+	}
+	return true
 }
