@@ -300,3 +300,41 @@ func TestSitesCommandAgreesWithAnalyze(t *testing.T) {
 		t.Errorf("only %d sites: the comparison says nothing", len(sa))
 	}
 }
+
+// A bookmark of code that is gone is not_found, also when the index was made
+// from an IR stream (-ir), which has no Go packages to list (#8). The packages
+// analysed are then the units the functions of the stream belong to.
+func TestResolveFromAnIRIndexTellsGoneFromNotAnalysed(t *testing.T) {
+	dir := t.TempDir()
+	irFile := filepath.Join(dir, "g.jsonl")
+	if err := os.WriteFile(irFile, rivus(t, "extract", "-texts", "./cases/grpcsrv"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	idx := filepath.Join(dir, "idx.json")
+	rivus(t, "index", "-ir", irFile, "-o", idx)
+	bm := func(fn string) string {
+		p := filepath.Join(dir, "bm.json")
+		doc := `[{"id":"s1:0000","func":"` + fn + `","symbol":"x","fingerprint":{"content@1":"00","structural@1":"00"}}]`
+		if err := os.WriteFile(p, []byte(doc), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	reason := func(fn string) string {
+		var out struct {
+			Results []struct {
+				Reason string `json:"reason"`
+			} `json:"results"`
+		}
+		if err := json.Unmarshal(rivus(t, "resolve", "-index", idx, "-bookmarks", bm(fn)), &out); err != nil || len(out.Results) != 1 {
+			t.Fatalf("%v %+v", err, out)
+		}
+		return out.Results[0].Reason
+	}
+	if r := reason("example.com/cases/cases/grpcsrv.Removed"); r != report.ReasonNotFound {
+		t.Errorf("a function gone from an analysed package: %q", r)
+	}
+	if r := reason("example.com/cases/cases/neverloaded.F"); r != report.ReasonNotAnalysed {
+		t.Errorf("a package that is not in the stream: %q", r)
+	}
+}

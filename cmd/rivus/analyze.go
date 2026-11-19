@@ -90,6 +90,8 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 		}
 		phase("ir")
 	}
+	// The graph drops the IR as it is built: what was analysed is listed first.
+	packages := l.packages()
 	// The sites read the IR, and the graph drops it as it is built.
 	expandSubtypes(rules, l.ir)
 	st := sites.Enumerate(l.ir, l.texts, rules)
@@ -155,7 +157,7 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 			f.Close()
 		}
 	}
-	rep := report.Build(l.packages(), l.loadErrors(), st, res, rules)
+	rep := report.Build(packages, l.loadErrors(), st, res, rules)
 	rep.Target = vcs.Detect(o.dir)
 	return rep, nil
 }

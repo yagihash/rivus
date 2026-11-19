@@ -16,6 +16,7 @@ import (
 	"github.com/yagihash/rivus/internal/ir"
 	"github.com/yagihash/rivus/internal/model"
 	"github.com/yagihash/rivus/internal/model/builtin"
+	"github.com/yagihash/rivus/internal/report"
 )
 
 // multiFlag collects a repeatable string flag.
@@ -198,12 +199,34 @@ func (l *loaded) loadErrors() []ir.LoadError {
 	return l.ir.LoadErrors
 }
 
-// packages lists the import paths of the packages that were analysed.
+// packages lists the units that were analysed: the import paths of the Go
+// packages, and the units (packages, crates) of the functions of an IR that
+// did not come from Go packages.
 func (l *loaded) packages() []string {
-	if l.gossa == nil {
-		return nil
+	seen := map[string]bool{}
+	var out []string
+	add := func(u string) {
+		if u != "" && !seen[u] {
+			seen[u] = true
+			out = append(out, u)
+		}
 	}
-	return l.gossa.PkgPaths
+	if l.gossa != nil {
+		for _, p := range l.gossa.PkgPaths {
+			add(p)
+		}
+	}
+	if l.ir != nil {
+		for i := range l.ir.Funcs {
+			id := string(l.ir.Funcs[i].ID)
+			// the Go functions of a program that has Go packages are listed by them
+			if l.gossa != nil && !report.ForeignID(id) {
+				continue
+			}
+			add(report.UnitOf(id))
+		}
+	}
+	return out
 }
 
 // extract makes the IR. The analysis needs every function with a body, the

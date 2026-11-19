@@ -319,7 +319,7 @@ func changedKeys(old, cur map[string]string) []string {
 
 // whyMissing tells a place that is gone from a package that was not looked at.
 func (r *Report) whyMissing(b *Bookmark) string {
-	pkg := packageOf(b.Func)
+	pkg := UnitOf(b.Func)
 	for _, le := range r.LoadErrors {
 		if le.Package == pkg {
 			return ReasonNotAnalysed
@@ -337,6 +337,31 @@ func (r *Report) whyMissing(b *Bookmark) string {
 		}
 	}
 	return ReasonNotFound
+}
+
+// UnitOf is what a function ID says about the unit of code it belongs to: the
+// package of a Go function, the package of a Dart library ("package:name"; the
+// files of the project itself are one unit, "file:"), the crate of a Rust
+// function. A report lists the units that were analysed (packages), so that a
+// place that is gone can be told from one that was not looked at.
+func UnitOf(funcID string) string {
+	switch {
+	case strings.HasPrefix(funcID, "package:"):
+		rest := funcID[len("package:"):]
+		if i := strings.IndexAny(rest, "/#"); i >= 0 {
+			rest = rest[:i]
+		}
+		return "package:" + rest
+	case strings.HasPrefix(funcID, "file:"):
+		return "file:"
+	case strings.Contains(funcID, "::"):
+		// "krate::path::f", "<krate::T as krate::Trait>::m"
+		s := strings.TrimLeft(funcID, "<&*(")
+		if i := strings.Index(s, "::"); i > 0 {
+			return s[:i]
+		}
+	}
+	return packageOf(funcID)
 }
 
 // packageOf extracts the import path from a function ID such as
@@ -409,4 +434,9 @@ func refs(ss []*sites.Site) []taint.SiteRef {
 		out = append(out, ref(s))
 	}
 	return out
+}
+
+// ForeignID reports whether a function ID is that of a language other than Go.
+func ForeignID(funcID string) bool {
+	return strings.HasPrefix(funcID, "package:") || strings.HasPrefix(funcID, "file:") || strings.Contains(funcID, "::")
 }

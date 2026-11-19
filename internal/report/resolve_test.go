@@ -64,3 +64,18 @@ func TestResolveSiteWithoutKeysIsUnresolved(t *testing.T) {
 		t.Errorf("got %+v", res.Results[0])
 	}
 }
+
+func TestUnitOf(t *testing.T) {
+	for id, want := range map[string]string{
+		"example.com/m/pkg.F":                                "example.com/m/pkg",
+		"(*example.com/m/pkg.T).M":                           "example.com/m/pkg",
+		"package:grpc_sample/hello.pb.dart#HelloRequest.new": "package:grpc_sample",
+		"file:///work/app/bin/main.dart#main":                "file:",
+		"anyhow::request_ref_backtrace":                      "anyhow",
+		"<anyhow::_::MyError as std::fmt::Debug>::fmt":       "anyhow",
+	} {
+		if got := UnitOf(id); got != want {
+			t.Errorf("UnitOf(%q) = %q, want %q", id, got, want)
+		}
+	}
+}
