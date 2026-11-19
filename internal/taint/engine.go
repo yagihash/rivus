@@ -770,6 +770,12 @@ func (e *Engine) commit(fn *sg.Func, r *fnResult, callers map[*sg.Func][]*sg.Fun
 	// suppressions and the uncertainties. The cells and the caches are the
 	// bulk of the memory, and the function is analysed afresh if it is
 	// visited again.
+	// A visit that was cut short (the budget, the time limit) saw part of the
+	// function: it does not take away what an earlier visit found. A complete
+	// visit replaces the earlier one, as before.
+	if prev := e.states[fn]; s.exceeded && prev != nil {
+		keepEarlier(s, prev)
+	}
 	e.states[fn] = &state{eng: e, fn: fn, findings: s.findings, suppressions: s.suppressions, uncertain: s.uncertain, numericStops: s.numericStops}
 	return changed
 }
@@ -1263,4 +1269,51 @@ func (e *Engine) mergeParamSources(fs []*Finding) []*Finding {
 		out = append(out, rep)
 	}
 	return out
+}
+
+// keepEarlier adds to the state of a visit that was cut short what the earlier
+// visit of the function found: a finding by its key (the labels of both, the
+// shorter path with its guards, as when the functions' results are merged), the
+// suppressions, the uncertainties and the places where data stopped at a number.
+func keepEarlier(s, prev *state) {
+	if s.findings == nil {
+		s.findings = map[findingKey]*rawFinding{}
+	}
+	for k, pf := range prev.findings {
+		cur := s.findings[k]
+		if cur == nil {
+			s.findings[k] = pf
+			continue
+		}
+		cp := *cur
+		cp.labels = map[string]bool{}
+		for l := range cur.labels {
+			cp.labels[l] = true
+		}
+		for l := range pf.labels {
+			cp.labels[l] = true
+		}
+		if pf.steps.len() < cp.steps.len() {
+			cp.steps = pf.steps
+			cp.guards = pf.guards
+		}
+		s.findings[k] = &cp
+	}
+	for k, sp := range prev.suppressions {
+		if s.suppressions == nil {
+			s.suppressions = map[string]*Suppression{}
+		}
+		if _, ok := s.suppressions[k]; !ok {
+			s.suppressions[k] = sp
+		}
+	}
+	s.uncertain = append(s.uncertain, prev.uncertain...)
+	for o, st := range prev.numericStops {
+		if s.numericStops == nil {
+			s.numericStops = map[string]numericStop{}
+		}
+		if _, ok := s.numericStops[o]; !ok {
+			s.numericStops[o] = st
+		}
+	}
 }
