@@ -35,7 +35,7 @@ func TestRustExtractor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the extractor failed: %v", err)
 	}
-	checkSampleFlows(t, stream, filepath.Join(root, "rules.yaml"), root, []string{"src/lib.rs", "src/std_flows.rs", "src/traits.rs", "src/async_flows.rs", "src/unsafe_flows.rs", "src/global_flows.rs", "src/review_flows.rs"}, 41)
+	checkSampleFlows(t, stream, filepath.Join(root, "rules.yaml"), root, []string{"src/lib.rs", "src/std_flows.rs", "src/traits.rs", "src/async_flows.rs", "src/unsafe_flows.rs", "src/global_flows.rs", "src/review_flows.rs"}, 44)
 
 	// What the extractor could not express is said in the IR (REVIEW-2026-11-19, the rule
 	// that nothing is left out without a trace): the sample has nothing of the kind, and a

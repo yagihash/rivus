@@ -522,6 +522,8 @@ impl<'a> Lower<'a> {
                         let d = self.pointer_local("");
                         self.emit("addr_of", &[d], &[p], pos, json!({"path": [{"kind": "field", "field": name}]}));
                         w.cur = Cur::Ptr(d);
+                        // the slot of a field: an array in it is held by value
+                        w.by_value = true;
                     }
                     Cur::Ptr(p) => {
                         let d = self.new_local("", Some(fty));
@@ -576,6 +578,8 @@ impl<'a> Lower<'a> {
                 let d = self.pointer_local("");
                 self.emit("addr_of", &[d], &[p], pos, json!({"path": [{"kind": "index"}]}));
                 w.cur = Cur::Ptr(d);
+                // the slot of an element: an array in it is held by value
+                w.by_value = true;
             }
             Cur::Ptr(p) => {
                 let d = self.new_local("", Some(&elem));

@@ -232,3 +232,34 @@ impl<T> Api<T> {
         sink(&body); // @sink(rv-param-generic-impl)
     }
 }
+
+// --- #64: an array in a field read through a reference, and an array of arrays
+
+pub struct Bufs {
+    buf: [String; 1],
+}
+
+pub fn array_field_ref(i: usize) {
+    let s = source(); // @source(rv-array-field-ref)
+    let b = Bufs { buf: [s] };
+    let p = &b;
+    sink(&p.buf[i]); // @sink(rv-array-field-ref)
+}
+
+impl Bufs {
+    fn first(&self, i: usize) -> String {
+        self.buf[i].clone()
+    }
+}
+
+pub fn array_field_method(i: usize) {
+    let s = source(); // @source(rv-array-field-method)
+    let b = Bufs { buf: [s] };
+    sink(&b.first(i)); // @sink(rv-array-field-method)
+}
+
+pub fn array_nested(i: usize, j: usize) {
+    let s = source(); // @source(rv-array-nested)
+    let a = [[s]];
+    sink(&a[i][j]); // @sink(rv-array-nested)
+}
