@@ -1,9 +1,0 @@
-[package]
-name = "rivus"
-version = "0.0.0"
-edition = "2021"
-description = "Placeholder to reserve the name. rivus is a taint analysis query engine for Dart, Go and Rust."
-license = "Apache-2.0"
-repository = "https://github.com/yagihash/rivus"
-readme = "README.md"
-include = ["src/**", "Cargo.toml", "README.md", "LICENSE"]
