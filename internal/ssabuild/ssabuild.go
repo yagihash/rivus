@@ -285,19 +285,30 @@ func (b *builder) frontiers() {
 // the blocks that define it.
 func (b *builder) placePhis() {
 	b.hasPhi = make([]map[int]bool, b.n)
-	for v := 0; v < b.f.NVars; v++ {
-		var work []int
-		inWork := map[int]bool{}
-		for i, blk := range b.f.Blocks {
-			if b.idom[i] == -2 {
+	// the blocks that define each variable, in block order (one pass: a pass for each variable is
+	// as many as the variables times the instructions)
+	defs := make([][]int, b.f.NVars)
+	for i, blk := range b.f.Blocks {
+		if b.idom[i] == -2 {
+			continue
+		}
+		for _, in := range blk.Instrs {
+			if in.Op == Use || in.Var < 0 || in.Var >= b.f.NVars {
 				continue
 			}
-			for _, in := range blk.Instrs {
-				if in.Var == v && in.Op != Use && !inWork[i] {
-					inWork[i] = true
-					work = append(work, i)
-				}
+			if d := defs[in.Var]; len(d) == 0 || d[len(d)-1] != i {
+				defs[in.Var] = append(d, i)
 			}
+		}
+	}
+	for v := 0; v < b.f.NVars; v++ {
+		if len(defs[v]) == 0 {
+			continue
+		}
+		work := append([]int(nil), defs[v]...)
+		inWork := make(map[int]bool, len(work))
+		for _, i := range work {
+			inWork[i] = true
 		}
 		for len(work) > 0 {
 			u := work[len(work)-1]
@@ -333,11 +344,17 @@ func (b *builder) rename() {
 	var walk func(blk int)
 	walk = func(blk int) {
 		var pushed []int
-		for v := 0; v < b.f.NVars; v++ {
-			if b.hasPhi[blk][v] {
-				stacks[v] = append(stacks[v], Definition{Kind: ByPhi, Block: blk})
-				pushed = append(pushed, v)
+		// the variables that have a φ here (not every variable: the blocks times the variables is too much)
+		phiVars := make([]int, 0, len(b.hasPhi[blk]))
+		for v, has := range b.hasPhi[blk] {
+			if has && v >= 0 && v < b.f.NVars {
+				phiVars = append(phiVars, v)
 			}
+		}
+		sort.Ints(phiVars)
+		for _, v := range phiVars {
+			stacks[v] = append(stacks[v], Definition{Kind: ByPhi, Block: blk})
+			pushed = append(pushed, v)
 		}
 		for i, in := range b.f.Blocks[blk].Instrs {
 			switch in.Op {

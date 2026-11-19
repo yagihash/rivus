@@ -3,6 +3,7 @@ package ssabuild
 import (
 	"math/rand"
 	"testing"
+	"time"
 )
 
 func use(v int) Instr  { return Instr{Use, v} }
@@ -230,5 +231,28 @@ func TestRandomGraphsAgreeWithReachingDefinitions(t *testing.T) {
 	}
 	if phis < 500 {
 		t.Errorf("only %d phis in 5000 graphs: the generator does not exercise the interesting cases", phis)
+	}
+}
+
+// A long chain of blocks, each with a variable of its own: the time grows with the size of the function,
+// not with the blocks times the variables (yagihash/rivus #25). The bound is generous: the quadratic
+// build took seconds on 20,000 blocks, this one milliseconds.
+func TestLongChainOfBlocksIsNotQuadratic(t *testing.T) {
+	const n = 30000
+	f := &Func{Roots: []int{0}, NVars: n}
+	for i := 0; i < n; i++ {
+		b := Block{Instrs: []Instr{zero(i), def(i), use(i)}}
+		if i+1 < n {
+			b.Succs = []int{i + 1}
+		}
+		f.Blocks = append(f.Blocks, b)
+	}
+	start := time.Now()
+	r := Build(f)
+	if d := time.Since(start); d > 3*time.Second {
+		t.Errorf("Build took %v for %d blocks and variables", d, n)
+	}
+	if len(r.Reach) != n {
+		t.Errorf("%d uses reached, want %d", len(r.Reach), n)
 	}
 }
