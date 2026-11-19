@@ -83,6 +83,8 @@ pub struct Func {
     pub symbol: String,
     pub exported: bool,
     pub entry: bool,
+    /// Parameter 0 is the receiver of a method (for a closure, the closure itself).
+    pub recv: bool,
     pub pos: Pos,
     pub params: Vec<Value>,
     pub results: Vec<String>,
@@ -106,6 +108,9 @@ impl Func {
         if !self.pos.is_none() {
             m.insert("pos".into(), self.pos.to_json());
             m.insert("file".into(), json!(self.pos.file));
+        }
+        if self.recv {
+            m.insert("recv".into(), json!(true));
         }
         if self.entry {
             m.insert("entry".into(), json!(true));

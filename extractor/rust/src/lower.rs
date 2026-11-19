@@ -28,11 +28,14 @@ pub struct Ctx {
     pub texts: Texts,
     /// The names of the items that have a body here.
     pub bodies: HashSet<String>,
+    /// The closures of the crate, with the types of their arguments (the closure
+    /// itself is not one of them): what a call through Fn::call may reach.
+    pub closures: HashMap<String, Vec<String>>,
 }
 
 impl Ctx {
     pub fn new(root: String, bodies: HashSet<String>) -> Ctx {
-        Ctx { root, files: HashMap::new(), texts: Texts::default(), bodies }
+        Ctx { root, files: HashMap::new(), texts: Texts::default(), bodies, closures: HashMap::new() }
     }
 
     fn lines(&mut self, path: &str) -> Rc<Vec<String>> {
@@ -192,7 +195,7 @@ fn is_smart_pointer(ty: &Ty) -> bool {
 /// The identity of a type for the IR: the path of a struct or an enum without
 /// its type arguments, `&` and `*` kept: `axum::extract::Query<P>` is
 /// `axum::extract::Query`, the type a rule names.
-fn type_id(ty: &Ty) -> String {
+pub fn type_id(ty: &Ty) -> String {
     match ty.kind() {
         TyKind::RigidTy(RigidTy::Adt(def, _)) => clean_symbol(&def.name()),
         TyKind::RigidTy(RigidTy::Ref(_, t, m)) => format!("&{}{}", if matches!(m, Mutability::Mut) { "mut " } else { "" }, type_id(&t)),
@@ -253,13 +256,16 @@ impl<'a> Lower<'a> {
         let mut l = Lower {
             cx,
             body,
-            f: Func { id: id.clone(), symbol: id, exported: true, entry: false, pos, params: vec![], results: vec![], locals: vec![], blocks: vec![] },
+            f: Func { id: id.clone(), symbol: id, exported: true, entry: false, recv: false, pos, params: vec![], results: vec![], locals: vec![], blocks: vec![] },
             cur: 0,
             var: vec![],
             cells: HashSet::new(),
             span: item_span,
         };
         l.run();
+        // a closure takes itself as its first parameter, as a method does: a call through
+        // Fn::call that the caller made with a closure of a known type is told apart by it
+        l.f.recv = is_closure_body(body);
         l.f
     }
 
@@ -277,6 +283,12 @@ impl<'a> Lower<'a> {
     fn pointer_local(&mut self, name: &str) -> usize {
         self.f.locals.push(Local { name: name.to_string(), ty: String::new(), class: "pointer" });
         self.f.locals.len() - 1
+    }
+
+    /// A construct that is not lowered: said in the IR, so that the core records it (a
+    /// stream without it answers "nothing flows here" about code that was not read).
+    fn unsupported(&mut self, reason: &str, pos: &Pos) {
+        self.emit("unsupported", &[], &[], pos, json!({"reason": reason}));
     }
 
     fn emit(&mut self, op: &str, dsts: &[usize], args: &[usize], pos: &Pos, extra: Value) {
@@ -635,7 +647,11 @@ impl<'a> Lower<'a> {
                 let idx = self.constant_int(*offset as i64, pos);
                 self.index_store(&w, idx, value, pos);
             }
-            _ => {}
+            other => {
+                // a write through a projection that is not lowered (a cast of the type of the place)
+                let _ = value;
+                self.unsupported(&format!("a write through the projection {:?}", other), pos);
+            }
         }
     }
 
@@ -669,6 +685,11 @@ impl<'a> Lower<'a> {
         if let TyKind::RigidTy(RigidTy::FnDef(def, args)) = ty.kind() {
             let name = resolve(def, &args).map(|i| i.name()).unwrap_or_else(|| def.name());
             self.emit("make_closure", &[d], &[], pos, json!({"func": name}));
+            return d;
+        }
+        // a closure that captures nothing: a value of its own type, with no fields
+        if let TyKind::RigidTy(RigidTy::Closure(..)) = ty.kind() {
+            self.emit("alloc", &[d], &[], pos, json!({"type": type_id(&ty), "class": class_of(&ty)}));
             return d;
         }
         // a reference to a static: the address of the one variable every
@@ -756,11 +777,14 @@ impl<'a> Lower<'a> {
                 self.emit("alloc", &[d], &[], pos, json!({"type": ty.as_ref().map(type_id).unwrap_or_default(), "class": cls}));
                 for (i, v) in vals.iter().enumerate() {
                     let name = match kind {
-                        AggregateKind::Adt(def, vi, _, _, _) => {
-                            let w = Walk { cur: Cur::Val(d), ty: ty.unwrap(), variant: Some(*vi) };
-                            let _ = def;
-                            self.field_name(&w, i)
-                        }
+                        AggregateKind::Adt(_, vi, _, _, active) => match ty.as_ref() {
+                            // a union holds one of its fields: the one that is written, not the operand's place
+                            Some(t) => {
+                                let w = Walk { cur: Cur::Val(d), ty: *t, variant: Some(*vi) };
+                                self.field_name(&w, active.unwrap_or(i))
+                            }
+                            None => i.to_string(),
+                        },
                         _ => i.to_string(),
                     };
                     if matches!(kind, AggregateKind::Array(_)) {
@@ -803,10 +827,24 @@ impl<'a> Lower<'a> {
                 self.emit("index_store", &[], &[d, idx, v], pos, json!({}));
                 d
             }
-            _ => {
-                // lengths, discriminants, thread locals, ...: values that carry
-                // no data of the program
+            // a thread local is a variable of its own, as a static is
+            Rvalue::ThreadLocalRef(item) => {
                 let d = out(self);
+                self.emit("addr_of", &[d], &[], pos, json!({"global": item.name()}));
+                d
+            }
+            // lengths, discriminants, sizes: values that carry no data of the program
+            Rvalue::Discriminant(_) | Rvalue::Len(_) => {
+                let d = out(self);
+                self.emit("const", &[d], &[], pos, json!({"const": {"kind": "int", "value": "0"}}));
+                d
+            }
+            // what is not known here is said, not taken for a value without data
+            other => {
+                let d = out(self);
+                let name = format!("{:?}", other);
+                let name = name.split(|c: char| c == '(' || c == ' ' || c == '{').next().unwrap_or("").to_string();
+                self.unsupported(&format!("rvalue {}", name), pos);
                 self.emit("const", &[d], &[], pos, json!({"const": {"kind": "int", "value": "0"}}));
                 d
             }
@@ -839,7 +877,13 @@ impl<'a> Lower<'a> {
                 let b = &mut self.f.blocks[self.cur];
                 b.term = Some(json!({"kind": "return", "values": [r]}));
             }
-            TerminatorKind::Drop { target, .. } | TerminatorKind::Assert { target, .. } => self.jump(*target),
+            // the end of the life of a value: the call of its `Drop::drop`, which is code of
+            // the program (it runs here, on the normal path, as much as in an unwind)
+            TerminatorKind::Drop { place, target, .. } => {
+                self.drop_call(place, &pos);
+                self.jump(*target)
+            }
+            TerminatorKind::Assert { target, .. } => self.jump(*target),
             TerminatorKind::Call { func, args, destination, target, .. } => {
                 self.call(func, args, destination, *target, &pos);
             }
@@ -865,8 +909,12 @@ impl<'a> Lower<'a> {
                     None => self.f.blocks[self.cur].term = Some(json!({"kind": "unreachable"})),
                 }
             }
-            _ => {
-                // resume, abort, unreachable
+            other => {
+                // resume, abort and unreachable end the flow; a terminator that rustc_public adds
+                // later must not end it without a word
+                if !matches!(other, TerminatorKind::Resume | TerminatorKind::Abort | TerminatorKind::Unreachable) {
+                    self.unsupported("a terminator that is not lowered", &pos);
+                }
                 self.f.blocks[self.cur].term = Some(json!({"kind": "unreachable"}));
             }
         }
@@ -924,8 +972,15 @@ impl<'a> Lower<'a> {
                         callee = json!({"kind": "static", "func": def_name, "symbol": def_name});
                     }
                     None => {
-                        // a call that cannot be resolved here: through a type parameter
-                        let cands = self.candidates(&def_name);
+                        // a call that cannot be resolved here: through a type parameter. For a
+                        // call of a function value (`f(v)` with `F: Fn(String)`) the callee is
+                        // one of the closures of the crate that takes as many arguments.
+                        let cands = if matches!(def_name.as_str(), "std::ops::Fn::call" | "std::ops::FnMut::call_mut" | "std::ops::FnOnce::call_once") {
+                            let tys: Vec<String> = vals.iter().skip(1).map(|v| self.f.locals[*v].ty.clone()).collect();
+                            self.closure_candidates(&tys)
+                        } else {
+                            self.candidates(&def_name)
+                        };
                         callee = json!({"kind": "dynamic", "symbol": def_name, "candidates": cands});
                     }
                 }
@@ -950,28 +1005,159 @@ impl<'a> Lower<'a> {
         if !plain {
             self.write_place(dest, d, pos);
         }
+        // an API of std that calls the closure it is given with what its receiver holds
+        if let Some(Value::String(sym)) = callee.get("symbol") {
+            let sym = sym.clone();
+            self.call_back(&sym, args, &vals, pos);
+        }
         match target {
             Some(t) => self.jump(t),
             None => self.f.blocks[self.cur].term = Some(json!({"kind": "unreachable"})),
         }
     }
 
-    /// The implementations in this crate of a trait method named by its path.
+    /// The call of `<T as Drop>::drop(&mut place)` for a type of the crate that has one.
+    fn drop_call(&mut self, place: &Place, pos: &Pos) {
+        let Ok(ty) = place.ty(self.body.locals()) else { return };
+        let want = type_id(&ty);
+        let want = want.split('<').next().unwrap_or(&want).to_string();
+        const TAIL: &str = " as std::ops::Drop>::drop";
+        let found = self
+            .cx
+            .bodies
+            .iter()
+            .filter(|n| n.starts_with('<') && n.ends_with(TAIL))
+            .find(|n| {
+                let inner = &n[1..n.len() - TAIL.len()];
+                inner.split('<').next().unwrap_or(inner) == want
+            })
+            .cloned();
+        let Some(name) = found else { return };
+        let ptr = self.ref_place(place, pos);
+        let d = self.new_local("", None);
+        self.emit("call", &[d], &[ptr], pos, json!({"callee": {"kind": "static", "func": name.clone(), "symbol": "std::ops::Drop::drop"}}));
+    }
+
+    /// `receiver.api(closure)`: the call that std makes, of the closure with what the receiver
+    /// holds (an element of an iterator, the value in an `Option` or a `Result`). Nothing in the code
+    /// says it, and a model only moves taint from the arguments to the result. The closure is
+    /// known by its type here, so it is called itself: not one of the closures that take as many
+    /// arguments.
+    fn call_back(&mut self, sym: &str, args: &[Operand], vals: &[usize], pos: &Pos) {
+        // which field of the receiver is what the closure is given
+        enum Held {
+            Element,
+            Field(&'static str),
+        }
+        let held = match sym {
+            "std::iter::Iterator::for_each"
+            | "std::iter::Iterator::map"
+            | "std::iter::Iterator::filter"
+            | "std::iter::Iterator::filter_map"
+            | "std::iter::Iterator::flat_map"
+            | "std::iter::Iterator::inspect"
+            | "std::iter::Iterator::any"
+            | "std::iter::Iterator::all"
+            | "std::iter::Iterator::find"
+            | "std::iter::Iterator::find_map"
+            | "std::iter::Iterator::position"
+            | "std::iter::Iterator::take_while"
+            | "std::iter::Iterator::skip_while"
+            | "std::iter::Iterator::map_while" => Held::Element,
+            "std::option::Option::map" | "std::option::Option::and_then" | "std::option::Option::filter" | "std::option::Option::inspect" | "std::option::Option::is_some_and" => Held::Field("Some.0"),
+            "std::result::Result::map" | "std::result::Result::and_then" | "std::result::Result::inspect" => Held::Field("Ok.0"),
+            "std::result::Result::map_err" | "std::result::Result::inspect_err" | "std::result::Result::unwrap_or_else" => Held::Field("Err.0"),
+            _ => return,
+        };
+        if args.len() < 2 || vals.len() < 2 {
+            return;
+        }
+        let Ok(ct) = args[1].ty(self.body.locals()) else { return };
+        let TyKind::RigidTy(RigidTy::Closure(def, _)) = ct.kind() else { return };
+        let body = def.name();
+        if !self.cx.bodies.contains(&body) {
+            return;
+        }
+        let recv = vals[0];
+        let elem = match held {
+            Held::Element => {
+                let n = self.new_local("", None);
+                self.emit("call", &[n], &[recv], pos, json!({"callee": {"kind": "static", "func": "std::iter::Iterator::next", "symbol": "std::iter::Iterator::next"}}));
+                let e = self.new_local("", None);
+                self.emit("field_load", &[e], &[n], pos, json!({"field": "Some.0"}));
+                e
+            }
+            Held::Field(f) => {
+                let e = self.new_local("", None);
+                self.emit("field_load", &[e], &[recv], pos, json!({"field": f}));
+                e
+            }
+        };
+        let r = self.new_local("", None);
+        self.emit("call", &[r], &[vals[1], elem], pos, json!({"callee": {"kind": "static", "func": body, "symbol": clean_symbol(&body)}}));
+    }
+
+    /// The closures of the crate that take arguments of these types (a type that is not
+    /// known matches any).
+    fn closure_candidates(&self, tys: &[String]) -> Vec<String> {
+        let mut out: Vec<String> = self
+            .cx
+            .closures
+            .iter()
+            .filter(|(_, mine)| mine.len() == tys.len() && mine.iter().zip(tys).all(|(a, b)| a.is_empty() || b.is_empty() || a == b))
+            .map(|(name, _)| name.clone())
+            .collect();
+        out.sort();
+        out
+    }
+
+    /// The implementations in this crate of a trait method named by its path: the
+    /// `impl`s of the trait (named `<Type as path::Trait>::method`), and the body the trait
+    /// itself has for the method (a default method). The trait is matched by its name:
+    /// the path of the trait where it is defined (`core::iter::traits::iterator::Iterator`)
+    /// is not the path of an `impl` (`std::iter::Iterator`).
     fn candidates(&self, def_name: &str) -> Vec<String> {
         let (trait_path, method) = match def_name.rsplit_once("::") {
             Some(x) => x,
             None => return vec![],
         };
+        let trait_name = trait_path.rsplit("::").next().unwrap_or(trait_path);
+        let suffix = format!(">::{}", method);
         let mut out: Vec<String> = self
             .cx
             .bodies
             .iter()
-            .filter(|n| n.starts_with('<') && n.ends_with(&format!(">::{}", method)) && n.contains(&format!(" as {}", trait_path)))
+            .filter(|n| n.starts_with('<') && n.ends_with(&suffix) && impl_of_trait(n, &suffix) == Some(trait_name))
             .cloned()
             .collect();
+        // the default body of the method, which an impl that does not override it uses
+        if self.cx.bodies.contains(def_name) {
+            out.push(def_name.to_string());
+        }
         out.sort();
+        out.dedup();
         out
     }
+}
+
+/// The name of the trait of an `impl` function named `<Type as path::Trait<A>>::method`,
+/// without its path and its generic arguments.
+fn impl_of_trait<'a>(name: &'a str, suffix: &str) -> Option<&'a str> {
+    let inner = name.strip_suffix(suffix)?;
+    let (_, tr) = inner.split_once(" as ")?;
+    let tr = tr.split('<').next().unwrap_or(tr);
+    tr.rsplit("::").next()
+}
+
+/// Whether the body is the body of a closure: its first parameter is the closure (or a
+/// reference to it). (The body of an `async` block is named like one, and is a coroutine.)
+pub fn is_closure_body(body: &Body) -> bool {
+    let Some(first) = body.arg_locals().first() else { return false };
+    let t = match first.ty.kind() {
+        TyKind::RigidTy(RigidTy::Ref(_, inner, _)) => inner,
+        _ => first.ty,
+    };
+    matches!(t.kind(), TyKind::RigidTy(RigidTy::Closure(..)))
 }
 
 /// The static a constant points to: `&STATIC` is a pointer constant whose

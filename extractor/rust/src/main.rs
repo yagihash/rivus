@@ -38,9 +38,15 @@ fn main() -> ExitCode {
 fn driver() -> ExitCode {
     // Cargo runs a wrapper as `wrapper rustc <arguments>`: the compiler is the
     // program the driver pretends to be.
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
     let probing = args.iter().any(|a| a == "-vV" || a == "--version" || a.starts_with("--print"));
     let skipped = args.iter().any(|a| a == "build_script_build" || a == "build_script_main");
+    // The optimizations of MIR change what is read: with `opt-level` above 0 rustc
+    // inlines (and the call that a rule names is gone). The level is fixed, whatever
+    // profile the workspace builds with.
+    if !probing {
+        args.push("-Zmir-opt-level=1".to_string());
+    }
     let out_dir = std::env::var("RIVUS_IR_DIR").unwrap_or_default();
     let root = std::env::var("RIVUS_ROOT").unwrap_or_default();
     let crate_name = args.iter().position(|a| a == "--crate-name").and_then(|i| args.get(i + 1)).cloned().unwrap_or_default();
@@ -51,6 +57,7 @@ fn driver() -> ExitCode {
     let dep = std::env::var_os("CARGO_PRIMARY_PACKAGE").is_none();
     let proc_macro = args.windows(2).any(|w| w[0] == "--crate-type" && w[1] == "proc-macro");
 
+    let write_failed = std::sync::atomic::AtomicBool::new(false);
     let result = run!(&args, || {
         if !probing && !skipped && !proc_macro && !out_dir.is_empty() {
             let records = extract(&root, dep);
@@ -60,11 +67,15 @@ fn driver() -> ExitCode {
                 text.push_str(&r.to_string());
                 text.push('\n');
             }
-            let _ = std::fs::write(path, text);
+            if let Err(e) = std::fs::write(&path, text) {
+                // a crate that is not written is a crate that is gone from the program: not a success
+                eprintln!("rivus-rust: cannot write {}: {}", path.display(), e);
+                write_failed.store(true, std::sync::atomic::Ordering::SeqCst);
+            }
         }
         ControlFlow::<(), ()>::Continue(())
     });
-    if result.is_err() && !probing {
+    if (result.is_err() || write_failed.load(std::sync::atomic::Ordering::SeqCst)) && !probing {
         return ExitCode::from(1);
     }
     ExitCode::SUCCESS
@@ -75,6 +86,17 @@ fn extract(root: &str, dep: bool) -> Vec<Value> {
     let items: Vec<_> = rustc_public::all_local_items().into_iter().filter(|i| i.has_body()).collect();
     let bodies: HashSet<String> = items.iter().map(|i| i.name()).collect();
     let mut cx = lower::Ctx::new(root.to_string(), bodies);
+    for item in &items {
+        let name = item.name();
+        if name.contains("{closure#") {
+            if let Some(b) = item.body() {
+                if lower::is_closure_body(&b) {
+                    let tys = b.arg_locals().iter().skip(1).map(|l| lower::type_id(&l.ty)).collect();
+                    cx.closures.insert(name, tys);
+                }
+            }
+        }
+    }
     let mut out = Vec::new();
     // main of a binary crate: where the program starts
     let entry = rustc_public::entry_fn().map(|e| e.name());
@@ -181,9 +203,21 @@ fn merge(frags: &Path) {
     let mut seen = HashSet::new();
     let mut rest = Vec::new();
     for f in files {
-        let text = std::fs::read_to_string(&f).unwrap_or_default();
+        let text = match std::fs::read_to_string(&f) {
+            Ok(t) => t,
+            Err(e) => {
+                // a crate that is not read is a crate that is gone from the program: the core records it
+                eprintln!("rivus-rust: cannot read {}: {}", f.display(), e);
+                rest.push(json!({"kind": "load_error", "load_error": {"package": f.display().to_string(), "message": format!("the extracted code of a crate could not be read: {}", e)}}).to_string());
+                continue;
+            }
+        };
         for line in text.lines() {
-            let Ok(v) = serde_json::from_str::<Value>(line) else { continue };
+            let Ok(v) = serde_json::from_str::<Value>(line) else {
+                // a line that is cut (the driver was killed while it wrote)
+                rest.push(json!({"kind": "load_error", "load_error": {"package": f.display().to_string(), "message": "a line of the extracted code is broken (a driver that was stopped?)"}}).to_string());
+                continue;
+            };
             if v["kind"] == "func" {
                 let id = v["func"]["id"].as_str().unwrap_or("").to_string();
                 if seen.insert(id) {
