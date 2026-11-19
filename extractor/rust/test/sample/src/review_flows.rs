@@ -142,3 +142,45 @@ pub fn array_passed() {
     let s = source(); // @source(rv-array-passed)
     sink(&first_of([s])); // @sink(rv-array-passed)
 }
+
+// --- #40: a call of generic code is linked to the function that holds the code
+
+// (a) a generic function and the method of a generic type, in a dependency
+pub fn dep_generic() {
+    let s = source(); // @source(rv-dep-generic)
+    sink(&depcrate::pass(s)); // @sink(rv-dep-generic)
+}
+
+pub fn dep_generic_method() {
+    let s = source(); // @source(rv-dep-generic-method)
+    sink(&depcrate::Holder(s).into_inner()); // @sink(rv-dep-generic-method)
+}
+
+// (b) an impl of a trait for a generic type overrides the default body
+pub trait Tr {
+    fn m(&self, _s: String) {}
+}
+
+pub struct Wr<T>(pub T);
+
+impl<T> Tr for Wr<T> {
+    fn m(&self, s: String) {
+        sink(&s); // @sink(rv-generic-impl)
+    }
+}
+
+pub fn generic_impl() {
+    let s = source(); // @source(rv-generic-impl)
+    Wr(1u8).m(s);
+}
+
+// (c) a generic function used as a value
+fn ident<T>(x: T) -> T {
+    x
+}
+
+pub fn generic_as_value() {
+    let s = source(); // @source(rv-generic-value)
+    let f = ident::<String>;
+    sink(&f(s)); // @sink(rv-generic-value)
+}

@@ -703,7 +703,7 @@ impl<'a> Lower<'a> {
         let d = self.new_local("", Some(&ty));
         // a function used as a value
         if let TyKind::RigidTy(RigidTy::FnDef(def, args)) = ty.kind() {
-            let name = resolve(def, &args).map(|i| i.name()).unwrap_or_else(|| def.name());
+            let name = resolve(def, &args).map(|i| definition_name(&i).unwrap_or_else(|| i.name())).unwrap_or_else(|| def.name());
             self.emit("make_closure", &[d], &[], pos, json!({"func": name}));
             return d;
         }
@@ -951,7 +951,9 @@ impl<'a> Lower<'a> {
                 let def_name = clean_symbol(&def.name());
                 let resolved = resolve(def, &gargs);
                 let virtual_call = resolved.as_ref().map(|i| matches!(i.kind, InstanceKind::Virtual { .. })).unwrap_or(false);
-                let inst = resolved.map(|i| i.name());
+                let inst = resolved.as_ref().map(|i| i.name());
+                // the function that holds the code, named as the definition names it (in every crate)
+                let defined = resolved.as_ref().and_then(definition_name);
                 let is_trait = inst.as_ref().map(|n| n.starts_with('<')).unwrap_or(false) && !def_name.starts_with('<');
                 // a closure called through Fn::call: its arguments come in a tuple
                 if matches!(def_name.as_str(), "std::ops::Fn::call" | "std::ops::FnMut::call_mut" | "std::ops::FnOnce::call_once") && args.len() == 2 {
@@ -969,13 +971,21 @@ impl<'a> Lower<'a> {
                     }
                 }
                 let raw_def = def.name();
+                // the name of an instance has the type arguments in it (`<W<u8> as Tr>::m`); the function that
+                // the crate writes out has not (`<W<T> as Tr>::m`)
+                let inst = match (&defined, inst) {
+                    (Some(d), Some(_)) => Some(d.clone()),
+                    (_, i) => i,
+                };
                 match inst {
                     // a call through a trait object: whichever impl the object has
                     _ if virtual_call => {
                         let cands = self.candidates(&def_name);
                         callee = json!({"kind": "dynamic", "symbol": def_name, "candidates": cands});
                     }
-                    Some(name) if self.cx.bodies.contains(&name) || self.cx.bodies.contains(&raw_def) => {
+                    // the body is the one of the definition the call resolves to. The trait's method of the same
+                    // name is not it: an impl that overrides a default body is not the default
+                    Some(name) if self.cx.bodies.contains(&name) || (defined.is_none() && self.cx.bodies.contains(&raw_def)) => {
                         let func = if self.cx.bodies.contains(&name) { name.clone() } else { raw_def.clone() };
                         let sym = if is_trait { def_name.clone() } else { clean_symbol(&func) };
                         callee = json!({"kind": "static", "func": func, "symbol": sym});
@@ -1249,6 +1259,19 @@ fn const_of(ty: &Ty, alloc: &Allocation) -> Value {
 /// find it in the parameter environment of the function. Such a call is as
 /// unresolved as one through a type parameter: `None`. (A panic is not caught: it leaves the
 /// queries of rustc active, and the compiler then aborts at the end.)
+/// The name of the definition that an instance runs, when it is code of a crate that is not the
+/// standard library (the instance's own name has the type arguments, which no function is named by).
+pub fn definition_name(i: &Instance) -> Option<String> {
+    if !matches!(i.kind, InstanceKind::Item) {
+        return None;
+    }
+    let krate = i.def.krate();
+    if matches!(krate.name.as_str(), "std" | "core" | "alloc" | "proc_macro" | "test") {
+        return None;
+    }
+    Some(i.def.name())
+}
+
 pub fn resolve(def: FnDef, args: &GenericArgs) -> Option<Instance> {
     if args.0.iter().any(has_open_const) {
         return None;
