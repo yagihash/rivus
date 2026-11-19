@@ -64,7 +64,9 @@ Future<void> extract(String root, StringSink sink, {bool deps = true, List<Strin
       if (lib.uri.scheme == 'dart' || !seen.add(lib.uri.toString())) return;
       for (final f in lib.fragments) {
         final path = f.source.fullName;
-        if (!p.isWithin(root, path)) files.add(path);
+        // a file of the project that was left out above (a hidden directory such as `.dart_tool`,
+        // the `build` at the top) is read as a dependency when the code imports it
+        if (!p.isWithin(root, path) || _skipped(root, path)) files.add(path);
       }
       for (final i in lib.firstFragment.libraryImports) {
         final l = i.importedLibrary;
@@ -87,14 +89,14 @@ Future<void> extract(String root, StringSink sink, {bool deps = true, List<Strin
       if (!path.endsWith('.dart') || !done.add(path)) continue;
       // Where a dependency is, is said by the package_config.json of the project, which is not trusted: it can
       // point anywhere. What is read is under the project, the pub cache, the SDKs, or what is asked for.
-      if (!trusted.any((r) => p.equals(r, path) || p.isWithin(r, path))) {
+      if (!p.isWithin(root, path) && !trusted.any((r) => p.equals(r, path) || p.isWithin(r, path))) {
         refused.putIfAbsent(_packageDir(path), () => path);
         continue;
       }
-      final context = collection.contexts.first;
+      final context = (p.isWithin(root, path) ? _contextOf(collection, path) : null) ?? collection.contexts.first;
       final r = await context.currentSession.getResolvedUnit(path);
       if (r is! ResolvedUnitResult) continue;
-      units.add(UnitInfo(prog, path, r.unit, r.content, r.lineInfo, dep: true));
+      units.add(UnitInfo(prog, p.isWithin(root, path) ? p.relative(path, from: root) : path, r.unit, r.content, r.lineInfo, dep: true));
     }
   }
   for (final e in refused.entries) {

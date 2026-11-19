@@ -1,4 +1,5 @@
 import 'lib.dart';
+import '.generated/gen_hidden.dart';
 
 // The repro code of the issues that the daily review made (yagihash/rivus #27-#36).
 
@@ -202,4 +203,15 @@ class AssertInit {
 
 void assertInitializer() {
   AssertInit(source()); // @source(is-62)
+}
+
+// --- #63: a file in a hidden directory that the code imports is read as a dependency
+
+void hiddenDirectory() {
+  final v = source(); // @source(is-63)
+  sink(hiddenPass(v)); // @sink(is-63)
+}
+
+void hiddenDirectoryConstant() {
+  sink(hiddenConstant(source())); // @sink(none)
 }
