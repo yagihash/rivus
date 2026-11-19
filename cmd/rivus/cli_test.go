@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -368,5 +369,62 @@ func TestIRInputHasNoTargetUnlessDirIsGiven(t *testing.T) {
 		if !hasTarget(cmd, "-ir", irFile, "-C", ".") {
 			t.Errorf("%s -ir -C .: the target the user asked for is missing", cmd)
 		}
+	}
+}
+
+// rivusFails runs the command and returns its stderr; it must exit non-zero.
+func rivusFails(t *testing.T, env []string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command(binary, args...)
+	cmd.Dir = testutil.Testdata()
+	cmd.Env = append(os.Environ(), env...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err == nil {
+		t.Fatalf("rivus %v must fail", args)
+	}
+	return stderr.String()
+}
+
+// Flags that are wrong or do not go together are an error, before the analysis
+// starts (#16).
+func TestFlagValidation(t *testing.T) {
+	dir := t.TempDir()
+	idx := filepath.Join(dir, "idx.json")
+	rivus(t, "index", "-rules", "rules.yaml", "-o", idx, "./cases/hello")
+
+	cases := []struct {
+		name string
+		env  []string
+		args []string
+		want string
+	}{
+		{"role", nil, []string{"sites", "-role", "sinks", "./cases/hello"}, "role"},
+		{"sites and summary", nil, []string{"analyze", "-sites", "-detail", "summary", "./cases/hello"}, "sites"},
+		{"detail", nil, []string{"analyze", "-detail", "bogus", "./cases/hello"}, "detail"},
+		{"query detail", nil, []string{"query", "-sink", "x", "-detail", "bogus", "./cases/hello"}, "detail"},
+		{"query without question", nil, []string{"query", "./cases/hello"}, "exactly one"},
+		{"index and packages", nil, []string{"query", "-index", idx, "-sink", "x", "./cases/hello"}, "-index"},
+		{"index and analysis flag", nil, []string{"query", "-index", idx, "-sink", "x", "-tests"}, "-index"},
+		{"blank extractor flag", nil, []string{"analyze", "-lang", "dart", "-dart-extractor", " ", "./cases/hello"}, "extractor"},
+		{"blank extractor env", []string{"RIVUS_DART_EXTRACTOR= "}, []string{"analyze", "-lang", "dart", "./cases/hello"}, "extractor"},
+	}
+	for _, c := range cases {
+		got := rivusFails(t, c.env, c.args...)
+		if strings.Contains(got, "panic") || !strings.Contains(got, c.want) {
+			t.Errorf("%s: stderr = %q, want an error naming %q", c.name, got, c.want)
+		}
+	}
+}
+
+// A query on an index about a symbol that the index holds no site of says so:
+// it is not the same as "nothing reaches it" (#16).
+func TestIndexQueryAboutUnknownSymbolSaysSo(t *testing.T) {
+	idx := filepath.Join(t.TempDir(), "idx.json")
+	rivus(t, "index", "-rules", "rules.yaml", "-o", idx, "./cases/hello")
+	var res report.QueryResult
+	rivusJSON(t, &res, "query", "-index", idx, "-sink", "fmt.Sprintf")
+	if len(res.Matched) != 0 || len(res.Notes) == 0 {
+		t.Errorf("matched %d, notes %v", len(res.Matched), res.Notes)
 	}
 }

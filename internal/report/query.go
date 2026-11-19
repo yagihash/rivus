@@ -44,10 +44,13 @@ type QueryResult struct {
 	Groups   []Group          `json:"groups"`
 	Findings []*taint.Finding `json:"findings"`
 	Stats    taint.Stats      `json:"stats"`
+	// Notes say what the answer does not tell, when it could be mistaken for
+	// more.
+	Notes []string `json:"notes,omitempty"`
 }
 
-// Run answers the query from the report.
-func (r *Report) Run(q Query) (*QueryResult, error) {
+// Validate checks that the query asks exactly one question.
+func (q Query) Validate() error {
 	n := 0
 	for _, s := range []string{q.Sink, q.Source, q.Site} {
 		if s != "" {
@@ -55,7 +58,15 @@ func (r *Report) Run(q Query) (*QueryResult, error) {
 		}
 	}
 	if n != 1 {
-		return nil, fmt.Errorf("exactly one of sink, source and site is required")
+		return fmt.Errorf("exactly one of sink, source and site is required")
+	}
+	return nil
+}
+
+// Run answers the query from the report.
+func (r *Report) Run(q Query) (*QueryResult, error) {
+	if err := q.Validate(); err != nil {
+		return nil, err
 	}
 	out := &QueryResult{SchemaVersion: QuerySchemaVersion, Query: q, Target: r.Target, Stats: r.Stats, Matched: []taint.SiteRef{}, Groups: []Group{}, Findings: []*taint.Finding{}}
 

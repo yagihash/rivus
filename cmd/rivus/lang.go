@@ -111,6 +111,9 @@ func (o *analyzeOpts) extractorCommand(lang string) ([]string, error) {
 		cmd = name
 	}
 	words := strings.Fields(cmd)
+	if len(words) == 0 {
+		return nil, fmt.Errorf("the %s extractor is named by a blank command (-%s-extractor or %s): name the command, or leave it unset", lang, lang, env)
+	}
 	if _, err := exec.LookPath(words[0]); err != nil {
 		return nil, &extractorMissingError{fmt.Errorf("the %s extractor %q is not found: install it (%s), or name it with -%s-extractor or %s", lang, words[0], how, lang, env)}
 	}

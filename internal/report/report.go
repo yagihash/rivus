@@ -264,6 +264,15 @@ const (
 	DetailSnippet = "snippet" // everything (default)
 )
 
+// ValidDetail reports whether level is a detail level.
+func ValidDetail(level string) error {
+	switch level {
+	case "", DetailSnippet, DetailSummary:
+		return nil
+	}
+	return fmt.Errorf("unknown detail level %q (want %s or %s)", level, DetailSummary, DetailSnippet)
+}
+
 // WithDetail returns a copy of the report reduced to the detail level. It
 // keeps the agent's context small when only an overview is needed.
 func (r *Report) WithDetail(level string) (*Report, error) {

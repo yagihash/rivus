@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/pprof"
+	"strings"
 	"time"
 
 	"github.com/yagihash/rivus/internal/model"
@@ -183,6 +184,13 @@ func runAnalyze(args []string) error {
 	detail := fs.String("detail", report.DetailSnippet, "level of detail: summary or snippet")
 	withSites := fs.Bool("sites", false, "also list the sites")
 	fs.Parse(args)
+	// What can be checked is checked before the analysis, which can take minutes.
+	if err := report.ValidDetail(*detail); err != nil {
+		return err
+	}
+	if *withSites && *detail == report.DetailSummary {
+		return fmt.Errorf("-sites cannot be combined with -detail summary: the summary leaves the sites out")
+	}
 
 	rep, err := o.analyze(fs.Args())
 	if err != nil {
@@ -233,9 +241,28 @@ func runQuery(args []string) error {
 	fs.Parse(args)
 
 	q := report.Query{Sink: *sink, Source: *source, Site: *site}
+	if err := q.Validate(); err != nil {
+		return err
+	}
+	if err := report.ValidDetail(*detail); err != nil {
+		return err
+	}
 	var rep *report.Report
 	var err error
 	if *index != "" {
+		// The index is the answer's source: nothing is analysed, so the flags
+		// that steer an analysis, and the packages, have no effect. They are
+		// refused rather than ignored.
+		own := map[string]bool{"sink": true, "source": true, "site": true, "index": true, "detail": true}
+		var ignored []string
+		fs.Visit(func(f *flag.Flag) {
+			if !own[f.Name] {
+				ignored = append(ignored, "-"+f.Name)
+			}
+		})
+		if len(ignored) > 0 || fs.NArg() > 0 {
+			return fmt.Errorf("query -index answers from the saved index and analyses nothing: %s cannot be combined with it", strings.Join(append(ignored, fs.Args()...), " "))
+		}
 		rep, err = report.Load(*index)
 	} else {
 		rep, err = o.analyze(fs.Args(), adHocRules(q)...)
@@ -246,6 +273,10 @@ func runQuery(args []string) error {
 	res, err := rep.Run(q)
 	if err != nil {
 		return err
+	}
+	if *index != "" && len(res.Matched) == 0 && (q.Sink != "" || q.Source != "") {
+		res.Notes = append(res.Notes, "the index holds no site of this symbol: an index answers only for the symbols that its rules name, "+
+			"so this is not \"nothing reaches it\". Query the source (without -index), or index again with a rule for the symbol")
 	}
 	if *detail != "" && *detail != report.DetailSnippet {
 		d, err := (&report.Report{SchemaVersion: report.SchemaVersion, Findings: res.Findings}).WithDetail(*detail)
