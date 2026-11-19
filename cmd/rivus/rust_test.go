@@ -110,3 +110,42 @@ func TestRustToolchainHintMatches(t *testing.T) {
 		t.Errorf("the install hint does not name %s: %v", m[1], err)
 	}
 }
+
+// With --include-tests the library is built twice (as it is, and as its tests): they are one
+// crate, not two versions of it, and a function that the tests change (the closures and impls that
+// its calls may reach) is not a conflict (yagihash/rivus #68).
+func TestRustExtractorIncludeTestsIsNotAConflict(t *testing.T) {
+	bin := os.Getenv("RIVUS_RUST")
+	if bin == "" {
+		t.Skip("RIVUS_RUST is not set")
+	}
+	bin, err := filepath.Abs(bin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	for name, text := range map[string]string{
+		"Cargo.toml": "[package]\nname = \"inctest\"\nversion = \"0.0.0\"\nedition = \"2021\"\n\n[workspace]\n",
+		"src/lib.rs": "pub fn run<F: FnOnce()>(f: F) { f() }\n\npub fn go() { run(|| {}); }\n\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() { super::run(|| { let _ = 1; }); }\n}\n",
+	} {
+		p := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cmd := exec.Command(bin, "--include-tests", dir)
+	stream, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("the extractor failed: %v", err)
+	}
+	prog, err := ir.Read(bytes.NewReader(stream))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range prog.LoadErrors {
+		t.Errorf("load_error: %s: %s", e.Package, e.Message)
+	}
+}

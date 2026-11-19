@@ -19,7 +19,7 @@ mod lower;
 
 use rustc_public::CrateDef;
 use serde_json::{json, Value};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
@@ -124,7 +124,9 @@ fn driver() -> ExitCode {
     let result = run!(&args, || {
         if !probing && !skipped && !proc_macro && !out_dir.is_empty() {
             let records = extract(&root, dep);
-            let path = PathBuf::from(&out_dir).join(format!("{}-{}.jsonl", crate_name, std::process::id()));
+            // a test build of a crate (`--test`) is told apart by its name: the merge prefers it to the library build
+            let kind = if args.iter().any(|a| a == "--test") { "-test" } else { "" };
+            let path = PathBuf::from(&out_dir).join(format!("{}{}-{}.jsonl", crate_name, kind, std::process::id()));
             let mut text = String::new();
             for r in records {
                 text.push_str(&r.to_string());
@@ -163,11 +165,24 @@ fn extract(root: &str, dep: bool) -> Vec<Value> {
     let mut out = Vec::new();
     // main of a binary crate: where the program starts
     let entry = rustc_public::entry_fn().map(|e| e.name());
+    // a test build has two items of the same name for each `#[test]` function: the function and the constant that
+    // the test harness makes of it (and the closure in that constant, named after it). What the harness makes is
+    // not code of the program: the function is
+    let mut count: HashMap<String, usize> = HashMap::new();
+    for item in &items {
+        *count.entry(item.name()).or_default() += 1;
+    }
     for item in &items {
         let Some(body) = item.body() else { continue };
         let name = item.name();
         let f = lower::Lower::lower(&mut cx, name.clone(), &body, item.span());
         let mut j = f.to_json();
+        if count.get(&name).copied().unwrap_or(0) > 1 {
+            let text = j.to_string();
+            if text.contains("test::TestDescAndFn") || text.contains("test::assert_test_result") {
+                continue;
+            }
+        }
         if !dep && entry.as_deref() == Some(name.as_str()) {
             j["entry"] = json!(true);
         }
@@ -302,6 +317,19 @@ fn fragment_files(frags: &Path) -> std::io::Result<Vec<PathBuf>> {
     Ok(files)
 }
 
+/// The crate a fragment is of, and whether it is the test build of it (`<crate>-test-<pid>.jsonl`).
+fn fragment_origin(path: &Path) -> (String, bool) {
+    let stem = path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+    let name = match stem.rsplit_once('-') {
+        Some((n, _pid)) => n.to_string(),
+        None => stem,
+    };
+    match name.strip_suffix("-test") {
+        Some(c) => (c.to_string(), true),
+        None => (name, false),
+    }
+}
+
 /// Writes the stream: the header, the functions (a function the workspace
 /// compiled twice, as a library and as a test, once), and the rest.
 fn merge(files: Vec<PathBuf>) {
@@ -310,9 +338,12 @@ fn merge(files: Vec<PathBuf>) {
     // versions that do not agree, or the library and its tests) cannot both be the program: the choice is
     // by the content, not by the order the compiler processes (a process number in a file name), and it is said.
     let mut funcs: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
+    // where each function came from: the crate, and whether it is a test build of it
+    let mut origin: std::collections::HashMap<String, (String, bool)> = std::collections::HashMap::new();
     let mut conflicts: Vec<String> = Vec::new();
     let mut rest = Vec::new();
     for f in files {
+        let from = fragment_origin(&f);
         let text = match std::fs::read_to_string(&f) {
             Ok(t) => t,
             Err(e) => {
@@ -332,16 +363,26 @@ fn merge(files: Vec<PathBuf>) {
                 let id = v["func"]["id"].as_str().unwrap_or("").to_string();
                 match funcs.get(&id) {
                     None => {
+                        origin.insert(id.clone(), from.clone());
                         funcs.insert(id, line.to_string());
                     }
                     Some(old) if old == line => {}
                     Some(old) => {
-                        // not the same function: the smaller line stays, whichever came first
-                        if conflicts.len() < 20 {
+                        let was = origin.get(&id).cloned().unwrap_or_default();
+                        if was.0 == from.0 && was.1 != from.1 {
+                            // the library and its tests are one crate, built twice: the test build has the code of
+                            // the library and what the tests add (the closures and impls the calls may reach), so it stays
+                            if from.1 {
+                                origin.insert(id.clone(), from.clone());
+                                funcs.insert(id, line.to_string());
+                            }
+                        } else {
+                            // not the same function: the smaller line stays, whichever came first
                             conflicts.push(id.clone());
-                        }
-                        if line < old.as_str() {
-                            funcs.insert(id, line.to_string());
+                            if line < old.as_str() {
+                                origin.insert(id.clone(), from.clone());
+                                funcs.insert(id, line.to_string());
+                            }
                         }
                     }
                 }
@@ -354,10 +395,18 @@ fn merge(files: Vec<PathBuf>) {
     for l in funcs.values() {
         println!("{}", l);
     }
-    for id in conflicts {
+    // the first twenty are named; the total is said, so that the size of it is known
+    let total = conflicts.len();
+    for id in conflicts.into_iter().take(20) {
         println!(
             "{}",
-            json!({"kind": "load_error", "load_error": {"package": id, "message": "two crates have a function of this name and they differ (a crate in two versions?): one of them is in the program"}})
+            json!({"kind": "load_error", "load_error": {"package": id, "message": format!("two crates have a function of this name and they differ (a crate in two versions?): one of them is in the program ({} such functions in all)", total)}})
+        );
+    }
+    if total > 20 {
+        println!(
+            "{}",
+            json!({"kind": "load_error", "load_error": {"package": "(crates in two versions)", "message": format!("{} functions have a name that two crates share and they differ; only the first 20 are named", total)}})
         );
     }
     for l in rest {
