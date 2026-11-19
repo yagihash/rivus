@@ -86,7 +86,10 @@ type Engine struct {
 	states         map[*sg.Func]*state
 	globals        *globalStore
 
-	notConverged []string
+	// notConverged lists the functions whose local analysis did not reach a
+	// fixed point, each once (however many times it was analysed again).
+	notConverged    []string
+	notConvergedSet map[string]bool
 	// degraded lists the functions whose analysis hit the budget. They are
 	// analysed once and then left alone.
 	degraded map[*sg.Func]bool
@@ -325,8 +328,15 @@ func sanitizes(sum *Summary) bool {
 }
 
 func (e *Engine) noteNotConverged(fn *sg.Func) {
+	id := e.funcID(fn)
 	e.mu.Lock()
-	e.notConverged = append(e.notConverged, e.funcID(fn))
+	if !e.notConvergedSet[id] {
+		if e.notConvergedSet == nil {
+			e.notConvergedSet = map[string]bool{}
+		}
+		e.notConvergedSet[id] = true
+		e.notConverged = append(e.notConverged, id)
+	}
 	e.mu.Unlock()
 }
 
