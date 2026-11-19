@@ -8,8 +8,8 @@ destination without being normalized.
 ```sh
 git clone https://github.com/dart-lang/pub && cd pub && git checkout 5e24336e71a05a96b558d496953ebed223f6e40a
 dart pub get                                              # Dart 3.13.6
-dart run /path/to/rivus/extractor/dart/bin/rivus_dart.dart --no-deps . > pub.jsonl   # about 15 s
-rivus analyze -ir pub.jsonl -rules /path/to/rivus/bench/dart-pub/rules.yaml > result.json   # a few seconds
+dart run /path/to/rivus/extractor/dart/bin/rivus_dart.dart --no-deps . > pub.jsonl   # about 11 s
+rivus analyze -ir pub.jsonl -rules /path/to/rivus/bench/dart-pub/rules.yaml > result.json   # about 1 s
 python3 /path/to/rivus/bench/score.py /path/to/rivus/bench/dart-pub/truth-5e24336e.json result.json
 ```
 
@@ -29,6 +29,6 @@ match.
   advisories for pub, none in shelf, shelf_static, dart_frog, grpc or pub-dev).
 - The fixed commit gives the same findings (shifted by two lines): `p.normalize` followed by `p.isWithin` is not a
   sanitizer that the rules know, so the benchmark measures recall on the vulnerable code, not that a fix is recognised.
-- One advisory is one flow: this is a smoke test of the Dart extractor on a large real program (about 1,100 files
-  with the dependencies; the extractor found and fixed four defects of its own on it: nested collection elements,
+- One advisory is one flow: this is a smoke test of the Dart extractor on a large real program (522 Dart files
+  in the project (`--no-deps`); the extractor found and fixed four defects of its own on it: nested collection elements,
   null-aware elements, a named constructor and a method of the same name, and unnamed extensions), not a measure of precision.
