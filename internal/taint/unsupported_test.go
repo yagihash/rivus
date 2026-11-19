@@ -103,3 +103,18 @@ func TestNumericStopIsRecorded(t *testing.T) {
 		t.Errorf("the record does not say where: %+v", got[0])
 	}
 }
+
+// A source that returns a flag beside its data (`md, ok := metadata.FromIncomingContext(ctx)`) is not a
+// number that the input became: the flag gets no record, however the call puts the label on
+// all of its results (yagihash/rivus #72).
+func TestCommaOkSourceLeavesNoNumericStop(t *testing.T) {
+	prog := loadIR(t, testutil.Testdata(), "./cases/grpcsrv/...")
+	rules := testutil.Rules(t)
+	rules.Expand(prog.gossa, 0)
+	st := prog.sites(rules)
+	for _, u := range prog.engine(st, rules, DefaultOptions()).Run().Uncertainties {
+		if u.Kind == KindNumericStop {
+			t.Errorf("numeric_stop for %s at %s: %s", u.Symbol, u.Position.File, u.Detail)
+		}
+	}
+}

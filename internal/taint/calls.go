@@ -103,7 +103,18 @@ func (s *state) callBody(cc *callCtx) {
 			// a source with out: the call fills the arguments it names (the
 			// result is the error or the count, not the data)
 			if !outOnly {
+				// a number or a bool beside the data (`v, ok := src()`) is not an input that became one: it
+				// holds nothing that the label could follow, and no stop is recorded for it
+				beside := false
 				for _, r := range cc.roots {
+					if !s.numericRoot(r) {
+						beside = true
+					}
+				}
+				for _, r := range cc.roots {
+					if beside && s.numericRoot(r) {
+						continue
+					}
 					for _, l := range site.Labels {
 						s.add(Loc{r, ""}, RealElem(l, site.ID), s.origin(ci.Pos, "source: "+site.Symbol))
 					}

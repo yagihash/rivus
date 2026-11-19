@@ -313,6 +313,12 @@ func (s *state) noteNumericStop(e Elem, w *why, v *sg.Value) {
 	s.numericStops[origin] = numericStop{label: e.Label(), pos: pos}
 }
 
+// numericRoot reports whether the root is a number or a bool that is not followed (what `add` stops at).
+func (s *state) numericRoot(r Root) bool {
+	v := r.V
+	return v != nil && r.Idx < 0 && !s.eng.opts.NumericTaint && (v.Class == ir.ClassNumber || v.Class == ir.ClassBool)
+}
+
 // add puts an element into a cell. It records w as the reason the first time.
 func (s *state) add(l Loc, e Elem, w *why) {
 	// A number or a bool cannot carry an injection (a path, a query, a
