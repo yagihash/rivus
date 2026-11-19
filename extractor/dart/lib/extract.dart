@@ -648,6 +648,13 @@ class _Lower extends RecursiveAstVisitor<void> {
       if (i is ConstructorFieldInitializer) {
         final v = f.expr(i.expression);
         f.emit('field_store', args: [self, v], at: f.pos(i), more: {'field': i.fieldName.name});
+      } else if (i is AssertInitializer) {
+        // the condition and the message are code that runs, as in an assert statement
+        f.expr(i.condition);
+        final m = i.message;
+        if (m != null) f.expr(m);
+      } else if (i is! SuperConstructorInvocation && i is! RedirectingConstructorInvocation) {
+        f.emit('unsupported', at: f.pos(i), more: {'reason': 'initializer ${i.runtimeType}'});
       }
     }
     return self;

@@ -187,3 +187,19 @@ enum Level {
 }
 
 String levelLabel() => Level.low.label;
+
+// --- #62: an assert in the initializer list of a constructor runs like one in a body
+
+bool _auditInit(String p) {
+  sink(p); // @sink(is-62)
+  return true;
+}
+
+class AssertInit {
+  final String s;
+  AssertInit(String p) : assert(true, 'bad ${_auditInit(p)}'), s = p;
+}
+
+void assertInitializer() {
+  AssertInit(source()); // @source(is-62)
+}
