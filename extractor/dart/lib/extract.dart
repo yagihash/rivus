@@ -279,7 +279,17 @@ class _Lower extends RecursiveAstVisitor<void> {
   @override
   void visitConstructorDeclaration(ConstructorDeclaration node) {
     final el = node.declaredFragment?.element;
-    if (el == null || !_hasBody(node.body) && node.initializers.isEmpty && node.parameters.parameters.isEmpty) return;
+    if (el == null) return;
+    // a factory makes no object of its own: it is a function that returns what its
+    // body returns, or (`factory A() = B;`, the shape freezed writes) what the
+    // constructor it redirects to makes
+    if (node.factoryKeyword != null) {
+      final redirect = node.redirectedConstructor?.element;
+      if (!_hasBody(node.body) && redirect == null) return;
+      _function(el, node, node.parameters, node.body, thisType: null, redirect: redirect);
+      return;
+    }
+    if (!_hasBody(node.body) && node.initializers.isEmpty && node.parameters.parameters.isEmpty) return;
     final cls = el.enclosingElement;
     _function(el, node, node.parameters, node.body, thisType: null, constructorOf: cls, ctor: node);
   }
@@ -287,7 +297,7 @@ class _Lower extends RecursiveAstVisitor<void> {
   bool _hasBody(FunctionBody b) => b is! EmptyFunctionBody && b is! NativeFunctionBody;
 
   void _function(ExecutableElement el, AstNode node, FormalParameterList? list, FunctionBody body,
-      {required DartType? thisType, InterfaceElement? constructorOf, ConstructorDeclaration? ctor}) {
+      {required DartType? thisType, InterfaceElement? constructorOf, ConstructorDeclaration? ctor, ConstructorElement? redirect}) {
     final id = funcId(el);
     final out = FuncOut(id)
       ..symbol = symbolOf(el)
@@ -315,23 +325,74 @@ class _Lower extends RecursiveAstVisitor<void> {
       params: params,
       body: body,
       at: at,
-      preamble: constructorOf == null
-          ? null
-          : () {
-              // a constructor makes the object, sets its fields, and returns it
-              final d = f.tmp(constructorOf.thisType);
-              f.emit('alloc', dsts: [d], at: out.pos, more: {'type': typeId(constructorOf.thisType), 'class': 'pointer'});
-              self = d;
-              f.bind(thisKey, d);
-              _constructorPrologue(f, constructorOf, ctor!, d, params);
-            },
+      preamble: redirect != null
+          ? () => _redirectFactory(f, redirect, el, out.pos)
+          : constructorOf == null
+              ? null
+              : () {
+                  // a constructor makes the object, sets its fields, and returns it
+                  final d = f.tmp(constructorOf.thisType);
+                  f.emit('alloc', dsts: [d], at: out.pos, more: {'type': typeId(constructorOf.thisType), 'class': 'pointer'});
+                  self = d;
+                  f.bind(thisKey, d);
+                  // a call of the constructor of the superclass (or of another constructor of
+                  // the class) makes the object: it is the object of this one too
+                  final s = _constructorPrologue(f, constructorOf, ctor!, d, params);
+                  if (s != d) {
+                    self = s;
+                    f.bind(thisKey, s);
+                  }
+                },
     );
     if (constructorOf != null) _returnSelf(out, self);
     unit.funcTexts(id, node);
     prog.out.func(out);
   }
 
-  void _constructorPrologue(FnLower f, InterfaceElement cls, ConstructorDeclaration ctor, int self, List<(Object, String, DartType?)> params) {
+  /// `factory A(x) = B;`: a call of B with the parameters, which is returned.
+  void _redirectFactory(FnLower f, ConstructorElement target, ExecutableElement el, Pos at) {
+    final mine = orderedParams(el).toList();
+    final theirs = orderedParams(target).toList();
+    final args = <int>[];
+    for (var i = 0; i < theirs.length; i++) {
+      FormalParameterElement? from;
+      if (mine.length == theirs.length) {
+        from = mine[i];
+      } else {
+        for (final m in mine) {
+          if (m.name == theirs[i].name) from = m;
+        }
+      }
+      args.add(from == null ? f.nilConst(at) : f.readVar(from.baseElement, from.type, at));
+    }
+    final d = f.tmp(target.enclosingElement.thisType);
+    f.emit('call', dsts: [d], args: args, at: at, more: {
+      'callee': {'kind': 'static', 'func': funcId(target), 'symbol': symbolOf(target)}
+    });
+    f.mayThrow();
+    f.ret([d], at);
+  }
+
+  /// Returns the object the constructor works on: the one it made, or the one that
+  /// the constructor it calls (super(...), or this.named(...)) made.
+  int _constructorPrologue(FnLower f, InterfaceElement cls, ConstructorDeclaration ctor, int self, List<(Object, String, DartType?)> params) {
+    // the constructor that makes the object: super(...) and this.named(...)
+    for (final i in ctor.initializers) {
+      if (i is SuperConstructorInvocation || i is RedirectingConstructorInvocation) {
+        final target = i is SuperConstructorInvocation ? i.element : (i as RedirectingConstructorInvocation).element;
+        final list = i is SuperConstructorInvocation ? i.argumentList : (i as RedirectingConstructorInvocation).argumentList;
+        if (target == null) {
+          for (final a in list.arguments) {
+            f.expr(a.argumentExpression);
+          }
+          break;
+        }
+        // evaluated first: what it takes cannot depend on the object
+        self = constructorCall(f, target, list, i, cls.thisType, f.pos(i));
+        if (i is RedirectingConstructorInvocation) return self; // the one it redirects to does the rest
+        break;
+      }
+    }
     // fields with an initializer in the class
     for (final m in _fieldsOf(cls)) {
       final init = m.initializer;
@@ -357,6 +418,7 @@ class _Lower extends RecursiveAstVisitor<void> {
         f.emit('field_store', args: [self, v], at: f.pos(i), more: {'field': i.fieldName.name});
       }
     }
+    return self;
   }
 
   Iterable<VariableDeclaration> _fieldsOf(InterfaceElement cls) sync* {

@@ -407,6 +407,10 @@ int _creation(FnLower f, InstanceCreationExpression e) {
   return _constructorCall(f, ctor, e.argumentList, e, e.staticType, at);
 }
 
+/// The call of a constructor (the same for `new C(...)`, a shorthand, and the
+/// `super(...)` of another constructor).
+int constructorCall(FnLower f, ConstructorElement ctor, ArgumentList list, AstNode n, DartType? t, Pos at) => _constructorCall(f, ctor, list, n, t, at);
+
 int _constructorCall(FnLower f, ConstructorElement ctor, ArgumentList list, AstNode n, DartType? t, Pos at) {
   final (args, nodes) = _arguments(f, ctor, list);
   final d = f.tmp(t);
