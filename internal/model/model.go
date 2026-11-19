@@ -450,6 +450,52 @@ func (rs *RuleSet) WithoutOrigin(origin string) (*RuleSet, int) {
 	return &out, n
 }
 
+// checkFields refuses the fields that the kind of a source does not read.
+func (s *Source) checkFields(what string) error {
+	var bad []string
+	has := func(name string, set bool) {
+		if set {
+			bad = append(bad, name)
+		}
+	}
+	switch s.Kind {
+	case KindCallResult:
+		has("type", s.Type != "")
+		has("field", s.Field != "")
+		has("params", len(s.Params) > 0)
+		has("marker", s.Marker != "")
+		has("extends", s.Extends != "")
+		has("with_param_type", s.WithParamType != "")
+		has("exclude_methods", len(s.ExcludeMethods) > 0)
+		has("marker_call", s.MarkerCall != "")
+	case KindParamType, KindField:
+		has("symbol", s.Symbol != "")
+		has("params", len(s.Params) > 0)
+		has("recv", s.Recv)
+		has("out", len(s.Out) > 0)
+		has("marker", s.Marker != "")
+		has("extends", s.Extends != "")
+		has("with_param_type", s.WithParamType != "")
+		has("exclude_methods", len(s.ExcludeMethods) > 0)
+		has("marker_call", s.MarkerCall != "")
+		// only a call_result and a param are expanded to their implementations
+		has("match: implementations", s.Match == MatchImplementations)
+		if s.Kind == KindParamType {
+			has("field", s.Field != "")
+		} else {
+			has("type", s.Type != "")
+		}
+	case KindParam:
+		has("out", len(s.Out) > 0)
+		has("type", s.Type != "")
+		has("field", s.Field != "")
+	}
+	if len(bad) > 0 {
+		return fmt.Errorf("%s: kind %s does not use %s", what, s.Kind, strings.Join(bad, ", "))
+	}
+	return nil
+}
+
 func (rs *RuleSet) validate() error {
 	checkMatch := func(m, what string) error {
 		switch m {
@@ -474,6 +520,10 @@ func (rs *RuleSet) validate() error {
 		}
 		if len(s.Labels) == 0 {
 			return fmt.Errorf("%s: labels is required", what)
+		}
+		// a field that the kind does not read is a rule that does not do what it says: refused, not ignored
+		if err := s.checkFields(what); err != nil {
+			return err
 		}
 		switch s.Kind {
 		case KindCallResult:
@@ -512,6 +562,11 @@ func (rs *RuleSet) validate() error {
 			if len(s.Params) == 0 && !s.Recv {
 				return fmt.Errorf("%s: kind %s needs params or recv", what, s.Kind)
 			}
+			for _, o := range s.Params {
+				if o < 0 {
+					return fmt.Errorf("%s: params: %d is not a parameter position", what, o)
+				}
+			}
 		default:
 			return fmt.Errorf("%s: unknown kind %q", what, s.Kind)
 		}
@@ -526,6 +581,19 @@ func (rs *RuleSet) validate() error {
 		}
 		if err := checkMatch(s.Match, what); err != nil {
 			return err
+		}
+		for _, a := range s.Args {
+			if a < 0 {
+				return fmt.Errorf("%s: args: %d is not an argument position (the receiver is recv: true)", what, a)
+			}
+		}
+		if c := s.WhenArgType; c != nil {
+			if c.Arg < 0 {
+				return fmt.Errorf("%s: when_arg_type: arg %d is not an argument position", what, c.Arg)
+			}
+			if len(c.Types) == 0 {
+				return fmt.Errorf("%s: when_arg_type needs types: without them the condition never holds and the sink never applies", what)
+			}
 		}
 	}
 	for i, s := range rs.Sanitizers {
