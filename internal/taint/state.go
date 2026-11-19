@@ -188,10 +188,12 @@ type state struct {
 
 	paramRoot map[Root]int // parameter and free variable roots -> index
 	numbering map[*sg.Value]int
-	stores    []*sg.Instr // the stores of the function (aliasLocs looks for what a cell holds)
-	locSet    map[*sg.Value]map[Loc]bool
-	locCache  map[*sg.Value][]Loc
-	locsFinal bool // locCache may be filled: the fixed point of the locations is reached
+	// numericStops: by source site, where its data stopped at a number or a bool here.
+	numericStops map[string]numericStop
+	stores       []*sg.Instr // the stores of the function (aliasLocs looks for what a cell holds)
+	locSet       map[*sg.Value]map[Loc]bool
+	locCache     map[*sg.Value][]Loc
+	locsFinal    bool // locCache may be filled: the fixed point of the locations is reached
 
 	branches        *[]*sg.Block
 	edgeGuardCache  map[[2]*sg.Block][]Guard
@@ -286,6 +288,31 @@ func (s *state) cellsOf(r Root) map[string]Set {
 	return m
 }
 
+// numericStop is the first place where the data of a source site stopped at a number
+// or a bool in a function.
+type numericStop struct {
+	label string
+	pos   ir.Pos
+}
+
+// noteNumericStop records that data that came from a source (a concrete label) was about to
+// become a number or a bool, where it is not followed: the place where an input is parsed
+// into a number, or measured.
+func (s *state) noteNumericStop(e Elem, w *why, v *sg.Value) {
+	origin := e.Origin()
+	if _, ok := s.numericStops[origin]; ok {
+		return
+	}
+	pos := v.Pos
+	if w != nil && w.pos != (cpos{}) {
+		pos = w.pos.pos()
+	}
+	if s.numericStops == nil {
+		s.numericStops = map[string]numericStop{}
+	}
+	s.numericStops[origin] = numericStop{label: e.Label(), pos: pos}
+}
+
 // add puts an element into a cell. It records w as the reason the first time.
 func (s *state) add(l Loc, e Elem, w *why) {
 	// A number or a bool cannot carry an injection (a path, a query, a
@@ -293,6 +320,9 @@ func (s *state) add(l Loc, e Elem, w *why) {
 	// whose sink is a size or a count needs that).
 	if v := l.Root.V; v != nil && l.Root.Idx < 0 && l.Path == "" && !s.eng.opts.NumericTaint &&
 		(v.Class == ir.ClassNumber || v.Class == ir.ClassBool) {
+		if e.Kind == Real {
+			s.noteNumericStop(e, w, v)
+		}
 		return
 	}
 	p, trunc := pathTrunc(l.Path, s.eng.opts.K)

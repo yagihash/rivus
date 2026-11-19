@@ -468,9 +468,32 @@ func (s *state) applyModel(cc *callCtx) {
 			s.newNote(cc.in, KindStoredDataBoundary, "data moves between the code and a data store here; what is read back is not followed unless a source rule says what comes from it", cc.sym)
 		}
 		if p.Pure {
-			continue // nothing flows: that is the model
+			// nothing flows: that is the model. When what comes out is a number or a bool, and what went
+			// in came from a source, this is where the input becomes a number: said, where it happens
+			s.noteNumericStopOfPure(cc)
+			continue
 		}
 		s.applyFlows(cc, p.Flows, nil, "", modelRef(cc.sym, "propagator", p.Provenance))
+	}
+}
+
+// noteNumericStopOfPure records the data of the sources that goes into a call that the model
+// says is pure, and comes out as a number or a bool (strconv.Atoi, len-like functions).
+func (s *state) noteNumericStopOfPure(cc *callCtx) {
+	var numeric *sg.Value
+	for _, d := range cc.in.Dsts {
+		if d != nil && (d.Class == ir.ClassNumber || d.Class == ir.ClassBool) {
+			numeric = d
+			break
+		}
+	}
+	if numeric == nil {
+		return
+	}
+	for _, f := range s.flatten(valuesLocs(s, cc.argv())) {
+		if f.E.Kind == Real {
+			s.noteNumericStop(f.E, nil, numeric)
+		}
 	}
 }
 

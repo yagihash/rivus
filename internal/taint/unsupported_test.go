@@ -76,3 +76,30 @@ func TestCutAccessPathsAreRecorded(t *testing.T) {
 	}
 	t.Error("no path_limit uncertainty with k = 1")
 }
+
+// The data of a source that becomes a number or a bool is not followed, and the place where it
+// stops is recorded for that source (CORE-5): "no flow" and "stopped at a number" differ.
+func TestNumericStopIsRecorded(t *testing.T) {
+	run := func(numeric bool) []*Uncertainty {
+		prog := loadIR(t, testutil.Testdata(), "./cases/numeric/...")
+		rules := testutil.Rules(t)
+		rules.Expand(prog.gossa, 0)
+		st := prog.sites(rules)
+		opts := DefaultOptions()
+		opts.NumericTaint = numeric
+		var out []*Uncertainty
+		for _, u := range prog.engine(st, rules, opts).Run().Uncertainties {
+			if u.Kind == KindNumericStop {
+				out = append(out, u)
+			}
+		}
+		return out
+	}
+	got := run(false)
+	if len(got) != 1 {
+		t.Fatalf("%d numeric_stop records, want 1 (one source site): %+v", len(got), got)
+	}
+	if got[0].Symbol == "" || got[0].Func == "" || got[0].Position.Line == 0 || got[0].AttributableTo != AttributableRivus {
+		t.Errorf("the record does not say where: %+v", got[0])
+	}
+}

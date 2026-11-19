@@ -196,6 +196,75 @@ func (e *Engine) funcID(fn *sg.Func) string { return fn.ID }
 // they become missing_source uncertainties.
 func (e *Engine) SetLoadErrors(errs []ir.LoadError) { e.loadErrors = errs }
 
+// numericStopRecords turns what the analyses of the functions saw into one record for each
+// source site. A stop that happens inside a callee, on the symbolic data of its parameter, is
+// not seen: it is seen only when the callee is given the data itself.
+func (e *Engine) numericStopRecords() []*Uncertainty {
+	type agg struct {
+		symbol, label string
+		sites         map[string]bool
+		funcs         []string
+		first         ir.Pos
+		fn            string
+	}
+	by := map[string]*agg{}
+	fns := make([]*sg.Func, 0, len(e.states))
+	for fn := range e.states {
+		fns = append(fns, fn)
+	}
+	sort.Slice(fns, func(i, j int) bool {
+		if fns[i].Dep != fns[j].Dep {
+			return !fns[i].Dep // the code of the project first
+		}
+		return fns[i].ID < fns[j].ID
+	})
+	for _, fn := range fns {
+		stops := e.states[fn].numericStops
+		origins := make([]string, 0, len(stops))
+		for o := range stops {
+			origins = append(origins, o)
+		}
+		sort.Strings(origins)
+		for _, origin := range origins {
+			st := stops[origin]
+			symbol := ""
+			if site := e.sites.ByID[origin]; site != nil {
+				symbol = site.Symbol
+			}
+			// One record for each kind of source (a request type is a source in every function that takes
+			// one: a record for each of them says the same thing a hundred times)
+			key := symbol + "|" + st.label
+			a := by[key]
+			if a == nil {
+				a = &agg{symbol: symbol, label: st.label, sites: map[string]bool{}, first: st.pos, fn: e.funcID(fn)}
+				by[key] = a
+			}
+			a.sites[origin] = true
+			if len(a.funcs) < 10 {
+				a.funcs = append(a.funcs, e.funcID(fn))
+			}
+		}
+	}
+	keys := make([]string, 0, len(by))
+	for k := range by {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var out []*Uncertainty
+	for _, k := range keys {
+		a := by[k]
+		u := newUncertainty(KindNumericStop, "numeric_stop: the data of this source (label "+a.label+", "+itoa(len(a.sites))+" source sites) became a number or a bool, "+
+			"which are not followed (-numeric-taint follows them); a sink that takes a size or a count is not reached by it. A stop inside a function "+
+			"that is given the data only through its parameters is not recorded here", a.symbol)
+		u.Func = a.fn
+		u.pos = a.first
+		u.Candidates = a.funcs
+		e.fill(u)
+		out = append(out, u)
+	}
+	return out
+}
+
 func (e *Engine) noteCoarsened(fn *sg.Func, truncated, widened bool) {
 	why := ""
 	switch {
@@ -700,7 +769,7 @@ func (e *Engine) commit(fn *sg.Func, r *fnResult, callers map[*sg.Func][]*sg.Fun
 	// suppressions and the uncertainties. The cells and the caches are the
 	// bulk of the memory, and the function is analysed afresh if it is
 	// visited again.
-	e.states[fn] = &state{eng: e, fn: fn, findings: s.findings, suppressions: s.suppressions, uncertain: s.uncertain}
+	e.states[fn] = &state{eng: e, fn: fn, findings: s.findings, suppressions: s.suppressions, uncertain: s.uncertain, numericStops: s.numericStops}
 	return changed
 }
 
@@ -926,6 +995,10 @@ func (e *Engine) collect(st Stats) *Result {
 			", or the cells of a parameter were merged into the whole of it: what is told apart in the code is not told apart here (more flows than there are, never fewer)", "")
 		u.Candidates = ids
 		res.Uncertainties = append(res.Uncertainties, u)
+	}
+	// where the data of a source became a number or a bool: one record for each source site
+	if stops := e.numericStopRecords(); len(stops) > 0 {
+		res.Uncertainties = append(res.Uncertainties, stops...)
 	}
 	var degraded []*sg.Func
 	for fn := range e.degraded {

@@ -21,6 +21,9 @@ const (
 	KindConfigRead             = "config_read"
 	KindExportedAPIParam       = "exported_api_param"
 	KindStoredDataBoundary     = "stored_data_boundary"
+	// KindNumericStop marks the data of a source that became a number or a bool: they are
+	// not followed (attributable to rivus: -numeric-taint follows them).
+	KindNumericStop = "numeric_stop"
 	// KindUnsupported marks a construct that the extractor could not express: what
 	// it does is not in the analysis (attributable to rivus).
 	KindUnsupported    = "unsupported_construct"
