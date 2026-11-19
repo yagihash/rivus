@@ -71,6 +71,11 @@ func checkSampleFlows(t *testing.T, stream []byte, rules, root string, files []s
 	got := map[string]bool{}
 	for _, fd := range rep.Findings {
 		got[fmt.Sprintf("%s:%d -> %s:%d", fd.Source.Position.File, fd.Source.Position.Line, fd.Sink.Position.File, fd.Sink.Position.Line)] = true
+		// the samples are libraries: their exported functions are where they start, whatever
+		// initializers of variables they hold (yagihash/rivus #60)
+		if fd.Reachability == "not_from_entry" {
+			t.Errorf("a flow at %s:%d is not from an entry", fd.Sink.Position.File, fd.Sink.Position.Line)
+		}
 		for _, n := range none {
 			if fd.Sink.Position.File == n.file && fd.Sink.Position.Line == n.line {
 				t.Errorf("a flow reaches the sink at %s:%d, which must stay quiet", n.file, n.line)

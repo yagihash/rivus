@@ -32,3 +32,16 @@ func TestPruneDepsKeepsWhatTheProjectReaches(t *testing.T) {
 		}
 	}
 }
+
+// The initializer of a global that a kept function reads is kept (yagihash/rivus #60).
+func TestPruneDepsKeepsTheInitializerOfAGlobalThatIsRead(t *testing.T) {
+	p := &Program{Funcs: []*Func{
+		{ID: "own", Blocks: []Block{{Instrs: []Instr{{Op: OpGlobalLoad, Global: "dep.table"}}}}},
+		{ID: "dep.table$init", Dep: true, Entry: true, Init: true},
+		{ID: "dep.other$init", Dep: true, Entry: true, Init: true},
+	}}
+	p.PruneDeps()
+	if len(p.Funcs) != 2 || p.Funcs[1].ID != "dep.table$init" {
+		t.Fatalf("got %d functions: %v", len(p.Funcs), p.Funcs)
+	}
+}

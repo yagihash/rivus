@@ -160,6 +160,10 @@ func (p *Program) PruneDeps() {
 			for ii := range f.Blocks[bi].Instrs {
 				in := &f.Blocks[bi].Instrs[ii]
 				visit(in.Func)
+				// a variable that is read has its initializer run (yagihash/rivus #60)
+				if in.Global != "" {
+					visit(FuncID(in.Global + "$init"))
+				}
 				if c := in.Callee; c != nil {
 					visit(c.Func)
 					for _, id := range c.Candidates {

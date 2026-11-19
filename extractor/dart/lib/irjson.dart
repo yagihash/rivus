@@ -83,6 +83,7 @@ class FuncOut {
   bool exported = false;
   bool dep = false; // a function of a dependency
   bool entry = false; // where the program starts: main
+  bool init = false; // the initializer of a variable: an entry, but not where a program starts
   Pos pos = Pos.none;
   final List<Param> params = [];
   final List<String> results = [];
@@ -100,6 +101,7 @@ class FuncOut {
         if (exported) 'exported': true,
         if (dep) 'dep': true,
         if (entry) 'entry': true,
+        if (init) 'init': true,
         if (symbol.isNotEmpty) 'symbol': symbol,
         if (recv) 'recv': true,
       };

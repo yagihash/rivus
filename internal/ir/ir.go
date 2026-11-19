@@ -133,6 +133,11 @@ type Func struct {
 	// package. What no entry reaches (a helper that only the tests use, a
 	// mock) is not part of the program that runs.
 	Entry bool `json:"entry,omitempty"`
+	// Init marks the initializer of a variable (the function that stores its value, named
+	// "<global>$init"): it runs when the variable is first read, so it is an entry, but it
+	// is not where a program starts: a library that has only these still starts from its
+	// exported functions (yagihash/rivus #60).
+	Init bool `json:"init,omitempty"`
 	// Symbol is the name the rules use for the function: the declared
 	// function or method (empty for an anonymous or a synthetic function).
 	Symbol string `json:"symbol,omitempty"`

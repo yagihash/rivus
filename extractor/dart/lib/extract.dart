@@ -373,7 +373,8 @@ class _Lower extends RecursiveAstVisitor<void> {
     final out = FuncOut(id)
       ..symbol = ''
       ..dep = unit.dep
-      ..entry = true;
+      ..entry = true
+      ..init = true;
     out.pos = unit.pos(v, v.offset);
     final scan = _Scan();
     scan._stack.add(v);

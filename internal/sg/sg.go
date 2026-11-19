@@ -213,6 +213,7 @@ type Func struct {
 	Dep      bool
 	Exported bool
 	Entry    bool
+	Init     bool // the initializer of a variable: an entry, but not where a program starts
 	Pos      ir.Pos
 	Params   []*Value
 	FreeVars []*Value
@@ -302,12 +303,18 @@ func (p *Program) Reachable() map[*Func]bool {
 			work = append(work, f)
 		}
 	}
+	starts := false
 	for _, f := range p.Funcs {
 		if f.Entry {
 			add(f)
+			// the initializer of a variable runs when the variable is read: it does not say
+			// that the program is one that starts somewhere (a library has them too)
+			if !f.Init {
+				starts = true
+			}
 		}
 	}
-	if len(work) == 0 {
+	if !starts {
 		for _, f := range p.Funcs {
 			if f.Exported && !f.Dep {
 				add(f)
