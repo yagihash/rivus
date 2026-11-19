@@ -2,7 +2,9 @@ package model
 
 import (
 	"fmt"
+	"path"
 	"sort"
+	"strings"
 )
 
 // DefaultMaxImplementations is the default bound of match: implementations.
@@ -30,6 +32,13 @@ type MarkedMethod struct {
 // interfaces that have a method named by a marker (a glob).
 type MarkerResolver interface {
 	MarkedMethods(marker string) []MarkedMethod
+}
+
+// SubtypeResolver lists the methods of the subtypes of a type that take a
+// parameter of another type (the IR of a language with a class hierarchy).
+type SubtypeResolver interface {
+	SubtypeMethods(super, with string) []MarkedMethod
+	CallsFunction(symbol string) bool
 }
 
 // CallResolver tells whether the code of the program calls a function.
@@ -167,4 +176,55 @@ func (e Expansion) String() string {
 		return fmt.Sprintf("%s %s: %d implementations exceed the limit %d, not expanded", e.Role, e.Symbol, e.Count, e.Max)
 	}
 	return fmt.Sprintf("%s %s: expanded to %d implementations", e.Role, e.Symbol, e.Count)
+}
+
+// ExpandSubtypes makes the rules with extends: rules for the methods found in
+// the program. When the program calls marker_call and nothing is found, the
+// generated code is probably missing, and the outcome says so.
+func (r *Rules) ExpandSubtypes(res SubtypeResolver) []Expansion {
+	var out []Expansion
+	for _, rs := range r.Sets {
+		for _, s := range rs.Sources {
+			if s.Extends == "" || s.Kind != KindParam {
+				continue
+			}
+			found := res.SubtypeMethods(s.Extends, s.WithParamType)
+			kept := 0
+			for _, m := range found {
+				if !excludedMethod(m.Symbol, s.ExcludeMethods) {
+					kept++
+				}
+			}
+			if kept == 0 && s.MarkerCall != "" && res.CallsFunction(s.MarkerCall) {
+				out = append(out, Expansion{Symbol: s.Extends, Role: "source", Missing: true,
+					Note: fmt.Sprintf("the program calls %s, but no subtype of %s has a method that takes a %s: the code generated from the service definitions (protoc) has to exist before the analysis (a service whose handlers are written otherwise is declared in the rules of the project)", s.MarkerCall, s.Extends, s.WithParamType)})
+			}
+			for _, m := range found {
+				if excludedMethod(m.Symbol, s.ExcludeMethods) {
+					continue
+				}
+				cp := s
+				cp.Symbol, cp.Extends, cp.WithParamType, cp.Params = m.Symbol, "", "", m.Params
+				cp.Match = MatchExact
+				r.ParamFuncs[m.Symbol] = append(r.ParamFuncs[m.Symbol], cp)
+			}
+			out = append(out, Expansion{Symbol: s.Extends, Role: "source", Count: kept})
+		}
+	}
+	return out
+}
+
+// excludedMethod reports whether the method of the symbol ("uri#Class.name")
+// is named by one of the globs.
+func excludedMethod(symbol string, globs []string) bool {
+	name := symbol
+	if i := strings.LastIndex(symbol, "."); i >= 0 {
+		name = symbol[i+1:]
+	}
+	for _, g := range globs {
+		if ok, _ := path.Match(g, name); ok {
+			return true
+		}
+	}
+	return false
 }

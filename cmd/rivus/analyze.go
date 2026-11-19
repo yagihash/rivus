@@ -100,6 +100,7 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 		phase("ir")
 	}
 	// The sites read the IR, and the graph drops it as it is built.
+	expandSubtypes(rules, l.ir)
 	st := sites.Enumerate(l.ir, l.texts, rules)
 	phase("sites")
 	graph, err := sg.BuildConsuming(l.ir)

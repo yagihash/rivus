@@ -975,3 +975,10 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
 
 - `marker:` のルールに `marker_call:`（サービスを動かすときに呼ぶ関数。go-grpc は `google.golang.org/grpc.NewServer`）を足した。その関数をプログラム自身のコードが呼んでいて、マーカーを持つインターフェースが 1 つも見つからなければ、`missing_source`（`attributable_to: target`）の不確実性 `generated_code_missing` を出す。クライアントだけのプログラムは、`NewServer` を呼ばないので、警告しない。
 - Rust（tonic）は、ハンドラーが `tonic::Request` を引数に取るので、`param_type` ですでに全部見つかる。Dart は、リクエストが生成クラスなので、型の継承関係が IR にないと自動では見つけられない。IR に型の階層を足すのは契約の変更なので、まだやっていない（プロジェクトのルールで `param_type` を書く）。
+
+### 追記: IR に型の階層（`type` レコード）を足した、`extends:` のルール（Dart の gRPC ハンドラー）
+
+- **決定:** IR のストリームに、`{"kind":"type","type":{"id":...,"supers":[...]}}` のレコードを足した。クラスが、直接に、継承・実装・mixin している型の ID を持つ。足すだけの変更で、`schema_version` は変えない（古いストリームは、階層なしとして読める。このレコードを知らない古い読み手は、未知のレコードとして拒む。extractor と本体は同じ版で配る前提）。
+- **ルール:** `kind: param` に、`extends: <型 ID>` と `with_param_type: <型 ID>` を足した。「`extends` のサブタイプ（推移的）の、解析対象のコードのメソッドのうち、`with_param_type` の型の引数を取るもの」が入口になり、その型の引数と受け手を除いた引数が入力になる。`exclude_methods`（glob）で、生成コードのラッパーを外す。`marker_call` は、Go の `marker:` と同じ使い方で、その関数を呼んでいるのに 1 つも見つからなければ、`generated_code_missing` を出す。
+- **Dart の gRPC:** `Service` のサブクラスで `ServiceCall` を取るメソッドが、ハンドラーになる（`dart-grpc.yaml`）。リクエストの型を、プロジェクトのルールに 1 つずつ書く必要はなくなった。生成コード（`.pb.dart`、`.pbgrpc.dart`）は、解析の前に済んでいる前提（コミット済み、または `protoc` の実行後）。
+- **しなかったこと:** Rust の tonic は、ハンドラーが `tonic::Request` を取るので、`param_type` で足りる。Go は、`gossa` が型の情報を持っているので、`marker:` のまま。

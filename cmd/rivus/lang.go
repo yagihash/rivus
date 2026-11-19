@@ -169,6 +169,7 @@ func (o *analyzeOpts) loadLangs(langs []string, patterns []string, rules *model.
 		}
 		merged.Funcs = append(merged.Funcs, p.Funcs...)
 		merged.Impls = append(merged.Impls, p.Impls...)
+		merged.Types = append(merged.Types, p.Types...)
 		merged.Globals = append(merged.Globals, p.Globals...)
 		merged.Texts = append(merged.Texts, p.Texts...)
 		merged.CallTexts = append(merged.CallTexts, p.CallTexts...)

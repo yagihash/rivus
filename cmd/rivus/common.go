@@ -127,6 +127,27 @@ func readIR(path string) (*loaded, error) {
 	return &loaded{ir: prog, texts: ir.NewStreamTexts(prog)}, nil
 }
 
+// expandSubtypes makes the rules that speak of the subtypes of a class
+// (extends:) from the class hierarchy the extractor wrote, if there is one.
+func expandSubtypes(rules *model.Rules, prog *ir.Program) {
+	if prog == nil || len(prog.Types) == 0 {
+		return
+	}
+	rules.ExpandSubtypes(subtypeResolver{prog})
+}
+
+type subtypeResolver struct{ p *ir.Program }
+
+func (r subtypeResolver) SubtypeMethods(super, with string) []model.MarkedMethod {
+	var out []model.MarkedMethod
+	for _, m := range r.p.SubtypeMethods(ir.TypeID(super), ir.TypeID(with)) {
+		out = append(out, model.MarkedMethod{Symbol: m.Symbol, Params: m.Params})
+	}
+	return out
+}
+
+func (r subtypeResolver) CallsFunction(symbol string) bool { return r.p.CallsFunction(symbol) }
+
 // loadErrors are what could not be read, from the packages or the stream.
 func (l *loaded) loadErrors() []ir.LoadError {
 	if l.gossa != nil {

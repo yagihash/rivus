@@ -59,6 +59,7 @@ class Program {
   final StreamOut out;
   final texts = Texts();
   final methods = <String, List<MethodImpl>>{}; // by member name
+  final types = <String, Set<String>>{}; // a class -> the types it extends, implements, mixes in
   final bodies = <String>{}; // the symbols of what has a body here
   final globals = <String, (String type, Pos pos)>{};
   var maxSourceLines = 80;

@@ -101,6 +101,17 @@ type Source struct {
 	// framework hands to them in parameters that are messages is the input. The
 	// generated code has to exist when the analysis runs.
 	Marker string `yaml:"marker"`
+	// Extends, with kind: param and no symbol, picks the methods of the
+	// subtypes of this type (a type ID, as the extractor writes it) that take a
+	// parameter of the type WithParamType, and declares them entry points: what
+	// the framework hands to them in the other parameters is the input. It is
+	// the marker of the languages that have a class hierarchy in the IR (Dart:
+	// the subclasses of grpc's Service, whose handlers take a ServiceCall).
+	Extends       string `yaml:"extends"`
+	WithParamType string `yaml:"with_param_type"`
+	// ExcludeMethods are globs of method names that extends: leaves out (the
+	// wrappers the generated code makes around the handlers).
+	ExcludeMethods []string `yaml:"exclude_methods"`
 	// MarkerCall is the symbol of a function whose call, in the code of the
 	// program, says that it serves what the marker is for (grpc.NewServer).
 	// When it is called and no interface has the marker, the generated code is
@@ -398,6 +409,12 @@ func (rs *RuleSet) validate() error {
 				return fmt.Errorf("%s: field is required for kind %s", what, s.Kind)
 			}
 		case KindParam:
+			if s.Extends != "" {
+				if s.Symbol != "" || s.Marker != "" || s.WithParamType == "" {
+					return fmt.Errorf("%s: extends goes with with_param_type, and no symbol or marker", what)
+				}
+				break
+			}
 			if s.Marker != "" {
 				if s.Symbol != "" || s.Match != MatchImplementations {
 					return fmt.Errorf("%s: marker goes with match: implementations and no symbol", what)
@@ -554,8 +571,8 @@ func Merge(sets ...*RuleSet) *Rules {
 			case KindParamType:
 				r.ParamTypes = append(r.ParamTypes, s)
 			case KindParam:
-				if s.Marker != "" {
-					break // expanded over the interfaces the program has (Expand)
+				if s.Marker != "" || s.Extends != "" {
+					break // expanded over what the program has (Expand, ExpandSubtypes)
 				}
 				r.ParamFuncs[s.Symbol] = append(r.ParamFuncs[s.Symbol], s)
 			case KindField:

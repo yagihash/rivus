@@ -1,15 +1,24 @@
 # package:grpc (Dart) on the server side: what the library hands to the code,
 # and the calls that connect to an address.
 #
-# The request message of a handler is a generated class (protoc_plugin writes
-# `HelloRequest extends GeneratedMessage` into the project), so it cannot be named
-# here: a handler of your own service is declared in the rules of the project, with
-# `kind: param_type` and the generated type (for example
-# `package:app/src/generated/hello.pb.dart#HelloRequest`). What the library
-# itself hands to the code is a source here.
+# The handlers of a service are found from the generated code: protoc_plugin
+# writes `FooServiceBase extends Service` (with the handlers as abstract
+# methods, each taking a `ServiceCall` and the request message), and the code of
+# the project overrides them. The methods of the subclasses of `Service` that
+# take a ServiceCall are the entry points, and the parameters that are not the
+# ServiceCall are the input (the request, or the stream of requests). The
+# generated code has to exist when the analysis runs. A service written in a
+# way that has no such method is declared in the rules of the project, with
+# `kind: param_type` and the generated type.
 ruleset: rivus/dart/grpc@1
 
 sources:
+  - kind: param
+    extends: package:grpc/src/server/service.dart#Service
+    with_param_type: package:grpc/src/server/call.dart#ServiceCall
+    marker_call: package:grpc/src/server/server.dart#Server.create
+    exclude_methods: ["*_Pre"]   # the wrapper protoc_plugin writes around a handler
+    labels: [user_input]
   # The headers the client sent with the call: ServiceCall.clientMetadata
   # (a Map<String, String>?). The extractor sees it as a call of a getter.
   - symbol: package:grpc/src/server/call.dart#ServiceCall.clientMetadata

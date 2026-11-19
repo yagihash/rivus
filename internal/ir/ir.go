@@ -360,11 +360,22 @@ type Implementations struct {
 	Impls  []FuncID `json:"impls"`
 }
 
+// TypeInfo says what a class is a subtype of: the types it extends,
+// implements and mixes in, directly. The type IDs are those of the
+// parameters (Param.Type).
+type TypeInfo struct {
+	ID     TypeID   `json:"id"`
+	Supers []TypeID `json:"supers,omitempty"`
+}
+
 // Program is what an extractor produces: functions, and the facts about the
 // whole program that the core cannot get from a function alone.
 type Program struct {
 	Funcs []*Func           `json:"funcs"`
 	Impls []Implementations `json:"implementations,omitempty"`
+	// Types are the supertypes of the classes the program has, for the rules
+	// that speak of "every subclass of" (extends:).
+	Types []TypeInfo `json:"types,omitempty"`
 	// Globals are the package variables the functions use.
 	Globals []Global `json:"globals,omitempty"`
 	// The texts an extractor in another process writes, because the core

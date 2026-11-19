@@ -117,6 +117,8 @@ class StreamOut {
   void func(FuncOut f) => _line({'kind': 'func', 'func': f.toJson()});
   void global(String name, String type, Pos pos) =>
       _line({'kind': 'global', 'global': {'name': name, if (type.isNotEmpty) 'type': type, if (!pos.isNone) 'pos': pos.toJson()}});
+  void type(String id, List<String> supers) =>
+      _line({'kind': 'type', 'type': {'id': id, if (supers.isNotEmpty) 'supers': supers}});
   void implementations(String method, List<String> impls) =>
       _line({'kind': 'implementations', 'implementations': {'method': method, 'impls': impls}});
   void text(String kind, String file, String text, List<int> offsets) =>

@@ -85,6 +85,9 @@ Future<void> extract(String root, StringSink sink, {bool deps = true}) async {
   for (final e in prog.globals.entries) {
     out.global(e.key, e.value.$1, e.value.$2);
   }
+  for (final id in prog.types.keys.toList()..sort()) {
+    out.type(id, prog.types[id]!.toList()..sort());
+  }
   prog.texts.write(out);
 }
 
@@ -107,6 +110,43 @@ class _Index extends RecursiveAstVisitor<void> {
     if (cls is InterfaceElement && base is! ConstructorElement) {
       (prog.methods[(base.name ?? '').replaceAll('=', '')] ??= []).add(MethodImpl(cls, id));
     }
+  }
+
+  /// What the class is a subtype of, directly: the rules ask for the
+  /// subclasses of a framework's class (the services of grpc).
+  void _type(InterfaceElement? el) {
+    if (el == null) return;
+    final supers = <DartType?>[el.supertype, ...el.interfaces, ...el.mixins];
+    if (el is MixinElement) supers.addAll(el.superclassConstraints);
+    final out = prog.types[typeId(el.thisType)] ??= {};
+    for (final s in supers) {
+      final id = typeId(s);
+      if (id.isNotEmpty && id != 'dart:core#Object' && id != 'dynamic') out.add(id);
+    }
+  }
+
+  @override
+  void visitClassDeclaration(ClassDeclaration node) {
+    _type(node.declaredFragment?.element);
+    super.visitClassDeclaration(node);
+  }
+
+  @override
+  void visitMixinDeclaration(MixinDeclaration node) {
+    _type(node.declaredFragment?.element);
+    super.visitMixinDeclaration(node);
+  }
+
+  @override
+  void visitEnumDeclaration(EnumDeclaration node) {
+    _type(node.declaredFragment?.element);
+    super.visitEnumDeclaration(node);
+  }
+
+  @override
+  void visitExtensionTypeDeclaration(ExtensionTypeDeclaration node) {
+    _type(node.declaredFragment?.element);
+    super.visitExtensionTypeDeclaration(node);
   }
 
   @override
