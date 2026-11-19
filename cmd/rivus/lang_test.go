@@ -214,3 +214,23 @@ func TestMultiLanguageLoadErrorsAreNotDoubled(t *testing.T) {
 		t.Errorf("%d load errors with Go and Rust, %d with Go alone: %+v", got, single, l.loadErrors())
 	}
 }
+
+// The project rules are found whatever the directory is called: a name with
+// the characters of a glob (p[1], q[) is not a pattern (#14).
+func TestProjectRulesInADirectoryNamedLikeAGlob(t *testing.T) {
+	for _, name := range []string{"p[1]", "q[", "a*b", "p?"} {
+		dir := filepath.Join(t.TempDir(), name)
+		rules := filepath.Join(dir, ".rivus", "rules")
+		if err := os.MkdirAll(rules, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		// a file that is not valid rules: it is an error only if it is read
+		if err := os.WriteFile(filepath.Join(rules, "broken.yaml"), []byte("rules: [: :\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		c := common{dir: dir}
+		if _, err := c.loadRules(); err == nil {
+			t.Errorf("%q: the project rules are not read", name)
+		}
+	}
+}

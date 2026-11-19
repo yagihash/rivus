@@ -3,13 +3,16 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 
 	"github.com/yagihash/rivus/internal/frontend/goir"
 	"github.com/yagihash/rivus/internal/frontend/gossa"
@@ -75,7 +78,18 @@ func (c *common) loadRules(extra ...*model.RuleSet) (*model.Rules, error) {
 	paths := append([]string(nil), c.rules...)
 	project := map[string]bool{}
 	if !c.noProject {
-		found, _ := filepath.Glob(filepath.Join(c.dir, ".rivus", "rules", "*.y*ml"))
+		// Not filepath.Glob: the directory is a name, and may hold the characters of a pattern.
+		rulesDir := filepath.Join(c.dir, ".rivus", "rules")
+		entries, err := os.ReadDir(rulesDir)
+		if err != nil && !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, syscall.ENOTDIR) {
+			return nil, fmt.Errorf("project rules: %w", err)
+		}
+		var found []string
+		for _, e := range entries {
+			if ext := filepath.Ext(e.Name()); !e.IsDir() && (ext == ".yaml" || ext == ".yml") {
+				found = append(found, filepath.Join(rulesDir, e.Name()))
+			}
+		}
 		sort.Strings(found)
 		for _, p := range found {
 			fmt.Fprintf(os.Stderr, "rivus: project rules: %s\n", p)
