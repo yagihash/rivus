@@ -110,6 +110,24 @@ func splitMethodSymbol(symbol string) (typeStr, method string, ok bool) {
 	return symbol[1:end], symbol[end+2:], true
 }
 
+// CallsFunction reports whether the code of the loaded packages (not their
+// dependencies) calls the function named by the symbol.
+func (p *Program) CallsFunction(symbol string) bool {
+	for _, fn := range p.Funcs {
+		if !p.Own[fn] {
+			continue
+		}
+		for _, b := range fn.Blocks {
+			for _, in := range b.Instrs {
+				if c, ok := in.(ssa.CallInstruction); ok && CalleeSymbol(c.Common()) == symbol {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
 // MarkedMethods lists the methods of the interfaces of the loaded packages that
 // have a method matching the marker (a glob, "mustEmbedUnimplemented*" for the
 // code of protoc-gen-go-grpc), with the positions of the parameters that are

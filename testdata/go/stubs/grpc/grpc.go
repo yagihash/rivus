@@ -18,3 +18,7 @@ func Dial(target string, opts ...any) (*ClientConn, error)      { return &Client
 func DialContext(ctx context.Context, target string, opts ...any) (*ClientConn, error) {
 	return &ClientConn{target}, nil
 }
+
+type Server struct{}
+
+func NewServer(opts ...any) *Server { return &Server{} }

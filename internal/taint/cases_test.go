@@ -556,3 +556,28 @@ func TestGRPCServerModels(t *testing.T) { checkCase(t, "grpcsrv") }
 // interface with a mustEmbedUnimplemented method): what they are given as
 // messages is input; a method of another interface is not.
 func TestGRPCHandlersAreFoundFromTheGeneratedCode(t *testing.T) { checkCase(t, "grpcunary") }
+
+// A program that starts a gRPC server, with no generated code to find the
+// handlers in, is told so; one that has the generated code, or does not serve,
+// is not.
+func TestMissingGeneratedCodeIsReported(t *testing.T) {
+	missing := func(name string) bool {
+		prog := loadIR(t, testutil.Testdata(), "./cases/"+name+"/...")
+		rules := testutil.Rules(t)
+		for _, e := range rules.Expand(prog.gossa, 0) {
+			if e.Missing {
+				return true
+			}
+		}
+		return false
+	}
+	if !missing("grpcnogen") {
+		t.Error("a server without generated code was not reported")
+	}
+	if missing("grpcunary") {
+		t.Error("a program with generated code was reported")
+	}
+	if missing("grpcsrv") {
+		t.Error("a program with generated code was reported")
+	}
+}

@@ -179,6 +179,9 @@ func Build(packages []string, loadErrors []ir.LoadError, st *sites.Result, res *
 	// A rule that was not expanded because it had too many implementations
 	// leaves flows through those implementations unseen: say so.
 	for _, e := range rules.Expansions {
+		if e.Missing {
+			r.Uncertainties = append(r.Uncertainties, taint.NewUncertainty(taint.KindMissingSource, "generated_code_missing: "+e.Note, e.Symbol))
+		}
 		if e.Limited {
 			r.Uncertainties = append(r.Uncertainties, taint.NewUncertainty(taint.KindDynamicDispatch,
 				fmt.Sprintf("expansion_limit: %d implementations exceed the limit of %d; the rule applies to the interface method only", e.Count, e.Max), e.Symbol))

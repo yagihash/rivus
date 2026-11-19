@@ -100,9 +100,14 @@ type Source struct {
 	// entry points the implementations of each of their other methods: what the
 	// framework hands to them in parameters that are messages is the input. The
 	// generated code has to exist when the analysis runs.
-	Marker string   `yaml:"marker"`
-	Labels []string `yaml:"labels"`
-	Match  string   `yaml:"match"`
+	Marker string `yaml:"marker"`
+	// MarkerCall is the symbol of a function whose call, in the code of the
+	// program, says that it serves what the marker is for (grpc.NewServer).
+	// When it is called and no interface has the marker, the generated code is
+	// probably missing, and the report says so.
+	MarkerCall string   `yaml:"marker_call"`
+	Labels     []string `yaml:"labels"`
+	Match      string   `yaml:"match"`
 	// MaxImplementations bounds the expansion of match: implementations.
 	MaxImplementations int `yaml:"max_implementations"`
 }

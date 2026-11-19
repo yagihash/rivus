@@ -32,6 +32,11 @@ type MarkerResolver interface {
 	MarkedMethods(marker string) []MarkedMethod
 }
 
+// CallResolver tells whether the code of the program calls a function.
+type CallResolver interface {
+	CallsFunction(symbol string) bool
+}
+
 // Expansion records what happened to one rule with match: implementations.
 type Expansion struct {
 	Symbol string `json:"symbol"`
@@ -44,6 +49,9 @@ type Expansion struct {
 	Limited bool `json:"limited,omitempty"`
 	// Note explains a rule that could not be expanded at all.
 	Note string `json:"note,omitempty"`
+	// Missing is true when a marker rule found nothing although the program
+	// uses the library it is for: the generated code is probably absent.
+	Missing bool `json:"missing,omitempty"`
 }
 
 // Expand replaces every rule with match: implementations by rules for the
@@ -81,7 +89,12 @@ func (r *Rules) Expand(res Resolver, defaultMax int) []Expansion {
 				if !ok {
 					continue
 				}
-				for _, m := range mr.MarkedMethods(s.Marker) {
+				marked := mr.MarkedMethods(s.Marker)
+				if cr, ok := res.(CallResolver); ok && len(marked) == 0 && s.MarkerCall != "" && cr.CallsFunction(s.MarkerCall) {
+					out = append(out, Expansion{Symbol: s.Marker, Role: "source", Missing: true,
+						Note: fmt.Sprintf("the program calls %s, but no interface has a method matching %q: the code generated from the service definitions (protoc) has to exist before the analysis (a service generated without the marker is declared in the rules of the project)", s.MarkerCall, s.Marker)})
+				}
+				for _, m := range marked {
 					m, s := m, s
 					expand("source", m.Symbol, s.MaxImplementations, func(c string) {
 						cp := s

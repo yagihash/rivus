@@ -970,3 +970,8 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
 - Dart extractor: extension のメンバーは、レシーバーを最初の引数に取る関数にした（今まではレシーバーが渡らず、`this` が nil で、extension を通る流れが全部切れていた）。`Ext(x).m()`（extension override）、コンストラクタの tear-off（`C.new`）、型引数付きの関数参照、dot shorthand（`.red`、`.make(x)`、`.new(x)`）、型リテラル、コレクションの `for`（古典的な形、識別子、パターン）を落とさず lower する。
 - Rust extractor: `ptr::copy_nonoverlapping` の MIR 文（最適化したビルドで出る）を、`load` と `store` にする。インラインアセンブリは、入力を引数、出力を結果にした `std::arch::asm` の呼び出しにする（今までは、ブロックを `unreachable` で終えて、それ以降のコードを落としていた）。モデルは `rust-std.yaml` に足した。
 - どれも、取りこぼしていたものを拾うだけの変更で、`unsupported` を出していた箇所は 0 になった。
+
+### 追記: 生成コードが見つからないときの警告（gRPC、Go）
+
+- `marker:` のルールに `marker_call:`（サービスを動かすときに呼ぶ関数。go-grpc は `google.golang.org/grpc.NewServer`）を足した。その関数をプログラム自身のコードが呼んでいて、マーカーを持つインターフェースが 1 つも見つからなければ、`missing_source`（`attributable_to: target`）の不確実性 `generated_code_missing` を出す。クライアントだけのプログラムは、`NewServer` を呼ばないので、警告しない。
+- Rust（tonic）は、ハンドラーが `tonic::Request` を引数に取るので、`param_type` ですでに全部見つかる。Dart は、リクエストが生成クラスなので、型の継承関係が IR にないと自動では見つけられない。IR に型の階層を足すのは契約の変更なので、まだやっていない（プロジェクトのルールで `param_type` を書く）。

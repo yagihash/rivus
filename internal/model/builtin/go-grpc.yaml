@@ -15,6 +15,7 @@ sources:
   - kind: param
     match: implementations
     marker: "mustEmbedUnimplemented*"
+    marker_call: google.golang.org/grpc.NewServer
     labels: [user_input]
   # The metadata (the headers) of the call: what the client wrote.
   - symbol: google.golang.org/grpc/metadata.FromIncomingContext
