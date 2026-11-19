@@ -217,6 +217,12 @@ func (s *state) transfer(in *sg.Instr) {
 		// calls throw (the thrown values are not told apart)
 		if len(in.Dsts) > 0 && s.eng.prog.HasExceptions {
 			s.copyLocs([]Loc{{excRoot(), ""}}, []Loc{{own(in.Dsts[0]), ""}}, "caught", in)
+			// A thrown object is boxed (`/*`), as in an interface. The handler either takes it out
+			// with a cast (`e as T`, which strips the box: the first copy is what it reads), or uses the
+			// variable as it is (`on T catch (e)`, a dynamic `e.field`): then the object is the value
+			// itself, and the second copy gives it that. The value has both shapes, which says more than
+			// is true, not less.
+			s.copyLocs([]Loc{{excRoot(), "/*"}}, []Loc{{own(in.Dsts[0]), ""}}, "caught", in)
 		}
 
 	case ir.OpUnsupported:

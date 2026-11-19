@@ -1,0 +1,13 @@
+ruleset: rivus/dart-sample@1
+
+sources:
+  - symbol: package:sample/lib.dart#source
+    labels: [user_input]
+
+sinks:
+  - symbol: package:sample/lib.dart#sink
+    category: test
+
+sanitizers:
+  - symbol: package:sample/lib.dart#sanitize
+    drops: [user_input]

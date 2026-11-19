@@ -56,3 +56,46 @@ void catcher() {
   }
 }
 
+
+// --- #70: a typed catch, and a dynamic field read, reach the fields of the object that was thrown
+
+void catchTyped() {
+  try {
+    throw Boom(source()); // @source(is-70-typed)
+  } on Boom catch (e) {
+    sink(e.msg); // @sink(is-70-typed)
+  }
+}
+
+void catchDynamic() {
+  try {
+    throw Boom(source()); // @source(is-70-dynamic)
+  } catch (e) {
+    final dynamic d = e;
+    sink(d.msg); // @sink(is-70-dynamic)
+  }
+}
+
+void thrower70() {
+  throw Boom(source()); // @source(is-70-callee)
+}
+
+void catchTypedCallee() {
+  try {
+    thrower70();
+  } on Boom catch (e) {
+    sink(e.msg); // @sink(is-70-callee)
+  }
+}
+
+void catchRethrown() {
+  try {
+    try {
+      throw Boom(source()); // @source(is-70-rethrow)
+    } on Boom {
+      rethrow;
+    }
+  } on Boom catch (e) {
+    sink(e.msg); // @sink(is-70-rethrow)
+  }
+}
