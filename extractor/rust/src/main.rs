@@ -33,6 +33,61 @@ fn is_build_script(args: &[String]) -> bool {
         || args.iter().any(|a| a == "build_script_build" || a == "build_script_main")
 }
 
+/// A directory that only this process can use: made exclusively (making it fails when the name exists, whoever
+/// made it), with the mode 0700, under a name that another user cannot wait for, and removed when the value is
+/// dropped, whichever way the extraction ends. The build of the project goes into it (CARGO_TARGET_DIR), and so
+/// do the fragments of the IR: a directory that someone else made first would be where they replace the build
+/// scripts that run, or write the IR (yagihash/rivus #44).
+struct ScratchDir(PathBuf);
+
+impl ScratchDir {
+    fn create() -> std::io::Result<ScratchDir> {
+        let base = std::env::temp_dir();
+        for _ in 0..100 {
+            let path = base.join(format!("rivus-rust-{}-{:016x}", std::process::id(), unpredictable()));
+            match make_private_dir(&path) {
+                Ok(()) => return Ok(ScratchDir(path)),
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(e) => return Err(e),
+            }
+        }
+        Err(std::io::Error::new(std::io::ErrorKind::AlreadyExists, "every name that was tried is taken"))
+    }
+
+    fn path(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Drop for ScratchDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+/// Makes the directory, and fails when it exists (a symbolic link to somewhere included).
+#[cfg(unix)]
+fn make_private_dir(path: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::DirBuilderExt;
+    std::fs::DirBuilder::new().mode(0o700).create(path)
+}
+
+#[cfg(not(unix))]
+fn make_private_dir(path: &Path) -> std::io::Result<()> {
+    std::fs::create_dir(path)
+}
+
+/// Eight bytes that are not a function of the process number: from the system, or else from the clock.
+fn unpredictable() -> u64 {
+    use std::io::Read;
+    let mut b = [0u8; 8];
+    if std::fs::File::open("/dev/urandom").and_then(|mut f| f.read_exact(&mut b)).is_ok() {
+        return u64::from_le_bytes(b);
+    }
+    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0) as u64;
+    nanos ^ ((&b as *const _ as usize) as u64).rotate_left(17)
+}
+
 fn main() -> ExitCode {
     if std::env::var_os("RIVUS_RUST_DRIVER").is_some() {
         return driver();
@@ -156,9 +211,20 @@ fn cli() -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let tmp = std::env::temp_dir().join(format!("rivus-rust-{}", std::process::id()));
+    // A directory only this process can use (see ScratchDir); it is removed on every way out of this function.
+    let scratch = match ScratchDir::create() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("rivus-rust: cannot make a directory to work in: {}", e);
+            return ExitCode::from(1);
+        }
+    };
+    let tmp = scratch.path().to_path_buf();
     let frags = tmp.join("fragments");
-    let _ = std::fs::create_dir_all(&frags);
+    if let Err(e) = std::fs::create_dir_all(&frags) {
+        eprintln!("rivus-rust: cannot make {}: {}", frags.display(), e);
+        return ExitCode::from(1);
+    }
     let exe = std::env::current_exe().expect("the path of the extractor");
     let sysroot = Command::new("rustc")
         .args([&format!("+{}", TOOLCHAIN), "--print", "sysroot"])
@@ -197,7 +263,6 @@ fn cli() -> ExitCode {
         }
     }
     merge(&frags);
-    let _ = std::fs::remove_dir_all(&tmp);
     ExitCode::SUCCESS
 }
 
@@ -274,6 +339,29 @@ mod tests {
     }
 
     // a build script of another name was read as shipped code, and its main became an entry (yagihash/rivus #47)
+    #[test]
+    fn the_scratch_directory_is_private_exclusive_and_removed() {
+        let (a, b) = (ScratchDir::create().unwrap(), ScratchDir::create().unwrap());
+        assert_ne!(a.path(), b.path());
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(std::fs::metadata(a.path()).unwrap().permissions().mode() & 0o777, 0o700);
+        }
+        // a directory that exists is not taken over, and neither is a link
+        assert_eq!(make_private_dir(a.path()).unwrap_err().kind(), std::io::ErrorKind::AlreadyExists);
+        #[cfg(unix)]
+        {
+            let link = std::env::temp_dir().join(format!("rivus-rust-test-link-{}", unpredictable()));
+            std::os::unix::fs::symlink(a.path(), &link).unwrap();
+            assert!(make_private_dir(&link).is_err());
+            std::fs::remove_file(&link).unwrap();
+        }
+        let path = a.path().to_path_buf();
+        drop(a);
+        assert!(!path.exists(), "the directory is left behind");
+    }
+
     #[test]
     fn a_build_script_of_any_name_is_one() {
         assert!(is_build_script(&args(&["rustc", "--crate-name", "build_script_build", "build.rs"])));
