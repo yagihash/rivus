@@ -283,6 +283,21 @@ func Parse(r io.Reader, origin string) (*RuleSet, error) {
 	if err := dec.Decode(&rs); err != nil {
 		return nil, fmt.Errorf("%s: %w", origin, err)
 	}
+	// A rule file is one document: what follows a `---` would be neither read nor checked, and a sink or a
+	// sanitizer written there would be silently void (yagihash/rivus #52). An empty one (a trailing `---`) is fine.
+	for {
+		var next yaml.Node
+		err := dec.Decode(&next)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("%s: after the first YAML document: %w", origin, err)
+		}
+		if next.Kind != 0 && !(next.Kind == yaml.DocumentNode && len(next.Content) == 1 && next.Content[0].Kind == yaml.ScalarNode && next.Content[0].Tag == "!!null") {
+			return nil, fmt.Errorf("%s: line %d: a rule file is one YAML document: what follows the second \"---\" is not read (put the rules in one document, or in another file)", origin, next.Line)
+		}
+	}
 	rs.Origin = origin
 	// `builtin` says that rivus itself embeds the rule: a file that comes from outside cannot say it (it would
 	// make its own rules look vetted, and the filters of origin would take it for one of rivus')

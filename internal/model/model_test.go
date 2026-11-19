@@ -40,6 +40,7 @@ func TestParseErrors(t *testing.T) {
 		"sanitizer expansion": "sanitizers:\n  - symbol: (a.I).M\n    drops: [x]\n    match: implementations\n",
 		"unknown match":       "sinks:\n  - symbol: a.B\n    match: fuzzy\n",
 		"unknown kind":        "sources:\n  - kind: magic\n    labels: [x]\n",
+		"second document":     "ruleset: t\nsources:\n  - symbol: a.B\n    labels: [x]\n---\nruleset: t2\nsinks:\n  - symbol: a.C\n    category: x\n  - this_is: garbage\n",
 	}
 	for name, src := range cases {
 		if _, err := Parse(strings.NewReader(src), name); err == nil {
@@ -167,5 +168,17 @@ propagators:
 	}
 	if !r.HasModel("a.Human") || r.HasModel("a.Machine") || r.HasModel("a.P") {
 		t.Error("only the rules decided by an LLM must be gone")
+	}
+}
+
+// A trailing `---`, or one before the rules, is not a second document of rules.
+func TestParseEmptyExtraDocuments(t *testing.T) {
+	for name, src := range map[string]string{
+		"trailing":     "ruleset: t\nsources:\n  - symbol: a.B\n    labels: [x]\n---\n",
+		"with comment": "ruleset: t\nsources:\n  - symbol: a.B\n    labels: [x]\n---\n# nothing\n",
+	} {
+		if _, err := Parse(strings.NewReader(src), name); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
 	}
 }
