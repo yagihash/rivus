@@ -186,16 +186,16 @@ type state struct {
 	// addLog is, for each root, the path of each element added to it, in
 	// order: rootVer[r] is the length of addLog[r], so a number of it is a place
 	// in the log, and what was added since is what follows.
-	addLog map[Root][]string
-	callSigs        map[*sg.Instr]int
-	sortedElems     map[Loc]cachedElems
-	sortedPaths     map[Root]cachedPaths
-	collectMemo     map[Loc][]found // active during one summary application
-	collectCache    map[Loc]cachedCollect
-	traceMemo       map[ref]*rope
-	guardMemo       map[ref]guardAnswer
-	guardEpoch      int // changes when an element loses the guards recorded for it
-	expandMemo      map[Elem][]expanded
+	addLog       map[Root][]string
+	callSigs     map[*sg.Instr]int
+	sortedElems  map[Loc]cachedElems
+	sortedPaths  map[Root]cachedPaths
+	collectMemo  map[Loc][]found // active during one summary application
+	collectCache map[Loc]cachedCollect
+	traceMemo    map[ref]*rope
+	guardMemo    map[ref]guardAnswer
+	guardEpoch   int // changes when an element loses the guards recorded for it
+	expandMemo   map[Elem][]expanded
 
 	suppressions map[string]*Suppression
 	findings     map[findingKey]*rawFinding
