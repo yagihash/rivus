@@ -69,16 +69,16 @@ file_content]`, so that the label a sanitizer adds does not make it fire.
 
 ## Not done
 
-- **Collection `for`** (`[for (...) x]`) is `unsupported`. A pattern's shape tests (the
-  length of a list, whether a key exists) are not made; the type test of an object
-  pattern and the constants are.
+- A pattern's shape tests (the length of a list, whether a key exists) are not made; the
+  type test of an object pattern and the constants are.
 - **Calls through function values**: the core finds the functions that flow to the value
   through copies, φ functions and the arguments of the callers of the parameter. A
   function kept in a field or a list is not found. A closure found from another function does not get
   the values it captured (they carry nothing); one made in the function that calls it does.
 - **Streams**: what a generator (`async*`, `sync*`) yields is collected in its result, so
   `await for` and `for` over a call of it see the values. A stream passed through a
-  `StreamController` is modeled (`dart-async.yaml`); `listen` with a callback is not.
+  `StreamController` is modeled (`dart-async.yaml`); `Stream.listen`, `Future.then` and the
+  callbacks of `Iterable` (`forEach`, `map`, `where`, ...) are called with what the receiver holds.
 - **Named parameters** of an override that adds one the base does not have may shift
   the others (by name, the usual case lines up).
 - **Dependencies** (`package:flutter`, `dart:*`) are not read: calls into them are

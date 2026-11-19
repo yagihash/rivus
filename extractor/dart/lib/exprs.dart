@@ -154,9 +154,11 @@ int _interpolation(FnLower f, StringInterpolation e) {
 bool _isLocal(Element? el) => el is LocalVariableElement || el is FormalParameterElement && el is! FieldFormalParameterElement;
 
 int _identifier(FnLower f, SimpleIdentifier e) {
-  final el = e.element;
+  final el = e.element ?? _readElementOf(e);
   final at = f.pos(e);
   if (el == null) {
+    // `$1`, `$2` in an extension of a record type: the field of this
+    if (RegExp(r'^\$\d+$').hasMatch(e.name)) return _recordField(f, f.readVar(thisKey, null, at), e.name, e.staticType, at);
     f.emit('unsupported', at: at, more: {'reason': 'a name that does not resolve: ${e.name}'});
     return f.nilConst(at);
   }
@@ -167,7 +169,7 @@ int _identifier(FnLower f, SimpleIdentifier e) {
 
 int _prefixed(FnLower f, PrefixedIdentifier e) {
   final pre = e.prefix.element;
-  final id = e.identifier.element;
+  final id = e.identifier.element ?? _readElementOf(e);
   // library prefix or class name: a static member
   if (pre is PrefixElement || pre is InterfaceElement || pre is ExtensionElement) {
     return _readMember(f, id, null, e, e.staticType, f.pos(e, e.identifier.offset));
@@ -181,7 +183,7 @@ int _prefixed(FnLower f, PrefixedIdentifier e) {
 
 int _propertyAccess(FnLower f, PropertyAccess e) {
   final t = e.target;
-  final id = e.propertyName.element;
+  final id = e.propertyName.element ?? _readElementOf(e);
   int? base;
   if (t == null) {
     base = f.cascade;
@@ -328,6 +330,25 @@ int _call(FnLower f, ExecutableElement callee, int? base, List<int> args, DartTy
 int _methodInvocation(FnLower f, MethodInvocation e) {
   final el = e.methodName.element;
   final at = f.pos(e, e.argumentList.leftParenthesis.offset);
+  // a method of a value whose type says nothing about it (dynamic), or `f.call(x)` / `f?.call(x)` of a
+  // function value: the receiver is what is called, or holds the member that is
+  final target = e.target;
+  if (el == null && target != null) {
+    final base = lowerExpr(f, target);
+    if (e.methodName.name == 'call') return _callValue(f, base, e.argumentList, e, e.staticType);
+    // what the method is, is not known: what it returns is taken to come from the receiver and the arguments
+    final args = <int>[base];
+    for (final a in e.argumentList.arguments) {
+      args.add(lowerExpr(f, a.argumentExpression));
+    }
+    final d = f.tmp(e.staticType);
+    final instr = f.emit('call', dsts: [d], args: args, at: at, more: {
+      'callee': {'kind': 'static', 'symbol': 'dart:core#dynamic.invoke'}
+    });
+    f._lastCall = instr;
+    f.mayThrow();
+    return d;
+  }
   // a function held in a variable
   if (el == null || _isLocal(el) || el is VariableElement) {
     final fn = e.target == null ? lowerExpr(f, e.methodName) : lowerExpr(f, e.function);
@@ -628,6 +649,25 @@ int _assignment(FnLower f, AssignmentExpression e) {
   return value;
 }
 
+/// The element that `x++`, `--x` and `x += 1` read: the operand has none of its own.
+Element? _readElementOf(Expression x) {
+  final p = x.parent;
+  if (p is AssignmentExpression && identical(p.leftHandSide, x)) return p.readElement;
+  if (p is PostfixExpression && identical(p.operand, x)) return p.readElement;
+  if (p is PrefixExpression && identical(p.operand, x)) return p.readElement;
+  return null;
+}
+
+/// The element that an assignment, or `x++` / `--x`, writes: it is the one the
+/// operation says (the operand of `++` has none of its own).
+Element? _writeElementOf(Expression x) {
+  final p = x.parent;
+  if (p is AssignmentExpression && identical(p.leftHandSide, x)) return p.writeElement;
+  if (p is PostfixExpression && identical(p.operand, x)) return p.writeElement;
+  if (p is PrefixExpression && identical(p.operand, x)) return p.writeElement;
+  return null;
+}
+
 void lowerAssign(FnLower f, Expression target, int value) {
   var x = target;
   while (x is ParenthesizedExpression) {
@@ -637,8 +677,7 @@ void lowerAssign(FnLower f, Expression target, int value) {
   switch (x) {
     case SimpleIdentifier():
       final el = x.element;
-      final w = x.parent is AssignmentExpression ? (x.parent as AssignmentExpression).writeElement : el;
-      final we = w ?? el;
+      final we = _writeElementOf(x) ?? el;
       if (we == null) {
         f.emit('unsupported', at: at, more: {'reason': 'assignment to a name that does not resolve: ${x.name}'});
         return;
@@ -650,7 +689,7 @@ void lowerAssign(FnLower f, Expression target, int value) {
       }
     case PrefixedIdentifier():
       final pre = x.prefix.element;
-      final we = (x.parent is AssignmentExpression ? (x.parent as AssignmentExpression).writeElement : null) ?? x.identifier.element;
+      final we = _writeElementOf(x) ?? x.identifier.element;
       if (pre is PrefixElement || pre is InterfaceElement) {
         _writeMember(f, we, null, x, value, f.pos(x, x.identifier.offset));
       } else {
@@ -658,7 +697,7 @@ void lowerAssign(FnLower f, Expression target, int value) {
         _writeMember(f, we, base, x, value, f.pos(x, x.identifier.offset), dynamicName: x.identifier.name);
       }
     case PropertyAccess():
-      final we = (x.parent is AssignmentExpression ? (x.parent as AssignmentExpression).writeElement : null) ?? x.propertyName.element;
+      final we = _writeElementOf(x) ?? x.propertyName.element;
       final t = x.target;
       final base = t == null ? f.cascade : lowerExpr(f, t);
       _writeMember(f, we, base, x, value, f.pos(x, x.propertyName.offset), dynamicName: x.propertyName.name);
@@ -666,7 +705,7 @@ void lowerAssign(FnLower f, Expression target, int value) {
       final t = x.target;
       final base = t == null ? f.cascade! : lowerExpr(f, t);
       final idx = lowerExpr(f, x.index);
-      final w = (x.parent is AssignmentExpression ? (x.parent as AssignmentExpression).writeElement : null) ?? x.element;
+      final w = _writeElementOf(x) ?? x.element;
       if (w is ExecutableElement && _hasBodyHere(f, w)) {
         _call(f, w, base, [idx, value], null, x, at);
         return;
@@ -782,7 +821,9 @@ int _cascade(FnLower f, CascadeExpression e) {
 
 int lowerClosure(FnLower f, FunctionExpression fe, {String? name}) {
   final id = '${f.out.id}\$${f.nextClosure()}';
-  final out = FuncOut(id)..symbol = '';
+  final out = FuncOut(id)
+    ..symbol = ''
+    ..dep = f.out.dep; // a closure of a dependency is a function of the dependency
   out.pos = f.pos(fe);
   final child = FnLower(f.prog, f.unit, out, parent: f, cells: f.cells, assigned: f.assigned);
   final params = <(Object, String, DartType?)>[];

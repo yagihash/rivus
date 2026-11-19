@@ -76,3 +76,84 @@ void userIndexOperator() {
   final b = Bag([s]);
   sink(b[0]); // @sink(rv-index-operator)
 }
+
+// --- DART-10: the message of an assert, and yield* -------------------------
+
+void assertRuns() {
+  final s = source(); // @source(rv-assert)
+  assert(s.isNotEmpty, sinkValue(s));
+}
+
+String sinkValue(String s) {
+  sink(s); // @sink(rv-assert)
+  return s;
+}
+
+Iterable<String> inner() sync* {
+  yield source(); // @source(rv-yield-star)
+}
+
+Iterable<String> outer() sync* {
+  yield* inner();
+}
+
+void readYieldStar() {
+  for (final x in outer()) {
+    sink(x); // @sink(rv-yield-star)
+  }
+}
+
+// --- the write of x++ to a field or a variable of the library ---------------
+
+class Counter {
+  int n = 0;
+  String last = 'safe';
+  void bump(String s) {
+    n++;
+    last = s;
+  }
+}
+
+int counted = 0;
+
+void incrementFieldAndGlobal() {
+  final c = Counter();
+  c.n++;
+  counted++;
+  --counted;
+  final s = source(); // @source(rv-incr)
+  c.bump(s);
+  sink(c.last); // @sink(rv-incr)
+}
+
+// --- what a corpus of real packages showed ----------------------------------
+
+void callOfFunctionValue(String Function(String)? f) {
+  final s = source(); // @source(rv-call)
+  sink(f?.call(s) ?? ''); // @sink(rv-call)
+}
+
+void dynamicMethod() {
+  final dynamic d = source(); // @source(rv-dynamic-call)
+  sink(d.toLowerCase()); // @sink(rv-dynamic-call)
+}
+
+void labeledBlock(bool b) {
+  var x = 'safe';
+  done:
+  {
+    x = source(); // @source(rv-labeled)
+    if (b) break done;
+    x = 'overwritten';
+  }
+  sink(x); // @sink(rv-labeled)
+}
+
+extension PairText on (String, String) {
+  String first() => $1;
+}
+
+void recordField() {
+  final p = (source(), 'b'); // @source(rv-record)
+  sink(p.first()); // @sink(rv-record)
+}

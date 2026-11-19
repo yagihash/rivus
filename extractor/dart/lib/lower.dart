@@ -367,15 +367,43 @@ class FnLower {
         for (final l in s.labels) {
           _pendingLabels.add(l.name.lexeme);
         }
-        stmt(s.statement);
-        _pendingLabels = {};
+        final inner = s.statement;
+        if (inner is ForStatement || inner is WhileStatement || inner is DoStatement || inner is SwitchStatement) {
+          stmt(inner);
+          _pendingLabels = {};
+        } else {
+          // a labeled block (`done: { ... break done; ... }`): the break goes to what follows it
+          final labels = _takeLabels();
+          final after = newBlock();
+          _jumps.add(_Jump(labels, after, null, _handlers.length));
+          stmt(inner);
+          _jumps.removeLast();
+          jump(after);
+          cur = _reached(after) ? after : null;
+        }
       case TryStatement():
         _try(s);
       case SwitchStatement():
         _switch(s);
       case YieldStatement():
         final v = expr(s.expression);
-        _yield(v, s);
+        if (s.star != null) {
+          // `yield* xs;` yields every element of xs, one by one
+          final it = tmp(null);
+          emit('call', dsts: [it], args: [v], at: pos(s), more: {
+            'callee': {'kind': 'static', 'symbol': 'iter.start'},
+          });
+          final ok = local('', null);
+          final k = local('', null);
+          final e = local('', null);
+          out.locals[ok] = Local('', 'dart:core#bool', 'bool');
+          emit('call', dsts: [ok, k, e], args: [it], at: pos(s), more: {
+            'callee': {'kind': 'static', 'symbol': 'iter.next'},
+          });
+          _yield(e, s);
+        } else {
+          _yield(v, s);
+        }
       case PatternVariableDeclarationStatement():
         final d = s.declaration;
         final v = expr(d.expression);
@@ -390,7 +418,11 @@ class FnLower {
       case EmptyStatement():
         break;
       case AssertStatement():
-        break;
+        // the condition and the message are code that runs (in a checked mode): a call in
+        // them can reach a sink, or change what the program holds
+        expr(s.condition);
+        final m = s.message;
+        if (m != null) expr(m);
       case FunctionDeclarationStatement():
         final fd = s.functionDeclaration;
         final el = fd.declaredFragment?.element;

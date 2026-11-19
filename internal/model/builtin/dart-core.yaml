@@ -3,6 +3,10 @@
 ruleset: rivus/dart/core@1
 
 propagators:
+  # a method of a dynamic value: the extractor does not know which, and says that what it
+  # returns may come from the receiver and from the arguments (the receiver is the first)
+  - symbol: dart:core#dynamic.invoke
+    flows: [{from: args, to: result}]
   # strings: the result is made of the receiver (and the arguments)
   - symbol: dart:core#String.trim
     flows: [{from: recv, to: result}, {from: args, to: result}]
