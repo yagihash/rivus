@@ -1002,6 +1002,7 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
 - **付けたもの:** Rust の std の `Deref::deref`、`DerefMut::deref_mut`、`Mutex::lock`、`RwLock::read/write` と `try_*`、`Result::unwrap/expect`、`RefCell::borrow/borrow_mut`、tokio の `Mutex::lock`、`RwLock::read/write`。
 - **もう 1 つ直した:** `sg.Program.Global`（パッケージ変数のアドレスの値）に、クラス `pointer` を付けた。付いていなかったので、`p := &G` の `copy` が、ポインタのコピーとして扱われず、グローバルの場所がたどれなかった。
 - **確認:** Mutex / RwLock<HashMap> / RwLock<Vec> を持つ `static` に、一方の関数が書き、他方が読む 3 つの流れが通る（`extractor/rust/test/sample/src/global_flows.rs`）。go-test-bench（37 件）、gogs（78 件）、gin-vue-admin（28 件）、Gitea（246 件）、parseable（80 件）は、変更の前後で、finding が完全に同一。
+- **検証:** 関数には、結果が同じ場所を指す引数が 1 つしかない。1 つのモデルに alias のフローが 2 つ、1 つのルールセットの中に、同じシンボルで alias を持つモデルが 2 つあると、パースで弾く。複数のルールセットにまたがる重複（組み込みとプロジェクトのルール）は、合成後の `Rules.Validate()`（`AliasArgs()` のエラー）が弾く。読み込み側（`cmd/rivus` とテスト用の `testutil.Rules`）が、これを呼ぶ。弾かないと、後のものが、黙って前のものに取って代わる。
 - **まだ届かない:** parseable の `src/alerts/target.rs:494`。tokio の `RwLock` と `.await`（async の状態機械）、`entry().or_default().insert()`、`Option::ok_or`、`call` の動的ディスパッチと、鎖がまだ長い。
 
 ### 追記: `unsupported` 命令の記録（CORE-1）と、例外のデータフロー（CORE-2）

@@ -48,5 +48,9 @@ func Rules(t testing.TB) *model.Rules {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return model.Merge(append(sets, rs)...)
+	rules := model.Merge(append(sets, rs)...)
+	if err := rules.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	return rules
 }

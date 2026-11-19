@@ -82,10 +82,16 @@ func (c *common) loadRules(extra ...*model.RuleSet) (*model.Rules, error) {
 		sets = append(sets, rs)
 	}
 	sets = append(sets, extra...)
+	var rules *model.Rules
 	if c.deterministic {
-		return model.WithoutOrigin(model.OriginLLM, sets...), nil
+		rules = model.WithoutOrigin(model.OriginLLM, sets...)
+	} else {
+		rules = model.Merge(sets...)
 	}
-	return model.Merge(sets...), nil
+	if err := rules.Validate(); err != nil {
+		return nil, err
+	}
+	return rules, nil
 }
 
 // load reads the code: the Go packages, and the neutral IR made of them.

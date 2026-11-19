@@ -481,6 +481,7 @@ func (rs *RuleSet) validate() error {
 			return fmt.Errorf("config_reads[%d]: symbol is required", i)
 		}
 	}
+	aliased := map[string]bool{}
 	for i, p := range rs.Propagators {
 		what := fmt.Sprintf("propagators[%d]", i)
 		if err := p.Provenance.validate(what); err != nil {
@@ -504,12 +505,26 @@ func (rs *RuleSet) validate() error {
 		if err := validateFlows(p.Flows, what); err != nil {
 			return err
 		}
+		for _, f := range p.Flows {
+			if f.Alias {
+				if aliased[p.Symbol] {
+					return fmt.Errorf("%s: %s has another model with an alias flow: a function has one", what, p.Symbol)
+				}
+				aliased[p.Symbol] = true
+			}
+		}
 	}
 	return nil
 }
 
 func validateFlows(flows []Flow, what string) error {
+	aliases := 0
 	for i, f := range flows {
+		if f.Alias {
+			if aliases++; aliases > 1 {
+				return fmt.Errorf("%s.flows[%d]: a model has at most one flow with alias (the result is the same storage as one argument)", what, i)
+			}
+		}
 		if _, err := ParseSelector(f.From); err != nil {
 			return fmt.Errorf("%s.flows[%d].from: %w", what, i, err)
 		}
@@ -533,7 +548,7 @@ func validateFlows(flows []Flow, what string) error {
 // AliasArgs gives, for the functions that have a flow with alias, the position
 // of the argument their result is the same storage as (the receiver is the
 // argument 0 for the languages that pass it first).
-func (r *Rules) AliasArgs() map[string]int {
+func (r *Rules) AliasArgs() (map[string]int, error) {
 	out := map[string]int{}
 	for sym, ps := range r.Propagators {
 		for _, p := range ps {
@@ -549,11 +564,22 @@ func (r *Rules) AliasArgs() map[string]int {
 				if sel.Kind == SelArg && !sel.All {
 					idx = sel.Index
 				}
+				// a function has one argument that its result is the same storage as: a second one (in another
+				// model of the same symbol, from another rule set) would take the place of the first without a word
+				if _, ok := out[sym]; ok {
+					return nil, fmt.Errorf("%s: more than one model has an alias flow", sym)
+				}
 				out[sym] = idx
 			}
 		}
 	}
-	return out
+	return out, nil
+}
+
+// Validate checks what only the merged rules can show: what the rule sets do not see of one another.
+func (r *Rules) Validate() error {
+	_, err := r.AliasArgs()
+	return err
 }
 
 // Rules is the merged, indexed view of several rule sets.
