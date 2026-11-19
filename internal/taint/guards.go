@@ -32,11 +32,59 @@ type Guard struct {
 	// parameters their values.
 	Call *GuardCall
 
+	// disp is set for a guard that is not a branch: the call goes through an
+	// interface, and the flow is real only if the value of the parameter has
+	// the type whose method it goes through (see dispatchSpec).
+	disp *dispatchSpec
+
 	fn    *sg.Func
 	pos   ir.Pos    // where the condition is
 	block int       // the block holding the branch
 	cond  *sg.Value // the condition itself, to evaluate it for constants
 	k     string    // the key, computed once
+}
+
+// dispatchSpec says which implementation of an interface method a flow went
+// through: the one whose receiver has the type recv, among the implementations
+// of the call, whose receivers are all.
+type dispatchSpec struct {
+	recv string
+	all  []string
+}
+
+// sameBase reports whether two types are one type, a pointer to it or not: the
+// method of a value type is in the method set of the pointer to it.
+func sameBase(a, b string) bool {
+	return strings.TrimPrefix(a, "*") == strings.TrimPrefix(b, "*")
+}
+
+// excludes reports whether a value of the concrete type c cannot take this
+// way. It does only when c is, by its type, another of the implementations the
+// call has: a type that is none of them (a method promoted from an embedded
+// field, say) leaves the question open.
+func (d *dispatchSpec) excludes(c string) bool {
+	if c == "" || sameBase(d.recv, c) {
+		return false
+	}
+	for _, r := range d.all {
+		if sameBase(r, c) {
+			return true
+		}
+	}
+	return false
+}
+
+// concreteType is the type of the value an interface value was made of, when
+// it was made right there: a value made by make_interface has the dynamic type
+// of its operand, and nothing else. It is empty when that is not known.
+func concreteType(v *sg.Value) string {
+	if v == nil || v.Kind != sg.KResult || v.Instr == nil || v.Instr.Op != ir.OpConvert || v.Instr.IR == nil || v.Instr.IR.Operator != "make_interface" {
+		return ""
+	}
+	if len(v.Instr.Args) != 1 || v.Instr.Args[0] == nil {
+		return ""
+	}
+	return string(v.Instr.Args[0].Type)
 }
 
 // GuardCall is the call site that instantiates the parameters of a guard.
@@ -74,6 +122,9 @@ func (g Guard) key() string {
 
 func (g Guard) computeKey() string {
 	k := g.condKey() + "|" + strconv.FormatBool(g.Polarity)
+	if g.disp != nil {
+		k += "|dispatch|" + g.disp.recv
+	}
 	if g.Call != nil {
 		k += "|" + posKey(g.Call.pos)
 	}
@@ -374,6 +425,7 @@ type callInfo struct {
 	argv     []*sg.Value
 	hasRecv  bool
 	anyConst bool // some argument is a constant: the guards may be decided
+	anyTyped bool // some argument is an interface made right there: so may the dispatch guards
 }
 
 func (s *state) newCallInfo(cc *callCtx, argv []*sg.Value) *callInfo {
@@ -381,7 +433,9 @@ func (s *state) newCallInfo(cc *callCtx, argv []*sg.Value) *callInfo {
 	for _, a := range argv {
 		if a.Kind == sg.KConst && a.Const != nil {
 			ci.anyConst = true
-			break
+		}
+		if concreteType(a) != "" {
+			ci.anyTyped = true
 		}
 	}
 	return ci
@@ -391,11 +445,17 @@ func (s *state) newCallInfo(cc *callCtx, argv []*sg.Value) *callInfo {
 // when every parameter a guard depends on is given a constant that makes the
 // condition take the other side.
 func (ci *callInfo) feasible(gs []Guard) bool {
-	if !ci.anyConst {
+	if !ci.anyConst && !ci.anyTyped {
 		return true
 	}
 	for _, g := range gs {
 		if g.Call != nil {
+			continue
+		}
+		if g.disp != nil {
+			if len(g.Params) == 1 && g.Params[0] < len(ci.argv) && g.disp.excludes(concreteType(ci.argv[g.Params[0]])) {
+				return false
+			}
 			continue
 		}
 		if env, ok := constEnv(g, ci.argv); ok {

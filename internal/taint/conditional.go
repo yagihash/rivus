@@ -18,6 +18,9 @@ func (e *Engine) conditionalNodes(guards []Guard) []ConditionalNode {
 	byCond := map[string]Guard{}
 	var order []string
 	for _, g := range guards {
+		if g.disp != nil {
+			continue // not a condition of the code: which implementation was reached
+		}
 		k := g.condKey()
 		cur, ok := byCond[k]
 		if !ok {

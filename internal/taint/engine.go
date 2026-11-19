@@ -58,7 +58,10 @@ func DefaultOptions() Options {
 
 // Engine runs the whole-program analysis.
 type Engine struct {
-	prog *sg.Program
+	// dispatch caches dispatchGuards by call: what it makes depends on the call
+	// alone, and it is asked at every analysis of the function.
+	dispatch sync.Map // *sg.Instr -> map[*sg.Func][]Guard
+	prog     *sg.Program
 	// reach is what the program can reach from its entry points (nil: unknown).
 	reach map[*sg.Func]bool
 	texts ir.Texts
@@ -1004,6 +1007,12 @@ func (e *Engine) buildFinding(rf *rawFinding) *Finding {
 			if !seen[k] {
 				seen[k] = true
 				f.Uncertainties = append(f.Uncertainties, n)
+				if n.Kind == KindDynamicDispatch && len(n.Candidates) > 1 {
+					f.DispatchWidened++
+					if len(n.Candidates) > f.DispatchCandidates {
+						f.DispatchCandidates = len(n.Candidates)
+					}
+				}
 			}
 		}
 	}

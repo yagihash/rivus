@@ -148,6 +148,14 @@ type Finding struct {
 	// (which rivus does not follow). Absent when nothing says where the
 	// program starts.
 	Reachability string `json:"reachability,omitempty"`
+	// DispatchWidened is the number of calls on the path that went through an
+	// interface or a function value and were taken to reach every one of
+	// several implementations; DispatchCandidates is the most implementations
+	// one of them had. The flow is real only if the value on this path is of
+	// the type whose method holds the rest of the path: a reviewer can start
+	// with the paths that have none of these. A fact for ranking, not a verdict.
+	DispatchWidened    int `json:"dispatch_widened,omitempty"`
+	DispatchCandidates int `json:"dispatch_candidates,omitempty"`
 	// Confidence classifies what is known about the path, and does not judge
 	// it: ConfidenceClear when nothing on it was left unresolved,
 	// ConfidenceReview otherwise.

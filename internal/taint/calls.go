@@ -178,12 +178,13 @@ func (s *state) callBody(cc *callCtx) {
 	if ci.IR.Go {
 		notes = append(notes, s.pathNote(KindConcurrency, "the callee runs in another goroutine; the order of effects is not modelled", ci.Pos))
 	}
+	which := s.dispatchGuards(cc, withBody)
 	for _, fn := range withBody {
 		b := bindings
 		if cb, ok := ci.CandidateBindings[fn]; ok {
 			b = cb
 		}
-		s.applySummary(cc, fn, b, notes)
+		s.applySummary(cc, fn, b, notes, which[fn])
 	}
 	switch {
 	case ruleOnly:
@@ -200,6 +201,49 @@ func (s *state) callBody(cc *callCtx) {
 		kind, detail := externalKind(ids, cc.sym)
 		s.unmodeled(cc, s.newNote(ci, kind, detail, cc.sym))
 	}
+}
+
+// dispatchGuards tells, for a call through an interface method on a parameter
+// of this function, which implementation each flow went through: what the
+// callee does with the flow is true only if the value has that type. The caller
+// of this function knows what it passed, and can leave out the flows through the
+// implementations of other types (the call graph does not tell the callers
+// apart: the implementations of every caller are candidates of the call).
+func (s *state) dispatchGuards(cc *callCtx, fns []*sg.Func) map[*sg.Func][]Guard {
+	recv := cc.recv
+	if cc.in.Callee.Kind != ir.CalleeDynamic || recv == nil || recv.Kind != sg.KParam || len(fns) < 2 {
+		return nil
+	}
+	if m, ok := s.eng.dispatch.Load(cc.in); ok {
+		return m.(map[*sg.Func][]Guard)
+	}
+	out := s.makeDispatchGuards(cc, fns)
+	s.eng.dispatch.Store(cc.in, out)
+	return out
+}
+
+func (s *state) makeDispatchGuards(cc *callCtx, fns []*sg.Func) map[*sg.Func][]Guard {
+	recv := cc.recv
+	var all []string
+	for _, fn := range fns {
+		if !fn.Recv || len(fn.Params) == 0 {
+			return nil // a candidate that does not say what it is a method of: no guard
+		}
+		all = append(all, string(fn.Params[0].Type))
+	}
+	out := make(map[*sg.Func][]Guard, len(fns))
+	for i, fn := range fns {
+		out[fn] = []Guard{{
+			Func:     s.eng.funcID(s.fn),
+			Params:   []int{recv.Param},
+			Cond:     "the value of " + recv.Name + " has the type " + all[i],
+			Polarity: true,
+			disp:     &dispatchSpec{recv: all[i], all: all},
+			fn:       s.fn,
+			pos:      cc.in.Pos,
+		}}
+	}
+	return out
 }
 
 // externalKind tells why a call to a function without a body cannot be

@@ -542,3 +542,8 @@ func TestStoredDataBoundaryIsRecorded(t *testing.T) {
 	}
 	t.Fatal("no stored_data_boundary uncertainty was recorded")
 }
+
+// A call through an interface is a call to every implementation, unless the
+// caller made the interface value right there: then only the implementation of
+// its type is called.
+func TestDispatchIsNarrowedByTheTypeTheCallerPassed(t *testing.T) { checkCase(t, "dispatch") }

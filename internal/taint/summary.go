@@ -248,7 +248,7 @@ func (s *state) expandParam(e Elem, argv []*sg.Value) []expanded {
 }
 
 // applySummary applies the summary of a callee at a call site.
-func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, notes []*Uncertainty) {
+func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, notes []*Uncertainty, extra []Guard) {
 	sum := s.eng.summaryOf(fn)
 	if sum == nil {
 		return // not analysed yet; a later round picks it up
@@ -303,6 +303,9 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 				if len(notes) > 0 {
 					w.setNotes(notes)
 				}
+				if len(extra) > 0 {
+					w.setGuards(extra)
+				}
 				if len(oe.Guards) > 0 {
 					w.setCallee(oe.Guards, info)
 				}
@@ -320,7 +323,7 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 			continue
 		}
 		srGuards := s.instantiate(info, sr.Guards)
-		callGuards := s.blockGuards(cc.in.Block)
+		callGuards := unionGuards(s.blockGuards(cc.in.Block), extra)
 		for _, x := range s.expandElem(sr.Elem, argv) {
 			var steps *rope
 			if x.From != nil {
