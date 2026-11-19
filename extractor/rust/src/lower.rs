@@ -671,6 +671,15 @@ impl<'a> Lower<'a> {
             self.emit("make_closure", &[d], &[], pos, json!({"func": name}));
             return d;
         }
+        // a reference to a static: the address of the one variable every
+        // function that names it sees (an alert table that a handler fills and a
+        // timer reads)
+        if let ConstantKind::Allocated(alloc) = c.kind() {
+            if let Some(name) = static_of(&ty, alloc) {
+                self.emit("addr_of", &[d], &[], pos, json!({"global": name}));
+                return d;
+            }
+        }
         let k = match c.kind() {
             ConstantKind::Allocated(alloc) => const_of(&ty, alloc),
             _ => json!({"kind": "nil"}),
@@ -962,6 +971,19 @@ impl<'a> Lower<'a> {
             .collect();
         out.sort();
         out
+    }
+}
+
+/// The static a constant points to: `&STATIC` is a pointer constant whose
+/// allocation is the static's.
+fn static_of(ty: &Ty, alloc: &Allocation) -> Option<String> {
+    if !matches!(ty.kind(), TyKind::RigidTy(RigidTy::Ref(..)) | TyKind::RigidTy(RigidTy::RawPtr(..))) {
+        return None;
+    }
+    let (_, prov) = alloc.provenance.ptrs.first()?;
+    match rustc_public::mir::alloc::GlobalAlloc::from(prov.0) {
+        rustc_public::mir::alloc::GlobalAlloc::Static(def) => Some(def.name()),
+        _ => None,
     }
 }
 
