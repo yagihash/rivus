@@ -46,13 +46,17 @@ func Extract(p *gossa.Program, opts Options) (*ir.Program, error) {
 	globals := map[string]ir.Global{}
 	seen := map[ir.FuncID]bool{}
 	var graph callgraph.Graph
-	var lifted map[string]*ssa.Function
+	var lifted map[string][]*ssa.Function
 	if !opts.NoCandidates {
 		if p.Lifted != nil {
 			graph = callgraph.BuildGoOn(p.Lifted)
-			lifted = map[string]*ssa.Function{}
+			lifted = map[string][]*ssa.Function{}
 			for fn := range ssautil.AllFunctions(p.Lifted) {
-				lifted[gossa.FuncID(fn)] = fn
+				// Several functions can have one name (the closure that binds a
+				// method, made once for each place that takes it): they are one
+				// function in the IR, and what the call graph says of each of
+				// them is joined (which one a map gave last is not an answer).
+				lifted[gossa.FuncID(fn)] = append(lifted[gossa.FuncID(fn)], fn)
 			}
 		} else {
 			graph = callgraph.BuildGo(p)
@@ -160,7 +164,7 @@ type conv struct {
 	graph  callgraph.Graph
 	// liftedCall maps a call of this function to the same call in the
 	// lifted build, which the call graph is about.
-	liftedCall map[ssa.CallInstruction]ssa.CallInstruction
+	liftedCall map[ssa.CallInstruction][]ssa.CallInstruction
 	global     map[string]ir.Global
 	cur        *[]ir.Instr
 }
@@ -175,7 +179,7 @@ type addrInfo struct {
 	pos   ir.Pos
 }
 
-func convertFunc(p *gossa.Program, fn *ssa.Function, graph callgraph.Graph, liftedFn *ssa.Function, globals map[string]ir.Global) *ir.Func {
+func convertFunc(p *gossa.Program, fn *ssa.Function, graph callgraph.Graph, liftedFns []*ssa.Function, globals map[string]ir.Global) *ir.Func {
 	c := &conv{
 		p:      p,
 		fn:     fn,
@@ -207,7 +211,7 @@ func convertFunc(p *gossa.Program, fn *ssa.Function, graph callgraph.Graph, lift
 		c.out.Roots = append(c.out.Roots, ir.BlockID(fn.Recover.Index))
 	}
 
-	c.matchCalls(liftedFn)
+	c.matchCalls(liftedFns)
 	c.findFused()
 
 	// Parameters first, in block 0.
@@ -524,8 +528,8 @@ func (c *conv) noteGlobal(g *ssa.Global) {
 // call graph is about. Lifting does not move or drop them, but it does drop
 // bookkeeping calls, so they are paired by where they are and what they are
 // (in order, when several are at the same place).
-func (c *conv) matchCalls(lifted *ssa.Function) {
-	if lifted == nil {
+func (c *conv) matchCalls(liftedFns []*ssa.Function) {
+	if len(liftedFns) == 0 {
 		return
 	}
 	type key struct {
@@ -546,17 +550,21 @@ func (c *conv) matchCalls(lifted *ssa.Function) {
 		}
 		return key{ci.Pos(), false, ""}, true
 	}
-	pool := map[key][]ssa.CallInstruction{}
-	for _, b := range lifted.Blocks {
-		for _, in := range b.Instrs {
-			if ci, ok := in.(ssa.CallInstruction); ok {
-				if k, ok := keyOf(ci); ok {
-					pool[k] = append(pool[k], ci)
+	pools := make([]map[key][]ssa.CallInstruction, len(liftedFns))
+	for i, lifted := range liftedFns {
+		pool := map[key][]ssa.CallInstruction{}
+		for _, b := range lifted.Blocks {
+			for _, in := range b.Instrs {
+				if ci, ok := in.(ssa.CallInstruction); ok {
+					if k, ok := keyOf(ci); ok {
+						pool[k] = append(pool[k], ci)
+					}
 				}
 			}
 		}
+		pools[i] = pool
 	}
-	c.liftedCall = map[ssa.CallInstruction]ssa.CallInstruction{}
+	c.liftedCall = map[ssa.CallInstruction][]ssa.CallInstruction{}
 	for _, b := range c.fn.Blocks {
 		for _, in := range b.Instrs {
 			ci, ok := in.(ssa.CallInstruction)
@@ -567,9 +575,11 @@ func (c *conv) matchCalls(lifted *ssa.Function) {
 			if !ok {
 				continue
 			}
-			if list := pool[k]; len(list) > 0 {
-				c.liftedCall[ci] = list[0]
-				pool[k] = list[1:]
+			for _, pool := range pools {
+				if list := pool[k]; len(list) > 0 {
+					c.liftedCall[ci] = append(c.liftedCall[ci], list[0])
+					pool[k] = list[1:]
+				}
 			}
 		}
 	}
