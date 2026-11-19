@@ -219,12 +219,23 @@ func (s *state) expandParam(e Elem, argv []*sg.Value) []expanded {
 	if e.Param < 0 || int(e.Param) >= len(argv) {
 		return nil
 	}
-	var out []expanded
+	locs := s.locs(argv[e.Param])
+	founds := make([][]found, len(locs))
+	total := 0
+	for i, l := range locs {
+		founds[i] = s.collect(Loc{l.Root, l.Path + e.Path()})
+		total += len(founds[i])
+	}
+	if total == 0 {
+		return nil
+	}
+	// What is made lives for the length of one call of a summary: it is made at
+	// its size, not grown.
+	out := make([]expanded, 0, total)
 	// The same element found in several cells is one element: the first
 	// reason stays (a cell keeps the first reason an element got into it).
-	seen := map[Elem]bool{}
-	for _, l := range s.locs(argv[e.Param]) {
-		found := s.collect(Loc{l.Root, l.Path + e.Path()})
+	seen := make(map[Elem]bool, total)
+	for _, found := range founds {
 		for i := range found {
 			f := &found[i]
 			if f.E.Kind == Real {
@@ -332,9 +343,12 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 			if x.From != nil {
 				steps = s.trace(x.From.Cell, x.From.Orig)
 			}
-			call := Step{Func: s.eng.funcID(s.fn), Desc: desc, pos: cc.in.Pos}
-			call.Notes = notes
-			steps = cat(cat(steps, leaf(call)), sr.Steps)
+			// The length the path will have, which is all that the flows that
+			// are dropped need; the path itself is made for the one that is kept.
+			stepsLen := steps.len() + 1 + sr.Steps.len()
+			if stepsLen > maxRopeLen {
+				stepsLen = maxRopeLen
+			}
 			// The guards are worked out only for a flow that is kept: one
 			// that is not shorter than what is already known is dropped, and
 			// only its label counts.
@@ -343,15 +357,18 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 				if !accepted(sr.Accepts, x.E.Label()) {
 					continue
 				}
-				if rf := s.findings[findingKey{x.E.Origin(), sr.Site}]; rf != nil && rf.steps != nil && steps.len() >= rf.steps.len() {
+				if rf := s.findings[findingKey{x.E.Origin(), sr.Site}]; rf != nil && rf.steps != nil && stepsLen >= rf.steps.len() {
 					rf.labels[x.E.Label()] = true
 					continue
 				}
 			case Param:
-				if old, ok := s.sinkReaches[sinkKey{x.E, sr.Site}]; ok && steps.len() >= old.Steps.len() {
+				if old, ok := s.sinkReaches[sinkKey{x.E, sr.Site}]; ok && stepsLen >= old.Steps.len() {
 					continue
 				}
 			}
+			call := Step{Func: s.eng.funcID(s.fn), Desc: desc, pos: cc.in.Pos}
+			call.Notes = notes
+			steps = cat(cat(steps, leaf(call)), sr.Steps)
 			var chain []Guard
 			var over bool
 			if x.From != nil {
