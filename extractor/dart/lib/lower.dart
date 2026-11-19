@@ -680,9 +680,9 @@ class FnLower {
       for (final st in s.members[i].statements) {
         stmt(st);
       }
-      // A case that ends without a jump falls into the next one, as it does
-      // in Dart only when it is empty; otherwise the analyzer rejects it.
-      jump(i + 1 < bodies.length ? bodies[i + 1] : after);
+      // A case that is empty goes on to the next one (`case 1: case 2: ...`); one that is not ends
+      // at the end of the switch (Dart 3 does not fall through, and before it the analyzer rejected it).
+      jump(i + 1 < bodies.length && s.members[i].statements.isEmpty ? bodies[i + 1] : after);
     }
     _caseLabels.removeLast();
     _jumps.removeLast();

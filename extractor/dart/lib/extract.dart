@@ -118,7 +118,10 @@ AnalysisContext? _contextOf(AnalysisContextCollection collection, String path) {
 
 bool _skipped(String root, String path) {
   final rel = p.relative(path, from: root);
-  return p.split(rel).any((s) => s.startsWith('.') || s == 'build');
+  final parts = p.split(rel);
+  // hidden directories (.dart_tool, .git), and `build` at the top (what the tools write): a directory
+  // called build deeper in the package is code (a `lib/src/build/command.dart` of a build tool)
+  return parts.any((s) => s.startsWith('.')) || (parts.length > 1 && parts.first == 'build');
 }
 
 /// Pass 1: which functions have a body, and which class has which method.
@@ -372,9 +375,52 @@ class _Lower extends RecursiveAstVisitor<void> {
       _function(el, node, node.parameters, node.body, thisType: null, redirect: redirect);
       return;
     }
-    if (!_hasBody(node.body) && node.initializers.isEmpty && node.parameters.parameters.isEmpty) return;
     final cls = el.enclosingElement;
+    // a constructor with nothing in it still sets the fields that have an initializer
+    final fieldsToSet = _fieldsOf(cls).any((v) => v.initializer != null);
+    if (!_hasBody(node.body) && node.initializers.isEmpty && node.parameters.parameters.isEmpty && !fieldsToSet) return;
     _function(el, node, node.parameters, node.body, thisType: null, constructorOf: cls, ctor: node);
+  }
+
+  /// A class that declares no constructor has the one that Dart makes: it sets the fields that have an
+  /// initializer (`final String v = source();`) and returns the object.
+  @override
+  void visitClassDeclaration(ClassDeclaration node) {
+    final cls = node.declaredFragment?.element;
+    final members = node.body is BlockClassBody ? (node.body as BlockClassBody).members : const <ClassMember>[];
+    if (cls != null && !members.any((m) => m is ConstructorDeclaration) && _fieldsOf(cls).any((v) => v.initializer != null)) {
+      _defaultConstructor(cls);
+    }
+    super.visitClassDeclaration(node);
+  }
+
+  void _defaultConstructor(ClassElement cls) {
+    final ctor = cls.unnamedConstructor;
+    if (ctor == null) return;
+    final id = funcId(ctor);
+    final out = FuncOut(id)
+      ..symbol = symbolOf(ctor)
+      ..dep = unit.dep
+      ..exported = !(cls.name ?? '').startsWith('_');
+    out.pos = unit.pos(unit.unit, 0);
+    final f = FnLower(prog, unit, out, cells: const {}, assigned: const {});
+    f.lowerInit(
+      at: out.pos,
+      body: () {
+        final d = f.tmp(cls.thisType);
+        f.emit('alloc', dsts: [d], at: out.pos, more: {'type': typeId(cls.thisType), 'class': 'pointer'});
+        f.bind(thisKey, d);
+        for (final m in _fieldsOf(cls)) {
+          final init = m.initializer;
+          final fe = m.declaredFragment?.element;
+          if (init == null || fe == null) continue;
+          final v = f.expr(init);
+          f.emit('field_store', args: [d, v], at: f.pos(m), more: {'field': fe.name ?? ''});
+        }
+        f.ret([d], out.pos);
+      },
+    );
+    prog.out.func(out);
   }
 
   bool _hasBody(FunctionBody b) => b is! EmptyFunctionBody && b is! NativeFunctionBody;
@@ -474,6 +520,33 @@ class _Lower extends RecursiveAstVisitor<void> {
         self = constructorCall(f, target, list, i, cls.thisType, f.pos(i));
         if (i is RedirectingConstructorInvocation) return self; // the one it redirects to does the rest
         break;
+      }
+    }
+    // `Derived(super.v)`: the parameters that are passed on to the constructor of the superclass
+    if (!ctor.initializers.any((i) => i is SuperConstructorInvocation || i is RedirectingConstructorInvocation)) {
+      final sup = ctor.declaredFragment?.element.superConstructor;
+      final passed = <FormalParameterElement, FormalParameterElement>{}; // the parameter of super -> the one here
+      for (final fp in ctor.parameters.parameters) {
+        if (fp is SuperFormalParameter) {
+          final pe = fp.declaredFragment?.element;
+          if (pe is SuperFormalParameterElement) {
+            final target = pe.superConstructorParameter;
+            if (target != null) passed[target.baseElement] = pe;
+          }
+        }
+      }
+      if (sup != null && passed.isNotEmpty) {
+        final args = <int>[];
+        for (final tp in orderedParams(sup)) {
+          final mine = passed[tp.baseElement];
+          args.add(mine == null ? f.nilConst(f.pos(ctor)) : f.readVar(mine.baseElement, mine.type, f.pos(ctor)));
+        }
+        final r = f.tmp(sup.enclosingElement.thisType);
+        f.emit('call', dsts: [r], args: args, at: f.pos(ctor), more: {
+          'callee': {'kind': 'static', 'func': funcId(sup), 'symbol': symbolOf(sup)}
+        });
+        f.mayThrow();
+        self = r;
       }
     }
     // fields with an initializer in the class

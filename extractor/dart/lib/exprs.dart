@@ -151,7 +151,8 @@ int _interpolation(FnLower f, StringInterpolation e) {
 // --- names ----------------------------------------------------------------
 
 /// Whether the element is a variable of a function: a local or a parameter.
-bool _isLocal(Element? el) => el is LocalVariableElement || el is FormalParameterElement && el is! FieldFormalParameterElement;
+// a `this.x` parameter is a parameter too: the initializer list and the body read it as one
+bool _isLocal(Element? el) => el is LocalVariableElement || el is FormalParameterElement;
 
 int _identifier(FnLower f, SimpleIdentifier e) {
   final el = e.element ?? _readElementOf(e);
@@ -364,7 +365,9 @@ int _methodInvocation(FnLower f, MethodInvocation e) {
   int? base;
   final t = e.target;
   if (t == null) {
-    base = f.cascade;
+    // a section of a cascade works on its target; a call that has no target and is not a section is a
+    // call of this (`..write(_header())`: _header is a method of the class around, not of the buffer)
+    base = e.isCascaded ? f.cascade : null;
   } else if (t is SimpleIdentifier && (t.element is PrefixElement || t.element is InterfaceElement || t.element is ExtensionElement)) {
     base = null;
   } else if (t is SuperExpression) {
@@ -636,14 +639,37 @@ int _assignment(FnLower f, AssignmentExpression e) {
   if (op == TokenType.EQ) {
     value = lowerExpr(f, e.rightHandSide);
   } else if (op == TokenType.QUESTION_QUESTION_EQ) {
-    value = lowerExpr(f, e.rightHandSide);
+    // `x ??= v`: v is evaluated and assigned only when x is null; the value is x either way
+    final cur = lowerExpr(f, e.leftHandSide);
+    final result = f.tmp(e.staticType);
+    f.emit('copy', dsts: [result], args: [cur], at: f.pos(e));
+    final nilc = f.nilConst(f.pos(e));
+    final isNull = f.local('', null);
+    f.out.locals[isNull] = Local('', 'dart:core#bool', 'bool');
+    f.emit('binop', dsts: [isNull], args: [cur, nilc], at: f.pos(e), more: {'operator': '=='});
+    final assign = f.newBlock();
+    final join = f.newBlock();
+    f.branch(isNull, assign, join, f.pos(e));
+    f.cur = assign;
+    final v = lowerExpr(f, e.rightHandSide);
+    f.emit('copy', dsts: [result], args: [v], at: f.pos(e));
+    lowerAssign(f, e.leftHandSide, v);
+    f.jump(join);
+    f.cur = join;
+    return result;
   } else {
     final cur = lowerExpr(f, e.leftHandSide);
     final r = lowerExpr(f, e.rightHandSide);
-    final d = f.tmp(e.staticType);
-    final lex = e.operator.lexeme;
-    f.emit('binop', dsts: [d], args: [cur, r], at: f.pos(e), more: {'operator': lex.substring(0, lex.length - 1)});
-    value = d;
+    // an operator that the code defines is a call of its body (`a += b` calls `+`)
+    final m = e.element;
+    if (m != null && _hasBodyHere(f, m)) {
+      value = _call(f, m, cur, [r], e.staticType, e, f.pos(e));
+    } else {
+      final d = f.tmp(e.staticType);
+      final lex = e.operator.lexeme;
+      f.emit('binop', dsts: [d], args: [cur, r], at: f.pos(e), more: {'operator': lex.substring(0, lex.length - 1)});
+      value = d;
+    }
   }
   lowerAssign(f, e.leftHandSide, value);
   return value;
