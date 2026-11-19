@@ -30,7 +30,6 @@ dependencies:
   http_parser: any
   intl: any
   io: any
-  jose: any
   json_annotation: any
   logging: any
   markdown: any

@@ -23,7 +23,6 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart' as http_parser;
 import 'package:intl/intl.dart' as intl;
 import 'package:io/io.dart' as io;
-import 'package:jose/jose.dart' as jose;
 import 'package:json_annotation/json_annotation.dart' as json_annotation;
 import 'package:logging/logging.dart' as logging;
 import 'package:markdown/markdown.dart' as markdown;

@@ -1,6 +1,6 @@
 #!/bin/sh
 # The regression of the Dart extractor on real code: extracts the project of
-# this directory (which imports 55 popular packages) with its dependencies, and
+# this directory (which imports 54 popular packages) with its dependencies, and
 # checks that no construct is left out ("unsupported") and that the program is a
 # valid IR (no function defined twice). Usage: run.sh [DART_COMMAND] ; needs `rivus` on the PATH.
 #   dart pub get && ./run.sh "mise exec dart@3.13.6 -- dart"
