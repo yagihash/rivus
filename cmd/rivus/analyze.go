@@ -84,17 +84,8 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 		}
 		phase("load")
 	} else {
-		l, err = o.load(patterns, true)
+		l, err = o.loadGo(patterns, rules, o.maxImpl)
 		if err != nil {
-			return nil, err
-		}
-		phase("load")
-		for _, e := range rules.Expand(l.gossa, o.maxImpl) {
-			if e.Limited || e.Note != "" {
-				fmt.Fprintf(os.Stderr, "rivus: %s\n", e)
-			}
-		}
-		if err := l.extract(true); err != nil {
 			return nil, err
 		}
 		phase("ir")

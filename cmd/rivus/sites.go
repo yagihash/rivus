@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/yagihash/rivus/internal/ir"
+	"github.com/yagihash/rivus/internal/model"
 	"github.com/yagihash/rivus/internal/sites"
 	"github.com/yagihash/rivus/internal/vcs"
 )
@@ -23,6 +24,7 @@ func runSites(args []string) error {
 	c.register(fs)
 	role := fs.String("role", "", `only "source" or "sink" sites`)
 	irFile := fs.String("ir", "", "list the sites of the neutral IR in this JSON Lines file (from an extractor of another language)")
+	maxImpl := fs.Int("max-implementations", model.DefaultMaxImplementations, "default limit of match: implementations")
 	fs.Parse(args)
 
 	rules, err := c.loadRules()
@@ -33,10 +35,7 @@ func runSites(args []string) error {
 	if *irFile != "" {
 		l, err = readIR(*irFile)
 	} else {
-		l, err = c.load(fs.Args(), false)
-		if err == nil {
-			err = l.extract(false)
-		}
+		l, err = c.loadGo(fs.Args(), rules, *maxImpl)
 	}
 	if err != nil {
 		return err

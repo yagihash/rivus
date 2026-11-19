@@ -124,6 +124,26 @@ func (c *common) load(patterns []string, withGraph bool) (*loaded, error) {
 	return &loaded{gossa: p}, nil
 }
 
+// loadGo reads the Go packages the way every command that lists sites or
+// analyses does: the rules that name an interface method (match:
+// implementations) are expanded against the program, then the IR is made.
+// "sites" and "analyze -sites" list the same sites because both come here.
+func (c *common) loadGo(patterns []string, rules *model.Rules, maxImpl int) (*loaded, error) {
+	l, err := c.load(patterns, true)
+	if err != nil {
+		return nil, err
+	}
+	for _, e := range rules.Expand(l.gossa, maxImpl) {
+		if e.Limited || e.Note != "" {
+			fmt.Fprintf(os.Stderr, "rivus: %s\n", e)
+		}
+	}
+	if err := l.extract(true); err != nil {
+		return nil, err
+	}
+	return l, nil
+}
+
 // loaded is the code read from Go packages.
 type loaded struct {
 	gossa *gossa.Program

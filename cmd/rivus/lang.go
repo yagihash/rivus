@@ -165,16 +165,8 @@ func (o *analyzeOpts) loadLangs(langs []string, patterns []string, rules *model.
 	for _, lang := range langs {
 		var p *ir.Program
 		if lang == langGo {
-			l, err := o.load(patterns, true)
+			l, err := o.loadGo(patterns, rules, o.maxImpl)
 			if err != nil {
-				return nil, err
-			}
-			for _, e := range rules.Expand(l.gossa, o.maxImpl) {
-				if e.Limited || e.Note != "" {
-					fmt.Fprintf(os.Stderr, "rivus: %s\n", e)
-				}
-			}
-			if err := l.extract(true); err != nil {
 				return nil, err
 			}
 			if len(langs) > 1 {

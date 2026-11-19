@@ -259,3 +259,44 @@ func TestModelsCoverageFromAnIndex(t *testing.T) {
 		t.Errorf("empty coverage from the index: %+v", cov)
 	}
 }
+
+// "rivus sites" lists what "rivus analyze -sites" lists: both expand the
+// rules that name an interface method (match: implementations), so the
+// implementations are sites in both.
+func TestSitesCommandAgreesWithAnalyze(t *testing.T) {
+	ids := func(sites []struct {
+		ID string `json:"id"`
+	}) map[string]bool {
+		m := map[string]bool{}
+		for _, s := range sites {
+			m[s.ID] = true
+		}
+		return m
+	}
+	type list struct {
+		Sites []struct {
+			ID string `json:"id"`
+		} `json:"sites"`
+	}
+	var a, b list
+	if err := json.Unmarshal(rivus(t, "sites", "-rules", "rules.yaml", "./cases/..."), &a); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(rivus(t, "analyze", "-sites", "-rules", "rules.yaml", "./cases/..."), &b); err != nil {
+		t.Fatal(err)
+	}
+	sa, sb := ids(a.Sites), ids(b.Sites)
+	for id := range sb {
+		if !sa[id] {
+			t.Errorf("site %s is in analyze -sites, not in sites", id)
+		}
+	}
+	for id := range sa {
+		if !sb[id] {
+			t.Errorf("site %s is in sites, not in analyze -sites", id)
+		}
+	}
+	if len(sa) < 100 {
+		t.Errorf("only %d sites: the comparison says nothing", len(sa))
+	}
+}
