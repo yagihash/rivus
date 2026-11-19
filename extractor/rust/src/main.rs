@@ -26,6 +26,13 @@ use std::process::{Command, ExitCode};
 /// The toolchain the extractor is built with and runs rustc with.
 const TOOLCHAIN: &str = "nightly-2026-11-15";
 
+/// Whether rustc is asked to compile the build script of a package: cargo names its crate `build_script_<name>`
+/// (`build_script_build` for build.rs, and the name of the file for `build = "codegen.rs"`).
+fn is_build_script(args: &[String]) -> bool {
+    args.windows(2).any(|w| w[0] == "--crate-name" && w[1].starts_with("build_script_"))
+        || args.iter().any(|a| a == "build_script_build" || a == "build_script_main")
+}
+
 fn main() -> ExitCode {
     if std::env::var_os("RIVUS_RUST_DRIVER").is_some() {
         return driver();
@@ -40,7 +47,7 @@ fn driver() -> ExitCode {
     // program the driver pretends to be.
     let mut args: Vec<String> = std::env::args().skip(1).collect();
     let probing = args.iter().any(|a| a == "-vV" || a == "--version" || a.starts_with("--print"));
-    let skipped = args.iter().any(|a| a == "build_script_build" || a == "build_script_main");
+    let skipped = is_build_script(&args);
     // The optimizations of MIR change what is read: with `opt-level` above 0 rustc
     // inlines (and the call that a rule names is gone). The level is fixed, whatever
     // profile the workspace builds with.
@@ -255,5 +262,22 @@ fn merge(frags: &Path) {
     }
     for l in rest {
         println!("{}", l);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| s.to_string()).collect()
+    }
+
+    // a build script of another name was read as shipped code, and its main became an entry (yagihash/rivus #47)
+    #[test]
+    fn a_build_script_of_any_name_is_one() {
+        assert!(is_build_script(&args(&["rustc", "--crate-name", "build_script_build", "build.rs"])));
+        assert!(is_build_script(&args(&["rustc", "--crate-name", "build_script_codegen", "codegen.rs"])));
+        assert!(!is_build_script(&args(&["rustc", "--crate-name", "mylib", "src/lib.rs"])));
     }
 }

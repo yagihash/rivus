@@ -79,7 +79,9 @@ fn snippet(lines: &[String], start: usize, end: usize) -> String {
     let last = end.min(start + 11).min(lines.len());
     let chosen: Vec<&str> = lines[start - 1..last].iter().map(|s| s.as_str()).collect();
     let indent = chosen.iter().filter(|l| !l.trim().is_empty()).map(|l| l.len() - l.trim_start().len()).min().unwrap_or(0);
-    chosen.iter().map(|l| if l.len() >= indent { l[indent..].trim_end() } else { l.trim() }).collect::<Vec<_>>().join("\n")
+    // `get` and not `[indent..]`: the line may have a character that is wider than the indent in
+    // front (a full-width space), where the byte `indent` is not a boundary
+    chosen.iter().map(|l| l.get(indent..).map(|r| r.trim_end()).unwrap_or_else(|| l.trim())).collect::<Vec<_>>().join("\n")
 }
 
 /// The condition of an `if` or a `while` that starts on the line, if any.
@@ -1271,5 +1273,19 @@ fn ty_has_open_const(t: &Ty) -> bool {
         TyKind::RigidTy(RigidTy::Adt(_, args)) => args.0.iter().any(has_open_const),
         TyKind::RigidTy(RigidTy::Ref(_, inner, _)) | TyKind::RigidTy(RigidTy::Slice(inner)) => ty_has_open_const(&inner),
         _ => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // a line that starts with a full-width space (U+3000, three bytes) in the middle of a statement
+    // made the slice panic, and with it the extraction of the whole crate (yagihash/rivus #43)
+    #[test]
+    fn snippet_does_not_cut_a_character() {
+        let lines: Vec<String> = vec!["    foo(".to_string(), "\u{3000}\u{3000}bar,".to_string(), "    );".to_string()];
+        let s = snippet(&lines, 1, 3);
+        assert!(s.contains("bar,"), "{}", s);
     }
 }
