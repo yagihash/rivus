@@ -96,3 +96,94 @@ void plainOperator() {
   final b = Acc('x') + t;
   sink(b.s); // @sink(is-35b)
 }
+
+// --- #28 (rest): the implicit super() runs the field initializers of the base class
+
+class BaseImp {
+  final String v = source(); // @source(is-28a)
+  final String w = source(); // @source(is-28d)
+}
+
+class DerivedImp extends BaseImp {
+  DerivedImp(this.x);
+  final int x;
+}
+
+class DerivedNoCtor extends BaseImp {}
+
+void implicitSuper() {
+  sink(DerivedImp(1).v); // @sink(is-28a)
+  sink(DerivedNoCtor().w); // @sink(is-28d)
+}
+
+class BaseBody {
+  BaseBody() {
+    v = source(); // @source(is-28b)
+  }
+  late String v;
+}
+
+class DerivedBody extends BaseBody {
+  DerivedBody(this.n);
+  final int n;
+}
+
+void implicitSuperBody() {
+  sink(DerivedBody(2).v); // @sink(is-28b)
+}
+
+// --- #28 (rest): a super parameter together with an explicit super.named() -
+
+class BaseNamed {
+  BaseNamed.named(this.v);
+  final String v;
+}
+
+class DerivedNamed extends BaseNamed {
+  DerivedNamed(super.v) : super.named();
+}
+
+void superParamWithNamed() {
+  final s = source(); // @source(is-28c)
+  sink(DerivedNamed(s).v); // @sink(is-28c)
+}
+
+// --- #29 (rest): the field initializers of a mixin run in the constructor of the class that uses it
+
+mixin Tagged {
+  final String tag = source(); // @source(is-29m)
+}
+
+class Doc with Tagged {
+  Doc(this.id);
+  final int id;
+}
+
+class DocNoCtor with Tagged {}
+
+void mixinField() {
+  sink(Doc(1).tag); // @sink(is-29m)
+}
+
+mixin Tagged2 {
+  final String tag2 = source(); // @source(is-29n)
+}
+
+class DocNoCtor2 with Tagged2 {}
+
+void mixinFieldNoCtor() {
+  sink(DocNoCtor2().tag2); // @sink(is-29n)
+}
+
+// --- #29 (rest): an enum field with an initializer ---------------------------
+
+enum Level {
+  low(1),
+  high(2);
+
+  const Level(this.n);
+  final int n;
+  final String label = 'level';
+}
+
+String levelLabel() => Level.low.label;

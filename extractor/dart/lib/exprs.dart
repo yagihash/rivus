@@ -500,10 +500,22 @@ int _creation(FnLower f, InstanceCreationExpression e) {
 
 /// The call of a constructor (the same for `new C(...)`, a shorthand, and the
 /// `super(...)` of another constructor).
-int constructorCall(FnLower f, ConstructorElement ctor, ArgumentList list, AstNode n, DartType? t, Pos at) => _constructorCall(f, ctor, list, n, t, at);
+int constructorCall(FnLower f, ConstructorElement ctor, ArgumentList list, AstNode n, DartType? t, Pos at,
+        {Map<FormalParameterElement, FormalParameterElement>? passed, Pos? passedAt}) =>
+    _constructorCall(f, ctor, list, n, t, at, passed: passed, passedAt: passedAt);
 
-int _constructorCall(FnLower f, ConstructorElement ctor, ArgumentList list, AstNode n, DartType? t, Pos at) {
+/// [passed]: the parameters of [ctor] that the constructor being lowered gets as super parameters;
+/// they fill the places that the arguments of the call leave out.
+int _constructorCall(FnLower f, ConstructorElement ctor, ArgumentList list, AstNode n, DartType? t, Pos at,
+    {Map<FormalParameterElement, FormalParameterElement>? passed, Pos? passedAt}) {
   final (args, nodes) = _arguments(f, ctor, list);
+  if (passed != null && passed.isNotEmpty) {
+    final params = orderedParams(ctor);
+    for (var i = 0; i < params.length && i < args.length; i++) {
+      final mine = passed[params[i].baseElement];
+      if (mine != null && nodes[i] == null) args[i] = f.readVar(mine.baseElement, mine.type, passedAt ?? at);
+    }
+  }
   final d = f.tmp(t);
   final pos = f.unit.callPos(n, list, nodes);
   final sym = symbolOf(ctor);

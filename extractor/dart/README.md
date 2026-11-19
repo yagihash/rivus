@@ -69,6 +69,10 @@ file_content]`, so that the label a sanitizer adds does not make it fire.
 
 ## Not done
 
+- **Field initializers** of an enum are set by the constructors it declares (an enum that declares none gets
+  none; its fields are const, so they hold no data of the program). The initializers of a mixin are set by the
+  constructors of the class that uses it when the mixin is in the same file; a mixin of another file says
+  `unsupported`.
 - A pattern's shape tests (the length of a list, whether a key exists) are not made; the
   type test of an object pattern and the constants are.
 - **Calls through function values**: the core finds the functions that flow to the value

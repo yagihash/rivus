@@ -105,6 +105,7 @@ Future<void> extract(String root, StringSink sink, {bool deps = true, List<Strin
   for (final u in units) {
     u.unit.accept(_Index(prog));
   }
+  prog.closeCtors();
   for (final u in units) {
     u.unit.accept(_Lower(prog, u));
   }
@@ -194,8 +195,25 @@ class _Index extends RecursiveAstVisitor<void> {
 
   @override
   void visitClassDeclaration(ClassDeclaration node) {
-    _type(node.declaredFragment?.element);
+    final cls = node.declaredFragment?.element;
+    _type(cls);
+    // a class that declares no constructor has the one that Dart makes
+    final members = node.body is BlockClassBody ? (node.body as BlockClassBody).members : const <ClassMember>[];
+    if (cls != null && !members.any((m) => m is ConstructorDeclaration)) {
+      final ctor = cls.unnamedConstructor;
+      if (ctor != null) _noteCtor(ctor, own: _hasFieldInit(cls), calls: ctor.superConstructor);
+    }
     super.visitClassDeclaration(node);
+  }
+
+  bool _hasFieldInit(InterfaceElement cls) =>
+      cls.fields.any((f) => !f.isStatic && f.hasInitializer) ||
+      (cls is ClassElement && cls.mixins.any((m) => m.element.fields.any((f) => !f.isStatic && f.hasInitializer)));
+
+  void _noteCtor(ConstructorElement ctor, {required bool own, ConstructorElement? calls}) {
+    final id = funcId(ctor);
+    if (own) prog.ctorsOut.add(id);
+    if (calls != null) (prog.ctorCalls[id] ??= {}).add(funcId(calls));
   }
 
   @override
@@ -224,6 +242,21 @@ class _Index extends RecursiveAstVisitor<void> {
   @override
   void visitConstructorDeclaration(ConstructorDeclaration node) {
     _note(node.declaredFragment?.element, node.body);
+    final el = node.declaredFragment?.element;
+    if (el == null || node.factoryKeyword != null) return;
+    // a constructor with nothing in it still sets the fields that have an initializer
+    final own = node.body is! EmptyFunctionBody && node.body is! NativeFunctionBody ||
+        node.initializers.isNotEmpty ||
+        node.parameters.parameters.isNotEmpty ||
+        _hasFieldInit(el.enclosingElement);
+    // the constructor that makes the object: the one that super(...) or this.named(...) names, or the
+    // one of the superclass that is called without being written
+    ConstructorElement? calls;
+    for (final i in node.initializers) {
+      if (i is SuperConstructorInvocation) calls = i.element;
+      if (i is RedirectingConstructorInvocation) calls = i.element;
+    }
+    _noteCtor(el, own: own, calls: calls ?? (node.initializers.any((i) => i is SuperConstructorInvocation || i is RedirectingConstructorInvocation) ? null : el.superConstructor));
   }
 
   @override
@@ -415,9 +448,9 @@ class _Lower extends RecursiveAstVisitor<void> {
       return;
     }
     final cls = el.enclosingElement;
-    // a constructor with nothing in it still sets the fields that have an initializer
-    final fieldsToSet = _fieldsOf(cls).any((v) => v.initializer != null);
-    if (!_hasBody(node.body) && node.initializers.isEmpty && node.parameters.parameters.isEmpty && !fieldsToSet) return;
+    // a constructor with nothing in it is left out, unless it sets fields (its own, or the ones of the
+    // classes it extends: the implicit super() runs their initializers)
+    if (!prog.ctorsOut.contains(funcId(el))) return;
     _function(el, node, node.parameters, node.body, thisType: null, constructorOf: cls, ctor: node);
   }
 
@@ -427,7 +460,8 @@ class _Lower extends RecursiveAstVisitor<void> {
   void visitClassDeclaration(ClassDeclaration node) {
     final cls = node.declaredFragment?.element;
     final members = node.body is BlockClassBody ? (node.body as BlockClassBody).members : const <ClassMember>[];
-    if (cls != null && !members.any((m) => m is ConstructorDeclaration) && _fieldsOf(cls).any((v) => v.initializer != null)) {
+    final unnamed = cls?.unnamedConstructor;
+    if (cls != null && unnamed != null && !members.any((m) => m is ConstructorDeclaration) && prog.ctorsOut.contains(funcId(unnamed))) {
       _defaultConstructor(cls);
     }
     super.visitClassDeclaration(node);
@@ -449,14 +483,22 @@ class _Lower extends RecursiveAstVisitor<void> {
         final d = f.tmp(cls.thisType);
         f.emit('alloc', dsts: [d], at: out.pos, more: {'type': typeId(cls.thisType), 'class': 'pointer'});
         f.bind(thisKey, d);
+        // the implicit super(): the object it makes is this one
+        var self = d;
+        final sup = ctor.superConstructor;
+        if (sup != null && prog.ctorsOut.contains(funcId(sup))) {
+          self = _implicitSuper(f, sup, out.pos);
+          f.bind(thisKey, self);
+        }
+        _foreignMixinFields(f, cls, out.pos);
         for (final m in _fieldsOf(cls)) {
           final init = m.initializer;
           final fe = m.declaredFragment?.element;
           if (init == null || fe == null) continue;
           final v = f.expr(init);
-          f.emit('field_store', args: [d, v], at: f.pos(m), more: {'field': fe.name ?? ''});
+          f.emit('field_store', args: [self, v], at: f.pos(m), more: {'field': fe.name ?? ''});
         }
-        f.ret([d], out.pos);
+        f.ret([self], out.pos);
       },
     );
     prog.out.func(out);
@@ -550,13 +592,15 @@ class _Lower extends RecursiveAstVisitor<void> {
         final target = i is SuperConstructorInvocation ? i.element : (i as RedirectingConstructorInvocation).element;
         final list = i is SuperConstructorInvocation ? i.argumentList : (i as RedirectingConstructorInvocation).argumentList;
         if (target == null) {
+          f.emit('unsupported', at: f.pos(i), more: {'reason': 'a constructor call that does not resolve: ${i.toSource()}'});
           for (final a in list.arguments) {
             f.expr(a.argumentExpression);
           }
           break;
         }
         // evaluated first: what it takes cannot depend on the object
-        self = constructorCall(f, target, list, i, cls.thisType, f.pos(i));
+        // (`Derived(super.v) : super.named()`: the super parameters fill what the call leaves out)
+        self = constructorCall(f, target, list, i, cls.thisType, f.pos(i), passed: i is SuperConstructorInvocation ? _superParams(ctor, target) : null, passedAt: f.pos(i));
         if (i is RedirectingConstructorInvocation) return self; // the one it redirects to does the rest
         break;
       }
@@ -564,17 +608,8 @@ class _Lower extends RecursiveAstVisitor<void> {
     // `Derived(super.v)`: the parameters that are passed on to the constructor of the superclass
     if (!ctor.initializers.any((i) => i is SuperConstructorInvocation || i is RedirectingConstructorInvocation)) {
       final sup = ctor.declaredFragment?.element.superConstructor;
-      final passed = <FormalParameterElement, FormalParameterElement>{}; // the parameter of super -> the one here
-      for (final fp in ctor.parameters.parameters) {
-        if (fp is SuperFormalParameter) {
-          final pe = fp.declaredFragment?.element;
-          if (pe is SuperFormalParameterElement) {
-            final target = pe.superConstructorParameter;
-            if (target != null) passed[target.baseElement] = pe;
-          }
-        }
-      }
-      if (sup != null && passed.isNotEmpty) {
+      final passed = sup == null ? const <FormalParameterElement, FormalParameterElement>{} : _superParams(ctor, sup);
+      if (sup != null && (passed.isNotEmpty || prog.ctorsOut.contains(funcId(sup)))) {
         final args = <int>[];
         for (final tp in orderedParams(sup)) {
           final mine = passed[tp.baseElement];
@@ -589,6 +624,7 @@ class _Lower extends RecursiveAstVisitor<void> {
       }
     }
     // fields with an initializer in the class
+    _foreignMixinFields(f, cls, f.pos(ctor));
     for (final m in _fieldsOf(cls)) {
       final init = m.initializer;
       final el = m.declaredFragment?.element;
@@ -616,13 +652,68 @@ class _Lower extends RecursiveAstVisitor<void> {
     return self;
   }
 
-  Iterable<VariableDeclaration> _fieldsOf(InterfaceElement cls) sync* {
-    final decl = unit.unit.declarations;
-    for (final d in decl) {
-      if (d is ClassDeclaration && d.declaredFragment?.element == cls) {
-        for (final m in d.body is BlockClassBody ? (d.body as BlockClassBody).members : const <ClassMember>[]) {
-          if (m is FieldDeclaration && !m.isStatic) yield* m.fields.variables;
+  /// `Derived(super.v)`: the parameter of the super constructor -> the parameter here that is passed on to it.
+  Map<FormalParameterElement, FormalParameterElement> _superParams(ConstructorDeclaration ctor, ConstructorElement target) {
+    final passed = <FormalParameterElement, FormalParameterElement>{};
+    for (final fp in ctor.parameters.parameters) {
+      if (fp is SuperFormalParameter) {
+        final pe = fp.declaredFragment?.element;
+        if (pe is SuperFormalParameterElement) {
+          final t = pe.superConstructorParameter;
+          if (t != null) passed[t.baseElement] = pe;
         }
+      }
+    }
+    return passed;
+  }
+
+  /// The call of the constructor of the superclass that Dart makes when none is written.
+  int _implicitSuper(FnLower f, ConstructorElement sup, Pos at) {
+    final args = [for (final _ in orderedParams(sup)) f.nilConst(at)];
+    final r = f.tmp(sup.enclosingElement.thisType);
+    f.emit('call', dsts: [r], args: args, at: at, more: {
+      'callee': {'kind': 'static', 'func': funcId(sup), 'symbol': symbolOf(sup)}
+    });
+    f.mayThrow();
+    return r;
+  }
+
+  /// The fields that a constructor of [cls] sets from their initializers: the ones of the mixins that
+  /// the class applies (in the order of the `with` clause), then its own. What is found is in this unit.
+  Iterable<VariableDeclaration> _fieldsOf(InterfaceElement cls) sync* {
+    if (cls is ClassElement) {
+      for (final m in cls.mixins) {
+        yield* _declaredFields(m.element);
+      }
+    }
+    yield* _declaredFields(cls);
+  }
+
+  Iterable<VariableDeclaration> _declaredFields(InterfaceElement cls) sync* {
+    for (final d in unit.unit.declarations) {
+      List<ClassMember>? members;
+      if (d is ClassDeclaration && d.declaredFragment?.element == cls) {
+        members = d.body is BlockClassBody ? (d.body as BlockClassBody).members : const <ClassMember>[];
+      } else if (d is MixinDeclaration && d.declaredFragment?.element == cls) {
+        members = d.body.members;
+      } else if (d is EnumDeclaration && d.declaredFragment?.element == cls) {
+        members = d.body.members;
+      }
+      for (final m in members ?? const <ClassMember>[]) {
+        if (m is FieldDeclaration && !m.isStatic) yield* m.fields.variables;
+      }
+    }
+  }
+
+  /// A mixin of another file has field initializers that this constructor runs, and they are not lowered
+  /// here: said, so that nothing is left out without a trace.
+  void _foreignMixinFields(FnLower f, InterfaceElement cls, Pos at) {
+    if (cls is! ClassElement) return;
+    for (final m in cls.mixins) {
+      final el = m.element;
+      if (!el.fields.any((x) => !x.isStatic && x.hasInitializer)) continue;
+      if (_declaredFields(el).isEmpty) {
+        f.emit('unsupported', at: at, more: {'reason': 'the field initializers of the mixin ${el.name} are in another file'});
       }
     }
   }

@@ -61,6 +61,25 @@ class Program {
   final methods = <String, List<MethodImpl>>{}; // by member name
   final types = <String, Set<String>>{}; // a class -> the types it extends, implements, mixes in
   final bodies = <String>{}; // the symbols of what has a body here
+  /// The constructors that are written out: the ones that have something to do, and the ones that a
+  /// constructor which has something to do calls (the implicit `super()` runs the field initializers
+  /// of the base class, even when the base constructor itself is empty).
+  final ctorsOut = <String>{};
+  final ctorCalls = <String, Set<String>>{}; // a constructor -> the constructors it calls
+
+  /// Closes [ctorsOut] over [ctorCalls]: a constructor that calls one that is written out is written out.
+  void closeCtors() {
+    var changed = true;
+    while (changed) {
+      changed = false;
+      for (final e in ctorCalls.entries) {
+        if (!ctorsOut.contains(e.key) && e.value.any(ctorsOut.contains)) {
+          ctorsOut.add(e.key);
+          changed = true;
+        }
+      }
+    }
+  }
   final globals = <String, (String type, Pos pos)>{};
   var maxSourceLines = 80;
 
