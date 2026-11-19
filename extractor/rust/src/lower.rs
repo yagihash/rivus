@@ -1042,16 +1042,20 @@ impl<'a> Lower<'a> {
         self.cx.texts.add("expr", pos, expr.clone());
         self.cx.texts.call(pos, expr, vec![]);
 
+        // an API of std that calls the closure it is given with what its receiver holds: what the
+        // closure returns is one more thing that the result is made of (the model of the API moves
+        // what its arguments hold to its result)
+        if let Some(Value::String(sym)) = callee.get("symbol") {
+            let sym = sym.clone();
+            if let Some(r) = self.call_back(&sym, args, &vals, pos) {
+                vals.push(r);
+            }
+        }
         let plain = dest.projection.is_empty() && !self.cells.contains(&dest.local);
         let d = if plain { self.var[dest.local] } else { self.new_local("", ret_ty.as_ref()) };
         self.emit("call", &[d], &vals, pos, json!({"callee": callee}));
         if !plain {
             self.write_place(dest, d, pos);
-        }
-        // an API of std that calls the closure it is given with what its receiver holds
-        if let Some(Value::String(sym)) = callee.get("symbol") {
-            let sym = sym.clone();
-            self.call_back(&sym, args, &vals, pos);
         }
         match target {
             Some(t) => self.jump(t),
@@ -1099,7 +1103,7 @@ impl<'a> Lower<'a> {
     /// says it, and a model only moves taint from the arguments to the result. The closure is
     /// known by its type here, so it is called itself: not one of the closures that take as many
     /// arguments.
-    fn call_back(&mut self, sym: &str, args: &[Operand], vals: &[usize], pos: &Pos) {
+    fn call_back(&mut self, sym: &str, args: &[Operand], vals: &[usize], pos: &Pos) -> Option<usize> {
         // which field of the receiver is what the closure is given
         enum Held {
             Element,
@@ -1123,16 +1127,16 @@ impl<'a> Lower<'a> {
             "std::option::Option::map" | "std::option::Option::and_then" | "std::option::Option::filter" | "std::option::Option::inspect" | "std::option::Option::is_some_and" => Held::Field("Some.0"),
             "std::result::Result::map" | "std::result::Result::and_then" | "std::result::Result::inspect" => Held::Field("Ok.0"),
             "std::result::Result::map_err" | "std::result::Result::inspect_err" | "std::result::Result::unwrap_or_else" => Held::Field("Err.0"),
-            _ => return,
+            _ => return None,
         };
         if args.len() < 2 || vals.len() < 2 {
-            return;
+            return None;
         }
-        let Ok(ct) = args[1].ty(self.body.locals()) else { return };
-        let TyKind::RigidTy(RigidTy::Closure(def, _)) = ct.kind() else { return };
+        let Ok(ct) = args[1].ty(self.body.locals()) else { return None };
+        let TyKind::RigidTy(RigidTy::Closure(def, _)) = ct.kind() else { return None };
         let body = def.name();
         if !self.cx.bodies.contains(&body) {
-            return;
+            return None;
         }
         let recv = vals[0];
         let elem = match held {
@@ -1151,6 +1155,26 @@ impl<'a> Lower<'a> {
         };
         let r = self.new_local("", None);
         self.emit("call", &[r], &[vals[1], elem], pos, json!({"callee": {"kind": "static", "func": body, "symbol": clean_symbol(&body)}}));
+        // the APIs whose result is made of what the closure returns (the others use it up: a test, a visit)
+        let makes = matches!(
+            sym,
+            "std::iter::Iterator::map"
+                | "std::iter::Iterator::filter_map"
+                | "std::iter::Iterator::flat_map"
+                | "std::iter::Iterator::find_map"
+                | "std::iter::Iterator::map_while"
+                | "std::option::Option::map"
+                | "std::option::Option::and_then"
+                | "std::result::Result::map"
+                | "std::result::Result::and_then"
+                | "std::result::Result::map_err"
+                | "std::result::Result::unwrap_or_else"
+        );
+        if makes {
+            Some(r)
+        } else {
+            None
+        }
     }
 
     /// The closures of the crate that take arguments of these types (a type that is not

@@ -263,3 +263,27 @@ pub fn array_nested(i: usize, j: usize) {
     let a = [[s]];
     sink(&a[i][j]); // @sink(rv-array-nested)
 }
+
+// --- #65: what the closure of a std API returns is what the result holds
+
+pub fn closure_option_map() {
+    let v = Some(1).map(|_| source()); // @source(rv-closure-opt-map)
+    sink(&v.unwrap()); // @sink(rv-closure-opt-map)
+}
+
+pub fn closure_iter_map() {
+    let ids = vec![1, 2];
+    let all: Vec<String> = ids.iter().map(|_| source()).collect(); // @source(rv-closure-iter-map)
+    sink(&all[0]); // @sink(rv-closure-iter-map)
+}
+
+pub fn closure_and_then() {
+    let v: Option<String> = Some(1).and_then(|_| Some(source())); // @source(rv-closure-and-then)
+    sink(&v.unwrap()); // @sink(rv-closure-and-then)
+}
+
+pub fn closure_unwrap_or_else() {
+    let r: Result<String, i32> = Err(1);
+    let s = r.unwrap_or_else(|_| source()); // @source(rv-closure-or-else)
+    sink(&s); // @sink(rv-closure-or-else)
+}
