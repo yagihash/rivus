@@ -225,6 +225,21 @@ class _Scan extends RecursiveAstVisitor<void> {
     super.visitAssignmentExpression(node);
   }
 
+  /// `(a, b) = value;`: the variables of the pattern are written.
+  @override
+  void visitAssignedVariablePattern(AssignedVariablePattern node) {
+    final el = node.element?.baseElement;
+    if (el != null) assigned.add(el);
+    super.visitAssignedVariablePattern(node);
+  }
+
+  /// `for (x in xs)`: x is written at every step.
+  @override
+  void visitForEachPartsWithIdentifier(ForEachPartsWithIdentifier node) {
+    _write(node.identifier);
+    super.visitForEachPartsWithIdentifier(node);
+  }
+
   @override
   void visitPrefixExpression(PrefixExpression node) {
     final t = node.operator.lexeme;
@@ -246,6 +261,49 @@ class _Lower extends RecursiveAstVisitor<void> {
   _Lower(this.prog, this.unit);
   final Program prog;
   final UnitInfo unit;
+
+  /// The initializer of a variable of the library (or a static field) is a function of its
+  /// own, which stores the value in the variable: the program starts there too (the
+  /// variable is set when it is first read, and the code that reads it does not ask when).
+  void _initializer(VariableDeclaration v) {
+    final init = v.initializer;
+    final el = v.declaredFragment?.element;
+    if (init == null || el == null) return;
+    final id = '${symbolOf(el)}\$init';
+    final out = FuncOut(id)
+      ..symbol = ''
+      ..dep = unit.dep
+      ..entry = true;
+    out.pos = unit.pos(v, v.offset);
+    final scan = _Scan();
+    scan._stack.add(v);
+    v.accept(scan);
+    final f = FnLower(prog, unit, out, cells: scan.captured, assigned: scan.assigned);
+    f.lowerInit(
+      at: unit.at(v.offset),
+      body: () {
+        final value = f.expr(init);
+        globalStore(f, el, value, f.pos(v));
+      },
+    );
+    unit.funcTexts(id, v);
+    prog.out.func(out);
+  }
+
+  @override
+  void visitTopLevelVariableDeclaration(TopLevelVariableDeclaration node) {
+    for (final v in node.variables.variables) {
+      _initializer(v);
+    }
+  }
+
+  @override
+  void visitFieldDeclaration(FieldDeclaration node) {
+    if (!node.isStatic) return;
+    for (final v in node.fields.variables) {
+      _initializer(v);
+    }
+  }
 
   @override
   void visitFunctionDeclaration(FunctionDeclaration node) {

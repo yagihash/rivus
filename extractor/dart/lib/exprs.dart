@@ -156,7 +156,10 @@ bool _isLocal(Element? el) => el is LocalVariableElement || el is FormalParamete
 int _identifier(FnLower f, SimpleIdentifier e) {
   final el = e.element;
   final at = f.pos(e);
-  if (el == null) return f.nilConst(at);
+  if (el == null) {
+    f.emit('unsupported', at: at, more: {'reason': 'a name that does not resolve: ${e.name}'});
+    return f.nilConst(at);
+  }
   if (_isLocal(el)) return f.readVar(el.baseElement, e.staticType, at);
   if (el is LocalFunctionElement) return f.readVar(el.baseElement, e.staticType, at);
   return _readMember(f, el, null, e, e.staticType, at);
@@ -173,7 +176,7 @@ int _prefixed(FnLower f, PrefixedIdentifier e) {
   if (id == null && e.prefix.staticType is RecordType) {
     return _recordField(f, base, e.identifier.name, e.staticType, f.pos(e, e.identifier.offset));
   }
-  return _readMember(f, id, base, e, e.staticType, f.pos(e, e.identifier.offset));
+  return _readMember(f, id, base, e, e.staticType, f.pos(e, e.identifier.offset), dynamicName: e.identifier.name);
 }
 
 int _propertyAccess(FnLower f, PropertyAccess e) {
@@ -190,7 +193,7 @@ int _propertyAccess(FnLower f, PropertyAccess e) {
   if (id == null && base != null && t?.staticType is RecordType) {
     return _recordField(f, base, e.propertyName.name, e.staticType, f.pos(e, e.propertyName.offset));
   }
-  return _readMember(f, id, base, e, e.staticType, f.pos(e, e.propertyName.offset));
+  return _readMember(f, id, base, e, e.staticType, f.pos(e, e.propertyName.offset), dynamicName: e.propertyName.name);
 }
 
 int _recordField(FnLower f, int base, String name, DartType? t, Pos at) {
@@ -201,8 +204,14 @@ int _recordField(FnLower f, int base, String name, DartType? t, Pos at) {
 
 /// Reads a member (a field, a getter, a tear-off) of [base], or of `this`
 /// when there is none and the member is not static.
-int _readMember(FnLower f, Element? el, int? base, AstNode n, DartType? t, Pos at) {
-  if (el == null) return f.nilConst(at);
+int _readMember(FnLower f, Element? el, int? base, AstNode n, DartType? t, Pos at, {String? dynamicName}) {
+  if (el == null) {
+    // a member of a dynamic value: a field of it by name (what it holds is what the
+    // member is, more than the truth and never less)
+    if (base != null && dynamicName != null) return _recordField(f, base, dynamicName, t, at);
+    f.emit('unsupported', at: at, more: {'reason': 'a name that does not resolve: ${dynamicName ?? n.toSource()}'});
+    return f.nilConst(at);
+  }
   var target = el.baseElement;
   if (target is PropertyAccessorElement && target.isOriginVariable) {
     target = target.variable.baseElement;
@@ -243,6 +252,8 @@ int _globalLoad(FnLower f, Element variable, DartType? t, Pos at) {
   f.emit('global_load', dsts: [d], at: at, more: {'global': name});
   return d;
 }
+
+void globalStore(FnLower f, Element variable, int value, Pos at) => _globalStore(f, variable, value, at);
 
 void _globalStore(FnLower f, Element variable, int value, Pos at) {
   final name = symbolOf(variable);
@@ -341,7 +352,63 @@ int _methodInvocation(FnLower f, MethodInvocation e) {
     base = lowerExpr(f, t);
   }
   final (args, nodes) = _arguments(f, el, e.argumentList);
-  return _call(f, el, base, args, e.staticType, e, at, argList: e.argumentList, slots: nodes);
+  final result = _call(f, el, base, args, e.staticType, e, at, argList: e.argumentList, slots: nodes);
+  // an API that calls the function it is given with what the receiver holds
+  final mode = _callbackMode(el);
+  if (mode != null && base != null && args.isNotEmpty) _callWhatTheReceiverHolds(f, mode, base, args[0], at);
+  return result;
+}
+
+/// The functions of the platform that call the function they are given (the first argument)
+/// with a value the receiver holds: nothing in the code says so, and the models only
+/// move taint from arguments to results, so the extractor makes the call.
+String? _callbackMode(ExecutableElement m) {
+  final cls = m.enclosingElement;
+  if (cls is! InterfaceElement) return null;
+  final owner = '${libraryUri(cls)}#${cls.name}';
+  switch ('$owner.${m.name}') {
+    case 'dart:async#Future.then':
+      return 'value';
+    case 'dart:async#Stream.listen':
+    case 'dart:async#Stream.forEach':
+    case 'dart:core#Iterable.forEach':
+    case 'dart:core#Iterable.map':
+    case 'dart:core#Iterable.where':
+    case 'dart:core#Iterable.any':
+    case 'dart:core#Iterable.every':
+    case 'dart:core#Iterable.expand':
+    case 'dart:core#Iterable.firstWhere':
+    case 'dart:core#Iterable.singleWhere':
+    case 'dart:core#Iterable.lastWhere':
+    case 'dart:core#Iterable.takeWhile':
+    case 'dart:core#Iterable.skipWhile':
+      return 'element';
+  }
+  return null;
+}
+
+/// `receiver.api(callback)`: the call that the platform makes, of the callback with what
+/// the receiver holds (the value of a future, an element of a stream or a collection).
+void _callWhatTheReceiverHolds(FnLower f, String mode, int receiver, int callback, Pos at) {
+  var arg = receiver;
+  if (mode == 'element') {
+    final it = f.tmp(null);
+    f.emit('call', dsts: [it], args: [receiver], at: at, more: {
+      'callee': {'kind': 'static', 'symbol': 'iter.start'}
+    });
+    final ok = f.local('', null);
+    final k = f.local('', null);
+    final v = f.local('', null);
+    f.out.locals[ok] = Local('', 'dart:core#bool', 'bool');
+    f.emit('call', dsts: [ok, k, v], args: [it], at: at, more: {
+      'callee': {'kind': 'static', 'symbol': 'iter.next'}
+    });
+    arg = v;
+  }
+  final d = f.tmp(null);
+  f.emit('call', dsts: [d], args: [callback, arg], at: at, more: {
+    'callee': {'kind': 'value'}
+  });
 }
 
 /// `.make(3)`: a static method (or a constructor) of the type the context asks for.
@@ -468,10 +535,17 @@ int _binary(FnLower f, BinaryExpression e) {
   }
   final l = lowerExpr(f, e.leftOperand);
   final r = lowerExpr(f, e.rightOperand);
+  // an operator that the code defines is a call of its body
+  final m = e.element;
+  if (m != null && _hasBodyHere(f, m)) return _call(f, m, l, [r], e.staticType, e, f.pos(e, e.operator.offset));
   final d = f.tmp(e.staticType);
   f.emit('binop', dsts: [d], args: [l, r], at: f.pos(e, e.operator.offset), more: {'operator': e.operator.lexeme});
   return d;
 }
+
+/// Whether the method is one that the program has a body for (an operator of
+/// the project, not `int.+`).
+bool _hasBodyHere(FnLower f, ExecutableElement m) => f.prog.bodies.contains(funcId(m));
 
 int _prefix(FnLower f, PrefixExpression e) {
   final op = e.operator.type;
@@ -484,6 +558,8 @@ int _prefix(FnLower f, PrefixExpression e) {
     return d;
   }
   final v = lowerExpr(f, e.operand);
+  final m = e.element;
+  if (m != null && _hasBodyHere(f, m)) return _call(f, m, v, const [], e.staticType, e, f.pos(e));
   final d = f.tmp(e.staticType);
   f.emit('unop', dsts: [d], args: [v], at: f.pos(e), more: {'operator': e.operator.lexeme});
   return d;
@@ -563,7 +639,10 @@ void lowerAssign(FnLower f, Expression target, int value) {
       final el = x.element;
       final w = x.parent is AssignmentExpression ? (x.parent as AssignmentExpression).writeElement : el;
       final we = w ?? el;
-      if (we == null) return;
+      if (we == null) {
+        f.emit('unsupported', at: at, more: {'reason': 'assignment to a name that does not resolve: ${x.name}'});
+        return;
+      }
       if (_isLocal(we)) {
         f.writeVar(we.baseElement, x.staticType, value, at);
       } else {
@@ -576,17 +655,22 @@ void lowerAssign(FnLower f, Expression target, int value) {
         _writeMember(f, we, null, x, value, f.pos(x, x.identifier.offset));
       } else {
         final base = lowerExpr(f, x.prefix);
-        _writeMember(f, we, base, x, value, f.pos(x, x.identifier.offset));
+        _writeMember(f, we, base, x, value, f.pos(x, x.identifier.offset), dynamicName: x.identifier.name);
       }
     case PropertyAccess():
       final we = (x.parent is AssignmentExpression ? (x.parent as AssignmentExpression).writeElement : null) ?? x.propertyName.element;
       final t = x.target;
       final base = t == null ? f.cascade : lowerExpr(f, t);
-      _writeMember(f, we, base, x, value, f.pos(x, x.propertyName.offset));
+      _writeMember(f, we, base, x, value, f.pos(x, x.propertyName.offset), dynamicName: x.propertyName.name);
     case IndexExpression():
       final t = x.target;
       final base = t == null ? f.cascade! : lowerExpr(f, t);
       final idx = lowerExpr(f, x.index);
+      final w = (x.parent is AssignmentExpression ? (x.parent as AssignmentExpression).writeElement : null) ?? x.element;
+      if (w is ExecutableElement && _hasBodyHere(f, w)) {
+        _call(f, w, base, [idx, value], null, x, at);
+        return;
+      }
       final isMap = _isMap(x.target?.staticType);
       f.emit('index_store', args: [base, idx, value], at: at, more: {if (isMap) 'keyed': true});
     default:
@@ -596,8 +680,16 @@ void lowerAssign(FnLower f, Expression target, int value) {
 
 bool _isMap(DartType? t) => t is InterfaceType && t.element.name == 'Map';
 
-void _writeMember(FnLower f, Element? el, int? base, AstNode n, int value, Pos at) {
-  if (el == null) return;
+void _writeMember(FnLower f, Element? el, int? base, AstNode n, int value, Pos at, {String? dynamicName}) {
+  if (el == null) {
+    // a member of a dynamic value
+    if (base != null && dynamicName != null) {
+      f.emit('field_store', args: [base, value], at: at, more: {'field': dynamicName});
+    } else {
+      f.emit('unsupported', at: at, more: {'reason': 'assignment to a name that does not resolve: ${dynamicName ?? n.toSource()}'});
+    }
+    return;
+  }
   var target = el.baseElement;
   if (target is PropertyAccessorElement && target.isOriginVariable) target = target.variable.baseElement;
   switch (target) {
@@ -614,6 +706,7 @@ void _writeMember(FnLower f, Element? el, int? base, AstNode n, int value, Pos a
       // an explicit setter: a call
       _call(f, target, base, [value], null, n, at);
     default:
+      f.emit('unsupported', at: at, more: {'reason': 'assignment to ${target.runtimeType}'});
   }
 }
 
@@ -623,6 +716,9 @@ int _index(FnLower f, IndexExpression e) {
   final t = e.target;
   final base = t == null ? f.cascade! : lowerExpr(f, t);
   final idx = lowerExpr(f, e.index);
+  // an index operator that the code defines is a call of its body
+  final m = e.element;
+  if (m != null && _hasBodyHere(f, m)) return _call(f, m, base, [idx], e.staticType, e, f.pos(e));
   final d = f.tmp(e.staticType);
   final isMap = _isMap(t?.staticType);
   f.emit('index_load', dsts: [d], args: [base, idx], at: f.pos(e), more: {if (isMap) 'keyed': true});

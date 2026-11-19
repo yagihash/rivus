@@ -226,6 +226,15 @@ class FnLower {
     finishCaptures();
   }
 
+  /// Lowers a function that has no parameters and no body to read: the code
+  /// is made by [body] (the initializer of a variable).
+  void lowerInit({required Pos at, required void Function() body}) {
+    cur = newBlock();
+    body();
+    if (cur != null) ret([], Pos.none);
+    finishCaptures();
+  }
+
   /// A parameter or a variable that is held in a cell lives behind a pointer.
   void bind(Object key, int l) {
     if (cells.contains(key) && assigned.contains(key)) {
@@ -564,7 +573,20 @@ class FnLower {
     cur = _reached(after) ? after : null;
   }
 
+  final List<(Map<String, Blk>, int)> _caseLabels = [];
+
   void _breakOrContinue(String? label, {required bool isBreak}) {
+    if (label != null && !isBreak) {
+      for (var i = _caseLabels.length - 1; i >= 0; i--) {
+        final (labels, depth) = _caseLabels[i];
+        final to = labels[label];
+        if (to != null) {
+          runFinallies(depth);
+          jump(to);
+          return;
+        }
+      }
+    }
     _Jump? target;
     for (var i = _jumps.length - 1; i >= 0; i--) {
       final j = _jumps[i];
@@ -573,7 +595,12 @@ class FnLower {
         break;
       }
     }
-    if (target == null) return;
+    if (target == null) {
+      // the target is not one that is known: what follows is not where the flow goes
+      emit('unsupported', more: {'reason': '${isBreak ? 'break' : 'continue'} ${label ?? ''} to a place that is not known'});
+      cur = null;
+      return;
+    }
     runFinallies(target.depth);
     final to = isBreak ? target.breakTo : (target.continueTo ?? target.breakTo);
     jump(to);
@@ -585,6 +612,14 @@ class FnLower {
     final after = newBlock();
     _jumps.add(_Jump(labels, after, null, _handlers.length));
     final bodies = [for (final _ in s.members) newBlock()];
+    // `continue name;` goes to the case that has the label
+    final caseLabels = <String, Blk>{};
+    for (var i = 0; i < s.members.length; i++) {
+      for (final lb in s.members[i].labels) {
+        caseLabels[lb.name.lexeme] = bodies[i];
+      }
+    }
+    _caseLabels.add((caseLabels, _handlers.length));
     Blk? defaultBody;
     for (var i = 0; i < s.members.length; i++) {
       final m = s.members[i];
@@ -617,6 +652,7 @@ class FnLower {
       // in Dart only when it is empty; otherwise the analyzer rejects it.
       jump(i + 1 < bodies.length ? bodies[i + 1] : after);
     }
+    _caseLabels.removeLast();
     _jumps.removeLast();
     cur = _reached(after) ? after : null;
   }
