@@ -399,10 +399,9 @@ fn link_across_crates(funcs: &mut std::collections::BTreeMap<String, String>) {
                     let sym = callee.get("symbol").and_then(|s| s.as_str()).unwrap_or("").to_string();
                     let mut cands: Vec<String> = callee.get("candidates").and_then(|c| c.as_array()).map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect()).unwrap_or_default();
                     if let Some((trait_path, method)) = sym.rsplit_once("::") {
-                        let trait_name = trait_path.rsplit("::").next().unwrap_or(trait_path);
                         let suffix = format!(">::{}", method);
                         for n in by_method.get(method).map(|v| v.as_slice()).unwrap_or(&[]) {
-                            if lower::impl_of_trait(n, &suffix) == Some(trait_name) {
+                            if lower::impl_of_trait(n, &suffix).map_or(false, |t| lower::same_trait(t, trait_path)) {
                                 cands.push(n.clone());
                             }
                         }

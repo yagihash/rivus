@@ -1252,13 +1252,12 @@ impl<'a> Lower<'a> {
             Some(x) => x,
             None => return vec![],
         };
-        let trait_name = trait_path.rsplit("::").next().unwrap_or(trait_path);
         let suffix = format!(">::{}", method);
         let mut out: Vec<String> = self
             .cx
             .bodies
             .iter()
-            .filter(|n| n.starts_with('<') && n.ends_with(&suffix) && impl_of_trait(n, &suffix) == Some(trait_name))
+            .filter(|n| n.starts_with('<') && n.ends_with(&suffix) && impl_of_trait(n, &suffix).map_or(false, |t| same_trait(t, trait_path)))
             .cloned()
             .collect();
         // the default body of the method, which an impl that does not override it uses
@@ -1271,13 +1270,32 @@ impl<'a> Lower<'a> {
     }
 }
 
-/// The name of the trait of an `impl` function named `<Type as path::Trait<A>>::method`,
-/// without its path and its generic arguments.
+/// The path of the trait of an `impl` function named `<Type as path::Trait<A>>::method`, without its
+/// generic arguments.
 pub(crate) fn impl_of_trait<'a>(name: &'a str, suffix: &str) -> Option<&'a str> {
     let inner = name.strip_suffix(suffix)?;
     let (_, tr) = inner.split_once(" as ")?;
-    let tr = tr.split('<').next().unwrap_or(tr);
-    tr.rsplit("::").next()
+    Some(tr.split('<').next().unwrap_or(tr))
+}
+
+/// Whether the trait that an `impl` is of (its path) is the trait a call names. The paths of a
+/// trait of the crates are compared whole (two traits of the same name in two modules are two
+/// traits). A trait of std is written differently where it is defined (`core::iter::traits::iterator::Iterator`)
+/// and where it is used (`std::iter::Iterator`): those are the same when the name and the module
+/// that std puts it in are (`std::fmt::Write` is not `std::io::Write`).
+pub(crate) fn same_trait(impl_trait: &str, called: &str) -> bool {
+    fn norm(p: &str) -> String {
+        match p.strip_prefix("core::").or_else(|| p.strip_prefix("alloc::")) {
+            Some(r) => format!("std::{}", r),
+            None => p.to_string(),
+        }
+    }
+    let (a, b) = (norm(impl_trait), norm(called));
+    if a == b {
+        return true;
+    }
+    let (sa, sb): (Vec<&str>, Vec<&str>) = (a.split("::").collect(), b.split("::").collect());
+    sa.len() > 2 && sb.len() > 2 && sa[0] == "std" && sb[0] == "std" && sa[1] == sb[1] && sa.last() == sb.last()
 }
 
 /// Whether the function is called with the ABI of Rust: one that is not is a
@@ -1402,6 +1420,16 @@ mod tests {
 
     // a line that starts with a full-width space (U+3000, three bytes) in the middle of a statement
     // made the slice panic, and with it the extraction of the whole crate (yagihash/rivus #43)
+    // two traits of the same name in two modules are two traits (yagihash/rivus #67)
+    #[test]
+    fn traits_are_compared_by_path() {
+        assert!(!same_trait("app::queue::Handler", "app::http::Handler"));
+        assert!(same_trait("app::http::Handler", "app::http::Handler"));
+        assert!(same_trait("core::iter::traits::iterator::Iterator", "std::iter::Iterator"));
+        assert!(!same_trait("core::fmt::Write", "std::io::Write"));
+        assert!(same_trait("std::io::Write", "std::io::Write"));
+    }
+
     #[test]
     fn snippet_does_not_cut_a_character() {
         let lines: Vec<String> = vec!["    foo(".to_string(), "\u{3000}\u{3000}bar,".to_string(), "    );".to_string()];

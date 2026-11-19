@@ -317,3 +317,39 @@ pub fn closure_dyn() {
     let s = source(); // @source(rv-closure-dyn)
     apply_dyn(&|x: String, _a: u8, _b: u8, _c: u8| sink(&x), s); // @sink(rv-closure-dyn)
 }
+
+// --- #67: two traits of the same name are two traits
+
+mod http_side {
+    pub trait Handler {
+        fn handle_t(&self, s: String);
+    }
+    pub struct Web;
+    impl Handler for Web {
+        fn handle_t(&self, s: String) {
+            crate::sink(&s); // @sink(rv-same-name-trait)
+        }
+    }
+}
+
+mod queue_side {
+    pub trait Handler {
+        fn handle_t(&self, s: String);
+    }
+    pub struct Worker;
+    impl Handler for Worker {
+        fn handle_t(&self, s: String) {
+            crate::sink(&s); // @sink(none)
+        }
+    }
+}
+
+fn run_http(h: &dyn http_side::Handler, s: String) {
+    h.handle_t(s)
+}
+
+pub fn same_name_trait() {
+    let s = source(); // @source(rv-same-name-trait)
+    run_http(&http_side::Web, s);
+    let _ = queue_side::Worker;
+}
