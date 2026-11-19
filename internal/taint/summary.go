@@ -299,9 +299,12 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 				if len(oe.Guards) == 0 && s.addsNothing(dsts, x.E) {
 					continue
 				}
-				w := &why{fn: s.fn, pos: cc.in.Pos, desc: desc, steps: oe.Steps, notes: notes}
+				w := &why{fn: s.fn, pos: packPos(cc.in.Pos), desc: desc, steps: oe.Steps}
+				if len(notes) > 0 {
+					w.setNotes(notes)
+				}
 				if len(oe.Guards) > 0 {
-					w.calleeGuards, w.call = oe.Guards, info
+					w.setCallee(oe.Guards, info)
 				}
 				if x.From != nil {
 					w.from = &ref{x.From.Cell, x.From.Orig}

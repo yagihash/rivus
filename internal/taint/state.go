@@ -34,10 +34,19 @@ type ref struct {
 // source to a sink can be reconstructed.
 type why struct {
 	fn    *sg.Func
-	pos   ir.Pos
+	pos   cpos
 	desc  string
 	from  *ref
 	steps *rope // steps taken inside a callee, spliced in from its summary
+	// rare holds what few hops have (the notes, the model, the guards): a hop
+	// is made millions of times, and a plain one is a good deal smaller
+	// without them. It is nil when none of them is set, which reads the same as
+	// all of them being empty.
+	rare *whyRare
+}
+
+// whyRare is what only some hops have.
+type whyRare struct {
 	notes []*Uncertainty
 	model *ModelRef
 	// guards are the parameter dependent conditions under which this hop
@@ -50,6 +59,100 @@ type why struct {
 	// terms; call tells how to read them from this side.
 	calleeGuards []Guard
 	call         *callInfo
+}
+
+func (w *why) notes() []*Uncertainty {
+	if w.rare == nil {
+		return nil
+	}
+	return w.rare.notes
+}
+
+func (w *why) model() *ModelRef {
+	if w.rare == nil {
+		return nil
+	}
+	return w.rare.model
+}
+
+func (w *why) guards() []Guard {
+	if w.rare == nil {
+		return nil
+	}
+	return w.rare.guards
+}
+
+func (w *why) unguarded() bool { return w.rare != nil && w.rare.unguarded }
+
+func (w *why) calleeGuards() []Guard {
+	if w.rare == nil {
+		return nil
+	}
+	return w.rare.calleeGuards
+}
+
+func (w *why) call() *callInfo {
+	if w.rare == nil {
+		return nil
+	}
+	return w.rare.call
+}
+
+// plain reports whether the hop has no guards and no summary applied.
+func (w *why) plain() bool {
+	return w.rare == nil || (len(w.rare.guards) == 0 && len(w.rare.calleeGuards) == 0 && w.rare.call == nil)
+}
+
+func (w *why) mk() *whyRare {
+	if w.rare == nil {
+		w.rare = &whyRare{}
+	}
+	return w.rare
+}
+
+func (w *why) setNotes(n []*Uncertainty) {
+	if n == nil && w.rare == nil {
+		return
+	}
+	w.mk().notes = n
+}
+
+func (w *why) setModel(m *ModelRef) {
+	if m != nil {
+		w.mk().model = m
+	}
+}
+
+func (w *why) setGuards(g []Guard) {
+	if g == nil && w.rare == nil {
+		return
+	}
+	w.mk().guards = g
+}
+
+func (w *why) setCallee(g []Guard, c *callInfo) {
+	if g == nil && c == nil && w.rare == nil {
+		return
+	}
+	r := w.mk()
+	r.calleeGuards, r.call = g, c
+}
+
+func (w *why) markUnguarded() { w.mk().unguarded = true }
+
+// cpos is a position (ir.Pos) in 20 bytes: the file is the number of its name
+// in the table of strings.
+type cpos struct {
+	file                      strID
+	offset, length, line, col int32
+}
+
+func packPos(p ir.Pos) cpos {
+	return cpos{intern(p.File), int32(p.Offset), int32(p.Length), int32(p.Line), int32(p.Col)}
+}
+
+func (c cpos) pos() ir.Pos {
+	return ir.Pos{File: c.file.str(), Offset: int(c.offset), Length: int(c.length), Line: int(c.line), Col: int(c.col)}
 }
 
 // found is an element read from some cell.
@@ -195,8 +298,8 @@ func (s *state) add(l Loc, e Elem, w *why) {
 	if old, ok := set[e]; ok {
 		// The element is already here. If it came with other guards, the
 		// guards recorded for it do not describe it any more.
-		if old != nil && w != nil && !(sameGuards(old.guards, w.guards) && sameGuards(old.calleeGuards, w.calleeGuards) && old.call == w.call) {
-			old.unguarded = true
+		if old != nil && w != nil && !(sameGuards(old.guards(), w.guards()) && sameGuards(old.calleeGuards(), w.calleeGuards()) && old.call() == w.call()) {
+			old.markUnguarded()
 			s.guardEpoch++
 		}
 		return
@@ -364,11 +467,11 @@ func hasElementSegment(p string) bool {
 // a slice, array, map or channel: the elements are not told apart, and
 // writes through aliases of the container are not followed.
 func (s *state) withContainerNote(w *why, from, to string) *why {
-	if w == nil || hasKind(w.notes, KindContainerImprecision) || !(hasElementSegment(from) || hasElementSegment(to)) {
+	if w == nil || hasKind(w.notes(), KindContainerImprecision) || !(hasElementSegment(from) || hasElementSegment(to)) {
 		return w
 	}
-	w.notes = appendNote(w.notes, s.pathNote(KindContainerImprecision,
-		"the elements of the container are not told apart, and writes through other references to it are not followed", w.pos))
+	w.setNotes(appendNote(w.notes(), s.pathNote(KindContainerImprecision,
+		"the elements of the container are not told apart, and writes through other references to it are not followed", w.pos.pos())))
 	return w
 }
 
@@ -413,7 +516,7 @@ func (s *state) plainExists(l Loc, e Elem) bool {
 		e.path = 0
 	}
 	old, ok := set[e]
-	return ok && old != nil && len(old.guards) == 0 && len(old.calleeGuards) == 0 && old.call == nil
+	return ok && old != nil && old.plain()
 }
 
 // addsNothing reports whether adding the element, with a plain reason (no
@@ -446,7 +549,7 @@ func (s *state) addsNothing(dsts []Loc, e Elem) bool {
 			return false
 		}
 		old, ok := set[e]
-		if !ok || old == nil || len(old.guards) != 0 || len(old.calleeGuards) != 0 || old.call != nil {
+		if !ok || old == nil || !old.plain() {
 			return false
 		}
 	}
@@ -467,7 +570,7 @@ func (s *state) whyFn(in *sg.Instr, kind string) func(f found) *why {
 	return func(f found) *why {
 		w := &why{fn: s.fn, desc: kind, from: &ref{f.Cell, f.Orig}}
 		if in != nil {
-			w.pos = in.Pos
+			w.pos = packPos(in.Pos)
 		}
 		return w
 	}
@@ -478,7 +581,7 @@ func (s *state) whyGuarded(in *sg.Instr, kind string, gs []Guard) func(f found) 
 	base := s.whyFn(in, kind)
 	return func(f found) *why {
 		w := base(f)
-		w.guards = gs
+		w.setGuards(gs)
 		return w
 	}
 }
@@ -500,7 +603,7 @@ func (s *state) whyNote(in *sg.Instr, kind string, u *Uncertainty) func(f found)
 	base := s.whyFn(in, kind)
 	return func(f found) *why {
 		w := base(f)
-		w.notes = appendNote(w.notes, u)
+		w.setNotes(appendNote(w.notes(), u))
 		return w
 	}
 }
@@ -508,7 +611,7 @@ func (s *state) whyNote(in *sg.Instr, kind string, u *Uncertainty) func(f found)
 // origin is the reason for an element that appears out of nothing (a source
 // or a parameter).
 func (s *state) origin(pos ir.Pos, kind string) *why {
-	return &why{fn: s.fn, pos: pos, desc: kind}
+	return &why{fn: s.fn, pos: packPos(pos), desc: kind}
 }
 
 // trace reconstructs the steps that led to the element in the cell.
@@ -558,11 +661,11 @@ func (s *state) traceUncached(l Loc, e Elem) *rope {
 func (s *state) stepsOf(w *why) *rope {
 	var out *rope
 	if w.desc != "" && !skipStep(w.desc) {
-		st := Step{Func: s.eng.funcID(w.fn), Desc: w.desc, pos: w.pos, Model: w.model, guards: w.guards}
-		st.Notes = w.notes
+		st := Step{Func: s.eng.funcID(w.fn), Desc: w.desc, pos: w.pos.pos(), Model: w.model(), guards: w.guards()}
+		st.Notes = w.notes()
 		out = leaf(st)
-	} else if len(w.notes) > 0 {
-		out = leaf(Step{Func: s.eng.funcID(w.fn), Desc: w.desc, pos: w.pos, Notes: w.notes})
+	} else if len(w.notes()) > 0 {
+		out = leaf(Step{Func: s.eng.funcID(w.fn), Desc: w.desc, pos: w.pos.pos(), Notes: w.notes()})
 	}
 	return cat(out, w.steps)
 }

@@ -344,14 +344,14 @@ func (s *state) guardsOfChainUncached(l Loc, e Elem) (gs []Guard, overflow bool)
 		if w == nil {
 			break
 		}
-		if w.unguarded {
+		if w.unguarded() {
 			return nil, false
 		}
-		if len(w.guards) > 0 {
-			lists = append(lists, w.guards)
+		if len(w.guards()) > 0 {
+			lists = append(lists, w.guards())
 		}
-		if len(w.calleeGuards) > 0 {
-			lists = append(lists, s.instantiate(w.call, w.calleeGuards))
+		if len(w.calleeGuards()) > 0 {
+			lists = append(lists, s.instantiate(w.call(), w.calleeGuards()))
 		}
 		if w.from == nil {
 			break
