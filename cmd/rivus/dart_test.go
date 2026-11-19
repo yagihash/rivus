@@ -33,5 +33,5 @@ func TestDartExtractor(t *testing.T) {
 	}
 	checkSampleFlows(t, stream, filepath.Join(extractor, "test", "sample", "rules.yaml"),
 		filepath.Join(extractor, "test", "sample"),
-		[]string{"lib/app.dart", "lib/web.dart", "lib/server.dart", "lib/patterns.dart", "lib/callbacks.dart", "lib/syntax.dart", "lib/grpc_flows.dart"}, 40)
+		[]string{"lib/app.dart", "lib/web.dart", "lib/server.dart", "lib/patterns.dart", "lib/callbacks.dart", "lib/syntax.dart", "lib/grpc_flows.dart"}, 42)
 }

@@ -643,23 +643,26 @@ int _collection(FnLower f, TypedLiteral e, NodeList<CollectionElement> elements,
         final v = lowerExpr(f, el.expression);
         final i = f.constant('int', '${n++}', null, f.pos(el));
         f.emit('index_store', args: [d, i, v], at: f.pos(el));
+      case IfElement():
+        // Both branches may contribute: lower them in sequence, after the test.
+        lowerExpr(f, el.expression);
+        add(el.thenElement);
+        final other = el.elseElement;
+        if (other != null) add(other);
+      case ForElement():
+        _forElement(f, el, add);
+      case NullAwareElement():
+        // `?x`: the element is there when x is not null; x is what it holds
+        final v = lowerExpr(f, el.value);
+        final i = f.constant('int', '${n++}', null, f.pos(el));
+        f.emit('index_store', args: [d, i, v], at: f.pos(el), more: isMap ? {'keyed': true} : {});
       default:
         f.emit('unsupported', at: f.pos(el), more: {'reason': 'collection element ${el.runtimeType}'});
     }
   }
 
   for (final el in elements) {
-    if (el is IfElement) {
-      // Both branches may contribute: lower them in sequence, after the test.
-      lowerExpr(f, el.expression);
-      add(el.thenElement);
-      final other = el.elseElement;
-      if (other != null) add(other);
-    } else if (el is ForElement) {
-      _forElement(f, el, add);
-    } else {
-      add(el);
-    }
+    add(el);
   }
   return d;
 }

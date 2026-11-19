@@ -75,3 +75,18 @@ void collectionForIdentifier() {
   final out = [for (s in [source()]) s]; // @source(syn-forid)
   sink(out[0]); // @sink(syn-forid)
 }
+
+void collectionNested(bool a, bool b) {
+  final s = source(); // @source(syn-nest)
+  final xs = [
+    if (a) if (b) s,
+    for (var i = 0; i < 2; i++) if (a) 'x',
+  ];
+  sink(xs[0]); // @sink(syn-nest)
+}
+
+void collectionNullAware() {
+  final s = source(); // @source(syn-nullaware)
+  final xs = [?s];
+  sink(xs[0]); // @sink(syn-nullaware)
+}
