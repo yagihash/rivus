@@ -299,7 +299,13 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 				if len(oe.Guards) == 0 && s.addsNothing(dsts, x.E) {
 					continue
 				}
-				w := &why{fn: s.fn, pos: packPos(cc.in.Pos), desc: desc, steps: oe.Steps}
+				var w *why
+				if x.From != nil {
+					w = newWhyFrom(s.fn, desc, x.From.Cell, x.From.Orig)
+				} else {
+					w = &why{fn: s.fn, desc: desc}
+				}
+				w.pos, w.steps = packPos(cc.in.Pos), oe.Steps
 				if len(notes) > 0 {
 					w.setNotes(notes)
 				}
@@ -308,9 +314,6 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 				}
 				if len(oe.Guards) > 0 {
 					w.setCallee(oe.Guards, info)
-				}
-				if x.From != nil {
-					w.from = &ref{x.From.Cell, x.From.Orig}
 				}
 				for _, d := range dsts {
 					s.add(d, x.E, w)

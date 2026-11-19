@@ -30,6 +30,21 @@ type ref struct {
 	E   Elem
 }
 
+// whyRef is a why and the reference it holds, made in one piece (one
+// allocation for the two, which are made millions of times).
+type whyRef struct {
+	w why
+	r ref
+}
+
+// newWhyFrom makes a why that came from the element e of the location l.
+func newWhyFrom(fn *sg.Func, desc string, l Loc, e Elem) *why {
+	x := &whyRef{}
+	x.r = ref{l, e}
+	x.w = why{fn: fn, desc: desc, from: &x.r}
+	return &x.w
+}
+
 // why records how an element first got into a cell, so that a path from a
 // source to a sink can be reconstructed.
 type why struct {
@@ -259,7 +274,7 @@ func (s *state) cellsOf(r Root) map[string]Set {
 		s.cells[r] = m
 		if r.V != nil && r.V.Kind == sg.KGlobal {
 			for path, set := range s.eng.globals.cellsOf(r.V) {
-				cp := Set{}
+				cp := make(Set, len(set))
 				for e := range set {
 					cp[e] = nil
 				}
@@ -318,6 +333,7 @@ func (s *state) add(l Loc, e Elem, w *why) {
 	if s.addLog == nil {
 		s.addLog = map[Root][]string{}
 	}
+	// one entry for each step of the version of the root (collect reads the log by it)
 	s.addLog[l.Root] = append(s.addLog[l.Root], l.Path)
 }
 
@@ -607,7 +623,7 @@ func (s *state) put(dst Loc, fs []found, w func(f found) *why) {
 
 func (s *state) whyFn(in *sg.Instr, kind string) func(f found) *why {
 	return func(f found) *why {
-		w := &why{fn: s.fn, desc: kind, from: &ref{f.Cell, f.Orig}}
+		w := newWhyFrom(s.fn, kind, f.Cell, f.Orig)
 		if in != nil {
 			w.pos = packPos(in.Pos)
 		}

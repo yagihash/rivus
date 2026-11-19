@@ -540,7 +540,8 @@ func (s *state) applyFlows(cc *callCtx, flows []model.Flow, o *op, desc string, 
 					}
 				}
 				for _, e := range elems {
-					wm := &why{fn: s.fn, pos: packPos(cc.in.Pos), desc: kind, from: &ref{f.Cell, f.Orig}}
+					wm := newWhyFrom(s.fn, kind, f.Cell, f.Orig)
+					wm.pos = packPos(cc.in.Pos)
 					wm.setModel(mref)
 					s.add(d, e, wm)
 				}

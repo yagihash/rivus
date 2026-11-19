@@ -181,8 +181,12 @@ func unionGuards(lists ...[]Guard) []Guard {
 			return only
 		}
 	}
-	var out []Guard
-	seen := map[string]bool{}
+	total := 0
+	for _, l := range lists {
+		total += len(l)
+	}
+	out := make([]Guard, 0, total)
+	seen := make(map[string]bool, total)
 	for _, l := range lists {
 		for _, g := range l {
 			if !seen[g.key()] {
@@ -192,6 +196,9 @@ func unionGuards(lists ...[]Guard) []Guard {
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].key() < out[j].key() })
+	if cap(out) > len(out)+len(out)/2 {
+		out = append(make([]Guard, 0, len(out)), out...) // the result is kept: no room to spare
+	}
 	return out
 }
 
