@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -82,5 +83,45 @@ func TestMissingExtractorIsAnErrorWhenAsked(t *testing.T) {
 	o.rustExtractor = "/nonexistent/rivus-rust"
 	if _, err := o.runExtractor("rust"); err == nil {
 		t.Error("a missing extractor is not an error")
+	}
+}
+
+// A rule file that the analysed directory brings is not read through a link, and the message of an error in it
+// does not show what it holds (yagihash/rivus #57).
+func TestProjectRuleFileThatIsALinkIsNotRead(t *testing.T) {
+	dir := t.TempDir()
+	rules := filepath.Join(dir, ".rivus", "rules")
+	if err := os.MkdirAll(rules, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	secret := filepath.Join(t.TempDir(), "secret")
+	if err := os.WriteFile(secret, []byte("root:x:0:0:root:/root:/bin/sh\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(secret, filepath.Join(rules, "z.yaml")); err != nil {
+		t.Skip("no symbolic links here")
+	}
+	c := common{dir: dir, noBuiltin: true}
+	_, err := c.loadRules()
+	if err == nil || !strings.Contains(err.Error(), "symbolic link") {
+		t.Fatalf("a link is read as a rule file: %v", err)
+	}
+	if strings.Contains(err.Error(), "root:x") {
+		t.Errorf("the message shows what the target holds: %v", err)
+	}
+
+	// a file that is a file, with a mistake in it: the error does not quote the value
+	if err := os.Remove(filepath.Join(rules, "z.yaml")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(rules, "z.yaml"), []byte("root:x:0:0:root:/root:/bin/sh\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err = c.loadRules()
+	if err == nil {
+		t.Fatal("a file that is not a rule file is read")
+	}
+	if strings.Contains(err.Error(), "root:x") {
+		t.Errorf("the message of the error quotes the value: %v", err)
 	}
 }

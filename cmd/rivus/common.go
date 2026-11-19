@@ -75,6 +75,13 @@ func (c *common) loadRules(extra ...*model.RuleSet) (*model.Rules, error) {
 		paths = append(found, paths...)
 	}
 	for _, path := range paths {
+		// A rule file that the analysed directory brings is not read through a link: it would be the file
+		// of another place (its content shows in the message of an error, and is read as rules).
+		if project[path] {
+			if fi, err := os.Lstat(path); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+				return nil, fmt.Errorf("%s: a project rule file is a symbolic link, and is not read (-no-project-rules leaves the project's rules out)", path)
+			}
+		}
 		f, err := os.Open(path)
 		if err != nil {
 			return nil, err
@@ -82,6 +89,9 @@ func (c *common) loadRules(extra ...*model.RuleSet) (*model.Rules, error) {
 		rs, err := model.Parse(f, path)
 		f.Close()
 		if err != nil {
+			if project[path] {
+				err = model.RedactValues(err)
+			}
 			return nil, err
 		}
 		rs.Project = project[path]

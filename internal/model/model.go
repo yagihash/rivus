@@ -14,6 +14,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -283,12 +284,66 @@ func Parse(r io.Reader, origin string) (*RuleSet, error) {
 		return nil, fmt.Errorf("%s: %w", origin, err)
 	}
 	rs.Origin = origin
+	// `builtin` says that rivus itself embeds the rule: a file that comes from outside cannot say it (it would
+	// make its own rules look vetted, and the filters of origin would take it for one of rivus')
+	if !strings.HasPrefix(origin, "builtin:") {
+		if err := rs.rejectBuiltinOrigin(); err != nil {
+			return nil, fmt.Errorf("%s: %w", origin, err)
+		}
+	}
 	rs.fillOrigins()
 	if err := rs.validate(); err != nil {
 		return nil, fmt.Errorf("%s: %w", origin, err)
 	}
 	return &rs, nil
 }
+
+// rejectBuiltinOrigin is an error for a rule set that claims the origin builtin (itself, or in one of its rules).
+func (rs *RuleSet) rejectBuiltinOrigin() error {
+	const msg = "origin: builtin is for the rules that rivus embeds; a rule file says human or llm (or says nothing: human)"
+	if rs.DefaultOrigin == OriginBuiltin {
+		return fmt.Errorf("origin: %s", msg)
+	}
+	check := func(what string, i int, p Provenance) error {
+		if p.Origin == OriginBuiltin {
+			return fmt.Errorf("%s[%d].origin: %s", what, i, msg)
+		}
+		return nil
+	}
+	for i, s := range rs.Sources {
+		if err := check("sources", i, s.Provenance); err != nil {
+			return err
+		}
+	}
+	for i, s := range rs.Sinks {
+		if err := check("sinks", i, s.Provenance); err != nil {
+			return err
+		}
+	}
+	for i, s := range rs.Sanitizers {
+		if err := check("sanitizers", i, s.Provenance); err != nil {
+			return err
+		}
+	}
+	for i, s := range rs.Propagators {
+		if err := check("propagators", i, s.Provenance); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// RedactValues is the error without the text of the values in it: the YAML decoder quotes the value it could not
+// read (`cannot unmarshal !!str `...` into ...`), and a rule file that is a link to another file would show the
+// start of that file.
+func RedactValues(err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%s", backquoted.ReplaceAllString(err.Error(), "`…`"))
+}
+
+var backquoted = regexp.MustCompile("`[^`]*`")
 
 // fillOrigins gives every rule an origin: its own, else the rule set's, else
 // builtin for the embedded rule sets and human for the others.

@@ -59,3 +59,40 @@ propagators:
 		t.Errorf("one symbol in two sets: %v", err)
 	}
 }
+
+// `builtin` is the origin of the rules that rivus embeds: a file that comes from outside cannot claim it
+// (yagihash/rivus #57).
+func TestRuleFilesCannotClaimTheBuiltinOrigin(t *testing.T) {
+	for name, text := range map[string]string{
+		"the set": "ruleset: t@1\norigin: builtin\nsanitizers:\n  - symbol: f\n    drops: [\"*\"]\n",
+		"a rule":  "ruleset: t@1\nsanitizers:\n  - symbol: f\n    drops: [\"*\"]\n    origin: builtin\n",
+	} {
+		if _, err := parseSet(t, text); err == nil || !strings.Contains(err.Error(), "origin: builtin is for the rules that rivus embeds") {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	// the other origins are theirs to say, and so is nothing
+	for _, text := range []string{
+		"ruleset: t@1\norigin: human\nsanitizers:\n  - symbol: f\n    drops: [\"*\"]\n",
+		"ruleset: t@1\nsanitizers:\n  - symbol: f\n    drops: [\"*\"]\n    origin: human\n",
+		"ruleset: t@1\nsanitizers:\n  - symbol: f\n    drops: [\"*\"]\n",
+	} {
+		if _, err := parseSet(t, text); err != nil {
+			t.Errorf("%v\n%s", err, text)
+		}
+	}
+	// what rivus embeds is read under a name that says so, and may say it
+	if _, err := Parse(strings.NewReader("ruleset: t@1\norigin: builtin\nsanitizers:\n  - symbol: f\n    drops: [\"*\"]\n"), "builtin:t.yaml"); err != nil {
+		t.Errorf("an embedded rule set cannot say builtin: %v", err)
+	}
+}
+
+func TestRedactValuesHidesWhatTheDecoderQuotes(t *testing.T) {
+	_, err := parseSet(t, "root:x:0:0:root:/root:/bin/sh\n")
+	if err == nil {
+		t.Fatal("not a rule file, and no error")
+	}
+	if strings.Contains(RedactValues(err).Error(), "root:x") {
+		t.Errorf("the value is still in the message: %v", RedactValues(err))
+	}
+}
