@@ -194,6 +194,36 @@ func (s *state) transfer(in *sg.Instr) {
 			s.copyLocsGuarded(s.locs(r), []Loc{{Root{nil, i}, ""}}, "return", in, gs)
 		}
 
+	case sg.OpThrow:
+		if !s.eng.prog.HasExceptions {
+			return
+		}
+		gs := s.blockGuards(in.Block)
+		for _, v := range in.Args {
+			// the thrown value is boxed, as in an interface: an object is what the
+			// pointer stored here points to
+			d := Loc{excRoot(), ""}
+			if pointerLike(v) {
+				d.Path = "/*"
+			}
+			s.copyLocsGuarded(s.locs(v), []Loc{d}, "throw", in, gs)
+		}
+
+	case ir.OpExceptionValue:
+		// the value a handler receives: what the function throws, and what its
+		// calls throw (the thrown values are not told apart)
+		if len(in.Dsts) > 0 && s.eng.prog.HasExceptions {
+			s.copyLocs([]Loc{{excRoot(), ""}}, []Loc{{own(in.Dsts[0]), ""}}, "caught", in)
+		}
+
+	case ir.OpUnsupported:
+		// what the extractor could not express is not in the analysis: say so, where it is
+		reason := ""
+		if in.IR != nil {
+			reason = in.IR.Reason
+		}
+		s.newNote(in, KindUnsupported, "the extractor could not express a construct here ("+reason+"): what it does is not followed", "")
+
 	case ir.OpCall:
 		s.callInstr(in)
 	}

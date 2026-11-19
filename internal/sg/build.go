@@ -22,6 +22,13 @@ func build(p *ir.Program, consume bool) (*Program, error) {
 		out.GlobalPos[g.Name] = g.Pos
 	}
 	for i, f := range p.Funcs {
+		for bi := range f.Blocks {
+			for _, e := range f.Blocks[bi].Succs {
+				if e.Kind == ir.EdgeException {
+					out.HasExceptions = true
+				}
+			}
+		}
 		fn, err := buildFunc(out, f)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", f.ID, err)
@@ -456,5 +463,5 @@ func slimFunc(f *ir.Func) *ir.Func {
 
 func infoOf(in *ir.Instr) *InstrInfo {
 	return &InstrInfo{Operator: in.Operator, Field: in.Field, Global: in.Global, Path: in.Path, Func: in.Func,
-		View: in.View, Folded: in.Folded, Keyed: in.Keyed, Go: in.Go}
+		View: in.View, Folded: in.Folded, Keyed: in.Keyed, Go: in.Go, Reason: in.Reason}
 }

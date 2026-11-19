@@ -59,6 +59,12 @@ type Provenance struct {
 // RuleSet is one parsed rule file.
 type RuleSet struct {
 	Name string `yaml:"ruleset"`
+	// ReadImpls says that the propagators of this set are for the methods of traits,
+	// which the code of the project also implements (Iterator::next of a type of
+	// its own): the model says what the implementations outside the code do, and the
+	// code of the project's own implementations is read as well. Off, a model replaces
+	// the analysis of every implementation (what a Go interface method with a model gets).
+	ReadImpls bool `yaml:"read_impls"`
 	// DefaultOrigin is the origin of the rules that do not say their own.
 	DefaultOrigin string `yaml:"origin"`
 	// The rules.
@@ -561,6 +567,8 @@ type Rules struct {
 	Sinks       map[string][]Sink
 	Sanitizers  map[string][]Sanitizer
 	Propagators map[string][]Propagator
+	// ReadImpls are the symbols of the propagators of a set with read_impls.
+	ReadImpls   map[string]bool
 	ConfigReads map[string]bool
 
 	// Expansions records what Expand did with match: implementations rules.
@@ -600,6 +608,7 @@ func Merge(sets ...*RuleSet) *Rules {
 		Sinks:       map[string][]Sink{},
 		Sanitizers:  map[string][]Sanitizer{},
 		Propagators: map[string][]Propagator{},
+		ReadImpls:   map[string]bool{},
 		ConfigReads: map[string]bool{},
 	}
 	for _, rs := range sets {
@@ -626,6 +635,9 @@ func Merge(sets ...*RuleSet) *Rules {
 		}
 		for _, p := range rs.Propagators {
 			r.Propagators[p.Symbol] = append(r.Propagators[p.Symbol], p)
+			if rs.ReadImpls {
+				r.ReadImpls[p.Symbol] = true
+			}
 		}
 		for _, c := range rs.ConfigReads {
 			r.ConfigReads[c.Symbol] = true
@@ -633,6 +645,10 @@ func Merge(sets ...*RuleSet) *Rules {
 	}
 	return r
 }
+
+// ReadsImpls reports whether the code of the project's own implementations of the
+// method is read as well as the model applied (a set with read_impls).
+func (r *Rules) ReadsImpls(symbol string) bool { return r.ReadImpls[symbol] }
 
 // HasModel reports whether the symbol has a sanitizer or propagator model,
 // which replaces the analysis of the function body.

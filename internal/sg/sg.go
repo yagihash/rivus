@@ -197,6 +197,8 @@ type InstrInfo struct {
 	Folded   bool
 	Keyed    bool
 	Go       bool
+	// Reason is what an unsupported instruction says an extractor could not express.
+	Reason string
 }
 
 // Func is a function of the program.
@@ -225,6 +227,10 @@ type Program struct {
 	Globals map[string]*Value
 	// GlobalPos is where each package variable is declared.
 	GlobalPos map[string]ir.Pos
+	// HasExceptions is true when the IR has an exception edge: the language
+	// has exceptions in its control flow (Dart), and the values that are
+	// thrown are followed. (Go panics and Rust panics are not.)
+	HasExceptions bool
 
 	globalMu sync.Mutex // Global makes a value the first time it is asked for
 }

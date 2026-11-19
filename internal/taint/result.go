@@ -21,10 +21,13 @@ const (
 	KindConfigRead             = "config_read"
 	KindExportedAPIParam       = "exported_api_param"
 	KindStoredDataBoundary     = "stored_data_boundary"
-	AttributableTarget         = "target"
-	AttributableRivus          = "rivus"
-	AttributableMixed          = "mixed"
-	maxPathSteps               = 200
+	// KindUnsupported marks a construct that the extractor could not express: what
+	// it does is not in the analysis (attributable to rivus).
+	KindUnsupported    = "unsupported_construct"
+	AttributableTarget = "target"
+	AttributableRivus  = "rivus"
+	AttributableMixed  = "mixed"
+	maxPathSteps       = 200
 )
 
 // attributable gives the attributable_to value of each kind
@@ -116,6 +119,18 @@ type SiteRef struct {
 	Fingerprint map[string]string `json:"fingerprint,omitempty"`
 }
 
+// OtherSource is a source that reaches the same sink as the finding it is listed
+// in, with what is known of its own path: so that a reviewer can tell a path that is
+// as clear as the one shown from one that is not, without asking for it.
+type OtherSource struct {
+	SiteRef
+	PathSteps          int    `json:"path_steps"`
+	Uncertainties      int    `json:"uncertainties"`
+	DispatchWidened    int    `json:"dispatch_widened,omitempty"`
+	DispatchCandidates int    `json:"dispatch_candidates,omitempty"`
+	Reachability       string `json:"reachability,omitempty"`
+}
+
 // Finding is the fact that data from a source site can reach a sink site.
 type Finding struct {
 	ID          string            `json:"id"`
@@ -129,10 +144,15 @@ type Finding struct {
 	// type, in other functions) that reach this sink with the same labels. The
 	// finding shows the shortest path; the rest are not repeated as findings,
 	// since a request type is a source in every function that takes it, and
-	// the same flow would be reported once per function. At most
-	// maxOtherSources are listed (without snippets); the count has them all.
-	OtherSources      []SiteRef `json:"other_sources,omitempty"`
-	OtherSourcesCount int       `json:"other_sources_count,omitempty"`
+	// the same flow would be reported once per function. The finding shows the
+	// path that is the best to look at first (reachable from where the program
+	// starts, with the fewest things left unresolved, the fewest calls taken
+	// to reach several implementations, then the shortest): the shortest alone
+	// favours a path that goes through a function value taken to reach every
+	// candidate. At most maxOtherSources are listed (without snippets, with what is
+	// known of each path); the count has them all.
+	OtherSources      []OtherSource `json:"other_sources,omitempty"`
+	OtherSourcesCount int           `json:"other_sources_count,omitempty"`
 	// Uncertainties lists everything on the path that rivus could not
 	// resolve; it is the part a reviewer should look at first.
 	Uncertainties []*Uncertainty `json:"uncertainties,omitempty"`

@@ -1003,3 +1003,18 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
 - **もう 1 つ直した:** `sg.Program.Global`（パッケージ変数のアドレスの値）に、クラス `pointer` を付けた。付いていなかったので、`p := &G` の `copy` が、ポインタのコピーとして扱われず、グローバルの場所がたどれなかった。
 - **確認:** Mutex / RwLock<HashMap> / RwLock<Vec> を持つ `static` に、一方の関数が書き、他方が読む 3 つの流れが通る（`extractor/rust/test/sample/src/global_flows.rs`）。go-test-bench（37 件）、gogs（78 件）、gin-vue-admin（28 件）、Gitea（246 件）、parseable（80 件）は、変更の前後で、finding が完全に同一。
 - **まだ届かない:** parseable の `src/alerts/target.rs:494`。tokio の `RwLock` と `.await`（async の状態機械）、`entry().or_default().insert()`、`Option::ok_or`、`call` の動的ディスパッチと、鎖がまだ長い。
+
+### 追記: `unsupported` 命令の記録（CORE-1）と、例外のデータフロー（CORE-2）
+
+- **CORE-1:** コアが `ir.OpUnsupported` を無視していた。`unsupported_construct`（`attributable_to: rivus`）の不確実性を、その場所に出すようにした。`missing_source`（`target`）にしなかったのは、対象のコードが足りないのではなく、rivus が読めなかったものだから。結果のスキーマの版は、kind の追加なので上げていない（読み手は、知らない kind を、そのまま持てばよい）。ARCHITECTURE 2.3 の「`unsupported` は理由の文字列を持ち、記録の起点になる」を、実装が満たした。
+- **CORE-2:** `throw` の値が、`catch` のハンドラーに届かなかった（`transfer()` に `OpThrow` と `OpExceptionValue` の case がなく、サマリにも「投げる」出力がなかった）。関数ごとに、投げた値を 1 つの場所（結果の番号 -2）に集めて、`exception_value` がそこから読む。サマリに出力の種類 `throw` を足して、呼び元は、呼び先が投げた値を、自分の同じ場所に受ける。どの `throw` を、どのハンドラーが受けるかは、区別しない（本当より多く、少なくはならない）。投げる値は、interface に入れたときと同じく、オブジェクトなら `/*` の下に置く。
+
+### 追記: 2026-11-19 のレビューへの対応（Dart、Rust）
+
+レビュー（`3f247e7` 時点の静的読解）の指摘のうち、フィクスチャを先に足して落ちることを確かめてから直したもの。どれも、フィクスチャは、修正前に落ちた。
+
+- **Dart（`extractor/dart`）:** DART-1（catch の中の例外で finally が実行されない）、DART-2（factory コンストラクタ。リダイレクトの factory を含む）、DART-3（`super(...)`、`: this.named(...)`）、DART-4（`analysis_options.yaml` の `exclude` で外された生成コード）、DART-5（`dynamic` のメンバ）、DART-6（トップレベル変数と static フィールドの初期化子）、DART-7（`continue <caseLabel>`）、DART-8（パターン代入と `for-in` の識別子）、DART-9（`Future.then`、`Stream.listen`、`Iterable.forEach` などのコールバック）、DART-10（利用者定義の演算子と `[]`）。解決できない名前、飛び先が分からない `break` / `continue`、下げられない代入先は、黙って捨てずに `unsupported` を出す。
+- **Rust（`extractor/rust`）:** RUST-1（`Drop` の終端が `Drop::drop` を呼ぶ。直接の型のみで、フィールドの drop glue は辿らない）、RUST-2（クロージャ。ジェネリックな関数の中の `f(v)` は、引数の型が合うクロージャを候補にし、呼び元が渡した型で、dispatch ガードが絞る。クロージャの型が分かる std の高階関数（`Iterator::for_each`、`map` など、`Option::map` など）は、受け手の中身でクロージャの本体を呼ぶ）、RUST-3（trait の候補を、trait の名前で一致させる。trait の既定のメソッドの本体も候補に入れる）。
+- **コア:** CORE-1（`unsupported` 命令を不確実性にする。上の追記）、CORE-2（例外のデータフロー。上の追記）。モデルのある trait のメソッドに、プロジェクトの実装があるときは、モデルに加えて、実装の本体も読む（`Iterator::next` を実装する型を `dyn` で呼ぶ形が、モデルに隠れていた）。
+- **精度の変化（parseable）:** クロージャを通る流れが見えるようになり、finding が 102 件から 136 件になった（正解にした 4 サイトのうち 3 は、前後で同じ）。追加された経路を読むと、クロージャの環境（捕獲した値）が 1 つのオブジェクトとして扱われ、`for_each_live_node` を通って、ノード間通信の URL に届くものが多く、誤検出の可能性が高い。クロージャの環境のフィールドごとの区別（捕獲した値を、フィールドとして追う）が、次の課題。
+- **まだ手を付けていないもの:** CORE-3（`mergeParamSources` が情報を落とす）、CORE-4（`truncated` が読まれない）、RUST-4〜RUST-12、DOC-1、フェーズ A の CI での `unsupported` 0 件の assert（Rust）。

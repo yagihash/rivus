@@ -139,12 +139,31 @@ func (s *state) callBody(cc *callCtx) {
 		return
 	}
 	rules := s.eng.rules
-	if cc.sym != "" && rules.HasModel(cc.sym) {
+	modelled := cc.sym != "" && rules.HasModel(cc.sym)
+	if modelled {
 		s.applyModel(cc)
-		return
+		if ci.Callee.Kind != ir.CalleeDynamic || !rules.ReadsImpls(cc.sym) {
+			return
+		}
+		// A method of a trait that the model describes is also implemented by the
+		// code (Iterator::next of a type of the project): the model says what the
+		// implementations outside the code do, and the code of the project's own is
+		// read (not that of its dependencies: the model is what says what they do).
+		if fns, _ := s.callees(ci); !hasOwnBody(fns) {
+			return
+		}
 	}
 
 	fns, bindings := s.callees(ci)
+	if modelled {
+		own := fns[:0:0]
+		for _, c := range fns {
+			if c.fn != nil && !c.fn.Dep {
+				own = append(own, c)
+			}
+		}
+		fns = own
+	}
 	var external bool
 	var withBody []*sg.Func
 	for _, c := range fns {
@@ -187,7 +206,7 @@ func (s *state) callBody(cc *callCtx) {
 		s.applySummary(cc, fn, b, notes, which[fn])
 	}
 	switch {
-	case ruleOnly:
+	case ruleOnly, modelled:
 		// the rule is the model
 	case len(fns) == 0 && invoke:
 		s.unmodeled(cc, dispatch)
@@ -624,4 +643,15 @@ func (s *state) variadicElems(v *sg.Value) []*sg.Value {
 		}
 	}
 	return out
+}
+
+// hasOwnBody reports whether one of the callees is code of the project (not of a
+// dependency) that the program has.
+func hasOwnBody(fns []callee) bool {
+	for _, c := range fns {
+		if c.fn != nil && !c.fn.Dep {
+			return true
+		}
+	}
+	return false
 }

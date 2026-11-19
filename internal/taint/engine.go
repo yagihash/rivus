@@ -95,6 +95,10 @@ type Engine struct {
 	// guardLimit lists the functions with a flow that had more guards than
 	// maxGuards: the flow is kept without guards (ADR-006).
 	guardLimit map[*sg.Func]bool
+	// coarsened lists the functions in which an access path was cut at the depth
+	// k, or the cell of a parameter was merged into the whole of it: the cells are
+	// coarser than the code (more than the truth, never less).
+	coarsened map[*sg.Func]string
 	// writers lists, for each package variable, the functions that store to it.
 	// deadline is when the whole run has to stop (zero: no limit).
 	deadline time.Time
@@ -180,6 +184,7 @@ func New(p *sg.Program, texts ir.Texts, st *sites.Result, rules *model.Rules, op
 		degraded:   map[*sg.Func]bool{},
 		spent:      map[*sg.Func]time.Duration{},
 		guardLimit: map[*sg.Func]bool{},
+		coarsened:  map[*sg.Func]string{},
 		globals:    newGlobalStore(),
 		aliasArgs:  rules.AliasArgs(),
 	}
@@ -190,6 +195,21 @@ func (e *Engine) funcID(fn *sg.Func) string { return fn.ID }
 // SetLoadErrors tells the engine what the loading of the code could not see:
 // they become missing_source uncertainties.
 func (e *Engine) SetLoadErrors(errs []ir.LoadError) { e.loadErrors = errs }
+
+func (e *Engine) noteCoarsened(fn *sg.Func, truncated, widened bool) {
+	why := ""
+	switch {
+	case truncated && widened:
+		why = "access paths cut at depth k, and the cells of a parameter merged"
+	case truncated:
+		why = "access paths cut at depth k"
+	default:
+		why = "the cells of a parameter merged into the whole of it"
+	}
+	e.mu.Lock()
+	e.coarsened[fn] = why
+	e.mu.Unlock()
+}
 
 func (e *Engine) noteGuardLimit(fn *sg.Func) {
 	e.mu.Lock()
@@ -614,6 +634,9 @@ func (e *Engine) compute(fn *sg.Func) *fnResult {
 	if s.guardOverflow && sanitizes(sum) {
 		e.noteGuardLimit(fn)
 	}
+	if s.truncated || s.widened {
+		e.noteCoarsened(fn, s.truncated, s.widened)
+	}
 	if e.opts.SlowFunc != nil {
 		if d := time.Since(began); d > e.opts.SlowThreshold {
 			e.opts.SlowFunc(e.funcID(fn), d, len(sum.Outputs), len(s.cells))
@@ -892,6 +915,18 @@ func (e *Engine) collect(st Stats) *Result {
 		e.fill(u)
 		res.Uncertainties = append(res.Uncertainties, u)
 	}
+	// the functions whose cells are coarser than the code: one record, with the list
+	if len(e.coarsened) > 0 {
+		ids := make([]string, 0, len(e.coarsened))
+		for fn := range e.coarsened {
+			ids = append(ids, e.funcID(fn))
+		}
+		sort.Strings(ids)
+		u := newUncertainty(KindDepthLimit, "path_limit: in "+itoa(len(ids))+" functions the access paths were cut at depth "+itoa(e.opts.K)+
+			", or the cells of a parameter were merged into the whole of it: what is told apart in the code is not told apart here (more flows than there are, never fewer)", "")
+		u.Candidates = ids
+		res.Uncertainties = append(res.Uncertainties, u)
+	}
 	var degraded []*sg.Func
 	for fn := range e.degraded {
 		degraded = append(degraded, fn)
@@ -1097,8 +1132,10 @@ const maxOtherSources = 5
 // source parameter is in: a parameter of a request type is a source in every
 // function that takes one, so a handler and the helpers it calls (and, when a
 // function value is resolved to every candidate, other handlers) each give
-// the same flow. The finding with the shortest path stays; the others are
-// listed in it.
+// the same flow. The finding that is the best to look at first stays (reachable
+// from where the program starts, with the fewest uncertainties and widened calls on
+// its path, then the shortest path); the others are listed in it, each with what is known of
+// its own path, and none of them has a path that is better by those measures.
 func (e *Engine) mergeParamSources(fs []*Finding) []*Finding {
 	type key struct{ sink, category, labels, symbol string }
 	groups := map[key][]*Finding{}
@@ -1120,6 +1157,15 @@ func (e *Engine) mergeParamSources(fs []*Finding) []*Finding {
 		g := groups[k]
 		sort.SliceStable(g, func(i, j int) bool {
 			a, b := g[i], g[j]
+			if ra, rb := a.Reachability != ReachNotFromEntry, b.Reachability != ReachNotFromEntry; ra != rb {
+				return ra
+			}
+			if ua, ub := len(a.Uncertainties), len(b.Uncertainties); ua != ub {
+				return ua < ub
+			}
+			if da, db := a.DispatchWidened, b.DispatchWidened; da != db {
+				return da < db
+			}
 			if la, lb := len(a.Paths[0].Steps), len(b.Paths[0].Steps); la != lb {
 				return la < lb
 			}
@@ -1134,7 +1180,10 @@ func (e *Engine) mergeParamSources(fs []*Finding) []*Finding {
 			if len(rep.OtherSources) < maxOtherSources {
 				ref := o.Source
 				ref.Snippet = ""
-				rep.OtherSources = append(rep.OtherSources, ref)
+				rep.OtherSources = append(rep.OtherSources, OtherSource{
+					SiteRef: ref, PathSteps: o.PathSteps, Uncertainties: len(o.Uncertainties),
+					DispatchWidened: o.DispatchWidened, DispatchCandidates: o.DispatchCandidates, Reachability: o.Reachability,
+				})
 			}
 		}
 		out = append(out, rep)

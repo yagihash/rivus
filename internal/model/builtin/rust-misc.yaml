@@ -1,6 +1,7 @@
 # More of Rust, found by "rivus models coverage" on a real program (a browser
 # automation CLI, 148,000 lines): formatting machinery, serde, tokio, futures.
 ruleset: rivus/rust/misc@1
+read_impls: true   # the methods of traits are also implemented by the code of the project
 
 propagators:
   - symbol: std::future::Future::poll

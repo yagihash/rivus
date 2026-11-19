@@ -14,7 +14,18 @@ const (
 	OutResult = "result"
 	OutParam  = "param"
 	OutGlobal = "global"
+	// OutThrow is what the function throws: the values of its throw statements
+	// and of the calls that may throw. The caller reads it where it catches.
+	OutThrow = "throw"
 )
+
+// excIdx is the result slot of the value a function throws (a function has
+// its results at 0, 1, ...). All the exceptions of a function are one value:
+// which throw a handler receives is not told apart (more than the truth, never
+// less).
+const excIdx = -2
+
+func excRoot() Root { return Root{nil, excIdx} }
 
 // OutElem is an element of an output with the steps that led to it inside
 // the function.
@@ -71,6 +82,8 @@ func (s *state) summarize() *Summary {
 		var idx int
 		var glob *sg.Value
 		switch {
+		case r.V == nil && r.Idx == excIdx:
+			kind, idx = OutThrow, 0
 		case r.V == nil:
 			kind, idx = OutResult, r.Idx
 		case s.paramRoot[r] != 0 || s.isParamRoot(r):
@@ -290,6 +303,8 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 			if o.Index < len(cc.roots) {
 				dsts = []Loc{{cc.roots[o.Index], o.Path}}
 			}
+		case OutThrow:
+			dsts = []Loc{{excRoot(), o.Path}}
 		case OutParam:
 			if o.Index < len(argv) {
 				for _, l := range s.locs(argv[o.Index]) {

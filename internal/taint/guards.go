@@ -55,7 +55,15 @@ type dispatchSpec struct {
 // sameBase reports whether two types are one type, a pointer to it or not: the
 // method of a value type is in the method set of the pointer to it.
 func sameBase(a, b string) bool {
-	return strings.TrimPrefix(a, "*") == strings.TrimPrefix(b, "*")
+	return baseType(a) == baseType(b)
+}
+
+// baseType is the type without the pointer or the reference to it (`*T` of Go, `&T` and
+// `&mut T` of Rust).
+func baseType(t string) string {
+	t = strings.TrimPrefix(t, "*")
+	t = strings.TrimPrefix(t, "&mut ")
+	return strings.TrimPrefix(t, "&")
 }
 
 // excludes reports whether a value of the concrete type c cannot take this
@@ -78,7 +86,21 @@ func (d *dispatchSpec) excludes(c string) bool {
 // it was made right there: a value made by make_interface has the dynamic type
 // of its operand, and nothing else. It is empty when that is not known.
 func concreteType(v *sg.Value) string {
-	if v == nil || v.Kind != sg.KResult || v.Instr == nil || v.Instr.Op != ir.OpConvert || v.Instr.IR == nil || v.Instr.IR.Operator != "make_interface" {
+	if v == nil || v.Kind != sg.KResult || v.Instr == nil {
+		return ""
+	}
+	switch v.Instr.Op {
+	case ir.OpAlloc:
+		// an object made right there (a closure of Rust, passed on to a generic
+		// function) has the type it was made with
+		return string(v.Type)
+	case ir.OpCopy:
+		if len(v.Instr.Args) == 1 {
+			return concreteType(v.Instr.Args[0])
+		}
+		return ""
+	}
+	if v.Instr.Op != ir.OpConvert || v.Instr.IR == nil || v.Instr.IR.Operator != "make_interface" {
 		return ""
 	}
 	if len(v.Instr.Args) != 1 || v.Instr.Args[0] == nil {
