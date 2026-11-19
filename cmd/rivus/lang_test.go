@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/yagihash/rivus/internal/ir"
 	"github.com/yagihash/rivus/internal/testutil"
 )
 
@@ -158,5 +160,57 @@ func TestAutoDetectedExtractorFailure(t *testing.T) {
 	o.dartExtractor = "false"
 	if _, err := o.loadLangs([]string{langGo, langDart}, []string{"./cases/hello"}, rules); err == nil {
 		t.Error("an extractor that failed must not be skipped")
+	}
+}
+
+// The load errors of the Go packages are counted once when Go is read together
+// with another language (#13).
+func TestMultiLanguageLoadErrorsAreNotDoubled(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		"go.mod":  "module example.com/brk\n\ngo 1.21\n",
+		"main.go": "package main\n\nimport _ \"example.invalid/nope\"\n\nfunc main() {}\n",
+	}
+	for name, body := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var buf bytes.Buffer
+	if err := ir.Write(&buf, &ir.Program{}); err != nil {
+		t.Fatal(err)
+	}
+	stream := filepath.Join(t.TempDir(), "stream.jsonl")
+	if err := os.WriteFile(stream, buf.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	script := filepath.Join(t.TempDir(), "extractor.sh")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\ncat "+stream+"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	o := analyzeOpts{}
+	o.dir = dir
+	o.lang = "go"
+	rules, err := o.loadRules()
+	if err != nil {
+		t.Fatal(err)
+	}
+	l, err := o.loadLangs([]string{langGo}, []string{"./..."}, rules)
+	if err != nil {
+		t.Fatal(err)
+	}
+	single := len(l.loadErrors())
+	if single == 0 {
+		t.Fatal("the broken import is not reported: the test says nothing")
+	}
+
+	o.rustExtractor = script
+	l, err = o.loadLangs([]string{langGo, langRust}, []string{"./..."}, rules)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := len(l.loadErrors()); got != single {
+		t.Errorf("%d load errors with Go and Rust, %d with Go alone: %+v", got, single, l.loadErrors())
 	}
 }

@@ -201,10 +201,24 @@ func (r subtypeResolver) CallsFunction(symbol string) bool { return r.p.CallsFun
 
 // loadErrors are what could not be read, from the packages or the stream.
 func (l *loaded) loadErrors() []ir.LoadError {
-	if l.gossa != nil {
-		return append(append([]ir.LoadError(nil), l.gossa.LoadErrors...), l.ir.LoadErrors...)
+	if l.gossa == nil {
+		return l.ir.LoadErrors
 	}
-	return l.ir.LoadErrors
+	// With several languages, the errors of the Go packages are also in the
+	// program (goir.AddTexts copies them): each is counted once (#13).
+	out := append([]ir.LoadError(nil), l.gossa.LoadErrors...)
+	copied := map[ir.LoadError]int{}
+	for _, e := range l.gossa.LoadErrors {
+		copied[e]++
+	}
+	for _, e := range l.ir.LoadErrors {
+		if copied[e] > 0 {
+			copied[e]--
+			continue
+		}
+		out = append(out, e)
+	}
+	return out
 }
 
 // packages lists the units that were analysed: the import paths of the Go
