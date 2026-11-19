@@ -180,7 +180,9 @@ func New(p *sg.Program, texts ir.Texts, st *sites.Result, rules *model.Rules, op
 	if opts.FuncTimeout <= 0 {
 		opts.FuncTimeout = DefaultOptions().FuncTimeout
 	}
-	aliasArgs, _ := rules.AliasArgs() // the loaders have checked the rules (Rules.Validate)
+	// the loaders have checked the rules (Rules.Validate, after the expansion too): what is wrong there
+	// costs its own symbol, not the alias models of the others
+	aliasArgs, _ := rules.AliasArgs()
 	return &Engine{
 		prog: p, texts: texts, sites: st, rules: rules, opts: opts,
 		summaries:  map[*sg.Func]*Summary{},

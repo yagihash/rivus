@@ -112,3 +112,49 @@ propagators:
 		t.Errorf("sources/propagators not expanded: %+v %+v", r.CallSources, r.Propagators)
 	}
 }
+
+// Two interfaces that one type implements both copy their alias model to its method: the same
+// argument is not a conflict, and a conflict does not take the alias models of other functions
+// with it (yagihash/rivus #71).
+func TestAliasModelsSurviveAnExpansionThatCopiesThemTwice(t *testing.T) {
+	r := mustParse(t, `
+propagators:
+  - symbol: (m.A).With
+    flows: [{from: recv, to: result, alias: true}]
+    match: implementations
+  - symbol: (m.B).With
+    flows: [{from: recv, to: result, alias: true}]
+    match: implementations
+  - symbol: other.Unrelated
+    flows: [{from: arg0, to: result, alias: true}]
+`)
+	r.Expand(fakeResolver{"(m.A).With": {"(*m.T).With"}, "(m.B).With": {"(*m.T).With"}}, 0)
+	if err := r.Validate(); err != nil {
+		t.Errorf("the same argument twice is a conflict: %v", err)
+	}
+	aliases, _ := r.AliasArgs()
+	if _, ok := aliases["other.Unrelated"]; !ok || len(aliases) == 0 {
+		t.Errorf("aliases = %v", aliases)
+	}
+
+	// different arguments are a conflict, and the other symbols keep theirs
+	r = mustParse(t, `
+propagators:
+  - symbol: (m.A).With
+    flows: [{from: arg0, to: result, alias: true}]
+    match: implementations
+  - symbol: (m.B).With
+    flows: [{from: arg1, to: result, alias: true}]
+    match: implementations
+  - symbol: other.Unrelated
+    flows: [{from: arg0, to: result, alias: true}]
+`)
+	r.Expand(fakeResolver{"(m.A).With": {"(*m.T).With"}, "(m.B).With": {"(*m.T).With"}}, 0)
+	if err := r.Validate(); err == nil {
+		t.Error("two different arguments for one function pass the validation after the expansion")
+	}
+	aliases, _ = r.AliasArgs()
+	if _, ok := aliases["other.Unrelated"]; !ok {
+		t.Errorf("an alias model of another function is lost: %v", aliases)
+	}
+}

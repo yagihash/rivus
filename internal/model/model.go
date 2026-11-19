@@ -690,8 +690,12 @@ func validateFlows(flows []Flow, what string) error {
 // AliasArgs gives, for the functions that have a flow with alias, the position
 // of the argument their result is the same storage as (the receiver is the
 // argument 0 for the languages that pass it first).
+//
+// A function that two models give different arguments is an error, and the map has the first
+// of them (the others are not lost with it: a rule that is wrong costs its own symbol only).
 func (r *Rules) AliasArgs() (map[string]int, error) {
 	out := map[string]int{}
+	var err0 error
 	for sym, ps := range r.Propagators {
 		for _, p := range ps {
 			for _, f := range p.Flows {
@@ -708,14 +712,19 @@ func (r *Rules) AliasArgs() (map[string]int, error) {
 				}
 				// a function has one argument that its result is the same storage as: a second one (in another
 				// model of the same symbol, from another rule set) would take the place of the first without a word
-				if _, ok := out[sym]; ok {
-					return nil, fmt.Errorf("%s: more than one model has an alias flow", sym)
+				// (two that name the same argument say the same: the rules of two interfaces that one type implements
+				// are both copied to its method)
+				if was, ok := out[sym]; ok {
+					if was != idx && err0 == nil {
+						err0 = fmt.Errorf("%s: more than one model has an alias flow, and they name different arguments", sym)
+					}
+					continue
 				}
 				out[sym] = idx
 			}
 		}
 	}
-	return out, nil
+	return out, err0
 }
 
 // Validate checks what only the merged rules can show: what the rule sets do not see of one another.

@@ -161,6 +161,10 @@ func (c *common) loadGo(patterns []string, rules *model.Rules, maxImpl int) (*lo
 			fmt.Fprintf(os.Stderr, "rivus: %s\n", e)
 		}
 	}
+	// the expansion copies the rules to the methods: what is wrong in the merged rules shows only now
+	if err := rules.Validate(); err != nil {
+		return nil, err
+	}
 	if err := l.extract(true); err != nil {
 		return nil, err
 	}
