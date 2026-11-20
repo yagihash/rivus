@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -165,7 +166,7 @@ func TestGraphIndexIsFreshUntilSomethingChanges(t *testing.T) {
 		{name: "-deterministic-only", args: []string{"-deterministic-only"}},
 		{name: "the packages", pkgs: "./nothing"},
 		{name: "GOFLAGS (the build tags)", env: []string{"GOFLAGS=-tags=never"}},
-		{name: "GOOS", env: []string{"GOOS=linux"}},
+		{name: "GOOS", env: []string{"GOOS=" + otherGOOS()}},
 		{name: "CGO_ENABLED", env: []string{"CGO_ENABLED=0"}},
 		{name: "a project rule file appears", do: create(t, filepath.Join(app, ".rivus", "rules", "r.yaml"), "ruleset: t@1\nsinks:\n  - symbol: os/exec.Command\n    category: x\n")},
 		{name: "-rules", do: create(t, filepath.Join(app, "..", "extra-rules.yaml"), "ruleset: t@1\nsinks:\n  - symbol: os.Open\n    category: x\n"),
@@ -478,4 +479,12 @@ func TestGraphKeyIsTheSameWhereverItIsMade(t *testing.T) {
 	if info := graphInfoOf(t, binary, elsewhere, nil, "-graph", db, "-C", app); *info.Snapshot.Fresh {
 		t.Error("a changed project rule file makes the file stale")
 	}
+}
+
+// otherGOOS is a GOOS that is not the one the test runs on: setting the one it runs on changes nothing.
+func otherGOOS() string {
+	if runtime.GOOS == "linux" {
+		return "darwin"
+	}
+	return "linux"
 }
