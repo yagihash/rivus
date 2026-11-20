@@ -373,10 +373,9 @@ func TestCuratedGo(t *testing.T) {
 	}
 }
 
-// TestCuratedDart is the accuracy benchmark for Dart (bench/dart-curated). It needs
-// the Dart SDK: RIVUS_DART names the command that runs it, for example "dart" or
-// "mise exec dart@3.13.6 -- dart".
-func TestCuratedDart(t *testing.T) {
+// dartCuratedStream runs the Dart extractor on bench/dart-curated: the IR and the directory.
+func dartCuratedStream(t *testing.T) ([]byte, string) {
+	t.Helper()
 	dart := os.Getenv("RIVUS_DART")
 	if dart == "" {
 		skipOrFail(t, "RIVUS_DART")
@@ -406,6 +405,14 @@ func TestCuratedDart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the extractor failed: %v\n%s", err, stderr.String())
 	}
+	return stream, dir
+}
+
+// TestCuratedDart is the accuracy benchmark for Dart (bench/dart-curated). It needs
+// the Dart SDK: RIVUS_DART names the command that runs it, for example "dart" or
+// "mise exec dart@3.13.6 -- dart".
+func TestCuratedDart(t *testing.T) {
+	stream, dir := dartCuratedStream(t)
 	c := checkCuratedIR(t, dir, stream, ".dart")
 	// limits.dart: nine closures to one helper. The functions are known and rivus leaves them out
 	// because of its own limit: it says so, and does not say the callee is unknown (ADR-050).
@@ -423,9 +430,9 @@ func TestCuratedDart(t *testing.T) {
 	}
 }
 
-// TestCuratedRust is the accuracy benchmark for Rust (bench/rust-curated). It needs
-// the extractor binary: RIVUS_RUST (extractor/rust: cargo build).
-func TestCuratedRust(t *testing.T) {
+// rustCuratedStream runs the Rust extractor on bench/rust-curated: the IR and the directory.
+func rustCuratedStream(t *testing.T) ([]byte, string) {
+	t.Helper()
 	bin := os.Getenv("RIVUS_RUST")
 	if bin == "" {
 		skipOrFail(t, "RIVUS_RUST")
@@ -442,6 +449,13 @@ func TestCuratedRust(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the extractor failed: %v", err)
 	}
+	return stream, dir
+}
+
+// TestCuratedRust is the accuracy benchmark for Rust (bench/rust-curated). It needs
+// the extractor binary: RIVUS_RUST (extractor/rust: cargo build).
+func TestCuratedRust(t *testing.T) {
+	stream, dir := rustCuratedStream(t)
 	c := checkCuratedIR(t, dir, stream, ".rs")
 	t.Logf("rust-curated: %d flows to find, %d sinks to keep quiet, %d flows not found yet (@miss: %d silent, %d with a trace), %d reported wrongly (@fp), %d flows of other sources into noisy sinks (@noisy)", c.detect, c.quiet, c.miss, c.missSilent, c.missTrace, c.fp, c.noisy)
 	logSilentMisses(t, "rust-curated", c)

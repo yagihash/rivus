@@ -311,6 +311,9 @@ type globalWrite struct {
 	e    Elem
 	// steps are the steps the writer took to put e there (nil when the store has it)
 	steps *rope
+	// fn is the function that wrote it (its ID): the order of the writes of a level
+	// is made from it, not from the order the goroutines finished in.
+	fn string
 }
 
 type globalReader struct {
@@ -686,6 +689,11 @@ func (e *Engine) commitGlobals() {
 	for _, r := range e.pendingReaders {
 		e.globals.noteReader(r.g, r.fn)
 	}
+	// The components of a level are analysed at the same time and commit in the
+	// order they finish: the writes are put in a fixed order (cell, path, element,
+	// writer), so that the writer a path starts at (noteWriter: the first) is the
+	// same on every run (ADR-049). Which writer it is has no meaning.
+	sort.SliceStable(e.pendingGlobals, func(i, j int) bool { return lessGlobalWrite(e.pendingGlobals[i], e.pendingGlobals[j]) })
 	for _, w := range e.pendingGlobals {
 		if e.globals.merge(w.g, w.path, w.e) {
 			e.globals.noteWriter(w.g, w.path, w.e, w.steps)
@@ -695,6 +703,26 @@ func (e *Engine) commitGlobals() {
 		}
 	}
 	e.pendingGlobals, e.pendingReaders = e.pendingGlobals[:0], e.pendingReaders[:0]
+}
+
+// lessGlobalWrite orders the writes to the global state: by cell (the name; the cells
+// of one name are the same global), path, element, and the ID of the writing function.
+func lessGlobalWrite(a, b globalWrite) bool {
+	if a.g != b.g && a.g.Name != b.g.Name {
+		return a.g.Name < b.g.Name
+	}
+	if a.path != b.path {
+		return a.path < b.path
+	}
+	if a.e != b.e {
+		if lessElem(a.e, b.e) {
+			return true
+		}
+		if lessElem(b.e, a.e) {
+			return false
+		}
+	}
+	return a.fn < b.fn
 }
 
 func (e *Engine) anyDirty(dirty map[*sg.Func]bool) bool {
@@ -783,7 +811,7 @@ func (e *Engine) compute(fn *sg.Func) *fnResult {
 				if set[el] == nil {
 					continue // read from the global state, not produced here
 				}
-				gw := globalWrite{g: g, path: path, e: el}
+				gw := globalWrite{g: g, path: path, e: el, fn: e.funcID(fn)}
 				if !e.globals.has(g, path, el) {
 					r.changed = true
 					// the steps the writer took, for the path of whoever reads it
