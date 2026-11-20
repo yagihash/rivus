@@ -124,6 +124,19 @@ propagators:
     pure: true
   - symbol: (reflect.Type).Name
     pure: true
+  # The type of a value is not the data of it: the identity of a type is not followed as taint.
+  # What a library keeps of a type (a cache of what it knows of it) is read by every function that uses the
+  # cache, and would take the data of the value into all of them.
+  - symbol: reflect.TypeOf
+    pure: true
+  - symbol: reflect.TypeFor
+    pure: true
+  - symbol: (reflect.Value).Type
+    pure: true
+  - symbol: (reflect.Type).String
+    pure: true
+  - symbol: (reflect.Type).PkgPath
+    pure: true
   - symbol: (testing.TB).Fatalf
     pure: true
   - symbol: (testing.TB).Errorf

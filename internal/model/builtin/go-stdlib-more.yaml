@@ -559,6 +559,18 @@ propagators:
   - symbol: text/template.ParseFS
     flows: [{from: arg0, to: result0}]
 
+  # reflect: a number or a boolean read from a value (the numeric_stop rule stops it, and says where)
+  - symbol: (reflect.Value).Len
+    flows: [{from: recv, to: result}]
+  - symbol: (reflect.Value).Kind
+    flows: [{from: recv, to: result}]
+  - symbol: (reflect.Value).IsNil
+    flows: [{from: recv, to: result}]
+  - symbol: (reflect.Value).IsValid
+    flows: [{from: recv, to: result}]
+  - symbol: (reflect.Value).NumField
+    flows: [{from: recv, to: result}]
+
 sinks:
   - symbol: net/http.ServeFile
     args: [2]
