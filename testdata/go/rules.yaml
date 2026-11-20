@@ -49,6 +49,16 @@ sinks:
   - symbol: (example.com/cases/lib.Runner).Run
     category: test
 
+  # when_arg_type on a method: recv: true is the receiver, arg counts without it (testdata/go/cases/recvcond).
+  - symbol: (example.com/cases/cases/recvcond.Out).Put
+    args: [0]
+    category: test
+    when_arg_type: {recv: true, types: [example.com/cases/cases/recvcond.Web]}
+  - symbol: (example.com/cases/cases/recvcond.Box).Fill
+    args: [1]
+    category: test
+    when_arg_type: {arg: 0, types: [example.com/cases/cases/recvcond.Web]}
+
   # match: implementations: the implementations of the interface method are
   # sinks as well (testdata/go/cases/impl).
   - symbol: (example.com/cases/cases/impl.Store).Save

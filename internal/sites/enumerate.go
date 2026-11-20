@@ -116,7 +116,7 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 							if srcs := rules.CallSources[sym]; len(srcs) > 0 {
 								add(&Site{Role: RoleSource, Kind: model.KindCallResult, Symbol: sym, Labels: labelsOf(srcs), IR: at, Src: srcs, irpos: in.Pos, Callee: string(c.ID)})
 							}
-							if sinks := sinksAt(fn, vin, rules.Sinks[sym]); len(sinks) > 0 {
+							if sinks := sinksAt(fn, vin, c.Recv, rules.Sinks[sym]); len(sinks) > 0 {
 								add(&Site{Role: RoleSink, Kind: "call", Symbol: sym, Category: sinks[0].Category, Labels: acceptsOf(sinks), IR: at, Sink: sinks, irpos: in.Pos, Callee: string(c.ID)})
 							}
 						}
@@ -129,7 +129,7 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 					if srcs := rules.CallSources[sym]; len(srcs) > 0 {
 						add(&Site{Role: RoleSource, Kind: model.KindCallResult, Symbol: sym, Labels: labelsOf(srcs), IR: at, Src: srcs, irpos: in.Pos})
 					}
-					if sinks := sinksAt(fn, in, rules.Sinks[sym]); len(sinks) > 0 {
+					if sinks := sinksAt(fn, in, in.Callee.Kind == ir.CalleeDynamic || (in.Callee.Kind == ir.CalleeStatic && in.Callee.Recv), rules.Sinks[sym]); len(sinks) > 0 {
 						add(&Site{Role: RoleSink, Kind: "call", Symbol: sym, Category: sinks[0].Category, Labels: acceptsOf(sinks), IR: at, Sink: sinks, irpos: in.Pos})
 					}
 				case ir.OpFieldLoad, ir.OpFieldStore, ir.OpAddrOf:
@@ -360,12 +360,23 @@ func isConstantRef(form *irssa.Form, r irssa.Ref, depth int) bool {
 }
 
 // sinksAt keeps the sinks whose condition on the type of an argument holds at
-// this call.
-func sinksAt(fn *ir.Func, in ir.Instr, sinks []model.Sink) []model.Sink {
+// this call. hasRecv says that the first of in.Args is the receiver: when_arg_type counts the arguments
+// without it, as args does, and recv: true is the condition on it.
+func sinksAt(fn *ir.Func, in ir.Instr, hasRecv bool, sinks []model.Sink) []model.Sink {
 	var out []model.Sink
 	for _, s := range sinks {
 		if c := s.WhenArgType; c != nil {
-			if c.Arg < 0 || c.Arg >= len(in.Args) || !argTypeHolds(fn, in.Args[c.Arg], c) {
+			at := c.Arg
+			switch {
+			case c.Recv:
+				at = 0
+				if !hasRecv {
+					continue
+				}
+			case hasRecv:
+				at++
+			}
+			if at < 0 || at >= len(in.Args) || !argTypeHolds(fn, in.Args[at], c) {
 				continue
 			}
 		}

@@ -305,6 +305,10 @@ func TestFunctionValues(t *testing.T) { checkCase(t, "funcvalue") }
 func TestFunctionValueSinks(t *testing.T) { checkCase(t, "funcsink") }
 func TestGenerics(t *testing.T)           { checkCase(t, "generics") }
 
+// when_arg_type counts the arguments of a method without the receiver, and recv: true is the receiver
+// (yagihash/rivus #56).
+func TestWhenArgTypeOfAMethod(t *testing.T) { checkCase(t, "recvcond") }
+
 func TestImplementationsStopAtTheLimit(t *testing.T) {
 	prog := loadIR(t, testutil.Testdata(), "./cases/impl/...")
 	rules := testutil.Rules(t)

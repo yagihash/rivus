@@ -157,8 +157,13 @@ type Sink struct {
 }
 
 // ArgTypeCond is a condition on the static type of an argument.
+//
+// Arg counts the arguments as args does: the receiver of a method is not one of them. Recv: true
+// makes the condition on the type of the receiver instead (Arg is then not read). A call that has
+// no receiver does not satisfy a condition on one.
 type ArgTypeCond struct {
 	Arg   int      `yaml:"arg"`
+	Recv  bool     `yaml:"recv"`
 	Types []string `yaml:"types"`
 }
 
@@ -598,7 +603,10 @@ func (rs *RuleSet) validate() error {
 		}
 		if c := s.WhenArgType; c != nil {
 			if c.Arg < 0 {
-				return fmt.Errorf("%s: when_arg_type: arg %d is not an argument position", what, c.Arg)
+				return fmt.Errorf("%s: when_arg_type: arg %d is not an argument position (the receiver is recv: true)", what, c.Arg)
+			}
+			if c.Recv && c.Arg != 0 {
+				return fmt.Errorf("%s: when_arg_type: recv: true is the condition on the receiver, and arg %d is not read", what, c.Arg)
 			}
 			if len(c.Types) == 0 {
 				return fmt.Errorf("%s: when_arg_type needs types: without them the condition never holds and the sink never applies", what)

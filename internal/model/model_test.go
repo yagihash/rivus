@@ -43,6 +43,7 @@ func TestParseErrors(t *testing.T) {
 		"sink negative arg":           "sinks:\n  - symbol: a.B\n    args: [-1, 7]\n",
 		"sink when_arg_type no types": "sinks:\n  - symbol: a.B\n    when_arg_type: {arg: 0}\n",
 		"sink when_arg_type negative": "sinks:\n  - symbol: a.B\n    when_arg_type: {arg: -1, types: [x]}\n",
+		"sink when_arg_type recv and arg": "sinks:\n  - symbol: a.B\n    when_arg_type: {recv: true, arg: 1, types: [x]}\n",
 		"param negative":              "sources:\n  - kind: param\n    symbol: a.B\n    params: [-1]\n    labels: [x]\n",
 		"field with symbol":           "sources:\n  - kind: field\n    field: a.T.f\n    symbol: a.B\n    labels: [x]\n",
 		"field with params":           "sources:\n  - kind: field\n    field: a.T.f\n    params: [0]\n    labels: [x]\n",
