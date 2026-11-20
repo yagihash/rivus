@@ -95,9 +95,9 @@ type Engine struct {
 	// fixed point, each once (however many times it was analysed again).
 	notConverged    []string
 	notConvergedSet map[string]bool
-	// degraded lists the functions whose analysis hit the budget. They are
-	// analysed once and then left alone.
-	degraded map[*sg.Func]bool
+	// degraded lists the functions whose analysis hit a limit, with which (the
+	// deg* bits). They are analysed once and then left alone.
+	degraded map[*sg.Func]uint8
 	// spent is the time each function has used so far.
 	spent map[*sg.Func]time.Duration
 	// guardLimit lists the functions with a flow that had more guards than
@@ -192,7 +192,7 @@ func New(p *sg.Program, texts ir.Texts, st *sites.Result, rules *model.Rules, op
 		prog: p, texts: texts, sites: st, rules: rules, opts: opts,
 		summaries:  map[*sg.Func]*Summary{},
 		states:     map[*sg.Func]*state{},
-		degraded:   map[*sg.Func]bool{},
+		degraded:   map[*sg.Func]uint8{},
 		spent:      map[*sg.Func]time.Duration{},
 		guardLimit: map[*sg.Func]bool{},
 		coarsened:  map[*sg.Func]string{},
@@ -368,8 +368,20 @@ type Stats struct {
 	NotConverged  []string `json:"not_converged,omitempty"`
 	TimedOut      bool     `json:"timed_out,omitempty"`
 	// Unstable lists (up to ten) functions whose summary still changed in
-	// the last pass, when the run did not converge.
-	Unstable []string `json:"unstable,omitempty"`
+	// the last pass, when the run did not converge (empty when it converged); UnstableCount is
+	// how many there were.
+	Unstable      []string `json:"unstable,omitempty"`
+	UnstableCount int      `json:"unstable_count,omitempty"`
+	// BudgetExhausted, FuncTimeouts and RunTimeouts count the functions whose analysis was
+	// stopped by the work limit (Budget: the same on any machine), by the time limit of one
+	// function (-func-timeout: a clock) and by the time limit of the run (-timeout: a clock);
+	// a function is counted once, under the clock when it was stopped by one.
+	BudgetExhausted int `json:"budget_exhausted,omitempty"`
+	FuncTimeouts    int `json:"func_timeouts,omitempty"`
+	RunTimeouts     int `json:"run_timeouts,omitempty"`
+	// LoadDependent is true when the result depends on the load of the machine: a function was
+	// stopped by a clock, or the run was.
+	LoadDependent bool `json:"load_dependent,omitempty"`
 
 	// Sizes of the summaries, to see where the time goes.
 	SummaryElems   int    `json:"summary_elems"`
@@ -436,6 +448,8 @@ func (e *Engine) Run() *Result {
 	}
 	var timedOut atomic.Bool
 	var reanalyses atomic.Int64
+	var lastUnstable []string
+	var lastChanged int
 	for pass := 0; pass < e.opts.MaxPasses; pass++ {
 		st.Passes = pass + 1
 		var anyDone atomic.Bool
@@ -510,10 +524,11 @@ func (e *Engine) Run() *Result {
 			e.commitGlobals()
 		}
 		sort.Strings(changedNow)
+		lastChanged = len(changedNow)
 		if len(changedNow) > 10 {
 			changedNow = changedNow[:10]
 		}
-		st.Unstable = changedNow
+		lastUnstable = changedNow
 		if timedOut.Load() {
 			st.TimedOut = true
 			break
@@ -528,6 +543,11 @@ func (e *Engine) Run() *Result {
 		}
 	}
 	st.Reanalyses = int(reanalyses.Load())
+	// the functions that changed in the last pass say what is not settled, and only a run that did not
+	// converge has any (a run that converged may have changed them in its last pass: that is settling)
+	if !st.Converged {
+		st.Unstable, st.UnstableCount = lastUnstable, lastChanged
+	}
 	sort.Strings(e.notConverged)
 	st.NotConverged = e.notConverged
 	for _, sum := range e.summaries {
@@ -555,6 +575,19 @@ func (e *Engine) Run() *Result {
 		}
 	}
 	st.DepSpentMilli, st.OwnSpentMilli = depSpent.Milliseconds(), ownSpent.Milliseconds()
+	for _, d := range e.degraded {
+		switch {
+		case d&degFuncTimeout != 0:
+			st.FuncTimeouts++
+		case d&degRunTimeout != 0:
+			st.RunTimeouts++
+		default:
+			st.BudgetExhausted++
+		}
+	}
+	// What stopped on the clock depends on the load of the machine: the same run on a quieter
+	// one may find more (ADR-054).
+	st.LoadDependent = st.FuncTimeouts > 0 || st.RunTimeouts > 0 || st.TimedOut
 	st.DurationMilli = time.Since(start).Milliseconds()
 	return e.collect(st)
 }
@@ -570,7 +603,7 @@ func (e *Engine) takeDirty(fn *sg.Func) bool {
 	defer e.mu.Unlock()
 	d := e.dirty[fn]
 	e.dirty[fn] = false
-	return d && !e.degraded[fn]
+	return d && e.degraded[fn] == 0
 }
 
 // runLevel runs f on the components, at most workers at a time, and waits.
@@ -771,14 +804,14 @@ func (e *Engine) commit(fn *sg.Func, r *fnResult, callers map[*sg.Func][]*sg.Fun
 	defer e.mu.Unlock()
 	e.spent[fn] += r.took
 	if s.exceeded {
-		e.degraded[fn] = true
+		e.degraded[fn] |= s.exceededBy
 	}
 	// A function that keeps costing time (its callees' summaries change and
 	// it is visited again) is not visited again once it has used what one
 	// analysis is allowed (four times the limit of one): its summary may miss flows,
 	// and says so.
 	if e.spent[fn] > 4*e.opts.FuncTimeout {
-		e.degraded[fn] = true
+		e.degraded[fn] |= degFuncTimeout
 	}
 	if old := e.summaries[fn]; old == nil || old.Sig != sum.Sig {
 		changed = true
@@ -1064,7 +1097,7 @@ func (e *Engine) collect(st Stats) *Result {
 	}
 	sort.Slice(degraded, func(i, j int) bool { return degraded[i].ID < degraded[j].ID })
 	for _, fn := range degraded {
-		u := newUncertainty(KindDepthLimit, "the analysis budget of this function was exhausted; its summary may miss flows", "")
+		u := newUncertainty(KindDepthLimit, degradedDetail(e.degraded[fn], e.opts), "")
 		u.Func = e.funcID(fn)
 		u.pos = fn.Pos
 		e.fill(u)
@@ -1368,4 +1401,24 @@ func keepEarlier(s, prev *state) {
 			s.numericStops[o] = st
 		}
 	}
+}
+
+// The limits that stop the analysis of a function (Engine.degraded is a set of them). The work
+// limit is the same on any machine; the two time limits are clocks.
+const (
+	degBudget      uint8 = 1 << iota // Options.Budget: the number of elements added
+	degFuncTimeout                   // Options.FuncTimeout: the time of one function
+	degRunTimeout                    // Options.Timeout: the time of the whole run
+)
+
+// degradedDetail is the text of the uncertainty of a function that a limit stopped. A clock is
+// said before the work limit: it is the one that makes the result depend on the machine.
+func degradedDetail(why uint8, o Options) string {
+	switch {
+	case why&degFuncTimeout != 0:
+		return "func_timeout: the analysis of this function used up its time (" + o.FuncTimeout.String() + ", -func-timeout) or the time that its repeated analyses may use; its summary may miss flows, and which flows depends on the load of the machine: the same run on a quieter one may find more"
+	case why&degRunTimeout != 0:
+		return "run_timeout: the time limit of the whole run (-timeout) was reached while this function was analysed; its summary may miss flows, and which flows depends on the load of the machine"
+	}
+	return "budget: the analysis of this function added more than " + itoa(o.Budget) + " elements (the work limit); its summary may miss flows (the same on any machine)"
 }

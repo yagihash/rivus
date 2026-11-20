@@ -79,6 +79,8 @@ Go / Rust / Dart extractor ──→ 中立 IR (CFG, JSON Lines) ──→ Go �
 
 finding の `reachability` は、経路のすべての関数が、プログラムの起点（`main` と `init`、なければ exported）から届くか（`from_entry`、`not_from_entry`）。`not_from_entry` には、説明 `reachability_note` が付く: コードが死んでいるという意味ではない（フレームワークが呼ぶ関数や、登録するハンドラは、起点に入っていない。[ADR-052](docs/DECISIONS.md)）。
 
+関数の解析が上限で止まったとき（`depth_limit`）、理由が先頭に付く: `budget`（作業量。どのマシンでも同じ）、`func_timeout` / `run_timeout`（実時間。マシンの負荷で止まる場所が変わる）。実時間で止まったものがあれば、`summary.load_dependent` が `true` になり、`load_dependent_note` が「この結果はマシンの負荷に依存する」と言う。`stats` に `budget_exhausted`、`func_timeouts`、`run_timeouts`、`load_dependent` の件数が付く。`stats.unstable`（最後のパスでまだ変わった関数）は、収束しなかったときだけ出る（[ADR-054](docs/DECISIONS.md)）。
+
 ## プロジェクトに合わせてモデルを足す
 
 source・sink・sanitizer と、使っているライブラリの伝播（モデル）は、解析するプロジェクトの側に置ける。

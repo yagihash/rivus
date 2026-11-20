@@ -118,6 +118,11 @@ type Summary struct {
 	// reduce itself: library calls without a model, and interface methods
 	// without a known implementation. They show where a model helps most.
 	TopSymbols map[string][]SymbolCount `json:"top_symbols"`
+	// LoadDependent is true when the result depends on the load of the machine: a time limit
+	// (-func-timeout, -timeout) stopped the analysis of a function or of the run, and what a clock
+	// cuts is not the same twice. LoadDependentNote says it, with the numbers (stats has them).
+	LoadDependent     bool   `json:"load_dependent,omitempty"`
+	LoadDependentNote string `json:"load_dependent_note,omitempty"`
 }
 
 // SymbolCount is a symbol and how often it was uncertain.
@@ -196,6 +201,11 @@ func summarize(r *Report) Summary {
 				s.OnFindings[u.Kind]++
 			}
 		}
+	}
+	if st := r.Stats; st.LoadDependent {
+		s.LoadDependent = true
+		s.LoadDependentNote = fmt.Sprintf("this result depends on the load of the machine: %d function(s) were stopped by the time limit of one function (-func-timeout), %d by the time limit of the run (-timeout), and the run itself %s; the same run on a quieter machine may find more (the work limit alone, %d function(s), is the same everywhere)",
+			st.FuncTimeouts, st.RunTimeouts, map[bool]string{true: "was stopped", false: "was not"}[st.TimedOut], st.BudgetExhausted)
 	}
 	if s.Program.Total > 0 {
 		s.RivusShare = float64(s.Program.ByAttribution[taint.AttributableRivus]) / float64(s.Program.Total)

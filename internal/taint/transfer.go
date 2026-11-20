@@ -10,11 +10,13 @@ import (
 // analyze runs the function-local analysis to a fixed point.
 func (s *state) analyze() {
 	limit := time.Now().Add(s.eng.opts.FuncTimeout)
+	timeLimit := degFuncTimeout
 	if d := s.eng.deadline; !d.IsZero() && d.Before(limit) {
 		limit = d
+		timeLimit = degRunTimeout
 	}
 	if !s.prepareLocs(limit) {
-		s.exceeded = true
+		s.exceeded, s.exceededBy = true, timeLimit
 		return
 	}
 	s.seed()
@@ -23,8 +25,13 @@ func (s *state) analyze() {
 		s.changed = false
 		for _, b := range s.fn.Blocks {
 			for _, in := range b.Instrs {
-				if steps++; s.adds > s.eng.opts.Budget || steps%64 == 0 && time.Now().After(limit) {
-					s.exceeded = true
+				steps++
+				if s.adds > s.eng.opts.Budget {
+					s.exceeded, s.exceededBy = true, degBudget
+					return
+				}
+				if steps%64 == 0 && time.Now().After(limit) {
+					s.exceeded, s.exceededBy = true, timeLimit
 					return
 				}
 				s.transfer(in)

@@ -229,6 +229,8 @@ type state struct {
 	widened      bool
 	adds         int
 	exceeded     bool
+	// exceededBy says which limit stopped the analysis (degBudget, degFuncTimeout, degRunTimeout)
+	exceededBy uint8
 }
 
 // maxCellElems is the number of elements a cell may hold before the symbolic
