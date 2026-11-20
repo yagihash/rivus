@@ -3,6 +3,7 @@ package graphq
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/yagihash/rivus/internal/graphdb"
 )
@@ -42,8 +43,9 @@ func rank(e *graphdb.Edge) int {
 // isHub: the call has more candidates than HubCandidates.
 func isHub(e *graphdb.Edge) bool { return !e.Static() && e.NCand > HubCandidates }
 
-// best keeps one edge of the ones between two functions: by rank, then the
-// first in the file.
+// best keeps one edge of the ones between two functions: the one of the
+// smallest rank (a static call, then a dynamic one of few candidates, then a
+// hub), and of the same rank the first in the file.
 func (a *adjacency) best(edges []graphdb.Edge, key func(*graphdb.Edge) int64) []graphdb.Edge {
 	idx := map[int64]int{}
 	var out []graphdb.Edge
@@ -54,7 +56,7 @@ func (a *adjacency) best(edges []graphdb.Edge, key func(*graphdb.Edge) int64) []
 		}
 		k := key(&ed)
 		if j, ok := idx[k]; ok {
-			if ed.Static() && !out[j].Static() {
+			if rank(&ed) < rank(&out[j]) {
 				out[j] = ed
 			}
 			continue
@@ -342,7 +344,7 @@ func (h *pq) pop() pqItem {
 // ones through the fewest hubs first, and among them the shortest (to
 // PathSlack hops more than the best). The distance to a goal is the cost of
 // the way, backward, settled as far as the longest path wanted.
-func (a *adjacency) enumerateHub(starts, goals []int64, want int) (paths [][]graphdb.Edge, roots []int64, cut bool, err error) {
+func (a *adjacency) enumerateHub(starts, goals []int64, want int) (paths [][]graphdb.Edge, roots []int64, bestCost int, cut bool, err error) {
 	w := func(ed *graphdb.Edge) int {
 		if isHub(ed) {
 			return hubCost + 1
@@ -379,7 +381,7 @@ func (a *adjacency) enumerateHub(starts, goals []int64, want int) (paths [][]gra
 		}
 		edges, e := a.prev(it.id)
 		if e != nil {
-			return nil, nil, false, e
+			return nil, nil, 0, false, e
 		}
 		for i := range edges {
 			ed := &edges[i]
@@ -391,7 +393,7 @@ func (a *adjacency) enumerateHub(starts, goals []int64, want int) (paths [][]gra
 		}
 	}
 	if best < 0 {
-		return nil, nil, cut, nil
+		return nil, nil, 0, cut, nil
 	}
 	sort.Slice(starts, func(i, j int) bool { return starts[i] < starts[j] })
 	steps := 0
@@ -441,12 +443,12 @@ func (a *adjacency) enumerateHub(starts, goals []int64, want int) (paths [][]gra
 			}
 			onPath[s] = true
 			if err := dfs(s, 0, s); err != nil {
-				return nil, nil, false, err
+				return nil, nil, 0, false, err
 			}
 			onPath[s] = false
 		}
 	}
-	return paths, roots, cut, nil
+	return paths, roots, best, cut, nil
 }
 
 // found is a path of edges, and the function it starts at.
@@ -504,79 +506,137 @@ type stageRes struct {
 	cut        bool
 	visited    int
 	hubTotal   int
+	// the range the paths cover: the length of the shortest path (the sum for
+	// the stretches of the --via points), how many stretches, and (the hub
+	// stage) the fewest hubs.
+	shortHops, segs, hubs int
+}
+
+// reaching are the functions of ids from which a goal is reached.
+func (a *adjacency) reaching(ids, goals []int64) ([]int64, error) {
+	var live []int64
+	for _, id := range ids {
+		b, err := a.shortest([]int64{id}, goals)
+		if err != nil {
+			return nil, err
+		}
+		if b.found {
+			live = append(live, id)
+		}
+	}
+	return live, nil
 }
 
 // runStage searches with the edges of a stage. The points are the start, the
-// --via functions in order, and the goal: the path is a way for each pair.
+// --via functions in order, and the goal: the path is a way for each pair. A
+// stretch begins where the paths of the one before ended (a --via function that
+// has several IDs, as a method and its wrapper, is entered by one and left by
+// the one that the stretch after it can use).
 func (e *Engine) runStage(s int, points [][]int64, o *Options, want int) (stageRes, error) {
 	a := e.newAdj(stageFilter(s), o.Edge, s == 1)
-	var joined []found
-	cut := false
-	for i := 0; i+1 < len(points); i++ {
-		starts, goals := points[i], points[i+1]
-		b, err := a.shortest(append([]int64(nil), starts...), goals)
-		if err != nil {
-			return stageRes{}, err
-		}
-		if !b.found {
-			return stageRes{exhaustive: b.exhaustive, visited: a.visited, hubTotal: len(a.hubs)}, nil
-		}
-		var seg []found
-		var c bool
-		if s == 2 {
-			ps, roots, c2, err := a.enumerateHub(append([]int64(nil), starts...), goals, want)
+	pts := append([][]int64(nil), points...)
+	narrowed := map[int]bool{}
+	fail := func(exhaustive, cut bool) stageRes {
+		return stageRes{exhaustive: exhaustive, cut: cut, visited: a.visited, hubTotal: len(a.hubs)}
+	}
+restart:
+	for {
+		var joined []found
+		cut := false
+		var short, hubs, segs int
+		for i := 0; i+1 < len(pts); i++ {
+			starts, goals := pts[i], pts[i+1]
+			if i > 0 {
+				seen := map[int64]bool{}
+				starts = nil
+				for _, x := range joined {
+					if end := x.end(); !seen[end] {
+						seen[end] = true
+						starts = append(starts, end)
+					}
+				}
+				sort.Slice(starts, func(p, q int) bool { return starts[p] < starts[q] })
+			}
+			b, err := a.shortest(append([]int64(nil), starts...), goals)
 			if err != nil {
 				return stageRes{}, err
 			}
-			c = c2
-			for j := range ps {
-				seg = append(seg, found{ps[j], roots[j]})
+			if !b.found {
+				if i > 0 && b.exhaustive && !narrowed[i] {
+					// none of the ends of the paths so far goes on: another ID of the point may
+					live, err := a.reaching(pts[i], goals)
+					if err != nil {
+						return stageRes{}, err
+					}
+					if len(live) > 0 {
+						narrowed[i] = true
+						pts[i] = live
+						continue restart
+					}
+				}
+				return fail(b.exhaustive, false), nil
 			}
-		} else {
-			ps, roots, c2, err := a.enumerate(append([]int64(nil), starts...), goals, b.length, want)
-			if err != nil {
-				return stageRes{}, err
+			var seg []found
+			var c bool
+			if s == 2 {
+				ps, roots, best, c2, err := a.enumerateHub(append([]int64(nil), starts...), goals, want)
+				if err != nil {
+					return stageRes{}, err
+				}
+				c = c2
+				for j := range ps {
+					seg = append(seg, found{ps[j], roots[j]})
+				}
+				hubs += best / hubCost
+				short += best % hubCost
+			} else {
+				ps, roots, c2, err := a.enumerate(append([]int64(nil), starts...), goals, b.length, want)
+				if err != nil {
+					return stageRes{}, err
+				}
+				c = c2
+				for j := range ps {
+					seg = append(seg, found{ps[j], roots[j][0]})
+				}
+				short += b.length
 			}
-			c = c2
-			for j := range ps {
-				seg = append(seg, found{ps[j], roots[j][0]})
+			segs++
+			cut = cut || c
+			if len(seg) == 0 {
+				// reached, but the listing was cut before one: say it is not exhaustive
+				return fail(false, true), nil
 			}
-		}
-		cut = cut || c
-		if len(seg) == 0 {
-			// reached, but the listing was cut before one: say it is not exhaustive
-			return stageRes{exhaustive: false, cut: true, visited: a.visited, hubTotal: len(a.hubs)}, nil
-		}
-		if i == 0 {
-			joined = seg
-			continue
-		}
-		var next []found
-		for _, x := range joined {
-			for _, y := range seg {
-				if y.root == x.end() {
-					next = append(next, found{append(append([]graphdb.Edge(nil), x.edges...), y.edges...), x.root})
+			if i == 0 {
+				joined = seg
+				continue
+			}
+			var next []found
+			for _, x := range joined {
+				for _, y := range seg {
+					if y.root == x.end() {
+						next = append(next, found{append(append([]graphdb.Edge(nil), x.edges...), y.edges...), x.root})
+					}
 				}
 			}
-		}
-		sort.SliceStable(next, func(p, q int) bool {
-			if next[p].simple() != next[q].simple() {
-				return next[p].simple()
+			sort.SliceStable(next, func(p, q int) bool {
+				if next[p].simple() != next[q].simple() {
+					return next[p].simple()
+				}
+				if next[p].hubs() != next[q].hubs() {
+					return next[p].hubs() < next[q].hubs()
+				}
+				return len(next[p].edges) < len(next[q].edges)
+			})
+			if len(next) > want {
+				next = next[:want]
 			}
-			if next[p].hubs() != next[q].hubs() {
-				return next[p].hubs() < next[q].hubs()
+			if len(next) == 0 {
+				return fail(false, true), nil
 			}
-			return len(next[p].edges) < len(next[q].edges)
-		})
-		if len(next) > want {
-			next = next[:want]
+			joined = next
 		}
-		if len(next) == 0 {
-			return stageRes{exhaustive: false, cut: true, visited: a.visited, hubTotal: len(a.hubs)}, nil
-		}
-		joined = next
+		return stageRes{found: true, paths: joined, exhaustive: true, cut: cut, visited: a.visited, hubTotal: len(a.hubs), shortHops: short, segs: segs, hubs: hubs}, nil
 	}
-	return stageRes{found: true, paths: joined, exhaustive: true, cut: cut, visited: a.visited, hubTotal: len(a.hubs)}, nil
 }
 
 type searchRes struct {
@@ -600,7 +660,9 @@ func (e *Engine) search(points [][]int64, o *Options, want int) (*searchRes, err
 		if r, err = e.runStage(s, points, o, want); err != nil {
 			return nil, err
 		}
-		if r.found {
+		// a stage whose listing was cut before a path is not "no path": the next one is not
+		// searched in its place (it could give a path of a lesser kind while a better one exists)
+		if r.found || r.cut {
 			break
 		}
 	}
@@ -642,6 +704,7 @@ func (e *Engine) Path(from, to string, o Options) (*PathResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("--to: %w", err)
 	}
+	asked := o
 	if err := e.prepare(&o, &res.Common); err != nil {
 		return nil, err
 	}
@@ -735,15 +798,23 @@ func (e *Engine) Path(from, to string, o Options) (*PathResult, error) {
 		}
 		res.Hints = append(res.Hints, what)
 		if o.filtered() {
-			wf, err := e.withoutFilters(&o, src, dst, startsFor)
+			wf, err := e.withoutFilters(&asked, src, dst, startsFor, res.Exhaustive)
 			if err != nil {
 				return nil, err
 			}
 			res.WithoutFilters = wf
-			if wf.Reachable {
+			switch {
+			case wf.Reachable && res.Exhaustive:
 				res.Hints = append(res.Hints, fmt.Sprintf("without the filters there is a path (%s, %d hops): one of them cuts it; take one off", wf.Certainty, wf.Hops))
-			} else {
+				if len(wf.Culprits) > 0 {
+					res.Hints = append(res.Hints, "taking off only one of these lets a path through (the others kept): "+strings.Join(wf.Culprits, "; "))
+				}
+			case wf.Reachable:
+				res.Hints = append(res.Hints, fmt.Sprintf("without the filters there is a path (%s, %d hops), but the search under the filters was cut by a bound (%d functions visited, at most %d hops): it cannot be said that the filters are the cause", wf.Certainty, wf.Hops, sr.visited, MaxPathHops))
+			case wf.Exhaustive:
 				res.Hints = append(res.Hints, "without the filters there is no path either")
+			default:
+				res.Hints = append(res.Hints, "without the filters the search was cut by a bound too: \"no path\" is not proved with or without them")
 			}
 		}
 		if o.FromEntry {
@@ -767,6 +838,12 @@ func (e *Engine) Path(from, to string, o Options) (*PathResult, error) {
 		res.Paths = append(res.Paths, out)
 	}
 	res.Certainty = res.Paths[0].Certainty
+	res.Listed = &Listed{Stage: stageNames[sr.stage], ShortestHops: sr.shortHops, MaxHops: sr.shortHops + PathSlack*sr.segs}
+	if sr.stage == 2 {
+		h := sr.hubs
+		res.Listed.Hubs = &h
+	}
+	res.Beyond = "not_searched"
 	switch res.Certainty {
 	case "uncertain":
 		res.Hints = append(res.Hints, "no path by the static calls alone: these go through an interface or a function value; \"candidates\" is the number of functions that call may reach")
@@ -776,7 +853,7 @@ func (e *Engine) Path(from, to string, o Options) (*PathResult, error) {
 	case "hub":
 		res.Hints = append(res.Hints,
 			fmt.Sprintf("no path without a call of more than %d candidates (a hub): the paths listed go through the fewest of them, then the shortest; a step with \"hub\" is such a call, and \"candidates\" says how many functions it may reach", HubCandidates),
-			"such a path may be real or not: to check one, ask from the implementation the code uses (--from the method, or the type it is made of), narrow the call with --only-impl <type>, or cut a hub with --avoid <function>")
+			"such a path may be real or not: to check one, ask from the implementation the code uses (--from the method, or the type it is made of), narrow the call with --only-impl <type>, or cut a hub: --avoid-call <file:line:col> cuts one call site (an \"at\" of the path), --avoid <function> a whole function")
 	}
 	if o.filtered() {
 		res.Hints = append(res.Hints, "the paths are those that the filters above (\"filters\") allow")
@@ -793,9 +870,11 @@ func (e *Engine) Path(from, to string, o Options) (*PathResult, error) {
 	return res, nil
 }
 
-// withoutFilters asks the question again without the filters, to say whether
-// they are what stops the path.
-func (e *Engine) withoutFilters(o *Options, src, dst *Target, startsFor func(bool) ([]int64, error)) (*WithoutFilters, error) {
+// withoutFilters asks the question again without the filters (--via too), to
+// say whether they are what stops the path. With more than one filter it asks
+// again with each one taken off alone, and names the ones that let a path
+// through. o is what was asked, before the filters were made into a predicate.
+func (e *Engine) withoutFilters(o *Options, src, dst *Target, startsFor func(bool) ([]int64, error), whole bool) (*WithoutFilters, error) {
 	starts, err := startsFor(false)
 	if err != nil {
 		return nil, err
@@ -805,12 +884,74 @@ func (e *Engine) withoutFilters(o *Options, src, dst *Target, startsFor func(boo
 	if err != nil {
 		return nil, err
 	}
-	wf := &WithoutFilters{Reachable: sr.found, Searched: sr.searched}
+	wf := &WithoutFilters{Reachable: sr.found, Searched: sr.searched, Exhaustive: sr.exhaustive && !sr.cut}
 	if sr.found {
 		wf.Certainty = []string{"certain", "uncertain", "hub"}[sr.stage]
 		wf.Hops = len(sr.paths[0].edges)
 	}
+	if !sr.found || !whole || o.nFilters() < 2 {
+		return wf, nil
+	}
+	// each filter taken off alone, the others kept
+	type drop struct {
+		name string
+		make func(Options) Options
+	}
+	var drops []drop
+	cut := func(l []string, i int) []string { return append(append([]string(nil), l[:i]...), l[i+1:]...) }
+	for i := range o.Avoid {
+		i := i
+		drops = append(drops, drop{"--avoid " + o.Avoid[i], func(x Options) Options { x.Avoid = cut(x.Avoid, i); return x }})
+	}
+	for i := range o.AvoidCall {
+		i := i
+		drops = append(drops, drop{"--avoid-call " + o.AvoidCall[i], func(x Options) Options { x.AvoidCall = cut(x.AvoidCall, i); return x }})
+	}
+	for i := range o.Via {
+		i := i
+		drops = append(drops, drop{"--via " + o.Via[i], func(x Options) Options { x.Via = cut(x.Via, i); return x }})
+	}
+	for i := range o.OnlyImpl {
+		i := i
+		drops = append(drops, drop{"--only-impl " + o.OnlyImpl[i], func(x Options) Options { x.OnlyImpl = cut(x.OnlyImpl, i); return x }})
+	}
+	for _, d := range drops {
+		x := d.make(*o)
+		var c Common
+		if err := e.prepare(&x, &c); err != nil {
+			return nil, err
+		}
+		st := starts
+		if src.Call != nil {
+			if st, err = startsWith(e, src, &x); err != nil {
+				return nil, err
+			}
+		}
+		pts := append(append([][]int64{st}, x.via...), dst.Funcs)
+		r, err := e.search(pts, &x, 1)
+		if err != nil {
+			return nil, err
+		}
+		if r.found {
+			wf.Culprits = append(wf.Culprits, d.name)
+		}
+	}
 	return wf, nil
+}
+
+// startsWith are the functions a call as the start reaches, under the filters of o.
+func startsWith(e *Engine, src *Target, o *Options) ([]int64, error) {
+	edges, err := e.edgesOfCall(src)
+	if err != nil {
+		return nil, err
+	}
+	var starts []int64
+	for i := range edges {
+		if o.pass(&edges[i]) {
+			starts = append(starts, edges[i].To)
+		}
+	}
+	return starts, nil
 }
 
 func (e *Engine) stepOfCall(c *graphdb.CallRow, holder int64) (Step, error) {

@@ -201,14 +201,18 @@ Usage:
   rivus graph info    [-graph <file> | -C <dir>]
   rivus graph callers [-graph <file> | -C <dir>] [--depth N] [--limit K] [--include-builtin] [filters] <target>
   rivus graph callees [-graph <file> | -C <dir>] [--depth N] [--limit K] [--include-builtin] [filters] <target>
-  rivus graph impls   [-graph <file> | -C <dir>] [--limit K] [--avoid <symbol>] [--only-impl <type>] <interface method>
-  rivus graph dispatchers [-graph <file> | -C <dir>] [--limit K] [--avoid <symbol>] [--only-impl <type>] <implementation>
+  rivus graph impls   [-graph <file> | -C <dir>] [--limit K] [--avoid <symbol>] [--avoid-call <file:line:col>] [--only-impl <type>] <interface method>
+  rivus graph dispatchers [-graph <file> | -C <dir>] [--limit K] [--avoid <symbol>] [--avoid-call <file:line:col>] [--only-impl <type>] <implementation>
   rivus graph path    [-graph <file> | -C <dir>] (--from <target> | --from-entry) --to <target> [--limit K] [--hubs] [filters]
 
 Filters (they may be given again, and the answer's "filters" says each one):
-  --avoid <symbol>      never go through this function
+  --avoid <symbol>      never go through this function (all of its calls, and all calls to it)
+  --avoid-call <file:line:col>
+                        never go through this one call site (the function that holds it, and its other calls, stay):
+                        to cut one dubious call of a path through a hub, and ask again
   --via <symbol>        only what goes through this function (path: in the order given)
-  --only-impl <type>    a call through an interface reaches only the methods of this type
+  --only-impl <type>    a call through an interface that has a method of this type among its candidates reaches only
+                        those methods; a call through an interface that has none is not narrowed (the answer says how many)
 
 Commands:
   info     what the file holds, when and from which source it was made, and (with -C) whether the source is still the same

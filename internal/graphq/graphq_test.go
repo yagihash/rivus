@@ -66,7 +66,12 @@ func build(t *testing.T, fns []fnDef, ss ...*sites.Site) *graphq.Engine {
 		if len(f.calls) > 0 {
 			file = f.calls[0].file
 		}
-		fn := &ir.Func{ID: ir.FuncID(f.id), Symbol: f.id, Pos: ir.Pos{File: file, Line: 1 + i, Col: 6, Offset: 1000 + i}}
+		// "V@@1": the function of the ID "V@@1", whose symbol is "V" (a method and its wrapper)
+		sym := f.id
+		if i := strings.Index(sym, "@@"); i >= 0 {
+			sym = sym[:i]
+		}
+		fn := &ir.Func{ID: ir.FuncID(f.id), Symbol: sym, Pos: ir.Pos{File: file, Line: 1 + i, Col: 6, Offset: 1000 + i}}
 		fn.Entry, fn.Exported = entryIDs[f.id], exportedIDs[f.id]
 		fn.Params = []ir.Param{{Name: "p", Class: ir.ClassFunc}}
 		fn.Locals = []ir.Local{{Class: ir.ClassFunc}}

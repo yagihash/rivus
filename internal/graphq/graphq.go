@@ -63,6 +63,9 @@ type Options struct {
 	Avoid    []string
 	Via      []string
 	OnlyImpl []string
+	// AvoidCall: no edge of these call sites (file:line:col); the function that
+	// holds the call stays, and so do its other calls.
+	AvoidCall []string
 	// Hubs (path): search with the calls of many candidates at once, instead of
 	// only when there is no path without them.
 	Hubs bool
@@ -249,6 +252,25 @@ type WithoutFilters struct {
 	Certainty string   `json:"certainty,omitempty"`
 	Hops      int      `json:"hops,omitempty"`
 	Searched  []string `json:"searched"`
+	// Exhaustive: false when a bound cut that search too.
+	Exhaustive bool `json:"exhaustive"`
+	// Culprits (with more than one filter): the filters that, taken off alone
+	// (the others kept), let a path through.
+	Culprits []string `json:"culprits,omitempty"`
+}
+
+// Listed says what the paths of a path answer cover: the ones of the stage that
+// found, with the fewest hubs, and no more than PathSlack hops longer than the
+// shortest. Paths outside this are not listed, and "truncated" does not count
+// them: they were not searched (see Beyond).
+type Listed struct {
+	// Stage is the kind of edges the paths use: static, dynamic or hub.
+	Stage string `json:"stage"`
+	// Hubs (stage hub): the number of hubs of each path listed, the fewest there is.
+	Hubs *int `json:"hubs,omitempty"`
+	// ShortestHops is the length of the shortest path; MaxHops the longest that was looked for.
+	ShortestHops int `json:"shortest_hops"`
+	MaxHops      int `json:"max_hops"`
 }
 
 // PathResult is the answer of path.
@@ -267,6 +289,11 @@ type PathResult struct {
 	// not proved. When true and there is no path, it is true of what was searched.
 	Exhaustive bool   `json:"exhaustive"`
 	Paths      []Path `json:"paths"`
+	// Listed is the range the paths cover (none when there is no path), and
+	// Beyond what is outside it: "not_searched" (a longer path, or one with
+	// more hubs, may exist; "truncated" does not count it).
+	Listed *Listed `json:"listed,omitempty"`
+	Beyond string  `json:"beyond,omitempty"`
 	// HubSkippedTotal is the number of calls with more than HubCandidates
 	// candidates that the search met and did not go through (all of them, once
 	// each); a path through one may exist. 0 when the hubs were searched, or the

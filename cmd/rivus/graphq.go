@@ -69,10 +69,11 @@ func runGraphQuery(op string, args []string) error {
 	builtin := fs.Bool("include-builtin", false, "keep the calls of builtins (len, append...), which are left out")
 	pretty := fs.Bool("pretty", false, "indent the JSON")
 	site := fs.String("site", "", "callers, callees: the target is this site of \"rivus sites\"")
-	var avoid, via, onlyImpl listFlag
+	var avoid, avoidCall, via, onlyImpl listFlag
 	fs.Var(&avoid, "avoid", "the filter: never go through this function (a symbol; may be given again)")
+	fs.Var(&avoidCall, "avoid-call", "the filter: never go through this one call site (file:line:col, as \"at\" of an answer says it; may be given again). --avoid cuts a function whole; this cuts one call")
 	fs.Var(&via, "via", "the filter: only what goes through this function (callers, callees: only the way through it; path: in the order given; may be given again)")
-	fs.Var(&onlyImpl, "only-impl", "the filter: a call through an interface reaches only the methods of this type (a name as in the symbols: bytes.Buffer; may be given again)")
+	fs.Var(&onlyImpl, "only-impl", "the filter: a call through an interface that has a method of this type among its candidates reaches only those methods; one that has none is not narrowed (a name as in the symbols: bytes.Buffer; may be given again)")
 	var from, to *string
 	var hubs, fromEntry *bool
 	if op == "path" {
@@ -144,7 +145,7 @@ func runGraphQuery(op string, args []string) error {
 	}
 
 	eng := graphq.New(db)
-	opts := graphq.Options{Depth: *depth, Limit: *limit, IncludeBuiltin: *builtin, Avoid: avoid, Via: via, OnlyImpl: onlyImpl}
+	opts := graphq.Options{Depth: *depth, Limit: *limit, IncludeBuiltin: *builtin, Avoid: avoid, AvoidCall: avoidCall, Via: via, OnlyImpl: onlyImpl}
 	if op == "path" {
 		opts.Hubs, opts.FromEntry = *hubs, *fromEntry
 	}

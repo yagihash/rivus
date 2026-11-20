@@ -303,8 +303,8 @@ func TestFilters(t *testing.T) {
 	if r.Reachable || r.WithoutFilters == nil || !r.WithoutFilters.Reachable || !strings.HasPrefix(r.Filters[0], "only-impl Y") {
 		t.Errorf("%+v", r)
 	}
-	// the type is the whole word: "X" is not "XX"
-	if c, _ = e.Callees("main", graphq.Options{OnlyImpl: []string{"."}}); hasEdge(&c.Graph, "main", "X.M", "interface") != nil {
+	// the type is the whole word: "X" is not "XX"; no candidate of the call site is a method of it, so the site is not narrowed
+	if c, _ = e.Callees("main", graphq.Options{OnlyImpl: []string{"."}}); hasEdge(&c.Graph, "main", "X.M", "interface") == nil || hasEdge(&c.Graph, "main", "Y.M", "interface") == nil {
 		t.Errorf("%+v", c.Edges)
 	}
 	// a type no function has is said
