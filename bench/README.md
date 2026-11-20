@@ -25,6 +25,23 @@ Dart or Rust toolchain), do not push**: say so and wait. `go test ./...` and the
 not enough, because the shapes in them are the ones that were already known (the regression of
 ADR-048, a540f30 to c44bfdd, was found only by the findings of gogs and gin-vue-admin).
 
+**In one command: `bench/compare.sh <base> <head>`** (for example `bench/compare.sh c44bfdd origin/main`)
+does steps 1, 4 and the comparison of 5 for you: it builds both states in worktrees, makes the copies of
+the targets of the table below (`git clone` and `git checkout`, then `ls go.mod` and `go list ./...`; a
+copy that cannot be made is listed as NOT RUN), runs **one benchmark at a time, base then head**, and
+writes `summary.md` (one row per benchmark; a removed finding is marked `!!` at the top) and
+`details/<bench>.md` (every added, removed, and changed finding, one per line: reachability, the
+representative path, `other_sources`, the uncertainties by kind and by `depth_limit` reason, `stats`,
+peak RSS; a run that did not converge is said so). Exit status: 0 nothing lost, 1 a finding was
+removed, 2 something did not run. Before each run it waits until swap use is 50% or less and no other
+`rivus` / `rv-*` / `rivus-*` process runs (`--wait HOURS`); `GOMEMLIMIT` is set per benchmark
+(`--gomemlimit NAME=VAL`; gogs 5GiB, Gitea 10GiB); `-timeout` is the same for both. For a night:
+`nohup bench/compare.sh --resume <base> <head> > compare.log 2>&1 &` (each result is saved per
+benchmark; `--resume` skips the ones that are done). Gitea (`--with-gitea`) and ech0 (`--with-ech0`) are
+off by default. `--dry-run` prints the plan; `--help` the options. The classification of step 5, and
+step 2 (`go test ./...`) and step 3 (`go-synth`), are still yours. The script does not score against
+the truth files except for printing `score.py`'s last lines.
+
 1. Build the binary of each state (the commit before, and the working tree), from the same toolchain:
    `git stash` or `git worktree add <dir> <before>`, then `go build -o <dir>/rivus-before ./cmd/rivus`
    and `go build -o <dir>/rivus-after ./cmd/rivus`. Keep them; every step below runs both.
