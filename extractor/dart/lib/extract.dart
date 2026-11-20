@@ -102,7 +102,7 @@ Future<void> extract(String root, StringSink sink,
   }
   for (final e in refused.entries) {
     out.loadError(e.key,
-        'a dependency outside the project, the pub cache and the SDKs is not read (what package_config.json points to is not trusted): --allow-deps-under ${p.dirname(e.key)} reads it');
+        'a dependency outside the project, the pub cache and the SDKs is not read (what package_config.json points to is not trusted): --allow-deps-under ${_advisedDir(e.key)} reads it');
   }
   units.sort((a, b) => a.file.compareTo(b.file));
   for (final u in units) {
@@ -130,17 +130,34 @@ List<String> _trustedDependencyRoots(List<String> extra) {
   final env = Platform.environment;
   final roots = <String>[];
   final home = env['HOME'] ?? env['USERPROFILE'];
-  final cache = env['PUB_CACHE'] ??
+  // an empty variable is not set: p.absolute('') is the current directory
+  final cache = (env['PUB_CACHE'] != null && env['PUB_CACHE']!.isNotEmpty ? env['PUB_CACHE'] : null) ??
       (Platform.isWindows ? (env['LOCALAPPDATA'] == null ? null : p.join(env['LOCALAPPDATA']!, 'Pub', 'Cache')) : (home == null ? null : p.join(home, '.pub-cache')));
   if (cache != null) roots.add(p.normalize(p.absolute(cache)));
+  // The SDK is two above the executable (<sdk>/bin/dart) only when that is an SDK: a compiled extractor in
+  // ~/bin would make the whole home directory trusted (yagihash/rivus #61).
   final sdk = p.dirname(p.dirname(Platform.resolvedExecutable));
-  roots.add(sdk);
-  // <flutter>/bin/cache/dart-sdk
-  if (p.basename(sdk) == 'dart-sdk' && p.basename(p.dirname(sdk)) == 'cache') roots.add(p.dirname(p.dirname(p.dirname(sdk))));
+  if (_isSdk(sdk)) {
+    roots.add(sdk);
+    // <flutter>/bin/cache/dart-sdk
+    if (p.basename(sdk) == 'dart-sdk' && p.basename(p.dirname(sdk)) == 'cache') roots.add(p.dirname(p.dirname(p.dirname(sdk))));
+  }
   final flutter = env['FLUTTER_ROOT'];
   if (flutter != null && flutter.isNotEmpty) roots.add(p.normalize(p.absolute(flutter)));
   roots.addAll(extra.map((d) => p.normalize(p.absolute(d))));
   return roots;
+}
+
+bool _isSdk(String dir) =>
+    File(p.join(dir, 'version')).existsSync() && Directory(p.join(dir, 'lib', '_internal')).existsSync();
+
+/// The directory that a refusal advises to allow: the one above the package, so that its siblings are read
+/// too; but not a directory that is the root or the home, which would open everything: the package itself.
+String _advisedDir(String packageDir) {
+  final parent = p.dirname(packageDir);
+  final home = Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'];
+  final shallow = parent == packageDir || p.dirname(parent) == parent || (home != null && p.equals(parent, home));
+  return shallow ? packageDir : parent;
 }
 
 /// The directory of the package a file is in: the one above its `lib` (or else the file's own).

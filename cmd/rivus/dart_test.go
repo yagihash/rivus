@@ -96,13 +96,14 @@ func TestDartDependenciesOutsideTheProjectAreNotReadUnlessAsked(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(outside, "pubspec.yaml"), []byte("name: other\nenvironment:\n  sdk: ^3.8.0\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	extract := func(extra ...string) *ir.Program {
+	extractIn := func(wd string, env []string, extra ...string) *ir.Program {
 		words := strings.Fields(dart)
 		args := append(words[1:], "run", "bin/rivus_dart.dart")
 		args = append(args, extra...)
 		args = append(args, project)
 		cmd := exec.Command(words[0], args...)
 		cmd.Dir = extractor
+		cmd.Env = append(os.Environ(), env...)
 		out, err := cmd.Output()
 		if err != nil {
 			t.Fatalf("the extractor failed: %v", err)
@@ -113,6 +114,7 @@ func TestDartDependenciesOutsideTheProjectAreNotReadUnlessAsked(t *testing.T) {
 		}
 		return prog
 	}
+	extract := func(extra ...string) *ir.Program { return extractIn("", nil, extra...) }
 	has := func(p *ir.Program, name string) bool {
 		for _, f := range p.Funcs {
 			if strings.HasSuffix(string(f.ID), name) {
@@ -137,6 +139,10 @@ func TestDartDependenciesOutsideTheProjectAreNotReadUnlessAsked(t *testing.T) {
 	}
 	if !said {
 		t.Errorf("the stream does not say that a dependency was left out: %+v", refused.LoadErrors)
+	}
+	// an empty PUB_CACHE is not read as a trusted directory (yagihash/rivus #61)
+	if emptyCache := extractIn("", []string{"PUB_CACHE="}); has(emptyCache, "secret.dart#leak") {
+		t.Error("an empty PUB_CACHE made a directory trusted")
 	}
 	if allowed := extract("--allow-deps-under", outside); !has(allowed, "secret.dart#leak") {
 		t.Error("a dependency under a directory that was asked for is not read")
