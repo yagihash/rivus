@@ -115,6 +115,9 @@ type Engine struct {
 	loadErrors []ir.LoadError
 	// callSites lists, for each function, the calls that may reach it.
 	callSites map[*sg.Func][]*sg.Instr
+	// heldNothing: for each package variable that holds nothing, the functions that wrote to it (ADR-056).
+	heldMu      sync.Mutex
+	heldNothing map[string]map[*sg.Func]bool
 }
 
 // writersOf lists the functions that directly store to the package variable.
@@ -370,6 +373,9 @@ type Stats struct {
 	OwnSpentMilli int64    `json:"own_spent_ms,omitempty"`
 	NotConverged  []string `json:"not_converged,omitempty"`
 	TimedOut      bool     `json:"timed_out,omitempty"`
+	// DroppedGlobals are the package variables that a rule says hold nothing (ADR-056), and the number of functions
+	// that wrote to them.
+	DroppedGlobals []DroppedGlobal `json:"dropped_globals,omitempty"`
 	// Unstable lists (up to ten) functions whose summary still changed in
 	// the last pass, when the run did not converge (empty when it converged); UnstableCount is
 	// how many there were.
@@ -546,6 +552,7 @@ func (e *Engine) Run() *Result {
 		}
 	}
 	st.Reanalyses = int(reanalyses.Load())
+	st.DroppedGlobals = e.droppedGlobals()
 	// the functions that changed in the last pass say what is not settled, and only a run that did not
 	// converge has any (a run that converged may have changed them in its last pass: that is settling)
 	if !st.Converged {
@@ -1122,6 +1129,8 @@ func (e *Engine) collect(st Stats) *Result {
 	if stops := e.numericStopRecords(); len(stops) > 0 {
 		res.Uncertainties = append(res.Uncertainties, stops...)
 	}
+	// the package variables that a rule says hold nothing, and that functions wrote to: one record for each variable
+	res.Uncertainties = append(res.Uncertainties, e.heldNothingRecords()...)
 	var degraded []*sg.Func
 	for fn := range e.degraded {
 		degraded = append(degraded, fn)

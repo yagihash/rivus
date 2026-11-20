@@ -94,7 +94,18 @@ func (s *state) summarize() *Summary {
 				continue
 			}
 			if s.eng.rules.HoldsNothing(r.V.Name) {
-				continue // read back by nobody (a rule says so, ADR-056)
+				// read back by nobody (a rule says so, ADR-056): the function is recorded, once for the variable
+				for _, set := range s.cells[r] {
+					produced := false
+					for _, w := range set {
+						produced = produced || w != nil
+					}
+					if produced {
+						s.eng.noteHeldNothing(r.V.Name, s.fn)
+						break
+					}
+				}
+				continue
 			}
 			kind, glob = OutGlobal, r.V
 		}

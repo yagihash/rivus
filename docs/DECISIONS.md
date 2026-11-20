@@ -1249,10 +1249,10 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
 3. 組み込みのモデル（`go-pure.yaml`）に、`os.Stderr` と `os.Stdout` を書く。プロジェクトのルールで、`holds: everything` と書くと、外れる（精度の限界を、利用者が外せる）。`Merge` は、どの集合でも `everything` と言われた変数を、`nothing` から外す（集合の順序によらない）。
 4. エンジンのコードに、`os.Stderr` とは書かない（`Rules.HoldsNothing(name)` を引くだけ）。
 
-**測定（Gitea、`reflect` のモデルあり、callouts なし）:** `summary_elems` 839,401 → 439,321、`summary_steps` 35.1M → 16.5M、最大の要約 15,200 → 935、`reanalyses` 134,075 → 120,899、`depth_limit` 1,431 → 1,217、収束は 8 パスのまま、finding 37 → 38（source の入れ替わり: 出ていく 6 組、入る 7 組）。最大 RSS（13.5 GB）とパスの数は変わらない。rivus 自身（dogfood）: `reanalyses` 10,265 → 7,742、finding は 88 で同一、`dropped` は `os.Stderr` の 4 回、`os.Stdout` の 1 回。gogs: 変わらない。
+**測定（Gitea、`reflect` のモデルあり、callouts なし）:** `summary_elems` 839,401 → 439,321、`summary_steps` 35.1M → 16.5M、最大の要約 15,200 → 935、`reanalyses` 134,075 → 120,899、`depth_limit` 1,431 → 1,217、収束は 8 パスのまま、finding 37 → 38（source の入れ替わり: 出ていく 6 組、入る 7 組）。最大 RSS（13.5 GB）とパスの数は変わらない。rivus 自身（dogfood、同じ木 = main の dd6436f を、main のバイナリと `holds` のバイナリで解析）: `reanalyses` 10,163 → 7,656（−24.7 %）、`summary_elems` 31,653 → 27,426、finding は 39 件で同一（`(source, sink)` の組 39、sink 11 か所。数え方は、finding の件数と、組の数の両方）、`depth_limit` 39 → 38（`capture_unbound`）。gogs: 変わらない。（C-1 の前の版で測った数字は、finding 88 だった。測り直した。）
 
 **限界:**
 - **見逃す形**: `os.Stdout` / `os.Stderr` を差し替えて、読み戻すコード（`os.Pipe` と、`os.Stdout = w`、別の端から読む）は、追わない。`holds: everything` で戻せる。
-- 黙った見逃しにしない不確実性は、まだ出していない（「このグローバルへの書き込みは、追っていない」。件数が少ない（Gitea で 1〜数回、dogfood で 5 回）ので、`stats.dropped_globals`（`-v`）に出す案がある）。
+- 黙った見逃しにしない: 書き込みがあった変数ごとに、不確実性を **1 件**出す（`global_holds_nothing`、`attributable_to: rivus`。書いた関数（上位 10 件）を `candidates` に、最初の 1 つを `func` に）。理由: `numeric_stop` と同じく、モデルの判断で、利用者がルール（`holds: everything`）で取り戻せるので、rivus の側の限界として扱う。新しい種類の値は足さず、既存の `rivus` を使う（`kind` は新しい）。`stats.dropped_globals` に、変数ごとの、書いた関数の数を出す。件数は、変数の数（組み込みでは最大 2）。
 - `holds` の値は、今は 2 つ。将来の 3 つ目（「メタデータだけ持つ」）を足せる名前にしてある。
 - `sync.Pool`（`sync.allPools`、`sync.oldPools`）のような、型のモデルで言う形は、別。
