@@ -1,0 +1,38 @@
+# Rules of the curated Go benchmark. The framework (web), the ORM (orm) and the
+# command helper (sys) are small copies of what Gitea, gogs and gin-vue-admin
+# use; the rules name them the way the rules for the real ones do.
+ruleset: rivus/bench-go-curated@1
+
+sources:
+  - symbol: (*curated/web.Context).Query
+    labels: [user_input]
+  - symbol: (*curated/web.Context).Param
+    labels: [user_input]
+  - symbol: (*curated/web.Context).PostForm
+    labels: [user_input]
+  - symbol: (*curated/web.Context).GetHeader
+    labels: [user_input]
+  # the binders fill their argument, as ShouldBindJSON does
+  - symbol: (*curated/web.Context).Bind
+    out: [0]
+    labels: [user_input]
+
+sinks:
+  - symbol: (*curated/orm.DB).Exec
+    args: [0]
+    category: sql_injection
+  - symbol: (*curated/orm.DB).Where
+    args: [0]
+    category: sql_injection
+  - symbol: curated/sys.Run
+    category: command_injection
+  - symbol: (*curated/web.Context).Redirect
+    category: open_redirect
+  - symbol: (*curated/web.Context).HTML
+    category: xss
+
+sanitizers:
+  - symbol: curated/valid.Ident
+    drops: [user_input]
+  - symbol: curated/valid.Quote
+    drops: [user_input]
