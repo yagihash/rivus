@@ -40,7 +40,7 @@ func main() {
 | 捕獲した変数への書き込み(`OutParam`、`argv[o.Index]` = 捕獲した値の指す先) | **当てる** | 捕獲した変数のセル(`out = a`)。`Go` の `var out string` と、Dart / Rust の変数の書き込み |
 | グローバルへの書き込み(`OutGlobal`) | **当てる** | グローバルのセル |
 | throw(`OutThrow`) | **当てない。ただし黙って落とさない** | throw は、呼ばれたところから抜ける。`make_closure` の場所に流すと、作った関数が throw することになり、過大。`try { run(() => throw x) } catch` は、見逃す。クロージャの要約に、**捕獲の値に依る throw の出力があるとき**は、(4)の不確実性を出す条件に含める(「当てなかった」ことが残る。detail に、throw は当てていないと書く) |
-| 戻り値(`OutResult`) | 当てない | 下の(2) |
+| 戻り値(`OutResult`) | **当てない。ただし黙って落とさない**(throw と同じ) | クロージャの結果は、呼ぶところで受け取るもの。`make_closure` の場所に、呼ぶところは無い(行き先が無い)。`cc.roots = nil`。**捕獲の値に依る `OutResult` があるときは、(4)の不確実性を出す条件に含め、detail に「結果は当てていない」と書く**。この型が、C-7 のあとも落ちる: `produce(func() string { return a })`(ヘルパーの `f()` は束縛なしで当たり、捕獲の値は `KUndef`)、Gitea の `db.WithTx2(ctx, func(ctx) (T, error) { return load(捕獲した値) })`(34 か所)、Dart の `items.map((x) => x + a)`、`Future.then((_) => a)`、MISSES の RET-CLOSURE(`holder-a/b`、`curry`、`getter-fn`)。次の段(末尾)で当てる |
 
 実装は、合成した `callCtx`(`in` は `make_closure` の命令、`recv=nil`、`args` は Params と同じ数の `KUndef`、`roots=nil`)と `applySummary(cc, closureFn, mc.Args, notes, nil)`。`applySummary` の `argv = cc.argv() + bindings`(Params の後ろに FreeVars)は、そのまま使える。**`summary.go` の中は変えなくてよい**(`len(bindings) == 0` のときだけ不足を `KUndef` で埋める分岐は、束縛を渡すので通らない。Params を呼び出し側で埋めるので、不一致のエラーにならない)。
 
@@ -57,7 +57,7 @@ func main() {
 「候補として解決済み」は、飛ばす理由にならない。今の見逃し(CAP)は、まさに、**候補としては解決済みで、捕獲の値が付いていない**形(`run(func() { sink(a) })`: `run` の中の `f()` の候補に、このクロージャは入っている)。候補の有無で決めると、候補の上限や解決のされ方で、当てたり当てなかったりする。
 前の版の `sg.Instr.Seen`(「束縛つきで呼ばれた」印)は、**取り下げ**。使用箇所で決める。
 
-* 実装: taint の `captured` が、`make_closure` の結果の使用箇所を見る。`in.Dsts[0]` の `Value` から、それを引数(`Args`)に持つ命令を、コピーと φ を通って辿り、すべてが「呼び出しの callee の位置(`Callee.Kind == CalleeValue` で、関数値が `Args[0]`、または、`Static` / `Bindings` が自分)」か、`go` / `defer` のフラグつきの呼び出しなら、飛ばす。1 つでも、引数の位置・`store`・`field_store`・`global_store`・return・φ(その先が上の条件を満たさない)なら、当てる。使用箇所の表を `sg` の構築時に作る(`Value` ごとの使用の一覧が既にあるなら、それを使う。無ければ、`sg` に作る。**コアの変更**)。
+* 実装: taint の `captured` が、`make_closure` の結果の使用箇所を見る。`in.Dsts[0]` の `Value` から、それを引数(`Args`)に持つ命令を、コピーと φ を通って辿り、すべてが「呼び出しの callee の位置(`Callee.Kind == CalleeValue` で、関数値が `Args[0]`、または、`Static` / `Bindings` が自分)」か、`go` / `defer` のフラグつきの呼び出しなら、飛ばす。1 つでも、引数の位置・`store`・`field_store`・`global_store`・return・φ(その先が上の条件を満たさない)・**別のクロージャの `make_closure` の引数の位置(このクロージャを、内のクロージャが捕獲する。内のクロージャが呼んでも、ここからは見えない)**なら、当てる。使用箇所の表を `sg` の構築時に作る(`Value` ごとの使用の一覧が既にあるなら、それを使う。無ければ、`sg` に作る。**コアの変更**)。
 * 検証の基準: **今の finding の経路が 1 件も変わらない**。その場で呼ぶだけのクロージャは、当てないので、経路が変わらない。引数で値を渡す形(`runArg(a, func(s){…})`)は、捕獲に依る効果が無ければ、当てても何も足さない。**変わりうるのは、「捕獲もあり、候補としても束縛つきで解決されている」形**(`home` の中の関数値の呼び出しの候補になっていて、かつ、別の使い方もある)。その件数を、前後の差分で数える。
 * `cap-seen`(その場で呼び、かつ、渡す): 渡す使い方があるので、当てる。finding は `(origin, sink)` で 1 件にまとまる(`recordFinding` の `findingKey`、`engine.collect` の `merged[k]`)。代表の経路は、ステップ数の少ないほう(`<` なので、同じ長さなら先に記録したほう)。`make_closure` の経路は、ヘルパーを通らないので、たいてい短く、代表になる(経路が変わりうるのは、この形)。`mergeParamSources` は、source が param の finding だけの別の併合で、関係しない。
 
@@ -69,7 +69,7 @@ func main() {
 * **閉じた集合に 1 つ足す**: kind の一覧は閉じた集合なので、**ADR-008 の追記が要る**(`result.go` の定数、`attributable()`、出力のスキーマ、`docs` の kind の表、`cases_test.go` の kind ごとの期待)。
 * 文面(`detail`): `the closure is made here and called where it cannot be seen (it is given to another function, or stored): what it captured is applied at the place it was made, and it is taken to be called`。日本語の意味: このクロージャが呼ばれるところは見えていない。作った場所で、捕獲の値を当てた(呼ばれるものとして扱っている)。throw を当てなかったときは、`; what it throws is not applied` を足す。
 * `symbol` は、クロージャの関数 ID。`position` は `make_closure` の位置(`graph` の `refs` の `closure` と同じ)。`func` は作った関数。
-* **出す条件**: クロージャの要約が、捕獲した値に依る効果(FreeVar 由来の sink への到達、書き込み、**throw の出力**)を**持つ**ときだけ。毎回出すと、Gitea で数千件になる(捕獲のあるクロージャ 1,496)。`sum.Sinks` と `sum.Outputs` の要素が FreeVar の `ParamElem` を含むか、で決まる(`applySummary` の前に調べる)。
+* **出す条件**: クロージャの要約が、捕獲した値に依る効果(FreeVar 由来の sink への到達、書き込み、**throw の出力**、**戻り値(`OutResult`)の出力**)を**持つ**ときだけ。当てなかったもの(throw、結果)は、detail に `; what it throws is not applied` / `; what it returns is not applied` と書く。毎回出すと、Gitea で数千件になる(捕獲のあるクロージャ 1,496)。`sum.Sinks` と `sum.Outputs` の要素が FreeVar の `ParamElem` を含むか、で決まる(`applySummary` の前に調べる)。
 * finding の経路: `applySummary` の `notes` 引数に渡す。ステップ(`call.Notes`)と `w.setNotes` に載り、finding の `uncertainties` に出る。重複は、`engine.collect` が `kind|symbol|func|pos` で 1 つにする。
 * **`confidence`**: この規則で見つかった finding の `confidence` が、**`no_uncertainty_on_path` にならない**こと(経路に `assumed_call` があるので)。**今の main では、規則が無いので、確かめられない**。期待として、実装後に、`cap-run-a`(go-curated)の finding の `confidence` と `uncertainties` に `assumed_call` が出ること、を受け入れの条件にする(`bench_curated_test.go` に、`@assumed` のような注釈で確かめるか、`cmd/rivus` のテストで、`cap-run-a` を `analyze` して JSON を見る。実装のときに決める)。
 
@@ -114,7 +114,7 @@ func main() {
 | `internal/taint/transfer.go:236` の switch | `case ir.OpMakeClosure:` を足し、`s.captured(in)` を呼ぶ |
 | `internal/taint/calls.go`(新しい関数 `captured`) | `in.Args` が空、使われ方が「直接の呼び出しだけ」、クロージャの `sg.Func` が無い(`ByID`)、要約に FreeVar 由来が無い、のどれかなら何もしない。それ以外は、`callCtx{in: in, args: Params 数の KUndef, roots: nil, sym: ""}` で `applySummary(cc, fn, in.Args, notes, nil)`。`notes` は、(4)の不確実性 |
 | `internal/taint/engine.go`(依存) | 要約の依存の辺(クロージャ → home)を足す(上の(8)の再解析の辺) |
-| `internal/taint/summary.go:283-286` | **変えない**。(任意: 束縛が無い非 home の呼び出しで、FreeVars を `KUndef` で埋めるときに、不確実性を出す。C-7 が入れば、捕獲した値の分は届くので、残る欠落は、引数に依る分だけ) |
+| `internal/taint/summary.go:283-286` | **不確実性を出す(任意ではない)**。束縛が無い非 home の呼び出しで、FreeVars を `KUndef` で埋めるときに、不確実性を出す。C-7 のあとも、Rust(最初の版の対象外)と、戻り値(上の(1))で、埋める場面が残る。黙って埋める場所を残さない。文面は `assumed_call` ではなく、**「このクロージャが捕獲した値は、ここでは分からない」**(DART-15 の痕跡の修正)。**C-2 の項目 2(別のエージェント a6ede9c0341ce3c28 が実装中)と同じ**なので、重複させない(C-2 が入ってから、C-7 は、その痕跡の上に載る) |
 | `internal/valuecalls/valuecalls.go:319` | **変えない**。`ExactClosures`(案 2)は、ここではなく `sg.ExactFuncs`(`sg/build.go:393`)の拡張 |
 | `internal/graphdb/write.go:261` | **変えない**(`refs` の `closure` は、構造の層。taint の変更と無関係) |
 | `docs/DECISIONS.md` | ADR(次の空き番号)。ADR-045 の限界(「パラメータ由来の候補は、呼び出し側ごと」の下の、束縛が home でだけ付く点)に、「捕獲した値は C-7 が当てる」と追記 |
@@ -123,8 +123,9 @@ func main() {
 
 ### (10) 検証の計画
 
+0. **最初に**: 収束する 4 つ(gogs、gin-vue-admin、ech0、go-test-bench)を、走らせられる状態にする。C-1 では、scratchpad の複製に go.mod が無く、走らせられなかった。`bench/README.md` の取得の手順で、複製を作り直し、**C-7 の前**の finding を基準として保存する。
 1. **網羅の不変条件**(`internal/taint` の既存のもの): finding の増加が、`make_closure` の経路の finding だけ。使われ方で飛ばす版は、**既存の finding が 1 件も消えず、経路も変わらない**ことを、全ベンチで確かめる。変わりうる形(「捕獲もあり、候補としても束縛つきで解決されている」)は、差分で数える。
-2. **ベンチの差分**: 収束する 4 つ(gogs、gin-vue-admin、ech0、go-test-bench)、`bench/go-curated`、`bench/go-synth`(S、M)、`testdata/go/cases`、Dart(`dart-curated`、`dart-pub`、`dart-corpus` 系)、Rust(変更なしのはず。finding が 1 件も変わらないことを確かめる)。**前後で findings を比べ、増えたもの全部を 1 件ずつ分類**(正しい流れ / 呼ばれないクロージャの過検出 / 順序の過検出)。Gitea は、今、収束しない(ADR-047 の下書きの測定)ので、`./modules/...` と、`services/` の一部で比べる(`db.WithTx` を含む)。分類できなければ push しない。
+2. **ベンチの差分**: 収束する 4 つ(gogs、gin-vue-admin、ech0、go-test-bench)、`bench/go-curated`、`bench/go-synth`(S、M)、`testdata/go/cases`、Dart(`dart-curated`、`dart-pub`、`dart-corpus` 系)、Rust(変更なしのはず。finding が 1 件も変わらないことを確かめる)。**前後で findings を比べ、増えたもの全部を 1 件ずつ分類**(正しい流れ / 呼ばれないクロージャの過検出 / 順序の過検出)。Gitea は、C-1(ADR-048)のあとは、収束する見込み(競合なしの再実行を待つ)。収束するなら、**Gitea 全体で前後を比べる**(`./modules/...` と `services/` の一部は、その予備。`db.WithTx` を含む)。収束しなければ、予備で比べる。分類できなければ push しない。
 3. **curated の `@miss` / `@fp` の増減**(下の表。**実装して確かめたものではない**):
 
 | ベンチ | `@miss` の今 | C-7 で直る(見込み) | 備考 |
@@ -137,12 +138,13 @@ func main() {
    * `@miss(silent)` の割合: Go 9/10(今)→ 0/1、Dart 31/41 → 約 20/30(見込み。silent のうち CAP 系が消える)。
 4. **go test ./...** と、`RIVUS_DART` / `RIVUS_RUST` つきの curated(Dart・Rust の extractor のテスト)を通す。
 5. **不確実性の数**: 前後で、`assumed_call` が、効果を持つクロージャの数だけ増える。他の kind は変わらない。
+6. **注釈に依らない不変条件**(共通の検査に入れる): 「経路か finding に `assumed_call` がある finding は、`confidence` が `no_uncertainty_on_path` でない」を、BENCH-2(`offsource_test.go` の共通の検査)と同じ仕組みで、**全部の finding** に効くようにする(3 つの curated、サンプル、dogfood)。`@assumed(tag)` の注釈(その finding に `assumed_call` が付くこと)は、これに加えるもので、不変条件は、注釈の無い finding にも効く。
 
 ## フィクスチャと、今の結果
 
 作った(2026-11-21): go-curated `api/capture.go`(20 関数、`/captures` で登録)、dart-curated `lib/callbacks.dart`(13 関数)、rust-curated `src/callbacks.rs`(7 関数)。
 
-### Go(今: 新しい `@miss` 10(silent)、見つかる 9、静か 6)
+### Go(今: 新しい `@miss` 11(silent)、見つかる 9、静か 6)
 
 | タグ | 形 | 今の結果 |
 | --- | --- | --- |
@@ -161,10 +163,11 @@ func main() {
 | `cap-handler` | クロージャのパラメータが source で、捕獲した変数に書き、別のクロージャが sink(登録されるハンドラの形) | `@miss(silent)`。C-1(ADR-048、a540f30)は main に入っている。それでも見つからない: C-7 の後に、この書き込みが「関数がした書き込み」として残るか(C-1 と C-7 の両方の受け入れ)を、実装で確かめる |
 | `cap-seen` | その場で呼び、かつ、渡す(`f(); run(f)`) | 見つかる(1 件)。C-7 の後も 1 件(`(origin, sink)` でまとまる)。使われ方の条件で、当てる側 |
 | `cap-funccall` | 捕獲した値が関数で、クロージャがそれを、呼び元の値で呼ぶ(PARAM-CALL) | `@miss(silent)`。C-7 では**直らないはず**(捕獲した関数 `g` の呼び出しは、候補が解決されない)。Dart は `relay-c-a/b`(既存) |
+| `cap-result` | クロージャが捕獲した値を**返し**、ヘルパーが返す(`produce(func() string { return a })`。`WithTx2` の型) | `@miss(silent)`。C-7 のあとは **`@miss(assumed_call)`**(結果は当てない。痕跡が付く)。次の段で直る |
 | `cap-sanitized` | クロージャが、捕獲した値を sink の前にサニタイズする | `@sink(none)` で静か(C-7 の後も) |
 | `tx_capture`、`tx_capture_plain`(既存、`gitea/routers/tx.go`) | `db.WithTx` | `@miss(dynamic_dispatch)`、`@miss(silent)` |
 
-### Dart(今: 新しい `@miss` 9、見つかる 1、静か 2)
+### Dart(今: 新しい `@miss` 11、見つかる 1、静か 2)
 
 | タグ | 形 | 今の結果 |
 | --- | --- | --- |
@@ -176,6 +179,7 @@ func main() {
 
 | `late` | 作ったあとで、捕獲した変数が汚染される | `@miss(silent)` |
 | `seen` | その場で呼び、かつ、渡す | 見つかる(1 件) |
+| `cap-result` / `cap-result-then` | `[1].map((e) => a).first`、`Future.then((_) => a)`(結果が捕獲した値) | `@miss(silent)`。C-7 のあとは `@miss(assumed_call)`(次の段で直る) |
 | `cap-fn` | 捕獲した関数を、呼び元の値で呼ぶ(PARAM-CALL) | `@miss(silent)`。C-7 では直らないはず(`relay-c-a/b` が既存) |
 
 (クロージャのパラメータが source の形と、サニタイズの形は、Dart の curated の規則に、`param_type` の source もサニタイザも無いので、Go だけ。)
@@ -211,3 +215,10 @@ advisor の意見を反映して決めた点: 飛ばす条件は**使われ方**
 4. **Rust の次の段**: 環境の `alloc` で当てる(渡すだけの 3 件が受け入れ)を、Go / Dart の直後に入れるか。ENV-PTR の修正(書く側 7 件)は別。
 5. **測定の続き**: `rivus index` で `refs` を数える(スワップに余裕ができてから、1 度に 1 つ)。gogs と gin-vue-admin は、ソースを scratchpad/bench に置く必要がある(今は無い)。
 6. 案 2(ADR-047)との順序: C-7 を先(小さく、独立)。案 2 は、`ExactFuncs` が束縛も返すように、C-7 のあとで足す。
+
+## 次の段(C-7 の最初の版のあと): 捕獲の値に依る結果を、クロージャの値に持たせる
+
+最初の版は、結果(`OutResult`)を当てない(痕跡は出す)。次の段: **`make_closure` の場所で、クロージャの要約の `OutResult`(捕獲の値で具体化したもの)を、クロージャの値の、決まったパス(たとえば `/()`: 「呼ぶと、これが返る」)のセルに置く。関数値の呼び出しは、呼ぶ値の `/()` を、結果に流す。** 値(クロージャ)は、引数、フィールド、return を、ふつうの汚染と同じに運ばれるので、**ヘルパー越し、フィールド越し、返されたクロージャの呼び出しに、仕組みを足さずに届く**。案 2 を待たずに、RET-CLOSURE(`holder-a/b`、`curry`、`getter-fn`)と `WithTx2`、`map` / `then` の型が直る見込み。クロージャの値ごとに別のセルなので、交差は起きない。
+
+* `/()` のパスの規則: 呼び出し側(`call` の関数値の呼び出し)が、候補が決まらなくても、呼ぶ値のセルを読む。関数値のセルに汚染が付くのは、`make_closure` だけ。
+* **ユーザーの判断が要る**(新しいパスの規則を、汚染のモデルに足す)ので、**C-7 の最初の版が入ってから、`cap-result` ほかの `@miss(assumed_call)` の数字と一緒に上げる**。

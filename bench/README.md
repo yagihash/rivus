@@ -66,19 +66,19 @@ Each curated test logs one line (`go test ./cmd/rivus -run Curated -v`, with `RI
 `RIVUS_RUST` set for Dart and Rust):
 
 ```
-go-curated silent misses: 12 / 13 (92%)
-dart-curated silent misses: 33 / 43 (77%)
+go-curated silent misses: 13 / 14 (93%)
+dart-curated silent misses: 35 / 45 (78%)
 rust-curated silent misses: 15 / 16 (94%)
 ```
 
 | | `@miss` | `@miss(silent)` | `@miss(<kind>)` | silent share |
 | --- | --- | --- | --- | --- |
-| Dart | 43 | 33 | 10 | 77% |
+| Dart | 45 | 35 | 10 | 78% |
 | Rust | 16 | 15 | 1 | 94% |
-| Go | 13 | 12 | 1 | 92% |
-| all | 72 | 60 | 12 | 83% |
+| Go | 14 | 13 | 1 | 93% |
+| all | 75 | 63 | 12 | 84% |
 
-(2026-11-21, after the fixtures of C-7 (`docs/DESIGN-capture.md`); the counts are the ones the tests check, so they match the annotations. It was 42 / 50 = 84% before the closure-capture fixtures, and 53 / 64 = 83% with the first ones of them.) **The share did not move because the engine got worse: the fixtures that were added record misses that were not seen before** (a captured value lost in a helper's callback, Go 10, Dart 9, Rust 3 of the 22 added); the engine is the same.
+(2026-11-21, after the fixtures of C-7 (`docs/DESIGN-capture.md`); the counts are the ones the tests check, so they match the annotations. It was 42 / 50 = 84% before the closure-capture fixtures, and 53 / 64 = 83% with the first ones of them.) **The share did not move because the engine got worse: the fixtures that were added record misses that were not seen before** (a captured value lost in a helper's callback, Go 11, Dart 11, Rust 3 of the 25 added); the engine is the same.
 
 What it means: it measures how well the discipline of leaving a trace is kept, i.e. how immature the
 engine is where it loses a flow. It stands next to the share of `attributable_to: rivus` among the

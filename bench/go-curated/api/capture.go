@@ -50,6 +50,7 @@ func (h *Handlers) Captures(c *web.Context) {
 	capSeenAndPassed(c)
 	capFuncCall(c)
 	capSanitized(c)
+	capResult(c)
 }
 
 // capRunA and capRunB: one helper, two callers, each with its own captured value. Neither value goes
@@ -256,4 +257,18 @@ func capSanitized(c *web.Context) {
 		sys.Run(valid.Quote(a)) // @sink(none)
 	})
 	sys.Run(a) // @sink(cap-sanitized)
+}
+
+// produce returns what the callback returns (db.WithTx2 of Gitea).
+func produce(f func() string) string { return f() }
+
+// capResult: what the closure returns is what it captured. The result of a closure has no place to go where
+// it is made (C-7 applies the captured values to sinks, writes and globals, not to the result): the helper's
+// call has no binding, so the result carries nothing, and the flow is lost without a word. After C-7: `@miss(assumed_call)`.
+func capResult(c *web.Context) {
+	a := c.Query("result") // @source(cap-result) @miss(silent)
+	x := produce(func() string {
+		return a
+	})
+	sys.Run(x) // @sink(cap-result)
 }

@@ -91,3 +91,16 @@ void captured_fn() {
   void g(String s) => sink(s); // @sink(cap-fn)
   run(() => g(a));
 }
+
+// what the closure returns is what it captured (`items.map((x) => x + a)`, `Future.then((_) => a)`): the result of a
+// closure has no place to go where it is made. After C-7: `@miss(assumed_call)` (the result is not applied).
+void cap_result() {
+  final a = source(); // @source(cap-result) @miss(silent)
+  final x = [1].map((e) => a).first;
+  sink(x); // @sink(cap-result)
+}
+
+void cap_result_then() {
+  final a = source(); // @source(cap-result-then) @miss(silent)
+  Future.value(1).then((_) => a).then((x) => sink(x)); // @sink(cap-result-then)
+}
