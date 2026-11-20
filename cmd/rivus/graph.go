@@ -199,11 +199,11 @@ for the flow, use "rivus analyze" and "rivus query".
 
 Usage:
   rivus graph info    [-graph <file> | -C <dir>]
-  rivus graph callers [-graph <file> | -C <dir>] [--depth N] [--limit K] [--include-builtin] [filters] <target>
-  rivus graph callees [-graph <file> | -C <dir>] [--depth N] [--limit K] [--include-builtin] [filters] <target>
+  rivus graph callers [-graph <file> | -C <dir>] [--depth N] [--limit K] [--include-builtin] [--refs] [filters] <target>
+  rivus graph callees [-graph <file> | -C <dir>] [--depth N] [--limit K] [--include-builtin] [--refs] [filters] <target>
   rivus graph impls   [-graph <file> | -C <dir>] [--limit K] [--avoid <symbol>] [--avoid-call <file:line:col>] [--only-impl <type>] <interface method>
   rivus graph dispatchers [-graph <file> | -C <dir>] [--limit K] [--avoid <symbol>] [--avoid-call <file:line:col>] [--only-impl <type>] <implementation>
-  rivus graph path    [-graph <file> | -C <dir>] (--from <target> | --from-entry) --to <target> [--limit K] [--hubs] [filters]
+  rivus graph path    [-graph <file> | -C <dir>] (--from <target> | --from-entry) --to <target> [--limit K] [--hubs | --refs | --no-refs] [filters]
 
 Filters (they may be given again, and the answer's "filters" says each one):
   --avoid <symbol>      never go through this function (all of its calls, and all calls to it)
@@ -218,9 +218,13 @@ Commands:
   info     what the file holds, when and from which source it was made, and (with -C) whether the source is still the same
   callers  the functions that call the target (backwards)
   callees  the functions the target calls (forwards)
+           (--refs adds the references: edges of kind ref, the functions a function holds as values, or that hold it)
   path     up to K ways from one target to the other, shortest first. It looks at the static calls, then (if
            there is none) at the dynamic ones, then (if there is still none) at the calls of more than 20
-           candidates, "hubs" ("searched" says how far it went). --from-entry starts from the entry points.
+           candidates, "hubs", then (if there is still none) through references: a function named as a value
+           (registered with a router, stored, passed on), which is not a call ("searched" says how far it went;
+           --refs starts at the references, --no-refs leaves them out). --from-entry starts from the entry points.
+           A path with a reference says "relation": "calls+refs" and "certainty": "reference".
 
   impls    the functions that the calls through an interface method (io.Writer.Write, (error).Error) may reach:
            the union of the candidates of those call sites in the graph, not every type that implements the interface

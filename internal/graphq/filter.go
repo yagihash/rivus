@@ -302,7 +302,7 @@ func entryInfo(en *graphdb.Entries) *EntryInfo {
 	if en.Source == "exported" {
 		def = "no function starts a program (no main): the exported functions of the code that was read (not of the dependencies); the same starts as the reachability of the taint analysis (sg.Program.Reachable)"
 	}
-	// the rule of the edges is not the same as the taint analysis: it follows the calls and their candidates, and not a function named as a value
-	def += ". The path follows the calls in the graph file and the candidates of calls through interfaces and function values; unlike the reachability of the taint analysis, it does not follow a function that is only named as a value (an argument, a stored function), so a function the taint analysis takes as reached may have no path here"
+	// the edges: the calls and the candidates of the calls through interfaces and function values, and (the fourth stage of the search, unless --no-refs) the references, which is what the taint analysis follows
+	def += ". The path follows the calls in the graph file and the candidates of calls through interfaces and function values; when there is none, it follows the references too (a function named as a value: a handler registered with a router, a callback), which is the rule of the reachability of the taint analysis, so a function it takes as reached has a path here. With --no-refs the references are not followed, and a function that is only named as a value has no path"
 	return &EntryInfo{Definition: def, Source: en.Source, Count: len(en.IDs), Langs: en.Langs, Examples: en.Examples}
 }

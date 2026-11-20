@@ -146,6 +146,7 @@ func (d *DB) Counts() (Counts, error) {
 		{&c.FuncsWithBody, `SELECT count(*) FROM funcs WHERE has_body = 1`},
 		{&c.CallSites, `SELECT count(*) FROM callsites`},
 		{&c.Edges, `SELECT count(*) FROM edges`},
+		{&c.Refs, `SELECT count(*) FROM refs`},
 		{&c.Sites, `SELECT count(*) FROM sites`},
 		{&c.Files, `SELECT count(*) FROM files WHERE sha256 IS NOT NULL`},
 	} {

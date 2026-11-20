@@ -71,6 +71,12 @@ type Options struct {
 	Hubs bool
 	// FromEntry (path): the start is the entry points of the program.
 	FromEntry bool
+	// Refs (callers, callees): add the references (a function named as a value) as
+	// edges of the kind ref. Refs (path): begin with the fourth stage, the one that
+	// goes through the references.
+	Refs bool
+	// NoRefs (path): do not search the fourth stage (the references).
+	NoRefs bool
 
 	via [][]int64
 }
@@ -142,6 +148,11 @@ type EdgeOut struct {
 	// Candidates is the number of candidates of the call site, when it is dynamic.
 	Candidates int      `json:"candidates,omitempty"`
 	Sites      []string `json:"sites,omitempty"`
+	// Kind "ref": the function From holds the function To as a value, at At (not a
+	// call). RefKind says how (arg, closure, other); ViaCallee is the callee of
+	// the call that takes it as an argument, when it is one.
+	RefKind   string `json:"ref_kind,omitempty"`
+	ViaCallee string `json:"via_callee,omitempty"`
 }
 
 // Frontier is a dynamic call where a forward search stopped.
@@ -222,6 +233,12 @@ type Step struct {
 	Sites []string `json:"sites,omitempty"`
 	// NoBody: the function has no body in the graph (a library function that was not read).
 	NoBody bool `json:"no_body,omitempty"`
+	// Kind "ref": this function holds the next one as a value at At; it does not
+	// call it. RefKind says how (arg, closure, other), ViaCallee is the callee of
+	// the call that takes it as an argument, and Note says what a reference is.
+	RefKind   string `json:"ref_kind,omitempty"`
+	ViaCallee string `json:"via_callee,omitempty"`
+	Note      string `json:"note,omitempty"`
 	// DefinedAt is where the last function of a path is declared (the last
 	// step has no call); a function with no body and no position has none.
 	DefinedAt string `json:"defined_at,omitempty"`
@@ -229,9 +246,17 @@ type Step struct {
 
 // Path is a way from one function to another.
 type Path struct {
+	// Relation is "calls" when every step is a call, "calls+refs" when some step is
+	// a reference (a function named as a value): a path with a reference does not
+	// say the program calls its way there.
+	Relation string `json:"relation"`
+	// Certainty: certain, uncertain, hub, or reference (some step is a reference).
 	Certainty string `json:"certainty"`
 	Hops      int    `json:"hops"`
+	Refs      int    `json:"refs,omitempty"`
 	Steps     []Step `json:"steps"`
+	// Note (a path with a reference) says how far to trust it.
+	Note string `json:"note,omitempty"`
 }
 
 // EntryInfo says what the start of a path was, when it was the entry points.
@@ -255,9 +280,17 @@ type TargetFact struct {
 	StaticCallSites int `json:"static_call_sites"`
 	// DynamicCallSites: calls through an interface or a function value that list it as a candidate (what "dispatchers" lists).
 	DynamicCallSites int `json:"dynamic_call_sites"`
-	// ValueReferences: the file does not hold where a function is named as a
-	// value (not called); null says it is not known, not that there is none.
-	ValueReferences *int `json:"value_references"`
+	// ValueReferences: how many times a function is named as a value (an
+	// argument, a stored function, a closure made there), anywhere in the file.
+	// ValueReferenceOwners are the functions that hold the most of them.
+	ValueReferences      *int       `json:"value_references"`
+	ValueReferenceOwners []RefOwner `json:"value_reference_owners,omitempty"`
+}
+
+// RefOwner is a function that holds references to the goal, and how many.
+type RefOwner struct {
+	Func  string `json:"func"`
+	Count int    `json:"count"`
 }
 
 // WithoutFilters is the answer of the same question asked again without the
@@ -279,10 +312,12 @@ type WithoutFilters struct {
 // shortest. Paths outside this are not listed, and "truncated" does not count
 // them: they were not searched (see Beyond).
 type Listed struct {
-	// Stage is the kind of edges the paths use: static, dynamic or hub.
+	// Stage is the kind of edges the paths use: static, dynamic, hub or ref.
 	Stage string `json:"stage"`
-	// Hubs (stage hub): the number of hubs of each path listed, the fewest there is.
+	// Hubs (stage hub, ref): the number of hubs of each path listed, the fewest there is.
 	Hubs *int `json:"hubs,omitempty"`
+	// Refs (stage ref): the number of references of each path listed, the fewest there is.
+	Refs *int `json:"refs,omitempty"`
 	// ShortestHops is the length of the shortest path; MaxHops the longest that was looked for.
 	ShortestHops int `json:"shortest_hops"`
 	MaxHops      int `json:"max_hops"`
@@ -404,11 +439,13 @@ func (e *Engine) edgeOut(ed *graphdb.Edge) (EdgeOut, error) {
 	if err != nil {
 		return EdgeOut{}, err
 	}
-	sites, err := e.siteIDs(ed.CallSite)
-	if err != nil {
-		return EdgeOut{}, err
+	var sites []string
+	if !isRef(ed) {
+		if sites, err = e.siteIDs(ed.CallSite); err != nil {
+			return EdgeOut{}, err
+		}
 	}
-	out := EdgeOut{From: from.FID, To: to.FID, At: pos(ed.File, ed.Line, ed.Col), Kind: ed.Kind, Sites: sites}
+	out := EdgeOut{From: from.FID, To: to.FID, At: pos(ed.File, ed.Line, ed.Col), Kind: ed.Kind, Sites: sites, RefKind: ed.RefKind, ViaCallee: ed.Via}
 	if dynamic(ed.Kind) {
 		out.Candidates = ed.NCand
 	}

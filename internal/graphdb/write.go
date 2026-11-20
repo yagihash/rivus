@@ -69,6 +69,7 @@ type Counts struct {
 	FuncsWithBody int `json:"functions_with_body"`
 	CallSites     int `json:"call_sites"`
 	Edges         int `json:"edges"`
+	Refs          int `json:"refs"`
 	Sites         int `json:"sites"`
 	Files         int `json:"files"`
 }
@@ -125,7 +126,7 @@ type writer struct {
 	nFiles  int64
 	nFuncs  int64
 
-	insFile, insFunc, insCall, insEdge, insSite *sql.Stmt
+	insFile, insFunc, insCall, insEdge, insSite, insRef *sql.Stmt
 }
 
 func write(path string, in *Input) (*Counts, error) {
@@ -155,6 +156,7 @@ func write(path string, in *Input) (*Counts, error) {
 		{&w.insFunc, `INSERT INTO funcs(id,fid,symbol,file_id,line,col,offset,entry,init,dep,exported,has_body,lang,body_hash) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`},
 		{&w.insCall, `INSERT INTO callsites(func_id,file_id,line,col,offset,kind,callee,ncand,is_go) VALUES(?,?,?,?,?,?,?,?,?)`},
 		{&w.insEdge, `INSERT INTO edges(callsite_id,from_func,to_func,kind,ncand) VALUES(?,?,?,?,?)`},
+		{&w.insRef, `INSERT INTO refs(owner_func,file_id,line,col,offset,target_func,via_callee,kind) VALUES(?,?,?,?,?,?,?,?)`},
 		{&w.insSite, `INSERT INTO sites(id,role,kind,func_id,symbol,category,labels,file_id,line,col,offset,callsite_id,callee) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`},
 	} {
 		if *p.dst, err = tx.Prepare(p.q); err != nil {
@@ -178,6 +180,11 @@ func write(path string, in *Input) (*Counts, error) {
 	var counts Counts
 	for _, fn := range in.Graph.Funcs {
 		fid := w.funcIDs[fn.ID]
+		n, err := w.refs(fn, fid)
+		if err != nil {
+			return nil, err
+		}
+		counts.Refs += n
 		for _, b := range fn.Blocks {
 			for _, ins := range b.Instrs {
 				if ins.Op != ir.OpCall || ins.Callee == nil {
@@ -220,6 +227,99 @@ func write(path string, in *Input) (*Counts, error) {
 	counts.Files = int(w.nFiles)
 	counts.FuncsWithBody = len(in.Graph.Funcs)
 	return &counts, nil
+}
+
+// refs adds the references of a function: where it names a function as a value.
+// It is what sg.Program.Reachable follows (an argument of an instruction that is
+// a function), and a closure made with captured values, which Reachable does not
+// follow (a closure that is not called there is not reached by it). The position
+// is that of the instruction that holds the reference (the call, for an argument).
+func (w *writer) refs(fn *sg.Func, owner int64) (int, error) {
+	type ref struct {
+		target ir.FuncID
+		symbol string
+		pos    ir.Pos
+		via    string
+		kind   string
+	}
+	var rows []ref
+	closure := map[*sg.Instr]int{}
+	seen := map[ref]bool{}
+	add := func(r ref) int {
+		if r.pos.File == "" {
+			r.pos.File = fn.Pos.File
+		}
+		if seen[r] {
+			return -1
+		}
+		seen[r] = true
+		rows = append(rows, r)
+		return len(rows) - 1
+	}
+	for _, b := range fn.Blocks {
+		for _, ins := range b.Instrs {
+			if ins.Op == ir.OpMakeClosure && ins.IR != nil && len(ins.Args) > 0 && ins.IR.Func != "" {
+				if i := add(ref{target: ins.IR.Func, pos: ins.Pos, kind: RefClosure}); i >= 0 {
+					closure[ins] = i
+				}
+			}
+		}
+	}
+	for _, b := range fn.Blocks {
+		for _, ins := range b.Instrs {
+			via := ""
+			call := ins.Op == ir.OpCall && ins.Callee != nil
+			if call {
+				via = ins.Callee.Symbol
+				if via == "" {
+					via = string(ins.StaticID)
+				}
+			}
+			for _, a := range ins.Args {
+				if a == nil {
+					continue
+				}
+				switch {
+				case a.Kind == sg.KFunc && a.FuncID != "":
+					sym := ""
+					if a.Fn != nil {
+						sym = a.Fn.Symbol
+					}
+					r := ref{target: a.FuncID, symbol: sym, pos: ins.Pos, kind: RefOther}
+					if call {
+						r.via, r.kind = via, RefArg
+					}
+					add(r)
+				case call && a.Kind == sg.KResult && a.Instr != nil:
+					if i, ok := closure[a.Instr]; ok && rows[i].via == "" {
+						rows[i].via = via
+					}
+				}
+			}
+		}
+	}
+	for _, r := range rows {
+		file, err := w.file(r.pos.File, "", 0, "position")
+		if err != nil {
+			return 0, err
+		}
+		sym := r.symbol
+		if sym == "" {
+			sym = string(r.target)
+		}
+		to, err := w.funcRow(string(r.target), sym, ir.Pos{}, false, nil, "")
+		if err != nil {
+			return 0, err
+		}
+		var via any
+		if r.via != "" {
+			via = r.via
+		}
+		if _, err := w.insRef.Exec(owner, nullInt(file), r.pos.Line, r.pos.Col, r.pos.Offset, to, via, r.kind); err != nil {
+			return 0, err
+		}
+	}
+	return len(rows), nil
 }
 
 type callKey struct {

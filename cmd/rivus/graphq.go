@@ -74,12 +74,14 @@ func runGraphQuery(op string, args []string) error {
 	fs.Var(&avoidCall, "avoid-call", "the filter: never go through this one call site (file:line:col, as \"at\" of an answer says it; may be given again). --avoid cuts a function whole; this cuts one call")
 	fs.Var(&via, "via", "the filter: only what goes through this function (callers, callees: only the way through it; path: in the order given; may be given again)")
 	fs.Var(&onlyImpl, "only-impl", "the filter: a call through an interface that has a method of this type among its candidates reaches only those methods; one that has none is not narrowed (a name as in the symbols: bytes.Buffer; may be given again)")
+	refs := fs.Bool("refs", false, "callers, callees: add the references (a function named as a value: registered, stored, passed on) as edges of kind ref; path: begin the search at the references (the fourth stage)")
 	var from, to *string
-	var hubs, fromEntry *bool
+	var hubs, fromEntry, noRefs *bool
 	if op == "path" {
 		from = fs.String("from", "", "the start: a function, file:line:col, file:line, or site:<id>")
 		to = fs.String("to", "", "the end")
 		fromEntry = fs.Bool("from-entry", false, "the start is the entry points of the program (main and init; for a library, the exported functions), in place of --from")
+		noRefs = fs.Bool("no-refs", false, "path: do not search through the references (a function named as a value); the search ends at the calls")
 		hubs = fs.Bool("hubs", false, "search with the calls of many candidates (hubs) at once, in place of only when there is no path without them")
 	}
 	fs.Usage = func() {
@@ -94,6 +96,12 @@ func runGraphQuery(op string, args []string) error {
 	}
 	if *graph == "" && !o.dirSet {
 		return fmt.Errorf("graph %s needs -graph <file>, or -C <dir> to find the file in the cache", op)
+	}
+	if (op == "impls" || op == "dispatchers") && *refs {
+		return fmt.Errorf("graph %s: --refs is for callers, callees and path", op)
+	}
+	if *refs && noRefs != nil && *noRefs {
+		return fmt.Errorf("graph path: --refs and --no-refs together")
 	}
 	target := ""
 	switch op {
@@ -145,9 +153,9 @@ func runGraphQuery(op string, args []string) error {
 	}
 
 	eng := graphq.New(db)
-	opts := graphq.Options{Depth: *depth, Limit: *limit, IncludeBuiltin: *builtin, Avoid: avoid, AvoidCall: avoidCall, Via: via, OnlyImpl: onlyImpl}
+	opts := graphq.Options{Depth: *depth, Limit: *limit, IncludeBuiltin: *builtin, Avoid: avoid, AvoidCall: avoidCall, Via: via, OnlyImpl: onlyImpl, Refs: *refs}
 	if op == "path" {
-		opts.Hubs, opts.FromEntry = *hubs, *fromEntry
+		opts.Hubs, opts.FromEntry, opts.NoRefs = *hubs, *fromEntry, *noRefs
 	}
 	var out any
 	switch op {

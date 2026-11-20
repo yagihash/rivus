@@ -27,7 +27,7 @@ type traversal struct {
 	via     []map[int64]bool
 	full    uint
 	seen    map[state]bool
-	emitted map[[3]int64]bool
+	emitted map[[4]int64]bool
 	// work counts the states expanded that are not shown (their way has not yet been through the --via
 	// functions): it is bounded by MaxVisited.
 	work    int
@@ -35,7 +35,7 @@ type traversal struct {
 }
 
 func newTraversal(e *Engine, o *Options, g *Graph) (*traversal, error) {
-	t := &traversal{e: e, o: o, g: g, depth: map[int64]int{}, seen: map[state]bool{}, emitted: map[[3]int64]bool{}}
+	t := &traversal{e: e, o: o, g: g, depth: map[int64]int{}, seen: map[state]bool{}, emitted: map[[4]int64]bool{}}
 	if len(o.via) > 8 {
 		return nil, fmt.Errorf("--via: at most 8 functions")
 	}
@@ -83,7 +83,7 @@ func (t *traversal) addNode(id int64, d int) error {
 // emit adds an edge; it reports false when the limit is reached (the edge is
 // then counted as cut). An edge that was added (by another way to its end, with --via) is not added twice.
 func (t *traversal) emit(ed *graphdb.Edge) (bool, error) {
-	key := [3]int64{ed.CallSite, ed.From, ed.To}
+	key := [4]int64{ed.CallSite, ed.From, ed.To, ed.Ref}
 	if len(t.via) > 0 && t.emitted[key] {
 		return true, nil
 	}
@@ -148,6 +148,7 @@ func (e *Engine) Callers(target string, o Options) (*CallersResult, error) {
 		return nil, err
 	}
 	g, _ := e.newGraph("callers", o, target, tg, "edges")
+	g.Omitted["refs"] = 0
 	res := &CallersResult{Graph: *g}
 	g = &res.Graph
 	if err := e.prepare(&o, &g.Common); err != nil {
@@ -182,6 +183,9 @@ func (e *Engine) Callers(target string, o Options) (*CallersResult, error) {
 		level = append(level, s)
 	}
 	dynamicSeen := false
+	inFilter := graphdb.AllEdges
+	inFilter.Refs = o.Refs
+	refsSeen := false
 	for d := 1; d <= o.Depth && len(level) > 0; d++ {
 		var next []state
 		for i, s := range level {
@@ -192,8 +196,11 @@ func (e *Engine) Callers(target string, o Options) (*CallersResult, error) {
 			if t.spend(s) {
 				break
 			}
-			edges, err := e.db.InEdges(s.id, graphdb.AllEdges)
+			edges, err := e.db.InEdges(s.id, inFilter)
 			if err != nil {
+				return nil, err
+			}
+			if err := e.noteOmittedRefs(g, &o, s, t, s.id, true); err != nil {
 				return nil, err
 			}
 			for j := range edges {
@@ -210,6 +217,9 @@ func (e *Engine) Callers(target string, o Options) (*CallersResult, error) {
 					}
 					if dynamic(ed.Kind) {
 						dynamicSeen = true
+					}
+					if isRef(ed) {
+						refsSeen = true
 					}
 				}
 				if !t.seen[ns] {
@@ -237,7 +247,7 @@ func (e *Engine) Callers(target string, o Options) (*CallersResult, error) {
 			if s.mask != t.full {
 				continue
 			}
-			if has, err := e.db.HasIn(s.id); err != nil {
+			if has, err := e.hasIn(s.id, o.Refs); err != nil {
 				return nil, err
 			} else if has {
 				g.Truncated.BeyondDepth++
@@ -250,6 +260,7 @@ func (e *Engine) Callers(target string, o Options) (*CallersResult, error) {
 	if dynamicSeen {
 		g.Hints = append(g.Hints, "an edge of kind interface or value is one of \"candidates\" the call may reach: the caller may call this function, not certainly")
 	}
+	e.refHints(g, &o, refsSeen, true)
 	if tg.Builtin > 0 {
 		g.Hints = append(g.Hints, "calls of builtins on the line were left out: --include-builtin keeps them")
 	}
@@ -270,6 +281,7 @@ func (e *Engine) Callees(target string, o Options) (*CalleesResult, error) {
 		return nil, err
 	}
 	g, _ := e.newGraph("callees", o, target, tg, "edges")
+	g.Omitted["refs"] = 0
 	res := &CalleesResult{Graph: *g, Frontier: []Frontier{}}
 	g = &res.Graph
 	if err := e.prepare(&o, &g.Common); err != nil {
@@ -349,8 +361,9 @@ func (e *Engine) Callees(target string, o Options) (*CalleesResult, error) {
 			level = append(level, s)
 		}
 	}
-	filter := graphdb.EdgeFilter{MaxDynamic: ExpandCandidates}
+	filter := graphdb.EdgeFilter{MaxDynamic: ExpandCandidates, Refs: o.Refs}
 	stopped := false
+	refsSeen := false
 	for d := first; d <= o.Depth && len(level) > 0; d++ {
 		var next []state
 		for i, s := range level {
@@ -366,6 +379,9 @@ func (e *Engine) Callees(target string, o Options) (*CalleesResult, error) {
 			if err != nil {
 				return nil, err
 			}
+			if err := e.noteOmittedRefs(g, &o, s, t, id, false); err != nil {
+				return nil, err
+			}
 			for j := range edges {
 				ed := &edges[j]
 				if !o.pass(ed) {
@@ -377,6 +393,9 @@ func (e *Engine) Callees(target string, o Options) (*CalleesResult, error) {
 						return nil, err
 					} else if !ok {
 						continue
+					}
+					if isRef(ed) {
+						refsSeen = true
 					}
 				}
 				if !t.seen[ns] {
@@ -426,7 +445,7 @@ func (e *Engine) Callees(target string, o Options) (*CalleesResult, error) {
 			if s.mask != t.full {
 				continue
 			}
-			if has, err := e.db.HasOut(s.id); err != nil {
+			if has, err := e.hasOut(s.id, o.Refs); err != nil {
 				return nil, err
 			} else if has {
 				g.Truncated.BeyondDepth++
@@ -442,6 +461,7 @@ func (e *Engine) Callees(target string, o Options) (*CalleesResult, error) {
 	if g.Omitted["builtin"] > 0 {
 		g.Hints = append(g.Hints, "builtin calls (len, append...) are left out: --include-builtin keeps them")
 	}
+	e.refHints(g, &o, refsSeen, false)
 	if len(o.via) > 0 {
 		g.Hints = append(g.Hints, "--via: the search does not go through a dynamic call with more than "+fmt.Sprint(ExpandCandidates)+" candidates, so a way through one is not shown (graph path --via asks for it)")
 	}
@@ -449,6 +469,52 @@ func (e *Engine) Callees(target string, o Options) (*CalleesResult, error) {
 		g.Hints = append(g.Hints, "the answer is narrowed by the filters above (\"filters\"): without them it has more")
 	}
 	return res, nil
+}
+
+// noteOmittedRefs counts the references of a function that was expanded and is
+// shown, when they are not followed (no --refs): "omitted" says how many.
+func (e *Engine) noteOmittedRefs(g *Graph, o *Options, s state, t *traversal, id int64, in bool) error {
+	if o.Refs || s.mask != t.full {
+		return nil
+	}
+	n, err := e.db.RefCount(id, in)
+	if err != nil {
+		return err
+	}
+	g.Omitted["refs"] += n
+	return nil
+}
+
+func (e *Engine) hasIn(id int64, refs bool) (bool, error) {
+	if has, err := e.db.HasIn(id); err != nil || has || !refs {
+		return has, err
+	}
+	n, err := e.db.RefCount(id, true)
+	return n > 0, err
+}
+
+func (e *Engine) hasOut(id int64, refs bool) (bool, error) {
+	if has, err := e.db.HasOut(id); err != nil || has || !refs {
+		return has, err
+	}
+	n, err := e.db.RefCount(id, false)
+	return n > 0, err
+}
+
+// refHints says what the references of an answer are, or that they were left out.
+func (e *Engine) refHints(g *Graph, o *Options, seen, callers bool) {
+	if o.Refs {
+		g.Filters = append(g.Filters, "refs added: edges of kind ref (a function named as a value: registered, stored or passed on, not called there) are followed besides the calls")
+		if callers {
+			g.Hints = append(g.Hints, "an edge of kind ref says the function \"from\" holds this function as a value at \"at\" (\"via_callee\": the function that takes it as an argument); it is not a call, and whether the value is called is not known")
+		} else if seen {
+			g.Hints = append(g.Hints, "an edge of kind ref says the function \"from\" holds the function \"to\" as a value at \"at\" (\"via_callee\": the function that takes it as an argument); it is not a call, and whether the value is called is not known. A ref is not an edge of kind value: that is a candidate of a call of a function value")
+		}
+		return
+	}
+	if n := g.Omitted["refs"]; n > 0 {
+		g.Hints = append(g.Hints, fmt.Sprintf("%d references (a function named as a value: registered, stored or passed on; not calls) of the functions shown are left out: --refs adds them as edges of kind ref", n))
+	}
 }
 
 func (e *Engine) frontier(c *graphdb.CallRow) (Frontier, error) {

@@ -19,7 +19,10 @@ import (
 type call struct {
 	file      string
 	line, col int
-	// kind: "" static, "builtin", "dyn" (an interface), "val" (a function value)
+	// kind: "" static, "builtin", "dyn" (an interface), "val" (a function value);
+	// "ref": a static call of callee that takes the functions of cands as arguments (named as values);
+	// "closure": the same with closures that capture a value; "store": the functions of cands are
+	// held by an instruction that is not a call (the callee is ignored)
 	kind   string
 	callee string // the function (static), or the name of the method (dynamic)
 	cands  []string
@@ -34,6 +37,37 @@ type fnDef struct {
 var entryIDs, exportedIDs map[string]bool
 
 var offset = 0
+
+// the program the last build made, for the tests that compare it with sg.Program.Reachable
+var lastProgram *sg.Program
+
+// instrs are the instructions of a call: the ones that make the function values it takes, and the call.
+func (c call) instrs(fn *ir.Func) []ir.Instr {
+	if c.kind != "ref" && c.kind != "closure" && c.kind != "store" {
+		return []ir.Instr{c.instr()}
+	}
+	var out []ir.Instr
+	var args []ir.LocalID
+	for _, f := range c.cands {
+		id := ir.LocalID(len(fn.Locals))
+		fn.Locals = append(fn.Locals, ir.Local{Class: ir.ClassFunc})
+		mc := ir.Instr{Op: ir.OpMakeClosure, Dsts: []ir.LocalID{id}, Func: ir.FuncID(f)}
+		if c.kind == "closure" {
+			mc.Args = []ir.LocalID{0}
+			mc.Pos = ir.Pos{File: c.file, Line: c.line, Col: c.col - 1, Offset: 5000 + int(id)}
+		}
+		out = append(out, mc)
+		args = append(args, id)
+	}
+	offset++
+	pos := ir.Pos{File: c.file, Line: c.line, Col: c.col, Offset: offset}
+	if c.kind == "store" {
+		dst := ir.LocalID(len(fn.Locals))
+		fn.Locals = append(fn.Locals, ir.Local{Class: ir.ClassFunc})
+		return append(out, ir.Instr{Op: ir.OpCopy, Dsts: []ir.LocalID{dst}, Args: args, Pos: pos})
+	}
+	return append(out, ir.Instr{Op: ir.OpCall, Args: args, Callee: &ir.Callee{Kind: ir.CalleeStatic, Func: ir.FuncID(c.callee), Symbol: c.callee}, Pos: pos})
+}
 
 func (c call) instr() ir.Instr {
 	offset++
@@ -78,7 +112,7 @@ func build(t *testing.T, fns []fnDef, ss ...*sites.Site) *graphq.Engine {
 		fn.Roots = []ir.BlockID{0}
 		b := ir.Block{Term: ir.Term{Kind: ir.TermReturn}, Instrs: []ir.Instr{{Op: ir.OpParam, Dsts: []ir.LocalID{0}, Index: 0}}}
 		for _, c := range f.calls {
-			b.Instrs = append(b.Instrs, c.instr())
+			b.Instrs = append(b.Instrs, c.instrs(fn)...)
 		}
 		fn.Blocks = []ir.Block{b}
 		p.Funcs = append(p.Funcs, fn)
@@ -88,6 +122,7 @@ func build(t *testing.T, fns []fnDef, ss ...*sites.Site) *graphq.Engine {
 	if err != nil {
 		t.Fatal(err)
 	}
+	lastProgram = g
 	path := filepath.Join(t.TempDir(), "g.db")
 	_, err = graphdb.Write(path, &graphdb.Input{Graph: g, Sites: ss, Meta: graphdb.Meta{RivusVersion: "t", CreatedAt: time.Now(), SourceHash: "h", Dir: "/proj"}})
 	if err != nil {

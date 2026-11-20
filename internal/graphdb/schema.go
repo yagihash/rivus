@@ -12,7 +12,9 @@ package graphdb
 
 // SchemaVersion is the version of the tables below (PRAGMA user_version). Any
 // change of the tables raises it.
-const SchemaVersion = 1
+//
+// Version 2 added the refs table (where a function is named as a value).
+const SchemaVersion = 2
 
 // SchemaName is the name of the JSON that the graph commands print.
 const SchemaName = "rivus.graph/1"
@@ -22,7 +24,7 @@ const LayerStructure = "structure"
 
 // LayerVersions are the versions of the layers this code writes. A layer whose
 // version differs from what the reader knows is not trusted.
-var LayerVersions = map[string]int{LayerStructure: 1}
+var LayerVersions = map[string]int{LayerStructure: 2}
 
 // Kinds of a call site, and of the edges from it: where the callee is known from.
 const (
@@ -30,6 +32,20 @@ const (
 	KindInterface = "interface" // a call through an interface or a virtual method: the candidates are implementations
 	KindValue     = "value"     // a call of a function value
 	KindBuiltin   = "builtin"   // a builtin of the language: no function
+)
+
+// Kinds of a reference (a function named as a value, not called there), and of
+// the edge that stands for it in a search.
+const (
+	// KindRef is the kind of an edge that is a reference, in place of a call.
+	KindRef = "ref"
+	// RefArg: the function is an argument of a call (m.Get("/x", repo.Activity)).
+	RefArg = "arg"
+	// RefClosure: a closure made there (a function literal that captures values,
+	// a method value).
+	RefClosure = "closure"
+	// RefOther: stored, returned, or put in a structure.
+	RefOther = "other"
 )
 
 const createTables = `
@@ -88,6 +104,21 @@ CREATE TABLE edges (
 	ncand       INTEGER NOT NULL
 );
 
+-- a function named as a value (an argument, a stored function, a closure made there): the owner holds
+-- the reference, at the position it is written; via_callee is the function the call that takes it as an
+-- argument names (empty for an assignment or a return)
+CREATE TABLE refs (
+	id          INTEGER PRIMARY KEY,
+	owner_func  INTEGER NOT NULL REFERENCES funcs(id),
+	file_id     INTEGER REFERENCES files(id),
+	line        INTEGER NOT NULL,
+	col         INTEGER NOT NULL,
+	offset      INTEGER NOT NULL,
+	target_func INTEGER NOT NULL REFERENCES funcs(id),
+	via_callee  TEXT,
+	kind        TEXT NOT NULL
+);
+
 -- the places where a source or a sink rule matches (what "rivus sites" lists)
 CREATE TABLE sites (
 	id          TEXT PRIMARY KEY,
@@ -114,6 +145,8 @@ CREATE INDEX callsites_func  ON callsites(func_id);
 CREATE INDEX edges_callsite  ON edges(callsite_id);
 CREATE INDEX edges_from      ON edges(from_func);
 CREATE INDEX edges_to        ON edges(to_func);
+CREATE INDEX refs_target     ON refs(target_func);
+CREATE INDEX refs_owner      ON refs(owner_func);
 CREATE INDEX sites_pos       ON sites(file_id, line);
 CREATE INDEX sites_func      ON sites(func_id);
 CREATE INDEX sites_symbol    ON sites(symbol);

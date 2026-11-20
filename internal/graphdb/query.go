@@ -38,6 +38,13 @@ type Edge struct {
 	// File, Line and Col are the position of the call site.
 	File      string
 	Line, Col int
+	// A reference (Kind is KindRef): the row of the refs table, how the function is
+	// named as a value (RefArg, RefClosure, RefOther), and the callee of the call
+	// that takes it as an argument. It has no call site (CallSite is 0), and the
+	// position is where the reference is written.
+	Ref     int64
+	RefKind string
+	Via     string
 }
 
 // Static reports whether the callee is named in the call.
@@ -52,6 +59,9 @@ type EdgeFilter struct {
 	// MaxDynamic keeps a dynamic call only when it has at most this many
 	// candidates (negative: no limit).
 	MaxDynamic int
+	// Refs adds the references (a function named as a value) as edges of the
+	// kind KindRef, from the function that holds the reference to the one it names.
+	Refs bool
 }
 
 // AllEdges is the filter that keeps every edge.
@@ -92,13 +102,90 @@ func (d *DB) edges(q string, args ...any) ([]Edge, error) {
 // OutEdges are the calls a function makes (forward).
 func (d *DB) OutEdges(from int64, f EdgeFilter) ([]Edge, error) {
 	s, m := f.args()
-	return d.edges(`SELECT `+edgeCols+` `+edgeJoin+` WHERE e.from_func = ? `+edgeFilterSQL, from, s, m)
+	out, err := d.edges(`SELECT `+edgeCols+` `+edgeJoin+` WHERE e.from_func = ? `+edgeFilterSQL, from, s, m)
+	if err != nil || !f.Refs {
+		return out, err
+	}
+	refs, err := d.refEdges(`r.owner_func = ?`, from)
+	return append(out, refs...), err
 }
 
 // InEdges are the calls that reach a function (backward).
 func (d *DB) InEdges(to int64, f EdgeFilter) ([]Edge, error) {
 	s, m := f.args()
-	return d.edges(`SELECT `+edgeCols+` `+edgeJoin+` WHERE e.to_func = ? `+edgeFilterSQL, to, s, m)
+	out, err := d.edges(`SELECT `+edgeCols+` `+edgeJoin+` WHERE e.to_func = ? `+edgeFilterSQL, to, s, m)
+	if err != nil || !f.Refs {
+		return out, err
+	}
+	refs, err := d.refEdges(`r.target_func = ?`, to)
+	return append(out, refs...), err
+}
+
+// refEdges reads the references that a condition picks, as edges of the kind
+// KindRef, in the order of their positions.
+func (d *DB) refEdges(cond string, arg int64) ([]Edge, error) {
+	rows, err := d.db.Query(`SELECT r.id, r.owner_func, r.target_func, r.kind, coalesce(r.via_callee,''), coalesce(fl.path,''), r.line, r.col
+		FROM refs r LEFT JOIN files fl ON fl.id = r.file_id WHERE `+cond+` ORDER BY fl.path, r.line, r.col, r.target_func, r.owner_func, r.id`, arg)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Edge
+	for rows.Next() {
+		e := Edge{Kind: KindRef}
+		if err := rows.Scan(&e.Ref, &e.From, &e.To, &e.RefKind, &e.Via, &e.File, &e.Line, &e.Col); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// RefCount counts the references a function holds (out) or that name it (in).
+func (d *DB) RefCount(id int64, in bool) (int, error) {
+	col := "owner_func"
+	if in {
+		col = "target_func"
+	}
+	var n int
+	err := d.db.QueryRow(`SELECT count(*) FROM refs WHERE `+col+` = ?`, id).Scan(&n)
+	return n, err
+}
+
+// RefStats are what the file says of where a function is named as a value.
+type RefStats struct {
+	// Total is the number of references to it.
+	Total int
+	// Owners are the functions that hold most of them, the most first.
+	Owners []RefOwner
+}
+
+// RefOwner is a function that holds references to another, and how many.
+type RefOwner struct {
+	ID    int64
+	Count int
+}
+
+// RefsTo counts the references to a function, and names the functions that hold
+// the most (up to top).
+func (d *DB) RefsTo(id int64, top int) (RefStats, error) {
+	var st RefStats
+	if err := d.db.QueryRow(`SELECT count(*) FROM refs WHERE target_func = ?`, id).Scan(&st.Total); err != nil || st.Total == 0 {
+		return st, err
+	}
+	rows, err := d.db.Query(`SELECT owner_func, count(*) c FROM refs WHERE target_func = ? GROUP BY owner_func ORDER BY c DESC, owner_func LIMIT ?`, id, top)
+	if err != nil {
+		return st, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var o RefOwner
+		if err := rows.Scan(&o.ID, &o.Count); err != nil {
+			return st, err
+		}
+		st.Owners = append(st.Owners, o)
+	}
+	return st, rows.Err()
 }
 
 // EdgesOfCallSite are the functions one call may reach.

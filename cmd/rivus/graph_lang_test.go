@@ -85,6 +85,22 @@ func TestGraphFromTheIROfOtherLanguages(t *testing.T) {
 			if c.Edges == 0 || c.Sites == 0 {
 				t.Errorf("%+v", c)
 			}
+			// the references: a function named as a value (a tear-off of Dart, a function pointer of Rust) is in the
+			// refs table, as many as the IR has of a function value (or a closure that captured something) in an instruction
+			want := 0
+			for _, f := range prog.Funcs {
+				for _, b := range f.Blocks {
+					for _, in := range b.Instrs {
+						if in.Op == ir.OpMakeClosure && len(in.Args) > 0 {
+							want++
+						}
+					}
+				}
+			}
+			if c.Refs == 0 || c.Refs < want/2 {
+				t.Errorf("the file has %d references, the IR has %d closures that captured a value, and function values besides", c.Refs, want)
+			}
+			t.Logf("%s: %d references (%d closures that captured a value)", s.lang, c.Refs, want)
 			if len(info.Graph.Languages) != 1 || info.Graph.Languages[0] != s.lang {
 				t.Errorf("languages: %v", info.Graph.Languages)
 			}

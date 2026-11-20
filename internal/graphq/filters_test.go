@@ -103,7 +103,7 @@ func TestPathNoPathEvenThroughHubs(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if r.Reachable || len(r.Paths) != 0 || !r.Exhaustive || strings.Join(r.Searched, ",") != "static,dynamic,hub" || r.Certainty != "" {
+		if r.Reachable || len(r.Paths) != 0 || !r.Exhaustive || strings.Join(r.Searched, ",") != "static,dynamic,hub,ref" || r.Certainty != "" {
 			t.Errorf("%s -> %s: %+v", c[0], c[1], r)
 		}
 	}
@@ -351,19 +351,24 @@ func TestPathFromEntry(t *testing.T) {
 	}
 	// a function no entry reaches
 	r, _ = e.Path("", "Dead", graphq.Options{FromEntry: true})
-	if r.Reachable || r.Exhaustive || !r.EdgesExhausted || !anyHas(r.Hints, "no entry reaches it") || r.Entry == nil {
+	if r.Reachable || !r.Exhaustive || !r.EdgesExhausted || !anyHas(r.Hints, "no entry reaches it") || r.Entry == nil {
 		t.Errorf("%+v", r)
 	}
-	// --from-entry with no path never says exhaustive: the limits and the facts of the goal come with it
-	if len(r.Limits) != 3 || !strings.Contains(strings.Join(r.Limits, " "), "stored as a value") || !strings.Contains(strings.Join(r.Limits, " "), "reflection") || !strings.Contains(r.ExhaustiveOf, "call edges") {
+	// --from-entry with no path, the references searched too: exhaustive of the calls and the references, and the limits (reflection, frameworks) and the facts of the goal come with it
+	if len(r.Limits) != 3 || !strings.Contains(strings.Join(r.Limits, " "), "reflection") || !strings.Contains(r.ExhaustiveOf, "call edges") || !strings.Contains(r.ExhaustiveOf, "references") {
 		t.Errorf("limits %+v", r.Limits)
 	}
-	if len(r.TargetFacts) != 1 || r.TargetFacts[0].ID != "Dead" || !r.TargetFacts[0].HasBody || r.TargetFacts[0].Dep || r.TargetFacts[0].Exported || r.TargetFacts[0].StaticCallSites != 0 || r.TargetFacts[0].DynamicCallSites != 0 || r.TargetFacts[0].ValueReferences != nil {
+	if len(r.TargetFacts) != 1 || r.TargetFacts[0].ID != "Dead" || !r.TargetFacts[0].HasBody || r.TargetFacts[0].Dep || r.TargetFacts[0].Exported || r.TargetFacts[0].StaticCallSites != 0 || r.TargetFacts[0].DynamicCallSites != 0 || r.TargetFacts[0].ValueReferences == nil || *r.TargetFacts[0].ValueReferences != 0 {
 		t.Errorf("facts %+v", r.TargetFacts)
+	}
+	// with --no-refs the references are not searched: never exhaustive, and the limits say a stored function is not an edge
+	r, _ = e.Path("", "Dead", graphq.Options{FromEntry: true, NoRefs: true})
+	if r.Reachable || r.Exhaustive || !r.EdgesExhausted || len(r.Limits) != 3 || !strings.Contains(strings.Join(r.Limits, " "), "stored as a value") || strings.Contains(r.ExhaustiveOf, "references") {
+		t.Errorf("no-refs %+v", r)
 	}
 	// a goal that is called, by a function no entry reaches: the callers are counted, and no path is still said
 	r, _ = e.Path("", "Dead", graphq.Options{FromEntry: true})
-	if !strings.Contains(r.Entry.Definition, "does not follow a function that is only named as a value") {
+	if !strings.Contains(r.Entry.Definition, "With --no-refs the references are not followed") {
 		t.Errorf("definition %q", r.Entry.Definition)
 	}
 	// a path found keeps exhaustive and has no limits
@@ -407,7 +412,7 @@ func TestEntryTargetFactsCountCallers(t *testing.T) {
 	entryIDs = map[string]bool{"main1": true}
 	e := build(t, fns)
 	r, err := e.Path("", "Helper", graphq.Options{FromEntry: true})
-	if err != nil || r.Reachable || r.Exhaustive || len(r.TargetFacts) != 1 || r.TargetFacts[0].StaticCallSites != 2 {
+	if err != nil || r.Reachable || !r.Exhaustive || len(r.TargetFacts) != 1 || r.TargetFacts[0].StaticCallSites != 2 {
 		t.Errorf("%v %+v", err, r)
 	}
 }

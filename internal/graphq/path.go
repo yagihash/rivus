@@ -29,19 +29,25 @@ func (e *Engine) newAdj(f graphdb.EdgeFilter, pred EdgePred, hubs bool) *adjacen
 }
 
 // rank orders the edges between two functions: a static one, then a dynamic
-// one with a modest number of candidates, then a hub.
+// one with a modest number of candidates, then a hub, then a reference (which
+// is not a call).
 func rank(e *graphdb.Edge) int {
 	switch {
 	case e.Static():
 		return 0
+	case isRef(e):
+		return 3
 	case e.NCand <= HubCandidates:
 		return 1
 	}
 	return 2
 }
 
+// isRef: the edge is a function named as a value, not a call.
+func isRef(e *graphdb.Edge) bool { return e.Kind == graphdb.KindRef }
+
 // isHub: the call has more candidates than HubCandidates.
-func isHub(e *graphdb.Edge) bool { return !e.Static() && e.NCand > HubCandidates }
+func isHub(e *graphdb.Edge) bool { return !e.Static() && !isRef(e) && e.NCand > HubCandidates }
 
 // best keeps one edge of the ones between two functions: the one of the
 // smallest rank (a static call, then a dynamic one of few candidates, then a
@@ -295,6 +301,11 @@ func (a *adjacency) enumerate(starts, goals []int64, short, want int) (paths [][
 // through, then by the fewer hops. It is more than any path's length.
 const hubCost = 1 << 20
 
+// refCost is what a reference costs in the search of the fourth stage: a path is
+// better by the fewer references it goes through, then by the fewer hubs, then
+// by the fewer hops. It is more than any number of hubs.
+const refCost = 1 << 40
+
 type pqItem struct {
 	cost int
 	id   int64
@@ -340,12 +351,16 @@ func (h *pq) pop() pqItem {
 	return top
 }
 
-// enumerateHub lists up to want paths, when the hubs are among the edges: the
-// ones through the fewest hubs first, and among them the shortest (to
+// enumerateHub lists up to want paths, when the hubs (and, in the fourth stage,
+// the references) are among the edges: the ones through the fewest references,
+// then the fewest hubs first, and among them the shortest (to
 // PathSlack hops more than the best). The distance to a goal is the cost of
 // the way, backward, settled as far as the longest path wanted.
 func (a *adjacency) enumerateHub(starts, goals []int64, want int) (paths [][]graphdb.Edge, roots []int64, bestCost int, cut bool, err error) {
 	w := func(ed *graphdb.Edge) int {
+		if isRef(ed) {
+			return refCost + 1
+		}
 		if isHub(ed) {
 			return hubCost + 1
 		}
@@ -464,6 +479,16 @@ func (f found) end() int64 {
 	return f.edges[len(f.edges)-1].To
 }
 
+func (f found) refs() int {
+	n := 0
+	for i := range f.edges {
+		if isRef(&f.edges[i]) {
+			n++
+		}
+	}
+	return n
+}
+
 func (f found) hubs() int {
 	n := 0
 	for i := range f.edges {
@@ -487,7 +512,7 @@ func (f found) simple() bool {
 }
 
 // stageNames are the kinds of edges, in the order of the search.
-var stageNames = []string{"static", "dynamic", "hub"}
+var stageNames = []string{"static", "dynamic", "hub", "ref"}
 
 func stageFilter(s int) graphdb.EdgeFilter {
 	switch s {
@@ -495,8 +520,12 @@ func stageFilter(s int) graphdb.EdgeFilter {
 		return graphdb.EdgeFilter{StaticOnly: true}
 	case 1:
 		return graphdb.EdgeFilter{MaxDynamic: HubCandidates}
+	case 2:
+		return graphdb.AllEdges
 	}
-	return graphdb.AllEdges
+	f := graphdb.AllEdges
+	f.Refs = true
+	return f
 }
 
 type stageRes struct {
@@ -507,9 +536,9 @@ type stageRes struct {
 	visited    int
 	hubTotal   int
 	// the range the paths cover: the length of the shortest path (the sum for
-	// the stretches of the --via points), how many stretches, and (the hub
-	// stage) the fewest hubs.
-	shortHops, segs, hubs int
+	// the stretches of the --via points), how many stretches, and (the hub and
+	// ref stages) the fewest hubs, and (the ref stage) the fewest references.
+	shortHops, segs, hubs, refs int
 }
 
 // reaching are the functions of ids from which a goal is reached.
@@ -543,7 +572,7 @@ restart:
 	for {
 		var joined []found
 		cut := false
-		var short, hubs, segs int
+		var short, hubs, refs, segs int
 		for i := 0; i+1 < len(pts); i++ {
 			starts, goals := pts[i], pts[i+1]
 			if i > 0 {
@@ -578,7 +607,7 @@ restart:
 			}
 			var seg []found
 			var c bool
-			if s == 2 {
+			if s >= 2 {
 				ps, roots, best, c2, err := a.enumerateHub(append([]int64(nil), starts...), goals, want)
 				if err != nil {
 					return stageRes{}, err
@@ -587,8 +616,10 @@ restart:
 				for j := range ps {
 					seg = append(seg, found{ps[j], roots[j]})
 				}
-				hubs += best / hubCost
-				short += best % hubCost
+				refs += best / refCost
+				rest := best % refCost
+				hubs += rest / hubCost
+				short += rest % hubCost
 			} else {
 				ps, roots, c2, err := a.enumerate(append([]int64(nil), starts...), goals, b.length, want)
 				if err != nil {
@@ -622,6 +653,9 @@ restart:
 				if next[p].simple() != next[q].simple() {
 					return next[p].simple()
 				}
+				if next[p].refs() != next[q].refs() {
+					return next[p].refs() < next[q].refs()
+				}
 				if next[p].hubs() != next[q].hubs() {
 					return next[p].hubs() < next[q].hubs()
 				}
@@ -635,27 +669,37 @@ restart:
 			}
 			joined = next
 		}
-		return stageRes{found: true, paths: joined, exhaustive: true, cut: cut, visited: a.visited, hubTotal: len(a.hubs), shortHops: short, segs: segs, hubs: hubs}, nil
+		return stageRes{found: true, paths: joined, exhaustive: true, cut: cut, visited: a.visited, hubTotal: len(a.hubs), shortHops: short, segs: segs, hubs: hubs, refs: refs}, nil
 	}
 }
 
 type searchRes struct {
 	stageRes
-	// stage is the one that found (an index of stageNames); 3 if none did.
+	// stage is the one that found (an index of stageNames); one past the last
+	// stage searched if none did.
 	stage    int
 	searched []string
 }
 
 // search looks with the static edges, then (if there is no path) with the
 // dynamic ones that have at most HubCandidates candidates, then (if there is
-// still none) with every edge. With o.Hubs it begins with the last.
+// still none) with every edge, and (if there is still none) with the references
+// too (a function named as a value: not a call). With o.Hubs it begins with the
+// third, with o.Refs with the fourth; o.NoRefs leaves the fourth out.
 func (e *Engine) search(points [][]int64, o *Options, want int) (*searchRes, error) {
+	last := 3
+	if o.NoRefs {
+		last = 2
+	}
 	s := 0
 	if o.Hubs {
 		s = 2
 	}
+	if o.Refs && !o.NoRefs {
+		s = 3
+	}
 	var r stageRes
-	for ; s <= 2; s++ {
+	for ; s <= last; s++ {
 		var err error
 		if r, err = e.runStage(s, points, o, want); err != nil {
 			return nil, err
@@ -666,7 +710,7 @@ func (e *Engine) search(points [][]int64, o *Options, want int) (*searchRes, err
 			break
 		}
 	}
-	return &searchRes{stageRes: r, stage: s, searched: append([]string(nil), stageNames[:min(s, 2)+1]...)}, nil
+	return &searchRes{stageRes: r, stage: s, searched: append([]string(nil), stageNames[:min(s, last)+1]...)}, nil
 }
 
 // Path answers the ways from a function (or a call) to another. The search is
@@ -729,7 +773,7 @@ func (e *Engine) Path(from, to string, o Options) (*PathResult, error) {
 			res.Hints = append(res.Hints, ambiguousHints(t, c)...)
 		}
 		res.Exhaustive, res.EdgesExhausted = true, true
-		res.ExhaustiveOf = exhaustiveOf
+		res.ExhaustiveOf = exhaustiveOfFor(!o.NoRefs)
 		return res, nil
 	}
 
@@ -781,7 +825,8 @@ func (e *Engine) Path(from, to string, o Options) (*PathResult, error) {
 		return nil, err
 	}
 	res.Searched = sr.searched
-	res.ExhaustiveOf = exhaustiveOf
+	refsSearched := len(sr.searched) > 0 && sr.searched[len(sr.searched)-1] == "ref"
+	res.ExhaustiveOf = exhaustiveOfFor(refsSearched)
 	res.Exhaustive = sr.exhaustive && !sr.cut
 	res.EdgesExhausted = res.Exhaustive
 	if sr.found && sr.stage == 1 {
@@ -793,6 +838,9 @@ func (e *Engine) Path(from, to string, o Options) (*PathResult, error) {
 			res.Warnings = append(res.Warnings, fmt.Sprintf("the search was cut (%d functions visited, at most %d hops): \"no path\" is not proved", sr.visited, MaxPathHops))
 		}
 		what := "no path by the static calls, nor by the dynamic calls (with at most " + fmt.Sprint(HubCandidates) + " candidates, or more)"
+		if refsSearched {
+			what += ", nor through references (a function named as a value)"
+		}
 		if o.filtered() {
 			what += ", under the filters"
 		}
@@ -821,10 +869,15 @@ func (e *Engine) Path(from, to string, o Options) (*PathResult, error) {
 			}
 		}
 		if o.FromEntry {
-			res.Hints = append(res.Hints, "no entry reaches it by calls: a function that is only passed as a value (a handler registered with a framework, a callback) is reached from the entry only through a call of a function value that lists it; \"no path\" does not say the code is dead")
-			// the edges of the file are calls: this "no path" is not "unreachable"
-			res.Exhaustive = false
-			res.Limits = entryLimits
+			if refsSearched {
+				res.Hints = append(res.Hints, "no entry reaches it by calls or by references (a function named as a value: a registered handler, a stored callback); a call by reflection, or from a framework or the runtime, is not in the graph file, so \"no path\" does not say the code is dead at run time (\"limits\")")
+				res.Limits = entryLimitsRefs
+			} else {
+				res.Hints = append(res.Hints, "no entry reaches it by calls (the references were not searched: --no-refs): a function that is only passed as a value (a handler registered with a framework, a callback) is reached from the entry only through a call of a function value that lists it, or through a reference (the default search follows them); \"no path\" does not say the code is dead")
+				// the references are not edges of this search: this "no path" is not "unreachable"
+				res.Exhaustive = false
+				res.Limits = entryLimits
+			}
 			for _, id := range dst.Funcs {
 				if len(res.TargetFacts) >= 5 {
 					break
@@ -837,7 +890,20 @@ func (e *Engine) Path(from, to string, o Options) (*PathResult, error) {
 				if err != nil {
 					return nil, err
 				}
-				res.TargetFacts = append(res.TargetFacts, TargetFact{ID: f.FID, Exported: ft.Exported, HasBody: ft.HasBody, Dep: ft.Dep, StaticCallSites: ft.StaticCallSites, DynamicCallSites: ft.DynamicCallSites})
+				tf := TargetFact{ID: f.FID, Exported: ft.Exported, HasBody: ft.HasBody, Dep: ft.Dep, StaticCallSites: ft.StaticCallSites, DynamicCallSites: ft.DynamicCallSites}
+				rs, err := e.db.RefsTo(id, 3)
+				if err != nil {
+					return nil, err
+				}
+				tf.ValueReferences = &rs.Total
+				for _, ow := range rs.Owners {
+					of, err := e.fn(ow.ID)
+					if err != nil {
+						return nil, err
+					}
+					tf.ValueReferenceOwners = append(tf.ValueReferenceOwners, RefOwner{Func: of.FID, Count: ow.Count})
+				}
+				res.TargetFacts = append(res.TargetFacts, tf)
 			}
 		}
 		res.Hints = append(res.Hints, "callees of the start, with --depth, shows where it goes (and the frontier, where it stops)")
@@ -858,10 +924,19 @@ func (e *Engine) Path(from, to string, o Options) (*PathResult, error) {
 		res.Paths = append(res.Paths, out)
 	}
 	res.Certainty = res.Paths[0].Certainty
+	for i := range res.Paths {
+		if res.Paths[i].Relation != "calls" {
+			res.Relation = res.Paths[i].Relation
+		}
+	}
 	res.Listed = &Listed{Stage: stageNames[sr.stage], ShortestHops: sr.shortHops, MaxHops: sr.shortHops + PathSlack*sr.segs}
-	if sr.stage == 2 {
+	if sr.stage >= 2 {
 		h := sr.hubs
 		res.Listed.Hubs = &h
+	}
+	if sr.stage == 3 {
+		r := sr.refs
+		res.Listed.Refs = &r
 	}
 	res.Beyond = "not_searched"
 	switch res.Certainty {
@@ -874,6 +949,10 @@ func (e *Engine) Path(from, to string, o Options) (*PathResult, error) {
 		res.Hints = append(res.Hints,
 			fmt.Sprintf("no path without a call of more than %d candidates (a hub): the paths listed go through the fewest of them, then the shortest; a step with \"hub\" is such a call, and \"candidates\" says how many functions it may reach", HubCandidates),
 			"such a path may be real or not: to check one, ask from the implementation the code uses (--from the method, or the type it is made of), narrow the call with --only-impl <type>, or cut a hub: --avoid-call <file:line:col> cuts one call site (an \"at\" of the path), --avoid <function> a whole function")
+	case "reference":
+		res.Hints = append(res.Hints,
+			"no path by calls: these go through a reference (a step of kind \"ref\": a function holds the next one as a value, registered, stored or passed on; it is not a call). The paths listed go through the fewest references, then the fewest hubs, then the shortest",
+			"\"at\" of a ref step is where the function is named (the registration); \"via_callee\" is the function that takes it as an argument. Whether the value is called is not known: the path says the function may be reached")
 	}
 	if o.filtered() {
 		res.Hints = append(res.Hints, "the paths are those that the filters above (\"filters\") allow")
@@ -892,12 +971,31 @@ func (e *Engine) Path(from, to string, o Options) (*PathResult, error) {
 
 const exhaustiveOf = "the call edges in the graph file (calls, and the candidates of calls through interfaces and function values); not a function stored as a value, reflection, or a call from a framework"
 
+// exhaustiveOfRefs is said when the references were searched too (the fourth stage).
+const exhaustiveOfRefs = "the call edges in the graph file (calls, and the candidates of calls through interfaces and function values) and the references (a function named as a value: an argument, a stored function, a closure made there; the rule of sg.Program.Reachable); not reflection, or a call from a framework"
+
+func exhaustiveOfFor(refs bool) string {
+	if refs {
+		return exhaustiveOfRefs
+	}
+	return exhaustiveOf
+}
+
 // entryLimits are what a path from the entries cannot see: the file holds
 // calls, and the program reaches more at run time.
 var entryLimits = []string{
-	"a function stored as a value (a handler registered with a router: m.Get(\"/x\", f), a callback, a function put in a map or a struct) is not an edge in the graph file: its call is an edge only if a call of a function value lists it",
+	"a function stored as a value (a handler registered with a router: m.Get(\"/x\", f), a callback, a function put in a map or a struct) is not an edge of this search (--no-refs): its call is an edge only if a call of a function value lists it",
 	"a call by reflection, and a call from a framework or the runtime (an override of a method of a dependency, such as ServeHTTP or a widget's build) is not an edge in the graph file",
 	"so \"no path\" here is true of the call edges only: at run time the function may be reached (\"exhaustive\" is false, \"edges_exhausted\" says the search of the edges was complete); \"target_facts\" says what the file knows of it",
+}
+
+// entryLimitsRefs are what a path from the entries cannot see when the
+// references were followed: the calls and the references are edges, and the
+// program reaches more at run time.
+var entryLimitsRefs = []string{
+	"a call by reflection, and a call from a framework or the runtime (an override of a method of a dependency, such as ServeHTTP or a widget's build) is not an edge in the graph file",
+	"a reference is a function named as a value; whether the value is called is not known, so a path through one says \"may be reached\". A function named in a string (a route by name, a plugin by path) is not a reference",
+	"so \"no path\" here is true of the calls and the references (the same rule as sg.Program.Reachable); \"exhaustive\" is true when the search of them was complete (\"edges_exhausted\"); \"target_facts\" says what the file knows of the goal",
 }
 
 // withoutFilters asks the question again without the filters (--via too), to
@@ -909,14 +1007,14 @@ func (e *Engine) withoutFilters(o *Options, src, dst *Target, startsFor func(boo
 	if err != nil {
 		return nil, err
 	}
-	plain := Options{Limit: 1, Hubs: o.Hubs}
+	plain := Options{Limit: 1, Hubs: o.Hubs, Refs: o.Refs, NoRefs: o.NoRefs}
 	sr, err := e.search([][]int64{starts, dst.Funcs}, &plain, 1)
 	if err != nil {
 		return nil, err
 	}
 	wf := &WithoutFilters{Reachable: sr.found, Searched: sr.searched, Exhaustive: sr.exhaustive && !sr.cut}
 	if sr.found {
-		wf.Certainty = []string{"certain", "uncertain", "hub"}[sr.stage]
+		wf.Certainty = certaintyOf(sr.paths[0].edges)
 		wf.Hops = len(sr.paths[0].edges)
 	}
 	if !sr.found || !whole || o.nFilters() < 2 {
@@ -1004,12 +1102,39 @@ func (e *Engine) stepOfCall(c *graphdb.CallRow, holder int64) (Step, error) {
 	return st, nil
 }
 
+// certaintyOf is the certainty of a path of edges: certain (every call is named),
+// uncertain (a dynamic call), hub (a call of many candidates), reference (a
+// function named as a value: not a call).
+func certaintyOf(edges []graphdb.Edge) string {
+	c := "certain"
+	for i := range edges {
+		switch {
+		case isRef(&edges[i]):
+			return "reference"
+		case isHub(&edges[i]):
+			c = "hub"
+		case dynamic(edges[i].Kind) && c == "certain":
+			c = "uncertain"
+		}
+	}
+	return c
+}
+
+// refNote is what a step of kind ref says.
+const refNote = "this function holds the next one as a value (registered, stored, passed on); it is not a call"
+
+// refPathNote says how far a path with a reference is to be trusted.
+const refPathNote = "a path with a reference is a wide approximation of \"may be reached\": a function that is registered or stored may be called or not (the graph does not say), and the steps of kind ref are not calls"
+
 func (e *Engine) pathOut(start int64, edges []graphdb.Edge, prefix []Step, suffix *Step) (Path, error) {
-	p := Path{Certainty: "certain"}
+	p := Path{Certainty: "certain", Relation: "calls"}
 	p.Steps = append(p.Steps, prefix...)
 	cur := start
 	// raise the certainty of the path: certain, uncertain (a dynamic call), hub (a call of many candidates)
 	raise := func(kind string, hub bool) {
+		if p.Certainty == "reference" {
+			return
+		}
 		if hub {
 			p.Certainty = "hub"
 		} else if dynamic(kind) && p.Certainty == "certain" {
@@ -1034,9 +1159,15 @@ func (e *Engine) pathOut(start int64, edges []graphdb.Edge, prefix []Step, suffi
 			if isHub(ed) {
 				st.Hub = true
 			}
-			raise(ed.Kind, st.Hub)
-			if st.Sites, err = e.siteIDs(ed.CallSite); err != nil {
-				return err
+			if isRef(ed) {
+				st.RefKind, st.ViaCallee, st.Note = ed.RefKind, ed.Via, refNote
+				p.Certainty, p.Relation, p.Note = "reference", "calls+refs", refPathNote
+				p.Refs++
+			} else {
+				raise(ed.Kind, st.Hub)
+				if st.Sites, err = e.siteIDs(ed.CallSite); err != nil {
+					return err
+				}
 			}
 		} else if f.File != "" && f.Line > 0 {
 			// the end of the path: where the function is declared
