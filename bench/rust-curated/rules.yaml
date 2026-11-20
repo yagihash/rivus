@@ -1,0 +1,13 @@
+# Rules of the curated Rust benchmark: the source and the sink are plain
+# functions (as in the sample of the extractor), so that what is measured is how
+# the value goes through closures, callbacks and function values, not the rules.
+ruleset: rivus/bench-rust-curated@1
+
+sources:
+  - symbol: curated::source
+    labels: [user_input]
+
+sinks:
+  - symbol: curated::sink
+    category: test
+    accepts: [user_input]

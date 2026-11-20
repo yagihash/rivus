@@ -1,0 +1,17 @@
+{
+  "findings": 128,
+  "ids_sha256": "daf5cb8c4b2a214f2bb3c713063aa68cc32129f2c99970f38b6fd1bb1d97775b",
+  "stats": {
+    "converged": true,
+    "functions": 614,
+    "largest_scc": 508,
+    "levels": 10,
+    "passes": 3
+  },
+  "uncertainties": 5,
+  "uncertainties_sha256": "ff2b1964d28fe1a3b4bc516265186e5946f0514ff6eac490961abbd4a278a7c0",
+  "uncertainty_kinds": {
+    "depth_limit": 1,
+    "dynamic_dispatch": 4
+  }
+}

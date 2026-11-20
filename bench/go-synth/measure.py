@@ -3,6 +3,11 @@
 
   measure.py run -rivus BIN -size S [-runs 3] [-out result.json] [-flags "-timeout 900s"]
   measure.py run -rivus BIN -dir DIR [-runs 3]      (any module that has rules.yaml)
+  measure.py run -lang dart|rust ...                (the generator is bench/<lang>-synth/gen; the extractor
+                                                     writes the IR once, and only "rivus analyze -ir" is measured:
+                                                     -dart "mise exec dart@3.13.6 -- dart" or $RIVUS_DART,
+                                                     -rust PATH or $RIVUS_RUST)
+  every command takes -lang (go by default); expected/ is bench/<lang>-synth/expected
   measure.py compare before.json after.json
   measure.py check -rivus BIN -size S               (is the result the one in expected/S.json?)
   measure.py snapshot -rivus BIN -size S            (write expected/S.json: only when the result is meant to change)
@@ -19,12 +24,33 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 
 
-def generate(size, out):
-    subprocess.run(["go", "run", "./bench/go-synth/gen", "-size", size, "-out", out], cwd=ROOT, check=True)
+def generate(size, out, lang="go"):
+    subprocess.run(["go", "run", "./bench/%s-synth/gen" % lang, "-size", size, "-out", out], cwd=ROOT, check=True)
+
+
+def extract(lang, d, a):
+    """Writes the IR of the project in d with the extractor of the language; returns (path, seconds)."""
+    ir = os.path.join(d, "ir.jsonl")
+    if lang == "dart":
+        words = shlex.split(a.dart or os.environ.get("RIVUS_DART", "") or "dart")
+        cmd = words + ["run", "bin/rivus_dart.dart", d]
+        cwd = os.path.join(ROOT, "extractor", "dart")
+    else:
+        binary = a.rust or os.environ.get("RIVUS_RUST", "") or os.path.join(ROOT, "extractor", "rust", "target", "debug", "rivus-rust")
+        cmd = [os.path.abspath(binary), d]
+        cwd = ROOT
+    t0 = time.time()
+    with open(ir, "wb") as f:
+        r = subprocess.run(cmd, cwd=cwd, stdout=f, stderr=subprocess.PIPE)
+    if r.returncode != 0:
+        sys.exit("the extractor failed: %s\n%s" % (r.returncode, r.stderr.decode()[-2000:]))
+    return ir, time.time() - t0
 
 
 def one(rivus, d, extra):
-    cmd = [rivus, "analyze", "-v", "-rules", os.path.join(d, "rules.yaml")] + extra + ["./..."]
+    cmd = [rivus, "analyze", "-v", "-rules", os.path.join(d, "rules.yaml")] + extra
+    if "-ir" not in extra:
+        cmd.append("./...")
     t0 = time.time()
     p = subprocess.Popen(cmd, cwd=d, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out, err = p.communicate()
@@ -65,16 +91,21 @@ def summarize(rep):
 def run(a, quiet=False):
     d = a.dir
     tmp = None
+    extra = list(a.extra)
+    extract_s = None
     if not d:
         tmp = tempfile.mkdtemp(prefix="rivus-synth-")
         d = os.path.join(tmp, a.size)
-        generate(a.size, d)
+        generate(a.size, d, a.lang)
+    if a.lang != "go":
+        ir, extract_s = extract(a.lang, os.path.abspath(d), a)
+        extra += ["-ir", ir]
     rivus = os.path.abspath(a.rivus)
     runs = []
     first = None
     for i in range(a.runs):
         # a fresh interpreter per run, so that the peak memory is the run's own
-        r = subprocess.run([sys.executable, __file__, "_one", rivus, d] + a.extra, capture_output=True, text=True)
+        r = subprocess.run([sys.executable, __file__, "_one", rivus, d] + extra, capture_output=True, text=True)
         if r.returncode != 0:
             sys.exit(r.stderr)
         o = json.loads(r.stdout)
@@ -83,7 +114,9 @@ def run(a, quiet=False):
             first = o["summary"]
         elif o["summary"]["ids_sha256"] != first["ids_sha256"] or o["summary"]["uncertainties_sha256"] != first["uncertainties_sha256"]:
             sys.exit("the result differs between runs of the same binary")
-    res = {"size": a.size if not a.dir else a.dir, "binary": rivus, "runs": runs, **first}
+    res = {"lang": a.lang, "size": a.size if not a.dir else a.dir, "binary": rivus, "runs": runs, **first}
+    if extract_s is not None:
+        res["extract_s"] = round(extract_s, 1)  # the extractor, once; not what is measured
     w = sorted(r["wall_s"] for r in runs)
     res["wall_s_min"], res["wall_s_max"] = w[0], w[-1]
     res["max_rss_mb_max"] = max(r["max_rss_mb"] for r in runs)
@@ -100,8 +133,8 @@ def run(a, quiet=False):
 EXPECTED_KEYS = ("findings", "uncertainties", "uncertainty_kinds", "ids_sha256", "uncertainties_sha256")
 
 
-def expected_path(size):
-    return os.path.join(HERE, "expected", size + ".json")
+def expected_path(size, lang="go"):
+    return os.path.join(ROOT, "bench", lang + "-synth", "expected", size + ".json")
 
 
 def snapshot(a):
@@ -111,9 +144,9 @@ def snapshot(a):
     res = run(a, quiet=True)
     keep = {k: res[k] for k in EXPECTED_KEYS}
     keep["stats"] = {k: res["stats"][k] for k in ("functions", "passes", "converged", "largest_scc", "levels")}  # not the sizes of the summaries: they are the engine's own
-    os.makedirs(os.path.dirname(expected_path(a.size)), exist_ok=True)
-    open(expected_path(a.size), "w").write(json.dumps(keep, indent=2, sort_keys=True) + "\n")
-    print("wrote", expected_path(a.size))
+    os.makedirs(os.path.dirname(expected_path(a.size, a.lang)), exist_ok=True)
+    open(expected_path(a.size, a.lang), "w").write(json.dumps(keep, indent=2, sort_keys=True) + "\n")
+    print("wrote", expected_path(a.size, a.lang))
 
 
 def check(a):
@@ -121,15 +154,15 @@ def check(a):
     a.dir = None
     a.out = None
     res = run(a, quiet=True)
-    want = json.load(open(expected_path(a.size)))
+    want = json.load(open(expected_path(a.size, a.lang)))
     bad = [k for k in EXPECTED_KEYS if res[k] != want[k]]
     bad += ["stats." + k for k in want["stats"] if res["stats"][k] != want["stats"][k]]
     if bad:
-        print("DIFFERENT from expected/%s.json: %s" % (a.size, ", ".join(bad)))
+        print("DIFFERENT from %s-synth/expected/%s.json: %s" % (a.lang, a.size, ", ".join(bad)))
         print("findings %s -> %s, uncertainties %s -> %s" % (want["findings"], res["findings"], want["uncertainties"], res["uncertainties"]))
         sys.exit(1)
-    print("identical to expected/%s.json (findings %d, uncertainties %d); %.1fs, %d MB" % (
-        a.size, res["findings"], res["uncertainties"], res["wall_s_min"], res["max_rss_mb_max"]))
+    print("identical to %s-synth/expected/%s.json (findings %d, uncertainties %d); %.1fs, %d MB" % (
+        a.lang, a.size, res["findings"], res["uncertainties"], res["wall_s_min"], res["max_rss_mb_max"]))
 
 
 def compare(a):
@@ -157,8 +190,12 @@ if __name__ == "__main__":
     r.add_argument("-runs", type=int, default=1)
     r.add_argument("-out")
     r.add_argument("-flags", default="", help="more flags for rivus analyze, as one string (\"-timeout 900s\")")
+    for x in [r] + [sub.add_parser(n) for n in ("snapshot", "check")]:
+        x.add_argument("-lang", default="go", choices=["go", "dart", "rust"])
+        x.add_argument("-dart", default="", help="the command that runs dart (default $RIVUS_DART)")
+        x.add_argument("-rust", default="", help="the Rust extractor (default $RIVUS_RUST)")
     for name in ("snapshot", "check"):
-        x = sub.add_parser(name)
+        x = sub.choices[name]
         x.add_argument("-rivus", required=True)
         x.add_argument("-size", default="S")
         x.add_argument("-flags", default="")

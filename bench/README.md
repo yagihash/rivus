@@ -18,16 +18,24 @@ Results are recorded in `docs/DECISIONS.md` (ADR-043).
 ## Benchmarks that are in this repository
 
 The targets above are real projects: they are big, slow to analyse, and have no answer key but the
-labels made by hand. For the work on the engine there are also two small benchmarks of our own, made
-for each language (`go-*` now; `dart-*` and `rust-*` are to be put next to them in the same way):
+labels made by hand. For the work on the engine there are also small benchmarks of our own, made
+for each language (Go, Dart, Rust):
 
 | directory | what it is | what it answers | time |
 | --- | --- | --- | --- |
 | `go-curated/` | a project in the shape of Gitea, gogs, gin-vue-admin, ech0, with the flows to find and the ones not to find written in the source | did the accuracy change (a flow lost, a false one gained)? | seconds, in `go test ./...` |
-| `go-synth/` | a generator of Go code of a given shape (depth, SCCs, interfaces, fields, ...), with a script that measures time, memory and the result | did the time or the memory change, and is the result the same? | S seconds, M minutes |
+| `dart-curated/`, `rust-curated/` | a package / a crate of the shapes that matter for closures and callbacks (helpers that take a closure, two callers; captures; relays; tear-offs and function pointers; errors), in the same marks, with what is not found yet (`@miss`) and what is reported wrongly (`@fp`, and in Rust `@noisy(N)`) recorded: the baseline for a change of how closures and callbacks are summarised | the same, for closures and callbacks | seconds, in `go test ./...` with `RIVUS_DART` / `RIVUS_RUST` set |
+| `go-synth/` | a generator of Go code of a given shape (depth, SCCs, interfaces, fields, ...), with a script (`measure.py`) that measures time, memory and the result | did the time or the memory change, and is the result the same? | S seconds, M minutes |
+| `dart-synth/`, `rust-synth/` | generators of a Dart package / a Rust crate (depth, SCCs, closures given to shared helpers, relays, closures in fields, captures); the plan is `synthplan/`; `go-synth/measure.py -lang dart` or `-lang rust` runs the extractor once and measures `rivus analyze -ir` | the same | S under a second, M and L seconds |
 
 When the core of the engine (`internal/sg`, `internal/sites`, `internal/taint`) is touched: run
-`go test ./...` (this includes `go-curated`), then the S and M of `go-synth` before and after with the
+`go test ./...` (this includes `go-curated`; with `RIVUS_DART` and `RIVUS_RUST` set, `dart-curated` and
+`rust-curated` too), then the S and M of `go-synth`, `dart-synth` and `rust-synth` before and after with the
 same binary built from each state, and check that the result is identical (or that every changed
 finding is understood). A real project (Gitea) is for a milestone only: it takes ten to sixteen
 minutes and 5 to 10 GB. See `go-synth/README.md` for how, and `docs/DECISIONS.md` (ADR-046) for why.
+
+```sh
+export RIVUS_DART="mise exec dart@3.13.6 -- dart" RIVUS_RUST=$PWD/extractor/rust/target/debug/rivus-rust
+go test ./cmd/rivus -run Curated -v        # the three accuracy benchmarks: counts in the log
+```

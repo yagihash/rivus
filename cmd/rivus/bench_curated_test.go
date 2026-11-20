@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -30,9 +31,16 @@ import (
 //	x := <-ch          // @source(tag) @miss   (a flow that is there, and is not found)
 //	db.Exec(y)         // @sink(none) @fp      (a sink that must stay quiet, and is reported)
 //
+// "@noisy(N)" goes on a sink line (with its @sink mark) that N sources of other tags
+// reach, wrongly, and that no @nosink names: the callbacks that are called by a
+// helper whose candidates are all the closures of one type (Rust, Dart) do this to
+// every closure that holds a sink. The flows are counted, not named; the test fails
+// when the count changes (fewer: write the new number, it is an improvement).
+//
 // "@nosink(tag)" says that the source of the tag must not reach this line (the
 // line has a flow of its own, from another source: two keys of one map, say).
 // It takes "@fp" in the same way.
+var curatedNoisy = regexp.MustCompile(`@noisy\((\d+)\)`)
 var curatedAnnot = regexp.MustCompile(`@(source|sink|nosink)\(([A-Za-z0-9_-]+)\)(\s+@(miss|fp))?`)
 
 type curatedAt struct {
@@ -41,9 +49,9 @@ type curatedAt struct {
 }
 
 // curatedCounts is what a curated project holds.
-type curatedCounts struct{ detect, quiet, miss, fp int }
+type curatedCounts struct{ detect, quiet, miss, fp, noisy int }
 
-// checkCurated analyses the project in dir (a Go module with rules.yaml) and
+// checkCurated analyses the Go project in dir (a Go module with rules.yaml) and
 // compares the findings with the annotations of its .go files.
 func checkCurated(t *testing.T, dir string) curatedCounts {
 	t.Helper()
@@ -57,6 +65,35 @@ func checkCurated(t *testing.T, dir string) curatedCounts {
 		}
 		t.Fatalf("analyze: %v\n%s", err, stderr)
 	}
+	return checkCuratedReport(t, dir, out, ".go")
+}
+
+// checkCuratedIR is checkCurated for a project that an extractor reads (Dart,
+// Rust): stream is the IR the extractor wrote for dir, and the annotations are
+// in the files with the extension ext.
+func checkCuratedIR(t *testing.T, dir string, stream []byte, ext string) curatedCounts {
+	t.Helper()
+	irFile := filepath.Join(t.TempDir(), "curated.jsonl")
+	if err := os.WriteFile(irFile, stream, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(binary, "analyze", "-ir", irFile, "-rules", filepath.Join(dir, "rules.yaml"))
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		var stderr []byte
+		if ee, ok := err.(*exec.ExitError); ok {
+			stderr = ee.Stderr
+		}
+		t.Fatalf("analyze: %v\n%s", err, stderr)
+	}
+	return checkCuratedReport(t, dir, out, ext)
+}
+
+// checkCuratedReport compares the report out with the annotations of the files
+// of dir that end in ext.
+func checkCuratedReport(t *testing.T, dir string, out []byte, ext string) curatedCounts {
+	t.Helper()
 	var rep report.Report
 	if err := json.Unmarshal(out, &rep); err != nil {
 		t.Fatal(err)
@@ -75,9 +112,20 @@ func checkCurated(t *testing.T, dir string) curatedCounts {
 		fp  bool
 	}
 	var nots []notFlow
-	err = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".go") {
+	noisyWant := map[curatedAt]int{}
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
 			return err
+		}
+		if info.IsDir() {
+			switch info.Name() {
+			case ".dart_tool", "target", ".rivus":
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ext) {
+			return nil
 		}
 		rel, _ := filepath.Rel(dir, path)
 		rel = filepath.ToSlash(rel)
@@ -89,6 +137,10 @@ func checkCurated(t *testing.T, dir string) curatedCounts {
 		sc := bufio.NewScanner(f)
 		for n := 1; sc.Scan(); n++ {
 			here := curatedAt{rel, n}
+			if m := curatedNoisy.FindStringSubmatch(sc.Text()); m != nil {
+				v, _ := strconv.Atoi(m[1])
+				noisyWant[here] = v
+			}
 			for _, m := range curatedAnnot.FindAllStringSubmatch(sc.Text(), -1) {
 				switch {
 				case m[1] == "nosink":
@@ -179,6 +231,7 @@ func checkCurated(t *testing.T, dir string) curatedCounts {
 			c.detect++
 		}
 	}
+	noisyGot := map[curatedAt]int{}
 	for _, fd := range rep.Findings {
 		// a flow into a quiet sink is told below, with the sink
 		k := fmt.Sprintf("%s:%d -> %s:%d", fd.Source.Position.File, fd.Source.Position.Line, fd.Sink.Position.File, fd.Sink.Position.Line)
@@ -186,7 +239,18 @@ func checkCurated(t *testing.T, dir string) curatedCounts {
 			continue
 		}
 		if _, ok := want[k]; !ok && !skip[k] {
+			at := curatedAt{fd.Sink.Position.File, fd.Sink.Position.Line}
+			if _, noisy := noisyWant[at]; noisy {
+				noisyGot[at]++
+				c.noisy++
+				continue
+			}
 			problems = append(problems, "unexpected flow: "+k)
+		}
+	}
+	for at, w := range noisyWant {
+		if noisyGot[at] != w {
+			problems = append(problems, fmt.Sprintf("@noisy(%d) at %s:%d, and %d other flows reach it now", w, at.file, at.line, noisyGot[at]))
 		}
 	}
 	for _, n := range none {
@@ -222,8 +286,74 @@ func TestCuratedGo(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := checkCurated(t, dir)
-	t.Logf("go-curated: %d flows to find, %d sinks to keep quiet, %d flows not found yet (@miss), %d reported wrongly (@fp)", c.detect, c.quiet, c.miss, c.fp)
+	t.Logf("go-curated: %d flows to find, %d sinks to keep quiet, %d flows not found yet (@miss), %d reported wrongly (@fp), %d flows of other sources into noisy sinks (@noisy)", c.detect, c.quiet, c.miss, c.fp, c.noisy)
 	if c.detect < 15 || c.quiet < 8 {
+		t.Errorf("the project has shrunk: %+v", c)
+	}
+}
+
+// TestCuratedDart is the accuracy benchmark for Dart (bench/dart-curated). It needs
+// the Dart SDK: RIVUS_DART names the command that runs it, for example "dart" or
+// "mise exec dart@3.13.6 -- dart".
+func TestCuratedDart(t *testing.T) {
+	dart := os.Getenv("RIVUS_DART")
+	if dart == "" {
+		t.Skip("RIVUS_DART is not set")
+	}
+	dir, err := filepath.Abs(filepath.Join("..", "..", "bench", "dart-curated"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	extractor, err := filepath.Abs(filepath.Join("..", "..", "extractor", "dart"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	words := strings.Fields(dart)
+	// the package has no dependency outside the repository: pub resolves it without the network
+	if _, err := os.Stat(filepath.Join(dir, ".dart_tool", "package_config.json")); err != nil {
+		get := exec.Command(words[0], append(append([]string{}, words[1:]...), "pub", "get", "--offline")...)
+		get.Dir = dir
+		if out, err := get.CombinedOutput(); err != nil {
+			t.Fatalf("pub get: %v\n%s", err, out)
+		}
+	}
+	cmd := exec.Command(words[0], append(append([]string{}, words[1:]...), "run", "bin/rivus_dart.dart", dir)...)
+	cmd.Dir = extractor
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	stream, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("the extractor failed: %v\n%s", err, stderr.String())
+	}
+	c := checkCuratedIR(t, dir, stream, ".dart")
+	t.Logf("dart-curated: %d flows to find, %d sinks to keep quiet, %d flows not found yet (@miss), %d reported wrongly (@fp), %d flows of other sources into noisy sinks (@noisy)", c.detect, c.quiet, c.miss, c.fp, c.noisy)
+	if c.detect < 70 || c.quiet < 35 {
+		t.Errorf("the project has shrunk: %+v", c)
+	}
+}
+
+// TestCuratedRust is the accuracy benchmark for Rust (bench/rust-curated). It needs
+// the extractor binary: RIVUS_RUST (extractor/rust: cargo build).
+func TestCuratedRust(t *testing.T) {
+	bin := os.Getenv("RIVUS_RUST")
+	if bin == "" {
+		t.Skip("RIVUS_RUST is not set")
+	}
+	bin, err := filepath.Abs(bin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir, err := filepath.Abs(filepath.Join("..", "..", "bench", "rust-curated"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stream, err := exec.Command(bin, dir).Output()
+	if err != nil {
+		t.Fatalf("the extractor failed: %v", err)
+	}
+	c := checkCuratedIR(t, dir, stream, ".rs")
+	t.Logf("rust-curated: %d flows to find, %d sinks to keep quiet, %d flows not found yet (@miss), %d reported wrongly (@fp), %d flows of other sources into noisy sinks (@noisy)", c.detect, c.quiet, c.miss, c.fp, c.noisy)
+	if c.detect < 100 || c.quiet < 38 {
 		t.Errorf("the project has shrunk: %+v", c)
 	}
 }

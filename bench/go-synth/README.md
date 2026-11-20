@@ -98,7 +98,8 @@ so the smaller code already takes what a real program of ten times the size does
 
 ## For Dart and Rust
 
-The directory is named by language (`go-synth`). `dart-synth` and `rust-synth` go next to it, each with a
-generator of its own and a `measure.py` that only differs in how the target is read (the IR of the
-extractor goes in with `-ir`); the result format of `measure.py` (`findings`, `uncertainties`,
-`ids_sha256`, `wall_s_*`, `max_rss_mb_max`) is the same for all.
+`dart-synth` and `rust-synth` are next to it, each with a generator of its own (the plan is shared:
+`../synthplan`). `measure.py` is the same script: `-lang dart` or `-lang rust` generates with that
+generator, runs the extractor once (`-dart` or `$RIVUS_DART`; `-rust` or `$RIVUS_RUST`), and measures only
+`rivus analyze -ir`; `expected/` is that of the language. The result format (`findings`, `uncertainties`,
+`ids_sha256`, `wall_s_*`, `max_rss_mb_max`) is the same for all, with `extract_s` added.

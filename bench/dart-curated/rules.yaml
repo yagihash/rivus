@@ -1,0 +1,12 @@
+# Rules of the curated Dart benchmark: the source and the sink are plain functions
+# (as in the sample of the extractor), so that what is measured is how the
+# value goes through closures, callbacks and tear-offs, not the rules.
+ruleset: rivus/bench-dart-curated@1
+
+sources:
+  - symbol: package:curated/lib.dart#source
+    labels: [user_input]
+
+sinks:
+  - symbol: package:curated/lib.dart#sink
+    category: test
