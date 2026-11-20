@@ -232,3 +232,14 @@ propagators:
     pure: true
   - symbol: strconv.ParseInt
     flows: [{from: arg0, to: result0}]
+
+globals:
+  # What is written to the standard output and the standard error goes out of the program: nobody reads it back.
+  # Without this, the data a function writes to os.Stderr (a log line) is in the variable, and every function that
+  # hands os.Stderr on (log.New(os.Stderr, ...): the logger of each library) carries it, and so does everything
+  # they are stored in. Writing to them is still seen as a call (a sink may name it). A program that reads its own
+  # output back (os.Pipe, replacing os.Stdout) is not followed. A rule file says "holds: everything" to undo it.
+  - symbol: os.Stderr
+    holds: nothing
+  - symbol: os.Stdout
+    holds: nothing

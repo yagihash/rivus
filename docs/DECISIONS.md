@@ -1239,3 +1239,20 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
 **決めたこと:** `joinSummaries` で、widen の前に、`Param(i, 一部)` の要素を、同じ `(i, mods)` の全体の要素 `Param(i, "")` があり、その条件（ガード）が、無条件か、同じなら、落とす（`absorbWhole`）。`Param(i, "")` の展開は、そのセルと、その下に保存されたもの全部を読むので、全体を表す要素は、一部を表す要素を含む。意味は変わらない。ラベルの操作（`mods`）が違うものは、落とさない。
 
 **測定:** gogs（`bench/gogs/rules.yaml`）: taint 19.9 秒 → 13.4 秒、finding 12 で同一、パスごとの「戻ってきた要素」は、最初のパスの 1 つだけ。単体のテスト `TestJoinAbsorbsPartsIntoTheWhole`（join が、安定していること）。Gitea は、この修正だけでは収束しない（増加は往復ではなく、新しい要素。ADR-055 の仮説の履歴）。ech0 は、15 分で、2 パスから 3 パスまで進むが、収束しない。
+## ADR-056: 書き込まれても、読む側に何も返さないグローバル（`globals:` の `holds: nothing`）（提案: ユーザーの確認待ち）
+
+**背景:** Gitea の解析で、`certmagic`（ACME の依存）のパッケージ変数 15 個に、380 個の `*net/http.Request` 型の source が、1 個あたり 4 つのパスで載り、要約の最大が 15,200 要素になった。追跡（`RIVUS_TRACE_ELEM`）で、入口は、`log.FallbackErrorf` の `fmt.Fprintf(os.Stderr, ...)`（引数から書き込み先へ流れる、という既定）だった。`os.Stderr` の指す先が汚染され、`log.New(os.Stderr, ...)`（引数から結果へ）で、すべてのライブラリのロガーが、汚染を運び、ロガーを持つパッケージ変数へ広がった。`os.Stderr` に書いたものは、プログラムの外へ出るだけで、同じプロセスの誰も読み戻さない。
+
+**決めたこと:**
+1. ルールの書式に `globals:` を足す（`symbol`: パッケージ付きの変数名、`holds: nothing | everything`）。`nothing`: そのグローバル（と、その指す先）への書き込みは、(a) 関数の要約の出力（`OutGlobal`）に出さない、(b) グローバルの格納に書かない、(c) 読む関数として登録しない。つまり、他の関数から見て、読んでも汚染は返らない。**書き込みの呼び出し自体（`fmt.Fprintf(os.Stderr, x)`）は、今までどおり呼び出しとして見える**（sink のルールが名前で当てられる。ログへの書き込みを sink にしたい利用者は、呼び出しで捕まえる）。
+2. **関数の中では、変数は、ふつうの変数のまま**（同じ関数の中で `os.Stderr` に書いて、すぐ読む形は、今までどおり流れる。フィクスチャ `globalshold` の `WriteAndRead`）。流れなくなるのは、関数の外へ、変数を通って出る流れだけ。
+3. 組み込みのモデル（`go-pure.yaml`）に、`os.Stderr` と `os.Stdout` を書く。プロジェクトのルールで、`holds: everything` と書くと、外れる（精度の限界を、利用者が外せる）。`Merge` は、どの集合でも `everything` と言われた変数を、`nothing` から外す（集合の順序によらない）。
+4. エンジンのコードに、`os.Stderr` とは書かない（`Rules.HoldsNothing(name)` を引くだけ）。
+
+**測定（Gitea、`reflect` のモデルあり、callouts なし）:** `summary_elems` 839,401 → 439,321、`summary_steps` 35.1M → 16.5M、最大の要約 15,200 → 935、`reanalyses` 134,075 → 120,899、`depth_limit` 1,431 → 1,217、収束は 8 パスのまま、finding 37 → 38（source の入れ替わり: 出ていく 6 組、入る 7 組）。最大 RSS（13.5 GB）とパスの数は変わらない。rivus 自身（dogfood）: `reanalyses` 10,265 → 7,742、finding は 88 で同一、`dropped` は `os.Stderr` の 4 回、`os.Stdout` の 1 回。gogs: 変わらない。
+
+**限界:**
+- **見逃す形**: `os.Stdout` / `os.Stderr` を差し替えて、読み戻すコード（`os.Pipe` と、`os.Stdout = w`、別の端から読む）は、追わない。`holds: everything` で戻せる。
+- 黙った見逃しにしない不確実性は、まだ出していない（「このグローバルへの書き込みは、追っていない」。件数が少ない（Gitea で 1〜数回、dogfood で 5 回）ので、`stats.dropped_globals`（`-v`）に出す案がある）。
+- `holds` の値は、今は 2 つ。将来の 3 つ目（「メタデータだけ持つ」）を足せる名前にしてある。
+- `sync.Pool`（`sync.allPools`、`sync.oldPools`）のような、型のモデルで言う形は、別。

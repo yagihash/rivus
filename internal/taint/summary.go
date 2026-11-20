@@ -93,6 +93,9 @@ func (s *state) summarize() *Summary {
 			if r.V.Kind != sg.KGlobal {
 				continue
 			}
+			if s.eng.rules.HoldsNothing(r.V.Name) {
+				continue // read back by nobody (a rule says so, ADR-056)
+			}
 			kind, glob = OutGlobal, r.V
 		}
 		cm := s.cells[r]

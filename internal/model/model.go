@@ -73,6 +73,8 @@ type RuleSet struct {
 	Sinks       []Sink       `yaml:"sinks"`
 	Sanitizers  []Sanitizer  `yaml:"sanitizers"`
 	Propagators []Propagator `yaml:"propagators"`
+	// Globals say what a package variable holds for the code that reads it.
+	Globals []GlobalRule `yaml:"globals"`
 	// ConfigReads are functions that read configuration: files, the
 	// environment, flags. When rivus traces a value back to such a call, it
 	// stops and says config_read: the value is in the repository's
@@ -222,6 +224,25 @@ type Propagator struct {
 	MaxImplementations int `yaml:"max_implementations"`
 }
 
+// Holds values of a global rule.
+const (
+	// HoldsNothing: what is written to the variable (and to what it points to) is not read back by anyone: it goes out of
+	// the program (os.Stderr). Reading the variable gives no taint; the call that writes to it is still seen (a sink rule
+	// may name it).
+	HoldsNothing = "nothing"
+	// HoldsEverything is the default, and undoes a rule that says nothing (a rule file of the project, over the built-in one).
+	HoldsEverything = "everything"
+)
+
+// GlobalRule says what a package variable holds. It is for the variables that many functions use as the
+// handle of a place the data goes out to: what was written to it is not data that others read.
+type GlobalRule struct {
+	Provenance `yaml:",inline"`
+	// Symbol is the name of the variable with its package: os.Stderr.
+	Symbol string `yaml:"symbol"`
+	Holds  string `yaml:"holds"`
+}
+
 // ConfigRead names a function that reads configuration.
 type ConfigRead struct {
 	Symbol string `yaml:"symbol"`
@@ -350,6 +371,11 @@ func (rs *RuleSet) rejectBuiltinOrigin() error {
 			return err
 		}
 	}
+	for i, s := range rs.Globals {
+		if err := check("globals", i, s.Provenance); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -392,6 +418,9 @@ func (rs *RuleSet) fillOrigins() {
 	}
 	for i := range rs.Propagators {
 		fill(&rs.Propagators[i].Provenance)
+	}
+	for i := range rs.Globals {
+		fill(&rs.Globals[i].Provenance)
 	}
 }
 
@@ -644,6 +673,18 @@ func (rs *RuleSet) validate() error {
 		}
 	}
 	aliased := map[string]bool{}
+	for i, g := range rs.Globals {
+		what := fmt.Sprintf("globals[%d]", i)
+		if err := g.Provenance.validate(what); err != nil {
+			return err
+		}
+		if g.Symbol == "" {
+			return fmt.Errorf("%s: symbol is required", what)
+		}
+		if g.Holds != HoldsNothing && g.Holds != HoldsEverything {
+			return fmt.Errorf("%s: holds is %q (want %s or %s)", what, g.Holds, HoldsNothing, HoldsEverything)
+		}
+	}
 	for i, p := range rs.Propagators {
 		what := fmt.Sprintf("propagators[%d]", i)
 		if err := p.Provenance.validate(what); err != nil {
@@ -779,6 +820,9 @@ type Rules struct {
 	// ReadImpls are the symbols of the propagators of a set with read_impls.
 	ReadImpls   map[string]bool
 	ConfigReads map[string]bool
+	// GlobalsHoldNothing are the package variables that hold nothing for the code that reads them (a rule that says
+	// everything, in any set, takes the variable out).
+	GlobalsHoldNothing map[string]bool
 
 	// Expansions records what Expand did with match: implementations rules.
 	Expansions []Expansion
@@ -819,8 +863,18 @@ func Merge(sets ...*RuleSet) *Rules {
 		Propagators: map[string][]Propagator{},
 		ReadImpls:   map[string]bool{},
 		ConfigReads: map[string]bool{},
+
+		GlobalsHoldNothing: map[string]bool{},
 	}
+	everything := map[string]bool{}
 	for _, rs := range sets {
+		for _, g := range rs.Globals {
+			if g.Holds == HoldsNothing {
+				r.GlobalsHoldNothing[g.Symbol] = true
+			} else {
+				everything[g.Symbol] = true
+			}
+		}
 		for _, s := range rs.Sources {
 			switch s.Kind {
 			case KindCallResult:
@@ -852,8 +906,14 @@ func Merge(sets ...*RuleSet) *Rules {
 			r.ConfigReads[c.Symbol] = true
 		}
 	}
+	for sym := range everything {
+		delete(r.GlobalsHoldNothing, sym)
+	}
 	return r
 }
+
+// HoldsNothing reports whether the package variable holds nothing for the code that reads it.
+func (r *Rules) HoldsNothing(symbol string) bool { return r != nil && r.GlobalsHoldNothing[symbol] }
 
 // ReadsImpls reports whether the code of the project's own implementations of the
 // method is read as well as the model applied (a set with read_impls).

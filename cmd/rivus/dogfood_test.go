@@ -110,7 +110,7 @@ func TestDogfood(t *testing.T) {
 			capture++
 		}
 	}
-	const wantCaptureUnbound = 35
+	const wantCaptureUnbound = 34
 	t.Logf("capture_unbound: %d (ceiling %d)", capture, wantCaptureUnbound)
 	if capture != wantCaptureUnbound {
 		t.Errorf("capture_unbound is %d, the ceiling is %d: if it went down, lower the ceiling (that is the point of C-7); if it went up, a closure capture is lost silently somewhere new", capture, wantCaptureUnbound)

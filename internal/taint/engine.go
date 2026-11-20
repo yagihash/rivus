@@ -802,6 +802,9 @@ func (e *Engine) compute(fn *sg.Func) *fnResult {
 		if g == nil || g.Kind != sg.KGlobal {
 			continue
 		}
+		if e.rules.HoldsNothing(g.Name) {
+			continue // what is written to it is read back by nobody (ADR-056): not stored, not read
+		}
 		r.reads = append(r.reads, globalReader{g, fn})
 		for path, set := range cm {
 			for el := range set {
