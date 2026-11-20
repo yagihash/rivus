@@ -245,7 +245,7 @@ func TestReferencesCoverReachable(t *testing.T) {
 	if n == 0 {
 		t.Fatal("empty")
 	}
-	// the other way: what the graph reaches by a reference that Reachable does not follow is a closure that captured a value
+	// the other way: what the graph reaches by a call or a reference, Reachable reaches too, a closure that captured a value included (ADR-051)
 	for _, id := range []string{"A", "H", "H1", "T", "B1", "B2", "Store", "S", "Lit"} {
 		r, _ := e.Path("", id, graphq.Options{FromEntry: true})
 		if !r.Reachable {
@@ -255,11 +255,7 @@ func TestReferencesCoverReachable(t *testing.T) {
 		for f := range want {
 			in = in || f.ID == id
 		}
-		if !in && id == "Lit" {
-			// a closure that captured a value and was passed to a call: sg.Program.Reachable does not follow it (its
-			// make_closure is not a function value, KFunc), the graph does, as a reference of kind closure
-			t.Logf("%s: the graph reaches it by a closure, Reachable does not", id)
-		} else if !in {
+		if !in {
 			t.Errorf("%s: the graph reaches it, Reachable does not", id)
 		}
 	}

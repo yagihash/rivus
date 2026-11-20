@@ -333,6 +333,12 @@ func (p *Program) Reachable() map[*Func]bool {
 				for _, c := range in.CandidateFns {
 					add(c)
 				}
+				// A closure that captured a value is made here, and the function it runs is
+				// reached (the same rule as a reference of kind closure in the graph). One that
+				// captured nothing is a function value (KFunc), and is an argument below.
+				if in.Op == ir.OpMakeClosure && in.IR != nil && in.IR.Func != "" {
+					add(p.ByID[string(in.IR.Func)])
+				}
 				for _, a := range in.Args {
 					if a != nil && a.Kind == KFunc {
 						add(a.Fn)
