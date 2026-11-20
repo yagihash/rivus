@@ -234,3 +234,41 @@ func TestProjectRulesInADirectoryNamedLikeAGlob(t *testing.T) {
 		}
 	}
 }
+
+// The directory of the rules that the analysed code brings is not read through a link either, and an error
+// in a rule file does not show the keys of the file (yagihash/rivus #69).
+func TestProjectRulesDirectoryThatIsALinkIsNotRead(t *testing.T) {
+	dir := t.TempDir()
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, "a.yaml"), []byte("SECRETKEY_abc123: 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, ".rivus"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(dir, ".rivus", "rules")); err != nil {
+		t.Skip("no symbolic links here")
+	}
+	c := common{dir: dir, noBuiltin: true}
+	_, err := c.loadRules()
+	if err == nil || !strings.Contains(err.Error(), "outside the analysed directory") {
+		t.Fatalf("a rules directory that is a link to another place is read: %v", err)
+	}
+	if strings.Contains(err.Error(), "SECRETKEY") {
+		t.Errorf("the message shows the file: %v", err)
+	}
+
+	// a link inside the directory is fine; a mistake in a file shows its line, not its keys
+	_ = os.Remove(filepath.Join(dir, ".rivus", "rules"))
+	rules := filepath.Join(dir, ".rivus", "rules")
+	if err := os.MkdirAll(rules, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(rules, "a.yaml"), []byte("SECRETKEY_abc123: 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err = c.loadRules()
+	if err == nil || strings.Contains(err.Error(), "SECRETKEY") || !strings.Contains(err.Error(), "line 1") {
+		t.Errorf("the error of a rule file: %v", err)
+	}
+}

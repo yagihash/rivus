@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"syscall"
@@ -80,6 +81,9 @@ func (c *common) loadRules(extra ...*model.RuleSet) (*model.Rules, error) {
 	if !c.noProject {
 		// Not filepath.Glob: the directory is a name, and may hold the characters of a pattern.
 		rulesDir := filepath.Join(c.dir, ".rivus", "rules")
+		if err := insideDir(c.dir, rulesDir); err != nil {
+			return nil, err
+		}
 		entries, err := os.ReadDir(rulesDir)
 		if err != nil && !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, syscall.ENOTDIR) {
 			return nil, fmt.Errorf("project rules: %w", err)
@@ -113,7 +117,8 @@ func (c *common) loadRules(extra ...*model.RuleSet) (*model.Rules, error) {
 		f.Close()
 		if err != nil {
 			if project[path] {
-				err = model.RedactValues(err)
+				// Not the message of the decoder: it quotes keys and values of the file (#69).
+				err = projectRuleError(path, err)
 			}
 			return nil, err
 		}
@@ -303,4 +308,33 @@ func (c *common) target(fromIR bool) *vcs.Target {
 		return nil
 	}
 	return vcs.Detect(c.dir)
+}
+
+// insideDir fails when rulesDir, with every link in its path followed, is outside dir: the directory of the
+// rules that the analysed code brings must not be another place (yagihash/rivus #69).
+func insideDir(dir, rulesDir string) error {
+	real, err := filepath.EvalSymlinks(rulesDir)
+	if err != nil {
+		return nil // not there: nothing is read
+	}
+	root, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return nil
+	}
+	rel, err := filepath.Rel(root, real)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("%s: the project rules directory is outside the analysed directory (a symbolic link), and is not read (-no-project-rules leaves the project's rules out)", rulesDir)
+	}
+	return nil
+}
+
+var ruleErrLine = regexp.MustCompile(`line (\d+)`)
+
+// projectRuleError is the error of a rule file that the analysed directory brings: the file and the line, and
+// not what the parser says of the content.
+func projectRuleError(path string, err error) error {
+	if m := ruleErrLine.FindStringSubmatch(err.Error()); m != nil {
+		return fmt.Errorf("%s: the project rule file is not valid (line %s; run it with -rules to see why)", path, m[1])
+	}
+	return fmt.Errorf("%s: the project rule file is not valid (run it with -rules to see why)", path)
 }
