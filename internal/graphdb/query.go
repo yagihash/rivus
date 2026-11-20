@@ -113,6 +113,31 @@ func (d *DB) HasOut(from int64) (bool, error) {
 	return n == 1, err
 }
 
+// FuncFacts are what the file says of one function, as a reader that wants to
+// know why nothing reaches it needs: who calls it, and what it is. Only what
+// the structure layer has.
+type FuncFacts struct {
+	Exported bool
+	HasBody  bool
+	Dep      bool
+	// StaticCallSites are the call sites that name it; DynamicCallSites those
+	// through an interface or a function value that list it as a candidate.
+	StaticCallSites  int
+	DynamicCallSites int
+}
+
+// FactsOf reads the facts of a function.
+func (d *DB) FactsOf(id int64) (FuncFacts, error) {
+	var ft FuncFacts
+	var ex, body, dep int
+	if err := d.db.QueryRow(`SELECT exported, has_body, dep FROM funcs WHERE id = ?`, id).Scan(&ex, &body, &dep); err != nil {
+		return ft, err
+	}
+	ft.Exported, ft.HasBody, ft.Dep = ex == 1, body == 1, dep == 1
+	err := d.db.QueryRow(`SELECT coalesce(sum(kind = 'static'),0), coalesce(sum(kind IN ('interface','value')),0) FROM (SELECT DISTINCT callsite_id, kind FROM edges WHERE to_func = ?)`, id).Scan(&ft.StaticCallSites, &ft.DynamicCallSites)
+	return ft, err
+}
+
 // HasIn reports whether anything calls a function.
 func (d *DB) HasIn(to int64) (bool, error) {
 	var n int

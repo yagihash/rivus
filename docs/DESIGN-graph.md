@@ -144,6 +144,8 @@ AI エージェントが、コード上の 1 点を指して、「そこへ届�
 - **フィルタが 2 つ以上のときの `without_filters`**: 1 つずつ外した探索を足した(`culprits`: 外すと届くもの。ほかは残す)。費用は、フィルタの数だけ探索が増える。
 - **見送ったもの**: なし(`culprits` は費用が小さいので入れた)。
 
+- **到達の限界を、出力で言う(`--from-entry`)**: `path` の `exhaustive` は、DB の呼び出しの辺(呼び出しと、インターフェース・関数値の候補)についてのもの。`exhaustive_of` にそう書く。関数値の保存(`m.Get("/x", repo.Activity)`)、リフレクション、フレームワークからの呼び出しは、辺にない。**`--from-entry` で `reachable: false` のときは、`exhaustive` を `false` にして**、`limits` で上の 3 つを言い、`target_facts`(終点ごと: `static_call_sites`、`dynamic_call_sites`〔`dispatchers` 相当〕、`exported`、`has_body`、`dep`、`value_references: null`〔辺の表がまだない〕)を並べる。`edges_exhausted` は、辺の探索が上限で切れなかったこと(従来の `exhaustive`)。`--from` つきの「経路なし」は変えていない(同じ限界はあるが、`exhaustive_of` で範囲を言う)。`entry.definition` は、起点は `sg.Program.Reachable` と同じ規則で、辺は違う(関数値として名前を挙げた関数を辿らない)と書く。DB の辺と `user_version` は変えていない。参照の表と、参照を辿る 4 段目は、出力の形を見せてから別に作る。
+
 ## これから決めること
 - `hints` の文面(段階 2 は、英語の短い文。使ってみて直す)と、`path` の出力を、トークンが問題になったときにノードの表に分けるか(今は、各ステップに関数の ID を書く。1 辺が約 190 バイト)
 - サイト ID の連携(今は、辺とステップに `sites` を付けるだけ)

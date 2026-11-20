@@ -351,7 +351,30 @@ func TestPathFromEntry(t *testing.T) {
 	}
 	// a function no entry reaches
 	r, _ = e.Path("", "Dead", graphq.Options{FromEntry: true})
-	if r.Reachable || !r.Exhaustive || !anyHas(r.Hints, "no entry reaches it") || r.Entry == nil {
+	if r.Reachable || r.Exhaustive || !r.EdgesExhausted || !anyHas(r.Hints, "no entry reaches it") || r.Entry == nil {
+		t.Errorf("%+v", r)
+	}
+	// --from-entry with no path never says exhaustive: the limits and the facts of the goal come with it
+	if len(r.Limits) != 3 || !strings.Contains(strings.Join(r.Limits, " "), "stored as a value") || !strings.Contains(strings.Join(r.Limits, " "), "reflection") || !strings.Contains(r.ExhaustiveOf, "call edges") {
+		t.Errorf("limits %+v", r.Limits)
+	}
+	if len(r.TargetFacts) != 1 || r.TargetFacts[0].ID != "Dead" || !r.TargetFacts[0].HasBody || r.TargetFacts[0].Dep || r.TargetFacts[0].Exported || r.TargetFacts[0].StaticCallSites != 0 || r.TargetFacts[0].DynamicCallSites != 0 || r.TargetFacts[0].ValueReferences != nil {
+		t.Errorf("facts %+v", r.TargetFacts)
+	}
+	// a goal that is called, by a function no entry reaches: the callers are counted, and no path is still said
+	r, _ = e.Path("", "Dead", graphq.Options{FromEntry: true})
+	if !strings.Contains(r.Entry.Definition, "does not follow a function that is only named as a value") {
+		t.Errorf("definition %q", r.Entry.Definition)
+	}
+	// a path found keeps exhaustive and has no limits
+	if r, _ = e.Path("", "Z", graphq.Options{FromEntry: true}); !r.Reachable || len(r.Limits) != 0 || len(r.TargetFacts) != 0 {
+		t.Errorf("%+v", r)
+	}
+	// without --from-entry, nothing changes
+	if r, _ = e.Path("Dead", "Z", graphq.Options{}); !r.Reachable || !r.Exhaustive || len(r.Limits) != 0 {
+		t.Errorf("%+v", r)
+	}
+	if r, _ = e.Path("Z", "Dead", graphq.Options{}); r.Reachable || !r.Exhaustive || len(r.Limits) != 0 || r.TargetFacts != nil {
 		t.Errorf("%+v", r)
 	}
 	// --from and --from-entry together
@@ -370,5 +393,21 @@ func TestPathFromEntry(t *testing.T) {
 	e = build(t, fns)
 	if _, err := e.Path("", "Z", graphq.Options{FromEntry: true}); err == nil || !strings.Contains(err.Error(), "--from-entry") {
 		t.Errorf("%v", err)
+	}
+}
+
+// The facts of a goal no entry reaches: its callers are counted, though the callers are unreachable too.
+func TestEntryTargetFactsCountCallers(t *testing.T) {
+	fns := []fnDef{
+		{"main1", nil},
+		{"Handler", []call{{"e.go", 1, 1, "", "Helper", nil}}},
+		{"Other", []call{{"e.go", 2, 1, "", "Helper", nil}}},
+		{"Helper", nil},
+	}
+	entryIDs = map[string]bool{"main1": true}
+	e := build(t, fns)
+	r, err := e.Path("", "Helper", graphq.Options{FromEntry: true})
+	if err != nil || r.Reachable || r.Exhaustive || len(r.TargetFacts) != 1 || r.TargetFacts[0].StaticCallSites != 2 {
+		t.Errorf("%v %+v", err, r)
 	}
 }

@@ -728,7 +728,8 @@ func (e *Engine) Path(from, to string, o Options) (*PathResult, error) {
 			res.AmbiguousTotal += c.AmbiguousTotal
 			res.Hints = append(res.Hints, ambiguousHints(t, c)...)
 		}
-		res.Exhaustive = true
+		res.Exhaustive, res.EdgesExhausted = true, true
+		res.ExhaustiveOf = exhaustiveOf
 		return res, nil
 	}
 
@@ -780,7 +781,9 @@ func (e *Engine) Path(from, to string, o Options) (*PathResult, error) {
 		return nil, err
 	}
 	res.Searched = sr.searched
+	res.ExhaustiveOf = exhaustiveOf
 	res.Exhaustive = sr.exhaustive && !sr.cut
+	res.EdgesExhausted = res.Exhaustive
 	if sr.found && sr.stage == 1 {
 		res.HubSkippedTotal = sr.hubTotal
 	}
@@ -819,6 +822,23 @@ func (e *Engine) Path(from, to string, o Options) (*PathResult, error) {
 		}
 		if o.FromEntry {
 			res.Hints = append(res.Hints, "no entry reaches it by calls: a function that is only passed as a value (a handler registered with a framework, a callback) is reached from the entry only through a call of a function value that lists it; \"no path\" does not say the code is dead")
+			// the edges of the file are calls: this "no path" is not "unreachable"
+			res.Exhaustive = false
+			res.Limits = entryLimits
+			for _, id := range dst.Funcs {
+				if len(res.TargetFacts) >= 5 {
+					break
+				}
+				f, err := e.fn(id)
+				if err != nil {
+					return nil, err
+				}
+				ft, err := e.db.FactsOf(id)
+				if err != nil {
+					return nil, err
+				}
+				res.TargetFacts = append(res.TargetFacts, TargetFact{ID: f.FID, Exported: ft.Exported, HasBody: ft.HasBody, Dep: ft.Dep, StaticCallSites: ft.StaticCallSites, DynamicCallSites: ft.DynamicCallSites})
+			}
 		}
 		res.Hints = append(res.Hints, "callees of the start, with --depth, shows where it goes (and the frontier, where it stops)")
 		return res, nil
@@ -868,6 +888,16 @@ func (e *Engine) Path(from, to string, o Options) (*PathResult, error) {
 		res.Warnings = append(res.Warnings, "the listing of the paths was cut by a bound: others may exist")
 	}
 	return res, nil
+}
+
+const exhaustiveOf = "the call edges in the graph file (calls, and the candidates of calls through interfaces and function values); not a function stored as a value, reflection, or a call from a framework"
+
+// entryLimits are what a path from the entries cannot see: the file holds
+// calls, and the program reaches more at run time.
+var entryLimits = []string{
+	"a function stored as a value (a handler registered with a router: m.Get(\"/x\", f), a callback, a function put in a map or a struct) is not an edge in the graph file: its call is an edge only if a call of a function value lists it",
+	"a call by reflection, and a call from a framework or the runtime (an override of a method of a dependency, such as ServeHTTP or a widget's build) is not an edge in the graph file",
+	"so \"no path\" here is true of the call edges only: at run time the function may be reached (\"exhaustive\" is false, \"edges_exhausted\" says the search of the edges was complete); \"target_facts\" says what the file knows of it",
 }
 
 // withoutFilters asks the question again without the filters (--via too), to

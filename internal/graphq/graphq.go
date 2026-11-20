@@ -245,6 +245,21 @@ type EntryInfo struct {
 	Examples []string `json:"examples"`
 }
 
+// TargetFact is what the graph file says of the goal of a path that was not found.
+type TargetFact struct {
+	ID       string `json:"id"`
+	Exported bool   `json:"exported"`
+	HasBody  bool   `json:"has_body"`
+	Dep      bool   `json:"dep"`
+	// StaticCallSites: call sites that name it (from anywhere, reachable from the entries or not).
+	StaticCallSites int `json:"static_call_sites"`
+	// DynamicCallSites: calls through an interface or a function value that list it as a candidate (what "dispatchers" lists).
+	DynamicCallSites int `json:"dynamic_call_sites"`
+	// ValueReferences: the file does not hold where a function is named as a
+	// value (not called); null says it is not known, not that there is none.
+	ValueReferences *int `json:"value_references"`
+}
+
 // WithoutFilters is the answer of the same question asked again without the
 // filters, when the filtered one found no path.
 type WithoutFilters struct {
@@ -287,8 +302,23 @@ type PathResult struct {
 	Searched []string `json:"searched"`
 	// Exhaustive is false when the search was cut by a bound: "no path" is then
 	// not proved. When true and there is no path, it is true of what was searched.
-	Exhaustive bool   `json:"exhaustive"`
-	Paths      []Path `json:"paths"`
+	// It speaks of the call edges in the graph file only (ExhaustiveOf says so):
+	// a function stored as a value (a handler registered with a router), a call
+	// by reflection, and a call from a framework are not edges. For --from-entry
+	// with no path it is false, and Limits says why.
+	Exhaustive   bool   `json:"exhaustive"`
+	ExhaustiveOf string `json:"exhaustive_of"`
+	// EdgesExhausted is what Exhaustive was before the limits of the edges
+	// were taken into account: the search of the call edges in the file was
+	// complete (no bound cut it).
+	EdgesExhausted bool `json:"edges_exhausted"`
+	// Limits (--from-entry, no path): what the edges of the file do not hold,
+	// so that "no path" is not read as "unreachable at run time".
+	Limits []string `json:"limits,omitempty"`
+	// TargetFacts (--from-entry, no path): what the file says of the goal, so
+	// that "no path" is not read as "dead code".
+	TargetFacts []TargetFact `json:"target_facts,omitempty"`
+	Paths       []Path       `json:"paths"`
 	// Listed is the range the paths cover (none when there is no path), and
 	// Beyond what is outside it: "not_searched" (a longer path, or one with
 	// more hubs, may exist; "truncated" does not count it).

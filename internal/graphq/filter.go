@@ -300,7 +300,9 @@ func (o *Options) nFilters() int {
 func entryInfo(en *graphdb.Entries) *EntryInfo {
 	def := "the functions the extractors mark as entries: in Go main.main and the init of each package, in Dart main, in Rust the entry_fn of the crate"
 	if en.Source == "exported" {
-		def = "no function starts a program (no main): the exported functions of the code that was read (not of the dependencies), as the reachability of the taint analysis takes them for a library"
+		def = "no function starts a program (no main): the exported functions of the code that was read (not of the dependencies); the same starts as the reachability of the taint analysis (sg.Program.Reachable)"
 	}
+	// the rule of the edges is not the same as the taint analysis: it follows the calls and their candidates, and not a function named as a value
+	def += ". The path follows the calls in the graph file and the candidates of calls through interfaces and function values; unlike the reachability of the taint analysis, it does not follow a function that is only named as a value (an argument, a stored function), so a function the taint analysis takes as reached may have no path here"
 	return &EntryInfo{Definition: def, Source: en.Source, Count: len(en.IDs), Langs: en.Langs, Examples: en.Examples}
 }
