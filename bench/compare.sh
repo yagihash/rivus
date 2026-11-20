@@ -14,7 +14,7 @@ Builds rivus at <base> and at <head> (git refs, e.g. c44bfdd and origin/main), r
 benchmarks ONE AT A TIME (each benchmark: base, then head), and writes a table and the details of
 every difference. Standard tools only (git, go, python3; dart / the Rust extractor for those targets).
 
-Before each run it waits (every minute, at most --wait hours) until swap use is 50% or less and no
+Before each run it waits (every minute, at most --wait hours) until the free memory is 40% or more (macOS; elsewhere swap use is 50% or less) and no
 other rivus / rv-* / rivus-* process runs. Only one compare.sh runs at a time (a lock in the work dir).
 Exit status: 0 nothing lost; 1 a finding was REMOVED (do not push: classify it); 2 a benchmark did not
 run, did not build or did not finish (by the procedure, "not run" means "do not push").
@@ -124,7 +124,7 @@ if [ "$DRY" = 1 ]; then
   echo "work dir: $WORK    results: $OUT (raw: $RES)"
   echo "1. git worktree add --detach $WORK/wt/$B7 $B7 ; go build -o $WORK/bin/$PAIR/rivus-base ./cmd/rivus   (skipped if the binary exists)"
   echo "   git worktree add --detach $WORK/wt/$H7 $H7 ; go build -o $WORK/bin/$PAIR/rivus-head ./cmd/rivus"
-  echo "2. benchmarks, one at a time, base then head; before each run: wait for swap <= 50% and no other rivus / rv-* / rivus-* process (at most $WAIT h)"
+  echo "2. benchmarks, one at a time, base then head; before each run: wait for free memory >= 40% (swap <= 50% where it cannot be read) and no other rivus / rv-* / rivus-* process (at most $WAIT h)"
   for b in $BENCHES; do
     if ! spec "$b"; then echo "   $b: unknown benchmark" >&2; continue; fi
     ML=""; memlimit_of "$b"

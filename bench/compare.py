@@ -17,6 +17,7 @@ Standard library only.
 import argparse, collections, json, os, re, resource, shlex, subprocess, sys, time
 
 SWAP_LIMIT = 0.50
+FREE_LIMIT = 0.40  # macOS: busy below this free-memory fraction (memory_pressure)
 OTHER = re.compile(r"^(rivus|rv-.*|rivus-.*)$")
 
 
@@ -38,6 +39,30 @@ def swap_fraction():
     return None
 
 
+def free_memory_fraction():
+    """Free memory as a fraction (0..1) from `memory_pressure` (macOS), or None. macOS keeps swap files allocated long
+    after the memory is free again, so the swap use alone says "busy" on a machine that is idle."""
+    try:
+        out = subprocess.run(["memory_pressure"], capture_output=True, text=True, timeout=20).stdout
+        m = re.search(r"free percentage:\s*(\d+)%", out)
+        if m:
+            return int(m.group(1)) / 100.0
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return None
+
+
+def memory_busy():
+    """Returns (busy, why). Where the free memory can be read (macOS), it decides: busy below 40%% free. Otherwise the swap use does."""
+    free = free_memory_fraction()
+    if free is not None:
+        return free < FREE_LIMIT, "free memory %.0f%%" % (100 * free)
+    sw = swap_fraction()
+    if sw is not None:
+        return sw > SWAP_LIMIT, "swap %.0f%% used" % (100 * sw)
+    return False, ""
+
+
 def other_analyses():
     """Processes that look like another analysis: the command (argv[0]) is rivus, rv-*, rivus-* (not this run's own children)."""
     out = subprocess.run(["ps", "-axo", "pid=,command="], capture_output=True, text=True).stdout
@@ -57,14 +82,15 @@ def wait_quiet(hours):
     """Blocks until swap <= 50% and no other analysis runs; returns False when it waited for longer than hours."""
     deadline = time.time() + hours * 3600
     while True:
-        sw, others = swap_fraction(), other_analyses()
-        if (sw is None or sw <= SWAP_LIMIT) and not others:
+        busy, mem_why = memory_busy()
+        others = other_analyses()
+        if not busy and not others:
             return True
         if time.time() > deadline:
             return False
         why = []
-        if sw is not None and sw > SWAP_LIMIT:
-            why.append("swap %.0f%% used" % (100 * sw))
+        if busy:
+            why.append(mem_why)
         if others:
             why.append("other analysis: " + others[0])
         print("compare: waiting (%s)" % "; ".join(why), file=sys.stderr, flush=True)
