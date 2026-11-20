@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -22,7 +23,9 @@ type Func struct {
 	Line    int
 	Col     int
 	HasBody bool
-	Lang    string
+	// Dep is a function of a dependency (not of the code that was asked about).
+	Dep  bool
+	Lang string
 }
 
 // Edge is a call site and a function it may reach.
@@ -201,27 +204,39 @@ func (d *DB) CallRowsBefore(file string, line, col int) ([]CallRow, error) {
 		AND c.kind != 'builtin' ORDER BY c.id`, file, line, file, line, col)
 }
 
-// HubOut are the dynamic calls of a function with more than max candidates:
-// the total, and some of them (the largest first).
-func (d *DB) HubOut(fn int64, max, limit int) (int, []CallRow, error) {
-	var n int
-	if err := d.db.QueryRow(`SELECT count(*) FROM callsites WHERE func_id = ? AND kind IN ('interface','value') AND ncand > ?`, fn, max).Scan(&n); err != nil || n == 0 {
-		return 0, nil, err
-	}
-	rs, err := d.callRows(`SELECT `+callCols+` `+callJoin+` WHERE c.func_id = ? AND c.kind IN ('interface','value') AND c.ncand > ? ORDER BY c.ncand DESC, c.id LIMIT ?`, fn, max, limit)
-	return n, rs, err
+// HubRef is a dynamic call site with many candidates.
+type HubRef struct {
+	ID    int64
+	NCand int
+}
+
+// HubOut are the dynamic calls of a function with more than max candidates (all
+// of them: the callers count them without a limit, and name the largest).
+func (d *DB) HubOut(fn int64, max int) ([]HubRef, error) {
+	return d.hubRefs(`SELECT id, ncand FROM callsites WHERE func_id = ? AND kind IN ('interface','value') AND ncand > ?`, fn, max)
 }
 
 // HubIn are the dynamic calls with more than max candidates that may reach a
-// function: the total, and some of them.
-func (d *DB) HubIn(fn int64, max, limit int) (int, []CallRow, error) {
-	var n int
-	if err := d.db.QueryRow(`SELECT count(*) FROM edges WHERE to_func = ? AND kind != 'static' AND ncand > ?`, fn, max).Scan(&n); err != nil || n == 0 {
-		return 0, nil, err
+// function (a call site once, however many of its candidates are the function).
+func (d *DB) HubIn(fn int64, max int) ([]HubRef, error) {
+	return d.hubRefs(`SELECT DISTINCT callsite_id, ncand FROM edges WHERE to_func = ? AND kind != 'static' AND ncand > ?`, fn, max)
+}
+
+func (d *DB) hubRefs(q string, args ...any) ([]HubRef, error) {
+	rows, err := d.db.Query(q, args...)
+	if err != nil {
+		return nil, err
 	}
-	rs, err := d.callRows(`SELECT `+callCols+` FROM edges e JOIN callsites c ON c.id = e.callsite_id LEFT JOIN files fl ON fl.id = c.file_id
-		WHERE e.to_func = ? AND e.kind != 'static' AND e.ncand > ? ORDER BY e.ncand DESC, c.id LIMIT ?`, fn, max, limit)
-	return n, rs, err
+	defer rows.Close()
+	var out []HubRef
+	for rows.Next() {
+		var h HubRef
+		if err := rows.Scan(&h.ID, &h.NCand); err != nil {
+			return nil, err
+		}
+		out = append(out, h)
+	}
+	return out, rows.Err()
 }
 
 // CandidateHistogram counts the dynamic call sites by the number of their
@@ -259,7 +274,7 @@ func (d *DB) FuncByID(id int64) (*Func, error) {
 }
 
 func (d *DB) funcs(where string, args ...any) ([]Func, error) {
-	rows, err := d.db.Query(`SELECT f.id, f.fid, f.symbol, coalesce(fl.path,''), f.line, f.col, f.has_body, f.lang FROM funcs f LEFT JOIN files fl ON fl.id = f.file_id `+where, args...)
+	rows, err := d.db.Query(`SELECT f.id, f.fid, f.symbol, coalesce(fl.path,''), f.line, f.col, f.has_body, f.dep, f.lang FROM funcs f LEFT JOIN files fl ON fl.id = f.file_id `+where, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -267,11 +282,12 @@ func (d *DB) funcs(where string, args ...any) ([]Func, error) {
 	var out []Func
 	for rows.Next() {
 		var f Func
-		var body int
-		if err := rows.Scan(&f.ID, &f.FID, &f.Symbol, &f.File, &f.Line, &f.Col, &body, &f.Lang); err != nil {
+		var body, dep int
+		if err := rows.Scan(&f.ID, &f.FID, &f.Symbol, &f.File, &f.Line, &f.Col, &body, &dep, &f.Lang); err != nil {
 			return nil, err
 		}
 		f.HasBody = body == 1
+		f.Dep = dep == 1
 		out = append(out, f)
 	}
 	return out, rows.Err()
@@ -283,10 +299,109 @@ func (d *DB) FuncsNamed(name string) ([]Func, error) {
 	return d.funcs(`WHERE f.fid = ? OR f.symbol = ? ORDER BY f.has_body DESC, f.fid`, name, name)
 }
 
-// FuncsEndingWith finds the functions whose symbol ends with "/"+name (a
-// package path left out in front).
-func (d *DB) FuncsEndingWith(name string, limit int) ([]Func, error) {
-	return d.funcs(`WHERE substr(f.symbol, -length(?)-1) = '/' || ? OR substr(f.fid, -length(?)-1) = '/' || ? ORDER BY f.has_body DESC, f.fid LIMIT ?`, name, name, name, name, limit)
+// SymRow is what the search of a short name reads of every function.
+type SymRow struct {
+	ID      int64
+	FID     string
+	Symbol  string
+	HasBody bool
+	Dep     bool
+}
+
+// AllSymbols reads the names of every function (the search of a name that is
+// the end of a symbol looks at all of them: there is no index for an end).
+func (d *DB) AllSymbols() ([]SymRow, error) {
+	rows, err := d.db.Query(`SELECT id, fid, symbol, has_body, dep FROM funcs`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []SymRow
+	for rows.Next() {
+		var r SymRow
+		var b, dep int
+		if err := rows.Scan(&r.ID, &r.FID, &r.Symbol, &b, &dep); err != nil {
+			return nil, err
+		}
+		r.HasBody, r.Dep = b == 1, dep == 1
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// FuncsByIDs reads the functions of some rows, in the order given.
+func (d *DB) FuncsByIDs(ids []int64) ([]Func, error) {
+	var out []Func
+	for _, id := range ids {
+		f, err := d.FuncByID(id)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *f)
+	}
+	return out, nil
+}
+
+// SymbolContains reports whether some function has text in its symbol (a
+// cheap check that a type name is used at all).
+func (d *DB) SymbolContains(text string) (bool, error) {
+	var n int
+	err := d.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM funcs WHERE instr(symbol, ?) > 0)`, text).Scan(&n)
+	return n == 1, err
+}
+
+// Entries are the functions a program starts from: those the extractor marked
+// as an entry (main, the initialisation of the packages), when one of them
+// starts a program (is not the initializer of a variable); else the exported
+// functions of the code that was read (a library has no start). It is the
+// rule of the reachability the taint analysis states (sg.Program.Reachable).
+type Entries struct {
+	IDs []int64
+	// Source is "entry" or "exported"; empty when nothing says where the program starts.
+	Source string
+	// Examples are some of their IDs.
+	Examples []string
+	Langs    []string
+}
+
+// EntryFuncs finds the functions a program starts from.
+func (d *DB) EntryFuncs() (*Entries, error) {
+	var starts int
+	if err := d.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM funcs WHERE entry = 1 AND init = 0)`).Scan(&starts); err != nil {
+		return nil, err
+	}
+	q, src := `SELECT id, fid, lang FROM funcs WHERE entry = 1 OR (exported = 1 AND dep = 0) ORDER BY fid`, "exported"
+	if starts == 1 {
+		q, src = `SELECT id, fid, lang FROM funcs WHERE entry = 1 ORDER BY fid`, "entry"
+	}
+	// with no start, the entries (an initializer) and the exported functions are the roots
+	rows, err := d.db.Query(q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	en := &Entries{Source: src}
+	langs := map[string]bool{}
+	for rows.Next() {
+		var id int64
+		var fid, lang string
+		if err := rows.Scan(&id, &fid, &lang); err != nil {
+			return nil, err
+		}
+		en.IDs = append(en.IDs, id)
+		if len(en.Examples) < 5 {
+			en.Examples = append(en.Examples, fid)
+		}
+		langs[lang] = true
+	}
+	for l := range langs {
+		en.Langs = append(en.Langs, l)
+	}
+	sort.Strings(en.Langs)
+	if len(en.IDs) == 0 {
+		en.Source = ""
+	}
+	return en, rows.Err()
 }
 
 // SimilarSymbols are symbols that end like name (the last word, any package),

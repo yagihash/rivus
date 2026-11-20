@@ -30,6 +30,9 @@ type fnDef struct {
 	calls []call
 }
 
+// the functions that are a start of the program, and the exported ones (a library's own API), for the next build
+var entryIDs, exportedIDs map[string]bool
+
 var offset = 0
 
 func (c call) instr() ir.Instr {
@@ -64,6 +67,7 @@ func build(t *testing.T, fns []fnDef, ss ...*sites.Site) *graphq.Engine {
 			file = f.calls[0].file
 		}
 		fn := &ir.Func{ID: ir.FuncID(f.id), Symbol: f.id, Pos: ir.Pos{File: file, Line: 1 + i, Col: 6, Offset: 1000 + i}}
+		fn.Entry, fn.Exported = entryIDs[f.id], exportedIDs[f.id]
 		fn.Params = []ir.Param{{Name: "p", Class: ir.ClassFunc}}
 		fn.Locals = []ir.Local{{Class: ir.ClassFunc}}
 		fn.Roots = []ir.BlockID{0}
@@ -74,6 +78,7 @@ func build(t *testing.T, fns []fnDef, ss ...*sites.Site) *graphq.Engine {
 		fn.Blocks = []ir.Block{b}
 		p.Funcs = append(p.Funcs, fn)
 	}
+	entryIDs, exportedIDs = nil, nil
 	g, err := sg.Build(p)
 	if err != nil {
 		t.Fatal(err)
@@ -148,6 +153,8 @@ func program() []fnDef {
 func engine(t *testing.T) *graphq.Engine {
 	return build(t, program(), &sites.Site{ID: "s1:aaa", Role: "sink", Kind: "call", Func: "main", Symbol: "A", Position: ir.Position{File: "a.go", Line: 10, Column: 2, Offset: 1}})
 }
+
+func amb(v any) graphq.CallSiteOut { return v.(graphq.CallSiteOut) }
 
 func ids(g *graphq.Graph) map[string]int {
 	m := map[string]int{}
@@ -331,7 +338,7 @@ func TestPositionsAndSpecifications(t *testing.T) {
 	if err != nil || len(r.Ambiguous) != 2 || len(r.Edges) != 0 {
 		t.Fatalf("%v %+v", err, r)
 	}
-	if r.Ambiguous[0].At != "a.go:20:5" || r.Ambiguous[1].At != "a.go:20:15" || r.Ambiguous[0].In != "TwoOnALine" {
+	if amb(r.Ambiguous[0]).At != "a.go:20:5" || amb(r.Ambiguous[1]).At != "a.go:20:15" || amb(r.Ambiguous[0]).In != "TwoOnALine" {
 		t.Errorf("%+v", r.Ambiguous)
 	}
 	if len(r.Hints) == 0 {
@@ -400,7 +407,7 @@ func TestPathStaticFirst(t *testing.T) {
 	if len(p.Steps[0].Sites) != 1 || p.Steps[0].Sites[0] != "s1:aaa" {
 		t.Errorf("site: %+v", p.Steps[0])
 	}
-	if r.Truncated.Count != 0 || !r.Exhaustive || len(r.HubSkipped) != 0 {
+	if r.Truncated.Count != 0 || !r.Exhaustive || strings.Join(r.Searched, ",") != "static" || r.HubSkippedTotal != 0 {
 		t.Errorf("%+v", r)
 	}
 	// a static path wins over a dynamic one: main reaches D by the interface only
@@ -463,34 +470,6 @@ func TestPathKPathsWithoutDuplicates(t *testing.T) {
 	}
 }
 
-func TestPathHubIsNotUsedAndIsSaid(t *testing.T) {
-	e := engine(t)
-	// Hub reaches E only by a call with 25 candidates
-	r, err := e.Path("Hub", "E", graphq.Options{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if r.Reachable || len(r.Paths) != 0 {
-		t.Fatalf("%+v", r.Paths)
-	}
-	if len(r.HubSkipped) != 1 || r.HubSkipped[0].Candidates != 25 || r.HubSkipped[0].In != "Hub" || r.HubSkipped[0].At != "a.go:40:2" || r.HubSkipped[0].Kind != "interface" {
-		t.Errorf("%+v", r.HubSkipped)
-	}
-	hinted := false
-	for _, h := range r.Hints {
-		if strings.Contains(h, "hub_skipped") {
-			hinted = true
-		}
-	}
-	if !hinted {
-		t.Errorf("%v", r.Hints)
-	}
-	// backward, from the implementation: the hub is met from E's side
-	if r, _ = e.Path("Hub", "H3", graphq.Options{}); r.Reachable || len(r.HubSkipped) == 0 {
-		t.Errorf("%+v", r)
-	}
-}
-
 func TestPathFromAndToACall(t *testing.T) {
 	e := engine(t)
 	// from the call a.go:14:2 (A calls B): the path starts in A, through that call
@@ -542,15 +521,15 @@ func TestOutputSchema(t *testing.T) {
 	path, _ := e.Path("main", "C", graphq.Options{})
 	nopath, _ := e.Path("D", "main", graphq.Options{})
 	amb, _ := e.Callers("a.go:20", graphq.Options{})
-	common := []string{"schema", "relation", "snapshot", "query", "truncated", "omitted", "filters", "hints"}
+	common := []string{"schema", "relation", "flows", "snapshot", "query", "truncated", "omitted", "filters", "hints"}
 	for name, c := range map[string]struct {
 		v    any
 		want []string
 	}{
 		"callers": {callers, append([]string{"start", "nodes", "edges"}, common...)},
 		"callees": {callees, append([]string{"start", "nodes", "edges", "frontier", "frontier_total"}, common...)},
-		"path":    {path, append([]string{"reachable", "certainty", "paths", "hub_skipped", "exhaustive"}, common...)},
-		"nopath":  {nopath, append([]string{"reachable", "paths", "hub_skipped"}, common...)},
+		"path":    {path, append([]string{"reachable", "certainty", "paths", "searched", "exhaustive"}, common...)},
+		"nopath":  {nopath, append([]string{"reachable", "paths", "searched", "exhaustive"}, common...)},
 		"amb":     {amb, append([]string{"ambiguous"}, common...)},
 	} {
 		b, err := json.Marshal(c.v)
@@ -564,7 +543,7 @@ func TestOutputSchema(t *testing.T) {
 				t.Errorf("%s: no %q in %s", name, k, b)
 			}
 		}
-		if string(m["schema"]) != `"rivus.graph/1"` || string(m["relation"]) != `"calls"` || string(m["filters"]) != `[]` {
+		if string(m["schema"]) != `"rivus.graph/1"` || string(m["relation"]) != `"calls"` || string(m["flows"]) != `"not_checked"` || string(m["filters"]) != `[]` {
 			t.Errorf("%s: %s %s %s", name, m["schema"], m["relation"], m["filters"])
 		}
 		var tr struct{ Count, Limit int }

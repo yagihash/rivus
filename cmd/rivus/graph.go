@@ -199,18 +199,27 @@ for the flow, use "rivus analyze" and "rivus query".
 
 Usage:
   rivus graph info    [-graph <file> | -C <dir>]
-  rivus graph callers [-graph <file> | -C <dir>] [--depth N] [--limit K] [--include-builtin] <target>
-  rivus graph callees [-graph <file> | -C <dir>] [--depth N] [--limit K] [--include-builtin] <target>
-  rivus graph path    [-graph <file> | -C <dir>] --from <target> --to <target> [--limit K]
+  rivus graph callers [-graph <file> | -C <dir>] [--depth N] [--limit K] [--include-builtin] [filters] <target>
+  rivus graph callees [-graph <file> | -C <dir>] [--depth N] [--limit K] [--include-builtin] [filters] <target>
+  rivus graph path    [-graph <file> | -C <dir>] (--from <target> | --from-entry) --to <target> [--limit K] [--hubs] [filters]
+
+Filters (they may be given again, and the answer's "filters" says each one):
+  --avoid <symbol>      never go through this function
+  --via <symbol>        only what goes through this function (path: in the order given)
+  --only-impl <type>    a call through an interface reaches only the methods of this type
 
 Commands:
   info     what the file holds, when and from which source it was made, and (with -C) whether the source is still the same
   callers  the functions that call the target (backwards)
   callees  the functions the target calls (forwards)
-  path     up to K ways from one target to the other, shortest first
+  path     up to K ways from one target to the other, shortest first. It looks at the static calls, then (if
+           there is none) at the dynamic ones, then (if there is still none) at the calls of more than 20
+           candidates, "hubs" ("searched" says how far it went). --from-entry starts from the entry points.
 
 A target is one of (the kind is told from its form):
-  os/exec.Command, (*pkg.T).Method   a function (a Dart or a Rust name too: pkg::f)
+  os/exec.Command, (*pkg.T).Method   a function (a Dart or a Rust name too: pkg::f). The front may be left out
+                                     (GetUserByID, T.Method) when one function in the whole graph ends so;
+                                     if several do, the answer lists them (the code itself first) to choose from
   file:line:col                      the call that begins there
   file:line                          the calls on that line (if several: the answer lists them to choose from)
   site:<id>, or --site <id>          a site of "rivus sites"

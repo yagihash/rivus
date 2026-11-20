@@ -3,8 +3,11 @@ package graphq
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/yagihash/rivus/internal/graphdb"
 )
@@ -22,6 +25,10 @@ type Target struct {
 	// gives what all of them reach.
 	Same      []graphdb.CallRow
 	Ambiguous []graphdb.CallRow
+	// AmbiguousFuncs are the functions a short name may stand for (up to
+	// MaxChoices), and AmbiguousTotal how many there are.
+	AmbiguousFuncs []FuncChoice
+	AmbiguousTotal int
 	// Desc says what the specification was taken for.
 	Desc string
 	// Builtin is the number of calls of a builtin that the specification
@@ -191,20 +198,43 @@ func (e *Engine) resolveSymbol(spec string) (*Target, error) {
 	}
 	desc := "function " + spec
 	if len(fs) == 0 {
-		// the package path left out in front: taken when only one function has it
-		cands, err := e.db.FuncsEndingWith(spec, 6)
+		// the front of the symbol left out (the package, the type): taken only when the whole
+		// graph has one function that ends so
+		rows, err := e.db.AllSymbols()
 		if err != nil {
 			return nil, err
 		}
-		if len(cands) == 1 {
-			fs = cands
-			desc = fmt.Sprintf("function %s (the name %q is the end of it)", cands[0].FID, spec)
-		} else if len(cands) > 1 {
-			se := &SpecError{Spec: spec, Msg: "no function with that name; several end with it"}
-			for _, c := range cands {
-				se.Candidates = append(se.Candidates, c.FID)
+		groups, matched := matchEnd(rows, spec)
+		switch {
+		case len(groups) == 1:
+			var ids []int64
+			for _, r := range matched {
+				ids = append(ids, r.ID)
 			}
-			return nil, se
+			if fs, err = e.db.FuncsByIDs(ids); err != nil {
+				return nil, err
+			}
+			desc = fmt.Sprintf("function %s (the name %q is the end of it, and no other function ends so)", groups[0].FID, spec)
+		case len(groups) > 1:
+			t := &Target{AmbiguousTotal: len(groups), Desc: fmt.Sprintf("%d functions end with %q", len(groups), spec)}
+			for i, g := range groups {
+				if i >= MaxChoices {
+					break
+				}
+				f, err := e.fn(g.ID)
+				if err != nil {
+					return nil, err
+				}
+				c := FuncChoice{ID: f.FID, NoBody: !f.HasBody, Dep: f.Dep}
+				if f.Symbol != f.FID {
+					c.Symbol = f.Symbol
+				}
+				if f.File != "" && f.Line > 0 {
+					c.At = pos(f.File, f.Line, f.Col)
+				}
+				t.AmbiguousFuncs = append(t.AmbiguousFuncs, c)
+			}
+			return t, nil
 		}
 	}
 	if len(fs) == 0 {
@@ -225,6 +255,103 @@ func (e *Engine) resolveSymbol(spec string) (*Target, error) {
 	return t, nil
 }
 
+func isIdent(r rune) bool { return r == '_' || unicode.IsLetter(r) || unicode.IsDigit(r) }
+
+var goForm = strings.NewReplacer("(*", "", "(", "", ")", "")
+
+// forms are the ways a symbol is written when part of the front is left out:
+// as it is; a Go method without its parentheses ("(*p.T).M" is "p.T.M"); a
+// Rust impl by its type ("<T as Tr>::m" is "T::m").
+func forms(sym string) []string {
+	out := []string{sym}
+	if g := goForm.Replace(sym); g != sym {
+		out = append(out, g)
+	}
+	if strings.HasPrefix(sym, "<") {
+		if i := strings.LastIndex(sym, ">::"); i > 0 {
+			inner, name := sym[1:i], sym[i+3:]
+			if j := strings.Index(inner, " as "); j > 0 {
+				inner = inner[:j]
+			}
+			out = append(out, inner+"::"+name)
+		}
+	}
+	return out
+}
+
+// endsAt reports whether form ends with spec, at the boundary of an
+// identifier: the character before is not one of an identifier (so "ByID" is
+// not the end of "GetUserByID", and "user.GetUserByID" is the end of
+// "x/models/user.GetUserByID"). The separators are not a list of a language's:
+// anything that cannot be in an identifier is one.
+func endsAt(form, spec string) bool {
+	if spec == "" || !strings.HasSuffix(form, spec) {
+		return false
+	}
+	if len(form) == len(spec) {
+		return true
+	}
+	if r, _ := utf8.DecodeRuneInString(spec); !isIdent(r) {
+		return true
+	}
+	r, _ := utf8.DecodeLastRuneInString(form[:len(form)-len(spec)])
+	return !isIdent(r)
+}
+
+// matchEnd finds the functions whose symbol (or ID) the spec is the end of. It
+// returns the symbols they make (one function of each, the best: of the code
+// itself before a dependency's, with a body before without, by name) and all
+// the functions.
+func matchEnd(rows []graphdb.SymRow, spec string) (groups, matched []graphdb.SymRow) {
+	specs := forms(spec)[:1]
+	if g := goForm.Replace(spec); g != spec {
+		specs = append(specs, g)
+	}
+	hit := func(s string) bool {
+		for _, f := range forms(s) {
+			for _, sp := range specs {
+				if endsAt(f, sp) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	bySym := map[string]int{}
+	for _, r := range rows {
+		if !hit(r.Symbol) && (r.FID == r.Symbol || !hit(r.FID)) {
+			continue
+		}
+		matched = append(matched, r)
+		if i, ok := bySym[r.Symbol]; ok {
+			if better(r, groups[i]) {
+				groups[i] = r
+			}
+			continue
+		}
+		bySym[r.Symbol] = len(groups)
+		groups = append(groups, r)
+	}
+	sort.SliceStable(groups, func(i, j int) bool {
+		if better(groups[i], groups[j]) != better(groups[j], groups[i]) {
+			return better(groups[i], groups[j])
+		}
+		return groups[i].Symbol < groups[j].Symbol
+	})
+	return groups, matched
+}
+
+// better: the code itself before a dependency; with a body before without.
+func better(a, b graphdb.SymRow) bool {
+	if a.Dep != b.Dep {
+		return !a.Dep
+	}
+	if a.HasBody != b.HasBody {
+		return a.HasBody
+	}
+	return false
+}
+
 func (e *Engine) ambiguous(rows []graphdb.CallRow) ([]CallSiteOut, error) {
 	var out []CallSiteOut
 	for i := range rows {
@@ -235,4 +362,41 @@ func (e *Engine) ambiguous(rows []graphdb.CallRow) ([]CallSiteOut, error) {
 		out = append(out, c)
 	}
 	return out, nil
+}
+
+// choices turns what a specification that names several things gives into the
+// answer's list.
+func (e *Engine) choices(tg *Target) (Choices, error) {
+	var c Choices
+	if tg.AmbiguousFuncs != nil {
+		for _, f := range tg.AmbiguousFuncs {
+			c.Ambiguous = append(c.Ambiguous, f)
+		}
+		c.AmbiguousTotal = tg.AmbiguousTotal
+		return c, nil
+	}
+	rows, err := e.ambiguous(tg.Ambiguous)
+	if err != nil {
+		return c, err
+	}
+	for _, r := range rows {
+		c.Ambiguous = append(c.Ambiguous, r)
+	}
+	c.AmbiguousTotal = len(rows)
+	return c, nil
+}
+
+// isAmbiguous: the specification names several things, to choose from.
+func (t *Target) isAmbiguous() bool { return t.Ambiguous != nil || t.AmbiguousFuncs != nil }
+
+// ambiguousHints says what to do with a choice.
+func ambiguousHints(tg *Target, c Choices) []string {
+	if tg.AmbiguousFuncs == nil {
+		return []string{"several calls on the line: ask again with one of the \"at\" values (file:line:col), or --site <id>"}
+	}
+	h := []string{"several functions end with that name: ask again with the \"id\" of one (or more of the name: pkg.Name, Type.Method)"}
+	if c.AmbiguousTotal > len(c.Ambiguous) {
+		h = append(h, fmt.Sprintf("%d functions end with it, %d are listed (the code itself first): qualify the name with its package (pkg.Name)", c.AmbiguousTotal, len(c.Ambiguous)))
+	}
+	return h
 }

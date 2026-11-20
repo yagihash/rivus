@@ -114,6 +114,31 @@ func TestGraphFromTheIROfOtherLanguages(t *testing.T) {
 			if !pq.Reachable || len(pq.Paths) == 0 || pq.Paths[0].Steps[0].Func != caller.File {
 				t.Errorf("path %s -> %s: %+v", caller.File, callee.File, pq)
 			}
+			// from the entry points to a function that one of them calls (neither sample has a main, so the
+			// entries are the exported functions; Dart's variable initializers are entries that do not start a program)
+			start := `exported = 1`
+			d2, err := graphdb.Open(db)
+			if err != nil {
+				t.Fatal(err)
+			}
+			reached, err := d2.QueryForTest(`SELECT t.fid, 0, 0 FROM edges e JOIN funcs f ON f.id = e.from_func JOIN funcs t ON t.id = e.to_func WHERE f.` + start + ` AND f.dep = 0 AND e.kind = 'static' AND t.has_body = 1 AND t.id != f.id ORDER BY t.fid LIMIT 1`)
+			d2.Close()
+			if err != nil {
+				t.Fatalf("no function that an entry calls: %v", err)
+			}
+			en := graphStage3(t, dir, "path", "-graph", db, "--from-entry", "--to", reached.File)
+			wantSource := "exported"
+			if !en.Reachable || en.Entry == nil || en.Entry.Source != wantSource || en.Entry.Count == 0 || len(en.Paths) == 0 {
+				t.Errorf("from the entry to %s: %+v", reached.File, en)
+			}
+			// the filters, and a short name of the language's own form
+			if f := graphStage3(t, dir, "path", "-graph", db, "--from", caller.File, "--to", callee.File, "--avoid", caller.File); f.Reachable || len(f.Filters) != 1 {
+				t.Errorf("avoid the start: %+v", f)
+			}
+			short := callee.File[strings.LastIndexAny(callee.File, "#:")+1:]
+			if sh := graphStage3(t, dir, "callers", "-graph", db, short); len(sh.Ambiguous) == 0 && !strings.Contains(sh.Query.Resolved, "function") {
+				t.Errorf("%s: %+v", short, sh)
+			}
 			// a call by its position, for the language's own file names
 			if len(cq.Edges) > 0 {
 				if at := graphQuery(t, dir, "callees", "-graph", db, cq.Edges[0].At); len(at.Start) == 0 {

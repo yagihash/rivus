@@ -7,6 +7,13 @@ import (
 	"github.com/yagihash/rivus/internal/graphdb"
 )
 
+// state is a function reached, and which of the --via functions the way to it
+// went through (a bit each; with none given, the mask is always 0, which is full).
+type state struct {
+	id   int64
+	mask uint
+}
+
 // traversal is the state of a breadth-first search over callers or callees.
 type traversal struct {
 	e      *Engine
@@ -16,6 +23,48 @@ type traversal struct {
 	nEdges int
 	// cut is true once the limit of edges is reached.
 	cut bool
+	// the --via functions: a node is shown only when the way to it went through all of them
+	via     []map[int64]bool
+	full    uint
+	seen    map[state]bool
+	emitted map[[3]int64]bool
+	// work counts the states expanded that are not shown (their way has not yet been through the --via
+	// functions): it is bounded by MaxVisited.
+	work    int
+	workCut bool
+}
+
+func newTraversal(e *Engine, o *Options, g *Graph) (*traversal, error) {
+	t := &traversal{e: e, o: o, g: g, depth: map[int64]int{}, seen: map[state]bool{}, emitted: map[[3]int64]bool{}}
+	if len(o.via) > 8 {
+		return nil, fmt.Errorf("--via: at most 8 functions")
+	}
+	for _, ids := range o.via {
+		m := map[int64]bool{}
+		for _, id := range ids {
+			m[id] = true
+		}
+		t.via = append(t.via, m)
+	}
+	t.full = uint(1)<<len(t.via) - 1
+	return t, nil
+}
+
+func (t *traversal) bit(id int64) uint {
+	var b uint
+	for i, m := range t.via {
+		if m[id] {
+			b |= 1 << i
+		}
+	}
+	return b
+}
+
+// reach is the state of going to a function from a state; shown says that the
+// way to it went through every --via function, so that it is part of the answer.
+func (t *traversal) reach(from state, to int64) (s state, shown bool) {
+	s = state{to, from.mask | t.bit(to)}
+	return s, s.mask == t.full
 }
 
 func (t *traversal) addNode(id int64, d int) error {
@@ -32,8 +81,12 @@ func (t *traversal) addNode(id int64, d int) error {
 }
 
 // emit adds an edge; it reports false when the limit is reached (the edge is
-// then counted as cut).
+// then counted as cut). An edge that was added (by another way to its end, with --via) is not added twice.
 func (t *traversal) emit(ed *graphdb.Edge) (bool, error) {
+	key := [3]int64{ed.CallSite, ed.From, ed.To}
+	if len(t.via) > 0 && t.emitted[key] {
+		return true, nil
+	}
 	if t.nEdges >= t.o.Limit {
 		t.cut = true
 		t.g.Truncated.Count++
@@ -43,9 +96,23 @@ func (t *traversal) emit(ed *graphdb.Edge) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	t.emitted[key] = true
 	t.g.Edges = append(t.g.Edges, out)
 	t.nEdges++
 	return true, nil
+}
+
+// work counts a state that is expanded without being shown, and reports that the bound is reached.
+func (t *traversal) spend(s state) bool {
+	if s.mask == t.full {
+		return false
+	}
+	t.work++
+	if t.work > MaxVisited {
+		t.workCut = true
+		return true
+	}
+	return false
 }
 
 func (e *Engine) newGraph(op string, o Options, target string, tg *Target, unit string) (*Graph, error) {
@@ -61,12 +128,12 @@ func (e *Engine) newGraph(op string, o Options, target string, tg *Target, unit 
 }
 
 func (e *Engine) ambiguousResult(g *Graph, tg *Target) error {
-	amb, err := e.ambiguous(tg.Ambiguous)
+	c, err := e.choices(tg)
 	if err != nil {
 		return err
 	}
-	g.Ambiguous = amb
-	g.Hints = append(g.Hints, "several calls on the line: ask again with one of the \"at\" values (file:line:col), or --site <id>")
+	g.Choices = c
+	g.Hints = append(g.Hints, ambiguousHints(tg, c)...)
 	return nil
 }
 
@@ -83,10 +150,13 @@ func (e *Engine) Callers(target string, o Options) (*CallersResult, error) {
 	g, _ := e.newGraph("callers", o, target, tg, "edges")
 	res := &CallersResult{Graph: *g}
 	g = &res.Graph
+	if err := e.prepare(&o, &g.Common); err != nil {
+		return nil, err
+	}
 	if clamped {
 		g.Warnings = append(g.Warnings, fmt.Sprintf("--depth is limited to %d", MaxDepth))
 	}
-	if tg.Ambiguous != nil {
+	if tg.isAmbiguous() {
 		return res, e.ambiguousResult(g, tg)
 	}
 	if tg.Call != nil {
@@ -96,25 +166,33 @@ func (e *Engine) Callers(target string, o Options) (*CallersResult, error) {
 		}
 		g.CallSite = &cs
 	}
-	t := &traversal{e: e, o: &o, g: g, depth: map[int64]int{}}
-	var level []int64
+	t, err := newTraversal(e, &o, g)
+	if err != nil {
+		return nil, err
+	}
+	var level []state
 	for _, id := range tg.Funcs {
+		s := state{id, t.bit(id)}
+		t.seen[s] = true
 		if err := t.addNode(id, 0); err != nil {
 			return nil, err
 		}
 		f, _ := e.fn(id)
 		g.Start = append(g.Start, f.FID)
-		level = append(level, id)
+		level = append(level, s)
 	}
 	dynamicSeen := false
 	for d := 1; d <= o.Depth && len(level) > 0; d++ {
-		var next []int64
-		for i, id := range level {
-			if t.cut {
+		var next []state
+		for i, s := range level {
+			if t.cut || t.workCut {
 				g.Truncated.Unexpanded += len(level) - i
 				break
 			}
-			edges, err := e.db.InEdges(id, graphdb.AllEdges)
+			if t.spend(s) {
+				break
+			}
+			edges, err := e.db.InEdges(s.id, graphdb.AllEdges)
 			if err != nil {
 				return nil, err
 			}
@@ -123,36 +201,43 @@ func (e *Engine) Callers(target string, o Options) (*CallersResult, error) {
 				if !o.pass(ed) {
 					continue
 				}
-				// the caller is a node of the next depth, unless it is known
-				seen := false
-				if _, ok := t.depth[ed.From]; ok {
-					seen = true
-				}
-				if ok, err := t.emit(ed); err != nil {
-					return nil, err
-				} else if !ok {
-					continue
-				}
-				if dynamic(ed.Kind) {
-					dynamicSeen = true
-				}
-				if !seen {
-					if err := t.addNode(ed.From, d); err != nil {
+				ns, shown := t.reach(s, ed.From)
+				if shown {
+					if ok, err := t.emit(ed); err != nil {
 						return nil, err
+					} else if !ok {
+						continue
 					}
-					next = append(next, ed.From)
+					if dynamic(ed.Kind) {
+						dynamicSeen = true
+					}
+				}
+				if !t.seen[ns] {
+					t.seen[ns] = true
+					if shown {
+						if err := t.addNode(ed.From, d); err != nil {
+							return nil, err
+						}
+					}
+					next = append(next, ns)
 				}
 			}
 		}
 		level = next
+	}
+	if t.workCut {
+		g.Warnings = append(g.Warnings, fmt.Sprintf("--via: the search was cut after %d functions that are not on the way: the answer may be short", MaxVisited))
 	}
 	if t.cut {
 		g.Truncated.Unexpanded += len(level)
 		g.Truncated.AtLeast = g.Truncated.Unexpanded > 0
 		g.Hints = append(g.Hints, fmt.Sprintf("cut at %d edges: raise --limit, or ask for the callers of one of the nodes", o.Limit))
 	} else {
-		for _, id := range level {
-			if has, err := e.db.HasIn(id); err != nil {
+		for _, s := range level {
+			if s.mask != t.full {
+				continue
+			}
+			if has, err := e.db.HasIn(s.id); err != nil {
 				return nil, err
 			} else if has {
 				g.Truncated.BeyondDepth++
@@ -167,6 +252,9 @@ func (e *Engine) Callers(target string, o Options) (*CallersResult, error) {
 	}
 	if tg.Builtin > 0 {
 		g.Hints = append(g.Hints, "calls of builtins on the line were left out: --include-builtin keeps them")
+	}
+	if o.filtered() {
+		g.Hints = append(g.Hints, "the answer is narrowed by the filters above (\"filters\"): without them it has more")
 	}
 	return res, nil
 }
@@ -184,14 +272,20 @@ func (e *Engine) Callees(target string, o Options) (*CalleesResult, error) {
 	g, _ := e.newGraph("callees", o, target, tg, "edges")
 	res := &CalleesResult{Graph: *g, Frontier: []Frontier{}}
 	g = &res.Graph
+	if err := e.prepare(&o, &g.Common); err != nil {
+		return nil, err
+	}
 	if clamped {
 		g.Warnings = append(g.Warnings, fmt.Sprintf("--depth is limited to %d", MaxDepth))
 	}
-	if tg.Ambiguous != nil {
+	if tg.isAmbiguous() {
 		return res, e.ambiguousResult(g, tg)
 	}
-	t := &traversal{e: e, o: &o, g: g, depth: map[int64]int{}}
-	var level []int64
+	t, err := newTraversal(e, &o, g)
+	if err != nil {
+		return nil, err
+	}
+	var level []state
 	first := 1
 	if tg.Call != nil {
 		// the call is the start: its callee functions are depth 1
@@ -200,6 +294,8 @@ func (e *Engine) Callees(target string, o Options) (*CalleesResult, error) {
 			return nil, err
 		}
 		g.CallSite = &cs
+		hs := state{tg.Funcs[0], t.bit(tg.Funcs[0])}
+		t.seen[hs] = true
 		if err := t.addNode(tg.Funcs[0], 0); err != nil {
 			return nil, err
 		}
@@ -214,16 +310,22 @@ func (e *Engine) Callees(target string, o Options) (*CalleesResult, error) {
 			if !o.pass(ed) {
 				continue
 			}
-			if ok, err := t.emit(ed); err != nil {
-				return nil, err
-			} else if !ok {
-				continue
-			}
-			if _, seen := t.depth[ed.To]; !seen {
-				if err := t.addNode(ed.To, 1); err != nil {
+			ns, shown := t.reach(hs, ed.To)
+			if shown {
+				if ok, err := t.emit(ed); err != nil {
 					return nil, err
+				} else if !ok {
+					continue
 				}
-				level = append(level, ed.To)
+			}
+			if !t.seen[ns] {
+				t.seen[ns] = true
+				if shown {
+					if err := t.addNode(ed.To, 1); err != nil {
+						return nil, err
+					}
+				}
+				level = append(level, ns)
 			}
 		}
 		if tg.Call.Kind == graphdb.KindBuiltin {
@@ -237,23 +339,29 @@ func (e *Engine) Callees(target string, o Options) (*CalleesResult, error) {
 		first = 2
 	} else {
 		for _, id := range tg.Funcs {
+			s := state{id, t.bit(id)}
+			t.seen[s] = true
 			if err := t.addNode(id, 0); err != nil {
 				return nil, err
 			}
 			f, _ := e.fn(id)
 			g.Start = append(g.Start, f.FID)
-			level = append(level, id)
+			level = append(level, s)
 		}
 	}
 	filter := graphdb.EdgeFilter{MaxDynamic: ExpandCandidates}
 	stopped := false
 	for d := first; d <= o.Depth && len(level) > 0; d++ {
-		var next []int64
-		for i, id := range level {
-			if t.cut {
+		var next []state
+		for i, s := range level {
+			if t.cut || t.workCut {
 				g.Truncated.Unexpanded += len(level) - i
 				break
 			}
+			if t.spend(s) {
+				break
+			}
+			id := s.id
 			edges, err := e.db.OutEdges(id, filter)
 			if err != nil {
 				return nil, err
@@ -263,21 +371,26 @@ func (e *Engine) Callees(target string, o Options) (*CalleesResult, error) {
 				if !o.pass(ed) {
 					continue
 				}
-				seen := false
-				if _, ok := t.depth[ed.To]; ok {
-					seen = true
-				}
-				if ok, err := t.emit(ed); err != nil {
-					return nil, err
-				} else if !ok {
-					continue
-				}
-				if !seen {
-					if err := t.addNode(ed.To, d); err != nil {
+				ns, shown := t.reach(s, ed.To)
+				if shown {
+					if ok, err := t.emit(ed); err != nil {
 						return nil, err
+					} else if !ok {
+						continue
 					}
-					next = append(next, ed.To)
 				}
+				if !t.seen[ns] {
+					t.seen[ns] = true
+					if shown {
+						if err := t.addNode(ed.To, d); err != nil {
+							return nil, err
+						}
+					}
+					next = append(next, ns)
+				}
+			}
+			if s.mask != t.full {
+				continue
 			}
 			stop, err := e.db.UnexpandedCalls(id, ExpandCandidates)
 			if err != nil {
@@ -301,13 +414,19 @@ func (e *Engine) Callees(target string, o Options) (*CalleesResult, error) {
 		}
 		level = next
 	}
+	if t.workCut {
+		g.Warnings = append(g.Warnings, fmt.Sprintf("--via: the search was cut after %d functions that are not on the way: the answer may be short", MaxVisited))
+	}
 	if t.cut {
 		g.Truncated.Unexpanded += len(level)
 		g.Truncated.AtLeast = g.Truncated.Unexpanded > 0
 		g.Hints = append(g.Hints, fmt.Sprintf("cut at %d edges: raise --limit, or ask for the callees of one of the nodes", o.Limit))
 	} else {
-		for _, id := range level {
-			if has, err := e.db.HasOut(id); err != nil {
+		for _, s := range level {
+			if s.mask != t.full {
+				continue
+			}
+			if has, err := e.db.HasOut(s.id); err != nil {
 				return nil, err
 			} else if has {
 				g.Truncated.BeyondDepth++
@@ -322,6 +441,12 @@ func (e *Engine) Callees(target string, o Options) (*CalleesResult, error) {
 	}
 	if g.Omitted["builtin"] > 0 {
 		g.Hints = append(g.Hints, "builtin calls (len, append...) are left out: --include-builtin keeps them")
+	}
+	if len(o.via) > 0 {
+		g.Hints = append(g.Hints, "--via: the search does not go through a dynamic call with more than "+fmt.Sprint(ExpandCandidates)+" candidates, so a way through one is not shown (graph path --via asks for it)")
+	}
+	if o.filtered() {
+		g.Hints = append(g.Hints, "the answer is narrowed by the filters above (\"filters\"): without them it has more")
 	}
 	return res, nil
 }
