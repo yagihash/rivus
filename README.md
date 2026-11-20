@@ -109,6 +109,8 @@ rivus graph callees -C . main.go:42        # その行の呼び出し点が呼�
 rivus graph path -C . --from cmd.run --to os/exec.Command  # 経路を k 本(--limit、既定 5)、最短から。静的 → 動的 → ハブ込みの順に探す(searched に、どこまで探したかを書く)
 rivus graph path -C . --from-entry --to os/exec.Command    # main と init(ライブラリなら exported な関数)から届く経路。出力の entry に、何を entry としたかを書く
 rivus graph path -C . --from a --to b --avoid log.Error --via db.Query --only-impl bytes.Buffer  # 辺のフィルタ(callers / callees でも使える。繰り返し可。filters に必ず書く)
+rivus graph impls -C . '(io.Writer).Write'        # インターフェースのメソッドの、実装(関数)の一覧。短い指定(io.Writer.Write、Writer.Write)も可。--limit で切り、総数と by_package(上位 10)を言う
+rivus graph dispatchers -C . '(*bytes.Buffer).Write'  # その実装を候補として呼ぶ、動的な呼び出し点(位置、含む関数、kind、candidates、通るインターフェースのメソッド = callee)
 rivus index -taint -o idx.json ./...       # taint 解析の結果を JSON で保存(-o だけでも同じ)。構造の層も、同じ実行で、キャッシュに書く
 rivus query -index idx.json -site <ID>     # 保存した結果から、ソースを読み込まずに答える
 rivus resolve -bookmarks seen.json ./...   # 前に見た箇所（サイト・検出結果）が、今のコードのどこにあるかを答える
@@ -132,6 +134,11 @@ rivus models coverage -yaml -top 20 ./...  # 埋めるためのルールのひ�
   - 切ったものは必ず言う: `truncated`（`count` と `limit`、`unit`。`at_least` は、数え切れていないとき。`beyond_depth` は、深さの端のノードに、見せていない先がある数）、`omitted`、`frontier`、`hub_skipped_total`、`warnings`。各出力に `schema: "rivus.graph/1"`、`relation: "calls"`（呼び出しの関係。データの流れではない）、`flows: "not_checked"`（データの流れは確認していない）、`snapshot`、`query`、`filters`、`hints`（次の一手）
   - **辺のフィルタ**（`callers` / `callees` / `path` のすべてで、繰り返し可）: `--avoid <シンボル>`（その関数を通らない）、`--via <シンボル>`（その関数を経由するものだけ。`path` は、与えた順）、`--only-impl <型>`（インターフェースの呼び出しは、その型のメソッドだけに届くとする。静的な呼び出しと関数値は絞らない）。**絞り込んだことは、必ず `filters` に書く**。`path` で `reachable: false` のときは、フィルタなしで 1 回探し直して、`without_filters: {reachable: ...}` と `hints` で、条件が経路を塞いでいるかを言う
   - **`path --from-entry --to X`**: `--from` の代わりに、プログラムの起点（Go の `main.main` と各パッケージの `init`、Dart の `main`、Rust の `entry_fn`。起点がなければ、読んだコードの exported な関数。taint の `reachability` と同じ定義）から探す。出力の `entry` に、定義(`definition`)、`source`(`entry` / `exported`)、件数、例を書く。経路の最初のステップが、届いた entry。「届かない」は、コードが死んでいるという意味ではない（フレームワークに登録されるハンドラーなど）
+  - **`rivus graph impls <インターフェースのメソッド>` / `dispatchers <実装のメソッド>`**（段階 3b。具体的な実装から始める使い方の入口。DB の辺は変えず、`edges` の `kind = interface` を、呼び出し点の静的な型 `callsites.callee` ごとにまとめて読む）。`impls` の指定は、呼び出し点が持つ名前（`(error).Error`、`(io.Writer).Write`、Rust は `pkg::Trait::method`、Dart は `dart:core#List.length`）か、その末尾（`io.Writer.Write`、`Writer.Write`。識別子の境界で、**インターフェースのメソッド全体で 1 つに決まるときだけ**。複数なら `ambiguous` に、呼び出し点の多い順で最大 20 件）。`dispatchers` の指定は、`callers` と同じ規則の関数（シンボル、短い形、`ambiguous`）
+    - **`impls` の出力は「DB の中の、その呼び出し点の候補の和」で、「型としての実装の全部」ではない**。Go の候補は VTA が呼び出し点ごとに絞ったもので、どの呼び出し点からも届かない型は載らない。これを `basis` に必ず書く。`call_sites`（そのメソッドの、インターフェース呼び出し点の数）、`zero_candidate_sites`（そのうち候補が 0 のもの。受け手の型が見つからなかったので、その先の実装は載っていない）、`impls_total`、`impls`（`id`、`at`、`dep`、`call_sites` = その実装を候補に持つ呼び出し点の数。自分のコード、呼び出し点の多い順）。`--limit`（既定 50）で切ったら、`truncated`（総数との差）と `by_package`（全体の、パッケージごとの内訳の上位 10。残りは `by_package_other`）を言う
+    - そのメソッドの呼び出し点が DB に 1 つもないとき（関数としては存在する、など）は、エラーにせず、`impls: []`、`call_sites: 0`、`reason`（なぜ何も言えないか）と `hints` を返す。「空 = 実装なし」ではない
+    - **`dispatchers`** は、その関数を候補に持つ**動的な呼び出し点**（`kind` が `interface` または `value`）だけを返す（静的な呼び元は `callers`）。各呼び出し点に、位置 `at`、含む関数 `in`、`kind`、`candidates`、**そこから届くインターフェースのメソッド `callee`**（静的な型）、`sites`。候補の少ない順（その実装を名指しに近い順）。`--limit` で切ったら `truncated` と、全体の `by_callee`（インターフェースのメソッドごと、上位 10）。同じ symbol の関数が複数あるとき（型の埋め込みによるラッパー）は、`id` が symbol と同じ本物のメソッドだけを見て、ほかがあることを `hints` で言う
+    - `--avoid`、`--only-impl`（`filters` に書く）は使える。`--via` は、意味がないので、エラー。`snapshot`、`-C` の照合、`relation: "calls"`、`flows: "not_checked"` は、ほかと同じ
   - `path` の最後のステップ(呼び先)には、宣言の位置 `defined_at`、本体がなければ `no_body: true` が付く（呼び出し点が終点のときは `at`）
   - 出力は、既定で 1 行の JSON（`--pretty` で整形）。`callers` / `callees` は、ノードと辺に分ける。`path` は、ステップの列（各ステップは関数と、そこから次へ進む呼び出し点の `at`、`kind`、`candidates`、`sites`）
 - `analyze` と `query` の `-detail summary` は、経路とスニペットを省いた概要だけを出す

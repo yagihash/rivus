@@ -65,7 +65,7 @@ func runGraphQuery(op string, args []string) error {
 	o.register(fs)
 	graph := fs.String("graph", "", "the graph file (default: the cache of -C)")
 	depth := fs.Int("depth", 0, fmt.Sprintf("callers, callees: how many calls deep (default %d, at most %d)", graphq.DefaultDepth, graphq.MaxDepth))
-	limit := fs.Int("limit", 0, fmt.Sprintf("callers, callees: the most edges listed (default %d); path: the most paths (default %d)", graphq.DefaultLimit, graphq.DefaultPaths))
+	limit := fs.Int("limit", 0, fmt.Sprintf("callers, callees, impls, dispatchers: the most edges, implementations or call sites listed (default %d); path: the most paths (default %d)", graphq.DefaultLimit, graphq.DefaultPaths))
 	builtin := fs.Bool("include-builtin", false, "keep the calls of builtins (len, append...), which are left out")
 	pretty := fs.Bool("pretty", false, "indent the JSON")
 	site := fs.String("site", "", "callers, callees: the target is this site of \"rivus sites\"")
@@ -159,6 +159,20 @@ func runGraphQuery(op string, args []string) error {
 		out = r
 	case "callees":
 		r, err := eng.Callees(target, opts)
+		if err != nil {
+			return err
+		}
+		r.Snapshot, r.Warnings = snap, append(warnings, r.Warnings...)
+		out = r
+	case "impls":
+		r, err := eng.Impls(target, opts)
+		if err != nil {
+			return err
+		}
+		r.Snapshot, r.Warnings = snap, append(warnings, r.Warnings...)
+		out = r
+	case "dispatchers":
+		r, err := eng.Dispatchers(target, opts)
 		if err != nil {
 			return err
 		}

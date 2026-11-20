@@ -139,6 +139,47 @@ func TestGraphFromTheIROfOtherLanguages(t *testing.T) {
 			if sh := graphStage3(t, dir, "callers", "-graph", db, short); len(sh.Ambiguous) == 0 && !strings.Contains(sh.Query.Resolved, "function") {
 				t.Errorf("%s: %+v", short, sh)
 			}
+			// impls and dispatchers, from the interface method (a trait of Rust, the implicit interface of a Dart class)
+			// of a call in the code itself, and back from the implementation it reaches
+			d3, err := graphdb.Open(db)
+			if err != nil {
+				t.Fatal(err)
+			}
+			im, err := d3.QueryForTest(`SELECT c.callee, 0, 0 FROM callsites c JOIN funcs f ON f.id = c.func_id JOIN edges e ON e.callsite_id = c.id JOIN funcs t ON t.id = e.to_func
+				WHERE c.kind = 'interface' AND f.dep = 0 AND t.has_body = 1 AND t.dep = 0 AND c.callee IS NOT NULL ORDER BY c.callee, t.fid LIMIT 1`)
+			var impl string
+			if err == nil {
+				var r graphdb.Position
+				r, err = d3.QueryForTest(`SELECT t.fid, 0, 0 FROM callsites c JOIN funcs f ON f.id = c.func_id JOIN edges e ON e.callsite_id = c.id JOIN funcs t ON t.id = e.to_func
+					WHERE c.kind = 'interface' AND f.dep = 0 AND t.has_body = 1 AND t.dep = 0 AND c.callee = '` + strings.ReplaceAll(im.File, "'", "''") + `' ORDER BY t.fid LIMIT 1`)
+				impl = r.File
+			}
+			d3.Close()
+			if err != nil {
+				t.Fatalf("no interface method that has an implementation: %v", err)
+			}
+			ii := graphImpls(t, dir, "impls", "-graph", db, im.File)
+			if ii.Method != im.File || len(ii.Impls) == 0 || ii.CallSites == 0 || !strings.Contains(ii.Basis, "not every type") {
+				t.Errorf("impls %s: %+v", im.File, ii)
+			}
+			listed := false
+			for _, x := range ii.Impls {
+				listed = listed || x.ID == impl
+			}
+			if !listed {
+				t.Errorf("impls %s does not list %s: %+v", im.File, impl, ii.Impls)
+			}
+			dd := graphDispatch(t, dir, "dispatchers", "-graph", db, impl)
+			if dd.CallSitesTotal == 0 || len(dd.CallSites) == 0 || dd.CallSites[0].At == "" || dd.CallSites[0].In == "" {
+				t.Fatalf("dispatchers %s: %+v", impl, dd)
+			}
+			seen := false
+			for _, x := range dd.CallSites {
+				seen = seen || x.Callee == im.File
+			}
+			if !seen {
+				t.Errorf("dispatchers %s has no call through %s: %+v", impl, im.File, dd.CallSites)
+			}
 			// a call by its position, for the language's own file names
 			if len(cq.Edges) > 0 {
 				if at := graphQuery(t, dir, "callees", "-graph", db, cq.Edges[0].At); len(at.Start) == 0 {

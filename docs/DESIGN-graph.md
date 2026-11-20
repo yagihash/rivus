@@ -34,7 +34,7 @@ AI エージェントが、コード上の 1 点を指して、「そこへ届�
 - DB は 2 つの層でできる: **構造の層**(関数、呼び出し点、辺、サイト。速い。数十秒)と、**taint の層**(findings、不確実性。遅い。数十分)。
 - **`rivus index` 1 つで作る**。既定は構造の層だけ。`rivus index -taint` で、taint の層も足す。構造だけで作ったときは、出力に「taint の層はない。`-taint` で追加できる」と書く(黙って、findings がないと誤解させない)。`graph build` は作らない。`graph` は、読む専用。JSON の index の互換は気にしない。
 - **サイト ID を、指定の 4 つ目**として受ける(`graph callers --site <ID>`)。サイトの列挙は解析なしで速いので、サイトの表は構造の層に入れる。逆に、`graph` の出力のノードと辺に、そこに載っているサイト ID を付ける。taint の層があるときは、経路に重なる finding を付ける(橋)。
-- **言葉を分ける**: 呼び出しの関係は `calls`、データの流れは `flows`。`graph` は `calls` だけを言い、すべての経路に `"relation": "calls"` を付ける。taint の層があれば `"also_flows": [...]`、なければ `"flows": "not_checked"`(確認していないことを明記する)。`reaches` という名前は使わず、`graph path` に一本化する(届くかは出力の `reachable`、最短 1 本は `--limit 1`)。`--help` の冒頭に、1 行で、違いを書く。
+- **言葉を分ける**: 呼び出しの関係は `calls`、データの流れは `flows`。`graph` は `calls` だけを言い、すべての経路に `"relation": "calls"` を付ける。taint の層があれば `"findings_at_sites": [...]`(経路の呼び出し点にあるサイトを source / sink とする finding。名前は決定済み。`also_flows` ではない)、なければ `"flows": "not_checked"`(確認していないことを明記する)。`reaches` という名前は使わず、`graph path` に一本化する(届くかは出力の `reachable`、最短 1 本は `--limit 1`)。`--help` の冒頭に、1 行で、違いを書く。
 - コマンド: `index [-taint]`、`graph callers` / `callees` / `path` / `impls` / `dispatchers` / `info`。ほかは、今のまま(`sites`、`analyze`、`query`、`resolve`、`extract`、`models`)。
 
 ### 2e. 出力の形(`rivus.graph/1`)
@@ -118,10 +118,22 @@ AI エージェントが、コード上の 1 点を指して、「そこへ届�
   - 短い指定: `graph callers Close`(319 件、20 件を載せる)53 ms、`callers GetUserByID` 53 ms。`callers GetUserByID --depth 2 --via runWeb` 123 ms、`callees runWeb --depth 3 --avoid log.Error` 97 ms。
 - **まだ決まっていないこと / 限界**: (1) 3 段目は、ハブが最少の経路だけを並べる。ハブが 1 つ多い経路は、並べない。(2) ハブのある探索(3 段目)は、ハブの先が「あらゆる実装」なので、見つかった経路が、実際に通るとは限らない(ヒントで言う。`impls` / `dispatchers` は、次の段階)。(3) `--via` が複数のときの、`callers` / `callees` の意味は、「全部を通る(順は問わない)」で、`path` は「与えた順」。(4) `--only-impl` は、型の名前を symbol の文字列で見る。同名の型が複数の package にあれば、区別しない(`pkg.Type` と書けば、区別できる)。(5) 経路が via の区間をつなぐとき、同じ関数を 2 回通る経路は、後ろに回す(なければ、そのまま出す)。
 
+## 段階 3b で決まったこと(2026-11-21)
+
+`graph impls` / `graph dispatchers`。構造の層(DB に書く辺)とスキーマ(`user_version` = 1)は変えていない。
+
+- **読み方**: `edges`(`kind = interface`)を、呼び出し点の静的な型(`callsites.callee` = インターフェースのメソッドのシンボル)ごとにまとめる。`callee` に索引はないので、`callee = ?` は `callsites` の走査(Gitea 482,450 点)。`impls` は、`callsites` と `edges` を結んで読み(`callsite_id` の索引を使う)、`dispatchers` は `edges_to` の索引で、その関数に届く動的な辺を読む。
+- **`impls` の指定**: 呼び出し点が持つ名前に完全一致、なければ、その末尾(識別子の境界。`forms` と `matchEnd` を、メソッド名の集合に使う)。**インターフェースのメソッド全体で 1 つに決まるときだけ採用**し、複数なら `ambiguous`(`MethodChoice`: `id`、`call_sites`。呼び出し点の多い順、最大 20)。名前が呼び出し点になく、関数としては解決できるときは、エラーにせず、空の結果と `reason` と `hints`(本体のある関数なら `dispatchers` を案内)。関数としても解決できなければ、`SpecError`(近い名前つき)。
+- **`impls` の出力**: **「DB の中の、その呼び出し点の候補の和」であって、型としての実装の全部ではない**。`basis` に必ず書く(Go のメソッドなら VTA が呼び出し点ごとに絞ったこと、それ以外は、言語の extractor が呼び出し点ごとに出した候補であること。どの呼び出し点からも届かない型は載らない)。`call_sites`、`zero_candidate_sites`(候補が 0 の呼び出し点。Gitea の全体では、interface 3,694 + 関数値 937 = 4,631。`(error).Error` では 628 点のうち 170)、`impls_total`、`impls`(自分のコード → 呼び出し点の多い順 → ID)、`truncated`(unit `impls`)、`by_package`(切ったときだけ。全体の上位 10 と `by_package_other`。Go は symbol の import path、ほかはファイルのディレクトリ)。呼び出し点が 1 つもないときは `reason`。呼び出し点はあるが全部候補 0 のときも `reason`。
+- **`dispatchers`**: 指定は `callers` の規則(シンボル、短い形、`ambiguous`)。呼び出し点を指す指定(`file:line`)はエラー。その関数に届く `kind` が `interface` / `value` の辺だけを、呼び出し点ごとに 1 つ(同じ呼び出し点の重複は除く)。`at`、`in`、`kind`、`candidates`、`callee`(通るインターフェースのメソッド = 静的な型。関数値のときは、その値の名前)、`sites`。**候補の少ない順**、次に位置の順(実装を名指しに近いものを先に)。`truncated`(unit `call sites`)、`by_callee`(上位 10 と `by_callee_other`)。同じ symbol の関数が複数あるとき(型の埋め込みで生じるラッパー。symbol が、埋め込まれたメソッドと同じ)は、ID が symbol と同じ**本物のメソッドだけ**を見て、ラッパーがあることを `hints` で言う(ラッパーを候補に持つ呼び出し点は、そのメソッドの呼び出し点ではないので、混ぜない)。
+- **フィルタ**: `--avoid`(その関数を含む辺、その関数から呼ばれる辺を除く)と `--only-impl` は、辺の述語として使う(`filters` に書く)。`--via` は、意味がないのでエラー。`impls` の `call_sites` / `zero_candidate_sites` は、DB の全体の数(フィルタの影響を受けない)。実装ごとの `call_sites` は、フィルタを通ったもの。
+- **測定(2026-11-21。起動と DB を開く時間を含む。ほかのプロセスが動いていて揺れる)**: Gitea(関数 63,591): `impls (error).Error`(595 実装、628 点、既定の 50 で切る)190 ms(初回 550 ms)、出力 7.3 KB。`--limit 5` で 2.5 KB。`impls (io.Writer).Write`(894 点、219 点が候補 0)80 ms、9.4 KB。`dispatchers (*bytes.Buffer).Write`(328 点)23 ms、13.4 KB(50 点を載せる)。`impls Write`(複数 → `ambiguous`)80〜180 ms。x/tools: 7〜37 ms、1.6〜2.4 KB。
+- **限界**: (1) `impls` は、候補の和。候補が 0 の呼び出し点の先は、載らない。(2) `callee` は、呼び出し点が持つ名前の文字列。Go で、同じインターフェースを別の形で書いた名前(型の別名、埋め込み)は、別のメソッドとして数える。(3) `dispatchers` は、関数値の呼び出し点も含み、その `callee` は、インターフェースのメソッドではなく、値の名前(Rust と Dart では空のことがある)。(4) `--only-impl` と `--avoid` は、実装(行き先)の symbol で見る。
+
 ## これから決めること
 - `hints` の文面(段階 2 は、英語の短い文。使ってみて直す)と、`path` の出力を、トークンが問題になったときにノードの表に分けるか(今は、各ステップに関数の ID を書く。1 辺が約 190 バイト)
-- 段階 3b: `impls` / `dispatchers`、サイト ID の連携(今は、辺とステップに `sites` を付けるだけ)
+- サイト ID の連携(今は、辺とステップに `sites` を付けるだけ)
 - git の revision をどう添えるか(`dirty` をやめたので、作業ツリーの変更は、`source_hash` で表す。今は `meta.revision` に HEAD を入れるだけ)
-- taint の層(findings、不確実性)を、いつ DB に移すか。移すときは、`layers` に層を足し、層ごとの版・作成日時・ハッシュで、構造の層とのずれを検出する。移したら、`also_flows` / `flows: not_checked` を出す
+- taint の層(findings、不確実性)を、いつ DB に移すか。移すときは、`layers` に層を足し、層ごとの版・作成日時・ハッシュで、構造の層とのずれを検出する。移したら、**`findings_at_sites`**(経路の呼び出し点にあるサイトを source / sink とする finding)を出す(**決定済みの名前**。`also_flows` にはしない。ユーザーが決めた)。taint の層がないときは、今のまま `flows: "not_checked"`。この橋と、層の DB への移行は、まだ作っていない
 - ハブ(`log.Error` のような、1,800 の呼び元)の `callers` を、どう見せるか(今は、`--limit` で切って、数を言う。呼び元を関数でまとめる、パッケージでまとめる、など)
 - `callsites` の builtin は、呼び出し点の約 4 割(Gitea: 全 482,450 のうち 203,578)。今は、DB に入れたまま、検索で外している(`kind` の索引はない)。DB から落とすかは、サイズ(91 MB)が問題になったら

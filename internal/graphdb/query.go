@@ -561,3 +561,82 @@ func (d *DB) FuncRowByFID(fid string) (*Func, error) {
 
 // Meta is a value of the meta table.
 func (d *DB) Meta(key string) string { return d.meta[key] }
+
+// MethodRow is an interface method as the call sites name it (callsites.callee
+// of a call through an interface), with how many calls there are.
+type MethodRow struct {
+	Callee string
+	// Sites is the number of call sites through an interface that name it,
+	// Zero those of them with no candidate, Go those in a Go function.
+	Sites, Zero, Go int
+}
+
+// InterfaceMethod reads the call sites through an interface that name callee.
+// Sites is 0 when none does.
+func (d *DB) InterfaceMethod(callee string) (MethodRow, error) {
+	m := MethodRow{Callee: callee}
+	err := d.db.QueryRow(`SELECT count(*), coalesce(sum(c.ncand = 0), 0), coalesce(sum(f.lang = 'go'), 0) FROM callsites c JOIN funcs f ON f.id = c.func_id WHERE c.kind = 'interface' AND c.callee = ?`, callee).Scan(&m.Sites, &m.Zero, &m.Go)
+	return m, err
+}
+
+// InterfaceMethods reads every interface method that a call site names.
+func (d *DB) InterfaceMethods() ([]MethodRow, error) {
+	rows, err := d.db.Query(`SELECT c.callee, count(*), sum(c.ncand = 0), sum(f.lang = 'go') FROM callsites c JOIN funcs f ON f.id = c.func_id WHERE c.kind = 'interface' AND c.callee IS NOT NULL GROUP BY c.callee`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []MethodRow
+	for rows.Next() {
+		var m MethodRow
+		if err := rows.Scan(&m.Callee, &m.Sites, &m.Zero, &m.Go); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+// InterfaceEdges are the edges of the call sites through an interface that name
+// callee (File, Line and Col are not read).
+func (d *DB) InterfaceEdges(callee string) ([]Edge, error) {
+	rows, err := d.db.Query(`SELECT e.callsite_id, e.from_func, e.to_func, e.kind, e.ncand FROM callsites c JOIN edges e ON e.callsite_id = c.id WHERE c.kind = 'interface' AND c.callee = ?`, callee)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Edge
+	for rows.Next() {
+		var e Edge
+		if err := rows.Scan(&e.CallSite, &e.From, &e.To, &e.Kind, &e.NCand); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// DynEdge is a dynamic edge, with the name its call site gives to the callee.
+type DynEdge struct {
+	Edge
+	Callee string
+}
+
+// DynamicInEdges are the calls through an interface or a function value that
+// may reach a function.
+func (d *DB) DynamicInEdges(to int64) ([]DynEdge, error) {
+	rows, err := d.db.Query(`SELECT `+edgeCols+`, coalesce(c.callee,'') `+edgeJoin+` WHERE e.to_func = ? AND e.kind IN ('interface','value') ORDER BY fl.path, c.line, c.col, e.from_func`, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []DynEdge
+	for rows.Next() {
+		var e DynEdge
+		if err := rows.Scan(&e.CallSite, &e.From, &e.To, &e.Kind, &e.NCand, &e.File, &e.Line, &e.Col, &e.Callee); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}

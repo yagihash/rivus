@@ -184,7 +184,7 @@ func runGraph(args []string) error {
 	switch args[0] {
 	case "info":
 		return runGraphInfo(args[1:])
-	case "callers", "callees", "path":
+	case "callers", "callees", "path", "impls", "dispatchers":
 		return runGraphQuery(args[0], args[1:])
 	}
 	fmt.Fprintf(os.Stderr, "rivus: unknown graph command %q\n\n%s", args[0], graphUsage)
@@ -201,6 +201,8 @@ Usage:
   rivus graph info    [-graph <file> | -C <dir>]
   rivus graph callers [-graph <file> | -C <dir>] [--depth N] [--limit K] [--include-builtin] [filters] <target>
   rivus graph callees [-graph <file> | -C <dir>] [--depth N] [--limit K] [--include-builtin] [filters] <target>
+  rivus graph impls   [-graph <file> | -C <dir>] [--limit K] [--avoid <symbol>] [--only-impl <type>] <interface method>
+  rivus graph dispatchers [-graph <file> | -C <dir>] [--limit K] [--avoid <symbol>] [--only-impl <type>] <implementation>
   rivus graph path    [-graph <file> | -C <dir>] (--from <target> | --from-entry) --to <target> [--limit K] [--hubs] [filters]
 
 Filters (they may be given again, and the answer's "filters" says each one):
@@ -215,6 +217,11 @@ Commands:
   path     up to K ways from one target to the other, shortest first. It looks at the static calls, then (if
            there is none) at the dynamic ones, then (if there is still none) at the calls of more than 20
            candidates, "hubs" ("searched" says how far it went). --from-entry starts from the entry points.
+
+  impls    the functions that the calls through an interface method (io.Writer.Write, (error).Error) may reach:
+           the union of the candidates of those call sites in the graph, not every type that implements the interface
+  dispatchers  the calls through an interface (or a function value) that list the target as a candidate, each with
+           the interface method it goes through ("callee"): start from a concrete implementation
 
 A target is one of (the kind is told from its form):
   os/exec.Command, (*pkg.T).Method   a function (a Dart or a Rust name too: pkg::f). The front may be left out
