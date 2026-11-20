@@ -21,6 +21,10 @@ func TestReachabilityFromEntryPoints(t *testing.T) {
 	got := map[string]string{}
 	for _, f := range res.Findings {
 		p := f.Sink.Position
+		// the note goes with not_from_entry, and only with it (ADR-052)
+		if (f.Reachability == ReachNotFromEntry) != (f.ReachabilityNote == NotFromEntryNote) {
+			t.Errorf("%s: reachability %q, note %q", p.File, f.Reachability, f.ReachabilityNote)
+		}
 		got[strings.TrimPrefix(p.File, "cases/")+":"+itoa(p.Line)] = f.Reachability
 	}
 	for k, w := range want {

@@ -1190,6 +1190,7 @@ func (e *Engine) buildFinding(rf *rawFinding) *Finding {
 		for _, id := range append([]string{src.Func, rf.site.Func}, funcs...) {
 			if fn := e.prog.ByID[id]; fn != nil && !e.reach[fn] {
 				f.Reachability = ReachNotFromEntry
+				f.ReachabilityNote = NotFromEntryNote
 				break
 			}
 		}

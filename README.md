@@ -77,6 +77,8 @@ Go / Rust / Dart extractor ──→ 中立 IR (CFG, JSON Lines) ──→ Go �
 }
 ```
 
+finding の `reachability` は、経路のすべての関数が、プログラムの起点（`main` と `init`、なければ exported）から届くか（`from_entry`、`not_from_entry`）。`not_from_entry` には、説明 `reachability_note` が付く: コードが死んでいるという意味ではない（フレームワークが呼ぶ関数や、登録するハンドラは、起点に入っていない。[ADR-052](docs/DECISIONS.md)）。
+
 ## プロジェクトに合わせてモデルを足す
 
 source・sink・sanitizer と、使っているライブラリの伝播（モデル）は、解析するプロジェクトの側に置ける。

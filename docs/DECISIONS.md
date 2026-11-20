@@ -1158,3 +1158,9 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
 **finding の集合は変わらない**（`Reachable` は finding を消さない）。変わるのは、`reachability` の値（`not_from_entry` → `from_entry`）と、代表の経路の選び方（「到達可能」が、選び方の最初の基準）。
 
 **検証:** go-curated、go-synth S / M、paramshare、dogfood、Dart / Rust のサンプルと curated で、finding の追加・削除 0、`reachability` の変化 0、経路の変化 0（これらのプログラムでは、`Reachable` が足りなかったことで `not_from_entry` になった finding がない）。x/tools などの実プロジェクトのベンチは、このマシンのスワップが逼迫していた（94 %）ので、**走らせていない**。454 関数が対象の x/tools での件数（`not_from_entry` → `from_entry`、代表の経路が変わる件数）は、未確認。
+
+## ADR-052: `not_from_entry` に、起点に入っていないものの説明を添える（つなぎ）
+
+**背景:** finding の `reachability: not_from_entry` は、「経路のどれかの関数が、起点（`main`、`init`、Dart の `main`、Rust の `entry_fn`。なければ exported）から届かない」と言う。**フレームワークが呼ぶメソッド（依存の型のメソッドの上書き）や、フレームワークに登録するハンドラは、起点に入っていない**（依存を読まない Dart と、依存を読まないときの Go / Rust では、フレームワークの側が読まれず、そこから呼ぶ辺もない）。読む人が「死んだコード」と読むと、誤り。C-4（`overrides` の辺）が入るまでのつなぎ。
+
+**決めたこと:** `not_from_entry` の finding に、説明の文字列 `reachability_note`（`taint.NotFromEntryNote`）を付ける（新しいフィールド。`from_entry` と、起点が分からないとき〔`reachability` が無いとき〕には付けない）。内容: 「`not_from_entry` はコードが死んでいるという意味ではない。フレームワークが呼ぶ関数（依存の型のメソッドの上書き、フレームワークに登録したハンドラ）は、ここでは起点に入っておらず、読まなかった依存のコードは、それを呼ばない」。全言語で同じ文字列（言語ごとに分けると、依存を読んだかどうかの情報が、解析の側に要る。C-4 で、辺として入れるときに、説明ごとなくす）。finding の集合も、`reachability` の値も変わらない。出力の形は、フィールドの追加だけ。

@@ -171,6 +171,8 @@ type Finding struct {
 	// (which rivus does not follow). Absent when nothing says where the
 	// program starts.
 	Reachability string `json:"reachability,omitempty"`
+	// ReachabilityNote explains not_from_entry: what the entry points leave out (ADR-052).
+	ReachabilityNote string `json:"reachability_note,omitempty"`
 	// DispatchWidened is the number of calls on the path that went through an
 	// interface or a function value and were taken to reach every one of
 	// several implementations; DispatchCandidates is the most implementations
@@ -204,6 +206,13 @@ const (
 	ReachFromEntry    = "from_entry"
 	ReachNotFromEntry = "not_from_entry"
 )
+
+// NotFromEntryNote is the explanation that goes with not_from_entry. The entry points are the
+// start of the program as the code that was read says it; what a framework calls (an override
+// of a method of a type of a dependency, a handler it is given to) is not an entry point
+// until the overrides are edges of the graph (C-4), and in Dart, and wherever the
+// dependencies are not read, the framework is not read either.
+const NotFromEntryNote = "not_from_entry does not mean the code is dead: a function that a framework calls (an override of a method of a type of a dependency, a handler registered with it) is not an entry point here, and the code of a dependency that was not read does not call it"
 
 // Path is one way the data gets from the source to the sink.
 type Path struct {
