@@ -353,3 +353,29 @@ pub fn same_name_trait() {
     run_http(&http_side::Web, s);
     let _ = queue_side::Worker;
 }
+
+// --- a rule names the function a call of a function value reaches ------------
+// (yagihash/rivus #54): the one a variable holds, or the one the caller passes.
+
+pub fn sink_in_variable() {
+    let emit: fn(&str) = sink;
+    let s = source(); // @source(rv-fnvar)
+    emit(&s); // @sink(rv-fnvar)
+}
+
+fn run_fn(f: fn(&str), v: &str) {
+    f(v); // @sink(rv-fnparam)
+}
+
+fn quiet(_s: &str) {}
+
+pub fn sink_by_parameter() {
+    let s = source(); // @source(rv-fnparam)
+    run_fn(sink, &s);
+}
+
+// no flow: this caller passes a function that is not a sink
+pub fn quiet_by_parameter() {
+    let s = source();
+    run_fn(quiet, &s);
+}

@@ -36,6 +36,10 @@ type Site struct {
 	// IR is where the site is in the neutral IR.
 	IR *IRRef `json:"-"`
 
+	// Callee is the function a site on a call of a function value is for (the
+	// call may reach several, and each is a site of its own).
+	Callee string `json:"-"`
+
 	Sink  []model.Sink   `json:"-"`
 	Src   []model.Source `json:"-"`
 	irpos ir.Pos

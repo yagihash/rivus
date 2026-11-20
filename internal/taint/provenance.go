@@ -313,6 +313,9 @@ func (t *tracer) walkResult(call *sg.Instr, idx int, fn *sg.Func, chain []string
 	if builtinName(call) != "" {
 		sym = ""
 	}
+	if vc := call.Callee.ValueCands; call.Callee.Kind == ir.CalleeValue && len(vc) == 1 {
+		sym = vc[0].Symbol
+	}
 	chain = append(chain, orUnknown(sym)+"()")
 	if t.e.rules.ConfigReads[sym] {
 		t.stop(KindConfigRead, "the value is read from configuration by "+sym, sym, call.Pos, chain, nil)

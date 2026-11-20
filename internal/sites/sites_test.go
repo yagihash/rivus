@@ -132,3 +132,35 @@ func TestEnumerateIsDeterministic(t *testing.T) {
 		}
 	}
 }
+
+// A call of a function value is a site for the function it may reach (yagihash/rivus #54), with
+// or without the call graph of the extractor: the functions that flow to the value are found in the IR.
+func TestEnumerateCallsOfFunctionValues(t *testing.T) {
+	res := enumerate(t, "./cases/funcsink")
+	for _, fn := range []string{"funcsink.Alias", "funcsink.Phi", "funcsink.runRule"} {
+		if s := find(res, fn, RoleSink, "example.com/cases/lib.Sink", 1); s == nil {
+			t.Errorf("%s: no sink site for the function the value holds", fn)
+		} else if s.Callee != "example.com/cases/lib.Sink" {
+			t.Errorf("%s: callee %q", fn, s.Callee)
+		}
+	}
+	if s := find(res, "funcsink.PhiNone", RoleSink, "example.com/cases/lib.Sink", 1); s != nil {
+		t.Errorf("a value that cannot hold a sink is not a site: %+v", s)
+	}
+	// the sites are the same when the call graph is there
+	p, err := gossa.Load(testutil.Testdata(), []string{"./cases/funcsink"}, gossa.Options{NaiveForm: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	prog, err := goir.Extract(p, goir.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	with := Enumerate(prog, goir.NewTexts(p), testutil.Rules(t))
+	for _, fn := range []string{"funcsink.Alias", "funcsink.Phi", "funcsink.runRule"} {
+		a, b := find(res, fn, RoleSink, "example.com/cases/lib.Sink", 1), find(with, fn, RoleSink, "example.com/cases/lib.Sink", 1)
+		if a == nil || b == nil || a.ID != b.ID {
+			t.Errorf("%s: %+v / %+v", fn, a, b)
+		}
+	}
+}

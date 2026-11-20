@@ -300,7 +300,10 @@ func TestGlobalVarNoteListsTheWriters(t *testing.T) {
 func TestImplementations(t *testing.T) { checkCase(t, "impl") }
 
 func TestFunctionValues(t *testing.T) { checkCase(t, "funcvalue") }
-func TestGenerics(t *testing.T)       { checkCase(t, "generics") }
+
+// The rules apply to the function a call of a function value reaches: yagihash/rivus #54.
+func TestFunctionValueSinks(t *testing.T) { checkCase(t, "funcsink") }
+func TestGenerics(t *testing.T)           { checkCase(t, "generics") }
 
 func TestImplementationsStopAtTheLimit(t *testing.T) {
 	prog := loadIR(t, testutil.Testdata(), "./cases/impl/...")

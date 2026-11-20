@@ -42,3 +42,29 @@ void viaCapturedCallback() {
   String Function() get = () => t;
   sink(get()); // @sink(cb-capture)
 }
+
+// A rule names the function a call of a function value reaches: the one a
+// variable holds, or the one the caller passes (yagihash/rivus #54).
+
+void sinkViaVariable() {
+  final emit = sink;
+  final x = source(); // @source(cb-sinkvar)
+  emit(x); // @sink(cb-sinkvar)
+}
+
+void run(void Function(String) f, String s) {
+  f(s); // @sink(cb-sinkparam)
+}
+
+void quiet(String s) {}
+
+void sinkViaParameter() {
+  final x = source(); // @source(cb-sinkparam)
+  run(sink, x);
+}
+
+// no flow: this caller passes a function that is not a sink
+void quietViaParameter() {
+  final y = source();
+  run(quiet, y);
+}

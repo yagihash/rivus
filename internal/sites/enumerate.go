@@ -8,6 +8,7 @@ import (
 	"github.com/yagihash/rivus/internal/ir"
 	"github.com/yagihash/rivus/internal/irssa"
 	"github.com/yagihash/rivus/internal/model"
+	"github.com/yagihash/rivus/internal/valuecalls"
 )
 
 // IRRef is the place of a site in the IR.
@@ -37,6 +38,7 @@ type IRParam struct {
 // mark: it needs neither a call graph nor any data flow analysis, so it is
 // fast. Every site has a stable ID and a fingerprint (ADR-028).
 func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
+	valuecalls.Resolve(prog)
 	res := &Result{
 		ByIRInstr: map[IRInstr][]*Site{},
 		ByIRParam: map[IRParam][]*Site{},
@@ -101,6 +103,25 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 				at := &IRRef{Func: fn, Block: bi, Instr: ii, Param: -1}
 				switch in.Op {
 				case ir.OpCall:
+					if in.Callee.Kind == ir.CalleeValue {
+						// A call of a function value: the rules apply to the functions
+						// it may reach, each its own site (ADR-045).
+						vin := in
+						vin.Args = in.Args[min(1, len(in.Args)):]
+						for _, c := range in.Callee.ValueCands {
+							sym := c.Symbol
+							if sym == "" {
+								continue
+							}
+							if srcs := rules.CallSources[sym]; len(srcs) > 0 {
+								add(&Site{Role: RoleSource, Kind: model.KindCallResult, Symbol: sym, Labels: labelsOf(srcs), IR: at, Src: srcs, irpos: in.Pos, Callee: string(c.ID)})
+							}
+							if sinks := sinksAt(fn, vin, rules.Sinks[sym]); len(sinks) > 0 {
+								add(&Site{Role: RoleSink, Kind: "call", Symbol: sym, Category: sinks[0].Category, Labels: acceptsOf(sinks), IR: at, Sink: sinks, irpos: in.Pos, Callee: string(c.ID)})
+							}
+						}
+						continue
+					}
 					sym := in.Callee.Symbol
 					if sym == "" {
 						continue
@@ -245,12 +266,17 @@ func literalOnlyIR(form *irssa.Form, s *Site) bool {
 	if in.Op != ir.OpCall {
 		return false
 	}
-	hasRecv, argStart := false, 0
+	hasRecv, argStart, recvAt := false, 0, 0
 	switch {
 	case in.Callee.Kind == ir.CalleeDynamic || (in.Callee.Kind == ir.CalleeStatic && in.Callee.Recv):
 		hasRecv, argStart = true, 1
 	case in.Callee.Kind == ir.CalleeValue:
 		argStart = 1
+		for _, c := range in.Callee.ValueCands {
+			if string(c.ID) == s.Callee && c.Recv && len(in.Args) > 1 {
+				hasRecv, argStart, recvAt = true, 2, 1
+			}
+		}
 	}
 	nargs := len(in.Args) - argStart
 	var checked int
@@ -263,7 +289,7 @@ func literalOnlyIR(form *irssa.Form, s *Site) bool {
 	for _, sk := range s.Sink {
 		if sk.Recv {
 			checked++
-			if !hasRecv || !isConstantRef(form, form.Operand(at.Block, at.Instr, 0), 0) {
+			if !hasRecv || !isConstantRef(form, form.Operand(at.Block, at.Instr, recvAt), 0) {
 				return false
 			}
 		}

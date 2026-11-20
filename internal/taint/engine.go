@@ -61,7 +61,9 @@ type Engine struct {
 	// dispatch caches dispatchGuards by call: what it makes depends on the call
 	// alone, and it is asked at every analysis of the function.
 	dispatch sync.Map // *sg.Instr -> map[*sg.Func][]Guard
-	prog     *sg.Program
+	// valueGuards is the same for the calls of function values (valueGuards).
+	valueGuards sync.Map // *sg.Instr -> map[string][]Guard
+	prog        *sg.Program
 	// reach is what the program can reach from its entry points (nil: unknown).
 	reach map[*sg.Func]bool
 	texts ir.Texts

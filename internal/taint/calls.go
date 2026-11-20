@@ -44,6 +44,10 @@ func (s *state) call(ci *sg.Instr) {
 	}
 	cc.recv, cc.args = ci.Recv(), ci.CallArgs()
 	cc.roots = callRoots(ci)
+	if vc := ci.Callee.ValueCands; ci.Callee.Kind == ir.CalleeValue && len(vc) == 1 {
+		// A call of a function value that can reach one function is a call of it.
+		cc = s.valueCtx(cc, vc[0])
+	}
 
 	// A call only reads the cells its operands point to. If none of them
 	// changed since the last time, applying the callee again would add
@@ -62,6 +66,17 @@ func (s *state) call(ci *sg.Instr) {
 	} else {
 		delete(s.callSigs, ci)
 	}
+}
+
+// valueCtx is the call seen as a call of the candidate: the rules name it, and
+// a method taken as a function has the receiver as its first argument.
+func (s *state) valueCtx(cc *callCtx, c ir.ValueCand) *callCtx {
+	x := *cc
+	x.sym = c.Symbol
+	if c.Recv && cc.recv == nil && len(cc.args) > 0 {
+		x.recv, x.args = cc.args[0], cc.args[1:]
+	}
+	return &x
 }
 
 // callSig changes whenever something is added to a cell the call reads. The
@@ -93,7 +108,17 @@ func (s *state) callBody(cc *callCtx) {
 	ci := cc.in
 
 	// Sources and sinks matched by the rules at this call.
-	for _, site := range s.eng.sites.ByIRInstr[sites.IRInstr{Func: s.fn.IR.ID, Block: ci.IRBlock, Instr: ci.IRIndex}] {
+	sitesHere := s.eng.sites.ByIRInstr[sites.IRInstr{Func: s.fn.IR.ID, Block: ci.IRBlock, Instr: ci.IRIndex}]
+	for _, site := range sitesHere {
+		// a site on a call of a function value is for one of the functions it may reach
+		sc := cc
+		if site.Callee != "" {
+			for _, c := range ci.Callee.ValueCands {
+				if string(c.ID) == site.Callee {
+					sc = s.valueCtx(cc, c)
+				}
+			}
+		}
 		switch site.Role {
 		case sites.RoleSource:
 			outOnly := false
@@ -122,10 +147,10 @@ func (s *state) callBody(cc *callCtx) {
 			}
 			for _, src := range site.Src {
 				for _, i := range src.Out {
-					if i >= len(cc.args) {
+					if i >= len(sc.args) {
 						continue
 					}
-					v := cc.args[i]
+					v := sc.args[i]
 					dsts := append(append([]Loc(nil), s.locs(v)...), s.pointeeOfInterface(v)...)
 					// variadic destinations: the pointers are the elements of
 					// the slice the call was given (rows.Scan(&a, &b))
@@ -141,12 +166,16 @@ func (s *state) callBody(cc *callCtx) {
 				}
 			}
 		case sites.RoleSink:
-			s.checkSink(cc, site)
+			s.checkSink(sc, site)
 		}
 	}
 
 	if name := builtinName(ci); name != "" {
 		s.builtin(cc, name)
+		return
+	}
+	if ci.Callee.Kind == ir.CalleeValue && len(ci.Callee.ValueCands) > 1 {
+		s.valueCandidates(cc)
 		return
 	}
 	rules := s.eng.rules
@@ -234,6 +263,87 @@ func (s *state) callBody(cc *callCtx) {
 		}
 		s.unmodeled(cc, s.newNote(ci, kind, detail, cc.sym))
 	}
+}
+
+// valueCandidates is a call of a function value that may reach several
+// functions, found from the function itself (they were copied or chosen in it:
+// every one is reached), or from the callers of the function (it is a
+// parameter: see valueGuards). What the rules and the models say about each is
+// applied, and the call records the uncertainty with the candidates.
+func (s *state) valueCandidates(cc *callCtx) {
+	ci := cc.in
+	rules := s.eng.rules
+	cands := ci.Callee.ValueCands
+	dispatch := s.newNote(ci, KindDynamicDispatch, "call through an interface or function value", "")
+	for _, c := range cands {
+		dispatch.Candidates = append(dispatch.Candidates, string(c.ID))
+	}
+	sort.Strings(dispatch.Candidates)
+	notes := []*Uncertainty{dispatch}
+	if ci.IR.Go {
+		notes = append(notes, s.pathNote(KindConcurrency, "the callee runs in another goroutine; the order of effects is not modelled", ci.Pos))
+	}
+	guards := s.valueGuards(ci)
+	var external []string
+	for _, c := range cands {
+		cx := s.valueCtx(cc, c)
+		if cx.sym != "" && rules.HasModel(cx.sym) {
+			s.applyModel(cx)
+			continue
+		}
+		if fn := s.eng.prog.ByID[string(c.ID)]; fn != nil {
+			b := []*sg.Value(nil)
+			if cb, ok := ci.CandidateBindings[fn]; ok {
+				b = cb
+			}
+			s.applySummary(cx, fn, b, notes, guards[string(c.ID)])
+			continue
+		}
+		if cx.sym != "" && (len(rules.CallSources[cx.sym]) > 0 || len(rules.Sinks[cx.sym]) > 0) {
+			continue // the rule is the model
+		}
+		external = append(external, string(c.ID))
+	}
+	if len(external) > 0 {
+		kind, detail := externalKind(external, "")
+		s.unmodeled(cc, s.newNote(ci, kind, detail, ""))
+	}
+}
+
+// valueGuards tells, for a call of a function value that the function has from
+// one of its parameters, which candidate each flow went through. The callers
+// know which function they passed: one that made it right there can leave out
+// the flows through the other candidates (the call graph does not tell the
+// callers apart: the functions every caller passes are the candidates). It is
+// the guard of dispatchGuards, for a function value.
+func (s *state) valueGuards(ci *sg.Instr) map[string][]Guard {
+	cands := ci.Callee.ValueCands
+	if len(cands) < 2 {
+		return nil
+	}
+	if m, ok := s.eng.valueGuards.Load(ci); ok {
+		return m.(map[string][]Guard)
+	}
+	var out map[string][]Guard
+	for _, c := range cands {
+		if c.Param < 0 || c.Param >= len(s.fn.Params) {
+			continue
+		}
+		if out == nil {
+			out = map[string][]Guard{}
+		}
+		out[string(c.ID)] = []Guard{{
+			Func:     s.eng.funcID(s.fn),
+			Params:   []int{c.Param},
+			Cond:     "the function given as " + s.fn.Params[c.Param].Name + " is " + string(c.ID),
+			Polarity: true,
+			disp:     &dispatchSpec{fnID: string(c.ID)},
+			fn:       s.fn,
+			pos:      ci.Pos,
+		}}
+	}
+	s.eng.valueGuards.Store(ci, out)
+	return out
 }
 
 // dispatchGuards tells, for a call through an interface method on a parameter
@@ -381,6 +491,14 @@ func accepted(accepts []string, label string) bool {
 func (s *state) reach(site *sites.Site, f found, in *sg.Instr) {
 	steps := cat(s.trace(f.Cell, f.Orig), leaf(s.sinkStep(site, in)))
 	gs := s.guardsAtSink(in, f)
+	if site.Callee != "" && f.E.Kind == Param {
+		if vg := s.valueGuards(in)[site.Callee]; len(vg) > 0 {
+			if gs = unionGuards(gs, vg); len(gs) > maxGuards {
+				s.guardOverflow = true
+				gs = nil
+			}
+		}
+	}
 	switch f.E.Kind {
 	case Real:
 		if !accepted(site.Labels, f.E.Label()) {

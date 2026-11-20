@@ -346,3 +346,57 @@ func TestValueCallOfAClosureSeenThroughEightCopies(t *testing.T) {
 		t.Errorf("nine copies: %v", got)
 	}
 }
+
+func TestValueCallCandidatesKnowTheParameterTheyCameThrough(t *testing.T) {
+	// apply(f, x) { f(x) }: the callers pass g, and a function that has no body; run(c, f) { if c { f = local }; f() }
+	apply := newFn("apply", 2)
+	apply.callValue(0, apply.param(0), apply.param(1))
+	c1 := newFn("c1", 1)
+	c1.callStatic(0, "apply", false, c1.closure(0, "g"), c1.param(0))
+	c2 := newFn("c2", 1)
+	c2.callStatic(0, "apply", false, c2.closure(0, "ext.Sink"), c2.param(0))
+	// a function that picks one itself, and the one it is given
+	pick := newFn("pick", 1)
+	v := pick.local()
+	pick.emit(0, ir.Instr{Op: ir.OpCopy, Dsts: []ir.LocalID{v}, Args: []ir.LocalID{pick.closure(0, "g")}})
+	pick.emit(0, ir.Instr{Op: ir.OpCopy, Dsts: []ir.LocalID{v}, Args: []ir.LocalID{pick.param(0)}})
+	pick.callValue(0, v)
+	c3 := newFn("c3", 0)
+	c3.callStatic(0, "pick", false, c3.closure(0, "h"))
+
+	prog := &ir.Program{Funcs: []*ir.Func{apply.done(), c1.done(), c2.done(), pick.done(), c3.done(), leaf("g", 1), leaf("h", 0)}}
+	if err := prog.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Build(prog); err != nil {
+		t.Fatal(err)
+	}
+	cands := func(fn string) []ir.ValueCand {
+		for _, f := range prog.Funcs {
+			if string(f.ID) != fn {
+				continue
+			}
+			for _, b := range f.Blocks {
+				for _, in := range b.Instrs {
+					if in.Op == ir.OpCall && in.Callee.Kind == ir.CalleeValue {
+						return in.Callee.ValueCands
+					}
+				}
+			}
+		}
+		return nil
+	}
+	got := cands("apply")
+	if len(got) != 2 || got[0].ID != "ext.Sink" || got[1].ID != "g" || got[0].Param != 0 || got[1].Param != 0 {
+		t.Errorf("apply: %+v (both come through parameter 0, the one without a body too)", got)
+	}
+	if got[0].Symbol != "ext.Sink" {
+		t.Errorf("a function without a body is known by its ID: %+v", got[0])
+	}
+	// g is chosen in the function itself (every caller reaches it); h only comes from the caller
+	for _, c := range cands("pick") {
+		if want := map[ir.FuncID]int{"g": -1, "h": 0}[c.ID]; c.Param != want {
+			t.Errorf("pick: %+v, want parameter %d", c, want)
+		}
+	}
+}

@@ -2,10 +2,10 @@ package sg
 
 import (
 	"fmt"
-	"sort"
 
 	"github.com/yagihash/rivus/internal/ir"
 	"github.com/yagihash/rivus/internal/irssa"
+	"github.com/yagihash/rivus/internal/valuecalls"
 )
 
 // Build makes the SSA graph of every function of the program.
@@ -17,6 +17,7 @@ func Build(p *ir.Program) (*Program, error) { return build(p, false) }
 func BuildConsuming(p *ir.Program) (*Program, error) { return build(p, true) }
 
 func build(p *ir.Program, consume bool) (*Program, error) {
+	valuecalls.Resolve(p)
 	out := &Program{IR: p, ByID: map[string]*Func{}, Globals: map[string]*Value{}, GlobalPos: map[string]ir.Pos{}}
 	for _, g := range p.Globals {
 		out.GlobalPos[g.Name] = g.Pos
@@ -339,118 +340,108 @@ func (b *builder) buildInstrs() {
 	}
 }
 
-// resolveValueCalls finds the functions a call of a function value may reach,
-// for the calls that nothing else resolved: the functions that flow to the
-// value, through copies, φ functions and the parameters of the function (the
-// arguments its callers pass). It follows no memory: a function kept in a
-// field or a list is not found, and the call stays unresolved.
+// resolveValueCalls takes, for the calls of function values that nothing else
+// resolved, the functions that internal/valuecalls found: those that flow to the
+// value through copies, φ functions and the parameters of the function (the
+// arguments its callers pass). The functions that have no body are candidates
+// too (a rule may name them), but there is no summary to apply for them.
 func (p *Program) resolveValueCalls() {
-	callers := map[*Func][]*Instr{}
 	for _, fn := range p.Funcs {
 		for _, b := range fn.Blocks {
 			for _, in := range b.Instrs {
-				if in.Op != ir.OpCall {
+				if in.Op != ir.OpCall || in.Callee.Kind != ir.CalleeValue || in.Static != nil || len(in.Callee.Candidates) > 0 || len(in.Callee.ValueCands) == 0 {
 					continue
 				}
-				if in.Static != nil {
-					callers[in.Static] = append(callers[in.Static], in)
-				}
-				for _, c := range in.CandidateFns {
-					callers[c] = append(callers[c], in)
-				}
-			}
-		}
-	}
-	const most = 8
-	for _, fn := range p.Funcs {
-		for _, b := range fn.Blocks {
-			for _, in := range b.Instrs {
-				if in.Op != ir.OpCall || in.Callee.Kind != ir.CalleeValue || in.Static != nil || len(in.CandidateFns) > 0 || len(in.Args) == 0 {
-					continue
-				}
-				found := map[*Func][]*Value{}
-				p.funcsOf(in.Args[0], in.Block.Func, callers, found, map[*Value]bool{}, 0)
-				if len(found) == 0 || len(found) > most {
-					continue
-				}
-				for f, binds := range found {
+				for _, c := range in.Callee.ValueCands {
+					in.Candidates = append(in.Candidates, c.ID)
+					f := p.ByID[string(c.ID)]
+					if f == nil {
+						continue
+					}
 					in.CandidateFns = append(in.CandidateFns, f)
-					if len(binds) > 0 {
-						if in.CandidateBindings == nil {
-							in.CandidateBindings = map[*Func][]*Value{}
+					if c.Bind != nil {
+						if mc := fn.instrAt(c.Bind.Block, c.Bind.Instr); mc != nil && len(mc.Args) > 0 {
+							if in.CandidateBindings == nil {
+								in.CandidateBindings = map[*Func][]*Value{}
+							}
+							in.CandidateBindings[f] = mc.Args
 						}
-						in.CandidateBindings[f] = binds
 					}
 				}
-				sort.Slice(in.CandidateFns, func(i, j int) bool { return in.CandidateFns[i].ID < in.CandidateFns[j].ID })
-				for _, f := range in.CandidateFns {
-					in.Candidates = append(in.Candidates, ir.FuncID(f.ID))
-				}
 			}
 		}
 	}
 }
 
-// callArgv is what a call passes, in the order of the parameters of the
-// callee (the receiver first).
-func callArgv(in *Instr) []*Value {
-	if in.Callee.Kind == ir.CalleeValue && len(in.Args) > 0 {
-		return in.Args[1:]
+// instrAt is the instruction that came from the instruction of the IR.
+func (f *Func) instrAt(block, instr int) *Instr {
+	if block < 0 || block >= len(f.Blocks) {
+		return nil
 	}
-	return in.Args
+	for _, in := range f.Blocks[block].Instrs {
+		if in.IRIndex == instr {
+			return in
+		}
+	}
+	return nil
 }
 
-func (p *Program) funcsOf(v *Value, home *Func, callers map[*Func][]*Instr, found map[*Func][]*Value, seen map[*Value]bool, depth int) {
-	if v == nil || seen[v] || depth > 3 {
-		return
-	}
-	seen[v] = true
-	switch v.Kind {
-	case KFunc:
-		if v.Fn != nil {
-			if _, ok := found[v.Fn]; !ok {
-				found[v.Fn] = nil
-			}
+// ExactFuncs are the functions a value is, when the function it is in
+// decides it: a function, or a closure made there, perhaps copied or chosen by
+// a φ. ok is false if it may be anything else too (a parameter, a result of a
+// call, something read from memory): the callers cannot tell.
+func ExactFuncs(v *Value) (ids map[string]bool, ok bool) {
+	ids = map[string]bool{}
+	seen := map[*Value]bool{}
+	var walk func(v *Value, depth int) bool
+	walk = func(v *Value, depth int) bool {
+		if v == nil || depth > 8 {
+			return false
 		}
-	case KPhi:
-		if v.Instr != nil {
+		if seen[v] {
+			return true
+		}
+		seen[v] = true
+		switch v.Kind {
+		case KFunc:
+			ids[string(v.FuncID)] = true
+			return true
+		case KPhi:
+			if v.Instr == nil {
+				return false
+			}
 			for _, a := range v.Instr.Args {
-				p.funcsOf(a, home, callers, found, seen, depth)
-			}
-		}
-	case KResult:
-		in := v.Instr
-		if in == nil || in.IR == nil {
-			return
-		}
-		switch in.Op {
-		case ir.OpMakeClosure:
-			if f := p.ByID[string(in.IR.Func)]; f != nil {
-				// The values it captured go with it when the closure is made
-				// in the function that calls it (they are values of that
-				// function); from another function they are not at hand.
-				if old, ok := found[f]; (!ok || len(old) == 0) && in.Block.Func == home {
-					found[f] = in.Args
-				} else if !ok {
-					found[f] = nil
+				if !walk(a, depth+1) {
+					return false
 				}
 			}
-		case ir.OpCopy:
-			if !in.IR.View && len(in.Args) == 1 {
-				p.funcsOf(in.Args[0], home, callers, found, seen, depth)
+			return true
+		case KResult:
+			in := v.Instr
+			if in == nil || in.IR == nil {
+				return false
+			}
+			switch in.Op {
+			case ir.OpMakeClosure:
+				ids[string(in.IR.Func)] = true
+				return true
+			case ir.OpCopy:
+				if !in.IR.View && len(in.Args) == 1 {
+					return walk(in.Args[0], depth+1)
+				}
+			case ir.OpConvert:
+				// a function of another function type (valuecalls does the same)
+				if len(in.Args) == 1 && len(in.Dsts) == 1 && in.Dsts[0].Class == ir.ClassFunc && in.Args[0].Class == ir.ClassFunc {
+					return walk(in.Args[0], depth+1)
+				}
 			}
 		}
-	case KParam:
-		if v.Func == nil {
-			return
-		}
-		for _, c := range callers[v.Func] {
-			args := callArgv(c)
-			if v.Param < len(args) {
-				p.funcsOf(args[v.Param], home, callers, found, seen, depth+1)
-			}
-		}
+		return false
 	}
+	if !walk(v, 0) {
+		return nil, false
+	}
+	return ids, true
 }
 
 // slimFunc is the function without its blocks and locals.

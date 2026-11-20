@@ -50,6 +50,9 @@ type Guard struct {
 type dispatchSpec struct {
 	recv string
 	all  []string
+	// fnID is set instead of recv for a call of a function value: the flow went
+	// through the function with this ID.
+	fnID string
 }
 
 // sameBase reports whether two types are one type, a pointer to it or not: the
@@ -145,7 +148,7 @@ func (g Guard) key() string {
 func (g Guard) computeKey() string {
 	k := g.condKey() + "|" + strconv.FormatBool(g.Polarity)
 	if g.disp != nil {
-		k += "|dispatch|" + g.disp.recv
+		k += "|dispatch|" + g.disp.recv + g.disp.fnID
 	}
 	if g.Call != nil {
 		k += "|" + posKey(g.Call.pos)
@@ -479,7 +482,7 @@ func (s *state) newCallInfo(cc *callCtx, argv []*sg.Value) *callInfo {
 // when every parameter a guard depends on is given a constant that makes the
 // condition take the other side.
 func (ci *callInfo) feasible(gs []Guard) bool {
-	if !ci.anyConst && !ci.anyTyped {
+	if !ci.anyConst && !ci.anyTyped && !hasFuncGuard(gs) {
 		return true
 	}
 	for _, g := range gs {
@@ -487,7 +490,15 @@ func (ci *callInfo) feasible(gs []Guard) bool {
 			continue
 		}
 		if g.disp != nil {
-			if len(g.Params) == 1 && g.Params[0] < len(ci.argv) && g.disp.excludes(concreteType(ci.argv[g.Params[0]])) {
+			if len(g.Params) != 1 || g.Params[0] >= len(ci.argv) {
+				continue
+			}
+			if g.disp.fnID != "" {
+				// the caller passed a function it made right there, and it is another one
+				if ids, ok := sg.ExactFuncs(ci.argv[g.Params[0]]); ok && !ids[g.disp.fnID] {
+					return false
+				}
+			} else if g.disp.excludes(concreteType(ci.argv[g.Params[0]])) {
 				return false
 			}
 			continue
@@ -499,6 +510,17 @@ func (ci *callInfo) feasible(gs []Guard) bool {
 		}
 	}
 	return true
+}
+
+// hasFuncGuard reports whether one of the guards says which function a flow went through
+// (a call of a function value): the caller may know.
+func hasFuncGuard(gs []Guard) bool {
+	for _, g := range gs {
+		if g.disp != nil && g.disp.fnID != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // instantiate puts the call around the guards that come from the callee. It

@@ -280,6 +280,30 @@ const (
 	CalleeValue CalleeKind = "value"
 )
 
+// ValueCand is a function a call of a function value may reach.
+type ValueCand struct {
+	ID FuncID
+	// Symbol is the name the rules use for it: the symbol of the function if
+	// the program has it, else its ID (a function without a body is known by
+	// the name it is called by).
+	Symbol string
+	// Recv is true when the first argument of the call is the receiver of the
+	// method (a method taken as a value of a function: `(*T).M`).
+	Recv bool
+	// Param is the parameter of the function that holds the call, when the
+	// function reaches the value only through that parameter: the callers
+	// decide which of the candidates is called (a guard follows the flow).
+	// -1 when the function is chosen in the function itself.
+	Param int
+	// Bind is the instruction that made the closure, when it was made in the
+	// function that holds the call and captured values (they are values of that
+	// function): the candidate is called with them.
+	Bind *Binding
+}
+
+// Binding is the place of an instruction in a function.
+type Binding struct{ Block, Instr int }
+
 // Callee is the target of a call.
 type Callee struct {
 	Kind CalleeKind `json:"kind"`
@@ -293,6 +317,11 @@ type Callee struct {
 	// method (a dynamic call always has the receiver first).
 	Recv       bool     `json:"recv,omitempty"`
 	Candidates []FuncID `json:"candidates,omitempty"`
+	// ValueCands are the functions a call of a function value may reach, with
+	// the names the rules use for them. They are not part of the stream: the
+	// core fills them in (internal/valuecalls), so that the sites and the
+	// graph see the same ones.
+	ValueCands []ValueCand `json:"-"`
 	// FFI marks a call of a foreign function (an extern "C" function of Rust): the
 	// call leaves the language, and what happens in it is not code that can be read.
 	FFI bool `json:"ffi,omitempty"`
@@ -393,6 +422,10 @@ type Program struct {
 	FuncTexts []FuncText  `json:"func_texts,omitempty"`
 	// LoadErrors are what the extractor could not read.
 	LoadErrors []LoadError `json:"load_errors,omitempty"`
+
+	// ValuesResolved is set when the calls of function values have their
+	// ValueCands (internal/valuecalls).
+	ValuesResolved bool `json:"-"`
 }
 
 // Kinds of text.

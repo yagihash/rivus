@@ -37,7 +37,7 @@ func TestDartExtractor(t *testing.T) {
 	}
 	checkSampleFlows(t, stream, filepath.Join(extractor, "test", "sample", "rules.yaml"),
 		filepath.Join(extractor, "test", "sample"),
-		[]string{"lib/app.dart", "lib/web.dart", "lib/server.dart", "lib/patterns.dart", "lib/callbacks.dart", "lib/syntax.dart", "lib/grpc_flows.dart", "lib/review_try.dart", "lib/review_ctor.dart", "lib/review_misc.dart", "lib/gen_model.dart", "lib/gen_model.g.dart", "lib/review_issues.dart", "lib/cfg_flows.dart", "lib/.generated/gen_hidden.dart", "lib/src/build/command.dart"}, 94)
+		[]string{"lib/app.dart", "lib/web.dart", "lib/server.dart", "lib/patterns.dart", "lib/callbacks.dart", "lib/syntax.dart", "lib/grpc_flows.dart", "lib/review_try.dart", "lib/review_ctor.dart", "lib/review_misc.dart", "lib/gen_model.dart", "lib/gen_model.g.dart", "lib/review_issues.dart", "lib/cfg_flows.dart", "lib/.generated/gen_hidden.dart", "lib/src/build/command.dart"}, 96)
 
 	// What the extractor could not express is said in the IR, and the sample has nothing of the kind
 	// (REVIEW-2026-11-19: nothing is left out without a trace).
