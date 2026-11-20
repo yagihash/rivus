@@ -27,12 +27,13 @@ The marks are those of `bench/go-curated` (`@source(tag)`, `@sink(tag)`, `@sink(
 | `structs.rs` | a closure kept in a struct, an emitter (`Vec<Box<dyn Fn>>`), `&self` methods given to a helper, a trait with a callback parameter and two implementations |
 | `errors.rs` | `Result`, `?`, `map_err`, `match`, a closure with `?`, a helper that takes a closure returning `Result`, `or_else`, `and_then` |
 | `across.rs` | the helper is in another crate (`shared`) |
+| `parseable.rs` | the shapes of the parseable advisories (`bench/parseable`): `web::Query` to the Location header, `web::Json` to the path of `put_object` (a trait with two implementations), `web::Form` stored in a global `OnceLock<RwLock<HashMap>>` and posted to later (**not found**, `pb_target`, `@miss(silent)`: the SSRF of GHSA-64vg that the benchmark misses too), `web::Path` to `Client::get`. The mark of each source is on the line of its `into_inner` (the place where the value of a `param_type` is first used) |
 | `fnself.rs` | `Fn` / `FnMut` called through `&self`, two callers each, own signatures so as not to change other counts: the acceptance of ADR-047 (draft 2), RUST-13; `@fp` on all, to go |
 | `modelled.rs` | a trait method of the crate that rules.yaml models (no `read_impls`), called through a generic: the model hides the implementation (RUST-14); `@miss` 1, `@fp` 1 |
 
 ## What is not found yet (`@miss`) and what is reported wrongly (`@fp`, `@noisy`)
 
-Every `@miss`, `@fp` and `@noisy` is classified by the cause in [`../MISSES.md`](../MISSES.md). Of the 12 `@miss`, all 12 are `@miss(silent)` (no uncertainty in the function of the source or of the sink; none has a trace); 7 are one cause (`ENV-PTR`: a write through a pointer kept in a closure's environment is not seen), none is fixed by ADR-047. All 16 `@noisy` places (183 flows; the text below says 17) and 12 of the 14 `@fp` are one cause (`XTALK`: the candidates of a closure call are all closures of its type).
+Every `@miss`, `@fp` and `@noisy` is classified by the cause in [`../MISSES.md`](../MISSES.md). Of the 13 `@miss`, all 13 are `@miss(silent)` (no uncertainty in the function of the source or of the sink; none has a trace); 7 are one cause (`ENV-PTR`: a write through a pointer kept in a closure's environment is not seen), none is fixed by ADR-047. All 16 `@noisy` places (183 flows; the text below says 17) and 12 of the 14 `@fp` are one cause (`XTALK`: the candidates of a closure call are all closures of its type).
 
 The first run (2026-11-21, before the callback outputs go into the summaries): 112 flows found, 11 not found,
 42 sinks quiet, 14 reported wrongly, 183 flows of other sources into 17 noisy sinks.

@@ -54,9 +54,11 @@
 | 言語 | `@miss` | `@miss(silent)` | `@miss(<kind>)` | 案 2 で直る(見込み) | 不明 | 直らない | 未特定 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Dart | 34 | 27 | 7 | 11 | 6 | 17 | 0 |
-| Rust | 12 | 12 | 0 | 0 | 0 | 12 | 0 |
-| Go | 1 | 1 | 0 | 0 | 0 | 1 | 0 |
-| 計 | 47 | 40 | 7 | 11 | 6 | 30 | 0 |
+| Rust | 13 | 13 | 0 | 0 | 0 | 13 | 0 |
+| Go | 3 | 2 | 1 | 0 | 0 | 3 | 0 |
+| 計 | 50 | 42 | 8 | 11 | 6 | 33 | 0 |
+
+(Rust 13 と Go 3 は、下の「CVE の形のフィクスチャ」の節の 3 件を足した数。この節より上の表と文は、足す前の数のまま。)
 
 `@miss(<kind>)` の 7 件: Dart の `holder-a`、`holder-b`、`curry`(`unresolved_callee`)、`getter-fn`(`unmodeled_library_call,unresolved_callee`)、`map-entries`(`dynamic_dispatch`、候補なし)、`dyn-arg`、`dyn-body`(`unmodeled_library_call`、上の限界)。残りの 40 件は、source と sink の関数に、痕跡が無い(`silent`)。前の版の「黙った 30、弱い痕跡 7、痕跡あり 7」(44 件。Dart 32、Rust 11)に、RUST-13/14・DART-12 のフィクスチャの 3 件(`dyn-arg`、`dyn-body`、`model-body`)を足した 47 件を、定義に当てはめ直した: 黙った 30 + 弱い 7 + `takes-a/b` 2 + `model-body` 1 = 40(`silent`)、痕跡あり 7 - 2 + `dyn-*` 2 = 7。
 
@@ -318,3 +320,39 @@ finding の `source.position` の関数(`source.func`)が、最初の経路(`pat
 | `paramshare/globalw` | 1 | CORE-B: 経路は `R` の load から始まり、書き手の `W` は `global_var` の候補にしか出ない |
 | `paramshare` の他(ptr、local、distinct、samelocal、str、ptype) | 0 | (ptr / local の finding は、CORE-A で偽だが、経路には source の関数がある) |
 | go-curated / dart-curated / rust-curated | 0 / 0 / 0 | 違反は無い(`@noisy` の 183 件、`@fp` を含む) |
+
+## CVE の形のフィクスチャ(T-5、2026-11-21)
+
+`bench/*/truth*.json` の正解(Gitea v1.26.4 の CVE 3 件、gin-vue-admin、Gogs、dart-pub、parseable)の、source から sink までの流れの**構造**を、小さいフィクスチャにして、curated に足した(コードのコピーではない)。実際のコードは、そのコミット / タグの GitHub のソースを読んだ(scratchpad のコピーは、修正後だった)。重い解析(Gitea 等)の代わりに、**CI(`go test ./...`)で、退行に気づくため**。**コアは変えていない。**
+
+| 正解 | フィクスチャ | 形 | 今の main(HEAD b1782f5) |
+| --- | --- | --- | --- |
+| Gitea GHSA-4p89 `release.go:338` | go-curated `gitea/routers/release.go` → `gitea/service/release.go:47`、`gitea/storage/storage.go:38` | ハンドラーが `ctx.Req.Form` を `range` し、キーを `strings.HasPrefix` で選んで、**ループの中の `append`**(`k[len(prefix):]`)で集める。サービスの `UpdateRelease`(6 引数)に渡し、`db.WithTx` のクロージャ(行の読み出しだけ)のあと、**ループで** `storage.Attachments.Delete(AttachmentRelativePath(uuid))`(インターフェース、実装 2 つ)。実物の v1.26.4 では、この `Delete` は `WithTx` のクロージャの**外**にある | 見つかる(`@source(release_del)`、sink 2 か所) |
+| Gitea GHSA-x77v `oauth.go:311` | `gitea/routers/oauth.go` | `goth.User`(値の構造体)を引数に取る関数が、`gothUser.AvatarURL` を、別の関数に渡して、`http.NewRequestWithContext(ctx, GET, url, nil)` | 見つかる(`oauth_avatar`) |
+| Gitea GHSA-8vmh `openid.go:26` | `gitea/routers/openid.go` → `gitea/openid/openid.go` → `ext/openidgo` | `setting.AppURL + ctx.Req.URL.String()[1:]` を、自前のラッパー(`Verify(fullURL)`)経由で、依存のライブラリの `Verify`(ルールが入口をシンクに指定) | 見つかる(`openid_verify`) |
+| gin-vue-admin GHSA-gv3w | `gva/api/autocode.go` → `gva/service/autocode.go` | `c.Bind(&req)`(`out` の source)、`req.Snake = strings.ToLower(req.PlugName)`、構造体を値で渡し、`filepath.Join` + `fmt.Sprintf` で作ったパスを `os.MkdirAll` / `os.OpenFile` へ | 見つかる(`gva_plug`、sink 2 か所) |
+| Gogs GHSA-qf5v(`PutContents`) | `gogs/routes/repo.go` → `gogs/database/repo.go` | `c.Param("*")` を、オプションの構造体に入れて、メソッド経由で `path.Join(localPath, ...)` → `os.MkdirAll` / `os.WriteFile` | 見つかる(`gogs_put`、sink 2 か所) |
+| Gogs GHSA-mrph(フックの名前) | `gogs/routes/repo.go`(`SettingsGitHooksEdit`) | `c.Param(":name")` を、依存の `Repository.Hook("hooks", name)` に(呼び出しがシンク) | 見つかる(`gogs_hook`) |
+| dart-pub GHSA-q739 | dart-curated `lib/pub_tar.dart` | `while (await reader.moveNext())` のループで `reader.current` の `entry.name`(getter が source)を、`joinAll([destination, ...entry.name.split('/')])` に入れ、`switch (entry.type)` の 4 つの枝で、`ensureDir`、`deleteIfLink`、`createFileFromStream`、`_chmod`、`createSymlink`(9 か所) | 9 か所とも見つかる(`pub_name`) |
+| parseable `oidc.rs:443`(open redirect) | rust-curated `src/parseable.rs`(`logout` → `redirect_to_client`) | `web::Query<..>` の `redirect` を `ResponseBuilder::insert_header(("Location", url))` へ | 見つかる(`pb_redirect`) |
+| parseable `localfs.rs:383` | 同(`post_filter`) | `web::Json<Filter>` の `stream_name` で作ったパスを、`Box<dyn ObjectStorage>` の `put_object`(実装 2 つ)の `fs::write` へ | 見つかる(`pb_store`) |
+| parseable `target.rs:494`(SSRF) | 同(`post_target`、`fire_alert`) | `web::Form<Target>`(parseable では Json。別の source の行を持たせるため型を変えた)を、`OnceLock<RwLock<HashMap>>` に入れ、別の関数が読んで `client.post(&self.endpoint)` | **見つからない(`@miss(silent)`)**。ADR の記録(2/3 検出、これは見逃し)と同じ。痕跡: source / sink の関数には無い。`targets()` に `unmodeled_library_call`(`OnceLock::new`、`get_or_init`)がある(source でも sink でもない関数) |
+| parseable の、クライアントが宛先を選ぶ形の SSRF(未公表のため、場所は伏せる) | 同(`drop_peer`) | `web::Path<String>` を `to_url_string`(`format!`)、`check_liveness` → `Client::get` | 見つかる(`pb_node`) |
+
+### 新しく足した見逃し(3 件)
+
+Gitea の CVE の 3 件(上の表)は**見つかる**。足したときに、**Gitea のほぼ全部のサービスの書き方**の見逃しが見つかった(`db.WithTx(ctx, func(ctx) error { ... })`: 関数が、捕獲した値を使うクロージャを、ヘルパーに渡して、ヘルパーが呼ぶ)。Go でも、Dart の `CAP` と同じ形が起きる:
+
+| タグ | source → sink | 痕跡 | 型 | 備考 |
+| --- | --- | --- | --- | --- |
+| `tx_capture` | gitea/routers/tx.go:17 → 20 | `@miss(dynamic_dispatch)`: sink の関数(`DeleteInTx$1`)に、`ObjectStorage.Delete` の dynamic_dispatch(候補 2)。`db.WithTx` の `f(ctx)` にも dynamic_dispatch(候補は、プログラムのクロージャ 3 つ: `DeleteInTx$1`、`RunInTx$1`、`UpdateRelease$1`) | `CAP`(Go 版) | `db.WithTx(ctx, func(c) error { return storage.Attachments.Delete(uuid) })`。`uuid` は、`ctx.Req.FormValue` から |
+| `tx_capture_plain` | gitea/routers/tx.go:26 → 29 | `@miss(silent)`(`sys.Run` は、インターフェースの後ろではない) | `CAP`(Go 版) | 同じ形で、シンクが直接の関数。**黙った見逃し** |
+| `pb_target` | src/parseable.rs:28 → 173 | `@miss(silent)` | 保存と読み出し(グローバルの `OnceLock<RwLock<HashMap>>`)。ADR の見立てで、私は切り分けていない | 上の表 |
+
+小さい例での確かめ(`mini`): `func C(s string) { withTx(func() error { sink(s); return nil }) }`(`withTx(f) { return f() }`)は、findings 0 件、不確実性 0 件。クロージャが**引数**を取る形(`withTx(func(a string) error { sink(a) }, s)`)と、クロージャを変数に入れて**その場で**呼ぶ形(`f := func() { sink(s) }; f()`)は、見つかる。
+
+### 退行の二分探索の材料(ADR の 3/3)
+
+* ADR の「3/3 検出」の追記は、`e117634`(2026-11-19、`feat: findingに到達可能性…、GiteaのCVEを3/3検出`)。「ループの中の `append`」の修正は、`7e4bd7d`(2026-11-19)。
+* **`e117634` と `7e4bd7d` で、同じ小さい例(上の Gitea 3 件)を流した結果は、今の main と同じ**(3 件とも見つかる。`7e4bd7d` の親では、`release` の流れだけが見つからない: `append` の修正のフィクスチャとして働く)。`tx_capture` / `tx_capture_plain` は、この 2 つのコミットでも見つからない(`mini` も同じ)ので、**これらは、2026-11-19 以降の退行ではない**(最初から、この形は追っていない)。
+* つまり、保存した最近の実行(C-1 の off / on)の **1/3** は、小さい形の退行では説明できない。残る候補は、規模に依存するもの(`depth_limit` が約 1,500 件で、経路が切れる、`-func-timeout` で関数が止まる、収束しない、`-k` や実行の設定が違う)。ADR の 3/3 は、`depth_limit` 1,499 件、収束せずの結果だった。

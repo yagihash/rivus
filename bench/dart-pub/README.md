@@ -32,3 +32,10 @@ match.
 - One advisory is one flow: this is a smoke test of the Dart extractor on a large real program (522 Dart files
   in the project (`--no-deps`); the extractor found and fixed four defects of its own on it: nested collection elements,
   null-aware elements, a named constructor and a method of the same name, and unnamed extensions), not a measure of precision.
+
+## The shape, in `dart-curated`
+
+The loop of `extractTarGz` (the entry name of a reader, joined into a path, and the `switch` on the entry type that gives it
+to five file helpers) is kept as a small fixture in `dart-curated/lib/pub_tar.dart` (9 sinks, all found), so that
+`go test ./...` (with `RIVUS_DART`) notices when the flow is lost without extracting pub. See the last section of
+[`../MISSES.md`](../MISSES.md).

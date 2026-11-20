@@ -6,7 +6,26 @@ ruleset: rivus/bench-dart-curated@1
 sources:
   - symbol: package:curated/lib.dart#source
     labels: [user_input]
+  # the shape of dart-lang/pub (lib/pub_tar.dart): the name of a tar entry
+  - symbol: package:curated/pub_tar.dart#TarEntry.name
+    labels: [user_input]
 
 sinks:
   - symbol: package:curated/lib.dart#sink
     category: test
+  # ... and its file helpers
+  - symbol: package:curated/pub_tar.dart#ensureDir
+    args: [0]
+    category: path_traversal
+  - symbol: package:curated/pub_tar.dart#deleteIfLink
+    args: [0]
+    category: path_traversal
+  - symbol: package:curated/pub_tar.dart#createFileFromStream
+    args: [1]
+    category: path_traversal
+  - symbol: package:curated/pub_tar.dart#chmod
+    args: [1]
+    category: path_traversal
+  - symbol: package:curated/pub_tar.dart#createSymlink
+    args: [1]
+    category: path_traversal

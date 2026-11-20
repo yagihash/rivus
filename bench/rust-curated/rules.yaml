@@ -7,10 +7,37 @@ sources:
   - symbol: curated::source
     labels: [user_input]
 
+  # the shapes of the parseable advisories (src/parseable.rs): the types of the framework
+  - kind: param_type
+    type: "curated::parseable::web::Query"
+    labels: [user_input]
+  - kind: param_type
+    type: "curated::parseable::web::Json"
+    labels: [user_input]
+  - kind: param_type
+    type: "curated::parseable::web::Form"
+    labels: [user_input]
+  - kind: param_type
+    type: "curated::parseable::web::Path"
+    labels: [user_input]
+
 sinks:
   - symbol: curated::sink
     category: test
     accepts: [user_input]
+  # ... the Location header, the clients, the files
+  - symbol: curated::parseable::http::ResponseBuilder::insert_header
+    args: [1]
+    category: open_redirect
+  - symbol: curated::parseable::http::Client::post
+    args: [1]
+    category: ssrf
+  - symbol: curated::parseable::http::Client::get
+    args: [1]
+    category: ssrf
+  - symbol: curated::parseable::fs::write
+    args: [0]
+    category: path_traversal
 
 # a trait of the crate that a model describes (the receiver goes to the result), without `read_impls`:
 # the implementations of the crate are not read (src/modelled.rs)

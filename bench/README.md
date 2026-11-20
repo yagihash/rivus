@@ -17,6 +17,12 @@ Results are recorded in `docs/DECISIONS.md` (ADR-043).
 
 ## Benchmarks that are in this repository
 
+The flows of the ground truths here (Gitea's three CVEs, gin-vue-admin, Gogs, dart-pub, parseable) are
+also kept as **small fixtures of their shape** in the curated projects (the CVE shapes, T-5; see the
+last section of [`MISSES.md`](MISSES.md)), so that `go test ./...` notices when one of these flows is
+lost without running the real project: `go-curated/gitea`, `go-curated/gva`, `go-curated/gogs`,
+`dart-curated/lib/pub_tar.dart`, `rust-curated/src/parseable.rs`.
+
 The targets above are real projects: they are big, slow to analyse, and have no answer key but the
 labels made by hand. For the work on the engine there are also small benchmarks of our own, made
 for each language (Go, Dart, Rust):
@@ -36,8 +42,8 @@ finding is understood). A real project (Gitea) is for a milestone only: it takes
 minutes and 5 to 10 GB. See `go-synth/README.md` for how, and `docs/DECISIONS.md` (ADR-046) for why.
 
 Two more things are held by the three curated tests. Each `@miss` says whether the engine left a
-trace of the flow it lost: `@miss(silent)` (nothing in the functions of the source and the sink; 40 of the
-47: Dart 27, Rust 12, Go 1) or `@miss(<kind>)` (7, all Dart); and the findings whose path has no step in
+trace of the flow it lost: `@miss(silent)` (nothing in the functions of the source and the sink; 42 of the
+50: Dart 27, Rust 13, Go 2) or `@miss(<kind>)` (8: Dart 7, Go 1); and the findings whose path has no step in
 the function of their source are counted against a ceiling (BENCH-2; 0 in the three, 77 of 88 in
 `TestDogfood`, 1 each in three samples of `paramshare`). See `MISSES.md`.
 

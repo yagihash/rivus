@@ -7,6 +7,7 @@ pub mod helpers;
 pub mod iters;
 pub mod modelled;
 pub mod nesting;
+pub mod parseable;
 pub mod pass_closure;
 pub mod structs;
 

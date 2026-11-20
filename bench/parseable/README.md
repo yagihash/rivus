@@ -24,3 +24,10 @@ The 25 sink sites that rivus reported were read by an independent reviewer (`rev
 exist, its name is validated, the header is rewritten by the authentication), 1 is wrong. So "the
 input reaches the sink" holds for 24 of 25, and "this can be exploited" for 5 of 25. One reviewer,
 and some of its claims are marked unverified in the file.
+
+## The shapes, in `rust-curated`
+
+The flows of the four sites (the redirect, the storage path, the alert target, `drop_peer`) are kept as small fixtures in
+`rust-curated/src/parseable.rs`, so that `go test ./...` (with `RIVUS_RUST`) notices when one is lost without
+extracting parseable. Three are found; the alert target (stored in a global map and posted to by another function) is
+`@miss(silent)`, as in the real project. See the last section of [`../MISSES.md`](../MISSES.md).

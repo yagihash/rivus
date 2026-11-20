@@ -17,7 +17,33 @@ sources:
     out: [0]
     labels: [user_input]
 
+  # the shapes of the Gitea CVEs (gitea/): the handlers take the context by its type,
+  # what the OAuth2 library says about the user is a source, as in bench/gitea/rules.yaml
+  - kind: param_type
+    type: "*curated/gitea/context.Context"
+    labels: [user_input]
+  - kind: param_type
+    type: "curated/gitea/goth.User"
+    labels: [user_input]
+
 sinks:
+  - symbol: (curated/gitea/storage.ObjectStorage).Delete
+    args: [0]
+    category: path_traversal
+  - symbol: (curated/gitea/storage.ObjectStorage).Open
+    args: [0]
+    category: path_traversal
+  - symbol: (curated/gitea/storage.ObjectStorage).Save
+    args: [0]
+    category: path_traversal
+  # gogs/git-module: the hook file is read in the dependency, so the call is the sink
+  - symbol: (*curated/ext/gitmodule.Repository).Hook
+    args: [1]
+    category: path_traversal
+  # a dependency: the entry point is the sink
+  - symbol: curated/ext/openidgo.Verify
+    args: [0]
+    category: ssrf
   - symbol: (*curated/orm.DB).Exec
     args: [0]
     category: sql_injection

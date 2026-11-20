@@ -36,9 +36,27 @@ h.DB.Exec("SELECT * FROM " + config.Default.Table)            // @sink(none)
 `Context.HTML`) and sanitizers (`valid.Ident`, `valid.Quote`) of the project. The built-in rules are
 in force as always.
 
+## The shapes of the CVEs of the real benchmarks
+
+`gitea/`, `gva/`, `gogs/` and `ext/` (a dependency whose entry point is the sink) hold, in a small form, the
+flow from the source to the sink of the ground truths in `bench/gitea/truth-v1.26.4.json`,
+`bench/gin-vue-admin/truth.json` and `bench/gogs/truth-*.json`: the structure (the handler, the context, the
+helpers that it goes through, the interface with two implementations, the `append` in a loop, the
+dependency) and not the code. They are the way to notice, in CI, that a flow of Gitea is lost; the real
+project is not in CI. The rules for them are at the end of `rules.yaml`.
+
+| tag | what | found |
+| --- | --- | --- |
+| `release_del` | GHSA-4p89: the keys of the form (`attachment-del-<uuid>`) are collected with `append` in a loop, go to a service with six parameters, and the files are deleted by the UUIDs after a `db.WithTx` closure; `storage.Attachments.Delete` is an interface with two implementations | yes (two sinks: the call and `os.Remove` of the local storage) |
+| `oauth_avatar` | GHSA-x77v: `goth.User` (a struct by value) to `http.NewRequestWithContext` | yes |
+| `openid_verify` | GHSA-8vmh: the URL of the request, through the wrapper, to the library's `Verify` (the entry point is the sink) | yes |
+| `gva_plug` | GHSA-gv3w: `c.Bind(&req)`, a field made of another, the struct by value, `filepath.Join` + `fmt.Sprintf`, `os.MkdirAll` and `os.OpenFile` | yes |
+| `gogs_put`, `gogs_hook` | GHSA-qf5v (`c.Param("*")` into an options struct, `path.Join`, `os.WriteFile`) and the hook name into `Repository.Hook` of a dependency | yes |
+| `tx_capture`, `tx_capture_plain` | the way every Gitea service is written: the work is a closure given to `db.WithTx`, and it uses a captured value | **no** (`@miss(dynamic_dispatch)` and `@miss(silent)`): see [`../MISSES.md`](../MISSES.md) |
+
 ## What is not found yet (`@miss`) and what is reported wrongly (`@fp`)
 
-The one `@miss` (`options`: a closure returned by a function, in a variadic list, loses what it captured; `@miss(silent)`: 1 silent, 0 with a trace) and the five `@fp` (a map that does not tell its keys apart: four; a switch allow-list: one) are classified by the cause in [`../MISSES.md`](../MISSES.md).
+The three `@miss` (`options`: a closure returned by a function, in a variadic list, loses what it captured, `@miss(silent)`; `tx_capture` and `tx_capture_plain`: a closure that captures a value and is called by a helper (`db.WithTx`), one with a trace, `@miss(dynamic_dispatch)`, one `@miss(silent)`) and the five `@fp` (a map that does not tell its keys apart: four; a switch allow-list: one) are classified by the cause in [`../MISSES.md`](../MISSES.md).
 
 The findings whose path has no step in the function of their source are counted too (`offSourcePath`,
 BENCH-2: 0 here; a ceiling, see [`../MISSES.md`](../MISSES.md)).

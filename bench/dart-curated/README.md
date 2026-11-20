@@ -31,6 +31,7 @@ cross-talk of a helper that calls every closure of its type). `rules.yaml`: `sou
 | `classes.dart` | an emitter (callbacks kept in a list), `Lazy`, a builder, default and named callbacks, a getter that returns a function, an extension with a callback |
 | `errors.dart` | `try` / `catch` / `finally`, typed catch, throw from a closure, rethrow, `Future.error`, `onError` |
 | `across.dart` | the helper is in another package (`packages/shared`) |
+| `pub_tar.dart` | the shape of dart-lang/pub's `extractTarGz` (`bench/dart-pub`, GHSA-q739): the name of a tar entry (a getter, the source), read in a `while (await reader.moveNext())` loop, joined into a path, and the `switch` on the type of the entry that gives the path to five file helpers (9 sinks, `pub_name`); all found |
 | `dynamic_calls.dart` | a method of a `dynamic` value (`dart:core#dynamic.invoke`, covered by a model): DART-12, in the last section of [`../MISSES.md`](../MISSES.md); `@miss` 2 (`@miss(unmodeled_library_call)`, by a constructor), `@fp` 1 |
 
 ## What is not found yet (`@miss`) and what is reported wrongly (`@fp`)
