@@ -10,14 +10,15 @@ import (
 )
 
 // TestParamSourceSharedObject records what a `kind: param` source does when
-// several functions get the same object (testdata/go/cases/paramshare). The
-// parameter taints the object it points to, and the taint is written back to
-// the caller (OutParam / OutGlobal); a second function that gets the same
-// object then reads it.
+// several functions get the same object (testdata/go/cases/paramshare). A param
+// source is a statement about the value the function received: the taint stays
+// in the function and is not written back to the caller (ADR-048), so a second
+// function that gets the same object does not read it. Before ADR-048 the
+// parameter tainted the object and the taint was written back (OutParam /
+// OutGlobal), and the finding "runB -> sink in runA" (CORE-A) was false.
 //
-// Every row is the behaviour of today, including what is wrong. A row with
-// wrong set says what: when the engine is fixed the row fails, and the row
-// (and the wrong note) is to be corrected.
+// A row with wrong set says what is still wrong; when it is fixed the row
+// fails, and the row (and the wrong note) is to be corrected.
 func TestParamSourceSharedObject(t *testing.T) {
 	type row struct {
 		pkg string
@@ -29,27 +30,32 @@ func TestParamSourceSharedObject(t *testing.T) {
 		// wrong says what the findings get wrong today.
 		wrong string
 		// off is the number of the findings with no step in the function of their
-		// source (offSourcePath, BENCH-2): a ceiling, today's value. It goes down to 0
-		// when CORE-B is fixed.
+		// source (offSourcePath, BENCH-2): a ceiling, today's value.
 		off int
 	}
 	rows := []row{
-		{pkg: "ptr", want: map[string]bool{"runB": true},
-			wrong: "CORE-A: runB does not reach the sink, runA does; the finding is false"},
-		{pkg: "local", want: map[string]bool{"runB": true},
-			wrong: "CORE-A: the same with a local slice; the finding is false"},
-		{pkg: "global", want: map[string]bool{"runB": false}, off: 1,
-			wrong: "CORE-A: the finding is false; CORE-B: and its path has no step in runB, no global_var uncertainty"},
-		{pkg: "repro", want: map[string]bool{"runA": true, "runB": false}, off: 1,
-			wrong: "CORE-B: 2 real flows, but the path of runB has no step in runB (it goes through runA); CORE-C picks by function order"},
-		// the shapes where it does not happen
+		// runB is the only source and does not reach the sink; runA reaches it but is
+		// not a source: no finding (ADR-048; CORE-A before)
+		{pkg: "ptr", want: map[string]bool{}},
+		{pkg: "local", want: map[string]bool{}},
+		{pkg: "global", want: map[string]bool{}},
+		// 2 real flows. Before ADR-048 the path of runB had no step in runB (it went
+		// through runA, CORE-B); now each source stays in its own function.
+		{pkg: "repro", want: map[string]bool{"runA": true, "runB": true}},
+		// the shapes where it did not happen
 		{pkg: "distinct", want: map[string]bool{"runA": true, "runB": true}},
 		{pkg: "samelocal", want: map[string]bool{"runA": true, "runB": true}},
 		{pkg: "str", want: map[string]bool{"runA": true, "runB": true}},
 		// param_type: HandleC does not reach the sink; the finding of HandleA is
-		// right and HandleC is in other_sources (merged, so not a finding of its own)
-		{pkg: "ptype", want: map[string]bool{"HandleA": true}, others: 1,
-			wrong: "CORE-A: HandleC is listed in other_sources, with a path through HandleA's flow"},
+		// right and HandleC is no longer in other_sources (CORE-A before: a wrong
+		// trace that made a reader believe another entry point also reaches it)
+		{pkg: "ptype", want: map[string]bool{"HandleA": true}},
+		// the router and the handlers: handlerB is a source and only holds the
+		// request, handlerA reaches the sink; no finding for handlerB
+		{pkg: "router", want: map[string]bool{"handlerA": true}},
+		// a source function that only takes the value in: x_direct (the flow from the
+		// parameter itself to a sink in the same function is kept)
+		{pkg: "direct", want: map[string]bool{"runB": true}},
 	}
 	for _, r := range rows {
 		t.Run(r.pkg, func(t *testing.T) {
@@ -125,4 +131,20 @@ func TestGlobalWriterIsOnThePath(t *testing.T) {
 		t.Skip("known miss (CORE-B): the path has no step in W, the writer of the global")
 	}
 	t.Error("the path now has a step in W: make this test fail on a miss")
+}
+
+// TestParamSourceNotWrittenBackIsLost: what ADR-048 gives up. runB is a source
+// that only holds the request; the caller then uses the same request in a sink.
+// KNOWN MISS (silent): the finding "the request runB received reaches
+// os.Create in Main" is not made, because a param source is a statement about
+// the value the function received and is not written back to the caller.
+func TestParamSourceNotWrittenBackIsLost(t *testing.T) {
+	var rep report.Report
+	if err := json.Unmarshal(rivus(t, "analyze", "-rules", "rules.yaml", "./cases/paramshare/lost"), &rep); err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Findings) != 0 {
+		t.Fatalf("the known miss is found now (%d findings): update ADR-048 and make this test fail on a miss", len(rep.Findings))
+	}
+	t.Skip("known miss (ADR-048): the taint of a param source is not written back to the caller")
 }

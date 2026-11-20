@@ -1,7 +1,6 @@
 // Package repro: both functions are sources and both reach the sink: that is
-// 2 real flows. rivus reports 2 findings (the right number), but with a global
-// the path of the second goes through the first (CORE-B/CORE-C: the source
-// function is missing from the path of one of them).
+// 2 real flows, 2 findings, each with a step in its own source function (before
+// ADR-048 the path of the second went through the first: CORE-B/CORE-C).
 package repro
 
 import "os"

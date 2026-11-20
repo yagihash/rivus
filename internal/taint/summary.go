@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/yagihash/rivus/internal/sg"
+	"github.com/yagihash/rivus/internal/sites"
 
 	"github.com/yagihash/rivus/internal/fingerprint"
 )
@@ -77,6 +78,7 @@ func (s *state) summarize() *Summary {
 		}
 		return false
 	})
+	own := s.paramSourceSites()
 	for _, r := range roots {
 		var kind string
 		var idx int
@@ -100,6 +102,13 @@ func (s *state) summarize() *Summary {
 			for _, e := range s.elemsOf(r, p, cm[p]) {
 				if kind == OutParam && p == "" && e == (ParamElem(idx, "")) {
 					continue // the parameter's own taint: no flow
+				}
+				if e.Kind == Real && len(own) > 0 {
+					// A `kind: param` source says something about the value the
+					// function received; it is not written back (ADR-048).
+					if pi, ok := own[e.Origin()]; ok && (kind == OutGlobal || (kind == OutParam && pi == idx)) {
+						continue
+					}
 				}
 				if cm[p][e] == nil {
 					continue // read from the global store, not produced here
@@ -520,4 +529,24 @@ func joinSummaries(old, cur *Summary) *Summary {
 	}
 	out.Sig = out.signature()
 	return out
+}
+
+// paramSourceSites returns the sites of the `kind: param` sources of this
+// function (origin site ID -> parameter index, free variables after the
+// parameters). A param source is a statement about the value the function
+// received: its taint stays in the function, and is not written back to the
+// caller through the parameter it is on, nor published to the global store
+// (ADR-048). It is computed once per analysis.
+func (s *state) paramSourceSites() map[string]int {
+	if s.ownSources != nil {
+		return s.ownSources
+	}
+	m := map[string]int{}
+	for i := 0; i < len(s.fn.Params)+len(s.fn.FreeVars); i++ {
+		for _, site := range s.eng.sites.ByIRParam[sites.IRParam{Func: s.fn.IR.ID, Index: i}] {
+			m[site.ID] = i
+		}
+	}
+	s.ownSources = m
+	return m
 }

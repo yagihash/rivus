@@ -1,8 +1,7 @@
 // Package global: the same as local, with a global (os.Args).
 //
-// KNOWN WRONG (CORE-A): runB -> os.Create is reported; there is no flow.
-// KNOWN WRONG (CORE-B): the path has no step in runB, and the finding says
-// nothing about the global (confidence no_uncertainty_on_path).
+// No finding (ADR-048; CORE-A before: runB -> os.Create was reported, with a
+// path with no step in runB and no word about the global).
 package global
 
 import "os"

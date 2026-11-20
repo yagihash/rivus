@@ -155,6 +155,7 @@ rivus models coverage -yaml -top 20 ./...  # 埋めるためのルールのひ�
 - 値によってサニタイズされるかが変わる関数（`render(s, escape bool)` のようなもの）は、検出結果の `conditional_nodes` に、条件・条件ごとの結果・呼び出し側が渡している式・引数の由来（`provenance`。定数、設定の読み出し、パッケージ変数、公開関数の引数など、辿れなくなった理由つき）を書き出す。どちらが起こるかは判定しない。引数が定数のときは、起こりえない側の流れを捨てる
 - ルールの `origin: builtin | human | llm` で、モデルを決めた主体を区別できる。`-deterministic-only` で `llm` のルールを無視する。LLM 由来のモデルが影響した検出結果は `llm_influenced`、検出結果を消した場所は `suppressions` に残る
 - ルールには `pure: true`（その関数を通って汚染は流れない）と、フレームワークの入口を宣言する `kind: param` が書ける
+- `kind: param` の source は、「その関数が受け取った値についての宣言」。その汚染は関数の中（sink、戻り値）に効くが、呼び元には書き戻さない。呼び元が同じオブジェクトを別の関数に渡して sink に使う流れは、その呼び元を入口にしないと出ない（ADR-048）
 - 出力は構造化 JSON。SARIF は未対応（副次出力として後で作る。GitHub のプライベートリポジトリの Security タブには Code Security が必要）
 
 ### 開発

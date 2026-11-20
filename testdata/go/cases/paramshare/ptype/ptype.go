@@ -1,5 +1,6 @@
 // Package ptype: the param_type version. Two handlers get the same request
-// type; HandleA reaches the sink, HandleC only holds the request.
+// type; HandleA reaches the sink, HandleC only holds the request. One finding
+// (HandleA), with no other_sources (before ADR-048 HandleC was listed there).
 package ptype
 
 import "os"

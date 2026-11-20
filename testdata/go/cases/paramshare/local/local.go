@@ -1,6 +1,6 @@
 // Package local: the same as ptr, with a local slice.
 //
-// KNOWN WRONG (CORE-A): runB -> os.Create is reported; there is no flow.
+// No finding (ADR-048; CORE-A before: runB -> os.Create was reported).
 package local
 
 import "os"

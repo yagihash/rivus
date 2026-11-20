@@ -63,6 +63,22 @@ sources:
     symbol: example.com/cases/cases/paramshare/str.runB
     params: [0]
     labels: [user_input]
+  - kind: param
+    symbol: example.com/cases/cases/paramshare/router.handlerA
+    params: [0]
+    labels: [user_input]
+  - kind: param
+    symbol: example.com/cases/cases/paramshare/router.handlerB
+    params: [0]
+    labels: [user_input]
+  - kind: param
+    symbol: example.com/cases/cases/paramshare/direct.runB
+    params: [0]
+    labels: [user_input]
+  - kind: param
+    symbol: example.com/cases/cases/paramshare/lost.runB
+    params: [0]
+    labels: [user_input]
   - kind: param_type
     type: "*example.com/cases/cases/paramshare/ptype.Req"
     labels: [user_input]

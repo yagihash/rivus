@@ -187,7 +187,10 @@ type state struct {
 	changed bool
 
 	paramRoot map[Root]int // parameter and free variable roots -> index
-	numbering map[*sg.Value]int
+	// ownSources: this function's `kind: param` source sites -> parameter index
+	// (nil until paramSourceSites computes it).
+	ownSources map[string]int
+	numbering  map[*sg.Value]int
 	// numericStops: by source site, where its data stopped at a number or a bool here.
 	numericStops map[string]numericStop
 	stores       []*sg.Instr // the stores of the function (aliasLocs looks for what a cell holds)

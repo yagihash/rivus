@@ -203,5 +203,5 @@ if __name__ == "__main__":
     c.add_argument("before")
     c.add_argument("after")
     a = ap.parse_args()
-    a.extra = shlex.split(a.flags)
+    a.extra = shlex.split(getattr(a, "flags", ""))
     {"run": run, "compare": compare, "snapshot": snapshot, "check": check}[a.cmd](a)

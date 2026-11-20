@@ -1091,3 +1091,26 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
 **ジェネレータの限界:** サイズは、エンジンが終わらせられる範囲に収めた（L でも Gitea の関数数の 1/60）。1 関数あたりの費用が高い形（フィールドの多い構造体、SCC）なので、小さなコードでも、実コードの 10 倍の大きさに相当する時間がかかる。時間の絶対値は Gitea と比べない。見るのは、前後の比。
 
 **追記（Dart と Rust）:** `bench/dart-curated` / `bench/rust-curated`（巨大 SCC の案 2、つまりヘルパーの要約にコールバックの出力を持たせる変更の前の基準）と、`bench/dart-synth` / `bench/rust-synth`（ジェネレータの計画は共通の `bench/synthplan`、測定は `bench/go-synth/measure.py -lang dart|rust`。extractor の実行は 1 回で、測るのは `rivus analyze -ir` だけ）を足した。検査は `TestCuratedDart` / `TestCuratedRust`（`RIVUS_DART` / `RIVUS_RUST` が無ければ skip。`checkCurated` の流用）。注釈に、Rust でクロージャの呼び先が「型が合う全クロージャ」になる過検出を数えるための `@noisy(N)`（その sink に他の source の N 件が届く。数が変わると落ちる）を足した。基準（2026-11-21）: dart-curated は検出 74、`@miss` 32、静か 39、`@fp` 4（捕獲した変数を読み書きするクロージャをヘルパーが呼ぶ形、返されたクロージャ、オブジェクトに持たれたコールバック、エラーと Future が `@miss`）。rust-curated は検出 112、`@miss` 11、静か 42、`@fp` 14、`@noisy` 183 件（17 か所。1 つのヘルパーの 2 つの呼び元が互いの sink に届く）。synth の S は、Dart が 0.13 秒・21 MB・最大 SCC 4、Rust が 0.35 秒・81 MB・最大 SCC 153（M は 1.3 秒・418 MB・SCC 508、L は 13 秒・1.3 GB・SCC 1030）。Dart は、捕獲を持つクロージャの流れが落ちるので、SCC も findings も小さい（案 2 の後に増えるはずで、それが比べる点）。
+
+## ADR-048: `kind: param` の source の汚染を、呼び元へ書き戻さない（C-1）
+
+**背景:** `kind: param`（`param_type`、`marker`、`extends` も同じ）の source は、そのパラメータが指すオブジェクトを汚染する。この汚染は、要約の `OutParam`（そのパラメータ）と `OutGlobal`（グローバルへの書き込み。グローバルのストアにも公開される）として、呼び元へ書き戻っていた。呼び元が同じオブジェクト（`main` が `os.Args[2:]` を、複数の `run*` に渡す形、ルータが同じリクエストを複数のハンドラに渡す形）を別の関数に渡すと、「source = runB のパラメータ、sink = runA の中」という finding が出た。runB が sink に届かなくても、である（`testdata/go/cases/paramshare`、`cmd/rivus/paramshare_test.go` の CORE-A）。
+
+**決めたこと:** **`kind: param` の source は、その関数が受け取った値についての宣言**として読む。その汚染は、関数の中（そのパラメータからたどれる値、sink、戻り値）には効くが、次のものとしては外へ出さない。
+1. 要約の出力: `Real` の要素で、その関数自身の param source のサイト（`state.paramSourceSites`: パラメータの番号とサイト ID）が起点のものを、`OutParam`（同じパラメータ）と `OutGlobal` から外す（`summarize`）。
+2. グローバルのストア: `compute` が、その関数自身の param source の要素を `pendingGlobals` に書かない。
+
+止めるのは**これだけ**: ほかのパラメータへの書き込み（`OutParam` の別の番号）、戻り値（`OutResult`）、例外、通常の source（`call_result` など）の書き戻し、param source でない要素のグローバルへの書き込みは、そのまま。パラメータ自身から、その関数の中で sink に届く流れ（`direct`）は残る。複数の source が同じオブジェクトを受け取って、それぞれが sink に届く形（`repro`）は、finding の数が変わらない。
+
+**理由（実測）:**
+- rivus 自身（dogfood のルール）: finding 88 → 39（8 つの入口 × 11 の sink の組み合わせのうち、source の関数に呼び出しで届かない、偽の組み合わせ 43 件（キーで数えて）が消えた。残りの 39 件は、すべて経路に source の関数を含む）。経路に source の関数が出ない finding は 77 → 0。`runExtract` は、規則の sink のどれにも届かない（11 件がすべて偽だった）。再解析は 10,155 → 8,168 回（パス数は 2 のまま）。
+- `other_sources` の誤った痕跡: `param_type` で、同じリクエスト型を受け取るハンドラ 2 つ + 共通の補助関数に sink（`ptype`）で、届かないハンドラが、届くハンドラの finding の `other_sources` に入っていた。finding ごとに判定する LLM は `other_sources_count` を見て「ほかの入口からも届く」と読むので、誤った痕跡だった。直った（`other_sources_count` が 0）。
+- go-synth S / M、Dart・Rust のサンプル、Dart の pub と serverpod、3 つの curated（`@miss` / `@fp` / `@noisy` の数）は、finding が同一。Rust の parseable は 94 件のまま、1 件の source が入れ替わった（書き戻しの偽の経由先だった `get_user_from_request` から、実際に tenant を読む `get_tenant_id_from_request` へ）。
+- Gitea（`./...`、実験のとき。再実行していない）: 収束（7 パス）、**最大の SCC は 3370 のまま**（書き戻しは SCC を作っていない。案 2 の領分）。finding は 37 → 41（off にだけある 8 件はすべて、経路が source の関数から始まらない。on にだけある 12 件のうち 5 件は、経路が source の関数から始まる）。書き戻しは、収束の問題としては部分的で、精度の問題が主。
+
+**失うもの:** `func runB(r *Req){ _ = r }` が source で、呼び元が `runB(r); os.Create(r.Path)` と書くとき、「runB が受け取った値が、呼び元の sink に届く」流れは、**出なくなる**（`testdata/go/cases/paramshare/lost`、`TestParamSourceNotWrittenBackIsLost`。既知の見逃し。痕跡もない）。source が受け取った値は、その関数の中で使われたときだけ追う。呼び元の側でも追いたいなら、呼び元を入口にする（`main` や、リクエストを作る関数に、`kind: param` や `call_result` の source を宣言する）。
+
+**限界:**
+- 別のオブジェクト経由の書き戻し（source のパラメータが指す値が、ほかのパラメータやグローバルが指すオブジェクトに入れられて、それが書き戻る）は、止めていない。止めるのは、param source のサイトが起点の要素が、そのパラメータ自身（`OutParam`）と `OutGlobal` に出る場合だけ。
+- Gitea の on / off の差は、実験の保存された出力の読みで、呼び出しの到達の確認ではない。
+- 巨大 SCC（Gitea の 3370）は、この変更では小さくならない。
