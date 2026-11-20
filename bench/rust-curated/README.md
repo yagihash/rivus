@@ -31,6 +31,20 @@ The marks are those of `bench/go-curated` (`@source(tag)`, `@sink(tag)`, `@sink(
 | `fnself.rs` | `Fn` / `FnMut` called through `&self`, two callers each, own signatures so as not to change other counts: the acceptance of ADR-047 (draft 2), RUST-13; `@fp` on all, to go |
 | `modelled.rs` | a trait method of the crate that rules.yaml models (no `read_impls`), called through a generic: the model hides the implementation (RUST-14); `@miss` 1, `@fp` 1 |
 
+## Closures that capture, and where they are called (`src/callbacks.rs`)
+
+A closure that captures is not a `make_closure` in Rust: it is a struct of its environment (an `alloc`
+of the type `{closure@file:line:col}` and a `field_store` for each captured value), and the closure is
+a function of that struct, called by `Fn::call` (the candidates are the closures with that parameter
+list). So the shape of C-7 (`docs/DESIGN-capture.md`: the captured values are applied where the closure is made) does
+not apply to Rust as it is. `callbacks.rs` has four forms that the engine finds now through the
+candidates of `Fn::call`: a closure returned by a function, a closure in a closure, a closure that is
+made and not called (quiet), a closure that uses its own parameter (quiet). Each has two parameters of
+types of its own, as in `fnself.rs`: a closure with the parameters that the others have (a closure with none,
+as the one of `thread::spawn`) would be a candidate of their calls, and would change their `@noisy` counts.
+The writes to a captured variable (`capture.rs`, `@miss(silent)`) are not found because of ENV-PTR, and
+applying the closure where it is made would not change that.
+
 ## What is not found yet (`@miss`) and what is reported wrongly (`@fp`, `@noisy`)
 
 Every `@miss`, `@fp` and `@noisy` is classified by the cause in [`../MISSES.md`](../MISSES.md). Of the 13 `@miss`, all 13 are `@miss(silent)` (no uncertainty in the function of the source or of the sink; none has a trace); 7 are one cause (`ENV-PTR`: a write through a pointer kept in a closure's environment is not seen), none is fixed by ADR-047. All 16 `@noisy` places (183 flows; the text below says 17) and 12 of the 14 `@fp` are one cause (`XTALK`: the candidates of a closure call are all closures of its type).

@@ -50,5 +50,6 @@ func Register(e *web.Engine, h *api.Handlers, b *api.Base, cache *api.Cache) {
 	tools.GET("/builder", h.Builder)
 	tools.GET("/parsed", h.Parsed)
 	tools.GET("/fixed", h.Fixed)
+	tools.GET("/captures", h.Captures)
 	(&api.Admin{Base: *b}).Run(nil)
 }

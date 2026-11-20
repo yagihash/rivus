@@ -54,6 +54,21 @@ project is not in CI. The rules for them are at the end of `rules.yaml`.
 | `gogs_put`, `gogs_hook` | GHSA-qf5v (`c.Param("*")` into an options struct, `path.Join`, `os.WriteFile`) and the hook name into `Repository.Hook` of a dependency | yes |
 | `tx_capture`, `tx_capture_plain` | the way every Gitea service is written: the work is a closure given to `db.WithTx`, and it uses a captured value | **no** (`@miss(dynamic_dispatch)` and `@miss(silent)`): see [`../MISSES.md`](../MISSES.md) |
 
+## The values a closure captures (`api/capture.go`)
+
+A closure that captures a value and is called by a helper is the form that every Gitea service has
+(`tx_capture`, above). `api/capture.go` has the forms around it, so that a change of the engine (C-7:
+the captured values are applied where the closure is made, `docs/DESIGN-capture.md`) is checked from
+both sides: the helper with two callers, each with its own closure (`cap-run-a`, `cap-run-b`: the value
+of one does not reach the closure of the other, `@nosink`); a write to a captured variable (`cap-write`);
+a closure in a closure (`cap-nested`); a closure made in a loop (`cap-loop`); two closures of one call
+(`cap-two-a`); a closure that a function returns (`cap-returned`). Seven are `@miss(silent)` now. The
+forms that are found now are kept as the control: the closure that gets its value by its argument, the
+closure called where it is made, `go`, `defer`. The closure that uses its own parameter, not what it
+captured (`cap-param`), and the closure that writes a constant (`cap-write-const`) are `@sink(none)`.
+`cap-never` is a closure that is made and not called: quiet now, and the one that C-7 would report (a
+limit of that rule: the line is to become `@fp`, or the rule is changed).
+
 ## What is not found yet (`@miss`) and what is reported wrongly (`@fp`)
 
 The three `@miss` (`options`: a closure returned by a function, in a variadic list, loses what it captured, `@miss(silent)`; `tx_capture` and `tx_capture_plain`: a closure that captures a value and is called by a helper (`db.WithTx`), one with a trace, `@miss(dynamic_dispatch)`, one `@miss(silent)`) and the five `@fp` (a map that does not tell its keys apart: four; a switch allow-list: one) are classified by the cause in [`../MISSES.md`](../MISSES.md).

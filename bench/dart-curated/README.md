@@ -28,6 +28,7 @@ cross-talk of a helper that calls every closure of its type). `rules.yaml`: `sou
 | `futures.dart` | `Future.then` chains, `catchError`, `whenComplete`, `async` closures, `Stream.listen` / `map` |
 | `nesting.dart` | closures in closures, called twice, taking callbacks, generic helpers, `Function`, typedef, currying, composition, local recursion |
 | `tearoff.dart` | tear-offs of methods, static methods, top-level functions, constructors, the sink; function-typed fields; tables; `this.method` as the callback |
+| `callbacks.dart` | a closure that captures a value and is given to a function that calls it later: the widget callback (`Button(onPressed: ...)`, two, not mixed), `Timer.run`, `Timer.periodic`, `scheduleMicrotask`, `Future.delayed`, a write to a captured variable by a timer; the closure that uses its own parameter; a closure that is made and not called. Seven are `@miss` now (the capture is applied where the closure is made, C-7, `docs/DESIGN-capture.md`); the last two are quiet, and the last is the one C-7 would report |
 | `classes.dart` | an emitter (callbacks kept in a list), `Lazy`, a builder, default and named callbacks, a getter that returns a function, an extension with a callback |
 | `errors.dart` | `try` / `catch` / `finally`, typed catch, throw from a closure, rethrow, `Future.error`, `onError` |
 | `across.dart` | the helper is in another package (`packages/shared`) |

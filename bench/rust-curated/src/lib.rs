@@ -1,4 +1,5 @@
 pub mod across;
+pub mod callbacks;
 pub mod capture;
 pub mod errors;
 pub mod fnself;
