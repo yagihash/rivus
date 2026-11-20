@@ -53,6 +53,14 @@ func TestParamSourceSharedObject(t *testing.T) {
 		// the router and the handlers: handlerB is a source and only holds the
 		// request, handlerA reaches the sink; no finding for handlerB
 		{pkg: "router", want: map[string]bool{"handlerA": true}},
+		// a write the function makes itself is a flow, to a global (also through a
+		// helper, and a channel) and to the state behind a parameter: 1 finding each
+		// (CORE-B: the path of a flow through a global has no step in the function that
+		// wrote it, today as before ADR-048)
+		{pkg: "gwrite", want: map[string]bool{"handler": false}, off: 1},
+		{pkg: "gwritehelper", want: map[string]bool{"handler": false}, off: 1},
+		{pkg: "gqueue", want: map[string]bool{"handler": false}, off: 1},
+		{pkg: "ctxstate", want: map[string]bool{"handler": true}},
 		// a source function that only takes the value in: x_direct (the flow from the
 		// parameter itself to a sink in the same function is kept)
 		{pkg: "direct", want: map[string]bool{"runB": true}},

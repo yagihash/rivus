@@ -730,7 +730,6 @@ func (e *Engine) compute(fn *sg.Func) *fnResult {
 	// level; whether it adds anything is read from the global state, which
 	// does not change while a level runs.
 	r := &fnResult{s: s, sum: sum, took: took}
-	ownSites := s.paramSourceSites()
 	for root, cm := range s.cells {
 		g := root.V
 		if g == nil || g.Kind != sg.KGlobal {
@@ -744,9 +743,6 @@ func (e *Engine) compute(fn *sg.Func) *fnResult {
 				}
 				if set[el] == nil {
 					continue // read from the global state, not produced here
-				}
-				if _, ok := ownSites[el.Origin()]; ok {
-					continue // the function's own param source is not published (ADR-048)
 				}
 				r.writes = append(r.writes, globalWrite{g, path, el})
 				if !e.globals.has(g, path, el) {

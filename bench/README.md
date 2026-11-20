@@ -44,8 +44,8 @@ minutes and 5 to 10 GB. See `go-synth/README.md` for how, and `docs/DECISIONS.md
 Two more things are held by the three curated tests. Each `@miss` says whether the engine left a
 trace of the flow it lost: `@miss(silent)` (nothing in the functions of the source and the sink; 42 of the
 50: Dart 27, Rust 13, Go 2) or `@miss(<kind>)` (8: Dart 7, Go 1); and the findings whose path has no step in
-the function of their source are counted against a ceiling (BENCH-2; 0 in the three, 77 of 88 in
-`TestDogfood`, 1 each in three samples of `paramshare`). See `MISSES.md`.
+the function of their source are counted against a ceiling (BENCH-2; 0 in the three, 0 of 39 in
+`TestDogfood`, 1 each in four samples of `paramshare` (the flows through a global: CORE-B)). See `MISSES.md`.
 
 ```sh
 export RIVUS_DART="mise exec dart@3.13.6 -- dart" RIVUS_RUST=$PWD/extractor/rust/target/debug/rivus-rust

@@ -79,6 +79,22 @@ sources:
     symbol: example.com/cases/cases/paramshare/lost.runB
     params: [0]
     labels: [user_input]
+  - kind: param
+    symbol: example.com/cases/cases/paramshare/gwrite.handler
+    params: [0]
+    labels: [user_input]
+  - kind: param
+    symbol: example.com/cases/cases/paramshare/gwritehelper.handler
+    params: [0]
+    labels: [user_input]
+  - kind: param
+    symbol: example.com/cases/cases/paramshare/gqueue.handler
+    params: [0]
+    labels: [user_input]
+  - kind: param
+    symbol: example.com/cases/cases/paramshare/ctxstate.handler
+    params: [0]
+    labels: [user_input]
   - kind: param_type
     type: "*example.com/cases/cases/paramshare/ptype.Req"
     labels: [user_input]

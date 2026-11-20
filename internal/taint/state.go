@@ -97,6 +97,12 @@ func (w *why) guards() []Guard {
 	return w.rare.guards
 }
 
+// isParamSeed reports whether the hop is the seed of a `kind: param` source (put
+// into the cell of the parameter by seedParam), not something the function did.
+func (w *why) isParamSeed() bool {
+	return w != nil && w.from == nil && strings.HasPrefix(w.desc, "source: parameter ")
+}
+
 func (w *why) unguarded() bool { return w.rare != nil && w.rare.unguarded }
 
 func (w *why) calleeGuards() []Guard {
@@ -187,10 +193,7 @@ type state struct {
 	changed bool
 
 	paramRoot map[Root]int // parameter and free variable roots -> index
-	// ownSources: this function's `kind: param` source sites -> parameter index
-	// (nil until paramSourceSites computes it).
-	ownSources map[string]int
-	numbering  map[*sg.Value]int
+	numbering map[*sg.Value]int
 	// numericStops: by source site, where its data stopped at a number or a bool here.
 	numericStops map[string]numericStop
 	stores       []*sg.Instr // the stores of the function (aliasLocs looks for what a cell holds)
