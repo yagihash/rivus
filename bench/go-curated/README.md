@@ -62,11 +62,11 @@ the captured values are applied where the closure is made, `docs/DESIGN-capture.
 both sides: the helper with two callers, each with its own closure (`cap-run-a`, `cap-run-b`: the value
 of one does not reach the closure of the other, `@nosink`); a write to a captured variable (`cap-write`);
 a closure in a closure (`cap-nested`); a closure made in a loop (`cap-loop`); two closures of one call
-(`cap-two-a`); a closure that a function returns (`cap-returned`). Seven are `@miss(silent)` now. The
+(`cap-two-a`); a closure that a function returns (`cap-returned`). Ten are `@miss(silent)` now (the ones above, and `cap-late`: the variable is tainted after the closure is made; `cap-handler`: the parameter of the closure is a source and it is written into a captured variable, the shape of C-1 (ADR-048) and C-7 together; `cap-funccall`: the closure calls a captured function with the caller's value, PARAM-CALL, C-7 does not fix it). The
 forms that are found now are kept as the control: the closure that gets its value by its argument, the
 closure called where it is made, `go`, `defer`. The closure that uses its own parameter, not what it
 captured (`cap-param`), and the closure that writes a constant (`cap-write-const`) are `@sink(none)`.
-`cap-never` is a closure that is made and not called: quiet now, and the one that C-7 would report (a
+`cap-seen` is a closure that is called where it is made and also given to a helper (found, one finding); `cap-sanitized` cleans the captured value in the closure (`@sink(none)`). `cap-never` is a closure that is made and not called: quiet now, and the one that C-7 would report (a
 limit of that rule: the line is to become `@fp`, or the rule is changed).
 
 ## What is not found yet (`@miss`) and what is reported wrongly (`@fp`)

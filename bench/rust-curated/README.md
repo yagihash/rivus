@@ -42,7 +42,7 @@ candidates of `Fn::call`: a closure returned by a function, a closure in a closu
 made and not called (quiet), a closure that uses its own parameter (quiet). Each has two parameters of
 types of its own, as in `fnself.rs`: a closure with the parameters that the others have (a closure with none,
 as the one of `thread::spawn`) would be a candidate of their calls, and would change their `@noisy` counts.
-The writes to a captured variable (`capture.rs`, `@miss(silent)`) are not found because of ENV-PTR, and
+Three forms where the closure is only given away are **not found** now (`@miss`, so the reading side is not found everywhere): `thread::spawn` (`@miss(unmodeled_library_call)`), a `Box<dyn Fn>` in a field that another function calls, `Vec::retain`. The closure of `spawn` and of `retain` is a candidate of the calls of closures with the same parameters, so other sources reach their sinks (`@noisy`). The writes to a captured variable (`capture.rs`, `@miss(silent)`) are not found because of ENV-PTR, and
 applying the closure where it is made would not change that.
 
 ## What is not found yet (`@miss`) and what is reported wrongly (`@fp`, `@noisy`)

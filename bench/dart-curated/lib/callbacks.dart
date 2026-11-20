@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'helpers.dart';
 import 'lib.dart';
 
 // A closure that captures a value and is given to a function that calls it later: the widget
@@ -65,4 +66,28 @@ void never_called() {
   final t = source(); // @source(never)
   final f = () => sink(t); // @sink(none)
   sink(t); // @sink(never)
+}
+
+// the variable is captured by reference: it is tainted after the closure is made, before the helper calls it
+void late_taint() {
+  String? x;
+  final f = () => sink(x); // @sink(late)
+  x = source(); // @source(late) @miss(silent)
+  run(f);
+}
+
+// the closure is called where it is made, and also given to a helper: one finding
+void seen_and_passed() {
+  final a = source(); // @source(seen)
+  final f = () => sink(a); // @sink(seen)
+  f();
+  run(f);
+}
+
+// a captured function that the closure calls with a value of the caller: capture.dart has `relay-c-a` and
+// `relay-c-b` (the capture of a closure that is called by a helper, PARAM-CALL); the same in the callback
+void captured_fn() {
+  final a = source(); // @source(cap-fn) @miss(silent)
+  void g(String s) => sink(s); // @sink(cap-fn)
+  run(() => g(a));
 }

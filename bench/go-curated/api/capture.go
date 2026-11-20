@@ -2,6 +2,7 @@ package api
 
 import (
 	"curated/sys"
+	"curated/valid"
 	"curated/web"
 )
 
@@ -44,6 +45,11 @@ func (h *Handlers) Captures(c *web.Context) {
 	capTwo(c)
 	capNever(c)
 	capReturned(c)
+	capLate(c)
+	capHandler(c, &web.RouterGroup{})
+	capSeenAndPassed(c)
+	capFuncCall(c)
+	capSanitized(c)
 }
 
 // capRunA and capRunB: one helper, two callers, each with its own captured value. Neither value goes
@@ -192,4 +198,62 @@ func capReturned(c *web.Context) {
 	a := c.Query("returned") // @source(cap-returned) @miss(silent)
 	f := mkRun(a)
 	f()
+}
+
+// capLate: the variable is captured by reference: it is tainted after the closure is made, before the
+// helper calls it.
+func capLate(c *web.Context) {
+	var x string
+	f := func() {
+		sys.Run(x) // @sink(cap-late)
+	}
+	x = c.Query("late") // @source(cap-late) @miss(silent)
+	runCb(f)
+}
+
+// capHandler: the parameter of the closure is a source (the shape of a registered handler), and the
+// closure writes it into a variable it captured; the variable is used somewhere else. The write is
+// "what the function did", and it is not the taint of a source written back to the callers (C-1,
+// ADR-048).
+func capHandler(c *web.Context, g *web.RouterGroup) {
+	var last string
+	g.GET("/x", func(c *web.Context) {
+		last = c.Query("handler") // @source(cap-handler) @miss(silent)
+	})
+	runCb(func() {
+		sys.Run(last) // @sink(cap-handler)
+	})
+}
+
+// capSeenAndPassed: the closure is called where it is made, and also given to a helper. The call that is
+// seen finds it; it is one finding.
+func capSeenAndPassed(c *web.Context) {
+	a := c.Query("seen") // @source(cap-seen)
+	f := func() {
+		sys.Run(a) // @sink(cap-seen)
+	}
+	f()
+	runCb(f)
+}
+
+// capFuncCall: the captured value is a function, and the closure calls it with a value of the
+// caller (PARAM-CALL: the call of a function that the closure captured is not resolved).
+func capFuncCall(c *web.Context) {
+	a := c.Query("funccall") // @source(cap-funccall) @miss(silent)
+	g := func(s string) {
+		sys.Run(s) // @sink(cap-funccall)
+	}
+	runCb(func() {
+		g(a)
+	})
+}
+
+// capSanitized: the closure cleans what it captured before the sink; and the sink that the closure
+// does not reach is the one that has the flow.
+func capSanitized(c *web.Context) {
+	a := c.Query("sanitized") // @source(cap-sanitized)
+	runCb(func() {
+		sys.Run(valid.Quote(a)) // @sink(none)
+	})
+	sys.Run(a) // @sink(cap-sanitized)
 }

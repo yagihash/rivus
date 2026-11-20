@@ -39,7 +39,7 @@ func main() {
 | sink への到達(`sum.Sinks`) | **当てる** | 捕獲した値の汚染が sink に届けば finding。捕獲した値が、作った関数のパラメータなら、記号的な到達(`noteSinkReach`)になり、呼び元に伝わる(ヘルパーを返すクロージャ `mkRun(s)` が効く) |
 | 捕獲した変数への書き込み(`OutParam`、`argv[o.Index]` = 捕獲した値の指す先) | **当てる** | 捕獲した変数のセル(`out = a`)。`Go` の `var out string` と、Dart / Rust の変数の書き込み |
 | グローバルへの書き込み(`OutGlobal`) | **当てる** | グローバルのセル |
-| throw(`OutThrow`) | **当てない(最初の版)** | throw は、呼ばれたところから抜ける。`make_closure` の場所に流すと、作った関数が throw することになり、過大。`try { run(() => throw x) } catch` は、まだ見逃す。決める点(下の「決めてほしいこと」) |
+| throw(`OutThrow`) | **当てない。ただし黙って落とさない** | throw は、呼ばれたところから抜ける。`make_closure` の場所に流すと、作った関数が throw することになり、過大。`try { run(() => throw x) } catch` は、見逃す。クロージャの要約に、**捕獲の値に依る throw の出力があるとき**は、(4)の不確実性を出す条件に含める(「当てなかった」ことが残る。detail に、throw は当てていないと書く) |
 | 戻り値(`OutResult`) | 当てない | 下の(2) |
 
 実装は、合成した `callCtx`(`in` は `make_closure` の命令、`recv=nil`、`args` は Params と同じ数の `KUndef`、`roots=nil`)と `applySummary(cc, closureFn, mc.Args, notes, nil)`。`applySummary` の `argv = cc.argv() + bindings`(Params の後ろに FreeVars)は、そのまま使える。**`summary.go` の中は変えなくてよい**(`len(bindings) == 0` のときだけ不足を `KUndef` で埋める分岐は、束縛を渡すので通らない。Params を呼び出し側で埋めるので、不一致のエラーにならない)。
@@ -50,30 +50,28 @@ func main() {
 * **引数に依る流れ**: クロージャの引数(Params)から sink への流れ(`runArg(a, func(s){ sink(s) })`)は、呼ぶ側の値(ヘルパーが渡す)に依る。`KUndef` なので何も運ばない。これは、今のとおり、呼ぶ側(ヘルパー内の `f(x)` の候補)で見つかる。**C-7 は、捕獲した値だけに依る流れを足す。引数に依る流れは足さない**(これは案 2 = ADR-047 の仕事)。
 * 捕獲した値と引数の**両方に依る**流れ(`sink(x + a)`): 要素は 1 起点ずつなので、`a` の分は C-7 で、`x` の分は呼ぶ側で、それぞれ見つかる。
 
-### (3) 呼ぶところが見えているクロージャと、二重になったとき
+### (3) 飛ばす条件と、二重になったとき
 
-「見えている」= 作った関数 `home` の中で、**束縛つきで呼ばれる**: その場で呼ぶ(`go func(){}()`、`defer`、`func(){}()`、`f := func(){…}; f()`: `Instr.Bindings`、`sg/build.go:84-90`)、または、`home` の中の関数値の呼び出しの候補として解決済み(`CandidateBindings`、`resolveValueCalls`)。
+**飛ばす条件: クロージャの値の使われ方が、作った関数の中での直接の呼び出し(その場で呼ぶ、`go`、`defer`)だけのとき。** それ以外の使い方(引数に渡す、代入、フィールドやグローバルに入れる、return、φ)が **1 つでも**あれば、当てる。作った関数の SSA の使用箇所(`make_closure` の結果の `Value` の使われ方)だけで決まり、**ほかの解析の結果(`valuecalls` の候補、上限 8、解決のされ方)に依らない**。
 
-**案: 見えているクロージャは、`make_closure` で当てない**(最初の版)。理由: 今の finding の経路・数が、**1 件も変わらない**ことを検証の基準にできる(増えるのは、今まで見えなかったクロージャの分だけ)。見えているクロージャは、今でも見つかっている。
+「候補として解決済み」は、飛ばす理由にならない。今の見逃し(CAP)は、まさに、**候補としては解決済みで、捕獲の値が付いていない**形(`run(func() { sink(a) })`: `run` の中の `f()` の候補に、このクロージャは入っている)。候補の有無で決めると、候補の上限や解決のされ方で、当てたり当てなかったりする。
+前の版の `sg.Instr.Seen`(「束縛つきで呼ばれた」印)は、**取り下げ**。使用箇所で決める。
 
-* 実装: `sg` の `resolveValueCalls` と、静的な束縛の設定(`build.go:84-90`)で、その `make_closure` の命令に、印(`Instr.Seen bool`、`sg` のフィールドを 1 つ足す)を付ける。taint は、印のある命令を飛ばす。
-* 取りこぼし: 「見えている呼び出しが 1 つあり、同じクロージャを別の関数にも渡す」(`f := func(){…}; f(); other(f)`)は、`other` の中の呼び出しが見えない。印があるので、当てない(今と同じ、見逃す)。まれ。印を「脱出しない」(使われ方が、呼び出しのみ)に絞れば当てるが、最初の版は取らない。
-
-**二重になる場合**(全部のクロージャに当てる案、または、上の取りこぼしを直す版): finding は `(origin, sink)` で 1 つにまとまる(`state.recordFinding` の `findingKey{origin, sink}`、`engine.collect` の `merged[k]`)。経路は、**ステップ数の少ないほう**が代表になる(`rf.steps.len() < cur.steps.len()` が `<` なので、同じ長さなら、最初に記録したほうが残る)。`make_closure` の経路は、ヘルパーを通らないので、たいてい短く、**こちらが代表になる**。代表が変わると、今ある finding の経路が変わる(finding の有無は変わらない)。`mergeParamSources` は、source が param の finding だけの、別の併合(関数をまたぐ source の同一視)で、`make_closure` の経路には関係しない。**最初の版で、見えているクロージャを飛ばす理由が、これ**。
+* 実装: taint の `captured` が、`make_closure` の結果の使用箇所を見る。`in.Dsts[0]` の `Value` から、それを引数(`Args`)に持つ命令を、コピーと φ を通って辿り、すべてが「呼び出しの callee の位置(`Callee.Kind == CalleeValue` で、関数値が `Args[0]`、または、`Static` / `Bindings` が自分)」か、`go` / `defer` のフラグつきの呼び出しなら、飛ばす。1 つでも、引数の位置・`store`・`field_store`・`global_store`・return・φ(その先が上の条件を満たさない)なら、当てる。使用箇所の表を `sg` の構築時に作る(`Value` ごとの使用の一覧が既にあるなら、それを使う。無ければ、`sg` に作る。**コアの変更**)。
+* 検証の基準: **今の finding の経路が 1 件も変わらない**。その場で呼ぶだけのクロージャは、当てないので、経路が変わらない。引数で値を渡す形(`runArg(a, func(s){…})`)は、捕獲に依る効果が無ければ、当てても何も足さない。**変わりうるのは、「捕獲もあり、候補としても束縛つきで解決されている」形**(`home` の中の関数値の呼び出しの候補になっていて、かつ、別の使い方もある)。その件数を、前後の差分で数える。
+* `cap-seen`(その場で呼び、かつ、渡す): 渡す使い方があるので、当てる。finding は `(origin, sink)` で 1 件にまとまる(`recordFinding` の `findingKey`、`engine.collect` の `merged[k]`)。代表の経路は、ステップ数の少ないほう(`<` なので、同じ長さなら先に記録したほう)。`make_closure` の経路は、ヘルパーを通らないので、たいてい短く、代表になる(経路が変わりうるのは、この形)。`mergeParamSources` は、source が param の finding だけの別の併合で、関係しない。
 
 ### (4) 痕跡(不確実性)
 
 呼ぶところが見えないクロージャに、捕獲の値を当てたことを、不確実性で残す。
 
-* kind: **`unresolved_callee`**(既存。`attributable_to` は `mixed`: 呼ぶところが、読んだコードの外(ライブラリ)にあるのか、見えていないだけなのか、分からない)。新しい kind は足さない(`result.go` の kind の一覧、出力のスキーマ、ドキュメント、`cases_test.go` の kind ごとの期待を変えなくてよい)。
-* 文面(`detail`): `the closure is made here and called where it cannot be seen (it is given to another function, or stored): what it captured is applied at the place it was made, and it is taken to be called`
-  日本語の意味: このクロージャが呼ばれるところは見えていない。作った場所で、捕獲の値を当てた(呼ばれるものとして扱っている)。
-* `symbol` は、クロージャの関数 ID。`position` は `make_closure` の位置(`graph` の `refs` の `closure` と同じ位置)。`func` は作った関数。
-* **出す条件**: クロージャの要約が、捕獲した値に依る効果(FreeVar 由来の sink への到達、書き込み)を**持つ**ときだけ。捕獲があるだけで毎回出すと、Gitea で数千件の不確実性になる(下の測定: 捕獲のあるクロージャ 1,496)。効果を持つかは、`sum.Sinks` と `sum.Outputs` の要素が FreeVar の `ParamElem` を含むか、で決まる(`applySummary` の前に調べる)。
-* finding の経路: `applySummary` の `notes` 引数に渡す。経路のステップ(`call.Notes`)と `w.setNotes` に載る。finding の `uncertainties` に出る。
-* 重複: `engine.collect` が `kind|symbol|func|pos` で同じものを 1 つにする(`seenU`)。
-
-痕跡が付くので、`@miss(silent)` が、フィクスチャの上で、「改善」として落ちる(流れが見つかるので `@miss` ごと消える)。
+* kind: **新しい kind `assumed_call`**(`attributable_to: mixed`)。`unresolved_callee` は使わない。理由: `unresolved_callee` の意味は「呼び先が分からない」で、ここで分からないのは、**呼ぶ側**(このクロージャを、誰が、いつ、どの引数で呼ぶか)。`unresolved_callee` は「候補を増やせば直る」、こちらは「メモリを辿る、モデルを足す、で直る」で、直し方が違う。同じ kind にすると、kind ごとの集計と `attributable_to` の指標が濁る。LLM の判定にも、「この finding は、クロージャが呼ばれると仮定した結果」を、finding ごとに見分けさせたい。名前は `assumed_call`(「呼ばれると仮定した」。代案: `closure_call_assumed`。短いほうにした)。
+* **閉じた集合に 1 つ足す**: kind の一覧は閉じた集合なので、**ADR-008 の追記が要る**(`result.go` の定数、`attributable()`、出力のスキーマ、`docs` の kind の表、`cases_test.go` の kind ごとの期待)。
+* 文面(`detail`): `the closure is made here and called where it cannot be seen (it is given to another function, or stored): what it captured is applied at the place it was made, and it is taken to be called`。日本語の意味: このクロージャが呼ばれるところは見えていない。作った場所で、捕獲の値を当てた(呼ばれるものとして扱っている)。throw を当てなかったときは、`; what it throws is not applied` を足す。
+* `symbol` は、クロージャの関数 ID。`position` は `make_closure` の位置(`graph` の `refs` の `closure` と同じ)。`func` は作った関数。
+* **出す条件**: クロージャの要約が、捕獲した値に依る効果(FreeVar 由来の sink への到達、書き込み、**throw の出力**)を**持つ**ときだけ。毎回出すと、Gitea で数千件になる(捕獲のあるクロージャ 1,496)。`sum.Sinks` と `sum.Outputs` の要素が FreeVar の `ParamElem` を含むか、で決まる(`applySummary` の前に調べる)。
+* finding の経路: `applySummary` の `notes` 引数に渡す。ステップ(`call.Notes`)と `w.setNotes` に載り、finding の `uncertainties` に出る。重複は、`engine.collect` が `kind|symbol|func|pos` で 1 つにする。
+* **`confidence`**: この規則で見つかった finding の `confidence` が、**`no_uncertainty_on_path` にならない**こと(経路に `assumed_call` があるので)。**今の main では、規則が無いので、確かめられない**。期待として、実装後に、`cap-run-a`(go-curated)の finding の `confidence` と `uncertainties` に `assumed_call` が出ること、を受け入れの条件にする(`bench_curated_test.go` に、`@assumed` のような注釈で確かめるか、`cmd/rivus` のテストで、`cap-run-a` を `analyze` して JSON を見る。実装のときに決める)。
 
 ### (5) 失うもの・増えるもの
 
@@ -85,6 +83,7 @@ func main() {
 ### (6) 入れ子のクロージャと、ループの中のクロージャ
 
 * **入れ子**(外のクロージャの捕獲を、内のクロージャが捕獲する): 内の `make_closure` は、外のクロージャの本体の中にあり、その引数は、外のクロージャの FreeVar。外のクロージャの要約を作るとき、内の `make_closure` を当てると、FreeVar に依る記号的な sink 到達(`noteSinkReach`)になる。外の `make_closure`(作った関数 `home`)で、それが具体化される。**要約の合成で、段数に依らず届く**。`capNested`(go-curated)がそのフィクスチャ。外のクロージャが見えている(その場で呼ぶ)場合に、内のクロージャが見えていないときは、内を当てる(印は、命令ごと)。
+* 届く順序(追記): 内側のクロージャの効果は、**外側のクロージャの要約に、外側の捕獲の言葉(外側の FreeVar)で入る**。作った関数が外側を当てる、の順で届く(内側は、外側の本体の中の `make_closure` として、外側の要約を作るときに当たる)。内側の使われ方が「直接の呼び出しだけ」なら、飛ばす(外側の本体の中で、その場で呼ばれる)。`cap-nested` で確かめる(今は `@miss(silent)`)。
 * **ループの中のクロージャ**: `make_closure` の命令は 1 つ。解析は流れに依らない(セルの和)ので、ループの何周目かを区別しない。捕獲した変数がループ変数(Go 1.22 以降は周ごと)でも、セルは 1 つで、届く。`capLoop` がそのフィクスチャ。ループで変数を書き換える形(`x += c.Query(..)`)は、セルの和で届く(過大側)。
 
 ### (7) Rust と Dart
@@ -95,26 +94,26 @@ func main() {
 
 * **できるか**: 同じことは、**別の段**で、できる。環境の `alloc` の type(`{closure@file:l:c}`)と、クロージャの関数の `params[0].type` が一致するので、alloc → クロージャの関数が引ける(extractor は変えなくてよい見込み。型の文字列が、ファイルと位置を含むので、一意)。`applySummary(cc, closureFn, nil, notes, nil)` を、`argv = [環境の値]`(束縛ではなく、Params の 1 つ目)で当てる。ただし、環境の `field_store` が `alloc` の後に来る(流れに依らない解析なので、順序は、問題にならないはずだが、**確かめていない**)。
 * **効く範囲**: 読む側(`run(|| sink(&a))`)は、`Fn::call` の候補で、**今でも見つかる**(XTALK の過検出つき。`run-a/b` は `@fp`)。C-7 は、これを直さない(XTALK は別の原因。案 2 の仕事)。`rust-curated/src/callbacks.rs` の 3 件(`returned`、`nested_cap`、`param_clean`)と `never_called` の静かな側は、**今、見つかっている**(`@miss` が無い)。書く側(`write-a/b`、`push-list` など 7 件、ENV-PTR)は、環境のフィールドのポインタが、指す先と別名にならない(`locs.go:215`、`transfer.go:148`)ことが原因なので、**alloc で当てても直らない**。ENV-PTR の修正が先。
-* 結論: **Rust は、C-7 の対象にしない**(最初の版は Go と Dart だけ)。Rust の別の段は、(a) ENV-PTR の修正(書く側 7 件)、(b) 環境の alloc で当てる(読む側の XTALK に依らない流れ、`thread::spawn` のような、呼ぶところが見えないもの)。(b)は、効果の測定が先(Rust の測定は別のエージェントが進行中)。
+* 結論(**条件つき**): 前の版は「読む側は、今でも見つかる」を理由に、Rust を最初の版の対象外にしたが、これは**呼ぶ側が見える形**(`Fn::call` の候補になる)でしか確かめていなかった。**渡すだけの形**で確かめた(`rust-curated/src/callbacks.rs`、今の main): `std::thread::spawn(move || sink(&t))`(`@miss(unmodeled_library_call)`)、捕獲のあるクロージャを `Box<dyn Fn(i16, u128)>` にして構造体のフィールドに入れ、別の関数が呼ぶ(`@miss(silent)`)、モデルのない標準ライブラリの関数に渡す(`Vec::retain`、`@miss(silent)`)の **3 件とも見つからない**。つまり、Rust にも、黙った見逃しがある。**Rust の環境の `alloc` で当てる段(上の「できるか」)は、次の段に入れる**(最初の版は Go と Dart。ENV-PTR の修正は、書く側 7 件で、別)。最初の版を Go と Dart にするのは、実装の大きさ(extractor の type で引く、環境の `field_store` の順序の確認)を分けるためで、「Rust は見つかるから要らない」ではない。`thread::spawn` と `retain` のクロージャは、他の呼び出しの候補にもなり、他のソースが誤って届く(`@noisy` 8 と 3)。
 
 ### (8) 案 2(ADR-047 の下書き: scratchpad/scc/adr-draft.md)との関係
 
 どちらも、「**作った関数での束縛**」(`make_closure` の引数)を使う。案 2 の「呼び元 K が、自分で渡したクロージャ(`ExactFuncs`)の要約で、ヘルパーの記号的な出力を具体化する」には、クロージャの要約に**束縛も**必要(下書きに書いていない。C-7 と同じ情報)。そこで:
 
 * `sg.ExactFuncs` を、ID の集合だけでなく、**`make_closure` の命令(束縛)も返す**ようにする(`ExactClosures`)。C-7 は、これを使わない(`make_closure` の命令を直接見る)が、案 2 が使うので、同じ補助関数にしてよい。
-* **分担**: C-7 = 捕獲した値だけに依る流れ(作った場所で当てる)。案 2 = 引数に依る流れ(ヘルパーが渡す値。呼ぶ側のコンテキストで具体化)。クロージャの要約の要素を、FreeVar 由来か Params 由来かで分ければ、**二重にならない**: 案 2 の K での具体化は、Params 由来の要素だけを当て、FreeVar 由来は C-7 に任せる。案 2 が先に入った場合は、K で束縛つきで当てるので、`make_closure` の「見えている」印が、K の束縛でも付く(印が付くクロージャは、C-7 が飛ばす = 二重にならない)。
+* **分担**: C-7 = **捕獲の値だけに依る流れ**(作った場所で当てる)。案 2 = **引数に依る流れ**(ヘルパーが渡す値。呼ぶ側のコンテキストで具体化)。**両方に依る流れ**(`fireAndForget(t, (x) { out = x; })` の `out` に、`t` が届く: 捕獲した `out` への書き込みの値が、ヘルパーが渡す引数 `x`)は、案 2 が入るまで**見つからない**(`write-param`(Dart、Rust)で記録している)。クロージャの要約の要素を、FreeVar 由来か Params 由来かで分ければ、二重にならない: 案 2 の K での具体化は、Params 由来の要素だけを当て、FreeVar 由来は C-7 に任せる。案 2 が先に入った場合も、C-7 の「使われ方」の条件は変わらない(K の束縛は、C-7 の条件に影響しない)。
 * 順序: **C-7 は案 2 に依らない**。案 2 は SCC の構造(要約のデータ型、`applySummary` の展開)を変える大きな作業。C-7 は、小さく、独立に入れられる。案 2 を待たない。
-* 案 2 は SCC の判定から、ヘルパー → クロージャの辺を外す。C-7 は、辺に触れない(クロージャの要約を使うだけで、`order` / `levelsOf` / `callers` は変えない)が、**`make_closure` の命令が、クロージャの要約に依る**ので、「クロージャの要約が変わったら、作った関数を dirty にする」辺が、**1 本増える**(クロージャ → home)。home が、クロージャを(直接でも間接でも)呼ぶ関数に呼ばれる場合、循環ができる可能性がある。実装時に、`engine` の依存(`callers` の作り方)を読んで、`make_closure` → クロージャの要約を、`callers` に足す。
+* **再解析の辺**: 作った関数(`home`)は、クロージャの要約に依存する。クロージャがどの呼び出しの候補でもないとき、今は、その依存の辺が無い(`callers` は、呼び出しの候補から作る)。**辺を足す**(クロージャ → `home`: クロージャの要約が変わったら、`home` を再解析する)。クロージャが、作った関数を(直接でも間接でも)呼ぶ形(再帰: クロージャの中から `home` を呼ぶ、入れ子のトランザクション)では、**この辺で SCC ができる。それは正しい**(要約が互いに依存している)。案 2 の SCC の判定(ヘルパー → クロージャの辺を外す)とは別の辺で、C-7 は `order` / `levelsOf` を、この辺の分だけ変える。`engine.go` の依存の作り方を、実装のときに読む。
 
 ### (9) 実装の場所の見立て
 
 | 変えるところ | 内容 |
 | --- | --- |
-| `internal/sg/sg.go` の `Instr` | `Seen bool`(その `make_closure` が、`home` の中で束縛つきで呼ばれる)を足す |
-| `internal/sg/build.go:84-90`(静的な束縛)、`:362` `resolveValueCalls` | 束縛を付けるとき、`make_closure` の命令(`mc`、`fn.instrAt(...)`)の `Seen` を true にする。`instrAt` は既にある |
+| `internal/sg`(使用箇所) | `make_closure` の結果の `Value` の**使われ方の一覧**(callee の位置か、`go` / `defer` の呼び出しだけか、それ以外か)を作る(`Seen` の印は取り下げ。`sg` に使用の一覧が無ければ作る = **コアの変更**)。候補、`valuecalls` の結果には依らない |
+| `internal/sg/build.go:84-90`(静的な束縛)、`:362` `resolveValueCalls` | **変えない**(前の版は、ここで印を付ける案だった) |
 | `internal/taint/transfer.go:236` の switch | `case ir.OpMakeClosure:` を足し、`s.captured(in)` を呼ぶ |
-| `internal/taint/calls.go`(新しい関数 `captured`) | `in.Args` が空、`Seen`、クロージャの `sg.Func` が無い(`ByID`)、要約に FreeVar 由来が無い、のどれかなら何もしない。それ以外は、`callCtx{in: in, args: Params 数の KUndef, roots: nil, sym: ""}` で `applySummary(cc, fn, in.Args, notes, nil)`。`notes` は、(4)の不確実性 |
-| `internal/taint/engine.go`(依存) | 要約の依存の辺(クロージャ → home)を足す(上の(8)の最後) |
+| `internal/taint/calls.go`(新しい関数 `captured`) | `in.Args` が空、使われ方が「直接の呼び出しだけ」、クロージャの `sg.Func` が無い(`ByID`)、要約に FreeVar 由来が無い、のどれかなら何もしない。それ以外は、`callCtx{in: in, args: Params 数の KUndef, roots: nil, sym: ""}` で `applySummary(cc, fn, in.Args, notes, nil)`。`notes` は、(4)の不確実性 |
+| `internal/taint/engine.go`(依存) | 要約の依存の辺(クロージャ → home)を足す(上の(8)の再解析の辺) |
 | `internal/taint/summary.go:283-286` | **変えない**。(任意: 束縛が無い非 home の呼び出しで、FreeVars を `KUndef` で埋めるときに、不確実性を出す。C-7 が入れば、捕獲した値の分は届くので、残る欠落は、引数に依る分だけ) |
 | `internal/valuecalls/valuecalls.go:319` | **変えない**。`ExactClosures`(案 2)は、ここではなく `sg.ExactFuncs`(`sg/build.go:393`)の拡張 |
 | `internal/graphdb/write.go:261` | **変えない**(`refs` の `closure` は、構造の層。taint の変更と無関係) |
@@ -124,7 +123,7 @@ func main() {
 
 ### (10) 検証の計画
 
-1. **網羅の不変条件**(`internal/taint` の既存のもの): finding の増加が、`make_closure` の経路の finding だけ。見えているクロージャを飛ばす版は、**既存の finding が 1 件も消えず、経路も変わらない**ことを、全ベンチで確かめる。
+1. **網羅の不変条件**(`internal/taint` の既存のもの): finding の増加が、`make_closure` の経路の finding だけ。使われ方で飛ばす版は、**既存の finding が 1 件も消えず、経路も変わらない**ことを、全ベンチで確かめる。変わりうる形(「捕獲もあり、候補としても束縛つきで解決されている」)は、差分で数える。
 2. **ベンチの差分**: 収束する 4 つ(gogs、gin-vue-admin、ech0、go-test-bench)、`bench/go-curated`、`bench/go-synth`(S、M)、`testdata/go/cases`、Dart(`dart-curated`、`dart-pub`、`dart-corpus` 系)、Rust(変更なしのはず。finding が 1 件も変わらないことを確かめる)。**前後で findings を比べ、増えたもの全部を 1 件ずつ分類**(正しい流れ / 呼ばれないクロージャの過検出 / 順序の過検出)。Gitea は、今、収束しない(ADR-047 の下書きの測定)ので、`./modules/...` と、`services/` の一部で比べる(`db.WithTx` を含む)。分類できなければ push しない。
 3. **curated の `@miss` / `@fp` の増減**(下の表。**実装して確かめたものではない**):
 
@@ -137,13 +136,13 @@ func main() {
    * `@sink(none)` が増える側: `capNever`(go-curated)と、`never_called`(dart-curated)の `@sink(none)`、`rust-curated/callbacks.rs:never_called`(Rust は対象外なので変わらない)。**この 2 つが落ちる**。落ちたら、`@fp` に直すか(限界として記録)、規則を変えるか、決める。
    * `@miss(silent)` の割合: Go 9/10(今)→ 0/1、Dart 31/41 → 約 20/30(見込み。silent のうち CAP 系が消える)。
 4. **go test ./...** と、`RIVUS_DART` / `RIVUS_RUST` つきの curated(Dart・Rust の extractor のテスト)を通す。
-5. **不確実性の数**: 前後で、`unresolved_callee` が、効果を持つクロージャの数だけ増える。他の kind は変わらない。
+5. **不確実性の数**: 前後で、`assumed_call` が、効果を持つクロージャの数だけ増える。他の kind は変わらない。
 
 ## フィクスチャと、今の結果
 
-作った(2026-11-21): go-curated `api/capture.go`(15 関数、`/captures` で登録)、dart-curated `lib/callbacks.dart`(10 関数)、rust-curated `src/callbacks.rs`(4 関数)。
+作った(2026-11-21): go-curated `api/capture.go`(20 関数、`/captures` で登録)、dart-curated `lib/callbacks.dart`(13 関数)、rust-curated `src/callbacks.rs`(7 関数)。
 
-### Go(今: 新しい `@miss` 7、見つかる 8、静か 5)
+### Go(今: 新しい `@miss` 10(silent)、見つかる 9、静か 6)
 
 | タグ | 形 | 今の結果 |
 | --- | --- | --- |
@@ -158,9 +157,14 @@ func main() {
 | `cap-two-a` | 1 つの呼びで、2 つのクロージャ(1 つは定数) | `@miss(silent)`(定数の側は `@sink(none)`) |
 | `cap-never` | 作って、呼ばない | クロージャの中は `@sink(none)` で静か。**C-7 の後は報告される**(過検出。限界) |
 | `cap-returned` | 関数が返したクロージャ(捕獲は、作った関数のパラメータ) | `@miss(silent)`。C-7 で直る(記号的な到達) |
+| `cap-late` | 作ったあとで、捕獲した変数が汚染される(`f := func(){ sink(x) }; x = source(); run(f)`。捕獲は参照) | `@miss(silent)`。見つかるべき |
+| `cap-handler` | クロージャのパラメータが source で、捕獲した変数に書き、別のクロージャが sink(登録されるハンドラの形) | `@miss(silent)`。C-1(ADR-048、a540f30)は main に入っている。それでも見つからない: C-7 の後に、この書き込みが「関数がした書き込み」として残るか(C-1 と C-7 の両方の受け入れ)を、実装で確かめる |
+| `cap-seen` | その場で呼び、かつ、渡す(`f(); run(f)`) | 見つかる(1 件)。C-7 の後も 1 件(`(origin, sink)` でまとまる)。使われ方の条件で、当てる側 |
+| `cap-funccall` | 捕獲した値が関数で、クロージャがそれを、呼び元の値で呼ぶ(PARAM-CALL) | `@miss(silent)`。C-7 では**直らないはず**(捕獲した関数 `g` の呼び出しは、候補が解決されない)。Dart は `relay-c-a/b`(既存) |
+| `cap-sanitized` | クロージャが、捕獲した値を sink の前にサニタイズする | `@sink(none)` で静か(C-7 の後も) |
 | `tx_capture`、`tx_capture_plain`(既存、`gitea/routers/tx.go`) | `db.WithTx` | `@miss(dynamic_dispatch)`、`@miss(silent)` |
 
-### Dart(今: 新しい `@miss` 7、静か 2)
+### Dart(今: 新しい `@miss` 9、見つかる 1、静か 2)
 
 | タグ | 形 | 今の結果 |
 | --- | --- | --- |
@@ -170,11 +174,16 @@ func main() {
 | `timer-param` | クロージャが、自分の引数を sink | `@sink(none)` で静か |
 | `never` | 作って、呼ばない | `@sink(none)` で静か。C-7 の後は報告される |
 
-`run-a/b`、`write-a/b`、`nest-a/b`、`add-list` などは、`pass_closure.dart`、`capture.dart`、`nesting.dart` に既にある(重複させない)。
+| `late` | 作ったあとで、捕獲した変数が汚染される | `@miss(silent)` |
+| `seen` | その場で呼び、かつ、渡す | 見つかる(1 件) |
+| `cap-fn` | 捕獲した関数を、呼び元の値で呼ぶ(PARAM-CALL) | `@miss(silent)`。C-7 では直らないはず(`relay-c-a/b` が既存) |
 
-### Rust(今: 全部、見つかる / 静か)
+(クロージャのパラメータが source の形と、サニタイズの形は、Dart の curated の規則に、`param_type` の source もサニタイザも無いので、Go だけ。)
+`run-a/b`、`write-a/b`、`nest-a/b`、`add-list`、`write-param`(捕獲と引数の両方に依る: 案 2 が入るまで見つからない)などは、`pass_closure.dart`、`capture.dart`、`nesting.dart` に既にある(重複させない)。
 
-`returned`、`nested_cap`、`never_called`(静かな側)、`param_clean`(静かな側): **今、見つかっている**(`Fn::call` の候補、XTALK で全クロージャが候補)。`thread::spawn` のような、引数の無いクロージャは、他のファイルの全呼び出しの候補になってしまい、既存の `@noisy` の数が変わるので、入れていない。書く側(`write-a/b` ほか)は、既存の `capture.rs`(7 件が `@miss(silent)`、ENV-PTR)。
+### Rust(今: 4 つは見つかる / 静か、渡すだけの 3 つは見つからない)
+
+`returned`、`nested_cap`、`never_called`(静かな側)、`param_clean`(静かな側): **今、見つかっている**(`Fn::call` の候補、XTALK で全クロージャが候補)。**渡すだけの 3 つは、見つからない**: `spawned`(`std::thread::spawn`、`@miss(unmodeled_library_call)`、`@noisy(8)`)、`boxed`(`Box<dyn Fn>` をフィールドに入れ、別の関数が呼ぶ、`@miss(silent)`)、`retained`(`Vec::retain`、`@miss(silent)`、`@noisy(3)`)。`@fp` の数は変わらず、`@noisy` は 183 から 194 になった。書く側(`write-a/b` ほか)は、既存の `capture.rs`(7 件が `@miss(silent)`、ENV-PTR)。
 
 ## 測定(Go の捕獲のあるクロージャの数)
 
@@ -194,10 +203,11 @@ func main() {
 
 ## 決めてほしいこと(実装に入る前に)
 
-1. **規則の採用**: 「見えないクロージャは、作った場所で当てる(呼ばれるものとして扱う)」。1 度も呼ばれないクロージャが過検出になる(`capNever`、`never_called`)ことを、限界として受け入れるか。受け入れるなら、その 2 つを `@fp` にする(`@sink(none)` + `@fp`)。
-2. **見えているクロージャを飛ばすか**(推奨: 飛ばす。今の finding の経路が 1 件も変わらないことを、基準にできる)。飛ばさない場合は、経路が変わる finding を、全部確かめる。
-3. **throw**: 最初の版で当てない(推奨)か。Dart で `try { await run(() => throw …) } catch` の形が、見つかるようになるが、作った関数が throw するという過大な主張になる。
-4. **痕跡の kind**: 既存の `unresolved_callee`(推奨。スキーマ変更なし)か、新しい kind(例: `closure_assumed_called`。`attributable_to` が `rivus` になる)か。
-5. **Rust**: 最初の版は対象外(推奨)。ENV-PTR の修正と、環境の `alloc` で当てるのは、別の段。
-6. **測定の続き**: `rivus index` で `refs` を数える(スワップに余裕ができてから、1 度に 1 つ)。gogs と gin-vue-admin は、ソースを scratchpad/bench に置く必要がある(今は無い)。
-7. 案 2(ADR-047)との順序: C-7 を先(小さく、独立)。案 2 は、`ExactFuncs` が束縛も返すように、C-7 のあとで足す。
+advisor の意見を反映して決めた点: 飛ばす条件は**使われ方**(候補に依らない)、throw は当てないが痕跡に含める、痕跡は新しい kind `assumed_call`(ADR-008 の追記)、Rust は条件つき(渡すだけの形が見つからないことを確かめた: 次の段に入れる)。残り:
+
+1. **規則の採用**: 「見えないクロージャは、作った場所で当てる(呼ばれるものとして扱う)」。1 度も呼ばれないクロージャが過検出になる(`cap-never`、`never_called`)ことを、限界として受け入れるか。受け入れるなら、その 2 つを `@fp` にする。
+2. **kind の名前**: `assumed_call`(案)でよいか。
+3. **`confidence`** の受け入れの確かめ方(`bench_curated_test.go` の注釈か、`cmd/rivus` のテストか)。
+4. **Rust の次の段**: 環境の `alloc` で当てる(渡すだけの 3 件が受け入れ)を、Go / Dart の直後に入れるか。ENV-PTR の修正(書く側 7 件)は別。
+5. **測定の続き**: `rivus index` で `refs` を数える(スワップに余裕ができてから、1 度に 1 つ)。gogs と gin-vue-admin は、ソースを scratchpad/bench に置く必要がある(今は無い)。
+6. 案 2(ADR-047)との順序: C-7 を先(小さく、独立)。案 2 は、`ExactFuncs` が束縛も返すように、C-7 のあとで足す。

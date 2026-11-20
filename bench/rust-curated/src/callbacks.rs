@@ -58,3 +58,45 @@ pub fn param_clean() {
     });
     sink(&a); // @sink(param-clean)
 }
+
+// A closure that is only given away, and called where the engine does not see the call.
+
+// (i) a thread: the call is in the library; the closure is not a candidate of any call that is seen (it has
+// no parameter, and the candidates of the calls of closures with none are not the counts of `@noisy` of the
+// other files: it is one of the candidates of the closures with none, and the other sources of those reach it: `@noisy`, XTALK)
+pub fn spawned() {
+    let a = source(); // @source(spawned) @miss(unmodeled_library_call)
+    let h = std::thread::spawn(move || {
+        sink(&a); // @sink(spawned) @noisy(8)
+    });
+    h.join().unwrap();
+}
+
+// (ii) a closure kept in a field (`Box<dyn Fn>`); another function calls it
+struct Handler {
+    f: Box<dyn Fn(i16, u128)>,
+}
+
+fn make_handler(s: String) -> Handler {
+    Handler { f: Box::new(move |_n, _m| sink(&s)) } // @sink(boxed)
+}
+
+fn fire(h: &Handler) {
+    (h.f)(0, 0)
+}
+
+pub fn boxed() {
+    let a = source(); // @source(boxed) @miss(silent)
+    let h = make_handler(a);
+    fire(&h);
+}
+
+// (iii) a function of the standard library that has no model: `Vec::retain` calls the closure
+pub fn retained() {
+    let a = source(); // @source(retained) @miss(silent)
+    let mut v: Vec<i128> = vec![1, 2];
+    v.retain(|_x| {
+        sink(&a); // @sink(retained) @noisy(3)
+        true
+    });
+}
