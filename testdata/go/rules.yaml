@@ -18,6 +18,55 @@ sources:
     params: [0]
     labels: [user_input]
 
+  # Parameters that taint the object they point to (testdata/go/cases/paramshare).
+  - kind: param
+    symbol: example.com/cases/cases/paramshare/ptr.runB
+    params: [0]
+    labels: [user_input]
+  - kind: param
+    symbol: example.com/cases/cases/paramshare/local.runB
+    params: [0]
+    labels: [user_input]
+  - kind: param
+    symbol: example.com/cases/cases/paramshare/global.runB
+    params: [0]
+    labels: [user_input]
+  - kind: param
+    symbol: example.com/cases/cases/paramshare/repro.runA
+    params: [0]
+    labels: [user_input]
+  - kind: param
+    symbol: example.com/cases/cases/paramshare/repro.runB
+    params: [0]
+    labels: [user_input]
+  - kind: param
+    symbol: example.com/cases/cases/paramshare/distinct.runA
+    params: [0]
+    labels: [user_input]
+  - kind: param
+    symbol: example.com/cases/cases/paramshare/distinct.runB
+    params: [0]
+    labels: [user_input]
+  - kind: param
+    symbol: example.com/cases/cases/paramshare/samelocal.runA
+    params: [0]
+    labels: [user_input]
+  - kind: param
+    symbol: example.com/cases/cases/paramshare/samelocal.runB
+    params: [0]
+    labels: [user_input]
+  - kind: param
+    symbol: example.com/cases/cases/paramshare/str.runA
+    params: [0]
+    labels: [user_input]
+  - kind: param
+    symbol: example.com/cases/cases/paramshare/str.runB
+    params: [0]
+    labels: [user_input]
+  - kind: param_type
+    type: "*example.com/cases/cases/paramshare/ptype.Req"
+    labels: [user_input]
+
   # A call that fills its argument (testdata/go/cases/dbsrc).
   - symbol: example.com/cases/lib.Fill
     out: [0]

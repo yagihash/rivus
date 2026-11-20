@@ -29,6 +29,14 @@ sources:
     symbol: github.com/yagihash/rivus/cmd/rivus.runModels
     params: [0]
     labels: [user_input]
+  - kind: param
+    symbol: github.com/yagihash/rivus/cmd/rivus.runGraph
+    params: [0]
+    labels: [user_input]
+  - kind: param
+    symbol: github.com/yagihash/rivus/cmd/rivus.runExtract
+    params: [0]
+    labels: [user_input]
 
 # Models found with "rivus models coverage -rules dogfood/rules.yaml ./...":
 # the functions on the paths of the findings that rivus had to guess about.

@@ -40,7 +40,21 @@ func TestDogfood(t *testing.T) {
 	entries := map[string]bool{}
 	sinks := map[string]bool{}
 	var humanSource, flagModel bool
+	// A finding whose path has no step in the function of its source: the
+	// source was reached through an object that another function wrote back
+	// (the parameter of a source function taints the object, and the call
+	// that passed it carries the taint to the next function that gets it).
+	var noSourceOnPath int
 	for _, f := range rep.Findings {
+		onPath := false
+		for _, st := range f.Paths[0].Steps {
+			if st.Func == f.Source.Func {
+				onPath = true
+			}
+		}
+		if !onPath {
+			noSourceOnPath++
+		}
 		entries[f.Source.Func] = true
 		sinks[f.Sink.Symbol] = true
 		for _, m := range f.Models {
@@ -57,8 +71,21 @@ func TestDogfood(t *testing.T) {
 			}
 		}
 	}
-	if len(entries) != 6 {
-		t.Errorf("want findings from the 6 commands, got from %d: %v", len(entries), entries)
+	if len(entries) != 8 {
+		t.Errorf("want findings from the 8 commands, got from %d: %v", len(entries), entries)
+	}
+	// Today (8 sources x 11 sinks = 88 findings) 77 paths do not go through
+	// their own source function: the same object is written back by one
+	// source and read by the others (CORE-A / CORE-B, see
+	// TestParamSourceSharedObject). These are ceilings: they must go down,
+	// never up. Lower them when the engine is fixed.
+	const maxFindings, maxNoSourceOnPath = 88, 77
+	t.Logf("%d findings, %d with no step in the source function", len(rep.Findings), noSourceOnPath)
+	if len(rep.Findings) > maxFindings {
+		t.Errorf("%d findings: more than the %d of today", len(rep.Findings), maxFindings)
+	}
+	if noSourceOnPath > maxNoSourceOnPath {
+		t.Errorf("%d findings have a path without a step in their source function: more than the %d of today", noSourceOnPath, maxNoSourceOnPath)
 	}
 	for _, s := range []string{"os.ReadFile", "os.Create", "os.WriteFile"} {
 		if !sinks[s] {
