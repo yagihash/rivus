@@ -64,6 +64,27 @@ func (c *common) register(fs *flag.FlagSet) {
 	fs.BoolVar(&c.deterministic, "deterministic-only", false, "ignore the rules decided by an LLM (origin: llm)")
 }
 
+// projectRuleFiles lists the rule files the analysed directory brings: <dir>/.rivus/rules/*.yaml, in name order.
+func (c *common) projectRuleFiles() ([]string, error) {
+	// Not filepath.Glob: the directory is a name, and may hold the characters of a pattern.
+	rulesDir := filepath.Join(c.dir, ".rivus", "rules")
+	if err := insideDir(c.dir, rulesDir); err != nil {
+		return nil, err
+	}
+	entries, err := os.ReadDir(rulesDir)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, syscall.ENOTDIR) {
+		return nil, fmt.Errorf("project rules: %w", err)
+	}
+	var found []string
+	for _, e := range entries {
+		if ext := filepath.Ext(e.Name()); !e.IsDir() && (ext == ".yaml" || ext == ".yml") {
+			found = append(found, filepath.Join(rulesDir, e.Name()))
+		}
+	}
+	sort.Strings(found)
+	return found, nil
+}
+
 func (c *common) loadRules(extra ...*model.RuleSet) (*model.Rules, error) {
 	var sets []*model.RuleSet
 	if !c.noBuiltin {
@@ -79,22 +100,10 @@ func (c *common) loadRules(extra ...*model.RuleSet) (*model.Rules, error) {
 	paths := append([]string(nil), c.rules...)
 	project := map[string]bool{}
 	if !c.noProject {
-		// Not filepath.Glob: the directory is a name, and may hold the characters of a pattern.
-		rulesDir := filepath.Join(c.dir, ".rivus", "rules")
-		if err := insideDir(c.dir, rulesDir); err != nil {
+		found, err := c.projectRuleFiles()
+		if err != nil {
 			return nil, err
 		}
-		entries, err := os.ReadDir(rulesDir)
-		if err != nil && !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, syscall.ENOTDIR) {
-			return nil, fmt.Errorf("project rules: %w", err)
-		}
-		var found []string
-		for _, e := range entries {
-			if ext := filepath.Ext(e.Name()); !e.IsDir() && (ext == ".yaml" || ext == ".yml") {
-				found = append(found, filepath.Join(rulesDir, e.Name()))
-			}
-		}
-		sort.Strings(found)
 		for _, p := range found {
 			fmt.Fprintf(os.Stderr, "rivus: project rules: %s\n", p)
 			project[p] = true
@@ -197,6 +206,7 @@ func readIR(path string) (*loaded, error) {
 	}
 	// an extractor may write the functions of the dependencies (marked dep):
 	// the ones nothing of the project reaches change nothing
+	prog.Files = prog.SourceFiles()
 	prog.PruneDeps()
 	return &loaded{ir: prog, texts: ir.NewStreamTexts(prog)}, nil
 }

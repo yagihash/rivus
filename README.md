@@ -102,7 +102,9 @@ rivus analyze -C path/to/project           # ディレクトリの言語を自�
                                            # Dart と Rust は extractor（rivus-dart、rivus-rust）が PATH にいること。-dart-extractor / -rust-extractor か、RIVUS_DART_EXTRACTOR / RIVUS_RUST_EXTRACTOR で指定
 rivus query -sink 'os/exec.Command' ./...  # この sink に届き得る source を列挙
 rivus query -source '(*net/http.Request).FormValue' ./...  # この source が届き得る sink を列挙
-rivus index -o idx.json ./...              # 解析結果を保存
+rivus index -C path/to/project ./...       # コールグラフ(構造の層)を SQLite に保存する。速い(taint 解析はしない)。書き先は、ユーザーのキャッシュ(-graph <file> で指定)
+rivus graph info -C path/to/project ./...  # 保存したファイルの中身(件数、作成日時、source_hash)と、今のソースと一致するか(fresh: true/false)
+rivus index -taint -o idx.json ./...       # taint 解析の結果を JSON で保存(-o だけでも同じ)。構造の層も、同じ実行で、キャッシュに書く
 rivus query -index idx.json -site <ID>     # 保存した結果から、ソースを読み込まずに答える
 rivus resolve -bookmarks seen.json ./...   # 前に見た箇所（サイト・検出結果）が、今のコードのどこにあるかを答える
 rivus models coverage ./...                # どの関数にモデルを書くと効くか（検出結果の経路に載っている順）
@@ -112,6 +114,11 @@ rivus models coverage -yaml -top 20 ./...  # 埋めるためのルールのひ�
 ```
 
 - 共通のフラグ: `-C <dir>`（解析の起点）、`-rules <file>`（ルールの追加。繰り返し可）、`-no-builtin-rules`、`-tests`、`-k <depth>`、`-v`（段階ごとの時間と遅い関数）、`-timeout <時間>`（時間切れでも、解析できた範囲を出して `depth_limit` として記録）、`-max-passes <n>`
+- **`rivus index` と `rivus graph info`**（設計: [docs/DESIGN-graph.md](docs/DESIGN-graph.md)）。`index` は、コードを 1 回読んで、関数・呼び出し点・辺（静的 / インターフェース / 関数値の別つき）・サイトを、1 つの SQLite ファイルに保存する（純 Go。cgo なし）。使い捨てのキャッシュで、マイグレーションはしない（スキーマ版が違えば、エラーで、作り直しを案内する）
+  - 書き先は `-graph <file>`。なければ、ユーザーのキャッシュ（`os.UserCacheDir()/rivus/<-C の絶対パスのハッシュ>/graph.db`。`RIVUS_CACHE_DIR` で変えられる）。**解析対象のディレクトリには作らない。読むのも、`-graph` で明示したファイルか、`-C` から導いたキャッシュだけ**（読み取り専用で開く）
+  - **構造の層だけ**を作る（taint の層、つまり findings と不確実性は、このファイルにはない。`index` はそれを出力に書く。`-taint` でも、taint の結果は、これまでの JSON の index（`-o`）に入り、`query -index` / `resolve -index` はそれを読む）
+  - `graph info` は、スキーマ版、rivus の版、作成日時、`source_hash`、層、件数、サイズ、言語を JSON（`rivus.graph/1`）で出す。**`-C <dir>` を付けると、鍵を今のソースから作り直して照合し、`fresh: true/false` と、変わった点（`stale_reasons`）を返す**。`-C` なしのときは、`verified: false`（今のソースとの一致は確認していない）。照合には、`index` に渡したのと同じフラグ（`-tests`、`-no-deps`、`-k`、`-lang`、`-rules`、パッケージなど）を渡す（違えば、`fresh: false`）
+  - `source_hash` には、結果に影響しうるものを全部入れる: 実際に読んだファイルの内容（Go は `go/packages` の一覧。依存、標準ライブラリ、ビルドタグで除かれたファイル、`go.mod`、`replace` の中身を含む）、ツリーのファイルの一覧（新しいファイルを見逃さない）、`go.sum` / `go.work` / `pubspec.lock` / `Cargo.lock`、ルール（組み込みの内容、`.rivus/rules`、`-rules`）、フラグ、rivus の版（実行ファイルのハッシュ）、`go env` の全項目、extractor と SDK の版。Dart と Rust は、extractor が読んだファイルを言わないので、プロジェクトのツリー全体（`.git`、ビルド出力などを除く）の内容を鍵にする。**疑わしいときは、`fresh: false`**
 - `analyze` と `query` の `-detail summary` は、経路とスニペットを省いた概要だけを出す
 - 出力の `summary` は、不確実性を kind と `attributable_to`（`target` / `rivus` / `mixed`）ごとに数え、モデルを書くと減るシンボルの上位（`top_symbols`）も出す
 - 注意: `(error).Error` のように至る所で呼ばれるメソッドを sink にすると、解析が大幅に遅くなる（[ADR-032](docs/DECISIONS.md)）。ルールは狭く書く

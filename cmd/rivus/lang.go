@@ -163,6 +163,7 @@ func (o *analyzeOpts) runExtractor(lang string) (*ir.Program, error) {
 	if err != nil {
 		return nil, fmt.Errorf("the %s extractor: %w", lang, err)
 	}
+	prog.Files = prog.SourceFiles()
 	prog.PruneDeps()
 	return prog, nil
 }
@@ -207,6 +208,7 @@ func (o *analyzeOpts) loadLangs(langs []string, patterns []string, rules *model.
 		merged.CallTexts = append(merged.CallTexts, p.CallTexts...)
 		merged.FuncTexts = append(merged.FuncTexts, p.FuncTexts...)
 		merged.LoadErrors = append(merged.LoadErrors, p.LoadErrors...)
+		merged.Files = append(merged.Files, p.Files...)
 	}
 	if len(merged.Funcs) == 0 && goProg == nil {
 		return nil, fmt.Errorf("nothing to analyse: no extractor produced code (languages: %s)", strings.Join(langs, ", "))

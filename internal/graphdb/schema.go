@@ -1,0 +1,121 @@
+// Package graphdb stores the call graph of a program in one SQLite file, and
+// reads it back (docs/DESIGN-graph.md). The file is a throw-away cache: a
+// derived copy that can always be made again, so its format is never migrated
+// (a file of another schema version is refused, and the message says to index
+// again).
+//
+// The tables are in layers. The structure layer (files, funcs, callsites,
+// edges, sites) is made without running the taint analysis. A taint layer
+// (findings, uncertainties) is added later; meta records which layers the
+// file has, so that a reader does not take their absence for "no findings".
+package graphdb
+
+// SchemaVersion is the version of the tables below (PRAGMA user_version). Any
+// change of the tables raises it.
+const SchemaVersion = 1
+
+// SchemaName is the name of the JSON that the graph commands print.
+const SchemaName = "rivus.graph/1"
+
+// LayerStructure is the layer of functions, call sites, edges and sites.
+const LayerStructure = "structure"
+
+// LayerVersions are the versions of the layers this code writes. A layer whose
+// version differs from what the reader knows is not trusted.
+var LayerVersions = map[string]int{LayerStructure: 1}
+
+// Kinds of a call site, and of the edges from it: where the callee is known from.
+const (
+	KindStatic    = "static"    // the function is named in the call
+	KindInterface = "interface" // a call through an interface or a virtual method: the candidates are implementations
+	KindValue     = "value"     // a call of a function value
+	KindBuiltin   = "builtin"   // a builtin of the language: no function
+)
+
+const createTables = `
+CREATE TABLE meta (
+	key   TEXT PRIMARY KEY,
+	value TEXT NOT NULL
+) WITHOUT ROWID;
+
+-- the files the load read (with the hash of the content), and the files that positions name
+CREATE TABLE files (
+	id     INTEGER PRIMARY KEY,
+	path   TEXT NOT NULL UNIQUE,
+	sha256 TEXT,
+	size   INTEGER,
+	kind   TEXT NOT NULL
+);
+
+-- every function of the program, and the callees that have no body (has_body = 0)
+CREATE TABLE funcs (
+	id        INTEGER PRIMARY KEY,
+	fid       TEXT NOT NULL UNIQUE,
+	symbol    TEXT NOT NULL,
+	file_id   INTEGER REFERENCES files(id),
+	line      INTEGER NOT NULL,
+	col       INTEGER NOT NULL,
+	offset    INTEGER NOT NULL,
+	entry     INTEGER NOT NULL,
+	init      INTEGER NOT NULL,
+	dep       INTEGER NOT NULL,
+	exported  INTEGER NOT NULL,
+	has_body  INTEGER NOT NULL,
+	lang      TEXT NOT NULL,
+	body_hash TEXT
+);
+
+-- a call: where it is, and how the callee is known
+CREATE TABLE callsites (
+	id      INTEGER PRIMARY KEY,
+	func_id INTEGER NOT NULL REFERENCES funcs(id),
+	file_id INTEGER REFERENCES files(id),
+	line    INTEGER NOT NULL,
+	col     INTEGER NOT NULL,
+	offset  INTEGER NOT NULL,
+	kind    TEXT NOT NULL,
+	callee  TEXT,
+	ncand   INTEGER NOT NULL,
+	is_go   INTEGER NOT NULL
+);
+
+-- a call site and a function it may reach; ncand is the number of candidates of the call site
+CREATE TABLE edges (
+	callsite_id INTEGER NOT NULL REFERENCES callsites(id),
+	from_func   INTEGER NOT NULL REFERENCES funcs(id),
+	to_func     INTEGER NOT NULL REFERENCES funcs(id),
+	kind        TEXT NOT NULL,
+	ncand       INTEGER NOT NULL
+);
+
+-- the places where a source or a sink rule matches (what "rivus sites" lists)
+CREATE TABLE sites (
+	id          TEXT PRIMARY KEY,
+	role        TEXT NOT NULL,
+	kind        TEXT NOT NULL,
+	func_id     INTEGER REFERENCES funcs(id),
+	symbol      TEXT NOT NULL,
+	category    TEXT,
+	labels      TEXT,
+	file_id     INTEGER REFERENCES files(id),
+	line        INTEGER NOT NULL,
+	col         INTEGER NOT NULL,
+	offset      INTEGER NOT NULL,
+	callsite_id INTEGER REFERENCES callsites(id),
+	callee      TEXT
+) WITHOUT ROWID;
+`
+
+const createIndexes = `
+CREATE INDEX funcs_symbol    ON funcs(symbol);
+CREATE INDEX funcs_pos       ON funcs(file_id, line);
+CREATE INDEX callsites_pos   ON callsites(file_id, line, col);
+CREATE INDEX callsites_func  ON callsites(func_id);
+CREATE INDEX edges_callsite  ON edges(callsite_id);
+CREATE INDEX edges_from      ON edges(from_func);
+CREATE INDEX edges_to        ON edges(to_func);
+CREATE INDEX sites_pos       ON sites(file_id, line);
+CREATE INDEX sites_func      ON sites(func_id);
+CREATE INDEX sites_symbol    ON sites(symbol);
+CREATE INDEX sites_callsite  ON sites(callsite_id);
+`

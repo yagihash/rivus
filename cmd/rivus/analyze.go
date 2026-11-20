@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/yagihash/rivus/internal/graphdb"
 	"github.com/yagihash/rivus/internal/model"
 	"github.com/yagihash/rivus/internal/report"
 	"github.com/yagihash/rivus/internal/sg"
@@ -39,6 +40,11 @@ type analyzeOpts struct {
 	// irFile is a stream of the neutral IR made by an extractor of another
 	// language (rivus extract writes the same form): the analysis starts there.
 	irFile string
+	// afterRead, if set, is called with the program once the graph is built
+	// and before the analysis (what the structure layer of the graph file is made from).
+	// structureOnly stops after afterRead: analyze returns no report.
+	structureOnly bool
+	afterRead     func(l *loaded, rules *model.Rules, st *sites.Result, g *sg.Program, bodies map[string]string) error
 }
 
 func (o *analyzeOpts) register(fs *flag.FlagSet) {
@@ -68,27 +74,9 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	if err != nil {
 		return nil, err
 	}
-	var l *loaded
-	if o.irFile != "" {
-		l, err = readIR(o.irFile)
-		if err != nil {
-			return nil, err
-		}
-		phase("ir")
-	} else if langs, lerr := o.languages(); lerr != nil {
-		return nil, lerr
-	} else if len(langs) != 1 || langs[0] != langGo {
-		l, err = o.loadLangs(langs, patterns, rules)
-		if err != nil {
-			return nil, err
-		}
-		phase("load")
-	} else {
-		l, err = o.loadGo(patterns, rules, o.maxImpl)
-		if err != nil {
-			return nil, err
-		}
-		phase("ir")
+	l, err := o.read(patterns, rules, phase)
+	if err != nil {
+		return nil, err
 	}
 	// The graph drops the IR as it is built: what was analysed is listed first.
 	packages := l.packages()
@@ -96,11 +84,24 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	expandSubtypes(rules, l.ir)
 	st := sites.Enumerate(l.ir, l.texts, rules)
 	phase("sites")
+	var bodies map[string]string
+	if o.afterRead != nil {
+		bodies = bodyHashes(l)
+	}
 	graph, err := sg.BuildConsuming(l.ir)
 	if err != nil {
 		return nil, err
 	}
 	phase("graph")
+	if o.afterRead != nil {
+		if err := o.afterRead(l, rules, st, graph, bodies); err != nil {
+			return nil, err
+		}
+		phase("graphdb")
+		if o.structureOnly {
+			return nil, nil
+		}
+	}
 	opts := taint.DefaultOptions()
 	opts.K = o.k
 	opts.Timeout = o.timeout
@@ -162,6 +163,36 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	return rep, nil
 }
 
+// read loads the code (the Go packages, the IR of an extractor, or a stream of IR) and makes the IR of it.
+func (o *analyzeOpts) read(patterns []string, rules *model.Rules, phase func(string)) (*loaded, error) {
+	if o.irFile != "" {
+		l, err := readIR(o.irFile)
+		if err != nil {
+			return nil, err
+		}
+		phase("ir")
+		return l, nil
+	}
+	langs, err := o.languages()
+	if err != nil {
+		return nil, err
+	}
+	if len(langs) != 1 || langs[0] != langGo {
+		l, err := o.loadLangs(langs, patterns, rules)
+		if err != nil {
+			return nil, err
+		}
+		phase("load")
+		return l, nil
+	}
+	l, err := o.loadGo(patterns, rules, o.maxImpl)
+	if err != nil {
+		return nil, err
+	}
+	phase("ir")
+	return l, nil
+}
+
 // phaseTimer returns a function that prints the time since the previous call.
 func (o *analyzeOpts) phaseTimer() func(string) {
 	last := time.Now()
@@ -210,22 +241,45 @@ func runIndex(args []string) error {
 	fs := flag.NewFlagSet("index", flag.ExitOnError)
 	var o analyzeOpts
 	o.register(fs)
-	out := fs.String("o", "", "file to write (default: .rivus/index.json below -C)")
+	out := fs.String("o", "", "with -taint: the JSON index to write (default: .rivus/index.json below -C)")
+	graph := fs.String("graph", "", "the graph file to write (default: in the user's cache, by the absolute path of -C)")
+	taintFlag := fs.Bool("taint", false, "also run the taint analysis (slow) and write its result as the JSON index that query -index and resolve -index read (-o implies it)")
 	fs.Parse(args)
+	// -o has always meant the JSON index: it is not left out silently
+	taint := taintFlag
+	if *out != "" {
+		t := true
+		taint = &t
+	}
+	path, err := graphFile(*graph, &o)
+	if err != nil {
+		return err
+	}
+	started := time.Now()
+	var counts *graphdb.Counts
+	o.afterRead = o.graphIndexer(path, fs.Args(), started, func(c *graphdb.Counts) { counts = c })
+	o.structureOnly = !*taint
 
 	rep, err := o.analyze(fs.Args())
 	if err != nil {
 		return err
 	}
-	path := *out
-	if path == "" {
-		path = filepath.Join(o.dir, ".rivus", "index.json")
+	fmt.Fprintf(os.Stderr, "rivus: wrote %s (%d functions, %d call sites, %d edges, %d sites, %d files read, %d ms)\n",
+		path, counts.Funcs, counts.CallSites, counts.Edges, counts.Sites, counts.Files, time.Since(started).Milliseconds())
+	if !*taint {
+		fmt.Fprintln(os.Stderr, "rivus: the file has the structure layer only (functions, call sites, edges, sites): there is no taint layer, so it holds no findings and says nothing of whether the code has any. -taint runs the analysis and writes the JSON index")
+		return nil
 	}
-	if err := rep.Save(path); err != nil {
+	jpath := *out
+	if jpath == "" {
+		jpath = filepath.Join(o.dir, ".rivus", "index.json")
+	}
+	if err := rep.Save(jpath); err != nil {
 		return err
 	}
 	fmt.Fprintf(os.Stderr, "rivus: wrote %s (%d sites, %d findings, %d uncertainties, %d ms)\n",
-		path, len(rep.Sites), len(rep.Findings), len(rep.Uncertainties), rep.Stats.DurationMilli)
+		jpath, len(rep.Sites), len(rep.Findings), len(rep.Uncertainties), rep.Stats.DurationMilli)
+	fmt.Fprintln(os.Stderr, "rivus: the taint layer is in the JSON index, not in the graph file (it will move there)")
 	return nil
 }
 

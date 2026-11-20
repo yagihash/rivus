@@ -3,7 +3,9 @@
 package builtin
 
 import (
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"fmt"
 	"sort"
 
@@ -38,4 +40,28 @@ func Load() ([]*model.RuleSet, error) {
 		out = append(out, rs)
 	}
 	return out, nil
+}
+
+// Hash is the SHA-256 of the built-in rule files (their names and contents):
+// what a saved result needs to know to tell that the built-in rules changed.
+func Hash() (string, error) {
+	entries, err := files.ReadDir(".")
+	if err != nil {
+		return "", err
+	}
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	sort.Strings(names)
+	h := sha256.New()
+	for _, n := range names {
+		b, err := files.ReadFile(n)
+		if err != nil {
+			return "", err
+		}
+		fmt.Fprintf(h, "%s\x00%d\x00", n, len(b))
+		h.Write(b)
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }

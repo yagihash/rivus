@@ -66,6 +66,11 @@ type Program struct {
 
 	LoadErrors []LoadError
 
+	// Inputs is what the load read: the files of the packages (the standard
+	// library and the dependencies included), the go.mod files of their modules,
+	// and the directories of the modules that are not in the module cache.
+	Inputs Inputs
+
 	// OwnPkgs are the packages that were loaded from source, as opposed to
 	// their dependencies.
 	OwnPkgs []*ssa.Package
@@ -79,6 +84,58 @@ type Program struct {
 	byRel   map[string][]*token.File
 	byID    map[string]*ssa.Function
 }
+
+// Inputs lists the files the Go load read, as absolute paths.
+type Inputs struct {
+	// Files are the Go files of every package (also those that build
+	// constraints left out, which a change of the constraint would bring in),
+	// the files of other languages that go with them, and the embedded files.
+	Files []string
+	// GoMods are the go.mod files of the modules of the packages.
+	GoMods []string
+	// ModuleDirs are the directories of the modules whose code can change under
+	// the user's hands: the modules of the main program, and the replacements
+	// that are a directory. The module cache (read only) is not one of them.
+	ModuleDirs []string
+}
+
+// collectInputs lists what the loaded packages read.
+func collectInputs(pkgs []*packages.Package) Inputs {
+	files, mods, dirs := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	packages.Visit(pkgs, nil, func(pkg *packages.Package) {
+		for _, list := range [][]string{pkg.GoFiles, pkg.CompiledGoFiles, pkg.OtherFiles, pkg.EmbedFiles, pkg.IgnoredFiles} {
+			for _, f := range list {
+				files[f] = true
+			}
+		}
+		if m := pkg.Module; m != nil {
+			if m.GoMod != "" {
+				mods[m.GoMod] = true
+			}
+			if m.Main && m.Dir != "" {
+				dirs[m.Dir] = true
+			}
+			if r := m.Replace; r != nil && r.Dir != "" {
+				dirs[r.Dir] = true
+				if r.GoMod != "" {
+					mods[r.GoMod] = true
+				}
+			}
+		}
+	})
+	keys := func(m map[string]bool) []string {
+		out := make([]string, 0, len(m))
+		for k := range m {
+			out = append(out, k)
+		}
+		sort.Strings(out)
+		return out
+	}
+	return Inputs{Files: keys(files), GoMods: keys(mods), ModuleDirs: keys(dirs)}
+}
+
+// Rel names a file as the output does: relative to the load directory when it is inside it.
+func (p *Program) Rel(name string) string { return p.rel(name) }
 
 // Load loads the packages matching patterns relative to dir.
 //
@@ -115,6 +172,7 @@ func Load(dir string, patterns []string, opts Options) (*Program, error) {
 	for _, pkg := range pkgs {
 		p.PkgPaths = append(p.PkgPaths, pkg.PkgPath)
 	}
+	p.Inputs = collectInputs(pkgs)
 	seenErr := map[string]bool{}
 	packages.Visit(pkgs, nil, func(pkg *packages.Package) {
 		for _, e := range pkg.Errors {

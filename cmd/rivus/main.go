@@ -17,7 +17,8 @@ Commands:
   sites     list the places where source and sink rules match (fast)
   analyze   find the flows from sources to sinks across functions and packages
   query     answer a one-sided question about a sink or a source
-  index     run the analysis once and save the result for later queries
+  index     read the code once and save its call graph (and with -taint, the analysis) for later queries
+  graph     search the call graph saved by index ("rivus graph info"): calls, not the flow of data
   resolve   find where the places seen earlier (bookmarks) are in the current code
   extract   write the neutral IR of the code (JSON Lines, or -text to read it)
   models    "rivus models coverage": which functions need a model most
@@ -41,6 +42,8 @@ func main() {
 		err = runQuery(os.Args[2:])
 	case "index":
 		err = runIndex(os.Args[2:])
+	case "graph":
+		err = runGraph(os.Args[2:])
 	case "resolve":
 		err = runResolve(os.Args[2:])
 	case "extract":

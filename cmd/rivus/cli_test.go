@@ -22,6 +22,8 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 	binary = filepath.Join(dir, "rivus")
+	// the graph files go to the cache: not the user's
+	os.Setenv("RIVUS_CACHE_DIR", filepath.Join(dir, "cache"))
 	if out, err := exec.Command("go", "build", "-o", binary, ".").CombinedOutput(); err != nil {
 		panic(string(out))
 	}

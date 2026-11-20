@@ -10,7 +10,10 @@
 // core. It does carry the full content of constants.
 package ir
 
-import "fmt"
+import (
+	"fmt"
+	"sort"
+)
 
 // SchemaVersion identifies the format of the stream.
 const SchemaVersion = "rivus.ir/0"
@@ -423,6 +426,11 @@ type Program struct {
 	// LoadErrors are what the extractor could not read.
 	LoadErrors []LoadError `json:"load_errors,omitempty"`
 
+	// Files are the source files named by the positions, set by the reader
+	// before the functions of dependencies that nothing reaches are dropped
+	// (SourceFiles). Not part of the stream.
+	Files []string `json:"-"`
+
 	// ValuesResolved is set when the calls of function values have their
 	// ValueCands (internal/valuecalls).
 	ValuesResolved bool `json:"-"`
@@ -466,4 +474,51 @@ type Global struct {
 	Name string `json:"name"`
 	Type TypeID `json:"type,omitempty"`
 	Pos  Pos    `json:"pos,omitempty"`
+}
+
+// SourceFiles lists the files the program's positions name, sorted: the
+// source files an extractor read that left a trace in the IR. A function that
+// PruneDeps drops is listed too when this is called before it.
+func (p *Program) SourceFiles() []string {
+	set := map[string]bool{}
+	add := func(f string) {
+		if f != "" {
+			set[f] = true
+		}
+	}
+	for _, f := range p.Funcs {
+		if f == nil {
+			continue
+		}
+		add(f.File)
+		add(f.Pos.File)
+		for bi := range f.Blocks {
+			b := &f.Blocks[bi]
+			for ii := range b.Instrs {
+				in := &b.Instrs[ii]
+				add(in.Pos.File)
+				add(in.AddrPos.File)
+				for _, a := range in.ArgPos {
+					add(a.File)
+				}
+			}
+			add(b.Term.Pos.File)
+			add(b.Term.CondPos.File)
+		}
+	}
+	for _, g := range p.Globals {
+		add(g.Pos.File)
+	}
+	for _, t := range p.Texts {
+		add(t.File)
+	}
+	for _, t := range p.CallTexts {
+		add(t.File)
+	}
+	out := make([]string, 0, len(set))
+	for f := range set {
+		out = append(out, f)
+	}
+	sort.Strings(out)
+	return out
 }

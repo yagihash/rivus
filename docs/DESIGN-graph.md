@@ -60,8 +60,28 @@ AI エージェントが、コード上の 1 点を指して、「そこへ届�
 - 鍵の各要素について、「変えたらヒットしない」ことのテストを書く。
 - **段階 2(抽出の結果の再利用)と段階 3(関数の要約の再利用)は、結果が「全部やり直したとき」と完全に同一であることを、変更のパターンを変えて(Gitea を含めて)確かめられるまで、入れない。**疑わしいときは、広く無効にする。
 
+## 段階 1 の実装(2026-11-21)で決まったこと
+
+`rivus index`(構造の層)、SQLite への保存、`rivus graph info` を作った。段階 2 以降(`callers` / `callees` / `path` / `impls` / `dispatchers`、フロンティア、フィルタ、サイト ID の連携)は、まだ。
+
+- **コード**: `internal/graphdb`(スキーマ、書き込み、読み取り、鍵の部品)、`cmd/rivus/graph.go`(`index` の構造の層、`graph info`)、`cmd/rivus/graphkey.go`(鍵の組み立て)。SQLite は `modernc.org/sqlite`(純 Go)。
+- **スキーマ(`PRAGMA user_version` = 1)**: `meta`(key/value: `schema_version`、`rivus_version`、`created_at`、`source_hash`、`dir`、`languages`、`flags`、`key_config`、`manifest`、`roots`、`revision`、`layers`(層ごとの名前・版・作成日時の配列。今は `structure` だけ))、`files`(`path`、`sha256`、`size`、`kind`。読んだファイルは `sha256` を持ち、位置にだけ出るファイルは持たない)、`funcs`(`fid`、`symbol`、`file_id`/`line`/`col`/`offset`、`entry`、`init`、`dep`、`exported`、`has_body`、`lang`、`body_hash`。本体のない呼び先も、`has_body = 0` の行として入る)、`callsites`(`func_id`、位置、`kind` = `static` / `interface` / `value` / `builtin`、`callee`、`ncand`、`is_go`)、`edges`(`callsite_id`、`from_func`、`to_func`、`kind`、`ncand`)、`sites`(`rivus sites` と同じ ID と位置。呼び出し点なら `callsite_id`)。索引: シンボル、位置(`file_id`, `line`, `col`)、関数 ID、辺の両端(`from_func`、`to_func`、`callsite_id`)。taint の層の表はない。
+- **辺の候補は `sg` のもの**: 静的(`StaticID`)、インターフェース(`Callee.Candidates`)、関数値(VTA の候補と `internal/valuecalls`)。呼び出し点の種類(`kind`)は、呼び出しの種類(IR の `Callee.Kind`)で決め、辺の `kind` はそれと同じ。インターフェースの呼び出しで候補が 0 のものも、呼び出し点としては入る(`ncand = 0`)。組み込み(`len`、`append` など)も呼び出し点(`kind = builtin`)として入る。
+- **`-taint` の扱い**: `rivus index` の既定は、構造の層だけを SQLite に書く。`-taint`(または `-o`)は、これまでどおり JSON の index を書く(`query -index` と `resolve -index` は、そのまま JSON を読む)。同じ実行で、構造の層も SQLite に書く(グラフを作った直後なので、費用がほぼない)。taint の層は、JSON にあり、SQLite にはない(出力に書く)。`-o` を `-taint` なしで渡したときは、`-taint` を意味する(これまでの使い方を、黙って変えない)。
+- **保存先**: `-graph <file>`。なければ `os.UserCacheDir()/rivus/<-C の実パスの SHA-256 の先頭 8 バイト>/graph.db`(環境変数 `RIVUS_CACHE_DIR` で、キャッシュのルートを変えられる。テストが使う)。一時ファイルに書いて、移動する(読む側が、書きかけを見ない)。世代管理なし。読むのは `-graph` か `-C` から導いたキャッシュだけで、`mode=ro`、`query_only`、`trusted_schema=0` で開き、ビューとトリガーを持つファイルは拒否する。スキーマ版が違えば、`rivus index` で作り直すよう案内するエラー。
+- **鍵(`source_hash`)**: SHA-256 の元は、(a) 設定(`rivus` の版 = 実行ファイルのハッシュ + 任意の `versionStamp`、`-tests` / `-no-deps` / `-k` / `-numeric-taint` / `-max-implementations` / `-lang`(解決後)/ `-allow-deps-under` / `-no-builtin-rules` / `-no-project-rules` / `-deterministic-only` / パッケージ、組み込みルールの内容のハッシュ、ルールファイルの一覧、`go env -json` の全項目(`GOGCCFLAGS` だけは毎回違う一時ディレクトリを含むので除く。`GOMOD` / `GOWORK` は `-C` からの相対にする)、Dart と Rust の extractor の実行ファイルのハッシュ・`--version`・SDK の版)、(b) ファイルとその内容のハッシュ、(c) ツリーのファイル名の一覧のハッシュ(マニフェスト。新しいファイルを見逃さない)。
+  - **Go のファイル**は `go/packages` の一覧(`GoFiles`、`CompiledGoFiles`、`OtherFiles`、`EmbedFiles`、ビルド制約で除かれた `IgnoredFiles`。依存と標準ライブラリを含む)と、各モジュールの `go.mod`、`go.sum` / `go.work` / `go.work.sum` / `vendor/modules.txt`(あれば)。マニフェストの対象は、`-C` と、メインのモジュールと `replace` 先のディレクトリ(モジュールキャッシュは除く)。**読んでいないファイル(`-tests` なしの `_test.go` など)の内容の変更は、変更にしない**(読んでいないので、結果に影響しない)。ただし、ファイルの追加と削除は、マニフェストで変更になる。
+  - **Dart と Rust**: IR のストリームは、読んだファイルの一覧を持たない(IR のスキーマは変えていない)。そこで、保守的に、プロジェクトのツリーの全ファイルの内容(`.git`、`.dart_tool`、`.rivus`、`node_modules`、ルート直下の `build` と `target` を除く。`lib/.generated` のような、隠しディレクトリの中の、読まれるソースは含む)、ロックファイル(`pubspec.lock`、`.dart_tool/package_config.json`、`Cargo.lock`、`rust-toolchain*`、`.cargo/config*`)、IR が名前を挙げるツリーの外のファイル(パッケージキャッシュの依存。**`PruneDeps` の前**の一覧)、extractor と SDK の版、で鍵を作る。`-ir` のときは、ストリームのファイルの内容が鍵(ソースは読まない)。
+  - 読んでいる最中にファイルが書き換わったら(読み込み開始より新しい更新時刻)、鍵を作らず、エラーにする。
+  - 照合(`graph info -C`)は、記録した一覧のファイルを今のディスクで再ハッシュし(ロック、ルール、ツリーは、一覧を作り直す)、設定を作り直し、違いを `stale_reasons` に、1 行ずつ出す。**出力の `fresh: true` は、「同じフラグで、今のソースから作り直しても同じ鍵になる」こと**。
+- **足りないこと(保守的にしていないもの)**: Dart の extractor 自体のソース(`pub global activate --source path` で入れたもの)の内容は、ハッシュしていない(`--version` と shim の実行ファイルだけ)。Rust のプロジェクトが、`-C` より上のワークスペースのルートの `Cargo.lock` を使うときは、読まない(`-C` をルートにする)。Dart / Rust の `-C` の外の、パス依存(`path:`)の中の、IR に関数が出ないファイル(宣言のない定数だけのファイルなど)は、見ない。
+- **測定(2026-11-21。他のエージェントが動いていて、時間は揺れる)**: x/tools v0.52(関数 9,549、呼び出し点 57,989、辺 48,328、サイト 274): `rivus index` 全体 4.2 秒(鍵 0.28 秒、書き込み 0.24 秒)、DB 10 MB、開く 3 ms、`file:line:col` の検索 0.2 ms、`graph info -C` 0.28 秒。Gitea(関数 63,591、呼び出し点 482,450、辺 584,929、サイト 696、ファイル 12,640): 全体 90 秒(ロードと IR が 77 秒。構築の費用は、鍵 0.9 秒 + 書き込み 2.2 秒 + 本体のハッシュ)、DB 91 MB、開く 3 ms、位置の検索 0.2 ms、`graph info -C` 0.77 秒。
+
+- **既知の揺れ**: 同じソースから作っても、関数の件数が数件違うことがある(x/tools で 9,542〜9,549)。違うのは標準ライブラリの関数(`(*sync.Mutex).Lock`、`slices.Repeat` など)の本体の有無で、`Deps` つきの Go のロード(`ssautil.AllFunctions`)の、もとからある揺れ。`rivus extract -all`(依存なし)は安定している。DB の鍵には影響しない(鍵は入力から作る)が、段階 2 で「件数が同じか」を比べるときは、これを踏まえる。
+
 ## これから決めること
 - 動的な呼び出しの、展開する候補数の上限(Gitea の候補数の分布を測って決める)
-- 出力スキーマの細部(フィールド名、`hints` の文面)
-- git の revision をどう添えるか(`dirty` をやめたので、作業ツリーの変更は、`source_hash` で表す)
-- 既存の `index.json`(taint の部分)を、いつ DB に移すか
+- 出力スキーマの細部(`callers` などのフィールド名、`hints` の文面)
+- git の revision をどう添えるか(`dirty` をやめたので、作業ツリーの変更は、`source_hash` で表す。今は `meta.revision` に HEAD を入れるだけ)
+- taint の層(findings、不確実性)を、いつ DB に移すか。移すときは、`layers` に層を足し、層ごとの版・作成日時・ハッシュで、構造の層とのずれを検出する
+- `callsites` の組み込み(`builtin`)が、呼び出し点の約 4 割を占める(Gitea: 全 482,450 のうち 203,578。`kind` で除ける)。段階 2 で、既定の検索から外すか
