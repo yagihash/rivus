@@ -25,6 +25,7 @@ func TestGraphFromTheIROfOtherLanguages(t *testing.T) {
 		if dart == "" {
 			skipOrFail(t, "RIVUS_DART")
 		}
+		ensureDartSamplePub(t, dart)
 		extractor, _ := filepath.Abs("../../extractor/dart")
 		words := strings.Fields(dart)
 		cmd := exec.Command(words[0], append(words[1:], "run", "bin/rivus_dart.dart", "test/sample")...)

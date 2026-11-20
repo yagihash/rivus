@@ -95,6 +95,10 @@ sources:
     symbol: example.com/cases/cases/paramshare/ctxstate.handler
     params: [0]
     labels: [user_input]
+  - kind: param
+    symbol: example.com/cases/cases/paramshare/ctxptr.handler
+    params: [0]
+    labels: [user_input]
   - kind: param_type
     type: "*example.com/cases/cases/paramshare/ptype.Req"
     labels: [user_input]

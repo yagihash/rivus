@@ -12,6 +12,27 @@ import (
 	"github.com/yagihash/rivus/internal/ir"
 )
 
+// ensureDartSamplePub runs `dart pub get --offline` in extractor/dart/test/sample when its
+// .dart_tool/package_config.json is not there (a fresh checkout or worktree): without it the
+// extractor cannot resolve the sample's packages ("a name that does not resolve: Server"). CI runs
+// `dart pub get` first; the sample's dependencies are in the pub cache, so no network is needed.
+func ensureDartSamplePub(t *testing.T, dart string) {
+	t.Helper()
+	sample, err := filepath.Abs("../../extractor/dart/test/sample")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(sample, ".dart_tool", "package_config.json")); err == nil {
+		return
+	}
+	words := strings.Fields(dart)
+	get := exec.Command(words[0], append(append([]string{}, words[1:]...), "pub", "get", "--offline")...)
+	get.Dir = sample
+	if out, err := get.CombinedOutput(); err != nil {
+		t.Fatalf("run `dart pub get` in extractor/dart/test/sample first (`dart pub get --offline` failed: %v)\n%s", err, out)
+	}
+}
+
 // The Dart extractor writes the neutral IR of a sample package; rivus reads it
 // and finds the flows that the annotations of the sample say it must find, and
 // no other. It needs the Dart SDK: RIVUS_DART names the command that runs it,
@@ -21,6 +42,7 @@ func TestDartExtractor(t *testing.T) {
 	if dart == "" {
 		skipOrFail(t, "RIVUS_DART")
 	}
+	ensureDartSamplePub(t, dart)
 	extractor, err := filepath.Abs("../../extractor/dart")
 	if err != nil {
 		t.Fatal(err)
@@ -157,6 +179,7 @@ func TestDartExtractorLeavesOutAFunctionThatFails(t *testing.T) {
 	if dart == "" {
 		skipOrFail(t, "RIVUS_DART")
 	}
+	ensureDartSamplePub(t, dart)
 	extractor, err := filepath.Abs("../../extractor/dart")
 	if err != nil {
 		t.Fatal(err)
@@ -200,6 +223,7 @@ func TestDartExtractorControlFlowShapes(t *testing.T) {
 	if dart == "" {
 		skipOrFail(t, "RIVUS_DART")
 	}
+	ensureDartSamplePub(t, dart)
 	extractor, err := filepath.Abs("../../extractor/dart")
 	if err != nil {
 		t.Fatal(err)

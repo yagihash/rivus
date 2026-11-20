@@ -152,3 +152,25 @@ func TestParamSourceNotWrittenBackIsLost(t *testing.T) {
 	}
 	t.Skip("known miss (ADR-048): the taint of a param source is not written back to the caller")
 }
+
+// TestParamSourceReachedThroughAnotherPointerIsLost: ctxstate with the caller's own
+// pointer to the shared object. handler writes c.Query into c.App.Last; reader gets the
+// App itself (reader(app)), not the Ctx. KNOWN MISS (silent): the same object reaches the
+// two functions through two pointers, and rivus has no full pointer analysis (an accepted
+// approximation, not an effect of ADR-048). Nothing is left in the functions of the source
+// (handler) and the sink (reader): the trace is checked here, as in the curated tests.
+func TestParamSourceReachedThroughAnotherPointerIsLost(t *testing.T) {
+	var rep report.Report
+	if err := json.Unmarshal(rivus(t, "analyze", "-rules", "rules.yaml", "./cases/paramshare/ctxptr"), &rep); err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Findings) != 0 {
+		t.Fatalf("the known miss is found now (%d findings): make this test fail on a miss, and correct bench/MISSES.md", len(rep.Findings))
+	}
+	for _, u := range rep.Uncertainties {
+		if strings.HasSuffix(u.Func, "ctxptr.handler") || strings.HasSuffix(u.Func, "ctxptr.reader") {
+			t.Fatalf("a trace is left now (%s in %s): the miss is not silent, correct bench/MISSES.md", u.Kind, u.Func)
+		}
+	}
+	t.Skip("known miss (silent): one object reached through two pointers (handler(c) writes c.App.Last, reader(app) reads it)")
+}

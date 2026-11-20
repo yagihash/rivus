@@ -62,6 +62,8 @@
 
 (Rust 13 と Go 3 は、下の「CVE の形のフィクスチャ」の節の 3 件を足した数。この節より上の表と文は、足す前の数のまま。)
 
+**別名の限界(`alias-ptr`)を足したあと: Go 15(silent 14、痕跡 1)、計 `@miss` 78、silent 66 / 78 = 85%。**(ADR-050 のあとの数 77 / 65 = 84% に、Go 1 を足した。上の C-7 の段落の数は、足す前のまま。)
+
 **C-7 のフィクスチャを足したあと(`docs/DESIGN-capture.md`、今の数。テストが数える): `@miss` 75 = Dart 45(silent 35、痕跡 10)、Rust 16(silent 15、痕跡 1)、Go 14(silent 13、痕跡 1)。silent 63 / 75 = 84%。** 足した分(Dart `callbacks.dart` 11、Go `api/capture.go` 11、Rust `callbacks.rs` 3)は、捕獲した値が、ヘルパーが呼ぶクロージャの中で落ちる形(`CAP` ほか)で、**エンジンが悪化したのではなく、見えていなかった見逃しを記録した結果**。Rust の 3 件(`thread::spawn` = `unmodeled_library_call`、`Box<dyn Fn>` をフィールドに入れて別の関数が呼ぶ、`Vec::retain`)は、渡すだけの形で、今、**見つからない**(Rust も黙った見逃し。C-7 の最初の版の対象外とした前提の、「読む側は今でも見つかる」は、呼ぶ側が見える形だけで成り立つ)。
 
 `@miss(<kind>)` の 7 件: Dart の `holder-a`、`holder-b`、`curry`(`unresolved_callee`)、`getter-fn`(`unmodeled_library_call,unresolved_callee`)、`map-entries`(`dynamic_dispatch`、候補なし)、`dyn-arg`、`dyn-body`(`unmodeled_library_call`、上の限界)。残りの 40 件は、source と sink の関数に、痕跡が無い(`silent`)。前の版の「黙った 30、弱い痕跡 7、痕跡あり 7」(44 件。Dart 32、Rust 11)に、RUST-13/14・DART-12 のフィクスチャの 3 件(`dyn-arg`、`dyn-body`、`model-body`)を足した 47 件を、定義に当てはめ直した: 黙った 30 + 弱い 7 + `takes-a/b` 2 + `model-body` 1 = 40(`silent`)、痕跡あり 7 - 2 + `dyn-*` 2 = 7。
@@ -264,6 +266,12 @@ Rust の `@miss` は、案 2 では 1 つも直らない(11 件とも、別の�
 | タグ | source → sink | 痕跡(注釈) | 型 | 案 2 | 備考 |
 | --- | --- | --- | --- | --- | --- |
 | `options` | api/more.go:32 → 33 | `silent`(ヘルパー側: api/more.go:25 に dynamic_dispatch) | `RET-CLOSURE` | 直らない | `WithName(n)` が返すクロージャを、可変長の引数(スライス)で受けた `build` が `o(q)` で呼ぶ。実験: 返されたクロージャを同じ関数で呼んでも、ヘルパーに渡しても落ちる |
+
+### Go の `@miss`: 別名の限界(`alias-ptr`、2026-11-21)
+
+| タグ | source → sink | 痕跡 | 型 | 備考 |
+| --- | --- | --- | --- | --- |
+| `alias-ptr` | go-curated/api/alias.go:`store` → `use`(`testdata/go/cases/paramshare/ctxptr` が同じ形の param source 版) | **`silent`**(source の関数 `store`・sink の関数 `use` に不確実性なし。`uncertainties` は `init` の `unmodeled_library_call` だけ) | `ALIAS`(完全なポインタ解析を作らない、という受け入れ済みの近似) | `h.S.Last = <source>` と書く関数と、同じ `state` を自分のポインタ `s` で受け取って `s.Last` を sink に渡す関数。呼び元が `use(h)` / `reader(c)`(同じ親を渡す)なら見つかる(`ctxstate`)。別のポインタ(`use(s)`)で渡すと見つからない。C-1(ADR-048)より前、ce6dc31 でも見つからない(退行ではない) |
 
 ### Go の `@fp`(5)
 
