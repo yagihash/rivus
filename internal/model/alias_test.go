@@ -96,3 +96,10 @@ func TestRedactValuesHidesWhatTheDecoderQuotes(t *testing.T) {
 		t.Errorf("the value is still in the message: %v", RedactValues(err))
 	}
 }
+
+func TestSymbolWithASpaceAroundItIsRejected(t *testing.T) {
+	_, err := parseSet(t, "ruleset: t@1\nsinks:\n  - symbol: \" example.com/gen.Sink\"\n    args: [0]\n    category: x\n")
+	if err == nil || !strings.Contains(err.Error(), "space around") {
+		t.Fatalf("a symbol with a space around it is accepted: %v", err)
+	}
+}

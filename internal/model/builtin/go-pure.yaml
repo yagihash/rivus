@@ -116,8 +116,6 @@ propagators:
     pure: true
   - symbol: (io/fs.DirEntry).Type
     pure: true
-  - symbol: (io.Closer).Close
-    pure: true
   - symbol: (reflect.Type).Elem
     pure: true
   - symbol: (reflect.Type).Kind

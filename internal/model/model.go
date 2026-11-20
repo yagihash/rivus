@@ -530,6 +530,9 @@ func (rs *RuleSet) validate() error {
 			if s.Symbol == "" {
 				return fmt.Errorf("%s: symbol is required for kind %s", what, s.Kind)
 			}
+			if err := checkSymbol(s.Symbol, what); err != nil {
+				return err
+			}
 			for _, o := range s.Out {
 				if o < 0 {
 					return fmt.Errorf("%s: out: %d is not an argument position", what, o)
@@ -559,6 +562,9 @@ func (rs *RuleSet) validate() error {
 			if s.Symbol == "" {
 				return fmt.Errorf("%s: symbol is required for kind %s", what, s.Kind)
 			}
+			if err := checkSymbol(s.Symbol, what); err != nil {
+				return err
+			}
 			if len(s.Params) == 0 && !s.Recv {
 				return fmt.Errorf("%s: kind %s needs params or recv", what, s.Kind)
 			}
@@ -578,6 +584,9 @@ func (rs *RuleSet) validate() error {
 		}
 		if s.Symbol == "" {
 			return fmt.Errorf("%s: symbol is required", what)
+		}
+		if err := checkSymbol(s.Symbol, what); err != nil {
+			return err
 		}
 		if err := checkMatch(s.Match, what); err != nil {
 			return err
@@ -603,6 +612,9 @@ func (rs *RuleSet) validate() error {
 		}
 		if s.Symbol == "" {
 			return fmt.Errorf("%s: symbol is required", what)
+		}
+		if err := checkSymbol(s.Symbol, what); err != nil {
+			return err
 		}
 		if len(s.Drops) == 0 {
 			return fmt.Errorf("%s: drops is required", what)
@@ -632,6 +644,9 @@ func (rs *RuleSet) validate() error {
 		if p.Symbol == "" {
 			return fmt.Errorf("%s: symbol is required", what)
 		}
+		if err := checkSymbol(p.Symbol, what); err != nil {
+			return err
+		}
 		if len(p.Flows) == 0 && !p.Pure {
 			return fmt.Errorf("%s: flows is required (or pure: true when nothing flows)", what)
 		}
@@ -655,6 +670,15 @@ func (rs *RuleSet) validate() error {
 				aliased[p.Symbol] = true
 			}
 		}
+	}
+	return nil
+}
+
+// checkSymbol rejects a symbol with a space around it: it is a mistake that no call has the symbol of, and the
+// rule would silently not apply (yagihash/rivus #53).
+func checkSymbol(sym, what string) error {
+	if sym != strings.TrimSpace(sym) {
+		return fmt.Errorf("%s: symbol %q has a space around it", what, sym)
 	}
 	return nil
 }

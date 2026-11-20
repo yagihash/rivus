@@ -558,8 +558,6 @@ propagators:
     flows: [{from: recv, to: result}]
   - symbol: text/template.ParseFS
     flows: [{from: arg0, to: result0}]
-  - symbol: (log/slog.Record).Message
-    flows: [{from: recv, to: result}]
 
 sinks:
   - symbol: net/http.ServeFile
