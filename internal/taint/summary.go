@@ -438,6 +438,8 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 // join normally changes nothing; its job is to make termination certain when
 // widening or mutual recursion would otherwise make a summary flip back and
 // forth: the result can only grow, and the set of possible elements is finite.
+// (A widened output joined with one that is not has the whole and the parts: the parts are
+// dropped before widen (absorbWhole), or the elements would go up and down for ever.)
 func joinSummaries(old, cur *Summary) *Summary {
 	if old == nil {
 		return cur
@@ -506,7 +508,7 @@ func joinSummaries(old, cur *Summary) *Summary {
 			list = append(list, oe)
 		}
 		sort.Slice(list, func(i, j int) bool { return lessElem(list[i].E, list[j].E) })
-		out.Outputs = append(out.Outputs, Output{Kind: k.kind, Index: k.index, Global: k.glob, Path: k.path, Elems: widen(list)})
+		out.Outputs = append(out.Outputs, Output{Kind: k.kind, Index: k.index, Global: k.glob, Path: k.path, Elems: widen(absorbWhole(list))})
 	}
 	sinks := map[sinkKey]*SinkReach{}
 	for _, sum := range []*Summary{old, cur} {
@@ -598,4 +600,35 @@ func usesCaptures(sum *Summary, declared int) bool {
 		}
 	}
 	return false
+}
+
+// absorbWhole drops the elements that stand for a part of a parameter when the element that
+// stands for the whole of it (what widen makes) is there too, with the same operations (mods)
+// and the same conditions, or none: the part adds nothing, because the whole is read at the same
+// place and below it. Without it, a summary that was widened and is joined with one that was
+// not has both, is widened again, and the elements go up and down for ever.
+func absorbWhole(list []OutElem) []OutElem {
+	type key struct {
+		param int32
+		mods  string
+	}
+	whole := map[key]OutElem{}
+	for _, oe := range list {
+		if oe.E.Kind == Param && oe.E.Path() == "" {
+			whole[key{oe.E.Param, oe.E.Mods()}] = oe
+		}
+	}
+	if len(whole) == 0 {
+		return list
+	}
+	out := list[:0:0]
+	for _, oe := range list {
+		if oe.E.Kind == Param && oe.E.Path() != "" {
+			if w, ok := whole[key{oe.E.Param, oe.E.Mods()}]; ok && (len(w.Guards) == 0 || sameGuards(w.Guards, oe.Guards)) {
+				continue
+			}
+		}
+		out = append(out, oe)
+	}
+	return out
 }
