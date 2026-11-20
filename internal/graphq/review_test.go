@@ -195,13 +195,13 @@ func TestWithoutFiltersHintWhenTheSearchWasCut(t *testing.T) {
 	if r.Reachable || r.Exhaustive || r.WithoutFilters == nil || !r.WithoutFilters.Reachable {
 		t.Fatalf("%+v", r)
 	}
-	if anyHas(r.Hints, "one of them cuts it") || !anyHas(r.Hints, "cannot be said that the filters") {
+	if anyHas(r.Hints, "cuts it") || !anyHas(r.Hints, "cannot be said that the filters") {
 		t.Errorf("%v", r.Hints)
 	}
 	// when the search was whole, the filters are the cause
 	e = build(t, []fnDef{{"S", []call{{"s.go", 1, 1, "", "X", nil}}}, {"X", []call{{"x.go", 1, 1, "", "Z", nil}}}, {"Z", nil}})
 	r, _ = e.Path("S", "Z", graphq.Options{Avoid: []string{"X"}})
-	if !r.Exhaustive || !anyHas(r.Hints, "one of them cuts it") {
+	if !r.Exhaustive || !anyHas(r.Hints, "cuts it") {
 		t.Errorf("%v", r.Hints)
 	}
 }

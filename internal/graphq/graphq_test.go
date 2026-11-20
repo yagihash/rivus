@@ -21,7 +21,7 @@ type call struct {
 	line, col int
 	// kind: "" static, "builtin", "dyn" (an interface), "val" (a function value);
 	// "ref": a static call of callee that takes the functions of cands as arguments (named as values);
-	// "closure": the same with closures that capture a value; "store": the functions of cands are
+	// "closure": the same with closures that capture a value; "closure0": the same, the instruction that makes the closure has no position; "store": the functions of cands are
 	// held by an instruction that is not a call (the callee is ignored)
 	kind   string
 	callee string // the function (static), or the name of the method (dynamic)
@@ -43,7 +43,7 @@ var lastProgram *sg.Program
 
 // instrs are the instructions of a call: the ones that make the function values it takes, and the call.
 func (c call) instrs(fn *ir.Func) []ir.Instr {
-	if c.kind != "ref" && c.kind != "closure" && c.kind != "store" {
+	if c.kind != "ref" && c.kind != "closure" && c.kind != "closure0" && c.kind != "store" {
 		return []ir.Instr{c.instr()}
 	}
 	var out []ir.Instr
@@ -52,8 +52,10 @@ func (c call) instrs(fn *ir.Func) []ir.Instr {
 		id := ir.LocalID(len(fn.Locals))
 		fn.Locals = append(fn.Locals, ir.Local{Class: ir.ClassFunc})
 		mc := ir.Instr{Op: ir.OpMakeClosure, Dsts: []ir.LocalID{id}, Func: ir.FuncID(f)}
-		if c.kind == "closure" {
+		if c.kind == "closure" || c.kind == "closure0" {
 			mc.Args = []ir.LocalID{0}
+		}
+		if c.kind == "closure" {
 			mc.Pos = ir.Pos{File: c.file, Line: c.line, Col: c.col - 1, Offset: 5000 + int(id)}
 		}
 		out = append(out, mc)

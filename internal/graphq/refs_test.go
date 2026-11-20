@@ -200,7 +200,7 @@ func TestEntryNoPathWithReferences(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Reachable || !r.Exhaustive || !r.EdgesExhausted || strings.Join(r.Searched, ",") != "static,dynamic,hub,ref" || len(r.Limits) != 3 || !strings.Contains(strings.Join(r.Limits, " "), "reflection") {
+	if r.Reachable || r.Exhaustive || !r.EdgesExhausted || strings.Join(r.Searched, ",") != "static,dynamic,hub,ref" || len(r.Limits) != 3 || !strings.Contains(strings.Join(r.Limits, " "), "reflection") {
 		t.Fatalf("%+v", r)
 	}
 	if len(r.TargetFacts) != 1 || r.TargetFacts[0].ValueReferences == nil || *r.TargetFacts[0].ValueReferences != 2 ||

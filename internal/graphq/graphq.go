@@ -225,9 +225,17 @@ type Step struct {
 	Symbol string `json:"symbol,omitempty"`
 	// At is the call site in this function that the path goes through (none
 	// at the end of a path).
-	At         string `json:"at,omitempty"`
-	Kind       string `json:"kind,omitempty"`
-	Candidates int    `json:"candidates,omitempty"`
+	At string `json:"at,omitempty"`
+	// AtUnknown: the step has a call (or a reference) but the file holds no
+	// position for it, so "at" is left out and --avoid-call cannot name it
+	// (--avoid names the function).
+	AtUnknown bool `json:"at_unknown,omitempty"`
+	// AtPrecision of a reference step is "statement": the position is that of the
+	// statement (the instruction) that holds the reference, not of the argument
+	// or the element of a literal that names the function.
+	AtPrecision string `json:"at_precision,omitempty"`
+	Kind        string `json:"kind,omitempty"`
+	Candidates  int    `json:"candidates,omitempty"`
 	// Hub: the call has more candidates than HubCandidates.
 	Hub   bool     `json:"hub,omitempty"`
 	Sites []string `json:"sites,omitempty"`
@@ -274,8 +282,12 @@ type EntryInfo struct {
 type TargetFact struct {
 	ID       string `json:"id"`
 	Exported bool   `json:"exported"`
-	HasBody  bool   `json:"has_body"`
-	Dep      bool   `json:"dep"`
+	// HasReceiver: the function is a method (read from its symbol). A method
+	// that nothing calls may be called through an interface from code that was
+	// not read (a dependency, a framework).
+	HasReceiver bool `json:"has_receiver"`
+	HasBody     bool `json:"has_body"`
+	Dep         bool `json:"dep"`
 	// StaticCallSites: call sites that name it (from anywhere, reachable from the entries or not).
 	StaticCallSites int `json:"static_call_sites"`
 	// DynamicCallSites: calls through an interface or a function value that list it as a candidate (what "dispatchers" lists).
@@ -407,7 +419,8 @@ func (e *Engine) siteIDs(callsite int64) ([]string, error) {
 }
 
 func pos(file string, line, col int) string {
-	if file == "" {
+	// a position with no line (file:0:0) is no position: a place that is not known is not named
+	if file == "" || line <= 0 {
 		return ""
 	}
 	return fmt.Sprintf("%s:%d:%d", file, line, col)

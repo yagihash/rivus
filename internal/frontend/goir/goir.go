@@ -470,6 +470,10 @@ func (c *conv) instr(in ssa.Instruction, blk *ir.Block, b *ssa.BasicBlock) {
 		// An alias of the tuple element: see local.
 	case *ssa.MakeClosure:
 		fn := in.Fn.(*ssa.Function)
+		// go/ssa gives a MakeClosure no position: the function literal's stands for it
+		if pos.File == "" {
+			pos = c.pos(fn.Pos())
+		}
 		c.emit(ir.Instr{Op: ir.OpMakeClosure, Dsts: c.dst(in), Args: c.vals(in.Bindings), Func: ir.FuncID(gossa.FuncID(fn)), Pos: pos})
 	case *ssa.Send:
 		c.emit(ir.Instr{Op: ir.OpCall, Args: []ir.LocalID{c.val(in.Chan), c.val(in.X)}, Callee: &ir.Callee{Kind: ir.CalleeStatic, Symbol: "chan.send"}, Pos: pos})

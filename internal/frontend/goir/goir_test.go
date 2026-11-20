@@ -278,3 +278,27 @@ func TestTextsOfRelocatedFiles(t *testing.T) {
 		t.Errorf("calls found in %v", seen)
 	}
 }
+
+// G-15: a closure that captures values is made by an instruction that go/ssa
+// gives no position (MakeClosure has none); the position of the function
+// literal stands for it, so a reference to the closure has a place.
+func TestMakeClosureHasAPosition(t *testing.T) {
+	p := extract(t, "./...")
+	n := 0
+	for _, f := range p.Funcs {
+		for _, b := range f.Blocks {
+			for _, in := range b.Instrs {
+				if in.Op != ir.OpMakeClosure || len(in.Args) == 0 {
+					continue
+				}
+				n++
+				if in.Pos.File == "" || in.Pos.Line == 0 {
+					t.Errorf("%s: make_closure of %s has no position", f.ID, in.Func)
+				}
+			}
+		}
+	}
+	if n == 0 {
+		t.Fatal("no closure with captured values in the testdata")
+	}
+}

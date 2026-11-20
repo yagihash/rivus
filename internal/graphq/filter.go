@@ -152,8 +152,35 @@ func (e *Engine) prepare(o *Options, c *Common) error {
 		if tg.Call == nil {
 			return fmt.Errorf("--avoid-call: %q is a function, and the filter names a call (file:line:col)", s)
 		}
+		// every call at the place (a desugared "a()?" is two) is one call to a reader: all are cut
+		n := 1 + len(tg.Same)
 		avoidCall[tg.Call.ID] = true
-		c.Filters = append(c.Filters, fmt.Sprintf("avoid-call %s: no edge of this call site; the function that holds it, and its other calls, stay", s))
+		for _, sc := range tg.Same {
+			avoidCall[sc.ID] = true
+		}
+		at := pos(tg.Call.File, tg.Call.Line, tg.Call.Col)
+		if at == "" {
+			at = "a call with no position in the file"
+		}
+		moved := ""
+		if strings.Contains(tg.Desc, "no call begins at column") {
+			moved = fmt.Sprintf(" (no call begins where %s says: the nearest call before it on the line is taken)", s)
+		}
+		callee := tg.Call.Callee
+		if callee == "" {
+			// a static call names its function by the edge
+			var names []string
+			if edges, err := e.edgesOfCall(tg); err == nil {
+				for i := range edges {
+					if f, err := e.fn(edges[i].To); err == nil && len(names) < 3 {
+						names = append(names, f.FID)
+					}
+				}
+			}
+			callee = strings.Join(names, ", ")
+		}
+		c.Filters = append(c.Filters, fmt.Sprintf("avoid-call %s: resolved to the call site %s%s, of %s (%s, %d candidates); %s cut: no edge of it; the function that holds it, and its other calls, stay",
+			s, at, moved, callee, tg.Call.Kind, tg.Call.NCand, plural(n, "call site")))
 	}
 	o.via = nil
 	for _, s := range o.Via {

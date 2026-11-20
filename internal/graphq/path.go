@@ -829,6 +829,7 @@ func (e *Engine) Path(from, to string, o Options) (*PathResult, error) {
 	res.ExhaustiveOf = exhaustiveOfFor(refsSearched)
 	res.Exhaustive = sr.exhaustive && !sr.cut
 	res.EdgesExhausted = res.Exhaustive
+	edgesDone := res.Exhaustive
 	if sr.found && sr.stage == 1 {
 		res.HubSkippedTotal = sr.hubTotal
 	}
@@ -844,21 +845,26 @@ func (e *Engine) Path(from, to string, o Options) (*PathResult, error) {
 		if o.filtered() {
 			what += ", under the filters"
 		}
-		if res.Exhaustive {
+		if edgesDone {
 			what += ": none in the graph file" + map[bool]string{true: " (under the filters)", false: ""}[o.filtered()]
 		}
 		res.Hints = append(res.Hints, what)
 		if o.filtered() {
-			wf, err := e.withoutFilters(&asked, src, dst, startsFor, res.Exhaustive)
+			wf, err := e.withoutFilters(&asked, src, dst, startsFor, edgesDone)
 			if err != nil {
 				return nil, err
 			}
 			res.WithoutFilters = wf
 			switch {
-			case wf.Reachable && res.Exhaustive:
-				res.Hints = append(res.Hints, fmt.Sprintf("without the filters there is a path (%s, %d hops): one of them cuts it; take one off", wf.Certainty, wf.Hops))
-				if len(wf.Culprits) > 0 {
+			case wf.Reachable && edgesDone:
+				switch {
+				case asked.nFilters() < 2:
+					res.Hints = append(res.Hints, fmt.Sprintf("without the filters there is a path (%s, %d hops): the filter cuts it; take it off", wf.Certainty, wf.Hops))
+				case len(wf.Culprits) > 0:
+					res.Hints = append(res.Hints, fmt.Sprintf("without the filters there is a path (%s, %d hops): some of them cut it", wf.Certainty, wf.Hops))
 					res.Hints = append(res.Hints, "taking off only one of these lets a path through (the others kept): "+strings.Join(wf.Culprits, "; "))
+				default:
+					res.Hints = append(res.Hints, fmt.Sprintf("without the filters there is a path (%s, %d hops), but taking off any one of them alone does not let one through: two or more of them block it (each may block a different path, or they block the same path together); take off more than one", wf.Certainty, wf.Hops))
 				}
 			case wf.Reachable:
 				res.Hints = append(res.Hints, fmt.Sprintf("without the filters there is a path (%s, %d hops), but the search under the filters was cut by a bound (%d functions visited, at most %d hops): it cannot be said that the filters are the cause", wf.Certainty, wf.Hops, sr.visited, MaxPathHops))
@@ -874,10 +880,13 @@ func (e *Engine) Path(from, to string, o Options) (*PathResult, error) {
 				res.Limits = entryLimitsRefs
 			} else {
 				res.Hints = append(res.Hints, "no entry reaches it by calls (the references were not searched: --no-refs): a function that is only passed as a value (a handler registered with a framework, a callback) is reached from the entry only through a call of a function value that lists it, or through a reference (the default search follows them); \"no path\" does not say the code is dead")
-				// the references are not edges of this search: this "no path" is not "unreachable"
-				res.Exhaustive = false
 				res.Limits = entryLimits
 			}
+			// "no path" from the entries is not "not called at run time": a function that nothing
+			// calls or names here may be called by code that was not read (a dependency, a
+			// framework: an Unwrap that errors.Is calls, a Set that the flag package calls). What
+			// the search proved of the edges is "edges_exhausted"
+			res.Exhaustive = false
 			for _, id := range dst.Funcs {
 				if len(res.TargetFacts) >= 5 {
 					break
@@ -890,7 +899,11 @@ func (e *Engine) Path(from, to string, o Options) (*PathResult, error) {
 				if err != nil {
 					return nil, err
 				}
-				tf := TargetFact{ID: f.FID, Exported: ft.Exported, HasBody: ft.HasBody, Dep: ft.Dep, StaticCallSites: ft.StaticCallSites, DynamicCallSites: ft.DynamicCallSites}
+				recv := hasReceiver(ft.Lang, f.Symbol)
+				if recv {
+					res.Hints = append(res.Hints, fmt.Sprintf("%s is a method: a method that no call or reference in the file reaches may still be called through an interface from code that was not read (a dependency, a framework); \"no path\" does not say it is not called at run time", f.FID))
+				}
+				tf := TargetFact{ID: f.FID, Exported: ft.Exported, HasReceiver: recv, HasBody: ft.HasBody, Dep: ft.Dep, StaticCallSites: ft.StaticCallSites, DynamicCallSites: ft.DynamicCallSites}
 				rs, err := e.db.RefsTo(id, 3)
 				if err != nil {
 					return nil, err
@@ -952,7 +965,7 @@ func (e *Engine) Path(from, to string, o Options) (*PathResult, error) {
 	case "reference":
 		res.Hints = append(res.Hints,
 			"no path by calls: these go through a reference (a step of kind \"ref\": a function holds the next one as a value, registered, stored or passed on; it is not a call). The paths listed go through the fewest references, then the fewest hubs, then the shortest",
-			"\"at\" of a ref step is where the function is named (the registration); \"via_callee\" is the function that takes it as an argument. Whether the value is called is not known: the path says the function may be reached")
+			"\"at\" of a ref step is where the function is named (the registration), at the precision of its \"at_precision\": \"statement\" is the statement that holds the reference, not the argument or the element of a literal that names it (a table of routes has one place for all its rows): read the source of that statement to see which one; \"via_callee\" is the function that takes it as an argument. Whether the value is called is not known: the path says the function may be reached")
 	}
 	if o.filtered() {
 		res.Hints = append(res.Hints, "the paths are those that the filters above (\"filters\") allow")
@@ -986,7 +999,7 @@ func exhaustiveOfFor(refs bool) string {
 var entryLimits = []string{
 	"a function stored as a value (a handler registered with a router: m.Get(\"/x\", f), a callback, a function put in a map or a struct) is not an edge of this search (--no-refs): its call is an edge only if a call of a function value lists it",
 	"a call by reflection, and a call from a framework or the runtime (an override of a method of a dependency, such as ServeHTTP or a widget's build) is not an edge in the graph file",
-	"so \"no path\" here is true of the call edges only: at run time the function may be reached (\"exhaustive\" is false, \"edges_exhausted\" says the search of the edges was complete); \"target_facts\" says what the file knows of it",
+	"so \"no path\" here is true of the call edges only: at run time the function may be reached (\"exhaustive\" is false, \"edges_exhausted\" says the search of the edges was complete); \"target_facts\" says what the file knows of it (\"has_receiver\": it is a method)",
 }
 
 // entryLimitsRefs are what a path from the entries cannot see when the
@@ -995,7 +1008,7 @@ var entryLimits = []string{
 var entryLimitsRefs = []string{
 	"a call by reflection, and a call from a framework or the runtime (an override of a method of a dependency, such as ServeHTTP or a widget's build) is not an edge in the graph file",
 	"a reference is a function named as a value; whether the value is called is not known, so a path through one says \"may be reached\". A function named in a string (a route by name, a plugin by path) is not a reference",
-	"so \"no path\" here is true of the calls and the references (the same rule as sg.Program.Reachable); \"exhaustive\" is true when the search of them was complete (\"edges_exhausted\"); \"target_facts\" says what the file knows of the goal",
+	"so \"no path\" here is true of the calls and the references (the same rule as sg.Program.Reachable); \"edges_exhausted\" is true when the search of them was complete; \"exhaustive\" is always false from the entries (a function of the code that was read can be called by code that was not read: an interface method a dependency calls); \"target_facts\" says what the file knows of the goal (\"has_receiver\": it is a method)",
 }
 
 // withoutFilters asks the question again without the filters (--via too), to
@@ -1092,6 +1105,7 @@ func (e *Engine) stepOfCall(c *graphdb.CallRow, holder int64) (Step, error) {
 		return Step{}, err
 	}
 	st := Step{Func: f.FID, At: pos(c.File, c.Line, c.Col), Kind: c.Kind, Sites: sites, NoBody: !f.HasBody}
+	st.AtUnknown = st.At == ""
 	if f.Symbol != f.FID {
 		st.Symbol = f.Symbol
 	}
@@ -1152,6 +1166,7 @@ func (e *Engine) pathOut(start int64, edges []graphdb.Edge, prefix []Step, suffi
 		}
 		if ed != nil {
 			st.At = pos(ed.File, ed.Line, ed.Col)
+			st.AtUnknown = st.At == ""
 			st.Kind = ed.Kind
 			if dynamic(ed.Kind) {
 				st.Candidates = ed.NCand
@@ -1160,7 +1175,7 @@ func (e *Engine) pathOut(start int64, edges []graphdb.Edge, prefix []Step, suffi
 				st.Hub = true
 			}
 			if isRef(ed) {
-				st.RefKind, st.ViaCallee, st.Note = ed.RefKind, ed.Via, refNote
+				st.RefKind, st.ViaCallee, st.Note, st.AtPrecision = ed.RefKind, ed.Via, refNote, "statement"
 				p.Certainty, p.Relation, p.Note = "reference", "calls+refs", refPathNote
 				p.Refs++
 			} else {
@@ -1194,4 +1209,28 @@ func (e *Engine) pathOut(start int64, edges []graphdb.Edge, prefix []Step, suffi
 	}
 	p.Hops = len(edges)
 	return p, nil
+}
+
+// hasReceiver reads from the symbol whether the function is a method: Go
+// writes "(*pkg.T).M" or "(pkg.T).M", Dart "uri#Class.m", Rust "<T as Tr>::m" or
+// "path::Type::m" (a type name starts with a capital).
+func hasReceiver(lang, symbol string) bool {
+	switch lang {
+	case "go":
+		return strings.HasPrefix(symbol, "(")
+	case "dart":
+		if i := strings.LastIndex(symbol, "#"); i >= 0 {
+			return strings.Contains(symbol[i+1:], ".")
+		}
+	case "rust":
+		if strings.HasPrefix(symbol, "<") {
+			return true
+		}
+		parts := strings.Split(symbol, "::")
+		if n := len(parts); n >= 2 && parts[n-2] != "" {
+			c := parts[n-2][0]
+			return c >= 'A' && c <= 'Z'
+		}
+	}
+	return false
 }

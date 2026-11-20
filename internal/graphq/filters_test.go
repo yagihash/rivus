@@ -351,7 +351,7 @@ func TestPathFromEntry(t *testing.T) {
 	}
 	// a function no entry reaches
 	r, _ = e.Path("", "Dead", graphq.Options{FromEntry: true})
-	if r.Reachable || !r.Exhaustive || !r.EdgesExhausted || !anyHas(r.Hints, "no entry reaches it") || r.Entry == nil {
+	if r.Reachable || r.Exhaustive || !r.EdgesExhausted || !anyHas(r.Hints, "no entry reaches it") || r.Entry == nil {
 		t.Errorf("%+v", r)
 	}
 	// --from-entry with no path, the references searched too: exhaustive of the calls and the references, and the limits (reflection, frameworks) and the facts of the goal come with it
@@ -412,7 +412,7 @@ func TestEntryTargetFactsCountCallers(t *testing.T) {
 	entryIDs = map[string]bool{"main1": true}
 	e := build(t, fns)
 	r, err := e.Path("", "Helper", graphq.Options{FromEntry: true})
-	if err != nil || r.Reachable || !r.Exhaustive || len(r.TargetFacts) != 1 || r.TargetFacts[0].StaticCallSites != 2 {
+	if err != nil || r.Reachable || r.Exhaustive || !r.EdgesExhausted || len(r.TargetFacts) != 1 || r.TargetFacts[0].StaticCallSites != 2 {
 		t.Errorf("%v %+v", err, r)
 	}
 }

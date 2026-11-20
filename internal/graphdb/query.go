@@ -207,6 +207,8 @@ type FuncFacts struct {
 	Exported bool
 	HasBody  bool
 	Dep      bool
+	// Lang is the language of the function (go, dart, rust).
+	Lang string
 	// StaticCallSites are the call sites that name it; DynamicCallSites those
 	// through an interface or a function value that list it as a candidate.
 	StaticCallSites  int
@@ -217,7 +219,7 @@ type FuncFacts struct {
 func (d *DB) FactsOf(id int64) (FuncFacts, error) {
 	var ft FuncFacts
 	var ex, body, dep int
-	if err := d.db.QueryRow(`SELECT exported, has_body, dep FROM funcs WHERE id = ?`, id).Scan(&ex, &body, &dep); err != nil {
+	if err := d.db.QueryRow(`SELECT exported, has_body, dep, lang FROM funcs WHERE id = ?`, id).Scan(&ex, &body, &dep, &ft.Lang); err != nil {
 		return ft, err
 	}
 	ft.Exported, ft.HasBody, ft.Dep = ex == 1, body == 1, dep == 1
