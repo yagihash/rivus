@@ -106,7 +106,7 @@ spec() {
                    RULES="$ROOT/bench/dart-pub/rules.yaml"; TRUTH="$ROOT/bench/dart-pub/truth-5e24336e.json" ;;
     gitea)         URL=https://github.com/go-gitea/gitea; COMMIT=v1.26.4; CLONE=gitea
                    RULES="$ROOT/bench/gitea/rules.yaml"; TRUTH="$ROOT/bench/gitea/truth-v1.26.4.json" ;;
-    ech0)          URL=https://github.com/lin-snow/Ech0; COMMIT=cecc2c19; CLONE=ech0 ;;  # repository and rules are not recorded: the built-in rules only
+    ech0)          URL=https://github.com/lin-snow/Ech0; COMMIT=cecc2c19; CLONE=ech0 ;;  # the built-in rules only here; it does not converge (bench/README.md, ech0)
     *) return 1 ;;
   esac
   [ -n "$CLONE" ] && DIR="$WORK/src/$CLONE${SUBDIR:+/$SUBDIR}"

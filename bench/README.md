@@ -80,7 +80,7 @@ same files.
 | gogs (CVE-2026-23633) | <https://github.com/gogs/gogs> | `ca59e76a5` | `bench/gogs/rules.yaml` | `bench/gogs/truth-48946299.json` |
 | gin-vue-admin | <https://github.com/flipped-aurora/gin-vue-admin>, module `server/` | `7bc7c3051067` (the parent of the fix `b1b7427c6ea6`) | `examples/rules/go-gin.yaml` (the gin model; the file that was used is not recorded in the repository: not confirmed) | `bench/gin-vue-admin/truth.json` |
 | go-test-bench | <https://github.com/Contrast-Security-OSS/go-test-bench> | not recorded (the `truth.json` says "the commit in `commit`", and has no such field): the default branch at the time, unrecorded | `examples/rules/go-gin.yaml` (above) | `bench/go-test-bench/truth.json` |
-| ech0 | repository not recorded (`bench/ech0/README.md` has only the name) | `cecc2c19` (the parent of the fix `091d26d2`) | not recorded | not scored |
+| ech0 | https://github.com/lin-snow/Ech0 (`bench/compare.sh` clones it) | `cecc2c19` (the parent of the fix `091d26d2`) | built-in rules only in `compare.sh`; the measurements of ADR-047 used `examples/rules/go-gin.yaml` on the head of 2026-11-21 | not scored |
 | parseable | <https://github.com/parseablehq/parseable> | `5c20b8e477be162238037e202cea1869d657017b` | `bench/parseable/rules.yaml` | `bench/parseable/truth-5c20b8e4.json` |
 | dart-pub | <https://github.com/dart-lang/pub> | `5e24336e71a05a96b558d496953ebed223f6e40a` | `bench/dart-pub/rules.yaml` | `bench/dart-pub/truth-5e24336e.json` |
 | Gitea (milestones only) | <https://github.com/go-gitea/gitea> | tag `v1.26.4` | `bench/gitea/rules.yaml` | `bench/gitea/truth-v1.26.4.json` |
@@ -161,3 +161,9 @@ anyone. It is a log, not a ceiling: it is the number to watch go down when a fix
 CORE-D, C-7). A trace that appears makes the `@miss(silent)` line fail as an improvement (rewrite it as
 `@miss(<kind>)`), so the number cannot move without someone seeing it. A miss that is fixed leaves both
 the numerator and the denominator, so it does not count as an improvement of this share.
+
+**ech0 does not finish (2026-11-21).** It reads the dependencies (the AWS SDK, protobuf: the default of `rivus analyze ./...`), and
+with `examples/rules/go-gin.yaml` on the head of the repository it does not converge in 900 seconds, with or without the
+callouts of ADR-047 (2 passes, 15 GB, 48 findings; the summaries of the AWS middleware grow from 36 to 2,200 elements in a few
+passes, almost all of them new, not coming back). It is a measure of the growth of the summaries, not a baseline to compare findings
+with: a run that does not converge is cut where it was.
