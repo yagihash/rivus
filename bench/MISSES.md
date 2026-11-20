@@ -29,6 +29,22 @@
 
 案 2 = ADR-047 の下書き(ヘルパーの要約に、コールバックの出力を「仮想のパラメータ」で持たせ、呼び元が、自分で渡したクロージャ(`ExactFuncs`)の要約で具体化する)。「直る(見込み)」は、下書きの記述から読んだ推測で、実装して確かめたものではない。直るには、`ExactFuncs` が、クロージャの束縛(`make_closure` の引数)も返す必要がある(下書きに書いていない)。
 
+## 未解決のレビュー指摘(RUST-13、RUST-14、DART-12)と、そのフィクスチャ
+
+別セッションのレビューの識別子(docs には無い)。2026-11-21、main(HEAD 1a429f0 の作業ツリー)で、原因のコードが残っていることと、落ちるフィクスチャを確かめた。**コアは変えていない。** 対応する issue は無い(#76〜#83 は、どれもこの 3 つの原因を挙げていない)。上の集計と表は、この節のフィクスチャを足す前の数のまま(足したあとの数は、下の表)。
+
+| 指摘 | 原因のコード(今) | フィクスチャ | 今の結果 |
+| --- | --- | --- | --- |
+| RUST-13: `Fn` / `FnMut` を `&self` で呼ぶと、受け手がセルで、呼び元ごとに絞れない | internal/taint/calls.go:357 `dispatchGuards`(`recv.Kind != sg.KParam` で nil)。さらに makeDispatchGuards は、候補が method でない(`!fn.Recv`)と、ガードを付けない(クロージャは全部これ) | rust-curated/src/fnself.rs: `fn_ret_clean` / `fn_mut_ret_clean`(`@sink(none) @fp`)、`fn_sink_a/b`、`fn_mut_sink_a/b`(`@nosink` + `@fp`)。対照の `fn_ref_clean`(`&impl Fn`、受け手がパラメータそのもの) | 6 か所とも `@fp`(落ちる)。対照も落ちる: 受け手がセルであることだけが原因ではなく、クロージャの候補にガードが付かない(`!fn.Recv`)ことも原因。案 2 の受け入れは、この 7 か所の `@fp` が全部消えること |
+| RUST-14: モデルを当てると、`read_impls` でない動的呼び出しの本体を読まない | internal/taint/calls.go:182-196(`modelled` のあと、`!rules.ReadsImpls(cc.sym)` で return)。`read_impls: true` は rust-std.yaml と rust-misc.yaml だけ | rust-curated/src/modelled.rs: `model_body`(source が実装の本体の中、`@miss`)、`model_drop`(実装が引数を捨てる、`@sink(none) @fp`)。rules.yaml に、プロジェクトの trait のメソッド(`Render::render`、`Mask::mask`)の propagator(recv→result)を足した | `@miss` 1、`@fp` 1(どちらも黙る)。モデルを外して流すと、`@miss` の流れは見つかり、`@fp` は静かになる(実験)。本体を読む修正(別件)が要る |
+| DART-12: `dynamic` のメソッド呼び出しが、`dart:core#dynamic.invoke` の静的呼び出しになり、モデルで覆われて痕跡が残らない | extractor/dart/lib/exprs.dart:347(`_methodInvocation`)、internal/model/builtin/dart-core.yaml:8(`flows: [{from: args, to: result}]`) | dart-curated/lib/dynamic_calls.dart: `dynamic_arg`(メソッドの中の sink、`@miss`)、`dynamic_body`(メソッドの本体の source、`@miss`)、`dynamic_drop`(`@sink(none) @fp`) | `@miss` 2、`@fp` 1。モデルを外す対照は、していない |
+
+足したあとの数: Dart `@miss` 34、`@fp` 5。Rust `@miss` 12、`@fp` 22、`@noisy` は 183 件のまま(新しいフィクスチャは、他と型が重ならない署名(`u8`、`u16`、`u32`、`u64`、`i8`)で、他のクロージャを候補にしない)。
+
+既存の `@miss` / `@fp` のうち、この 3 つに当たるもの: **RUST-13 は、XTALK の `@fp`(12)と `@noisy`(16 か所)が同じ形**(ヘルパーが `f(..)` で呼ぶ `impl Fn`)。1 件ずつ、受け手がセルかは確かめていない。**RUST-14 と DART-12 に当たる既存のものは、無い**(`@miss` の原因の型のどれにも、モデルが本体を隠すものは無かった)。
+
+案 2(ADR-047)で RUST-13 が直る見込み: 案 2 は、ヘルパーの要約にコールバックの出力を持たせ、呼び元が渡したクロージャで具体化するので、`dispatchGuards` を通らない。下書きの記述から読んだ推測で、実装して確かめたものではない。RUST-14 と DART-12 は、案 2 では直らない(別の修正)。
+
 ## 集計
 
 ### `@miss`

@@ -2,6 +2,7 @@
 export 'across.dart';
 export 'capture.dart';
 export 'classes.dart';
+export 'dynamic_calls.dart';
 export 'errors.dart';
 export 'futures.dart';
 export 'iterables.dart';

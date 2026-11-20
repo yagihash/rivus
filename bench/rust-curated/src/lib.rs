@@ -1,9 +1,11 @@
 pub mod across;
 pub mod capture;
 pub mod errors;
+pub mod fnself;
 pub mod fnvalues;
 pub mod helpers;
 pub mod iters;
+pub mod modelled;
 pub mod nesting;
 pub mod pass_closure;
 pub mod structs;

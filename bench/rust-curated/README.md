@@ -27,6 +27,8 @@ The marks are those of `bench/go-curated` (`@source(tag)`, `@sink(tag)`, `@sink(
 | `structs.rs` | a closure kept in a struct, an emitter (`Vec<Box<dyn Fn>>`), `&self` methods given to a helper, a trait with a callback parameter and two implementations |
 | `errors.rs` | `Result`, `?`, `map_err`, `match`, a closure with `?`, a helper that takes a closure returning `Result`, `or_else`, `and_then` |
 | `across.rs` | the helper is in another crate (`shared`) |
+| `fnself.rs` | `Fn` / `FnMut` called through `&self`, two callers each, own signatures so as not to change other counts: the acceptance of ADR-047 (draft 2), RUST-13; `@fp` on all, to go |
+| `modelled.rs` | a trait method of the crate that rules.yaml models (no `read_impls`), called through a generic: the model hides the implementation (RUST-14); `@miss` 1, `@fp` 1 |
 
 ## What is not found yet (`@miss`) and what is reported wrongly (`@fp`, `@noisy`)
 
@@ -43,6 +45,8 @@ The first run (2026-11-21, before the callback outputs go into the summaries): 1
 * `@fp` on `@sink(none)` (6): a closure that returns a constant still carries the argument (`ret-clean`, `produce`,
   `map-const`, `and_then` with a constant), an fn item that drops its argument (`fn-drop`), the second emitter.
 * `@noisy` (183 flows): the cross-talk above, for the callers that no pair names.
+
+The review items RUST-13 / RUST-14 and their fixtures are in the last section of [`../MISSES.md`](../MISSES.md). `fnself.rs` and `modelled.rs` were added after the first run above: now 123 flows found, 12 not found, 45 sinks quiet, 22 reported wrongly, the same 183 noisy.
 
 ## Run it
 

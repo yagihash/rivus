@@ -31,6 +31,7 @@ cross-talk of a helper that calls every closure of its type). `rules.yaml`: `sou
 | `classes.dart` | an emitter (callbacks kept in a list), `Lazy`, a builder, default and named callbacks, a getter that returns a function, an extension with a callback |
 | `errors.dart` | `try` / `catch` / `finally`, typed catch, throw from a closure, rethrow, `Future.error`, `onError` |
 | `across.dart` | the helper is in another package (`packages/shared`) |
+| `dynamic_calls.dart` | a method of a `dynamic` value (`dart:core#dynamic.invoke`, covered by a model): DART-12, in the last section of [`../MISSES.md`](../MISSES.md); `@miss` 2, `@fp` 1 |
 
 ## What is not found yet (`@miss`) and what is reported wrongly (`@fp`)
 

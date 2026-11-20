@@ -11,3 +11,11 @@ sinks:
   - symbol: curated::sink
     category: test
     accepts: [user_input]
+
+# a trait of the crate that a model describes (the receiver goes to the result), without `read_impls`:
+# the implementations of the crate are not read (src/modelled.rs)
+propagators:
+  - symbol: curated::modelled::Render::render
+    flows: [{from: recv, to: result}]
+  - symbol: curated::modelled::Mask::mask
+    flows: [{from: recv, to: result}]
