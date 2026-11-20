@@ -55,11 +55,11 @@ func TestParamSourceSharedObject(t *testing.T) {
 		{pkg: "router", want: map[string]bool{"handlerA": true}},
 		// a write the function makes itself is a flow, to a global (also through a
 		// helper, and a channel) and to the state behind a parameter: 1 finding each
-		// (CORE-B: the path of a flow through a global has no step in the function that
-		// wrote it, today as before ADR-048)
-		{pkg: "gwrite", want: map[string]bool{"handler": false}, off: 1},
-		{pkg: "gwritehelper", want: map[string]bool{"handler": false}, off: 1},
-		{pkg: "gqueue", want: map[string]bool{"handler": false}, off: 1},
+		// (CORE-B, ADR-049: the path of a flow through a global has a step in the function
+		// that wrote it)
+		{pkg: "gwrite", want: map[string]bool{"handler": true}},
+		{pkg: "gwritehelper", want: map[string]bool{"handler": true}},
+		{pkg: "gqueue", want: map[string]bool{"handler": true}},
 		{pkg: "ctxstate", want: map[string]bool{"handler": true}},
 		// a source function that only takes the value in: x_direct (the flow from the
 		// parameter itself to a sink in the same function is kept)
@@ -113,9 +113,9 @@ func keys(m map[string]bool) []string {
 }
 
 // TestGlobalWriterIsOnThePath: W writes a source value to a global and R
-// reads it into a sink; the path must have a step in W, the function the
-// value comes from. KNOWN MISS (CORE-B): today the path starts at the load in
-// R, and W is only a candidate in the global_var note.
+// reads it into a sink; the path goes through W, the function the value comes
+// from: W: source > W: store > R: load > R: sink (CORE-B, ADR-049). Before, the
+// path started at the load in R, and W was only a candidate in the global_var note.
 func TestGlobalWriterIsOnThePath(t *testing.T) {
 	var rep report.Report
 	if err := json.Unmarshal(rivus(t, "analyze", "-rules", "rules.yaml", "./cases/paramshare/globalw"), &rep); err != nil {
@@ -125,20 +125,16 @@ func TestGlobalWriterIsOnThePath(t *testing.T) {
 		t.Fatalf("want 1 finding, got %d", len(rep.Findings))
 	}
 	f := rep.Findings[0]
-	// the same ceiling as the rows of TestParamSourceSharedObject: this finding is off its source
-	if got := len(offSourcePath(&rep)); got > 1 {
-		t.Errorf("%d findings have a path without a step in their source function: more than the 1 of today", got)
+	if got := len(offSourcePath(&rep)); got != 0 {
+		t.Errorf("%d findings have a path without a step in their source function", got)
 	}
-	inW := false
+	var funcs []string
 	for _, s := range f.Paths[0].Steps {
-		if strings.HasSuffix(s.Func, "globalw.W") {
-			inW = true
-		}
+		funcs = append(funcs, s.Func[strings.LastIndex(s.Func, ".")+1:])
 	}
-	if !inW {
-		t.Skip("known miss (CORE-B): the path has no step in W, the writer of the global")
+	if got, want := strings.Join(funcs, " "), "W W R R"; got != want {
+		t.Errorf("functions on the path: %s, want %s", got, want)
 	}
-	t.Error("the path now has a step in W: make this test fail on a miss")
 }
 
 // TestParamSourceNotWrittenBackIsLost: what ADR-048 gives up. runB is a source

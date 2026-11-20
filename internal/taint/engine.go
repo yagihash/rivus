@@ -306,6 +306,8 @@ type globalWrite struct {
 	g    *sg.Value
 	path string
 	e    Elem
+	// steps are the steps the writer took to put e there (nil when the store has it)
+	steps *rope
 }
 
 type globalReader struct {
@@ -650,6 +652,7 @@ func (e *Engine) commitGlobals() {
 	}
 	for _, w := range e.pendingGlobals {
 		if e.globals.merge(w.g, w.path, w.e) {
+			e.globals.noteWriter(w.g, w.path, w.e, w.steps)
 			for _, other := range e.globals.readers(w.g) {
 				e.dirty[other] = true
 			}
@@ -744,10 +747,13 @@ func (e *Engine) compute(fn *sg.Func) *fnResult {
 				if set[el] == nil {
 					continue // read from the global state, not produced here
 				}
-				r.writes = append(r.writes, globalWrite{g, path, el})
+				gw := globalWrite{g: g, path: path, e: el}
 				if !e.globals.has(g, path, el) {
 					r.changed = true
+					// the steps the writer took, for the path of whoever reads it
+					gw.steps = s.trace(Loc{root, path}, el)
 				}
+				r.writes = append(r.writes, gw)
 			}
 		}
 	}
@@ -870,12 +876,40 @@ func order(fns []*sg.Func, callees func(*sg.Instr) []*sg.Func) ([][]*sg.Func, ma
 // --- globals ---
 
 type globalStore struct {
-	cells    map[*sg.Value]map[string]Set
+	cells map[*sg.Value]map[string]Set
+	// writers holds, for each element of a cell, the steps of the function that
+	// wrote it first (CORE-B): a reader's path starts there, not at its load.
+	writers  map[*sg.Value]map[string]map[Elem]*rope
 	readers_ map[*sg.Value]map[*sg.Func]bool
 }
 
 func newGlobalStore() *globalStore {
 	return &globalStore{cells: map[*sg.Value]map[string]Set{}, readers_: map[*sg.Value]map[*sg.Func]bool{}}
+}
+
+func (g *globalStore) noteWriter(v *sg.Value, path string, e Elem, steps *rope) {
+	if steps == nil {
+		return
+	}
+	if g.writers == nil {
+		g.writers = map[*sg.Value]map[string]map[Elem]*rope{}
+	}
+	pm := g.writers[v]
+	if pm == nil {
+		pm = map[string]map[Elem]*rope{}
+		g.writers[v] = pm
+	}
+	em := pm[path]
+	if em == nil {
+		em = map[Elem]*rope{}
+		pm[path] = em
+	}
+	em[e] = steps
+}
+
+// writerSteps returns the steps of the function that first wrote the element to the cell.
+func (g *globalStore) writerSteps(v *sg.Value, path string, e Elem) *rope {
+	return g.writers[v][path][e]
 }
 
 func (g *globalStore) cellsOf(v *sg.Value) map[string]Set { return g.cells[v] }

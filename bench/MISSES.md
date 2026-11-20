@@ -314,14 +314,14 @@ go test ./cmd/rivus -run Curated -v     # 注釈の検査(この表の元の数)
 
 ## BENCH-2: 経路に source の関数が出ない finding(`offSourcePath`)
 
-finding の `source.position` の関数(`source.func`)が、最初の経路(`paths[0]`)のステップのどれにも出ない finding。出ないのは、source が、別の関数が書き戻したオブジェクトから届いたとき(CORE-A / CORE-B。`TestParamSourceSharedObject`)。検査は `cmd/rivus/offsource_test.go` の `offSourcePath` で、`TestDogfood`、`TestCurated{Go,Dart,Rust}`、`TestParamSourceSharedObject`、`TestGlobalWriterIsOnThePath` が使う。数は上限(今の値)で、上がると落ちる。下がっても落ちる(上限を下げる。CORE-B が直ると 0 になる)。2026-11-21(HEAD 78c3bdb + この変更)の値:
+finding の `source.position` の関数(`source.func`)が、最初の経路(`paths[0]`)のステップのどれにも出ない finding。出ないのは、source が、別の関数が書き戻したオブジェクトから届いたとき(CORE-A / CORE-B。`TestParamSourceSharedObject`)。検査は `cmd/rivus/offsource_test.go` の `offSourcePath` で、`TestDogfood`、`TestCurated{Go,Dart,Rust}`、`TestParamSourceSharedObject`、`TestGlobalWriterIsOnThePath` が使う。数は上限(今の値)で、上がると落ちる。下がっても落ちる(上限を下げる)。CORE-A(ADR-048)と CORE-B(ADR-049。グローバルのストアに書いた側の段を持たせた)で、全部 0 になった。下の表は、2026-11-21(HEAD 78c3bdb + CORE-A の前)の値で、記録として残す:
 
 | 場所 | 数 | 型 |
 | --- | --- | --- |
 | `TestDogfood`(rivus 自身、88 件) | 77 | 1 つの source が書き戻したオブジェクトを、他の source(8 つのコマンド)が読む(CORE-A / CORE-B)。経路が、読む側の関数から始まる |
 | `paramshare/global` | 1 | CORE-B: finding も偽(CORE-A)で、経路に `runB` が無く、`global_var` の不確実性も付かない |
 | `paramshare/repro` | 1 | CORE-B: 本物の流れが 2 つあり、`runB` の経路は `runA` を通る |
-| `paramshare/globalw` | 1 | CORE-B: 経路は `R` の load から始まり、書き手の `W` は `global_var` の候補にしか出ない |
+| `paramshare/globalw` | 1 → 0 | CORE-B(直った): 経路は `R` の load から始まり、書き手の `W` は `global_var` の候補にしか出ない |
 | `paramshare` の他(ptr、local、distinct、samelocal、str、ptype) | 0 | (ptr / local の finding は、CORE-A で偽だが、経路には source の関数がある) |
 | go-curated / dart-curated / rust-curated | 0 / 0 / 0 | 違反は無い(`@noisy` の 183 件、`@fp` を含む) |
 

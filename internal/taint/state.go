@@ -786,6 +786,13 @@ func (s *state) traceUncached(l Loc, e Elem) *rope {
 		seen[cur] = true
 		w := s.whyOf(cur)
 		if w == nil {
+			// An element read from the global store has no reason here: the
+			// function that wrote it does (CORE-B).
+			if g := cur.Loc.Root.V; g != nil && g.Kind == sg.KGlobal {
+				if ws := s.eng.globals.writerSteps(g, cur.Loc.Path, cur.E); ws != nil {
+					chunks = append(chunks, ws)
+				}
+			}
 			break
 		}
 		chunks = append(chunks, s.stepsOf(w))
