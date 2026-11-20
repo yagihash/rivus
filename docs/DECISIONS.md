@@ -1116,3 +1116,18 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
 - 別のオブジェクト経由の書き戻し（source のパラメータが指す値が、ほかのパラメータやグローバルが指すオブジェクトに入れられて、それが書き戻る）は、止めていない。止めるのは、param source のサイトが起点の要素が、そのパラメータ自身（`OutParam`）と `OutGlobal` に出る場合だけ。
 - Gitea の on / off の差は、実験の保存された出力の読みで、呼び出しの到達の確認ではない。
 - 巨大 SCC（Gitea の 3370）は、この変更では小さくならない。
+
+## ADR-050: 関数値の呼び出しを、rivus の上限で解決しなかったときは、「知らない」と言わない（CORE-D）
+
+**背景:** `internal/valuecalls` の `resolve` は、関数値の呼び出しの候補を、コピー・φ・パラメータ（呼び元が渡す引数、`maxDepth` = 3 段まで）を通って求める。見つかった関数が 8 個（`most`）を超えると、候補を 1 つも付けずに戻る。何も見つからなかったときと同じ形だったので、解析は不確実性 `unresolved_callee`（「the called function is not known」、`attributable_to: mixed`）を出した。**関数は分かっているのに、rivus が自分の上限で捨てた**ので、これは誤った痕跡だった（読む人は、コードの側の問題（動的で分からない）と読む）。呼び元を 3 段より上に辿らないで 0 件のときも同じ。
+
+**決めたこと:**
+1. `ir.Callee` に、IR のストリームに出ない `ValueLimit` と `ValueFound` を足した（`ValueCands` と同じ扱い）。`resolve` が、候補を付けないときに理由を残す。
+   - `candidate_limit`: 見つかった関数が 8 個を超えた（`ValueFound` = 見つけた数）。
+   - `caller_depth_limit`: 何も見つからず、呼び元を辿る歩みが `maxDepth` で切られた（`resolver.cut`）。切られていなければ（本当に分からない）、従来どおり `unresolved_callee`。
+2. 解析（`calls.go` の呼び出しの処理、`provenance.go` の来歴）は、`ValueLimit` があるとき、`unresolved_callee` ではなく、**`depth_limit`**（`attributable_to: rivus`）を出す。文面は理由で始まる（`candidate_limit: the function value may be any of N functions, more than the 8 that rivus keeps; ...`、`caller_depth_limit: ...`）。場所は、呼び出しの位置と関数。kind を `depth_limit` にした理由: 「上限を超えたので、解析が切った」という意味に合うのは `depth_limit`（`guard_limit`、`path_limit` と同じ系列）で、`unresolved_callee` は「関数がどれか分からない」ことだから。
+3. **上限そのもの（8、3 段）は変えない**。候補を持たない呼び出しの扱い（候補なしで、モデルもなし）は同じ。finding の集合は変わらない（不確実性の kind と文面と attributable_to だけが変わる）。
+
+**限界:** 3 段で切れたが、途中で 1〜8 個が見つかったとき（候補が足りないかもしれない）は、まだ、何も言わない。呼び元の 3 段より先にある関数は、候補に入らない（`resolver.cut` は、この場合も立つが、痕跡は 0 件のときだけに付けた）。8 と 3 を外すのは、案 2（巨大 SCC の整理）の ADR で。
+
+**検証:** `bench/dart-curated/lib/limits.dart`（9 個の関数を渡すヘルパー、5 段のヘルパーに渡すクロージャ。`TestCuratedDart` が、`depth_limit` の `candidate_limit` と `caller_depth_limit` を要求する）。Go は、VTA が候補を持つので、この経路を通らない。curated の `@miss(silent)` の数え方（source と sink の関数にある不確実性だけを痕跡とする）では、ヘルパーの中の痕跡は数えない。そのため、足した 2 つの見逃しは `@miss(silent)` のまま（Dart 27/34 → 29/36）。数えているのは、足したケースの 2 件だけで、既存の見逃しの痕跡は変わらない。

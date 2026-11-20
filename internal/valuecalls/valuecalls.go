@@ -68,6 +68,8 @@ type resolver struct {
 	byID    map[ir.FuncID]*ir.Func
 	forms   map[*ir.Func]*irssa.Form
 	callers map[ir.FuncID][]callSite
+	// cut is set when a walk up the callers stopped at maxDepth
+	cut bool
 }
 
 func (r *resolver) form(f *ir.Func) *irssa.Form {
@@ -120,8 +122,17 @@ func (r *resolver) resolve(fn *ir.Func, bi, ii int, in *ir.Instr) {
 		r.indexCallers()
 	}
 	found := map[ir.FuncID]*found{}
+	r.cut = false
 	r.funcsOf(fn, root, fn, found, map[seenKey]bool{}, 0, -1)
-	if len(found) == 0 || len(found) > most {
+	if len(found) > most {
+		// the functions are known, rivus leaves them out: not "the callee is not known"
+		in.Callee.ValueLimit, in.Callee.ValueFound = ir.ValueCandidateLimit, len(found)
+		return
+	}
+	if len(found) == 0 {
+		if r.cut {
+			in.Callee.ValueLimit = ir.ValueCallerDepthLimit
+		}
 		return
 	}
 	ids := make([]string, 0, len(found))
@@ -291,6 +302,7 @@ func (r *resolver) onlyParam(fn *ir.Func, form *irssa.Form, root irssa.Ref) int 
 // home that the walk has gone through (-1 before it has).
 func (r *resolver) funcsOf(f *ir.Func, ref irssa.Ref, home *ir.Func, out map[ir.FuncID]*found, seen map[seenKey]bool, depth, via int) {
 	if depth > maxDepth {
+		r.cut = true
 		return
 	}
 	key := seenKey{f, ref}

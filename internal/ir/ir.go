@@ -325,6 +325,13 @@ type Callee struct {
 	// core fills them in (internal/valuecalls), so that the sites and the
 	// graph see the same ones.
 	ValueCands []ValueCand `json:"-"`
+	// ValueLimit says why a call of a function value has no ValueCands although the functions
+	// were found: rivus left them out because of its own limit, which is not the same as the
+	// function not being known. "candidate_limit": more functions than the limit flow to the
+	// value (ValueFound of them); "caller_depth_limit": the callers were not followed far
+	// enough to find any. Empty when nothing was cut.
+	ValueLimit string `json:"-"`
+	ValueFound int    `json:"-"`
 	// FFI marks a call of a foreign function (an extern "C" function of Rust): the
 	// call leaves the language, and what happens in it is not code that can be read.
 	FFI bool `json:"ffi,omitempty"`
@@ -521,4 +528,22 @@ func (p *Program) SourceFiles() []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// The reasons of Callee.ValueLimit.
+const (
+	ValueCandidateLimit   = "candidate_limit"
+	ValueCallerDepthLimit = "caller_depth_limit"
+)
+
+// ValueLimitDetail is the text of the uncertainty of a call of a function value that rivus gave up
+// on because of a limit of its own (nothing is said when ValueLimit is empty).
+func (c *Callee) ValueLimitDetail() string {
+	switch c.ValueLimit {
+	case ValueCandidateLimit:
+		return fmt.Sprintf("candidate_limit: the function value may be any of %d functions, more than the 8 that rivus keeps; none is followed (the functions are known: this is rivus' limit, not the code's)", c.ValueFound)
+	case ValueCallerDepthLimit:
+		return "caller_depth_limit: the callers that pass the function value were followed 3 calls up and no function was found; the value may be one beyond that (rivus' limit)"
+	}
+	return ""
 }

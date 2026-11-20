@@ -339,6 +339,8 @@ func (t *tracer) walkResult(call *sg.Instr, idx int, fn *sg.Func, chain []string
 	switch {
 	case len(callees) == 0 && invoke:
 		t.stop(KindDynamicDispatch, "no implementation is known: a model for the interface method would resolve this", sym, call.Pos, chain, nil)
+	case len(callees) == 0 && call.Callee != nil && call.Callee.ValueLimit != "":
+		t.stop(KindDepthLimit, call.Callee.ValueLimitDetail(), sym, call.Pos, chain, nil)
 	case len(callees) == 0:
 		t.stop(KindUnresolvedCallee, "the called function is not known", sym, call.Pos, chain, nil)
 	case len(bodies) == 0:

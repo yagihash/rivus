@@ -71,6 +71,19 @@ type curatedCounts struct {
 	// ("fp"), or another ("other").
 	offSource int
 	offKinds  map[string]int
+	// uncertainties of the run, for the tests that look at a kind
+	uncertainties []*taint.Uncertainty
+}
+
+// hasUncertainty reports whether the run recorded an uncertainty of the kind, in a file whose
+// path ends in file, with a detail that starts with detail.
+func (c curatedCounts) hasUncertainty(kind, file, detail string) bool {
+	for _, u := range c.uncertainties {
+		if u.Kind == kind && strings.HasSuffix(u.Position.File, file) && strings.HasPrefix(u.Detail, detail) {
+			return true
+		}
+	}
+	return false
 }
 
 // checkCurated analyses the Go project in dir (a Go module with rules.yaml) and
@@ -229,6 +242,7 @@ func checkCuratedReport(t *testing.T, dir string, out []byte, ext string) curate
 	}
 
 	var c curatedCounts
+	c.uncertainties = rep.Uncertainties
 	var problems []string
 	for _, nf := range nots {
 		s, ok := src[nf.tag]
@@ -393,6 +407,14 @@ func TestCuratedDart(t *testing.T) {
 		t.Fatalf("the extractor failed: %v\n%s", err, stderr.String())
 	}
 	c := checkCuratedIR(t, dir, stream, ".dart")
+	// limits.dart: nine closures to one helper. The functions are known and rivus leaves them out
+	// because of its own limit: it says so, and does not say the callee is unknown (ADR-050).
+	if !c.hasUncertainty("depth_limit", "limits.dart", "candidate_limit") {
+		t.Error("limits.dart: no depth_limit (candidate_limit) for the helper that nine closures are given to")
+	}
+	if !c.hasUncertainty("depth_limit", "limits.dart", "caller_depth_limit") {
+		t.Error("limits.dart: no depth_limit (caller_depth_limit) for the helper that is five calls below the closure")
+	}
 	t.Logf("dart-curated: %d flows to find, %d sinks to keep quiet, %d flows not found yet (@miss: %d silent, %d with a trace), %d reported wrongly (@fp), %d flows of other sources into noisy sinks (@noisy)", c.detect, c.quiet, c.miss, c.missSilent, c.missTrace, c.fp, c.noisy)
 	logSilentMisses(t, "dart-curated", c)
 	checkOffSource(t, c, maxDartOffSource)

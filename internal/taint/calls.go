@@ -250,6 +250,9 @@ func (s *state) callBody(cc *callCtx) {
 		// the rule is the model
 	case len(fns) == 0 && invoke:
 		s.unmodeled(cc, dispatch)
+	case len(fns) == 0 && ci.Callee != nil && ci.Callee.ValueLimit != "":
+		// the functions are known and rivus left them out: its limit, not the code's
+		s.unmodeled(cc, s.newNote(ci, KindDepthLimit, ci.Callee.ValueLimitDetail(), cc.sym))
 	case len(fns) == 0:
 		s.unmodeled(cc, s.newNote(ci, KindUnresolvedCallee, "the called function is not known", cc.sym))
 	case external:
