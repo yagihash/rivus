@@ -19,7 +19,7 @@ import (
 func TestDartExtractor(t *testing.T) {
 	dart := os.Getenv("RIVUS_DART")
 	if dart == "" {
-		t.Skip("RIVUS_DART is not set")
+		skipOrFail(t, "RIVUS_DART")
 	}
 	extractor, err := filepath.Abs("../../extractor/dart")
 	if err != nil {
@@ -65,7 +65,7 @@ func TestDartExtractor(t *testing.T) {
 func TestDartDependenciesOutsideTheProjectAreNotReadUnlessAsked(t *testing.T) {
 	dart := os.Getenv("RIVUS_DART")
 	if dart == "" {
-		t.Skip("RIVUS_DART is not set")
+		skipOrFail(t, "RIVUS_DART")
 	}
 	extractor, err := filepath.Abs("../../extractor/dart")
 	if err != nil {
@@ -155,7 +155,7 @@ func TestDartDependenciesOutsideTheProjectAreNotReadUnlessAsked(t *testing.T) {
 func TestDartExtractorLeavesOutAFunctionThatFails(t *testing.T) {
 	dart := os.Getenv("RIVUS_DART")
 	if dart == "" {
-		t.Skip("RIVUS_DART is not set")
+		skipOrFail(t, "RIVUS_DART")
 	}
 	extractor, err := filepath.Abs("../../extractor/dart")
 	if err != nil {
@@ -198,7 +198,7 @@ func TestDartExtractorLeavesOutAFunctionThatFails(t *testing.T) {
 func TestDartExtractorControlFlowShapes(t *testing.T) {
 	dart := os.Getenv("RIVUS_DART")
 	if dart == "" {
-		t.Skip("RIVUS_DART is not set")
+		skipOrFail(t, "RIVUS_DART")
 	}
 	extractor, err := filepath.Abs("../../extractor/dart")
 	if err != nil {

@@ -55,6 +55,8 @@ jobs:
       - name: Test with the Dart extractor
         env:
           RIVUS_DART: dart
+          # a missing RIVUS_DART fails the tests, and does not skip them
+          RIVUS_REQUIRE_DART: "1"
         run: go test ./cmd/...
 
   # The Rust extractor is built against the compiler's MIR (rustc_public), which is nightly only: it is pinned
@@ -84,3 +86,5 @@ jobs:
         run: go test ./cmd/...
         env:
           RIVUS_RUST: ${{ github.workspace }}/extractor/rust/target/debug/rivus-rust
+          # a missing RIVUS_RUST fails the tests, and does not skip them
+          RIVUS_REQUIRE_RUST: "1"

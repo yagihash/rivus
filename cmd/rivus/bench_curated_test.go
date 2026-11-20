@@ -298,7 +298,7 @@ func TestCuratedGo(t *testing.T) {
 func TestCuratedDart(t *testing.T) {
 	dart := os.Getenv("RIVUS_DART")
 	if dart == "" {
-		t.Skip("RIVUS_DART is not set")
+		skipOrFail(t, "RIVUS_DART")
 	}
 	dir, err := filepath.Abs(filepath.Join("..", "..", "bench", "dart-curated"))
 	if err != nil {
@@ -337,7 +337,7 @@ func TestCuratedDart(t *testing.T) {
 func TestCuratedRust(t *testing.T) {
 	bin := os.Getenv("RIVUS_RUST")
 	if bin == "" {
-		t.Skip("RIVUS_RUST is not set")
+		skipOrFail(t, "RIVUS_RUST")
 	}
 	bin, err := filepath.Abs(bin)
 	if err != nil {

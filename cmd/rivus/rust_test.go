@@ -20,7 +20,7 @@ import (
 func TestRustExtractor(t *testing.T) {
 	bin := os.Getenv("RIVUS_RUST")
 	if bin == "" {
-		t.Skip("RIVUS_RUST is not set")
+		skipOrFail(t, "RIVUS_RUST")
 	}
 	bin, err := filepath.Abs(bin)
 	if err != nil {
@@ -67,7 +67,7 @@ func TestRustExtractor(t *testing.T) {
 func TestRustExtractorMissingToolchain(t *testing.T) {
 	bin := os.Getenv("RIVUS_RUST")
 	if bin == "" {
-		t.Skip("RIVUS_RUST is not set")
+		skipOrFail(t, "RIVUS_RUST")
 	}
 	bin, err := filepath.Abs(bin)
 	if err != nil {
@@ -117,7 +117,7 @@ func TestRustToolchainHintMatches(t *testing.T) {
 func TestRustExtractorIncludeTestsIsNotAConflict(t *testing.T) {
 	bin := os.Getenv("RIVUS_RUST")
 	if bin == "" {
-		t.Skip("RIVUS_RUST is not set")
+		skipOrFail(t, "RIVUS_RUST")
 	}
 	bin, err := filepath.Abs(bin)
 	if err != nil {

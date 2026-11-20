@@ -23,7 +23,7 @@ func TestGraphFromTheIROfOtherLanguages(t *testing.T) {
 	extractorDart := func(t *testing.T) []byte {
 		dart := os.Getenv("RIVUS_DART")
 		if dart == "" {
-			t.Skip("RIVUS_DART is not set")
+			skipOrFail(t, "RIVUS_DART")
 		}
 		extractor, _ := filepath.Abs("../../extractor/dart")
 		words := strings.Fields(dart)
@@ -38,7 +38,7 @@ func TestGraphFromTheIROfOtherLanguages(t *testing.T) {
 	extractorRust := func(t *testing.T) []byte {
 		bin := os.Getenv("RIVUS_RUST")
 		if bin == "" {
-			t.Skip("RIVUS_RUST is not set")
+			skipOrFail(t, "RIVUS_RUST")
 		}
 		bin, _ = filepath.Abs(bin)
 		root, _ := filepath.Abs("../../extractor/rust/test/sample")
