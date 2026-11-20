@@ -91,7 +91,7 @@ func validate(list []*Bookmark) error {
 
 func revisionChange(from, to *vcs.Target) string {
 	switch {
-	case from == nil || to == nil || from.Dirty || to.Dirty:
+	case from == nil || to == nil:
 		return "unknown"
 	case from.Revision == to.Revision:
 		return "same"
@@ -162,8 +162,8 @@ type Resolution struct {
 	// FromRevision is the code the bookmark was taken from, when known.
 	FromRevision *vcs.Target `json:"from_revision,omitempty"`
 	// RevisionChange says how that code relates to the code now: "same"
-	// (the same commit, both trees clean), "different", or "unknown" (one
-	// of the two is not known, or one tree was modified).
+	// (the same commit; the working trees are not compared, ADR-038 addendum), "different", or "unknown" (one
+	// of the two is not known).
 	RevisionChange string `json:"revision_change"`
 	SiteResult
 	Source *SiteResult `json:"source,omitempty"`

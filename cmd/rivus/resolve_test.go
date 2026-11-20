@@ -490,7 +490,7 @@ func TestResolveRecordsTheRevision(t *testing.T) {
 	if err := json.Unmarshal(w.run("analyze", "-rules", "rules.yaml", "-sites", "./main"), &rep); err != nil {
 		t.Fatal(err)
 	}
-	if rep.Target == nil || rep.Target.Revision == "" || rep.Target.Dirty {
+	if rep.Target == nil || rep.Target.Revision == "" {
 		t.Fatalf("target of a clean tree: %+v", rep.Target)
 	}
 	// An agent keeps the findings together with the target they came from.
@@ -521,13 +521,6 @@ func TestResolveRecordsTheRevision(t *testing.T) {
 	}
 	if r.Bookmark != rep.Findings[0].ID {
 		t.Errorf("the ID changed with the revision: %s", r.Bookmark)
-	}
-
-	// A modified tree: the commit is not what was analysed.
-	w.write("main/main.go", wsBase)
-	res, r = resolve()
-	if r.RevisionChange != "unknown" || !res.Target.Dirty {
-		t.Errorf("dirty tree: %+v to %+v", r.RevisionChange, res.Target)
 	}
 
 	// A bookmark with no revision, or outside git: unknown, and no target.

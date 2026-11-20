@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -31,47 +32,54 @@ func repo(t *testing.T) string {
 	return dir
 }
 
-// The repository under analysis is not trusted: what its configuration names is not run to
-// find the revision and whether the tree is dirty (yagihash/rivus #6).
-func TestDetectRunsNothingThatTheRepositoryNames(t *testing.T) {
+// The repository under analysis is not trusted: git is not run at all to find the revision, so nothing that
+// the configuration names can run (yagihash/rivus #6).
+func TestDetectRunsNothingAndFindsTheRevision(t *testing.T) {
 	dir := repo(t)
 	mark := filepath.Join(t.TempDir(), "RAN")
-	run(t, dir, "config", "core.fsmonitor", "touch "+mark+"; false")
-	if tg := Detect(dir); tg == nil || tg.Revision == "" {
-		t.Fatalf("the revision is not found: %+v", tg)
-	}
-	if _, err := os.Stat(mark); err == nil {
-		t.Fatal("core.fsmonitor of the repository was run")
-	}
-}
-
-func TestDetectDoesNotRunTheFiltersOfTheRepository(t *testing.T) {
-	dir := repo(t)
-	mark := filepath.Join(t.TempDir(), "RAN")
-	if err := os.WriteFile(filepath.Join(dir, ".gitattributes"), []byte("*.txt filter=evil\n"), 0o644); err != nil {
+	extra := filepath.Join(dir, ".git", "extra")
+	if err := os.WriteFile(extra, []byte("[filter \"x\"]\n\tclean = touch "+mark+"; cat\n[core]\n\tfsmonitor = touch "+mark+"; false\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	run(t, dir, "config", "filter.evil.clean", "sh -c 'touch "+mark+"; cat'")
-	// a file whose stat differs from the index is the one git passes through the clean filter
-	f := filepath.Join(dir, "a.txt")
+	run(t, dir, "config", "include.path", "extra")
+	if err := os.WriteFile(filepath.Join(dir, ".gitattributes"), []byte("*.txt filter=x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	later := time.Now().Add(time.Hour)
-	if err := os.Chtimes(f, later, later); err != nil {
+	_ = os.Chtimes(filepath.Join(dir, "a.txt"), later, later)
+	want, err := exec.Command("git", "-C", dir, "rev-parse", "HEAD").Output()
+	if err != nil {
 		t.Fatal(err)
 	}
-	if tg := Detect(dir); tg == nil {
-		t.Fatal("no target")
+	// the mark made by the git of this test itself (rev-parse reads no filter) is removed before Detect
+	_ = os.Remove(mark)
+	tg := Detect(dir)
+	if tg == nil || tg.Revision != strings.TrimSpace(string(want)) {
+		t.Fatalf("the revision is not found: %+v, want %s", tg, want)
 	}
 	if _, err := os.Stat(mark); err == nil {
-		t.Fatal("a filter of the repository was run")
+		t.Fatal("the repository's configuration ran a command")
 	}
 }
 
-func TestDetectStillSeesADirtyTree(t *testing.T) {
+func TestDetectReadsPackedRefsAndWorktrees(t *testing.T) {
 	dir := repo(t)
-	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("two\n"), 0o644); err != nil {
-		t.Fatal(err)
+	want, _ := exec.Command("git", "-C", dir, "rev-parse", "HEAD").Output()
+	run(t, dir, "pack-refs", "--all")
+	if tg := Detect(dir); tg == nil || tg.Revision != strings.TrimSpace(string(want)) {
+		t.Fatalf("packed refs: %+v", tg)
 	}
-	if tg := Detect(dir); tg == nil || !tg.Dirty {
-		t.Fatalf("a changed file is not dirty: %+v", tg)
+	wt := filepath.Join(t.TempDir(), "wt")
+	run(t, dir, "worktree", "add", "-q", "-b", "other", wt)
+	if tg := Detect(wt); tg == nil || tg.Revision != strings.TrimSpace(string(want)) {
+		t.Fatalf("linked worktree: %+v", tg)
+	}
+	sub := filepath.Join(dir, "d")
+	_ = os.MkdirAll(sub, 0o755)
+	if tg := Detect(sub); tg == nil {
+		t.Fatal("a subdirectory of the working tree")
+	}
+	if tg := Detect(t.TempDir()); tg != nil {
+		t.Fatalf("outside git: %+v", tg)
 	}
 }

@@ -117,7 +117,7 @@ rivus models coverage -yaml -top 20 ./...  # 埋めるためのルールのひ�
 - 注意: `(error).Error` のように至る所で呼ばれるメソッドを sink にすると、解析が大幅に遅くなる（[ADR-032](docs/DECISIONS.md)）。ルールは狭く書く
 - ルールに `match: implementations` と書くと、インタフェースのメソッドを、自モジュールの実装に展開する（上限 `-max-implementations`、既定 300）
 - シンボルは `go/types` の形式（`(*net/http.Request).FormValue`、`os/exec.Command`）。ルールの書式は [組み込みルール](internal/model/builtin) を参照
-- `resolve` には、前に出力された検出結果やサイトの JSON をそのまま渡せる。状態は `unchanged` / `changed` / `rematched` / `ambiguous` / `unresolved`。検出結果には、今も届くか（`flow`）も返す。出力には解析したコードの `target`（git の revision と dirty）が入り、ブックマークも `revision` を持てる（出力の `target` を `{"target": ..., "bookmarks": [...]}` で渡す）。結果の `revision_change` が `same` / `different` / `unknown` を示す（ADR-038）
+- `resolve` には、前に出力された検出結果やサイトの JSON をそのまま渡せる。状態は `unchanged` / `changed` / `rematched` / `ambiguous` / `unresolved`。検出結果には、今も届くか（`flow`）も返す。出力には解析したコードの `target`（git の revision。作業ツリーの未コミットの変更は見ない）が入り、ブックマークも `revision` を持てる（出力の `target` を `{"target": ..., "bookmarks": [...]}` で渡す）。結果の `revision_change` が `same` / `different` / `unknown` を示す（ADR-038）
 - 値によってサニタイズされるかが変わる関数（`render(s, escape bool)` のようなもの）は、検出結果の `conditional_nodes` に、条件・条件ごとの結果・呼び出し側が渡している式・引数の由来（`provenance`。定数、設定の読み出し、パッケージ変数、公開関数の引数など、辿れなくなった理由つき）を書き出す。どちらが起こるかは判定しない。引数が定数のときは、起こりえない側の流れを捨てる
 - ルールの `origin: builtin | human | llm` で、モデルを決めた主体を区別できる。`-deterministic-only` で `llm` のルールを無視する。LLM 由来のモデルが影響した検出結果は `llm_influenced`、検出結果を消した場所は `suppressions` に残る
 - ルールには `pure: true`（その関数を通って汚染は流れない）と、フレームワークの入口を宣言する `kind: param` が書ける

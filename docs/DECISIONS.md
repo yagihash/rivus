@@ -707,6 +707,12 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
 
 **限界:** `dirty` は変更の中身を区別しない（追跡されていないファイルは見ない）。dirty な作業ツリー同士は、同じコミットでも `unknown` になる。古いリビジョンを自分で展開して解く `resolve --from <rev>` は、まだ作らない（ブックマークのスニペットとフィンガープリントで足りるうちは不要）。
 
+### 追記: `dirty` をやめ、git を実行しない（yagihash/rivus #6）
+
+- **決定:** `target` は `{revision}` だけにする。リビジョンは `.git/HEAD`、refs、`packed-refs`（リンクされたワークツリーは `commondir`）を直接読んで求め、git は実行しない。`dirty` は出さない。
+- **理由:** 解析対象の `.git/config` は信頼できないコードの一部で、`git status` は `core.fsmonitor`、`filter.*.clean`、`include.path`、サブモジュール、promisor など、設定が指すコマンドを実行する。設定を列挙して打ち消す方式は、経路が増えるたびに抜けた（#6 が再オープンされた）。
+- **影響:** `revision_change` の `same` は「同じコミット」の意味になり、作業ツリーに未コミットの変更があるかどうかは見ない。`unknown` は、どちらかの target がないとき。reftable など、読めない形式のリポジトリは `target` なし。
+
 ## ADR-039: Phase 2 の IR を、Phase 1 の実測から具体化する（案）
 
 **状況:** 2.3 の命令セット（26 種）は Phase 1 の前に書いた。Phase 1 で、エンジンが `go/ssa` から使っているものが分かった（ARCHITECTURE 2.7.1）。
