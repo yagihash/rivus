@@ -40,7 +40,7 @@ void twice_b() {
 
 // the callback is called twice with different arguments, one clean
 void twice_args() {
-  final a = source(); // @source(twice-args) @miss(silent)
+  final a = source(); // @source(twice-args) @miss(depth_limit)
   final out = <String>[];
   fireAndForget(a, (x) => out.add(x));
   fireAndForget('const', (x) => out.add(x));
@@ -49,13 +49,13 @@ void twice_args() {
 
 // the callback gets another callback
 void takes_callback_a() {
-  final a = source(); // @source(takes-a) @miss(silent)
+  final a = source(); // @source(takes-a) @miss(depth_limit)
   final r = viaInner('const', (g) => g(a));
   sink(r); // @sink(takes-a) @nosink(takes-b)
 }
 
 void takes_callback_b() {
-  final b = source(); // @source(takes-b) @miss(silent)
+  final b = source(); // @source(takes-b) @miss(depth_limit)
   final r = viaInner('const', (g) => g(b));
   sink(r); // @sink(takes-b) @nosink(takes-a)
 }

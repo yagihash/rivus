@@ -4,6 +4,7 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/yagihash/rivus/internal/ir"
 	"github.com/yagihash/rivus/internal/sg"
 
 	"github.com/yagihash/rivus/internal/fingerprint"
@@ -288,6 +289,12 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 	// A callee may take optional parameters that the call leaves out (an
 	// override can add them): what is not passed carries nothing.
 	if want := len(fn.Params) + len(fn.FreeVars); len(argv) < want && len(bindings) == 0 {
+		if len(fn.FreeVars) > 0 && usesCaptures(sum, len(fn.Params)) {
+			// The closure is called where the values it captured are not at hand (a helper
+			// that was given it): they are filled in as nothing, and the flows that go
+			// through them are not followed. That is said (ADR-053), not left silent.
+			s.noteUnboundCapture(cc, fn)
+		}
 		for len(argv) < want {
 			argv = append(argv, &sg.Value{Kind: sg.KUndef})
 		}
@@ -527,4 +534,68 @@ func joinSummaries(old, cur *Summary) *Summary {
 	}
 	out.Sig = out.signature()
 	return out
+}
+
+// closureSite is the function that makes a closure, and the place where it does.
+type closureSite struct {
+	fn  *sg.Func
+	pos ir.Pos
+}
+
+// closureMakers is where each closure is made, by the ID of the closure.
+func (e *Engine) closureMakers() map[string]closureSite {
+	e.makersOnce.Do(func() {
+		e.makers = map[string]closureSite{}
+		for _, f := range e.prog.Funcs {
+			for _, b := range f.Blocks {
+				for _, in := range b.Instrs {
+					if in.Op == ir.OpMakeClosure && in.IR != nil && in.IR.Func != "" {
+						if _, ok := e.makers[string(in.IR.Func)]; !ok {
+							e.makers[string(in.IR.Func)] = closureSite{f, in.Pos}
+						}
+					}
+				}
+			}
+		}
+	})
+	return e.makers
+}
+
+// noteUnboundCapture records that a closure is called without the values it captured: the
+// function that made it knows them, the call in the helper does not. The uncertainty is at the
+// place where the closure is made (the function that holds the values, which is where a reader of
+// a lost flow looks), of kind depth_limit (rivus' limit: the summary of the helper does not carry
+// the captured values of the closure it is given), and it changes nothing of what is found.
+func (s *state) noteUnboundCapture(cc *callCtx, fn *sg.Func) {
+	id := s.eng.funcID(fn)
+	u := newUncertainty(KindDepthLimit, "capture_unbound: the closure made here captured "+itoa(len(fn.FreeVars))+
+		" value(s), and a function it was handed to calls it without them (they are known only here): the flows that go through them are not followed", id)
+	u.Func = id
+	u.pos = cc.in.Pos
+	if mk, ok := s.eng.closureMakers()[fn.ID]; ok {
+		u.Func, u.pos = s.eng.funcID(mk.fn), mk.pos
+	}
+	s.uncertain = append(s.uncertain, u)
+}
+
+// usesCaptures reports whether what the summary says depends on the values the function captured
+// (the parameters after the declared ones), or writes to one of them: only then does not knowing
+// them lose anything.
+func usesCaptures(sum *Summary, declared int) bool {
+	for _, o := range sum.Outputs {
+		if o.Kind == OutParam && o.Index >= declared {
+			return true
+		}
+		for _, oe := range o.Elems {
+			if oe.E.Kind == Param && int(oe.E.Param) >= declared {
+				return true
+			}
+		}
+	}
+	for _, sk := range sum.Sinks {
+		if sk.Elem.Kind == Param && int(sk.Elem.Param) >= declared {
+			return true
+		}
+	}
+	return false
 }

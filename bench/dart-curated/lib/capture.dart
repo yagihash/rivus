@@ -35,7 +35,7 @@ void write_const() {
 // the callback writes what the helper gave it into the captured variable
 void write_param() {
   String out = '';
-  final t = source(); // @source(write-param) @miss(silent)
+  final t = source(); // @source(write-param) @miss(depth_limit)
   fireAndForget(t, (x) {
     out = x;
   });

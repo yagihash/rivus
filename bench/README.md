@@ -99,8 +99,8 @@ finding is understood). A real project (Gitea) is for a milestone only: it takes
 minutes and 5 to 10 GB. See `go-synth/README.md` for how, and `docs/DECISIONS.md` (ADR-046) for why.
 
 Two more things are held by the three curated tests. Each `@miss` says whether the engine left a
-trace of the flow it lost: `@miss(silent)` (nothing in the functions of the source and the sink; 66 of the
-78: Dart 37, Rust 15, Go 14) or `@miss(<kind>)` (12: Dart 10, Rust 1, Go 1); and the findings whose path has no step in
+trace of the flow it lost: `@miss(silent)` (nothing in the functions of the source and the sink; 51 of the
+78: Dart 31, Rust 15, Go 5) or `@miss(<kind>)` (27: Dart 16, Rust 1, Go 10); and the findings whose path has no step in
 the function of their source are counted against a ceiling (BENCH-2; 0 in the three, 0 of 39 in
 `TestDogfood` and `paramshare` too: CORE-B was fixed, ADR-049). See `MISSES.md`.
 
@@ -123,19 +123,19 @@ Each curated test logs one line (`go test ./cmd/rivus -run Curated -v`, with `RI
 `RIVUS_RUST` set for Dart and Rust):
 
 ```
-go-curated silent misses: 14 / 15 (93%)
-dart-curated silent misses: 37 / 47 (79%)
+go-curated silent misses: 5 / 15 (33%)
+dart-curated silent misses: 31 / 47 (66%)
 rust-curated silent misses: 15 / 16 (94%)
 ```
 
 | | `@miss` | `@miss(silent)` | `@miss(<kind>)` | silent share |
 | --- | --- | --- | --- | --- |
-| Dart | 47 | 37 | 10 | 79% |
+| Dart | 47 | 31 | 16 | 66% |
 | Rust | 16 | 15 | 1 | 94% |
-| Go | 15 | 14 | 1 | 93% |
-| all | 78 | 66 | 12 | 85% |
+| Go | 15 | 5 | 10 | 33% |
+| all | 78 | 51 | 27 | 65% |
 
-(2026-11-21, `alias-ptr` (`go-curated/api/alias.go`: one object reached through two pointers, a limit of the alias analysis, Go +1 silent; 77 / 65 = 84% before it); ADR-050 added `limits.dart` (Dart +2 misses, both told in the helper by `depth_limit`: `candidate_limit` / `caller_depth_limit`; this share does not count a trace in a helper, so they stay silent); after the fixtures of C-7 (`docs/DESIGN-capture.md`); the counts are the ones the tests check, so they match the annotations. It was 42 / 50 = 84% before the closure-capture fixtures, and 53 / 64 = 83% with the first ones of them.) **The share did not move because the engine got worse: the fixtures that were added record misses that were not seen before** (a captured value lost in a helper's callback, Go 11, Dart 11, Rust 3 of the 25 added); the engine is the same.
+(2026-11-21, **ADR-053 (DART-15): 66 / 78 = 85% before, 51 / 78 = 65% now**: 15 of the misses of a captured value (Go 9, Dart 6) now have a `depth_limit` (`capture_unbound`) in the function that made the closure; the engine finds the same flows, and says what it does not know. Rust: none, see ADR-053. Before it: `alias-ptr` (`go-curated/api/alias.go`: one object reached through two pointers, a limit of the alias analysis, Go +1 silent; 77 / 65 = 84% before it); ADR-050 added `limits.dart` (Dart +2 misses, both told in the helper by `depth_limit`: `candidate_limit` / `caller_depth_limit`; this share does not count a trace in a helper, so they stay silent); after the fixtures of C-7 (`docs/DESIGN-capture.md`); the counts are the ones the tests check, so they match the annotations. It was 42 / 50 = 84% before the closure-capture fixtures, and 53 / 64 = 83% with the first ones of them.) **The share did not move because the engine got worse: the fixtures that were added record misses that were not seen before** (a captured value lost in a helper's callback, Go 11, Dart 11, Rust 3 of the 25 added); the engine is the same.
 
 What it means: it measures how well the discipline of leaving a trace is kept, i.e. how immature the
 engine is where it loses a flow. It stands next to the share of `attributable_to: rivus` among the

@@ -56,14 +56,14 @@ func (h *Handlers) Captures(c *web.Context) {
 // capRunA and capRunB: one helper, two callers, each with its own captured value. Neither value goes
 // into the closure of the other.
 func capRunA(c *web.Context) {
-	a := c.Query("a") // @source(cap-run-a) @miss(silent)
+	a := c.Query("a") // @source(cap-run-a) @miss(depth_limit)
 	runCb(func() {
 		sys.Run(a) // @sink(cap-run-a) @nosink(cap-run-b)
 	})
 }
 
 func capRunB(c *web.Context) {
-	b := c.Query("b") // @source(cap-run-b) @miss(silent)
+	b := c.Query("b") // @source(cap-run-b) @miss(depth_limit)
 	runCb(func() {
 		sys.Run(b) // @sink(cap-run-b) @nosink(cap-run-a)
 	})
@@ -124,7 +124,7 @@ func capDefer(c *web.Context) {
 // capWrite: the closure writes a variable it captured, and the function uses it after the helper.
 func capWrite(c *web.Context) {
 	var out string
-	a := c.Query("write") // @source(cap-write) @miss(silent)
+	a := c.Query("write") // @source(cap-write) @miss(depth_limit)
 	runCb(func() {
 		out = a
 	})
@@ -154,7 +154,7 @@ func capNested(c *web.Context) {
 
 // capLoop: a closure made for each element of a loop; each captures its element.
 func capLoop(c *web.Context) {
-	names := []string{c.Query("loop")} // @source(cap-loop) @miss(silent)
+	names := []string{c.Query("loop")} // @source(cap-loop) @miss(depth_limit)
 	for _, n := range names {
 		runCb(func() {
 			sys.Run(n) // @sink(cap-loop)
@@ -164,7 +164,7 @@ func capLoop(c *web.Context) {
 
 // capTwo: two closures of one call, each with its own value (the helper calls both).
 func capTwo(c *web.Context) {
-	a := c.Query("two-a") // @source(cap-two-a) @miss(silent)
+	a := c.Query("two-a") // @source(cap-two-a) @miss(depth_limit)
 	b := "fixed"
 	runTwo(func() {
 		sys.Run(a) // @sink(cap-two-a)
@@ -208,7 +208,7 @@ func capLate(c *web.Context) {
 	f := func() {
 		sys.Run(x) // @sink(cap-late)
 	}
-	x = c.Query("late") // @source(cap-late) @miss(silent)
+	x = c.Query("late") // @source(cap-late) @miss(depth_limit)
 	runCb(f)
 }
 
@@ -240,7 +240,7 @@ func capSeenAndPassed(c *web.Context) {
 // capFuncCall: the captured value is a function, and the closure calls it with a value of the
 // caller (PARAM-CALL: the call of a function that the closure captured is not resolved).
 func capFuncCall(c *web.Context) {
-	a := c.Query("funccall") // @source(cap-funccall) @miss(silent)
+	a := c.Query("funccall") // @source(cap-funccall) @miss(depth_limit)
 	g := func(s string) {
 		sys.Run(s) // @sink(cap-funccall)
 	}
@@ -266,7 +266,7 @@ func produce(f func() string) string { return f() }
 // it is made (C-7 applies the captured values to sinks, writes and globals, not to the result): the helper's
 // call has no binding, so the result carries nothing, and the flow is lost without a word. After C-7: `@miss(assumed_call)`.
 func capResult(c *web.Context) {
-	a := c.Query("result") // @source(cap-result) @miss(silent)
+	a := c.Query("result") // @source(cap-result) @miss(depth_limit)
 	x := produce(func() string {
 		return a
 	})

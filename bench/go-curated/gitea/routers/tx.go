@@ -23,7 +23,7 @@ func DeleteInTx(ctx *context.Context) { // @source(tx_capture) @miss(dynamic_dis
 
 // RunInTx is the same with a sink that is not behind an interface: the engine
 // leaves no trace of the lost flow.
-func RunInTx(ctx *context.Context) { // @source(tx_capture_plain) @miss(silent)
+func RunInTx(ctx *context.Context) { // @source(tx_capture_plain) @miss(depth_limit)
 	name := ctx.Req.FormValue("name")
 	_ = db.WithTx(ctx.Req.Context(), func(c stdctx.Context) error {
 		return sys.Run(name) // @sink(tx_capture_plain)

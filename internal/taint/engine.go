@@ -64,6 +64,9 @@ type Engine struct {
 	// valueGuards is the same for the calls of function values (valueGuards).
 	valueGuards sync.Map // *sg.Instr -> map[string][]Guard
 	prog        *sg.Program
+	// makers says where each closure is made (the function and the place): made once, when first asked.
+	makersOnce sync.Once
+	makers     map[string]closureSite
 	// reach is what the program can reach from its entry points (nil: unknown).
 	reach map[*sg.Func]bool
 	texts ir.Texts

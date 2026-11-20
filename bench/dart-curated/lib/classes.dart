@@ -58,7 +58,7 @@ class Builder {
 }
 
 void builder_closure() {
-  final a = source(); // @source(builder) @miss(silent)
+  final a = source(); // @source(builder) @miss(depth_limit)
   final b = Builder().with_((x) => x.add(a));
   sink(b.build()); // @sink(builder)
 }

@@ -96,7 +96,10 @@ func TestDogfood(t *testing.T) {
 	s := rep.Summary
 	t.Logf("%d findings, %d uncertainties: %v; rivus share %.2f, depth_limit share %.3f",
 		s.Findings, s.Program.Total, s.Program.ByAttribution, s.RivusShare, s.DepthLimitShare)
-	if s.DepthLimitShare > 0.05 {
+	// 0.05 before ADR-053: the closures of rivus' own code that capture a value and are called by
+	// a helper (capture_unbound, a limit of rivus that was silent) are 0.078 of them. It is the
+	// number to bring down again, when the helpers' summaries carry the captured values (C-7).
+	if s.DepthLimitShare > 0.10 {
 		t.Errorf("depth_limit is %.1f%% of the uncertainties: the limits are too tight for rivus' own code", 100*s.DepthLimitShare)
 	}
 }
