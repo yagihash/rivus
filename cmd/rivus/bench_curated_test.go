@@ -330,6 +330,19 @@ func checkCuratedReport(t *testing.T, dir string, out []byte, ext string) curate
 	return c
 }
 
+// logSilentMisses logs the share of the @miss that left no trace: "silent misses: S / M (P%)".
+// It is the measure of how much of what the engine loses it also says nothing about (the
+// definition and the numbers are in bench/README.md); the work that adds traces (DART-15,
+// CORE-D, C-7) is to bring it down. It is a log, not a ceiling: the per-@miss check is above.
+func logSilentMisses(t *testing.T, name string, c curatedCounts) {
+	t.Helper()
+	pct := 0.0
+	if c.miss > 0 {
+		pct = 100 * float64(c.missSilent) / float64(c.miss)
+	}
+	t.Logf("%s silent misses: %d / %d (%.0f%%)", name, c.missSilent, c.miss, pct)
+}
+
 // TestCuratedGo is the accuracy benchmark for Go (bench/go-curated): it runs with
 // every "go test" and takes seconds.
 func TestCuratedGo(t *testing.T) {
@@ -339,6 +352,7 @@ func TestCuratedGo(t *testing.T) {
 	}
 	c := checkCurated(t, dir)
 	t.Logf("go-curated: %d flows to find, %d sinks to keep quiet, %d flows not found yet (@miss: %d silent, %d with a trace), %d reported wrongly (@fp), %d flows of other sources into noisy sinks (@noisy)", c.detect, c.quiet, c.miss, c.missSilent, c.missTrace, c.fp, c.noisy)
+	logSilentMisses(t, "go-curated", c)
 	checkOffSource(t, c, maxGoOffSource)
 	if c.detect < 15 || c.quiet < 8 {
 		t.Errorf("the project has shrunk: %+v", c)
@@ -380,6 +394,7 @@ func TestCuratedDart(t *testing.T) {
 	}
 	c := checkCuratedIR(t, dir, stream, ".dart")
 	t.Logf("dart-curated: %d flows to find, %d sinks to keep quiet, %d flows not found yet (@miss: %d silent, %d with a trace), %d reported wrongly (@fp), %d flows of other sources into noisy sinks (@noisy)", c.detect, c.quiet, c.miss, c.missSilent, c.missTrace, c.fp, c.noisy)
+	logSilentMisses(t, "dart-curated", c)
 	checkOffSource(t, c, maxDartOffSource)
 	if c.detect < 70 || c.quiet < 35 {
 		t.Errorf("the project has shrunk: %+v", c)
@@ -407,6 +422,7 @@ func TestCuratedRust(t *testing.T) {
 	}
 	c := checkCuratedIR(t, dir, stream, ".rs")
 	t.Logf("rust-curated: %d flows to find, %d sinks to keep quiet, %d flows not found yet (@miss: %d silent, %d with a trace), %d reported wrongly (@fp), %d flows of other sources into noisy sinks (@noisy)", c.detect, c.quiet, c.miss, c.missSilent, c.missTrace, c.fp, c.noisy)
+	logSilentMisses(t, "rust-curated", c)
 	checkOffSource(t, c, maxRustOffSource)
 	if c.detect < 100 || c.quiet < 38 {
 		t.Errorf("the project has shrunk: %+v", c)

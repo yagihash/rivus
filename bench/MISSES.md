@@ -58,6 +58,8 @@
 | Go | 3 | 2 | 1 | 0 | 0 | 3 | 0 |
 | 計 | 50 | 42 | 8 | 11 | 6 | 33 | 0 |
 
+黙った見逃しの割合(`@miss(silent)` / `@miss`): Dart 27/34 = 79%、Rust 13/13 = 100%、Go 2/3 = 67%、計 42/50 = 84%(定義と意味は README.md の「The share of silent misses」。テストのログに `silent misses: S / M (P%)` が出る)。
+
 (Rust 13 と Go 3 は、下の「CVE の形のフィクスチャ」の節の 3 件を足した数。この節より上の表と文は、足す前の数のまま。)
 
 `@miss(<kind>)` の 7 件: Dart の `holder-a`、`holder-b`、`curry`(`unresolved_callee`)、`getter-fn`(`unmodeled_library_call,unresolved_callee`)、`map-entries`(`dynamic_dispatch`、候補なし)、`dyn-arg`、`dyn-body`(`unmodeled_library_call`、上の限界)。残りの 40 件は、source と sink の関数に、痕跡が無い(`silent`)。前の版の「黙った 30、弱い痕跡 7、痕跡あり 7」(44 件。Dart 32、Rust 11)に、RUST-13/14・DART-12 のフィクスチャの 3 件(`dyn-arg`、`dyn-body`、`model-body`)を足した 47 件を、定義に当てはめ直した: 黙った 30 + 弱い 7 + `takes-a/b` 2 + `model-body` 1 = 40(`silent`)、痕跡あり 7 - 2 + `dyn-*` 2 = 7。

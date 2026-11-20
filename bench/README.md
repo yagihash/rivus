@@ -51,3 +51,39 @@ the function of their source are counted against a ceiling (BENCH-2; 0 in the th
 export RIVUS_DART="mise exec dart@3.13.6 -- dart" RIVUS_RUST=$PWD/extractor/rust/target/debug/rivus-rust
 go test ./cmd/rivus -run Curated -v        # the three accuracy benchmarks: counts in the log
 ```
+
+## The share of silent misses
+
+`@miss(silent) / @miss`: of the flows the engine loses, how many it loses **without a word**. The
+definition is the one of `rivus resolve`'s `absent_now`: the functions of the sites on the source
+line and the sink line hold no uncertainty at all. Not counted as a trace: an uncertainty that has no
+function (a whole-run one, such as Rust's `depth_limit` / `path_limit`), `numeric_stop`, and a
+`dynamic_dispatch` with exactly one candidate (it is raised at every method call and does not say that
+a callback was lost). Uncertainties of a helper on the way (not in the function of the source or the
+sink) are not counted either.
+
+Each curated test logs one line (`go test ./cmd/rivus -run Curated -v`, with `RIVUS_DART` and
+`RIVUS_RUST` set for Dart and Rust):
+
+```
+go-curated silent misses: 2 / 3 (67%)
+dart-curated silent misses: 27 / 34 (79%)
+rust-curated silent misses: 13 / 13 (100%)
+```
+
+| | `@miss` | `@miss(silent)` | `@miss(<kind>)` | silent share |
+| --- | --- | --- | --- | --- |
+| Dart | 34 | 27 | 7 | 79% |
+| Rust | 13 | 13 | 0 | 100% |
+| Go | 3 | 2 | 1 | 67% |
+| all | 50 | 42 | 8 | 84% |
+
+(2026-11-21, HEAD 52e2ba8; the counts are the ones the tests check, so they match the annotations.)
+
+What it means: it measures how well the discipline of leaving a trace is kept, i.e. how immature the
+engine is where it loses a flow. It stands next to the share of `attributable_to: rivus` among the
+reasons a flow is not found: that one says whose fault a miss is, this one says whether the engine told
+anyone. It is a log, not a ceiling: it is the number to watch go down when a fix adds traces (DART-15,
+CORE-D, C-7). A trace that appears makes the `@miss(silent)` line fail as an improvement (rewrite it as
+`@miss(<kind>)`), so the number cannot move without someone seeing it. A miss that is fixed leaves both
+the numerator and the denominator, so it does not count as an improvement of this share.
