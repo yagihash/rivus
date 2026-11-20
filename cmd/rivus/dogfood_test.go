@@ -5,9 +5,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/yagihash/rivus/internal/report"
+	"github.com/yagihash/rivus/internal/taint"
 )
 
 // TestDogfood analyses rivus with rivus (docs: ADR-037). What the command
@@ -96,10 +98,27 @@ func TestDogfood(t *testing.T) {
 	s := rep.Summary
 	t.Logf("%d findings, %d uncertainties: %v; rivus share %.2f, depth_limit share %.3f",
 		s.Findings, s.Program.Total, s.Program.ByAttribution, s.RivusShare, s.DepthLimitShare)
-	// 0.05 before ADR-053: the closures of rivus' own code that capture a value and are called by
-	// a helper (capture_unbound, a limit of rivus that was silent) are 0.078 of them. It is the
-	// number to bring down again, when the helpers' summaries carry the captured values (C-7).
-	if s.DepthLimitShare > 0.10 {
-		t.Errorf("depth_limit is %.1f%% of the uncertainties: the limits are too tight for rivus' own code", 100*s.DepthLimitShare)
+	// depth_limit is held in two parts (ADR-053, "the split of the ceiling"): capture_unbound
+	// (a closure that captures a value and is called by a helper, whose summary does not carry
+	// it: a limit of rivus that was silent) has a ceiling of its own, a count; every other
+	// depth_limit (path_limit, budget, guard_limit, ...) stays under 5% of the uncertainties.
+	// Both are ceilings: a count that goes down fails too, so that the ceiling is brought down
+	// (C-7 is meant to make capture_unbound go down).
+	capture := 0
+	for _, u := range rep.Uncertainties {
+		if u.Kind == taint.KindDepthLimit && strings.HasPrefix(u.Detail, "capture_unbound") {
+			capture++
+		}
+	}
+	const wantCaptureUnbound = 35
+	t.Logf("capture_unbound: %d (ceiling %d)", capture, wantCaptureUnbound)
+	if capture != wantCaptureUnbound {
+		t.Errorf("capture_unbound is %d, the ceiling is %d: if it went down, lower the ceiling (that is the point of C-7); if it went up, a closure capture is lost silently somewhere new", capture, wantCaptureUnbound)
+	}
+	if s.Program.Total > 0 {
+		other := float64(s.Program.ByKind[taint.KindDepthLimit]-capture) / float64(s.Program.Total)
+		if other > 0.05 {
+			t.Errorf("depth_limit other than capture_unbound is %.1f%% of the uncertainties: the limits are too tight for rivus' own code", 100*other)
+		}
 	}
 }
