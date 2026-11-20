@@ -104,6 +104,9 @@ rivus query -sink 'os/exec.Command' ./...  # この sink に届き得る source 
 rivus query -source '(*net/http.Request).FormValue' ./...  # この source が届き得る sink を列挙
 rivus index -C path/to/project ./...       # コールグラフ(構造の層)を SQLite に保存する。速い(taint 解析はしない)。書き先は、ユーザーのキャッシュ(-graph <file> で指定)
 rivus graph info -C path/to/project ./...  # 保存したファイルの中身(件数、作成日時、source_hash)と、今のソースと一致するか(fresh: true/false)
+rivus graph callers -C . os/exec.Command   # この関数を呼ぶ関数(逆向き)。--depth N(既定 1、最大 6)、--limit K(既定 50 辺)
+rivus graph callees -C . main.go:42        # その行の呼び出し点が呼ぶ関数(順向き)。複数あれば、候補の一覧を返して選ばせる
+rivus graph path -C . --from cmd.run --to os/exec.Command  # 経路を k 本(--limit、既定 5)、最短から。静的な辺だけの経路を先に探す
 rivus index -taint -o idx.json ./...       # taint 解析の結果を JSON で保存(-o だけでも同じ)。構造の層も、同じ実行で、キャッシュに書く
 rivus query -index idx.json -site <ID>     # 保存した結果から、ソースを読み込まずに答える
 rivus resolve -bookmarks seen.json ./...   # 前に見た箇所（サイト・検出結果）が、今のコードのどこにあるかを答える
@@ -119,6 +122,13 @@ rivus models coverage -yaml -top 20 ./...  # 埋めるためのルールのひ�
   - **構造の層だけ**を作る（taint の層、つまり findings と不確実性は、このファイルにはない。`index` はそれを出力に書く。`-taint` でも、taint の結果は、これまでの JSON の index（`-o`）に入り、`query -index` / `resolve -index` はそれを読む）
   - `graph info` は、スキーマ版、rivus の版、作成日時、`source_hash`、層、件数、サイズ、言語を JSON（`rivus.graph/1`）で出す。**`-C <dir>` を付けると、鍵を今のソースから作り直して照合し、`fresh: true/false` と、変わった点（`stale_reasons`）を返す**。`-C` なしのときは、`verified: false`（今のソースとの一致は確認していない）。照合には、`index` に渡したのと同じフラグ（`-tests`、`-no-deps`、`-k`、`-lang`、`-rules`、パッケージなど）を渡す（違えば、`fresh: false`）
   - `source_hash` には、結果に影響しうるものを全部入れる: 実際に読んだファイルの内容（Go は `go/packages` の一覧。依存、標準ライブラリ、ビルドタグで除かれたファイル、`go.mod`、`replace` の中身を含む）、ツリーのファイルの一覧（新しいファイルを見逃さない）、`go.sum` / `go.work` / `pubspec.lock` / `Cargo.lock`、ルール（組み込みの内容、`.rivus/rules`、`-rules`）、フラグ、rivus の版（実行ファイルのハッシュ）、`go env` の全項目、extractor と SDK の版。Dart と Rust は、extractor が読んだファイルを言わないので、プロジェクトのツリー全体（`.git`、ビルド出力などを除く）の内容を鍵にする。**疑わしいときは、`fresh: false`**
+- **`rivus graph callers | callees | path`**（段階 2。DB だけを読む。ソースの再読み込みも taint もしない）。`-graph <file>` か `-C <dir>`（そこから導くキャッシュ）で DB を指す。`-C` を付けると `graph info` と同じ照合をして、出力の `snapshot.verified` / `fresh` に入れ、**古ければ `warnings` に書く**（答えは返す。古いソースの答えである）。`index` に渡したフラグは、`-C` で照合するとき、与えなければ DB に記録されたものを使う
+  - **指定（target）は 4 通りを形で判別する**: シンボル（`os/exec.Command`、`(*pkg.T).Method`、Rust は `crate::f`。パッケージのパスを省いた末尾でも、1 つに決まるなら通る）、`file:行:桁`（その位置から始まる呼び出し点。桁がずれていれば、その行でそれより前に始まる最後の呼び出し点）、`file:行`（その行の呼び出し点。複数あれば、**エラーにせず `ambiguous` に一覧を返す**）、`site:<ID>`（`rivus sites` のサイト。`callers` / `callees` は `--site <ID>` でも）。ファイルは、DB の名前（解析対象からの相対）でも、絶対パスでも、末尾だけでも（1 つに決まるなら）良い。見つからなければ、近い候補を添えたエラー
+  - **指定が何を指すか**（関数 F と、呼び出し点 C = 関数の中の、別の関数を呼ぶ場所）: `callers F` は F を呼ぶ関数、`callees F` は F が呼ぶ関数。`callers C` は **C を含む関数**の呼び元、`callees C` は **C が呼ぶ関数**（C の呼び先の候補）。`path --from C` は C を通って始まり、`path --to C` は C を含む関数で終わる（最後のステップが C）。例: `main.go:42:7` が `exec.Command(...)` の呼び出しなら、`callees main.go:42:7` は `os/exec.Command`、`callers main.go:42:7` は、それを含む関数の呼び元
+  - **builtin**（`len`、`append` など）の呼び出し点は、既定で結果から外す（呼び出し点の約 4 割）。外した数は `omitted.builtin`。`--include-builtin` で `builtin:len` のノードとして戻す
+  - **動的な辺**（インターフェース、関数値）は、`kind` と `candidates`（その呼び出し点の候補の数）を必ず持つ。`callers` では「呼び元は、候補の 1 つとして、これを呼びうる」と読む。`callees` は静的な辺をたどり、**候補が 3 以下の動的な呼び出しは展開し、それより多いもの（と候補が 0 のもの）で止めて `frontier` に入れる**（`frontier_total` に総数）。`path` は、静的な辺だけの経路を先に探し（`certainty: certain`）、なければ動的な辺を含む経路（`uncertain`）を探すが、**候補が 20 を超える呼び出し点は使わず、`hub_skipped` に言う**（ハブを通る経路があるかもしれない）
+  - 切ったものは必ず言う: `truncated`（`count` と `limit`、`unit`。`at_least` は、数え切れていないとき。`beyond_depth` は、深さの端のノードに、見せていない先がある数）、`omitted`、`frontier`、`hub_skipped`、`warnings`。各出力に `schema: "rivus.graph/1"`、`relation: "calls"`（呼び出しの関係。データの流れではない）、`snapshot`、`query`、`filters`（段階 3 の `--via` などの置き場）、`hints`（次の一手）
+  - 出力は、既定で 1 行の JSON（`--pretty` で整形）。`callers` / `callees` は、ノードと辺に分ける。`path` は、ステップの列（各ステップは関数と、そこから次へ進む呼び出し点の `at`、`kind`、`candidates`、`sites`）
 - `analyze` と `query` の `-detail summary` は、経路とスニペットを省いた概要だけを出す
 - 出力の `summary` は、不確実性を kind と `attributable_to`（`target` / `rivus` / `mixed`）ごとに数え、モデルを書くと減るシンボルの上位（`top_symbols`）も出す
 - 注意: `(error).Error` のように至る所で呼ばれるメソッドを sink にすると、解析が大幅に遅くなる（[ADR-032](docs/DECISIONS.md)）。ルールは狭く書く

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/yagihash/rivus/internal/graphdb"
 	"github.com/yagihash/rivus/internal/ir"
 )
 
@@ -86,6 +87,38 @@ func TestGraphFromTheIROfOtherLanguages(t *testing.T) {
 			}
 			if len(info.Graph.Languages) != 1 || info.Graph.Languages[0] != s.lang {
 				t.Errorf("languages: %v", info.Graph.Languages)
+			}
+			// callers and path read the same file: a function that has a caller, and the way from it
+			d, err := graphdb.Open(db)
+			if err != nil {
+				t.Fatal(err)
+			}
+			callee, err := d.QueryForTest(`SELECT f.fid, 0, 0 FROM edges e JOIN funcs f ON f.id = e.to_func WHERE e.kind = 'static' AND f.has_body = 1 AND e.from_func != e.to_func ORDER BY f.fid LIMIT 1`)
+			if err != nil {
+				t.Fatal(err)
+			}
+			caller, err := d.QueryForTest(`SELECT f.fid, 0, 0 FROM edges e JOIN funcs f ON f.id = e.from_func JOIN funcs t ON t.id = e.to_func WHERE t.fid = '` + strings.ReplaceAll(callee.File, "'", "''") + `' AND e.from_func != e.to_func ORDER BY f.fid LIMIT 1`)
+			d.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+			cq := graphQuery(t, dir, "callers", "-graph", db, callee.File)
+			found := false
+			for _, e := range cq.Edges {
+				found = found || e.From == caller.File
+			}
+			if !found {
+				t.Errorf("callers of %s: %+v", callee.File, cq.Edges)
+			}
+			pq := graphQuery(t, dir, "path", "-graph", db, "--from", caller.File, "--to", callee.File)
+			if !pq.Reachable || len(pq.Paths) == 0 || pq.Paths[0].Steps[0].Func != caller.File {
+				t.Errorf("path %s -> %s: %+v", caller.File, callee.File, pq)
+			}
+			// a call by its position, for the language's own file names
+			if len(cq.Edges) > 0 {
+				if at := graphQuery(t, dir, "callees", "-graph", db, cq.Edges[0].At); len(at.Start) == 0 {
+					t.Errorf("callees %s: %+v", cq.Edges[0].At, at)
+				}
 			}
 			// the sites are the sites of "rivus sites"
 			sites := runIn(t, binary, dir, nil, "sites", "-ir", irFile, "-rules", s.rules, "-no-project-rules")

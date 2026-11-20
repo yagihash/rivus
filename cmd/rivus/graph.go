@@ -184,6 +184,8 @@ func runGraph(args []string) error {
 	switch args[0] {
 	case "info":
 		return runGraphInfo(args[1:])
+	case "callers", "callees", "path":
+		return runGraphQuery(args[0], args[1:])
 	}
 	fmt.Fprintf(os.Stderr, "rivus: unknown graph command %q\n\n%s", args[0], graphUsage)
 	os.Exit(2)
@@ -196,12 +198,35 @@ It speaks of calls (who calls whom), not of the flow of data (what reaches what)
 for the flow, use "rivus analyze" and "rivus query".
 
 Usage:
-  rivus graph info -graph <file> [-C <dir>]
+  rivus graph info    [-graph <file> | -C <dir>]
+  rivus graph callers [-graph <file> | -C <dir>] [--depth N] [--limit K] [--include-builtin] <target>
+  rivus graph callees [-graph <file> | -C <dir>] [--depth N] [--limit K] [--include-builtin] <target>
+  rivus graph path    [-graph <file> | -C <dir>] --from <target> --to <target> [--limit K]
 
 Commands:
-  info   what the file holds, when and from which source it was made, and (with -C) whether the source is still the same
+  info     what the file holds, when and from which source it was made, and (with -C) whether the source is still the same
+  callers  the functions that call the target (backwards)
+  callees  the functions the target calls (forwards)
+  path     up to K ways from one target to the other, shortest first
+
+A target is one of (the kind is told from its form):
+  os/exec.Command, (*pkg.T).Method   a function (a Dart or a Rust name too: pkg::f)
+  file:line:col                      the call that begins there
+  file:line                          the calls on that line (if several: the answer lists them to choose from)
+  site:<id>, or --site <id>          a site of "rivus sites"
+A file is named as the graph has it (relative to the analysed directory), or by an absolute path.
+
+What a target means, for a function F and a call C (a call is a place in a function, where it calls another):
+  callers F   who calls F                       callees F   what F calls
+  callers C   who calls the function that holds C   callees C   what C calls (the functions it may reach)
+  path --from C   starts with the call C         path --to C   ends in the function that holds C, with the call C
 
 The file is read only from -graph, or from the cache of -C (never from a file in the analysed directory).
+With -C the source is held against the file: "snapshot.fresh" says whether it is the same, and a warning
+is printed when it is not (the answer is still given, of the old source). Without -C nothing says so.
+The calls of builtins (len, append...) are left out of the answers; --include-builtin keeps them. The count
+that was left out is in "omitted". A call through an interface or a function value is "dynamic": its edge
+has "kind" and "candidates" (how many functions the call may reach).
 `
 
 func runGraphInfo(args []string) error {
@@ -236,6 +261,15 @@ func runGraphInfo(args []string) error {
 		out.Snapshot.Note = "not checked against the current source: pass -C <dir> to make the key again from it"
 		return writeJSON(os.Stdout, out)
 	}
+	if err := verifySnapshot(db, path, &o, fs.Args(), &out.Snapshot); err != nil {
+		return err
+	}
+	return writeJSON(os.Stdout, out)
+}
+
+// verifySnapshot makes the key again from the current source of -C and holds it against the file's, and
+// fills what the snapshot says: whether the file is fresh, and the differences when it is not.
+func verifySnapshot(db *graphdb.DB, path string, o *analyzeOpts, patterns []string, snap *snapshot) error {
 	stored, err := db.KeyParts()
 	if err != nil {
 		return err
@@ -244,8 +278,7 @@ func runGraphInfo(args []string) error {
 	if err != nil {
 		return err
 	}
-	patterns := fs.Args()
-	k := &keyCtx{o: &o, dir: dir, graphPath: path, stored: stored, patterns: patterns}
+	k := &keyCtx{o: o, dir: dir, graphPath: path, stored: stored, patterns: patterns}
 	now, err := k.compute()
 	if err != nil {
 		return err
@@ -256,11 +289,11 @@ func runGraphInfo(args []string) error {
 		// every part is the same and the hash is not: the file is not trusted
 		reasons = append(reasons, "the source hash does not match, though no part differs (the file is not made by this version of the key)")
 	}
-	out.Snapshot.Verified = true
-	out.Snapshot.Fresh = &fresh
-	out.Snapshot.Reasons = reasons
+	snap.Verified = true
+	snap.Fresh = &fresh
+	snap.Reasons = reasons
 	if !fresh {
-		out.Snapshot.Note = "the file was made from other source or other settings: make it again with \"rivus index\" (with the same flags)"
+		snap.Note = "the file was made from other source or other settings: make it again with \"rivus index\" (with the same flags)"
 	}
-	return writeJSON(os.Stdout, out)
+	return nil
 }
