@@ -30,6 +30,8 @@ The marks are those of `bench/go-curated` (`@source(tag)`, `@sink(tag)`, `@sink(
 
 ## What is not found yet (`@miss`) and what is reported wrongly (`@fp`, `@noisy`)
 
+Every `@miss`, `@fp` and `@noisy` is classified by the cause in [`../MISSES.md`](../MISSES.md). Of the 11 `@miss`, 10 are silent; 7 are one cause (`ENV-PTR`: a write through a pointer kept in a closure's environment is not seen), none is fixed by ADR-047. All 16 `@noisy` places (183 flows; the text below says 17) and 12 of the 14 `@fp` are one cause (`XTALK`: the candidates of a closure call are all closures of its type).
+
 The first run (2026-11-21, before the callback outputs go into the summaries): 112 flows found, 11 not found,
 42 sinks quiet, 14 reported wrongly, 183 flows of other sources into 17 noisy sinks.
 

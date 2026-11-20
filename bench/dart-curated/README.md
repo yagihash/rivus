@@ -34,6 +34,8 @@ cross-talk of a helper that calls every closure of its type). `rules.yaml`: `sou
 
 ## What is not found yet (`@miss`) and what is reported wrongly (`@fp`)
 
+Every `@miss` and `@fp` is classified by the cause (where in the engine the flow is lost, whether it leaves a trace in `uncertainties`, whether ADR-047 would fix it) in [`../MISSES.md`](../MISSES.md). Of the 32 `@miss`, 19 are silent (no uncertainty at the source or the sink); 12 are one cause (`CAP`: what a closure captured is lost when a helper calls it).
+
 The first run (2026-11-21, the engine before the callback outputs go into the summaries) gave 74 flows found,
 32 not found, 39 sinks quiet, 4 reported wrongly:
 

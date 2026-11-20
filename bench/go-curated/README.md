@@ -31,6 +31,10 @@ h.DB.Exec("SELECT * FROM " + config.Default.Table)            // @sink(none)
 `Context.HTML`) and sanitizers (`valid.Ident`, `valid.Quote`) of the project. The built-in rules are
 in force as always.
 
+## What is not found yet (`@miss`) and what is reported wrongly (`@fp`)
+
+The one `@miss` (`options`: a closure returned by a function, in a variadic list, loses what it captured; silent) and the five `@fp` (a map that does not tell its keys apart: four; a switch allow-list: one) are classified by the cause in [`../MISSES.md`](../MISSES.md).
+
 ## Run it
 
 ```sh
