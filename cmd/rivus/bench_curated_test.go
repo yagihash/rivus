@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/yagihash/rivus/internal/report"
+	"github.com/yagihash/rivus/internal/taint"
 )
 
 // The curated benchmarks (bench/<lang>-curated) are small projects in the shape of
@@ -28,8 +29,18 @@ import (
 // as a ratchet. They are checked from both sides: when the engine changes and the
 // mark is no longer true, the test fails and the mark is to be removed.
 //
-//	x := <-ch          // @source(tag) @miss   (a flow that is there, and is not found)
-//	db.Exec(y)         // @sink(none) @fp      (a sink that must stay quiet, and is reported)
+//	x := <-ch          // @source(tag) @miss(silent)             (a flow that is there, and is not found)
+//	x := <-ch          // @source(tag) @miss(unresolved_callee)  (the same, and the engine says why)
+//	db.Exec(y)         // @sink(none) @fp                        (a sink that must stay quiet, and is reported)
+//
+// A @miss says whether the engine left a trace of what it lost: "silent" means that the function
+// of the source and the function of the sink hold no uncertainty (see missTraces: a
+// dynamic_dispatch with one candidate says nothing about the lost flow, and counts as no trace);
+// a kind (unresolved_callee, unmodeled_library_call, dynamic_dispatch, depth_limit; several
+// separated by a comma) means that an uncertainty of that kind is in one of the two functions.
+// Both are checked: a trace that is gone, and a trace that has come ("silent" no longer true:
+// an improvement, write the kind) fail the test. A fix that adds the trace of a lost flow
+// shows in this way.
 //
 // "@noisy(N)" goes on a sink line (with its @sink mark) that N sources of other tags
 // reach, wrongly, and that no @nosink names: the callbacks that are called by a
@@ -41,7 +52,7 @@ import (
 // line has a flow of its own, from another source: two keys of one map, say).
 // It takes "@fp" in the same way.
 var curatedNoisy = regexp.MustCompile(`@noisy\((\d+)\)`)
-var curatedAnnot = regexp.MustCompile(`@(source|sink|nosink)\(([A-Za-z0-9_-]+)\)(\s+@(miss|fp))?`)
+var curatedAnnot = regexp.MustCompile(`@(source|sink|nosink)\(([A-Za-z0-9_-]+)\)(\s+@(miss(?:\(([a-z_,]+)\))?|fp))?`)
 
 type curatedAt struct {
 	file string
@@ -49,13 +60,24 @@ type curatedAt struct {
 }
 
 // curatedCounts is what a curated project holds.
-type curatedCounts struct{ detect, quiet, miss, fp, noisy int }
+type curatedCounts struct {
+	detect, quiet, miss, fp, noisy int
+	// missSilent and missTrace split miss: the engine left no trace of the flow it lost,
+	// or an uncertainty of a kind says so.
+	missSilent, missTrace int
+	// offSource is the number of findings that have no step in the function of their source
+	// (see offSourcePath), and what they are: a flow that is to be found ("detect"), one of
+	// another source into a noisy sink ("noisy"), a reported flow that must not be there
+	// ("fp"), or another ("other").
+	offSource int
+	offKinds  map[string]int
+}
 
 // checkCurated analyses the Go project in dir (a Go module with rules.yaml) and
 // compares the findings with the annotations of its .go files.
 func checkCurated(t *testing.T, dir string) curatedCounts {
 	t.Helper()
-	cmd := exec.Command(binary, "analyze", "-rules", "rules.yaml", "./...")
+	cmd := exec.Command(binary, "analyze", "-sites", "-rules", "rules.yaml", "./...")
 	cmd.Dir = dir
 	out, err := cmd.Output()
 	if err != nil {
@@ -77,7 +99,7 @@ func checkCuratedIR(t *testing.T, dir string, stream []byte, ext string) curated
 	if err := os.WriteFile(irFile, stream, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command(binary, "analyze", "-ir", irFile, "-rules", filepath.Join(dir, "rules.yaml"))
+	cmd := exec.Command(binary, "analyze", "-sites", "-ir", irFile, "-rules", filepath.Join(dir, "rules.yaml"))
 	cmd.Dir = dir
 	out, err := cmd.Output()
 	if err != nil {
@@ -104,6 +126,7 @@ func checkCuratedReport(t *testing.T, dir string, out []byte, ext string) curate
 
 	src, sinks := map[string]curatedAt{}, map[string][]curatedAt{}
 	miss := map[string]bool{}
+	missKinds := map[string][]string{} // tag -> the kinds of its @miss(...)
 	var none []curatedAt
 	fp := map[curatedAt]bool{}
 	type notFlow struct {
@@ -150,8 +173,13 @@ func checkCuratedReport(t *testing.T, dir string, out []byte, ext string) curate
 						t.Errorf("the tag %s has two sources", m[2])
 					}
 					src[m[2]] = here
-					if m[4] == "miss" {
+					if strings.HasPrefix(m[4], "miss") {
 						miss[m[2]] = true
+						if m[5] == "" {
+							t.Errorf("the @miss of %s at %s:%d needs the kind of its trace: @miss(silent) or @miss(<kind>)", m[2], rel, n)
+						} else {
+							missKinds[m[2]] = strings.Split(m[5], ",")
+						}
 					}
 				case m[2] == "none":
 					none = append(none, here)
@@ -171,12 +199,14 @@ func checkCuratedReport(t *testing.T, dir string, out []byte, ext string) curate
 
 	pair := func(a, b curatedAt) string { return fmt.Sprintf("%s:%d -> %s:%d", a.file, a.line, b.file, b.line) }
 	want := map[string]string{} // pair -> tag
+	ends := map[string][2]curatedAt{}
 	for tag, s := range src {
 		if len(sinks[tag]) == 0 {
 			t.Errorf("the tag %s has a source and no sink", tag)
 		}
 		for _, k := range sinks[tag] {
 			want[pair(s, k)] = tag
+			ends[pair(s, k)] = [2]curatedAt{s, k}
 		}
 	}
 	for tag := range sinks {
@@ -225,10 +255,32 @@ func checkCuratedReport(t *testing.T, dir string, out []byte, ext string) curate
 			problems = append(problems, fmt.Sprintf("found now (remove @miss): %s [%s]", k, tag))
 		case miss[tag]:
 			c.miss++
+			problems = append(problems, checkMissTrace(t, rep, k, tag, missKinds[tag], ends[k], &c)...)
 		case !got[k]:
 			problems = append(problems, fmt.Sprintf("missing flow: %s [%s]", k, tag))
 		default:
 			c.detect++
+		}
+	}
+	c.offKinds = map[string]int{}
+	for _, fd := range offSourcePath(&rep) {
+		s := curatedAt{fd.Source.Position.File, fd.Source.Position.Line}
+		k := curatedAt{fd.Sink.Position.File, fd.Sink.Position.Line}
+		kind := "other"
+		_, wanted := want[pair(s, k)]
+		_, noisy := noisyWant[k]
+		switch {
+		case wanted:
+			kind = "detect"
+		case hitNone[k] || skip[pair(s, k)]:
+			kind = "fp"
+		case noisy:
+			kind = "noisy"
+		}
+		c.offKinds[kind]++
+		c.offSource++
+		if os.Getenv("RIVUS_CURATED_TRACES") == "1" {
+			t.Logf("OFFSOURCE %s %s (source function %s)", kind, pair(s, k), fd.Source.Func)
 		}
 	}
 	noisyGot := map[curatedAt]int{}
@@ -286,7 +338,8 @@ func TestCuratedGo(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := checkCurated(t, dir)
-	t.Logf("go-curated: %d flows to find, %d sinks to keep quiet, %d flows not found yet (@miss), %d reported wrongly (@fp), %d flows of other sources into noisy sinks (@noisy)", c.detect, c.quiet, c.miss, c.fp, c.noisy)
+	t.Logf("go-curated: %d flows to find, %d sinks to keep quiet, %d flows not found yet (@miss: %d silent, %d with a trace), %d reported wrongly (@fp), %d flows of other sources into noisy sinks (@noisy)", c.detect, c.quiet, c.miss, c.missSilent, c.missTrace, c.fp, c.noisy)
+	checkOffSource(t, c, maxGoOffSource)
 	if c.detect < 15 || c.quiet < 8 {
 		t.Errorf("the project has shrunk: %+v", c)
 	}
@@ -326,7 +379,8 @@ func TestCuratedDart(t *testing.T) {
 		t.Fatalf("the extractor failed: %v\n%s", err, stderr.String())
 	}
 	c := checkCuratedIR(t, dir, stream, ".dart")
-	t.Logf("dart-curated: %d flows to find, %d sinks to keep quiet, %d flows not found yet (@miss), %d reported wrongly (@fp), %d flows of other sources into noisy sinks (@noisy)", c.detect, c.quiet, c.miss, c.fp, c.noisy)
+	t.Logf("dart-curated: %d flows to find, %d sinks to keep quiet, %d flows not found yet (@miss: %d silent, %d with a trace), %d reported wrongly (@fp), %d flows of other sources into noisy sinks (@noisy)", c.detect, c.quiet, c.miss, c.missSilent, c.missTrace, c.fp, c.noisy)
+	checkOffSource(t, c, maxDartOffSource)
 	if c.detect < 70 || c.quiet < 35 {
 		t.Errorf("the project has shrunk: %+v", c)
 	}
@@ -352,8 +406,106 @@ func TestCuratedRust(t *testing.T) {
 		t.Fatalf("the extractor failed: %v", err)
 	}
 	c := checkCuratedIR(t, dir, stream, ".rs")
-	t.Logf("rust-curated: %d flows to find, %d sinks to keep quiet, %d flows not found yet (@miss), %d reported wrongly (@fp), %d flows of other sources into noisy sinks (@noisy)", c.detect, c.quiet, c.miss, c.fp, c.noisy)
+	t.Logf("rust-curated: %d flows to find, %d sinks to keep quiet, %d flows not found yet (@miss: %d silent, %d with a trace), %d reported wrongly (@fp), %d flows of other sources into noisy sinks (@noisy)", c.detect, c.quiet, c.miss, c.missSilent, c.missTrace, c.fp, c.noisy)
+	checkOffSource(t, c, maxRustOffSource)
 	if c.detect < 100 || c.quiet < 38 {
 		t.Errorf("the project has shrunk: %+v", c)
+	}
+}
+
+// missTraces returns the kinds of the uncertainties that the engine left in the functions of the
+// source and of the sink of a flow that it did not find: what `rivus resolve` says about a flow
+// that is gone ("absent_now"). The uncertainties of the whole run (no function) do not count; nor
+// do a dynamic_dispatch with exactly one candidate (it is told at every method call, and says
+// nothing of the callback that was lost: advisor's rule, bench/MISSES.md) and numeric_stop
+// (numbers do not carry an injection: it is no explanation of a miss).
+func missTraces(rep *report.Report, from, to curatedAt) []string {
+	funcs := map[string]bool{}
+	for _, s := range rep.Sites {
+		p := curatedAt{s.Position.File, s.Position.Line}
+		if p == from || p == to {
+			funcs[s.Func] = true
+		}
+	}
+	seen := map[string]bool{}
+	var kinds []string
+	for _, u := range rep.Uncertainties {
+		if u.Func == "" || !funcs[u.Func] {
+			continue
+		}
+		if u.Kind == taint.KindNumericStop || (u.Kind == taint.KindDynamicDispatch && len(u.Candidates) == 1) {
+			continue
+		}
+		if !seen[u.Kind] {
+			seen[u.Kind] = true
+			kinds = append(kinds, u.Kind)
+		}
+	}
+	sort.Strings(kinds)
+	return kinds
+}
+
+// checkMissTrace compares the trace of a @miss with its annotation, and counts it in c.
+func checkMissTrace(t *testing.T, rep report.Report, pairName, tag string, want []string, end [2]curatedAt, c *curatedCounts) []string {
+	got := missTraces(&rep, end[0], end[1])
+	if os.Getenv("RIVUS_CURATED_TRACES") == "1" {
+		t.Logf("MISSTRACE %s:%d %s %v", end[0].file, end[0].line, tag, got)
+		funcs := map[string]bool{}
+		for _, st := range rep.Sites {
+			if p := (curatedAt{st.Position.File, st.Position.Line}); p == end[0] || p == end[1] {
+				funcs[st.Func] = true
+			}
+		}
+		for _, u := range rep.Uncertainties {
+			if funcs[u.Func] {
+				t.Logf("MISSRAW %s %s %s:%d cand=%d %s", tag, u.Kind, u.Position.File, u.Position.Line, len(u.Candidates), u.Detail)
+			}
+		}
+	}
+	if len(want) == 0 {
+		return nil // the annotation has no kind: told where it is read
+	}
+	silent := len(want) == 1 && want[0] == "silent"
+	var problems []string
+	switch {
+	case silent:
+		c.missSilent++
+		if len(got) > 0 {
+			problems = append(problems, fmt.Sprintf("a trace has come (improvement: write @miss(%s) instead of @miss(silent)): %s [%s]", strings.Join(got, ","), pairName, tag))
+		}
+	default:
+		c.missTrace++
+		have := map[string]bool{}
+		for _, k := range got {
+			have[k] = true
+		}
+		for _, k := range want {
+			if !have[k] {
+				problems = append(problems, fmt.Sprintf("the trace %s of the @miss is gone (the uncertainties of its functions: %v): %s [%s]", k, got, pairName, tag))
+			}
+		}
+	}
+	return problems
+}
+
+// The findings of the curated projects that have no step in the function of their source
+// (offSourcePath, BENCH-2), today. These are ceilings: they must go down, never up, and
+// they are lowered when CORE-B is fixed (to 0). What they are is in the log (OFFSOURCE, with
+// RIVUS_CURATED_TRACES=1) and in bench/MISSES.md.
+const (
+	maxGoOffSource   = 0
+	maxDartOffSource = 0
+	maxRustOffSource = 0
+)
+
+// checkOffSource holds the findings without a step in their source function to the ceiling.
+func checkOffSource(t *testing.T, c curatedCounts, max int) {
+	t.Helper()
+	t.Logf("%d findings have no step in the function of their source (ceiling %d): %v", c.offSource, max, c.offKinds)
+	if c.offSource > max {
+		t.Errorf("%d findings have a path without a step in their source function: more than the %d of today: %v", c.offSource, max, c.offKinds)
+	}
+	if c.offSource < max {
+		t.Errorf("only %d findings have a path without a step in their source function, and the ceiling is %d: lower it", c.offSource, max)
 	}
 }

@@ -4,10 +4,11 @@
 // definition that reaches it.
 //
 // It knows nothing of any language or of go/ssa: this is the part that the
-// architecture puts in the core, once, for every extractor (ADR-003). In
-// Phase 1 the analysis still runs on go/ssa; this package is built and
-// verified beside it, against go/ssa's own lifting and against an
-// independent reaching definitions analysis (see internal/ssacheck).
+// architecture puts in the core, once, for every extractor (ADR-003). The
+// analysis runs on the neutral IR, and internal/irssa uses this package to give
+// the IR its SSA form (ADR-036). It is verified against go/ssa's own lifting
+// and against an independent reaching definitions analysis (see
+// internal/ssacheck).
 package ssabuild
 
 import (

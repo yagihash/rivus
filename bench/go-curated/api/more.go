@@ -29,7 +29,7 @@ func build(opts ...Option) *Query {
 
 // Options passes the name by an option; the order is a constant.
 func (h *Handlers) Options(c *web.Context) {
-	q := build(WithName(c.Query("name")), WithOrder("name")) // @source(options) @miss
+	q := build(WithName(c.Query("name")), WithOrder("name")) // @source(options) @miss(silent)
 	h.DB.Exec("SELECT * FROM t WHERE n = '" + q.name + "'")  // @sink(options)
 	h.DB.Exec("SELECT * FROM t ORDER BY " + q.order)         // @sink(none)
 }

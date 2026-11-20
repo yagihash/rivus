@@ -40,21 +40,10 @@ func TestDogfood(t *testing.T) {
 	entries := map[string]bool{}
 	sinks := map[string]bool{}
 	var humanSource, flagModel bool
-	// A finding whose path has no step in the function of its source: the
-	// source was reached through an object that another function wrote back
-	// (the parameter of a source function taints the object, and the call
-	// that passed it carries the taint to the next function that gets it).
-	var noSourceOnPath int
+	// A finding whose path has no step in the function of its source is counted by
+	// offSourcePath (see there, and the ceiling below).
+	noSourceOnPath := len(offSourcePath(&rep))
 	for _, f := range rep.Findings {
-		onPath := false
-		for _, st := range f.Paths[0].Steps {
-			if st.Func == f.Source.Func {
-				onPath = true
-			}
-		}
-		if !onPath {
-			noSourceOnPath++
-		}
 		entries[f.Source.Func] = true
 		sinks[f.Sink.Symbol] = true
 		for _, m := range f.Models {

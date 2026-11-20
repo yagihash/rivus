@@ -28,15 +28,19 @@ func TestParamSourceSharedObject(t *testing.T) {
 		others int
 		// wrong says what the findings get wrong today.
 		wrong string
+		// off is the number of the findings with no step in the function of their
+		// source (offSourcePath, BENCH-2): a ceiling, today's value. It goes down to 0
+		// when CORE-B is fixed.
+		off int
 	}
 	rows := []row{
 		{pkg: "ptr", want: map[string]bool{"runB": true},
 			wrong: "CORE-A: runB does not reach the sink, runA does; the finding is false"},
 		{pkg: "local", want: map[string]bool{"runB": true},
 			wrong: "CORE-A: the same with a local slice; the finding is false"},
-		{pkg: "global", want: map[string]bool{"runB": false},
+		{pkg: "global", want: map[string]bool{"runB": false}, off: 1,
 			wrong: "CORE-A: the finding is false; CORE-B: and its path has no step in runB, no global_var uncertainty"},
-		{pkg: "repro", want: map[string]bool{"runA": true, "runB": false},
+		{pkg: "repro", want: map[string]bool{"runA": true, "runB": false}, off: 1,
 			wrong: "CORE-B: 2 real flows, but the path of runB has no step in runB (it goes through runA); CORE-C picks by function order"},
 		// the shapes where it does not happen
 		{pkg: "distinct", want: map[string]bool{"runA": true, "runB": true}},
@@ -69,6 +73,13 @@ func TestParamSourceSharedObject(t *testing.T) {
 			if len(got) != len(r.want) || others != r.others {
 				t.Errorf("findings from %v (other sources %d), want from %v (%d): %s", keys(got), others, keys(r.want), r.others, r.wrong)
 			}
+			off := offSourcePath(&rep)
+			if len(off) > r.off {
+				t.Errorf("%d findings have a path without a step in their source function: more than the %d of today", len(off), r.off)
+			}
+			if len(off) < r.off {
+				t.Errorf("only %d findings have a path without a step in their source function, the ceiling is %d: lower it", len(off), r.off)
+			}
 			for n, in := range r.want {
 				if g, ok := got[n]; ok && g != in {
 					t.Errorf("%s: path has a step in the source function = %v, today %v: update the row", n, g, in)
@@ -100,6 +111,10 @@ func TestGlobalWriterIsOnThePath(t *testing.T) {
 		t.Fatalf("want 1 finding, got %d", len(rep.Findings))
 	}
 	f := rep.Findings[0]
+	// the same ceiling as the rows of TestParamSourceSharedObject: this finding is off its source
+	if got := len(offSourcePath(&rep)); got > 1 {
+		t.Errorf("%d findings have a path without a step in their source function: more than the 1 of today", got)
+	}
 	inW := false
 	for _, s := range f.Paths[0].Steps {
 		if strings.HasSuffix(s.Func, "globalw.W") {

@@ -32,7 +32,7 @@ Future<void> await_then() async {
 }
 
 void catch_error_value() {
-  Future<String>.error(source()) // @source(catch-error) @miss
+  Future<String>.error(source()) // @source(catch-error) @miss(silent)
       .catchError((e) {
     sink(e); // @sink(catch-error)
     return '';
@@ -41,7 +41,7 @@ void catch_error_value() {
 
 void when_complete_capture() {
   String? out;
-  final t = source(); // @source(when-complete) @miss
+  final t = source(); // @source(when-complete) @miss(silent)
   Future.value(1).whenComplete(() {
     out = t;
   });
@@ -55,7 +55,7 @@ Future<void> async_closure() async {
 }
 
 void completer_flow() {
-  final t = source(); // @source(completer) @miss
+  final t = source(); // @source(completer) @miss(silent)
   final c = Future<String>.sync(() => t);
   c.then((v) => sink(v)); // @sink(completer)
 }

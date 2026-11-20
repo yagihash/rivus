@@ -5,7 +5,7 @@ import 'lib.dart';
 
 void write_a() {
   String? out;
-  final t = source(); // @source(write-a) @miss
+  final t = source(); // @source(write-a) @miss(silent)
   run(() {
     out = t;
   });
@@ -14,7 +14,7 @@ void write_a() {
 
 void write_b() {
   String? out;
-  final t = source(); // @source(write-b) @miss
+  final t = source(); // @source(write-b) @miss(silent)
   run(() {
     out = t;
   });
@@ -35,7 +35,7 @@ void write_const() {
 // the callback writes what the helper gave it into the captured variable
 void write_param() {
   String out = '';
-  final t = source(); // @source(write-param) @miss
+  final t = source(); // @source(write-param) @miss(silent)
   fireAndForget(t, (x) {
     out = x;
   });
@@ -45,7 +45,7 @@ void write_param() {
 // a list that the closure adds to
 void add_to_list() {
   final items = <String>[];
-  final t = source(); // @source(add-list) @miss
+  final t = source(); // @source(add-list) @miss(silent)
   run(() {
     items.add(t);
   });
@@ -73,12 +73,12 @@ void relayCapture(void Function() f) {
 }
 
 void relay_cap_a() {
-  final a = source(); // @source(relay-c-a) @miss
+  final a = source(); // @source(relay-c-a) @miss(silent)
   relayCapture(() => sink(a)); // @sink(relay-c-a) @nosink(relay-c-b)
 }
 
 void relay_cap_b() {
-  final b = source(); // @source(relay-c-b) @miss
+  final b = source(); // @source(relay-c-b) @miss(silent)
   relayCapture(() => sink(b)); // @sink(relay-c-b) @nosink(relay-c-a)
 }
 
@@ -99,13 +99,13 @@ void relay_both_b() {
 
 // a closure returned by a function holds a captured value
 void holder_a() {
-  final a = source(); // @source(holder-a) @miss
+  final a = source(); // @source(holder-a) @miss(unresolved_callee)
   final get = holder(a);
   sink(get()); // @sink(holder-a) @nosink(holder-b)
 }
 
 void holder_b() {
-  final b = source(); // @source(holder-b) @miss
+  final b = source(); // @source(holder-b) @miss(unresolved_callee)
   final get = holder(b);
   sink(get()); // @sink(holder-b) @nosink(holder-a)
 }

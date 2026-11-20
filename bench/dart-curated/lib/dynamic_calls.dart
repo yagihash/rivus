@@ -13,7 +13,7 @@ class Loud {
 
 // the method of the value takes the argument to a sink inside: the model has nothing about the body
 void dynamic_arg() {
-  final a = source(); // @source(dyn-arg) @miss
+  final a = source(); // @source(dyn-arg) @miss(unmodeled_library_call)
   dynamic l = Loud();
   l.shout(a);
 }
@@ -32,7 +32,7 @@ void dynamic_drop() {
 }
 
 class Maker {
-  String make() => source(); // @source(dyn-body) @miss
+  String make() => source(); // @source(dyn-body) @miss(unmodeled_library_call)
 }
 
 // the method takes a source in its own body

@@ -15,19 +15,19 @@ pub fn across_b() {
 }
 
 pub fn across_each() {
-    let items = vec![source()]; // @source(across-each) @miss
+    let items = vec![source()]; // @source(across-each) @miss(silent)
     shared::each(items, |x| sink(&x)); // @sink(across-each) @noisy(42)
 }
 
 pub fn across_hub() {
     let mut h = shared::Hub::new();
     h.on(Box::new(|s| sink(s))); // @sink(across-hub) @noisy(5)
-    h.emit(&source()); // @source(across-hub) @miss
+    h.emit(&source()); // @source(across-hub) @miss(silent)
 }
 
 pub fn across_capture() {
     let mut out = String::new();
-    let t = source(); // @source(across-cap) @miss
+    let t = source(); // @source(across-cap) @miss(silent)
     shared::each(vec![1], |_i| out = t.clone());
     sink(&out); // @sink(across-cap)
 }

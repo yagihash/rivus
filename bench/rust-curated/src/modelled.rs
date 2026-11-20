@@ -15,7 +15,7 @@ pub struct Leaky;
 
 impl Render for Leaky {
     fn render(&self) -> String {
-        source() // @source(model-body) @miss
+        source() // @source(model-body) @miss(silent)
     }
 }
 

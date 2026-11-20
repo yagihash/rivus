@@ -76,13 +76,13 @@ void sort_by() {
 }
 
 void map_entries() {
-  final m = {'k': source()}; // @source(map-entries) @miss
+  final m = {'k': source()}; // @source(map-entries) @miss(dynamic_dispatch)
   m.forEach((k, v) => sink(v)); // @sink(map-entries)
 }
 
 void putIfAbsent_value() {
   final m = <String, String>{};
-  final t = source(); // @source(put-if-absent) @miss
+  final t = source(); // @source(put-if-absent) @miss(silent)
   final v = m.putIfAbsent('k', () => t);
   sink(v); // @sink(put-if-absent)
 }

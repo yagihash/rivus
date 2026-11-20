@@ -35,6 +35,12 @@ same binary built from each state, and check that the result is identical (or th
 finding is understood). A real project (Gitea) is for a milestone only: it takes ten to sixteen
 minutes and 5 to 10 GB. See `go-synth/README.md` for how, and `docs/DECISIONS.md` (ADR-046) for why.
 
+Two more things are held by the three curated tests. Each `@miss` says whether the engine left a
+trace of the flow it lost: `@miss(silent)` (nothing in the functions of the source and the sink; 40 of the
+47: Dart 27, Rust 12, Go 1) or `@miss(<kind>)` (7, all Dart); and the findings whose path has no step in
+the function of their source are counted against a ceiling (BENCH-2; 0 in the three, 77 of 88 in
+`TestDogfood`, 1 each in three samples of `paramshare`). See `MISSES.md`.
+
 ```sh
 export RIVUS_DART="mise exec dart@3.13.6 -- dart" RIVUS_RUST=$PWD/extractor/rust/target/debug/rivus-rust
 go test ./cmd/rivus -run Curated -v        # the three accuracy benchmarks: counts in the log

@@ -108,6 +108,6 @@ void bound_method() {
 }
 
 void bound_method_prefix() {
-  final p = source(); // @source(bound-prefix) @miss
+  final p = source(); // @source(bound-prefix) @miss(silent)
   sink(Pipeline(p).run('const')); // @sink(bound-prefix)
 }

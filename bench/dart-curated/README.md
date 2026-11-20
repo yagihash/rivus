@@ -7,7 +7,7 @@ callbacks being the part that changes). The sample of the extractor (`extractor/
 the extractor; this is a set of answers to compare two states of the engine.
 
 The answers are in the source, in the way of `bench/go-curated` (same marks: `@source(tag)`, `@sink(tag)`,
-`@sink(none)`, `@nosink(tag)`, `@miss`, `@fp`; see `../go-curated/README.md`):
+`@sink(none)`, `@nosink(tag)`, `@miss(silent)` / `@miss(<kind>)`, `@fp`; see `../go-curated/README.md`):
 
 ```dart
 final a = source();                         // @source(ret-a)
@@ -31,11 +31,11 @@ cross-talk of a helper that calls every closure of its type). `rules.yaml`: `sou
 | `classes.dart` | an emitter (callbacks kept in a list), `Lazy`, a builder, default and named callbacks, a getter that returns a function, an extension with a callback |
 | `errors.dart` | `try` / `catch` / `finally`, typed catch, throw from a closure, rethrow, `Future.error`, `onError` |
 | `across.dart` | the helper is in another package (`packages/shared`) |
-| `dynamic_calls.dart` | a method of a `dynamic` value (`dart:core#dynamic.invoke`, covered by a model): DART-12, in the last section of [`../MISSES.md`](../MISSES.md); `@miss` 2, `@fp` 1 |
+| `dynamic_calls.dart` | a method of a `dynamic` value (`dart:core#dynamic.invoke`, covered by a model): DART-12, in the last section of [`../MISSES.md`](../MISSES.md); `@miss` 2 (`@miss(unmodeled_library_call)`, by a constructor), `@fp` 1 |
 
 ## What is not found yet (`@miss`) and what is reported wrongly (`@fp`)
 
-Every `@miss` and `@fp` is classified by the cause (where in the engine the flow is lost, whether it leaves a trace in `uncertainties`, whether ADR-047 would fix it) in [`../MISSES.md`](../MISSES.md). Of the 32 `@miss`, 19 are silent (no uncertainty at the source or the sink); 12 are one cause (`CAP`: what a closure captured is lost when a helper calls it).
+Every `@miss` and `@fp` is classified by the cause (where in the engine the flow is lost, whether it leaves a trace in `uncertainties`, whether ADR-047 would fix it) in [`../MISSES.md`](../MISSES.md). Of the 34 `@miss`, 27 are `@miss(silent)` (no uncertainty in the function of the source or of the sink; a `dynamic_dispatch` with one candidate does not count) and 7 have a trace, `@miss(<kind>)` (`unresolved_callee` 3 and 1 more together with `unmodeled_library_call`, `dynamic_dispatch` 1, `unmodeled_library_call` 2: these two are the default constructors in `dynamic_calls.dart`, not the lost call); 12 are one cause (`CAP`: what a closure captured is lost when a helper calls it).
 
 The first run (2026-11-21, the engine before the callback outputs go into the summaries) gave 74 flows found,
 32 not found, 39 sinks quiet, 4 reported wrongly:
@@ -66,4 +66,6 @@ go test ./cmd/rivus -run TestCuratedDart -v     # about 6 seconds, part of "go t
 The test runs `dart pub get --offline` first if `.dart_tool` is missing (the only dependency is the path
 package, so it needs no network), runs the extractor, then `rivus analyze -ir`, and compares the findings with the
 annotations. `.dart_tool` is not committed. A flow that is found now makes the test fail with "remove
-@miss"; a flow that is new, or an `@fp` that is gone, fails too.
+@miss"; a flow that is new, or an `@fp` that is gone, fails too. So does a trace that has come to a
+`@miss(silent)` (write its kind: a gain) or gone from a `@miss(<kind>)`. The findings with no step in
+the function of their source are counted (`offSourcePath`, BENCH-2): 0 here, a ceiling.

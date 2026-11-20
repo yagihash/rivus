@@ -1,8 +1,11 @@
 // Package gossa loads Go packages and builds go/ssa programs.
 //
-// This is the only package (together with the Go call graph builder) that is
-// meant to know how go/ssa is constructed. Phase 2 replaces it with an
-// extractor that emits the neutral IR.
+// This is the only package (together with the Go call graph builder and
+// internal/frontend/goir, the Go extractor that turns go/ssa into the neutral
+// IR) that is meant to know how go/ssa is constructed. The core (taint, sg,
+// sites, report) does not import it; it is the layer under the Go extractor
+// (goir), the call graph builder and the command that lists implementations
+// (docs/ARCHITECTURE.md, section "Phase 2").
 package gossa
 
 import (

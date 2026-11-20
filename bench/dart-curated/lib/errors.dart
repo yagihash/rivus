@@ -50,7 +50,7 @@ String mayThrow(String s) {
 }
 
 void throw_through_helper() {
-  final a = source(); // @source(through) @miss
+  final a = source(); // @source(through) @miss(silent)
   try {
     transform(a, (x) => throw AppError(x));
   } on AppError catch (e) {
@@ -83,7 +83,7 @@ void rethrow_flow() {
 // the error of a future is given to the handler
 Future<void> future_error() async {
   try {
-    await Future<void>.error(AppError(source())); // @source(future-error) @miss
+    await Future<void>.error(AppError(source())); // @source(future-error) @miss(silent)
   } on AppError catch (e) {
     sink(e.detail); // @sink(future-error)
   }
@@ -91,7 +91,7 @@ Future<void> future_error() async {
 
 // the value is given to the callback of onError
 void on_error() {
-  final a = source(); // @source(on-error) @miss
+  final a = source(); // @source(on-error) @miss(silent)
   Future<String>.error(a).then((v) => v, onError: (e) => sink(e)); // @sink(on-error)
 }
 

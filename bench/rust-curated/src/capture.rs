@@ -5,7 +5,7 @@ use crate::{sink, source};
 
 pub fn write_a() {
     let mut out = String::new();
-    let t = source(); // @source(write-a) @miss
+    let t = source(); // @source(write-a) @miss(silent)
     run(|| {
         out = t;
     });
@@ -14,7 +14,7 @@ pub fn write_a() {
 
 pub fn write_b() {
     let mut out = String::new();
-    let t = source(); // @source(write-b) @miss
+    let t = source(); // @source(write-b) @miss(silent)
     run(|| {
         out = t;
     });
@@ -35,7 +35,7 @@ pub fn write_const() {
 // the callback writes what the helper gave it into the captured variable
 pub fn write_param() {
     let mut out = String::new();
-    let t = source(); // @source(write-param) @miss
+    let t = source(); // @source(write-param) @miss(silent)
     fire_and_forget(t, |x| {
         out = x;
     });
@@ -45,7 +45,7 @@ pub fn write_param() {
 // a list that the closure pushes to
 pub fn push_to_list() {
     let mut items: Vec<String> = Vec::new();
-    let t = source(); // @source(push-list) @miss
+    let t = source(); // @source(push-list) @miss(silent)
     run(|| items.push(t));
     sink(&items[0]); // @sink(push-list)
 }
@@ -131,7 +131,7 @@ pub fn local_closure() {
 // a closure that captures by reference and the variable is changed after it is made
 pub fn late_write() {
     let mut v = String::from("const");
-    let a = source(); // @source(late) @miss
+    let a = source(); // @source(late) @miss(silent)
     let mut set = |x: String| v = x;
     set(a);
     sink(&v); // @sink(late)

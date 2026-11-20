@@ -22,12 +22,12 @@ void across_each() {
 void across_hub() {
   final h = Hub();
   h.on((s) => sink(s)); // @sink(across-hub)
-  h.emit(source()); // @source(across-hub) @miss
+  h.emit(source()); // @source(across-hub) @miss(silent)
 }
 
 void across_capture() {
   String? out;
-  final t = source(); // @source(across-cap) @miss
+  final t = source(); // @source(across-cap) @miss(silent)
   each([1], (i) {
     out = t;
   });

@@ -5,7 +5,7 @@ import 'lib.dart';
 // take callbacks, generic helpers.
 
 void nested_a() {
-  final a = source(); // @source(nest-a) @miss
+  final a = source(); // @source(nest-a) @miss(silent)
   final r = transform('const', (x) {
     return transform(a, (y) => y);
   });
@@ -13,7 +13,7 @@ void nested_a() {
 }
 
 void nested_b() {
-  final b = source(); // @source(nest-b) @miss
+  final b = source(); // @source(nest-b) @miss(silent)
   final r = transform('const', (x) {
     return transform(b, (y) => y);
   });
@@ -40,7 +40,7 @@ void twice_b() {
 
 // the callback is called twice with different arguments, one clean
 void twice_args() {
-  final a = source(); // @source(twice-args) @miss
+  final a = source(); // @source(twice-args) @miss(silent)
   final out = <String>[];
   fireAndForget(a, (x) => out.add(x));
   fireAndForget('const', (x) => out.add(x));
@@ -49,13 +49,13 @@ void twice_args() {
 
 // the callback gets another callback
 void takes_callback_a() {
-  final a = source(); // @source(takes-a) @miss
+  final a = source(); // @source(takes-a) @miss(silent)
   final r = viaInner('const', (g) => g(a));
   sink(r); // @sink(takes-a) @nosink(takes-b)
 }
 
 void takes_callback_b() {
-  final b = source(); // @source(takes-b) @miss
+  final b = source(); // @source(takes-b) @miss(silent)
   final r = viaInner('const', (g) => g(b));
   sink(r); // @sink(takes-b) @nosink(takes-a)
 }
@@ -130,7 +130,7 @@ void local_recursion() {
 
 // currying: a closure that returns a closure
 void curried() {
-  final a = source(); // @source(curry) @miss
+  final a = source(); // @source(curry) @miss(unresolved_callee)
   String Function(String) Function(String) add = (p) => (q) => p + q;
   sink(add(a)('x')); // @sink(curry)
 }

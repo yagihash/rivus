@@ -16,7 +16,7 @@ class Emitter {
 void emitter_flow() {
   final e = Emitter();
   e.on((s) => sink(s)); // @sink(emit)
-  e.emit(source()); // @source(emit) @miss
+  e.emit(source()); // @source(emit) @miss(silent)
 }
 
 // two emitters: the subscriber of one is not called by the other
@@ -25,7 +25,7 @@ void emitter_two() {
   final e2 = Emitter();
   e1.on((s) => sink(s)); // @sink(emit-two)
   e2.on((s) => sink(s)); // @sink(none)
-  e1.emit(source()); // @source(emit-two) @miss
+  e1.emit(source()); // @source(emit-two) @miss(silent)
   e2.emit('const');
 }
 
@@ -37,7 +37,7 @@ class Lazy<T> {
 }
 
 void lazy_value() {
-  final a = source(); // @source(lazy) @miss
+  final a = source(); // @source(lazy) @miss(silent)
   final l = Lazy(() => a);
   sink(l.value); // @sink(lazy)
 }
@@ -58,7 +58,7 @@ class Builder {
 }
 
 void builder_closure() {
-  final a = source(); // @source(builder) @miss
+  final a = source(); // @source(builder) @miss(silent)
   final b = Builder().with_((x) => x.add(a));
   sink(b.build()); // @sink(builder)
 }
@@ -80,7 +80,7 @@ String withNamed(String s, {required String Function(String) map}) => map(s);
 
 // a getter that returns a function
 class Source {
-  String Function() get maker => () => source(); // @source(getter-fn) @miss
+  String Function() get maker => () => source(); // @source(getter-fn) @miss(unmodeled_library_call,unresolved_callee)
 }
 
 void getter_function() {

@@ -20,7 +20,12 @@ h.DB.Exec("SELECT * FROM " + config.Default.Table)            // @sink(none)
 * `@sink(none)`: nothing reaches this sink (a sanitizer, a constant, a number, stored data).
 * `@nosink(tag)`: the source of the tag must not reach this line, which has a flow of its own from
   another source (two keys of one map, say).
-* `@miss` after a `@source(...)`: the flow is there, and the engine does not find it yet.
+* `@miss(silent)` or `@miss(<kind>)` after a `@source(...)`: the flow is there, and the engine does not
+  find it yet. `silent` says that the engine left no uncertainty in the function of the source or the
+  function of the sink (the test fails when one comes: write its kind, it is a gain); a kind
+  (`unresolved_callee`, `unmodeled_library_call`, `dynamic_dispatch`, `depth_limit`; several with a comma)
+  says which uncertainty is there (the test fails when it is gone). A `dynamic_dispatch` with exactly one
+  candidate is not a trace (see [`../MISSES.md`](../MISSES.md)).
   `@fp` after a `@sink(none)` or a `@nosink(...)`: the engine reports a flow that is not there.
   These two record what the engine cannot do yet, so that this is a ratchet: they are checked from
   both sides, and when a change of the engine makes a mark untrue (the flow is found, the false
@@ -33,7 +38,10 @@ in force as always.
 
 ## What is not found yet (`@miss`) and what is reported wrongly (`@fp`)
 
-The one `@miss` (`options`: a closure returned by a function, in a variadic list, loses what it captured; silent) and the five `@fp` (a map that does not tell its keys apart: four; a switch allow-list: one) are classified by the cause in [`../MISSES.md`](../MISSES.md).
+The one `@miss` (`options`: a closure returned by a function, in a variadic list, loses what it captured; `@miss(silent)`: 1 silent, 0 with a trace) and the five `@fp` (a map that does not tell its keys apart: four; a switch allow-list: one) are classified by the cause in [`../MISSES.md`](../MISSES.md).
+
+The findings whose path has no step in the function of their source are counted too (`offSourcePath`,
+BENCH-2: 0 here; a ceiling, see [`../MISSES.md`](../MISSES.md)).
 
 ## Run it
 

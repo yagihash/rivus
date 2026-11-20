@@ -8,7 +8,7 @@ sample of the extractor (`extractor/rust/test/sample`) tests the extractor, this
 two states of the engine.
 
 The marks are those of `bench/go-curated` (`@source(tag)`, `@sink(tag)`, `@sink(none)`, `@nosink(tag)`,
-`@miss`, `@fp`; see `../go-curated/README.md`), and one more, for this language:
+`@miss(silent)` / `@miss(<kind>)`, `@fp`; see `../go-curated/README.md`), and one more, for this language:
 
 * `@noisy(N)` on a sink line: **N sources of other tags reach it, wrongly**, and no `@nosink` names them.
   Rust matches a call of a closure parameter to every closure of that type, so the closure that holds a sink
@@ -32,7 +32,7 @@ The marks are those of `bench/go-curated` (`@source(tag)`, `@sink(tag)`, `@sink(
 
 ## What is not found yet (`@miss`) and what is reported wrongly (`@fp`, `@noisy`)
 
-Every `@miss`, `@fp` and `@noisy` is classified by the cause in [`../MISSES.md`](../MISSES.md). Of the 11 `@miss`, 10 are silent; 7 are one cause (`ENV-PTR`: a write through a pointer kept in a closure's environment is not seen), none is fixed by ADR-047. All 16 `@noisy` places (183 flows; the text below says 17) and 12 of the 14 `@fp` are one cause (`XTALK`: the candidates of a closure call are all closures of its type).
+Every `@miss`, `@fp` and `@noisy` is classified by the cause in [`../MISSES.md`](../MISSES.md). Of the 12 `@miss`, all 12 are `@miss(silent)` (no uncertainty in the function of the source or of the sink; none has a trace); 7 are one cause (`ENV-PTR`: a write through a pointer kept in a closure's environment is not seen), none is fixed by ADR-047. All 16 `@noisy` places (183 flows; the text below says 17) and 12 of the 14 `@fp` are one cause (`XTALK`: the candidates of a closure call are all closures of its type).
 
 The first run (2026-11-21, before the callback outputs go into the summaries): 112 flows found, 11 not found,
 42 sinks quiet, 14 reported wrongly, 183 flows of other sources into 17 noisy sinks.
@@ -57,3 +57,7 @@ RIVUS_RUST=$PWD/extractor/rust/target/debug/rivus-rust go test ./cmd/rivus -run 
 
 The test runs the extractor on this crate (it runs `cargo check`, which makes `target/`, not committed) and
 `rivus analyze -ir`, and compares the findings with the annotations. The crate compiles with plain `cargo check`.
+
+The `@miss(silent)` / `@miss(<kind>)` marks are checked from both sides (a trace that has come to a silent one, or gone from one with a
+kind, fails the test). The findings with no step in the function of their source are counted
+(`offSourcePath`, BENCH-2): 0 here, a ceiling.

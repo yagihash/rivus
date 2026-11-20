@@ -23,7 +23,7 @@ pub fn for_each_sink() {
 
 pub fn for_each_capture() {
     let mut last = String::new();
-    let items = vec![source()]; // @source(for-each-cap) @miss
+    let items = vec![source()]; // @source(for-each-cap) @miss(silent)
     items.into_iter().for_each(|s| last = s);
     sink(&last); // @sink(for-each-cap)
 }
