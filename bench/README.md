@@ -23,7 +23,7 @@ real code have been run before and after it, and every difference in their findi
 looked at. If they could not be run (a checkout without `go.mod`, a target that does not build, no
 Dart or Rust toolchain), do not push**: say so and wait. `go test ./...` and the curated projects are
 not enough, because the shapes in them are the ones that were already known (the regression of
-ADR-048, a554e9e to c44bfdd, was found only by the findings of gogs and gin-vue-admin).
+ADR-048, a540f30 to c44bfdd, was found only by the findings of gogs and gin-vue-admin).
 
 1. Build the binary of each state (the commit before, and the working tree), from the same toolchain:
    `git stash` or `git worktree add <dir> <before>`, then `go build -o <dir>/rivus-before ./cmd/rivus`
