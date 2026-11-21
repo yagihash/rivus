@@ -320,6 +320,16 @@ def load(results, bench, which):
 
 
 FUNC_WARN, FUNC_FAIL = 0.10, 0.50
+NOISE_RATIO, NOISE_MIN = 0.20, 5  # a benchmark without a truth cannot say that an added finding is wrong: a surge of them needs a reading
+
+
+def noise_check(bench, n_base, n_added):
+    """More than 20% of the findings of base, and more than 5, added at once (exit status 2, not 1: nothing was lost, but the
+    additions are to be classified one by one, like a removal). There is no flag that silences it: write the classification
+    in the commit message or the review."""
+    if n_added > NOISE_MIN and n_added > NOISE_RATIO * n_base:
+        return "NOISE: %s +%d (%.0f%%): classification needed (read details/%s.md, one by one)" % (bench, n_added, 100.0 * n_added / max(n_base, 1), bench)
+    return ""
 
 
 def check_validity(bench, sb, sh, nb, nh):
@@ -358,7 +368,7 @@ def report(a):
                 skipped[n] = why
     os.makedirs(os.path.join(a.out, "details"), exist_ok=True)
     rows, alarms, notes, detail_files = [], [], [], []
-    alarms_invalid, warnings, cached = [], [], []
+    alarms_invalid, warnings, cached, alarms_noise = [], [], [], []
     not_run = 0
     removed_total = 0
     for bench in benches:
@@ -408,6 +418,9 @@ def report(a):
         invalid, warned = check_validity(bench, sb, sh, len(rb["findings"]), len(rh["findings"]))
         for line in invalid:
             alarms_invalid.append(line)
+        noise = noise_check(bench, len(ib), len(added))
+        if noise:
+            alarms_noise.append(noise)
         for line in warned:
             warnings.append(line)
         if removed or shrunk:
@@ -456,6 +469,8 @@ def report(a):
         detail_files.append(bench)
         rows[-1].append(ukinds and ", ".join("%s %d->%d" % (k, ub[k], uh[k]) for k in ukinds) or "-")
     out = ["# rivus compare: %s -> %s" % (a.base, a.head), ""]
+    for al in alarms_noise:
+        out.append("**!! %s**" % al)
     for al in alarms_invalid:
         out.append("**!! INVALID: %s**" % al)
     for w in warnings:
@@ -498,7 +513,7 @@ def report(a):
     out += ["", "Details (added / removed / changed findings, one per line): `details/<bench>.md`."]
     open(os.path.join(a.out, "summary.md"), "w").write("\n".join(out) + "\n")
     print("\n".join(out))
-    return 1 if removed_total else (2 if not_run or alarms_invalid else 0)
+    return 1 if removed_total else (2 if not_run or alarms_invalid or alarms_noise else 0)
 
 
 def main():

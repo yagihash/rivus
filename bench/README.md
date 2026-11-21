@@ -63,12 +63,15 @@ makes the exit status 2 (the run is not a basis for a comparison; a removed find
 | `base / head timed out` | the clock stopped the run: the result depends on the load of the machine |
 | `stats.functions N -> M (x%)` with `!! INVALID` | 50% or more: not the same program (an extractor that lost a package, a checkout that is not whole) |
 | `warning: ... stats.functions` | 10% to 50%: look at why, no exit status |
+| `NOISE: <bench> +N (P%): classification needed` | more than 20% of the base findings and more than 5 were ADDED at once (exit status 2, apart from the 1 of a removal). A benchmark without a truth cannot say that they are wrong: read details/<bench>.md one by one and write the result in the commit message or the review. There is no flag that silences it |
 | `no finding in base and none in head` | the input or the rules are empty (a benchmark with a truth has findings) |
 
 Under the table, "Inputs of each side" has, per benchmark, the input (the tree hash of the fixtures, or the commit of the
 clone), the tree hash of the extractor, and the sha256 of the IR of base and head (with the path of the worktree replaced,
 so the same input in two worktrees has the same hash); `IR: same` says that only the binary differs, `DIFFERENT` that the
 extractor or the fixtures changed too. Gitea's base that does not converge is the one `NOT CONVERGED` note, not an `INVALID`.
+
+The synthetic tests of this report (exit statuses) are `python3 bench/test_compare.py`.
 
 **Tiers (`--light`, `--heavy`).** The tiers are measured, not named. Light: one run of 60 seconds or less and 6 GB or less
 (curated three, go-synth-S, `go-scale`, gogs x 2, gin-vue-admin, go-test-bench, parseable, dart-pub). Heavy: Gitea and ech0.

@@ -25,6 +25,8 @@ jobs:
         run: go vet ./...
       - name: Test
         run: go test -timeout 30m ./...
+      - name: Test the comparison tool
+        run: python3 bench/test_compare.py
 
   # The Dart extractor reads the code with package:analyzer; its tests (and the curated bench) need the Dart
   # SDK and each sample package's `dart pub get`. They are skipped when RIVUS_DART is not set.
