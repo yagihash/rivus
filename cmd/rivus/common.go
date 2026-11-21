@@ -144,6 +144,9 @@ func (c *common) loadRules(extra ...*model.RuleSet) (*model.Rules, error) {
 	if err := rules.Validate(); err != nil {
 		return nil, err
 	}
+	for _, w := range rules.CallWarnings() {
+		fmt.Fprintf(os.Stderr, "rivus: warning: %s\n", w)
+	}
 	return rules, nil
 }
 

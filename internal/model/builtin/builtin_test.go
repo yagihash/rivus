@@ -31,6 +31,18 @@ func TestBuiltinRulesAreValid(t *testing.T) {
 	}
 }
 
+// A row of calls of the built-in models fills the parameters of its callback (a `with` that does not fit is a
+// silent loss of the flow).
+func TestBuiltinCallRowsFitTheirCallbacks(t *testing.T) {
+	sets, err := builtin.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, w := range model.Merge(sets...).CallWarnings() {
+		t.Error(w)
+	}
+}
+
 // Every symbol of the Go standard library that a built-in rule names must be one that a call can have
 // (yagihash/rivus #53): a method that the type only gets by embedding is called by the symbol of the type that
 // declares it, and a field is not called.

@@ -74,6 +74,19 @@ called, with what, and where its result goes; rivus then reads the callback at t
       mode: call            # call (default); go and defer: it runs on its own, what it returns is not read
 ```
 
+* **`with` fills the parameters of the callback from the first, in order.** For a callback of `func(ctx, m)`, `with: [recv]` puts
+  the receiver in `ctx` and leaves `m` with nothing, and the flow you meant is silently lost (the usual mistake of a model written
+  with an AI). To fill a later parameter, write the entries by number: `with: [{param: 1, from: recv}]` (`from: none` leaves a
+  parameter empty on purpose; write every entry one way, not both). The load **warns** (stderr, `rivus: warning: ...`) of a `with` whose
+  number of entries is not the number of parameters of the callback, when it can tell that number: the row says it with `params: 2`,
+  or the function is one of the standard library of Go that the built-in rows already know (`sort.Slice`, `strings.Map`, ...). Where
+  it cannot tell, nothing is said: write `params` (or the named form) in a row for a callback that has more than one parameter.
+
+  ```yaml
+  - symbol: example.com/lib.Subscribe       # func Subscribe(handler func(ctx context.Context, m *Message))
+    calls: [{fn: arg0, params: 2, with: [{param: 1, from: recv}]}]   # m is the receiver; ctx gets nothing
+  ```
+
 * **`with` and `ret` name whole values** (`recv` is the receiver with what is inside it), as `flows` does. For a Rust method the
   receiver is `arg0` and the closure `arg1` (the model of Rust names the arguments with `self` first).
 * **A row that has a `ret` has what stands for it when the callback cannot be told** (it is a parameter, it was read from a

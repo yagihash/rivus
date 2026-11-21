@@ -381,12 +381,79 @@ type CallRow struct {
 	// on its receiver (`std::io::Write::write_all` calls `write`): the implementations of it that the program has are
 	// called, with the receiver and With. The positions of a row with a method count every operand of the call, the
 	// receiver first (arg0), as the models of Rust do.
-	Method string         `yaml:"method"`
-	With   []string       `yaml:"with"`
+	Method string `yaml:"method"`
+	// With is what the callback is called with, parameter by parameter from the first: entry k fills
+	// parameter k, and "" fills none. The YAML is a list of positions (`[arg1, recv]`), or of
+	// `{param: 1, from: recv}` that say the parameter by number (`from: none` leaves it empty), so that
+	// a row for a callback of (ctx, m) can fill m alone: `[{param: 1, from: recv}]`.
+	With WithList `yaml:"with"`
+	// Params is the number of parameters of the callback, when the row says it (optional): the load then
+	// warns of a `with` that does not fill them (CallWarnings).
+	Params int            `yaml:"params"`
 	Ret    string         `yaml:"ret"`
 	Throw  string         `yaml:"throw"`
 	Writes map[int]string `yaml:"writes"`
 	Mode   string         `yaml:"mode"`
+}
+
+// WithList is the `with` of a row of calls (see CallRow.With).
+type WithList []string
+
+// UnmarshalYAML reads the two forms of with: positions in order, or {param: N, from: position} entries.
+func (w *WithList) UnmarshalYAML(n *yaml.Node) error {
+	if n.Kind != yaml.SequenceNode {
+		return fmt.Errorf("line %d: with is a list of positions (recv, argN) or of {param: N, from: position}", n.Line)
+	}
+	var out []string
+	named, plain := false, false
+	for _, e := range n.Content {
+		switch e.Kind {
+		case yaml.ScalarNode:
+			plain = true
+			if e.Value == "" {
+				return fmt.Errorf("line %d: a with entry is a position (recv, argN); {param: N, from: none} leaves a parameter empty", e.Line)
+			}
+			out = append(out, e.Value)
+		case yaml.MappingNode:
+			named = true
+			param, from := -1, ""
+			seenFrom := false
+			for i := 0; i+1 < len(e.Content); i += 2 {
+				k, v := e.Content[i], e.Content[i+1]
+				switch k.Value {
+				case "param":
+					if err := v.Decode(&param); err != nil || param < 0 || param > 31 {
+						return fmt.Errorf("line %d: with.param is the number of the parameter of the callback, from 0", v.Line)
+					}
+				case "from":
+					seenFrom = true
+					from = v.Value
+					if from == "none" {
+						from = ""
+					}
+				default:
+					return fmt.Errorf("line %d: with: %q is not a key of {param, from}", k.Line, k.Value)
+				}
+			}
+			if param < 0 || !seenFrom {
+				return fmt.Errorf("line %d: a with entry of the named form has param and from", e.Line)
+			}
+			for len(out) <= param {
+				out = append(out, "")
+			}
+			if out[param] != "" {
+				return fmt.Errorf("line %d: with: parameter %d is given twice", e.Line, param)
+			}
+			out[param] = from
+		default:
+			return fmt.Errorf("line %d: a with entry is a position or {param: N, from: position}", e.Line)
+		}
+	}
+	if named && plain {
+		return fmt.Errorf("line %d: with: write every entry as a position or every entry as {param, from}, not both", n.Line)
+	}
+	*w = out
+	return nil
 }
 
 // DerivedFlows are the flows that stand for the rows of calls when the function that was passed
@@ -400,6 +467,9 @@ func (p *Propagator) DerivedFlows(row int) []Flow {
 	}
 	var out []Flow
 	for _, w := range c.With {
+		if w == "" {
+			continue
+		}
 		out = append(out, Flow{From: w, To: c.Ret, Assumed: "assumed_call: the function given to " + p.Symbol + " is not known here: what it is called with is taken to come out as what it returns"})
 	}
 	return out
@@ -929,6 +999,9 @@ func (p *Propagator) validateCalls(what string) error {
 			return err
 		}
 		for j, x := range c.With {
+			if x == "" {
+				continue
+			}
 			if _, err := pos(fmt.Sprintf("with[%d]", j), x, false); err != nil {
 				return err
 			}
