@@ -163,7 +163,7 @@ propagators:
   - symbol: (time.Time).Local
     pure: true
   - symbol: (time.Time).Format
-    pure: true
+    flows: [{from: arg0, to: result}]
   - symbol: (time.Time).UnixNano
     pure: true
   - symbol: (time.Time).Year
@@ -171,7 +171,7 @@ propagators:
   - symbol: (time.Time).Nanosecond
     pure: true
   - symbol: time.ParseInLocation
-    pure: true
+    flows: [{from: arg0, to: result1}, {from: arg1, to: result1}]
   - symbol: (*os.File).Close
     pure: true
   - symbol: os.TempDir
@@ -203,9 +203,9 @@ propagators:
   - symbol: (*os/exec.Cmd).Wait
     pure: true
   - symbol: os/exec.LookPath
-    pure: true
+    flows: [{from: arg0, to: result0}, {from: arg0, to: result1}]
   - symbol: os.Stat
-    pure: true
+    flows: [{from: arg0, to: result0}, {from: arg0, to: result1}]
   - symbol: (*regexp.Regexp).MatchString
     pure: true
   - symbol: (*net/smtp.Client).Extension

@@ -1396,3 +1396,26 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 **R-21（残る。課題として記録）:** 対象の `.cargo/config.toml` の `[env]` で `RIVUS_IR_DIR` を空にすると、IR が空になり終了コード 0 になる。隔離では直らない（コンテナの中でも、同じことが起きる。安全の問題ではなく、結果の正しさの問題）。隔離のモードでも、「コンパイルした crate と IR の断片の突き合わせ（0 件なら失敗、欠けたら load_error）」が別に要る。今回は直さない（`extractor/rust` の別の変更）。
 
 **探索:** 信頼しない対象の探索は、3 言語とも、隔離のモードで回す（Go と Dart は、5 のとおり、後で同じ作りに載せる）。
+
+## ADR-065: 本体のない関数に sink のルールしかないとき、ルールをモデルとみなさない(CORE-K)
+
+**背景:** `callBody` の `ruleOnly`(`CallSources` か `Sinks` にシンボルがある)が真のとき、「ルールがモデル」として、既定の「入ったものは出る」と、`unmodeled_library_call` の両方を通さなかった。sink のルールは「ここへ汚れが来てはならない」とだけ言い、戻り値に何が乗るかは言わない。組み込みの Go の sink 53 個のうち 48 個は、propagator がなく(`os.Open`、`http.Get`、`(*sql.DB).Prepare`)、戻り値に引数の汚れが乗らず、不確実性も出なかった(黙った見逃し)。`io.WriteString` は、ResponseWriter のときだけの sink なのに、`io.WriteString(&b, src)` で、`b` へ流れず、不確実性もなかった。
+
+**決めたこと:** `ruleOnly` は **source のルールがあるとき**だけ(source は結果が何かを言う)。sink だけのシンボルは、本体がなければ、既定(引数から結果へ)と `unmodeled_library_call` を通す。`valueCandidates` も同じ。`io.WriteString` には、引数 1 から引数 0 への propagator を足した(`fmt.Fprint*` と同じ形。`flows` を持てば、モデルになり、不確実性は出ない)。
+
+**検証:** `testdata/go/cases/sinkret`(`lib.Open`、`(*lib.DB).Prepare` の戻り値が、次の sink へ届く。`io.WriteString` から `bytes.Buffer`)と、`unmodeled_library_call` が出ること(直す前は、2 つの finding が落ち、不確実性が出なかった)。`compare.sh`(軽い層 + Gitea v1.26.4): 削除 0。追加は gogs の 1 件(2 リビジョンで同じコード): `getServiceType`(`r.FormValue("service")`、`upload-pack` か `receive-pack` に等しいときだけ通る)から `gitCommand`(`exec.Command(...).Output()`)の出力を、`ResponseWriter.Write` へ、の経路。`exec.Command`(sink のみ)の戻り値に引数が乗るようになり、`cmd.Output()` へ届く。入力は 2 つの定数のどちらかに限られ、出力は引数の文字列でない(git の出力)。**偽陽性として分類**(実コードの追加は、この 1 件のみ)。この finding の経路の `exec.Command` と `(*exec.Cmd).Output` の 2 つの呼び出しには、`unmodeled_library_call` が付いていて(`confidence` は `requires_review`)、痕跡のある過大近似。`Output` の流れを切るモデルは入れない(`exec.Command("sh", "-c", "echo "+x).Output()` のように、引数の中身が標準出力に出る形は実在する。この偽陽性の理由は、値が定数の集合と等しいことを確かめてから使う許可リストで、モデルの理由ではない)。go-test-bench の 2 件は、同じ `sink` の `other_sources` の 6 件の集合が同じで、代表の source が替わっただけ。Gitea: finding 259 のまま、パス 6、不確実性 `unmodeled_library_call` 2087 → 2313(+226)。`unmodeled_library_call` は、gogs で 172 → 302、gin-vue-admin で 53 → 113 に増える(本来の「分からない」を言うようになった)。
+
+**限界:** `exec.Command` のような sink は、結果(`*exec.Cmd`)の中身が、引数の汚れを運ぶとして扱われる(既定)。sink のシンボルごとに、戻り値に乗せるかを決める(`flows:` を書く)ことで、雑音を落とせる。
+
+## ADR-066: 組み込みの `pure` から、入力を出力に伝える関数を外す。基準を決め、実行で確かめる(R-03)
+
+**背景:** `go-pure.yaml` / `go-stdlib-more.yaml` の `pure: true` は「戻り値に汚れが乗らない」と言う。実行で確かめると(zoo、`TestZooPureGo`)、文字列・バイト列の引数を持つ `pure` の行 50 件のうち 18 件が誤りだった: 値に入る(`(*json.Decoder).Token`、`(*http.Cookie).String`、`(*url.URL).RequestURI`、`(time.Time).Format`、`hex.AppendEncode`、`hex.Encode`(書き込み先)、`url.UserPassword`、`regexp.Compile`)と、**error の文字列に入る**(`os.Stat`、`exec.LookPath`、`netip.ParseAddr`、`strconv.Atoi/ParseBool/ParseFloat/ParseUint`、`time.Parse/ParseInLocation/ParseDuration`)。error の文字列は、応答やログに書かれる(エラー文をそのまま返す XSS)。
+
+**決めたこと:**
+1. **`pure` の基準**(`bench/README.md` の「When a function may be `pure`」): 結果と、書き込み先(引数、レシーバ)のどれにも、引数・レシーバの中身が入らない。**error の文字列も含める**。
+2. 直し方は、**結果ごとに書く**(`pure` を外して「引数 → 全部の結果」にしない): 数や時刻を作る関数(`strconv.Atoi` ほか 4、`time.Parse` ほか 2、`ParseDuration`)は、入力を `result1`(error)へだけ流し、`result0`(数、時刻)へは流さない(`numeric_stop` が止める値を汚すと過検出になる)。`os.Stat`、`exec.LookPath`、`netip.ParseAddr`、`regexp.Compile` は、`result0` と `result1` の両方。`hex.Encode` は、`arg1 → arg0`。`Token`、`Cookie.String`、`RequestURI` は、レシーバ → 結果。`Format` は、レイアウト(`arg0`) → 結果(日時の値は数なので止める)。`UserPassword`、`AppendEncode`、`x509.CreateCertificate`、`ParsePKIXPublicKey`、`sql.Named`、`parser.ParseFile`、`tls.Client`、`slog.Group` ほか、全部で 29 の行。
+3. 検査: `TestPureFunctionsThatReturnDataAreReviewed`(型から、文字列・バイト列・構造体などを返す標準ライブラリの `pure` を列挙し、`testdata/pure-carriers.txt` の 84 件と比べる。増えても減っても落ちる)。`TestZooPureGo`(実行): 既知の誤りの一覧(ratchet)は空になった。270 の Go の `pure` の行のうち、呼んで確かめたのは 20、確かめていないのは 250(`bench/zoo-go/pure/unchecked.txt`、理由つき。呼んでいない行が増えるとテストが落ちる)。
+
+**検証:** `compare.sh`: R-03 の変更だけを、CORE-K の上で測ると、全ベンチで、finding の追加 0、削除 0、不確実性の変更 0(error や値に新しく流れが乗っても、sink に届く形が、これらのコードにはない)。Gitea は、R-03 だけでは測っていない(CORE-K と合わせて測った: ADR-065)。
+
+**限界:** 呼んで確かめていない 250 の行(レシーバが唯一の入口の関数、プロセス・ファイル・ネットワーク・時計に触る関数)は、基準で読んだだけ。Dart と Rust の `pure` の同じ検査は、各言語の zoo の段階で。

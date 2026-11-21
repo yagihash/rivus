@@ -21,17 +21,17 @@ propagators:
   - symbol: strconv.Itoa
     pure: true
   - symbol: strconv.Atoi
-    pure: true
+    flows: [{from: arg0, to: result1}]
   - symbol: strconv.ParseUint
-    pure: true
+    flows: [{from: arg0, to: result1}]
   - symbol: strconv.FormatUint
     pure: true
   - symbol: strconv.ParseBool
-    pure: true
+    flows: [{from: arg0, to: result1}]
   - symbol: strconv.FormatBool
     pure: true
   - symbol: strconv.ParseFloat
-    pure: true
+    flows: [{from: arg0, to: result1}]
   - symbol: strconv.FormatFloat
     pure: true
   - symbol: log/slog.New
@@ -115,7 +115,7 @@ propagators:
   - symbol: go/token.NewFileSet
     pure: true
   - symbol: go/parser.ParseFile
-    pure: true
+    flows: [{from: args, to: result0}]
   - symbol: go/printer.Fprint
     pure: true
   - symbol: (*go/ast.CommentGroup).Pos
@@ -165,9 +165,9 @@ propagators:
   - symbol: crypto/sha512.New
     pure: true
   - symbol: crypto/x509.CreateCertificate
-    pure: true
+    flows: [{from: args, to: result0}]
   - symbol: crypto/x509.ParsePKIXPublicKey
-    pure: true
+    flows: [{from: arg0, to: result0}]
   - symbol: (*sync/atomic.Bool).Load
     pure: true
   - symbol: (*sync/atomic.Bool).Store
@@ -181,17 +181,17 @@ propagators:
   - symbol: time.NewTimer
     pure: true
   - symbol: time.Parse
-    pure: true
+    flows: [{from: arg0, to: result1}, {from: arg1, to: result1}]
   - symbol: time.ParseDuration
-    pure: true
+    flows: [{from: arg0, to: result1}]
   - symbol: time.Date
     pure: true
   - symbol: (time.Duration).String
     pure: true
   - symbol: regexp.MustCompile
-    pure: true
+    flows: [{from: arg0, to: result}]
   - symbol: regexp.Compile
-    pure: true
+    flows: [{from: arg0, to: result0}, {from: arg0, to: result1}]
   - symbol: (*regexp.Regexp).Match
     pure: true
   - symbol: strings.LastIndex
@@ -251,7 +251,7 @@ propagators:
   - symbol: (*archive/zip.Writer).Close
     pure: true
   - symbol: archive/zip.FileInfoHeader
-    pure: true
+    flows: [{from: arg0, to: result0}]
   - symbol: (*os/exec.Cmd).StdoutPipe
     pure: true
   - symbol: (*os/exec.Cmd).StderrPipe
@@ -345,7 +345,7 @@ propagators:
   - symbol: os.ExpandEnv
     flows: [{from: arg0, to: result}]
   - symbol: os.MkdirTemp
-    flows: [{from: arg0, to: result0}]
+    flows: [{from: arg0, to: result0}, {from: arg1, to: result0}]
   - symbol: (*regexp.Regexp).FindSubmatch
     flows: [{from: arg0, to: result}]
   - symbol: (*regexp.Regexp).ReplaceAll
@@ -387,9 +387,9 @@ propagators:
   - symbol: (*go/ast.CommentGroup).Text
     flows: [{from: recv, to: result}]
   - symbol: log/slog.NewRecord
-    pure: true
+    flows: [{from: args, to: result}]
   - symbol: log/slog.Group
-    pure: true
+    flows: [{from: args, to: result}]
   - symbol: log/slog.SetDefault
     pure: true
   - symbol: log/slog.Int64
@@ -403,11 +403,11 @@ propagators:
   - symbol: (log/slog.Record).Attrs
     pure: true
   - symbol: (log/slog.Value).Resolve
-    pure: true
+    flows: [{from: recv, to: result}]
   - symbol: (log/slog.Value).Kind
     pure: true
   - symbol: (log/slog.Value).Group
-    pure: true
+    flows: [{from: recv, to: result}]
   - symbol: (*log/slog.Logger).Enabled
     pure: true
   - symbol: (log/slog.Leveler).Level
@@ -443,13 +443,13 @@ propagators:
   - symbol: (*net/http.Request).SetBasicAuth
     pure: true
   - symbol: (*net/http.Cookie).String
-    pure: true
+    flows: [{from: recv, to: result}]
   - symbol: (*database/sql.Conn).PingContext
     pure: true
   - symbol: (*database/sql.Conn).Raw
     pure: true
   - symbol: database/sql.Named
-    pure: true
+    flows: [{from: args, to: result}]
   - symbol: crypto/cipher.NewCFBEncrypter
     pure: true
   - symbol: crypto/cipher.NewCFBDecrypter
@@ -471,25 +471,25 @@ propagators:
   - symbol: crypto/tls.Dial
     pure: true
   - symbol: crypto/tls.Client
-    pure: true
+    flows: [{from: arg0, to: result}]
   - symbol: crypto/tls.LoadX509KeyPair
     pure: true
   - symbol: (*crypto/x509.CertPool).AppendCertsFromPEM
     pure: true
   - symbol: net/netip.ParseAddr
-    pure: true
+    flows: [{from: arg0, to: result0}, {from: arg0, to: result1}]
   - symbol: (net/netip.Addr).IsLoopback
     pure: true
   - symbol: net/smtp.CRAMMD5Auth
     pure: true
   - symbol: net/url.UserPassword
-    pure: true
+    flows: [{from: args, to: result}]
   - symbol: encoding/json.Valid
     pure: true
   - symbol: encoding/hex.Encode
-    pure: true
+    flows: [{from: arg1, to: arg0}]
   - symbol: encoding/hex.AppendEncode
-    pure: true
+    flows: [{from: args, to: result}]
   - symbol: unicode/utf8.ValidString
     pure: true
   - symbol: unicode/utf8.RuneCountInString
@@ -515,9 +515,9 @@ propagators:
   - symbol: (go/ast.Node).End
     pure: true
   - symbol: (*encoding/json.Decoder).Token
-    pure: true
+    flows: [{from: recv, to: result0}]
   - symbol: (*net/url.URL).RequestURI
-    pure: true
+    flows: [{from: recv, to: result}]
   - symbol: mime/multipart.NewWriter
     pure: true
   - symbol: (*mime/multipart.Writer).Close

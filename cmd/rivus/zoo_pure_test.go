@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/yagihash/rivus/internal/model/builtin"
@@ -15,26 +17,7 @@ import (
 // that depend on the marker when they are called: a pure row is wrong for them (R-03). The list is a ratchet:
 // a row that is no longer pure (or no longer depends) must be taken out of it, and a new one must be fixed
 // or written here with its reference.
-var knownWrongPure = []string{
-	"(*encoding/json.Decoder).Token value",
-	"(*net/http.Cookie).String value",
-	"(*net/url.URL).RequestURI value",
-	"(time.Time).Format value",
-	"encoding/hex.AppendEncode value",
-	"encoding/hex.Encode value",
-	"net/netip.ParseAddr error",
-	"net/url.UserPassword value",
-	"os.Stat error",
-	"os/exec.LookPath error",
-	"regexp.Compile value",
-	"strconv.Atoi error",
-	"strconv.ParseBool error",
-	"strconv.ParseFloat error",
-	"strconv.ParseUint error",
-	"time.Parse error",
-	"time.ParseDuration error",
-	"time.ParseInLocation error",
-}
+var knownWrongPure = []string{}
 
 type zooPart struct {
 	Symbol string `json:"symbol"`
@@ -81,6 +64,7 @@ func TestZooPureGo(t *testing.T) {
 	}
 	var wrong []string
 	checked, pureChecked := 0, 0
+	calledPure := map[string]bool{}
 	for i := range v0 {
 		if v0[i].Text != v0b[i].Text {
 			t.Errorf("%s %s is not the same in two runs of variant 0 (the call is not deterministic: do not use it here)", v0[i].Symbol, v0[i].Part)
@@ -91,6 +75,7 @@ func TestZooPureGo(t *testing.T) {
 			continue
 		}
 		pureChecked++
+		calledPure[v0[i].Symbol] = true
 		if v0[i].Text != v1[i].Text {
 			wrong = append(wrong, v0[i].Symbol+" "+v0[i].Part)
 		}
@@ -112,5 +97,44 @@ func TestZooPureGo(t *testing.T) {
 			t.Errorf("%q: a pure row whose result depends on the marker (R-03). Fix the row, or add it to knownWrongPure", w)
 		}
 	}
+	// The rows that are pure and were not called: the list is kept (bench/zoo-go/pure/unchecked.txt), with
+	// the reason of each. A pure row of Go that is neither called here nor in the list fails: it has to be
+	// called (a part in bench/zoo-go/pure) or written there with the reason.
+	var unchecked []string
+	goPure := 0
+	for sym := range pure {
+		if strings.ContainsAny(sym, "#:") {
+			continue // Dart (package:...#) and Rust (a::b)
+		}
+		goPure++
+		if !calledPure[sym] {
+			unchecked = append(unchecked, sym)
+		}
+	}
+	sort.Strings(unchecked)
+	raw, err := os.ReadFile(filepath.Join(dir, "pure", "unchecked.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed := map[string]bool{}
+	for _, line := range strings.Split(string(raw), "\n") {
+		line, _, _ = strings.Cut(line, "#")
+		if line = strings.TrimSpace(line); line != "" {
+			listed[line] = true
+		}
+	}
+	gotU := map[string]bool{}
+	for _, u := range unchecked {
+		gotU[u] = true
+		if !listed[u] {
+			t.Errorf("%s is a pure row of Go that the run did not call and bench/zoo-go/pure/unchecked.txt does not list: call it in the harness, or list it there with the reason", u)
+		}
+	}
+	for u := range listed {
+		if !gotU[u] {
+			t.Errorf("%s is in bench/zoo-go/pure/unchecked.txt but is called now, or is not pure any more: take it out", u)
+		}
+	}
+	t.Logf("zoo-go pure Go rows: %d, called %d, not called %d (bench/zoo-go/pure/unchecked.txt)", goPure, len(calledPure), len(unchecked))
 	t.Logf("zoo-go pure: %d parts called, %d of them of pure rows (the model has %d pure rows), %d wrong (R-03)", checked, pureChecked, len(pure), len(wrong))
 }

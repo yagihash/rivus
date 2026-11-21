@@ -1,0 +1,257 @@
+# The pure rows of Go in the built-in model that TestZooPureGo does not call (R-03), each with the reason.
+# 270 pure rows of Go: 20 are called (bench/zoo-go/pure, with the marker of two variants), 250 are listed here.
+# Not called is not checked: a result that comes from the receiver (Err(), Name(), String()) is not covered by a call
+# with a marker in the arguments. A row is read by the criterion in bench/README.md ("When a function may be pure").
+# The list is a ratchet: a pure row of Go that is neither called nor listed fails the test, and a row listed that is
+# called, or is not pure any more, fails it.
+
+(*archive/zip.Writer).Close  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*bufio.Scanner).Scan  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*crypto/x509.CertPool).AppendCertsFromPEM  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+(*database/sql.Conn).BeginTx  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*database/sql.Conn).Close  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*database/sql.Conn).PingContext  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*database/sql.Conn).Raw  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*database/sql.DB).Begin  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*database/sql.DB).BeginTx  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*database/sql.DB).Close  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*database/sql.DB).Conn  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*database/sql.DB).Ping  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*database/sql.DB).PingContext  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*database/sql.DB).SetConnMaxIdleTime  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*database/sql.DB).SetConnMaxLifetime  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*database/sql.DB).SetMaxIdleConns  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*database/sql.DB).SetMaxOpenConns  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*database/sql.DB).Stats  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*database/sql.Row).Err  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*database/sql.Row).Scan  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*database/sql.Rows).Close  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*database/sql.Rows).Err  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*database/sql.Rows).Next  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*database/sql.Rows).Scan  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*database/sql.Tx).Commit  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*database/sql.Tx).Rollback  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*go/ast.CallExpr).End  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*go/ast.CallExpr).Pos  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*go/ast.CommentGroup).Pos  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*log/slog.Level).UnmarshalText  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+(*log/slog.Logger).Debug  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+(*log/slog.Logger).DebugContext  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+(*log/slog.Logger).Enabled  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*log/slog.Logger).Error  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+(*log/slog.Logger).ErrorContext  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+(*log/slog.Logger).Handler  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*log/slog.Logger).Info  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+(*log/slog.Logger).InfoContext  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+(*log/slog.Logger).Warn  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+(*log/slog.Logger).WarnContext  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+(*log/slog.Record).Add  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*log/slog.Record).AddAttrs  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*math/big.Int).BitLen  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*math/big.Int).Int64  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*mime/multipart.Writer).Close  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*mime/multipart.Writer).FormDataContentType  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*net/http.Client).CloseIdleConnections  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*net/http.Request).ParseMultipartForm  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*net/http.Request).SetBasicAuth  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+(*net/http.ServeMux).Handle  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+(*net/http.Server).ListenAndServeTLS  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+(*net/http.Transport).Clone  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*net/smtp.Client).Auth  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*net/smtp.Client).Close  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*net/smtp.Client).Data  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*net/smtp.Client).Extension  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+(*net/smtp.Client).Hello  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+(*net/smtp.Client).Mail  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+(*net/smtp.Client).Quit  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*net/smtp.Client).Rcpt  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+(*net/smtp.Client).StartTLS  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*net/url.URL).Port  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*os.File).Close  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*os.File).Write  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+(*os.File).WriteString  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+(*os/exec.Cmd).Run  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*os/exec.Cmd).Start  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*os/exec.Cmd).StderrPipe  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*os/exec.Cmd).StdoutPipe  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*os/exec.Cmd).Wait  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*regexp.Regexp).Match  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+(*sync.Mutex).Lock  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*sync.Mutex).TryLock  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*sync.Mutex).Unlock  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*sync.RWMutex).Lock  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*sync.RWMutex).RLock  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*sync.RWMutex).RUnlock  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*sync.RWMutex).Unlock  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*sync.WaitGroup).Add  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*sync.WaitGroup).Done  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*sync.WaitGroup).Wait  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*sync/atomic.Bool).Load  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*sync/atomic.Bool).Store  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*sync/atomic.Int64).Add  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*sync/atomic.Int64).Load  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(*sync/atomic.Int64).Store  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(context.Context).Done  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(context.Context).Err  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(crypto/cipher.AEAD).NonceSize  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(crypto/cipher.AEAD).Overhead  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(encoding/binary.bigEndian).Uint32  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+(go/ast.Node).End  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(go/ast.Node).Pos  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(hash.Hash).Reset  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(hash.Hash).Size  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(io.Closer).Close  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(io/fs.DirEntry).IsDir  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(io/fs.DirEntry).Type  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(io/fs.FileInfo).IsDir  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(io/fs.FileInfo).ModTime  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(io/fs.FileInfo).Mode  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(io/fs.FileInfo).Size  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(io/fs.FileMode).Perm  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(io/fs.FileMode).String  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(log/slog.Leveler).Level  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(log/slog.Record).Attrs  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(log/slog.Record).NumAttrs  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(log/slog.Value).Kind  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(net/http.File).Readdir  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(net/http.Handler).ServeHTTP  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(net/http.ResponseWriter).WriteHeader  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(net/netip.Addr).IsLoopback  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(net/url.Values).Del  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+(reflect.Type).Elem  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(reflect.Type).Kind  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(reflect.Type).Name  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(reflect.Type).NumField  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(reflect.Type).PkgPath  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(reflect.Type).String  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(reflect.Value).Type  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(sync.Locker).Lock  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(sync.Locker).Unlock  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(testing.TB).Errorf  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+(testing.TB).Fatalf  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+(testing.TB).Helper  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(testing.TB).Logf  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+(time.Duration).String  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(time.Time).Add  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(time.Time).After  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(time.Time).Before  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(time.Time).Equal  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(time.Time).IsZero  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(time.Time).Local  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(time.Time).Nanosecond  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(time.Time).Sub  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(time.Time).UTC  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(time.Time).Unix  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(time.Time).UnixNano  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+(time.Time).Year  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+context.Background  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+context.TODO  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+crypto/aes.NewCipher  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+crypto/cipher.NewCFBDecrypter  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+crypto/cipher.NewCFBEncrypter  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+crypto/ecdsa.GenerateKey  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+crypto/ed25519.GenerateKey  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+crypto/elliptic.P256  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+crypto/elliptic.P384  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+crypto/elliptic.P521  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+crypto/hmac.Equal  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+crypto/hmac.New  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+crypto/md5.New  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+crypto/rand.Int  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+crypto/rand.Read  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+crypto/rsa.GenerateKey  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+crypto/sha1.New  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+crypto/sha256.New  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+crypto/sha512.New  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+crypto/tls.Dial  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+crypto/tls.LoadX509KeyPair  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+crypto/x509.IsEncryptedPEMBlock  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+crypto/x509.NewCertPool  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+database/sql.Open  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+database/sql/driver.IsValue  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+encoding/hex.DecodedLen  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+encoding/hex.EncodedLen  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+errors.Is  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+flag.Parse  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+fmt.Print  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+fmt.Printf  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+fmt.Println  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+go/ast.Inspect  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+go/ast.Print  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+go/printer.Fprint  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+go/token.NewFileSet  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+hash/fnv.New128  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+hash/fnv.New32  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+hash/fnv.New32a  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+hash/fnv.New64a  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+log.Fatal  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+log.Fatalf  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+log.Panicf  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+log.Print  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+log.Printf  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+log.Println  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+log/slog.Bool  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+log/slog.Debug  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+log/slog.Default  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+log/slog.Error  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+log/slog.Info  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+log/slog.Int64  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+log/slog.New  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+log/slog.NewJSONHandler  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+log/slog.NewTextHandler  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+log/slog.SetDefault  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+log/slog.Warn  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+math.Ceil  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+math.Floor  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+math.Log  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+math.Max  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+math.Min  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+math/big.NewInt  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+math/rand.Float64  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+math/rand.Int  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+math/rand.Int63n  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+math/rand.Intn  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+math/rand.Seed  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+mime/multipart.NewWriter  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+net.Listen  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+net/http.Error  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+net/http.ListenAndServe  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+net/http.NotFoundHandler  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+net/http.ParseHTTPVersion  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+net/http.Serve  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+net/http.SetCookie  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+net/http/cookiejar.New  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+net/http/fcgi.Serve  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+net/smtp.CRAMMD5Auth  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+net/smtp.Dial  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+net/smtp.NewClient  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+net/smtp.PlainAuth  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+os.Exit  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+os.Hostname  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+os.IsExist  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+os.IsNotExist  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+os.TempDir  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+path/filepath.Walk  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+reflect.TypeFor  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+reflect.TypeOf  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+runtime.FuncForPC  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+runtime.NumGoroutine  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+runtime.Version  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+runtime/debug.Stack  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+sort.Ints  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+sort.SearchStrings  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
+sort.Slice  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+sort.Sort  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+sort.Strings  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+strconv.FormatBool  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+strconv.FormatFloat  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+strconv.FormatInt  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+strconv.FormatUint  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+strconv.Itoa  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+time.Date  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+time.NewTimer  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+time.Now  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+time.Since  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+time.Sleep  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+time.Unix  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
+time.Until  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed

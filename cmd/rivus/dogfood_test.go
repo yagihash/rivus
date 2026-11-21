@@ -81,7 +81,10 @@ func TestDogfood(t *testing.T) {
 	// 61: ADR-064 adds 10 real flows in isolate.go: the directory of -C and the paths of -container-ro-mount, through
 	// os.ReadFile (Cargo.lock, the toolchain file) and the arguments of the docker command. They are what the isolation is
 	// about: the project is untrusted, and the paths that name it go to the container only as mounts that are read-only.
-	const maxFindings, maxNoSourceOnPath = 61, 0
+	// 63: R-03 (ADR-066) makes exec.LookPath carry its argument (it was pure): the extractor command of
+	// `rivus index` and `rivus graph` (-dart-extractor and the like) reaches the os.ReadFile of
+	// keyCtx.extractorConfig, which hashes the file that the command names (2 real flows, one per command).
+	const maxFindings, maxNoSourceOnPath = 63, 0
 	t.Logf("%d findings, %d with no step in the source function", len(rep.Findings), noSourceOnPath)
 	if len(rep.Findings) > maxFindings {
 		t.Errorf("%d findings: more than the %d of today", len(rep.Findings), maxFindings)

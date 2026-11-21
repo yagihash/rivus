@@ -654,6 +654,45 @@ func (s *state) applyModel(cc *callCtx) {
 			continue
 		}
 		s.applyFlows(cc, p.Flows, nil, "", modelRef(cc.sym, "propagator", p.Provenance))
+		s.noteNumericStopOfUncovered(cc, p.Flows)
+	}
+}
+
+// noteNumericStopOfUncovered is noteNumericStopOfPure for a model that has flows, none of them to a result that is
+// a number or a bool (strconv.Atoi: the input goes to the error only): the number is where the input stops (R-03).
+func (s *state) noteNumericStopOfUncovered(cc *callCtx, flows []model.Flow) {
+	toResult := false
+	for _, fl := range flows {
+		if to, err := model.ParseSelector(fl.To); err == nil && to.Kind == model.SelResult {
+			toResult = true
+		}
+	}
+	if !toResult {
+		return // a model that writes to an argument (Buffer.Write) is not one that turns its input into a number
+	}
+	var numeric *sg.Value
+	for i, d := range cc.in.Dsts {
+		if d == nil || (d.Class != ir.ClassNumber && d.Class != ir.ClassBool) {
+			continue
+		}
+		covered := false
+		for _, fl := range flows {
+			if to, err := model.ParseSelector(fl.To); err == nil && to.Kind == model.SelResult && (to.All || to.Index == i) {
+				covered = true
+			}
+		}
+		if !covered {
+			numeric = d
+			break
+		}
+	}
+	if numeric == nil {
+		return
+	}
+	for _, f := range s.flatten(valuesLocs(s, cc.argv())) {
+		if f.E.Kind == Real {
+			s.noteNumericStop(f.E, nil, numeric)
+		}
 	}
 }
 

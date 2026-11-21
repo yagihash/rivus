@@ -271,7 +271,7 @@ Rust の `@miss` は、案 2 では 1 つも直らない(11 件とも、別の�
 
 | タグ | source → sink | 痕跡 | 型 | 備考 |
 | --- | --- | --- | --- | --- |
-| `alias-ptr` | go-curated/api/alias.go:`store` → `use`(`testdata/go/cases/paramshare/ctxptr` が同じ形の param source 版) | **`silent`**(source の関数 `store`・sink の関数 `use` に不確実性なし。`uncertainties` は `init` の `unmodeled_library_call` だけ) | `ALIAS`(完全なポインタ解析を作らない、という受け入れ済みの近似) | `h.S.Last = <source>` と書く関数と、同じ `state` を自分のポインタ `s` で受け取って `s.Last` を sink に渡す関数。呼び元が `use(h)` / `reader(c)`(同じ親を渡す)なら見つかる(`ctxstate`)。別のポインタ(`use(s)`)で渡すと見つからない。C-1(ADR-048)より前、ce6dc31 でも見つからない(退行ではない) |
+| `alias-ptr` | go-curated/api/alias.go:`store` → `use`(`testdata/go/cases/paramshare/ctxptr` が同じ形の param source 版。CORE-K(ADR-065)のあとは、こちらの `reader` に `unmodeled_library_call` の痕跡が出る。go-curated の `alias.go` は silent のまま) | **`silent`**(source の関数 `store`・sink の関数 `use` に不確実性なし。`uncertainties` は `init` の `unmodeled_library_call` だけ) | `ALIAS`(完全なポインタ解析を作らない、という受け入れ済みの近似) | `h.S.Last = <source>` と書く関数と、同じ `state` を自分のポインタ `s` で受け取って `s.Last` を sink に渡す関数。呼び元が `use(h)` / `reader(c)`(同じ親を渡す)なら見つかる(`ctxstate`)。別のポインタ(`use(s)`)で渡すと見つからない。C-1(ADR-048)より前、ce6dc31 でも見つからない(退行ではない) |
 
 ### Go の `@fp`(5)
 

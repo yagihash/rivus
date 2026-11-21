@@ -155,10 +155,11 @@ func TestParamSourceNotWrittenBackIsLost(t *testing.T) {
 
 // TestParamSourceReachedThroughAnotherPointerIsLost: ctxstate with the caller's own
 // pointer to the shared object. handler writes c.Query into c.App.Last; reader gets the
-// App itself (reader(app)), not the Ctx. KNOWN MISS (silent): the same object reaches the
+// App itself (reader(app)), not the Ctx. KNOWN MISS: the same object reaches the
 // two functions through two pointers, and rivus has no full pointer analysis (an accepted
-// approximation, not an effect of ADR-048). Nothing is left in the functions of the source
-// (handler) and the sink (reader): the trace is checked here, as in the curated tests.
+// approximation, not an effect of ADR-048). It was silent; since CORE-K (ADR-065) the sink-only call
+// in reader is an unmodeled_library_call, which is a trace (in the curated project the same shape
+// stays silent: go-curated/api/alias.go). The trace is checked here.
 func TestParamSourceReachedThroughAnotherPointerIsLost(t *testing.T) {
 	var rep report.Report
 	if err := json.Unmarshal(rivus(t, "analyze", "-rules", "rules.yaml", "./cases/paramshare/ctxptr"), &rep); err != nil {
@@ -167,10 +168,17 @@ func TestParamSourceReachedThroughAnotherPointerIsLost(t *testing.T) {
 	if len(rep.Findings) != 0 {
 		t.Fatalf("the known miss is found now (%d findings): make this test fail on a miss, and correct bench/MISSES.md", len(rep.Findings))
 	}
+	traced := false
 	for _, u := range rep.Uncertainties {
 		if strings.HasSuffix(u.Func, "ctxptr.handler") || strings.HasSuffix(u.Func, "ctxptr.reader") {
-			t.Fatalf("a trace is left now (%s in %s): the miss is not silent, correct bench/MISSES.md", u.Kind, u.Func)
+			traced = true
+			if u.Kind != "unmodeled_library_call" {
+				t.Errorf("a trace of another kind (%s in %s): correct this test and bench/MISSES.md", u.Kind, u.Func)
+			}
 		}
 	}
-	t.Skip("known miss (silent): one object reached through two pointers (handler(c) writes c.App.Last, reader(app) reads it)")
+	if !traced {
+		t.Error("no trace now: it was an unmodeled_library_call in reader (CORE-K); if it went, the miss is silent again")
+	}
+	t.Skip("known miss (trace: unmodeled_library_call): one object reached through two pointers (handler(c) writes c.App.Last, reader(app) reads it)")
 }
