@@ -1414,8 +1414,21 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 **決めたこと:**
 1. **`pure` の基準**(`docs/MODELING.md` の「When a function may be `pure`」): 結果と、書き込み先(引数、レシーバ)のどれにも、引数・レシーバの中身が入らない。**error の文字列も含める**。
 2. 直し方は、**結果ごとに書く**(`pure` を外して「引数 → 全部の結果」にしない): 数や時刻を作る関数(`strconv.Atoi` ほか 4、`time.Parse` ほか 2、`ParseDuration`)は、入力を `result1`(error)へだけ流し、`result0`(数、時刻)へは流さない(`numeric_stop` が止める値を汚すと過検出になる)。`os.Stat`、`exec.LookPath`、`netip.ParseAddr`、`regexp.Compile` は、`result0` と `result1` の両方。`hex.Encode` は、`arg1 → arg0`。`Token`、`Cookie.String`、`RequestURI` は、レシーバ → 結果。`Format` は、レイアウト(`arg0`) → 結果(日時の値は数なので止める)。`UserPassword`、`AppendEncode`、`x509.CreateCertificate`、`ParsePKIXPublicKey`、`sql.Named`、`parser.ParseFile`、`tls.Client`、`slog.Group` ほか、全部で 30 の行(レシーバの値に目印を入れて呼ぶ検査が、`(*log/slog.Level).UnmarshalText` の error の文字列に入力が入る 19 件目の誤りを見つけた)。
-3. 検査: `TestPureFunctionsThatReturnDataAreReviewed`(型から、文字列・バイト列・構造体などを返す標準ライブラリの `pure` を列挙し、`testdata/pure-carriers.txt` の 84 件と比べる。増えても減っても落ちる)。`TestZooPureGo`(実行): 既知の誤りの一覧(ratchet)は空になった。269 の Go の `pure` の行のうち、呼んで確かめたのは 23(引数に目印を入れる 20 と、レシーバの型の値に目印を入れて呼ぶ 3(`(*net/url.URL).Port`、`(*os/exec.Cmd).Run`、`(*regexp.Regexp).Match`))、確かめていないのは 246(`bench/zoo-go/pure/unchecked.txt`、理由つき。呼んでいない行が増えるとテストが落ちる)。
+3. 検査: `TestPureFunctionsThatReturnDataAreReviewed`(型から、文字列・バイト列・構造体などを返す標準ライブラリの `pure` を列挙し、`testdata/pure-carriers.txt` の 84 件と比べる。増えても減っても落ちる)。`TestZooPureGo`(実行): 既知の誤りの一覧(ratchet)は空になった。264 の Go の `pure` の行のうち、呼んで確かめたのは 22(引数に目印を入れる 20 と、レシーバの型の値に目印を入れて呼ぶ 2(`(*net/url.URL).Port`、`(*regexp.Regexp).Match`))、確かめていないのは 242(`bench/zoo-go/pure/unchecked.txt`、理由つき。呼んでいない行が増えるとテストが落ちる)。
 
 **検証:** `compare.sh`: R-03 の変更だけを、CORE-K の上で測ると、全ベンチで、finding の追加 0、削除 0、不確実性の変更 0(error や値に新しく流れが乗っても、sink に届く形が、これらのコードにはない)。Gitea は、R-03 だけでは測っていない(CORE-K と合わせて測った: ADR-065)。
 
-**限界:** 呼んで確かめていない 246 の行(レシーバが唯一の入口の関数、プロセス・ファイル・ネットワーク・時計に触る関数)は、基準で読んだだけ。Dart と Rust の `pure` の同じ検査は、各言語の zoo の段階で。
+**限界:** 呼んで確かめていない 242 の行(レシーバが唯一の入口の関数、プロセス・ファイル・ネットワーク・時計に触る関数)は、基準で読んだだけ。Dart と Rust の `pure` の同じ検査は、各言語の zoo の段階で。
+
+## ADR-067: モデルの流れに「これは近似」と書く(`approximate`)。通った finding に不確実性 `model_approximation` が 1 件付く(C-8 の最初の実例)
+
+**背景:** CORE-K(ADR-065)で、`exec.Command` の戻り値に引数が載り、`(*exec.Cmd).Output` の結果へ運ばれる流れが、gogs に 1 件増やした(`git` の出力を、許可リストで絞った引数から応答に書く形)。この流れは**実在する**(`exec.Command("sh", "-c", "echo "+x).Output()`、`git log --format=<x>`、`cat <x>` は、引数の中身が標準出力に出る)ので、モデルで切ると、この形が黙った見逃しになる。gogs の +1 が偽陽性なのは、値が定数の集合と等しいことを確かめてから使う許可リストのためで、モデルの理由ではない。モデルを切ると、理由の違う finding をたまたま消す。ただ、外部プログラムの出力が引数を運ぶかは、プログラムによる、**近似**で、そう言わずに「ふつうの流れ」として運ぶと、確信度が `no_uncertainty_on_path`(痕跡なし)になりうる。
+
+**決めたこと:**
+1. `flows` の要素に `approximate: "<理由>"` を書ける(`internal/model` の `Flow.Approximate`)。理由は、不確実性の `detail` になる。
+2. その流れを通った finding の経路に、不確実性が **1 件**付く。種類は **`model_approximation`**(1 つに決める。`attributable_to: rivus`、`symbol` はモデルのシンボル、`detail` は理由)。確信度は `no_uncertainty_on_path` にならない(`requires_review`)。流れは消さない。
+3. 当てた所(`go-stdlib-more.yaml`、`go-pure.yaml`): `(*os/exec.Cmd).Output` / `CombinedOutput` / `StdoutPipe` / `StderrPipe` の recv → 結果(外部プログラムの出力は、引数を運ぶかがプログラムによる)。`Run` / `Start` / `Wait` の recv → 結果(error): `exec.LookPath` の失敗の文面にコマンド名が入る(zoo の `(*os/exec.Cmd).Run` で確かめた)ので、`pure` から外して、近似つきで伝える。`exec.Command(name, args…)` の引数 → 戻り値は、近似でない本物の流れ(`cmd.Args` や `cmd.String()` を読む流れを失わない)。
+4. **スキーマ**: 足すだけ(ルールの `approximate`、不確実性の新しい `kind`)。`rivus.result/1` の版は上げない(ADR-034 の、足すだけの変更の扱い)。
+5. zoo に `conv/exec-output-echo`(引数が `echo` で出力に出る形。`cmd.Args` に入れて、構築子が sink にならないようにした。`@sink` が出る)。`testdata/go/cases/approx`(近似の流れの finding は `model_approximation` が 1 件と、確信度が clear でない。近似でない流れには付かない)。
+
+**ほかの使い道(今後):** 「引数がそのまま出るかは、呼ぶ先による」モデル(外部プログラム、リフレクション、プラグイン)。ルール作者(利用者や AI)が、確信のない流れを、消さずに、近似と書ける。

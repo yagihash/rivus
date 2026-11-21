@@ -20,6 +20,7 @@ import (
 	_ "zoo/cells/cont/slice"
 	_ "zoo/cells/cont/struct_whole_to_sink"
 	_ "zoo/cells/conv/buffer_writestring"
+	_ "zoo/cells/conv/exec_output_echo"
 	_ "zoo/cells/dyn/func_field"
 	_ "zoo/cells/dyn/func_map"
 	_ "zoo/cells/dyn/generics_ptr"

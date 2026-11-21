@@ -570,6 +570,35 @@ func TestSinkOnlyRuleDoesNotMakeTheCallAModel(t *testing.T) {
 	}
 }
 
+// A flow that the model marks approximate is followed, and the finding through it carries one uncertainty of kind
+// model_approximation with the reason of the model: it is not a path without any uncertainty (C-8). A flow that is
+// not marked leaves none.
+func TestApproximateFlowLeavesAnUncertaintyOnThePath(t *testing.T) {
+	checkCase(t, "approx")
+	res, _ := runCase(t, "approx")
+	for _, f := range res.Findings {
+		var n int
+		for _, u := range f.Uncertainties {
+			if u.Kind == KindModelApproximation {
+				n++
+				if !strings.Contains(u.Detail, "external program") || u.Symbol != "example.com/cases/lib.External" {
+					t.Errorf("the uncertainty does not say why: %+v", u)
+				}
+			}
+		}
+		switch f.Source.Position.Line {
+		case 8, 9, 10:
+			if n != 1 || f.Confidence == ConfidenceClear {
+				t.Errorf("the approximate flow: %d model_approximation, confidence %s", n, f.Confidence)
+			}
+		default:
+			if n != 0 {
+				t.Errorf("a flow that is not approximate has %d model_approximation: line %d", n, f.Source.Position.Line)
+			}
+		}
+	}
+}
+
 // A call through an interface is a call to every implementation, unless the
 // caller made the interface value right there: then only the implementation of
 // its type is called.

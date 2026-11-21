@@ -21,6 +21,8 @@ const (
 	KindConfigRead             = "config_read"
 	KindExportedAPIParam       = "exported_api_param"
 	KindStoredDataBoundary     = "stored_data_boundary"
+	// KindModelApproximation: a flow that a model says is an approximation (the flow's `approximate` text).
+	KindModelApproximation = "model_approximation"
 	// KindNumericStop marks the data of a source that became a number or a bool: they are
 	// not followed (attributable to rivus: -numeric-taint follows them).
 	KindNumericStop = "numeric_stop"

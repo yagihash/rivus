@@ -163,6 +163,11 @@ sanitizers:
 
 
 propagators:
+  # a flow that the model says is an approximation (testdata/go/cases/approx)
+  - symbol: example.com/cases/lib.External
+    flows: [{from: arg0, to: result, approximate: "the output of an external program: whether it carries the arguments depends on the program"}]
+  - symbol: example.com/cases/lib.Exact
+    flows: [{from: arg0, to: result}]
   # a call that moves data to or from the data store (testdata/go/cases/dbsrc)
   - symbol: example.com/cases/lib.StoreRead
     pure: true

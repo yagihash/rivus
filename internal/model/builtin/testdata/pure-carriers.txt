@@ -14,8 +14,6 @@
 (*net/smtp.Client).Data  # a handle or a value of the runtime or the network: not the text of an argument
 (*net/smtp.Client).Extension  # a handle or a value of the runtime or the network: not the text of an argument
 (*net/url.URL).Port  # digits only (the parser checks them)
-(*os/exec.Cmd).StderrPipe  # a value of the environment or the runtime (a process pipe: the output of a command is not the text of its arguments, a known limit)
-(*os/exec.Cmd).StdoutPipe  # a value of the environment or the runtime (a process pipe: the output of a command is not the text of its arguments, a known limit)
 (context.Context).Done  # a handle or a value of the runtime or the network: not the text of an argument
 (io/fs.FileInfo).ModTime  # numbers only: a time, a duration, a file mode or a formatted number holds digits and names of a fixed set, not text of an argument
 (io/fs.FileMode).String  # numbers only: a time, a duration, a file mode or a formatted number holds digits and names of a fixed set, not text of an argument

@@ -176,8 +176,8 @@ var rows = []row{
 		return []Part{v("(*net/url.URL).Port", u.Port())}
 	}},
 	{"(*os/exec.Cmd).Run", func(s string) []Part {
-		// the process is `true`: it does nothing with its arguments, and the answer is whether the marker reached the error
-		err := exec.Command("true", s).Run()
+		// the marker is the name of the command: a command that is not found has its name in the error
+		err := exec.Command(s).Run()
 		return []Part{e("(*os/exec.Cmd).Run", err)}
 	}},
 }

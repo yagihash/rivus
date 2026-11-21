@@ -197,11 +197,11 @@ propagators:
   - symbol: (*database/sql.Rows).Err
     pure: true
   - symbol: (*os/exec.Cmd).Run
-    pure: true
+    flows: [{from: recv, to: result, approximate: "a failed start puts the name of the command in the text of the error (the LookPath failure)"}]
   - symbol: (*os/exec.Cmd).Start
-    pure: true
+    flows: [{from: recv, to: result, approximate: "a failed start puts the name of the command in the text of the error (the LookPath failure)"}]
   - symbol: (*os/exec.Cmd).Wait
-    pure: true
+    flows: [{from: recv, to: result, approximate: "a failed start puts the name of the command in the text of the error (the LookPath failure)"}]
   - symbol: os/exec.LookPath
     flows: [{from: arg0, to: result0}, {from: arg0, to: result1}]
   - symbol: os.Stat

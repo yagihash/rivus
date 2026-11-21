@@ -777,6 +777,10 @@ func (s *state) applyFlows(cc *callCtx, flows []model.Flow, o *op, desc string, 
 		if len(src) == 0 {
 			continue
 		}
+		var approx []*Uncertainty
+		if fl.Approximate != "" {
+			approx = []*Uncertainty{s.newNote(cc.in, KindModelApproximation, fl.Approximate, cc.sym)}
+		}
 		var dsts []Loc
 		if to.Kind == model.SelResult {
 			if to.All {
@@ -807,6 +811,9 @@ func (s *state) applyFlows(cc *callCtx, flows []model.Flow, o *op, desc string, 
 					wm := newWhyFrom(s.fn, kind, f.Cell, f.Orig)
 					wm.pos = packPos(cc.in.Pos)
 					wm.setModel(mref)
+					if approx != nil {
+						wm.setNotes(approx)
+					}
 					s.add(d, e, wm)
 				}
 			}

@@ -19,7 +19,7 @@ Results are recorded in `docs/DECISIONS.md` (ADR-043).
 
 Moved to [`docs/MODELING.md`](../docs/MODELING.md) (the guide for whoever writes a model, by hand or with an AI). The tests that
 hold the rule are `TestPureFunctionsThatReturnDataAreReviewed` (`internal/model/builtin`) and `TestZooPureGo`
-(`cmd/rivus/zoo_pure_test.go`, `bench/zoo-go/pure`); the 246 `pure` rows of Go that the run does not call are listed with the
+(`cmd/rivus/zoo_pure_test.go`, `bench/zoo-go/pure`); the 242 `pure` rows of Go that the run does not call are listed with the
 reason of each in `bench/zoo-go/pure/unchecked.txt`.
 
 ## Changing the accuracy of the core: the procedure

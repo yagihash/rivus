@@ -252,10 +252,14 @@ propagators:
     pure: true
   - symbol: archive/zip.FileInfoHeader
     flows: [{from: arg0, to: result0}]
+  - symbol: (*os/exec.Cmd).Output
+    flows: [{from: recv, to: result, approximate: "the output of an external program: whether it carries the arguments depends on the program"}]
+  - symbol: (*os/exec.Cmd).CombinedOutput
+    flows: [{from: recv, to: result, approximate: "the output of an external program: whether it carries the arguments depends on the program"}]
   - symbol: (*os/exec.Cmd).StdoutPipe
-    pure: true
+    flows: [{from: recv, to: result, approximate: "the output of an external program: whether it carries the arguments depends on the program"}]
   - symbol: (*os/exec.Cmd).StderrPipe
-    pure: true
+    flows: [{from: recv, to: result, approximate: "the output of an external program: whether it carries the arguments depends on the program"}]
   - symbol: (net/http.File).Readdir
     pure: true
   - symbol: (log/slog.Record).NumAttrs

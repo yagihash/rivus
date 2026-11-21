@@ -52,3 +52,9 @@ type DB struct{}
 
 // Prepare is a sink of the query; the statement it returns holds it.
 func (*DB) Prepare(query string) string { return query }
+
+// External stands for the output of an external program: the model says that the argument may come out, as a guess.
+func External(s string) string { return s }
+
+// Exact is the same with a flow that is not a guess.
+func Exact(s string) string { return s }

@@ -257,6 +257,11 @@ type Flow struct {
 	// guard): what is written through the result is written to the argument.
 	// Without it a flow copies the taint, and the result is a value of its own.
 	Alias bool `yaml:"alias"`
+	// Approximate says that the flow is a guess that the model makes (the output of an external program:
+	// whether it carries the arguments depends on the program): the text is the reason. A finding whose
+	// path goes through the flow has one uncertainty of kind model_approximation, with the reason as its
+	// detail, so that it is not reported as a path without any uncertainty (C-8).
+	Approximate string `yaml:"approximate"`
 }
 
 // Position kinds of a Selector.
