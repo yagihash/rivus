@@ -61,3 +61,6 @@ sanitizers:
     drops: [user_input]
   - symbol: package:zoo_mark/zoo_mark.dart#cleanPath
     drops: [user_input]
+  # an interface method of a cell that says its result is clean (cells/lib/dyn/sanitizer_own_impl)
+  - symbol: package:zoo_cells/dyn/sanitizer_own_impl.dart#Cleaner.clean
+    drops: [user_input]
