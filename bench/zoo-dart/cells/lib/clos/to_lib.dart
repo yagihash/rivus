@@ -19,13 +19,13 @@ void vuln() { // @vuln
 
 // vuln2: the result of the closure comes back through the library.
 void vuln2() { // @vuln
-  final v = src('clos-to-lib-vuln2'); // @source(clos-to-lib-vuln2) @miss(assumed_call) @ref(CALLBACK-MODEL)
+  final v = src('clos-to-lib-vuln2'); // @source(clos-to-lib-vuln2)
   sinkCmd([1].map((_) => v).first); // @sink(clos-to-lib-vuln2)
 }
 
 // vuln3: the same with a Future.
 Future<void> vuln3() async { // @vuln
-  final v = src('clos-to-lib-vuln3'); // @source(clos-to-lib-vuln3) @miss(assumed_call) @ref(CALLBACK-MODEL)
+  final v = src('clos-to-lib-vuln3'); // @source(clos-to-lib-vuln3)
   final r = await Future.value(1).then((_) => v);
   sinkCmd(r); // @sink(clos-to-lib-vuln3)
 }
@@ -38,7 +38,7 @@ void fixed() { // @fixed
 }
 
 void decoy() { // @decoy
-  final v = src('clos-to-lib-decoy'); // @source(clos-to-lib-decoy) @miss(assumed_call,dynamic_dispatch) @ref(CALLBACK-MODEL)
+  final v = src('clos-to-lib-decoy'); // @source(clos-to-lib-decoy)
   const k = 'constant';
   [1].forEach((_) {
     sinkCmd(k); // @sink(none) @nosink(clos-to-lib-decoy)

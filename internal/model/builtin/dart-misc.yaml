@@ -84,7 +84,8 @@ propagators:
   - symbol: dart:io#HttpClientResponse.transform
     flows: [{from: recv, to: result}, {from: args, to: result}]
   - symbol: dart:io#HttpClientResponse.listen
-    flows: [{from: recv, to: result}, {from: args, to: result}]
+    flows: [{from: recv, to: result}]
+    calls: [{fn: arg0, with: [recv]}]
   - symbol: dart:io#HttpClientResponse.cast
     flows: [{from: recv, to: result}, {from: args, to: result}]
   - symbol: dart:io#HttpRequest.response

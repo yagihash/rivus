@@ -254,6 +254,7 @@ propagators:
     pure: true
   - symbol: std::thread::spawn
     pure: true
+    calls: [{fn: arg0, mode: go}]
   - symbol: std::thread::yield_now
     pure: true
   - symbol: log::info

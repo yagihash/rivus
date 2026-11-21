@@ -3,6 +3,19 @@
 ruleset: rivus/dart/core@1
 
 propagators:
+  # functions that call a function they are given: forEach and listen deliver what the receiver holds
+  - symbol: dart:core#Iterable.forEach
+    pure: true
+    calls: [{fn: arg0, with: [recv]}]
+  - symbol: dart:core#List.forEach
+    pure: true
+    calls: [{fn: arg0, with: [recv]}]
+  - symbol: dart:core#Set.forEach
+    pure: true
+    calls: [{fn: arg0, with: [recv]}]
+  - symbol: dart:core#Map.forEach
+    pure: true
+    calls: [{fn: arg0, with: [recv, recv]}]
   # a method of a dynamic value: the extractor does not know which, and says that what it
   # returns may come from the receiver and from the arguments (the receiver is the first)
   - symbol: dart:core#dynamic.invoke
@@ -143,10 +156,13 @@ propagators:
     flows: [{from: recv, to: result}]
   - symbol: dart:core#Iterable.where
     flows: [{from: recv, to: result}]
+    calls: [{fn: arg0, with: [recv]}]
   - symbol: dart:core#Iterable.firstWhere
     flows: [{from: recv, to: result}]
+    calls: [{fn: arg0, with: [recv]}]
   - symbol: dart:core#Iterable.lastWhere
     flows: [{from: recv, to: result}]
+    calls: [{fn: arg0, with: [recv]}]
   - symbol: dart:core#Iterable.singleWhere
     flows: [{from: recv, to: result}]
   - symbol: dart:core#Iterable.whereType
@@ -292,7 +308,7 @@ propagators:
   - symbol: dart:core#StringBuffer.toString
     flows: [{from: recv, to: result}, {from: args, to: result}]
   - symbol: dart:core#Iterable.map
-    flows: [{from: recv, to: result}, {from: args, to: result}]
+    calls: [{fn: arg0, with: [recv], ret: result0}]
   - symbol: dart:core#Iterable.expand
     flows: [{from: recv, to: result}, {from: args, to: result}]
   - symbol: dart:core#Iterable.fold
@@ -300,11 +316,13 @@ propagators:
   - symbol: dart:core#Iterable.reduce
     flows: [{from: recv, to: result}, {from: args, to: result}]
   - symbol: dart:core#Iterable.any
-    flows: [{from: recv, to: result}, {from: args, to: result}]
+    flows: [{from: recv, to: result}]
+    calls: [{fn: arg0, with: [recv]}]
   - symbol: dart:core#Iterable.every
-    flows: [{from: recv, to: result}, {from: args, to: result}]
+    flows: [{from: recv, to: result}]
+    calls: [{fn: arg0, with: [recv]}]
   - symbol: dart:core#List.map
-    flows: [{from: recv, to: result}, {from: args, to: result}]
+    calls: [{fn: arg0, with: [recv], ret: result0}]
   - symbol: dart:core#List.sort
     flows: [{from: recv, to: result}, {from: args, to: result}]
   - symbol: dart:collection#Queue.removeFirst

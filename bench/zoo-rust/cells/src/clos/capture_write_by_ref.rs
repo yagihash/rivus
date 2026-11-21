@@ -69,7 +69,7 @@ fn vuln5() { // @vuln
     let f = || {
         m::sink_cmd(&x.borrow()); // @sink(clos-capture-write-by-ref-vuln5) @noisy(4) @ref(ENV-PTR)
     };
-    *x.borrow_mut() = m::src("clos-capture-write-by-ref-vuln5"); // @source(clos-capture-write-by-ref-vuln5) @miss(unmodeled_library_call) @ref(CALLBACK-MODEL,PARITY)
+    *x.borrow_mut() = m::src("clos-capture-write-by-ref-vuln5"); // @source(clos-capture-write-by-ref-vuln5)
     let once = Once::new();
     once.call_once(f);
 }
@@ -88,7 +88,7 @@ fn vuln7() { // @vuln
     let mut x = String::new();
     let once = Once::new();
     once.call_once(|| {
-        x = m::src("clos-capture-write-by-ref-vuln7"); // @source(clos-capture-write-by-ref-vuln7) @miss(unmodeled_library_call) @ref(CALLBACK-MODEL,PARITY)
+        x = m::src("clos-capture-write-by-ref-vuln7"); // @source(clos-capture-write-by-ref-vuln7) @miss(unmodeled_library_call) @ref(CALLBACK-MODEL,ENV-PTR,PARITY)
     });
     m::sink_cmd(&x); // @sink(clos-capture-write-by-ref-vuln7)
 }

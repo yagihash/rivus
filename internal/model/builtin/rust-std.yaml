@@ -17,6 +17,11 @@ sources:
     labels: [file_content]
 
 propagators:
+  # a function that calls what it is given (docs/MODELING.md): Once::call_once runs its closure; for the callbacks
+  # that std hands what the receiver holds (Option::map, Iterator::for_each) the rows say it, beside the flows
+  - symbol: std::sync::Once::call_once
+    pure: true
+    calls: [{fn: arg1}]
   # conversions and views: the result is made of the argument
   - symbol: std::convert::From::from
     flows: [{from: args, to: result}]
@@ -188,14 +193,18 @@ propagators:
     flows: [{from: args, to: result}]
   - symbol: std::option::Option::unwrap_or_else
     flows: [{from: args, to: result}]
+    calls: [{fn: arg1, ret: result0}]
   - symbol: std::option::Option::map
     flows: [{from: args, to: result}]
+    calls: [{fn: arg1, with: [arg0], ret: result0}]
   - symbol: std::option::Option::and_then
     flows: [{from: args, to: result}]
+    calls: [{fn: arg1, with: [arg0], ret: result0}]
   - symbol: std::option::Option::ok_or
     flows: [{from: args, to: result}]
   - symbol: std::option::Option::ok_or_else
     flows: [{from: args, to: result}]
+    calls: [{fn: arg1, ret: result0}]
   - symbol: std::option::Option::as_ref
     flows: [{from: args, to: result}]
   - symbol: std::option::Option::as_deref
@@ -214,6 +223,7 @@ propagators:
     flows: [{from: args, to: result}]
   - symbol: std::option::Option::filter
     flows: [{from: args, to: result}]
+    calls: [{fn: arg1, with: [arg0]}]
   - symbol: std::result::Result::unwrap
     flows: [{from: args, to: result, alias: true}]
   - symbol: std::result::Result::expect
@@ -224,16 +234,20 @@ propagators:
     flows: [{from: args, to: result}]
   - symbol: std::result::Result::unwrap_or_else
     flows: [{from: args, to: result}]
+    calls: [{fn: arg1, with: [arg0], ret: result0}]
   - symbol: std::result::Result::ok
     flows: [{from: args, to: result}]
   - symbol: std::result::Result::err
     flows: [{from: args, to: result}]
   - symbol: std::result::Result::map
     flows: [{from: args, to: result}]
+    calls: [{fn: arg1, with: [arg0], ret: result0}]
   - symbol: std::result::Result::map_err
     flows: [{from: args, to: result}]
+    calls: [{fn: arg1, with: [arg0], ret: result0}]
   - symbol: std::result::Result::and_then
     flows: [{from: args, to: result}]
+    calls: [{fn: arg1, with: [arg0], ret: result0}]
   - symbol: std::result::Result::as_ref
     flows: [{from: args, to: result}]
   - symbol: std::ops::Index::index
@@ -254,8 +268,10 @@ propagators:
     flows: [{from: args, to: result}]
   - symbol: std::iter::Iterator::map
     flows: [{from: args, to: result}]
+    calls: [{fn: arg1, with: [arg0], ret: result0}]
   - symbol: std::iter::Iterator::filter
     flows: [{from: args, to: result}]
+    calls: [{fn: arg1, with: [arg0]}]
   - symbol: std::iter::Iterator::cloned
     flows: [{from: args, to: result}]
   - symbol: std::iter::Iterator::copied
@@ -276,6 +292,7 @@ propagators:
     flows: [{from: args, to: result}]
   - symbol: std::iter::Iterator::flat_map
     flows: [{from: args, to: result}]
+    calls: [{fn: arg1, with: [arg0], ret: result0}]
   - symbol: std::iter::Iterator::peekable
     flows: [{from: args, to: result}]
   - symbol: std::iter::IntoIterator::into_iter
@@ -446,18 +463,25 @@ propagators:
     flows: [{from: args, to: result}]
   - symbol: std::iter::Iterator::find
     flows: [{from: args, to: result}]
+    calls: [{fn: arg1, with: [arg0]}]
   - symbol: std::iter::Iterator::position
     flows: [{from: args, to: result}]
+    calls: [{fn: arg1, with: [arg0]}]
   - symbol: std::iter::Iterator::any
     flows: [{from: args, to: result}]
+    calls: [{fn: arg1, with: [arg0]}]
   - symbol: std::iter::Iterator::all
     flows: [{from: args, to: result}]
+    calls: [{fn: arg1, with: [arg0]}]
   - symbol: std::iter::Iterator::for_each
     flows: [{from: args, to: result}]
+    calls: [{fn: arg1, with: [arg0]}]
   - symbol: std::iter::Iterator::filter_map
     flows: [{from: args, to: result}]
+    calls: [{fn: arg1, with: [arg0], ret: result0}]
   - symbol: std::iter::Iterator::take_while
     flows: [{from: args, to: result}]
+    calls: [{fn: arg1, with: [arg0]}]
   - symbol: std::iter::Iterator::skip_while
     flows: [{from: args, to: result}]
   - symbol: std::iter::Iterator::by_ref

@@ -11,7 +11,7 @@ pub fn register() {
 }
 
 fn vuln() { // @vuln
-    let v = m::src("clos-to-lib-vuln"); // @source(clos-to-lib-vuln) @miss(unmodeled_library_call) @ref(CALLBACK-MODEL,PARITY)
+    let v = m::src("clos-to-lib-vuln"); // @source(clos-to-lib-vuln)
     let once = Once::new();
     once.call_once(|| {
         m::sink_cmd(&v); // @sink(clos-to-lib-vuln) @noisy(4) @ref(ENV-PTR)

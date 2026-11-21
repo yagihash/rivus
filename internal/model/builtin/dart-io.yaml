@@ -47,6 +47,7 @@ propagators:
     flows: [{from: recv, to: result}]
   - symbol: dart:io#HttpHeaders.forEach
     flows: [{from: recv, to: result}]
+    calls: [{fn: arg0, with: [recv, recv]}]
   - symbol: dart:io#Cookie.value
     flows: [{from: recv, to: result}]
   - symbol: dart:io#Cookie.name
@@ -55,6 +56,7 @@ propagators:
     flows: [{from: recv, to: result}]
   - symbol: dart:io#HttpRequest.listen
     flows: [{from: recv, to: result}]
+    calls: [{fn: arg0, with: [recv]}]
   - symbol: dart:io#HttpRequest.transform
     flows: [{from: recv, to: result}]
   - symbol: dart:io#File.new

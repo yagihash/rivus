@@ -3,6 +3,12 @@
 ruleset: rivus/dart/async@1
 
 propagators:
+  - symbol: dart:async#Stream.listen
+    flows: [{from: recv, to: result}]
+    calls: [{fn: arg0, with: [recv]}]
+  - symbol: dart:async#Stream.forEach
+    flows: [{from: recv, to: result}]
+    calls: [{fn: arg0, with: [recv]}]
   - symbol: dart:async#StreamController.new
     flows: [{from: args, to: result}]
   - symbol: dart:async#StreamController.broadcast
@@ -65,6 +71,7 @@ propagators:
     flows: [{from: recv, to: result}]
   - symbol: dart:async#Stream.where
     flows: [{from: recv, to: result}]
+    calls: [{fn: arg0, with: [recv]}]
   - symbol: dart:async#Stream.expand
     flows: [{from: recv, to: result}]
   - symbol: dart:async#Stream.cast
@@ -78,17 +85,21 @@ propagators:
   - symbol: dart:async#Stream.transform
     flows: [{from: recv, to: result}, {from: args, to: result}]
   - symbol: dart:async#Stream.map
-    flows: [{from: recv, to: result}, {from: args, to: result}]
+    flows: [{from: recv, to: result}]
+    calls: [{fn: arg0, with: [recv], ret: result0}]
   - symbol: dart:async#Stream.asyncMap
     flows: [{from: recv, to: result}, {from: args, to: result}]
   - symbol: dart:async#Stream.asyncExpand
     flows: [{from: recv, to: result}, {from: args, to: result}]
   - symbol: dart:async#Future.then
-    flows: [{from: recv, to: result}, {from: args, to: result}]
+    flows: [{from: recv, to: result}]
+    calls: [{fn: arg0, with: [recv], ret: result0}]
   - symbol: dart:async#Future.catchError
-    flows: [{from: recv, to: result}, {from: args, to: result}]
+    flows: [{from: recv, to: result}]
+    calls: [{fn: arg0, with: [recv], ret: result0}]
   - symbol: dart:async#Future.whenComplete
-    flows: [{from: recv, to: result}, {from: args, to: result}]
+    flows: [{from: recv, to: result}]
+    calls: [{fn: arg0}]
   - symbol: dart:async#Future.timeout
     flows: [{from: recv, to: result}, {from: args, to: result}]
   - symbol: dart:async#Future.wait
