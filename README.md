@@ -236,7 +236,7 @@ RIVUS_RUST=$PWD/extractor/rust/target/debug/rivus-rust go test ./cmd/rivus   # R
 - [docs/GRAPH.md](docs/GRAPH.md): `rivus index` と `rivus graph` の使い方
 - [docs/DESIGN-graph.md](docs/DESIGN-graph.md)、[DESIGN-capture.md](docs/DESIGN-capture.md)、[DESIGN-zoo.md](docs/DESIGN-zoo.md)、[DESIGN-memory.md](docs/DESIGN-memory.md): 個別の設計
 - [bench/README.md](bench/README.md)、[bench/MISSES.md](bench/MISSES.md): ベンチの手順と、既知の見逃し
-- [docs/BRIEF.md](docs/BRIEF.md)、[docs/QUESTIONS.md](docs/QUESTIONS.md): 最初の構想と、それへの指摘（経緯の記録）
+- [docs/history/BRIEF.md](docs/history/BRIEF.md)、[docs/history/QUESTIONS.md](docs/history/QUESTIONS.md): 最初の構想と、それへの指摘（歴史的な文書。今の設計とは異なる所がある）
 
 ## ライセンス
 

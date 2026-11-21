@@ -1,9 +1,16 @@
 # rivus — プロジェクトブリーフ
 
+> **歴史的な文書。** 初期の計画の記録で、今の設計とは異なる所がある（Phase 1〜4 の計画、SARIF の扱い、Go のみの前提など）。中身は書き換えていない。
+> 今の正本は次のとおり。
+> - 設計思想: [PRINCIPLES.md](../PRINCIPLES.md)
+> - 今のアーキテクチャ: [ARCHITECTURE.md](../ARCHITECTURE.md)
+> - 判断の経緯: [DECISIONS.md](../DECISIONS.md)（一覧は [ADR-INDEX.md](../ADR-INDEX.md)）
+> - 使い方: [README.md](../../README.md)
+
 > **この文書について（リポジトリ追加時のメモ）**
 > 初期ブリーフの原文を、経緯を残すためにそのまま置いている。
 > レビュー（[QUESTIONS.md](QUESTIONS.md)）で内容が変わった箇所には、`> 【改訂注記】` の引用ブロックを添えた。
-> 注記のある節は、現在は [ARCHITECTURE.md](ARCHITECTURE.md) と [DECISIONS.md](DECISIONS.md) が優先する。
+> 注記のある節は、現在は [ARCHITECTURE.md](../ARCHITECTURE.md) と [DECISIONS.md](../DECISIONS.md) が優先する。
 > 注記が付いているのは 5.3、5.5、6.1、7.1、7.2、7.4 の 6 か所。
 
 ---
@@ -170,7 +177,7 @@ taint 解析に必要な情報は、コンパイラ IR よりずっと少ない�
 > （`branch` の条件保持、クロージャ、型アサーション、グローバル変数などを追加。`slice` は `copy` の `view` フラグで表す）。
 > `go` / `defer` / `await` は新しい命令にせず `call` のフラグで表す。
 > イテレータは extractor が脱糖する。IR は **φ なしの CFG ＋ 書き換え可能ローカル変数**とする。
-> → [ARCHITECTURE.md 2 節](ARCHITECTURE.md)、[DECISIONS.md ADR-003](DECISIONS.md)
+> → [ARCHITECTURE.md 2 節](../ARCHITECTURE.md)、[DECISIONS.md ADR-003](../DECISIONS.md)
 
 ### 5.4 言語別の実装コスト（調査済み）
 
@@ -219,7 +226,7 @@ Rust が外部依存になるのは原理的な制約。proc-macro の展開に�
 > `go:embed` は動作確認後の最適化として後から追加できるよう、extractor の在り処を解決する層（`Locator`）を挟む。
 > また Rust は `rustc_public` が nightly 専用のため、**固定した nightly でビルドが通るプロジェクト**が前提になる
 > （「対象プロジェクトの cargo / rustc を使う」はそのままでは成立しない）。
-> → [DECISIONS.md ADR-012, ADR-013](DECISIONS.md)
+> → [DECISIONS.md ADR-012, ADR-013](../DECISIONS.md)
 
 ---
 
@@ -242,7 +249,7 @@ Rust が外部依存になるのは原理的な制約。proc-macro の展開に�
 > Sharir & Pnueli (1981) の **functional approach** で、IFDS の tabulation（呼び出し元からのオンデマンド探索）とは別物。
 > 「IFDS の summary edge に相当するものを functional approach で計算する」と表現を統一する。
 > bottom-up を選ぶ理由は、4.2 の「seed なしで sink 側から source を引く」クエリが素直に実現できること。
-> 不動点の反復は SCC の内部のみ。→ [DECISIONS.md ADR-004](DECISIONS.md)
+> 不動点の反復は SCC の内部のみ。→ [DECISIONS.md ADR-004](../DECISIONS.md)
 
 ### 6.2 汚染はラベル付きで持つ
 
@@ -292,7 +299,7 @@ SARIF に載せる場合、LLM 向けの付加情報は `properties` バッグ�
 > 組織のリポジトリに限られる（出典: GitHub Docs "Uploading a SARIF file to GitHub"）。
 > したがって**構造化 JSON を唯一の一級市民**とし、SARIF は副次出力（公開リポジトリ、ローカルのビューワ、
 > 将来の互換性用）に格下げする。SARIF 生成は Phase 1 のスコープ外。
-> → [DECISIONS.md ADR-009](DECISIONS.md)
+> → [DECISIONS.md ADR-009](../DECISIONS.md)
 
 ### 7.2 不確実性の分類（terminal kind）
 
@@ -324,7 +331,7 @@ SARIF に載せる場合、LLM 向けの付加情報は `properties` バッグ�
 > 【改訂注記】レビューで 4 種を追加し（`ffi_boundary`、`unresolved_callee`、`missing_source`、
 > `recursion_approximation`）、各 kind に `attributable_to: target | rivus | mixed` を持たせた。
 > 列挙は閉じた集合とし、追加はスキーマのバージョンを上げて行う。
-> → [DECISIONS.md ADR-008](DECISIONS.md)、[ARCHITECTURE.md 4.4](ARCHITECTURE.md)
+> → [DECISIONS.md ADR-008](../DECISIONS.md)、[ARCHITECTURE.md 4.4](../ARCHITECTURE.md)
 
 ### 7.3 出力例（イメージ）
 
@@ -373,7 +380,7 @@ LLM が「このケースは常に sanitize される」と判定したら、
 > 【改訂注記】LLM の出力を**モデル**（関数 1 つの振る舞い。再利用する）と**判定**（検出結果 1 件の評価。再利用しない）に分ける。
 > キャッシュキーは「関数のボディのハッシュ ＋ 直接呼び出している関数のモデル ID の集合」とし、
 > モデルには `origin: builtin | human | llm` を必須にする。`--deterministic-only` で `origin: llm` を無視して走れる。
-> → [DECISIONS.md ADR-010](DECISIONS.md)
+> → [DECISIONS.md ADR-010](../DECISIONS.md)
 
 ---
 

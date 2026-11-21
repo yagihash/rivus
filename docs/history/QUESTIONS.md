@@ -1,5 +1,8 @@
 # ブリーフへの質問・指摘
 
+> **歴史的な文書。** 最初のブリーフ（[BRIEF.md](BRIEF.md)）への質問と指摘の記録で、各項目の「回答」欄は空のまま。回答に当たる判断は [DECISIONS.md](../DECISIONS.md) の ADR にある。今の設計とは異なる所がある（例: Q3 の推奨「自モジュールのみ解析」は、今の既定と逆で、依存のソースも既定で読む）。中身は書き換えていない。
+> 今の正本は [PRINCIPLES.md](../PRINCIPLES.md)、[ARCHITECTURE.md](../ARCHITECTURE.md)、[DECISIONS.md](../DECISIONS.md)。
+
 ARCHITECTURE.md を書く前に確認したい事項。回答は各項目の「回答」欄に書く。
 「推奨どおり」とだけ書いてもよい。
 
