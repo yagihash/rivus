@@ -1,0 +1,5 @@
+name: zoo_dep
+description: "Stands for a dependency of the Dart zoo: a package of its own, so that its functions are those of a dependency, not the code under test (F/dyn/through-dependency)."
+publish_to: none
+environment:
+  sdk: ^3.10.0

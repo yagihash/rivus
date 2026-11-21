@@ -36,6 +36,8 @@ import 'package:zoo_cells/dyn/sink_behind_own_interface.dart' as dyn_sink_behind
 import 'package:zoo_cells/dyn/sink_in_method.dart' as dyn_sink_in_method;
 import 'package:zoo_cells/dyn/sink_in_method_iface.dart' as dyn_sink_in_method_iface;
 import 'package:zoo_cells/dyn/stdlib_writer_own.dart' as dyn_stdlib_writer_own;
+import 'package:zoo_cells/dyn/through_dependency.dart' as dyn_through_dependency;
+import 'package:zoo_cells/dyn/xtalk_n_by_m.dart' as dyn_xtalk_n_by_m;
 import 'package:zoo_cells/guard/one_branch.dart' as guard_one_branch;
 import 'package:zoo_cells/guard/sanitize_before.dart' as guard_sanitize_before;
 import 'package:zoo_cells/state/global_chain.dart' as state_global_chain;
@@ -84,6 +86,8 @@ void registerAll() {
   dyn_sink_in_method.register();
   dyn_sink_in_method_iface.register();
   dyn_stdlib_writer_own.register();
+  dyn_through_dependency.register();
+  dyn_xtalk_n_by_m.register();
   guard_one_branch.register();
   guard_sanitize_before.register();
   state_global_chain.register();
