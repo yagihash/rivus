@@ -90,7 +90,13 @@ def main():
             bench, side = name.rsplit(".", 1)
             r = read_run(raw, bench, side)
             if r:
-                runs.setdefault(bench, {})[(r["engine"], inputs)] = r
+                old = runs.setdefault(bench, {}).get((r["engine"], inputs))
+                if old is not None:
+                    same = "the findings are the same" if old["keys"] == r["keys"] else "THE FINDINGS DIFFER (%d and %d)" % (old["n"], r["n"])
+                    print("ledger: WARNING: %s, engine %s, inputs %s was already read from %s; the run in %s replaces it (the later directory wins; %s)" % (
+                        bench, r["engine"], inputs, old["dir"], d, same), file=sys.stderr)
+                r["dir"] = d
+                runs[bench][(r["engine"], inputs)] = r
     if a.header:
         print(open(a.header).read().rstrip("\n") + "\n")
     print("# Ledger: version x bench x metric\n")

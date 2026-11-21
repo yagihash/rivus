@@ -9,15 +9,20 @@
                                               -w it fails when a file is not the one that the rows make
 
 The tests are the ones of the head (TestScaleSynth, TestCuratedGo, TestZooGo, the determinism tests) run with
-RIVUS_BINARY=<an older build of cmd/rivus> (bench/backtest.sh): the inputs and the answer keys are the head's,
+RIVUS_BINARY=<an older build of cmd/rivus> (how: bench/BACKTEST.md, "How it is run"): the inputs and the answer keys are the head's,
 only the engine is old (bench/BACKTEST.md). A unit is:
   GREEN     the test passes
   RED       it fails; the reasons say which metric: FAKE (a flow into a sink that must stay quiet, or a flow that
             the key does not name), MISS (a flow of the key is not reported), NOCONV, SIZE (a size over the
-            expected file by 10 percent or more, with the ratio), TRACE (the uncertainties by kind differ),
+            expected file by 10 percent or more, with the ratio), TRACE (the uncertainties by kind differ), OTHER_SOURCES (the count of other sources of the findings),
             FINDINGS (the set of the findings differs from the expected file)
   UNJUDGED  the old build could not read the input (a rules file in a newer format, an unknown flag): neither red
             nor green
+  ERROR     it fails, and the reason is not one of the above (a crash, a message that this tool does not know): it is
+            counted, never dropped; read the last line of the output that is printed with it
+
+The exit status (judge, all, table, det) is 1 when a unit is RED or ERROR (det: DIFFERENT), 2 when nothing could be
+judged (the binary does not run, UNJUDGED only), else 0. A bad version is expected to be red: the caller reads it.
 """
 import json
 import os
@@ -25,6 +30,8 @@ import re
 import sys
 from collections import OrderedDict
 
+# an old build that cannot read an input of the head (a rules file in a newer format, a flag it does not have)
+CANNOT_READ = re.compile(r"unknown flag|flag provided but not defined|load rules|yaml:|unknown field|rules?.*(error|unknown)")
 GREW = re.compile(r"(\w+): (\w+) grew from (\d+) to (\d+)")
 
 
@@ -45,6 +52,8 @@ def reasons_of(lines):
             miss += 1
         elif "did not converge" in l or "converged was" in l:
             out["NOCONV"] = 1
+        elif "other_sources_count was" in l:
+            out["OTHER_SOURCES"] = 1
         elif "uncertainties by kind" in l:
             out["TRACE"] = 1
         elif "findings are not the ones" in l:
@@ -90,13 +99,17 @@ def judge(path):
         elif st == "skip":
             res[unit] = ("SKIP", [])
         else:
-            if re.search(r"analyze: |unknown flag|rules?.*(error|unknown)|load rules|yaml:|unknown field", text) and "problems" not in text and not reasons_of(text.splitlines()):
-                res[unit] = ("UNJUDGED", [text.strip().splitlines()[-1][:80] if text.strip() else "?"])
+            reasons = reasons_of(text.splitlines())
+            last = (text.strip().splitlines() or ["(no output)"])[-1][:100]
+            if reasons:
+                res[unit] = ("RED", reasons)
+            elif CANNOT_READ.search(text):
+                res[unit] = ("UNJUDGED", [last])
             else:
-                res[unit] = ("RED", reasons_of(text.splitlines()))
+                res[unit] = ("ERROR", ["unrecognized: " + last])
     # a parent test (a profile of TestScaleSynth has no children): done above; keep a note if the run broke
-    if broken and not res:
-        res["(run)"] = ("UNJUDGED", ["the test binary did not run"])
+    if not res:
+        res["(run)"] = ("ERROR", ["the test binary did not run" if broken else "no test result in the output"])
     return res
 
 
@@ -208,9 +221,19 @@ def det(binary, runs):
                         env["GOMAXPROCS"] = procs
                     p = subprocess.run([binary, "analyze", "-workers", workers, "-rules", rules, "./cases/paramshare/gwriters"], cwd=data, capture_output=True, text=True, env=env)
                     if p.returncode != 0:
-                        print("UNJUDGED (%s)" % p.stderr.strip().splitlines()[-1][:80])
-                        return
-                    rep = json.loads(p.stdout)
+                        lines = (p.stderr.strip() or p.stdout.strip()).splitlines()
+                        last = lines[-1][:80] if lines else "exit status %d, no output" % p.returncode  # a crash may have no stderr at all
+                        if CANNOT_READ.search(p.stderr):
+                            print("UNJUDGED (%s)" % last)
+                            return 2
+                        print("ERROR (unrecognized: %s)" % last)
+                        return 1
+                    try:
+                        rep = json.loads(p.stdout)
+                        rep["stats"]
+                    except (ValueError, KeyError, TypeError):
+                        print("ERROR (unrecognized: the output is not a report)")
+                        return 1
                     rep["stats"].pop("duration_ms", None)
                     for k in ("dep_spent_ms", "own_spent_ms"):
                         rep["stats"].pop(k, None)
@@ -219,27 +242,50 @@ def det(binary, runs):
                     total += 1
         if len(seen) == 1:
             print("SAME %d" % total)
-        else:
-            print("DIFFERENT: %d outputs in %d runs (the most common %d)" % (len(seen), total, max(seen.values())))
+            return 0
+        print("DIFFERENT: %d outputs in %d runs (the most common %d)" % (len(seen), total, max(seen.values())))
+        return 1
+
+
+def exit_code(statuses):
+    """1 when a unit is RED or ERROR; 2 when nothing could be judged (every unit UNJUDGED or SKIP); else 0."""
+    st = list(statuses)
+    if any(x in ("RED", "ERROR") for x in st):
+        return 1
+    if st and all(x in ("UNJUDGED", "SKIP") for x in st) and "UNJUDGED" in st:
+        return 2
+    return 0
 
 
 def main():
-    if len(sys.argv) >= 3 and sys.argv[1] == "judge":
-        for u, (st, r) in judge(sys.argv[2]).items():
+    a = sys.argv
+    if len(a) >= 3 and a[1] == "judge":
+        res = judge(a[2])
+        for u, (st, r) in res.items():
             print("%-22s %-9s %s" % (u, st, "; ".join(r)))
-    elif len(sys.argv) >= 3 and sys.argv[1] == "det":  # det BIN [runs]: the determinism row, with rules in the oldest format
-        det(sys.argv[2], int(sys.argv[3]) if len(sys.argv) > 3 else 6)
-    elif len(sys.argv) >= 4 and sys.argv[1] == "all":  # all OUTDIR ref...: what is not green, per engine
-        for ref in sys.argv[3:]:
+        return exit_code(st for st, _ in res.values())
+    if len(a) >= 3 and a[1] == "det":  # det BIN [runs]: the determinism row, with rules in the oldest format
+        return det(a[2], int(a[3]) if len(a) > 3 else 6)
+    if len(a) >= 4 and a[1] == "all":  # all OUTDIR ref...: what is not green, per engine
+        codes = []
+        for ref in a[3:]:
             print("== %s" % ref)
-            for u, (st, r) in judge("%s/scale-%s.json" % (sys.argv[2], ref)).items():
+            try:
+                res = judge("%s/scale-%s.json" % (a[2], ref))
+            except OSError as e:
+                print("  ERROR (cannot read the judgement: %s)" % e)
+                codes.append(1)
+                continue
+            for u, (st, r) in res.items():
                 if st != "GREEN":
                     print("  %-22s %-9s %s" % (u, st, "; ".join(r)))
-    elif len(sys.argv) >= 5 and sys.argv[1] == "docs":
-        sys.exit(docs(sys.argv[2:]))
-    elif len(sys.argv) >= 4 and sys.argv[1] == "table":
-        outdir, rows = sys.argv[2], json.load(open(sys.argv[3]))
-        cache = {}
+            codes.append(exit_code(st for st, _ in res.values()))
+        return max(codes, default=0)
+    if len(a) >= 5 and a[1] == "docs":
+        return docs(a[2:])
+    if len(a) >= 4 and a[1] == "table":
+        outdir, rows = a[2], json.load(open(a[3]))
+        cache, sts = {}, []
 
         def get(ref):
             if ref not in cache:
@@ -255,10 +301,11 @@ def main():
             print("|---|---|---|")
             for u in row["units"]:
                 print("| %s | %s | %s |" % (u, cell(get(row["bad_ref"]), u), cell(get(row["good_ref"]), u)))
+                sts += [get(row["bad_ref"]).get(u, ("-",))[0], get(row["good_ref"]).get(u, ("-",))[0]]
             print()
-    else:
-        sys.exit(__doc__)
+        return exit_code(sts)
+    sys.exit(__doc__)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
