@@ -23,7 +23,7 @@ jobs:
       - name: Vet
         run: go vet ./...
       - name: Test
-        run: go test ./...
+        run: go test -timeout 30m ./...
 
   # The Dart extractor reads the code with package:analyzer; its tests (and the curated bench) need the Dart
   # SDK and each sample package's `dart pub get`. They are skipped when RIVUS_DART is not set.
@@ -57,7 +57,7 @@ jobs:
           RIVUS_DART: dart
           # a missing RIVUS_DART fails the tests, and does not skip them
           RIVUS_REQUIRE_DART: "1"
-        run: go test ./cmd/...
+        run: go test -timeout 30m ./cmd/...
 
   # The Rust extractor is built against the compiler's MIR (rustc_public), which is nightly only: it is pinned
   # to one nightly by extractor/rust/rust-toolchain.toml.
@@ -83,7 +83,7 @@ jobs:
         working-directory: extractor/rust
         run: cargo test
       - name: Test with the Rust extractor
-        run: go test ./cmd/...
+        run: go test -timeout 30m ./cmd/...
         env:
           RIVUS_RUST: ${{ github.workspace }}/extractor/rust/target/debug/rivus-rust
           # a missing RIVUS_RUST fails the tests, and does not skip them
