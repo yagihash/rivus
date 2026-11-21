@@ -11,7 +11,6 @@
 //! @todo(F/conv/struct-field-boxed: PARITY: the sinks that name a field of a structure (`parts`) are measured in Go first; a Rust struct can have the same fields, stage 6 of docs/DESIGN-field-sinks.md)
 //! @todo(F/conv/struct-field-opaque: PARITY: the sinks that name a field of a structure (`parts`) are measured in Go first; a Rust struct can have the same fields, stage 6 of docs/DESIGN-field-sinks.md)
 //! @na(F/dyn/iface-assert-ptr-recv: Go's type assertion of `any` to an interface read through a pointer receiver; Rust has neither)
-//! @todo(F/dyn/fprint-writer-own: PARITY: `fmt.Fprint` to a writer of the project is Go's; the Rust counterpart (`write!` to an `impl io::Write` of the project) can be written)
 //! @todo(F/dyn/sanitizer-own-impl: PARITY: not written for Rust yet; a trait method can be a sanitizer, and the engine reads an implementation of a sanitizer's trait the same way in every language)
 pub mod call {
     pub mod depth3;
@@ -52,6 +51,7 @@ pub mod dyns {
     pub mod sink_behind_own_interface;
     pub mod sink_in_method;
     pub mod sink_in_method_iface;
+    pub mod fprint_writer_own;
     pub mod stdlib_writer_own;
     pub mod stdlib_writer_own_static;
     pub mod xtalk_n_by_m;
