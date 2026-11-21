@@ -8,6 +8,9 @@ import 'package:zoo_mark/zoo_mark.dart';
 void register() {
   zooCase('F/dart/closure-to-sdk/vuln', vuln);
   zooCase('F/dart/closure-to-sdk/vuln2', vuln2);
+  zooCase('F/dart/closure-to-sdk/vuln3', vuln3);
+  zooCase('F/dart/closure-to-sdk/vuln4', vuln4);
+  zooCase('F/dart/closure-to-sdk/vuln5', vuln5);
   zooCase('F/dart/closure-to-sdk/fixed', fixed);
   zooCase('F/dart/closure-to-sdk/decoy', decoy);
 }
@@ -30,6 +33,37 @@ Future<void> vuln2() async { // @vuln
     done.complete();
   });
   await done.future;
+}
+
+Future<void> vuln3() async { // @vuln
+  final t = src('dart-closure-to-sdk-vuln3'); // @source(dart-closure-to-sdk-vuln3)
+  final done = Completer<void>();
+  Future.microtask(() {
+    sinkCmd(t); // @sink(dart-closure-to-sdk-vuln3)
+    done.complete();
+  });
+  await done.future;
+}
+
+Future<void> vuln4() async { // @vuln
+  final t = src('dart-closure-to-sdk-vuln4'); // @source(dart-closure-to-sdk-vuln4)
+  final done = Completer<void>();
+  Future.delayed(Duration.zero, () {
+    sinkCmd(t); // @sink(dart-closure-to-sdk-vuln4)
+    done.complete();
+  });
+  await done.future;
+}
+
+class Button {
+  Button({required this.onPressed});
+  final void Function() onPressed;
+}
+
+void vuln5() { // @vuln
+  final t = src('dart-closure-to-sdk-vuln5'); // @source(dart-closure-to-sdk-vuln5)
+  final b = Button(onPressed: () => sinkCmd(t)); // @sink(dart-closure-to-sdk-vuln5)
+  b.onPressed();
 }
 
 Future<void> fixed() async { // @fixed
