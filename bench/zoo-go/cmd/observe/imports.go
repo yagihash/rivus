@@ -30,6 +30,7 @@ import (
 	_ "zoo/cells/dyn/iface_val_recv"
 	_ "zoo/cells/dyn/method_value"
 	_ "zoo/cells/dyn/method_value_iface"
+	_ "zoo/cells/dyn/sink_behind_own_interface"
 	_ "zoo/cells/dyn/sink_in_method"
 	_ "zoo/cells/dyn/sink_in_method_iface"
 	_ "zoo/cells/dyn/stdlib_writer_own"

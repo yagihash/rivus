@@ -36,6 +36,7 @@ pub mod dyns {
     pub mod iface_val_recv;
     pub mod method_value;
     pub mod method_value_iface;
+    pub mod sink_behind_own_interface;
     pub mod sink_in_method;
     pub mod sink_in_method_iface;
     pub mod stdlib_writer_own;

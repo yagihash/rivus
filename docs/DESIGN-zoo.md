@@ -360,6 +360,7 @@ source は 2 種(戻り値: `src(tag)`、引数の型: `In`)。**既定は戻り
 | R-02 / CORE-K | conv/buffer-writestring、buffer-fprintf、表 S の propagator の行 |
 | R-03 | 表 S の pure の行(機械で出る) |
 | R-04 | dyn/stdlib-writer-own、stdlib-error-own、http-middleware-chain |
+| R-11 | dyn/sink-behind-own-interface(自前のインターフェース越しの sink。vuln2 は標準の `database/sql`) |
 | R-08 | ctl/builtin-unsupported、panic-recover |
 | R-14 | Dart tearoff-instance |
 | R-15 | Dart patterns-record、for-in |

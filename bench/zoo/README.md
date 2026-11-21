@@ -114,9 +114,9 @@ The rest is as for Go (steps 3 and 4 above). Things that are Dart's:
 * Flutter itself is not in the zoo: `build`, `onPressed` and the state store are written as small skeletons in the cell (`state/provider-store`, `dart/tearoff-instance` `vuln3`).
 * A pubspec.lock is committed for `cells` and `exec`; CI resolves both with `dart pub get --enforce-lockfile`.
 
-Stage 2 has 32 cells: **24 common forms** (the first 14 below, then 10 that came with the closure and global-variable cells of all three languages, see "Closure and global cells" at the end), which have the name of the Go cell (`call/direct`, `call/direct-in`, `call/depth3`, `call/multiret`,
+Stage 2 has 33 cells: **25 common forms** (the first 14 below, and `dyn/sink-behind-own-interface`, then 10 that came with the closure and global-variable cells of all three languages, see "Closure and global cells" at the end), which have the name of the Go cell (`call/direct`, `call/direct-in`, `call/depth3`, `call/multiret`,
 `clos/inline`, `clos/returned`, `clos/to-own-helper`, `cont/slice` (a list), `cont/map-key-vs-value`, `state/global-direct`,
-`state/handler-then-reader`, `state/receiver-field-across-entries`, `guard/sanitize-before`, `guard/one-branch`), written in Dart's own words, so that
+`state/handler-then-reader`, `state/receiver-field-across-entries`, `guard/sanitize-before`, `guard/one-branch`, `dyn/sink-behind-own-interface`), written in Dart's own words, so that
 the difference between the languages is read from one table; and **8 Dart forms** (`dart/patterns-record` (also the variables of a for-in),
 `dart/tearoff-instance`, `dart/interp-tostring`, `dart/super-mixin-impl`, `state/provider-store`, `dart/flutter-field-read`,
 `dart/flutter-override-arg`, `dart/flutter-route-args`), each with `// @na(go: <why>)` in its first lines: the form does not exist in the other language.
