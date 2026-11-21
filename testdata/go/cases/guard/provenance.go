@@ -131,3 +131,18 @@ func ComparedField() {
 	s := lib.Source()                // @source(cmp)
 	lib.Sink(renderEsc(c.n == 3, s)) // @sink(cmp)
 }
+
+// A loop that steps the value: the values are not 1 and 8 only, so the
+// tracing says it does not know.
+func SteppedInLoop(k int) {
+	a := 1
+	for i := 0; i < k; i++ {
+		b := a
+		if i == 3 {
+			b = 7
+		}
+		a = b + 1
+	}
+	s := lib.Source()     // @source(loopstep)
+	lib.Sink(level(a, s)) // @sink(loopstep)
+}

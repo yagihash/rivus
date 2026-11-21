@@ -704,6 +704,7 @@ func TestProvenanceTellsNoValueThatIsNotKnown(t *testing.T) {
 		{"@sink(ident)", []val{{"true", CertaintyLiteral}}},
 		{"@sink(addr)", nil},
 		{"@sink(cmp)", []val{{"true", CertaintyLiteral}}},
+		{"@sink(loopstep)", []val{{"1", CertaintyLiteral}}}, // the first value only, and the rest said unresolved
 	} {
 		p := provenanceOf(t, tc.marker)
 		var got []val
@@ -713,7 +714,7 @@ func TestProvenanceTellsNoValueThatIsNotKnown(t *testing.T) {
 		if fmt.Sprint(got) != fmt.Sprint(tc.want) {
 			t.Errorf("%s: resolved %v, want %v (%+v)", tc.marker, got, tc.want, p)
 		}
-		if tc.want == nil && len(p.Unresolved) == 0 {
+		if (tc.want == nil || tc.marker == "@sink(loopstep)") && len(p.Unresolved) == 0 {
 			t.Errorf("%s: nothing resolved and nothing unresolved: %+v", tc.marker, p)
 		}
 	}

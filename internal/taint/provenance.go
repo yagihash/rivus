@@ -54,10 +54,14 @@ type tracer struct {
 	res    *Provenance
 	nodes  int
 	keys   map[string]bool
-	inPath map[*sg.Value]bool
+	inPath map[*sg.Value]int
+	// opDepth is how many operations are being worked out around the
+	// current point; a loop that is cut with a greater depth than it was
+	// entered at goes through an operation.
+	opDepth int
 	// objPath are the (object, field) pairs being followed, to cut a loop
 	// of calls that hand the same object on.
-	objPath map[objKey]bool
+	objPath map[objKey]int
 	// frame, when set, collects the values the tracing of an operand of an
 	// operation reaches, instead of reporting them: they are not the value
 	// of the operation.
@@ -180,12 +184,13 @@ func (t *tracer) walk(v *sg.Value, fn *sg.Func, chain []string, site ir.Pos, dep
 		return
 	}
 	if t.inPath == nil {
-		t.inPath = map[*sg.Value]bool{}
+		t.inPath = map[*sg.Value]int{}
 	}
-	if t.inPath[v] {
-		return // a loop
+	if d, ok := t.inPath[v]; ok {
+		t.cutLoop(d, v.Pos, chain)
+		return
 	}
-	t.inPath[v] = true
+	t.inPath[v] = t.opDepth
 	defer delete(t.inPath, v)
 
 	switch v.Kind {
@@ -271,6 +276,16 @@ func (t *tracer) walk(v *sg.Value, fn *sg.Func, chain []string, site ir.Pos, dep
 	}
 }
 
+// cutLoop is a value reached again while it is being followed. A loop of
+// copies adds no value, so it is cut quietly; a loop through an operation
+// (a counter that is stepped) has values the tracing does not enumerate, so
+// the frame it is in fails: the set of values must not be told as complete.
+func (t *tracer) cutLoop(enteredAt int, pos ir.Pos, chain []string) {
+	if t.opDepth > enteredAt {
+		t.stop(KindDepthLimit, "a loop goes through an operation: its values are not worked out", "", pos, chain, nil)
+	}
+}
+
 // derived traces the operands of an operation on their own and folds the
 // operation over the constants they reach. The result is told only when every
 // operand reaches constants and the operation can be computed on them; else
@@ -282,6 +297,8 @@ func (t *tracer) derived(v *sg.Value, ops []*sg.Value, what string, fn *sg.Func,
 		return
 	}
 	outer := t.frame
+	t.opDepth++
+	defer func() { t.opDepth-- }()
 	all := make([][]capVal, len(ops))
 	complete, said := true, false
 	for i, o := range ops {
@@ -574,12 +591,13 @@ func (t *tracer) walkObject(base *sg.Value, field string, read *sg.Value, fn *sg
 	}
 	k := objKey{base, field}
 	if t.objPath == nil {
-		t.objPath = map[objKey]bool{}
+		t.objPath = map[objKey]int{}
 	}
-	if t.objPath[k] {
-		return // a loop
+	if d, ok := t.objPath[k]; ok {
+		t.cutLoop(d, base.Pos, chain)
+		return
 	}
-	t.objPath[k] = true
+	t.objPath[k] = t.opDepth
 	defer delete(t.objPath, k)
 	chain = append(chain, "."+field)
 	switch {
