@@ -1,9 +1,27 @@
 name: CI
 
+# A change of only Markdown that no test reads does not run CI (paths-ignore, the same list for both). Not in the list
+# on purpose: bench/BACKTEST.md, bench/LEDGER.md and bench/ledger-header.md (bench/test_backtest.py checks them).
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "README.md"
+      - "docs/**"
+      - "examples/**/*.md"
+      - "extractor/*/README.md"
+      - "bench/**/README.md"
+      - "bench/MISSES.md"
+      - "bench/gitea-cve-paths.md"
   pull_request:
+    paths-ignore:
+      - "README.md"
+      - "docs/**"
+      - "examples/**/*.md"
+      - "extractor/*/README.md"
+      - "bench/**/README.md"
+      - "bench/MISSES.md"
+      - "bench/gitea-cve-paths.md"
 
 permissions: {}
 
