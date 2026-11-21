@@ -105,3 +105,13 @@ type Store struct{}
 
 // Run runs the request.
 func (*Store) Run(r *Req) {}
+
+// SinkReqVal runs the request that it is given by value: the Q of it is the sink (the shape of every Cloud Spanner
+// call, which takes the Statement by value).
+func SinkReqVal(r Req) {}
+
+// OpaqueRewrite is a function that has no model and takes the request by value and returns it.
+func OpaqueRewrite(r Req) Req { return r }
+
+// ReadInto reads into the variables that it is given (the model sends the first argument to them).
+func ReadInto(src string, dst ...*string) {}

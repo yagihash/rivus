@@ -902,6 +902,12 @@ func (s *state) applyFlows(cc *callCtx, flows []model.Flow, o *op, desc string, 
 					}
 				}
 				dsts = append(dsts, here...)
+				// a variadic destination: the pointers that were stored in the slice the call was given
+				// (row.Columns(&a, &b)) are where the data goes, as for a source that fills its arguments
+				for _, e := range s.variadicElems(v) {
+					dsts = append(dsts, s.locs(e)...)
+					dsts = append(dsts, s.pointeeOfInterface(e)...)
+				}
 			}
 		}
 		for _, d := range dsts {

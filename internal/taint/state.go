@@ -645,6 +645,9 @@ func (s *state) copyLocs(src []Loc, dst []Loc, kind string, in *sg.Instr) {
 
 // copyLocsNoted is copyLocs with an uncertainty attached to the hop.
 func (s *state) copyLocsNoted(src []Loc, dst []Loc, kind string, in *sg.Instr, note *Uncertainty) {
+	if len(s.opaque) > 0 {
+		s.carryOpaque(src, dst)
+	}
 	for _, d := range dst {
 		for _, sl := range src {
 			s.copyLoc(sl, d, s.whyNote(in, kind, note))

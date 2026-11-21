@@ -208,3 +208,62 @@ func Method(s *lib.Store) {
 	r := &lib.Req{Q: lib.Source()} // @source(method)
 	s.Run(r)                       // @sink(method)
 }
+
+// --- the address of a variable goes to a function that is not read, and the value of the variable goes to a sink
+// that takes it by value (the shape of every Cloud Spanner call). The mark that a function that is not read had the
+// value is on the variable (the memory), and a read of the variable by value carries it. ---
+
+func ValAfterPtr() {
+	r := lib.Req{Meta: lib.Source()} // @source(valafterptr)
+	lib.Opaque(&r)
+	lib.SinkReqVal(r) // @sink(valafterptr)
+}
+
+func ValAfterPtrAssign() {
+	r := lib.Req{}
+	r.Meta = lib.Source() // @source(valafterptrassign)
+	lib.Opaque(&r)
+	lib.SinkReqVal(r) // @sink(valafterptrassign)
+}
+
+func ValAfterPtrVar() {
+	r := lib.Req{Meta: lib.Source()} // @source(valafterptrvar)
+	p := &r
+	lib.Opaque(p)
+	lib.SinkReqVal(*p) // @sink(valafterptrvar)
+}
+
+func moveReq(r *lib.Req) { lib.Opaque(r) }
+
+func ValAfterPtrInside() {
+	r := lib.Req{Meta: lib.Source()} // @source(valafterptrinside)
+	moveReq(&r)
+	lib.SinkReqVal(r) // @sink(valafterptrinside)
+}
+
+func ValAfterPtrNew() {
+	r := new(lib.Req)
+	r.Meta = lib.Source() // @source(valafterptrnew)
+	lib.Opaque(r)
+	lib.SinkReqVal(*r) // @sink(valafterptrnew)
+}
+
+// a value that is given and returned
+func ValRewrite() {
+	r := lib.Req{Meta: lib.Source()} // @source(valrewrite)
+	r = lib.OpaqueRewrite(r)
+	lib.SinkReqVal(r) // @sink(valrewrite)
+}
+
+// decoys: nothing that is not read had the variable, or it had another one
+func ValAfterPtrDecoy() {
+	r := lib.Req{Meta: lib.Source()}
+	lib.SinkReqVal(r)
+}
+
+func ValAfterPtrOther() {
+	r := lib.Req{Meta: lib.Source()}
+	o := lib.Req{}
+	lib.Opaque(&o)
+	lib.SinkReqVal(r)
+}

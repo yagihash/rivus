@@ -10,6 +10,9 @@ import (
 
 func TestFieldSinksFindings(t *testing.T) { checkCase(t, "fieldsink") }
 
+// A model that sends data into a variadic destination reaches what the pointers in the slice point to.
+func TestFlowIntoVariadicDestination(t *testing.T) { checkCase(t, "variadicdst") }
+
 // TestFieldSinksSayWhenTheFieldIsNotTold holds the uncertainty of each finding: a flow that is told to be in the
 // field has none; one that may be in it, but the value does not tell, has field_imprecision (with its
 // why); a name the program does not have is field_unresolved. It holds the composition through the
@@ -52,6 +55,13 @@ func TestFieldSinksSayWhenTheFieldIsNotTold(t *testing.T) {
 		"opaque":       KindFieldImprecision + ":opaque_callee",
 		"opaqueinside": KindFieldImprecision + ":opaque_callee",
 		"misspelled":   KindFieldUnresolved,
+		// the address goes to a function that is not read, the value goes to a sink that takes it by value
+		"valafterptr":       KindFieldImprecision + ":opaque_callee",
+		"valafterptrassign": KindFieldImprecision + ":opaque_callee",
+		"valafterptrvar":    KindFieldImprecision + ":opaque_callee",
+		"valafterptrinside": KindFieldImprecision + ":opaque_callee",
+		"valafterptrnew":    KindFieldImprecision + ":opaque_callee",
+		"valrewrite":        KindFieldImprecision + ":whole_value",
 	}
 	for tg, w := range want {
 		if !seen[tg] {

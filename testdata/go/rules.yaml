@@ -181,6 +181,10 @@ sinks:
     args: [0]
     field: Qq
     category: test
+  - symbol: example.com/cases/lib.SinkReqVal
+    args: [0]
+    field: Q
+    category: test
   - symbol: (*example.com/cases/lib.Store).Run
     parts:
       - {arg: 0, field: Q}
@@ -218,6 +222,8 @@ propagators:
   - symbol: example.com/cases/lib.Each
     pure: true
     calls: [{fn: arg1, with: [arg0]}]
+  - symbol: example.com/cases/lib.ReadInto
+    flows: [{from: arg0, to: arg1}]
   - symbol: example.com/cases/lib.Later
     pure: true
     calls: [{fn: arg0, mode: go}]

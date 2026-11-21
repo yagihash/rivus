@@ -15,25 +15,19 @@ import (
 
 // gcpKnownMisses are the cases of bench/gcp that rivus does not find, with the reason: a ratchet (the test fails
 // the day it is found, and the entry is to be taken out).
-var gcpKnownMisses = map[string]string{
-	// a propagator's flow into a variadic destination (row.Columns(&a)) does not reach the pointee of the
-	// elements of the slice: the flow into an argument that is not variadic (ColumnByName, ToStruct) does.
-	"ReadColumns": "the flow of a propagator into a variadic destination",
-	// the address of a Statement goes to a function that is not read (it may move a parameter to the SQL), and the
-	// Statement is given to the sink by value, as every Spanner call does: the root that the call leaves is not
-	// followed through the copy. The same call before a sink that takes the pointer is reported with
-	// field_imprecision (opaque_callee), and so is a function that takes the Statement by value and returns it
-	// (URewrite below). Found with a small project outside bench/gcp: the exec_test.go runs both and the value
-	// does reach the SQL, so this is a miss and not a quiet decoy.
-	"UOpaque":       "an unread function that takes the address of a Statement, then the Statement is copied into the sink",
-	"UOpaqueAssign": "the same, the parameter set by an assignment",
-}
+var gcpKnownMisses = map[string]string{}
 
 // gcpUncertain are the cases that are reported with a field_imprecision of a known why: how a form is reported
 // today. The day the engine says more (a path in `to:` of flows, stage 5 of docs/DESIGN-field-sinks.md), the test is
 // red, and the change is seen.
 var gcpUncertain = map[string]string{
 	"URewrite": "whole_value",
+	// the address of a Statement goes to a function that is not read (it may move a parameter to the SQL), and the
+	// Statement is given to the sink by value, as every Spanner call does: the mark that the function had the
+	// variable is on the variable, and the copy of it by value carries the mark (opaque_callee). It was a miss.
+	// exec_test.go runs both and the value does reach the SQL.
+	"UOpaque":       "opaque_callee",
+	"UOpaqueAssign": "opaque_callee",
 }
 
 // TestGCPRows is the gate of the dead rows of the Google Cloud model (internal/model/builtin/go-gcp.yaml) and of

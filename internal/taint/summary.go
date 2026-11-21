@@ -54,7 +54,9 @@ type Summary struct {
 	Func    string
 	Outputs []Output
 	Sinks   []*SinkReach
-	Sig     string
+	// Opaque are the parameters whose memory a function that is not read had (opaqueParams)
+	Opaque []int
+	Sig    string
 }
 
 // summarize turns the final state of the analysis into a summary.
@@ -147,6 +149,7 @@ func (s *state) summarize() *Summary {
 	for _, k := range keys {
 		sum.Sinks = append(sum.Sinks, s.sinkReaches[k])
 	}
+	sum.Opaque = s.opaqueParams()
 	sum.Sig = sum.signature()
 	return sum
 }
@@ -218,6 +221,9 @@ func (sum *Summary) signature() string {
 	}
 	for _, k := range sum.Sinks {
 		parts = append(parts, "sink", k.Site, k.Elem.String(), guardsKey(k.Guards), k.Field, strconv.FormatBool(k.Unsure))
+	}
+	for _, i := range sum.Opaque {
+		parts = append(parts, "opaque", strconv.Itoa(i))
 	}
 	return fingerprint.Hash(parts...)
 }
@@ -345,6 +351,11 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 	s.recvBoxed = cc.in.Callee != nil && cc.in.Callee.Kind == ir.CalleeDynamic && cc.recv != nil && !pointerLike(cc.recv) &&
 		len(fn.Params) > 0 && pointerLike(fn.Params[0])
 	defer func() { s.collectMemo, s.expandMemo, s.recvBoxed = nil, nil, false }()
+	for _, i := range sum.Opaque {
+		if i < len(argv) {
+			s.markOpaque(argv[i])
+		}
+	}
 	for _, o := range sum.Outputs {
 		var dsts []Loc
 		switch o.Kind {
@@ -627,6 +638,16 @@ func joinSummaries(old, cur *Summary) *Summary {
 	for _, k := range skeys {
 		out.Sinks = append(out.Sinks, sinks[k])
 	}
+	seen := map[int]bool{}
+	for _, sum := range []*Summary{old, cur} {
+		for _, i := range sum.Opaque {
+			if !seen[i] {
+				seen[i] = true
+				out.Opaque = append(out.Opaque, i)
+			}
+		}
+	}
+	sort.Ints(out.Opaque)
 	out.Sig = out.signature()
 	return out
 }

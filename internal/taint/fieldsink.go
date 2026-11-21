@@ -2,6 +2,7 @@ package taint
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/yagihash/rivus/internal/ir"
@@ -150,23 +151,69 @@ func (s *state) touchedByOpaque(v *sg.Value) bool {
 // adds no taint: the only thing that reads it is a sink that names a part (touchedByOpaque).
 func (s *state) noteOpaque(cc *callCtx) {
 	for _, v := range cc.argv() {
-		if v == nil {
-			continue
-		}
-		switch v.Class {
-		case ir.ClassPointer, ir.ClassContainer, ir.ClassInterface, ir.ClassStruct:
-		default:
-			continue
-		}
-		roots := append(append([]Loc(nil), s.locs(v)...), s.pointeeOfInterface(v)...)
-		for _, l := range roots {
-			if !s.opaque[l.Root] {
-				if s.opaque == nil {
-					s.opaque = map[Root]bool{}
-				}
-				s.opaque[l.Root] = true
-				s.changed = true
+		s.markOpaque(v)
+	}
+}
+
+// markOpaque marks the memory that the value gives a function that is not read: see noteOpaque.
+func (s *state) markOpaque(v *sg.Value) {
+	if v == nil {
+		return
+	}
+	switch v.Class {
+	case ir.ClassPointer, ir.ClassContainer, ir.ClassInterface, ir.ClassStruct:
+	default:
+		return
+	}
+	roots := append(append([]Loc(nil), s.locs(v)...), s.pointeeOfInterface(v)...)
+	for _, l := range roots {
+		if !s.opaque[l.Root] {
+			if s.opaque == nil {
+				s.opaque = map[Root]bool{}
 			}
+			s.opaque[l.Root] = true
+			s.changed = true
+		}
+	}
+}
+
+// opaqueParams are the parameters of the function whose memory a function that is not read had: the summary says
+// it, and a caller marks what it passed (applySummary), as the call had been made there.
+func (s *state) opaqueParams() []int {
+	var out []int
+	for r := range s.opaque {
+		if idx, ok := s.paramRoot[r]; ok {
+			out = append(out, idx)
+		}
+	}
+	sort.Ints(out)
+	return out
+}
+
+// carryOpaque makes a read of a memory cell that a function that is not read had (noteOpaque) carry the mark to
+// the value that is made of it: the mark is on the cell (the variable, what the address points to), and a copy of
+// the variable by value (the argument of a sink that takes the structure by value) is made of the same memory. A
+// value that is not a structure (a string, a number) is no place for a part of a structure to be moved to, and a
+// pointer is the same cell (locs), so only the values that hold fields are marked.
+func (s *state) carryOpaque(src []Loc, dst []Loc) {
+	from := false
+	for _, l := range src {
+		if s.opaque[l.Root] {
+			from = true
+			break
+		}
+	}
+	if !from {
+		return
+	}
+	for _, d := range dst {
+		if d.Path != "" || d.Root.V == nil || d.Root.Idx >= 0 || s.opaque[d.Root] {
+			continue
+		}
+		switch d.Root.V.Class {
+		case ir.ClassStruct, ir.ClassContainer, ir.ClassInterface:
+			s.opaque[d.Root] = true
+			s.changed = true
 		}
 	}
 }
