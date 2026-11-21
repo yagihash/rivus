@@ -115,3 +115,6 @@ func OpaqueRewrite(r Req) Req { return r }
 
 // ReadInto reads into the variables that it is given (the model sends the first argument to them).
 func ReadInto(src string, dst ...*string) {}
+
+// Subscribe calls f with a context and a message (the model has calls, the message is the second position).
+func Subscribe(ctx, msg string, f func(ctx, m string)) { f(ctx, msg) }

@@ -224,6 +224,9 @@ propagators:
     calls: [{fn: arg1, with: [arg0]}]
   - symbol: example.com/cases/lib.ReadInto
     flows: [{from: arg0, to: arg1}]
+  - symbol: example.com/cases/lib.Subscribe
+    pure: true
+    calls: [{fn: arg2, with: [arg0, arg1]}]
   - symbol: example.com/cases/lib.Later
     pure: true
     calls: [{fn: arg0, mode: go}]

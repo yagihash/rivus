@@ -55,7 +55,7 @@ Google Cloud は、何を「外からの入力」と数えるかが製品ごと�
 | P11 | 管理: `CreateSubscription` / `ModifyPushConfig` / `UpdateSubscription` の `PushConfig.PushEndpoint`(v1 の手書きは `SubscriptionConfig.PushConfig.Endpoint`) | **sink**、`ssrf`(基盤が、その URL に、メッセージを送る。攻撃者の URL に流れる) | `parts`(`pubsubpb.Subscription` と `ModifyPushConfigRequest` の `PushConfig.PushEndpoint`。v1 と v2 で別のシンボル) | 低い優先。メンテナの使い方では少ない。**未確認** |
 | P12 | **依存の中の時間**(grpc と gax の `invoke`) | source でも sink でもない。**費用の行** | なし(**モデルで依存の中を切らない**) | Spanner と BigQuery の `bench/gcp`: 42〜45 秒、3.4〜4.1 GB、時間の 99.7% が依存。grpc が 10.5 秒(2,259 回の再解析)、gax の `invoke` が 356ms。Pub/Sub を足したときの数字は、別のエージェントが測る。**速くする作業は、結果が同一であること**(`pure` を、実行で確かめずに足して、依存の本体を飛ばさない) |
 
-**P1 の `calls:` を使わない理由(確かめた)。** `Receive` の `calls:` 行(`fn: arg1`、`with: [recv]`)と、`Client.Subscription(id)` の結果の `call_result` source で、コールバックの引数に流す形を試した。小さい自前のライブラリでは当たったが、**実際の Pub/Sub では、v1 も v2 も当たらなかった**(原因は未調査: シンボルは IR のものと一致している)。`param_type` は当たる。ただし、`calls:` の形は、送る側の関数の引数を汚さないので、当たれば、より正確。**原因を調べるのは、YAML の段**(判断 B)。
+**P1 の `calls:` の行(原因が分かった。確かめた)。** `Receive` の `calls:` 行を `fn: arg1`、`with: [recv]` と書くと、実際の Pub/Sub(v1、v2)で当たらなかった。**原因は、エンジンでもシンボルでもなく、行の書き方**: `with` は、コールバックの**パラメータを先頭から順に**埋める。コールバックは `func(ctx context.Context, m *Message)` で、`[recv]` は第 1 パラメータの `ctx` に入り、`m` には何も入らない。小さい自前のライブラリのコールバックは、パラメータが 1 つだったので当たった。`with: [arg0, recv]`(`arg0` は `ctx`)と書くと、v1 の `Subscription.Receive`、v2 の `Subscriber.Receive` ともに当たる(確認: 試験用のプロジェクトで、コールバックの中の `exec.Command("sh", "-c", string(m.Data))` と `m.Attributes[...]` に finding が出て、送る側の関数 `send(m *Message)` の `m.Data` には出ない = `param_type` のノイズがない)。モデルと本体は、`calls:` の行がある関数では、**モデルが勝ち**、依存の本体は読まれない(`Receive` の本体のゴルーチンやチャネルは関係しない)。組み込みの `calls:` の行(Go、Dart、Rust)は、どれもコールバックのパラメータが 1 つか、`with` が全部を埋めており、同じ書き間違いはない。**YAML の段で、`calls:` に乗り換える**(判断 B)。試験: `testdata/go/cases/callbacks` の `SecondParameter`、`FirstParameterDecoy`。
 
 ## 2. Functions と Cloud Run(イベントと HTTP の入口)
 
@@ -91,7 +91,7 @@ ID トークンの検証と、復号したクレーム。ラベルを決める(�
 | | 問い | 案 |
 |---|---|---|
 | A | `queue_message` を、組み込みの既定で入れるか | **入れない**(全製品で `stored` と同じ選択。ファイル 1 つ)。理由: トピックが内部専用なら、全部が偽陽性。組み込みには、sink と `flows` だけ |
-| B | Pub/Sub の入口を、`param_type`(確認済み、ノイズあり)にするか、`calls:`(正確だが、実際の Pub/Sub では当たらなかった。原因は未調査)にするか | まず `param_type`。`calls:` は、原因を調べて、当たるなら乗り換える(ノイズが消える) |
+| B | Pub/Sub の入口を、`param_type`(確認済み、ノイズあり)にするか、`calls:`(正確。`with: [arg0, recv]` と書けば実際の Pub/Sub で当たる。P1 の注)にするか | `calls:` に乗り換える(ノイズが消える)。YAML の段 |
 | C | 「関数を登録する呼び出しが、渡された関数の引数を入口にする」道具(`functions.Typed`、第 1 世代の関数、`Receive` のような API を、利用者の型でも) | エンジンの変更(`flows` の `to:` の道と並ぶ大きさ)。ADR が要る。入れるまで、利用者が自分の型を `param_type` で書く |
 | D | **エンジンの見逃し**: 構造体を、**ポインタで**、読んでいない関数に渡し、あとで、**値で** sink に渡すと、黙った | **直した**(ADR-084。7 節) |
 | E | トピック、バケットなどの**名前**が入力のとき(別のプロジェクトのリソースを指せる)のカテゴリ | 今のカテゴリ(6 つ)に当たらない。新しいカテゴリ(`resource_name`)を作るか、作らないか。**作るまで sink にしない** |

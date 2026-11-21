@@ -54,3 +54,21 @@ func NotKnown() {
 	out := Wrapper(func(s string) string { return "constant" }, src)
 	lib.Sink(out) // @sink(cb_unknown)
 }
+
+// A callback that takes more than the one value (the shape of Receive(ctx, func(ctx, msg)) of a message queue
+// client): `with` is parameter by parameter, so a row that names only the message puts it in the first parameter
+// (the context). The row of lib.Subscribe names both positions, and the message arrives in the second.
+func SecondParameter() {
+	src := lib.Source() // @source(cb_second)
+	lib.Subscribe("context", src, func(ctx, m string) {
+		lib.Sink(m) // @sink(cb_second)
+	})
+}
+
+// The value of the first position is not the message: the row puts it in the first parameter only.
+func FirstParameterDecoy() {
+	src := lib.Source()
+	lib.Subscribe(src, "message", func(ctx, m string) {
+		lib.Sink(m) // @sink(none)
+	})
+}

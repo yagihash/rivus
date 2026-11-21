@@ -67,7 +67,7 @@ called, with what, and where its result goes; rivus then reads the callback at t
 - symbol: strings.Map
   calls:
     - fn: arg0              # the argument that is called (recv or argN; the receiver is not counted in argN)
-      with: [arg1]          # what it is called with, parameter by parameter (recv, argN). Nothing: nothing flows in
+      with: [arg1]          # what it is called with, parameter by parameter (recv, argN): the first entry is the first parameter of the callback, so a callback of (ctx, msg) needs [arg0, recv], not [recv]. Nothing: nothing flows in
       ret: result0          # where what it returns goes (result, resultN, recv, argN). Nothing: it is dropped
       throw: result1        # where what it throws goes (the same). Nothing: it is thrown out of the caller
       writes: {0: arg2}     # where what it writes through its parameter 0 goes, besides the value it was given
