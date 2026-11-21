@@ -50,6 +50,11 @@ dart	conv/struct_field_opaque.dart	sink-none	@sink(none)	void fixed() { @fixed
 dart	conv/struct_field_opaque.dart	sink-none	@sink(none) @nosink(conv-struct-field-opaque-decoy)	void decoy() { @decoy
 dart	conv/struct_field_shallow.dart	sink-none	@sink(none)	void fixed() { @fixed
 dart	conv/struct_field_shallow.dart	sink-none	@sink(none) @nosink(conv-struct-field-shallow-decoy)	void decoy() { @decoy
+dart	dart/callable_class.dart	miss	@source(dart-callable-class-decoy) @miss(unresolved_callee) @ref(#97)	void decoy() { @decoy
+dart	dart/callable_class.dart	miss	@source(dart-callable-class-vuln) @miss(unresolved_callee) @ref(#97)	void vuln() { @vuln
+dart	dart/callable_class.dart	na	@na(go: a value of a Go type has no `call` method; a func value is the nearest, and F/clos has it)	-
+dart	dart/callable_class.dart	sink-none	@sink(none)	void vuln() { @vuln
+dart	dart/callable_class.dart	sink-none	@sink(none) @nosink(dart-callable-class-decoy)	void fixed() { @fixed
 dart	dart/flutter_field_read.dart	na	@na(go: no such form; the framework's field that holds what the user typed)	-
 dart	dart/flutter_field_read.dart	sink-none	@sink(none)	void fixed() { @fixed
 dart	dart/flutter_field_read.dart	sink-none	@sink(none) @nosink(dart-flutter-field-read-decoy)	void decoy() { @decoy
