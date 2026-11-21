@@ -40,21 +40,47 @@ zoo は、それを埋める。**zoo が見ないもの**は §10 に書く。
 
 ### 3.2 目印と記録の仕様(3 言語で共通)
 
-**目印(marker)**。`src(tag)` が返す文字列。`tag` はケースごとに一意(`[a-z0-9-]+`)。目印は、sink の種類(クラス)ごとの**セグメント**の連結:
+**目印(marker)**。`src(tag)` が返す文字列。`tag` はケースごとに一意(`[a-z0-9-]+`)。目印は、sink のクラスごとの**セグメント**の連結:
 
 ```
 Z<tag>.SH[;|$]  Z<tag>.SQL[']  Z<tag>.HTML[<>&]  Z<tag>.PATH[../]
 ```
 
-(実際は区切りなしの連結。見やすさのために空白を入れた)。クラスは `Cmd`(SH)、`SQL`、`HTML`、`Path`(PATH)、`Any`。`[...]` の中が、そのクラスにとって危険な文字。**sink は、自分のクラスのセグメントが、そのままの形で届いたとき「届いた(reached)」と記録する**。サニタイザ(`CleanCmd` など。危険な文字の集合を `_` に置き換える)を通ると、セグメントが壊れるので、届かない。HTML のエスケープ(`&lt;`)を通ったあと `SinkCmd` に行く形は、SH のセグメントが無傷なので、届く(= 出るべき。「種類の違うサニタイザ」)。
+(実際は区切りなしの連結。見やすさのために空白を入れた)。クラスは `Cmd`(SH)、`SQL`、`HTML`、`Path`、`Any`。`[...]` の中が、そのクラスにとって**危険な並び**。
 
-**第 2 の目印(差分用、variant 1)**。各セグメントの中身を、同じクラスの危険な文字の集合から選んだ、同じ長さの別の文字に置き換えたもの(SH は `&(` と逆引用符、SQL は `;`、HTML は `'` `"` `<`、PATH は `./.`)。ケースを variant 0 と 1 で別のプロセスとして走らせ、sink が受け取った文字列を比べる。「届いてはいないが、危険な文字の中身に依存して変わる」ものを **carry**(例: hex、base64、ハッシュ。情報は運ぶが、危険な形では届かない)と呼ぶ。carry の注釈は `@carry(tag)`。carry は、rivus が出しても出さなくてもよい(方針の問題)ので、「出る」「誤って出る」の数に入れず、別に数える。
+**「届いた(reached)」の定義: 目印の全体の一致ではなく、危険な部分の生存**。`strings.ToUpper`、`s[3:]`、`TrimPrefix`、`Split` → `Join`、無関係な文字の `Replace` で tag の部分が変わっただけでは、reached でなくならない。
 
-**3 つの結果**: `reached`(注釈は `@sink(tag)`)、`none`(`@sink(none)`、`@nosink(tag)`)、`carry`(`@carry(tag)`)。
+- reached(クラス)= **そのクラスの危険な並び(`[` `]` の中身)が、連続して無傷で、sink に届いた**こと。
+- **どの tag かの帰属**: (a) tag の文字が残っていれば、それで決める。(b) 残っていなければ、**variant 1** で危険な並びが variant 1 のものに入れ替わること(差分)で決める。variant 0 と 1 を別プロセスで走らせ、sink が受け取った文字列を比べる。
+- **クラスごとの判定は、文字の一致で足りないものがある。判定を `spec.json` にクラスごとに 1 つずつ書く**(下)。
 
-表 S のサニタイザの行などが、「宣言と実際の食い違い」を見つけるのは、ここ(sanitizer と宣言されているのに、セグメントがそのまま届く = 脆弱。rivus が出さなければ `@miss`)。
+| クラス | reached の判定(意味) | 文字の一致で足りない理由 |
+| --- | --- | --- |
+| SH | `;` `\|` `$` の並びが連続して無傷で、**引用の外**に届く | 引用符の中に入ったものは、危険でない(`quote` のサニタイザ) |
+| SQL | 引用符 `'` が、**文字列リテラルを閉じる位置**に届く(前に `\` や `''` の対がない) | `''` に置き換えたものは、閉じない |
+| HTML | `<` が、**エスケープされずに**残る(`&lt;` になっていない) | `&` を含む並びは、エスケープで形が変わる |
+| Path | sink は、**基準のディレクトリ**(`base`)を受け取り、`Clean(Join(base, 値))` が**基準の外に出る**、または `../` の並びが残る | `filepath.Join` と `Clean` は `x/../` を畳む。危険な並びは消えるが、結果は基準の外に出ている(本物の横断) |
+| Any | 上のどれか | |
 
-**記録(hit)**。sink を呼ぶたびに 1 件: `(呼び出し位置(file, line)、クラス、見えた tag の一覧、そのうち reached の一覧、受け取った文字列の写し(差分用))`。呼び出し位置は、sink を呼んだ行(Go は `runtime.Caller(1)`、Dart は `StackTrace.current` の 2 番目の frame、Rust は `#[track_caller]` と `Location::caller()`)。**注釈は sink を呼んだ行に付ける**(今の curated と同じ。rivus の finding の位置と一致する)。値の中身は、深く歩いて探す(Go は reflect で、非公開フィールド、ポインタ、スライス、map のキーと値、構造体。Dart は `dart:mirrors` で、インスタンスの変数と、コレクションと、`toString`。Rust は `Debug` の出力。目印に `"` と `\` を使わないので、Debug の出力で壊れない)。深さの上限 8、循環の検出つき。
+設計の段階で、クラスごとに「文字の一致」と「意味」が食い違う入力の表(`spec.json` の `probes`)を先に書き、3 言語の `mark` が同じ答えを出すことを自己検査する。
+
+**サニタイザ**(`CleanCmd` など)は、そのクラスの危険な文字の集合を `_` に置き換え、reached にならなくする。HTML のエスケープのあと `SinkCmd` に行く形は、SH の並びが無傷なので、reached(= 出るべき。「種類の違うサニタイザ」)。
+
+**carry(届いてはいないが、依存はある)**。差分(variant 0 と 1)で、受け取った文字列が危険な並びの中身に依存して変わるが、reached でないもの。**taint 解析が追うのはデータの依存であって、「危険な文字がそのまま残るか」ではない。宣言されたサニタイザを通っていない依存は、出るのが既定**。carry を採点の外に置くと、hex、base64、URL エスケープ、大文字化、部分文字列、書式を通る流れが「どちらでもよい」になり、`pure` に化ける退行(R-03: `hex.AppendEncode`、`(time.Time).Format`)を zoo が見逃す。だから carry は**種類に分け、種類ごとに期待を決め、採点に入れる**:
+
+| 種類 | 例 | 期待(rivus) | 注釈 |
+| --- | --- | --- | --- |
+| `carry(encode)` | hex、base64、URL エスケープ、引用、大文字・小文字、切り出し、置換、書式 | **出るべき**。出なければ `@miss`(`@sink` と同じ扱い) | `@carry(tag, encode)` |
+| `carry(digest)` | ハッシュ、HMAC | **方針の行**。今の rivus の動き(出る / 出ない)を注釈に固定する | `@carry(tag, digest)`(出ないなら、その行に `@nosink(tag)` を併記して固定) |
+| `carry(numeric)` | 長さ、`Atoi`、比較の結果 | **出ないべき + `numeric_stop` の痕跡** | `@carry(tag, numeric)` |
+
+どの種類も、**今の rivus の出方を注釈に固定する**(`encode` は出るのが正で、出なければ ratchet つきの `@miss`)。方針の行(digest)も、変わったら「真理の変更の一覧」(§3.9)に出る。**採点の外に置くものを作らない**。見出しの数字には carry の内訳を足す(§6.3)。
+
+**3 つの結果と注釈**: `reached`(`@sink(tag)`)、`none`(`@sink(none)`、`@nosink(tag)`)、`carry`(`@carry(tag, 種類)`)。
+
+表 S のサニタイザの行などが、「宣言と実際の食い違い」を見つけるのは、ここ(sanitizer と宣言されているのに、危険な並びがそのまま届く = 脆弱。rivus が出さなければ `@miss`)。
+
+**記録(hit)**。sink を呼ぶたびに 1 件: `(呼び出し位置(file, line)、クラス、見えた tag の一覧、そのうち reached の一覧、受け取った文字列の写し(差分用))`。呼び出し位置は、sink を呼んだ行(Go は `runtime.Caller(1)`、Dart は `StackTrace.current` の 2 番目の frame、Rust は `#[track_caller]` と `Location::caller()`)。**注釈は sink を呼んだ行に付ける**(今の curated と同じ。rivus の finding の位置と一致する)。型のある sink は、受け取った文字列をそのまま記録する。`SinkAny` の値だけ、深く歩く(Go は reflect で、非公開フィールド、ポインタ、スライス、map のキーと値、構造体。Dart はケース側の `toString`。Rust は `Debug` の出力。目印に `"` と `\` を使わないので、Debug の出力で壊れない)。深さの上限 8、循環の検出つき。
 
 **記録は、ケースごとに初期化しない**。tag と行が、ケースを一意に決める。順序の依存は、逆順で実行して、観測が同じことで検査する(§3.6)。
 
@@ -76,8 +102,12 @@ type In struct{ v string }
 func NewIn(tag string) In
 func (i In) Value() string
 
-// sink。受け取った値を深く歩いて、記録するだけ。何も実行しない。
-func SinkCmd(v any)   // 同じ形で SinkSQL, SinkHTML, SinkPath, SinkAny
+// sink。**既定は型のある sink**。受け取った文字列を記録するだけ。何も実行しない。
+func SinkCmd(s string)        // 同じ形で SinkSQL, SinkHTML。
+func SinkCmdBytes(b []byte)   // バイト列
+func SinkPath(base, s string) // Path は基準のディレクトリを受け取る(§3.2)
+// SinkAny(v any) は、構造体やコンテナを渡す形のマスだけが使う(reflect で歩く)。
+func SinkAny(v any)
 // サニタイザ。そのクラスの危険な文字の集合を `_` に置き換える。
 func CleanCmd(s string) string   // 同じ形で CleanSQL, CleanHTML, CleanPath
 
@@ -127,7 +157,10 @@ func decoy() { // @decoy
 - 同じ sink の呼び出し行を、複数のケースで共有してよいのは、形がそれを要求するとき(= 共有そのものが形。例: `dyn/xtalk-n-by-m`)だけ。
 - おとりは、**汚れた値の行き先を持つ**: 汚れた値は別の場所に行く。別の sink 行(`@sink(tag)`)に届くのが望ましい(エンジンが全部切る、という退化を、おとりが見逃さないため。これは「共存する流れ」と呼ぶ)。判定の対象の行が `@sink(none)`。
 - 非同期(goroutine、`select`)は、ケース自身が待つ(`sync.WaitGroup`)。待てないものは `@manual`。
-- `mark` の本体は解析される(依存として)。`rivus analyze ./cells/...` の結果が、`mark` を解析の対象に含めても含めなくても同じことを、段階 1 で確かめる(違えば、`mark` の書き方を直す)。harness(`cmd/observe`)は解析の対象に含めない(登録の `fn()` は動的な呼び出しで、全ケースの汚染源になる)。
+- **sink の既定を `any` にしない**。`SinkCmd(v any)` が既定だと、全ケースの最後の段が make_interface + reflect の深い走査になり、その扱いの誤り(CORE-J の近く)が、全マスを一斉に赤か緑に倒す。`SinkAny` は、構造体やコンテナを渡す形のマスだけ。**「構造体を丸ごと sink に渡したら、中のフィールドの汚れは届いたとみなすか」は、それ自体を 1 つのマス**(`F/cont/struct-whole-to-sink`)にする。
+- **解析が見る `mark` は、本体のない宣言だけ**。`mark` の本体(記録のグローバルへの追記、reflect)を rivus が読むと、全ケースの値が 1 つのグローバルに書かれる合流点になる(今日の `os.Stderr` と同じ形)。Go: ビルドタグ。既定(解析)は空の本体(`func SinkCmd(s string) {}`)、実行のときだけ `-tags zooexec` で本物の記録。rivus は、ルールだけで source / sink / sanitizer を与える(`symbol: zoo/mark.SinkCmd` など)。Dart / Rust も、解析の対象から `zoo_mark` / `zoo-mark` の実装を外す(実装は別ファイルにし、rivus の入力のパターンから外す。公開の宣言だけを解析に見せる)。解析の結果が、`mark` の実装の有無で変わらないことを、段階 1 で確かめる。
+- harness(`cmd/observe`)は解析の対象に含めない(登録の `fn()` は動的な呼び出しで、全ケースの汚染源になる)。**登録(`init` で関数値をグローバルの表に入れる)**は、全ケースの関数が「保存された関数値」になる。C-7(`assumed_call`)や `Reachable` に触れないこと(捕獲がないので当たらないはず)を、段階 1 の最初の表で確かめる。
+- 入口の形で `In`(引数の型の source)を使うとき、ケースの関数は引数なしなので、内側のハンドラ `h(in mark.In)` をケースが呼ぶ形になる(`h(mark.NewIn("tag"))`)。rivus から見ると source は `h` の引数、実行では `NewIn(tag)` の値で、**両者が同じ tag で対になる**。これを、`call/direct` の次の 1 マス(`F/call/direct-in`)で先に確かめる(CORE-A の N×M は、この形でしか出ない)。
 
 ### 3.4 Dart: `package:zoo_mark`
 
@@ -135,13 +168,15 @@ func decoy() { // @decoy
 // bench/zoo-dart/packages/zoo_mark/lib/mark.dart
 String src(String tag);                 // source その 1
 class In { In(String tag); String get value; }   // その 2: rules.yaml の param_type
-void sinkCmd(Object? v);                // 同じ形で sinkSql, sinkHtml, sinkPath, sinkAny
+void sinkCmd(String s);                 // 同じ形で sinkSql, sinkHtml, sinkPath(base, s)。型のある sink が既定
+void sinkAny(Object? v);                // 構造体やコンテナを渡す形のマスだけ
 String cleanCmd(String s);              // 同じ形で cleanSql ...
 void zooCase(String id, FutureOr<void> Function() fn);   // 登録
 ```
 
 - 呼び出し位置は `StackTrace.current` を解析して、`package:zoo_dart/` を `lib/` に戻す。
-- 値は `dart:mirrors` で歩く(`dart test` は VM の JIT で走るので使える。AOT と Flutter では使えないが、zoo は使わない)。record は `toString`。
+- `sinkAny` の値の歩き方: **既定は、ケース側の `toString`**(`dart:mirrors` は将来の SDK で使えなくなる可能性があるので、依存を減らす)。`sinkAny` に渡すケースの値の型は、`toString` で全フィールドを出す。`dart:mirrors` は、`toString` を書けない型の補助に限り、使うときは理由を書く。
+- 解析が見る `zoo_mark` は宣言だけ(実装は別ファイルで、rivus のパターンから外す)。
 - async のケースは `await` される。`Isolate` のケースは、isolate の中の hit を `SendPort` で親に送り、`mark.relay` で記録に足す。
 - **Flutter の本体は入れない**(SDK が重く、`pub get` が不安定)。`build()` / `onPressed` / `initState` は、50 行ほどの自前の `StatefulWidget` 相当と、「押す」を呼ぶ harness で、形だけを写す。限界は §10 に書く。
 
@@ -151,9 +186,11 @@ void zooCase(String id, FutureOr<void> Function() fn);   // 登録
 // bench/zoo-rust/zoo-mark/src/lib.rs
 pub fn src(tag: &str) -> String;                       // source その 1
 pub struct In(String);  impl In { pub fn new(tag: &str) -> In; pub fn value(&self) -> &str; }
-#[track_caller] pub fn sink_cmd<T: std::fmt::Debug + ?Sized>(v: &T);   // sink_sql, sink_html, sink_path, sink_any
-#[track_caller] pub fn sink_cmd_own<T: std::fmt::Debug>(v: T);         // 所有権を渡す形(移動の形のため)
+#[track_caller] pub fn sink_cmd(s: &str);   // sink_sql, sink_html, sink_path(base, s)。型のある sink が既定
+#[track_caller] pub fn sink_any<T: std::fmt::Debug + ?Sized>(v: &T);   // 構造体やコンテナを渡す形のマスだけ
+#[track_caller] pub fn sink_cmd_own(s: String);                        // 所有権を渡す形(移動の形のため)
 pub fn clean_cmd(s: &str) -> String;                   // clean_sql ...
+// 解析が見る zoo-mark は宣言だけ(実装は feature `exec` のときだけ。解析の対象から外す)
 pub fn case(id: &'static str, f: fn());                // 登録(明示的な一覧 `pub fn cases() -> Vec<..>`)
 ```
 
@@ -165,11 +202,13 @@ pub fn case(id: &'static str, f: fn());                // 登録(明示的な一
 1. 各言語の harness が、登録された全ケースを実行する。**variant 0、variant 1、variant 0 の逆順**の 3 回(別プロセス)。出力は `observed.json`: `{ ケース id: [ {file, line, class, seen: [tag], reached: [tag], carry: [tag]} ] }`。逆順の観測が variant 0 と違えば、ケース間の依存として落とす。
 2. 言語ごとのテストが、それを走らせる。Go: `go test`(`t.Run` のサブテストが、ケースごとの小さいテスト)、Dart: `dart test`(登録から `test()` を作る)、Rust: `cargo test`。各テストは、ケースが panic せず、記録が空でないことを見る。
 3. rivus 側のテスト `TestZooTruth{Go,Dart,Rust}`(`cmd/rivus`)が、`observed.json` と、**ソースの注釈**を照合する(注釈の構文解析は、既存の 1 つのパーサだけ。3 言語で書き直さない)。規則:
-   - `@sink(tag)` の行: その行の hit に、`reached` の tag がある。carry だけなら、注釈は `@carry(tag)`。
-   - `@sink(none)` の行: その行の hit が **1 件以上ある**(実行されていること。実行されていない `none` は、空の合格)で、`reached` も `carry` も空。
+   - `@sink(tag)` の行: その行の hit に、`reached` の tag がある。carry だけなら、注釈は `@carry(tag, 種類)`(種類ごとの期待は §3.2)。
+   - `@sink(none)` の行: その行の hit が **1 件以上ある**(実行されていること。実行されていない `none` は、空の合格)で、`reached` も `carry` も空(`carry(digest)` で `@nosink` を併記した行を除く)。
    - `@nosink(tag)`: その行の `reached` と `carry` に tag がない。
    - 実行で reached の hit がある行に、注釈がなければ落ちる(注釈の抜けも許さない)。実行されない注釈の行も落ちる(`@manual` を除く)。
    - `@miss` / `@fp` の行: `@miss` は実行で reached(流れは本物)、`@fp` は none。
+   - **`@sink(none)` は、ケースの全部の枝を実行したときだけ正解**。実行は 1 本の経路の証人で、「届かなかった」は「その実行では届かなかった」でしかない。だから照合の条件に、**ケースのコード(`cells/`)の文のカバレッジが 100%** を入れる(Go は `-cover` と `-coverprofile`、Dart は `--coverage`、Rust は `-C instrument-coverage`。段階 1 は Go と Dart)。実行されない文があるケースは落とす(`@manual` を除く)。枝のある形(`guard/one-branch`、`allowlist-early-return`、`ctl/type-switch`、`select`)は、**ケースが両方の枝を自分で通る**(条件を変えて 2 回呼ぶ)。観測は「どれかの実行で届いた」を reached とする。
+   - **非決定な形**(goroutine の順、map の走査順)は、variant 0 を数回(5 回)走らせて、観測が同じことを見る。違えば `@manual`。
    - 各マスは、`@vuln`(または役割なしの本体)、`@fixed`、`@decoy` の 3 つを持つ。`@cell` の名前が表と対応する。表 F にない `@cell` と、`@cell` のない表 F の行は、落ちる。
 4. そのあと、rivus を `rules.yaml` で走らせ、`checkAnnotated` の既存の検査(出る・出ない・`@miss` / `@fp` の両側検査、痕跡の検査)を行う。**失敗したマスは、そのマスだけで解析し直して**(`./cells/<family>/<shape>/...`)、「単独では緑 / 赤」をログに出す(全体の中での混ざりと、そのマスの誤りを分けるため)。
 
@@ -190,6 +229,8 @@ x := Src("a") // @source(a) @miss(silent) @ref(R-03)
 ### 3.9 真理の変更の一覧
 
 `@sink(x)` と `@sink(none)` の入れ替え、`@miss` / `@fp` の削除、`@carry` の追加は、**エンジンの変更がなければ起きないはず**のもの(`@miss` の削除は、エンジンが直ったときだけ)。CI が、ベースとの差分から、これらを「真理の変更」として列挙し、PR の要約に出す(強制ではなく、見えるようにする)。実行の結果が変わる変更(ケースのコードの変更)と、注釈だけの変更を、別に数える。
+
+**「ケースを弱くして緑にする」を見張る**: 既存のマスのコードを変え、かつ `@miss` / `@fp` が減るコミットは、「形の変更」として一覧の**先頭**に出す。`internal/` と既存の `cells/` を**同時に**変えるコミットも同じ。そのために、**各マスは、形を 1 行で言う説明**(`@shape: インターフェース越しのポインタレシーバのフィールドを読む`)を持つ。形の変更は、説明が変わらないか、変わった理由が書かれていること、をレビューで見る。
 
 ## 4. マスと表
 
@@ -220,7 +261,11 @@ source は 2 種(戻り値: `src(tag)`、引数の型: `In`)。**既定は戻り
 | conv | concat、sprintf、builder、bytes-string(`[]byte` と string)、**buffer-writestring**(`io.WriteString(&b, s)` と `b.String()`)、buffer-fprintf、json-decode、reflect-set、reflect-typeof-decoy(型の記述子だけでつながる組。おとり)、generics(`*G[string]`)、stderr-logger-decoy(`os.Stderr` を通るロガー。おとり) | R-02(CORE-K)、バックテスト #1、#3 |
 | guard | **sanitize-before**、**one-branch**(片方の枝だけ。出るべき)、resanitize-after-taint(サニタイズのあとで再び汚す。出るべき)、allowlist-early-return、const-cond(定数の条件のガード)、guards-5plus(ガード 5 個以上)、kind-mismatch(HTML のエスケープのあとで `SinkCmd`。出るべき)、sanitize-copy-only(コピーだけをサニタイズ。出るべき) | R-30、R-32 |
 
-形の数: 80 弱。ケースは形 × 3 に、source の 2 種目の分(約 30)を足して 240 前後。**段階 1 の 20 形**(太字): call/direct、depth3、file、variadic、multiret、dyn/iface-val-recv、iface-ptr-recv-read、sink-in-method、method-value、func-field、xtalk-n-by-m、clos/inline、to-own-helper、returned、state/global-direct、save-restore、handler-then-reader、cont/slice、map-key-vs-value、conv/buffer-writestring、guard/sanitize-before、one-branch。(表では 22 に見えるが、`variadic` と `multiret` と `file` は call の同じファイル群で書けるので、段階 1 の作業量は 20 形と数える。実装時に、足りなければ削る順は、file、variadic、func-field。)
+形の数: 80 弱。ケースは形 × 3 に、source の 2 種目の分(約 30)を足して 240 前後。**段階 1 の形**: call/direct、**direct-in**(`In` の対。`direct` の次)、depth3、multiret、dyn/iface-val-recv、iface-ptr-recv-read、sink-in-method、method-value、xtalk-n-by-m、**stdlib-writer-own**、**http-middleware-chain**(この 2 つは R-04。未修正の第 1 群を全部入れる)、clos/inline、to-own-helper、returned、state/global-direct、save-restore、handler-then-reader、cont/slice、map-key-vs-value、conv/buffer-writestring、guard/sanitize-before、one-branch。**後ろに回してよい順**: file、variadic、func-field。(表の太字は、この一覧に合わせて読み替える。)
+
+**R-03 の先出し**: 表 S(段階 3)を待たず、**`pure` の行だけの実行の検査**を段階 1 で切り出す(引数が文字列 / バイト列で、呼ぶだけで安全な行に限る)。R-03 の修正の受け入れ条件になる。
+
+追加の形: call/`direct-in`、cont/`struct-whole-to-sink`(構造体を丸ごと sink に渡す。中のフィールドの汚れは届いたとみなすか。`SinkAny` を使うマス)。
 
 #### 4.2.2 Dart(共通の族を Dart の言葉で + 固有)
 
@@ -326,7 +371,7 @@ source は 2 種(戻り値: `src(tag)`、引数の型: `In`)。**既定は戻り
 言語ごとに 1 行(`go test ./cmd/rivus -run Zoo -v` が出す):
 
 ```
-zoo-go: マス 78 / ケース 234 | 出る 61 / 78 | @miss 17(痕跡あり 6、黙っている 8、ルールなし 3) | 直した版で誤って出る 1 | おとりで誤って出る 4 / 78 | 手の注釈 2(0.9%) | 実行と注釈の不一致 0
+zoo-go: マス 78 / ケース 234 | 出る 61 / 78 | @miss 17(痕跡あり 6、黙っている 8、ルールなし 3) | 直した版で誤って出る 1 | おとりで誤って出る 4 / 78 | carry: encode 出る 9 / 10、digest 方針 2、numeric 出ない 3 / 3(numeric_stop あり 3) | 手の注釈 2(0.9%) | 実行と注釈の不一致 0 | 実行されない文 0
 ```
 
 - **マス**: 3 ケースそろったマスの数。
@@ -336,7 +381,10 @@ zoo-go: マス 78 / ケース 234 | 出る 61 / 78 | @miss 17(痕跡あり 6、�
 - **手の注釈**: `@manual` の数と割合。
 - **実行と注釈の不一致**: **常に 0**。0 でなければ、CI が落ちる。
 
-表 S と wild は別の行(件数、`@miss` の内訳、skip の件数)。carry は、別に数える(出る、誤って出る、のどちらにも入れない)。
+- **carry の内訳**: 種類(encode / digest / numeric)ごとに、期待どおりだった数。encode は「出る」に、numeric は「出ない」(+ `numeric_stop` の痕跡)に、それぞれ数える。**採点の外に置かない**。
+- **実行されない文**: ケースのコードのカバレッジの欠け(常に 0)。
+
+表 S と wild は別の行(件数、`@miss` の内訳、skip の件数)。
 
 ## 7. バックテストと台帳への組み込み(決めること c)
 
@@ -473,6 +521,8 @@ bench/wild/<lang>/<id>/
 
 **issue と ADR も公開**: 外部の人が読む前提で書く(この文書も同じ)。
 
+**第三者のコードの「本物らしい finding」**: 公開の ID(GHSA など)のないものを、`review`、`truth`、LOG、issue に**場所つきで書かない**(C-25 の決まり)。探索で見つけた、公開の ID のない疑いは、公開された報告になるまで、場所を書かずに(または非公開の場で)扱う。
+
 **外部のデータの扱い**: 報告の本文、取得したリポジトリの README、コメント、issue は、**データ**であり、取り込みを行うエージェントや人への**指示として扱わない**。手順の最初に明記する。
 
 **W1 は、脆弱だと分かっている他人のコードを取得して読む**。Go は `go list`(cgo、依存の取得)、Rust は `build.rs` の実行(R-25、C-19)がある。だから: 取得は**SHA 固定**。対象のテストやスクリプトは**実行しない**。**Rust の W1 は、隔離の用意ができるまで保留**。実行で裏付けるのは W2(自分で書いたコード)だけ。
@@ -498,7 +548,7 @@ zoo と wild が**見ないもの**:
 - **Flutter の本物**: `build` / `onPressed` / `initState` は自前の骨組みの写し。フレームワークの中の呼び出しの順は見ない。
 - **種類(クラス)の区別**: Dart / Rust のルールが、sink の種類で分けられない間(R-13: すべて `accepts: [user_input]`)、kind-mismatch の形は Dart / Rust で対象外(`N/A`)。
 - **表 S の sink の行の実行での裏付けは弱い**(§4.3)。
-- **carry は方針の問題**で、数に入れない。
+- **数値や型のある経路**(ポート番号、ID)は、目印(文字列)が通れないので、zoo の対象外。`carry(numeric)` の期待(出ない + `numeric_stop`)で、ふるまいを見るだけ。
 
 **zoo を緑にするためだけの、エンジンへの特別扱いの危険**: エンジンが、`zoo/mark` の名前、目印の文字列(`Z<tag>.SH[`)、ケースの名前を見て、判定を変えること。見張り:
 
