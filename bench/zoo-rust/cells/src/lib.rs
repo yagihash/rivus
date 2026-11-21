@@ -3,6 +3,10 @@
 //! exec/src/cases.rs (not analysed). The modules are inline, so that this is the only file without a cell.
 //! (`dyns` is the family `dyn` of the design: `dyn` is a keyword.)
 //! @na(F/conv/exec-output-echo: Rust's `Command::output` has no model with an approximation yet; the cell is not written)
+//! @na(F/conv/struct-field-shallow: the sinks that name a field of a structure (`parts`) are measured in Go first; the Rust cells are stage 6 of docs/DESIGN-field-sinks.md)
+//! @na(F/conv/struct-field-deep: the sinks that name a field of a structure (`parts`) are measured in Go first; the Rust cells are stage 6 of docs/DESIGN-field-sinks.md)
+//! @na(F/conv/struct-field-boxed: the sinks that name a field of a structure (`parts`) are measured in Go first; the Rust cells are stage 6 of docs/DESIGN-field-sinks.md)
+//! @na(F/conv/struct-field-opaque: the sinks that name a field of a structure (`parts`) are measured in Go first; the Rust cells are stage 6 of docs/DESIGN-field-sinks.md)
 //! @na(F/dyn/iface-assert-ptr-recv: Go's type assertion of `any` to an interface read through a pointer receiver; Rust has neither)
 pub mod call {
     pub mod depth3;
