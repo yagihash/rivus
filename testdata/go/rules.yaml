@@ -157,6 +157,12 @@ sinks:
     match: implementations
     category: test
 
+  # a rule on a type of the standard library, reached through an interface of the project
+  # (testdata/go/cases/ownif).
+  - symbol: (*database/sql.DB).QueryContext
+    args: [1]
+    category: test
+
 sanitizers:
   - symbol: example.com/cases/lib.Sanitize
     drops: [user_input]

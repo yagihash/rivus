@@ -115,7 +115,25 @@ func (s *state) callBody(cc *callCtx) {
 	for _, site := range sitesHere {
 		// a site on a call of a function value is for one of the functions it may reach
 		sc := cc
-		if site.Callee != "" {
+		if site.Callee != "" && ci.Callee.Kind == ir.CalleeDynamic {
+			// a site on a call through an interface is for one of its implementations
+			x := *cc
+			x.sym = site.Symbol
+			sc = &x
+			if site.Role == sites.RoleSink {
+				// the flow reaches the sink if the call goes to this implementation: the
+				// finding says it is one of the candidates
+				d := s.newNote(ci, KindDynamicDispatch, "call through an interface or function value", cc.sym)
+				for _, id := range ci.Candidates {
+					d.Candidates = append(d.Candidates, string(id))
+				}
+				sort.Strings(d.Candidates)
+				s.sinkNotes = []*Uncertainty{d}
+				s.checkSink(sc, site)
+				s.sinkNotes = nil
+				continue
+			}
+		} else if site.Callee != "" {
 			for _, c := range ci.Callee.ValueCands {
 				if string(c.ID) == site.Callee {
 					sc = s.valueCtx(cc, c)
@@ -554,7 +572,7 @@ func mergeSinkReach(old, nw *SinkReach) *SinkReach {
 }
 
 func (s *state) sinkStep(site *sites.Site, in *sg.Instr) Step {
-	return Step{Func: s.eng.funcID(s.fn), Desc: "sink: " + site.Symbol, pos: in.Pos}
+	return Step{Func: s.eng.funcID(s.fn), Desc: "sink: " + site.Symbol, pos: in.Pos, Notes: s.sinkNotes}
 }
 
 // guardsAtSink are the conditions under which the flow reaches the sink: those

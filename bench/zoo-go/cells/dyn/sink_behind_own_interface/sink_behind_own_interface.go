@@ -58,7 +58,7 @@ func newDB() dbtx {
 
 func vuln2() { // @vuln
 	q := newDB()
-	_, _ = q.QueryContext(context.Background(), mark.Src("dyn-sink-behind-own-interface-vuln2")) // @source(dyn-sink-behind-own-interface-vuln2) @miss(unmodeled_library_call) @ref(R-11) @sink(dyn-sink-behind-own-interface-vuln2) @manual(the sink is the standard library's (*sql.DB).QueryContext, which the case cannot record; it never reaches a database)
+	_, _ = q.QueryContext(context.Background(), mark.Src("dyn-sink-behind-own-interface-vuln2")) // @source(dyn-sink-behind-own-interface-vuln2) @sink(dyn-sink-behind-own-interface-vuln2) @manual(the sink is the standard library's (*sql.DB).QueryContext, which the case cannot record; it never reaches a database)
 }
 
 type querierFixed interface {

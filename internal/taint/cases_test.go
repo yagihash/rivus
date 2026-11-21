@@ -303,7 +303,10 @@ func TestFunctionValues(t *testing.T) { checkCase(t, "funcvalue") }
 
 // The rules apply to the function a call of a function value reaches: yagihash/rivus #54.
 func TestFunctionValueSinks(t *testing.T) { checkCase(t, "funcsink") }
-func TestGenerics(t *testing.T)           { checkCase(t, "generics") }
+
+// A call through an interface of the project reaches the implementation that the rules name (ADR-067).
+func TestSinkBehindOwnInterface(t *testing.T) { checkCase(t, "ownif") }
+func TestGenerics(t *testing.T)               { checkCase(t, "generics") }
 
 // when_arg_type counts the arguments of a method without the receiver, and recv: true is the receiver
 // (yagihash/rivus #56).
@@ -644,5 +647,34 @@ func TestProvenanceThroughARecursiveObjectIsBounded(t *testing.T) {
 	p := provenanceOf(t, "@sink(recobj)")
 	if _, ok := terminalKinds(p)[KindDepthLimit]; !ok {
 		t.Errorf("the cut must be recorded as %s: %+v", KindDepthLimit, p.Unresolved)
+	}
+}
+
+// The finding at a sink behind an interface of the project says "one of N implementations" (ADR-067).
+func TestSinkBehindOwnInterfaceKeepsTheDispatchUncertainty(t *testing.T) {
+	res, _ := runCase(t, "ownif")
+	found := 0
+	for _, f := range res.Findings {
+		two := strings.Contains(f.Sink.Snippet, "ownif_two")
+		if !two && !strings.Contains(f.Sink.Snippet, "ownif_direct") {
+			continue
+		}
+		found++
+		var d *Uncertainty
+		for _, u := range f.Uncertainties {
+			if u.Kind == KindDynamicDispatch {
+				d = u
+			}
+		}
+		if d == nil {
+			t.Errorf("%s: no dynamic_dispatch uncertainty: %+v", f.Sink.Snippet, f.Uncertainties)
+			continue
+		}
+		if two && len(d.Candidates) < 2 {
+			t.Errorf("candidates = %v, want both implementations", d.Candidates)
+		}
+	}
+	if found != 2 {
+		t.Errorf("found %d findings, want 2", found)
 	}
 }

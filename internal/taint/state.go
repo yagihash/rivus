@@ -187,7 +187,9 @@ type found struct {
 // state is the analysis state of one function.
 type state struct {
 	eng *Engine
-	fn  *sg.Func
+	// sinkNotes are the uncertainties of the sink being checked (a sink behind an interface).
+	sinkNotes []*Uncertainty
+	fn        *sg.Func
 
 	cells   map[Root]map[string]Set
 	changed bool

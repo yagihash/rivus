@@ -44,6 +44,10 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 		ByIRParam: map[IRParam][]*Site{},
 		ByID:      map[string]*Site{},
 	}
+	byID := make(map[ir.FuncID]*ir.Func, len(prog.Funcs))
+	for _, f := range prog.Funcs {
+		byID[f.ID] = f
+	}
 	for _, fn := range prog.Funcs {
 		if fn.Dep {
 			continue
@@ -131,6 +135,24 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 					}
 					if sinks := sinksAt(fn, in, in.Callee.Kind == ir.CalleeDynamic || (in.Callee.Kind == ir.CalleeStatic && in.Callee.Recv), rules.Sinks[sym]); len(sinks) > 0 {
 						add(&Site{Role: RoleSink, Kind: "call", Symbol: sym, Category: sinks[0].Category, Labels: acceptsOf(sinks), IR: at, Sink: sinks, irpos: in.Pos})
+					}
+					if in.Callee.Kind == ir.CalleeDynamic {
+						// A call through an interface: the rules also apply to the
+						// implementations it may reach, each its own site (ADR-067).
+						// The interface of the project is what is called; the sink may be
+						// the method of a type of the standard library or a dependency.
+						for _, id := range in.Callee.Candidates {
+							csym := string(id)
+							if f := byID[id]; f != nil {
+								csym = f.Symbol
+							}
+							if csym == "" || csym == sym {
+								continue
+							}
+							if sinks := sinksAt(fn, in, true, rules.Sinks[csym]); len(sinks) > 0 {
+								add(&Site{Role: RoleSink, Kind: "call", Symbol: csym, Category: sinks[0].Category, Labels: acceptsOf(sinks), IR: at, Sink: sinks, irpos: in.Pos, Callee: string(id)})
+							}
+						}
 					}
 				case ir.OpFieldLoad, ir.OpFieldStore, ir.OpAddrOf:
 					field := in.Field
