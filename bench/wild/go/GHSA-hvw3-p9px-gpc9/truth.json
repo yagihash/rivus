@@ -1,0 +1,15 @@
+{
+  "target": "https://github.com/gophish/gophish at 27d13a0584731371033926064d750e5f4f620e7a (the parent of the fix e3352f481e94 and the code before the fix 2a452bda89ff, GHSA-hvw3-p9px-gpc9 / CVE-2022-25295)",
+  "how": "Matched by the pair (source function, sink position). The data (the next form value) is read in nextOrIndex itself, and the sink is the Redirect in the same function; Login and ResetPassword call it after their own work, and are not on the data path. Only this site is labelled.",
+  "sites": [
+    {
+      "source_func": ".nextOrIndex",
+      "sink_file": "controllers/route.go",
+      "sink_line": 300,
+      "label": "vuln",
+      "category": "open_redirect",
+      "via": ["(*net/http.Request).FormValue", "net/url.Parse"],
+      "note": "GHSA-hvw3: r.FormValue(\"next\") -> url.Parse -> url.Path -> http.Redirect, no check of the host or of a leading double slash. The path was read in the code"
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+id: GHSA-9c9w-9pq7-f35h
+cve: CVE-2020-24710
+url: https://github.com/advisories/GHSA-9c9w-9pq7-f35h
+cwe: CWE-918
+kind: ssrf
+repo: https://github.com/gophish/gophish
+vuln_sha: 27d13a0584731371033926064d750e5f4f620e7a
+fixed_sha: e3352f481e94054ffe08494c9225d3878347b005   # the fix commit (released in 0.11.0)
+published: 2022-05-24            # the date of the advisory (it must be today or earlier)
+license: MIT                     # the license of the project (GitHub does not detect it: read LICENSE in the checkout)
+forms: [W1]                      # no W2: the code of the project is not copied
+rules: [builtin]                 # the built-in rules are enough: net/http is known
+source:
+  func: (*github.com/gophish/gophish/controllers/api.Server).ImportSite   # the request body (r.Body), decoded as JSON into cr
+  file: controllers/api/import.go
+  line: 101
+path:                            # the route is /api/import/site; the whole flow is in one function
+  - encoding/json.NewDecoder, (*encoding/json.Decoder).Decode   # r.Body -> cr
+  - cr.URL (a field load)
+sink:
+  symbol: (*net/http.Client).Get
+  func: (*github.com/gophish/gophish/controllers/api.Server).ImportSite
+  file: controllers/api/import.go
+  line: 122                      # 125 in the fixed version
+stages: [param_source, conv/json-decode, sink]
+fix_kind: "(ii) validate and reject, at the transport: the client gets a Transport whose DialContext refuses the addresses that are not allowed (a new package `dialer`). The URL value is not changed or tested in the handler"
+fixed_version_expectation: "a guard in the evidence is expected for (ii); here the guard is in the dialer of the transport, which the URL does not pass through, so there is nothing on the data path to show"
+summary: "The URL of the site to import, given in the JSON body of an API request, is fetched by the server with an HTTP client that has no restriction on the address (an SSRF to the internal network). The fix restricts the dialer."
+imported: 2026-11-21
+copy:
+  rewritten: false               # nothing is copied: the SHA and the fetch script only
+note: "The advisory text was read as data. The vulnerable version is the same commit as GHSA-hvw3-p9px-gpc9."

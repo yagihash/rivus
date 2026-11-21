@@ -138,8 +138,9 @@ def run(a):
         print("compare: gave up waiting for a quiet machine", file=sys.stderr)
         return 125
     cmd = [os.path.abspath(a.rivus), "analyze", "-timeout", a.timeout]
-    if a.rules:
-        cmd += ["-rules", os.path.abspath(a.rules)]
+    for r in (a.rules or "").split(":"):   # one file, or several joined by ":" (a framework's file and the project's)
+        if r:
+            cmd += ["-rules", os.path.abspath(r)]
     if a.ir:
         cmd += ["-ir", os.path.abspath(a.ir)]
     cmd += shlex.split(a.flags)
@@ -186,7 +187,7 @@ def cache_entry(a):
         material = {
             "rivus_sha256": sha256_file(a.rivus),
             "tree": tree,
-            "rules_sha256": sha256_file(a.rules) if a.rules else "",
+            "rules_sha256": ",".join(sha256_file(r) for r in a.rules.split(":") if r) if a.rules else "",
             "timeout": a.timeout, "flags": a.flags, "ir": bool(a.ir), "gomemlimit": a.gomemlimit,
             "env": {k: os.environ.get(k, "") for k in ("GOMAXPROCS", "GOGC", "GOFLAGS", "GOOS", "GOARCH", "GODEBUG")},
         }

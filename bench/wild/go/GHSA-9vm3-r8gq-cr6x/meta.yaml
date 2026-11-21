@@ -1,0 +1,33 @@
+id: GHSA-9vm3-r8gq-cr6x
+cve: CVE-2022-38638
+url: https://github.com/advisories/GHSA-9vm3-r8gq-cr6x
+cwe: CWE-22
+kind: path
+repo: https://github.com/casdoor/casdoor
+vuln_sha: 7b0b426a76fd77b89817e0eafcccaed8d15b8cf4     # the parent of the fix commit
+fixed_sha: 411d76798d73446fff4a0244f0475f1ea8bf42dc    # the fix commit (released in 1.103.1)
+published: 2022-09-10
+license: Apache-2.0
+forms: [W1]
+rules:                           # the framework part is shared (examples/), the project part is only the wrapper type
+  - examples/rules/go-beego.yaml
+  - bench/wild/go/GHSA-9vm3-r8gq-cr6x/rules.yaml
+source:
+  func: (*github.com/casdoor/casdoor/controllers.ApiController).UploadResource   # c.Input().Get("fullFilePath")
+  file: controllers/resource.go
+  line: 130
+path:                            # read in the code; the same list is in the finding of rivus
+  - (*github.com/casdoor/casdoor/object).UploadFileSafe -> uploadFile -> getUploadFileUrl (escapePath, util.UrlJoin) -> objectKey
+  - the interface call (oss.StorageInterface).Put, whose implementation here is storage.FileSystem.Put (a value receiver)
+  - (storage.FileSystem).GetFullPath, path/filepath.Dir
+sink:
+  - {symbol: os.MkdirAll, func: (storage.FileSystem).Put, file: storage/local_file_system.go, line: 66}
+  - {symbol: os.Create, func: (storage.FileSystem).Put, file: storage/local_file_system.go, line: 73}
+stages: [todo:param_source/embedded-controller, call/depth3, conv/sprintf, cont/slice, dyn/iface-val-recv, dyn/sink-in-method, sink]
+fix_kind: "(ii) validate and reject: UploadFileSafe returns an error when the path contains two dots, before anything is stored. The data still flows to the sink after the check"
+fixed_version_expectation: "(ii): the finding may stay; the guard should be in the evidence"
+summary: "The file name chosen by the client in an upload request is used as the path under the storage directory of the local file system provider, so a path with .. writes a file outside it (arbitrary file write). The fix rejects a name that contains two dots."
+imported: 2026-11-21
+copy:
+  rewritten: false
+note: "Controllers have no per-method route in the code: the routes are in a router file of the project (beego), which is not read by rivus (reachability: not_from_entry). The same run reports other findings; they are not labelled here."

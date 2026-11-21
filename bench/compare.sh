@@ -27,7 +27,7 @@ options:
   --resume          keep a result that is already saved with exit code 0 (for a run that was stopped)
   --only a,b        run only these benchmarks      --skip a,b   do not run these
   --light           only the light tier: the benchmarks of one run of 60 seconds or less and 6 GB or less (the curated three, go-synth-S,
-                    go-scale, zoo-go, gogs x 2, gin-vue-admin, go-test-bench, parseable, dart-pub). Base and head of a benchmark run at the same
+                    go-scale, zoo-go, gogs x 2, gin-vue-admin, go-test-bench, parseable, dart-pub, gophish, casdoor). Base and head of a benchmark run at the same
                     time when the free memory allows it; a light run does not wait for other analyses, only for free memory (25%)
   --heavy           only the heavy tier: Gitea (and ech0 with --with-ech0). One run at a time, waits for a quiet machine,
                     never uses the cache. The final check of a big change. With neither --light nor --heavy: the light tier, then the
@@ -50,7 +50,7 @@ Go; the sha256 of the IR for Dart and Rust), rules (their content) and arguments
 key is kept with the result and compared when it is read. summary.md says "base: cached <date>".
 
 benchmarks (in this order): go-curated dart-curated rust-curated go-synth-S gogs-9a9388ac
-gogs-48946299 gin-vue-admin go-test-bench parseable dart-pub [gitea] [ech0]
+gogs-48946299 gin-vue-admin go-test-bench parseable dart-pub gophish casdoor [gitea] [ech0]
 Each side is analysed with the inputs of ITS OWN version: the fixtures, the rules, the synth generator and
 the extractor are taken from wt/<sha7> (the worktree of that commit). The IR is cached per version, with a key made of
 the benchmark, the tree hash of the extractor (git rev-parse <sha>:extractor/<lang>), the tree hash of the target (or
@@ -106,7 +106,7 @@ is_heavy() { case "$1" in gitea|ech0) return 0 ;; *) return 1 ;; esac; }
 BENCHES="go-curated dart-curated rust-curated go-synth-S"
 grep -q "^    go-scale)" "${BASH_SOURCE[0]}" && BENCHES="$BENCHES go-scale"   # a pseudo-project of scale, added by another change
 grep -q "^    zoo-go)" "${BASH_SOURCE[0]}" && BENCHES="$BENCHES zoo-go"   # the zoo of Go: cases with answers that a run backs (bench/zoo/README.md)
-BENCHES="$BENCHES gogs-9a9388ac gogs-48946299 gin-vue-admin go-test-bench parseable dart-pub"
+BENCHES="$BENCHES gogs-9a9388ac gogs-48946299 gin-vue-admin go-test-bench parseable dart-pub gophish casdoor"
 if [ "$SEL_HEAVY" = 1 ] && [ "$SEL_LIGHT" = 0 ]; then BENCHES=""; WITH_GITEA=1; fi
 [ "$SEL_LIGHT" = 1 ] && [ "$SEL_HEAVY" = 0 ] && WITH_GITEA=0 && WITH_ECH0=0
 [ "$SEL_HEAVY" = 1 ] && [ "$SEL_LIGHT" = 1 ] && WITH_GITEA=1
@@ -140,6 +140,10 @@ spec() {
                    RULES="$R/bench/parseable/rules.yaml"; TRUTH="$R/bench/parseable/truth-5c20b8e4.json" ;;
     dart-pub)      KIND=dart; URL=https://github.com/dart-lang/pub; COMMIT=5e24336e71a05a96b558d496953ebed223f6e40a; CLONE=pub
                    RULES="$R/bench/dart-pub/rules.yaml"; TRUTH="$R/bench/dart-pub/truth-5e24336e.json" ;;
+    gophish)       URL=https://github.com/gophish/gophish; COMMIT=27d13a0584731371033926064d750e5f4f620e7a; CLONE=gophish   # bench/wild/go: GHSA-9c9w-9pq7-f35h and GHSA-hvw3-p9px-gpc9, built-in rules
+                   TRUTH="$R/bench/wild/go/gophish-27d13a05.truth.json" ;;
+    casdoor)       URL=https://github.com/casdoor/casdoor; COMMIT=7b0b426a76fd77b89817e0eafcccaed8d15b8cf4; CLONE=casdoor   # bench/wild/go: GHSA-9vm3-r8gq-cr6x
+                   RULES="$R/examples/rules/go-beego.yaml:$R/bench/wild/go/GHSA-9vm3-r8gq-cr6x/rules.yaml"; TRUTH="$R/bench/wild/go/GHSA-9vm3-r8gq-cr6x/truth.json" ;;
     gitea)         URL=https://github.com/go-gitea/gitea; COMMIT=v1.26.4; CLONE=gitea
                    RULES="$R/bench/gitea/rules.yaml"; TRUTH="$R/bench/gitea/truth-v1.26.4.json" ;;
     ech0)          URL=https://github.com/lin-snow/Ech0; COMMIT=cecc2c19; CLONE=ech0 ;;  # the built-in rules only here; it does not converge (bench/README.md, ech0)
@@ -238,8 +242,14 @@ setup() { # name side: makes the copy and the IR of that version; sets DIR, RULE
       [ -n "$tgt" ] || { skip "$b" "bench/$b does not exist in $w ($s7)"; return 1; }
       PROV_INPUT="bench/$b tree ${tgt:0:12}" ;;
   esac
-  if [ -n "$RULES" ] && [ "$KIND" != synth ] && [ ! -f "$RULES" ]; then   # a rules file that this old version does not have: the one of this script's tree
-    [ -f "${RULES/#$wt/$ROOT}" ] && RULES="${RULES/#$wt/$ROOT}" || { skip "$b" "no rules file $RULES in $w ($s7)"; return 1; }
+  if [ -n "$RULES" ] && [ "$KIND" != synth ]; then   # a rules file that this old version does not have: the one of this script's tree (RULES: one file, or several joined by ":")
+    local rf1 rl=""
+    for rf1 in ${RULES//:/ }; do
+      [ -f "$rf1" ] || rf1="${rf1/#$wt/$ROOT}"
+      [ -f "$rf1" ] || { skip "$b" "no rules file $rf1 in $w ($s7)"; return 1; }
+      rl="${rl:+$rl:}$rf1"
+    done
+    RULES="$rl"
   fi
   if [ -n "$URL" ]; then
     top="$WORK/src/$CLONE"

@@ -1,0 +1,9 @@
+# The project's own part: the type that Casdoor's controllers share (it embeds beego.Controller), named as a
+# source. The rest (the getters, the sinks of the controller) is examples/rules/go-beego.yaml; run with both:
+#   rivus analyze -rules examples/rules/go-beego.yaml -rules <this file> ./...
+ruleset: bench/wild/casdoor@1
+
+sources:
+  - kind: param_type
+    type: "*github.com/casdoor/casdoor/controllers.ApiController"
+    labels: [user_input]

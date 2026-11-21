@@ -1,0 +1,15 @@
+{
+  "target": "https://github.com/gophish/gophish at 27d13a0584731371033926064d750e5f4f620e7a (the parent of the fix e3352f481e94, GHSA-9c9w-9pq7-f35h / CVE-2020-24710)",
+  "how": "Matched by the pair (source function, sink position): the whole flow is in one function, ImportSite, and the sink is the Get on the line named here. Only this site is labelled: the other findings of the run were not read, so precision is not measured.",
+  "sites": [
+    {
+      "source_func": ".ImportSite",
+      "sink_file": "controllers/api/import.go",
+      "sink_line": 122,
+      "label": "vuln",
+      "category": "ssrf",
+      "via": ["encoding/json.NewDecoder", "(*encoding/json.Decoder).Decode"],
+      "note": "GHSA-9c9w: the url field of the JSON body (cr.URL) is fetched with (*http.Client).Get, with no restriction on the address. The path was read in the code: r.Body -> json Decode into cr -> cr.URL -> Get"
+    }
+  ]
+}

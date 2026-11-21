@@ -1,0 +1,22 @@
+{
+  "target": "https://github.com/gophish/gophish at 27d13a0584731371033926064d750e5f4f620e7a: the truth of GHSA-9c9w-9pq7-f35h and GHSA-hvw3-p9px-gpc9 together (one analysis scores both; the entries are the same as the truth.json of each directory)",
+  "how": "Matched by the pair (source function, sink position). Only these two sites are labelled.",
+  "sites": [
+    {
+      "source_func": ".ImportSite",
+      "sink_file": "controllers/api/import.go",
+      "sink_line": 122,
+      "label": "vuln",
+      "category": "ssrf",
+      "note": "GHSA-9c9w-9pq7-f35h"
+    },
+    {
+      "source_func": ".nextOrIndex",
+      "sink_file": "controllers/route.go",
+      "sink_line": 300,
+      "label": "vuln",
+      "category": "open_redirect",
+      "note": "GHSA-hvw3-p9px-gpc9"
+    }
+  ]
+}

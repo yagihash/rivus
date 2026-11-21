@@ -1,0 +1,32 @@
+id: GHSA-hvw3-p9px-gpc9
+cve: CVE-2022-25295
+url: https://github.com/advisories/GHSA-hvw3-p9px-gpc9
+cwe: CWE-601
+kind: redirect
+repo: https://github.com/gophish/gophish
+vuln_sha: 27d13a0584731371033926064d750e5f4f620e7a   # the same commit as GHSA-9c9w-9pq7-f35h: the flaw is in it, read in the code
+fixed_sha: 2a452bda89ffdb85f929fa78290bce1f456881dc   # the fix commit (released in 0.12.0; its parent is db63ee978dcd)
+published: 2022-09-12
+license: MIT
+forms: [W1]
+rules: [builtin]
+source:
+  func: (*github.com/gophish/gophish/controllers.AdminServer).nextOrIndex   # r.FormValue("next"), read in this function
+  file: controllers/route.go
+  line: 291
+path:                            # the routes: /login (Login, at the end of the POST) and /reset_password (ResetPassword) both call nextOrIndex; the data is read in nextOrIndex itself
+  - (*net/http.Request).FormValue, net/url.Parse
+  - url.Path (a field load), then the local variable next
+sink:
+  symbol: net/http.Redirect
+  func: (*github.com/gophish/gophish/controllers.AdminServer).nextOrIndex
+  file: controllers/route.go
+  line: 300                      # 305 in the fixed version
+stages: [param_source, todo:conv/url-parse-field, sink]
+fix_kind: "(i) sanitize / normalize: the value is rebuilt from the escaped path and a single leading slash is forced, so that it cannot name another host. A prefix normalization, which rivus has no model for"
+fixed_version_expectation: "(i): the finding should disappear, or carry a sanitizer mark"
+summary: "The next parameter of the login form is parsed as a URL and its path is used as the target of a redirect after login; a path such as //host sends the user to another site. The fix rebuilds the path and forces one leading slash."
+imported: 2026-11-21
+copy:
+  rewritten: false
+note: "The function of the finding was checked against the code: the data comes from r.FormValue(\"next\") inside nextOrIndex, so the source function and the sink function are the same, and the callers (Login, ResetPassword) are not on the data path."
