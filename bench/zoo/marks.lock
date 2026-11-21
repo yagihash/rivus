@@ -9,6 +9,18 @@ dart	call/multiret.dart	sink-none	@sink(none) @nosink(call-multiret-decoy)	void 
 dart	clos/capture_write_by_ref.dart	sink-none	@sink(none)	void fixed() { @fixed
 dart	clos/capture_write_by_ref.dart	sink-none	@sink(none)	void fixed() { @fixed
 dart	clos/capture_write_by_ref.dart	sink-none	@sink(none) @nosink(clos-capture-write-by-ref-decoy)	void decoy() { @decoy
+dart	clos/helper_overflow.dart	miss	@source(clos-helper-overflow-vuln) @miss(recursion_approximation) @ref(#77)	void vuln() { @vuln
+dart	clos/helper_overflow.dart	miss	@source(clos-helper-overflow-vuln10) @miss(recursion_approximation) @ref(#77)	void vuln10() { @vuln
+dart	clos/helper_overflow.dart	miss	@source(clos-helper-overflow-vuln2) @miss(recursion_approximation) @ref(#77)	void vuln2() { @vuln
+dart	clos/helper_overflow.dart	miss	@source(clos-helper-overflow-vuln3) @miss(recursion_approximation) @ref(#77)	void vuln3() { @vuln
+dart	clos/helper_overflow.dart	miss	@source(clos-helper-overflow-vuln4) @miss(recursion_approximation) @ref(#77)	void vuln4() { @vuln
+dart	clos/helper_overflow.dart	miss	@source(clos-helper-overflow-vuln5) @miss(recursion_approximation) @ref(#77)	void vuln5() { @vuln
+dart	clos/helper_overflow.dart	miss	@source(clos-helper-overflow-vuln6) @miss(recursion_approximation) @ref(#77)	void vuln6() { @vuln
+dart	clos/helper_overflow.dart	miss	@source(clos-helper-overflow-vuln7) @miss(recursion_approximation) @ref(#77)	void vuln7() { @vuln
+dart	clos/helper_overflow.dart	miss	@source(clos-helper-overflow-vuln8) @miss(recursion_approximation) @ref(#77)	void vuln8() { @vuln
+dart	clos/helper_overflow.dart	miss	@source(clos-helper-overflow-vuln9) @miss(recursion_approximation) @ref(#77)	void vuln9() { @vuln
+dart	clos/helper_overflow.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	clos/helper_overflow.dart	sink-none	@sink(none) @nosink(clos-helper-overflow-decoy)	void decoy() { @decoy
 dart	clos/inline.dart	sink-none	@sink(none)	void fixed() { @fixed
 dart	clos/inline.dart	sink-none	@sink(none) @nosink(clos-inline-decoy)	void decoy() { @decoy
 dart	clos/partial_callers.dart	miss	@source(clos-partial-callers-vuln) @miss(silent) @ref(PARTIAL-CALLERS,PARITY)	void vuln() { @vuln

@@ -8,6 +8,7 @@ import 'package:zoo_cells/clos/capture_write_by_ref.dart' as clos_capture_write_
 import 'package:zoo_cells/clos/inline.dart' as clos_inline;
 import 'package:zoo_cells/clos/partial_callers.dart' as clos_partial_callers;
 import 'package:zoo_cells/clos/relay.dart' as clos_relay;
+import 'package:zoo_cells/clos/helper_overflow.dart' as clos_helper_overflow;
 import 'package:zoo_cells/clos/returned.dart' as clos_returned;
 import 'package:zoo_cells/dart/callable_class.dart' as dart_callable_class;
 import 'package:zoo_cells/clos/stored.dart' as clos_stored;
@@ -66,6 +67,7 @@ void registerAll() {
   clos_inline.register();
   clos_partial_callers.register();
   clos_relay.register();
+  clos_helper_overflow.register();
   clos_returned.register();
   dart_callable_class.register();
   clos_stored.register();
