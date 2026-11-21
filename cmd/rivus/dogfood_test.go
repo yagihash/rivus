@@ -76,7 +76,7 @@ func TestDogfood(t *testing.T) {
 	// 44: C-7 (ADR-059) adds 5 real flows of `rivus index` (the path of -o to the files that graphdb.Write
 	// creates): graphIndexer returns the closure that o.afterRead keeps and calls later, and what it
 	// captured (the path) is applied where it is made.
-	// 51: ADR-061 adds 7 real flows: the directory of -C, through the packages, to the os.ReadDir of gossa.countTestFiles
+	// 51: ADR-062 adds 7 real flows: the directory of -C, through the packages, to the os.ReadDir of gossa.countTestFiles
 	// (which counts the _test.go files that were not read); `rivus sites` is a command that reaches a sink now.
 	const maxFindings, maxNoSourceOnPath = 51, 0
 	t.Logf("%d findings, %d with no step in the source function", len(rep.Findings), noSourceOnPath)
