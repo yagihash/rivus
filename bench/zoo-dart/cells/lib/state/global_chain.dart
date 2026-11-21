@@ -107,7 +107,7 @@ void c13s13() {
 
 
 void vuln13() { // @vuln
-  c13g0 = src('state-global-chain-vuln13'); // @source(state-global-chain-vuln13) @miss(recursion_approximation) @ref(R-44)
+  c13g0 = src('state-global-chain-vuln13'); // @source(state-global-chain-vuln13) @miss(recursion_approximation) @ref(PASS-LIMIT)
   c13s1();
   c13s2();
   c13s3();
@@ -279,7 +279,7 @@ void c30s30() {
 
 
 void vuln30() { // @vuln
-  c30g0 = src('state-global-chain-vuln30'); // @source(state-global-chain-vuln30) @miss(recursion_approximation) @ref(R-44)
+  c30g0 = src('state-global-chain-vuln30'); // @source(state-global-chain-vuln30) @miss(recursion_approximation) @ref(PASS-LIMIT)
   c30s1();
   c30s2();
   c30s3();
