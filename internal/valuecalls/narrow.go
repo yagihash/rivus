@@ -446,13 +446,47 @@ func (n *narrower) indexFields() {
 						continue
 					}
 					ref := irssa.Ref{Kind: irssa.RefInstr, Block: bi, Index: ii, Dst: 0}
-					if _, _, ok := n.aliasUses(f, form, ref, false); !ok {
+					if _, _, ok := n.aliasUses(f, form, ref, false); !ok && !sharedPointer(f, in) {
 						fi.mutated = true
 					}
 				}
 			}
 		}
 	}
+}
+
+// sharedPointer: the address is a shared reference (`&F`, a copy of the address is typed so): nothing can be written
+// through it (a function value has no interior that makes it another function), so where the address goes (stored in
+// the environment of a closure, given to a call) is not a way to change the field.
+func sharedPointer(f *ir.Func, addr *ir.Instr) bool {
+	if len(addr.Dsts) != 1 {
+		return false
+	}
+	shared := func(id ir.LocalID) bool {
+		if int(id) < 0 || int(id) >= len(f.Locals) {
+			return false
+		}
+		t := string(f.Locals[id].Type)
+		return strings.HasPrefix(t, "&") && !strings.HasPrefix(t, "&mut ")
+	}
+	cur := addr.Dsts[0]
+	if shared(cur) {
+		return true
+	}
+	// the copy of the address (the address is made into a local, and copied to the one that has the type)
+	found := false
+	for bi := range f.Blocks {
+		for ii := range f.Blocks[bi].Instrs {
+			in := &f.Blocks[bi].Instrs[ii]
+			if in.Op == ir.OpCopy && len(in.Args) == 1 && len(in.Dsts) == 1 && in.Args[0] == cur {
+				if in.View || !shared(in.Dsts[0]) {
+					return false // a copy that is not a shared reference (a `&mut`, a raw pointer, untyped): it may write
+				}
+				found = true
+			}
+		}
+	}
+	return found
 }
 
 // aliasUses looks at what a function does with a pointer: it is copied (the copy is the same pointer), loaded
