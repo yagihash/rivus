@@ -64,3 +64,25 @@ abstract class State {
     fn();
   }
 }
+
+// The shape of an app: `runApp(MyApp())` hands the root widget to the framework, which calls `build` of the
+// widgets and `initState` / `dispose` of their states; a button holds the closure that the framework calls
+// on a press. runApp does nothing here: it is the framework, which does not call the app in this skeleton.
+// bench/zoo-dart/app is the app (ADR-073).
+class BuildContext {}
+
+abstract class Widget {
+  const Widget();
+}
+
+abstract class StatelessWidget extends Widget {
+  const StatelessWidget();
+  Widget build(BuildContext context);
+}
+
+class TextButton extends Widget {
+  const TextButton({this.onPressed});
+  final void Function()? onPressed;
+}
+
+void runApp(Widget app) {}

@@ -306,6 +306,9 @@ func render(tablePath, deadPath string, rows []Row, mi *ModelIndex, corpora []*C
 			}
 		}
 		w("%s\n", t)
+		if l == "dart" {
+			w("%s", "**Dart の入口(ADR-073。この表の入力の数ではなく、Flutter のアプリの測定の記録)**: フレームワークが呼ぶメソッド(依存の型のメソッドの上書き。`build`、`initState`、`dispose` など)を入口に足した。`flutter/samples`(`a5bccd24`)の 6 つのアプリ(`--no-deps`)で、入口から届く関数は、411 のうち 65(16%)から 403(98%)に。LocalSend の `app/` は 20,522 のうち 1,546(7.5%)から 19,750(96%)に。finding の `reachability` は `not_from_entry` から `from_framework_callback` に変わる(finding の集合は同じ)。dart-pub(`main` のある CLI。フレームワークの上書きがない)は変わらない。\n\n")
+		}
 		aggAll[l] = agg
 		show := agg
 		w("形ごと(実コードの合計。参考の入力は入れない):\n\n")

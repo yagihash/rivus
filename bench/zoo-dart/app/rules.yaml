@@ -1,0 +1,11 @@
+# Rules of the app of the Dart zoo: the functions of package:zoo_mark, as in the cells (bench/zoo-dart/cells/rules.yaml).
+ruleset: rivus/bench-zoo-dart-app@1
+
+sources:
+  - symbol: package:zoo_mark/zoo_mark.dart#src
+    labels: [user_input]
+
+sinks:
+  - symbol: package:zoo_mark/zoo_mark.dart#sinkCmd
+    args: [0]
+    category: command_injection

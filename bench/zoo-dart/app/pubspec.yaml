@@ -1,0 +1,10 @@
+name: zoo_app
+description: "An app of the Dart zoo: a main that hands a widget to the framework (runApp), whose methods the framework calls (docs/DECISIONS.md ADR-073). rivus analyses this directory."
+publish_to: none
+environment:
+  sdk: ^3.10.0
+dependencies:
+  zoo_mark:
+    path: ../cells/packages/zoo_mark
+  zoo_flutter:
+    path: ../cells/packages/zoo_flutter
