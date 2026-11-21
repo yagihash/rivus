@@ -20,6 +20,8 @@ void main() {
     });
   }
   tearDownAll(() {
+    final stacks = Platform.environment['ZOO_STACKS_OUT'];
+    if (stacks != null) File(stacks).writeAsStringSync(jsonEncode(mark.stackRows()));
     final out = Platform.environment['ZOO_OUT'];
     if (out == null) return;
     File(out).writeAsStringSync(const JsonEncoder.withIndent(' ').convert({

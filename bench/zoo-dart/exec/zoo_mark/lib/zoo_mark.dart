@@ -93,6 +93,23 @@ Future<void> runCase(String id) async {
 /// The hits so far.
 List<Hit> hits() => List.of(_hits);
 
+/// The stack of every call of a sink, with the case that made it (docs/DESIGN-observed-calls.md): recorded
+/// only when ZOO_STACKS=1, and written by the harness to ZOO_STACKS_OUT. A trial, no part of what the zoo holds.
+final bool _stacks = Platform.environment['ZOO_STACKS'] == '1';
+final _stackRows = <Map<String, Object?>>[];
+
+/// The recorded stacks (empty when ZOO_STACKS is not 1).
+List<Map<String, Object?>> stackRows() => List.of(_stackRows);
+
+/// Called at the start of every function of a copy of the cells that bench/zoo-dart/observed/instrument.dart made:
+/// the stack of the call (the first lines: this function and the place that called it), with the case. Only when
+/// ZOO_STACKS=1.
+void rvEnter() {
+  if (!_stacks) return;
+  final lines = StackTrace.current.toString().split('\n');
+  _stackRows.add({'case': _current, 'class': 'enter', 'stack': lines.skip(1).take(4).join('\n')});
+}
+
 /// The marker of the tag.
 String src(String tag) => _marker(tag);
 
@@ -217,6 +234,7 @@ final _frame = RegExp(r'package:zoo_cells/([^\s:)]+\.dart):(\d+):\d+');
 }
 
 void _record(String cls, String base, List<String> strs) {
+  if (_stacks) _stackRows.add({'case': _current, 'class': cls, 'stack': StackTrace.current.toString()});
   final (file, line) = _where();
   final text = strs.join('\x00');
   final lower = text.toLowerCase();
