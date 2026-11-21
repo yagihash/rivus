@@ -164,7 +164,8 @@ func sameEveryTimeIR(t *testing.T, dir string, stream []byte) {
 // TestDeterministicDogfood: rivus analysed by rivus. Only the findings are compared (paths and
 // fingerprints included): the `functions` count of a run is one more or less from one run to the
 // next (6676 to 6678 in rivus itself, same binary, nothing changed: the wrappers go/ssa makes, not
-// an order of the engine; not looked into), and a run that the clock stopped (-timeout, on a loaded
+// an order of the engine; not looked into: yagihash/rivus #84. The test hides it on purpose, and says so: when
+// it is fixed, compare `stats` too), and a run that the clock stopped (-timeout, on a loaded
 // machine) is a different analysis, so it is not compared.
 func TestDeterministicDogfood(t *testing.T) {
 	if testing.Short() {
