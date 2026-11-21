@@ -21,7 +21,7 @@ class Printer {
 
 void vuln() { // @vuln
   final f = Printer('constant').run;
-  f(src('dart-tearoff-instance-vuln')); // @source(dart-tearoff-instance-vuln) @miss(silent) @ref(R-14)
+  f(src('dart-tearoff-instance-vuln')); // @source(dart-tearoff-instance-vuln)
 }
 
 // the callback of Stream.listen, which is an instance method of a controller
@@ -35,7 +35,7 @@ class Controller {
 
 Future<void> vuln2() async { // @vuln
   final c = Controller('list');
-  final stream = Stream.value(src('dart-tearoff-instance-vuln2')); // @source(dart-tearoff-instance-vuln2) @miss(dynamic_dispatch) @ref(R-14)
+  final stream = Stream.value(src('dart-tearoff-instance-vuln2')); // @source(dart-tearoff-instance-vuln2)
   await stream.listen(c.onData).asFuture<void>();
 }
 
@@ -76,12 +76,12 @@ class PrinterDecoy {
   PrinterDecoy(this.prefix);
   final String prefix;
   void run(String arg) {
-    sinkCmd(arg); // @sink(none) @fp @nosink(dart-tearoff-instance-decoy) @fp @ref(R-14)
+    sinkCmd(arg); // @sink(none) @nosink(dart-tearoff-instance-decoy)
     sinkSql(prefix); // @sink(dart-tearoff-instance-decoy)
   }
 }
 
 void decoy() { // @decoy
-  final f = PrinterDecoy(src('dart-tearoff-instance-decoy')).run; // @source(dart-tearoff-instance-decoy) @miss(silent) @ref(R-14)
+  final f = PrinterDecoy(src('dart-tearoff-instance-decoy')).run; // @source(dart-tearoff-instance-decoy)
   f('constant');
 }

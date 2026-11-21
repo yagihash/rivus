@@ -239,15 +239,53 @@ int _readMember(FnLower f, Element? el, int? base, AstNode n, DartType? t, Pos a
     case ExecutableElement():
       // a method or a function used as a value
       final d = f.tmp(t);
-      final args = <int>[];
       if (!target.isStatic && target is! ConstructorElement && (target.enclosingElement is InterfaceElement || target.enclosingElement is ExtensionElement)) {
-        args.add(base ?? f.readVar(thisKey, null, at));
+        // an instance method as a value: a bound method, a closure that captures the receiver and
+        // calls the method on it (through the receiver's type, as a call does)
+        final recv = base ?? f.readVar(thisKey, null, at);
+        final id = _boundMethod(f, target, n);
+        f.emit('make_closure', dsts: [d], args: [recv], at: at, more: {'func': id});
+        return d;
       }
-      f.emit('make_closure', dsts: [d], args: args, at: at, more: {'func': funcId(target)});
+      f.emit('make_closure', dsts: [d], args: const [], at: at, more: {'func': funcId(target)});
       return d;
     default:
       return f.nilConst(at);
   }
+}
+
+/// The function that stands for `recv.method` used as a value: it takes the arguments of the method, holds
+/// the receiver as what it captured, and calls the method on it. One for each method (the receiver is
+/// what a closure made of it captures). Returns its id.
+String _boundMethod(FnLower f, ExecutableElement method, AstNode n) {
+  final m = method.baseElement;
+  final id = '${funcId(m)}\$bound${f.out.dep ? '\$dep' : ''}';
+  if (!f.prog.boundDone.add(id)) return id;
+  final out = FuncOut(id)
+    ..symbol = ''
+    ..dep = f.out.dep;
+  final at = f.pos(n);
+  out.pos = at;
+  final child = FnLower(f.prog, f.unit, out, cells: const {}, assigned: const {});
+  child.cur = child.newBlock();
+  final params = orderedParams(m);
+  final args = <int>[];
+  for (var i = 0; i < params.length; i++) {
+    final p = params[i];
+    final l = child.local(p.name ?? '', p.type);
+    out.params.add(Param(p.name ?? '', typeId(p.type), typeClass(p.type), displayType(p.type)));
+    child.emit('param', dsts: [l], at: at, more: {'index': i});
+    args.add(l);
+  }
+  final recv = child.local('', null);
+  child.captures.add(thisKey);
+  child.captureLocal[thisKey] = recv;
+  child.vars[thisKey] = recv;
+  final r = _call(child, m, recv, args, null, n, at);
+  child.ret([r], Pos.none);
+  child.finishCaptures();
+  f.prog.out.func(out);
+  return id;
 }
 
 int _globalLoad(FnLower f, Element variable, DartType? t, Pos at) {

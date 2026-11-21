@@ -19,7 +19,7 @@ class Printer {
 
 void vuln() { // @vuln
   final f = Printer('constant').run;
-  f(src('dyn-method-value-vuln')); // @source(dyn-method-value-vuln) @miss(silent) @ref(R-14,PARITY)
+  f(src('dyn-method-value-vuln')); // @source(dyn-method-value-vuln)
 }
 
 class PrinterFixed {
@@ -41,12 +41,12 @@ class PrinterDecoy {
   final String prefix;
 
   void run(String arg) {
-    sinkCmd(arg); // @sink(none) @fp @nosink(dyn-method-value-decoy) @fp @ref(R-14)
+    sinkCmd(arg); // @sink(none) @nosink(dyn-method-value-decoy)
     sinkSql(prefix); // @sink(dyn-method-value-decoy)
   }
 }
 
 void decoy() { // @decoy
-  final f = PrinterDecoy(src('dyn-method-value-decoy')).run; // @source(dyn-method-value-decoy) @miss(silent) @ref(R-14,PARITY)
+  final f = PrinterDecoy(src('dyn-method-value-decoy')).run; // @source(dyn-method-value-decoy)
   f('constant');
 }

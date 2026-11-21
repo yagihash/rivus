@@ -62,6 +62,7 @@ class Program {
   final texts = Texts();
   final methods = <String, List<MethodImpl>>{}; // by member name
   final types = <String, Set<String>>{}; // a class -> the types it extends, implements, mixes in
+  final boundDone = <String>{}; // the bound-method functions (a tear-off of an instance method) already written
   final bodies = <String>{}; // the symbols of what has a body here
   /// The constructors that are written out: the ones that have something to do, and the ones that a
   /// constructor which has something to do calls (the implicit `super()` runs the field initializers

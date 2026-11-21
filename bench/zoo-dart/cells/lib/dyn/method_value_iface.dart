@@ -21,7 +21,7 @@ class Box implements Getter {
 }
 
 void vuln() { // @vuln
-  final Getter i = Box(src('dyn-method-value-iface-vuln')); // @source(dyn-method-value-iface-vuln) @miss(unmodeled_library_call) @ref(R-14,PARITY)
+  final Getter i = Box(src('dyn-method-value-iface-vuln')); // @source(dyn-method-value-iface-vuln)
   final g = i.get;
   sinkCmd(g()); // @sink(dyn-method-value-iface-vuln)
 }
@@ -33,7 +33,7 @@ void fixed() { // @fixed
 }
 
 void decoy() { // @decoy
-  final Getter a = Box(src('dyn-method-value-iface-decoy')); // @source(dyn-method-value-iface-decoy) @miss(unmodeled_library_call) @ref(R-14,PARITY)
+  final Getter a = Box(src('dyn-method-value-iface-decoy')); // @source(dyn-method-value-iface-decoy)
   final Getter b = Box('constant');
   final ga = a.get;
   final gb = b.get;
