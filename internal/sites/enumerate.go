@@ -55,7 +55,7 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 		fields = make(map[string][]model.Source, len(rules.Fields))
 		for k, v := range rules.Fields {
 			if i := strings.LastIndexByte(k, '.'); i > 0 {
-				k = canon(k[:i]) + k[i:]
+				k = canon.Canon(k[:i]) + k[i:]
 			}
 			fields[k] = append(fields[k], v...)
 		}
@@ -109,7 +109,7 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 			}
 			t := string(prm.Type)
 			for _, src := range rules.ParamTypes {
-				if src.Type == t || canon(src.Type) == canon(t) {
+				if src.Type == t || canon.Canon(src.Type) == canon.Canon(t) {
 					add(&Site{Role: RoleSource, Kind: model.KindParamType, Symbol: t, Labels: src.Labels, Src: []model.Source{src}, irpos: paramPos(i), IR: &IRRef{Func: fn, Param: i}})
 				}
 			}
@@ -177,7 +177,7 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 					if len(in.Args) == 0 {
 						continue
 					}
-					key := fieldKeyOf(canon(string(fn.Locals[in.Args[0]].Type)), field)
+					key := fieldKeyOf(canon.Canon(string(fn.Locals[in.Args[0]].Type)), field)
 					if key == "" {
 						continue
 					}
@@ -401,7 +401,7 @@ func isConstantRef(form *irssa.Form, r irssa.Ref, depth int) bool {
 // sinksAt keeps the sinks whose condition on the type of an argument holds at
 // this call. hasRecv says that the first of in.Args is the receiver: when_arg_type counts the arguments
 // without it, as args does, and recv: true is the condition on it.
-func sinksAt(fn *ir.Func, in ir.Instr, hasRecv bool, sinks []model.Sink, canon func(string) string) []model.Sink {
+func sinksAt(fn *ir.Func, in ir.Instr, hasRecv bool, sinks []model.Sink, canon ir.TypeCanon) []model.Sink {
 	var out []model.Sink
 	for _, s := range sinks {
 		if c := s.WhenArgType; c != nil {
@@ -427,7 +427,7 @@ func sinksAt(fn *ir.Func, in ir.Instr, hasRecv bool, sinks []model.Sink, canon f
 // argTypeHolds checks the condition against the type of the local and, when the
 // local is an interface made by a conversion (an http.ResponseWriter passed as
 // an io.Writer), against the type that was converted.
-func argTypeHolds(fn *ir.Func, l ir.LocalID, c *model.ArgTypeCond, canon func(string) string) bool {
+func argTypeHolds(fn *ir.Func, l ir.LocalID, c *model.ArgTypeCond, canon ir.TypeCanon) bool {
 	if c.HoldsWith(string(fn.Locals[l].Type), canon) {
 		return true
 	}

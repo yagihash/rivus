@@ -9,7 +9,7 @@ func TestCanonTypeAndStream(t *testing.T) {
 	p := &Program{TypeAliases: []TypeAlias{{Name: "a/b.Msg", Target: "a/internal.Msg"}}}
 	c := p.CanonType()
 	for in, want := range map[string]string{"a/b.Msg": "a/internal.Msg", "*a/b.Msg": "*a/internal.Msg", "[]*a/b.Msg": "[]*a/internal.Msg", "x.Y": "x.Y"} {
-		if got := c(in); got != want {
+		if got := c.Canon(in); got != want {
 			t.Errorf("canon(%q) = %q, want %q", in, got, want)
 		}
 	}

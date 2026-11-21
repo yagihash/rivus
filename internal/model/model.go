@@ -248,15 +248,18 @@ func (c *ArgTypeCond) Holds(t string) bool {
 	return false
 }
 
+// TypeCanonicalizer gives the type behind the aliases of a type name (ir.TypeCanon).
+type TypeCanonicalizer interface{ Canon(string) string }
+
 // HoldsWith is Holds, where a type and the same type under another name (an
 // alias) are the same: canon gives the name of the type behind the aliases.
-func (c *ArgTypeCond) HoldsWith(t string, canon func(string) string) bool {
+func (c *ArgTypeCond) HoldsWith(t string, canon TypeCanonicalizer) bool {
 	if c == nil || c.Holds(t) {
 		return true
 	}
-	ct := canon(t)
+	ct := canon.Canon(t)
 	for _, x := range c.Types {
-		if canon(x) == ct {
+		if canon.Canon(x) == ct {
 			return true
 		}
 	}

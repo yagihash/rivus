@@ -684,30 +684,34 @@ type TypeAlias struct {
 	Target TypeID `json:"target"`
 }
 
-// CanonType returns a function that gives the type behind the aliases of a
-// type name, keeping the pointer and slice prefixes: two names of one type
-// give one result. Without aliases it is the identity.
-func (p *Program) CanonType() func(string) string {
-	if len(p.TypeAliases) == 0 {
-		return func(s string) string { return s }
-	}
-	m := make(map[string]string, len(p.TypeAliases))
+// CanonType returns the aliases of the program as a TypeCanon: Canon gives the type behind the
+// aliases of a type name, keeping the pointer and slice prefixes, so two names of one type give one
+// result. Without aliases it is the identity. It is a value with a method, not a func value: a
+// closure handed to a helper that calls it is a capture rivus does not follow (capture_unbound).
+func (p *Program) CanonType() TypeCanon {
+	m := make(TypeCanon, len(p.TypeAliases))
 	for _, a := range p.TypeAliases {
 		m[string(a.Name)] = string(a.Target)
 	}
-	return func(s string) string {
-		i := 0
-		for i < len(s) && (s[i] == '*' || s[i] == '[' || s[i] == ']') {
-			i++
-		}
-		base := s[i:]
-		for n := 0; n < 8; n++ {
-			t, ok := m[base]
-			if !ok || t == base {
-				break
-			}
-			base = t
-		}
-		return s[:i] + base
+	return m
+}
+
+// TypeCanon maps an alias name to its target.
+type TypeCanon map[string]string
+
+// Canon is the type behind the aliases of s.
+func (m TypeCanon) Canon(s string) string {
+	i := 0
+	for i < len(s) && (s[i] == '*' || s[i] == '[' || s[i] == ']') {
+		i++
 	}
+	base := s[i:]
+	for n := 0; n < 8; n++ {
+		t, ok := m[base]
+		if !ok || t == base {
+			break
+		}
+		base = t
+	}
+	return s[:i] + base
 }
