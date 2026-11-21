@@ -70,6 +70,16 @@ type resolver struct {
 	callers map[ir.FuncID][]callSite
 	// cut is set when a walk up the callers stopped at maxDepth
 	cut bool
+	// partial holds the reasons why a walk could not follow every caller's value (the functions it
+	// found are then not known to be all of them)
+	partial map[string]bool
+}
+
+func (r *resolver) notePartial(why string) {
+	if r.partial == nil {
+		r.partial = map[string]bool{}
+	}
+	r.partial[why] = true
 }
 
 func (r *resolver) form(f *ir.Func) *irssa.Form {
@@ -123,6 +133,7 @@ func (r *resolver) resolve(fn *ir.Func, bi, ii int, in *ir.Instr) {
 	}
 	found := map[ir.FuncID]*found{}
 	r.cut = false
+	r.partial = nil
 	r.funcsOf(fn, root, fn, found, map[seenKey]bool{}, 0, -1)
 	if len(found) > most {
 		// the functions are known, rivus leaves them out: not "the callee is not known"
@@ -134,6 +145,19 @@ func (r *resolver) resolve(fn *ir.Func, bi, ii int, in *ir.Instr) {
 			in.Callee.ValueLimit = ir.ValueCallerDepthLimit
 		}
 		return
+	}
+	if r.cut {
+		r.notePartial(ir.ValueWhyDepth)
+	}
+	if len(r.partial) > 0 {
+		// The functions that were found stay the candidates (nothing that is found now is lost), but
+		// they are not said to be all of them: the call has an uncertainty, and nothing narrows the
+		// candidates because it looks as if they were every one.
+		in.Callee.ValueLimit, in.Callee.ValueFound = ir.ValuePartial, len(found)
+		for why := range r.partial {
+			in.Callee.ValueWhy = append(in.Callee.ValueWhy, why)
+		}
+		sort.Strings(in.Callee.ValueWhy)
 	}
 	ids := make([]string, 0, len(found))
 	for id := range found {
@@ -312,10 +336,13 @@ func (r *resolver) funcsOf(f *ir.Func, ref irssa.Ref, home *ir.Func, out map[ir.
 	seen[key] = true
 	form := r.form(f)
 	if form == nil {
+		r.notePartial(ir.ValueWhyNoForm)
 		return
 	}
 	k, in, from := r.classify(f, form, ref)
 	switch k {
+	case refOther:
+		r.notePartial(ir.ValueWhyUntraced)
 	case refClosure:
 		id := in.Func
 		cur, ok := out[id]
@@ -347,10 +374,12 @@ func (r *resolver) funcsOf(f *ir.Func, ref irssa.Ref, home *ir.Func, out map[ir.
 			}
 			k := in.Index + off
 			if k >= len(cin.Args) {
+				r.notePartial(ir.ValueWhyArgs)
 				continue
 			}
 			cf := r.form(c.fn)
 			if cf == nil {
+				r.notePartial(ir.ValueWhyNoForm)
 				continue
 			}
 			r.funcsOf(c.fn, cf.Operand(c.b, c.i, k), home, out, seen, depth+1, via)

@@ -11,6 +11,7 @@ import (
 	_ "zoo/cells/call/multiret"
 	_ "zoo/cells/clos/capture_write_by_ref"
 	_ "zoo/cells/clos/inline"
+	_ "zoo/cells/clos/partial_callers"
 	_ "zoo/cells/clos/relay"
 	_ "zoo/cells/clos/returned"
 	_ "zoo/cells/clos/stored"

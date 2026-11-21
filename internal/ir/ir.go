@@ -387,6 +387,9 @@ type Callee struct {
 	// enough to find any. Empty when nothing was cut.
 	ValueLimit string `json:"-"`
 	ValueFound int    `json:"-"`
+	// ValueWhy is, when ValueLimit is "partial" (ValueCands are set, ValueFound of them), why not
+	// every caller's value could be followed: the causes, sorted.
+	ValueWhy []string `json:"-"`
 	// FFI marks a call of a foreign function (an extern "C" function of Rust): the
 	// call leaves the language, and what happens in it is not code that can be read.
 	FFI bool `json:"ffi,omitempty"`
@@ -591,6 +594,17 @@ func (p *Program) SourceFiles() []string {
 const (
 	ValueCandidateLimit   = "candidate_limit"
 	ValueCallerDepthLimit = "caller_depth_limit"
+	// ValuePartial: some functions were found (they are ValueCands) but not every caller's value
+	// could be followed, so the candidates are not known to be all of them.
+	ValuePartial = "partial"
+)
+
+// The causes in Callee.ValueWhy.
+const (
+	ValueWhyUntraced = "untraced_value" // a caller passes a value that is not a function or a copy of one (a field, a result, a global, ...)
+	ValueWhyArgs     = "missing_argument"
+	ValueWhyNoForm   = "no_ssa_form"
+	ValueWhyDepth    = "caller_depth"
 )
 
 // ValueLimitDetail is the text of the uncertainty of a call of a function value that rivus gave up
@@ -599,6 +613,8 @@ func (c *Callee) ValueLimitDetail() string {
 	switch c.ValueLimit {
 	case ValueCandidateLimit:
 		return fmt.Sprintf("candidate_limit: the function value may be any of %d functions, more than the 8 that rivus keeps; none is followed (the functions are known: this is rivus' limit, not the code's)", c.ValueFound)
+	case ValuePartial:
+		return fmt.Sprintf("partial: the callers that pass the function value were followed only in part (%s); %d functions were found and are followed, others may be called (rivus' limit: the candidates are not known to be all of them)", strings.Join(c.ValueWhy, ", "), c.ValueFound)
 	case ValueCallerDepthLimit:
 		return "caller_depth_limit: the callers that pass the function value were followed 3 calls up and no function was found; the value may be one beyond that (rivus' limit)"
 	}

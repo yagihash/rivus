@@ -259,6 +259,10 @@ func (s *state) callBody(cc *callCtx) {
 		}
 		notes = append(notes, dispatch)
 	}
+	if ci.Callee.Kind == ir.CalleeValue && ci.Callee.ValueLimit == ir.ValuePartial {
+		// one function was found (several are told by valueCandidates): followed, and said not to be all
+		notes = append(notes, s.newNote(ci, KindUnresolvedCallee, ci.Callee.ValueLimitDetail(), ""))
+	}
 	if ci.IR.Go {
 		notes = append(notes, s.pathNote(KindConcurrency, "the callee runs in another goroutine; the order of effects is not modelled", ci.Pos))
 	}
@@ -308,6 +312,10 @@ func (s *state) valueCandidates(cc *callCtx) {
 	}
 	sort.Strings(dispatch.Candidates)
 	notes := []*Uncertainty{dispatch}
+	if ci.Callee.ValueLimit == ir.ValuePartial {
+		// the candidates found are followed, and said not to be all of them
+		notes = append(notes, s.newNote(ci, KindUnresolvedCallee, ci.Callee.ValueLimitDetail(), ""))
+	}
 	if ci.IR.Go {
 		notes = append(notes, s.pathNote(KindConcurrency, "the callee runs in another goroutine; the order of effects is not modelled", ci.Pos))
 	}

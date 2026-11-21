@@ -1515,3 +1515,20 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 **確かめたこと(`compare.sh f188ed0 6a5e478`、軽い層):** finding の追加 0、削除 0、経路・到達性・`other_sources` の変化 0(全 16 件の対象)。`shared_state` が付いた finding: gogs 2 つ 10 件ずつ(すべて `conf.Database` のフィールド。`flow` 1、`all` 2、`readers` 8)、gin-vue-admin 2 件(`injectionPaths`、1/1)、go-curated 4、go-scale 5(`flow` 1、`all` 1〜16)、zoo-go 14、zoo-dart 6。gophish、casdoor、dart-pub、parseable、rust-curated には、グローバルを通る finding がない(0)。`flow` > `all` のものは、なかった。動物園の 3 つ(`global-chain` で収束しない)は、実行のたびに `uncertainties` が 87〜91 で揺れる(base でも同じ。この変更とは関係がない)。
 
 **限界:** `readers` は、読む関数と書く関数の和。複数のグローバルを通る finding は、配列で全部を出す。粒度の改善(持ち上げ、マップのキー)と、範囲の絞り込み(テストの印)は、別の段。
+
+
+## ADR-070: 関数値の呼び出しの候補が「一部の呼び元しか追えていない」ことを、不確実性 `unresolved_callee`(`partial`)で言う
+
+**背景:** `valuecalls` の `funcsOf` は、値の出どころが追えない形(フィールドの読み出し、戻り値、グローバルなど。`classify` の `refOther`)に当たると、**黙って戻って**いた。見つかった関数が 1 つ以上あれば、それが「全部」として候補になり、`found` が 0 のときだけ不確実性が出た。Dart の再現: ヘルパー `apply(f, s) { f(s); }` を `apply((s){}, 'x')`(追える)と `apply(h.cb, source())`(フィールドの読み出し)で呼ぶと、候補は前者の 1 つだけになり、`h.cb` の中の sink の流れは、見逃しなのに、finding も不確実性も出なかった(追えない呼び元だけのときは `unresolved_callee` が出る。つまり「全部が追えないときは言い、一部が追えないときは言わない」)。呼び元の絞り込み(Rust の `Fn::call` の候補を受け手の出どころで絞る案)が、この印なしでは、見つかった分だけに絞ってしまう。
+
+**決めたこと(設計の段階 1):**
+1. `funcsOf` が、(a) `refOther`、(b) 呼び元の引数が足りない、(c) 呼び元の `form` が作れない、(d) 呼び元をたどる深さの上限(3)で切った、のどれかに当たったとき、**不完全**の印を付ける。見つかった関数は、**候補に残す**(finding は減らさない)。
+2. 印: `Callee.ValueLimit = "partial"`、`ValueFound`(見つかった数)、`ValueWhy`(原因: `untraced_value`、`missing_argument`、`no_ssa_form`、`caller_depth`)。候補が 0 のときの `candidate_limit` と `caller_depth_limit` は、そのまま(候補が 0 なら `partial` にしない)。
+3. 不確実性: 候補が 1 つでも複数でも、その呼び出しに `unresolved_callee`(detail は `partial: ...`、原因と見つかった数)を、**呼び出しの位置に**足す。その呼び出しを通った finding の経路にも付く(確信度は `no_uncertainty_on_path` にならない)。
+4. **候補を絞る案は、この印のある呼び出しには使わない**(印は、そのための前提)。いまの絞り(ガード)は、候補が複数あるとき、呼び元が直接渡した関数だけで絞るもので、変わらない。
+5. zoo に共通のマス `clos/partial-callers`(3 言語。脆弱、直した版、おとり)を足した。Go は VTA の候補があり、`valuecalls` に来ないので、見つかる(印も出ない)。Dart は、脆弱が `@miss(silent)`(見逃しは今までと同じ。不確実性はヘルパーの中に出るので、見逃した流れの source と sink の関数の痕跡にはならない: `TestZooPartialCallersSaysItIsPartialDart` が、ヘルパーの `unresolved_callee`(`partial:`)を検査する)。Rust は、関数ポインタの呼び出しが `valuecalls` を通らず、追えない呼び元がなくても、脆弱とおとりが見つからない(`@miss(unmodeled_library_call)`。別の穴)。
+6. スキーマは変えない(不確実性の `kind` は既存。`detail` の追加)。
+
+**確かめたこと(`compare.sh a1194ae 732de0b`、軽い層):** finding の追加 0・削除 0(実コードの全対象)、経路・到達性の変化 0。追加の finding は、zoo の新しいマスの分だけ(zoo-go +2、zoo-dart +1。base にはマスがない)。不確実性: Go の実コード(gogs 2 つ、gin-vue-admin、go-test-bench、gophish、casdoor)は **0 件の変化**(Go は候補が VTA で付く)。Dart: dart-pub の `unresolved_callee` が 66 → 71(`mapMap`、`Package.load`、`_handleAccessTokenResponse`、`_handleErrorResponse`、`_parseIgnorePatterns`: 関数値の呼び元の一部が追えない)、dart-curated が 21 → 22(`withDefault`)。parseable(Rust)は 0。
+
+**限界:** 候補が見つかった分だけであることは変わらない(広げない。広げると、過検出が増える。別の判断)。印の `incomplete` を使う絞り込みは、まだない(その案を入れるとき、この印のある呼び出しを除く)。

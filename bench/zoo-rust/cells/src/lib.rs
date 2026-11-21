@@ -13,6 +13,7 @@ pub mod call {
 pub mod clos {
     pub mod capture_write_by_ref;
     pub mod inline;
+    pub mod partial_callers;
     pub mod relay;
     pub mod returned;
     pub mod stored;

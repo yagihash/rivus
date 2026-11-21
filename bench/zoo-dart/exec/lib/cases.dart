@@ -6,6 +6,7 @@ import 'package:zoo_cells/call/direct_in.dart' as call_direct_in;
 import 'package:zoo_cells/call/multiret.dart' as call_multiret;
 import 'package:zoo_cells/clos/capture_write_by_ref.dart' as clos_capture_write_by_ref;
 import 'package:zoo_cells/clos/inline.dart' as clos_inline;
+import 'package:zoo_cells/clos/partial_callers.dart' as clos_partial_callers;
 import 'package:zoo_cells/clos/relay.dart' as clos_relay;
 import 'package:zoo_cells/clos/returned.dart' as clos_returned;
 import 'package:zoo_cells/clos/stored.dart' as clos_stored;
@@ -42,6 +43,7 @@ void registerAll() {
   call_multiret.register();
   clos_capture_write_by_ref.register();
   clos_inline.register();
+  clos_partial_callers.register();
   clos_relay.register();
   clos_returned.register();
   clos_stored.register();

@@ -9,6 +9,7 @@ pub fn register_all() {
     c::call::direct_in::register();
     c::call::multiret::register();
     c::clos::inline::register();
+    c::clos::partial_callers::register();
     c::clos::relay::register();
     c::clos::returned::register();
     c::clos::stored::register();
