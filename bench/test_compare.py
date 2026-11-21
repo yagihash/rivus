@@ -52,7 +52,7 @@ class Report(unittest.TestCase):
         self.assertEqual(report(50, 40)[0], 1)
 
 
-def dry_run(docker_works, *benches):
+def dry_run(docker_works, *benches, extra=()):
     """compare.sh --dry-run with a stub `docker` first in PATH that answers (or not) to `docker info`."""
     with tempfile.TemporaryDirectory() as d:
         stub = os.path.join(d, "docker")
@@ -61,7 +61,7 @@ def dry_run(docker_works, *benches):
         os.chmod(stub, 0o755)
         env = dict(os.environ, PATH=d + os.pathsep + os.environ["PATH"], TMPDIR=d)
         env.pop("RIVUS_UNSAFE_HOST_EXEC", None)
-        r = subprocess.run(["bash", os.path.join(HERE, "compare.sh"), "--dry-run", "--only", ",".join(benches), "HEAD", "HEAD"],
+        r = subprocess.run(["bash", os.path.join(HERE, "compare.sh"), "--dry-run", "--only", ",".join(benches)] + list(extra) + ["HEAD", "HEAD"],
                            capture_output=True, text=True, env=env)
         return r.returncode, r.stdout, r.stderr
 
@@ -106,6 +106,24 @@ class RustIsolation(unittest.TestCase):
             self.assertEqual(mode("bench/parseable"), "container")
             self.assertEqual(mode("src/zoo-rust-clone"), "container")
             self.assertEqual(mode("does/not/exist"), "container")
+
+
+class BigTargets(unittest.TestCase):
+    URL = "https://example.invalid/o/r@" + "a" * 40
+
+    def test_a_big_target_has_the_memory_limit_of_the_help(self):
+        rc, out, _ = dry_run(True, "bigone", extra=("--big", "bigone=" + self.URL))
+        self.assertEqual(rc, 0)
+        self.assertIn("GOMEMLIMIT=10GiB", line(out, "bigone"))
+
+    def test_gomemlimit_overrides_it(self):
+        rc, out, _ = dry_run(True, "bigone", extra=("--big", "bigone=" + self.URL, "--gomemlimit", "bigone=3GiB"))
+        self.assertIn("GOMEMLIMIT=3GiB", line(out, "bigone"))
+
+    def test_the_light_ones_keep_theirs(self):
+        rc, out, _ = dry_run(True, "gogs-9a9388ac", "casdoor")
+        self.assertIn("GOMEMLIMIT=5GiB", line(out, "gogs-9a9388ac"))
+        self.assertIn("GOMEMLIMIT=unset", line(out, "casdoor"))
 
 
 if __name__ == "__main__":

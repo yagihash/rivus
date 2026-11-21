@@ -188,6 +188,8 @@ flags_of() {
 memlimit_of() {
   local kv
   for kv in $MEMLIMITS; do [ "${kv%%=*}" = "$1" ] && ML="${kv#*=}"; done
+  # a --big target is limited to 10GiB unless --gomemlimit NAME=V says otherwise (what --help says)
+  if [ -z "$ML" ] && is_heavy "$1"; then ML=10GiB; fi
 }
 
 if [ "$DRY" = 1 ]; then
