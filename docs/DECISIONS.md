@@ -1867,3 +1867,13 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 **数字(前 → 後):** 時間は同じ(gogs 16 → 16 秒、29 → 30 秒、gin-vue-admin 30 → 30 秒、casdoor 10 → 10 秒)。再解析は +2 〜 4%(gogs 18939 → 19599、23916 → 24738、gin-vue-admin 29998 → 30710、casdoor 14803 → 14856)、最大 RSS は gogs 3173 → 3444 MB、3488 → 3632 MB、gin-vue-admin 5271 → 5901 MB(+12%)、go-test-bench 1175 → 1197 MB、casdoor 2700 → 2773 MB。未収束は、base と head で変わらない(動物園 3 つの「NOT CONVERGED」は、base もそうで、同じ)。go-scale の期待値は変わらない(54 件、4833 回の再解析、同じ)。
 
 **限界:** 書き込みの先が、パラメータで受けたインターフェースで出どころが見えないとき(その関数自身の要約が連鎖して運ぶ)と、インターフェースの値をフィールドや map に入れて取り出したときは、出どころを辿らない(`ifacePointers` は、その場の `make_interface` / コピー / φ だけ)。読む側(callee が iface のパラメータからポインタの指す先のフィールドを読む)は、`convert` が置く写しを読む(ADR-060 のまま)。
+
+## ADR-091: 下げられなかった式が値を返すとき、extractor は結果と元の値を `unsupported` に持たせ、コアは元の値から結果を作る(相談役の判断、2026-11-22)
+
+**背景:** Dart の extractor は、解決できないコンストラクタ呼び出し(`new C.nope(a)`)で、引数を下げたあと、結果を汚染のない定数(`nilConst`)にして済ませていた。`unsupported` は note だけを作り、値を作らないので、引数の汚染は結果へ流れず、流れは黙って消えた(note は全体の一覧にだけ残り、その流れの finding には付かなかった)。原則(PRINCIPLES 1 節、2 節)の「値を返す所で、汚染のない定数を返して済ませない」に反していた。
+
+**決めたこと:** IR の `unsupported` は、引数(元になる値)と結果を持てる(検証 `validate.go` の個数を 0 固定から可変にした。既存の流れは 0 / 0 のままで変わらない)。値を作る構文が下げられなかったとき、extractor は、元の値を `args`、結果を `dsts` にして `unsupported` を出す。コアは、`args` の位置から `dsts` を作り(ほんとうより多く、少なくはない側)、note を流れの途中の `why` に付ける(通る finding は clear でなくなる)。元の値がない所(コンストラクタの tear-off、変数が見つからない、パターンの変数: 束縛する先の要素がない)は、これまでどおり `nilConst` と note で、全体の一覧にだけ残る。
+
+**確かめたこと:** `cmd/rivus/dart_syntax_test.go` の `TestDartUnresolvedConstructorKeepsTheFlow`(直す前は finding 0 件、後は 1 件で clear でない)。dart-curated(114 件)と zoo-dart(163 件)の finding は、直す前後で同一。
+
+**限界:** Go と Rust の extractor に、同じ形(下げられない式が値を返す所で、定数や nil を返している所)があるかは、まだ見ていない(Rust の表のとき)。

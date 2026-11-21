@@ -152,7 +152,7 @@ rivus resolve --bookmarks b.json ./...  # 前回見た箇所が今どこにあ�
 | 命令 | 内容 |
 |---|---|
 | `exception_value` | 例外ハンドラブロックの先頭で、捕捉した値を受ける |
-| `unsupported` | extractor が脱糖できなかった構文。理由の文字列を持ち、不確実性 `unsupported_construct` の起点になる（4.4） |
+| `unsupported` | extractor が脱糖できなかった構文。理由の文字列を持ち、不確実性 `unsupported_construct` の起点になる（4.4）。値を作る構文は、元の値を引数、結果を `dsts` に持てる。コアは、引数の位置から結果を作り、note を流れの途中に付ける（ADR-091） |
 
 **終端命令（各ブロックに 1 つ）**
 
