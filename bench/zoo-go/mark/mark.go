@@ -32,3 +32,16 @@ func CleanPath(s string) string { return "" }
 
 // Case registers a case of the zoo (the harness runs it).
 func Case(id string, fn func()) {}
+
+// SinkStmt runs the statement: the SQL of it is the sink, the Params are not (types.go).
+func SinkStmt(s *Stmt) {}
+
+// SinkStmtAny is SinkStmt for a statement that is held by an interface (the pointer is in it).
+func SinkStmtAny(v any) {}
+
+// SinkTask sends the request of the task: the URL of the HTTP request is the sink.
+func SinkTask(r *CreateTask) {}
+
+// Opaque is a function that the analysis has no body and no model of (the declaration has no body: opaque.s
+// makes that legal): it moves the "body" parameter of a statement to its SQL (mark_exec.go does so).
+func Opaque(s *Stmt)

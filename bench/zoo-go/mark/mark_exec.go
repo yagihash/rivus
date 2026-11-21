@@ -325,3 +325,28 @@ func judgeCmd(s, d string) bool {
 	}
 	return false
 }
+
+// SinkStmt runs the statement: the SQL of it is the sink, the Params are not.
+func SinkStmt(s *Stmt) { record(SQL, "", []string{s.SQL}) }
+
+// SinkStmtAny is SinkStmt for a statement that is held by an interface.
+func SinkStmtAny(v any) { record(SQL, "", []string{v.(*Stmt).SQL}) }
+
+// SinkTask sends the request of the task: the URL of the HTTP request is the sink.
+func SinkTask(r *CreateTask) {
+	u := ""
+	if r.Task != nil {
+		if w, ok := r.Task.MessageType.(*TaskHTTPRequest); ok && w.HTTPRequest != nil {
+			u = w.HTTPRequest.URL
+		}
+	}
+	record(Cmd, "", []string{u})
+}
+
+// Opaque moves the "body" parameter of a statement to its SQL: what a function that is not read may do
+// to a structure that it is given.
+func Opaque(s *Stmt) {
+	if b, ok := s.Params["body"]; ok {
+		s.SQL = b
+	}
+}
