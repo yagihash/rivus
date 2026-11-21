@@ -1,7 +1,7 @@
 # zoo: cases of one shape each, with answers that a run backs
 
 The design is in [`docs/DESIGN-zoo.md`](../../docs/DESIGN-zoo.md). This is how to work with what is built
-(stage 1: Go, `bench/zoo-go`; stage 2: Dart, `bench/zoo-dart`, see the last section; the Rust zoo follows the same `spec.json`).
+(stage 1: Go, `bench/zoo-go`; stage 2: Dart, `bench/zoo-dart`, see the last section; stage 4: Rust, `bench/zoo-rust`, the section "Rust" at the end; all three follow the same `spec.json`).
 
 **The answer is what the case does when it runs, not what rivus says.** A source returns a marker; a sink
 records what it got and does nothing else. The three runs of the cases (`TestZooExecGo`) say whether the
@@ -92,7 +92,7 @@ of the cases in the analysis (the design says the analysis must not see them).
 ## Light tier
 
 `bench/compare.sh --light` has `zoo-go` (`./...` of `bench/zoo-go`: the cells and `mark`; the harness, the `pure` package and
-`cmd/` are behind the `zooexec` tag). A cell added in head shows as `+N` of that benchmark. `zoo-dart` is the same for Dart (`bench/zoo-dart/cells`; the Dart extractor, about 9 s and 1.1 GB).
+`cmd/` are behind the `zooexec` tag). A cell added in head shows as `+N` of that benchmark. `zoo-dart` is the same for Dart (`bench/zoo-dart/cells`; the Dart extractor, about 9 s and 1.1 GB). `zoo-rust` is the same for Rust (`bench/zoo-rust`: the Rust extractor builds the cells and `zoo-mark`, which have no dependency, with `cargo check`).
 
 ## Dart (`bench/zoo-dart`)
 
@@ -139,3 +139,35 @@ and the position of such a source is the line of the `@override` of the method).
 | `R-15` | a variable that a pattern (`var (a, _) = ...`) or a for-in (`for (var x in ...)`) declares is not a cell: a closure that assigns it is not seen | `dart/patterns-record` `vuln4`, `vuln7` (a pattern, an if-case, a switch case and a for-in whose variable is only read are found) |
 | `R-16` | the implementation that comes from a mixin or a superclass of the class is not a candidate of a call through the interface; the interpolation `'$w'` does not call the `toString` (the result carries the whole object) | `dart/super-mixin-impl` (`vuln`, `vuln2`, `decoy`), `dart/interp-tostring` `decoy` |
 | `KEYED-MAP` | the keys of a list or a map are not told apart (also a `Map<Object, _>` that a store keeps by provider) | `cont/slice`, `cont/map-key-vs-value`, `state/provider-store` (the decoys) |
+
+## Rust (`bench/zoo-rust`)
+
+The same marker, the same judgement (`spec.json`), the same annotations and the same checks as Go and Dart. **The zoo has no dependency at all** (std only: no registry crate, no `build.rs`, no proc macro, no network): the Rust extractor runs `cargo check` on what it reads, and that runs the build scripts and proc macros of the target and of its dependencies, so the zoo is code of our own and nothing else. `Cargo.lock` is committed (no packages); every command is `--locked --offline`.
+
+| file | what |
+| --- | --- |
+| `bench/zoo-rust` | the workspace that rivus analyses (`cells`, `zoo-mark`; `exec` is excluded). `rules.yaml` is next to `Cargo.toml` |
+| `bench/zoo-rust/zoo-mark` | what the cases call (`src`, `src_bytes`, `In`, `sink_cmd` / `sink_cmd_own` (ownership moves in) / `sink_cmd_bytes` / `sink_sql` / `sink_html` / `sink_path(base, s)` / `sink_any` (structs and containers: the `Debug` text), `clean_cmd` ..., `case`). `src/decl.rs` is what rivus reads: declarations with empty bodies. `src/exec.rs` (feature `exec`) records, with `#[track_caller]` for the line of the call |
+| `bench/zoo-rust/cells/src/<family>/<shape>.rs` | one cell = one file = three cases; `register()` hands them to `zoo_mark::case`. `lib.rs` lists the modules inline (`dyns` is the family `dyn`: a keyword). The family `rust` is the shapes of Rust |
+| `bench/zoo-rust/exec` | the harness, a workspace of its own: `zoo-observe` (the three runs), `tests/spec.rs` (`cargo test`: the constants and the probes of `spec.json`, with a small JSON reader of its own), `tests/cases.rs`, `src/cases.rs` (the table of the cells' `register()`; the test checks that every file is there). `zoo-cells` is built with its feature `extra` (the cell `rust/cfg-feature`) |
+| `cmd/rivus/zoo_rust_test.go` | `TestZooExecRust` (`cargo test` of the harness in both variants; the harness built with `-C instrument-coverage` by the toolchain of `extractor/rust/rust-toolchain.toml` (the nightly that has `llvm-tools`), run three times (variant 0, variant 1, variant 0 in the reverse order, in different processes); `llvm-profdata merge` and `llvm-cov export`: every code region of `cells/src` must have run), `TestZooTruthRust`, `TestZooRust`, `TestZooMarkIndependentRust` (the analysis with `default = ["exec"]` and the table of the cases inside the cells crate: the same findings). They share the comparison of the runs, the checks of the cells and of the lines, and the headline with Go and Dart (`zoo_test.go`). `RIVUS_RUST` names the extractor; without it they skip (`RIVUS_REQUIRE_RUST=1`: they fail) |
+
+Adding a cell: `cells/src/<family>/<shape>.rs` with `// @cell(F/<family>/<shape>)` and `// @shape: ...` in the first lines, `pub fn register() { m::case("F/<family>/<shape>/vuln", vuln); ... }`, the three functions with `// @vuln`, `// @fixed`, `// @decoy` on the line of the `fn` (more vulnerable cases: `vuln2` ..., registered too, with their own tags), the module in `cells/src/lib.rs` and the file in `exec/src/cases.rs` (both are plain lists). A shape that Rust cannot have is told in `lib.rs` as `@na(F/<family>/<shape>: the reason)`; the test fails for a cell of the Go zoo that the Rust zoo has neither as a cell nor as `@na`. Things that are Rust's:
+
+* The place of a sink is `Location::caller()`: the line of the call, so keep a call of a sink on one line. In a macro (`macro_rules!`) the place is the line of the invocation.
+* Every code region must run (`if let` without `else` makes a region for the missing branch; a `Write` impl needs its `flush` called; a branch of `?` needs both outcomes). A case may start threads (they must be joined) and use a future (`cells/src/rust/async_await.rs` has its own `block_on` with `Waker::noop()`; no executor crate).
+* `In` has a public field `value`; the handler under test takes it: `fn handle(i: m::In) { // @source(tag)`.
+* The 29 cells of the Go zoo have the same names (`F/call/direct` ...), the same tags and the same three roles; where Rust has no such form the closest one is used (a method value is a method taken as a function `Printer::run`; an interface is a trait and `dyn`; `io.Writer` is `std::io::Write`; a goroutine is a thread). `cmd/rivus` prints the parity with the Go zoo: the flows that are found in Go and not in Rust (each such `@miss` or `@fp` has `@ref(PARITY)`; the test fails without it).
+
+### What the Rust zoo found (the refs of its `@miss`, `@fp` and `@noisy`)
+
+New names (not from a review) say what the zoo saw; the cause is not investigated yet.
+
+| ref | what | cells |
+| --- | --- | --- |
+| `R-17` | `Drop::drop` is not called for a value that is nested (a field, `Some(..)`, `Box`, explicit `drop(g)`); a function without a receiver through a type parameter (`T::read()`) is a call without a body; the initialiser of a `static LazyLock` does not reach the reader; the code of a feature that is not a default one is not in the IR | `rust/drop` (`vuln2` .. `vuln5`), `rust/assoc-fn`, `rust/static-lazylock`, `rust/cfg-feature` |
+| `R-35` | a call inside a macro has the line of the macro's definition; the flow is reported there and not at the invocation | `rust/macro-rules` `vuln2` |
+| `R-58` | two entry points that share a state through a field of the receiver (`Arc<AppState>` with a `Mutex` field) | `state/receiver-field-across-entries` (`vuln`, `decoy`) |
+| `PARITY` | found (or quiet) in the Go zoo with the same tag, not in the Rust zoo. Together with the name of what is known: `GEN-DYN` (a generic trait through `&dyn`), `KEYED-MAP` (the elements of a Vec and the keys of a HashMap are not told apart), `DYN-IMPLS` (the call through `dyn Handler` / `dyn Execer` reaches the implementations of the other cases) | `dyn/generics-ptr`, `cont/slice`, `cont/map-key-vs-value`, `dyn/http-middleware-chain`, `dyn/sink-in-method-iface`, `guard/one-branch` (the fixed case's sink), `state/save-restore` (the decoy) |
+| `R-04`, `CORE-K`, `R-44` | as in Go: `impl io::Write` through `dyn Write`, `write_str` into a `String`, a chain of 13 and 30 statics (the pass limit) | `dyn/stdlib-writer-own`, `conv/buffer-writestring`, `state/global-chain` |
+| `CAP`, `ENV-PTR`, `STD-MODEL`, `ASYNC` | `thread::spawn` and the closure it takes; a closure that writes through a captured `&mut` (`FnMut`, `for_each`); `mpsc::channel` has no model; an `async` block / `.await` | `rust/arc-mutex`, `rust/closure-fnmut`, `rust/iterator-chain` `vuln2`, `rust/channel`, `rust/async-await` |
