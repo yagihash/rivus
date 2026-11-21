@@ -84,6 +84,7 @@ class FuncOut {
   bool dep = false; // a function of a dependency
   bool entry = false; // where the program starts: main
   bool init = false; // the initializer of a variable: an entry, but not where a program starts
+  List<String> overrides = const []; // the methods of the supertypes (outside dart:*) that this one overrides
   Pos pos = Pos.none;
   final List<Param> params = [];
   final List<String> results = [];
@@ -104,6 +105,7 @@ class FuncOut {
         if (init) 'init': true,
         if (symbol.isNotEmpty) 'symbol': symbol,
         if (recv) 'recv': true,
+        if (overrides.isNotEmpty) 'overrides': overrides,
       };
 }
 

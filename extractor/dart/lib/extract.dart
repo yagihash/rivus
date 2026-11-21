@@ -585,6 +585,33 @@ class _Lower extends RecursiveAstVisitor<void> {
     }
   }
 
+  /// The methods of the supertypes that a method overrides or implements (a getter and a setter likewise), by
+  /// symbol, outside the SDK: what a framework calls when an app overrides it (`State.initState`,
+  /// `StatelessWidget.build`). The core takes a method that overrides what the code that was read does not
+  /// declare as a function the framework calls (`Func.overrides`). Private names are left out (a library's
+  /// own); so are the members of `dart:*` (`Object.toString`, `Iterator.moveNext` are called by anyone).
+  List<String> _overrides(ExecutableElement el) {
+    final base = el.baseElement;
+    final cls = base.enclosingElement;
+    final raw = base.name ?? '';
+    final name = base is SetterElement && raw.endsWith('=') ? raw.substring(0, raw.length - 1) : raw;
+    if (cls is! InterfaceElement || base is ConstructorElement || base.isStatic || name.isEmpty || name.startsWith('_')) {
+      return const [];
+    }
+    final out = <String>{};
+    for (final s in cls.allSupertypes) {
+      final e = s.element;
+      final Element? m = base is SetterElement
+          ? e.getSetter(name)
+          : base is GetterElement
+              ? e.getGetter(name)
+              : e.getMethod(name);
+      if (m == null || m.isPrivate || m.library?.uri.scheme == 'dart') continue;
+      out.add(symbolOf(m));
+    }
+    return out.toList()..sort();
+  }
+
   void _function(ExecutableElement el, AstNode node, FormalParameterList? list, FunctionBody body,
           {required DartType? thisType, InterfaceElement? constructorOf, ConstructorDeclaration? ctor, ConstructorElement? redirect}) =>
       _guarded(funcId(el), () => _functionLower(el, node, list, body, thisType: thisType, constructorOf: constructorOf, ctor: ctor, redirect: redirect));
@@ -597,6 +624,7 @@ class _Lower extends RecursiveAstVisitor<void> {
       ..recv = thisType != null
       ..dep = unit.dep
       ..entry = !unit.dep && el is TopLevelFunctionElement && el.name == 'main'
+      ..overrides = _overrides(el)
       ..exported = !(el.name ?? '').startsWith('_');
     final at = unit.at(node.offset);
     out.pos = unit.pos(node, node.offset);

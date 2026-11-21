@@ -204,6 +204,12 @@ type Func struct {
 	// Dep marks a function of a dependency: it is there so that calls into
 	// it can be followed, but it is not part of the code being analysed.
 	Dep bool `json:"dep,omitempty"`
+	// Overrides are the symbols of the methods of the supertypes that this method overrides or
+	// implements (an extractor lists them, outside the language's own library). One of them
+	// that no function of the code being analysed has as its symbol is a method that a
+	// framework declares: this one is called by the framework, and the program does not
+	// start there (Program.FrameworkCallbacks, ADR-073). Dart only for now.
+	Overrides []string `json:"overrides,omitempty"`
 }
 
 // EdgeKind says how control goes from a block to another.
