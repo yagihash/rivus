@@ -379,7 +379,8 @@ func TestPathFromEntry(t *testing.T) {
 	if r, _ = e.Path("Dead", "Z", graphq.Options{}); !r.Reachable || !r.Exhaustive || len(r.Limits) != 0 {
 		t.Errorf("%+v", r)
 	}
-	if r, _ = e.Path("Z", "Dead", graphq.Options{}); r.Reachable || !r.Exhaustive || len(r.Limits) != 0 || r.TargetFacts != nil {
+	// (a "no path" of --from says that reflection and the start of the program are not edges: one line, from 2026-11-22)
+	if r, _ = e.Path("Z", "Dead", graphq.Options{}); r.Reachable || !r.Exhaustive || len(r.Limits) != 1 || r.TargetFacts != nil {
 		t.Errorf("%+v", r)
 	}
 	// --from and --from-entry together

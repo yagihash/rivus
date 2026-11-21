@@ -835,6 +835,13 @@ func (e *Engine) Path(from, to string, o Options) (*PathResult, error) {
 	}
 	if !sr.found {
 		res.Certainty = ""
+		if !o.FromEntry {
+			// what no edge of the file holds, whatever the answer of the search (the limits of the entries say the same)
+			res.Limits = append(res.Limits, "a call by reflection, and one that the start of the program or the runtime makes (main, init, the initializers of variables), is not an edge of the file")
+			if e.db.Meta("flags.tests") == "false" {
+				res.Limits = append(res.Limits, "the code of the tests was not read (the index was made without -tests): a call from it is outside the range of the answer")
+			}
+		}
 		if edgesDone && !o.FromEntry {
 			// "No path" is exhaustive only when nothing was left out: what the file does not hold may decide it
 			ne, err := e.notExhaustive(starts, goals, refsSearched)

@@ -110,3 +110,16 @@ func TestFoundPathIsUnchangedByTheCaveats(t *testing.T) {
 		t.Fatalf("%v %+v", err, r)
 	}
 }
+
+// What no edge holds is said for every "no path" of --from, whatever the answer says of exhaustive.
+func TestNoPathSaysThatReflectionAndTheRuntimeAreNotEdges(t *testing.T) {
+	e := build(t, []fnDef{
+		{"S", []call{{"s.go", 3, 1, "", "A", nil}}},
+		{"A", nil},
+		{"T", nil},
+	})
+	r, err := e.Path("S", "T", graphq.Options{})
+	if err != nil || r.Reachable || !strings.Contains(strings.Join(r.Limits, " "), "reflection") {
+		t.Fatalf("%v %+v", err, r.Limits)
+	}
+}
