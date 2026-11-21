@@ -144,6 +144,7 @@ class StreamOut {
           if (notes.isNotEmpty) 'notes': notes
         }
       });
-  void loadError(String package, String message) =>
-      _line({'kind': 'load_error', 'load_error': {'package': package, 'message': message}});
+  /// [unread]: the file is in the result on a tree that is not what its text says (the core lists it in summary.unread).
+  void loadError(String package, String message, {bool unread = false}) =>
+      _line({'kind': 'load_error', 'load_error': {'package': package, 'message': message, if (unread) 'unread': true}});
 }

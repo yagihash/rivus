@@ -99,7 +99,7 @@ func (o *analyzeOpts) graphIndexer(path string, patterns []string, since time.Ti
 			case "go":
 				meta.Unread.Counted = append(meta.Unread.Counted, "go:failed_packages")
 			case "dart":
-				meta.Unread.Uncounted = append(meta.Unread.Uncounted, "dart:failed_files") // the Dart extractor reports no load error
+				meta.Unread.Counted = append(meta.Unread.Counted, "dart:failed_files") // the extractor reports the type and the syntax errors of a file
 			case "rust":
 				meta.Unread.Uncounted = append(meta.Unread.Uncounted, "rust:failed_crates") // nor the Rust one
 			default:

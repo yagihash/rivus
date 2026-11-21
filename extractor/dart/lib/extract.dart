@@ -60,10 +60,22 @@ Future<void> extract(String root, StringSink sink,
       out.loadError(p.relative(path, from: root), 'could not be resolved');
       continue;
     }
+    String? firstSyntax;
+    var syntax = 0;
     for (final d in r.diagnostics) {
       if (d.diagnosticCode.type.name == 'COMPILE_TIME_ERROR') {
         out.loadError(p.relative(path, from: root), d.message);
+      } else if (d.diagnosticCode.type.name == 'SYNTACTIC_ERROR') {
+        firstSyntax ??= d.message;
+        syntax++;
       }
+    }
+    // A file with a syntax error is read on the tree that the analyzer recovers: a declaration after the error may be
+    // missing, or made up. It is said (summary.unread; the findings of its functions have a note of it).
+    if (firstSyntax != null) {
+      out.loadError(p.relative(path, from: root),
+          'syntax_error: $firstSyntax ($syntax in the file); the file was read on the syntax tree that the analyzer recovered: a declaration may be missing or made up',
+          unread: true);
     }
     units.add(UnitInfo(prog, p.relative(path, from: root), r.unit, r.content, r.lineInfo));
   }

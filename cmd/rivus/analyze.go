@@ -210,7 +210,7 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 			}
 			names = append(names, fmt.Sprintf("%s (%d)", p.Package, p.Functions))
 		}
-		fmt.Fprintf(os.Stderr, "rivus: %d package(s) were read and not built (a type error in them or in a package they import), so their %d function(s) are not analysed: %s; see summary.unread\n",
+		fmt.Fprintf(os.Stderr, "rivus: %d package(s) or file(s) were read and not built (a type error in them or in a package they import), or read on a syntax tree that the analyzer recovered (a syntax error: a declaration may be missing); %d function(s) of them are not analysed: %s; see summary.unread\n",
 			u.Packages, u.Functions, strings.Join(names, ", "))
 	}
 	rep.Target = o.target(o.irFile != "")
