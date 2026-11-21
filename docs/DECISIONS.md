@@ -1615,3 +1615,22 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 - `--no-deps` でなく、Flutter を読んでも、`build` には、フレームワークの呼び出しの辺では届かない(`form_app` の `Reachable` は、読んでも 18 のまま。どこで辺が切れるかは、調べていない)。
 - `graph path --from-entry` は、これまでの入口のまま(`from_framework_callback` の入口を足していない)。足すなら、`graph` の `--from-entry` の入口の定義を足す、別の変更。
 - LocalSend は、固定した依存の版が、今の Flutter と合わないので、緩めて解決した版で測った。数は参考。
+
+## ADR-074: sink が、引数の値の「どのフィールドか」を言えるようにする(`parts`)。細かさが残らないときは、鳴らして `field_imprecision` を付ける(設計: docs/DESIGN-field-sinks.md)
+
+**背景:** sink の書式は、位置(引数 n、受け手)までしか言えず、`checkSink` は、位置の値の下の汚れを、構造を無視して全部見た。要求を構造体で組み立てる API(Google Cloud のクライアントと、生成された API 全般)では、危険なのは 1 つのフィールド(`SQL`、`Url`)で、同じ値の中の別のフィールド(`Params`、`Body`)は危険でない。全部見ると、別のフィールドだけが汚れた呼び出しで偽陽性になり、sink にしなければ見逃しになる。
+
+**決めたこと(案 B: 今ある呼び出しの sink に、道を書けるようにする。案 A の「フィールドへの書き込みが sink」は、設計の 10 節の条件が揃うまで作らない):**
+1. **書式:** `model.Sink.Parts`(`{arg|recv, field}` の列)と、糖衣(`args: [n]` か `recv: true` と `field`)。`field` は、位置の値から下るフィールド名の列(`.` 区切り、`[]` は要素)。`args` / `recv` に書いた位置は、`parts` があっても全部が勝つ。`parts` があって `args` がないときは、「全部の引数」とは読まない。`parts` のない sink は、今までどおり(既存のルールの結果は変わらない)。
+2. **照合:** セルの道(位置の値からの残り)から、名前でない段(`*`、`[]`)を飛ばして、`field` の名前の列が、**部分列**として先頭から当たるか(`matchParts`)。下(当たる、または、その下)は、確かな finding。上(値が丸ごと汚れている、道が切れている)は、鳴らして `field_imprecision`(`why`: `whole_value` / `path_limit` / `element`)。別のフィールドは、当たらない(鳴らない)。名前の段は飛ばさない。
+3. **モデルも本体もない呼び先に渡された値**(`unmodeled`): 渡した値の根を覚える(汚れは足さない。`parts` のない sink と、今の伝播は変わらない)。`parts` の sink が、その根の下の汚れを見つけたら、道に当たらなくても、鳴らして `field_imprecision`(`why`: `opaque_callee`)。今の既定の伝播は、引数の中を混ぜない(結果にだけ流す)ことを、段階 0 で確かめた。
+4. **綴りの誤り(永久に黙る見逃し):** `field` の名前が、解析した IR のどの命令のフィールド名にも出ないとき、その sink は、その site で `parts` なし(全部)として扱い、`field_unresolved`(プログラム全体の不確実性と、finding の経路)を出す。**型の鎖の検査は、IR に構造体の定義(フィールド名と型)がないのでできない**(3 言語とも。`ir.TypeInfo` は `supers` だけ)。IR に足すのは、3 つの抽出器と書式の変更なので、別の設計。かわりに、死んだ行の関門を `parts` の道の単位に広げた(`TestZooFieldSinkRowsAreHit`: 動物園のルールの `parts` の各行は、道が「下」で当たる finding を持たなければ赤。道が `K` を超える行は、理由つきの一覧)。
+5. **要約(`SinkReach`):** 要約の中では、呼び元の道(`*` の段)を知らないので、`parts` の照合は、呼び元の実引数のセルに対して行う。`SinkReach` に、まだ照合していない残りの名前(`Field`)と、不確実の印(`Unsure`)を足した。`expandParam` は、`parts` のある到達では、同じ要素を 1 つにまとめない(同じ要素が、フィールドの中と、別のフィールドにある形を区別するため)。**印は、キー(`sinkKey`)に入れて、確かな到達と不確実な到達を別々に持つ**(OR で 1 つにすると、確かな到達があるのに不確実と報告する誤った痕跡になる)。finding(`recordFinding`)は、**確かな経路があれば、確かが勝つ**(不確実性は、確かな経路がないときだけ)。`signature` と `joinSummaries` の比べに `Field` と印を入れた。
+6. **`literal_only`:** `parts` のある sink は、定数だけの引数とは見ない(過検出側)。
+
+**実測(段階 0。何も変えずに測った):** セルの道は、ポインタの値そのものには `*` が出ず、ポインタを持つフィールドの先とインターフェースに包んだポインタの先に出る。Cloud Tasks の形(`CreateTask.Task.MessageType.HTTPRequest.URL`)は、設計の見積りの 5 段ではなく **7 段**(`Task`、`*`、`MessageType`、`*`、`HTTPRequest`、`*`、`URL`)で、K = 3 で `/Task/*/MessageType` に切れ、`URL` と `Body` が混ざる。この形は、`field_imprecision`(`path_limit`)で鳴り、おとりも鳴る(動物園の `conv/struct-field-deep` の `@fp`)。段階 4(`max(K, 道の段数)`)は、測ってから。
+
+**確かめたこと:** 動物園の `conv/struct-field-shallow` / `boxed`: おとり(`Params` だけ汚れる)が静かになった(偽陽性の消える側)。`struct-field-opaque`: `Opaque` が実際に `Params["body"]` を `SQL` に写す(実行で裏付け)脆弱が、`opaque_callee` つきで鳴る。`testdata/go/cases/fieldsink`: 1 関数、別の関数を挟む(2 段)、丸ごとのコピー、ラッパー、丸ごと汚れた値(`NewReq` の `flows`)、確かな到達が不確実な到達に勝つ(同じ関数内と、要約を通して)、綴りの誤り、プロジェクトのインターフェースの裏の実装(ADR-068)、受け手。**見逃しの形(丸ごと、k で切れた、要素、モデルのない関数)は、すべて鳴る。**
+
+**限界:** 道の名前の検査は、「プログラムのどこかで使われているか」まで(型の鎖ではない)。`flows` の `to:` に道がまだ書けないので、フィールドを公開しない生成コード(Opaque API、ビルダー、セッター)では、`whole_value` で鳴るだけ(段階 5 が前提)。`K` を超える深い道は、段階 4 まで `path_limit`。Dart と Rust の `Option` / variant の透過な段は、段階 6。
+

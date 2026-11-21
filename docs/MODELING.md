@@ -98,3 +98,55 @@ test too. When you write a row for a function of a library, write the call in th
 Not yet: a projection (`recv.elem`, `result0.err`: whole values only), a result that is itself a function (`sync.OnceValue`), a callback
 that is a field of an argument, `feed` (the accumulator of `fold`), and the libraries that are not the standard one (a row for
 `dio` or `tokio` is the next step; the harness takes them from a lockfile of their own).
+
+## 4. A sink that is one field of an argument: `parts`
+
+A sink says which **position** is dangerous (`args`, `recv`). A request of a generated API is one value with a dangerous field and
+safe ones (`spanner.Statement{SQL, Params}`: the SQL is dangerous, the bind parameters are not; a Cloud Tasks request: the `Url`,
+not the `Body`). A sink that takes the whole value reports a flow that goes only into the safe field. Say which field:
+
+```yaml
+- symbol: (*cloud.google.com/go/spanner.ReadOnlyTransaction).Query
+  args: [1]
+  field: SQL                                  # one position: the short form
+  category: sql_injection
+
+- symbol: (*cloud.google.com/go/cloudtasks/apiv2.Client).CreateTask
+  category: ssrf
+  parts:                                      # several positions, or several fields
+    - {arg: 1, field: Task.MessageType.HttpRequest.Url}
+    - {arg: 1, field: Task.MessageType.HttpRequest.Headers}
+    - {recv: true, field: Config.Endpoint}
+```
+
+* **`field` is the names of the fields from the value of the position down to the dangerous one**, separated by dots, as the IR of
+  the language names them (Go: the Go field name, an embedded struct by its type name; Dart: `url`; Rust: the field, or `0`). The first
+  name is a field **of** the value (not the type of it). **Do not write the steps of a pointer** (`*`): a pointer behind a field, or
+  inside an interface (a `oneof`, an `any(&x)`), is skipped when the path is matched. `[]` is an element of a slice, an array or a
+  map: `[].SQL` is the `SQL` of each element (it can be left out: an element is skipped too, and the elements are not told apart).
+  Matching is by the names **in order**: a name of the path is never skipped.
+* **A position in `args` or `recv` is dangerous whole**, and `parts` do not limit it. A sink with `parts` and no `args` reads only the
+  positions of its parts (no `args` is **not** every argument, as it is for a sink without `parts`). A sink without `parts` is as it
+  was. Several rows of one symbol are added up.
+* **What the finding says.** Taint that is in the field is a finding as any other. Taint in a field **beside** it (`Params`) is not a
+  flow to the sink, and the sink is quiet. When the value does not tell which field the taint is in, the finding is **kept and carries
+  `field_imprecision`**, with the `why`: `whole_value` (the whole value is tainted: a function that is modelled to return the request
+  tainted, a `json.Unmarshal` into it), `path_limit` (the path is longer than the analysis keeps: 3 steps, and each pointer is a step),
+  `element` (an element of a container), `opaque_callee` (the value went to a function that is neither read nor modelled: it may have
+  moved the taint into the field). A flow that is told to be in the field wins over one that is not: when both reach the sink from the same source, there is no
+  `field_imprecision`.
+* **A misspelled path is silent for ever, and looks like a decoy.** `Task.MessageType.HttpRequst.Url`, or a field that a new version of
+  the library renamed, matches nothing: nothing reaches it, and the sink is quiet. Three guards: (1) rivus checks the names against the field names that the
+  instructions of the analysed program use; a name that is nowhere makes the sink read the **whole** value, with
+  `field_unresolved` (read the output for it: it is on the program, and on the findings of the sink). (2) Write **two tests** for
+  every row, as for a `pure` row: a flow into the field (it must be found, **with no `field_imprecision`**), and a flow into a field beside it (it must be quiet): a
+  sink that has only the second is not tested. (3) In a project, run the sink once on a case that puts a marker in the field and look for the
+  finding, and for the absence of `field_unresolved`.
+  The zoo does (2) for its own rows: `TestZooFieldSinkRowsAreHit` (`cmd/rivus/zoo_fieldsinks_test.go`) fails for a row with `parts`
+  that no flow of the cells meets through the field itself.
+* **A library whose fields are not exposed** (the Go protobuf Opaque API, builders, Dart setters, Rust builders) writes the field by a
+  call (`req.SetUrl(x)`, `b.url(x)`): the call is a `flows` row, and until `flows` can name a field of its target (`to: arg0.Url`, not
+  yet), the request is tainted as a whole and the sink reports it with `field_imprecision` (`whole_value`). That is
+  safe, and noisy: the model of such a library is not finished by `parts` alone.
+* The calls through an interface of the project whose implementation has the row (ADR-068) use the same `parts`.
+
