@@ -213,6 +213,11 @@ type Propagator struct {
 	// the clock). It replaces the guess that everything flows, and the
 	// uncertainty that goes with the guess.
 	Pure bool `yaml:"pure"`
+	// Calls say that the function calls a function it was given (a callback), and with what: the
+	// engine applies the summary of the function that was passed, at the call, with the values this
+	// row names (CallRow). A row that has a ret also has flows that stand for it when the function
+	// that was passed is not one that can be told (see CallRow.DerivedFlows).
+	Calls []CallRow `yaml:"calls"`
 	// Boundary marks a call that moves data between the code and a store that
 	// rivus does not follow (a database, a cache): "stored_data". The call is
 	// recorded as an uncertainty (stored_data_boundary), so that a place where
@@ -262,6 +267,53 @@ type Flow struct {
 	// path goes through the flow has one uncertainty of kind model_approximation, with the reason as its
 	// detail, so that it is not reported as a path without any uncertainty (C-8).
 	Approximate string `yaml:"approximate"`
+	// Assumed is set on the flows that DerivedFlows makes (not read from a file): the use of the flow is
+	// an assumed_call, and the text is its detail.
+	Assumed string `yaml:"-"`
+}
+
+// Modes of a call row.
+const (
+	CallModeCall  = "call"  // the callback is called, and the caller waits for it (the default)
+	CallModeGo    = "go"    // it runs on its own (a thread, a task): what it does counts, what it returns does not
+	CallModeDefer = "defer" // it runs later: the same
+)
+
+// CallRow says that the function calls one of its arguments (or the receiver).
+//
+//	calls:
+//	  - fn: arg0              # which function value is called (recv or argN; the receiver is not counted in argN)
+//	    with: [recv]          # what it is called with, parameter by parameter (recv, argN; none: nothing flows in)
+//	    ret: result0          # where its result goes (result, resultN, recv, argN; none: dropped)
+//	    throw: result0        # where what it throws goes (the same; none: it is thrown out of the caller)
+//	    writes: {0: recv}     # where what it writes through its parameter N goes, besides the value that was given
+//	    mode: call            # call (default), go or defer
+//
+// The names are the positions of the call, as flows names them. Whole values only (no projection:
+// `recv` is the receiver with what is inside it), which is what flows does too.
+type CallRow struct {
+	Fn     string         `yaml:"fn"`
+	With   []string       `yaml:"with"`
+	Ret    string         `yaml:"ret"`
+	Throw  string         `yaml:"throw"`
+	Writes map[int]string `yaml:"writes"`
+	Mode   string         `yaml:"mode"`
+}
+
+// DerivedFlows are the flows that stand for the rows of calls when the function that was passed
+// cannot be told (it is a parameter, read from memory, one of more than four): what goes in
+// (with) comes out (ret), whole, and each use says assumed_call. A flow that is written is added to
+// these, not replaced by them. A row without a ret or without a with has none: nothing is carried.
+func (p *Propagator) DerivedFlows(row int) []Flow {
+	c := p.Calls[row]
+	if c.Ret == "" || c.Mode == CallModeGo || c.Mode == CallModeDefer {
+		return nil
+	}
+	var out []Flow
+	for _, w := range c.With {
+		out = append(out, Flow{From: w, To: c.Ret, Assumed: "assumed_call: the function given to " + p.Symbol + " is not known here: what it is called with is taken to come out as what it returns"})
+	}
+	return out
 }
 
 // Position kinds of a Selector.
@@ -701,8 +753,11 @@ func (rs *RuleSet) validate() error {
 		if err := checkSymbol(p.Symbol, what); err != nil {
 			return err
 		}
-		if len(p.Flows) == 0 && !p.Pure {
-			return fmt.Errorf("%s: flows is required (or pure: true when nothing flows)", what)
+		if len(p.Flows) == 0 && !p.Pure && len(p.Calls) == 0 {
+			return fmt.Errorf("%s: flows is required (or pure: true when nothing flows, or calls)", what)
+		}
+		if err := p.validateCalls(what); err != nil {
+			return err
 		}
 		if len(p.Flows) > 0 && p.Pure {
 			return fmt.Errorf("%s: pure: true and flows contradict each other", what)
@@ -723,6 +778,64 @@ func (rs *RuleSet) validate() error {
 				}
 				aliased[p.Symbol] = true
 			}
+		}
+	}
+	return nil
+}
+
+// validateCalls checks the rows of calls, and that a row that returns something has a way to carry it
+// when the function that is called cannot be told: with and ret, or flows that say it.
+func (p *Propagator) validateCalls(what string) error {
+	for i, c := range p.Calls {
+		w := fmt.Sprintf("%s.calls[%d]", what, i)
+		pos := func(field, text string, results bool) (Selector, error) {
+			sel, err := ParseSelector(text)
+			if err != nil || sel.All || (sel.Kind == SelResult && !results) {
+				return sel, fmt.Errorf("%s.%s: %q is not a position (recv or argN%s)", w, field, text, map[bool]string{true: ", resultN", false: ""}[results])
+			}
+			return sel, nil
+		}
+		if c.Fn == "" {
+			return fmt.Errorf("%s: fn is required (the argument that is called)", w)
+		}
+		if _, err := pos("fn", c.Fn, false); err != nil {
+			return err
+		}
+		for j, x := range c.With {
+			if _, err := pos(fmt.Sprintf("with[%d]", j), x, false); err != nil {
+				return err
+			}
+		}
+		if c.Ret != "" {
+			if _, err := pos("ret", c.Ret, true); err != nil {
+				return err
+			}
+		}
+		if c.Throw != "" {
+			if _, err := pos("throw", c.Throw, true); err != nil {
+				return err
+			}
+		}
+		for k, x := range c.Writes {
+			if k < 0 {
+				return fmt.Errorf("%s.writes: %d is not a parameter position", w, k)
+			}
+			if _, err := pos(fmt.Sprintf("writes[%d]", k), x, true); err != nil {
+				return err
+			}
+		}
+		switch c.Mode {
+		case "", CallModeCall, CallModeGo, CallModeDefer:
+		default:
+			return fmt.Errorf("%s.mode: %q (want call, go or defer)", w, c.Mode)
+		}
+		if (c.Mode == CallModeGo || c.Mode == CallModeDefer) && c.Ret != "" {
+			return fmt.Errorf("%s: a callback that runs on its own has no result to read (ret with mode %s)", w, c.Mode)
+		}
+		// a row that returns something is a flow when its function cannot be told: it has to have one,
+		// from the row or written (an approximation that errs towards finding)
+		if c.Ret != "" && len(p.DerivedFlows(i)) == 0 && len(p.Flows) == 0 {
+			return fmt.Errorf("%s: ret needs with (what goes in comes out when the function is not known), or flows that say where the result comes from", w)
 		}
 	}
 	return nil
@@ -822,6 +935,8 @@ type Rules struct {
 	Sinks       map[string][]Sink
 	Sanitizers  map[string][]Sanitizer
 	Propagators map[string][]Propagator
+	// Calls are the symbols that have a row of calls in a propagator.
+	Calls map[string]bool
 	// ReadImpls are the symbols of the propagators of a set with read_impls.
 	ReadImpls   map[string]bool
 	ConfigReads map[string]bool
@@ -866,6 +981,7 @@ func Merge(sets ...*RuleSet) *Rules {
 		Sinks:       map[string][]Sink{},
 		Sanitizers:  map[string][]Sanitizer{},
 		Propagators: map[string][]Propagator{},
+		Calls:       map[string]bool{},
 		ReadImpls:   map[string]bool{},
 		ConfigReads: map[string]bool{},
 
@@ -903,6 +1019,9 @@ func Merge(sets ...*RuleSet) *Rules {
 		}
 		for _, p := range rs.Propagators {
 			r.Propagators[p.Symbol] = append(r.Propagators[p.Symbol], p)
+			if len(p.Calls) > 0 {
+				r.Calls[p.Symbol] = true
+			}
 			if rs.ReadImpls {
 				r.ReadImpls[p.Symbol] = true
 			}

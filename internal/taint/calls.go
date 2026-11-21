@@ -21,6 +21,8 @@ type callCtx struct {
 	// made: the closure's summary is applied where the closure is made (C-7), not at a call: what
 	// it throws goes to no handler here, and it has no result to give.
 	made bool
+	// rd: the callback of a row of calls, whose outputs go where the row says (callrows.go)
+	rd *redirect
 }
 
 // argv lists the operands in parameter order (receiver first).
@@ -95,6 +97,10 @@ func (s *state) callSig(cc *callCtx) int {
 		add(v)
 	}
 	for _, b := range cc.in.Bindings {
+		add(b)
+	}
+	// the values that the closures given to a callback row captured are read by the call too
+	for _, b := range s.callBindings(cc) {
 		add(b)
 	}
 	return sum
@@ -670,6 +676,7 @@ func (s *state) applyModel(cc *callCtx) {
 		s.applyFlows(cc, flows, &o, "sanitized by "+cc.sym, modelRef(cc.sym, "sanitizer", san.Provenance))
 	}
 	for _, p := range rules.Propagators[cc.sym] {
+		p := p
 		if p.Boundary != "" {
 			s.newNote(cc.in, KindStoredDataBoundary, "data moves between the code and a data store here; what is read back is not followed unless a source rule says what comes from it", cc.sym)
 		}
@@ -677,10 +684,13 @@ func (s *state) applyModel(cc *callCtx) {
 			// nothing flows: that is the model. When what comes out is a number or a bool, and what went
 			// in came from a source, this is where the input becomes a number: said, where it happens
 			s.noteNumericStopOfPure(cc)
-			continue
+		} else if len(p.Flows) > 0 {
+			s.applyFlows(cc, p.Flows, nil, "", modelRef(cc.sym, "propagator", p.Provenance))
+			s.noteNumericStopOfUncovered(cc, p.Flows)
 		}
-		s.applyFlows(cc, p.Flows, nil, "", modelRef(cc.sym, "propagator", p.Provenance))
-		s.noteNumericStopOfUncovered(cc, p.Flows)
+		for i := range p.Calls {
+			s.applyCallRow(cc, &p, i, modelRef(cc.sym, "propagator", p.Provenance))
+		}
 	}
 }
 
@@ -806,6 +816,9 @@ func (s *state) applyFlows(cc *callCtx, flows []model.Flow, o *op, desc string, 
 		var approx []*Uncertainty
 		if fl.Approximate != "" {
 			approx = []*Uncertainty{s.newNote(cc.in, KindModelApproximation, fl.Approximate, cc.sym)}
+		}
+		if fl.Assumed != "" {
+			approx = append(approx, s.newNote(cc.in, KindAssumedCall, fl.Assumed, cc.sym))
 		}
 		var dsts []Loc
 		if to.Kind == model.SelResult {
@@ -954,6 +967,9 @@ func (s *state) captured(in *sg.Instr) {
 	fn := s.eng.prog.ByID[string(in.IR.Func)]
 	if fn == nil || len(in.Args) != len(fn.FreeVars) {
 		return
+	}
+	if s.coveredByModel(in) {
+		return // the call it is given to applies it, with what it captured: nothing is assumed
 	}
 	sigOf := func() int {
 		sum := 1

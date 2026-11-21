@@ -89,8 +89,6 @@ propagators:
     pure: true
   - symbol: sort.Ints
     pure: true
-  - symbol: sort.Slice
-    pure: true
   - symbol: errors.Is
     pure: true
   - symbol: (io.Closer).Close

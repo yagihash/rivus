@@ -187,6 +187,8 @@ type found struct {
 // state is the analysis state of one function.
 type state struct {
 	eng *Engine
+	// useIndex: the instructions that use a value of this function (made when needed: callrows.go)
+	useIndex map[*sg.Value][]*sg.Instr
 	// sinkNotes are the uncertainties of the sink being checked (a sink behind an interface).
 	sinkNotes []*Uncertainty
 	fn        *sg.Func

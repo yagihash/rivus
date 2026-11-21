@@ -174,6 +174,15 @@ propagators:
     flows: [{from: arg0, to: result, approximate: "the output of an external program: whether it carries the arguments depends on the program"}]
   - symbol: example.com/cases/lib.Exact
     flows: [{from: arg0, to: result}]
+  # functions that call a function they are given (testdata/go/cases/callbacks)
+  - symbol: example.com/cases/lib.Apply
+    calls: [{fn: arg1, with: [arg0], ret: result0}]
+  - symbol: example.com/cases/lib.Each
+    pure: true
+    calls: [{fn: arg1, with: [arg0]}]
+  - symbol: example.com/cases/lib.Later
+    pure: true
+    calls: [{fn: arg0, mode: go}]
   # a call that moves data to or from the data store (testdata/go/cases/dbsrc)
   - symbol: example.com/cases/lib.StoreRead
     pure: true

@@ -455,13 +455,25 @@ func (e *Engine) Run() *Result {
 			}
 			return nil
 		}
+		// the functions that the callback rows of a model make concrete here (a library function that calls
+		// what it was given): this function needs their summaries
+		cb := e.callbackFuncs(ci)
+		if len(cb) == 0 {
+			if ci.StaticID != "" {
+				if ci.Static != nil {
+					return []*sg.Func{ci.Static}
+				}
+				return nil
+			}
+			return ci.CandidateFns
+		}
 		if ci.StaticID != "" {
 			if ci.Static != nil {
-				return []*sg.Func{ci.Static}
+				return append([]*sg.Func{ci.Static}, cb...)
 			}
-			return nil
+			return cb
 		}
-		return ci.CandidateFns
+		return append(append([]*sg.Func(nil), ci.CandidateFns...), cb...)
 	}
 	sccs, callers := order(fns, callees)
 	levels := levelsOf(sccs, callees)

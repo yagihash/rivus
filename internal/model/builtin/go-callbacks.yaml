@@ -1,0 +1,43 @@
+# Functions of the standard library that call a function they are given (a callback): `calls` says which
+# argument is called, with what, and where its result goes (docs/MODELING.md). Where the function that is
+# given is not one that rivus can tell (a parameter, read from memory), the flows that `calls` stand for
+# are used, and each use is an assumed_call. What the rows say is held to what the functions do by
+# TestZooCallbacksGo (bench/zoo-go/callbacks).
+ruleset: rivus/go/callbacks@1
+
+propagators:
+  - symbol: (*sync.Once).Do
+    pure: true
+    calls: [{fn: arg0}]
+  - symbol: sort.Slice
+    pure: true
+    calls: [{fn: arg1}]
+  - symbol: sort.SliceStable
+    pure: true
+    calls: [{fn: arg1}]
+  - symbol: sort.Search
+    pure: true
+    calls: [{fn: arg1}]
+  - symbol: slices.SortFunc
+    pure: true
+    calls: [{fn: arg1, with: [arg0, arg0]}]
+  - symbol: slices.SortStableFunc
+    pure: true
+    calls: [{fn: arg1, with: [arg0, arg0]}]
+  - symbol: slices.IndexFunc
+    pure: true
+    calls: [{fn: arg1, with: [arg0]}]
+  - symbol: slices.ContainsFunc
+    pure: true
+    calls: [{fn: arg1, with: [arg0]}]
+  - symbol: strings.IndexFunc
+    pure: true
+    calls: [{fn: arg1, with: [arg0]}]
+  - symbol: strings.Map
+    calls: [{fn: arg0, with: [arg1], ret: result0}]
+  - symbol: strings.TrimFunc
+    flows: [{from: arg0, to: result0}]
+    calls: [{fn: arg1, with: [arg0]}]
+  - symbol: strings.FieldsFunc
+    flows: [{from: arg0, to: result0}]
+    calls: [{fn: arg1, with: [arg0]}]

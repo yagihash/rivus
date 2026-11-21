@@ -459,8 +459,41 @@ func (f *Func) instrAt(block, instr int) *Instr {
 // a φ. ok is false if it may be anything else too (a parameter, a result of a
 // call, something read from memory): the callers cannot tell.
 func ExactFuncs(v *Value) (ids map[string]bool, ok bool) {
+	cs, ok := ExactClosures(v)
+	if !ok {
+		return nil, false
+	}
 	ids = map[string]bool{}
+	for _, c := range cs {
+		if c.Env != nil {
+			return nil, false // a closure of Rust: not what ExactFuncs has told (its callers do not bind an environment)
+		}
+		ids[c.ID] = true
+	}
+	return ids, true
+}
+
+// Closure is a function a value is: Make is the instruction that made it, which has the values it
+// captured (its Args: the bindings), or nil for a function that is not a closure. A closure of Rust
+// is the alloc of its environment: Env is that value, which the closure takes as its first parameter,
+// and the values it captured are its fields.
+type Closure struct {
+	ID   string
+	Make *Instr
+	Env  *Value
+}
+
+// ExactClosures is ExactFuncs with the closures' make instructions, so that a caller can bind
+// the values they captured. The order is the order they were found in, without repeats.
+func ExactClosures(v *Value) (out []Closure, ok bool) {
 	seen := map[*Value]bool{}
+	have := map[Closure]bool{}
+	add := func(c Closure) {
+		if !have[c] {
+			have[c] = true
+			out = append(out, c)
+		}
+	}
 	var walk func(v *Value, depth int) bool
 	walk = func(v *Value, depth int) bool {
 		if v == nil || depth > 8 {
@@ -472,7 +505,7 @@ func ExactFuncs(v *Value) (ids map[string]bool, ok bool) {
 		seen[v] = true
 		switch v.Kind {
 		case KFunc:
-			ids[string(v.FuncID)] = true
+			add(Closure{ID: string(v.FuncID)})
 			return true
 		case KPhi:
 			if v.Instr == nil {
@@ -491,8 +524,15 @@ func ExactFuncs(v *Value) (ids map[string]bool, ok bool) {
 			}
 			switch in.Op {
 			case ir.OpMakeClosure:
-				ids[string(in.IR.Func)] = true
+				add(Closure{ID: string(in.IR.Func), Make: in})
 				return true
+			case ir.OpAlloc:
+				if v.Func != nil && v.Func.Prog != nil && len(in.Dsts) == 1 {
+					if f := v.Func.Prog.EnvClosures[in]; f != nil {
+						add(Closure{ID: f.ID, Env: in.Dsts[0]})
+						return true
+					}
+				}
 			case ir.OpCopy:
 				if !in.IR.View && len(in.Args) == 1 {
 					return walk(in.Args[0], depth+1)
@@ -509,7 +549,7 @@ func ExactFuncs(v *Value) (ids map[string]bool, ok bool) {
 	if !walk(v, 0) {
 		return nil, false
 	}
-	return ids, true
+	return out, true
 }
 
 // slimFunc is the function without its blocks and locals.

@@ -58,3 +58,16 @@ func External(s string) string { return s }
 
 // Exact is the same with a flow that is not a guess.
 func Exact(s string) string { return s }
+
+// Apply calls f with s and returns what it returns (the model has calls).
+func Apply(s string, f func(string) string) string { return f(s) }
+
+// Each calls f with every element of xs (the model has calls, and nothing flows).
+func Each(xs []string, f func(string)) {
+	for _, x := range xs {
+		f(x)
+	}
+}
+
+// Later runs f on its own (calls with mode go).
+func Later(f func()) { go f() }

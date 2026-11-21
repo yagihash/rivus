@@ -602,6 +602,30 @@ func TestApproximateFlowLeavesAnUncertaintyOnThePath(t *testing.T) {
 	}
 }
 
+// A function of a library that calls the function it is given (a model with calls) is a call of it: what it is
+// called with is what the model says, what it returns goes where the model says, and nothing is assumed (no
+// assumed_call) where the function is told. Where it is not (a parameter), the flows the row stands for are used,
+// and the finding through them says assumed_call.
+func TestCallbackRowsApplyTheFunctionThatWasGiven(t *testing.T) {
+	checkCase(t, "callbacks")
+	res, _ := runCase(t, "callbacks")
+	for _, f := range res.Findings {
+		n := 0
+		for _, u := range f.Uncertainties {
+			if u.Kind == KindAssumedCall {
+				n++
+			}
+		}
+		want := 0
+		if f.Source.Position.Line == 53 {
+			want = 1
+		}
+		if n != want {
+			t.Errorf("line %d: %d assumed_call, want %d", f.Source.Position.Line, n, want)
+		}
+	}
+}
+
 // A call through an interface is a call to every implementation, unless the
 // caller made the interface value right there: then only the implementation of
 // its type is called.

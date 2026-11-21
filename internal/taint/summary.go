@@ -342,11 +342,22 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 		var dsts []Loc
 		switch o.Kind {
 		case OutResult:
-			if o.Index < len(cc.roots) {
+			if cc.rd != nil {
+				// the result of a callback goes where the row says (the first one only)
+				if o.Index == 0 {
+					for _, l := range cc.rd.ret {
+						dsts = append(dsts, Loc{l.Root, l.Path + o.Path})
+					}
+				}
+			} else if o.Index < len(cc.roots) {
 				dsts = []Loc{{cc.roots[o.Index], o.Path}}
 			}
 		case OutThrow:
-			if !cc.made {
+			if cc.rd != nil && cc.rd.throwSet {
+				for _, l := range cc.rd.throw {
+					dsts = append(dsts, Loc{l.Root, l.Path + o.Path})
+				}
+			} else if !cc.made {
 				dsts = []Loc{{excRoot(), o.Path}}
 			}
 		case OutParam:
@@ -356,6 +367,11 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 					if o.Index == 0 && s.recvBoxed {
 						dsts = append(dsts, Loc{l.Root, l.Path + "/*" + o.Path})
 					}
+				}
+			}
+			if cc.rd != nil {
+				for _, l := range cc.rd.writes[o.Index] {
+					dsts = append(dsts, Loc{l.Root, l.Path + o.Path})
 				}
 			}
 		case OutGlobal:
