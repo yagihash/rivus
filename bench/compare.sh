@@ -268,7 +268,20 @@ clone_checkout() { # url commit dir [from-local]
 # The inputs of one side are the ones of ITS OWN version (wt/<sha7>): the fixtures, the rules, the extractor.
 # The IR is cached per (benchmark, extractor tree, target tree or commit, flags), never by the name alone:
 # a fixture or an extractor fix that is in one version and not in the other makes another IR (R-41).
-tree() { git -C "$ROOT" rev-parse -q --verify "$1:$2" 2>/dev/null; }   # tree <sha> <path>: the hash of that directory in that version
+# wtree <path>: the hash of the files of that path in the WORKING tree of this script (committed or not, untracked ones too; empty when none).
+# --fixed-inputs reads the working tree, so its keys (the cache of the base, the IR) are made from this and never from HEAD: an input that
+# is changed and not committed is another input.
+wtree() {
+  local list
+  list="$(cd "$ROOT" && git ls-files -co --exclude-standard -- "$1" | LC_ALL=C sort | while IFS= read -r f; do
+    [ -f "$ROOT/$f" ] && printf '%s %s\n' "$f" "$(shasum -a 256 < "$ROOT/$f" | cut -d' ' -f1)"
+  done)"
+  [ -n "$list" ] && printf '%s\n' "$list" | shasum -a 256 | cut -c1-40
+  return 0
+}
+tree() {   # tree <sha> <path>: the hash of that directory in that version (with --fixed-inputs: in the working tree, whatever the sha)
+  if [ "$FIXED" = 1 ]; then wtree "$2"; else git -C "$ROOT" rev-parse -q --verify "$1:$2" 2>/dev/null; fi
+}
 h16() { shasum -a 256 | cut -c1-16; }
 # the rivus of this script's tree that drives the container (`rivus extract -lang rust`): a base that is older may not have it
 DRIVER="$WORK/bin/driver/rivus"
@@ -313,7 +326,7 @@ setup() { # name side: makes the copy and the IR of that version; sets DIR, RULE
       fi ;;
     synth)
       if [ "$b" = go-scale ]; then   # the same input for both sides: the generator of this script's tree (a base before it has none)
-        key="$(cat "$ROOT"/bench/go-scale/gen/main.go | h16)"; DIR="$WORK/synth/scale-$key"; RULES="$DIR/rules.yaml"; PROV_INPUT="go-scale -shapes all (generator $key)"
+        key="$(wtree bench/go-scale/gen | h16)"; DIR="$WORK/synth/scale-$key"; RULES="$DIR/rules.yaml"; PROV_INPUT="go-scale -shapes all (generator $key)"
         if [ ! -f "$DIR/rules.yaml" ]; then
           /bin/rm -rf "$DIR.tmp"; mkdir -p "$WORK/synth"
           (cd "$ROOT" && go run ./bench/go-scale/gen -shapes all -out "$DIR.tmp") >&2 && mv "$DIR.tmp" "$DIR" || { skip "$b" "the go-scale generator failed"; return 1; }

@@ -126,5 +126,37 @@ class BigTargets(unittest.TestCase):
         self.assertIn("GOMEMLIMIT=unset", line(out, "casdoor"))
 
 
+class FixedInputsKey(unittest.TestCase):
+    """--fixed-inputs reads the working tree: the key of an input is the hash of the working tree, not the one of HEAD."""
+
+    def tree(self, root, fixed, path):
+        script = 'ROOT="$1"; FIXED="$2"; eval "$(sed -n "/^wtree()/,/^h16()/p" %s/compare.sh)"; tree HEAD "$3"' % HERE
+        r = subprocess.run(["bash", "-c", script, "x", root, fixed, path], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return r.stdout.strip()
+
+    def test_an_uncommitted_change_is_another_input(self):
+        with tempfile.TemporaryDirectory() as root:
+            def git(*a):
+                subprocess.run(["git", "-C", root, "-c", "user.name=t", "-c", "user.email=t@example.invalid"] + list(a), check=True, capture_output=True)
+            git("init", "-q")
+            os.makedirs(os.path.join(root, "bench/x"))
+            f = os.path.join(root, "bench/x/a.txt")
+            open(f, "w").write("one\n")
+            git("add", ".")
+            git("commit", "-q", "-m", "x")
+            head_before, fixed_before = self.tree(root, "0", "bench/x"), self.tree(root, "1", "bench/x")
+            self.assertTrue(head_before and fixed_before)
+            open(f, "w").write("two\n")            # not committed
+            self.assertEqual(self.tree(root, "0", "bench/x"), head_before)           # HEAD's tree: what was committed
+            self.assertNotEqual(self.tree(root, "1", "bench/x"), fixed_before)       # the working tree: another input
+            fixed_two = self.tree(root, "1", "bench/x")
+            open(os.path.join(root, "bench/x/new.txt"), "w").write("n\n")           # an untracked file is an input too
+            self.assertNotEqual(self.tree(root, "1", "bench/x"), fixed_two)
+            self.assertEqual(self.tree(root, "1", "bench/none"), "")                  # no such input: empty, as the git form
+            os.remove(f)                                                              # a tracked file that was removed
+            self.assertNotEqual(self.tree(root, "1", "bench/x"), fixed_two)
+
+
 if __name__ == "__main__":
     unittest.main()
