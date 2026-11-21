@@ -368,15 +368,27 @@ func zooParity(t *testing.T, rust []zooLine, rustCells []*zooCell) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	na := map[string]bool{}
-	for _, m := range regexp.MustCompile(`@na\((F/[a-z0-9/-]+):\s*([^)]+)\)`).FindAllStringSubmatch(string(lib), -1) {
-		na[m[1]] = true
-	}
+	na, todo := zooParityMarks(string(lib))
+	var naNames, todoNames []string
 	for _, c := range goCells {
-		if !rustHas[c.name] && !na[c.name] {
-			t.Errorf("%s is a cell of the Go zoo: the Rust zoo has it, or says @na(%s: the reason) in cells/src/lib.rs", c.name, c.name)
+		_, isNa := na[c.name]
+		_, isTodo := todo[c.name]
+		switch {
+		case rustHas[c.name]:
+			if isNa || isTodo {
+				t.Errorf("%s: the Rust zoo has the cell, and lib.rs says @na or @todo of it", c.name)
+			}
+		case isNa && isTodo:
+			t.Errorf("%s is both @na and @todo in cells/src/lib.rs", c.name)
+		case isNa:
+			naNames = append(naNames, strings.TrimPrefix(c.name, "F/"))
+		case isTodo:
+			todoNames = append(todoNames, strings.TrimPrefix(c.name, "F/"))
+		default:
+			t.Errorf("%s is a cell of the Go zoo: the Rust zoo has it, or says @na(%s: the reason) (the form does not exist in Rust) or @todo(%s: PARITY: the reason) (it can be written, not yet) in cells/src/lib.rs", c.name, c.name, c.name)
 		}
 	}
+	zooParityLine(t, "zoo-rust", naNames, todoNames)
 	goMiss := map[string]bool{}
 	goTags := map[string]bool{}
 	goTagsAll := map[string]bool{} // every tag of the Go zoo (a source tag)

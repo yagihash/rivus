@@ -210,11 +210,49 @@ Go の呼び出しの行 595 のうち、標準ライブラリの名前 588、�
 |  | Go | Dart | Rust |
 | --- | --- | --- | --- |
 | `pure` の行(実数。行 = 呼び出しの名前ごと) | 272 | 93 | 82 |
-| `pure` の実行の検査(`TestZooPure*`): 呼んだ結果の部分 / うち誤り | (`-zoo` なし) | 未(検査がない) | 未(検査がない) |
+| `pure` の実行の検査(`TestZooPure*`): 呼んだ結果の部分 / うち誤り | 55 / 0 | 未(検査がない) | 未(検査がない) |
 | 表 S(組み込みの全行を、行ごとに実行で確かめる) | `pure` の一部だけ(上)。propagator / sanitizer / source / sink の行は未 | 未 | 未 |
-| zoo(共通の形のマス): マス / ケース / 出る / `@miss` | (`-zoo` なし) | (`-zoo` なし) | (`-zoo` なし) |
+| zoo(共通の形のマス): マス / ケース / 出る / `@miss` | 50 / 162 / 57 of 62 / 5 | 35 / 127 / 45 of 57 / 12 | 61 / 212 / 68 of 90 / 22 |
+| zoo: 相手の言語に**本当に無い**形(`@na`)の数(Go の列は、Dart だけにあるマス) | 8 | 3 | 9 |
+| zoo: 書ける形で**まだ無い**(未実装、`@todo`。印のないものも数える)の数 | 0 | 20 | 0 |
 
-(zoo のテストの出力は `-zoo` で渡す)
+`@na` と `@todo` の中身(マスの名前。Dart の `@todo` は、印のない「段階 3 でまだ」も含む):
+
+- Go: `@na` 8: `dart/flutter-field-read`, `dart/flutter-override-arg`, `dart/flutter-route-args`, `dart/interp-tostring`, `dart/patterns-record`, `dart/super-mixin-impl`, `dart/tearoff-instance`, `state/provider-store`
+- Go: `@todo`(未実装) 0: なし
+- Dart: `@na` 3: `dyn/generics-ptr`, `dyn/iface-ptr-recv-read`, `dyn/iface-ptr-recv-write`
+- Dart: `@todo`(未実装) 20: `cont/struct-whole-to-sink`, `conv/buffer-writestring`, `conv/exec-output-echo`, `conv/struct-field-boxed`, `conv/struct-field-deep`, `conv/struct-field-opaque`, `conv/struct-field-shallow`, `dyn/fprint-writer-own`, `dyn/global-iface`, `dyn/http-middleware-chain`, `dyn/iface-assert-ptr-recv`, `dyn/iface-val-recv`, `dyn/method-value`, `dyn/method-value-iface`, `dyn/sanitizer-own-impl`, `dyn/sink-in-method`, `dyn/sink-in-method-iface`, `dyn/stdlib-writer-own`, `dyn/through-dependency`, `dyn/xtalk-n-by-m`
+- Rust: `@na` 9: `conv/exec-output-echo`, `conv/struct-field-boxed`, `conv/struct-field-deep`, `conv/struct-field-opaque`, `conv/struct-field-shallow`, `dyn/fprint-writer-own`, `dyn/iface-assert-ptr-recv`, `dyn/sanitizer-own-impl`, `dyn/through-dependency`
+- Rust: `@todo`(未実装) 0: なし
+
+zoo のテストの出力(`go test ./cmd/rivus -run 'TestZooPureGo|TestZooGo|TestZooDart' -v` の記録の行):
+
+```
+14 findings have an assumed_call on their path
+zoo-dart: cells 35 / cases 127 | found 45 / 57 | @miss 12 (trace 8, silent 4, no rule 0) | fixed reported wrongly 0 | decoys reported wrongly 6 / 35 (with the trace container_element_imprecision 3, without 3) | carry map[] | manual 0 (0.0%) | run and annotation disagree 0 | statements not run 0
+zoo-dart: rivus: 76 flows found, 94 sinks quiet, 16 flows not found (@miss), 12 reported wrongly (@fp)
+zoo-dart: parity marks: @na 3 [dyn/generics-ptr dyn/iface-ptr-recv-read dyn/iface-ptr-recv-write] | @todo 20 [cont/struct-whole-to-sink conv/buffer-writestring conv/exec-output-echo conv/struct-field-boxed conv/struct-field-deep conv/struct-field-opaque conv/struct-field-shallow dyn/fprint-writer-own dyn/global-iface dyn/http-middleware-chain dyn/iface-assert-ptr-recv dyn/iface-val-recv dyn/method-value dyn/method-value-iface dyn/sanitizer-own-impl dyn/sink-in-method dyn/sink-in-method-iface dyn/stdlib-writer-own dyn/through-dependency dyn/xtalk-n-by-m]
+zoo-go: parity marks: @na 8 [dart/flutter-field-read dart/flutter-override-arg dart/flutter-route-args dart/interp-tostring dart/patterns-record dart/super-mixin-impl dart/tearoff-instance state/provider-store] | @todo 0 []
+zoo-dart: common cells 27 | found in zoo-go and not in Dart 3 (@ref(PARITY)) | only in Dart: 8 with @na(go: reason), 0 common and not yet in zoo-go | cells of zoo-go that Dart has no counterpart of (na.txt) 3, not written yet (stage 3) 20
+zoo-dart silent misses: 5 / 16 (31%)
+--- PASS: TestZooDart (9.77s)
+zoo-go pure Go rows: 272, called 22, not called 250 (bench/zoo-go/pure/unchecked.txt)
+zoo-go pure: 55 parts called, 22 of them of pure rows (the model has 447 pure rows), 0 wrong (R-03)
+--- PASS: TestZooPureGo (0.79s)
+0 findings have an assumed_call on their path
+zoo-rust: cells 61 / cases 212 | found 68 / 90 | @miss 22 (trace 21, silent 1, no rule 0) | fixed reported wrongly 4 | decoys reported wrongly 8 / 61 (with the trace container_element_imprecision 1, without 10) | carry map[] | manual 0 (0.0%) | run and annotation disagree 0 | statements not run 0
+zoo-rust: rivus: 118 flows found, 167 sinks quiet, 34 flows not found (@miss), 19 reported wrongly (@fp)
+zoo-rust silent misses: 2 / 34 (6%)
+zoo-rust: parity marks: @na 9 [conv/exec-output-echo conv/struct-field-boxed conv/struct-field-deep conv/struct-field-opaque conv/struct-field-shallow dyn/fprint-writer-own dyn/iface-assert-ptr-recv dyn/sanitizer-own-impl dyn/through-dependency] | @todo 0 []
+zoo-rust: parity with zoo-go: common cells 41 | common vulnerable flows 52 (found in both 41, missed in both 2) | found in Go and not in Rust 9 [clos-capture-write-by-ref-vuln3 clos-partial-callers-vuln clos-stored-vuln clos-stored-vuln2 clos-stored-vuln3 conv-buffer-writestring-vuln dyn-func-field-vuln dyn-func-map-vuln state-receiver-field-across-entries-vuln] | decoys reported in Rust and not in Go 5 [dyn-http-middleware-chain-decoy dyn-sink-in-method-iface-decoy state-global-field-decoy state-global-struct-copy-decoy state-save-restore-decoy]
+zoo-rust: vulnerable flows found 68 / 90
+--- PASS: TestZooRust (2.09s)
+12 findings have an assumed_call on their path
+zoo-go: cells 50 / cases 162 | found 57 / 62 | @miss 5 (trace 4, silent 1, no rule 0) | fixed reported wrongly 0 | decoys reported wrongly 6 / 50 (with the trace container_element_imprecision 4, without 2) | carry map[] | manual 1 (0.6%) | run and annotation disagree 0 | statements not run 0
+zoo-go: rivus: 105 flows found, 140 sinks quiet, 8 flows not found (@miss), 12 reported wrongly (@fp)
+--- PASS: TestZooGo (1.70s)
+ok  	github.com/yagihash/rivus/cmd/rivus	15.165s
+```
 
 ## 4. (D) 当たっているか: どの IR にも当たらなかった行
 

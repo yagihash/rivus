@@ -364,7 +364,12 @@ func render(tablePath, deadPath string, rows []Row, mi *ModelIndex, corpora []*C
 	t.add("`pure` の実行の検査(`TestZooPure*`): 呼んだ結果の部分 / うち誤り", pp, "未(検査がない)", "未(検査がない)")
 	t.add("表 S(組み込みの全行を、行ごとに実行で確かめる)", "`pure` の一部だけ(上)。propagator / sanitizer / source / sink の行は未", "未", "未")
 	t.add("zoo(共通の形のマス): マス / ケース / 出る / `@miss`", zooCell(zoo, "go"), zooCell(zoo, "dart"), zooCell(zoo, "rust"))
+	t.add("zoo: 相手の言語に**本当に無い**形(`@na`)の数(Go の列は、Dart だけにあるマス)", zooMarksCell(zoo, "go", false), zooMarksCell(zoo, "dart", false), zooMarksCell(zoo, "rust", false))
+	t.add("zoo: 書ける形で**まだ無い**(未実装、`@todo`。印のないものも数える)の数", zooMarksCell(zoo, "go", true), zooMarksCell(zoo, "dart", true), zooMarksCell(zoo, "rust", true))
 	w("%s\n", t)
+	if list := zooMarksList(zoo); list != "" {
+		w("`@na` と `@todo` の中身(マスの名前。Dart の `@todo` は、印のない「段階 3 でまだ」も含む):\n\n%s\n", list)
+	}
 	if zoo != "" {
 		w("zoo のテストの出力(`go test ./cmd/rivus -run 'TestZooPureGo|TestZooGo|TestZooDart' -v` の記録の行):\n\n```\n%s```\n\n", zoo)
 	} else {
@@ -457,6 +462,51 @@ func zooCell(zoo, lang string) string {
 		}
 	}
 	return "(`-zoo` なし)"
+}
+
+var zooMarksRe = regexp.MustCompile(`zoo-(go|dart|rust): parity marks: @na (\d+) \[([^\]]*)\] \| @todo (\d+) \[([^\]]*)\]`)
+
+// zooMarks reads the "parity marks" line of a language: the count and the names of the cells that the language
+// lacks, in two kinds. @na: the form does not exist in the language. @todo: it can be written, and is not yet.
+func zooMarks(zoo, lang string) (naN, naNames, todoN, todoNames string, ok bool) {
+	for _, m := range zooMarksRe.FindAllStringSubmatch(zoo, -1) {
+		if m[1] == lang {
+			return m[2], m[3], m[4], m[5], true
+		}
+	}
+	return "", "", "", "", false
+}
+
+func zooMarksCell(zoo, lang string, todo bool) string {
+	naN, _, todoN, _, ok := zooMarks(zoo, lang)
+	switch {
+	case !ok:
+		return "(`-zoo` なし)"
+	case todo:
+		return todoN
+	}
+	return naN
+}
+
+// zooMarksList is the names of the cells, per language, under the table.
+func zooMarksList(zoo string) string {
+	var sb strings.Builder
+	for _, l := range []struct{ key, name string }{{"go", "Go"}, {"dart", "Dart"}, {"rust", "Rust"}} {
+		naN, naNames, todoN, todoNames, ok := zooMarks(zoo, l.key)
+		if !ok {
+			continue
+		}
+		fmt.Fprintf(&sb, "- %s: `@na` %s: %s\n", l.name, naN, nameList(naNames))
+		fmt.Fprintf(&sb, "- %s: `@todo`(未実装) %s: %s\n", l.name, todoN, nameList(todoNames))
+	}
+	return sb.String()
+}
+
+func nameList(names string) string {
+	if strings.TrimSpace(names) == "" {
+		return "なし"
+	}
+	return "`" + strings.Join(strings.Fields(names), "`, `") + "`"
 }
 
 func depCell(lang string, n0 int) string {

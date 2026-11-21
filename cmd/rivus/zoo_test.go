@@ -275,7 +275,33 @@ var (
 	zooMissRe   = regexp.MustCompile(`@miss(?:\(([a-z_,]+)\))?`)
 	zooFpRe     = regexp.MustCompile(`@fp\b`)
 	zooNaRe     = regexp.MustCompile(`@na\(([^)]+)\)`)
+	// the marks of a Go cell that the other language does not have (docs/DESIGN-zoo.md, "@na and @todo"):
+	// @na(F/<family>/<shape>: why), the form does not exist in the language; @todo(F/<family>/<shape>: PARITY: why), the
+	// form can be written and the cell is not written yet. Both pass the parity check; the table counts them apart.
+	zooParityNaRe   = regexp.MustCompile(`@na\((F/[a-z0-9/-]+):\s*([^)]+)\)`)
+	zooParityTodoRe = regexp.MustCompile(`@todo\((F/[a-z0-9/-]+):\s*PARITY:\s*([^)]+)\)`)
 )
+
+// zooParityMarks reads the @na and @todo marks of a file (a cell name -> the reason).
+func zooParityMarks(src string) (na, todo map[string]string) {
+	na, todo = map[string]string{}, map[string]string{}
+	for _, m := range zooParityNaRe.FindAllStringSubmatch(src, -1) {
+		na[m[1]] = m[2]
+	}
+	for _, m := range zooParityTodoRe.FindAllStringSubmatch(src, -1) {
+		todo[m[1]] = m[2]
+	}
+	return
+}
+
+// zooParityLine logs the count of the cells that the language lacks, in two kinds, for bench/parity (the table
+// reads this line): "zoo-<lang>: parity marks: @na N [names] | @todo N [names]".
+func zooParityLine(t testing.TB, lang string, na, todo []string) {
+	t.Helper()
+	sort.Strings(na)
+	sort.Strings(todo)
+	t.Logf("%s: parity marks: @na %d [%s] | @todo %d [%s]", lang, len(na), strings.Join(na, " "), len(todo), strings.Join(todo, " "))
+}
 
 // zooLine is what the annotations of one line say.
 type zooLine struct {

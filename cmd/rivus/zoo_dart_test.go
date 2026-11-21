@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -392,6 +391,7 @@ func zooParityDart(t *testing.T, lines []zooLine, cells []*zooCell) {
 		goCell[c.name] = c
 	}
 	common, parity, onlyDart, onlyDartPending := 0, 0, 0, 0
+	var goNa, goTodo []string // the cells that only Dart has: Go's side of the parity marks
 	dartHas := map[string]bool{}
 	for _, c := range cells {
 		dartHas[c.name] = true
@@ -400,8 +400,10 @@ func zooParityDart(t *testing.T, lines []zooLine, cells []*zooCell) {
 			if len(c.na) == 0 {
 				t.Logf("%s: a common form, and zoo-go has no cell of this name yet", c.name)
 				onlyDartPending++
+				goTodo = append(goTodo, strings.TrimPrefix(c.name, "F/"))
 			} else {
 				onlyDart++
+				goNa = append(goNa, strings.TrimPrefix(c.name, "F/"))
 			}
 			continue
 		}
@@ -424,19 +426,30 @@ func zooParityDart(t *testing.T, lines []zooLine, cells []*zooCell) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	na := map[string]bool{}
-	for _, m := range regexp.MustCompile(`@na\((F/[a-z0-9/-]+):\s*([^)]+)\)`).FindAllStringSubmatch(string(nab), -1) {
-		na[m[1]] = true
-	}
+	na, todo := zooParityMarks(string(nab))
+	var naNames, todoNames []string
 	notYet, notApplicable := 0, 0
 	for _, c := range goCells {
+		_, isNa := na[c.name]
+		_, isTodo := todo[c.name]
 		switch {
 		case dartHas[c.name]:
-		case na[c.name]:
+			if isNa || isTodo {
+				t.Errorf("%s: the Dart zoo has the cell, and na.txt says @na or @todo of it", c.name)
+			}
+		case isNa && isTodo:
+			t.Errorf("%s is both @na and @todo in na.txt", c.name)
+		case isNa:
 			notApplicable++
-		default:
+			naNames = append(naNames, strings.TrimPrefix(c.name, "F/"))
+		default: // @todo, or no mark (stage 3, not written yet): both are "not yet"
 			notYet++
+			todoNames = append(todoNames, strings.TrimPrefix(c.name, "F/"))
 		}
 	}
+	zooParityLine(t, "zoo-dart", naNames, todoNames)
+	// the other direction: the cells that Dart has and Go does not (@na(go: reason): no such form in Go; a common form
+	// that zoo-go has not written yet is "not yet")
+	zooParityLine(t, "zoo-go", goNa, goTodo)
 	t.Logf("zoo-dart: common cells %d | found in zoo-go and not in Dart %d (@ref(PARITY)) | only in Dart: %d with @na(go: reason), %d common and not yet in zoo-go | cells of zoo-go that Dart has no counterpart of (na.txt) %d, not written yet (stage 3) %d", common, parity, onlyDart, onlyDartPending, notApplicable, notYet)
 }
