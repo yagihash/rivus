@@ -260,7 +260,7 @@ func TestGraphKeyOfLanguagesWhoseExtractorDoesNotSayWhatItRead(t *testing.T) {
 			script := "#!/bin/sh\nif [ \"$1\" = --version ]; then echo fake 1; exit 0; fi\ncat " + stream + "\n"
 			write(t, ext, script)
 			os.Chmod(ext, 0o755)
-			env := []string{"RIVUS_" + strings.ToUpper(c.lang) + "_EXTRACTOR=" + ext}
+			env := []string{"RIVUS_" + strings.ToUpper(c.lang) + "_EXTRACTOR=" + ext, "RIVUS_UNSAFE_HOST_EXEC=1" /* a script of the test, not a project that is read */}
 			db := filepath.Join(t.TempDir(), "g.db")
 			args := []string{"-lang", c.lang, "-graph", db, "-C", proj, "-no-project-rules"}
 			runIn(t, binary, proj, env, append([]string{"index"}, args...)...)

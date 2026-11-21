@@ -78,7 +78,10 @@ func TestDogfood(t *testing.T) {
 	// captured (the path) is applied where it is made.
 	// 51: ADR-062 adds 7 real flows: the directory of -C, through the packages, to the os.ReadDir of gossa.countTestFiles
 	// (which counts the _test.go files that were not read); `rivus sites` is a command that reaches a sink now.
-	const maxFindings, maxNoSourceOnPath = 51, 0
+	// 61: ADR-064 adds 10 real flows in isolate.go: the directory of -C and the paths of -container-ro-mount, through
+	// os.ReadFile (Cargo.lock, the toolchain file) and the arguments of the docker command. They are what the isolation is
+	// about: the project is untrusted, and the paths that name it go to the container only as mounts that are read-only.
+	const maxFindings, maxNoSourceOnPath = 61, 0
 	t.Logf("%d findings, %d with no step in the source function", len(rep.Findings), noSourceOnPath)
 	if len(rep.Findings) > maxFindings {
 		t.Errorf("%d findings: more than the %d of today", len(rep.Findings), maxFindings)
