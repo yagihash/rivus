@@ -212,7 +212,7 @@ Go の呼び出しの行 595 のうち、標準ライブラリの名前 588、�
 | `pure` の行(実数。行 = 呼び出しの名前ごと) | 272 | 93 | 82 |
 | `pure` の実行の検査(`TestZooPure*`): 呼んだ結果の部分 / うち誤り | 55 / 0 | 未(検査がない) | 未(検査がない) |
 | 表 S(組み込みの全行を、行ごとに実行で確かめる) | `pure` の一部だけ(上)。propagator / sanitizer / source / sink の行は未 | 未 | 未 |
-| zoo(共通の形のマス): マス / ケース / 出る / `@miss` | 50 / 162 / 57 of 62 / 5 | 55 / 187 / 62 of 77 / 15 | 62 / 215 / 68 of 91 / 23 |
+| zoo(共通の形のマス): マス / ケース / 出る / `@miss` | 50 / 162 / 57 of 62 / 5 | 55 / 187 / 67 of 77 / 10 | 62 / 215 / 68 of 91 / 23 |
 | zoo: 相手の言語に**本当に無い**形(`@na`)の数(Go の列は、Dart だけにあるマス) | 8 | 3 | 1 |
 | zoo: 書ける形で**まだ無い**(未実装、`@todo`。印のないものも数える)の数 | 0 | 0 | 7 |
 
@@ -229,12 +229,12 @@ zoo のテストの出力(`go test ./cmd/rivus -run 'TestZooPureGo|TestZooGo|Tes
 
 ```
 14 findings have an assumed_call on their path
-zoo-dart: cells 55 / cases 187 | found 62 / 77 | @miss 15 (trace 9, silent 6, no rule 0) | fixed reported wrongly 2 | decoys reported wrongly 12 / 55 (with the trace container_element_imprecision 4, without 10) | carry map[] | manual 0 (0.0%) | run and annotation disagree 0 | statements not run 0
-zoo-dart: rivus: 111 flows found, 141 sinks quiet, 22 flows not found (@miss), 26 reported wrongly (@fp)
+zoo-dart: cells 55 / cases 187 | found 67 / 77 | @miss 10 (trace 7, silent 3, no rule 0) | fixed reported wrongly 2 | decoys reported wrongly 10 / 55 (with the trace container_element_imprecision 4, without 8) | carry map[] | manual 0 (0.0%) | run and annotation disagree 0 | statements not run 0
+zoo-dart: rivus: 120 flows found, 145 sinks quiet, 13 flows not found (@miss), 22 reported wrongly (@fp)
 zoo-dart: parity marks: @na 3 [dyn/generics-ptr dyn/iface-ptr-recv-read dyn/iface-ptr-recv-write] | @todo 0 []
 zoo-go: parity marks: @na 8 [dart/flutter-field-read dart/flutter-override-arg dart/flutter-route-args dart/interp-tostring dart/patterns-record dart/super-mixin-impl dart/tearoff-instance state/provider-store] | @todo 0 []
-zoo-dart: common cells 47 | found in zoo-go and not in Dart 6 (@ref(PARITY)) | only in Dart: 8 with @na(go: reason), 0 common and not yet in zoo-go | cells of zoo-go that Dart has no counterpart of (na.txt) 3, not written yet (stage 3) 0
-zoo-dart silent misses: 9 / 22 (41%)
+zoo-dart: common cells 47 | found in zoo-go and not in Dart 3 (@ref(PARITY)) | only in Dart: 8 with @na(go: reason), 0 common and not yet in zoo-go | cells of zoo-go that Dart has no counterpart of (na.txt) 3, not written yet (stage 3) 0
+zoo-dart silent misses: 3 / 13 (23%)
 --- PASS: TestZooDart (15.70s)
 zoo-go pure Go rows: 272, called 22, not called 250 (bench/zoo-go/pure/unchecked.txt)
 zoo-go pure: 55 parts called, 22 of them of pure rows (the model has 447 pure rows), 0 wrong (R-03)
