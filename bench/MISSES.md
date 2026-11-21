@@ -350,7 +350,7 @@ finding の `source.position` の関数(`source.func`)が、最初の経路(`pat
 | parseable `oidc.rs:443`(open redirect) | rust-curated `src/parseable.rs`(`logout` → `redirect_to_client`) | `web::Query<..>` の `redirect` を `ResponseBuilder::insert_header(("Location", url))` へ | 見つかる(`pb_redirect`) |
 | parseable `localfs.rs:383` | 同(`post_filter`) | `web::Json<Filter>` の `stream_name` で作ったパスを、`Box<dyn ObjectStorage>` の `put_object`(実装 2 つ)の `fs::write` へ | 見つかる(`pb_store`) |
 | parseable `target.rs:494`(SSRF) | 同(`post_target`、`fire_alert`) | `web::Form<Target>`(parseable では Json。別の source の行を持たせるため型を変えた)を、`OnceLock<RwLock<HashMap>>` に入れ、別の関数が読んで `client.post(&self.endpoint)` | **見つからない(`@miss(silent)`)**。ADR の記録(2/3 検出、これは見逃し)と同じ。痕跡: source / sink の関数には無い。`targets()` に `unmodeled_library_call`(`OnceLock::new`、`get_or_init`)がある(source でも sink でもない関数) |
-| parseable の、クライアントが宛先を選ぶ形の SSRF(未公表のため、場所は伏せる) | 同(`drop_peer`) | `web::Path<String>` を `to_url_string`(`format!`)、`check_liveness` → `Client::get` | 見つかる(`pb_node`) |
+| parseable の、クライアントが宛先を選ぶ形の SSRF(未公表のため、件数と種類だけ) | rust-curated `src/parseable.rs` | 同ファイルの写しを参照 | 見つかる(`pb_node`) |
 
 ### 新しく足した見逃し(3 件)
 

@@ -184,7 +184,7 @@ pub fn fire_alert(client: &Client) {
 
 // ---- a peer to drop is named by the path (a client-chosen host; the shape only) ----
 
-fn to_url_string(s: String) -> String {
+fn normalize_addr(s: String) -> String {
     if s.starts_with("http") {
         s
     } else {
@@ -192,11 +192,11 @@ fn to_url_string(s: String) -> String {
     }
 }
 
-pub fn check_liveness(domain_name: &str) -> bool {
-    Client::new().get(domain_name).is_ok() // @sink(pb_node)
+pub fn ping_peer(addr: &str) -> bool {
+    Client::new().get(addr).is_ok() // @sink(pb_node)
 }
 
-pub async fn drop_peer(node_url: web::Path<String>) -> bool {
-    let url = to_url_string(node_url.into_inner());
-    check_liveness(&url)
+pub async fn choose_peer(peer: web::Path<String>) -> bool {
+    let url = normalize_addr(peer.into_inner());
+    ping_peer(&url)
 }
