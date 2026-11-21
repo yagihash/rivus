@@ -5,6 +5,7 @@
 # The receiver is the first argument: arg0.
 ruleset: rivus/rust/std@1
 read_impls: true   # the methods of traits are also implemented by the code of the project
+self_first: true     # the positions count the receiver (arg0), also for a call through a trait
 
 sources:
   - symbol: std::env::args

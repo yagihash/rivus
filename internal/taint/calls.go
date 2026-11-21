@@ -721,6 +721,13 @@ func (s *state) builtin(cc *callCtx, name string) {
 
 func (s *state) applyModel(cc *callCtx) {
 	rules := s.eng.rules
+	if cc.in.Callee != nil && cc.in.Callee.Kind == ir.CalleeDynamic && cc.recv != nil && rules.SelfFirst[cc.sym] {
+		// a call through a trait whose model names the receiver arg0 (Rust): the receiver is the first of the
+		// operands, as it is for a call of the function itself (Iterator::next, IntoIterator::into_iter)
+		c2 := *cc
+		c2.recv, c2.args = nil, append([]*sg.Value{cc.recv}, cc.args...)
+		cc = &c2
+	}
 	for _, san := range rules.Sanitizers[cc.sym] {
 		flows := san.Flows
 		if len(flows) == 0 {

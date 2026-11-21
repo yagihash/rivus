@@ -1727,3 +1727,17 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 **確かめたこと:** 動物園(Rust)で、`dyn/stdlib-writer-own` の vuln と decoy の本物の流れが見つかる(`@miss` を外した。decoy の別の writer の sink には届かない: 受け手の型で 1 つの実装に絞る)。rust-curated は変化なし。
 
 **限界:** (1) 行は `write_all` だけ。`Read::read_to_string` → `read`、`Iterator` の既定のメソッド(`count`、`last`、`fold` が `next` を呼ぶ)などは、行を足す前に、harness の呼び出しと、`with` の位置(バッファの型の違い)を確かめる。(2) 受け手の型が分からないときは、実装の全部(`dynamic_dispatch` の不確実性が付く)。
+
+
+## ADR-081: Rust のモデルの位置は、trait 越し(dynamic)の呼び出しでも、受け手が `arg0` になる(`self_first`)。`GEN-DYN` を直す。`Box<dyn Fn>` の呼び出しは、設計の 1 枚にして入れない
+
+**背景:** `GEN-DYN`(bench/MISSES.md): ジェネリックな `T` に対する `items.into_iter()`、`it.next()` は、抽出器が呼び先を決められず、dynamic な呼び出しになる。コアは dynamic な呼び出しの受け手を引数と別に持ち(`args` は受け手を除く。Go のインターフェースのメソッドの規約)、Rust のモデルは `self` を先頭に引数を数える(`from: args`、`arg1`)ので、`from: args` が受け手(`Vec` そのもの)を含まず、結果に何も流れなかった。同じ関数が、型が分かる呼び出しでは見つかり、`T` では落ちる(docs/DESIGN-generics-dispatch.md)。
+
+**決めたこと:**
+1. モデルの集合に `self_first: true`(`rust-std.yaml`、`rust-misc.yaml`)。その集合のシンボルの dynamic な呼び出しでは、受け手を引数の先頭に置いて、モデルを当てる(`internal/taint/calls.go` の `applyModel`)。型が分かる呼び出しと同じ位置になる。受け手を別に持つ規約は、ガード、候補の絞りのために、そのまま。
+2. **`Box<dyn Fn>` の呼び出しは、入れない**(docs/DESIGN-generics-dispatch.md の (2))。抽出器で `Box` の `Fn` の実装の呼び出しを dynamic にし、モデルの行(今までの既定と同じ)を足す試作は、動物園で本物の流れが 7 件増える一方、静かなはずの sink に届く所が 16 か所増えた(受け手の出どころが、`Option` / `HashMap` / `Vec` の中で、ADR-079 の絞りが辿れない)。精度を犠牲にする判断なので、入れない。コンテナの要素まで辿る設計が済んでから、同じ測定で入れる。
+
+**確かめたこと:** 動物園(Rust)の `dyn/generics-ptr` の vuln と decoy の本物の流れが見つかる(`@miss` を外した)。動物園 Rust: 本物の流れ 114 → 116、`@miss` 36 → 34、静かなはずの sink に届く所の増減 0。rust-curated: 変化なし(147、`@miss` 8)。
+
+**限界:** rust-curated の `across-each`(別の crate の `each<T>(items: Vec<T>, f)`)は、まだ見つからない(別の原因が残る。未確認)。`Iterator` の既定のメソッドが `next` を呼ぶ形は、ADR-080 の `method:` の行を足す仕事。
+

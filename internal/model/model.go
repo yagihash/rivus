@@ -66,6 +66,11 @@ type RuleSet struct {
 	// code of the project's own implementations is read as well. Off, a model replaces
 	// the analysis of every implementation (what a Go interface method with a model gets).
 	ReadImpls bool `yaml:"read_impls"`
+	// SelfFirst says that the positions of the rules of this set count every operand of a call, the receiver
+	// first (`arg0`): the models of Rust name the arguments with `self` first. A call through a trait (a
+	// dynamic call), whose receiver is not one of its arguments for the engine, is then given the positions
+	// the rule means: `from: args` is the receiver and the arguments.
+	SelfFirst bool `yaml:"self_first"`
 	// DefaultOrigin is the origin of the rules that do not say their own.
 	DefaultOrigin string `yaml:"origin"`
 	// The rules.
@@ -1063,6 +1068,7 @@ func Merge(sets ...*RuleSet) *Rules {
 		Propagators: map[string][]Propagator{},
 		Calls:       map[string]bool{},
 		ReadImpls:   map[string]bool{},
+		SelfFirst:   map[string]bool{},
 		ConfigReads: map[string]bool{},
 
 		GlobalsHoldNothing: map[string]bool{},
@@ -1104,6 +1110,9 @@ func Merge(sets ...*RuleSet) *Rules {
 			}
 			if rs.ReadImpls {
 				r.ReadImpls[p.Symbol] = true
+			}
+			if rs.SelfFirst {
+				r.SelfFirst[p.Symbol] = true
 			}
 		}
 		for _, c := range rs.ConfigReads {
