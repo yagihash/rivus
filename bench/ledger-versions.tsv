@@ -1,0 +1,18 @@
+# engine (git short hash)	role	note (the row of bench/BACKTEST.md it belongs to)
+2dd5022	bad 1, 4	no reflect models (type descriptors merge)
+43ba517	good 1	reflect models
+10fabef	bad 2	no absorbWhole (join + widen)
+aa7cb0c	good 2	absorbWhole
+671777d	bad 3	no holds: nothing (os.Stderr)
+2884c01	good 3	holds: nothing
+6c5c28c	good 4	the three fixes together
+009c0d5	bad 5	writer order of globals depends on the run
+396d477	good 5	pendingGlobals sorted
+623b620	bad 6	explicit global writes dropped (CORE-H)
+c9aa412	good 6, 7	only the seeds are not written back
+8e8b866	bad 7	param source written back (N x M, CORE-A)
+5dfec7f	good 8	closure captures; plan D (identity global stores)
+697ae9d	bad 8	5dfec7f without plan D (made for the backtest, never pushed)
+7552eb9	bad 10	writer model puts the data on the whole object
+6ddee62	good 10	writer content step (a branch, not on main yet)
+84877f1	reference	main at the time of the backtest

@@ -1,0 +1,10 @@
+[
+ {"id": "1", "what": "a merge through the descriptor of a type (no reflect models)", "bad": "2dd5022", "good": "43ba517", "units": ["scale/types", "scale/typeschain"]},
+ {"id": "2", "what": "join + widen: the summary grows and shrinks (no absorbWhole)", "bad": "10fabef", "good": "aa7cb0c", "units": ["scale/widen"]},
+ {"id": "3", "what": "a logger that goes through os.Stderr (no holds: nothing)", "bad": "671777d", "good": "2884c01", "units": ["scale/stderr"]},
+ {"id": "4", "what": "1 to 3 together (the unconverged Gitea, in small)", "bad": "2dd5022", "good": "6c5c28c", "units": ["scale/all"]},
+ {"id": "6", "what": "the write to an explicit global is dropped (CORE-H)", "bad": "623b620", "good": "c9aa412", "units": ["curated-go", "scale/glob"]},
+ {"id": "7", "what": "the source of a param is written back: N x M (CORE-A)", "bad": "8e8b866", "good": "c9aa412", "units": ["curated-go"]},
+ {"id": "8", "what": "save and restore lifts a sub-cell to the root (C-7 noise)", "bad": "noD", "good": "5dfec7f", "units": ["scale/selfcopy", "scale/all"]},
+ {"id": "10", "what": "a writer model puts the data on the whole object", "bad": "7552eb9", "good": "6ddee62", "units": ["curated-go"]}
+]

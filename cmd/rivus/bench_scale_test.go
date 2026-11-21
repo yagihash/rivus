@@ -70,6 +70,9 @@ func TestScaleSynth(t *testing.T) {
 		// the one real finding lists the other N-1 handlers as other sources (docs/DESIGN-shared-state.md, stage 2)
 		{"registry", "registry", []string{"-ops", "40"}, []int{1}, false},
 		{"stagefield", "stagefield", []string{"-ops", "40", "-stages", "4", "-fields", "8"}, []int{1}, false},
+		// all the shapes in one module (2,500 functions): what Gitea is, small. The causes that are alone above add up here:
+		// without the three fixes of 2026-11-21 it swells 5.5 times and does not converge (bench/BACKTEST.md, the overlap row)
+		{"all", "all", nil, []int{1}, false},
 	}
 	for _, pr := range profiles {
 		pr := pr

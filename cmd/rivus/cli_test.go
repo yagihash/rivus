@@ -24,7 +24,10 @@ func TestMain(m *testing.M) {
 	binary = filepath.Join(dir, "rivus")
 	// the graph files go to the cache: not the user's
 	os.Setenv("RIVUS_CACHE_DIR", filepath.Join(dir, "cache"))
-	if out, err := exec.Command("go", "build", "-o", binary, ".").CombinedOutput(); err != nil {
+	if b := os.Getenv("RIVUS_BINARY"); b != "" {
+		// the backtest (bench/BACKTEST.md): the tests judge an older build of the engine
+		binary = b
+	} else if out, err := exec.Command("go", "build", "-o", binary, ".").CombinedOutput(); err != nil {
 		panic(string(out))
 	}
 	code := m.Run()
