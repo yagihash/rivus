@@ -416,10 +416,10 @@ zoo-go: マス 78 / ケース 234 | 出る 61 / 78 | @miss 17(痕跡あり 6、�
 
 | # | 現象 | 悪い版で赤になるべき zoo のマス | 赤の種類 |
 | --- | --- | --- | --- |
-| 6 | 明示のグローバルへの書き込みを落とす(CORE-H。`a540f30` 〜 `ce6dc31`) | state/handler-then-reader の脆弱 | **MISS** |
-| 7 | param の source の書き戻しで N×M(CORE-A。`52e2ba8`) | dyn/xtalk-n-by-m のおとり | **FAKE** |
+| 6 | 明示のグローバルへの書き込みを落とす(CORE-H。`623b620` 〜 `ae5fdf6`) | state/handler-then-reader の脆弱 | **MISS** |
+| 7 | param の source の書き戻しで N×M(CORE-A。`8e8b866`) | dyn/xtalk-n-by-m のおとり | **FAKE** |
 | 8 | 保存して戻すでサブセルが根に持ち上がる(C-7 の案 D の前) | state/save-restore のおとり | **FAKE** |
-| 1、3 | reflect のモデルなし、`holds: nothing` なし(`dd6436f`) | conv/reflect-typeof-decoy、stderr-logger-decoy のおとり | FAKE(小さい形でも出るなら。出なければ、規模の現象として層 A に任せる) |
+| 1、3 | reflect のモデルなし、`holds: nothing` なし(`2dd5022`) | conv/reflect-typeof-decoy、stderr-logger-decoy のおとり | FAKE(小さい形でも出るなら。出なければ、規模の現象として層 A に任せる) |
 
 - 良い版では、同じマスが緑であること(悪い版が赤、良い版が緑の両方。赤の指標が期待した指標であること)。
 - zoo が悪い版で赤にならない行は、zoo の形が足りない(足す)。

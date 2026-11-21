@@ -1025,7 +1025,7 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
 
 ### 追記: 2026-11-19 のレビューへの対応（Dart、Rust）
 
-レビュー（`3f247e7` 時点の静的読解）の指摘のうち、フィクスチャを先に足して落ちることを確かめてから直したもの。どれも、フィクスチャは、修正前に落ちた。
+レビュー（`dc82535` 時点の静的読解）の指摘のうち、フィクスチャを先に足して落ちることを確かめてから直したもの。どれも、フィクスチャは、修正前に落ちた。
 
 - **Dart（`extractor/dart`）:** DART-1（catch の中の例外で finally が実行されない）、DART-2（factory コンストラクタ。リダイレクトの factory を含む）、DART-3（`super(...)`、`: this.named(...)`）、DART-4（`analysis_options.yaml` の `exclude` で外された生成コード）、DART-5（`dynamic` のメンバ）、DART-6（トップレベル変数と static フィールドの初期化子）、DART-7（`continue <caseLabel>`）、DART-8（パターン代入と `for-in` の識別子）、DART-9（`Future.then`、`Stream.listen`、`Iterable.forEach` などのコールバック）、DART-10（利用者定義の演算子と `[]`）。解決できない名前、飛び先が分からない `break` / `continue`、下げられない代入先は、黙って捨てずに `unsupported` を出す。
 - **Rust（`extractor/rust`）:** RUST-1（`Drop` の終端が `Drop::drop` を呼ぶ。直接の型のみで、フィールドの drop glue は辿らない）、RUST-2（クロージャ。ジェネリックな関数の中の `f(v)` は、引数の型が合うクロージャを候補にし、呼び元が渡した型で、dispatch ガードが絞る。クロージャの型が分かる std の高階関数（`Iterator::for_each`、`map` など、`Option::map` など）は、受け手の中身でクロージャの本体を呼ぶ）、RUST-3（trait の候補を、trait の名前で一致させる。trait の既定のメソッドの本体も候補に入れる）。
@@ -1150,14 +1150,14 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
 - `shared = r.Path`、`save(r.Path)`（ヘルパーがグローバルに書く）、`queue <- r.Path`（グローバルのチャネル）、`c.App.Last = c.Query`（同じパラメータの先の共有の状態）は、`OutGlobal` / `OutParam` として出て、グローバルのストアにも公開される。別の関数がそれを読めば、finding になる（`testdata/go/cases/paramshare/gwrite`、`gwritehelper`、`gqueue`、`ctxstate`）。
 - 種そのものは、呼び元に書き戻らない。`runB(r)` の `r` が、呼び元で、`runB` の source として汚染されることはない。
 
-最初の実装（a540f30）は、`OutGlobal` を、種かどうかを見ずに外し、`compute` のグローバルへの公開も止めていた。そのため、関数自身がグローバルに書いた値まで消え（上の 4 つの形が、変更前は 1 件、a540f30 では 0 件）、gogs の `InstallPost` からの流れ 11 件と、gin-vue-admin の 3 件が消えた。この規則に直した。`os.Args` の再現（`global`）は、`OutGlobal` を外さなくても直る（`runB` の `OutParam` の種を呼び元に書き戻さないだけで、呼び元の実引数（グローバル）に当たらない）。
+最初の実装（623b620）は、`OutGlobal` を、種かどうかを見ずに外し、`compute` のグローバルへの公開も止めていた。そのため、関数自身がグローバルに書いた値まで消え（上の 4 つの形が、変更前は 1 件、623b620 では 0 件）、gogs の `InstallPost` からの流れ 11 件と、gin-vue-admin の 3 件が消えた。この規則に直した。`os.Args` の再現（`global`）は、`OutGlobal` を外さなくても直る（`runB` の `OutParam` の種を呼び元に書き戻さないだけで、呼び元の実引数（グローバル）に当たらない）。
 
-**この退行(a540f30)は、実コードのベンチ(gogs、gin-vue-admin)の finding の差分で見つかった。コアの精度の変更は、その手順(前後のバイナリ、`measure.py compare`、実コードの finding の差分を 1 件ずつ分類、見逃しが 1 件でもあれば push しない、走らせられなければ push しない)を `bench/README.md` の「Changing the accuracy of the core: the procedure」に置いた。**
+**この退行(623b620)は、実コードのベンチ(gogs、gin-vue-admin)の finding の差分で見つかった。コアの精度の変更は、その手順(前後のバイナリ、`measure.py compare`、実コードの finding の差分を 1 件ずつ分類、見逃しが 1 件でもあれば push しない、走らせられなければ push しない)を `bench/README.md` の「Changing the accuracy of the core: the procedure」に置いた。**
 
 止めるのは**これだけ**: 種以外の要素（ほかのパラメータへの書き込み、同じパラメータの別の場所への書き込み、戻り値、例外、通常の source の書き戻し、グローバルへの書き込み）は、そのまま。パラメータ自身から、その関数の中で sink に届く流れ（`direct`）は残る。複数の source が同じオブジェクトを受け取って、それぞれが sink に届く形（`repro`）は、finding の数が変わらない。
 
 **理由（実測）:**
-- rivus 自身（dogfood のルール）: finding 88 → 39（`OutGlobal` を外さない規則でも同じ 39 件。書き戻しの偽の組み合わせは、`OutParam` の種で起きていた）（8 つの入口 × 11 の sink の組み合わせのうち、source の関数に呼び出しで届かない、偽の組み合わせ 43 件（キーで数えて）が消えた。残りの 39 件は、すべて経路に source の関数を含む）。経路に source の関数が出ない finding は 77 → 0。`runExtract` は、規則の sink のどれにも届かない（11 件がすべて偽だった）。再解析は、種だけを外す規則では 10,151 回（変更前 10,155。`OutGlobal` まで外した a540f30 の 8,168 は、グローバルへの書き込みを止めた効果で、書き込みの消失を含んでいた）。
+- rivus 自身（dogfood のルール）: finding 88 → 39（`OutGlobal` を外さない規則でも同じ 39 件。書き戻しの偽の組み合わせは、`OutParam` の種で起きていた）（8 つの入口 × 11 の sink の組み合わせのうち、source の関数に呼び出しで届かない、偽の組み合わせ 43 件（キーで数えて）が消えた。残りの 39 件は、すべて経路に source の関数を含む）。経路に source の関数が出ない finding は 77 → 0。`runExtract` は、規則の sink のどれにも届かない（11 件がすべて偽だった）。再解析は、種だけを外す規則では 10,151 回（変更前 10,155。`OutGlobal` まで外した 623b620 の 8,168 は、グローバルへの書き込みを止めた効果で、書き込みの消失を含んでいた）。
 - `other_sources` の誤った痕跡: `param_type` で、同じリクエスト型を受け取るハンドラ 2 つ + 共通の補助関数に sink（`ptype`）で、届かないハンドラが、届くハンドラの finding の `other_sources` に入っていた。finding ごとに判定する LLM は `other_sources_count` を見て「ほかの入口からも届く」と読むので、誤った痕跡だった。直った（`other_sources_count` が 0）。
 - go-synth S / M、Dart・Rust のサンプル、Dart の pub と serverpod、3 つの curated（`@miss` / `@fp` / `@noisy` の数）は、finding が同一。Rust の parseable は 94 件のまま、1 件の source が入れ替わった（書き戻しの偽の経由先だった `get_user_from_request` から、実際に tenant を読む `get_tenant_id_from_request` へ）。
 - Gitea（`./...`、実験のとき。再実行していない）: 収束（7 パス）、**最大の SCC は 3370 のまま**（書き戻しは SCC を作っていない。案 2 の領分）。finding は 37 → 41（off にだけある 8 件はすべて、経路が source の関数から始まらない。on にだけある 12 件のうち 5 件は、経路が source の関数から始まる）。書き戻しは、収束の問題としては部分的で、精度の問題が主。
@@ -1178,7 +1178,7 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
 2. `commitGlobals`: 要素が新しく入ったとき（最初の書き手）、その段を `noteWriter` で記録する。レベルの終わりに、（セル、パス、要素、書いた関数の ID）の順に整列してから一度だけ書くので、決定的（整列は後から足した。下の「書き手が複数のとき」）。
 3. `traceUncached`: 理由が無い要素が、グローバルのルートのセルにあるとき（ストアから読んだ要素）、その段を、経路の先頭に足す。**セルの値（`why`）は変えない**（`set[e] == nil` の意味、「ストアから読んだ」の判定、`addLog` の版は、そのまま。状態の間で共有される `why` を、書き換える危険も避けた）。
 
-**finding の集合は変わらない**（経路の証拠だけが変わる）。前後で確かめた（C-1 の修正 c44bfdd の上）: go-curated、go-synth S / M、paramshare、dogfood、Dart / Rust のサンプルと curated で、finding の追加も削除も 0。経路が変わったのは、paramshare の 4 件（`globalw`、`gwrite`、`gwritehelper`、`gqueue`）、Dart のサンプル 1 件、Rust のサンプル 4 件（`static` を通る流れ）で、**経路に source の関数が無かった finding は、paramshare 4、Dart サンプル 1、Rust サンプル 3 → すべて 0**（`offSourcePath` は全部の場所で 0。`TestParamSourceSharedObject` の `off` の天井も 0 にした）。
+**finding の集合は変わらない**（経路の証拠だけが変わる）。前後で確かめた（C-1 の修正 c9aa412 の上）: go-curated、go-synth S / M、paramshare、dogfood、Dart / Rust のサンプルと curated で、finding の追加も削除も 0。経路が変わったのは、paramshare の 4 件（`globalw`、`gwrite`、`gwritehelper`、`gqueue`）、Dart のサンプル 1 件、Rust のサンプル 4 件（`static` を通る流れ）で、**経路に source の関数が無かった finding は、paramshare 4、Dart サンプル 1、Rust サンプル 3 → すべて 0**（`offSourcePath` は全部の場所で 0。`TestParamSourceSharedObject` の `off` の天井も 0 にした）。
 
 **CORE-C（短い経路を残す選び方）:** `collect` は、同じ finding の経路が複数あるとき、短いものを残す（同じ長さなら関数 ID の順）。グローバルを通る経路は、書き手の段が付いて長くなったので、選び方を変えなくても、source の関数が経路に出ない finding は 0 になった。選び方（「source の関数が経路に出るものを優先」）は、足していない。
 
@@ -1187,7 +1187,7 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
 **書き手が複数のとき（advisor の 3 つの質問。コード `internal/taint/engine.go` を読んで確かめた。実行で確かめてはいない）:**
 1. どれを見せるか: **最初にストアへ入れた 1 つ**。`commitGlobals` が `merge`（セルに要素が無ければ入れて `true`）が `true` のときだけ `noteWriter` を呼ぶ。同じ要素の 2 つ目以降の書き込みは、`merge` が `false` なので、段は記録されない。
 2. 短い経路の書き手があとから来たら入れ替わるか: **入れ替わらない**。要素がストアにある間は `merge` が `false` で、`noteWriter` は呼ばれない（`compute` も、ストアに既にある要素はトレースしない）。「短いほう」を選ぶのは、finding の経路の選び方（`collect`）で、書き手の段の選び方ではない。
-3. パスをまたいで決定的か: **パスをまたぐ部分は決定的**（最初に入った書き手の段は、後のパスで変わらない。ストアはパスの間で保たれる）。**同じレベルの中は、整列で決定的にした**: `pendingGlobals` への追加は `commit` の中で、レベルの中で並列に走る SCC（`runLevel`、`workers > 1`）が終わった順に入る。整列がなかったとき（b94fa80）、同じレベルの別の SCC の 2 つの関数が同じ要素を書くと、最初の書き手が、ゴルーチンの終わる順で決まり、**書き手の段（経路の前半）と `fingerprint["path@1"]` が、実行ごとに変わった**（`rivus resolve` が `path_changed` と読む。finding の ID と集合は変わらない）。`gwriters`（書き手 8 つ）と `TestDeterministic*`（`GOMAXPROCS` 1 / 4 / 既定、`-workers` 既定 / 2 / 16）で再現した。直し: `commitGlobals` が、`pendingGlobals` を（セル、パス、要素、書いた関数の ID）で整列してから `merge` する（`globalWrite.fn`）。**選び方に意味はない**（関数 ID の順で最初の書き手。短い書き手を選ぶものではない）。**全部の書き手は `global_var` の不確実性の候補に残る**。finding の集合は変わらない。この種の「並列の順が出力に漏れる」不具合は、常設の `TestDeterministic*` が見る。
+3. パスをまたいで決定的か: **パスをまたぐ部分は決定的**（最初に入った書き手の段は、後のパスで変わらない。ストアはパスの間で保たれる）。**同じレベルの中は、整列で決定的にした**: `pendingGlobals` への追加は `commit` の中で、レベルの中で並列に走る SCC（`runLevel`、`workers > 1`）が終わった順に入る。整列がなかったとき（009c0d5）、同じレベルの別の SCC の 2 つの関数が同じ要素を書くと、最初の書き手が、ゴルーチンの終わる順で決まり、**書き手の段（経路の前半）と `fingerprint["path@1"]` が、実行ごとに変わった**（`rivus resolve` が `path_changed` と読む。finding の ID と集合は変わらない）。`gwriters`（書き手 8 つ）と `TestDeterministic*`（`GOMAXPROCS` 1 / 4 / 既定、`-workers` 既定 / 2 / 16）で再現した。直し: `commitGlobals` が、`pendingGlobals` を（セル、パス、要素、書いた関数の ID）で整列してから `merge` する（`globalWrite.fn`）。**選び方に意味はない**（関数 ID の順で最初の書き手。短い書き手を選ぶものではない）。**全部の書き手は `global_var` の不確実性の候補に残る**。finding の集合は変わらない。この種の「並列の順が出力に漏れる」不具合は、常設の `TestDeterministic*` が見る。
 
 ## ADR-050: 関数値の呼び出しを、rivus の上限で解決しなかったときは、「知らない」と言わない（CORE-D）
 
@@ -1270,7 +1270,7 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
 - gogs（`bench/gogs/rules.yaml`、新しい版）: finding 12 → 1（残るのは `bind.go:116`）、パス 6 → 3、taint 19.9 秒 → 9.3 秒、uncertainty 2,900 → 2,463。11 件は、経路が、型のキャッシュ（`proto.*Map`、`aberrantMessageDescCache`）のグローバルを通る形だった。
 - Gitea（`-deps`、`bench/gitea/rules.yaml`、`absorbWhole` なし、callouts なし）: **収束**（8 パス、145 秒、最大 RSS 13.2 GB、finding 37）。モデルなしは、30 分で収束しなかった。`stats.pass_changes` で、新しい要素が、パスごとに 124K、470K、277K、252K、171K、64K、15K、100 と減り、戻ってきた要素はほぼ 0。
 - CVE 3 件（`bench/gitea/truth-v1.26.4.json`）の再現率は、モデルの前後で、どの出力も 1/3（`oauth.go:313` だけ。`release.go:338` と `openid.go:26` は、モデルとは関係なく、今の main で、見つからない）。
-- 正解のある版での再現率（`bench/compare.sh dd6436f 7391fa1`、`bench/score.py`）: gogs-9a9388ac（TP 4、FN 0）、gogs-48946299（TP 2、FN 0）、gin-vue-admin（TP 2、FN 0）、go-test-bench（TP 18、FN 0、FP 2、TN 1）。前後で同じ。追加された finding は 0 件。削除は、gogs-48946299 の 21 件（同じ sink `misc/markdown.go:16` は残る。経路は 183〜191 ステップで、5 または 14 番目のステップで protobuf の型の処理に入る）と、go-curated の 2 件（新しいフィクスチャの `@sink(none)`）。
+- 正解のある版での再現率（`bench/compare.sh 2dd5022 7391fa1`、`bench/score.py`）: gogs-9a9388ac（TP 4、FN 0）、gogs-48946299（TP 2、FN 0）、gin-vue-admin（TP 2、FN 0）、go-test-bench（TP 18、FN 0、FP 2、TN 1）。前後で同じ。追加された finding は 0 件。削除は、gogs-48946299 の 21 件（同じ sink `misc/markdown.go:16` は残る。経路は 183〜191 ステップで、5 または 14 番目のステップで protobuf の型の処理に入る）と、go-curated の 2 件（新しいフィクスチャの `@sink(none)`）。
 - 本物の v1.26.4 の Gitea での測り直しは、別に記録する（ここまでの Gitea の数字は、2026-11-18 の main の木で取った: `bench/README.md` の注意）。
 
 **仮説の履歴（Gitea が収束しない原因。次に同じ形の問題が出たとき、要素の追跡と `stats.unmodeled_top` から始められるように）:**
@@ -1299,7 +1299,7 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
 3. 組み込みのモデル（`go-pure.yaml`）に、`os.Stderr` と `os.Stdout` を書く。プロジェクトのルールで、`holds: everything` と書くと、外れる（精度の限界を、利用者が外せる）。`Merge` は、どの集合でも `everything` と言われた変数を、`nothing` から外す（集合の順序によらない）。
 4. エンジンのコードに、`os.Stderr` とは書かない（`Rules.HoldsNothing(name)` を引くだけ）。
 
-**測定（Gitea、`reflect` のモデルあり、callouts なし）:** `summary_elems` 839,401 → 439,321、`summary_steps` 35.1M → 16.5M、最大の要約 15,200 → 935、`reanalyses` 134,075 → 120,899、`depth_limit` 1,431 → 1,217、収束は 8 パスのまま、finding 37 → 38（source の入れ替わり: 出ていく 6 組、入る 7 組）。最大 RSS（13.5 GB）とパスの数は変わらない。rivus 自身（dogfood、同じ木 = main の dd6436f を、main のバイナリと `holds` のバイナリで解析）: `reanalyses` 10,163 → 7,656（−24.7 %）、`summary_elems` 31,653 → 27,426、finding は 39 件で同一（`(source, sink)` の組 39、sink 11 か所。数え方は、finding の件数と、組の数の両方）、`depth_limit` 39 → 38（`capture_unbound`）。gogs: 変わらない。（C-1 の前の版で測った数字は、finding 88 だった。測り直した。）
+**測定（Gitea、`reflect` のモデルあり、callouts なし）:** `summary_elems` 839,401 → 439,321、`summary_steps` 35.1M → 16.5M、最大の要約 15,200 → 935、`reanalyses` 134,075 → 120,899、`depth_limit` 1,431 → 1,217、収束は 8 パスのまま、finding 37 → 38（source の入れ替わり: 出ていく 6 組、入る 7 組）。最大 RSS（13.5 GB）とパスの数は変わらない。rivus 自身（dogfood、同じ木 = main の 2dd5022 を、main のバイナリと `holds` のバイナリで解析）: `reanalyses` 10,163 → 7,656（−24.7 %）、`summary_elems` 31,653 → 27,426、finding は 39 件で同一（`(source, sink)` の組 39、sink 11 か所。数え方は、finding の件数と、組の数の両方）、`depth_limit` 39 → 38（`capture_unbound`）。gogs: 変わらない。（C-1 の前の版で測った数字は、finding 88 だった。測り直した。）
 
 **限界:**
 - **見逃す形**: `os.Stdout` / `os.Stderr` を差し替えて、読み戻すコード（`os.Pipe` と、`os.Stdout = w`、別の端から読む）は、追わない。`holds: everything` で戻せる。
@@ -1337,7 +1337,7 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
 
 **限界:** 1 度も呼ばれないクロージャの流れも、渡されていれば finding になる(過検出)。呼ぶ順序は見ない。捕獲と引数の両方に依る流れは、案 2(ADR-047)まで見つからない。結果の流れ(`WithTx2` など)は、`assumed_call` を残して、次の段(結果をクロージャの値に持たせる)。依存の関数の中で記録された `assumed_call` は、ほかの不確実性と同じく、全体の一覧からは捨てられる(finding の経路には残る)。
 
-**検証(`bench/compare.sh a1689ee <C-7>`、実コード、案 D のあと。削除 0、全部収束):**
+**検証(`bench/compare.sh 6c5c28c <C-7>`、実コード、案 D のあと。削除 0、全部収束):**
 
 | bench | findings | 追加 | `assumed_call` | 備考 |
 | --- | --- | --- | --- | --- |
@@ -1373,7 +1373,7 @@ rivus 自身(dogfood): 39 → 44(追加の 5 は `rivus index` の `-o` の経�
 
 **限界:** 診断は、実行の費用を増やす（`pass_changes` は、要約が変わるたびに、要素の集合を作って比べる。`unmodeled_top` は、ロックを取る）ので、既定では切。数えるのは、実行がたどった解析で、要約の値ではない。
 
-**測定:** `compare.sh a1689ee <この変更>`: finding の追加・削除 0、新しい欄以外に差なし（コミットに記す）。
+**測定:** `compare.sh 6c5c28c <この変更>`: finding の追加・削除 0、新しい欄以外に差なし（コミットに記す）。
 
 
 ## ADR-062: ビルドが本番から除くものは、既定で読まない(3 言語で揃える)。読まなかった数は出力に出す
@@ -1391,7 +1391,7 @@ rivus 自身(dogfood): 39 → 44(追加の 5 は `rivus index` の `-o` の経�
 
 **確かめたこと(Dart は、実際に既定でテストを読んでいた):** dart-pub(`--no-deps`)の IR で、関数 4847 のうち **2607 が `test/` のもの**、entry 579 のうち **428 がテストの `main`**。`--no-deps` なので、dev の依存の本体は、もともと入っていない(`unmodeled_library_call` の上位が `test_descriptor` などだったのは、`test/` のファイルが呼んでいたため)。
 
-**検証(`bench/compare.sh 703c3ac 4fa0ce1`、dart-pub、dart-curated):**
+**検証(`bench/compare.sh 2b2dbe7 4fa0ce1`、dart-pub、dart-curated):**
 
 | | 読む(`--include-tests`、前と同じ) | 既定(読まない) |
 | --- | --- | --- |
@@ -1512,7 +1512,7 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 3. `test` は、ファイル名だけの証拠(`_test.go`、`_test.dart`、`test/`、`tests/`)。**何も除かない**(範囲を絞る段は別。IR の印と、シグネチャの証拠は、まだ)。`excluded_test` と `first_writer` は、出さない(後者は、どれが最初かに意味がない。ADR-049)。
 4. **出力の追加だけ**: finding の集合、経路、指紋は変わらない。`rivus.result/1` の版は上げない(ADR-034 の、足すだけの変更の扱い)。
 
-**確かめたこと(`compare.sh f188ed0 6a5e478`、軽い層):** finding の追加 0、削除 0、経路・到達性・`other_sources` の変化 0(全 16 件の対象)。`shared_state` が付いた finding: gogs 2 つ 10 件ずつ(すべて `conf.Database` のフィールド。`flow` 1、`all` 2、`readers` 8)、gin-vue-admin 2 件(`injectionPaths`、1/1)、go-curated 4、go-scale 5(`flow` 1、`all` 1〜16)、zoo-go 14、zoo-dart 6。gophish、casdoor、dart-pub、parseable、rust-curated には、グローバルを通る finding がない(0)。`flow` > `all` のものは、なかった。動物園の 3 つ(`global-chain` で収束しない)は、実行のたびに `uncertainties` が 87〜91 で揺れる(base でも同じ。この変更とは関係がない)。
+**確かめたこと(`compare.sh 7faf20e 6a5e478`、軽い層):** finding の追加 0、削除 0、経路・到達性・`other_sources` の変化 0(全 16 件の対象)。`shared_state` が付いた finding: gogs 2 つ 10 件ずつ(すべて `conf.Database` のフィールド。`flow` 1、`all` 2、`readers` 8)、gin-vue-admin 2 件(`injectionPaths`、1/1)、go-curated 4、go-scale 5(`flow` 1、`all` 1〜16)、zoo-go 14、zoo-dart 6。gophish、casdoor、dart-pub、parseable、rust-curated には、グローバルを通る finding がない(0)。`flow` > `all` のものは、なかった。動物園の 3 つ(`global-chain` で収束しない)は、実行のたびに `uncertainties` が 87〜91 で揺れる(base でも同じ。この変更とは関係がない)。
 
 **限界:** `readers` は、読む関数と書く関数の和。複数のグローバルを通る finding は、配列で全部を出す。粒度の改善(持ち上げ、マップのキー)と、範囲の絞り込み(テストの印)は、別の段。
 
@@ -1529,7 +1529,7 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 5. zoo に共通のマス `clos/partial-callers`(3 言語。脆弱、直した版、おとり)を足した。Go は VTA の候補があり、`valuecalls` に来ないので、見つかる(印も出ない)。Dart は、脆弱が `@miss(silent)`(見逃しは今までと同じ。不確実性はヘルパーの中に出るので、見逃した流れの source と sink の関数の痕跡にはならない: `TestZooPartialCallersSaysItIsPartialDart` が、ヘルパーの `unresolved_callee`(`partial:`)を検査する)。Rust は、関数ポインタの呼び出しが `valuecalls` を通らず、追えない呼び元がなくても、脆弱とおとりが見つからない(`@miss(unmodeled_library_call)`。別の穴)。
 6. スキーマは変えない(不確実性の `kind` は既存。`detail` の追加)。
 
-**確かめたこと(`compare.sh a1194ae 732de0b`、軽い層):** finding の追加 0・削除 0(実コードの全対象)、経路・到達性の変化 0。追加の finding は、zoo の新しいマスの分だけ(zoo-go +2、zoo-dart +1。base にはマスがない)。不確実性: Go の実コード(gogs 2 つ、gin-vue-admin、go-test-bench、gophish、casdoor)は **0 件の変化**(Go は候補が VTA で付く)。Dart: dart-pub の `unresolved_callee` が 66 → 71(`mapMap`、`Package.load`、`_handleAccessTokenResponse`、`_handleErrorResponse`、`_parseIgnorePatterns`: 関数値の呼び元の一部が追えない)、dart-curated が 21 → 22(`withDefault`)。parseable(Rust)は 0。
+**確かめたこと(`compare.sh b0ed28b 732de0b`、軽い層):** finding の追加 0・削除 0(実コードの全対象)、経路・到達性の変化 0。追加の finding は、zoo の新しいマスの分だけ(zoo-go +2、zoo-dart +1。base にはマスがない)。不確実性: Go の実コード(gogs 2 つ、gin-vue-admin、go-test-bench、gophish、casdoor)は **0 件の変化**(Go は候補が VTA で付く)。Dart: dart-pub の `unresolved_callee` が 66 → 71(`mapMap`、`Package.load`、`_handleAccessTokenResponse`、`_handleErrorResponse`、`_parseIgnorePatterns`: 関数値の呼び元の一部が追えない)、dart-curated が 21 → 22(`withDefault`)。parseable(Rust)は 0。
 
 **限界:** 候補が見つかった分だけであることは変わらない(広げない。広げると、過検出が増える。別の判断)。印の `incomplete` を使う絞り込みは、まだない(その案を入れるとき、この印のある呼び出しを除く)。
 
@@ -1545,7 +1545,7 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 5. 最初のモデル(標準ライブラリ): Go `Once.Do`、`sort.Slice` / `SliceStable` / `Search`、`slices.SortFunc` / `SortStableFunc` / `IndexFunc` / `ContainsFunc`、`strings.Map` / `IndexFunc` / `TrimFunc` / `FieldsFunc`。Dart `Iterable`(`map`、`where`、`firstWhere`、`lastWhere`、`any`、`every`、`forEach`)、`List.map` / `forEach`、`Set.forEach`、`Map.forEach`、`Future.then` / `catchError` / `whenComplete`、`Stream.map` / `where` / `listen` / `forEach`。Rust `Once::call_once`、`Option` / `Result` の `map`、`and_then`、`map_err`、`ok_or_else`、`unwrap_or_else`、`filter`、`Iterator` の `map`、`filter`、`filter_map`、`flat_map`、`for_each`、`any`、`all`、`find`、`position`、`take_while`、`thread::spawn`(`mode: go`)。Rust は、抽出器が、すでに一部の API でクロージャの呼び出しを作っている(名前による表)ので、その行には、元の `flows` を残した(**削除が起きない側**)。
 6. **実行の検査**(`TestZooCallbacksGo` / `Dart` / `Rust`。`bench/zoo-{go,dart,rust}/callbacks`): 目印を記録するクロージャを渡して、実際に呼び、`with`(渡された値)と `ret`(戻り値が結果に出たか)を、行と照合する。行が呼ばれていない、行と食い違う、は、モデルの誤り(直す。`@miss` にしない)。照合そのものが落とせることは `TestCallbackCheckFindsAWrongRow`。Go 12 行、Dart 18 行、Rust 21 行は、全部、一致した。`HttpRequest.listen` などは、サーバが要るので、`calls` を書いていない。
 
-**確かめたこと(`compare.sh f033952 1caf62b`、軽い層):** 実コード(gogs 2 つ、gin-vue-admin、go-test-bench、gophish、casdoor、dart-pub、parseable)は、finding の追加 0・削除 0。`assumed_call` の数(不確実性): gogs-9a9388ac 157 → 156、gogs-48946299 158 → 157、dart-pub 192 → 140、parseable 0 → 28(Rust のクロージャが引数の関数で、導いた流れが使われた。経路が変わった finding が 16)。`unmodeled_library_call` は gogs 2 つで 300 → 291、304 → 295。curated: dart-curated は追加 4(`cap_result`、`cap_result_then`、`catch_error_value`、`map_entries`。どれも、実行で本物と分かっている流れの `@miss` が外れた)と、削除 1(`map_const_result` の `sink(out.first)`: `items.map((s) => 'fixed')` の結果に source は入らない。`@fp` だったもの。同じ source は `sink(items)` で見つかるまま)。rust-curated は追加 1(`spawned`)。動物園: `clos/to-lib` は Dart の 3 つ(`vuln2`、`vuln3`、`decoy` の流れ)と Rust の `vuln` が見つかる側に。Rust の `clos/capture-write-by-ref/vuln5`(`call_once` が呼ぶ)も出た。Go の `vuln2` は `sync.OnceValue`(結果が関数値)で、段階 4 の仕事。おとりの誤報・直した版の誤報は、3 言語とも増えていない。
+**確かめたこと(`compare.sh b820590 d277d63`、軽い層):** 実コード(gogs 2 つ、gin-vue-admin、go-test-bench、gophish、casdoor、dart-pub、parseable)は、finding の追加 0・削除 0。`assumed_call` の数(不確実性): gogs-9a9388ac 157 → 156、gogs-48946299 158 → 157、dart-pub 192 → 140、parseable 0 → 28(Rust のクロージャが引数の関数で、導いた流れが使われた。経路が変わった finding が 16)。`unmodeled_library_call` は gogs 2 つで 300 → 291、304 → 295。curated: dart-curated は追加 4(`cap_result`、`cap_result_then`、`catch_error_value`、`map_entries`。どれも、実行で本物と分かっている流れの `@miss` が外れた)と、削除 1(`map_const_result` の `sink(out.first)`: `items.map((s) => 'fixed')` の結果に source は入らない。`@fp` だったもの。同じ source は `sink(items)` で見つかるまま)。rust-curated は追加 1(`spawned`)。動物園: `clos/to-lib` は Dart の 3 つ(`vuln2`、`vuln3`、`decoy` の流れ)と Rust の `vuln` が見つかる側に。Rust の `clos/capture-write-by-ref/vuln5`(`call_once` が呼ぶ)も出た。Go の `vuln2` は `sync.OnceValue`(結果が関数値)で、段階 4 の仕事。おとりの誤報・直した版の誤報は、3 言語とも増えていない。
 
 **限界:** 射影がない(`recv` は要素ごとでなく全体)。`fold` の accumulator(`feed`)、結果が関数値の API、フィールドに入れた関数を呼ぶものは、まだ。デファクトのライブラリ(`dio`、`tokio` など)は、このあと。Rust は、渡された関数が `&closure` や、他の関数の引数のとき、決まらず、導いた流れ(`assumed_call`)に戻る。
 
@@ -1568,7 +1568,7 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 - `compare.sh origin/main HEAD`(`rust-curated`、`zoo-rust`、`parseable`。両側とも、自分の側の extractor で作った IR): **parseable は finding 159 → 159、追加 0、削除 0**、経路の長さが変わったのが 31 件(1 段短くなる。`catalog` のクロージャが、環境のフィールドを別々に持つので)。到達性・`other_sources` の変化は 0。時間は 3 → 3 秒、メモリは 1036 → 1119 MB。`rust-curated` は +10 / −46、`zoo-rust` は +7 / −122 と −1。
 - 追加(17 件)は、すべて、source と同じ関数(クロージャを含む)の中の sink で、本物: 上の `@miss` を外した流れと、足したフィクスチャ。経路を読んで、書いたクロージャの `src` から、変数を通って、外の `sink` に届いていることを確かめた。追加の雑音は 0。
 - 削除(`rust-curated` 46、`zoo-rust` 123)は、すべて、**別のマスのクロージャの sink に届く過検出**(source と sink が別の関数。1 件を除く)。例外の 1 件は、`capture-write-by-ref` の decoy の `quiet` のクロージャ(定数 `y`)の sink に、同じ decoy の `set` の `src` が届くもの(`@fp`。`@nosink` の注記で、本物でないと決めてあるもの)。これらの sink は、`@noisy(3)` から `@noisy(8)` と注記してあった sink で、数が合う(`spawned` の sink 8、`retained` の sink 3 ほか)。本物の流れの削除は 0。
-- `go vet`、`go test ./...`(`RIVUS_DART`、`RIVUS_RUST`、`RIVUS_REQUIRE_*=1`): この変更で落ちるものは無い。`TestCuratedDart`、`TestDogfood`、`TestZooPureGo` が落ちるが、`calls:` の変更を入れた main(1caf62b)でも同じに落ちる(別の変更の途中: Dart の `@miss` が見つかる側に変わる、`capture_unbound` が 37、Go の pure の行が呼ばれていない)。
+- `go vet`、`go test ./...`(`RIVUS_DART`、`RIVUS_RUST`、`RIVUS_REQUIRE_*=1`): この変更で落ちるものは無い。`TestCuratedDart`、`TestDogfood`、`TestZooPureGo` が落ちるが、`calls:` の変更を入れた main(d277d63)でも同じに落ちる(別の変更の途中: Dart の `@miss` が見つかる側に変わる、`capture_unbound` が 37、Go の pure の行が呼ばれていない)。
 
 **`Fn::call` の候補が 0 件、について(調べた):** parseable で `std::ops::Fn::call` の呼び出しは 36 件。**dynamic は 3 件で、候補は全部ある。** 残る 33 件は `static` で、29 種類の呼び先のうち 28 は本体がある(その `async` ブロックや、クロージャの関数)。本体も候補もないのは、`<Box<dyn Fn(String) -> bool + Send> as Fn<(String,)>>::call`(標準ライブラリの `Box<dyn Fn>` の実装。4 呼び出し)だけ。つまり、「dynamic で 0 件」ではなく、「`Box<dyn Fn>` の呼び出しが、`dyn` の仮想呼び出しにならず、標準ライブラリの本体のない static 呼び出しになる」。直すには、extractor が、この形を、`dyn Fn` の呼び出し(候補は、引数の型の合うクロージャ)にする必要がある。別の変更(別の issue)に回した。この ADR の範囲ではない。
 

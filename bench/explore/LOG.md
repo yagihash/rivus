@@ -21,7 +21,7 @@ Stats of the cut-out run: `dep_spent_ms` 1,394,980 (summed over the workers), `o
 
 ## Measurement 2: what if the packages outside every `main` closure were not read as own code (2026-11-21)
 
-**Question.** A user reported scan times growing a lot "because of mocks". `./...` reads every package of the module as own code, also the ones that no non-test `main` imports (mock packages, test helpers). Estimate, before implementing anything, what it would change to analyse only the own packages in the import closure of the `main` packages (`go list -deps -test=false` over all `main` packages, intersected with `go list ./...`). This is a change of the analysis scope (results change), not a speed-up: the findings that disappear are listed first. Names (`mock`, `test`) are used only to describe the set, never to select it. Binary: main at `703c3ac`; rules as in `bench/compare.sh` (memos and cloudreve: built-in only).
+**Question.** A user reported scan times growing a lot "because of mocks". `./...` reads every package of the module as own code, also the ones that no non-test `main` imports (mock packages, test helpers). Estimate, before implementing anything, what it would change to analyse only the own packages in the import closure of the `main` packages (`go list -deps -test=false` over all `main` packages, intersected with `go list ./...`). This is a change of the analysis scope (results change), not a speed-up: the findings that disappear are listed first. Names (`mock`, `test`) are used only to describe the set, never to select it. Binary: main at `2b2dbe7`; rules as in `bench/compare.sh` (memos and cloudreve: built-in only).
 
 ### 1. What is outside the closure
 

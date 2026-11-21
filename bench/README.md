@@ -30,9 +30,9 @@ real code have been run before and after it, and every difference in their findi
 looked at. If they could not be run (a checkout without `go.mod`, a target that does not build, no
 Dart or Rust toolchain), do not push**: say so and wait. `go test ./...` and the curated projects are
 not enough, because the shapes in them are the ones that were already known (the regression of
-ADR-048, a540f30 to c44bfdd, was found only by the findings of gogs and gin-vue-admin).
+ADR-048, 623b620 to c9aa412, was found only by the findings of gogs and gin-vue-admin).
 
-**In one command: `bench/compare.sh <base> <head>`** (for example `bench/compare.sh c44bfdd origin/main`)
+**In one command: `bench/compare.sh <base> <head>`** (for example `bench/compare.sh c9aa412 origin/main`)
 does steps 1, 4 and the comparison of 5 for you: it builds both states in worktrees, makes the copies of
 the targets of the table below (`git clone` and `git checkout`, then `ls go.mod` and `go list ./...`; a
 copy that cannot be made is listed as NOT RUN), runs **one benchmark at a time, base then head**, and
@@ -251,7 +251,7 @@ sink) plus ONE shape, so that a change of a number has one cause. The code carri
 (`@source(tag)`, `@sink(tag)`, `@sink(none)`, `@nosink(tag)`): the flows that must stay (`*_real`: a real flow next to the confluence) and the sinks
 that must stay quiet. A change that cuts too much (it loses a `*_real` flow) fails as surely as one that cuts too little.
 
-| profile (`-shapes`) | the phenomenon | the change that fixes it | what it does without that change (the engine of `dd6436f`) |
+| profile (`-shapes`) | the phenomenon | the change that fixes it | what it does without that change (the engine of `2dd5022`) |
 | --- | --- | --- | --- |
 | `types` | the data of a value reaches a cache of types (`reflect.TypeOf` / `(reflect.Value).Type` as `proto.marshalInfoMap`), and every reader of the cache | the `reflect` models (ADR-055) | `summary_elems` x11, largest summary 6 to 76, `reanalyses` x1.8, 2 passes (not 1), 72 false pairs into the `@sink(none)` |
 | `stderr` | `fmt.Fprintf(os.Stderr, tainted)`, and every `log.New(os.Stderr, ...)` carries it | `holds: nothing` (ADR-056) | `summary_elems` x13, largest summary 6 to 85, `reanalyses` x1.9, 3 passes (not 2), 82 false pairs |
@@ -278,7 +278,7 @@ closures given to a helper; Dart and Rust profiles (a task of their own).
 **Measuring by hand and between two builds.** `python3 bench/go-scale/measure.py -rivus BIN -shapes types [-workers 1]` prints one line (functions,
 passes, converged, reanalyses, `summary_elems`, the largest summary, found / missing / false against the key). `bench/compare.sh` has `go-scale`
 in the light tier (all shapes in one module, about 2,550 functions, 11 s; the same input for base and head, made by the generator of the tree the script is in).
-Against `dd6436f` it says "164 findings REMOVED" (the false pairs of `types` and `stderr`: that is the point of the profile; classify them by the key).
+Against `2dd5022` it says "164 findings REMOVED" (the false pairs of `types` and `stderr`: that is the point of the profile; classify them by the key).
 
 **Which change makes which profile big (measured once, 2026-11-21; the head with ONE of the three taken out, the others kept).**
 Taking the fix out is not kept as a switch in the engine (no flag for it); it was done on a copy of the tree: `go-pure.yaml` without the five `pure: true`
@@ -291,7 +291,7 @@ of `reflect`; `holds: nothing` changed to `holds: everything`; `widen(absorbWhol
 | `widen` | 5,198, maxsum 7 | 5,198 | 5,198 | 5,390, **maxsum 47** |
 | the others | | the same as head | the same as head | the same as head |
 
-Each fix moves only its own profile. `dd6436f` itself: `types` and `stderr` as in the columns above, `widen` 5,390 / 47, and the rest as head.
+Each fix moves only its own profile. `2dd5022` itself: `types` and `stderr` as in the columns above, `widen` 5,390 / 47, and the rest as head.
 The three fixes together on all the shapes at once (2,547 functions, `-shapes all`, 2 s on head): `summary_elems` 78,190 to 14,141 (5.5 times), `reanalyses` 7,656 to 4,302, largest summary 164 to 45, 164 false pairs to 0, **base does not converge (12 passes), head converges in 11**, 52 real flows found by both.
 
 **How big the profiles are (head, `-workers 1`, an idle machine):** types 2,033 functions 2.9 s; stderr 2,049, 2.1 s; widen 2,045, 1.1 s; scc 2,229 (largest SCC 200), 2.4 s;

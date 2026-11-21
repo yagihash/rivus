@@ -1,6 +1,6 @@
 # 見逃し(`@miss`)と過検出(`@fp`、`@noisy`)の、原因の型での分類
 
-2026-11-21 の作業ツリー(HEAD 3424363)で、`dart-curated` / `rust-curated` / `go-curated` の全部の `@miss` と `@fp` と `@noisy` を、実際に流して確かめた。**エンジン、extractor は変えていない。** 原因の見立てのうち、実験(下の「確かめ方」)で確かめたものは、表の備考に書いた。確かめられていないものは「未特定」と書く。
+2026-11-21 の作業ツリー(HEAD ad34d5b)で、`dart-curated` / `rust-curated` / `go-curated` の全部の `@miss` と `@fp` と `@noisy` を、実際に流して確かめた。**エンジン、extractor は変えていない。** 原因の見立てのうち、実験(下の「確かめ方」)で確かめたものは、表の備考に書いた。確かめられていないものは「未特定」と書く。
 
 ## 確かめ方
 
@@ -33,7 +33,7 @@
 
 ## 未解決のレビュー指摘(RUST-13、RUST-14、DART-12)と、そのフィクスチャ
 
-別セッションのレビューの識別子(docs には無い)。2026-11-21、main(HEAD 1a429f0 の作業ツリー)で、原因のコードが残っていることと、落ちるフィクスチャを確かめた。**コアは変えていない。** 対応する issue は無い(#76〜#83 は、どれもこの 3 つの原因を挙げていない)。上の集計と表は、この節のフィクスチャを足す前の数のまま(足したあとの数は、下の表)。
+別セッションのレビューの識別子(docs には無い)。2026-11-21、main(HEAD 793a803 の作業ツリー)で、原因のコードが残っていることと、落ちるフィクスチャを確かめた。**コアは変えていない。** 対応する issue は無い(#76〜#83 は、どれもこの 3 つの原因を挙げていない)。上の集計と表は、この節のフィクスチャを足す前の数のまま(足したあとの数は、下の表)。
 
 | 指摘 | 原因のコード(今) | フィクスチャ | 今の結果 |
 | --- | --- | --- | --- |
@@ -271,7 +271,7 @@ Rust の `@miss` は、案 2 では 1 つも直らない(11 件とも、別の�
 
 | タグ | source → sink | 痕跡 | 型 | 備考 |
 | --- | --- | --- | --- | --- |
-| `alias-ptr` | go-curated/api/alias.go:`store` → `use`(`testdata/go/cases/paramshare/ctxptr` が同じ形の param source 版。CORE-K(ADR-065)のあとは、こちらの `reader` に `unmodeled_library_call` の痕跡が出る。go-curated の `alias.go` は silent のまま) | **`silent`**(source の関数 `store`・sink の関数 `use` に不確実性なし。`uncertainties` は `init` の `unmodeled_library_call` だけ) | `ALIAS`(完全なポインタ解析を作らない、という受け入れ済みの近似) | `h.S.Last = <source>` と書く関数と、同じ `state` を自分のポインタ `s` で受け取って `s.Last` を sink に渡す関数。呼び元が `use(h)` / `reader(c)`(同じ親を渡す)なら見つかる(`ctxstate`)。別のポインタ(`use(s)`)で渡すと見つからない。C-1(ADR-048)より前、ce6dc31 でも見つからない(退行ではない) |
+| `alias-ptr` | go-curated/api/alias.go:`store` → `use`(`testdata/go/cases/paramshare/ctxptr` が同じ形の param source 版。CORE-K(ADR-065)のあとは、こちらの `reader` に `unmodeled_library_call` の痕跡が出る。go-curated の `alias.go` は silent のまま) | **`silent`**(source の関数 `store`・sink の関数 `use` に不確実性なし。`uncertainties` は `init` の `unmodeled_library_call` だけ) | `ALIAS`(完全なポインタ解析を作らない、という受け入れ済みの近似) | `h.S.Last = <source>` と書く関数と、同じ `state` を自分のポインタ `s` で受け取って `s.Last` を sink に渡す関数。呼び元が `use(h)` / `reader(c)`(同じ親を渡す)なら見つかる(`ctxstate`)。別のポインタ(`use(s)`)で渡すと見つからない。C-1(ADR-048)より前、ae5fdf6 でも見つからない(退行ではない) |
 
 ### Go の `@fp`(5)
 
@@ -322,7 +322,7 @@ go test ./cmd/rivus -run Curated -v     # 注釈の検査(この表の元の数)
 
 ## BENCH-2: 経路に source の関数が出ない finding(`offSourcePath`)
 
-finding の `source.position` の関数(`source.func`)が、最初の経路(`paths[0]`)のステップのどれにも出ない finding。出ないのは、source が、別の関数が書き戻したオブジェクトから届いたとき(CORE-A / CORE-B。`TestParamSourceSharedObject`)。検査は `cmd/rivus/offsource_test.go` の `offSourcePath` で、`TestDogfood`、`TestCurated{Go,Dart,Rust}`、`TestParamSourceSharedObject`、`TestGlobalWriterIsOnThePath` が使う。数は上限(今の値)で、上がると落ちる。下がっても落ちる(上限を下げる)。CORE-A(ADR-048)と CORE-B(ADR-049。グローバルのストアに書いた側の段を持たせた)で、全部 0 になった。下の表は、2026-11-21(HEAD 78c3bdb + CORE-A の前)の値で、記録として残す:
+finding の `source.position` の関数(`source.func`)が、最初の経路(`paths[0]`)のステップのどれにも出ない finding。出ないのは、source が、別の関数が書き戻したオブジェクトから届いたとき(CORE-A / CORE-B。`TestParamSourceSharedObject`)。検査は `cmd/rivus/offsource_test.go` の `offSourcePath` で、`TestDogfood`、`TestCurated{Go,Dart,Rust}`、`TestParamSourceSharedObject`、`TestGlobalWriterIsOnThePath` が使う。数は上限(今の値)で、上がると落ちる。下がっても落ちる(上限を下げる)。CORE-A(ADR-048)と CORE-B(ADR-049。グローバルのストアに書いた側の段を持たせた)で、全部 0 になった。下の表は、2026-11-21(HEAD d85ee95 + CORE-A の前)の値で、記録として残す:
 
 | 場所 | 数 | 型 |
 | --- | --- | --- |
@@ -337,7 +337,7 @@ finding の `source.position` の関数(`source.func`)が、最初の経路(`pat
 
 `bench/*/truth*.json` の正解(Gitea v1.26.4 の CVE 3 件、gin-vue-admin、Gogs、dart-pub、parseable)の、source から sink までの流れの**構造**を、小さいフィクスチャにして、curated に足した(コードのコピーではない)。実際のコードは、そのコミット / タグの GitHub のソースを読んだ(scratchpad のコピーは、修正後だった)。重い解析(Gitea 等)の代わりに、**CI(`go test ./...`)で、退行に気づくため**。**コアは変えていない。**
 
-| 正解 | フィクスチャ | 形 | 今の main(HEAD b1782f5) |
+| 正解 | フィクスチャ | 形 | 今の main(HEAD 6e6f17e) |
 | --- | --- | --- | --- |
 | Gitea GHSA-4p89 `release.go:338` | go-curated `gitea/routers/release.go` → `gitea/service/release.go:47`、`gitea/storage/storage.go:38` | ハンドラーが `ctx.Req.Form` を `range` し、キーを `strings.HasPrefix` で選んで、**ループの中の `append`**(`k[len(prefix):]`)で集める。サービスの `UpdateRelease`(6 引数)に渡し、`db.WithTx` のクロージャ(行の読み出しだけ)のあと、**ループで** `storage.Attachments.Delete(AttachmentRelativePath(uuid))`(インターフェース、実装 2 つ)。実物の v1.26.4 では、この `Delete` は `WithTx` のクロージャの**外**にある | 見つかる(`@source(release_del)`、sink 2 か所) |
 | Gitea GHSA-x77v `oauth.go:311` | `gitea/routers/oauth.go` | `goth.User`(値の構造体)を引数に取る関数が、`gothUser.AvatarURL` を、別の関数に渡して、`http.NewRequestWithContext(ctx, GET, url, nil)` | 見つかる(`oauth_avatar`) |
@@ -365,12 +365,12 @@ Gitea の CVE の 3 件(上の表)は**見つかる**。足したときに、**G
 
 ### 退行の二分探索の材料(ADR の 3/3)
 
-* ADR の「3/3 検出」の追記は、`e117634`(2026-11-19、`feat: findingに到達可能性…、GiteaのCVEを3/3検出`)。「ループの中の `append`」の修正は、`7e4bd7d`(2026-11-19)。
-* **`e117634` と `7e4bd7d` で、同じ小さい例(上の Gitea 3 件)を流した結果は、今の main と同じ**(3 件とも見つかる。`7e4bd7d` の親では、`release` の流れだけが見つからない: `append` の修正のフィクスチャとして働く)。`tx_capture` / `tx_capture_plain` は、この 2 つのコミットでも見つからない(`mini` も同じ)ので、**これらは、2026-11-19 以降の退行ではない**(最初から、この形は追っていない)。
+* ADR の「3/3 検出」の追記は、`5754550`(2026-11-19、`feat: findingに到達可能性…、GiteaのCVEを3/3検出`)。「ループの中の `append`」の修正は、`288dc80`(2026-11-19)。
+* **`5754550` と `288dc80` で、同じ小さい例(上の Gitea 3 件)を流した結果は、今の main と同じ**(3 件とも見つかる。`288dc80` の親では、`release` の流れだけが見つからない: `append` の修正のフィクスチャとして働く)。`tx_capture` / `tx_capture_plain` は、この 2 つのコミットでも見つからない(`mini` も同じ)ので、**これらは、2026-11-19 以降の退行ではない**(最初から、この形は追っていない)。
 * つまり、保存した最近の実行(C-1 の off / on)の **1/3** は、小さい形の退行では説明できない。残る候補は、規模に依存するもの(`depth_limit` が約 1,500 件で、経路が切れる、`-func-timeout` で関数が止まる、収束しない、`-k` や実行の設定が違う)。ADR の 3/3 は、`depth_limit` 1,499 件、収束せずの結果だった。
 
 ## C-7 のあと(ADR-059): `CAP` の見逃しが直った
 
-`make_closure` の捕獲した値を、作った場所で、クロージャの要約に当てた(渡す、保存する、返すクロージャだけ。不確実性 `assumed_call`)。`@miss` の数(テストが数える、a1689ee → 今): Go 15 → 3(silent 5 → 2、痕跡 10 → 1)、Dart 47 → 30(silent 31 → 10、痕跡 16 → 20)、Rust 16 のまま(対象外。次の段は `docs/DESIGN-capture.md` の「Rust の節」)。外れた `@miss`: Go の `cap-run-a/b`、`cap-write`、`cap-nested`、`cap-loop`、`cap-two-a`、`cap-returned`、`cap-late`、`cap-handler`、`cap-funccall`(設計では直らない見込みだったが、直った)、`tx_capture`、`tx_capture_plain`。Dart の `btn-a/b`、`timer-run`、`periodic`、`timer-write`、`microtask`、`delayed`、`late`、`write-a/b`、`add-list`、`across-cap`、`run-a/b`、`relay-c-a/b`、`when-complete`。`assumed_call` の `@miss`(結果を当てない): Go の `cap-result`、Dart の `cap-result`、`cap-result-then`、`cap-fn`、`nest-a/b` ほか(次の段: 結果をクロージャの値に持たせる)。残る `CAP` の見逃しは、捕獲と引数の両方に依る流れ(案 2)、`bound-prefix`(メソッドの tear-off、R-14)。
+`make_closure` の捕獲した値を、作った場所で、クロージャの要約に当てた(渡す、保存する、返すクロージャだけ。不確実性 `assumed_call`)。`@miss` の数(テストが数える、6c5c28c → 今): Go 15 → 3(silent 5 → 2、痕跡 10 → 1)、Dart 47 → 30(silent 31 → 10、痕跡 16 → 20)、Rust 16 のまま(対象外。次の段は `docs/DESIGN-capture.md` の「Rust の節」)。外れた `@miss`: Go の `cap-run-a/b`、`cap-write`、`cap-nested`、`cap-loop`、`cap-two-a`、`cap-returned`、`cap-late`、`cap-handler`、`cap-funccall`(設計では直らない見込みだったが、直った)、`tx_capture`、`tx_capture_plain`。Dart の `btn-a/b`、`timer-run`、`periodic`、`timer-write`、`microtask`、`delayed`、`late`、`write-a/b`、`add-list`、`across-cap`、`run-a/b`、`relay-c-a/b`、`when-complete`。`assumed_call` の `@miss`(結果を当てない): Go の `cap-result`、Dart の `cap-result`、`cap-result-then`、`cap-fn`、`nest-a/b` ほか(次の段: 結果をクロージャの値に持たせる)。残る `CAP` の見逃しは、捕獲と引数の両方に依る流れ(案 2)、`bound-prefix`(メソッドの tear-off、R-14)。
 
 **限界(バックログ B)**: `expandParam` が、構造体全体の要素(`Param(i, "")`)を読むとき、サブセルの要素(フィールドの指す先の要素)を、根へ持ち上げる。構造体を丸ごとコピーして書き戻す形(`before := Picture; Picture = before`)で、あるフィールドの指す先の汚染が、全フィールドに広がる。C-7 は、これを gogs の `conf.SetMockPicture$1`(テストのヘルパー)で露出させ(+45 件)、案 D(同じグローバルの全体を読んだ値の書き戻しだけの書き込みは当てない)で、その形だけを避けた。ふつうの呼び出し(`setG(before)`)には、同じ持ち上げが残る。優先度の根拠: gogs の基準の 77 件には、`conf.Picture` を通るものは 0 件(数えた)。

@@ -10,7 +10,7 @@ usage() {
   cat <<'EOF'
 usage: bench/compare.sh [options] <base> <head>
 
-Builds rivus at <base> and at <head> (git refs, e.g. c44bfdd and origin/main), runs both on the
+Builds rivus at <base> and at <head> (git refs, e.g. c9aa412 and origin/main), runs both on the
 benchmarks ONE AT A TIME (each benchmark: base, then head), and writes a table and the details of
 every difference. Standard tools only (git, go, python3; dart / the Rust extractor for those targets).
 
@@ -58,7 +58,7 @@ the commit of the clone) and the flags; the same input is not extracted twice. T
 once (cargo build --locked, shared target dir). RIVUS_RUST (a binary) or RIVUS_DART (a command) name the tool for both
 sides. summary.md lists, per benchmark, the input and the IR sha256 of both sides. A target whose copy
 cannot be made (clone, checkout, go.mod, go list, pub get, no toolchain) is listed as NOT RUN.
-nohup bench/compare.sh --resume c44bfdd origin/main > compare.log 2>&1 &
+nohup bench/compare.sh --resume c9aa412 origin/main > compare.log 2>&1 &
 EOF
 }
 
