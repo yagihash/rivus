@@ -9,7 +9,7 @@ the program is made by `../synthplan` (shared with `dart-synth`). The crate has 
 
 ```sh
 go run ./bench/rust-synth/gen -size M -out /tmp/rsynth-m              # S, M or L; flags override single parameters
-source ~/.zshrc && (cd extractor/rust && cargo build)
+(cd extractor/rust && cargo build)     # needs a Rust toolchain on the PATH
 export RIVUS_RUST=$PWD/extractor/rust/target/debug/rivus-rust
 go build -o /tmp/rivus-before ./cmd/rivus
 python3 bench/go-synth/measure.py run -lang rust -rivus /tmp/rivus-before -size M -runs 3 -out /tmp/rm-before.json

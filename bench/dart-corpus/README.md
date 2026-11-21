@@ -10,7 +10,7 @@ cd bench/dart-corpus && dart pub get && ./run.sh        # a few minutes; needs `
 ```
 
 It fails when a construct is left out (`unsupported` in the IR) or when the stream is not a valid IR (a function
-defined twice, for example). Measured at the commit that added it: 317 MB of IR, no construct left out, a valid
+defined twice, for example). Measured at the commit that added it (`0aae742`, 2026-11-19): 317 MB of IR, no construct left out, a valid
 IR. The extractor's own defects found on real code so far (nested collection elements, null-aware elements,
 a constructor and a method of the same name, unnamed extensions) were found on `dart-lang/pub` and its
 dependencies (`bench/dart-pub`); the 54 packages here found nothing new, which is the point of keeping it:

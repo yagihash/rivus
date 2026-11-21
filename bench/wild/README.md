@@ -43,7 +43,7 @@ for code we write ourselves, and is not made yet.
 | Rust | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | **0** |
 
 Go 6 = Gitea 3 (`bench/gitea/truth-v1.26.4.json` and `bench/gitea-cve-paths.md`: one release-attachment path, two SSRF; they live in `bench/gitea`, not in
-a directory here, because they are three sinks of one checkout) + gophish 2 + casdoor 1 (this directory). The Gitea three are W1 of the same kind
+a directory here, because they are three sinks of one checkout) + gophish 2 + casdoor 1 (this directory). The Gitea three are W1 of the same kind (a record of 2026-11-21: Gitea is not used by the project since then, not in the gate and not in a change's check; `compare.sh` still has the cut-out `gitea-cut` in the light tier, and `bench/gitea/` is still here, not removed)
 (the SHA / tag, the cut-out `gitea-cut` of `compare.sh`, a truth file by the sink), with the paths read in `bench/gitea-cve-paths.md`. Dart and Rust are
 zero: there is nothing to hide (the target of the first goal was Go 10, Dart 5, Rust 5).
 

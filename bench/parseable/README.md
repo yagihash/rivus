@@ -3,6 +3,10 @@
 A log and observability server (actix-web), the Rust benchmark: <https://github.com/parseablehq/parseable>
 at `5c20b8e477be162238037e202cea1869d657017b`, the parent of the fixes of three advisories.
 
+> **Exception, trusted code only.** The command below runs `rivus-rust` on the **host**, and that executes the target's `build.rs` and proc macros.
+> `bench/compare.sh` does not do this: it reads third-party Rust (parseable included) only inside the container (`rivus extract -lang rust`, the default;
+> `bench/README.md`, "Rust: third-party code is read in the container only"). Run the host command only on a checkout you trust; otherwise use the container.
+
 ```sh
 git clone https://github.com/parseablehq/parseable && cd parseable && git checkout 5c20b8e477be162238037e202cea1869d657017b
 mkdir -p /tmp/parseable-assets     # build.rs would fetch the UI from the network without it

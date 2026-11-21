@@ -15,11 +15,16 @@ reading the code (the targets have no answer key), and the judgement calls are i
 
 Results are recorded in `docs/DECISIONS.md` (ADR-043).
 
+**Where things are.** This file has: the procedure for a change of the core and `compare.sh` (below), the targets and where to fetch them,
+the table of the directories ("Benchmarks that are in this repository"), the share of silent misses, and the scale profiles
+(`go-scale/`). Records of measurements: [`LEDGER.md`](LEDGER.md), [`BACKTEST.md`](BACKTEST.md), [`explore/LOG.md`](explore/LOG.md);
+the classification of the `@miss` / `@fp` / `@noisy` of the curated projects: [`MISSES.md`](MISSES.md) (a snapshot, see its header).
+
 ## When a function may be `pure`
 
 Moved to [`docs/MODELING.md`](../docs/MODELING.md) (the guide for whoever writes a model, by hand or with an AI). The tests that
 hold the rule are `TestPureFunctionsThatReturnDataAreReviewed` (`internal/model/builtin`) and `TestZooPureGo`
-(`cmd/rivus/zoo_pure_test.go`, `bench/zoo-go/pure`); the 242 `pure` rows of Go that the run does not call are listed with the
+(`cmd/rivus/zoo_pure_test.go`, `bench/zoo-go/pure`); the `pure` rows of Go that the run does not call (250 of the 272 on 2026-11-21, by the header of that file; a count that moves with the model) are listed with the
 reason of each in `bench/zoo-go/pure/unchecked.txt`.
 
 ## Changing the accuracy of the core: the procedure
@@ -40,12 +45,12 @@ writes `summary.md` (one row per benchmark; a removed finding is marked `!!` at 
 `details/<bench>.md` (every added, removed, and changed finding, one per line: reachability, the
 representative path, `other_sources`, the uncertainties by kind and by `depth_limit` reason, `stats`,
 peak RSS; a run that did not converge is said so). Exit status: 0 nothing lost, 1 a finding was
-removed, 2 something did not run. Before each run it waits until swap use is 50% or less and no other
-`rivus` / `rv-*` / `rivus-*` process runs (`--wait HOURS`); `GOMEMLIMIT` is set per benchmark
-(`--gomemlimit NAME=VAL`; gogs 5GiB); `-timeout` is the same for both. For a night:
-`nohup bench/compare.sh --resume <base> <head> > compare.log 2>&1 &` (each result is saved per
-benchmark; `--resume` skips the ones that are done). A big real codebase is run only when it is named (`--big NAME=URL@COMMIT`, the periodic and occasional runs of
-`bench/explore/README.md`); the gate never runs one. `--dry-run` prints the plan; `--help` the options. The classification of step 5, and
+removed, 2 something did not run. **`bench/compare.sh --help` prints the options and is the authoritative list** (`--wait`, `--timeout`,
+`--gomemlimit`, `--resume`, `--only` / `--skip`, `--light` / `--heavy`, `--big`, `--fixed-inputs`, `--dry-run`, `--no-cache`);
+`--dry-run` prints the plan. Before each run it waits until the free memory is 40% or more (macOS; elsewhere swap use is 50% or less)
+and no other `rivus` / `rv-*` / `rivus-*` process runs. For a night:
+`nohup bench/compare.sh --resume <base> <head> > compare.log 2>&1 &`. A big real codebase is run only when it is named (`--big NAME=URL@COMMIT`, the
+periodic and occasional runs of `bench/explore/README.md`); the gate never runs one. The classification of step 5, and
 step 2 (`go test ./...`) and step 3 (`go-synth`), are still yours. The script does not score against
 the truth files except for printing `score.py`'s last lines.
 
@@ -91,7 +96,7 @@ extractor or the fixtures changed too. A base that does not converge is the one 
 The synthetic tests of this report (exit statuses) are `python3 bench/test_compare.py`.
 
 **Tiers (`--light`, `--heavy`).** The tiers are measured, not named. Light: one run of 60 seconds or less and 6 GB or less
-(curated three, go-synth-S, `go-scale`, the zoos, gogs x 2, gin-vue-admin, go-test-bench, parseable, dart-pub, gophish, casdoor, and the cut-out of the three CVEs of Gitea (7 packages of Gitea, `gitea-cut`, layer B: it includes that cut-out, not the whole of Gitea)). Heavy: the `--big` targets (none in the gate).
+(curated three, go-synth-S, `go-scale`, the zoos, gogs x 2, gin-vue-admin, go-test-bench, parseable, dart-pub, gophish, casdoor, and `gitea-cut`, the cut-out of the three CVEs of Gitea (7 packages, layer B; not the whole of Gitea; see "Gitea" below)). Heavy: the `--big` targets (none in the gate).
 Within the light tier, base and head of a benchmark run at the same time when the free memory allows it (checked a few seconds after
 base started: 35% free or more), and a light run waits only for free memory (25%), not for other analyses; a light-only run has its own
 lock (`lock-light.d`), so it can run beside a heavy one of the same work dir. The time and the peak RSS of a light run are therefore
@@ -158,7 +163,7 @@ same files.
 | dart-pub | <https://github.com/dart-lang/pub> | `5e24336e71a05a96b558d496953ebed223f6e40a` | `bench/dart-pub/rules.yaml` | `bench/dart-pub/truth-5e24336e.json` |
 | gophish (GHSA-9c9w-9pq7-f35h, GHSA-hvw3-p9px-gpc9; `bench/wild/go/`) | <https://github.com/gophish/gophish> | `27d13a0584731371033926064d750e5f4f620e7a` | `bench/wild/go/GHSA-9c9w-9pq7-f35h/rules.yaml` | `bench/wild/go/gophish-27d13a05.truth.json` |
 | casdoor (GHSA-9vm3-r8gq-cr6x; `bench/wild/go/`) | <https://github.com/casdoor/casdoor> | `7b0b426a76fd77b89817e0eafcccaed8d15b8cf4` | `bench/wild/go/GHSA-9vm3-r8gq-cr6x/rules.yaml` | `bench/wild/go/GHSA-9vm3-r8gq-cr6x/truth.json` |
-| the cut-out of the three CVEs of Gitea (7 packages, `-no-deps`) | <https://github.com/go-gitea/gitea> | tag `v1.26.4` | `bench/gitea/rules.yaml` | `bench/gitea-cve-truth.json` |
+| the cut-out of the three CVEs of Gitea (7 packages, `-no-deps`; **not used by the project since 2026-11-21**, see "Gitea" below) | <https://github.com/go-gitea/gitea> | tag `v1.26.4` | `bench/gitea/rules.yaml` | `bench/gitea-cve-truth.json` |
 
 How to run each is in the README of the target where there is one (`dart-pub/`, `parseable/`; the top of
 this file for the Go ones). "Not recorded" is a gap to be filled the next time someone has the
@@ -183,6 +188,14 @@ for each language (Go, Dart, Rust):
 | `go-synth/` | a generator of Go code of a given shape (depth, SCCs, interfaces, fields, ...), with a script (`measure.py`) that measures time, memory and the result | did the time or the memory change, and is the result the same? | S seconds, M minutes |
 | `go-scale/` | a generator of Go code of about 2,000 functions, each profile with ONE shape that made Gitea and gogs big (a cache of types, `os.Stderr`, widen, a ring of 200 functions, ...), with its answer key in the source (the marks of `go-curated`), and `measure.py` | does the engine still stay small on the shapes of scale, and keep the real flows next to them? Gitea is the last check, not the first | 1 to 7 seconds a profile, in `go test ./cmd/rivus -run TestScaleSynth` (skipped by `-short`) |
 | `parity/` | the table of what the built-in model gives each language (B-52, stage 1): the quantity of the model, the demand of real code (the calls to functions without a body that have a row), what is checked by a run, and the rows that no IR hits (dead rows), side by side with the counts, by shape ((i) returns a value, (ii) writes to an argument, (iii) calls a callback, (iv) rules); `TABLE.md` is committed, `README.md` says how to remake it | which language is behind, and where: a row that is spelled in a way the extractor never writes, a shape the default gets wrong | a few minutes (the analyses of the real code), the table in 10 s |
+| `dart-curated/`, `rust-curated/` also have `rust-curated-ffi/` and `rust-curated-lib/` | two small crates (a binary with a `#[no_mangle]` function, a library crate) for the case where a program is called from outside, so what is `pub` is not a closed world (`docs/DESIGN-capture.md`) | the same | seconds |
+| `zoo-go/`, `zoo-dart/`, `zoo-rust/` (and `zoo/`) | cells of one shape each, with answers that a run backs (`zoo/spec.json`, [`zoo/README.md`](zoo/README.md); design in `docs/DESIGN-zoo.md`): `TestZooGo`, `TestZooDart`, `TestZooRust`, `TestZooPureGo` | does each shape of the model and the engine give the answer that is written for it, per language? | seconds to a minute, in `go test ./...` (Dart and Rust with `RIVUS_DART` / `RIVUS_RUST`) |
+| `wild/` | published vulnerabilities of real code (the SHA and a fetch script only; the code of the target is not copied; [`wild/README.md`](wild/README.md)): gophish, casdoor (and the Gitea three, by `bench/gitea`) | does the engine find the real flow of a published advisory? | per target |
+| `gcp/` | a Go module that registers handlers of Cloud Spanner and BigQuery (nothing connects to Google Cloud); the case for the size of the summaries from the dependencies (`explore/LOG.md`, measurement 3, with `rules-stored.yaml`) | where do the elements and the time of the dependencies come from? | a measurement, not a gate |
+| `explore/` | the periodic and occasional runs of big real codebases, out of the gate: `README.md` (the procedure), `pool.yaml` (the targets), `LOG.md` (the log; its first sections are about the cut-out of Gitea, kept as records) | what does the engine do on a code it has not seen? | minutes to hours |
+| `ech0/` | **no files but a README, and no truth**: Ech0, GHSA-8mc6-xjpr-h98x (SSRF), commit `cecc2c19`. The flow is **second-order** (an administrator adds a peer URL, it is stored in the database, and `fetchPeerConnectInfo` requests it later); rivus has no model of what a database holds, so the flow is not found, and `SendRequest` is a project function that needs a project rule for the sink. Recorded as a limit of what rivus can see, not as a miss in the scoring (`bench/ech0/README.md` has the same text) | not scored | |
+| `gogs/`, `gin-vue-admin/`, `go-test-bench/`, `dart-pub/`, `parseable/`, `dart-corpus/` | the truth files and rules of the targets above (a directory has what the table says; the targets themselves are not here); `dart-corpus` is the regression of the Dart extractor on 54 packages | see the table of targets | |
+| `LEDGER.md`, `BACKTEST.md`, `parity/` | the ledger of versions, the backtest of the light benches against the regressions that only the heavy projects showed, and the parity tables | see each file | |
 | `dart-synth/`, `rust-synth/` | generators of a Dart package / a Rust crate (depth, SCCs, closures given to shared helpers, relays, closures in fields, captures); the plan is `synthplan/`; `go-synth/measure.py -lang dart` or `-lang rust` runs the extractor once and measures `rivus analyze -ir` | the same | S under a second, M and L seconds |
 
 When the core of the engine (`internal/sg`, `internal/sites`, `internal/taint`) is touched: run
@@ -195,8 +208,8 @@ codebase is for the periodic and occasional runs of `bench/explore/README.md`, n
 Two more things are held by the three curated tests. Each `@miss` says whether the engine left a
 trace of the flow it lost: `@miss(silent)` (nothing in the functions of the source and the sink; 51 of the
 78: Dart 31, Rust 15, Go 5) or `@miss(<kind>)` (27: Dart 16, Rust 1, Go 10); and the findings whose path has no step in
-the function of their source are counted against a ceiling (BENCH-2; 0 in the three, 0 of 39 in
-`TestDogfood` and `paramshare` too: CORE-B was fixed, ADR-049). See `MISSES.md`.
+the function of their source are counted against a ceiling (BENCH-2; 0 in the three, 0 of 76 in
+`TestDogfood` (2026-11-22; it was 39 earlier) and `paramshare` too: CORE-B was fixed, ADR-049). See `MISSES.md`.
 
 ```sh
 export RIVUS_DART="mise exec dart@3.13.6 -- dart" RIVUS_RUST=$PWD/extractor/rust/target/debug/rivus-rust
@@ -204,6 +217,8 @@ go test ./cmd/rivus -run Curated -v        # the three accuracy benchmarks: coun
 ```
 
 ## The share of silent misses
+
+(The classification of each `@miss` by cause is in [`MISSES.md`](MISSES.md); this section is the tally and stays here.)
 
 `@miss(silent) / @miss`: of the flows the engine loses, how many it loses **without a word**. The
 definition is the one of `rivus resolve`'s `absent_now`: the functions of the sites on the source
@@ -244,6 +259,12 @@ with `examples/rules/go-gin.yaml` on the head of the repository it does not conv
 callouts of ADR-047 (2 passes, 15 GB, 48 findings; the summaries of the AWS middleware grow from 36 to 2,200 elements in a few
 passes, almost all of them new, not coming back). It is a measure of the growth of the summaries, not a baseline to compare findings
 with: a run that does not converge is cut where it was.
+
+**Gitea (a note of 2026-11-22).** The project does not use Gitea since 2026-11-21: it is not in the gate and not a step of a change; the exploration
+uses small reproductions and rotating targets (`explore/README.md`). The files below are **still in the repository** and are not removed: the
+cut-out `gitea-cut` is still in the light tier of `compare.sh` (`--light` and the default list), and `bench/gitea/` (`rules.yaml`, `truth-v1.26.4.json`) and
+`bench/gitea-cve-truth.json` are still here. Whether the cut-out leaves `compare.sh` is not decided in these documents. The rest of this section
+describes them as they are.
 
 **`bench/gitea/truth-v1.26.4.json`** is the first form of the ground truth of those three CVEs ((file, line, category) of the sink, for a run of the whole of Gitea). No tool grades it now: `bench/score.py` and `compare.sh` use `bench/gitea-cve-truth.json`. It is kept because `bench/gitea-cve-paths.md`, `bench/wild/README.md`, `bench/go-curated/README.md` and ADR-055 refer to it as the definition of the labels; do not delete it without changing them.
 

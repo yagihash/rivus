@@ -71,7 +71,7 @@ The review items RUST-13 / RUST-14 and their fixtures are in the last section of
 ## Run it
 
 ```sh
-source ~/.zshrc && (cd extractor/rust && cargo build)
+(cd extractor/rust && cargo build)     # needs a Rust toolchain on the PATH
 RIVUS_RUST=$PWD/extractor/rust/target/debug/rivus-rust go test ./cmd/rivus -run TestCuratedRust -v   # about 3 seconds
 ```
 
