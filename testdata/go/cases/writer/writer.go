@@ -181,6 +181,27 @@ func PassedDecoy() {
 	lib.Sink(other.String()) // @sink(none)
 }
 
+// no finding: the writer is held by a pointer in a field of a context, and what is written to it is
+// not what the context's other pointer (the request) holds
+type reqT struct{ form string }
+
+type ctxT struct {
+	req  *reqT
+	resp *sliceW
+}
+
+func PassedHeldDecoy() {
+	c := &ctxT{req: &reqT{form: "x"}, resp: &sliceW{}}
+	fill(c.resp, lib.Source())
+	lib.Sink(c.req.form) // @sink(none)
+}
+
+func PassedHeld() {
+	c := &ctxT{req: &reqT{form: "x"}, resp: &sliceW{}}
+	fill(c.resp, lib.Source())    // @source(writer_passed_held)
+	lib.Sink(string(c.resp.data)) // @sink(writer_passed_held)
+}
+
 // --- a method of the project called through an interface, and the original pointer read ---
 
 type box struct{ v string }
