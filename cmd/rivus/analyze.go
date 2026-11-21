@@ -173,7 +173,12 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	eng.SetLoadErrors(l.loadErrors())
 	res = eng.Run()
 	if ts := l.testsSkipped(); ts != nil {
-		res.Stats.TestsSkipped = ts
+		// the directories that were not read are not tests: they are in summary.skipped_dirs, not here
+		stats := *ts
+		stats.SkippedDirs, stats.SkippedDirNames = 0, nil
+		if !stats.Empty() || len(stats.Notes) > 0 {
+			res.Stats.TestsSkipped = &stats
+		}
 		if !ts.Empty() {
 			fmt.Fprintf(os.Stderr, "rivus: %s\n", ts.Describe())
 		}
@@ -200,6 +205,9 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 		}
 	}
 	rep := report.Build(packages, l.loadErrors(), st, res, rules)
+	if ts := l.testsSkipped(); ts != nil && ts.SkippedDirs > 0 {
+		rep.Summary.SkippedDirs = &report.SkippedDirs{Total: ts.SkippedDirs, Examples: ts.SkippedDirNames}
+	}
 	if u := rep.Summary.Unread; u != nil {
 		// the exit code stays 0 (a flag for it is a decision of its own): a result without the packages that
 		// did not build must not look like the analysis of all of them

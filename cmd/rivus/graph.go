@@ -106,6 +106,9 @@ func (o *analyzeOpts) graphIndexer(path string, patterns []string, since time.Ti
 				meta.Unread.Uncounted = append(meta.Unread.Uncounted, lang+":failed_units")
 			}
 		}
+		if ts := l.testsSkipped(); ts != nil {
+			meta.Unread.SkippedDirs = ts.SkippedDirs
+		}
 		failed := map[string]bool{} // a package with several errors is one
 		for _, e := range l.loadErrors() {
 			if failed[e.Package] {

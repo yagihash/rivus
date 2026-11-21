@@ -69,6 +69,9 @@ type Unread struct {
 	// cannot say that nothing was left out.
 	Counted   []string `json:"counted,omitempty"`
 	Uncounted []string `json:"uncounted,omitempty"`
+	// SkippedDirs is the number of directories of the project that an extractor did not read because of where they are
+	// (hidden, `build` at the top). A range declaration: it does not make "no path" not exhaustive (path says it in limits).
+	SkippedDirs int `json:"skipped_dirs,omitempty"`
 }
 
 // Input is what Write stores.

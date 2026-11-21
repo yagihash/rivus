@@ -239,3 +239,13 @@ func TestWithoutFiltersNoPathStaysExhaustiveWhenNothingWasLeftOut(t *testing.T) 
 		t.Fatalf("%v %+v wf %+v", err, r.Reachable, r.WithoutFilters)
 	}
 }
+
+// Directories that were not read because of where they are: a range declaration in limits; exhaustive stays true.
+func TestNoPathSaysThatSkippedDirectoriesAreOutsideTheRange(t *testing.T) {
+	testUnread = &graphdb.Unread{SkippedDirs: 2}
+	e := build(t, unreadFixture())
+	r, err := e.Path("S", "T", graphq.Options{})
+	if err != nil || r.Reachable || !r.Exhaustive || !strings.Contains(strings.Join(r.Limits, " "), "2 director") {
+		t.Fatalf("%v %+v limits %v", err, r.Exhaustive, r.Limits)
+	}
+}

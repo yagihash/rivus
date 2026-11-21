@@ -49,8 +49,15 @@ Future<void> extract(String root, StringSink sink,
       if (path.endsWith('.dart') && p.isWithin(root, path) && !_skipped(root, path)) take(path);
     }
   }
+  // the directories of the project with code that is not read because of where they are (said at the end)
+  final skippedDirs = <String>{};
   for (final e in Directory(root).listSync(recursive: true, followLinks: false)) {
-    if (e is File && e.path.endsWith('.dart') && !_skipped(root, e.path)) take(p.normalize(e.path));
+    if (e is! File || !e.path.endsWith('.dart')) continue;
+    if (_skipped(root, e.path)) {
+      skippedDirs.add(_skippedDir(root, e.path));
+    } else {
+      take(p.normalize(e.path));
+    }
   }
   for (final path in paths.toList()..sort()) {
     final context = _contextOf(collection, path);
@@ -155,7 +162,9 @@ Future<void> extract(String root, StringSink sink,
     out.testsSkipped(testFiles.length, unread.length, unread..sort(), [
       if (used.isNotEmpty)
         'the code of the project uses a dependency that is declared for development (${(used..sort()).join(', ')}): it is read, because it is imported'
-    ]);
+    ], skippedDirs: skippedDirs.length, skippedDirNames: (skippedDirs.toList()..sort()).take(5).toList());
+  } else if (skippedDirs.isNotEmpty) {
+    out.testsSkipped(0, 0, const [], const [], skippedDirs: skippedDirs.length, skippedDirNames: (skippedDirs.toList()..sort()).take(5).toList());
   }
   units.sort((a, b) => a.file.compareTo(b.file));
   for (final u in units) {
@@ -229,6 +238,14 @@ AnalysisContext? _contextOf(AnalysisContextCollection collection, String path) {
     if (p.isWithin(r, path) && (best == null || r.length > best.contextRoot.root.path.length)) best = c;
   }
   return best;
+}
+
+/// The directory of the project that makes [path] skipped: the path up to the first hidden directory, or `build` at the top.
+String _skippedDir(String root, String path) {
+  final parts = p.split(p.relative(path, from: root));
+  final at = parts.indexWhere((s) => s.startsWith('.'));
+  if (at < 0) return parts.first; // `build` at the top
+  return p.joinAll(parts.sublist(0, at + 1 > parts.length - 1 ? parts.length - 1 : at + 1));
 }
 
 bool _skipped(String root, String path) {

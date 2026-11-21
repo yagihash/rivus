@@ -246,3 +246,70 @@ func TestDartCompileErrorIsOnTheFindingsOfItsFunction(t *testing.T) {
 		}
 	}
 }
+
+// The directories of the project that are not read because of where they are (a hidden directory, `build` at the top)
+// are counted in summary.skipped_dirs (not in the tests); a project with none has no such field.
+func TestDartSkippedDirectoriesAreSaid(t *testing.T) {
+	dart := os.Getenv("RIVUS_DART")
+	if dart == "" {
+		skipOrFail(t, "RIVUS_DART")
+	}
+	extractor, err := filepath.Abs("../../extractor/dart")
+	if err != nil {
+		t.Fatal(err)
+	}
+	words := strings.Fields(dart)
+	run := func(extra map[string]string) (skipped *struct {
+		Total    int      `json:"total"`
+		Examples []string `json:"examples"`
+	}, testsSkipped bool) {
+		dir := t.TempDir()
+		write := func(name, text string) {
+			if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, name), []byte(text), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		write("pubspec.yaml", "name: dx\npublish_to: none\nenvironment:\n  sdk: ^3.10.0\n")
+		write("lib/a.dart", "void a() {}\n")
+		for n, c := range extra {
+			write(n, c)
+		}
+		get := exec.Command(words[0], append(append([]string{}, words[1:]...), "pub", "get")...)
+		get.Dir = dir
+		if out, err := get.CombinedOutput(); err != nil {
+			t.Fatalf("dart pub get: %v\n%s", err, out)
+		}
+		cmd := exec.Command(binary, "analyze", "-lang", "dart", ".")
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), "RIVUS_DART_EXTRACTOR="+dart+" run "+filepath.Join(extractor, "bin", "rivus_dart.dart"))
+		out, err := cmd.Output()
+		if err != nil {
+			t.Fatalf("analyze: %v", err)
+		}
+		var r struct {
+			Summary struct {
+				SkippedDirs *struct {
+					Total    int      `json:"total"`
+					Examples []string `json:"examples"`
+				} `json:"skipped_dirs"`
+			} `json:"summary"`
+			Stats struct {
+				TestsSkipped *json.RawMessage `json:"tests_skipped"`
+			} `json:"stats"`
+		}
+		if err := json.Unmarshal(out, &r); err != nil {
+			t.Fatal(err)
+		}
+		return r.Summary.SkippedDirs, r.Stats.TestsSkipped != nil && strings.Contains(string(*r.Stats.TestsSkipped), "skipped_dir")
+	}
+	got, inTests := run(map[string]string{".hidden/h.dart": "void h() {}\n", "build/b.dart": "void b() {}\n"})
+	if got == nil || got.Total != 2 || len(got.Examples) != 2 || inTests {
+		t.Errorf("skipped_dirs: %+v (in stats.tests_skipped: %v)", got, inTests)
+	}
+	if none, _ := run(nil); none != nil {
+		t.Errorf("a project with nothing skipped has skipped_dirs: %+v", none)
+	}
+}

@@ -131,6 +131,16 @@ type Summary struct {
 	// them (go/ssa builds nothing for them). Absent when every package was built. They stay in
 	// packages; the functions they hold are not in the analysis, and no finding can come from them.
 	Unread *Unread `json:"unread,omitempty"`
+	// SkippedDirs are the directories of the project that an extractor did not read because of where they are (Dart: a
+	// hidden directory, and `build` at the top): code in them is not in the analysis, and may be shipped. Not tests
+	// (stats.tests_skipped is the tests). Absent when none.
+	SkippedDirs *SkippedDirs `json:"skipped_dirs,omitempty"`
+}
+
+// SkippedDirs counts the directories that were not read because of where they are.
+type SkippedDirs struct {
+	Total    int      `json:"total"`
+	Examples []string `json:"examples,omitempty"`
 }
 
 // Unread counts the packages that were read and not built.

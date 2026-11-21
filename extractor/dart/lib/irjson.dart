@@ -135,13 +135,17 @@ class StreamOut {
         'kind': 'func_text',
         'func_text': {'func': id, if (body.isNotEmpty) 'body': body, if (source.isNotEmpty) 'source': source}
       });
-  void testsSkipped(int files, int devDependencies, List<String> names, List<String> notes) => _line({
+  void testsSkipped(int files, int devDependencies, List<String> names, List<String> notes,
+          {int skippedDirs = 0, List<String> skippedDirNames = const []}) =>
+      _line({
         'kind': 'tests_skipped',
         'tests_skipped': {
           'files': files,
           'dev_dependencies': devDependencies,
           if (names.isNotEmpty) 'dev_dependency_names': names,
-          if (notes.isNotEmpty) 'notes': notes
+          if (notes.isNotEmpty) 'notes': notes,
+          if (skippedDirs > 0) 'skipped_dirs': skippedDirs,
+          if (skippedDirNames.isNotEmpty) 'skipped_dir_names': skippedDirNames
         }
       });
   /// [unread]: the file is in the result on a tree that is not what its text says (the core lists it in summary.unread).

@@ -97,6 +97,11 @@ type TestsSkipped struct {
 	DevDependencyNames []string `json:"dev_dependency_names,omitempty"`
 	// Notes are what the reader of the result should know (a dependency declared for development that the code uses).
 	Notes []string `json:"notes,omitempty"`
+	// SkippedDirs are the directories of the project that an extractor did not read because of where they are (Dart:
+	// a hidden directory, and `build` at the top), SkippedDirNames names some of them (up to 5). They are not tests:
+	// code in them may be shipped. The result says them in summary.skipped_dirs (not in stats.tests_skipped).
+	SkippedDirs     int      `json:"skipped_dirs,omitempty"`
+	SkippedDirNames []string `json:"skipped_dir_names,omitempty"`
 }
 
 // Add adds the counts of another language.
@@ -113,6 +118,11 @@ func (t *TestsSkipped) Add(o *TestsSkipped) *TestsSkipped {
 	t.DevDependencies += o.DevDependencies
 	t.DevDependencyNames = append(t.DevDependencyNames, o.DevDependencyNames...)
 	t.Notes = append(t.Notes, o.Notes...)
+	t.SkippedDirs += o.SkippedDirs
+	t.SkippedDirNames = append(t.SkippedDirNames, o.SkippedDirNames...)
+	if len(t.SkippedDirNames) > 5 {
+		t.SkippedDirNames = t.SkippedDirNames[:5]
+	}
 	return t
 }
 

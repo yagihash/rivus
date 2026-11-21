@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/yagihash/rivus/internal/graphdb"
@@ -841,6 +842,12 @@ func (e *Engine) Path(from, to string, o Options) (*PathResult, error) {
 			res.Limits = append(res.Limits, "a call by reflection, and one that the start of the program or the runtime makes (main, init, the initializers of variables), is not an edge of the file")
 			if cfg := e.buildConfigLine(); cfg != "" {
 				res.Limits = append(res.Limits, cfg)
+			}
+			if raw := e.db.Meta("unread"); raw != "" {
+				var u graphdb.Unread
+				if json.Unmarshal([]byte(raw), &u) == nil && u.SkippedDirs > 0 {
+					res.Limits = append(res.Limits, strconv.Itoa(u.SkippedDirs)+" director(ies) of the project were not read because of where they are (hidden, or build at the top): code in them is outside the range of the answer")
+				}
 			}
 			if e.db.Meta("flags.tests") == "false" {
 				res.Limits = append(res.Limits, "the code of the tests was not read (the index was made without -tests): a call from it is outside the range of the answer")

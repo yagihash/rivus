@@ -245,7 +245,7 @@ func (l *loaded) testsSkipped() *ir.TestsSkipped {
 	if l.gossa != nil && l.gossa.TestFilesSkipped > 0 {
 		t = t.Add(&ir.TestsSkipped{Files: l.gossa.TestFilesSkipped})
 	}
-	if t.Empty() && (t == nil || len(t.Notes) == 0) {
+	if t.Empty() && (t == nil || (len(t.Notes) == 0 && t.SkippedDirs == 0)) {
 		return nil
 	}
 	return t
