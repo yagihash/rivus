@@ -299,6 +299,18 @@ func (n *narrower) decide(c *callSite, in *ir.Instr) (*narrowing, string) {
 	if len(t.found) > most {
 		return nil, notLimit
 	}
+	// a function item (not a closure) is not among the candidates of Fn::call: when the walk finds one that the
+	// candidates do not list, the list is not the complete one, and what was left out cannot be told from what was
+	// not there: nothing is narrowed
+	listed := make(map[ir.FuncID]bool, len(in.Callee.Candidates))
+	for _, id := range in.Callee.Candidates {
+		listed[id] = true
+	}
+	for id := range t.found {
+		if !listed[id] && !ir.IsClosureID(string(id)) {
+			return nil, notUnknown
+		}
+	}
 	var keep []ir.FuncID
 	for _, id := range in.Callee.Candidates {
 		if t.found[id] {

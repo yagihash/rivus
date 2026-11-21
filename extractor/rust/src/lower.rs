@@ -34,11 +34,14 @@ pub struct Ctx {
     /// The traits of the crate, by name: whether the source says the trait is private to its crate (no `pub`).
     /// A method of a trait (a default body) is as visible as the trait: it has no `pub` of its own.
     pub traits: HashMap<String, bool>,
+    /// The functions that a promoted constant names, by the item that holds it and its number (`&helper`,
+    /// `&[helper as fn(..)]`): a constant is lowered to a `nil`, and the functions in it are used as values all the same.
+    pub promoted: HashMap<(String, u32), Vec<String>>,
 }
 
 impl Ctx {
     pub fn new(root: String, bodies: HashSet<String>) -> Ctx {
-        Ctx { root, files: HashMap::new(), texts: Texts::default(), bodies, closures: HashMap::new(), traits: HashMap::new() }
+        Ctx { root, files: HashMap::new(), texts: Texts::default(), bodies, closures: HashMap::new(), traits: HashMap::new(), promoted: HashMap::new() }
     }
 
     fn lines(&mut self, path: &str) -> Rc<Vec<String>> {
@@ -843,6 +846,15 @@ impl<'a> Lower<'a> {
                 return d;
             }
         }
+        if let ConstantKind::Unevaluated(u) = c.kind() {
+            if let Some(n) = u.promoted {
+                let fns = self.cx.promoted.get(&(u.def.name(), n)).cloned().unwrap_or_default();
+                for name in fns {
+                    let t = self.new_local("", None);
+                    self.emit("make_closure", &[t], &[], pos, json!({"func": name}));
+                }
+            }
+        }
         let k = match c.kind() {
             ConstantKind::Allocated(alloc) => const_of(&ty, alloc),
             _ => json!({"kind": "nil"}),
@@ -1588,4 +1600,24 @@ mod tests {
         let s = snippet(&lines, 1, 3);
         assert!(s.contains("bar,"), "{}", s);
     }
+}
+
+/// The functions that a body names as values (the constants of the type of a function).
+pub fn fns_named_by(body: &Body) -> Vec<String> {
+    use rustc_public::mir::visit::{Location, MirVisitor};
+    struct V(Vec<String>);
+    impl MirVisitor for V {
+        fn visit_mir_const(&mut self, c: &MirConst, loc: Location) {
+            if let TyKind::RigidTy(RigidTy::FnDef(def, args)) = c.ty().kind() {
+                let name = resolve(def, &args).map(|i| definition_name(&i).unwrap_or_else(|| i.name())).unwrap_or_else(|| def.name());
+                if !self.0.contains(&name) {
+                    self.0.push(name);
+                }
+            }
+            self.super_mir_const(c, loc);
+        }
+    }
+    let mut v = V(Vec::new());
+    v.visit_body(body);
+    v.0
 }

@@ -121,12 +121,12 @@ fn driver() -> ExitCode {
     let proc_macro = args.windows(2).any(|w| w[0] == "--crate-type" && w[1] == "proc-macro");
 
     let write_failed = std::sync::atomic::AtomicBool::new(false);
-    let result = run!(&args, || {
+    let result = run_with_tcx!(&args, |tcx| {
         if !probing && !skipped && !proc_macro && !out_dir.is_empty() {
             // a crate that is built to be loaded or linked by another program is called from outside
             let open_crate = args.windows(2).any(|w| w[0] == "--crate-type" && matches!(w[1].as_str(), "cdylib" | "staticlib" | "dylib"))
                 || args.iter().any(|a| matches!(a.as_str(), "--crate-type=cdylib" | "--crate-type=staticlib" | "--crate-type=dylib"));
-            let records = extract(&root, dep, open_crate);
+            let records = extract(tcx, &root, dep, open_crate);
             // a test build of a crate (`--test`) is told apart by its name: the merge prefers it to the library build
             let kind = if args.iter().any(|a| a == "--test") { "-test" } else { "" };
             let path = PathBuf::from(&out_dir).join(format!("{}{}-{}.jsonl", crate_name, kind, std::process::id()));
@@ -150,10 +150,28 @@ fn driver() -> ExitCode {
 }
 
 /// The records of the crate being compiled: its functions, and the texts.
-fn extract(root: &str, dep: bool, open_crate: bool) -> Vec<Value> {
+fn extract(tcx: rustc_middle::ty::TyCtxt<'_>, root: &str, dep: bool, open_crate: bool) -> Vec<Value> {
     let items: Vec<_> = rustc_public::all_local_items().into_iter().filter(|i| i.has_body()).collect();
     let bodies: HashSet<String> = items.iter().map(|i| i.name()).collect();
     let mut cx = lower::Ctx::new(root.to_string(), bodies);
+    // the promoted constants of the crate: the functions in them are used as values (`&helper`)
+    for ldid in tcx.mir_keys(()) {
+        let did = ldid.to_def_id();
+        if !tcx.is_mir_available(did) {
+            continue;
+        }
+        let promoted = tcx.promoted_mir(did);
+        if promoted.is_empty() {
+            continue;
+        }
+        let owner = rustc_public::rustc_internal::stable(did).name();
+        for (i, b) in promoted.iter_enumerated() {
+            let fns = lower::fns_named_by(&rustc_public::rustc_internal::stable(b));
+            if !fns.is_empty() {
+                cx.promoted.insert((owner.clone(), i.as_u32()), fns);
+            }
+        }
+    }
     for t in rustc_public::local_crate().trait_decls() {
         let private = cx.trait_is_private(&t.span());
         cx.traits.insert(t.name(), private);

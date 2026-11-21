@@ -379,3 +379,17 @@ pub fn quiet_by_parameter() {
     let s = source();
     run_fn(quiet, &s);
 }
+
+// functions that are used as values in promoted constants (`&helper`, `&[helper as fn(..)]`): lowered to a `nil`,
+// and the functions in them are values all the same (a make_closure each, so that they are not taken to have only
+// the callers that are seen)
+fn promoted_helper(_x: &str) {}
+
+fn promoted_helper2(_x: &str) {}
+
+pub fn promoted_fn_values() -> usize {
+    let a: &dyn Fn(&str) = &promoted_helper;
+    let t: &[fn(&str)] = &[promoted_helper2 as fn(&str)];
+    a("");
+    t.len()
+}

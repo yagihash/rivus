@@ -45,9 +45,13 @@ func TestRustExtractor(t *testing.T) {
 		t.Fatal(err)
 	}
 	foreign := false
+	valued := map[string]bool{}
 	for _, f := range prog.Funcs {
 		for _, b := range f.Blocks {
 			for _, in := range b.Instrs {
+				if in.Op == ir.OpMakeClosure && f.ID == "sample::review_flows::promoted_fn_values" {
+					valued[string(in.Func)] = true
+				}
 				if in.Op == ir.OpUnsupported {
 					t.Errorf("%s: unsupported: %s", f.ID, in.Reason)
 				}
@@ -59,6 +63,12 @@ func TestRustExtractor(t *testing.T) {
 	}
 	if !foreign {
 		t.Error("the call of a foreign function is not marked ffi")
+	}
+	// a function in a promoted constant is used as a value (the narrowing of the callers of a function reads it)
+	for _, name := range []string{"sample::review_flows::promoted_helper", "sample::review_flows::promoted_helper2"} {
+		if !valued[name] {
+			t.Errorf("%s is named in a promoted constant of promoted_fn_values, and is not used as a value there", name)
+		}
 	}
 }
 
