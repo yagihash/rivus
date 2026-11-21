@@ -32,7 +32,7 @@ Future<void> await_then() async {
 }
 
 void catch_error_value() {
-  Future<String>.error(source()) // @source(catch-error) @miss(silent)
+  Future<String>.error(source()) // @source(catch-error)
       .catchError((e) {
     sink(e); // @sink(catch-error)
     return '';

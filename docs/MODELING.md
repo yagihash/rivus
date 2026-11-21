@@ -55,3 +55,46 @@ arguments), do not cut it and do not write it as a plain flow: write it with a r
 The flow is kept. A finding whose path goes through it gets one uncertainty of kind `model_approximation`
 (`attributable_to: rivus`, `detail` is the reason), so its confidence is never `no_uncertainty_on_path`
 ([ADR-067](DECISIONS.md)).
+
+## 3. A function that calls a function it is given: `calls`
+
+`flows` says where the data goes. It cannot say that the function **calls** an argument (`Once.Do(f)`,
+`strings.Map(f, s)`, `Iterable.map(f)`, `Option::map(f)`, `thread::spawn(f)`): what the callback does with what the library
+hands it, and what it returns, is in the callback, which is code of the project. A row of `calls` says which argument is
+called, with what, and where its result goes; rivus then reads the callback at the call, with the values it captured:
+
+```yaml
+- symbol: strings.Map
+  calls:
+    - fn: arg0              # the argument that is called (recv or argN; the receiver is not counted in argN)
+      with: [arg1]          # what it is called with, parameter by parameter (recv, argN). Nothing: nothing flows in
+      ret: result0          # where what it returns goes (result, resultN, recv, argN). Nothing: it is dropped
+      throw: result1        # where what it throws goes (the same). Nothing: it is thrown out of the caller
+      writes: {0: arg2}     # where what it writes through its parameter 0 goes, besides the value it was given
+      mode: call            # call (default); go and defer: it runs on its own, what it returns is not read
+```
+
+* **`with` and `ret` name whole values** (`recv` is the receiver with what is inside it), as `flows` does. For a Rust method the
+  receiver is `arg0` and the closure `arg1` (the model of Rust names the arguments with `self` first).
+* **A row that has a `ret` has what stands for it when the callback cannot be told** (it is a parameter, it was read from a
+  field, there are more than four): `with` flows to `ret`, whole, and each use of this flow is an `assumed_call`
+  (the function that was given is not known here: what it is called with is taken to come out as what it returns). The load
+  refuses a row with a `ret` and no `with` unless `flows` says where the result comes from (`ok_or_else`: `flows` has it).
+  A `flows` you write is added to this, not replaced by it: put there what `calls` cannot say (the other half of `Result::map`,
+  `flows: [{from: arg0, to: result0}]` for the `Ok` that goes through `map_err`).
+* **Where the callback is told** (a function, or a closure written right there: one to four of them), the flow of the row is
+  not used: the summary of the callback is applied, with its parameters bound to `with`, what it captured bound, its result sent
+  to `ret`, what it throws to `throw`. A finding that goes through it has no `assumed_call`, and a closure that is only given to
+  such a call is not also applied where it is made.
+* A function that returns nothing and carries nothing is `pure: true` with its `calls` (`sort.Slice`, `Once.Do`).
+
+**The run decides the row** (`TestZooCallbacksGo`, `TestZooCallbacksDart`, `TestZooCallbacksRust`; `bench/zoo-go/callbacks`,
+`bench/zoo-dart/callbacks`, `bench/zoo-rust/callbacks`): a harness calls the real function with a closure that records what it was
+called with and returns a marker. A `with` that is not what the closure was given, a parameter that has the marker of an
+argument the row does not name, a `ret` that is not in what the call returned, a `ret` that is missing and the marker is there, a
+callback that was not called, are all errors of the row (corrected; not marked as misses). A row that no harness calls fails the
+test too. When you write a row for a function of a library, write the call in the harness first, and read what it gives.
+
+Not yet: a projection (`recv.elem`, `result0.err`: whole values only), a result that is itself a function (`sync.OnceValue`), a callback
+that is a field of an argument, `feed` (the accumulator of `fold`), and the libraries that are not the standard one (a row for
+`dio` or `tokio` is the next step; the harness takes them from a lockfile of their own).

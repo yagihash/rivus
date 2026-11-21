@@ -57,7 +57,7 @@ void expand_value() {
 void map_const_result() {
   final items = [source()]; // @source(map-const)
   final out = items.map((s) => 'fixed').toList();
-  sink(out.first); // @sink(none) @fp
+  sink(out.first); // @sink(none)
   sink(items); // @sink(map-const)
 }
 
@@ -76,7 +76,7 @@ void sort_by() {
 }
 
 void map_entries() {
-  final m = {'k': source()}; // @source(map-entries) @miss(dynamic_dispatch)
+  final m = {'k': source()}; // @source(map-entries)
   m.forEach((k, v) => sink(v)); // @sink(map-entries)
 }
 

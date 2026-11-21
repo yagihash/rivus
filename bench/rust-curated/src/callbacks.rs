@@ -65,7 +65,7 @@ pub fn param_clean() {
 // no parameter, and the candidates of the calls of closures with none are not the counts of `@noisy` of the
 // other files: it is one of the candidates of the closures with none, and the other sources of those reach it: `@noisy`, XTALK)
 pub fn spawned() {
-    let a = source(); // @source(spawned) @miss(unmodeled_library_call)
+    let a = source(); // @source(spawned)
     let h = std::thread::spawn(move || {
         sink(&a); // @sink(spawned) @noisy(8)
     });

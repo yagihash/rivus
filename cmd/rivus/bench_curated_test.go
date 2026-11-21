@@ -526,7 +526,7 @@ func TestCuratedDart(t *testing.T) {
 	t.Logf("dart-curated: %d flows to find, %d sinks to keep quiet, %d flows not found yet (@miss: %d silent, %d with a trace), %d reported wrongly (@fp), %d flows of other sources into noisy sinks (@noisy)", c.detect, c.quiet, c.miss, c.missSilent, c.missTrace, c.fp, c.noisy)
 	logSilentMisses(t, "dart-curated", c)
 	checkAssumedCall(t, c, "package:curated/callbacks.dart#",
-		[]string{"button_a", "button_b", "timer_run", "seen_and_passed", "cap_result"},
+		[]string{"button_a", "button_b", "timer_run", "seen_and_passed"},
 		[]string{"inline_only", "inline_literal"})
 	checkOffSource(t, c, maxDartOffSource)
 	if c.detect < 70 || c.quiet < 35 {
