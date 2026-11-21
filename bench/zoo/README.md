@@ -76,8 +76,9 @@ zoo-go: cells 24 / cases 74 | found 20 / 26 | @miss 6 (trace 2, silent 4, no rul
 
 * **cells / cases**: cells with all three roles, and their cases.
 * **found a / b**: of the vulnerable tags, those that rivus reports (the others are `@miss`).
-* **@miss**: the vulnerable tags that are not found, split by what the engine left: a trace (a kind), `silent`, `no rule`
-  (`@miss(norule)`: no rule exists for the API; stage 3).
+* **@miss**: the vulnerable tags that are not found, split by what the engine left: a trace (a kind), `silent`, or
+  `no rule` (`@miss(norule)`: the API has no rule. Only for the APIs of the standard library and of the de facto
+  libraries; an API outside that scope is not counted as a miss. Stage 3; none in stage 1).
 * **fixed / decoys reported wrongly**: `@fp` on the quiet lines of the fixed and decoy cases.
 * **carry**: `@carry(tag, encode|digest|numeric)` lines by kind (a value that depends on the marker and has not reached:
   the text differs between the two variants).
