@@ -1,7 +1,7 @@
 # The pure rows of Go in the built-in model that TestZooPureGo does not call (R-03), each with the reason.
 # 270 pure rows of Go: 20 are called (bench/zoo-go/pure, with the marker of two variants), 250 are listed here.
 # Not called is not checked: a result that comes from the receiver (Err(), Name(), String()) is not covered by a call
-# with a marker in the arguments. A row is read by the criterion in bench/README.md ("When a function may be pure").
+# with a marker in the arguments. A row is read by the criterion in docs/MODELING.md ("When a function may be pure").
 # The list is a ratchet: a pure row of Go that is neither called nor listed fails the test, and a row listed that is
 # called, or is not pure any more, fails it.
 

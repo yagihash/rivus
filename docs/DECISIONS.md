@@ -1412,7 +1412,7 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 **背景:** `go-pure.yaml` / `go-stdlib-more.yaml` の `pure: true` は「戻り値に汚れが乗らない」と言う。実行で確かめると(zoo、`TestZooPureGo`)、文字列・バイト列の引数を持つ `pure` の行 50 件のうち 18 件が誤りだった: 値に入る(`(*json.Decoder).Token`、`(*http.Cookie).String`、`(*url.URL).RequestURI`、`(time.Time).Format`、`hex.AppendEncode`、`hex.Encode`(書き込み先)、`url.UserPassword`、`regexp.Compile`)と、**error の文字列に入る**(`os.Stat`、`exec.LookPath`、`netip.ParseAddr`、`strconv.Atoi/ParseBool/ParseFloat/ParseUint`、`time.Parse/ParseInLocation/ParseDuration`)。error の文字列は、応答やログに書かれる(エラー文をそのまま返す XSS)。
 
 **決めたこと:**
-1. **`pure` の基準**(`bench/README.md` の「When a function may be `pure`」): 結果と、書き込み先(引数、レシーバ)のどれにも、引数・レシーバの中身が入らない。**error の文字列も含める**。
+1. **`pure` の基準**(`docs/MODELING.md` の「When a function may be `pure`」): 結果と、書き込み先(引数、レシーバ)のどれにも、引数・レシーバの中身が入らない。**error の文字列も含める**。
 2. 直し方は、**結果ごとに書く**(`pure` を外して「引数 → 全部の結果」にしない): 数や時刻を作る関数(`strconv.Atoi` ほか 4、`time.Parse` ほか 2、`ParseDuration`)は、入力を `result1`(error)へだけ流し、`result0`(数、時刻)へは流さない(`numeric_stop` が止める値を汚すと過検出になる)。`os.Stat`、`exec.LookPath`、`netip.ParseAddr`、`regexp.Compile` は、`result0` と `result1` の両方。`hex.Encode` は、`arg1 → arg0`。`Token`、`Cookie.String`、`RequestURI` は、レシーバ → 結果。`Format` は、レイアウト(`arg0`) → 結果(日時の値は数なので止める)。`UserPassword`、`AppendEncode`、`x509.CreateCertificate`、`ParsePKIXPublicKey`、`sql.Named`、`parser.ParseFile`、`tls.Client`、`slog.Group` ほか、全部で 29 の行。
 3. 検査: `TestPureFunctionsThatReturnDataAreReviewed`(型から、文字列・バイト列・構造体などを返す標準ライブラリの `pure` を列挙し、`testdata/pure-carriers.txt` の 84 件と比べる。増えても減っても落ちる)。`TestZooPureGo`(実行): 既知の誤りの一覧(ratchet)は空になった。270 の Go の `pure` の行のうち、呼んで確かめたのは 20、確かめていないのは 250(`bench/zoo-go/pure/unchecked.txt`、理由つき。呼んでいない行が増えるとテストが落ちる)。
 

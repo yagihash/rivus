@@ -1,6 +1,6 @@
 # Functions of the standard library that are `pure` and return data (a string, bytes, a slice, a map,
 # a struct, a pointer, an interface), each read and found not to carry the text of an argument.
-# See bench/README.md, "When a function may be pure", and TestPureFunctionsThatReturnDataAreReviewed.
+# See docs/MODELING.md, "When a function may be pure", and TestPureFunctionsThatReturnDataAreReviewed.
 # A function whose result can hold an argument is not here: it has a `flows:` (R-03).
 
 (*database/sql.Conn).BeginTx  # a handle of a database: what it returns is the stored data (the sources of the rules), not the arguments

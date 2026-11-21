@@ -14,7 +14,7 @@ import (
 	"github.com/yagihash/rivus/internal/model/builtin"
 )
 
-// The criterion for `pure: true` (bench/README.md, "When a function may be pure"): the result is a
+// The criterion for `pure: true` (docs/MODELING.md, "When a function may be pure"): the result is a
 // number, a bool, nothing, an error, or does not depend on the arguments. A function of the standard
 // library that is `pure` and returns a string, bytes, a slice, a map, a struct, a pointer or an
 // interface is listed here, and every one of them was read and found not to carry its arguments
@@ -117,7 +117,7 @@ func TestPureFunctionsThatReturnDataAreReviewed(t *testing.T) {
 	for _, c := range carriers {
 		got[c] = true
 		if !reviewed[c] {
-			t.Errorf("%s is pure and returns data: read whether the result can hold an argument (bench/README.md, \"When a function may be pure\"); write a flow if it can, add it to testdata/pure-carriers.txt if not", c)
+			t.Errorf("%s is pure and returns data: read whether the result can hold an argument (docs/MODELING.md, \"When a function may be pure\"); write a flow if it can, add it to testdata/pure-carriers.txt if not", c)
 		}
 	}
 	for r := range reviewed {
