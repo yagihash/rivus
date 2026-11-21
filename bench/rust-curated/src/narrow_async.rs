@@ -10,7 +10,9 @@ use std::future::Future;
 fn spawn<F: Future<Output = ()>>(_f: F) {}
 
 // (1) an `async move` block that captures a clone of the closure, and calls it: the receiver is a field of the
-// coroutine. Two callers; the closure of the other one is not the receiver (`@fp` goes)
+// coroutine. Two callers, and a closure of the type that no caller passes (`*_extra`: quiet, narrowed away). The closure of the
+// other caller stays a candidate (`@fp`): the guard of the dispatch (which closure the caller gave) is on a parameter of the
+// function that holds the call, and that is the coroutine, not the helper (docs/DESIGN-async-dispatch.md)
 struct Qa(String);
 
 fn run_block(f: impl Fn(&Qa) + Clone + Send + 'static, s: Qa) {
@@ -39,7 +41,7 @@ pub fn block_other() {
 
 pub fn block_extra() {
     let g = |x: &Qa| {
-        sink(&x.0); // @sink(none) @fp
+        sink(&x.0); // @sink(none)
     };
     g(&Qa(String::from("constant")));
 }
@@ -72,7 +74,7 @@ pub fn async_fn_other() {
 
 pub fn async_fn_extra() {
     let g = |x: &Qb| {
-        sink(&x.0); // @sink(none) @fp
+        sink(&x.0); // @sink(none)
     };
     g(&Qb(String::from("constant")));
 }
@@ -109,7 +111,7 @@ pub fn each_other() {
 
 pub fn each_extra() {
     let g = |x: &Qc| {
-        sink(&x.0); // @sink(none) @fp
+        sink(&x.0); // @sink(none)
     };
     g(&Qc(String::from("constant")));
 }

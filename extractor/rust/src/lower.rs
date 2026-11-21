@@ -533,6 +533,13 @@ impl<'a> Lower<'a> {
         if let TyKind::RigidTy(RigidTy::Closure(def, _)) = w.ty.kind() {
             return closure_field(def, i);
         }
+        // the same for what an `async` block or an `async fn` captures (its upvars: the fields of the coroutine that
+        // are not a state the coroutine saves across an `.await`). Named for the body of the coroutine
+        // (a path with `{closure#N}`, as a closure's name is), so that a function that is captured by two blocks is
+        // not mixed with another one's `0`
+        if let (TyKind::RigidTy(RigidTy::Coroutine(def, _)), None) = (w.ty.kind(), w.variant) {
+            return coroutine_field(def, i);
+        }
         if let TyKind::RigidTy(RigidTy::Adt(def, _)) = w.ty.kind() {
             let found = match w.variant {
                 Some(vi) => def.variant(vi),
@@ -884,6 +891,7 @@ impl<'a> Lower<'a> {
                             None => i.to_string(),
                         },
                         AggregateKind::Closure(def, _) => closure_field(*def, i),
+                        AggregateKind::Coroutine(def, _) => coroutine_field(*def, i),
                         _ => i.to_string(),
                     };
                     if matches!(kind, AggregateKind::Array(_)) {
@@ -1308,6 +1316,12 @@ impl<'a> Lower<'a> {
 /// The name of the field `i` of the environment of the closure `def`: the name of the closure (a path of Rust
 /// names: it has no `/`, which the paths of the analysis use) and the number of the field.
 pub(crate) fn closure_field(def: rustc_public::ty::ClosureDef, i: usize) -> String {
+    format!("{}.{}", def.name(), i)
+}
+
+/// The name of the upvar `i` of the coroutine `def` (an `async` block, or the future of an `async fn`): like a
+/// closure's, the name of its body and the number of the field.
+pub(crate) fn coroutine_field(def: rustc_public::ty::CoroutineDef, i: usize) -> String {
     format!("{}.{}", def.name(), i)
 }
 

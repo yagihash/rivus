@@ -347,10 +347,30 @@ func (t *trace) origins(f *ir.Func, ref irssa.Ref, depth int) {
 			t.origins(f, form.Operand(ref.Block, ref.Index, 0), depth)
 			return
 		}
+		// the copy of a function that a generic helper takes (`f.clone()` with `F: Fn + Clone`): the extractor cannot name
+		// the impl of a type parameter, so it is a dynamic call whose candidates say nothing. What a `Clone` of a callable
+		// gives is what it was given (a closure, a function, a pointer to one)
+		if isDynamicClone(in) {
+			t.origins(f, form.Operand(ref.Block, ref.Index, 0), depth)
+			return
+		}
 		t.stop(notUnknown)
 	default:
 		t.stop(notUnknown)
 	}
+}
+
+func isDynamicClone(in *ir.Instr) bool {
+	return in.Op == ir.OpCall && in.Callee != nil && in.Callee.Kind == ir.CalleeDynamic && in.Callee.Symbol == "std::clone::Clone::clone" && len(in.Args) == 1
+}
+
+// isCloneOfCallable: a clone that the walk follows (origins): it reads what its argument points to, and gives it back.
+func isCloneOfCallable(in *ir.Instr) bool {
+	if isDynamicClone(in) {
+		return true
+	}
+	return in.Op == ir.OpCall && in.Callee != nil && in.Callee.Kind == ir.CalleeStatic && strings.HasPrefix(string(in.Callee.Func), "<{closure@") &&
+		strings.HasSuffix(string(in.Callee.Func), " as std::clone::Clone>::clone") && len(in.Args) == 1
 }
 
 func isClosureField(f string) bool { return strings.Contains(f, "{closure#") }
@@ -471,7 +491,7 @@ func (n *narrower) aliasUses(f *ir.Func, form *irssa.Form, start irssa.Ref, allo
 							changed = true
 						}
 					case ir.OpCall:
-						if !(k == 0 && isFnCall(in.Callee)) {
+						if !(k == 0 && (isFnCall(in.Callee) || isCloneOfCallable(in))) {
 							return nil, nil, false
 						}
 					default:
