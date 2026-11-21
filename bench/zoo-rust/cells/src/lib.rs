@@ -2,15 +2,17 @@
 //! See bench/zoo/README.md. `register()` of a file hands its cases to zoo-mark; the table of the files is in
 //! exec/src/cases.rs (not analysed). The modules are inline, so that this is the only file without a cell.
 //! (`dyns` is the family `dyn` of the design: `dyn` is a keyword.)
-//! @na(F/dyn/through-dependency: the Go cell is about a dependency (a module of its own) whose body is not read (dependency_body_unread, ADR-075), measured in Go first; the Rust zoo has no dependency crate yet)
-//! @na(F/conv/exec-output-echo: Rust's `Command::output` has no model with an approximation yet; the cell is not written)
-//! @na(F/conv/struct-field-shallow: the sinks that name a field of a structure (`parts`) are measured in Go first; the Rust cells are stage 6 of docs/DESIGN-field-sinks.md)
-//! @na(F/conv/struct-field-deep: the sinks that name a field of a structure (`parts`) are measured in Go first; the Rust cells are stage 6 of docs/DESIGN-field-sinks.md)
-//! @na(F/conv/struct-field-boxed: the sinks that name a field of a structure (`parts`) are measured in Go first; the Rust cells are stage 6 of docs/DESIGN-field-sinks.md)
-//! @na(F/conv/struct-field-opaque: the sinks that name a field of a structure (`parts`) are measured in Go first; the Rust cells are stage 6 of docs/DESIGN-field-sinks.md)
+//! Two marks for a cell of the Go zoo that Rust has not (docs/DESIGN-zoo.md, 4.2.5): `@na` is a form that Rust does not have at all,
+//! `@todo` is a form that Rust can have and the cell is not written yet. The parity table counts them apart.
+//! @todo(F/dyn/through-dependency: PARITY: the Go cell is about a dependency (a module of its own) whose body is not read (dependency_body_unread, ADR-075), measured in Go first; a dependency crate can be written)
+//! @todo(F/conv/exec-output-echo: PARITY: `Command::output` can be written; it has no model with an approximation yet, and the cell is not written)
+//! @todo(F/conv/struct-field-shallow: PARITY: the sinks that name a field of a structure (`parts`) are measured in Go first; a Rust struct can have the same fields, stage 6 of docs/DESIGN-field-sinks.md)
+//! @todo(F/conv/struct-field-deep: PARITY: the sinks that name a field of a structure (`parts`) are measured in Go first; a Rust struct can have the same fields, stage 6 of docs/DESIGN-field-sinks.md)
+//! @todo(F/conv/struct-field-boxed: PARITY: the sinks that name a field of a structure (`parts`) are measured in Go first; a Rust struct can have the same fields, stage 6 of docs/DESIGN-field-sinks.md)
+//! @todo(F/conv/struct-field-opaque: PARITY: the sinks that name a field of a structure (`parts`) are measured in Go first; a Rust struct can have the same fields, stage 6 of docs/DESIGN-field-sinks.md)
 //! @na(F/dyn/iface-assert-ptr-recv: Go's type assertion of `any` to an interface read through a pointer receiver; Rust has neither)
-//! @na(F/dyn/fprint-writer-own: `fmt.Fprint` to a writer of the project is Go's; the Rust counterpart (`write!` to an `impl io::Write` of the project) is not written yet)
-//! @na(F/dyn/sanitizer-own-impl: not written for Rust yet; the built-in model has no sanitizer on a trait method, and the engine reads an implementation of a sanitizer's trait the same way in every language)
+//! @todo(F/dyn/fprint-writer-own: PARITY: `fmt.Fprint` to a writer of the project is Go's; the Rust counterpart (`write!` to an `impl io::Write` of the project) can be written)
+//! @todo(F/dyn/sanitizer-own-impl: PARITY: not written for Rust yet; a trait method can be a sanitizer, and the engine reads an implementation of a sanitizer's trait the same way in every language)
 pub mod call {
     pub mod depth3;
     pub mod direct;
