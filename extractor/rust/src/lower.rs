@@ -537,8 +537,13 @@ impl<'a> Lower<'a> {
         // are not a state the coroutine saves across an `.await`). Named for the body of the coroutine
         // (a path with `{closure#N}`, as a closure's name is), so that a function that is captured by two blocks is
         // not mixed with another one's `0`
-        if let (TyKind::RigidTy(RigidTy::Coroutine(def, _)), None) = (w.ty.kind(), w.variant) {
-            return coroutine_field(def, i);
+        // A local that the coroutine saves across an `.await` is a field of a state of it (a variant: `Downcast`), and is named
+        // for the state too: the body moves its parameters there, and calls them from there
+        if let TyKind::RigidTy(RigidTy::Coroutine(def, _)) = w.ty.kind() {
+            return match w.variant {
+                None => coroutine_field(def, i),
+                Some(vi) => format!("{}.s{}.{}", def.name(), format!("{:?}", vi).chars().filter(|c| c.is_ascii_digit()).collect::<String>(), i),
+            };
         }
         if let TyKind::RigidTy(RigidTy::Adt(def, _)) = w.ty.kind() {
             let found = match w.variant {

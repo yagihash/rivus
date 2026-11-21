@@ -392,7 +392,7 @@ func (t *trace) field(name string, depth int) {
 			t.stop(notUnknown)
 			return
 		}
-		t.origins(s.fn, form.Operand(s.b, s.i, 1), depth+1)
+		t.origins(s.fn, form.Operand(s.b, s.i, 1), depth) // a field of an environment is not a call up: the depth counts the callers that are followed
 		if t.fail != "" {
 			return
 		}

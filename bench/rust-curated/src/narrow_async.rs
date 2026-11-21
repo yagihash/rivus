@@ -145,3 +145,42 @@ pub fn unknown_unknown() {
     let a = Qd(source()); // @source(async-unknown)
     run_block_qd(make_unknown_qd(String::from("tag")), a);
 }
+
+// (5) an `.await` before the closure is cloned (as in `for_each_live_node`): the coroutine saves its parameters across
+// the `.await`, in the fields of a state of it, and the body calls the closure from there
+struct Qe(String);
+
+async fn yield_now() {}
+
+async fn run_awaited(f: impl Fn(&Qe) + Clone + Send + 'static, s: Qe) {
+    yield_now().await;
+    let g = f.clone();
+    spawn(async move { g(&s) });
+    yield_now().await;
+}
+
+pub fn awaited_real() {
+    let a = Qe(source()); // @source(async-awaited)
+    spawn(run_awaited(
+        |x| {
+            sink(&x.0); // @sink(async-awaited)
+        },
+        a,
+    ));
+}
+
+pub fn awaited_other() {
+    spawn(run_awaited(
+        |x| {
+            sink(&x.0); // @sink(none) @fp
+        },
+        Qe(String::from("constant")),
+    ));
+}
+
+pub fn awaited_extra() {
+    let g = |x: &Qe| {
+        sink(&x.0); // @sink(none)
+    };
+    g(&Qe(String::from("constant")));
+}
