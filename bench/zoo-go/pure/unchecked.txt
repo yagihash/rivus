@@ -1,5 +1,5 @@
 # The pure rows of Go in the built-in model that TestZooPureGo does not call (R-03), each with the reason.
-# 270 pure rows of Go: 20 are called (bench/zoo-go/pure, with the marker of two variants), 250 are listed here.
+# 269 pure rows of Go: 23 are called (bench/zoo-go/pure, with the marker of two variants, in an argument or in a value of the receiver's type), 246 are listed here.
 # Not called is not checked: a result that comes from the receiver (Err(), Name(), String()) is not covered by a call
 # with a marker in the arguments. A row is read by the criterion in docs/MODELING.md ("When a function may be pure").
 # The list is a ratchet: a pure row of Go that is neither called nor listed fails the test, and a row listed that is
@@ -34,7 +34,6 @@
 (*go/ast.CallExpr).End  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
 (*go/ast.CallExpr).Pos  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
 (*go/ast.CommentGroup).Pos  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
-(*log/slog.Level).UnmarshalText  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
 (*log/slog.Logger).Debug  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
 (*log/slog.Logger).DebugContext  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
 (*log/slog.Logger).Enabled  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
@@ -66,16 +65,13 @@
 (*net/smtp.Client).Quit  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
 (*net/smtp.Client).Rcpt  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
 (*net/smtp.Client).StartTLS  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
-(*net/url.URL).Port  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
 (*os.File).Close  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
 (*os.File).Write  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
 (*os.File).WriteString  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
-(*os/exec.Cmd).Run  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
 (*os/exec.Cmd).Start  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
 (*os/exec.Cmd).StderrPipe  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
 (*os/exec.Cmd).StdoutPipe  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
 (*os/exec.Cmd).Wait  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
-(*regexp.Regexp).Match  # a string or bytes argument, not called: it acts on a process, a file, the network or the clock, or needs a value the harness cannot make from the marker
 (*sync.Mutex).Lock  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
 (*sync.Mutex).TryLock  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed
 (*sync.Mutex).Unlock  # no string or bytes argument (a number, a bool, a handle, a lock, nothing): the marker cannot be passed

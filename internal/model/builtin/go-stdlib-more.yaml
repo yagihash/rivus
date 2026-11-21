@@ -413,7 +413,7 @@ propagators:
   - symbol: (log/slog.Leveler).Level
     pure: true
   - symbol: (*log/slog.Level).UnmarshalText
-    pure: true
+    flows: [{from: arg0, to: result0}]
   - symbol: net/http.Error
     pure: true
   - symbol: net/http.NotFoundHandler

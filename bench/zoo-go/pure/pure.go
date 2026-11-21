@@ -14,6 +14,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/netip"
 	"net/url"
@@ -156,6 +157,28 @@ var rows = []row{
 		q, _ := json.Marshal(s)
 		tok, err := json.NewDecoder(strings.NewReader(string(q))).Token()
 		return []Part{v("(*encoding/json.Decoder).Token", tok), e("(*encoding/json.Decoder).Token", err)}
+	}},
+	// The recipes of receivers (R-03): a value of the type is made with the marker in it, and the methods that the model
+	// says are pure are called. The receiver is the way in that a call with the marker in an argument does not cover.
+	{"(*log/slog.Level).UnmarshalText", func(s string) []Part {
+		var l slog.Level
+		err := l.UnmarshalText([]byte(s))
+		return []Part{v("(*log/slog.Level).UnmarshalText", l), e("(*log/slog.Level).UnmarshalText", err)}
+	}},
+	{"(*regexp.Regexp).Match", func(s string) []Part {
+		return []Part{v("(*regexp.Regexp).Match", regexp.MustCompile(`SH`).Match([]byte(s)))}
+	}},
+	{"(*net/url.URL).Port", func(s string) []Part {
+		u, err := url.Parse("http://host:8080/" + s)
+		if err != nil {
+			return []Part{e("(*net/url.URL).Port", err)}
+		}
+		return []Part{v("(*net/url.URL).Port", u.Port())}
+	}},
+	{"(*os/exec.Cmd).Run", func(s string) []Part {
+		// the process is `true`: it does nothing with its arguments, and the answer is whether the marker reached the error
+		err := exec.Command("true", s).Run()
+		return []Part{e("(*os/exec.Cmd).Run", err)}
 	}},
 }
 
