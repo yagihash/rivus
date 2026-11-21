@@ -267,3 +267,27 @@ func ValAfterPtrOther() {
 	lib.Opaque(&o)
 	lib.SinkReqVal(r)
 }
+
+// --- the mark does not depend on the order of the instructions: a sink that was evaluated before the mark was made
+// is evaluated again when the mark is made (a loop, a deferred sink, a copy that was made before) ---
+
+func LoopMark() {
+	r := lib.Req{Meta: lib.Source()} // @source(loopmark)
+	for i := 0; i < 2; i++ {
+		lib.SinkReqVal(r) // @sink(loopmark)
+		lib.Opaque(&r)
+	}
+}
+
+func DeferMark() {
+	r := &lib.Req{Meta: lib.Source()} // @source(defermark)
+	defer lib.SinkReq(r)              // @sink(defermark)
+	lib.Opaque(r)
+}
+
+func CopyBeforeMark() {
+	r := lib.Req{Meta: lib.Source()} // @source(copybeforemark)
+	r2 := r
+	lib.Opaque(&r)
+	lib.SinkReqVal(r2) // @sink(copybeforemark)
+}

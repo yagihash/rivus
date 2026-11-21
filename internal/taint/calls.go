@@ -96,6 +96,7 @@ func (s *state) callSig(cc *callCtx) int {
 		for _, l := range s.locs(v) {
 			sum += s.rootVer[l.Root]
 		}
+		sum += s.markSig(v, cc.in)
 	}
 	for _, v := range cc.argv() {
 		add(v)

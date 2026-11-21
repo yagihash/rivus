@@ -353,7 +353,7 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 	defer func() { s.collectMemo, s.expandMemo, s.recvBoxed = nil, nil, false }()
 	for _, i := range sum.Opaque {
 		if i < len(argv) {
-			s.markOpaque(argv[i])
+			s.markOpaque(argv[i], cc.in)
 		}
 	}
 	for _, o := range sum.Outputs {

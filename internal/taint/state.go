@@ -237,6 +237,8 @@ type state struct {
 
 	// opaque are the roots of the values that a call neither read nor modelled was given (noteOpaque)
 	opaque map[Root]bool
+	// opaqueBy is the instruction that marked a root (multiMark: more than one): a sink does not see its own mark
+	opaqueBy map[Root]*sg.Instr
 
 	suppressions map[string]*Suppression
 	findings     map[findingKey]*rawFinding

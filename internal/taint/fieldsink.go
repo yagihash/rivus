@@ -83,7 +83,7 @@ func (s *state) checkPart(cc *callCtx, site *sites.Site, p model.SinkPart) {
 		}
 		return
 	}
-	opaque := s.touchedByOpaque(v)
+	opaque := s.touchedByOpaque(v, cc.in)
 	for _, l := range locs {
 		for _, f := range s.collect(l) {
 			kind, rest := partAbove, names
@@ -129,21 +129,69 @@ func (s *state) fieldNote(pos ir.Pos, field, why, cell string) *Uncertainty {
 
 // touchedByOpaque reports whether the value (or what it points to) was given to a function that the
 // analysis has neither the body nor a model of: it may have changed any part of it.
-func (s *state) touchedByOpaque(v *sg.Value) bool {
+func (s *state) touchedByOpaque(v *sg.Value, self *sg.Instr) bool {
 	if len(s.opaque) == 0 {
 		return false
 	}
 	for _, l := range s.locs(v) {
-		if s.opaque[l.Root] {
+		if s.markedByOther(l.Root, self) {
 			return true
 		}
 	}
 	for _, l := range s.pointeeOfInterface(v) {
-		if s.opaque[l.Root] {
+		if s.markedByOther(l.Root, self) {
 			return true
 		}
 	}
 	return false
+}
+
+// multiMark is the marker of a root that was marked by more than one instruction (or by a read of a marked cell).
+var multiMark = &sg.Instr{}
+
+// markedByOther reports whether the root was marked by an instruction other than self. A call that is neither
+// read nor modelled marks what it was given after it was looked at, as a sink: a sink does not see its own mark,
+// or every sink of a function that is not read would be reported by what it was given (ADR-084).
+func (s *state) markedByOther(r Root, self *sg.Instr) bool {
+	return s.opaque[r] && s.opaqueBy[r] != self
+}
+
+// markSig is the part of the signature of a call that the marks make: a call is looked at again when a mark that
+// it does not see as its own was made on a cell it reads, whatever order the instructions are looked at in.
+func (s *state) markSig(v *sg.Value, self *sg.Instr) int {
+	if len(s.opaque) == 0 {
+		return 0
+	}
+	n := 0
+	for _, l := range s.locs(v) {
+		if s.markedByOther(l.Root, self) {
+			n++
+		}
+	}
+	for _, l := range s.pointeeOfInterface(v) {
+		if s.markedByOther(l.Root, self) {
+			n++
+		}
+	}
+	return n
+}
+
+// setMark records that by marked the root; a second, different marker makes it multiMark. It reports a change.
+func (s *state) setMark(r Root, by *sg.Instr) {
+	if !s.opaque[r] {
+		if s.opaque == nil {
+			s.opaque = map[Root]bool{}
+			s.opaqueBy = map[Root]*sg.Instr{}
+		}
+		s.opaque[r] = true
+		s.opaqueBy[r] = by
+		s.changed = true
+		return
+	}
+	if s.opaqueBy[r] != by && s.opaqueBy[r] != multiMark {
+		s.opaqueBy[r] = multiMark
+		s.changed = true
+	}
 }
 
 // noteOpaque remembers the values that a call that is neither read nor modelled was given and that it
@@ -151,12 +199,12 @@ func (s *state) touchedByOpaque(v *sg.Value) bool {
 // adds no taint: the only thing that reads it is a sink that names a part (touchedByOpaque).
 func (s *state) noteOpaque(cc *callCtx) {
 	for _, v := range cc.argv() {
-		s.markOpaque(v)
+		s.markOpaque(v, cc.in)
 	}
 }
 
 // markOpaque marks the memory that the value gives a function that is not read: see noteOpaque.
-func (s *state) markOpaque(v *sg.Value) {
+func (s *state) markOpaque(v *sg.Value, by *sg.Instr) {
 	if v == nil {
 		return
 	}
@@ -167,13 +215,7 @@ func (s *state) markOpaque(v *sg.Value) {
 	}
 	roots := append(append([]Loc(nil), s.locs(v)...), s.pointeeOfInterface(v)...)
 	for _, l := range roots {
-		if !s.opaque[l.Root] {
-			if s.opaque == nil {
-				s.opaque = map[Root]bool{}
-			}
-			s.opaque[l.Root] = true
-			s.changed = true
-		}
+		s.setMark(l.Root, by)
 	}
 }
 
@@ -196,24 +238,28 @@ func (s *state) opaqueParams() []int {
 // value that is not a structure (a string, a number) is no place for a part of a structure to be moved to, and a
 // pointer is the same cell (locs), so only the values that hold fields are marked.
 func (s *state) carryOpaque(src []Loc, dst []Loc) {
-	from := false
+	var by *sg.Instr
 	for _, l := range src {
 		if s.opaque[l.Root] {
-			from = true
-			break
+			if by == nil {
+				by = s.opaqueBy[l.Root]
+			} else if by != s.opaqueBy[l.Root] {
+				by = multiMark
+			}
 		}
 	}
-	if !from {
+	if by == nil {
 		return
 	}
 	for _, d := range dst {
-		if d.Path != "" || d.Root.V == nil || d.Root.Idx >= 0 || s.opaque[d.Root] {
+		if d.Path != "" || d.Root.V == nil || d.Root.Idx >= 0 {
 			continue
 		}
 		switch d.Root.V.Class {
 		case ir.ClassStruct, ir.ClassContainer, ir.ClassInterface:
-			s.opaque[d.Root] = true
-			s.changed = true
+			// the origin of the mark goes with it: a copy that was made for a sink that was the marker itself
+			// is marked by another when the cell it was read from was
+			s.setMark(d.Root, by)
 		}
 	}
 }
