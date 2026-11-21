@@ -68,6 +68,9 @@ type fetchCase struct {
 	config   string // .cargo/config.toml; @IP@ is the fake registry, @DIR@ the project
 	// proxy: the case is seen as a request to the fake registry (the project points the proxy at it)
 	proxy bool
+	// git: a second fake host serves a git repository (a dependency of the project, with a submodule that names the fake
+	// registry); @GIT@ is its address and @COMMIT@ the commit of the repository
+	git bool
 }
 
 var fetchCases = []fetchCase{
@@ -123,6 +126,10 @@ func startFakeRegistry(t *testing.T, o *isolationOpts) (name, ip string) {
 func fetchProject(t *testing.T, o *isolationOpts, c fetchCase, fetch func(name, dir, volume string) []string) (volumeFiles, registryLog, said string) {
 	t.Helper()
 	regName, ip := startFakeRegistry(t, o)
+	commit, gitIP := "", ""
+	if c.git {
+		gitIP, commit = startFakeGitHost(t, o, ip)
+	}
 	base, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -135,7 +142,7 @@ func fetchProject(t *testing.T, o *isolationOpts, c fetchCase, fetch func(name, 
 		".cargo/config.toml": c.config,
 		"prov.sh":            markerScript,
 	} {
-		body = strings.NewReplacer("@IP@", ip, "@DIR@", dir).Replace(body)
+		body = strings.NewReplacer("@IP@", ip, "@DIR@", dir, "@GIT@", gitIP, "@COMMIT@", commit).Replace(body)
 		p := filepath.Join(dir, f)
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 			t.Fatal(err)
@@ -191,5 +198,112 @@ func TestIsolationImageHasNoGit(t *testing.T) {
 	out, err := exec.Command("docker", "run", "--rm", "--network", "none", "--entrypoint", "sh", o.image, "-c", "command -v git").CombinedOutput()
 	if err == nil {
 		t.Errorf("the image has git (%s): the cargo configuration of the project could make the fetch stage run it", strings.TrimSpace(string(out)))
+	}
+}
+
+// The fake host of a git repository. It runs in a container of its own (an image made from the one of the extractor, with
+// git added, for this test only) on the bridge network of Docker, and it speaks the smart HTTP protocol through
+// `git http-backend`. Its repository has a submodule whose URL (.gitmodules) is the fake registry: the place the
+// repository sends the fetch to. A path under /redir/ answers with a redirect (30x) to the fake registry.
+const fakeGitHostPerl = `$|=1; use IO::Socket::INET; my $inner=$ENV{INNER};
+my $s=IO::Socket::INET->new(Listen=>5,LocalPort=>8080,ReuseAddr=>1) or die; $SIG{CHLD}='IGNORE';
+while (my $c=$s->accept) { binmode $c;
+ my $l=<$c>; print "REQ $l"; my %h; while (<$c>) { last if /^\r?\n$/; $h{lc $1}=$2 if /^([^:]+):\s*(.*?)\r?\n$/ }
+ my ($m,$u)=split ' ',$l;
+ if ($u =~ m{^/redir/(.*)}) { print $c "HTTP/1.1 302 Found\r\nLocation: http://$inner:8080/redirected/$1\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"; close $c; next }
+ my $body=''; read($c,$body,$h{'content-length'}) if $h{'content-length'};
+ open F,'>','/tmp/body'; binmode F; print F $body; close F;
+ my ($p,$q)=split /\?/,$u,2;
+ local %ENV=(REQUEST_METHOD=>$m, PATH_INFO=>$p, QUERY_STRING=>$q//'', CONTENT_TYPE=>$h{'content-type'}//'', CONTENT_LENGTH=>length($body),
+  GIT_PROJECT_ROOT=>'/tmp/srv', GIT_HTTP_EXPORT_ALL=>1, PATH=>'/usr/bin:/bin', HOME=>'/tmp', REMOTE_ADDR=>'1.1.1.1');
+ my $out=qx{git http-backend < /tmp/body}; my ($hd,$b)=split /\r?\n\r?\n/,$out,2; $b//='';
+ my $st='200 OK'; my @hs; for (split /\r?\n/,$hd) { if (/^Status:\s*(.*)/) {$st=$1} else {push @hs,$_} }
+ print $c "HTTP/1.1 $st\r\n",join("\r\n",@hs),"\r\nContent-Length: ".length($b)."\r\nConnection: close\r\n\r\n",$b; close $c }`
+
+const fakeGitHostSetup = `set -e; export HOME=/tmp
+git config --global user.email t@t.invalid; git config --global user.name t; git config --global init.defaultBranch main
+mkdir -p /tmp/w /tmp/srv; cd /tmp/w; git init -q
+mkdir src; : > src/lib.rs
+printf '[package]\nname = "gdep"\nversion = "0.1.0"\nedition = "2021"\n' > Cargo.toml
+printf '[submodule "sub"]\n\tpath = sub\n\turl = http://%s:8080/sub.git\n' "$INNER" > .gitmodules
+git add Cargo.toml src .gitmodules; git update-index --add --cacheinfo 160000,0123456789abcdef0123456789abcdef01234567,sub; git commit -qm x; git clone -q --bare /tmp/w /tmp/srv/dep.git
+git -C /tmp/srv/dep.git rev-parse HEAD > /tmp/ready
+printf '%s' "$PERL" > /tmp/s.pl; exec perl /tmp/s.pl`
+
+func gitHostImage(t *testing.T, o *isolationOpts) string {
+	t.Helper()
+	id, err := dockerOut(t, "image", "inspect", "-f", "{{.Id}}", o.image)
+	if err != nil {
+		t.Fatalf("image: %v: %s", err, id)
+	}
+	tag := "rivus-test-githost:" + strings.TrimPrefix(id, "sha256:")[:12]
+	if _, err := dockerOut(t, "image", "inspect", tag); err == nil {
+		return tag
+	}
+	cmd := exec.Command("docker", "build", "-q", "-t", tag, "-")
+	cmd.Stdin = strings.NewReader("FROM " + o.image + "\nUSER root\nRUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*\nUSER 10001:10001\n")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("the image of the fake git host did not build: %v: %s", err, out)
+	}
+	return tag
+}
+
+// startFakeGitHost returns the address of the fake git host on the bridge network and the commit of its repository.
+func startFakeGitHost(t *testing.T, o *isolationOpts, innerIP string) (ip, commit string) {
+	t.Helper()
+	name := randomName("rivus-fakegit-")
+	if out, err := dockerOut(t, "run", "-d", "--rm", "--name", name, "--user", "10001:10001", "--cap-drop", "ALL", "--read-only", "--tmpfs", "/tmp:rw,nosuid,size=64m",
+		"--security-opt", "no-new-privileges", "--memory", "256m", "--pids-limit", "128", "--label", "rivus=test-fake-git",
+		"-e", "INNER="+innerIP, "-e", "PERL="+fakeGitHostPerl, "--entrypoint", "sh", gitHostImage(t, o), "-c", fakeGitHostSetup); err != nil {
+		t.Fatalf("the fake git host did not start: %v: %s", err, out)
+	}
+	t.Cleanup(func() { _ = exec.Command("docker", "rm", "-f", name).Run() })
+	t.Cleanup(func() { l, _ := dockerOut(t, "logs", name); t.Logf("the fake git host was asked:\n%s", l) })
+	for range 30 {
+		if c, err := dockerOut(t, "exec", name, "cat", "/tmp/ready"); err == nil && len(c) == 40 {
+			commit = c
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	if commit == "" {
+		l, _ := dockerOut(t, "logs", name)
+		t.Fatalf("the fake git host is not ready: %s", l)
+	}
+	ip, err := dockerOut(t, "inspect", "-f", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", name)
+	if err != nil || ip == "" {
+		t.Fatalf("no address for the fake git host: %v: %s", err, ip)
+	}
+	time.Sleep(time.Second)
+	return ip, commit
+}
+
+const manifestGitDep = "[package]\nname = \"t\"\nversion = \"0.1.0\"\nedition = \"2021\"\n[dependencies]\ngdep = { git = \"http://@GIT@:8080@PATH@/dep.git\" }\n"
+
+const lockGitDep = "version = 4\n\n[[package]]\nname = \"gdep\"\nversion = \"0.1.0\"\nsource = \"git+http://@GIT@:8080@PATH@/dep.git#@COMMIT@\"\n\n[[package]]\nname = \"t\"\nversion = \"0.1.0\"\ndependencies = [\n \"gdep\",\n]\n"
+
+// What the fetch stage does when a repository is allowed (-allow-fetch-host): the places that the repository itself names are
+// reached. This test pins that as a LIMIT, not as a wish: the submodules (.gitmodules: Cargo.lock does not show them) and the
+// redirects (30x) of a host that was allowed send requests to other places (here the fake registry stands for a place inside a
+// network). It is what the narrowing of the network of the fetch stage (docs/DESIGN-fetch-network.md) is for; when that is in,
+// this test is turned around (the requests must not arrive). Until then the default is the guard: a git dependency is not
+// fetched unless the user names its host (checkFetchSources).
+func TestIsolationFetchFollowsWhatTheAllowedRepositorySays(t *testing.T) {
+	o := dockerForTests(t)
+	for _, c := range []struct {
+		name, path, want string
+	}{
+		{"submodule", "", "sub.git"},
+		{"redirect", "/redir", "/redirected/"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			fc := fetchCase{name: c.name, git: true, config: "",
+				manifest: strings.ReplaceAll(manifestGitDep, "@PATH@", c.path), lock: strings.ReplaceAll(lockGitDep, "@PATH@", c.path)}
+			_, reglog, said := fetchProject(t, o, fc, func(name, dir, volume string) []string { return o.fetchArgs(name, dir, volume) })
+			if !strings.Contains(reglog, c.want) {
+				t.Errorf("no request arrived at the place the repository names (%s): the limit may be gone, check it and turn this test around\nthe registry saw: %q\n%s", c.want, reglog, said)
+			}
+			t.Logf("the request went to the place the repository names (a known limit until the network of the fetch stage is narrowed): %s", strings.TrimSpace(reglog))
+		})
 	}
 }

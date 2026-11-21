@@ -22,13 +22,14 @@ func TestCheckFetchSources(t *testing.T) {
 		"", // a crate of the project itself has no source
 		"registry+https://github.com/rust-lang/crates.io-index",
 		"registry+sparse+https://index.crates.io/",
-		"git+https://github.com/someone/repo?rev=abc#0123456789abcdef0123456789abcdef01234567",
-		"git+https://gitlab.example.org/a/b.git#0123456789abcdef0123456789abcdef01234567",
 	}
 	if err := checkFetchSources(lockWith(ok...), nil); err != nil {
-		t.Errorf("the default places are refused: %v", err)
+		t.Errorf("crates.io is refused: %v", err)
 	}
+	// everything else is refused by default: a git dependency on any host (a public one too), a registry, any scheme
 	for _, bad := range []string{
+		"git+https://github.com/someone/repo?rev=abc#0123456789abcdef0123456789abcdef01234567",
+		"git+https://gitlab.example.org/a/b.git#0123456789abcdef0123456789abcdef01234567",
 		"registry+sparse+http://10.0.0.5:8080/",
 		"registry+https://registry.example.com/index",
 		"registry+http://registry.corp/",
@@ -37,15 +38,20 @@ func TestCheckFetchSources(t *testing.T) {
 		"git+https://[::1]/x.git#0123456789abcdef0123456789abcdef01234567",
 		"git+https://localhost/x.git#0123456789abcdef0123456789abcdef01234567",
 		"git+https://nas.local/x.git#0123456789abcdef0123456789abcdef01234567",
-		"git+https://git.internal/x.git#0123456789abcdef0123456789abcdef01234567",
-		"git+https://intranet/x.git#0123456789abcdef0123456789abcdef01234567",
 		"git+https://2130706433/x.git#0123456789abcdef0123456789abcdef01234567",
 		"git+https://user:pw@github.com/x/y#0123456789abcdef0123456789abcdef01234567",
 		"git+ssh://github.com/x/y#0123456789abcdef0123456789abcdef01234567",
 	} {
 		err := checkFetchSources(lockWith(bad), nil)
-		if err == nil || !strings.Contains(err.Error(), bad) {
+		if err == nil || !strings.Contains(err.Error(), strings.TrimPrefix(strings.SplitN(bad, "#", 2)[0], "git+")) {
 			t.Errorf("not refused (or not listed): %s: %v", bad, err)
+		}
+	}
+	// the message says which repository at which commit, and how to allow it, in one line
+	err := checkFetchSources(lockWith("git+https://github.com/someone/repo?rev=abc#0123456789abcdef0123456789abcdef01234567"), nil)
+	for _, want := range []string{"pa 1.0.0: https://github.com/someone/repo?rev=abc at commit 0123456789abcdef0123456789abcdef01234567", "-allow-fetch-host github.com", "submodules", "redirects"} {
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("the message lacks %q: %v", want, err)
 		}
 	}
 	// named by the user: allowed, by host

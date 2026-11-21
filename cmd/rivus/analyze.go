@@ -78,7 +78,7 @@ func (o *analyzeOpts) register(fs *flag.FlagSet) {
 	fs.Var(&o.containerEnv, "container-env", "NAME=VALUE for the build of the Rust project in the container (repeatable). The value is written here; nothing is taken from your environment (a build script that needs a setting that it would fetch otherwise, like LOCAL_ASSETS_PATH)")
 	fs.Var(&o.containerMounts, "container-ro-mount", "SRC:DST: a directory or file of this machine that the build of the Rust project in the container sees, read-only (repeatable; not your home directory)")
 	fs.Int64Var(&o.containerMaxOut, "container-max-output", 4<<30, "the most bytes the container of the Rust extractor may write (the stream of the IR)")
-	fs.Var(&o.allowFetchHosts, "allow-fetch-host", "HOST: let the fetch stage of the Rust project (in the container, with a network) get from this host, which Cargo.lock names and which is not crates.io or an https repository host with a public name (repeatable)")
+	fs.Var(&o.allowFetchHosts, "allow-fetch-host", "HOST: let the fetch stage of the Rust project (in the container, with a network) get from this host, which Cargo.lock names (git dependencies on any host, other registries; by default only crates.io is allowed). The repository can send the fetch on to other places (its submodules, redirects); that is not prevented until the network of the fetch stage is narrowed (repeatable)")
 	fs.IntVar(&o.workers, "workers", 0, "functions analysed at the same time (0: one per CPU; 1: one at a time). The result does not depend on it")
 	fs.BoolVar(&o.numeric, "numeric-taint", false, "follow taint through numbers and bools (by default it stops there: they cannot carry an injection)")
 	fs.BoolVar(&o.verbose, "v", false, "print the time of each phase to stderr")
