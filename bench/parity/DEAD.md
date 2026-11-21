@@ -4,8 +4,17 @@
 
 ## Go
 
-### 使われていない: 215
+### 使われていない: 224
 
+- `sort.SliceStable` (go-callbacks.yaml, propagator, pure)
+- `sort.Search` (go-callbacks.yaml, propagator, pure)
+- `slices.SortFunc` (go-callbacks.yaml, propagator, pure)
+- `slices.SortStableFunc` (go-callbacks.yaml, propagator, pure)
+- `slices.IndexFunc` (go-callbacks.yaml, propagator, pure)
+- `slices.ContainsFunc` (go-callbacks.yaml, propagator, pure)
+- `strings.IndexFunc` (go-callbacks.yaml, propagator, pure)
+- `strings.TrimFunc` (go-callbacks.yaml, propagator, iii)
+- `strings.FieldsFunc` (go-callbacks.yaml, propagator, iii)
 - `flag.Int` (go-config.yaml, config_read, iv)
 - `flag.Duration` (go-config.yaml, config_read, iv)
 - `(*flag.FlagSet).Bool` (go-config.yaml, config_read, iv)
@@ -53,7 +62,7 @@
 - `(hash.Hash).Size` (go-pure.yaml, propagator, pure)
 - `fmt.Print` (go-stdlib-more.yaml, propagator, pure)
 - `strconv.FormatUint` (go-stdlib-more.yaml, propagator, pure)
-- `strconv.ParseBool` (go-stdlib-more.yaml, propagator, pure)
+- `strconv.ParseBool` (go-stdlib-more.yaml, propagator, i)
 - `strconv.FormatFloat` (go-stdlib-more.yaml, propagator, pure)
 - `log/slog.New` (go-stdlib-more.yaml, propagator, pure)
 - `log/slog.Default` (go-stdlib-more.yaml, propagator, pure)
@@ -88,7 +97,7 @@
 - `database/sql/driver.IsValue` (go-stdlib-more.yaml, propagator, pure)
 - `crypto/hmac.Equal` (go-stdlib-more.yaml, propagator, pure)
 - `crypto/sha512.New` (go-stdlib-more.yaml, propagator, pure)
-- `crypto/x509.ParsePKIXPublicKey` (go-stdlib-more.yaml, propagator, pure)
+- `crypto/x509.ParsePKIXPublicKey` (go-stdlib-more.yaml, propagator, i)
 - `(*sync/atomic.Bool).Load` (go-stdlib-more.yaml, propagator, pure)
 - `(*sync/atomic.Bool).Store` (go-stdlib-more.yaml, propagator, pure)
 - `(*sync/atomic.Int64).Load` (go-stdlib-more.yaml, propagator, pure)
@@ -128,20 +137,20 @@
 - `crypto/tls.X509KeyPair` (go-stdlib-more.yaml, propagator, i)
 - `strings.CutSuffix` (go-stdlib-more.yaml, propagator, i)
 - `(*encoding/xml.Decoder).Decode` (go-stdlib-more.yaml, propagator, ii)
-- `log/slog.NewRecord` (go-stdlib-more.yaml, propagator, pure)
-- `log/slog.Group` (go-stdlib-more.yaml, propagator, pure)
+- `log/slog.NewRecord` (go-stdlib-more.yaml, propagator, i)
+- `log/slog.Group` (go-stdlib-more.yaml, propagator, i)
 - `log/slog.SetDefault` (go-stdlib-more.yaml, propagator, pure)
 - `log/slog.Int64` (go-stdlib-more.yaml, propagator, pure)
 - `log/slog.Bool` (go-stdlib-more.yaml, propagator, pure)
 - `(*log/slog.Record).Add` (go-stdlib-more.yaml, propagator, pure)
 - `(*log/slog.Record).AddAttrs` (go-stdlib-more.yaml, propagator, pure)
 - `(log/slog.Record).Attrs` (go-stdlib-more.yaml, propagator, pure)
-- `(log/slog.Value).Resolve` (go-stdlib-more.yaml, propagator, pure)
+- `(log/slog.Value).Resolve` (go-stdlib-more.yaml, propagator, i)
 - `(log/slog.Value).Kind` (go-stdlib-more.yaml, propagator, pure)
-- `(log/slog.Value).Group` (go-stdlib-more.yaml, propagator, pure)
+- `(log/slog.Value).Group` (go-stdlib-more.yaml, propagator, i)
 - `(*log/slog.Logger).Enabled` (go-stdlib-more.yaml, propagator, pure)
 - `(log/slog.Leveler).Level` (go-stdlib-more.yaml, propagator, pure)
-- `(*log/slog.Level).UnmarshalText` (go-stdlib-more.yaml, propagator, pure)
+- `(*log/slog.Level).UnmarshalText` (go-stdlib-more.yaml, propagator, i)
 - `net/http.NotFoundHandler` (go-stdlib-more.yaml, propagator, pure)
 - `net/http.SetCookie` (go-stdlib-more.yaml, propagator, pure)
 - `(*net/http.ServeMux).Handle` (go-stdlib-more.yaml, propagator, pure)
@@ -155,15 +164,15 @@
 - `crypto/elliptic.P521` (go-stdlib-more.yaml, propagator, pure)
 - `crypto/ed25519.GenerateKey` (go-stdlib-more.yaml, propagator, pure)
 - `crypto/tls.Dial` (go-stdlib-more.yaml, propagator, pure)
-- `net/netip.ParseAddr` (go-stdlib-more.yaml, propagator, pure)
+- `net/netip.ParseAddr` (go-stdlib-more.yaml, propagator, i)
 - `(net/netip.Addr).IsLoopback` (go-stdlib-more.yaml, propagator, pure)
 - `encoding/json.Valid` (go-stdlib-more.yaml, propagator, pure)
-- `encoding/hex.Encode` (go-stdlib-more.yaml, propagator, pure)
-- `encoding/hex.AppendEncode` (go-stdlib-more.yaml, propagator, pure)
+- `encoding/hex.Encode` (go-stdlib-more.yaml, propagator, ii)
+- `encoding/hex.AppendEncode` (go-stdlib-more.yaml, propagator, i)
 - `unicode/utf8.ValidString` (go-stdlib-more.yaml, propagator, pure)
 - `math/rand.Float64` (go-stdlib-more.yaml, propagator, pure)
 - `hash/fnv.New128` (go-stdlib-more.yaml, propagator, pure)
-- `(*net/url.URL).RequestURI` (go-stdlib-more.yaml, propagator, pure)
+- `(*net/url.URL).RequestURI` (go-stdlib-more.yaml, propagator, i)
 - `crypto/x509.MarshalPKCS8PrivateKey` (go-stdlib-more.yaml, propagator, i)
 - `crypto/x509.MarshalPKIXPublicKey` (go-stdlib-more.yaml, propagator, i)
 - `crypto/x509.ParsePKCS1PrivateKey` (go-stdlib-more.yaml, propagator, i)
@@ -224,29 +233,17 @@
 
 ## Dart
 
-### 別の型の同名メンバ: 43
+### 別の型の同名メンバ: 25
 
+- `dart:async#Stream.forEach` (dart-async.yaml, propagator, iii) -> `dart:async#Future.forEach`
 - `dart:async#Completer.sync` (dart-async.yaml, propagator, i) -> `dart:async#Future.sync`
 - `dart:async#Stream.error` (dart-async.yaml, propagator, i) -> `dart:async#Future.error`
 - `dart:async#StreamIterator.current` (dart-async.yaml, propagator, i) -> `dart:async#Zone.current`
 - `dart:async#Stream.timeout` (dart-async.yaml, propagator, i) -> `dart:async#Future.timeout`
-- `dart:async#StreamSink.addError` (dart-async.yaml, propagator, ii) -> `dart:async#StreamController.addError`
 - `dart:async#StreamIterator.cancel` (dart-async.yaml, propagator, pure) -> `dart:async#StreamSubscription.cancel`, `dart:async#Timer.cancel`
 - `dart:async#StreamSink.close` (dart-async.yaml, propagator, pure) -> `dart:async#EventSink.close`, `dart:async#StreamController.close`
 - `dart:convert#HtmlEscape.convert` (dart-core.yaml, sanitizer, iv) -> `dart:convert#JsonEncoder.convert`, `dart:convert#LineSplitter.convert`
 - `dart:core#num.parse` (dart-core.yaml, propagator, i) -> `dart:core#DateTime.parse`, `dart:core#Uri.parse`, `dart:core#double.parse`, `dart:core#int.parse`
-- `dart:core#Iterable.reversed` (dart-core.yaml, propagator, i) -> `dart:core#List.reversed`
-- `dart:core#List.first` (dart-core.yaml, propagator, i) -> `dart:core#Iterable.first`
-- `dart:core#List.single` (dart-core.yaml, propagator, i) -> `dart:core#Iterable.single`
-- `dart:core#List.join` (dart-core.yaml, propagator, i) -> `dart:core#Iterable.join`
-- `dart:core#List.toList` (dart-core.yaml, propagator, i) -> `dart:core#Iterable.toList`
-- `dart:core#List.toSet` (dart-core.yaml, propagator, i) -> `dart:core#Iterable.toSet`
-- `dart:core#Set.first` (dart-core.yaml, propagator, i) -> `dart:core#Iterable.first`
-- `dart:core#Set.last` (dart-core.yaml, propagator, i) -> `dart:core#Iterable.last`, `dart:core#List.last`
-- `dart:core#Set.single` (dart-core.yaml, propagator, i) -> `dart:core#Iterable.single`
-- `dart:core#Set.join` (dart-core.yaml, propagator, i) -> `dart:core#Iterable.join`
-- `dart:core#Set.toList` (dart-core.yaml, propagator, i) -> `dart:core#Iterable.toList`
-- `dart:convert#Base64Codec.encode` (dart-core.yaml, propagator, i) -> `dart:convert#AsciiCodec.encode`, `dart:convert#Codec.encode`, `dart:convert#JsonCodec.encode`, `dart:convert#Utf8Codec.encode`
 - `dart:convert#Base64Codec.decode` (dart-core.yaml, propagator, i) -> `dart:convert#Codec.decode`, `dart:convert#JsonCodec.decode`, `dart:convert#Utf8Codec.decode`
 - `dart:convert#Converter.convert` (dart-core.yaml, propagator, i) -> `dart:convert#JsonEncoder.convert`, `dart:convert#LineSplitter.convert`
 - `dart:core#RangeError.value` (dart-core.yaml, propagator, i) -> `dart:core#ArgumentError.value`
@@ -254,9 +251,6 @@
 - `dart:io#HttpHeaders.value` (dart-io.yaml, propagator, i) -> `dart:io#HeaderValue.value`
 - `dart:io#Cookie.value` (dart-io.yaml, propagator, i) -> `dart:io#HeaderValue.value`
 - `dart:io#File.path` (dart-io.yaml, propagator, i) -> `dart:io#Directory.path`, `dart:io#FileSystemEntity.path`
-- `dart:io#File.resolveSymbolicLinksSync` (dart-io.yaml, propagator, i) -> `dart:io#Directory.resolveSymbolicLinksSync`, `dart:io#FileSystemEntity.resolveSymbolicLinksSync`, `dart:io#Link.resolveSymbolicLinksSync`
-- `dart:io#HttpResponse.write` (dart-io.yaml, propagator, ii) -> `dart:io#_StdSink.write`
-- `dart:io#HttpResponse.writeln` (dart-io.yaml, propagator, ii) -> `dart:io#_StdSink.writeln`
 - `dart:io#IOSink.write` (dart-misc.yaml, propagator, ii) -> `dart:io#_StdSink.write`
 - `dart:io#IOSink.writeln` (dart-misc.yaml, propagator, ii) -> `dart:io#_StdSink.writeln`
 - `dart:async#EventSink.addError` (dart-misc.yaml, propagator, ii) -> `dart:async#StreamController.addError`
@@ -264,13 +258,10 @@
 - `dart:typed_data#Uint32List.fromList` (dart-misc.yaml, propagator, i) -> `dart:typed_data#Uint8List.fromList`
 - `dart:typed_data#ByteData.sublistView` (dart-misc.yaml, propagator, i) -> `dart:typed_data#Uint8List.sublistView`
 - `dart:io#IOSink.close` (dart-misc.yaml, propagator, pure) -> `dart:io#HttpServer.close`, `dart:io#_StdSink.close`
-- `dart:io#HttpResponse.close` (dart-pure.yaml, propagator, pure) -> `dart:io#HttpServer.close`, `dart:io#_StdSink.close`
-- `dart:core#List.isEmpty` (dart-pure.yaml, propagator, pure) -> `dart:core#Iterable.isEmpty`, `dart:core#Map.isEmpty`, `dart:core#String.isEmpty`
-- `dart:core#List.isNotEmpty` (dart-pure.yaml, propagator, pure) -> `dart:core#Iterable.isNotEmpty`, `dart:core#Map.isNotEmpty`, `dart:core#String.isNotEmpty`, `dart:core#StringBuffer.isNotEmpty`
 - `dart:core#StringBuffer.isEmpty` (dart-pure.yaml, propagator, pure) -> `dart:core#Iterable.isEmpty`, `dart:core#Map.isEmpty`, `dart:core#String.isEmpty`
 - `dart:core#StringBuffer.clear` (dart-pure.yaml, propagator, pure) -> `dart:core#Set.clear`
 
-### 使われていない: 212
+### 使われていない: 214
 
 - `dart:async#StreamController.broadcast` (dart-async.yaml, propagator, i)
 - `dart:async#Future.new` (dart-async.yaml, propagator, i)
@@ -471,6 +462,8 @@
 - `package:http/http.dart#get` (dart-packages.yaml, propagator, i)
 - `package:http/http.dart#post` (dart-packages.yaml, propagator, i)
 - `package:http/http.dart#read` (dart-packages.yaml, propagator, i)
+- `package:path/src/context.dart#Context.absolute` (dart-path.yaml, propagator, i)
+- `package:path/src/context.dart#Context.toUri` (dart-path.yaml, propagator, i)
 - `dart:core#print` (dart-pure.yaml, propagator, pure)
 - `dart:core#Object.hashCode` (dart-pure.yaml, propagator, pure)
 - `dart:core#List.contains` (dart-pure.yaml, propagator, pure)
@@ -507,7 +500,7 @@
 - `http::HeaderValue::to_str` (rust-web.yaml, propagator, i) -> `actix_web::http::header::HeaderValue::to_str`, `object_store::HeaderValue::to_str`
 - `http::HeaderValue::as_bytes` (rust-web.yaml, propagator, i) -> `actix_web::http::header::HeaderValue::as_bytes`, `object_store::HeaderValue::as_bytes`
 
-### 別の型の同名メンバ: 59
+### 別の型の同名メンバ: 33
 
 - `tonic::metadata::MetadataMap::iter` (rust-grpc.yaml, propagator, i) -> `tonic::metadata::GetAll::iter`
 - `tonic::metadata::map::MetadataMap::iter` (rust-grpc.yaml, propagator, i) -> `tonic::metadata::GetAll::iter`
@@ -517,51 +510,25 @@
 - `serde::__private::from_utf8_lossy` (rust-misc.yaml, propagator, i) -> `serde::__private228::from_utf8_lossy`
 - `std::result::Result::map_or` (rust-misc.yaml, propagator, iii) -> `std::option::Option::map_or`
 - `std::result::Result::map_or_else` (rust-misc.yaml, propagator, iii) -> `std::option::Option::map_or_else`
-- `std::iter::Iterator::windows` (rust-misc.yaml, propagator, i) -> `std::slice::windows`
 - `std::iter::Iterator::last` (rust-misc.yaml, propagator, i) -> `std::slice::last`
 - `std::slice::split` (rust-misc.yaml, propagator, i) -> `std::str::split`
-- `std::vec::Vec::sort` (rust-misc.yaml, propagator, iii) -> `std::slice::sort`
-- `std::vec::Vec::reverse` (rust-misc.yaml, propagator, i) -> `std::cmp::Ordering::reverse`, `std::slice::reverse`
 - `std::collections::BTreeMap::keys` (rust-misc.yaml, propagator, i) -> `std::collections::HashMap::keys`
 - `tokio::task::spawn` (rust-misc.yaml, propagator, iii) -> `tokio::runtime::Runtime::spawn`, `tokio::task::JoinSet::spawn`
 - `tokio::io::AsyncWriteExt::write` (rust-misc.yaml, propagator, ii) -> `tokio::fs::write`, `tokio::sync::RwLock::write`
 - `tokio::io::AsyncReadExt::read` (rust-misc.yaml, propagator, ii) -> `tokio::fs::OpenOptions::read`, `tokio::fs::read`, `tokio::sync::RwLock::read`
 - `serde::__private::missing_field` (rust-misc.yaml, propagator, pure) -> `serde::__private228::de::missing_field`, `serde::de::Error::missing_field`
-- `std::sync::atomic::AtomicBool::load` (rust-misc.yaml, propagator, pure) -> `std::sync::atomic::Atomic::load`
-- `std::sync::atomic::AtomicBool::store` (rust-misc.yaml, propagator, pure) -> `std::sync::atomic::Atomic::store`
-- `std::sync::atomic::AtomicUsize::load` (rust-misc.yaml, propagator, pure) -> `std::sync::atomic::Atomic::load`
-- `std::sync::atomic::AtomicUsize::store` (rust-misc.yaml, propagator, pure) -> `std::sync::atomic::Atomic::store`
-- `std::sync::atomic::AtomicU64::load` (rust-misc.yaml, propagator, pure) -> `std::sync::atomic::Atomic::load`
-- `std::sync::atomic::AtomicU64::store` (rust-misc.yaml, propagator, pure) -> `std::sync::atomic::Atomic::store`
-- `std::sync::atomic::AtomicI64::load` (rust-misc.yaml, propagator, pure) -> `std::sync::atomic::Atomic::load`
-- `std::sync::atomic::AtomicI64::store` (rust-misc.yaml, propagator, pure) -> `std::sync::atomic::Atomic::store`
-- `std::sync::atomic::AtomicBool::swap` (rust-misc.yaml, propagator, pure) -> `std::sync::atomic::Atomic::swap`
 - `std::process::Command::args` (rust-std.yaml, sink, iv) -> `std::env::args`
 - `std::convert::AsMut::as_mut` (rust-std.yaml, propagator, i) -> `std::option::Option::as_mut`, `std::pin::Pin::as_mut`
+- `std::borrow::Borrow::borrow` (rust-std.yaml, propagator, i) -> `std::cell::RefCell::borrow`
 - `std::sync::Mutex::into_inner` (rust-std.yaml, propagator, i) -> `std::sync::PoisonError::into_inner`
 - `std::sync::RwLock::into_inner` (rust-std.yaml, propagator, i) -> `std::sync::PoisonError::into_inner`
 - `std::string::String::with_capacity` (rust-std.yaml, propagator, i) -> `std::collections::HashMap::with_capacity`, `std::collections::VecDeque::with_capacity`, `std::vec::Vec::with_capacity`
-- `std::str::to_string` (rust-std.yaml, propagator, i) -> `std::string::ToString::to_string`
-- `std::str::to_owned` (rust-std.yaml, propagator, i) -> `std::borrow::ToOwned::to_owned`
-- `std::string::String::trim` (rust-std.yaml, propagator, i) -> `std::str::trim`
-- `std::string::String::to_lowercase` (rust-std.yaml, propagator, i) -> `std::str::to_lowercase`
-- `std::string::String::to_uppercase` (rust-std.yaml, propagator, i) -> `std::char::methods::to_uppercase`, `std::str::to_uppercase`
-- `std::vec::Vec::join` (rust-std.yaml, propagator, i) -> `std::path::Path::join`, `std::slice::join`, `std::thread::JoinHandle::join`
-- `std::path::PathBuf::join` (rust-std.yaml, propagator, i) -> `std::path::Path::join`, `std::slice::join`, `std::thread::JoinHandle::join`
 - `std::iter::Iterator::last` (rust-std.yaml, propagator, i) -> `std::slice::last`
-- `std::vec::Vec::first` (rust-std.yaml, propagator, i) -> `std::slice::first`
-- `std::vec::Vec::last` (rust-std.yaml, propagator, i) -> `std::slice::last`
-- `std::vec::Vec::iter` (rust-std.yaml, propagator, i) -> `std::collections::BTreeMap::iter`, `std::collections::HashMap::iter`, `std::collections::HashSet::iter`, `std::option::Option::iter`, `std::path::Path::iter`, `std::slice::iter`
-- `std::vec::Vec::into_iter` (rust-std.yaml, propagator, i) -> `std::iter::IntoIterator::into_iter`
-- `std::collections::HashMap::into_iter` (rust-std.yaml, propagator, i) -> `std::iter::IntoIterator::into_iter`
-- `std::slice::to_owned` (rust-std.yaml, propagator, i) -> `std::borrow::ToOwned::to_owned`
 - `std::fmt::Arguments::as_str` (rust-std.yaml, propagator, i) -> `std::string::String::as_str`
 - `std::string::String::insert` (rust-std.yaml, propagator, ii) -> `std::collections::BTreeMap::insert`, `std::collections::HashMap::insert`, `std::collections::HashSet::insert`, `std::vec::Vec::insert`
-- `std::vec::Vec::extend` (rust-std.yaml, propagator, ii) -> `std::iter::Extend::extend`
 - `std::io::Read::read_to_string` (rust-std.yaml, propagator, ii) -> `std::fs::read_to_string`
 - `std::io::BufRead::read_line` (rust-std.yaml, propagator, ii) -> `std::io::Stdin::read_line`
 - `std::io::Write::write` (rust-std.yaml, propagator, ii) -> `std::fs::OpenOptions::write`, `std::fs::write`, `std::hash::Hasher::write`, `std::sync::RwLock::write`
-- `std::vec::Vec::iter_mut` (rust-std.yaml, propagator, i) -> `std::slice::iter_mut`
 - `std::ptr::read` (rust-std.yaml, propagator, i) -> `std::fs::read`, `std::sync::RwLock::read`
 - `std::ptr::write` (rust-std.yaml, propagator, i) -> `std::fs::OpenOptions::write`, `std::fs::write`, `std::hash::Hasher::write`, `std::sync::RwLock::write`
 - `std::mem::swap` (rust-std.yaml, propagator, i) -> `std::sync::atomic::Atomic::swap`
@@ -569,7 +536,7 @@
 - `std::pin::Pin::into_inner` (rust-std.yaml, propagator, i) -> `std::sync::PoisonError::into_inner`
 - `std::pin::pin` (rust-std.yaml, propagator, i) -> `std::boxed::Box::pin`
 
-### 使われていない: 153
+### 使われていない: 149
 
 - `std::env::var_os` (rust-config.yaml, config_read, iv)
 - `std::env::vars` (rust-config.yaml, config_read, iv)
@@ -656,16 +623,12 @@
 - `sqlx::query` (rust-std.yaml, sink, iv)
 - `sqlx::query_as` (rust-std.yaml, sink, iv)
 - `sqlx::query_scalar` (rust-std.yaml, sink, iv)
-- `std::borrow::Borrow::borrow` (rust-std.yaml, propagator, i)
 - `std::string::String::into_bytes` (rust-std.yaml, propagator, i)
 - `std::string::String::into_boxed_str` (rust-std.yaml, propagator, i)
 - `std::path::PathBuf::from` (rust-std.yaml, propagator, i)
 - `std::ffi::OsStr::new` (rust-std.yaml, propagator, i)
 - `std::ffi::OsString::from` (rust-std.yaml, propagator, i)
 - `std::rc::Rc::new` (rust-std.yaml, propagator, i)
-- `std::cell::RefCell::new` (rust-std.yaml, propagator, i)
-- `std::cell::RefCell::borrow` (rust-std.yaml, propagator, i)
-- `std::cell::RefCell::borrow_mut` (rust-std.yaml, propagator, i)
 - `std::sync::Mutex::try_lock` (rust-std.yaml, propagator, i)
 - `std::sync::RwLock::try_read` (rust-std.yaml, propagator, i)
 - `std::sync::RwLock::try_write` (rust-std.yaml, propagator, i)

@@ -71,16 +71,7 @@ Future<void> main() async {
     it.forEach((x) { r.see([x]); });
     add('dart:core#Iterable.forEach', recv, r, '');
   }
-  {
-    final r = Rec();
-    <String>['RECV'].forEach((x) { r.see([x]); });
-    add('dart:core#List.forEach', recv, r, '');
-  }
-  {
-    final r = Rec();
-    <String>{'RECV'}.forEach((x) { r.see([x]); });
-    add('dart:core#Set.forEach', recv, r, '');
-  }
+  // a forEach on a List or a Set is written by the extractor as Iterable.forEach (they inherit it), so it is the one row
   {
     final r = Rec();
     <String, String>{'RECV': 'RECV'}.forEach((k, v) { r.see([k, v]); });

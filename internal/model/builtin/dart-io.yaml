@@ -73,14 +73,16 @@ propagators:
     flows: [{from: recv, to: result}, {from: args, to: result}]
   - symbol: dart:io#File.path
     flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:io#Directory.path
+    flows: [{from: recv, to: result}, {from: args, to: result}]
   - symbol: dart:io#File.uri
     flows: [{from: recv, to: result}, {from: args, to: result}]
-  - symbol: dart:io#File.resolveSymbolicLinksSync
+  - symbol: dart:io#FileSystemEntity.resolveSymbolicLinksSync
     flows: [{from: recv, to: result}, {from: args, to: result}]
-  - symbol: dart:io#HttpResponse.write
-    flows: [{from: arg0, to: recv}]
-  - symbol: dart:io#HttpResponse.writeln
-    flows: [{from: arg0, to: recv}]
+  - symbol: dart:io#Directory.resolveSymbolicLinksSync
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:io#Link.resolveSymbolicLinksSync
+    flows: [{from: recv, to: result}, {from: args, to: result}]
   - symbol: dart:io#HttpResponse.add
     flows: [{from: arg0, to: recv}]
   - symbol: dart:io#HttpResponse.addStream

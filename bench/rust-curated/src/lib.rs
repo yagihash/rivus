@@ -10,6 +10,7 @@ pub mod modelled;
 pub mod nesting;
 pub mod parseable;
 pub mod pass_closure;
+pub mod spelling;
 pub mod structs;
 
 // The source and the sink of the benchmark.

@@ -1,0 +1,34 @@
+# package:path, the path library of the Dart team (https://pub.dev/packages/path): it works on text. What it
+# builds a path from is in the result, so these functions are not pure (docs/MODELING.md): the arguments flow to the
+# result. TestZooPathDart calls each of them with a marker, in two variants, and holds the rows to what came out
+# (bench/zoo-dart/pure). The top-level functions are those of the default context; the ones of a Context are the same
+# with the receiver (the style and the current directory it was made with) added.
+ruleset: rivus/dart/path@1
+
+propagators:
+  - symbol: package:path/path.dart#join
+    flows: [{from: args, to: result}]
+  - symbol: package:path/path.dart#joinAll
+    flows: [{from: args, to: result}]
+  - symbol: package:path/path.dart#normalize
+    flows: [{from: args, to: result}]
+  # relative(path, from: base): the base only decides how many "../" there are, so its text is not in the result
+  # (the run shows it: bench/zoo-dart/pure, part "from")
+  - symbol: package:path/path.dart#relative
+    flows: [{from: arg0, to: result}]
+  - symbol: package:path/path.dart#absolute
+    flows: [{from: args, to: result}]
+  - symbol: package:path/path.dart#toUri
+    flows: [{from: args, to: result}]
+  - symbol: package:path/src/context.dart#Context.join
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: package:path/src/context.dart#Context.joinAll
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: package:path/src/context.dart#Context.normalize
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: package:path/src/context.dart#Context.relative
+    flows: [{from: recv, to: result}, {from: arg0, to: result}]
+  - symbol: package:path/src/context.dart#Context.absolute
+    flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: package:path/src/context.dart#Context.toUri
+    flows: [{from: recv, to: result}, {from: args, to: result}]

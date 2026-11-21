@@ -36,8 +36,6 @@ propagators:
     pure: true
   - symbol: dart:core#List.contains
     pure: true
-  - symbol: dart:io#HttpResponse.close
-    pure: true
   - symbol: dart:core#int.isEven
     pure: true
   - symbol: dart:core#int.isOdd
@@ -49,10 +47,6 @@ propagators:
   - symbol: dart:core#Iterable.isEmpty
     pure: true
   - symbol: dart:core#Iterable.isNotEmpty
-    pure: true
-  - symbol: dart:core#List.isEmpty
-    pure: true
-  - symbol: dart:core#List.isNotEmpty
     pure: true
   - symbol: dart:core#Map.isEmpty
     pure: true

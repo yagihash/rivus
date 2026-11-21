@@ -10,20 +10,20 @@
 
 |  | Go | Dart | Rust |
 | --- | --- | --- | --- |
-| 組み込みの行(全部) | 585 | 476 | 553 |
-| **(A) 量**: 標準ライブラリの公開 API(型から列挙)のうち、組み込みの行がある | 383 / 2678 (14%) | 未 | 未 |
-|   うち型では「書く」(ii)関数に、書き込みを運ぶ行(ii)がある | 27 / 131 (21%)(行がある関数の中で。型の判定は上界) | 未 | 未 |
-| **(B) 需要**: 実コードの、本体のないライブラリ関数への呼び出し(箇所)のうち、組み込みの行がある | 5936 / 6397 (93%) | 2503 / 4421 (57%); `--include-tests`(参考) 3660 / 14428 (25%) | 37653 / 69355 (54%) |
-|   異なる呼び先(関数の種類。コードごとの重複あり)のうち、組み込みの行がある | 672 / 882 (76%) | 201 / 522 (39%) | 289 / 1522 (19%) |
-|   うち標準ライブラリへの呼び出し(箇所) | 5936 / 6397 (93%) | 2487 / 2959 (84%); `--include-tests`(参考) 3641 / 4481 (81%) | 35636 / 37079 (96%) |
-|   形 (ii) と (ii?)(書く)の箇所のうち、組み込みの行がある | 421 / 509 (83%)(名前・型の推定を含む) | 401 / 402 (100%)(名前・型の推定を含む) | 666 / 842 (79%)(名前・型の推定を含む) |
-|   形 (iii)(コールバック)の箇所のうち、組み込みの行がある | 0 / 21 (0%)(名前・型の推定。行があっても中は運ばない) | 276 / 324 (85%)(名前・型の推定。行があっても中は運ばない) | 1301 / 1436 (91%)(名前・型の推定。行があっても中は運ばない) |
+| 組み込みの行(全部) | 599 | 477 | 540 |
+| **(A) 量**: 標準ライブラリの公開 API(型から列挙)のうち、組み込みの行がある | 396 / 2678 (15%) | 未 | 未 |
+|   うち型では「書く」(ii)関数に、書き込みを運ぶ行(ii)がある | 27 / 133 (20%)(行がある関数の中で。型の判定は上界) | 未 | 未 |
+| **(B) 需要**: 実コードの、本体のないライブラリ関数への呼び出し(箇所)のうち、組み込みの行がある | 5948 / 6397 (93%) | 2867 / 4421 (65%); `--include-tests`(参考) 4774 / 14428 (33%) | 38151 / 69234 (55%) |
+|   異なる呼び先(関数の種類。コードごとの重複あり)のうち、組み込みの行がある | 676 / 882 (77%) | 217 / 522 (42%) | 302 / 1516 (20%) |
+|   うち標準ライブラリへの呼び出し(箇所) | 5948 / 6397 (93%) | 2517 / 2959 (85%); `--include-tests`(参考) 3701 / 4481 (83%) | 35652 / 37019 (96%) |
+|   形 (ii) と (ii?)(書く)の箇所のうち、組み込みの行がある | 421 / 507 (83%)(名前・型の推定を含む) | 401 / 402 (100%)(名前・型の推定を含む) | 666 / 839 (79%)(名前・型の推定を含む) |
+|   形 (iii)(コールバック)の箇所のうち、組み込みの行がある | 0 / 11 (0%)(名前・型の推定。行があっても中は運ばない) | 276 / 303 (91%)(名前・型の推定。行があっても中は運ばない) | 1305 / 1436 (91%)(名前・型の推定。行があっても中は運ばない) |
 |   汚れた値が**届いた**呼び出しのうち、組み込みの行がある | 未(コアの診断が足りない。下の 2) | 未 | 未 |
-| **(C) 正しさ**: `pure` の行のうち、実行で確かめた | 確かめた部分あり(299 行が pure。下の 3) | 未(94 行が pure) | 未(86 行が pure) |
-| **(D) 当たっているか**: 鍵が呼び出しの行のうち、どの IR にも当たらない | 215 / 581 (37%) | 255 / 473 (54%) | 229 / 530 (43%) |
+| **(C) 正しさ**: `pure` の行のうち、実行で確かめた | 確かめた部分あり(272 行が pure。下の 3) | 未(93 行が pure) | 未(82 行が pure) |
+| **(D) 当たっているか**: 鍵が呼び出しの行のうち、どの IR にも当たらない | 224 / 595 (38%) | 239 / 474 (50%) | 199 / 517 (38%) |
 |   うち 綴りの疑い / API 不在 | 0 / 0 | 0 / - | 17 / - |
-|   うち 別の型の同名メンバ(継承・Deref・trait の疑い) | 0 | 43 | 59 |
-|   うち 使われていない(似た名前も IR にない) | 215 | 212 | 153 |
+|   うち 別の型の同名メンバ(継承・Deref・trait の疑い) | 0 | 25 | 33 |
+|   うち 使われていない(似た名前も IR にない) | 224 | 214 | 149 |
 
 分母は言語ごとに違う(読んだコードが違う)ので、割合どうしを比べない。入力は 6 を見る。
 
@@ -34,21 +34,21 @@
 | 形 | 標準ライブラリの API | 組み込みにある | 割合 |
 | --- | --- | --- | --- |
 | (i) 値を返すだけ | 1037 | 198 | 19% |
-| (ii) 引数・受け手に書く | 1133 | 131 | 12% |
+| (ii) 引数・受け手に書く | 1133 | 133 | 12% |
 | (ii?) 書き先になりうる型(スライス・マップ)だけ。上界 | 280 | 28 | 10% |
-| (iii) コールバックを呼ぶ | 152 | 7 | 5% |
+| (iii) コールバックを呼ぶ | 152 | 18 | 12% |
 | 運ばない型(結果も書き先もない) | 76 | 19 | 25% |
-| **計** | 2678 | 383 | 14% |
+| **計** | 2678 | 396 | 15% |
 
 **型では書く・コールバックを呼ぶ関数に、組み込みの行があるとき、その行は何と言っているか**(行の形。(ii) の行だけが書き込みを運ぶ。(i) は、書き込みを落とす。pure は、書き込みも切る。型の判定は上界なので、(i) と pure の中には、読むだけの関数が入る):
 
 | 型から見た形 | モデルがある | 行の形 (ii) | (i) | pure | (iii) | (iv) |
 | --- | --- | --- | --- | --- | --- | --- |
-| ii | 131 | 27 | 42 | 51 | 0 | 11 |
-| ii? | 28 | 5 | 3 | 18 | 0 | 2 |
-| iii | 7 | 0 | 1 | 6 | 0 | 0 |
+| ii | 133 | 27 | 56 | 39 | 0 | 11 |
+| ii? | 28 | 6 | 5 | 15 | 0 | 2 |
+| iii | 18 | 0 | 1 | 14 | 3 | 0 |
 
-Go の呼び出しの行 581 のうち、標準ライブラリの名前 574、それ以外(grpc・protobuf・x/* など)7。
+Go の呼び出しの行 595 のうち、標準ライブラリの名前 588、それ以外(grpc・protobuf・x/* など)7。
 
 **Dart と Rust は未**(形が決まってから。Dart の `dart:*` は型のライブラリ URI から、Rust の `std` は rustdoc の JSON から、同じ基準で列挙できる見込み)。
 
@@ -62,10 +62,10 @@ Go の呼び出しの行 581 のうち、標準ライブラリの名前 574、�
 
 | 入力 | ライブラリへの呼び出し(箇所) | モデルがある箇所 | うち標準ライブラリへ(箇所 / モデルあり) | 異なる呼び先 | モデルがある呼び先 | (Go)本体を読む依存への呼び出し(数えない) | 解析の `unmodeled_library_call` | `unmodeled_top`: 汚れが届いた(上位 20 の合計) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| casdoor | 1668 | 1551 / 1668 (93%) | 1551 / 1668 (93%) | 182 | 130 / 182 (71%) | 1253 | 78 | 3874 (20 個) |
-| gin-vue-admin | 1247 | 1138 / 1247 (91%) | 1138 / 1247 (91%) | 207 | 165 / 207 (80%) | 1547 | 53 | 6268 (20 個) |
-| gogs | 2918 | 2766 / 2918 (95%) | 2766 / 2918 (95%) | 347 | 269 / 347 (78%) | 4766 | 172 | 4306 (20 個) |
-| gophish | 564 | 481 / 564 (85%) | 481 / 564 (85%) | 146 | 108 / 146 (74%) | 543 | 76 | 1087 (20 個) |
+| casdoor | 1668 | 1551 / 1668 (93%) | 1551 / 1668 (93%) | 182 | 130 / 182 (71%) | 1253 | 128 | 3894 (20 個) |
+| gin-vue-admin | 1247 | 1139 / 1247 (91%) | 1139 / 1247 (91%) | 207 | 166 / 207 (80%) | 1547 | 112 | 6268 (20 個) |
+| gogs | 2918 | 2777 / 2918 (95%) | 2777 / 2918 (95%) | 347 | 272 / 347 (78%) | 4766 | 291 | 4306 (20 個) |
+| gophish | 564 | 481 / 564 (85%) | 481 / 564 (85%) | 146 | 108 / 146 (74%) | 543 | 92 | 1068 (20 個) |
 
 形ごと(実コードの合計。参考の入力は入れない):
 
@@ -73,12 +73,12 @@ Go の呼び出しの行 581 のうち、標準ライブラリの名前 574、�
 
 | 形 | ライブラリへの呼び出し(箇所) | モデルがある箇所 | 割合 |
 | --- | --- | --- | --- |
-| (i) 値を返すだけ | 3594 | 3536 | 98% |
-| (ii) 引数・受け手に書く | 496 | 421 | 85% |
+| (i) 値を返すだけ | 3730 | 3672 | 98% |
+| (ii) 引数・受け手に書く | 494 | 421 | 85% |
 | (ii?) 書き先になりうる型(スライス・マップ)だけ。上界 | 13 | 0 | 0% |
-| (iii) コールバックを呼ぶ | 21 | 0 | 0% |
+| (iii) コールバックを呼ぶ | 11 | 0 | 0% |
 | (iv) source / sink / sanitizer / boundary | 343 | 343 | 100% |
-| pure(流れを切る) | 1636 | 1636 | 100% |
+| pure(流れを切る) | 1512 | 1512 | 100% |
 | 運ばない型(結果も書き先もない) | 150 | 0 | 0% |
 | 形が分からない(モデルがなく、型も引けない) | 144 | 0 | 0% |
 
@@ -138,8 +138,8 @@ Go の呼び出しの行 581 のうち、標準ライブラリの名前 574、�
 
 | 入力 | ライブラリへの呼び出し(箇所) | モデルがある箇所 | うち標準ライブラリへ(箇所 / モデルあり) | 異なる呼び先 | モデルがある呼び先 | (Go)本体を読む依存への呼び出し(数えない) | 解析の `unmodeled_library_call` | `unmodeled_top`: 汚れが届いた(上位 20 の合計) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| dart-pub | 4421 | 2503 / 4421 (57%) | 2487 / 2959 (84%) | 522 | 201 / 522 (39%) | - | 909 | 1273 (20 個) |
-| dart-pub-tests(参考。合計に入れない) | 14428 | 3660 / 14428 (25%) | 3641 / 4481 (81%) | 679 | 235 / 679 (35%) | - | - | - |
+| dart-pub | 4421 | 2867 / 4421 (65%) | 2517 / 2959 (85%) | 522 | 217 / 522 (42%) | - | 597 | 840 (20 個) |
+| dart-pub-tests(参考。合計に入れない) | 14428 | 4774 / 14428 (33%) | 3701 / 4481 (83%) | 679 | 251 / 679 (37%) | - | - | - |
 
 **Dart の入口(ADR-073。この表の入力の数ではなく、Flutter のアプリの測定の記録)**: フレームワークが呼ぶメソッド(依存の型のメソッドの上書き。`build`、`initState`、`dispose` など)を入口に足した。`flutter/samples`(`a5bccd24`)の 6 つのアプリ(`--no-deps`)で、入口から届く関数は、411 のうち 65(16%)から 403(98%)に。LocalSend の `app/` は 20,522 のうち 1,546(7.5%)から 19,750(96%)に。finding の `reachability` は `not_from_entry` から `from_framework_callback` に変わる(finding の集合は同じ)。dart-pub(`main` のある CLI。フレームワークの上書きがない)は変わらない。
 
@@ -149,32 +149,32 @@ Go の呼び出しの行 581 のうち、標準ライブラリの名前 574、�
 
 | 形 | ライブラリへの呼び出し(箇所) | モデルがある箇所 | 割合 |
 | --- | --- | --- | --- |
-| (i) 値を返すだけ | 1094 | 1094 | 100% |
+| (i) 値を返すだけ | 1437 | 1437 | 100% |
 | (ii) 引数・受け手に書く | 401 | 401 | 100% |
 | (ii?) 書き先になりうる型(スライス・マップ)だけ。上界 | 1 | 0 | 0% |
-| (iii) コールバックを呼ぶ | 324 | 276 | 85% |
+| (iii) コールバックを呼ぶ | 303 | 276 | 91% |
 | (iv) source / sink / sanitizer / boundary | 107 | 107 | 100% |
-| pure(流れを切る) | 625 | 625 | 100% |
-| 形が分からない(モデルがなく、型も引けない) | 1869 | 0 | 0% |
+| pure(流れを切る) | 646 | 646 | 100% |
+| 形が分からない(モデルがなく、型も引けない) | 1526 | 0 | 0% |
 
 **dart-pub**: 汚れた値が届いた、モデルのない呼び先の上位(`reached` = 届いた回数、`on_path` = finding の経路に載った数):
 
 | 呼び先 | reached | on_path | 形 |
 | --- | --- | --- | --- |
-| `package:path/path.dart#join` | 272 | 1 | ? |
 | `package:args/command_runner.dart#Command.usageException` | 158 | 0 | ? |
-| `package:path/path.dart#normalize` | 116 | 1 | ? |
-| `package:path/path.dart#relative` | 75 | 0 | ? |
 | `package:args/command_runner.dart#Command.addSubcommand` | 74 | 0 | ? |
-| `dart:core#Set.contains` | 69 | 0 | ? |
-| `package:path/path.dart#absolute` | 66 | 1 | ? |
-| `package:yaml/src/yaml_node.dart#YamlNode.span` | 59 | 0 | ? |
+| `dart:core#Set.contains` | 70 | 0 | ? |
+| `package:yaml/src/yaml_node.dart#YamlNode.span` | 60 | 0 | ? |
+| `package:path/path.dart#dirname` | 50 | 4 | ? |
+| `package:args/command_runner.dart#CommandRunner.addCommand` | 46 | 0 | ? |
+| `package:path/path.dart#canonicalize` | 36 | 0 | ? |
+| `dart:core#List.removeWhere` | 31 | 0 | iii |
 
 ### Rust
 
 | 入力 | ライブラリへの呼び出し(箇所) | モデルがある箇所 | うち標準ライブラリへ(箇所 / モデルあり) | 異なる呼び先 | モデルがある呼び先 | (Go)本体を読む依存への呼び出し(数えない) | 解析の `unmodeled_library_call` | `unmodeled_top`: 汚れが届いた(上位 20 の合計) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| parseable | 69355 | 37653 / 69355 (54%) | 35636 / 37079 (96%) | 1522 | 289 / 1522 (19%) | - | 20528 | 7751 (20 個) |
+| parseable | 69234 | 38151 / 69234 (55%) | 35652 / 37019 (96%) | 1516 | 302 / 1516 (20%) | - | 20383 | 7490 (20 個) |
 
 形ごと(実コードの合計。参考の入力は入れない):
 
@@ -182,22 +182,22 @@ Go の呼び出しの行 581 のうち、標準ライブラリの名前 574、�
 
 | 形 | ライブラリへの呼び出し(箇所) | モデルがある箇所 | 割合 |
 | --- | --- | --- | --- |
-| (i) 値を返すだけ | 28883 | 28883 | 100% |
+| (i) 値を返すだけ | 28956 | 28956 | 100% |
 | (ii) 引数・受け手に書く | 666 | 666 | 100% |
-| (ii?) 書き先になりうる型(スライス・マップ)だけ。上界 | 176 | 0 | 0% |
-| (iii) コールバックを呼ぶ | 1436 | 1301 | 91% |
+| (ii?) 書き先になりうる型(スライス・マップ)だけ。上界 | 173 | 0 | 0% |
+| (iii) コールバックを呼ぶ | 1436 | 1305 | 91% |
 | (iv) source / sink / sanitizer / boundary | 141 | 141 | 100% |
-| pure(流れを切る) | 6662 | 6662 | 100% |
-| 形が分からない(モデルがなく、型も引けない) | 31391 | 0 | 0% |
+| pure(流れを切る) | 7083 | 7083 | 100% |
+| 形が分からない(モデルがなく、型も引けない) | 30779 | 0 | 0% |
 
 **parseable**: 汚れた値が届いた、モデルのない呼び先の上位(`reached` = 届いた回数、`on_path` = finding の経路に載った数):
 
 | 呼び先 | reached | on_path | 形 |
 | --- | --- | --- | --- |
-| `tracing::field::FieldSet::value_set_all` | 1274 | 0 | ? |
-| `tracing::__macro_support::__tracing_log` | 948 | 0 | ? |
-| `tracing::field::debug` | 836 | 0 | ? |
-| `tracing::field::display` | 830 | 0 | ? |
+| `tracing::field::FieldSet::value_set_all` | 1260 | 0 | ? |
+| `tracing::__macro_support::__tracing_log` | 941 | 0 | ? |
+| `tracing::field::debug` | 758 | 0 | ? |
+| `tracing::field::display` | 758 | 0 | ? |
 | `serde::de::MapAccess::next_value` | 577 | 0 | ? |
 | `serde::ser::SerializeStruct::serialize_field` | 477 | 0 | ? |
 | `tracing::Event::dispatch` | 426 | 0 | ? |
@@ -209,35 +209,12 @@ Go の呼び出しの行 581 のうち、標準ライブラリの名前 574、�
 
 |  | Go | Dart | Rust |
 | --- | --- | --- | --- |
-| `pure` の行(実数。行 = 呼び出しの名前ごと) | 299 | 94 | 86 |
-| `pure` の実行の検査(`TestZooPure*`): 呼んだ結果の部分 / うち誤り | 50 / 18 | 未(検査がない) | 未(検査がない) |
+| `pure` の行(実数。行 = 呼び出しの名前ごと) | 272 | 93 | 82 |
+| `pure` の実行の検査(`TestZooPure*`): 呼んだ結果の部分 / うち誤り | (`-zoo` なし) | 未(検査がない) | 未(検査がない) |
 | 表 S(組み込みの全行を、行ごとに実行で確かめる) | `pure` の一部だけ(上)。propagator / sanitizer / source / sink の行は未 | 未 | 未 |
-| zoo(共通の形のマス): マス / ケース / 出る / `@miss` | 30 / 92 / 26 of 32 / 6 | 22 / 76 / 25 of 32 / 7 | 49 / 167 / 49 of 69 / 20 |
+| zoo(共通の形のマス): マス / ケース / 出る / `@miss` | (`-zoo` なし) | (`-zoo` なし) | (`-zoo` なし) |
 
-zoo のテストの出力(`go test ./cmd/rivus -run 'TestZooPureGo|TestZooGo|TestZooDart' -v` の記録の行):
-
-```
-6 findings have an assumed_call on their path
-zoo-dart: cells 22 / cases 76 | found 25 / 32 | @miss 7 (trace 4, silent 3, no rule 0) | fixed reported wrongly 0 | decoys reported wrongly 5 / 22 (with the trace container_element_imprecision 3, without 2) | carry map[] | manual 0 (0.0%) | run and annotation disagree 0 | statements not run 0
-zoo-dart: rivus: 45 flows found, 57 sinks quiet, 9 flows not found (@miss), 10 reported wrongly (@fp)
-zoo-dart: common cells 14 | found in zoo-go and not in Dart 0 (@ref(PARITY)) | only in Dart: 8 with @na(go: reason), 0 common and not yet in zoo-go | cells of zoo-go that Dart has no counterpart of (na.txt) 3, not written yet (stage 3) 13
-zoo-dart silent misses: 4 / 9 (44%)
---- PASS: TestZooDart (15.09s)
-zoo-go pure: 50 parts called, 50 of them of pure rows (the model has 479 pure rows), 18 wrong (R-03)
---- PASS: TestZooPureGo (0.90s)
-0 findings have an assumed_call on their path
-zoo-rust: cells 49 / cases 167 | found 49 / 69 | @miss 20 (trace 7, silent 13, no rule 0) | fixed reported wrongly 4 | decoys reported wrongly 5 / 49 (with the trace container_element_imprecision 1, without 7) | carry map[] | manual 0 (0.0%) | run and annotation disagree 0 | statements not run 0
-zoo-rust: rivus: 88 flows found, 137 sinks quiet, 31 flows not found (@miss), 13 reported wrongly (@fp)
-zoo-rust silent misses: 19 / 31 (61%)
-zoo-rust: parity with zoo-go: common cells 30 | common vulnerable flows 32 (found in both 26, missed in both 4) | found in Go and not in Rust 2 [dyn-generics-ptr-vuln state-receiver-field-across-entries-vuln] | decoys reported in Rust and not in Go 3 [dyn-http-middleware-chain-decoy dyn-sink-in-method-iface-decoy state-save-restore-decoy]
-zoo-rust: vulnerable flows found 49 / 69
---- PASS: TestZooRust (2.73s)
-4 findings have an assumed_call on their path
-zoo-go: cells 30 / cases 92 | found 26 / 32 | @miss 6 (trace 2, silent 4, no rule 0) | fixed reported wrongly 0 | decoys reported wrongly 2 / 30 (with the trace container_element_imprecision 2, without 0) | carry map[] | manual 0 (0.0%) | run and annotation disagree 0 | statements not run 0
-zoo-go: rivus: 53 flows found, 88 sinks quiet, 10 flows not found (@miss), 4 reported wrongly (@fp)
---- PASS: TestZooGo (1.75s)
-ok  	github.com/yagihash/rivus/cmd/rivus	21.633s
-```
+(zoo のテストの出力は `-zoo` で渡す)
 
 ## 4. (D) 当たっているか: どの IR にも当たらなかった行
 
@@ -245,24 +222,24 @@ ok  	github.com/yagihash/rivus/cmd/rivus	21.633s
 
 |  | Go | Dart | Rust |
 | --- | --- | --- | --- |
-| 組み込みの行 | 585 | 476 | 553 |
-| 鍵が呼び出しの行(分母) | 581 | 473 | 530 |
-| **当たった行**(どれかの IR) | 366 / 581 (63%) | 218 / 473 (46%) | 301 / 530 (57%) |
-|   うち実コードの IR に当たった | 361 / 581 (62%) | 214 / 473 (45%) | 298 / 530 (56%) |
-| **当たらなかった行** | 215 / 581 (37%) | 255 / 473 (54%) | 229 / 530 (43%) |
+| 組み込みの行 | 599 | 477 | 540 |
+| 鍵が呼び出しの行(分母) | 595 | 474 | 517 |
+| **当たった行**(どれかの IR) | 371 / 595 (62%) | 235 / 474 (50%) | 318 / 517 (62%) |
+|   うち実コードの IR に当たった | 364 / 595 (61%) | 231 / 474 (49%) | 311 / 517 (60%) |
+| **当たらなかった行** | 224 / 595 (38%) | 239 / 474 (50%) | 199 / 517 (38%) |
 |   API 不在(go/types にない。Go のみ) | 0 | 0 | 0 |
 |   **綴りの疑い**(別の綴りが IR にある) | 0 | 0 | 17 |
-|   **別の型の同名メンバ**(同じライブラリの、継承・Deref・trait の疑い) | 0 | 43 | 59 |
-|   使われていない(似た名前も IR にない) | 215 | 212 | 153 |
+|   **別の型の同名メンバ**(同じライブラリの、継承・Deref・trait の疑い) | 0 | 25 | 33 |
+|   使われていない(似た名前も IR にない) | 224 | 214 | 149 |
 
 形ごと(行 / 当たった / 当たらず・綴りの疑い・API 不在・別の型の同名メンバ / 当たらず・使われていない):
 
 | 形 | Go | Dart | Rust |
 | --- | --- | --- | --- |
-| i | 171 / 123 / 0 / 48 | 250 / 113 / 28 / 109 | 337 / 186 / 48 / 103 |
-| ii | 38 / 25 / 0 / 13 | 42 / 22 / 6 / 14 | 25 / 11 / 7 / 7 |
-| iii | 0 / 0 / 0 / 0 | 27 / 15 / 0 / 12 | 32 / 25 / 4 / 3 |
-| pure | 299 / 181 / 0 / 118 | 94 / 48 / 8 / 38 | 86 / 52 / 10 / 24 |
+| i | 207 / 149 / 0 / 58 | 253 / 127 / 15 / 111 | 329 / 197 / 33 / 99 |
+| ii | 40 / 26 / 0 / 14 | 39 / 22 / 3 / 14 | 24 / 11 / 6 / 7 |
+| iii | 3 / 1 / 0 / 2 | 29 / 16 / 1 / 12 | 32 / 26 / 3 / 3 |
+| pure | 272 / 158 / 0 / 114 | 93 / 50 / 5 / 38 | 82 / 57 / 1 / 24 |
 | iv | 73 / 37 / 0 / 36 | 60 / 20 / 1 / 39 | 50 / 27 / 7 / 16 |
 
 綴りの疑いと別の型の同名メンバの例(モデルの鍵 -> IR にある別の綴り。全部は [DEAD.md](DEAD.md)):
@@ -270,16 +247,16 @@ ok  	github.com/yagihash/rivus/cmd/rivus	21.633s
 - Go
   - (なし)
 - Dart
+  - `dart:async#Stream.forEach` -> `dart:async#Future.forEach`
   - `dart:async#Completer.sync` -> `dart:async#Future.sync`
   - `dart:async#Stream.error` -> `dart:async#Future.error`
   - `dart:async#StreamIterator.current` -> `dart:async#Zone.current`
   - `dart:async#Stream.timeout` -> `dart:async#Future.timeout`
-  - `dart:async#StreamSink.addError` -> `dart:async#StreamController.addError`
   - `dart:async#StreamIterator.cancel` -> `dart:async#StreamSubscription.cancel`
   - `dart:async#StreamSink.close` -> `dart:async#EventSink.close`
   - `dart:convert#HtmlEscape.convert` -> `dart:convert#JsonEncoder.convert`
   - `dart:core#num.parse` -> `dart:core#DateTime.parse`
-  - `dart:core#Iterable.reversed` -> `dart:core#List.reversed`
+  - `dart:convert#Base64Codec.decode` -> `dart:convert#Codec.decode`
 - Rust
   - `tokio::fs::read_to_string` -> `std::fs::read_to_string`
   - `tokio::fs::File::open` -> `std::fs::File::open`
@@ -298,17 +275,17 @@ ok  	github.com/yagihash/rivus/cmd/rivus	21.633s
 
 | 行の種類 | Go | Dart | Rust |
 | --- | --- | --- | --- |
-| **組み込みの行(全部)** | 585 | 476 | 553 |
-| (i) propagator: 値を返すだけ | 171 | 250 | 337 |
-| (ii) propagator: 引数・受け手に書く | 38 | 42 | 25 |
-| (iii) propagator: コールバック(名前の推定) | 0 | 27 | 32 |
-| pure | 299 | 94 | 86 |
+| **組み込みの行(全部)** | 599 | 477 | 540 |
+| (i) propagator: 値を返すだけ | 207 | 253 | 329 |
+| (ii) propagator: 引数・受け手に書く | 40 | 39 | 24 |
+| (iii) propagator: コールバック(名前の推定) | 3 | 29 | 32 |
+| pure | 272 | 93 | 82 |
 | (iv) source / sink / sanitizer / boundary / config_read | 73 | 60 | 50 |
 | 呼び出しでない鍵(型・フィールド・変数・marker) | 4 | 3 | 23 |
 |   うち source | 4 | 9 | 4 |
 |   うち sink | 53 | 38 | 41 |
 |   うち sanitizer | 3 | 4 | 0 |
-|   うち propagator | 508 | 413 | 480 |
+|   うち propagator | 522 | 414 | 467 |
 |   うち config_read | 13 | 9 | 5 |
 
 ## 6. 読んだもの
@@ -320,14 +297,14 @@ ok  	github.com/yagihash/rivus/cmd/rivus	21.633s
 | Go | go-curated | いいえ(fixture) | 280 | 194 |  |
 | Go | gogs | はい | 2953 | 2258 | 8a3b8198a |
 | Go | gophish | はい | 395 | 524 | 27d13a05 |
-| Go | zoo-go | いいえ(fixture) | 326 | 179 |  |
+| Go | zoo-go | いいえ(fixture) | 511 | 249 |  |
 | Dart | dart-curated | いいえ(fixture) | 340 | 109 |  |
 | Dart | dart-pub-tests | はい | 4847 | 2011 | 5e24336e; --include-tests |
 | Dart | dart-pub | はい | 2196 | 1628 | 5e24336e; the extractor leaves test/ out (its default, ADR-062) |
-| Dart | zoo-dart | いいえ(fixture) | 238 | 103 |  |
-| Rust | parseable | はい | 8557 | 4840 | 5c20b8e4; an IR that was made before (not extracted again) |
-| Rust | rust-curated | いいえ(fixture) | 373 | 176 |  |
-| Rust | zoo-rust | いいえ(fixture) | 557 | 253 |  |
+| Dart | zoo-dart | いいえ(fixture) | 512 | 209 |  |
+| Rust | parseable | はい | 8557 | 4877 | 5c20b8e4; an IR that was made before (not extracted again) |
+| Rust | rust-curated | いいえ(fixture) | 386 | 190 |  |
+| Rust | zoo-rust | いいえ(fixture) | 709 | 295 |  |
 
 ## 7. 読み方の注意
 

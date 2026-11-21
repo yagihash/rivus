@@ -7,12 +7,6 @@ propagators:
   - symbol: dart:core#Iterable.forEach
     pure: true
     calls: [{fn: arg0, with: [recv]}]
-  - symbol: dart:core#List.forEach
-    pure: true
-    calls: [{fn: arg0, with: [recv]}]
-  - symbol: dart:core#Set.forEach
-    pure: true
-    calls: [{fn: arg0, with: [recv]}]
   - symbol: dart:core#Map.forEach
     pure: true
     calls: [{fn: arg0, with: [recv, recv]}]
@@ -148,8 +142,6 @@ propagators:
     flows: [{from: recv, to: result}]
   - symbol: dart:core#Iterable.elementAt
     flows: [{from: recv, to: result}]
-  - symbol: dart:core#Iterable.reversed
-    flows: [{from: recv, to: result}]
   - symbol: dart:core#Iterable.skip
     flows: [{from: recv, to: result}]
   - symbol: dart:core#Iterable.take
@@ -173,15 +165,7 @@ propagators:
     flows: [{from: recv, to: result}]
   - symbol: dart:core#Iterable.cast
     flows: [{from: recv, to: result}]
-  - symbol: dart:core#List.first
-    flows: [{from: recv, to: result}]
   - symbol: dart:core#List.last
-    flows: [{from: recv, to: result}]
-  - symbol: dart:core#List.single
-    flows: [{from: recv, to: result}]
-  - symbol: dart:core#List.join
-    flows: [{from: recv, to: result}]
-  - symbol: dart:core#List.toList
     flows: [{from: recv, to: result}]
   - symbol: dart:core#List.elementAt
     flows: [{from: recv, to: result}]
@@ -197,8 +181,6 @@ propagators:
     flows: [{from: recv, to: result}]
   - symbol: dart:core#List.removeFirst
     flows: [{from: recv, to: result}]
-  - symbol: dart:core#List.toSet
-    flows: [{from: recv, to: result}]
   - symbol: dart:core#Map.values
     flows: [{from: recv, to: result}]
   - symbol: dart:core#Map.keys
@@ -206,16 +188,6 @@ propagators:
   - symbol: dart:core#Map.entries
     flows: [{from: recv, to: result}]
   - symbol: dart:core#Map.remove
-    flows: [{from: recv, to: result}]
-  - symbol: dart:core#Set.first
-    flows: [{from: recv, to: result}]
-  - symbol: dart:core#Set.last
-    flows: [{from: recv, to: result}]
-  - symbol: dart:core#Set.single
-    flows: [{from: recv, to: result}]
-  - symbol: dart:core#Set.join
-    flows: [{from: recv, to: result}]
-  - symbol: dart:core#Set.toList
     flows: [{from: recv, to: result}]
   - symbol: dart:convert#jsonDecode
     flows: [{from: recv, to: result}, {from: args, to: result}]
@@ -228,8 +200,6 @@ propagators:
   - symbol: dart:convert#Utf8Codec.decode
     flows: [{from: recv, to: result}, {from: args, to: result}]
   - symbol: dart:convert#Utf8Codec.encode
-    flows: [{from: recv, to: result}, {from: args, to: result}]
-  - symbol: dart:convert#Base64Codec.encode
     flows: [{from: recv, to: result}, {from: args, to: result}]
   - symbol: dart:convert#Base64Codec.decode
     flows: [{from: recv, to: result}, {from: args, to: result}]

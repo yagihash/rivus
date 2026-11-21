@@ -112,8 +112,6 @@ propagators:
     flows: [{from: arg0, to: recv}]
   - symbol: dart:async#StreamController.addStream
     flows: [{from: arg0, to: recv}]
-  - symbol: dart:async#StreamSink.addError
-    flows: [{from: arg0, to: recv}]
   - symbol: dart:async#Completer.complete
     flows: [{from: arg0, to: recv}]
   - symbol: dart:async#Completer.completeError

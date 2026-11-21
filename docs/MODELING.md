@@ -150,3 +150,25 @@ not the `Body`). A sink that takes the whole value reports a flow that goes only
   safe, and noisy: the model of such a library is not finished by `parts` alone.
 * The calls through an interface of the project whose implementation has the row (ADR-068) use the same `parts`.
 
+
+## 5. A row has to be hit
+
+A row whose key is not the name the extractor writes never matches a call, and nothing says so: the call is read as an
+unmodelled one (its arguments flow to its result, with an `unmodeled_library_call`), or, for a source, a sink or a
+sanitizer, the call is not seen as one. The extractors do not always write the name you would expect: a call on a `List` in
+Dart is the member of `Iterable` (`dart:core#Iterable.join`); a call on a `Vec` in Rust is the member of the slice
+(`std::slice::sort`, `std::slice::iter`), a call on a `String` the member of `str`, a method of a trait the method of the
+trait (`std::iter::Extend::extend`); a type that a library re-exports is written with the re-export (`tonic::Request`), and
+serde writes its private module with its version in it. **Read the name from the IR** (`rivus extract` for Go;
+`rivus-dart` and `rivus-rust` for the others), do not write it from the source.
+
+`TestBuiltinRowsAreHitByTheZoo` (`cmd/rivus`) holds every row of the built-in model that names a function to the IR of
+the zoo (`bench/zoo-*`) and the curated targets (`bench/*-curated`): a row has to be hit by a call (or, for an entry point,
+by a function) in it, or be in `bench/parity/dead-allow.txt` with its reason. **A new row is a failing test until a cell
+calls it**: add the call to a cell of the zoo, to a function of a curated target, or, for a package of the Dart team, to
+`bench/zoo-dart/pure` (`lib/observe.dart` calls the rows of package:path with a marker and `TestZooPathDart` holds the
+flows to the run; `lib/probe.dart` only has calls whose spelling is looked at). The IR of real projects is not used for
+this: a real project does not use every API, and a row it does not use is not wrong. The file `dead-allow.txt` is for what
+a run cannot check (an API that needs a server, a device, a network, or a library the zoo has no dependency on); the lines
+marked `debt` are the rows of the standard library that no cell calls yet: they only go down, and none is added for a new
+row. The test fails on a line for a row that is hit now, and on one for a row that does not exist.

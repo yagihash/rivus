@@ -127,8 +127,6 @@ propagators:
     flows: [{from: args, to: result}]
   - symbol: std::str::to_uppercase
     flows: [{from: args, to: result}]
-  - symbol: std::str::to_string
-    flows: [{from: args, to: result}]
   - symbol: std::str::replace
     flows: [{from: args, to: result}]
   - symbol: std::str::replacen
@@ -155,25 +153,13 @@ propagators:
     flows: [{from: args, to: result}]
   - symbol: std::str::get
     flows: [{from: args, to: result}]
-  - symbol: std::str::to_owned
-    flows: [{from: args, to: result}]
-  - symbol: std::string::String::trim
-    flows: [{from: args, to: result}]
-  - symbol: std::string::String::to_lowercase
-    flows: [{from: args, to: result}]
-  - symbol: std::string::String::to_uppercase
-    flows: [{from: args, to: result}]
   - symbol: std::slice::join
     flows: [{from: args, to: result}]
   - symbol: std::slice::concat
     flows: [{from: args, to: result}]
-  - symbol: std::vec::Vec::join
-    flows: [{from: args, to: result}]
   - symbol: std::vec::Vec::concat
     flows: [{from: args, to: result}]
   - symbol: std::path::Path::join
-    flows: [{from: args, to: result}]
-  - symbol: std::path::PathBuf::join
     flows: [{from: args, to: result}]
   - symbol: std::path::Path::parent
     flows: [{from: args, to: result}]
@@ -305,15 +291,7 @@ propagators:
     flows: [{from: args, to: result}]
   - symbol: std::vec::Vec::with_capacity
     flows: [{from: args, to: result}]
-  - symbol: std::vec::Vec::first
-    flows: [{from: args, to: result}]
-  - symbol: std::vec::Vec::last
-    flows: [{from: args, to: result}]
   - symbol: std::vec::Vec::get
-    flows: [{from: args, to: result}]
-  - symbol: std::vec::Vec::iter
-    flows: [{from: args, to: result}]
-  - symbol: std::vec::Vec::into_iter
     flows: [{from: args, to: result}]
   - symbol: std::vec::Vec::pop
     flows: [{from: args, to: result}]
@@ -331,8 +309,6 @@ propagators:
     flows: [{from: args, to: result}]
   - symbol: std::collections::HashMap::iter
     flows: [{from: args, to: result}]
-  - symbol: std::collections::HashMap::into_iter
-    flows: [{from: args, to: result}]
   - symbol: std::collections::HashMap::entry
     flows: [{from: args, to: result}]
   - symbol: std::collections::HashMap::new
@@ -347,9 +323,6 @@ propagators:
     flows: [{from: args, to: result}]
   - symbol: std::slice::to_vec
     flows: [{from: args, to: result}]
-  - symbol: std::slice::to_owned
-    flows: [{from: args, to: result}]
-  # formatting: format!(...) is built from its arguments
   - symbol: std::fmt::format
     flows: [{from: args, to: result}]
   - symbol: std::fmt::Arguments::new
@@ -385,8 +358,6 @@ propagators:
     flows: [{from: arg1, to: arg0}]
   - symbol: std::vec::Vec::insert
     flows: [{from: arg2, to: arg0}]
-  - symbol: std::vec::Vec::extend
-    flows: [{from: arg1, to: arg0}]
   - symbol: std::vec::Vec::extend_from_slice
     flows: [{from: arg1, to: arg0}]
   - symbol: std::collections::HashMap::insert
@@ -418,8 +389,6 @@ propagators:
   - symbol: std::vec::from_elem
     flows: [{from: args, to: result}]
   - symbol: std::slice::iter_mut
-    flows: [{from: args, to: result}]
-  - symbol: std::vec::Vec::iter_mut
     flows: [{from: args, to: result}]
   - symbol: std::vec::Vec::as_slice
     flows: [{from: args, to: result}]

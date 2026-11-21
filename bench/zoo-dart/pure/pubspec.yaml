@@ -1,0 +1,7 @@
+name: zoo_pure
+description: "The rows of the built-in Dart model for packages that are not dart:* (table S of docs/DESIGN-zoo.md), called with a marker in two variants. TestZooPathDart runs it; rivus reads it too (the rows have to be hit, TestBuiltinRowsAreHitByTheZoo). Only the official packages of the Dart team are here."
+publish_to: none
+environment:
+  sdk: ^3.10.0
+dependencies:
+  path: 1.9.1
