@@ -121,7 +121,7 @@ func TestDogfood(t *testing.T) {
 			capture++
 		}
 	}
-	const wantCaptureUnbound = 36 // the closures of the code of C-7 itself (the same set with and without it)
+	const wantCaptureUnbound = 37 // the closures of the code of C-7 itself (the same set with and without it); 37: sg.ExactClosures has two (add, walk) where ExactFuncs had one
 	t.Logf("capture_unbound: %d (ceiling %d)", capture, wantCaptureUnbound)
 	if capture != wantCaptureUnbound {
 		t.Errorf("capture_unbound is %d, the ceiling is %d: if it went down, lower the ceiling (that is the point of C-7); if it went up, a closure capture is lost silently somewhere new", capture, wantCaptureUnbound)

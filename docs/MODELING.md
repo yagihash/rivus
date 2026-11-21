@@ -36,7 +36,7 @@ linked to its destination: the flow into it does not reach `w`.
 
 The run decides, not the reading: `TestZooPureGo` (`cmd/rivus/zoo_pure_test.go`, `bench/zoo-go/pure`) calls the `pure` rows
 whose arguments are strings or bytes with a marker, in two variants, and a part (a result, or `error`) whose text differs
-is wrong. Of the 264 `pure` rows of Go (444 with Dart and Rust), **22 are called, 242 are not** (the list with the reason of
+is wrong. Of the 272 `pure` rows of Go (452 with Dart and Rust), **22 are called, 250 are not** (the list with the reason of
 each is [`bench/zoo-go/pure/unchecked.txt`](../bench/zoo-go/pure/unchecked.txt): 52 have a string or bytes argument but act on a process, a file, the network or
 the clock, or need a value the harness cannot make; 190 have no string or bytes argument, the receiver being the only way
 in, which a call with a marker does not cover). Dart (`dart-pure.yaml`) and Rust (`rust-pure.yaml`) are checked in the zoo of
