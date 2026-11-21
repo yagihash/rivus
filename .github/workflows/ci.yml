@@ -47,7 +47,7 @@ jobs:
           go test -timeout 30m "${pkgs[@]}"
       - name: Test cmd/rivus (shards 1 to 4 of four)
         if: matrix.shard != 0
-        run: .github/scripts/go-test-shard.sh ./cmd/rivus "$((SHARD - 1))" 4 -timeout 30m
+        run: bash .github/scripts/go-test-shard.sh ./cmd/rivus "$((SHARD - 1))" 4 -timeout 30m
 
   # The tools of the bench (the comparison, the backtest, the ledger) have their own job: a red `test` job must not keep
   # them from running (they were the last step of it, and did not run while it was red). Python only, no build.
@@ -111,7 +111,7 @@ jobs:
           RIVUS_DART: dart
           # a missing RIVUS_DART fails the tests, and does not skip them
           RIVUS_REQUIRE_DART: "1"
-        run: .github/scripts/go-test-shard.sh ./cmd/rivus "$SHARD" 3 -timeout 30m
+        run: bash .github/scripts/go-test-shard.sh ./cmd/rivus "$SHARD" 3 -timeout 30m
 
   # The Rust extractor is built against the compiler's MIR (rustc_public), which is nightly only: it is pinned
   # to one nightly by extractor/rust/rust-toolchain.toml.
@@ -152,7 +152,7 @@ jobs:
         working-directory: bench/zoo-rust/exec
         run: cargo test --locked --offline
       - name: Test with the Rust extractor (one shard of three)
-        run: .github/scripts/go-test-shard.sh ./cmd/rivus "$SHARD" 3 -timeout 30m
+        run: bash .github/scripts/go-test-shard.sh ./cmd/rivus "$SHARD" 3 -timeout 30m
         env:
           RIVUS_RUST: ${{ github.workspace }}/extractor/rust/target/debug/rivus-rust
           # a missing RIVUS_RUST fails the tests, and does not skip them
