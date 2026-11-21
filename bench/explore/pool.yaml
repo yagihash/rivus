@@ -1,0 +1,92 @@
+# The pool of the occasional exploration (bench/explore/README.md): big codebases that are NOT in the gate.
+# Each run takes one target that has not been run (or the one run the longest ago) and the target of the last run again.
+# Fields: name, url, commit (a full SHA: fixed when the target is first taken; "~" until then), lang, size (measured:
+# functions, own packages, with the date; "unmeasured" until a run), last_run (date of the last exploration and the section
+# of bench/explore/LOG.md; "never"), note (why it is in the pool: the shape that it may show; never a finding).
+# Rules: the commit of a run is written here BEFORE the run. A target whose run showed a shape of scale is not "done":
+# the shape is reduced to a go-scale profile or a corpus of the layer C (bench/README.md), and its row here says which.
+targets:
+  - name: memos
+    url: https://github.com/usememos/memos
+    commit: "~"
+    lang: go
+    size: "21,808 functions, 31 own packages (2026-11-21); about 985,000 summary elements in 3 passes"
+    last_run: "2026-11-21, LOG.md Measurement 2"
+    note: "the cause of the 985,000 elements is not known (the stack of middleware of an SDK is not it: go-scale middleware). Kept out of the gate until it is."
+  - name: cloudreve
+    url: https://github.com/cloudreve/cloudreve
+    commit: "~"
+    lang: go
+    size: "44,396 functions, 105 own packages (2026-11-21)"
+    last_run: "2026-11-21, LOG.md Measurement 2"
+    note: "many reflection and dynamic-dispatch uncertainties (ent, an ORM of generated code)."
+  - name: ech0
+    url: https://github.com/lin-snow/Ech0
+    commit: cecc2c19
+    lang: go
+    size: "unmeasured; does not converge in 900 s (bench/README.md, ech0)"
+    last_run: "never (a heavy tier target of bench/compare.sh with --with-ech0)"
+    note: "does not converge: the case that a profile of go-scale should come from."
+  - name: pocketbase
+    url: https://github.com/pocketbase/pocketbase
+    commit: 7f2773ec234b62d0b80ca47c508397cb3d0da3ea
+    lang: go
+    size: unmeasured
+    last_run: never
+    note: "a framework with its own router, an ORM (dbx) and a JS engine (goja): dynamic dispatch through a big interface."
+  - name: caddy
+    url: https://github.com/caddyserver/caddy
+    commit: edcdfa0ed88f7dcc1c53720d25218fde9d63eb1e
+    lang: go
+    size: unmeasured
+    last_run: never
+    note: "a module registry (a global map of constructors) and many handlers behind one interface."
+  - name: traefik
+    url: https://github.com/traefik/traefik
+    commit: 6f79f8c03bf3ab14442c433f194caadd26aed05c
+    lang: go
+    size: unmeasured
+    last_run: never
+    note: "middleware chains built from configuration; a very large dependency closure."
+  - name: hugo
+    url: https://github.com/gohugoio/hugo
+    commit: 68434ddaf46afc1a485547bb282b97da3f719df3
+    lang: go
+    size: unmeasured
+    last_run: never
+    note: "a template engine (reflection, method values) over a content tree."
+  - name: syncthing
+    url: https://github.com/syncthing/syncthing
+    commit: f2ed52347ec461a2b7a70787192f3615bcb6bafd
+    lang: go
+    size: unmeasured
+    last_run: never
+    note: "protobuf messages through channels and goroutines; a database layer behind an interface."
+  - name: gitness
+    url: https://github.com/harness/gitness
+    commit: 5ef62008529c10601c8190869eb688b633542d18
+    lang: go
+    size: unmeasured
+    last_run: never
+    note: "a code forge (wire-style dependency injection, a store layer of interfaces)."
+  - name: harbor
+    url: https://github.com/goharbor/harbor
+    commit: 67748c71ef12a1caad2a3c00ab03b0e84eea9c4c
+    lang: go
+    size: unmeasured
+    last_run: never
+    note: "a registry with a controller / manager / DAO stack of interfaces; many singletons (globals)."
+  - name: minio
+    url: https://github.com/minio/minio
+    commit: 7aac2a2c5b7c882e68c1ce017d8256be2feea27f
+    lang: go
+    size: unmeasured
+    last_run: never
+    note: "a big object-layer interface with several implementations, and a global state."
+  - name: mattermost
+    url: https://github.com/mattermost/mattermost
+    commit: 2d6c2852eaebf2e23336332b8feeacf9db0ea0e8
+    lang: go
+    size: unmeasured
+    last_run: never
+    note: "the largest in the pool: an app layer with a store of hundreds of methods, and plugins over RPC."

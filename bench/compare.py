@@ -143,7 +143,7 @@ def run(a):
     if a.ir:
         cmd += ["-ir", os.path.abspath(a.ir)]
     cmd += shlex.split(a.flags)
-    if not a.ir:
+    if not a.ir and not any(t.startswith("./") for t in shlex.split(a.flags)):   # a flag list that names packages replaces ./...
         cmd.append("./...")
     env = dict(os.environ)
     if a.gomemlimit:

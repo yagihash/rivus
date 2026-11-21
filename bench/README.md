@@ -42,10 +42,10 @@ representative path, `other_sources`, the uncertainties by kind and by `depth_li
 peak RSS; a run that did not converge is said so). Exit status: 0 nothing lost, 1 a finding was
 removed, 2 something did not run. Before each run it waits until swap use is 50% or less and no other
 `rivus` / `rv-*` / `rivus-*` process runs (`--wait HOURS`); `GOMEMLIMIT` is set per benchmark
-(`--gomemlimit NAME=VAL`; gogs 5GiB, Gitea 10GiB); `-timeout` is the same for both. For a night:
+(`--gomemlimit NAME=VAL`; gogs 5GiB); `-timeout` is the same for both. For a night:
 `nohup bench/compare.sh --resume <base> <head> > compare.log 2>&1 &` (each result is saved per
-benchmark; `--resume` skips the ones that are done). Gitea (`--with-gitea`) and ech0 (`--with-ech0`) are
-off by default. `--dry-run` prints the plan; `--help` the options. The classification of step 5, and
+benchmark; `--resume` skips the ones that are done). A big real codebase is run only when it is named (`--big NAME=URL@COMMIT`, the periodic and occasional runs of
+`bench/explore/README.md`); the gate never runs one. `--dry-run` prints the plan; `--help` the options. The classification of step 5, and
 step 2 (`go test ./...`) and step 3 (`go-synth`), are still yours. The script does not score against
 the truth files except for printing `score.py`'s last lines.
 
@@ -86,17 +86,17 @@ makes the exit status 2 (the run is not a basis for a comparison; a removed find
 Under the table, "Inputs of each side" has, per benchmark, the input (the tree hash of the fixtures, or the commit of the
 clone), the tree hash of the extractor, and the sha256 of the IR of base and head (with the path of the worktree replaced,
 so the same input in two worktrees has the same hash); `IR: same` says that only the binary differs, `DIFFERENT` that the
-extractor or the fixtures changed too. Gitea's base that does not converge is the one `NOT CONVERGED` note, not an `INVALID`.
+extractor or the fixtures changed too. A base that does not converge is the one `NOT CONVERGED` note, not an `INVALID`.
 
 The synthetic tests of this report (exit statuses) are `python3 bench/test_compare.py`.
 
 **Tiers (`--light`, `--heavy`).** The tiers are measured, not named. Light: one run of 60 seconds or less and 6 GB or less
-(curated three, go-synth-S, `go-scale`, gogs x 2, gin-vue-admin, go-test-bench, parseable, dart-pub). Heavy: Gitea and ech0.
+(curated three, go-synth-S, `go-scale`, the zoos, gogs x 2, gin-vue-admin, go-test-bench, parseable, dart-pub, gophish, casdoor, the cut-out of the three CVEs of layer B). Heavy: the `--big` targets (none in the gate).
 Within the light tier, base and head of a benchmark run at the same time when the free memory allows it (checked a few seconds after
 base started: 35% free or more), and a light run waits only for free memory (25%), not for other analyses; a light-only run has its own
 lock (`lock-light.d`), so it can run beside a heavy one of the same work dir. The time and the peak RSS of a light run are therefore
 measured beside another run: read them as a guide. Heavy: one at a time, waits for a quiet machine, and never uses the cache; it is
-the final check of a big change (`--heavy`, or `--with-gitea` after the light tier). The real codes (gogs etc.) stay in the light tier: they
+for the periodic and the occasional runs, never the gate (`bench/explore/README.md`). The real codes (gogs etc.) stay in the light tier: they
 are the net that found unknown regressions.
 
 **The cache of base (`<work>/cache`, `--no-cache`).** The result of BASE in the light tier is kept and reused by the next comparison with
@@ -158,7 +158,7 @@ same files.
 | dart-pub | <https://github.com/dart-lang/pub> | `5e24336e71a05a96b558d496953ebed223f6e40a` | `bench/dart-pub/rules.yaml` | `bench/dart-pub/truth-5e24336e.json` |
 | gophish (GHSA-9c9w-9pq7-f35h, GHSA-hvw3-p9px-gpc9; `bench/wild/go/`) | <https://github.com/gophish/gophish> | `27d13a0584731371033926064d750e5f4f620e7a` | `bench/wild/go/GHSA-9c9w-9pq7-f35h/rules.yaml` | `bench/wild/go/gophish-27d13a05.truth.json` |
 | casdoor (GHSA-9vm3-r8gq-cr6x; `bench/wild/go/`) | <https://github.com/casdoor/casdoor> | `7b0b426a76fd77b89817e0eafcccaed8d15b8cf4` | `bench/wild/go/GHSA-9vm3-r8gq-cr6x/rules.yaml` | `bench/wild/go/GHSA-9vm3-r8gq-cr6x/truth.json` |
-| Gitea (milestones only) | <https://github.com/go-gitea/gitea> | tag `v1.26.4` | `bench/gitea/rules.yaml` | `bench/gitea/truth-v1.26.4.json` |
+| the cut-out of the three CVEs of Gitea (7 packages, `-no-deps`) | <https://github.com/go-gitea/gitea> | tag `v1.26.4` | `bench/gitea/rules.yaml` | `bench/gitea-cve-truth.json` |
 
 How to run each is in the README of the target where there is one (`dart-pub/`, `parseable/`; the top of
 this file for the Go ones). "Not recorded" is a gap to be filled the next time someone has the
@@ -189,8 +189,8 @@ When the core of the engine (`internal/sg`, `internal/sites`, `internal/taint`) 
 `go test ./...` (this includes `go-curated`; with `RIVUS_DART` and `RIVUS_RUST` set, `dart-curated` and
 `rust-curated` too), then the S and M of `go-synth`, `dart-synth` and `rust-synth` before and after with the
 same binary built from each state, and check that the result is identical (or that every changed
-finding is understood). A real project (Gitea) is for a milestone only: it takes ten to sixteen
-minutes and 5 to 10 GB. See `go-synth/README.md` for how, and `docs/DECISIONS.md` (ADR-046) for why.
+finding is understood). The gate is the light tier of `bench/compare.sh` (about 10 minutes); a big real
+codebase is for the periodic and occasional runs of `bench/explore/README.md`, never a step of a change. See `go-synth/README.md` for how, and `docs/DECISIONS.md` (ADR-046) for why.
 
 Two more things are held by the three curated tests. Each `@miss` says whether the engine left a
 trace of the flow it lost: `@miss(silent)` (nothing in the functions of the source and the sink; 51 of the
@@ -245,8 +245,8 @@ callouts of ADR-047 (2 passes, 15 GB, 48 findings; the summaries of the AWS midd
 passes, almost all of them new, not coming back). It is a measure of the growth of the summaries, not a baseline to compare findings
 with: a run that does not converge is cut where it was.
 
-**Gitea: use the tag.** The truth file `bench/gitea/truth-v1.26.4.json` is for the tag `v1.26.4` (the three CVEs are in that
-code, and fixed in later releases). `bench/compare.sh --with-gitea` checks out the tag in its own copy. A copy of the
+**The cut-out of the three CVEs: use the tag.** The truth file `bench/gitea-cve-truth.json` is for the tag `v1.26.4` (the three CVEs are in that
+code, and fixed in later releases). `bench/compare.sh` (`gitea-cut`, 7 packages, `-no-deps`) checks out the tag in its own copy. A copy of the
 repository that was cloned some other time is the head of `main` of that day, not the tag: a measurement on it (the time, the
 passes, the recall of the three CVEs) is of other code, and has to be taken again on the tag. Check with
 `git describe --tags` (or `git rev-parse HEAD` against the tag) before a measurement is written down.
@@ -308,4 +308,4 @@ The three fixes together on all the shapes at once (2,547 functions, `-shapes al
 **How big the profiles are (head, `-workers 1`, an idle machine):** types 2,033 functions 2.9 s; stderr 2,049, 2.1 s; widen 2,045, 1.1 s; scc 2,229 (largest SCC 200), 2.4 s;
 chain 2,038, 0.5 s (11 passes); dyn 2,222, 0.5 s; glob 2,030, 0.5 s; giant 2,028, 2.2 s; selfcopy 2,067, 1.3 s; all together 2,529, 11 s. The shapes show their
 effect at this size (the ratio is 11 to 13 for the confluences); the real cost of Gitea (60,000 functions, 8 passes) is not reached, and is not the point: the profile
-says the shape is there, Gitea says how large it grows.
+says the shape is there; how large it grows on a real codebase is what the occasional exploration (`bench/explore/README.md`) is for.

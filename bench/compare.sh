@@ -29,16 +29,18 @@ options:
   --light           only the light tier: the benchmarks of one run of 60 seconds or less and 6 GB or less (the curated three, go-synth-S,
                     go-scale, zoo-go, zoo-dart, zoo-rust, gogs x 2, gin-vue-admin, go-test-bench, parseable, dart-pub, gophish, casdoor). Base and head of a benchmark run at the same
                     time when the free memory allows it; a light run does not wait for other analyses, only for free memory (25%)
-  --heavy           only the heavy tier: Gitea (and ech0 with --with-ech0). One run at a time, waits for a quiet machine,
-                    never uses the cache. The final check of a big change. With neither --light nor --heavy: the light tier, then the
-                    heavy one if --with-gitea / --with-ech0 asks for it
-  --with-gitea      also run Gitea (v1.26.4: 10 to 16 minutes, 5 to 10 GB; off by default)
-  --with-ech0       also run ech0 (may not finish; off by default)
+  --big NAME=URL@COMMIT  a big real codebase, run once per side (repeatable; NAME is a short word, COMMIT a full SHA or a tag; Go, the
+                    built-in rules). One at a time, waits for a quiet machine, never uses the cache. For the periodic and the
+                    occasional runs (bench/explore/README.md), never the gate. With --big and neither --light nor --heavy, the light
+                    tier runs first; --heavy runs only the --big targets
+  --heavy           only the --big targets (see above)
   --no-cache        do not keep or use the results of base (see below)
   --cache-dir DIR   where they are kept (default <work>/cache)
   --wait HOURS      how long to wait for a quiet machine before a run (default 6)
   --timeout DUR     -timeout of rivus analyze, the same for base and head (default 1800s)
-  --gomemlimit N=V  GOMEMLIMIT for benchmark N (repeatable; defaults: gogs-* 5GiB, gitea 10GiB)
+  --gomemlimit N=V  GOMEMLIMIT for benchmark N (repeatable; defaults: gogs-* 5GiB, a --big target 10GiB)
+  --fixed-inputs    the backtest (bench/BACKTEST.md): both sides are analysed with the inputs of THIS tree (fixtures, rules, generator,
+                    extractor), only the engine is the one of <base> / <head>, so that an old engine can be judged on today's inputs
   --dry-run         print what would be done and exit (nothing is created)
   --no-guard        do not wait for a quiet machine (for testing this script on the small benchmarks only)
   -h, --help
@@ -50,7 +52,7 @@ Go; the sha256 of the IR for Dart and Rust), rules (their content) and arguments
 key is kept with the result and compared when it is read. summary.md says "base: cached <date>".
 
 benchmarks (in this order): go-curated dart-curated rust-curated go-synth-S gogs-9a9388ac
-gogs-48946299 gin-vue-admin go-test-bench parseable dart-pub gophish casdoor [gitea] [ech0]
+gogs-48946299 gin-vue-admin go-test-bench parseable dart-pub gophish casdoor gitea-cut
 Each side is analysed with the inputs of ITS OWN version: the fixtures, the rules, the synth generator and
 the extractor are taken from wt/<sha7> (the worktree of that commit). The IR is cached per version, with a key made of
 the benchmark, the tree hash of the extractor (git rev-parse <sha>:extractor/<lang>), the tree hash of the target (or
@@ -63,8 +65,8 @@ EOF
 }
 
 WORK="${COMPARE_WORK:-${TMPDIR:-/tmp}/rivus-compare}"
-OUT=""; RESUME=0; ONLY=""; SKIP=""; WITH_GITEA=0; WITH_ECH0=0; SEL_LIGHT=0; SEL_HEAVY=0; NOCACHE=0; CACHE_DIR=""; WAIT=6; TIMEOUT=1800s; DRY=0; NOGUARD=0
-MEMLIMITS="gogs-9a9388ac=5GiB gogs-48946299=5GiB gitea=10GiB"
+OUT=""; RESUME=0; ONLY=""; SKIP=""; BIGS=""; SEL_LIGHT=0; SEL_HEAVY=0; NOCACHE=0; FIXED=0; CACHE_DIR=""; WAIT=6; TIMEOUT=1800s; DRY=0; NOGUARD=0
+MEMLIMITS="gogs-9a9388ac=5GiB gogs-48946299=5GiB gitea-cut=4GiB"
 POS=()
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -78,11 +80,11 @@ while [ $# -gt 0 ]; do
     --heavy) SEL_HEAVY=1 ;;
     --no-cache) NOCACHE=1 ;;
     --cache-dir) CACHE_DIR="$2"; shift ;;
-    --with-gitea) WITH_GITEA=1 ;;
-    --with-ech0) WITH_ECH0=1 ;;
+    --big) BIGS="$BIGS $2"; shift ;;
     --wait) WAIT="$2"; shift ;;
     --timeout) TIMEOUT="$2"; shift ;;
     --gomemlimit) MEMLIMITS="$MEMLIMITS $2"; shift ;;
+    --fixed-inputs) FIXED=1 ;;
     --dry-run) DRY=1 ;;
     --no-guard) NOGUARD=1 ;;
     -*) echo "unknown option $1" >&2; usage >&2; exit 64 ;;
@@ -101,19 +103,19 @@ PAIR="$B7-$H7"
 RES="$OUT/raw"
 
 # The tiers are measured, not named: the light one is a run of 60 seconds or less and 6 GB or less (gogs 11 to 27 s and 3.3 to 3.8 GB,
-# gin-vue-admin 21 s and 5.3 GB, go-test-bench 4 s, parseable 3 s, dart-pub 2 s); the heavy one is Gitea and ech0.
-is_heavy() { case "$1" in gitea|ech0) return 0 ;; *) return 1 ;; esac; }
+# gin-vue-admin 21 s and 5.3 GB, go-test-bench 4 s, parseable 3 s, dart-pub 2 s); the heavy one is a --big target.
+is_heavy() { local kv; for kv in $BIGS; do [ "${kv%%=*}" = "$1" ] && return 0; done; return 1; }
+big_names() { local kv; for kv in $BIGS; do printf '%s ' "${kv%%=*}"; done; }
 BENCHES="go-curated dart-curated rust-curated go-synth-S"
 grep -q "^    go-scale)" "${BASH_SOURCE[0]}" && BENCHES="$BENCHES go-scale"   # a pseudo-project of scale, added by another change
 grep -q "^    zoo-go)" "${BASH_SOURCE[0]}" && BENCHES="$BENCHES zoo-go"   # the zoo of Go: cases with answers that a run backs (bench/zoo/README.md)
 grep -q "^    zoo-dart)" "${BASH_SOURCE[0]}" && BENCHES="$BENCHES zoo-dart"   # the zoo of Dart: the same
 grep -q "^    zoo-rust)" "${BASH_SOURCE[0]}" && BENCHES="$BENCHES zoo-rust"   # the zoo of Rust: the same
-BENCHES="$BENCHES gogs-9a9388ac gogs-48946299 gin-vue-admin go-test-bench parseable dart-pub gophish casdoor"
-if [ "$SEL_HEAVY" = 1 ] && [ "$SEL_LIGHT" = 0 ]; then BENCHES=""; WITH_GITEA=1; fi
-[ "$SEL_LIGHT" = 1 ] && [ "$SEL_HEAVY" = 0 ] && WITH_GITEA=0 && WITH_ECH0=0
-[ "$SEL_HEAVY" = 1 ] && [ "$SEL_LIGHT" = 1 ] && WITH_GITEA=1
-[ "$WITH_GITEA" = 1 ] && BENCHES="$BENCHES gitea"
-[ "$WITH_ECH0" = 1 ] && BENCHES="$BENCHES ech0"
+BENCHES="$BENCHES gogs-9a9388ac gogs-48946299 gin-vue-admin go-test-bench parseable dart-pub gophish casdoor gitea-cut"
+if [ "$SEL_HEAVY" = 1 ] && [ "$SEL_LIGHT" = 0 ]; then BENCHES=""; fi
+[ "$SEL_LIGHT" = 1 ] && [ "$SEL_HEAVY" = 0 ] && BIGS=""
+[ "$SEL_HEAVY" = 1 ] && [ -z "$BIGS" ] && { echo "--heavy needs --big NAME=URL@COMMIT" >&2; exit 64; }
+BENCHES="$BENCHES $(big_names)"
 if [ -n "$ONLY" ]; then BENCHES="$(echo "$ONLY" | tr ',' ' ')"; fi
 if [ -n "$SKIP" ]; then
   keep=""
@@ -148,10 +150,12 @@ spec() {
                    RULES="$R/bench/wild/go/GHSA-9c9w-9pq7-f35h/rules.yaml"; TRUTH="$R/bench/wild/go/gophish-27d13a05.truth.json" ;;
     casdoor)       URL=https://github.com/casdoor/casdoor; COMMIT=7b0b426a76fd77b89817e0eafcccaed8d15b8cf4; CLONE=casdoor   # bench/wild/go: GHSA-9vm3-r8gq-cr6x
                    RULES="$R/bench/wild/go/GHSA-9vm3-r8gq-cr6x/rules.yaml"; TRUTH="$R/bench/wild/go/GHSA-9vm3-r8gq-cr6x/truth.json" ;;
-    gitea)         URL=https://github.com/go-gitea/gitea; COMMIT=v1.26.4; CLONE=gitea
-                   RULES="$R/bench/gitea/rules.yaml"; TRUTH="$R/bench/gitea/truth-v1.26.4.json" ;;
-    ech0)          URL=https://github.com/lin-snow/Ech0; COMMIT=cecc2c19; CLONE=ech0 ;;  # the built-in rules only here; it does not converge (bench/README.md, ech0)
-    *) return 1 ;;
+    gitea-cut)     URL=https://github.com/go-gitea/gitea; COMMIT=v1.26.4; CLONE=gitea   # layer B: the cut-out of bench/gitea-cve-paths.md section 4 (7 packages, -no-deps: about 20 s, 1 GB), the three CVEs of Gitea
+                   RULES="$R/bench/gitea/rules.yaml"; TRUTH="$R/bench/gitea-cve-truth.json" ;;
+    *) local kv; for kv in $BIGS; do
+         if [ "${kv%%=*}" = "$1" ]; then v="${kv#*=}"; URL="${v%@*}"; COMMIT="${v##*@}"; CLONE="$1"; fi
+       done
+       [ -n "$URL" ] || return 1 ;;
   esac
   [ -n "$CLONE" ] && DIR="$WORK/src/$CLONE${SUBDIR:+/$SUBDIR}"
   return 0
@@ -173,6 +177,13 @@ rust_is_own() { # dir root: 0 only when dir is, or is under, one of OWN_RUST_PAT
 rust_mode() { rust_is_own "$1" "$2" && echo host || echo container; } # dir root
 docker_ok() { docker info --format '{{.ServerVersion}}' > /dev/null 2>&1; }
 
+# the flags (and the packages instead of ./...) that a benchmark is run with
+flags_of() {
+  case "$1" in
+    gitea-cut) echo "-no-deps ./routers/web/repo ./services/release ./models/repo ./modules/storage ./routers/web/auth ./services/auth/source/oauth2 ./modules/auth/openid" ;;
+  esac
+}
+
 memlimit_of() {
   local kv
   for kv in $MEMLIMITS; do [ "${kv%%=*}" = "$1" ] && ML="${kv#*=}"; done
@@ -184,8 +195,8 @@ if [ "$DRY" = 1 ]; then
   echo "work dir: $WORK    results: $OUT (raw: $RES)"
   echo "1. git worktree add --detach $WORK/wt/$B7 $B7 ; go build -o $WORK/bin/$PAIR/rivus-base ./cmd/rivus   (skipped if the binary exists)"
   echo "   git worktree add --detach $WORK/wt/$H7 $H7 ; go build -o $WORK/bin/$PAIR/rivus-head ./cmd/rivus"
-  echo "2. light tier: base and head at the same time when the free memory allows, no wait for other analyses (free memory >= 25%); the result of base is cached in ${CACHE_DIR:-$WORK/cache} unless --no-cache; heavy tier (gitea, ech0): one at a time, no cache."
-  echo "   the heavy tier: before each run: wait for free memory >= 40% (swap <= 50% where it cannot be read) and no other rivus / rv-* / rivus-* process (at most $WAIT h)"
+  echo "2. light tier: base and head at the same time when the free memory allows, no wait for other analyses (free memory >= 25%); the result of base is cached in ${CACHE_DIR:-$WORK/cache} unless --no-cache; heavy tier (--big): one at a time, no cache."
+  echo "   the heavy tier (--big): before each run: wait for free memory >= 40% (swap <= 50% where it cannot be read) and no other rivus / rv-* / rivus-* process (at most $WAIT h)"
   NODOCKER_FAIL=0
   for b in $BENCHES; do
     if ! spec "$b"; then echo "   $b: unknown benchmark" >&2; continue; fi
@@ -201,17 +212,16 @@ if [ "$DRY" = 1 ]; then
     printf '   %-14s %-5s %s | rules: %s | GOMEMLIMIT=%s | -timeout %s %s\n' "$b" "$KIND" "$src" "${RULES:-built-in}" "${ML:-unset}" "$TIMEOUT" "$ex"
   done
   [ "${NODOCKER_FAIL:-0}" = 1 ] && echo "compare: $NO_DOCKER_MSG" >&2
-  [ "$WITH_GITEA" = 1 ] || echo "   (gitea is off: --with-gitea)"
-  [ "$WITH_ECH0" = 1 ] || echo "   (ech0 is off: --with-ech0)"
   echo "3. python3 bench/compare.py report: $OUT/summary.md, $OUT/details/<bench>.md; exit 1 if a finding was removed, 2 if a benchmark did not run"
     [ "${NODOCKER_FAIL:-0}" = 1 ] && exit 2
   exit 0
 fi
 
 mkdir -p "$WORK" "$RES" "$OUT/details" || exit 2
+[ "$FIXED" = 1 ] && : > "$RES/fixed-inputs"   # bench/ledger.py reads it: the inputs are the ones of this tree
 
 # one compare.sh at a time
-# a light-only run has its own lock, so that it can run beside a heavy one (Gitea) of the same work dir
+# a light-only run has its own lock, so that it can run beside a --big one of the same work dir
 LOCK="$WORK/lock.d"; [ "$SEL_LIGHT" = 1 ] && [ "$SEL_HEAVY" = 0 ] && LOCK="$WORK/lock-light.d"
 if ! mkdir "$LOCK" 2>/dev/null; then
   if kill -0 "$(cat "$LOCK/pid" 2>/dev/null)" 2>/dev/null; then
@@ -268,6 +278,7 @@ side_sha() { if [ "$1" = base ]; then echo "$BASE_SHA"; else echo "$HEAD_SHA"; f
 setup() { # name side: makes the copy and the IR of that version; sets DIR, RULES, IR (empty for Go); returns non-zero (and records why) if it cannot
   local b="$1" w="$2" sha s7 wt top tgt="" ext="" extkey="-" key irsha="-" rr
   sha="$(side_sha "$w")"; s7="${sha:0:7}"; wt="$WORK/wt/$s7"; IR=""
+  if [ "$FIXED" = 1 ]; then sha="$(git -C "$ROOT" rev-parse HEAD)"; wt="$ROOT"; fi   # the inputs of this tree; s7 stays the engine's (the record of the run)
   spec "$b" "$wt" || { skip "$b" "unknown benchmark"; return 1; }
   PROV_INPUT="-"
   case "$b" in
@@ -415,6 +426,7 @@ run_side() { # bench side tier: runs one analysis of one side with the variables
   args=(run -rivus "$BIN/rivus-$w" -dir "$DIR" -out "$RES/$b.$w" -timeout "$TIMEOUT" -wait "$WAIT" -gomemlimit "$ML")
   [ -n "$RULES" ] && args+=(-rules "$RULES")
   [ -n "$IR" ] && args+=(-ir "$IR")
+  [ -n "$(flags_of "$b")" ] && args+=(-flags "$(flags_of "$b")")
   [ "$NOGUARD" = 1 ] && args+=(-no-guard)
   [ "$tier" = light ] && args+=(-light)
   if [ "$tier" = light ] && [ "$w" = base ] && [ "$NOCACHE" = 0 ]; then args+=(-cache-dir "$CACHE_DIR" -cache-tree "$CACHE_TREE"); fi
