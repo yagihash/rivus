@@ -77,6 +77,7 @@ Future<void> extract(String root, StringSink sink,
     // A file with a syntax error is read on the tree that the analyzer recovers: a declaration after the error may be
     // missing, or made up. It is said (summary.unread; the findings of its functions have a note of it).
     if (firstSyntax != null) {
+      // (the core takes the file by this prefix: ir.SyntaxErrorPrefix, held by cmd/rivus/dart_syntax_test.go)
       out.loadError(p.relative(path, from: root),
           'syntax_error: $firstSyntax ($syntax in the file); the file was read on the syntax tree that the analyzer recovered: a declaration may be missing or made up',
           unread: true);

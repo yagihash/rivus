@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/yagihash/rivus/internal/ir"
 )
 
 // A Dart file with a syntax error is read on the tree that the analyzer recovers (a declaration may be missing or
@@ -88,6 +90,12 @@ func TestDartSyntaxErrorIsReported(t *testing.T) {
 	}))
 	if bad.Summary.Unread == nil || bad.Summary.Unread.Packages != 3 {
 		t.Fatalf("summary.unread: %+v", bad.Summary.Unread)
+	}
+	// the extractor and the core agree on the prefix of the message (ir.SyntaxErrorPrefix)
+	for _, u := range bad.Summary.Unread.Top {
+		if !strings.HasPrefix(u.Why, ir.SyntaxErrorPrefix) {
+			t.Errorf("the message of %s does not start with %q: %q", u.Package, ir.SyntaxErrorPrefix, u.Why)
+		}
 	}
 	for _, f := range bad.Findings {
 		inBad := !strings.HasSuffix(f.Source.Func, "#okFlow")

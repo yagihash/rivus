@@ -62,6 +62,12 @@ func (p Pos) Position() Position {
 	return Position{File: p.File, Line: p.Line, Column: p.Col, Offset: p.Offset}
 }
 
+// SyntaxErrorPrefix starts the message of the load error that an extractor writes for a file that was read on a tree
+// that the parser recovered (a syntax error), with the file as the package and unread set. The core takes such a file
+// as one whose findings are not clear (taint.Engine.recoveredFiles). The Dart extractor writes it
+// (extractor/dart/lib/extract.dart, "syntax_error:"); a test holds the two to each other (cmd/rivus/dart_syntax_test.go).
+const SyntaxErrorPrefix = "syntax_error:"
+
 // LoadError records something that could not be read: it maps to the
 // missing_source terminal kind.
 type LoadError struct {

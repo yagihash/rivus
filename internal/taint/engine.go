@@ -253,7 +253,7 @@ func (e *Engine) errorFunctions() map[string]string {
 func (e *Engine) indexLoadErrors() {
 	e.recovered = map[string]string{}
 	for _, le := range e.loadErrors {
-		if le.Unread && strings.HasPrefix(le.Message, "syntax_error:") {
+		if le.Unread && strings.HasPrefix(le.Message, ir.SyntaxErrorPrefix) {
 			e.recovered[le.Package] = le.Message
 		}
 	}
