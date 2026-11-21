@@ -3,6 +3,7 @@
 
   compare.py run    -rivus BIN -dir DIR -out PREFIX [-rules F] [-ir F] [-timeout 1800s] [-gomemlimit 5GiB]
                     [-wait HOURS] [-resume] [-flags "..."]
+  compare.py irsum  FILE ROOT        (prints the sha256 of an IR, with ROOT replaced by <ROOT>)
   compare.py report -results DIR -base NAME -head NAME -out DIR [-benches a,b,c] [-skipped file]
 
 "run" runs ONE analysis, after the machine is quiet enough (swap use at most 50%, and no other
@@ -139,6 +140,35 @@ def run(a):
     json.dump(meta, open(meta_path, "w"), indent=1)
     print("compare: %s rc=%d %.0fs %d MB" % (os.path.basename(a.out), p.returncode, wall, rss), file=sys.stderr)
     return 0 if p.returncode == 0 else 3
+
+
+def irsum(path, root):
+    """sha256 of an IR file with the absolute path of its worktree replaced: the IR holds file:///<worktree>/... ids,
+    and the same input analysed in two worktrees is the same IR."""
+    import hashlib
+    h = hashlib.sha256()
+    needle, rep = root.rstrip("/").encode(), b"<ROOT>"
+    tail = b""
+    with open(path, "rb") as f:
+        while True:
+            chunk = f.read(1 << 22)
+            data = tail + chunk
+            if not chunk:
+                h.update(data.replace(needle, rep))
+                break
+            cut = max(0, len(data) - len(needle))  # keep a tail so a path split between two chunks is still replaced
+            h.update(data[:cut].replace(needle, rep))
+            tail = data[cut:]
+    return h.hexdigest()
+
+
+def load_prov(results, bench, which):
+    """The line compare.sh wrote for one side: input, extractor, IR sha256, version, rules (TSV)."""
+    try:
+        f = open(os.path.join(results, "%s.%s.prov" % (bench, which))).read().rstrip("\n").split("\t")
+        return dict(zip(("input", "extractor", "ir", "version", "rules"), f))
+    except OSError:
+        return None
 
 
 def parse_seconds(s):
@@ -330,6 +360,22 @@ def report(a):
     for r in rows:
         r = r + [""] * (12 - len(r))
         out.append("| " + " | ".join(str(c) for c in r) + " |")
+    prov = []
+    for bench in benches:
+        pb, ph = load_prov(a.results, bench, "base"), load_prov(a.results, bench, "head")
+        if not pb or not ph:
+            continue
+        same_ir = "same" if pb["ir"] == ph["ir"] else "DIFFERENT"
+        if pb["ir"] == "-":
+            same_ir = "-"
+        prov.append("| %s | %s | %s | %s | %s | %s | %s |" % (
+            bench, pb["input"], ph["input"] if ph["input"] != pb["input"] else "(same)",
+            pb["extractor"] + ("" if pb["extractor"] == ph["extractor"] else " -> " + ph["extractor"]),
+            pb["ir"][:16], ph["ir"][:16], same_ir))
+    if prov:
+        out += ["", "Inputs of each side (its own version's fixtures and extractor; the IR sha256 has the worktree path removed; a Go target has no IR):", "",
+                "| bench | input (base) | input (head) | extractor (tree) | IR sha256 base | IR sha256 head | IR |",
+                "| --- | --- | --- | --- | --- | --- | --- |"] + prov
     out += ["", "Details (added / removed / changed findings, one per line): `details/<bench>.md`."]
     open(os.path.join(a.out, "summary.md"), "w").write("\n".join(out) + "\n")
     print("\n".join(out))
@@ -351,6 +397,9 @@ def main():
     r.add_argument("-resume", action="store_true")
     r.add_argument("-no-guard", action="store_true", help="do not wait for a quiet machine (for tests of this script only)")
     r.add_argument("-flags", default="")
+    i = sub.add_parser("irsum")
+    i.add_argument("file")
+    i.add_argument("root")
     p = sub.add_parser("report")
     p.add_argument("-results", required=True)
     p.add_argument("-base", required=True)
@@ -359,6 +408,9 @@ def main():
     p.add_argument("-benches", required=True)
     p.add_argument("-skipped", help="file of <bench><TAB><reason> for benchmarks that could not be set up")
     a = ap.parse_args()
+    if a.cmd == "irsum":
+        print(irsum(a.file, a.root))
+        return
     sys.exit({"run": run, "report": report}[a.cmd](a))
 
 

@@ -35,8 +35,12 @@ options:
 
 benchmarks (in this order): go-curated dart-curated rust-curated go-synth-S gogs-9a9388ac
 gogs-48946299 gin-vue-admin go-test-bench parseable dart-pub [gitea] [ech0]
-The inputs, the rules, the extractors (RIVUS_DART, RIVUS_RUST) are the ones of the working tree
-this script is in, the same for base and head; only the rivus binary differs. A target whose copy
+Each side is analysed with the inputs of ITS OWN version: the fixtures, the rules, the synth generator and
+the extractor are taken from wt/<sha7> (the worktree of that commit). The IR is cached per version, with a key made of
+the benchmark, the tree hash of the extractor (git rev-parse <sha>:extractor/<lang>), the tree hash of the target (or
+the commit of the clone) and the flags; the same input is not extracted twice. The Rust extractor of each version is built
+once (cargo build --locked, shared target dir). RIVUS_RUST (a binary) or RIVUS_DART (a command) name the tool for both
+sides. summary.md lists, per benchmark, the input and the IR sha256 of both sides. A target whose copy
 cannot be made (clone, checkout, go.mod, go list, pub get, no toolchain) is listed as NOT RUN.
 nohup bench/compare.sh --resume c44bfdd origin/main > compare.log 2>&1 &
 EOF
@@ -86,26 +90,27 @@ if [ -n "$SKIP" ]; then
   BENCHES="$keep"
 fi
 
-# spec NAME: sets KIND (go|dart|rust|synth), URL, COMMIT, SUBDIR, RULES, DIR (the directory the analysis runs in), TRUTH
+# spec NAME [ROOT]: ROOT is the working tree (wt/<sha7>) of one side, default this script's; sets KIND (go|dart|rust|synth), URL, COMMIT, SUBDIR, RULES, DIR (the directory the analysis runs in), TRUTH
 spec() {
+  local R="${2:-$ROOT}"
   KIND=go; URL=""; COMMIT=""; SUBDIR=""; RULES=""; DIR=""; TRUTH=""; CLONE=""
   case "$1" in
-    go-curated)    DIR="$ROOT/bench/go-curated"; RULES="$DIR/rules.yaml" ;;
-    dart-curated)  KIND=dart; DIR="$ROOT/bench/dart-curated"; RULES="$DIR/rules.yaml" ;;
-    rust-curated)  KIND=rust; DIR="$ROOT/bench/rust-curated"; RULES="$DIR/rules.yaml" ;;
-    go-synth-S)    KIND=synth; DIR="$WORK/synth-S"; RULES="$DIR/rules.yaml" ;;
-    gogs-9a9388ac) URL=https://github.com/gogs/gogs; COMMIT=8a3b8198a; CLONE=gogs; RULES="$ROOT/bench/gogs/rules.yaml"; TRUTH="$ROOT/bench/gogs/truth-9a9388ac.json" ;;
-    gogs-48946299) URL=https://github.com/gogs/gogs; COMMIT=ca59e76a5; CLONE=gogs-2; RULES="$ROOT/bench/gogs/rules.yaml"; TRUTH="$ROOT/bench/gogs/truth-48946299.json" ;;
+    go-curated)    DIR="$R/bench/go-curated"; RULES="$DIR/rules.yaml" ;;
+    dart-curated)  KIND=dart; DIR="$R/bench/dart-curated"; RULES="$DIR/rules.yaml" ;;
+    rust-curated)  KIND=rust; DIR="$R/bench/rust-curated"; RULES="$DIR/rules.yaml" ;;
+    go-synth-S)    KIND=synth; DIR="$WORK/synth/S"; RULES="$DIR/rules.yaml" ;;   # DIR is made per version in setup()
+    gogs-9a9388ac) URL=https://github.com/gogs/gogs; COMMIT=8a3b8198a; CLONE=gogs; RULES="$R/bench/gogs/rules.yaml"; TRUTH="$R/bench/gogs/truth-9a9388ac.json" ;;
+    gogs-48946299) URL=https://github.com/gogs/gogs; COMMIT=ca59e76a5; CLONE=gogs-2; RULES="$R/bench/gogs/rules.yaml"; TRUTH="$R/bench/gogs/truth-48946299.json" ;;
     gin-vue-admin) URL=https://github.com/flipped-aurora/gin-vue-admin; COMMIT=7bc7c3051067; CLONE=gin-vue-admin; SUBDIR=server
-                   RULES="$ROOT/examples/rules/go-gin.yaml"; TRUTH="$ROOT/bench/gin-vue-admin/truth.json" ;;
+                   RULES="$R/examples/rules/go-gin.yaml"; TRUTH="$R/bench/gin-vue-admin/truth.json" ;;
     go-test-bench) URL=https://github.com/Contrast-Security-OSS/go-test-bench; COMMIT=""; CLONE=go-test-bench
-                   RULES="$ROOT/examples/rules/go-gin.yaml"; TRUTH="$ROOT/bench/go-test-bench/truth.json" ;;
+                   RULES="$R/examples/rules/go-gin.yaml"; TRUTH="$R/bench/go-test-bench/truth.json" ;;
     parseable)     KIND=rust; URL=https://github.com/parseablehq/parseable; COMMIT=5c20b8e477be162238037e202cea1869d657017b; CLONE=parseable
-                   RULES="$ROOT/bench/parseable/rules.yaml"; TRUTH="$ROOT/bench/parseable/truth-5c20b8e4.json" ;;
+                   RULES="$R/bench/parseable/rules.yaml"; TRUTH="$R/bench/parseable/truth-5c20b8e4.json" ;;
     dart-pub)      KIND=dart; URL=https://github.com/dart-lang/pub; COMMIT=5e24336e71a05a96b558d496953ebed223f6e40a; CLONE=pub
-                   RULES="$ROOT/bench/dart-pub/rules.yaml"; TRUTH="$ROOT/bench/dart-pub/truth-5e24336e.json" ;;
+                   RULES="$R/bench/dart-pub/rules.yaml"; TRUTH="$R/bench/dart-pub/truth-5e24336e.json" ;;
     gitea)         URL=https://github.com/go-gitea/gitea; COMMIT=v1.26.4; CLONE=gitea
-                   RULES="$ROOT/bench/gitea/rules.yaml"; TRUTH="$ROOT/bench/gitea/truth-v1.26.4.json" ;;
+                   RULES="$R/bench/gitea/rules.yaml"; TRUTH="$R/bench/gitea/truth-v1.26.4.json" ;;
     ech0)          URL=https://github.com/lin-snow/Ech0; COMMIT=cecc2c19; CLONE=ech0 ;;  # the built-in rules only here; it does not converge (bench/README.md, ech0)
     *) return 1 ;;
   esac
@@ -128,9 +133,9 @@ if [ "$DRY" = 1 ]; then
   for b in $BENCHES; do
     if ! spec "$b"; then echo "   $b: unknown benchmark" >&2; continue; fi
     ML=""; memlimit_of "$b"
-    case "$KIND" in dart) ex="extractor: ${RIVUS_DART:-dart} run extractor/dart/bin/rivus_dart.dart";; rust) ex="extractor: ${RIVUS_RUST:-$ROOT/extractor/rust/target/debug/rivus-rust}";; *) ex="";; esac
-    src="in-tree"; [ -n "$URL" ] && src="git clone $URL ; git checkout ${COMMIT:-<default branch>} ; ls go.mod ; go list ./..."
-    [ "$KIND" = synth ] && src="go run ./bench/go-synth/gen -size S"
+    case "$KIND" in dart) ex="extractor: ${RIVUS_DART:-dart} run wt/<sha7>/extractor/dart/bin/rivus_dart.dart";; rust) ex="extractor: ${RIVUS_RUST:-cargo build --locked in wt/<sha7>/extractor/rust}";; *) ex="";; esac
+    src="in-tree (wt/<sha7>/bench/$b)"; [ -n "$URL" ] && src="git clone $URL ; git checkout ${COMMIT:-<default branch>} ; ls go.mod ; go list ./..."
+    [ "$KIND" = synth ] && src="go run ./bench/go-synth/gen -size S (in wt/<sha7>)"
     printf '   %-14s %-5s %s | rules: %s | GOMEMLIMIT=%s | -timeout %s %s\n' "$b" "$KIND" "$src" "${RULES:-built-in}" "${ML:-unset}" "$TIMEOUT" "$ex"
   done
   [ "$WITH_GITEA" = 1 ] || echo "   (gitea is off: --with-gitea)"
@@ -182,9 +187,27 @@ clone_checkout() { # url commit dir [from-local]
   [ -z "$commit" ] || git -C "$dir" checkout -q "$commit" >&2 || return 1
 }
 
-setup() { # name: makes the copy and the IR; sets IR (empty for Go); returns non-zero (and records why) if it cannot
-  local b="$1" top; IR=""
-  spec "$b" || { skip "$b" "unknown benchmark"; return 1; }
+# The inputs of one side are the ones of ITS OWN version (wt/<sha7>): the fixtures, the rules, the extractor.
+# The IR is cached per (benchmark, extractor tree, target tree or commit, flags), never by the name alone:
+# a fixture or an extractor fix that is in one version and not in the other makes another IR (R-41).
+tree() { git -C "$ROOT" rev-parse -q --verify "$1:$2" 2>/dev/null; }   # tree <sha> <path>: the hash of that directory in that version
+h16() { shasum -a 256 | cut -c1-16; }
+side_sha() { if [ "$1" = base ]; then echo "$BASE_SHA"; else echo "$HEAD_SHA"; fi; }
+
+setup() { # name side: makes the copy and the IR of that version; sets DIR, RULES, IR (empty for Go); returns non-zero (and records why) if it cannot
+  local b="$1" w="$2" sha s7 wt top tgt="" ext="" extkey="-" key irsha="-" rr
+  sha="$(side_sha "$w")"; s7="${sha:0:7}"; wt="$WORK/wt/$s7"; IR=""
+  spec "$b" "$wt" || { skip "$b" "unknown benchmark"; return 1; }
+  PROV_INPUT="-"
+  case "$b" in
+    go-curated|dart-curated|rust-curated)
+      tgt="$(tree "$sha" "bench/$b")"
+      [ -n "$tgt" ] || { skip "$b" "bench/$b does not exist in $w ($s7)"; return 1; }
+      PROV_INPUT="bench/$b tree ${tgt:0:12}" ;;
+  esac
+  if [ -n "$RULES" ] && [ "$KIND" != synth ] && [ ! -f "$RULES" ]; then   # a rules file that this old version does not have: the one of this script's tree
+    [ -f "${RULES/#$wt/$ROOT}" ] && RULES="${RULES/#$wt/$ROOT}" || { skip "$b" "no rules file $RULES in $w ($s7)"; return 1; }
+  fi
   if [ -n "$URL" ]; then
     top="$WORK/src/$CLONE"
     if [ "$CLONE" = gogs-2 ]; then
@@ -195,6 +218,7 @@ setup() { # name: makes the copy and the IR; sets IR (empty for Go); returns non
       clone_checkout "$URL" "$COMMIT" "$top" || { skip "$b" "git clone / checkout $COMMIT failed"; return 1; }
     fi
     [ -n "$COMMIT" ] || say "$b: the commit is not recorded; HEAD of the default branch is $(git -C "$top" rev-parse --short HEAD)"
+    tgt="$(git -C "$top" rev-parse HEAD)"; PROV_INPUT="$CLONE @ ${tgt:0:12}"
   fi
   case "$KIND" in
     go)
@@ -203,29 +227,61 @@ setup() { # name: makes the copy and the IR; sets IR (empty for Go); returns non
         (cd "$DIR" && go list ./... > /dev/null 2>&1) || { skip "$b" "go list ./... failed in $DIR"; return 1; }
       fi ;;
     synth)
-      [ -f "$DIR/rules.yaml" ] || (cd "$ROOT" && go run ./bench/go-synth/gen -size S -out "$DIR") >&2 || { skip "$b" "the generator failed"; return 1; } ;;
+      tgt="$(tree "$sha" bench/go-synth)$(tree "$sha" bench/synthplan)"; key="$(printf '%s' "$tgt" | h16)"
+      DIR="$WORK/synth/S-$key"; RULES="$DIR/rules.yaml"; PROV_INPUT="go-synth -size S (generator $key)"
+      if [ ! -f "$DIR/rules.yaml" ]; then
+        /bin/rm -rf "$DIR.tmp"; mkdir -p "$WORK/synth"
+        (cd "$wt" && go run ./bench/go-synth/gen -size S -out "$DIR.tmp") >&2 && mv "$DIR.tmp" "$DIR" || { skip "$b" "the generator failed in $w ($s7)"; return 1; }
+      fi ;;
     dart)
-      IR="$WORK/ir/$b.jsonl"; mkdir -p "$WORK/ir"
-      local dartcmd="${RIVUS_DART:-dart}" nodeps="--no-deps"
+      mkdir -p "$WORK/ir"
+      local dartcmd="${RIVUS_DART:-dart}" nodeps="--no-deps" extdir="$wt/extractor/dart"
       [ "$b" = dart-curated ] && nodeps=""
+      [ -d "$extdir" ] || { skip "$b" "no extractor/dart in $w ($s7)"; return 1; }
       (cd "$DIR" && $dartcmd pub get) > /dev/null 2>&1 || { skip "$b" "dart pub get failed (RIVUS_DART=$dartcmd)"; return 1; }
-      [ -d "$ROOT/extractor/dart/.dart_tool" ] || (cd "$ROOT/extractor/dart" && $dartcmd pub get) > /dev/null 2>&1
+      [ -d "$extdir/.dart_tool" ] || (cd "$extdir" && $dartcmd pub get) > /dev/null 2>&1
+      ext="$(tree "$sha" extractor/dart)"; extkey="dart ${ext:0:12}"
+      key="$(printf '%s|%s|%s|%s|%s' "$b" "$ext" "$dartcmd" "$tgt" "$nodeps" | h16)"
+      IR="$WORK/ir/$b.$key.jsonl"
       if [ ! -s "$IR" ]; then
-        (cd "$ROOT/extractor/dart" && $dartcmd run bin/rivus_dart.dart $nodeps "$DIR" > "$IR") 2>"$WORK/ir/$b.err" || { /bin/rm -f "$IR"; skip "$b" "the Dart extractor failed (see $WORK/ir/$b.err)"; return 1; }
+        say "$b: making the IR with the extractor of $w ($s7)"
+        (cd "$extdir" && $dartcmd run bin/rivus_dart.dart $nodeps "$DIR" > "$IR.tmp") 2>"$WORK/ir/$b.$key.err" || { /bin/rm -f "$IR.tmp"; skip "$b" "the Dart extractor failed (see $WORK/ir/$b.$key.err)"; return 1; }
+        mv "$IR.tmp" "$IR"
       fi ;;
     rust)
-      IR="$WORK/ir/$b.jsonl"; mkdir -p "$WORK/ir"
-      local rr="${RIVUS_RUST:-$ROOT/extractor/rust/target/debug/rivus-rust}"
-      [ -x "$rr" ] || { skip "$b" "no Rust extractor at $rr (cargo build in extractor/rust, or RIVUS_RUST)"; return 1; }
+      mkdir -p "$WORK/ir"
+      if [ -n "${RIVUS_RUST:-}" ]; then   # an extractor named by the caller is used for both sides
+        rr="$RIVUS_RUST"; [ -x "$rr" ] || { skip "$b" "RIVUS_RUST=$rr is not executable"; return 1; }
+        ext="bin-$(shasum -a 256 "$rr" | h16)"
+      else
+        ext="$(tree "$sha" extractor/rust)"; [ -n "$ext" ] || { skip "$b" "no extractor/rust in $w ($s7)"; return 1; }
+        rr="$WORK/bin/rust-extractor/$ext/rivus-rust"
+        if [ ! -x "$rr" ]; then   # one binary per extractor tree; the cargo target dir is shared, so the dependencies are built once
+          say "building the Rust extractor of $w ($s7, tree ${ext:0:12})"
+          (cd "$wt/extractor/rust" && CARGO_TARGET_DIR="$WORK/cargo-target" cargo build --locked) > "$WORK/ir/rust-extractor-$ext.log" 2>&1 \
+            || { skip "$b" "cargo build --locked failed in $w ($s7) (see $WORK/ir/rust-extractor-$ext.log)"; return 1; }
+          mkdir -p "$WORK/bin/rust-extractor/$ext" && cp "$WORK/cargo-target/debug/rivus-rust" "$rr" || { skip "$b" "no rivus-rust after cargo build"; return 1; }
+        fi
+      fi
+      extkey="rust ${ext:0:12}"
+      key="$(printf '%s|%s|%s' "$b" "$ext" "$tgt" | h16)"
+      IR="$WORK/ir/$b.$key.jsonl"
       if [ ! -s "$IR" ]; then
+        say "$b: making the IR with the extractor of $w ($s7)"
         if [ "$b" = parseable ]; then
           mkdir -p "$WORK/parseable-assets"   # build.rs would fetch the UI from the network without it
-          (cd "$DIR" && LOCAL_ASSETS_PATH="$WORK/parseable-assets" "$rr" --no-deps . > "$IR") 2>"$WORK/ir/$b.err" || { /bin/rm -f "$IR"; skip "$b" "the Rust extractor failed (see $WORK/ir/$b.err)"; return 1; }
+          (cd "$DIR" && LOCAL_ASSETS_PATH="$WORK/parseable-assets" "$rr" --no-deps . > "$IR.tmp") 2>"$WORK/ir/$b.$key.err" || { /bin/rm -f "$IR.tmp"; skip "$b" "the Rust extractor failed (see $WORK/ir/$b.$key.err)"; return 1; }
         else
-          (cd "$ROOT" && "$rr" "$DIR" > "$IR") 2>"$WORK/ir/$b.err" || { /bin/rm -f "$IR"; skip "$b" "the Rust extractor failed (see $WORK/ir/$b.err)"; return 1; }
+          (cd "$wt" && "$rr" "$DIR" > "$IR.tmp") 2>"$WORK/ir/$b.$key.err" || { /bin/rm -f "$IR.tmp"; skip "$b" "the Rust extractor failed (see $WORK/ir/$b.$key.err)"; return 1; }
         fi
+        mv "$IR.tmp" "$IR"
       fi ;;
   esac
+  if [ -n "$IR" ]; then   # the hash is taken with this version's path replaced, so the same input in two worktrees has the same hash
+    [ -s "$IR.sha256" ] || python3 "$PY" irsum "$IR" "$wt" > "$IR.sha256"
+    irsha="$(cat "$IR.sha256")"
+  fi
+  printf '%s\t%s\t%s\t%s\t%s\n' "$PROV_INPUT" "$extkey" "$irsha" "$s7" "$RULES" > "$RES/$b.$w.prov"
   return 0
 }
 
@@ -233,10 +289,16 @@ setup() { # name: makes the copy and the IR; sets IR (empty for Go); returns non
 ALL=""
 for b in $BENCHES; do
   ALL="$ALL,$b"
-  setup "$b" || continue
+  ok=1
+  for w in base head; do
+    setup "$b" "$w" || { ok=0; break; }
+    eval "DIR_$w=\$DIR; IR_$w=\$IR; RULES_$w=\$RULES"
+  done
+  [ "$ok" = 1 ] || continue
   ML=""; memlimit_of "$b"
   rf=(); [ "$RESUME" = 1 ] && rf=(-resume)
   for w in base head; do
+    eval "DIR=\$DIR_$w; IR=\$IR_$w; RULES=\$RULES_$w"
     say "$b: $w"
     args=(run -rivus "$BIN/rivus-$w" -dir "$DIR" -out "$RES/$b.$w" -timeout "$TIMEOUT" -wait "$WAIT" -gomemlimit "$ML")
     [ -n "$RULES" ] && args+=(-rules "$RULES")
@@ -244,6 +306,7 @@ for b in $BENCHES; do
     [ "$NOGUARD" = 1 ] && args+=(-no-guard)
     python3 "$PY" "${args[@]}" ${rf[@]+"${rf[@]}"} || true
   done
+  spec "$b"   # the truth is the one of this script's tree
   if [ -n "$TRUTH" ]; then
     for w in base head; do
       [ -s "$RES/$b.$w.json" ] && python3 "$ROOT/bench/score.py" "$TRUTH" "$RES/$b.$w.json" 2>/dev/null | tail -n 2 | sed "s/^/$b $w: /" >> "$RES/scores.txt"
