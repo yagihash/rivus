@@ -24,6 +24,7 @@ import 'package:zoo_cells/dart/super_mixin_impl.dart' as dart_super_mixin_impl;
 import 'package:zoo_cells/dart/tearoff_instance.dart' as dart_tearoff_instance;
 import 'package:zoo_cells/dyn/func_field.dart' as dyn_func_field;
 import 'package:zoo_cells/dyn/func_map.dart' as dyn_func_map;
+import 'package:zoo_cells/dyn/fprint_writer_own.dart' as dyn_fprint_writer_own;
 import 'package:zoo_cells/dyn/sink_behind_own_interface.dart' as dyn_sink_behind_own_interface;
 import 'package:zoo_cells/guard/one_branch.dart' as guard_one_branch;
 import 'package:zoo_cells/guard/sanitize_before.dart' as guard_sanitize_before;
@@ -61,6 +62,7 @@ void registerAll() {
   dart_tearoff_instance.register();
   dyn_func_field.register();
   dyn_func_map.register();
+  dyn_fprint_writer_own.register();
   dyn_sink_behind_own_interface.register();
   guard_one_branch.register();
   guard_sanitize_before.register();
