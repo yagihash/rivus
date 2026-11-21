@@ -49,7 +49,7 @@ functions of the ballast calls `Decode`, so what the decoder carries goes up the
 the elements of a map do not say which key they came from: the decoded value carries the requests of all handlers, and
 the one real finding (handler 0 to the sink) lists the other N-1 handlers as `other_sources`. None of them was ever in
 the decoded value. The code has no answer key; `expected/registry-w1.json` (N = 40) is the check: the one finding,
-`other_sources_count` 39, `summary_elems` 22,173.
+`other_sources_count` 39, `summary_elems` 22,173. The 39 is a false trace that the test pins (it must not grow), and the profile skips `checkCuratedReport` because the code has no answer key: when stage 2 of `docs/DESIGN-shared-state.md` brings the count to 0, take the skip out (give the code an answer key) and write the expected file again.
 
 Measured on the head (one finding in every row; the count is `other_sources_count`, the list in the report is cut at 5):
 

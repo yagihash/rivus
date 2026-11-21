@@ -8,5 +8,6 @@
   "reanalyses": 3263,
   "summary_elems": 22173,
   "largest_summary_elems": 43,
-  "other_sources_count": 39
+  "other_sources_count": 39,
+  "note": "other_sources_count 39 is a false trace that the test pins (it must not grow). Stage 2 of docs/DESIGN-shared-state.md brings it to 0: then set the profile free of the skip of checkCuratedReport (the registry code has no answer key yet) and write this file again."
 }

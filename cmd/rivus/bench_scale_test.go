@@ -93,13 +93,19 @@ func TestScaleSynth(t *testing.T) {
 					t.Fatal(err)
 				}
 				curatedAllowUnconverged = pr.noconv
-				if pr.name != "registry" { // the registry code has no answer key: its expected file is the check
+				// the registry code has no answer key: its expected file is the check, with other_sources_count 39 (a false
+				// trace). When stage 2 of docs/DESIGN-shared-state.md brings it to 0, give the code an answer key and
+				// take this skip out.
+				if pr.name != "registry" {
 					checkCuratedReport(t, dir, out, ".go")
 				}
 				curatedAllowUnconverged = false
 				got := scaleResultOf(&rep)
 				path := filepath.Join(root, "bench", "go-scale", "expected", fmt.Sprintf("%s-w%d.json", pr.name, w))
 				if os.Getenv("RIVUS_SCALE_UPDATE") == "1" {
+					if pr.name == "registry" {
+						got.Note = registryNote
+					}
 					b, _ := json.MarshalIndent(got, "", "  ")
 					if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 						t.Fatal(err)
@@ -135,7 +141,12 @@ type scaleResult struct {
 	// OtherSources is the sum of other_sources_count of the findings: the sources of the same kind that are
 	// folded into a finding. It is a number to bring to 0 for a false trace, so it must not move (more or fewer).
 	OtherSources int `json:"other_sources_count,omitempty"`
+	// Note is for the reader of the file; it is not compared.
+	Note string `json:"note,omitempty"`
 }
+
+// registryNote is written into registry-w1.json: the 39 is a false trace that is fixed in place, not a goal.
+const registryNote = "other_sources_count 39 is a false trace that the test pins (it must not grow). Stage 2 of docs/DESIGN-shared-state.md brings it to 0: then set the profile free of the skip of checkCuratedReport (the registry code has no answer key yet) and write this file again."
 
 func scaleResultOf(rep *report.Report) scaleResult {
 	r := scaleResult{UncertaintyKinds: map[string]int{}, Findings: []string{}}
