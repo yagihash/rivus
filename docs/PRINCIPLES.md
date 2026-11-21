@@ -30,7 +30,7 @@ rivus の設計の判断は、ここに書いた原則に沿う。ほかの文�
 **現状と、まだ届いていない所**
 
 - 経路は 1 本だけ出す（`internal/taint/engine.go:1390`）。ADR-023 の「3 本まで、あふれは数える」は実装されていない。
-- 経路が 200 段を超えると、途中を痕跡なしに落とす（`rope.flatten`）。これは 2 節の原則に反する。
+- 経路が 200 段を超えると、途中の段を見せない（`rope.flatten`）。省いた段数は `paths[].omitted_steps` と、`depth_limit`（detail が `path_steps_omitted:`）に残る。省いた段が持つ不確実性・モデル・到達性は、見せる段と同じに集計に入る。source までさかのぼる途中の打ち切りも、同じ印を付ける。
 
 ---
 
@@ -66,7 +66,7 @@ rivus の設計の判断は、ここに書いた原則に沿う。ほかの文�
 
 **現状と、まだ届いていない所**
 
-- **200 段を超える経路の切り詰め:** 記録がない（1 節に同じ）。
+- **200 段を超える経路の切り詰め:** 記録している（`omitted_steps`、`path_steps_omitted:`。1 節に同じ）。
 - **流れを止めるモデルの記録が、一部だけ:** 記録するのは、`origin: llm` の sanitizer の抑制、`numeric_stop`、`global_holds_nothing`、`approximate`。`builtin` や人が書いた sanitizer の停止と、`pure` による停止は、出力に残らない。ADR-010 の文面（「抑制した・伝播させたを必ず記録する」）のほうが、実装より広い。
 - **`numeric_stop`:** サマリを通って止まる分は記録しない。ADR-043 の追記が自己申告している。
 - **`kind` の追加と、スキーマの版:** ADR-008 は「種類は閉じた集合で、追加はスキーマを上げる」と書くが、実際は `assumed_call`、`model_approximation`、`field_imprecision`、`numeric_stop` などを `rivus.result/1` のまま足している（ADR-043 の追記が認めている）。運用と ADR の文面が食い違っていて、どちらに合わせるかは **未決**。

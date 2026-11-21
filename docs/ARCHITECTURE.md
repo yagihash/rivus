@@ -461,7 +461,7 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 | `numeric_stop` | rivus | source のデータが数値や bool になり、それ以降は追わない（既定。`-numeric-taint` で追う）。source の種類（シンボルとラベル）ごとに 1 件で、最初の場所と、起きた関数の一覧（10 件まで）を持つ。サマリを通って止まる分（呼び先の中の、引数の記号的なデータの止まり）は、記録されない |
 | `unsupported_construct` | rivus | extractor が下げられなかった構文（IR の `unsupported`）。その場所で何が起きるかは、解析に入っていない。`missing_source` ではない（対象のコードが足りないのではなく、rivus が読めなかった） |
 | `container_element_imprecision` | rivus | 結論に影響した場合のみ記録（ノイズ防止） |
-| `depth_limit` | rivus | 打ち切り。detail が理由を言う（`guard_limit`、`candidate_limit`、`caller_depth_limit`、`func_timeout` など） |
+| `depth_limit` | rivus | 打ち切り。detail が理由を言う（`guard_limit`、`candidate_limit`、`caller_depth_limit`、`func_timeout` など）。例外: detail が `path_steps_omitted:` のものは、**解析の打ち切りではなく、表示の省略**（流れは見た。200 段を超える経路の、真ん中の段を見せていない。省いた段の不確実性・モデル・到達性は finding に入っている）。ただし、source までさかのぼる途中の打ち切り（`the path was followed back for ...`）は、その先の段を見ていない |
 | `recursion_approximation` | rivus | |
 | `field_imprecision` | rivus | 欄を名指す sink に、その欄にあるとは言えない汚染が届いた（14 節）。detail は `whole_value`、`path_limit`、`element`、`opaque_callee` |
 | `field_unresolved` | rivus | sink が名指した欄が、プログラムにない（綴りの誤りなど）。sink を全体として扱った（14 節） |
