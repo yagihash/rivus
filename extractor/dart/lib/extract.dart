@@ -55,7 +55,8 @@ Future<void> extract(String root, StringSink sink,
   for (final path in paths.toList()..sort()) {
     final context = _contextOf(collection, path);
     if (context == null) {
-      // not in any package of the project: the file is not read, and that is said
+      // not in any package of the project: the file is not read, and that is said (what input does this: not known;
+      // a tree of packages with a directory that has no pubspec.yaml was read, so there is no fixture)
       out.loadError(p.relative(path, from: root), 'the file is not in any package of the project and was not read', unread: true);
       continue;
     }
@@ -136,6 +137,7 @@ Future<void> extract(String root, StringSink sink,
       final context = (p.isWithin(root, path) ? _contextOf(collection, path) : null) ?? collection.contexts.first;
       final r = await context.currentSession.getResolvedUnit(path);
       if (r is! ResolvedUnitResult) {
+        // (what input does this: not known; no fixture)
         out.loadError(p.isWithin(root, path) ? p.relative(path, from: root) : path, 'a file of a dependency could not be resolved and was not read', unread: true);
         continue;
       }
@@ -435,7 +437,8 @@ class _Lower extends RecursiveAstVisitor<void> {
   final Program prog;
   final UnitInfo unit;
 
-  /// A declaration whose element the analyzer could not make is left out (there is nothing to lower it with): said,
+  /// A declaration whose element the analyzer could not make is left out (there is nothing to lower it with; what
+  /// input does this other than a compile error: not known; no fixture): said,
   /// with where it is, so that what is missing is not missing without a trace (the file is in summary.unread).
   void _noElement(AstNode node, String what) {
     final src = node.toSource().replaceAll(RegExp(r'\s+'), ' ');
