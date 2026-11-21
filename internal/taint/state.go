@@ -208,9 +208,9 @@ type state struct {
 	valStores []*sg.Instr
 	ptrAlias  map[Loc]map[Loc]struct{}
 	copyOf    map[Loc][]Loc // a cell that holds a copy of a struct -> the cells it was copied from
-	locSet       map[*sg.Value]map[Loc]bool
-	locCache     map[*sg.Value][]Loc
-	locsFinal    bool // locCache may be filled: the fixed point of the locations is reached
+	locSet    map[*sg.Value]map[Loc]bool
+	locCache  map[*sg.Value][]Loc
+	locsFinal bool // locCache may be filled: the fixed point of the locations is reached
 
 	branches        *[]*sg.Block
 	edgeGuardCache  map[[2]*sg.Block][]Guard
