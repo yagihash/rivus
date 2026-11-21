@@ -140,8 +140,9 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	opts.TraceElement = o.traceElement
 	if o.verbose {
 		opts.SlowThreshold = 300 * time.Millisecond
-		opts.SlowFunc = func(fn string, d time.Duration, outputs, roots int) {
-			fmt.Fprintf(os.Stderr, "rivus: slow function %s: %v (%d outputs, %d roots)\n", fn, d.Round(time.Millisecond), outputs, roots)
+		opts.SlowFunc = func(fn string, d, cpu time.Duration, outputs, roots int) {
+			// cpu: the thread's own CPU time over the same span (0: no clock on this system); wall time swells with the collector
+			fmt.Fprintf(os.Stderr, "rivus: slow function %s: %v (cpu %v, %d outputs, %d roots)\n", fn, d.Round(time.Millisecond), cpu.Round(time.Millisecond), outputs, roots)
 		}
 	}
 	var res *taint.Result

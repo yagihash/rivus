@@ -37,7 +37,10 @@ type Options struct {
 	// depth_limit; its summary may then miss flows. Zero means the default.
 	Budget int
 	// SlowFunc, if set, is called for functions whose analysis took longer
-	// than SlowThreshold. It is a development aid.
+	// than SlowThreshold. It is a development aid. d is the wall time; cpu is the CPU time of the
+	// goroutine's own thread over the same span (0 when the system has no per-thread clock): wall time
+	// grows with the collector and with the other workers, so a wall time well over the CPU time is not
+	// the function's work. While SlowFunc is set, compute locks its goroutine to its OS thread to read it.
 	// Workers is the number of functions analysed at the same time: the
 	// strongly connected components of one level of the call graph (the ones
 	// that do not call each other) run together. Zero is the number of CPUs.
@@ -53,7 +56,7 @@ type Options struct {
 	// elements first leave their function is printed to stderr. Neither changes the findings.
 	PassStats     bool
 	TraceElement  string
-	SlowFunc      func(fn string, d time.Duration, outputs, roots int)
+	SlowFunc      func(fn string, d, cpu time.Duration, outputs, roots int)
 	SlowThreshold time.Duration
 }
 
@@ -854,6 +857,13 @@ func (e *Engine) compute(fn *sg.Func) *fnResult {
 		findings:    map[findingKey]*rawFinding{},
 		sinkReaches: map[sinkKey]*SinkReach{},
 	}
+	var cpu0 time.Duration
+	var haveCPU bool
+	if e.opts.SlowFunc != nil {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+		cpu0, haveCPU = threadCPU()
+	}
 	began := time.Now()
 	s.analyze()
 	took := time.Since(began)
@@ -869,7 +879,13 @@ func (e *Engine) compute(fn *sg.Func) *fnResult {
 	}
 	if e.opts.SlowFunc != nil {
 		if d := time.Since(began); d > e.opts.SlowThreshold {
-			e.opts.SlowFunc(e.funcID(fn), d, len(sum.Outputs), len(s.cells))
+			var cpu time.Duration
+			if haveCPU {
+				if c1, ok := threadCPU(); ok {
+					cpu = c1 - cpu0
+				}
+			}
+			e.opts.SlowFunc(e.funcID(fn), d, cpu, len(sum.Outputs), len(s.cells))
 		}
 	}
 	// What the function writes to global variables waits for the end of the
