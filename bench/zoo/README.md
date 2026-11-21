@@ -1,7 +1,7 @@
 # zoo: cases of one shape each, with answers that a run backs
 
 The design is in [`docs/DESIGN-zoo.md`](../../docs/DESIGN-zoo.md). This is how to work with what is built
-(stage 1: Go, `bench/zoo-go`; the Dart and Rust zoos follow the same `spec.json`).
+(stage 1: Go, `bench/zoo-go`; stage 2: Dart, `bench/zoo-dart`, see the last section; the Rust zoo follows the same `spec.json`).
 
 **The answer is what the case does when it runs, not what rivus says.** A source returns a marker; a sink
 records what it got and does nothing else. The three runs of the cases (`TestZooExecGo`) say whether the
@@ -92,4 +92,37 @@ of the cases in the analysis (the design says the analysis must not see them).
 ## Light tier
 
 `bench/compare.sh --light` has `zoo-go` (`./...` of `bench/zoo-go`: the cells and `mark`; the harness, the `pure` package and
-`cmd/` are behind the `zooexec` tag). A cell added in head shows as `+N` of that benchmark.
+`cmd/` are behind the `zooexec` tag). A cell added in head shows as `+N` of that benchmark. `zoo-dart` is the same for Dart (`bench/zoo-dart/cells`; the Dart extractor, about 9 s and 1.1 GB).
+
+## Dart (`bench/zoo-dart`)
+
+The same marker, the same judgement (`spec.json`), the same annotations and the same checks as Go. What differs:
+
+| file | what |
+| --- | --- |
+| `bench/zoo-dart/cells` | the package that rivus analyses (`rivus analyze` reads this directory; `compare.sh` has `zoo-dart`). `lib/<family>/<shape>.dart` is one cell = one file = three cases; `rules.yaml`; `packages/zoo_mark` has the **declarations** of the marks with empty bodies (`src`, `In`, `sinkCmd`/`sinkCmdBytes`/`sinkSql`/`sinkHtml`/`sinkPath(base, s)`/`sinkAny`, `cleanCmd` ..., `zooCase`) |
+| `bench/zoo-dart/exec` | the harness: the recording `zoo_mark` (`exec/zoo_mark`, put in place of the declarations by `dependency_overrides`), `lib/cases.dart` (the list of the cells' `register()`; the test checks that every file of `cells/lib` is there), `test/zoo_test.dart` (one `test()` per case) and `test/spec_test.dart` (the constants and the probes of `spec.json`, in both variants). rivus does not read this directory |
+| `cmd/rivus/zoo_dart_test.go` | `TestZooExecDart` (`dart test --coverage` three times: variant 0, variant 1, variant 0 in the reverse order, in different processes; the lines of `cells/lib` that no run executed fail), `TestZooTruthDart`, `TestZooDart`, `TestZooMarkIndependentDart`. They share the comparison of the runs, the checks of the cells and of the lines, and the headline with the Go ones (`zoo_test.go`). `RIVUS_DART` names the Dart command; without it they skip (`RIVUS_REQUIRE_DART=1`: they fail) |
+
+Adding a cell: `cells/lib/<family>/<shape>.dart` with `// @cell(F/<family>/<shape>)` and `// @shape: ...` in the first lines, `void register() { zooCase('F/<family>/<shape>/vuln', vuln); ... }`, the three functions with `// @vuln`, `// @fixed`, `// @decoy` on the line of their declaration (more vulnerable cases are `vuln2` ... with their own tags: `<family>-<shape>-vuln2`), and the file in `exec/lib/cases.dart`.
+The rest is as for Go (steps 3 and 4 above). Things that are Dart's:
+
+* The position of a sink is the first frame of the stack that is in `package:zoo_cells/` (a sink that a callback of the core library calls is the line of the callback). Keep a call of a sink on one line.
+* `sinkAny` records the `toString` of the value: a struct that is given to it needs a `toString` that prints every field.
+* A case may be `async` (the harness awaits it). An Isolate cannot be a case yet: its code runs in another isolate and the coverage does not see it.
+* `In` (a source that is a parameter type, `rules.yaml` `param_type`) is a class with a final field `value`; the handler under test takes it: `void handle(In req) { // @source(tag)`.
+* Flutter itself is not in the zoo: `build`, `onPressed` and the state store are written as small skeletons in the cell (`state/provider-store`, `dart/tearoff-instance` `vuln3`).
+* A pubspec.lock is committed for `cells` and `exec`; CI resolves both with `dart pub get --enforce-lockfile`.
+
+Stage 2 has 21 cells: the 20 of the design (the ten Dart shapes `async-await`, `future-then`, `extension`, `named-args`, `getter-setter`, `patterns-record`, `for-in`, `interp-tostring`, `callable-class`, `tearoff-instance`, and the nine common ones `call/direct`, `call/depth3`, `clos/two-callers`, `state/global-direct`, `state/handler-then-reader`, `cont/list`, `cont/map`, `guard/sanitize-before`, `guard/one-branch`, plus `state/provider-store`) and `dart/super-mixin-impl` (R-16: the review item asks for a mixin).
+Some cells have more than one vulnerable case (`vuln2` ...): the forms that one review item (R-14, R-15, R-16) names are separate cases, because a `@miss` is a mark of one flow.
+
+### What the Dart zoo found (the refs of its `@miss` and `@fp`)
+
+| ref | what | cells |
+| --- | --- | --- |
+| `R-14` | the tear-off of an instance method swaps the receiver and the arguments: the flow is not found (`f = Printer('x').run; f(src())`, `stream.listen(c.onData)`, `Button(onPressed: form.submit)`), and the receiver's value is reported at the sink of the argument | `dart/tearoff-instance` (`vuln`, `vuln2`, `vuln3`, `decoy`) |
+| `R-15` | a variable that a pattern (`var (a, _) = ...`) or a for-in (`for (var x in ...)`) declares is not a cell: a closure that assigns it is not seen | `dart/patterns-record` `vuln4`, `dart/for-in` `vuln3` (a pattern, an if-case, a switch case and a for-in whose variable is only read are found) |
+| `R-16` | the implementation that comes from a mixin or a superclass of the class is not a candidate of a call through the interface; the interpolation `'$w'` does not call the `toString` (the result carries the whole object) | `dart/super-mixin-impl` (`vuln`, `vuln2`, `decoy`), `dart/interp-tostring` `decoy` |
+| `ZOO-D1` | the call of an object of a class with a `call` method (`r(x)`, not `r.call(x)`) has no callee: `unresolved_callee` | `dart/callable-class` (`vuln`, `decoy`) |
+| `KEYED-MAP` | the keys of a list or a map are not told apart (also a `Map<Object, _>` that a store keeps by provider) | `cont/list`, `cont/map`, `state/provider-store` (the decoys) |

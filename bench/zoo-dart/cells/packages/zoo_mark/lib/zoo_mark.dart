@@ -9,8 +9,8 @@ import 'dart:async';
 /// The source that is a parameter type (rules.yaml: param_type). The handler under test takes an [In]; a
 /// case makes one with `In('tag')`.
 class In {
-  In(String tag);
-  String get value => '';
+  In(String tag) : value = tag;
+  final String value;
 }
 
 /// The marker of the tag (a source).

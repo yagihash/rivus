@@ -56,6 +56,11 @@ jobs:
       - name: Analyze the extractor
         working-directory: extractor/dart
         run: dart analyze lib bin
+      - name: Analyze the Dart zoo
+        run: |
+          for d in bench/zoo-dart/cells bench/zoo-dart/exec; do
+            (cd "$d" && dart analyze)
+          done
       - name: Test with the Dart extractor
         env:
           RIVUS_DART: dart

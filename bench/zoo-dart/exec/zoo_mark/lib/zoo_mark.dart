@@ -94,7 +94,11 @@ Future<void> runCase(String id) async {
 List<Hit> hits() => List.of(_hits);
 
 /// The marker of the tag.
-String src(String tag) {
+String src(String tag) => _marker(tag);
+
+// (the class In makes its text with this too, and not with src: the analysis must not find a second source
+// in the recording implementation, which is what TestZooMarkIndependentDart holds)
+String _marker(String tag) {
   _allTags.add(tag);
   final l = _caseSrcs.putIfAbsent(_current, () => []);
   if (!l.contains(tag)) l.add(tag);
@@ -107,7 +111,7 @@ String src(String tag) {
 
 /// The source that is a parameter type.
 class In {
-  In(String tag) : value = src(tag);
+  In(String tag) : value = _marker(tag);
   final String value;
 }
 

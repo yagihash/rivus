@@ -260,8 +260,10 @@ func TestZooDart(t *testing.T) {
 	lines, cells := zooDartScan(t, root)
 	cellsDir := filepath.Join(root, "cells")
 	c := checkCuratedIR(t, cellsDir, zooDartStream(t, cellsDir), ".dart")
-	if t.Failed() || os.Getenv("ZOO_ALONE") == "1" { // ZOO_ALONE=1 asks for it
-		t.Log("the zoo failed as a whole: each cell is analysed alone below (green alone: mixed up with the others; red alone: the cell)")
+	if t.Failed() {
+		t.Log("the zoo failed as a whole: ZOO_ALONE=1 analyses each cell alone (green alone: mixed up with the others; red alone: the cell; the Dart extractor takes about 10 s for each)")
+	}
+	if os.Getenv("ZOO_ALONE") == "1" { // asked for: the extractor runs once for each cell
 		zooDartAlone(t, root, cells)
 	}
 	zooHeadline(t, "zoo-dart", lines, cells, obs, c)
@@ -327,7 +329,24 @@ func TestZooMarkIndependentDart(t *testing.T) {
 	}
 	rec := findings(other)
 	if strings.Join(plain, "\n") != strings.Join(rec, "\n") {
-		t.Errorf("the findings change with the implementation of zoo_mark:\n plain: %v\n recording: %v", plain, rec)
+		in := func(l []string, s string) bool {
+			for _, x := range l {
+				if x == s {
+					return true
+				}
+			}
+			return false
+		}
+		for _, f := range plain {
+			if !in(rec, f) {
+				t.Errorf("only without the recording implementation: %s", f)
+			}
+		}
+		for _, f := range rec {
+			if !in(plain, f) {
+				t.Errorf("only with the recording implementation: %s", f)
+			}
+		}
 	}
 	if len(plain) == 0 {
 		t.Error("no findings")
