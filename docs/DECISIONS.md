@@ -1498,3 +1498,5 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 - 候補ごとの sink の finding は、候補の 1 つが当たれば出る。実際には別の実装が呼ばれる経路でも出る(不確実性で示す)
 
 **検証:** `testdata/go/cases/ownif`(自前のインターフェース越しの `(*sql.DB).QueryContext`、候補が 2 つ(標準ライブラリと自前の別の実装)で不確実性が付く、sink の引数でない値、sink でない実装だけ)。動物園の `dyn/sink-behind-own-interface` の `vuln2`(`@miss` を外した)。Dart と Rust のセル(自前のインターフェースの実装の本体に sink がある形)と、おとりは、変わらない。
+
+`compare.sh`(軽い層 + Gitea v1.26.4): 削除 0。追加は、動物園の `vuln2` の 1 件だけ(意図した変化)。gogs 2 つ、gin-vue-admin、go-test-bench、gophish、casdoor、dart-pub、parseable、Gitea は、追加 0(`unmodeled_library_call` が Gitea で 1 件増えただけ)。実際のコードでは、候補の実装に sink のルールがあるインターフェース越しの呼び出しが、これらのコードにはなかった、ということ。
