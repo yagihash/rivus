@@ -32,7 +32,7 @@ Google Cloud は、何を「外からの入力」と数えるかが製品ごと�
 | **IR が言う型の名前** | `*cloud.google.com/go/pubsub.Message` | `*cloud.google.com/go/pubsub/v2.Message` |
 | 生成された protobuf の型 | `cloud.google.com/go/pubsub/apiv1/pubsubpb` | `cloud.google.com/go/pubsub/v2/apiv1/pubsubpb`(別の型) |
 
-* **別名は解決されず、使った名前で IR に出る**(`rivus extract` で確かめた)。だから `param_type` の行は、**v1 と v2 で別の 2 行**。内部の型(`.../internal/pubsub.Message`)の名前で書くと、何にも当たらず、黙る。
+* **別名は、使った名前で IR に出る**が、照合は別名をほどいて行う(ADR-083)。別名の名前(`.../pubsub.Message`)でも、実体の名前(`.../internal/pubsub.Message`)でも当たる。v1 と v2 は別の型なので、`param_type` の行は別の 2 行のまま。メソッドのシンボルは実体の型の側(別名の名前では当たらない)。
 * 2026-11-21 の時点で、v1 のサポートは 6 週間で終わる。それでも、既存のコードの多くが v1 なので、**両方の版に行を置く**(形は同じ。行は安い)。v2 を先に書く。
 * `bench/gcp` に、どちらの版も、まだない(YAML の段で足す)。
 

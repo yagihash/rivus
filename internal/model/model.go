@@ -248,6 +248,21 @@ func (c *ArgTypeCond) Holds(t string) bool {
 	return false
 }
 
+// HoldsWith is Holds, where a type and the same type under another name (an
+// alias) are the same: canon gives the name of the type behind the aliases.
+func (c *ArgTypeCond) HoldsWith(t string, canon func(string) string) bool {
+	if c == nil || c.Holds(t) {
+		return true
+	}
+	ct := canon(t)
+	for _, x := range c.Types {
+		if canon(x) == ct {
+			return true
+		}
+	}
+	return false
+}
+
 // Sanitizer removes labels (and optionally adds others) from what flows from
 // its inputs to its result.
 type Sanitizer struct {

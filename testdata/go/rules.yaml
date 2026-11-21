@@ -103,6 +103,15 @@ sources:
     type: "*example.com/cases/cases/paramshare/ptype.Req"
     labels: [user_input]
 
+  # One type under two names (testdata/go/cases/typealias): the rule for A names
+  # the alias, the rule for B names the type.
+  - kind: param_type
+    type: "*example.com/cases/cases/typealias/api.AliasA"
+    labels: [user_input]
+  - kind: param_type
+    type: "*example.com/cases/cases/typealias/real.B"
+    labels: [user_input]
+
   # A call that fills its argument (testdata/go/cases/dbsrc).
   - symbol: example.com/cases/lib.Fill
     out: [0]
@@ -118,6 +127,14 @@ sources:
   - kind: field
     field: example.com/cases/cases/dbsrc.Row.*
     labels: [stored]
+
+  # The same type under two names (testdata/go/cases/typealias).
+  - kind: field
+    field: example.com/cases/cases/typealias/api.AliasC.F
+    labels: [user_input]
+  - kind: field
+    field: example.com/cases/cases/typealias/real.D.F
+    labels: [user_input]
 
   # A field of a struct (testdata/go/cases/irshape).
   - kind: field

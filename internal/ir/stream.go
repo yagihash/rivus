@@ -20,6 +20,7 @@ type record struct {
 	Impls  *Implementations `json:"implementations,omitempty"`
 	Global *Global          `json:"global,omitempty"`
 	Type   *TypeInfo        `json:"type,omitempty"`
+	Alias  *TypeAlias       `json:"type_alias,omitempty"`
 
 	Text      *TextGroup `json:"text,omitempty"`
 	CallText  *CallText  `json:"call_text,omitempty"`
@@ -35,6 +36,7 @@ const (
 	recImpls  = "implementations"
 	recGlobal = "global"
 	recType   = "type"
+	recAlias  = "type_alias"
 	recText   = "text"
 	recCall   = "call_text"
 	recFunc2  = "func_text"
@@ -66,6 +68,11 @@ func Write(w io.Writer, p *Program) error {
 	}
 	for i := range p.Types {
 		if err := enc.Encode(record{Kind: recType, Type: &p.Types[i]}); err != nil {
+			return err
+		}
+	}
+	for i := range p.TypeAliases {
+		if err := enc.Encode(record{Kind: recAlias, Alias: &p.TypeAliases[i]}); err != nil {
 			return err
 		}
 	}
@@ -139,6 +146,8 @@ func Read(r io.Reader) (*Program, error) {
 			p.Impls = append(p.Impls, *rec.Impls)
 		case rec.Kind == recType && rec.Type != nil:
 			p.Types = append(p.Types, *rec.Type)
+		case rec.Kind == recAlias && rec.Alias != nil:
+			p.TypeAliases = append(p.TypeAliases, *rec.Alias)
 		case rec.Kind == recGlobal && rec.Global != nil:
 			p.Globals = append(p.Globals, *rec.Global)
 		case rec.Kind == recText && rec.Text != nil:

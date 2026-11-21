@@ -1,0 +1,13 @@
+// Package api re-exports the types of real under other names, as a client
+// library does with the types of its internal package.
+package api
+
+import "example.com/cases/cases/typealias/real"
+
+type AliasA = real.A
+
+type AliasB = real.B
+
+type AliasC = real.C
+
+type AliasD = real.D

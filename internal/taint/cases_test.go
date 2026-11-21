@@ -374,6 +374,8 @@ func TestDispatchWithOneCandidateStaysMixed(t *testing.T) {
 
 func TestEntryPoints(t *testing.T) { checkCase(t, "entry") }
 
+func TestTypeAliasInRules(t *testing.T) { checkCase(t, "typealias") }
+
 func TestGuard(t *testing.T) { checkCase(t, "guard") }
 
 func findingWithSink(t *testing.T, res *Result, marker string) *Finding {

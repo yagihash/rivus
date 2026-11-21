@@ -1750,3 +1750,15 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 **確かめたこと:** `testdata/go/cases/writer`(書き手のフィールドを読む本体は鳴らない。書いたデータを読む本体と、書き手全体の読みは鳴る)。動物園の `dyn/stdlib-writer-own`、`dyn/http-middleware-chain`、`conv/buffer-writestring` は出たまま。Gitea(`bench/compare.sh --heavy`、base は ADR-078 の main): 367 → 358、追加 3、削除 12、7 パスで収束(再解析 112,695 → 112,353)。削除 12 は、1 件ずつ経路を読んだ: 9 件は、ログのファイルの書き手(`rotatingfilewriter`)の 3 つの sink に、書いたデータでなく書き手のファイル名を通って届いていた雑音(経路 100 以上、source の関数で始まらない)。3 件(`UploadPackage` と `PutManifest` を source にしたもの)は、同じ sink が別の source(同じ形の `Context`)で見つかっており、代表の source が変わっただけで、sink は失われていない(追加の 3 件も同じ入れ替わり)。本物の finding が消えた例はない。
 
 **限界:** ADR-075 の追加 20 件のうち、残るのは 8 件(sink は 4 か所)。この変更の根(書き込みの置き先)ではない: (1) 汚れたリクエストの context そのものを `io.Writer` として渡した先(`event.WriteTo(ctx)`)で、`w.Write` の候補に別の実装(`RotatingFileWriter`)が入り、その受け手が汚れる。これは受け手の同一視(XTALK)の根で、呼び出し元が渡した型で候補を絞る仕事(`narrow.go`)の範囲。(2) 共有状態を通る長い経路(`shared_state`)。`ctx.Resp` を包む形(XSS 2 件)は、sink 単位では、変更の前後で件数が同じで、この変更の効果は区別できない。
+
+
+## ADR-083: Go の型の別名は、ルールの側で同義に扱う。IR は使った名前のまま、別名の表(`type_aliases`)を足す
+
+**背景:** Go の IR は、型を使った名前で出す(別名は解決しない)。Pub/Sub の v1 / v2 の `Message` は、ルートのモジュールの内部の型の別名で、`cloudevents/sdk-go/v2.Event` は `event.Event` の別名。利用者が実体の名前(正しい型の名前)でルールを書くと、コードが別名で書いた引数に当たらず、黙る(docs/GCP-MODELS.md)。
+
+**決めたこと:**
+1. 抽出器は、読んだ全部のパッケージの、型の別名の宣言(`type A = B`。型引数なしのもの)を、`type_alias` の記録(`name` と、別名をほどいた `target`)で、IR の末尾に足す(Program の `type_aliases`)。足すだけで、古い IR はそのまま読める(表が空)。型の名前そのものは変えない。
+2. 照合は、ルールの型と IR の型の**両方を、別名をほどいた名前**にして比べる(`ir.Program.CanonType`。`*` と `[]` の接頭辞は残す)。だから、別名の名前で書いたルールも、実体の名前で書いたルールも、別名で書いたコードにも実体で書いたコードにも当たる。対象: `param_type`、`when_arg_type` の型、`field`(`pkg.Type.field`、`pkg.Type.*`)。
+3. 照合の側で同義にするので、結果が変わるのは、今まで黙っていた所が鳴る方向だけ。
+
+**限界:** メソッドのシンボル(`pkg.Type.Method`)は、メソッドが実体の型に宣言されるので、IR のシンボルは常に実体の側。ルールを別名の名前の受け手で書くと当たらない(実体の側で書く。docs/GCP-MODELS.md の `DataAs` の行)。入れ子の型引数の中の別名(`[]Alias`の `[]` は扱うが、`map[string]Alias`、`Foo[Alias]`)はほどかない。Dart の `typedef`: 抽出器の型は `element` のクラスで、型の側はすでに実体(別名の名前で書いたルールが当たらない穴は、同じ表を足せば塞げる。未着手)。Rust: 型の別名は rustc が展開し、`use … as` は定義の道に影響しないので、同じ穴はない(未確認の範囲は、`impl` の対象の別名)。

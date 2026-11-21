@@ -48,6 +48,18 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 	for _, f := range prog.Funcs {
 		byID[f.ID] = f
 	}
+	canon := prog.CanonType()
+	// the field rules by the type behind its aliases
+	fields := rules.Fields
+	if len(prog.TypeAliases) > 0 {
+		fields = make(map[string][]model.Source, len(rules.Fields))
+		for k, v := range rules.Fields {
+			if i := strings.LastIndexByte(k, '.'); i > 0 {
+				k = canon(k[:i]) + k[i:]
+			}
+			fields[k] = append(fields[k], v...)
+		}
+	}
 	for _, fn := range prog.Funcs {
 		if fn.Dep {
 			continue
@@ -97,7 +109,7 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 			}
 			t := string(prm.Type)
 			for _, src := range rules.ParamTypes {
-				if src.Type == t {
+				if src.Type == t || canon(src.Type) == canon(t) {
 					add(&Site{Role: RoleSource, Kind: model.KindParamType, Symbol: t, Labels: src.Labels, Src: []model.Source{src}, irpos: paramPos(i), IR: &IRRef{Func: fn, Param: i}})
 				}
 			}
@@ -120,7 +132,7 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 							if srcs := rules.CallSources[sym]; len(srcs) > 0 {
 								add(&Site{Role: RoleSource, Kind: model.KindCallResult, Symbol: sym, Labels: labelsOf(srcs), IR: at, Src: srcs, irpos: in.Pos, Callee: string(c.ID)})
 							}
-							if sinks := sinksAt(fn, vin, c.Recv, rules.Sinks[sym]); len(sinks) > 0 {
+							if sinks := sinksAt(fn, vin, c.Recv, rules.Sinks[sym], canon); len(sinks) > 0 {
 								add(&Site{Role: RoleSink, Kind: "call", Symbol: sym, Category: sinks[0].Category, Labels: acceptsOf(sinks), IR: at, Sink: sinks, irpos: in.Pos, Callee: string(c.ID)})
 							}
 						}
@@ -133,7 +145,7 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 					if srcs := rules.CallSources[sym]; len(srcs) > 0 {
 						add(&Site{Role: RoleSource, Kind: model.KindCallResult, Symbol: sym, Labels: labelsOf(srcs), IR: at, Src: srcs, irpos: in.Pos})
 					}
-					if sinks := sinksAt(fn, in, in.Callee.Kind == ir.CalleeDynamic || (in.Callee.Kind == ir.CalleeStatic && in.Callee.Recv), rules.Sinks[sym]); len(sinks) > 0 {
+					if sinks := sinksAt(fn, in, in.Callee.Kind == ir.CalleeDynamic || (in.Callee.Kind == ir.CalleeStatic && in.Callee.Recv), rules.Sinks[sym], canon); len(sinks) > 0 {
 						add(&Site{Role: RoleSink, Kind: "call", Symbol: sym, Category: sinks[0].Category, Labels: acceptsOf(sinks), IR: at, Sink: sinks, irpos: in.Pos})
 					}
 					if in.Callee.Kind == ir.CalleeDynamic {
@@ -149,7 +161,7 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 							if csym == "" || csym == sym {
 								continue
 							}
-							if sinks := sinksAt(fn, in, true, rules.Sinks[csym]); len(sinks) > 0 {
+							if sinks := sinksAt(fn, in, true, rules.Sinks[csym], canon); len(sinks) > 0 {
 								add(&Site{Role: RoleSink, Kind: "call", Symbol: csym, Category: sinks[0].Category, Labels: acceptsOf(sinks), IR: at, Sink: sinks, irpos: in.Pos, Callee: string(id)})
 							}
 						}
@@ -165,14 +177,14 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 					if len(in.Args) == 0 {
 						continue
 					}
-					key := fieldKeyOf(string(fn.Locals[in.Args[0]].Type), field)
+					key := fieldKeyOf(canon(string(fn.Locals[in.Args[0]].Type)), field)
 					if key == "" {
 						continue
 					}
-					srcs := rules.Fields[key]
+					srcs := fields[key]
 					if i := strings.LastIndexByte(key, '.'); i > 0 {
 						// "pkg.Type.*": any field of the type
-						srcs = append(append([]model.Source(nil), srcs...), rules.Fields[key[:i]+".*"]...)
+						srcs = append(append([]model.Source(nil), srcs...), fields[key[:i]+".*"]...)
 					}
 					if len(srcs) > 0 {
 						pos := in.Pos
@@ -389,7 +401,7 @@ func isConstantRef(form *irssa.Form, r irssa.Ref, depth int) bool {
 // sinksAt keeps the sinks whose condition on the type of an argument holds at
 // this call. hasRecv says that the first of in.Args is the receiver: when_arg_type counts the arguments
 // without it, as args does, and recv: true is the condition on it.
-func sinksAt(fn *ir.Func, in ir.Instr, hasRecv bool, sinks []model.Sink) []model.Sink {
+func sinksAt(fn *ir.Func, in ir.Instr, hasRecv bool, sinks []model.Sink, canon func(string) string) []model.Sink {
 	var out []model.Sink
 	for _, s := range sinks {
 		if c := s.WhenArgType; c != nil {
@@ -403,7 +415,7 @@ func sinksAt(fn *ir.Func, in ir.Instr, hasRecv bool, sinks []model.Sink) []model
 			case hasRecv:
 				at++
 			}
-			if at < 0 || at >= len(in.Args) || !argTypeHolds(fn, in.Args[at], c) {
+			if at < 0 || at >= len(in.Args) || !argTypeHolds(fn, in.Args[at], c, canon) {
 				continue
 			}
 		}
@@ -415,8 +427,8 @@ func sinksAt(fn *ir.Func, in ir.Instr, hasRecv bool, sinks []model.Sink) []model
 // argTypeHolds checks the condition against the type of the local and, when the
 // local is an interface made by a conversion (an http.ResponseWriter passed as
 // an io.Writer), against the type that was converted.
-func argTypeHolds(fn *ir.Func, l ir.LocalID, c *model.ArgTypeCond) bool {
-	if c.Holds(string(fn.Locals[l].Type)) {
+func argTypeHolds(fn *ir.Func, l ir.LocalID, c *model.ArgTypeCond, canon func(string) string) bool {
+	if c.HoldsWith(string(fn.Locals[l].Type), canon) {
 		return true
 	}
 	for depth := 0; depth < 4; depth++ {
@@ -436,7 +448,7 @@ func argTypeHolds(fn *ir.Func, l ir.LocalID, c *model.ArgTypeCond) bool {
 		if src < 0 {
 			return false
 		}
-		if c.Holds(string(fn.Locals[src].Type)) {
+		if c.HoldsWith(string(fn.Locals[src].Type), canon) {
 			return true
 		}
 		l = src

@@ -145,6 +145,7 @@ func Extract(p *gossa.Program, opts Options) (*ir.Program, error) {
 	}
 	sort.Slice(out.Globals, func(i, j int) bool { return out.Globals[i].Name < out.Globals[j].Name })
 	out.Impls = impls
+	out.TypeAliases = typeAliases(p)
 	return out, nil
 }
 
@@ -600,4 +601,35 @@ func isEntry(fn *ssa.Function) bool {
 		return true
 	}
 	return name == "main" && fn.Pkg != nil && fn.Pkg.Pkg.Name() == "main"
+}
+
+// typeAliases lists the type aliases the packages declare, so that a rule that
+// names an alias and one that names its type both match (ADR-083).
+func typeAliases(p *gossa.Program) []ir.TypeAlias {
+	if p.SSA == nil {
+		return nil
+	}
+	var out []ir.TypeAlias
+	for _, pkg := range p.SSA.AllPackages() {
+		if pkg.Pkg == nil {
+			continue
+		}
+		sc := pkg.Pkg.Scope()
+		for _, n := range sc.Names() {
+			tn, ok := sc.Lookup(n).(*types.TypeName)
+			if !ok || !tn.IsAlias() {
+				continue
+			}
+			a, ok := tn.Type().(*types.Alias)
+			if !ok || a.TypeArgs().Len() > 0 || a.TypeParams().Len() > 0 {
+				continue
+			}
+			name, target := typeString(a), typeString(types.Unalias(a))
+			if name != target {
+				out = append(out, ir.TypeAlias{Name: ir.TypeID(name), Target: ir.TypeID(target)})
+			}
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
 }

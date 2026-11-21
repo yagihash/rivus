@@ -512,6 +512,10 @@ type Program struct {
 	Types []TypeInfo `json:"types,omitempty"`
 	// Globals are the package variables the functions use.
 	Globals []Global `json:"globals,omitempty"`
+	// TypeAliases are the names that stand for another type (Go's `type A = B`).
+	// A type in the IR keeps the name the code used; a rule that names the
+	// alias and one that names the type behind it both match (ADR-083).
+	TypeAliases []TypeAlias `json:"type_aliases,omitempty"`
 	// The texts an extractor in another process writes, because the core
 	// cannot ask it for them (see StreamTexts).
 	Texts     []TextGroup `json:"texts,omitempty"`
@@ -673,3 +677,37 @@ type NarrowStats struct {
 // BasisClosedWorldEntry is the assumption of a narrowing by the callers of a function: the program has a
 // start, and what it can call from outside is nothing that is read, so the callers that are read are all.
 const BasisClosedWorldEntry = "closed_world_entry"
+
+// TypeAlias says that the type Name is another name of Target.
+type TypeAlias struct {
+	Name   TypeID `json:"name"`
+	Target TypeID `json:"target"`
+}
+
+// CanonType returns a function that gives the type behind the aliases of a
+// type name, keeping the pointer and slice prefixes: two names of one type
+// give one result. Without aliases it is the identity.
+func (p *Program) CanonType() func(string) string {
+	if len(p.TypeAliases) == 0 {
+		return func(s string) string { return s }
+	}
+	m := make(map[string]string, len(p.TypeAliases))
+	for _, a := range p.TypeAliases {
+		m[string(a.Name)] = string(a.Target)
+	}
+	return func(s string) string {
+		i := 0
+		for i < len(s) && (s[i] == '*' || s[i] == '[' || s[i] == ']') {
+			i++
+		}
+		base := s[i:]
+		for n := 0; n < 8; n++ {
+			t, ok := m[base]
+			if !ok || t == base {
+				break
+			}
+			base = t
+		}
+		return s[:i] + base
+	}
+}
