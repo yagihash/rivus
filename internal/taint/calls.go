@@ -113,6 +113,14 @@ type callee struct {
 	fn *sg.Func
 }
 
+// readsImpls tells whether a call through an interface that has a model also reads the
+// project's own implementations of the method. It does unless the rule is a sanitizer: that
+// says the result is clean, and a body that is read would take it back.
+func (s *state) readsImpls(sym string) bool {
+	rules := s.eng.rules
+	return rules.ReadsImpls(sym) || len(rules.Sanitizers[sym]) == 0
+}
+
 func (s *state) callBody(cc *callCtx) {
 	ci := cc.in
 
@@ -209,13 +217,15 @@ func (s *state) callBody(cc *callCtx) {
 	modelled := cc.sym != "" && rules.HasModel(cc.sym)
 	if modelled {
 		s.applyModel(cc)
-		if ci.Callee.Kind != ir.CalleeDynamic || !rules.ReadsImpls(cc.sym) {
+		if ci.Callee.Kind != ir.CalleeDynamic || !s.readsImpls(cc.sym) {
 			return
 		}
-		// A method of a trait that the model describes is also implemented by the
-		// code (Iterator::next of a type of the project): the model says what the
-		// implementations outside the code do, and the code of the project's own is
-		// read (not that of its dependencies: the model is what says what they do).
+		// A method of an interface or trait that the model describes is also implemented by
+		// the code (Iterator::next, io.Writer.Write, http.Handler.ServeHTTP of a type of the
+		// project): the model says what the implementations outside the code do, and the code
+		// of the project's own is read (not that of its dependencies: the model is what says
+		// what they do). The two are joined, so what the model gives is never lost: a model
+		// that says `pure` leaves the body alone to say what happens.
 		if fns, _ := s.callees(ci); !hasOwnBody(fns) {
 			return
 		}

@@ -39,8 +39,8 @@ sinks:
     args: [0]
     category: path_traversal
 
-# a trait of the crate that a model describes (the receiver goes to the result), without `read_impls`:
-# the implementations of the crate are not read (src/modelled.rs)
+# a trait of the crate that a model describes (the receiver goes to the result): the implementations of
+# the crate are read as well as the model applied (src/modelled.rs)
 propagators:
   - symbol: curated::modelled::Render::render
     flows: [{from: recv, to: result}]

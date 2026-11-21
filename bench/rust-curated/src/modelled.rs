@@ -2,9 +2,8 @@ use crate::{sink, source};
 
 // A trait method that a model describes (`curated::modelled::Render::render`, in rules.yaml: the receiver
 // goes to the result), called through a generic parameter, so that it is dynamic. The model is applied,
-// and the code of the project's own implementations is not read, because the model does not say
-// `read_impls` (RUST-14: `internal/taint/calls.go`, after `applyModel`): the model hides what the
-// implementations do, though the project has them.
+// and the code of the project's own implementations is read as well (ADR-075): what the model gives and
+// what the bodies do are joined, so that the model does not hide what the implementations do.
 
 pub trait Render {
     fn render(&self) -> String;
@@ -15,7 +14,7 @@ pub struct Leaky;
 
 impl Render for Leaky {
     fn render(&self) -> String {
-        source() // @source(model-body) @miss(silent)
+        source() // @source(model-body)
     }
 }
 

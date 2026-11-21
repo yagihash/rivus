@@ -38,7 +38,7 @@
 | 指摘 | 原因のコード(今) | フィクスチャ | 今の結果 |
 | --- | --- | --- | --- |
 | RUST-13: `Fn` / `FnMut` を `&self` で呼ぶと、受け手がセルで、呼び元ごとに絞れない | internal/taint/calls.go:357 `dispatchGuards`(`recv.Kind != sg.KParam` で nil)。さらに makeDispatchGuards は、候補が method でない(`!fn.Recv`)と、ガードを付けない(クロージャは全部これ) | rust-curated/src/fnself.rs: `fn_ret_clean` / `fn_mut_ret_clean`(`@sink(none) @fp`)、`fn_sink_a/b`、`fn_mut_sink_a/b`(`@nosink` + `@fp`)。対照の `fn_ref_clean`(`&impl Fn`、受け手がパラメータそのもの) | 6 か所とも `@fp`(落ちる)。対照も落ちる: 受け手がセルであることだけが原因ではなく、クロージャの候補にガードが付かない(`!fn.Recv`)ことも原因。案 2 の受け入れは、この 7 か所の `@fp` が全部消えること |
-| RUST-14: モデルを当てると、`read_impls` でない動的呼び出しの本体を読まない | internal/taint/calls.go:182-196(`modelled` のあと、`!rules.ReadsImpls(cc.sym)` で return)。`read_impls: true` は rust-std.yaml と rust-misc.yaml だけ | rust-curated/src/modelled.rs: `model_body`(source が実装の本体の中、`@miss`)、`model_drop`(実装が引数を捨てる、`@sink(none) @fp`)。rules.yaml に、プロジェクトの trait のメソッド(`Render::render`、`Mask::mask`)の propagator(recv→result)を足した | `@miss` 1、`@fp` 1(どちらも黙る)。モデルを外して流すと、`@miss` の流れは見つかり、`@fp` は静かになる(実験)。本体を読む修正(別件)が要る |
+| RUST-14: モデルを当てると、`read_impls` でない動的呼び出しの本体を読まない | internal/taint/calls.go:182-196(`modelled` のあと、`!rules.ReadsImpls(cc.sym)` で return)。`read_impls: true` は rust-std.yaml と rust-misc.yaml だけ | rust-curated/src/modelled.rs: `model_body`(source が実装の本体の中、`@miss`)、`model_drop`(実装が引数を捨てる、`@sink(none) @fp`)。rules.yaml に、プロジェクトの trait のメソッド(`Render::render`、`Mask::mask`)の propagator(recv→result)を足した | **ADR-075 で `@miss` は直った**(モデルを当てたあと、本体も読む)。`@fp`(`model_drop`)は残る: モデルは「受け手が結果に入る」と言い続け、本体の和でも消えない |
 | DART-12: `dynamic` のメソッド呼び出しが、`dart:core#dynamic.invoke` の静的呼び出しになり、モデルで覆われて痕跡が残らない | extractor/dart/lib/exprs.dart:347(`_methodInvocation`)、internal/model/builtin/dart-core.yaml:8(`flows: [{from: args, to: result}]`) | dart-curated/lib/dynamic_calls.dart: `dynamic_arg`(メソッドの中の sink、`@miss`)、`dynamic_body`(メソッドの本体の source、`@miss`)、`dynamic_drop`(`@sink(none) @fp`) | `@miss` 2、`@fp` 1。モデルを外す対照は、していない |
 
 足したあとの数: Dart `@miss` 34、`@fp` 5。Rust `@miss` 12、`@fp` 22、`@noisy` は 183 件のまま(新しいフィクスチャは、他と型が重ならない署名(`u8`、`u16`、`u32`、`u64`、`i8`)で、他のクロージャを候補にしない)。
@@ -145,7 +145,6 @@ Rust の `@noisy` は README に「17 か所」とあるが、ソースの注釈
 | `emit` | src/structs.rs:74 → src/structs.rs:73 | `STORE` | ヘルパー側: structs.rs:66 に unmodeled_library_call |
 | `emit-two` | src/structs.rs:83 → src/structs.rs:81 | `STORE` | 同上 |
 | `across-each` | src/across.rs:18 → src/across.rs:19 | `GEN-DYN` | `numeric_stop`(`vec!` のマクロの中。見逃しの説明にならないので数えない)だけ。ヘルパー側に dynamic_dispatch |
-| `model-body` | src/modelled.rs:18 → src/modelled.rs:28 | (RUST-14: モデルが本体を隠す) | (なし) |
 
 ### Go(1 件)
 

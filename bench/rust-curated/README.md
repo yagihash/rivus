@@ -29,7 +29,7 @@ The marks are those of `bench/go-curated` (`@source(tag)`, `@sink(tag)`, `@sink(
 | `across.rs` | the helper is in another crate (`shared`) |
 | `parseable.rs` | the shapes of the parseable advisories (`bench/parseable`): `web::Query` to the Location header, `web::Json` to the path of `put_object` (a trait with two implementations), `web::Form` stored in a global `OnceLock<RwLock<HashMap>>` and posted to later (**not found**, `pb_target`, `@miss(silent)`: the SSRF of GHSA-64vg that the benchmark misses too), `web::Path` to `Client::get`. The mark of each source is on the line of its `into_inner` (the place where the value of a `param_type` is first used) |
 | `fnself.rs` | `Fn` / `FnMut` called through `&self`, two callers each, own signatures so as not to change other counts: the acceptance of ADR-047 (draft 2), RUST-13; `@fp` on all, to go |
-| `modelled.rs` | a trait method of the crate that rules.yaml models (no `read_impls`), called through a generic: the model hides the implementation (RUST-14); `@miss` 1, `@fp` 1 |
+| `modelled.rs` | a trait method of the crate that rules.yaml models, called through a generic: the model is applied and the implementation is read as well (ADR-075); `@miss` 0, `@fp` 1 |
 
 ## Closures that capture, and where they are called (`src/callbacks.rs`)
 

@@ -25,7 +25,7 @@ func (shellWriter) Write(p []byte) (int, error) {
 
 func vuln() { // @vuln
 	var out io.Writer = shellWriter{}
-	_, _ = out.Write(mark.SrcBytes("dyn-stdlib-writer-own-vuln")) // @source(dyn-stdlib-writer-own-vuln) @miss(silent) @ref(R-04)
+	_, _ = out.Write(mark.SrcBytes("dyn-stdlib-writer-own-vuln")) // @source(dyn-stdlib-writer-own-vuln)
 }
 
 type fixedWriter struct{}
@@ -58,5 +58,5 @@ func decoy() { // @decoy
 	var quiet io.Writer = quietWriter{}
 	var loud io.Writer = loudWriter{}
 	_, _ = quiet.Write([]byte("constant"))
-	_, _ = loud.Write(mark.SrcBytes("dyn-stdlib-writer-own-decoy")) // @source(dyn-stdlib-writer-own-decoy) @miss(silent) @ref(R-04)
+	_, _ = loud.Write(mark.SrcBytes("dyn-stdlib-writer-own-decoy")) // @source(dyn-stdlib-writer-own-decoy)
 }

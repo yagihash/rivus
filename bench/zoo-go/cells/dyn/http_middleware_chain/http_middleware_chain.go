@@ -32,7 +32,7 @@ func (i inner) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func vuln() { // @vuln
-	serve(logging{next: inner{v: mark.Src("dyn-http-middleware-chain-vuln")}}) // @source(dyn-http-middleware-chain-vuln) @miss(silent) @ref(R-04,CORE-J)
+	serve(logging{next: inner{v: mark.Src("dyn-http-middleware-chain-vuln")}}) // @source(dyn-http-middleware-chain-vuln)
 }
 
 type loggingFixed struct{ next http.Handler }
@@ -61,5 +61,5 @@ func (i innerDecoy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func decoy() { // @decoy
-	serve(loggingDecoy{next: innerDecoy{a: mark.Src("dyn-http-middleware-chain-decoy"), b: "constant"}}) // @source(dyn-http-middleware-chain-decoy) @miss(silent) @ref(R-04,CORE-J)
+	serve(loggingDecoy{next: innerDecoy{a: mark.Src("dyn-http-middleware-chain-decoy"), b: "constant"}}) // @source(dyn-http-middleware-chain-decoy)
 }
