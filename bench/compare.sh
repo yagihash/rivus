@@ -127,6 +127,7 @@ spec() {
     dart-curated)  KIND=dart; DIR="$R/bench/dart-curated"; RULES="$DIR/rules.yaml" ;;
     rust-curated)  KIND=rust; DIR="$R/bench/rust-curated"; RULES="$DIR/rules.yaml" ;;
     go-synth-S)    KIND=synth; DIR="$WORK/synth/S"; RULES="$DIR/rules.yaml" ;;   # DIR is made per version in setup()
+    go-scale)      KIND=synth; DIR="$WORK/synth/scale"; RULES="$DIR/rules.yaml" ;;   # bench/go-scale: all the shapes, made by the generator of this script's tree for both sides
     gogs-9a9388ac) URL=https://github.com/gogs/gogs; COMMIT=8a3b8198a; CLONE=gogs; RULES="$R/bench/gogs/rules.yaml"; TRUTH="$R/bench/gogs/truth-9a9388ac.json" ;;
     gogs-48946299) URL=https://github.com/gogs/gogs; COMMIT=ca59e76a5; CLONE=gogs-2; RULES="$R/bench/gogs/rules.yaml"; TRUTH="$R/bench/gogs/truth-48946299.json" ;;
     gin-vue-admin) URL=https://github.com/flipped-aurora/gin-vue-admin; COMMIT=7bc7c3051067; CLONE=gin-vue-admin; SUBDIR=server
@@ -257,11 +258,19 @@ setup() { # name side: makes the copy and the IR of that version; sets DIR, RULE
         (cd "$DIR" && go list ./... > /dev/null 2>&1) || { skip "$b" "go list ./... failed in $DIR"; return 1; }
       fi ;;
     synth)
+      if [ "$b" = go-scale ]; then   # the same input for both sides: the generator of this script's tree (a base before it has none)
+        key="$(cat "$ROOT"/bench/go-scale/gen/main.go | h16)"; DIR="$WORK/synth/scale-$key"; RULES="$DIR/rules.yaml"; PROV_INPUT="go-scale -shapes all (generator $key)"
+        if [ ! -f "$DIR/rules.yaml" ]; then
+          /bin/rm -rf "$DIR.tmp"; mkdir -p "$WORK/synth"
+          (cd "$ROOT" && go run ./bench/go-scale/gen -shapes all -out "$DIR.tmp") >&2 && mv "$DIR.tmp" "$DIR" || { skip "$b" "the go-scale generator failed"; return 1; }
+        fi
+      else
       tgt="$(tree "$sha" bench/go-synth)$(tree "$sha" bench/synthplan)"; key="$(printf '%s' "$tgt" | h16)"
       DIR="$WORK/synth/S-$key"; RULES="$DIR/rules.yaml"; PROV_INPUT="go-synth -size S (generator $key)"
       if [ ! -f "$DIR/rules.yaml" ]; then
         /bin/rm -rf "$DIR.tmp"; mkdir -p "$WORK/synth"
         (cd "$wt" && go run ./bench/go-synth/gen -size S -out "$DIR.tmp") >&2 && mv "$DIR.tmp" "$DIR" || { skip "$b" "the generator failed in $w ($s7)"; return 1; }
+      fi
       fi ;;
     dart)
       mkdir -p "$WORK/ir"
