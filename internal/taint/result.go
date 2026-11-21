@@ -162,6 +162,11 @@ type OtherSource struct {
 	DispatchWidened    int    `json:"dispatch_widened,omitempty"`
 	DispatchCandidates int    `json:"dispatch_candidates,omitempty"`
 	Reachability       string `json:"reachability,omitempty"`
+	// ViaSharedState is the mark that this source reached the sink through package variables (the places of
+	// Finding.SharedState of the finding that this source would be, in the same order): the names of the variables. The
+	// input of another entry point, carried through a shared state to this sink. Absent when the path goes through none.
+	// Output only (ADR-069).
+	ViaSharedState []string `json:"via_shared_state,omitempty"`
 }
 
 // Finding is the fact that data from a source site can reach a sink site.

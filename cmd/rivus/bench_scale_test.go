@@ -96,6 +96,19 @@ func TestScaleSynth(t *testing.T) {
 				if err := json.Unmarshal(out, &rep); err != nil {
 					t.Fatal(err)
 				}
+				if pr.name == "registry" || pr.name == "longlived" {
+					// each other source went through the package variable too: the mark that says so (ADR-069)
+					for _, f := range rep.Findings {
+						if len(f.OtherSources) == 0 {
+							t.Errorf("%s: no other sources listed", pr.name)
+						}
+						for _, o := range f.OtherSources {
+							if len(o.ViaSharedState) == 0 {
+								t.Errorf("%s: other source %s has no via_shared_state", pr.name, o.Func)
+							}
+						}
+					}
+				}
 				curatedAllowUnconverged = pr.noconv
 				// the registry code has no answer key: its expected file is the check, with other_sources_count 39 (a false
 				// trace). When stage 2 of docs/DESIGN-shared-state.md brings it to 0, give the code an answer key and

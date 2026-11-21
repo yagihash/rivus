@@ -1524,10 +1524,22 @@ func (e *Engine) mergeParamSources(fs []*Finding) []*Finding {
 				rep.OtherSources = append(rep.OtherSources, OtherSource{
 					SiteRef: ref, PathSteps: o.PathSteps, Uncertainties: len(o.Uncertainties),
 					DispatchWidened: o.DispatchWidened, DispatchCandidates: o.DispatchCandidates, Reachability: o.Reachability,
+					ViaSharedState: sharedPlaceNames(o.SharedState),
 				})
 			}
 		}
 		out = append(out, rep)
+	}
+	return out
+}
+
+// sharedPlaceNames are the names of the package variables of a finding's shared_state (nil when it has none).
+func sharedPlaceNames(ss []SharedState) []string {
+	var out []string
+	for _, s := range ss {
+		if n := s.Place.Name; len(out) == 0 || out[len(out)-1] != n {
+			out = append(out, n)
+		}
 	}
 	return out
 }

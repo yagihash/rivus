@@ -169,7 +169,7 @@ func (s *state) transfer(in *sg.Instr) {
 		src := suffix(s.locs(in.Args[0]), "[]")
 		switch {
 		case in.IR.Keyed:
-			s.loadInto(in, Loc{own(dst), ""}, src, pointerLike(dst), "read element", nil)
+			s.loadInto(in, Loc{own(dst), ""}, src, pointerLike(dst), "read element", s.globalNote(src, in.Pos))
 		case in.IR.Folded:
 			if pointerLike(dst) {
 				return
