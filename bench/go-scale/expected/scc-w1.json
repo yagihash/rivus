@@ -1,0 +1,13 @@
+{
+  "findings": [
+    "truth/scc.go:11 -\u003e ring/ring.go:1140"
+  ],
+  "uncertainty_kinds": {
+    "depth_limit": 64
+  },
+  "converged": true,
+  "passes": 2,
+  "reanalyses": 3846,
+  "summary_elems": 13859,
+  "largest_summary_elems": 45
+}

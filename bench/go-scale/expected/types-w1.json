@@ -1,0 +1,15 @@
+{
+  "findings": [
+    "truth/types.go:13 -\u003e truth/types.go:15",
+    "truth/types.go:13 -\u003e truth/types.go:17"
+  ],
+  "uncertainty_kinds": {
+    "reflection": 3,
+    "unmodeled_library_call": 2
+  },
+  "converged": true,
+  "passes": 1,
+  "reanalyses": 2033,
+  "summary_elems": 5085,
+  "largest_summary_elems": 6
+}

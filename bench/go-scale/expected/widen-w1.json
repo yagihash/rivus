@@ -1,0 +1,13 @@
+{
+  "findings": [
+    "truth/wide.go:12 -\u003e truth/wide.go:13"
+  ],
+  "uncertainty_kinds": {
+    "unmodeled_library_call": 1
+  },
+  "converged": true,
+  "passes": 2,
+  "reanalyses": 2108,
+  "summary_elems": 5198,
+  "largest_summary_elems": 7
+}

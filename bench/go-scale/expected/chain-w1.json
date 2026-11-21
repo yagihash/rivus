@@ -1,0 +1,11 @@
+{
+  "findings": [
+    "chain/chain.go:45 -\u003e chain/chain.go:48"
+  ],
+  "uncertainty_kinds": {},
+  "converged": true,
+  "passes": 11,
+  "reanalyses": 2067,
+  "summary_elems": 5095,
+  "largest_summary_elems": 6
+}

@@ -1,0 +1,14 @@
+{
+  "findings": [
+    "truth/stderr.go:11 -\u003e truth/stderr.go:13"
+  ],
+  "uncertainty_kinds": {
+    "global_holds_nothing": 1,
+    "unmodeled_library_call": 25
+  },
+  "converged": true,
+  "passes": 2,
+  "reanalyses": 2052,
+  "summary_elems": 5006,
+  "largest_summary_elems": 6
+}

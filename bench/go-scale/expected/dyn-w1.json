@@ -1,0 +1,14 @@
+{
+  "findings": [
+    "truth/dyn.go:11 -\u003e truth/dyn.go:13",
+    "truth/dyn.go:18 -\u003e truth/dyn.go:21"
+  ],
+  "uncertainty_kinds": {
+    "dynamic_dispatch": 41
+  },
+  "converged": true,
+  "passes": 1,
+  "reanalyses": 2222,
+  "summary_elems": 5275,
+  "largest_summary_elems": 6
+}

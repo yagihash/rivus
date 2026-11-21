@@ -1,0 +1,13 @@
+{
+  "findings": [
+    "giant/giant.go:12 -\u003e giant/giant.go:4525"
+  ],
+  "uncertainty_kinds": {
+    "unmodeled_library_call": 1
+  },
+  "converged": true,
+  "passes": 1,
+  "reanalyses": 2028,
+  "summary_elems": 5091,
+  "largest_summary_elems": 6
+}
