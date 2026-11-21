@@ -1,0 +1,272 @@
+# 設計: 関数値を通る流れ(コールアウトの再開と、関数値を運ぶ要素)
+
+状態: **設計のみ。実装していない。** 数字は、2026-11-21 の main(d12bfe9)で測った。グローバル側(同じ根の、もう 1 つの面)は [`DESIGN-shared-state.md`](DESIGN-shared-state.md)。前提の文書: [`DESIGN-capture.md`](DESIGN-capture.md)(捕獲した値を、作った場所で当てる。ADR-059)。
+
+**ADR-047(コールアウト。棚上げ)の本文は、`docs/DECISIONS.md` の本体から消えている**(参照だけが ADR-055 と ADR-059 に残る)。本文は git の履歴にある(ブランチ `worktree-agent-a26babddee62fea72` のコミット `0a0c01e` の `docs/DECISIONS.md` の `## ADR-047`、コードはそのブランチの `wip:` のコミット)。実装の ADR は、棚上げの経緯と、この設計の差を書いて、ADR-047 の位置を埋め直す。
+
+## 1. 問題
+
+関数値(クロージャ、関数、メソッド値)を通る流れで、解析は、「**どの関数値を、どの呼び元が作ったか**」を失う。今ある仕組みは、3 つの部分的なものに分かれている。
+
+| 仕組み | 何をするか | 限界 |
+| --- | --- | --- |
+| (1) 作った場所で呼ばれると仮定(ADR-059、`assumed_call`) | 呼ばれるところが見えないクロージャを、`make_closure` で当てる(捕獲した値の sink 到達、書き込み) | 結果と throw は当てない。1 度も呼ばれないクロージャも当たる(過検出)。引数と捕獲の**両方**に依る流れ(`write-param`)は見つからない |
+| (2) `valuecalls` の追跡(上限 8、深さ 3)と、候補ごとのガード(ADR-045) | 関数値の呼び出しの候補を、コピー・φ・パラメータ(呼び元の引数)から求める。パラメータ由来の候補には「p の関数は c」のガードを付け、呼び元が直接渡した関数で絞る | **中継**(`wrapper(g)` → `run(g)`)は、ガードが外へ伝わらず絞れない。メモリ(フィールド、マップ、スライス)は辿らない。一部の呼び元しか追えなくても、見つかった分を全部として扱う(下の 4 の最後の表)。上限を超えると不確実性になる |
+| (3) ライブラリが引数の関数を呼ぶことのモデル | **まだない**。今のモデルは、`flows: [{from: args, to: result}]`(関数値の中身が結果に入る)で近似する(`Future.then`、`Option::map` など) | コールバックの結果が、呼び元の捕獲した値と、ライブラリの渡す値で作られることは、言えない |
+
+3 つに共通の根は、**「関数値を、データと同じ要素として運ぶ」ことと、「呼ぶ側の値と、呼ばれる関数の要約を、呼び元ごとに組む」ことが、できていない**こと。結果として、(i) 別々のクロージャを、同じヘルパーに渡す 2 つの呼び元が、**互いの流れに混ざる**(XTALK、`two-callers`、`relay`)。(ii) 関数値を、フィールド・グローバル・マップ・スライスに入れると、**呼び先が分からない**(`func-field`、`func-map`、`clos/stored`)。(iii) ライブラリが呼ぶクロージャの**結果**が落ちる(`to-lib`)。
+
+## 2. 測定
+
+### zoo(3 言語の、同じ形のマス)
+
+「見つかった / 脆弱なケース」。**おとり**は、相手のクロージャ・別のフィールド・別のキー。FP = おとりが誤って報告される。「流れが落ちる」= おとりの本物の側の流れが見つからない(静かなのは、見つからないから)。マスを足した push は d12bfe9。
+
+| マス | Go | Dart | Rust |
+| --- | --- | --- | --- |
+| `clos/two-callers`(同じヘルパー、2 つの呼び元) | 1/1、静か | 1/1、静か | 1/1、**FP** |
+| `clos/to-own-helper` | 1/1、静か | 1/1、静か | 1/1、静か |
+| `clos/relay`(`wrapper(g)` → `run(g)`) | 1/1、**FP** | 1/1、**FP** | 1/1、**FP** |
+| `clos/to-lib`(`Once`、`OnceValue`; `forEach`、`map`、`then`; `Once`、`OnceLock`) | 1/2(結果を返す形が `@miss(assumed_call)`)、おとりの流れが落ちる | 1/3(`map` の結果、`then`: `@miss(assumed_call)`)、落ちる | 1/2(`Once::call_once`: `@miss(unmodeled_library_call)`)、静か |
+| `clos/stored`(フィールド、グローバル、スライス) | 3/3、静か | 3/3、静か | **0/3**(`unmodeled_library_call`)、落ちる |
+| `clos/returned` | 1/1、静か | 1/1、静か | 1/1、静か |
+| `dyn/func-field` | 1/1、静か | **0/1**(`unresolved_callee`)、落ちる | **0/1**、落ちる |
+| `dyn/func-map` | 1/1、**FP** | **0/1**(`unresolved_callee`)、落ちる | **0/1**、落ちる |
+| `dyn/method-value` | 1/1、静か | (Dart の `dart/tearoff-instance` に別の見逃し) | 1/1、静か |
+
+読み方: (1) **取り違え(FP)は、中継(`relay`)で 3 言語に残り、Rust は `two-callers` でも残る**(Rust の `Fn::call` の候補が、型の合う全クロージャ)。Go の `func-map` の FP は、マップの値の関数が、型で候補になるため。(2) **関数値をメモリに入れる形(`stored`、`func-field`、`func-map`)は、Dart と Rust で、流れが落ちる**。Go は、フロントエンドの候補(VTA)があるので出る。(3) **ライブラリが呼ぶクロージャの結果(`to-lib` の vuln2)は、3 言語とも落ちる**(`assumed_call` を残して)。
+
+### 実コード(gogs、gin-vue-admin、gophish、casdoor、dart-pub、parseable)
+
+方法: finding の集計は、`rivus analyze -pass-stats` の JSON。関数値の呼び出しと、クロージャの受け渡しの集計は、**IR を読む使い捨ての診断**(`internal/valuecalls.Resolve` を呼んで、`ValueCands` を数え、`make_closure` / `{closure@…}` の `alloc` の渡し先を集める。コミットしない)。Go は `rivus extract -all`、Dart と Rust は、既存の IR(dart-pub は `test/` を除いて数えた。parseable は、すでにある IR だけ)。`-deps` を読む Go の解析と違い、**IR の診断はプロジェクトの関数だけ**(gogs 2,953、gin-vue-admin 1,148、gophish 395、casdoor 1,107、dart-pub 2,240、parseable 8,557)。
+
+**(ii)`assumed_call` が付いた finding**(経路か finding の不確実性):
+
+| | gogs | gva | gophish | casdoor | dart-pub | parseable | 合計 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| finding | 80 | 29 | 8 | 38 | 19 | 159 | 333 |
+| `assumed_call` つき | 2 | 0 | 0 | 0 | 2 | 0(Rust は未実装) | **4(1.2%)** |
+| プログラム全体の `assumed_call`(クロージャの数) | 153 | 18 | 15 | 13 | 340 | 0 | 539 |
+
+**(iii)関数値の呼び出しの、候補の数**(プロジェクトの関数の、`CalleeValue` の呼び出し。Rust は、`Fn::call` 系を別に数える):
+
+| | 呼び出し | 候補 0 | 1 | 複数(2〜8) | 上限(8 超、深さ 3) | 出どころ |
+| --- | --- | --- | --- | --- | --- | --- |
+| gogs | 193 | 9(4.7%) | 151(78%) | 33(17%) | 0 | 抽出器(VTA)149、`valuecalls` 44 |
+| gin-vue-admin | 21 | 9(43%) | 12(57%) | 0 | 0 | 抽出器 4、`valuecalls` 8 |
+| gophish | 21 | 9(43%) | 10(48%) | 2(10%) | 0 | 抽出器 6、`valuecalls` 15 |
+| casdoor | 10 | 0 | 8(80%) | 2(20%) | 0 | 抽出器 5、`valuecalls` 5 |
+| dart-pub(`test/` を除く) | 465 | 61(13%) | 375(81%) | 27(5.8%) | **2(0.4%)** | すべて `valuecalls` |
+| parseable(関数ポインタ) | 17 | 17(100%) | 0 | 0 | 0 | |
+| parseable(`Fn::call` / `call_once`) | 36 | **33(92%)**: 本体のない static 呼び出し(`Box<dyn Fn>`) | 0 | 3(動的。候補は 8 超) | | 抽出器 |
+
+読み方: **「Dart と Rust は、`valuecalls` の候補が 0 件で、言語間の差の最大の原因」という仮説は、Rust では成り立ち、Dart では成り立たない**。Dart は 0 件が 13% で、1 件が 81%。**Rust は、クロージャを呼ぶ呼び出しの 92%(`Box<dyn Fn>`、`Fn::call` の static 呼び出し)に、本体も候補もない**(`unmodeled`)。残りの 3 件(候補 8 超)が、XTALK の 35 件の finding の根(`cluster/mod.rs` の `api_fn(ingestor)`)。上限に当たる呼び出しは、Dart の 2 件だけ。Go は、抽出器の候補が主で、`valuecalls` が足りないところを補う。
+
+**(iv)同じヘルパーに、別々のクロージャを渡す、複数の呼び元**(ヘルパーの、パラメータ p が、2 つ以上の別のクロージャを、2 つ以上の呼び元から受け取る。ヘルパーに本体がある):
+
+| | クロージャを受けるパラメータ | 2 つ以上の別のクロージャ | 2 つ以上の呼び元 × 別のクロージャ | うち、**ヘルパーが p を直接呼ぶ** |
+| --- | --- | --- | --- | --- |
+| gogs | 15 | 3 | 1 | 1(`RenderUserCards`: 4 クロージャ・4 呼び元) |
+| gin-vue-admin | 1 | 0 | 0 | 0 |
+| gophish | 1 | 1 | 1 | 0 |
+| casdoor | 2 | 2 | 2 | 1(`getAllValues`: 2 クロージャ・2 呼び元) |
+| dart-pub(`test/` を除く) | 57 | 29 | 26 | **18**(28 のうち。`withTempDir`、`progress`、`Ignore.listFiles` など) |
+| parseable | 962 | 15 | 15 | 12(`otel` の `process_resource_*` の 12 パラメータ) |
+
+(parseable の数は**下限**: ヘルパーが、クロージャを、`async move` のブロックの環境に `clone` して呼ぶ形(`for_each_live_node` の `api_fn`)は、診断が、パラメータの直接の呼び出しだけを数えるので、入っていない。DESIGN-capture の XTALK は、その 1 つのパラメータが、8 つの別のクロージャを受ける形。)
+
+**ライブラリに渡されたクロージャ**(本体のない呼び先。ライブラリが引数の関数を呼ぶモデルの、優先順位):
+
+| | 呼び出し | 上位(呼び出しの数) |
+| --- | --- | --- |
+| gogs | 158 | `macaron.Router.Group` 103(ルーターの登録)、`gorm.DB.Transaction` 12、`testing.common.Cleanup` 9、`sync.Once.Do` 9、`xorm.Session.Iterate` 9 |
+| gin-vue-admin | 27 | `go/ast.Inspect` 13、`gorm.DB.Transaction` 9 |
+| gophish | 38 | `mux.Router.HandleFunc` 29、`goquery.Selection.Each` 6 |
+| casdoor | 13 | `beego.InsertFilter` 5 |
+| dart-pub | 370 | `Iterable.map` 110、`where` 60、`any` 30、`firstWhereOrNull` 22、`expand` 17、`Map.forEach` 16、`List.sort` 15、`Pool.withResource` 13 |
+| parseable | 1,734 | `Result::map_err` 285、`Iterator::map` 199、`Option::ok_or_else` 192、`actix_web::Route::to` 135、`Option::map` 109、`Option::and_then` 91、`Lazy::new` 72 |
+
+ルーターの登録(`Group`、`HandleFunc`、`Route::to`)は、データでなく入口を作るもので、ルールの領分(`kind: param` の source)。**データを運ぶのは**、`Transaction`、`Iterate`、`Once.Do`、`map` / `where` / `any` / `forEach`、`map_err` / `ok_or_else` / `and_then` / `map`。
+
+## 3. 設計: 要約に、「引数 p の関数を、これらの値で呼ぶ」を持たせる
+
+ADR-047(棚上げ)の `OutCallParam` の再開。違いは 3 つ: **(1) ライブラリのモデル(YAML)と、同じ表現にする**(自前のヘルパーは本体から導き、ライブラリは YAML で書く)。(2) 作った場所で当てる仕組み(ADR-059)がある。(3) 巨大な SCC を割ることは、収束には効かなかった(ADR-055)ので、**動機は精度**(取り違えと、結果の流れ)。
+
+### 3.1 要約の表現: `CallOut`
+
+`Summary` に、`Calls []CallOut` を足す(ADR-047 の `Callout`。出力の種類 `OutCallParam` の中身):
+
+| 欄 | 意味 |
+| --- | --- |
+| `Site` | ヘルパーの中の呼び出しの位置(関数 ID、ブロック、命令)。同じ関数値を 2 か所で呼ぶとき区別する |
+| `Fn` | 呼ばれる関数値の場所: **(パラメータ p、パス)**。「引数 p の(パス `…` の)関数」。最初の版は、パスが `""`(p そのもの)だけ。フィールド(`h.cb`)は、関数値の要素(5)の仕事 |
+| `Recv`、`Args[j]` | 関数に渡す j 番目の実引数の**場所**: ヘルパーの言葉で、`Param(q, パス)`(q の指す先)か、ヘルパーが作った値(`Local` + 要素の集合)。**場所**で持つ(要素でなく): ポインタの引数への書き込みを、呼び元の場所に届けるため |
+| `Virt` | 仮想のパラメータの基点 `Base`。`Base+0` = 関数が throw するもの、`Base+1+r` = 結果 r、`Base+9+j` = 引数 j の指す先(関数が書いたあと) |
+| `Guards` | この呼び出しが起きる条件(ヘルパーの分岐。今のガード) |
+| `Mode` | `call`、`go`、`defer`(`go` / `defer` は、結果を読まない: 効果(書き込みと sink)だけを当てる) |
+
+仮想のパラメータは、**普通のパラメータの要素(`Param`)と同じに流れる**(パス、サニタイザの演算、`widen`、`SinkReach`、ガードが、そのまま使える)。ヘルパーの本体は、`x := f(s); sink(x)` を、**呼び先の要約を当てずに**、`x = Param(Base+1)`、sink への到達 = `Param(Base+1)` の要素、として要約する。ヘルパーは、クロージャに依存しない(呼び出しグラフの辺が、ヘルパーからクロージャへ張られない。SCC が割れる)。
+
+### 3.2 具体化(呼び元 K で)
+
+K が、ヘルパー H を呼ぶとき、H の `CallOut` ごとに:
+
+1. **`Fn` の p に、K が渡したものを決める**。`sg.ExactFuncs`(関数、その場で作ったクロージャ、それらのコピーと φ。それ以外が混ざるなら `ok = false`)。ADR-047 のとおり、`ExactClosures` に拡張して、`make_closure` の命令(**束縛** = 捕獲の値)も返す。`ok` で、**集合の大きさが 1〜4**(φ が、決まった数のクロージャを選ぶ)なら具体化する。
+2. 引数の場所を、K の場所に写す(`Param(q, パス)` → 実引数の場所。`Local` → K の合成した根に、要素を展開して置く)。
+3. 選ばれた各クロージャ(関数)の要約を、**K の中で**、`applySummary` で当てる。実引数 = 2 で作ったもの、束縛 = `make_closure` の引数(**捕獲した値が、呼ぶところで分かる**。ADR-059 の限界の、引数と捕獲の両方に依る流れ: `write-param`)。
+4. 当てた結果を、仮想のパラメータの根に置く: 結果 → `Base+1+r`、throw → `Base+0`、ポインタ引数の指す先への書き込み → `Base+9+j`(と、`Param(q, …)` の場所があれば、K のそこへ直接)。
+5. H の、仮想のパラメータの要素を含む出力と sink 到達は、**普通の `expandParam`** で、この根から読まれる(引数の列に、仮想の根を足した `argv`)。
+6. 2〜5 を、値が動かなくなるまで繰り返す(上限 16。超えたら `not converged` で、今の扱いに戻す)。
+
+呼び元ごとに、**自分が渡したクロージャだけ**で組むので、別の呼び元のクロージャが混ざらない(XTALK、`two-callers`)。**中継**(`wrapper(g)` → `run(g)`): K = wrapper が、`run` の `CallOut` を、自分の要約に**載せ直す**(`Fn` を、自分のパラメータ g に、`Args` を、自分の言葉に、仮想のパラメータを、自分の `Base` に付け替える)。wrapper の呼び元が、具体化する。
+
+### 3.3 当てるもの(ADR-059 が「当てない」ものを、当てる)
+
+| 出力 | 具体化のとき |
+| --- | --- |
+| 結果 | **当てる**(行き先は、`Base+1+r`。ADR-059 は、行き先がなく当てなかった。`WithTx2` の型、`produce(func() T)`、`map` / `then`) |
+| throw | **当てる**(`Base+0`。ヘルパーが、呼び出しを囲む `try` を持てば、そこで受ける) |
+| sink への到達 | 当てる(クロージャの中の sink。引数の値と捕獲した値の、**両方**) |
+| 捕獲した変数・引数の指す先への書き込み | 当てる |
+| グローバルへの書き込み | 当てる(K の `OutGlobal`) |
+
+### 3.4 ライブラリのモデル(YAML)との、同じ表現
+
+ライブラリの関数は、本体がない。**モデルの行が、その関数の要約**: `flows`(今)に、`calls` を足す。`calls` の 1 行 = 1 つの `CallOut`。ヘルパーの「パラメータ q」が、モデルでは「呼び出しの実引数 q(`recv` / `argN`)」。
+
+```yaml
+- symbol: dart:core#Iterable.map
+  calls:
+    - fn: arg0                  # どの実引数の関数か(recv も書ける)
+      with: [recv.elem]         # 関数のパラメータ 0 に入るもの(複数なら並べる)
+      ret: result0.elem         # 関数の結果 0 の行き先
+      throw: result0            # 関数が throw するものの行き先(省略可)
+      writes: {1: arg0}         # 関数が、パラメータ 1 の指す先に書いたものの行き先(省略可)
+      feed: [{from: ret0, to: with0}]   # 結果を、次の呼び出しのパラメータに戻す(fold の accumulator。省略可)
+      mode: call                # call | go | defer
+```
+
+`with` と `ret` の**射影**(`.elem`、`.err`、`.ok`、…)は、エンジンがすでに使うアクセスパスの区切り(コンテナの要素 `[]`、構造体のフィールド、Rust の enum の中身)の、言語ごとの固定の表への別名。最初の版は、**射影なし**(全体)で書き、効果を測ってから足す(今の `flows: [{from: args, to: result}]` と同じ精度から始める)。
+
+対応表(要件の API):
+
+| API | `calls`(と、足りない `flows`) |
+| --- | --- |
+| Go `sync.Once.Do(f)` | `calls: [{fn: arg0}]` |
+| Go `sort.Slice(x, less)` | `calls: [{fn: arg1}]`(今の `pure` は、`pure` のまま、呼ばれることだけを足す) |
+| Go `slices.SortFunc(x, cmp)` | `calls: [{fn: arg1, with: [arg0.elem, arg0.elem]}]` |
+| Go `(*gorm.DB).Transaction(fc)` | `calls: [{fn: arg0, with: [recv], ret: result0}]` |
+| Go `sync.OnceValue(f)` | 結果が**関数値**: `calls` では書けない(5 の、関数値の要素: `result_funcs: [arg0]`) |
+| Dart `Future.then(f)` | `calls: [{fn: arg0, with: [recv], ret: result0}]` + `flows: [{from: recv, to: result0}]`(エラーの側) |
+| Dart `Iterable.map(f)` | `calls: [{fn: arg0, with: [recv.elem], ret: result0.elem}]` |
+| Dart `Iterable.forEach`、`Stream.listen` | `calls: [{fn: arg0, with: [recv.elem]}]` |
+| Dart `Iterable.fold(init, f)` | `calls: [{fn: arg1, with: [arg0, recv.elem], ret: result0, feed: [{from: ret0, to: with0}]}]` + `flows: [{from: arg0, to: result0}]` |
+| Rust `Result::map_err(f)` | `calls: [{fn: arg0, with: [recv.err], ret: result0.err}]` + `flows: [{from: recv.ok, to: result0.ok}]` |
+| Rust `Option::and_then(f)`、`Iterator::map(f)` | `calls: [{fn: arg0, with: [recv.some], ret: result0}]`、`[{fn: arg0, with: [recv.elem], ret: result0.elem}]` |
+| Rust `<Box<dyn Fn(A)> as Fn>::call(&self, (a,))` | `calls: [{fn: recv, with: [arg0.0]}]`(**受け手が関数値**。parseable の 33 か所の、本体のない static 呼び出し) |
+| Rust `thread::spawn(f)`、`Vec::retain(f)` | `calls: [{fn: arg0, mode: go}]`、`[{fn: arg0, with: [recv.elem]}]` |
+
+具体化できない呼び出し(関数値が 1 つに決まらない)は、**今の扱い**(下の 4)。
+
+## 4. 具体化できる条件と、戻す条件
+
+**ヘルパー H の、パラメータ p の呼び出しを `CallOut` にするのは、H の解析のときに、次のすべてが成り立つとき**(ADR-047 の下書きの「外してよい条件」7 つ、を、今の状態に合わせた)。1 つでも当たれば、**今の扱い**(H の本体で、候補の全部の要約を当てる。`ValueCands` と、ガード)に戻す。
+
+| # | 外す条件(今の扱いに戻す) | 理由 | 固定するテスト(各 1 つ、今の扱いと同じ結果) |
+| --- | --- | --- | --- |
+| 1 | パラメータの関数値を、**呼ばずに保存**する(フィールド、グローバル、チャネル、スライス) | 呼び出しは別の関数。`CallOut` にできない(`Fn` は、直接の呼び出しの p のみ)。関数値の要素(5)の仕事 | `clos/stored` |
+| 2 | `go f()` / `defer f()` | **外さない**(ADR-047 は最初の版で外した)。`Mode` で、効果だけを当てる | `go` / `defer` の入ったヘルパーの、`@sink` が残る |
+| 3 | 別の関数へ渡す(中継) | **外さない**。3.2 の載せ直し。H が、`entry` / 外から呼べる(7)なら、中継もしない | `clos/relay` |
+| 4 | 関数値が、**複数のパラメータにまたがる φ**、または、パラメータと別のものの φ(`Param = -1`) | `Fn` が、1 つの p でない | φ のあるヘルパー |
+| 5 | 呼び元が、クロージャを直接渡さない(`ExactFuncs` が `ok = false`) | **その呼び元だけ**、今の扱い(全候補を当てる)。他の呼び元は、具体化する | フィールドから渡す呼び元と、直接渡す呼び元の混在 |
+| 6 | H 自身が、関数値・インターフェース越しに呼ばれる(呼び元が静的でない) | 呼び元が、`CallOut` を具体化しない | `dyn/*` |
+| 7 | H が、`exported` / `entry`(呼び元が見えない)、呼び元が 0 | 具体化する人がいない | 公開関数のヘルパー |
+| 8 | 呼び先の候補に、**モデルがある**もの、**本体がない**もの | 要約がない。呼び出しの位置で、今のとおり(モデルが `calls` を持てば、`CallOut` として、同じ流れ) | `to-lib` |
+| 9 | 捕獲した関数を呼ぶクロージャが、**返される・保存される**(渡される以外に使われる) | 呼ぶ人はいるが、当てる人がいない(go-test-bench の `makeHandler` で、ADR-047 のときに、実際に finding が落ちた) | `clos/returned` |
+
+「戻す」場合に、H の本体は、`CallOut` を**出さず**、今のとおり。**戻す判断は、静的**(H と、H の呼び元の呼び出しグラフ。解析の途中で変わらない)。1 つの H に、`CallOut` にするパラメータと、戻すパラメータが、混ざってよい(パラメータごとに決める)。
+
+### 作った場所で当てる仕組み(ADR-059、`assumed_call`)、ガード(ADR-045)、案 A、一部の呼び元しか追えないとき、との関係
+
+| 仕組み | どうなるか |
+| --- | --- |
+| **作った場所で当てる仕組み**(ADR-059、`assumed_call`) | **残る**。ただし、**「当てる相手が、呼び元の具体化に変わる」**: 具体化された呼び出しに渡されたクロージャ(`Escapes` の使い方がすべて、具体化される `CallOut` の `Fn`)は、`make_closure` で当てない(呼ばれるところで、束縛つきで当たるので)。結果の、`assumed_call` の `; what it returns is not applied` が消える。**残る**のは、保存・返す・具体化できない呼び出しに渡す・本体もモデルもないライブラリに渡す、クロージャ。`assumed_call` の文面は、「具体化できなかった呼び出し」に変える |
+| **ガード**(ADR-045、`valueGuards`) | **フォールバックとして残る**(戻した H のため)。具体化できる H では、使われない(`CallOut` が、呼び元ごとに絞る)。ガードの上限(5)に、具体化できる H は当たらなくなる |
+| **案 A**(`DESIGN-capture.md` の、Rust の `Fn::call` の候補を、受け手の出どころで絞る) | **フォールバックの絞りとして残る**。`CallOut` にできる H は、候補を使わないので、XTALK が起きない。`CallOut` にできない(1〜9)形で、案 A の絞りが効く。案 A の条件 1・2(もれなく数え上げたときだけ絞る)は、3.2 の(1)「具体化できる」の判定と、**同じ述語**(`ExactFuncs` の `ok`)を使う |
+| **一部の呼び元しか追えないとき**(`valuecalls` の `incomplete`。`DESIGN-capture.md` の「`valuecalls` が、一部の呼び元しか追えないとき」の節) | **先に塞ぐ**(段階 1)。`valuecalls` が、一部の呼び元が `refOther` で、辿れなかったのに、見つかった分を「全部」として扱う穴は、具体化の判定(`ok`)には関係しない(`ExactFuncs` は厳密)が、**フォールバックの候補を、黙って狭める**。`incomplete` の印は、案 A と、この設計のフォールバックの両方が使う |
+
+## 5. 関数値を、汚れの要素と同じ道具で運ぶ
+
+3 の `CallOut` は、「呼ぶ人が、呼ばれる関数を、**直接渡した**呼び元」で決まる。保存・返す・中継・マップに入れる形は、**関数値が、データと同じに、状態・アクセスパス・グローバル・要約を運ばれる**ことで解く。
+
+### 5.1 表現
+
+`Elem` に、**第 3 の種類 `Func`**(`Real`、`Param` に並ぶ)を足す。比較できる小さな要素のまま(`label` に関数 ID、`origin` に作った場所): `Elem{Kind: Func, label: 関数 ID, origin: make_closure の位置}`。**不明を表す要素**: `Elem{Kind: Func, label: "?"}`(+ 型)。
+
+| 場所 | 規則 |
+| --- | --- |
+| 作る | `make_closure`、関数への参照(`KFunc`)、メソッド値の値の根に、`Func` 要素を置く。**捕獲した値**は、値の根の下 `/cap/i` に、**中身をコピー**する(`store` が、ポインタの中身をコピーするのと同じ、今の意味)。`Escapes` でないクロージャ(作った関数の中で、直接呼ばれるだけ)は、コピーしない |
+| 運ぶ | コピー、φ、`store` / `load`、フィールド、マップ、スライス、グローバル、戻り値、引数、要約の出力(`Output` の `Elem`)、`globalStore`: **データの要素と同じ道具**。サニタイザは、`Func` に効かない |
+| 不明 | 入口のパラメータ、本体もモデルもない呼び出しの、関数型の結果、リフレクション、: `?` の要素。**モデルが「結果の関数は、引数 a の関数」と言えるもの**(`OnceValue`、`http.HandlerFunc(f)`)は、`result_funcs: [argN]` で、`?` を足さない |
+| 呼ぶ | `CalleeValue`(Rust の `Fn::call`、Dart の関数値の呼び出し)の候補 = 呼ぶ値の場所から `collect` で得た `Func` 要素。**`?` がなく、数が 8 以下**なら、その集合を候補にする(`valuecalls` の候補は使わない。**抽出器の候補(VTA)より絞れる**)。`?` がある、または 8 を超える(`widen`)なら、**今の候補**(`valuecalls`、抽出器)に戻し、`depth_limit` / `candidate_limit` の不確実性を言う |
+| 呼んだときの束縛 | `Func` 要素の値の根の `/cap/i` を、`FreeVars` の束縛にして、`applySummary` を当てる。**捕獲した値と引数の両方に依る流れ**(`write-param`)は、この束縛で出る |
+
+**`valuecalls` との関係**: 置き換えでなく、**フォールバックに下げる**。`valuecalls` は、`?` のある呼び出し、上限(8、深さ 3)を超える呼び出し、Go の抽出器の候補、のために残る。**Dart と Rust の、候補 0 件が多い**ところ(Rust の `Box<dyn Fn>` の `Fn::call` 33 か所、Dart の 61 か所)は、フィールドとマップに入れた関数値が、`Func` 要素で呼び元まで届けば、0 件でなくなる。
+
+**ADR-059 との関係**: 関数値の要素で、クロージャが**呼ばれるところで、束縛つきで当たる**ので、`make_closure` の位置で当てる `assumed_call` は、**要素が呼ばれる場所に届かない**(`?`、上限、本体もモデルもないライブラリに渡す)クロージャだけに残る。1 度も呼ばれないクロージャ(`cap-never`)は、**呼ばれない**から、静かなまま(ADR-059 の過検出がなくなる)。
+
+### 5.2 上限(widen)に当たったとき
+
+- 1 つのセルの `Func` 要素が、**`N`(16)** を超えたら、**型ごとの `Func(*, 型)` の 1 つ**にまとめる(= 「この型の、不明の関数」。`widen` が `Param` を、パラメータごとにまとめるのと同じ)。呼び出しは、今の候補(型の合う全関数)に戻る。**不確実性**: `depth_limit`(`candidate_limit`)。
+- 要約の出力の上限(24 要素)は、`Func` 要素にも効く。ディスパッチテーブル(関数 200 個)は、上のまとめで、要素数が増えない。
+- 経路は、`Func` 要素の運ばれた段を持つ(普通の要素と同じ)。finding の経路に、「関数値が、ここで作られ、ここで呼ばれた」が出る。
+
+### 5.3 読めないこと(測る)
+
+**要素の数と、収束への影響は、読めない**: (a)`Func` 要素が増えるぶんの、要約の大きさと、メモリ。(b)捕獲した値のコピー(Gitea は、捕獲のあるクロージャが 1,496)。(c)関数値を運ぶ要素が、SCC のなかの再解析を増やすか。**go-scale に、2 つのプロファイルを足して測る**: `fnvals`(ディスパッチテーブル、マップに入れた関数値、返すクロージャを、200 個の規模で)と、`callouts`(同じヘルパーを 40 の呼び元が呼び、各自のクロージャを渡す形)。`go-synth` の `-closures` の形(`bench/synthplan`)も使える。**最初の版は、フラグ(`-func-values`、既定は off)**で、結果が同一であることを、先に確かめる。
+
+## 6. 段階と、各段の受け入れ
+
+**精度を変える段は、消えた finding が本物でないことを示す**: `bench/compare.sh` で、base と head の finding を比べ、**消えたもの**を、経路を読んで分類する(取り違えで消えた = 偽の組だったことを、source から sink までの経路の、どのステップで混ざっていたかで示す)。**本物が 1 件でも消えたら、push しない**。足したものも分類する(本物の流れか、過検出か)。
+
+| 段 | 内容 | 受け入れ |
+| --- | --- | --- |
+| **1. `incomplete`** | `valuecalls` が、一部の呼び元しか追えないとき(`refOther`、引数の数が足りない、`form` が作れない、`maxDepth`)に、不確実性を足し(finding は減らさない)、`ValueCand` に印を付ける。`ExactClosures`(束縛つき) | finding の追加・削除 0(`compare.sh`)。不確実性は増える。Dart の再現の入力を `dart-curated` に |
+| **2. ライブラリの `calls`** | 3.4 の YAML の書式と読み込み。`applyModel` が、`calls` を、**呼び出しの位置で**具体化する(`ExactFuncs`)。ヘルパーの要約は、まだ変えない。優先順: Go `Once.Do`、`Transaction`、`Iterate`; Dart `map` / `where` / `any` / `forEach` / `then` / `listen` / `fold`; Rust `map_err` / `ok_or_else` / `and_then` / `Option::map` / `Iterator::map` / `Box<dyn Fn>` の `call` / `thread::spawn` | zoo の `clos/to-lib` が 3 言語で出る(`@miss` が外れる)。dart-pub と parseable の `compare.sh`: **追加の finding を 1 件ずつ分類**。`assumed_call` の数が、ライブラリに渡された分、減る。`bench/parity` の (iii) の行が、「名前による推定」から、`calls` の有無に変わる |
+| **3. ヘルパーの `CallOut`** | 3.1〜3.3。`Summary.Calls`、`order` / `levelsOf` / `callers` の辺の変更(呼び元 → 渡した関数)、`joinSummaries` / `signature`、`-ctx-callbacks`(フラグ、既定 off)。ADR-047 のブランチのコードを、新しい要約の型に合わせて載せ直す | zoo の `clos/two-callers`(Rust の FP)、`clos/relay`(3 言語の FP)が 0。**9 つの外す条件に、1 つずつテスト**(`testdata/go/cases`)。`compare.sh` で、finding の削除 0(取り違えで消えるものは、分類して許す)。go-scale: 最大 SCC、`summary_elems`、時間(**結果が同一**であること)。Gitea は最後に 1 度。**フラグ off は今と完全に同じ** |
+| **4. 関数値の要素** | 5.1(`-func-values`、既定 off) | zoo の `clos/stored`、`dyn/func-field`、`dyn/func-map`(Dart・Rust の見逃し)、`clos/to-lib` の結果の形(`OnceValue`)が出る。go-scale の `fnvals`: 要素数と収束。フラグ off は今と同じ。on で、finding の削除が、**取り違えの消滅だけ**(分類) |
+| **5. 既定に** | 3 と 4 の、既定を on に | 3 言語の curated・zoo・実コード・Gitea の、同一または分類済みの差。`assumed_call` の残り(保存・不明・上限)を、数えて記録 |
+
+各段の、**zoo のマスの期待値**(今 → 段の後):
+
+| マス | 今(Go / Dart / Rust) | 段 2 の後 | 段 3 の後 | 段 4 の後 |
+| --- | --- | --- | --- | --- |
+| `clos/to-lib` | 1/2 / 1/3 / 1/2 | **2/2 / 3/3 / 2/2** | 同じ | 同じ |
+| `clos/two-callers` | 静か / 静か / **FP** | | **静か ×3** | |
+| `clos/relay` | **FP** ×3 | | **静か ×3** | |
+| `clos/stored` | 3/3 / 3/3 / **0/3** | | | **3/3 ×3**(Rust が出る) |
+| `dyn/func-field` | 1/1 / **0/1** / **0/1** | | | **1/1 ×3** |
+| `dyn/func-map` | 1/1 + **FP** / **0/1** / **0/1** | | | **1/1 ×3**、FP は、値の型でなく、`Func` 要素で絞られるので **静か**(定数のキーは、`DESIGN-shared-state.md` の 4.2 b) |
+
+## 7. 順
+
+1. **`DESIGN-shared-state.md` の段階 1(証拠)、1b、2、3**(小さく、今日の雑音に直接効く)。
+2. このページの **段階 1(`incomplete`)**、**段階 2(ライブラリの `calls`)**(ヘルパーの要約を変えない。見つかる件数が、すぐ増える)。
+3. **段階 3(ヘルパーの `CallOut`)**(要約の型を変える大きな変更)。ADR-047 のコードがある。
+4. **段階 4(関数値の要素)**(測らないと読めない。go-scale のプロファイルが先)。
+5. 並行して、`DESIGN-shared-state.md` の段階 5(止まらない)と 6(入口の受け手)。
+
+## 決めてほしいこと
+
+1. **YAML の書式**(`calls:` の `fn` / `with` / `ret` / `throw` / `writes` / `feed` / `mode`)。射影(`.elem`、`.err`)は、最初の版で書かない(全体)でよいか。
+2. 段階 2 を、**段階 3 より先**にしてよいか(ヘルパーの要約を変えずに、ライブラリの `calls` だけを足す)。
+3. `go` / `defer` を、`CallOut` から**外さない**(ADR-047 の最初の版は外した)でよいか。
+4. 関数値の要素(5)の、`N = 16`、`8` の上限。測ってから決めるか。
+5. ADR-047 の位置を、実装の ADR で埋め直すか(棚上げの記録を、DECISIONS.md の本体に戻す)。
+
+## 確かめていないこと
+
+- 5.1 の、**`?` の付け方の抜け**(関数型の値が作られる場所を、全部、数えているか)。段階 4 の最初に、Go・Dart・Rust の IR の、関数型の値の作られ方を、網羅して表にする。
+- 3.2 の、**φ が選ぶ、決まった数のクロージャ**(1〜4)を、全部当てるのが、過検出にならないか(その呼び元が、実際は 1 つだけを渡す)。
+- Rust の `impl Fn` の、`Fn::call`(ジェネリックの呼び出し)が、`CallOut` として、本体から導けるか(今の IR では、`std::ops::Fn::call` の動的な呼び出しで、候補は型の合う全クロージャ)。段階 3 の最初に確かめる。
+- parseable の、`async move` のブロックの環境に入れて呼ぶ形(`for_each_live_node`)は、`Fn` が、パラメータの直接の呼び出しでなく、環境のフィールドの呼び出し。段階 4 の対象。
