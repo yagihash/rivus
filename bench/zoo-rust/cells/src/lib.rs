@@ -9,6 +9,7 @@
 //! @na(F/conv/struct-field-boxed: the sinks that name a field of a structure (`parts`) are measured in Go first; the Rust cells are stage 6 of docs/DESIGN-field-sinks.md)
 //! @na(F/conv/struct-field-opaque: the sinks that name a field of a structure (`parts`) are measured in Go first; the Rust cells are stage 6 of docs/DESIGN-field-sinks.md)
 //! @na(F/dyn/iface-assert-ptr-recv: Go's type assertion of `any` to an interface read through a pointer receiver; Rust has neither)
+//! @na(F/dyn/fprint-writer-own: `fmt.Fprint` to a writer of the project is Go's; the Rust counterpart (`write!` to an `impl io::Write` of the project) is not written yet)
 //! @na(F/dyn/sanitizer-own-impl: not written for Rust yet; the built-in model has no sanitizer on a trait method, and the engine reads an implementation of a sanitizer's trait the same way in every language)
 pub mod call {
     pub mod depth3;
