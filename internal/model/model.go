@@ -401,7 +401,7 @@ type Selector struct {
 	All   bool // "args" or "results": every argument/result
 	// Content is the written content of the position (`recv.content`, `arg0.content`): what a writer
 	// holds of the data written to it, as a step of its own below the value, beside the fields of
-	// the value. Only a destination (`to:`) of a flow can say it (ParseDest); ADR-077.
+	// the value. Only a destination (`to:`) of a flow can say it (ParseDest); ADR-082.
 	Content bool
 }
 

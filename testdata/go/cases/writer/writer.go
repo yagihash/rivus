@@ -11,7 +11,7 @@ import (
 
 // What is written to a writer is the content of the writer (a step of its own below it), not the
 // writer: a field of the writer (a file name) is not what was written to it, and a read of the whole
-// writer, or of its content, still sees it (ADR-077).
+// writer, or of its content, still sees it (ADR-082).
 
 // --- a writer of the project, called through the interface: the body reads its own field ---
 

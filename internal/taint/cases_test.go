@@ -631,7 +631,7 @@ func TestCallbackRowsApplyTheFunctionThatWasGiven(t *testing.T) {
 // its type is called.
 func TestDispatchIsNarrowedByTheTypeTheCallerPassed(t *testing.T) { checkCase(t, "dispatch") }
 
-// What is written to a writer is its content, a step below the writer: a field of the writer is not what was written (ADR-077).
+// What is written to a writer is its content, a step below the writer: a field of the writer is not what was written (ADR-082).
 func TestWriterContentIsNotTheWritersFields(t *testing.T) { checkCase(t, "writer") }
 
 // gRPC: the metadata of a call and the messages of a stream are what a client
