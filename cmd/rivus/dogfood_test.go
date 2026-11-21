@@ -2,9 +2,12 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"testing"
 
@@ -72,35 +75,13 @@ func TestDogfood(t *testing.T) {
 	// through their own source function: the same object was written back by one
 	// source and read by the others (CORE-A / CORE-B, see
 	// TestParamSourceSharedObject). Now every path has a step in its source
-	// function. These are ceilings: they must go down, never up.
-	// 44: C-7 (ADR-059) adds 5 real flows of `rivus index` (the path of -o to the files that graphdb.Write
-	// creates): graphIndexer returns the closure that o.afterRead keeps and calls later, and what it
-	// captured (the path) is applied where it is made.
-	// 51: ADR-062 adds 7 real flows: the directory of -C, through the packages, to the os.ReadDir of gossa.countTestFiles
-	// (which counts the _test.go files that were not read); `rivus sites` is a command that reaches a sink now.
-	// 61: ADR-064 adds 10 real flows in isolate.go: the directory of -C and the paths of -container-ro-mount, through
-	// os.ReadFile (Cargo.lock, the toolchain file) and the arguments of the docker command. They are what the isolation is
-	// about: the project is untrusted, and the paths that name it go to the container only as mounts that are read-only.
-	// 63: R-03 (ADR-066) makes exec.LookPath carry its argument (it was pure): the extractor command of
-	// `rivus index` and `rivus graph` (-dart-extractor and the like) reaches the os.ReadFile of
-	// keyCtx.extractorConfig, which hashes the file that the command names (2 real flows, one per command).
-	// 71: `rivus extract -lang rust` reads a Rust project the way analyze does (in a container), so the directory of -C and
-	// the paths of -container-ro-mount reach the same sinks of isolate.go from a second command: 8 real flows, of the
-	// same kind as the ones of the line above (the paths that name the project go to the container as read-only mounts).
-	// 75: the fetch stage keeps the cargo configuration of the project out (isolate_fetch.go): 4 real flows of the same kind as
-	// the lines above: the directory of -C reaches the os.ReadFile of .cargo/config.toml (read as text, to decide whether the
-	// stage is skipped or stopped), and the name of the volume (a hash of the lock file and the configuration) reaches the
-	// docker commands that check, create and remove that volume.
-	// 76: the places Cargo.lock names are checked before the fetch stage (isolate_sources.go): 1 real flow, the directory of -C
-	// to the os.ReadFile of Cargo.lock that is read as text.
-	const maxFindings, maxNoSourceOnPath = 76, 0
+	// function. This is a ceiling: it must go down, never up.
+	const maxNoSourceOnPath = 0
 	t.Logf("%d findings, %d with no step in the source function", len(rep.Findings), noSourceOnPath)
-	if len(rep.Findings) > maxFindings {
-		t.Errorf("%d findings: more than the %d of today", len(rep.Findings), maxFindings)
-	}
 	if noSourceOnPath > maxNoSourceOnPath {
 		t.Errorf("%d findings have a path without a step in their source function: more than the %d of today", noSourceOnPath, maxNoSourceOnPath)
 	}
+	checkDogfoodFlows(t, &rep)
 	for _, s := range []string{"os.ReadFile", "os.Create", "os.WriteFile"} {
 		if !sinks[s] {
 			t.Errorf("no finding reaches %s: %v", s, sinks)
@@ -139,6 +120,112 @@ func TestDogfood(t *testing.T) {
 		other := float64(s.Program.ByKind[taint.KindDepthLimit]-capture) / float64(s.Program.Total)
 		if other > 0.05 {
 			t.Errorf("depth_limit other than capture_unbound is %.1f%% of the uncertainties: the limits are too tight for rivus' own code", 100*other)
+		}
+	}
+}
+
+// updateDogfoodFlows (go test ./cmd/rivus -run 'TestDogfood$' -update) rewrites testdata/dogfood-flows.txt from the findings of
+// today. Without the flag the test is read-only.
+var updateDogfoodFlows = flag.Bool("update", false, "rewrite cmd/rivus/testdata/dogfood-flows.txt from the findings of this run")
+
+const dogfoodFlowsFile = "testdata/dogfood-flows.txt"
+
+// checkDogfoodFlows holds the findings of rivus on itself as a list of (the function of the source, the function that has the
+// sink, the sink), not as a count: a count hides a swap (a real flow that is lost while another one appears keeps the same
+// number). A flow that is added or lost is red. A flow is listed once per finding, so a finding that is added to a pair that
+// is already there is red too.
+//
+// How to change the list:
+//   - go test ./cmd/rivus -run 'TestDogfood$' -update rewrites the file. The flows that are new get the comment
+//     "# TODO(reason)" at the end of their line, and the test stays red until it is replaced.
+//   - Say WHY the flow is real (or why it is the price of the code that was added), in that comment: which path of the
+//     project (the directory of -C, a flag) reaches which operation, and why that is what the code is for. If it is
+//     not real (the analysis follows a value that does not flow), it is a bug of rivus: fix that, do not list it.
+//   - A flow that is lost is taken off the list by -update. Say in the commit why it is gone (a fix, or a flow that was
+//     lost by mistake: look at it, a lost flow is a lost detection).
+//   - Never put the flows back in by hand to make the test green. The comments at the head of the file say why the groups exist.
+func checkDogfoodFlows(t *testing.T, rep *report.Report) {
+	t.Helper()
+	const prefix = "github.com/yagihash/rivus/"
+	var got []string
+	for _, f := range rep.Findings {
+		got = append(got, strings.ReplaceAll(f.Source.Func+" -> "+f.Sink.Func+" ["+f.Sink.Symbol+"]", prefix, ""))
+	}
+	sort.Strings(got)
+
+	old, err := os.ReadFile(dogfoodFlowsFile)
+	if err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	var head []string // the comment lines before the first flow
+	comments := map[string][]string{}
+	var want []string
+	for _, l := range strings.Split(string(old), "\n") {
+		flow, comment, _ := strings.Cut(l, "  # ")
+		switch {
+		case strings.TrimSpace(l) == "":
+		case strings.HasPrefix(l, "#"):
+			if len(want) == 0 {
+				head = append(head, l)
+			}
+		default:
+			flow = strings.TrimSpace(flow)
+			want = append(want, flow)
+			comments[flow] = append(comments[flow], comment)
+		}
+	}
+
+	if *updateDogfoodFlows {
+		var b strings.Builder
+		for _, l := range head {
+			b.WriteString(l + "\n")
+		}
+		b.WriteString("\n")
+		used := map[string]int{}
+		for _, g := range got {
+			c := "TODO(reason)"
+			if i := used[g]; i < len(comments[g]) {
+				c = comments[g][i]
+			}
+			used[g]++
+			b.WriteString(g)
+			if c != "" {
+				b.WriteString("  # " + c)
+			}
+			b.WriteString("\n")
+		}
+		if err := os.WriteFile(dogfoodFlowsFile, []byte(b.String()), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("%s rewritten (%d flows)", dogfoodFlowsFile, len(got))
+	}
+
+	count := func(xs []string) map[string]int {
+		m := map[string]int{}
+		for _, x := range xs {
+			m[x]++
+		}
+		return m
+	}
+	g, w := count(got), count(want)
+	if *updateDogfoodFlows {
+		w = g
+	}
+	for k, n := range g {
+		if n > w[k] {
+			t.Errorf("a flow was added (x%d, was x%d): %s\n\tif it is real, run with -update and write the reason on its line in %s", n, w[k], k, dogfoodFlowsFile)
+		}
+	}
+	for k, n := range w {
+		if n > g[k] {
+			t.Errorf("a flow was lost (x%d, was x%d): %s\n\ta lost flow can be a lost detection: look at it; if it is gone for a reason, run with -update and say why in the commit", g[k], n, k)
+		}
+	}
+	for flow, cs := range comments {
+		for _, c := range cs {
+			if strings.Contains(c, "TODO(reason)") {
+				t.Errorf("the flow has no reason yet (%s): replace TODO(reason) in %s", flow, dogfoodFlowsFile)
+			}
 		}
 	}
 }
