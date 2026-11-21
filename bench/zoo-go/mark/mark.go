@@ -17,12 +17,12 @@ func Src(tag string) string { return "" }
 func SrcBytes(tag string) []byte { return nil }
 
 // The sinks of each class. They record what they got and execute nothing.
-func SinkCmd(s string)          {}
-func SinkCmdBytes(b []byte)     {}
-func SinkSQL(s string)          {}
-func SinkHTML(s string)         {}
-func SinkPath(base, s string)   {}
-func SinkAny(v any)             {}
+func SinkCmd(s string)        {}
+func SinkCmdBytes(b []byte)   {}
+func SinkSQL(s string)        {}
+func SinkHTML(s string)       {}
+func SinkPath(base, s string) {}
+func SinkAny(v any)           {}
 
 // The sanitizers: each replaces the dangerous characters of its class by '_'.
 func CleanCmd(s string) string  { return "" }

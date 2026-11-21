@@ -578,8 +578,10 @@ func TestZooGo(t *testing.T) {
 	}
 	// a failed cell is analysed alone, to tell a mix with the others from an error of the cell
 	c := checkAnnotated(t, dir, annotOpts{pattern: "./cells/...", allowUnconverged: rec, programWide: rec})
-	if t.Failed() {
-		t.Log("the cells that failed are to be analysed alone: ./cells/<family>/<shape>/... (rivus analyze -sites -rules rules.yaml)")
+	if t.Failed() || os.Getenv("ZOO_ALONE") == "1" { // ZOO_ALONE=1 asks for it
+		// the cells are analysed one by one: green alone and red in the whole is a mix with the others
+		t.Log("the zoo failed as a whole: each cell is analysed alone below (green alone: mixed up with the others; red alone: the cell)")
+		zooAlone(t, dir, cells)
 	}
 
 	// the headline (docs/DESIGN-zoo.md, 6.3): from the annotations, once they agree with the run

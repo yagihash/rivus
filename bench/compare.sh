@@ -27,7 +27,7 @@ options:
   --resume          keep a result that is already saved with exit code 0 (for a run that was stopped)
   --only a,b        run only these benchmarks      --skip a,b   do not run these
   --light           only the light tier: the benchmarks of one run of 60 seconds or less and 6 GB or less (the curated three, go-synth-S,
-                    go-scale, gogs x 2, gin-vue-admin, go-test-bench, parseable, dart-pub). Base and head of a benchmark run at the same
+                    go-scale, zoo-go, gogs x 2, gin-vue-admin, go-test-bench, parseable, dart-pub). Base and head of a benchmark run at the same
                     time when the free memory allows it; a light run does not wait for other analyses, only for free memory (25%)
   --heavy           only the heavy tier: Gitea (and ech0 with --with-ech0). One run at a time, waits for a quiet machine,
                     never uses the cache. The final check of a big change. With neither --light nor --heavy: the light tier, then the
@@ -105,6 +105,7 @@ RES="$OUT/raw"
 is_heavy() { case "$1" in gitea|ech0) return 0 ;; *) return 1 ;; esac; }
 BENCHES="go-curated dart-curated rust-curated go-synth-S"
 grep -q "^    go-scale)" "${BASH_SOURCE[0]}" && BENCHES="$BENCHES go-scale"   # a pseudo-project of scale, added by another change
+grep -q "^    zoo-go)" "${BASH_SOURCE[0]}" && BENCHES="$BENCHES zoo-go"   # the zoo of Go: cases with answers that a run backs (bench/zoo/README.md)
 BENCHES="$BENCHES gogs-9a9388ac gogs-48946299 gin-vue-admin go-test-bench parseable dart-pub"
 if [ "$SEL_HEAVY" = 1 ] && [ "$SEL_LIGHT" = 0 ]; then BENCHES=""; WITH_GITEA=1; fi
 [ "$SEL_LIGHT" = 1 ] && [ "$SEL_HEAVY" = 0 ] && WITH_GITEA=0 && WITH_ECH0=0
@@ -124,6 +125,7 @@ spec() {
   KIND=go; URL=""; COMMIT=""; SUBDIR=""; RULES=""; DIR=""; TRUTH=""; CLONE=""
   case "$1" in
     go-curated)    DIR="$R/bench/go-curated"; RULES="$DIR/rules.yaml" ;;
+    zoo-go)        DIR="$R/bench/zoo-go"; RULES="$DIR/rules.yaml" ;;   # the zoo (docs/DESIGN-zoo.md): ./... reads the cells and mark; the harness is behind a build tag
     dart-curated)  KIND=dart; DIR="$R/bench/dart-curated"; RULES="$DIR/rules.yaml" ;;
     rust-curated)  KIND=rust; DIR="$R/bench/rust-curated"; RULES="$DIR/rules.yaml" ;;
     go-synth-S)    KIND=synth; DIR="$WORK/synth/S"; RULES="$DIR/rules.yaml" ;;   # DIR is made per version in setup()
@@ -231,7 +233,7 @@ setup() { # name side: makes the copy and the IR of that version; sets DIR, RULE
   spec "$b" "$wt" || { skip "$b" "unknown benchmark"; return 1; }
   PROV_INPUT="-"
   case "$b" in
-    go-curated|dart-curated|rust-curated)
+    go-curated|dart-curated|rust-curated|zoo-go)
       tgt="$(tree "$sha" "bench/$b")"
       [ -n "$tgt" ] || { skip "$b" "bench/$b does not exist in $w ($s7)"; return 1; }
       PROV_INPUT="bench/$b tree ${tgt:0:12}" ;;
