@@ -10,7 +10,8 @@ permissions: {}
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # the job must outlast `go test -timeout 30m` (the dogfood and the curated tests on a loaded runner)
+    timeout-minutes: 45
     permissions:
       contents: read
     steps:
@@ -29,7 +30,7 @@ jobs:
   # SDK and each sample package's `dart pub get`. They are skipped when RIVUS_DART is not set.
   dart:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: read
     steps:
@@ -43,10 +44,11 @@ jobs:
         with:
           sdk: 3.13.6
       - name: Resolve the packages of the extractor and the samples
+        # every one of them has a pubspec.lock: the versions are the locked ones, or the step fails
         run: |
           for d in extractor/dart extractor/dart/test/sample bench/dart-curated; do
             if [ -f "$d/pubspec.yaml" ]; then
-              (cd "$d" && dart pub get)
+              (cd "$d" && dart pub get --enforce-lockfile)
             fi
           done
       - name: Analyze the extractor
@@ -63,7 +65,7 @@ jobs:
   # to one nightly by extractor/rust/rust-toolchain.toml.
   rust:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     permissions:
       contents: read
     steps:
@@ -78,10 +80,10 @@ jobs:
         run: rustup toolchain install
       - name: Build the extractor
         working-directory: extractor/rust
-        run: cargo build
+        run: cargo build --locked
       - name: Test the extractor
         working-directory: extractor/rust
-        run: cargo test
+        run: cargo test --locked
       - name: Test with the Rust extractor
         run: go test -timeout 30m ./cmd/...
         env:

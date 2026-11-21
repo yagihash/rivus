@@ -174,6 +174,7 @@ func TestDeterministicDogfood(t *testing.T) {
 	_, file, _, _ := runtime.Caller(0)
 	root := filepath.Join(filepath.Dir(file), "..", "..")
 	var first json.RawMessage
+	finished := 0
 	for _, procs := range []string{"1", "4", ""} {
 		for i := 0; i < 1; i++ {
 			out := analyzeWith(t, root, procs, "-rules", "dogfood/rules.yaml", "-timeout", "120s", "./...")
@@ -191,6 +192,7 @@ func TestDeterministicDogfood(t *testing.T) {
 				t.Logf("GOMAXPROCS=%q run %d did not finish (a loaded machine): not compared", procs, i)
 				continue
 			}
+			finished++
 			if first == nil {
 				first = rep.Findings
 			} else if !bytes.Equal(first, rep.Findings) {
@@ -198,7 +200,8 @@ func TestDeterministicDogfood(t *testing.T) {
 			}
 		}
 	}
-	if first == nil {
-		t.Skip("no run finished")
+	// fewer than two finished runs compared nothing: that is not a pass (R-42)
+	if finished < 2 {
+		t.Skipf("only %d of 3 runs finished (a loaded machine): nothing was compared", finished)
 	}
 }
