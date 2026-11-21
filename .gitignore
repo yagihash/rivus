@@ -1,4 +1,4 @@
-/.rivus/
+.rivus/
 /rivus
 *.test
 /rust/target/
@@ -8,3 +8,5 @@
 /bench/zoo-rust/exec/target/
 __pycache__/
 *.pyc
+# backups that `sed -i` leaves (the BSD sed on macOS asks for a suffix)
+*.go-e
