@@ -50,6 +50,7 @@ pub mod dyns {
     pub mod sink_in_method;
     pub mod sink_in_method_iface;
     pub mod stdlib_writer_own;
+    pub mod stdlib_writer_own_static;
     pub mod xtalk_n_by_m;
 }
 pub mod guard {

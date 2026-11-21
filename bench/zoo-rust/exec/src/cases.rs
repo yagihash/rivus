@@ -35,6 +35,7 @@ pub fn register_all() {
     c::dyns::sink_in_method::register();
     c::dyns::sink_in_method_iface::register();
     c::dyns::stdlib_writer_own::register();
+    c::dyns::stdlib_writer_own_static::register();
     c::dyns::xtalk_n_by_m::register();
     c::guard::one_branch::register();
     c::guard::sanitize_before::register();

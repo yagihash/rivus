@@ -214,7 +214,7 @@ func (s *state) callBody(cc *callCtx) {
 	modelled := cc.sym != "" && rules.HasModel(cc.sym)
 	if modelled {
 		s.applyModel(cc)
-		if ci.Callee.Kind != ir.CalleeDynamic {
+		if ci.Callee.Kind != ir.CalleeDynamic && !staticImplOfModelledTrait(ci) {
 			return
 		}
 		// A method of an interface or trait that the model describes is also implemented by
@@ -1033,8 +1033,6 @@ func (s *state) variadicElems(v *sg.Value) []*sg.Value {
 	return out
 }
 
-// hasOwnBody reports whether one of the callees is code of the project (not of a
-// dependency) that the program has.
 // noteDepBodies records, for a call of a modelled interface method, the candidates whose body is in the
 // program but belongs to a dependency: they are not read (the model stands for them), and a dynamic_dispatch
 // cannot tell that from a candidate that was never there (dependency_body_unread).
@@ -1053,6 +1051,20 @@ func (s *state) noteDepBodies(ci *sg.Instr, cc *callCtx, fns []callee) {
 	n.Candidates = ids
 }
 
+// staticImplOfModelledTrait: a call that the compiler resolved (Rust: the type is known, the call is of the impl
+// `<A as std::io::Write>::write`) and that the extractor names by the trait's method, which has a model. It is the
+// same method as the dynamic call of the trait, with the impl known: the model says what the implementations outside
+// the code do, and the impl of the project is read besides (the sum, as for a dynamic call).
+func staticImplOfModelledTrait(ci *sg.Instr) bool {
+	if ci.Callee == nil || ci.Callee.Kind != ir.CalleeStatic || ci.Static == nil || ci.Static.Dep {
+		return false
+	}
+	id := string(ci.StaticID)
+	return strings.HasPrefix(id, "<") && strings.Contains(id, " as ") && id != ci.Callee.Symbol
+}
+
+// hasOwnBody reports whether one of the callees is code of the project (not of a
+// dependency) that the program has.
 func hasOwnBody(fns []callee) bool {
 	for _, c := range fns {
 		if c.fn != nil && !c.fn.Dep {
