@@ -54,7 +54,11 @@ Future<void> extract(String root, StringSink sink,
   }
   for (final path in paths.toList()..sort()) {
     final context = _contextOf(collection, path);
-    if (context == null) continue; // not in any package of the project
+    if (context == null) {
+      // not in any package of the project: the file is not read, and that is said
+      out.loadError(p.relative(path, from: root), 'the file is not in any package of the project and was not read', unread: true);
+      continue;
+    }
     final r = await context.currentSession.getResolvedUnit(path);
     if (r is! ResolvedUnitResult) {
       out.loadError(p.relative(path, from: root), 'could not be resolved');
@@ -130,7 +134,10 @@ Future<void> extract(String root, StringSink sink,
       }
       final context = (p.isWithin(root, path) ? _contextOf(collection, path) : null) ?? collection.contexts.first;
       final r = await context.currentSession.getResolvedUnit(path);
-      if (r is! ResolvedUnitResult) continue;
+      if (r is! ResolvedUnitResult) {
+        out.loadError(p.isWithin(root, path) ? p.relative(path, from: root) : path, 'a file of a dependency could not be resolved and was not read', unread: true);
+        continue;
+      }
       units.add(UnitInfo(prog, p.isWithin(root, path) ? p.relative(path, from: root) : path, r.unit, r.content, r.lineInfo, dep: true));
     }
   }
@@ -139,7 +146,7 @@ Future<void> extract(String root, StringSink sink,
         'a dependency outside the project, the pub cache and the SDKs is not read (what package_config.json points to is not trusted): --allow-deps-under ${_advisedDir(e.key)} reads it');
   }
   if (!includeTests) {
-    final dev = _devOnlyDependencies(root);
+    final dev = _devOnlyDependencies(root, out);
     final unread = deps ? dev.where((d) => !readPackages.contains(d)).toList() : <String>[];
     final used = deps ? (dev.toList()..retainWhere(usedByProduction.contains)) : <String>[];
     out.testsSkipped(testFiles.length, unread.length, unread..sort(), [
@@ -427,11 +434,24 @@ class _Lower extends RecursiveAstVisitor<void> {
   final Program prog;
   final UnitInfo unit;
 
+  /// A declaration whose element the analyzer could not make is left out (there is nothing to lower it with): said,
+  /// with where it is, so that what is missing is not missing without a trace (the file is in summary.unread).
+  void _noElement(AstNode node, String what) {
+    final src = node.toSource().replaceAll(RegExp(r'\s+'), ' ');
+    prog.out.loadError(unit.file,
+        'a $what whose element the analyzer could not make is left out (line ${unit.lines.getLocation(node.offset).lineNumber}): ${src.length > 60 ? src.substring(0, 60) : src}',
+        unread: true);
+  }
+
   /// The initializer of a variable of the library (or a static field) is a function of its
   /// own, which stores the value in the variable: the program starts there too (the
   /// variable is set when it is first read, and the code that reads it does not ask when).
   void _initializer(VariableDeclaration v) {
     final el = v.declaredFragment?.element;
+    if (v.initializer != null && el == null) {
+      _noElement(v, 'variable initializer');
+      return;
+    }
     if (v.initializer == null || el == null) return;
     _guarded('${symbolOf(el)}\$init', () => _initializerLower(v));
   }
@@ -482,7 +502,11 @@ class _Lower extends RecursiveAstVisitor<void> {
     if (node.parent is! CompilationUnit) return;
     final el = node.declaredFragment?.element;
     final fe = node.functionExpression;
-    if (el == null || !_hasBody(fe.body)) return;
+    if (el == null) {
+      _noElement(node, 'function');
+      return;
+    }
+    if (!_hasBody(fe.body)) return;
     _function(
       el,
       node,
@@ -495,7 +519,11 @@ class _Lower extends RecursiveAstVisitor<void> {
   @override
   void visitMethodDeclaration(MethodDeclaration node) {
     final el = node.declaredFragment?.element;
-    if (el == null || !_hasBody(node.body)) return;
+    if (el == null) {
+      _noElement(node, 'method');
+      return;
+    }
+    if (!_hasBody(node.body)) return;
     final cls = el.enclosingElement;
     _function(
       el,
@@ -509,7 +537,10 @@ class _Lower extends RecursiveAstVisitor<void> {
   @override
   void visitConstructorDeclaration(ConstructorDeclaration node) {
     final el = node.declaredFragment?.element;
-    if (el == null) return;
+    if (el == null) {
+      _noElement(node, 'constructor');
+      return;
+    }
     // a factory makes no object of its own: it is a function that returns what its
     // body returns, or (`factory A() = B;`, the shape freezed writes) what the
     // constructor it redirects to makes
@@ -881,7 +912,7 @@ bool _isNonProduction(String root, String path, Map<String, bool> pkgCache) {
 
 /// The packages that the pubspec.yaml files under [root] declare under dev_dependencies and not under
 /// dependencies (nor as a package of the project itself).
-Set<String> _devOnlyDependencies(String root) {
+Set<String> _devOnlyDependencies(String root, StreamOut out) {
   final dev = <String>{}, prod = <String>{}, own = <String>{};
   for (final e in Directory(root).listSync(recursive: true, followLinks: false)) {
     if (e is! File || p.basename(e.path) != 'pubspec.yaml' || _skipped(root, e.path)) continue;
@@ -892,7 +923,10 @@ Set<String> _devOnlyDependencies(String root) {
       final d = y['dev_dependencies'], m = y['dependencies'];
       if (d is YamlMap) dev.addAll(d.keys.cast<String>());
       if (m is YamlMap) prod.addAll(m.keys.cast<String>());
-    } catch (_) {}
+    } catch (err) {
+      // the dev-only dependencies are told from the ones that the project ships by these files: not read, said
+      out.loadError(p.relative(e.path, from: root), 'pubspec.yaml could not be read ($err): which dependencies are for development only is not known from it');
+    }
   }
   return dev.difference(prod).difference(own);
 }
