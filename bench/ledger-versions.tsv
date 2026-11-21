@@ -12,7 +12,8 @@ aa7cb0c	good 2	absorbWhole
 c9aa412	good 6, 7	only the seeds are not written back
 8e8b866	bad 7	param source written back (N x M, CORE-A)
 5dfec7f	good 8	closure captures; plan D (identity global stores)
-697ae9d	bad 8	5dfec7f without plan D (made for the backtest, never pushed)
+697ae9d	bad 8	5dfec7f without plan D (bench/backtest-patches/8-no-plan-d.patch; the commit itself is in no ref)
 7552eb9	bad 10	writer model puts the data on the whole object
-6ddee62	good 10	writer content step (a branch, not on main yet)
-84877f1	reference	main at the time of the backtest
+6ddee62	good 10 (branch)	writer content step (a branch commit; the same patch is a1e2fb7 on main)
+a1e2fb7	good 10	writer content step (on main)
+de627ce	reference	main (the engine the differences are against)

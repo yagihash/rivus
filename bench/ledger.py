@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The ledger of the bench (bench/LEDGER.md): version x bench x metric.
 
-  bench/ledger.py -versions bench/ledger-versions.tsv -ref 84877f1 RESULTS_DIR... > bench/LEDGER.md
+  bench/ledger.py -versions bench/ledger-versions.tsv -ref de627ce RESULTS_DIR... > bench/LEDGER.md
 
 RESULTS_DIR is a directory that bench/compare.sh wrote (--out, or <work>/results/<pair>): its raw/ holds
 <bench>.<side>.json, .meta.json and .prov. A run is named by the engine that made it (the 4th field of the .prov
