@@ -63,7 +63,9 @@ int lowerExpr(FnLower f, Expression e) {
     case AsExpression():
       final v = lowerExpr(f, e.expression);
       final d = f.tmp(e.staticType);
-      f.emit('type_assert', dsts: [d], args: [v], at: f.pos(e), more: {'type': typeId(e.staticType)});
+      // a cast is not a conversion: the value is the same one, seen as another type (the
+      // engine's type_assert reads the value out of an interface box, which Dart has not)
+      f.emit('copy', dsts: [d], args: [v], at: f.pos(e));
       return d;
     case IsExpression():
       final v = lowerExpr(f, e.expression);

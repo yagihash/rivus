@@ -21,7 +21,7 @@ class Box implements Getter {
 }
 
 void vuln() { // @vuln
-  final Object a = Box(src('dyn-iface-assert-ptr-recv-vuln')); // @source(dyn-iface-assert-ptr-recv-vuln) @miss(silent) @ref(CAST,PARITY)
+  final Object a = Box(src('dyn-iface-assert-ptr-recv-vuln')); // @source(dyn-iface-assert-ptr-recv-vuln)
   final g = a as Getter;
   sinkCmd(g.get()); // @sink(dyn-iface-assert-ptr-recv-vuln)
 }
@@ -33,7 +33,7 @@ void fixed() { // @fixed
 }
 
 void decoy() { // @decoy
-  final Object a = Box(src('dyn-iface-assert-ptr-recv-decoy')); // @source(dyn-iface-assert-ptr-recv-decoy) @miss(silent) @ref(CAST,PARITY)
+  final Object a = Box(src('dyn-iface-assert-ptr-recv-decoy')); // @source(dyn-iface-assert-ptr-recv-decoy)
   final Object b = Box('constant');
   sinkCmd((b as Getter).get()); // @sink(none) @nosink(dyn-iface-assert-ptr-recv-decoy)
   sinkSql((a as Getter).get()); // @sink(dyn-iface-assert-ptr-recv-decoy)
