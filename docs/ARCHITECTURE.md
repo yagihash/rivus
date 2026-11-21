@@ -1,6 +1,14 @@
 # rivus アーキテクチャ
 
-状態: 初版（レビュー待ち）。決定の経緯と理由は [DECISIONS.md](DECISIONS.md)、用語は [GLOSSARY.md](GLOSSARY.md) を参照。
+状態: 今のアーキテクチャの説明（確認: 2026-11-22、`aa79d0e`）。コードと突き合わせて書いた。古くなる前提で読むこと。
+
+- 設計思想: [PRINCIPLES.md](PRINCIPLES.md)
+- 経緯と理由: [DECISIONS.md](DECISIONS.md)。各 ADR の今の状態: [ADR-INDEX.md](ADR-INDEX.md)
+- 個別の設計: `DESIGN-*.md`（[DESIGN-graph.md](DESIGN-graph.md)、[DESIGN-memory.md](DESIGN-memory.md)、[DESIGN-capture.md](DESIGN-capture.md)、[DESIGN-field-sinks.md](DESIGN-field-sinks.md) など）
+- 歴史・計画: [history/](history/)。この文書から移した Phase の計画と実測は [history/ARCHITECTURE-plans.md](history/ARCHITECTURE-plans.md)
+- 用語: [GLOSSARY.md](GLOSSARY.md)
+
+節番号は、ADR、コードのコメント、extractor の README が引用している。1〜8 節の番号は変えない。履歴・計画へ移した節には、同じ番号に案内を残してある。9〜11 節は、全部移した。新しい内容は 12 節以降に足した。
 
 ---
 
@@ -12,19 +20,21 @@ rivus は「脆弱性を報告する SAST」ではなく、**到達可能性に�
 ```
                  言語ごとの extractor（言語固有の知識が要る部分）
  ┌──────────────────────────────────────────────────────────────┐
- │ Go   extractor (Go 製・同梱)   go/packages → go/ssa(NaiveForm)│
- │ Rust extractor (Rust 製・外部) rustc_public → MIR             │──┐
- │ Dart extractor (Dart 製・外部) package:analyzer → 自作 CFG    │  │ サブプロセス起動
- └──────────────────────────────────────────────────────────────┘  │ 中立 IR (JSON Lines, schema_version 付き)
-                                                                    ▼
+ │ Go   extractor (Go 製・同梱・同じプロセス) go/packages → go/ssa(NaiveForm)│
+ │ Rust extractor (Rust 製・外部・既定はコンテナの中) rustc_public → MIR     │──┐
+ │ Dart extractor (Dart 製・外部)  package:analyzer → 自作 CFG               │  │ サブプロセス起動
+ └──────────────────────────────────────────────────────────────┘  │ （Go は IR を直接渡す）
+                                                                    ▼ 中立 IR (JSON Lines, schema_version 付き)
  ┌──────────────────────────────────────────────────────────────────────────┐
  │ コアエンジン（Go 製・言語非依存）                                          │
  │                                                                          │
  │  IR 読み込み・検証                                                         │
  │     ↓                                                                    │
+ │  関数値の呼び出しの候補を足す（valuecalls。13 節）                           │
+ │     ↓                                                                    │
  │  SSA 化（dominator → φ 挿入）                                              │
  │     ↓                                                                    │
- │  コールグラフ（言語ごとのビルダーが供給。SCC 縮約 → トポロジカル順）        │
+ │  コールグラフ（IR の call の candidates。SCC 縮約 → トポロジカル順）         │
  │     ↓                       ┌──────────────┐                             │
  │  関数サマリ算出（bottom-up） ←─ モデル(YAML)  │ source/sink/sanitizer/      │
  │     ↓                       └──────────────┘ propagator。組み込みも同形式 │
@@ -32,9 +42,11 @@ rivus は「脆弱性を報告する SAST」ではなく、**到達可能性に�
  │     ↓                                                                    │
  │  由来追跡 (provenance) ・ 条件ガード ・ 不確実性の記録                      │
  │     ↓                                                                    │
- │  出力: 構造化 JSON（本体）／ SARIF（副次）                                  │
+ │  出力: 構造化 JSON（SARIF は出さない。ADR-009）                             │
  └──────────────────────────────────────────────────────────────────────────┘
 ```
+
+コールグラフだけを保存して検索する経路（`rivus index` / `rivus graph`）は、このパイプラインの横にある（12 節）。
 
 責務の境界は「**言語固有の知識が要るか**」で引く。CFG 構築まで（言語固有の脱糖を含む）は extractor、SSA 化から先はコア。
 
@@ -73,6 +85,7 @@ rivus resolve --bookmarks b.json ./...  # 前回見た箇所が今どこにあ�
 
 ---
 
+
 ## 2. 中立 IR
 
 ### 2.1 基本方針
@@ -91,14 +104,14 @@ rivus resolve --bookmarks b.json ./...  # 前回見た箇所が今どこにあ�
 |---|---|
 | `FuncID` | 関数の一意な ID（完全修飾名）。例 `example.com/m/pkg.(*T).Method` |
 | `TypeID` | 型の同一性を判定できる ID。構造は持たない |
-| `FieldID` | 型 + フィールド名。フィールド感度のための名前 |
-| `Pos` | ファイル、オフセット、長さ |
+| `FieldID` | 型 + フィールド名。フィールド感度のための名前（IR では型ではなく、`field_load` などの `field` の文字列） |
+| `Pos` | ファイル、オフセット、長さ。読む人のために行・桁も持つ |
 | `LocalID` | 関数内ローカルの番号 |
 | `BlockID` | 関数内ブロックの番号 |
 
 ### 2.3 命令セット v0（26 種）
 
-「15 種類程度」という当初の見積もりは過小だった。以下を初版とする。
+命令は次の 26 種（`internal/ir/ir.go` の `Op` と `TermKind`）。
 
 **値の生成・変換**
 
@@ -139,7 +152,7 @@ rivus resolve --bookmarks b.json ./...  # 前回見た箇所が今どこにあ�
 | 命令 | 内容 |
 |---|---|
 | `exception_value` | 例外ハンドラブロックの先頭で、捕捉した値を受ける |
-| `unsupported` | extractor が脱糖できなかった構文。理由の文字列を持ち、`missing_source` 等の記録の起点になる |
+| `unsupported` | extractor が脱糖できなかった構文。理由の文字列を持ち、不確実性 `unsupported_construct` の起点になる（4.4） |
 
 **終端命令（各ブロックに 1 つ）**
 
@@ -151,7 +164,7 @@ rivus resolve --bookmarks b.json ./...  # 前回見た箇所が今どこにあ�
 | `throw` | 例外送出 |
 | `unreachable` | 到達不能（`panic` 後など） |
 
-合計: 値 7 ＋ メモリ 10 ＋ 関数 2 ＋ 例外・不明 2 ＋ 終端 5 ＝ 26。「25 前後」の想定内。
+合計: 値 7 ＋ メモリ 10 ＋ 関数 2 ＋ 例外・不明 2 ＋ 終端 5 ＝ 26。
 
 **`slice` を独立命令にしなかった理由:** 構文として存在するのは主に Go で、Rust は範囲インデックス（MIR では `Index::index` の呼び出し）、
 Dart の `sublist` / `substring` はただのメソッド呼び出しになる。汚染の意味は `copy` と同じ（`base` の汚染を引き継ぐだけ）なので、`copy` の `view` フラグで表す。
@@ -186,15 +199,19 @@ call dst? callee args flags
 
 ### 2.6 ストリーム形式
 
-JSON Lines。**先頭行は必ず `{"schema_version": ...}`**。以降は関数ごとに 1 行以上。
-`rivus extract --lang=... --output=ir.jsonl` で IR を単独で出力でき、人間が読んで検証できることを一級の要件とする。
+JSON Lines。**先頭行は必ず `{"schema_version": "rivus.ir/0"}`**。以降は 1 行 1 レコードで、`kind` が種類を言う。種類は `func`（関数）、`implementations`、`global`、`type`、`type_alias`、`text`、`call_text`、`func_text`、`load_error`、`tests_skipped`、`caller_marks`（`internal/ir/stream.go`）。
+`rivus extract` で、Go の IR を単独で出せる。`-text` で人間向けの形、`-func` で関数を絞り、`-all` で依存も出す。`-implementations`、`-texts`、`-check` もある（`cmd/rivus/extract.go`）。
+`-lang rust` は、Rust の extractor が出すストリームをそのまま出す（既定ではコンテナの中で動かす。15 節）。`-lang` は `go` か `rust` で、Dart の extractor は `rivus extract` からは呼べない（`rivus-dart` を直接動かす）。
+人間が読んで検証できることを一級の要件とする。
 
-### 2.7 Phase 2 に向けた具体化（案。レビュー待ち）
+### 2.7 IR の具体化（エンジンの要求と、extractor の契約）
 
-2.1〜2.6 は Phase 1 の前に書いた。Phase 1 で解析エンジン（約 4,800 行）が実際に `go/ssa` から何を使っているかが分かったので、
-IR が運ぶべきものを実測から決め直す。**ここに書くのは案で、ユーザーのレビューで確定する（ADR-039）。**
+2.1〜2.6 の方針を、実装が決めた形に具体化したもの（ADR-039、ADR-040）。ここに書くのは今の契約。
+Phase 2 の実施記録、実装メモ、移行の戦略、実測は、[history/ARCHITECTURE-plans.md](history/ARCHITECTURE-plans.md) に移した。
 
-#### 2.7.1 エンジンが IR に要求するもの（Phase 1 の実装から）
+#### 2.7.1 エンジンが IR に要求するもの
+
+「今の使い方」の列は、IR を切り出す前（go/ssa を直接使っていた Phase 1）のエンジンでの使い方。要求の由来を示すために残す。今のエンジンは `sg` の値の上で動く。
 
 | 要求 | 今の使い方 | IR での持たせ方 |
 |---|---|---|
@@ -208,9 +225,10 @@ IR が運ぶべきものを実測から決め直す。**ここに書くのは案
 | 定数 | `Const`、`IsConstant` | `const`（値と型） |
 | スニペット・式テキスト | AST から切り出す（`text.go`） | 命令の `Pos`、呼び出しの引数ごとの `Pos`、`branch` の `CondPos`。**言語ごとの `ir.Texts` が位置から切り出す**（IR 自体はテキストを運ばない。2.3 で修正。下の実装メモ） |
 | 指紋 | シンボル、関数、出現順、式テキスト、本体テキスト | すべて `Pos` とシンボルから作れる。コアに置く |
-| 実装列挙 | `Implementations(symbol)`（`match: implementations`） | extractor が提供する問い合わせ。ストリームでは、インタフェースメソッドごとの `implementations` レコード |
-| コールグラフ | `callgraph.BuildGo`（CHA → VTA） | **extractor 側**。結果は `call` の `dynamic(candidates)` として IR に埋める。コアは IR だけから SCC を作る |
+| 実装列挙 | `Implementations(symbol)`（`match: implementations`） | Go では `gossa` が答える。ストリームには、インタフェースメソッドごとの `implementations` レコードの形がある（2.7.7） |
+| コールグラフ | `callgraph.BuildGo`（CHA → VTA） | **extractor 側**。結果は `call` の `dynamic(candidates)` として IR に埋める。コアは IR だけから SCC を作る。関数値の呼び出しの候補は、コアの `internal/valuecalls` が IR の上で足す（13 節） |
 | `defer` / `recover` | `ssabuild` の `Roots`（recover 後のブロック） | `defer` フラグのエッジと、`roots` を持つ関数（2.5） |
+
 
 #### 2.7.2 2.3 からの変更点
 
@@ -219,6 +237,7 @@ IR が運ぶべきものを実測から決め直す。**ここに書くのは案
 3. **`param` はクロージャの捕捉値も受ける。** 位置番号の後ろに、捕捉値の番号を並べる
 4. **`call` / `branch` / `return` に、引数ごとのソース範囲**（`ArgPos`）を持たせる。テキストの切り出しとガードの対応づけに必要
 5. 命令数は 26 のまま。上の 1〜4 はどれもフィールドの追加で、命令は増やさない
+
 
 #### 2.7.2b 文字列とテキストの扱い
 
@@ -260,87 +279,61 @@ Phase 1 のエンジンが型について実際に問うのは、この分類（
 
 NaiveForm のローカルは、`Alloc` の結果がそのままローカル変数になる。コアの `ssabuild` が、ローカルの代入 ＋ 使用から φ と到達定義を作る（Phase 1 で検証済み。ADR-036）。
 
-**2.1 で分かったこと（実装メモ）:**
-- `rivus extract [-text] [-func 部分文字列] [-all]` で、IR を JSON Lines か人間向けの文字列で出せる。`testdata`、ghmint、rivus 自身、x/tools（5,258 関数、87MB、約 2 秒）が、検証つきで通り、`unsupported` は 0 件
-- go/ssa の内部用の呼び出し（`ssa:deferstack`、`ssa:wrapnilchk`）は、シンボル `builtin.ssa:...` の静的な `call` として、そのまま出る。`defer` を持つ関数の出口には `rt.rundefers` の `call` が出る
-- アドレス計算（`FieldAddr` / `IndexAddr`）は、使い道が `load` / `store` だけなら畳み込む。アドレスが値として渡るときだけ `addr_of` になる。グローバルのアドレスは、引数のない `addr_of`（`global` つき）
-- `call` の `callee` は、静的な呼び出しで `func`（呼び先の関数 ID）と `symbol`（ルールのシンボル。無名関数では空）の両方を持つ。クロージャの直接呼び出しは、`value` の呼び出しにする（束縛した値を失わないため）
-- φ は、前任ブロックの末尾の `copy` に落とす。1 つの前任が複数の φ に値を渡すときは、一時変数を経由する
-- **まだ入れていないもの:** `ArgPos`（2.3 でサイトを IR の上に載せるときに入れる）、`dynamic` の `candidates`（2.5）、`implementations`（`-implementations` で指定したメソッドだけ）
+**Go extractor の決めごと**（`internal/frontend/goir/`、`internal/ir/ir.go`）:
+- `call` の `callee` は、静的な呼び出しで `func`（呼び先の関数 ID）と `symbol`（ルールのシンボル。無名関数では空）の両方を持つ。組み込み関数は、`builtin.<名前>` のシンボルの静的な `call`
+- アドレス計算（`FieldAddr` / `IndexAddr`）は、使い道が 1 つの `load` / `store` だけなら畳む（`Folded`。位置は `AddrPos`）。アドレスが値として渡るときだけ `addr_of` になる。グローバルのアドレスは、引数のない `addr_of`（`global` つき）
+- φ は、前任ブロックの末尾の `copy` に落とす（NaiveForm には φ がない。コアが `ssabuild` で作る）
+- エンジンを動かす言語固有の操作は、シンボル付きの `call` で表す: `chan.send` / `chan.recv`、`iter.start` / `iter.next` / `iter.next_string`、`rt.rundefers`。`select` は、extractor が送信と受信の `call` に分ける。`index_load` / `index_store` の `Keyed` は、キーで引くこと（map、文字列）
+- 何も捕捉しない無名関数を変数に入れて呼ぶ場合は、`make_closure`（捕捉なし）から呼び先を、コアの `sg` が静的に解く
+- 型の別名（Go の `type A = B`）は、`type_alias` レコードで渡す（ADR-083）
 
-**2.2 で分かったこと（実装メモ）:** `internal/irssa`。
-- 変数になるのは、(a) 2 回以上書かれるローカル（φ を落とした `copy` の宛先）と、(b) `load` / `store` のアドレスとしてしか使われない `alloc`（昇格。go/ssa の lifting と同じ基準）。`recover` の root があるとき、entry から届かないブロックで `load` される `alloc`（名前つきの結果）は昇格しない
-- 答えは `Ref`（命令の結果、φ、昇格した変数のゼロ値、未定義）。`Form.Operand(block, instr, k)` が、命令の k 番目の引数の定義を返す。昇格した変数の `load` は、その場所で変数が持つ値（直前の `store` の値、または φ）に解決される
-- 検証は、go/ssa の lifting（昇格した `alloc` の φ の位置）、ナイーブな go/ssa の φ（落とした φ の位置）、独立な到達定義解析（使用ごと）。testdata、rivus 自身、x/tools（5,256 関数、φ 4,646 個、使用 67,640 箇所）で一致
+2.7.4 の末尾にあった「で分かったこと（実装メモ）」（検証の結果と、その時点の実測）は、履歴・計画は [history/ARCHITECTURE-plans.md](history/ARCHITECTURE-plans.md) の 2.7.4 節（実装メモ）にある。
 
-**2.3 で分かったこと（実装メモ）:**
-- **テキストの切り出しは、コアではなく言語ごとの `ir.Texts` が行う（ADR-039 の修正）。** スニペットの範囲（複合文は見出しだけ）、式の正規化（コメントと空白に依らない）、本体の正規化は、言語の構文の問題で、`expr@1` / `body@1` はこの出力のハッシュだから。IR は位置（`File`、`Offset`、`Line`、`Col`）だけを運び、`Texts` は extractor と同じプロセスで、同じ構文木を使う。別プロセスの extractor を作るときは、`Texts` を同じ extractor が提供する形を考える
-- 追加したフィールド: `Func.Symbol` / `Recv` / `Dep`、`Callee.Recv`、`Instr.AddrPos`（`load` / `store` に畳んだアドレス計算の位置。フィールドの source のサイトの位置に使う）、`Pos.Line` / `Col`
-- アドレス計算を畳むのは、使い道が 1 つの `load` か `store` のときだけにした（`x.f += 1` のように 2 つあるときは `addr_of`。ソース上で触るのは 1 回なので、サイトも 1 つにするため）
-- **検証:** 同じコードを go/ssa 経路と IR 経路で列挙し、サイトの ID・指紋 4 種・位置・スニペット・ラベル・`literal_only`・並び順が完全に一致することを、testdata（212 サイト、フィールド 7）、rivus 自身、ghmint、x/tools（243 サイト）で確かめた
+#### 2.7.5 構成
 
-**2.4〜2.6 で分かったこと（実装メモ）:**
-- **新しいパッケージ:** `internal/irssa`（2.2）、`internal/sg`（SSA グラフ。IR ＋ `irssa` から、値・命令・ブロック・支配木を作る。昇格した変数の `load` / `store` と、φ を落とした `copy` は消え、定数・パラメータは値になる）、`internal/taint`（エンジン。`go/ssa` の値の代わりに `sg` の値を使う）
-- **エンジンを動かす言語固有の操作は、シンボル付きの `call`:** `chan.send` / `chan.recv`、`iter.start` / `iter.next` / `iter.next_string`、`rt.rundefers`。`select` は、extractor が送信と受信の `call` に分ける（どれが起きるかはデータではない）。`index_load` / `index_store` の `Keyed` は、キーで引くこと（map、文字列）。`Folded` は、アドレス計算を畳んだ `load` / `store`。`convert` の `Operator` は、変換の種類
-- **値の同一性:** `go/ssa` のタプル（複数戻り値）は、`call` の `Dsts` の 1 つずつが値になる。`Extract` は消える
-- **コールグラフ:** VTA は NaiveForm の上だと lifted の上より粗い（`(go/types.Object).Name` の候補が増える）。そこで `gossa.Options.WithLifted` で lifted 版も作り、グラフはそちらから取って、NaiveForm の `call` へ位置と種類で対応づけて `candidates` に入れる。この対応づけで、`ssa:deferstack` のような lifting で消える呼び出しを避ける
-- **関数だけの値:** 何も捕捉しない無名関数を変数に入れて呼ぶ場合、`sg` が `make_closure`（捕捉なし）から呼び先を静的に解く（これを落とすと、`unresolved_callee` が増えた）
-- **検証（旧経路との突き合わせ。JSON を比べた）:** `testdata` の全ケース、rivus 自身（36 検出、614 不確実性）、ghmint（15 検出、176 不確実性）で完全に一致。x/tools（4 検出、10,628 不確実性）も、検出・抑制・収束は一致し、不確実性は 1 件だけ違う（generic な関数の中の range-over-func で、位置のない合成された呼び出し。`excfg.CFG.Out$1` を呼ぶ側）。許容する
-- **性能（x/tools、15.6 万行）:** 107 秒・最大 4.9 GB → 97 秒・最大 2.4 GB（ADR-040）。メモリが増えた原因は、関数ごとの解析の状態を結果の収集まで持っていたことだった（`analyzeFunc` の最後に、検出・抑制・不確実性だけ残して手放す）
-- **依存:** `go list -deps` で、`taint`・`sites`・`sg`・`irssa`・`ir`・`report`・`model` に `go/ssa`・`x/tools`・`gossa`・`go/types`・`go/ast` は入っていない。`taint`（ガードの定数評価）と `report` には `go/token` と `go/constant` が入る（標準ライブラリの、言語に依らない部分。いずれ自前にできる）。`gossa` は、Go の extractor と、`rules.Expand`（実装列挙。Go のパッケージを引く）からだけ使われる
+履歴・計画は [history/ARCHITECTURE-plans.md](history/ARCHITECTURE-plans.md) の 2.7.5 節にある。今の構成は 3 節。要点だけ: Go では同じプロセスの中で IR の型を直接渡し、JSON Lines は `rivus extract` の出力と、Dart / Rust の extractor（別プロセス）の入力に使う。直接渡す経路と JSON を経由する経路の結果が一致することは、`TestTheStreamGivesTheSameResultAsTheDirectIR`（`internal/taint/helper_test.go`）で確かめている。
 
-#### 2.7.5 構成（案）
+#### 2.7.6 移行の戦略
 
-- `internal/ir`: 型（`Func`、`Block`、`Instr`）、JSON Lines の符号化・復号、検証（全ブロックに終端がある、`Dst` が宣言済み、など）
-- `internal/frontend/goir`: `go/packages` ＋ `go/ssa`（NaiveForm）→ IR。`gossa` の下の層（ロード、型、コールグラフ、実装列挙）を使う
-- `internal/ir/ssa`（名前は未定）: IR ＋ `ssabuild` → 値の名前つきの SSA 形
-- `internal/taint` / `internal/sites`: **`go/ssa` を import しない。** IR の SSA 形だけを見る。`gossa` への依存も取り除く
-- **Go では、同じプロセスの中で IR の型を直接渡す。** JSON Lines は `rivus extract` の出力と、Rust / Dart extractor（別プロセス）の入力のためだけに使う。ただし、直接渡す経路と JSON を経由する経路の結果が一致することをテストする
+履歴・計画は [history/ARCHITECTURE-plans.md](history/ARCHITECTURE-plans.md) の 2.7.6 節にある（旧経路と新経路を突き合わせた移行。実施済み）。
 
-#### 2.7.6 移行の戦略（実施済み）
+#### 2.7.7 別プロセスの extractor の契約
 
-エンジンの移植は大きい（`taint` 約 4,800 行）。壊さないために、**旧経路（`go/ssa` 直）と新経路（IR 経由）を、移行が終わるまで両方動かし、`Report` を突き合わせる。**
-対象は `testdata` の全ケース、ghmint、rivus 自身、`x/tools`。結果が一致するまでは旧経路を消さない。
-意図した差（IR で表せなくなったもの、位置の表現）が出たら、ADR に書いてから許容する。
-
-#### 2.7.7 別プロセスの extractor の契約（案。レビュー待ち）
-
-Go の extractor は、コアと同じプロセスで、`ir.Program` と `ir.Texts` を直接渡す。Dart と Rust の extractor は別プロセスなので、コアが Go の中で頼っていたものを、extractor が提供する形にする。
+Go の extractor は、コアと同じプロセスで、`ir.Program` と `ir.Texts` を直接渡す。Dart と Rust の extractor は別プロセス（Rust は既定でコンテナの中。15 節）なので、コアが Go の中で頼っていたものを、ストリームに載せて渡す。
 
 | コアが要るもの | Go（同じプロセス） | 別プロセスの extractor |
 |---|---|---|
 | 関数と命令 | `ir.Program` | JSON Lines（2.6）。`rivus extract` と同じ形式 |
-| コールグラフ | `call` の `candidates` | 同じ。extractor が、その言語の方法（Dart は `pkg/vm` の type flow、Rust は monomorphize collector）で解き、`candidates` に入れる |
-| 実装列挙（`match: implementations`） | `rules.Expand` が `gossa` を引く | `implementations` レコード（2.6）。**どのメソッドを列挙するかは、コアが先に extractor に伝える**（下の「問い合わせ」） |
+| コールグラフ | `call` の `candidates` | 同じ。extractor が、その言語の方法で解き、`candidates` に入れる |
+| 実装列挙（`match: implementations`） | `rules.Expand` が `gossa` を引く（`internal/frontend/gossa/implementations.go`） | ストリームに `implementations` レコードの形はあるが、今、Dart / Rust の extractor は出さず、コアも展開には使わない（`cmd/rivus/common.go` の `rules.Expand` は `gossa` だけ）。Dart / Rust の継承の問い合わせは `type` レコード（`extends:`、`marker:`）で行う |
 | テキスト（スニペット、式、本体、条件、引数） | `ir.Texts` | **ストリームに載せる**（下の「テキスト」） |
 | 型の分類 | `Local.Class` | 同じ |
 | 読み込みの失敗 | `LoadError` | `load_error` レコード（パッケージ名とメッセージ） |
 
-**テキスト:** 別プロセスでは、`Texts` を呼び返せない。そこで extractor は、**必要なテキストを、あらかじめストリームに載せる**。コアが要るのは、(a) 命令の位置ごとのスニペット（検出の経路の 1 歩は、どの命令でもありうる）、(b) サイトの位置の、正規化した式、(c) 分岐の後の命令の位置ごとの、条件のテキスト、(d) 呼び出しごとの、全体と引数のテキスト、(e) 関数ごとの、正規化した本体と、表示用のソース（80 行まで）、(f) グローバル変数の宣言位置のスニペット。
-- 形式: `text`（種類、ファイル、テキスト、**その位置のオフセットの一覧**）、`call_text`、`func_text`、`load_error` のレコード。同じ文に属する位置は多い（x/tools で、命令の位置 28 万個に対して、異なるスニペットは 1.6 MB 分）ので、テキストを 1 回だけ書き、オフセットを並べる
-- コア側は `ir.StreamTexts` が `ir.Texts` を満たす。**Go の extractor も `goir.AddTexts` で同じレコードを出せ、ストリームを通した結果（テキストも含む）が、直接渡した結果と一致する**ことをテストしている（`TestTheStreamGivesTheSameResultAsTheDirectIR`）。他言語の extractor は、`AddTexts` が何を出すかを、契約の見本にする
-- **実測（x/tools、依存を含む 8,096 関数）:** IR 120 MB に対し、テキストの分は 27 MB（+23%）。位置ごとにスニペットをそのまま書くと 53 MB になるところを、グループ化で 1.6 MB 分の文字列に絞れた。問い合わせの対話は要らない
+**起動:** コアは extractor を `<command> [--no-deps] [--include-tests] [--allow-deps-under DIR]... <絶対パス>` で起動し、標準出力の JSON Lines を読む（`cmd/rivus/lang.go` の `extractRaw`）。`--allow-deps-under` は Dart だけ。`--include-tests` は、`-tests` のとき。
+コマンドは、フラグ（`-dart-extractor`、`-rust-extractor`）、環境変数（`RIVUS_DART_EXTRACTOR`、`RIVUS_RUST_EXTRACTOR`）、既定の名前（`rivus-dart`、`rivus-rust`）の順で決める。見つからなければ、入れ方を添えて止める（`extractorCommand`）。差し替えのためのインタフェースは置いていない。
 
-**問い合わせ:** extractor を常駐させ、コアと標準入出力で対話する形にする。最初は、**1 回の実行で必要な問い合わせが決まる**ものに絞る。
-1. 実行の前に、コアが規則から、列挙してほしい**インタフェースのメソッドのシンボル**の一覧を extractor に渡す（`--implementations <file>`）
-2. extractor は IR を出す。テキストは、`rivus sites` が必要とする分（サイトの位置）と、`analyze` が必要とする分（ガードの条件、呼び出しの引数）を、**最初から全部**出す（サイトに限らず、ガードに使いうる `branch` と、引数のある `call` も）。対話は後回し
-3. 大きさが問題になったら、位置の範囲による絞り込み（`--text-for <positions>`）を足す
+**テキスト:** 別プロセスでは、`Texts` を呼び返せない。そこで extractor は、**必要なテキストを、あらかじめストリームに載せる**。コアが要るのは、(a) 命令の位置ごとのスニペット（検出の経路の 1 歩は、どの命令でもありうる）、(b) サイトの位置の、正規化した式、(c) 分岐の後の命令の位置ごとの、条件のテキスト、(d) 呼び出しごとの、全体と引数のテキスト、(e) 関数ごとの、正規化した本体と、表示用のソース（80 行まで）、(f) グローバル変数の宣言位置のスニペット。
+- 形式: `text`（種類、ファイル、テキスト、**その位置のオフセットの一覧**）、`call_text`、`func_text`、`load_error` のレコード。同じ文に属する位置は多いので、テキストを 1 回だけ書き、オフセットを並べる
+- コア側は `ir.StreamTexts`（`internal/ir/streamtexts.go`）が `ir.Texts` を満たす。**Go の extractor も `goir.AddTexts` で同じレコードを出せ、ストリームを通した結果（テキストも含む）が、直接渡した結果と一致する**ことをテストしている（`TestTheStreamGivesTheSameResultAsTheDirectIR`）。他言語の extractor は、`AddTexts` が何を出すかを、契約の見本にする
+- テキストは、`rivus sites` が要る分（サイトの位置）と、`analyze` が要る分（ガードの条件、呼び出しの引数）を、**最初から全部**出す。コアと extractor の間に、問い合わせの対話はない
+- Go の `rivus extract` は、`-texts` を付けたときだけテキストを出す。`-implementations <シンボル>` は、そのインタフェースメソッドの `implementations` レコードを出す
 
 **モジュール境界:** 複数パッケージ（Dart の melos、Rust の workspace）を 1 回の実行で出し、`Func.Dep` で、解析の対象と依存を分ける。依存は、ソースがあるものだけを出す。
-**バージョン:** ストリームの先頭の `schema_version` で、読めないものは止める。extractor は、自分の版を `--version` で返す。
+**バージョン:** ストリームの先頭の `schema_version`（今は `rivus.ir/0`）が違えば、読まずに止める（`internal/ir/stream.go`）。Dart の extractor は、自分の版を `--version` で返す（`rivus_dart rivus.ir/0`）。コアは、グラフの鍵に、extractor の実行ファイルのハッシュと、Dart ではこの版を入れる（`cmd/rivus/graphkey.go`）。
 **失敗:** 読めなかったもの（解決できないパッケージ、生成コードがない）は、`load_error` として出す。コアは `missing_source` の不確実性にする。
+**読まなかったもの:** ビルドが出荷しないもの（テスト、example、開発用の依存）を読まなかったときは、`tests_skipped` レコードで言う（ADR-062）。呼び元が全部読まれているかは、`caller_marks` と `Func.Private` / `Func.ExternalEntry` で言う（13 節）。
 
-**未決（レビューで決めたい）:**
-1. 実装列挙を、事前の一覧で渡す案は、規則の `match: implementations` がモデルのシンボルだけで決まる限りは足りる。呼び出しの先でシンボルが決まる場合は、対話が要る
+2.7.7 のレビュー待ちだった項目と、問い合わせの案、実測は、履歴・計画は [history/ARCHITECTURE-plans.md](history/ARCHITECTURE-plans.md) の 2.7.7 節にある。
 
 ---
 
 ## 3. コアエンジンのパッケージ構成
 
-Go モジュール `github.com/yagihash/rivus`。依存は標準ライブラリ ＋ `golang.org/x/tools`（最新）＋ YAML パーサ。
+Go モジュール `github.com/yagihash/rivus`。依存は標準ライブラリ ＋ `golang.org/x/tools` ＋ YAML・TOML のパーサ ＋ `golang.org/x/sys` ＋ SQLite（純 Go の `modernc.org/sqlite`）（`go.mod`）。
 
 ```
-cmd/rivus/                CLI（sites / analyze / query / index / resolve / extract / models）
+cmd/rivus/                CLI（sites / analyze / query / index / graph / resolve / extract / models）
 internal/
   ir/                     IR の型定義、JSON Lines の読み書き、検証、ダンプ、ir.Texts
   irssa/                  IR の SSA 形（ssabuild をつなぐ。昇格、φ、到達定義）
@@ -349,17 +342,21 @@ internal/
   ssacheck/               ssabuild の検証（go/ssa の lifting、独立な到達定義との比較）。テストのみ
   frontend/gossa/         go/packages → go/ssa。go/ssa に触れるコードはここと goir だけ
   frontend/goir/          Go extractor（NaiveForm → IR）と、Go の ir.Texts
-  callgraph/              Go 用: CHA → VTA（extractor が使う）
-  model/                  YAML ルールの読み込み、シンボル照合（exact / implementations）
+  callgraph/              Go 用: CHA → VTA（Go の extractor が使う）
+  valuecalls/             関数値の呼び出しの候補を、IR の上で決める（13 節）
+  model/                  YAML ルールの読み込み、シンボル照合（exact / implementations）、実装の展開
     builtin/              組み込みルール（YAML。ユーザー定義と同形式）
   taint/                  エンジン（手続き内、サマリ、ガード、由来追跡、不確実性）
   sites/                  サイト（source / sink の候補箇所）の列挙と ID 付け。L0 / L1
   fingerprint/            指紋の鍵とハッシュ
   report/                 結果のグループ化、クエリ、resolve、モデルカバレッジ、JSON 出力
+  graphdb/                コールグラフを SQLite に保存して読む（12 節）
+  graphq/                 保存したグラフへの問い合わせ（callers / callees / path / impls / dispatchers）
   vcs/                    解析したコードのリビジョン
   testutil/               testdata ハーネス
-testdata/
-  go/ …                   マイクロベンチマーク（検出すべき / 意図的に検出しない）
+extractor/                Dart と Rust の extractor（dart/、rust/。それぞれ別言語のプロジェクト）
+testdata/                 マイクロベンチマーク（go/ ほか）
+bench/                    ベンチ（zoo、curated、wild など。8 節）
 docs/
 ```
 
@@ -369,20 +366,20 @@ docs/
 cmd → report → taint → sg → irssa → ssabuild
                  ↘ sites ↗     ↘ ir
         model ──→ (taint, sites から参照)
+        valuecalls → (sg、sites から呼ばれる。ir、irssa を読む)
 cmd → frontend/goir → frontend/gossa (go/ssa), callgraph → ir
+cmd → graphdb ← graphq（graphdb は sg のグラフから書く）
 ```
 
 **`go/ssa` や `go/callgraph` を import してよいのは `frontend/gossa`、`frontend/goir`、`callgraph` と、そのテストのみ。**
-コア（`ir`、`irssa`、`sg`、`ssabuild`、`sites`、`taint`、`model`、`report`）は IR だけを見る。
+コア（`ir`、`irssa`、`sg`、`ssabuild`、`sites`、`taint`、`model`、`report`、`valuecalls`、`graphdb`、`graphq`）は IR だけを見る。
 Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えずにつなげられる。
 
 ### 差し替えを前提にする境界
 
-1. **Extractor の在り処の解決層** — `Locator` インタフェース。実装は「PATH から探す」「設定で指定されたパス」「埋め込みバイナリを展開」。
-   初期は前 2 つのみ。`go:embed` は動作確認後の最適化として後から追加できる形にする
-2. **コールグラフビルダー** — `CallGraphBuilder` インタフェース。
-   Go は CHA → VTA、Dart は `pkg/vm` の type flow analysis、Rust は monomorphize collector 等。言語ごとに別実装で、Go 固有の手法をコアに漏らさない
-3. **エントリポイント解決** — 言語・用途ごとの既定 ＋ ユーザー追加指定（6 節）
+1. **Extractor の在り処** — インタフェースではなく、`cmd/rivus/lang.go` の `extractorCommand` が、フラグ、環境変数、既定の名前の順で決める（2.7.7）。`go:embed` で埋め込む形は取っていない
+2. **コールグラフ** — extractor が `call` の `candidates` として IR に入れる。Go は CHA → VTA（`internal/callgraph`）、Dart と Rust は extractor が自分の方法で解く。関数値の呼び出しは、コアの `valuecalls` が IR の上で候補を足す。コアに Go 固有の手法を漏らさない（`call` を解く部分は IR だけを見る）
+3. **エントリポイント解決** — extractor が `Func.Entry` を付ける ＋ ルールの `kind: param` の source（6 節）
 
 ### Go のコールグラフに関する実装メモ
 
@@ -392,212 +389,117 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 - 渡す SSA 関数は **`ssa.InstantiateGenerics` 付き**で構築しておく必要がある
 - 結果にはルートノードがない
 - 結果は reflection と unsafe を除いて健全。これらは `reflection` / `ffi_boundary` として記録する側の責務
+- 結果は reflection と unsafe を除いて健全。これらは `reflection` / `ffi_boundary` として記録する側の責務
 
 ---
 
-## 4. 主要なデータ構造（案）
+## 4. 主要なデータ構造
 
-Go 風の擬似コード。実装時に調整する。
+実際の型は、各節に書いたファイルにある。この節は、型の役割と、出力に出る名前を説明する。擬似コードでなく、コードが正本。
 
 ### 4.1 IR
 
-```go
-type FuncID string
-type TypeID string
+型は `internal/ir/ir.go`。主な形:
 
-type Pos struct {
-    File   string
-    Offset int
-    Length int
-}
+- `Program`: `Funcs`、`Impls`、`Types`（上位の型）、`Globals`、`TypeAliases`、テキスト（`Texts`、`CallTexts`、`FuncTexts`）、`LoadErrors`、`CallerMarks`、`TestsSkipped`
+- `Func`: `ID`、`Params`（`Class`、`Captured`）、`Results`、`Locals`、`Blocks`（先頭が entry）、`Roots`、`Pos`、`File`。印として `Exported`、`Entry`、`Init`、`Symbol`、`Recv`、`Dep`、`Private`、`ExternalEntry`、`Overrides`
+- `Block`: `Instrs`、`Term`（`Kind`、`Cond`、`CondPos`、`Values`）、`Succs`（種別つきの辺）
+- `Instr`: `Op`、`Dsts`（呼び出しは戻り値の数だけ）、`Args`、`Const`、`Operator`、`Field`、`Path`、`Global`、`Func`、`View`、`Folded`、`Keyed`、`Callee`、`Go` / `Defer` / `Await`、`Reason`、`Pos`、`AddrPos`、`ArgPos`
+- `Callee`: `Kind`（`static` / `dynamic` / `value`）、`Func`、`Symbol`、`Recv`、`Candidates`、`FFI`。ストリームには載らず、コアが埋めるもの: `ValueCands`、`ValueLimit` など（13 節）
+- `Pos` は `File`、`Offset`、`Length`、`Line`、`Col`
 
-type Func struct {
-    ID       FuncID
-    Params   []Param          // 位置、名前、TypeID
-    Results  []TypeID
-    Locals   []Local          // LocalID → 名前、TypeID
-    Blocks   []Block          // 先頭が entry
-    Pos      Pos
-    BodyHash string           // モデルのキャッシュキーに使う（5.4 参照）
-    Exported bool
-}
-
-type Block struct {
-    ID     BlockID
-    Instrs []Instr
-    Term   Terminator
-    Succs  []Edge             // 種別付き
-}
-
-type Instr struct {
-    Op   Op                   // 2.3 の命令
-    Dst  LocalID              // なければ -1
-    Args []LocalID
-    Imm  any                  // const の値、FieldID、FuncID など Op ごとに決まる
-    Call *CallInfo            // Op == Call のとき
-    Pos  Pos
-}
-
-type Terminator struct {
-    Kind     TermKind         // jump / branch / return / throw / unreachable
-    Cond     LocalID          // branch のとき
-    CondPos  Pos              // 条件式のソース範囲。人間可読な式はここから切り出す
-    TrueBB   BlockID
-    FalseBB  BlockID
-    Values   []LocalID        // return
-}
-```
+指紋（4.6）に使う本体のハッシュは、IR の型ではなく、`ir.Texts` の出力から作る（2.7.7）。
 
 ### 4.2 汚染
 
-```go
-type Label string             // 例 "user_input", "html_escaped", "sql_unsafe"
+型は `internal/taint/elem.go`、`state.go`。
 
-type LabelSet struct{ /* ビットセットまたは小さな sorted slice */ }
-
-// アクセスパス。深さは k（既定 3）で打ち切る。打ち切りを起こしたときは記録する。
-type AccessPath struct {
-    Base   ValueRef           // ローカル / グローバル / 引数 / 戻り値
-    Fields []FieldID          // 長さ <= k
-}
-
-// 汚染状態: アクセスパス → ラベル集合。コンテナ要素は区別しない（Fields には含めない）
-type TaintState map[AccessPath]LabelSet
-```
+- 汚染の単位は `Elem`（小さく、比較できる）。`Real`（source のサイトから来た具体的なラベル。ラベル名と、元の source サイトの ID を持つ）と、`Param`（「呼び出し側が引数 i に渡すもの、のこの経路の下」という記号的な汚染。サマリになる）の 2 種
+- 汚染の状態は、**セル**（`Root` ＋ アクセスパス）から `Elem` の集合への写像。`Root` は、SSA の値、複数の戻り値のうちの 1 つ、または解析中の関数の戻り値
+- アクセスパスの深さは k（既定 3。`-k`）で打ち切る。打ち切りは記録する
+- コンテナ要素は区別しない
 
 ### 4.3 関数サマリ
 
-```go
-type Summary struct {
-    Func     FuncID
-    Flows    []Flow           // 引数 / グローバル → 戻り値 / 引数の副作用先 / sink
-    Returns  []SourceReturn   // 戻り値が source 由来
-    Sinks    []SinkReach      // 引数 → 関数内（またはその呼び先）の sink
-    Uncertain []Uncertainty   // この関数の解析で打ち切った箇所
-    Origin   ModelOrigin      // builtin / human / llm / derived（解析で算出）
-}
+型は `internal/taint/summary.go`、`guards.go`。
 
-type Flow struct {
-    From   AccessPath         // 引数 i のフィールドなど
-    To     AccessPath         // 戻り値、または引数 j のフィールド（副作用）
-    Add    LabelSet           // 付与するラベル
-    Drop   LabelSet           // 落とすラベル（sanitizer）
-    Guards []Guard            // 引数由来の条件。空なら無条件
-    Trace  []TraceStep        // 経路復元用
-}
-
-type Guard struct {
-    Param     int             // 条件が依存する引数
-    CondPos   Pos             // 条件式のソース範囲
-    Polarity  bool            // true 側を通ったときこの Flow が成立するか
-    Expr      string          // ソースから切り出した条件式（提示用。評価はしない）
-}
-```
+- `Summary`: 関数 ID、`Outputs`、`Sinks`、`Opaque`（読まれなかった関数が触ったかもしれない引数）
+- `Output`: 汚染がどこに出るか。種類は戻り値、引数が指す先、グローバル変数、例外（`OutResult`、`OutParam`、`OutGlobal`、`OutThrow`）。中身は `OutElem` の並びで、各要素に経路（`Steps`）と、その要素が届く条件（`Guards`）が付く
+- `SinkReach`: 引数が、関数の中（またはその呼び先）の sink に届くこと
+- `Guard`: 条件が依存する引数（`Params`）、条件式のソース（`Cond`）、通った側（`Polarity`）、呼び出し側から見たときの呼び出し点（`Call`）
 
 **ガードの制約:** 記録するのは引数由来の条件のみ。「その条件値が引数からのデータフローで到達可能か」で判定し、
-この判定には taint ソルバを流用する（source = 引数、sink = 分岐条件）。
-1 サマリあたり上限 4 個。超えたらガードなしの過大近似（全経路の和集合）に畳み、
-`attributable_to: rivus` の不確実性（`guard_limit`、サブ理由）として記録する。
+この判定には taint ソルバを流用する（source = 引数、sink = 分岐条件）。条件式は提示のために切り出すだけで、評価して判定することはしない。
+1 フローあたり上限 4 個（`maxGuards`。`internal/taint/guards.go`）。超えたらガードなしの過大近似（全経路の和集合）に畳み、
+`attributable_to: rivus` の不確実性（`depth_limit`、detail が `guard_limit: ...`）として記録する。
 
 ### 4.4 不確実性
 
-```go
-type TerminalKind string
-const (
-    KindLiteral TerminalKind = "literal"
-    KindConfigRead = "config_read"
-    KindExportedAPIParam = "exported_api_param"
-    KindGlobalVar = "global_var"
-    KindDynamicDispatch = "dynamic_dispatch"
-    KindUnmodeledLibraryCall = "unmodeled_library_call"
-    KindReflection = "reflection"
-    KindConcurrency = "concurrency"
-    KindContainerElementImprecision = "container_element_imprecision"
-    KindDepthLimit = "depth_limit"
-    KindFFIBoundary = "ffi_boundary"                   // 追加
-    KindUnresolvedCallee = "unresolved_callee"         // 追加
-    KindMissingSource = "missing_source"               // 追加
-    KindRecursionApproximation = "recursion_approximation" // 追加
-)
+型は `internal/taint/result.go`（`Uncertainty`）。`kind` の定数と `attributable_to` の割り当て（`attributable()`）も、そこにある。
+`Uncertainty` の主な欄: `kind`、`attributable_to`、`detail`、`symbol`、`candidates`（`dynamic_dispatch` の候補）、`narrowed_from` と `basis`（13 節）、`func`、`position`、`snippet`。
 
-type Uncertainty struct {
-    Kind          TerminalKind
-    AttributableTo string      // "target" | "rivus" | "mixed"
-    Detail        string       // サブ理由（missing_source など）
-    Chain         []string     // 辿った式の連鎖
-    Candidates    []FuncID     // dynamic_dispatch の候補
-    Pos           Pos
-    Snippet       string
-}
-```
+`kind` は、`rivus.result/1` のまま足されてきた（ADR-008 の「閉じた集合。追加は版を上げる」は運用で逆。ADR-043 の追記、ADR-INDEX を参照）。この表が、コードの定数と合う一覧。
 
-#### kind ごとの `attributable_to`（初版の割り当て）
+#### kind ごとの `attributable_to`
 
 | kind | attributable_to | 備考 |
 |---|---|---|
-| `literal` | （なし） | 確定。不確実性ではない |
 | `config_read` | target | |
-| `exported_api_param` | target | |
+| `exported_api_param` | target | ライブラリの公開関数の引数が、外から来る値 |
 | `global_var` | target | 書き込み箇所は列挙する |
 | `reflection` | target | |
 | `ffi_boundary` | target | |
+| `stored_data_boundary` | target | データストアに出し入れする呼び出し。その先は追わない |
 | `missing_source` | target | ワークフロー前提（`go generate` / `build_runner` 未実行）に由来 |
-| `dynamic_dispatch` | 候補 1 件以上: mixed／候補 0 件: rivus | 言語機能として呼び先が決まらないが、候補の絞り込み精度（VTA など）は rivus の改善余地がある。候補が 0 件なのは、実装が読み込んだコードの外にあるときで、モデルを書けば減る（rivus） |
-| `assumed_call` | mixed | 呼ばれるところが見えないクロージャ(渡す、保存する、返す)を、作った場所で、呼ばれるものとして当てた(捕獲した値を、クロージャの要約に当てる。C-7、ADR-059)。付くのは、要約が捕獲した値に依る効果を持つクロージャだけ。throw と結果は当てず、そのとき detail に言う。1 度も呼ばれないクロージャの流れも、finding になりうる(過検出) |
+| `dynamic_dispatch` | 候補 1 件以上: mixed／候補 0 件: rivus | 言語機能として呼び先が決まらないが、候補の絞り込み精度（VTA など）は rivus の改善余地がある。候補が 0 件なのは、実装が読み込んだコードの外にあるときで、モデルを書けば減る（rivus）。detail が `expansion_limit` のものは、`match: implementations` の展開を上限で止めた記録（5.4） |
+| `assumed_call` | mixed | 呼ばれるところが見えないクロージャ（渡す、保存する、返す）を、作った場所で、呼ばれるものとして当てた（捕獲した値を、クロージャの要約に当てる。ADR-059）。付くのは、要約が捕獲した値に依る効果を持つクロージャだけ。throw と結果は当てず、そのとき detail に言う。1 度も呼ばれないクロージャの流れも、finding になりうる（過検出） |
 | `unresolved_callee` | mixed | 関数値は実行時に決まるが、生成箇所を追う型フロー解析で候補を絞れる |
 | `concurrency` | mixed | 実行順序に依存するが、channel を単純なキューとしてモデル化すれば追える範囲が広がる |
 | `unmodeled_library_call` | rivus | モデルを書けば減る |
-| `dependency_body_unread` | rivus | モデルのあるインターフェースのメソッドの動的な呼び出しで、候補に本体のある依存の関数(プロジェクトの外)があったが、読まなかった(ADR-075: 依存の本体は読まず、モデルがそれを代わる。重すぎる)。依存が値を包んで渡した先の、自前の実装の中の sink は、辿っていない。`dynamic_dispatch` と並べて付き、候補に、読まなかった依存の関数を並べる。スキーマ版は変えない(種類を足しただけ) |
+| `dependency_body_unread` | rivus | モデルのあるインターフェースのメソッドの動的な呼び出しで、候補に本体のある依存の関数（プロジェクトの外）があったが、読まなかった（ADR-075）。依存が値を包んで渡した先の、自前の実装の中の sink は、辿っていない。`dynamic_dispatch` と並べて付き、候補に、読まなかった依存の関数を並べる |
+| `model_approximation` | rivus | 流れのモデルが、自分で「近似」と言っている（`approximate` の文）。モデルの限界（ADR-067） |
 | `numeric_stop` | rivus | source のデータが数値や bool になり、それ以降は追わない（既定。`-numeric-taint` で追う）。source の種類（シンボルとラベル）ごとに 1 件で、最初の場所と、起きた関数の一覧（10 件まで）を持つ。サマリを通って止まる分（呼び先の中の、引数の記号的なデータの止まり）は、記録されない |
-| `unsupported_construct` | rivus | extractor が下げられなかった構文（IR の `unsupported`）。その場所で何が起きるかは、解析に入っていない。extractor を直せば減る。`missing_source` ではない（対象のコードが足りないのではなく、rivus が読めなかった） |
+| `unsupported_construct` | rivus | extractor が下げられなかった構文（IR の `unsupported`）。その場所で何が起きるかは、解析に入っていない。`missing_source` ではない（対象のコードが足りないのではなく、rivus が読めなかった） |
 | `container_element_imprecision` | rivus | 結論に影響した場合のみ記録（ノイズ防止） |
-| `depth_limit` | rivus | |
+| `depth_limit` | rivus | 打ち切り。detail が理由を言う（`guard_limit`、`candidate_limit`、`caller_depth_limit`、`func_timeout` など） |
 | `recursion_approximation` | rivus | |
-| `guard_limit`（サブ理由） | rivus | ガード上限超過。専用 kind にはせず、`depth_limit` ではない別の記録として残す |
+| `field_imprecision` | rivus | 欄を名指す sink に、その欄にあるとは言えない汚染が届いた（14 節）。detail は `whole_value`、`path_limit`、`element`、`opaque_callee` |
+| `field_unresolved` | rivus | sink が名指した欄が、プログラムにない（綴りの誤りなど）。sink を全体として扱った（14 節） |
+| `global_holds_nothing` | rivus | 読み戻す人がいないとルールが言う変数（ADR-056）に、汚染を書いた関数を、変数ごとに 1 件記録する（`internal/taint/heldnothing.go`） |
 
 `mixed` は「言語機能由来で、かつ rivus の精度向上でも減らせる」もの。
 集計では `target` / `rivus` / `mixed` を**別々に**出し、`mixed` を `rivus` に含めない（投資で減らせる量を過大に見積もらないため）。
-`mixed` の割り当ては暫定で、Phase 1 のステップ 1.12（ドッグフーディング）で実測してから見直す（`dynamic_dispatch` の候補 0 件を `rivus` にしたのはステップ 1.9 の実測による。ADR-032）。
+`mixed` の割り当てが暫定だった時期の見直し予定は、[history/ARCHITECTURE-plans.md](history/ARCHITECTURE-plans.md) の 4.4 の移動分にある。
+
+`literal` は kind ではない。値が定数だと分かったことは、由来追跡（5.6）の確度（`certainty`。`internal/taint/provenance.go`）で言う。
 
 ### 4.5 出力
 
-```go
-type Finding struct {
-    ID           string        // (source サイト, sink サイト) の組から生成（4.6）
-    Fingerprint  map[string]string // サイトの指紋から、同じキー名ごとに合成（4.6）
-    Source       Endpoint
-    Sink         Endpoint
-    Paths        []Path        // 上限あり。超過分は OmittedPaths に件数のみ
-    OmittedPaths int
-    Conditional  []ConditionalNode
-    Provenance   []Provenance
-    Uncertain    []Uncertainty
-    ModelsUsed   []ModelRef    // origin: llm のモデルが影響したらここに現れる
-    PathSteps    int           // 表示する経路（最短）の段数。順位付けのための事実
-    Confidence   string        // "no_uncertainty_on_path"（経路に未解決がない）か "requires_review"。判定ではなく、確定度の分類
-}
-```
+型は `internal/taint/result.go`（`Finding`、`Path`、`Step`、`ModelRef`、`Suppression`）と `internal/report/report.go`（`Report`）。結果の版は `rivus.result/1`。
 
-ブリーフ 7.3 節の出力例に沿う。`resolved` と `unresolved` を分け、確定した事実と調査が必要な項目を書き分けられるようにする。
+`Finding` の主な欄（JSON の名前）:
+
+- `id`、`fingerprint`: (source サイト, sink サイト) の組から生成（4.6）
+- `source`、`sink`（`SiteRef`）、`category`、`labels`
+- `paths`: 経路。今は**常に 1 本**（`internal/taint/engine.go`。7 節）。各段は `steps`（`func`、`position`、`snippet`、`desc`、`notes`、`model`）
+- `other_sources`、`other_sources_count`: 同じ sink に届く、同じ種類の別の source。経路は繰り返さない
+- `uncertainties`: 経路上で解決できなかったこと
+- `path_steps`: 表示する経路の段数（順位付けのための事実）
+- `reachability`（`from_entry` / `from_framework_callback` / `not_from_entry`）と `reachability_note`: 経路上の関数が、プログラムの起点から届くか
+- `dispatch_widened`、`dispatch_candidates`: インタフェースや関数値の呼び出しが、複数の実装すべてに届くとして進めた数（順位付けのための事実）
+- `confidence`: `no_uncertainty_on_path`（経路に未解決がない）か `requires_review`。判定ではなく、確定度の分類
+- `models`、`llm_influenced`: 経路を決めたモデルと、LLM が決めたものが影響したか
+- `conditional_nodes`: 結果が呼び出し側の値に依る所（5.6）
+- `shared_state`: パッケージ変数を通る流れの根拠（書き手の数など）。出力だけで、結果を変えない
+
+`Report` は、`findings` のほか、`sites`、`uncertainties`（全体）、`suppressions`、`load_errors`、`expansions`、`project_rules`、`stats`、`summary` を持つ（`internal/report/report.go`）。出力の読み方は [README.md](../README.md)。
 
 ### 4.6 サイトと指紋（fingerprint）
 
-サイトは「関数の中の、ルールにマッチした 1 箇所」。検出結果は (source サイト, sink サイト) の組。
+サイトは「関数の中の、ルールにマッチした 1 箇所」。検出結果は (source サイト, sink サイト) の組。型は `internal/sites/sites.go` の `Site`（`id`、`role`、`kind`、`func`、`symbol`、`category`、`labels`、`position`、`snippet`、`literal_only`、`fingerprint`）。
+`id` は公開用で、`"s1:"` ＋ `structural@1` の値から作る。`literal_only` は L1 の印（sink の引数がリテラル定数だけ）。
 
-```go
-type Site struct {
-    ID          string              // 公開用。"s1:" + structural@1 の値から作る。同じ版の中で一意
-    Role        string              // "source" | "sink"
-    Func        FuncID
-    Symbol      string              // マッチしたルールのシンボル
-    Pos         Pos
-    Snippet     string
-    LiteralOnly bool                // L1: sink の引数がリテラル定数だけ
-    Fingerprint map[string]string   // キー名 → 値。名前の末尾 @N がそのキーのアルゴリズムの版
-}
-```
-
-指紋は**入れ物 1 つの中に、複数の種類を並べる**。種類は役割で名付け、版は `@N` で表す。
+指紋は**入れ物 1 つの中に、複数の種類を並べる**。種類は役割で名付け、版は `@N` で表す（`internal/fingerprint`）。
 
 | キー | 役割 | 材料 |
 |---|---|---|
@@ -605,8 +507,8 @@ type Site struct {
 | `content@1` | 同一性 | 関数 ID ＋ ルールのシンボル ＋ 呼び出し式の正規化テキストのハッシュ（序数は同一テキストの中だけ） |
 | `expr@1` | 変化検知 | 呼び出し式の正規化テキストのハッシュ |
 | `body@1` | 変化検知 | 関数本体のハッシュ |
-| `path@1`（検出結果のみ） | 変化検知 | 代表経路ごとの、通る関数 ID 列のハッシュを辞書順に並べて合成。経路が変わったかを検知する（詳細は実装時に詰める） |
-| `sim@1`（将来） | 類似度 | 関数本体の正規化トークン列の simhash |
+| `path@1`（検出結果のみ） | 変化検知 | 経路の呼び出しの連鎖のハッシュ。経路が変わったかを検知する |
+| `sim@1`（将来。未実装） | 類似度 | 関数本体の正規化トークン列の simhash |
 
 - **同一性のキーは、2 つの版（旧と新）のサイトを対応付けるために使う。** 優先順位順に当てる。内容キー → 構造キー → （将来）類似度の候補提示。
   内容キーを先に当てるのは、同じシンボルの呼び出しを前に挿入したとき、構造キー（出現順）だけだと誤った相手に結び付くため
@@ -615,30 +517,18 @@ type Site struct {
 - 検出結果の指紋は、source サイトと sink サイトの**同じキー名ごとに合成**する:
   `Finding.Fingerprint[k] = hash(source.Fingerprint[k], sink.Fingerprint[k])`。`Finding.ID` は `structural@1` の合成値から作る
 - ID の材料にコールグラフの位置は使わない。`rivus sites`（L0）がコールグラフなしで即時に返せなくなり、rivus の改善（VTA の精度向上など）で ID が揺れるため
-- 版をまたぐ同一性は、ID だけで保証するものではなく、対応付けで成立する。ブックマークによる対応付け（`rivus resolve`、4.7）は Phase 1 のステップ 1.8b で作る。旧新の結果どうしの比較（`rivus diff`）と simhash は、需要が出てから作る
+- 版をまたぐ同一性は、ID だけで保証するものではなく、対応付けで成立する。ブックマークによる対応付けが `rivus resolve`（4.7）。旧新の結果どうしの比較（`rivus diff`）と、類似度の指紋（`sim@1`）は、作っていない
 
 ### 4.7 ブックマークと `rivus resolve`
 
 エージェントは、前回の探索で見た箇所を**ブックマーク**として保存し、あとで再び見る。
 コードが変わると ID が引けなくなることがあるので、**保存した指紋を今のコードに当てて、対応する箇所を答える**コマンドを持つ。
 
-- **ブックマーク**は、エージェント側が保存する。rivus が出力したサイトや検出結果の JSON をそのまま使える（実装は ADR-033）。中身は `id`、指紋（全部）、見たときのスニペット。検出結果をブックマークする場合は、source / sink の両サイトの情報と、検出結果の指紋（`path@1` を含む）。
+- **ブックマーク**は、エージェント側が保存する。rivus が出力したサイトや検出結果の JSON をそのまま使える（ADR-033）。中身は `id`、指紋（全部）、見たときのスニペット。検出結果をブックマークする場合は、source / sink の両サイトの情報と、検出結果の指紋（`path@1` を含む）。
   **rivus はステートレスのまま**で、保存場所を持たない
 - `rivus resolve` は複数のブックマークをまとめて受け取り（ソースのロードは 1 回）、ブックマークごとに状態を返す。前回の解析結果（ベースライン）は不要
 
-```go
-type ResolveResult struct {
-    Bookmark   string            // 入力側の識別子
-    Status     string            // 下表
-    Current    *Site             // 見つかった場合の現在のサイト（新しい ID を含む）
-    MatchBasis string            // どのキーで一致したか: "content@1" | "structural@1" | "sim@1"
-    ChangedKeys []string         // changed のとき、どの変化検知キーが違うか
-    Candidates []Site            // ambiguous のとき
-    Reason     string            // unresolved のとき: "not_found" | "not_analyzed"
-    Flow       *FlowStatus       // 検出結果のブックマークのみ
-    Evidence   []string          // 一致の根拠となる事実（同じ関数内のサイト数の変化など）
-}
-```
+型は `internal/report/resolve.go`（`Resolution`、`SiteResult`、`Flow`、`ResolveResult`）。`SiteResult` の主な欄: `status`、`current`（見つかった今のサイト。新しい ID を含む）、`match_basis`（どのキーで一致したか）、`changed_keys`、`previous_snippet`、`candidates`、`reason`、`evidence`。`Resolution` は、そのほかに `kind`（`site` / `finding`）、`from_revision`、`revision_change`、検出結果のときの `source` / `sink` / `flow` を持つ。
 
 | 状態 | 意味 | エージェントの動き |
 |---|---|---|
@@ -680,9 +570,9 @@ type ResolveResult struct {
 
 1. コールグラフを構築し、SCC に縮約してトポロジカル順（呼び先から）に処理する
 2. 各関数の手続き内 taint を解き、サマリを算出する
-3. 呼び出し側でサマリを展開する。**SCC の内部だけ**不動点まで反復する
+3. 呼び出し側でサマリを展開する。**SCC の内部だけ**不動点まで反復する。グローバル変数への書き込みなどでサマリが変わったときは、関数を解析し直す。プログラム全体のパスの上限は `-max-passes`（既定 12）。収束したかは `stats.converged` に出る
 
-サマリの独立性（関数単位で閉じていること）を保つ。これが将来の増分解析の土台になる。増分解析自体は Phase 1〜4 のスコープ外。
+サマリの独立性（関数単位で閉じていること）を保つ。これが将来の増分解析の土台になる。増分解析自体は、今のスコープ外（ADR-021）。
 
 ### 5.3 ヒープの扱い
 
@@ -690,6 +580,7 @@ type ResolveResult struct {
 - アロケーションサイトによるオブジェクト感度は入れない
 - コンテナ（配列・map など）は要素を区別しない。`container_element_imprecision` は、**結論に影響した場合にだけ**記録する
 - エイリアス解析は作らない。`b := a; b.Name = tainted` のような必要箇所は、列挙して出力に残す範囲に留める
+
 
 ### 5.4 モデル（YAML）と LLM の扱い
 
@@ -708,7 +599,7 @@ type ResolveResult struct {
 # インタフェースのメソッドにマッチし、コールグラフ経由で実装に展開
 - symbol: "(net/http.Handler).ServeHTTP"
   match: implementations
-  max_implementations: 300   # 省略時は全体の既定値（暫定 100）
+  max_implementations: 300   # 省略時は全体の既定値（300。`-max-implementations`）
 ```
 
 #### `match: implementations` の展開
@@ -716,7 +607,7 @@ type ResolveResult struct {
 - 展開先は、コールグラフ（呼び先の候補）から求める
 - **上限を超えたら、展開を中止する。** 先頭 N 個だけ展開する（切り捨てる）ことはしない。部分的に展開すると「見ている部分」と「見ていない部分」の境界が見えなくなり、
   「列挙は網羅的に」に反するため。中止したときは `exact` と同じ扱いに縮退し、総数を `dynamic_dispatch`（`attributable_to: mixed`、サブ理由 `expansion_limit`）として記録する
-- 上限の既定値は**暫定 100**。ステップ 1.9 で参照コーパスを使って実測してから確定する（項目 5 と同じ進め方）。ルールごとに `max_implementations` で上書きできる
+- 上限の既定値は 300（`internal/model/expand.go` の `DefaultMaxImplementations`。ADR-030 の追記）。ルールごとに `max_implementations` で上書きできる。暫定値だった頃の記録は [history/ARCHITECTURE-plans.md](history/ARCHITECTURE-plans.md) の 5.4 の移動分
 - **sanitizer への `implementations` は既定で禁止。** source / sink / propagator の展開が広すぎるとノイズが増えるだけだが、
   sanitizer を広げ過ぎると、本当は sanitize していない実装にまで「通れば安全」が及び、汚染が消えて見逃しが生まれるため。
   許可するときはルール側で明示する（`allow_sanitizer_expansion: true`）
@@ -743,7 +634,7 @@ type ResolveResult struct {
 
 #### 決定論性の担保
 
-- 出力に「このモデルで抑制した / 伝播させた」を必ず記録する。LLM 由来モデルが結論に影響した検出結果は、その旨がトレースできる
+- 出力に、モデルが決めた所を記録する（`models`、`llm_influenced`、`suppressions`）。LLM 由来モデルが結論に影響した検出結果は、その旨がトレースできる。記録は、`origin: llm` の sanitizer の抑制、`numeric_stop`、`global_holds_nothing`、`approximate` に限られる。`builtin` や人が書いた sanitizer の停止と、`pure` による停止は残らない（PRINCIPLES.md 2 節）
 - `--deterministic-only` は `origin: llm` のモデルをすべて無視して走る
 
 #### モデルカバレッジレポート
@@ -752,14 +643,15 @@ type ResolveResult struct {
 rivus models coverage ./...
 ```
 
-モデル未定義の外部関数の呼び出しを頻度順に並べる。`unmodeled_library_call` を集計するだけで、実装は軽い。**Phase 1 に含める。**
+モデル未定義の外部関数の呼び出しを頻度順に並べる。`unmodeled_library_call` を集計する（`internal/report/coverage.go`）。
+
 
 ### 5.5 依存パッケージ
 
-- **解析するのは自モジュールのみ。** 依存（stdlib・第三者ライブラリ）との境界は手書きモデルで扱い、無ければ `unmodeled_library_call`
-- 設定で選んだ依存だけ解析対象に含められる
-- 組み込みモデルの最低ライン: Go は `database/sql`、`os/exec`、`net/http`、`html/template`、`text/template`、`strings` など。
-  Dart は `dart:*` と Flutter SDK の主要部分。Rust は `std` と頻出クレート（`serde`、`tokio`、`reqwest` など）
+- **依存の本体は、既定で読む。** 標準ライブラリは読まず、モデルで扱う。依存のソースを読むと、依存の中への呼び出しを推測でなく追えるので、メモリは増える。`-no-deps` で読まなくなり、そのとき依存への呼び出しは、すべてモデルか `unmodeled_library_call` になる（`cmd/rivus/common.go` のフラグの説明。メモリの数字は 16 節）
+- Dart は、プロジェクトの外の依存を、頼まれたものだけ読む（`-allow-deps-under`。`package_config.json` は信用しない）。Rust の依存の取得は、既定でコンテナの中（15 節）
+- モデルのあるインタフェースのメソッドの動的な呼び出しで、候補に本体のある依存の関数があるとき、本体は読まず、`dependency_body_unread` で言う（ADR-075）
+- 組み込みモデルの範囲は、標準ライブラリと、代わりのないパッケージまで（ADR-044、063、077。README と `docs/GCP-MODELS.md`）。ユーザーは、ルールを足せる
 
 ### 5.6 値依存サニタイズと由来追跡
 
@@ -780,18 +672,18 @@ rivus models coverage ./...
 
 ## 6. エントリポイント
 
-コールグラフの根をどう決めるかは未定義だったので、ここで決める。
+コールグラフの根（プログラムの起点）は、extractor が `Func.Entry` で言う。外から来る値の入口は、ルールの `kind: param` の source で書く。
 `exported_api_param` を定義した以上、「どこから先が外部か」を明示する必要がある。
 
-| 対象 | 既定のエントリポイント |
+| 対象 | 起点（`Func.Entry`） |
 |---|---|
-| Go | `main.main` ＋ エクスポートされた関数・メソッド。テスト関数を含めるかは設定 |
-| Dart バックエンド | ルートハンドラの登録箇所（フレームワークごとにモデルとして記述） |
-| Flutter | `main`、`build` メソッド、イベントハンドラ |
-| Rust | `main` ＋ `pub` な関数 ＋ ハンドラ登録（フレームワークごと） |
+| Go | `main` パッケージの `main` と、パッケージの `init`（`internal/frontend/goir/goir.go` の `isEntry`）。変数の初期化は `Init`。ライブラリには起点がなく、エクスポートされた関数が起点になる |
+| Dart | トップレベルの `main`（`extractor/dart/lib/extract.dart`）。変数の初期化は `Init` |
+| Rust | extractor が決めた `main`（`extractor/rust/src/main.rs`） |
 
-- **ユーザー追加指定:** ルールファイルに `entrypoints:` セクションを持てる（シンボル指定は 5.4 と同じ）
-- エントリポイントの引数・非 `main` ライブラリ入口は `exported_api_param` の起点になる
+- **ユーザー追加指定:** ルールの source に `kind: param` を書く。シンボルの関数の引数（`params`、`recv`）を、フレームワークが渡す入力として宣言する。`marker`（インタフェースのメソッド名の glob。生成コードのサービス）と `extends` / `with_param_type`（継承の階層を持つ言語のサブクラス）は、複数の関数をまとめて宣言する（`internal/model/model.go`）。ルールファイルに `entrypoints:` という節はない
+- 起点から届くかは、検出結果の `reachability` が言う（4.5）。フレームワークが呼ぶメソッド（外の型のメソッドを上書きしたもの。`Func.Overrides`）は、`from_framework_callback`（ADR-073）
+- ライブラリの公開関数の引数は `exported_api_param` の起点になる
 
 ---
 
@@ -800,142 +692,93 @@ rivus models coverage ./...
 過大近似を維持するため、素朴に全経路を出すと LLM 判定のコストが破綻する。実運用で最初に詰まる箇所なので、設計に入れる。
 
 - 検出結果の単位は **(source サイト, sink サイト) の組**。経路はその中に入れる（シンボルの組ではない。シンボルの組だと、プロジェクト中の同じ関数の呼び出しがすべて 1 件に混ざってしまうため）
-- 1 グループあたりの経路数に上限（既定 3）。超えたら代表経路だけ出し、`omitted_paths` に残件数を記録
+- **経路は 1 本だけ出す**（`internal/taint/engine.go`）。ADR-023 の「3 本まで。あふれは `omitted_paths` に数える」は、実装されていない（`omitted_paths` という欄はない）。経路が複数あっても、残りは出力に出ない。1 本の経路は、起点から届くもの、未解決の少ないもの、短いものを選ぶ。同じ sink に届く別の source は、`other_sources` に、本数と経路の素性だけを出す
+- 経路が 200 段（`maxPathSteps`）を超えると、途中を落とす。これは痕跡を残さない（PRINCIPLES.md 1 節）
 - 検出結果とサイトに**安定した ID と指紋**を持たせる（4.6、ADR-028）。「前回から新規に増えたもの」を、前回の結果（ベースライン）との比較で CI が扱えるようにする
 - **サイト ID**（`rivus sites` の各項目）も同じ方針で安定させる。ID を `rivus query --site` の seed に使える
-- **出力の詳細度を選べる**ようにする（概要のみ / スニペット付き / 関数全文付き）。エージェントのコンテキストを圧迫しないため
+- **出力の詳細度を選べる。** `-detail` は `summary`（経路とスニペットを省く）と `snippet`（全部。既定）の 2 つ（`internal/report/report.go`）。関数全文を付ける段階はない。エージェントのコンテキストを圧迫しないため
 
 ---
 
 ## 8. テスト戦略
 
-後から足せないので最初に決める。
+後から足せないので最初に決めた。今の層は、次のとおり（使い方は README の開発の節、各ベンチの README）。
 
 1. **マイクロベンチマーク集（`testdata/`）** — 言語ごとに作る。
    「検出されるべきケース」と「**意図的に検出できないケース**」の両方を置き、後者は「検出されないこと」を assert する。
    各ケースに期待される terminal kind も assert する
-2. **differential test** — コアの SSA 化と、lifted `go/ssa` を比較する。
+2. **differential test** — コアの SSA 化と、lifted `go/ssa` を比較する（`internal/ssacheck`）。
    - (1) NaiveForm → IR → コアの SSA 化
    - (2) `go/ssa` の lifted 出力
    - 上記の φ の配置と到達定義が一致することを確認する
-   SSA 化は自作部分で最もバグを埋め込みやすく、症状が「なぜか汚染が消える / 増える」という分かりにくい形で出るため。
-   導入時期は Phase 1 の終盤（1.11b）。Phase 1 の `testdata` が揃った段階で差し込み、SSA 化の問題を「検出結果の変化」として検知できるようにする
-3. **クロス言語の等価性テスト** — Phase が進むごとに、同じ意味のコードを複数言語で書いて同じ結果を期待する。IR の中立性の検証になる
-4. **ドッグフーディング** — rivus 自身を rivus で解析する。`attributable_to: rivus` の比率を監視する
+   SSA 化は自作部分で最もバグを埋め込みやすく、症状が「なぜか汚染が消える / 増える」という分かりにくい形で出るため（ADR-036）
+3. **zoo と curated、言語間の比較** — `bench/zoo`、`bench/zoo-go`、`bench/zoo-dart`、`bench/zoo-rust` は、流れの形を 1 つずつ、同じ意味のコードを 3 言語で書く。期待値は、ケースを実際に動かした結果（[DESIGN-zoo.md](DESIGN-zoo.md)）。`bench/*-curated` は、実プロジェクトと CVE の形を写したもの。`bench/parity` は、組み込みモデルの整備の言語間の差を数える。IR の中立性の検証にもなる
+4. **ドッグフーディング** — rivus 自身を rivus で解析する（`cmd/rivus/dogfood_test.go`）。`attributable_to: rivus` の比率を監視する
+5. **隔離のテスト** — 敵対的なビルドを、コンテナが閉じ込めること（`TestIsolation*`。15 節）
 
 ---
 
 ## 9. 性能目標
 
-叩き台（現実的でないと分かったらレビューで見直す）は 2 軸で置く。
-
-1. **一括解析**: 20 万行規模のプロジェクトを、ノート PC で 5 分以内。CI の PR チェックで回せる上限として置く
-2. **問い合わせ**: サマリが揃った後の 1 回のクエリ（`rivus query --site`）の応答時間。
-   エージェントが対話的に何度も呼ぶため、数秒以内を目標にする（数値はステップ 1.8 の実測後に決める）。
-   `rivus sites`（L0 / L1）はそれより速く、ほぼ即時を目標にする
-
-問い合わせ型の使い方では、重いサマリ算出と軽いクエリ応答を分け、**サマリを保存して再利用できる**形にする必要がある。
-
-- 増分解析は Phase 1〜4 のスコープ外。ただしサマリの関数単位の独立性は壊さない
-- メモリに全部載せてよい前提で始める。ノート PC を想定し、上限の目安は 8GB（これも仮説で、実測で見直す）
-
-### 数字の扱い
-
-上の数字は**実測前の仮説**であり、ステップ 1.8 で測ってから確定する（ADR-027）。
-
-- **当面の対象は Go のみ。** Dart は `package:analyzer` のコールド解析、Rust は rustc のビルド時間が下限になり得るため、
-  Dart スパイクと Phase 3 の最初の調査の後に別の数字を置く
-- **規模の階層:**
-
-  | 階層 | 規模 | 扱い |
-  |---|---|---|
-  | 小 | 〜 5 千行 | 開発中の高速な確認用 |
-  | 中 | 〜 5 万行 | 日常の利用 |
-  | 大 | 〜 20 万行 | 目標の上限（プライベートの実プロジェクトと、著名 OSS を想定） |
-  | 超大 | 20 万行超 | 約束しない。動かなくなるのではなく、上限に達したら打ち切って `depth_limit` 等で記録する（段階的に劣化する） |
-
-- **参照コーパス:** 各階層の実在の Go プロジェクトを数本選び、行数（`tokei` 等で数える）と計測値を `docs/` に記録する。
-  著名 OSS を含める。具体的な選定はステップ 1.8 の直前に行う
-- **頑健性（著名 OSS で回すための要件）:** 実在のプロジェクトは、cgo、ビルドタグ、vendor、一部パッケージのロード失敗などを含む。
-  ロードエラーがあっても**全体を失敗させず**、解析できた範囲で続行し、見えなかった箇所を `missing_source` として記録する
-- **問い合わせ応答:** クエリ時にソースのロードをやり直さずに答えられるよう、サマリ・コールグラフの辺・位置情報を保存する。
-  サマリは `go/ssa` の型に依存させず `FuncID` と位置で表す（4.3 の定義はそうなっている）。常駐サーバ化は、この方式で足りなかった場合に検討する
-
----
+履歴・計画は [history/ARCHITECTURE-plans.md](history/ARCHITECTURE-plans.md) の 9 節にある（実測前の仮説と、規模の階層）。今の測定値は、この文書には書かない。数字は、測った日とコミットを付けて、ベンチの記録（`bench/README.md`、`bench/LEDGER.md`）と [DESIGN-memory.md](DESIGN-memory.md) にある。
 
 ## 10. Phase 1 の細分化
 
-方針: 1 ステップごとに区切り、**各ステップの終わりで `git commit` ＋ ユーザーの確認**を挟む。
-Phase 1 では中立 IR を経由せず、`go/ssa` から直接 taint 解析まで作る。`go/ssa` に触れるコードは `internal/frontend/gossa` に隔離する。
-
-| ステップ | 内容 | 完了の目安 |
-|---|---|---|
-| 1.0 | 足場: `go.mod`（Go 1.27、`golang.org/x/tools` 最新）、CI（GitHub Actions）、LICENSE（Apache-2.0）、`testdata/` ハーネス | `go test ./...` が通る CI |
-| 1.1 | ローダ: `go/packages` → `go/ssa`（`InstantiateGenerics` 付き）、`FuncID` 付与、ソース位置とスニペット切り出し | 小さな Go プロジェクトの全関数と位置を列挙できる |
-| 1.2 | モデル: YAML 読み込み、シンボル照合（`exact` のみ先に）、組み込みの最小セット | source/sink/sanitizer を YAML で書いて照合できる |
-| 1.2b | サイト列挙（`rivus sites`）: L0 の列挙、L1 のリテラル印、サイト ID、JSON 出力 | 型解決つきで sink の呼び出し箇所を列挙でき、grep との差（別名インポートなど）がテストで示せる |
-| 1.3 | 手続き内 taint: ラベル、worklist、φ 相当の合流、sanitizer の `Drop` | 1 関数内の `testdata` ケース（検出する / しない）が通る |
-| 1.4 | 出力 v0: 構造化 JSON（経路ノードとスニペット） | 1.3 の結果が JSON で読める |
-| 1.5 | コールグラフ: `CallGraphBuilder` インタフェース、Go 実装（CHA → VTA）、SCC 縮約、トポロジカル順 | 呼び先から順に関数を列挙できる |
-| 1.6 | 関数サマリ: 算出、展開、SCC 内の不動点。ファイル・パッケージ跨ぎ | 複数ファイル・複数パッケージにまたがる `testdata` が通る |
-| 1.7 | ヒープ: フィールド感度（k=3）、クロージャ、グローバル、コンテナの扱い | 構造体・クロージャ経由のケースが通る |
-| ★ Dart スパイク | **（実施済み。ADR-037。コードは削除した。git の履歴にある）** 1.5〜1.7 のあいだ、ただし Phase 2 の前に。2 日のタイムボックス（下記） | 可否の判断 ＋ IR 設計に反映すべき難所のリスト |
-| 1.8 | 一方向クエリ: sink から source を引く / source から sink を引く。サイト ID を seed に取れる | seed なしのクエリと、サイト起点のクエリが動く。サマリの保存・再利用と、応答時間の初回計測 |
-| 1.8b | **（実装済み。ADR-033）** ブックマークの解決（`rivus resolve`）: 指紋による対応付け（内容 → 構造）、状態の返却（`unchanged` / `changed` / `rematched` / `ambiguous` / `unresolved`）、検出結果の `flow` と `path@1` | ブックマークをした後でコードを変更（行の挿入、引数の書き換え、関数の削除、sanitizer の追加）しても、期待どおりの状態が返る |
-| 1.9 | 不確実性の記録: terminal kind、`attributable_to`、`dynamic_dispatch` の候補列挙、`match: implementations`（展開上限と中止時の記録を含む） | すべての打ち切りが分類されて出る。参照コーパスで展開数を実測し、`max_implementations` の既定値を確定する。**実装済み（ADR-030 の追記、ADR-032）。既定値と `mixed` の割り当ての確定はレビュー待ち** |
-| 1.10 | **（実装済み。ADR-035）** 値依存: 引数由来のガード抽出（taint ソルバ流用）、`conditional_nodes`、provenance、ガード上限 | ブリーフの `render` の例が期待どおりに出る |
-| 1.11 | **（実装済み、複数経路を除く。ADR-034）** 運用機能: モデルカバレッジレポート、`origin` と `--deterministic-only`、結果のグループ化・安定 ID・経路数上限、`entrypoints` | `rivus models coverage` が動く |
-| 1.11b | **（実装済み。ADR-036）** 自作 SSA 化（`ssabuild`）と differential test: `go/ssa` の NaiveForm 出力から SSA 化し、lifted `go/ssa` と φ の配置・到達定義を突き合わせる。Phase 1 の `testdata` を回帰テストにする | differential test が全 `testdata` で一致し、解析結果が変わらない |
-| 1.12 | **（実施済み。ADR-037）** ドッグフーディング: rivus 自身を解析。`depth_limit` と `attributable_to: rivus` の比率を計測 | 計測値を README に記録 |
-
-SARIF 出力は Phase 1 のスコープ外。JSON が固まってから。
-
-### Dart スパイク（`spike/dart-cfg/`。削除済み、履歴にある）
-
-タイムボックスは 2 日。コードは捨ててよい。成果物は README に書く「可否の判断」と「IR 設計に反映すべき難所のリスト」。
-
-1. **CFG が組めるか。** 手書きの Dart スニペットで試し、CFG を DOT で出して目視確認する
-   - `async` / `await`
-   - `try` / `catch` / `finally`（特に `finally` が複数経路から到達する形）
-   - `for-in` と `await for`（`Stream`）
-   - ラベル付き `break` / `continue`
-   - `switch` のパターンマッチング
-2. **パッケージ解決が効くか。** melos などで分割されたモノレポで、`AnalysisContextCollection` がパッケージ境界を越えて参照を解決できるか
-3. **生成コードが見えるか。** `build_runner` 実行後、`*.g.dart` / `*.freezed.dart` が解析対象として普通に扱えるか
-
-2 と 3 は CFG とは別のリスクだが、駄目なら Phase 4 の前提が崩れるため同時に潰す。
-
-### Phase 2 以降の見通し
-
-- **Phase 2:** 中立 IR の切り出し。Go extractor（NaiveForm）が最初の実装例。`ssabuild` と differential test は Phase 1 のステップ 1.11b で導入済みなので、ここでは `gossa` を extractor に置き換えて IR を挟むことだけに集中する。Phase 1 の `testdata` がそのまま回帰テストになる
-
-Phase 2 のステップ（案。2.7 のレビュー後に確定する）:
-
-| ステップ | 内容 | 完了の目安 |
-|---|---|---|
-| 2.0 | **（実装済み）** `internal/ir`: 型、JSON Lines の符号化・復号、検証、人間が読める整形 | 手書きの IR が往復でき、不正な IR が検証で落ちる |
-| 2.1 | **（実装済み）** Go extractor（`goir`）: NaiveForm → IR。`rivus extract` | `testdata` の全関数が IR になり、検証を通る。目視用の出力が読める。SQL への補間（`+`、`Sprintf`、`strings.Builder`）のケースで、`const` の中身と補間の形が IR に残ることを確かめる |
-| 2.2 | **（実装済み）** IR → SSA 形（`ssabuild` の接続）。`testdata` と `x/tools` で、旧経路の SSA の値の使用関係と一致 | differential test が IR 経由でも通る |
-| 2.3 | **（実装済み）** `sites` と指紋を IR の上へ。**ID と指紋が、旧経路と全ケースで一致** | `rivus sites` / `resolve` の出力が変わらない |
-| 2.4 | **（実装済み）** `taint` の移植（手続き内 → 手続き間 → ヒープ → ガード）。旧経路との `Report` の突き合わせ | `testdata`・ghmint・dogfood で一致 |
-| 2.5 | **（実装済み。2.4 の中でやった）** コールグラフを extractor へ。`call` の `candidates` として IR に入れ、コアは IR だけから SCC を作る | `x/tools` で一致し、時間が Phase 1 の ±20% 以内（実測: 107 秒 → 100 秒） |
-| 2.6 | **（実装済み）** 旧経路の除去。`taint` / `sites` / `report` から `go/ssa` と `gossa` の import を消す | `go list -deps` で確認（`taint` に `go/token`・`go/constant` が残る。下記） |
-- **Phase 3:** Rust。最初のタスクは「`stable-mir-json` 等の既存ツールで、実在のクレートがどれくらい通るかの確認」。成果物は「固定した nightly でビルドが通る Rust プロジェクトを解析できるツール」。想定より通らなければ、Rust の優先度を下げる判断もあり得る
-- **Phase 4:** Dart。解決済み AST → CFG → IR。**最初の版を実装済み**（`extractor/dart`、ADR-041）。残りは、パターン、関数値のコールグラフ、`Stream`、依存パッケージのモデル
-
----
+履歴・計画は [history/ARCHITECTURE-plans.md](history/ARCHITECTURE-plans.md) の 10 節にある（Phase 1 のステップ表、Dart スパイク、Phase 2 以降の見通し）。Phase 1 と 2 は完了した。Go、Dart、Rust の 3 言語の extractor は、実装されている。
 
 ## 11. レビューで確認したい点
 
-1. **【決定済み】** 4.4 の `dynamic_dispatch` / `unresolved_callee` / `concurrency` は `attributable_to: mixed`（3 値化）。
-   Phase 1 のステップ 1.12 の実測後に見直す
-2. **【決定済み】** 自作 SSA 化と differential test は **Phase 1 の終盤（ステップ 1.11b）**で導入する（ADR-026）。
-   Phase 1 の間は lifted の `go/ssa` を使い、`testdata` が揃ってから差し込む
-3. **【決定済み】** `global_load/store` は独立のまま、`slice` は `copy` の `view` フラグに畳む。命令数は 26（2.3）
-4. **【決定済み】** `finally` は、extractor が出口ごとにブロックを複製する（ADR-037）。複製されたサイトは 1 つとして数える。投げうる呼び出しは、`try` の範囲の中ではブロックの終端にする
-5. **【決定済み】** 性能目標は仮説として置き、ステップ 1.8 の実測で確定する（9 節、ADR-027）。20 万行は目標の上限。Go のみが当面の対象
-6. **【決定済み】** ID と指紋の設計は 4.6 と ADR-028。検出結果の単位は (source サイト, sink サイト) の組
-7. **【決定済み】** 上限を超えたら展開を中止して記録する。既定値は暫定 100 で、ステップ 1.9 の実測で確定する。sanitizer への展開は既定で禁止（5.4、ADR-030）
+履歴・計画は [history/ARCHITECTURE-plans.md](history/ARCHITECTURE-plans.md) の 11 節にある。全項目が決定済みで、決めた内容は ADR（ADR-INDEX.md）にある。
+
+---
+
+## 12. グラフ層（`rivus index` / `rivus graph`）
+
+解析結果（データの流れ）ではなく、**呼び出しの関係**を、1 回作って保存し、あとから検索する層。taint 解析を走らせない。出力には必ず `relation: "calls"` と `flows: "not_checked"` が付く（`internal/graphq/graphq.go`）。
+使い方は [GRAPH.md](GRAPH.md)、設計の理由は [DESIGN-graph.md](DESIGN-graph.md)。
+
+- **保存（`internal/graphdb`）:** 1 つの SQLite ファイル（純 Go の `modernc.org/sqlite`。cgo なし）。表は `meta`、`files`、`funcs`、`callsites`、`edges`、`refs`（関数が値として名指される所）、`sites`（`schema.go`）。**使い捨てのキャッシュ**で、移行はしない。スキーマの版（今は 2）が違うファイルは拒み、作り直しを案内する。
+- **層:** 今あるのは構造の層（関数、呼び出し点、辺、サイト）だけ。taint の層（findings、不確実性）は、このファイルにはない（`index -taint` は、JSON の index に出す）。`meta` が、どの層があるかを記録するので、層がないことを「findings がない」と読み違えない。
+- **書き先:** `-graph <file>`、なければユーザーのキャッシュ（`os.UserCacheDir()/rivus/<-C の絶対パスのハッシュ>/graph.db`。`RIVUS_CACHE_DIR` で変えられる）。解析対象のディレクトリには作らない（`cmd/rivus/graph.go`）。
+- **鍵（source hash。`internal/graphdb/key.go`、`cmd/rivus/graphkey.go`）:** 設定（フラグ、ルール、rivus の版、環境、ツールチェイン）、読んだファイルの内容のハッシュ、ファイル一覧のハッシュ（新しく読めるようになったファイルに気づくため）で作る。疑わしいときは、いつも「作り直す」側に倒す。偽の「新しい」は変更を見逃し、偽の「古い」は index の時間だけで済むため。`graph info -C` が、今のソースと照合して `fresh` を返す。
+- **問い合わせ（`internal/graphq`）:** `callers`、`callees`、`path`、`impls`、`dispatchers`。1 関数ずつ、ファイルから隣を引くので、グラフを全部メモリに持たない。必ず、深さと件数に上限を持つ（深さは既定 1、最大 6。件数は既定 50。経路は既定 5 本）。動的な呼び出しは、候補が 3 以下なら展開し、それより多いものは境界（フロンティア）として見せ、20 を超えるもの（ハブ）は `path` に使わない（`hub_skipped`）。**切ったものと、絞ったもの（`--via`、`--avoid`、`--only-impl`）は、必ず出力に言う。**
+
+## 13. 関数値の呼び出しの候補（`internal/valuecalls`）
+
+関数値の呼び出し（`call` の `value`）の候補を、**IR の上で 1 か所で決める**。サイトの列挙（ルールが、変数が持つ関数を名指せる。ADR-045）と、解析のグラフが、同じ候補を見るため（`sites` と `sg` が `valuecalls.Resolve` を呼ぶ）。
+
+- **候補の出どころ:** Go は、extractor の VTA の結果。ほかの言語は、`valuecalls` が、値に流れ込む関数を、コピー、φ、引数（呼び元が渡すもの）を通して探す。メモリは追わない（フィールドやリストに入れた関数は見つからず、呼び出しは未解決のまま）。
+- **限界:** 候補が 8 を超えたとき（`most`）、呼び元を 3 段より上まで辿るとき（`maxDepth`）は、候補を付けない。理由は `Callee.ValueLimit`（`candidate_limit`、`caller_depth_limit`）に残り、不確実性の detail になる。
+- **引数を通って届く関数:** どの候補が呼ばれるかは、呼び元に依る。候補は、通った引数の番号を持ち（`ValueCand.Param`）、呼び元が、渡した関数以外を通る流れを外す。
+- **絞り込み（`narrow.go`）:** Rust の `Fn::call` / `FnMut::call_mut` / `FnOnce::call_once` の候補は、extractor が「型の合うクロージャすべて」で作る。ここでは、**受け手に流れ込む関数に絞る**（ADR-079、[DESIGN-capture.md](DESIGN-capture.md)）。
+  - 規則は「**全部辿れたときだけ絞る**」。絞ると流れを失いうるが、作り出すことはない。辿れない物（規則のない命令、構造体の欄、呼び出しの結果、グローバル、トレイトオブジェクト、呼び元が全部は分からない引数、上限）に当たったら、候補を全部残す。
+  - 引数を辿るときは、呼び元が全部読まれていることが条件。`Func.Private`（`pub` がない）か、**閉じた世界**（起点があり、外からシンボルで呼べる関数がなく、extractor が `caller_marks` を付けた）。閉じた世界は前提を 1 つ入れるので、絞った不確実性に `basis: closed_world_entry` を付けて言う（「起点のあるプログラムとして読んだので、外からの呼び出しは数えていない」）。絞る前の候補数は `narrowed_from`。
+  - Dart の動的な呼び出しへの同じ絞り込みは、まだない（設計だけ）。
+
+## 14. `parts`（sink が引数の欄を名指す）
+
+sink は、位置の引数のうち、**どの欄が危険か**を言える（ADR-074。設計は [DESIGN-field-sinks.md](DESIGN-field-sinks.md)、書き方は [MODELING.md](MODELING.md)）。
+
+- **ルール:** `parts: [{arg: n | recv: true, field: "A.B"}]`。1 か所だけなら短い形（`args: [n]` ＋ `field:`）。欄は、IR にある名前を `.` でつなぐ。`[]` は、スライス、配列、map の要素。`args` で名指した位置は、全体が危険で、`parts` はそれ以外の位置のためにある（`internal/model/model.go` の `Sink`、`SinkPart`、`WholeArgs`）。
+- **照合（`internal/taint/fieldsink.go` の `matchParts`）:** モデルの名前は、値からのアクセスパスの**部分列**として照合する。名前でない段（欄の後ろのポインタ、インタフェースの中身、コンテナの要素）は飛ばせる。名前のほうは、飛ばせない。
+- **結果:** その欄（かその下）にある汚染は、確かな検出。欄の隣の汚染は、流れではない。欄にあるとは言えない汚染（値全体が汚れている、パスの上限で切れた、コンテナの要素、読まれていない関数を通った）は、検出として出し、不確実性 `field_imprecision`（detail は `whole_value` / `path_limit` / `element` / `opaque_callee`）を付ける。欄の名前がプログラムにないときは、`field_unresolved` を付けて、sink を全体として扱う。黙って落とすことはしない。
+
+## 15. 隔離（信頼できない Rust の読み込み）
+
+Rust の extractor は、対象をビルドする（`cargo check`）ので、対象の `build.rs`、proc macro、`[build-dependencies]` が動く。そこで `rivus analyze -lang rust` と `rivus extract -lang rust` は、**既定では Docker のコンテナの中で動かす**（ADR-064）。2 段階で、取得（ネットワークあり。`cargo fetch --locked` だけ。ビルドしない。対象の `.cargo` の設定は使わない）と、抽出（`--network none`。`cargo check --offline --locked`）。コンテナは、非 root、`--cap-drop ALL`、`no-new-privileges`、読み取り専用のルート、プロセス・メモリ・CPU・時間の上限を持ち、ホストの環境変数は渡さず、対象は読み取り専用でマウントし、IR は標準出力でだけ返す。Docker がなければ、何も実行せずに止まる。ホストで直接動かすのは、`-unsafe-host-exec`（信頼できるコードだけ）。コードは `cmd/rivus/isolate.go`、`isolate_fetch.go`、`lang.go`。詳しくは [rust-isolation.md](rust-isolation.md)。ルールは、解析対象の `.rivus/rules` からも読まれる（`-no-project-rules` で外せ、消せる量は `project_rules` が出す）。Go と Dart の extractor は、コンテナの中では動かさない。
+
+## 16. メモリ
+
+ピークは、解析ではなく、**読み込みと go/ssa の構築**にある（Go）。次の手で下げている（設計と測定は [DESIGN-memory.md](DESIGN-memory.md)）。
+
+- **GC の設定（`tuneGC`、`cmd/rivus/main.go`）:** GC の目標を 50% にして（Go の既定は 100%）、ごみを多く持たない。環境変数 `GOGC` があれば、それを優先する。
+- **go/ssa の解放:** IR とテキストを作ったあと、go/ssa のプログラムと、読み込んだパッケージを手放す（`ReleaseSSA`、`internal/frontend/gossa/load.go`。呼ぶのは `cmd/rivus/common.go`）。
+- **依存ごとの解放:** 依存のパッケージのソースと型情報は、そのパッケージを構築し終えるたびに手放す（`load.go` の `buildInOrder` のコールバック）。
+- 起点から届く関数だけを IR にする。`-no-deps` は、依存を読まないので、メモリが大きく減る（その分、依存への呼び出しは推測になる）。
+
+測定値（ピーク GB、時間）は、測った日とコミットを付けて DESIGN-memory.md にある。この文書には書かない。未実装の案（段階的な構築など）も DESIGN-memory.md にある。
+
+---
 
 ## 診断出力 `-v`
 
