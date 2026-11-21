@@ -1,0 +1,13 @@
+diff --git a/internal/taint/summary.go b/internal/taint/summary.go
+index a0613a2..32e87dd 100644
+--- a/internal/taint/summary.go
++++ b/internal/taint/summary.go
+@@ -348,7 +348,7 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
+ 			if len(oe.Guards) > 0 && !info.feasible(oe.Guards) {
+ 				continue // the call passes constants that rule this flow out
+ 			}
+-			if cc.made && o.Kind == OutGlobal && o.Path == "" && oe.E.Kind == Param && oe.E.Mods() == "" &&
++			if false && cc.made && o.Kind == OutGlobal && o.Path == "" && oe.E.Kind == Param && oe.E.Mods() == "" &&
+ 				int(oe.E.Param) < len(argv) && identityOfGlobal(s.fn, argv[oe.E.Param], oe.E.Path(), o.Global) {
+ 				// The closure writes back the whole value of the variable that was read, whole, where it
+ 				// was made (`before := G; ...; G = before`, the cleanup of a mock). The analysis does not

@@ -25,6 +25,7 @@ only the engine is old.
 
 ## The table: which bad version is red, in which layer, by which metric
 
+<!-- rows:begin (made by `bench/backtest.py docs -w` from bench/backtest-rows.json; do not edit) -->
 | # | what | bad | good | layer | red by (bad) | good |
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | a merge through the descriptor of a type (no `reflect` models) | `2dd5022` | `43ba517` | A: `scale/types`, `scale/typeschain` | types: FAKE 1 (a flow into a quiet sink), `summary_elems` x11.2, `reanalyses` x1.8, `passes` x2.0, largest summary x12.7; typeschain: NOCONV (12 passes), largest summary x24 | green on both |
@@ -32,12 +33,13 @@ only the engine is old.
 | 3 | a logger that goes through `os.Stderr` (no `holds: nothing`) | `671777d` | `2884c01` | A: `scale/stderr` | FAKE 1, `summary_elems` x13.1, `reanalyses` x1.9, largest summary x14.2 | green |
 | 4 | 1 to 3 together (the unconverged Gitea, in small) | `2dd5022` | `6c5c28c` | A: `scale/all` (2,500 functions, all shapes) | FAKE 2, NOCONV, `summary_elems` x5.5, largest summary x3.6 | green on FAKE, NOCONV and SIZE (TRACE only: the uncertainties of later fixes) |
 | 5 | the writer of a global differs from run to run | `009c0d5` | `396d477` | determinism (`backtest.py det`) | 3 different outputs in 60 runs (10 of 60 differ from the most common) | the same output in 60 runs |
-| 6 | the write to an explicit global is dropped (CORE-H) | `623b620` | `c9aa412` | C (compare, fixed inputs) | LOST 11 (gogs, first copy), LOST 31 (gogs, second copy), LOST 3 (gin-vue-admin), LOST 1 (gophish) | (the base of the pair) |
-| 7 | the source of a param is written back: N x M (CORE-A) | `8e8b866` | `c9aa412` | C (compare, fixed inputs) | casdoor +29 findings (97 percent: NOISE), gogs (second copy) LOST 1 | (the base) |
-| 8 | save and restore lifts a sub-cell to the root (the noise of C-7) | `697ae9d` (`5dfec7f` without plan D; made for this, not pushed) | `5dfec7f` | curated (`go-curated/gitea`) | FAKE 1 more than the good version | see the ledger |
-| 9 | regressions of the traces | optional | | | not run | |
-| 10 | a writer model puts the data on the whole object (only +20 on Gitea; the light layer C had +0) | `7552eb9` | `a1e2fb7` (on main; the same patch as the branch commit `6ddee62`) | curated decoys (`bench/go-curated/api/rotate.go`, the writers of a rotating log: `Write(data)`, then the body gives its own file-name field to a sink) | FAKE 2 | green (`TestCuratedGo$` with `RIVUS_BINARY` = a build of `a1e2fb7`); red on `7552eb9` |
-| 11 | a path of another entry is folded into the shortest one (the third CVE) | head | | B | recorded as a miss, not a condition | |
+| 6 | the write to an explicit global is dropped (CORE-H) | `623b620` | `c9aa412` | C (compare, fixed inputs). The tests of A / curated cannot judge it: both builds predate later fixes and are red there | LOST 11 (gogs, first copy), LOST 31 (gogs, second copy), LOST 3 (gin-vue-admin), LOST 1 (gophish) | (the base of the pair) |
+| 7 | the source of a param is written back: N x M (CORE-A) | `8e8b866` | `c9aa412` | C (compare, fixed inputs). The tests of A / curated cannot judge it, as for row 6 | casdoor +29 findings (97 percent: NOISE), gogs (second copy) LOST 1 | (the base) |
+| 8 | save and restore lifts a sub-cell to the root (the noise of C-7) | `5dfec7f` with `bench/backtest-patches/8-no-plan-d.patch` applied (one line: `git apply` it, build; the commit `697ae9d` that was made from it is in no ref) | `5dfec7f` | curated (`go-curated`): the decoy `api/restore.go` (`cap-restore`). Not A: `scale/selfcopy` and `scale/all` are green on the bad build | FAKE 1 more than the good build (a flow into a quiet sink: `api/restore.go`, 28 quiet sinks, 27 kept) | no FAKE (`TestCuratedGo$` is red on MISS 1, the writer content step of row 10, a later fix: not this row's metric) |
+| 9 | regressions of the traces | optional |  |  | not run |  |
+| 10 | a writer model puts the data on the whole object (only +20 on Gitea; the light layer C had +0) | `7552eb9` | `a1e2fb7` (the same patch as the branch commit `6ddee62`) | curated decoys (`bench/go-curated/api/rotate.go`, the writers of a rotating log: `Write(data)`, then the body gives its own file-name field to a sink) | FAKE 2 | green (`TestCuratedGo$` with `RIVUS_BINARY` = a build of `a1e2fb7`) |
+| 11 | a path of another entry is folded into the shortest one (the third CVE) | head |  | B | recorded as a miss, not a condition |  |
+<!-- rows:end -->
 
 Rows 6 and 7 are told apart by the metric: `623b620` is red for 6 (LOST) and was green for 7 by design (its fix for 7 is in it); `8e8b866` is red for 7 (NOISE)
 and it has the lost flows of 6 only as a second effect. Rows 1, 3 and 4 are the ones that only a big project showed on 2026-11-21 (the types cache with the chain,

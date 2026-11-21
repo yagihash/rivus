@@ -1,10 +1,169 @@
 [
- {"id": "1", "what": "a merge through the descriptor of a type (no reflect models)", "bad": "2dd5022", "good": "43ba517", "units": ["scale/types", "scale/typeschain"]},
- {"id": "2", "what": "join + widen: the summary grows and shrinks (no absorbWhole)", "bad": "10fabef", "good": "aa7cb0c", "units": ["scale/widen"]},
- {"id": "3", "what": "a logger that goes through os.Stderr (no holds: nothing)", "bad": "671777d", "good": "2884c01", "units": ["scale/stderr"]},
- {"id": "4", "what": "1 to 3 together (the unconverged Gitea, in small)", "bad": "2dd5022", "good": "6c5c28c", "units": ["scale/all"]},
- {"id": "6", "what": "the write to an explicit global is dropped (CORE-H)", "bad": "623b620", "good": "c9aa412", "units": ["curated-go", "scale/glob"]},
- {"id": "7", "what": "the source of a param is written back: N x M (CORE-A)", "bad": "8e8b866", "good": "c9aa412", "units": ["curated-go"]},
- {"id": "8", "what": "save and restore lifts a sub-cell to the root (C-7 noise)", "bad": "noD", "good": "5dfec7f", "units": ["scale/selfcopy", "scale/all"]},
- {"id": "10", "what": "a writer model puts the data on the whole object", "bad": "7552eb9", "good": "6ddee62", "units": ["curated-go"]}
+ {
+  "id": "1",
+  "status": "verified",
+  "what": "a merge through the descriptor of a type (no `reflect` models)",
+  "bad": "`2dd5022`",
+  "good": "`43ba517`",
+  "bad_ref": "2dd5022",
+  "good_ref": "43ba517",
+  "units": [
+   "scale/types",
+   "scale/typeschain"
+  ],
+  "layer": "A: `scale/types`, `scale/typeschain`",
+  "red_by": "types: FAKE 1 (a flow into a quiet sink), `summary_elems` x11.2, `reanalyses` x1.8, `passes` x2.0, largest summary x12.7; typeschain: NOCONV (12 passes), largest summary x24",
+  "good_result": "green on both",
+  "verified_on": "2026-11-21"
+ },
+ {
+  "id": "2",
+  "status": "verified",
+  "what": "join + widen: the summary grows and shrinks (no `absorbWhole`)",
+  "bad": "`10fabef`",
+  "good": "`aa7cb0c`",
+  "bad_ref": "10fabef",
+  "good_ref": "aa7cb0c",
+  "units": [
+   "scale/widen"
+  ],
+  "layer": "A: `scale/widen`",
+  "red_by": "largest summary x6.7 (47 against 7)",
+  "good_result": "green",
+  "verified_on": "2026-11-21"
+ },
+ {
+  "id": "3",
+  "status": "verified",
+  "what": "a logger that goes through `os.Stderr` (no `holds: nothing`)",
+  "bad": "`671777d`",
+  "good": "`2884c01`",
+  "bad_ref": "671777d",
+  "good_ref": "2884c01",
+  "units": [
+   "scale/stderr"
+  ],
+  "layer": "A: `scale/stderr`",
+  "red_by": "FAKE 1, `summary_elems` x13.1, `reanalyses` x1.9, largest summary x14.2",
+  "good_result": "green",
+  "verified_on": "2026-11-21"
+ },
+ {
+  "id": "4",
+  "status": "verified",
+  "what": "1 to 3 together (the unconverged Gitea, in small)",
+  "bad": "`2dd5022`",
+  "good": "`6c5c28c`",
+  "bad_ref": "2dd5022",
+  "good_ref": "6c5c28c",
+  "units": [
+   "scale/all"
+  ],
+  "layer": "A: `scale/all` (2,500 functions, all shapes)",
+  "red_by": "FAKE 2, NOCONV, `summary_elems` x5.5, largest summary x3.6",
+  "good_result": "green on FAKE, NOCONV and SIZE (TRACE only: the uncertainties of later fixes)",
+  "verified_on": "2026-11-21"
+ },
+ {
+  "id": "5",
+  "status": "verified",
+  "what": "the writer of a global differs from run to run",
+  "bad": "`009c0d5`",
+  "good": "`396d477`",
+  "bad_ref": "009c0d5",
+  "good_ref": "396d477",
+  "units": [],
+  "layer": "determinism (`backtest.py det`)",
+  "red_by": "3 different outputs in 60 runs (10 of 60 differ from the most common)",
+  "good_result": "the same output in 60 runs",
+  "verified_on": "2026-11-21"
+ },
+ {
+  "id": "6",
+  "status": "verified",
+  "what": "the write to an explicit global is dropped (CORE-H)",
+  "bad": "`623b620`",
+  "good": "`c9aa412`",
+  "bad_ref": "623b620",
+  "good_ref": "c9aa412",
+  "units": [],
+  "layer": "C (compare, fixed inputs). The tests of A / curated cannot judge it: both builds predate later fixes and are red there",
+  "red_by": "LOST 11 (gogs, first copy), LOST 31 (gogs, second copy), LOST 3 (gin-vue-admin), LOST 1 (gophish)",
+  "good_result": "(the base of the pair)",
+  "verified_on": "2026-11-21"
+ },
+ {
+  "id": "7",
+  "status": "verified",
+  "what": "the source of a param is written back: N x M (CORE-A)",
+  "bad": "`8e8b866`",
+  "good": "`c9aa412`",
+  "bad_ref": "8e8b866",
+  "good_ref": "c9aa412",
+  "units": [],
+  "layer": "C (compare, fixed inputs). The tests of A / curated cannot judge it, as for row 6",
+  "red_by": "casdoor +29 findings (97 percent: NOISE), gogs (second copy) LOST 1",
+  "good_result": "(the base)",
+  "verified_on": "2026-11-21"
+ },
+ {
+  "id": "8",
+  "status": "verified",
+  "what": "save and restore lifts a sub-cell to the root (the noise of C-7)",
+  "bad": "`5dfec7f` with `bench/backtest-patches/8-no-plan-d.patch` applied (one line: `git apply` it, build; the commit `697ae9d` that was made from it is in no ref)",
+  "good": "`5dfec7f`",
+  "bad_ref": "697ae9d",
+  "good_ref": "5dfec7f",
+  "units": [
+   "curated-go"
+  ],
+  "layer": "curated (`go-curated`): the decoy `api/restore.go` (`cap-restore`). Not A: `scale/selfcopy` and `scale/all` are green on the bad build",
+  "red_by": "FAKE 1 more than the good build (a flow into a quiet sink: `api/restore.go`, 28 quiet sinks, 27 kept)",
+  "good_result": "no FAKE (`TestCuratedGo$` is red on MISS 1, the writer content step of row 10, a later fix: not this row's metric)",
+  "verified_on": "2026-11-21",
+  "history": "the first table of this page named `scale/selfcopy` and `scale/all` for it, and a good version \"see the ledger\"; the ledger has no such section and both units are green on the bad build. It is judged on `curated-go` (the decoy `api/restore.go`), and the bad build is rebuilt from `5dfec7f` and `bench/backtest-patches/8-no-plan-d.patch`"
+ },
+ {
+  "id": "9",
+  "status": "optional",
+  "what": "regressions of the traces",
+  "bad": "optional",
+  "good": "",
+  "bad_ref": "",
+  "good_ref": "",
+  "units": [],
+  "layer": "",
+  "red_by": "not run",
+  "good_result": ""
+ },
+ {
+  "id": "10",
+  "status": "verified",
+  "what": "a writer model puts the data on the whole object (only +20 on Gitea; the light layer C had +0)",
+  "bad": "`7552eb9`",
+  "good": "`a1e2fb7` (the same patch as the branch commit `6ddee62`)",
+  "bad_ref": "7552eb9",
+  "good_ref": "a1e2fb7",
+  "units": [
+   "curated-go"
+  ],
+  "layer": "curated decoys (`bench/go-curated/api/rotate.go`, the writers of a rotating log: `Write(data)`, then the body gives its own file-name field to a sink)",
+  "red_by": "FAKE 2",
+  "good_result": "green (`TestCuratedGo$` with `RIVUS_BINARY` = a build of `a1e2fb7`)",
+  "verified_on": "2026-11-21",
+  "history": "the good version was a branch commit (`6ddee62`); the same patch is `a1e2fb7` on main, and the decoys were a `.pending` file until the file was enabled"
+ },
+ {
+  "id": "11",
+  "status": "miss",
+  "what": "a path of another entry is folded into the shortest one (the third CVE)",
+  "bad": "head",
+  "good": "",
+  "bad_ref": "",
+  "good_ref": "",
+  "units": [],
+  "layer": "B",
+  "red_by": "recorded as a miss, not a condition",
+  "good_result": ""
+ }
 ]

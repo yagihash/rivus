@@ -2,7 +2,11 @@
 """Backtest of the bench: does the new bench go red on the bad versions, and stay green on the good ones?
 
   bench/backtest.py judge OUT.json            the red / green of one engine, per unit (from `go test -json`)
-  bench/backtest.py table  OUTDIR  ROWS.json  the table of bench/BACKTEST.md: row x (bad, good) x unit, with the metric
+  bench/backtest.py table  OUTDIR  ROWS.json  row x (bad, good) x unit, with the metric (the raw judgement of each unit)
+  bench/backtest.py docs   [-w] ROWS.json BACKTEST.md LEDGER_HEADER.md
+                                              the table of bench/BACKTEST.md and the head of bench/LEDGER.md are made from
+                                              bench/backtest-rows.json (the only source of the rows); -w writes them, without
+                                              -w it fails when a file is not the one that the rows make
 
 The tests are the ones of the head (TestScaleSynth, TestCuratedGo, TestZooGo, the determinism tests) run with
 RIVUS_BINARY=<an older build of cmd/rivus> (bench/backtest.sh): the inputs and the answer keys are the head's,
@@ -16,6 +20,7 @@ only the engine is old (bench/BACKTEST.md). A unit is:
             nor green
 """
 import json
+import os
 import re
 import sys
 from collections import OrderedDict
@@ -95,6 +100,75 @@ def judge(path):
     return res
 
 
+ROWS_BEGIN = "<!-- rows:begin (made by `bench/backtest.py docs -w` from bench/backtest-rows.json; do not edit) -->"
+ROWS_END = "<!-- rows:end -->"
+
+
+def rows_table(rows):
+    """The table of bench/BACKTEST.md, from the rows (the only source)."""
+    out = ["| # | what | bad | good | layer | red by (bad) | good |", "| --- | --- | --- | --- | --- | --- | --- |"]
+    for r in rows:
+        out.append("| %s | %s | %s | %s | %s | %s | %s |" % (r["id"], r["what"], r["bad"], r["good"], r["layer"], r["red_by"], r["good_result"]))
+    return "\n".join(out)
+
+
+def ledger_header(rows):
+    """The head of bench/LEDGER.md: the count of the unverified rows, from the rows."""
+    counted = [r for r in rows if r["status"] in ("verified", "unverified")]
+    unv = [r for r in counted if r["status"] == "unverified"]
+    out = ["**Unverified rows: %d** (the number of rows of `bench/BACKTEST.md` that are not red on the bad version AND green on the good version, on main; "
+           "the status of each row is in `bench/backtest-rows.json`). It is counted again at every change of that file." % len(unv), ""]
+    if unv:
+        out += ["| row | why it is unverified | what makes it verified |", "|---|---|---|"]
+        for r in unv:
+            out.append("| %s (%s) | %s | %s |" % (r["id"], r["what"], r.get("unverified_why", "-"), r.get("verified_when", "-")))
+    else:
+        out.append("No row is unverified.")
+    out.append("")
+    for r in rows:
+        if r.get("history"):
+            out.append("Row %s: %s." % (r["id"], r["history"]))
+    out += ["", "Rows 9 (the traces; optional) and 11 (a recorded miss, not a condition) are not counted.", ""]
+    days = [r["verified_on"] for r in counted if r.get("verified_on")]
+    if unv:
+        out.append("**The day the number reached 0: not yet** (the last row to be verified: %s)." % (max(days) if days else "none"))
+    else:
+        out.append("**The day the number reached 0: %s** (the day the last of the rows was verified; a row that is added later starts as unverified)." % max(days))
+    out += ["", "Holes: only the pairs of rows 6, 7 (layer C) have compare runs so far, and row 8 and 10 are judged by `TestCuratedGo`; the rows of A (go-scale) are in BACKTEST.md. "
+            "Wall times were taken while the machine was shared (read them as a guide; the counts are exact)."]
+    return "\n".join(out) + "\n"
+
+
+def splice(text, table):
+    a, b = text.find("<!-- rows:begin"), text.find(ROWS_END)
+    if a < 0 or b < a:
+        raise SystemExit("backtest: the markers of the table are not in the file")
+    return text[:a] + ROWS_BEGIN + "\n" + table + "\n" + text[b:]
+
+
+def docs(args):
+    write = False
+    if args and args[0] == "-w":
+        write, args = True, args[1:]
+    rows_path, bt_path, hdr_path = args
+    rows = json.load(open(rows_path))
+    ledger_path = os.path.join(os.path.dirname(os.path.abspath(hdr_path)), "LEDGER.md")
+    want = {bt_path: splice(open(bt_path).read(), rows_table(rows)), hdr_path: ledger_header(rows)}
+    led = open(ledger_path).read()
+    i = led.find("# Ledger: version")
+    want[ledger_path] = ledger_header(rows).rstrip("\n") + "\n\n" + (led[i:] if i >= 0 else "")
+    bad = []
+    for path, text in want.items():
+        if open(path).read() != text:
+            bad.append(path)
+            if write:
+                open(path, "w").write(text)
+    if bad and not write:
+        print("not the ones that bench/backtest-rows.json makes (run `python3 bench/backtest.py docs -w ...`): " + ", ".join(bad))
+        return 1
+    return 0
+
+
 def cell(res, unit):
     if unit not in res:
         return "-"
@@ -161,6 +235,8 @@ def main():
             for u, (st, r) in judge("%s/scale-%s.json" % (sys.argv[2], ref)).items():
                 if st != "GREEN":
                     print("  %-22s %-9s %s" % (u, st, "; ".join(r)))
+    elif len(sys.argv) >= 5 and sys.argv[1] == "docs":
+        sys.exit(docs(sys.argv[2:]))
     elif len(sys.argv) >= 4 and sys.argv[1] == "table":
         outdir, rows = sys.argv[2], json.load(open(sys.argv[3]))
         cache = {}
@@ -175,10 +251,10 @@ def main():
 
         for row in rows:
             print("### %s: %s" % (row["id"], row["what"]))
-            print("| unit | bad %s | good %s |" % (row["bad"], row["good"]))
+            print("| unit | bad %s | good %s |" % (row["bad_ref"], row["good_ref"]))
             print("|---|---|---|")
             for u in row["units"]:
-                print("| %s | %s | %s |" % (u, cell(get(row["bad"]), u), cell(get(row["good"]), u)))
+                print("| %s | %s | %s |" % (u, cell(get(row["bad_ref"]), u), cell(get(row["good_ref"]), u)))
             print()
     else:
         sys.exit(__doc__)
