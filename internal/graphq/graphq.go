@@ -339,6 +339,10 @@ type Listed struct {
 type NotExhaustive struct {
 	UnresolvedCalls Caveat `json:"unresolved_calls"`
 	OpenFunctions   Caveat `json:"open_functions"`
+	// UnreadCode: code of the project that is in the run this index stands for and that the load did not read (a
+	// package with a type error, a file or crate that failed): a call from it is not an edge. Or the index has no
+	// record of it (it was made before it was recorded): it is not known that nothing was left out.
+	UnreadCode Caveat `json:"unread_code"`
 	// Cut is set when the sets that were read (what the start reaches, what reaches the goal) were cut by a bound.
 	Cut bool `json:"cut,omitempty"`
 }

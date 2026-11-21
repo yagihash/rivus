@@ -51,6 +51,18 @@ type Meta struct {
 	Manifest string
 	Roots    []string
 	Revision string
+	// Unread is what was in the run of this build and was not read (nil: not recorded). Not in the key: it is
+	// made of what the load said, and the key already holds the sources and the flags.
+	Unread *Unread
+}
+
+// Unread is what the code of the project holds that the structure layer does not: the packages, crates and files
+// that the load could not read (a type error, a failed read, a unit the extractor dropped). The build tags, the
+// cfg and features, and the tests are not here: they are not in the run that the index stands for (the flags and
+// key_config say which configuration it is). A file made before this was recorded has no "unread" in its meta.
+type Unread struct {
+	FailedPackages int      `json:"failed_packages"`
+	FailedExamples []string `json:"failed_examples,omitempty"` // at most 5
 }
 
 // Input is what Write stores.
@@ -512,6 +524,9 @@ func writeMeta(tx *sql.Tx, in *Input, c *Counts, w *writer) error {
 		{"roots", js(m.Roots)},
 		{"revision", m.Revision},
 		{"layers", js(layers)},
+	}
+	if m.Unread != nil {
+		rows = append(rows, [2]string{"unread", js(m.Unread)})
 	}
 	for _, r := range rows {
 		if _, err := tx.Exec(`INSERT INTO meta(key,value) VALUES(?,?)`, r[0], r[1]); err != nil {

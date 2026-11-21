@@ -93,6 +93,18 @@ func (o *analyzeOpts) graphIndexer(path string, patterns []string, since time.Ti
 			Manifest:     key.Manifest,
 			Roots:        key.Roots,
 		}
+		meta.Unread = &graphdb.Unread{}
+		failed := map[string]bool{} // a package with several errors is one
+		for _, e := range l.loadErrors() {
+			if failed[e.Package] {
+				continue
+			}
+			failed[e.Package] = true
+			meta.Unread.FailedPackages++
+			if len(meta.Unread.FailedExamples) < 5 {
+				meta.Unread.FailedExamples = append(meta.Unread.FailedExamples, e.Package)
+			}
+		}
 		if t := vcs.Detect(dir); t != nil && o.irFile == "" {
 			meta.Revision = t.Revision
 		}

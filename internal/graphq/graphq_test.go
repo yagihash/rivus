@@ -38,6 +38,10 @@ var entryIDs, exportedIDs map[string]bool
 
 var offset = 0
 
+// what the next build records of the code that was not read (nil: the index has no record), and its key_config
+var testUnread = &graphdb.Unread{}
+var testKeyConfig map[string]string
+
 // the program the last build made, for the tests that compare it with sg.Program.Reachable
 var lastProgram *sg.Program
 
@@ -120,13 +124,14 @@ func build(t *testing.T, fns []fnDef, ss ...*sites.Site) *graphq.Engine {
 		p.Funcs = append(p.Funcs, fn)
 	}
 	entryIDs, exportedIDs = nil, nil
+	defer func() { testUnread, testKeyConfig = &graphdb.Unread{}, nil }()
 	g, err := sg.Build(p)
 	if err != nil {
 		t.Fatal(err)
 	}
 	lastProgram = g
 	path := filepath.Join(t.TempDir(), "g.db")
-	_, err = graphdb.Write(path, &graphdb.Input{Graph: g, Sites: ss, Meta: graphdb.Meta{RivusVersion: "t", CreatedAt: time.Now(), SourceHash: "h", Dir: "/proj"}})
+	_, err = graphdb.Write(path, &graphdb.Input{Graph: g, Sites: ss, Meta: graphdb.Meta{RivusVersion: "t", CreatedAt: time.Now(), SourceHash: "h", Dir: "/proj", Unread: testUnread, KeyConfig: testKeyConfig}})
 	if err != nil {
 		t.Fatal(err)
 	}

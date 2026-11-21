@@ -1,6 +1,7 @@
 package graphq
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -838,6 +839,9 @@ func (e *Engine) Path(from, to string, o Options) (*PathResult, error) {
 		if !o.FromEntry {
 			// what no edge of the file holds, whatever the answer of the search (the limits of the entries say the same)
 			res.Limits = append(res.Limits, "a call by reflection, and one that the start of the program or the runtime makes (main, init, the initializers of variables), is not an edge of the file")
+			if cfg := e.buildConfigLine(); cfg != "" {
+				res.Limits = append(res.Limits, cfg)
+			}
 			if e.db.Meta("flags.tests") == "false" {
 				res.Limits = append(res.Limits, "the code of the tests was not read (the index was made without -tests): a call from it is outside the range of the answer")
 			}
@@ -1318,8 +1322,48 @@ func (e *Engine) notExhaustive(starts, goals []int64, refs bool) (*NotExhaustive
 			ne.OpenFunctions.Examples = append(ne.OpenFunctions.Examples, f.FID+" ("+why+")")
 		}
 	}
-	if !ne.Cut && ne.UnresolvedCalls.Total == 0 && ne.OpenFunctions.Total == 0 {
+	// what the load left out of the run
+	raw := e.db.Meta("unread")
+	switch {
+	case raw == "":
+		ne.UnreadCode.Total = -1
+		ne.UnreadCode.Why = "this index has no record of the code that was not read (it was made by an older version; make it again with rivus index): it is not known that nothing was left out"
+	default:
+		var u graphdb.Unread
+		if err := json.Unmarshal([]byte(raw), &u); err != nil {
+			ne.UnreadCode.Total = -1
+			ne.UnreadCode.Why = "the record of the code that was not read in this index cannot be read: it is not known that nothing was left out"
+		} else if u.FailedPackages > 0 {
+			ne.UnreadCode.Total = u.FailedPackages
+			ne.UnreadCode.Why = "the project has code that the load did not read (a type error, a failed read): a call from it is not an edge"
+			ne.UnreadCode.Examples = u.FailedExamples
+		}
+	}
+	if !ne.Cut && ne.UnresolvedCalls.Total == 0 && ne.OpenFunctions.Total == 0 && ne.UnreadCode.Total == 0 {
 		return nil, nil
 	}
 	return ne, nil
+}
+
+// buildConfigLine says which configuration the index stands for: a file that the build constraints (Go), cfg and
+// features (Rust) leave out is not in the run, and a call from it is outside the range of the answer.
+func (e *Engine) buildConfigLine() string {
+	raw := e.db.Meta("key_config")
+	if raw == "" {
+		return ""
+	}
+	var cfg map[string]string
+	if json.Unmarshal([]byte(raw), &cfg) != nil {
+		return ""
+	}
+	var parts []string
+	for _, k := range []string{"env.go.GOOS", "env.go.GOARCH", "env.go.CGO_ENABLED"} {
+		if v, ok := cfg[k]; ok && v != "" {
+			parts = append(parts, strings.TrimPrefix(k, "env.go.")+"="+v)
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "this answer is about the configuration the index was made in (" + strings.Join(parts, ", ") + "; the build constraints, and the cfg and features of Rust, leave files out): a file that this configuration does not build is outside it"
 }

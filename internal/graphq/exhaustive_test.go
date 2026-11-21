@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/yagihash/rivus/internal/graphdb"
 	"github.com/yagihash/rivus/internal/graphq"
 )
 
@@ -121,5 +122,51 @@ func TestNoPathSaysThatReflectionAndTheRuntimeAreNotEdges(t *testing.T) {
 	r, err := e.Path("S", "T", graphq.Options{})
 	if err != nil || r.Reachable || !strings.Contains(strings.Join(r.Limits, " "), "reflection") {
 		t.Fatalf("%v %+v", err, r.Limits)
+	}
+}
+
+func unreadFixture() []fnDef {
+	return []fnDef{
+		{"S", []call{{"s.go", 3, 1, "", "A", nil}}},
+		{"A", nil},
+		{"B", []call{{"b.go", 1, 1, "", "T", nil}}},
+		{"T", nil},
+	}
+}
+
+// A package that the load could not read (a type error) is in the run: the code of it may call the goal, and no
+// edge says so. "No path" is not exhaustive.
+func TestNoPathIsNotExhaustiveWhenCodeOfTheProjectWasNotRead(t *testing.T) {
+	testUnread = &graphdb.Unread{FailedPackages: 2, FailedExamples: []string{"example.com/p/bad", "example.com/p/worse"}}
+	e := build(t, unreadFixture())
+	r, err := e.Path("S", "T", graphq.Options{})
+	if err != nil || r.Reachable || r.Exhaustive || !r.EdgesExhausted || r.NotExhaustiveBecause == nil ||
+		r.NotExhaustiveBecause.UnreadCode.Total != 2 || len(r.NotExhaustiveBecause.UnreadCode.Examples) != 2 {
+		t.Fatalf("%v %+v because %+v", err, r.Exhaustive, r.NotExhaustiveBecause)
+	}
+}
+
+// An index with no record of it (made before it was recorded): it is not known that nothing was left out.
+func TestNoPathIsNotExhaustiveWhenTheIndexHasNoRecordOfUnreadCode(t *testing.T) {
+	testUnread = nil
+	e := build(t, unreadFixture())
+	r, err := e.Path("S", "T", graphq.Options{})
+	if err != nil || r.Reachable || r.Exhaustive || r.NotExhaustiveBecause == nil || r.NotExhaustiveBecause.UnreadCode.Total != -1 ||
+		!strings.Contains(r.NotExhaustiveBecause.UnreadCode.Why, "no record") {
+		t.Fatalf("%v %+v because %+v", err, r.Exhaustive, r.NotExhaustiveBecause)
+	}
+}
+
+// What the build constraints leave out is not in the run: "exhaustive" stays true, and the limits say which
+// configuration the answer is about.
+func TestNoPathStaysExhaustiveForFilesTheConfigurationLeavesOut(t *testing.T) {
+	testKeyConfig = map[string]string{"env.go.GOOS": "linux", "env.go.GOARCH": "amd64"}
+	e := build(t, unreadFixture())
+	r, err := e.Path("S", "T", graphq.Options{})
+	if err != nil || r.Reachable || !r.Exhaustive || r.NotExhaustiveBecause != nil {
+		t.Fatalf("%v %+v because %+v", err, r.Exhaustive, r.NotExhaustiveBecause)
+	}
+	if l := strings.Join(r.Limits, " "); !strings.Contains(l, "GOOS=linux") || !strings.Contains(l, "GOARCH=amd64") {
+		t.Errorf("limits %v", r.Limits)
 	}
 }
