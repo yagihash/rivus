@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "doc": "The marker and the judgement of 'reached' that every language of the zoo shares (docs/DESIGN-zoo.md, section 3.2). A source returns 'Z<tag>' followed, for each class in 'order', by its segment and the danger of the variant that runs. Both variants of a class have the same length and are made of characters of the class's dangerous set, so a sanitizer (which replaces every character of the set by '_') gives the same text for both; the set of a class holds no character of the danger of another class. Variant 0 and variant 1 run in different processes; a sink that gets different text in the two and has not reached is a carry.",
+  "prefix": "Z",
+  "order": ["Cmd", "SQL", "HTML", "Path"],
+  "classes": {
+    "Cmd": {
+      "segment": ".SH",
+      "danger": [";|$", "|$;"],
+      "set": ";|$\n",
+      "reached": "the danger is in the text, contiguous and intact, and its first character is outside a quote (single quotes and double quotes are tracked from the start of the text; a backslash outside single quotes escapes the next character)"
+    },
+    "SQL": {
+      "segment": ".SQL",
+      "danger": ["'\"", "'`"],
+      "set": "'\"\\`",
+      "reached": "the danger is in the text, and its first character (the quote) is not preceded by a backslash or a quote and not followed by a quote (it is not escaped, and it is not half of a doubled quote)"
+    },
+    "HTML": {
+      "segment": ".HTML",
+      "danger": ["<>&", "<&>"],
+      "set": "<>&",
+      "reached": "the danger is in the text, contiguous and intact (an escaped text has '&lt;' and no '<>&')"
+    },
+    "Path": {
+      "segment": ".PATH",
+      "danger": ["//../..", "/../../"],
+      "set": "./",
+      "reached": "the sink takes a base and the text; Clean(Join(base, text)) is outside the base"
+    }
+  },
+  "sanitizer": "CleanX(s) replaces every character of the set of the class X by '_' and does nothing else",
+  "tag": "[a-z0-9-]+, one per case. A tag is 'seen' when 'z<tag>.' is in the lower-cased text. When the text is reached and no tag is seen, the tag is the one source of the running case; when the case has several sources, that is an error (ambiguous)",
+  "probes": [
+    {"class": "Cmd", "text": "ls {D}", "reached": true},
+    {"class": "Cmd", "text": "echo '{D}'", "reached": false, "why": "inside single quotes"},
+    {"class": "Cmd", "text": "echo \"{D}\"", "reached": false, "why": "inside double quotes"},
+    {"class": "Cmd", "text": "echo 'a' {D}", "reached": true, "why": "the quote is closed before"},
+    {"class": "Cmd", "text": "ls ___", "reached": false},
+    {"class": "SQL", "text": "x = a{D}", "reached": true},
+    {"class": "SQL", "text": "x = \\{D}", "reached": false, "why": "the quote of the danger follows a backslash"},
+    {"class": "SQL", "text": "x = ''{D}", "reached": false, "why": "the quote of the danger follows a quote"},
+    {"class": "SQL", "text": "x = {DQ}", "reached": false, "why": "the quote of the danger is followed by a quote (doubled)"},
+    {"class": "HTML", "text": "<p>{D}</p>", "reached": true},
+    {"class": "HTML", "text": "&lt;&gt;&amp;", "reached": false},
+    {"class": "Path", "base": "/srv/base", "text": "a{D}", "reached": true},
+    {"class": "Path", "base": "/srv/base", "text": "a___", "reached": false},
+    {"class": "Path", "base": "/srv/base", "text": "a/b", "reached": false}
+  ],
+  "probe_notes": "{D} is the danger of the class in the variant that runs; {DQ} is the danger with its first character doubled. A probe passes when the judgement of the class gives 'reached' as written.",
+  "observed": "observed.json is {\"<case id>\": [{\"file\":\"cells/..\",\"line\":N,\"class\":\"Cmd|SQL|HTML|Path|Any\",\"seen\":[tag],\"reached\":[tag],\"carry\":[tag]}]}, hits in the order of the calls; the file is relative to the root of the zoo of the language. A case of the language is run three times (variant 0, variant 1, variant 0 in reverse order); the run of variant 0 is the observation, variant 1 gives the carry, and the reverse run must see the same."
+}

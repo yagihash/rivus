@@ -94,7 +94,23 @@ func (c curatedCounts) hasUncertainty(kind, file, detail string) bool {
 // compares the findings with the annotations of its .go files.
 func checkCurated(t *testing.T, dir string) curatedCounts {
 	t.Helper()
-	cmd := exec.Command(binary, "analyze", "-sites", "-rules", "rules.yaml", "./...")
+	return checkAnnotated(t, dir, annotOpts{pattern: "./..."})
+}
+
+// annotOpts are what the annotated projects other than the curated ones change (the zoo, bench/zoo-go):
+// the package pattern to analyse, a run that does not converge on purpose (a flow that the engine
+// loses by its limit: the @miss says so), and the uncertainties of the whole program (no function)
+// counted as the trace of a @miss.
+type annotOpts struct {
+	pattern          string
+	allowUnconverged bool
+	programWide      bool
+}
+
+// checkAnnotated is checkCurated for a project with its own options.
+func checkAnnotated(t *testing.T, dir string, o annotOpts) curatedCounts {
+	t.Helper()
+	cmd := exec.Command(binary, "analyze", "-sites", "-rules", "rules.yaml", o.pattern)
 	cmd.Dir = dir
 	out, err := cmd.Output()
 	if err != nil {
@@ -104,7 +120,7 @@ func checkCurated(t *testing.T, dir string) curatedCounts {
 		}
 		t.Fatalf("analyze: %v\n%s", err, stderr)
 	}
-	return checkCuratedReport(t, dir, out, ".go")
+	return checkCuratedReportOpts(t, dir, out, ".go", o)
 }
 
 // checkCuratedIR is checkCurated for a project that an extractor reads (Dart,
@@ -132,6 +148,11 @@ func checkCuratedIR(t *testing.T, dir string, stream []byte, ext string) curated
 // checkCuratedReport compares the report out with the annotations of the files
 // of dir that end in ext.
 func checkCuratedReport(t *testing.T, dir string, out []byte, ext string) curatedCounts {
+	t.Helper()
+	return checkCuratedReportOpts(t, dir, out, ext, annotOpts{})
+}
+
+func checkCuratedReportOpts(t *testing.T, dir string, out []byte, ext string, o annotOpts) curatedCounts {
 	t.Helper()
 	var rep report.Report
 	if err := json.Unmarshal(out, &rep); err != nil {
@@ -294,7 +315,7 @@ func checkCuratedReport(t *testing.T, dir string, out []byte, ext string) curate
 			problems = append(problems, fmt.Sprintf("found now (remove @miss): %s [%s]", k, tag))
 		case miss[tag]:
 			c.miss++
-			problems = append(problems, checkMissTrace(t, rep, k, tag, missKinds[tag], ends[k], &c)...)
+			problems = append(problems, checkMissTrace(t, rep, k, tag, missKinds[tag], ends[k], &c, o.programWide)...)
 		case !got[k]:
 			problems = append(problems, fmt.Sprintf("missing flow: %s [%s]", k, tag))
 		default:
@@ -363,7 +384,7 @@ func checkCuratedReport(t *testing.T, dir string, out []byte, ext string) curate
 	}
 	// unexpected flows into a quiet sink are reported twice, by design: the first
 	// names the pair, the second the sink.
-	if !rep.Stats.Converged && !curatedAllowUnconverged {
+	if !rep.Stats.Converged && !curatedAllowUnconverged && !o.allowUnconverged {
 		t.Errorf("the analysis did not converge: %+v", rep.Stats)
 	}
 	return c
@@ -531,7 +552,7 @@ func TestCuratedRust(t *testing.T) {
 // do a dynamic_dispatch with exactly one candidate (it is told at every method call, and says
 // nothing of the callback that was lost: advisor's rule, bench/MISSES.md) and numeric_stop
 // (numbers do not carry an injection: it is no explanation of a miss).
-func missTraces(rep *report.Report, from, to curatedAt) []string {
+func missTraces(rep *report.Report, from, to curatedAt, programWide bool) []string {
 	funcs := map[string]bool{}
 	for _, s := range rep.Sites {
 		p := curatedAt{s.Position.File, s.Position.Line}
@@ -542,7 +563,10 @@ func missTraces(rep *report.Report, from, to curatedAt) []string {
 	seen := map[string]bool{}
 	var kinds []string
 	for _, u := range rep.Uncertainties {
-		if u.Func == "" || !funcs[u.Func] {
+		if u.Func == "" && programWide {
+			// an uncertainty of the whole program (recursion_approximation of a limit): it says that
+			// a flow may be lost, and not which
+		} else if u.Func == "" || !funcs[u.Func] {
 			continue
 		}
 		if u.Kind == taint.KindNumericStop || (u.Kind == taint.KindDynamicDispatch && len(u.Candidates) == 1) {
@@ -558,8 +582,8 @@ func missTraces(rep *report.Report, from, to curatedAt) []string {
 }
 
 // checkMissTrace compares the trace of a @miss with its annotation, and counts it in c.
-func checkMissTrace(t *testing.T, rep report.Report, pairName, tag string, want []string, end [2]curatedAt, c *curatedCounts) []string {
-	got := missTraces(&rep, end[0], end[1])
+func checkMissTrace(t *testing.T, rep report.Report, pairName, tag string, want []string, end [2]curatedAt, c *curatedCounts, programWide bool) []string {
+	got := missTraces(&rep, end[0], end[1], programWide)
 	if os.Getenv("RIVUS_CURATED_TRACES") == "1" {
 		t.Logf("MISSTRACE %s:%d %s %v", end[0].file, end[0].line, tag, got)
 		funcs := map[string]bool{}

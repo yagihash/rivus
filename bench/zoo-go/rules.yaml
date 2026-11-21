@@ -1,0 +1,44 @@
+# Rules of the Go zoo (docs/DESIGN-zoo.md). The sources, sinks and sanitizers are the
+# functions of zoo/mark, which have empty bodies for the analysis: the meaning is given
+# here, with the public rules and nothing else. The built-in rules are in force as always.
+ruleset: rivus/bench-zoo-go@1
+
+sources:
+  - symbol: zoo/mark.Src
+    labels: [user_input]
+  - symbol: zoo/mark.SrcBytes
+    labels: [user_input]
+  # a source that is the type of a parameter: the handler under test takes a mark.In
+  - kind: param_type
+    type: zoo/mark.In
+    labels: [user_input]
+
+sinks:
+  - symbol: zoo/mark.SinkCmd
+    args: [0]
+    category: command_injection
+  - symbol: zoo/mark.SinkCmdBytes
+    args: [0]
+    category: command_injection
+  - symbol: zoo/mark.SinkSQL
+    args: [0]
+    category: sql_injection
+  - symbol: zoo/mark.SinkHTML
+    args: [0]
+    category: xss
+  - symbol: zoo/mark.SinkPath
+    args: [1]
+    category: path_traversal
+  - symbol: zoo/mark.SinkAny
+    args: [0]
+    category: command_injection
+
+sanitizers:
+  - symbol: zoo/mark.CleanCmd
+    drops: [user_input]
+  - symbol: zoo/mark.CleanSQL
+    drops: [user_input]
+  - symbol: zoo/mark.CleanHTML
+    drops: [user_input]
+  - symbol: zoo/mark.CleanPath
+    drops: [user_input]
