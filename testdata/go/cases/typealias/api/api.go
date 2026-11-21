@@ -19,3 +19,11 @@ type AliasF = real.F
 type AliasG = real.G
 
 type AliasH = real.H
+
+type PtrH = *real.H
+
+type ListH = []PtrH
+
+type MapH = map[string]PtrH
+
+type PCT = *real.CT

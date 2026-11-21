@@ -129,10 +129,19 @@ sources:
     type: "[]*example.com/cases/cases/typealias/api.AliasH"
     labels: [user_input]
 
-  # A type defined in a function under the name of an alias
+  # An alias of a pointer, a slice, a map; a type defined in a function under the name of an alias
   # (testdata/go/cases/typealias).
   - kind: param_type
     type: "*example.com/cases/cases/typealias/real.S"
+    labels: [user_input]
+  - kind: param_type
+    type: "*example.com/cases/cases/typealias/real.H"
+    labels: [user_input]
+  - kind: param_type
+    type: "[]*example.com/cases/cases/typealias/real.H"
+    labels: [user_input]
+  - kind: param_type
+    type: "map[string]*example.com/cases/cases/typealias/real.H"
     labels: [user_input]
 
   # A call that fills its argument (testdata/go/cases/dbsrc).
@@ -157,6 +166,11 @@ sources:
     labels: [user_input]
   - kind: field
     field: example.com/cases/cases/typealias/real.D.F
+    labels: [user_input]
+
+  # A field read through an alias of a pointer (testdata/go/cases/typealias).
+  - kind: field
+    field: example.com/cases/cases/typealias/real.CT.F
     labels: [user_input]
 
   # A field of a struct (testdata/go/cases/irshape).

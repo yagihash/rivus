@@ -1785,6 +1785,8 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 
 **訂正(関数の中で定義した同名の型):** 別名の表は名前を鍵にするので、関数の中で定義した型が、そのパッケージの別名と同じ名前(`type Shadow = real.S` と、関数の中の `type Shadow struct{…}`)だと、別名の先と同じ型として扱われ、別名の先のルールが当たった(誤検出)。直し: 抽出器は、パッケージの別名と同じ名前の、関数の中の型を、`pkg.Name·位置` の名前で出す(`typeString`。`*`、`[]`、配列、`map`、`chan`、型引数の下も)。別名の表は、パッケージ直下の宣言だけなので、この型には当たらない。ほかの型の名前は変わらない。試験: `testdata/go/cases/typealias` の `SShadowDecoy`(前は鳴った、今は静か)。限界: 関数の型、構造体の型の中の、同名の関数内の型は、名前のまま(`typeString` が下りない)。
 
+**確かめ直した(別名の別名、ポインタ、スライス、マップの別名):** `type PT = *T`、`type LT = []T`、`type M = map[string]PT`、`type PCT = *CT` 越しのフィールドは、`CanonType` が型の文字列の名前ごとに、別名の先を再帰的にほどく(目標も別名を含みうる。深さ 8 まで)ので、置き換えたあとの `*` / `[]` / `map` / `chan` / 関数の型の接頭辞は、実体の型として並ぶ(別名のまま残らない)。`map[string]api.T` も当たる(上の「限界」の入れ子)。試験: `testdata/go/cases/typealias` の `PtrAliasSpelling`、`ListAliasSpelling`、`MapAliasSpelling`、`FieldThroughPtrAlias`、`internal/ir/canon_test.go`。接頭辞を外し直す処理は要らなかった(文字列の名前ごとの置き換えが、固定点まで進む)。
+
 ## ADR-084: 「読まない関数に渡った」の印は、メモリの物(変数、指す先)に付け、そこからの値の読み出し(コピー)と、要約を通して運ぶ(`parts` の黙った見逃しを直す)
 
 **背景:** ADR-074 の 3 で、モデルも本体もない呼び先に渡された値の根(`opaque`)を覚え、`parts` の sink がその根の下の汚れを見つけたら、`field_imprecision`(`opaque_callee`)で鳴らす、とした。印は、呼び出しの**引数の値の根**にだけ付いた。`Params` だけ汚れた構造体 `stmt` の**アドレス**を、読まない関数に渡し、あとで `stmt` を**値で** sink に渡す形(Cloud Spanner の呼び出しは、すべて値渡し)では、アドレスの根は変数のセルで、値のコピー(`load`)は別の根を作るので、印が sink の引数に届かず、**黙った**(実行では、値が SQL に届く)。ポインタを取る sink や、値を渡して値で返す形(`whole_value`)は鳴っていた。

@@ -112,3 +112,29 @@ func SShadowDecoy() {
 	}
 	f(&Shadow{})
 }
+
+// F9: an alias of a pointer, of a slice, of a map; the type behind it is read again.
+func PtrRealSpelling(r *real.H) { // @source(i1)
+	lib.Sink(r.P) // @sink(i1)
+}
+
+func PtrAliasSpelling(r api.PtrH) { // @source(i2)
+	lib.Sink(r.P) // @sink(i2)
+}
+
+func ListAliasSpelling(hs api.ListH) { // @source(j1)
+	for _, h := range hs {
+		lib.Sink(h.P) // @sink(j1)
+	}
+}
+
+func MapAliasSpelling(m api.MapH) { // @source(k1)
+	for _, h := range m {
+		lib.Sink(h.P) // @sink(k1)
+	}
+}
+
+func FieldThroughPtrAlias(r api.PCT) {
+	v := r.F    // @source(l1)
+	lib.Sink(v) // @sink(l1)
+}
