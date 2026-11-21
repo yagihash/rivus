@@ -31,7 +31,7 @@ func (p *Program) addUnread(pkgs []*packages.Package, built []*ssa.Package) {
 			}
 		}
 		out = append(out, LoadError{
-			Package:    pkg.PkgPath,
+			Package:   pkg.PkgPath,
 			Message:   fmt.Sprintf("not analysed: %s; its %d function(s) are not in the result", cause, n),
 			Unread:    true,
 			Functions: n,
