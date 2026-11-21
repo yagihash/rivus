@@ -326,7 +326,13 @@ func TestZooRust(t *testing.T) {
 	root := zooRustRoot(t)
 	obs := zooRustObserve(t)
 	lines, cells := zooRustScan(t, root)
-	c := checkCuratedIR(t, root, zooRustStream(t, root), ".rs")
+	rec := false // a chain of 13 and 30 stages stops by the pass limit (the Go zoo has the same)
+	for _, l := range lines {
+		for _, k := range l.missKinds {
+			rec = rec || k == "recursion_approximation"
+		}
+	}
+	c := checkCuratedIROpts(t, root, zooRustStream(t, root), ".rs", annotOpts{allowUnconverged: rec, programWide: rec})
 	if t.Failed() {
 		t.Log("the zoo failed as a whole: ZOO_ALONE=1 analyses each cell alone (green alone: mixed up with the others; red alone: the cell)")
 	}
@@ -350,14 +356,34 @@ func zooParity(t *testing.T, rust []zooLine, rustCells []*zooCell) {
 		goHas[c.name] = true
 	}
 	common := 0
+	rustHas := map[string]bool{}
 	for _, c := range rustCells {
+		rustHas[c.name] = true
 		if goHas[c.name] {
 			common++
 		}
 	}
+	// a shape that Rust does not have is told in cells/src/lib.rs: @na(F/<family>/<shape>: the reason)
+	lib, err := os.ReadFile(filepath.Join(zooRustRoot(t), "cells", "src", "lib.rs"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	na := map[string]bool{}
+	for _, m := range regexp.MustCompile(`@na\((F/[a-z0-9/-]+):\s*([^)]+)\)`).FindAllStringSubmatch(string(lib), -1) {
+		na[m[1]] = true
+	}
+	for _, c := range goCells {
+		if !rustHas[c.name] && !na[c.name] {
+			t.Errorf("%s is a cell of the Go zoo: the Rust zoo has it, or says @na(%s: the reason) in cells/src/lib.rs", c.name, c.name)
+		}
+	}
 	goMiss := map[string]bool{}
 	goTags := map[string]bool{}
+	goTagsAll := map[string]bool{} // every tag of the Go zoo (a source tag)
 	for _, l := range goLines {
+		for _, tag := range l.sourceTags {
+			goTagsAll[tag] = true
+		}
 		for _, tag := range l.sourceTags {
 			if zooTagRole.FindStringSubmatch(tag) == nil || zooTagRole.FindStringSubmatch(tag)[1] != "vuln" {
 				continue
@@ -368,6 +394,29 @@ func zooParity(t *testing.T, rust []zooLine, rustCells []*zooCell) {
 			}
 		}
 	}
+	// the decoys and the fixed cases that rivus reports wrongly in Rust and not in Go (the same tag)
+	goFp := map[string]bool{}
+	for _, l := range goLines {
+		if l.hasFp {
+			for _, tag := range l.nosinks {
+				goFp[tag] = true
+			}
+		}
+	}
+	var fpGap []string
+	for _, l := range rust {
+		if l.hasFp {
+			for _, tag := range l.nosinks {
+				if !goFp[tag] && goTagsAll[tag] {
+					fpGap = append(fpGap, tag)
+					if !zooContains(l.refs, "PARITY") {
+						t.Errorf("%s:%d: %s is quiet in the Go zoo and reported in the Rust one: the @fp needs @ref(PARITY)", l.file, l.line, tag)
+					}
+				}
+			}
+		}
+	}
+	sort.Strings(fpGap)
 	var gap, bothMiss, both []string
 	foundRust := 0
 	rustVuln := 0
@@ -397,7 +446,7 @@ func zooParity(t *testing.T, rust []zooLine, rustCells []*zooCell) {
 		}
 	}
 	sort.Strings(gap)
-	t.Logf("zoo-rust: parity with zoo-go: common cells %d | common vulnerable flows %d (found in both %d, missed in both %d) | found in Go and not in Rust %d %v", common, len(gap)+len(bothMiss)+len(both), len(both), len(bothMiss), len(gap), gap)
+	t.Logf("zoo-rust: parity with zoo-go: common cells %d | common vulnerable flows %d (found in both %d, missed in both %d) | found in Go and not in Rust %d %v | decoys reported in Rust and not in Go %d %v", common, len(gap)+len(bothMiss)+len(both), len(both), len(bothMiss), len(gap), gap, len(fpGap), fpGap)
 	t.Logf("zoo-rust: vulnerable flows found %d / %d", foundRust, rustVuln)
 }
 

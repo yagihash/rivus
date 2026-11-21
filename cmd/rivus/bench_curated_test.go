@@ -131,6 +131,12 @@ func checkAnnotated(t *testing.T, dir string, o annotOpts) curatedCounts {
 // in the files with the extension ext.
 func checkCuratedIR(t *testing.T, dir string, stream []byte, ext string) curatedCounts {
 	t.Helper()
+	return checkCuratedIROpts(t, dir, stream, ext, annotOpts{})
+}
+
+// checkCuratedIROpts is checkCuratedIR with the options of checkAnnotated (a run that stops by its pass limit).
+func checkCuratedIROpts(t *testing.T, dir string, stream []byte, ext string, o annotOpts) curatedCounts {
+	t.Helper()
 	irFile := filepath.Join(t.TempDir(), "curated.jsonl")
 	if err := os.WriteFile(irFile, stream, 0o644); err != nil {
 		t.Fatal(err)
@@ -145,7 +151,7 @@ func checkCuratedIR(t *testing.T, dir string, stream []byte, ext string) curated
 		}
 		t.Fatalf("analyze: %v\n%s", err, stderr)
 	}
-	return checkCuratedReport(t, dir, out, ext)
+	return checkCuratedReportOpts(t, dir, out, ext, o)
 }
 
 // checkCuratedReport compares the report out with the annotations of the files
