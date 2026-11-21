@@ -108,3 +108,54 @@ func TestDartSyntaxErrorIsReported(t *testing.T) {
 		t.Errorf("a project with no syntax error changed: unread %+v, findings %+v", good.Summary.Unread, good.Findings)
 	}
 }
+
+// A constructor that does not resolve (a compile error): what it makes is taken to come from its arguments, and the
+// construct is said (unsupported_construct). It used to return a constant with no taint, and the flow went out of
+// the result without a trace.
+func TestDartUnresolvedConstructorKeepsTheFlow(t *testing.T) {
+	dart := os.Getenv("RIVUS_DART")
+	if dart == "" {
+		skipOrFail(t, "RIVUS_DART")
+	}
+	extractor, err := filepath.Abs("../../extractor/dart")
+	if err != nil {
+		t.Fatal(err)
+	}
+	words := strings.Fields(dart)
+	dir := t.TempDir()
+	write := func(name, text string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "lib"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write("pubspec.yaml", "name: dx\npublish_to: none\nenvironment:\n  sdk: ^3.10.0\n")
+	write("rules.yaml", "ruleset: t/dx@1\nsources:\n  - symbol: package:dx/lib.dart#source\n    labels: [user_input]\nsinks:\n  - symbol: package:dx/lib.dart#sink\n    category: test\n")
+	write("lib/lib.dart", "String source() => 'x';\nvoid sink(String s) {}\n")
+	write("lib/c.dart", "import 'lib.dart';\nclass Box { Box(this.v); final String v; }\nvoid made() { final a = source(); final b = new Box.nope2(a); sink('$b'); }\n")
+	get := exec.Command(words[0], append(append([]string{}, words[1:]...), "pub", "get")...)
+	get.Dir = dir
+	if out, err := get.CombinedOutput(); err != nil {
+		t.Fatalf("dart pub get: %v\n%s", err, out)
+	}
+	cmd := exec.Command(binary, "analyze", "-rules", "rules.yaml", "./...")
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "RIVUS_DART_EXTRACTOR="+dart+" run "+filepath.Join(extractor, "bin", "rivus_dart.dart"))
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("analyze: %v", err)
+	}
+	var r struct {
+		Findings []struct {
+			Confidence string `json:"confidence"`
+		} `json:"findings"`
+	}
+	if err := json.Unmarshal(out, &r); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Findings) != 1 || r.Findings[0].Confidence == "no_uncertainty_on_path" {
+		t.Errorf("the flow through a constructor that does not resolve: %d findings, %+v", len(r.Findings), r.Findings)
+	}
+}

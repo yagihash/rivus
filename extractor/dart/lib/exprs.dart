@@ -106,7 +106,10 @@ int lowerExpr(FnLower f, Expression e) {
     case ConstructorReference():
       // `C.new`, `C<T>.named`: a tear-off of the constructor
       final ctor = e.constructorName.element;
-      if (ctor == null) return f.nilConst(f.pos(e));
+      if (ctor == null) {
+        f.emit('unsupported', at: f.pos(e), more: {'reason': 'a constructor tear-off that does not resolve: ${e.constructorName.toSource()}'});
+        return f.nilConst(f.pos(e));
+      }
       final d = f.tmp(e.staticType);
       f.emit('make_closure', dsts: [d], args: const [], at: f.pos(e), more: {'func': funcId(ctor)});
       return d;
@@ -530,10 +533,15 @@ int _creation(FnLower f, InstanceCreationExpression e) {
   final ctor = e.constructorName.element;
   final at = f.pos(e, e.argumentList.leftParenthesis.offset);
   if (ctor == null) {
+    // a constructor that does not resolve: what it makes is not known (said), and is taken to come from the
+    // arguments, as the result of a method that is not known is (more than the truth, never less)
+    final args = <int>[];
     for (final a in e.argumentList.arguments) {
-      lowerExpr(f, a.argumentExpression);
+      args.add(lowerExpr(f, a.argumentExpression));
     }
-    return f.nilConst(at);
+    final d = f.tmp(e.staticType);
+    f.emit('unsupported', dsts: [d], args: args, at: at, more: {'reason': 'a constructor that does not resolve: ${e.constructorName.toSource()}'});
+    return d;
   }
   return _constructorCall(f, ctor, e.argumentList, e, e.staticType, at);
 }

@@ -28,7 +28,9 @@ var shapes = map[Op]shape{
 	OpMakeClosure:    {1, -1},
 	OpCall:           {-1, -1},
 	OpExceptionValue: {1, 0},
-	OpUnsupported:    {0, 0},
+	// the arguments and the result of an unsupported construct are optional: a construct that makes a value (a
+	// constructor that does not resolve) says what it was made from, and the core takes the result to come from it
+	OpUnsupported: {-1, -1},
 }
 
 // Validate checks the program: every function, and the references between

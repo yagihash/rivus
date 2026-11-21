@@ -238,7 +238,12 @@ func (s *state) transfer(in *sg.Instr) {
 		if in.IR != nil {
 			reason = in.IR.Reason
 		}
-		s.newNote(in, KindUnsupported, "the extractor could not express a construct here ("+reason+"): what it does is not followed", "")
+		note := s.newNote(in, KindUnsupported, "the extractor could not express a construct here ("+reason+"): what it does is not followed", "")
+		// a construct that makes a value says what it was made from: the result comes from those, more than the
+		// truth and never less, and the note is on the way (a finding that goes through it is not a clear one)
+		if len(in.Dsts) > 0 && len(in.Args) > 0 {
+			s.put(Loc{own(in.Dsts[0]), ""}, s.flatten(valuesLocs(s, in.Args)), s.whyNote(in, "unsupported: "+reason, note))
+		}
 
 	case ir.OpCall:
 		s.callInstr(in)

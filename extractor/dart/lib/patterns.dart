@@ -44,11 +44,18 @@ extension PatternLowering on FnLower {
         bindPattern(p.pattern, v, fail);
       case DeclaredVariablePattern():
         final el = p.declaredFragment?.element;
-        if (el == null) return;
+        if (el == null) {
+          emit('unsupported', at: at, more: {'reason': 'a variable of a pattern that does not resolve: ${p.name.lexeme}'});
+          return;
+        }
         _bindVar(el.baseElement, p.name.lexeme, el.type, v, at);
       case AssignedVariablePattern():
         final el = p.element;
-        if (el != null && _isLocal(el)) writeVar(el.baseElement, null, v, at);
+        if (el != null && _isLocal(el)) {
+          writeVar(el.baseElement, null, v, at);
+        } else {
+          emit('unsupported', at: at, more: {'reason': 'a pattern that assigns to ${el == null ? 'a name that does not resolve' : 'a variable that is not local'}: ${p.toSource()}'});
+        }
       case WildcardPattern():
         break;
       case ConstantPattern():

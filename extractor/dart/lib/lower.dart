@@ -299,7 +299,11 @@ class FnLower {
 
   int readVar(Object key, DartType? t, Pos at) {
     final l = _lookup(key, t, wantCell: false);
-    if (l == null) return nilConst(at);
+    if (l == null) {
+      // a variable that the lowering does not know: a mistake of the extractor, said
+      emit('unsupported', at: at, more: {'reason': 'a variable that the extractor does not know ($key)'});
+      return nilConst(at);
+    }
     if (cellVars.containsKey(key)) {
       final d = tmp(t);
       emit('load', dsts: [d], args: [cellVars[key]!], at: at);
