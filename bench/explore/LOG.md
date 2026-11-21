@@ -215,3 +215,49 @@ LocalSend `app/` (388 entries; 20,522 functions), top 20 by overridden type:
 | LocalSend `app/` | 20,522 | 1,546 (7.5 %) | 388 / **19,750 (96 %)** | 388 / **19,750 (96 %)** | 168 / 14,579 (71 %) | 161 / 14,570 (71 %) |
 
 **What it says.** The suspicion does not hold for the Object members: they are not entries, and 98 % stays 98 %. For the six small apps every entry is a lifecycle or a route method of Flutter. For LocalSend a quarter of the 96 % (5,171 functions, 25 points) comes from entries that are **not Flutter's**: refena's `reduce` / `init` and so on (about 80 overrides), dart_mappable's `$make` (22), `AssetPickerTextDelegate`'s getters (29), `WindowListener` (7), `SharedPreferencesStorePlatform` (4). Whether a package calls the overrides of its own types (a state-management library calls `reduce`; a picker reads its text delegate's getters) is the claim that the rule makes for every dependency; it is likely true for these, and it is not checked against the code of the dependencies, which `--no-deps` did not read. `reachability` still tells apart: 8 of 411 and 772 of 20,522 functions are not reached even with the callbacks, and a finding in code that nothing registers stays `not_from_entry`. No change is proposed.
+
+## Measurement 5: what carries the 65 handler sources of bench/gcp into package variables (2026-11-21)
+
+**Question.** After the stage-2 trial of docs/DESIGN-shared-state.md (not lifting sub-cells to the root) made `bench/gcp` worse, where does the spread come from? Hypothesis to test: not the shape of the registry (map / field / slice) but **a whole tainted carrier of the handler's source (`ctx`, a connection, an options struct)** that goes into every call of the gRPC stack. If so, constant map keys (stage 3) would not fix `bench/gcp`.
+
+**Method.** main at `8834929`, `bench/gcp`, `rules-stored.yaml`, `rivus analyze -v -pass-stats`. A diagnostic build, **not committed** (a patch of about 40 lines in the commit of the global writes, `internal/taint`; it prints, for each Real origin, the first writes into package variables and the steps the writer took; the findings are the same as without it). The machine was shared (load 13 to 20): user CPU, elements and re-analyses are comparable, wall time is not.
+
+### 5.1 The first step of each of the 65 sources
+
+The 65 sources are the `*http.Request` parameters in 33 plain functions (handlers, and one handler closure) and 32 `$bound` method-value twins. **All 65 reach the same six package variables in the first pass** (not one after another over passes): `golang.org/x/net/trace.activeTraces` (path `/*/[]/*` and `/*/[k]`), `x/net/trace.completedTraces` (`/*/[k]`), `x/net/trace.traceFreeList` (`/*/[]/*`), `compute/metadata.projID` (`/*/v`, a field of the cached value; 61 of 65), `go.opencensus.io/stats/view.defaultWorker` (`/*/c/*`, 60), `sync.allPools` (`/*/[]/*`, 5). The one entered first (in the fixed order of the commit) is `metadata.projID` for 60 and `trace.activeTraces` for 5. (`[k]`, `[]`: the key side and the element side of a map or slice in the engine's notation; `v`, `c`: struct fields.) Every one is a non-constant place: a struct field, a slice, a map keyed by a trace name or a hash.
+
+What carries the taint out of the handler (the first model propagation on the writer's steps, and the first call that leaves the sample), counted by origin:
+
+| rank | carrier (type) | made tainted by | first call out of the sample (receiver) | origins |
+|---|---|---|---|---|
+| 1 | `context.Context` | the model `(*net/http.Request).Context`: `flows recv -> result` gives `ctx` the taint of the **whole request** | `(*spanner.txReadOnly).Query / QueryWithStats / QueryWithOptions / AnalyzeQuery` | 32 |
+| 2 | `context.Context` | the same model | `(*spanner.Client).ReadWriteTransaction / BatchReadOnlyTransaction / PartitionedUpdate*` | 23 |
+| 3 | `string` (`param(r)` = `r.URL.Query().Get("name")`, into `spanner.Statement.SQL` or the argument of `Update` / `BatchUpdate`) | `(*net/url.URL).Query`, `(net/url.Values).Get` | `(*spanner.ReadWriteTransaction).Update / BatchUpdate*` | 5 |
+| 4 | `context.Context` | the same model | `(*bigquery.Query).Read` | 4 |
+| 5 | `string` (the statement text) | `(*net/url.URL).Query` | `(*spanner.txReadOnly).Query` | 1 |
+
+**The carrier of the first step is `ctx` for 59 of the 65** (the `Context` model); the string of the request for 6. This confirms the chain of the hypothesis for the first step. It does not say the `ctx` is the only way in: that is what 5.2 tests.
+
+### 5.2 Diagnostic: `(*net/http.Request).Context` returns a clean value
+
+The diagnostic build also marks the `Context` model `pure: true` (nothing flows). Not a proposal: a handler's `ctx` can carry `WithValue` data of the request in real code.
+
+| | main (diagnostic build, switch off) | `Context` pure |
+|---|---|---|
+| `summary_elems` | 1,033,594 | 909,511 (-12 %) |
+| `summary_steps` | 134.6 M | 119.3 M (-11 %) |
+| re-analyses | 41,510 | 41,517 |
+| user CPU | 220.5 s | 218.0 s |
+| max RSS | 4.22 GB | 4.00 GB (-5 %) |
+| findings | 27 | 27 |
+| `other_sources_count` 64 | 3 | **0** (the 3 now list 54) |
+| `other_sources_count` 2 | 24 | 24 |
+| sources that reach a package variable | 65 | **55** (the 10 BigQuery sources are gone; all 55 Spanner remain) |
+
+**It does not shrink.** -12 % of the elements and nothing in CPU: the hypothesis "the whole request in `ctx` is the cause" is **not** supported. It removes the BigQuery handlers (their only way was `ctx`) and 10 of 64 false other sources, nothing else.
+
+### 5.3 What the remaining 55 are (the next candidate, by the same method)
+
+With `ctx` clean, every one of the 55 enters through the **string of the request** (`param(r)`): the statement text, which is a real flow (the SQL text *is* the data). The first calls out of the sample: `txReadOnly` 24, `ReadWriteTransaction` 15, `Client` 6, `BatchReadOnlyTransaction` 6, `spanner.NewStatement` 4. In 42 of the 55 first paths the chain is the same: the statement goes into the request message (`ExecuteSqlRequest`: `GetSql` loaded, stored into the `preparedQuery` and put in the **bounded cache of the location router** (`boundedCache.Put` -> `container/list.PushBack`, unmodeled)), and a **receiver of the router and its caches** (`keyRangeCache`, `cachedGroup`, `endpointClientCache`) now holds the taint; `fillRoutingHint...` -> `warmPendingEndpoints` ranges over those cache entries and calls `endpointClientCache.Get` -> `createEndpointClient` -> `grpc.DialPool` -> the token source -> `ctx` made by `context.WithTimeout` -> `metadata.ProjectIDWithContext` -> `cachedValue.get` stores into `projID`. So the second carrier is **not a connection or an options struct handed down: it is the state of long-lived receivers (router caches), keyed by hashes and not constants, in which the statement of one handler is stored and from which the next call loads**. Constant keys (stage 3) would not separate these entries (`uint64` hashes, `list` elements), and `from:` on `Context` (stage 5) would not touch them.
+
+Both carriers are inside the dependency, below the handler's call. In the elements: the 65 sources are in the summaries of 1,082 functions of the stack (Measurement 3). Not measured here: which of the cache stores, if cut, would drop the 55 (candidate diagnostics: the `boundedCache.Put` / `list.PushBack` store, or `warmPendingEndpoints`'s range over the cache).
