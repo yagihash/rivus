@@ -1,0 +1,58 @@
+# actix-web: where untrusted requests come from. A handler is given an HttpRequest or an extractor
+# (web::Query, web::Path, web::Json, web::Form, web::Bytes): that is the request, and what its getters
+# return comes from it. This is not built in (ADR-063: a specific framework is for the project to
+# add); copy it and edit it. The types are the paths of the structs (without type arguments), `&` kept.
+#
+#   rivus analyze -rules examples/rules/rust-actix-web.yaml
+ruleset: example/rust/actix-web@1
+
+sources:
+  - kind: param_type
+    type: "actix_web::HttpRequest"
+    labels: [user_input]
+  - kind: param_type
+    type: "&actix_web::HttpRequest"
+    labels: [user_input]
+  - kind: param_type
+    type: "actix_web::web::Query"
+    labels: [user_input]
+  - kind: param_type
+    type: "actix_web::web::Path"
+    labels: [user_input]
+  - kind: param_type
+    type: "actix_web::web::Json"
+    labels: [user_input]
+  - kind: param_type
+    type: "actix_web::web::Form"
+    labels: [user_input]
+  - kind: param_type
+    type: "actix_web::web::Bytes"
+    labels: [user_input]
+
+propagators:
+  - symbol: actix_web::HttpRequest::query_string
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::HttpRequest::path
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::HttpRequest::uri
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::HttpRequest::headers
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::HttpRequest::match_info
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::HttpRequest::cookie
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::HttpRequest::cookies
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::HttpRequest::peer_addr
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::HttpRequest::connection_info
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::web::Query::into_inner
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::web::Path::into_inner
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::web::Json::into_inner
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::web::Form::into_inner
+    flows: [{from: args, to: result}]

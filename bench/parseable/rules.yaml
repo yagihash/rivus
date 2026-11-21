@@ -1,5 +1,5 @@
 # Rules for parseable (the project's own: what an actix-web handler is given, and the
-# operations the project treats as dangerous). Used with
+# operations the project treats as dangerous; actix-web is not built in, ADR-063). Used with
 #   rivus analyze -rules bench/parseable/rules.yaml
 # (the Rust extractor writes the types of the extractors without their parameters).
 ruleset: project/parseable@1
@@ -20,6 +20,12 @@ sources:
     labels: [user_input]
   - kind: param_type
     type: "actix_web::web::Bytes"
+    labels: [user_input]
+  - kind: param_type
+    type: "&actix_web::HttpRequest"
+    labels: [user_input]
+  - kind: param_type
+    type: "actix_web::web::Form"
     labels: [user_input]
 
 sinks:
@@ -50,3 +56,33 @@ sinks:
   - symbol: tokio::fs::read_dir
     args: [0]
     category: path_traversal
+
+# the models of the actix-web getters (the same as examples/rules/rust-actix-web.yaml: actix-web is not
+# built in, ADR-063, so the rules of the benchmark name them)
+propagators:
+  - symbol: actix_web::HttpRequest::query_string
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::HttpRequest::path
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::HttpRequest::uri
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::HttpRequest::headers
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::HttpRequest::match_info
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::HttpRequest::cookie
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::HttpRequest::cookies
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::HttpRequest::peer_addr
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::HttpRequest::connection_info
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::web::Query::into_inner
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::web::Path::into_inner
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::web::Json::into_inner
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::web::Form::into_inner
+    flows: [{from: args, to: result}]

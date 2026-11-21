@@ -85,6 +85,7 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	}
 	// The graph drops the IR as it is built: what was analysed is listed first.
 	packages := l.packages()
+	noteNotBuiltin(os.Stderr, l.ir, rules)
 	// The sites read the IR, and the graph drops it as it is built.
 	expandSubtypes(rules, l.ir)
 	st := sites.Enumerate(l.ir, l.texts, rules)

@@ -1356,3 +1356,21 @@ rivus 自身(dogfood): 39 → 44(追加の 5 は `rivus index` の `-o` の経�
 | dart-curated | 111 findings、同じ | 同じ(`test/` なし) |
 
 dart-pub で消えた 2 件は、**どちらも source と sink が `test/` のファイル**(`test/get/git/check_out_test.dart:153`→`:156` の `File.new`、`test/hosted/will_normalize_hosted_url_test.dart` の `main$1$4$1`)。本番のファイルの finding は消えていない。ラベル付きの 9 件は 9/9 のまま。テストは、関数の 54%、解析の時間の約 22%、メモリの約 55% を占めていた。
+
+## ADR-063: 組み込みの範囲 — 特定のフレームワークは、組み込みでなく `examples/rules` に置く(採用: ユーザーが承認した、2026-11-21。ADR-044 の続き)
+
+**背景:** ADR-044 は「めちゃくちゃ有名なサードパーティ」を組み込みに入れる、と決め、目安は暫定だった。Go の gin は、同じ理由(半数に満たない、ベンチの都合)で `examples/rules` に戻した。Rust の actix-web は、組み込みの `rust-web.yaml` に残っていて、基準が揃っていなかった。
+
+**決めたこと(ユーザーの線引き):**
+1. **組み込み = 標準ライブラリ + 代わりのないパッケージ(Rust の `serde`、`tonic`、`tokio`、`futures`、`bytes`、`libc`、エコシステムの基礎の `http` / `url` / `serde_json` / `serde_urlencoded` / `urlencoding`、`log` / `tracing`、Dart の公式の `http`)+ SQL のドライバ(あらゆるプロダクトで要る: `sqlx`、`rusqlite`、Dart の `sqflite` / `sqflite_common`)**。
+2. **特定のフレームワークのモデルは、`examples/rules/`(書き方の見本。利用者が自分のルールで足す)**。
+3. **これは、既定の検出が減る変更で、ユーザーが承認した。** 第 1 弾は actix-web(`actix_web::HttpRequest`、`&HttpRequest`、`web::Query` / `Path` / `Json` / `Form` / `Bytes` の source と、それらの getter の propagator 13 個)を、`rust-web.yaml` から `examples/rules/rust-actix-web.yaml` に移した。`rust-web.yaml` に残るのは、axum、rocket、tide、rouille、warp、hyper の source(下の「保留」)と、`http`、`url`、`serde_json`、`serde_urlencoded`、`urlencoding` の propagator。
+4. **利用者に伝える:** 組み込みでなくなったフレームワーク(`cmd/rivus/notbuiltin.go` の表。いまは actix-web)を、プロジェクトのコード(依存でない関数)が呼んでいる、またはその型の引数を取っているのに、ルール(組み込み、`.rivus/rules`、`-rules`)のどこにも `actix_web::` の名前がないとき、`analyze` が stderr に 1 行出す(`-rules examples/rules/rust-actix-web.yaml` で入口が見える)。**結果(finding、`stats`)は変えない**。README に「組み込みの範囲」の節と、移したフレームワークの一覧を足した。
+5. **ベンチとテスト:** parseable の `rules.yaml` は、もともと actix の source を持っていた。足りなかった `&HttpRequest` と `web::Form` の source、getter の propagator 13 個を足した(`examples/rules/rust-actix-web.yaml` と同じ内容)。rust-curated(`curated::parseable::web::*` の自前の型)と、Rust のテストは、組み込みの actix のモデルを使っていなかったので、変更なし。
+
+**保留(移さず、ユーザーの判断を待つ。基準は「特定のフレームワーク → 移す」):**
+- Rust の `axum`、`rocket`、`tide`、`rouille`、`warp`(`rust-web.yaml` の source)。`hyper` は HTTP の基礎(`http` と同じ側)で残す案。
+- Dart の `shelf`(`dart-packages.yaml`。公式のパッケージ(dart-lang)で、サーバー側の標準的な土台なので、残す案もある)。
+- `reqwest`、`ureq`(HTTP クライアント。代わりがあるが、sink だけで、クライアントは基礎)は残す案。
+
+**測定:** `compare.sh <base> <この変更>`: parseable、rust-curated、dart-curated、dart-pub で、finding の追加・削除 0(結果はコミットに記す)。

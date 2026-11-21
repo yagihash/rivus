@@ -33,7 +33,7 @@ rivus analyze -ir workspace.jsonl -rules rules.yaml
 Only the library and the binaries are read: the code that is shipped. Tests, examples and
 benchmarks are not even compiled, so `#[cfg(test)]` code cannot get in. `--include-tests`
 (also spelled `--tests`, like `rivus -tests` for Go; before the directory) reads them too (`cargo check --all-targets`).
-The stream says how many targets (tests, examples, benchmarks) and how many `[dev-dependencies]`-only crates were left out (`tests_skipped`, ADR-062).
+The stream says how many targets (tests, examples, benchmarks) and how many `[dev-dependencies]`-only crates were left out (`tests_skipped`, ADR-063).
 
 It builds the workspace with `cargo check`, running itself in place of rustc for the crates
 of the workspace (`RUSTC_WORKSPACE_WRAPPER`): rustc compiles them as usual, and the driver
@@ -99,5 +99,5 @@ receiver apart from the arguments), and a sink's `args: [1]` is the first argume
 - The text of the arguments of a call (the stream has the call as written only), and the
   body in the token-normalized form.
 - Models: `internal/model/builtin/rust-*.yaml` cover the common part of `std`. Others
-  (`reqwest`, `sqlx`, `actix-web`, `axum`) are sinks only, and no framework's request
-  type is a source yet.
+  (`reqwest`, `sqlx`, `axum`) are sinks only. actix-web is not built in
+  (`examples/rules/rust-actix-web.yaml`, ADR-063).
