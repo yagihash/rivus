@@ -1,5 +1,10 @@
 # Rust: `async` の中の `Fn::call` の候補を絞る(調べたこと)
 
+> **状態: 実装済み**(確認: 2026-11-22、9c26a39)
+> - 実装済み: `async` の状態機械の受け手を辿って `Fn::call` の候補を絞る(ADR-085)。
+> - 未実装: 呼び元ごとのガードの案。
+> - 関連: 同じ `Fn::call` の絞りが [DESIGN-generics-dispatch.md](DESIGN-generics-dispatch.md)、[DESIGN-capture.md](DESIGN-capture.md) の XTALK の節、ADR-079、081、085 に分かれている。統合して歴史的な文書にまとめる案がある。
+
 ADR-079(案 A)は、動物園と rust-curated で `@fp` / `@noisy` を減らしたが、parseable では、複数の候補を持つ `Fn::call` 3 か所のうち 1 か所しか絞れなかった。主因の呼び出し(15 候補)の受け手は、**`async` の状態機械(coroutine)のフィールド**で、出どころを辿れず、全候補のままだった。ここは、その原因を、独立した小さい例(`bench/rust-curated/src/narrow_async.rs`)で再現して調べた記録。
 
 ## IR での `async` の形(確かめた)

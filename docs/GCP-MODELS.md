@@ -1,5 +1,10 @@
 # Google Cloud のモデル: 製品ごとの表(YAML を書く前に)
 
+> **状態: 一部実装**(確認: 2026-11-22、9c26a39)
+> - 実装済み: Spanner と BigQuery の SQL(`internal/model/builtin/go-gcp.yaml`、ADR-077)。
+> - 未実装(YAML にしていない): Pub/Sub と Functions の表。後ろの 3 つ(Firestore など)は見出しだけ。
+> - 注意: ADR-077 から、この文書へのリンクが無い。
+
 ADR-077 の例外(メンテナの選択。ほかのベンダーの根拠にならない)で組み込む Google Cloud のクライアントを、**製品ごとに、書く前に、1 枚の表で決める**文書。ここは設計の置き場で、YAML はない。表をレビューしてから `internal/model/builtin/go-gcp.yaml` に行を足す。
 
 順番: **Pub/Sub と Functions の入口(この版で書いた)** → Storage / BigQuery の残り → Firestore → Firebase Auth。後ろの 3 つは節の見出しだけ(まだ表がない)。Spanner と BigQuery の SQL は ADR-077 で済み。

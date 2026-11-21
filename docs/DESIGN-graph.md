@@ -1,6 +1,12 @@
 # 設計: コールグラフの検索(`rivus graph`)と、保存するファイル
 
-状態: **議論中**(決まったところから書く。議論が終わったら、DECISIONS.md に ADR としてまとめる)。
+> **状態: 実装済み**(確認: 2026-11-22、9c26a39)
+> - 実装済み: `callers`、`callees`、`path`、`impls`、`dispatchers`、`info` と各フィルタ。
+> - 未実装: taint 層の DB への移行と `findings_at_sites`。
+> - 注意: 本文の `reaches` / `paths` は、実際には `path`。`index -taint` は DB でなく JSON に出す。この設計に対応する ADR は、まだ無い。
+> - 使い方と出力の正本は [GRAPH.md](GRAPH.md)。この文書は設計の理由(経緯)。
+
+設計時の状態の記述(今の状態は上の枠が正本): **議論中**(決まったところから書く。議論が終わったら、DECISIONS.md に ADR としてまとめる)。
 
 ## 目的
 

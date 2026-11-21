@@ -1,5 +1,11 @@
 # Rust: ジェネリクスと `Box<dyn Fn>` の dynamic な呼び出し(調べたこと、直したこと、直していないこと)
 
+> **状態: 一部実装**(確認: 2026-11-22、9c26a39)
+> - 実装済み: `self_first`(ADR-081)。
+> - 取り下げ: `Box<dyn Fn>` の案。
+> - 未解決: `across-each`。
+> - 関連: [DESIGN-async-dispatch.md](DESIGN-async-dispatch.md)、ADR-079(統合する案がある)。
+
 ADR-081 の背景。Rust の動物園(`bench/zoo-rust`)と rust-curated で、2 つの形が見つからなかった: (1) ジェネリックな `T` に対する trait の呼び出し(`for i in items { f(i) }` の `IntoIterator::into_iter` / `next`。`bench/MISSES.md` の `GEN-DYN`)、(2) `Box<dyn Fn(A) -> B>` の呼び出し(`(self.f)(x)`、`map.get(k).unwrap()(x)`)。
 
 ## (1) ジェネリックな trait の呼び出し(`GEN-DYN`): 直した

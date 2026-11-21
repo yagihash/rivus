@@ -1,5 +1,10 @@
 # Memory: where it goes, and the designs to bring it down
 
+> **Status: partly implemented** (checked 2026-11-22, 9c26a39)
+> - Implemented: what the 'Already done' section describes (per-dependency release in `load.go`, `ReleaseSSA`).
+> - Not implemented: options A to E. There is no `-memory-limit` flag.
+> - Note: the code has `tuneGC` (GC percent 50), which this document does not mention.
+
 Measured on Go with the dependencies read (the default; `-no-deps` leaves them out): Gogs peaks at 3.3 GB, gin-vue-admin at 5.5 GB; after the
 IR is made the live heap is 1.8 GB. **The peak is in loading and in building go/ssa**, not in the
 analysis.
