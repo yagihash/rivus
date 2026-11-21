@@ -1333,6 +1333,10 @@ func (e *Engine) notExhaustive(starts, goals []int64, refs bool) (*NotExhaustive
 		if err := json.Unmarshal([]byte(raw), &u); err != nil {
 			ne.UnreadCode.Total = -1
 			ne.UnreadCode.Why = "the record of the code that was not read in this index cannot be read: it is not known that nothing was left out"
+		} else if len(u.Uncounted) > 0 {
+			ne.UnreadCode.Total = -1
+			ne.UnreadCode.Why = "this index cannot say that nothing was left out: the extractor of a language does not report the code it could not read"
+			ne.UnreadCode.Examples = u.Uncounted
 		} else if u.FailedPackages > 0 {
 			ne.UnreadCode.Total = u.FailedPackages
 			ne.UnreadCode.Why = "the project has code that the load did not read (a type error, a failed read): a call from it is not an edge"

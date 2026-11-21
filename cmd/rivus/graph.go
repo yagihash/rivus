@@ -94,6 +94,18 @@ func (o *analyzeOpts) graphIndexer(path string, patterns []string, since time.Ti
 			Roots:        key.Roots,
 		}
 		meta.Unread = &graphdb.Unread{}
+		for _, lang := range meta.Languages {
+			switch lang {
+			case "go":
+				meta.Unread.Counted = append(meta.Unread.Counted, "go:failed_packages")
+			case "dart":
+				meta.Unread.Uncounted = append(meta.Unread.Uncounted, "dart:failed_files") // the Dart extractor reports no load error
+			case "rust":
+				meta.Unread.Uncounted = append(meta.Unread.Uncounted, "rust:failed_crates") // nor the Rust one
+			default:
+				meta.Unread.Uncounted = append(meta.Unread.Uncounted, lang+":failed_units")
+			}
+		}
 		failed := map[string]bool{} // a package with several errors is one
 		for _, e := range l.loadErrors() {
 			if failed[e.Package] {

@@ -63,6 +63,12 @@ type Meta struct {
 type Unread struct {
 	FailedPackages int      `json:"failed_packages"`
 	FailedExamples []string `json:"failed_examples,omitempty"` // at most 5
+	// Counted are the kinds of unread code that the extractors of the languages of this index count ("go:failed_packages").
+	// Uncounted are the kinds that an extractor does not report at all ("dart:failed_files", "rust:failed_crates"): a
+	// language that does not count a kind has no zero for it, only "not known". An index with an uncounted kind
+	// cannot say that nothing was left out.
+	Counted   []string `json:"counted,omitempty"`
+	Uncounted []string `json:"uncounted,omitempty"`
 }
 
 // Input is what Write stores.

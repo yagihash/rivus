@@ -170,3 +170,14 @@ func TestNoPathStaysExhaustiveForFilesTheConfigurationLeavesOut(t *testing.T) {
 		t.Errorf("limits %v", r.Limits)
 	}
 }
+
+// A language whose extractor does not report the code it could not read has no zero for it: "not known".
+func TestNoPathIsNotExhaustiveWhenAKindOfUnreadCodeIsNotCounted(t *testing.T) {
+	testUnread = &graphdb.Unread{Uncounted: []string{"dart:failed_files"}}
+	e := build(t, unreadFixture())
+	r, err := e.Path("S", "T", graphq.Options{})
+	if err != nil || r.Reachable || r.Exhaustive || r.NotExhaustiveBecause == nil || r.NotExhaustiveBecause.UnreadCode.Total != -1 ||
+		len(r.NotExhaustiveBecause.UnreadCode.Examples) != 1 {
+		t.Fatalf("%v %+v because %+v", err, r.Exhaustive, r.NotExhaustiveBecause)
+	}
+}
