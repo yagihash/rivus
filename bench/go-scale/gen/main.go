@@ -18,33 +18,38 @@ import (
 
 // Params is the shape of the generated module.
 type Params struct {
-	Seed    uint64
-	Funcs   int             // ordinary functions (the ballast: a call graph without sinks)
-	Pkgs    int             // packages of the ballast
-	KeepPct int             // percent of the calls whose result is used (the others only call)
-	SrcPct  int             // percent of the ballast with a source (it flows up, to no sink)
-	EncPct  int             // percent of the ballast that hands its source to a cache of types / to os.Stderr
-	ReadPct int             // percent of the ballast that reads the cache / a logger
-	Loggers int             // packages with a logger made of os.Stderr
-	Ring    int             // functions that call each other (shape scc)
-	Wide    int             // functions of the ring of wide structs (shape widen)
-	Chain   int             // globals in a chain (shape chain)
-	TStages int             // caches of types in a chain, each one a global (shape typeschain)
-	Impls   int             // implementations of the interface (shape dyn)
-	Callers int             // functions that call through the interface (shape dyn)
-	Giant   int             // statements of the one huge function (shape giant)
-	Copies  int             // copies of the "save and restore a global struct" shape (shape selfcopy)
-	Ops     int             // operations that share one chain of middleware (shape middleware)
-	Stages  int             // stages of the chain (shape middleware)
-	Shapes  map[string]bool // types stderr widen scc chain dyn glob giant selfcopy middleware
+	Seed      uint64
+	Funcs     int             // ordinary functions (the ballast: a call graph without sinks)
+	Pkgs      int             // packages of the ballast
+	KeepPct   int             // percent of the calls whose result is used (the others only call)
+	SrcPct    int             // percent of the ballast with a source (it flows up, to no sink)
+	EncPct    int             // percent of the ballast that hands its source to a cache of types / to os.Stderr
+	ReadPct   int             // percent of the ballast that reads the cache / a logger
+	Loggers   int             // packages with a logger made of os.Stderr
+	Ring      int             // functions that call each other (shape scc)
+	Wide      int             // functions of the ring of wide structs (shape widen)
+	Chain     int             // globals in a chain (shape chain)
+	TStages   int             // caches of types in a chain, each one a global (shape typeschain)
+	Impls     int             // implementations of the interface (shape dyn)
+	Callers   int             // functions that call through the interface (shape dyn)
+	Giant     int             // statements of the one huge function (shape giant)
+	Copies    int             // copies of the "save and restore a global struct" shape (shape selfcopy)
+	Ops       int             // operations that share one chain of middleware (shape middleware)
+	Stages    int             // stages of the chain (shapes middleware, stagefield)
+	OutFields int             // fields of the output type of each operation (shape stagefield)
+	Shapes    map[string]bool // types stderr widen scc chain dyn glob giant selfcopy middleware stagefield
 }
 
 // allShapes is the list of the shapes, in the order they are written.
 var allShapes = []string{"types", "stderr", "widen", "scc", "chain", "typeschain", "dyn", "glob", "giant", "selfcopy", "middleware"}
 
+// namedShapes are the shapes that -shapes takes by name only: "all" does not turn them on (the input of
+// bench/compare.sh's light tier stays the same for the base and the head).
+var namedShapes = []string{"stagefield"}
+
 // Default is the size of the profiles (about 2,000 functions).
 func Default() Params {
-	return Params{Seed: 1, Funcs: 2000, Pkgs: 20, KeepPct: 15, SrcPct: 4, EncPct: 4, ReadPct: 25, Loggers: 8, Ring: 200, Wide: 16, Chain: 10, TStages: 14, Impls: 150, Callers: 40, Giant: 3000, Copies: 40, Ops: 40, Stages: 9, Shapes: map[string]bool{}}
+	return Params{Seed: 1, Funcs: 2000, Pkgs: 20, KeepPct: 15, SrcPct: 4, EncPct: 4, ReadPct: 25, Loggers: 8, Ring: 200, Wide: 16, Chain: 10, TStages: 14, Impls: 150, Callers: 40, Giant: 3000, Copies: 40, Ops: 40, Stages: 9, OutFields: 12, Shapes: map[string]bool{}}
 }
 
 // rng is splitmix64: the generated code must not depend on the Go version.
@@ -134,6 +139,10 @@ func (g *gen) ballast() {
 			// ballast of the other shapes is the same)
 			f.imports["ops"] = true
 			fmt.Fprintf(&b, "\tv += ops.Op%d(r, v)\n", (i/8)%g.p.Ops)
+		}
+		if g.on("stagefield") && i%8 == 0 && g.p.Ops > 0 {
+			f.imports["sfops"] = true
+			fmt.Fprintf(&b, "\tv += sfops.Op%d(r, v)\n", (i/8)%g.p.Ops)
 		}
 		if g.r.pct(g.p.SrcPct) {
 			f.imports["lib"] = true
@@ -553,6 +562,129 @@ func MwQuiet() {
 `)
 }
 
+// shapeStagefield is the shape of memos' AWS SDK that the shape middleware does not reach: every operation
+// has its OWN stage types (not nine shared ones) and its own output type with its own field names, and a
+// stage writes the fields of its operation's output into the result that goes back up the chain. The steps
+// of the stack build a struct with an interface FIELD (node.With) in a loop, and `n.With.HandleMiddleware`
+// has every stage type of every operation as a candidate (ops x stages of them). The chain is one strongly
+// connected component, and the union of the fields of all the outputs (ops x fields paths) goes into the
+// summary of every member: elements of the order of (members) x ops x fields. Parameters: -ops, -stages,
+// -fields.
+func (g *gen) shapeStagefield() {
+	const steps = 3
+	f := g.file("sf/sf.go")
+	f.imports["model"] = true
+	f.body.WriteString(`// Req is what the stages read; Resp is what goes back up the chain (smithy-go: DeserializeOutput).
+type Req struct{ Param string }
+
+type Resp struct {
+	Raw    string
+	Result any
+}
+
+// Handler is what a step hands to the next one; Middleware is one stage.
+type Handler interface {
+	Handle(r *model.Rec, in *Req) (out *Resp, md string)
+}
+
+type Middleware interface {
+	HandleMiddleware(r *model.Rec, in *Req, next Handler) (out *Resp, md string)
+}
+
+// node is a stage with the handler after it (smithy-go's decoratedHandler): the stage is an interface FIELD.
+type node struct {
+	Next Handler
+	With Middleware
+}
+
+func (n *node) Handle(r *model.Rec, in *Req) (*Resp, string) {
+	return n.With.HandleMiddleware(r, in, n.Next)
+}
+
+// Step is an ordered list of stages: it is a stage too, of the stack.
+type Step struct{ head, tail *node }
+
+func (s *Step) Add(m Middleware) {
+	n := &node{With: m}
+	if s.head == nil {
+		s.head = n
+	} else {
+		s.tail.Next = n
+	}
+	s.tail = n
+}
+
+func (s *Step) HandleMiddleware(r *model.Rec, in *Req, next Handler) (*Resp, string) {
+	if s.head == nil {
+		return next.Handle(r, in)
+	}
+	s.tail.Next = next
+	return s.head.Handle(r, in)
+}
+
+// Stack is the steps in order.
+type Stack struct{ Steps [` + fmt.Sprint(steps) + `]*Step }
+
+func NewStack() *Stack {
+	s := &Stack{}
+	for i := range s.Steps {
+		s.Steps[i] = &Step{}
+	}
+	return s
+}
+
+func (s *Stack) Add(step int, m Middleware) { s.Steps[step].Add(m) }
+
+func (s *Stack) HandleMiddleware(r *model.Rec, in *Req, last Handler) (*Resp, string) {
+	h := last
+	for i := len(s.Steps) - 1; i >= 0; i-- {
+		h = &node{Next: h, With: s.Steps[i]}
+	}
+	return h.Handle(r, in)
+}
+`)
+	o := g.file("sfops/ops.go")
+	o.imports["model"], o.imports["sf"] = true, true
+	m := g.p.Stages
+	for i := 0; i < g.p.Ops; i++ {
+		fmt.Fprintf(&o.body, "// Out%d is the output type of operation %d: its own field names.\ntype Out%d struct {\n", i, i, i)
+		for k := 0; k < g.p.OutFields; k++ {
+			fmt.Fprintf(&o.body, "\tOp%dF%d string\n", i, k)
+		}
+		o.body.WriteString("}\n\n")
+		for j := 0; j < m; j++ {
+			fmt.Fprintf(&o.body, "// Stage%d_%d is stage %d of operation %d; it writes some fields of Out%d.\ntype Stage%d_%d struct{}\n\n", i, j, j, i, i, i, j)
+			fmt.Fprintf(&o.body, "func (Stage%d_%d) HandleMiddleware(r *model.Rec, in *sf.Req, next sf.Handler) (*sf.Resp, string) {\n\tresp, md := next.Handle(r, in)\n\tif resp == nil {\n\t\treturn nil, md\n\t}\n\to, _ := resp.Result.(*Out%d)\n\tif o == nil {\n\t\to = &Out%d{}\n\t\tresp.Result = o\n\t}\n", i, j, i, i)
+			for k := j; k < g.p.OutFields; k += m {
+				fmt.Fprintf(&o.body, "\to.Op%dF%d = resp.Raw + in.Param\n", i, k)
+			}
+			o.body.WriteString("\treturn resp, md\n}\n\n")
+		}
+		fmt.Fprintf(&o.body, "// last%d is the last handler of operation %d.\ntype last%d struct{}\n\nfunc (last%d) Handle(r *model.Rec, in *sf.Req) (*sf.Resp, string) {\n\treturn &sf.Resp{Raw: in.Param}, \"\"\n}\n\n", i, i, i, i)
+		fmt.Fprintf(&o.body, "func Op%d(r *model.Rec, in string) string {\n\tst := sf.NewStack()\n", i)
+		for j := 0; j < m; j++ {
+			fmt.Fprintf(&o.body, "\tst.Add(%d, Stage%d_%d{})\n", j%steps, i, j)
+		}
+		fmt.Fprintf(&o.body, "\tresp, _ := st.HandleMiddleware(r, &sf.Req{Param: in}, last%d{})\n\tif resp == nil {\n\t\treturn \"\"\n\t}\n\ts := resp.Raw\n\tif o, ok := resp.Result.(*Out%d); ok {\n\t\ts += o.Op%dF0\n\t}\n\treturn s\n}\n\n", i, i, i)
+	}
+	t := g.file("truth/sf.go")
+	t.imports["lib"], t.imports["model"], t.imports["sfops"] = true, true, true
+	t.body.WriteString(`// SfReal: a value goes into one operation and comes out of its chain of stages.
+func SfReal() {
+	x := lib.Source() // @source(sf_real)
+	lib.Sink(sfops.Op0(&model.Rec{}, x)) // @sink(sf_real)
+}
+
+// SfQuiet gives another operation a constant: it shares every call of the chain with the first.
+func SfQuiet() {
+	x := lib.Source() // @source(sf_quiet)
+	lib.Sink(sfops.Op1(&model.Rec{}, "k")) // @nosink(sf_quiet)
+	lib.Sink(x)                            // @sink(sf_quiet)
+}
+
+`)
+}
+
 func (g *gen) shapeGlob() {
 	f := g.file("glob/glob.go")
 	f.imports["lib"] = true
@@ -612,7 +744,7 @@ func (g *gen) shapeSelfcopy() {
 func Generate(p Params) (map[string]string, error) {
 	g := &gen{p: p, r: rng{s: p.Seed}, files: map[string]*file{}}
 	g.ballast()
-	for _, s := range allShapes {
+	for _, s := range append(append([]string{}, allShapes...), namedShapes...) {
 		if !p.Shapes[s] {
 			continue
 		}
@@ -639,6 +771,8 @@ func Generate(p Params) (map[string]string, error) {
 			g.shapeSelfcopy()
 		case "middleware":
 			g.shapeMiddleware()
+		case "stagefield":
+			g.shapeStagefield()
 		}
 	}
 	out := map[string]string{}
@@ -677,7 +811,7 @@ func Generate(p Params) (map[string]string, error) {
 			calls = append(calls, fmt.Sprintf("\tselfcopy.SelfCopy%d()", i))
 		}
 	}
-	for _, s := range []struct{ shape, fn string }{{"types", "TyReal()\n\ttruth.TyQuiet(\"\")"}, {"typeschain", "TcReal()\n\ttruth.TcQuiet(\"\")"}, {"stderr", "SrReal()\n\ttruth.SrQuiet()"}, {"widen", "WdReal()"}, {"scc", "SccReal()"}, {"dyn", "DynReal()\n\ttruth.DynQuiet()"}, {"middleware", "MwReal()\n\ttruth.MwQuiet()"}} {
+	for _, s := range []struct{ shape, fn string }{{"types", "TyReal()\n\ttruth.TyQuiet(\"\")"}, {"typeschain", "TcReal()\n\ttruth.TcQuiet(\"\")"}, {"stderr", "SrReal()\n\ttruth.SrQuiet()"}, {"widen", "WdReal()"}, {"scc", "SccReal()"}, {"dyn", "DynReal()\n\ttruth.DynQuiet()"}, {"middleware", "MwReal()\n\ttruth.MwQuiet()"}, {"stagefield", "SfReal()\n\ttruth.SfQuiet()"}} {
 		if p.Shapes[s.shape] {
 			mainImports["truth"] = true
 			calls = append(calls, "\ttruth."+s.fn)
@@ -783,6 +917,7 @@ func main() {
 	flag.IntVar(&p.Giant, "giant", p.Giant, "statements of the huge function")
 	flag.IntVar(&p.Ops, "ops", p.Ops, "operations that share the chain of middleware (middleware)")
 	flag.IntVar(&p.Stages, "stages", p.Stages, "stages of the chain of middleware (middleware)")
+	flag.IntVar(&p.OutFields, "fields", p.OutFields, "fields of the output type of each operation (stagefield)")
 	flag.IntVar(&p.Copies, "copies", p.Copies, "copies of the save-and-restore shape (selfcopy)")
 	flag.Parse()
 	if *out == "" {
@@ -799,7 +934,7 @@ func main() {
 		for _, s := range strings.Split(*shapes, ",") {
 			s = strings.TrimSpace(s)
 			ok := false
-			for _, a := range allShapes {
+			for _, a := range append(append([]string{}, allShapes...), namedShapes...) {
 				ok = ok || a == s
 			}
 			if !ok {

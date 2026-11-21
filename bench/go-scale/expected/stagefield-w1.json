@@ -1,0 +1,15 @@
+{
+  "findings": [
+    "truth/sf.go:11 -\u003e truth/sf.go:12",
+    "truth/sf.go:17 -\u003e truth/sf.go:19"
+  ],
+  "uncertainty_kinds": {
+    "depth_limit": 1,
+    "dynamic_dispatch": 163
+  },
+  "converged": true,
+  "passes": 1,
+  "reanalyses": 2641,
+  "summary_elems": 108893,
+  "largest_summary_elems": 322
+}

@@ -64,6 +64,9 @@ func TestScaleSynth(t *testing.T) {
 		{"selfcopy", "selfcopy", nil, []int{1}, false},
 		// the shape of smithy-go's stack of steps: 40 operations put 9 stages into a stack of their own and call it
 		{"middleware", "middleware", nil, []int{1}, false},
+		// the same shape with a stage type and an output type of its own for every operation (memos' form): the
+		// elements grow with ops x fields in every member of the one SCC (bench/go-scale/README.md)
+		{"stagefield", "stagefield", []string{"-ops", "40", "-stages", "4", "-fields", "8"}, []int{1}, false},
 	}
 	for _, pr := range profiles {
 		pr := pr

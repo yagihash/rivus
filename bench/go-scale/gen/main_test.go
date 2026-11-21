@@ -23,7 +23,7 @@ func digest(files map[string]string) string {
 // The same parameters write the same code, every time, for every shape alone and for all of them.
 func TestDeterministic(t *testing.T) {
 	sets := [][]string{{}, allShapes}
-	for _, s := range allShapes {
+	for _, s := range append(append([]string{}, allShapes...), namedShapes...) {
 		sets = append(sets, []string{s})
 	}
 	for _, set := range sets {
