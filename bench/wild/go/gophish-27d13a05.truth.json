@@ -8,7 +8,10 @@
       "sink_line": 122,
       "label": "vuln",
       "category": "ssrf",
-      "note": "GHSA-9c9w-9pq7-f35h"
+      "note": "GHSA-9c9w-9pq7-f35h",
+      "via": [
+        "api.Server).ImportSite"
+      ]
     },
     {
       "source_func": ".nextOrIndex",
@@ -16,7 +19,10 @@
       "sink_line": 300,
       "label": "vuln",
       "category": "open_redirect",
-      "note": "GHSA-hvw3-p9px-gpc9"
+      "note": "GHSA-hvw3-p9px-gpc9",
+      "via": [
+        "controllers.AdminServer).nextOrIndex"
+      ]
     }
   ]
 }

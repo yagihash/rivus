@@ -8,7 +8,12 @@
       "sink_line": 66,
       "label": "vuln",
       "category": "path_traversal",
-      "via": ["object.UploadFileSafe", "object.uploadFile", "object.getUploadFileUrl", "(oss.StorageInterface).Put", "(storage.FileSystem).Put"],
+      "via": [
+        "object.UploadFileSafe",
+        "object.uploadFile",
+        "object.getUploadFileUrl",
+        "storage.FileSystem).Put"
+      ],
       "note": "GHSA-9vm3: the fullFilePath of the upload form becomes the object key, and the local file system provider creates the directories of the key (os.MkdirAll)"
     },
     {
@@ -17,7 +22,12 @@
       "sink_line": 73,
       "label": "vuln",
       "category": "path_traversal",
-      "via": ["object.UploadFileSafe", "object.uploadFile", "object.getUploadFileUrl", "(oss.StorageInterface).Put", "(storage.FileSystem).Put"],
+      "via": [
+        "object.UploadFileSafe",
+        "object.uploadFile",
+        "object.getUploadFileUrl",
+        "storage.FileSystem).Put"
+      ],
       "note": "the same flow, at the creation of the file (os.Create)"
     }
   ]

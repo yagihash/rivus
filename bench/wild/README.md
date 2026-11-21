@@ -15,7 +15,7 @@ for code we write ourselves, and is not made yet.
 | --- | --- |
 | `meta.yaml` | the public ID, the URL of the report (a link, not a copy), CWE, kind, repository, the full SHA of the vulnerable version and of the fix, the date the report was published (today or earlier), the license of the target, the form (`forms: [W1]`), the rules, source / path / sink (function and line), `stages` (the names of the shapes of table F; `todo:<name>` when table F has none), `fix_kind` (below), a summary in our own words, the date of the import |
 | `fetch.sh` | `fetch.sh <outdir> [vuln\|fixed]`: one commit, shallow, into a new empty directory (`bench/wild/fetch-sha.sh`); no absolute path in it |
-| `truth.json` | the labelled sites, in the form `bench/score.py` reads: `source_func` (a suffix) with `sink_file` and `sink_line`, so that it is matched by the pair; `via` lists the functions on the way (score.py ignores it) |
+| `truth.json` | the labelled sites, in the form `bench/score.py` reads: `source_func` (a suffix) with `sink_file` and `sink_line`, so that it is matched by the pair; `via` lists the functions on the way (suffixes; score.py counts the entry only when a path of the finding goes through all of them, so the middle of the path is checked, not only the two ends); `through` is a note of the library calls on the way inside one function |
 | `rules.yaml` | **always**: the input of the test, the source and the sinks of this flaw (and the getters of a framework the project wraps). The rules are the input, not what is evaluated; they are not made general (a rule that happens to be reusable may go to `examples/rules/`, but that is not the aim) |
 
 ## Adding one (the steps; the order matters)

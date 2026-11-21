@@ -8,8 +8,14 @@
       "sink_line": 300,
       "label": "vuln",
       "category": "open_redirect",
-      "via": ["(*net/http.Request).FormValue", "net/url.Parse"],
-      "note": "GHSA-hvw3: r.FormValue(\"next\") -> url.Parse -> url.Path -> http.Redirect, no check of the host or of a leading double slash. The path was read in the code"
+      "note": "GHSA-hvw3: r.FormValue(\"next\") -> url.Parse -> url.Path -> http.Redirect, no check of the host or of a leading double slash. The path was read in the code",
+      "through": [
+        "(*net/http.Request).FormValue",
+        "net/url.Parse"
+      ],
+      "via": [
+        "controllers.AdminServer).nextOrIndex"
+      ]
     }
   ]
 }

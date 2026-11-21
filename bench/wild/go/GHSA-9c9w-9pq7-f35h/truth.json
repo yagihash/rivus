@@ -8,8 +8,14 @@
       "sink_line": 122,
       "label": "vuln",
       "category": "ssrf",
-      "via": ["encoding/json.NewDecoder", "(*encoding/json.Decoder).Decode"],
-      "note": "GHSA-9c9w: the url field of the JSON body (cr.URL) is fetched with (*http.Client).Get, with no restriction on the address. The path was read in the code: r.Body -> json Decode into cr -> cr.URL -> Get"
+      "note": "GHSA-9c9w: the url field of the JSON body (cr.URL) is fetched with (*http.Client).Get, with no restriction on the address. The path was read in the code: r.Body -> json Decode into cr -> cr.URL -> Get",
+      "through": [
+        "encoding/json.NewDecoder",
+        "(*encoding/json.Decoder).Decode"
+      ],
+      "via": [
+        "api.Server).ImportSite"
+      ]
     }
   ]
 }
