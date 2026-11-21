@@ -1,6 +1,7 @@
 package taint
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -265,6 +266,7 @@ func (s *state) callBody(cc *callCtx) {
 			dispatch.Candidates = append(dispatch.Candidates, c.id)
 		}
 		sort.Strings(dispatch.Candidates)
+		s.noteNarrowed(dispatch, ci)
 		if len(fns) == 0 {
 			// The implementations are outside the loaded code (typically
 			// the standard library or a dependency). A model for the
@@ -405,6 +407,9 @@ func (s *state) valueGuards(ci *sg.Instr) map[string][]Guard {
 // implementations of other types (the call graph does not tell the callers
 // apart: the implementations of every caller are candidates of the call).
 func (s *state) dispatchGuards(cc *callCtx, fns []*sg.Func) map[*sg.Func][]Guard {
+	if cc.in.Callee != nil && cc.in.Callee.CandParam != nil && len(fns) > 1 {
+		return s.paramGuards(cc, fns)
+	}
 	recv := cc.recv
 	if cc.in.Callee.Kind != ir.CalleeDynamic || recv == nil || recv.Kind != sg.KParam || len(fns) < 2 {
 		return nil
@@ -1085,4 +1090,50 @@ func capturedDepends(sum *Summary, declared int, kind string) bool {
 		}
 	}
 	return false
+}
+
+// noteNarrowed says on the uncertainty of a call that its candidates were narrowed to the functions that flow to
+// the receiver (internal/valuecalls), and the assumption it rests on.
+func (s *state) noteNarrowed(u *Uncertainty, ci *sg.Instr) {
+	c := ci.Callee
+	if c == nil || c.NarrowedFrom == 0 {
+		return
+	}
+	u.NarrowedFrom = c.NarrowedFrom
+	u.Basis = c.NarrowBasis
+	u.Detail += fmt.Sprintf("; the candidates were narrowed from %d to %d (%s)", c.NarrowedFrom, len(c.Candidates), c.NarrowFrom)
+	if c.NarrowBasis == ir.BasisClosedWorldEntry {
+		u.Detail += "; basis closed_world_entry: the program was read as one that starts at its entry point, so a call from outside it is not counted"
+	}
+}
+
+// paramGuards is dispatchGuards for a call of a closure (Rust, Fn::call) whose candidates were narrowed to the
+// functions that flow to the receiver: a candidate that came only through one parameter of this function is
+// called only if the function given as that parameter is it, and the caller, which knows what it passed, can
+// leave out the flows through the other candidates (the guard of valueGuards).
+func (s *state) paramGuards(cc *callCtx, fns []*sg.Func) map[*sg.Func][]Guard {
+	if m, ok := s.eng.dispatch.Load(cc.in); ok {
+		return m.(map[*sg.Func][]Guard)
+	}
+	var out map[*sg.Func][]Guard
+	for _, fn := range fns {
+		p, ok := cc.in.Callee.CandParam[ir.FuncID(fn.ID)]
+		if !ok || p < 0 || p >= len(s.fn.Params) {
+			continue
+		}
+		if out == nil {
+			out = map[*sg.Func][]Guard{}
+		}
+		out[fn] = []Guard{{
+			Func:     s.eng.funcID(s.fn),
+			Params:   []int{p},
+			Cond:     "the function given as " + s.fn.Params[p].Name + " is " + fn.ID,
+			Polarity: true,
+			disp:     &dispatchSpec{fnID: fn.ID},
+			fn:       s.fn,
+			pos:      cc.in.Pos,
+		}}
+	}
+	s.eng.dispatch.Store(cc.in, out)
+	return out
 }

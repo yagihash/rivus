@@ -16,12 +16,12 @@ pub fn across_b() {
 
 pub fn across_each() {
     let items = vec![source()]; // @source(across-each) @miss(silent)
-    shared::each(items, |x| sink(&x)); // @sink(across-each) @noisy(42)
+    shared::each(items, |x| sink(&x)); // @sink(across-each) @noisy(28)
 }
 
 pub fn across_hub() {
     let mut h = shared::Hub::new();
-    h.on(Box::new(|s| sink(s))); // @sink(across-hub) @noisy(5)
+    h.on(Box::new(|s| sink(s))); // @sink(across-hub)
     h.emit(&source()); // @source(across-hub) @miss(silent)
 }
 

@@ -64,6 +64,33 @@ impl Ctx {
         p
     }
 
+    /// Whether the source of an item says it is private to its crate: the text at its span starts with
+    /// `fn <its name>` (after `async`, `const`, `unsafe`), with no `pub`. Anything that is not seen to be so
+    /// (a macro writes the item, no source) is not private: the case where the callers are all in the crate
+    /// is the one that is shown, not assumed.
+    pub fn item_is_private(&mut self, span: &Span, name: &str) -> bool {
+        let file = span.get_filename().to_string();
+        if file.is_empty() {
+            return false;
+        }
+        let li = span.get_lines();
+        let lines = self.lines(&file);
+        if li.start_line == 0 || li.start_line > lines.len() {
+            return false;
+        }
+        let text: String = lines[li.start_line - 1].chars().skip(li.start_col.saturating_sub(1)).collect();
+        let mut words = text.split_whitespace().peekable();
+        while matches!(words.peek(), Some(&"async") | Some(&"const") | Some(&"unsafe") | Some(&"default")) {
+            words.next();
+        }
+        if words.next() != Some("fn") {
+            return false;
+        }
+        let ident: String = words.next().unwrap_or("").chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+        let last = name.rsplit("::").next().unwrap_or(name);
+        !ident.is_empty() && ident == last
+    }
+
     pub fn expr_text(&mut self, span: &Span) -> String {
         let file = span.get_filename().to_string();
         let li = span.get_lines();
@@ -1320,7 +1347,7 @@ pub(crate) fn same_trait(impl_trait: &str, called: &str) -> bool {
 
 /// Whether the function is called with the ABI of Rust: one that is not is a
 /// foreign function (`extern "C"`).
-fn has_rust_abi(def: FnDef) -> bool {
+pub(crate) fn has_rust_abi(def: FnDef) -> bool {
     matches!(
         def.fn_sig().skip_binder().abi,
         Abi::Rust | Abi::RustCall | Abi::RustCold | Abi::RustPreserveNone | Abi::RustTail | Abi::RustInvalid | Abi::Custom | Abi::LlvmIntrinsic

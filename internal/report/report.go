@@ -114,6 +114,10 @@ type Summary struct {
 	// no candidate needs a model; many candidates call for a more precise
 	// call graph.
 	DispatchCandidates map[string]int `json:"dispatch_candidates"`
+	// DispatchNarrowed counts the calls through Fn::call (Rust) whose candidates were narrowed to the
+	// closures that flow to the receiver: how many, and the candidates they had before and after (summed).
+	// The numbers of DispatchCandidates are those after. Absent when none was narrowed.
+	DispatchNarrowed *DispatchNarrowed `json:"dispatch_narrowed,omitempty"`
 	// TopSymbols lists the symbols behind the uncertainties rivus can
 	// reduce itself: library calls without a model, and interface methods
 	// without a known implementation. They show where a model helps most.
@@ -201,6 +205,13 @@ func bucket(n int) string {
 	return "21+"
 }
 
+// DispatchNarrowed is what the narrowing of the candidates of Fn::call did (Summary.DispatchNarrowed).
+type DispatchNarrowed struct {
+	Calls  int `json:"calls"`
+	Before int `json:"candidates_before"`
+	After  int `json:"candidates_after"`
+}
+
 func summarize(r *Report) Summary {
 	s := Summary{Findings: len(r.Findings), OnFindings: map[string]int{},
 		Program:            Counts{ByKind: map[string]int{}, ByAttribution: map[string]int{}},
@@ -220,6 +231,14 @@ func summarize(r *Report) Summary {
 		case u.Kind == taint.KindDynamicDispatch && !strings.HasPrefix(u.Detail, "expansion_limit"):
 			n := len(u.Candidates)
 			s.DispatchCandidates[bucket(n)]++
+			if u.NarrowedFrom > 0 {
+				if s.DispatchNarrowed == nil {
+					s.DispatchNarrowed = &DispatchNarrowed{}
+				}
+				s.DispatchNarrowed.Calls++
+				s.DispatchNarrowed.Before += u.NarrowedFrom
+				s.DispatchNarrowed.After += n
+			}
 			if n == 0 {
 				count("dynamic_dispatch_without_implementation", u.Symbol)
 			}

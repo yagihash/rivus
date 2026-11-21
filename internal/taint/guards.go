@@ -495,8 +495,15 @@ func (ci *callInfo) feasible(gs []Guard) bool {
 			}
 			if g.disp.fnID != "" {
 				// the caller passed a function it made right there, and it is another one
-				if ids, ok := sg.ExactFuncs(ci.argv[g.Params[0]]); ok && !ids[g.disp.fnID] {
-					return false
+				if cs, ok := sg.ExactClosures(ci.argv[g.Params[0]]); ok {
+					// (a closure of Rust that captured values is its environment: the function is the same)
+					other := true
+					for _, c := range cs {
+						other = other && c.ID != g.disp.fnID
+					}
+					if other {
+						return false
+					}
 				}
 			} else if g.disp.excludes(concreteType(ci.argv[g.Params[0]])) {
 				return false

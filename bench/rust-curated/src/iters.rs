@@ -18,7 +18,7 @@ pub fn map_other_list() {
 
 pub fn for_each_sink() {
     let items = vec![source()]; // @source(for-each)
-    items.iter().for_each(|s| sink(s)); // @sink(for-each) @noisy(3)
+    items.iter().for_each(|s| sink(s)); // @sink(for-each)
 }
 
 pub fn for_each_capture() {
@@ -101,7 +101,7 @@ pub fn result_map_err() {
 pub fn any_callback() {
     let items = vec![source()]; // @source(any)
     items.iter().any(|s| {
-        sink(s); // @sink(any) @noisy(3)
+        sink(s); // @sink(any)
         true
     });
 }

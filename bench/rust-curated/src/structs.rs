@@ -70,7 +70,7 @@ impl Emitter {
 
 pub fn emitter_flow() {
     let mut e = Emitter::new();
-    e.on(Box::new(|s| sink(s))); // @sink(emit) @noisy(5)
+    e.on(Box::new(|s| sink(s))); // @sink(emit)
     e.emit(&source()); // @source(emit) @miss(silent)
 }
 
@@ -78,8 +78,8 @@ pub fn emitter_flow() {
 pub fn emitter_two() {
     let mut e1 = Emitter::new();
     let mut e2 = Emitter::new();
-    e1.on(Box::new(|s| sink(s))); // @sink(emit-two) @noisy(5)
-    e2.on(Box::new(|s| sink(s))); // @sink(none) @fp
+    e1.on(Box::new(|s| sink(s))); // @sink(emit-two)
+    e2.on(Box::new(|s| sink(s))); // @sink(none)
     e1.emit(&source()); // @source(emit-two) @miss(silent)
     e2.emit("const");
 }

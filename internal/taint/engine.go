@@ -411,6 +411,10 @@ type Stats struct {
 	// functions the dynamic calls may reach.
 	PackagesTop        []PackageStat       `json:"packages_top,omitempty"`
 	DispatchCandidates *DispatchCandidates `json:"dispatch_candidates,omitempty"`
+	// DispatchNotNarrowed counts the calls through Fn::call (Rust) that have several candidates and kept every
+	// one, by why: the callers of a function may not all be read, the receiver comes from something that is not
+	// followed, or a limit was reached. Absent when there was none (a run of another language).
+	DispatchNotNarrowed *NotNarrowed `json:"dispatch_not_narrowed,omitempty"`
 	// Unstable lists (up to ten) functions whose summary still changed in
 	// the last pass, when the run did not converge (empty when it converged); UnstableCount is
 	// how many there were.
@@ -1289,6 +1293,9 @@ func (e *Engine) collect(st Stats) *Result {
 		}
 		return a.ID < b.ID
 	})
+	if nr := e.prog.IR.Narrowing; nr != nil && (nr.OpenCallers+nr.UnknownOrigin+nr.Limit > 0) {
+		res.Stats.DispatchNotNarrowed = &NotNarrowed{OpenCallers: nr.OpenCallers, UnknownOrigin: nr.UnknownOrigin, Limit: nr.Limit}
+	}
 	if e.opts.PassStats {
 		res.Stats.UnmodeledTop = e.unmodeledTop(res.Findings)
 		res.Stats.PackagesTop = e.packagesTop()

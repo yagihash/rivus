@@ -54,6 +54,7 @@ func Resolve(prog *ir.Program) {
 			}
 		}
 	}
+	narrowCalls(r)
 	r.forms = nil
 	r.callers = nil
 }

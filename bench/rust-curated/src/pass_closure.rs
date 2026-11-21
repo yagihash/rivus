@@ -27,12 +27,12 @@ pub fn ret_clean() {
 // the callback is given the value: it reaches the sink inside the closure
 pub fn arg_a() {
     let a = source(); // @source(arg-a)
-    fire_and_forget(a, |x| sink(&x)); // @sink(arg-a) @nosink(arg-b) @fp @noisy(40)
+    fire_and_forget(a, |x| sink(&x)); // @sink(arg-a) @nosink(arg-b) @noisy(28)
 }
 
 pub fn arg_b() {
     let b = source(); // @source(arg-b)
-    fire_and_forget(b, |x| sink(&x)); // @sink(arg-b) @nosink(arg-a) @fp @noisy(40)
+    fire_and_forget(b, |x| sink(&x)); // @sink(arg-b) @nosink(arg-a) @noisy(28)
 }
 
 // the helper calls the callback with a constant; the caller's source stays in the caller
@@ -123,10 +123,10 @@ pub fn boxed_b() {
 // the sink is the callback's
 pub fn sink_with_a() {
     let a = source(); // @source(sinkwith-a)
-    sink_with(a, |s| sink(s)); // @sink(sinkwith-a) @nosink(sinkwith-b) @fp @noisy(3)
+    sink_with(a, |s| sink(s)); // @sink(sinkwith-a) @nosink(sinkwith-b)
 }
 
 pub fn sink_with_b() {
     let b = source(); // @source(sinkwith-b)
-    sink_with(b, |s| sink(s)); // @sink(sinkwith-b) @nosink(sinkwith-a) @fp @noisy(3)
+    sink_with(b, |s| sink(s)); // @sink(sinkwith-b) @nosink(sinkwith-a)
 }

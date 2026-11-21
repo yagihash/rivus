@@ -208,6 +208,14 @@ type Func struct {
 	// Dep marks a function of a dependency: it is there so that calls into
 	// it can be followed, but it is not part of the code being analysed.
 	Dep bool `json:"dep,omitempty"`
+	// Private marks a function that the code of its own crate only can call: the source says it has no
+	// `pub` (Rust). Its callers are all among the functions that are read, wherever the program starts.
+	// No mark says nothing (an extractor that does not know, or a function that may be called from outside).
+	Private bool `json:"private,omitempty"`
+	// ExternalEntry marks a function that another program can call by its symbol (`#[no_mangle]`,
+	// `#[export_name]`, `extern "C"`, anything of a crate built as a library of C): a program that has
+	// one is called from outside, so its callers are not all read (Rust).
+	ExternalEntry bool `json:"external_entry,omitempty"`
 	// Overrides are the symbols of the methods of the supertypes that this method overrides or
 	// implements (an extractor lists them, outside the language's own library). One of them
 	// that no function of the code being analysed has as its symbol is a method that a
@@ -400,6 +408,17 @@ type Callee struct {
 	// ValueWhy is, when ValueLimit is "partial" (ValueCands are set, ValueFound of them), why not
 	// every caller's value could be followed: the causes, sorted.
 	ValueWhy []string `json:"-"`
+	// NarrowedFrom is the number of candidates a call through Fn::call (Rust) had before the
+	// candidates were narrowed to the functions that flow to the receiver (internal/valuecalls); 0 when
+	// they were not. NarrowBasis is the assumption the narrowing rests on ("closed_world_entry", or empty
+	// when the receiver was made in the function itself), and NarrowCallers says where the receiver came
+	// from, for the text of the uncertainty.
+	NarrowedFrom int    `json:"-"`
+	NarrowBasis  string `json:"-"`
+	// CandParam is, for the candidates that came to the receiver only through one parameter of the
+	// function that holds the call, that parameter: the callers know which function they passed.
+	CandParam  map[FuncID]int `json:"-"`
+	NarrowFrom string         `json:"-"`
 	// FFI marks a call of a foreign function (an extern "C" function of Rust): the
 	// call leaves the language, and what happens in it is not code that can be read.
 	FFI bool `json:"ffi,omitempty"`
@@ -500,6 +519,11 @@ type Program struct {
 	FuncTexts []FuncText  `json:"func_texts,omitempty"`
 	// LoadErrors are what the extractor could not read.
 	LoadErrors []LoadError `json:"load_errors,omitempty"`
+	// CallerMarks says that the extractor marks the functions that the code of their crate only can call (Func.Private)
+	// and the functions that another program can call by their symbol (Func.ExternalEntry): a function without a mark
+	// is then one that may be called from outside. An extractor that does not say so (an older one) leaves no
+	// function private, and the program is not read as a closed world: nothing is known of what calls it.
+	CallerMarks bool `json:"caller_marks,omitempty"`
 	// TestsSkipped is what was not read because the build does not ship it (ADR-062).
 	TestsSkipped *TestsSkipped `json:"tests_skipped,omitempty"`
 
@@ -511,6 +535,8 @@ type Program struct {
 	// ValuesResolved is set when the calls of function values have their
 	// ValueCands (internal/valuecalls).
 	ValuesResolved bool `json:"-"`
+	// Narrowing counts what the narrowing of the candidates of Fn::call did (internal/valuecalls).
+	Narrowing *NarrowStats `json:"-"`
 }
 
 // Kinds of text.
@@ -630,3 +656,20 @@ func (c *Callee) ValueLimitDetail() string {
 	}
 	return ""
 }
+
+// NarrowStats is what the narrowing of the candidates of the calls of Rust closures did: the calls that were
+// narrowed (with the candidates before and after, summed), and, for the others, why not.
+type NarrowStats struct {
+	Narrowed      int `json:"narrowed"`
+	CandidatesOld int `json:"candidates_before"`
+	CandidatesNew int `json:"candidates_after"`
+	// The calls that stayed as they were: the callers of a function may be outside what is read, the
+	// receiver comes from something that is not followed, or a limit of rivus was reached.
+	OpenCallers   int `json:"open_callers,omitempty"`
+	UnknownOrigin int `json:"unknown_origin,omitempty"`
+	Limit         int `json:"limit,omitempty"`
+}
+
+// BasisClosedWorldEntry is the assumption of a narrowing by the callers of a function: the program has a
+// start, and what it can call from outside is nothing that is read, so the callers that are read are all.
+const BasisClosedWorldEntry = "closed_world_entry"

@@ -62,14 +62,20 @@ func attributable(kind string) string {
 
 // Uncertainty records a place where rivus could not know, and why.
 type Uncertainty struct {
-	Kind           string      `json:"kind"`
-	AttributableTo string      `json:"attributable_to"`
-	Detail         string      `json:"detail,omitempty"`
-	Symbol         string      `json:"symbol,omitempty"`
-	Candidates     []string    `json:"candidates,omitempty"`
-	Func           string      `json:"func,omitempty"`
-	Position       ir.Position `json:"position"`
-	Snippet        string      `json:"snippet,omitempty"`
+	Kind           string   `json:"kind"`
+	AttributableTo string   `json:"attributable_to"`
+	Detail         string   `json:"detail,omitempty"`
+	Symbol         string   `json:"symbol,omitempty"`
+	Candidates     []string `json:"candidates,omitempty"`
+	// NarrowedFrom is, for a call through Fn::call (Rust) whose candidates were narrowed to the closures that
+	// flow to its receiver, how many candidates there were before. Basis is the assumption the narrowing
+	// rests on, when it rests on one ("closed_world_entry": the program was read as one that starts at its
+	// entry point, so the callers that are not read are not counted).
+	NarrowedFrom int         `json:"narrowed_from,omitempty"`
+	Basis        string      `json:"basis,omitempty"`
+	Func         string      `json:"func,omitempty"`
+	Position     ir.Position `json:"position"`
+	Snippet      string      `json:"snippet,omitempty"`
 
 	pos ir.Pos
 	// global and globalPath say which package variable (and which path inside it) a global_var

@@ -24,7 +24,7 @@
 | `AWAIT-ERR` | await した Future.error が、catch に値を渡さない | internal/model/builtin/dart-async.yaml の Future.error(args→結果)と extractor の `[await]` 呼び出し(失敗した Future の await を throw にしない)。細部は未特定 |
 | `ENV-PTR`(**直した、ADR-072**) | ポインタをフィールド(クロージャの環境)に入れて、そこから書くと別名にならない | (直す前)internal/taint/locs.go computeLocs(OpFieldLoad: `locs(base)+field+"*"` を指す)と internal/taint/transfer.go(OpFieldStore はポインタの値を保存するだけで、指す先と同一視しない)。関数内の `*e.o = x`(Env{o:&mut out})でも再現。(今)internal/taint/ptrcells.go: セルに入れたポインタの指す先を覚え(`ptrAlias`)、`field_load` の結果と、呼び先が書いたもの(`applySummary` の `OutParam`)を、指す先にも当てる。extractor は、環境のフィールドをクロージャの名前で呼ぶ(`<クロージャ>.0`)ので、どのクロージャか分からない `Fn::call` の候補が、別のクロージャの環境のセルを混ぜない |
 | `GEN-DYN` | ジェネリックな T に対する trait 呼び出し(dynamic)で、モデルの `from: args` が receiver を含まない | internal/taint/calls.go selectVals(`SelArg All` は cc.args)+ internal/sg/sg.go:139 CallArgs(dynamic は Args[1:])+ internal/model/builtin/rust-std.yaml(`Iterator::next` / `IntoIterator::into_iter` は from: args)。`for i in items`(items: Vec<T>)で流れが消える |
-| `XTALK` | Fn*::call(dynamic)の候補が「型の合う全クロージャ」で、呼び元ごとに絞らない(ADR-072 のあと: 候補の書き込みが、別のクロージャの環境のセルを通って、別のクロージャの sink に届く過検出は消えた。zoo-rust の `@noisy` と、それに伴う `@fp` が減った。候補の集合そのものは絞っていない) | internal/valuecalls/valuecalls.go:50(CalleeValue だけを解決。Rust は dynamic)と internal/taint/calls.go:355-380 dispatchGuards / makeDispatchGuards(候補が method でない(`!fn.Recv`)と、ガードなし) |
+| `XTALK`(**絞った、ADR-079**。受け手の出どころを、もれなく辿れたときだけ絞る。rust-curated の `@fp` 18 → 7、`@noisy` 152 → 84 流れ。残りは、辿れない側: フィールド、`Box<dyn Fn>`、関数の結果、中継) | Fn*::call(dynamic)の候補が「型の合う全クロージャ」で、呼び元ごとに絞らない(ADR-072 のあと: 候補の書き込みが、別のクロージャの環境のセルを通って、別のクロージャの sink に届く過検出は消えた。zoo-rust の `@noisy` と、それに伴う `@fp` が減った。候補の集合そのものは絞っていない) | internal/valuecalls/valuecalls.go:50(CalleeValue だけを解決。Rust は dynamic)と internal/taint/calls.go:355-380 dispatchGuards / makeDispatchGuards(候補が method でない(`!fn.Recv`)と、ガードなし) |
 | `MODEL-OVER` | モデルが、コールバックの戻り値を見ずに recv を結果へ流す | internal/model/builtin/dart-async.yaml Future.then / dart-core.yaml Iterable.map / rust-std.yaml Iterator::map・Option::and_then(recv/args→結果) |
 | `KEYED-MAP` | マップのキーを区別しない(Set/Get のキーが違っても同じセル) | internal/taint/transfer.go OpIndexStore / OpIndexLoad(キー付きは、値を `[]` に持つ) |
 | `ALLOWLIST` | 分岐条件(switch の許可リスト)を、汚染を落とすものと見ない | internal/taint/guards.go(条件は記録するだけで、評価しない: Guard の説明) |
@@ -92,6 +92,8 @@
 | Go | `@fp` | 5 | KEYED-MAP 4、ALLOWLIST 1 | 直らない 5 |
 
 Rust の `@fp` 14 件の内訳: XTALK 12 件(直る 9: arg-a/b、run-a/b、sinkwith-a/b の 6 件と ret-clean、produce、fn-drop。不明 3: relay-c-a/b と emit-two の 2 つ目)、MODEL-OVER 2 件(直らない)。
+**ADR-079 のあと(`valuecalls/narrow.go`)**: Rust の `@fp` 14 件のうち、XTALK の直る 9 件に当たる 5 件(arg-a/b、sinkwith-a/b、emit-two の 2 つ目)と、`fnself.rs` の 6 件が消えた(rust-curated の `@fp` は 18 から 7)。`@noisy` は 16 か所 152 流れから 3 か所 84 流れ。動物園(Rust)は、`clos/two-callers` のおとりが消えた(`clos/relay` は残る)。
+
 Rust の `@noisy` は README に「17 か所」とあるが、ソースの注釈は 16 か所で、合計 183 件になる(下の表)。
 
 ## 黙った見逃し(`@miss(silent)`、先頭にまとめる)

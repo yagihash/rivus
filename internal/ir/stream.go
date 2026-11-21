@@ -27,6 +27,7 @@ type record struct {
 	LoadError *LoadError `json:"load_error,omitempty"`
 
 	TestsSkipped *TestsSkipped `json:"tests_skipped,omitempty"`
+	CallerMarks  bool          `json:"caller_marks,omitempty"`
 }
 
 const (
@@ -39,6 +40,7 @@ const (
 	recFunc2  = "func_text"
 	recLoad   = "load_error"
 	recTests  = "tests_skipped"
+	recMarks  = "caller_marks"
 )
 
 // Write writes the program as a stream. It does not validate: Validate is
@@ -97,6 +99,11 @@ func Write(w io.Writer, p *Program) error {
 			return err
 		}
 	}
+	if p.CallerMarks {
+		if err := enc.Encode(record{Kind: recMarks, CallerMarks: true}); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -144,6 +151,8 @@ func Read(r io.Reader) (*Program, error) {
 			p.LoadErrors = append(p.LoadErrors, *rec.LoadError)
 		case rec.Kind == recTests && rec.TestsSkipped != nil:
 			p.TestsSkipped = p.TestsSkipped.Add(rec.TestsSkipped)
+		case rec.Kind == recMarks && rec.CallerMarks:
+			p.CallerMarks = true
 		default:
 			return nil, fmt.Errorf("ir: record %d: unknown record %q", n, rec.Kind)
 		}

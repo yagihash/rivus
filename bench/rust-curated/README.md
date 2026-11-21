@@ -29,7 +29,11 @@ The marks are those of `bench/go-curated` (`@source(tag)`, `@sink(tag)`, `@sink(
 | `across.rs` | the helper is in another crate (`shared`) |
 | `parseable.rs` | the shapes of the parseable advisories (`bench/parseable`): `web::Query` to the Location header, `web::Json` to the path of `put_object` (a trait with two implementations), `web::Form` stored in a global `OnceLock<RwLock<HashMap>>` and posted to later (**not found**, `pb_target`, `@miss(silent)`: the SSRF of GHSA-64vg that the benchmark misses too), `web::Path` to `Client::get`. The mark of each source is on the line of its `into_inner` (the place where the value of a `param_type` is first used) |
 | `fnself.rs` | `Fn` / `FnMut` called through `&self`, two callers each, own signatures so as not to change other counts: the acceptance of ADR-047 (draft 2), RUST-13; `@fp` on all, to go |
+| `narrow.rs` | the candidates of `Fn::call` narrowed to the closures that flow to the receiver (ADR-079) and the forms where narrowing would lose a flow, so every candidate stays: a closure that is the result of a call, a closure in a field, a relay; and the edge of the limit (8 callers narrow, 9 do not) |
+| `main.rs` | a `main`: the program starts somewhere, so what the library has that is `pub` is read as a closed world (`closed_world_entry`). The library with no `main` is `../rust-curated-lib`, and one with a function that another program can call by its symbol is `../rust-curated-ffi` |
 | `modelled.rs` | a trait method of the crate that rules.yaml models, called through a generic: the model is applied and the implementation is read as well (ADR-075); `@miss` 0, `@fp` 1 |
+
+**After the narrowing (ADR-079):** the `@fp` of the first fixtures are 7 (from 18; the six of `fnself.rs`, which ADR-047 meant to remove, are gone) and the `@noisy` flows 84 (from 152; three places). What is left comes from the helpers whose receiver is not followed (a field, a `Box<dyn Fn>`, the result of a call).
 
 ## Closures that capture, and where they are called (`src/callbacks.rs`)
 

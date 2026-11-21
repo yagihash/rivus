@@ -31,7 +31,7 @@ fn fn_mut_sink_with(s: String, mut f: impl FnMut(String, u64)) {
 pub fn fn_ret_clean() {
     let a = source(); // @source(fnself-clean)
     let r = call_fn(a.clone(), |_x, _n| String::from("fixed"));
-    sink(&r); // @sink(none) @fp
+    sink(&r); // @sink(none)
     sink(&a); // @sink(fnself-clean)
 }
 
@@ -43,18 +43,18 @@ pub fn fn_ret_id() {
 
 pub fn fn_sink_a() {
     let a = source(); // @source(fnself-a)
-    fn_sink_with(a, |x, _n| sink(&x)); // @sink(fnself-a) @nosink(fnself-b) @fp
+    fn_sink_with(a, |x, _n| sink(&x)); // @sink(fnself-a) @nosink(fnself-b)
 }
 
 pub fn fn_sink_b() {
     let b = source(); // @source(fnself-b)
-    fn_sink_with(b, |x, _n| sink(&x)); // @sink(fnself-b) @nosink(fnself-a) @fp
+    fn_sink_with(b, |x, _n| sink(&x)); // @sink(fnself-b) @nosink(fnself-a)
 }
 
 pub fn fn_mut_ret_clean() {
     let a = source(); // @source(fnmutself-clean)
     let r = call_fn_mut(a.clone(), |_x, _n| String::from("fixed"));
-    sink(&r); // @sink(none) @fp
+    sink(&r); // @sink(none)
     sink(&a); // @sink(fnmutself-clean)
 }
 
@@ -66,12 +66,12 @@ pub fn fn_mut_ret_id() {
 
 pub fn fn_mut_sink_a() {
     let a = source(); // @source(fnmutself-a)
-    fn_mut_sink_with(a, |x, _n| sink(&x)); // @sink(fnmutself-a) @nosink(fnmutself-b) @fp
+    fn_mut_sink_with(a, |x, _n| sink(&x)); // @sink(fnmutself-a) @nosink(fnmutself-b)
 }
 
 pub fn fn_mut_sink_b() {
     let b = source(); // @source(fnmutself-b)
-    fn_mut_sink_with(b, |x, _n| sink(&x)); // @sink(fnmutself-b) @nosink(fnmutself-a) @fp
+    fn_mut_sink_with(b, |x, _n| sink(&x)); // @sink(fnmutself-b) @nosink(fnmutself-a)
 }
 
 // the callback is a reference (`&impl Fn`): the receiver of the call is the parameter itself, which is the

@@ -271,6 +271,8 @@ func (o *analyzeOpts) loadLangs(langs []string, patterns []string, rules *model.
 		merged.FuncTexts = append(merged.FuncTexts, p.FuncTexts...)
 		merged.LoadErrors = append(merged.LoadErrors, p.LoadErrors...)
 		merged.TestsSkipped = merged.TestsSkipped.Add(p.TestsSkipped)
+		// (a program of several languages is not read as a closed world: what the other language calls is not said)
+		merged.CallerMarks = len(langs) == 1 && p.CallerMarks
 		merged.Files = append(merged.Files, p.Files...)
 	}
 	if len(merged.Funcs) == 0 && goProg == nil {

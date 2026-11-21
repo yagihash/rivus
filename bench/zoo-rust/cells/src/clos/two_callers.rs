@@ -49,7 +49,7 @@ fn apply_decoy(f: impl Fn(&Td), s: &Td) {
 fn decoy_a(s: &Td) {
     apply_decoy(
         |x| {
-            m::sink_cmd(&x.0); // @sink(none) @fp @nosink(clos-two-callers-decoy) @fp @ref(XTALK,PARITY)
+            m::sink_cmd(&x.0); // @sink(none) @nosink(clos-two-callers-decoy)
         },
         s,
     );

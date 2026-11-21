@@ -355,6 +355,13 @@ func (e *Engine) packagesTop() []PackageStat {
 	return out
 }
 
+// NotNarrowed counts the calls of closures (Rust, Fn::call) that kept every candidate of the extractor, by why.
+type NotNarrowed struct {
+	OpenCallers   int `json:"open_callers"`
+	UnknownOrigin int `json:"unknown_origin"`
+	Limit         int `json:"limit"`
+}
+
 // DispatchCandidates is how many functions the calls through an interface, a trait or a function value
 // may reach: the calls (the call sites of the code, once each) by that number. A call with many is where the
 // analysis joins many things, which is what makes a mock or a variadic "any" slow.

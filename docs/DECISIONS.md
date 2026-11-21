@@ -1701,3 +1701,19 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 **確かめたこと:** `testdata/go/cases/guard/provenance.go`(報告された 7 つの形+アドレスを取られた変数、callee の引数、比較の畳み込み): 否定と算術は畳んだ値(`false`、`0`)、丸ごとの代入と配列の要素は `unresolved`、本当のゼロ値は `false / zero_value`、ポインタ越しの `*pc = true` は `true / literal`(`TestProvenanceTellsNoValueThatIsNotKnown`)。畳み込みの単体試験は、Rust(`i32`、`u32`)と Dart(`int`)の型名も含む(`TestProvenanceFoldsOperations`)。Dart と Rust は同じコアで、`!` と `n - 9` を引数にした小さな例で、`unresolved`(誤った値は言わない)になることを確かめた。`bench/compare.sh --light`: finding の追加・削除 0、`path@1` の変化 0。軽い層の実コードで言い切っていた件数は、`literal` が 0、`zero_value` が 2(gogs の 2 つの版で同じノード。`PatchPath` の `repo` に `nil / zero_value`)で、どちらも `unresolved` になった(誤って言い切っていた数の上界は 2)。
 
 **限界:** 変数の丸ごとの代入は、別の関数の変数のコピーや、構造体の中の構造体の一部の格納は、たどらず `unresolved`(多めに言わない側)。Dart と Rust は、変数の読み出し(`not followed: *ssa.Slice`)で止まるため、定数を畳む前に `unresolved` になる(今までも値は言っていない)。
+
+## ADR-079: Rust の `Fn*::call` の候補を、受け手に流れ込む関数値の出どころで絞る(XTALK、案 A)。閉じた世界は `closed_world_entry`
+
+**背景:** Rust のクロージャの呼び出し(`f(s)`、`impl Fn` のヘルパー)は、抽出器が呼び先を決められず、`Fn::call` の dynamic な呼び出しになる。候補は、引数の型の合う全クロージャ(XTALK)。ヘルパーの 2 つの呼び元が、それぞれのクロージャを渡しても、互いのクロージャの sink に、互いの source が届いた(rust-curated の `@fp` 18、`@noisy` 152 流れ。動物園の `clos/two-callers`)。設計は docs/DESIGN-capture.md の「案 A」。
+
+**決めたこと:**
+1. 受け手の出どころを、**もれなく辿れたときだけ**、候補を `出どころ ∩ 今の候補` に絞る(`internal/valuecalls/narrow.go`)。辿れないものは、全候補のまま(今の挙動)。辿る: 環境の `alloc`(`ir.ClosureIndex`: `sg.EnvClosures` と同じ規則)、`make_closure`、`copy` / `convert` / φ、`clone`、環境のフィールドの store(クロージャの名前のフィールド)、`&f` のセル、パラメータ → 呼び元(呼び元が全部分かるとき)。出どころが 8 を超える、深さが 3 を超えると、全候補。
+2. **呼び元が全部分かる**とは、ヘルパーが、クロージャでなく、トレイトの実装でなく、トレイト越しに呼ばれず、値として使われず(`make_closure` が名指さない)、かつ: (a) `Func.private`(`pub` が無い。呼び元は crate の中だけ)、または (b) **閉じた世界**: 起点(`main`)があり、外からシンボルで呼べる関数(`external_entry`)が無く、抽出器が印を付ける(`caller_marks`)。(b) が、設計の `closed_world_entry`: 「起点のあるプログラムとして読んだので、外からの呼び出しは数えていない」。**ユーザーに報告する前提**: 新しい前提を 1 つ入れた(起点のあるプログラムは、読んだコードが閉じた世界)。(a) は前提でない。
+3. **IR の追加(追加だけ。スキーマ版は上げない)**: `Func.private`、`Func.external_entry`、記録 `caller_marks`(`ir.Program.CallerMarks`)。Rust の抽出器が付ける。古い IR は、印が無いので、閉じた世界にならない。
+4. **出力の追加**: `Uncertainty.narrowed_from`(絞る前の候補数)、`Uncertainty.basis`(`closed_world_entry`。パラメータ由来で、private でないヘルパーのとき)と、`detail` の文、`summary.dispatch_narrowed`(`calls` / `candidates_before` / `candidates_after`)、`stats.dispatch_not_narrowed`(`open_callers` / `unknown_origin` / `limit`)。`dispatch_candidates` は、絞ったあとで数える。
+5. **ガード(ADR-045)**: 絞った呼び出しで、1 つのパラメータだけを通ってきた候補に、「パラメータ p に渡された関数がこの候補」のガードを付ける。受け手がセルの中でも付く(`dispatchGuards` は、受け手がパラメータそのもののときだけだった)。呼び元が作ったクロージャを渡していれば、ほかの候補を通る流れが落ちる。
+
+**確かめたこと:** docs/DESIGN-capture.md の「実装」の表。本物の流れの削除 0(rust-curated 142、動物園 112 の、`@source` と `@sink` の組が全部残る。削除した finding は、97 件(rust-curated)と 1 件(動物園)で、全部 source の注記が、sink の注記と同じタグを持たない)。「絞ると見逃す」形の 4 つと、開いた世界の 2 つの crate(`rust-curated-lib`、`rust-curated-ffi`)で、全候補のまま出ることと、private なヘルパーが絞れることを固定した。
+
+**限界:** 中継のガード、`Box<dyn Fn>` を作る呼び出しの先、`async` の本体は辿らない(全候補)。マクロが書く関数は private としない。衝突した関数の名前の確認は入れていない。Dart は別の機会(DESIGN-capture.md の末尾の段落)。
+

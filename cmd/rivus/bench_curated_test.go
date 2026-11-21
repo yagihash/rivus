@@ -569,6 +569,38 @@ func TestCuratedRust(t *testing.T) {
 	}
 }
 
+// TestCuratedRustOpen holds the cases where the candidates of a call of a closure are not narrowed because the
+// callers of the helper may not all be read (bench/rust-curated-lib: a library with no main; bench/rust-curated-ffi: a
+// program with a function that another program can call by its symbol): the `pub` helper keeps every candidate (its
+// `@fp` stays), and the helper that is private to the crate, which only this crate calls, is narrowed (quiet).
+func TestCuratedRustOpen(t *testing.T) {
+	bin := os.Getenv("RIVUS_RUST")
+	if bin == "" {
+		skipOrFail(t, "RIVUS_RUST")
+	}
+	bin, err := filepath.Abs(bin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"rust-curated-lib", "rust-curated-ffi"} {
+		name := name
+		t.Run(name, func(t *testing.T) {
+			dir, err := filepath.Abs(filepath.Join("..", "..", "bench", name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			stream, err := exec.Command(bin, dir).Output()
+			if err != nil {
+				t.Fatalf("the extractor failed: %v", err)
+			}
+			c := checkCuratedIR(t, dir, stream, ".rs")
+			if c.detect != 2 || c.fp != 1 {
+				t.Errorf("%s: want 2 flows found and 1 reported wrongly (the pub helper), got %+v", name, c)
+			}
+		})
+	}
+}
+
 // missTraces returns the kinds of the uncertainties that the engine left in the functions of the
 // source and of the sink of a flow that it did not find: what `rivus resolve` says about a flow
 // that is gone ("absent_now"). The uncertainties of the whole run (no function) do not count; nor

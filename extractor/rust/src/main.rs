@@ -123,7 +123,10 @@ fn driver() -> ExitCode {
     let write_failed = std::sync::atomic::AtomicBool::new(false);
     let result = run!(&args, || {
         if !probing && !skipped && !proc_macro && !out_dir.is_empty() {
-            let records = extract(&root, dep);
+            // a crate that is built to be loaded or linked by another program is called from outside
+            let open_crate = args.windows(2).any(|w| w[0] == "--crate-type" && matches!(w[1].as_str(), "cdylib" | "staticlib" | "dylib"))
+                || args.iter().any(|a| matches!(a.as_str(), "--crate-type=cdylib" | "--crate-type=staticlib" | "--crate-type=dylib"));
+            let records = extract(&root, dep, open_crate);
             // a test build of a crate (`--test`) is told apart by its name: the merge prefers it to the library build
             let kind = if args.iter().any(|a| a == "--test") { "-test" } else { "" };
             let path = PathBuf::from(&out_dir).join(format!("{}{}-{}.jsonl", crate_name, kind, std::process::id()));
@@ -147,7 +150,7 @@ fn driver() -> ExitCode {
 }
 
 /// The records of the crate being compiled: its functions, and the texts.
-fn extract(root: &str, dep: bool) -> Vec<Value> {
+fn extract(root: &str, dep: bool, open_crate: bool) -> Vec<Value> {
     let items: Vec<_> = rustc_public::all_local_items().into_iter().filter(|i| i.has_body()).collect();
     let bodies: HashSet<String> = items.iter().map(|i| i.name()).collect();
     let mut cx = lower::Ctx::new(root.to_string(), bodies);
@@ -186,6 +189,15 @@ fn extract(root: &str, dep: bool) -> Vec<Value> {
         if !dep && entry.as_deref() == Some(name.as_str()) {
             j["entry"] = json!(true);
         }
+        // what can be called from outside the program as it is read (a symbol that another program links:
+        // `#[no_mangle]`, `#[export_name]`, `extern "C"`, anything of a crate built as a library of C), and
+        // what cannot be called from outside its crate (no `pub`): the first is where the program is open
+        // to callers that are not read, the second is where the callers are all in the crate
+        if open_crate || is_external_entry(item) {
+            j["external_entry"] = json!(true);
+        } else if cx.item_is_private(&item.span(), &name) {
+            j["private"] = json!(true);
+        }
         if dep {
             // the texts of a dependency are not wanted: the core keeps only
             // the functions the code reaches
@@ -200,6 +212,25 @@ fn extract(root: &str, dep: bool) -> Vec<Value> {
         cx.texts.write(&mut out);
     }
     out
+}
+
+/// Whether the function is one that another program can call by its symbol: its symbol is not the one that
+/// rustc makes up (`#[no_mangle]`, `#[export_name]`), or it is not a function of Rust (`extern "C"`).
+fn is_external_entry(item: &rustc_public::CrateItem) -> bool {
+    use rustc_public::mir::mono::Instance;
+    use rustc_public::ty::{RigidTy, TyKind};
+    if let TyKind::RigidTy(RigidTy::FnDef(def, _)) = item.ty().kind() {
+        if !lower::has_rust_abi(def) {
+            return true;
+        }
+    }
+    match Instance::try_from(*item) {
+        Ok(inst) => {
+            let sym = inst.mangled_name();
+            !(sym.starts_with("_ZN") || sym.starts_with("_R") || sym.starts_with("__ZN") || sym.starts_with("__R"))
+        }
+        Err(_) => false,
+    }
 }
 
 // --- the command: builds the workspace with the driver in place of rustc ------
@@ -308,6 +339,8 @@ fn cli() -> ExitCode {
         }
     };
     merge(files);
+    // this extractor marks what only its crate can call (`private`) and what another program can call (`external_entry`)
+    println!("{}", json!({"kind": "caller_marks", "caller_marks": true}));
     if !include_tests {
         // What is not built: the tests, examples and benchmarks of the workspace, and the dependencies declared for
         // development only (cargo check does not compile them without --all-targets). The build scripts are not

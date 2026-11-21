@@ -1,0 +1,11 @@
+# Rules of the open-world fixture of the narrowing of the candidates of a closure call (docs/DESIGN-capture.md).
+ruleset: rivus/bench-rust-curated-lib@1
+
+sources:
+  - symbol: curated_lib::source
+    labels: [user_input]
+
+sinks:
+  - symbol: curated_lib::sink
+    category: test
+    accepts: [user_input]

@@ -54,7 +54,7 @@ pub fn non_capturing_closure_as_pointer() {
 // the sink as a function value
 pub fn sink_as_value() {
     let items = vec![source()]; // @source(sink-value)
-    items.iter().for_each(|s| sink(s)); // @sink(sink-value) @noisy(3)
+    items.iter().for_each(|s| sink(s)); // @sink(sink-value)
 }
 
 pub fn sink_pointer() {

@@ -1,22 +1,13 @@
 package sg
 
-import (
-	"regexp"
-	"strconv"
-)
-
-// envType is the type of the environment of a closure of Rust: where the closure is written.
-var envType = regexp.MustCompile(`^\{closure@(.+):(\d+):(\d+): \d+:\d+\}$`)
+import "github.com/yagihash/rivus/internal/ir"
 
 // linkEnvClosures finds the function of each closure that is made as the alloc of its environment
 // (Rust: a closure that captured values is not a make_closure). The type of the environment says
-// where the closure is written, and the function of the closure is at that place.
+// where the closure is written, and the function of the closure is at that place (ir.ClosureIndex:
+// the one rule, shared with the narrowing of the candidates of Fn::call).
 func (p *Program) linkEnvClosures() {
-	type at struct {
-		file      string
-		line, col int
-	}
-	var index map[at][]*Func
+	var index *ir.ClosureIndex
 	for _, fn := range p.Funcs {
 		for _, b := range fn.Blocks {
 			for _, in := range b.Instrs {
@@ -24,43 +15,24 @@ func (p *Program) linkEnvClosures() {
 					continue
 				}
 				p.HasEnv = true
-				m := envType.FindStringSubmatch(in.IR.Env)
-				if m == nil {
-					continue
-				}
 				if index == nil {
-					index = map[at][]*Func{}
+					irs := make([]*ir.Func, 0, len(p.Funcs))
 					for _, f := range p.Funcs {
-						if !isClosureID(f.ID) {
-							continue
+						if isClosureID(f.ID) {
+							irs = append(irs, f.IR)
 						}
-						file := f.Pos.File
-						if file == "" {
-							file = f.IR.File
-						}
-						k := at{file, f.Pos.Line, f.Pos.Col}
-						index[k] = append(index[k], f)
 					}
+					index = ir.NewClosureIndex(irs)
 				}
-				line, _ := strconv.Atoi(m[2])
-				col, _ := strconv.Atoi(m[3])
-				// exactly one function is at the place (a macro that writes the closure in many places is not matched)
-				if fs := index[at{m[1], line, col}]; len(fs) == 1 {
+				if f := index.Lookup(in.IR.Env); f != nil {
 					if p.EnvClosures == nil {
 						p.EnvClosures = map[*Instr]*Func{}
 					}
-					p.EnvClosures[in] = fs[0]
+					p.EnvClosures[in] = p.ByID[string(f.ID)]
 				}
 			}
 		}
 	}
 }
 
-func isClosureID(id string) bool {
-	for i := 0; i+9 <= len(id); i++ {
-		if id[i:i+9] == "{closure#" {
-			return true
-		}
-	}
-	return false
-}
+func isClosureID(id string) bool { return ir.IsClosureID(id) }
