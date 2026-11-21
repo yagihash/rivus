@@ -85,10 +85,12 @@ type Engine struct {
 	makers     map[string]closureSite
 	// reach is what the program can reach from its entry points (nil: unknown).
 	reach map[*sg.Func]bool
-	texts ir.Texts
-	sites *sites.Result
-	rules *model.Rules
-	opts  Options
+	// reachCB is reach with the methods that a framework calls as entry points too (ADR-073).
+	reachCB map[*sg.Func]bool
+	texts   ir.Texts
+	sites   *sites.Result
+	rules   *model.Rules
+	opts    Options
 	// aliasArgs: the calls whose result is the same storage as an argument
 	// (a model flow with alias), by symbol.
 	aliasArgs map[string]int
@@ -443,6 +445,7 @@ type Result struct {
 func (e *Engine) Run() *Result {
 	start := time.Now()
 	e.reach = e.prog.Reachable()
+	e.reachCB = e.prog.ReachableWithCallbacks()
 	fns := e.prog.Funcs
 	callees := func(ci *sg.Instr) []*sg.Func {
 		if ci.Op == ir.OpMakeClosure {
@@ -1358,6 +1361,11 @@ func (e *Engine) buildFinding(rf *rawFinding) *Finding {
 		f.Reachability = ReachFromEntry
 		for _, id := range append([]string{src.Func, rf.site.Func}, funcs...) {
 			if fn := e.prog.ByID[id]; fn != nil && !e.reach[fn] {
+				if e.reachCB[fn] {
+					f.Reachability = ReachFromFrameworkCallback
+					f.ReachabilityNote = FrameworkCallbackNote
+					continue
+				}
 				f.Reachability = ReachNotFromEntry
 				f.ReachabilityNote = NotFromEntryNote
 				break
@@ -1456,7 +1464,9 @@ func (e *Engine) mergeParamSources(fs []*Finding) []*Finding {
 		g := groups[k]
 		sort.SliceStable(g, func(i, j int) bool {
 			a, b := g[i], g[j]
-			if ra, rb := a.Reachability != ReachNotFromEntry, b.Reachability != ReachNotFromEntry; ra != rb {
+			// the framework callbacks do not count as reached here: they were not before they had a name, and the
+			// representative path is the same (ADR-073)
+			if ra, rb := a.Reachability != ReachNotFromEntry && a.Reachability != ReachFromFrameworkCallback, b.Reachability != ReachNotFromEntry && b.Reachability != ReachFromFrameworkCallback; ra != rb {
 				return ra
 			}
 			if ua, ub := len(a.Uncertainties), len(b.Uncertainties); ua != ub {

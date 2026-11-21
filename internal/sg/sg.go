@@ -311,6 +311,44 @@ func (v *Value) Less(o *Value) bool {
 // interfaces and function values, and the functions named as values. It is nil
 // when nothing says where the program starts.
 func (p *Program) Reachable() map[*Func]bool {
+	return p.reach(nil)
+}
+
+// FrameworkCallbacks are the methods of the code that was read that a framework calls: they
+// override (or implement) a method that a supertype declares and that no function of the code
+// being analysed has (State.initState, StatelessWidget.build of a Flutter app: the framework
+// is a dependency that is not read, or read and not followed to every call). The criterion is
+// a fact of the code (ir.Func.Overrides, from the declarations of the supertypes), not a name.
+func (p *Program) FrameworkCallbacks() []*Func {
+	own := map[string]bool{} // the symbols that the code being analysed declares
+	for _, f := range p.Funcs {
+		if !f.Dep && f.Symbol != "" {
+			own[f.Symbol] = true
+		}
+	}
+	var out []*Func
+	for _, f := range p.Funcs {
+		if f.Dep || f.IR == nil {
+			continue
+		}
+		for _, s := range f.IR.Overrides {
+			if !own[s] {
+				out = append(out, f)
+				break
+			}
+		}
+	}
+	return out
+}
+
+// ReachableWithCallbacks is Reachable with the framework callbacks (FrameworkCallbacks) as
+// entry points too, and what they reach. It is a superset of Reachable, and nil when
+// Reachable is (nothing says where the program starts).
+func (p *Program) ReachableWithCallbacks() map[*Func]bool {
+	return p.reach(p.FrameworkCallbacks())
+}
+
+func (p *Program) reach(extra []*Func) map[*Func]bool {
 	var work []*Func
 	reach := map[*Func]bool{}
 	add := func(f *Func) {
@@ -339,6 +377,9 @@ func (p *Program) Reachable() map[*Func]bool {
 	}
 	if len(work) == 0 {
 		return nil
+	}
+	for _, f := range extra {
+		add(f)
 	}
 	for len(work) > 0 {
 		f := work[len(work)-1]

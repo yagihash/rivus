@@ -182,7 +182,7 @@ type Finding struct {
 	// (which rivus does not follow). Absent when nothing says where the
 	// program starts.
 	Reachability string `json:"reachability,omitempty"`
-	// ReachabilityNote explains not_from_entry: what the entry points leave out (ADR-052).
+	// ReachabilityNote explains not_from_entry (what the entry points leave out, ADR-052) and from_framework_callback (ADR-073).
 	ReachabilityNote string `json:"reachability_note,omitempty"`
 	// DispatchWidened is the number of calls on the path that went through an
 	// interface or a function value and were taken to reach every one of
@@ -246,16 +246,25 @@ const (
 
 // Values of Finding.Reachability.
 const (
-	ReachFromEntry    = "from_entry"
-	ReachNotFromEntry = "not_from_entry"
+	ReachFromEntry = "from_entry"
+	// ReachFromFrameworkCallback: some function of the path is not reached from the entry points,
+	// and every one that is not is reached from a method that a framework calls (an override of a
+	// method that a dependency declares: State.initState, StatelessWidget.build), which the code
+	// that was read does not call. The framework calls it where the program runs (ADR-073).
+	ReachFromFrameworkCallback = "from_framework_callback"
+	ReachNotFromEntry          = "not_from_entry"
 )
 
 // NotFromEntryNote is the explanation that goes with not_from_entry. The entry points are the
-// start of the program as the code that was read says it; what a framework calls (an override
-// of a method of a type of a dependency, a handler it is given to) is not an entry point
-// until the overrides are edges of the graph (C-4), and in Dart, and wherever the
-// dependencies are not read, the framework is not read either.
-const NotFromEntryNote = "not_from_entry does not mean the code is dead: a function that a framework calls (an override of a method of a type of a dependency, a handler registered with it) is not an entry point here, and the code of a dependency that was not read does not call it"
+// start of the program as the code that was read says it, and the methods that a framework
+// calls are those that override a method of a dependency's type (ReachFromFrameworkCallback).
+// What is left out is what a framework is given as a value (a handler registered with a router,
+// a function stored in a table) and that the code read does not pass on, and what the code
+// of a dependency that was not read would call.
+const NotFromEntryNote = "not_from_entry does not mean the code is dead: a function that a framework calls (a handler registered with it, a method that a dependency's code calls through a table) is not an entry point here, and the code of a dependency that was not read does not call it"
+
+// FrameworkCallbackNote is the explanation that goes with from_framework_callback.
+const FrameworkCallbackNote = "from_framework_callback: a function on the path is not reached from the entry points of the program, but it overrides a method that a dependency declares (State.initState, StatelessWidget.build), which the framework calls: the path starts where the framework calls, as the code of the dependency that was not read would"
 
 // Path is one way the data gets from the source to the sink.
 type Path struct {
