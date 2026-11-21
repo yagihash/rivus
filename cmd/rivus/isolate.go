@@ -21,8 +21,11 @@ import (
 // Reading a Rust project builds it: cargo runs its build scripts and its proc macros. For code that is not trusted
 // that runs in a container (ADR-064, docs/rust-isolation.md), in two stages:
 //
-//  1. fetch (network, no code of the project runs): `cargo fetch --locked` puts the sources of the dependencies in a
-//     volume. cargo does not build in this stage.
+//  1. fetch (network): `cargo fetch --locked` puts the sources of the dependencies in a volume. cargo does not build in
+//     this stage, so no build.rs and no proc macro runs. But cargo reads the cargo configuration the project brings
+//     (.cargo/config.toml), and that can name a program that cargo runs (a credential provider). Until the
+//     configuration of the project is kept out of this stage, code of the project can run here, with a network.
+//     Do not read untrusted Rust with this stage (-no-fetch); see docs/rust-isolation.md.
 //  2. extract (no network): the extractor runs `cargo check --offline --locked`; the project is mounted read-only,
 //     so is the volume of the dependencies, and what is written goes to volumes that are removed with the container.
 //
@@ -168,7 +171,8 @@ func (o *isolationOpts) limits(name string) []string {
 	}
 }
 
-// fetchArgs are the arguments of `docker` for the stage that has the network. No code of the project runs: cargo fetch does not build.
+// fetchArgs are the arguments of `docker` for the stage that has the network. cargo fetch does not build, but it reads the
+// cargo configuration of the project, which can make it run a program of the project (see the comment at the top).
 func (o *isolationOpts) fetchArgs(name, dir, volume string) []string {
 	a := o.limits(name)
 	a = append(a,
@@ -271,7 +275,7 @@ func (o *isolationOpts) extractRustIsolated(ctx context.Context, dir string, ext
 		fmt.Fprintf(o.err(), "rivus: the project asks for the toolchain %q; the extractor is pinned to %s and the container does not fetch another one, so it is built with %s (it may not compile)\n", want, pinnedToolchain, pinnedToolchain)
 	}
 	if !o.noFetch {
-		fmt.Fprintf(o.err(), "rivus: fetching the dependencies (cargo fetch --locked, with a network, no code of the project runs) into the volume %s\n", volume)
+		fmt.Fprintf(o.err(), "rivus: fetching the dependencies (cargo fetch --locked, with a network; the cargo configuration of the project can make this stage run its code, see docs/rust-isolation.md) into the volume %s\n", volume)
 		name := randomName("rivus-fetch-")
 		if err := o.runContainer(ctx, name, o.fetchArgs(name, dir, volume), io.Discard, "fetch"); err != nil {
 			return nil, err

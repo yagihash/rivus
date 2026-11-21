@@ -411,7 +411,10 @@ setup() { # name side: makes the copy and the IR of that version; sets DIR, RULE
       if [ ! -s "$IR" ]; then
         say "$b: making the IR with the extractor of $w ($s7), $mode"
         if [ "$mode" = container ]; then
-          local xargs=(-lang rust -C "$DIR" -rust-image "$image")
+          # -no-fetch: the stage that fetches has a network, and the cargo configuration of a third-party project can
+          # make it run a program of the project (SECURITY: see docs/rust-isolation.md). Until that is closed the
+          # dependencies have to be in the volume already (fetched by someone who has looked at the project).
+          local xargs=(-lang rust -C "$DIR" -rust-image "$image" -no-fetch)
           if [ "$b" = parseable ]; then
             mkdir -p "$WORK/parseable-assets"   # build.rs would fetch the UI from the network without it
             xargs+=(-no-deps -container-env LOCAL_ASSETS_PATH=/assets -container-ro-mount "$WORK/parseable-assets:/assets")

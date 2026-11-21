@@ -179,7 +179,7 @@ LLM にモデルを書かせ、人や別の手段で確かめる、という使�
 
 | 言語 | 何が動くか |
 |---|---|
-| Rust | extractor が、対象に `cargo check` を走らせます（**対象をコンパイルします**）。対象と依存の `build.rs`、proc macro が実行されます。**既定は、Docker のコンテナの中で動かします**（ネットワークなし、対象は読み取り専用、非 root、権限なし。Docker がなければ、動かさずに止まります）。ホストで直接動かすのは `-unsafe-host-exec`（信頼できるコードだけ）。手順と限界は [docs/rust-isolation.md](docs/rust-isolation.md) |
+| Rust | extractor が、対象に `cargo check` を走らせます（**対象をコンパイルします**）。対象と依存の `build.rs`、proc macro が実行されます。**既定は、Docker のコンテナの中で動かします**（抽出の段階はネットワークなし。**依存を取る段階は、ネットワークがあり、対象の cargo の設定しだいで対象のコードが動きうる既知の穴があり、修正中。信頼できない Rust には、直るまで `-no-fetch` を使う**。対象は読み取り専用、非 root、権限なし。Docker がなければ、動かさずに止まります）。ホストで直接動かすのは `-unsafe-host-exec`（信頼できるコードだけ）。手順と限界は [docs/rust-isolation.md](docs/rust-isolation.md) |
 | Go | `go/packages` が `go list` を走らせます。依存の取得（ネットワーク）が起きることがあります。cgo のあるパッケージは、cgo の前処理（C コンパイラ）が走ります。**対象のソースそのものは実行しません**が、「Go はコードを実行しない」とは言えません。隔離はありません（Rust と同じ作りに載せる予定） |
 | Dart | extractor は、静的に読むだけです。ただし、前提の手順（`dart pub get`、`build_runner`）は、対象の依存と生成器のコードを実行します |
 

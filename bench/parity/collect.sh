@@ -46,7 +46,9 @@ rust_ir() { # name source_dir read_dir [extractor flags]: the IR of the Rust pro
     "$RIVUS_RUST" "$@" "$dir" > "$WORK/ir/$name.jsonl"
   else
     docker info > /dev/null 2>&1 || { echo "Rust の第三者のコードは隔離の中でだけ読む。Docker を起動するか、このベンチを外す ($name)" >&2; return 1; }
-    env -u RIVUS_UNSAFE_HOST_EXEC "$RIVUS" extract -lang rust -C "$dir" "$@" > "$WORK/ir/$name.jsonl"
+    # -no-fetch: the stage that fetches has a network and the cargo configuration of the project can make it run a program of
+    # the project (docs/rust-isolation.md); the dependencies have to be in the volume already until that is closed
+    env -u RIVUS_UNSAFE_HOST_EXEC "$RIVUS" extract -lang rust -no-fetch -C "$dir" "$@" > "$WORK/ir/$name.jsonl"
   fi
 }
 
