@@ -104,7 +104,8 @@ class Det(unittest.TestCase):
             r = run("det", same, "1")
             self.assertEqual((r.returncode, r.stdout.split()[0]), (0, "SAME"), r.stdout + r.stderr)
         with tempfile.TemporaryDirectory() as d:
-            diff = self.binary(d, 'echo "{\\"stats\\":{},\\"findings\\":[$RANDOM]}"')
+            # a different output on each run (a counter in a file: $RANDOM is not in every sh)
+            diff = self.binary(d, 'n=$(cat %s/n 2>/dev/null || echo 0); n=$((n+1)); echo $n > %s/n; echo "{\\"stats\\":{},\\"findings\\":[$n]}"' % (d, d))
             r = run("det", diff, "1")
             self.assertEqual((r.returncode, r.stdout.split()[0]), (1, "DIFFERENT:"), r.stdout + r.stderr)
 
