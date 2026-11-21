@@ -21,7 +21,7 @@ func (h *holder) Set(s string) { h.v = s }
 func vuln() { // @vuln
 	h := &holder{}
 	var i setter = h
-	i.Set(mark.Src("dyn-iface-ptr-recv-write-vuln")) // @source(dyn-iface-ptr-recv-write-vuln) @miss(silent) @ref(CORE-J)
+	i.Set(mark.Src("dyn-iface-ptr-recv-write-vuln")) // @source(dyn-iface-ptr-recv-write-vuln)
 	mark.SinkCmd(h.v)                                // @sink(dyn-iface-ptr-recv-write-vuln)
 }
 
@@ -36,7 +36,7 @@ func decoy() { // @decoy
 	h := &holder{}
 	other := &holder{}
 	var i setter = h
-	i.Set(mark.Src("dyn-iface-ptr-recv-write-decoy")) // @source(dyn-iface-ptr-recv-write-decoy) @miss(silent) @ref(CORE-J)
+	i.Set(mark.Src("dyn-iface-ptr-recv-write-decoy")) // @source(dyn-iface-ptr-recv-write-decoy)
 	mark.SinkCmd(other.v)                             // @sink(none) @nosink(dyn-iface-ptr-recv-write-decoy)
 	mark.SinkSQL(h.v)                                 // @sink(dyn-iface-ptr-recv-write-decoy)
 }

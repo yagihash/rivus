@@ -37,6 +37,7 @@ import (
 	_ "zoo/cells/dyn/iface_ptr_recv_read"
 	_ "zoo/cells/dyn/iface_ptr_recv_write"
 	_ "zoo/cells/dyn/iface_val_recv"
+	_ "zoo/cells/dyn/iface_write_passed"
 	_ "zoo/cells/dyn/method_value"
 	_ "zoo/cells/dyn/method_value_iface"
 	_ "zoo/cells/dyn/sanitizer_own_impl"

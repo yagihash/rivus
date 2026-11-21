@@ -134,3 +134,92 @@ func OwnCopy() {
 	_, _ = io.Copy(w, strings.NewReader(lib.Source())) // @source(writer_own_copy)
 	lib.Sink(string(w.data))                           // @sink(writer_own_copy)
 }
+
+// --- the writer is passed to a function as an interface (a pointer inside the interface value), and
+// is written to there: the write must reach what the pointer points to (ADR-087) ---
+
+func fill(w io.Writer, s string) { fmt.Fprint(w, s) }
+
+func PassedBuffer() {
+	var b bytes.Buffer
+	fill(&b, lib.Source()) // @source(writer_passed_buffer)
+	lib.Sink(b.String())   // @sink(writer_passed_buffer)
+}
+
+func PassedBuilder() {
+	var sb strings.Builder
+	fill(&sb, lib.Source()) // @source(writer_passed_builder)
+	lib.Sink(sb.String())   // @sink(writer_passed_builder)
+}
+
+func PassedOwn() {
+	w := &sliceW{}
+	fill(w, lib.Source())    // @source(writer_passed_own)
+	lib.Sink(string(w.data)) // @sink(writer_passed_own)
+}
+
+func fillf(w io.Writer, s string) { fmt.Fprintf(w, "%s", s) }
+
+func PassedOwnFprintf() {
+	w := &sliceW{}
+	fillf(w, lib.Source())   // @source(writer_passed_own_f)
+	lib.Sink(string(w.data)) // @sink(writer_passed_own_f)
+}
+
+func ws(w io.Writer, s string) { _, _ = io.WriteString(w, s) }
+
+func PassedWriteString() {
+	var b bytes.Buffer
+	ws(&b, lib.Source()) // @source(writer_passed_ws)
+	lib.Sink(b.String()) // @sink(writer_passed_ws)
+}
+
+// no finding: another buffer is read
+func PassedDecoy() {
+	var b, other bytes.Buffer
+	fill(&b, lib.Source())
+	lib.Sink(other.String()) // @sink(none)
+}
+
+// --- a method of the project called through an interface, and the original pointer read ---
+
+type box struct{ v string }
+
+func (b *box) Set(s string) { b.v = s }
+
+type setter interface{ Set(string) }
+
+func SetterWrite() {
+	b := &box{}
+	var s setter = b
+	s.Set(lib.Source()) // @source(writer_setter)
+	lib.Sink(b.v)       // @sink(writer_setter)
+}
+
+// no finding: another field of the box is read (the body of Set is read: only v is written)
+type twoField struct{ v, name string }
+
+func (t *twoField) Set(s string) { t.v = s }
+
+func SetterFieldDecoy() {
+	t := &twoField{}
+	var s setter = t
+	s.Set(lib.Source())
+	lib.Sink(t.name) // @sink(none)
+}
+
+// no finding: another box
+func SetterDecoy() {
+	b, other := &box{}, &box{}
+	var s setter = b
+	s.Set(lib.Source())
+	lib.Sink(other.v) // @sink(none)
+}
+
+func setVia(s setter, v string) { s.Set(v) }
+
+func SetterPassed() {
+	b := &box{}
+	setVia(b, lib.Source()) // @source(writer_setter_passed)
+	lib.Sink(b.v)           // @sink(writer_setter_passed)
+}

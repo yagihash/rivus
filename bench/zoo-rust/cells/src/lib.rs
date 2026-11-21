@@ -5,6 +5,7 @@
 //! Two marks for a cell of the Go zoo that Rust has not (docs/DESIGN-zoo.md, 4.2.5): `@na` is a form that Rust does not have at all,
 //! `@todo` is a form that Rust can have and the cell is not written yet. The parity table counts them apart.
 //! @na(F/dyn/iface-assert-ptr-recv: Go's type assertion of `any` to an interface read through a pointer receiver; Rust has neither)
+//! @todo(F/dyn/iface-write-passed: PARITY: Go's pointer held in an `io.Writer` interface value that a function writes to (ADR-087); a Rust `&mut dyn Write` passed to a function and read back from the owner can be written)
 pub mod call {
     pub mod depth3;
     pub mod direct;
