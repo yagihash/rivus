@@ -335,6 +335,21 @@ type Listed struct {
 	MaxHops      int `json:"max_hops"`
 }
 
+// NotExhaustive says why a "no path" is not exhaustive (see PathResult.NotExhaustiveBecause).
+type NotExhaustive struct {
+	UnresolvedCalls Caveat `json:"unresolved_calls"`
+	OpenFunctions   Caveat `json:"open_functions"`
+	// Cut is set when the sets that were read (what the start reaches, what reaches the goal) were cut by a bound.
+	Cut bool `json:"cut,omitempty"`
+}
+
+// Caveat is one reason: how many, what it means, and a few examples (at most 5).
+type Caveat struct {
+	Total    int      `json:"total"`
+	Why      string   `json:"why"`
+	Examples []string `json:"examples,omitempty"`
+}
+
 // PathResult is the answer of path.
 type PathResult struct {
 	Common
@@ -362,6 +377,13 @@ type PathResult struct {
 	// Limits (--from-entry, no path): what the edges of the file do not hold,
 	// so that "no path" is not read as "unreachable at run time".
 	Limits []string `json:"limits,omitempty"`
+	// NotExhaustiveBecause (no path, exhaustive false although the search of the edges was complete): what the
+	// file does not hold that the answer depends on. "No path" is exhaustive only when nothing was left out:
+	// UnresolvedCalls are calls in what the start reaches that go nowhere the file knows (a call through an
+	// interface or a function value with no candidate); OpenFunctions are functions that reach the goal (backwards)
+	// and that code which was not read may call (a method; a function named as a value that the search did not
+	// reach).
+	NotExhaustiveBecause *NotExhaustive `json:"not_exhaustive_because,omitempty"`
 	// TargetFacts (--from-entry, no path): what the file says of the goal, so
 	// that "no path" is not read as "dead code".
 	TargetFacts []TargetFact `json:"target_facts,omitempty"`

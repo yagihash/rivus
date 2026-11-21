@@ -835,6 +835,18 @@ func (e *Engine) Path(from, to string, o Options) (*PathResult, error) {
 	}
 	if !sr.found {
 		res.Certainty = ""
+		if edgesDone && !o.FromEntry {
+			// "No path" is exhaustive only when nothing was left out: what the file does not hold may decide it
+			ne, err := e.notExhaustive(starts, goals, refsSearched)
+			if err != nil {
+				return nil, err
+			}
+			if ne != nil {
+				res.NotExhaustiveBecause = ne
+				res.Exhaustive = false // (edges_exhausted still says the search of the edges was complete)
+				res.Limits = append(res.Limits, notExhaustiveLimits...)
+			}
+		}
 		if !sr.exhaustive {
 			res.Warnings = append(res.Warnings, fmt.Sprintf("the search was cut (%d functions visited, at most %d hops): \"no path\" is not proved", sr.visited, MaxPathHops))
 		}
@@ -1233,4 +1245,74 @@ func hasReceiver(lang, symbol string) bool {
 		}
 	}
 	return false
+}
+
+var notExhaustiveLimits = []string{
+	"\"no path\" is exhaustive only when nothing was left out; \"not_exhaustive_because\" says what was: \"edges_exhausted\" is true when the search of the edges of the file was complete",
+	"a call through an interface or a function value with no candidate (\"unresolved_calls\"): the file does not say where it goes, so a path may go through it",
+	"a function that reaches the goal and that code which was not read may call (\"open_functions\": a method that a dependency or the language calls, as an implicit toString; a function named as a value that the search did not reach): a path may begin outside what was read",
+}
+
+// notExhaustive reads what the file leaves out, for a "no path" whose search of the edges was complete. Forward: the
+// calls, in what the start reaches, through an interface or a function value that have no candidate. Backward: the
+// functions that reach the goal and that code which was not read may call: a method (the file does not say which
+// declarations of code that was not read it overrides or implements, so any method may be), and a function named as a
+// value that the search did not reach. nil: nothing was left out.
+func (e *Engine) notExhaustive(starts, goals []int64, refs bool) (*NotExhaustive, error) {
+	fwd, cutF, err := e.db.ReachSet(starts, true, refs, graphdb.MaxReach)
+	if err != nil {
+		return nil, err
+	}
+	bwd, cutB, err := e.db.ReachSet(goals, false, refs, graphdb.MaxReach)
+	if err != nil {
+		return nil, err
+	}
+	ne := &NotExhaustive{Cut: cutF || cutB}
+	ne.UnresolvedCalls.Why = "a call through an interface or a function value in what the start reaches has no candidate: the file does not say where it goes"
+	total, rows, err := e.db.UnresolvedCallsIn(fwd, 5)
+	if err != nil {
+		return nil, err
+	}
+	ne.UnresolvedCalls.Total = total
+	for _, r := range rows {
+		f, err := e.fn(r.Func)
+		if err != nil {
+			return nil, err
+		}
+		ne.UnresolvedCalls.Examples = append(ne.UnresolvedCalls.Examples, fmt.Sprintf("%s:%d:%d in %s (%s)", r.File, r.Line, r.Col, f.FID, r.Kind))
+	}
+	ne.OpenFunctions.Why = "a function that reaches the goal may be called by code that was not read: a method (a dependency or the language may call it), or a function named as a value that the search did not reach"
+	funcs, err := e.db.FuncsIn(bwd)
+	if err != nil {
+		return nil, err
+	}
+	named, err := e.db.NamedAsValue(bwd)
+	if err != nil {
+		return nil, err
+	}
+	inFwd := make(map[int64]bool, len(fwd))
+	for _, id := range fwd {
+		inFwd[id] = true
+	}
+	sort.Slice(funcs, func(i, j int) bool { return funcs[i].FID < funcs[j].FID })
+	for _, f := range funcs {
+		why := ""
+		switch {
+		case hasReceiver(f.Lang, f.Symbol):
+			why = "a method"
+		case named[f.ID] && !inFwd[f.ID]:
+			why = "named as a value"
+		}
+		if why == "" {
+			continue
+		}
+		ne.OpenFunctions.Total++
+		if len(ne.OpenFunctions.Examples) < 5 {
+			ne.OpenFunctions.Examples = append(ne.OpenFunctions.Examples, f.FID+" ("+why+")")
+		}
+	}
+	if !ne.Cut && ne.UnresolvedCalls.Total == 0 && ne.OpenFunctions.Total == 0 {
+		return nil, nil
+	}
+	return ne, nil
 }

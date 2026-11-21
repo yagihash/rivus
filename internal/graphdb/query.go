@@ -754,3 +754,139 @@ func (d *DB) DynamicInEdges(to int64) ([]DynEdge, error) {
 	}
 	return out, rows.Err()
 }
+
+// MaxReach is the most functions ReachSet reads.
+const MaxReach = 200000
+
+const inChunk = 400
+
+func placeholders(n int) string {
+	return strings.TrimSuffix(strings.Repeat("?,", n), ",")
+}
+
+func idArgs(ids []int64) []any {
+	a := make([]any, len(ids))
+	for i, id := range ids {
+		a[i] = id
+	}
+	return a
+}
+
+// ReachSet is the set of functions that the seeds reach over the edges of the file (forward: the callees; not
+// forward: the callers), and over the references (a function named as a value: owner to target; backwards,
+// target to owner) when refs is true. The seeds are in it. At most max functions are read: cut says it stopped.
+func (d *DB) ReachSet(seeds []int64, forward, refs bool, max int) (ids []int64, cut bool, err error) {
+	seen := map[int64]bool{}
+	var frontier []int64
+	for _, s := range seeds {
+		if !seen[s] {
+			seen[s] = true
+			frontier = append(frontier, s)
+			ids = append(ids, s)
+		}
+	}
+	from, to, rfrom, rto := "from_func", "to_func", "owner_func", "target_func"
+	if !forward {
+		from, to, rfrom, rto = to, from, rto, rfrom
+	}
+	queries := []string{`SELECT DISTINCT ` + to + ` FROM edges WHERE ` + from + ` IN (%s)`}
+	if refs {
+		queries = append(queries, `SELECT DISTINCT `+rto+` FROM refs WHERE `+rfrom+` IN (%s)`)
+	}
+	for len(frontier) > 0 {
+		var next []int64
+		for i := 0; i < len(frontier); i += inChunk {
+			chunk := frontier[i:min(i+inChunk, len(frontier))]
+			for _, q := range queries {
+				rows, err := d.db.Query(fmt.Sprintf(q, placeholders(len(chunk))), idArgs(chunk)...)
+				if err != nil {
+					return nil, false, err
+				}
+				for rows.Next() {
+					var id int64
+					if err := rows.Scan(&id); err != nil {
+						rows.Close()
+						return nil, false, err
+					}
+					if !seen[id] {
+						seen[id] = true
+						next = append(next, id)
+						ids = append(ids, id)
+					}
+				}
+				if err := rows.Err(); err != nil {
+					rows.Close()
+					return nil, false, err
+				}
+				rows.Close()
+			}
+			if len(ids) > max {
+				return ids, true, nil
+			}
+		}
+		frontier = next
+	}
+	return ids, false, nil
+}
+
+// UnresolvedCallsIn counts the calls, in the functions given, through an interface or a function value that have
+// no candidate (nothing says where they go), and returns the first max of them.
+func (d *DB) UnresolvedCallsIn(ids []int64, max int) (int, []CallRow, error) {
+	total := 0
+	var out []CallRow
+	for i := 0; i < len(ids); i += inChunk {
+		chunk := ids[i:min(i+inChunk, len(ids))]
+		rows, err := d.callRows(`SELECT `+callCols+` `+callJoin+` WHERE c.func_id IN (`+placeholders(len(chunk))+`) AND c.kind IN ('interface','value') AND c.ncand = 0 ORDER BY c.func_id, c.line, c.col, c.id`, idArgs(chunk)...)
+		if err != nil {
+			return 0, nil, err
+		}
+		total += len(rows)
+		for _, r := range rows {
+			if len(out) < max {
+				out = append(out, r)
+			}
+		}
+	}
+	return total, out, nil
+}
+
+// FuncsIn reads the functions of the ids (the order is not the order given).
+func (d *DB) FuncsIn(ids []int64) ([]Func, error) {
+	var out []Func
+	for i := 0; i < len(ids); i += inChunk {
+		chunk := ids[i:min(i+inChunk, len(ids))]
+		fs, err := d.funcs(`WHERE f.id IN (`+placeholders(len(chunk))+`)`, idArgs(chunk)...)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, fs...)
+	}
+	return out, nil
+}
+
+// NamedAsValue is which of the functions some function names as a value (a reference: an argument, a stored
+// function, a closure made there).
+func (d *DB) NamedAsValue(ids []int64) (map[int64]bool, error) {
+	out := map[int64]bool{}
+	for i := 0; i < len(ids); i += inChunk {
+		chunk := ids[i:min(i+inChunk, len(ids))]
+		rows, err := d.db.Query(`SELECT DISTINCT target_func FROM refs WHERE target_func IN (`+placeholders(len(chunk))+`)`, idArgs(chunk)...)
+		if err != nil {
+			return nil, err
+		}
+		for rows.Next() {
+			var id int64
+			if err := rows.Scan(&id); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			out[id] = true
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		rows.Close()
+	}
+	return out, nil
+}

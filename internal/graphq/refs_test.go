@@ -84,9 +84,11 @@ func TestPathFourthStageReferences(t *testing.T) {
 	if last.Kind != "ref" || last.RefKind != "other" || last.ViaCallee != "" || last.At != "r.go:50:4" {
 		t.Errorf("store step: %+v", last)
 	}
-	// --no-refs leaves the stage out, and says so
+	// --no-refs leaves the stage out, and says so. H is named as a value, which this search did not follow: "no path"
+	// is not exhaustive then (the judgement of the adviser, 2026-11-22: only when nothing was left out), and the edges
+	// were searched to the end.
 	r, _ = e.Path("main", "H", graphq.Options{NoRefs: true})
-	if r.Reachable || strings.Join(r.Searched, ",") != "static,dynamic,hub" || !r.Exhaustive || r.Relation != "calls" || strings.Contains(r.ExhaustiveOf, "references") {
+	if r.Reachable || strings.Join(r.Searched, ",") != "static,dynamic,hub" || r.Exhaustive || !r.EdgesExhausted || r.NotExhaustiveBecause == nil || r.Relation != "calls" || strings.Contains(r.ExhaustiveOf, "references") {
 		t.Errorf("no-refs: %+v", r)
 	}
 	// a path of calls is found before the references are looked at
