@@ -624,7 +624,6 @@ dart dart:core#Map.values | debt | the standard library: no cell of the zoo call
 dart dart:core#MapEntry.new | debt | the standard library: no cell of the zoo calls it yet
 dart dart:core#Object.hashCode | debt | the standard library: no cell of the zoo calls it yet
 dart dart:core#Object.runtimeType | debt | the standard library: no cell of the zoo calls it yet
-dart dart:core#Object.toString | debt | the standard library: no cell of the zoo calls it yet
 dart dart:core#RangeError.checkNotNegative | debt | the standard library: no cell of the zoo calls it yet
 dart dart:core#RangeError.checkValidIndex | debt | the standard library: no cell of the zoo calls it yet
 dart dart:core#RangeError.checkValidRange | debt | the standard library: no cell of the zoo calls it yet
@@ -640,7 +639,6 @@ dart dart:core#Stopwatch.new | debt | the standard library: no cell of the zoo c
 dart dart:core#Stopwatch.start | debt | the standard library: no cell of the zoo calls it yet
 dart dart:core#Stopwatch.stop | debt | the standard library: no cell of the zoo calls it yet
 dart dart:core#String.characters | debt | the standard library: no cell of the zoo calls it yet
-dart dart:core#String.fromCharCode | debt | the standard library: no cell of the zoo calls it yet
 dart dart:core#String.fromCharCodes | debt | the standard library: no cell of the zoo calls it yet
 dart dart:core#String.fromEnvironment | debt | the standard library: no cell of the zoo calls it yet
 dart dart:core#String.hashCode | debt | the standard library: no cell of the zoo calls it yet
@@ -657,7 +655,6 @@ dart dart:core#StringBuffer.length | debt | the standard library: no cell of the
 dart dart:core#StringBuffer.writeAll | debt | the standard library: no cell of the zoo calls it yet
 dart dart:core#StringBuffer.writeCharCode | debt | the standard library: no cell of the zoo calls it yet
 dart dart:core#StringBuffer.writeln | debt | the standard library: no cell of the zoo calls it yet
-dart dart:core#StringSink.write | debt | the standard library: no cell of the zoo calls it yet
 dart dart:core#StringSink.writeAll | debt | the standard library: no cell of the zoo calls it yet
 dart dart:core#StringSink.writeCharCode | debt | the standard library: no cell of the zoo calls it yet
 dart dart:core#StringSink.writeln | debt | the standard library: no cell of the zoo calls it yet
@@ -767,7 +764,6 @@ dart dart:io#Link.new | debt | the standard library: no cell of the zoo calls it
 dart dart:io#Platform.executable | debt | the standard library: no cell of the zoo calls it yet
 dart dart:io#Platform.script | debt | the standard library: no cell of the zoo calls it yet
 dart dart:io#Process.run | debt | the standard library: no cell of the zoo calls it yet
-dart dart:io#Process.runSync | debt | the standard library: no cell of the zoo calls it yet
 dart dart:io#Process.start | debt | the standard library: no cell of the zoo calls it yet
 dart dart:io#Socket.connect | debt | the standard library: no cell of the zoo calls it yet
 dart dart:io#Stdin.readLine | debt | the standard library: no cell of the zoo calls it yet
@@ -912,7 +908,6 @@ rust std::collections::BTreeMap::keys | debt | the standard library: no cell of 
 rust std::collections::BTreeMap::new | debt | the standard library: no cell of the zoo calls it yet
 rust std::collections::BTreeMap::values | debt | the standard library: no cell of the zoo calls it yet
 rust std::collections::HashMap::contains_key | debt | the standard library: no cell of the zoo calls it yet
-rust std::collections::HashMap::get | debt | the standard library: no cell of the zoo calls it yet
 rust std::collections::HashMap::is_empty | debt | the standard library: no cell of the zoo calls it yet
 rust std::collections::HashMap::iter | debt | the standard library: no cell of the zoo calls it yet
 rust std::collections::HashMap::keys | debt | the standard library: no cell of the zoo calls it yet
@@ -927,7 +922,6 @@ rust std::collections::VecDeque::new | debt | the standard library: no cell of t
 rust std::collections::VecDeque::pop_back | debt | the standard library: no cell of the zoo calls it yet
 rust std::collections::VecDeque::pop_front | debt | the standard library: no cell of the zoo calls it yet
 rust std::convert::AsMut::as_mut | debt | the standard library: no cell of the zoo calls it yet
-rust std::convert::AsRef::as_ref | debt | the standard library: no cell of the zoo calls it yet
 rust std::convert::TryFrom::try_from | debt | the standard library: no cell of the zoo calls it yet
 rust std::convert::TryInto::try_into | debt | the standard library: no cell of the zoo calls it yet
 rust std::default::Default::default | debt | the standard library: no cell of the zoo calls it yet
@@ -956,6 +950,7 @@ rust std::fmt::Formatter::debug_tuple_field1_finish | debt | the standard librar
 rust std::fmt::Formatter::debug_tuple_field2_finish | debt | the standard library: no cell of the zoo calls it yet
 rust std::fmt::Formatter::pad | debt | the standard library: no cell of the zoo calls it yet
 rust std::fmt::Formatter::write_str | debt | the standard library: no cell of the zoo calls it yet
+rust std::fmt::Write::write_fmt | debt | the standard library: no cell of the zoo calls it yet (ADR-089 added the row; the zoo writer is an io::Write)
 rust std::fmt::rt::Argument::from_usize | debt | the standard library: no cell of the zoo calls it yet
 rust std::fmt::rt::Argument::new_debug | debt | the standard library: no cell of the zoo calls it yet
 rust std::fmt::rt::Argument::new_lower_hex | debt | the standard library: no cell of the zoo calls it yet
@@ -979,7 +974,6 @@ rust std::io::BufRead::read_line | debt | the standard library: no cell of the z
 rust std::io::Read::read_to_end | debt | the standard library: no cell of the zoo calls it yet
 rust std::io::Read::read_to_string | debt | the standard library: no cell of the zoo calls it yet
 rust std::io::Stdin::read_line | debt | the standard library: no cell of the zoo calls it yet
-rust std::io::Write::write | debt | the standard library: no cell of the zoo calls it yet
 rust std::io::_eprint | debt | the standard library: no cell of the zoo calls it yet
 rust std::io::_print | debt | the standard library: no cell of the zoo calls it yet
 rust std::io::stdin | debt | the standard library: no cell of the zoo calls it yet
@@ -1053,9 +1047,7 @@ rust std::pin::Pin::get_unchecked_mut | debt | the standard library: no cell of 
 rust std::pin::Pin::into_inner | debt | the standard library: no cell of the zoo calls it yet
 rust std::pin::Pin::new | debt | the standard library: no cell of the zoo calls it yet
 rust std::pin::pin | debt | the standard library: no cell of the zoo calls it yet
-rust std::process::Command::arg | debt | the standard library: no cell of the zoo calls it yet
 rust std::process::Command::args | debt | the standard library: no cell of the zoo calls it yet
-rust std::process::Command::new | debt | the standard library: no cell of the zoo calls it yet
 rust std::ptr::copy | debt | the standard library: no cell of the zoo calls it yet
 rust std::ptr::copy_nonoverlapping | debt | the standard library: no cell of the zoo calls it yet
 rust std::ptr::read | debt | the standard library: no cell of the zoo calls it yet
@@ -1144,7 +1136,6 @@ rust std::vec::Vec::concat | debt | the standard library: no cell of the zoo cal
 rust std::vec::Vec::contains | debt | the standard library: no cell of the zoo calls it yet
 rust std::vec::Vec::dedup | debt | the standard library: no cell of the zoo calls it yet
 rust std::vec::Vec::drain | debt | the standard library: no cell of the zoo calls it yet
-rust std::vec::Vec::extend_from_slice | debt | the standard library: no cell of the zoo calls it yet
 rust std::vec::Vec::from | debt | the standard library: no cell of the zoo calls it yet
 rust std::vec::Vec::get | debt | the standard library: no cell of the zoo calls it yet
 rust std::vec::Vec::insert | debt | the standard library: no cell of the zoo calls it yet

@@ -3,6 +3,7 @@ package taint
 import (
 	"testing"
 
+	"github.com/yagihash/rivus/internal/ir"
 	"github.com/yagihash/rivus/internal/model"
 	"github.com/yagihash/rivus/internal/sites"
 )
@@ -19,7 +20,7 @@ func TestMergedSourcesShowTheCleanestPath(t *testing.T) {
 	mk := func(src string, steps, uncertain, widened int, reach string) *Finding {
 		f := &Finding{
 			ID:              "f-" + src,
-			Source:          SiteRef{ID: src, Symbol: "req", Func: "fn-" + src},
+			Source:          SiteRef{ID: src, Symbol: "req", Func: "fn-" + src, Position: ir.Position{File: src + ".go", Line: 1}},
 			Sink:            SiteRef{ID: "sink"},
 			Category:        "x",
 			Labels:          []string{"user_input"},
