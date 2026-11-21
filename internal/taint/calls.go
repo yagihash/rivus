@@ -896,7 +896,7 @@ func (s *state) applyFlows(cc *callCtx, flows []model.Flow, o *op, desc string, 
 		} else {
 			for _, v := range s.selectVals(cc, to) {
 				here := append(append([]Loc(nil), s.locs(v)...), s.pointeeOfInterface(v)...)
-				if to.Content && s.contentOnly(to, v) {
+				if to.Content && s.contentOnly(to, v, s.eng.rules.SelfFirst[cc.sym]) {
 					// what was written goes below the writer, in a step of its own: a field of the
 					// writer (a file name, a setting) is not what was written to it, and a read of the
 					// whole writer (`from: recv`) still sees it
@@ -945,8 +945,14 @@ func (s *state) applyFlows(cc *callCtx, flows []model.Flow, o *op, desc string, 
 // to a function that does not call its Write (`fmt.Fprint(w, x)`, `io.Copy(w, r)`) and that is of a type
 // of the project, an interface or any other library type, is not: the body of its Write is not applied,
 // so the data must reach the fields it is stored in (`w.data`, `rec.Body`) through the whole writer.
-func (s *state) contentOnly(to model.Selector, v *sg.Value) bool {
-	if to.Kind == model.SelRecv {
+func (s *state) contentOnly(to model.Selector, v *sg.Value, selfFirst bool) bool {
+	// in a set with self_first (Rust) the receiver is arg0
+	if to.Kind == model.SelRecv || (selfFirst && to.Kind == model.SelArg && to.Index == 0) {
+		// a writer of the Rust standard library (`Vec<u8>`, `String`, `File`) has no body to apply, and its
+		// models read the whole writer
+		if isStdType(string(v.Type)) {
+			return false
+		}
 		return true
 	}
 	t := strings.TrimLeft(string(v.Type), "*")

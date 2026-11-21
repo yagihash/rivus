@@ -1835,3 +1835,13 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 **背景:** メソッド値(`s.HandleA`)は、`HandleA$bound` という関数になり、同じリクエスト型のパラメータを、**束ねたメソッドの位置**で持つ。`param_type` の source は、この双子と元の関数の両方に付き、`mergeParamSources` が別々の source として数えた。`bench/gcp` では、`*http.Request` を取る関数 33 個と `$bound` の双子 32 個が、`other_sources_count` を約 2 倍にしていた(同じ入力を 2 回数える)。
 
 **決めたこと:** `mergeParamSources` は、代表と同じ位置・同じシンボルの source(と、すでに数えた位置の source)を、`other_sources` と `other_sources_count` に入れない。**findings の集合は変わらない**(双子は、同じ sink の同じグループに畳まれるだけで、代表になる関数は、並びの最後の決め手(関数名の順)で、元の関数が先になる)。見せ方の変更だけで、`other_sources_count` の数が減る。試験: `testdata/go/cases/paramshare/bound`(3 から 1)。
+
+## ADR-089: Rust の `write!` / `writeln!`(`Write::write_fmt`)のモデル。受け手が `arg0` のとき `.content` の置き先を使い、標準の書き込み器は全体に置く
+
+**背景:** `write!(w, "{}", x)` は `w.write_fmt(format_args!(..))` になる。`std::io::Write::write_fmt` のモデルが無く、Go の `fmt.Fprint` に当たる形が見つからなかった(動物園 `dyn/fprint-writer-own` の Rust が `@miss(unmodeled_library_call)`)。`format_args!` は `Arguments::new_v1` / `Argument::new_display`(既存の行: 引数が結果へ)を通り、`write_fmt` の `arg1` に届く。
+
+**決めたこと:** (1) `rust-std.yaml` に `std::io::Write::write_fmt`(`arg1` → `arg0.content`、`calls: [{method: write, with: [arg1]}]`)と `std::fmt::Write::write_fmt`(`write_str`)。標準の `write_fmt` は `write_all` を経て `write` を呼ぶので、`method:`(ADR-080)は `write` を直接指す。(2) `contentOnly`(ADR-082)は、`self_first` の集合(Rust)の `arg0` を受け手として扱う。プロジェクトの型の書き手では、データは `.content` に置き、本体(`write`)を当てた先のフィールドにだけ届く(`w.name` のような別のフィールドを読む sink は静か)。標準の型(`Vec<u8>`、`String`)は本体がなく、モデルが書き手の全体を読むので、全体に置く。(3) `applyMethodRow`: 受け手の型が分かり、それが標準の型(`std::` / `alloc::` / `core::`)なら、プロジェクトの実装は呼ばない(別の型の実装へ流れが漏れた)。
+
+**確かめたこと:** 動物園(Rust)の `dyn/fprint-writer-own` の vuln と decoy の本物の流れが見つかる(`@miss` を外した)。decoy の `w.name` の sink は静か。一時的に書き手を `Vec<u8>`、`String`(`fmt::Write::write_fmt`)にした形でも見つかり、他のセルへの漏れは無い。
+
+**限界:** `fmt::Formatter::write_fmt`(`impl Display` の中の `write!(f, ..)`)は、今までどおり `pure`(行を変えていない)。`impl Display` を通る流れは別の仕事。

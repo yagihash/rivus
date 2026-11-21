@@ -25,7 +25,7 @@ impl Write for SliceWriter {
 
 fn vuln() { // @vuln
     let mut w = SliceWriter { data: Vec::new() };
-    write!(w, "{}", m::src("dyn-fprint-writer-own-vuln")).unwrap(); // @source(dyn-fprint-writer-own-vuln) @miss(unmodeled_library_call) @ref(IO-WRITE-FMT,PARITY)
+    write!(w, "{}", m::src("dyn-fprint-writer-own-vuln")).unwrap(); // @source(dyn-fprint-writer-own-vuln) @ref(IO-WRITE-FMT,PARITY)
     w.flush().unwrap();
     m::sink_cmd(&String::from_utf8_lossy(&w.data)); // @sink(dyn-fprint-writer-own-vuln)
 }
@@ -54,7 +54,7 @@ impl Write for NamedWriter {
 
 fn decoy() { // @decoy
     let mut w = NamedWriter { name: String::from("constant"), data: Vec::new() };
-    write!(w, "{}", m::src("dyn-fprint-writer-own-decoy")).unwrap(); // @source(dyn-fprint-writer-own-decoy) @miss(unmodeled_library_call) @ref(IO-WRITE-FMT,PARITY)
+    write!(w, "{}", m::src("dyn-fprint-writer-own-decoy")).unwrap(); // @source(dyn-fprint-writer-own-decoy) @ref(IO-WRITE-FMT,PARITY)
     w.flush().unwrap();
     m::sink_cmd(&w.name); // @sink(none) @nosink(dyn-fprint-writer-own-decoy)
     m::sink_sql(&String::from_utf8_lossy(&w.data)); // @sink(dyn-fprint-writer-own-decoy)

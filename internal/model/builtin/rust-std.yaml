@@ -377,6 +377,14 @@ propagators:
     calls: [{method: write, with: [arg1]}]
   - symbol: std::io::Write::write
     flows: [{from: arg1, to: arg0}]
+  - symbol: std::io::Write::write_fmt
+    flows: [{from: arg1, to: arg0.content}]
+    # `write!(w, ..)` is `w.write_fmt(format_args!(..))`; the provided method reaches `write` of the receiver through `write_all`
+    calls: [{method: write, with: [arg1]}]
+  - symbol: std::fmt::Write::write_fmt
+    flows: [{from: arg1, to: arg0.content}]
+    # a `String` is a writer of the library; a `fmt::Write` of the project is reached through `write_str`
+    calls: [{method: write_str, with: [arg1]}]
   - symbol: std::fs::File::open
     flows: [{from: args, to: result}]
   - symbol: std::boxed::box_assume_init_into_vec_unsafe

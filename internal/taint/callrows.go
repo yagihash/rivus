@@ -273,6 +273,10 @@ func (s *state) applyMethodRow(cc *callCtx, row model.CallRow) {
 		}
 		if len(same) > 0 {
 			impls = same
+		} else if isStdType(t) {
+			// a type of the standard library (a `Vec<u8>`, a `String`) has its own method: the project's
+			// implementations are of other types
+			return
 		}
 	}
 	with := make([]*sg.Value, 1, 1+len(row.With))
@@ -515,6 +519,16 @@ func (s *state) givenToModel(u *sg.Instr, x *sg.Value) bool {
 func hasValue(vs []*sg.Value, x *sg.Value) bool {
 	for _, v := range vs {
 		if v == x {
+			return true
+		}
+	}
+	return false
+}
+
+// isStdType: the type is a path of the standard library (std, alloc, core), not a type parameter or a type of the project.
+func isStdType(t string) bool {
+	for _, p := range []string{"std::", "alloc::", "core::", "&std::", "&mut std::", "&alloc::", "&mut alloc::", "&core::", "&mut core::"} {
+		if strings.HasPrefix(t, p) {
 			return true
 		}
 	}

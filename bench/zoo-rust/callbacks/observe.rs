@@ -86,6 +86,30 @@ fn main() {
         }
         std::io::Write::write_all(&mut W(r), b"DATA")
     });
+    // `write!(w, ..)` is `w.write_fmt(format_args!(..))`: the provided method writes the text to its receiver, through `write_all` to `write`
+    case!("std::io::Write::write_fmt", [("arg1", "DATA")], |r| {
+        struct W<'a>(&'a RefCell<Rec>);
+        impl std::io::Write for W<'_> {
+            fn write(&mut self, p: &[u8]) -> std::io::Result<usize> {
+                self.0.borrow_mut().see(&[String::from_utf8_lossy(p).to_string()]);
+                Ok(p.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        std::io::Write::write_fmt(&mut W(r), format_args!("DATA"))
+    });
+    case!("std::fmt::Write::write_fmt", [("arg1", "DATA")], |r| {
+        struct W<'a>(&'a RefCell<Rec>);
+        impl std::fmt::Write for W<'_> {
+            fn write_str(&mut self, p: &str) -> std::fmt::Result {
+                self.0.borrow_mut().see(&[p.to_string()]);
+                Ok(())
+            }
+        }
+        std::fmt::Write::write_fmt(&mut W(r), format_args!("DATA"))
+    });
     case!("std::option::Option::map", RECV, |r| Some(s("RECV")).map(|x| {
         r.borrow_mut().see(&[x.clone()]);
         s("Ж")
