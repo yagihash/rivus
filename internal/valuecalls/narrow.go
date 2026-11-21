@@ -63,6 +63,10 @@ type narrower struct {
 	r      *resolver
 	idx    *ir.ClosureIndex
 	closed bool
+	// linked: the crates that the program (what starts at its entry) reaches. The closed world is these crates: a
+	// crate of the workspace that the program does not reach (a library that is published, beside a tool that is not
+	// linked to it) is called from outside, whatever the program that is read starts with.
+	linked map[string]bool
 	// valueRef: the functions that a make_closure names (used as a value: a call of them is not a caller we see).
 	valueRef map[ir.FuncID]bool
 	// inCands: the functions that a dynamic call that is not a call of a closure may reach.
@@ -93,6 +97,75 @@ type cellInfo struct {
 	ok     bool
 }
 
+// crateOf is the crate of a function of Rust ("krate::path::f", "<krate::T as krate::Tr>::m").
+func crateOf(id string) string {
+	s := strings.TrimLeft(id, "<&*(")
+	if i := strings.Index(s, "::"); i > 0 {
+		return s[:i]
+	}
+	return ""
+}
+
+// linkedCrates are the crates of the functions that the entries of the program reach: by calls (static, the
+// candidates of dynamic calls and of function values) and by closures that are made.
+func linkedCrates(prog *ir.Program) map[string]bool {
+	byID := make(map[ir.FuncID]*ir.Func, len(prog.Funcs))
+	for _, f := range prog.Funcs {
+		byID[f.ID] = f
+	}
+	idx := ir.NewClosureIndex(prog.Funcs)
+	seen := map[ir.FuncID]bool{}
+	var work []ir.FuncID
+	visit := func(id ir.FuncID) {
+		if id != "" && !seen[id] && byID[id] != nil {
+			seen[id] = true
+			work = append(work, id)
+		}
+	}
+	for _, f := range prog.Funcs {
+		if f.Entry && !f.Init {
+			visit(f.ID)
+		}
+	}
+	for len(work) > 0 {
+		f := byID[work[len(work)-1]]
+		work = work[:len(work)-1]
+		for bi := range f.Blocks {
+			for ii := range f.Blocks[bi].Instrs {
+				in := &f.Blocks[bi].Instrs[ii]
+				if in.Op == ir.OpMakeClosure {
+					visit(in.Func)
+				}
+				if in.Op == ir.OpAlloc && ir.IsEnvType(string(in.Type)) {
+					if cl := idx.Lookup(string(in.Type)); cl != nil {
+						visit(cl.ID)
+					}
+				}
+				if in.Op != ir.OpCall || in.Callee == nil {
+					continue
+				}
+				visit(in.Callee.Func)
+				if isFnCall(in.Callee) {
+					// every closure of the program that takes such arguments: the closures that are made are followed
+					// at the make_closure, and a library's closure is not the program's for having the same types
+					continue
+				}
+				for _, c := range in.Callee.Candidates {
+					visit(c)
+				}
+				for _, c := range in.Callee.ValueCands {
+					visit(c.ID)
+				}
+			}
+		}
+	}
+	out := map[string]bool{}
+	for id := range seen {
+		out[crateOf(string(id))] = true
+	}
+	return out
+}
+
 // narrowCalls narrows the candidates of the calls of closures of the program. The callers index of the resolver
 // is the one of the candidates as the extractor made them: every decision is taken on it, and applied after.
 func narrowCalls(r *resolver) {
@@ -117,6 +190,9 @@ func narrowCalls(r *resolver) {
 		entry = entry || (f.Entry && !f.Init)
 	}
 	n.closed = entry && !external && prog.CallerMarks
+	if n.closed {
+		n.linked = linkedCrates(prog)
+	}
 	if r.callers == nil {
 		r.indexCallers()
 	}
@@ -610,7 +686,7 @@ func (t *trace) param(f *ir.Func, idx, depth int) {
 		t.stop(notOpen)
 		return
 	case f.Private:
-	case n.closed:
+	case n.closed && n.linked[crateOf(string(f.ID))]:
 		t.basis = ir.BasisClosedWorldEntry
 	default:
 		t.stop(notOpen)
