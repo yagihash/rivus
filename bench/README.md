@@ -167,3 +167,9 @@ with `examples/rules/go-gin.yaml` on the head of the repository it does not conv
 callouts of ADR-047 (2 passes, 15 GB, 48 findings; the summaries of the AWS middleware grow from 36 to 2,200 elements in a few
 passes, almost all of them new, not coming back). It is a measure of the growth of the summaries, not a baseline to compare findings
 with: a run that does not converge is cut where it was.
+
+**Gitea: use the tag.** The truth file `bench/gitea/truth-v1.26.4.json` is for the tag `v1.26.4` (the three CVEs are in that
+code, and fixed in later releases). `bench/compare.sh --with-gitea` checks out the tag in its own copy. A copy of the
+repository that was cloned some other time is the head of `main` of that day, not the tag: a measurement on it (the time, the
+passes, the recall of the three CVEs) is of other code, and has to be taken again on the tag. Check with
+`git describe --tags` (or `git rev-parse HEAD` against the tag) before a measurement is written down.
