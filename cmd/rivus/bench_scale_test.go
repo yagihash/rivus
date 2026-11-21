@@ -62,6 +62,8 @@ func TestScaleSynth(t *testing.T) {
 		{"glob", "glob", nil, []int{1}, false},
 		{"giant", "giant", nil, []int{1}, false},
 		{"selfcopy", "selfcopy", nil, []int{1}, false},
+		// the shape of smithy-go's stack of steps: 40 operations put 9 stages into a stack of their own and call it
+		{"middleware", "middleware", nil, []int{1}, false},
 	}
 	for _, pr := range profiles {
 		pr := pr

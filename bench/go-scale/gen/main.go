@@ -34,15 +34,17 @@ type Params struct {
 	Callers int             // functions that call through the interface (shape dyn)
 	Giant   int             // statements of the one huge function (shape giant)
 	Copies  int             // copies of the "save and restore a global struct" shape (shape selfcopy)
-	Shapes  map[string]bool // types stderr widen scc chain dyn glob giant selfcopy
+	Ops     int             // operations that share one chain of middleware (shape middleware)
+	Stages  int             // stages of the chain (shape middleware)
+	Shapes  map[string]bool // types stderr widen scc chain dyn glob giant selfcopy middleware
 }
 
 // allShapes is the list of the shapes, in the order they are written.
-var allShapes = []string{"types", "stderr", "widen", "scc", "chain", "typeschain", "dyn", "glob", "giant", "selfcopy"}
+var allShapes = []string{"types", "stderr", "widen", "scc", "chain", "typeschain", "dyn", "glob", "giant", "selfcopy", "middleware"}
 
 // Default is the size of the profiles (about 2,000 functions).
 func Default() Params {
-	return Params{Seed: 1, Funcs: 2000, Pkgs: 20, KeepPct: 15, SrcPct: 4, EncPct: 4, ReadPct: 25, Loggers: 8, Ring: 200, Wide: 16, Chain: 10, TStages: 14, Impls: 150, Callers: 40, Giant: 3000, Copies: 40, Shapes: map[string]bool{}}
+	return Params{Seed: 1, Funcs: 2000, Pkgs: 20, KeepPct: 15, SrcPct: 4, EncPct: 4, ReadPct: 25, Loggers: 8, Ring: 200, Wide: 16, Chain: 10, TStages: 14, Impls: 150, Callers: 40, Giant: 3000, Copies: 40, Ops: 40, Stages: 9, Shapes: map[string]bool{}}
 }
 
 // rng is splitmix64: the generated code must not depend on the Go version.
@@ -127,6 +129,12 @@ func (g *gen) ballast() {
 			}
 		}
 		fmt.Fprintf(&b, "\tv += r.F%d\n", g.r.n(4))
+		if g.on("middleware") && i%8 == 0 && g.p.Ops > 0 {
+			// a function of the program calls an operation of the SDK with what it has (no random draw: the
+			// ballast of the other shapes is the same)
+			f.imports["ops"] = true
+			fmt.Fprintf(&b, "\tv += ops.Op%d(r, v)\n", (i/8)%g.p.Ops)
+		}
 		if g.r.pct(g.p.SrcPct) {
 			f.imports["lib"] = true
 			b.WriteString("\tx := lib.Source()\n\tv += x\n")
@@ -438,6 +446,113 @@ func DynQuiet() {
 `)
 }
 
+// shapeMiddleware is the shape of the AWS SDK for Go (smithy-go): a stack of steps, each a list of
+// middleware that its HandleMiddleware chains with a decorated handler, and N operations that put
+// the same M stages into a stack of their own and call it. Every operation reaches the chain's
+// calls through one interface (Handler.Handle, Middleware.HandleMiddleware), so the candidates of
+// those calls are all the stages and all the operations' last handlers.
+func (g *gen) shapeMiddleware() {
+	const steps = 3
+	f := g.file("mw/mw.go")
+	f.imports["model"] = true
+	f.body.WriteString(`// Handler is what a step hands to the next one; Middleware is one stage.
+type Handler interface {
+	Handle(r *model.Rec, in any) (out any, md string)
+}
+
+type Middleware interface {
+	HandleMiddleware(r *model.Rec, in any, next Handler) (out any, md string)
+}
+
+// node is a stage with the handler after it (smithy-go's decoratedHandler, linked in a list).
+type node struct {
+	Next Handler
+	With Middleware
+}
+
+func (n *node) Handle(r *model.Rec, in any) (any, string) {
+	return n.With.HandleMiddleware(r, in, n.Next)
+}
+
+// Step is an ordered list of stages: it is a stage too, of the stack. The last node of the
+// list is given the handler after the step when the step runs (s.tail.Next = next).
+type Step struct{ head, tail *node }
+
+func (s *Step) Add(m Middleware) {
+	n := &node{With: m}
+	if s.head == nil {
+		s.head = n
+	} else {
+		s.tail.Next = n
+	}
+	s.tail = n
+}
+
+func (s *Step) HandleMiddleware(r *model.Rec, in any, next Handler) (any, string) {
+	if s.head == nil {
+		return next.Handle(r, in)
+	}
+	s.tail.Next = next
+	return s.head.Handle(r, in)
+}
+
+// Stack is the steps in order.
+type Stack struct{ Steps [` + fmt.Sprint(steps) + `]*Step }
+
+func NewStack() *Stack {
+	s := &Stack{}
+	for i := range s.Steps {
+		s.Steps[i] = &Step{}
+	}
+	return s
+}
+
+func (s *Stack) HandleMiddleware(r *model.Rec, in any, last Handler) (any, string) {
+	h := last
+	for i := len(s.Steps) - 1; i >= 0; i-- {
+		h = &node{Next: h, With: s.Steps[i]}
+	}
+	return h.Handle(r, in)
+}
+
+`)
+	for j := 0; j < g.p.Stages; j++ {
+		fmt.Fprintf(&f.body, "// S%d is a stage shared by every operation.\ntype S%d struct{}\n\nfunc (S%d) HandleMiddleware(r *model.Rec, in any, next Handler) (any, string) {\n\treq, _ := in.(*model.Rec)\n\tif req != nil {\n\t\treq.F%d = req.F%d + r.F%d\n\t\treq.F%d = req.F%d\n\t\treq.F%d += req.F%d\n\t}\n\treturn next.Handle(r, in)\n}\n\n", j, j, j, j%fields, (j+3)%fields, (j+5)%fields, (j+3)%fields, (j+7)%fields, (j+9)%fields, (j+7)%fields)
+	}
+	for j := 0; j < g.p.Stages; j++ {
+		// the options of a client are functions that an operation calls on its stack (smithy-go: APIOptions)
+		fmt.Fprintf(&f.body, "func Option%d() func(*Stack) error {\n\tm := S%d{}\n\treturn func(st *Stack) error {\n\t\tst.Steps[%d].Add(m)\n\t\treturn nil\n\t}\n}\n\n", j, j, j%steps)
+	}
+	o := g.file("ops/ops.go")
+	o.imports["model"], o.imports["mw"] = true, true
+	for i := 0; i < g.p.Ops; i++ {
+		fmt.Fprintf(&o.body, "// last%d is the last handler of operation %d.\ntype last%d struct{}\n\nfunc (last%d) Handle(r *model.Rec, in any) (any, string) {\n\treq, _ := in.(*model.Rec)\n\tif req == nil {\n\t\treturn nil, \"\"\n\t}\n\treturn req.F%d + req.F%d, \"\"\n}\n\n", i, i, i, i, i%fields, (i+1)%fields)
+		fmt.Fprintf(&o.body, "func Op%d(r *model.Rec, in string) string {\n\tst := mw.NewStack()\n\treq := &model.Rec{F0: in}\n", i)
+		o.body.WriteString("\topts := []func(*mw.Stack) error{")
+		for j := 0; j < g.p.Stages; j++ {
+			fmt.Fprintf(&o.body, "mw.Option%d(), ", j)
+		}
+		o.body.WriteString("}\n\tfor _, fn := range opts {\n\t\t_ = fn(st)\n\t}\n")
+		fmt.Fprintf(&o.body, "\tout, _ := st.HandleMiddleware(r, req, last%d{})\n\ts, _ := out.(string)\n\treturn s\n}\n\n", i)
+	}
+	t := g.file("truth/mw.go")
+	t.imports["lib"], t.imports["model"], t.imports["ops"] = true, true, true
+	t.body.WriteString(`// MwReal: a value goes into one operation and comes out of its chain of stages.
+func MwReal() {
+	x := lib.Source() // @source(mw_real)
+	lib.Sink(ops.Op0(&model.Rec{}, x)) // @sink(mw_real)
+}
+
+// MwQuiet gives another operation a constant: it shares every call of the chain with the first.
+func MwQuiet() {
+	x := lib.Source() // @source(mw_quiet)
+	lib.Sink(ops.Op1(&model.Rec{}, "k")) // @nosink(mw_quiet)
+	lib.Sink(x)                          // @sink(mw_quiet)
+}
+
+`)
+}
+
 func (g *gen) shapeGlob() {
 	f := g.file("glob/glob.go")
 	f.imports["lib"] = true
@@ -522,6 +637,8 @@ func Generate(p Params) (map[string]string, error) {
 			g.shapeGiant()
 		case "selfcopy":
 			g.shapeSelfcopy()
+		case "middleware":
+			g.shapeMiddleware()
 		}
 	}
 	out := map[string]string{}
@@ -560,7 +677,7 @@ func Generate(p Params) (map[string]string, error) {
 			calls = append(calls, fmt.Sprintf("\tselfcopy.SelfCopy%d()", i))
 		}
 	}
-	for _, s := range []struct{ shape, fn string }{{"types", "TyReal()\n\ttruth.TyQuiet(\"\")"}, {"typeschain", "TcReal()\n\ttruth.TcQuiet(\"\")"}, {"stderr", "SrReal()\n\ttruth.SrQuiet()"}, {"widen", "WdReal()"}, {"scc", "SccReal()"}, {"dyn", "DynReal()\n\ttruth.DynQuiet()"}} {
+	for _, s := range []struct{ shape, fn string }{{"types", "TyReal()\n\ttruth.TyQuiet(\"\")"}, {"typeschain", "TcReal()\n\ttruth.TcQuiet(\"\")"}, {"stderr", "SrReal()\n\ttruth.SrQuiet()"}, {"widen", "WdReal()"}, {"scc", "SccReal()"}, {"dyn", "DynReal()\n\ttruth.DynQuiet()"}, {"middleware", "MwReal()\n\ttruth.MwQuiet()"}} {
 		if p.Shapes[s.shape] {
 			mainImports["truth"] = true
 			calls = append(calls, "\ttruth."+s.fn)
@@ -664,6 +781,8 @@ func main() {
 	flag.IntVar(&p.Impls, "impls", p.Impls, "implementations of the interface (dyn)")
 	flag.IntVar(&p.Callers, "callers", p.Callers, "callers through the interface (dyn)")
 	flag.IntVar(&p.Giant, "giant", p.Giant, "statements of the huge function")
+	flag.IntVar(&p.Ops, "ops", p.Ops, "operations that share the chain of middleware (middleware)")
+	flag.IntVar(&p.Stages, "stages", p.Stages, "stages of the chain of middleware (middleware)")
 	flag.IntVar(&p.Copies, "copies", p.Copies, "copies of the save-and-restore shape (selfcopy)")
 	flag.Parse()
 	if *out == "" {

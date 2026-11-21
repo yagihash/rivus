@@ -1,0 +1,16 @@
+{
+  "findings": [
+    "truth/mw.go:11 -\u003e truth/mw.go:12",
+    "truth/mw.go:17 -\u003e truth/mw.go:19"
+  ],
+  "uncertainty_kinds": {
+    "assumed_call": 9,
+    "depth_limit": 10,
+    "dynamic_dispatch": 52
+  },
+  "converged": true,
+  "passes": 1,
+  "reanalyses": 2194,
+  "summary_elems": 5319,
+  "largest_summary_elems": 6
+}
