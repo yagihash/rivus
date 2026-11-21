@@ -254,6 +254,8 @@ func TestZooExecGo(t *testing.T) {
 
 // ---- the annotations of the cells
 
+var zooTagRole = regexp.MustCompile(`-(vuln|fixed|decoy)[0-9]*(-[a-z0-9]+)?$`)
+
 var (
 	zooSinkRe   = regexp.MustCompile(`@sink\(([A-Za-z0-9_-]+)\)`)
 	zooNosinkRe = regexp.MustCompile(`@nosink\(([A-Za-z0-9_-]+)\)`)
@@ -413,8 +415,8 @@ func TestZooTruthGo(t *testing.T) {
 			t.Errorf("%s has no @shape", c.name)
 		}
 		for _, role := range []string{"vuln", "fixed", "decoy"} {
-			if c.roles[role] != 1 {
-				t.Errorf("%s: the role @%s is on %d lines (one wanted)", c.name, role, c.roles[role])
+			if c.roles[role] < 1 {
+				t.Errorf("%s: no role @%s", c.name, role)
 			}
 			wantCases[c.name+"/"+role] = true
 		}
@@ -424,7 +426,12 @@ func TestZooTruthGo(t *testing.T) {
 			t.Errorf("the case %s was not run (is its package in cmd/observe/imports.go?)", id)
 		}
 	}
+	// a cell may have more cases of the vulnerable role (a chain of 3, 13 and 30 stages): vuln<N>
+	extra := regexp.MustCompile(`^(F/[a-z0-9/-]+)/vuln[0-9]+$`)
 	for _, id := range obs.Cases {
+		if m := extra.FindStringSubmatch(id); m != nil && wantCases[m[1]+"/vuln"] {
+			continue
+		}
 		if !wantCases[id] {
 			t.Errorf("the case %s was run and no cell has it", id)
 		}
@@ -577,10 +584,8 @@ func TestZooGo(t *testing.T) {
 
 	// the headline (docs/DESIGN-zoo.md, 6.3): from the annotations, once they agree with the run
 	roleOfTag := func(tag string) string {
-		for _, r := range []string{"vuln", "fixed", "decoy"} {
-			if strings.HasSuffix(tag, "-"+r) {
-				return r
-			}
+		if m := zooTagRole.FindStringSubmatch(tag); m != nil {
+			return m[1]
 		}
 		return ""
 	}

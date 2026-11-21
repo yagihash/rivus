@@ -563,9 +563,9 @@ func missTraces(rep *report.Report, from, to curatedAt, programWide bool) []stri
 	seen := map[string]bool{}
 	var kinds []string
 	for _, u := range rep.Uncertainties {
-		if u.Func == "" && programWide {
-			// an uncertainty of the whole program (recursion_approximation of a limit): it says that
-			// a flow may be lost, and not which
+		if u.Func == "" && programWide && u.Kind == taint.KindRecursionApproximation {
+			// an uncertainty of the whole program (the limit of the number of passes): it says that
+			// a flow may be lost, and not which. Only a @miss that names the kind counts it.
 		} else if u.Func == "" || !funcs[u.Func] {
 			continue
 		}
@@ -583,7 +583,8 @@ func missTraces(rep *report.Report, from, to curatedAt, programWide bool) []stri
 
 // checkMissTrace compares the trace of a @miss with its annotation, and counts it in c.
 func checkMissTrace(t *testing.T, rep report.Report, pairName, tag string, want []string, end [2]curatedAt, c *curatedCounts, programWide bool) []string {
-	got := missTraces(&rep, end[0], end[1], programWide)
+	silent := len(want) == 1 && want[0] == "silent"
+	got := missTraces(&rep, end[0], end[1], programWide && !silent)
 	if os.Getenv("RIVUS_CURATED_TRACES") == "1" {
 		t.Logf("MISSTRACE %s:%d %s %v", end[0].file, end[0].line, tag, got)
 		funcs := map[string]bool{}
@@ -601,7 +602,6 @@ func checkMissTrace(t *testing.T, rep report.Report, pairName, tag string, want 
 	if len(want) == 0 {
 		return nil // the annotation has no kind: told where it is read
 	}
-	silent := len(want) == 1 && want[0] == "silent"
 	var problems []string
 	switch {
 	case silent:
