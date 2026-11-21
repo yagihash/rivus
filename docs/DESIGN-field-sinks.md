@@ -124,7 +124,7 @@ sinks:
 
 **不確実性の種類**: 今の `depth_limit`(`path_limit`)は、「関数の中で、道を切った」という、関数単位の記録(`engine.coarsened`)で、finding の経路には付かない。ここで言いたいのは、**その finding の sink で、「どのフィールドかは分からない」**ことなので、**sink の段(`sinkStep` の `Notes`。今、動的な呼び出しの `dynamic_dispatch` が付く所)に付ける新しい種類 `field_imprecision`** を足す(出力の追加だけ。`rivus.result/1` の版は上げない。ADR-034)。`detail` に、`why` と、指定した道、汚れていたセルの道を書く。代案: `path_limit` と `container_element_imprecision` を再利用する(新しい種類なし)。**推す: 新しい種類**(読む人が、「sink の指定した道の上が汚れていた」と、「関数の中で道を切った」を、見分けられる)。
 
-**k = 3 の扱い**: 道が `Task` / `MessageType` / `*` / `HttpRequest` / `Url` と、**段が 5**(`/` が 5 つ)で、K = 3 を超える。`Task` は `*CreateTaskRequest` のポインタの先で、ポインタの値のセルは指す先と別名なので段にならない(`locs`)、と読んだが、**`/*` の数え方は、動物園のセルで実測してから**確定する(段階 0)。k を超える形では、**書き込みの道が `Task/MessageType/*` で切られる**(`pathTrunc`)ので、`Url` と `Body` を区別できない。この形では、`field_imprecision`(`path_limit`)で鳴る。おとりの(`Body` だけ汚れた)finding は、**消えない**。「消えた finding は本物でないことを示す」の対象は、k に収まる形だけ。深い形を細かくするのは、段階 4(7 節)。
+**k = 3 の扱い**: (段階 0 で実測した: 12 節。**段は 5 ではなく 7**: `Task`、`*`、`MessageType`、`*`、`HttpRequest`、`*`、`Url`。ポインタのフィールドの先が `*` の段になる。以下は 5 と書いてあるが、K = 3 を超える、という結論は同じ。): 道が `Task` / `MessageType` / `*` / `HttpRequest` / `Url` と、**段が 5**(`/` が 5 つ)で、K = 3 を超える。`Task` は `*CreateTaskRequest` のポインタの先で、ポインタの値のセルは指す先と別名なので段にならない(`locs`)、と読んだが、**`/*` の数え方は、動物園のセルで実測してから**確定する(段階 0)。k を超える形では、**書き込みの道が `Task/MessageType/*` で切られる**(`pathTrunc`)ので、`Url` と `Body` を区別できない。この形では、`field_imprecision`(`path_limit`)で鳴る。おとりの(`Body` だけ汚れた)finding は、**消えない**。「消えた finding は本物でないことを示す」の対象は、k に収まる形だけ。深い形を細かくするのは、段階 4(7 節)。
 
 **要約(`SinkReach`)で確かめたこと(コードを読んだ。段階 2 で、テストで固定する)**
 
@@ -208,3 +208,28 @@ sinks:
 - `SinkReach` の、`Field` と印を `signature` に入れたときの、収束への影響(段階 2)。
 - Dart と Rust の、フィールドの書き込みと、`Option` / `oneof` の道の形(段階 6)。
 - 既存の組み込みの sink で、構造体を渡されるものの数(段階 0(b))。
+
+## 12. 段階 0 の測定結果(何も変えていない)
+
+**アクセスパスの実際の形**(zoo の `conv/struct-field-shallow` / `deep` / `boxed`。`checkSink` で、位置の値の `collect` を出して測った)。**`*` の段は、ポインタの値そのもの(`req` が `*Stmt`)では出ないが、ポインタを持つフィールド(`Task *Task`、マップの `Params`)の先と、インターフェースに包んだポインタの先には出る**。
+
+| 形 | 位置の値の `Loc` | セルの道 | 読み取り |
+| --- | --- | --- | --- |
+| 浅い: `req.SQL = x`(`req` は `*Stmt`) | `""` | `/SQL` | 1 段。`*` なし |
+| 浅いおとり: `req.Params["p"] = x` | `""` | `/Params/*/[]` | マップは、`*`(マップの指す先)と `[]`(要素) |
+| インターフェースに包む: `any(req)` | `""` | `/*/SQL` | 先頭に `*`(ADR-060 の `/*`) |
+| 深い: `CreateTask{Task: &Task{MessageType: &TaskHTTPRequest{HTTPRequest: h}}}` の `URL` | `""` | **`/Task/*/MessageType`**(`URL` も `Body` もこのセルに混ざる) | 本当の道は `/Task/*/MessageType/*/HTTPRequest/*/URL` と **7 段**(`Task`、`*`、`MessageType`、`*`、`HTTPRequest`、`*`、`URL`)。K = 3 で、3 段目の `MessageType` で切れる |
+
+- **5 節の「5 段」は誤り**: ポインタのフィールド(`Task *Task`、`HTTPRequest *HTTPRequest`)と、oneof のインターフェースの段は、**それぞれ `*` の段を足す**。深い形は 7 段で、k = 3 の 2 倍以上。段階 4 でやるなら `max(K, 7)` で、要素数と収束を測ってから決める。今は、深い形は、`path_limit` の不確実性つきで鳴る(`URL` のおとりも鳴る)。
+- **型の情報は IR にない**(Go、Dart、Rust の IR とも。`ir.TypeInfo` は `supers` だけ)。ので、3 節の型の鎖の検査はできず、IR の名前の検査(`field_unresolved`)と、死んだ行の関門を使う。
+- **既定の伝播は、引数の中を混ぜない**: `unmodeled`(`internal/taint/calls.go`)は、引数と受け手の中身の全部を、**結果のセルだけ**に流し、引数へは何も書かない。`opaque(&req)` の後でも、`req` のセルは変わらない。この設計の 4 節の 3 が、これを補う(`TestZooGo` の `conv/struct-field-opaque`: 実行では `Opaque` が `Params["body"]` を `SQL` に写し、今の sink(構造体の全部)は鳴る。`parts` の後でも鳴ること、が受け入れ)。
+- **実コードの数**(`grep` による。流れではなく、書く形の行数。Dart と Rust は、段階 6 で数える):
+
+  | 対象 | `exec.Cmd{...}` のリテラル | `cmd.Dir` / `cmd.Env` の代入(`Path` / `Args` は 0) | `http.Request{...}` | `req.URL` / `req.Body` の代入 | `.Do(` |
+  | --- | --- | --- | --- | --- | --- |
+  | gogs | 0 | 13(`Dir` 8、`Env` 5) | 1 | 4(`httplib.go`: `r.req.URL = url`、`r.req.Body = ...`) | 10 |
+  | gin-vue-admin | 0 | 0 | 0 | 0 | 2 |
+  | gophish | 0 | 0 | 0 | 0 | 1 |
+  | casdoor | 0 | 0 | 0 | 0 | 14 |
+
+  フィールドへの代入のあとに呼ぶ形は、gogs の `httplib` の `r.req.URL = url` から `Do` までの 1 か所が、組み込みの sink(`(*http.Client).Do`)の `parts` の対象。ほかは、`Dir` / `Env`(実行のための設定)。**`exec.Cmd` のフィールドを sink にする需要は、この 4 つの対象では、ほとんどない**(ので、段階 3 の後ろでよい)。
