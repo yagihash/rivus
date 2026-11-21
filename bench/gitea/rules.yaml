@@ -18,6 +18,17 @@ sources:
   - kind: param_type
     type: "github.com/markbates/goth.User"
     labels: [user_input]
+  # what the identity provider answered over HTTP (the userinfo response: AvatarURL is its
+  # `picture` claim), as Gitea's code sees it: the result of (*oauth2.Source).Callback, which
+  # calls gothic.CompleteUserAuth. gothic.CompleteUserAuth itself is a function variable (no
+  # symbol to name) and FetchUser is called inside goth, which -no-deps does not read; this
+  # call is in Gitea's own code, so it is a call site in every cut. The label is not
+  # user_input: it keeps what a remote server says apart from what the request carries (a
+  # sink with `accepts: [user_input]` does not react to it; the SSRF, path and command sinks
+  # react to any label).
+  - kind: call_result
+    symbol: (*code.gitea.io/gitea/services/auth/source/oauth2.Source).Callback
+    labels: [remote_response]
 
 propagators:
   # the form bound from the request is kept in the data store of the request

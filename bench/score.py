@@ -16,6 +16,10 @@ A "source_func" entry may also say where the sink is ("sink_file" and "sink_line
 with a "source_func" only does not look at the sink: every finding from that function with the category counts, so
 the more a run over-reports, the better such an entry scores. The score says how many entries are of that kind
 (the last lines; compare.sh copies them into scores.txt). Make the labels with the sink where it is known.
+An entry with a sink may also name "via": a list of function names (suffixes). It then counts only when one path of
+a finding of that (source function, sink) pair goes through every one of them (a step's function, or the function
+that a step calls). The pair alone is matched by two ends; "via" is the middle, so that a finding that reaches the
+same sink by another route does not count.
 A label other than "vuln" or "safe", or an entry without a category, is an error (it would count as safe)."""
 import json
 import sys
@@ -28,14 +32,27 @@ for i, s in enumerate(truth):
 found = {}
 by_source = {}
 by_pair = {}
+pair_funcs = {}  # (source func, file, line) -> [set of the functions on each path of each finding, with the callees]
 for f in res["findings"]:
     p = f["sink"]["position"]
     found.setdefault((p["file"], p["line"]), set()).add(f["category"])
     by_source.setdefault(f["source"]["func"], set()).add(f["category"])
     by_pair.setdefault((f["source"]["func"], p["file"], p["line"]), set()).add(f["category"])
+    for pa in f.get("paths") or []:
+        fs = set()
+        for st in pa.get("steps", []):
+            fs.add(st.get("func", ""))
+            d = st.get("desc", "")
+            if d.startswith("call "):
+                fs.add(d[5:])
+        pair_funcs.setdefault((f["source"]["func"], p["file"], p["line"], f["category"]), []).append(fs)
 
 
-def source_hit(suffix, category, sink=None):
+def source_hit(suffix, category, sink=None, via=None):
+    if sink and via:
+        return any(fn.endswith(suffix) and (sf, sl) == sink and cat == category
+                   and any(all(any(x.endswith(v) for x in fs) for v in via) for fs in paths)
+                   for (fn, sf, sl, cat), paths in pair_funcs.items())
     if sink:
         return any(fn.endswith(suffix) and (sf, sl) == sink and category in cats for (fn, sf, sl), cats in by_pair.items())
     return any(fn.endswith(suffix) and category in cats for fn, cats in by_source.items())
@@ -45,10 +62,12 @@ src_only = 0
 rows = []
 labelled = set()
 for s in truth:
+    if "via" in s and not ("source_func" in s and "sink_file" in s and "sink_line" in s):
+        sys.exit("truth entry %r: via needs source_func, sink_file and sink_line" % (s,))
     if "source_func" in s:
         sink = (s["sink_file"], s["sink_line"]) if "sink_file" in s and "sink_line" in s else None
         k = (s["source_func"], 0) if not sink else (s["source_func"] + " -> " + sink[0], sink[1])
-        hit = source_hit(s["source_func"], s["category"], sink)
+        hit = source_hit(s["source_func"], s["category"], sink, s.get("via"))
         if not sink:
             src_only += 1
     else:
