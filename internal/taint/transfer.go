@@ -302,6 +302,7 @@ func (s *state) globalNote(src []Loc, pos ir.Pos) *Uncertainty {
 			u := s.pathNote(KindGlobalVar, "the value is read from the package variable "+g.Name, pos)
 			u.Symbol = g.Name
 			u.Candidates = s.eng.writersOf(g)
+			u.global, u.globalPath = g, l.Path
 			return u
 		}
 	}

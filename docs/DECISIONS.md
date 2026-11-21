@@ -1500,3 +1500,18 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 **検証:** `testdata/go/cases/ownif`(自前のインターフェース越しの `(*sql.DB).QueryContext`、候補が 2 つ(標準ライブラリと自前の別の実装)で不確実性が付く、sink の引数でない値、sink でない実装だけ)。動物園の `dyn/sink-behind-own-interface` の `vuln2`(`@miss` を外した)。Dart と Rust のセル(自前のインターフェースの実装の本体に sink がある形)と、おとりは、変わらない。
 
 `compare.sh`(軽い層 + Gitea v1.26.4): 削除 0。追加は、動物園の `vuln2` の 1 件だけ(意図した変化)。gogs 2 つ、gin-vue-admin、go-test-bench、gophish、casdoor、dart-pub、parseable、Gitea は、追加 0(`unmodeled_library_call` が Gitea で 1 件増えただけ)。実際のコードでは、候補の実装に sink のルールがあるインターフェース越しの呼び出しが、これらのコードにはなかった、ということ。
+
+
+## ADR-069: グローバルを通る finding に、証拠 `shared_state`(書き手の数、読み手の数)を付ける(出力の追加だけ)
+
+**背景:** グローバルを通る流れは、「誰が書いたものを、誰が読むか」の組を失い、書き手全員の和を読み手に返す(`docs/DESIGN-shared-state.md`)。finding は、グローバルを通ったこと(経路の `global_var` の注記)は言うが、そのグローバルに何か所が書いたかは言わなかった。読む人は、「1 か所が書いている」のか「100 か所の和」なのかを見分けられなかった(gogs の +47 のような過検出を見分けるための材料がなかった)。
+
+**決めたこと(設計の段階 1):**
+1. finding に `shared_state`(配列。グローバルを通った finding だけ。欄は `omitempty`)を足す。1 要素 = `place`(`kind: global`、`name`)、`path`(読んだフィールドの道。なければ省く)、`writers`(`flow`: **その finding の source の要素を、そのグローバルのそのパスに書いた関数の数**、`all`: そのグローバルに直接書く関数の数(`writersOf`)、`test`: `flow` のうち、ファイル名がテストのもの)、`readers`(そのグローバルのセルを読む・書く関数の数。グローバルが育つと再解析の印を付けられる関数)。
+2. `flow` は、`globalStore` に、要素ごとの書いた関数の集合(`writerFns`)を持たせて数える(今まである「最初に書いた関数の段」(`writers`)は、そのまま。経路の始まりに使う)。`commitGlobals` が、整列した順に書き込みを処理するので、決定的(集合の大きさだけを出す)。`global_var` の注記は、グローバルとパスを持つ(出力には出ない)。
+3. `test` は、ファイル名だけの証拠(`_test.go`、`_test.dart`、`test/`、`tests/`)。**何も除かない**(範囲を絞る段は別。IR の印と、シグネチャの証拠は、まだ)。`excluded_test` と `first_writer` は、出さない(後者は、どれが最初かに意味がない。ADR-049)。
+4. **出力の追加だけ**: finding の集合、経路、指紋は変わらない。`rivus.result/1` の版は上げない(ADR-034 の、足すだけの変更の扱い)。
+
+**確かめたこと(`compare.sh f188ed0 6a5e478`、軽い層):** finding の追加 0、削除 0、経路・到達性・`other_sources` の変化 0(全 16 件の対象)。`shared_state` が付いた finding: gogs 2 つ 10 件ずつ(すべて `conf.Database` のフィールド。`flow` 1、`all` 2、`readers` 8)、gin-vue-admin 2 件(`injectionPaths`、1/1)、go-curated 4、go-scale 5(`flow` 1、`all` 1〜16)、zoo-go 14、zoo-dart 6。gophish、casdoor、dart-pub、parseable、rust-curated には、グローバルを通る finding がない(0)。`flow` > `all` のものは、なかった。動物園の 3 つ(`global-chain` で収束しない)は、実行のたびに `uncertainties` が 87〜91 で揺れる(base でも同じ。この変更とは関係がない)。
+
+**限界:** `readers` は、読む関数と書く関数の和。複数のグローバルを通る finding は、配列で全部を出す。粒度の改善(持ち上げ、マップのキー)と、範囲の絞り込み(テストの印)は、別の段。

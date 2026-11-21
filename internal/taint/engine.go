@@ -1,6 +1,7 @@
 package taint
 
 import (
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -743,6 +744,7 @@ func (e *Engine) commitGlobals() {
 	// same on every run (ADR-049). Which writer it is has no meaning.
 	sort.SliceStable(e.pendingGlobals, func(i, j int) bool { return lessGlobalWrite(e.pendingGlobals[i], e.pendingGlobals[j]) })
 	for _, w := range e.pendingGlobals {
+		e.globals.noteWriterFn(w.g, w.path, w.e, w.fn)
 		if e.globals.merge(w.g, w.path, w.e) {
 			e.globals.noteWriter(w.g, w.path, w.e, w.steps)
 			e.traceGlobal(w.g, w.path, w.e)
@@ -1003,6 +1005,32 @@ type globalStore struct {
 	// wrote it first (CORE-B): a reader's path starts there, not at its load.
 	writers  map[*sg.Value]map[string]map[Elem]*rope
 	readers_ map[*sg.Value]map[*sg.Func]bool
+	// writerFns holds, for each element of a cell, the functions that wrote it (all of them,
+	// not only the first: the evidence of a finding, Finding.SharedState).
+	writerFns map[*sg.Value]map[string]map[Elem][]string
+}
+
+// noteWriterFn records that the function wrote the element to the cell.
+func (g *globalStore) noteWriterFn(v *sg.Value, path string, e Elem, fn string) {
+	if g.writerFns == nil {
+		g.writerFns = map[*sg.Value]map[string]map[Elem][]string{}
+	}
+	pm := g.writerFns[v]
+	if pm == nil {
+		pm = map[string]map[Elem][]string{}
+		g.writerFns[v] = pm
+	}
+	em := pm[path]
+	if em == nil {
+		em = map[Elem][]string{}
+		pm[path] = em
+	}
+	for _, f := range em[e] {
+		if f == fn {
+			return
+		}
+	}
+	em[e] = append(em[e], fn)
 }
 
 func newGlobalStore() *globalStore {
@@ -1328,6 +1356,7 @@ func (e *Engine) buildFinding(rf *rawFinding) *Finding {
 		f.Confidence = ConfidenceClear
 	}
 	f.ConditionalNodes = e.conditionalNodes(rf.guards)
+	f.SharedState = e.sharedState(rf.origin, f.Uncertainties)
 
 	// Which models decided something on the path, and who decided them.
 	seenModel := map[string]bool{}
@@ -1517,3 +1546,71 @@ func degradedDetail(why uint8, o Options) string {
 }
 
 func (e *Engine) noteIdentityStore(in *sg.Instr) { e.identityStores.Store(in, struct{}{}) }
+
+// sharedState is the evidence of a finding that goes through package variables (Finding.SharedState):
+// for each variable (and path in it) the path read, the functions that wrote an element of the
+// source of the finding there. It reads what the run left; it changes nothing.
+func (e *Engine) sharedState(origin string, notes []*Uncertainty) []SharedState {
+	type key struct {
+		g    *sg.Value
+		path string
+	}
+	var keys []key
+	seen := map[key]bool{}
+	for _, n := range notes {
+		if n.Kind != KindGlobalVar || n.global == nil {
+			continue
+		}
+		k := key{n.global, n.globalPath}
+		if !seen[k] {
+			seen[k] = true
+			keys = append(keys, k)
+		}
+	}
+	if len(keys) == 0 {
+		return nil
+	}
+	var out []SharedState
+	for _, k := range keys {
+		flow := map[string]bool{}
+		for p, em := range e.globals.writerFns[k.g] {
+			if p != k.path && !strings.HasPrefix(p, k.path+"/") && !strings.HasPrefix(k.path, p+"/") {
+				continue
+			}
+			for el, fns := range em {
+				if el.Kind != Real || el.Origin() != origin {
+					continue
+				}
+				for _, fn := range fns {
+					flow[fn] = true
+				}
+			}
+		}
+		st := SharedState{
+			Place:   SharedPlace{Kind: "global", Name: k.g.Name},
+			Path:    k.path,
+			Writers: SharedWriters{Flow: len(flow), All: len(e.writersOf(k.g))},
+			Readers: len(e.globals.readers_[k.g]),
+		}
+		for id := range flow {
+			if fn := e.prog.ByID[id]; fn != nil && inTestFile(position(fn.Pos).File) {
+				st.Writers.Test++
+			}
+		}
+		out = append(out, st)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Place.Name != out[j].Place.Name {
+			return out[i].Place.Name < out[j].Place.Name
+		}
+		return out[i].Path < out[j].Path
+	})
+	return out
+}
+
+// inTestFile says, from the name of a file, that it is a test (Go, Dart; the directory of the tests of Dart and Rust).
+func inTestFile(file string) bool {
+	f := filepath.ToSlash(file)
+	return strings.HasSuffix(f, "_test.go") || strings.HasSuffix(f, "_test.dart") ||
+		strings.Contains(f, "/test/") || strings.HasPrefix(f, "test/") || strings.Contains(f, "/tests/") || strings.HasPrefix(f, "tests/")
+}

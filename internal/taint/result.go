@@ -2,6 +2,7 @@ package taint
 
 import (
 	"github.com/yagihash/rivus/internal/ir"
+	"github.com/yagihash/rivus/internal/sg"
 )
 
 // Terminal kinds recorded as uncertainty (ADR-008). Only the ones the
@@ -64,6 +65,10 @@ type Uncertainty struct {
 	Snippet        string      `json:"snippet,omitempty"`
 
 	pos ir.Pos
+	// global and globalPath say which package variable (and which path inside it) a global_var
+	// note is about: the evidence of a finding (Finding.SharedState) is made from them.
+	global     *sg.Value
+	globalPath string
 }
 
 // NewUncertainty creates an uncertainty with the attributable_to of its kind.
@@ -199,6 +204,38 @@ type Finding struct {
 	// ConditionalNodes are the places on the path where the outcome
 	// depends on a value the caller passes.
 	ConditionalNodes []ConditionalNode `json:"conditional_nodes,omitempty"`
+	// SharedState is the evidence for a flow that goes through a package variable: the flow
+	// puts together what every writer of the variable wrote, and a reader of the finding cannot
+	// tell a variable one function sets from one that a hundred do. Output only: it changes
+	// neither the finding nor its path.
+	SharedState []SharedState `json:"shared_state,omitempty"`
+}
+
+// SharedState says who wrote the element of the finding to a shared place, and who reads it.
+type SharedState struct {
+	Place   SharedPlace   `json:"place"`
+	Path    string        `json:"path,omitempty"`
+	Writers SharedWriters `json:"writers"`
+	// Readers is the number of functions that read or write the place (the ones the analysis
+	// marks to be analysed again when it grows).
+	Readers int `json:"readers"`
+}
+
+// SharedPlace is the place: a package variable ("global"; the name is the one the path's note has).
+type SharedPlace struct {
+	Kind string `json:"kind"`
+	Name string `json:"name"`
+}
+
+// SharedWriters counts the functions that write to the place. Flow is the number that wrote an
+// element of this finding's source (Flow <= All is what is expected: a function that passes on
+// what a callee wrote is counted in Flow too, and the callee in All only when it stores to the
+// variable itself); All is the number of functions that store to the variable directly; Test is
+// how many of the Flow writers are in a file of a test (by its name: only evidence, nothing is left out).
+type SharedWriters struct {
+	Flow int `json:"flow"`
+	All  int `json:"all"`
+	Test int `json:"test,omitempty"`
 }
 
 // Values of Finding.Confidence.
