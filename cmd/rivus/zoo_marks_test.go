@@ -197,9 +197,11 @@ func TestZooLoosenedCheck(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	first := ""
 	check := func(base string) error {
 		cmd := exec.Command("bash", script, base, "HEAD")
 		cmd.Dir = repo
+		cmd.Env = append(os.Environ(), "ZOO_LOCK_FIRST="+first)
 		out, err := cmd.CombinedOutput()
 		t.Logf("%s", out)
 		return err
@@ -208,7 +210,8 @@ func TestZooLoosenedCheck(t *testing.T) {
 	write("go\ta.go\tmiss\t@miss\n")
 	run("add", ".")
 	run("commit", "-q", "-m", "base")
-	base := run("rev-parse", "HEAD")
+	first = run("rev-parse", "HEAD") // the commit that made the file: the only one that is let off
+	base := first
 	// (b) a row is added without the line: fails
 	write("go\ta.go\tmiss\t@miss\ngo\tb.go\tfp\t@fp\n")
 	run("commit", "-qam", "add a mark")
@@ -219,6 +222,28 @@ func TestZooLoosenedCheck(t *testing.T) {
 	run("commit", "-q", "--amend", "-m", "add a mark\n\nZoo-Loosened: test。ユーザーの承認: 2026-01-01")
 	if err := check(base); err != nil {
 		t.Errorf("a row added with Zoo-Loosened failed: %v", err)
+	}
+	// CI-1: delete the file in one commit and make it again with a new row in the next one: fails
+	base = run("rev-parse", "HEAD")
+	run("rm", "-q", "bench/zoo/marks.lock")
+	run("commit", "-qm", "delete the lock")
+	write("go\ta.go\tmiss\t@miss\ngo\tb.go\tfp\t@fp\ngo\tc.go\tfp\t@fp\n")
+	run("add", ".")
+	run("commit", "-qm", "make it again")
+	if check(base) == nil {
+		t.Error("delete and make again passed")
+	}
+	// a wrong form of the line (no approval date) fails
+	run("reset", "-q", "--hard", base)
+	write("go\ta.go\tmiss\t@miss\ngo\tb.go\tfp\t@fp\ngo\tc.go\tfp\t@fp\n")
+	run("commit", "-qam", "add\n\nZoo-Loosened: no date")
+	if check(base) == nil {
+		t.Error("a Zoo-Loosened line without the approval date passed")
+	}
+	run("reset", "-q", "--hard", base)
+	// a base that is not usable fails
+	if check("0000000000000000000000000000000000000000") == nil {
+		t.Error("an unusable base passed")
 	}
 	// (c) a row is removed: passes with nothing
 	base = run("rev-parse", "HEAD")
