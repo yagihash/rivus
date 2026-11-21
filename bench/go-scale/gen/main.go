@@ -45,7 +45,7 @@ var allShapes = []string{"types", "stderr", "widen", "scc", "chain", "typeschain
 
 // namedShapes are the shapes that -shapes takes by name only: "all" does not turn them on (the input of
 // bench/compare.sh's light tier stays the same for the base and the head).
-var namedShapes = []string{"stagefield", "registry"}
+var namedShapes = []string{"stagefield", "registry", "longlived"}
 
 // Default is the size of the profiles (about 2,000 functions).
 func Default() Params {
@@ -144,6 +144,11 @@ func (g *gen) ballast() {
 			// one function in eight decodes a value (a call of the gRPC stack): what the decoder carries goes up
 			f.imports["reg"] = true
 			b.WriteString("\tv += reg.Decode(v)\n")
+		}
+		if g.on("longlived") && i%8 == 0 {
+			// one function in eight asks the stream for what it sent last: what flush wrote goes up the call graph
+			f.imports["ll"] = true
+			b.WriteString("\tv += ll.Last(v)\n")
 		}
 		if g.on("stagefield") && i%8 == 0 && g.p.Ops > 0 {
 			f.imports["sfops"] = true
@@ -722,6 +727,58 @@ func Decode(s string) string { return s + M["codec"] }
 	}
 }
 
+// shapeLonglived is the shape of bench/gcp's long-lived receivers (bench/explore/LOG.md, measurement 5): N handlers
+// each put the body of their own request (a source by its type) into a receiver that lives on (a connection, a
+// stream, the cache of a router) by a library call that fills the receiver as a whole (encoding/json.Unmarshal; the
+// engine has no model for what it fills), and pass the whole receiver to a function (flush) that reads ANOTHER
+// field (Meta) and writes it to a package variable (Sent). Meta carries the tag `json:"-"`, so the library never
+// fills it. Reader reads the variable and sends it to the sink. Only handler 0 sets Meta itself, so the one real
+// finding is handler 0 to the sink; the requests of the other N-1 handlers never reach Sent, and the finding lists
+// them as other sources, since the engine does not tell the fields of the receiver apart after the library call.
+// One function in eight of the ballast calls Last, which returns what flush wrote, so what Sent carries goes up the
+// call graph (as the 1,082 functions of bench/gcp). Parameter: -ops (N). The code has no answer key (@source marks): the flow of handler 0 and the number of other
+// sources are in the expected file. The acceptance of a flow that tells the fields apart (stage 5 of
+// docs/DESIGN-shared-state.md: from: / to: on the path, the other field quiet) is other_sources_count 0 with the
+// same finding. (-shapes longlived only: "all" does not turn it on.)
+func (g *gen) shapeLonglived() {
+	f := g.file("ll/ll.go")
+	f.imports["lib"], f.imports["encoding/json"] = true, true
+	f.body.WriteString(`// Req is a request: a source by its type (rules.yaml).
+type Req struct{ Body string }
+
+// Stream is a receiver that lives on: the handlers fill it as a whole (json.Unmarshal, which never fills Meta), and flush reads Meta.
+type Stream struct {
+	Pending string
+	Meta    string ` + "`json:\"-\"`" + `
+}
+
+// Conn is the one long-lived stream; Sent is the package variable flush writes.
+var Conn = &Stream{}
+
+var Sent string
+
+// flush gets the whole receiver and reads another field than the one the library fills.
+func flush(s *Stream) { Sent = s.Meta }
+
+// Reader reads the variable and sends it to the sink.
+func Reader() { lib.Sink(Sent) }
+
+// Last flushes the stream and gives back what was sent (the ballast calls it: what flush wrote goes up the call graph).
+func Last(s string) string {
+	flush(Conn)
+	return s + Sent
+}
+
+`)
+	for i := 0; i < g.p.Ops; i++ {
+		if i == 0 {
+			f.body.WriteString("// Handler0 puts its request into Meta itself.\nfunc Handler0(r *Req) {\n\tConn.Meta = r.Body\n\tflush(Conn)\n}\n\n")
+			continue
+		}
+		fmt.Fprintf(&f.body, "// Handler%d fills the stream with its request by the library (Meta is never filled).\nfunc Handler%d(r *Req) {\n\tjson.Unmarshal([]byte(r.Body), Conn)\n\tflush(Conn)\n}\n\n", i, i)
+	}
+}
+
 func (g *gen) shapeGlob() {
 	f := g.file("glob/glob.go")
 	f.imports["lib"] = true
@@ -812,6 +869,8 @@ func Generate(p Params) (map[string]string, error) {
 			g.shapeStagefield()
 		case "registry":
 			g.shapeRegistry()
+		case "longlived":
+			g.shapeLonglived()
 		}
 	}
 	out := map[string]string{}
@@ -825,6 +884,9 @@ func Generate(p Params) (map[string]string, error) {
 	paramRule := ""
 	if p.Shapes["registry"] {
 		paramRule = "  - kind: param_type\n    type: \"*scale/reg.Req\"\n    labels: [user_input]\n"
+	}
+	if p.Shapes["longlived"] {
+		paramRule += "  - kind: param_type\n    type: \"*scale/ll.Req\"\n    labels: [user_input]\n"
 	}
 	out["rules.yaml"] = "ruleset: rivus/bench-scale@1\n\nsources:\n  - symbol: scale/lib.Source\n    labels: [user_input]\n" + paramRule + "\nsinks:\n  - symbol: scale/lib.Sink\n    category: test\n"
 
@@ -853,6 +915,13 @@ func Generate(p Params) (map[string]string, error) {
 		for i := 0; i < p.Ops; i++ {
 			calls = append(calls, fmt.Sprintf("\treg.Handler%d(&reg.Req{})", i))
 		}
+	}
+	if p.Shapes["longlived"] {
+		mainImports["ll"] = true
+		for i := 0; i < p.Ops; i++ {
+			calls = append(calls, fmt.Sprintf("\tll.Handler%d(&ll.Req{})", i))
+		}
+		calls = append(calls, "\tll.Reader()")
 	}
 	if p.Shapes["selfcopy"] {
 		mainImports["selfcopy"] = true
@@ -884,7 +953,7 @@ func Generate(p Params) (map[string]string, error) {
 		var imps []string
 		for i := range f.imports {
 			switch i {
-			case "strings", "fmt", "reflect", "log", "os":
+			case "strings", "fmt", "reflect", "log", "os", "encoding/json":
 				imps = append(imps, "\""+i+"\"")
 			default:
 				imps = append(imps, "\"scale/"+i+"\"")

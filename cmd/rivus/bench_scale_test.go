@@ -69,6 +69,10 @@ func TestScaleSynth(t *testing.T) {
 		// N handlers write their requests into a registry (a map in a package variable), a decoder reads it under another key:
 		// the one real finding lists the other N-1 handlers as other sources (docs/DESIGN-shared-state.md, stage 2)
 		{"registry", "registry", []string{"-ops", "40"}, []int{1}, false},
+		// N handlers fill a long-lived receiver by a library call and pass it whole to a function that reads another
+		// field and writes a package variable: the other N-1 requests are other sources of the one finding (the
+		// acceptance of stage 5 of docs/DESIGN-shared-state.md, a path that tells the fields apart; not part of "all")
+		{"longlived", "longlived", []string{"-ops", "40"}, []int{1}, false},
 		{"stagefield", "stagefield", []string{"-ops", "40", "-stages", "4", "-fields", "8"}, []int{1}, false},
 		// all the shapes in one module (2,500 functions): what Gitea is, small. The causes that are alone above add up here:
 		// without the three fixes of 2026-11-21 it swells 5.5 times and does not converge (bench/BACKTEST.md, the overlap row)
@@ -96,7 +100,7 @@ func TestScaleSynth(t *testing.T) {
 				// the registry code has no answer key: its expected file is the check, with other_sources_count 39 (a false
 				// trace). When stage 2 of docs/DESIGN-shared-state.md brings it to 0, give the code an answer key and
 				// take this skip out.
-				if pr.name != "registry" {
+				if pr.name != "registry" && pr.name != "longlived" {
 					checkCuratedReport(t, dir, out, ".go")
 				}
 				curatedAllowUnconverged = false
@@ -105,6 +109,9 @@ func TestScaleSynth(t *testing.T) {
 				if os.Getenv("RIVUS_SCALE_UPDATE") == "1" {
 					if pr.name == "registry" {
 						got.Note = registryNote
+					}
+					if pr.name == "longlived" {
+						got.Note = longlivedNote
 					}
 					b, _ := json.MarshalIndent(got, "", "  ")
 					if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -147,6 +154,9 @@ type scaleResult struct {
 
 // registryNote is written into registry-w1.json: the 39 is a false trace that is fixed in place, not a goal.
 const registryNote = "other_sources_count 39 is a false trace that the test pins (it must not grow). Stage 2 of docs/DESIGN-shared-state.md brings it to 0: then set the profile free of the skip of checkCuratedReport (the registry code has no answer key yet) and write this file again."
+
+// longlivedNote is written into longlived-w1.json: the 39 is a false trace that is fixed in place, not a goal.
+const longlivedNote = "other_sources_count 39 is a false trace that the test pins (it must not grow). The acceptance of stage 5 of docs/DESIGN-shared-state.md (a flow that tells the fields apart, the other field quiet) brings it to 0; registry stays the acceptance of stage 3. Then give the code an answer key and take the skip of checkCuratedReport out."
 
 func scaleResultOf(rep *report.Report) scaleResult {
 	r := scaleResult{UncertaintyKinds: map[string]int{}, Findings: []string{}}

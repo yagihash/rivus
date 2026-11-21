@@ -64,3 +64,32 @@ Measured on the head (one finding in every row; the count is `other_sources_coun
 Both numbers are **linear in N**: `summary_elems` about 440 per handler (the 250 callers of `Decode` and their callers each
 carry the N requests), and `other_sources_count` is exactly N-1. The acceptance of the second stage of
 `docs/DESIGN-shared-state.md` is that `other_sources_count` becomes 0 and the finding stays the same.
+
+## `longlived`: false "other sources" through a long-lived receiver that is passed whole
+
+`go run ./bench/go-scale/gen -shapes longlived -ops N -out DIR` (by name only; not part of `-shapes all`). The shape of
+`bench/gcp` that `bench/explore/LOG.md`, measurement 5, found: the request goes into a **long-lived receiver** (a
+connection, a stream, the cache of a router), the receiver is passed whole to another function, which reads **another
+field** and writes a package variable. N handlers (a source by its type, `*ll.Req`) each fill the one stream `Conn` by a
+library call that fills it as a whole (`json.Unmarshal([]byte(r.Body), Conn)`; the engine has no model for what it fills);
+`flush(s *Stream)` reads `s.Meta`, a field that has the tag `json:"-"` so the library never fills it, and writes the
+package variable `Sent`. `Reader` reads `Sent` and sends it to the sink. Only handler 0 sets `Meta` itself, so the one
+real finding is handler 0 to the sink; the requests of the other N-1 handlers never reach `Sent`, and the finding lists them
+as `other_sources`. One in eight functions of the ballast calls `Last` (it flushes and returns `Sent`), so what `Sent` carries
+goes up the call graph. `expected/longlived-w1.json` (N = 40): the one finding, `other_sources_count` 39, `summary_elems`
+22,254; like `registry`, the profile skips `checkCuratedReport` (no answer key in the code).
+
+Measured on the head (one finding in every row):
+
+| handlers N | summary_elems | largest summary | reanalyses | other_sources_count |
+| ---: | ---: | ---: | ---: | ---: |
+| 10 | 9,477 | 16 | 3,207 | 9 |
+| 40 | 22,254 | 43 | 3,267 | 39 |
+| 160 | 74,934 | 163 | 3,508 | 159 |
+
+Both numbers are linear in N (about 440 elements per handler, `other_sources_count` exactly N-1), as in `registry`.
+
+**What it is the acceptance of.** `longlived` is a candidate for the acceptance of **stage 5** (a path in `flows` with
+`from:` / `to:`, that tells the fields apart, the other field staying quiet): then `other_sources_count` becomes 0 and the
+finding stays. `registry` stays the acceptance of **stage 3** (constant keys). `bench/gcp` stays a measurement and is not an
+acceptance of either.

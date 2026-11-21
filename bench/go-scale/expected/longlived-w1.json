@@ -1,0 +1,15 @@
+{
+  "findings": [
+    "ll/ll.go:35 -\u003e ll/ll.go:26"
+  ],
+  "uncertainty_kinds": {
+    "unmodeled_library_call": 1
+  },
+  "converged": true,
+  "passes": 2,
+  "reanalyses": 3267,
+  "summary_elems": 22254,
+  "largest_summary_elems": 43,
+  "other_sources_count": 39,
+  "note": "other_sources_count 39 is a false trace that the test pins (it must not grow). The acceptance of stage 5 of docs/DESIGN-shared-state.md (a flow that tells the fields apart, the other field quiet) brings it to 0; registry stays the acceptance of stage 3. Then give the code an answer key and take the skip of checkCuratedReport out."
+}
