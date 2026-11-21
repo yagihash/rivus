@@ -2,6 +2,8 @@
 //! See bench/zoo/README.md. `register()` of a file hands its cases to zoo-mark; the table of the files is in
 //! exec/src/cases.rs (not analysed). The modules are inline, so that this is the only file without a cell.
 //! (`dyns` is the family `dyn` of the design: `dyn` is a keyword.)
+//! @na(F/conv/exec-output-echo: Rust's `Command::output` has no model with an approximation yet; the cell is not written)
+//! @na(F/dyn/iface-assert-ptr-recv: Go's type assertion of `any` to an interface read through a pointer receiver; Rust has neither)
 pub mod call {
     pub mod depth3;
     pub mod direct;
