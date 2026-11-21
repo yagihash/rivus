@@ -101,6 +101,8 @@ ID トークンの検証と、復号したクレーム。ラベルを決める(�
 
 `TestGCPRows`(`cmd/rivus/gcp_test.go`)と、`go test -tags gcpexec ./...`(`bench/gcp/exec_test.go`。実行で、値が本当に SQL に届くことを確かめる)が持つ。
 
+実行の検査は、実際の Google の端点に接続しない。Spanner のクライアントを放っておくと、組み込みのメトリクスが `monitoring.googleapis.com:443` へ送り、GCP のリソース検出がメタデータサーバを探る。試験は、メトリクスを切り(`DisableNativeMetrics`、`SPANNER_DISABLE_BUILTIN_METRICS`)、検出(ライブラリは、切っても行う)の問い合わせ先を手元の待ち受け(`GCE_METADATA_HOST`)にし、`TestMain` が、ループバック以外への名前解決と HTTP の接続を、拒否して数え、1 つでもあれば失敗にする。
+
 | ケース | 形 | 今の出方 |
 |---|---|---|
 | `VNewStatement`、`VNewStatementBare` | `spanner.NewStatement(src)`(連結あり、なし) | **`SQL` に細かく入って鳴る。`field_imprecision` なし**(`no_uncertainty_on_path`)。依存の本体が読まれる。**`whole_value` ではない**。ビルダーが読まれない(本体がない)ライブラリでは `whole_value` になる。`flows` の `to:` に道(段階 5)が入っても、これは変わらないことが、受け入れ |

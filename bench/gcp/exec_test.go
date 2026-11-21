@@ -17,12 +17,16 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -41,6 +45,76 @@ import (
 	bq "gcpsample/bigquery"
 	sp "gcpsample/spanner"
 )
+
+// Nothing here may talk to a real Google endpoint. The Spanner client, left alone, starts a metrics exporter that
+// sends to monitoring.googleapis.com:443 and probes the metadata server (GCP resource detection). The test turns both
+// off (DisableNativeMetrics, SPANNER_DISABLE_BUILTIN_METRICS) and sends the region probe, which the library makes
+// whatever the switches say, to a local listener (GCE_METADATA_HOST). TestMain pins it:
+// every name lookup and every dial of the default HTTP transport that is not loopback is refused and counted,
+// and the run fails when one happened.
+var outside atomic.Int64
+var outsideWhat sync.Map
+
+func noteOutside(what string) { outside.Add(1); outsideWhat.Store(what, true) }
+
+func isLoopback(addr string) bool {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		host = addr
+	}
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+func TestMain(m *testing.M) {
+	os.Setenv("SPANNER_DISABLE_BUILTIN_METRICS", "true")
+	os.Setenv("SPANNER_DISABLE_DIRECT_ACCESS_GRPC_BUILTIN_METRICS", "true")
+	os.Unsetenv("SPANNER_EMULATOR_HOST")
+	// the metadata client (GCP detection) asks this host: a local listener that counts, so a probe is seen and is not sent out
+	var metadataHits atomic.Int64
+	ml, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		panic(err)
+	}
+	go func() {
+		_ = http.Serve(ml, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			metadataHits.Add(1)
+			http.NotFound(w, r)
+		}))
+	}()
+	os.Setenv("GCE_METADATA_HOST", ml.Addr().String())
+	// every name lookup that is not "localhost" is a way out
+	net.DefaultResolver = &net.Resolver{PreferGo: true, Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+		noteOutside("dns " + address)
+		return nil, fmt.Errorf("the test does not use the network: dns %s", address)
+	}}
+	if tr, ok := http.DefaultTransport.(*http.Transport); ok {
+		d := &net.Dialer{}
+		tr.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+			if !isLoopback(address) {
+				noteOutside("http " + address)
+				return nil, fmt.Errorf("the test does not use the network: %s", address)
+			}
+			return d.DialContext(ctx, network, address)
+		}
+	}
+	code := m.Run()
+	if n := outside.Load(); n > 0 {
+		var what []string
+		outsideWhat.Range(func(k, _ any) bool { what = append(what, k.(string)); return true })
+		fmt.Fprintf(os.Stderr, "FAIL: %d attempt(s) to reach outside the machine: %v\n", n, what)
+		code = 1
+	}
+	// the client library detects the region (GCP resource detection) whatever the metrics switches say: the probe
+	// goes to the local listener above, and is not an outside attempt
+	if n := metadataHits.Load(); n > 0 {
+		fmt.Fprintf(os.Stderr, "note: the client library probed the metadata server %d times: answered by the local listener\n", n)
+	}
+	os.Exit(code)
+}
 
 const marker = "rivus'marker"
 
@@ -149,7 +223,8 @@ func TestSpannerCases(t *testing.T) {
 	defer srv.Close()
 	rec := &sent{}
 	ctx := context.Background()
-	client, err := spanner.NewClient(ctx, "projects/p/instances/i/databases/d",
+	client, err := spanner.NewClientWithConfig(ctx, "projects/p/instances/i/databases/d",
+		spanner.ClientConfig{DisableNativeMetrics: true},
 		option.WithEndpoint(srv.Addr),
 		option.WithoutAuthentication(),
 		option.WithGRPCDialOption(grpc.WithTransportCredentials(insecure.NewCredentials())),
