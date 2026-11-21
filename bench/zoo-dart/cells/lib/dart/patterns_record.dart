@@ -1,5 +1,6 @@
 // @cell(F/dart/patterns-record)
-// @shape: a variable that a pattern declares (a record pattern, an if-case, a switch case; also one that a closure assigns) gets the value (the decoy declares two and sinks the other)
+// @na(go: no patterns and no for-in pattern variables; the multiple return is call/multiret)
+// @shape: a variable that a pattern or a for-in declares (a record pattern, an if-case, a switch case, the variable of a for-in; also one that a closure assigns) gets the value (the decoy declares two and sinks the other)
 import 'package:zoo_mark/zoo_mark.dart';
 
 void register() {
@@ -7,6 +8,9 @@ void register() {
   zooCase('F/dart/patterns-record/vuln2', vuln2);
   zooCase('F/dart/patterns-record/vuln3', vuln3);
   zooCase('F/dart/patterns-record/vuln4', vuln4);
+  zooCase('F/dart/patterns-record/vuln5', vuln5);
+  zooCase('F/dart/patterns-record/vuln6', vuln6);
+  zooCase('F/dart/patterns-record/vuln7', vuln7);
   zooCase('F/dart/patterns-record/fixed', fixed);
   zooCase('F/dart/patterns-record/decoy', decoy);
 }
@@ -41,6 +45,32 @@ void vuln4() { // @vuln
 
   load();
   sinkCmd(a); // @sink(dart-patterns-record-vuln4)
+}
+
+// the variable of a for-in loop
+void vuln5() { // @vuln
+  for (final x in [src('dart-patterns-record-vuln5')]) { // @source(dart-patterns-record-vuln5)
+    sinkCmd(x); // @sink(dart-patterns-record-vuln5)
+  }
+}
+
+// a pattern variable of a for-in loop
+void vuln6() { // @vuln
+  for (final (a, _) in [(src('dart-patterns-record-vuln6'), 1)]) { // @source(dart-patterns-record-vuln6)
+    sinkCmd(a); // @sink(dart-patterns-record-vuln6)
+  }
+}
+
+// the variable of the loop is captured by a closure and assigned there
+void vuln7() { // @vuln
+  for (var x in ['constant']) {
+    void load() {
+      x = src('dart-patterns-record-vuln7'); // @source(dart-patterns-record-vuln7) @miss(silent) @ref(R-15)
+    }
+
+    load();
+    sinkCmd(x); // @sink(dart-patterns-record-vuln7)
+  }
 }
 
 void fixed() { // @fixed

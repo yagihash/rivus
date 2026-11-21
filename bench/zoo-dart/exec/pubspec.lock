@@ -400,6 +400,13 @@ packages:
       relative: true
     source: path
     version: "0.0.0"
+  zoo_flutter:
+    dependency: transitive
+    description:
+      path: "../cells/packages/zoo_flutter"
+      relative: true
+    source: path
+    version: "0.0.0"
   zoo_mark:
     dependency: "direct main"
     description:

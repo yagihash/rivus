@@ -1,4 +1,5 @@
 // @cell(F/state/provider-store)
+// @na(go: no state-management store of a framework)
 // @shape: a state store (as riverpod and provider have it): one widget writes a provider's state from its event handler, and another widget reads it in build (the decoy has a second provider)
 import 'package:zoo_mark/zoo_mark.dart';
 

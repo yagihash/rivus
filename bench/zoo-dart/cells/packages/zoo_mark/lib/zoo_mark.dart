@@ -16,6 +16,11 @@ class In {
 /// The marker of the tag (a source).
 String src(String tag) => '';
 
+/// What the user gives to the framework in a case (the text typed, the arguments of a route, the message of a
+/// channel): the marker of the tag at run time, and **not a source** of rules.yaml: the source of such a cell is
+/// the API of the framework (a field that is read, the parameter of a method that an app overrides).
+String typed(String tag) => tag;
+
 /// The sinks of each class. They record what they got and execute nothing.
 void sinkCmd(String s) {}
 void sinkCmdBytes(List<int> b) {}

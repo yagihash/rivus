@@ -1,4 +1,5 @@
 // @cell(F/dart/super-mixin-impl)
+// @na(go: no mixins; the nearest is embedding (dyn/embed))
 // @shape: the method that is called is implemented by a mixin (or by a superclass) of the class, and the variable's type is only the interface that the class implements (the decoy's mixin sinks the constant and the value goes to another sink)
 import 'package:zoo_mark/zoo_mark.dart';
 

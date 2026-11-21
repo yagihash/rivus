@@ -114,15 +114,28 @@ The rest is as for Go (steps 3 and 4 above). Things that are Dart's:
 * Flutter itself is not in the zoo: `build`, `onPressed` and the state store are written as small skeletons in the cell (`state/provider-store`, `dart/tearoff-instance` `vuln3`).
 * A pubspec.lock is committed for `cells` and `exec`; CI resolves both with `dart pub get --enforce-lockfile`.
 
-Stage 2 has 21 cells: the 20 of the design (the ten Dart shapes `async-await`, `future-then`, `extension`, `named-args`, `getter-setter`, `patterns-record`, `for-in`, `interp-tostring`, `callable-class`, `tearoff-instance`, and the nine common ones `call/direct`, `call/depth3`, `clos/two-callers`, `state/global-direct`, `state/handler-then-reader`, `cont/list`, `cont/map`, `guard/sanitize-before`, `guard/one-branch`, plus `state/provider-store`) and `dart/super-mixin-impl` (R-16: the review item asks for a mixin).
+Stage 2 has 22 cells: **14 common forms**, which have the name of the Go cell (`call/direct`, `call/direct-in`, `call/depth3`, `call/multiret`,
+`clos/inline`, `clos/returned`, `clos/to-own-helper`, `cont/slice` (a list), `cont/map-key-vs-value`, `state/global-direct`,
+`state/handler-then-reader`, `state/receiver-field-across-entries`, `guard/sanitize-before`, `guard/one-branch`), written in Dart's own words, so that
+the difference between the languages is read from one table; and **8 Dart forms** (`dart/patterns-record` (also the variables of a for-in),
+`dart/tearoff-instance`, `dart/interp-tostring`, `dart/super-mixin-impl`, `state/provider-store`, `dart/flutter-field-read`,
+`dart/flutter-override-arg`, `dart/flutter-route-args`), each with `// @na(go: <why>)` in its first lines: the form does not exist in the other language.
+`TestZooDart` prints the parity line: the common cells in which Go finds the flow and Dart has a `@miss` (the `@miss` then says `@ref(..., PARITY)`; the
+test fails without it), and the cells that only Dart has. A common form that the other language has not written yet is logged, not failed.
 Some cells have more than one vulnerable case (`vuln2` ...): the forms that one review item (R-14, R-15, R-16) names are separate cases, because a `@miss` is a mark of one flow.
+
+Flutter is not in the zoo: `packages/zoo_flutter` has a skeleton of what the cells need (`TextEditingController`, `RouteSettings`, `Navigator`,
+`MethodChannel`, `State.setState`), real code of a few lines. What the user gives to the framework in a case is `typed(tag)` (the marker, which is **not**
+a source of `rules.yaml`): the source of such a cell is the framework's API: a getter that is read (`TextEditingController.text`, `call_result`), a field that is read
+(`RouteSettings.arguments`, `kind: field`) or the parameter of a method that an app overrides (`kind: param` with the symbol of each override; the rules
+`match: implementations` and `extends` + `with_param_type` of an interface did not fire for a Dart class that extends or implements it, so each override is named,
+and the position of such a source is the line of the `@override` of the method).
 
 ### What the Dart zoo found (the refs of its `@miss` and `@fp`)
 
 | ref | what | cells |
 | --- | --- | --- |
 | `R-14` | the tear-off of an instance method swaps the receiver and the arguments: the flow is not found (`f = Printer('x').run; f(src())`, `stream.listen(c.onData)`, `Button(onPressed: form.submit)`), and the receiver's value is reported at the sink of the argument | `dart/tearoff-instance` (`vuln`, `vuln2`, `vuln3`, `decoy`) |
-| `R-15` | a variable that a pattern (`var (a, _) = ...`) or a for-in (`for (var x in ...)`) declares is not a cell: a closure that assigns it is not seen | `dart/patterns-record` `vuln4`, `dart/for-in` `vuln3` (a pattern, an if-case, a switch case and a for-in whose variable is only read are found) |
+| `R-15` | a variable that a pattern (`var (a, _) = ...`) or a for-in (`for (var x in ...)`) declares is not a cell: a closure that assigns it is not seen | `dart/patterns-record` `vuln4`, `vuln7` (a pattern, an if-case, a switch case and a for-in whose variable is only read are found) |
 | `R-16` | the implementation that comes from a mixin or a superclass of the class is not a candidate of a call through the interface; the interpolation `'$w'` does not call the `toString` (the result carries the whole object) | `dart/super-mixin-impl` (`vuln`, `vuln2`, `decoy`), `dart/interp-tostring` `decoy` |
-| `ZOO-D1` | the call of an object of a class with a `call` method (`r(x)`, not `r.call(x)`) has no callee: `unresolved_callee` | `dart/callable-class` (`vuln`, `decoy`) |
-| `KEYED-MAP` | the keys of a list or a map are not told apart (also a `Map<Object, _>` that a store keeps by provider) | `cont/list`, `cont/map`, `state/provider-store` (the decoys) |
+| `KEYED-MAP` | the keys of a list or a map are not told apart (also a `Map<Object, _>` that a store keeps by provider) | `cont/slice`, `cont/map-key-vs-value`, `state/provider-store` (the decoys) |

@@ -1,0 +1,6 @@
+The cells of the Go zoo that the Dart zoo has no counterpart of, with the reason (the Go zoo's other cells that Dart does not have yet are stage 3).
+Read by TestZooDart (the parity line).
+
+@na(F/dyn/iface-ptr-recv-read: Go's pointer receiver of a method that an interface holds; a Dart object is always a reference)
+@na(F/dyn/iface-ptr-recv-write: the same)
+@na(F/dyn/generics-ptr: a Go pointer type argument; Dart's generics are reified and have no pointer receivers)

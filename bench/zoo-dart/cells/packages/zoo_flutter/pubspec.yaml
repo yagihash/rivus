@@ -1,0 +1,5 @@
+name: zoo_flutter
+description: "The skeleton of the parts of Flutter that the cells of the Dart zoo need (the framework is not in the zoo)."
+publish_to: none
+environment:
+  sdk: ^3.10.0

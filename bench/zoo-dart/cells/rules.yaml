@@ -6,6 +6,27 @@ ruleset: rivus/bench-zoo-dart@1
 sources:
   - symbol: package:zoo_mark/zoo_mark.dart#src
     labels: [user_input]
+  # what Flutter gives to an app (the skeleton of packages/zoo_flutter): a field that is read, the parameter of the
+  # method that an app overrides, the arguments of a route
+  - symbol: package:zoo_flutter/zoo_flutter.dart#TextEditingController.text
+    labels: [user_input]
+  - kind: field
+    field: package:zoo_flutter/zoo_flutter.dart#RouteSettings.arguments
+    labels: [user_input]
+  # the parameter of the method that an app overrides: the handlers of the cells (the rule of an interface, match:
+  # implementations or extends, does not fire for Dart yet, so each override is named)
+  - kind: param
+    symbol: package:zoo_cells/dart/flutter_override_arg.dart#OpenHandler.onMethodCall
+    params: [0]
+    labels: [user_input]
+  - kind: param
+    symbol: package:zoo_cells/dart/flutter_override_arg.dart#OpenHandlerFixed.onMethodCall
+    params: [0]
+    labels: [user_input]
+  - kind: param
+    symbol: package:zoo_cells/dart/flutter_override_arg.dart#OpenHandlerDecoy.onMethodCall
+    params: [0]
+    labels: [user_input]
   # a source that is the type of a parameter: the handler under test takes an In
   - kind: param_type
     type: package:zoo_mark/zoo_mark.dart#In

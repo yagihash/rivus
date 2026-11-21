@@ -6,3 +6,5 @@ environment:
 dependencies:
   zoo_mark:
     path: packages/zoo_mark
+  zoo_flutter:
+    path: packages/zoo_flutter

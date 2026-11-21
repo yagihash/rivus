@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -267,6 +268,7 @@ func TestZooDart(t *testing.T) {
 		zooDartAlone(t, root, cells)
 	}
 	zooHeadline(t, "zoo-dart", lines, cells, obs, c)
+	zooParityDart(t, lines, cells)
 	logSilentMisses(t, "zoo-dart", c)
 }
 
@@ -352,4 +354,83 @@ func TestZooMarkIndependentDart(t *testing.T) {
 		t.Error("no findings")
 	}
 	t.Logf("zoo-dart: %d findings, the same with the implementation of zoo_mark and the registration of the cases", len(plain))
+}
+
+// zooParityDart compares the cells of the Dart zoo with the ones of the Go zoo (the common forms have the same name,
+// docs/DESIGN-zoo.md 4.2.2): a common cell in which Go finds the flow and Dart has a @miss says @ref(..., PARITY);
+// a Dart cell that Go does not have says why in @na(go: reason); a Go cell that Dart does not have is in
+// bench/zoo-dart/na.txt (@na(F/<family>/<shape>: reason), a form that Dart has no counterpart of) or is still to be
+// written (stage 3), which is logged.
+func zooParityDart(t *testing.T, lines []zooLine, cells []*zooCell) {
+	t.Helper()
+	goLines, goCells := zooScan(t, zooRoot(t))
+	vulnMisses := func(lines []zooLine, c *zooCell) (miss int, refs [][]string) {
+		for _, l := range lines {
+			if !(l.file == c.dir || strings.HasPrefix(l.file, c.dir+"/")) {
+				continue
+			}
+			for _, tag := range l.sourceTags {
+				if m := zooTagRole.FindStringSubmatch(tag); m == nil || m[1] != "vuln" {
+					continue
+				}
+				if l.hasMiss {
+					miss++
+					refs = append(refs, l.refs)
+				}
+			}
+		}
+		return
+	}
+	goCell := map[string]*zooCell{}
+	for _, c := range goCells {
+		goCell[c.name] = c
+	}
+	common, parity, onlyDart, onlyDartPending := 0, 0, 0, 0
+	dartHas := map[string]bool{}
+	for _, c := range cells {
+		dartHas[c.name] = true
+		gc := goCell[c.name]
+		if gc == nil {
+			if len(c.na) == 0 {
+				t.Logf("%s: a common form, and zoo-go has no cell of this name yet", c.name)
+				onlyDartPending++
+			} else {
+				onlyDart++
+			}
+			continue
+		}
+		if len(c.na) > 0 {
+			t.Errorf("%s: has @na(%s), and zoo-go has a cell of this name", c.name, c.na[0])
+		}
+		common++
+		gm, _ := vulnMisses(goLines, gc)
+		m, refs := vulnMisses(lines, c)
+		if gm == 0 && m > 0 {
+			parity++
+			for _, r := range refs {
+				if !zooContains(r, "PARITY") {
+					t.Errorf("%s: a @miss of a common cell that zoo-go finds needs @ref(..., PARITY)", c.name)
+				}
+			}
+		}
+	}
+	nab, err := os.ReadFile(filepath.Join(zooDartRoot(t), "na.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	na := map[string]bool{}
+	for _, m := range regexp.MustCompile(`@na\((F/[a-z0-9/-]+):\s*([^)]+)\)`).FindAllStringSubmatch(string(nab), -1) {
+		na[m[1]] = true
+	}
+	notYet, notApplicable := 0, 0
+	for _, c := range goCells {
+		switch {
+		case dartHas[c.name]:
+		case na[c.name]:
+			notApplicable++
+		default:
+			notYet++
+		}
+	}
+	t.Logf("zoo-dart: common cells %d | found in zoo-go and not in Dart %d (@ref(PARITY)) | only in Dart: %d with @na(go: reason), %d common and not yet in zoo-go | cells of zoo-go that Dart has no counterpart of (na.txt) %d, not written yet (stage 3) %d", common, parity, onlyDart, onlyDartPending, notApplicable, notYet)
 }

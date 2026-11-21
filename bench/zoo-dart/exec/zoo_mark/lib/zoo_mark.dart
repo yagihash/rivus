@@ -109,6 +109,9 @@ String _marker(String tag) {
   return b.toString();
 }
 
+/// What the user gives to the framework in a case: the marker, which is not a source of the rules.
+String typed(String tag) => _marker(tag);
+
 /// The source that is a parameter type.
 class In {
   In(String tag) : value = _marker(tag);

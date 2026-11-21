@@ -274,6 +274,7 @@ var (
 	zooRoleRe   = regexp.MustCompile(`@(vuln|fixed|decoy)\b`)
 	zooMissRe   = regexp.MustCompile(`@miss(?:\(([a-z_,]+)\))?`)
 	zooFpRe     = regexp.MustCompile(`@fp\b`)
+	zooNaRe     = regexp.MustCompile(`@na\(([^)]+)\)`)
 )
 
 // zooLine is what the annotations of one line say.
@@ -298,6 +299,7 @@ type zooCell struct {
 	shape  string
 	roles  map[string]int
 	manual int
+	na     []string // @na(reason): the form does not exist in the other language, and why
 }
 
 // zooScan reads the cells of the Go zoo: the annotated lines and the cells (a cell is a directory).
@@ -389,6 +391,11 @@ func zooScanIn(t testing.TB, dir, sub, ext string, unit func(rel string) string)
 			zl.hasRef = zooRefRe.MatchString(text)
 			for _, m := range zooRefRe.FindAllStringSubmatch(text, -1) {
 				zl.refs = append(zl.refs, strings.Split(m[1], ",")...)
+			}
+			for _, m := range zooNaRe.FindAllStringSubmatch(text, -1) {
+				for _, c := range byDir[d] {
+					c.na = append(c.na, m[1])
+				}
 			}
 			if len(zl.sinks)+len(zl.nosinks)+len(zl.carries)+len(zl.sourceTags) > 0 || zl.manual != "" || zl.hasMiss || zl.hasFp {
 				lines = append(lines, zl)

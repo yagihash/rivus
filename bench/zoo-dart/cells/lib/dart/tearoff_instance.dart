@@ -1,4 +1,5 @@
 // @cell(F/dart/tearoff-instance)
+// @na(go: the method value is dyn/method-value; this cell adds Stream.listen and onPressed, which are the common Flutter forms)
 // @shape: the tear-off of an instance method (the receiver is bound, the argument comes later) is called, also as the callback of Stream.listen and of a widget's onPressed (the decoy has the value in the receiver and the constant as the argument)
 import 'package:zoo_mark/zoo_mark.dart';
 

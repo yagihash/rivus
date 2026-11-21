@@ -1,4 +1,5 @@
 // @cell(F/dart/interp-tostring)
+// @na(go: no implicit String() call in a concatenation)
 // @shape: an object is interpolated into a string, which calls its toString, and the text is sunk (the decoy's toString returns the other field)
 import 'package:zoo_mark/zoo_mark.dart';
 
