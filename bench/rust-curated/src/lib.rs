@@ -8,6 +8,7 @@ pub mod helpers;
 pub mod iters;
 pub mod modelled;
 pub mod narrow;
+pub mod narrow_async;
 pub mod nesting;
 pub mod parseable;
 pub mod pass_closure;
