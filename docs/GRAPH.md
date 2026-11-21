@@ -46,3 +46,18 @@ rivus index -taint -o idx.json ./...       # taint 解析の結果を JSON で�
     - `--avoid`、`--avoid-call`、`--only-impl`（`filters` に書く）は使える。`--via` は、意味がないので、エラー。`snapshot`、`-C` の照合、`relation: "calls"`、`flows: "not_checked"` は、ほかと同じ
   - `path` の最後のステップ(呼び先)には、宣言の位置 `defined_at`、本体がなければ `no_body: true` が付く（呼び出し点が終点のときは `at`）
   - 出力は、既定で 1 行の JSON（`--pretty` で整形）。`callers` / `callees` は、ノードと辺に分ける。`path` は、ステップの列（各ステップは関数と、そこから次へ進む呼び出し点の `at`、`kind`、`candidates`、`sites`）
+
+## 答えの読み方(要約)
+
+`rivus graph path` の答えを読むときの要点です(確認: 2026-11-22、9c26a39。正本は `internal/graphq` のコメント)。
+
+- **`reachable: false` は、「届かない」とは限りません。** `exhaustive` を見ます。
+  - `exhaustive: false`: 探索が上限で切れました。「経路なし」は証明されていません。
+  - `exhaustive: true` で経路なし: **探した範囲では**ありません。範囲は `exhaustive_of` に書いてあります。グラフのファイルにある呼び出しの辺(直接の呼び出しと、インターフェースや関数値の候補)だけです。値として持たれた関数(ルータに登録したハンドラ)、リフレクション、フレームワークからの呼び出しは辺ではありません。`--refs` の段では、参照(関数を値として名指したもの)も範囲に入ります。
+  - `--from-entry` で経路なしのとき、`exhaustive` は**常に** `false` です。読んだコードの関数は、読んでいないコードから呼ばれうるからです。`edges_exhausted` が、辺の探索自体は最後まで終わったかを言い、`limits` が、辺が持たないものを言い、`target_facts` が、終点についてファイルが知っていること(`has_receiver`: メソッドである、など)を言います。「経路なし」を「使われていないコード」と読まないための欄です。
+- **`certainty`** は、最初の経路の確かさです。`certain`(どの呼び出しも、コードに名前がある)、`uncertain`(インターフェースか関数値を通る。候補が 3 以下)、`hub`(候補が 3 を超える呼び出しを通る)。
+- **`searched`** は、探索に使った辺の種類(`static`、`dynamic`、`hub`、`ref`)です。前の種類で見つかると、後ろは探しません。載っていない種類は、探していません。
+- **`truncated`** は、`--limit` などで切った数です。`listed` と `beyond: "not_searched"` は、並べた経路の範囲と、それより長い経路や、ハブの多い経路を探していないことを言います(`truncated` は、これを数えません)。
+- **`relation: "calls"`、`flows: "not_checked"`** は、答えが呼び出しの関係で、データの流れではないことを言います。データの流れは `rivus analyze` と `rivus query` で調べます。
+
+この読み方は、[PRINCIPLES.md](PRINCIPLES.md) の「省いたものは、必ず言う」の、グラフの検索への適用です。
