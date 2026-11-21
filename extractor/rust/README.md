@@ -19,6 +19,9 @@ as `rivus analyze` does: running the command is the request. The build also sees
 written (`RIVUS_IR_DIR`): a build script of the project can add to the fragments, or remove from them,
 so what the target built is not only what is analysed, it can also change what the analysis says.
 
+`rivus analyze -lang rust` runs this extractor in a Docker container by default; `-unsafe-host-exec` runs it on the
+host. How, and what the container does not protect: [docs/rust-isolation.md](../../docs/rust-isolation.md).
+
 Reads Rust through the compiler: MIR, by way of `rustc_public` (the stable interface of
 `rustc`'s MIR), and writes the neutral IR (`docs/ARCHITECTURE.md` 2) as JSON Lines. The
 core reads it with `rivus analyze -ir`.
@@ -99,5 +102,7 @@ receiver apart from the arguments), and a sink's `args: [1]` is the first argume
 - The text of the arguments of a call (the stream has the call as written only), and the
   body in the token-normalized form.
 - Models: `internal/model/builtin/rust-*.yaml` cover the common part of `std`. Others
-  (`reqwest`, `sqlx`, `axum`) are sinks only. actix-web is not built in
+  (`reqwest`, `sqlx`) have their sinks in `rust-std.yaml`, and `rust-web.yaml` has sources for
+  `axum` and some other web frameworks (ADR-063 left the question of which frameworks are built in
+  open; see `docs/PRINCIPLES.md`, section 3). actix-web is not built in
   (`examples/rules/rust-actix-web.yaml`, ADR-063).
