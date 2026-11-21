@@ -11,3 +11,11 @@ type AliasB = real.B
 type AliasC = real.C
 
 type AliasD = real.D
+
+type AliasE = real.E
+
+type AliasF = real.F
+
+type AliasG = real.G
+
+type AliasH = real.H

@@ -112,6 +112,20 @@ sources:
     type: "*example.com/cases/cases/typealias/real.B"
     labels: [user_input]
 
+  # An alias inside a type (testdata/go/cases/typealias): the rule names the type or the alias, the code the other.
+  - kind: param_type
+    type: "map[string]*example.com/cases/cases/typealias/real.E"
+    labels: [user_input]
+  - kind: param_type
+    type: "map[string]*example.com/cases/cases/typealias/api.AliasF"
+    labels: [user_input]
+  - kind: param_type
+    type: "*example.com/cases/cases/typealias/real.Box[example.com/cases/cases/typealias/real.G]"
+    labels: [user_input]
+  - kind: param_type
+    type: "[]*example.com/cases/cases/typealias/api.AliasH"
+    labels: [user_input]
+
   # A call that fills its argument (testdata/go/cases/dbsrc).
   - symbol: example.com/cases/lib.Fill
     out: [0]

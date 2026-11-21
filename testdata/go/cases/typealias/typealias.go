@@ -45,3 +45,49 @@ func DAliasSpelling(r *api.AliasD) {
 	v := r.F    // @source(d2)
 	lib.Sink(v) // @sink(d2)
 }
+
+// An alias inside a type (ADR-083): in a map, in a type argument, under a slice of pointers. The rule
+// for E names the type and the code the alias, the rule for F the other way round (the same for the others).
+func ERealInMap(m map[string]*real.E) { // @source(e1)
+	for _, v := range m {
+		lib.Sink(v.P) // @sink(e1)
+	}
+}
+
+func EAliasInMap(m map[string]*api.AliasE) { // @source(e2)
+	for _, v := range m {
+		lib.Sink(v.P) // @sink(e2)
+	}
+}
+
+func FRealInMap(m map[string]*real.F) { // @source(f1)
+	for _, v := range m {
+		lib.Sink(v.P) // @sink(f1)
+	}
+}
+
+func FAliasInMap(m map[string]*api.AliasF) { // @source(f2)
+	for _, v := range m {
+		lib.Sink(v.P) // @sink(f2)
+	}
+}
+
+func GRealInBox(b *real.Box[real.G]) { // @source(g1)
+	lib.Sink(b.V.P) // @sink(g1)
+}
+
+func GAliasInBox(b *real.Box[api.AliasG]) { // @source(g2)
+	lib.Sink(b.V.P) // @sink(g2)
+}
+
+func HRealInSlice(hs []*real.H) { // @source(h1)
+	for _, h := range hs {
+		lib.Sink(h.P) // @sink(h1)
+	}
+}
+
+func HAliasInSlice(hs []*api.AliasH) { // @source(h2)
+	for _, h := range hs {
+		lib.Sink(h.P) // @sink(h2)
+	}
+}

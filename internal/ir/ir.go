@@ -685,9 +685,11 @@ type TypeAlias struct {
 }
 
 // CanonType returns the aliases of the program as a TypeCanon: Canon gives the type behind the
-// aliases of a type name, keeping the pointer and slice prefixes, so two names of one type give one
-// result. Without aliases it is the identity. It is a value with a method, not a func value: a
-// closure handed to a helper that calls it is a capture rivus does not follow (capture_unbound).
+// aliases of a type name, so two names of one type give one result. The aliases are resolved wherever
+// they stand in the type, not only at its head: under the pointer and slice prefixes, and inside
+// `map[string]Alias`, `Foo[Alias]`, `[]*Alias`, a function type (ADR-083). Without aliases it is the
+// identity. It is a value with a method, not a func value: a closure handed to a helper that calls it
+// is a capture rivus does not follow (capture_unbound).
 func (p *Program) CanonType() TypeCanon {
 	m := make(TypeCanon, len(p.TypeAliases))
 	for _, a := range p.TypeAliases {
@@ -701,17 +703,47 @@ type TypeCanon map[string]string
 
 // Canon is the type behind the aliases of s.
 func (m TypeCanon) Canon(s string) string {
-	i := 0
-	for i < len(s) && (s[i] == '*' || s[i] == '[' || s[i] == ']') {
-		i++
+	if len(m) == 0 {
+		return s
 	}
-	base := s[i:]
-	for n := 0; n < 8; n++ {
-		t, ok := m[base]
-		if !ok || t == base {
-			break
+	return m.canon(s, 0)
+}
+
+// canon resolves the aliases in the names of s: the names are what the delimiters of a type leave.
+func (m TypeCanon) canon(s string, depth int) string {
+	var b strings.Builder
+	changed := false
+	for i := 0; i < len(s); {
+		if typeDelim(s[i]) {
+			b.WriteByte(s[i])
+			i++
+			continue
 		}
-		base = t
+		j := i
+		for j < len(s) && !typeDelim(s[j]) {
+			j++
+		}
+		tok := s[i:j]
+		if t, ok := m[tok]; ok && t != tok && depth < 8 {
+			// the target may itself be an alias, or have one in it
+			tok = m.canon(t, depth+1)
+			changed = true
+		}
+		b.WriteString(tok)
+		i = j
 	}
-	return s[:i] + base
+	if !changed {
+		return s
+	}
+	return b.String()
+}
+
+// typeDelim reports whether c separates the names in a type written as a string: the prefixes (*, []), the
+// brackets of a map, an array and the type arguments, and the parentheses and commas of a function type.
+func typeDelim(c byte) bool {
+	switch c {
+	case '*', '[', ']', '(', ')', ',', ' ', '{', '}', ';':
+		return true
+	}
+	return false
 }
