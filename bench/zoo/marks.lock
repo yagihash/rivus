@@ -6,6 +6,10 @@ dart	call/direct_in.dart	sink-none	@sink(none)	void vuln() { @vuln
 dart	call/direct_in.dart	sink-none	@sink(none) @nosink(call-direct-in-decoy)	void fixed() { @fixed
 dart	call/multiret.dart	sink-none	@sink(none)	void fixed() { @fixed
 dart	call/multiret.dart	sink-none	@sink(none) @nosink(call-multiret-decoy)	void decoy() { @decoy
+dart	clos/callback_of_callback.dart	miss	@source(clos-callback-of-callback-decoy) @miss(depth_limit) @ref(#81)	void decoy() { @decoy
+dart	clos/callback_of_callback.dart	miss	@source(clos-callback-of-callback-vuln) @miss(depth_limit) @ref(#81)	void vuln() { @vuln
+dart	clos/callback_of_callback.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	clos/callback_of_callback.dart	sink-none	@sink(none) @nosink(clos-callback-of-callback-decoy)	void decoy() { @decoy
 dart	clos/capture_write_by_ref.dart	sink-none	@sink(none)	void fixed() { @fixed
 dart	clos/capture_write_by_ref.dart	sink-none	@sink(none)	void fixed() { @fixed
 dart	clos/capture_write_by_ref.dart	sink-none	@sink(none) @nosink(clos-capture-write-by-ref-decoy)	void decoy() { @decoy
