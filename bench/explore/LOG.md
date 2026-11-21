@@ -93,3 +93,125 @@ Not confirmed, and unlikely to be the cause:
 ### 5. The case behind the report
 
 No target at hand has a mock-heavy part outside its closure, or any large part (the biggest outside set is 1,759 lines). The user's case is not reproduced; the name of that project is needed (a module with generated mocks as own code, or with mock / test-helper packages of tens of thousands of lines).
+
+## Measurement 3: where the summary elements and the time of the dependencies come from (bench/gcp and memos; 2026-11-21)
+
+**Question.** The 985,000 summary elements of memos (AWS SDK) and the 1,030,000 of `bench/gcp` (Cloud Spanner + BigQuery) look alike, and in both the time is almost all in dependencies. The hypothesis to test: *the closures of all operations meet in one call of a helper (gax `invoke`; the smithy middleware), which makes false flows between operations and big summaries; if so, the fix is `CallOut` (docs/DESIGN-callouts.md: the helper's call of its function argument made concrete per caller), not how summaries are stored.*
+
+**Method.** main at `84877f1`. Rules: `bench/gcp/rules-stored.yaml` for gcp (`rivus analyze -v -pass-stats -rules rules-stored.yaml ./...` in `bench/gcp`); built-in only for memos (the copy of the earlier measurements, `-no-project-rules`). Temporary diagnostic builds, **not committed**: a dump of every summary by output kind, element kind and source site, and of the candidates of every call of chosen functions; a count of analyses per function; pprof labels on chosen functions; and three switches (the Real elements are not written to package variables; `internal/valuecalls.Resolve` is skipped; and, in a copy of `bench/gcp`, `r.Context()` is `context.Background()`). **There is no `-func-values` flag on main**; the closest switch is `valuecalls.Resolve` (the function-value candidates that the engine finds itself; the Go extractor's own candidates stay). Load: the machine was shared (load average 15 to 31, other analyses running), so **wall time is not comparable between runs; the user CPU, the elements and the re-analyses are** (same binary and input: gcp 53 s and 96 s, memos 235 s and 569 s).
+
+### 3.1 The two programs, side by side
+
+| | bench/gcp | memos |
+|---|---|---|
+| functions / passes / re-analyses | 20,819 / 6 / 41,355 | 21,808 / 3 / 36,127 |
+| `summary_elems` / `summary_steps` | 1,033,593 / 134.6 M | 987,412 / 72.7 M |
+| largest summary / largest SCC | 2,758 / 860 | 3,542 / 531 |
+| user CPU / max RSS | 231 s / 4.3 to 4.6 GB | 836 to 940 s / 11.0 to 12.7 GB |
+| findings | 24 (the V cases, nothing else) | 7 |
+| elements that are `Real` (from a source site) | **815,840 (79 %)**, in 1,203 functions (5.8 %) | 83,760 (8.5 %) |
+| elements that are `Param` (symbolic: "what the caller passes") | 217,845 (21 %) | 903,652 (91.5 %) |
+| where the mass is | grpc, spanner, monitoring, bigquery storage: 65 source sites, each in about 12,500 elements | 82.7 % of all elements in **508 functions (2.3 %)** with 200 or more output paths |
+
+The two have **different causes**.
+
+### 3.2 bench/gcp: the elements are not the closures; the time is not the elements
+
+**(i) `invoke` and `refreshSubConns`.**
+
+| function | summary elems (Real / Param) | outputs | analyses | wall ms (sum) | candidates of its dynamic and function-value calls |
+|---|---|---|---|---|---|
+| gax `invoke` | 1,775 (1,690 / 85) | 44 | 3 | about 1,000 | `call(ctx, settings)`: **97** (the closure of every API client method), `opt.Resolve`: 72, `(error).Error`: 573, `Retryer.Retry`: 4, `Sleep`: 1 |
+| `grpc.invoke` | 1,020 (865 / 155) | 28 | 25 | 280 | 1 and 1 |
+| `grpclb.lbBalancer.refreshSubConns` | 343 (313 / 30) | 15 | 28 | 8,300 | 8 calls of 4, 2, 4, 2, 4, 4, 1, 4 (the balancer `SubConn` / `ClientConn` interfaces) |
+
+So the closures **do** meet in `invoke` (97 candidates in one call; they come from the Go extractor's VTA: switching `valuecalls.Resolve` off changes nothing in these numbers), but:
+
+- **The meeting does not make the summary.** With the Real elements not written to package variables, the same `invoke` (the same 97 / 72 / 573 candidates) has **83** elements (1,775 before), `grpc.invoke` 215 (1,020), `refreshSubConns` 28 (343). The union of 97 closures costs about 80 elements. Each closure's own summary is already about 2,000 elements, nearly all of them the same 65 source sites, so the union adds nothing to them.
+- **`refreshSubConns` is not a merge.** Its 8 calls have 4 candidates at most, its summary is 343 elements in 15 outputs. Its 28 analyses (against 3 of `invoke`) are probably the iterations of the 860-function SCC of the grpc balancer interfaces (not checked that it is a member). Its time is not its work: the pprof of its analyses (labels on the function) is **1.8 s of CPU against 8.3 s of wall**; the rest is the garbage collector and allocation (in the whole run 27 % of the CPU is `gcBgMarkWorker`, and `madvise` is 14 %). The `slow function` lines of `-v` (300 to 490 ms) overstate this function by 4 to 5 times; `NewHTTP2Client` is real work (5.4 s CPU of 8.2 s wall: `copyLoc`, `guardsOfChain`).
+
+**Where the 65 source sites in a thousand summaries come from: package variables.** The 65 sites are the `*http.Request` parameters of the 65 handlers of the sample. `-trace-element` on one of them: its handler writes the taint into variables of `golang.org/x/net/trace` and `sync` in the first pass; the dependencies that read them, and then `credentials/alts/internal/handshaker/service.hsConnMap` (1,439 writes), the same variable of `s2a-go` (1,260), `grpc/internal/channelz.db` (895), `compute/metadata.projID` (673), `certprovider.provStore` (104), carry it into the results of the gRPC stack, and so into everything that calls it (`gax.Invoke`, `grpc.invoke`, `ClientConn.NewStream`, the balancers). 1,082 functions end with all 65 sites in their outputs.
+
+**Ablation (diagnostic builds).**
+
+| run | summary_elems | summary_steps | analyses | user CPU | max RSS | findings |
+|---|---|---|---|---|---|---|
+| main | 1,033,593 | 134.6 M | 41,355 | 231 s | 4.6 GB | 24 |
+| `valuecalls.Resolve` off (the closest to `-func-values`) | 1,035,254 | 134.8 M | 41,270 | 231 s | 4.5 GB | 24, **the same** |
+| the Real elements not written to package variables | **282,479 (-73 %)** | **17.4 M (-87 %)** | 39,557 | **162 s (-30 %)** | **3.5 GB (-24 %)** | 24, the same sinks; the source of 2 differs (below) |
+| `r.Context()` made `context.Background()` in the sample | 909,251 (-12 %) | 119.4 M | 41,319 | 216 s | 4.3 GB | 24 |
+
+Wall time of the third run: 46 s against 53 s (-13 %). Taking 73 % of the elements away takes 30 % of the CPU and 13 % of the wall time away: **the time of bench/gcp is mostly not in the elements** (the SCC iteration and the memory churn are the rest). `r.Context()` explains a part: the model `(*net/http.Request).Context: flows recv -> result` gives the context of every handler the taint of the whole request, and a context goes into every client call; making it clean removes the BigQuery handlers' share (65 sites become 55 in a summary) and 12 % of the elements. The Spanner handlers still reach the variables, probably through the statement they hand to the client (not traced).
+
+**(ii) Does one operation's value mix into another's?** Yes in the summaries and in the "other sources" of 2 findings; no in the sink reaches.
+
+- Sink reaches (`SinkReach`): 49 functions have some; **none has a Real element**. A Spanner source cannot reach a BigQuery sink through them.
+- The 24 findings: every sink is reported with its own handler's source, and no decoy (`D*`, `F*`) is reported. Two findings (`ReadColumnByName`, `ReadToStruct`, to `fmt.Fprint`; the stored-data source) list **64 other sources** (other handlers, all `user_input`): the value read by `row.ColumnByName` / `ToStruct` carries the 65 sites of the summaries of the Spanner decoding functions. With the Real elements not written to variables they list none, and the source of the finding is the handler itself instead of its `$bound` twin. So these are false extra sources on a true finding, not false findings.
+- The summaries of 3 of the handlers (the `PartitionQuery` cases) have all 65 sites in their outputs; the other handlers have 1 or 2 (their own).
+
+**(iv) `valuecalls.Resolve` off.** gcp: elements +0.2 %, analyses -0.2 %, time and memory within the noise, findings identical. memos: elements 987,412 to 967,475 (-2 %), analyses 36,127 to 35,845, user CPU 940 to 878 s (the load differed), findings identical (7). The function values of both programs come from the extractor's VTA, not from the engine's own tracing.
+
+**Verdict on the hypothesis, for bench/gcp: not the cause.** The meeting of closures exists (97 candidates in one call) and it costs about 80 elements. What makes the 1.03 M elements is the taint of the 65 handlers travelling through package variables of the gRPC stack, which the summaries of 1,082 functions then carry. `CallOut` would not change these numbers. The time is not in the elements either (-73 % elements, -30 % CPU, -13 % wall), and the per-function time that pointed at `refreshSubConns` is mostly the collector.
+
+### 3.3 memos: the shape is the one of the hypothesis, through interface calls and not function values
+
+**(iii) The smithy middleware.** The 985,000 elements are not the 83 k Real ones. They are **symbolic elements in the middleware methods**: `HandleDeserialize` 135 functions with 339 k elements, `HandleSerialize` 137 / 174 k, `HandleInitialize` 124 / 142 k, `HandleFinalize` 58 / 61 k, `HandleBuild` 15 / 26 k, `Step.HandleMiddleware` 6 / 13 k: **743 k of 987 k (75 %) in about 475 functions**; the 508 functions with 200 or more output paths hold 82.7 %. Each has 211 to 354 distinct output paths (`/*/AbortRuleId`, `/*/AcceptRanges`, `/*/Account`, ...: the field names of **the output types of all the operations**) times the input paths and parameters. The package `aws-sdk-go-v2/service/s3` alone is 525,724 elements (53 %).
+
+What merges: one call in each of the five decorated handlers, `h.With.HandleX(ctx, in, h.Next)` (the stage is the interface-typed *field* `With` of the receiver, which the step's `HandleMiddleware` builds in a loop over its stages):
+
+| call | candidates | summary of the method |
+|---|---|---|
+| `decoratedSerializeHandler.HandleSerialize` | 134 | 831 elems |
+| `decoratedDeserializeHandler.HandleDeserialize` | 131 | 2,072 elems, 354 output paths |
+| `decoratedInitializeHandler.HandleInitialize` | 121 | 691 elems |
+| `decoratedFinalizeHandler.HandleFinalize` | 56 | 2,917 elems |
+| `decoratedBuildHandler.HandleBuild` | 12 | 1,269 elems |
+| `orderedIDs.Add` (`ider.ID`) | 385 | 7 elems |
+
+Every operation has its own stage types (for example `awsRestxml_deserializeOpListParts`), so the candidates of the call are the stages of all the operations; each of them calls `next.HandleDeserialize` (2 candidates: the decorated handler and the last one), which comes back to the same call. The chain is **one strongly connected component** (the largest SCC of the run has 531 functions, and 508 functions hold the elements), so every member has the union of all the operations' output paths in its summary: the summary of `awsRestxml_deserializeOpListParts.HandleDeserialize` has 354 output paths and 2,508 elements, where its own operation has about ten fields. Elements are about (members of the SCC) x (the union of the operations) = 500 x 2,000. **That is the operation mixing in memos: the output of one operation's deserializer holds the fields of every other operation's.** It does not move a finding here (7 findings; the SDK holds no source), and the time has the same shape (the deserializers' analyses take up to 47 s of wall each, summed over their 20 analyses, at a load of about 20).
+
+(Synthetic check: the `middleware` shape of `bench/go-scale` has 9 stages shared by 40 operations, so the candidate sets stay at 9; the real SDK has a stage type per operation, 131 candidates in the call. The synthetic shape misses memos because of that; one stage type per operation, each writing its own output type into `Result any`, would be the test.)
+
+### 3.4 What to fix next, with the reason
+
+1. **memos: narrow the candidates of an interface call whose receiver was built by a caller we can see, by what flows into the receiver's field (`With`).** This is `CallOut`'s idea (make the call concrete per caller), but its target is **not a function-value parameter**: the stage is an interface in a field of a struct that the step builds in a loop over a slice of stages. The design of docs/DESIGN-callouts.md (parameter `p`, path `""`) would not reach it; it needs the "element of a function value" step (paths) and the slice of stages as an element. First reproduce it in `bench/go-scale` (a stage type per operation, the wrapper with a `With` field), then measure the narrowing there. Evidence: 75 % of memos' elements in about 475 `HandleX` methods; 131 / 134 / 121 / 56 / 12 candidates in five calls; the same summary in 508 members of one SCC.
+2. **bench/gcp: find why the SQL text and the context of a handler reach package variables of the dependencies, and what reads them back.** Evidence: 73 % of the elements, 87 % of the steps and 30 % of the user CPU disappear when the Real elements are not written to variables, with the same 24 findings, and two findings list 64 false "other sources". Not measured: whether reading only the elements that the variable's type can hold, or not carrying the taint of a whole `*http.Request` into `Context()`, is enough (the `Context` model alone is 12 % of the elements). The switch used here also stops the true shared-state flows (ADR-069), so it is a measurement and not a candidate change.
+3. **Do not read the per-function wall time of `-v` as the cost of the function.** On `refreshSubConns` the CPU is 1.8 s of 8.3 s wall; the run spends 27 % of its CPU in GC marking and 14 % in `madvise` (heap growth and release). A `GOGC` / `GOMEMLIMIT` trial with the same results (not done here) and a CPU-time column in the `slow function` line would show whether the time of both programs is the collector's. Nothing here speaks for reading the dependencies less: models only would be a silent miss.
+
+## Measurement 4: what the Dart framework-callback entries are made of (2026-11-21)
+
+**Question.** The functions reached from the entries went from 16 % to 98 % (ADR-073). If `Overrides` were every override of a dependency's method, `toString`, `==`, `hashCode` and `compareTo` would be entries too, and `reachability` would no longer tell the two apart.
+
+**Method.** The IR of the 6 `flutter/samples` apps and of LocalSend `app/` (`--no-deps`; the files of ADR-073's measurement, extractor output with `overrides`), read by a temporary test of `internal/sg` (not committed) that applies `FrameworkCallbacks` and `ReachableWithCallbacks` and variants of the entry set. Its numbers for the whole set are the ones of ADR-073 (403 of 411; 19,750 of 20,522).
+
+**(i) The overridden types of the entries** (the number of overrides of the entry functions, by the type that declares the overridden member; an entry that overrides several is counted for each).
+
+6 apps (77 entries; 411 functions): `State` 26 (`build` 19, `initState` 4, `didUpdateWidget` 1, `dispose` 1, `didChangeDependencies` 1), `StatelessWidget` 25 (`build`), `StatefulWidget` 19 (`createState`), `ModalRoute` 5 (`buildPage`, `buildTransitions`, `barrierColor`, `barrierLabel`, `maintainState`), `SingleTickerProviderStateMixin` 1, `Page` 1, `TransitionRoute` 1. That is all of them (7 types).
+
+LocalSend `app/` (388 entries; 20,522 functions), top 20 by overridden type:
+
+| count | declaring type | count | declaring type |
+|---|---|---|---|
+| 73 | flutter `StatelessWidget` | 7 | refena `BaseReduxAction` |
+| 60 | flutter `State` | 7 | refena `AsyncGlobalActionWithResult` |
+| 29 | wechat_assets_picker `AssetPickerTextDelegate` | 7 | window_manager `WindowListener` |
+| 28 | flutter `StatefulWidget` | 6 | refena `BaseSyncNotifier` |
+| 22 | dart_mappable `ClassCopyWithBase` (`$make`) | 5 | `SendSessionStateCopyWith` (generated, in the app's package) |
+| 22 | refena `ReduxAction` (`reduce`) | 5 | `WebSendStateCopyWith`, `ServerStateCopyWith`, `SettingsTabVmCopyWith` (each) |
+| 22 | refena `AsyncReduxAction` (`reduce`) | 4 | `ReceiveSessionStateCopyWith`, `SettingsStateCopyWith`, shared_preferences_platform_interface `SharedPreferencesStorePlatform`, flutter `SliverPersistentHeaderDelegate` (each) |
+| 15 | refena `ReduxNotifier` (`init`, `initialAction`) | | |
+
+**(ii) Object members.** **No entry comes from `Object`'s members.** The extractor leaves `dart:*` supertypes out of `overrides` (ADR-073, decision 2), so the `toString`, `==` and `hashCode` of a class that extends only `Object` are not there. None of the names `toString`, `==`, `hashCode`, `compareTo`, `noSuchMethod` is an overridden member of an entry in the 6 apps (0 of 77); in LocalSend 6 `toString` overrides exist (generated `*Mappable` mixins of the app's own package), and they are not entries because the overridden method is declared in the code that was read. Taking the Object-like names out of the entry set changes nothing, by construction and by measurement (entries / functions reached; the last two columns are variants of the entry set):
+
+| app | functions | from entry | all callbacks | without Object-like members | only types of `package:flutter` | only lifecycle (`build`, `createState`, `initState`, `dispose`, `didChangeDependencies`, `didUpdateWidget`) |
+|---|---|---|---|---|---|---|
+| form_app | 76 | 18 | 13 / 74 | 13 / 74 | 13 / 74 | 13 / 74 |
+| navigation_and_routing | 115 | 13 | 25 / 113 | 25 / 113 | 25 / 113 | 18 / 105 |
+| platform_channels | 74 | 9 | 14 / 74 | 14 / 74 | 14 / 74 | 14 / 74 |
+| date_planner | 87 | 15 | 14 / 83 | 14 / 83 | 14 / 83 | 14 / 83 |
+| dynamic_theme | 31 | 5 | 6 / 31 | 6 / 31 | 6 / 31 | 6 / 31 |
+| testing_app | 28 | 5 | 5 / 28 | 5 / 28 | 5 / 28 | 5 / 28 |
+| 6 apps | 411 | 65 (16 %) | 77 / **403 (98 %)** | 77 / **403 (98 %)** | 77 / 403 | 70 / 395 (96 %) |
+| LocalSend `app/` | 20,522 | 1,546 (7.5 %) | 388 / **19,750 (96 %)** | 388 / **19,750 (96 %)** | 168 / 14,579 (71 %) | 161 / 14,570 (71 %) |
+
+**What it says.** The suspicion does not hold for the Object members: they are not entries, and 98 % stays 98 %. For the six small apps every entry is a lifecycle or a route method of Flutter. For LocalSend a quarter of the 96 % (5,171 functions, 25 points) comes from entries that are **not Flutter's**: refena's `reduce` / `init` and so on (about 80 overrides), dart_mappable's `$make` (22), `AssetPickerTextDelegate`'s getters (29), `WindowListener` (7), `SharedPreferencesStorePlatform` (4). Whether a package calls the overrides of its own types (a state-management library calls `reduce`; a picker reads its text delegate's getters) is the claim that the rule makes for every dependency; it is likely true for these, and it is not checked against the code of the dependencies, which `--no-deps` did not read. `reachability` still tells apart: 8 of 411 and 772 of 20,522 functions are not reached even with the callbacks, and a finding in code that nothing registers stays `not_from_entry`. No change is proposed.
