@@ -304,7 +304,7 @@ func TestFunctionValues(t *testing.T) { checkCase(t, "funcvalue") }
 // The rules apply to the function a call of a function value reaches: yagihash/rivus #54.
 func TestFunctionValueSinks(t *testing.T) { checkCase(t, "funcsink") }
 
-// A call through an interface of the project reaches the implementation that the rules name (ADR-067).
+// A call through an interface of the project reaches the implementation that the rules name (ADR-068).
 func TestSinkBehindOwnInterface(t *testing.T) { checkCase(t, "ownif") }
 func TestGenerics(t *testing.T)               { checkCase(t, "generics") }
 
@@ -650,7 +650,7 @@ func TestProvenanceThroughARecursiveObjectIsBounded(t *testing.T) {
 	}
 }
 
-// The finding at a sink behind an interface of the project says "one of N implementations" (ADR-067).
+// The finding at a sink behind an interface of the project says "one of N implementations" (ADR-068).
 func TestSinkBehindOwnInterfaceKeepsTheDispatchUncertainty(t *testing.T) {
 	res, _ := runCase(t, "ownif")
 	found := 0

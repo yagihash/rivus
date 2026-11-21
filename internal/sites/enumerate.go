@@ -138,7 +138,7 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 					}
 					if in.Callee.Kind == ir.CalleeDynamic {
 						// A call through an interface: the rules also apply to the
-						// implementations it may reach, each its own site (ADR-067).
+						// implementations it may reach, each its own site (ADR-068).
 						// The interface of the project is what is called; the sink may be
 						// the method of a type of the standard library or a dependency.
 						for _, id := range in.Callee.Candidates {
