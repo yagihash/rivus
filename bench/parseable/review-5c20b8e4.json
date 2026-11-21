@@ -9,106 +9,10 @@
  },
  "sites": [
   [
-   "src/handlers/http/cluster/mod.rs:492",
-   "ssrf",
-   "partial",
-   "host is the stored node metadata; only the tenant header selects the node list"
-  ],
-  [
-   "src/handlers/http/cluster/mod.rs:2024",
-   "ssrf",
-   "partial",
-   "host is the querier from storage; the request supplies the body and headers"
-  ],
-  [
-   "src/handlers/http/logstream.rs:72",
-   "path_traversal",
-   "partial",
-   "stream must exist; names are validated at creation"
-  ],
-  [
-   "src/handlers/http/modal/ingest/ingestor_logstream.rs:85",
-   "path_traversal",
-   "partial",
-   "stream must exist"
-  ],
-  [
-   "src/handlers/http/modal/query/querier_logstream.rs:80",
-   "path_traversal",
-   "partial",
-   "name checked against list_streams"
-  ],
-  [
-   "src/handlers/http/oidc.rs:101",
-   "open_redirect",
-   "partial",
-   "login: the host is the IdP, redirect is only state and is validated"
-  ],
-  [
-   "src/handlers/http/oidc.rs:158",
-   "open_redirect",
-   "partial",
-   "same as 101"
-  ],
-  [
    "src/handlers/http/oidc.rs:443",
    "open_redirect",
    "true_positive",
    "GHSA-mh89: logout passes the redirect query parameter unvalidated; reply_login also redirects to the state parameter unvalidated"
-  ],
-  [
-   "src/handlers/http/oidc.rs:455",
-   "open_redirect",
-   "partial",
-   "called only from login after the host check"
-  ],
-  [
-   "src/hottier.rs:1261",
-   "path_traversal",
-   "partial",
-   "stream must exist; the Json is only the size struct"
-  ],
-  [
-   "src/hottier.rs:1629",
-   "path_traversal",
-   "partial",
-   "path from the stream path and directory entries"
-  ],
-  [
-   "src/hottier.rs:1643",
-   "path_traversal",
-   "partial",
-   "hour.path() from read_dir entries"
-  ],
-  [
-   "src/parseable/streams.rs:552",
-   "path_traversal",
-   "false_positive",
-   "File::open on read_dir entries filtered by suffix"
-  ],
-  [
-   "src/parseable/streams.rs:614",
-   "path_traversal",
-   "partial",
-   "existing stream, validated name"
-  ],
-  [
-   "src/parseable/streams.rs:634",
-   "path_traversal",
-   "partial",
-   "ingestor_id from server configuration"
-  ],
-  [
-   "src/parseable/streams.rs:635",
-   "path_traversal",
-   "partial",
-   "same tmp path as 634"
-  ],
-  [
-   "src/storage/localfs.rs:305",
-   "path_traversal",
-   "partial",
-   "after the existence check against list_streams"
   ],
   [
    "src/storage/localfs.rs:380",
@@ -120,33 +24,22 @@
    "src/storage/localfs.rs:383",
    "path_traversal",
    "true_positive",
-   "same flow as 380: writes the filter JSON into an attacker chosen directory"
-  ],
-  [
-   "src/storage/localfs.rs:430",
-   "path_traversal",
-   "partial",
-   "the reported flow (alert delete, typed Ulid) is safe; delete_object is also used for filters with a stored stream_name (unverified)"
-  ],
-  [
-   "src/storage/localfs.rs:472",
-   "path_traversal",
-   "partial",
-   "after check_or_load_stream"
-  ],
-  [
-   "src/storage/store_metadata.rs:367",
-   "path_traversal",
-   "partial",
-   "tenant_id of the SyncRole body (the tool names the wrong source); needs existing metadata for that tenant, behind Action::PutRole"
-  ],
-  [
-   "src/storage/store_metadata.rs:375",
-   "path_traversal",
-   "partial",
-   "same as 367, fixed file name"
+   "GHSA-q8xx, same flow as 380: writes the filter JSON into an attacker chosen directory"
   ]
  ],
+ "sites_without_a_public_id": {
+  "note": "findings with no published advisory: the places are not listed in this repository (counts by verdict and category only)",
+  "counts": {
+   "partial": {
+    "ssrf": 2,
+    "path_traversal": 14,
+    "open_redirect": 3
+   },
+   "false_positive": {
+    "path_traversal": 1
+   }
+  }
+ },
  "patterns": [
   "The whole HttpRequest is a source, so the x-p-tenant header starts many reports; auth middleware rewrites it for most actions",
   "The tool does not see existence and validation gates on stream names: such sites come out partial",
