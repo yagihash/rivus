@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -25,7 +26,15 @@ func TestMain(m *testing.M) {
 	// the graph files go to the cache: not the user's
 	os.Setenv("RIVUS_CACHE_DIR", filepath.Join(dir, "cache"))
 	if b := os.Getenv("RIVUS_BINARY"); b != "" {
-		// the backtest (bench/BACKTEST.md): the tests judge an older build of the engine
+		// the backtest (bench/BACKTEST.md): the tests judge an older build of the engine. A variable left in the
+		// environment would make every test of this package judge the wrong engine and stay green: it is said in
+		// the log, and in CI (CI=true) it is a failure.
+		if os.Getenv("CI") == "true" {
+			fmt.Fprintf(os.Stderr, "RIVUS_BINARY=%s is set in CI: the tests would judge that binary, not this tree\n", b)
+			os.RemoveAll(dir)
+			os.Exit(1)
+		}
+		fmt.Fprintf(os.Stderr, "rivus tests: RIVUS_BINARY=%s: judging that binary, not this tree\n", b)
 		binary = b
 	} else if out, err := exec.Command("go", "build", "-o", binary, ".").CombinedOutput(); err != nil {
 		panic(string(out))
