@@ -15,15 +15,17 @@ import (
 // The marks that loosen the truth of the zoo (docs/ROADMAP.md, section 1): @miss, @fp, @noisy, @na, @todo, @manual
 // and @sink(none) of the three zoos are listed in bench/zoo/marks.lock, one row for a mark of a line:
 //
-//	<lang> TAB <file> TAB <kind> TAB <the annotations of the line>
+//	<lang> TAB <file> TAB <kind> TAB <the annotations of the line> TAB <the header of the case the line is in>
 //
-// (no line number, so that an edit above does not change the rows). TestZooMarksLock holds the file to the sources;
+// (no line number, so that an edit above does not change the rows; the last column is the line of the @vuln /
+// @fixed / @decoy that comes before it, or "-", so that a mark that is moved to another case is a new row). TestZooMarksLock holds the file to the sources;
 // .github/scripts/zoo-loosened-check.sh fails a commit that adds a row without a "Zoo-Loosened:" line in its message.
 // A row that goes away (a mark that is fixed) needs nothing. To write the file again: ZOO_MARKS_UPDATE=1.
 
 const zooMarksLockPath = "bench/zoo/marks.lock"
 
 var (
+	zooMarksRoleRe  = regexp.MustCompile(`@(vuln|fixed|decoy)\b`)
 	zooMarksTokenRe = regexp.MustCompile(`@[a-z]+(?:\([^)]*\))?`)
 	zooMarksKinds   = map[string]string{"@miss": "miss", "@fp": "fp", "@noisy": "noisy", "@na": "na", "@todo": "todo", "@manual": "manual"}
 )
@@ -53,8 +55,16 @@ func zooMarksRows(bench string) ([]string, error) {
 			defer f.Close()
 			sc := bufio.NewScanner(f)
 			sc.Buffer(make([]byte, 1<<20), 1<<20)
+			within := "-"
 			for sc.Scan() {
 				text := sc.Text()
+				if zooMarksRoleRe.MatchString(text) {
+					within = strings.TrimSpace(text)
+					if j := strings.Index(within, "//"); j >= 0 {
+						within = strings.TrimSpace(within[:j])
+					}
+					within += " " + zooMarksRoleRe.FindString(text)
+				}
 				i := strings.Index(text, "// ")
 				if i < 0 || !strings.Contains(text[i:], "@") {
 					continue
@@ -74,7 +84,7 @@ func zooMarksRows(bench string) ([]string, error) {
 					}
 				}
 				for k := range kinds {
-					rows = append(rows, strings.Join([]string{z.lang, filepath.ToSlash(rel), k, strings.Join(tokens, " ")}, "\t"))
+					rows = append(rows, strings.Join([]string{z.lang, filepath.ToSlash(rel), k, strings.Join(tokens, " "), within}, "\t"))
 				}
 			}
 			return sc.Err()
