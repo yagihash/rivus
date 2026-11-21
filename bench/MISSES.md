@@ -22,9 +22,9 @@
 | `STORE` | コールバックを List / フィールドに持ち、あとで呼ぶ | internal/valuecalls/valuecalls.go(冒頭のコメント: メモリを辿らない。`iter.next` / `field_load` は refOther)。呼び出しは、ヘルパー側の unresolved_callee / unmodeled_library_call |
 | `CB-LIST` | 標準ライブラリのコールバックの決め打ちのリストにない | extractor/dart/lib/exprs.dart:_callbackMode(Future.then と、Iterable / Stream の数個だけ)と internal/model/builtin/dart-async.yaml / dart-core.yaml(モデルは args→結果、recv→結果だけ。コールバックの戻り値を結果へ繋がない) |
 | `AWAIT-ERR` | await した Future.error が、catch に値を渡さない | internal/model/builtin/dart-async.yaml の Future.error(args→結果)と extractor の `[await]` 呼び出し(失敗した Future の await を throw にしない)。細部は未特定 |
-| `ENV-PTR` | ポインタをフィールド(クロージャの環境)に入れて、そこから書くと別名にならない | internal/taint/locs.go:215 computeLocs(OpFieldLoad: `locs(base)+field+"*"` を指す)と internal/taint/transfer.go:148(OpFieldStore はポインタの値を保存するだけで、指す先と同一視しない)。関数内の `*e.o = x`(Env{o:&mut out})でも再現 |
+| `ENV-PTR`(**直した、ADR-071**) | ポインタをフィールド(クロージャの環境)に入れて、そこから書くと別名にならない | (直す前)internal/taint/locs.go computeLocs(OpFieldLoad: `locs(base)+field+"*"` を指す)と internal/taint/transfer.go(OpFieldStore はポインタの値を保存するだけで、指す先と同一視しない)。関数内の `*e.o = x`(Env{o:&mut out})でも再現。(今)internal/taint/ptrcells.go: セルに入れたポインタの指す先を覚え(`ptrAlias`)、`field_load` の結果と、呼び先が書いたもの(`applySummary` の `OutParam`)を、指す先にも当てる。extractor は、環境のフィールドをクロージャの名前で呼ぶ(`<クロージャ>.0`)ので、どのクロージャか分からない `Fn::call` の候補が、別のクロージャの環境のセルを混ぜない |
 | `GEN-DYN` | ジェネリックな T に対する trait 呼び出し(dynamic)で、モデルの `from: args` が receiver を含まない | internal/taint/calls.go selectVals(`SelArg All` は cc.args)+ internal/sg/sg.go:139 CallArgs(dynamic は Args[1:])+ internal/model/builtin/rust-std.yaml(`Iterator::next` / `IntoIterator::into_iter` は from: args)。`for i in items`(items: Vec<T>)で流れが消える |
-| `XTALK` | Fn*::call(dynamic)の候補が「型の合う全クロージャ」で、呼び元ごとに絞らない | internal/valuecalls/valuecalls.go:50(CalleeValue だけを解決。Rust は dynamic)と internal/taint/calls.go:355-380 dispatchGuards / makeDispatchGuards(候補が method でない(`!fn.Recv`)と、ガードなし) |
+| `XTALK` | Fn*::call(dynamic)の候補が「型の合う全クロージャ」で、呼び元ごとに絞らない(ADR-071 のあと: 候補の書き込みが、別のクロージャの環境のセルを通って、別のクロージャの sink に届く過検出は消えた。zoo-rust の `@noisy` と、それに伴う `@fp` が減った。候補の集合そのものは絞っていない) | internal/valuecalls/valuecalls.go:50(CalleeValue だけを解決。Rust は dynamic)と internal/taint/calls.go:355-380 dispatchGuards / makeDispatchGuards(候補が method でない(`!fn.Recv`)と、ガードなし) |
 | `MODEL-OVER` | モデルが、コールバックの戻り値を見ずに recv を結果へ流す | internal/model/builtin/dart-async.yaml Future.then / dart-core.yaml Iterable.map / rust-std.yaml Iterator::map・Option::and_then(recv/args→結果) |
 | `KEYED-MAP` | マップのキーを区別しない(Set/Get のキーが違っても同じセル) | internal/taint/transfer.go OpIndexStore / OpIndexLoad(キー付きは、値を `[]` に持つ) |
 | `ALLOWLIST` | 分岐条件(switch の許可リスト)を、汚染を落とすものと見ない | internal/taint/guards.go(条件は記録するだけで、評価しない: Guard の説明) |
@@ -79,7 +79,7 @@
 | `STORE` | 4 | 3 | 0 | 7 |
 | `CB-LIST` | 6 | 0 | 0 | 6 |
 | `AWAIT-ERR` | 1 | 0 | 0 | 1 |
-| `ENV-PTR` | 0 | 7 | 0 | 7 |
+| `ENV-PTR`(ADR-071 で 6 件が見つかる。残りは `across-cap`) | 0 | 7 | 0 | 7 |
 | `GEN-DYN` | 0 | 1 | 0 | 1 |
 
 ### `@fp` と `@noisy`
@@ -209,13 +209,13 @@ Rust の `@noisy` は README に「17 か所」とあるが、ソースの注釈
 | --- | --- | --- | --- | --- | --- |
 | `across-each` | src/across.rs:18 → 19 | `silent`(numeric_stop は数えない): numeric_stop(rivus、`vec!` のマクロ内 macros.rs:60 に記録。この flow と無関係に見える)。ヘルパー側 shared/src/lib.rs:8 に dynamic_dispatch(「実装が分からない」) | `GEN-DYN` | 直らない | `shared::each<T>(items: Vec<T>, f)`: `for i in items` が dynamic `into_iter` / `next`。同じ形を同じクレートに書いても、T がジェネリックなら再現(実験)。Fn 版は見つかる |
 | `across-hub` | src/across.rs:25 → 24 | `silent`(ヘルパー側: shared/src/lib.rs:25 に unmodeled_library_call) | `STORE` | 直らない | `Vec<Box<dyn Fn>>` に入れて emit で呼ぶ |
-| `across-cap` | src/across.rs:30 → 32 | `silent` | `ENV-PTR` | 直らない | `shared::each(vec![1], \|_i\| out = t.clone())` |
-| `write-a` | src/capture.rs:8 → 12 | `silent` | `ENV-PTR` | 直らない | `run(\|\| { out = t; })`。呼び出しが同じ関数内(`let f = \|\| {out = t;}; f();`)でも落ちる(実験) |
-| `write-b` | src/capture.rs:17 → 21 | `silent` | `ENV-PTR` | 直らない |  |
-| `write-param` | src/capture.rs:38 → 42 | `silent` | `ENV-PTR` | 直らない | `fire_and_forget(t, \|x\| { out = x; })` |
-| `push-list` | src/capture.rs:48 → 50 | `silent` | `ENV-PTR` | 直らない | `run(\|\| items.push(t))` |
-| `late` | src/capture.rs:134 → 137 | `silent` | `ENV-PTR` | 直らない | `let mut set = \|x\| v = x; set(a);`(ヘルパーなし) |
-| `for-each-cap` | src/iters.rs:26 → 28 | `silent` | `ENV-PTR` | 直らない | `items.into_iter().for_each(\|x\| last = x)` |
+| `across-cap` | src/across.rs:30 → 32 | `silent` | `ENV-PTR`(ADR-071 のあとも落ちる。呼ぶ側 `shared::each` が `for i in items { f(i) }` で、`IntoIterator::into_iter` / `Iterator::next` の候補が 0。`GEN-DYN` と同じ根に見える。未確認) | 直らない | `shared::each(vec![1], \|_i\| out = t.clone())` |
+| `write-a` | src/capture.rs:8 → 12 | ~~`silent`~~ → **見つかる(ADR-071)** | `ENV-PTR` | 直った | `run(\|\| { out = t; })`。呼び出しが同じ関数内(`let f = \|\| {out = t;}; f();`)でも落ちる(実験) |
+| `write-b` | src/capture.rs:17 → 21 | ~~`silent`~~ → **見つかる(ADR-071)** | `ENV-PTR` | 直った |  |
+| `write-param` | src/capture.rs:38 → 42 | ~~`silent`~~ → **見つかる(ADR-071)** | `ENV-PTR` | 直った | `fire_and_forget(t, \|x\| { out = x; })` |
+| `push-list` | src/capture.rs:48 → 50 | ~~`silent`~~ → **見つかる(ADR-071)** | `ENV-PTR` | 直った | `run(\|\| items.push(t))` |
+| `late` | src/capture.rs:134 → 137 | ~~`silent`~~ → **見つかる(ADR-071)** | `ENV-PTR` | 直った | `let mut set = \|x\| v = x; set(a);`(ヘルパーなし) |
+| `for-each-cap` | src/iters.rs:26 → 28 | ~~`silent`~~ → **見つかる(ADR-071)** | `ENV-PTR` | 直った | `items.into_iter().for_each(\|x\| last = x)` |
 | `emit` | src/structs.rs:74 → 73 | `silent`(ヘルパー側: structs.rs:66 に unmodeled_library_call) | `STORE` | 直らない | `Vec<Box<dyn Fn>>` に入れて emit で呼ぶ |
 | `emit-two` | src/structs.rs:83 → 81 | `silent`(同上) | `STORE` | 直らない |  |
 
@@ -289,7 +289,7 @@ Rust の `@miss` は、案 2 では 1 つも直らない(11 件とも、別の�
 * Dart: `transform(a, (x) => throw AppError(x))` は、`transform` に渡すクロージャが 4 種類なら見つかり、11 種類なら落ちる。クロージャの中の `sink(x)` も、10 種類のときは 0 件、4 種類のときは 4 件(OVERFLOW)。`transform(c, (x) => "fixed")` の過検出も、11 種類のときだけ出る。
 * Dart: `rc(f) { run(() => f()); }`、`viaInner(a, (g) => g("q"))` は落ち、`unresolved_callee` はヘルパーの中のクロージャに出る(PARAM-CALL)。
 * Dart: `catchError`、`putIfAbsent`、`Map.forEach`、`whenComplete`、`await Future.error(...)` はすべて落ちる。同じ形の `forEach`、`fold` は見つかる(CB-LIST、AWAIT-ERR)。
-* Rust: `*e.o = e.t`(`Env { o: &mut out, t }`、ヘルパーなし、関数 1 つ)で落ちる。`fn w(o: &mut String, t)` を呼ぶ形は見つかる(ENV-PTR)。
+* Rust: `*e.o = e.t`(`Env { o: &mut out, t }`、ヘルパーなし、関数 1 つ)で落ちた。`fn w(o: &mut String, t)` を呼ぶ形は見つかる(ENV-PTR)。ADR-071 で、`rust-curated/src/capture.rs` の `struct_mut_field` / `struct_mut_field_helper` が見つかるようになった。
 * Rust: `fn g<T>(items: Vec<T>) -> Vec<T> { for i in items { o.push(i) } }` は落ち、`Vec<String>` では見つかる。`Fn` の呼び出しでなく、`for` の `into_iter` / `next`(dynamic)で落ちる(GEN-DYN)。
 * Go: 返したクロージャ(`With(src())` を変数に入れて `o(q)`)、クロージャをヘルパーに渡す形(`apply(func(q *Q){ q.name = n }, q)`)は落ちる。クロージャをその場で作って呼ぶ形は見つかる(RET-CLOSURE と CAP)。
 

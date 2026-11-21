@@ -244,6 +244,10 @@ type Program struct {
 	// EnvClosures is, for each alloc of a closure's environment (Rust), the function the closure
 	// runs: the one at the place where the type of the environment says the closure is written.
 	EnvClosures map[*Instr]*Func
+	// HasEnv is true when the program has an alloc of a closure's environment (Rust): the language
+	// whose closures hold what they capture in the fields of an environment, and a mutable capture
+	// as a pointer to the variable (ENV-PTR).
+	HasEnv bool
 
 	globalMu sync.Mutex // Global makes a value the first time it is asked for
 }

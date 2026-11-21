@@ -23,6 +23,7 @@ func (p *Program) linkEnvClosures() {
 				if in.IR == nil || in.IR.Env == "" {
 					continue
 				}
+				p.HasEnv = true
 				m := envType.FindStringSubmatch(in.IR.Env)
 				if m == nil {
 					continue

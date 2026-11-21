@@ -499,6 +499,13 @@ impl<'a> Lower<'a> {
     }
 
     fn field_name(&self, w: &Walk, i: usize) -> String {
+        // a field of the environment of a closure is named for the closure: every closure has fields `0`, `1` of
+        // its own, and a call that cannot tell which closure it runs (`Fn::call` on a type parameter: every
+        // closure that fits) must not mix what one closure keeps in its field `0` with what another keeps in its
+        // field `0`
+        if let TyKind::RigidTy(RigidTy::Closure(def, _)) = w.ty.kind() {
+            return closure_field(def, i);
+        }
         if let TyKind::RigidTy(RigidTy::Adt(def, _)) = w.ty.kind() {
             let found = match w.variant {
                 Some(vi) => def.variant(vi),
@@ -849,6 +856,7 @@ impl<'a> Lower<'a> {
                             }
                             None => i.to_string(),
                         },
+                        AggregateKind::Closure(def, _) => closure_field(*def, i),
                         _ => i.to_string(),
                     };
                     if matches!(kind, AggregateKind::Array(_)) {
@@ -1268,6 +1276,12 @@ impl<'a> Lower<'a> {
         out.dedup();
         out
     }
+}
+
+/// The name of the field `i` of the environment of the closure `def`: the name of the closure (a path of Rust
+/// names: it has no `/`, which the paths of the analysis use) and the number of the field.
+pub(crate) fn closure_field(def: rustc_public::ty::ClosureDef, i: usize) -> String {
+    format!("{}.{}", def.name(), i)
 }
 
 /// The path of the trait of an `impl` function named `<Type as path::Trait<A>>::method`, without its

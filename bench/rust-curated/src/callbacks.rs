@@ -62,12 +62,11 @@ pub fn param_clean() {
 // A closure that is only given away, and called where the engine does not see the call.
 
 // (i) a thread: the call is in the library; the closure is not a candidate of any call that is seen (it has
-// no parameter, and the candidates of the calls of closures with none are not the counts of `@noisy` of the
-// other files: it is one of the candidates of the closures with none, and the other sources of those reach it: `@noisy`, XTALK)
+// no parameter, and the candidates of the calls of closures with none)
 pub fn spawned() {
     let a = source(); // @source(spawned)
     let h = std::thread::spawn(move || {
-        sink(&a); // @sink(spawned) @noisy(8)
+        sink(&a); // @sink(spawned)
     });
     h.join().unwrap();
 }
@@ -96,7 +95,7 @@ pub fn retained() {
     let a = source(); // @source(retained) @miss(silent)
     let mut v: Vec<i128> = vec![1, 2];
     v.retain(|_x| {
-        sink(&a); // @sink(retained) @noisy(3)
+        sink(&a); // @sink(retained)
         true
     });
 }

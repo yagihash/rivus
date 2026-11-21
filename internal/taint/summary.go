@@ -364,6 +364,9 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 			if o.Index < len(argv) {
 				for _, l := range s.locs(argv[o.Index]) {
 					dsts = append(dsts, Loc{l.Root, l.Path + o.Path})
+					// a pointer held in a field of what was passed (the environment of a closure that captured a
+					// variable by `&mut`): the write is to the variable it points to as well (ENV-PTR)
+					dsts = append(dsts, s.mirror(Loc{l.Root, l.Path + o.Path})...)
 					if o.Index == 0 && s.recvBoxed {
 						dsts = append(dsts, Loc{l.Root, l.Path + "/*" + o.Path})
 					}

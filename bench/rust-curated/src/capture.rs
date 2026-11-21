@@ -5,7 +5,7 @@ use crate::{sink, source};
 
 pub fn write_a() {
     let mut out = String::new();
-    let t = source(); // @source(write-a) @miss(silent)
+    let t = source(); // @source(write-a)
     run(|| {
         out = t;
     });
@@ -14,7 +14,7 @@ pub fn write_a() {
 
 pub fn write_b() {
     let mut out = String::new();
-    let t = source(); // @source(write-b) @miss(silent)
+    let t = source(); // @source(write-b)
     run(|| {
         out = t;
     });
@@ -35,7 +35,7 @@ pub fn write_const() {
 // the callback writes what the helper gave it into the captured variable
 pub fn write_param() {
     let mut out = String::new();
-    let t = source(); // @source(write-param) @miss(silent)
+    let t = source(); // @source(write-param)
     fire_and_forget(t, |x| {
         out = x;
     });
@@ -45,7 +45,7 @@ pub fn write_param() {
 // a list that the closure pushes to
 pub fn push_to_list() {
     let mut items: Vec<String> = Vec::new();
-    let t = source(); // @source(push-list) @miss(silent)
+    let t = source(); // @source(push-list)
     run(|| items.push(t));
     sink(&items[0]); // @sink(push-list)
 }
@@ -73,12 +73,12 @@ fn relay_capture(f: impl Fn()) {
 
 pub fn relay_cap_a() {
     let a = source(); // @source(relay-c-a)
-    relay_capture(|| sink(&a)); // @sink(relay-c-a) @nosink(relay-c-b) @fp @noisy(6)
+    relay_capture(|| sink(&a)); // @sink(relay-c-a) @nosink(relay-c-b)
 }
 
 pub fn relay_cap_b() {
     let b = source(); // @source(relay-c-b)
-    relay_capture(|| sink(&b)); // @sink(relay-c-b) @nosink(relay-c-a) @fp @noisy(6)
+    relay_capture(|| sink(&b)); // @sink(relay-c-b) @nosink(relay-c-a)
 }
 
 // both: the parameter, then the capture
@@ -131,8 +131,61 @@ pub fn local_closure() {
 // a closure that captures by reference and the variable is changed after it is made
 pub fn late_write() {
     let mut v = String::from("const");
-    let a = source(); // @source(late) @miss(silent)
+    let a = source(); // @source(late)
     let mut set = |x: String| v = x;
     set(a);
     sink(&v); // @sink(late)
+}
+
+// A closure that writes one of two variables it captured by `&mut`: the other one is not changed, and a
+// closure that captured another variable in the same position (the first field of its environment) does not
+// see the write.
+pub fn write_one_of_two() {
+    let mut out = String::new();
+    let mut other = String::new();
+    let t = source(); // @source(write-one-of-two)
+    run(|| {
+        out = t;
+        other.push_str("const");
+    });
+    sink(&out); // @sink(write-one-of-two)
+    sink(&other); // @sink(none)
+}
+
+pub fn write_one_of_two_reader() {
+    let kept = String::from("const");
+    run(|| sink(&kept)); // @sink(none)
+}
+
+// a struct that holds a `&mut` and writes through it, with no closure (the same pointer in a field)
+struct Slot<'a> {
+    out: &'a mut String,
+    t: String,
+}
+
+pub fn struct_mut_field() {
+    let mut out = String::new();
+    let t = source(); // @source(struct-mut-field)
+    let e = Slot { out: &mut out, t };
+    *e.out = e.t;
+    sink(&out); // @sink(struct-mut-field)
+}
+
+fn write_slot(e: Slot) {
+    *e.out = e.t;
+}
+
+pub fn struct_mut_field_helper() {
+    let mut out = String::new();
+    let t = source(); // @source(struct-mut-field-helper)
+    write_slot(Slot { out: &mut out, t });
+    sink(&out); // @sink(struct-mut-field-helper)
+}
+
+pub fn struct_mut_field_const() {
+    let mut out = String::new();
+    let t = source(); // @source(struct-mut-field-const)
+    write_slot(Slot { out: &mut out, t: String::from("const") });
+    sink(&out); // @sink(none)
+    sink(&t); // @sink(struct-mut-field-const)
 }

@@ -24,7 +24,7 @@ fn run(f: impl FnOnce()) {
 fn vuln() { // @vuln
     let x = RefCell::new(String::new());
     let f = || {
-        m::sink_cmd(&x.borrow()); // @sink(clos-capture-write-by-ref-vuln) @noisy(4) @ref(ENV-PTR)
+        m::sink_cmd(&x.borrow()); // @sink(clos-capture-write-by-ref-vuln)
     };
     *x.borrow_mut() = m::src("clos-capture-write-by-ref-vuln"); // @source(clos-capture-write-by-ref-vuln)
     f();
@@ -34,7 +34,7 @@ fn vuln() { // @vuln
 fn vuln2() { // @vuln
     let mut x = String::new();
     let mut f = || {
-        x = m::src("clos-capture-write-by-ref-vuln2"); // @source(clos-capture-write-by-ref-vuln2) @miss(unmodeled_library_call) @ref(ENV-PTR,PARITY)
+        x = m::src("clos-capture-write-by-ref-vuln2"); // @source(clos-capture-write-by-ref-vuln2)
     };
     f();
     m::sink_cmd(&x); // @sink(clos-capture-write-by-ref-vuln2)
@@ -45,7 +45,7 @@ fn vuln3() { // @vuln
     let mut fs: Vec<Box<dyn Fn()>> = Vec::new();
     for s in vec![m::src("clos-capture-write-by-ref-vuln3")] { // @source(clos-capture-write-by-ref-vuln3) @miss(unmodeled_library_call) @ref(FUNC-VALUE-MEMORY,PARITY)
         fs.push(Box::new(move || {
-            m::sink_cmd(&s); // @sink(clos-capture-write-by-ref-vuln3) @noisy(4) @ref(ENV-PTR)
+            m::sink_cmd(&s); // @sink(clos-capture-write-by-ref-vuln3)
         }));
     }
     for f in &fs {
@@ -57,7 +57,7 @@ fn vuln3() { // @vuln
 fn vuln4() { // @vuln
     let x = RefCell::new(String::new());
     let f = || {
-        m::sink_cmd(&x.borrow()); // @sink(clos-capture-write-by-ref-vuln4) @noisy(4) @ref(ENV-PTR)
+        m::sink_cmd(&x.borrow()); // @sink(clos-capture-write-by-ref-vuln4)
     };
     *x.borrow_mut() = m::src("clos-capture-write-by-ref-vuln4"); // @source(clos-capture-write-by-ref-vuln4)
     run(f);
@@ -67,7 +67,7 @@ fn vuln4() { // @vuln
 fn vuln5() { // @vuln
     let x = RefCell::new(String::new());
     let f = || {
-        m::sink_cmd(&x.borrow()); // @sink(clos-capture-write-by-ref-vuln5) @noisy(4) @ref(ENV-PTR)
+        m::sink_cmd(&x.borrow()); // @sink(clos-capture-write-by-ref-vuln5)
     };
     *x.borrow_mut() = m::src("clos-capture-write-by-ref-vuln5"); // @source(clos-capture-write-by-ref-vuln5)
     let once = Once::new();
@@ -78,7 +78,7 @@ fn vuln5() { // @vuln
 fn vuln6() { // @vuln
     let mut x = String::new();
     run(|| {
-        x = m::src("clos-capture-write-by-ref-vuln6"); // @source(clos-capture-write-by-ref-vuln6) @miss(unmodeled_library_call) @ref(ENV-PTR,PARITY)
+        x = m::src("clos-capture-write-by-ref-vuln6"); // @source(clos-capture-write-by-ref-vuln6)
     });
     m::sink_cmd(&x); // @sink(clos-capture-write-by-ref-vuln6)
 }
@@ -88,7 +88,7 @@ fn vuln7() { // @vuln
     let mut x = String::new();
     let once = Once::new();
     once.call_once(|| {
-        x = m::src("clos-capture-write-by-ref-vuln7"); // @source(clos-capture-write-by-ref-vuln7) @miss(unmodeled_library_call) @ref(CALLBACK-MODEL,ENV-PTR,PARITY)
+        x = m::src("clos-capture-write-by-ref-vuln7"); // @source(clos-capture-write-by-ref-vuln7)
     });
     m::sink_cmd(&x); // @sink(clos-capture-write-by-ref-vuln7)
 }
@@ -96,7 +96,7 @@ fn vuln7() { // @vuln
 fn fixed() { // @fixed
     let x = RefCell::new(String::new());
     let f = || {
-        m::sink_cmd(&x.borrow()); // @sink(none) @fp @ref(ENV-PTR)
+        m::sink_cmd(&x.borrow()); // @sink(none)
     };
     *x.borrow_mut() = m::clean_cmd(&m::src("clos-capture-write-by-ref-fixed"));
     f();
@@ -114,10 +114,10 @@ fn decoy() { // @decoy
         *x.borrow_mut() = m::src("clos-capture-write-by-ref-decoy"); // @source(clos-capture-write-by-ref-decoy)
     };
     let read = || {
-        m::sink_sql(&x.borrow()); // @sink(clos-capture-write-by-ref-decoy) @noisy(3) @ref(ENV-PTR)
+        m::sink_sql(&x.borrow()); // @sink(clos-capture-write-by-ref-decoy)
     };
     let quiet = || {
-        m::sink_cmd(y); // @sink(none) @fp @nosink(clos-capture-write-by-ref-decoy) @fp @ref(ENV-PTR,PARITY)
+        m::sink_cmd(y); // @sink(none) @nosink(clos-capture-write-by-ref-decoy)
     };
     run(set);
     run(read);

@@ -201,6 +201,13 @@ type state struct {
 	// numericStops: by source site, where its data stopped at a number or a bool here.
 	numericStops map[string]numericStop
 	stores       []*sg.Instr // the stores of the function (aliasLocs looks for what a cell holds)
+	// ptrStores are the stores (store, field_store) of a pointer into a cell, and valStores the stores of
+	// a value that is not a pointer (a closure's environment copied into the variable that holds it):
+	// the two make ptrAlias (ptrcells.go). Only in a program of a language that has closure environments.
+	ptrStores []*sg.Instr
+	valStores []*sg.Instr
+	ptrAlias  map[Loc]map[Loc]struct{}
+	copyOf    map[Loc][]Loc // a cell that holds a copy of a struct -> the cells it was copied from
 	locSet       map[*sg.Value]map[Loc]bool
 	locCache     map[*sg.Value][]Loc
 	locsFinal    bool // locCache may be filled: the fixed point of the locations is reached

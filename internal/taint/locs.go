@@ -62,11 +62,12 @@ func (s *state) prepareLocs(limit time.Time) bool {
 			}
 		}
 	}
+	s.collectPtrStores()
 	s.locsFinal = false
 	total := 0
 	ok := true
 	for ok {
-		changed := false
+		changed := s.buildPtrAlias()
 		for _, v := range vals {
 			if time.Now().After(limit) {
 				ok = false
@@ -214,7 +215,8 @@ func (s *state) computeLocs(v *sg.Value) []Loc {
 		return out
 	case ir.OpFieldLoad:
 		if pointerLike(v) {
-			return suffix(suffix(s.locs(in.Args[0]), in.IR.Field), "*")
+			slots := suffix(s.locs(in.Args[0]), in.IR.Field)
+			return append(suffix(slots, "*"), s.pointees(slots)...)
 		}
 	case ir.OpIndexLoad:
 		if len(in.Dsts) == 1 && pointerLike(v) {
@@ -222,7 +224,8 @@ func (s *state) computeLocs(v *sg.Value) []Loc {
 		}
 	case ir.OpLoad, ir.OpGlobalLoad:
 		if pointerLike(v) {
-			return suffix(s.loadAddr(in), "*")
+			slots := s.loadAddr(in)
+			return append(suffix(slots, "*"), s.pointees(slots)...)
 		}
 	case ir.OpConvert:
 		switch in.IR.Operator {

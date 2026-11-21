@@ -47,18 +47,18 @@ pub fn prod_a() {
 // the closure captures the value, and the helper calls it
 pub fn run_a() {
     let a = source(); // @source(run-a)
-    run(|| sink(&a)); // @sink(run-a) @nosink(run-b) @fp @noisy(6)
+    run(|| sink(&a)); // @sink(run-a) @nosink(run-b)
 }
 
 pub fn run_b() {
     let b = source(); // @source(run-b)
-    run(|| sink(&b)); // @sink(run-b) @nosink(run-a) @fp @noisy(6)
+    run(|| sink(&b)); // @sink(run-b) @nosink(run-a)
 }
 
 // the closure takes what it captures (move)
 pub fn run_move() {
     let a = source(); // @source(run-move)
-    run(move || sink(&a)); // @sink(run-move) @noisy(7)
+    run(move || sink(&a)); // @sink(run-move)
 }
 
 // a block body, and the value is changed on the way

@@ -16,7 +16,7 @@ fn vuln() { // @vuln
 
 fn vuln2() { // @vuln
     let mut out = String::new();
-    [m::src("rust-iterator-chain-vuln2")].iter().for_each(|x| out.push_str(x)); // @source(rust-iterator-chain-vuln2) @miss(unmodeled_library_call) @ref(ENV-PTR)
+    [m::src("rust-iterator-chain-vuln2")].iter().for_each(|x| out.push_str(x)); // @source(rust-iterator-chain-vuln2)
     m::sink_cmd(&out); // @sink(rust-iterator-chain-vuln2)
 }
 

@@ -1,0 +1,262 @@
+package taint
+
+import (
+	"sort"
+
+	"github.com/yagihash/rivus/internal/ir"
+	"github.com/yagihash/rivus/internal/sg"
+)
+
+// Pointers held in cells (ENV-PTR).
+//
+// A store of a pointer into a cell writes what the pointer points to into the cell's "/*" (store): the
+// cell holds a copy of the content, and what is later written through the pointer that is loaded from
+// the cell lands in that copy, not in the variable. A closure of Rust that captures a variable by `&mut`
+// holds a pointer to it in a field of its environment, and writes through it: the variable never saw
+// the write.
+//
+// So that it does, the cell remembers where the pointer pointed (ptrAlias: the slot -> the locations of
+// the pointee), and
+//   * the locations of a pointer loaded from the slot are the pointee too (pointees), so a write through
+//     it, in this function, goes to the variable as well;
+//   * what a callee writes at "<slot>/*..." (a closure called with its environment, a helper given the
+//     struct) is written at the pointee as well (mirror, used by applySummary).
+//
+// The slot's copy stays: the reads of the content still find what was written to the variable (the
+// stores are applied again as the variable changes). Only for a program that has closure environments
+// (sg.Program.HasEnv: Rust). A struct that is stored whole into another cell (the environment into the
+// variable of the closure) takes its slots with it, and a write through a pointer in the copy is a write
+// through the pointer in the original (copyOf: `mut f: impl FnMut()` is copied into a slot of the helper,
+// and the closure that the helper calls writes into the slot).
+
+// collectPtrStores lists the stores that make ptrAlias. Nothing for a program that has no closure
+// environment.
+func (s *state) collectPtrStores() {
+	s.ptrStores, s.valStores, s.ptrAlias, s.copyOf = s.ptrStores[:0], s.valStores[:0], nil, nil
+	if !s.eng.prog.HasEnv {
+		return
+	}
+	for _, b := range s.fn.Blocks {
+		for _, in := range b.Instrs {
+			var val *sg.Value
+			switch in.Op {
+			case ir.OpStore:
+				val = in.Args[1]
+			case ir.OpFieldStore:
+				val = in.Args[1]
+			default:
+				continue
+			}
+			if pointerLike(val) {
+				s.ptrStores = append(s.ptrStores, in)
+			} else if holdsPointers(val) {
+				s.valStores = append(s.valStores, in)
+			}
+		}
+	}
+}
+
+// holdsPointers reports whether a value that is not a pointer can hold one: a struct, a closure's
+// environment, a function value, an interface, or a type that the extractor has no class for (a generic
+// parameter: `mut f: impl FnMut()`). A number, a bool, a string and a constant cannot.
+func holdsPointers(v *sg.Value) bool {
+	if v.Kind == sg.KConst || v.Kind == sg.KUndef || v.Kind == sg.KFunc {
+		return false
+	}
+	switch v.Class {
+	case ir.ClassStruct, ir.ClassFunc, ir.ClassOther, ir.ClassInterface:
+		return true
+	}
+	return false
+}
+
+// slotsOf are the cells a store writes into.
+func (s *state) slotsOf(in *sg.Instr) []Loc {
+	if in.Op == ir.OpFieldStore {
+		return suffix(s.locs(in.Args[0]), in.IR.Field)
+	}
+	return s.locs(in.Args[0])
+}
+
+func (s *state) addAlias(slot, target Loc) bool {
+	if slot == target {
+		return false
+	}
+	m := s.ptrAlias[slot]
+	if m == nil {
+		if s.ptrAlias == nil {
+			s.ptrAlias = map[Loc]map[Loc]struct{}{}
+		}
+		m = map[Loc]struct{}{}
+		s.ptrAlias[slot] = m
+	}
+	if _, ok := m[target]; ok {
+		return false
+	}
+	m[target] = struct{}{}
+	return true
+}
+
+func (s *state) addCopy(dst, src Loc) bool {
+	if dst == src {
+		return false
+	}
+	for _, x := range s.copyOf[dst] {
+		if x == src {
+			return false
+		}
+	}
+	if s.copyOf == nil {
+		s.copyOf = map[Loc][]Loc{}
+	}
+	s.copyOf[dst] = append(s.copyOf[dst], src)
+	return true
+}
+
+// buildPtrAlias adds what the stores say to ptrAlias, from the locations known now. It reports whether
+// something was added (prepareLocs goes on until nothing is).
+func (s *state) buildPtrAlias() bool {
+	if len(s.ptrStores) == 0 && len(s.valStores) == 0 {
+		return false
+	}
+	changed := false
+	for _, in := range s.valStores {
+		// a value that is not a pointer is stored whole (a struct, a closure's environment): what is
+		// written through a pointer inside the copy is written through the pointer inside the original
+		srcs := s.locs(in.Args[1])
+		if len(srcs) == 0 {
+			continue
+		}
+		for _, d := range s.slotsOf(in) {
+			for _, src := range srcs {
+				if s.addCopy(d, src) {
+					changed = true
+				}
+			}
+		}
+	}
+	for _, in := range s.ptrStores {
+		targets := s.locs(in.Args[1])
+		if len(targets) == 0 {
+			continue
+		}
+		for _, slot := range s.slotsOf(in) {
+			for _, t := range targets {
+				if s.addAlias(slot, t) {
+					changed = true
+				}
+			}
+		}
+	}
+	// a struct stored whole into a cell: the slots inside it are inside the copy
+	for len(s.ptrAlias) > 0 {
+		grew := false
+		for _, in := range s.valStores {
+			srcs := s.locs(in.Args[1])
+			if len(srcs) == 0 {
+				continue
+			}
+			var dsts []Loc
+			for _, src := range srcs {
+				for slot, ts := range s.ptrAlias {
+					if slot.Root != src.Root || !pathHasPrefix(slot.Path, src.Path) {
+						continue
+					}
+					if dsts == nil {
+						dsts = s.slotsOf(in)
+					}
+					for _, d := range dsts {
+						nk := Loc{d.Root, d.Path + slot.Path[len(src.Path):]}
+						for t := range ts {
+							if s.addAlias(nk, t) {
+								grew = true
+							}
+						}
+					}
+				}
+			}
+		}
+		if !grew {
+			break
+		}
+		changed = true
+	}
+	return changed
+}
+
+// pointees are the locations that the pointers held in these cells point to.
+func (s *state) pointees(slots []Loc) []Loc {
+	if len(s.ptrAlias) == 0 {
+		return nil
+	}
+	var out []Loc
+	for _, sl := range slots {
+		for t := range s.ptrAlias[sl] {
+			out = append(out, t)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return s.lessLoc(out[i], out[j]) })
+	return out
+}
+
+// mirror are the cells that a write at l is also a write at: the pointee of a pointer that is held on the
+// way (l is "<slot>/*<rest>", and the pointer in <slot> points to t: then t<rest>).
+func (s *state) mirror(l Loc) []Loc {
+	if len(s.ptrAlias) == 0 && len(s.copyOf) == 0 {
+		return nil
+	}
+	var out []Loc
+	seen := map[Loc]bool{l: true}
+	work := []Loc{l}
+	for len(work) > 0 && len(seen) < 64 {
+		c := work[len(work)-1]
+		work = work[:len(work)-1]
+		p := c.Path
+		for i := 0; i+2 <= len(p); i++ {
+			if p[i] != '/' || p[i+1] != '*' || (i+2 < len(p) && p[i+2] != '/') {
+				continue
+			}
+			for t := range s.ptrAlias[Loc{c.Root, p[:i]}] {
+				nl := Loc{t.Root, t.Path + p[i+2:]}
+				if !seen[nl] {
+					seen[nl] = true
+					out = append(out, nl)
+					work = append(work, nl)
+				}
+			}
+		}
+		// a struct that was copied: a write through a pointer in the copy is a write through the pointer in
+		// the original
+		if len(s.copyOf) > 0 {
+			for i := 0; i <= len(p); i++ {
+				if i < len(p) && p[i] != '/' {
+					continue
+				}
+				rest := p[i:]
+				if !throughPointer(rest) {
+					continue
+				}
+				for _, src := range s.copyOf[Loc{c.Root, p[:i]}] {
+					nl := Loc{src.Root, src.Path + rest}
+					if !seen[nl] {
+						seen[nl] = true
+						out = append(out, nl)
+						work = append(work, nl)
+					}
+				}
+			}
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return s.lessLoc(out[i], out[j]) })
+	return out
+}
+
+// throughPointer reports whether the path has a step that follows a pointer ("/*" as a whole step).
+func throughPointer(p string) bool {
+	for i := 0; i+2 <= len(p); i++ {
+		if p[i] == '/' && p[i+1] == '*' && (i+2 == len(p) || p[i+2] == '/') {
+			return true
+		}
+	}
+	return false
+}
