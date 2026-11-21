@@ -12,7 +12,10 @@ rivus / rv-* / rivus-* process), and writes PREFIX.json (the report), PREFIX.err
 
 "report" reads the pairs <bench>.base.* / <bench>.head.* in the results directory and writes
 summary.md and details/<bench>.md in -out. Exit status: 0 nothing lost; 1 a finding was removed
-(a flow was lost: do not push, classify it); 2 a benchmark did not run or did not finish.
+(a flow was lost: do not push, classify it); 2 a benchmark did not run, or a run is not a valid basis for the
+comparison (R-40): head did not converge while base did, either run timed out, the number of functions
+fell or grew by 50% or more, or both runs have no finding at all. A change of 10% to 50% in the number of
+functions is a warning. Each condition is one line at the top of summary.md.
 Standard library only.
 """
 import argparse, collections, json, os, re, resource, shlex, subprocess, sys, time
@@ -243,6 +246,31 @@ def load(results, bench, which):
         return meta, None
 
 
+FUNC_WARN, FUNC_FAIL = 0.10, 0.50
+
+
+def check_validity(bench, sb, sh, nb, nh):
+    """R-40: what makes a pair of runs unfit to be compared. Returns (invalid, warnings): lines for summary.md."""
+    bad, warn = [], []
+    if sb.get("converged") and not sh.get("converged"):
+        bad.append("%s: head did not converge (base did)" % bench)
+    for w, st in (("base", sb), ("head", sh)):
+        if st.get("timed_out"):
+            bad.append("%s: %s timed out (a clock stopped it: the result depends on the load of the machine)" % (bench, w))
+    fb, fh = sb.get("functions"), sh.get("functions")
+    if isinstance(fb, int) and isinstance(fh, int) and fb > 0:
+        change = abs(fh - fb) / fb
+        if change >= FUNC_FAIL:
+            bad.append("%s: stats.functions %d -> %d (%.0f%%): the program that was analysed is not the same" % (bench, fb, fh, 100 * change))
+        elif change >= FUNC_WARN:
+            warn.append("%s: stats.functions %d -> %d (%.0f%%)" % (bench, fb, fh, 100 * change))
+    elif isinstance(fb, int) and fb > 0 and fh is None:
+        bad.append("%s: head has no stats.functions" % bench)
+    if nb == 0 and nh == 0:
+        bad.append("%s: no finding in base and none in head (a benchmark with a truth has findings: is the input or the rules empty?)" % bench)
+    return bad, warn
+
+
 def fmt_delta(b, h):
     return str(b) if b == h else "%s -> %s" % (b, h)
 
@@ -257,6 +285,7 @@ def report(a):
                 skipped[n] = why
     os.makedirs(os.path.join(a.out, "details"), exist_ok=True)
     rows, alarms, notes, detail_files = [], [], [], []
+    alarms_invalid, warnings = [], []
     not_run = 0
     removed_total = 0
     for bench in benches:
@@ -300,6 +329,11 @@ def report(a):
             status.append("NOT CONVERGED (base %s, head %s): the sets are a weak basis" % (conv_b, conv_h))
         if mb.get("rc") == 0 and (sb.get("timed_out") or sh.get("timed_out")):
             status.append("TIMED OUT")
+        invalid, warned = check_validity(bench, sb, sh, len(rb["findings"]), len(rh["findings"]))
+        for line in invalid:
+            alarms_invalid.append(line)
+        for line in warned:
+            warnings.append(line)
         if removed or shrunk:
             alarms.append("%s: %d finding(s) REMOVED%s" % (bench, len(removed), " (+%d key(s) with fewer findings)" % len(shrunk) if shrunk else ""))
             removed_total += len(removed) + len(shrunk)
@@ -307,7 +341,7 @@ def report(a):
             notes.append("%s: %s" % (bench, s))
         rows.append([
             bench,
-            "!! LOST %d" % (len(removed) + len(shrunk)) if removed or shrunk else "ok",
+            "!! LOST %d" % (len(removed) + len(shrunk)) if removed or shrunk else ("!! INVALID" if invalid else "ok"),
             fmt_delta(len(rb["findings"]), len(rh["findings"])),
             "+%d" % len(added), "-%d" % len(removed),
             "%d" % len(reach), "%d" % len(path), "%d" % others,
@@ -346,6 +380,13 @@ def report(a):
         detail_files.append(bench)
         rows[-1].append(ukinds and ", ".join("%s %d->%d" % (k, ub[k], uh[k]) for k in ukinds) or "-")
     out = ["# rivus compare: %s -> %s" % (a.base, a.head), ""]
+    for al in alarms_invalid:
+        out.append("**!! INVALID: %s**" % al)
+    for w in warnings:
+        out.append("warning: %s" % w)
+    if alarms_invalid:
+        out += ["", "!! The run(s) above are not a valid basis for the comparison (exit status 2): a head that did not finish, or a result "
+                "that shrank to nothing, shows no removed finding because there is nothing left to remove. Find out why before reading the table.", ""]
     for al in alarms:
         out.append("**!! %s**" % al)
     if alarms:
@@ -379,7 +420,7 @@ def report(a):
     out += ["", "Details (added / removed / changed findings, one per line): `details/<bench>.md`."]
     open(os.path.join(a.out, "summary.md"), "w").write("\n".join(out) + "\n")
     print("\n".join(out))
-    return 1 if removed_total else (2 if not_run else 0)
+    return 1 if removed_total else (2 if not_run or alarms_invalid else 0)
 
 
 def main():
