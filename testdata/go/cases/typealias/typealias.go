@@ -91,3 +91,24 @@ func HAliasInSlice(hs []*api.AliasH) { // @source(h2)
 		lib.Sink(h.P) // @sink(h2)
 	}
 }
+
+// F8: a type defined in a function can have the name of an alias of the package. The rule for real.S is
+// for the alias target, not for the other type of that name.
+func SRealSpelling(r *real.S) { // @source(s1)
+	lib.Sink(r.P) // @sink(s1)
+}
+
+type Shadow = real.S
+
+func SShadowAlias(r *Shadow) { // @source(s2)
+	lib.Sink(r.P) // @sink(s2)
+}
+
+// The decoy: the Shadow of the function is not the alias, so the rule for real.S is not for its parameter.
+func SShadowDecoy() {
+	type Shadow struct{ P string }
+	f := func(r *Shadow) {
+		lib.Sink(r.P)
+	}
+	f(&Shadow{})
+}

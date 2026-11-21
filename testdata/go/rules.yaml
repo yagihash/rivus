@@ -129,6 +129,12 @@ sources:
     type: "[]*example.com/cases/cases/typealias/api.AliasH"
     labels: [user_input]
 
+  # A type defined in a function under the name of an alias
+  # (testdata/go/cases/typealias).
+  - kind: param_type
+    type: "*example.com/cases/cases/typealias/real.S"
+    labels: [user_input]
+
   # A call that fills its argument (testdata/go/cases/dbsrc).
   - symbol: example.com/cases/lib.Fill
     out: [0]

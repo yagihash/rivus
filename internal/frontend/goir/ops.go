@@ -6,6 +6,7 @@ import (
 	"go/types"
 	"sort"
 	"strconv"
+	"strings"
 
 	"golang.org/x/tools/go/ssa"
 
@@ -172,8 +173,90 @@ func constOf(k *ssa.Const) *ir.Const {
 	return &ir.Const{Kind: ir.ConstNil}
 }
 
+func qualify(p *types.Package) string { return p.Path() }
+
+// typeString is the name of a type as the IR writes it. A type defined inside a function whose name is
+// also the name of a type alias of the package is told apart by its position (`pkg.Name·N`), so the
+// table of aliases (type_aliases) is not applied to it: the two are not the same type (ADR-083).
 func typeString(t types.Type) string {
-	return types.TypeString(t, func(p *types.Package) string { return p.Path() })
+	if !hasShadow(t, 0) {
+		return types.TypeString(t, qualify)
+	}
+	return shadowString(t)
+}
+
+// shadowedBy reports whether n is a type defined in a function, under the name of a type alias that its
+// package declares.
+func shadowedBy(n *types.Named) bool {
+	obj := n.Obj()
+	if obj == nil || obj.Pkg() == nil || obj.Parent() == nil || obj.Parent() == obj.Pkg().Scope() {
+		return false
+	}
+	o, ok := obj.Pkg().Scope().Lookup(obj.Name()).(*types.TypeName)
+	return ok && o.IsAlias()
+}
+
+// hasShadow reports whether a type that shadowString writes differently is in t: under the pointer, slice,
+// array, map and channel types and the type arguments.
+func hasShadow(t types.Type, depth int) bool {
+	if depth > 16 {
+		return false
+	}
+	switch t := t.(type) {
+	case *types.Named:
+		if shadowedBy(t) {
+			return true
+		}
+		for i := 0; i < t.TypeArgs().Len(); i++ {
+			if hasShadow(t.TypeArgs().At(i), depth+1) {
+				return true
+			}
+		}
+	case *types.Pointer:
+		return hasShadow(t.Elem(), depth+1)
+	case *types.Slice:
+		return hasShadow(t.Elem(), depth+1)
+	case *types.Array:
+		return hasShadow(t.Elem(), depth+1)
+	case *types.Chan:
+		return hasShadow(t.Elem(), depth+1)
+	case *types.Map:
+		return hasShadow(t.Key(), depth+1) || hasShadow(t.Elem(), depth+1)
+	}
+	return false
+}
+
+func shadowString(t types.Type) string {
+	switch t := t.(type) {
+	case *types.Named:
+		base := types.TypeString(t.Origin(), qualify)
+		if i := strings.IndexByte(base, '['); i >= 0 {
+			base = base[:i]
+		}
+		if shadowedBy(t) {
+			base += "·" + strconv.Itoa(int(t.Obj().Pos()))
+		}
+		if t.TypeArgs().Len() == 0 {
+			return base
+		}
+		args := make([]string, t.TypeArgs().Len())
+		for i := range args {
+			args[i] = typeString(t.TypeArgs().At(i))
+		}
+		return base + "[" + strings.Join(args, ",") + "]"
+	case *types.Pointer:
+		return "*" + typeString(t.Elem())
+	case *types.Slice:
+		return "[]" + typeString(t.Elem())
+	case *types.Array:
+		return "[" + strconv.FormatInt(t.Len(), 10) + "]" + typeString(t.Elem())
+	case *types.Chan:
+		pre := map[types.ChanDir]string{types.SendRecv: "chan ", types.SendOnly: "chan<- ", types.RecvOnly: "<-chan "}[t.Dir()]
+		return pre + typeString(t.Elem())
+	case *types.Map:
+		return "map[" + typeString(t.Key()) + "]" + typeString(t.Elem())
+	}
+	return types.TypeString(t, qualify)
 }
 
 // classOf is the class of a type (ADR-039).

@@ -18,3 +18,7 @@ type H struct{ P string }
 
 // Box is a generic type: its type argument is where an alias can stand inside a type.
 type Box[T any] struct{ V T }
+
+type S struct{ P string }
+
+type CT struct{ F string }
