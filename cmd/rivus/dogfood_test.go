@@ -84,7 +84,10 @@ func TestDogfood(t *testing.T) {
 	// 63: R-03 (ADR-066) makes exec.LookPath carry its argument (it was pure): the extractor command of
 	// `rivus index` and `rivus graph` (-dart-extractor and the like) reaches the os.ReadFile of
 	// keyCtx.extractorConfig, which hashes the file that the command names (2 real flows, one per command).
-	const maxFindings, maxNoSourceOnPath = 63, 0
+	// 71: `rivus extract -lang rust` reads a Rust project the way analyze does (in a container), so the directory of -C and
+	// the paths of -container-ro-mount reach the same sinks of isolate.go from a second command: 8 real flows, of the
+	// same kind as the ones of the line above (the paths that name the project go to the container as read-only mounts).
+	const maxFindings, maxNoSourceOnPath = 71, 0
 	t.Logf("%d findings, %d with no step in the source function", len(rep.Findings), noSourceOnPath)
 	if len(rep.Findings) > maxFindings {
 		t.Errorf("%d findings: more than the %d of today", len(rep.Findings), maxFindings)

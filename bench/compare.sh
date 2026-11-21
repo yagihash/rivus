@@ -157,6 +157,22 @@ spec() {
   return 0
 }
 
+# Rust: third-party code is read only in the container (ADR-064, docs/rust-isolation.md): its build.rs and proc macros run
+# during the extraction. Only these paths of this repository (our own code) may be read on this machine, with
+# -unsafe-host-exec; everything else, a clone of someone else's project included, goes through `rivus extract -lang rust`,
+# which is the container. Without Docker the third-party benchmark FAILS; it never falls back to the machine.
+OWN_RUST_PATHS="bench/zoo-rust bench/rust-curated extractor/rust/test"
+NO_DOCKER_MSG="Rust の第三者のコードは隔離の中でだけ読む。Docker を起動するか、このベンチを外す"
+rust_is_own() { # dir root: 0 only when dir is, or is under, one of OWN_RUST_PATHS of root
+  local d r p
+  d="$(cd "$1" 2>/dev/null && pwd -P)" || return 1
+  r="$(cd "$2" 2>/dev/null && pwd -P)" || return 1
+  for p in $OWN_RUST_PATHS; do case "$d" in "$r/$p"|"$r/$p"/*) return 0 ;; esac; done
+  return 1
+}
+rust_mode() { rust_is_own "$1" "$2" && echo host || echo container; } # dir root
+docker_ok() { docker info --format '{{.ServerVersion}}' > /dev/null 2>&1; }
+
 memlimit_of() {
   local kv
   for kv in $MEMLIMITS; do [ "${kv%%=*}" = "$1" ] && ML="${kv#*=}"; done
@@ -170,17 +186,25 @@ if [ "$DRY" = 1 ]; then
   echo "   git worktree add --detach $WORK/wt/$H7 $H7 ; go build -o $WORK/bin/$PAIR/rivus-head ./cmd/rivus"
   echo "2. light tier: base and head at the same time when the free memory allows, no wait for other analyses (free memory >= 25%); the result of base is cached in ${CACHE_DIR:-$WORK/cache} unless --no-cache; heavy tier (gitea, ech0): one at a time, no cache."
   echo "   the heavy tier: before each run: wait for free memory >= 40% (swap <= 50% where it cannot be read) and no other rivus / rv-* / rivus-* process (at most $WAIT h)"
+  NODOCKER_FAIL=0
   for b in $BENCHES; do
     if ! spec "$b"; then echo "   $b: unknown benchmark" >&2; continue; fi
     ML=""; memlimit_of "$b"
-    case "$KIND" in dart) ex="extractor: ${RIVUS_DART:-dart} run wt/<sha7>/extractor/dart/bin/rivus_dart.dart";; rust) ex="extractor: ${RIVUS_RUST:-cargo build --locked in wt/<sha7>/extractor/rust}";; *) ex="";; esac
+    case "$KIND" in dart) ex="extractor: ${RIVUS_DART:-dart} run wt/<sha7>/extractor/dart/bin/rivus_dart.dart";; rust)
+      if [ "$(rust_mode "$DIR" "$ROOT")" = host ]; then ex="extractor: host (our own code: -unsafe-host-exec) ${RIVUS_RUST:-cargo build --locked in wt/<sha7>/extractor/rust}"
+      else
+        ex="extractor: container (docker build of wt/<sha7>/extractor/rust, then rivus extract -lang rust)"
+        if ! docker_ok; then ex="$ex; Docker is not available: this benchmark FAILS ($NO_DOCKER_MSG)"; NODOCKER_FAIL=1; fi
+      fi;; *) ex="";; esac
     src="in-tree (wt/<sha7>/bench/$b)"; [ -n "$URL" ] && src="git clone $URL ; git checkout ${COMMIT:-<default branch>} ; ls go.mod ; go list ./..."
     [ "$KIND" = synth ] && src="go run ./bench/go-synth/gen -size S (in wt/<sha7>)"
     printf '   %-14s %-5s %s | rules: %s | GOMEMLIMIT=%s | -timeout %s %s\n' "$b" "$KIND" "$src" "${RULES:-built-in}" "${ML:-unset}" "$TIMEOUT" "$ex"
   done
+  [ "${NODOCKER_FAIL:-0}" = 1 ] && echo "compare: $NO_DOCKER_MSG" >&2
   [ "$WITH_GITEA" = 1 ] || echo "   (gitea is off: --with-gitea)"
   [ "$WITH_ECH0" = 1 ] || echo "   (ech0 is off: --with-ech0)"
   echo "3. python3 bench/compare.py report: $OUT/summary.md, $OUT/details/<bench>.md; exit 1 if a finding was removed, 2 if a benchmark did not run"
+    [ "${NODOCKER_FAIL:-0}" = 1 ] && exit 2
   exit 0
 fi
 
@@ -233,6 +257,12 @@ clone_checkout() { # url commit dir [from-local]
 # a fixture or an extractor fix that is in one version and not in the other makes another IR (R-41).
 tree() { git -C "$ROOT" rev-parse -q --verify "$1:$2" 2>/dev/null; }   # tree <sha> <path>: the hash of that directory in that version
 h16() { shasum -a 256 | cut -c1-16; }
+# the rivus of this script's tree that drives the container (`rivus extract -lang rust`): a base that is older may not have it
+DRIVER="$WORK/bin/driver/rivus"
+ensure_driver() {
+  [ -n "${DRIVER_OK:-}" ] && return 0
+  mkdir -p "$WORK/bin/driver" && (cd "$ROOT" && go build -o "$DRIVER.$$" ./cmd/rivus) >&2 && mv "$DRIVER.$$" "$DRIVER" && DRIVER_OK=1
+}
 side_sha() { if [ "$1" = base ]; then echo "$BASE_SHA"; else echo "$HEAD_SHA"; fi; }
 
 setup() { # name side: makes the copy and the IR of that version; sets DIR, RULES, IR (empty for Go); returns non-zero (and records why) if it cannot
@@ -299,27 +329,53 @@ setup() { # name side: makes the copy and the IR of that version; sets DIR, RULE
       fi ;;
     rust)
       mkdir -p "$WORK/ir"
-      if [ -n "${RIVUS_RUST:-}" ]; then   # an extractor named by the caller is used for both sides
-        rr="$RIVUS_RUST"; [ -x "$rr" ] || { skip "$b" "RIVUS_RUST=$rr is not executable"; return 1; }
-        ext="bin-$(shasum -a 256 "$rr" | h16)"
-      else
-        ext="$(tree "$sha" extractor/rust)"; [ -n "$ext" ] || { skip "$b" "no extractor/rust in $w ($s7)"; return 1; }
-        rr="$WORK/bin/rust-extractor/$ext/rivus-rust"
-        if [ ! -x "$rr" ]; then   # one binary per extractor tree; the cargo target dir is shared, so the dependencies are built once
-          say "building the Rust extractor of $w ($s7, tree ${ext:0:12})"
-          (cd "$wt/extractor/rust" && CARGO_TARGET_DIR="$WORK/cargo-target" cargo build --locked) > "$WORK/ir/rust-extractor-$ext.log" 2>&1 \
-            || { skip "$b" "cargo build --locked failed in $w ($s7) (see $WORK/ir/rust-extractor-$ext.log)"; return 1; }
-          mkdir -p "$WORK/bin/rust-extractor/$ext" && cp "$WORK/cargo-target/debug/rivus-rust" "$rr" || { skip "$b" "no rivus-rust after cargo build"; return 1; }
+      local mode image=""
+      mode="$(rust_mode "$DIR" "$wt")"
+      if [ "$mode" = host ]; then   # our own code (OWN_RUST_PATHS)
+        if [ -n "${RIVUS_RUST:-}" ]; then   # an extractor named by the caller is used for both sides
+          rr="$RIVUS_RUST"; [ -x "$rr" ] || { skip "$b" "RIVUS_RUST=$rr is not executable"; return 1; }
+          ext="bin-$(shasum -a 256 "$rr" | h16)"
+        else
+          ext="$(tree "$sha" extractor/rust)"; [ -n "$ext" ] || { skip "$b" "no extractor/rust in $w ($s7)"; return 1; }
+          rr="$WORK/bin/rust-extractor/$ext/rivus-rust"
+          if [ ! -x "$rr" ]; then   # one binary per extractor tree; the cargo target dir is shared, so the dependencies are built once
+            say "building the Rust extractor of $w ($s7, tree ${ext:0:12})"
+            (cd "$wt/extractor/rust" && CARGO_TARGET_DIR="$WORK/cargo-target" cargo build --locked) > "$WORK/ir/rust-extractor-$ext.log" 2>&1 \
+              || { skip "$b" "cargo build --locked failed in $w ($s7) (see $WORK/ir/rust-extractor-$ext.log)"; return 1; }
+            mkdir -p "$WORK/bin/rust-extractor/$ext" && cp "$WORK/cargo-target/debug/rivus-rust" "$rr" || { skip "$b" "no rivus-rust after cargo build"; return 1; }
+          fi
         fi
+        extkey="rust ${ext:0:12}"
+      else   # someone else's code: the container, or nothing
+        docker_ok || { skip "$b" "$NO_DOCKER_MSG"; return 1; }
+        if [ -n "${RIVUS_RUST_IMAGE:-}" ]; then   # an image named by the caller is used for both sides
+          image="$RIVUS_RUST_IMAGE"
+          ext="image-$(docker image inspect --format '{{.Id}}' "$image" 2>/dev/null | h16)"
+        else
+          ext="$(tree "$sha" extractor/rust)"; [ -n "$ext" ] || { skip "$b" "no extractor/rust in $w ($s7)"; return 1; }
+          image="rivus-rust-extractor:cmp-${ext:0:12}"   # one image per extractor tree: the extractor of THIS version runs in it
+          if ! docker image inspect "$image" > /dev/null 2>&1; then
+            say "building the image of the Rust extractor of $w ($s7, tree ${ext:0:12})"
+            docker build -q -f "$ROOT/docker/rust-extractor/Dockerfile" -t "$image" "$wt/extractor/rust" > "$WORK/ir/rust-image-$ext.log" 2>&1 \
+              || { skip "$b" "docker build of the extractor failed in $w ($s7) (see $WORK/ir/rust-image-$ext.log)"; return 1; }
+          fi
+        fi
+        ensure_driver || { skip "$b" "go build of the rivus that drives the container failed"; return 1; }
+        extkey="rust-container ${ext:0:12}"
       fi
-      extkey="rust ${ext:0:12}"
-      key="$(printf '%s|%s|%s' "$b" "$ext" "$tgt" | h16)"
+      key="$(printf '%s|%s|%s|%s' "$b" "$ext" "$tgt" "$mode" | h16)"
       IR="$WORK/ir/$b.$key.jsonl"
       if [ ! -s "$IR" ]; then
-        say "$b: making the IR with the extractor of $w ($s7)"
-        if [ "$b" = parseable ]; then
-          mkdir -p "$WORK/parseable-assets"   # build.rs would fetch the UI from the network without it
-          (cd "$DIR" && LOCAL_ASSETS_PATH="$WORK/parseable-assets" "$rr" --no-deps . > "$IR.tmp") 2>"$WORK/ir/$b.$key.err" || { /bin/rm -f "$IR.tmp"; skip "$b" "the Rust extractor failed (see $WORK/ir/$b.$key.err)"; return 1; }
+        say "$b: making the IR with the extractor of $w ($s7), $mode"
+        if [ "$mode" = container ]; then
+          local xargs=(-lang rust -C "$DIR" -rust-image "$image")
+          if [ "$b" = parseable ]; then
+            mkdir -p "$WORK/parseable-assets"   # build.rs would fetch the UI from the network without it
+            xargs+=(-no-deps -container-env LOCAL_ASSETS_PATH=/assets -container-ro-mount "$WORK/parseable-assets:/assets")
+          fi
+          # RIVUS_UNSAFE_HOST_EXEC is removed: there is no way to the host from here
+          env -u RIVUS_UNSAFE_HOST_EXEC "$DRIVER" extract "${xargs[@]}" > "$IR.tmp" 2>"$WORK/ir/$b.$key.err" \
+            || { /bin/rm -f "$IR.tmp"; skip "$b" "the Rust extractor failed in the container (see $WORK/ir/$b.$key.err)"; return 1; }
         else
           (cd "$wt" && "$rr" "$DIR" > "$IR.tmp") 2>"$WORK/ir/$b.$key.err" || { /bin/rm -f "$IR.tmp"; skip "$b" "the Rust extractor failed (see $WORK/ir/$b.$key.err)"; return 1; }
         fi

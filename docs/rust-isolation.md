@@ -63,6 +63,8 @@ rivus analyze -lang rust -no-deps -C proj \
 
 `-unsafe-host-exec`（または `RIVUS_UNSAFE_HOST_EXEC=1`）で、従来どおり、この機械の上で、`rivus-rust` を直接動かします（`-rust-extractor` / `RIVUS_RUST_EXTRACTOR` / `PATH`）。自分のコード、CI で自分のリポジトリを読むとき、このリポジトリのベンチ（`bench/rust-curated`、`bench/zoo-rust`、`extractor/rust/test`）向けです。**`.rivus-hostile` のあるプロジェクト（隔離の検証用の、悪意のある crate）は、このモードでは、動かしません。**
 
+ベンチの道具（`bench/compare.sh`、`bench/parity/collect.sh`）は、この許可リストを、コードで持ちます。**この 3 つのパスの中だけ**をホストで読み、それ以外の Rust の対象（parseable など第三者のもの）は、`rivus extract -lang rust`（既定のコンテナ）で読みます。Docker がないときは、ホストに切り替えずに、**失敗します**（「Rust の第三者のコードは隔離の中でだけ読む。Docker を起動するか、このベンチを外す」）。`rivus extract -lang rust` は、抽出器の IR を、そのまま標準出力に書きます（`-unsafe-host-exec` がなければ、コンテナ）。
+
 ## できないこと（限界）
 
 - **コンテナは、仮想マシンではありません。** カーネルは共有です。Docker（runc、カーネル）の脆弱性による脱出は、防げません。Docker とカーネルを、更新してください。最も硬くするなら、使い捨ての VM の中で、rivus を動かしてください。

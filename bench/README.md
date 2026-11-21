@@ -61,6 +61,16 @@ shared `CARGO_TARGET_DIR` in the work dir, the binary kept in `<work>/bin/rust-e
 binary) or `RIVUS_DART` (a command), when set, name the tool for both sides. A rules file that an old base does not have is
 taken from the tree of the script, and the other way round is not done. `bench/compare.sh --dry-run` shows the plan.
 
+**Rust: third-party code is read in the container only.** The extraction of a Rust target runs its `build.rs` and proc macros.
+`compare.sh` therefore reads only our own code on the host (with `-unsafe-host-exec`): the paths listed in `OWN_RUST_PATHS` of the script
+(`bench/zoo-rust`, `bench/rust-curated`, `extractor/rust/test`). Every other Rust target (parseable) is read by `rivus extract -lang rust`,
+which is the default of rivus: the container, a fetch with the network and no build, then the extraction with no network
+(docs/rust-isolation.md). The extractor that runs is the one of the version: an image `rivus-rust-extractor:cmp-<tree of extractor/rust>`
+is built from `<work>/wt/<sha7>/extractor/rust` (once per tree; `RIVUS_RUST_IMAGE` names one image for both sides), and the IR is cached per
+that tree as before. Without Docker the third-party benchmark does not run (exit status 2, "Rust の第三者のコードは隔離の中でだけ読む。Docker を起動するか、このベンチを外す");
+it never falls back to the host, and `RIVUS_UNSAFE_HOST_EXEC` is removed from the environment of that run. `--dry-run` shows `host` or `container` per Rust benchmark;
+`python3 bench/test_compare.py` pins the choice and the failure. `bench/parity/collect.sh` follows the same rule.
+
 **How to read `summary.md` (R-40, R-41).** Its top lines come first, one per condition, and a line that starts with `!! INVALID`
 makes the exit status 2 (the run is not a basis for a comparison; a removed finding is still exit status 1):
 

@@ -11,8 +11,11 @@
 #                 (see bench/README.md and bench/wild for the commits; fetch-sha.sh makes them)
 #   RIVUS_DART    the command of the Dart SDK ("mise exec dart@3.13.6 -- dart")
 #   RIVUS_RUST    the Rust extractor binary (extractor/rust: cargo build)
-#   PARSEABLE_IR  an IR of parseable that already exists (the extraction is not run: it runs cargo on a
-#                 project that is not ours, C-19)
+#   PARSEABLE_IR  an IR of parseable that already exists (the extraction is not run). Without it parseable is
+#                 extracted in the container (`rivus extract -lang rust`: Docker is needed; without it the step fails)
+#
+# Rust: only our own code (bench/zoo-rust, bench/rust-curated, extractor/rust/test) is read on this machine
+# (-unsafe-host-exec, the extractor RIVUS_RUST); third-party code is read in the container only, as in bench/compare.sh.
 #   ANALYZE=1     also run `rivus analyze -pass-stats` on the real targets (one at a time; minutes, GBs)
 #
 # One heavy step at a time: it waits when less than 40% of the memory is free.
@@ -25,6 +28,27 @@ RIVUS=${RIVUS:-$WORK/rivus}
 PARITY=${PARITY:-$WORK/parity}
 [ -x "$RIVUS" ] || (cd "$ROOT" && go build -o "$RIVUS" ./cmd/rivus)
 (cd "$ROOT" && go build -o "$PARITY" ./bench/parity)
+
+OWN_RUST_PATHS="bench/zoo-rust bench/rust-curated extractor/rust/test"
+rust_is_own() { # dir: our own Rust code, by its path in this repository
+  local d p
+  d=$(cd "$1" 2>/dev/null && pwd -P) || return 1
+  for p in $OWN_RUST_PATHS; do
+    case "$d" in "$(cd "$ROOT" && pwd -P)/$p"|"$(cd "$ROOT" && pwd -P)/$p"/*) return 0 ;; esac
+  done
+  return 1
+}
+rust_ir() { # name source_dir read_dir [extractor flags]: the IR of the Rust project; source_dir decides the mode (read_dir is a copy of it, or itself)
+  local name=$1 src=$2 dir=$3
+  shift 3
+  free_ok
+  if rust_is_own "$src"; then
+    "$RIVUS_RUST" "$@" "$dir" > "$WORK/ir/$name.jsonl"
+  else
+    docker info > /dev/null 2>&1 || { echo "Rust の第三者のコードは隔離の中でだけ読む。Docker を起動するか、このベンチを外す ($name)" >&2; return 1; }
+    env -u RIVUS_UNSAFE_HOST_EXEC "$RIVUS" extract -lang rust -C "$dir" "$@" > "$WORK/ir/$name.jsonl"
+  fi
+}
 
 free_ok() {
   [ "$(uname)" = Darwin ] || return 0
@@ -93,20 +117,25 @@ for step in "$@"; do
       dart_ir dart-pub-tests "$SRC/pub" --include-tests
       "$PARITY" scan -name dart-pub-tests -lang dart -real -supp -ir "$WORK/ir/dart-pub-tests.jsonl" -out "$WORK/out/corpus-dart-pub-tests.json" -note "5e24336e; --include-tests" ;;
     rust-curated)
-      free_ok
-      "$RIVUS_RUST" --no-deps "$ROOT/bench/rust-curated" > "$WORK/ir/rust-curated.jsonl"
+      rust_ir rust-curated "$ROOT/bench/rust-curated" "$ROOT/bench/rust-curated" --no-deps
       scan rust-curated rust "" "$WORK/ir/rust-curated.jsonl" ;;
     zoo-rust)
       # the workspace that rivus analyses (not the harness, not target/), as TestZooRust copies it
       rm -rf "$WORK/zoo-rust-ws" && mkdir -p "$WORK/zoo-rust-ws"
       for f in Cargo.toml Cargo.lock rules.yaml zoo-mark cells; do cp -R "$ROOT/bench/zoo-rust/$f" "$WORK/zoo-rust-ws/$f"; done
       rm -rf "$WORK/zoo-rust-ws/zoo-mark/target"
-      free_ok
-      "$RIVUS_RUST" "$WORK/zoo-rust-ws" > "$WORK/ir/zoo-rust.jsonl"
+      rust_ir zoo-rust "$ROOT/bench/zoo-rust" "$WORK/zoo-rust-ws"
       scan zoo-rust rust "" "$WORK/ir/zoo-rust.jsonl" ;;
     parseable)
-      cp "$PARSEABLE_IR" "$WORK/ir/parseable.jsonl"
-      scan parseable rust 1 "$WORK/ir/parseable.jsonl" "5c20b8e4; an IR that was made before (not extracted again)"
+      if [ -n "${PARSEABLE_IR:-}" ]; then
+        cp "$PARSEABLE_IR" "$WORK/ir/parseable.jsonl"
+        note="5c20b8e4; an IR that was made before (not extracted again)"
+      else
+        mkdir -p "$WORK/parseable-assets"   # build.rs would fetch the UI from the network without it
+        rust_ir parseable "$SRC/parseable" "$SRC/parseable" --no-deps -container-env LOCAL_ASSETS_PATH=/assets -container-ro-mount "$WORK/parseable-assets:/assets"
+        note="5c20b8e4; extracted in the container"
+      fi
+      scan parseable rust 1 "$WORK/ir/parseable.jsonl" "$note"
       analyze_ir parseable rust "$ROOT/bench/parseable/rules.yaml" ;;
     *) echo "unknown step $step" >&2; exit 2 ;;
   esac

@@ -132,8 +132,17 @@ func (e *extractorMissingError) Unwrap() error { return e.error }
 // runExtractor runs the extractor of a language on the directory and reads the
 // IR it writes.
 func (o *analyzeOpts) runExtractor(lang string) (*ir.Program, error) {
+	out, err := o.extractRaw(lang)
+	if err != nil {
+		return nil, err
+	}
+	return readExtracted(lang, out)
+}
+
+// extractRaw runs the extractor of a language (Rust: in the container unless -unsafe-host-exec) and returns the stream of the IR as it wrote it.
+func (o *analyzeOpts) extractRaw(lang string) ([]byte, error) {
 	if lang == langRust && !o.hostExec() {
-		return o.runRustIsolated()
+		return o.rawRustIsolated()
 	}
 	if lang == langRust {
 		if d, err := filepath.Abs(o.dir); err == nil {
@@ -171,7 +180,7 @@ func (o *analyzeOpts) runExtractor(lang string) (*ir.Program, error) {
 	if err != nil {
 		return nil, fmt.Errorf("the %s extractor failed: %v\n%s", lang, err, strings.TrimSpace(stderr.String()))
 	}
-	return readExtracted(lang, out)
+	return out, nil
 }
 
 func readExtracted(lang string, out []byte) (*ir.Program, error) {
@@ -190,7 +199,7 @@ func (o *analyzeOpts) hostExec() bool {
 }
 
 // runRustIsolated reads a Rust project in a container (ADR-064).
-func (o *analyzeOpts) runRustIsolated() (*ir.Program, error) {
+func (o *analyzeOpts) rawRustIsolated() ([]byte, error) {
 	dir, err := filepath.Abs(o.dir)
 	if err != nil {
 		return nil, err
@@ -207,11 +216,7 @@ func (o *analyzeOpts) runRustIsolated() (*ir.Program, error) {
 		args = append(args, "--include-tests")
 	}
 	args = append(args, dir)
-	out, err := iso.extractRustIsolated(context.Background(), dir, args)
-	if err != nil {
-		return nil, err
-	}
-	return readExtracted(langRust, out)
+	return iso.extractRustIsolated(context.Background(), dir, args)
 }
 
 func (o *analyzeOpts) isolation() *isolationOpts {

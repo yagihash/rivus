@@ -52,5 +52,61 @@ class Report(unittest.TestCase):
         self.assertEqual(report(50, 40)[0], 1)
 
 
+def dry_run(docker_works, *benches):
+    """compare.sh --dry-run with a stub `docker` first in PATH that answers (or not) to `docker info`."""
+    with tempfile.TemporaryDirectory() as d:
+        stub = os.path.join(d, "docker")
+        with open(stub, "w") as f:
+            f.write("#!/bin/sh\nexit %d\n" % (0 if docker_works else 1))
+        os.chmod(stub, 0o755)
+        env = dict(os.environ, PATH=d + os.pathsep + os.environ["PATH"], TMPDIR=d)
+        env.pop("RIVUS_UNSAFE_HOST_EXEC", None)
+        r = subprocess.run(["bash", os.path.join(HERE, "compare.sh"), "--dry-run", "--only", ",".join(benches), "HEAD", "HEAD"],
+                           capture_output=True, text=True, env=env)
+        return r.returncode, r.stdout, r.stderr
+
+
+def line(out, bench):
+    return [l for l in out.splitlines() if l.startswith("   %s " % bench)][0]
+
+
+class RustIsolation(unittest.TestCase):
+    """Third-party Rust is read in the container only; our own code (bench/zoo-rust, bench/rust-curated) on the host."""
+
+    def test_third_party_uses_the_container(self):
+        rc, out, _ = dry_run(True, "parseable")
+        self.assertEqual(rc, 0)
+        self.assertIn("extractor: container", line(out, "parseable"))
+        self.assertNotIn("unsafe-host-exec", line(out, "parseable"))
+
+    def test_own_code_runs_on_the_host(self):
+        rc, out, _ = dry_run(True, "rust-curated", "zoo-rust")
+        self.assertEqual(rc, 0)
+        for b in ("rust-curated", "zoo-rust"):
+            self.assertIn("extractor: host (our own code: -unsafe-host-exec)", line(out, b))
+
+    def test_no_docker_fails_the_third_party_only(self):
+        rc, out, err = dry_run(False, "parseable")
+        self.assertEqual(rc, 2)
+        self.assertIn("Rust の第三者のコードは隔離の中でだけ読む。Docker を起動するか、このベンチを外す", err)
+        rc, out, err = dry_run(False, "rust-curated", "zoo-rust")  # our own code needs no Docker
+        self.assertEqual(rc, 0)
+
+    def test_the_allowlist_is_by_path(self):
+        script = 'eval "$(sed -n "/^OWN_RUST_PATHS=/,/^rust_mode()/p" %s/compare.sh)"; ' % HERE
+        with tempfile.TemporaryDirectory() as root:
+            for sub in ("bench/zoo-rust/cells", "bench/rust-curated", "extractor/rust/test/x", "bench/parseable", "src/zoo-rust-clone"):
+                os.makedirs(os.path.join(root, sub))
+            def mode(sub):
+                return subprocess.run(["bash", "-c", script + 'rust_mode "$1" "$2"', "x", os.path.join(root, sub), root],
+                                      capture_output=True, text=True).stdout.strip()
+            self.assertEqual(mode("bench/zoo-rust/cells"), "host")
+            self.assertEqual(mode("bench/rust-curated"), "host")
+            self.assertEqual(mode("extractor/rust/test/x"), "host")
+            self.assertEqual(mode("bench/parseable"), "container")
+            self.assertEqual(mode("src/zoo-rust-clone"), "container")
+            self.assertEqual(mode("does/not/exist"), "container")
+
+
 if __name__ == "__main__":
     unittest.main()
