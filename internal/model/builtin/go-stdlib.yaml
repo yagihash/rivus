@@ -101,6 +101,8 @@ propagators:
     flows: [{from: args, to: arg0}]
   - symbol: fmt.Fprintln
     flows: [{from: args, to: arg0}]
+  - symbol: io.WriteString
+    flows: [{from: arg1, to: arg0}]
   - symbol: (error).Error
     flows: [{from: recv, to: result}]
 

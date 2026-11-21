@@ -133,6 +133,13 @@ sinks:
     category: test
   - symbol: (example.com/cases/lib.Runner).Run
     category: test
+  # Sinks that return something and have no model of the flow (testdata/go/cases/sinkret).
+  - symbol: example.com/cases/lib.Open
+    args: [0]
+    category: test
+  - symbol: (*example.com/cases/lib.DB).Prepare
+    args: [0]
+    category: test
 
   # when_arg_type on a method: recv: true is the receiver, arg counts without it (testdata/go/cases/recvcond).
   - symbol: (example.com/cases/cases/recvcond.Out).Put

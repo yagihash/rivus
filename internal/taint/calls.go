@@ -216,7 +216,11 @@ func (s *state) callBody(cc *callCtx) {
 			external = true
 		}
 	}
-	ruleOnly := cc.sym != "" && (len(rules.CallSources[cc.sym]) > 0 || len(rules.Sinks[cc.sym]) > 0)
+	// A source rule says what the result holds: it is the model. A sink rule says only where a
+	// value must not arrive; it says nothing of what the call returns, so a function without a
+	// body that has only a sink rule gets the default (what goes in comes out) and the
+	// uncertainty of an unmodelled call, like any other (CORE-K).
+	ruleOnly := cc.sym != "" && len(rules.CallSources[cc.sym]) > 0
 
 	var notes []*Uncertainty
 	var dispatch *Uncertainty
@@ -305,7 +309,7 @@ func (s *state) valueCandidates(cc *callCtx) {
 			s.applySummary(cx, fn, b, notes, guards[string(c.ID)])
 			continue
 		}
-		if cx.sym != "" && (len(rules.CallSources[cx.sym]) > 0 || len(rules.Sinks[cx.sym]) > 0) {
+		if cx.sym != "" && len(rules.CallSources[cx.sym]) > 0 {
 			continue // the rule is the model
 		}
 		external = append(external, string(c.ID))

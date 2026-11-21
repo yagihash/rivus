@@ -551,6 +551,25 @@ func TestStoredDataBoundaryIsRecorded(t *testing.T) {
 	t.Fatal("no stored_data_boundary uncertainty was recorded")
 }
 
+// A function with no body in the code, that has a sink rule and no rule of the
+// flow, is not modelled by the sink: what goes in comes out, and the call is an
+// unmodelled library call (CORE-K).
+func TestSinkOnlyRuleDoesNotMakeTheCallAModel(t *testing.T) {
+	checkCase(t, "sinkret")
+	res, _ := runCase(t, "sinkret")
+	got := map[string]bool{}
+	for _, u := range res.Uncertainties {
+		if u.Kind == KindUnmodeledLibraryCall {
+			got[u.Symbol] = true
+		}
+	}
+	for _, sym := range []string{"example.com/cases/lib.Open", "(*example.com/cases/lib.DB).Prepare"} {
+		if !got[sym] {
+			t.Errorf("no unmodeled_library_call for %s", sym)
+		}
+	}
+}
+
 // A call through an interface is a call to every implementation, unless the
 // caller made the interface value right there: then only the implementation of
 // its type is called.

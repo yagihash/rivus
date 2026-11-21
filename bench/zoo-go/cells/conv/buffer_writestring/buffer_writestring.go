@@ -19,7 +19,7 @@ func init() {
 
 func vuln() { // @vuln
 	var b bytes.Buffer
-	_, _ = io.WriteString(&b, mark.Src("conv-buffer-writestring-vuln")) // @source(conv-buffer-writestring-vuln) @miss(silent) @ref(CORE-K)
+	_, _ = io.WriteString(&b, mark.Src("conv-buffer-writestring-vuln")) // @source(conv-buffer-writestring-vuln)
 	mark.SinkCmd(b.String())                                            // @sink(conv-buffer-writestring-vuln)
 }
 
@@ -31,7 +31,7 @@ func fixed() { // @fixed
 
 func decoy() { // @decoy
 	var a, b bytes.Buffer
-	_, _ = io.WriteString(&a, mark.Src("conv-buffer-writestring-decoy")) // @source(conv-buffer-writestring-decoy) @miss(silent) @ref(CORE-K)
+	_, _ = io.WriteString(&a, mark.Src("conv-buffer-writestring-decoy")) // @source(conv-buffer-writestring-decoy)
 	_, _ = io.WriteString(&b, "constant")
 	mark.SinkCmd(b.String()) // @sink(none) @nosink(conv-buffer-writestring-decoy)
 	mark.SinkSQL(a.String()) // @sink(conv-buffer-writestring-decoy)

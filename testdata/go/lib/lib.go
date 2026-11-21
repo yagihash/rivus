@@ -41,3 +41,14 @@ func FillAny(dst any) error { return nil }
 
 // StoreRead reads from the data store; nothing is followed through it.
 func StoreRead() string { return "" }
+
+// Open is a sink of its argument that returns a value built from it (os.Open,
+// http.Get): the rules say where the argument must not arrive, not what the
+// result holds.
+func Open(path string) string { return path }
+
+// DB has a method that is a sink and returns a value (the (*sql.DB).Prepare shape).
+type DB struct{}
+
+// Prepare is a sink of the query; the statement it returns holds it.
+func (*DB) Prepare(query string) string { return query }
