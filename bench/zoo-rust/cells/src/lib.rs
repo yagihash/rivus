@@ -4,14 +4,7 @@
 //! (`dyns` is the family `dyn` of the design: `dyn` is a keyword.)
 //! Two marks for a cell of the Go zoo that Rust has not (docs/DESIGN-zoo.md, 4.2.5): `@na` is a form that Rust does not have at all,
 //! `@todo` is a form that Rust can have and the cell is not written yet. The parity table counts them apart.
-//! @todo(F/dyn/through-dependency: PARITY: the Go cell is about a dependency (a module of its own) whose body is not read (dependency_body_unread, ADR-075), measured in Go first; a dependency crate can be written)
-//! @todo(F/conv/exec-output-echo: PARITY: `Command::output` can be written; it has no model with an approximation yet, and the cell is not written)
-//! @todo(F/conv/struct-field-shallow: PARITY: the sinks that name a field of a structure (`parts`) are measured in Go first; a Rust struct can have the same fields, stage 6 of docs/DESIGN-field-sinks.md)
-//! @todo(F/conv/struct-field-deep: PARITY: the sinks that name a field of a structure (`parts`) are measured in Go first; a Rust struct can have the same fields, stage 6 of docs/DESIGN-field-sinks.md)
-//! @todo(F/conv/struct-field-boxed: PARITY: the sinks that name a field of a structure (`parts`) are measured in Go first; a Rust struct can have the same fields, stage 6 of docs/DESIGN-field-sinks.md)
-//! @todo(F/conv/struct-field-opaque: PARITY: the sinks that name a field of a structure (`parts`) are measured in Go first; a Rust struct can have the same fields, stage 6 of docs/DESIGN-field-sinks.md)
 //! @na(F/dyn/iface-assert-ptr-recv: Go's type assertion of `any` to an interface read through a pointer receiver; Rust has neither)
-//! @todo(F/dyn/sanitizer-own-impl: PARITY: not written for Rust yet; a trait method can be a sanitizer, and the engine reads an implementation of a sanitizer's trait the same way in every language)
 pub mod call {
     pub mod depth3;
     pub mod direct;
@@ -36,6 +29,11 @@ pub mod cont {
 }
 pub mod conv {
     pub mod buffer_writestring;
+    pub mod exec_output_echo;
+    pub mod struct_field_boxed;
+    pub mod struct_field_deep;
+    pub mod struct_field_opaque;
+    pub mod struct_field_shallow;
 }
 pub mod dyns {
     pub mod func_field;
@@ -50,7 +48,9 @@ pub mod dyns {
     pub mod method_value_iface;
     pub mod sink_behind_own_interface;
     pub mod sink_in_method;
+    pub mod sanitizer_own_impl;
     pub mod sink_in_method_iface;
+    pub mod through_dependency;
     pub mod fprint_writer_own;
     pub mod stdlib_writer_own;
     pub mod stdlib_writer_own_static;

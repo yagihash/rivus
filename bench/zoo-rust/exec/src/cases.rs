@@ -21,6 +21,11 @@ pub fn register_all() {
     c::cont::slice::register();
     c::cont::struct_whole_to_sink::register();
     c::conv::buffer_writestring::register();
+    c::conv::exec_output_echo::register();
+    c::conv::struct_field_boxed::register();
+    c::conv::struct_field_deep::register();
+    c::conv::struct_field_opaque::register();
+    c::conv::struct_field_shallow::register();
     c::dyns::func_field::register();
     c::dyns::func_map::register();
     c::dyns::generics_ptr::register();
@@ -33,7 +38,9 @@ pub fn register_all() {
     c::dyns::method_value_iface::register();
     c::dyns::sink_behind_own_interface::register();
     c::dyns::sink_in_method::register();
+    c::dyns::sanitizer_own_impl::register();
     c::dyns::sink_in_method_iface::register();
+    c::dyns::through_dependency::register();
     c::dyns::fprint_writer_own::register();
     c::dyns::stdlib_writer_own::register();
     c::dyns::stdlib_writer_own_static::register();

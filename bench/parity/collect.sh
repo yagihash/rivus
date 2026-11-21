@@ -124,7 +124,7 @@ for step in "$@"; do
     zoo-rust)
       # the workspace that rivus analyses (not the harness, not target/), as TestZooRust copies it
       rm -rf "$WORK/zoo-rust-ws" && mkdir -p "$WORK/zoo-rust-ws"
-      for f in Cargo.toml Cargo.lock rules.yaml zoo-mark cells; do cp -R "$ROOT/bench/zoo-rust/$f" "$WORK/zoo-rust-ws/$f"; done
+      for f in Cargo.toml Cargo.lock rules.yaml zoo-mark cells dep; do cp -R "$ROOT/bench/zoo-rust/$f" "$WORK/zoo-rust-ws/$f"; done
       rm -rf "$WORK/zoo-rust-ws/zoo-mark/target"
       rust_ir zoo-rust "$ROOT/bench/zoo-rust" "$WORK/zoo-rust-ws"
       scan zoo-rust rust "" "$WORK/ir/zoo-rust.jsonl" ;;

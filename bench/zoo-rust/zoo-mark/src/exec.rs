@@ -4,6 +4,7 @@
 //
 // The marker and the judgement of "reached" are in bench/zoo/spec.json; the constants below are its copy, and
 // exec/tests/spec.rs holds the two to be the same.
+use crate::types::{CreateTask, Stmt, TaskMessage};
 use std::fmt::Debug;
 use std::panic::Location;
 use std::sync::Mutex;
@@ -178,6 +179,28 @@ pub fn sink_path(base: &str, s: &str) {
 #[track_caller]
 pub fn sink_any<T: Debug + ?Sized>(v: &T) {
     record(CLASS_ANY, "", &[format!("{v:?}")], Location::caller());
+}
+
+/// Runs the statement: the `sql` of it is the sink, the `params` are not.
+#[track_caller]
+pub fn sink_stmt(s: &Stmt) {
+    record(CLASS_SQL, "", &[s.sql.clone()], Location::caller());
+}
+#[track_caller]
+pub fn sink_stmt_any(v: &dyn std::any::Any) {
+    let s = v.downcast_ref::<Stmt>().expect("a Stmt");
+    record(CLASS_SQL, "", &[s.sql.clone()], Location::caller());
+}
+/// Sends the request of the task: the URL of the HTTP request is the sink.
+#[track_caller]
+pub fn sink_task(r: &CreateTask) {
+    let mut u = String::new();
+    if let Some(t) = &r.task {
+        if let Some(TaskMessage::HttpRequest(h)) = &t.message_type {
+            u = h.url.clone();
+        }
+    }
+    record(CLASS_CMD, "", &[u], Location::caller());
 }
 
 fn clean(class: &str, s: &str) -> String {

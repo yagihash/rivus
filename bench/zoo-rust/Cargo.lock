@@ -6,6 +6,14 @@ version = 4
 name = "zoo-cells"
 version = "0.0.0"
 dependencies = [
+ "zoo-dep",
+ "zoo-mark",
+]
+
+[[package]]
+name = "zoo-dep"
+version = "0.0.0"
+dependencies = [
  "zoo-mark",
 ]
 

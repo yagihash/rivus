@@ -1,4 +1,6 @@
 // The declarations that the analysis reads (the bodies are empty: rules.yaml says what each one is).
+use crate::types::{CreateTask, Stmt};
+use std::any::Any;
 use std::fmt::Debug;
 
 /// The source that is the type of a parameter: the handler under test takes an `In`.
@@ -39,6 +41,16 @@ pub fn sink_path(_base: &str, _s: &str) {}
 /// For structs and containers (the text is the `Debug` output).
 #[track_caller]
 pub fn sink_any<T: Debug + ?Sized>(_v: &T) {}
+
+/// Runs the statement: the `sql` of it is the sink, the `params` are not (types.rs).
+#[track_caller]
+pub fn sink_stmt(_s: &Stmt) {}
+/// `sink_stmt` for a statement that is held as a `dyn Any`.
+#[track_caller]
+pub fn sink_stmt_any(_v: &dyn Any) {}
+/// Sends the request of the task: the URL of the HTTP request is the sink.
+#[track_caller]
+pub fn sink_task(_r: &CreateTask) {}
 
 // The sanitizers: each replaces the dangerous characters of its class by '_'.
 pub fn clean_cmd(_s: &str) -> String {

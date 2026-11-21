@@ -5,4 +5,4 @@
 [workspace]
 resolver = "2"
 members = ["zoo-mark", "cells"]
-exclude = ["exec"]
+exclude = ["exec", "dep"]

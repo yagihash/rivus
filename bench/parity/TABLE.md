@@ -212,9 +212,9 @@ Go の呼び出しの行 595 のうち、標準ライブラリの名前 588、�
 | `pure` の行(実数。行 = 呼び出しの名前ごと) | 272 | 93 | 82 |
 | `pure` の実行の検査(`TestZooPure*`): 呼んだ結果の部分 / うち誤り | 55 / 0 | 未(検査がない) | 未(検査がない) |
 | 表 S(組み込みの全行を、行ごとに実行で確かめる) | `pure` の一部だけ(上)。propagator / sanitizer / source / sink の行は未 | 未 | 未 |
-| zoo(共通の形のマス): マス / ケース / 出る / `@miss` | 50 / 162 / 57 of 62 / 5 | 55 / 187 / 67 of 77 / 10 | 62 / 215 / 68 of 91 / 23 |
+| zoo(共通の形のマス): マス / ケース / 出る / `@miss` | 50 / 162 / 57 of 62 / 5 | 55 / 187 / 67 of 77 / 10 | 69 / 236 / 76 of 98 / 22 |
 | zoo: 相手の言語に**本当に無い**形(`@na`)の数(Go の列は、Dart だけにあるマス) | 8 | 3 | 1 |
-| zoo: 書ける形で**まだ無い**(未実装、`@todo`。印のないものも数える)の数 | 0 | 0 | 7 |
+| zoo: 書ける形で**まだ無い**(未実装、`@todo`。印のないものも数える)の数 | 0 | 0 | 0 |
 
 `@na` と `@todo` の中身(マスの名前。Dart の `@todo` は、印のない「段階 3 でまだ」も含む):
 
@@ -223,7 +223,7 @@ Go の呼び出しの行 595 のうち、標準ライブラリの名前 588、�
 - Dart: `@na` 3: `dyn/generics-ptr`, `dyn/iface-ptr-recv-read`, `dyn/iface-ptr-recv-write`
 - Dart: `@todo`(未実装) 0: なし
 - Rust: `@na` 1: `dyn/iface-assert-ptr-recv`
-- Rust: `@todo`(未実装) 7: `conv/exec-output-echo`, `conv/struct-field-boxed`, `conv/struct-field-deep`, `conv/struct-field-opaque`, `conv/struct-field-shallow`, `dyn/sanitizer-own-impl`, `dyn/through-dependency`
+- Rust: `@todo`(未実装) 0: なし
 
 zoo のテストの出力(`go test ./cmd/rivus -run 'TestZooPureGo|TestZooGo|TestZooDart' -v` の記録の行):
 
@@ -235,23 +235,23 @@ zoo-dart: parity marks: @na 3 [dyn/generics-ptr dyn/iface-ptr-recv-read dyn/ifac
 zoo-go: parity marks: @na 8 [dart/flutter-field-read dart/flutter-override-arg dart/flutter-route-args dart/interp-tostring dart/patterns-record dart/super-mixin-impl dart/tearoff-instance state/provider-store] | @todo 0 []
 zoo-dart: common cells 47 | found in zoo-go and not in Dart 3 (@ref(PARITY)) | only in Dart: 8 with @na(go: reason), 0 common and not yet in zoo-go | cells of zoo-go that Dart has no counterpart of (na.txt) 3, not written yet (stage 3) 0
 zoo-dart silent misses: 3 / 13 (23%)
---- PASS: TestZooDart (15.70s)
+--- PASS: TestZooDart (10.43s)
 zoo-go pure Go rows: 272, called 22, not called 250 (bench/zoo-go/pure/unchecked.txt)
 zoo-go pure: 55 parts called, 22 of them of pure rows (the model has 447 pure rows), 0 wrong (R-03)
---- PASS: TestZooPureGo (0.71s)
+--- PASS: TestZooPureGo (0.60s)
 0 findings have an assumed_call on their path
-zoo-rust: cells 62 / cases 215 | found 68 / 91 | @miss 23 (trace 22, silent 1, no rule 0) | fixed reported wrongly 4 | decoys reported wrongly 8 / 62 (with the trace container_element_imprecision 1, without 10) | carry map[] | manual 0 (0.0%) | run and annotation disagree 0 | statements not run 0
-zoo-rust: rivus: 118 flows found, 170 sinks quiet, 36 flows not found (@miss), 19 reported wrongly (@fp)
-zoo-rust silent misses: 2 / 36 (6%)
-zoo-rust: parity marks: @na 1 [dyn/iface-assert-ptr-recv] | @todo 7 [conv/exec-output-echo conv/struct-field-boxed conv/struct-field-deep conv/struct-field-opaque conv/struct-field-shallow dyn/sanitizer-own-impl dyn/through-dependency]
-zoo-rust: parity with zoo-go: common cells 42 | common vulnerable flows 53 (found in both 41, missed in both 2) | found in Go and not in Rust 10 [clos-capture-write-by-ref-vuln3 clos-partial-callers-vuln clos-stored-vuln clos-stored-vuln2 clos-stored-vuln3 conv-buffer-writestring-vuln dyn-fprint-writer-own-vuln dyn-func-field-vuln dyn-func-map-vuln state-receiver-field-across-entries-vuln] | decoys reported in Rust and not in Go 5 [dyn-http-middleware-chain-decoy dyn-sink-in-method-iface-decoy state-global-field-decoy state-global-struct-copy-decoy state-save-restore-decoy]
-zoo-rust: vulnerable flows found 68 / 91
---- PASS: TestZooRust (2.30s)
+zoo-rust: cells 69 / cases 236 | found 76 / 98 | @miss 22 (trace 21, silent 1, no rule 0) | fixed reported wrongly 4 | decoys reported wrongly 12 / 69 (with the trace container_element_imprecision 2, without 13) | carry map[] | manual 0 (0.0%) | run and annotation disagree 0 | statements not run 0
+zoo-rust: rivus: 134 flows found, 183 sinks quiet, 34 flows not found (@miss), 27 reported wrongly (@fp)
+zoo-rust silent misses: 2 / 34 (6%)
+zoo-rust: parity marks: @na 1 [dyn/iface-assert-ptr-recv] | @todo 0 []
+zoo-rust: parity with zoo-go: common cells 49 | common vulnerable flows 60 (found in both 49, missed in both 2) | found in Go and not in Rust 9 [clos-capture-write-by-ref-vuln3 clos-partial-callers-vuln clos-stored-vuln clos-stored-vuln2 clos-stored-vuln3 conv-buffer-writestring-vuln dyn-func-field-vuln dyn-func-map-vuln state-receiver-field-across-entries-vuln] | decoys reported in Rust and not in Go 8 [conv-struct-field-boxed-decoy dyn-http-middleware-chain-decoy dyn-sanitizer-own-impl-decoy dyn-sink-in-method-iface-decoy dyn-through-dependency-decoy state-global-field-decoy state-global-struct-copy-decoy state-save-restore-decoy]
+zoo-rust: vulnerable flows found 76 / 98
+--- PASS: TestZooRust (2.18s)
 12 findings have an assumed_call on their path
 zoo-go: cells 50 / cases 162 | found 57 / 62 | @miss 5 (trace 4, silent 1, no rule 0) | fixed reported wrongly 0 | decoys reported wrongly 6 / 50 (with the trace container_element_imprecision 4, without 2) | carry map[] | manual 1 (0.6%) | run and annotation disagree 0 | statements not run 0
 zoo-go: rivus: 105 flows found, 140 sinks quiet, 8 flows not found (@miss), 12 reported wrongly (@fp)
---- PASS: TestZooGo (1.38s)
-ok  	github.com/yagihash/rivus/cmd/rivus	20.794s
+--- PASS: TestZooGo (1.39s)
+ok  	github.com/yagihash/rivus/cmd/rivus	15.373s
 ```
 
 ## 4. (D) 当たっているか: どの IR にも当たらなかった行
