@@ -344,25 +344,7 @@ func (r *Report) whyMissing(b *Bookmark) string {
 // files of the project itself are one unit, "file:"), the crate of a Rust
 // function. A report lists the units that were analysed (packages), so that a
 // place that is gone can be told from one that was not looked at.
-func UnitOf(funcID string) string {
-	switch {
-	case strings.HasPrefix(funcID, "package:"):
-		rest := funcID[len("package:"):]
-		if i := strings.IndexAny(rest, "/#"); i >= 0 {
-			rest = rest[:i]
-		}
-		return "package:" + rest
-	case strings.HasPrefix(funcID, "file:"):
-		return "file:"
-	case strings.Contains(funcID, "::"):
-		// "krate::path::f", "<krate::T as krate::Trait>::m"
-		s := strings.TrimLeft(funcID, "<&*(")
-		if i := strings.Index(s, "::"); i > 0 {
-			return s[:i]
-		}
-	}
-	return packageOf(funcID)
-}
+func UnitOf(funcID string) string { return taint.UnitOf(funcID) }
 
 // packageOf extracts the import path from a function ID such as
 // "example.com/m/pkg.F", "(*example.com/m/pkg.T).M" or "example.com/m/pkg.F$1".

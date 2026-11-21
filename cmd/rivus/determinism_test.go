@@ -36,6 +36,14 @@ func stable(t *testing.T, out []byte) []byte {
 		for _, k := range []string{"duration_ms", "dep_spent_ms", "own_spent_ms"} {
 			delete(st, k)
 		}
+		// packages_top (-pass-stats) has the time each package took: a clock too
+		if pk, ok := st["packages_top"].([]any); ok {
+			for _, row := range pk {
+				if m, ok := row.(map[string]any); ok {
+					delete(m, "spent_ms")
+				}
+			}
+		}
 	}
 	b, err := json.Marshal(rep) // sorted keys
 	if err != nil {
@@ -188,7 +196,7 @@ func sameEveryTimeIR(t *testing.T, dir string, stream []byte) {
 	if err := os.WriteFile(irFile, stream, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	sameEveryTime(t, dir, 2, "-sites", "-ir", irFile, "-rules", filepath.Join(dir, "rules.yaml"))
+	sameEveryTime(t, dir, 2, "-pass-stats", "-sites", "-ir", irFile, "-rules", filepath.Join(dir, "rules.yaml"))
 }
 
 // TestDeterministicDogfood: rivus analysed by rivus. Only the findings are compared (paths and
@@ -233,5 +241,47 @@ func TestDeterministicDogfood(t *testing.T) {
 	// fewer than two finished runs compared nothing: that is not a pass (R-42)
 	if finished < 2 {
 		t.Skipf("only %d of 3 runs finished (a loaded machine): nothing was compared", finished)
+	}
+}
+
+// TestDeterministicPassStats: the diagnostics of -pass-stats (pass_changes, unmodeled_top) are
+// in `stats`, which stable() compares (it hides only the clocks), so they are the same on every
+// run and under every number of workers (ADR-061).
+func TestDeterministicPassStats(t *testing.T) {
+	dir, err := filepath.Abs(filepath.Join("..", "..", "bench", "go-curated"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sameEveryTime(t, dir, 2, "-pass-stats", "-rules", "rules.yaml", "./...")
+}
+
+// TestPassStatsChangeNothing: with -pass-stats the report has the new fields, and nothing else
+// differs from the report without it.
+func TestPassStatsChangeNothing(t *testing.T) {
+	dir, err := filepath.Abs(filepath.Join("..", "..", "bench", "go-curated"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var plain, with map[string]any
+	if err := json.Unmarshal(stable(t, analyzeWith(t, dir, "", "-rules", "rules.yaml", "./...")), &plain); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(stable(t, analyzeWith(t, dir, "", "-pass-stats", "-rules", "rules.yaml", "./...")), &with); err != nil {
+		t.Fatal(err)
+	}
+	st := with["stats"].(map[string]any)
+	for _, k := range []string{"unmodeled_top", "packages_top", "dispatch_candidates"} {
+		if _, ok := st[k]; !ok {
+			t.Errorf("no %s in stats: %v", k, st)
+		}
+	}
+	delete(st, "pass_changes") // there are none when the run settles in one pass
+	delete(st, "unmodeled_top")
+	delete(st, "packages_top")
+	delete(st, "dispatch_candidates")
+	a, _ := json.Marshal(plain)
+	b, _ := json.Marshal(with)
+	if !bytes.Equal(a, b) {
+		t.Fatalf("-pass-stats changed the report\n%s", firstDifference(a, b))
 	}
 }

@@ -776,6 +776,9 @@ func (s *state) applyFlows(cc *callCtx, flows []model.Flow, o *op, desc string, 
 // uncertainty so that a reviewer sees the guess.
 func (s *state) unmodeled(cc *callCtx, note *Uncertainty) {
 	src := s.flatten(valuesLocs(s, cc.argv()))
+	if s.eng.opts.PassStats && cc.sym != "" {
+		s.eng.noteUnmodeled(cc.sym, len(src) > 0)
+	}
 	for i, r := range cc.roots {
 		if i < len(cc.in.Dsts) && cc.in.Dsts[i].Class == ir.ClassBool {
 			continue

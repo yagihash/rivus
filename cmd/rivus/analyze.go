@@ -27,7 +27,10 @@ type analyzeOpts struct {
 	cpuProf  string
 	lockProf string
 	memProf  string
-	timeout  time.Duration
+	// the diagnostics (ADR-061)
+	passStats    bool
+	traceElement string
+	timeout      time.Duration
 	// funcTimeout bounds the analysis of one function.
 	funcTimeout time.Duration
 	passes      int
@@ -61,6 +64,8 @@ func (o *analyzeOpts) register(fs *flag.FlagSet) {
 	fs.DurationVar(&o.timeout, "timeout", 0, "stop the analysis after this long and report what was found (0: no limit)")
 	fs.DurationVar(&o.funcTimeout, "func-timeout", taint.DefaultOptions().FuncTimeout, "stop the analysis of one function after this long (it is then recorded as depth_limit, func_timeout: a clock, so the result then depends on the load of the machine)")
 	fs.StringVar(&o.irFile, "ir", "", "analyse the neutral IR in this JSON Lines file (from an extractor of another language) instead of Go packages")
+	fs.BoolVar(&o.passStats, "pass-stats", false, "add to stats what changed in the summaries in each pass (pass_changes) and the functions without a model that tainted values reached the most (unmodeled_top); the findings are the same (development)")
+	fs.StringVar(&o.traceElement, "trace-element", "", "print to stderr where the taint of this source (a site ID) first leaves its function and enters a package variable; the findings are the same (development)")
 	fs.StringVar(&o.memProf, "memprofile", "", "write a heap profile (allocations) to this file after the taint phase (development)")
 	fs.StringVar(&o.lockProf, "lockprofile", "", "write the mutex and block profiles of the taint phase to <this>.mutex and <this>.block (development)")
 	fs.StringVar(&o.cpuProf, "cpuprofile", "", "write a CPU profile of the taint phase to this file (development)")
@@ -109,6 +114,8 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	opts.MaxPasses = o.passes
 	opts.NumericTaint = o.numeric
 	opts.Workers = o.workers
+	opts.PassStats = o.passStats
+	opts.TraceElement = o.traceElement
 	if o.verbose {
 		opts.SlowThreshold = 300 * time.Millisecond
 		opts.SlowFunc = func(fn string, d time.Duration, outputs, roots int) {

@@ -46,7 +46,12 @@ type Options struct {
 	// By default it stops there: the sinks of the injection categories take
 	// text, and a number made from a request has no text to inject. Turn it
 	// on for rules whose sinks are quantities (a size, a count, a delay).
-	NumericTaint  bool
+	NumericTaint bool
+	// PassStats adds to the stats what changed in the summaries in each pass, and the functions without a
+	// model that tainted values reached the most (ADR-061). TraceElement is a site ID: where its
+	// elements first leave their function is printed to stderr. Neither changes the findings.
+	PassStats     bool
+	TraceElement  string
 	SlowFunc      func(fn string, d time.Duration, outputs, roots int)
 	SlowThreshold time.Duration
 }
@@ -58,6 +63,13 @@ func DefaultOptions() Options {
 
 // Engine runs the whole-program analysis.
 type Engine struct {
+	// the diagnostics (ADR-061)
+	pass        int
+	passChanges []PassChange
+	seenEver    map[*sg.Func]map[uint64]struct{}
+	unmodeled   unmodeledCount
+	traced      map[*sg.Func]bool
+	pkgs        map[string]*pkgAcc
 	// dispatch caches dispatchGuards by call: what it makes depends on the call
 	// alone, and it is asked at every analysis of the function.
 	dispatch sync.Map // *sg.Instr -> map[*sg.Func][]Guard
@@ -382,6 +394,14 @@ type Stats struct {
 	// IdentityGlobalStores is the number of closures given away whose write of a global was left out: it writes back
 	// the value read from the same global, whole, which adds nothing (ADR-059).
 	IdentityGlobalStores int `json:"identity_global_stores,omitempty"`
+	// PassChanges and UnmodeledTop are the diagnostics of -pass-stats (ADR-061): what changed in the summaries in each
+	// pass, and the functions without a model that tainted values reached the most.
+	PassChanges  []PassChange      `json:"pass_changes,omitempty"`
+	UnmodeledTop []UnmodeledSymbol `json:"unmodeled_top,omitempty"`
+	// PackagesTop and DispatchCandidates are the same kind (ADR-059): where the work went, by package, and how many
+	// functions the dynamic calls may reach.
+	PackagesTop        []PackageStat       `json:"packages_top,omitempty"`
+	DispatchCandidates *DispatchCandidates `json:"dispatch_candidates,omitempty"`
 	// Unstable lists (up to ten) functions whose summary still changed in
 	// the last pass, when the run did not converge (empty when it converged); UnstableCount is
 	// how many there were.
@@ -477,6 +497,7 @@ func (e *Engine) Run() *Result {
 	var lastChanged int
 	for pass := 0; pass < e.opts.MaxPasses; pass++ {
 		st.Passes = pass + 1
+		e.pass = pass + 1
 		var anyDone atomic.Bool
 		var changedNow []string
 		var changedMu sync.Mutex
@@ -577,6 +598,7 @@ func (e *Engine) Run() *Result {
 	}
 	sort.Strings(e.notConverged)
 	st.NotConverged = e.notConverged
+	st.PassChanges = e.passChanges
 	for _, sum := range e.summaries {
 		n, steps := 0, 0
 		for _, o := range sum.Outputs {
@@ -721,6 +743,7 @@ func (e *Engine) commitGlobals() {
 	for _, w := range e.pendingGlobals {
 		if e.globals.merge(w.g, w.path, w.e) {
 			e.globals.noteWriter(w.g, w.path, w.e, w.steps)
+			e.traceGlobal(w.g, w.path, w.e)
 			for _, other := range e.globals.readers(w.g) {
 				e.dirty[other] = true
 			}
@@ -839,6 +862,9 @@ func (e *Engine) compute(fn *sg.Func) *fnResult {
 					continue // read from the global state, not produced here
 				}
 				gw := globalWrite{g: g, path: path, e: el, fn: e.funcID(fn)}
+				if e.tracing(el) {
+					s.traceWrite(fn, g, root, path, el)
+				}
 				if !e.globals.has(g, path, el) {
 					r.changed = true
 					// the steps the writer took, for the path of whoever reads it
@@ -858,6 +884,7 @@ func (e *Engine) commit(fn *sg.Func, r *fnResult, callers map[*sg.Func][]*sg.Fun
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.spent[fn] += r.took
+	e.notePackage(fn, r.took)
 	if s.exceeded {
 		e.degraded[fn] |= s.exceededBy
 	}
@@ -869,6 +896,8 @@ func (e *Engine) commit(fn *sg.Func, r *fnResult, callers map[*sg.Func][]*sg.Fun
 		e.degraded[fn] |= degFuncTimeout
 	}
 	if old := e.summaries[fn]; old == nil || old.Sig != sum.Sig {
+		e.notePassChange(fn, old, sum)
+		e.traceSummary(fn, sum)
 		changed = true
 		for _, c := range callers[fn] {
 			e.dirty[c] = true
@@ -1211,6 +1240,11 @@ func (e *Engine) collect(st Stats) *Result {
 		}
 		return a.ID < b.ID
 	})
+	if e.opts.PassStats {
+		res.Stats.UnmodeledTop = e.unmodeledTop(res.Findings)
+		res.Stats.PackagesTop = e.packagesTop()
+		res.Stats.DispatchCandidates = e.dispatchCandidates()
+	}
 	return res
 }
 
