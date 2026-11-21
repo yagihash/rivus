@@ -9,6 +9,11 @@ package main
 //     record the requests (the fake does not implement everything: what it answers does not matter,
 //     the request is recorded before).
 //   - BigQuery: no fake in the library; an httptest server answers a finished job and records the request body.
+//
+// Run it with -tags gcpexec: the functions of the package opaque have no body without it (they are what the
+// analysis does not read), and the test binary would not link.
+//
+//	go test -tags gcpexec ./...
 
 import (
 	"context"
@@ -97,7 +102,7 @@ func run(t *testing.T, srv any, rec *sent, reset func()) map[string][2]bool {
 	for i := 0; i < v.NumMethod(); i++ {
 		name := v.Type().Method(i).Name
 		h, ok := v.Method(i).Interface().(func(http.ResponseWriter, *http.Request))
-		if !ok || (name[0] != 'V' && name[0] != 'F' && name[0] != 'D') {
+		if !ok || (name[0] != 'V' && name[0] != 'F' && name[0] != 'D' && name[0] != 'U') {
 			continue
 		}
 		reset()
@@ -119,7 +124,7 @@ func check(t *testing.T, got map[string][2]bool) {
 	for name, g := range got {
 		inSQL, inParams := g[0], g[1]
 		switch name[0] {
-		case 'V':
+		case 'V', 'U': // U: a true flow that the analysis does not report as a V* case (the function that is not read moves it)
 			if !inSQL {
 				t.Errorf("%s: the value is not in the text of the request that was sent", name)
 			}

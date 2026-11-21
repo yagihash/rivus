@@ -13,6 +13,8 @@ import (
 	"net/http"
 
 	"cloud.google.com/go/spanner"
+
+	"gcpsample/opaque"
 )
 
 type Server struct {
@@ -55,6 +57,49 @@ func (s *Server) VNewStatement(w http.ResponseWriter, r *http.Request) {
 func (s *Server) FNewStatement(w http.ResponseWriter, r *http.Request) {
 	stmt := spanner.NewStatement("SELECT id FROM users WHERE name = @name")
 	stmt.Params["name"] = param(r)
+	it := s.Client.Single().Query(r.Context(), stmt)
+	_ = it.Do(func(*spanner.Row) error { return nil })
+}
+
+// VNewStatementBare: the source itself is the text (no concatenation) given to the NewStatement of the library.
+// The body of the library is read, so the value goes into the SQL field, and nothing is uncertain. The day a
+// builder that is not read (flows cannot name a field of the result yet) is used instead, the whole Statement is
+// tainted and the finding carries field_imprecision (whole_value): a flow with a path in `to:` (stage 5 of
+// docs/DESIGN-field-sinks.md) is the way to keep this form quiet of uncertainty.
+func (s *Server) VNewStatementBare(w http.ResponseWriter, r *http.Request) {
+	stmt := spanner.NewStatement(param(r))
+	it := s.Client.Single().Query(r.Context(), stmt)
+	_ = it.Do(func(*spanner.Row) error { return nil })
+}
+
+// U* is a case that the harness runs (the value really reaches the text of the request: a true flow) and that the
+// analysis does not report as a V* case. TestGCPRows records how: the "why" of the field_imprecision, or a miss
+// (gcpKnownMisses). The day the engine says more, the test is red, and the change is seen.
+
+// URewrite: the whole Statement goes to a function that is not read, and comes back (a result that has the
+// argument in it): the taint is in the whole of the value, and the finding says whole_value.
+func (s *Server) URewrite(w http.ResponseWriter, r *http.Request) {
+	stmt := spanner.Statement{SQL: "SELECT id FROM users", Params: map[string]any{"name": param(r)}}
+	stmt = opaque.Rewrite(stmt)
+	it := s.Client.Single().Query(r.Context(), stmt)
+	_ = it.Do(func(*spanner.Row) error { return nil })
+}
+
+// UOpaque: only the Params of the Statement are tainted, and the address of the Statement goes to a function that
+// is not read, which moves a parameter to the SQL. The Statement is then given to the sink by value (the shape of
+// every Spanner call). Not reported (a miss): see gcpKnownMisses.
+func (s *Server) UOpaque(w http.ResponseWriter, r *http.Request) {
+	stmt := spanner.Statement{SQL: "SELECT id FROM users", Params: map[string]any{"name": param(r)}}
+	opaque.Move(&stmt)
+	it := s.Client.Single().Query(r.Context(), stmt)
+	_ = it.Do(func(*spanner.Row) error { return nil })
+}
+
+// UOpaqueAssign: the same, with the parameter set by an assignment.
+func (s *Server) UOpaqueAssign(w http.ResponseWriter, r *http.Request) {
+	stmt := spanner.NewStatement("SELECT id FROM users")
+	stmt.Params["name"] = param(r)
+	opaque.Move(&stmt)
 	it := s.Client.Single().Query(r.Context(), stmt)
 	_ = it.Do(func(*spanner.Row) error { return nil })
 }

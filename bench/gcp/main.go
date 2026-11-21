@@ -14,7 +14,7 @@ func main() {
 	b := &bq.Server{}
 	for p, h := range map[string]http.HandlerFunc{
 		"/sp/query": s.VQuery, "/sp/fquery": s.FQuery, "/sp/dquery": s.DQuery,
-		"/sp/newstmt": s.VNewStatement, "/sp/fnewstmt": s.FNewStatement,
+		"/sp/newstmt": s.VNewStatement, "/sp/newstmtbare": s.VNewStatementBare, "/sp/urewrite": s.URewrite, "/sp/uopaque": s.UOpaque, "/sp/uopaque2": s.UOpaqueAssign, "/sp/fnewstmt": s.FNewStatement,
 		"/sp/qwo": s.VQueryWithOptions, "/sp/rot": s.VReadOnlyTransaction, "/sp/analyze": s.VAnalyze,
 		"/sp/update": s.VUpdate, "/sp/fupdate": s.FUpdate, "/sp/dupdate": s.DUpdate,
 		"/sp/txquery": s.VTxQuery, "/sp/batch": s.VBatchUpdate, "/sp/dbatch": s.DBatchUpdate,
