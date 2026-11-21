@@ -14,10 +14,11 @@ else
 fi
 fail=0
 for c in $range; do
-  if git rev-parse -q --verify "$c^" >/dev/null; then
+  # a commit that creates the file (its parent has none) is the start of the list: nothing is loosened
+  if git rev-parse -q --verify "$c^" >/dev/null && git cat-file -e "$c^:$lock" 2>/dev/null; then
     added=$(git diff "$c^" "$c" -- "$lock" | grep -c '^+[^+]' || true)
   else
-    added=$(git show "$c:$lock" 2>/dev/null | wc -l | tr -d ' ')
+    added=0
   fi
   if [ "$added" -gt 0 ] && ! git log -1 --format=%B "$c" | grep -Eq '^Zoo-Loosened: .+'; then
     echo "::error::$c adds $added row(s) to $lock (a loosened mark) without a 'Zoo-Loosened: <reason>。ユーザーの承認: <date>' line in the message"
