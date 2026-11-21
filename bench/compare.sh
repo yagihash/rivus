@@ -313,7 +313,7 @@ for b in $BENCHES; do
     for w in base head; do
       [ -s "$RES/$b.$w.json" ] || continue
       if python3 "$ROOT/bench/score.py" "$TRUTH" "$RES/$b.$w.json" > "$RES/$b.$w.score" 2> "$RES/$b.$w.score.err"; then
-        grep -E '^(TP |uncertainties:|source-only entries:)' "$RES/$b.$w.score" | sed "s/^/$b $w: /" >> "$RES/scores.txt"
+        grep -E '^(TP [0-9]|uncertainties:|source-only entries:)' "$RES/$b.$w.score" | sed "s/^/$b $w: /" >> "$RES/scores.txt"
       else
         echo "$b $w: SCORING FAILED: $(tail -n 1 "$RES/$b.$w.score.err")" >> "$RES/scores.txt"
       fi
