@@ -211,11 +211,15 @@ fn cli() -> ExitCode {
     // construction (a `#[cfg(test)]` item is not compiled at all).
     let mut include_tests = false;
     let mut deps = true;
+    let mut cargo_flags: Vec<&str> = Vec::new();
     let mut dir = None;
     for a in std::env::args().skip(1) {
         match a.as_str() {
             "--include-tests" | "--tests" | "-tests" => include_tests = true,
             "--no-deps" => deps = false,
+            // what the isolated run asks (docs/rust-isolation.md): the lock file is not written, and nothing is fetched
+            "--locked" => cargo_flags.push("--locked"),
+            "--offline" => cargo_flags.push("--offline"),
             _ => dir = Some(a),
         }
     }
@@ -268,6 +272,7 @@ fn cli() -> ExitCode {
     if include_tests {
         check.push("--all-targets");
     }
+    check.extend(cargo_flags);
     // With the dependencies, the driver stands in for rustc for every crate (cargo
     // tells the members of the workspace apart); without, for the members only.
     let wrapper = if deps { "RUSTC_WRAPPER" } else { "RUSTC_WORKSPACE_WRAPPER" };

@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -51,10 +52,11 @@ func detectLangs(dir string) []string {
 func (o *analyzeOpts) languages() ([]string, error) {
 	if o.lang == "" || o.lang == "auto" {
 		langs := detectLangs(o.dir)
-		// Reading a Rust project builds it: cargo runs its build scripts and its proc macros, with the rights of
-		// whoever runs rivus. A Cargo.toml that happens to be in the directory is not a request for that, so Rust
-		// is read only when it is asked for (-lang rust). Go does not run the code, and Dart reads it with the
-		// analyzer; what they ask the user to prepare (go generate, build_runner) the user does.
+		// Reading a Rust project builds it: cargo runs its build scripts and its proc macros (in a container, or with
+		// the rights of whoever runs rivus under -unsafe-host-exec). A Cargo.toml that happens to be in the directory
+		// is not a request for that, so Rust is read only when it is asked for (-lang rust). Go runs `go list`, which
+		// runs cgo and may fetch modules, but not the code of the project; Dart reads it with the analyzer, and what
+		// they ask the user to prepare (go generate, build_runner) the user does.
 		var chosen []string
 		skippedRust := false
 		for _, l := range langs {
@@ -130,6 +132,16 @@ func (e *extractorMissingError) Unwrap() error { return e.error }
 // runExtractor runs the extractor of a language on the directory and reads the
 // IR it writes.
 func (o *analyzeOpts) runExtractor(lang string) (*ir.Program, error) {
+	if lang == langRust && !o.hostExec() {
+		return o.runRustIsolated()
+	}
+	if lang == langRust {
+		if d, err := filepath.Abs(o.dir); err == nil {
+			if _, err := os.Stat(filepath.Join(d, hostileMarker)); err == nil {
+				return nil, fmt.Errorf("%s is a project that is hostile on purpose (a test of the isolation): it is never run on this machine", d)
+			}
+		}
+	}
 	words, err := o.extractorCommand(lang)
 	if err != nil {
 		return nil, err
@@ -159,6 +171,10 @@ func (o *analyzeOpts) runExtractor(lang string) (*ir.Program, error) {
 	if err != nil {
 		return nil, fmt.Errorf("the %s extractor failed: %v\n%s", lang, err, strings.TrimSpace(stderr.String()))
 	}
+	return readExtracted(lang, out)
+}
+
+func readExtracted(lang string, out []byte) (*ir.Program, error) {
 	prog, err := ir.Read(bufio.NewReaderSize(bytes.NewReader(out), 1<<20))
 	if err != nil {
 		return nil, fmt.Errorf("the %s extractor: %w", lang, err)
@@ -166,6 +182,47 @@ func (o *analyzeOpts) runExtractor(lang string) (*ir.Program, error) {
 	prog.Files = prog.SourceFiles()
 	prog.PruneDeps()
 	return prog, nil
+}
+
+// hostExec says that the Rust extractor runs on this machine, with the rights of the user, and not in a container.
+func (o *analyzeOpts) hostExec() bool {
+	return o.unsafeHostExec || os.Getenv("RIVUS_UNSAFE_HOST_EXEC") == "1"
+}
+
+// runRustIsolated reads a Rust project in a container (ADR-064).
+func (o *analyzeOpts) runRustIsolated() (*ir.Program, error) {
+	dir, err := filepath.Abs(o.dir)
+	if err != nil {
+		return nil, err
+	}
+	if d, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = d
+	}
+	iso := o.isolation()
+	var args []string
+	if o.noDeps {
+		args = append(args, "--no-deps")
+	}
+	if o.tests {
+		args = append(args, "--include-tests")
+	}
+	args = append(args, dir)
+	out, err := iso.extractRustIsolated(context.Background(), dir, args)
+	if err != nil {
+		return nil, err
+	}
+	return readExtracted(langRust, out)
+}
+
+func (o *analyzeOpts) isolation() *isolationOpts {
+	image := o.rustImage
+	if image == "" {
+		image = os.Getenv("RIVUS_RUST_IMAGE")
+	}
+	if image == "" {
+		image = rustImageName
+	}
+	return &isolationOpts{image: image, memory: o.containerMemory, cpus: o.containerCPUs, pids: o.containerPids, timeout: o.containerTimeout, noFetch: o.noFetch, env: o.containerEnv, mounts: o.containerMounts, maxOutput: o.containerMaxOut}
 }
 
 // loadLangs reads several languages into one program. The functions of the

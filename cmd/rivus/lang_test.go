@@ -206,6 +206,7 @@ func TestMultiLanguageLoadErrorsAreNotDoubled(t *testing.T) {
 	}
 
 	o.rustExtractor = script
+	o.unsafeHostExec = true // a script of the test, not a project that is read
 	l, err = o.loadLangs([]string{langGo, langRust}, []string{"./..."}, rules)
 	if err != nil {
 		t.Fatal(err)

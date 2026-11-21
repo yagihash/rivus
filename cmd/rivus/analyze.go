@@ -39,7 +39,18 @@ type analyzeOpts struct {
 	// lang is the language to read: auto (what the directory holds), or a list.
 	lang                         string
 	dartExtractor, rustExtractor string
-	maxImpl                      int
+	// the isolation of the Rust extractor (ADR-062)
+	unsafeHostExec   bool
+	rustImage        string
+	containerMemory  string
+	containerCPUs    int
+	containerPids    int
+	containerTimeout time.Duration
+	noFetch          bool
+	containerEnv     multiFlag
+	containerMounts  multiFlag
+	containerMaxOut  int64
+	maxImpl          int
 	// irFile is a stream of the neutral IR made by an extractor of another
 	// language (rivus extract writes the same form): the analysis starts there.
 	irFile string
@@ -56,6 +67,16 @@ func (o *analyzeOpts) register(fs *flag.FlagSet) {
 	fs.StringVar(&o.lang, "lang", "auto", "languages to read: auto (what the directory holds: go.mod / go.work, pubspec.yaml; Rust is read only when asked for, because reading it builds the project), or go, dart, rust, separated by commas")
 	fs.StringVar(&o.dartExtractor, "dart-extractor", "", "command of the Dart extractor (default: $RIVUS_DART_EXTRACTOR, then rivus-dart)")
 	fs.StringVar(&o.rustExtractor, "rust-extractor", "", "command of the Rust extractor (default: $RIVUS_RUST_EXTRACTOR, then rivus-rust)")
+	fs.BoolVar(&o.unsafeHostExec, "unsafe-host-exec", false, "run the Rust extractor on this machine, with your rights: the build scripts and proc macros of the project run here. Only for code you trust (default: in a container with no network, docs/rust-isolation.md; also RIVUS_UNSAFE_HOST_EXEC=1)")
+	fs.StringVar(&o.rustImage, "rust-image", "", "image of the Rust extractor for the container (default: $RIVUS_RUST_IMAGE, then "+rustImageName+")")
+	fs.StringVar(&o.containerMemory, "container-memory", "6g", "memory of the container of the Rust extractor (Docker Desktop's VM has to have it)")
+	fs.IntVar(&o.containerCPUs, "container-cpus", 0, "CPUs of the container of the Rust extractor (0: the CPUs here, at most 8)")
+	fs.IntVar(&o.containerPids, "container-pids", 4096, "processes and threads the container of the Rust extractor may have")
+	fs.DurationVar(&o.containerTimeout, "container-timeout", 30*time.Minute, "stop the container of the Rust extractor after this long (each of the two stages: fetch, extract)")
+	fs.BoolVar(&o.noFetch, "no-fetch", false, "do not fetch the dependencies of the Rust project (use what an earlier run put in the volume)")
+	fs.Var(&o.containerEnv, "container-env", "NAME=VALUE for the build of the Rust project in the container (repeatable). The value is written here; nothing is taken from your environment (a build script that needs a setting that it would fetch otherwise, like LOCAL_ASSETS_PATH)")
+	fs.Var(&o.containerMounts, "container-ro-mount", "SRC:DST: a directory or file of this machine that the build of the Rust project in the container sees, read-only (repeatable; not your home directory)")
+	fs.Int64Var(&o.containerMaxOut, "container-max-output", 4<<30, "the most bytes the container of the Rust extractor may write (the stream of the IR)")
 	fs.IntVar(&o.workers, "workers", 0, "functions analysed at the same time (0: one per CPU; 1: one at a time). The result does not depend on it")
 	fs.BoolVar(&o.numeric, "numeric-taint", false, "follow taint through numbers and bools (by default it stops there: they cannot carry an injection)")
 	fs.BoolVar(&o.verbose, "v", false, "print the time of each phase to stderr")

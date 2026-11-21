@@ -104,3 +104,25 @@ jobs:
           RIVUS_RUST: ${{ github.workspace }}/extractor/rust/target/debug/rivus-rust
           # a missing RIVUS_RUST fails the tests, and does not skip them
           RIVUS_REQUIRE_RUST: "1"
+
+  # The Rust extractor in a container (ADR-064, docs/rust-isolation.md): the image is built from this repository,
+  # and the project that is hostile on purpose is built in it, never outside.
+  rust-isolation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+      - name: Build the image
+        run: docker build -f docker/rust-extractor/Dockerfile -t rivus-rust-extractor:nightly-2026-11-15 extractor/rust
+      - name: Test the isolation
+        run: go test -timeout 30m -run 'Isolation|Hostile|Mountable|CargoVolume|NoDocker|LimitWriter|ProjectToolchain' ./cmd/rivus
+        env:
+          # a missing Docker or image fails the tests, and does not skip them
+          RIVUS_REQUIRE_DOCKER: "1"
