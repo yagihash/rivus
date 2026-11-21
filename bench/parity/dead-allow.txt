@@ -495,13 +495,10 @@ go (*cloud.google.com/go/bigquery.Query).Read | dependency | Google Cloud client
 
 ## dart
 
-dart dart:async#Completer.complete | debt | the standard library: no cell of the zoo calls it yet
 dart dart:async#Completer.completeError | debt | the standard library: no cell of the zoo calls it yet
 dart dart:async#Completer.isCompleted | debt | the standard library: no cell of the zoo calls it yet
-dart dart:async#Completer.new | debt | the standard library: no cell of the zoo calls it yet
 dart dart:async#EventSink.add | debt | the standard library: no cell of the zoo calls it yet
 dart dart:async#Future.any | debt | the standard library: no cell of the zoo calls it yet
-dart dart:async#Future.microtask | debt | the standard library: no cell of the zoo calls it yet
 dart dart:async#Future.new | debt | the standard library: no cell of the zoo calls it yet
 dart dart:async#Future.timeout | debt | the standard library: no cell of the zoo calls it yet
 dart dart:async#Future.wait | debt | the standard library: no cell of the zoo calls it yet
