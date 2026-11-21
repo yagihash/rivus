@@ -353,7 +353,12 @@ const (
 // The names are the positions of the call, as flows names them. Whole values only (no projection:
 // `recv` is the receiver with what is inside it), which is what flows does too.
 type CallRow struct {
-	Fn     string         `yaml:"fn"`
+	Fn string `yaml:"fn"`
+	// Method is, instead of Fn, the method of the same trait that a provided (default) method of the library calls
+	// on its receiver (`std::io::Write::write_all` calls `write`): the implementations of it that the program has are
+	// called, with the receiver and With. The positions of a row with a method count every operand of the call, the
+	// receiver first (arg0), as the models of Rust do.
+	Method string         `yaml:"method"`
 	With   []string       `yaml:"with"`
 	Ret    string         `yaml:"ret"`
 	Throw  string         `yaml:"throw"`
@@ -859,10 +864,19 @@ func (p *Propagator) validateCalls(what string) error {
 			}
 			return sel, nil
 		}
-		if c.Fn == "" {
-			return fmt.Errorf("%s: fn is required (the argument that is called)", w)
+		if (c.Fn == "") == (c.Method == "") {
+			return fmt.Errorf("%s: exactly one of fn (the argument that is called) and method (the method of the receiver's trait that is called) is required", w)
 		}
-		if _, err := pos("fn", c.Fn, false); err != nil {
+		if c.Method != "" {
+			for _, r := range c.Method {
+				if !(r == '_' || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')) {
+					return fmt.Errorf("%s.method: %q is not a method name", w, c.Method)
+				}
+			}
+			if c.Ret != "" || c.Throw != "" || len(c.Writes) > 0 || c.Mode != "" {
+				return fmt.Errorf("%s: a row with a method calls it as a call is: ret, throw, writes and mode are not for it", w)
+			}
+		} else if _, err := pos("fn", c.Fn, false); err != nil {
 			return err
 		}
 		for j, x := range c.With {
@@ -1002,7 +1016,9 @@ type Rules struct {
 	// Calls are the symbols that have a row of calls in a propagator.
 	Calls map[string]bool
 	// ReadImpls are the symbols of the propagators of a set with read_impls.
-	ReadImpls   map[string]bool
+	ReadImpls map[string]bool
+	// SelfFirst are the symbols of the propagators of a set with self_first.
+	SelfFirst   map[string]bool
 	ConfigReads map[string]bool
 	// GlobalsHoldNothing are the package variables that hold nothing for the code that reads them (a rule that says
 	// everything, in any set, takes the variable out).

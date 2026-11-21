@@ -62,6 +62,9 @@ func TestCallsRowErrors(t *testing.T) {
 		"ret of a background":  "propagators:\n  - symbol: a.B\n    calls: [{fn: arg0, with: [recv], ret: result0, mode: go}]\n",
 		"unknown key in a row": "propagators:\n  - symbol: a.B\n    calls: [{fn: arg0, feed: []}]\n",
 		"pure with flows":      "propagators:\n  - symbol: a.B\n    pure: true\n    flows: [{from: recv, to: result}]\n    calls: [{fn: arg0}]\n",
+		"fn and method":        "propagators:\n  - symbol: a.B\n    calls: [{fn: arg0, method: write}]\n",
+		"method is not a name": "propagators:\n  - symbol: a.B\n    calls: [{method: \"a b\"}]\n",
+		"method with ret":      "propagators:\n  - symbol: a.B\n    calls: [{method: write, with: [arg1], ret: result0}]\n",
 	}
 	for name, text := range cases {
 		if _, err := parseCalls(t, text); err == nil {
@@ -71,5 +74,22 @@ func TestCallsRowErrors(t *testing.T) {
 	// ret without with is fine when flows say where the result comes from
 	if _, err := parseCalls(t, "propagators:\n  - symbol: a.B\n    flows: [{from: recv, to: result0}]\n    calls: [{fn: arg0, ret: result0}]\n"); err != nil {
 		t.Errorf("ret with flows: %v", err)
+	}
+}
+
+func TestCallsRowWithAMethod(t *testing.T) {
+	rs, err := parseCalls(t, "propagators:\n  - symbol: std::io::Write::write_all\n    flows: [{from: arg1, to: arg0}]\n    calls: [{method: write, with: [arg1]}]\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := rs.Propagators[0].Calls[0]
+	if c.Method != "write" || c.Fn != "" || len(c.With) != 1 || c.With[0] != "arg1" {
+		t.Errorf("row: %+v", c)
+	}
+	if got := rs.Propagators[0].DerivedFlows(0); len(got) != 0 {
+		t.Errorf("a row with a method has no derived flows: %+v", got)
+	}
+	if !Merge(rs).Calls["std::io::Write::write_all"] {
+		t.Errorf("the symbol of a row with a method is in the index of calls")
 	}
 }

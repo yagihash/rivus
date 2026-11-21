@@ -1651,7 +1651,7 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 - `bench/compare.sh 7e276b5 58c3e0f`(軽い層。base は変更の前の main): **削除 0**。追加は 5 件、sink の単位で、経路を読んで分類した: 動物園(Go)の 4 件と `rust-curated` の 1 件。5 件とも、本物(source が、呼び出しの引数や、実装の本体の中にあり、`@miss` の注記が「あるはずの流れ」と言っていたもの)。**実コード(gogs 2 つ、gin-vue-admin、go-test-bench、gophish、casdoor、dart-pub、parseable)は、finding の追加 0・削除 0**: 雑音はない(基準の 1 割どころか 0)。変わったのは不確実性の数(`dynamic_dispatch`: gogs-9a9388ac 703 → 728、dart-pub 3,573 → 3,643、go-test-bench 105 → 106、gophish 28 → 32。本体を読む候補が増えた分)と、再解析の数(gin-vue-admin 25,651 → 26,362、+2.8%。収束は同じ)、メモリ(gin-vue-admin 5,242 → 5,688 MB)。
 - Gitea(`bench/compare.sh --heavy 7e276b5 58c3e0f`): finding 350 → 367、**削除 0**(3 件は、ほかの finding の `other_sources` に畳まれた、失われていない流れ)、**追加 20 件(sink の単位で 7 か所)**、パスが変わったのが 35、`other_sources` の変化が 24。7 パスのまま収束、再解析 110,120 → 112,688(+2.3%)、メモリ 12,291 → 11,873 MB。時間 593 → 949 秒は、同じ時間に別の解析が走っていた(ほかの比較)ので、基準にしない(`func_timeout` の 8 → 11 も、同じ時計の影響)。**追加の分類(経路を読んだ): 20 件とも雑音。** (a) ログのファイルに書く `io.Writer` の実装(回転する書き手)の、ファイル名を開く・名前を変える・消す sink、5 か所 18 件: 呼び出し側が `w.Write(data)` を呼び、モデル(「引数が受け手に入る」)が書き手の**オブジェクト全体**に汚れを置き、読むようになった本体が、書き手の**ファイル名のフィールド**(`file.Name()`)を読んで sink に渡す。書いたデータは、書き手のファイル名を決めない。(b) 圧縮の書き手に `ctx.Resp` を包んで `Close` → `Flush` → 自前の `Response.Write` に至る、`ResponseWriter.Write` の XSS 2 か所 2 件: source は、リクエストの context そのもの(包まれた書き手のオブジェクト)で、書かれる圧縮データではない。(a)(b) とも、同じ根: **モデルが書き手の中身を、オブジェクト全体の汚れとして持つ**(書き手のフィールドの区別がない)。追加 20 件は、基準 350 件の 5.7%(雑音の上限 1 割 = 35 件の内)で、収束も変わらない。受け入れの基準は満たすが、雑音の根は残る(下の限界)。
 
-**限界:** (1) Rust の標準の既定のメソッド(`write_all`、`Iterator::map` など)は、候補が実装の `write` / `next` でなく、本体のない標準のメソッドなので、この修正の対象外(`write_all` のモデルが `write` を呼ぶ、という行が要る。`calls:` の延長)。(2) **書き手のフィールドの区別がない**: `(io.Writer).Write` のモデルは、書いたデータを受け手の全体に置く。本体を読むと、書き手の別のフィールド(ファイル名、ロガーの設定)が汚れて見える。Gitea の追加 20 件は、これだった。直し方の案: モデルの置き先を、受け手の「中身」の要素にする(フィールドとは別の要素)。この変更の対象外。(3) 同じインターフェースの実装が複数あるときの絞り込みは、Go と Dart で違う。Go の動物園(実装が 4 つ以上)は、おとりの `@nosink` が静かなまま。Dart で、`StringSink` の実装 4 つ(vuln、fixed、おとり用の 2 つ)を 1 ファイルに置いて試すと、ある実装に渡した source が、他の実装の sink にも届いた(受け手の静的な型の全実装が候補。XTALK と同じ根)ので、Dart の動物園のマスにはしていない。Dart の実コード(dart-pub)に、finding の増減はない。
+**限界:** (1) Rust の標準の既定のメソッド(`write_all`、`Iterator::map` など)は、候補が実装の `write` / `next` でなく、本体のない標準のメソッドなので、この修正の対象外(`write_all` のモデルが `write` を呼ぶ、という行が要る。`calls:` の延長: ADR-080 で `write_all` を足した)。(2) **書き手のフィールドの区別がない**: `(io.Writer).Write` のモデルは、書いたデータを受け手の全体に置く。本体を読むと、書き手の別のフィールド(ファイル名、ロガーの設定)が汚れて見える。Gitea の追加 20 件は、これだった。直し方の案: モデルの置き先を、受け手の「中身」の要素にする(フィールドとは別の要素)。この変更の対象外。(3) 同じインターフェースの実装が複数あるときの絞り込みは、Go と Dart で違う。Go の動物園(実装が 4 つ以上)は、おとりの `@nosink` が静かなまま。Dart で、`StringSink` の実装 4 つ(vuln、fixed、おとり用の 2 つ)を 1 ファイルに置いて試すと、ある実装に渡した source が、他の実装の sink にも届いた(受け手の静的な型の全実装が候補。XTALK と同じ根)ので、Dart の動物園のマスにはしていない。Dart の実コード(dart-pub)に、finding の増減はない。
 
 
 ## ADR-076: 型エラーで SSA が作られなかったパッケージを、出力で言う(読めなかったパッケージの数と名前、落ちた関数の数)
@@ -1717,3 +1717,13 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 
 **限界:** 中継のガード、`Box<dyn Fn>` を作る呼び出しの先、`async` の本体は辿らない(全候補)。マクロが書く関数は private としない。衝突した関数の名前の確認は入れていない。Dart は別の機会(DESIGN-capture.md の末尾の段落)。
 
+
+## ADR-080: モデルの `calls:` に `method:`(既定のメソッドが、受け手の同じ trait のメソッドを呼ぶ)
+
+**背景:** ADR-075 の限界 1: `out.write_all(buf)`(`out: &mut dyn Write`、自前の `impl Write`)は、標準の既定のメソッド `write_all` の呼び出しで、候補は実装の `write` でなく(`write_all` は上書きされていない)、`write_all` の本体はプログラムにない。`write` の中の sink が見つからなかった(動物園 `dyn/stdlib-writer-own`)。`Iterator` の既定のメソッドも同じ形。
+
+**決めたこと:** YAML の `calls:` の行に `method:` を足す(`fn` と、どちらか 1 つ)。「ライブラリの既定のメソッドが、受け手に対して、同じ trait の、このメソッドを呼ぶ」。エンジン(`internal/taint/callrows.go` の `applyMethodRow`)は、プログラムの自前の実装(`<T as std::io::Write>::write`。依存は読まない: ADR-075 と同じ)を、受け手と `with` で呼ぶ(呼び出しと同じ。結果、throw、書き込みは、そのメソッドのもの)。受け手がその場で作られた 1 つの型と分かるとき(`&mut w` の `w`、trait object への変換を通して)は、その型の実装だけ。複数のときは `dynamic_dispatch` の不確実性。**位置は、受け手を先頭に、すべてのオペランドを数える**(`arg0` が受け手。Rust のモデルの規約)。`ret`、`throw`、`writes`、`mode` は付けない。呼び出しグラフの辺(`callbackFuncs`)に、実装を入れた。標準の最初の行: `std::io::Write::write_all` → `write`(`with: [arg1]`)。harness(`bench/zoo-rust/callbacks`)が、`write` を記録する型で、本物の呼び出しと、行を照合する。
+
+**確かめたこと:** 動物園(Rust)で、`dyn/stdlib-writer-own` の vuln と decoy の本物の流れが見つかる(`@miss` を外した。decoy の別の writer の sink には届かない: 受け手の型で 1 つの実装に絞る)。rust-curated は変化なし。
+
+**限界:** (1) 行は `write_all` だけ。`Read::read_to_string` → `read`、`Iterator` の既定のメソッド(`count`、`last`、`fold` が `next` を呼ぶ)などは、行を足す前に、harness の呼び出しと、`with` の位置(バッファの型の違い)を確かめる。(2) 受け手の型が分からないときは、実装の全部(`dynamic_dispatch` の不確実性が付く)。

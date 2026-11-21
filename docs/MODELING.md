@@ -95,6 +95,24 @@ argument the row does not name, a `ret` that is not in what the call returned, a
 callback that was not called, are all errors of the row (corrected; not marked as misses). A row that no harness calls fails the
 test too. When you write a row for a function of a library, write the call in the harness first, and read what it gives.
 
+**A provided method that calls a method of its own trait: `method`.** `Write::write_all` is a method of the library that has a body
+there (it calls `write` of the receiver in a loop). When the receiver is a type of the project that implements `Write`, what
+`write_all` does is what its `write` does, and the library's body is not read. A row with `method` says so, instead of `fn`:
+
+```yaml
+- symbol: std::io::Write::write_all
+  flows: [{from: arg1, to: arg0}]
+  calls: [{method: write, with: [arg1]}]   # the receiver (arg0) is given as it is; `with` is what comes after it
+```
+
+The implementations of that method that the program has (its own code: `<T as std::io::Write>::write`) are called with the
+receiver and `with`, as a call of them is. When the receiver is seen to be made here, of one type, only that type's is called.
+**The positions of a row with `method` count every operand of the call, the receiver first (`arg0`)**, as the models of Rust do,
+for a call of the function itself and for a call through a trait alike. `ret`, `throw`, `writes` and `mode` are not for it: the call
+is a call, and its result, what it throws and what it writes are those of the method. The flows of the row are applied beside it
+(the library's own half). The harness (`bench/zoo-rust/callbacks`) calls the real function with a type that records what its
+`write` was given.
+
 Not yet: a projection (`recv.elem`, `result0.err`: whole values only), a result that is itself a function (`sync.OnceValue`), a callback
 that is a field of an argument, `feed` (the accumulator of `fold`), and the libraries that are not the standard one (a row for
 `dio` or `tokio` is the next step; the harness takes them from a lockfile of their own).

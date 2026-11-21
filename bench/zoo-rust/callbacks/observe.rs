@@ -71,6 +71,21 @@ fn main() {
         let once = Once::new();
         once.call_once(|| r.borrow_mut().see(&[]));
     });
+    // a provided method of a trait calls a method of the same trait on its receiver: `write_all` calls `write`
+    // (a row with a method: the receiver is arg0 and what it is called with is arg1)
+    case!("std::io::Write::write_all", [("arg1", "DATA")], |r| {
+        struct W<'a>(&'a RefCell<Rec>);
+        impl std::io::Write for W<'_> {
+            fn write(&mut self, p: &[u8]) -> std::io::Result<usize> {
+                self.0.borrow_mut().see(&[String::from_utf8_lossy(p).to_string()]);
+                Ok(p.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        std::io::Write::write_all(&mut W(r), b"DATA")
+    });
     case!("std::option::Option::map", RECV, |r| Some(s("RECV")).map(|x| {
         r.borrow_mut().see(&[x.clone()]);
         s("Ж")

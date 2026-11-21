@@ -2,6 +2,7 @@ package taint
 
 import (
 	"sort"
+	"strings"
 
 	"github.com/yagihash/rivus/internal/ir"
 	"github.com/yagihash/rivus/internal/model"
@@ -103,6 +104,10 @@ func (e *Engine) callbackFuncs(ci *sg.Instr) []*sg.Func {
 	}
 	var out []*sg.Func
 	for _, r := range rows {
+		if m := r.row().Method; m != "" {
+			out = append(out, e.methodImpls(ci.Callee.Symbol, m)...)
+			continue
+		}
 		sel, err := model.ParseSelector(r.row().Fn)
 		if err != nil {
 			continue
@@ -127,6 +132,9 @@ func (s *state) callBindings(cc *callCtx) []*sg.Value {
 	}
 	var out []*sg.Value
 	for _, r := range rows {
+		if r.row().Method != "" {
+			continue
+		}
 		sel, err := model.ParseSelector(r.row().Fn)
 		if err != nil {
 			continue
@@ -147,6 +155,10 @@ func (s *state) callBindings(cc *callCtx) []*sg.Value {
 // applyCallRow applies one row of calls at the call.
 func (s *state) applyCallRow(cc *callCtx, p *model.Propagator, i int, mref *ModelRef) {
 	row := p.Calls[i]
+	if row.Method != "" {
+		s.applyMethodRow(cc, row)
+		return
+	}
 	fsel, err := model.ParseSelector(row.Fn)
 	if err != nil {
 		return
@@ -236,6 +248,196 @@ func (s *state) applyCallRow(cc *callCtx, p *model.Propagator, i int, mref *Mode
 		x := &callCtx{in: cc.in, args: args, roots: cc.roots, sym: cc.sym, rd: rd}
 		s.applySummary(x, fn, bindings, notes, nil)
 	}
+}
+
+// applyMethodRow applies a row of calls that names a method (a provided method of a trait of the library calls a
+// method of the same trait on its receiver: `Write::write_all` calls `write`). The implementations of the method that
+// the program has are called, as a call of them is, with the receiver and what the row says (`with`; the positions
+// count every operand, the receiver first). When the receiver is seen to be of one type, only that type's. The flows
+// of the model (the library's own body, which is not read) are applied beside it.
+func (s *state) applyMethodRow(cc *callCtx, row model.CallRow) {
+	impls := s.eng.methodImpls(cc.sym, row.Method)
+	if len(impls) == 0 {
+		return
+	}
+	ops := cc.argv()
+	if len(ops) == 0 {
+		return
+	}
+	if t := receiverType(ops[0]); t != "" {
+		var same []*sg.Func
+		for _, fn := range impls {
+			if self := implSelfType(fn.ID); self != "" && sameBase(self, withoutGenerics(t)) {
+				same = append(same, fn)
+			}
+		}
+		if len(same) > 0 {
+			impls = same
+		}
+	}
+	with := make([]*sg.Value, 1, 1+len(row.With))
+	with[0] = ops[0]
+	for _, t := range row.With {
+		var v *sg.Value
+		if sel, err := model.ParseSelector(t); err == nil && sel.Kind == model.SelArg && !sel.All && sel.Index < len(ops) {
+			v = ops[sel.Index]
+		} else if err == nil && sel.Kind == model.SelRecv {
+			v = ops[0]
+		}
+		if v == nil {
+			v = &sg.Value{Kind: sg.KUndef}
+		}
+		with = append(with, v)
+	}
+	var notes []*Uncertainty
+	if len(impls) > 1 {
+		d := s.newNote(cc.in, KindDynamicDispatch, cc.sym+" calls "+row.Method+" of its receiver, which has several implementations", cc.sym)
+		for _, fn := range impls {
+			d.Candidates = append(d.Candidates, fn.ID)
+		}
+		sort.Strings(d.Candidates)
+		notes = append(notes, d)
+	}
+	for _, fn := range impls {
+		args := make([]*sg.Value, len(fn.Params))
+		for k := range args {
+			if k < len(with) {
+				args[k] = with[k]
+			} else {
+				args[k] = &sg.Value{Kind: sg.KUndef}
+			}
+		}
+		x := &callCtx{in: cc.in, args: args, roots: cc.roots, sym: cc.sym}
+		s.applySummary(x, fn, nil, notes, nil)
+	}
+}
+
+// receiverType is the type of the object that a receiver was made of right there: the type of the first value, through
+// the copies and the conversions to a trait object, that is not a trait object itself ("" when the receiver is not made
+// here, or is a trait object all the way).
+func receiverType(v *sg.Value) string {
+	for i := 0; i < 8 && v != nil; i++ {
+		if t := string(v.Type); t != "" && !strings.Contains(t, "dyn ") {
+			return t
+		}
+		if v.Kind != sg.KResult || v.Instr == nil || len(v.Instr.Args) != 1 {
+			return ""
+		}
+		switch v.Instr.Op {
+		case ir.OpCopy, ir.OpConvert:
+			v = v.Instr.Args[0]
+		default:
+			return ""
+		}
+	}
+	return ""
+}
+
+// methodImpls are the implementations that the program has (its own code, not its dependencies) of the method of
+// the trait that a symbol is a method of: for `std::io::Write::write_all` and `write`, the functions
+// `<T as std::io::Write>::write`.
+func (e *Engine) methodImpls(sym, method string) []*sg.Func {
+	i := strings.LastIndex(sym, "::")
+	if i < 0 {
+		return nil
+	}
+	trait := sym[:i]
+	e.implsOnce.Do(func() {
+		e.implsIndex = map[string][]*sg.Func{}
+		for _, fn := range e.prog.Funcs {
+			if fn.Dep || !strings.HasPrefix(fn.ID, "<") {
+				continue
+			}
+			tr, m, ok := splitImplID(fn.ID)
+			if ok {
+				k := lastSegment(tr) + "::" + m
+				e.implsIndex[k] = append(e.implsIndex[k], fn)
+			}
+		}
+	})
+	var out []*sg.Func
+	for _, fn := range e.implsIndex[lastSegment(trait)+"::"+method] {
+		if tr, _, _ := splitImplID(fn.ID); sameTraitPath(tr, trait) {
+			out = append(out, fn)
+		}
+	}
+	return out
+}
+
+// implSelfType is the type an impl method is of, without its generic arguments (`<a::T<u8> as b::Tr>::m` is `a::T`).
+func implSelfType(id string) string {
+	i := strings.Index(id, " as ")
+	if !strings.HasPrefix(id, "<") || i < 0 {
+		return ""
+	}
+	return withoutGenerics(id[1:i])
+}
+
+func withoutGenerics(t string) string {
+	if j := strings.IndexByte(t, '<'); j >= 0 {
+		return t[:j]
+	}
+	return t
+}
+
+// splitImplID splits `<Type as path::Trait<A>>::method` into the path of the trait (without its generic
+// arguments) and the method.
+func splitImplID(id string) (trait, method string, ok bool) {
+	depth, as, end := 0, -1, -1
+	for i := 0; i < len(id); i++ {
+		switch id[i] {
+		case '<':
+			depth++
+		case '>':
+			depth--
+			if depth == 0 {
+				end = i
+			}
+		case ' ':
+			if depth == 1 && as < 0 && strings.HasPrefix(id[i:], " as ") {
+				as = i + 4
+			}
+		}
+		if end >= 0 {
+			break
+		}
+	}
+	if as < 0 || end < 0 || !strings.HasPrefix(id[end:], ">::") {
+		return "", "", false
+	}
+	trait = id[as:end]
+	if j := strings.IndexByte(trait, '<'); j >= 0 {
+		trait = trait[:j]
+	}
+	method = id[end+3:]
+	if j := strings.IndexAny(method, "<:"); j >= 0 {
+		method = method[:j]
+	}
+	return trait, method, trait != "" && method != ""
+}
+
+func lastSegment(path string) string {
+	if i := strings.LastIndex(path, "::"); i >= 0 {
+		return path[i+2:]
+	}
+	return path
+}
+
+// sameTraitPath: two paths name one trait when they are equal, or both are of the standard library (where it is
+// defined, `core::fmt::Write`; where it is used, `std::fmt::Write`) and end in the same two names.
+func sameTraitPath(a, b string) bool {
+	if a == b {
+		return true
+	}
+	std := func(p string) bool {
+		return strings.HasPrefix(p, "std::") || strings.HasPrefix(p, "core::") || strings.HasPrefix(p, "alloc::")
+	}
+	if !std(a) || !std(b) {
+		return false
+	}
+	// the module that the standard library puts it in is the second name (`core::iter::traits::iterator::Iterator` is `std::iter::Iterator`)
+	sa, sb := strings.Split(a, "::"), strings.Split(b, "::")
+	return len(sa) >= 3 && len(sb) >= 3 && sa[1] == sb[1] && sa[len(sa)-1] == sb[len(sb)-1]
 }
 
 // coveredByModel reports whether every use of the closure made here, other than a call right here, is as the

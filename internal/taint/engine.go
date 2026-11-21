@@ -76,6 +76,11 @@ type Engine struct {
 	dispatch sync.Map // *sg.Instr -> map[*sg.Func][]Guard
 	// valueGuards is the same for the calls of function values (valueGuards).
 	valueGuards sync.Map // *sg.Instr -> map[string][]Guard
+
+	// implsIndex are the implementations of the trait methods that the program has, by the last name of the
+	// trait and the method (callrows.go, methodImpls)
+	implsOnce  sync.Once
+	implsIndex map[string][]*sg.Func
 	// identityStores are the closures made (the make_closure instructions) whose write of a global was left out because it
 	// writes back the value that was read from it (stats.identity_global_stores).
 	identityStores sync.Map // *sg.Instr -> struct{}

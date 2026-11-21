@@ -372,6 +372,8 @@ propagators:
     flows: [{from: arg0, to: arg1}]
   - symbol: std::io::Write::write_all
     flows: [{from: arg1, to: arg0}]
+    # the provided method calls `write` of the receiver (of a type of the project, when it implements Write): its body is read
+    calls: [{method: write, with: [arg1]}]
   - symbol: std::io::Write::write
     flows: [{from: arg1, to: arg0}]
   - symbol: std::fs::File::open

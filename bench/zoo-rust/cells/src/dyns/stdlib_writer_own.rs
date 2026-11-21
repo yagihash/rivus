@@ -24,7 +24,7 @@ impl Write for ShellWriter {
 fn vuln() { // @vuln
     let mut w = ShellWriter;
     let out: &mut dyn Write = &mut w;
-    out.write_all(&m::src_bytes("dyn-stdlib-writer-own-vuln")).unwrap(); // @source(dyn-stdlib-writer-own-vuln) @miss(dynamic_dispatch) @ref(PARITY)
+    out.write_all(&m::src_bytes("dyn-stdlib-writer-own-vuln")).unwrap(); // @source(dyn-stdlib-writer-own-vuln)
     out.flush().unwrap();
 }
 
@@ -78,6 +78,6 @@ fn decoy() { // @decoy
     let loud: &mut dyn Write = &mut l;
     quiet.write_all(b"constant").unwrap();
     quiet.flush().unwrap();
-    loud.write_all(&m::src_bytes("dyn-stdlib-writer-own-decoy")).unwrap(); // @source(dyn-stdlib-writer-own-decoy) @miss(dynamic_dispatch) @ref(PARITY)
+    loud.write_all(&m::src_bytes("dyn-stdlib-writer-own-decoy")).unwrap(); // @source(dyn-stdlib-writer-own-decoy)
     loud.flush().unwrap();
 }
