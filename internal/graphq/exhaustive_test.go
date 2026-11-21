@@ -208,3 +208,34 @@ func TestNoPathStaysExhaustiveWhenOnlyBuiltinsAreCalled(t *testing.T) {
 		t.Fatalf("%v %+v because %+v", err, r.Exhaustive, r.NotExhaustiveBecause)
 	}
 }
+
+// GRAPH-3: "without the filters there is no path either" is a "no path" too: it is exhaustive only when nothing was left out.
+func TestWithoutFiltersNoPathIsNotExhaustiveWhenTheGoalIsAMethod(t *testing.T) {
+	e := build(t, []fnDef{
+		{"S", []call{{"s.go", 3, 1, "", "A", nil}}},
+		{"A", nil},
+		{"(X).M", nil},
+	})
+	r, err := e.Path("S", "(X).M", graphq.Options{Avoid: []string{"A"}})
+	if err != nil || r.Reachable || r.WithoutFilters == nil || r.WithoutFilters.Reachable || r.WithoutFilters.Exhaustive || r.WithoutFilters.NotExhaustiveBecause == nil {
+		t.Fatalf("%v %+v wf %+v", err, r.Reachable, r.WithoutFilters)
+	}
+	for _, h := range r.Hints {
+		if strings.Contains(h, "there is no path either") {
+			t.Errorf("the hint says no path either: %q", h)
+		}
+	}
+}
+
+// ... and stays "no path either" when nothing was left out.
+func TestWithoutFiltersNoPathStaysExhaustiveWhenNothingWasLeftOut(t *testing.T) {
+	e := build(t, []fnDef{
+		{"S", []call{{"s.go", 3, 1, "", "A", nil}}},
+		{"A", nil},
+		{"T", nil},
+	})
+	r, err := e.Path("S", "T", graphq.Options{Avoid: []string{"A"}})
+	if err != nil || r.Reachable || r.WithoutFilters == nil || !r.WithoutFilters.Exhaustive {
+		t.Fatalf("%v %+v wf %+v", err, r.Reachable, r.WithoutFilters)
+	}
+}

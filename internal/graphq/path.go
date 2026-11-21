@@ -893,6 +893,8 @@ func (e *Engine) Path(from, to string, o Options) (*PathResult, error) {
 				res.Hints = append(res.Hints, fmt.Sprintf("without the filters there is a path (%s, %d hops), but the search under the filters was cut by a bound (%d functions visited, at most %d hops): it cannot be said that the filters are the cause", wf.Certainty, wf.Hops, sr.visited, MaxPathHops))
 			case wf.Exhaustive:
 				res.Hints = append(res.Hints, "without the filters there is no path either")
+			case wf.NotExhaustiveBecause != nil:
+				res.Hints = append(res.Hints, "without the filters there is no path in the edges of the file either, but that is not exhaustive: \"without_filters.not_exhaustive_because\" says what was left out")
 			default:
 				res.Hints = append(res.Hints, "without the filters the search was cut by a bound too: \"no path\" is not proved with or without them")
 			}
@@ -1049,6 +1051,18 @@ func (e *Engine) withoutFilters(o *Options, src, dst *Target, startsFor func(boo
 		return nil, err
 	}
 	wf := &WithoutFilters{Reachable: sr.found, Searched: sr.searched, Exhaustive: sr.exhaustive && !sr.cut}
+	if !sr.found && wf.Exhaustive {
+		// "without the filters there is no path either" is a "no path" too: exhaustive only when nothing was left out
+		refsSearched := len(sr.searched) > 0 && sr.searched[len(sr.searched)-1] == "ref"
+		ne, err := e.notExhaustive(starts, dst.Funcs, refsSearched)
+		if err != nil {
+			return nil, err
+		}
+		if ne != nil {
+			wf.Exhaustive = false
+			wf.NotExhaustiveBecause = ne
+		}
+	}
 	if sr.found {
 		wf.Certainty = certaintyOf(sr.paths[0].edges)
 		wf.Hops = len(sr.paths[0].edges)

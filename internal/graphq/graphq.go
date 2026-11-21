@@ -314,6 +314,8 @@ type WithoutFilters struct {
 	Searched  []string `json:"searched"`
 	// Exhaustive: false when a bound cut that search too.
 	Exhaustive bool `json:"exhaustive"`
+	// NotExhaustiveBecause: the search was complete, and something was left out (as in the answer: see PathResult).
+	NotExhaustiveBecause *NotExhaustive `json:"not_exhaustive_because,omitempty"`
 	// Culprits (with more than one filter): the filters that, taken off alone
 	// (the others kept), let a path through.
 	Culprits []string `json:"culprits,omitempty"`
