@@ -87,7 +87,11 @@ func TestDogfood(t *testing.T) {
 	// 71: `rivus extract -lang rust` reads a Rust project the way analyze does (in a container), so the directory of -C and
 	// the paths of -container-ro-mount reach the same sinks of isolate.go from a second command: 8 real flows, of the
 	// same kind as the ones of the line above (the paths that name the project go to the container as read-only mounts).
-	const maxFindings, maxNoSourceOnPath = 71, 0
+	// 75: the fetch stage keeps the cargo configuration of the project out (isolate_fetch.go): 4 real flows of the same kind as
+	// the lines above: the directory of -C reaches the os.ReadFile of .cargo/config.toml (read as text, to decide whether the
+	// stage is skipped or stopped), and the name of the volume (a hash of the lock file and the configuration) reaches the
+	// docker commands that check, create and remove that volume.
+	const maxFindings, maxNoSourceOnPath = 75, 0
 	t.Logf("%d findings, %d with no step in the source function", len(rep.Findings), noSourceOnPath)
 	if len(rep.Findings) > maxFindings {
 		t.Errorf("%d findings: more than the %d of today", len(rep.Findings), maxFindings)

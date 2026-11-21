@@ -22,10 +22,12 @@ import (
 // that runs in a container (ADR-064, docs/rust-isolation.md), in two stages:
 //
 //  1. fetch (network): `cargo fetch --locked` puts the sources of the dependencies in a volume. cargo does not build in
-//     this stage, so no build.rs and no proc macro runs. But cargo reads the cargo configuration the project brings
-//     (.cargo/config.toml), and that can name a program that cargo runs (a credential provider). Until the
-//     configuration of the project is kept out of this stage, code of the project can run here, with a network.
-//     Do not read untrusted Rust with this stage (-no-fetch); see docs/rust-isolation.md.
+//     this stage, so no build.rs and no proc macro runs. But cargo reads the cargo configuration it finds, and the
+//     configuration of the project can name a program that cargo runs (a credential provider) and a place to send
+//     requests to. So this stage does not see the configuration of the project (.cargo is covered with an empty
+//     tmpfs), and the volume is checked for a configuration that an earlier run could have left. A project that
+//     needs its configuration to fetch (its own registry, a replaced source) is stopped with the reason; one that
+//     is vendored skips this stage.
 //  2. extract (no network): the extractor runs `cargo check --offline --locked`; the project is mounted read-only,
 //     so is the volume of the dependencies, and what is written goes to volumes that are removed with the container.
 //
@@ -172,11 +174,16 @@ func (o *isolationOpts) limits(name string) []string {
 }
 
 // fetchArgs are the arguments of `docker` for the stage that has the network. cargo fetch does not build, but it reads the
-// cargo configuration of the project, which can make it run a program of the project (see the comment at the top).
+// cargo configuration it finds, which can make it run a program of the project (see the comment at the top): the
+// .cargo of the project, the only place in the container where cargo looks for one that comes from the project, is
+// covered with an empty tmpfs.
 func (o *isolationOpts) fetchArgs(name, dir, volume string) []string {
 	a := o.limits(name)
+	a = append(a, "--mount", "type=bind,src="+dir+",dst="+dir+",readonly")
+	if _, err := os.Lstat(filepath.Join(dir, ".cargo")); err == nil {
+		a = append(a, "--mount", "type=tmpfs,dst="+filepath.Join(dir, ".cargo")+",tmpfs-size=1048576")
+	}
 	a = append(a,
-		"--mount", "type=bind,src="+dir+",dst="+dir+",readonly",
 		"--mount", "type=volume,src="+volume+",dst=/cargo-home",
 		"--tmpfs", "/work:rw,noexec,nosuid,nodev,size=64m",
 		"-w", dir,
@@ -275,10 +282,27 @@ func (o *isolationOpts) extractRustIsolated(ctx context.Context, dir string, ext
 		fmt.Fprintf(o.err(), "rivus: the project asks for the toolchain %q; the extractor is pinned to %s and the container does not fetch another one, so it is built with %s (it may not compile)\n", want, pinnedToolchain, pinnedToolchain)
 	}
 	if !o.noFetch {
-		fmt.Fprintf(o.err(), "rivus: fetching the dependencies (cargo fetch --locked, with a network; the cargo configuration of the project can make this stage run its code, see docs/rust-isolation.md) into the volume %s\n", volume)
-		name := randomName("rivus-fetch-")
-		if err := o.runContainer(ctx, name, o.fetchArgs(name, dir, volume), io.Discard, "fetch"); err != nil {
+		plan, err := planFetch(dir)
+		if err != nil {
 			return nil, err
+		}
+		if plan.vendored {
+			fmt.Fprintf(o.err(), "rivus: the project is vendored (its cargo configuration replaces the sources with a directory of the project): the fetch stage is skipped\n")
+			if out, err := exec.CommandContext(ctx, "docker", "volume", "create", volume).CombinedOutput(); err != nil {
+				return nil, fmt.Errorf("docker volume create %s: %v: %s", volume, err, strings.TrimSpace(string(out)))
+			}
+		} else {
+			if err := o.dropConfigOfVolume(ctx, volume); err != nil {
+				return nil, err
+			}
+			fmt.Fprintf(o.err(), "rivus: fetching the dependencies (cargo fetch --locked, with a network; the cargo configuration of the project is not read in this stage) into the volume %s\n", volume)
+			name := randomName("rivus-fetch-")
+			if err := o.runContainer(ctx, name, o.fetchArgs(name, dir, volume), io.Discard, "fetch"); err != nil {
+				if plan.hasConfig {
+					err = fmt.Errorf("%w\n(the project has a cargo configuration, and it is not used in the stage that fetches. If the project needs it to fetch, fetch it yourself or vendor it, then use -no-fetch)", err)
+				}
+				return nil, err
+			}
 		}
 	}
 	// without the network a volume that was never filled would be an empty one: it is said as that
