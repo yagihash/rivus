@@ -865,6 +865,11 @@ impl<'a> Lower<'a> {
 
     fn rvalue(&mut self, rv: &Rvalue, dst: Option<usize>, pos: &Pos) -> usize {
         let ty = rv.ty(self.body.locals()).ok();
+        if ty.is_none() {
+            // lowered without a type: a condition on the type of this value (`when_arg_type`) does not hold of it, and a
+            // sink that asks for the type is missed. Said at the place (what input does this: not known; no fixture)
+            self.unsupported("the type of this value is not known: a condition on its type does not apply to it", pos);
+        }
         let out = |me: &mut Self| match dst {
             Some(d) => d,
             None => me.new_local("", ty.as_ref()),

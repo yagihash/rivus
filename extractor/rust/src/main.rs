@@ -154,10 +154,15 @@ fn extract(tcx: rustc_middle::ty::TyCtxt<'_>, root: &str, dep: bool, open_crate:
     let items: Vec<_> = rustc_public::all_local_items().into_iter().filter(|i| i.has_body()).collect();
     let bodies: HashSet<String> = items.iter().map(|i| i.name()).collect();
     let mut cx = lower::Ctx::new(root.to_string(), bodies);
+    // what the crate holds that is not read, said at the end (a load error that names the function)
+    let mut unread: Vec<(String, String)> = Vec::new();
     // the promoted constants of the crate: the functions in them are used as values (`&helper`)
     for ldid in tcx.mir_keys(()) {
         let did = ldid.to_def_id();
         if !tcx.is_mir_available(did) {
+            // the constants that this function holds and that name a function (`&helper`) are not read: a flow
+            // through such a function value is lost. (what input does this: not known; no fixture)
+            unread.push((rustc_public::rustc_internal::stable(did).name(), "the MIR of this function is not available: the functions that its constants name as values are not read".to_string()));
             continue;
         }
         let promoted = tcx.promoted_mir(did);
@@ -198,7 +203,11 @@ fn extract(tcx: rustc_middle::ty::TyCtxt<'_>, root: &str, dep: bool, open_crate:
         *count.entry(item.name()).or_default() += 1;
     }
     for item in &items {
-        let Some(body) = item.body() else { continue };
+        let Some(body) = item.body() else {
+            // an item that has a body and gives none: left out (what input does this: not known; no fixture)
+            unread.push((item.name(), "the body of this function could not be read: it is left out".to_string()));
+            continue;
+        };
         let name = item.name();
         let f = lower::Lower::lower(&mut cx, name.clone(), &body, item.span());
         let mut j = f.to_json();
@@ -232,6 +241,9 @@ fn extract(tcx: rustc_middle::ty::TyCtxt<'_>, root: &str, dep: bool, open_crate:
     }
     if !dep {
         cx.texts.write(&mut out);
+    }
+    for (name, why) in unread {
+        out.push(json!({"kind": "load_error", "load_error": {"package": name, "message": why, "unread": true, "func": name}}));
     }
     out
 }
@@ -502,7 +514,7 @@ fn merge(files: Vec<PathBuf>) {
             }
         }
     }
-    link_across_crates(&mut funcs);
+    rest.extend(link_across_crates(&mut funcs));
     for l in funcs.values() {
         println!("{}", l);
     }
@@ -528,7 +540,8 @@ fn merge(files: Vec<PathBuf>) {
 /// The calls through a trait (`dyn Trait`, a type parameter) and the drops of values of another crate, which
 /// one crate cannot resolve: it knows the impls of its own functions only. Here every crate is in, so the
 /// candidates are the impls of the whole program, and the marks the lowering left are removed.
-fn link_across_crates(funcs: &mut std::collections::BTreeMap<String, String>) {
+fn link_across_crates(funcs: &mut std::collections::BTreeMap<String, String>) -> Vec<String> {
+    let mut unlinked: Vec<String> = Vec::new();
     let mut by_method: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
     let mut drops: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
     const DROP_TAIL: &str = " as std::ops::Drop>::drop";
@@ -545,11 +558,14 @@ fn link_across_crates(funcs: &mut std::collections::BTreeMap<String, String>) {
         }
     }
     let ids: HashSet<String> = funcs.keys().cloned().collect();
-    for line in funcs.values_mut() {
+    for (id, line) in funcs.iter_mut() {
         if !line.contains("\"by_trait\"") && !line.contains("\"drop_of\"") {
             continue;
         }
-        let Ok(mut v) = serde_json::from_str::<Value>(line) else { continue };
+        let Ok(mut v) = serde_json::from_str::<Value>(line) else {
+            unlinked.push(json!({"kind": "load_error", "load_error": {"package": id, "message": "the calls through a trait and the drops of this function could not be linked across the crates: its stream line is not readable", "unread": true, "func": id}}).to_string());
+            continue;
+        };
         let Some(blocks) = v["func"]["blocks"].as_array_mut() else { continue };
         for b in blocks {
             let Some(instrs) = b["instrs"].as_array_mut() else { continue };
@@ -595,6 +611,7 @@ fn link_across_crates(funcs: &mut std::collections::BTreeMap<String, String>) {
         }
         *line = v.to_string();
     }
+    unlinked
 }
 
 #[cfg(test)]
