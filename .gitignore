@@ -10,3 +10,5 @@ __pycache__/
 *.pyc
 # backups that `sed -i` leaves (the BSD sed on macOS asks for a suffix)
 *.go-e
+# the reviews of the advisor session (they can hold the details of a vulnerability that is not fixed yet; the repository is public)
+/.claude/reviews/
