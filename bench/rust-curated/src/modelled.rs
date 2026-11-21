@@ -52,3 +52,12 @@ pub fn model_drop() {
     sink(&r); // @sink(none) @fp
     sink(&d.0); // @sink(model-drop)
 }
+
+// `write!(s, ..)` on a `String` is `fmt::Write::write_fmt`: what is formatted goes into the string (the row of the
+// standard library; the string has no body of its own to read)
+pub fn write_fmt_string() {
+    use std::fmt::Write;
+    let mut s = String::new();
+    write!(s, "{}", source()).unwrap(); // @source(write-fmt-string)
+    sink(&s); // @sink(write-fmt-string)
+}

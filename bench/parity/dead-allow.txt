@@ -950,7 +950,6 @@ rust std::fmt::Formatter::debug_tuple_field1_finish | debt | the standard librar
 rust std::fmt::Formatter::debug_tuple_field2_finish | debt | the standard library: no cell of the zoo calls it yet
 rust std::fmt::Formatter::pad | debt | the standard library: no cell of the zoo calls it yet
 rust std::fmt::Formatter::write_str | debt | the standard library: no cell of the zoo calls it yet
-rust std::fmt::Write::write_fmt | debt | the standard library: no cell of the zoo calls it yet (ADR-089 added the row; the zoo writer is an io::Write)
 rust std::fmt::rt::Argument::from_usize | debt | the standard library: no cell of the zoo calls it yet
 rust std::fmt::rt::Argument::new_debug | debt | the standard library: no cell of the zoo calls it yet
 rust std::fmt::rt::Argument::new_lower_hex | debt | the standard library: no cell of the zoo calls it yet
