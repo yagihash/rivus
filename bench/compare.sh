@@ -17,7 +17,9 @@ every difference. Standard tools only (git, go, python3; dart / the Rust extract
 Before each run it waits (every minute, at most --wait hours) until the free memory is 40% or more (macOS; elsewhere swap use is 50% or less) and no
 other rivus / rv-* / rivus-* process runs. Only one compare.sh runs at a time (a lock in the work dir).
 Exit status: 0 nothing lost; 1 a finding was REMOVED (do not push: classify it); 2 a benchmark did not
-run, did not build or did not finish (by the procedure, "not run" means "do not push").
+run, did not build or did not finish, or a pair of runs is not a valid basis: head did not converge while base did, a run
+timed out, stats.functions changed by 50% or more, or no finding in either (by the procedure, "not run" means "do not push").
+Each such condition is a line at the top of summary.md; a change of 10% to 50% in stats.functions is a warning line.
 
 options:
   --work DIR        clones, worktrees, binaries, results (default $COMPARE_WORK, else $TMPDIR/rivus-compare)
@@ -309,7 +311,12 @@ for b in $BENCHES; do
   spec "$b"   # the truth is the one of this script's tree
   if [ -n "$TRUTH" ]; then
     for w in base head; do
-      [ -s "$RES/$b.$w.json" ] && python3 "$ROOT/bench/score.py" "$TRUTH" "$RES/$b.$w.json" 2>/dev/null | tail -n 2 | sed "s/^/$b $w: /" >> "$RES/scores.txt"
+      [ -s "$RES/$b.$w.json" ] || continue
+      if python3 "$ROOT/bench/score.py" "$TRUTH" "$RES/$b.$w.json" > "$RES/$b.$w.score" 2> "$RES/$b.$w.score.err"; then
+        grep -E '^(TP |uncertainties:|source-only entries:)' "$RES/$b.$w.score" | sed "s/^/$b $w: /" >> "$RES/scores.txt"
+      else
+        echo "$b $w: SCORING FAILED: $(tail -n 1 "$RES/$b.$w.score.err")" >> "$RES/scores.txt"
+      fi
     done
   fi
 done

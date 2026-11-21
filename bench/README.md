@@ -42,6 +42,41 @@ off by default. `--dry-run` prints the plan; `--help` the options. The classific
 step 2 (`go test ./...`) and step 3 (`go-synth`), are still yours. The script does not score against
 the truth files except for printing `score.py`'s last lines.
 
+**What each side is analysed with (R-41).** Base and head are each analysed with the inputs of their own version, taken
+from `<work>/wt/<sha7>`: the fixtures (`bench/*-curated`, the `go-synth` generator), the rules files, and the extractor
+(`extractor/dart`, `extractor/rust`). A fixture added in head is therefore seen only by head (it shows as `+1` in the row
+of that benchmark), and an extractor fix changes the IR of head only. The IR is cached **per version**, in
+`<work>/ir/<bench>.<key>.jsonl`, where the key is a hash of the benchmark, the tree hash of the extractor
+(`git rev-parse <sha>:extractor/<lang>`), the tree hash of the target (`<sha>:bench/<name>`; for a clone, its commit), the flags
+and `RIVUS_DART`. The same input is never extracted twice (parseable takes about 95 s, dart-pub about as long), and an input
+that changed is never read from the old file. The Rust extractor of each version is built once (`cargo build --locked`, one
+shared `CARGO_TARGET_DIR` in the work dir, the binary kept in `<work>/bin/rust-extractor/<tree>/`); `RIVUS_RUST` (a
+binary) or `RIVUS_DART` (a command), when set, name the tool for both sides. A rules file that an old base does not have is
+taken from the tree of the script, and the other way round is not done. `bench/compare.sh --dry-run` shows the plan.
+
+**How to read `summary.md` (R-40, R-41).** Its top lines come first, one per condition, and a line that starts with `!! INVALID`
+makes the exit status 2 (the run is not a basis for a comparison; a removed finding is still exit status 1):
+
+| line | meaning |
+| --- | --- |
+| `head did not converge (base did)` | head stopped by the pass limit; a lost finding would not show |
+| `base / head timed out` | the clock stopped the run: the result depends on the load of the machine |
+| `stats.functions N -> M (x%)` with `!! INVALID` | 50% or more: not the same program (an extractor that lost a package, a checkout that is not whole) |
+| `warning: ... stats.functions` | 10% to 50%: look at why, no exit status |
+| `no finding in base and none in head` | the input or the rules are empty (a benchmark with a truth has findings) |
+
+Under the table, "Inputs of each side" has, per benchmark, the input (the tree hash of the fixtures, or the commit of the
+clone), the tree hash of the extractor, and the sha256 of the IR of base and head (with the path of the worktree replaced,
+so the same input in two worktrees has the same hash); `IR: same` says that only the binary differs, `DIFFERENT` that the
+extractor or the fixtures changed too. Gitea's base that does not converge is the one `NOT CONVERGED` note, not an `INVALID`.
+
+**Scores (`scores.txt`, R-45).** `score.py` matches a truth entry by its sink (`file`, `line`) or, for an entry with
+`source_func`, by the source function; if the entry also has `sink_file` and `sink_line`, by the pair (source function,
+sink), which a finding from that function to another sink does not satisfy. An entry with a `source_func` only does not look
+at the sink, so a run that over-reports scores as well as one that does not: the score prints how many entries are of that
+kind (`source-only entries: N of M`). The two gogs truth files are all of that kind today. A label other than `vuln` or
+`safe`, or an entry without a category, is an error; a score that could not be made is written in `scores.txt`, not dropped.
+
 1. Build the binary of each state (the commit before, and the working tree), from the same toolchain:
    `git stash` or `git worktree add <dir> <before>`, then `go build -o <dir>/rivus-before ./cmd/rivus`
    and `go build -o <dir>/rivus-after ./cmd/rivus`. Keep them; every step below runs both.
