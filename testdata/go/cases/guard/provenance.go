@@ -146,3 +146,37 @@ func SteppedInLoop(k int) {
 	s := lib.Source()     // @source(loopstep)
 	lib.Sink(level(a, s)) // @sink(loopstep)
 }
+
+// Read before it is written: the read sees the zero value.
+func ReadThenWrite() {
+	var c struct{ n int }
+	v := c.n
+	c.n = 9
+	s := lib.Source()     // @source(readfirst)
+	lib.Sink(level(v, s)) // @sink(readfirst)
+}
+
+// Written on one branch only: 0 or 9.
+func WrittenOnOneBranch(k int) {
+	var c struct{ n int }
+	if k > 2 {
+		c.n = 9
+	}
+	v := c.n
+	s := lib.Source()     // @source(onebranch)
+	lib.Sink(level(v, s)) // @sink(onebranch)
+}
+
+// Written on every path before the read, but by no single write that
+// dominates it: the zero value stays a candidate (more, never less).
+func WrittenOnBothBranches(k int) {
+	var c struct{ n int }
+	if k > 2 {
+		c.n = 9
+	} else {
+		c.n = 9
+	}
+	v := c.n
+	s := lib.Source()     // @source(bothbranch)
+	lib.Sink(level(v, s)) // @sink(bothbranch)
+}

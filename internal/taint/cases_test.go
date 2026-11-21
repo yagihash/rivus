@@ -704,7 +704,10 @@ func TestProvenanceTellsNoValueThatIsNotKnown(t *testing.T) {
 		{"@sink(ident)", []val{{"true", CertaintyLiteral}}},
 		{"@sink(addr)", nil},
 		{"@sink(cmp)", []val{{"true", CertaintyLiteral}}},
-		{"@sink(loopstep)", []val{{"1", CertaintyLiteral}}}, // the first value only, and the rest said unresolved
+		{"@sink(readfirst)", []val{{"0", CertaintyZeroValue}}},
+		{"@sink(onebranch)", []val{{"9", CertaintyLiteral}, {"0", CertaintyZeroValue}}},
+		{"@sink(bothbranch)", []val{{"9", CertaintyLiteral}, {"0", CertaintyZeroValue}}}, // no single write dominates: the zero value stays a candidate
+		{"@sink(loopstep)", []val{{"1", CertaintyLiteral}}},                              // the first value only, and the rest said unresolved
 	} {
 		p := provenanceOf(t, tc.marker)
 		var got []val

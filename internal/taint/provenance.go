@@ -250,12 +250,12 @@ func (t *tracer) walk(v *sg.Value, fn *sg.Func, chain []string, site ir.Pos, dep
 			return foldUnop(in.IR.Operator, a[0], v)
 		})
 	case ir.OpLoad:
-		t.walkAddr(in.Args[0], fn, chain, site, depth)
+		t.walkAddr(in.Args[0], v, fn, chain, site, depth)
 	case ir.OpGlobalLoad:
 		t.stopGlobal(t.e.prog.Global(in.IR.Global), chain)
 	case ir.OpFieldLoad:
 		if in.IR.Folded {
-			t.walkObject(in.Args[0], in.IR.Field, v, fn, chain, site, depth)
+			t.walkObject(in.Args[0], in.IR.Field, v, in, fn, chain, site, depth)
 			return
 		}
 		t.walk(in.Args[0], fn, append(chain, "."+in.IR.Field), site, depth)
@@ -544,7 +544,7 @@ func (t *tracer) walkResult(call *sg.Instr, idx int, fn *sg.Func, chain []string
 }
 
 // walkAddr follows a value that is read from memory: a variable, a field.
-func (t *tracer) walkAddr(addr *sg.Value, fn *sg.Func, chain []string, site ir.Pos, depth int) {
+func (t *tracer) walkAddr(addr, read *sg.Value, fn *sg.Func, chain []string, site ir.Pos, depth int) {
 	switch {
 	case addr.Kind == sg.KGlobal:
 		t.stopGlobal(addr, chain)
@@ -552,7 +552,7 @@ func (t *tracer) walkAddr(addr *sg.Value, fn *sg.Func, chain []string, site ir.P
 		a := addr.Instr
 		switch a.IR.Path[0].Kind {
 		case ir.StepField:
-			t.walkObject(a.Args[0], a.IR.Path[0].Field, nil, fn, chain, site, depth)
+			t.walkObject(a.Args[0], a.IR.Path[0].Field, read, read.Instr, fn, chain, site, depth)
 		default:
 			t.stop(KindContainerImprecision, "an element of a container: the elements are not told apart", "", a.Pos, chain, nil)
 		}
@@ -583,7 +583,7 @@ func (t *tracer) walkAddr(addr *sg.Value, fn *sg.Func, chain []string, site ir.P
 // walkObject follows the field of an object back to where the field is set.
 // read is the value the field was read into: its type is the type of the
 // field.
-func (t *tracer) walkObject(base *sg.Value, field string, read *sg.Value, fn *sg.Func, chain []string, site ir.Pos, depth int) {
+func (t *tracer) walkObject(base *sg.Value, field string, read *sg.Value, at *sg.Instr, fn *sg.Func, chain []string, site ir.Pos, depth int) {
 	t.nodes++
 	if depth > maxProvDepth || t.nodes > maxProvNodes {
 		t.stop(KindDepthLimit, "the tracing was cut at its depth or size limit", "", base.Pos, chain, nil)
@@ -605,7 +605,12 @@ func (t *tracer) walkObject(base *sg.Value, field string, read *sg.Value, fn *sg
 		t.stop(KindGlobalVar, "the field "+field+" of the package variable "+base.Name+"; its direct writers are listed", base.Name+"."+field, base.Pos,
 			chain, t.e.writersOf(base))
 	case base.Instr != nil && base.Instr.Op == ir.OpAlloc:
-		set := false
+		// killed: a write of the field that is made on every path to the
+		// read, so that the zero value no longer reaches it.
+		killed := false
+		// writes are told only when they can reach the read.
+		reaches := func(w *sg.Instr) bool { return writeReaches(w, at) }
+		kills := func(w *sg.Instr) bool { return writeKills(w, at) }
 		// A write that reaches the field in another form: the whole object
 		// assigned (from a call, a copy of what a pointer points to, an
 		// element), or a part of the field.
@@ -622,20 +627,29 @@ func (t *tracer) walkObject(base *sg.Value, field string, read *sg.Value, fn *sg
 						// A copy of another variable of the function (a
 						// literal is built there and copied): the field is
 						// what that variable's field is.
-						set = true
-						t.walkObject(z.Instr.Args[0], field, read, fn, chain[:len(chain)-1], site, depth+1)
+						if !reaches(in) {
+							continue
+						}
+						killed = killed || kills(in)
+						t.walkObject(z.Instr.Args[0], field, read, in, fn, chain[:len(chain)-1], site, depth+1)
 					default:
 						other = true
 					}
 				case in.Op == ir.OpAddrOf && len(in.Args) == 1 && in.Args[0] == base && len(in.IR.Path) > 1 && in.IR.Path[0].Kind == ir.StepField && in.IR.Path[0].Field == field:
 					other = true
 				case in.Op == ir.OpFieldStore && in.Args[0] == base && in.IR.Field == field:
-					set = true
+					if !reaches(in) {
+						continue
+					}
+					killed = killed || kills(in)
 					t.walk(in.Args[1], fn, chain, site, depth+1)
 				case in.Op == ir.OpStore && in.Args[0].Instr != nil && in.Args[0].Instr.Op == ir.OpAddrOf:
 					fa := in.Args[0].Instr
 					if len(fa.Args) == 1 && fa.Args[0] == base && len(fa.IR.Path) == 1 && fa.IR.Path[0].Kind == ir.StepField && fa.IR.Path[0].Field == field {
-						set = true
+						if !reaches(in) {
+							continue
+						}
+						killed = killed || kills(in)
 						t.walk(in.Args[1], fn, chain, site, depth+1)
 					}
 				}
@@ -646,15 +660,15 @@ func (t *tracer) walkObject(base *sg.Value, field string, read *sg.Value, fn *sg
 			t.stop(KindDepthLimit, "the address of the object is passed on: the field may be changed elsewhere", "", base.Pos, chain, nil)
 		case other:
 			t.stop(KindDepthLimit, "the object that holds the field is assigned as a whole (or a part of the field is set): the field is not followed", "", base.Pos, chain, nil)
-		case !set:
-			// Nothing sets it and nobody else can: the zero value.
-			if read != nil {
-				var cp *provVal
-				if c, ok := provConst(read); ok {
-					cp = &c
-				}
-				t.resolved(zeroText(read.Class, read.Type), site, CertaintyZeroValue, cp)
+		}
+		// The zero value reaches the read unless a write is made on every
+		// path to it (or the object is not followed at all, above).
+		if !allocEscapes(fn, base) && !other && !killed && read != nil {
+			var cp *provVal
+			if c, ok := provConst(read); ok {
+				cp = &c
 			}
+			t.resolved(zeroText(read.Class, read.Type), site, CertaintyZeroValue, cp)
 		}
 	case base.Kind == sg.KParam:
 		// The object is handed in: look at what the callers pass.
@@ -664,7 +678,7 @@ func (t *tracer) walkObject(base *sg.Value, field string, read *sg.Value, fn *sg
 			if idx >= 0 && idx < len(argv) {
 				saved := t.ctx
 				t.ctx = rest
-				t.walkObject(argv[idx], field, read, ci.Block.Func, chain[:len(chain)-1], ci.Pos, depth+1)
+				t.walkObject(argv[idx], field, read, ci, ci.Block.Func, chain[:len(chain)-1], ci.Pos, depth+1)
 				t.ctx = saved
 			}
 			return
@@ -685,7 +699,7 @@ func (t *tracer) walkObject(base *sg.Value, field string, read *sg.Value, fn *sg
 		for _, ci := range sites {
 			argv := callArgv(ci)
 			if idx >= 0 && idx < len(argv) {
-				t.walkObject(argv[idx], field, read, ci.Block.Func, chain[:len(chain)-1], ci.Pos, depth+1)
+				t.walkObject(argv[idx], field, read, ci, ci.Block.Func, chain[:len(chain)-1], ci.Pos, depth+1)
 			}
 		}
 	default:
@@ -763,4 +777,44 @@ func (e *Engine) callersOf(fn *sg.Func) []*sg.Instr {
 		}
 	}
 	return e.callSites[fn]
+}
+
+// writeReaches reports whether a write may be seen by a read: it is made
+// before the read in the same block, or on a path from its block to the
+// read's (a loop included). Without a known read, every write may.
+func writeReaches(w, at *sg.Instr) bool {
+	if at == nil || w.Block.Func != at.Block.Func {
+		return true
+	}
+	if w.Block == at.Block && w.Index < at.Index {
+		return true
+	}
+	seen := map[*sg.Block]bool{}
+	stack := append([]*sg.Block(nil), w.Block.Succs...)
+	for len(stack) > 0 {
+		b := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if seen[b] {
+			continue
+		}
+		seen[b] = true
+		if b == at.Block {
+			return true
+		}
+		stack = append(stack, b.Succs...)
+	}
+	return false
+}
+
+// writeKills reports whether a write is made on every path to the read: it
+// is before the read in the same block, or its block dominates the read's.
+// Unknown is no.
+func writeKills(w, at *sg.Instr) bool {
+	if at == nil || w.Block.Func != at.Block.Func {
+		return false
+	}
+	if w.Block == at.Block {
+		return w.Index < at.Index
+	}
+	return w.Block.Dominates(at.Block)
 }
