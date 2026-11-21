@@ -863,7 +863,7 @@ func modelRef(symbol, role string, p model.Provenance) *ModelRef {
 func (s *state) applyFlows(cc *callCtx, flows []model.Flow, o *op, desc string, mref *ModelRef) {
 	for _, fl := range flows {
 		from, err1 := model.ParseSelector(fl.From)
-		to, err2 := model.ParseSelector(fl.To)
+		to, err2 := model.ParseDest(fl.To)
 		if err1 != nil || err2 != nil {
 			continue
 		}
@@ -892,8 +892,16 @@ func (s *state) applyFlows(cc *callCtx, flows []model.Flow, o *op, desc string, 
 			}
 		} else {
 			for _, v := range s.selectVals(cc, to) {
-				dsts = append(dsts, s.locs(v)...)
-				dsts = append(dsts, s.pointeeOfInterface(v)...)
+				here := append(append([]Loc(nil), s.locs(v)...), s.pointeeOfInterface(v)...)
+				if to.Content {
+					// what was written goes below the writer, in a step of its own: a field of the
+					// writer (a file name, a setting) is not what was written to it, and a read of the
+					// whole writer (`from: recv`) still sees it
+					for i := range here {
+						here[i].Path = pathJoin(here[i].Path, model.ContentStep)
+					}
+				}
+				dsts = append(dsts, here...)
 			}
 		}
 		for _, d := range dsts {

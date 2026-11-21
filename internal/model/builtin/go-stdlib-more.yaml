@@ -303,9 +303,9 @@ propagators:
   - symbol: (*log/slog.Logger).With
     flows: [{from: recv, to: result}, {from: arg0, to: result}]
   - symbol: (*text/template.Template).Execute
-    flows: [{from: arg1, to: arg0}]
+    flows: [{from: arg1, to: arg0.content}]
   - symbol: (*html/template.Template).Execute
-    flows: [{from: arg1, to: arg0}]
+    flows: [{from: arg1, to: arg0.content}]
   - symbol: text/template.New
     flows: [{from: arg0, to: result}]
   - symbol: html/template.New
@@ -339,7 +339,7 @@ propagators:
   - symbol: encoding/pem.Decode
     flows: [{from: arg0, to: result0}]
   - symbol: encoding/pem.Encode
-    flows: [{from: arg1, to: arg0}]
+    flows: [{from: arg1, to: arg0.content}]
   - symbol: crypto/x509.ParseCertificate
     flows: [{from: arg0, to: result0}]
   - symbol: crypto/tls.X509KeyPair
@@ -381,7 +381,7 @@ propagators:
   - symbol: image.Decode
     flows: [{from: arg0, to: result0}]
   - symbol: image/png.Encode
-    flows: [{from: arg1, to: arg0}]
+    flows: [{from: arg1, to: arg0.content}]
   - symbol: archive/zip.NewWriter
     flows: [{from: arg0, to: result}]
   - symbol: (*archive/zip.Writer).CreateHeader
@@ -553,9 +553,9 @@ propagators:
   - symbol: encoding/xml.NewDecoder
     flows: [{from: arg0, to: result}]
   - symbol: (*text/template.Template).ExecuteTemplate
-    flows: [{from: arg2, to: arg0}]
+    flows: [{from: arg2, to: arg0.content}]
   - symbol: (*html/template.Template).ExecuteTemplate
-    flows: [{from: arg2, to: arg0}]
+    flows: [{from: arg2, to: arg0.content}]
   - symbol: (*html/template.Template).Lookup
     flows: [{from: recv, to: result}]
   - symbol: (*html/template.Template).New

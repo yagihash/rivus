@@ -399,6 +399,32 @@ type Selector struct {
 	Kind  string // SelRecv, SelArg or SelResult
 	Index int
 	All   bool // "args" or "results": every argument/result
+	// Content is the written content of the position (`recv.content`, `arg0.content`): what a writer
+	// holds of the data written to it, as a step of its own below the value, beside the fields of
+	// the value. Only a destination (`to:`) of a flow can say it (ParseDest); ADR-077.
+	Content bool
+}
+
+// ContentSuffix is how a model names the content step of a destination, and ContentStep is the step it
+// is in an access path. A step that is no field name of any language: a field of the writer (a file name,
+// a setting) is never a read of what was written to it.
+const (
+	ContentSuffix = ".content"
+	ContentStep   = "#content"
+)
+
+// ParseDest parses the destination of a flow: a Selector, or `recv.content` / `argN.content`, the content
+// of a writer (a destination that is not a result).
+func ParseDest(s string) (Selector, error) {
+	if base, ok := strings.CutSuffix(s, ContentSuffix); ok {
+		sel, err := ParseSelector(base)
+		if err != nil || sel.Kind == SelResult || sel.All {
+			return Selector{}, fmt.Errorf("invalid destination %q (%s is for recv or argN)", s, ContentSuffix)
+		}
+		sel.Content = true
+		return sel, nil
+	}
+	return ParseSelector(s)
 }
 
 // ParseSelector parses "recv", "arg0", "args", "result", "result1", "results".
@@ -944,7 +970,7 @@ func validateFlows(flows []Flow, what string) error {
 		if _, err := ParseSelector(f.From); err != nil {
 			return fmt.Errorf("%s.flows[%d].from: %w", what, i, err)
 		}
-		to, err := ParseSelector(f.To)
+		to, err := ParseDest(f.To)
 		if err != nil {
 			return fmt.Errorf("%s.flows[%d].to: %w", what, i, err)
 		}

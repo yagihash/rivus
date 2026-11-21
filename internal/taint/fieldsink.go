@@ -28,7 +28,7 @@ const (
 // that an interface holds, and an element of a container. The names a model writes are matched against
 // the path with these steps left out (docs/DESIGN-field-sinks.md 3).
 func transparentStep(seg string) bool {
-	return seg == "*" || strings.HasPrefix(seg, "[")
+	return seg == "*" || strings.HasPrefix(seg, "[") || seg == model.ContentStep
 }
 
 // matchParts matches the names of a field (the part of a sink) against the path of a cell, relative to

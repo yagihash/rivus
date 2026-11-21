@@ -50,13 +50,13 @@ propagators:
   - symbol: strings.NewReader
     flows: [{from: arg0, to: result}]
   - symbol: (*strings.Builder).WriteString
-    flows: [{from: arg0, to: recv}]
+    flows: [{from: arg0, to: recv.content}]
   - symbol: (*strings.Builder).WriteByte
-    flows: [{from: arg0, to: recv}]
+    flows: [{from: arg0, to: recv.content}]
   - symbol: (*strings.Builder).WriteRune
-    flows: [{from: arg0, to: recv}]
+    flows: [{from: arg0, to: recv.content}]
   - symbol: (*strings.Builder).Write
-    flows: [{from: arg0, to: recv}]
+    flows: [{from: arg0, to: recv.content}]
   - symbol: (*strings.Builder).String
     flows: [{from: recv, to: result}]
 
@@ -68,11 +68,11 @@ propagators:
   - symbol: bytes.NewReader
     flows: [{from: arg0, to: result}]
   - symbol: (*bytes.Buffer).WriteString
-    flows: [{from: arg0, to: recv}]
+    flows: [{from: arg0, to: recv.content}]
   - symbol: (*bytes.Buffer).Write
-    flows: [{from: arg0, to: recv}]
+    flows: [{from: arg0, to: recv.content}]
   - symbol: (*bytes.Buffer).WriteByte
-    flows: [{from: arg0, to: recv}]
+    flows: [{from: arg0, to: recv.content}]
   - symbol: (*bytes.Buffer).String
     flows: [{from: recv, to: result}]
   - symbol: (*bytes.Buffer).Bytes
@@ -96,13 +96,13 @@ propagators:
   - symbol: errors.New
     flows: [{from: args, to: result}]
   - symbol: fmt.Fprintf
-    flows: [{from: args, to: arg0}]
+    flows: [{from: args, to: arg0.content}]
   - symbol: fmt.Fprint
-    flows: [{from: args, to: arg0}]
+    flows: [{from: args, to: arg0.content}]
   - symbol: fmt.Fprintln
-    flows: [{from: args, to: arg0}]
+    flows: [{from: args, to: arg0.content}]
   - symbol: io.WriteString
-    flows: [{from: arg1, to: arg0}]
+    flows: [{from: arg1, to: arg0.content}]
   - symbol: (error).Error
     flows: [{from: recv, to: result}]
 
@@ -160,11 +160,11 @@ propagators:
   - symbol: io.LimitReader
     flows: [{from: arg0, to: result}]
   - symbol: io.Copy
-    flows: [{from: arg1, to: arg0}]
+    flows: [{from: arg1, to: arg0.content}]
   - symbol: (io.Reader).Read
     flows: [{from: recv, to: arg0}]
   - symbol: (io.Writer).Write
-    flows: [{from: arg0, to: recv}]
+    flows: [{from: arg0, to: recv.content}]
   - symbol: (io/fs.DirEntry).Name
     flows: [{from: recv, to: result}]
   - symbol: (io/fs.FileInfo).Name
