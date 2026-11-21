@@ -263,6 +263,12 @@ func (w *writer) refs(fn *sg.Func, owner int64) (int, error) {
 					closure[ins] = i
 				}
 			}
+			// a closure of Rust that captured values: the alloc of its environment (Reachable follows it)
+			if f := fn.Prog.EnvClosures[ins]; f != nil {
+				if i := add(ref{target: ir.FuncID(f.ID), symbol: f.Symbol, pos: ins.Pos, kind: RefClosure}); i >= 0 {
+					closure[ins] = i
+				}
+			}
 		}
 	}
 	for _, b := range fn.Blocks {
@@ -279,13 +285,14 @@ func (w *writer) refs(fn *sg.Func, owner int64) (int, error) {
 				if a == nil {
 					continue
 				}
+				k := a.FuncRef() // a function item made a function pointer (Rust convert) too
 				switch {
-				case a.Kind == sg.KFunc && a.FuncID != "":
+				case k != nil && k.FuncID != "":
 					sym := ""
-					if a.Fn != nil {
-						sym = a.Fn.Symbol
+					if k.Fn != nil {
+						sym = k.Fn.Symbol
 					}
-					r := ref{target: a.FuncID, symbol: sym, pos: ins.Pos, kind: RefOther}
+					r := ref{target: k.FuncID, symbol: sym, pos: ins.Pos, kind: RefOther}
 					if call {
 						r.via, r.kind = via, RefArg
 					}

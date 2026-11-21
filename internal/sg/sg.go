@@ -197,6 +197,10 @@ type InstrInfo struct {
 	Folded   bool
 	Keyed    bool
 	Go       bool
+	// Env is the type of an alloc of a closure's environment (Rust: "{closure@file:l:c: l:c}"),
+	// empty for every other instruction. A closure that captured values is made as this alloc, not
+	// as a make_closure; Program.EnvClosures says which function it runs.
+	Env string
 	// Reason is what an unsupported instruction says an extractor could not express.
 	Reason string
 }
@@ -232,6 +236,9 @@ type Program struct {
 	// has exceptions in its control flow (Dart), and the values that are
 	// thrown are followed. (Go panics and Rust panics are not.)
 	HasExceptions bool
+	// EnvClosures is, for each alloc of a closure's environment (Rust), the function the closure
+	// runs: the one at the place where the type of the environment says the closure is written.
+	EnvClosures map[*Instr]*Func
 
 	globalMu sync.Mutex // Global makes a value the first time it is asked for
 }
@@ -333,6 +340,8 @@ func (p *Program) Reachable() map[*Func]bool {
 				for _, c := range in.CandidateFns {
 					add(c)
 				}
+				// a closure that captured values, made as the alloc of its environment (Rust)
+				add(p.EnvClosures[in])
 				// A closure that captured a value is made here, and the function it runs is
 				// reached (the same rule as a reference of kind closure in the graph). One that
 				// captured nothing is a function value (KFunc), and is an argument below.
@@ -340,12 +349,42 @@ func (p *Program) Reachable() map[*Func]bool {
 					add(p.ByID[string(in.IR.Func)])
 				}
 				for _, a := range in.Args {
-					if a != nil && a.Kind == KFunc {
-						add(a.Fn)
-					}
+					add(a.FuncValue())
 				}
 			}
 		}
 	}
 	return reach
+}
+
+// FuncValue is the function that a value is when it is a function named as a value: a KFunc, or
+// one that was copied, or converted to another function type, on the way (Rust: a function item
+// made a function pointer is a convert of it). Nil when it is not exactly one known function.
+func (v *Value) FuncValue() *Func {
+	if k := v.FuncRef(); k != nil {
+		return k.Fn
+	}
+	return nil
+}
+
+// FuncRef is the KFunc value that a value is (see FuncValue), or nil. Its FuncID is the function
+// even when the function has no body (Fn is nil).
+func (v *Value) FuncRef() *Value {
+	for i := 0; i < 8 && v != nil; i++ {
+		if v.Kind == KFunc {
+			return v
+		}
+		if v.Kind != KResult || v.Instr == nil || v.Instr.IR == nil || len(v.Instr.Args) != 1 {
+			return nil
+		}
+		in := v.Instr
+		switch {
+		case in.Op == ir.OpCopy && !in.IR.View:
+		case in.Op == ir.OpConvert && len(in.Dsts) == 1 && in.Dsts[0].Class == ir.ClassFunc && in.Args[0].Class == ir.ClassFunc:
+		default:
+			return nil
+		}
+		v = in.Args[0]
+	}
+	return nil
 }

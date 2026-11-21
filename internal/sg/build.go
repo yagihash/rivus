@@ -2,6 +2,7 @@ package sg
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/yagihash/rivus/internal/ir"
 	"github.com/yagihash/rivus/internal/irssa"
@@ -44,6 +45,7 @@ func build(p *ir.Program, consume bool) (*Program, error) {
 		p.Funcs = nil
 	}
 	out.link()
+	out.linkEnvClosures()
 	out.resolveValueCalls()
 	return out, nil
 }
@@ -453,6 +455,10 @@ func slimFunc(f *ir.Func) *ir.Func {
 }
 
 func infoOf(in *ir.Instr) *InstrInfo {
-	return &InstrInfo{Operator: in.Operator, Field: in.Field, Global: in.Global, Path: in.Path, Func: in.Func,
+	info := &InstrInfo{Operator: in.Operator, Field: in.Field, Global: in.Global, Path: in.Path, Func: in.Func,
 		View: in.View, Folded: in.Folded, Keyed: in.Keyed, Go: in.Go, Reason: in.Reason}
+	if in.Op == ir.OpAlloc && strings.HasPrefix(string(in.Type), "{closure@") {
+		info.Env = string(in.Type)
+	}
+	return info
 }

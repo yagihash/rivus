@@ -1295,6 +1295,12 @@ pub(crate) fn same_trait(impl_trait: &str, called: &str) -> bool {
         return true;
     }
     let (sa, sb): (Vec<&str>, Vec<&str>) = (a.split("::").collect(), b.split("::").collect());
+    // a trait that its crate re-exports at the root (`pub use handlers::modal::Server`) is named by the
+    // root path (`app::Server`) in a crate that uses it, and by where it is defined in the impls of its
+    // own crate: the same crate, the same name, and one of them is the root path
+    if sa[0] != "std" && sa[0] == sb[0] && sa.last() == sb.last() && (sa.len() == 2 || sb.len() == 2) {
+        return true;
+    }
     sa.len() > 2 && sb.len() > 2 && sa[0] == "std" && sb[0] == "std" && sa[1] == sb[1] && sa.last() == sb.last()
 }
 
@@ -1474,6 +1480,11 @@ mod tests {
     fn traits_are_compared_by_path() {
         assert!(!same_trait("app::queue::Handler", "app::http::Handler"));
         assert!(same_trait("app::http::Handler", "app::http::Handler"));
+        // a trait that the crate re-exports at its root
+        assert!(same_trait("app::http::modal::Server", "app::Server"));
+        assert!(same_trait("app::Server", "app::http::modal::Server"));
+        assert!(!same_trait("app::http::modal::Server", "other::Server"));
+        assert!(!same_trait("app::http::Server", "app::Handler"));
         assert!(same_trait("core::iter::traits::iterator::Iterator", "std::iter::Iterator"));
         assert!(!same_trait("core::fmt::Write", "std::io::Write"));
         assert!(same_trait("std::io::Write", "std::io::Write"));
