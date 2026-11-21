@@ -6,3 +6,5 @@
 /extractor/rust/target/
 /bench/zoo-rust/target/
 /bench/zoo-rust/exec/target/
+__pycache__/
+*.pyc
