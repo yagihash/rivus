@@ -1,0 +1,10 @@
+ruleset: r43/scc@1
+
+sources:
+  - symbol: os.Getenv
+    labels: [user_input]
+
+sinks:
+  - symbol: os/exec.Command
+    category: command_injection
+    args: [0]

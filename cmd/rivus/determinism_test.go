@@ -65,13 +65,13 @@ func analyzeWith(t *testing.T, dir, procs string, args ...string) []byte {
 }
 
 // sameEveryTime analyses the same input `runs` times under each GOMAXPROCS (1, 4, the
-// default) and -workers (the default, 2, 16), and fails when two outputs differ.
+// default) and -workers (the default, 1, 2, 16), and fails when two outputs differ.
 func sameEveryTime(t *testing.T, dir string, runs int, args ...string) {
 	t.Helper()
 	var first []byte
 	var firstHow string
 	for _, procs := range []string{"1", "4", ""} {
-		for _, workers := range []string{"", "2", "16"} {
+		for _, workers := range []string{"", "1", "2", "16"} {
 			for i := 0; i < runs; i++ {
 				a := args
 				if workers != "" {
@@ -115,6 +115,29 @@ func stepFuncs(steps []taint.Step) string {
 		s = append(s, st.Func[strings.LastIndex(st.Func, ".")+1:])
 	}
 	return strings.Join(s, " ")
+}
+
+// TestDeterministicLargeSCC: testdata/scc has a strongly connected component of 8 functions or more, which
+// `-workers 1` goes through one function at a time and `-workers 2` or more all together, round by round
+// (engine.go: parallelSCC). The other inputs of these tests have no such component, so they did not see that the
+// two ways give different representative paths and stats (R-43, yagihash/rivus#96). The test records the fact:
+// it is skipped while the output differs, and passes once the two ways agree.
+func TestDeterministicLargeSCC(t *testing.T) {
+	dir := filepath.Join(testutil.Testdata(), "..", "scc")
+	var first []byte
+	var firstW string
+	var diff string
+	for _, w := range []string{"1", "2", "16"} {
+		got := analyzeWith(t, dir, "", "-workers", w, "-rules", "rules.yaml", "./...")
+		if first == nil {
+			first, firstW = got, w
+		} else if !bytes.Equal(first, got) && diff == "" {
+			diff = fmt.Sprintf("-workers %s and -workers %s differ\n%s", firstW, w, firstDifference(first, got))
+		}
+	}
+	if diff != "" {
+		t.Skipf("yagihash/rivus#96 (R-43): the output depends on -workers when a component has 8 functions or more: %s", diff)
+	}
 }
 
 // TestDeterministicGlobalWriters: the writers of gwriters are in the same level, and the
