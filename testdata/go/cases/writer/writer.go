@@ -136,7 +136,7 @@ func OwnCopy() {
 }
 
 // --- the writer is passed to a function as an interface (a pointer inside the interface value), and
-// is written to there: the write must reach what the pointer points to (ADR-087) ---
+// is written to there: the write must reach what the pointer points to (ADR-090) ---
 
 func fill(w io.Writer, s string) { fmt.Fprint(w, s) }
 

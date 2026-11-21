@@ -383,7 +383,7 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 			}
 		case OutParam:
 			if o.Index < len(argv) {
-				// an interface value made of a pointer: the write is to what the pointer points to as well (ADR-087)
+				// an interface value made of a pointer: the write is to what the pointer points to as well (ADR-090)
 				dsts = append(dsts, s.ifaceTargets(argv[o.Index], o.Path)...)
 				for _, l := range s.locs(argv[o.Index]) {
 					dsts = append(dsts, Loc{l.Root, l.Path + o.Path})

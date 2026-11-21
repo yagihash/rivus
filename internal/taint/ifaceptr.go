@@ -5,7 +5,7 @@ import (
 	"github.com/yagihash/rivus/internal/sg"
 )
 
-// A pointer inside an interface value (Go, ADR-087).
+// A pointer inside an interface value (Go, ADR-090).
 //
 // make_interface of a pointer copies what the pointer points to below "/*" of the interface value
 // (convert), so a function that is given the interface value, and writes to it (`fmt.Fprint(w, s)`
