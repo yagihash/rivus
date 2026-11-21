@@ -2,8 +2,13 @@ package main
 
 import (
 	"fmt"
+	"io/fs"
 	"net/url"
+	"path/filepath"
+	"sort"
 	"strings"
+
+	"github.com/BurntSushi/toml"
 )
 
 // The only place that the fetch stage gets from without a flag: the registry of crates.io. Where the fetch goes is chosen
@@ -118,4 +123,102 @@ func checkFetchSources(lock string, allow []string) error {
 		"Note that allowing a host lets the repository send the fetch to other places: the submodules it names (.gitmodules) and redirects from the host. "+
 		"That is not prevented until the network of the fetch stage is narrowed (docs/DESIGN-fetch-network.md)",
 		strings.Join(refused, "\n  "), strings.Join(hostList, " "))
+}
+
+// manifestPlaces are the places that the manifests (Cargo.toml) of the project name for cargo to get from: the `git` of
+// a dependency, the `registry-index` of a dependency, and the URL that names the source of a [patch] table. They are read
+// from the manifests, not from Cargo.lock, because cargo asks the places a manifest names before it finds that Cargo.lock
+// does not match (`--locked`): a manifest can send the fetch to a place that Cargo.lock never shows. The manifests are
+// parsed as data (nothing is run). A manifest that cannot be parsed is a place that is not known: it is refused.
+type manifestPlace struct{ desc, url string }
+
+func manifestPlaces(dir string) (places []manifestPlace, err error) {
+	var files []string
+	err = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if n := d.Name(); path != dir && (n == "target" || n == ".git") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if d.Name() == "Cargo.toml" && d.Type().IsRegular() {
+			files = append(files, path)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(files)
+	for _, f := range files {
+		rel, _ := filepath.Rel(dir, f)
+		var doc map[string]any
+		if _, err := toml.DecodeFile(f, &doc); err != nil {
+			return nil, fmt.Errorf("%s cannot be read as TOML, so the places it names are not known: %v", rel, err)
+		}
+		places = collectPlaces(places, doc, "", rel)
+	}
+	return places, nil
+}
+
+// collectPlaces adds to places the places that the table v (at path, of the manifest rel) names, and those of the tables inside.
+func collectPlaces(places []manifestPlace, v any, path, rel string) []manifestPlace {
+	t, ok := v.(map[string]any)
+	if !ok {
+		if arr, ok := v.([]map[string]any); ok { // [[bin]] and the like
+			for _, e := range arr {
+				places = collectPlaces(places, e, path, rel)
+			}
+		}
+		return places
+	}
+	for k, e := range t {
+		switch {
+		case path == "package.metadata" || path == "workspace.metadata":
+			return places // inert: cargo does not read it
+		case (k == "git" || k == "registry-index") && isString(e):
+			places = append(places, manifestPlace{fmt.Sprintf("%s: %s = %q", rel, k, e), e.(string)})
+		case (path == "patch" || path == "replace") && strings.Contains(k, "://"):
+			places = append(places, manifestPlace{fmt.Sprintf("%s: [%s.%q]", rel, path, k), k})
+		}
+		places = collectPlaces(places, e, strings.TrimPrefix(path+"."+k, "."), rel)
+	}
+	return places
+}
+
+func isString(v any) bool { _, ok := v.(string); return ok }
+
+// checkManifestSources refuses the places that the manifests name, unless the host is named in allow, as checkFetchSources
+// does for Cargo.lock.
+func checkManifestSources(dir string, allow []string) error {
+	places, err := manifestPlaces(dir)
+	if err != nil {
+		return err
+	}
+	var refused []string
+	for _, p := range places {
+		host := ""
+		if pu, err := url.Parse(strings.TrimSpace(p.url)); err == nil {
+			host = pu.Hostname()
+		}
+		ok := false
+		for _, a := range allow {
+			if host != "" && strings.EqualFold(strings.Trim(a, "[]"), host) {
+				ok = true
+			}
+		}
+		if !ok {
+			refused = append(refused, p.desc)
+		}
+	}
+	if len(refused) == 0 {
+		return nil
+	}
+	return fmt.Errorf("the manifests (Cargo.toml) of the project name places to fetch from that are not allowed. Cargo.lock does not have to show them: "+
+		"cargo asks them before it finds that Cargo.lock does not match. By default the fetch stage gets from crates.io only. Not allowed:\n  %s\n"+
+		"To fetch them, after you have looked at them, name their hosts with -allow-fetch-host HOST (or fetch the dependencies yourself and use -no-fetch)",
+		strings.Join(refused, "\n  "))
 }

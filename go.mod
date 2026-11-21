@@ -3,6 +3,7 @@ module github.com/yagihash/rivus
 go 1.27
 
 require (
+	github.com/BurntSushi/toml v1.6.0
 	go.yaml.in/yaml/v3 v3.0.6
 	golang.org/x/sys v0.49.0
 	golang.org/x/tools v0.52.0

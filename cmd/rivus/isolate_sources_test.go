@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -61,5 +63,50 @@ func TestCheckFetchSources(t *testing.T) {
 	}
 	if err := checkFetchSources(lockWith("git+http://10.0.0.5/x.git#0123456789abcdef0123456789abcdef01234567"), []string{"registry.example.com"}); err == nil {
 		t.Error("another host was allowed")
+	}
+}
+
+// The manifests name places too, and cargo asks them before it finds that Cargo.lock does not match (--locked): a manifest that
+// names a git repository which Cargo.lock lacks sends the fetch there. The check reads the manifests.
+func TestCheckManifestSources(t *testing.T) {
+	const pkg = "[package]\nname = \"t\"\nversion = \"0.1.0\"\nedition = \"2021\"\n"
+	cases := []struct {
+		name  string
+		files map[string]string
+		allow []string
+		bad   string // part of the message; "" means allowed
+	}{
+		{"crates.io only", map[string]string{"Cargo.toml": pkg + "[dependencies]\nitoa = \"1\"\nlocal = { path = \"../x\" }\n[package.metadata.docs]\ngit = \"https://example.com/\"\n"}, nil, ""},
+		{"git dependency", map[string]string{"Cargo.toml": pkg + "[dependencies]\ng = { git = \"https://github.com/a/b\" }\n"}, nil, `git = "https://github.com/a/b"`},
+		{"git dependency, host allowed", map[string]string{"Cargo.toml": pkg + "[dependencies]\ng = { git = \"https://github.com/a/b\" }\n"}, []string{"github.com"}, ""},
+		{"in a member of the workspace", map[string]string{"Cargo.toml": "[workspace]\nmembers = [\"m\"]\n", "m/Cargo.toml": pkg + "[target.'cfg(unix)'.dependencies]\ng = { git = \"http://10.0.0.5/x\" }\n"}, nil, "m/Cargo.toml"},
+		{"quoted key with an escape", map[string]string{"Cargo.toml": pkg + "[dependencies]\ng = { \"\\u0067it\" = \"http://10.0.0.5/x\" }\n"}, nil, "10.0.0.5"},
+		{"dotted key", map[string]string{"Cargo.toml": pkg + "[dependencies]\ng.git = \"http://10.0.0.5/x\"\n"}, nil, "10.0.0.5"},
+		{"patch of a source", map[string]string{"Cargo.toml": pkg + "[patch.\"https://evil.example/x\"]\ny = { path = \"p\" }\n"}, nil, "evil.example"},
+		{"patch with git", map[string]string{"Cargo.toml": pkg + "[patch.crates-io]\nitoa = { git = \"http://10.0.0.5/x\" }\n"}, nil, "10.0.0.5"},
+		{"registry-index", map[string]string{"Cargo.toml": pkg + "[dependencies]\ng = { version = \"1\", registry-index = \"http://10.0.0.5/\" }\n"}, nil, "registry-index"},
+		{"not TOML", map[string]string{"Cargo.toml": pkg + "[dependencies\n"}, nil, "cannot be read as TOML"},
+		{"build directories are skipped", map[string]string{"Cargo.toml": pkg, "target/x/Cargo.toml": "[dependencies]\ng = { git = \"http://10.0.0.5/x\" }\n"}, nil, ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			for f, body := range c.files {
+				p := filepath.Join(dir, f)
+				if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			err := checkManifestSources(dir, c.allow)
+			switch {
+			case c.bad == "" && err != nil:
+				t.Errorf("refused: %v", err)
+			case c.bad != "" && (err == nil || !strings.Contains(err.Error(), c.bad)):
+				t.Errorf("not refused (or not listed: %q): %v", c.bad, err)
+			}
+		})
 	}
 }

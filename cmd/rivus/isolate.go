@@ -302,6 +302,9 @@ func (o *isolationOpts) extractRustIsolated(ctx context.Context, dir string, ext
 			if err := checkFetchSources(string(lock), o.allowHosts); err != nil {
 				return nil, err
 			}
+			if err := checkManifestSources(dir, o.allowHosts); err != nil {
+				return nil, err
+			}
 			if err := o.dropConfigOfVolume(ctx, volume); err != nil {
 				return nil, err
 			}
