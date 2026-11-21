@@ -18,18 +18,38 @@ if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] ||
 fi
 fail=0
 have() { git cat-file -e "$1:$lock" 2>/dev/null; }
-count_added() { grep -c '^+[^+]' || true; }
+# rows_added <old> <new>: how many rows the new file (a rev:path, or "-" for none) has that the old one has not, as a
+# multiset. The columns that both have are compared (the old file has 4 columns and the new one 5: the first 4), so
+# a column that is added is not a loosening; a column that goes away fails (prints -1).
+cols() { git show "$1:$lock" | head -1 | awk -F'\t' '{print NF}'; }
+rows_added() {
+  local oc nc k
+  if [ "$1" = "-" ]; then oc=$(cols "$2"); else oc=$(cols "$1"); fi
+  nc=$(cols "$2")
+  if [ "$nc" -lt "$oc" ]; then echo -1; return; fi
+  k=$oc
+  if [ "$1" = "-" ]; then
+    git show "$2:$lock" | cut -f1-"$k" | wc -l | tr -d ' '
+  else
+    comm -13 <(git show "$1:$lock" | cut -f1-"$k" | LC_ALL=C sort) <(git show "$2:$lock" | cut -f1-"$k" | LC_ALL=C sort) | wc -l | tr -d ' '
+  fi
+}
 for c in $(git rev-list "$base..$head"); do
   [ "$c" = "$first" ] && continue
   p=$(git rev-parse -q --verify "$c^1" || true)
   if [ -z "$p" ] || ! have "$p"; then
-    if have "$c"; then added=$(git show "$c:$lock" | wc -l | tr -d ' '); else added=0; fi
+    if have "$c"; then added=$(rows_added - "$c"); else added=0; fi
   elif ! have "$c"; then
     echo "::error::$c deletes $lock"
     fail=1
     continue
   else
-    added=$(git diff "$p" "$c" -- "$lock" | count_added)
+    added=$(rows_added "$p" "$c")
+  fi
+  if [ "$added" -lt 0 ]; then
+    echo "::error::$c takes a column away from $lock"
+    fail=1
+    continue
   fi
   if [ "$added" -gt 0 ] && ! git log -1 --format=%B "$c" | grep -Eq "$approved"; then
     echo "::error::$c adds $added row(s) to $lock (a loosened mark) without a 'Zoo-Loosened: <reason>。ユーザーの承認: YYYY-MM-DD' line in the message"
@@ -38,7 +58,7 @@ for c in $(git rev-list "$base..$head"); do
 done
 # the whole range: rows added in all, and no commit of the range has the line
 if have "$base" && have "$head"; then
-  net=$(git diff "$base" "$head" -- "$lock" | count_added)
+  net=$(rows_added "$base" "$head")
   if [ "$net" -gt 0 ] && ! git log --format=%B "$base..$head" | grep -Eq "$approved"; then
     echo "::error::$base..$head adds $net row(s) to $lock and no commit of the range has a Zoo-Loosened line"
     fail=1

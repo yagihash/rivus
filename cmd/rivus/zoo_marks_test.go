@@ -252,4 +252,41 @@ func TestZooLoosenedCheck(t *testing.T) {
 	if err := check(base); err != nil {
 		t.Errorf("a removed row failed: %v", err)
 	}
+	// ZOO-1: a column is added. Only the columns that both files have are compared.
+	run("reset", "-q", "--hard", first)
+	base = first
+	write("go\ta.go\tmiss\t@miss\n")
+	run("commit", "-qam", "back to the base", "--allow-empty")
+	base = run("rev-parse", "HEAD")
+	// 4 -> 5 columns, the same content: passes
+	write("go\ta.go\tmiss\t@miss\tfunc vuln()\n")
+	run("commit", "-qam", "add a column")
+	if err := check(base); err != nil {
+		t.Errorf("a column added with the same rows failed: %v", err)
+	}
+	// 4 -> 5 columns and a row more: fails
+	run("reset", "-q", "--hard", base)
+	write("go\ta.go\tmiss\t@miss\tfunc vuln()\ngo\tb.go\tfp\t@fp\tfunc f()\n")
+	run("commit", "-qam", "add a column and a row")
+	if check(base) == nil {
+		t.Error("a column and a row added at once passed")
+	}
+	// 5 columns: a @sink(none) moved to another case (the 5th column differs): fails
+	run("reset", "-q", "--hard", base)
+	write("go\ta.go\tsink-none\t@sink(none)\tfunc vuln()\n")
+	run("commit", "-qam", "five columns")
+	five := run("rev-parse", "HEAD")
+	write("go\ta.go\tsink-none\t@sink(none)\tfunc fixed()\n")
+	run("commit", "-qam", "move the mark")
+	if check(five) == nil {
+		t.Error("a mark moved to another case passed")
+	}
+	// 5 -> 4 columns: fails
+	run("reset", "-q", "--hard", five)
+	write("go\ta.go\tsink-none\t@sink(none)\n")
+	run("commit", "-qam", "four columns")
+	if check(five) == nil {
+		t.Error("a column taken away passed")
+	}
+
 }
