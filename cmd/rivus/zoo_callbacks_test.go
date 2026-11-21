@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -129,6 +131,54 @@ func cbCheck(row model.CallRow, o cbObserved) string {
 		return fmt.Sprintf("the row drops what the closure returns, and it is in what the call returned (%q)", o.Result)
 	}
 	return ""
+}
+
+// TestZooCallbacksDart is the same for the core library of Dart (bench/zoo-dart/callbacks/observe.dart).
+func TestZooCallbacksDart(t *testing.T) {
+	if os.Getenv("RIVUS_DART") == "" {
+		skipOrFail(t, "RIVUS_DART")
+	}
+	dir, err := filepath.Abs(filepath.Join("..", "..", "bench", "zoo-dart", "callbacks"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := zooDartCmd(t, dir, nil, "run", "observe.dart")
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("running it: %v\n%s", err, out)
+	}
+	var obs []cbObserved
+	if err := json.Unmarshal(out, &obs); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	checkCallbackRows(t, func(rs *model.RuleSet) bool { return strings.HasPrefix(rs.Origin, "builtin:dart-") }, obs)
+}
+
+// TestZooCallbacksRust is the same for the standard library of Rust (bench/zoo-rust/callbacks/observe.rs, std only,
+// built by rustc).
+func TestZooCallbacksRust(t *testing.T) {
+	if os.Getenv("RIVUS_RUST") == "" {
+		skipOrFail(t, "RIVUS_RUST")
+	}
+	dir, err := filepath.Abs(filepath.Join("..", "..", "bench", "zoo-rust", "callbacks"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	exe := filepath.Join(t.TempDir(), "observe")
+	build := exec.Command("rustc", "+"+zooRustChannel(t), "--edition", "2021", "-o", exe, "observe.rs")
+	build.Dir = dir
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("building the harness: %v\n%s", err, out)
+	}
+	out, err := exec.Command(exe).Output()
+	if err != nil {
+		t.Fatalf("running it: %v\n%s", err, out)
+	}
+	var obs []cbObserved
+	if err := json.Unmarshal(out, &obs); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	checkCallbackRows(t, func(rs *model.RuleSet) bool { return strings.HasPrefix(rs.Origin, "builtin:rust-") }, obs)
 }
 
 // TestZooCallbacksGo calls the functions of the standard library that the model has rows of calls for, with a
