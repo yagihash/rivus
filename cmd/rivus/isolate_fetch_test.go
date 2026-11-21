@@ -307,3 +307,74 @@ func TestIsolationFetchFollowsWhatTheAllowedRepositorySays(t *testing.T) {
 		})
 	}
 }
+
+// The cargo of the image is a nightly. Its unstable features that a manifest can switch on (cargo-features) are about how a
+// package is built and described; none of them makes the stage that fetches run a program or choose where it gets from.
+// What this test shows, for the features that this nightly accepts: with no network at all, `cargo fetch --locked` on a
+// manifest that switches them on succeeds, and nothing of the project runs. The -Z flags and [unstable] come from the command
+// line, the environment and the cargo configuration; the stage passes no environment of the host and does not read the
+// configuration of the project (TestIsolationFetchRunsNoCodeOfTheProject).
+func TestIsolationFetchUnstableManifestFeatures(t *testing.T) {
+	o := dockerForTests(t)
+	manifest := `cargo-features = ["profile-rustflags", "codegen-backend", "different-binary-name", "trim-paths", "metabuild", "per-package-target", "public-dependency", "open-namespaces"]
+[package]
+name = "t"
+version = "0.1.0"
+edition = "2021"
+metabuild = ["mb"]
+forced-target = "x86_64-unknown-linux-gnu"
+[build-dependencies]
+mb = { path = "mb" }
+[profile.dev]
+codegen-backend = "cranelift"
+rustflags = ["--cfg=x"]
+trim-paths = "all"
+[[bin]]
+name = "t"
+filename = "tt"
+path = "src/main.rs"
+`
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(base, "proj")
+	for f, body := range map[string]string{
+		"Cargo.toml":    manifest,
+		"Cargo.lock":    "version = 4\n\n[[package]]\nname = \"mb\"\nversion = \"0.1.0\"\n\n[[package]]\nname = \"t\"\nversion = \"0.1.0\"\ndependencies = [\n \"mb\",\n]\n",
+		"src/main.rs":   "fn main(){}\n",
+		"mb/Cargo.toml": "[package]\nname = \"mb\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+		"mb/src/lib.rs": "",
+		"mb/build.rs":   "fn main(){ std::fs::write(\"/cargo-home/BUILD-RAN\", \"x\").ok(); }\n",
+	} {
+		p := filepath.Join(dir, f)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if out, err := exec.Command("chmod", "-R", "a+rX", base).CombinedOutput(); err != nil {
+		t.Fatalf("chmod: %v: %s", err, out)
+	}
+	volume, err := cargoVolume(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = exec.Command("docker", "volume", "rm", "-f", volume).Run() })
+	var buf strings.Builder
+	o.stderr = &buf
+	o.timeout = 2 * time.Minute
+	name := randomName("rivus-fetch-")
+	fa := o.fetchArgs(name, dir, volume)
+	args := append([]string{fa[0], "--network", "none"}, fa[1:]...)
+	if err := o.runContainer(context.Background(), name, args, io.Discard, "fetch"); err != nil {
+		t.Fatalf("the fetch of a manifest with unstable features failed (no network): %v\n%s", err, buf.String())
+	}
+	files, _ := dockerOut(t, "run", "--rm", "--network", "none", "--user", "10001:10001", "--mount", "type=volume,src="+volume+",dst=/v,readonly",
+		"--entrypoint", "ls", o.image, "-a", "/v")
+	if strings.Contains(files, "BUILD-RAN") {
+		t.Errorf("a build script ran in the stage that fetches")
+	}
+}
