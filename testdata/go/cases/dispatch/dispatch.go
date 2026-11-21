@@ -79,3 +79,62 @@ func Embedded() {
 	key := lib.Source() // @source(dispatch_embedded)
 	write(outer{}, key)
 }
+
+// --- the receiver's fields, through an interface (CORE-J) ---
+// A method with a pointer receiver reads a field of the receiver; the value
+// reached the interface as a pointer.
+
+type Getter interface{ Get() string }
+
+type ptrRecv struct{ f string }
+
+func (t *ptrRecv) Get() string { return t.f }
+
+type valRecv struct{ f string }
+
+func (t valRecv) Get() string { return t.f }
+
+// pointer receiver, the field read in the method, the result used at the sink
+func PtrRecv() {
+	var g Getter = &ptrRecv{f: lib.Source()} // @source(dispatch_ptr_recv)
+	lib.Sink(g.Get())                        // @sink(dispatch_ptr_recv)
+}
+
+// value receiver: no regression
+func ValRecv() {
+	var g Getter = valRecv{f: lib.Source()} // @source(dispatch_val_recv)
+	lib.Sink(g.Get())                       // @sink(dispatch_val_recv)
+}
+
+// the sink is in the method
+type Runner interface{ Run() }
+
+type cmdRunner struct{ cmd string }
+
+func (c *cmdRunner) Run() {
+	lib.Sink(c.cmd) // @sink(dispatch_sink_in_method)
+}
+
+func run(r Runner) { r.Run() }
+
+func SinkInMethod() {
+	run(&cmdRunner{cmd: lib.Source()}) // @source(dispatch_sink_in_method)
+}
+
+// a method value
+func MethodValue() {
+	var g Getter = &ptrRecv{f: lib.Source()} // @source(dispatch_method_value)
+	h := g.Get
+	lib.Sink(h()) // @sink(dispatch_method_value)
+}
+
+// a package variable of the interface type
+var globalGetter Getter
+
+func SetGlobal() {
+	globalGetter = &ptrRecv{f: lib.Source()} // @source(dispatch_global_iface)
+}
+
+func ReadGlobal() {
+	lib.Sink(globalGetter.Get()) // @sink(dispatch_global_iface)
+}

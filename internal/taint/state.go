@@ -220,6 +220,9 @@ type state struct {
 	guardMemo    map[ref]guardAnswer
 	guardEpoch   int // changes when an element loses the guards recorded for it
 	expandMemo   map[Elem][]expanded
+	// recvBoxed: the receiver of the call being applied is an interface value that holds a
+	// pointer (what it points to lives under "/*"), and the callee takes the pointer itself
+	recvBoxed bool
 
 	suppressions map[string]*Suppression
 	findings     map[findingKey]*rawFinding

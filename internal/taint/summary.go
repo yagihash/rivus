@@ -255,10 +255,20 @@ func (s *state) expandParam(e Elem, argv []*sg.Value) []expanded {
 		return nil
 	}
 	locs := s.locs(argv[e.Param])
+	ep := e.Path()
+	if e.Param == 0 && s.recvBoxed {
+		// both places: the interface holds the pointer's target below "/*" in Go; a language that
+		// does not do so keeps it where the callee says
+		boxed := make([]Loc, len(locs))
+		for i, l := range locs {
+			boxed[i] = Loc{l.Root, l.Path + "/*"}
+		}
+		locs = append(append([]Loc(nil), locs...), boxed...)
+	}
 	founds := make([][]found, len(locs))
 	total := 0
 	for i, l := range locs {
-		founds[i] = s.collect(Loc{l.Root, l.Path + e.Path()})
+		founds[i] = s.collect(Loc{l.Root, l.Path + ep})
 		total += len(founds[i])
 	}
 	if total == 0 {
@@ -323,7 +333,11 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 	// times; the actual arguments do not change meanwhile.
 	s.collectMemo = map[Loc][]found{}
 	s.expandMemo = map[Elem][]expanded{}
-	defer func() { s.collectMemo, s.expandMemo = nil, nil }()
+	// A call through an interface whose method has a pointer receiver: the interface holds
+	// the pointer's target below "/*" (make_interface), the summary speaks of the target.
+	s.recvBoxed = cc.in.Callee != nil && cc.in.Callee.Kind == ir.CalleeDynamic && cc.recv != nil && !pointerLike(cc.recv) &&
+		len(fn.Params) > 0 && pointerLike(fn.Params[0])
+	defer func() { s.collectMemo, s.expandMemo, s.recvBoxed = nil, nil, false }()
 	for _, o := range sum.Outputs {
 		var dsts []Loc
 		switch o.Kind {
@@ -339,6 +353,9 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 			if o.Index < len(argv) {
 				for _, l := range s.locs(argv[o.Index]) {
 					dsts = append(dsts, Loc{l.Root, l.Path + o.Path})
+					if o.Index == 0 && s.recvBoxed {
+						dsts = append(dsts, Loc{l.Root, l.Path + "/*" + o.Path})
+					}
 				}
 			}
 		case OutGlobal:
