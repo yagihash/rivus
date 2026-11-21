@@ -547,6 +547,7 @@ type Uncertainty struct {
 | `unresolved_callee` | mixed | 関数値は実行時に決まるが、生成箇所を追う型フロー解析で候補を絞れる |
 | `concurrency` | mixed | 実行順序に依存するが、channel を単純なキューとしてモデル化すれば追える範囲が広がる |
 | `unmodeled_library_call` | rivus | モデルを書けば減る |
+| `dependency_body_unread` | rivus | モデルのあるインターフェースのメソッドの動的な呼び出しで、候補に本体のある依存の関数(プロジェクトの外)があったが、読まなかった(ADR-075: 依存の本体は読まず、モデルがそれを代わる。重すぎる)。依存が値を包んで渡した先の、自前の実装の中の sink は、辿っていない。`dynamic_dispatch` と並べて付き、候補に、読まなかった依存の関数を並べる。スキーマ版は変えない(種類を足しただけ) |
 | `numeric_stop` | rivus | source のデータが数値や bool になり、それ以降は追わない（既定。`-numeric-taint` で追う）。source の種類（シンボルとラベル）ごとに 1 件で、最初の場所と、起きた関数の一覧（10 件まで）を持つ。サマリを通って止まる分（呼び先の中の、引数の記号的なデータの止まり）は、記録されない |
 | `unsupported_construct` | rivus | extractor が下げられなかった構文（IR の `unsupported`）。その場所で何が起きるかは、解析に入っていない。extractor を直せば減る。`missing_source` ではない（対象のコードが足りないのではなく、rivus が読めなかった） |
 | `container_element_imprecision` | rivus | 結論に影響した場合のみ記録（ノイズ防止） |

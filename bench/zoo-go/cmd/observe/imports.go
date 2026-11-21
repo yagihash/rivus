@@ -44,6 +44,7 @@ import (
 	_ "zoo/cells/dyn/sink_in_method"
 	_ "zoo/cells/dyn/sink_in_method_iface"
 	_ "zoo/cells/dyn/stdlib_writer_own"
+	_ "zoo/cells/dyn/through_dependency"
 	_ "zoo/cells/dyn/xtalk_n_by_m"
 	_ "zoo/cells/guard/one_branch"
 	_ "zoo/cells/guard/sanitize_before"

@@ -223,7 +223,9 @@ func (s *state) callBody(cc *callCtx) {
 		// of the project's own is read (a sanitizer's with its result dropped: noResult; not that of its dependencies: the model is what says
 		// what they do). The two are joined, so what the model gives is never lost: a model
 		// that says `pure` leaves the body alone to say what happens.
-		if fns, _ := s.callees(ci); !hasOwnBody(fns) {
+		fns, _ := s.callees(ci)
+		s.noteDepBodies(ci, cc, fns)
+		if !hasOwnBody(fns) {
 			return
 		}
 	}
@@ -1033,6 +1035,24 @@ func (s *state) variadicElems(v *sg.Value) []*sg.Value {
 
 // hasOwnBody reports whether one of the callees is code of the project (not of a
 // dependency) that the program has.
+// noteDepBodies records, for a call of a modelled interface method, the candidates whose body is in the
+// program but belongs to a dependency: they are not read (the model stands for them), and a dynamic_dispatch
+// cannot tell that from a candidate that was never there (dependency_body_unread).
+func (s *state) noteDepBodies(ci *sg.Instr, cc *callCtx, fns []callee) {
+	var ids []string
+	for _, c := range fns {
+		if c.fn != nil && c.fn.Dep {
+			ids = append(ids, c.id)
+		}
+	}
+	if len(ids) == 0 {
+		return
+	}
+	sort.Strings(ids)
+	n := s.newNote(ci, KindDependencyBodyUnread, fmt.Sprintf("%d candidate(s) of %s have a body in a dependency that is not read (the model stands for them): what they hand on to an implementation of the project is not followed (rivus' limit, ADR-075)", len(ids), cc.sym), cc.sym)
+	n.Candidates = ids
+}
+
 func hasOwnBody(fns []callee) bool {
 	for _, c := range fns {
 		if c.fn != nil && !c.fn.Dep {

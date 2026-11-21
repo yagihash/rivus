@@ -8,8 +8,14 @@ import (
 // Terminal kinds recorded as uncertainty (ADR-008). Only the ones the
 // analysis can currently observe are produced.
 const (
-	KindDynamicDispatch        = "dynamic_dispatch"
-	KindUnmodeledLibraryCall   = "unmodeled_library_call"
+	KindDynamicDispatch      = "dynamic_dispatch"
+	KindUnmodeledLibraryCall = "unmodeled_library_call"
+	// KindDependencyBodyUnread: a call of a method of an interface that has a model has a candidate whose
+	// body is in the program but belongs to a dependency (ADR-075: the bodies of dependencies are not read; the
+	// model says what they do). What the body does with the value, a call to an implementation of the
+	// project's own (a wrapper that hands the value on), is not followed. It is rivus' limit, and it is
+	// recorded beside dynamic_dispatch, which cannot tell this from a call with no unread candidate.
+	KindDependencyBodyUnread   = "dependency_body_unread"
 	KindUnresolvedCallee       = "unresolved_callee"
 	KindContainerImprecision   = "container_element_imprecision"
 	KindDepthLimit             = "depth_limit"
