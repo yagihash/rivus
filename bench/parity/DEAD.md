@@ -1,0 +1,727 @@
+# どの IR にも当たらなかった組み込みの行
+
+`go run ./bench/parity report` が作る。分け方は TABLE.md の 1。「別の綴り」は、IR にある、末尾が同じ名前(最大 6)。
+
+## Go
+
+### 使われていない: 215
+
+- `flag.Int` (go-config.yaml, config_read, iv)
+- `flag.Duration` (go-config.yaml, config_read, iv)
+- `(*flag.FlagSet).Bool` (go-config.yaml, config_read, iv)
+- `(*flag.FlagSet).String` (go-config.yaml, config_read, iv)
+- `(*flag.FlagSet).Int` (go-config.yaml, config_read, iv)
+- `(*flag.FlagSet).Duration` (go-config.yaml, config_read, iv)
+- `google.golang.org/grpc/metadata.FromIncomingContext` (go-grpc.yaml, source, iv)
+- `google.golang.org/grpc/metadata.ValueFromIncomingContext` (go-grpc.yaml, source, iv)
+- `(google.golang.org/grpc.ServerStream).RecvMsg` (go-grpc.yaml, source, iv)
+- `(*google.golang.org/grpc.serverStream).RecvMsg` (go-grpc.yaml, source, iv)
+- `google.golang.org/grpc.NewClient` (go-grpc.yaml, sink, iv)
+- `google.golang.org/grpc.Dial` (go-grpc.yaml, sink, iv)
+- `google.golang.org/grpc.DialContext` (go-grpc.yaml, sink, iv)
+- `net/http.Head` (go-net-http.yaml, sink, iv)
+- `net/http.Post` (go-net-http.yaml, sink, iv)
+- `(*net/http.Client).Head` (go-net-http.yaml, sink, iv)
+- `fmt.Fprint` (go-net-http.yaml, sink, iv)
+- `(*net/http.Request).PostFormValue` (go-net-http.yaml, propagator, i)
+- `(*net/http.Request).Cookie` (go-net-http.yaml, propagator, i)
+- `(*net/http.Request).Cookies` (go-net-http.yaml, propagator, i)
+- `(*net/http.Request).PathValue` (go-net-http.yaml, propagator, i)
+- `net/http.MaxBytesReader` (go-net-http.yaml, propagator, i)
+- `(*sync.Mutex).TryLock` (go-pure.yaml, propagator, pure)
+- `(*sync.WaitGroup).Add` (go-pure.yaml, propagator, pure)
+- `(*sync.WaitGroup).Done` (go-pure.yaml, propagator, pure)
+- `(*sync.WaitGroup).Wait` (go-pure.yaml, propagator, pure)
+- `(sync.Locker).Lock` (go-pure.yaml, propagator, pure)
+- `(sync.Locker).Unlock` (go-pure.yaml, propagator, pure)
+- `time.Until` (go-pure.yaml, propagator, pure)
+- `log.Printf` (go-pure.yaml, propagator, pure)
+- `log.Println` (go-pure.yaml, propagator, pure)
+- `log.Print` (go-pure.yaml, propagator, pure)
+- `log.Panicf` (go-pure.yaml, propagator, pure)
+- `bytes.Equal` (go-pure.yaml, propagator, pure)
+- `sort.Ints` (go-pure.yaml, propagator, pure)
+- `(*net/http.Client).CloseIdleConnections` (go-pure.yaml, propagator, pure)
+- `(io/fs.DirEntry).Type` (go-pure.yaml, propagator, pure)
+- `(reflect.Type).Name` (go-pure.yaml, propagator, pure)
+- `reflect.TypeFor` (go-pure.yaml, propagator, pure)
+- `(reflect.Type).PkgPath` (go-pure.yaml, propagator, pure)
+- `(testing.TB).Errorf` (go-pure.yaml, propagator, pure)
+- `(testing.TB).Logf` (go-pure.yaml, propagator, pure)
+- `(crypto/cipher.AEAD).Overhead` (go-pure.yaml, propagator, pure)
+- `(hash.Hash).Reset` (go-pure.yaml, propagator, pure)
+- `(hash.Hash).Size` (go-pure.yaml, propagator, pure)
+- `fmt.Print` (go-stdlib-more.yaml, propagator, pure)
+- `strconv.FormatUint` (go-stdlib-more.yaml, propagator, pure)
+- `strconv.ParseBool` (go-stdlib-more.yaml, propagator, pure)
+- `strconv.FormatFloat` (go-stdlib-more.yaml, propagator, pure)
+- `log/slog.New` (go-stdlib-more.yaml, propagator, pure)
+- `log/slog.Default` (go-stdlib-more.yaml, propagator, pure)
+- `log/slog.NewTextHandler` (go-stdlib-more.yaml, propagator, pure)
+- `log/slog.NewJSONHandler` (go-stdlib-more.yaml, propagator, pure)
+- `(*log/slog.Logger).Debug` (go-stdlib-more.yaml, propagator, pure)
+- `(*log/slog.Logger).Info` (go-stdlib-more.yaml, propagator, pure)
+- `(*log/slog.Logger).Warn` (go-stdlib-more.yaml, propagator, pure)
+- `(*log/slog.Logger).Error` (go-stdlib-more.yaml, propagator, pure)
+- `(*log/slog.Logger).DebugContext` (go-stdlib-more.yaml, propagator, pure)
+- `(*log/slog.Logger).InfoContext` (go-stdlib-more.yaml, propagator, pure)
+- `(*log/slog.Logger).WarnContext` (go-stdlib-more.yaml, propagator, pure)
+- `(*log/slog.Logger).ErrorContext` (go-stdlib-more.yaml, propagator, pure)
+- `(*log/slog.Logger).Handler` (go-stdlib-more.yaml, propagator, pure)
+- `log/slog.Debug` (go-stdlib-more.yaml, propagator, pure)
+- `log/slog.Info` (go-stdlib-more.yaml, propagator, pure)
+- `log/slog.Warn` (go-stdlib-more.yaml, propagator, pure)
+- `log/slog.Error` (go-stdlib-more.yaml, propagator, pure)
+- `(*database/sql.Row).Scan` (go-stdlib-more.yaml, propagator, pure)
+- `(*database/sql.Row).Err` (go-stdlib-more.yaml, propagator, pure)
+- `(*database/sql.Rows).Scan` (go-stdlib-more.yaml, propagator, pure)
+- `(*database/sql.Tx).Commit` (go-stdlib-more.yaml, propagator, pure)
+- `(*database/sql.Tx).Rollback` (go-stdlib-more.yaml, propagator, pure)
+- `(*database/sql.DB).SetConnMaxIdleTime` (go-stdlib-more.yaml, propagator, pure)
+- `(*database/sql.DB).BeginTx` (go-stdlib-more.yaml, propagator, pure)
+- `(*database/sql.DB).Begin` (go-stdlib-more.yaml, propagator, pure)
+- `(*database/sql.DB).PingContext` (go-stdlib-more.yaml, propagator, pure)
+- `(*database/sql.DB).Stats` (go-stdlib-more.yaml, propagator, pure)
+- `(*database/sql.DB).Conn` (go-stdlib-more.yaml, propagator, pure)
+- `(*database/sql.Conn).Close` (go-stdlib-more.yaml, propagator, pure)
+- `(*database/sql.Conn).BeginTx` (go-stdlib-more.yaml, propagator, pure)
+- `database/sql/driver.IsValue` (go-stdlib-more.yaml, propagator, pure)
+- `crypto/hmac.Equal` (go-stdlib-more.yaml, propagator, pure)
+- `crypto/sha512.New` (go-stdlib-more.yaml, propagator, pure)
+- `crypto/x509.ParsePKIXPublicKey` (go-stdlib-more.yaml, propagator, pure)
+- `(*sync/atomic.Bool).Load` (go-stdlib-more.yaml, propagator, pure)
+- `(*sync/atomic.Bool).Store` (go-stdlib-more.yaml, propagator, pure)
+- `(*sync/atomic.Int64).Load` (go-stdlib-more.yaml, propagator, pure)
+- `(*sync/atomic.Int64).Store` (go-stdlib-more.yaml, propagator, pure)
+- `(*sync/atomic.Int64).Add` (go-stdlib-more.yaml, propagator, pure)
+- `time.NewTimer` (go-stdlib-more.yaml, propagator, pure)
+- `time.Date` (go-stdlib-more.yaml, propagator, pure)
+- `strings.Compare` (go-stdlib-more.yaml, propagator, pure)
+- `sort.SearchStrings` (go-stdlib-more.yaml, propagator, pure)
+- `math.Ceil` (go-stdlib-more.yaml, propagator, pure)
+- `math.Max` (go-stdlib-more.yaml, propagator, pure)
+- `math.Min` (go-stdlib-more.yaml, propagator, pure)
+- `math/rand.Int63n` (go-stdlib-more.yaml, propagator, pure)
+- `hash/fnv.New32` (go-stdlib-more.yaml, propagator, pure)
+- `hash/fnv.New32a` (go-stdlib-more.yaml, propagator, pure)
+- `hash/fnv.New64a` (go-stdlib-more.yaml, propagator, pure)
+- `encoding/hex.EncodedLen` (go-stdlib-more.yaml, propagator, pure)
+- `encoding/hex.DecodedLen` (go-stdlib-more.yaml, propagator, pure)
+- `(net/http.File).Readdir` (go-stdlib-more.yaml, propagator, pure)
+- `(log/slog.Record).NumAttrs` (go-stdlib-more.yaml, propagator, pure)
+- `(net/url.Values).Del` (go-stdlib-more.yaml, propagator, pure)
+- `context.WithDeadline` (go-stdlib-more.yaml, propagator, i)
+- `errors.Join` (go-stdlib-more.yaml, propagator, i)
+- `log/slog.String` (go-stdlib-more.yaml, propagator, i)
+- `log/slog.Any` (go-stdlib-more.yaml, propagator, i)
+- `log/slog.Int` (go-stdlib-more.yaml, propagator, i)
+- `log/slog.Uint64` (go-stdlib-more.yaml, propagator, i)
+- `log/slog.Time` (go-stdlib-more.yaml, propagator, i)
+- `log/slog.Duration` (go-stdlib-more.yaml, propagator, i)
+- `log/slog.StringValue` (go-stdlib-more.yaml, propagator, i)
+- `log/slog.GroupValue` (go-stdlib-more.yaml, propagator, i)
+- `(*log/slog.Logger).With` (go-stdlib-more.yaml, propagator, i)
+- `(*html/template.Template).Execute` (go-stdlib-more.yaml, propagator, ii)
+- `(*html/template.Template).Parse` (go-stdlib-more.yaml, propagator, ii)
+- `text/template.Must` (go-stdlib-more.yaml, propagator, i)
+- `(*html/template.Template).Funcs` (go-stdlib-more.yaml, propagator, i)
+- `crypto/tls.X509KeyPair` (go-stdlib-more.yaml, propagator, i)
+- `strings.CutSuffix` (go-stdlib-more.yaml, propagator, i)
+- `(*encoding/xml.Decoder).Decode` (go-stdlib-more.yaml, propagator, ii)
+- `log/slog.NewRecord` (go-stdlib-more.yaml, propagator, pure)
+- `log/slog.Group` (go-stdlib-more.yaml, propagator, pure)
+- `log/slog.SetDefault` (go-stdlib-more.yaml, propagator, pure)
+- `log/slog.Int64` (go-stdlib-more.yaml, propagator, pure)
+- `log/slog.Bool` (go-stdlib-more.yaml, propagator, pure)
+- `(*log/slog.Record).Add` (go-stdlib-more.yaml, propagator, pure)
+- `(*log/slog.Record).AddAttrs` (go-stdlib-more.yaml, propagator, pure)
+- `(log/slog.Record).Attrs` (go-stdlib-more.yaml, propagator, pure)
+- `(log/slog.Value).Resolve` (go-stdlib-more.yaml, propagator, pure)
+- `(log/slog.Value).Kind` (go-stdlib-more.yaml, propagator, pure)
+- `(log/slog.Value).Group` (go-stdlib-more.yaml, propagator, pure)
+- `(*log/slog.Logger).Enabled` (go-stdlib-more.yaml, propagator, pure)
+- `(log/slog.Leveler).Level` (go-stdlib-more.yaml, propagator, pure)
+- `(*log/slog.Level).UnmarshalText` (go-stdlib-more.yaml, propagator, pure)
+- `net/http.NotFoundHandler` (go-stdlib-more.yaml, propagator, pure)
+- `net/http.SetCookie` (go-stdlib-more.yaml, propagator, pure)
+- `(*net/http.ServeMux).Handle` (go-stdlib-more.yaml, propagator, pure)
+- `(*net/http.Transport).Clone` (go-stdlib-more.yaml, propagator, pure)
+- `(*database/sql.Conn).PingContext` (go-stdlib-more.yaml, propagator, pure)
+- `(*database/sql.Conn).Raw` (go-stdlib-more.yaml, propagator, pure)
+- `crypto/cipher.NewCFBEncrypter` (go-stdlib-more.yaml, propagator, pure)
+- `crypto/cipher.NewCFBDecrypter` (go-stdlib-more.yaml, propagator, pure)
+- `crypto/x509.IsEncryptedPEMBlock` (go-stdlib-more.yaml, propagator, pure)
+- `crypto/elliptic.P256` (go-stdlib-more.yaml, propagator, pure)
+- `crypto/elliptic.P521` (go-stdlib-more.yaml, propagator, pure)
+- `crypto/ed25519.GenerateKey` (go-stdlib-more.yaml, propagator, pure)
+- `crypto/tls.Dial` (go-stdlib-more.yaml, propagator, pure)
+- `net/netip.ParseAddr` (go-stdlib-more.yaml, propagator, pure)
+- `(net/netip.Addr).IsLoopback` (go-stdlib-more.yaml, propagator, pure)
+- `encoding/json.Valid` (go-stdlib-more.yaml, propagator, pure)
+- `encoding/hex.Encode` (go-stdlib-more.yaml, propagator, pure)
+- `encoding/hex.AppendEncode` (go-stdlib-more.yaml, propagator, pure)
+- `unicode/utf8.ValidString` (go-stdlib-more.yaml, propagator, pure)
+- `math/rand.Float64` (go-stdlib-more.yaml, propagator, pure)
+- `hash/fnv.New128` (go-stdlib-more.yaml, propagator, pure)
+- `(*net/url.URL).RequestURI` (go-stdlib-more.yaml, propagator, pure)
+- `crypto/x509.MarshalPKCS8PrivateKey` (go-stdlib-more.yaml, propagator, i)
+- `crypto/x509.MarshalPKIXPublicKey` (go-stdlib-more.yaml, propagator, i)
+- `crypto/x509.ParsePKCS1PrivateKey` (go-stdlib-more.yaml, propagator, i)
+- `crypto/x509.DecryptPEMBlock` (go-stdlib-more.yaml, propagator, i)
+- `(*encoding/xml.Decoder).Token` (go-stdlib-more.yaml, propagator, i)
+- `encoding/xml.NewDecoder` (go-stdlib-more.yaml, propagator, i)
+- `(*text/template.Template).ExecuteTemplate` (go-stdlib-more.yaml, propagator, ii)
+- `(*html/template.Template).Lookup` (go-stdlib-more.yaml, propagator, i)
+- `(*html/template.Template).New` (go-stdlib-more.yaml, propagator, i)
+- `text/template.ParseFS` (go-stdlib-more.yaml, propagator, i)
+- `os/exec.CommandContext` (go-stdlib.yaml, sink, iv)
+- `(*database/sql.DB).Query` (go-stdlib.yaml, sink, iv)
+- `(*database/sql.DB).QueryRow` (go-stdlib.yaml, sink, iv)
+- `(*database/sql.DB).Prepare` (go-stdlib.yaml, sink, iv)
+- `(*database/sql.DB).QueryContext` (go-stdlib.yaml, sink, iv)
+- `(*database/sql.DB).QueryRowContext` (go-stdlib.yaml, sink, iv)
+- `(*database/sql.DB).ExecContext` (go-stdlib.yaml, sink, iv)
+- `(*database/sql.DB).PrepareContext` (go-stdlib.yaml, sink, iv)
+- `(*database/sql.Tx).Query` (go-stdlib.yaml, sink, iv)
+- `(*database/sql.Tx).QueryRow` (go-stdlib.yaml, sink, iv)
+- `(*database/sql.Tx).Exec` (go-stdlib.yaml, sink, iv)
+- `(*database/sql.Tx).QueryContext` (go-stdlib.yaml, sink, iv)
+- `(*database/sql.Tx).QueryRowContext` (go-stdlib.yaml, sink, iv)
+- `(*database/sql.Tx).ExecContext` (go-stdlib.yaml, sink, iv)
+- `os.Truncate` (go-stdlib.yaml, sink, iv)
+- `os.Symlink` (go-stdlib.yaml, sink, iv)
+- `os.Link` (go-stdlib.yaml, sink, iv)
+- `io/ioutil.WriteFile` (go-stdlib.yaml, sink, iv)
+- `html/template.JSEscapeString` (go-stdlib.yaml, sanitizer, iv)
+- `strings.Cut` (go-stdlib.yaml, propagator, i)
+- `(*strings.Builder).WriteByte` (go-stdlib.yaml, propagator, ii)
+- `(*strings.Builder).WriteRune` (go-stdlib.yaml, propagator, ii)
+- `bytes.ToUpper` (go-stdlib.yaml, propagator, i)
+- `bytes.ToLower` (go-stdlib.yaml, propagator, i)
+- `fmt.Sprintln` (go-stdlib.yaml, propagator, i)
+- `fmt.Fprint` (go-stdlib.yaml, propagator, ii)
+- `(*flag.FlagSet).Parse` (go-stdlib.yaml, propagator, ii)
+- `(*flag.FlagSet).Args` (go-stdlib.yaml, propagator, i)
+- `(*flag.FlagSet).Arg` (go-stdlib.yaml, propagator, i)
+- `(*flag.FlagSet).String` (go-stdlib.yaml, propagator, i)
+- `(*flag.FlagSet).Int` (go-stdlib.yaml, propagator, i)
+- `(*flag.FlagSet).Bool` (go-stdlib.yaml, propagator, i)
+- `(*flag.FlagSet).Duration` (go-stdlib.yaml, propagator, i)
+- `(*flag.FlagSet).StringVar` (go-stdlib.yaml, propagator, ii)
+- `(*flag.FlagSet).IntVar` (go-stdlib.yaml, propagator, ii)
+- `(*flag.FlagSet).BoolVar` (go-stdlib.yaml, propagator, ii)
+- `(*flag.FlagSet).DurationVar` (go-stdlib.yaml, propagator, ii)
+- `(*flag.FlagSet).Var` (go-stdlib.yaml, propagator, ii)
+- `(io/fs.DirEntry).Info` (go-stdlib.yaml, propagator, i)
+- `bufio.NewReader` (go-stdlib.yaml, propagator, i)
+- `(*bufio.Reader).ReadString` (go-stdlib.yaml, propagator, i)
+- `(*bufio.Reader).ReadBytes` (go-stdlib.yaml, propagator, i)
+- `(*bufio.Scanner).Text` (go-stdlib.yaml, propagator, i)
+- `net/url.ParseRequestURI` (go-stdlib.yaml, propagator, i)
+- `net/url.PathEscape` (go-stdlib.yaml, propagator, i)
+- `(*net/url.URL).JoinPath` (go-stdlib.yaml, propagator, i)
+- `mime.ParseMediaType` (go-stdlib.yaml, propagator, i)
+
+## Dart
+
+### 別の型の同名メンバ: 43
+
+- `dart:async#Completer.sync` (dart-async.yaml, propagator, i) -> `dart:async#Future.sync`
+- `dart:async#Stream.error` (dart-async.yaml, propagator, i) -> `dart:async#Future.error`
+- `dart:async#StreamIterator.current` (dart-async.yaml, propagator, i) -> `dart:async#Zone.current`
+- `dart:async#Stream.timeout` (dart-async.yaml, propagator, i) -> `dart:async#Future.timeout`
+- `dart:async#StreamSink.addError` (dart-async.yaml, propagator, ii) -> `dart:async#StreamController.addError`
+- `dart:async#StreamIterator.cancel` (dart-async.yaml, propagator, pure) -> `dart:async#StreamSubscription.cancel`, `dart:async#Timer.cancel`
+- `dart:async#StreamSink.close` (dart-async.yaml, propagator, pure) -> `dart:async#EventSink.close`, `dart:async#StreamController.close`
+- `dart:convert#HtmlEscape.convert` (dart-core.yaml, sanitizer, iv) -> `dart:convert#JsonEncoder.convert`, `dart:convert#LineSplitter.convert`
+- `dart:core#num.parse` (dart-core.yaml, propagator, i) -> `dart:core#DateTime.parse`, `dart:core#Uri.parse`, `dart:core#double.parse`, `dart:core#int.parse`
+- `dart:core#Iterable.reversed` (dart-core.yaml, propagator, i) -> `dart:core#List.reversed`
+- `dart:core#List.first` (dart-core.yaml, propagator, i) -> `dart:core#Iterable.first`
+- `dart:core#List.single` (dart-core.yaml, propagator, i) -> `dart:core#Iterable.single`
+- `dart:core#List.join` (dart-core.yaml, propagator, i) -> `dart:core#Iterable.join`
+- `dart:core#List.toList` (dart-core.yaml, propagator, i) -> `dart:core#Iterable.toList`
+- `dart:core#List.toSet` (dart-core.yaml, propagator, i) -> `dart:core#Iterable.toSet`
+- `dart:core#Set.first` (dart-core.yaml, propagator, i) -> `dart:core#Iterable.first`
+- `dart:core#Set.last` (dart-core.yaml, propagator, i) -> `dart:core#Iterable.last`, `dart:core#List.last`
+- `dart:core#Set.single` (dart-core.yaml, propagator, i) -> `dart:core#Iterable.single`
+- `dart:core#Set.join` (dart-core.yaml, propagator, i) -> `dart:core#Iterable.join`
+- `dart:core#Set.toList` (dart-core.yaml, propagator, i) -> `dart:core#Iterable.toList`
+- `dart:convert#Base64Codec.encode` (dart-core.yaml, propagator, i) -> `dart:convert#AsciiCodec.encode`, `dart:convert#Codec.encode`, `dart:convert#JsonCodec.encode`, `dart:convert#Utf8Codec.encode`
+- `dart:convert#Base64Codec.decode` (dart-core.yaml, propagator, i) -> `dart:convert#Codec.decode`, `dart:convert#JsonCodec.decode`, `dart:convert#Utf8Codec.decode`
+- `dart:convert#Converter.convert` (dart-core.yaml, propagator, i) -> `dart:convert#JsonEncoder.convert`, `dart:convert#LineSplitter.convert`
+- `dart:core#RangeError.value` (dart-core.yaml, propagator, i) -> `dart:core#ArgumentError.value`
+- `dart:core#Iterable.generate` (dart-core.yaml, propagator, i) -> `dart:core#List.generate`
+- `dart:io#HttpHeaders.value` (dart-io.yaml, propagator, i) -> `dart:io#HeaderValue.value`
+- `dart:io#Cookie.value` (dart-io.yaml, propagator, i) -> `dart:io#HeaderValue.value`
+- `dart:io#File.path` (dart-io.yaml, propagator, i) -> `dart:io#Directory.path`, `dart:io#FileSystemEntity.path`
+- `dart:io#File.resolveSymbolicLinksSync` (dart-io.yaml, propagator, i) -> `dart:io#Directory.resolveSymbolicLinksSync`, `dart:io#FileSystemEntity.resolveSymbolicLinksSync`, `dart:io#Link.resolveSymbolicLinksSync`
+- `dart:io#HttpResponse.write` (dart-io.yaml, propagator, ii) -> `dart:io#_StdSink.write`
+- `dart:io#HttpResponse.writeln` (dart-io.yaml, propagator, ii) -> `dart:io#_StdSink.writeln`
+- `dart:io#IOSink.write` (dart-misc.yaml, propagator, ii) -> `dart:io#_StdSink.write`
+- `dart:io#IOSink.writeln` (dart-misc.yaml, propagator, ii) -> `dart:io#_StdSink.writeln`
+- `dart:async#EventSink.addError` (dart-misc.yaml, propagator, ii) -> `dart:async#StreamController.addError`
+- `dart:typed_data#Uint8List.view` (dart-misc.yaml, propagator, i) -> `dart:typed_data#ByteData.view`
+- `dart:typed_data#Uint32List.fromList` (dart-misc.yaml, propagator, i) -> `dart:typed_data#Uint8List.fromList`
+- `dart:typed_data#ByteData.sublistView` (dart-misc.yaml, propagator, i) -> `dart:typed_data#Uint8List.sublistView`
+- `dart:io#IOSink.close` (dart-misc.yaml, propagator, pure) -> `dart:io#HttpServer.close`, `dart:io#_StdSink.close`
+- `dart:io#HttpResponse.close` (dart-pure.yaml, propagator, pure) -> `dart:io#HttpServer.close`, `dart:io#_StdSink.close`
+- `dart:core#List.isEmpty` (dart-pure.yaml, propagator, pure) -> `dart:core#Iterable.isEmpty`, `dart:core#Map.isEmpty`, `dart:core#String.isEmpty`
+- `dart:core#List.isNotEmpty` (dart-pure.yaml, propagator, pure) -> `dart:core#Iterable.isNotEmpty`, `dart:core#Map.isNotEmpty`, `dart:core#String.isNotEmpty`, `dart:core#StringBuffer.isNotEmpty`
+- `dart:core#StringBuffer.isEmpty` (dart-pure.yaml, propagator, pure) -> `dart:core#Iterable.isEmpty`, `dart:core#Map.isEmpty`, `dart:core#String.isEmpty`
+- `dart:core#StringBuffer.clear` (dart-pure.yaml, propagator, pure) -> `dart:core#Set.clear`
+
+### 使われていない: 212
+
+- `dart:async#StreamController.broadcast` (dart-async.yaml, propagator, i)
+- `dart:async#Future.new` (dart-async.yaml, propagator, i)
+- `dart:async#Future.microtask` (dart-async.yaml, propagator, i)
+- `dart:async#Stream.fromFuture` (dart-async.yaml, propagator, i)
+- `dart:async#StreamTransformer.fromBind` (dart-async.yaml, propagator, i)
+- `dart:async#StreamSink.add` (dart-async.yaml, propagator, i)
+- `dart:async#Stream.last` (dart-async.yaml, propagator, i)
+- `dart:async#Stream.single` (dart-async.yaml, propagator, i)
+- `dart:async#Stream.toList` (dart-async.yaml, propagator, i)
+- `dart:async#Stream.toSet` (dart-async.yaml, propagator, i)
+- `dart:async#Stream.join` (dart-async.yaml, propagator, i)
+- `dart:async#Stream.take` (dart-async.yaml, propagator, i)
+- `dart:async#Stream.skip` (dart-async.yaml, propagator, i)
+- `dart:async#Stream.where` (dart-async.yaml, propagator, iii)
+- `dart:async#Stream.expand` (dart-async.yaml, propagator, iii)
+- `dart:async#Stream.cast` (dart-async.yaml, propagator, i)
+- `dart:async#Stream.distinct` (dart-async.yaml, propagator, i)
+- `dart:async#Stream.handleError` (dart-async.yaml, propagator, i)
+- `dart:async#Stream.asyncMap` (dart-async.yaml, propagator, iii)
+- `dart:async#Stream.asyncExpand` (dart-async.yaml, propagator, i)
+- `dart:async#Future.any` (dart-async.yaml, propagator, iii)
+- `dart:async#StreamController.add` (dart-async.yaml, propagator, ii)
+- `dart:async#StreamController.addStream` (dart-async.yaml, propagator, ii)
+- `dart:async#StreamController.isPaused` (dart-async.yaml, propagator, pure)
+- `dart:async#StreamController.isClosed` (dart-async.yaml, propagator, pure)
+- `dart:async#StreamIterator.moveNext` (dart-async.yaml, propagator, pure)
+- `dart:core#String.fromEnvironment` (dart-config.yaml, config_read, iv)
+- `dart:core#bool.fromEnvironment` (dart-config.yaml, config_read, iv)
+- `dart:core#int.fromEnvironment` (dart-config.yaml, config_read, iv)
+- `dart:io#Platform.executable` (dart-config.yaml, config_read, iv)
+- `dart:core#Uri.encodeQueryComponent` (dart-core.yaml, sanitizer, iv)
+- `dart:core#String.trimLeft` (dart-core.yaml, propagator, i)
+- `dart:core#String.trimRight` (dart-core.yaml, propagator, i)
+- `dart:core#String.replaceFirstMapped` (dart-core.yaml, propagator, i)
+- `dart:core#String.splitMapJoin` (dart-core.yaml, propagator, i)
+- `dart:core#String.toString` (dart-core.yaml, propagator, i)
+- `dart:core#String.codeUnits` (dart-core.yaml, propagator, i)
+- `dart:core#String.characters` (dart-core.yaml, propagator, i)
+- `dart:core#Uri.queryParametersAll` (dart-core.yaml, propagator, i)
+- `dart:core#Uri.authority` (dart-core.yaml, propagator, i)
+- `dart:core#Uri.fragment` (dart-core.yaml, propagator, i)
+- `dart:core#Uri.data` (dart-core.yaml, propagator, i)
+- `dart:core#Uri.removeFragment` (dart-core.yaml, propagator, i)
+- `dart:core#Uri.new` (dart-core.yaml, propagator, i)
+- `dart:core#Uri.http` (dart-core.yaml, propagator, i)
+- `dart:core#Uri.dataFromString` (dart-core.yaml, propagator, i)
+- `dart:core#Uri.decodeFull` (dart-core.yaml, propagator, i)
+- `dart:core#Uri.decodeQueryComponent` (dart-core.yaml, propagator, i)
+- `dart:core#Iterable.elementAt` (dart-core.yaml, propagator, i)
+- `dart:core#Iterable.lastWhere` (dart-core.yaml, propagator, iii)
+- `dart:core#Iterable.singleWhere` (dart-core.yaml, propagator, iii)
+- `dart:core#Iterable.whereType` (dart-core.yaml, propagator, i)
+- `dart:core#Iterable.iterator` (dart-core.yaml, propagator, i)
+- `dart:core#Iterable.followedBy` (dart-core.yaml, propagator, i)
+- `dart:core#Iterable.cast` (dart-core.yaml, propagator, i)
+- `dart:core#List.elementAt` (dart-core.yaml, propagator, i)
+- `dart:core#List.removeFirst` (dart-core.yaml, propagator, i)
+- `dart:core#RangeError.new` (dart-core.yaml, propagator, i)
+- `dart:core#Exception.new` (dart-core.yaml, propagator, i)
+- `dart:core#MapEntry.new` (dart-core.yaml, propagator, i)
+- `dart:core#List.from` (dart-core.yaml, propagator, i)
+- `dart:core#List.of` (dart-core.yaml, propagator, i)
+- `dart:core#Set.of` (dart-core.yaml, propagator, i)
+- `dart:core#Map.of` (dart-core.yaml, propagator, i)
+- `dart:core#String.fromCharCode` (dart-core.yaml, propagator, i)
+- `dart:collection#Queue.of` (dart-core.yaml, propagator, i)
+- `dart:core#List.map` (dart-core.yaml, propagator, iii)
+- `dart:collection#Queue.removeLast` (dart-core.yaml, propagator, i)
+- `dart:collection#Queue.first` (dart-core.yaml, propagator, i)
+- `dart:collection#Queue.last` (dart-core.yaml, propagator, i)
+- `dart:core#StringBuffer.writeAll` (dart-core.yaml, propagator, ii)
+- `dart:core#StringBuffer.writeCharCode` (dart-core.yaml, propagator, ii)
+- `package:grpc/src/server/call.dart#ServiceCall.clientMetadata` (dart-grpc.yaml, source, iv)
+- `package:grpc/src/client/http2_channel.dart#ClientChannel.new` (dart-grpc.yaml, sink, iv)
+- `dart:io#Stdin.readLine` (dart-io.yaml, source, iv)
+- `dart:io#File.readAsLines` (dart-io.yaml, source, iv)
+- `dart:io#File.readAsLinesSync` (dart-io.yaml, source, iv)
+- `dart:io#File.readAsBytes` (dart-io.yaml, source, iv)
+- `dart:io#HttpClient.getUrl` (dart-io.yaml, sink, iv)
+- `dart:io#HttpClient.postUrl` (dart-io.yaml, sink, iv)
+- `dart:io#HttpClient.openUrl` (dart-io.yaml, sink, iv)
+- `dart:io#HttpClient.get` (dart-io.yaml, sink, iv)
+- `dart:io#HttpClient.post` (dart-io.yaml, sink, iv)
+- `dart:io#HttpClient.open` (dart-io.yaml, sink, iv)
+- `dart:io#Socket.connect` (dart-io.yaml, sink, iv)
+- `dart:html#Element.innerHtml` (dart-io.yaml, sink, iv)
+- `dart:html#Element.outerHtml` (dart-io.yaml, sink, iv)
+- `dart:html#Element.setInnerHtml` (dart-io.yaml, sink, iv)
+- `dart:html#Element.insertAdjacentHtml` (dart-io.yaml, sink, iv)
+- `dart:io#HttpRequest.uri` (dart-io.yaml, propagator, i)
+- `dart:io#HttpRequest.requestedUri` (dart-io.yaml, propagator, i)
+- `dart:io#HttpRequest.headers` (dart-io.yaml, propagator, i)
+- `dart:io#HttpRequest.cookies` (dart-io.yaml, propagator, i)
+- `dart:io#HttpRequest.method` (dart-io.yaml, propagator, i)
+- `dart:io#HttpRequest.session` (dart-io.yaml, propagator, i)
+- `dart:io#HttpRequest.connectionInfo` (dart-io.yaml, propagator, i)
+- `dart:io#HttpRequest.certificate` (dart-io.yaml, propagator, i)
+- `dart:io#HttpHeaders.operator[]` (dart-io.yaml, propagator, i)
+- `dart:io#HttpHeaders.forEach` (dart-io.yaml, propagator, iii)
+- `dart:io#Cookie.name` (dart-io.yaml, propagator, i)
+- `dart:io#HttpResponse.headers` (dart-io.yaml, propagator, i)
+- `dart:io#HttpRequest.listen` (dart-io.yaml, propagator, iii)
+- `dart:io#HttpRequest.transform` (dart-io.yaml, propagator, iii)
+- `dart:io#File.fromUri` (dart-io.yaml, propagator, i)
+- `dart:io#Directory.fromUri` (dart-io.yaml, propagator, i)
+- `dart:io#File.absolute` (dart-io.yaml, propagator, i)
+- `dart:io#File.parent` (dart-io.yaml, propagator, i)
+- `dart:io#File.uri` (dart-io.yaml, propagator, i)
+- `dart:io#HttpResponse.add` (dart-io.yaml, propagator, ii)
+- `dart:io#HttpResponse.addStream` (dart-io.yaml, propagator, ii)
+- `dart:io#File.writeAsBytes` (dart-io.yaml, propagator, ii)
+- `dart:core#StringSink.writeAll` (dart-misc.yaml, propagator, ii)
+- `dart:core#StringSink.writeCharCode` (dart-misc.yaml, propagator, ii)
+- `dart:io#IOSink.writeAll` (dart-misc.yaml, propagator, ii)
+- `dart:io#IOSink.add` (dart-misc.yaml, propagator, ii)
+- `dart:io#IOSink.addStream` (dart-misc.yaml, propagator, ii)
+- `dart:io#_StdSink.writeAll` (dart-misc.yaml, propagator, ii)
+- `dart:async#EventSink.add` (dart-misc.yaml, propagator, ii)
+- `dart:typed_data#Uint8List.new` (dart-misc.yaml, propagator, i)
+- `dart:typed_data#Uint32List.new` (dart-misc.yaml, propagator, i)
+- `dart:typed_data#Uint16List.new` (dart-misc.yaml, propagator, i)
+- `dart:typed_data#Int32List.new` (dart-misc.yaml, propagator, i)
+- `dart:typed_data#ByteData.new` (dart-misc.yaml, propagator, i)
+- `dart:typed_data#ByteBuffer.asUint8List` (dart-misc.yaml, propagator, i)
+- `dart:collection#HashMap.new` (dart-misc.yaml, propagator, i)
+- `dart:collection#HashSet.new` (dart-misc.yaml, propagator, i)
+- `dart:collection#LinkedHashMap.new` (dart-misc.yaml, propagator, i)
+- `dart:collection#LinkedHashSet.new` (dart-misc.yaml, propagator, i)
+- `dart:convert#ChunkedConversionSink.withCallback` (dart-misc.yaml, propagator, i)
+- `dart:async#StreamIterator.new` (dart-misc.yaml, propagator, i)
+- `dart:core#Uri.port` (dart-misc.yaml, propagator, i)
+- `dart:io#HttpClientResponse.headers` (dart-misc.yaml, propagator, i)
+- `dart:io#HttpClientResponse.transform` (dart-misc.yaml, propagator, iii)
+- `dart:io#HttpClientResponse.listen` (dart-misc.yaml, propagator, iii)
+- `dart:io#HttpClientResponse.cast` (dart-misc.yaml, propagator, i)
+- `dart:io#HttpRequest.response` (dart-misc.yaml, propagator, i)
+- `dart:core#num.toStringAsFixed` (dart-misc.yaml, propagator, i)
+- `dart:core#int.abs` (dart-misc.yaml, propagator, i)
+- `dart:core#num.abs` (dart-misc.yaml, propagator, i)
+- `dart:core#double.toString` (dart-misc.yaml, propagator, i)
+- `dart:core#bool.hashCode` (dart-misc.yaml, propagator, pure)
+- `dart:core#int.hashCode` (dart-misc.yaml, propagator, pure)
+- `dart:core#DateTime.new` (dart-misc.yaml, propagator, pure)
+- `dart:core#DateTime.utc` (dart-misc.yaml, propagator, pure)
+- `dart:core#DateTime.subtract` (dart-misc.yaml, propagator, pure)
+- `dart:core#DateTime.year` (dart-misc.yaml, propagator, pure)
+- `dart:core#DateTime.month` (dart-misc.yaml, propagator, pure)
+- `dart:core#DateTime.day` (dart-misc.yaml, propagator, pure)
+- `dart:core#DateTime.hour` (dart-misc.yaml, propagator, pure)
+- `dart:core#DateTime.minute` (dart-misc.yaml, propagator, pure)
+- `dart:core#DateTime.second` (dart-misc.yaml, propagator, pure)
+- `dart:core#DateTime.microsecond` (dart-misc.yaml, propagator, pure)
+- `dart:core#DateTime.millisecond` (dart-misc.yaml, propagator, pure)
+- `dart:core#num.isNaN` (dart-misc.yaml, propagator, pure)
+- `dart:core#num.isFinite` (dart-misc.yaml, propagator, pure)
+- `dart:async#Stream.empty` (dart-misc.yaml, propagator, pure)
+- `dart:io#HttpClientResponse.statusCode` (dart-misc.yaml, propagator, pure)
+- `dart:io#HttpClient.new` (dart-misc.yaml, propagator, pure)
+- `dart:io#HttpServer.address` (dart-misc.yaml, propagator, pure)
+- `dart:io#IOSink.flush` (dart-misc.yaml, propagator, pure)
+- `dart:core#ConcurrentModificationError.new` (dart-misc.yaml, propagator, pure)
+- `dart:core#RangeError.checkValidIndex` (dart-misc.yaml, propagator, pure)
+- `package:http/http.dart#get` (dart-packages.yaml, sink, iv)
+- `package:http/http.dart#post` (dart-packages.yaml, sink, iv)
+- `package:http/http.dart#put` (dart-packages.yaml, sink, iv)
+- `package:http/http.dart#delete` (dart-packages.yaml, sink, iv)
+- `package:http/http.dart#head` (dart-packages.yaml, sink, iv)
+- `package:http/http.dart#patch` (dart-packages.yaml, sink, iv)
+- `package:http/http.dart#read` (dart-packages.yaml, sink, iv)
+- `package:sqflite_common/src/database_mixin.dart#SqfliteDatabaseMixin.rawQuery` (dart-packages.yaml, sink, iv)
+- `package:sqflite_common/src/database_mixin.dart#SqfliteDatabaseMixin.rawInsert` (dart-packages.yaml, sink, iv)
+- `package:sqflite_common/src/database_mixin.dart#SqfliteDatabaseMixin.rawUpdate` (dart-packages.yaml, sink, iv)
+- `package:sqflite_common/src/database_mixin.dart#SqfliteDatabaseMixin.rawDelete` (dart-packages.yaml, sink, iv)
+- `package:sqflite_common/src/database_mixin.dart#SqfliteDatabaseMixin.execute` (dart-packages.yaml, sink, iv)
+- `package:sqflite_common/sqlite_api.dart#DatabaseExecutor.rawQuery` (dart-packages.yaml, sink, iv)
+- `package:sqflite_common/sqlite_api.dart#DatabaseExecutor.rawInsert` (dart-packages.yaml, sink, iv)
+- `package:sqflite_common/sqlite_api.dart#DatabaseExecutor.rawUpdate` (dart-packages.yaml, sink, iv)
+- `package:sqflite_common/sqlite_api.dart#DatabaseExecutor.rawDelete` (dart-packages.yaml, sink, iv)
+- `package:sqflite_common/sqlite_api.dart#DatabaseExecutor.execute` (dart-packages.yaml, sink, iv)
+- `package:shelf/src/request.dart#Request.url` (dart-packages.yaml, propagator, i)
+- `package:shelf/src/request.dart#Request.requestedUri` (dart-packages.yaml, propagator, i)
+- `package:shelf/src/request.dart#Request.headers` (dart-packages.yaml, propagator, i)
+- `package:shelf/src/request.dart#Request.headersAll` (dart-packages.yaml, propagator, i)
+- `package:shelf/src/request.dart#Request.context` (dart-packages.yaml, propagator, i)
+- `package:shelf/src/request.dart#Request.method` (dart-packages.yaml, propagator, i)
+- `package:shelf/src/request.dart#Request.handlerPath` (dart-packages.yaml, propagator, i)
+- `package:shelf/src/request.dart#Request.change` (dart-packages.yaml, propagator, i)
+- `package:shelf/src/request.dart#Request.read` (dart-packages.yaml, propagator, i)
+- `package:shelf/src/request.dart#Request.readAsString` (dart-packages.yaml, propagator, i)
+- `package:shelf/src/request.dart#Request.encoding` (dart-packages.yaml, propagator, i)
+- `package:shelf/src/request.dart#Request.mimeType` (dart-packages.yaml, propagator, i)
+- `package:shelf/src/request.dart#Request.contentLength` (dart-packages.yaml, propagator, i)
+- `package:http/src/response.dart#Response.bodyBytes` (dart-packages.yaml, propagator, i)
+- `package:http/src/response.dart#Response.headers` (dart-packages.yaml, propagator, i)
+- `package:http/src/base_response.dart#BaseResponse.headers` (dart-packages.yaml, propagator, i)
+- `package:http/src/streamed_response.dart#StreamedResponse.stream` (dart-packages.yaml, propagator, i)
+- `package:http/http.dart#get` (dart-packages.yaml, propagator, i)
+- `package:http/http.dart#post` (dart-packages.yaml, propagator, i)
+- `package:http/http.dart#read` (dart-packages.yaml, propagator, i)
+- `dart:core#print` (dart-pure.yaml, propagator, pure)
+- `dart:core#Object.hashCode` (dart-pure.yaml, propagator, pure)
+- `dart:core#List.contains` (dart-pure.yaml, propagator, pure)
+- `dart:core#int.isEven` (dart-pure.yaml, propagator, pure)
+- `dart:core#int.sign` (dart-pure.yaml, propagator, pure)
+- `dart:core#int.isNegative` (dart-pure.yaml, propagator, pure)
+- `dart:core#StringBuffer.length` (dart-pure.yaml, propagator, pure)
+- `dart:core#RangeError.checkValidRange` (dart-pure.yaml, propagator, pure)
+- `dart:core#RangeError.checkNotNegative` (dart-pure.yaml, propagator, pure)
+- `dart:core#RangeError.checkValueInInterval` (dart-pure.yaml, propagator, pure)
+- `dart:core#Stopwatch.elapsedMilliseconds` (dart-pure.yaml, propagator, pure)
+- `dart:math#Random.new` (dart-pure.yaml, propagator, pure)
+- `dart:convert#Encoding.name` (dart-pure.yaml, propagator, pure)
+
+## Rust
+
+### 綴りの疑い: 17
+
+- `tokio::fs::read_to_string` (rust-grpc.yaml, sink, iv) -> `std::fs::read_to_string`
+- `tokio::fs::File::open` (rust-grpc.yaml, sink, iv) -> `std::fs::File::open`
+- `tonic::request::Request::into_inner` (rust-grpc.yaml, propagator, i) -> `tonic::Request::into_inner`
+- `tonic::request::Request::get_ref` (rust-grpc.yaml, propagator, i) -> `tonic::Request::get_ref`
+- `tonic::request::Request::metadata` (rust-grpc.yaml, propagator, i) -> `tonic::Request::metadata`
+- `tonic::metadata::map::MetadataMap::get` (rust-grpc.yaml, propagator, i) -> `tonic::metadata::MetadataMap::get`
+- `tonic::metadata::map::MetadataMap::get_all` (rust-grpc.yaml, propagator, i) -> `tonic::metadata::MetadataMap::get_all`
+- `tonic::metadata::value::MetadataValue::to_str` (rust-grpc.yaml, propagator, i) -> `tonic::metadata::MetadataValue::to_str`
+- `tonic::response::Response::new` (rust-grpc.yaml, propagator, i) -> `tonic::Response::new`
+- `tokio::process::Command::new` (rust-misc.yaml, propagator, i) -> `clap::Command::new`, `std::process::Command::new`
+- `std::fs::File::create` (rust-std.yaml, sink, iv) -> `tokio::fs::File::create`
+- `std::fs::copy` (rust-std.yaml, sink, iv) -> `tokio::fs::copy`
+- `reqwest::blocking::Client::get` (rust-std.yaml, sink, iv) -> `curated::parseable::http::Client::get`, `reqwest::Client::get`
+- `reqwest::blocking::Client::post` (rust-std.yaml, sink, iv) -> `curated::parseable::http::Client::post`, `reqwest::Client::post`
+- `http::HeaderMap::get` (rust-web.yaml, propagator, i) -> `actix_web::http::header::HeaderMap::get`, `object_store::HeaderMap::get`
+- `http::HeaderValue::to_str` (rust-web.yaml, propagator, i) -> `actix_web::http::header::HeaderValue::to_str`, `object_store::HeaderValue::to_str`
+- `http::HeaderValue::as_bytes` (rust-web.yaml, propagator, i) -> `actix_web::http::header::HeaderValue::as_bytes`, `object_store::HeaderValue::as_bytes`
+
+### 別の型の同名メンバ: 59
+
+- `tonic::metadata::MetadataMap::iter` (rust-grpc.yaml, propagator, i) -> `tonic::metadata::GetAll::iter`
+- `tonic::metadata::map::MetadataMap::iter` (rust-grpc.yaml, propagator, i) -> `tonic::metadata::GetAll::iter`
+- `tonic::Streaming::into_inner` (rust-grpc.yaml, propagator, i) -> `tonic::Request::into_inner`
+- `tonic::codec::decode::Streaming::into_inner` (rust-grpc.yaml, propagator, i) -> `tonic::Request::into_inner`
+- `serde_json::Value::as_i64` (rust-misc.yaml, propagator, i) -> `serde_json::Number::as_i64`
+- `serde::__private::from_utf8_lossy` (rust-misc.yaml, propagator, i) -> `serde::__private228::from_utf8_lossy`
+- `std::result::Result::map_or` (rust-misc.yaml, propagator, iii) -> `std::option::Option::map_or`
+- `std::result::Result::map_or_else` (rust-misc.yaml, propagator, iii) -> `std::option::Option::map_or_else`
+- `std::iter::Iterator::windows` (rust-misc.yaml, propagator, i) -> `std::slice::windows`
+- `std::iter::Iterator::last` (rust-misc.yaml, propagator, i) -> `std::slice::last`
+- `std::slice::split` (rust-misc.yaml, propagator, i) -> `std::str::split`
+- `std::vec::Vec::sort` (rust-misc.yaml, propagator, iii) -> `std::slice::sort`
+- `std::vec::Vec::reverse` (rust-misc.yaml, propagator, i) -> `std::cmp::Ordering::reverse`, `std::slice::reverse`
+- `std::collections::BTreeMap::keys` (rust-misc.yaml, propagator, i) -> `std::collections::HashMap::keys`
+- `tokio::task::spawn` (rust-misc.yaml, propagator, iii) -> `tokio::runtime::Runtime::spawn`, `tokio::task::JoinSet::spawn`
+- `tokio::io::AsyncWriteExt::write` (rust-misc.yaml, propagator, ii) -> `tokio::fs::write`, `tokio::sync::RwLock::write`
+- `tokio::io::AsyncReadExt::read` (rust-misc.yaml, propagator, ii) -> `tokio::fs::OpenOptions::read`, `tokio::fs::read`, `tokio::sync::RwLock::read`
+- `serde::__private::missing_field` (rust-misc.yaml, propagator, pure) -> `serde::__private228::de::missing_field`, `serde::de::Error::missing_field`
+- `std::sync::atomic::AtomicBool::load` (rust-misc.yaml, propagator, pure) -> `std::sync::atomic::Atomic::load`
+- `std::sync::atomic::AtomicBool::store` (rust-misc.yaml, propagator, pure) -> `std::sync::atomic::Atomic::store`
+- `std::sync::atomic::AtomicUsize::load` (rust-misc.yaml, propagator, pure) -> `std::sync::atomic::Atomic::load`
+- `std::sync::atomic::AtomicUsize::store` (rust-misc.yaml, propagator, pure) -> `std::sync::atomic::Atomic::store`
+- `std::sync::atomic::AtomicU64::load` (rust-misc.yaml, propagator, pure) -> `std::sync::atomic::Atomic::load`
+- `std::sync::atomic::AtomicU64::store` (rust-misc.yaml, propagator, pure) -> `std::sync::atomic::Atomic::store`
+- `std::sync::atomic::AtomicI64::load` (rust-misc.yaml, propagator, pure) -> `std::sync::atomic::Atomic::load`
+- `std::sync::atomic::AtomicI64::store` (rust-misc.yaml, propagator, pure) -> `std::sync::atomic::Atomic::store`
+- `std::sync::atomic::AtomicBool::swap` (rust-misc.yaml, propagator, pure) -> `std::sync::atomic::Atomic::swap`
+- `std::process::Command::args` (rust-std.yaml, sink, iv) -> `std::env::args`
+- `std::convert::AsMut::as_mut` (rust-std.yaml, propagator, i) -> `std::option::Option::as_mut`, `std::pin::Pin::as_mut`
+- `std::sync::Mutex::into_inner` (rust-std.yaml, propagator, i) -> `std::sync::PoisonError::into_inner`
+- `std::sync::RwLock::into_inner` (rust-std.yaml, propagator, i) -> `std::sync::PoisonError::into_inner`
+- `std::string::String::with_capacity` (rust-std.yaml, propagator, i) -> `std::collections::HashMap::with_capacity`, `std::collections::VecDeque::with_capacity`, `std::vec::Vec::with_capacity`
+- `std::str::to_string` (rust-std.yaml, propagator, i) -> `std::string::ToString::to_string`
+- `std::str::to_owned` (rust-std.yaml, propagator, i) -> `std::borrow::ToOwned::to_owned`
+- `std::string::String::trim` (rust-std.yaml, propagator, i) -> `std::str::trim`
+- `std::string::String::to_lowercase` (rust-std.yaml, propagator, i) -> `std::str::to_lowercase`
+- `std::string::String::to_uppercase` (rust-std.yaml, propagator, i) -> `std::char::methods::to_uppercase`, `std::str::to_uppercase`
+- `std::vec::Vec::join` (rust-std.yaml, propagator, i) -> `std::path::Path::join`, `std::slice::join`, `std::thread::JoinHandle::join`
+- `std::path::PathBuf::join` (rust-std.yaml, propagator, i) -> `std::path::Path::join`, `std::slice::join`, `std::thread::JoinHandle::join`
+- `std::iter::Iterator::last` (rust-std.yaml, propagator, i) -> `std::slice::last`
+- `std::vec::Vec::first` (rust-std.yaml, propagator, i) -> `std::slice::first`
+- `std::vec::Vec::last` (rust-std.yaml, propagator, i) -> `std::slice::last`
+- `std::vec::Vec::iter` (rust-std.yaml, propagator, i) -> `std::collections::BTreeMap::iter`, `std::collections::HashMap::iter`, `std::collections::HashSet::iter`, `std::option::Option::iter`, `std::path::Path::iter`, `std::slice::iter`
+- `std::vec::Vec::into_iter` (rust-std.yaml, propagator, i) -> `std::iter::IntoIterator::into_iter`
+- `std::collections::HashMap::into_iter` (rust-std.yaml, propagator, i) -> `std::iter::IntoIterator::into_iter`
+- `std::slice::to_owned` (rust-std.yaml, propagator, i) -> `std::borrow::ToOwned::to_owned`
+- `std::fmt::Arguments::as_str` (rust-std.yaml, propagator, i) -> `std::string::String::as_str`
+- `std::string::String::insert` (rust-std.yaml, propagator, ii) -> `std::collections::BTreeMap::insert`, `std::collections::HashMap::insert`, `std::collections::HashSet::insert`, `std::vec::Vec::insert`
+- `std::vec::Vec::extend` (rust-std.yaml, propagator, ii) -> `std::iter::Extend::extend`
+- `std::io::Read::read_to_string` (rust-std.yaml, propagator, ii) -> `std::fs::read_to_string`
+- `std::io::BufRead::read_line` (rust-std.yaml, propagator, ii) -> `std::io::Stdin::read_line`
+- `std::io::Write::write` (rust-std.yaml, propagator, ii) -> `std::fs::OpenOptions::write`, `std::fs::write`, `std::hash::Hasher::write`, `std::sync::RwLock::write`
+- `std::vec::Vec::iter_mut` (rust-std.yaml, propagator, i) -> `std::slice::iter_mut`
+- `std::ptr::read` (rust-std.yaml, propagator, i) -> `std::fs::read`, `std::sync::RwLock::read`
+- `std::ptr::write` (rust-std.yaml, propagator, i) -> `std::fs::OpenOptions::write`, `std::fs::write`, `std::hash::Hasher::write`, `std::sync::RwLock::write`
+- `std::mem::swap` (rust-std.yaml, propagator, i) -> `std::sync::atomic::Atomic::swap`
+- `std::iter::repeat` (rust-std.yaml, propagator, i) -> `std::str::repeat`
+- `std::pin::Pin::into_inner` (rust-std.yaml, propagator, i) -> `std::sync::PoisonError::into_inner`
+- `std::pin::pin` (rust-std.yaml, propagator, i) -> `std::boxed::Box::pin`
+
+### 使われていない: 153
+
+- `std::env::var_os` (rust-config.yaml, config_read, iv)
+- `std::env::vars` (rust-config.yaml, config_read, iv)
+- `std::env::current_exe` (rust-config.yaml, config_read, iv)
+- `tonic::Request::get_mut` (rust-grpc.yaml, propagator, i)
+- `tonic::request::Request::get_mut` (rust-grpc.yaml, propagator, i)
+- `tonic::Request::metadata_mut` (rust-grpc.yaml, propagator, i)
+- `tonic::request::Request::metadata_mut` (rust-grpc.yaml, propagator, i)
+- `tonic::Request::into_parts` (rust-grpc.yaml, propagator, i)
+- `tonic::request::Request::into_parts` (rust-grpc.yaml, propagator, i)
+- `tonic::Request::remote_addr` (rust-grpc.yaml, propagator, i)
+- `tonic::request::Request::remote_addr` (rust-grpc.yaml, propagator, i)
+- `tonic::metadata::MetadataMap::get_bin` (rust-grpc.yaml, propagator, i)
+- `tonic::metadata::map::MetadataMap::get_bin` (rust-grpc.yaml, propagator, i)
+- `tonic::metadata::MetadataMap::values` (rust-grpc.yaml, propagator, i)
+- `tonic::metadata::map::MetadataMap::values` (rust-grpc.yaml, propagator, i)
+- `tonic::metadata::MetadataMap::into_headers` (rust-grpc.yaml, propagator, i)
+- `tonic::metadata::map::MetadataMap::into_headers` (rust-grpc.yaml, propagator, i)
+- `tonic::metadata::MetadataMap::as_ref` (rust-grpc.yaml, propagator, i)
+- `tonic::metadata::MetadataValue::as_bytes` (rust-grpc.yaml, propagator, i)
+- `tonic::metadata::value::MetadataValue::as_bytes` (rust-grpc.yaml, propagator, i)
+- `tonic::metadata::MetadataValue::to_bytes` (rust-grpc.yaml, propagator, i)
+- `tonic::metadata::value::MetadataValue::to_bytes` (rust-grpc.yaml, propagator, i)
+- `tonic::Streaming::message` (rust-grpc.yaml, propagator, i)
+- `tonic::codec::decode::Streaming::message` (rust-grpc.yaml, propagator, i)
+- `tonic::Streaming::trailers` (rust-grpc.yaml, propagator, i)
+- `tonic::codec::decode::Streaming::trailers` (rust-grpc.yaml, propagator, i)
+- `std::task::Poll::Ready` (rust-misc.yaml, propagator, i)
+- `serde_json::to_string_pretty` (rust-misc.yaml, propagator, i)
+- `serde_json::Value::as_bool` (rust-misc.yaml, propagator, i)
+- `serde_json::Value::pointer` (rust-misc.yaml, propagator, i)
+- `std::str::to_ascii_lowercase` (rust-misc.yaml, propagator, i)
+- `std::string::String::to_ascii_lowercase` (rust-misc.yaml, propagator, i)
+- `std::iter::Iterator::unzip` (rust-misc.yaml, propagator, i)
+- `std::iter::Iterator::rposition` (rust-misc.yaml, propagator, i)
+- `std::iter::Iterator::max_by_key` (rust-misc.yaml, propagator, i)
+- `std::iter::Iterator::min_by_key` (rust-misc.yaml, propagator, i)
+- `std::iter::Iterator::product` (rust-misc.yaml, propagator, i)
+- `std::vec::Vec::split_off` (rust-misc.yaml, propagator, i)
+- `std::collections::HashSet::get` (rust-misc.yaml, propagator, i)
+- `std::collections::BTreeMap::get` (rust-misc.yaml, propagator, i)
+- `std::collections::VecDeque::front` (rust-misc.yaml, propagator, i)
+- `std::collections::VecDeque::back` (rust-misc.yaml, propagator, i)
+- `std::collections::VecDeque::new` (rust-misc.yaml, propagator, i)
+- `tokio::net::TcpListener::bind` (rust-misc.yaml, propagator, i)
+- `tokio::net::TcpListener::accept` (rust-misc.yaml, propagator, i)
+- `tokio::net::TcpStream::connect` (rust-misc.yaml, propagator, i)
+- `tokio::io::AsyncWriteExt::write_all` (rust-misc.yaml, propagator, ii)
+- `tokio::io::AsyncReadExt::read_to_string` (rust-misc.yaml, propagator, ii)
+- `std::fmt::Formatter::debug_struct` (rust-misc.yaml, propagator, pure)
+- `std::fmt::Formatter::debug_tuple_field1_finish` (rust-misc.yaml, propagator, pure)
+- `std::fmt::Formatter::debug_tuple_field2_finish` (rust-misc.yaml, propagator, pure)
+- `std::fmt::Formatter::debug_tuple` (rust-misc.yaml, propagator, pure)
+- `std::fmt::Formatter::debug_list` (rust-misc.yaml, propagator, pure)
+- `std::fmt::Formatter::pad` (rust-misc.yaml, propagator, pure)
+- `test::assert_test_result` (rust-misc.yaml, propagator, pure)
+- `serde::de::Error::unknown_field` (rust-misc.yaml, propagator, pure)
+- `serde::de::Error::invalid_type` (rust-misc.yaml, propagator, pure)
+- `std::sync::atomic::AtomicUsize::fetch_add` (rust-misc.yaml, propagator, pure)
+- `std::sync::atomic::AtomicU64::fetch_add` (rust-misc.yaml, propagator, pure)
+- `std::sync::atomic::AtomicI64::fetch_add` (rust-misc.yaml, propagator, pure)
+- `std::thread::yield_now` (rust-misc.yaml, propagator, pure)
+- `log::info` (rust-misc.yaml, propagator, pure)
+- `log::warn` (rust-misc.yaml, propagator, pure)
+- `log::error` (rust-misc.yaml, propagator, pure)
+- `log::debug` (rust-misc.yaml, propagator, pure)
+- `log::trace` (rust-misc.yaml, propagator, pure)
+- `tracing::event` (rust-misc.yaml, propagator, pure)
+- `std::vec::Vec::contains` (rust-pure.yaml, propagator, pure)
+- `std::vec::Vec::capacity` (rust-pure.yaml, propagator, pure)
+- `std::slice::len` (rust-pure.yaml, propagator, pure)
+- `std::fmt::Arguments::new_const` (rust-pure.yaml, propagator, pure)
+- `std::thread::sleep` (rust-pure.yaml, propagator, pure)
+- `std::fs::create_dir` (rust-std.yaml, sink, iv)
+- `std::net::TcpStream::connect` (rust-std.yaml, sink, iv)
+- `std::net::UdpSocket::connect` (rust-std.yaml, sink, iv)
+- `reqwest::get` (rust-std.yaml, sink, iv)
+- `reqwest::blocking::get` (rust-std.yaml, sink, iv)
+- `ureq::get` (rust-std.yaml, sink, iv)
+- `ureq::post` (rust-std.yaml, sink, iv)
+- `rusqlite::Connection::execute` (rust-std.yaml, sink, iv)
+- `rusqlite::Connection::prepare` (rust-std.yaml, sink, iv)
+- `rusqlite::Connection::execute_batch` (rust-std.yaml, sink, iv)
+- `sqlx::query` (rust-std.yaml, sink, iv)
+- `sqlx::query_as` (rust-std.yaml, sink, iv)
+- `sqlx::query_scalar` (rust-std.yaml, sink, iv)
+- `std::borrow::Borrow::borrow` (rust-std.yaml, propagator, i)
+- `std::string::String::into_bytes` (rust-std.yaml, propagator, i)
+- `std::string::String::into_boxed_str` (rust-std.yaml, propagator, i)
+- `std::path::PathBuf::from` (rust-std.yaml, propagator, i)
+- `std::ffi::OsStr::new` (rust-std.yaml, propagator, i)
+- `std::ffi::OsString::from` (rust-std.yaml, propagator, i)
+- `std::rc::Rc::new` (rust-std.yaml, propagator, i)
+- `std::cell::RefCell::new` (rust-std.yaml, propagator, i)
+- `std::cell::RefCell::borrow` (rust-std.yaml, propagator, i)
+- `std::cell::RefCell::borrow_mut` (rust-std.yaml, propagator, i)
+- `std::sync::Mutex::try_lock` (rust-std.yaml, propagator, i)
+- `std::sync::RwLock::try_read` (rust-std.yaml, propagator, i)
+- `std::sync::RwLock::try_write` (rust-std.yaml, propagator, i)
+- `std::str::trim_start` (rust-std.yaml, propagator, i)
+- `std::str::trim_end` (rust-std.yaml, propagator, i)
+- `std::str::splitn` (rust-std.yaml, propagator, i)
+- `std::str::split_whitespace` (rust-std.yaml, propagator, i)
+- `std::str::bytes` (rust-std.yaml, propagator, i)
+- `std::str::get` (rust-std.yaml, propagator, i)
+- `std::slice::concat` (rust-std.yaml, propagator, i)
+- `std::vec::Vec::concat` (rust-std.yaml, propagator, i)
+- `std::iter::Iterator::nth` (rust-std.yaml, propagator, i)
+- `std::iter::Iterator::peekable` (rust-std.yaml, propagator, i)
+- `std::vec::Vec::get` (rust-std.yaml, propagator, i)
+- `std::vec::Vec::remove` (rust-std.yaml, propagator, i)
+- `std::vec::Vec::clone` (rust-std.yaml, propagator, i)
+- `std::fmt::Arguments::new_v1` (rust-std.yaml, propagator, i)
+- `std::fmt::Arguments::new_v1_formatted` (rust-std.yaml, propagator, i)
+- `std::fmt::rt::Argument::from_usize` (rust-std.yaml, propagator, i)
+- `std::fmt::Debug::fmt` (rust-std.yaml, propagator, i)
+- `std::string::String::insert_str` (rust-std.yaml, propagator, ii)
+- `std::vec::Vec::extend_from_slice` (rust-std.yaml, propagator, ii)
+- `std::io::Read::read_to_end` (rust-std.yaml, propagator, ii)
+- `std::boxed::Box::new_uninit_slice` (rust-std.yaml, propagator, i)
+- `std::boxed::Box::assume_init` (rust-std.yaml, propagator, i)
+- `std::slice::into_vec` (rust-std.yaml, propagator, i)
+- `std::vec::from_elem` (rust-std.yaml, propagator, i)
+- `std::vec::Vec::as_mut_slice` (rust-std.yaml, propagator, i)
+- `std::vec::Vec::into_boxed_slice` (rust-std.yaml, propagator, i)
+- `std::vec::Vec::as_ptr` (rust-std.yaml, propagator, i)
+- `std::vec::Vec::from` (rust-std.yaml, propagator, i)
+- `std::slice::as_ptr` (rust-std.yaml, propagator, i)
+- `std::ptr::copy` (rust-std.yaml, propagator, ii)
+- `std::ptr::copy_nonoverlapping` (rust-std.yaml, propagator, ii)
+- `std::arch::asm` (rust-std.yaml, propagator, i)
+- `std::mem::transmute` (rust-std.yaml, propagator, i)
+- `std::iter::Iterator::take_while` (rust-std.yaml, propagator, iii)
+- `std::iter::Iterator::skip_while` (rust-std.yaml, propagator, iii)
+- `std::iter::Iterator::by_ref` (rust-std.yaml, propagator, i)
+- `std::iter::once` (rust-std.yaml, propagator, i)
+- `std::pin::Pin::new` (rust-std.yaml, propagator, i)
+- `std::pin::Pin::get_unchecked_mut` (rust-std.yaml, propagator, i)
+- `std::task::Poll::map` (rust-std.yaml, propagator, iii)
+- `http::request::Request::uri` (rust-web.yaml, propagator, i)
+- `http::request::Request::headers` (rust-web.yaml, propagator, i)
+- `http::request::Request::body` (rust-web.yaml, propagator, i)
+- `http::request::Request::into_body` (rust-web.yaml, propagator, i)
+- `http::request::Request::into_parts` (rust-web.yaml, propagator, i)
+- `http::Uri::path` (rust-web.yaml, propagator, i)
+- `http::Uri::query` (rust-web.yaml, propagator, i)
+- `http::Uri::host` (rust-web.yaml, propagator, i)
+- `http::Uri::to_string` (rust-web.yaml, propagator, i)
+- `url::Url::path` (rust-web.yaml, propagator, i)
+- `url::Url::query` (rust-web.yaml, propagator, i)
+- `url::Url::query_pairs` (rust-web.yaml, propagator, i)
+- `serde_urlencoded::from_str` (rust-web.yaml, propagator, i)
+- `serde_urlencoded::to_string` (rust-web.yaml, propagator, i)
+- `urlencoding::decode` (rust-web.yaml, propagator, i)
+
