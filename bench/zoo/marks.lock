@@ -192,6 +192,8 @@ go	clos/inline/inline.go	sink-none	@sink(none)	func fixed() { @fixed
 go	clos/inline/inline.go	sink-none	@sink(none) @nosink(clos-inline-decoy)	func decoy() { @decoy
 go	clos/partial_callers/partial_callers.go	sink-none	@sink(none)	func decoy() { @decoy
 go	clos/partial_callers/partial_callers.go	sink-none	@sink(none)	func fixed() { @fixed
+go	clos/range_func/range_func.go	sink-none	@sink(none)	func fixed() { @fixed
+go	clos/range_func/range_func.go	sink-none	@sink(none) @nosink(clos-range-func-decoy)	func decoy() { @decoy
 go	clos/relay/relay.go	fp	@sink(none) @fp @nosink(clos-relay-decoy) @fp @ref(XTALK)	func fixed() { @fixed
 go	clos/relay/relay.go	sink-none	@sink(none)	func fixed() { @fixed
 go	clos/relay/relay.go	sink-none	@sink(none) @fp @nosink(clos-relay-decoy) @fp @ref(XTALK)	func fixed() { @fixed
@@ -217,6 +219,8 @@ go	cont/struct_whole_to_sink/struct_whole_to_sink.go	sink-none	@sink(none)	func 
 go	cont/struct_whole_to_sink/struct_whole_to_sink.go	sink-none	@sink(none) @nosink(cont-struct-whole-to-sink-decoy)	func decoy() { @decoy
 go	conv/buffer_writestring/buffer_writestring.go	sink-none	@sink(none)	func fixed() { @fixed
 go	conv/buffer_writestring/buffer_writestring.go	sink-none	@sink(none) @nosink(conv-buffer-writestring-decoy)	func decoy() { @decoy
+go	conv/builtin_minmax/builtin_minmax.go	sink-none	@sink(none)	func fixed() { @fixed
+go	conv/builtin_minmax/builtin_minmax.go	sink-none	@sink(none) @nosink(conv-builtin-minmax-decoy)	func decoy() { @decoy
 go	conv/exec_output_echo/exec_output_echo.go	sink-none	@sink(none)	func fixed() { @fixed
 go	conv/exec_output_echo/exec_output_echo.go	sink-none	@sink(none) @nosink(conv-exec-output-echo-decoy)	func decoy() { @decoy
 go	conv/struct_field_boxed/struct_field_boxed.go	sink-none	@sink(none)	func fixed() { @fixed
@@ -228,6 +232,8 @@ go	conv/struct_field_opaque/struct_field_opaque.go	sink-none	@sink(none)	func fi
 go	conv/struct_field_opaque/struct_field_opaque.go	sink-none	@sink(none) @nosink(conv-struct-field-opaque-decoy)	func decoy() { @decoy
 go	conv/struct_field_shallow/struct_field_shallow.go	sink-none	@sink(none)	func fixed() { @fixed
 go	conv/struct_field_shallow/struct_field_shallow.go	sink-none	@sink(none) @nosink(conv-struct-field-shallow-decoy)	func decoy() { @decoy
+go	conv/unsafe_string/unsafe_string.go	sink-none	@sink(none)	func fixed() { @fixed
+go	conv/unsafe_string/unsafe_string.go	sink-none	@sink(none) @nosink(conv-unsafe-string-decoy)	func decoy() { @decoy
 go	dyn/fprint_writer_own/fprint_writer_own.go	fp	@sink(none) @fp @nosink(dyn-fprint-writer-own-decoy) @fp @ref(FIELD-SINK)	func decoy() { @decoy
 go	dyn/fprint_writer_own/fprint_writer_own.go	sink-none	@sink(none)	func fixed() { @fixed
 go	dyn/fprint_writer_own/fprint_writer_own.go	sink-none	@sink(none) @fp @nosink(dyn-fprint-writer-own-decoy) @fp @ref(FIELD-SINK)	func decoy() { @decoy

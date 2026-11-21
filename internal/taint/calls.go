@@ -717,6 +717,31 @@ func (s *state) builtin(cc *callCtx, name string) {
 		if len(args) > 0 && len(cc.roots) > 0 {
 			s.copyLocs(s.locs(args[0]), []Loc{{cc.roots[0], ""}}, "alias", cc.in)
 		}
+	case "min", "max":
+		// the result is one of the arguments (a string compared, a number: the number stops where it does)
+		for _, a := range args {
+			if len(cc.roots) > 0 {
+				s.copyLocs(s.locs(a), []Loc{{cc.roots[0], ""}}, name, cc.in)
+			}
+		}
+	case "String", "Slice", "StringData", "SliceData", "Add":
+		// unsafe.String / Slice / StringData / SliceData / Add: the result is made of the first argument (the
+		// pointer, or the data); the length does not flow
+		if len(args) > 0 && len(cc.roots) > 0 {
+			s.copyLocs(s.locs(args[0]), []Loc{{cc.roots[0], ""}}, "unsafe."+name, cc.in)
+		}
+	case "len", "cap", "complex", "real", "imag", "delete", "clear", "close", "print", "println", "ssa:deferstack":
+		// a number, or no result: nothing flows (the number stops where a number does)
+	case "recover":
+		// the value of a panic is not followed (there is no edge from a panic to its recover): said where it is read
+		s.newNote(cc.in, KindUnsupported, "recover(): the value of a panic is not followed, so what it holds is not traced", "")
+	default:
+		// a builtin that this version does not know (a Go that has more of them): the result is taken to come from the
+		// arguments, more than the truth and never less, and it is said, on the way of the flow
+		note := s.newNote(cc.in, KindUnsupported, "an unknown builtin function (builtin."+name+"): its result is taken to come from its arguments", "")
+		if len(cc.roots) > 0 && len(args) > 0 {
+			s.put(Loc{cc.roots[0], ""}, s.flatten(valuesLocs(s, args)), s.whyNote(cc.in, "builtin "+name+" (not known)", note))
+		}
 	}
 }
 
