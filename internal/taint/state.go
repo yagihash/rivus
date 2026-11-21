@@ -803,6 +803,7 @@ func (s *state) traceUncached(l Loc, e Elem) *rope {
 	var chunks []*rope
 	seen := map[ref]bool{}
 	cur := ref{l, e}
+	cut := false
 	for len(chunks) < maxPathSteps {
 		if seen[cur] {
 			break
@@ -824,8 +825,16 @@ func (s *state) traceUncached(l Loc, e Elem) *rope {
 			break
 		}
 		cur = *w.from
+		if len(chunks) == maxPathSteps && !seen[cur] {
+			cut = true // the walk back to the source stops here: what is before is not in the path
+		}
 	}
 	var out *rope
+	if cut {
+		n := newUncertainty(KindDepthLimit, "path_steps_omitted: the path was followed back for "+itoa(maxPathSteps)+
+			" reasons and no further; the steps before this one (up to the source) were left out", "")
+		out = leaf(Step{Desc: "the steps before this one were left out", Notes: []*Uncertainty{n}})
+	}
 	for i := len(chunks) - 1; i >= 0; i-- {
 		out = cat(out, chunks[i])
 	}

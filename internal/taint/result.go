@@ -293,6 +293,9 @@ const FrameworkCallbackNote = "from_framework_callback: a function on the path i
 // Path is one way the data gets from the source to the sink.
 type Path struct {
 	Steps []Step `json:"steps"`
+	// OmittedSteps is how many steps were left out of the middle of the path (it kept the first and the last
+	// maxPathSteps/2). The finding has a depth_limit note ("path_steps_omitted:") for it.
+	OmittedSteps int `json:"omitted_steps,omitempty"`
 }
 
 // Kinds of conditional node.

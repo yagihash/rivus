@@ -75,13 +75,19 @@ func (r *rope) eachReverse(f func(Step) bool) {
 // flatten returns the steps. A path longer than max keeps both ends: where it
 // started and where it arrived.
 func (r *rope) flatten(max int) []Step {
+	out, _ := r.flattenOmitted(max)
+	return out
+}
+
+// flattenOmitted is flatten that also says how many steps it left out of the middle (0: none).
+func (r *rope) flattenOmitted(max int) ([]Step, int) {
 	if r == nil {
-		return nil
+		return nil, 0
 	}
 	if r.n <= max {
 		out := make([]Step, 0, r.n)
 		r.each(func(s Step) bool { out = append(out, s); return true })
-		return out
+		return out, 0
 	}
 	half := max / 2
 	head := make([]Step, 0, half)
@@ -91,5 +97,5 @@ func (r *rope) flatten(max int) []Step {
 	for i, j := 0, len(tail)-1; i < j; i, j = i+1, j-1 {
 		tail[i], tail[j] = tail[j], tail[i]
 	}
-	return append(head, tail...)
+	return append(head, tail...), r.n - len(head) - len(tail)
 }

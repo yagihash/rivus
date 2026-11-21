@@ -1358,7 +1358,8 @@ func (e *Engine) buildFinding(rf *rawFinding) *Finding {
 	// Steps without a position (compiler generated hops) tell a reader
 	// nothing, unless they carry an uncertainty.
 	steps := make([]Step, 0, rf.steps.len())
-	for _, st := range rf.steps.flatten(maxPathSteps) {
+	flat, omitted := rf.steps.flattenOmitted(maxPathSteps)
+	for _, st := range flat {
 		if !st.pos.IsZero() || len(st.Notes) > 0 {
 			steps = append(steps, st)
 		}
@@ -1387,8 +1388,13 @@ func (e *Engine) buildFinding(rf *rawFinding) *Finding {
 			}
 		}
 	}
-	f.Paths = []Path{{Steps: steps}}
+	f.Paths = []Path{{Steps: steps, OmittedSteps: omitted}}
 	f.PathSteps = len(steps)
+	if omitted > 0 {
+		// the middle of a long path is not shown: say so (it is not a path that was read in full)
+		f.Uncertainties = append(f.Uncertainties, newUncertainty(KindDepthLimit, "path_steps_omitted: "+itoa(omitted)+
+			" steps in the middle of the path were left out (the first "+itoa(maxPathSteps/2)+" and the last "+itoa(maxPathSteps/2)+" are shown)", ""))
+	}
 	if e.reach != nil {
 		f.Reachability = ReachFromEntry
 		for _, id := range append([]string{src.Func, rf.site.Func}, funcs...) {
