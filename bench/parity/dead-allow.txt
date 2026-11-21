@@ -305,7 +305,6 @@ go errors.Is | debt | the standard library: no cell of the zoo calls it yet
 go errors.Join | debt | the standard library: no cell of the zoo calls it yet
 go flag.Duration | debt | the standard library: no cell of the zoo calls it yet
 go flag.Int | debt | the standard library: no cell of the zoo calls it yet
-go fmt.Fprint | debt | the standard library: no cell of the zoo calls it yet
 go fmt.Fprintf | debt | the standard library: no cell of the zoo calls it yet
 go fmt.Print | debt | the standard library: no cell of the zoo calls it yet
 go fmt.Printf | debt | the standard library: no cell of the zoo calls it yet

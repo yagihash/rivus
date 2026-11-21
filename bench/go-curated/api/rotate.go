@@ -1,7 +1,3 @@
-// PENDING: rename this file to rotate.go when the change that puts what a writer is given in its content (a step below the
-// writer, not on the whole object) is on main. On main today the two quiet sinks below are reported (the model puts the data on
-// the whole object): the build 7552eb9 is red here (FAKE 2) and 6ddee62, the branch with the fix, is green (bench/BACKTEST.md, row 10).
-// It is not a .go file so that the gate stays green until then; rename it in the commit of the fix.
 package api
 
 import (

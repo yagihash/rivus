@@ -893,7 +893,7 @@ func (s *state) applyFlows(cc *callCtx, flows []model.Flow, o *op, desc string, 
 		} else {
 			for _, v := range s.selectVals(cc, to) {
 				here := append(append([]Loc(nil), s.locs(v)...), s.pointeeOfInterface(v)...)
-				if to.Content {
+				if to.Content && s.contentOnly(to, v) {
 					// what was written goes below the writer, in a step of its own: a field of the
 					// writer (a file name, a setting) is not what was written to it, and a read of the
 					// whole writer (`from: recv`) still sees it
@@ -933,6 +933,21 @@ func (s *state) applyFlows(cc *callCtx, flows []model.Flow, o *op, desc string, 
 			}
 		}
 	}
+}
+
+// contentOnly reports whether what a flow writes goes only below the writer (ADR-082), and not to the
+// whole writer as well. The writer itself (`recv.content`: a method of the writer, which the body of
+// the project's own implementation is applied for) and a writer of the library that holds what it is
+// written in a way its own models read back (bytes.Buffer, strings.Builder) are. A writer that is given
+// to a function that does not call its Write (`fmt.Fprint(w, x)`, `io.Copy(w, r)`) and that is of a type
+// of the project, an interface or any other library type, is not: the body of its Write is not applied,
+// so the data must reach the fields it is stored in (`w.data`, `rec.Body`) through the whole writer.
+func (s *state) contentOnly(to model.Selector, v *sg.Value) bool {
+	if to.Kind == model.SelRecv {
+		return true
+	}
+	t := strings.TrimLeft(string(v.Type), "*")
+	return t == "bytes.Buffer" || t == "strings.Builder"
 }
 
 // unmodeled is the conservative default for a call whose callee is not

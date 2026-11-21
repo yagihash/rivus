@@ -27,6 +27,7 @@ import (
 	_ "zoo/cells/conv/struct_field_deep"
 	_ "zoo/cells/conv/struct_field_opaque"
 	_ "zoo/cells/conv/struct_field_shallow"
+	_ "zoo/cells/dyn/fprint_writer_own"
 	_ "zoo/cells/dyn/func_field"
 	_ "zoo/cells/dyn/func_map"
 	_ "zoo/cells/dyn/generics_ptr"

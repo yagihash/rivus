@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"net/http/httptest"
 	"strings"
 
 	"example.com/cases/lib"
@@ -91,4 +92,45 @@ func WrappedDecoy() {
 	w := &wrap{name: "x"}
 	_, _ = w.Write([]byte(lib.Source()))
 	lib.Sink(w.name)
+}
+
+// --- a writer of the project, written to by a function that does not call its Write: the data is in
+// the fields the Write body stores it in (what the model does not apply the body of must not lose it) ---
+
+type sliceW struct{ data []byte }
+
+func (w *sliceW) Write(p []byte) (int, error) { w.data = append(w.data, p...); return len(p), nil }
+
+func OwnFprintf() {
+	w := &sliceW{}
+	fmt.Fprintf(w, "%s", lib.Source()) // @source(writer_own_fprintf)
+	lib.Sink(string(w.data))           // @sink(writer_own_fprintf)
+}
+
+type bufW struct{ buf bytes.Buffer }
+
+func (w *bufW) Write(p []byte) (int, error) { return w.buf.Write(p) }
+
+func OwnWriteString() {
+	w := &bufW{}
+	_, _ = io.WriteString(w, lib.Source()) // @source(writer_own_iowrite)
+	lib.Sink(w.buf.String())               // @sink(writer_own_iowrite)
+}
+
+func Recorder() {
+	rec := httptest.NewRecorder()
+	fmt.Fprint(rec, lib.Source()) // @source(writer_recorder)
+	lib.Sink(rec.Body.String())   // @sink(writer_recorder)
+}
+
+func BufferFprint() {
+	var b bytes.Buffer
+	fmt.Fprint(&b, lib.Source()) // @source(writer_buffer_fprint)
+	lib.Sink(b.String())         // @sink(writer_buffer_fprint)
+}
+
+func OwnCopy() {
+	w := &sliceW{}
+	_, _ = io.Copy(w, strings.NewReader(lib.Source())) // @source(writer_own_copy)
+	lib.Sink(string(w.data))                           // @sink(writer_own_copy)
 }
