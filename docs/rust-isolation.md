@@ -81,6 +81,8 @@ rivus analyze -lang rust -no-deps -C proj \
 
 コンテナの制限と、起動・時間切れ・出力の上限は、言語を知りません（`cmd/rivus/isolate.go`）。Rust 固有なのは、イメージと、取得（`cargo fetch`）と、抽出の呼び出しだけです。Go（cgo、依存の取得）と Dart（`pub get`、`build_runner`）は、後で、同じ作りに載せます。
 
+**載せるときに、最初に確かめること**: 取得の道具が、**対象の設定で、コードを動かすか、内側へ要求を出すか**。Go は `go mod download` の `GOPROXY` / `GOFLAGS` / `GONOSUMDB` / `.netrc`（`go.work`、`go.mod` の `replace`、`toolchain`）、Dart は `pub get` の hosted の URL（`pubspec.yaml` の `hosted:`、`PUB_HOSTED_URL`、`pub_cache` の設定）と、フック（`pubspec` の `executables`、`build_runner`）。Rust で、取得が、対象の設定で `credential-provider` のスクリプトを動かした（直した）のと同じ種類のものが、あるはずだと考えて調べる。取得の段階のネットワークの絞り込みは、言語を知らない形にする（`docs/DESIGN-fetch-network.md`）。
+
 ## 検証
 
 `extractor/rust/test/hostile/` は、悪意のある `build.rs` と proc macro を持つ、自作の crate です。見えるもの（マウントの一覧、環境変数の名前、読めるファイルの中の、秘密の置き場の名前）と、止まらない `build.rs`、フォークの無限ループ、メモリを使い切るもの（コンテナの中だけで止まり、コンテナが残らない）、IR の断片のディレクトリに置く、リンクと大きなファイルも試します。ホストの鍵（のつもりのファイル）、プロジェクトの隣のファイル、ネットワーク（1.1.1.1、8.8.8.8、名前の解決）、`/` と `/etc` と対象と依存への書き込み、環境変数（トークンの名前）、`docker.sock`、root と capability を試し、**コンテナの中で、すべて失敗する**ことを、`TestIsolationHostileBuild` が確かめます（`go test ./cmd/rivus -run Isolation`。Docker とイメージが要る。CI では `RIVUS_REQUIRE_DOCKER=1`）。この crate は、ホストでは、動かしません（`.rivus-hostile` を rivus が拒否し、`build.rs` は、イメージの外では、何もせずに panic する。`RIVUS_UNSAFE_HOST_EXEC=1` のときは、テストが skip する）。
