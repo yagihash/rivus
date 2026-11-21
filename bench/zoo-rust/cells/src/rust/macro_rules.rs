@@ -27,7 +27,7 @@ macro_rules! emit {
 }
 
 fn vuln2() { // @vuln
-    let v = m::src("rust-macro-rules-vuln2"); // @source(rust-macro-rules-vuln2) @miss(silent) @ref(R-35)
+    let v = m::src("rust-macro-rules-vuln2"); // @source(rust-macro-rules-vuln2) @miss(unmodeled_library_call) @ref(R-35)
     emit!(v); // @sink(rust-macro-rules-vuln2)
 }
 

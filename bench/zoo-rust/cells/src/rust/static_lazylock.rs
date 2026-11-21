@@ -9,7 +9,7 @@ pub fn register() {
     m::case("F/rust/static-lazylock/decoy", decoy);
 }
 
-static CMD: LazyLock<String> = LazyLock::new(|| m::src("rust-static-lazylock-vuln")); // @source(rust-static-lazylock-vuln) @miss(silent) @ref(R-17)
+static CMD: LazyLock<String> = LazyLock::new(|| m::src("rust-static-lazylock-vuln")); // @source(rust-static-lazylock-vuln) @miss(unmodeled_library_call) @ref(R-17)
 
 fn read() {
     m::sink_cmd(&CMD); // @sink(rust-static-lazylock-vuln)
@@ -29,7 +29,7 @@ fn fixed() { // @fixed
     read_fixed();
 }
 
-static LOUD: LazyLock<String> = LazyLock::new(|| m::src("rust-static-lazylock-decoy")); // @source(rust-static-lazylock-decoy) @miss(silent) @ref(R-17)
+static LOUD: LazyLock<String> = LazyLock::new(|| m::src("rust-static-lazylock-decoy")); // @source(rust-static-lazylock-decoy) @miss(unmodeled_library_call) @ref(R-17)
 static CALM: LazyLock<String> = LazyLock::new(|| "constant".to_string());
 
 fn read_decoy() {

@@ -42,7 +42,7 @@ async fn produce(s: String) -> String {
 }
 
 fn vuln() { // @vuln
-    let out = block_on(async { produce(m::src("rust-async-await-vuln")).await }); // @source(rust-async-await-vuln) @miss(silent) @ref(ASYNC)
+    let out = block_on(async { produce(m::src("rust-async-await-vuln")).await }); // @source(rust-async-await-vuln) @miss(unmodeled_library_call) @ref(ASYNC)
     m::sink_cmd(&out); // @sink(rust-async-await-vuln)
 }
 
@@ -60,7 +60,7 @@ fn fixed() { // @fixed
 }
 
 fn decoy() { // @decoy
-    let a = block_on(async { produce(m::src("rust-async-await-decoy")).await }); // @source(rust-async-await-decoy) @miss(silent) @ref(ASYNC)
+    let a = block_on(async { produce(m::src("rust-async-await-decoy")).await }); // @source(rust-async-await-decoy) @miss(unmodeled_library_call) @ref(ASYNC)
     let b = block_on(async { produce("constant".to_string()).await });
     m::sink_cmd(&b); // @sink(none) @nosink(rust-async-await-decoy)
     m::sink_sql(&a); // @sink(rust-async-await-decoy)

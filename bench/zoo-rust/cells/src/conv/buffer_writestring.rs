@@ -11,7 +11,7 @@ pub fn register() {
 
 fn vuln() { // @vuln
     let mut b = String::new();
-    b.write_str(&m::src("conv-buffer-writestring-vuln")).unwrap(); // @source(conv-buffer-writestring-vuln) @miss(unmodeled_library_call) @ref(CORE-K)
+    b.write_str(&m::src("conv-buffer-writestring-vuln")).unwrap(); // @source(conv-buffer-writestring-vuln) @miss(unmodeled_library_call) @ref(CORE-K) @ref(PARITY)
     m::sink_cmd(&b); // @sink(conv-buffer-writestring-vuln)
 }
 

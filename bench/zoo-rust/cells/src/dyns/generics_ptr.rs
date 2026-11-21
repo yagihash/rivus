@@ -23,7 +23,7 @@ impl<T: Clone> GetterOf<T> for G<T> {
 }
 
 fn vuln() { // @vuln
-    let g = G { v: m::src("dyn-generics-ptr-vuln") }; // @source(dyn-generics-ptr-vuln) @miss(silent) @ref(PARITY,GEN-DYN)
+    let g = G { v: m::src("dyn-generics-ptr-vuln") }; // @source(dyn-generics-ptr-vuln) @miss(unmodeled_library_call) @ref(PARITY,GEN-DYN) @ref(PARITY)
     let i: &dyn GetterOf<String> = &g;
     m::sink_cmd(&i.get()); // @sink(dyn-generics-ptr-vuln)
 }
@@ -35,7 +35,7 @@ fn fixed() { // @fixed
 }
 
 fn decoy() { // @decoy
-    let ga = G { v: m::src("dyn-generics-ptr-decoy") }; // @source(dyn-generics-ptr-decoy) @miss(silent) @ref(PARITY,GEN-DYN)
+    let ga = G { v: m::src("dyn-generics-ptr-decoy") }; // @source(dyn-generics-ptr-decoy) @miss(unmodeled_library_call) @ref(PARITY,GEN-DYN)
     let gb = G { v: "constant".to_string() };
     let a: &dyn GetterOf<String> = &ga;
     let b: &dyn GetterOf<String> = &gb;

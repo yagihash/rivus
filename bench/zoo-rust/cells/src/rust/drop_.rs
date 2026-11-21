@@ -34,7 +34,7 @@ struct Outer2 {
 }
 
 fn vuln2() { // @vuln
-    let _o = Outer2 { _g: G2(m::src("rust-drop-vuln2")) }; // @source(rust-drop-vuln2) @miss(silent) @ref(R-17)
+    let _o = Outer2 { _g: G2(m::src("rust-drop-vuln2")) }; // @source(rust-drop-vuln2) @miss(unmodeled_library_call) @ref(R-17)
 }
 
 struct G3(String);
@@ -45,7 +45,7 @@ impl Drop for G3 {
 }
 
 fn vuln3() { // @vuln
-    let _o = Some(G3(m::src("rust-drop-vuln3"))); // @source(rust-drop-vuln3) @miss(silent) @ref(R-17)
+    let _o = Some(G3(m::src("rust-drop-vuln3"))); // @source(rust-drop-vuln3) @miss(unmodeled_library_call) @ref(R-17)
 }
 
 struct G4(String);
@@ -56,7 +56,7 @@ impl Drop for G4 {
 }
 
 fn vuln4() { // @vuln
-    let _b = Box::new(G4(m::src("rust-drop-vuln4"))); // @source(rust-drop-vuln4) @miss(silent) @ref(R-17)
+    let _b = Box::new(G4(m::src("rust-drop-vuln4"))); // @source(rust-drop-vuln4) @miss(unmodeled_library_call) @ref(R-17)
 }
 
 struct G5(String);
@@ -67,7 +67,7 @@ impl Drop for G5 {
 }
 
 fn vuln5() { // @vuln
-    let g = G5(m::src("rust-drop-vuln5")); // @source(rust-drop-vuln5) @miss(silent) @ref(R-17)
+    let g = G5(m::src("rust-drop-vuln5")); // @source(rust-drop-vuln5) @miss(unmodeled_library_call) @ref(R-17)
     drop(g);
 }
 
