@@ -112,6 +112,46 @@ String _marker(String tag) {
 /// What the user gives to the framework in a case: the marker, which is not a source of the rules.
 String typed(String tag) => _marker(tag);
 
+/// The structures that the sinks of the cells read a part of (docs/DESIGN-field-sinks.md): the shapes of the
+/// requests of a generated API.
+///
+/// Stmt is a statement whose text is dangerous and whose bind parameters are not.
+class Stmt {
+  Stmt({this.sql = '', Map<String, String>? params}) : params = params ?? <String, String>{};
+  String sql;
+  Map<String, String> params;
+}
+
+/// CreateTask is the request of a service that makes a task, and Task the task: an object that holds an object
+/// that holds a sealed class (a oneof) whose value is a wrapper that holds the request of the HTTP call.
+class CreateTask {
+  CreateTask({this.parent = '', this.task});
+  String parent;
+  Task? task;
+}
+
+/// Task has the oneof message.
+class Task {
+  Task({this.name = '', this.message});
+  String name;
+  TaskMessage? message;
+}
+
+sealed class TaskMessage {}
+
+/// The wrapper of the HTTP request in the oneof.
+class TaskHttpRequest extends TaskMessage {
+  TaskHttpRequest({this.httpRequest});
+  HttpRequest? httpRequest;
+}
+
+/// The request: the url is the sink (the body is not).
+class HttpRequest {
+  HttpRequest({this.url = '', this.body = ''});
+  String url;
+  String body;
+}
+
 /// The source that is a parameter type.
 class In {
   In(String tag) : value = _marker(tag);
@@ -123,6 +163,27 @@ void sinkCmdBytes(List<int> b) => _record(classCmd, '', [utf8.decode(b, allowMal
 void sinkSql(String s) => _record(classSql, '', [s]);
 void sinkHtml(String s) => _record(classHtml, '', [s]);
 void sinkPath(String base, String s) => _record(classPath, base, [s]);
+
+/// Runs the statement: the sql of it is the sink, the params are not.
+void sinkStmt(Stmt s) => _record(classSql, '', [s.sql]);
+
+/// sinkStmt for a statement that is held as an Object.
+void sinkStmtAny(Object v) => _record(classSql, '', [(v as Stmt).sql]);
+
+/// Sends the request of the task: the url of the HTTP request is the sink.
+void sinkTask(CreateTask r) {
+  var u = '';
+  final m = r.task?.message;
+  if (m is TaskHttpRequest && m.httpRequest != null) u = m.httpRequest!.url;
+  _record(classCmd, '', [u]);
+}
+
+/// Moves the "body" param of a statement to its sql: what a function that is not read may do to a structure
+/// that it is given.
+void opaque(Stmt s) {
+  final b = s.params['body'];
+  if (b != null) s.sql = b;
+}
 
 /// Records the text of the value (the `toString` of the case's type; a list, a map, a record print their
 /// elements).

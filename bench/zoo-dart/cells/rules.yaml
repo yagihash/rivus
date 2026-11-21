@@ -51,6 +51,19 @@ sinks:
   - symbol: package:zoo_mark/zoo_mark.dart#sinkAny
     args: [0]
     category: command_injection
+  # the sinks that read a part of a structure (docs/DESIGN-field-sinks.md)
+  - symbol: package:zoo_mark/zoo_mark.dart#sinkStmt
+    args: [0]
+    field: sql
+    category: sql_injection
+  - symbol: package:zoo_mark/zoo_mark.dart#sinkStmtAny
+    args: [0]
+    field: sql
+    category: sql_injection
+  - symbol: package:zoo_mark/zoo_mark.dart#sinkTask
+    args: [0]
+    field: task.message.httpRequest.url
+    category: command_injection
 
 sanitizers:
   - symbol: package:zoo_mark/zoo_mark.dart#cleanCmd
