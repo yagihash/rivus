@@ -70,6 +70,24 @@ clone), the tree hash of the extractor, and the sha256 of the IR of base and hea
 so the same input in two worktrees has the same hash); `IR: same` says that only the binary differs, `DIFFERENT` that the
 extractor or the fixtures changed too. Gitea's base that does not converge is the one `NOT CONVERGED` note, not an `INVALID`.
 
+**Tiers (`--light`, `--heavy`).** The tiers are measured, not named. Light: one run of 60 seconds or less and 6 GB or less
+(curated three, go-synth-S, `go-scale`, gogs x 2, gin-vue-admin, go-test-bench, parseable, dart-pub). Heavy: Gitea and ech0.
+Within the light tier, base and head of a benchmark run at the same time when the free memory allows it (checked a few seconds after
+base started: 35% free or more), and a light run waits only for free memory (25%), not for other analyses; a light-only run has its own
+lock (`lock-light.d`), so it can run beside a heavy one of the same work dir. The time and the peak RSS of a light run are therefore
+measured beside another run: read them as a guide. Heavy: one at a time, waits for a quiet machine, and never uses the cache; it is
+the final check of a big change (`--heavy`, or `--with-gitea` after the light tier). The real codes (gogs etc.) stay in the light tier: they
+are the net that found unknown regressions.
+
+**The cache of base (`<work>/cache`, `--no-cache`).** The result of BASE in the light tier is kept and reused by the next comparison with
+the same base, because the analysis is deterministic (`TestDeterministic*`). The key is the sha256 of the `rivus` binary, the state of
+the target (Go: the commit or tree hash, a clean tree, the sha256 of `go.sum`, `go version`, GOOS / GOARCH / GOFLAGS; Dart and Rust: the
+sha256 of the IR, i.e. the extractor and the target of R-41), the content of the rules file, `-timeout`, the flags, GOMEMLIMIT, GOMAXPROCS,
+GOGC: never the name of a version. A dirty tree is not cached. A run with `timed_out`, `converged: false`, `func_timeouts` or
+`budget_exhausted` is not kept (a clock decided). The material of the key is kept with the result and compared when it is read. Until
+the number of functions is stable between runs (B-30), a cached row can differ in `stats` from a fresh one: `summary.md` says
+`<bench>: base: cached <date>`, and the time and the peak RSS are those of the run that made it.
+
 **Scores (`scores.txt`, R-45).** `score.py` matches a truth entry by its sink (`file`, `line`) or, for an entry with
 `source_func`, by the source function; if the entry also has `sink_file` and `sink_line`, by the pair (source function,
 sink), which a finding from that function to another sink does not satisfy. An entry with a `source_func` only does not look

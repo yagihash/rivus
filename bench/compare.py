@@ -18,7 +18,7 @@ fell or grew by 50% or more, or both runs have no finding at all. A change of 10
 functions is a warning. Each condition is one line at the top of summary.md.
 Standard library only.
 """
-import argparse, collections, json, os, re, resource, shlex, subprocess, sys, time
+import argparse, collections, hashlib, json, os, re, resource, shlex, shutil, subprocess, sys, time
 
 SWAP_LIMIT = 0.50
 FREE_LIMIT = 0.40  # macOS: busy below this free-memory fraction (memory_pressure)
@@ -82,12 +82,19 @@ def other_analyses():
     return found
 
 
-def wait_quiet(hours):
-    """Blocks until swap <= 50% and no other analysis runs; returns False when it waited for longer than hours."""
+LIGHT_FREE_LIMIT = 0.25  # the light tier (one run: 60 s or less, 6 GB or less): busy only below this free-memory fraction
+
+
+def wait_quiet(hours, light=False):
+    """Blocks until the memory is free enough and no other analysis runs; returns False when it waited for longer than hours.
+    light: the run is small and may go beside others: only a nearly full memory makes it wait."""
     deadline = time.time() + hours * 3600
     while True:
         busy, mem_why = memory_busy()
         others = other_analyses()
+        if light:
+            free = free_memory_fraction()
+            busy, others = (free is not None and free < LIGHT_FREE_LIMIT), []
         if not busy and not others:
             return True
         if time.time() > deadline:
@@ -110,7 +117,23 @@ def run(a):
                 return 0
         except (OSError, ValueError):
             pass
-    if not a.no_guard and not wait_quiet(a.wait):
+    cdir, material = cache_entry(a)
+    if cdir and os.path.exists(os.path.join(cdir, "meta.json")):
+        # the analysis is deterministic (TestDeterministic*): the same binary, input, rules and arguments give the same result.
+        # The material of the key is kept with the result and compared when it is read (a collision or an edit by hand is caught).
+        try:
+            if json.load(open(os.path.join(cdir, "material.json"))) != material:
+                raise ValueError("the material of the cache entry is not the one of this run")
+            for ext, name in ((".json", "result.json"), (".err", "err")):
+                shutil.copyfile(os.path.join(cdir, name), a.out + ext)
+            meta = json.load(open(os.path.join(cdir, "meta.json")))
+            meta["cached"] = meta.get("cached_at", "?")
+            json.dump(meta, open(meta_path, "w"), indent=1)
+            print("compare: %s: cached result (%s), the analysis is skipped" % (os.path.basename(a.out), meta["cached"]), file=sys.stderr)
+            return 0
+        except (OSError, ValueError) as e:
+            print("compare: the cache entry is not used: %s" % e, file=sys.stderr)
+    if not a.no_guard and not wait_quiet(a.wait, a.light):
         json.dump({"rc": 125, "reason": "the machine was not quiet for %s hours" % a.wait}, open(meta_path, "w"))
         print("compare: gave up waiting for a quiet machine", file=sys.stderr)
         return 125
@@ -142,7 +165,57 @@ def run(a):
     meta = {"rc": p.returncode, "wall_s": round(wall, 1), "max_rss_mb": round(rss), "cmd": cmd, "gomemlimit": a.gomemlimit}
     json.dump(meta, open(meta_path, "w"), indent=1)
     print("compare: %s rc=%d %.0fs %d MB" % (os.path.basename(a.out), p.returncode, wall, rss), file=sys.stderr)
+    if cdir and p.returncode == 0:
+        store_cache(a, cdir, material, meta)
     return 0 if p.returncode == 0 else 3
+
+
+def sha256_file(path):
+    return hashlib.sha256(open(path, "rb").read()).hexdigest()
+
+
+def cache_entry(a):
+    """(directory, material) of the cache entry of this run, or ("", None) when it is not to be cached. The key is made of the
+    binary, the state of the target, the rules (their content), every argument and the environment: never the name of a version."""
+    if not a.cache_dir or not a.cache_tree:
+        return "", None
+    tree = json.loads(a.cache_tree)
+    if tree.get("dirty"):
+        return "", None
+    try:
+        material = {
+            "rivus_sha256": sha256_file(a.rivus),
+            "tree": tree,
+            "rules_sha256": sha256_file(a.rules) if a.rules else "",
+            "timeout": a.timeout, "flags": a.flags, "ir": bool(a.ir), "gomemlimit": a.gomemlimit,
+            "env": {k: os.environ.get(k, "") for k in ("GOMAXPROCS", "GOGC", "GOFLAGS", "GOOS", "GOARCH", "GODEBUG")},
+        }
+    except OSError:
+        return "", None
+    key = hashlib.sha256(json.dumps(material, sort_keys=True).encode()).hexdigest()[:32]
+    return os.path.join(a.cache_dir, key), material
+
+
+def store_cache(a, cdir, material, meta):
+    """Keep a result for the next comparison with the same base. A run that a clock decided (timed out, a function that timed
+    out, a budget that ran out) or that did not converge is not deterministic: it is not kept."""
+    try:
+        st = json.load(open(a.out + ".json")).get("stats", {})
+    except (OSError, ValueError):
+        return
+    if st.get("timed_out") or not st.get("converged") or st.get("func_timeouts") or st.get("budget_exhausted"):
+        return
+    tmp = cdir + ".tmp%d" % os.getpid()
+    try:
+        os.makedirs(tmp, exist_ok=True)
+        shutil.copyfile(a.out + ".json", os.path.join(tmp, "result.json"))
+        shutil.copyfile(a.out + ".err", os.path.join(tmp, "err"))
+        json.dump(dict(meta, cached_at=time.strftime("cached %Y-%m-%d %H:%M:%S")), open(os.path.join(tmp, "meta.json"), "w"), indent=1)
+        json.dump(material, open(os.path.join(tmp, "material.json"), "w"), indent=1, sort_keys=True)
+        shutil.rmtree(cdir, ignore_errors=True)
+        os.rename(tmp, cdir)
+    except OSError:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 def irsum(path, root):
@@ -285,7 +358,7 @@ def report(a):
                 skipped[n] = why
     os.makedirs(os.path.join(a.out, "details"), exist_ok=True)
     rows, alarms, notes, detail_files = [], [], [], []
-    alarms_invalid, warnings = [], []
+    alarms_invalid, warnings, cached = [], [], []
     not_run = 0
     removed_total = 0
     for bench in benches:
@@ -303,6 +376,9 @@ def report(a):
             rows.append([bench, "NOT RUN: " + "; ".join(why)] + [""] * 9)
             not_run += 1
             continue
+        for w, m in (("base", mb), ("head", mh)):
+            if m.get("cached"):
+                cached.append("%s: %s: %s (the result of an earlier run with the same binary, input, rules and arguments; the time, the peak RSS and, while stats.functions is not stable between runs, the stats are of that run)" % (bench, w, m["cached"]))
         ib, ih = index(rb), index(rh)
         added = sorted(k for k in ih if k not in ib)
         folded = covered(rh)
@@ -384,6 +460,8 @@ def report(a):
         out.append("**!! INVALID: %s**" % al)
     for w in warnings:
         out.append("warning: %s" % w)
+    for c in cached:
+        out.append("- %s" % c)
     if alarms_invalid:
         out += ["", "!! The run(s) above are not a valid basis for the comparison (exit status 2): a head that did not finish, or a result "
                 "that shrank to nothing, shows no removed finding because there is nothing left to remove. Find out why before reading the table.", ""]
@@ -438,6 +516,10 @@ def main():
     r.add_argument("-resume", action="store_true")
     r.add_argument("-no-guard", action="store_true", help="do not wait for a quiet machine (for tests of this script only)")
     r.add_argument("-flags", default="")
+    r.add_argument("-light", action="store_true", help="a small run: it does not wait for other analyses, only for free memory")
+    r.add_argument("-cache-dir", default="", help="where results of deterministic runs are kept (with -cache-tree)")
+    r.add_argument("-cache-tree", default="", help="JSON, the state of the target: commit, dirty, go.sum, go version, IR sha256 ...")
+    sub.add_parser("freemem")
     i = sub.add_parser("irsum")
     i.add_argument("file")
     i.add_argument("root")
@@ -449,6 +531,10 @@ def main():
     p.add_argument("-benches", required=True)
     p.add_argument("-skipped", help="file of <bench><TAB><reason> for benchmarks that could not be set up")
     a = ap.parse_args()
+    if a.cmd == "freemem":
+        f = free_memory_fraction()
+        print("" if f is None else int(100 * f))
+        return
     if a.cmd == "irsum":
         print(irsum(a.file, a.root))
         return
