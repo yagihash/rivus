@@ -26,6 +26,7 @@ import (
 	_ "zoo/cells/dyn/generics_ptr"
 	_ "zoo/cells/dyn/global_iface"
 	_ "zoo/cells/dyn/http_middleware_chain"
+	_ "zoo/cells/dyn/iface_assert_ptr_recv"
 	_ "zoo/cells/dyn/iface_ptr_recv_read"
 	_ "zoo/cells/dyn/iface_ptr_recv_write"
 	_ "zoo/cells/dyn/iface_val_recv"
