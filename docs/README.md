@@ -74,3 +74,4 @@
 - テストと測定: [../bench/README.md](../bench/README.md)
 - extractor: [../extractor/dart/README.md](../extractor/dart/README.md)、[../extractor/rust/README.md](../extractor/rust/README.md)
 - ルールの見本: [../examples/rules/README.md](../examples/rules/README.md)
+- AI セッションへの指示(相談役、開発者): [../.claude/prompts/](../.claude/prompts/)。相談役のレビューは `.claude/reviews/` に置くが、git は追跡しない(公開リポジトリなので、直していない脆弱性の詳細を入れない)
