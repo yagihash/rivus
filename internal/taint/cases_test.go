@@ -520,7 +520,7 @@ func TestProvenanceFollowsAParameterToItsCallers(t *testing.T) {
 
 func TestProvenanceFollowsAFieldToWhereItIsSet(t *testing.T) {
 	p := provenanceOf(t, "@sink(sf)")
-	if len(p.Resolved) != 1 || p.Resolved[0].Value != "false" || p.Resolved[0].Certainty != CertaintyZeroValue {
+	if len(p.Resolved) != 1 || p.Resolved[0].Value != "false" || p.Resolved[0].Certainty != CertaintyLiteral {
 		t.Errorf("provenance = %+v", p)
 	}
 }
@@ -671,6 +671,41 @@ func TestProvenanceThroughARecursiveObjectIsBounded(t *testing.T) {
 	p := provenanceOf(t, "@sink(recobj)")
 	if _, ok := terminalKinds(p)[KindDepthLimit]; !ok {
 		t.Errorf("the cut must be recorded as %s: %+v", KindDepthLimit, p.Unresolved)
+	}
+}
+
+// A value is told only when it is a constant or a plain copy of one. An
+// operation on the way gives the folded value or nothing, and a field that is
+// assigned as a whole is not the zero value.
+func TestProvenanceTellsNoValueThatIsNotKnown(t *testing.T) {
+	type val struct{ value, certainty string }
+	for _, tc := range []struct {
+		marker string
+		want   []val // nil: nothing resolved, and something said unresolved
+	}{
+		{"@sink(negfield)", []val{{"false", CertaintyLiteral}}},
+		{"@sink(arith)", []val{{"0", CertaintyLiteral}}},
+		{"@sink(whole)", nil},
+		{"@sink(wholeptr)", nil},
+		{"@sink(wholeelem)", nil},
+		{"@sink(innerpart)", nil},
+		{"@sink(truezero)", []val{{"false", CertaintyZeroValue}}},
+		{"@sink(throughptr)", []val{{"true", CertaintyLiteral}}},
+		{"@sink(ident)", []val{{"true", CertaintyLiteral}}},
+		{"@sink(addr)", nil},
+		{"@sink(cmp)", []val{{"true", CertaintyLiteral}}},
+	} {
+		p := provenanceOf(t, tc.marker)
+		var got []val
+		for _, r := range p.Resolved {
+			got = append(got, val{r.Value, r.Certainty})
+		}
+		if fmt.Sprint(got) != fmt.Sprint(tc.want) {
+			t.Errorf("%s: resolved %v, want %v (%+v)", tc.marker, got, tc.want, p)
+		}
+		if tc.want == nil && len(p.Unresolved) == 0 {
+			t.Errorf("%s: nothing resolved and nothing unresolved: %+v", tc.marker, p)
+		}
 	}
 }
 

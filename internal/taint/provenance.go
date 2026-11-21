@@ -58,6 +58,30 @@ type tracer struct {
 	// objPath are the (object, field) pairs being followed, to cut a loop
 	// of calls that hand the same object on.
 	objPath map[objKey]bool
+	// frame, when set, collects the values the tracing of an operand of an
+	// operation reaches, instead of reporting them: they are not the value
+	// of the operation.
+	frame *frame
+	// ctx are the calls whose result is being followed into the callee: a
+	// parameter of such a callee is the argument of that call, not of every
+	// caller.
+	ctx []provCall
+}
+
+type provCall struct {
+	call   *sg.Instr
+	callee *sg.Func
+}
+
+type frame struct {
+	vals   []capVal
+	failed bool
+}
+
+type capVal struct {
+	c    *provVal
+	cert string
+	site ir.Pos
 }
 
 // Certainty of a resolved value.
@@ -66,7 +90,11 @@ const (
 	CertaintyZeroValue = "zero_value" // nothing sets it: the zero value of the type
 )
 
-func (t *tracer) resolved(val string, site ir.Pos, certainty string) {
+func (t *tracer) resolved(val string, site ir.Pos, certainty string, c *provVal) {
+	if t.frame != nil {
+		t.frame.vals = append(t.frame.vals, capVal{c, certainty, site})
+		return
+	}
 	k := "r|" + val + "|" + posKey(site) + "|" + certainty
 	if t.keys[k] || len(t.res.Resolved) >= maxProvResults {
 		return
@@ -77,6 +105,9 @@ func (t *tracer) resolved(val string, site ir.Pos, certainty string) {
 
 // stop records a place where the tracing could not go on.
 func (t *tracer) stop(kind, detail, symbol string, pos ir.Pos, chain []string, candidates []string) {
+	if t.frame != nil {
+		t.frame.failed = true
+	}
 	k := "u|" + kind + "|" + symbol + "|" + posKey(pos) + "|" + detail
 	if t.keys[k] || len(t.res.Unresolved) >= maxProvResults {
 		return
@@ -159,7 +190,11 @@ func (t *tracer) walk(v *sg.Value, fn *sg.Func, chain []string, site ir.Pos, dep
 
 	switch v.Kind {
 	case sg.KConst:
-		t.resolved(constText(v), site, CertaintyLiteral)
+		var cp *provVal
+		if c, ok := provConst(v); ok {
+			cp = &c
+		}
+		t.resolved(constText(v), site, CertaintyLiteral, cp)
 		return
 	case sg.KPhi:
 		for _, e := range v.Instr.Args {
@@ -182,8 +217,12 @@ func (t *tracer) walk(v *sg.Value, fn *sg.Func, chain []string, site ir.Pos, dep
 	switch in.Op {
 	case ir.OpConvert:
 		switch in.IR.Operator {
-		case "convert", "make_interface":
+		case "make_interface":
 			t.walk(in.Args[0], fn, chain, site, depth)
+		case "convert":
+			t.derived(v, in.Args, "a conversion", fn, chain, site, depth, func(a []provVal) (provVal, bool) {
+				return foldConvert(a[0], v)
+			})
 		default:
 			t.stop(KindDepthLimit, "not followed: "+notFollowed(v), "", v.Pos, chain, nil)
 		}
@@ -194,16 +233,17 @@ func (t *tracer) walk(v *sg.Value, fn *sg.Func, chain []string, site ir.Pos, dep
 		}
 		t.walk(in.Args[0], fn, chain, site, depth)
 	case ir.OpBinop:
-		// A constant compared with the value is not where the value comes from.
-		cmp := isComparison(in.IR.Operator)
-		for _, o := range in.Args {
-			if cmp && o.Kind == sg.KConst {
-				continue
-			}
-			t.walk(o, fn, chain, site, depth)
+		if len(in.Args) != 2 {
+			t.stop(KindDepthLimit, "not followed: "+notFollowed(v), "", v.Pos, chain, nil)
+			return
 		}
+		t.derived(v, in.Args, "the operation "+in.IR.Operator, fn, chain, site, depth, func(a []provVal) (provVal, bool) {
+			return foldBinop(in.IR.Operator, a[0], a[1], v)
+		})
 	case ir.OpUnop:
-		t.walk(in.Args[0], fn, chain, site, depth)
+		t.derived(v, in.Args, "the operation "+in.IR.Operator, fn, chain, site, depth, func(a []provVal) (provVal, bool) {
+			return foldUnop(in.IR.Operator, a[0], v)
+		})
 	case ir.OpLoad:
 		t.walkAddr(in.Args[0], fn, chain, site, depth)
 	case ir.OpGlobalLoad:
@@ -229,6 +269,99 @@ func (t *tracer) walk(v *sg.Value, fn *sg.Func, chain []string, site ir.Pos, dep
 	default:
 		t.stop(KindDepthLimit, "not followed: "+notFollowed(v), "", v.Pos, chain, nil)
 	}
+}
+
+// derived traces the operands of an operation on their own and folds the
+// operation over the constants they reach. The result is told only when every
+// operand reaches constants and the operation can be computed on them; else
+// the operation is recorded as not followed (unless an operand already said
+// where it stopped). The operands' own values are never told as the result.
+func (t *tracer) derived(v *sg.Value, ops []*sg.Value, what string, fn *sg.Func, chain []string, site ir.Pos, depth int, fold func([]provVal) (provVal, bool)) {
+	if len(ops) == 0 {
+		t.stop(KindDepthLimit, "not followed: "+notFollowed(v), "", v.Pos, chain, nil)
+		return
+	}
+	outer := t.frame
+	all := make([][]capVal, len(ops))
+	complete, said := true, false
+	for i, o := range ops {
+		f := &frame{}
+		t.frame = f
+		t.walk(o, fn, chain, site, depth)
+		t.frame = outer
+		if f.failed {
+			said = true
+			complete = false
+			if outer != nil {
+				outer.failed = true
+			}
+		}
+		if len(f.vals) == 0 {
+			complete = false
+		}
+		for _, cv := range f.vals {
+			if cv.c == nil {
+				complete = false
+			}
+		}
+		all[i] = f.vals
+	}
+	var out []capVal
+	if complete {
+		out = foldAll(all, v, fold)
+	}
+	if out == nil {
+		if !said {
+			t.stop(KindDepthLimit, "the value is computed by "+what+" and could not be worked out to a constant", "", v.Pos, chain, nil)
+		}
+		return
+	}
+	for _, o := range out {
+		t.resolved(o.c.text(), o.site, o.cert, o.c)
+	}
+}
+
+// foldAll applies the operation to every combination of the operands' values
+// (a φ gives several); nil when any combination cannot be computed or there
+// are too many.
+func foldAll(all [][]capVal, v *sg.Value, fold func([]provVal) (provVal, bool)) []capVal {
+	combos := 1
+	for _, a := range all {
+		combos *= len(a)
+		if combos > 16 {
+			return nil
+		}
+	}
+	var out []capVal
+	idx := make([]int, len(all))
+	for n := 0; n < combos; n++ {
+		args := make([]provVal, len(all))
+		cert := CertaintyZeroValue
+		var site ir.Pos
+		for i, a := range all {
+			cv := a[idx[i]]
+			args[i] = *cv.c
+			if cv.cert == CertaintyLiteral {
+				cert = CertaintyLiteral
+			}
+			if i == 0 {
+				site = cv.site
+			}
+		}
+		r, ok := fold(args)
+		if !ok {
+			return nil
+		}
+		out = append(out, capVal{&r, cert, site})
+		for i := len(idx) - 1; i >= 0; i-- {
+			idx[i]++
+			if idx[i] < len(all[i]) {
+				break
+			}
+			idx[i] = 0
+		}
+	}
+	return out
 }
 
 // notFollowed names the kind of a value that the tracing does not go
@@ -275,6 +408,18 @@ func (t *tracer) stopGlobal(g *sg.Value, chain []string) {
 func (t *tracer) walkParam(p *sg.Value, fn *sg.Func, chain []string, depth int) {
 	idx := p.Param
 	chain = append(chain, fmt.Sprintf("%s (parameter of %s)", p.Name, fn.ID))
+	if ci, rest, ok := t.enteredBy(fn); ok {
+		// The callee is being read for the result of this very call: the
+		// parameter is the argument of this call, not of the other callers.
+		argv := callArgv(ci)
+		if idx >= 0 && idx < len(argv) {
+			saved := t.ctx
+			t.ctx = rest
+			t.walk(argv[idx], ci.Block.Func, chain, ci.Pos, depth+1)
+			t.ctx = saved
+		}
+		return
+	}
 	sites := t.e.callersOf(fn)
 	if len(sites) == 0 {
 		if fn.Exported {
@@ -295,6 +440,16 @@ func (t *tracer) walkParam(p *sg.Value, fn *sg.Func, chain []string, depth int) 
 		}
 		t.walk(argv[idx], ci.Block.Func, chain, ci.Pos, depth+1)
 	}
+}
+
+// enteredBy tells whether fn is being read for the result of a call, and
+// gives that call and the calls outside it.
+func (t *tracer) enteredBy(fn *sg.Func) (*sg.Instr, []provCall, bool) {
+	n := len(t.ctx)
+	if n == 0 || t.ctx[n-1].callee != fn {
+		return nil, nil, false
+	}
+	return t.ctx[n-1].call, t.ctx[:n-1], true
 }
 
 // callArgv lists the operands of a call in parameter order (receiver first).
@@ -361,7 +516,10 @@ func (t *tracer) walkResult(call *sg.Instr, idx int, fn *sg.Func, chain []string
 		for _, b := range bodies {
 			for _, blk := range b.Blocks {
 				if ret := blk.Terminator(); ret != nil && ret.Op == sg.OpReturn && idx < len(ret.Args) {
+					saved := t.ctx
+					t.ctx = append(t.ctx[:len(t.ctx):len(t.ctx)], provCall{call, b})
 					t.walk(ret.Args[idx], b, chain, call.Pos, depth+1)
+					t.ctx = saved
 				}
 			}
 		}
@@ -382,7 +540,12 @@ func (t *tracer) walkAddr(addr *sg.Value, fn *sg.Func, chain []string, site ir.P
 			t.stop(KindContainerImprecision, "an element of a container: the elements are not told apart", "", a.Pos, chain, nil)
 		}
 	case addr.Instr != nil && addr.Instr.Op == ir.OpAlloc:
-		// A variable of the function: what is stored into it.
+		// A variable of the function: what is stored into it, unless its
+		// address is passed on and others may store into it too.
+		if allocEscapes(fn, addr) {
+			t.stop(KindDepthLimit, "the address of the variable is passed on: it may be changed elsewhere", "", addr.Pos, chain, nil)
+			return
+		}
 		stored := false
 		for _, b := range fn.Blocks {
 			for _, in := range b.Instrs {
@@ -425,9 +588,29 @@ func (t *tracer) walkObject(base *sg.Value, field string, read *sg.Value, fn *sg
 			chain, t.e.writersOf(base))
 	case base.Instr != nil && base.Instr.Op == ir.OpAlloc:
 		set := false
+		// A write that reaches the field in another form: the whole object
+		// assigned (from a call, a copy of what a pointer points to, an
+		// element), or a part of the field.
+		other := false
 		for _, blk := range fn.Blocks {
 			for _, in := range blk.Instrs {
 				switch {
+				case in.Op == ir.OpStore && in.Args[0] == base:
+					z := in.Args[1]
+					switch {
+					case z.Kind == sg.KConst && z.Const == nil:
+						// The zero value of the type: changes nothing.
+					case z.Kind == sg.KResult && z.Instr != nil && z.Instr.Op == ir.OpLoad && z.Instr.Args[0].Instr != nil && z.Instr.Args[0].Instr.Op == ir.OpAlloc:
+						// A copy of another variable of the function (a
+						// literal is built there and copied): the field is
+						// what that variable's field is.
+						set = true
+						t.walkObject(z.Instr.Args[0], field, read, fn, chain[:len(chain)-1], site, depth+1)
+					default:
+						other = true
+					}
+				case in.Op == ir.OpAddrOf && len(in.Args) == 1 && in.Args[0] == base && len(in.IR.Path) > 1 && in.IR.Path[0].Kind == ir.StepField && in.IR.Path[0].Field == field:
+					other = true
 				case in.Op == ir.OpFieldStore && in.Args[0] == base && in.IR.Field == field:
 					set = true
 					t.walk(in.Args[1], fn, chain, site, depth+1)
@@ -443,15 +626,31 @@ func (t *tracer) walkObject(base *sg.Value, field string, read *sg.Value, fn *sg
 		switch {
 		case allocEscapes(fn, base):
 			t.stop(KindDepthLimit, "the address of the object is passed on: the field may be changed elsewhere", "", base.Pos, chain, nil)
+		case other:
+			t.stop(KindDepthLimit, "the object that holds the field is assigned as a whole (or a part of the field is set): the field is not followed", "", base.Pos, chain, nil)
 		case !set:
 			// Nothing sets it and nobody else can: the zero value.
 			if read != nil {
-				t.resolved(zeroText(read.Class, read.Type), site, CertaintyZeroValue)
+				var cp *provVal
+				if c, ok := provConst(read); ok {
+					cp = &c
+				}
+				t.resolved(zeroText(read.Class, read.Type), site, CertaintyZeroValue, cp)
 			}
 		}
 	case base.Kind == sg.KParam:
 		// The object is handed in: look at what the callers pass.
 		idx := base.Param
+		if ci, rest, ok := t.enteredBy(fn); ok {
+			argv := callArgv(ci)
+			if idx >= 0 && idx < len(argv) {
+				saved := t.ctx
+				t.ctx = rest
+				t.walkObject(argv[idx], field, read, ci.Block.Func, chain[:len(chain)-1], ci.Pos, depth+1)
+				t.ctx = saved
+			}
+			return
+		}
 		sites := t.e.callersOf(fn)
 		if len(sites) == 0 {
 			if fn.Exported {
