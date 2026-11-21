@@ -298,3 +298,26 @@ pub fn lim9_extra_2() {
     };
     g(&P9(String::from("constant")));
 }
+
+// (10) the same two closures reach one call as the parameter 0 in one call of the helper and as the parameter 1
+// in another: the closure that does the sink has to stay a candidate of the call, whichever parameter the walk
+// went through first
+struct Pz(String);
+
+fn home_pz<F: Fn(&Pz), G: Fn(&Pz)>(f: F, g: G, c: bool, s: &Pz) {
+    let h: &dyn Fn(&Pz) = if c { &f } else { &g };
+    h(s)
+}
+
+pub fn param_order(flag: bool) {
+    let a = |_x: &Pz| {};
+    let b = |x: &Pz| {
+        sink(&x.0); // @sink(narrow-param-order)
+    };
+    home_pz(a, b, flag, &Pz(source())); // @source(narrow-param-order)
+    let a2 = |_x: &Pz| {};
+    let b2 = |x: &Pz| {
+        sink(&x.0); // @sink(none)
+    };
+    home_pz(b2, a2, flag, &Pz(String::from("constant")));
+}

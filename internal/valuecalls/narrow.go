@@ -184,7 +184,14 @@ type trace struct {
 	fail  string
 	basis string
 	named []string
-	seen  map[seenKey]bool
+	seen  map[narrowSeen]bool
+}
+
+// narrowSeen is a value that the walk has been to, and the parameter of the home function it went through: the
+// same value reached through another parameter tells the callers another thing (via), so it is walked again.
+type narrowSeen struct {
+	seenKey
+	cur int
 }
 
 // found records that the value may be the function id, through the parameter the walk is in.
@@ -208,7 +215,7 @@ func (n *narrower) decide(c *callSite, in *ir.Instr) (*narrowing, string) {
 	if form == nil {
 		return nil, notUnknown
 	}
-	t := &trace{n: n, found: map[ir.FuncID]bool{}, seen: map[seenKey]bool{}, home: c.fn, cur: -1, via: map[ir.FuncID]int{}}
+	t := &trace{n: n, found: map[ir.FuncID]bool{}, seen: map[narrowSeen]bool{}, home: c.fn, cur: -1, via: map[ir.FuncID]int{}}
 	t.origins(c.fn, form.Operand(c.b, c.i, 0), 0)
 	if t.fail != "" {
 		return nil, t.fail
@@ -264,7 +271,7 @@ func (t *trace) origins(f *ir.Func, ref irssa.Ref, depth int) {
 		t.stop(notLimit)
 		return
 	}
-	key := seenKey{f, ref}
+	key := narrowSeen{seenKey{f, ref}, t.cur}
 	if t.seen[key] {
 		return
 	}
