@@ -16,6 +16,13 @@ read too, and their functions are marked `dep`: `rivus analyze` keeps the ones t
 reaches, so that a flow is followed through a dependency instead of guessed at. `--no-deps`
 leaves them out.
 
+The files that a package's build does not ship are not read: `test/`, `integration_test/`, `benchmark/`,
+`tool/` and `example/` of each package (a directory with a `pubspec.yaml`; a `lib/src/test/` is code of the
+library). The dependencies are followed from the code that is read, so a package declared under
+`dev_dependencies` that no shipped file imports is not read either. The stream says how many files and
+packages were left out (`tests_skipped`). `--include-tests` (like `rivus analyze -tests`) reads them all.
+A shipped file that imports one of them reads it, as a dependency (ADR-062).
+
 The package needs its `dart pub get` done (and `build_runner` if it has generated
 code): that is what makes `package:` imports and `part` files resolve.
 

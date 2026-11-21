@@ -303,7 +303,58 @@ fn cli() -> ExitCode {
         }
     };
     merge(files);
+    if !include_tests {
+        // What is not built: the tests, examples and benchmarks of the workspace, and the dependencies declared for
+        // development only (cargo check does not compile them without --all-targets). The build scripts are not
+        // extracted either (is_build_script), and the crates they need only run at build time.
+        if let Some(v) = tests_skipped(&root, &tmp) {
+            println!("{}", json!({"kind": "tests_skipped", "tests_skipped": v}));
+        }
+    }
     ExitCode::SUCCESS
+}
+
+/// The targets that `cargo check` leaves out without `--include-tests` (kind test, example, bench), and the
+/// dependencies declared under `[dev-dependencies]` only, read from `cargo metadata --no-deps`. None when
+/// cargo does not say.
+fn tests_skipped(root: &Path, tmp: &Path) -> Option<serde_json::Value> {
+    let out = Command::new("cargo")
+        .arg(format!("+{}", TOOLCHAIN))
+        .args(["metadata", "--no-deps", "--format-version", "1"])
+        .current_dir(root)
+        .env("CARGO_TARGET_DIR", tmp.join("target"))
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let meta: serde_json::Value = serde_json::from_slice(&out.stdout).ok()?;
+    let mut targets = 0;
+    let mut dev: std::collections::BTreeSet<String> = Default::default();
+    let mut prod: std::collections::BTreeSet<String> = Default::default();
+    for p in meta["packages"].as_array()? {
+        if let Some(a) = p["name"].as_str() {
+            prod.insert(a.to_string());
+        }
+        for t in p["targets"].as_array().into_iter().flatten() {
+            if t["kind"].as_array().into_iter().flatten().any(|k| matches!(k.as_str(), Some("test") | Some("example") | Some("bench"))) {
+                targets += 1;
+            }
+        }
+        for d in p["dependencies"].as_array().into_iter().flatten() {
+            let name = d["name"].as_str().unwrap_or("").to_string();
+            if d["kind"].as_str() == Some("dev") {
+                dev.insert(name);
+            } else {
+                prod.insert(name);
+            }
+        }
+    }
+    let names: Vec<String> = dev.difference(&prod).cloned().collect();
+    if targets == 0 && names.is_empty() {
+        return None;
+    }
+    Some(json!({"files": 0, "targets": targets, "dev_dependencies": names.len(), "dev_dependency_names": names.iter().take(50).collect::<Vec<_>>()}))
 }
 
 /// The files the driver wrote, in name order. A directory that cannot be read, or an entry that cannot be

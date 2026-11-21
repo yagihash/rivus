@@ -133,6 +133,15 @@ class StreamOut {
         'kind': 'func_text',
         'func_text': {'func': id, if (body.isNotEmpty) 'body': body, if (source.isNotEmpty) 'source': source}
       });
+  void testsSkipped(int files, int devDependencies, List<String> names, List<String> notes) => _line({
+        'kind': 'tests_skipped',
+        'tests_skipped': {
+          'files': files,
+          'dev_dependencies': devDependencies,
+          if (names.isNotEmpty) 'dev_dependency_names': names,
+          if (notes.isNotEmpty) 'notes': notes
+        }
+      });
   void loadError(String package, String message) =>
       _line({'kind': 'load_error', 'load_error': {'package': package, 'message': message}});
 }

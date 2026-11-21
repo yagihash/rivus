@@ -10,6 +10,7 @@ import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/dart/element/type.dart';
 import 'package:path/path.dart' as p;
+import 'package:yaml/yaml.dart';
 
 import 'irjson.dart';
 import 'lower.dart';
@@ -19,7 +20,7 @@ import 'program.dart';
 /// Extracts the Dart code under [root] (the files that are not under a hidden
 /// or a build directory) and writes the stream to [sink].
 Future<void> extract(String root, StringSink sink,
-    {bool deps = true, List<String> allowDepsUnder = const [], Future<void> Function()? drain, String? failIn}) async {
+    {bool deps = true, bool includeTests = false, List<String> allowDepsUnder = const [], Future<void> Function()? drain, String? failIn}) async {
   root = p.normalize(p.absolute(root));
   final out = StreamOut(sink);
   final prog = Program(root, out)..failIn = failIn;
@@ -31,13 +32,25 @@ Future<void> extract(String root, StringSink sink,
   // analysis_options.yaml leaves out of it (the generated code: *.g.dart and
   // *.freezed.dart are the usual `exclude`), which are code of the project all the same.
   final paths = <String>{};
+  // The files of a package that its build does not ship (test/, integration_test/, benchmark/, tool/,
+  // example/) are not read unless --include-tests asks (ADR-062). A production file that imports one reads
+  // it as a dependency (below), so a flow through it is not lost.
+  final testFiles = <String>{};
+  final pkgCache = <String, bool>{};
+  void take(String path) {
+    if (!includeTests && _isNonProduction(root, path, pkgCache)) {
+      testFiles.add(path);
+      return;
+    }
+    paths.add(path);
+  }
   for (final context in collection.contexts) {
     for (final path in context.contextRoot.analyzedFiles()) {
-      if (path.endsWith('.dart') && p.isWithin(root, path) && !_skipped(root, path)) paths.add(path);
+      if (path.endsWith('.dart') && p.isWithin(root, path) && !_skipped(root, path)) take(path);
     }
   }
   for (final e in Directory(root).listSync(recursive: true, followLinks: false)) {
-    if (e is File && e.path.endsWith('.dart') && !_skipped(root, e.path)) paths.add(p.normalize(e.path));
+    if (e is File && e.path.endsWith('.dart') && !_skipped(root, e.path)) take(p.normalize(e.path));
   }
   for (final path in paths.toList()..sort()) {
     final context = _contextOf(collection, path);
@@ -57,6 +70,8 @@ Future<void> extract(String root, StringSink sink,
   // The dependencies (not the SDK): the libraries the code imports, and what
   // they import. Their functions are marked dep; the core keeps the ones the
   // code reaches.
+  final readPackages = <String>{}; // the packages of the dependencies that were reached
+  final usedByProduction = <String>{}; // the packages that the code of the project imports directly
   final refused = <String, String>{}; // the directory of a dependency that was not read -> a file in it
   if (deps) {
     final seen = <String>{};
@@ -67,8 +82,9 @@ Future<void> extract(String root, StringSink sink,
         final path = f.source.fullName;
         // a file of the project that was left out above (a hidden directory such as `.dart_tool`,
         // the `build` at the top) is read as a dependency when the code imports it
-        if (!p.isWithin(root, path) || _skipped(root, path)) files.add(path);
+        if (!p.isWithin(root, path) || _skipped(root, path) || testFiles.contains(path)) files.add(path);
       }
+      if (lib.uri.scheme == 'package') readPackages.add(lib.uri.pathSegments.first);
       for (final i in lib.firstFragment.libraryImports) {
         final l = i.importedLibrary;
         if (l != null) visit(l);
@@ -81,7 +97,13 @@ Future<void> extract(String root, StringSink sink,
     for (final context in collection.contexts) {
       for (final u in List.of(units)) {
         final r = await context.currentSession.getResolvedUnit(p.join(root, u.file));
-        if (r is ResolvedUnitResult) visit(r.libraryElement);
+        if (r is ResolvedUnitResult) {
+          for (final i in r.libraryElement.firstFragment.libraryImports) {
+            final u = i.importedLibrary?.uri;
+            if (u != null && u.scheme == 'package') usedByProduction.add(u.pathSegments.first);
+          }
+          visit(r.libraryElement);
+        }
       }
     }
     final done = <String>{};
@@ -103,6 +125,15 @@ Future<void> extract(String root, StringSink sink,
   for (final e in refused.entries) {
     out.loadError(e.key,
         'a dependency outside the project, the pub cache and the SDKs is not read (what package_config.json points to is not trusted): --allow-deps-under ${_advisedDir(e.key)} reads it');
+  }
+  if (!includeTests) {
+    final dev = _devOnlyDependencies(root);
+    final unread = deps ? dev.where((d) => !readPackages.contains(d)).toList() : <String>[];
+    final used = deps ? (dev.toList()..retainWhere(usedByProduction.contains)) : <String>[];
+    out.testsSkipped(testFiles.length, unread.length, unread..sort(), [
+      if (used.isNotEmpty)
+        'the code of the project uses a dependency that is declared for development (${(used..sort()).join(', ')}): it is read, because it is imported'
+    ]);
   }
   units.sort((a, b) => a.file.compareTo(b.file));
   for (final u in units) {
@@ -788,4 +819,40 @@ class _Lower extends RecursiveAstVisitor<void> {
       }
     }
   }
+}
+
+const _nonProductionDirs = {'test', 'integration_test', 'benchmark', 'tool', 'example'};
+
+/// Whether the file is in a directory of a package that the package does not ship: the first directory
+/// under the package (the one with a pubspec.yaml; the project itself when it has none) is one of
+/// [_nonProductionDirs]. `lib/src/test/` and `lib/foo_test.dart` are code of the library.
+bool _isNonProduction(String root, String path, Map<String, bool> pkgCache) {
+  var dir = p.dirname(path);
+  while (true) {
+    final isPkg = pkgCache.putIfAbsent(dir, () => File(p.join(dir, 'pubspec.yaml')).existsSync());
+    if (isPkg || p.equals(dir, root)) {
+      final parts = p.split(p.relative(path, from: dir));
+      if (parts.length > 1 && _nonProductionDirs.contains(parts.first)) return true;
+    }
+    if (p.equals(dir, root) || !p.isWithin(root, dir)) return false;
+    dir = p.dirname(dir);
+  }
+}
+
+/// The packages that the pubspec.yaml files under [root] declare under dev_dependencies and not under
+/// dependencies (nor as a package of the project itself).
+Set<String> _devOnlyDependencies(String root) {
+  final dev = <String>{}, prod = <String>{}, own = <String>{};
+  for (final e in Directory(root).listSync(recursive: true, followLinks: false)) {
+    if (e is! File || p.basename(e.path) != 'pubspec.yaml' || _skipped(root, e.path)) continue;
+    try {
+      final y = loadYaml(e.readAsStringSync());
+      if (y is! YamlMap) continue;
+      if (y['name'] is String) own.add(y['name'] as String);
+      final d = y['dev_dependencies'], m = y['dependencies'];
+      if (d is YamlMap) dev.addAll(d.keys.cast<String>());
+      if (m is YamlMap) prod.addAll(m.keys.cast<String>());
+    } catch (_) {}
+  }
+  return dev.difference(prod).difference(own);
 }

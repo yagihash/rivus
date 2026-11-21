@@ -388,6 +388,8 @@ type Stats struct {
 	OwnSpentMilli int64    `json:"own_spent_ms,omitempty"`
 	NotConverged  []string `json:"not_converged,omitempty"`
 	TimedOut      bool     `json:"timed_out,omitempty"`
+	// TestsSkipped is what was not read because the build does not ship it (ADR-062); absent when nothing was left out.
+	TestsSkipped *ir.TestsSkipped `json:"tests_skipped,omitempty"`
 	// DroppedGlobals are the package variables that a rule says hold nothing (ADR-056), and the number of functions
 	// that wrote to them.
 	DroppedGlobals []DroppedGlobal `json:"dropped_globals,omitempty"`

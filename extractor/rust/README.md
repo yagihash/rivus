@@ -33,6 +33,7 @@ rivus analyze -ir workspace.jsonl -rules rules.yaml
 Only the library and the binaries are read: the code that is shipped. Tests, examples and
 benchmarks are not even compiled, so `#[cfg(test)]` code cannot get in. `--include-tests`
 (also spelled `--tests`, like `rivus -tests` for Go; before the directory) reads them too (`cargo check --all-targets`).
+The stream says how many targets (tests, examples, benchmarks) and how many `[dev-dependencies]`-only crates were left out (`tests_skipped`, ADR-062).
 
 It builds the workspace with `cargo check`, running itself in place of rustc for the crates
 of the workspace (`RUSTC_WORKSPACE_WRAPPER`): rustc compiles them as usual, and the driver

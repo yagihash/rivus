@@ -147,6 +147,15 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	eng := taint.New(graph, l.texts, st, rules, opts)
 	eng.SetLoadErrors(l.loadErrors())
 	res = eng.Run()
+	if ts := l.testsSkipped(); ts != nil {
+		res.Stats.TestsSkipped = ts
+		if !ts.Empty() {
+			fmt.Fprintf(os.Stderr, "rivus: %s\n", ts.Describe())
+		}
+		for _, n := range ts.Notes {
+			fmt.Fprintf(os.Stderr, "rivus: %s\n", n)
+		}
+	}
 	phase("taint")
 	if o.verbose {
 		fmt.Fprintf(os.Stderr, "rivus: %d distinct strings in the elements\n", taint.InternedStrings())

@@ -1,4 +1,4 @@
-// rivus_dart [--no-deps] [--allow-deps-under DIR]... [directory]: writes the neutral IR of the Dart code under the
+// rivus_dart [--no-deps] [--include-tests] [--allow-deps-under DIR]... [directory]: writes the neutral IR of the Dart code under the
 // directory (the current one by default) to the standard output, as JSON
 // Lines (--no-deps leaves out the dependencies). See docs/ARCHITECTURE.md 2.7.7.
 import 'dart:io';
@@ -11,11 +11,12 @@ Future<void> main(List<String> args) async {
     return;
   }
   final deps = !args.contains('--no-deps');
+  final includeTests = args.contains('--include-tests');
   // --allow-deps-under DIR (repeatable): the dependencies under DIR may be read, though the project does not hold them
   final allow = <String>[];
   final rest = <String>[];
   for (var i = 0; i < args.length; i++) {
-    if (args[i] == '--no-deps') continue;
+    if (args[i] == '--no-deps' || args[i] == '--include-tests') continue;
     if (args[i] == '--allow-deps-under' && i + 1 < args.length) {
       allow.add(args[++i]);
       continue;
@@ -24,7 +25,7 @@ Future<void> main(List<String> args) async {
   }
   final root = rest.isEmpty ? '.' : rest.first;
   final sink = _Stdout();
-  await extract(root, sink, deps: deps, allowDepsUnder: allow, drain: sink.drain, failIn: Platform.environment['RIVUS_DART_FAIL_IN']); // RIVUS_DART_FAIL_IN: for the tests only (a function that fails)
+  await extract(root, sink, deps: deps, includeTests: includeTests, allowDepsUnder: allow, drain: sink.drain, failIn: Platform.environment['RIVUS_DART_FAIL_IN']); // RIVUS_DART_FAIL_IN: for the tests only (a function that fails)
   await sink.drain();
 }
 

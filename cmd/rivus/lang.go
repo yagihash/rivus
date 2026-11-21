@@ -143,7 +143,7 @@ func (o *analyzeOpts) runExtractor(lang string) (*ir.Program, error) {
 			args = append(args, "--allow-deps-under", d)
 		}
 	}
-	if lang == langRust && o.tests {
+	if (lang == langRust || lang == langDart) && o.tests {
 		args = append(args, "--include-tests")
 	}
 	dir, err := filepath.Abs(o.dir)
@@ -208,6 +208,7 @@ func (o *analyzeOpts) loadLangs(langs []string, patterns []string, rules *model.
 		merged.CallTexts = append(merged.CallTexts, p.CallTexts...)
 		merged.FuncTexts = append(merged.FuncTexts, p.FuncTexts...)
 		merged.LoadErrors = append(merged.LoadErrors, p.LoadErrors...)
+		merged.TestsSkipped = merged.TestsSkipped.Add(p.TestsSkipped)
 		merged.Files = append(merged.Files, p.Files...)
 	}
 	if len(merged.Funcs) == 0 && goProg == nil {

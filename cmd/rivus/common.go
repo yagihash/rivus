@@ -232,6 +232,22 @@ func (r subtypeResolver) SubtypeMethods(super, with string) []model.MarkedMethod
 
 func (r subtypeResolver) CallsFunction(symbol string) bool { return r.p.CallsFunction(symbol) }
 
+// testsSkipped is what was left out because the build does not ship it (ADR-062): the _test.go files, and what an
+// extractor said it did not read. Nil when nothing was.
+func (l *loaded) testsSkipped() *ir.TestsSkipped {
+	var t *ir.TestsSkipped
+	if l.ir != nil {
+		t = t.Add(l.ir.TestsSkipped)
+	}
+	if l.gossa != nil && l.gossa.TestFilesSkipped > 0 {
+		t = t.Add(&ir.TestsSkipped{Files: l.gossa.TestFilesSkipped})
+	}
+	if t.Empty() && (t == nil || len(t.Notes) == 0) {
+		return nil
+	}
+	return t
+}
+
 // loadErrors are what could not be read, from the packages or the stream.
 func (l *loaded) loadErrors() []ir.LoadError {
 	if l.gossa == nil {

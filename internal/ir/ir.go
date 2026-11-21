@@ -13,6 +13,7 @@ package ir
 import (
 	"fmt"
 	"sort"
+	"strings"
 )
 
 // SchemaVersion identifies the format of the stream.
@@ -66,6 +67,60 @@ func (p Pos) Position() Position {
 type LoadError struct {
 	Package string `json:"package"`
 	Message string `json:"message"`
+}
+
+// TestsSkipped says what an extractor did not read because the build of the project does not ship it
+// (ADR-062): the test files, the tests, examples and benchmarks of a crate, the dependencies that are
+// declared for development only. The same shape for every language.
+type TestsSkipped struct {
+	// Files are the test files that were not read (Go: _test.go; Dart: the files of test/, integration_test/,
+	// benchmark/, tool/ and example/ of a package).
+	Files int `json:"files"`
+	// Targets are the test, example and benchmark targets of a crate that were not built (Rust).
+	Targets int `json:"targets,omitempty"`
+	// DevDependencies are the dependencies declared for development only, and not reached from the code that is shipped.
+	DevDependencies int `json:"dev_dependencies"`
+	// DevDependencyNames names them (up to 50).
+	DevDependencyNames []string `json:"dev_dependency_names,omitempty"`
+	// Notes are what the reader of the result should know (a dependency declared for development that the code uses).
+	Notes []string `json:"notes,omitempty"`
+}
+
+// Add adds the counts of another language.
+func (t *TestsSkipped) Add(o *TestsSkipped) *TestsSkipped {
+	if o == nil {
+		return t
+	}
+	if t == nil {
+		c := *o
+		return &c
+	}
+	t.Files += o.Files
+	t.Targets += o.Targets
+	t.DevDependencies += o.DevDependencies
+	t.DevDependencyNames = append(t.DevDependencyNames, o.DevDependencyNames...)
+	t.Notes = append(t.Notes, o.Notes...)
+	return t
+}
+
+// Empty is true when nothing was left out.
+func (t *TestsSkipped) Empty() bool {
+	return t == nil || (t.Files == 0 && t.Targets == 0 && t.DevDependencies == 0)
+}
+
+// Describe is the line that says it.
+func (t *TestsSkipped) Describe() string {
+	var parts []string
+	if t.Files > 0 {
+		parts = append(parts, fmt.Sprintf("%d test files", t.Files))
+	}
+	if t.Targets > 0 {
+		parts = append(parts, fmt.Sprintf("%d test, example and benchmark targets", t.Targets))
+	}
+	if t.DevDependencies > 0 {
+		parts = append(parts, fmt.Sprintf("%d dependencies declared for development", t.DevDependencies))
+	}
+	return strings.Join(parts, ", ") + " were not read (--tests reads them: the build does not ship them)"
 }
 
 // TypeClass is what the engine asks of a type; the structure of types is not
@@ -432,6 +487,8 @@ type Program struct {
 	FuncTexts []FuncText  `json:"func_texts,omitempty"`
 	// LoadErrors are what the extractor could not read.
 	LoadErrors []LoadError `json:"load_errors,omitempty"`
+	// TestsSkipped is what was not read because the build does not ship it (ADR-062).
+	TestsSkipped *TestsSkipped `json:"tests_skipped,omitempty"`
 
 	// Files are the source files named by the positions, set by the reader
 	// before the functions of dependencies that nothing reaches are dropped

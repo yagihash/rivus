@@ -69,6 +69,10 @@ type Program struct {
 
 	LoadErrors []LoadError
 
+	// TestFilesSkipped is the number of _test.go files in the directories of the loaded packages that
+	// were not read, because Options.Tests did not ask for them (ADR-062).
+	TestFilesSkipped int
+
 	// Inputs is what the load read: the files of the packages (the standard
 	// library and the dependencies included), the go.mod files of their modules,
 	// and the directories of the modules that are not in the module cache.
@@ -176,6 +180,9 @@ func Load(dir string, patterns []string, opts Options) (*Program, error) {
 		p.PkgPaths = append(p.PkgPaths, pkg.PkgPath)
 	}
 	p.Inputs = collectInputs(pkgs)
+	if !opts.Tests {
+		p.TestFilesSkipped = countTestFiles(pkgs)
+	}
 	seenErr := map[string]bool{}
 	packages.Visit(pkgs, nil, func(pkg *packages.Package) {
 		for _, e := range pkg.Errors {
@@ -514,4 +521,28 @@ func isStdlib(pkg *packages.Package, gorootSrc string) bool {
 		}
 	}
 	return false
+}
+
+// countTestFiles counts the _test.go files in the directories of the packages: what a load without
+// Tests leaves out.
+func countTestFiles(pkgs []*packages.Package) int {
+	dirs := map[string]bool{}
+	for _, pkg := range pkgs {
+		for _, f := range pkg.GoFiles {
+			dirs[filepath.Dir(f)] = true
+		}
+	}
+	n := 0
+	for d := range dirs {
+		entries, err := os.ReadDir(d)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if !e.IsDir() && strings.HasSuffix(e.Name(), "_test.go") {
+				n++
+			}
+		}
+	}
+	return n
 }

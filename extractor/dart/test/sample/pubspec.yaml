@@ -7,3 +7,5 @@ dependencies:
   shelf: ^1.4.0
   grpc:
     path: stubs/grpc
+dev_dependencies:
+  matcher: ^0.12.16
