@@ -38,3 +38,29 @@ the answer. The expected file `expected/stagefield-w1.json` is ops 40 / stages 4
 
 What it does not reproduce: memos' time (the dependencies' own analyses, minutes) and its 3 passes; the field names
 here never overlap between operations (in the SDK many names are shared, so the union is smaller than ops x fields).
+
+## `registry`: false "other sources" through a registry in a package variable
+
+`go run ./bench/go-scale/gen -shapes registry -ops N -out DIR` (by name only; not part of `-shapes all`). The shape of
+`bench/gcp` (the notes of `bench/explore/LOG.md`, measurement 3): N handlers take a request (a source by its type,
+`*reg.Req`), and each writes its body into one registry (`var M = map[string]string{}`, a package variable) under a
+key of its own. Handler 0 also decodes its body (`Decode(s) = s + M["codec"]`) and sends it to the sink. One in eight
+functions of the ballast calls `Decode`, so what the decoder carries goes up the call graph. The key is a constant and
+the elements of a map do not say which key they came from: the decoded value carries the requests of all handlers, and
+the one real finding (handler 0 to the sink) lists the other N-1 handlers as `other_sources`. None of them was ever in
+the decoded value. The code has no answer key; `expected/registry-w1.json` (N = 40) is the check: the one finding,
+`other_sources_count` 39, `summary_elems` 22,173.
+
+Measured on the head (one finding in every row; the count is `other_sources_count`, the list in the report is cut at 5):
+
+| handlers N | summary_elems | largest summary | reanalyses | other_sources_count |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 5,523 | 7 | 3,185 | 0 |
+| 10 | 9,456 | 16 | 3,203 | 9 |
+| 40 | 22,173 | 43 | 3,263 | 39 |
+| 160 | 74,613 | 163 | 3,504 | 159 |
+| 320 | 144,533 | 323 | 3,824 | 319 |
+
+Both numbers are **linear in N**: `summary_elems` about 440 per handler (the 250 callers of `Decode` and their callers each
+carry the N requests), and `other_sources_count` is exactly N-1. The acceptance of the second stage of
+`docs/DESIGN-shared-state.md` is that `other_sources_count` becomes 0 and the finding stays the same.

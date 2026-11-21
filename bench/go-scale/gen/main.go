@@ -45,7 +45,7 @@ var allShapes = []string{"types", "stderr", "widen", "scc", "chain", "typeschain
 
 // namedShapes are the shapes that -shapes takes by name only: "all" does not turn them on (the input of
 // bench/compare.sh's light tier stays the same for the base and the head).
-var namedShapes = []string{"stagefield"}
+var namedShapes = []string{"stagefield", "registry"}
 
 // Default is the size of the profiles (about 2,000 functions).
 func Default() Params {
@@ -139,6 +139,11 @@ func (g *gen) ballast() {
 			// ballast of the other shapes is the same)
 			f.imports["ops"] = true
 			fmt.Fprintf(&b, "\tv += ops.Op%d(r, v)\n", (i/8)%g.p.Ops)
+		}
+		if g.on("registry") && i%8 == 0 {
+			// one function in eight decodes a value (a call of the gRPC stack): what the decoder carries goes up
+			f.imports["reg"] = true
+			b.WriteString("\tv += reg.Decode(v)\n")
 		}
 		if g.on("stagefield") && i%8 == 0 && g.p.Ops > 0 {
 			f.imports["sfops"] = true
@@ -685,6 +690,38 @@ func SfQuiet() {
 `)
 }
 
+// shapeRegistry is the shape of bench/gcp's gRPC stack (the false "other sources" of a true finding): N
+// handlers take a request (a source by its type), and each one writes the body of its request into one
+// registry (a package variable that is a map, as the connection table or the trace registry of a
+// dependency) under a key of its own. Handler 0 also decodes its body and sends it to the sink; the decoder
+// reads the registry under another key ("codec") and builds its result with it. The key is a constant and
+// the elements of a map do not say which key they came from, so the value that the decoder returns carries
+// the requests of all N handlers: the one real finding (handler 0 to the sink) lists the other N-1
+// handlers' requests as other sources, and none of them was ever in the decoded value. Parameter: -ops (N).
+// The finding lists at most 5 (maxOtherSources) and counts the rest (other_sources_count). The code has no answer key
+// (@source marks): the flow of handler 0 and the number of other sources are in the expected file.
+func (g *gen) shapeRegistry() {
+	f := g.file("reg/reg.go")
+	f.imports["lib"] = true
+	f.body.WriteString(`// Req is a request: a source by its type (rules.yaml).
+type Req struct{ Body string }
+
+// M is the registry: every handler writes it, the decoder reads it.
+var M = map[string]string{}
+
+// Decode builds its result from its argument and the codec that the registry holds.
+func Decode(s string) string { return s + M["codec"] }
+
+`)
+	for i := 0; i < g.p.Ops; i++ {
+		if i == 0 {
+			f.body.WriteString("// Handler0 registers its request and sends the decoded body to the sink.\nfunc Handler0(r *Req) {\n\tM[\"h0\"] = r.Body\n\tlib.Sink(Decode(r.Body))\n}\n\n")
+			continue
+		}
+		fmt.Fprintf(&f.body, "// Handler%d registers its request.\nfunc Handler%d(r *Req) {\n\tM[\"h%d\"] = r.Body\n}\n\n", i, i, i)
+	}
+}
+
 func (g *gen) shapeGlob() {
 	f := g.file("glob/glob.go")
 	f.imports["lib"] = true
@@ -773,6 +810,8 @@ func Generate(p Params) (map[string]string, error) {
 			g.shapeMiddleware()
 		case "stagefield":
 			g.shapeStagefield()
+		case "registry":
+			g.shapeRegistry()
 		}
 	}
 	out := map[string]string{}
@@ -783,7 +822,11 @@ func Generate(p Params) (map[string]string, error) {
 	out["model/model.go"] = m + "\tSub *Rec\n}\n"
 	out["lib/lib.go"] = "// Package lib has the source and the sink the rules name.\npackage lib\n\nfunc Source() string { return \"x\" }\n\nfunc Sink(s string) {}\n"
 	out["go.mod"] = "module scale\n\ngo 1.27\n"
-	out["rules.yaml"] = "ruleset: rivus/bench-scale@1\n\nsources:\n  - symbol: scale/lib.Source\n    labels: [user_input]\n\nsinks:\n  - symbol: scale/lib.Sink\n    category: test\n"
+	paramRule := ""
+	if p.Shapes["registry"] {
+		paramRule = "  - kind: param_type\n    type: \"*scale/reg.Req\"\n    labels: [user_input]\n"
+	}
+	out["rules.yaml"] = "ruleset: rivus/bench-scale@1\n\nsources:\n  - symbol: scale/lib.Source\n    labels: [user_input]\n" + paramRule + "\nsinks:\n  - symbol: scale/lib.Sink\n    category: test\n"
 
 	// main calls the shapes' entry points, so that nothing is unreachable
 	var calls []string
@@ -804,6 +847,12 @@ func Generate(p Params) (map[string]string, error) {
 	if p.Shapes["giant"] {
 		mainImports["giant"] = true
 		calls = append(calls, "\tgiant.Giant(r, \"\")")
+	}
+	if p.Shapes["registry"] {
+		mainImports["reg"] = true
+		for i := 0; i < p.Ops; i++ {
+			calls = append(calls, fmt.Sprintf("\treg.Handler%d(&reg.Req{})", i))
+		}
 	}
 	if p.Shapes["selfcopy"] {
 		mainImports["selfcopy"] = true

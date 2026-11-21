@@ -66,6 +66,9 @@ func TestScaleSynth(t *testing.T) {
 		{"middleware", "middleware", nil, []int{1}, false},
 		// the same shape with a stage type and an output type of its own for every operation (memos' form): the
 		// elements grow with ops x fields in every member of the one SCC (bench/go-scale/README.md)
+		// N handlers write their requests into a registry (a map in a package variable), a decoder reads it under another key:
+		// the one real finding lists the other N-1 handlers as other sources (docs/DESIGN-shared-state.md, stage 2)
+		{"registry", "registry", []string{"-ops", "40"}, []int{1}, false},
 		{"stagefield", "stagefield", []string{"-ops", "40", "-stages", "4", "-fields", "8"}, []int{1}, false},
 	}
 	for _, pr := range profiles {
@@ -87,7 +90,9 @@ func TestScaleSynth(t *testing.T) {
 					t.Fatal(err)
 				}
 				curatedAllowUnconverged = pr.noconv
-				checkCuratedReport(t, dir, out, ".go")
+				if pr.name != "registry" { // the registry code has no answer key: its expected file is the check
+					checkCuratedReport(t, dir, out, ".go")
+				}
 				curatedAllowUnconverged = false
 				got := scaleResultOf(&rep)
 				path := filepath.Join(root, "bench", "go-scale", "expected", fmt.Sprintf("%s-w%d.json", pr.name, w))
@@ -124,11 +129,15 @@ type scaleResult struct {
 	Reanalyses       int            `json:"reanalyses"`
 	SummaryElems     int            `json:"summary_elems"`
 	LargestSummary   int            `json:"largest_summary_elems"`
+	// OtherSources is the sum of other_sources_count of the findings: the sources of the same kind that are
+	// folded into a finding. It is a number to bring to 0 for a false trace, so it must not move (more or fewer).
+	OtherSources int `json:"other_sources_count,omitempty"`
 }
 
 func scaleResultOf(rep *report.Report) scaleResult {
 	r := scaleResult{UncertaintyKinds: map[string]int{}, Findings: []string{}}
 	for _, f := range rep.Findings {
+		r.OtherSources += f.OtherSourcesCount
 		r.Findings = append(r.Findings, fmt.Sprintf("%s:%d -> %s:%d", f.Source.Position.File, f.Source.Position.Line, f.Sink.Position.File, f.Sink.Position.Line))
 	}
 	sort.Strings(r.Findings)
@@ -147,6 +156,9 @@ func compareScale(t *testing.T, name string, want, got scaleResult) {
 	}
 	if fmt.Sprint(want.UncertaintyKinds) != fmt.Sprint(got.UncertaintyKinds) {
 		t.Errorf("%s: the uncertainties by kind are not the ones of the expected file: want %v, got %v", name, want.UncertaintyKinds, got.UncertaintyKinds)
+	}
+	if want.OtherSources != got.OtherSources {
+		t.Errorf("%s: other_sources_count was %d, now %d (fewer: write the file; more: a false trace is new)", name, want.OtherSources, got.OtherSources)
 	}
 	if want.Converged != got.Converged {
 		t.Errorf("%s: converged was %v, now %v", name, want.Converged, got.Converged)

@@ -183,6 +183,8 @@ LLM の判定(`resolve`)は、finding ごとに、この欄を読む。「`flow:
 | **5. 止まらない** | 4.5 | パスの数、収束 | zoo の `global-chain` が 3 言語で出る。go-scale の `chain`(3、13、30 段)で、パスの数が段数に依らなくなる。Gitea・gogs・go-scale で、**finding と `path@1` が同一**(速さは見ない。違えば分類。または、issue #96 を先に直す) |
 | **6. 入口の受け手** | 4.6 | Rust で増える(Dart は、入口の整備のあと) | zoo の `receiver-field-across-entries` の Rust が出る。**マスを足す**: 2 つの入口が別々に呼ばれ(同じ関数が 2 つを呼ぶ形でない)、受け手を共有するもの。**通った finding に、前提の不確実性が付き、確信度が `no_uncertainty_on_path` にならない**ことの検査。入口の定義(フレームワークが呼ぶメソッドと、呼び元のないメソッド)のテスト。parseable の finding の追加を分類 |
 
+**段 2 の測定と再現(go-scale の `registry`)**: `bench/gcp` で、本物の finding に付く誤った `other_sources`(Spanner の読み出しの 2 件が、他の 64 ハンドラの入力を並べる)は、依存の中のパッケージ変数のレジストリ(`map`)に、全ハンドラが自分の入力を書き、読み出しが、別の定数のキーで読む形から来る(`bench/explore/LOG.md` の測定 3)。この形の小さい再現が、`bench/go-scale` の `registry`(`-shapes registry -ops N`。期待値 `expected/registry-w1.json`、N = 40)。N 個のハンドラが、自分のリクエストをレジストリに書き、ハンドラ 0 だけが、デコーダを通して sink に出す。実測(今の挙動): finding は 1 件(本物)のまま、**`other_sources_count` は N-1 ちょうど**(N = 10 / 40 / 160 / 320 で 9 / 39 / 159 / 319。レポートに並ぶのは 5 件まで)、`summary_elems` は N に線形(約 440 / ハンドラ。N = 1 / 40 / 320 で 5,523 / 22,173 / 144,533)。**段 2 の受け入れに足す**: この profile で、`other_sources_count` が 0 になり、finding が同じであること(期待値のファイルの更新が、コミットに出る)。
+
 各段で、**zoo の @miss と @fp の数**(見出しの数字)、`bench/compare.sh`(light と、Gitea は最後に 1 度)、`bench/go-scale`(`measure.py compare`。ここでは、要素の数と収束)を、コミットメッセージに書く。段 2 と 3 は、go-scale に、**`selfcopy`(構造体を、グローバルから写して書き戻す形)と、キーつきマップのプロファイル**がある(`selfcopy` は、gogs の +45 の再現を試みて、**再現できなかった**。段 2 の前に、再現できる形を作るか、gogs だけを基準にする)。
 
 ## 6. 順
