@@ -15,39 +15,39 @@ class Button {
 }
 
 void button_a() {
-  final t = source(); // @source(btn-a) @miss(silent)
+  final t = source(); // @source(btn-a)
   Button(onPressed: () => sink(t)); // @sink(btn-a) @nosink(btn-b)
 }
 
 void button_b() {
-  final t = source(); // @source(btn-b) @miss(silent)
+  final t = source(); // @source(btn-b)
   Button(onPressed: () => sink(t)); // @sink(btn-b) @nosink(btn-a)
 }
 
 void timer_run() {
-  final t = source(); // @source(timer-run) @miss(unmodeled_library_call)
+  final t = source(); // @source(timer-run)
   Timer.run(() => sink(t)); // @sink(timer-run)
 }
 
 void microtask() {
-  final t = source(); // @source(microtask) @miss(silent)
+  final t = source(); // @source(microtask)
   scheduleMicrotask(() => sink(t)); // @sink(microtask)
 }
 
 void future_delayed() {
-  final t = source(); // @source(delayed) @miss(silent)
+  final t = source(); // @source(delayed)
   Future.delayed(const Duration(seconds: 1), () => sink(t)); // @sink(delayed)
 }
 
 void timer_periodic() {
-  final t = source(); // @source(periodic) @miss(unmodeled_library_call)
+  final t = source(); // @source(periodic)
   Timer.periodic(const Duration(seconds: 1), (timer) => sink(t)); // @sink(periodic)
 }
 
 // a callback that writes a captured variable, called by a timer
 void timer_write() {
   String out = '';
-  final t = source(); // @source(timer-write) @miss(unmodeled_library_call)
+  final t = source(); // @source(timer-write)
   Timer.run(() {
     out = t;
   });
@@ -72,7 +72,7 @@ void never_called() {
 void late_taint() {
   String? x;
   final f = () => sink(x); // @sink(late)
-  x = source(); // @source(late) @miss(silent)
+  x = source(); // @source(late)
   run(f);
 }
 
@@ -87,7 +87,7 @@ void seen_and_passed() {
 // a captured function that the closure calls with a value of the caller: capture.dart has `relay-c-a` and
 // `relay-c-b` (the capture of a closure that is called by a helper, PARAM-CALL); the same in the callback
 void captured_fn() {
-  final a = source(); // @source(cap-fn) @miss(silent)
+  final a = source(); // @source(cap-fn) @miss(assumed_call)
   void g(String s) => sink(s); // @sink(cap-fn)
   run(() => g(a));
 }
@@ -95,12 +95,25 @@ void captured_fn() {
 // what the closure returns is what it captured (`items.map((x) => x + a)`, `Future.then((_) => a)`): the result of a
 // closure has no place to go where it is made. After C-7: `@miss(assumed_call)` (the result is not applied).
 void cap_result() {
-  final a = source(); // @source(cap-result) @miss(silent)
+  final a = source(); // @source(cap-result) @miss(assumed_call)
   final x = [1].map((e) => a).first;
   sink(x); // @sink(cap-result)
 }
 
 void cap_result_then() {
-  final a = source(); // @source(cap-result-then) @miss(silent)
+  final a = source(); // @source(cap-result-then) @miss(assumed_call)
   Future.value(1).then((_) => a).then((x) => sink(x)); // @sink(cap-result-then)
+}
+
+// the closure is only called where it is made (by name, and as a literal): the call has what it
+// captured, and nothing is applied at the place it is made (C-7): no assumed_call, one finding each
+void inline_only() {
+  final a = source(); // @source(inline-only)
+  final f = () => sink(a); // @sink(inline-only)
+  f();
+}
+
+void inline_literal() {
+  final a = source(); // @source(inline-literal)
+  (() => sink(a))(); // @sink(inline-literal)
 }

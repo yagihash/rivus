@@ -138,6 +138,7 @@ rivus の設計判断を、後から経緯を追えるように記録する。
     `mixed` は「言語機能由来だが rivus の精度向上でも減らせる」もの。集計では `rivus` と別々に出す
 - **理由:** これらを `depth_limit` に押し込むと「rivus の都合」と「対象の性質」が混ざる。
   `attributable_to: rivus` の比率がそのまま「rivus の未熟さの指標」になり、どこに投資すべきかが数字で出る。既製 SAST では得られないフィードバックループ。
+- **追記(ADR-059、C-7):** `assumed_call`(`attributable_to: mixed`)を足した。使う条件: **呼ばれるところが見えないクロージャ(渡す、保存する、返す)を、作った場所で、呼ばれるものとして当てた**ときだけ。クロージャの要約が、捕獲した値に依る効果(sink への到達、書き込み、throw、結果)を持つものにだけ付く。`unresolved_callee` は、呼び先の関数が分からないとき(候補を増やせば直る)で、こちらは、呼び先は分かっていて、呼ぶ側が見えないとき(メモリを辿る、モデルを足す、で直る)。直し方が違うので、集計と `attributable_to` の指標を濁らせないために、別の kind にした。
 - **帰結:** kind ごとの割り当て初版は ARCHITECTURE.md 4.4。`dynamic_dispatch` / `unresolved_callee` / `concurrency` は `mixed`。
   コールグラフの精度を実装前に見積もれないため、2 値に決め打ちせず 3 値で様子を見る。Phase 1 のステップ 1.12 の実測後に見直す（レビューで決定）。
   `container_element_imprecision` は結論に影響した場合のみ記録する（ノイズで集計が無意味にならないように）。
@@ -1272,3 +1273,30 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
 **`Reachable` の使い道（grep で確認）:** `internal/taint/engine.go` の `e.reach` だけ。finding の `reachability` の値と、代表の経路の選び方の最初の基準。**絞り込みには使われない**（finding は増減しない）。
 
 **検証（parseable、同じ rules）:** 届く関数 101 → 114（`Reachable` の変更だけ）→ 3,867（抽出器の変更と合わせて）。finding の集合: 追加 0、削除 0（159 件）、fingerprint 0 件、代表の経路 0 件が変化。`reachability`: `not_from_entry` 159 → 7（`from_entry` 152）。抽出器だけだと 3 件、`Reachable` だけだと 0 件: **両方が要る**。残る 7 件は、`tonic` の gRPC サービス（`AirServiceImpl` のメソッドを、依存の `tonic` が呼ぶ）で、読まなかった依存のコードの側の辺なので、ADR-052 の説明のとおり。新しい固定: `cmd/rivus/rust_reach_test.go`（`extractor/rust/test/reach`: 再 export したトレイトの dyn 呼び出し、関数アイテム、関数ポインタ、捕獲のあるクロージャが、`Reachable` と graph の `--from-entry` の両方で届き、参照のない関数は届かない）。
+
+## ADR-059: 呼ばれるところが見えないクロージャは、作った場所で、捕獲した値を当てる(C-7、採用: ユーザーが承認した)
+
+**背景:** クロージャが捕獲した値が、**ヘルパーが呼ぶクロージャの中で**使われると、流れが黙って落ちた(Go の `run(func(){ exec.Command(a).Run() })`、Dart の `Button(onPressed: () => sink(t))`、`Timer.run`。CORE-F、DART-16、`CAP`)。束縛(捕獲した値)を呼び出しに付けるのは、クロージャを作った関数の中の呼び出しだけで、ヘルパーの中の `f()` には付かない。ADR-053 は、この落ちたことを `capture_unbound` で言った。直すのは C-7(`docs/DESIGN-capture.md`)。
+
+**決めたこと:**
+1. `make_closure`(捕獲する値がある)の命令で、クロージャの要約を、捕獲の値で当てる(`captured`、`applyMade`)。Params は `KUndef`。**当てるもの**: sink への到達、捕獲した変数への書き込み、グローバルへの書き込み。**当てないもの**: throw と結果(呼ぶところのもの)。これらが捕獲した値に依るときは、`assumed_call` の detail に言う。
+2. **飛ばす条件は、使われ方**(`sg.Instr.Escapes`): クロージャの値の使われ方が、作った関数の中での直接の呼び出し(callee の位置。`go`、`defer` を含む)だけなら当てない(その呼び出しが、値を持っている)。引数、`store`、`return`、別のクロージャの捕獲などが 1 つでもあれば当てる。コピーと φ は辿る。使用が 0 件のクロージャは、当てない(呼ばれない。`capNever` は静かなまま)。候補の解決のされ方には依らない。
+3. **痕跡**: 新しい kind `assumed_call`(`attributable_to: mixed`、ADR-008 の追記)。クロージャの要約が、捕獲した値に依る効果を持つときだけ。`symbol` はクロージャの関数 ID、場所は `make_closure`。finding の経路に載り、`confidence` は `no_uncertainty_on_path` にならない(全 finding に効く検査を、curated に足した)。
+4. エンジン: `make_closure` → クロージャの辺を、`order` と `levelsOf` に足した(クロージャの要約が変わると、作った関数が再解析される)。
+5. **書き戻しだけの書き込みは当てない(案 D)**: クロージャが、グローバル G に、作った場所で G から全体を読んだ値(`before := G` の、コピーと φ だけを通ったもの。参照で捕獲したセルのときは、そのセルが、その読み出しの 1 回だけ書かれ、ほかの使われ方がない)を、そのまま G の全体へ書き戻す(モックの後始末)ときは、その要素を当てない。**根拠**: 流れに依らない解析では、G は読まれた値を持つので、`G = G` の書き込みは G に何も足さない。足すのは、構造体のコピーの誤差だけ(`expandParam` が構造体全体の要素を読むとき、フィールドの指す先の要素を根へ持ち上げる。バックログ B)。`before + src`、φ で別の値と合流、フィールドを書き換えてから戻す、別の path への書き込み、別のグローバルへの書き込みは、判定が「そのまま」と言えないので、当てる。判定が辿れなければ、当てる。数は `stats.identity_global_stores`(飛ばしたクロージャの数)。固定: `go-curated/api/restore.go`。
+6. Rust は、捕獲のあるクロージャが `make_closure` でなく環境の `alloc` なので、次の段(`docs/DESIGN-capture.md` の「Rust の節」)。
+
+**限界:** 1 度も呼ばれないクロージャの流れも、渡されていれば finding になる(過検出)。呼ぶ順序は見ない。捕獲と引数の両方に依る流れは、案 2(ADR-047)まで見つからない。結果の流れ(`WithTx2` など)は、`assumed_call` を残して、次の段(結果をクロージャの値に持たせる)。依存の関数の中で記録された `assumed_call` は、ほかの不確実性と同じく、全体の一覧からは捨てられる(finding の経路には残る)。
+
+**検証(`bench/compare.sh a1689ee <C-7>`、実コード、案 D のあと。削除 0、全部収束):**
+
+| bench | findings | 追加 | `assumed_call` | 備考 |
+| --- | --- | --- | --- | --- |
+| go-curated | 50 → 66 | +17 | 0 → 44 | `@miss` だった本物の流れと、新しい固定 4 |
+| dart-curated | 92 → 109 | +17 | 0 → 36 | `@miss` だった本物の流れ。tear-off の形(R-14)は含まない |
+| rust-curated、go-synth-S、gin-vue-admin、go-test-bench、parseable | 同じ | 0 | 0 → 3 / 18 / 23(rust、parseable は 0) | |
+| gogs 2 つ | 77 → 79 | +2 | 0 → 152 / 153 | +2 は本物: `ChangeUsername$1` の `os.Rename`(`org/setting.go:29`、`user/setting.go:73`)。案 D の前は +47(45 件は `SetMockPicture$1` の `Picture = before`、構造体のコピーの持ち上げ)。飛ばした 8(`identity_global_stores`) |
+| dart-pub | 17 → 19 | +2 | 0 → 340 | `extractTarGz` → `createFileFromStream$1` の `File.new`(本物) |
+| Gitea v1.26.4 | 242 → 269 | +29 | 0 → 674 | 収束(6 → 7 パス)、134 → 142 秒、RSS 11.5 → 11.8 GB。追加 29 のうち 25 は、サービスの `db.WithTx(…, func…)` の形のクロージャ(`processGiteaTemplateFile$1`、`UploadAvatar$1`、`DeleteAvatar$1`、`AcceptTransferOwnership$1`、`MkdirTempRandom$1`)を通る。ほかの 4 は、`*net/http.Request` などの param の source の組み替え(`other_sources` の割り振りが変わった)。削除の 1(`pagination.go:53`)は、同じ型の source の組み替え(`*net/http.Request` の source の数は 21 のまま) |
+
+rivus 自身(dogfood): 39 → 44(追加の 5 は `rivus index` の `-o` の経路が `graphdb.Write` のファイル作成に届く、本物)。黙った見逃し(`@miss(silent) / @miss`): Go 5/15 → 2/3、Dart 31/47 → 10/30、Rust 15/16 のまま。基準の gogs の 77 件に、`conf.Picture` の持ち上げで出ているものは 0 件。

@@ -26,7 +26,11 @@ const (
 	KindNumericStop = "numeric_stop"
 	// KindUnsupported marks a construct that the extractor could not express: what
 	// it does is not in the analysis (attributable to rivus).
-	KindUnsupported    = "unsupported_construct"
+	KindUnsupported = "unsupported_construct"
+	// KindAssumedCall marks a closure that is made here and called where it cannot be seen (given
+	// to another function, stored, returned): what it captured is applied at the place it was made,
+	// as if it were called (C-7, ADR-059).
+	KindAssumedCall    = "assumed_call"
 	AttributableTarget = "target"
 	AttributableRivus  = "rivus"
 	AttributableMixed  = "mixed"
@@ -37,7 +41,7 @@ const (
 // (docs/ARCHITECTURE.md section 4.4).
 func attributable(kind string) string {
 	switch kind {
-	case KindDynamicDispatch, KindUnresolvedCallee, KindConcurrency:
+	case KindDynamicDispatch, KindUnresolvedCallee, KindConcurrency, KindAssumedCall:
 		return AttributableMixed
 	case KindMissingSource, KindReflection, KindFFIBoundary, KindGlobalVar, KindConfigRead, KindExportedAPIParam, KindStoredDataBoundary:
 		return AttributableTarget

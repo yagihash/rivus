@@ -46,12 +46,12 @@ void prod_a() {
 
 // the callback of the helper is given the value the caller captured
 void run_a() {
-  final a = source(); // @source(run-a) @miss(silent)
+  final a = source(); // @source(run-a)
   run(() => sink(a)); // @sink(run-a) @nosink(run-b)
 }
 
 void run_b() {
-  final b = source(); // @source(run-b) @miss(silent)
+  final b = source(); // @source(run-b)
   run(() => sink(b)); // @sink(run-b) @nosink(run-a)
 }
 

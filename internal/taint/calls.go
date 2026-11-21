@@ -18,6 +18,9 @@ type callCtx struct {
 	args  []*sg.Value // receiver excluded
 	roots []Root      // one per result
 	sym   string
+	// made: the closure's summary is applied where the closure is made (C-7), not at a call: what
+	// it throws goes to no handler here, and it has no result to give.
+	made bool
 }
 
 // argv lists the operands in parameter order (receiver first).
@@ -850,6 +853,90 @@ func hasOwnBody(fns []callee) bool {
 	for _, c := range fns {
 		if c.fn != nil && !c.fn.Dep {
 			return true
+		}
+	}
+	return false
+}
+
+// captured applies the summary of a closure at the place where it is made, to the values it
+// captured (C-7, ADR-059). A closure that is given to another function, stored or returned is
+// called where it cannot be seen from here: what the call would do with what it captured is
+// done here, and it is taken to be called (assumed_call). A closure that is only called in this
+// function (the call, go, defer) is seen by the call, which has the values: nothing is done.
+//
+// Not applied: what the closure throws, and its result, which are for the place that calls it;
+// the closure's own parameters, which are what the caller gives it (nothing is known of them
+// here: they carry nothing). The two that are not applied are said, if they depend on the
+// values captured.
+func (s *state) captured(in *sg.Instr) {
+	if len(in.Args) == 0 || !in.Escapes || in.IR == nil || in.IR.Func == "" {
+		return
+	}
+	fn := s.eng.prog.ByID[string(in.IR.Func)]
+	if fn == nil || len(in.Args) != len(fn.FreeVars) {
+		return
+	}
+	sigOf := func() int {
+		sum := 1
+		for _, v := range in.Args {
+			for _, l := range s.locs(v) {
+				sum += s.rootVer[l.Root]
+			}
+		}
+		return sum
+	}
+	// the cells of the captured values are all it reads: if none grew, there is nothing to add
+	before := sigOf()
+	if prev, ok := s.callSigs[in]; ok && prev == before {
+		return
+	}
+	s.applyMade(in, fn)
+	if s.callSigs == nil {
+		s.callSigs = map[*sg.Instr]int{}
+	}
+	if sigOf() == before {
+		s.callSigs[in] = before
+	} else {
+		delete(s.callSigs, in)
+	}
+}
+
+func (s *state) applyMade(in *sg.Instr, fn *sg.Func) {
+	sum := s.eng.summaryOf(fn)
+	if sum == nil {
+		return // not analysed yet; a later round picks it up
+	}
+	declared := len(fn.Params)
+	if !usesCaptures(sum, declared) {
+		return
+	}
+	detail := "assumed_call: the closure made here is given to another function, stored or returned: where it is called is not seen, and what it captured is applied here, as if it were called"
+	if capturedDepends(sum, declared, OutThrow) {
+		detail += "; what it throws is not applied"
+	}
+	if capturedDepends(sum, declared, OutResult) {
+		detail += "; what it returns is not applied"
+	}
+	u := s.newNote(in, KindAssumedCall, detail, s.eng.funcID(fn))
+	args := make([]*sg.Value, declared)
+	for i := range args {
+		args[i] = &sg.Value{Kind: sg.KUndef}
+	}
+	cc := &callCtx{in: in, args: args, made: true}
+	s.applySummary(cc, fn, in.Args, []*Uncertainty{u}, nil)
+}
+
+// capturedDepends reports whether an output of the kind carries something of the values the
+// function captured (the parameters after the declared ones).
+func capturedDepends(sum *Summary, declared int, kind string) bool {
+	for _, o := range sum.Outputs {
+		if o.Kind != kind {
+			continue
+		}
+		for _, oe := range o.Elems {
+			if oe.E.Kind == Param && int(oe.E.Param) >= declared {
+				return true
+			}
 		}
 	}
 	return false

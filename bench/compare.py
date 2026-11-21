@@ -178,6 +178,17 @@ def index(rep):
     return d
 
 
+def covered(rep):
+    """The keys of the flows that a finding lists in other_sources: a flow whose source is a parameter
+    can be folded into the finding of another source that reaches the same sink (mergeParamSources),
+    and is not lost."""
+    out = set()
+    for f in rep["findings"]:
+        for o in f.get("other_sources") or []:
+            out.add((pos(o["position"]), pos(f["sink"]["position"]), f["sink"].get("symbol", ""), f.get("category", "")))
+    return out
+
+
 def reasons(rep):
     c = collections.Counter()
     for u in rep.get("uncertainties") or []:
@@ -235,7 +246,9 @@ def report(a):
             continue
         ib, ih = index(rb), index(rh)
         added = sorted(k for k in ih if k not in ib)
-        removed = sorted(k for k in ib if k not in ih)
+        folded = covered(rh)
+        removed = sorted(k for k in ib if k not in ih and k not in folded)
+        merged = sorted(k for k in ib if k not in ih and k in folded)
         # a key that held n findings and holds fewer is a loss too
         shrunk = sorted(k for k in ib if k in ih and len(ih[k]) < len(ib[k]))
         reach, path = [], []
@@ -289,6 +302,7 @@ def report(a):
             L.append("")
         section("REMOVED findings (a flow that was lost: classify each)", removed, lambda k: "- !! " + ib[k][0]["line"] + "  [base: %s, path %d steps%s]" % (
             ib[k][0]["reach"], ib[k][0]["len"], "" if ib[k][0]["starts"] else ", path does not start in the source function"))
+        section("Folded into the other_sources of another finding (not lost)", merged, lambda k: "- " + ib[k][0]["line"])
         section("Keys with fewer findings", shrunk, lambda k: "- !! %s: %d -> %d" % (ib[k][0]["line"], len(ib[k]), len(ih[k])))
         section("ADDED findings", added, lambda k: "- " + ih[k][0]["line"] + "  [head: %s, path %d steps%s]" % (
             ih[k][0]["reach"], ih[k][0]["len"], "" if ih[k][0]["starts"] else ", path does not start in the source function"))

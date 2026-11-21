@@ -151,7 +151,73 @@ func buildFunc(p *Program, f *ir.Func) (*Func, error) {
 	}
 	b.defineValues()
 	b.buildInstrs()
+	markEscapes(b.fn)
 	return b.fn, nil
+}
+
+// markEscapes sets Instr.Escapes of the make_closure instructions that capture values: whether
+// the closure is used in a way other than a call right here (the call, a go statement, a defer:
+// the callee position of a call of a function value). The decision is by the uses of the value
+// in the function, not by what the call resolution found.
+func markEscapes(fn *Func) {
+	var mcs []*Instr
+	for _, blk := range fn.Blocks {
+		for _, in := range blk.Instrs {
+			if in.Op == ir.OpMakeClosure && len(in.Args) > 0 && len(in.Dsts) == 1 {
+				mcs = append(mcs, in)
+			}
+		}
+	}
+	if len(mcs) == 0 {
+		return
+	}
+	uses := map[*Value][]*Instr{}
+	for _, blk := range fn.Blocks {
+		for _, in := range blk.Instrs {
+			for _, a := range in.Args {
+				if a != nil {
+					uses[a] = append(uses[a], in)
+				}
+			}
+		}
+	}
+	for _, mc := range mcs {
+		mc.Escapes = escapes(mc.Dsts[0], uses)
+	}
+}
+
+func escapes(v *Value, uses map[*Value][]*Instr) bool {
+	seen := map[*Value]bool{}
+	work := []*Value{v}
+	for len(work) > 0 {
+		x := work[len(work)-1]
+		work = work[:len(work)-1]
+		if seen[x] {
+			continue
+		}
+		seen[x] = true
+		for _, u := range uses[x] {
+			switch {
+			case u.Op == ir.OpCall && u.Callee != nil && u.Callee.Kind == ir.CalleeValue &&
+				len(u.Args) > 0 && u.Args[0] == x && !argAgain(u.Args[1:], x):
+				// called right here
+			case u.Op == OpPhi, u.Op == ir.OpCopy && u.IR != nil && !u.IR.View && len(u.Args) == 1:
+				work = append(work, u.Dsts...)
+			default:
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func argAgain(args []*Value, x *Value) bool {
+	for _, a := range args {
+		if a == x {
+			return true
+		}
+	}
+	return false
 }
 
 func (b *builder) local(l ir.LocalID) (name string, t ir.TypeID, c ir.TypeClass) {

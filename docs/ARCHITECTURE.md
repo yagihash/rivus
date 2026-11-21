@@ -543,6 +543,7 @@ type Uncertainty struct {
 | `ffi_boundary` | target | |
 | `missing_source` | target | ワークフロー前提（`go generate` / `build_runner` 未実行）に由来 |
 | `dynamic_dispatch` | 候補 1 件以上: mixed／候補 0 件: rivus | 言語機能として呼び先が決まらないが、候補の絞り込み精度（VTA など）は rivus の改善余地がある。候補が 0 件なのは、実装が読み込んだコードの外にあるときで、モデルを書けば減る（rivus） |
+| `assumed_call` | mixed | 呼ばれるところが見えないクロージャ(渡す、保存する、返す)を、作った場所で、呼ばれるものとして当てた(捕獲した値を、クロージャの要約に当てる。C-7、ADR-059)。付くのは、要約が捕獲した値に依る効果を持つクロージャだけ。throw と結果は当てず、そのとき detail に言う。1 度も呼ばれないクロージャの流れも、finding になりうる(過検出) |
 | `unresolved_callee` | mixed | 関数値は実行時に決まるが、生成箇所を追う型フロー解析で候補を絞れる |
 | `concurrency` | mixed | 実行順序に依存するが、channel を単純なキューとしてモデル化すれば追える範囲が広がる |
 | `unmodeled_library_call` | rivus | モデルを書けば減る |

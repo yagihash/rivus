@@ -37,7 +37,7 @@ class Lazy<T> {
 }
 
 void lazy_value() {
-  final a = source(); // @source(lazy) @miss(silent)
+  final a = source(); // @source(lazy) @miss(assumed_call)
   final l = Lazy(() => a);
   sink(l.value); // @sink(lazy)
 }

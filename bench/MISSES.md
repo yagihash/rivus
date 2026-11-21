@@ -368,3 +368,9 @@ Gitea の CVE の 3 件(上の表)は**見つかる**。足したときに、**G
 * ADR の「3/3 検出」の追記は、`e117634`(2026-11-19、`feat: findingに到達可能性…、GiteaのCVEを3/3検出`)。「ループの中の `append`」の修正は、`7e4bd7d`(2026-11-19)。
 * **`e117634` と `7e4bd7d` で、同じ小さい例(上の Gitea 3 件)を流した結果は、今の main と同じ**(3 件とも見つかる。`7e4bd7d` の親では、`release` の流れだけが見つからない: `append` の修正のフィクスチャとして働く)。`tx_capture` / `tx_capture_plain` は、この 2 つのコミットでも見つからない(`mini` も同じ)ので、**これらは、2026-11-19 以降の退行ではない**(最初から、この形は追っていない)。
 * つまり、保存した最近の実行(C-1 の off / on)の **1/3** は、小さい形の退行では説明できない。残る候補は、規模に依存するもの(`depth_limit` が約 1,500 件で、経路が切れる、`-func-timeout` で関数が止まる、収束しない、`-k` や実行の設定が違う)。ADR の 3/3 は、`depth_limit` 1,499 件、収束せずの結果だった。
+
+## C-7 のあと(ADR-059): `CAP` の見逃しが直った
+
+`make_closure` の捕獲した値を、作った場所で、クロージャの要約に当てた(渡す、保存する、返すクロージャだけ。不確実性 `assumed_call`)。`@miss` の数(テストが数える、a1689ee → 今): Go 15 → 3(silent 5 → 2、痕跡 10 → 1)、Dart 47 → 30(silent 31 → 10、痕跡 16 → 20)、Rust 16 のまま(対象外。次の段は `docs/DESIGN-capture.md` の「Rust の節」)。外れた `@miss`: Go の `cap-run-a/b`、`cap-write`、`cap-nested`、`cap-loop`、`cap-two-a`、`cap-returned`、`cap-late`、`cap-handler`、`cap-funccall`(設計では直らない見込みだったが、直った)、`tx_capture`、`tx_capture_plain`。Dart の `btn-a/b`、`timer-run`、`periodic`、`timer-write`、`microtask`、`delayed`、`late`、`write-a/b`、`add-list`、`across-cap`、`run-a/b`、`relay-c-a/b`、`when-complete`。`assumed_call` の `@miss`(結果を当てない): Go の `cap-result`、Dart の `cap-result`、`cap-result-then`、`cap-fn`、`nest-a/b` ほか(次の段: 結果をクロージャの値に持たせる)。残る `CAP` の見逃しは、捕獲と引数の両方に依る流れ(案 2)、`bound-prefix`(メソッドの tear-off、R-14)。
+
+**限界(バックログ B)**: `expandParam` が、構造体全体の要素(`Param(i, "")`)を読むとき、サブセルの要素(フィールドの指す先の要素)を、根へ持ち上げる。構造体を丸ごとコピーして書き戻す形(`before := Picture; Picture = before`)で、あるフィールドの指す先の汚染が、全フィールドに広がる。C-7 は、これを gogs の `conf.SetMockPicture$1`(テストのヘルパー)で露出させ(+45 件)、案 D(同じグローバルの全体を読んだ値の書き戻しだけの書き込みは当てない)で、その形だけを避けた。ふつうの呼び出し(`setG(before)`)には、同じ持ち上げが残る。優先度の根拠: gogs の基準の 77 件には、`conf.Picture` を通るものは 0 件(数えた)。

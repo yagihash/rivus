@@ -242,6 +242,9 @@ func (s *state) transfer(in *sg.Instr) {
 
 	case ir.OpCall:
 		s.callInstr(in)
+
+	case ir.OpMakeClosure:
+		s.captured(in)
 	}
 }
 

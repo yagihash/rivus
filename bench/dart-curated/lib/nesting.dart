@@ -5,7 +5,7 @@ import 'lib.dart';
 // take callbacks, generic helpers.
 
 void nested_a() {
-  final a = source(); // @source(nest-a) @miss(silent)
+  final a = source(); // @source(nest-a) @miss(assumed_call)
   final r = transform('const', (x) {
     return transform(a, (y) => y);
   });
@@ -13,7 +13,7 @@ void nested_a() {
 }
 
 void nested_b() {
-  final b = source(); // @source(nest-b) @miss(silent)
+  final b = source(); // @source(nest-b) @miss(assumed_call)
   final r = transform('const', (x) {
     return transform(b, (y) => y);
   });

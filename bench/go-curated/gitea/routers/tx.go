@@ -14,7 +14,7 @@ import (
 // captured. Every service of Gitea is written in this way. The helper calls
 // the closure, and a captured value does not get into it from the caller (the
 // closure is a function value that the helper takes by a parameter and calls).
-func DeleteInTx(ctx *context.Context) { // @source(tx_capture) @miss(dynamic_dispatch)
+func DeleteInTx(ctx *context.Context) { // @source(tx_capture)
 	uuid := ctx.Req.FormValue("uuid")
 	_ = db.WithTx(ctx.Req.Context(), func(c stdctx.Context) error {
 		return storage.Attachments.Delete(uuid) // @sink(tx_capture)
@@ -23,7 +23,7 @@ func DeleteInTx(ctx *context.Context) { // @source(tx_capture) @miss(dynamic_dis
 
 // RunInTx is the same with a sink that is not behind an interface: the engine
 // leaves no trace of the lost flow.
-func RunInTx(ctx *context.Context) { // @source(tx_capture_plain) @miss(depth_limit)
+func RunInTx(ctx *context.Context) { // @source(tx_capture_plain)
 	name := ctx.Req.FormValue("name")
 	_ = db.WithTx(ctx.Req.Context(), func(c stdctx.Context) error {
 		return sys.Run(name) // @sink(tx_capture_plain)

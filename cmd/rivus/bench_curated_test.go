@@ -137,6 +137,22 @@ func checkCuratedReport(t *testing.T, dir string, out []byte, ext string) curate
 		t.Fatalf("load errors: %v", rep.LoadErrors)
 	}
 
+	// A flow that was found because a closure was taken to be called (assumed_call, C-7) is not
+	// without uncertainty on its path: the finding says so, for every finding of every project.
+	assumed := 0
+	for _, fd := range rep.Findings {
+		for _, u := range fd.Uncertainties {
+			if u.Kind == taint.KindAssumedCall {
+				assumed++
+				if fd.Confidence == taint.ConfidenceClear {
+					t.Errorf("the finding %s:%d -> %s:%d has an assumed_call and its confidence is %s", fd.Source.Position.File, fd.Source.Position.Line, fd.Sink.Position.File, fd.Sink.Position.Line, fd.Confidence)
+				}
+				break
+			}
+		}
+	}
+	t.Logf("%d findings have an assumed_call on their path", assumed)
+
 	src, sinks := map[string]curatedAt{}, map[string][]curatedAt{}
 	miss := map[string]bool{}
 	missKinds := map[string][]string{} // tag -> the kinds of its @miss(...)
@@ -234,6 +250,11 @@ func checkCuratedReport(t *testing.T, dir string, out []byte, ext string) curate
 		s := curatedAt{fd.Source.Position.File, fd.Source.Position.Line}
 		k := curatedAt{fd.Sink.Position.File, fd.Sink.Position.Line}
 		got[pair(s, k)] = true
+		// the sources of the same kind that reach the sink too are folded into the finding of the
+		// one with the best path (which is chosen by the paths, not by the file): they are found
+		for _, o := range fd.OtherSources {
+			got[pair(curatedAt{o.Position.File, o.Position.Line}, k)] = true
+		}
 		for _, n := range none {
 			if k == n {
 				hitNone[n] = true
@@ -357,6 +378,35 @@ func logSilentMisses(t *testing.T, name string, c curatedCounts) {
 	t.Logf("%s silent misses: %d / %d (%.0f%%)", name, c.missSilent, c.miss, pct)
 }
 
+// assumedCalls lists the functions that made a closure whose captured values were applied there
+// (assumed_call, C-7), by the end of their ID (the function that made it).
+func (c curatedCounts) assumedCalls() map[string]bool {
+	out := map[string]bool{}
+	for _, u := range c.uncertainties {
+		if u.Kind == taint.KindAssumedCall {
+			out[u.Func] = true
+		}
+	}
+	return out
+}
+
+// checkAssumedCall holds what C-7 promises: a closure that is given away has the assumed_call at the
+// place it was made; a closure that is only called there (the call, go, defer) has none.
+func checkAssumedCall(t *testing.T, c curatedCounts, pkg string, given, seen []string) {
+	t.Helper()
+	have := c.assumedCalls()
+	for _, f := range given {
+		if !have[pkg+f] {
+			t.Errorf("%s%s: no assumed_call for the closure that is given away", pkg, f)
+		}
+	}
+	for _, f := range seen {
+		if have[pkg+f] {
+			t.Errorf("%s%s: assumed_call for a closure that is only called where it is made (it would be applied twice)", pkg, f)
+		}
+	}
+}
+
 // TestCuratedGo is the accuracy benchmark for Go (bench/go-curated): it runs with
 // every "go test" and takes seconds.
 func TestCuratedGo(t *testing.T) {
@@ -367,6 +417,9 @@ func TestCuratedGo(t *testing.T) {
 	c := checkCurated(t, dir)
 	t.Logf("go-curated: %d flows to find, %d sinks to keep quiet, %d flows not found yet (@miss: %d silent, %d with a trace), %d reported wrongly (@fp), %d flows of other sources into noisy sinks (@noisy)", c.detect, c.quiet, c.miss, c.missSilent, c.missTrace, c.fp, c.noisy)
 	logSilentMisses(t, "go-curated", c)
+	checkAssumedCall(t, c, "curated/api.",
+		[]string{"capRunA", "capRunB", "capWrite", "capNested", "capLoop", "capTwo", "mkRun", "capLate", "capSeenAndPassed", "capResult"},
+		[]string{"capInline", "capGo", "capDefer"})
 	checkOffSource(t, c, maxGoOffSource)
 	if c.detect < 15 || c.quiet < 8 {
 		t.Errorf("the project has shrunk: %+v", c)
@@ -424,6 +477,9 @@ func TestCuratedDart(t *testing.T) {
 	}
 	t.Logf("dart-curated: %d flows to find, %d sinks to keep quiet, %d flows not found yet (@miss: %d silent, %d with a trace), %d reported wrongly (@fp), %d flows of other sources into noisy sinks (@noisy)", c.detect, c.quiet, c.miss, c.missSilent, c.missTrace, c.fp, c.noisy)
 	logSilentMisses(t, "dart-curated", c)
+	checkAssumedCall(t, c, "package:curated/callbacks.dart#",
+		[]string{"button_a", "button_b", "timer_run", "seen_and_passed", "cap_result"},
+		[]string{"inline_only", "inline_literal"})
 	checkOffSource(t, c, maxDartOffSource)
 	if c.detect < 70 || c.quiet < 35 {
 		t.Errorf("the project has shrunk: %+v", c)

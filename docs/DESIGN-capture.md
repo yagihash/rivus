@@ -1,6 +1,6 @@
 # 設計: クロージャの捕獲の値を、作った場所で当てる(C-7)
 
-状態: **下書き。ユーザーの承認待ち**(承認されたら、DECISIONS.md に ADR(番号は次の空き)としてまとめて、実装に入る)。コアはまだ変えていない。ここに書いた「今の状態」は、2026-11-21 の main(HEAD 52e2ba8)のコードを読んで、curated のフィクスチャを流して確かめたもの。実装して確かめた数字ではないものは、「見込み」と書く。
+状態: **承認済み。最初の版(Go と Dart)は実装した(ADR-059)**。Rust は次の段(下の「Rust の節」に仕組みを書いた。実装していない)。以下の本文は、設計のときの記述のまま(「今の状態」は、実装前の main のもの)。実装で設計から変わったところは、末尾の「実装で分かったこと」に書いた。ここに書いた「今の状態」は、2026-11-21 の main(HEAD 52e2ba8)のコードを読んで、curated のフィクスチャを流して確かめたもの。実装して確かめた数字ではないものは、「見込み」と書く。
 
 ## 問題
 
@@ -330,3 +330,15 @@ Rust の抽出器(`extractor/rust/src/main.rs` の `merge`)は、クレートご
 2. `valuecalls` の上限(`most = 8`、`maxDepth = 3`)を、この絞りで上げるか(上げないなら、`for_each_live_node` は、上限の縁。1 つ増えたら絞りが止まる)。CORE-D の判断と同じ。
 3. 出力の追加(`narrowed_from`、`dispatch_narrowed`、`dispatch_not_narrowed`): 追加だけで、スキーマ版を上げないでよいか。
 4. Dart への適用の時期(Rust の測定のあと)。
+
+## Rust の節(次の段: 実装していない)
+
+最初の版は Go と Dart(`make_closure`)。Rust の捕獲のあるクロージャは `make_closure` ではなく、**環境の構造体の `alloc`** で作られる。同じ規則(使われ方が、ホーム関数内の直接の呼び出しだけなら何もしない。それ以外は、作った場所で、捕獲した値を、クロージャの要約に当てる)を、この `alloc` に載せる。仕組みの見立て(main の `sg.Program.EnvClosures`、ADR-058 の上で):
+
+* **形**: `alloc`(`InstrInfo.Env` が型 `{closure@file:l:c: l:c}`)で環境を作り、捕獲した値を `field_store`(field `"0"`, `"1"` …。可変の捕獲は、変数へのポインタ)で入れる。クロージャの関数は、パラメータが 1 つ(その環境、`recv: true`)で、`field_load` で取り出す。`sg.Program.EnvClosures[alloc の命令]` が、そのクロージャの関数(型の位置が、関数の位置と、ちょうど 1 つ一致するとき)を引く。
+* **当てる**: `captured` の相当を、`EnvClosures` にある `alloc` に足す。`applySummary(cc, closureFn, nil, notes, nil)`、`argv = [環境の値]`(束縛ではなく、Params の 1 つ目。`make_closure` と違い、捕獲した値は環境のセルの中にあって、クロージャの関数は `field_load` で読む)。`Params` は環境 1 つだけなので、呼び出しの引数(宣言した引数)は要約の中で、環境と別のパラメータとして出る(その分は `KUndef`)。環境の `field_store` が `alloc` の後に来るが、解析は流れに依らない(セルの和)ので、順序は問題にならない見込み(**確かめていない**)。
+* **使われ方(飛ばす条件)**: `alloc` の結果(環境の値)の使われ方を、同じ表(`sg` の使用箇所)で見る。呼び出し(`Fn::call` の dynamic 呼び出し)の位置、または、`field_store` / `field_load` だけなら、ホーム関数内の直接の呼び出し。`field_store`(環境への書き込み)は、環境を作る側の使い方なので、**数えない**(`make_closure` には無い、Rust 固有の例外)。環境の値が、引数、`store`、`return`、別の `alloc` の `field_store` の値に入るなら、当てる。
+* **痕跡**: 同じ `assumed_call`(`attributable_to: mixed`)。
+* **効く範囲(`rust-curated/src/callbacks.rs`)**: 渡すだけの形の 3 件(`spawned` = `std::thread::spawn`、`boxed` = `Box<dyn Fn>` をフィールドに入れて別の関数が呼ぶ、`retained` = `Vec::retain`)。読む側(`run(|| sink(&a))`)は `Fn::call` の候補で今も見つかる(XTALK の過検出つき。`run-a/b` は `@fp`)。書く側(`write-a/b`、`push-list` など 7 件、ENV-PTR)は、環境のフィールドのポインタが、指す先と別名にならない(`locs.go:215`、`transfer.go:148`)ことが原因で、**`alloc` で当てても直らない**。ENV-PTR の修正が先。
+* **気をつけること**: 型 `{closure@file:l:c}` が、マクロで複数の場所に書かれるクロージャは、`EnvClosures` が引けない(ちょうど 1 つ一致のときだけ引く)。そのクロージャは、今と同じく、黙って落ちる。`assumed_call` ではなく、引けなかったことの痕跡が要る(次の段で決める)。`thread::spawn` と `retain` のクロージャは、`Fn::call` の候補にもなり、他のソースが誤って届く(`@noisy` 8 と 3)ことは、この段で直らない(XTALK)。
+* **受け入れ(次の段)**: `callbacks.rs` の渡すだけの 3 件が見つかる。`cap-run` 相当の「その場で呼ぶ」クロージャで、finding が増えず、`assumed_call` も出ない。`parseable` で、追加の finding を分類する。

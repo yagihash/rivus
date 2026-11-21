@@ -63,7 +63,10 @@ type Engine struct {
 	dispatch sync.Map // *sg.Instr -> map[*sg.Func][]Guard
 	// valueGuards is the same for the calls of function values (valueGuards).
 	valueGuards sync.Map // *sg.Instr -> map[string][]Guard
-	prog        *sg.Program
+	// identityStores are the closures made (the make_closure instructions) whose write of a global was left out because it
+	// writes back the value that was read from it (stats.identity_global_stores).
+	identityStores sync.Map // *sg.Instr -> struct{}
+	prog           *sg.Program
 	// makers says where each closure is made (the function and the place): made once, when first asked.
 	makersOnce sync.Once
 	makers     map[string]closureSite
@@ -376,6 +379,9 @@ type Stats struct {
 	// DroppedGlobals are the package variables that a rule says hold nothing (ADR-056), and the number of functions
 	// that wrote to them.
 	DroppedGlobals []DroppedGlobal `json:"dropped_globals,omitempty"`
+	// IdentityGlobalStores is the number of closures given away whose write of a global was left out: it writes back
+	// the value read from the same global, whole, which adds nothing (ADR-059).
+	IdentityGlobalStores int `json:"identity_global_stores,omitempty"`
 	// Unstable lists (up to ten) functions whose summary still changed in
 	// the last pass, when the run did not converge (empty when it converged); UnstableCount is
 	// how many there were.
@@ -416,6 +422,16 @@ func (e *Engine) Run() *Result {
 	e.reach = e.prog.Reachable()
 	fns := e.prog.Funcs
 	callees := func(ci *sg.Instr) []*sg.Func {
+		if ci.Op == ir.OpMakeClosure {
+			// a closure that is not only called where it is made has its summary applied at the
+			// place it is made (C-7): the function that makes it depends on it
+			if ci.Escapes && ci.IR != nil {
+				if f := e.prog.ByID[string(ci.IR.Func)]; f != nil {
+					return []*sg.Func{f}
+				}
+			}
+			return nil
+		}
 		if ci.StaticID != "" {
 			if ci.Static != nil {
 				return []*sg.Func{ci.Static}
@@ -553,6 +569,7 @@ func (e *Engine) Run() *Result {
 	}
 	st.Reanalyses = int(reanalyses.Load())
 	st.DroppedGlobals = e.droppedGlobals()
+	e.identityStores.Range(func(_, _ any) bool { st.IdentityGlobalStores++; return true })
 	// the functions that changed in the last pass say what is not settled, and only a run that did not
 	// converge has any (a run that converged may have changed them in its last pass: that is settling)
 	if !st.Converged {
@@ -666,7 +683,7 @@ func levelsOf(sccs [][]*sg.Func, callees func(*sg.Instr) []*sg.Func) [][][]*sg.F
 		for _, fn := range scc {
 			for _, b := range fn.Blocks {
 				for _, in := range b.Instrs {
-					if in.Op != ir.OpCall {
+					if in.Op != ir.OpCall && in.Op != ir.OpMakeClosure {
 						continue
 					}
 					for _, c := range callees(in) {
@@ -887,7 +904,7 @@ func order(fns []*sg.Func, callees func(*sg.Instr) []*sg.Func) ([][]*sg.Func, ma
 		seen := map[*sg.Func]bool{}
 		for _, b := range fn.Blocks {
 			for _, in := range b.Instrs {
-				if in.Op != ir.OpCall {
+				if in.Op != ir.OpCall && in.Op != ir.OpMakeClosure {
 					continue
 				}
 				for _, c := range callees(in) {
@@ -1462,3 +1479,5 @@ func degradedDetail(why uint8, o Options) string {
 	}
 	return "budget: the analysis of this function added more than " + itoa(o.Budget) + " elements (the work limit); its summary may miss flows (the same on any machine)"
 }
+
+func (e *Engine) noteIdentityStore(in *sg.Instr) { e.identityStores.Store(in, struct{}{}) }

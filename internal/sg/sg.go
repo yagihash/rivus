@@ -119,6 +119,11 @@ type Instr struct {
 	// candidate was found from the closure being made (a call of a function
 	// value).
 	CandidateBindings map[*Func][]*Value
+
+	// For a make_closure that captures values: Escapes is true when the closure value is used in
+	// any way but being called, here, in this function (given as an argument, stored, returned,
+	// captured by another closure: the places that call it are not seen from here). C-7.
+	Escapes bool
 }
 
 // Recv is the receiver of a call, or nil.

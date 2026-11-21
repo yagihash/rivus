@@ -35,7 +35,7 @@ func (l *LocalStorage) Save(p string, r io.Reader, size int64) (int64, error) {
 }
 
 // the local storage removes the file under its root (a sink of the built-in rules too)
-func (l *LocalStorage) Delete(p string) error { return os.Remove(filepath.Join(l.Root, p)) } // @sink(release_del)
+func (l *LocalStorage) Delete(p string) error { return os.Remove(filepath.Join(l.Root, p)) } // @sink(release_del) @sink(tx_capture)
 
 // MinioStorage keeps them in a bucket.
 type MinioStorage struct{ Bucket string }

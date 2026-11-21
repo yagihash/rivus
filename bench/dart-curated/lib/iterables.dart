@@ -82,7 +82,7 @@ void map_entries() {
 
 void putIfAbsent_value() {
   final m = <String, String>{};
-  final t = source(); // @source(put-if-absent) @miss(silent)
+  final t = source(); // @source(put-if-absent) @miss(assumed_call)
   final v = m.putIfAbsent('k', () => t);
   sink(v); // @sink(put-if-absent)
 }

@@ -27,7 +27,7 @@ void across_hub() {
 
 void across_capture() {
   String? out;
-  final t = source(); // @source(across-cap) @miss(depth_limit)
+  final t = source(); // @source(across-cap)
   each([1], (i) {
     out = t;
   });

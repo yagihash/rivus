@@ -5,7 +5,7 @@ import 'lib.dart';
 
 void write_a() {
   String? out;
-  final t = source(); // @source(write-a) @miss(silent)
+  final t = source(); // @source(write-a)
   run(() {
     out = t;
   });
@@ -14,7 +14,7 @@ void write_a() {
 
 void write_b() {
   String? out;
-  final t = source(); // @source(write-b) @miss(silent)
+  final t = source(); // @source(write-b)
   run(() {
     out = t;
   });
@@ -45,7 +45,7 @@ void write_param() {
 // a list that the closure adds to
 void add_to_list() {
   final items = <String>[];
-  final t = source(); // @source(add-list) @miss(silent)
+  final t = source(); // @source(add-list)
   run(() {
     items.add(t);
   });
@@ -73,12 +73,12 @@ void relayCapture(void Function() f) {
 }
 
 void relay_cap_a() {
-  final a = source(); // @source(relay-c-a) @miss(silent)
+  final a = source(); // @source(relay-c-a)
   relayCapture(() => sink(a)); // @sink(relay-c-a) @nosink(relay-c-b)
 }
 
 void relay_cap_b() {
-  final b = source(); // @source(relay-c-b) @miss(silent)
+  final b = source(); // @source(relay-c-b)
   relayCapture(() => sink(b)); // @sink(relay-c-b) @nosink(relay-c-a)
 }
 

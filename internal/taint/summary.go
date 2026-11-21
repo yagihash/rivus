@@ -332,7 +332,9 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 				dsts = []Loc{{cc.roots[o.Index], o.Path}}
 			}
 		case OutThrow:
-			dsts = []Loc{{excRoot(), o.Path}}
+			if !cc.made {
+				dsts = []Loc{{excRoot(), o.Path}}
+			}
 		case OutParam:
 			if o.Index < len(argv) {
 				for _, l := range s.locs(argv[o.Index]) {
@@ -345,6 +347,16 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 		for _, oe := range o.Elems {
 			if len(oe.Guards) > 0 && !info.feasible(oe.Guards) {
 				continue // the call passes constants that rule this flow out
+			}
+			if cc.made && o.Kind == OutGlobal && o.Path == "" && oe.E.Kind == Param && oe.E.Mods() == "" &&
+				int(oe.E.Param) < len(argv) && identityOfGlobal(s.fn, argv[oe.E.Param], oe.E.Path(), o.Global) {
+				// The closure writes back the whole value of the variable that was read, whole, where it
+				// was made (`before := G; ...; G = before`, the cleanup of a mock). The analysis does not
+				// follow the order, so G holds what it was read to hold: writing it to G adds nothing,
+				// except that the elements below a field are lifted to the whole value, which is an
+				// error of the copy of a struct (ADR-059). It is counted (stats.identity_global_stores).
+				s.eng.noteIdentityStore(cc.in)
+				continue
 			}
 			for _, x := range s.expandElem(oe.E, argv) {
 				// Most of what a summary says is already known here: then adding
@@ -645,4 +657,85 @@ func absorbWhole(list []OutElem) []OutElem {
 		out = append(out, oe)
 	}
 	return out
+}
+
+// identityOfGlobal reports whether what the element of a summary names (the value v of the home
+// function, below the path epath of it) is the whole value of the global g, read as it is and nothing
+// else: the same path (the whole), by a load of g, through copies and φ, or held in a cell (a variable
+// captured by reference) that is stored once, by such a load, and is not written in any other way.
+// When it cannot be said so for sure: false (the write is applied). One predicate, for the closure
+// made here and for a plain `G = before` (ADR-059).
+func identityOfGlobal(home *sg.Func, v *sg.Value, epath string, g *sg.Value) bool {
+	if v == nil || g == nil || home == nil {
+		return false
+	}
+	if epath != "" {
+		return false
+	}
+	if isLoadOfGlobal(v, g) {
+		return true
+	}
+	// a cell: the alloc that the closure captured (its content is the element)
+	if v.Instr == nil || v.Instr.Op != ir.OpAlloc {
+		return false
+	}
+	var stored *sg.Value
+	for _, b := range home.Blocks {
+		for _, in := range b.Instrs {
+			for i, a := range in.Args {
+				if a != v {
+					continue
+				}
+				switch {
+				case in.Op == ir.OpMakeClosure:
+				case in.Op == ir.OpLoad && i == 0:
+				case in.Op == ir.OpStore && i == 0 && len(in.Args) == 2:
+					if stored != nil || in.Args[1] == v {
+						return false
+					}
+					stored = in.Args[1]
+				default:
+					return false // written or given away in another way
+				}
+			}
+		}
+	}
+	return stored != nil && isLoadOfGlobal(stored, g)
+}
+
+// isLoadOfGlobal reports whether v is, through copies and φ only, the whole value of the global g
+// read as it is (a load of g, and nothing else mixed in). When it cannot be said so for sure: false.
+func isLoadOfGlobal(v *sg.Value, g *sg.Value) bool {
+	if v == nil || g == nil {
+		return false
+	}
+	seen := map[*sg.Value]bool{}
+	var walk func(x *sg.Value, depth int) bool
+	walk = func(x *sg.Value, depth int) bool {
+		if x == nil || depth > 8 || seen[x] {
+			return seen[x] // a cycle through φ adds nothing
+		}
+		seen[x] = true
+		if x.Instr == nil {
+			return false
+		}
+		in := x.Instr
+		switch {
+		case in.Op == ir.OpGlobalLoad && in.IR != nil:
+			return in.IR.Global == g.Name
+		case in.Op == ir.OpLoad && len(in.Args) == 1:
+			return in.Args[0] == g
+		case in.Op == ir.OpCopy && in.IR != nil && !in.IR.View && len(in.Args) == 1:
+			return walk(in.Args[0], depth+1)
+		case in.Op == sg.OpPhi && len(in.Args) > 0:
+			for _, a := range in.Args {
+				if !walk(a, depth+1) {
+					return false
+				}
+			}
+			return true
+		}
+		return false
+	}
+	return walk(v, 0)
 }
