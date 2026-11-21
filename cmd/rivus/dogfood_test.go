@@ -65,8 +65,8 @@ func TestDogfood(t *testing.T) {
 	// runExtract is declared as a source too, and no sink of the rules is reachable from
 	// it: it had 11 findings while a param source was written back to the caller
 	// (ADR-048), and none of them had a step in runExtract.
-	if len(entries) != 7 {
-		t.Errorf("want findings from the 7 commands that reach a sink, got from %d: %v", len(entries), entries)
+	if len(entries) != 8 {
+		t.Errorf("want findings from the 8 commands that reach a sink, got from %d: %v", len(entries), entries)
 	}
 	// Before ADR-048 (8 sources x 11 sinks = 88 findings) 77 paths did not go
 	// through their own source function: the same object was written back by one
@@ -76,7 +76,9 @@ func TestDogfood(t *testing.T) {
 	// 44: C-7 (ADR-059) adds 5 real flows of `rivus index` (the path of -o to the files that graphdb.Write
 	// creates): graphIndexer returns the closure that o.afterRead keeps and calls later, and what it
 	// captured (the path) is applied where it is made.
-	const maxFindings, maxNoSourceOnPath = 44, 0
+	// 51: ADR-061 adds 7 real flows: the directory of -C, through the packages, to the os.ReadDir of gossa.countTestFiles
+	// (which counts the _test.go files that were not read); `rivus sites` is a command that reaches a sink now.
+	const maxFindings, maxNoSourceOnPath = 51, 0
 	t.Logf("%d findings, %d with no step in the source function", len(rep.Findings), noSourceOnPath)
 	if len(rep.Findings) > maxFindings {
 		t.Errorf("%d findings: more than the %d of today", len(rep.Findings), maxFindings)
