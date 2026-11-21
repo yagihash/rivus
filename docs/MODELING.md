@@ -1,7 +1,11 @@
 # Writing models for rivus
 
 A guide for whoever writes a model (a rule file that says what a function without a body does with taint), by hand or with
-an AI. This is its first section; the others (the shape of `flows`, `sources`, `sinks`, `sanitizers`) will follow it.
+an AI. The sections below cover `pure`, `approximate`, `calls`, `parts`, and the rule that a row has to be hit.
+Not written yet: the basic shapes of `flows`, `sources`, `sinks` and `sanitizers`; `globals` with `holds` (ADR-056);
+`.content` (ADR-082); `read_impls`, `self_first` and `alias`. Until they are, read the built-in rule sets in
+`internal/model/builtin` and the loader in `internal/model/model.go` (it rejects what it does not know), and the
+examples in `examples/rules`. The principles behind the models are in [PRINCIPLES.md](PRINCIPLES.md) (section 3).
 
 ## 1. When a function may be `pure`
 
