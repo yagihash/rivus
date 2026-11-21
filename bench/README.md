@@ -162,6 +162,7 @@ for each language (Go, Dart, Rust):
 | `go-curated/` | a project in the shape of Gitea, gogs, gin-vue-admin, ech0, with the flows to find and the ones not to find written in the source | did the accuracy change (a flow lost, a false one gained)? | seconds, in `go test ./...` |
 | `dart-curated/`, `rust-curated/` | a package / a crate of the shapes that matter for closures and callbacks (helpers that take a closure, two callers; captures; relays; tear-offs and function pointers; errors), in the same marks, with what is not found yet (`@miss`) and what is reported wrongly (`@fp`, and in Rust `@noisy(N)`) recorded: the baseline for a change of how closures and callbacks are summarised | the same, for closures and callbacks | seconds, in `go test ./...` with `RIVUS_DART` / `RIVUS_RUST` set |
 | `go-synth/` | a generator of Go code of a given shape (depth, SCCs, interfaces, fields, ...), with a script (`measure.py`) that measures time, memory and the result | did the time or the memory change, and is the result the same? | S seconds, M minutes |
+| `go-scale/` | a generator of Go code of about 2,000 functions, each profile with ONE shape that made Gitea and gogs big (a cache of types, `os.Stderr`, widen, a ring of 200 functions, ...), with its answer key in the source (the marks of `go-curated`), and `measure.py` | does the engine still stay small on the shapes of scale, and keep the real flows next to them? Gitea is the last check, not the first | 1 to 7 seconds a profile, in `go test ./cmd/rivus -run TestScaleSynth` (skipped by `-short`) |
 | `dart-synth/`, `rust-synth/` | generators of a Dart package / a Rust crate (depth, SCCs, closures given to shared helpers, relays, closures in fields, captures); the plan is `synthplan/`; `go-synth/measure.py -lang dart` or `-lang rust` runs the extractor once and measures `rivus analyze -ir` | the same | S under a second, M and L seconds |
 
 When the core of the engine (`internal/sg`, `internal/sites`, `internal/taint`) is touched: run
@@ -229,3 +230,60 @@ code, and fixed in later releases). `bench/compare.sh --with-gitea` checks out t
 repository that was cloned some other time is the head of `main` of that day, not the tag: a measurement on it (the time, the
 passes, the recall of the three CVEs) is of other code, and has to be taken again on the tag. Check with
 `git describe --tags` (or `git rev-parse HEAD` against the tag) before a measurement is written down.
+
+## The scale profiles (`go-scale/`)
+
+**What it is for.** The phenomena of scale appeared only on Gitea and gogs (6 to 16 minutes, 5 to 13 GB). Each of them has a cause that
+is known (ADR-049, ADR-055, ADR-056, ADR-057), and each can be built at 2,000 functions in 1 to 7 seconds. `go-scale/gen` writes the module
+(`go run ./bench/go-scale/gen -shapes types -out DIR`; `-shapes` takes one or more of the names below, `all` or `none`; the same flags write the
+same bytes; the output is not committed). Every profile is the same ballast (2,000 functions that call each other, 4% of them with a source, no
+sink) plus ONE shape, so that a change of a number has one cause. The code carries its answer key in the marks of `go-curated`
+(`@source(tag)`, `@sink(tag)`, `@sink(none)`, `@nosink(tag)`): the flows that must stay (`*_real`: a real flow next to the confluence) and the sinks
+that must stay quiet. A change that cuts too much (it loses a `*_real` flow) fails as surely as one that cuts too little.
+
+| profile (`-shapes`) | the phenomenon | the change that fixes it | what it does without that change (the engine of `dd6436f`) |
+| --- | --- | --- | --- |
+| `types` | the data of a value reaches a cache of types (`reflect.TypeOf` / `(reflect.Value).Type` as `proto.marshalInfoMap`), and every reader of the cache | the `reflect` models (ADR-055) | `summary_elems` x11, largest summary 6 to 76, `reanalyses` x1.8, 2 passes (not 1), 72 false pairs into the `@sink(none)` |
+| `stderr` | `fmt.Fprintf(os.Stderr, tainted)`, and every `log.New(os.Stderr, ...)` carries it | `holds: nothing` (ADR-056) | `summary_elems` x13, largest summary 6 to 85, `reanalyses` x1.9, 3 passes (not 2), 82 false pairs |
+| `widen` | an output of more than 24 elements is widened to the whole parameter; the join of the whole and the parts | `absorbWhole` (ADR-057) | **the parts are kept next to the whole**: largest summary 7 to 47, `summary_elems` +3%. **The going back and forth (63, 82, 85, 63) and the 12 passes of gogs are NOT reproduced** (what is needed is a widened output and an unwidened one of the same function that alternate between passes; the random rings tried converge at 2 passes with and without the change) |
+| `scc` | a ring of 200 functions (and 40 writes of sources into a global array that nobody reads), R-43: `-workers 1` gives other numbers than 2 or more (issue #96) | (none: a shape of cost) | the same on both: the shape is for `reanalyses`, `passes`, and for R-43 (`scc-w1.json` and `scc-w4.json` differ: `summary_elems` 13,859 and 11,487, `reanalyses` 3,846 and 4,188) |
+| `chain` | a chain of 10 globals, each written from the one before (one step a pass): 11 passes of 12 (`MaxPasses`). With 30 it does **not converge and the flow is lost**, silently. | | the same on both |
+| `dyn` | an interface with 150 implementations, 40 callers under conditions; a call on one implementation must not see the others | | the same on both (the multiplication of ADR-047 is not reproduced: no closures) |
+| `glob` | a handler writes a global, another entry reads it (the explicit write that must stay: CORE-H) | | the same on both, 2 flows found |
+| `giant` | one function of 3,000 statements (it takes 5 s; it is stopped by work, never by a clock) | | the same on both |
+| `selfcopy` | a struct copied out of a global and written back, 40 times (the shape of C-7's gogs +45): what is in the pointee must not reach the other field | | the same on both: **the amplification of C-7 is not reproduced** (1 pass, 0 false) |
+
+Not made yet: the edge of `valuecalls` (8 and 9 callers) and the multiplication of ADR-047 (208 candidates with a guard each), which need
+closures given to a helper; Dart and Rust profiles (a task of their own).
+
+**What `TestScaleSynth` checks** (`cmd/rivus/bench_scale_test.go`, run in `go test ./...`, skipped by `-short`; `-workers` is fixed, 1, and for `scc` 1 and 4):
+1. the answer key (the same function as `TestCuratedGo`): every flow that must stay is found, no sink that must stay quiet is reached, no other flow;
+2. `bench/go-scale/expected/<profile>-w<workers>.json`: the set of the findings, the uncertainties by kind and `converged` are **the same**; `passes`,
+   `reanalyses`, `summary_elems` and the largest summary must not be **more than 10% over** the file (a different number inside 10% is logged, a
+   smaller one is an improvement to write down). The analysis is deterministic, so a number does not move without a change of the engine. Time is not
+   looked at (it moves with the load). A change that is meant to move them: `RIVUS_SCALE_UPDATE=1 go test ./cmd/rivus -run TestScaleSynth`, and the diff
+   of the files is in the commit. When R-43 (#96) is fixed, `scc-w1.json` and `scc-w4.json` become one.
+
+**Measuring by hand and between two builds.** `python3 bench/go-scale/measure.py -rivus BIN -shapes types [-workers 1]` prints one line (functions,
+passes, converged, reanalyses, `summary_elems`, the largest summary, found / missing / false against the key). `bench/compare.sh` has `go-scale`
+in the light tier (all shapes in one module, 2,529 functions, 11 s; the same input for base and head, made by the generator of the tree the script is in).
+Against `dd6436f` it says "164 findings REMOVED" (the false pairs of `types` and `stderr`: that is the point of the profile; classify them by the key).
+
+**Which change makes which profile big (measured once, 2026-11-21; the head with ONE of the three taken out, the others kept).**
+Taking the fix out is not kept as a switch in the engine (no flag for it); it was done on a copy of the tree: `go-pure.yaml` without the five `pure: true`
+of `reflect`; `holds: nothing` changed to `holds: everything`; `widen(absorbWhole(list))` changed to `widen(list)` in `joinSummaries`.
+
+| the profile | head | without the `reflect` models | without `holds: nothing` | without `absorbWhole` |
+| --- | --- | --- | --- | --- |
+| `types` | elems 5,085, maxsum 6, 1 pass, 0 false | **56,869**, 76, 2 passes, 72 false | 5,085 | 5,085 |
+| `stderr` | 5,006, 6, 2 passes, 0 false | 5,006 | **65,815**, 85, 3 passes, 82 false | 5,006 |
+| `widen` | 5,198, maxsum 7 | 5,198 | 5,198 | 5,390, **maxsum 47** |
+| the others | | the same as head | the same as head | the same as head |
+
+Each fix moves only its own profile. `dd6436f` itself: `types` and `stderr` as in the columns above, `widen` 5,390 / 47, and the rest as head.
+The three fixes together on all the shapes at once (2,529 functions): `summary_elems` 76,220 to 14,141, `reanalyses` 7,615 to 4,284, largest summary 88 to 45, 164 false pairs to 0, 51 real flows found by both.
+
+**How big the profiles are (head, `-workers 1`, an idle machine):** types 2,033 functions 2.9 s; stderr 2,049, 2.1 s; widen 2,045, 1.1 s; scc 2,229 (largest SCC 200), 2.4 s;
+chain 2,038, 0.5 s (11 passes); dyn 2,222, 0.5 s; glob 2,030, 0.5 s; giant 2,028, 2.2 s; selfcopy 2,067, 1.3 s; all together 2,529, 11 s. The shapes show their
+effect at this size (the ratio is 11 to 13 for the confluences); the real cost of Gitea (60,000 functions, 8 passes) is not reached, and is not the point: the profile
+says the shape is there, Gitea says how large it grows.
