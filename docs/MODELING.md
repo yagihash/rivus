@@ -41,3 +41,17 @@ each is [`bench/zoo-go/pure/unchecked.txt`](../bench/zoo-go/pure/unchecked.txt):
 the clock, or need a value the harness cannot make; 190 have no string or bytes argument, the receiver being the only way
 in, which a call with a marker does not cover). Dart (`dart-pure.yaml`) and Rust (`rust-pure.yaml`) are checked in the zoo of
 each language, by the same rule.
+
+## 2. When a flow is a guess: `approximate`
+
+If a flow is real in some cases and not in others (the output of an external program may or may not carry its
+arguments), do not cut it and do not write it as a plain flow: write it with a reason.
+
+```yaml
+- symbol: (*os/exec.Cmd).Output
+  flows: [{from: recv, to: result, approximate: "the output of an external program: whether it carries the arguments depends on the program"}]
+```
+
+The flow is kept. A finding whose path goes through it gets one uncertainty of kind `model_approximation`
+(`attributable_to: rivus`, `detail` is the reason), so its confidence is never `no_uncertainty_on_path`
+([ADR-067](DECISIONS.md)).

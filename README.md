@@ -154,7 +154,8 @@ rivus が出さなかったことは、「流れがない」という意味で�
    rivus models coverage -yaml -top 20 ./...
    ```
 
-3. 誰が書いたか: ルールの `origin: builtin | human | llm` で区別できます。`-deterministic-only` は `llm` のルールを無視します。LLM 由来のモデルが効いた finding には `llm_influenced` が付き、モデルが流れを消した場所は `suppressions` に残ります。
+3. 確信のない流れ: モデルの `flows` に `approximate: "理由"` を書くと、流れは消さずに、通った finding に不確実性 `model_approximation` が付きます（書き方は [docs/MODELING.md](docs/MODELING.md)）。
+4. 誰が書いたか: ルールの `origin: builtin | human | llm` で区別できます。`-deterministic-only` は `llm` のルールを無視します。LLM 由来のモデルが効いた finding には `llm_influenced` が付き、モデルが流れを消した場所は `suppressions` に残ります。
 
 LLM にモデルを書かせ、人や別の手段で確かめる、という使い方を想定しています。そのための手引きと、モデルを実行で確かめる道具は、これから整えます。
 
