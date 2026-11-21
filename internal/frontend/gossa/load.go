@@ -222,6 +222,7 @@ func Load(dir string, patterns []string, opts Options) (*Program, error) {
 	}
 	prog, ssaPkgs := mk(pkgs, mode)
 	p.SSA = prog
+	p.addUnread(pkgs, ssaPkgs)
 	if len(pkgs) > 0 {
 		p.Fset = pkgs[0].Fset
 	} else {

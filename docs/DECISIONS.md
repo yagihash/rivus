@@ -1651,3 +1651,18 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 - Gitea(`bench/compare.sh --heavy 7e276b5 58c3e0f`): finding 350 → 367、**削除 0**(3 件は、ほかの finding の `other_sources` に畳まれた、失われていない流れ)、**追加 20 件(sink の単位で 7 か所)**、パスが変わったのが 35、`other_sources` の変化が 24。7 パスのまま収束、再解析 110,120 → 112,688(+2.3%)、メモリ 12,291 → 11,873 MB。時間 593 → 949 秒は、同じ時間に別の解析が走っていた(ほかの比較)ので、基準にしない(`func_timeout` の 8 → 11 も、同じ時計の影響)。**追加の分類(経路を読んだ): 20 件とも雑音。** (a) ログのファイルに書く `io.Writer` の実装(回転する書き手)の、ファイル名を開く・名前を変える・消す sink、5 か所 18 件: 呼び出し側が `w.Write(data)` を呼び、モデル(「引数が受け手に入る」)が書き手の**オブジェクト全体**に汚れを置き、読むようになった本体が、書き手の**ファイル名のフィールド**(`file.Name()`)を読んで sink に渡す。書いたデータは、書き手のファイル名を決めない。(b) 圧縮の書き手に `ctx.Resp` を包んで `Close` → `Flush` → 自前の `Response.Write` に至る、`ResponseWriter.Write` の XSS 2 か所 2 件: source は、リクエストの context そのもの(包まれた書き手のオブジェクト)で、書かれる圧縮データではない。(a)(b) とも、同じ根: **モデルが書き手の中身を、オブジェクト全体の汚れとして持つ**(書き手のフィールドの区別がない)。追加 20 件は、基準 350 件の 5.7%(雑音の上限 1 割 = 35 件の内)で、収束も変わらない。受け入れの基準は満たすが、雑音の根は残る(下の限界)。
 
 **限界:** (1) Rust の標準の既定のメソッド(`write_all`、`Iterator::map` など)は、候補が実装の `write` / `next` でなく、本体のない標準のメソッドなので、この修正の対象外(`write_all` のモデルが `write` を呼ぶ、という行が要る。`calls:` の延長)。(2) **書き手のフィールドの区別がない**: `(io.Writer).Write` のモデルは、書いたデータを受け手の全体に置く。本体を読むと、書き手の別のフィールド(ファイル名、ロガーの設定)が汚れて見える。Gitea の追加 20 件は、これだった。直し方の案: モデルの置き先を、受け手の「中身」の要素にする(フィールドとは別の要素)。この変更の対象外。(3) 同じインターフェースの実装が複数あるときの絞り込みは、Go と Dart で違う。Go の動物園(実装が 4 つ以上)は、おとりの `@nosink` が静かなまま。Dart で、`StringSink` の実装 4 つ(vuln、fixed、おとり用の 2 つ)を 1 ファイルに置いて試すと、ある実装に渡した source が、他の実装の sink にも届いた(受け手の静的な型の全実装が候補。XTALK と同じ根)ので、Dart の動物園のマスにはしていない。Dart の実コード(dart-pub)に、finding の増減はない。
+
+
+## ADR-076: 型エラーで SSA が作られなかったパッケージを、出力で言う(読めなかったパッケージの数と名前、落ちた関数の数)
+
+**背景:** 型エラーが 1 行あるパッケージ(`a`)に依存するパッケージ(`b`)は、go/packages が `IllTyped` と印を付け、go/ssa は SSA を作らない(`a` 自身も)。`packages` には載ったままで、`b` の関数は解析されず、そのことは出力のどこにもなかった(`a` の型エラーだけが `missing_source` で出る)。全部の関数が落ちても、終了コードは 0、stderr は無言。結果が「コードの解析」に見えて、実際は「作れた分の解析」だった。
+
+**決めたこと(最初の版は、痕跡だけ。finding と終了コードは変えない):**
+1. Go の読み込み(`internal/frontend/gossa/unread.go`)で、読んだ(`packages` に載せた)のに SSA が作られなかったパッケージごとに、`load_errors` に 1 件を足す: `unread: true`、`unread_functions`(構文に本体のある関数とメソッドの数)、文面は「not analysed: 原因; its N function(s) are not in the result」。原因は、自分に型エラーがあればそのエラー、なければ import をたどって見つけた、エラーのあるパッケージ(「it depends on X, which does not type-check: …」)。`load_errors` は今までどおり `missing_source` の不確実性になるので、パッケージごとに `uncertainties` にも出る。
+2. 出力の `summary.unread`(1 つもなければ欄なし): `packages`(読めなかったパッケージの数)、`functions`(それによって、解析から落ちた関数の数)、`top`(関数の多い順に上位 10 の、パッケージ・関数の数・理由)。
+3. stderr に 1 行(`rivus: N package(s) were read and not built …, so their M function(s) are not analysed: a (n), b (m), …; see summary.unread`)。
+4. `packages` は変えない(読んだものを載せる、という今の意味のまま)。終了コードは 0 のまま。旗 `-fail-on-incomplete` は別の判断(未実装)。
+
+**確かめたこと:** `testdata/go/cases/illtyped`(独立したモジュール: 型エラーのあるパッケージが、ほかのケースを全部読むテストを壊すため。`broken` に型エラー、`user` がそれを import、`top` が `user` を import、`fine` は無関係): `summary.unread` が 3 パッケージ・5 関数(`broken` 2、`user` 2、`top` 1)、`user` と `top` の理由が `broken` を名指す、`fine` の finding は 1 件のまま、`packages` は 5 つ(`lib` を含む)のまま(`TestUnreadPackagesAreTold`、`TestUnreadIsAbsentWhenEverythingBuilt`)。
+
+**限界:** 構文エラーで本体が読めなかった関数は数えない(読めた分だけ)。ジェネリクスの具体化や、無名関数は、数えない(宣言の数)。Rust と Dart は、この版の対象外(抽出器の `load_errors` は、それぞれの言語のもの)。

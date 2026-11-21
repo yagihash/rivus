@@ -64,7 +64,7 @@ func runExtract(args []string) error {
 		return err
 	}
 	for _, e := range prog.LoadErrors {
-		fmt.Fprintf(os.Stderr, "rivus: %s\n", e)
+		fmt.Fprintf(os.Stderr, "rivus: %s: %s\n", e.Package, e.Message)
 	}
 	out, err := goir.Extract(prog, goir.Options{All: *all, Implementations: impls})
 	if err != nil {

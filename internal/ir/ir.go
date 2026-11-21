@@ -67,6 +67,10 @@ func (p Pos) Position() Position {
 type LoadError struct {
 	Package string `json:"package"`
 	Message string `json:"message"`
+	// Unread says that the package was read and not built (a type error in it, or in a package it imports): what it
+	// holds is not in the analysis. Functions is the number of its functions (with a body) that are not.
+	Unread    bool `json:"unread,omitempty"`
+	Functions int  `json:"unread_functions,omitempty"`
 }
 
 // TestsSkipped says what an extractor did not read because the build of the project does not ship it

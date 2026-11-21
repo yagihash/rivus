@@ -123,6 +123,55 @@ type Summary struct {
 	// cuts is not the same twice. LoadDependentNote says it, with the numbers (stats has them).
 	LoadDependent     bool   `json:"load_dependent,omitempty"`
 	LoadDependentNote string `json:"load_dependent_note,omitempty"`
+	// Unread is what was read and not built: the packages with a type error, and those that import
+	// them (go/ssa builds nothing for them). Absent when every package was built. They stay in
+	// packages; the functions they hold are not in the analysis, and no finding can come from them.
+	Unread *Unread `json:"unread,omitempty"`
+}
+
+// Unread counts the packages that were read and not built.
+type Unread struct {
+	// Packages is how many, Functions the functions (with a body) that they hold.
+	Packages  int `json:"packages"`
+	Functions int `json:"functions"`
+	// Top lists the packages with the most functions (at most 10).
+	Top []UnreadPackage `json:"top"`
+}
+
+// UnreadPackage is one package that was read and not built.
+type UnreadPackage struct {
+	Package   string `json:"package"`
+	Functions int    `json:"functions"`
+	Why       string `json:"why"`
+}
+
+func unreadOf(errs []ir.LoadError) *Unread {
+	var u *Unread
+	for _, e := range errs {
+		if !e.Unread {
+			continue
+		}
+		if u == nil {
+			u = &Unread{Top: []UnreadPackage{}}
+		}
+		u.Packages++
+		u.Functions += e.Functions
+		u.Top = append(u.Top, UnreadPackage{Package: e.Package, Functions: e.Functions, Why: e.Message})
+	}
+	if u == nil {
+		return nil
+	}
+	sort.SliceStable(u.Top, func(i, j int) bool {
+		a, b := u.Top[i], u.Top[j]
+		if a.Functions != b.Functions {
+			return a.Functions > b.Functions
+		}
+		return a.Package < b.Package
+	})
+	if len(u.Top) > 10 {
+		u.Top = u.Top[:10]
+	}
+	return u
 }
 
 // SymbolCount is a symbol and how often it was uncertain.
@@ -207,6 +256,7 @@ func summarize(r *Report) Summary {
 		s.LoadDependentNote = fmt.Sprintf("this result depends on the load of the machine: %d function(s) were stopped by the time limit of one function (-func-timeout), %d by the time limit of the run (-timeout), and the run itself %s; the same run on a quieter machine may find more (the work limit alone, %d function(s), is the same everywhere)",
 			st.FuncTimeouts, st.RunTimeouts, map[bool]string{true: "was stopped", false: "was not"}[st.TimedOut], st.BudgetExhausted)
 	}
+	s.Unread = unreadOf(r.LoadErrors)
 	if s.Program.Total > 0 {
 		s.RivusShare = float64(s.Program.ByAttribution[taint.AttributableRivus]) / float64(s.Program.Total)
 		s.DepthLimitShare = float64(s.Program.ByKind[taint.KindDepthLimit]) / float64(s.Program.Total)

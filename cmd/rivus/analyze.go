@@ -197,6 +197,19 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 		}
 	}
 	rep := report.Build(packages, l.loadErrors(), st, res, rules)
+	if u := rep.Summary.Unread; u != nil {
+		// the exit code stays 0 (a flag for it is a decision of its own): a result without the packages that
+		// did not build must not look like the analysis of all of them
+		names := make([]string, 0, 3)
+		for i, p := range u.Top {
+			if i == 3 {
+				break
+			}
+			names = append(names, fmt.Sprintf("%s (%d)", p.Package, p.Functions))
+		}
+		fmt.Fprintf(os.Stderr, "rivus: %d package(s) were read and not built (a type error in them or in a package they import), so their %d function(s) are not analysed: %s; see summary.unread\n",
+			u.Packages, u.Functions, strings.Join(names, ", "))
+	}
 	rep.Target = o.target(o.irFile != "")
 	return rep, nil
 }

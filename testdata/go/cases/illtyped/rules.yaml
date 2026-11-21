@@ -1,0 +1,11 @@
+# Rules of the case. The module is its own: a package with a type error in the module of the other cases
+# would break every test that loads them all.
+ruleset: rivus/testdata-illtyped@1
+
+sources:
+  - symbol: example.com/illtyped/lib.Source
+    labels: [user_input]
+
+sinks:
+  - symbol: example.com/illtyped/lib.Sink
+    category: test
