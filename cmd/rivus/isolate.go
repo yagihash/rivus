@@ -53,6 +53,9 @@ type isolationOpts struct {
 	noFetch bool
 	// maxOutput is the most the container may write to its standard output (the stream of the IR); 0: 4 GiB
 	maxOutput int64
+	// allowHosts are the hosts (-allow-fetch-host) that the fetch stage may get from although Cargo.lock names them and
+	// they are not among the ones that are allowed without a flag
+	allowHosts []string
 	// env are NAME=VALUE pairs given on the command line (the extract stage only), and mounts are SRC:DST read-only
 	// mounts: the only way something of the host gets in besides the project. Nothing is passed on from the environment.
 	env, mounts []string
@@ -292,6 +295,13 @@ func (o *isolationOpts) extractRustIsolated(ctx context.Context, dir string, ext
 				return nil, fmt.Errorf("docker volume create %s: %v: %s", volume, err, strings.TrimSpace(string(out)))
 			}
 		} else {
+			lock, err := os.ReadFile(filepath.Join(dir, "Cargo.lock"))
+			if err != nil {
+				return nil, err
+			}
+			if err := checkFetchSources(string(lock), o.allowHosts); err != nil {
+				return nil, err
+			}
 			if err := o.dropConfigOfVolume(ctx, volume); err != nil {
 				return nil, err
 			}

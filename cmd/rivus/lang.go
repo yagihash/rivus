@@ -227,7 +227,7 @@ func (o *analyzeOpts) isolation() *isolationOpts {
 	if image == "" {
 		image = rustImageName
 	}
-	return &isolationOpts{image: image, memory: o.containerMemory, cpus: o.containerCPUs, pids: o.containerPids, timeout: o.containerTimeout, noFetch: o.noFetch, env: o.containerEnv, mounts: o.containerMounts, maxOutput: o.containerMaxOut}
+	return &isolationOpts{image: image, memory: o.containerMemory, cpus: o.containerCPUs, pids: o.containerPids, timeout: o.containerTimeout, noFetch: o.noFetch, env: o.containerEnv, mounts: o.containerMounts, maxOutput: o.containerMaxOut, allowHosts: o.allowFetchHosts}
 }
 
 // loadLangs reads several languages into one program. The functions of the

@@ -39,6 +39,7 @@ func runExtract(args []string) error {
 	fs.Var(&ro.containerEnv, "container-env", "-lang rust: NAME=VALUE for the build in the container (repeatable)")
 	fs.Var(&ro.containerMounts, "container-ro-mount", "-lang rust: SRC:DST read-only mount (repeatable)")
 	fs.Int64Var(&ro.containerMaxOut, "container-max-output", 4<<30, "-lang rust: the most bytes the container may write")
+	fs.Var(&ro.allowFetchHosts, "allow-fetch-host", "-lang rust: HOST the fetch stage may get from although it is not crates.io or an https repository host with a public name (repeatable)")
 	fs.Parse(args)
 
 	if *lang == langRust {

@@ -91,7 +91,9 @@ func TestDogfood(t *testing.T) {
 	// the lines above: the directory of -C reaches the os.ReadFile of .cargo/config.toml (read as text, to decide whether the
 	// stage is skipped or stopped), and the name of the volume (a hash of the lock file and the configuration) reaches the
 	// docker commands that check, create and remove that volume.
-	const maxFindings, maxNoSourceOnPath = 75, 0
+	// 76: the places Cargo.lock names are checked before the fetch stage (isolate_sources.go): 1 real flow, the directory of -C
+	// to the os.ReadFile of Cargo.lock that is read as text.
+	const maxFindings, maxNoSourceOnPath = 76, 0
 	t.Logf("%d findings, %d with no step in the source function", len(rep.Findings), noSourceOnPath)
 	if len(rep.Findings) > maxFindings {
 		t.Errorf("%d findings: more than the %d of today", len(rep.Findings), maxFindings)
