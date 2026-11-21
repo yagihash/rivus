@@ -1,6 +1,6 @@
 # 設計: 構造体のフィールドを sink にする(引数や受け手の「どの部分」が危険か、を書けるようにする)
 
-状態: **設計のみ(実装なし)**。決める人: アーキテクチャ助言者とユーザー。末尾の「決めること」に、まだ決まっていない点を書く。
+状態: **設計は決まった(アーキテクチャ助言者のレビュー済み)。段階 0〜2 を実装する**(段階 3 以降は、各段の受け入れを満たしてから)。11 節の「決めること」は、すべて答えを書いた。
 
 ## 1. 問題
 
@@ -82,8 +82,14 @@ sinks:
 - 糖衣(1 つだけのとき): `args: [1], field: Task.MessageType.HttpRequest.Url` / `recv: true, field: Path`。`parts` の 1 要素と同じ。位置が 2 つ以上あるのに `field` だけを書くのは、読み込みで拒否する。
 - **`parts` を書かなければ、今までどおり全部**(既存のルールは変わらない)。`args` / `recv`(全部)と `parts` を同じ sink に書いたとき、**同じ位置は全部が勝つ**(`parts` は、その位置については何も制限しない)。`args` が空で `parts` があるときは、「全部の引数」とは読まず、`parts` の位置だけ(今の「空 = 全部の引数」は、`parts` のない sink だけ)。同じ symbol の複数の行は、今までどおり和。
 - `field` は、**位置の値の中の、フィールド名の列**(`.` 区切り)。先頭は、位置の値の型の**フィールド**(型の名前ではない: `CreateTaskRequest` ではなく `Task` から)。名前は、**IR が言うフィールド名**そのまま(Go は Go のフィールド名。Dart は `url`、Rust は構造体のフィールド名か `0`)。要素の区切りは `[]`(スライス、配列、マップの値)。
-- **型のパス(`pkg.Type.Field`)との関係**: `kind: field` の source は、`pkg.Type.Field` で、**アクセスする側の型**から決まる。`parts` の `field` は、位置の値から**下る**道で、型は書かない(型は、位置の値の静的な型で、`when_arg_type` で絞れる)。道の名前の誤りは、モデルの読み込みでは見つからない(モデルは型を知らない)ので、**モデルを書くときの規則に、「脆弱とおとりの 2 つの試験を付ける」を入れる**(`docs/MODELING.md` に節を足す)。補助として、`rivus` に、「この位置の値の下に、どの道のセルがあるか」を出す診断(5 節の測定にも使う)を足す。
+- **型のパス(`pkg.Type.Field`)との関係**: `kind: field` の source は、`pkg.Type.Field` で、**アクセスする側の型**から決まる。`parts` の `field` は、位置の値から**下る**道で、型は書かない(型は、位置の値の静的な型で、`when_arg_type` で絞れる)。
+- **道の綴りの誤りは、永久に黙った見逃しになる(段階 1 までに、設計に入れる)**。`field: Task.MessageType.HttpRequst.Url`(書き損じ)や、ライブラリの版でのフィールド名の変更では、下にも上にも当たらず、静かになる。おとり(`Body` だけ汚れて、`Url` のセルがまだない)と、**セルの状態では区別がつかない**。3 つの手で防ぐ。
+  1. **site での検査(`field_unresolved`)**。照合の前に、`field` の名前の列の各名前が、**解析した IR のどこかで、フィールド名として使われているか**(`field_load` / `field_store` / `addr_of` の `field` の段)を調べる。1 つでも、どこにも出ない名前があれば、**その sink は、その site で `parts` なし(位置の値の全部)として扱い**、不確実性 `field_unresolved`(`detail` に、出ない名前と指定した道)を出す。見逃しにならず、綴りの誤りは、出力で見える。
+     **型の鎖をたどる検査は、今の IR ではできない**(段階 0 で確かめた): 位置の値の静的な型から、フィールドの型をたどる(ポインタは透過、インターフェースの段に来たらそこで打ち切って「不明」)には、構造体のフィールドの並びと型が要る。IR は、型の ID と分類(`class`)だけを持つ(`TypeInfo` は `supers` だけ。3 言語とも)。構造体の定義を IR に足せば型の鎖の検査になるが、3 つの抽出器と IR の書式の変更なので、**この設計の範囲に入れない**。名前の検査は、広げすぎない側にある: IR のどこにも出ない名前は、どの型のフィールドとしても、書き込まれも読まれもしていない。
+  2. **「死んだ行」の関門を、`parts` の道の単位に広げる**(`bench/parity` と、動物園・curated の IR に、モデルの各行が 1 度でも当たる検査)。動物園のルールの `parts` の各行は、動物園の解析で、**道が「下」で 1 度も当たらなければ赤**(試験: 段階 1)。組み込みの行は、段階 3 で足すときに同じ検査を入れる。
+  3. **利用者のモデル**には、`docs/MODELING.md` に、「脆弱とおとりの 2 つの試験を付ける」「出力に `field_unresolved` が出ていないことを見る」を書く(AI に書かせるときの手引き)。
 - **道の突き当たりの正規化(`*` は透明)**: エンジンのアクセスパスには、`/*`(ポインタの指す先、**インターフェースに包んだ値の中身**)の段が入る(`make_interface` は、ポインタの指す先を、インターフェースの値の `/*` の下に置く)。モデルの書き手が、それを知らなくてよいように、**照合は、`*` の段を読み飛ばして**行う: セルの道から `*` を除いたものと、`field` を比べる。oneof(`Task.MessageType` はインターフェース、`Task_HttpRequest{HttpRequest: ...}` が中身)は、`MessageType` の次に、そのまま `HttpRequest`(ラッパーのフィールド名)と書く。読み飛ばしで広がるのは、`*` が実際に別の物を指す形だけで、見逃しにはならない。ADR-060(ポインタレシーバのメソッドで `/*` の下を読み書きする)が直した、「`/*` が 1 段ずれる」場所と同じ所を通るので、**ずれても拾える**ように、この読み飛ばしにした(`Param0` の展開は、今までの場所と `/*` を足した場所の和、と同じ考え)。
+- **`*` 以外の「書き手が知らない段」**(Rust の `Option` の中身、enum の variant、Dart のラッパー、Go の想定外の段): 照合は、`*` の読み飛ばしだけでなく、**「`field` の名前の列が、セルの道の部分列(間に、名前でない段が挟まってよい)」**にする。名前でない段は、`*`、`[]`、`[k]`(`field` がその段を書いていないとき)。言語ごとの透過な段(Rust の `Option` の中身など)は、段階 6 で、この一覧に足す(`transparentStep`)。**フィールド名の段を飛ばすことはしない**(別の型の同じ名前の下に当たって、広げすぎるため)。照合の関数の形は、段階 1 で、この形にする(`matchParts(field []string, rel []string) (kind, rest)`: `kind` は、下 / 上 / 当たらない。`rest` は、上のとき、残りの名前)。
 - **埋め込み**: Go の埋め込みは、IR でも道に出る(`Query` の `QueryConfig`)ので、`QueryConfig.Q` と書く(昇格したフィールドの、短い名前 `Q` は読まない。最初は、書いた道だけ)。
 
 ## 4. 意味: `checkSink` が見る範囲
@@ -93,9 +99,11 @@ sinks:
 1. **下**: 道のセルとその下(`Url` のセル、`Headers` の要素)。**細かく分かっている**。普通の finding。
 2. **上**: 道を包む、上のセル(`""` や `Task/MessageType/*`)に、丸ごとの汚れがある。**どのフィールドの汚れか、分からない**。鳴らす + 不確実性(次の節)。
 
-指定した道と並ぶ、別のフィールドだけが汚れている(`Body` だけ)ときは、どちらにも当たらない: **鳴らない**。これが、偽陽性の消える所。
+3. **モデルも本体もない呼び先に渡された値**(`req.Body = src; opaque(&req); sink(req)`)。`opaque` が `Body` を `Url` に写しても、エンジンは引数の中を混ぜない(段階 0 で確かめた: `unmodeled` は、引数と受け手の中身の全部を、**結果**に流すだけで、引数への書き込みはしない。モデルのない関数、解決できなかった呼び出し、リフレクション、`proto.Merge` / `Clone` で、`Url` のセルがなくなったまま静かになる)。**意味に足す: モデルも本体もない呼び先に、ポインタ(または参照を含む値: ポインタ、インターフェース、コンテナ)で渡された値は、`parts` の照合では「上が汚れている」と同じ扱い**(その値の下のどこかに汚れがあれば、鳴らす + `field_imprecision`、why: `opaque_callee`)。実装は、`unmodeled` が、渡された値の根を「不明の関数に渡した」と覚えるだけ(**汚れは足さない**: `parts` のない sink と、今の伝播は、何も変わらない)。
 
-実装の注: 読み飛ばし(`*`)のために、`Loc{根, 道 + field}` を 1 つ作るのではなく、根のセルの道の一覧(`pathsOf`)から、「`*` を除いた道が、`field` の下(または、`field` の上)」のものを選ぶ。指定のある sink でだけ行うので、全体の費用は変わらない(測る: 9 節の段階 0)。
+指定した道と並ぶ、別のフィールドだけが汚れている(`Body` だけ)ときは、どれにも当たらない: **鳴らない**。これが、偽陽性の消える所。
+
+実装の注: 読み飛ばし(`*`)のために、`Loc{根, 道 + field}` を 1 つ作るのではなく、位置の値の `Loc` を `collect` した結果(下のセルと、包む上のセルの両方が、すでに入っている)の、**道の残り(`Rel`)を、`field` と部分列で照合**する。指定のある sink でだけ行うので、全体の費用は変わらない。
 
 `literal_only`(L1。引数がすべて定数のとき)は、指定のある sink では、構造体のリテラルを定数とは見ない(`isConstantRef` が、構造体を作る命令を通さない)。つまり、「定数だけ」と言わない側に倒れる(過検出側で、見逃しではない)。
 
@@ -108,6 +116,8 @@ sinks:
 | モデルのない関数が返した構造体(`flows: [{from: arg0, to: result}]` で、結果が丸ごと汚れる。`spanner.NewStatement(sql)`、`json.Unmarshal(src, &req)`) | 根の `""` が汚れている(上) | 鳴る + `field_imprecision`(why: `whole_value`) |
 | アクセスパスの切り詰め(k = 3)に当たった深い道 | `Task/MessageType/*` で切られ、`HttpRequest/Url` と `HttpRequest/Body` が 1 つのセルに混ざる(上) | 鳴る + `field_imprecision`(why: `path_limit`) |
 | 要素(スライス、マップ)の中のフィールド | `[]` の要素は区別しない(`container_element_imprecision` の、今の扱い)。要素のセルが上 | 鳴る + `field_imprecision`(why: `element`)。今の `container_element_imprecision` と同じ道 |
+| モデルも本体もない関数に、ポインタで渡した構造体(`opaque(&req)`)。`Body` のセルだけがあり、`Url` のセルはない | 根の下に、道が合わない(兄弟)汚れがあり、根は「不明の関数に渡した」と覚えられている | 鳴る + `field_imprecision`(why: `opaque_callee`)。動物園の vuln 側のマス: `opaque` が、実際に `Body` を `Url` に写す |
+| `parts` の名前が、IR のどこにも出ない(綴りの誤り) | セルの照合は、どれにも当たらない | **`parts` なし(全部)として鳴る** + `field_unresolved` |
 | 細かく書き込まれた(`stmt.SQL = x`、リテラル `Statement{SQL: x}`) | `SQL` のセル(下) | 普通の finding(不確実性なし) |
 
 **判定は 1 つ**: `collect` が返した `found` の `Cell.Path` が、**照合した道より短い(上)**なら、`field_imprecision`。同じか、長ければ(下)、なし。**この規則が、3 行を、同じ仕組みで言う**(丸ごと汚れた構造体も、k で切れた道も、要素も、「道を包む上のセルが汚れている」形)。
@@ -120,7 +130,8 @@ sinks:
 
 - 関数 f の中の sink が、f のパラメータ p の下の道を読むとき、`reach` は `Param` の要素を `SinkReach{Elem, Site, Accepts, Steps, Guards}` に記録する(`noteSinkReach`)。`Elem` は、パラメータ番号と**道**を持つ(`ParamElem(idx, path)`)。指定した道は、`collect` が `Param` の要素に `rest`(上のセルが丸ごと `Param` のとき、道の残り)を足して(`ext.WithPath(pathTrunc(e.Path()+rest, K))`)、**要素の道に乗る**。
 - 呼び元は、`expandParam` で `locs(実引数) + e.Path()` を `collect` する。**指定した道が、要素の道として、実引数の同じ道に当たる**。f が構造体を別の関数 g に渡して、g の中の sink が `Url` を読むときも、g の要約が `Param(p, "/Url")` の `SinkReach` を持ち、f の `Param` に変わる(今の道の合成)。
-- つまり、**新しい種類の `SinkReach` はいらない**。足すのは 1 つ: `SinkReach` に、**不確実(`field_imprecision`)かどうか**の印(`mergeSinkReach` は、同じ `Elem` と site を、短い経路 1 つにまとめるので、不確実な到達が、確かな到達に潰されないよう、印は OR で残す。`signature` / `joinSummaries` の比べにも入れる)。経路の `sinkStep` の `Notes` に載せるだけでは、まとめるときに落ちうる。
+- つまり、**新しい種類の `SinkReach` はいらない**。足すのは 2 つ: (a) `SinkReach` に、**まだ照合していない、`field` の残りの名前**(`Field`)。要約の中では、パラメータの `Param` の要素は、呼び元の道(`*` の段を含む)を知らないので、`parts` の照合は、**呼び元の実引数のセルに対して**行う(`expandParam` の先)。照合は「上か下か」の判定が、展開の各段で要る。(b) **不確実(`field_imprecision`)かどうか**の印(`Imprecise`、why の文字)。呼び元の実引数が丸ごと汚れているとき、印は呼び元で付く。
+- **印の持ち方(決定)**: `mergeSinkReach` が同じ `Elem` と site を 1 つにまとめるとき、印を OR で 1 つにすると、**同じ `Elem` と site に確かな到達があるのに、不確実と報告する(誤った痕跡)**。そこで、**印をキー(`sinkKey`)に入れて、確かな到達と不確実な到達を、別々に持つ**。finding の側(`recordFinding`)は、**確かな経路があれば、確かが勝つ**(不確実性は、確かな経路がないときだけ付く)。`signature` / `joinSummaries` の比べに、`Field` と印を入れる(要素の数は、`Field` の取りうる値が規則で決まり有限なので、収束は変わらない)。
 - **k が効く所**: 要素の `Param` の道が `K` で切られる(上の `pathTrunc`)ので、深い道の `Param` は、浅い道のセルに当たる。呼び元は、広い(兄弟を含む)セルを読む。**過検出側(見逃しにはならない)**。切れたときは、印で `path_limit` を言う。
 
 ## 6. 最初に書く型(試金石)
@@ -128,12 +139,12 @@ sinks:
 | 型 | 道の形 | 試すこと |
 | --- | --- | --- |
 | `spanner.Statement{SQL}`(`txn.Query(ctx, stmt)`、`BatchUpdate`) | 浅い(1 段、`[]`) | 偽陽性(`Params` だけ汚れる)が消えること。`NewStatement(sql)` を通る形(丸ごとの汚れ)が、不確実性つきで鳴ること |
-| `bigquery` の `Query` の `QueryConfig.Q`(`q.Run` / `q.Read`) | 埋め込み 1 段 + 1 | 今、関数の引数で書ける形(`client.Query(q)` の引数 0)との比較。**同じ流れを 2 つの sink にしない**: 実行する所(`Run` / `Read`)を sink にし、`client.Query(q)` は、`flows` で結果に運ぶ(下の注) |
+| `bigquery` の `Query` の `QueryConfig.Q`(`q.Run` / `q.Read`) | 埋め込み 1 段 + 1 | 今、関数の引数で書ける形(`client.Query(q)` の引数 0)との比較。**`client.Query(q)` の sink も残す(両方。決定)**: 「`Run` に届く道をエンジンが落としたときに黙る」ほうが、「同じ流れが 2 件になる」より重い。重複は、段階 3 で数を測り、多ければ、報告の側で「同じ source で、一方の経路が他方の site を通るなら、1 件にまとめて、両方の場所を載せる」(別の設計の、別の入口からの経路をまとめて見せる件と、同じ場所の話) |
 | Cloud Tasks の `CreateTaskRequest.Task.MessageType.HttpRequest.Url` | 深い(5 段)+ oneof(インターフェース) | k = 3 に当たる。`/*` の読み飛ばし。おとり(`Body` だけ汚れ)は、段階 4 まで鳴る(不確実性つき) |
 
-`exec.Cmd` は最初の対象にしない(`exec.Command(x)` が、すでに sink で、受け手の `Path` / `Args` も sink にすると、同じ流れが 2 件になる)。`tls.Config.InsecureSkipVerify` は対象外(汚れた値の流れでなく、定数の設定の話)。
+**`exec.Cmd` を対象外にしない**(段階 3 の後ろでよい): `cmd := &exec.Cmd{Path: x}`、`cmd.Args = append(cmd.Args, x)`、`cmd.Dir` / `cmd.Env` を `Run` / `Start` / `Output` に渡す形は、今は黙った見逃しで、標準ライブラリなので整備の対象(`exec.Command(x)` と重なる流れは、BigQuery と同じ扱い)。段階 0 の数える対象に、`(*http.Client).Do(req)` の `URL` / `Host`(`req.URL.Host = x`)も入れる。`tls.Config.InsecureSkipVerify` は対象外(汚れた値の流れでなく、定数の設定の話)。
 
-注(BigQuery): `client.Query(q)` の `flows: [{from: arg0, to: result}]` は、結果を**丸ごと**汚す(`flows` の `to:` は、今、フィールドの道を言えない)。そのため、最初は、`Run` / `Read` の受け手の `QueryConfig.Q` が、上のセル(丸ごと)で当たり、`field_imprecision`(`whole_value`)つきで鳴る。見逃しではないが、確かな finding にならない。`flows` の `to:` に道を書けるようにして(`to: result.QueryConfig.Q`)、細かく言うのは、段階 5。
+注(BigQuery): `client.Query(q)` の `flows: [{from: arg0, to: result}]` は、結果を**丸ごと**汚す(`flows` の `to:` は、今、フィールドの道を言えない)。そのため、`Run` / `Read` の受け手の `QueryConfig.Q` は、上のセル(丸ごと)で当たり、`field_imprecision`(`whole_value`)つきで鳴る(`client.Query(q)` の sink は、別に、確かに鳴る)。見逃しではないが、`Run` の側は確かな finding にならない。`flows` の `to:` に道を書けるようにして(`to: result.QueryConfig.Q`)、細かく言うのは、段階 5。
 
 `googleapis` や `google-cloud` を、組み込み(`internal/model/builtin/`)に置くか、`examples/rules/`(`go-google-cloud.yaml`)に置くか: ADR の「組み込みは言語と標準ライブラリまで、フレームワークはユーザーのルール」の方針では、後者。**決めること**(11 節)。
 
@@ -154,17 +165,19 @@ sinks:
 
 ## 9. 段階と、各段の受け入れ
 
-精度を変える段は、**消えた finding が本物でないことを、`bench/compare.sh` の、消えたものの経路を読んで分類して示す**(本物が 1 件でも消えたら、push しない)。**増えたものは、sink の単位で分類する**(本物の流れか、不確実性つきの鳴りか)。
+各段の変更は、**`parts` を書かなければ、既存のルールの結果は変わらない**(`bench/compare.sh` で、削除 0・追加 0)。精度を変える段は、**消えた finding が本物でないことを、`bench/compare.sh` の、消えたものの経路を読んで分類して示す**(本物が 1 件でも消えたら、push しない)。**増えたものは、sink の単位で分類する**(本物の流れか、不確実性つきの鳴りか)。
 
 | 段 | 内容 | 受け入れ |
 | --- | --- | --- |
-| **0. 測る**(何も変えない) | (a) zoo の 3 つの形(浅い / 5 段 / インターフェースに包む)で、実際のセルの道を出す(診断の追加だけ)。`/*` の段の数え方と、k に当たる所を確定する。(b) go-scale と Gitea で、今の sink の位置に、**構造体が渡される**ものを数える(組み込みの sink で、`parts` を足せば偽陽性が減るもの。例: `net/http` の要求を渡すもの)。(c) `pathsOf` の走査の費用 | 数と道を、この文書に書き戻す。結果は変わらない |
+| **0. 測る**(何も変えない) | (a) zoo の 3 つの形(浅い / 5 段 / インターフェースに包む)で、実際のセルの道を出す(診断の追加だけ)。`/*` の段の数え方と、k に当たる所を確定する。(b) 実コード(gogs、gin-vue-admin、gophish、casdoor、dart-pub、parseable)で、`req.URL` / `cmd.Path` のように、**フィールドへの代入のあとに呼ぶ形**の数(`exec.Cmd{Path: ...}`、`http.Request`、`(*http.Client).Do(req)` の `URL` / `Host`)。(c) 型の情報が IR にあるか(上の 3 節)と、既定の伝播が引数の中を混ぜるか(4 節の 3)。(d) `parts` の照合の費用 | 数と道を、この文書に書き戻す。結果は変わらない。zoo のマスは別の push で、今の出方を `@miss` / `@fp` で記録 |
 | **1. 書式と、1 つの呼び出し** | `model.Sink.Parts`(読み込みの検査: 位置と `field` の整合、糖衣)。`sites.SinkArgs` と、`sinksAt` の整理。`checkSink` を、`parts` のある sink で、道の照合に。`field_imprecision`(sink の段の `Notes`)。**`parts` のない sink は、今と同じ**。zoo の新しいマス `conv/struct-field-at-call`(下) | `compare.sh`: **`parts` を使うルールがまだないので、finding の差 0**(本物と偽のどちらも)。zoo のマスが期待どおり |
 | **2. 要約(`SinkReach`)** | `SinkReach` の不確実性の印。`mergeSinkReach` と `joinSummaries` / `signature`。試験: 構造体を別の関数に渡す、`*dst = *src` のコピー、ポインタ、ビルダー風の関数(中で詰める)、`flows` のあるモデルが詰める形 | 試験(`testdata/go/cases`)が、1 つずつ。差 0(まだルールがない) |
 | **3. 最初のモデル** | `go-google-cloud.yaml`(6 節の 3 つ)。既存の sink に `parts` を足すもの(段階 0(b) で選ぶ)は、**1 つずつ**足す | **足すたびに `compare.sh`**: 消えた finding は、「危険でないフィールドだけが汚れていた」ものと、経路で示す(ソースが、`Body` や `Params` だけに入っている)。増えた finding は、sink の単位で分類。`go-scale`: 時間と不確実性の数 |
-| **4. 要求された深さ**(k の、局所的な拡張) | 規則の `parts` が言う道(例: 5 段)の上だけ、切り詰めを `max(K, 道の段数)` にする(エンジンの全体の `K` は 3 のまま)。道の集合は規則で決まり有限なので、収束は変わらない。要約の `Param` の道の切り詰めも同じ | 先に測る(段階 0 の続き): 要素数、収束、`go-scale` の時間。**結果が変わる(おとりが消える)ので、compare で、消えたものを分類**。深い形の `field_imprecision`(`path_limit`)が、細かい finding に変わる |
-| **5. `flows` の `to:` に道** | `to: result.QueryConfig.Q` のように、結果や引数の、フィールドを言う。`client.Query(q)`、`spanner.NewStatement(sql)` を細かくする | `whole_value` の `field_imprecision` が、細かい finding に変わる。差は、compare で分類 |
+| **4. 要求された深さ**(k の、局所的な拡張。**測ってから決める**) | 規則の `parts` が言う道(例: 5 段)の上だけ、切り詰めを `max(K, 道の段数)` にする(エンジンの全体の `K` は 3 のまま)。道の集合は規則で決まり有限なので、収束は変わらない。要約の `Param` の道の切り詰めも同じ。**やるなら、「規則が言う道の上だけ」の判定が、要約の `Param` の切り詰めと呼び元で食い違わないこと**(片方だけ深いと、道が当たらなくなる = 見逃し)を、試験で固定する | 先に測る(段階 0 の続き): 要素数、収束、`go-scale` の時間。**結果が変わる(おとりが消える)ので、compare で、消えたものを分類**。深い形の `field_imprecision`(`path_limit`)が、細かい finding に変わる |
+| **5. `flows` の `to:` に道**(**精度の改善ではなく、`parts` が働くための前提**。下の注) | `to: result.QueryConfig.Q` のように、結果や引数の、フィールドを言う。`client.Query(q)`、`spanner.NewStatement(sql)` を細かくする | `whole_value` の `field_imprecision` が、細かい finding に変わる。差は、compare で分類 |
 | **6. Dart と Rust** | zoo-dart、zoo-rust の同じ 3 マス。`googleapis` の生成クラス、Rust の生成された構造体 | マスの期待値。出ない形は、`@miss(理由)` で記録 |
+
+**段階 5 の位置づけ**: 生成コードが、フィールドを公開しない形(Go protobuf の Opaque API、ビルダー、Dart のセッター、Rust のビルダー)では、**書き込みが全部、呼び出しになる**(`req.SetUrl(x)`、`b.url(x)`)。呼び出しの書き込みは、モデルの `flows` が言うしかなく、`to:` が道を言えなければ、構造体は丸ごと汚れ、`parts` は、いつも `whole_value` の不確実性つきで鳴るだけになる。つまり、**その形で `parts` が働くための前提**であって、あとで磨く精度の話ではない。
 
 **zoo の新しいマス `conv/struct-field-at-call`**(3 言語。`bench/zoo-go/cells/conv/struct_field_at_call/`)。形は 3 つ:
 
@@ -180,17 +193,18 @@ sinks:
 
 ## 11. 決めること
 
-1. 新しい不確実性の種類 `field_imprecision`(推す)か、`depth_limit`(`path_limit`)と `container_element_imprecision` の再利用か(5 節)。
-2. 書式の `parts: [{arg|recv, field}]` と、糖衣 `args + field`(3 節)。
-3. 照合で `*` を読み飛ばす(3 節。ずれたら拾う側)。
-4. Google Cloud のモデルの置き場: `examples/rules/`(ADR の方針)か、組み込みか。
-5. 段階 4(k の局所拡張)をやるか。やらなければ、深い形のおとりは、`field_imprecision` つきで鳴り続ける(見逃しはない)。測ってから決める(段階 0)。
-6. BigQuery の sink を、実行する所(`Run` / `Read`)に置き、`client.Query(q)` は `flows` にする(同じ流れを 2 件にしない)。
+**決定(アーキテクチャ助言者のレビュー済み)**:
+
+1. 新しい不確実性: **はい**。`field_imprecision`(`why`: `whole_value` / `path_limit` / `element` / `opaque_callee`)と、別に `field_unresolved`(綴りの誤り)。
+2. 書式 `parts: [{arg|recv, field}]` と、糖衣 `args + field`: **はい**。
+3. 照合で `*` を読み飛ばす: **はい**。**部分列に広げる**(3 節)。
+4. Google Cloud のモデルの置き場: **組み込みの `go-gcp.yaml`**(「組み込みは言語と標準ライブラリまで」の方針の、ユーザーの明示の例外)。
+5. 段階 4(k の局所拡張): **測ってから**(段階 0 の続き)。やらなければ、深い形のおとりは、`field_imprecision` つきで鳴り続ける(見逃しはない)。
+6. BigQuery: **両方**(`client.Query(q)` の sink も残す。6 節)。
 
 ## 確かめていないこと
 
-- **アクセスパスの実際の形**(`/*` の段の数、Go の埋め込み、oneof のラッパー)は、コードを読んだ範囲。段階 0 で、zoo のセルで実測する。数え方が違えば、k に収まる形と収まらない形が入れ替わる。
-- `pathsOf` を道の照合に使う費用(段階 0)。
-- `SinkReach` の、不確実性の印を `signature` に入れたときの、収束への影響(段階 2)。
+- **アクセスパスの実際の形**(`/*` の段の数、Go の埋め込み、oneof のラッパー)は、コードを読んだ範囲。段階 0 で、zoo のセルで実測する(結果は 12 節)。数え方が違えば、k に収まる形と収まらない形が入れ替わる。
+- `SinkReach` の、`Field` と印を `signature` に入れたときの、収束への影響(段階 2)。
 - Dart と Rust の、フィールドの書き込みと、`Option` / `oneof` の道の形(段階 6)。
 - 既存の組み込みの sink で、構造体を渡されるものの数(段階 0(b))。
