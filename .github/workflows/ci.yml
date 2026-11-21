@@ -217,3 +217,21 @@ jobs:
       - name: Test the cases by running them
         working-directory: bench/gcp
         run: go test -tags gcpexec -timeout 10m ./...
+
+  # A mark that loosens the truth of the zoo (a row added to bench/zoo/marks.lock) needs a "Zoo-Loosened:" line in the
+  # commit message (the user's approval). TestZooMarksLock (in the shards of the test job) holds the file to the sources.
+  zoo-loosened:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check the commits
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: bash .github/scripts/zoo-loosened-check.sh "$BASE" "$HEAD_SHA"

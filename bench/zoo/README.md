@@ -190,3 +190,11 @@ same type, and cases of one cell that share a type would meet at the call. The d
 refs are `XTALK` (a call of a function value reaches a closure that was given to another caller), `CALLBACK-MODEL` (a function of
 the standard library calls its argument, and no model says so), `CLOSURE-IN-MEMORY` and `FUNC-VALUE-MEMORY` (a function value that
 was kept in a field, a variable, a list or a map is not followed to its call).
+
+## 正解を緩める印の固定(`marks.lock`)
+
+`@miss` / `@fp` / `@noisy` / `@na` / `@todo` / `@manual` / `@sink(none)` を、3 言語の動物園から集めて `bench/zoo/marks.lock` に固定している(1 行 = 言語、ファイル、種類、その行の注釈。行番号は持たない)。
+
+- `TestZooMarksLock` が、ソースから作った一覧とファイルを比べる。印を足す・変える・外すと落ちる。書き直すのは `ZOO_MARKS_UPDATE=1 go test -run ZooMarksLock ./cmd/rivus`。
+- CI の `zoo-loosened` が、`marks.lock` に**行が増えた**コミットのメッセージに `Zoo-Loosened: <理由>。ユーザーの承認: <日付>` の行がなければ落とす。行が減る(直って印が外れる)のは何も要らない。
+- 範囲: 動物園だけ。`@sink(tag)` の数が減る向きと、curated / wild / go-scale の正解の件数は、まだ固定していない([ROADMAP.md](../../docs/ROADMAP.md))。
