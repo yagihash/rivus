@@ -36,7 +36,7 @@ only the engine is old.
 | 7 | the source of a param is written back: N x M (CORE-A) | `8e8b866` | `c9aa412` | C (compare, fixed inputs) | casdoor +29 findings (97 percent: NOISE), gogs (second copy) LOST 1 | (the base) |
 | 8 | save and restore lifts a sub-cell to the root (the noise of C-7) | `697ae9d` (`5dfec7f` without plan D; made for this, not pushed) | `5dfec7f` | curated (`go-curated/gitea`) | FAKE 1 more than the good version | see the ledger |
 | 9 | regressions of the traces | optional | | | not run | |
-| 10 | a writer model puts the data on the whole object (only +20 on Gitea; the light layer C had +0) | `7552eb9` | `6ddee62` (a branch: the fix is not on main) | curated decoys (`bench/go-curated/api/rotate.go.pending`, renamed to `.go` with the fix; the writers of a rotating log: `Write(data)`, then the body gives its own file-name field to a sink) | FAKE 2 | green (on the branch commit); **UNVERIFIED on main**, see the ledger |
+| 10 | a writer model puts the data on the whole object (only +20 on Gitea; the light layer C had +0) | `7552eb9` | `a1e2fb7` (on main; the same patch as the branch commit `6ddee62`) | curated decoys (`bench/go-curated/api/rotate.go`, the writers of a rotating log: `Write(data)`, then the body gives its own file-name field to a sink) | FAKE 2 | green (`TestCuratedGo$` with `RIVUS_BINARY` = a build of `a1e2fb7`); red on `7552eb9` |
 | 11 | a path of another entry is folded into the shortest one (the third CVE) | head | | B | recorded as a miss, not a condition | |
 
 Rows 6 and 7 are told apart by the metric: `623b620` is red for 6 (LOST) and was green for 7 by design (its fix for 7 is in it); `8e8b866` is red for 7 (NOISE)
