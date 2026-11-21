@@ -139,6 +139,8 @@ same files.
 | ech0 | https://github.com/lin-snow/Ech0 (`bench/compare.sh` clones it) | `cecc2c19` (the parent of the fix `091d26d2`) | built-in rules only in `compare.sh`; the measurements of ADR-047 used `examples/rules/go-gin.yaml` on the head of 2026-11-21 | not scored |
 | parseable | <https://github.com/parseablehq/parseable> | `5c20b8e477be162238037e202cea1869d657017b` | `bench/parseable/rules.yaml` | `bench/parseable/truth-5c20b8e4.json` |
 | dart-pub | <https://github.com/dart-lang/pub> | `5e24336e71a05a96b558d496953ebed223f6e40a` | `bench/dart-pub/rules.yaml` | `bench/dart-pub/truth-5e24336e.json` |
+| gophish (GHSA-9c9w-9pq7-f35h, GHSA-hvw3-p9px-gpc9; `bench/wild/go/`) | <https://github.com/gophish/gophish> | `27d13a0584731371033926064d750e5f4f620e7a` | `bench/wild/go/GHSA-9c9w-9pq7-f35h/rules.yaml` | `bench/wild/go/gophish-27d13a05.truth.json` |
+| casdoor (GHSA-9vm3-r8gq-cr6x; `bench/wild/go/`) | <https://github.com/casdoor/casdoor> | `7b0b426a76fd77b89817e0eafcccaed8d15b8cf4` | `bench/wild/go/GHSA-9vm3-r8gq-cr6x/rules.yaml` | `bench/wild/go/GHSA-9vm3-r8gq-cr6x/truth.json` |
 | Gitea (milestones only) | <https://github.com/go-gitea/gitea> | tag `v1.26.4` | `bench/gitea/rules.yaml` | `bench/gitea/truth-v1.26.4.json` |
 
 How to run each is in the README of the target where there is one (`dart-pub/`, `parseable/`; the top of

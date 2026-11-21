@@ -9,7 +9,7 @@ fixed_sha: e3352f481e94054ffe08494c9225d3878347b005   # the fix commit (released
 published: 2022-05-24            # the date of the advisory (it must be today or earlier)
 license: MIT                     # the license of the project (GitHub does not detect it: read LICENSE in the checkout)
 forms: [W1]                      # no W2: the code of the project is not copied
-rules: [builtin]                 # the built-in rules are enough: net/http is known
+rules: [bench/wild/go/GHSA-9c9w-9pq7-f35h/rules.yaml]   # the input of the test: the source and the sinks; the built-in propagators are used
 source:
   func: (*github.com/gophish/gophish/controllers/api.Server).ImportSite   # the request body (r.Body), decoded as JSON into cr
   file: controllers/api/import.go

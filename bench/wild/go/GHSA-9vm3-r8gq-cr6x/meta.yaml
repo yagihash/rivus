@@ -9,9 +9,7 @@ fixed_sha: 411d76798d73446fff4a0244f0475f1ea8bf42dc    # the fix commit (release
 published: 2022-09-10
 license: Apache-2.0
 forms: [W1]
-rules:                           # the framework part is shared (examples/), the project part is only the wrapper type
-  - examples/rules/go-beego.yaml
-  - bench/wild/go/GHSA-9vm3-r8gq-cr6x/rules.yaml
+rules: [bench/wild/go/GHSA-9vm3-r8gq-cr6x/rules.yaml]   # the input of the test: the wrapper type as a source and the beego getters; the sinks are built in
 source:
   func: (*github.com/casdoor/casdoor/controllers.ApiController).UploadResource   # c.Input().Get("fullFilePath")
   file: controllers/resource.go

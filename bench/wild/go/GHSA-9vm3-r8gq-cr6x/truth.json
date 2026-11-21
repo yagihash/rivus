@@ -1,6 +1,6 @@
 {
   "target": "https://github.com/casdoor/casdoor at 7b0b426a76fd77b89817e0eafcccaed8d15b8cf4 (the parent of the fix 411d76798d73, GHSA-9vm3-r8gq-cr6x / CVE-2022-38638)",
-  "how": "Matched by the pair (source function, sink position): the file name given in the upload request reaches the two file system calls of the local storage provider (MkdirAll, Create). Needs examples/rules/go-beego.yaml and this directory's rules.yaml. Only these two sites are labelled: the other findings of the run were not read, so precision is not measured.",
+  "how": "Matched by the pair (source function, sink position): the file name given in the upload request reaches the two file system calls of the local storage provider (MkdirAll, Create). Needs this directory's rules.yaml (the input of the test). Only these two sites are labelled: the other findings of the run were not read, so precision is not measured.",
   "sites": [
     {
       "source_func": ".UploadResource",

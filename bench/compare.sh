@@ -140,10 +140,10 @@ spec() {
                    RULES="$R/bench/parseable/rules.yaml"; TRUTH="$R/bench/parseable/truth-5c20b8e4.json" ;;
     dart-pub)      KIND=dart; URL=https://github.com/dart-lang/pub; COMMIT=5e24336e71a05a96b558d496953ebed223f6e40a; CLONE=pub
                    RULES="$R/bench/dart-pub/rules.yaml"; TRUTH="$R/bench/dart-pub/truth-5e24336e.json" ;;
-    gophish)       URL=https://github.com/gophish/gophish; COMMIT=27d13a0584731371033926064d750e5f4f620e7a; CLONE=gophish   # bench/wild/go: GHSA-9c9w-9pq7-f35h and GHSA-hvw3-p9px-gpc9, built-in rules
-                   TRUTH="$R/bench/wild/go/gophish-27d13a05.truth.json" ;;
+    gophish)       URL=https://github.com/gophish/gophish; COMMIT=27d13a0584731371033926064d750e5f4f620e7a; CLONE=gophish   # bench/wild/go: GHSA-9c9w-9pq7-f35h and GHSA-hvw3-p9px-gpc9, rules.yaml
+                   RULES="$R/bench/wild/go/GHSA-9c9w-9pq7-f35h/rules.yaml"; TRUTH="$R/bench/wild/go/gophish-27d13a05.truth.json" ;;
     casdoor)       URL=https://github.com/casdoor/casdoor; COMMIT=7b0b426a76fd77b89817e0eafcccaed8d15b8cf4; CLONE=casdoor   # bench/wild/go: GHSA-9vm3-r8gq-cr6x
-                   RULES="$R/examples/rules/go-beego.yaml:$R/bench/wild/go/GHSA-9vm3-r8gq-cr6x/rules.yaml"; TRUTH="$R/bench/wild/go/GHSA-9vm3-r8gq-cr6x/truth.json" ;;
+                   RULES="$R/bench/wild/go/GHSA-9vm3-r8gq-cr6x/rules.yaml"; TRUTH="$R/bench/wild/go/GHSA-9vm3-r8gq-cr6x/truth.json" ;;
     gitea)         URL=https://github.com/go-gitea/gitea; COMMIT=v1.26.4; CLONE=gitea
                    RULES="$R/bench/gitea/rules.yaml"; TRUTH="$R/bench/gitea/truth-v1.26.4.json" ;;
     ech0)          URL=https://github.com/lin-snow/Ech0; COMMIT=cecc2c19; CLONE=ech0 ;;  # the built-in rules only here; it does not converge (bench/README.md, ech0)
@@ -242,14 +242,8 @@ setup() { # name side: makes the copy and the IR of that version; sets DIR, RULE
       [ -n "$tgt" ] || { skip "$b" "bench/$b does not exist in $w ($s7)"; return 1; }
       PROV_INPUT="bench/$b tree ${tgt:0:12}" ;;
   esac
-  if [ -n "$RULES" ] && [ "$KIND" != synth ]; then   # a rules file that this old version does not have: the one of this script's tree (RULES: one file, or several joined by ":")
-    local rf1 rl=""
-    for rf1 in ${RULES//:/ }; do
-      [ -f "$rf1" ] || rf1="${rf1/#$wt/$ROOT}"
-      [ -f "$rf1" ] || { skip "$b" "no rules file $rf1 in $w ($s7)"; return 1; }
-      rl="${rl:+$rl:}$rf1"
-    done
-    RULES="$rl"
+  if [ -n "$RULES" ] && [ "$KIND" != synth ] && [ ! -f "$RULES" ]; then   # a rules file that this old version does not have: the one of this script's tree
+    [ -f "${RULES/#$wt/$ROOT}" ] && RULES="${RULES/#$wt/$ROOT}" || { skip "$b" "no rules file $RULES in $w ($s7)"; return 1; }
   fi
   if [ -n "$URL" ]; then
     top="$WORK/src/$CLONE"

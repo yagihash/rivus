@@ -9,7 +9,7 @@ fixed_sha: 2a452bda89ffdb85f929fa78290bce1f456881dc   # the fix commit (released
 published: 2022-09-12
 license: MIT
 forms: [W1]
-rules: [builtin]
+rules: [bench/wild/go/GHSA-hvw3-p9px-gpc9/rules.yaml]   # the input of the test: the source and the sinks; the built-in propagators are used
 source:
   func: (*github.com/gophish/gophish/controllers.AdminServer).nextOrIndex   # r.FormValue("next"), read in this function
   file: controllers/route.go

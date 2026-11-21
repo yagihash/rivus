@@ -1,0 +1,17 @@
+# The input of the test (not what is evaluated): the source and the sinks of the two flaws found in this checkout
+# (GHSA-9c9w-9pq7-f35h and GHSA-hvw3-p9px-gpc9 share one commit, so one file serves both; the file of the other directory is the same).
+# The question is whether rivus builds the real path (source -> the functions on the way -> sink) when it is given these.
+ruleset: bench/wild/gophish@1
+
+sources:
+  - kind: param_type
+    type: "*net/http.Request"
+    labels: [user_input]
+
+sinks:
+  - symbol: (*net/http.Client).Get
+    args: [0]
+    category: ssrf
+  - symbol: net/http.Redirect
+    args: [2]
+    category: open_redirect
