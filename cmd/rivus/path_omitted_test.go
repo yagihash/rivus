@@ -98,6 +98,49 @@ func TestLongPathSaysWhatItOmitted(t *testing.T) {
 		}
 	}
 
+	// CORE-1: a step that is left out of the view still tells what it has. Step 150 of 300 is a call through an
+	// interface with two implementations: the finding has the dynamic_dispatch note.
+	{
+		dir := t.TempDir()
+		var b strings.Builder
+		b.WriteString("package main\n\nimport (\n\t\"net/http\"\n\t\"os/exec\"\n)\n\n")
+		b.WriteString("type I interface{ do(s string) }\ntype A struct{}\ntype B struct{}\n")
+		b.WriteString("func (A) do(s string) { f151(s) }\nfunc (B) do(s string) { f151(s) }\n")
+		b.WriteString("func main() { http.HandleFunc(\"/\", h); http.ListenAndServe(\":0\", nil) }\n")
+		b.WriteString("func h(w http.ResponseWriter, r *http.Request) { f0(r.FormValue(\"x\")) }\n")
+		for i := 0; i < 300; i++ {
+			switch {
+			case i == 150:
+				b.WriteString("func f150(s string) { var i I = A{}; if len(s) > 3 { i = B{} }; i.do(s) }\n")
+			case i == 299:
+				b.WriteString("func f299(s string) { exec.Command(\"sh\", \"-c\", s).Run() }\n")
+			default:
+				fmt.Fprintf(&b, "func f%d(s string) { f%d(s) }\n", i, i+1)
+			}
+		}
+		if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(b.String()), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/mid\n\ngo 1.22\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		var r result
+		if err := json.Unmarshal(analyzeWith(t, dir, "", "./..."), &r); err != nil {
+			t.Fatal(err)
+		}
+		if len(r.Findings) != 1 {
+			t.Fatalf("mid: %d findings", len(r.Findings))
+		}
+		f := r.Findings[0]
+		dispatch := false
+		for _, u := range f.Uncertainties {
+			dispatch = dispatch || u.Kind == "dynamic_dispatch"
+		}
+		if f.Paths[0].OmittedSteps == 0 || !dispatch {
+			t.Errorf("the call through the interface at step 150: omitted %d, dynamic_dispatch in the finding: %v", f.Paths[0].OmittedSteps, dispatch)
+		}
+	}
+
 	if steps, omitted, notes, _ := run(100); omitted != 0 || len(notes) != 0 || steps > 200 {
 		t.Errorf("a short path: steps %d, omitted %d, notes %v", steps, omitted, notes)
 	}

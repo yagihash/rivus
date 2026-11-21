@@ -1364,8 +1364,19 @@ func (e *Engine) buildFinding(rf *rawFinding) *Finding {
 			steps = append(steps, st)
 		}
 	}
-	var funcs []string
-	seen := map[string]bool{}
+	// What the path says (uncertainties, models, reachability) is read from every step, also from the ones
+	// that a long path does not show (CORE-1): what is left out of the view is not left out of the facts.
+	agg := steps
+	if omitted > 0 {
+		agg = nil
+		full, _ := rf.steps.flattenOmitted(rf.steps.len())
+		for _, st := range full {
+			if !st.pos.IsZero() || len(st.Notes) > 0 {
+				agg = append(agg, st)
+			}
+		}
+	}
+	var funcs []string // the steps that are shown (the fingerprint of the path)
 	for i := range steps {
 		st := &steps[i]
 		if !st.pos.IsZero() {
@@ -1373,6 +1384,12 @@ func (e *Engine) buildFinding(rf *rawFinding) *Finding {
 			st.Snippet = e.texts.Snippet(st.pos)
 		}
 		funcs = append(funcs, st.Func)
+	}
+	var allFuncs []string
+	seen := map[string]bool{}
+	for i := range agg {
+		st := &agg[i]
+		allFuncs = append(allFuncs, st.Func)
 		for _, n := range st.Notes {
 			e.fill(n)
 			k := n.Kind + "|" + n.Symbol + "|" + posKey(n.pos)
@@ -1397,7 +1414,7 @@ func (e *Engine) buildFinding(rf *rawFinding) *Finding {
 	}
 	if e.reach != nil {
 		f.Reachability = ReachFromEntry
-		for _, id := range append([]string{src.Func, rf.site.Func}, funcs...) {
+		for _, id := range append([]string{src.Func, rf.site.Func}, allFuncs...) {
 			if fn := e.prog.ByID[id]; fn != nil && !e.reach[fn] {
 				if e.reachCB[fn] {
 					f.Reachability = ReachFromFrameworkCallback
@@ -1432,7 +1449,7 @@ func (e *Engine) buildFinding(rf *rawFinding) *Finding {
 	for _, s := range src.Src {
 		addModel(*modelRef(src.Symbol, "source", s.Provenance))
 	}
-	for _, st := range steps {
+	for _, st := range agg {
 		if st.Model != nil {
 			addModel(*st.Model)
 		}
