@@ -20,7 +20,7 @@ fn new_state() -> Arc<AppState> {
 }
 
 // entry A: the query is stored in the state
-fn handler_a(state: Arc<AppState>, q: m::In) { // @source(state-receiver-field-across-entries-vuln) @miss(silent) @ref(R-58)
+fn handler_a(state: Arc<AppState>, q: m::In) { // @source(state-receiver-field-across-entries-vuln) @miss(silent) @ref(R-58,PARITY)
     state.cache.lock().unwrap().push_str(&q.value);
 }
 
@@ -52,7 +52,7 @@ fn fixed() { // @fixed
 }
 
 // the value goes to the field `other`, and the reader that must stay quiet reads `cache`
-fn handler_a_decoy(state: Arc<AppState>, q: m::In) { // @source(state-receiver-field-across-entries-decoy) @miss(silent) @ref(R-58)
+fn handler_a_decoy(state: Arc<AppState>, q: m::In) { // @source(state-receiver-field-across-entries-decoy) @miss(silent) @ref(R-58,PARITY)
     state.other.lock().unwrap().push_str(&q.value);
 }
 

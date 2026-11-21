@@ -40,6 +40,25 @@ pub mod guard {
     pub mod sanitize_before;
 }
 pub mod rust {
+    pub mod arc_mutex;
+    pub mod assoc_fn;
+    pub mod async_await;
+    pub mod cfg_feature;
+    pub mod channel;
+    pub mod closure_fn;
+    pub mod closure_fnmut;
+    pub mod closure_fnonce;
+    pub mod deref;
+    pub mod display_format;
+    pub mod drop_;
+    pub mod dyn_vs_mono;
+    pub mod from_into;
+    pub mod iterator_chain;
+    pub mod macro_rules;
+    pub mod mut_out_param;
+    pub mod option_result_chain;
+    pub mod ownership_move;
+    pub mod static_lazylock;
 }
 pub mod state {
     pub mod global_chain;

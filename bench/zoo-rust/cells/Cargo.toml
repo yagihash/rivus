@@ -6,3 +6,7 @@ publish = false
 
 [dependencies]
 zoo-mark = { path = "../zoo-mark" }
+
+# code that only the harness builds (the cell rust/cfg-feature: R-17, a feature that is not a default one)
+[features]
+extra = []

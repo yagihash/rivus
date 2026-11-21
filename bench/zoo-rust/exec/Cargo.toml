@@ -12,6 +12,6 @@ path = "src/main.rs"
 
 [dependencies]
 zoo-mark = { path = "../zoo-mark", features = ["exec"] }
-zoo-cells = { path = "../cells" }
+zoo-cells = { path = "../cells", features = ["extra"] }
 
 [workspace]
