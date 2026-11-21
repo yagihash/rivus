@@ -1,0 +1,8 @@
+# The Rust zoo (docs/DESIGN-zoo.md). `cargo check` of this workspace is what rivus analyses: the cells and the
+# declarations of zoo-mark. Nothing here depends on another crate (no registry, no build.rs, no proc macro):
+# the extractor builds what it reads, so the zoo is code of our own and std only. The harness is `exec/`, a
+# workspace of its own (rivus does not read it).
+[workspace]
+resolver = "2"
+members = ["zoo-mark", "cells"]
+exclude = ["exec"]

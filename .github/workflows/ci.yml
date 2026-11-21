@@ -91,6 +91,13 @@ jobs:
       - name: Test the extractor
         working-directory: extractor/rust
         run: cargo test --locked
+      # The Rust zoo has no dependency (std only, no build.rs, no proc macro): the extractor builds what it reads.
+      - name: Build the Rust zoo
+        working-directory: bench/zoo-rust
+        run: cargo build --locked --offline
+      - name: Test the harness of the Rust zoo
+        working-directory: bench/zoo-rust/exec
+        run: cargo test --locked --offline
       - name: Test with the Rust extractor
         run: go test -timeout 30m ./cmd/...
         env:

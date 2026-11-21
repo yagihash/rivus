@@ -287,6 +287,7 @@ type zooLine struct {
 	hasMiss    bool
 	hasFp      bool
 	hasRef     bool
+	refs       []string // the names in @ref(...)
 	sourceTags []string
 	missKinds  []string
 }
@@ -318,7 +319,7 @@ func zooScanIn(t testing.TB, dir, sub, ext string, unit func(rel string) string)
 		if err != nil {
 			return err
 		}
-		if info.IsDir() || !strings.HasSuffix(path, ext) {
+		if info.IsDir() || !strings.HasSuffix(path, ext) || filepath.Base(path) == "lib.rs" { // (lib.rs of the Rust zoo only lists the cells)
 			return nil
 		}
 		rel, _ := filepath.Rel(dir, path)
@@ -386,6 +387,9 @@ func zooScanIn(t testing.TB, dir, sub, ext string, unit func(rel string) string)
 			}
 			zl.hasFp = zooFpRe.MatchString(text)
 			zl.hasRef = zooRefRe.MatchString(text)
+			for _, m := range zooRefRe.FindAllStringSubmatch(text, -1) {
+				zl.refs = append(zl.refs, strings.Split(m[1], ",")...)
+			}
 			if len(zl.sinks)+len(zl.nosinks)+len(zl.carries)+len(zl.sourceTags) > 0 || zl.manual != "" || zl.hasMiss || zl.hasFp {
 				lines = append(lines, zl)
 			}

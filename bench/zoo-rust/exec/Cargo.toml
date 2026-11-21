@@ -1,0 +1,17 @@
+# The harness of the Rust zoo: the cells with the recording zoo-mark (feature `exec`). A workspace of its own:
+# rivus does not read it (cmd/rivus TestZooExecRust runs it three times, with coverage).
+[package]
+name = "zoo-exec"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "zoo-observe"
+path = "src/main.rs"
+
+[dependencies]
+zoo-mark = { path = "../zoo-mark", features = ["exec"] }
+zoo-cells = { path = "../cells" }
+
+[workspace]

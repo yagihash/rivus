@@ -1,0 +1,12 @@
+[package]
+name = "zoo-mark"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# What the analysis reads is src/decl.rs: the declarations, with empty bodies. The recording is src/exec.rs and
+# is built only with the feature `exec` (the harness asks for it).
+[features]
+exec = []
+
+[dependencies]

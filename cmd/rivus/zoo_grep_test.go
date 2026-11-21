@@ -18,13 +18,13 @@ func TestZooGreps(t *testing.T) {
 		t.Fatal(err)
 	}
 	personal := regexp.MustCompile(`(/Users/|/home/[a-z]|[A-Za-z0-9._-]+@[A-Za-z0-9-]+\.[a-z]{2,})`)
-	for _, d := range []string{"bench/zoo", "bench/zoo-go", "bench/zoo-dart"} {
+	for _, d := range []string{"bench/zoo", "bench/zoo-go", "bench/zoo-dart", "bench/zoo-rust"} {
 		filepath.Walk(filepath.Join(root, d), func(p string, info os.FileInfo, err error) error {
 			if err != nil {
 				return nil
 			}
 			if info.IsDir() {
-				if info.Name() == ".dart_tool" { // what pub writes (absolute paths of this machine), not committed
+				if info.Name() == ".dart_tool" || info.Name() == "target" { // what pub and cargo write (absolute paths of this machine), not committed
 					return filepath.SkipDir
 				}
 				return nil

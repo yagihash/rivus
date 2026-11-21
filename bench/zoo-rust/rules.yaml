@@ -1,0 +1,47 @@
+# Rules of the Rust zoo (docs/DESIGN-zoo.md). The sources, sinks and sanitizers are the functions of the crate
+# zoo-mark, which have empty bodies for the analysis: the meaning is given here, with the public rules and nothing
+# else. The built-in rules are in force as always.
+ruleset: rivus/bench-zoo-rust@1
+
+sources:
+  - symbol: zoo_mark::src
+    labels: [user_input]
+  - symbol: zoo_mark::src_bytes
+    labels: [user_input]
+  # a source that is the type of a parameter: the handler under test takes an In
+  - kind: param_type
+    type: zoo_mark::In
+    labels: [user_input]
+
+sinks:
+  - symbol: zoo_mark::sink_cmd
+    args: [0]
+    category: command_injection
+  - symbol: zoo_mark::sink_cmd_own
+    args: [0]
+    category: command_injection
+  - symbol: zoo_mark::sink_cmd_bytes
+    args: [0]
+    category: command_injection
+  - symbol: zoo_mark::sink_sql
+    args: [0]
+    category: sql_injection
+  - symbol: zoo_mark::sink_html
+    args: [0]
+    category: xss
+  - symbol: zoo_mark::sink_path
+    args: [1]
+    category: path_traversal
+  - symbol: zoo_mark::sink_any
+    args: [0]
+    category: command_injection
+
+sanitizers:
+  - symbol: zoo_mark::clean_cmd
+    drops: [user_input]
+  - symbol: zoo_mark::clean_sql
+    drops: [user_input]
+  - symbol: zoo_mark::clean_html
+    drops: [user_input]
+  - symbol: zoo_mark::clean_path
+    drops: [user_input]

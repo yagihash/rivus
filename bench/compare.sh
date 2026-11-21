@@ -27,7 +27,7 @@ options:
   --resume          keep a result that is already saved with exit code 0 (for a run that was stopped)
   --only a,b        run only these benchmarks      --skip a,b   do not run these
   --light           only the light tier: the benchmarks of one run of 60 seconds or less and 6 GB or less (the curated three, go-synth-S,
-                    go-scale, zoo-go, zoo-dart, gogs x 2, gin-vue-admin, go-test-bench, parseable, dart-pub, gophish, casdoor). Base and head of a benchmark run at the same
+                    go-scale, zoo-go, zoo-dart, zoo-rust, gogs x 2, gin-vue-admin, go-test-bench, parseable, dart-pub, gophish, casdoor). Base and head of a benchmark run at the same
                     time when the free memory allows it; a light run does not wait for other analyses, only for free memory (25%)
   --heavy           only the heavy tier: Gitea (and ech0 with --with-ech0). One run at a time, waits for a quiet machine,
                     never uses the cache. The final check of a big change. With neither --light nor --heavy: the light tier, then the
@@ -107,6 +107,7 @@ BENCHES="go-curated dart-curated rust-curated go-synth-S"
 grep -q "^    go-scale)" "${BASH_SOURCE[0]}" && BENCHES="$BENCHES go-scale"   # a pseudo-project of scale, added by another change
 grep -q "^    zoo-go)" "${BASH_SOURCE[0]}" && BENCHES="$BENCHES zoo-go"   # the zoo of Go: cases with answers that a run backs (bench/zoo/README.md)
 grep -q "^    zoo-dart)" "${BASH_SOURCE[0]}" && BENCHES="$BENCHES zoo-dart"   # the zoo of Dart: the same
+grep -q "^    zoo-rust)" "${BASH_SOURCE[0]}" && BENCHES="$BENCHES zoo-rust"   # the zoo of Rust: the same
 BENCHES="$BENCHES gogs-9a9388ac gogs-48946299 gin-vue-admin go-test-bench parseable dart-pub gophish casdoor"
 if [ "$SEL_HEAVY" = 1 ] && [ "$SEL_LIGHT" = 0 ]; then BENCHES=""; WITH_GITEA=1; fi
 [ "$SEL_LIGHT" = 1 ] && [ "$SEL_HEAVY" = 0 ] && WITH_GITEA=0 && WITH_ECH0=0
@@ -130,6 +131,7 @@ spec() {
     dart-curated)  KIND=dart; DIR="$R/bench/dart-curated"; RULES="$DIR/rules.yaml" ;;
     zoo-dart)      KIND=dart; DIR="$R/bench/zoo-dart/cells"; RULES="$DIR/rules.yaml" ;;   # the zoo of Dart: the cells and the declarations of zoo_mark; the harness (bench/zoo-dart/exec) is not read
     rust-curated)  KIND=rust; DIR="$R/bench/rust-curated"; RULES="$DIR/rules.yaml" ;;
+    zoo-rust)      KIND=rust; DIR="$R/bench/zoo-rust"; RULES="$DIR/rules.yaml" ;;   # the zoo of Rust: the cells and the declarations of zoo-mark (no dependency); the harness (bench/zoo-rust/exec) is a workspace of its own and is not read
     go-synth-S)    KIND=synth; DIR="$WORK/synth/S"; RULES="$DIR/rules.yaml" ;;   # DIR is made per version in setup()
     go-scale)      KIND=synth; DIR="$WORK/synth/scale"; RULES="$DIR/rules.yaml" ;;   # bench/go-scale: all the shapes, made by the generator of this script's tree for both sides
     gogs-9a9388ac) URL=https://github.com/gogs/gogs; COMMIT=8a3b8198a; CLONE=gogs; RULES="$R/bench/gogs/rules.yaml"; TRUTH="$R/bench/gogs/truth-9a9388ac.json" ;;
@@ -239,7 +241,7 @@ setup() { # name side: makes the copy and the IR of that version; sets DIR, RULE
   spec "$b" "$wt" || { skip "$b" "unknown benchmark"; return 1; }
   PROV_INPUT="-"
   case "$b" in
-    go-curated|dart-curated|rust-curated|zoo-go|zoo-dart)
+    go-curated|dart-curated|rust-curated|zoo-go|zoo-dart|zoo-rust)
       tgt="$(tree "$sha" "bench/$b")"
       [ -n "$tgt" ] || { skip "$b" "bench/$b does not exist in $w ($s7)"; return 1; }
       PROV_INPUT="bench/$b tree ${tgt:0:12}" ;;
