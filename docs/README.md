@@ -67,6 +67,7 @@
 |---|---|
 | [history/BRIEF.md](history/BRIEF.md) | 最初の計画(ブリーフ) |
 | [history/QUESTIONS.md](history/QUESTIONS.md) | ブリーフへの質問と指摘 |
+| [history/ARCHITECTURE-plans.md](history/ARCHITECTURE-plans.md) | 以前の ARCHITECTURE.md から移した、Phase の計画、実施記録、実測(9〜11 節など) |
 
 ## ほかの場所
 
