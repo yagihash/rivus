@@ -474,6 +474,25 @@ go time.Now | debt | the standard library: no cell of the zoo calls it yet
 go time.Since | debt | the standard library: no cell of the zoo calls it yet
 go time.Sleep | debt | the standard library: no cell of the zoo calls it yet
 go time.Until | debt | the standard library: no cell of the zoo calls it yet
+go (*cloud.google.com/go/spanner.Row).Columns | dependency | Google Cloud client (the maintainer's choice, ADR-077): not in the zoo; bench/gcp calls it, TestGCPRows holds the row
+go (*cloud.google.com/go/spanner.Row).ColumnByName | dependency | Google Cloud client (the maintainer's choice, ADR-077): not in the zoo; bench/gcp calls it, TestGCPRows holds the row
+go (*cloud.google.com/go/spanner.Row).ToStruct | dependency | Google Cloud client (the maintainer's choice, ADR-077): not in the zoo; bench/gcp calls it, TestGCPRows holds the row
+go (*cloud.google.com/go/spanner.Row).ToStructLenient | dependency | Google Cloud client (the maintainer's choice, ADR-077): not in the zoo; bench/gcp calls it, TestGCPRows holds the row
+go (*cloud.google.com/go/spanner.txReadOnly).Query | dependency | Google Cloud client (the maintainer's choice, ADR-077): not in the zoo; bench/gcp calls it, TestGCPRows holds the row
+go (*cloud.google.com/go/spanner.txReadOnly).QueryWithOptions | dependency | Google Cloud client (the maintainer's choice, ADR-077): not in the zoo; bench/gcp calls it, TestGCPRows holds the row
+go (*cloud.google.com/go/spanner.txReadOnly).QueryWithStats | dependency | Google Cloud client (the maintainer's choice, ADR-077): not in the zoo; bench/gcp calls it, TestGCPRows holds the row
+go (*cloud.google.com/go/spanner.txReadOnly).AnalyzeQuery | dependency | Google Cloud client (the maintainer's choice, ADR-077): not in the zoo; bench/gcp calls it, TestGCPRows holds the row
+go (*cloud.google.com/go/spanner.ReadWriteTransaction).Update | dependency | Google Cloud client (the maintainer's choice, ADR-077): not in the zoo; bench/gcp calls it, TestGCPRows holds the row
+go (*cloud.google.com/go/spanner.ReadWriteTransaction).UpdateWithOptions | dependency | Google Cloud client (the maintainer's choice, ADR-077): not in the zoo; bench/gcp calls it, TestGCPRows holds the row
+go (*cloud.google.com/go/spanner.ReadWriteTransaction).BatchUpdate | dependency | Google Cloud client (the maintainer's choice, ADR-077): not in the zoo; bench/gcp calls it, TestGCPRows holds the row
+go (*cloud.google.com/go/spanner.ReadWriteTransaction).BatchUpdateWithOptions | dependency | Google Cloud client (the maintainer's choice, ADR-077): not in the zoo; bench/gcp calls it, TestGCPRows holds the row
+go (*cloud.google.com/go/spanner.Client).PartitionedUpdate | dependency | Google Cloud client (the maintainer's choice, ADR-077): not in the zoo; bench/gcp calls it, TestGCPRows holds the row
+go (*cloud.google.com/go/spanner.Client).PartitionedUpdateWithOptions | dependency | Google Cloud client (the maintainer's choice, ADR-077): not in the zoo; bench/gcp calls it, TestGCPRows holds the row
+go (*cloud.google.com/go/spanner.BatchReadOnlyTransaction).PartitionQuery | dependency | Google Cloud client (the maintainer's choice, ADR-077): not in the zoo; bench/gcp calls it, TestGCPRows holds the row
+go (*cloud.google.com/go/spanner.BatchReadOnlyTransaction).PartitionQueryWithOptions | dependency | Google Cloud client (the maintainer's choice, ADR-077): not in the zoo; bench/gcp calls it, TestGCPRows holds the row
+go (*cloud.google.com/go/bigquery.Client).Query | dependency | Google Cloud client (the maintainer's choice, ADR-077): not in the zoo; bench/gcp calls it, TestGCPRows holds the row
+go (*cloud.google.com/go/bigquery.Query).Run | dependency | Google Cloud client (the maintainer's choice, ADR-077): not in the zoo; bench/gcp calls it, TestGCPRows holds the row
+go (*cloud.google.com/go/bigquery.Query).Read | dependency | Google Cloud client (the maintainer's choice, ADR-077): not in the zoo; bench/gcp calls it, TestGCPRows holds the row
 
 ## dart
 

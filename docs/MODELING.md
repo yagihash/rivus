@@ -151,6 +151,41 @@ not the `Body`). A sink that takes the whole value reports a flow that goes only
 * The calls through an interface of the project whose implementation has the row (ADR-068) use the same `parts`.
 
 
+### A worked example: Cloud Spanner and BigQuery (`internal/model/builtin/go-gcp.yaml`)
+
+The first built-in rows with `parts` (ADR-077). The shape of each is a statement or a query that is one value, with the text in one
+field:
+
+```yaml
+- symbol: (*cloud.google.com/go/spanner.txReadOnly).Query     # (1) the key is the type that declares the method
+  args: [1]
+  field: SQL                                                  # the text; the Params are not a sink
+  category: sql_injection
+- symbol: (*cloud.google.com/go/spanner.ReadWriteTransaction).BatchUpdate
+  args: [1]
+  field: "[].SQL"                                             # (2) the SQL of each statement of the slice
+  category: sql_injection
+- symbol: (*cloud.google.com/go/bigquery.Query).Run
+  recv: true
+  field: QueryConfig.Q                                        # (3) an embedded struct is a step, by its type name
+  category: sql_injection
+```
+
+1. **Write the symbol that the IR names, not the one the documentation names.** `client.Single().Query(ctx, stmt)` and
+   `tx.Query(ctx, stmt)` of a `ReadWriteTransaction` are both a call of `(*spanner.txReadOnly).Query`: the method is declared on
+   an unexported type that the public ones embed. Read the symbols off the IR of a small project that calls the API
+   (`rivus extract`, and look at `callee.symbol`), and do not guess them. A row whose key matches nothing is quiet for ever.
+2. **`[]` is the elements.** A finding through an element carries `container_element_imprecision`: the elements are not told apart.
+3. **Do not write the safe fields.** `Params`, `Parameters`, `Labels` are not a sink: a row names only the dangerous field, and the
+   others are quiet because nothing reads them.
+4. **A function of the library that builds the value** (`spanner.NewStatement(sql)`) needs no row when the library's own code is
+   read: the text goes into `SQL` through the body. A library that is not read (a generated client, a builder) needs a `flows` row,
+   and until `flows` can name a field (`to: result.SQL`), the value is tainted as a whole and reported with `field_imprecision`.
+5. **Test each row three ways** (`bench/gcp`, `TestGCPRows`): a vulnerable case that must be reported with no `field_imprecision`
+   and no `field_unresolved`; the fixed form (the value goes in by the bind parameters) that must be quiet; a decoy (the request is
+   in another field of the same value) that must be quiet. The test also fails for a row that no case reaches.
+
+
 ## 5. A row has to be hit
 
 A row whose key is not the name the extractor writes never matches a call, and nothing says so: the call is read as an

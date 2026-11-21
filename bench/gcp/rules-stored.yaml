@@ -1,0 +1,6 @@
+# Not a rule of the product: what a user writes who does not trust the data of the database. The rows that a Spanner
+# query returns are a source, and TestGCPRows checks that the data goes on into the output arguments of the
+# rows of go-gcp.yaml (Columns, ColumnByName, ToStruct).
+sources:
+  - symbol: (*cloud.google.com/go/spanner.RowIterator).Next
+    labels: [stored]

@@ -1,0 +1,92 @@
+# Google Cloud clients for Go.
+#
+# These clients are built in because the maintainer uses them: it is the maintainer's choice. It is not a
+# criterion, and it is not a reason to build in any other library (README, "組み込みで持つ範囲"; ADR-077). They
+# are kept in a file of their own so that the boundary stays visible.
+#
+# What is here is the first slice: Cloud Spanner and BigQuery, the SQL they run. The dangerous part of a
+# request is one field of a value (`spanner.Statement{SQL, Params}`: the SQL, not the bind parameters), so the
+# sinks use `parts` (docs/MODELING.md, section 4). The keys are the symbols that the IR names: a method that the
+# library declares on an unexported type (`txReadOnly`, which `ReadOnlyTransaction` and `ReadWriteTransaction`
+# embed) is named by that type. bench/gcp holds a case for every row that must hit it
+# (TestGCPRows in cmd/rivus), and `Params`, `Parameters` and the labels stay safe.
+ruleset: rivus/go/gcp@1
+
+propagators:
+  # Cloud Spanner: the rows that a query returns are read into the arguments (the data that comes back is a
+  # stored-data boundary, which is not set here: it is a choice of the user, as for database/sql).
+  - symbol: (*cloud.google.com/go/spanner.Row).Columns
+    flows: [{from: recv, to: arg0}]
+  - symbol: (*cloud.google.com/go/spanner.Row).ColumnByName
+    flows: [{from: recv, to: arg1}]
+  - symbol: (*cloud.google.com/go/spanner.Row).ToStruct
+    flows: [{from: recv, to: arg0}]
+  - symbol: (*cloud.google.com/go/spanner.Row).ToStructLenient
+    flows: [{from: recv, to: arg0}]
+
+sinks:
+  # Cloud Spanner: the SQL of a statement. The text is the dangerous field; the Params are bound by the server.
+  - symbol: (*cloud.google.com/go/spanner.txReadOnly).Query
+    args: [1]
+    field: SQL
+    category: sql_injection
+  - symbol: (*cloud.google.com/go/spanner.txReadOnly).QueryWithOptions
+    args: [1]
+    field: SQL
+    category: sql_injection
+  - symbol: (*cloud.google.com/go/spanner.txReadOnly).QueryWithStats
+    args: [1]
+    field: SQL
+    category: sql_injection
+  - symbol: (*cloud.google.com/go/spanner.txReadOnly).AnalyzeQuery
+    args: [1]
+    field: SQL
+    category: sql_injection
+  - symbol: (*cloud.google.com/go/spanner.ReadWriteTransaction).Update
+    args: [1]
+    field: SQL
+    category: sql_injection
+  - symbol: (*cloud.google.com/go/spanner.ReadWriteTransaction).UpdateWithOptions
+    args: [1]
+    field: SQL
+    category: sql_injection
+  - symbol: (*cloud.google.com/go/spanner.ReadWriteTransaction).BatchUpdate
+    args: [1]
+    field: "[].SQL"
+    category: sql_injection
+  - symbol: (*cloud.google.com/go/spanner.ReadWriteTransaction).BatchUpdateWithOptions
+    args: [1]
+    field: "[].SQL"
+    category: sql_injection
+  - symbol: (*cloud.google.com/go/spanner.Client).PartitionedUpdate
+    args: [1]
+    field: SQL
+    category: sql_injection
+  - symbol: (*cloud.google.com/go/spanner.Client).PartitionedUpdateWithOptions
+    args: [1]
+    field: SQL
+    category: sql_injection
+  - symbol: (*cloud.google.com/go/spanner.BatchReadOnlyTransaction).PartitionQuery
+    args: [1]
+    field: SQL
+    category: sql_injection
+  - symbol: (*cloud.google.com/go/spanner.BatchReadOnlyTransaction).PartitionQueryWithOptions
+    args: [1]
+    field: SQL
+    category: sql_injection
+
+  # BigQuery: the text of a query is the argument of Client.Query and then the Q of the Query (an embedded
+  # QueryConfig). Both are sinks: Client.Query(q) reports the text where it is handed over, and Run / Read
+  # report the Q that is set on the Query by a later assignment (q.Q = x), which Client.Query never sees. One
+  # flow can be reported twice (docs/DESIGN-field-sinks.md, section 6). The parameters and the labels are safe.
+  - symbol: (*cloud.google.com/go/bigquery.Client).Query
+    args: [0]
+    category: sql_injection
+  - symbol: (*cloud.google.com/go/bigquery.Query).Run
+    recv: true
+    field: QueryConfig.Q
+    category: sql_injection
+  - symbol: (*cloud.google.com/go/bigquery.Query).Read
+    recv: true
+    field: QueryConfig.Q
+    category: sql_injection
