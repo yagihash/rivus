@@ -830,13 +830,14 @@ func (d *DB) ReachSet(seeds []int64, forward, refs bool, max int) (ids []int64, 
 }
 
 // UnresolvedCallsIn counts the calls, in the functions given, through an interface or a function value that have
-// no candidate (nothing says where they go), and returns the first max of them.
+// no candidate (nothing says where they go), and the calls on a dynamic value (the Dart extractor writes them as a
+// call of dart:core#dynamic.invoke, which the graph holds as a builtin with no edge), and returns the first max of them.
 func (d *DB) UnresolvedCallsIn(ids []int64, max int) (int, []CallRow, error) {
 	total := 0
 	var out []CallRow
 	for i := 0; i < len(ids); i += inChunk {
 		chunk := ids[i:min(i+inChunk, len(ids))]
-		rows, err := d.callRows(`SELECT `+callCols+` `+callJoin+` WHERE c.func_id IN (`+placeholders(len(chunk))+`) AND c.kind IN ('interface','value') AND c.ncand = 0 ORDER BY c.func_id, c.line, c.col, c.id`, idArgs(chunk)...)
+		rows, err := d.callRows(`SELECT `+callCols+` `+callJoin+` WHERE c.func_id IN (`+placeholders(len(chunk))+`) AND ((c.kind IN ('interface','value') AND c.ncand = 0) OR (c.kind = 'builtin' AND c.callee LIKE '%#dynamic.invoke')) ORDER BY c.func_id, c.line, c.col, c.id`, idArgs(chunk)...)
 		if err != nil {
 			return 0, nil, err
 		}

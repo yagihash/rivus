@@ -181,3 +181,30 @@ func TestNoPathIsNotExhaustiveWhenAKindOfUnreadCodeIsNotCounted(t *testing.T) {
 		t.Fatalf("%v %+v because %+v", err, r.Exhaustive, r.NotExhaustiveBecause)
 	}
 }
+
+// GRAPH-1: a call on a dynamic value (Dart: dart:core#dynamic.invoke, which the graph holds as a builtin with no
+// edge) goes nowhere that the file knows: it is an unresolved call, as a call with no candidate is.
+func TestNoPathIsNotExhaustiveWhenADynamicInvokeIsReached(t *testing.T) {
+	e := build(t, []fnDef{
+		{"S", []call{{"s.go", 3, 1, "", "A", nil}}},
+		{"A", []call{{"a.go", 5, 1, "builtin", "dart:core#dynamic.invoke", nil}}},
+		{"T", nil},
+	})
+	r, err := e.Path("S", "T", graphq.Options{})
+	if err != nil || r.Reachable || r.Exhaustive || r.NotExhaustiveBecause == nil || r.NotExhaustiveBecause.UnresolvedCalls.Total != 1 {
+		t.Fatalf("%v %+v because %+v", err, r.Exhaustive, r.NotExhaustiveBecause)
+	}
+}
+
+// ... and a builtin that is only that (len, append) is not.
+func TestNoPathStaysExhaustiveWhenOnlyBuiltinsAreCalled(t *testing.T) {
+	e := build(t, []fnDef{
+		{"S", []call{{"s.go", 3, 1, "", "A", nil}}},
+		{"A", []call{{"a.go", 5, 1, "builtin", "len", nil}}},
+		{"T", nil},
+	})
+	r, err := e.Path("S", "T", graphq.Options{})
+	if err != nil || r.Reachable || !r.Exhaustive {
+		t.Fatalf("%v %+v because %+v", err, r.Exhaustive, r.NotExhaustiveBecause)
+	}
+}
