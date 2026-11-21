@@ -7,13 +7,29 @@ on:
 
 permissions: {}
 
+# A push to main that lands on a run in progress cancels it: only the newest commit is checked (to find which commit
+# broke what, use `git bisect` and a local reproduction). A pull request is checked per branch.
+concurrency:
+  group: ci-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  # The tests of `cmd/rivus` are most of the time (the tests of a package run one after the other): they are divided
+  # into shards that run in parallel (every test runs in exactly one shard). Shard 0 runs the other packages.
   test:
     runs-on: ubuntu-latest
     # the job must outlast `go test -timeout 30m` (the dogfood and the curated tests on a loaded runner)
     timeout-minutes: 45
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4]
+    env:
+      SHARD: ${{ matrix.shard }}
+      # a missing module cache of bench/gcp fails the Google Cloud gate, and does not skip it
+      RIVUS_REQUIRE_GCP: "1"
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -22,12 +38,16 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Vet
+        if: matrix.shard == 0
         run: go vet ./...
-      - name: Test
-        run: go test -timeout 30m ./...
-        env:
-          # a missing module cache of bench/gcp fails the Google Cloud gate, and does not skip it
-          RIVUS_REQUIRE_GCP: "1"
+      - name: Test the packages other than cmd/rivus
+        if: matrix.shard == 0
+        run: |
+          mapfile -t pkgs < <(go list ./... | grep -v '/cmd/rivus$')
+          go test -timeout 30m "${pkgs[@]}"
+      - name: Test cmd/rivus (shards 1 to 4 of four)
+        if: matrix.shard != 0
+        run: .github/scripts/go-test-shard.sh ./cmd/rivus "$((SHARD - 1))" 4 -timeout 30m
 
   # The tools of the bench (the comparison, the backtest, the ledger) have their own job: a red `test` job must not keep
   # them from running (they were the last step of it, and did not run while it was red). Python only, no build.
@@ -52,6 +72,12 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2]
+    env:
+      SHARD: ${{ matrix.shard }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -71,19 +97,21 @@ jobs:
             fi
           done
       - name: Analyze the extractor
+        if: matrix.shard == 0
         working-directory: extractor/dart
         run: dart analyze lib bin
       - name: Analyze the Dart zoo
+        if: matrix.shard == 0
         run: |
           for d in bench/zoo-dart/cells bench/zoo-dart/exec; do
             (cd "$d" && dart analyze)
           done
-      - name: Test with the Dart extractor
+      - name: Test with the Dart extractor (one shard of three)
         env:
           RIVUS_DART: dart
           # a missing RIVUS_DART fails the tests, and does not skip them
           RIVUS_REQUIRE_DART: "1"
-        run: go test -timeout 30m ./cmd/...
+        run: .github/scripts/go-test-shard.sh ./cmd/rivus "$SHARD" 3 -timeout 30m
 
   # The Rust extractor is built against the compiler's MIR (rustc_public), which is nightly only: it is pinned
   # to one nightly by extractor/rust/rust-toolchain.toml.
@@ -92,6 +120,12 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2]
+    env:
+      SHARD: ${{ matrix.shard }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -106,6 +140,7 @@ jobs:
         working-directory: extractor/rust
         run: cargo build --locked
       - name: Test the extractor
+        if: matrix.shard == 0
         working-directory: extractor/rust
         run: cargo test --locked
       # The Rust zoo has no dependency (std only, no build.rs, no proc macro): the extractor builds what it reads.
@@ -113,10 +148,11 @@ jobs:
         working-directory: bench/zoo-rust
         run: cargo build --locked --offline
       - name: Test the harness of the Rust zoo
+        if: matrix.shard == 0
         working-directory: bench/zoo-rust/exec
         run: cargo test --locked --offline
-      - name: Test with the Rust extractor
-        run: go test -timeout 30m ./cmd/...
+      - name: Test with the Rust extractor (one shard of three)
+        run: .github/scripts/go-test-shard.sh ./cmd/rivus "$SHARD" 3 -timeout 30m
         env:
           RIVUS_RUST: ${{ github.workspace }}/extractor/rust/target/debug/rivus-rust
           # a missing RIVUS_RUST fails the tests, and does not skip them
