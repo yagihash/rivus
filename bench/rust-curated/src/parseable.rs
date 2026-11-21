@@ -182,7 +182,7 @@ pub fn fire_alert(client: &Client) {
     }
 }
 
-// ---- found by the review: a node to remove is named by the path ----
+// ---- a peer to drop is named by the path (a client-chosen host; the shape only) ----
 
 fn to_url_string(s: String) -> String {
     if s.starts_with("http") {

@@ -22,13 +22,6 @@
       "label": "vuln",
       "category": "ssrf",
       "note": "GHSA-64vg-fp53-frjx and two more: the alert target posts to the endpoint the user gave (POST /api/v1/targets)"
-    },
-    {
-      "file": "(omitted)",
-      "line": 0,
-      "label": "vuln",
-      "category": "ssrf",
-      "note": "(omitted: not public)"
     }
   ]
 }
