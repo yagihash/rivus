@@ -33,5 +33,6 @@ import (
 	_ "zoo/cells/state/global_chain"
 	_ "zoo/cells/state/global_direct"
 	_ "zoo/cells/state/handler_then_reader"
+	_ "zoo/cells/state/receiver_field_across_entries"
 	_ "zoo/cells/state/save_restore"
 )
