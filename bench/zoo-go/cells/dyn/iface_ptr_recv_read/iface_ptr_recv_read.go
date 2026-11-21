@@ -19,7 +19,7 @@ type box struct{ v string }
 func (b *box) Get() string { return b.v }
 
 func vuln() { // @vuln
-	var g getter = &box{v: mark.Src("dyn-iface-ptr-recv-read-vuln")} // @source(dyn-iface-ptr-recv-read-vuln) @miss(silent) @ref(CORE-J)
+	var g getter = &box{v: mark.Src("dyn-iface-ptr-recv-read-vuln")} // @source(dyn-iface-ptr-recv-read-vuln)
 	mark.SinkCmd(g.Get())                                            // @sink(dyn-iface-ptr-recv-read-vuln)
 }
 
@@ -29,7 +29,7 @@ func fixed() { // @fixed
 }
 
 func decoy() { // @decoy
-	var a getter = &box{v: mark.Src("dyn-iface-ptr-recv-read-decoy")} // @source(dyn-iface-ptr-recv-read-decoy) @miss(silent) @ref(CORE-J)
+	var a getter = &box{v: mark.Src("dyn-iface-ptr-recv-read-decoy")} // @source(dyn-iface-ptr-recv-read-decoy)
 	var b getter = &box{v: "constant"}
 	mark.SinkCmd(b.Get()) // @sink(none) @nosink(dyn-iface-ptr-recv-read-decoy)
 	mark.SinkSQL(a.Get()) // @sink(dyn-iface-ptr-recv-read-decoy)
