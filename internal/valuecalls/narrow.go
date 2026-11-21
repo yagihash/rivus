@@ -506,6 +506,23 @@ func (n *narrower) aliasUses(f *ir.Func, form *irssa.Form, start irssa.Ref, allo
 	aliases = map[irssa.Ref]bool{start: true}
 	for changed := true; changed; {
 		changed = false
+		// a φ of which an argument is the pointer is the pointer too (`let p = if c { &mut r1 } else { &mut r2 }; *p = ..`):
+		// a store through it is a store to the cell (and, the φ being more than the pointer, to the other cell too)
+		for bi := range form.Phis {
+			for _, ph := range form.Phis[bi] {
+				d := irssa.Ref{Kind: irssa.RefPhi, Block: bi, Var: ph.Var}
+				if aliases[d] {
+					continue
+				}
+				for _, a := range ph.Args {
+					if aliases[a] {
+						aliases[d] = true
+						changed = true
+						break
+					}
+				}
+			}
+		}
 		for bi := range f.Blocks {
 			b := &f.Blocks[bi]
 			for ii := range b.Instrs {
