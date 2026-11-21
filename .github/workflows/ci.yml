@@ -25,6 +25,9 @@ jobs:
         run: go vet ./...
       - name: Test
         run: go test -timeout 30m ./...
+        env:
+          # a missing module cache of bench/gcp fails the Google Cloud gate, and does not skip it
+          RIVUS_REQUIRE_GCP: "1"
       - name: Test the comparison tool
         run: python3 bench/test_compare.py
 
@@ -126,3 +129,21 @@ jobs:
         env:
           # a missing Docker or image fails the tests, and does not skip them
           RIVUS_REQUIRE_DOCKER: "1"
+
+  # bench/gcp run for real, against fakes (exec_test.go): the value of a vulnerable case reaches the SQL text, the
+  # value of a fixed one only the parameters. The test refuses every connection that is not loopback.
+  gcp-exec:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+      - name: Test the cases by running them
+        working-directory: bench/gcp
+        run: go test -tags gcpexec -timeout 10m ./...
