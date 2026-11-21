@@ -607,7 +607,8 @@ ADR-006（ガードは引数由来の条件だけ、上限 4 個、判定しな�
   `resolved` は定数（`literal`）または、誰も設定しないフィールド（`zero_value`。そのオブジェクトのアドレスが外に渡っていないときだけ）に着いた値、
   `unresolved` は辿れなくなった所で、**terminal kind** で分類する: `exported_api_param`（呼び出しがなく、公開関数の引数）、`config_read`（ルールの `config_reads`: `os.Getenv` など）、`global_var`（書き手を列挙）、
   `dynamic_dispatch`、`unmodeled_library_call`、`reflection`、`container_element_imprecision`、`depth_limit`（深さ 6、300 ノード、呼び出し元 8 件が上限）。
-  比較の相手の定数は、値の由来ではないので辿らない
+  演算(否定、算術、比較、変換)を越えるときは、オペランドを別々にたどって定数を畳み、畳めなければ `unresolved`(ADR-078)。
+  比較の相手の定数は、値の由来ではないので、畳むためにだけ使い、値としては言わない
 - **検証:** `render(s, escape)` の例（ブリーフと同じ形）を含む `testdata/go/cases/guard` で、ノードの中身、定数の呼び出し、早期 return、ガードの数の超過、由来追跡の各終端（パッケージ変数、環境変数、ラッパー越しの定数、構造体のフィールド、公開関数の引数）を確かめる
 - **既知の限界:**
   - ガードは条件の文字列（`a && b` のように複数の条件が 1 つの `if` に入っているときは、各分岐が全体の文字列を持つ）。短絡評価の個々の項は区別しない
@@ -1686,3 +1687,17 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 - 時間とメモリ(`rivus analyze`、1 つの解析の間に別の解析が走っていた Mac で、2 回): 42 から 45 秒、最大 3.4 から 4.1 GB。**依存の中の時間が 99.7%**(`dep_spent_ms` 106 秒に対して、プロジェクト自身は 0.27 秒)。20,785 関数(spanner と bigquery が、grpc、xds、monitoring、arrow などを引く)。上位は `google.golang.org/grpc`(10.5 秒、2,259 回の再解析)、`grpc/internal/xds/httpfilter/extproc`(7.7 秒)、`cloud.google.com/go/spanner`(4.0 秒)。遅い関数は、`grpclb.lbBalancer.refreshSubConns`(1 回 300 から 380ms)と、gax の `invoke`(356ms、出力 44)。1 つの動的な呼び出しに全部の操作が通る形(memos の AWS SDK)かは、まだ調べていない。**別の課題として報告**。
 
 **限界:** (1) `Row.Columns(&a)` の flows は、可変長の出力引数の中身に届かない(`ColumnByName` と `ToStruct` は届く)。`flows` が可変長の宛先の要素を書けないエンジン側の限界(`bench/gcp` の `ReadColumns`、`TestGCPRows` の `gcpKnownMisses` で記録)。(2) `spanner/apiv1` の `ExecuteSqlRequest.Sql` と、データベース管理の DDL は、まだない。(3) 版が上がってメソッドの名前や置き場所が変わると、行は当たらなくなる: `TestGCPRows` が赤になる(モジュールを上げるときの検査)。(4) 重い試験で、モジュールのキャッシュが要る(`RIVUS_REQUIRE_GCP=1` で、ないことを失敗にする)。
+
+## ADR-078: ガードの出どころ(provenance)は、定数そのものか定数の単純なコピーだけを言い切る。演算を越えるときは畳むか `unresolved`、`zero_value` は書き込みが 1 つも届かないと分かるときだけ
+
+**背景:** 判定役は `conditional_nodes` の `provenance.resolved`(`literal` / `zero_value`)を、「この呼び出しでは条件の値が決まっている」と読み、サニタイズ済みの側なら流れを捨てる。それで、言い切った値が実際と逆だと、本物の流れが捨てられる(誤った痕跡の中で最も重い)。head で 3 つの形が確かめられた。(1) 単項・二項の演算(`!`、算術)を、オペランドへそのまま素通ししていた(`render(!c.raw, src)` の `c.raw = true` を `true / literal` と言う。実際の引数は `false`。`level(c.n-9, src)` を `9 / literal`。実際は 0)。比較は定数側だけを除いて、もう一方のオペランドの値を言っていた。(2) フィールドを読む先が、関数内の変数のとき、その変数への丸ごとの代入(関数の結果、`*p` のコピー、配列の要素のコピー)を書き込みと数えず、「誰も設定しない」と見てゼロ値と言っていた。(3) 呼び出しの結果をたどって callee の引数に着くと、その呼び出しの引数ではなく、callee の全部の呼び出し元の引数を混ぜていた。アドレスを取られた変数への、ポインタ越しの書き込みも数えていなかった。
+
+**決めたこと(provenance だけの変更。コアの要約、finding の集合は変えない):**
+1. 値を言い切ってよいのは、定数そのもの、定数の単純なコピー(変数・フィールドへの格納と読み出し、`make_interface`、型表明、callee が返す定数)だけ。
+2. 途中に演算(`convert`、単項、二項: 比較を含む)があるときは、オペランドを別々にたどる(`derived`)。オペランドの値は、結果の値としては報告しない(集める枠に入れる)。全オペランドが定数に着き、演算が畳めれば、畳んだ値を `literal`(全部ゼロ値なら `zero_value`)で言う。畳めない(オペランドが `unresolved`、定数でない、演算が分からない、型の大きさが分からない、オーバーフロー、0 での除算)ときは、`depth_limit`(`attributable_to: rivus`)で「演算で計算される値で、定数に畳めなかった」と言う。オペランドがすでに止まった理由を言っているときは、それだけにする。畳み方(`provfold.go`)は Go、Rust、Dart の演算子と型名の綴りを受ける。φ が複数の値を運ぶときは、組み合わせ(16 まで)ごとに畳む。
+3. `zero_value` は、フィールドへの格納、フィールドの一部への格納、変数の丸ごとの代入のどれも、そのオブジェクトに届かないときだけ。丸ごとの代入のうち、同じ関数の別の変数のコピー(リテラルは別の変数に作ってコピーされる)は、その変数のフィールドをたどる。型のゼロ値の代入は、何も変えない。それ以外(関数の結果、`*p`、配列の要素)は `unresolved`。変数の値を読むとき(`walkAddr`)も、アドレスが渡っていれば `unresolved`。
+4. 呼び出しの結果をたどって callee の引数に着いたら、その呼び出しの引数に結ぶ(ほかの呼び出し元の引数は混ぜない)。
+
+**確かめたこと:** `testdata/go/cases/guard/provenance.go`(報告された 7 つの形+アドレスを取られた変数、callee の引数、比較の畳み込み): 否定と算術は畳んだ値(`false`、`0`)、丸ごとの代入と配列の要素は `unresolved`、本当のゼロ値は `false / zero_value`、ポインタ越しの `*pc = true` は `true / literal`(`TestProvenanceTellsNoValueThatIsNotKnown`)。畳み込みの単体試験は、Rust(`i32`、`u32`)と Dart(`int`)の型名も含む(`TestProvenanceFoldsOperations`)。Dart と Rust は同じコアで、`!` と `n - 9` を引数にした小さな例で、`unresolved`(誤った値は言わない)になることを確かめた。`bench/compare.sh --light`: finding の追加・削除 0、`path@1` の変化 0。軽い層の実コードで言い切っていた件数は、`literal` が 0、`zero_value` が 2(gogs の 2 つの版で同じノード。`PatchPath` の `repo` に `nil / zero_value`)で、どちらも `unresolved` になった(誤って言い切っていた数の上界は 2)。
+
+**限界:** 変数の丸ごとの代入は、別の関数の変数のコピーや、構造体の中の構造体の一部の格納は、たどらず `unresolved`(多めに言わない側)。Dart と Rust は、変数の読み出し(`not followed: *ssa.Slice`)で止まるため、定数を畳む前に `unresolved` になる(今までも値は言っていない)。
