@@ -120,6 +120,27 @@ class BigTargets(unittest.TestCase):
         rc, out, _ = dry_run(True, "bigone", extra=("--big", "bigone=" + self.URL, "--gomemlimit", "bigone=3GiB"))
         self.assertIn("GOMEMLIMIT=3GiB", line(out, "bigone"))
 
+    def test_the_argument_is_checked(self):
+        bad = {
+            "a built-in name": "casdoor=" + self.URL,
+            "white space (two words)": "big one=" + self.URL,
+            "no =": "bigone",
+            "no @": "bigone=https://example.invalid/o/r",
+            "no URL": "bigone=nourl@" + "a" * 40,
+            "an empty commit": "bigone=https://example.invalid/o/r@",
+            "a commit with a space or a shell character": "bigone=https://example.invalid/o/r@a;b",
+            "a name that is not a word": "-x=" + self.URL,
+        }
+        for why, arg in bad.items():
+            rc, out, err = dry_run(True, "bigone", extra=("--big", arg))
+            self.assertEqual(rc, 64, "%s: %r gave %d" % (why, arg, rc))
+            self.assertIn("--big", err, why)
+        rc, out, err = dry_run(True, "bigone", extra=("--big", "bigone=" + self.URL, "--big", "bigone=" + self.URL))
+        self.assertEqual(rc, 64)
+        self.assertIn("given twice", err)
+        rc, out, err = dry_run(True, "bigone", extra=("--big", "bigone=" + self.URL, "--big", "two=" + self.URL))
+        self.assertEqual(rc, 0, err)
+
     def test_the_light_ones_keep_theirs(self):
         rc, out, _ = dry_run(True, "gogs-9a9388ac", "casdoor")
         self.assertIn("GOMEMLIMIT=5GiB", line(out, "gogs-9a9388ac"))

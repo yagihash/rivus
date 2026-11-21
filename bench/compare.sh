@@ -81,7 +81,9 @@ while [ $# -gt 0 ]; do
     --heavy) SEL_HEAVY=1 ;;
     --no-cache) NOCACHE=1 ;;
     --cache-dir) CACHE_DIR="$2"; shift ;;
-    --big) BIGS="$BIGS $2"; shift ;;
+    --big) [ $# -ge 2 ] || { echo "--big needs NAME=URL@COMMIT" >&2; exit 64; }
+           case "$2" in *[[:space:]]*) echo "--big: no white space in '$2' (NAME=URL@COMMIT is one word)" >&2; exit 64 ;; esac
+           BIGS="$BIGS $2"; shift ;;
     --wait) WAIT="$2"; shift ;;
     --timeout) TIMEOUT="$2"; shift ;;
     --gomemlimit) MEMLIMITS="$MEMLIMITS $2"; shift ;;
@@ -161,6 +163,20 @@ spec() {
   [ -n "$CLONE" ] && DIR="$WORK/src/$CLONE${SUBDIR:+/$SUBDIR}"
   return 0
 }
+
+# --big NAME=URL@COMMIT: checked here, and an error stops the run (a wrong word was a silent skip or a URL that was not one)
+for kv in $BIGS; do
+  name="${kv%%=*}"; v="${kv#*=}"
+  case "$kv" in *=*) ;; *) echo "--big: '$kv' has no '=': NAME=URL@COMMIT" >&2; exit 64 ;; esac
+  case "$v" in *@*) ;; *) echo "--big: '$kv' has no '@': NAME=URL@COMMIT" >&2; exit 64 ;; esac
+  url="${v%@*}"; commit="${v##*@}"
+  case "$name" in ""|[!A-Za-z0-9]*|*[!A-Za-z0-9_.-]*) echo "--big: the name '$name' is not a short word (letters, digits, - _ .)" >&2; exit 64 ;; esac
+  case "$url" in */*) ;; *) echo "--big: '$kv': '$url' is not a URL" >&2; exit 64 ;; esac
+  case "$commit" in ""|*[!A-Za-z0-9._/-]*) echo "--big: '$kv': the commit '$commit' is not a full SHA or a tag" >&2; exit 64 ;; esac
+  if ( BIGS=""; spec "$name" ); then echo "--big: the name '$name' is the one of a built-in benchmark (it would be ignored)" >&2; exit 64; fi
+  n=0; for o in $BIGS; do [ "${o%%=*}" = "$name" ] && n=$((n+1)); done
+  [ "$n" -le 1 ] || { echo "--big: the name '$name' is given twice" >&2; exit 64; }
+done
 
 # Rust: third-party code is read only in the container (ADR-064, docs/rust-isolation.md): its build.rs and proc macros run
 # during the extraction. Only these paths of this repository (our own code) may be read on this machine, with
