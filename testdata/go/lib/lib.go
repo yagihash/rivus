@@ -32,6 +32,11 @@ type Runner interface {
 	Run(s string)
 }
 
+// Cleaner is an interface whose method is a sanitizer by the rules: the result is clean.
+type Cleaner interface {
+	Clean(s string) string
+}
+
 // Fill writes attacker controlled data through the pointer, as a database read
 // does (rows.Scan(&x)).
 func Fill(dst *string) error { return nil }

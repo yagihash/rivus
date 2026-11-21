@@ -1,0 +1,16 @@
+# The sanitizers of the built-in model, each read once (internal/model/builtin, TestSanitizersAreReviewed).
+# One symbol per line, then the kind, then a comment after `#`.
+#   function      a function of a package, never reached through an interface or a trait
+#   static        a static method of a class (Dart): never dispatched
+#   class-method  an instance method of a concrete class that a subclass may override
+#   interface     a method of an interface or a trait (none is written yet)
+# A sanitizer says only that its result is clean. The implementations of the project that a call
+# through such a symbol may reach are read, with their result dropped (ADR-086): a `class-method` or an
+# `interface` row is therefore safe, and listed because it is where that rule is used.
+html.EscapeString function
+html/template.HTMLEscapeString function
+html/template.JSEscapeString function
+dart:core#Uri.encodeComponent static
+dart:core#Uri.encodeFull static
+dart:core#Uri.encodeQueryComponent static
+dart:convert#HtmlEscape.convert class-method # a subclass of HtmlEscape may override convert

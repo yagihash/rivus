@@ -636,6 +636,11 @@ func TestDispatchIsNarrowedByTheTypeTheCallerPassed(t *testing.T) { checkCase(t,
 // What is written to a writer is its content, a step below the writer: a field of the writer is not what was written (ADR-082).
 func TestWriterContentIsNotTheWritersFields(t *testing.T) { checkCase(t, "writer") }
 
+// A sanitizer of an interface method says the result is clean; the implementations of the project are read, with their result dropped (ADR-086).
+func TestSanitizerOfAnInterfaceReadsTheImplementationsWithoutTheirResult(t *testing.T) {
+	checkCase(t, "sanitizeown")
+}
+
 // gRPC: the metadata of a call and the messages of a stream are what a client
 // sent; a connection to an address from outside is a request forgery.
 func TestGRPCServerModels(t *testing.T) { checkCase(t, "grpcsrv") }

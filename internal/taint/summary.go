@@ -360,6 +360,9 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 		var dsts []Loc
 		switch o.Kind {
 		case OutResult:
+			if cc.noResult {
+				continue // a sanitizer says the result is clean: the body is read for the rest
+			}
 			if cc.rd != nil {
 				// the result of a callback goes where the row says (the first one only)
 				if o.Index == 0 {

@@ -205,6 +205,9 @@ sinks:
 sanitizers:
   - symbol: example.com/cases/lib.Sanitize
     drops: [user_input]
+  # an interface method that says its result is clean (testdata/go/cases/sanitizeown)
+  - symbol: (example.com/cases/lib.Cleaner).Clean
+    drops: [user_input]
 
 
 propagators:

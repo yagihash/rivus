@@ -1792,3 +1792,13 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 **確かめたこと:** rust-curated(`narrow_async.rs`: 渡されないクロージャの sink が静かになる 4 つ、辿れない形は全候補のまま)、動物園(Rust)は、本物の流れ(`@source` と `@sink` の組)の削除 0、finding の増減 0。parseable(コンテナで抽出した IR): 絞れた呼び出しは 1 → 3、候補の合計 375 → 13(`for_each_live_node` は 15 → 8)、findings 164 → 137、(source, sink)の組(`other_sources` の上限を外して)723 → 544、新しい組 0、消えた 179 組は、呼ばれ得ない候補を通る流れ(98)と、状態のフィールドが全 coroutine で同じ名前だったために混ざった流れ(81)で、本物の流れは消えていない(手で経路を確かめた)。`bench/parseable` の真値の採点は同じ。
 
 **限界:** 呼び元が 2 つ以上あれば、`async` のヘルパーでも、呼び元のクロージャの sink は、互いに届く(上の 3)。`async` の本体の中の、`Box<dyn Fn>` を作る呼び出しの先は辿らない(ADR-079 と同じ)。
+
+## ADR-086: sanitizer のあるインターフェースのメソッドは、プロジェクトの実装の本体を読み、結果への流れだけ捨てる。組み込みの sanitizer は、読んだ種類を一覧に持つ
+
+**背景:** ADR-075 は、sanitizer のあるシンボルを、本体を読まない対象から外していた(本体を読むと「結果は無害」を取り戻すため)。その結果、`type Cleaner interface{ Clean(string) string }` に `Clean` の sanitizer を書くと、プロジェクトの実装の本体の中の sink(`Clean` が自分で `exec` に渡す、グローバルに書く)が見えなかった。
+
+**決めたこと:** (1) 呼び先のモデルが sanitizer で、動的な呼び出しのとき、プロジェクト自身の実装の本体も読み、**結果への流れだけ捨てる**(`callCtx.noResult`、`applySummary` の `OutResult`)。本体の中の sink への到達、引数・受け手・グローバルへの書き込みは採る。`read_impls` のある行は、今までどおり結果も採る。依存の本体は読まない(ADR-075 のまま)。(2) 組み込みの sanitizer の全行を `internal/model/builtin/testdata/sanitizers-reviewed.txt` に、種類(関数、static、上書きされうるクラスのメソッド、インターフェース / trait のメソッド)つきで持ち、行が増えて一覧にないと `go test` が赤くなる(`TestSanitizersAreReviewed`)。
+
+**数えたこと:** 3 言語の組み込みモデルの sanitizer 7 行のうち、インターフェース / trait のメソッドは **0 行**(Go の関数 3、Dart の static 3、Dart の上書きされうるクラスのメソッド 1)。したがって組み込みの結果は変わらない。この実装は、利用者のルールの sanitizer(自前のインターフェースへの行)のためのもの。
+
+**確かめたこと:** `testdata/go/cases/sanitizeown`(結果は無害のまま、本体の sink、グローバルへの書き込みは見える、本体が洗えば静か)、動物園の `dyn/sanitizer-own-impl`(脆弱 / 直した / おとり)。

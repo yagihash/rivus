@@ -55,3 +55,6 @@ sanitizers:
     drops: [user_input]
   - symbol: zoo/mark.CleanPath
     drops: [user_input]
+  # an interface method of a cell that says its result is clean (cells/dyn/sanitizer_own_impl)
+  - symbol: (zoo/cells/dyn/sanitizer_own_impl.Cleaner).Clean
+    drops: [user_input]
