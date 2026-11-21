@@ -1,0 +1,13 @@
+{
+  "findings": [
+    "truth/typeschain.go:10 -\u003e truth/typeschain.go:12"
+  ],
+  "uncertainty_kinds": {
+    "unmodeled_library_call": 1
+  },
+  "converged": true,
+  "passes": 1,
+  "reanalyses": 2045,
+  "summary_elems": 5085,
+  "largest_summary_elems": 6
+}

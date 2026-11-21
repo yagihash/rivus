@@ -54,6 +54,10 @@ import (
 var curatedNoisy = regexp.MustCompile(`@noisy\((\d+)\)`)
 var curatedAnnot = regexp.MustCompile(`@(source|sink|nosink)\(([A-Za-z0-9_-]+)\)(\s+@(miss(?:\(([a-z_,]+)\))?|fp))?`)
 
+// curatedAllowUnconverged is set by a test that holds a run that does not converge (TestScaleSynth: a chain longer than
+// the passes the engine makes); its expected file says so.
+var curatedAllowUnconverged bool
+
 type curatedAt struct {
 	file string
 	line int
@@ -359,7 +363,7 @@ func checkCuratedReport(t *testing.T, dir string, out []byte, ext string) curate
 	}
 	// unexpected flows into a quiet sink are reported twice, by design: the first
 	// names the pair, the second the sink.
-	if !rep.Stats.Converged {
+	if !rep.Stats.Converged && !curatedAllowUnconverged {
 		t.Errorf("the analysis did not converge: %+v", rep.Stats)
 	}
 	return c

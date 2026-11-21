@@ -41,24 +41,33 @@ func TestScaleSynth(t *testing.T) {
 		t.Fatalf("building the generator: %v\n%s", err, out)
 	}
 	profiles := []struct {
-		name    string
+		name    string // the name of the expected file
+		shapes  string
+		flags   []string
 		workers []int
+		noconv  bool // the run does not converge (the expected file says so)
 	}{
-		{"types", []int{1}},
-		{"stderr", []int{1}},
-		{"widen", []int{1}},
-		{"scc", []int{1, 4}},
-		{"chain", []int{1}},
-		{"dyn", []int{1}},
-		{"glob", []int{1}},
-		{"giant", []int{1}},
-		{"selfcopy", []int{1}},
+		{"types", "types", nil, []int{1}, false},
+		{"typeschain", "typeschain", nil, []int{1}, false},
+		{"stderr", "stderr", nil, []int{1}, false},
+		{"widen", "widen", nil, []int{1}, false},
+		{"scc", "scc", nil, []int{1, 4}, false},
+		// the chain of globals, one step a pass: the number of passes follows the number of steps (3 steps 4 passes, 10 steps 11),
+		// and at 12 passes (MaxPasses) it stops: 13 and 30 steps do not converge and the flow is lost (@miss).
+		{"chain3", "chain", []string{"-chain", "3"}, []int{1}, false},
+		{"chain", "chain", nil, []int{1}, false},
+		{"chain13", "chain", []string{"-chain", "13"}, []int{1}, true},
+		{"chain30", "chain", []string{"-chain", "30"}, []int{1}, true},
+		{"dyn", "dyn", nil, []int{1}, false},
+		{"glob", "glob", nil, []int{1}, false},
+		{"giant", "giant", nil, []int{1}, false},
+		{"selfcopy", "selfcopy", nil, []int{1}, false},
 	}
 	for _, pr := range profiles {
 		pr := pr
 		t.Run(pr.name, func(t *testing.T) {
 			dir := t.TempDir()
-			if out, err := exec.Command(gen, "-shapes", pr.name, "-out", dir).CombinedOutput(); err != nil {
+			if out, err := exec.Command(gen, append([]string{"-shapes", pr.shapes, "-out", dir}, pr.flags...)...).CombinedOutput(); err != nil {
 				t.Fatalf("gen: %v\n%s", err, out)
 			}
 			for _, w := range pr.workers {
@@ -72,7 +81,9 @@ func TestScaleSynth(t *testing.T) {
 				if err := json.Unmarshal(out, &rep); err != nil {
 					t.Fatal(err)
 				}
+				curatedAllowUnconverged = pr.noconv
 				checkCuratedReport(t, dir, out, ".go")
+				curatedAllowUnconverged = false
 				got := scaleResultOf(&rep)
 				path := filepath.Join(root, "bench", "go-scale", "expected", fmt.Sprintf("%s-w%d.json", pr.name, w))
 				if os.Getenv("RIVUS_SCALE_UPDATE") == "1" {

@@ -1,0 +1,11 @@
+{
+  "findings": [],
+  "uncertainty_kinds": {
+    "recursion_approximation": 1
+  },
+  "converged": false,
+  "passes": 12,
+  "reanalyses": 2074,
+  "summary_elems": 5097,
+  "largest_summary_elems": 6
+}

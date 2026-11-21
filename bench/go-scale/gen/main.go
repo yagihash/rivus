@@ -29,6 +29,7 @@ type Params struct {
 	Ring    int             // functions that call each other (shape scc)
 	Wide    int             // functions of the ring of wide structs (shape widen)
 	Chain   int             // globals in a chain (shape chain)
+	TStages int             // caches of types in a chain, each one a global (shape typeschain)
 	Impls   int             // implementations of the interface (shape dyn)
 	Callers int             // functions that call through the interface (shape dyn)
 	Giant   int             // statements of the one huge function (shape giant)
@@ -37,11 +38,11 @@ type Params struct {
 }
 
 // allShapes is the list of the shapes, in the order they are written.
-var allShapes = []string{"types", "stderr", "widen", "scc", "chain", "dyn", "glob", "giant", "selfcopy"}
+var allShapes = []string{"types", "stderr", "widen", "scc", "chain", "typeschain", "dyn", "glob", "giant", "selfcopy"}
 
 // Default is the size of the profiles (about 2,000 functions).
 func Default() Params {
-	return Params{Seed: 1, Funcs: 2000, Pkgs: 20, KeepPct: 15, SrcPct: 4, EncPct: 4, ReadPct: 25, Loggers: 8, Ring: 200, Wide: 16, Chain: 10, Impls: 150, Callers: 40, Giant: 3000, Copies: 40, Shapes: map[string]bool{}}
+	return Params{Seed: 1, Funcs: 2000, Pkgs: 20, KeepPct: 15, SrcPct: 4, EncPct: 4, ReadPct: 25, Loggers: 8, Ring: 200, Wide: 16, Chain: 10, TStages: 14, Impls: 150, Callers: 40, Giant: 3000, Copies: 40, Shapes: map[string]bool{}}
 }
 
 // rng is splitmix64: the generated code must not depend on the Go version.
@@ -142,12 +143,20 @@ func (g *gen) ballast() {
 					f.imports["logx"] = true
 					b.WriteString("\tlogx.Warn(x)\n")
 				}
+				if g.on("typeschain") {
+					f.imports["tchain"] = true
+					b.WriteString("\ttchain.Put(x)\n")
+				}
 			}
 		}
 		if g.r.pct(g.p.ReadPct) {
 			if g.on("types") {
 				f.imports["tcache"] = true
 				b.WriteString("\tv += tcache.Describe(v)\n")
+			}
+			if g.on("typeschain") {
+				f.imports["tchain"] = true
+				b.WriteString("\tv += tchain.Get(v)\n")
 			}
 			if g.on("stderr") {
 				l := fmt.Sprintf("lg%02d", g.r.n(g.p.Loggers))
@@ -342,15 +351,52 @@ func SccReal() {
 `)
 }
 
+// shapeTypesChain is the cache of types of a library that registers what it knows in a second one, and that in a third
+// (each one a package variable): the type of a value goes one cache further in a pass, so the data of the value reaches
+// the readers of the last one after TStages passes (without the models of reflect.TypeOf).
+func (g *gen) shapeTypesChain() {
+	n := g.p.TStages
+	var b strings.Builder
+	b.WriteString("// Package tchain is a chain of caches of types.\npackage tchain\n\nimport (\n\t\"fmt\"\n\t\"reflect\"\n)\n\ntype Info struct{ T reflect.Type }\n\n")
+	for i := 0; i < n; i++ {
+		fmt.Fprintf(&b, "var m%d = map[reflect.Type]*Info{}\n", i)
+	}
+	b.WriteString("\n// Put gives the first cache the type of the value.\nfunc Put(v interface{}) {\n\tt := reflect.TypeOf(v)\n\tm0[t] = &Info{T: t}\n}\n\n")
+	for i := n - 1; i >= 1; i-- {
+		fmt.Fprintf(&b, "// Step%d registers what the cache %d knows in the cache %d.\nfunc Step%d() {\n\tfor k, v := range m%d {\n\t\tm%d[k] = v\n\t}\n}\n\n", i, i-1, i, i, i-1, i)
+	}
+	fmt.Fprintf(&b, "// Get reads the last cache.\nfunc Get(v interface{}) string {\n\treturn fmt.Sprint(m%d[reflect.TypeOf(v)])\n}\n", n-1)
+	g.rawFile("tchain/tchain.go", b.String())
+	t := g.file("truth/typeschain.go")
+	t.imports["lib"], t.imports["tchain"] = true, true
+	t.body.WriteString(`// TcReal: the data of a value goes on to the sink, and next to it the type of the value goes into the chain of caches.
+func TcReal() {
+	x := lib.Source() // @source(tc_real)
+	tchain.Put(x)
+	lib.Sink(x) // @sink(tc_real)
+}
+
+// TcQuiet reads the last cache only: no source reaches it, but for the chain that joins every writer to every reader.
+func TcQuiet(s string) {
+	lib.Sink(tchain.Get(s)) // @sink(none)
+}
+
+`)
+}
+
 func (g *gen) shapeChain() {
 	f := g.file("chain/chain.go")
 	f.imports["lib"] = true
 	n := g.p.Chain
+	miss := ""
+	if n > 10 {
+		miss = " @miss(silent)" // more steps than the passes the engine makes (MaxPasses 12): the flow is lost
+	}
 	// the steps are written in the order that is against the order of analysis: the last first
 	for i := n - 1; i >= 1; i-- {
 		fmt.Fprintf(&f.body, "var G%d string\n\nfunc S%d() { G%d = G%d }\n\n", i, i, i, i-1)
 	}
-	fmt.Fprintf(&f.body, "var G0 string\n\nfunc S0() { G0 = lib.Source() } // @source(ch_real)\n\nfunc Out() {\n\tlib.Sink(G%d) // @sink(ch_real)\n}\n\n", n-1)
+	fmt.Fprintf(&f.body, "var G0 string\n\nfunc S0() { G0 = lib.Source() } // @source(ch_real)%s\n\nfunc Out() {\n\tlib.Sink(G%d) // @sink(ch_real)\n}\n\n", miss, n-1)
 }
 
 func (g *gen) shapeDyn() {
@@ -466,6 +512,8 @@ func Generate(p Params) (map[string]string, error) {
 			g.shapeSCC()
 		case "chain":
 			g.shapeChain()
+		case "typeschain":
+			g.shapeTypesChain()
 		case "dyn":
 			g.shapeDyn()
 		case "glob":
@@ -512,7 +560,7 @@ func Generate(p Params) (map[string]string, error) {
 			calls = append(calls, fmt.Sprintf("\tselfcopy.SelfCopy%d()", i))
 		}
 	}
-	for _, s := range []struct{ shape, fn string }{{"types", "TyReal()\n\ttruth.TyQuiet(\"\")"}, {"stderr", "SrReal()\n\ttruth.SrQuiet()"}, {"widen", "WdReal()"}, {"scc", "SccReal()"}, {"dyn", "DynReal()\n\ttruth.DynQuiet()"}} {
+	for _, s := range []struct{ shape, fn string }{{"types", "TyReal()\n\ttruth.TyQuiet(\"\")"}, {"typeschain", "TcReal()\n\ttruth.TcQuiet(\"\")"}, {"stderr", "SrReal()\n\ttruth.SrQuiet()"}, {"widen", "WdReal()"}, {"scc", "SccReal()"}, {"dyn", "DynReal()\n\ttruth.DynQuiet()"}} {
 		if p.Shapes[s.shape] {
 			mainImports["truth"] = true
 			calls = append(calls, "\ttruth."+s.fn)
@@ -612,6 +660,7 @@ func main() {
 	flag.IntVar(&p.Ring, "ring", p.Ring, "functions in the ring (scc)")
 	flag.IntVar(&p.Wide, "wide", p.Wide, "functions in the ring of wide structs (widen)")
 	flag.IntVar(&p.Chain, "chain", p.Chain, "globals in the chain")
+	flag.IntVar(&p.TStages, "tstages", p.TStages, "caches in the chain of caches of types")
 	flag.IntVar(&p.Impls, "impls", p.Impls, "implementations of the interface (dyn)")
 	flag.IntVar(&p.Callers, "callers", p.Callers, "callers through the interface (dyn)")
 	flag.IntVar(&p.Giant, "giant", p.Giant, "statements of the huge function")

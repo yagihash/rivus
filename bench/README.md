@@ -247,7 +247,8 @@ that must stay quiet. A change that cuts too much (it loses a `*_real` flow) fai
 | `stderr` | `fmt.Fprintf(os.Stderr, tainted)`, and every `log.New(os.Stderr, ...)` carries it | `holds: nothing` (ADR-056) | `summary_elems` x13, largest summary 6 to 85, `reanalyses` x1.9, 3 passes (not 2), 82 false pairs |
 | `widen` | an output of more than 24 elements is widened to the whole parameter; the join of the whole and the parts | `absorbWhole` (ADR-057) | **the parts are kept next to the whole**: largest summary 7 to 47, `summary_elems` +3%. **The going back and forth (63, 82, 85, 63) and the 12 passes of gogs are NOT reproduced** (what is needed is a widened output and an unwidened one of the same function that alternate between passes; the random rings tried converge at 2 passes with and without the change) |
 | `scc` | a ring of 200 functions (and 40 writes of sources into a global array that nobody reads), R-43: `-workers 1` gives other numbers than 2 or more (issue #96) | (none: a shape of cost) | the same on both: the shape is for `reanalyses`, `passes`, and for R-43 (`scc-w1.json` and `scc-w4.json` differ: `summary_elems` 13,859 and 11,487, `reanalyses` 3,846 and 4,188) |
-| `chain` | a chain of 10 globals, each written from the one before (one step a pass): 11 passes of 12 (`MaxPasses`). With 30 it does **not converge and the flow is lost**, silently. | | the same on both |
+| `typeschain` | the cache of types registers what it knows in a second cache, and that in a third, 14 stages, each a package variable: the type of a value goes one cache further in a pass | the `reflect` models (ADR-055) | **does not converge**: 12 passes (`MaxPasses`), `converged: false`, largest summary 144, and nothing of the false pairs yet (they would come after 14 passes). With 8 stages: 9 passes (stages + 1), `summary_elems` 57,727, 72 false pairs. The hypothesis "a type descriptor goes through one global a pass, so the types confluence times a chain does not converge" is **confirmed on this shape** (not shown for Gitea itself) |
+| `chain` | a chain of globals, each written from the one before (one step a pass). The number of passes follows the number of steps: 3 steps 4 passes, 10 steps 11 (default), 13 and 30 steps **12 passes, not converged, the flow is lost** (`@miss(silent)`; one `recursion_approximation`, in neither the source nor the sink function). `chain3`, `chain`, `chain13`, `chain30` have their expected files | | the same on both |
 | `dyn` | an interface with 150 implementations, 40 callers under conditions; a call on one implementation must not see the others | | the same on both (the multiplication of ADR-047 is not reproduced: no closures) |
 | `glob` | a handler writes a global, another entry reads it (the explicit write that must stay: CORE-H) | | the same on both, 2 flows found |
 | `giant` | one function of 3,000 statements (it takes 5 s; it is stopped by work, never by a clock) | | the same on both |
@@ -266,7 +267,7 @@ closures given to a helper; Dart and Rust profiles (a task of their own).
 
 **Measuring by hand and between two builds.** `python3 bench/go-scale/measure.py -rivus BIN -shapes types [-workers 1]` prints one line (functions,
 passes, converged, reanalyses, `summary_elems`, the largest summary, found / missing / false against the key). `bench/compare.sh` has `go-scale`
-in the light tier (all shapes in one module, 2,529 functions, 11 s; the same input for base and head, made by the generator of the tree the script is in).
+in the light tier (all shapes in one module, about 2,550 functions, 11 s; the same input for base and head, made by the generator of the tree the script is in).
 Against `dd6436f` it says "164 findings REMOVED" (the false pairs of `types` and `stderr`: that is the point of the profile; classify them by the key).
 
 **Which change makes which profile big (measured once, 2026-11-21; the head with ONE of the three taken out, the others kept).**
@@ -281,7 +282,7 @@ of `reflect`; `holds: nothing` changed to `holds: everything`; `widen(absorbWhol
 | the others | | the same as head | the same as head | the same as head |
 
 Each fix moves only its own profile. `dd6436f` itself: `types` and `stderr` as in the columns above, `widen` 5,390 / 47, and the rest as head.
-The three fixes together on all the shapes at once (2,529 functions): `summary_elems` 76,220 to 14,141, `reanalyses` 7,615 to 4,284, largest summary 88 to 45, 164 false pairs to 0, 51 real flows found by both.
+The three fixes together on all the shapes at once (2,547 functions, `-shapes all`, 2 s on head): `summary_elems` 78,190 to 14,141 (5.5 times), `reanalyses` 7,656 to 4,302, largest summary 164 to 45, 164 false pairs to 0, **base does not converge (12 passes), head converges in 11**, 52 real flows found by both.
 
 **How big the profiles are (head, `-workers 1`, an idle machine):** types 2,033 functions 2.9 s; stderr 2,049, 2.1 s; widen 2,045, 1.1 s; scc 2,229 (largest SCC 200), 2.4 s;
 chain 2,038, 0.5 s (11 passes); dyn 2,222, 0.5 s; glob 2,030, 0.5 s; giant 2,028, 2.2 s; selfcopy 2,067, 1.3 s; all together 2,529, 11 s. The shapes show their
