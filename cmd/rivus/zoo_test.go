@@ -640,8 +640,8 @@ func TestZooGo(t *testing.T) {
 		}
 	}
 	nCases := len(obs.Cases)
-	t.Logf("zoo-go: cells %d / cases %d | found %d / %d | @miss %d (trace %d, silent %d, no rule %d) | fixed reported wrongly %d | decoys reported wrongly %d / %d | carry %v | manual %d (%.1f%%) | run and annotation disagree %d | statements not run %d",
-		len(cells), nCases, vulnTags-missVuln, vulnTags, missVuln, missTrace, missSilent, missNorule, fpFixed, fpDecoy, len(cells), carry,
+	t.Logf("zoo-go: cells %d / cases %d | found %d / %d | @miss %d (trace %d, silent %d, no rule %d) | fixed reported wrongly %d | decoys reported wrongly %d / %d (with the trace container_element_imprecision %d, without %d) | carry %v | manual %d (%.1f%%) | run and annotation disagree %d | statements not run %d",
+		len(cells), nCases, vulnTags-missVuln, vulnTags, missVuln, missTrace, missSilent, missNorule, fpFixed, fpDecoy, len(cells), c.fpTrace, c.fpSilent, carry,
 		manuals, 100*float64(manuals)/float64(max(nCases, 1)), len(obs.Problems), len(obs.Uncovered))
 	t.Logf("zoo-go: rivus: %d flows found, %d sinks quiet, %d flows not found (@miss), %d reported wrongly (@fp)", c.detect, c.quiet, c.miss, c.fp)
 	if c.detect+c.miss < 1 {

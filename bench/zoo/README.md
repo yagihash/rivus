@@ -71,7 +71,7 @@ one to look at (`@shape` says what the cell is about; if the shape changed, say 
 `go test ./cmd/rivus -run 'TestZoo' -v` prints, per language, one line:
 
 ```
-zoo-go: cells 24 / cases 74 | found 20 / 26 | @miss 6 (trace 2, silent 4, no rule 0) | fixed reported wrongly 0 | decoys reported wrongly 2 / 24 | carry map[] | manual 0 (0.0%) | run and annotation disagree 0 | statements not run 0
+zoo-go: cells 29 / cases 89 | found 25 / 31 | @miss 6 (trace 2, silent 4, no rule 0) | fixed reported wrongly 0 | decoys reported wrongly 2 / 29 (with the trace container_element_imprecision 2, without 0) | carry map[] | manual 0 (0.0%) | run and annotation disagree 0 | statements not run 0
 ```
 
 * **cells / cases**: cells with all three roles, and their cases.
@@ -79,7 +79,7 @@ zoo-go: cells 24 / cases 74 | found 20 / 26 | @miss 6 (trace 2, silent 4, no rul
 * **@miss**: the vulnerable tags that are not found, split by what the engine left: a trace (a kind), `silent`, or
   `no rule` (`@miss(norule)`: the API has no rule. Only for the APIs of the standard library and of the de facto
   libraries; an API outside that scope is not counted as a miss. Stage 3; none in stage 1).
-* **fixed / decoys reported wrongly**: `@fp` on the quiet lines of the fixed and decoy cases.
+* **fixed / decoys reported wrongly**: `@fp` on the quiet lines of the fixed and decoy cases. The decoy count is split: a finding that carries `container_element_imprecision` is an over-approximation that says so; one without it is a false report with no trace.
 * **carry**: `@carry(tag, encode|digest|numeric)` lines by kind (a value that depends on the marker and has not reached:
   the text differs between the two variants).
 * **manual**: `@manual` lines. **run and annotation disagree**: always 0. **statements not run**: always 0.

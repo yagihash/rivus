@@ -66,6 +66,9 @@ type curatedAt struct {
 // curatedCounts is what a curated project holds.
 type curatedCounts struct {
 	detect, quiet, miss, fp, noisy int
+	// fpTrace and fpSilent split the sinks that must stay quiet and are reported (@fp): a finding at the sink carries a
+	// container_element_imprecision (an over-approximation that says so), or none does (a false report with no trace)
+	fpTrace, fpSilent int
 	// missSilent and missTrace split miss: the engine left no trace of the flow it lost,
 	// or an uncertainty of a kind says so.
 	missSilent, missTrace int
@@ -371,6 +374,20 @@ func checkCuratedReportOpts(t *testing.T, dir string, out []byte, ext string, o 
 			problems = append(problems, fmt.Sprintf("quiet now (remove @fp): %s:%d", n.file, n.line))
 		case fp[n]:
 			c.fp++
+			traced := false
+			for _, fd := range rep.Findings {
+				if (curatedAt{fd.Sink.Position.File, fd.Sink.Position.Line}) != n {
+					continue
+				}
+				for _, u := range fd.Uncertainties {
+					traced = traced || u.Kind == taint.KindContainerImprecision
+				}
+			}
+			if traced {
+				c.fpTrace++
+			} else {
+				c.fpSilent++
+			}
 		case hitNone[n]:
 			// reported above as an unexpected flow; say it is a sink that must stay quiet
 			problems = append(problems, fmt.Sprintf("a flow reaches the sink at %s:%d, which must stay quiet", n.file, n.line))
