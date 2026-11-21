@@ -22,10 +22,10 @@ targets:
     note: "many reflection and dynamic-dispatch uncertainties (ent, an ORM of generated code)."
   - name: ech0
     url: https://github.com/lin-snow/Ech0
-    commit: cecc2c19
+    commit: cecc2c19b590df85d79ea98457faa143130cd620
     lang: go
     size: "unmeasured; does not converge in 900 s (bench/README.md, ech0)"
-    last_run: "never (a heavy tier target of bench/compare.sh with --with-ech0)"
+    last_run: "never (run it with bench/compare.sh --big ech0=https://github.com/lin-snow/Ech0@cecc2c19b590df85d79ea98457faa143130cd620)"
     note: "does not converge: the case that a profile of go-scale should come from."
   - name: pocketbase
     url: https://github.com/pocketbase/pocketbase

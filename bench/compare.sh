@@ -27,7 +27,8 @@ options:
   --resume          keep a result that is already saved with exit code 0 (for a run that was stopped)
   --only a,b        run only these benchmarks      --skip a,b   do not run these
   --light           only the light tier: the benchmarks of one run of 60 seconds or less and 6 GB or less (the curated three, go-synth-S,
-                    go-scale, zoo-go, zoo-dart, zoo-rust, gogs x 2, gin-vue-admin, go-test-bench, parseable, dart-pub, gophish, casdoor). Base and head of a benchmark run at the same
+                    go-scale, zoo-go, zoo-dart, zoo-rust, gogs x 2, gin-vue-admin, go-test-bench, parseable, dart-pub, gophish, casdoor, and
+                    gitea-cut: the cut-out of Gitea's three CVEs, 7 packages, not the whole of Gitea). Base and head of a benchmark run at the same
                     time when the free memory allows it; a light run does not wait for other analyses, only for free memory (25%)
   --big NAME=URL@COMMIT  a big real codebase, run once per side (repeatable; NAME is a short word, COMMIT a full SHA or a tag; Go, the
                     built-in rules). One at a time, waits for a quiet machine, never uses the cache. For the periodic and the

@@ -91,7 +91,7 @@ extractor or the fixtures changed too. A base that does not converge is the one 
 The synthetic tests of this report (exit statuses) are `python3 bench/test_compare.py`.
 
 **Tiers (`--light`, `--heavy`).** The tiers are measured, not named. Light: one run of 60 seconds or less and 6 GB or less
-(curated three, go-synth-S, `go-scale`, the zoos, gogs x 2, gin-vue-admin, go-test-bench, parseable, dart-pub, gophish, casdoor, the cut-out of the three CVEs of layer B). Heavy: the `--big` targets (none in the gate).
+(curated three, go-synth-S, `go-scale`, the zoos, gogs x 2, gin-vue-admin, go-test-bench, parseable, dart-pub, gophish, casdoor, and the cut-out of the three CVEs of Gitea (7 packages of Gitea, `gitea-cut`, layer B: it includes that cut-out, not the whole of Gitea)). Heavy: the `--big` targets (none in the gate).
 Within the light tier, base and head of a benchmark run at the same time when the free memory allows it (checked a few seconds after
 base started: 35% free or more), and a light run waits only for free memory (25%), not for other analyses; a light-only run has its own
 lock (`lock-light.d`), so it can run beside a heavy one of the same work dir. The time and the peak RSS of a light run are therefore
@@ -153,7 +153,7 @@ same files.
 | gogs (CVE-2026-23633) | <https://github.com/gogs/gogs> | `ca59e76a5` | `bench/gogs/rules.yaml` | `bench/gogs/truth-48946299.json` |
 | gin-vue-admin | <https://github.com/flipped-aurora/gin-vue-admin>, module `server/` | `7bc7c3051067` (the parent of the fix `b1b7427c6ea6`) | `examples/rules/go-gin.yaml` (the gin model; the file that was used is not recorded in the repository: not confirmed) | `bench/gin-vue-admin/truth.json` |
 | go-test-bench | <https://github.com/Contrast-Security-OSS/go-test-bench> | not recorded (the `truth.json` says "the commit in `commit`", and has no such field): the default branch at the time, unrecorded | `examples/rules/go-gin.yaml` (above) | `bench/go-test-bench/truth.json` |
-| ech0 | https://github.com/lin-snow/Ech0 (`bench/compare.sh` clones it) | `cecc2c19` (the parent of the fix `091d26d2`) | built-in rules only in `compare.sh`; the measurements of ADR-047 used `examples/rules/go-gin.yaml` on the head of 2026-11-21 | not scored |
+| ech0 | https://github.com/lin-snow/Ech0 (`bench/compare.sh` clones it) | `cecc2c19b590df85d79ea98457faa143130cd620` (the parent of the fix `091d26d2`) | built-in rules only in `compare.sh`; the measurements of ADR-047 used `examples/rules/go-gin.yaml` on the head of 2026-11-21 | not scored |
 | parseable | <https://github.com/parseablehq/parseable> | `5c20b8e477be162238037e202cea1869d657017b` | `bench/parseable/rules.yaml` | `bench/parseable/truth-5c20b8e4.json` |
 | dart-pub | <https://github.com/dart-lang/pub> | `5e24336e71a05a96b558d496953ebed223f6e40a` | `bench/dart-pub/rules.yaml` | `bench/dart-pub/truth-5e24336e.json` |
 | gophish (GHSA-9c9w-9pq7-f35h, GHSA-hvw3-p9px-gpc9; `bench/wild/go/`) | <https://github.com/gophish/gophish> | `27d13a0584731371033926064d750e5f4f620e7a` | `bench/wild/go/GHSA-9c9w-9pq7-f35h/rules.yaml` | `bench/wild/go/gophish-27d13a05.truth.json` |
@@ -244,6 +244,8 @@ with `examples/rules/go-gin.yaml` on the head of the repository it does not conv
 callouts of ADR-047 (2 passes, 15 GB, 48 findings; the summaries of the AWS middleware grow from 36 to 2,200 elements in a few
 passes, almost all of them new, not coming back). It is a measure of the growth of the summaries, not a baseline to compare findings
 with: a run that does not converge is cut where it was.
+
+**`bench/gitea/truth-v1.26.4.json`** is the first form of the ground truth of those three CVEs ((file, line, category) of the sink, for a run of the whole of Gitea). No tool grades it now: `bench/score.py` and `compare.sh` use `bench/gitea-cve-truth.json`. It is kept because `bench/gitea-cve-paths.md`, `bench/wild/README.md`, `bench/go-curated/README.md` and ADR-055 refer to it as the definition of the labels; do not delete it without changing them.
 
 **The cut-out of the three CVEs: use the tag.** The truth file `bench/gitea-cve-truth.json` is for the tag `v1.26.4` (the three CVEs are in that
 code, and fixed in later releases). `bench/compare.sh` (`gitea-cut`, 7 packages, `-no-deps`) checks out the tag in its own copy. A copy of the

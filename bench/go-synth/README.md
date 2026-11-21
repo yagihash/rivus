@@ -35,7 +35,9 @@ is the peak of the resident set), and stops when two runs of the same binary giv
   binaries first, run them one after the other, 2 or 3 times each). The result (`compare`) must be
   IDENTICAL for a change that is for speed. For a change that is meant to change the result, look at
   every finding that moved and say why in the commit, then `snapshot`.
-* Gitea (350,000 lines, 10 to 16 minutes, 5 to 10 GB) and the other real projects are for a milestone.
+* Gitea (350,000 lines, 10 to 16 minutes, 5 to 10 GB) is not run for a change, and is not in the gate. Big real projects are run only when
+  named with `bench/compare.sh --big`, and in the periodic runs of `bench/explore/README.md`. The light tier has the cut-out of Gitea's
+  three CVEs (7 packages).
 * Sizes and what the engine took (the build of 2026-11-21, 12 cores, 24 GB, machine otherwise idle):
 
   | size | functions (engine) | largest SCC | time | peak memory | findings / uncertainties |
