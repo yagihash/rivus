@@ -9,12 +9,18 @@ pub fn register_all() {
     c::call::direct_in::register();
     c::call::multiret::register();
     c::clos::inline::register();
+    c::clos::relay::register();
     c::clos::returned::register();
+    c::clos::stored::register();
+    c::clos::to_lib::register();
     c::clos::to_own_helper::register();
+    c::clos::two_callers::register();
     c::cont::map_key_vs_value::register();
     c::cont::slice::register();
     c::cont::struct_whole_to_sink::register();
     c::conv::buffer_writestring::register();
+    c::dyns::func_field::register();
+    c::dyns::func_map::register();
     c::dyns::generics_ptr::register();
     c::dyns::global_iface::register();
     c::dyns::http_middleware_chain::register();
@@ -50,6 +56,8 @@ pub fn register_all() {
     c::rust::static_lazylock::register();
     c::state::global_chain::register();
     c::state::global_direct::register();
+    c::state::global_field::register();
+    c::state::global_struct_copy::register();
     c::state::handler_then_reader::register();
     c::state::receiver_field_across_entries::register();
     c::state::save_restore::register();

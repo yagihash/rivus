@@ -260,7 +260,13 @@ func TestZooDart(t *testing.T) {
 	obs := zooDartObserve(t)
 	lines, cells := zooDartScan(t, root)
 	cellsDir := filepath.Join(root, "cells")
-	c := checkCuratedIR(t, cellsDir, zooDartStream(t, cellsDir), ".dart")
+	rec := false // a chain of 13 and 30 stages stops by the pass limit (the Go and Rust zoos have the same)
+	for _, l := range lines {
+		for _, k := range l.missKinds {
+			rec = rec || k == "recursion_approximation"
+		}
+	}
+	c := checkCuratedIROpts(t, cellsDir, zooDartStream(t, cellsDir), ".dart", annotOpts{allowUnconverged: rec, programWide: rec})
 	if t.Failed() {
 		t.Log("the zoo failed as a whole: ZOO_ALONE=1 analyses each cell alone (green alone: mixed up with the others; red alone: the cell; the Dart extractor takes about 10 s for each)")
 	}

@@ -114,7 +114,7 @@ The rest is as for Go (steps 3 and 4 above). Things that are Dart's:
 * Flutter itself is not in the zoo: `build`, `onPressed` and the state store are written as small skeletons in the cell (`state/provider-store`, `dart/tearoff-instance` `vuln3`).
 * A pubspec.lock is committed for `cells` and `exec`; CI resolves both with `dart pub get --enforce-lockfile`.
 
-Stage 2 has 22 cells: **14 common forms**, which have the name of the Go cell (`call/direct`, `call/direct-in`, `call/depth3`, `call/multiret`,
+Stage 2 has 32 cells: **24 common forms** (the first 14 below, then 10 that came with the closure and global-variable cells of all three languages, see "Closure and global cells" at the end), which have the name of the Go cell (`call/direct`, `call/direct-in`, `call/depth3`, `call/multiret`,
 `clos/inline`, `clos/returned`, `clos/to-own-helper`, `cont/slice` (a list), `cont/map-key-vs-value`, `state/global-direct`,
 `state/handler-then-reader`, `state/receiver-field-across-entries`, `guard/sanitize-before`, `guard/one-branch`), written in Dart's own words, so that
 the difference between the languages is read from one table; and **8 Dart forms** (`dart/patterns-record` (also the variables of a for-in),
@@ -171,3 +171,21 @@ New names (not from a review) say what the zoo saw; the cause is not investigate
 | `PARITY` | found (or quiet) in the Go zoo with the same tag, not in the Rust zoo. Together with the name of what is known: `GEN-DYN` (a generic trait through `&dyn`), `KEYED-MAP` (the elements of a Vec and the keys of a HashMap are not told apart), `DYN-IMPLS` (the call through `dyn Handler` / `dyn Execer` reaches the implementations of the other cases) | `dyn/generics-ptr`, `cont/slice`, `cont/map-key-vs-value`, `dyn/http-middleware-chain`, `dyn/sink-in-method-iface`, `guard/one-branch` (the fixed case's sink), `state/save-restore` (the decoy) |
 | `R-04`, `CORE-K`, `R-44` | as in Go: `impl io::Write` through `dyn Write`, `write_str` into a `String`, a chain of 13 and 30 statics (the pass limit) | `dyn/stdlib-writer-own`, `conv/buffer-writestring`, `state/global-chain` |
 | `CAP`, `ENV-PTR`, `STD-MODEL`, `ASYNC` | `thread::spawn` and the closure it takes; a closure that writes through a captured `&mut` (`FnMut`, `for_each`); `mpsc::channel` has no model; an `async` block / `.await` | `rust/arc-mutex`, `rust/closure-fnmut`, `rust/iterator-chain` `vuln2`, `rust/channel`, `rust/async-await` |
+
+## Closure and global cells (all three languages)
+
+Cells for the two ways a flow loses who wrote it and who reads it: through a package variable, and through a function value.
+Each has the vulnerable, fixed and decoy case, and the decoys are the point (the other field, the other closure, the other
+caller). `clos/two-callers` (a helper that calls its argument with a value, two callers with their own closures),
+`clos/relay` (`wrapper(g)` calls `run(g)`), `clos/to-lib` (`sync.Once.Do`, `sync.OnceValue`; Dart `forEach`, `map`,
+`Future.then`; Rust `Once::call_once`, `OnceLock::get_or_init`), `clos/stored` (a closure kept in a field, a package variable and a
+slice, then called by another function), `dyn/func-field`, `dyn/func-map`, `state/global-field` (one field of a package
+variable that is a struct; the decoy reads another), `state/global-struct-copy` (the struct is copied whole, then a field of the
+copy is read). Dart also has `state/save-restore` and `state/global-chain` (they were Go and Rust only).
+
+Two things the cells are written around. **A case has its own function types** (Go: a named function type for each case; Rust: a
+newtype of the marker for the argument of each case), because the candidates of a call of a function value are the functions of the
+same type, and cases of one cell that share a type would meet at the call. The decoy is where the type is shared on purpose. The
+refs are `XTALK` (a call of a function value reaches a closure that was given to another caller), `CALLBACK-MODEL` (a function of
+the standard library calls its argument, and no model says so), `CLOSURE-IN-MEMORY` and `FUNC-VALUE-MEMORY` (a function value that
+was kept in a field, a variable, a list or a map is not followed to its call).

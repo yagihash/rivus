@@ -10,8 +10,12 @@ pub mod call {
 }
 pub mod clos {
     pub mod inline;
+    pub mod relay;
     pub mod returned;
+    pub mod stored;
+    pub mod to_lib;
     pub mod to_own_helper;
+    pub mod two_callers;
 }
 pub mod cont {
     pub mod map_key_vs_value;
@@ -22,6 +26,8 @@ pub mod conv {
     pub mod buffer_writestring;
 }
 pub mod dyns {
+    pub mod func_field;
+    pub mod func_map;
     pub mod generics_ptr;
     pub mod global_iface;
     pub mod http_middleware_chain;
@@ -63,6 +69,8 @@ pub mod rust {
 pub mod state {
     pub mod global_chain;
     pub mod global_direct;
+    pub mod global_field;
+    pub mod global_struct_copy;
     pub mod handler_then_reader;
     pub mod receiver_field_across_entries;
     pub mod save_restore;
