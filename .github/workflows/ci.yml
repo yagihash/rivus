@@ -28,8 +28,22 @@ jobs:
         env:
           # a missing module cache of bench/gcp fails the Google Cloud gate, and does not skip it
           RIVUS_REQUIRE_GCP: "1"
+
+  # The tools of the bench (the comparison, the backtest, the ledger) have their own job: a red `test` job must not keep
+  # them from running (they were the last step of it, and did not run while it was red). Python only, no build.
+  bench-tools:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
       - name: Test the comparison tool
         run: python3 bench/test_compare.py
+      - name: Test the backtest and the ledger tools
+        run: python3 bench/test_backtest.py
 
   # The Dart extractor reads the code with package:analyzer; its tests (and the curated bench) need the Dart
   # SDK and each sample package's `dart pub get`. They are skipped when RIVUS_DART is not set.
