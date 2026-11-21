@@ -60,7 +60,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 読み方:
 
 - **`paths`**: source から sink までの段。各段に、関数、位置、その行のコード（`snippet`）、何が起きたか（`desc`）、使ったモデルがあります。
-- **`uncertainties`**: その経路で、rivus が確かめられなかったこと。種類（`kind`）と、原因が対象のコードにあるか rivus の側にあるか（`attributable_to`: `target` / `rivus`）を言います。種類は、`dynamic_dispatch`（呼び先が実行時に決まる）、`unmodeled_library_call`（中身もモデルもない関数を通った）、`dependency_body_unread`（モデルのあるインターフェースの呼び出しの候補に、依存の本体があったが、読まなかった: 依存が包んだ先の自前の実装へは進んでいない。Go）、`depth_limit`（解析の上限で止めた）、`assumed_call`（渡したクロージャが呼ばれると仮定した）、`container_element_imprecision`、`reflection`、`config_read`、`global_var` などです。
+- **`uncertainties`**: その経路で、rivus が確かめられなかったこと。種類（`kind`）と、原因が対象のコードにあるか rivus の側にあるか（`attributable_to`: `target` / `rivus` / `mixed`。`mixed` は、言語の機能に由来するが、rivus の精度向上でも減らせるもの）を言います。種類は、`dynamic_dispatch`（呼び先が実行時に決まる）、`unmodeled_library_call`（中身もモデルもない関数を通った）、`dependency_body_unread`（モデルのあるインターフェースの呼び出しの候補に、依存の本体があったが、読まなかった: 依存が包んだ先の自前の実装へは進んでいない。Go）、`depth_limit`（解析の上限で止めた）、`assumed_call`（渡したクロージャが呼ばれると仮定した）、`container_element_imprecision`、`reflection`、`config_read`、`global_var` などです。
 - **`confidence`**: 経路に不確実性が 1 つもなければ `no_uncertainty_on_path`、あれば `requires_review`。**本物かどうかの判定ではありません。**
 - **`reachability`**: 経路の関数が、プログラムの起点（`main` など）から届くか（`from_entry` / `from_framework_callback` / `not_from_entry`）。`from_framework_callback` は、起点からは届かないが、依存の型が宣言するメソッドを上書きしている関数（Flutter の `build`、`initState` など。フレームワークが呼ぶ）から届く、という意味です（Dart）。`not_from_entry` は「死んだコード」の意味ではありません（フレームワークに値として登録されたハンドラは、起点から辿れないことがあります）。
 - **`conditional_nodes`**（上の例にはありません）: 引数の値でサニタイズするかが変わる関数（`render(s, escape bool)` のような形）を通ったとき、条件、条件ごとの結果、呼び元が渡した値の出どころ（定数、設定の読み出し、など）を書き出します。どちらが起きるかは、判定しません。
@@ -114,7 +114,7 @@ rivus query -site <ID> ./...           # sites の 1 件から始める
 - Dart と Rust の extractor（`rivus-dart`、`rivus-rust`）は、PATH に置くか、`-dart-extractor` / `-rust-extractor`（または環境変数 `RIVUS_DART_EXTRACTOR` / `RIVUS_RUST_EXTRACTOR`）で指します。extractor が書いた IR のファイルを、`rivus analyze -ir file.jsonl` で読むこともできます。
 - Rust は、`Cargo.toml` があるだけでは読みません。`-lang rust` と書いたときだけ読みます。
 - **テストと、開発用の依存は、既定で読みません**（Go の `_test.go`、Dart の `test/` などと `dev_dependencies` だけから使われるパッケージ、Rust のテスト・例・ベンチと `[dev-dependencies]`）。本番のビルドに入らないコードだからです。読まなかった数は、出力の `stats.tests_skipped` に出ます。`-tests` で読みます。
-- 対象のビルドやコード生成（`go generate`、`build_runner`）は、rivus はしません。先に済ませてください。
+- 対象のコード生成（`go generate`、`build_runner`）は、rivus はしません。先に済ませてください。ビルドも、Go と Dart ではしません。**Rust は例外で、読むときに `cargo check` が走ります**（上の表と「信頼できないコード」）。
 
 ## 今の状態
 
@@ -158,7 +158,7 @@ rivus が出さなかったことは、「流れがない」という意味で�
 3. 確信のない流れ: モデルの `flows` に `approximate: "理由"` を書くと、流れは消さずに、通った finding に不確実性 `model_approximation` が付きます（書き方は [docs/MODELING.md](docs/MODELING.md)）。
 4. 誰が書いたか: ルールの `origin: builtin | human | llm` で区別できます。`-deterministic-only` は `llm` のルールを無視します。LLM 由来のモデルが効いた finding には `llm_influenced` が付き、モデルが流れを消した場所は `suppressions` に残ります。
 
-LLM にモデルを書かせ、人や別の手段で確かめる、という使い方を想定しています。そのための手引きと、モデルを実行で確かめる道具は、これから整えます。
+LLM にモデルを書かせ、人や別の手段で確かめる、という使い方を想定しています。書式の手引きは [docs/MODELING.md](docs/MODELING.md)(英語。まだ全部の節は無い)。モデルを実行で確かめる道具は、これから整えます。
 
 ルールで書けること（抜粋）:
 
@@ -230,13 +230,17 @@ RIVUS_RUST=$PWD/extractor/rust/target/debug/rivus-rust go test ./cmd/rivus   # R
 
 ## ドキュメント
 
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): 全体の構成、IR、データ構造
-- [docs/DECISIONS.md](docs/DECISIONS.md): 設計の判断の記録（ADR）
-- [docs/GLOSSARY.md](docs/GLOSSARY.md): 用語
-- [docs/GRAPH.md](docs/GRAPH.md): `rivus index` と `rivus graph` の使い方
-- [docs/DESIGN-graph.md](docs/DESIGN-graph.md)、[DESIGN-capture.md](docs/DESIGN-capture.md)、[DESIGN-zoo.md](docs/DESIGN-zoo.md)、[DESIGN-memory.md](docs/DESIGN-memory.md): 個別の設計
-- [bench/README.md](bench/README.md)、[bench/MISSES.md](bench/MISSES.md): ベンチの手順と、既知の見逃し
-- [docs/history/BRIEF.md](docs/history/BRIEF.md)、[docs/history/QUESTIONS.md](docs/history/QUESTIONS.md): 最初の構想と、それへの指摘（歴史的な文書。今の設計とは異なる所がある）
+読み手ごとの入口です。全体の目次は [docs/README.md](docs/README.md)。
+
+| 読み手 | 読む文書 |
+|---|---|
+| 使い手 | この README。信頼できないコードの扱いは [docs/rust-isolation.md](docs/rust-isolation.md)。用語は [docs/GLOSSARY.md](docs/GLOSSARY.md) |
+| ルールを書く人 | [docs/MODELING.md](docs/MODELING.md)(書式)、[examples/rules](examples/rules)(見本)、[docs/GCP-MODELS.md](docs/GCP-MODELS.md) |
+| rivus を使う AI エージェント | [docs/GRAPH.md](docs/GRAPH.md)(`rivus index` と `rivus graph`)。出力の読み方はこの README の「何が出るか」 |
+| 開発者 | [docs/PRINCIPLES.md](docs/PRINCIPLES.md)(設計思想)、[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)(今の構成)、[docs/DECISIONS.md](docs/DECISIONS.md) と [docs/ADR-INDEX.md](docs/ADR-INDEX.md)(判断の経緯と一覧)、`docs/DESIGN-*.md`(個別の設計。冒頭に状態がある)、[bench/README.md](bench/README.md)(テストと測定) |
+| レビューする人 | [docs/PRINCIPLES.md](docs/PRINCIPLES.md)(原則と、まだ届いていない所)、[bench/MISSES.md](bench/MISSES.md)(既知の見逃し) |
+
+[docs/history/](docs/history/) の BRIEF.md と QUESTIONS.md は、最初の構想と、それへの指摘です(歴史的な文書。今の設計とは異なる所があります)。
 
 ## ライセンス
 
