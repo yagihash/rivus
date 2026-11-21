@@ -15,14 +15,14 @@ fn run(f: impl FnOnce()) {
 fn vuln() { // @vuln
     let v = m::src("clos-to-own-helper-vuln"); // @source(clos-to-own-helper-vuln)
     run(|| {
-        m::sink_cmd(&v); // @sink(clos-to-own-helper-vuln)
+        m::sink_cmd(&v); // @sink(clos-to-own-helper-vuln) @noisy(4) @ref(ENV-PTR)
     });
 }
 
 fn fixed() { // @fixed
     let v = m::clean_cmd(&m::src("clos-to-own-helper-fixed"));
     run(|| {
-        m::sink_cmd(&v); // @sink(none)
+        m::sink_cmd(&v); // @sink(none) @fp @ref(ENV-PTR)
     });
 }
 
@@ -30,9 +30,9 @@ fn decoy() { // @decoy
     let v = m::src("clos-to-own-helper-decoy"); // @source(clos-to-own-helper-decoy)
     let k = "constant";
     run(|| {
-        m::sink_cmd(k); // @sink(none) @nosink(clos-to-own-helper-decoy)
+        m::sink_cmd(k); // @sink(none) @fp @nosink(clos-to-own-helper-decoy) @ref(ENV-PTR,PARITY)
     });
     run(|| {
-        m::sink_sql(&v); // @sink(clos-to-own-helper-decoy)
+        m::sink_sql(&v); // @sink(clos-to-own-helper-decoy) @noisy(4) @ref(ENV-PTR)
     });
 }

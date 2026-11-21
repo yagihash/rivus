@@ -4,6 +4,7 @@ import 'package:zoo_cells/call/depth3.dart' as call_depth3;
 import 'package:zoo_cells/call/direct.dart' as call_direct;
 import 'package:zoo_cells/call/direct_in.dart' as call_direct_in;
 import 'package:zoo_cells/call/multiret.dart' as call_multiret;
+import 'package:zoo_cells/clos/capture_write_by_ref.dart' as clos_capture_write_by_ref;
 import 'package:zoo_cells/clos/inline.dart' as clos_inline;
 import 'package:zoo_cells/clos/relay.dart' as clos_relay;
 import 'package:zoo_cells/clos/returned.dart' as clos_returned;
@@ -39,6 +40,7 @@ void registerAll() {
   call_direct.register();
   call_direct_in.register();
   call_multiret.register();
+  clos_capture_write_by_ref.register();
   clos_inline.register();
   clos_relay.register();
   clos_returned.register();

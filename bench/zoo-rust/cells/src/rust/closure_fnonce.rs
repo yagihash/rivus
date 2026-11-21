@@ -15,13 +15,13 @@ fn call_once<F: FnOnce() -> String>(f: F) -> String {
 fn vuln() { // @vuln
     let v = m::src("rust-closure-fnonce-vuln"); // @source(rust-closure-fnonce-vuln)
     let r = call_once(move || v);
-    m::sink_cmd(&r); // @sink(rust-closure-fnonce-vuln)
+    m::sink_cmd(&r); // @sink(rust-closure-fnonce-vuln) @noisy(4) @ref(ENV-PTR)
 }
 
 fn fixed() { // @fixed
     let v = m::clean_cmd(&m::src("rust-closure-fnonce-fixed"));
     let r = call_once(move || v);
-    m::sink_cmd(&r); // @sink(none)
+    m::sink_cmd(&r); // @sink(none) @fp @ref(ENV-PTR)
 }
 
 fn decoy() { // @decoy
@@ -29,6 +29,6 @@ fn decoy() { // @decoy
     let k = "constant".to_string();
     let a = call_once(move || k);
     let b = call_once(move || v);
-    m::sink_cmd(&a); // @sink(none) @nosink(rust-closure-fnonce-decoy)
-    m::sink_sql(&b); // @sink(rust-closure-fnonce-decoy)
+    m::sink_cmd(&a); // @sink(none) @fp @nosink(rust-closure-fnonce-decoy) @ref(ENV-PTR)
+    m::sink_sql(&b); // @sink(rust-closure-fnonce-decoy) @noisy(4) @ref(ENV-PTR)
 }

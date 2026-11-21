@@ -10,7 +10,7 @@ pub fn register() {
 
 fn make1(s: String) -> impl Fn() {
     move || {
-        m::sink_cmd(&s); // @sink(clos-returned-vuln)
+        m::sink_cmd(&s); // @sink(clos-returned-vuln) @noisy(4) @ref(ENV-PTR)
     }
 }
 
@@ -20,7 +20,7 @@ fn vuln() { // @vuln
 
 fn make_fixed(s: String) -> impl Fn() {
     move || {
-        m::sink_cmd(&s); // @sink(none)
+        m::sink_cmd(&s); // @sink(none) @fp @ref(ENV-PTR)
     }
 }
 
@@ -30,7 +30,7 @@ fn fixed() { // @fixed
 
 fn make_decoy(a: String, b: String) -> impl Fn() {
     move || {
-        m::sink_cmd(&b); // @sink(none) @nosink(clos-returned-decoy)
+        m::sink_cmd(&b); // @sink(none) @fp @nosink(clos-returned-decoy) @ref(ENV-PTR,PARITY)
         m::sink_sql(&a); // @sink(clos-returned-decoy)
     }
 }

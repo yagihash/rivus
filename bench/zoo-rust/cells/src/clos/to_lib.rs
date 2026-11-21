@@ -14,7 +14,7 @@ fn vuln() { // @vuln
     let v = m::src("clos-to-lib-vuln"); // @source(clos-to-lib-vuln) @miss(unmodeled_library_call) @ref(CALLBACK-MODEL,PARITY)
     let once = Once::new();
     once.call_once(|| {
-        m::sink_cmd(&v); // @sink(clos-to-lib-vuln)
+        m::sink_cmd(&v); // @sink(clos-to-lib-vuln) @noisy(4) @ref(ENV-PTR)
     });
 }
 
@@ -30,7 +30,7 @@ fn fixed() { // @fixed
     let v = m::clean_cmd(&m::src("clos-to-lib-fixed"));
     let once = Once::new();
     once.call_once(|| {
-        m::sink_cmd(&v); // @sink(none)
+        m::sink_cmd(&v); // @sink(none) @fp @ref(ENV-PTR)
     });
 }
 
@@ -39,7 +39,7 @@ fn decoy() { // @decoy
     let k = "constant";
     let once = Once::new();
     once.call_once(|| {
-        m::sink_cmd(k); // @sink(none) @nosink(clos-to-lib-decoy)
+        m::sink_cmd(k); // @sink(none) @fp @nosink(clos-to-lib-decoy) @ref(ENV-PTR,PARITY)
     });
     let cell: OnceLock<String> = OnceLock::new();
     let r = cell.get_or_init(|| v.clone());

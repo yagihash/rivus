@@ -11,6 +11,7 @@ pub mod call {
     pub mod multiret;
 }
 pub mod clos {
+    pub mod capture_write_by_ref;
     pub mod inline;
     pub mod relay;
     pub mod returned;

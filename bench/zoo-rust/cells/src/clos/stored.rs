@@ -25,7 +25,7 @@ fn vuln() { // @vuln
     let v = m::src("clos-stored-vuln"); // @source(clos-stored-vuln) @miss(unmodeled_library_call) @ref(CLOSURE-IN-MEMORY,PARITY)
     let h = Holder {
         a: Some(Box::new(move || {
-            m::sink_cmd(&v); // @sink(clos-stored-vuln)
+            m::sink_cmd(&v); // @sink(clos-stored-vuln) @noisy(4) @ref(ENV-PTR)
         })),
         b: None,
     };
@@ -42,7 +42,7 @@ fn call_g() {
 fn vuln2() { // @vuln
     let v = m::src("clos-stored-vuln2"); // @source(clos-stored-vuln2) @miss(unmodeled_library_call) @ref(CLOSURE-IN-MEMORY,PARITY)
     *G_FN.lock().unwrap() = Some(Box::new(move || {
-        m::sink_cmd(&v); // @sink(clos-stored-vuln2)
+        m::sink_cmd(&v); // @sink(clos-stored-vuln2) @noisy(4) @ref(ENV-PTR)
     }));
     call_g();
 }
@@ -57,7 +57,7 @@ fn run_all(fs: &[Box<dyn Fn()>]) {
 fn vuln3() { // @vuln
     let v = m::src("clos-stored-vuln3"); // @source(clos-stored-vuln3) @miss(unmodeled_library_call) @ref(CLOSURE-IN-MEMORY,PARITY)
     let fs: Vec<Box<dyn Fn()>> = vec![Box::new(move || {
-        m::sink_cmd(&v); // @sink(clos-stored-vuln3)
+        m::sink_cmd(&v); // @sink(clos-stored-vuln3) @noisy(4) @ref(ENV-PTR)
     })];
     run_all(&fs);
 }
@@ -66,7 +66,7 @@ fn fixed() { // @fixed
     let v = m::clean_cmd(&m::src("clos-stored-fixed"));
     let h = Holder {
         a: Some(Box::new(move || {
-            m::sink_cmd(&v); // @sink(none)
+            m::sink_cmd(&v); // @sink(none) @fp @ref(ENV-PTR)
         })),
         b: None,
     };
@@ -83,10 +83,10 @@ fn decoy() { // @decoy
     let k = "constant";
     let h = Holder {
         a: Some(Box::new(move || {
-            m::sink_cmd(k); // @sink(none) @nosink(clos-stored-decoy)
+            m::sink_cmd(k); // @sink(none) @fp @nosink(clos-stored-decoy) @ref(ENV-PTR,PARITY)
         })),
         b: Some(Box::new(move || {
-            m::sink_sql(&v); // @sink(clos-stored-decoy)
+            m::sink_sql(&v); // @sink(clos-stored-decoy) @noisy(4) @ref(ENV-PTR)
         })),
     };
     call_both(&h);
