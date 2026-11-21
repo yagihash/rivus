@@ -28,6 +28,7 @@ def frames(stack):
 
 SKIP = ('package:zoo_mark/', 'package:zoo_exec/', 'file:')  # the recording and the harness: not what rivus read
 LINE_ONLY = '--line-only' in sys.argv
+AT = collections.Counter()  # how the callee of an entry record was found (OBS-1)
 KNOWN = set()  # the libraries that the graph has functions of (set in main)
 
 
@@ -78,6 +79,12 @@ class Graph:
                 got = [c[0] for c in cs if (c[3], c[4]) == best]
         return got
 
+    def callee_at(self, uri, at):
+        """OBS-1: the function that starts at `at` ("line:col" of the original file, which instrument.dart passed):
+        exact, no guess from the name in the stack."""
+        line, col = (int(x) for x in at.split(':'))
+        return [c[0] for c in self.by_uri.get(uri, []) if (c[3], c[4]) == (line, col)]
+
     def callsite(self, uri, line, col):
         """The call sites of the line from the column of the frame on (the VM says where the name starts, the graph
         where the arguments start)."""
@@ -105,7 +112,12 @@ def main():
                 continue
             nxt = fs[i + 1]
             callee = fs[i]
-            ids = g.callee(*callee)
+            at = row.get('at')
+            if at and at != '0:0' and i == 0:
+                ids = g.callee_at(callee[1], at)
+                AT[('exact' if ids else 'at_unmatched')] += 1
+            else:
+                ids = g.callee(*callee)
             cname = '%s %s:%d' % (callee[0], callee[1], callee[2])
             if is_cell(nxt[1]):
                 site = g.callsite(nxt[1], nxt[2], nxt[3])
@@ -147,6 +159,8 @@ def main():
     for (kind, st), n in sorted(kinds.items()):
         print('%-5s %-18s %d' % (kind, st, n))
     print('distinct observed edges: %d, stacks: %d' % (len(seen), len(stacks)))
+    if AT:
+        print('callee by the start position: %s' % dict(AT))
     if '--json' in sys.argv:
         json.dump(out, open(sys.argv[sys.argv.index('--json') + 1], 'w'), indent=1, ensure_ascii=False)
     if '--list' in sys.argv:

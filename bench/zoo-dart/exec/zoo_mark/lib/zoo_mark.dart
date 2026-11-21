@@ -104,10 +104,11 @@ List<Map<String, Object?>> stackRows() => List.of(_stackRows);
 /// Called at the start of every function of a copy of the cells that bench/zoo-dart/observed/instrument.dart made:
 /// the stack of the call (the first lines: this function and the place that called it), with the case. Only when
 /// ZOO_STACKS=1.
-void rvEnter() {
+void rvEnter([int line = 0, int col = 0]) {
   if (!_stacks) return;
   final lines = StackTrace.current.toString().split('\n');
-  _stackRows.add({'case': _current, 'class': 'enter', 'stack': lines.skip(1).take(4).join('\n')});
+  // `at`: where the function starts in the original file (OBS-1)
+  _stackRows.add({'case': _current, 'class': 'enter', 'at': '$line:$col', 'stack': lines.skip(1).take(4).join('\n')});
 }
 
 /// The marker of the tag.
