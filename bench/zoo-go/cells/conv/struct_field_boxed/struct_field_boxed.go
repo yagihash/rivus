@@ -31,6 +31,6 @@ func decoy() { // @decoy
 	req := &mark.Stmt{SQL: "constant", Params: map[string]string{}}
 	req.Params["p"] = t
 	var v any = req
-	mark.SinkStmtAny(v) // @sink(none) @fp @nosink(conv-struct-field-boxed-decoy) @fp @ref(FIELD-SINK)
+	mark.SinkStmtAny(v) // @sink(none) @nosink(conv-struct-field-boxed-decoy)
 	mark.SinkCmd(t)     // @sink(conv-struct-field-boxed-decoy)
 }

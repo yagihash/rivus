@@ -71,3 +71,37 @@ func Each(xs []string, f func(string)) {
 
 // Later runs f on its own (calls with mode go).
 func Later(f func()) { go f() }
+
+// Req is a request with a text that is dangerous (Q) and one that is not (Meta): the shape of the
+// requests of a generated API (testdata/go/cases/fieldsink).
+type Req struct {
+	Q    string
+	Meta string
+}
+
+// Wrap holds a request, and a text beside it.
+type Wrap struct {
+	Req *Req
+	N   string
+}
+
+// SinkReq runs the request: the Q of it is the sink.
+func SinkReq(r *Req) {}
+
+// SinkWrap runs the request of the wrapper: the Q of the Req is the sink.
+func SinkWrap(w *Wrap) {}
+
+// SinkReqTypo is a sink of a field that Req does not have (a misspelling in the rule).
+func SinkReqTypo(r *Req) {}
+
+// NewReq makes a request of a text (the model says the whole request holds it).
+func NewReq(q string) *Req { return nil }
+
+// Opaque is a function that has no model: the analysis does not know what it does to the request.
+func Opaque(r *Req) {}
+
+// Store runs requests: the Q of the request is the sink.
+type Store struct{}
+
+// Run runs the request.
+func (*Store) Run(r *Req) {}

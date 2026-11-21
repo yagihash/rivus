@@ -62,24 +62,40 @@ type Result struct {
 func SinkArgs(sinks []model.Sink, n int) []int {
 	seen := map[int]bool{}
 	var out []int
-	for _, sk := range sinks {
-		if len(sk.Args) == 0 {
-			for i := 0; i < n; i++ {
-				if !seen[i] {
-					seen[i] = true
-					out = append(out, i)
-				}
-			}
-			continue
-		}
-		for _, i := range sk.Args {
-			if i >= 0 && i < n && !seen[i] {
-				seen[i] = true
-				out = append(out, i)
+	for i := range sinks {
+		for _, a := range sinks[i].WholeArgs(n) {
+			if !seen[a] {
+				seen[a] = true
+				out = append(out, a)
 			}
 		}
 	}
 	sort.Ints(out)
+	return out
+}
+
+// SinkPartsAt are the parts of the sinks of a call with nargs arguments (docs/DESIGN-field-sinks.md): the
+// position and the field below it that is dangerous. A position that a sink takes whole is not among
+// them (whole says more); a position out of the arguments is not either.
+func SinkPartsAt(sinks []model.Sink, nargs int) []model.SinkPart {
+	whole := map[int]bool{}
+	for _, a := range SinkArgs(sinks, nargs) {
+		whole[a] = true
+	}
+	wholeRecv := false
+	for i := range sinks {
+		wholeRecv = wholeRecv || sinks[i].WholeRecv()
+	}
+	var out []model.SinkPart
+	for i := range sinks {
+		for _, p := range sinks[i].PartList() {
+			switch {
+			case p.Recv && wholeRecv, !p.Recv && p.Arg != nil && (whole[*p.Arg] || *p.Arg >= nargs):
+				continue
+			}
+			out = append(out, p)
+		}
+	}
 	return out
 }
 

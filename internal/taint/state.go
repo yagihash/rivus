@@ -235,6 +235,9 @@ type state struct {
 	// pointer (what it points to lives under "/*"), and the callee takes the pointer itself
 	recvBoxed bool
 
+	// opaque are the roots of the values that a call neither read nor modelled was given (noteOpaque)
+	opaque map[Root]bool
+
 	suppressions map[string]*Suppression
 	findings     map[findingKey]*rawFinding
 	sinkReaches  map[sinkKey]*SinkReach

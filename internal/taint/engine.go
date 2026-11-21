@@ -83,6 +83,10 @@ type Engine struct {
 	// makers says where each closure is made (the function and the place): made once, when first asked.
 	makersOnce sync.Once
 	makers     map[string]closureSite
+	// fieldNames are the field names that the instructions of the program use (the sinks that name a
+	// field check theirs against it: fieldsink.go).
+	fieldNamesOnce sync.Once
+	fieldNames     map[string]bool
 	// reach is what the program can reach from its entry points (nil: unknown).
 	reach map[*sg.Func]bool
 	// reachCB is reach with the methods that a framework calls as entry points too (ADR-073).

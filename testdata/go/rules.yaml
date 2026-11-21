@@ -151,6 +151,24 @@ sinks:
     category: test
     when_arg_type: {arg: 0, types: [example.com/cases/cases/recvcond.Web]}
 
+  # sinks that name a part of the value (testdata/go/cases/fieldsink)
+  - symbol: example.com/cases/lib.SinkReq
+    args: [0]
+    field: Q
+    category: test
+  - symbol: example.com/cases/lib.SinkWrap
+    args: [0]
+    field: Req.Q
+    category: test
+  - symbol: example.com/cases/lib.SinkReqTypo
+    args: [0]
+    field: Qq
+    category: test
+  - symbol: (*example.com/cases/lib.Store).Run
+    parts:
+      - {arg: 0, field: Q}
+    category: test
+
   # match: implementations: the implementations of the interface method are
   # sinks as well (testdata/go/cases/impl).
   - symbol: (example.com/cases/cases/impl.Store).Save
@@ -173,6 +191,9 @@ propagators:
   - symbol: example.com/cases/lib.External
     flows: [{from: arg0, to: result, approximate: "the output of an external program: whether it carries the arguments depends on the program"}]
   - symbol: example.com/cases/lib.Exact
+    flows: [{from: arg0, to: result}]
+  # the whole request holds the text (testdata/go/cases/fieldsink)
+  - symbol: example.com/cases/lib.NewReq
     flows: [{from: arg0, to: result}]
   # functions that call a function they are given (testdata/go/cases/callbacks)
   - symbol: example.com/cases/lib.Apply

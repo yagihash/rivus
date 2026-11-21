@@ -301,6 +301,11 @@ func literalOnlyIR(form *irssa.Form, s *Site) bool {
 		}
 	}
 	nargs := len(in.Args) - argStart
+	for i := range s.Sink {
+		if s.Sink[i].HasParts() {
+			return false // a part of a value is not told apart from a constant here: not literal only
+		}
+	}
 	var checked int
 	for _, i := range SinkArgs(s.Sink, nargs) {
 		checked++
@@ -309,7 +314,7 @@ func literalOnlyIR(form *irssa.Form, s *Site) bool {
 		}
 	}
 	for _, sk := range s.Sink {
-		if sk.Recv {
+		if sk.WholeRecv() {
 			checked++
 			if !hasRecv || !isConstantRef(form, form.Operand(at.Block, at.Instr, recvAt), 0) {
 				return false

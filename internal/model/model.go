@@ -156,7 +156,68 @@ type Sink struct {
 	WhenArgType *ArgTypeCond `yaml:"when_arg_type"`
 	// MaxImplementations bounds the expansion of match: implementations.
 	MaxImplementations int `yaml:"max_implementations"`
+	// Parts say, for a position, which part of the value is dangerous: the field (a list of names) below
+	// it. A position that Args or Recv name is dangerous whole, whatever Parts say of it. With Parts
+	// and no Args, only the positions of Parts are read (docs/DESIGN-field-sinks.md).
+	Parts []SinkPart `yaml:"parts"`
+	// Field is the short form of one part: args: [1] with field: A.B, or recv: true with field: A.
+	Field string `yaml:"field"`
 }
+
+// SinkPart is a position of a call and the field below it that is dangerous.
+type SinkPart struct {
+	// Arg is the position of an argument (the receiver is not one of them); Recv: true is the receiver.
+	Arg  *int `yaml:"arg"`
+	Recv bool `yaml:"recv"`
+	// Field is the names of the fields from the value to the dangerous one, separated by dots. "[]" is
+	// an element of a slice, an array or a map. The names are those the IR has; the steps that are
+	// not names (the pointer behind a field, the pointer in an interface) are not written.
+	Field string `yaml:"field"`
+}
+
+// PartList is the parts of the sink: Parts, or the one that the short form (field) makes.
+func (s *Sink) PartList() []SinkPart {
+	if s.Field == "" {
+		return s.Parts
+	}
+	switch {
+	case len(s.Args) == 1 && !s.Recv:
+		a := s.Args[0]
+		return []SinkPart{{Arg: &a, Field: s.Field}}
+	case len(s.Args) == 0 && s.Recv:
+		return []SinkPart{{Recv: true, Field: s.Field}}
+	}
+	return nil
+}
+
+// HasParts reports whether the sink names parts of its values.
+func (s *Sink) HasParts() bool { return s.Field != "" || len(s.Parts) > 0 }
+
+// WholeArgs are the positions of the arguments (out of n) that are dangerous whole. A sink with parts
+// reads whole only the positions that args names: its parts are for the rest, and no args does not
+// mean every argument (as it does for a sink without parts).
+func (s *Sink) WholeArgs(n int) []int {
+	if s.Field != "" {
+		return nil // the short form: its one position is the part
+	}
+	if len(s.Args) == 0 && !s.HasParts() {
+		out := make([]int, n)
+		for i := range out {
+			out[i] = i
+		}
+		return out
+	}
+	var out []int
+	for _, i := range s.Args {
+		if i >= 0 && i < n {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
+// WholeRecv reports whether the receiver is dangerous whole.
+func (s *Sink) WholeRecv() bool { return s.Recv && s.Field == "" }
 
 // ArgTypeCond is a condition on the static type of an argument.
 //
@@ -687,6 +748,9 @@ func (rs *RuleSet) validate() error {
 				return fmt.Errorf("%s: args: %d is not an argument position (the receiver is recv: true)", what, a)
 			}
 		}
+		if err := validateSinkParts(&s, what); err != nil {
+			return err
+		}
 		if c := s.WhenArgType; c != nil {
 			if c.Arg < 0 {
 				return fmt.Errorf("%s: when_arg_type: arg %d is not an argument position (the receiver is recv: true)", what, c.Arg)
@@ -1071,4 +1135,47 @@ func (r *Rules) Symbols() []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// validateSinkParts checks the parts of a sink and its short form.
+func validateSinkParts(s *Sink, what string) error {
+	if s.Field != "" {
+		if len(s.Parts) > 0 {
+			return fmt.Errorf("%s: field is the short form of one part: it cannot come with parts", what)
+		}
+		if !(len(s.Args) == 1 && !s.Recv) && !(len(s.Args) == 0 && s.Recv) {
+			return fmt.Errorf("%s: field names the part of one position: give one position (args: [n], or recv: true), or write parts", what)
+		}
+		return checkFieldPath(s.Field, what+": field")
+	}
+	for i, p := range s.Parts {
+		w := fmt.Sprintf("%s: parts[%d]", what, i)
+		switch {
+		case p.Recv && p.Arg != nil:
+			return fmt.Errorf("%s: arg and recv: true are one or the other", w)
+		case !p.Recv && p.Arg == nil:
+			return fmt.Errorf("%s: arg (an argument position) or recv: true is required", w)
+		case p.Arg != nil && *p.Arg < 0:
+			return fmt.Errorf("%s: arg: %d is not an argument position (the receiver is recv: true)", w, *p.Arg)
+		}
+		if p.Field == "" {
+			return fmt.Errorf("%s: field is required (a position whole is args or recv)", w)
+		}
+		if err := checkFieldPath(p.Field, w+": field"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// FieldNames splits the field of a part into the names of the fields (and "[]" for an element).
+func FieldNames(field string) []string { return strings.Split(field, ".") }
+
+func checkFieldPath(field, what string) error {
+	for _, n := range FieldNames(field) {
+		if n == "" || n == "*" || strings.ContainsAny(n, "/ \t") {
+			return fmt.Errorf("%s: %q is not a path of field names (names separated by dots; \"[]\" for an element; the steps of a pointer are not written)", what, field)
+		}
+	}
+	return nil
 }

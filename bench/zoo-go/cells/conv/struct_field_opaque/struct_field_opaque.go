@@ -32,6 +32,6 @@ func decoy() { // @decoy
 	req.Params["body"] = t
 	other := &mark.Stmt{}
 	mark.Opaque(other)
-	mark.SinkStmt(req) // @sink(none) @fp @nosink(conv-struct-field-opaque-decoy) @fp @ref(FIELD-SINK)
+	mark.SinkStmt(req) // @sink(none) @nosink(conv-struct-field-opaque-decoy)
 	mark.SinkCmd(t)    // @sink(conv-struct-field-opaque-decoy)
 }

@@ -33,11 +33,18 @@ const (
 	// KindAssumedCall marks a closure that is made here and called where it cannot be seen (given
 	// to another function, stored, returned): what it captured is applied at the place it was made,
 	// as if it were called (C-7, ADR-059).
-	KindAssumedCall    = "assumed_call"
-	AttributableTarget = "target"
-	AttributableRivus  = "rivus"
-	AttributableMixed  = "mixed"
-	maxPathSteps       = 200
+	KindAssumedCall = "assumed_call"
+	// KindFieldImprecision marks a sink that names a part of its value (a field below the argument) and was
+	// reached by taint that is not known to be in that part: the value is tainted as a whole, the path was
+	// cut, an element of a container, or the value went through a function that is not read. The detail
+	// says why (whole_value, path_limit, element, opaque_callee). KindFieldUnresolved marks a sink whose
+	// field names a name that the program does not have (a misspelling): the sink was taken whole.
+	KindFieldImprecision = "field_imprecision"
+	KindFieldUnresolved  = "field_unresolved"
+	AttributableTarget   = "target"
+	AttributableRivus    = "rivus"
+	AttributableMixed    = "mixed"
+	maxPathSteps         = 200
 )
 
 // attributable gives the attributable_to value of each kind

@@ -484,11 +484,32 @@ type rawFinding struct {
 	labels map[string]bool
 	steps  *rope
 	guards []Guard
+	// unsure: the only ways known to reach the sink are ones that do not tell the field (field_imprecision):
+	// a way that does tell it is the finding, and the ones that do not are dropped (a sure flow wins).
+	unsure bool
 }
 
+// sinkKey is what a summary keeps apart: the element, the sink, the part of the value that is read below
+// it (field: dotted names, "" for all of it), and whether the way is a sure one or an unsure one (the
+// sure one is not mixed into the unsure one, or a flow that is known would be reported as a guess).
 type sinkKey struct {
-	e    Elem
-	site string
+	e      Elem
+	site   string
+	field  string
+	unsure bool
+}
+
+func lessSinkKey(a, b sinkKey) bool {
+	if a.site != b.site {
+		return a.site < b.site
+	}
+	if a.e != b.e {
+		return lessElem(a.e, b.e)
+	}
+	if a.field != b.field {
+		return a.field < b.field
+	}
+	return !a.unsure && b.unsure
 }
 
 // SinkReach says: taint coming from the symbolic element reaches a sink site.
@@ -498,6 +519,12 @@ type SinkReach struct {
 	Accepts []string
 	Steps   *rope
 	Guards  []Guard
+	// Field is the part of the value that the sink reads, below Elem, still to be matched against the
+	// cells of the caller (names separated by dots; "" for all of it: docs/DESIGN-field-sinks.md). The
+	// summary does not know the steps of the path of the caller (the pointers), so the caller matches.
+	Field string
+	// Unsure: the way does not tell the field (field_imprecision), and the step of the sink carries it.
+	Unsure bool
 }
 
 func (s *state) checkSink(cc *callCtx, site *sites.Site) {
@@ -505,16 +532,19 @@ func (s *state) checkSink(cc *callCtx, site *sites.Site) {
 	for _, i := range sites.SinkArgs(site.Sink, len(cc.args)) {
 		vals = append(vals, cc.args[i])
 	}
-	for _, sk := range site.Sink {
-		if sk.Recv && cc.recv != nil {
+	for i := range site.Sink {
+		if site.Sink[i].WholeRecv() && cc.recv != nil {
 			vals = append(vals, cc.recv)
 			break
 		}
 	}
 	for _, v := range vals {
 		for _, f := range s.flatten(s.locs(v)) {
-			s.reach(site, f, cc.in)
+			s.reach(site, f, cc.in, nil, "")
 		}
+	}
+	for _, p := range sites.SinkPartsAt(site.Sink, len(cc.args)) {
+		s.checkPart(cc, site, p)
 	}
 }
 
@@ -530,8 +560,11 @@ func accepted(accepts []string, label string) bool {
 	return false
 }
 
-func (s *state) reach(site *sites.Site, f found, in *sg.Instr) {
-	steps := cat(s.trace(f.Cell, f.Orig), leaf(s.sinkStep(site, in)))
+// reach says that the element f, found in a value that the sink reads, reaches the sink. note is the
+// uncertainty of a way that does not tell the field (field_imprecision, field_unresolved): nil for a sure
+// one. field is the part still to be matched by the caller, for a symbolic element ("" for all of it).
+func (s *state) reach(site *sites.Site, f found, in *sg.Instr, note *Uncertainty, field string) {
+	steps := cat(s.trace(f.Cell, f.Orig), leaf(s.sinkStep(site, in, note)))
 	gs := s.guardsAtSink(in, f)
 	if site.Callee != "" && f.E.Kind == Param {
 		if vg := s.valueGuards(in)[site.Callee]; len(vg) > 0 {
@@ -546,10 +579,10 @@ func (s *state) reach(site *sites.Site, f found, in *sg.Instr) {
 		if !accepted(site.Labels, f.E.Label()) {
 			return
 		}
-		s.recordFinding(f.E.Origin(), site, f.E.Label(), steps, gs)
+		s.recordFinding(f.E.Origin(), site, f.E.Label(), steps, gs, note != nil)
 	case Param:
-		k := sinkKey{f.E, site.ID}
-		s.noteSinkReach(k, &SinkReach{Elem: f.E, Site: site.ID, Accepts: site.Labels, Steps: steps, Guards: gs})
+		k := sinkKey{f.E, site.ID, field, note != nil}
+		s.noteSinkReach(k, &SinkReach{Elem: f.E, Site: site.ID, Accepts: site.Labels, Steps: steps, Guards: gs, Field: field, Unsure: note != nil})
 	}
 }
 
@@ -585,8 +618,8 @@ func mergeSinkReach(old, nw *SinkReach) *SinkReach {
 	return &c
 }
 
-func (s *state) sinkStep(site *sites.Site, in *sg.Instr) Step {
-	return Step{Func: s.eng.funcID(s.fn), Desc: "sink: " + site.Symbol, pos: in.Pos, Notes: s.sinkNotes}
+func (s *state) sinkStep(site *sites.Site, in *sg.Instr, note *Uncertainty) Step {
+	return Step{Func: s.eng.funcID(s.fn), Desc: "sink: " + site.Symbol, pos: in.Pos, Notes: appendNote(s.sinkNotes, note)}
 }
 
 // guardsAtSink are the conditions under which the flow reaches the sink: those
@@ -602,7 +635,7 @@ func (s *state) guardsAtSink(in *sg.Instr, f found) []Guard {
 	return all
 }
 
-func (s *state) recordFinding(origin string, site *sites.Site, label string, steps *rope, guards []Guard) {
+func (s *state) recordFinding(origin string, site *sites.Site, label string, steps *rope, guards []Guard, unsure bool) {
 	k := findingKey{origin, site.ID}
 	rf := s.findings[k]
 	if rf == nil {
@@ -614,6 +647,12 @@ func (s *state) recordFinding(origin string, site *sites.Site, label string, ste
 	case rf.steps == nil:
 		rf.steps = steps
 		rf.guards = guards
+		rf.unsure = unsure
+	case rf.unsure && !unsure:
+		// a way that tells the field: the finding is that one, with no uncertainty of the field
+		rf.steps, rf.guards, rf.unsure = steps, guards, false
+	case !rf.unsure && unsure:
+		// a way that does not tell the field, beside one that does: nothing to add
 	default:
 		// The same flow came under other guards (or none): the guards of
 		// the one kept would not describe it (ADR-035: they are dropped).
@@ -864,6 +903,7 @@ func (s *state) applyFlows(cc *callCtx, flows []model.Flow, o *op, desc string, 
 // known: everything that goes in may come out. The result is recorded as
 // uncertainty so that a reviewer sees the guess.
 func (s *state) unmodeled(cc *callCtx, note *Uncertainty) {
+	s.noteOpaque(cc)
 	src := s.flatten(valuesLocs(s, cc.argv()))
 	if s.eng.opts.PassStats && cc.sym != "" {
 		s.eng.noteUnmodeled(cc.sym, len(src) > 0)

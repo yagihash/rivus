@@ -32,15 +32,18 @@ sinks:
   - symbol: zoo/mark.SinkAny
     args: [0]
     category: command_injection
-  # the sinks that read a part of a structure (docs/DESIGN-field-sinks.md): today the whole of it
+  # the sinks that read a part of a structure (docs/DESIGN-field-sinks.md)
   - symbol: zoo/mark.SinkStmt
     args: [0]
+    field: SQL
     category: sql_injection
   - symbol: zoo/mark.SinkStmtAny
     args: [0]
+    field: SQL
     category: sql_injection
   - symbol: zoo/mark.SinkTask
     args: [0]
+    field: Task.MessageType.HTTPRequest.URL
     category: command_injection
 
 sanitizers:

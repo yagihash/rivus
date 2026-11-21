@@ -3,6 +3,7 @@ package taint
 import (
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/yagihash/rivus/internal/ir"
 	"github.com/yagihash/rivus/internal/sg"
@@ -142,12 +143,7 @@ func (s *state) summarize() *Summary {
 	for k := range s.sinkReaches {
 		keys = append(keys, k)
 	}
-	sort.Slice(keys, func(i, j int) bool {
-		if keys[i].site != keys[j].site {
-			return keys[i].site < keys[j].site
-		}
-		return lessElem(keys[i].e, keys[j].e)
-	})
+	sort.Slice(keys, func(i, j int) bool { return lessSinkKey(keys[i], keys[j]) })
 	for _, k := range keys {
 		sum.Sinks = append(sum.Sinks, s.sinkReaches[k])
 	}
@@ -221,7 +217,7 @@ func (sum *Summary) signature() string {
 		}
 	}
 	for _, k := range sum.Sinks {
-		parts = append(parts, "sink", k.Site, k.Elem.String(), guardsKey(k.Guards))
+		parts = append(parts, "sink", k.Site, k.Elem.String(), guardsKey(k.Guards), k.Field, strconv.FormatBool(k.Unsure))
 	}
 	return fingerprint.Hash(parts...)
 }
@@ -230,6 +226,11 @@ func (sum *Summary) signature() string {
 type expanded struct {
 	E    Elem
 	From *found // where the actual taint was found in the caller; nil if it originated in the callee
+	// Enclosing: it was found in a cell that holds the place that was read whole (a cell above it), and
+	// Rel is otherwise the path of the cell below the place that was read: what a sink that reads a field
+	// matches (fieldsink.go).
+	Enclosing bool
+	Rel       string
 }
 
 // expandElem translates an element of a callee summary using the actual
@@ -243,14 +244,17 @@ func (s *state) expandElem(e Elem, argv []*sg.Value) []expanded {
 			return r
 		}
 	}
-	r := s.expandParam(e, argv)
+	r := s.expandParam(e, argv, false)
 	if s.expandMemo != nil {
 		s.expandMemo[e] = r
 	}
 	return r
 }
 
-func (s *state) expandParam(e Elem, argv []*sg.Value) []expanded {
+// expandParam translates a symbolic element. keepAll: the same element found in several cells is not made
+// one (the cells are told apart by the field that a sink reads: the same element may be in the field in
+// one and beside it in another).
+func (s *state) expandParam(e Elem, argv []*sg.Value, keepAll bool) []expanded {
 	if e.Param < 0 || int(e.Param) >= len(argv) {
 		return nil
 	}
@@ -266,9 +270,11 @@ func (s *state) expandParam(e Elem, argv []*sg.Value) []expanded {
 		locs = append(append([]Loc(nil), locs...), boxed...)
 	}
 	founds := make([][]found, len(locs))
+	read := make([]int, len(locs)) // the length of the path that was read
 	total := 0
 	for i, l := range locs {
 		founds[i] = s.collect(Loc{l.Root, l.Path + ep})
+		read[i] = len(l.Path + ep)
 		total += len(founds[i])
 	}
 	if total == 0 {
@@ -280,23 +286,24 @@ func (s *state) expandParam(e Elem, argv []*sg.Value) []expanded {
 	// The same element found in several cells is one element: the first
 	// reason stays (a cell keeps the first reason an element got into it).
 	seen := make(map[Elem]bool, total)
-	for _, found := range founds {
+	for fi, found := range founds {
 		for i := range found {
 			f := &found[i]
+			enclosing := len(f.Cell.Path) < read[fi]
 			if f.E.Kind == Real {
 				for _, x := range applyMods(f.E, e.Mods()) {
-					if !seen[x] {
+					if !seen[x] || keepAll {
 						seen[x] = true
-						out = append(out, expanded{E: x, From: f})
+						out = append(out, expanded{E: x, From: f, Enclosing: enclosing, Rel: f.Rel})
 					}
 				}
 				continue
 			}
 			x := f.E
 			x = x.WithMods(joinMods(f.E.Mods(), e.Mods()))
-			if !seen[x] {
+			if !seen[x] || keepAll {
 				seen[x] = true
-				out = append(out, expanded{E: x, From: f})
+				out = append(out, expanded{E: x, From: f, Enclosing: enclosing, Rel: f.Rel})
 			}
 		}
 	}
@@ -433,7 +440,36 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 		}
 		srGuards := s.instantiate(info, sr.Guards)
 		callGuards := unionGuards(s.blockGuards(cc.in.Block), extra)
-		for _, x := range s.expandElem(sr.Elem, argv) {
+		var xs []expanded
+		if sr.Field == "" {
+			xs = s.expandElem(sr.Elem, argv)
+		} else {
+			xs = s.expandParam(sr.Elem, argv, true)
+		}
+		for _, x := range xs {
+			// the part of the value that the sink reads: what is found in the caller is matched against it
+			field, unsure := "", sr.Unsure
+			var fnote *Uncertainty
+			if sr.Field != "" {
+				names := strings.Split(sr.Field, ".")
+				kind, rest := partAbove, names
+				if !x.Enclosing {
+					kind, rest = matchParts(names, x.Rel)
+				}
+				switch {
+				case kind == partNone:
+					continue
+				case kind == partAbove && x.E.Kind == Param:
+					field = strings.Join(rest, ".")
+				case kind == partAbove:
+					unsure = true
+					cell := ""
+					if x.From != nil {
+						cell = x.From.Cell.Path
+					}
+					fnote = s.fieldNote(cc.in.Pos, sr.Field, s.whyUnsure(cell), cell)
+				}
+			}
 			var steps *rope
 			if x.From != nil {
 				steps = s.trace(x.From.Cell, x.From.Orig)
@@ -454,17 +490,17 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 				}
 				// A flow that is not shorter is dropped, unless the guards of
 				// the one kept could differ from it: then they are compared.
-				if rf := s.findings[findingKey{x.E.Origin(), sr.Site}]; rf != nil && rf.steps != nil && stepsLen >= rf.steps.len() && len(rf.guards) == 0 {
+				if rf := s.findings[findingKey{x.E.Origin(), sr.Site}]; rf != nil && rf.steps != nil && stepsLen >= rf.steps.len() && len(rf.guards) == 0 && !(rf.unsure && !unsure) {
 					rf.labels[x.E.Label()] = true
 					continue
 				}
 			case Param:
-				if old, ok := s.sinkReaches[sinkKey{x.E, sr.Site}]; ok && stepsLen >= old.Steps.len() && len(old.Guards) == 0 {
+				if old, ok := s.sinkReaches[sinkKey{x.E, sr.Site, field, unsure}]; ok && stepsLen >= old.Steps.len() && len(old.Guards) == 0 {
 					continue
 				}
 			}
 			call := Step{Func: s.eng.funcID(s.fn), Desc: desc, pos: cc.in.Pos}
-			call.Notes = notes
+			call.Notes = appendNote(notes, fnote)
 			steps = cat(cat(steps, leaf(call)), sr.Steps)
 			var chain []Guard
 			var over bool
@@ -486,10 +522,10 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 			switch x.E.Kind {
 			case Real:
 				if accepted(sr.Accepts, x.E.Label()) {
-					s.recordFinding(x.E.Origin(), s.eng.sites.ByID[sr.Site], x.E.Label(), steps, gs)
+					s.recordFinding(x.E.Origin(), s.eng.sites.ByID[sr.Site], x.E.Label(), steps, gs, unsure)
 				}
 			case Param:
-				s.noteSinkReach(sinkKey{x.E, sr.Site}, &SinkReach{Elem: x.E, Site: sr.Site, Accepts: sr.Accepts, Steps: steps, Guards: gs})
+				s.noteSinkReach(sinkKey{x.E, sr.Site, field, unsure}, &SinkReach{Elem: x.E, Site: sr.Site, Accepts: sr.Accepts, Steps: steps, Guards: gs, Field: field, Unsure: unsure})
 			}
 		}
 	}
@@ -575,7 +611,7 @@ func joinSummaries(old, cur *Summary) *Summary {
 	sinks := map[sinkKey]*SinkReach{}
 	for _, sum := range []*Summary{old, cur} {
 		for _, sr := range sum.Sinks {
-			k := sinkKey{sr.Elem, sr.Site}
+			k := sinkKey{sr.Elem, sr.Site, sr.Field, sr.Unsure}
 			if have, ok := sinks[k]; !ok {
 				sinks[k] = sr
 			} else {
@@ -587,12 +623,7 @@ func joinSummaries(old, cur *Summary) *Summary {
 	for k := range sinks {
 		skeys = append(skeys, k)
 	}
-	sort.Slice(skeys, func(i, j int) bool {
-		if skeys[i].site != skeys[j].site {
-			return skeys[i].site < skeys[j].site
-		}
-		return lessElem(skeys[i].e, skeys[j].e)
-	})
+	sort.Slice(skeys, func(i, j int) bool { return lessSinkKey(skeys[i], skeys[j]) })
 	for _, k := range skeys {
 		out.Sinks = append(out.Sinks, sinks[k])
 	}

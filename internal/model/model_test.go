@@ -194,3 +194,66 @@ func TestParseEmptyExtraDocuments(t *testing.T) {
 		}
 	}
 }
+
+func TestSinkParts(t *testing.T) {
+	bad := map[string]string{
+		"field without a position":    "sinks:\n  - symbol: a.B\n    field: X\n",
+		"field with two positions":    "sinks:\n  - symbol: a.B\n    args: [0, 1]\n    field: X\n",
+		"field and parts":             "sinks:\n  - symbol: a.B\n    args: [0]\n    field: X\n    parts: [{arg: 0, field: Y}]\n",
+		"part without a position":     "sinks:\n  - symbol: a.B\n    parts: [{field: X}]\n",
+		"part arg and recv":           "sinks:\n  - symbol: a.B\n    parts: [{arg: 0, recv: true, field: X}]\n",
+		"part negative arg":           "sinks:\n  - symbol: a.B\n    parts: [{arg: -1, field: X}]\n",
+		"part without a field":        "sinks:\n  - symbol: a.B\n    parts: [{arg: 0}]\n",
+		"part with an empty name":     "sinks:\n  - symbol: a.B\n    parts: [{arg: 0, field: \"A..B\"}]\n",
+		"part with a pointer step":    "sinks:\n  - symbol: a.B\n    parts: [{arg: 0, field: \"A.*.B\"}]\n",
+		"part with an unknown member": "sinks:\n  - symbol: a.B\n    parts: [{arg: 0, field: A, path: B}]\n",
+	}
+	for name, src := range bad {
+		if _, err := Parse(strings.NewReader(src), name); err == nil {
+			t.Errorf("%s: expected an error", name)
+		}
+	}
+	rs, err := Parse(strings.NewReader(`sinks:
+  - symbol: a.Short
+    args: [1]
+    field: A.B
+  - symbol: a.Recv
+    recv: true
+    field: Path
+  - symbol: a.Parts
+    args: [0]
+    parts:
+      - {arg: 1, field: "[].SQL"}
+      - {recv: true, field: X}
+  - symbol: a.Plain
+    args: [2]
+`), "ok")
+	if err != nil {
+		t.Fatal(err)
+	}
+	short, recv, parts, plain := rs.Sinks[0], rs.Sinks[1], rs.Sinks[2], rs.Sinks[3]
+	if p := short.PartList(); len(p) != 1 || p[0].Arg == nil || *p[0].Arg != 1 || p[0].Field != "A.B" {
+		t.Errorf("short form: %+v", p)
+	}
+	if got := short.WholeArgs(3); len(got) != 0 || short.WholeRecv() {
+		t.Errorf("the short form reads its position by the part only: %v %v", got, short.WholeRecv())
+	}
+	if p := recv.PartList(); len(p) != 1 || !p[0].Recv || p[0].Field != "Path" || recv.WholeRecv() {
+		t.Errorf("recv short form: %+v", p)
+	}
+	if got := parts.WholeArgs(3); len(got) != 1 || got[0] != 0 {
+		t.Errorf("args beside parts are whole, and no other argument is: %v", got)
+	}
+	if got := plain.WholeArgs(3); len(got) != 1 || got[0] != 2 {
+		t.Errorf("a sink without parts is as it was: %v", got)
+	}
+	if (&Sink{}).HasParts() {
+		t.Error("no parts")
+	}
+	if got := (&Sink{}).WholeArgs(2); len(got) != 2 {
+		t.Errorf("no args and no parts is every argument: %v", got)
+	}
+	if got := (&Sink{Parts: []SinkPart{{Recv: true, Field: "X"}}}).WholeArgs(2); len(got) != 0 {
+		t.Errorf("parts and no args is not every argument: %v", got)
+	}
+}

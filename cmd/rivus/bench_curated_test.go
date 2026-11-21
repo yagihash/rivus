@@ -67,7 +67,7 @@ type curatedAt struct {
 type curatedCounts struct {
 	detect, quiet, miss, fp, noisy int
 	// fpTrace and fpSilent split the sinks that must stay quiet and are reported (@fp): a finding at the sink carries a
-	// container_element_imprecision (an over-approximation that says so), or none does (a false report with no trace)
+	// container_element_imprecision or a field_imprecision (an over-approximation that says so), or none does (a false report with no trace)
 	fpTrace, fpSilent int
 	// missSilent and missTrace split miss: the engine left no trace of the flow it lost,
 	// or an uncertainty of a kind says so.
@@ -386,7 +386,7 @@ func checkCuratedReportOpts(t *testing.T, dir string, out []byte, ext string, o 
 					continue
 				}
 				for _, u := range fd.Uncertainties {
-					traced = traced || u.Kind == taint.KindContainerImprecision
+					traced = traced || u.Kind == taint.KindContainerImprecision || u.Kind == taint.KindFieldImprecision
 				}
 			}
 			if traced {
