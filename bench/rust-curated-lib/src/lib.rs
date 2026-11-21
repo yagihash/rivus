@@ -60,3 +60,66 @@ pub fn priv_b() {
         &Pf(String::from("constant")),
     );
 }
+
+pub struct Pg(pub String);
+
+// a default method of a `pub` trait has no `pub` in front of it, and is as public as the trait: a caller outside may
+// give a closure of any type that fits, so every candidate stays
+pub trait Each {
+    fn each(&self, f: impl Fn(&Pg), s: &Pg) {
+        f(s)
+    }
+}
+
+pub struct Lister;
+
+impl Each for Lister {}
+
+pub fn trait_a() {
+    let a = Pg(source()); // @source(open-trait)
+    Lister.each(
+        |x| {
+            sink(&x.0); // @sink(open-trait)
+        },
+        &a,
+    );
+}
+
+pub fn trait_b() {
+    Lister.each(
+        |x| {
+            sink(&x.0); // @sink(none) @fp
+        },
+        &Pg(String::from("constant")),
+    );
+}
+
+pub struct Ph(pub String);
+
+// a default method of a trait that is private to the crate: only this crate calls it, and the callers are all read
+trait EachPriv {
+    fn each_priv(&self, f: impl Fn(&Ph), s: &Ph) {
+        f(s)
+    }
+}
+
+impl EachPriv for Lister {}
+
+pub fn trait_priv_a() {
+    let a = Ph(source()); // @source(open-trait-priv)
+    Lister.each_priv(
+        |x| {
+            sink(&x.0); // @sink(open-trait-priv)
+        },
+        &a,
+    );
+}
+
+pub fn trait_priv_b() {
+    Lister.each_priv(
+        |x| {
+            sink(&x.0); // @sink(none)
+        },
+        &Ph(String::from("constant")),
+    );
+}

@@ -31,11 +31,14 @@ pub struct Ctx {
     /// The closures of the crate, with the types of their arguments (the closure
     /// itself is not one of them): what a call through Fn::call may reach.
     pub closures: HashMap<String, Vec<String>>,
+    /// The traits of the crate, by name: whether the source says the trait is private to its crate (no `pub`).
+    /// A method of a trait (a default body) is as visible as the trait: it has no `pub` of its own.
+    pub traits: HashMap<String, bool>,
 }
 
 impl Ctx {
     pub fn new(root: String, bodies: HashSet<String>) -> Ctx {
-        Ctx { root, files: HashMap::new(), texts: Texts::default(), bodies, closures: HashMap::new() }
+        Ctx { root, files: HashMap::new(), texts: Texts::default(), bodies, closures: HashMap::new(), traits: HashMap::new() }
     }
 
     fn lines(&mut self, path: &str) -> Rc<Vec<String>> {
@@ -88,7 +91,36 @@ impl Ctx {
         }
         let ident: String = words.next().unwrap_or("").chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
         let last = name.rsplit("::").next().unwrap_or(name);
-        !ident.is_empty() && ident == last
+        if ident.is_empty() || ident != last {
+            return false;
+        }
+        // a method of a trait has no `pub` in front of it, whatever the trait is: it is private when the trait is
+        if let Some((parent, _)) = name.rsplit_once("::") {
+            if let Some(trait_private) = self.traits.get(parent) {
+                return *trait_private;
+            }
+        }
+        true
+    }
+
+    /// Whether the source of a trait says it is private to its crate: the text at its span starts with `trait`
+    /// (after `unsafe`, `auto`), with no `pub`. What is not seen to be so is not private.
+    pub fn trait_is_private(&mut self, span: &Span) -> bool {
+        let file = span.get_filename().to_string();
+        if file.is_empty() {
+            return false;
+        }
+        let li = span.get_lines();
+        let lines = self.lines(&file);
+        if li.start_line == 0 || li.start_line > lines.len() {
+            return false;
+        }
+        let text: String = lines[li.start_line - 1].chars().skip(li.start_col.saturating_sub(1)).collect();
+        let mut words = text.split_whitespace().peekable();
+        while matches!(words.peek(), Some(&"unsafe") | Some(&"auto")) {
+            words.next();
+        }
+        words.next() == Some("trait")
     }
 
     pub fn expr_text(&mut self, span: &Span) -> String {

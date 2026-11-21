@@ -582,8 +582,13 @@ func TestCuratedRustOpen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"rust-curated-lib", "rust-curated-ffi"} {
-		name := name
+	// the flows to find and the sinks reported wrongly, by crate: the lib has the default method of a `pub` trait (as
+	// open as a `pub` fn: every candidate stays) and of a private trait (narrowed) besides the helpers
+	for _, k := range []struct {
+		name       string
+		detect, fp int
+	}{{"rust-curated-lib", 4, 2}, {"rust-curated-ffi", 2, 1}} {
+		name, wantDetect, wantFP := k.name, k.detect, k.fp
 		t.Run(name, func(t *testing.T) {
 			dir, err := filepath.Abs(filepath.Join("..", "..", "bench", name))
 			if err != nil {
@@ -594,8 +599,8 @@ func TestCuratedRustOpen(t *testing.T) {
 				t.Fatalf("the extractor failed: %v", err)
 			}
 			c := checkCuratedIR(t, dir, stream, ".rs")
-			if c.detect != 2 || c.fp != 1 {
-				t.Errorf("%s: want 2 flows found and 1 reported wrongly (the pub helper), got %+v", name, c)
+			if c.detect != wantDetect || c.fp != wantFP {
+				t.Errorf("%s: want %d flows found and %d reported wrongly (the pub helpers), got %+v", name, wantDetect, wantFP, c)
 			}
 		})
 	}

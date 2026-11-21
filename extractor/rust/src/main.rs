@@ -154,6 +154,10 @@ fn extract(root: &str, dep: bool, open_crate: bool) -> Vec<Value> {
     let items: Vec<_> = rustc_public::all_local_items().into_iter().filter(|i| i.has_body()).collect();
     let bodies: HashSet<String> = items.iter().map(|i| i.name()).collect();
     let mut cx = lower::Ctx::new(root.to_string(), bodies);
+    for t in rustc_public::local_crate().trait_decls() {
+        let private = cx.trait_is_private(&t.span());
+        cx.traits.insert(t.name(), private);
+    }
     for item in &items {
         let name = item.name();
         if name.contains("{closure#") {
