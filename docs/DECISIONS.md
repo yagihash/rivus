@@ -1481,3 +1481,20 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 5. zoo に `conv/exec-output-echo`(引数が `echo` で出力に出る形。`cmd.Args` に入れて、構築子が sink にならないようにした。`@sink` が出る)。`testdata/go/cases/approx`(近似の流れの finding は `model_approximation` が 1 件と、確信度が clear でない。近似でない流れには付かない)。
 
 **ほかの使い道(今後):** 「引数がそのまま出るかは、呼ぶ先による」モデル(外部プログラム、リフレクション、プラグイン)。ルール作者(利用者や AI)が、確信のない流れを、消さずに、近似と書ける。
+**限界:** 呼んで確かめていない 246 の行(レシーバが唯一の入口の関数、プロセス・ファイル・ネットワーク・時計に触る関数)は、基準で読んだだけ。Dart と Rust の `pure` の同じ検査は、各言語の zoo の段階で。
+
+## ADR-068: インターフェース越しの呼び出しで、候補の実装に sink のルールがあれば、その候補の sink として扱う(ADR-045 の延長)
+
+**背景:** `pgx` や `database/sql` を使うコードは、プロジェクトが定義したインターフェース越しに呼ぶ形が非常に多い(sqlc の `DBTX`、自前の `Querier`)。呼び出し点のシンボルは `(myapp.dbtx).QueryContext` で、sink のルールのある `(*database/sql.DB).QueryContext` ではない。サイトの列挙は `rules.Sinks[呼び出し点のシンボル]` だけを引いていたので、sink にならず、`dynamic_dispatch` と `unmodeled_library_call` の痕跡だけが出た(finding なし)。関数値の呼び出し(`CalleeValue`)は ADR-045 で、候補ごとに sink の site を作っていた。
+
+**決めたこと:**
+1. **`internal/sites/enumerate.go`:** `CalleeDynamic` の呼び出しで、呼び出しグラフ(Go は CHA / VTA。Dart と Rust は extractor が持つ実装)の候補ごとに、ルールを引く(候補のシンボルは、IR に関数があればそのシンボル、なければ ID)。sink のルールがある候補ごとに 1 つ site を作る(`Site.Callee` を候補の ID に。ID は候補ごとに別)。レシーバは常にある(`sinksAt` の `recv` と `when_arg_type` は、そのまま通す)。インターフェースのメソット自身のシンボルは、これまでどおりの 1 つの site で、候補のシンボルが同じなら作らない(重複を避ける)
+2. **`internal/taint/calls.go`:** 候補の site は、候補のシンボルの文脈で `checkSink` を通す(レシーバと引数のオフセットは動的な呼び出しのまま)。finding の sink の段に、`dynamic_dispatch`(全候補つき)を付ける。複数の候補の 1 つとして届く、という不確実性は、候補が 1 つのときも出る(インターフェース越しである以上、実装が増えれば変わる)。既存の `dynamic_dispatch` の記録も、そのまま残る
+3. **候補が分からない(0 個)とき:** sink は当てない。全候補が分からないので、どの実装に当たるか言えない。これまでどおり `dynamic_dispatch`(実装が見つからない)と `unmodeled_library_call` の痕跡が出る。候補の数に上限はない(CHA / VTA がそのまま。`max_implementations` のような切り捨ては、今のコードにない)
+
+**限界:**
+- ソースの `CallSources` は、候補には当てない(sink だけ。source は結果の汚れの出どころなので、候補を決めてから別に決める)
+- 呼び出し元が渡した型で候補を絞る `dispatch` のガード(ADR-031)は、候補の sink の site には付かない(過大側。見逃しは増えない)
+- 候補ごとの sink の finding は、候補の 1 つが当たれば出る。実際には別の実装が呼ばれる経路でも出る(不確実性で示す)
+
+**検証:** `testdata/go/cases/ownif`(自前のインターフェース越しの `(*sql.DB).QueryContext`、候補が 2 つ(標準ライブラリと自前の別の実装)で不確実性が付く、sink の引数でない値、sink でない実装だけ)。動物園の `dyn/sink-behind-own-interface` の `vuln2`(`@miss` を外した)。Dart と Rust のセル(自前のインターフェースの実装の本体に sink がある形)と、おとりは、変わらない。
