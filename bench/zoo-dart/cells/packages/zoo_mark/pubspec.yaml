@@ -1,0 +1,5 @@
+name: zoo_mark
+description: The declarations of the zoo marks, which is what the analysis reads (the recording is in bench/zoo-dart/exec).
+publish_to: none
+environment:
+  sdk: ^3.10.0

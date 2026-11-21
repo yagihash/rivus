@@ -1,0 +1,8 @@
+name: zoo_cells
+description: "The cells of the Dart zoo (docs/DESIGN-zoo.md). rivus analyses this directory."
+publish_to: none
+environment:
+  sdk: ^3.10.0
+dependencies:
+  zoo_mark:
+    path: packages/zoo_mark

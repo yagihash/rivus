@@ -167,7 +167,14 @@ func zooObserveOnce(dir string) (zooObserved, error) {
 		}
 	}
 	sort.Strings(obs.Uncovered)
+	return zooCombine(obs, got)
+}
 
+// zooCombine reads the three runs (variant 0, variant 1, variant 0 in the reverse order; the harness of every
+// language writes the same shape) and makes the observation: what reached each sink in variant 0, the carries
+// (from the difference with variant 1), and the problems (the runs that do not agree). It is shared by the
+// languages.
+func zooCombine(obs zooObserved, got map[string]zooRun) (zooObserved, error) {
 	v0, v1, rev := got["v0"], got["v1"], got["rev"]
 	key := func(h zooHit, n int) string { return fmt.Sprintf("%s|%s:%d|%d", h.Case, h.File, h.Line, n) }
 	index := func(r zooRun) (map[string]zooHit, []string) {
@@ -292,23 +299,31 @@ type zooCell struct {
 	manual int
 }
 
-// zooScan reads the cells: the annotated lines and the cells.
+// zooScan reads the cells of the Go zoo: the annotated lines and the cells (a cell is a directory).
 func zooScan(t testing.TB, dir string) ([]zooLine, []*zooCell) {
+	t.Helper()
+	return zooScanIn(t, dir, "cells", ".go", func(rel string) string { return filepath.ToSlash(filepath.Dir(rel)) })
+}
+
+// zooScanIn reads the files of the zoo of a language (sub: the directory of the cells, ext: the extension), the
+// annotated lines and the cells. unit says which unit holds a cell (the package of Go, the file of Dart): the
+// directory or the file of rel (the path from dir).
+func zooScanIn(t testing.TB, dir, sub, ext string, unit func(rel string) string) ([]zooLine, []*zooCell) {
 	t.Helper()
 	var lines []zooLine
 	cells := map[string]*zooCell{}
 	byDir := map[string][]*zooCell{}
 	var goDirs []string
-	err := filepath.Walk(filepath.Join(dir, "cells"), func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(filepath.Join(dir, sub), func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-		if info.IsDir() || !strings.HasSuffix(path, ".go") {
+		if info.IsDir() || !strings.HasSuffix(path, ext) {
 			return nil
 		}
 		rel, _ := filepath.Rel(dir, path)
 		rel = filepath.ToSlash(rel)
-		d := filepath.ToSlash(filepath.Dir(rel))
+		d := unit(rel)
 		seenDir := false
 		for _, g := range goDirs {
 			seenDir = seenDir || g == d
@@ -407,7 +422,24 @@ func TestZooTruthGo(t *testing.T) {
 	dir := zooRoot(t)
 	obs := zooObserve(t)
 	lines, cells := zooScan(t, dir)
+	zooCheckCells(t, cells, obs)
+	// every directory of the cells is imported by the harness
+	imports, err := os.ReadFile(filepath.Join(dir, "cmd", "observe", "imports.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range cells {
+		if !strings.Contains(string(imports), `"zoo/`+c.dir+`"`) {
+			t.Errorf("zoo/%s is not imported by cmd/observe/imports.go", c.dir)
+		}
+	}
+	zooHoldLines(t, lines, cells, obs)
+}
 
+// zooCheckCells checks the cells (a shape, the three roles) and that the cases that were run are the ones of
+// the cells. It is shared by the languages.
+func zooCheckCells(t *testing.T, cells []*zooCell, obs zooObserved) {
+	t.Helper()
 	// the cells: three cases each, and the cases are the ones that were run
 	wantCases := map[string]bool{}
 	for _, c := range cells {
@@ -423,7 +455,7 @@ func TestZooTruthGo(t *testing.T) {
 	}
 	for id := range wantCases {
 		if !zooContains(obs.Cases, id) {
-			t.Errorf("the case %s was not run (is its package in cmd/observe/imports.go?)", id)
+			t.Errorf("the case %s was not run (is its cell in the list of the harness?)", id)
 		}
 	}
 	// a cell may have more cases of the vulnerable role (a chain of 3, 13 and 30 stages): vuln<N>
@@ -436,17 +468,12 @@ func TestZooTruthGo(t *testing.T) {
 			t.Errorf("the case %s was run and no cell has it", id)
 		}
 	}
-	// every directory of the cells is imported by the harness
-	imports, err := os.ReadFile(filepath.Join(dir, "cmd", "observe", "imports.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, c := range cells {
-		if !strings.Contains(string(imports), `"zoo/`+c.dir+`"`) {
-			t.Errorf("zoo/%s is not imported by cmd/observe/imports.go", c.dir)
-		}
-	}
+}
 
+// zooHoldLines holds the annotated lines of the cells to the hits of the run (the heart of the truth test; the
+// languages share it).
+func zooHoldLines(t *testing.T, lines []zooLine, cells []*zooCell, obs zooObserved) {
+	t.Helper()
 	// the hits of each line, with the case that made them
 	type hitAt struct {
 		role string
@@ -584,6 +611,13 @@ func TestZooGo(t *testing.T) {
 		zooAlone(t, dir, cells)
 	}
 
+	zooHeadline(t, "zoo-go", lines, cells, obs, c)
+}
+
+// zooHeadline prints the headline numbers (docs/DESIGN-zoo.md, 6.3) of the zoo of a language: from the
+// annotations, once they agree with the run, and from what rivus found.
+func zooHeadline(t *testing.T, name string, lines []zooLine, cells []*zooCell, obs zooObserved, c curatedCounts) {
+	t.Helper()
 	// the headline (docs/DESIGN-zoo.md, 6.3): from the annotations, once they agree with the run
 	roleOfTag := func(tag string) string {
 		if m := zooTagRole.FindStringSubmatch(tag); m != nil {
@@ -640,10 +674,10 @@ func TestZooGo(t *testing.T) {
 		}
 	}
 	nCases := len(obs.Cases)
-	t.Logf("zoo-go: cells %d / cases %d | found %d / %d | @miss %d (trace %d, silent %d, no rule %d) | fixed reported wrongly %d | decoys reported wrongly %d / %d (with the trace container_element_imprecision %d, without %d) | carry %v | manual %d (%.1f%%) | run and annotation disagree %d | statements not run %d",
-		len(cells), nCases, vulnTags-missVuln, vulnTags, missVuln, missTrace, missSilent, missNorule, fpFixed, fpDecoy, len(cells), c.fpTrace, c.fpSilent, carry,
+	t.Logf("%s: cells %d / cases %d | found %d / %d | @miss %d (trace %d, silent %d, no rule %d) | fixed reported wrongly %d | decoys reported wrongly %d / %d (with the trace container_element_imprecision %d, without %d) | carry %v | manual %d (%.1f%%) | run and annotation disagree %d | statements not run %d",
+		name, len(cells), nCases, vulnTags-missVuln, vulnTags, missVuln, missTrace, missSilent, missNorule, fpFixed, fpDecoy, len(cells), c.fpTrace, c.fpSilent, carry,
 		manuals, 100*float64(manuals)/float64(max(nCases, 1)), len(obs.Problems), len(obs.Uncovered))
-	t.Logf("zoo-go: rivus: %d flows found, %d sinks quiet, %d flows not found (@miss), %d reported wrongly (@fp)", c.detect, c.quiet, c.miss, c.fp)
+	t.Logf("%s: rivus: %d flows found, %d sinks quiet, %d flows not found (@miss), %d reported wrongly (@fp)", name, c.detect, c.quiet, c.miss, c.fp)
 	if c.detect+c.miss < 1 {
 		t.Errorf("no flow in the zoo: %+v", c)
 	}

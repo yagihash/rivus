@@ -1,0 +1,5 @@
+name: zoo_mark
+description: The recording implementation of the zoo marks (what the harness runs; rivus does not analyse it).
+publish_to: none
+environment:
+  sdk: ^3.10.0

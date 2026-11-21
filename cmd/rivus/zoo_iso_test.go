@@ -67,6 +67,12 @@ func zooFindings(t *testing.T, dir string, env ...string) []string {
 	if err != nil {
 		t.Fatalf("analyze: %v", err)
 	}
+	return zooParseFindings(t, out)
+}
+
+// zooParseFindings reads the report of an analysis: its findings as "source -> sink reachability confidence".
+func zooParseFindings(t *testing.T, out []byte) []string {
+	t.Helper()
 	var rep struct {
 		Findings []struct {
 			Source, Sink struct {

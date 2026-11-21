@@ -1,0 +1,42 @@
+# Rules of the Dart zoo (docs/DESIGN-zoo.md). The sources, sinks and sanitizers are the functions of
+# package:zoo_mark, which have empty bodies for the analysis: the meaning is given here, with the
+# public rules and nothing else. The built-in rules are in force as always.
+ruleset: rivus/bench-zoo-dart@1
+
+sources:
+  - symbol: package:zoo_mark/zoo_mark.dart#src
+    labels: [user_input]
+  # a source that is the type of a parameter: the handler under test takes an In
+  - kind: param_type
+    type: package:zoo_mark/zoo_mark.dart#In
+    labels: [user_input]
+
+sinks:
+  - symbol: package:zoo_mark/zoo_mark.dart#sinkCmd
+    args: [0]
+    category: command_injection
+  - symbol: package:zoo_mark/zoo_mark.dart#sinkCmdBytes
+    args: [0]
+    category: command_injection
+  - symbol: package:zoo_mark/zoo_mark.dart#sinkSql
+    args: [0]
+    category: sql_injection
+  - symbol: package:zoo_mark/zoo_mark.dart#sinkHtml
+    args: [0]
+    category: xss
+  - symbol: package:zoo_mark/zoo_mark.dart#sinkPath
+    args: [1]
+    category: path_traversal
+  - symbol: package:zoo_mark/zoo_mark.dart#sinkAny
+    args: [0]
+    category: command_injection
+
+sanitizers:
+  - symbol: package:zoo_mark/zoo_mark.dart#cleanCmd
+    drops: [user_input]
+  - symbol: package:zoo_mark/zoo_mark.dart#cleanSql
+    drops: [user_input]
+  - symbol: package:zoo_mark/zoo_mark.dart#cleanHtml
+    drops: [user_input]
+  - symbol: package:zoo_mark/zoo_mark.dart#cleanPath
+    drops: [user_input]
