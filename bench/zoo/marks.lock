@@ -71,6 +71,9 @@ dart	dart/callable_class.dart	miss	@source(dart-callable-class-vuln) @miss(unres
 dart	dart/callable_class.dart	na	@na(go: a value of a Go type has no `call` method; a func value is the nearest, and F/clos has it)	-
 dart	dart/callable_class.dart	sink-none	@sink(none)	void vuln() { @vuln
 dart	dart/callable_class.dart	sink-none	@sink(none) @nosink(dart-callable-class-decoy)	void fixed() { @fixed
+dart	dart/closure_to_sdk.dart	na	@na(go: a Go closure is handed to a goroutine or a library the same way, F/clos has the forms that Go has)	-
+dart	dart/closure_to_sdk.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	dart/closure_to_sdk.dart	sink-none	@sink(none) @nosink(dart-closure-to-sdk-decoy)	Future<void> decoy() async { @decoy
 dart	dart/flutter_field_read.dart	na	@na(go: no such form; the framework's field that holds what the user typed)	-
 dart	dart/flutter_field_read.dart	sink-none	@sink(none)	void fixed() { @fixed
 dart	dart/flutter_field_read.dart	sink-none	@sink(none) @nosink(dart-flutter-field-read-decoy)	void decoy() { @decoy

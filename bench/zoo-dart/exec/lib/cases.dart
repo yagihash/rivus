@@ -25,6 +25,7 @@ import 'package:zoo_cells/conv/struct_field_shallow.dart' as conv_struct_field_s
 import 'package:zoo_cells/cont/map_key_vs_value.dart' as cont_map_key_vs_value;
 import 'package:zoo_cells/cont/struct_whole_to_sink.dart' as cont_struct_whole_to_sink;
 import 'package:zoo_cells/cont/slice.dart' as cont_slice;
+import 'package:zoo_cells/dart/closure_to_sdk.dart' as dart_closure_to_sdk;
 import 'package:zoo_cells/dart/flutter_field_read.dart' as dart_flutter_field_read;
 import 'package:zoo_cells/dart/flutter_override_arg.dart' as dart_flutter_override_arg;
 import 'package:zoo_cells/dart/flutter_route_args.dart' as dart_flutter_route_args;
@@ -85,6 +86,7 @@ void registerAll() {
   conv_struct_field_opaque.register();
   conv_struct_field_shallow.register();
   cont_slice.register();
+  dart_closure_to_sdk.register();
   dart_flutter_field_read.register();
   dart_flutter_override_arg.register();
   dart_flutter_route_args.register();
