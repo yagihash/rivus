@@ -159,3 +159,82 @@ func TestDartUnresolvedConstructorKeepsTheFlow(t *testing.T) {
 		t.Errorf("the flow through a constructor that does not resolve: %d findings, %+v", len(r.Findings), r.Findings)
 	}
 }
+
+// A compile error in a function: a finding that goes through the function carries it (missing_source), also when the
+// flow is found by another way; a finding through a function of the same file with no error is a clear one.
+func TestDartCompileErrorIsOnTheFindingsOfItsFunction(t *testing.T) {
+	dart := os.Getenv("RIVUS_DART")
+	if dart == "" {
+		skipOrFail(t, "RIVUS_DART")
+	}
+	extractor, err := filepath.Abs("../../extractor/dart")
+	if err != nil {
+		t.Fatal(err)
+	}
+	words := strings.Fields(dart)
+	dir := t.TempDir()
+	write := func(name, text string) {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("pubspec.yaml", "name: dx\npublish_to: none\nenvironment:\n  sdk: ^3.10.0\n")
+	write("rules.yaml", "ruleset: t/dx@1\nsources:\n  - symbol: package:dx/lib.dart#source\n    labels: [user_input]\nsinks:\n  - symbol: package:dx/lib.dart#sink\n    category: test\n")
+	write("lib/lib.dart", "String source() => 'x';\nvoid sink(String s) {}\n")
+	write("lib/c.dart", "import 'lib.dart';\nclass Box { Box(this.v); final String v; }\n"+
+		"void broken() { final a = source(); final b = Box.nope(a); sink(b.v); sink(a); }\n"+
+		"void fine() { final a = source(); sink(a); }\n"+
+		"void viaClosure() { final f = () { final a = source(); var z = 1 + 'x'; sink(a); }; f(); }\n")
+	get := exec.Command(words[0], append(append([]string{}, words[1:]...), "pub", "get")...)
+	get.Dir = dir
+	if out, err := get.CombinedOutput(); err != nil {
+		t.Fatalf("dart pub get: %v\n%s", err, out)
+	}
+	cmd := exec.Command(binary, "analyze", "-rules", "rules.yaml", "./...")
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "RIVUS_DART_EXTRACTOR="+dart+" run "+filepath.Join(extractor, "bin", "rivus_dart.dart"))
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("analyze: %v", err)
+	}
+	var r struct {
+		Findings []struct {
+			Source        struct{ Func string }   `json:"source"`
+			Confidence    string                  `json:"confidence"`
+			Uncertainties []struct{ Kind string } `json:"uncertainties"`
+		} `json:"findings"`
+	}
+	if err := json.Unmarshal(out, &r); err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{}
+	for _, f := range r.Findings {
+		name := f.Source.Func[strings.LastIndex(f.Source.Func, "#")+1:]
+		if i := strings.Index(name, "$"); i >= 0 {
+			name = name[:i]
+		}
+		seen[name] = true
+		note := false
+		for _, u := range f.Uncertainties {
+			note = note || u.Kind == "missing_source"
+		}
+		switch name {
+		case "fine":
+			if note || f.Confidence != "no_uncertainty_on_path" {
+				t.Errorf("a function with no error is not clear: %+v", f)
+			}
+		default:
+			if !note || f.Confidence == "no_uncertainty_on_path" {
+				t.Errorf("%s (a compile error in it): no missing_source on the finding: %+v", name, f)
+			}
+		}
+	}
+	for _, want := range []string{"broken", "fine", "viaClosure"} {
+		if !seen[want] {
+			t.Errorf("no finding of %s", want)
+		}
+	}
+}

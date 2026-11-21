@@ -145,6 +145,7 @@ class StreamOut {
         }
       });
   /// [unread]: the file is in the result on a tree that is not what its text says (the core lists it in summary.unread).
-  void loadError(String package, String message, {bool unread = false}) =>
-      _line({'kind': 'load_error', 'load_error': {'package': package, 'message': message, if (unread) 'unread': true}});
+  /// [func]: the function that holds what the message says (the findings that go through it carry the message).
+  void loadError(String package, String message, {bool unread = false, String? func}) => _line(
+      {'kind': 'load_error', 'load_error': {'package': package, 'message': message, if (unread) 'unread': true, if (func != null) 'func': func}});
 }

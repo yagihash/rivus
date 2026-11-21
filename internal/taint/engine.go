@@ -143,7 +143,9 @@ type Engine struct {
 	writers  map[*sg.Value][]string
 	// loadErrors are the problems the loading of the code had.
 	loadErrors []ir.LoadError
-	recovered  map[string]string // recoveredFiles, made once
+	loadOnce   sync.Once         // indexLoadErrors runs once (buildFinding may run in several goroutines)
+	recovered  map[string]string // recoveredFiles
+	errFuncs   map[string]string // errorFunctions, made once
 	// callSites lists, for each function, the calls that may reach it.
 	callSites map[*sg.Func][]*sg.Instr
 	// heldNothing: for each package variable that holds nothing, the functions that wrote to it (ADR-056).
@@ -241,19 +243,43 @@ func (e *Engine) funcID(fn *sg.Func) string { return fn.ID }
 // they become missing_source uncertainties.
 func (e *Engine) SetLoadErrors(errs []ir.LoadError) { e.loadErrors = errs }
 
-// recoveredFiles are the files that the load says were read on a tree that is not what their text says (a syntax
-// error: the load error is unread, its package is the file, and its message starts with "syntax_error:"), with the
-// message.
-func (e *Engine) recoveredFiles() map[string]string {
-	if e.recovered != nil {
-		return e.recovered
-	}
+// errorFunctions are the functions that the load says hold a compile error (a load error with Func), with the first
+// message and the number of them.
+func (e *Engine) errorFunctions() map[string]string {
+	e.loadOnce.Do(e.indexLoadErrors)
+	return e.errFuncs
+}
+
+func (e *Engine) indexLoadErrors() {
 	e.recovered = map[string]string{}
 	for _, le := range e.loadErrors {
 		if le.Unread && strings.HasPrefix(le.Message, "syntax_error:") {
 			e.recovered[le.Package] = le.Message
 		}
 	}
+	e.errFuncs = map[string]string{}
+	count := map[string]int{}
+	for _, le := range e.loadErrors {
+		if le.Func == "" {
+			continue
+		}
+		count[le.Func]++
+		if _, ok := e.errFuncs[le.Func]; !ok {
+			e.errFuncs[le.Func] = le.Message
+		}
+	}
+	for fn, n := range count {
+		if n > 1 {
+			e.errFuncs[fn] += " (" + itoa(n) + " errors in the function)"
+		}
+	}
+}
+
+// recoveredFiles are the files that the load says were read on a tree that is not what their text says (a syntax
+// error: the load error is unread, its package is the file, and its message starts with "syntax_error:"), with the
+// message.
+func (e *Engine) recoveredFiles() map[string]string {
+	e.loadOnce.Do(e.indexLoadErrors)
 	return e.recovered
 }
 
@@ -1395,6 +1421,24 @@ func (e *Engine) buildFinding(rf *rawFinding) *Finding {
 	}
 	// a function of a file that was read on a recovered tree (a syntax error: the extractor says so in a load error that
 	// names the file): the finding is not a clear one
+	if byFunc := e.errorFunctions(); len(byFunc) > 0 {
+		ids := []string{src.Func, rf.site.Func}
+		for i := range agg {
+			ids = append(ids, agg[i].Func)
+		}
+		seenFn := map[string]bool{}
+		for _, id := range ids {
+			// a closure ("f$1") counts as the function around it
+			base := id
+			if i := strings.Index(id, "$"); i >= 0 {
+				base = id[:i]
+			}
+			if msg, ok := byFunc[base]; ok && !seenFn[base] {
+				seenFn[base] = true
+				f.Uncertainties = append(f.Uncertainties, newUncertainty(KindMissingSource, msg, base))
+			}
+		}
+	}
 	if rec := e.recoveredFiles(); len(rec) > 0 {
 		ids := []string{src.Func, rf.site.Func}
 		for i := range agg {

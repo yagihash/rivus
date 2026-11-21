@@ -71,6 +71,9 @@ type LoadError struct {
 	// holds is not in the analysis. Functions is the number of its functions (with a body) that are not.
 	Unread    bool `json:"unread,omitempty"`
 	Functions int  `json:"unread_functions,omitempty"`
+	// Func is the function that holds what the message says (a compile error of Dart: the declaration around it; a
+	// closure of it counts as it): the findings that go through the function carry the message (missing_source).
+	Func string `json:"func,omitempty"`
 }
 
 // TestsSkipped says what an extractor did not read because the build of the project does not ship it

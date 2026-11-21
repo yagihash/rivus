@@ -64,7 +64,7 @@ Future<void> extract(String root, StringSink sink,
     var syntax = 0;
     for (final d in r.diagnostics) {
       if (d.diagnosticCode.type.name == 'COMPILE_TIME_ERROR') {
-        out.loadError(p.relative(path, from: root), d.message);
+        out.loadError(p.relative(path, from: root), d.message, func: _enclosingFunction(r.unit, d.offset));
       } else if (d.diagnosticCode.type.name == 'SYNTACTIC_ERROR') {
         firstSyntax ??= d.message;
         syntax++;
@@ -895,4 +895,41 @@ Set<String> _devOnlyDependencies(String root) {
     } catch (_) {}
   }
   return dev.difference(prod).difference(own);
+}
+
+/// The ID of the innermost function, method or constructor declaration of [unit] that holds [offset] (a closure
+/// counts as the declaration around it), or null when the place is outside of them (an import, a class header).
+String? _enclosingFunction(CompilationUnit unit, int offset) {
+  String? best;
+  var bestLen = 1 << 30;
+  void consider(AstNode n, Element? el) {
+    if (el == null || offset < n.offset || offset > n.end || n.length >= bestLen) return;
+    best = funcId(el);
+    bestLen = n.length;
+  }
+
+  unit.accept(_DeclFinder(consider));
+  return best;
+}
+
+class _DeclFinder extends RecursiveAstVisitor<void> {
+  _DeclFinder(this.consider);
+  final void Function(AstNode, Element?) consider;
+  @override
+  void visitFunctionDeclaration(FunctionDeclaration node) {
+    consider(node, node.declaredFragment?.element);
+    super.visitFunctionDeclaration(node);
+  }
+
+  @override
+  void visitMethodDeclaration(MethodDeclaration node) {
+    consider(node, node.declaredFragment?.element);
+    super.visitMethodDeclaration(node);
+  }
+
+  @override
+  void visitConstructorDeclaration(ConstructorDeclaration node) {
+    consider(node, node.declaredFragment?.element);
+    super.visitConstructorDeclaration(node);
+  }
 }
