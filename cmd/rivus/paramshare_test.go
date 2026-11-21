@@ -50,6 +50,9 @@ func TestParamSourceSharedObject(t *testing.T) {
 		// right and HandleC is no longer in other_sources (CORE-A before: a wrong
 		// trace that made a reader believe another entry point also reaches it)
 		{pkg: "ptype", want: map[string]bool{"HandleA": true}},
+		// two handlers called by method values: the `$bound` twins are at the place of the methods and are not other
+		// sources: 1 other source (the second handler), not 3
+		{pkg: "bound", want: map[string]bool{"HandleA": true}, others: 1},
 		// the router and the handlers: handlerB is a source and only holds the
 		// request, handlerA reaches the sink; no finding for handlerB
 		{pkg: "router", want: map[string]bool{"handlerA": true}},

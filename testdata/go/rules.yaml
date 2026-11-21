@@ -102,6 +102,9 @@ sources:
   - kind: param_type
     type: "*example.com/cases/cases/paramshare/ptype.Req"
     labels: [user_input]
+  - kind: param_type
+    type: "*example.com/cases/cases/paramshare/bound.Req"
+    labels: [user_input]
 
   # One type under two names (testdata/go/cases/typealias): the rule for A names
   # the alias, the rule for B names the type.

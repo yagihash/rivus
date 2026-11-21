@@ -1464,6 +1464,28 @@ func itoa(n int) string {
 	return string(b[i:])
 }
 
+// distinctSources keeps the first finding of each place of a source, in order: the sources at one place (the same
+// parameter of the same function) are one source. The twin that a method value makes (`F$bound`) has the position of
+// the function it binds, and is not another input.
+func distinctSources(g []*Finding) []*Finding {
+	seen := map[srcPlace]bool{}
+	var out []*Finding
+	for _, f := range g {
+		p := srcPlace{f.Source.Position, f.Source.Symbol}
+		if !seen[p] {
+			seen[p] = true
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// srcPlace is where a source is (its position and symbol): sources at one place are one source.
+type srcPlace struct {
+	pos ir.Position
+	sym string
+}
+
 // maxOtherSources bounds the other sources a finding lists.
 const maxOtherSources = 5
 
@@ -1516,7 +1538,7 @@ func (e *Engine) mergeParamSources(fs []*Finding) []*Finding {
 			return a.ID < b.ID
 		})
 		rep := g[0]
-		for _, o := range g[1:] {
+		for _, o := range distinctSources(g)[1:] {
 			rep.OtherSourcesCount++
 			if len(rep.OtherSources) < maxOtherSources {
 				ref := o.Source
