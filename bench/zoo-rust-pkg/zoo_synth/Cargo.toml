@@ -1,0 +1,17 @@
+# A package of the Rust zoo (docs/DESIGN-package-models.md, 6.8): a crate of its own (not a member of bench/zoo-rust), with the
+# skeleton of an external package in skel/. Nothing is fetched: every dependency is a path. The tests copy zoo-mark next to the
+# crate for the extractor (the sandbox does not read a path outside the directory), so no file of the zoo is shared.
+[package]
+name = "zoo-pkg-zoo-synth"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+path = "cells/src/lib.rs"
+
+[dependencies]
+zoo-mark = { path = "../../zoo-rust/zoo-mark" }
+zoosynth = { path = "skel" }
+
+[workspace]

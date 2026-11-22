@@ -18,7 +18,7 @@ func TestZooGreps(t *testing.T) {
 		t.Fatal(err)
 	}
 	personal := regexp.MustCompile(`(/Users/|/home/[a-z]|[A-Za-z0-9._-]+@[A-Za-z0-9-]+\.[a-z]{2,})`)
-	for _, d := range []string{"bench/zoo", "bench/zoo-go", "bench/zoo-dart", "bench/zoo-rust"} {
+	for _, d := range []string{"bench/zoo", "bench/zoo-go", "bench/zoo-dart", "bench/zoo-rust", "bench/zoo-go-pkg", "bench/zoo-rust-pkg"} {
 		filepath.Walk(filepath.Join(root, d), func(p string, info os.FileInfo, err error) error {
 			if err != nil {
 				return nil

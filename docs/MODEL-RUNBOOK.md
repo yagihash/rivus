@@ -45,7 +45,7 @@
 `examples/rules/*.yaml` と `bench/*/rules.yaml` の例を、組み込みに昇格する作業(一覧の「例から昇格」の行)。
 
 - 例のまま移さない。ほかのモデルと同じ確認を通す: 差分テスト(入っていれば)、`result` / `results` の点検、zoo のセル、すでに組み込みにある行との重複の確認。
-- 昇格したら、**例のファイルは消す**。`examples/rules/README.md` の、そのファイルの行は、「組み込みになった(`internal/model/builtin/<ファイル>`)」の 1 行にする(ファイル名で探す利用者のため)。`bench/*/rules.yaml` の例も同じ。リポジトリの直下の README は、昇格の PR ではさわらない(例の一覧は `examples/rules/README.md` を見る、という形にしてある。README に、昇格するファイルを名指しした記述が残っていたら、書き直さず、PR の本文の「手順のとおりにできなかった所」に書く)。
+- 昇格したら、**例のファイルは、リポジトリの中に、ファイルを名指しで使う参照が残る場合は、中身が空のルール(「組み込みになった。`internal/model/builtin/<ファイル>`」のコメントだけ)として残し、参照がなければ消す**([ADR-102](DECISIONS.md))。決め方: `grep -rn` で、ファイル名と `examples/rules` を、リポジトリ全体(`bench/`、`cmd/`、`internal/`、`extractor/`、`docs/`、`.github/`、`Makefile`)で探し、結果を PR の本文に書く。参照の側を直す必要があるとき(例: `cmd/rivus/notbuiltin.go` とそのテスト)は、その PR でさわってよい。`examples/rules/README.md` の、そのファイルの行は、「組み込みになった(`internal/model/builtin/<ファイル>`)」の 1 行にする(ファイル名で探す利用者のため)。`bench/*/rules.yaml` の例も同じ。リポジトリの直下の README は、昇格の PR ではさわらない(例の一覧は `examples/rules/README.md` を見る、という形にしてある。README に、昇格するファイルを名指しした記述が残っていたら、書き直さず、PR の本文の「手順のとおりにできなかった所」に書く)。
 - 例の位置づけ(ADR-063)の上書きは、**[ADR-101](DECISIONS.md) で済んでいる**。昇格の PR は ADR を書かない(ADR-101 を参照するだけ)。
 - PR の題は `feat(model): <言語> <パッケージ> の組み込みモデル(例から昇格)`。判定は、この題の形で行う(1 節)。昇格のあと、例のファイルは無いか短くなるので、`ls internal/model/builtin/` の判定は、`<言語>-<パッケージ>*.yaml` で使える。
 
@@ -59,9 +59,9 @@
 
 **骨組みは、公開のシグネチャと、記録するだけの本体にする**: rivus は、骨組みの本体も読む(依存として)。interceptor を呼ぶ、検査をするなど、凝った本体にすると、本物と違う流れになり、モデルの確認が、骨組みの形に引きずられる(実例: Dart の `dio` の最初の骨組み)。本体は、引数を記録する(`zoo_mark` の `recordAny` など)か、空にする。
 
-**開発用の依存とぶつかるパッケージの骨組み(Dart)**: `bench/zoo-dart/exec` の `test` が持ってくる本物のパッケージ(`shelf`、`shelf_static`、`shelf_web_socket`、`web_socket_channel`、`async`、`collection`、`http_parser`、`stream_channel`、`path` など)と同じ名前の骨組みは、`bench/zoo-dart/cells/packages/<名前>`(path の依存。本物の依存は書かない)に置き、`exec/pubspec.yaml` の `dependency_overrides` に `<名前>: <本物の範囲>`(hosted)を 1 行足す。解析(cells)は骨組みを読み、実行(exec)は、`test` がすでに動かしている本物で動く。cells の `pubspec.yaml` の依存に本物の名前を hosted で書かない(zoo のプログラムに本物の依存が入り、依存の関数を検査するテストが失敗する)。骨組みは、本物の公開のシグネチャに合わせる(セルのコードが、両方で型が合うこと)。
+**開発用の依存とぶつかるパッケージの骨組み(Dart)**: `bench/zoo-dart/exec` の `test` が持ってくる本物のパッケージ(`shelf`、`shelf_static`、`shelf_web_socket`、`web_socket_channel`、`async`、`collection`、`http_parser`、`stream_channel`、`path` など)と同じ名前の骨組みは、`bench/zoo-dart/cells/packages/<名前>`(path の依存。本物の依存は書かない)に置き、骨組みの `pubspec.yaml` の末尾に `zoo_exec_override: <本物の範囲>` の 1 行を書く(`exec/pubspec.yaml` の `dependency_overrides` は、これから生成される。`exec/pubspec.yaml` と `cells/pubspec.yaml` は生成物で、コミットしない。`make zoo-dart-gen`)。解析(cells)は骨組みを読み、実行(exec)は、`test` がすでに動かしている本物で動く。cells の `pubspec.yaml` の依存に本物の名前を hosted で書かない(zoo のプログラムに本物の依存が入り、依存の関数を検査するテストが失敗する)。骨組みは、本物の公開のシグネチャに合わせる(セルのコードが、両方で型が合うこと)。
 
-**骨組みの置き場(Go と Rust。事実。[DESIGN-package-models.md](DESIGN-package-models.md) 6.8 の表)**: 外部のパッケージを使うセルは、パッケージごとに独立したモジュールに置く案(Go: `bench/zoo-go-pkg/<パッケージ>/`、Rust: `bench/zoo-rust-pkg/<パッケージ>/`)で、一時の場所で動くことを確かめた。**ただし、zoo のテストが、そのディレクトリを数える処理は、まだない**(固定のディレクトリを数えている)。その処理が入るまでは、Go と Rust の外部のパッケージのセルは、置かない(着手せず、次に進む)。Rust は、サンドボックスが対象の外の path の依存を読めないので、`zoo-mark` を対象に写して読む。
+**骨組みの置き場(Go と Rust)**: 外部のパッケージを使うセルは、パッケージごとに独立したモジュールに置く([DESIGN-package-models.md](DESIGN-package-models.md) 6.8 の表)。Go は `bench/zoo-go-pkg/<パッケージ>/`(`go.mod`、`skel/`、`cells/`、`rules.yaml`)、Rust は `bench/zoo-rust-pkg/<パッケージ>/`(`Cargo.toml`、`Cargo.lock`、`skel/`、`cells/src/`、`rules.yaml`)。**テストは、そのディレクトリを探す(一覧はない)ので、ディレクトリを足すだけで、実行、真の注釈の照合、rivus の照合が働く**(合成の `zoo_synth` が、見本)。セルの名前は `F/pkg/<パッケージ(`_` は `-`)>/<セル>`、マークの固定は `bench/zoo/marks.d/<lang>/pkg/<パッケージ>/`。Rust の `Cargo.toml` は、zoo-mark を `path = "../../zoo-rust/zoo-mark"` で指す(テストが、サンドボックスのために、対象に写して書き換える)。
 
 テスト: `go test ./internal/model/... ./cmd/rivus/ -run 'Builtin|Zoo'`、`regomark check --no-judge`(0)。Dart のセルは、Dart のテスト(`dart analyze` を含む)も通す。
 
@@ -79,11 +79,11 @@ zoo のゲート(`scripts/zoo-loosened-check.sh`、#167): 新しいセル(`bench
 
 ## 4. conflict を避ける置き方
 
-1 パッケージ = 1 つのモデルのファイル + 専用の zoo のセルのディレクトリ + 専用のマークのファイル(`bench/zoo/marks.d/`)。`cases.dart` は生成、zoo-dart の `pubspec.lock` はコミットしない。共有のファイルをさわらない。**さわってよいファイルは、次のものだけ**:
+1 パッケージ = 1 つのモデルのファイル + 専用の zoo のセルのディレクトリ + 専用のマークのファイル(`bench/zoo/marks.d/`)。`cases.dart` と、zoo-dart の `cells/pubspec.yaml`、`exec/pubspec.yaml` は生成(コミットしない。`make zoo-dart-gen`)、zoo-dart の `pubspec.lock` もコミットしない。共有のファイルをさわらない。**さわってよいファイルは、次のものだけ**:
 - `internal/model/builtin/<lang>-<package>*.yaml`(`verified_versions` も、このファイルに書く)と、そのモデルの `.dead-allow`(`internal/model/builtin/<lang>-<package>*.dead-allow`。**さわるのは、「新しい行がどこにも一致しない」という失敗が出たとき(その行を、理由つきで足す)だけ。「zoo から一致するようになったので外せ」の指摘は、無視する**(#187 のあと、通常は記録だけになる。掃除は定期の別の作業で、モデルの PR は、ほかのモデルの `.dead-allow` をさわらない))。**`.dead-allow` の書式は、1 行 1 シンボルの `symbol | 理由`(同じシンボルを 2 回は書けない。ワイルドカードや、まとめの行はない)。zoo のセルが当たらないメソッドで、同じクラスの同じ形のもの(例: 同じ形のオーバーロード、`get`、`post`、`put` のような同じ形の HTTP のメソッド)は、1 行ずつ、同じ理由の文(例: `debt | no cell of the zoo calls it yet`、または `not called: same shape as <当たっているメソッド>`)で書いてよい(書式の拡張は要らない)。1 行のグループにまとめる書式は、いまはない。**
-- `bench/zoo-<lang>/` の自分のディレクトリ(セル、骨組み)、`bench/zoo/marks.d/<lang>/` の自分のファイル、`docs/issues/model-<パッケージ>-*.md`。
+- `bench/zoo-<lang>/` の自分のディレクトリ(セル、骨組み)、外部のパッケージのセルは、`bench/zoo-go-pkg/<パッケージ>/`、`bench/zoo-rust-pkg/<パッケージ>/`(ディレクトリを足すだけでよい。テストも `ci.yml` も足さない)、`bench/zoo/marks.d/<lang>/` の自分のファイル、`docs/issues/model-<パッケージ>-*.md`。
 - **広げる PR**(1 節): もともと main にある、そのパッケージのモデルのファイル(と、その `.dead-allow`)。
-- **例からの昇格の PR**(1 節): 昇格する `examples/rules/<その 1 つ>`(消す)と、`examples/rules/README.md` のその行(「組み込みになった」の 1 行に)、`bench/*/rules.yaml` の例(あれば)。
+- **例からの昇格の PR**(1 節): 昇格する `examples/rules/<その 1 つ>`(消すか、空のルールにする。1 節)と、参照の側(洗い出して必要なものだけ)、`examples/rules/README.md` のその行(「組み込みになった」の 1 行に)、`bench/*/rules.yaml` の例(あれば)。
 - **例からの昇格の、さわってよい範囲の事実(洗い出し)**: 例のファイルを使っているのは、`bench/compare.sh`(gin: 145、147 行。`gin-vue-admin` と `go-test-bench` のルール)、`bench/parity/collect.sh`(103 行。gin)、`bench/README.md`(gin: 8、158〜160、258 行)、`cmd/rivus/notbuiltin.go` と `notbuiltin_test.go`(actix-web のファイルを名指し。テストが読む)、`bench/parseable/rules.yaml` と `bench/parseable/README.md`(actix-web の写し)、`internal/model/builtin/rust-web.yaml` の 3 行目のコメント、`extractor/rust/README.md` の 108 行。ファイルを消すと、`compare.sh` の gin の 2 つのベンチは、ルールのファイルがなく飛ばされる。**gin は、例のファイルを消さず、中身を空のルール(「組み込みになった」のコメントつき)にして残す案が、使っている所を壊さない**(`compare.sh` は、比べる 2 つのバージョンが、それぞれの木のファイルを読むので、古いバージョンは昔の gin のルール、新しいバージョンは組み込み、になり、昇格の前後の比較の意味が保たれる)。**actix-web は、`notbuiltin.go` の表の行と、そのテストを直す必要がある**(昇格すると、`actix_web::` が組み込みのルールにあるので、知らせは出ない)。この 2 ファイルは、actix-web の昇格の PR で、さわってよい。決める(相談役。ADR-101 の「消す」との関係)まで、gin は、消さずに残す。
 
 - ほかのファイル(`docs/DECISIONS.md`、`docs/ISSUES.md`、直下の README、コード、ゲート、ワークフロー)は、さわらない。conflict が出たら、main 側の行を残して、自分の行を足し直す。
@@ -143,11 +143,17 @@ go run ./bench/model-diff -pkg google.golang.org/grpc -model mine.yaml -version 
 - **やること**: モデルの行にある関数を、source の値で、位置(`recv`、`arg0`、...)ごとに 1 つずつ呼ぶコードを作り、出てくるもの(戻り値ごと、書き込まれうる引数、レシーバ)を、**関数と場所ごとに別の sink** に渡す。同じコードを、(A) そのパッケージの行を外した組み込みモデルで、本体を読んで解析し、(B) モデルで解析して、比べる。出力は、表と、JSON(`-json`。既定は `<out>/report.json`)。
 - **結果の種類**: `agree`(一致。`agree_no_flow` は、A も B も流れがなく、その位置について何も言えなかった数)、**`MISS`**(A にあって B にない流れ。モデルが落とした)、**`EXTRA`**(B にあって A にない流れ。モデルが広い)、`EXTRA-intended`(意図した差。下の注釈)、`unverified`(未検証。理由つき)。
 - **終了コード**: MISS があれば 1。EXTRA は、注釈のないものがあれば 1。注釈に理由がない、sink の行が存在しない位置を宣言している、生成したコードがビルドできない、も 1。**MISS は、原則、注釈でも許さない**(落ちた流れは、モデルを直す)。例外は、本体を読んで、データの流れではないと確認した 1 つの位置だけ(下の `miss-reviewed`)。
+- **`miss-reviewed` の扱い**: 差分テストの出力は、毎回、`miss-reviewed` の件数と一覧(`miss-reviewed: N` と、1 行ずつ)を出す(JSON は `miss_reviewed`)。**モデルを作るセッション(クラウドのルーチン、ローカルの検証のサブエージェント)は `miss-reviewed` を足さない**。必要だと思ったら、下書きのまま、理由を書いて終わる(足すかどうかは、相談役が決める)。PR で増えた注釈は、`go run ./bench/model-diff -changed-reviewed origin/main` が、`miss-reviewed-added <ファイル> <symbol>@<位置> <種類>` の行で出す(ジョブは、これを失敗でなく目立つ注意として表示する。`ci-ok` は止めない)。
 - **意図した差の置き方**: モデルの YAML の、その行の近くに、コメントで書く。理由は必須(ない注釈は失敗)。注釈は、コメントの行を読む(`internal/model` のパーサではない)。
 
   ```yaml
   # model-diff: extra <symbol> <理由>        # その関数の EXTRA は、意図した差
-  # model-diff: miss-reviewed <symbol>@<位置> <理由>   # その 1 つの位置の MISS は、本体を読んで確認した、データの流れではないもの(例: 値の型だけがエラーに入る、解決できない呼び出しの既定の流れ)。MISS-reviewed と表示され、失敗にしない。関数全体には付けない
+  # model-diff: miss-reviewed <symbol>@<位置> <種類> <短い説明>   # その 1 つの位置の MISS は、本体を調べて確認した、モデルに足さないもの。種類は下の表の 3 つ。種類のない理由は失敗。MISS-reviewed と表示され、失敗にしない。関数全体には付けない
+  | 種類 | 意味 | 使える条件 | 必須の記述 |
+  | --- | --- | --- | --- |
+  | `type-only` | 値でなく、値の型の情報だけが出力に届く | エラーの文が `%T` や `reflect.TypeOf` で型名を入れるだけ | 短い説明 |
+  | `non-payload` | 本体の流れは実在するが、届く値が、決まった狭い形に絞られる | 数値、bool、列挙に近い値、文字の種類と長さが固定で短い値(例: ゾーン名) | 何に絞られるか、と、標準ライブラリのソースの場所 `src=<ファイル>.go:<関数>`([MODELING.md](MODELING.md) の「Stopping at a number, and a value of a narrow shape」) |
+  | `body-default` | 本体を分析する側の、未解決の呼び出しなどの既定の近似による見かけの流れ | 本体を調べて、データの流れがないと確認した | 直す課題の番号 `#N` |
   # model-diff: value <型> <Dart の式>       # Dart: その型の値(レシーバ、引数)の作り方。$S が source の位置。`<型>.<メンバ>` は、そのメンバのレシーバだけ
   ```
 

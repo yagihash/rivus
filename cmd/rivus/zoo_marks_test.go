@@ -35,10 +35,20 @@ var (
 
 // zooMarksRows reads the sources of the three zoos under bench (bench/zoo-go/cells, ...) and returns the sorted rows.
 func zooMarksRows(bench string) ([]string, error) {
-	zoos := []struct{ lang, dir, ext string }{
-		{"go", "zoo-go/cells", ".go"},
-		{"dart", "zoo-dart/cells/lib", ".dart"},
-		{"rust", "zoo-rust/cells/src", ".rs"},
+	zoos := []struct{ lang, dir, ext, prefix string }{
+		{"go", "zoo-go/cells", ".go", ""},
+		{"dart", "zoo-dart/cells/lib", ".dart", ""},
+		{"rust", "zoo-rust/cells/src", ".rs", ""},
+	}
+	// the packages of the zoo (bench/zoo-go-pkg/<package>, bench/zoo-rust-pkg/<package>): found by the directories; the file of a
+	// cell is pkg/<package>/<file>, so that its lock is bench/zoo/marks.d/<lang>/pkg/<package>/<file>.lock
+	for _, p := range []struct{ lang, dir, sub, ext string }{{"go", "zoo-go-pkg", "cells", ".go"}, {"rust", "zoo-rust-pkg", "cells/src", ".rs"}} {
+		names, _ := os.ReadDir(filepath.Join(bench, p.dir))
+		for _, n := range names {
+			if n.IsDir() {
+				zoos = append(zoos, struct{ lang, dir, ext, prefix string }{p.lang, filepath.Join(p.dir, n.Name(), p.sub), p.ext, "pkg/" + n.Name() + "/"})
+			}
+		}
 	}
 	var rows []string
 	for _, z := range zoos {
@@ -51,6 +61,7 @@ func zooMarksRows(bench string) ([]string, error) {
 				return nil
 			}
 			rel, _ := filepath.Rel(root, path)
+			rel = z.prefix + rel
 			f, err := os.Open(path)
 			if err != nil {
 				return err

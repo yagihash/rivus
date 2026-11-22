@@ -17,9 +17,11 @@ import (
 //   - bench/zoo-dart/exec/lib/cases.dart (the imports and the registerAll() of the cells) is generated from the files of
 //     bench/zoo-dart/cells/lib that have a `void register()`. It is not committed (.gitignore): the tests write it
 //     (zooDartRoot), and `make zoo-dart-gen` writes it for `dart analyze` and for a person who runs dart by hand.
-//   - bench/zoo-dart/cells/pubspec.yaml is committed (rivus and several scripts read the cells as a package), and it is the
-//     one of the head below, with a path dependency for every directory of cells/packages in the order of the names.
-//     TestZooDartGenerate fails when it is not that; `make zoo-dart-gen` (the -update flag) rewrites it.
+//   - bench/zoo-dart/cells/pubspec.yaml has a path dependency for every directory of cells/packages (in the order of the names),
+//     and bench/zoo-dart/exec/pubspec.yaml has the dependency_overrides of the skeleton packages that name a real package of the
+//     harness (a `zoo_exec_override: <range>` line in the pubspec.yaml of the skeleton: the cells are read as the skeleton and run
+//     as the real package that `test` brings, see docs/DESIGN-package-models.md 6.8). Both are written like cases.dart and are not
+//     committed (.gitignore): two pull requests that add a skeleton package do not touch a file in common.
 
 const zooDartPubspecHead = `name: zoo_cells
 description: "The cells of the Dart zoo (docs/DESIGN-zoo.md). rivus analyses this directory."
@@ -28,6 +30,26 @@ environment:
   sdk: ^3.10.0
 dependencies:
 `
+
+const zooDartExecPubspecHead = `name: zoo_exec
+description: "The harness of the Dart zoo (docs/DESIGN-zoo.md): runs the cases with the recording zoo_mark. rivus does not analyse it."
+publish_to: none
+environment:
+  sdk: ^3.10.0
+dependencies:
+  zoo_cells:
+    path: ../cells
+  zoo_mark:
+    path: zoo_mark
+dev_dependencies:
+  test: ^1.25.0
+# the cells depend on the declarations of zoo_mark (what the analysis reads); the harness runs the recording one
+dependency_overrides:
+  zoo_mark:
+    path: zoo_mark
+`
+
+var zooDartExecOverrideRe = regexp.MustCompile(`(?m)^zoo_exec_override:\s*"?([^"\n]+?)"?\s*$`)
 
 var zooDartGenOnce sync.Once
 
@@ -96,6 +118,35 @@ func zooDartPubspecSource(root string) (string, error) {
 	return b.String(), nil
 }
 
+// zooDartExecPubspecSource is the text of exec/pubspec.yaml: the head, and an override of each skeleton package of cells/packages
+// whose pubspec.yaml has `zoo_exec_override: <range>` (the real package that the harness runs the cells against: a skeleton that
+// has the name of a package that `test` depends on, the real one is resolved there).
+func zooDartExecPubspecSource(root string) (string, error) {
+	ents, err := os.ReadDir(filepath.Join(root, "cells", "packages"))
+	if err != nil {
+		return "", err
+	}
+	var names []string
+	for _, e := range ents {
+		if e.IsDir() {
+			names = append(names, e.Name())
+		}
+	}
+	sort.Strings(names)
+	var b strings.Builder
+	b.WriteString(zooDartExecPubspecHead)
+	for _, n := range names {
+		ps, err := os.ReadFile(filepath.Join(root, "cells", "packages", n, "pubspec.yaml"))
+		if err != nil {
+			return "", err
+		}
+		if m := zooDartExecOverrideRe.FindSubmatch(ps); m != nil {
+			fmt.Fprintf(&b, "  %s: %s\n", n, m[1])
+		}
+	}
+	return b.String(), nil
+}
+
 // writeIfChanged writes the file only when its content differs: `dart run` resolves again when a pubspec is newer than
 // the package config.
 func writeIfChanged(path, content string) (bool, error) {
@@ -109,7 +160,7 @@ func writeIfChanged(path, content string) (bool, error) {
 	return true, os.WriteFile(path, []byte(content), 0o644)
 }
 
-// zooDartGenerateCases writes exec/lib/cases.dart once per test binary.
+// zooDartGenerateCases writes exec/lib/cases.dart and the two pubspec.yaml files, once per test binary.
 func zooDartGenerateCases(t testing.TB, root string) {
 	t.Helper()
 	zooDartGenOnce.Do(func() {
@@ -117,33 +168,43 @@ func zooDartGenerateCases(t testing.TB, root string) {
 		if err == nil {
 			_, err = writeIfChanged(filepath.Join(root, "exec", "lib", "cases.dart"), src)
 		}
+		if err == nil {
+			src, err = zooDartPubspecSource(root)
+			if err == nil {
+				_, err = writeIfChanged(filepath.Join(root, "cells", "pubspec.yaml"), src)
+			}
+		}
+		if err == nil {
+			src, err = zooDartExecPubspecSource(root)
+			if err == nil {
+				_, err = writeIfChanged(filepath.Join(root, "exec", "pubspec.yaml"), src)
+			}
+		}
 		if err != nil {
-			t.Fatalf("cases.dart: %v", err)
+			t.Fatalf("the generated files of the Dart zoo: %v", err)
 		}
 	})
 }
 
-// TestZooDartGenerate writes exec/lib/cases.dart, and holds cells/pubspec.yaml to the directories of cells/packages
-// (-update rewrites it: `make zoo-dart-gen`).
+// TestZooDartGenerate writes the generated files of the Dart zoo (`make zoo-dart-gen` runs only this test) and holds the
+// skeleton packages to the form that the generator reads.
 func TestZooDartGenerate(t *testing.T) {
 	root := zooDartRoot(t)
-	zooDartGenerateCases(t, root)
-	want, err := zooDartPubspecSource(root)
+	ents, err := os.ReadDir(filepath.Join(root, "cells", "packages"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(root, "cells", "pubspec.yaml")
-	if *updateDogfoodFlows {
-		if _, err := writeIfChanged(path, want); err != nil {
-			t.Fatal(err)
+	for _, e := range ents {
+		if !e.IsDir() {
+			continue
 		}
-		return
+		if _, err := os.Stat(filepath.Join(root, "cells", "packages", e.Name(), "pubspec.yaml")); err != nil {
+			t.Errorf("cells/packages/%s has no pubspec.yaml: a skeleton package is a package", e.Name())
+		}
 	}
-	got, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(got) != want {
-		t.Errorf("bench/zoo-dart/cells/pubspec.yaml is not the one of the directories of cells/packages (a path dependency for each, in the order of the names): run `make zoo-dart-gen`\nwant:\n%s", want)
+	for _, f := range []string{"cells/pubspec.yaml", "exec/pubspec.yaml", "exec/lib/cases.dart"} {
+		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(f))); err != nil {
+			t.Errorf("%s was not written: %v", f, err)
+		}
 	}
 }

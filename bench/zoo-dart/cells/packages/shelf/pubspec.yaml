@@ -3,3 +3,5 @@ description: "The skeleton of package:shelf that the cells of the Dart zoo need 
 publish_to: none
 environment:
   sdk: ^3.10.0
+# what `exec` resolves this package to (the real shelf that `test` depends on; cmd/rivus zoo_dart_gen_test.go writes exec/pubspec.yaml)
+zoo_exec_override: ^1.4.0

@@ -10,28 +10,39 @@ sources:
     labels: [user_input]
 
 propagators:
+  # model-diff: extra (*net/http.Request).FormValue the model takes the request as one value (what is in it reaches what it returns); the probe puts the source in the argument of NewRequest that makes one field (the method or the URL), which this one does not read
   - symbol: (*net/http.Request).FormValue
     flows: [{from: recv, to: result}]
+  # model-diff: extra (*net/http.Request).PostFormValue the model takes the request as one value (what is in it reaches what it returns); the probe puts the source in the argument of NewRequest that makes one field (the method or the URL), which this one does not read
   - symbol: (*net/http.Request).PostFormValue
     flows: [{from: recv, to: result}]
+  # model-diff: extra (*net/http.Request).Cookie the model takes the request as one value (what is in it reaches what it returns); the probe puts the source in the argument of NewRequest that makes one field (the method or the URL), which this one does not read
   - symbol: (*net/http.Request).Cookie
     flows: [{from: recv, to: result0}]
+  # model-diff: extra (*net/http.Request).Cookies the model takes the request as one value (what is in it reaches what it returns); the probe puts the source in the argument of NewRequest that makes one field (the method or the URL), which this one does not read
   - symbol: (*net/http.Request).Cookies
     flows: [{from: recv, to: result}]
+  # model-diff: extra (*net/http.Request).PathValue the model takes the request as one value (what is in it reaches what it returns); the probe puts the source in the argument of NewRequest that makes one field (the method or the URL), which this one does not read
   - symbol: (*net/http.Request).PathValue
     flows: [{from: recv, to: result}]
+  # model-diff: extra (*net/http.Request).BasicAuth the model takes the request as one value (what is in it reaches what it returns); the probe puts the source in the argument of NewRequest that makes one field (the method or the URL), which this one does not read
   - symbol: (*net/http.Request).BasicAuth
     flows: [{from: recv, to: result0}, {from: recv, to: result1}]
   - symbol: (*net/http.Request).ParseForm
     flows: [{from: recv, to: recv}]
+  # model-diff: miss-reviewed (net/http.Header).Get@arg0 body-default #155 the key of a lookup in a map is taken as flowing to the value it finds; the value is not made of the key
   - symbol: (net/http.Header).Get
     flows: [{from: recv, to: result}]
+  # model-diff: miss-reviewed (net/http.Header).Values@arg0 body-default #155 the same as Get
   - symbol: (net/http.Header).Values
     flows: [{from: recv, to: result}]
+  # model-diff: extra (net/http.Header).Set #154 the header is a map that `textproto.MIMEHeader(h)` converts; the reading of the body does not follow the write through the converted map. The value is stored in the header
   - symbol: (net/http.Header).Set
     flows: [{from: arg1, to: recv}]
+  # model-diff: extra (net/http.Header).Add #154 the same as Set
   - symbol: (net/http.Header).Add
     flows: [{from: arg1, to: recv}]
+  # model-diff: extra (*net/http.Request).Context the model takes the request as one value (what is in it reaches what it returns); the probe puts the source in the argument of NewRequest that makes one field (the method or the URL), which this one does not read
   - symbol: (*net/http.Request).Context
     flows: [{from: recv, to: result}]
   - symbol: (net/http.ResponseWriter).Header
@@ -41,9 +52,9 @@ propagators:
   - symbol: net/http.MaxBytesReader
     flows: [{from: arg1, to: result}]
   - symbol: net/http.NewRequest
-    flows: [{from: args, to: result0}]
+    flows: [{from: args, to: result0}, {from: arg0, to: result1}, {from: arg1, to: result1}]
   - symbol: net/http.NewRequestWithContext
-    flows: [{from: args, to: result0}]
+    flows: [{from: args, to: result0}, {from: arg1, to: result1}, {from: arg2, to: result1}]
 
 sinks:
   # SSRF: outgoing requests to attacker controlled URLs.
