@@ -1,3 +1,10 @@
 # Rules of the package zoo_synth of the Rust zoo. The sources, sinks and sanitizers of zoo-mark are in bench/zoo-rust/rules.yaml
-# (the tests give both files); this package has nothing to add: `echo` of the skeleton is read as a dependency.
+# (the tests give both files). `echo` of the skeleton is read as a dependency.
 ruleset: rivus/bench-zoo-rust-pkg-zoo-synth@1
+
+# `run` of the skeleton is the sink row of the package (the skeleton of it records with zoo-mark, so that the run of the cell
+# checks the row)
+sinks:
+  - symbol: zoosynth::run
+    args: [0]
+    category: command_injection

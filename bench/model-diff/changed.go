@@ -77,3 +77,40 @@ func rowsOf(text []byte) map[string]string {
 	}
 	return m
 }
+
+// addedReviewed lists the `miss-reviewed` notes that the built-in model files have and the commit `base` does not, one line each:
+// `miss-reviewed-added <file> <symbol>@<position> <kind>`. A pull request that adds one gets a notice from the job (it does not fail).
+func addedReviewed(repo, base string) ([]string, error) {
+	c := exec.Command("git", "diff", "--name-only", base, "--", "internal/model/builtin")
+	c.Dir = repo
+	out, err := c.Output()
+	if err != nil {
+		return nil, fmt.Errorf("git diff: %v", err)
+	}
+	var res []string
+	for _, f := range strings.Fields(string(out)) {
+		if !strings.HasSuffix(f, ".yaml") {
+			continue
+		}
+		show := exec.Command("git", "show", base+":"+f)
+		show.Dir = repo
+		old, _ := show.Output()
+		now, _ := os.ReadFile(filepath.Join(repo, f))
+		before := map[string]bool{}
+		on, _ := ParseNotes(f, string(old))
+		for _, n := range on {
+			if n.Kind == "miss-reviewed" {
+				before[n.Symbol] = true
+			}
+		}
+		nn, _ := ParseNotes(f, string(now))
+		for _, n := range nn {
+			if n.Kind == "miss-reviewed" && !before[n.Symbol] {
+				k, _ := ReviewKind(n)
+				res = append(res, fmt.Sprintf("miss-reviewed-added %s %s %s", f, n.Symbol, k))
+			}
+		}
+	}
+	sort.Strings(res)
+	return res, nil
+}

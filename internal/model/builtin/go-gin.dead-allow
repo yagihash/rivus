@@ -1,0 +1,53 @@
+# The rows of go-gin.yaml that no call in the zoo or the curated targets hits (TestBuiltinRowsAreHitByTheZoo). "symbol | reason"; see bench/parity/README.md.
+(*github.com/gin-gonic/gin.Context).Redirect | not called: the sink of a skeleton is not seen by the run of the zoo (the skeleton records nothing), so no cell can mark a flow into it; the declaration is checked by bench/model-diff
+(*github.com/gin-gonic/gin.Context).File | not called: the sink of a skeleton is not seen by the run of the zoo (the skeleton records nothing), so no cell can mark a flow into it; the declaration is checked by bench/model-diff
+(*github.com/gin-gonic/gin.Context).FileFromFS | not called: the sink of a skeleton is not seen by the run of the zoo (the skeleton records nothing), so no cell can mark a flow into it; the declaration is checked by bench/model-diff
+(*github.com/gin-gonic/gin.Context).FileAttachment | not called: the sink of a skeleton is not seen by the run of the zoo (the skeleton records nothing), so no cell can mark a flow into it; the declaration is checked by bench/model-diff
+(*github.com/gin-gonic/gin.Context).SaveUploadedFile | not called: the sink of a skeleton is not seen by the run of the zoo (the skeleton records nothing), so no cell can mark a flow into it; the declaration is checked by bench/model-diff
+(*github.com/gin-gonic/gin.Context).String | not called: the sink of a skeleton is not seen by the run of the zoo (the skeleton records nothing), so no cell can mark a flow into it; the declaration is checked by bench/model-diff
+(*github.com/gin-gonic/gin.Context).Data | not called: the sink of a skeleton is not seen by the run of the zoo (the skeleton records nothing), so no cell can mark a flow into it; the declaration is checked by bench/model-diff
+(*github.com/gin-gonic/gin.Context).DefaultQuery | not called: same shape as (*github.com/gin-gonic/gin.Context).Query
+(*github.com/gin-gonic/gin.Context).QueryArray | not called: same shape as (*github.com/gin-gonic/gin.Context).Query
+(*github.com/gin-gonic/gin.Context).QueryMap | not called: same shape as (*github.com/gin-gonic/gin.Context).Query
+(*github.com/gin-gonic/gin.Context).DefaultPostForm | not called: same shape as (*github.com/gin-gonic/gin.Context).Query
+(*github.com/gin-gonic/gin.Context).PostFormArray | not called: same shape as (*github.com/gin-gonic/gin.Context).Query
+(*github.com/gin-gonic/gin.Context).PostFormMap | not called: same shape as (*github.com/gin-gonic/gin.Context).Query
+(*github.com/gin-gonic/gin.Context).GetRawData | not called: same shape as (*github.com/gin-gonic/gin.Context).Query
+(*github.com/gin-gonic/gin.Context).ClientIP | not called: same shape as (*github.com/gin-gonic/gin.Context).Query
+(*github.com/gin-gonic/gin.Context).FullPath | not called: same shape as (*github.com/gin-gonic/gin.Context).Query
+(*github.com/gin-gonic/gin.Context).ContentType | not called: same shape as (*github.com/gin-gonic/gin.Context).Query
+(*github.com/gin-gonic/gin.Context).GetQuery | not called: same shape as (*github.com/gin-gonic/gin.Context).Query
+(*github.com/gin-gonic/gin.Context).GetQueryArray | not called: same shape as (*github.com/gin-gonic/gin.Context).Query
+(*github.com/gin-gonic/gin.Context).GetQueryMap | not called: same shape as (*github.com/gin-gonic/gin.Context).Query
+(*github.com/gin-gonic/gin.Context).GetPostForm | not called: same shape as (*github.com/gin-gonic/gin.Context).Query
+(*github.com/gin-gonic/gin.Context).GetPostFormArray | not called: same shape as (*github.com/gin-gonic/gin.Context).Query
+(*github.com/gin-gonic/gin.Context).GetPostFormMap | not called: same shape as (*github.com/gin-gonic/gin.Context).Query
+(*github.com/gin-gonic/gin.Context).FormFile | not called: same shape as (*github.com/gin-gonic/gin.Context).Query
+(*github.com/gin-gonic/gin.Context).MultipartForm | not called: same shape as (*github.com/gin-gonic/gin.Context).Query
+(*github.com/gin-gonic/gin.Context).Bind | not called: same shape as (*github.com/gin-gonic/gin.Context).ShouldBindJSON
+(*github.com/gin-gonic/gin.Context).BindJSON | not called: same shape as (*github.com/gin-gonic/gin.Context).ShouldBindJSON
+(*github.com/gin-gonic/gin.Context).BindXML | not called: same shape as (*github.com/gin-gonic/gin.Context).ShouldBindJSON
+(*github.com/gin-gonic/gin.Context).BindQuery | not called: same shape as (*github.com/gin-gonic/gin.Context).ShouldBindJSON
+(*github.com/gin-gonic/gin.Context).BindYAML | not called: same shape as (*github.com/gin-gonic/gin.Context).ShouldBindJSON
+(*github.com/gin-gonic/gin.Context).BindTOML | not called: same shape as (*github.com/gin-gonic/gin.Context).ShouldBindJSON
+(*github.com/gin-gonic/gin.Context).BindPlain | not called: same shape as (*github.com/gin-gonic/gin.Context).ShouldBindJSON
+(*github.com/gin-gonic/gin.Context).BindHeader | not called: same shape as (*github.com/gin-gonic/gin.Context).ShouldBindJSON
+(*github.com/gin-gonic/gin.Context).BindUri | not called: same shape as (*github.com/gin-gonic/gin.Context).ShouldBindJSON
+(*github.com/gin-gonic/gin.Context).ShouldBind | not called: same shape as (*github.com/gin-gonic/gin.Context).ShouldBindJSON
+(*github.com/gin-gonic/gin.Context).ShouldBindXML | not called: same shape as (*github.com/gin-gonic/gin.Context).ShouldBindJSON
+(*github.com/gin-gonic/gin.Context).ShouldBindQuery | not called: same shape as (*github.com/gin-gonic/gin.Context).ShouldBindJSON
+(*github.com/gin-gonic/gin.Context).ShouldBindYAML | not called: same shape as (*github.com/gin-gonic/gin.Context).ShouldBindJSON
+(*github.com/gin-gonic/gin.Context).ShouldBindTOML | not called: same shape as (*github.com/gin-gonic/gin.Context).ShouldBindJSON
+(*github.com/gin-gonic/gin.Context).ShouldBindPlain | not called: same shape as (*github.com/gin-gonic/gin.Context).ShouldBindJSON
+(*github.com/gin-gonic/gin.Context).ShouldBindHeader | not called: same shape as (*github.com/gin-gonic/gin.Context).ShouldBindJSON
+(*github.com/gin-gonic/gin.Context).ShouldBindUri | not called: same shape as (*github.com/gin-gonic/gin.Context).ShouldBindJSON
+(*github.com/gin-gonic/gin.Context).MustBindWith | not called: same shape as (*github.com/gin-gonic/gin.Context).ShouldBindJSON
+(*github.com/gin-gonic/gin.Context).ShouldBindWith | not called: same shape as (*github.com/gin-gonic/gin.Context).ShouldBindJSON
+(*github.com/gin-gonic/gin.Context).ShouldBindBodyWith | not called: same shape as (*github.com/gin-gonic/gin.Context).ShouldBindJSON
+(*github.com/gin-gonic/gin.Context).ShouldBindBodyWithJSON | not called: same shape as (*github.com/gin-gonic/gin.Context).ShouldBindJSON
+(*github.com/gin-gonic/gin.Context).ShouldBindBodyWithXML | not called: same shape as (*github.com/gin-gonic/gin.Context).ShouldBindJSON
+(*github.com/gin-gonic/gin.Context).ShouldBindBodyWithYAML | not called: same shape as (*github.com/gin-gonic/gin.Context).ShouldBindJSON
+(*github.com/gin-gonic/gin.Context).ShouldBindBodyWithTOML | not called: same shape as (*github.com/gin-gonic/gin.Context).ShouldBindJSON
+(*github.com/gin-gonic/gin.Context).ShouldBindBodyWithPlain | not called: same shape as (*github.com/gin-gonic/gin.Context).ShouldBindJSON
+(github.com/gin-gonic/gin.Params).Get | not called: a Params that the cells make is empty (the skeleton has no router)
+(github.com/gin-gonic/gin.Params).ByName | not called: a Params that the cells make is empty (the skeleton has no router)

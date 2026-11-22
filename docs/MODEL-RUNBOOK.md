@@ -63,6 +63,11 @@
 
 **骨組みの置き場(Go と Rust)**: 外部のパッケージを使うセルは、パッケージごとに独立したモジュールに置く([DESIGN-package-models.md](DESIGN-package-models.md) 6.8 の表)。Go は `bench/zoo-go-pkg/<パッケージ>/`(`go.mod`、`skel/`、`cells/`、`rules.yaml`)、Rust は `bench/zoo-rust-pkg/<パッケージ>/`(`Cargo.toml`、`Cargo.lock`、`skel/`、`cells/src/`、`rules.yaml`)。**テストは、そのディレクトリを探す(一覧はない)ので、ディレクトリを足すだけで、実行、真の注釈の照合、rivus の照合が働く**(合成の `zoo_synth` が、見本)。セルの名前は `F/pkg/<パッケージ(`_` は `-`)>/<セル>`、マークの固定は `bench/zoo/marks.d/<lang>/pkg/<パッケージ>/`。Rust の `Cargo.toml` は、zoo-mark を `path = "../../zoo-rust/zoo-mark"` で指す(テストが、サンドボックスのために、対象に写して書き換える)。
 
+**骨組みは、sink の行の関数が呼ばれたら、記録する**(zoo のセルで sink の行を確認するため。記録しない骨組みでは、実行の確認が、sink に届かない)。Go の骨組みは `zoo/mark` を、Rust の骨組みは `zoo-mark` を呼ぶ。記録の場所は、セルの中の、骨組みの関数の呼び出しの行になる(Go は、スタックの中の最初の `/cells/` のフレーム。Rust は、骨組みの関数に `#[track_caller]` を付ける)。最小の例(見本は、`bench/zoo-go-pkg/zoo_synth`、`bench/zoo-rust-pkg/zoo_synth` の `Run` と `run`):
+- Go(骨組みの `go.mod` に `require zoo v0.0.0` と `replace zoo => ../../../zoo-go`): `func Run(cmd string) { mark.SinkCmd(cmd) }`
+- Rust(骨組みの `Cargo.toml` に `zoo-mark = { path = "../../../zoo-rust/zoo-mark" }`): `#[track_caller] pub fn run(cmd: &str) { zoo_mark::sink_cmd(cmd); }`
+sink の行は、パッケージの `rules.yaml` の `sinks:` に、骨組みの関数の記号で書く(`zoo/mark` の sink の記号は、zoo の `rules.yaml` が持つ)。Rust のテストは、パッケージの crate と骨組みの crate の `Cargo.toml` の zoo-mark の path 依存を、写した zoo-mark に書き換える。
+
 テスト: `go test ./internal/model/... ./cmd/rivus/ -run 'Builtin|Zoo'`、`regomark check --no-judge`(0)。Dart のセルは、Dart のテスト(`dart analyze` を含む)も通す。
 
 ## 3. 既知の見逃しと誤検出は、セルと課題のファイルで残す
@@ -112,6 +117,7 @@ zoo のゲート(`scripts/zoo-loosened-check.sh`、#167): 新しいセル(`bench
 - 言い回しは `.regomark/policy/wording.rego` に従う(`regomark check --no-judge` が 0)。
 - ADR を書かない(昇格は、[ADR-101](DECISIONS.md) で済んでいる)。方針の変更が要ると思ったら、PR の本文に書く。
 - 1 つの PR で、1 パッケージだけ。終わったら、次のパッケージには進まず、終わる。
+- `.dead-allow` の書式: 1 行 1 シンボルで、`symbol | 理由`(`readDeadAllow`)。既存のファイルは `symbol | 種類 | 理由` の 3 列だが、テストは `|` の最初の区切りだけで分けるので、「種類 | 理由」の全体が理由の文字列として読まれる(2 列でも 3 列でも読める。種類は検査されない)。種類の意味は `bench/parity/README.md`: `dependency`(標準でないライブラリで、zoo にその依存がない)、`debt`(標準ライブラリで、まだ呼ぶセルがない。**減る一方で、新しい行には足さない**)、`spelling`(extractor が書く別の綴り)。新しいパッケージの行は、`symbol | dependency | 理由` か、`symbol | 理由` の形で足す(`debt` は、標準ライブラリのモデルの、いまある行だけ)。
 
 ## 7. 更新の PR(案。定期の照合が入ってから)
 
@@ -143,11 +149,17 @@ go run ./bench/model-diff -pkg google.golang.org/grpc -model mine.yaml -version 
 - **やること**: モデルの行にある関数を、source の値で、位置(`recv`、`arg0`、...)ごとに 1 つずつ呼ぶコードを作り、出てくるもの(戻り値ごと、書き込まれうる引数、レシーバ)を、**関数と場所ごとに別の sink** に渡す。同じコードを、(A) そのパッケージの行を外した組み込みモデルで、本体を読んで解析し、(B) モデルで解析して、比べる。出力は、表と、JSON(`-json`。既定は `<out>/report.json`)。
 - **結果の種類**: `agree`(一致。`agree_no_flow` は、A も B も流れがなく、その位置について何も言えなかった数)、**`MISS`**(A にあって B にない流れ。モデルが落とした)、**`EXTRA`**(B にあって A にない流れ。モデルが広い)、`EXTRA-intended`(意図した差。下の注釈)、`unverified`(未検証。理由つき)。
 - **終了コード**: MISS があれば 1。EXTRA は、注釈のないものがあれば 1。注釈に理由がない、sink の行が存在しない位置を宣言している、生成したコードがビルドできない、も 1。**MISS は、原則、注釈でも許さない**(落ちた流れは、モデルを直す)。例外は、本体を読んで、データの流れではないと確認した 1 つの位置だけ(下の `miss-reviewed`)。
+- **`miss-reviewed` の扱い**: 差分テストの出力は、毎回、`miss-reviewed` の件数と一覧(`miss-reviewed: N` と、1 行ずつ)を出す(JSON は `miss_reviewed`)。**モデルを作るセッション(クラウドのルーチン、ローカルの検証のサブエージェント)は `miss-reviewed` を足さない**。必要だと思ったら、下書きのまま、理由を書いて終わる(足すかどうかは、相談役が決める)。PR で増えた注釈は、`go run ./bench/model-diff -changed-reviewed origin/main` が、`miss-reviewed-added <ファイル> <symbol>@<位置> <種類>` の行で出す(ジョブは、これを失敗でなく目立つ注意として表示する。`ci-ok` は止めない)。
 - **意図した差の置き方**: モデルの YAML の、その行の近くに、コメントで書く。理由は必須(ない注釈は失敗)。注釈は、コメントの行を読む(`internal/model` のパーサではない)。
 
   ```yaml
   # model-diff: extra <symbol> <理由>        # その関数の EXTRA は、意図した差
-  # model-diff: miss-reviewed <symbol>@<位置> <理由>   # その 1 つの位置の MISS は、本体を読んで確認した、データの流れではないもの(例: 値の型だけがエラーに入る、解決できない呼び出しの既定の流れ)。MISS-reviewed と表示され、失敗にしない。関数全体には付けない
+  # model-diff: miss-reviewed <symbol>@<位置> <種類> <短い説明>   # その 1 つの位置の MISS は、本体を調べて確認した、モデルに足さないもの。種類は下の表の 3 つ。種類のない理由は失敗。MISS-reviewed と表示され、失敗にしない。関数全体には付けない
+  | 種類 | 意味 | 使える条件 | 必須の記述 |
+  | --- | --- | --- | --- |
+  | `type-only` | 値でなく、値の型の情報だけが出力に届く | エラーの文が `%T` や `reflect.TypeOf` で型名を入れるだけ | 短い説明 |
+  | `non-payload` | 本体の流れは実在するが、届く値が、決まった狭い形に絞られる | 数値、bool、列挙に近い値、文字の種類と長さが固定で短い値(例: ゾーン名) | 何に絞られるか、と、標準ライブラリのソースの場所 `src=<ファイル>.go:<関数>`([MODELING.md](MODELING.md) の「Stopping at a number, and a value of a narrow shape」) |
+  | `body-default` | 本体を分析する側の、未解決の呼び出しなどの既定の近似による見かけの流れ | 本体を調べて、データの流れがないと確認した | 直す課題の番号 `#N` |
   # model-diff: value <型> <Dart の式>       # Dart: その型の値(レシーバ、引数)の作り方。$S が source の位置。`<型>.<メンバ>` は、そのメンバのレシーバだけ
   ```
 

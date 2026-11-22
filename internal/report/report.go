@@ -161,6 +161,61 @@ type Summary struct {
 	// dependencies (ADR-099): a flow from the input of the user to a dangerous call inside a library is not found unless a
 	// sink model says so at the call of the library's API. Present when the run read the body of any dependency function.
 	DependencySites *DependencySites `json:"dependency_sites,omitempty"`
+	// CallbackParamUnresolved are the calls that a callback_param source names and whose function (the handler) was not found where
+	// the call is made: the parameters of that function are not treated as sources, with or without a finding. Where the call is made,
+	// not where the source would have been (which function that is, is not known). Sorted by place. Absent when none.
+	CallbackParamUnresolved *CallbackParamUnresolved `json:"callback_param_unresolved,omitempty"`
+}
+
+// CallbackParamUnresolved is the registrations whose handler was not found.
+type CallbackParamUnresolved struct {
+	Count int                           `json:"count"`
+	Sites []CallbackParamUnresolvedSite `json:"sites"`
+}
+
+// CallbackParamUnresolvedSite is one call.
+type CallbackParamUnresolvedSite struct {
+	// Func is the function that makes the call, Symbol the function that is called (the one the rule names).
+	Func     string      `json:"func"`
+	Position ir.Position `json:"position"`
+	Symbol   string      `json:"symbol"`
+}
+
+// callbackParamUnresolved lists the notes that say that the handler of a registration was not found.
+func callbackParamUnresolved(us []*taint.Uncertainty) *CallbackParamUnresolved {
+	var out []CallbackParamUnresolvedSite
+	for _, u := range us {
+		if u.Kind == taint.KindUnresolvedCallee && strings.HasPrefix(u.Detail, sites.CallbackUnresolvedPrefix) {
+			out = append(out, CallbackParamUnresolvedSite{Func: u.Func, Position: u.Position, Symbol: u.Symbol})
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	sort.Slice(out, func(i, j int) bool {
+		a, b := out[i], out[j]
+		if a.Position.File != b.Position.File {
+			return a.Position.File < b.Position.File
+		}
+		if a.Position.Line != b.Position.Line {
+			return a.Position.Line < b.Position.Line
+		}
+		if a.Position.Column != b.Position.Column {
+			return a.Position.Column < b.Position.Column
+		}
+		if a.Func != b.Func {
+			return a.Func < b.Func
+		}
+		return a.Symbol < b.Symbol
+	})
+	// the same call can be noted once for each analysis of its function: one entry for a place
+	w := out[:1]
+	for _, s := range out[1:] {
+		if s != w[len(w)-1] {
+			w = append(w, s)
+		}
+	}
+	return &CallbackParamUnresolved{Count: len(w), Sites: w}
 }
 
 // BodyReplacedPackage is a package whose body was not read, and why.
@@ -469,6 +524,7 @@ func Build(packages []string, loadErrors []ir.LoadError, st *sites.Result, res *
 		r.Rules = []string{}
 	}
 	r.Summary = summarize(r)
+	r.Summary.CallbackParamUnresolved = callbackParamUnresolved(r.Uncertainties)
 	if st.DependencyFunctions > 0 {
 		r.Summary.DependencySites = &DependencySites{DependencyFunctions: st.DependencyFunctions}
 	}

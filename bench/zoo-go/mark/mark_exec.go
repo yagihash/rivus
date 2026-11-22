@@ -218,6 +218,18 @@ func CleanPath(s string) string { return clean(Path, s) }
 
 func record(class Class, base string, strs []string) {
 	_, file, line, _ := runtime.Caller(2)
+	// a skeleton of an external package (bench/zoo-go-pkg/<package>/skel) calls the sink for its function: the place is the
+	// call of that function in the cell, the first frame of the stack that is in cells/
+	for skip := 2; skip < 16; skip++ {
+		_, f, l, ok := runtime.Caller(skip)
+		if !ok {
+			break
+		}
+		if strings.Contains(f, "/cells/") {
+			file, line = f, l
+			break
+		}
+	}
 	if i := strings.LastIndex(file, "/cells/"); i >= 0 {
 		file = file[i+1:]
 	} else {
