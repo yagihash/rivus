@@ -114,7 +114,7 @@ propagators:
     pure: true
   - symbol: go/token.NewFileSet
     pure: true
-  # model-diff: extra go/parser.ParseFile `src` is an `any` read through a type switch, which the reading of the body loses; the syntax tree is made of it
+  # model-diff: extra go/parser.ParseFile #153 `src` is an `any` read through a type switch, which the reading of the body loses; the syntax tree is made of it
   - symbol: go/parser.ParseFile
     flows: [{from: args, to: results}]
   - symbol: go/printer.Fprint
@@ -303,7 +303,7 @@ propagators:
     flows: [{from: arg0, to: result}]
   - symbol: (*log/slog.Logger).With
     flows: [{from: recv, to: result}, {from: arg0, to: result}]
-  # model-diff: extra (*text/template.Template).Execute the data is read through reflect, which the reading of the body does not follow into the writer; the output is made of it
+  # model-diff: extra (*text/template.Template).Execute #152 the data is read through reflect, which the reading of the body does not follow into the writer; the output is made of it
   - symbol: (*text/template.Template).Execute
     flows: [{from: arg1, to: arg0.content}]
   # the error names the template
@@ -389,7 +389,7 @@ propagators:
     flows: [{from: arg0, to: result}]
   - symbol: (*archive/zip.Writer).CreateHeader
     flows: [{from: recv, to: result0}]
-  # model-diff: miss-reviewed (*encoding/xml.Decoder).Decode@arg0 only the type of `v` goes into the error (as for encoding/json)
+  # model-diff: miss-reviewed (*encoding/xml.Decoder).Decode@arg0 type-only only the type of `v` goes into the error (as for encoding/json)
   - symbol: (*encoding/xml.Decoder).Decode
     flows: [{from: recv, to: arg0}, {from: recv, to: result0}]
   - symbol: (*go/ast.CommentGroup).Text
@@ -494,10 +494,10 @@ propagators:
     flows: [{from: args, to: result}]
   - symbol: encoding/json.Valid
     pure: true
-  # model-diff: extra encoding/hex.Encode the reading of the body works on bytes one by one (numbers), which the analysis stops; the result is the input recoded
+  # model-diff: extra encoding/hex.Encode #151 the reading of the body works on bytes one by one (numbers), which the analysis stops; the result is the input recoded
   - symbol: encoding/hex.Encode
     flows: [{from: arg1, to: arg0}]
-  # model-diff: extra encoding/hex.AppendEncode the reading of the body works on bytes one by one (numbers), which the analysis stops; the result is the input recoded
+  # model-diff: extra encoding/hex.AppendEncode #151 the reading of the body works on bytes one by one (numbers), which the analysis stops; the result is the input recoded
   - symbol: encoding/hex.AppendEncode
     flows: [{from: args, to: result}]
   - symbol: unicode/utf8.ValidString
@@ -524,7 +524,7 @@ propagators:
     pure: true
   - symbol: (go/ast.Node).End
     pure: true
-  # model-diff: extra (*encoding/json.Decoder).Token the strings of the tokens are read by `Decode(&x)`, which writes through reflect; the reading of the body does not see that write, and the result does carry the input
+  # model-diff: extra (*encoding/json.Decoder).Token #152 the strings of the tokens are read by `Decode(&x)`, which writes through reflect; the reading of the body does not see that write, and the result does carry the input
   - symbol: (*encoding/json.Decoder).Token
     flows: [{from: recv, to: results}]
   - symbol: (*net/url.URL).RequestURI
@@ -555,12 +555,12 @@ propagators:
     flows: [{from: arg0, to: recv}, {from: arg1, to: recv}]
   - symbol: (*mime/multipart.Writer).WriteField
     flows: [{from: arg0, to: recv}, {from: arg1, to: recv}]
-  # model-diff: extra (*encoding/xml.Decoder).Token the names and texts of the tokens come from the input byte by byte (numbers), which the analysis stops; the result carries the input
+  # model-diff: extra (*encoding/xml.Decoder).Token #151 the names and texts of the tokens come from the input byte by byte (numbers), which the analysis stops; the result carries the input
   - symbol: (*encoding/xml.Decoder).Token
     flows: [{from: recv, to: results}]
   - symbol: encoding/xml.NewDecoder
     flows: [{from: arg0, to: result}]
-  # model-diff: extra (*text/template.Template).ExecuteTemplate same as Execute
+  # model-diff: extra (*text/template.Template).ExecuteTemplate #152 same as Execute
   - symbol: (*text/template.Template).ExecuteTemplate
     flows: [{from: arg2, to: arg0.content}, {from: recv, to: result0}, {from: arg1, to: result0}]
   - symbol: (*html/template.Template).ExecuteTemplate

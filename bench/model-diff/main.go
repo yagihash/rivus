@@ -26,6 +26,7 @@ func realMain(args []string) int {
 	fs := flag.NewFlagSet("model-diff", flag.ContinueOnError)
 	lang := fs.String("lang", "auto", "go or dart (auto: dart for package:<name>, else go). Rust: not checked, there is no isolation for the build of a crate")
 	changed := fs.String("changed", "", "print the packages whose rows differ from the ones at this commit (what a pull request checks), and stop")
+	reviewed := fs.String("changed-reviewed", "", "print the miss-reviewed notes added since this commit (one line each, `miss-reviewed-added <file> <symbol>@<position> <kind>`; a notice for the pull request, never a failure), and stop")
 	pkg := fs.String("pkg", "", "the package: a Go import path, or package:<name> for Dart")
 	modelFile := fs.String("model", "", "the model file (a built-in one or a -rules file); default: the built-in files that have rows of the package")
 	rivus := fs.String("rivus", "", "the rivus binary (default: built from -repo)")
@@ -37,6 +38,17 @@ func realMain(args []string) int {
 	timeout := fs.String("timeout", "600s", "limit of each analysis")
 	if err := fs.Parse(args); err != nil {
 		return 2
+	}
+	if *reviewed != "" {
+		abs, _ := filepath.Abs(*repo)
+		lines, err := addedReviewed(abs, *reviewed)
+		if err != nil {
+			return fail(err)
+		}
+		for _, l := range lines {
+			fmt.Println(l)
+		}
+		return 0
 	}
 	if *changed != "" {
 		abs, _ := filepath.Abs(*repo)

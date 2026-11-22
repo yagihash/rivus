@@ -78,7 +78,7 @@ type Result struct {
 	Status string   `json:"status"` // agree, MISS, EXTRA, EXTRA-intended
 	Miss   []string `json:"miss,omitempty"`
 	Extra  []string `json:"extra,omitempty"`
-	Reason string   `json:"reason,omitempty"` // the reason of the note that allows the EXTRA
+	Reason string   `json:"reason,omitempty"` // the reason of the note that allows the EXTRA or the reviewed MISS
 }
 
 type Report struct {
@@ -89,6 +89,7 @@ type Report struct {
 	Results    []Result       `json:"results"`
 	Unverified []Skip         `json:"unverified"`
 	Stale      []string       `json:"stale_notes,omitempty"`
+	Reviewed   []string       `json:"miss_reviewed,omitempty"` // every miss-reviewed note used: <symbol>@<position> <kind> <explanation>
 	Errors     []string       `json:"errors,omitempty"`
 	Runs       map[string]Run `json:"runs,omitempty"`
 }
@@ -146,6 +147,9 @@ func Compare(probes []Probe, skips []Skip, a, b Hits, notes []Note) *Report {
 			}
 			if n, ok := reviewed[p.Symbol+"@"+pos]; ok {
 				r.Status, r.Reason = "MISS-reviewed", n.Text
+				if !usedMiss[n.Symbol] {
+					rep.Reviewed = append(rep.Reviewed, n.Symbol+" "+n.Text)
+				}
 				usedMiss[n.Symbol] = true
 			} else {
 				r.Status = "MISS"
@@ -208,6 +212,10 @@ func (r *Report) Print(w io.Writer) {
 	}
 	for _, s := range r.Stale {
 		fmt.Fprintf(w, "  stale note: %s\n", s)
+	}
+	fmt.Fprintf(w, "  miss-reviewed: %d\n", len(r.Reviewed))
+	for _, s := range r.Reviewed {
+		fmt.Fprintf(w, "    miss-reviewed %s\n", s)
 	}
 	for _, e := range r.Errors {
 		fmt.Fprintf(w, "  ERROR: %s\n", e)

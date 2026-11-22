@@ -53,6 +53,12 @@ func ParseNotes(file, text string) ([]Note, []string) {
 		n := Note{Kind: m[1], Symbol: m[2], Text: m[3], File: file, Line: i + 1}
 		switch n.Kind {
 		case "extra", "value", "miss-reviewed":
+			if n.Kind == "miss-reviewed" {
+				if e := checkReviewed(n); e != "" {
+					errs = append(errs, fmt.Sprintf("%s:%d: %s", file, n.Line, e))
+					continue
+				}
+			}
 			if n.Text == "" {
 				errs = append(errs, fmt.Sprintf("%s:%d: the note `%s %s` has no %s", file, n.Line, n.Kind, n.Symbol, map[string]string{"extra": "reason", "value": "expression", "miss-reviewed": "reason"}[n.Kind]))
 				continue
@@ -64,6 +70,45 @@ func ParseNotes(file, text string) ([]Note, []string) {
 		notes = append(notes, n)
 	}
 	return notes, errs
+}
+
+// ReviewKinds are the kinds that the text of a `miss-reviewed` note starts with (the reason is one of these, then a short explanation):
+//
+//	type-only     not the value but only information of its type reaches the output (the error of encoding/json names the type of `v`)
+//	body-default  an apparent flow of the reading of the bodies: an unresolved call that it takes as "arguments to results" (it needs the
+//	              number of the issue, `#N`, that is to make the reading better; the kind goes away when that is fixed)
+var ReviewKinds = []string{"type-only", "body-default"}
+
+// ReviewKind returns the kind that the note starts with ("" if it is none of the ReviewKinds) and the explanation after it.
+func ReviewKind(n Note) (kind, text string) {
+	f := strings.Fields(n.Text)
+	if len(f) == 0 {
+		return "", ""
+	}
+	for _, k := range ReviewKinds {
+		if f[0] == k {
+			return k, strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(n.Text), k))
+		}
+	}
+	return "", ""
+}
+
+var issueRe = regexp.MustCompile(`#[0-9]+`)
+
+func checkReviewed(n Note) string {
+	if !strings.Contains(n.Symbol, "@") {
+		return fmt.Sprintf("the note `miss-reviewed %s` needs a position: <symbol>@<position>", n.Symbol)
+	}
+	k, text := ReviewKind(n)
+	switch {
+	case k == "":
+		return fmt.Sprintf("the note `miss-reviewed %s` starts with a kind (%s), then a short explanation", n.Symbol, strings.Join(ReviewKinds, ", "))
+	case text == "":
+		return fmt.Sprintf("the note `miss-reviewed %s` has a kind and no explanation", n.Symbol)
+	case k == "body-default" && !issueRe.MatchString(text):
+		return fmt.Sprintf("the note `miss-reviewed %s` of the kind body-default needs the number of the issue (#N)", n.Symbol)
+	}
+	return ""
 }
 
 // LoadRows reads a model file and returns its flows rows and sinks rows whose symbol is of the package.
