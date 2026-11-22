@@ -540,8 +540,8 @@ func TestNoPathStaysNotExhaustiveThroughACallThatGotCandidates(t *testing.T) {
 	}
 }
 
-// TestResolveFuncValuesRoundsLimit: when the last round still gave a call new candidates (here the rounds are cut to one;
-// the callback of a callback needs two), that call, and only that one, says so (depth_limit, func_values_rounds); it is not
+// TestResolveFuncValuesRoundsLimit: when the last round still gave a call new candidates (here the rounds are cut to one: the
+// first round always adds candidates, and a second is needed to see that nothing more comes), that call, and only that one, says so (depth_limit, func_values_rounds); it is not
 // a note of the whole result.
 func TestResolveFuncValuesRoundsLimit(t *testing.T) {
 	a := fvLoad(t, fvIR, fvRules)
