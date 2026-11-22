@@ -136,7 +136,7 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 								add(&Site{Role: RoleSource, Kind: model.KindCallResult, Symbol: sym, Labels: labelsOf(srcs), IR: at, Src: srcs, irpos: in.Pos, Callee: string(c.ID)})
 							}
 							for _, sinks := range byCategory(sinksAt(fn, vin, c.Recv, rules.Sinks[sym], canon, known, sym)) {
-								add(&Site{Role: RoleSink, Kind: "call", Symbol: sym, Category: sinks[0].Category, Labels: acceptsOf(sinks), IR: at, Sink: sinks, irpos: in.Pos, Callee: string(c.ID)})
+								add(&Site{Role: RoleSink, Kind: "call", Symbol: sym, Category: sinks[0].Category, Categories: categoriesOf(sinks), Labels: acceptsOf(sinks), IR: at, Sink: sinks, irpos: in.Pos, Callee: string(c.ID)})
 							}
 						}
 						continue
@@ -150,7 +150,7 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 					}
 					ownSinks := sinksAt(fn, in, in.Callee.Kind == ir.CalleeDynamic || (in.Callee.Kind == ir.CalleeStatic && in.Callee.Recv), rules.Sinks[sym], canon, known, sym)
 					for _, sinks := range byCategory(ownSinks) {
-						add(&Site{Role: RoleSink, Kind: "call", Symbol: sym, Category: sinks[0].Category, Labels: acceptsOf(sinks), IR: at, Sink: sinks, irpos: in.Pos})
+						add(&Site{Role: RoleSink, Kind: "call", Symbol: sym, Category: sinks[0].Category, Categories: categoriesOf(sinks), Labels: acceptsOf(sinks), IR: at, Sink: sinks, irpos: in.Pos})
 					}
 					if in.Callee.Kind == ir.CalleeDynamic {
 						// A call through an interface: the rules also apply to the
@@ -169,7 +169,7 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 							// positions, category and labels) adds no site: the call has one finding, not one for each
 							// name it is written under
 							for _, sinks := range byCategory(uncovered(sinksAt(fn, in, true, rules.Sinks[csym], canon, known, csym, sym), ownSinks)) {
-								add(&Site{Role: RoleSink, Kind: "call", Symbol: csym, Category: sinks[0].Category, Labels: acceptsOf(sinks), IR: at, Sink: sinks, irpos: in.Pos, Callee: string(id)})
+								add(&Site{Role: RoleSink, Kind: "call", Symbol: csym, Category: sinks[0].Category, Categories: categoriesOf(sinks), Labels: acceptsOf(sinks), IR: at, Sink: sinks, irpos: in.Pos, Callee: string(id)})
 							}
 						}
 					}

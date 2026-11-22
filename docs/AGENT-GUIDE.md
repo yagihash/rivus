@@ -359,7 +359,7 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 |---|---|
 | `id`、`fingerprint` | `f1:...`。コードが少し変わっても同じ箇所を指すための鍵(`resolve` が使う) |
 | `source`、`sink` | 両端のサイト: `symbol`、`func`、`position`、`snippet` |
-| `category`、`labels` | sink の種類(`command_injection`、`resource_name` など。一覧は `MODELING.md` 4b 節)と、source のラベル |
+| `category`、`categories`、`labels` | sink の種類(`categories` は、同じ位置を読む別カテゴリの行があるときの全部のカテゴリ。先頭が `category`)(`command_injection`、`resource_name` など。一覧は `MODELING.md` 4b 節)と、source のラベル |
 | `paths[0].steps[]` | 経路のステップ: `func`、`position`、`snippet`、`desc`(`source: ...`、`call ...`、`store`、`load`、`propagated by ...`、`sink: ...` など)、`notes`(そのステップの不確実性)、`model`(そのステップを決めたモデルと `origin`) |
 | `uncertainties[]` | 経路の上の不確実性の全部。**最初に読む場所** |
 | `confidence` | 経路に不確実性が 1 つもなければ `no_uncertainty_on_path`、あれば `requires_review`。**本物かどうかの判定ではありません**(サニタイズや認証は見ていません) |
