@@ -1,7 +1,6 @@
 # package:shelf_router: the router of package:shelf (a `Router` is a `Handler`; the routes are registered with `get`, `post`, ...).
 #
-# Checked against shelf_router 1.1.5 (range >=1.1.0 <2.0.0), 2026-11-22, by reading the published source. `verified_versions`
-# (docs/DESIGN-package-models.md, 6.7) is not a field of the loader yet, so the record is kept here, in a comment.
+# Checked against shelf_router 1.1.5 (range >=1.1.0 <2.0.0), 2026-11-23, by reading the published source (`verified_versions` below).
 # Hand written rows (origin: human); the generator and the differential test do not exist yet.
 #
 # The source is the `Request` that the handler takes: `package:shelf/src/request.dart#Request` is a `param_type` source in
@@ -10,9 +9,64 @@
 # that the route `/item/<id>` captured) and that the router calls the handler it was given.
 #
 # The extra arguments of a handler (`router.get('/item/<id>', (Request r, String id) => ...)`: the captured segments come as
-# `String` parameters after the request) are user input too. A `calls:` row cannot make a parameter a source, and there is
-# no `param_type` for a bare `String`; that case is not modelled (docs/issues/model-shelf_router-extra-path-params.md).
+# `String` parameters after the request, by `Function.apply(handler, [request, ...params])` in router_entry.dart) are user input
+# too: the `callback_param` rows make the parameters from the second on a source (docs/MODELING.md, 4d). `get`, `head`, `post`,
+# `put`, `delete`, `options`, `patch` and `all` take the handler as the second argument (the route is the first), `add` as the
+# third (the verb is the first). `mount` takes a `Handler` (the request only): no row.
 ruleset: rivus/dart/shelf_router@1
+
+verified_versions:
+  - package: shelf_router
+    versions: ">=1.1.0 <2.0.0"
+    checked_with: 1.1.5
+    checked: 2026-11-23
+
+sources:
+  - kind: callback_param
+    symbol: package:shelf_router/src/router.dart#Router.get
+    operand: 1
+    from: 1
+    labels: [user_input]
+  - kind: callback_param
+    symbol: package:shelf_router/src/router.dart#Router.head
+    operand: 1
+    from: 1
+    labels: [user_input]
+  - kind: callback_param
+    symbol: package:shelf_router/src/router.dart#Router.post
+    operand: 1
+    from: 1
+    labels: [user_input]
+  - kind: callback_param
+    symbol: package:shelf_router/src/router.dart#Router.put
+    operand: 1
+    from: 1
+    labels: [user_input]
+  - kind: callback_param
+    symbol: package:shelf_router/src/router.dart#Router.delete
+    operand: 1
+    from: 1
+    labels: [user_input]
+  - kind: callback_param
+    symbol: package:shelf_router/src/router.dart#Router.options
+    operand: 1
+    from: 1
+    labels: [user_input]
+  - kind: callback_param
+    symbol: package:shelf_router/src/router.dart#Router.patch
+    operand: 1
+    from: 1
+    labels: [user_input]
+  - kind: callback_param
+    symbol: package:shelf_router/src/router.dart#Router.all
+    operand: 1
+    from: 1
+    labels: [user_input]
+  - kind: callback_param
+    symbol: package:shelf_router/src/router.dart#Router.add
+    operand: 2
+    from: 1
+    labels: [user_input]
 
 propagators:
   - symbol: package:shelf_router/src/router.dart#RouterParams.params
