@@ -82,6 +82,8 @@
 - Rust(骨組みの `Cargo.toml` に `zoo-mark = { path = "../../../zoo-rust/zoo-mark" }`): `#[track_caller] pub fn run(cmd: &str) { zoo_mark::sink_cmd(cmd); }`
 sink の行は、パッケージの `rules.yaml` の `sinks:` に、骨組みの関数の記号で書く(`zoo/mark` の sink の記号は、zoo の `rules.yaml` が持つ)。Rust のテストは、パッケージの crate と骨組みの crate の `Cargo.toml` の zoo-mark の path 依存を、写した zoo-mark に書き換える。
 
+**骨組みは、本物の型の埋め込みと、インターフェースの実装の関係を、本物と同じ形にする**(昇格したメソッドが、別のパッケージの行に当たるため。実例: Go の `sqlx.DB` は `*sql.DB` を埋め込む。骨組みが埋め込まないと、昇格したメソッドを呼ぶセルが、本物と違う形で通る)。骨組みの生成器の要件にも足してある([DESIGN-package-models.md](DESIGN-package-models.md) 6.8)。
+
 テスト: `go test ./internal/model/... ./cmd/rivus/ -run 'Builtin|Zoo'`、`regomark check --no-judge`(0)。Dart のセルは、Dart のテスト(`dart analyze` を含む)も通す。
 
 ## 3. 既知の見逃しと誤検出は、セルと課題のファイルで残す
