@@ -29,6 +29,7 @@ func TestDartExtractorCompiledToOneExecutable(t *testing.T) {
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("dart compile exe: %v\n%s", err, out)
 	}
+	zooDartRoot(t) // writes the pubspec.yaml of bench/zoo-dart/cells (generated, not committed)
 	zoo, err := filepath.Abs("../../bench/zoo-dart/cells")
 	if err != nil {
 		t.Fatal(err)

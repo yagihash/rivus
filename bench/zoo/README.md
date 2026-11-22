@@ -207,7 +207,7 @@ was kept in a field, a variable, a list or a map is not followed to its call).
 | `bench/parity/dead-allow.txt` | `internal/model/builtin/<モデルのファイル>.dead-allow`(1 モデルのファイル 1 ファイル。`bench/parity/README.md`) | なし |
 | `bench/zoo-dart/exec/lib/cases.dart` | `cells/lib` から**生成**(コミットしない。`make zoo-dart-gen`、テストも書く) | なし |
 | `bench/zoo-dart/{cells,exec}/pubspec.lock` | コミットしない(`.gitignore`。CI と `make setup` が `dart pub get`) | なし |
-| `bench/zoo-dart/cells/pubspec.yaml` の path 依存 | `cells/packages/` のディレクトリの一覧から生成(名前順。`TestZooDartGenerate` が固定) | 同じ 2 つの名前の間に足す PR 同士だけ(機械的に直せる: `make zoo-dart-gen`) |
+| `bench/zoo-dart/{cells,exec}/pubspec.yaml` | **生成**(コミットしない。`make zoo-dart-gen`、テストも書く)。cells は `cells/packages/` のディレクトリごとの path 依存、exec は、骨組みの `pubspec.yaml` の `zoo_exec_override: <範囲>` から、ぶつかる名前の `dependency_overrides` | なし(パッケージのディレクトリだけ) |
 | `docs/ISSUES.md` の「次の番号」の行と表 | 行は廃止(最大 + 1)。モデルの PR の課題は `docs/issues/model-<パッケージ>-<名前>.md`(番号なし、表に載せない) | なし |
 | `docs/DECISIONS.md`、`docs/DESIGN-deps-cost.md` | モデルの PR は触らない(ADR は段階の PR とモデルの範囲の変更だけ。測定は PR の本文) | なし |
 

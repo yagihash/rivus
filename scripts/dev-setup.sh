@@ -106,7 +106,8 @@ for d in extractor/dart extractor/dart/test/sample extractor/dart/test/monorepo/
     (cd "$d" && dart pub get --enforce-lockfile)
   fi
 done
-# the two of the Dart zoo have no pubspec.lock in the repository (not committed): the versions are resolved now
+# the two of the Dart zoo have no pubspec.yaml and no pubspec.lock in the repository (generated, not committed): write them, and resolve the versions now
+make zoo-dart-gen
 for d in bench/zoo-dart/cells bench/zoo-dart/exec; do
   echo "dev-setup: dart pub get in $d"
   (cd "$d" && dart pub get)
