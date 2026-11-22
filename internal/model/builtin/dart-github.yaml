@@ -9,12 +9,17 @@
 #   the program meant. (As the names of the Google Cloud resources: dart-gcp.yaml.) The rows are on the service methods that
 #   take a path or a ref and not on every method that takes a slug: the slug is a sink where it is made.
 # * `GitHub.request`, `requestJson`, `getJSON`, `postJSON`: the `path` is put after the endpoint. The same category.
-# * Source: `GitHubFile.text`, the decoded content of a file of a repository: text that other people wrote and the API gives
-#   back. This differs from `dart-http.yaml`, where the body of a response is not a source (the server is the one the program
-#   chose to call); here the data is that of the users of a repository, which the program does not control.
-#   The plain fields that hold such text (`GitHubFile.content`, the `body` of `Issue`, `IssueComment`, `PullRequest`) are NOT
-#   sources: a `kind: field` source also fires on the constructor of the class in the dependency and on every read of the field
-#   inside it, so each flow gets a second, spurious source in the package (docs/issues/model-github-field-source-in-dependency.md).
+# * Sources, the criterion: a client of a service makes a value a source when it carries what a user of the service wrote
+#   (the text of a file, an issue, a comment). A value that the service decides (an id, a time, a sha, a count, a URL that the
+#   service builds) is not a source. A value that is hard to say is not made a source, and the reason is written here.
+#   This is why the body of a response is a source here and not in `dart-http.yaml`: there the server is the one that the
+#   program chose to call, and here the text is that of the users of a repository, which the program does not control.
+#   `GitHubFile.text`, the decoded content of a file of a repository, is the source. The rule format has no label that tells
+#   "from an external service" from the default `user_input`, so it has the default (docs/ISSUES.md, #158).
+#   Candidates that are not sources, and why: `GitHubFile.content` (the same text, undecoded), the `body` and the title of
+#   `Issue`, `IssueComment` and `PullRequest`, the message of a commit: they are plain fields, and a `kind: field` source fires
+#   also on the constructor of the class and on every read of the field inside the package, which the zoo reports as unexpected
+#   flows (the skeleton of the zoo is read as part of the project). Known miss, with the cells: docs/issues/model-github-field-source-in-dependency.md.
 # * The service methods have no `flows` row: their bodies are read (they are a few lines each and reach `GitHub.request`, which
 #   reaches `package:http`, whose own rows stand for the clients).
 # The notes `# model-diff:` are for `bench/model-diff` (docs/MODEL-RUNBOOK.md, 9): how to make a value of a class for the generated calls.
