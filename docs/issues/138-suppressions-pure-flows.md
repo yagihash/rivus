@@ -1,4 +1,4 @@
-# 137: `origin: llm` の `pure` と、流れを切る `flows` のモデルが流れを消しても、`suppressions` と `llm_influenced` に残らない
+# 138: `origin: llm` の `pure` と、流れを切る `flows` のモデルが流れを消しても、`suppressions` と `llm_influenced` に残らない
 
 - 状態: **closed**
 - 種類: 正確さ(サイレントな見逃し)
