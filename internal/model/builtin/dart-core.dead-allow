@@ -68,6 +68,7 @@ dart:core#Uri.authority | debt | the standard library: no cell of the zoo calls 
 dart:core#Uri.data | debt | the standard library: no cell of the zoo calls it yet
 dart:core#Uri.dataFromString | debt | the standard library: no cell of the zoo calls it yet
 dart:core#Uri.decodeQueryComponent | debt | the standard library: no cell of the zoo calls it yet
+dart:core#Uri.encodeComponent | debt | the standard library: no cell of the zoo calls it yet
 dart:core#Uri.encodeFull | debt | the standard library: no cell of the zoo calls it yet
 dart:core#Uri.encodeQueryComponent | debt | the standard library: no cell of the zoo calls it yet
 dart:core#Uri.file | debt | the standard library: no cell of the zoo calls it yet
