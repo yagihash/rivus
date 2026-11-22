@@ -214,8 +214,12 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+      # the tests of the completion script check it with zsh (zsh -n)
+      - name: Install zsh
+        run: sudo apt-get install -y zsh
       - name: Test cmd/rivus (one shard of five)
         env:
+          RIVUS_REQUIRE_ZSH: "1"
           SHARD_INDEX: ${{ matrix.shard }}
           SHARD_TOTAL: "5"
           # the heavy tests that need no extractor, the heaviest first

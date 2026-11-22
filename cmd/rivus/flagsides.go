@@ -15,7 +15,10 @@ import (
 // The kind is set beside the definition of the flags, by usual(fs, names...) or diagnostic(fs, names...). A flag that is in neither, or in
 // both, stops the command when it is run (and TestEveryFlagHasOneSide), so a new flag cannot be added without deciding its side.
 
-const helpAllFlag = "help-all"
+const (
+	helpAllFlag  = "help-all"
+	helpAllUsage = "with -h: also list the flags for diagnosis and tuning"
+)
 
 type flagSides struct {
 	usual, diag map[string]bool
@@ -93,7 +96,7 @@ func prepareFlags(fs *flag.FlagSet, args []string) {
 		sort.Strings(bad)
 		panic(fmt.Sprintf("rivus: %s: flags without exactly one side (usual or diagnostic): %s", fs.Name(), strings.Join(bad, ", ")))
 	}
-	fs.Bool(helpAllFlag, false, "with -h: also list the flags for diagnosis and tuning")
+	fs.Bool(helpAllFlag, false, helpAllUsage)
 	usageOf = fs
 	fs.Usage = printUsage
 	help := false
