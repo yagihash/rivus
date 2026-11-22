@@ -64,6 +64,8 @@ func init() {
 			sub: []*command{
 				{name: "coverage", summary: "which functions need a model most", args: "packages",
 					flags: func(fs *flag.FlagSet) { coverageFlags(fs) }, run: runModelsCoverage},
+				{name: "versions", summary: "the versions of the packages that the models were checked against (verified_versions)",
+					flags: func(fs *flag.FlagSet) { versionsFlags(fs) }, run: runModelsVersions},
 			}},
 		{name: "setup", usual: true, summary: "prepare what reading a language needs",
 			sub: []*command{
