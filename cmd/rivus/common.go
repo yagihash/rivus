@@ -47,6 +47,13 @@ type common struct {
 	deterministic bool
 	// allowDepsUnder: directories outside the project from which the Dart extractor may read dependencies.
 	allowDepsUnder multiFlag
+	// bodyReplaced are packages whose body the analysis does not read, besides the ones the rule files declare.
+	bodyReplaced multiFlag
+	// readDeclared reads the bodies of the packages that are declared (the declarations of the rule files and of
+	// -body-replaced are left out): the run that a declaration is checked against.
+	readDeclared bool
+	// declIgnored is how many declarations readDeclared left out (loadRules sets it).
+	declIgnored int
 }
 
 func (c *common) register(fs *flag.FlagSet) {
@@ -62,7 +69,9 @@ func (c *common) register(fs *flag.FlagSet) {
 	fs.BoolVar(&c.noDeps, "no-deps", false, "do not read the source of the dependencies (which is done by default, except for the standard library, so that calls into them are followed instead of guessed): lighter (about a sixth of the memory), and every call into a dependency is a guess")
 	fs.Var(&c.allowDepsUnder, "allow-deps-under", "Dart: a directory outside the project whose packages may be read as dependencies (repeatable). The package_config.json of the project says where its dependencies are, and it is not trusted: only the project, the pub cache and the SDKs are read without being asked (a monorepo's sibling packages need this)")
 	fs.BoolVar(&c.deterministic, "deterministic-only", false, "ignore the rules decided by an LLM (origin: llm)")
-	usual(fs, "C", "rules", "no-builtin-rules", "no-project-rules", "tests", "no-deps", "allow-deps-under", "deterministic-only")
+	fs.Var(&c.bodyReplaced, "body-replaced", "PACKAGE: do not read the body of this package of the dependencies; the models stand for it (a call of its functions is the model's row, or unmodeled_library_call when there is none). The import path of a Go package, package:name of a Dart package, a Rust crate; the package named and no other, `PATH/...` for it and what is under it. For a try: the rule files declare it with body_replaced_packages, with the reason (repeatable; docs/MODELING.md)")
+	fs.BoolVar(&c.readDeclared, "read-declared-bodies", false, "read the body of the packages that the rule files and -body-replaced declare, as if there were no declaration: to compare the result with the one that leaves them out (summary.body_replaced_ignored says how many were left out)")
+	usual(fs, "C", "rules", "no-builtin-rules", "no-project-rules", "tests", "no-deps", "allow-deps-under", "deterministic-only", "body-replaced", "read-declared-bodies")
 	kind(fs, "dir", "C", "allow-deps-under")
 	kind(fs, "file", "rules")
 }
@@ -138,6 +147,13 @@ func (c *common) loadRules(extra ...*model.RuleSet) (*model.Rules, error) {
 		sets = append(sets, rs)
 	}
 	sets = append(sets, extra...)
+	flagSet, err := c.bodyReplacedSet()
+	if err != nil {
+		return nil, err
+	}
+	if flagSet != nil {
+		sets = append(sets, flagSet)
+	}
 	var rules *model.Rules
 	if c.deterministic {
 		rules = model.WithoutOrigin(model.OriginLLM, sets...)
@@ -146,6 +162,10 @@ func (c *common) loadRules(extra ...*model.RuleSet) (*model.Rules, error) {
 	}
 	if err := rules.Validate(); err != nil {
 		return nil, err
+	}
+	if c.readDeclared {
+		c.declIgnored = len(rules.Declared)
+		rules = rules.WithDeclarations(nil)
 	}
 	for _, w := range rules.CallWarnings() {
 		fmt.Fprintf(os.Stderr, "rivus: warning: %s\n", w)

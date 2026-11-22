@@ -1,6 +1,6 @@
 # ADR の一覧
 
-[DECISIONS.md](DECISIONS.md)(ADR-001〜099)の、番号、題、今の状態、関連する文書の一覧。ADR は決めた時点の記録で、書き換えない。**今どうなっているか**は、ここと、[ARCHITECTURE.md](ARCHITECTURE.md)、[PRINCIPLES.md](PRINCIPLES.md) で見る。
+[DECISIONS.md](DECISIONS.md)(ADR-001〜100)の、番号、題、今の状態、関連する文書の一覧。ADR は決めた時点の記録で、書き換えない。**今どうなっているか**は、ここと、[ARCHITECTURE.md](ARCHITECTURE.md)、[PRINCIPLES.md](PRINCIPLES.md) で見る。
 
 - 確認: 2026-11-22、9c26a39。状態は、ADR の本文と、後の ADR・実装を読んで付けた。古くなる前提で読むこと。
 - 状態の意味:
@@ -113,6 +113,7 @@
 | 097 | 組み込みモデルの範囲に「外部のサービスのクライアント」を足し、Google Cloud をその範囲の 1 つ目にする | 有効 | ユーザーの希望を受けた相談役の決定(2026-11-22)。ADR-096 を更新。ADR-077 の「例外」は、この範囲で読む | README、ARCHITECTURE 5.5、GCP-MODELS、DART-MODEL-CANDIDATES | 範囲は 5 つ |
 | 098 | 実装の多いインターフェースのメソッドを、委譲のクリーク全体をモデルにして切る基準 | 有効 | ADR-092 の条件 1 とは別の基準。`package:http` の `Client.send` | MODELING 4a、DESIGN-deps-cost 11 節、ARCHITECTURE 5.5 | 公開の対象で finding が同じ + `dependency_body_unread` |
 | 099 | source と sink は、プロジェクトの関数の中だけで探す。依存を読んだ実行では `summary.dependency_sites` が毎回言う | 有効 | 相談役の決定(2026-11-23)。ADR-096、097 の根拠の 1 つ。課題 #144 | README、AGENT-GUIDE、ARCHITECTURE 5.5、MODELING | sink のモデルは、検出のためにも必要 |
+| 100 | モデルのファイルに、パッケージ単位で「本体を読まない」宣言を書ける(解析の側) | 有効 | ADR-092、098 の続き。`body_replaced_packages`、`-body-replaced`、`-read-declared-bodies`。extractor への受け渡し、組み込みへの宣言は未 | MODELING 4a、ARCHITECTURE 5.5、AGENT-GUIDE、DESIGN-package-models | `summary.body_replaced_packages`、呼び返しの `assumed_call` |
 
 ## 訂正・追記の書き方を保つ ADR
 

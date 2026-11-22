@@ -150,10 +150,28 @@ type Summary struct {
 	// Isolation says how a Rust project was read: reading it runs the build scripts and the macros of the project. Absent when no Rust
 	// project was read (Go and Dart are not built).
 	Isolation *Isolation `json:"isolation,omitempty"`
+	// BodyReplacedPackages are the packages of the dependencies whose body was not read because a model declares that it
+	// stands for it (body_replaced_packages of a rule file, or -body-replaced): a call of their functions is the model
+	// when it has a row for the function, and unmodeled_library_call when it has none; code inside them is not
+	// analysed. Sorted by package. Absent when none was left out.
+	BodyReplacedPackages []BodyReplacedPackage `json:"body_replaced_packages,omitempty"`
+	// BodyReplacedIgnored is how many declarations -read-declared-bodies left out: the bodies were read. Absent when 0.
+	BodyReplacedIgnored int `json:"body_replaced_ignored,omitempty"`
 	// DependencySites says that the sources and the sinks were listed in the functions of the project only, not in those of the
 	// dependencies (ADR-099): a flow from the input of the user to a dangerous call inside a library is not found unless a
 	// sink model says so at the call of the library's API. Present when the run read the body of any dependency function.
 	DependencySites *DependencySites `json:"dependency_sites,omitempty"`
+}
+
+// BodyReplacedPackage is a package whose body was not read, and why.
+type BodyReplacedPackage struct {
+	// Package is the declaration as it was written (it may end in /...: the package and what is under it).
+	Package string `json:"package"`
+	// DeclaredIn is the rule set that declares it: its file, "builtin:..." or "-body-replaced".
+	DeclaredIn string `json:"declared_in"`
+	Reason     string `json:"reason"`
+	// Functions is how many functions were left out.
+	Functions int `json:"functions"`
 }
 
 // DependencySites is where the sites were not looked for.

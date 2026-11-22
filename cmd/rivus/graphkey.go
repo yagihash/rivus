@@ -125,6 +125,15 @@ func (k *keyCtx) compute() (*keyResult, error) {
 		// on, so that the key of an index made without it is what it was.
 		cfg["flags.resolve-func-values"] = "true"
 	}
+	if len(o.bodyReplaced) > 0 {
+		// the packages whose body is not read are not in the file: another list is another file. Set only when named, so
+		// that the key of an index made without it is what it was. (The declarations of the rule files are in the key
+		// with the files, and those of the built-in rules with their hash.)
+		cfg["flags.body-replaced"] = strings.Join(sortedUnique(o.bodyReplaced), "\n")
+	}
+	if o.readDeclared {
+		cfg["flags.read-declared-bodies"] = "true"
+	}
 	allow := append([]string(nil), o.allowDepsUnder...)
 	sort.Strings(allow)
 	cfg["flags.allow-deps-under"] = strings.Join(allow, "\n")
@@ -432,4 +441,18 @@ func realAbs(p string) (string, error) {
 		return real, nil
 	}
 	return abs, nil
+}
+
+// sortedUnique is the list sorted, without repeats.
+func sortedUnique(in []string) []string {
+	out := append([]string(nil), in...)
+	sort.Strings(out)
+	n := 0
+	for i, s := range out {
+		if i == 0 || s != out[n-1] {
+			out[n] = s
+			n++
+		}
+	}
+	return out[:n]
 }

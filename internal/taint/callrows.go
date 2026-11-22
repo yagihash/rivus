@@ -92,17 +92,26 @@ func (e *Engine) callRowsOf(sym string) []callRowRef {
 	return out
 }
 
+// callRowsFor are the rows of calls of the call: the ones of the models of the symbol, and where there are none, the
+// rows that stand for the function values given to a function of a declared package (bodyreplaced.go).
+func (e *Engine) callRowsFor(ci *sg.Instr, sym string) []callRowRef {
+	if rows := e.callRowsOf(sym); len(rows) > 0 {
+		return rows
+	}
+	return e.replacedRows(ci)
+}
+
 // callbackFuncs are the functions that the rows of the call make concrete: the call depends on their
 // summaries (the order of the analysis).
 func (e *Engine) callbackFuncs(ci *sg.Instr) []*sg.Func {
 	if ci.Callee == nil {
 		return nil
 	}
-	rows := e.callRowsOf(ci.Callee.Symbol)
+	rows := e.callRowsFor(ci, ci.Callee.Symbol)
+	out := e.implFuncs(ci)
 	if len(rows) == 0 {
-		return nil
+		return out
 	}
-	var out []*sg.Func
 	for _, r := range rows {
 		if m := r.row().Method; m != "" {
 			out = append(out, e.methodImpls(ci.Callee.Symbol, m)...)
@@ -126,7 +135,7 @@ func (e *Engine) callbackFuncs(ci *sg.Instr) []*sg.Func {
 // callBindings are the values that the closures made concrete by the rows of the call captured: what the
 // call reads besides its operands.
 func (s *state) callBindings(cc *callCtx) []*sg.Value {
-	rows := s.eng.callRowsOf(cc.sym)
+	rows := s.eng.callRowsFor(cc.in, cc.sym)
 	if len(rows) == 0 {
 		return nil
 	}
@@ -216,6 +225,9 @@ func (s *state) applyCallRow(cc *callCtx, p *model.Propagator, i int, mref *Mode
 	}
 
 	var notes []*Uncertainty
+	if row.Assumed != "" {
+		notes = append(notes, s.newNote(cc.in, KindAssumedCall, row.Assumed, cc.sym))
+	}
 	if len(cs) > 1 {
 		d := s.newNote(cc.in, KindDynamicDispatch, "the function given to "+cc.sym+" is one of several", cc.sym)
 		for _, c := range cs {
@@ -449,7 +461,7 @@ func sameTraitPath(a, b string) bool {
 // bound, and applying it where it is made as well would count it twice (assumed_call is for what is not seen).
 func (s *state) coveredByModel(mk *sg.Instr) bool {
 	rules := s.eng.rules
-	if rules == nil || len(rules.Calls) == 0 || len(mk.Dsts) != 1 {
+	if rules == nil || (len(rules.Calls) == 0 && !rules.HasDeclared()) || len(mk.Dsts) != 1 {
 		return false
 	}
 	if s.useIndex == nil {
@@ -504,7 +516,7 @@ func (s *state) givenToModel(u *sg.Instr, x *sg.Value) bool {
 		return false
 	}
 	recv, args := u.Recv(), u.CallArgs()
-	for _, r := range s.eng.callRowsOf(u.Callee.Symbol) {
+	for _, r := range s.eng.callRowsFor(u, u.Callee.Symbol) {
 		sel, err := model.ParseSelector(r.row().Fn)
 		if err != nil || pick(recv, args, sel) != x {
 			continue
