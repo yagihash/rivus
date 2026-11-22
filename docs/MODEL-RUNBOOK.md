@@ -59,6 +59,8 @@
 - 例の位置づけ(ADR-063)の上書きは、**[ADR-101](DECISIONS.md) で済んでいる**。昇格の PR は ADR を書かない(ADR-101 を参照するだけ)。
 - PR の題は `feat(model): <言語> <パッケージ> の組み込みモデル(例から昇格)`。判定は、この題の形で行う(1 節)。昇格のあと、例のファイルは無いか短くなるので、`ls internal/model/builtin/` の判定は、`<言語>-<パッケージ>*.yaml` で使える。
 
+作業の種類は、一覧の「新規 / 広げる / 例から昇格」の列ではなく、**main にそのパッケージのモデルのファイルがあるか**(`ls internal/model/builtin/<言語>-<パッケージ>*.yaml`)で決める。ファイルがなければ、一覧が「広げる」でも新規として扱う(標準ライブラリの行に乗る薄いラッパーなど)。
+
 ## 2. 作る(標準の 4 段)
 
 1. **生成(未実装)**: 型から粗いモデルを作る。`internal/model/builtin/<lang>-<package>.gen.yaml`(コミットする。先頭に生成器のバージョンと入力のパッケージとバージョン)。書き込み先の引数は、`results` とレシーバへの流れの読み取り元にも含める。
@@ -73,12 +75,16 @@
 
 **開発用の依存とぶつかるパッケージの骨組み(Dart)**: `bench/zoo-dart/exec` の `test` が持ってくる本物のパッケージ(`shelf`、`shelf_static`、`shelf_web_socket`、`web_socket_channel`、`async`、`collection`、`http_parser`、`stream_channel`、`path` など)と同じ名前の骨組みは、`bench/zoo-dart/cells/packages/<名前>`(path の依存。本物の依存は書かない)に置き、骨組みの `pubspec.yaml` の末尾に `zoo_exec_override: <本物の範囲>` の 1 行を書く(`exec/pubspec.yaml` の `dependency_overrides` は、これから生成される。`exec/pubspec.yaml` と `cells/pubspec.yaml` は生成物で、コミットしない。`make zoo-dart-gen`)。解析(cells)は骨組みを読み、実行(exec)は、`test` がすでに動かしている本物で動く。cells の `pubspec.yaml` の依存に本物の名前を hosted で書かない(zoo のプログラムに本物の依存が入り、依存の関数を検査するテストが失敗する)。骨組みは、本物の公開のシグネチャに合わせる(セルのコードが、両方で型が合うこと)。
 
-**骨組みの置き場(Go と Rust)**: 外部のパッケージを使うセルは、パッケージごとに独立したモジュールに置く([DESIGN-package-models.md](DESIGN-package-models.md) 6.8 の表)。Go は `bench/zoo-go-pkg/<パッケージ>/`(`go.mod`、`skel/`、`cells/`、`rules.yaml`)、Rust は `bench/zoo-rust-pkg/<パッケージ>/`(`Cargo.toml`、`Cargo.lock`、`skel/`、`cells/src/`、`rules.yaml`)。**テストは、そのディレクトリを探す(一覧はない)ので、ディレクトリを足すだけで、実行、真の注釈の照合、rivus の照合が働く**(合成の `zoo_synth` が、見本)。セルの名前は `F/pkg/<パッケージ(`_` は `-`)>/<セル>`、マークの固定は `bench/zoo/marks.d/<lang>/pkg/<パッケージ>/`。Rust の `Cargo.toml` は、zoo-mark を `path = "../../zoo-rust/zoo-mark"` で指す(テストが、サンドボックスのために、対象に写して書き換える)。
+**骨組みの置き場(Go と Rust)**: 外部のパッケージを使うセルは、パッケージごとに独立したモジュールに置く([DESIGN-package-models.md](DESIGN-package-models.md) 6.8 の表)。Go は `bench/zoo-go-pkg/<パッケージ>/`(`go.mod`、`skel/`、`cells/`、`rules.yaml`)、Rust は `bench/zoo-rust-pkg/<パッケージ>/`(`Cargo.toml`、`Cargo.lock`、`skel/`、`cells/src/`、`rules.yaml`)。**テストは、そのディレクトリを探す(一覧はない)ので、ディレクトリを足すだけで、実行、真の注釈の照合、rivus の照合が働く**(合成の `zoo_synth` が、見本)。セルの名前は `F/pkg/<パッケージ(`_` は `-`)>/<セル>`、マークの固定は `bench/zoo/marks.d/<lang>/pkg/<パッケージ>/`。Rust の `Cargo.toml` は、zoo-mark を `path = "../../zoo-rust/zoo-mark"` で指す(テストが、サンドボックスのために、対象に写して書き換える)。 `kind: field` の source を使うモデルのときは、パッケージの `Cargo.toml` の `[workspace]` に `exclude = ["skel"]` を書く(cargo は、ワークスペースの根の下の path の依存をメンバーにし、extractor はメンバーをプログラムとして読む。除かないと、骨組みの中のフィールドの読み出しが source の場所に出て、想定外の流れになる。除くと、骨組みは依存として読まれる)。
 
 **骨組みは、sink の行の関数が呼ばれたら、記録する**(zoo のセルで sink の行を確認するため。記録しない骨組みでは、実行の確認が、sink に届かない)。Go の骨組みは `zoo/mark` を、Rust の骨組みは `zoo-mark` を呼ぶ。記録の場所は、セルの中の、骨組みの関数の呼び出しの行になる(Go は、スタックの中の最初の `/cells/` のフレーム。Rust は、骨組みの関数に `#[track_caller]` を付ける)。最小の例(見本は、`bench/zoo-go-pkg/zoo_synth`、`bench/zoo-rust-pkg/zoo_synth` の `Run` と `run`):
 - Go(骨組みの `go.mod` に `require zoo v0.0.0` と `replace zoo => ../../../zoo-go`): `func Run(cmd string) { mark.SinkCmd(cmd) }`
 - Rust(骨組みの `Cargo.toml` に `zoo-mark = { path = "../../../zoo-rust/zoo-mark" }`): `#[track_caller] pub fn run(cmd: &str) { zoo_mark::sink_cmd(cmd); }`
 sink の行は、パッケージの `rules.yaml` の `sinks:` に、骨組みの関数の記号で書く(`zoo/mark` の sink の記号は、zoo の `rules.yaml` が持つ)。Rust のテストは、パッケージの crate と骨組みの crate の `Cargo.toml` の zoo-mark の path 依存を、写した zoo-mark に書き換える。
+
+**骨組みは、本物の型の埋め込みと、インターフェースの実装の関係を、本物と同じ形にする**(昇格したメソッドが、別のパッケージの行に当たるため。実例: Go の `sqlx.DB` は `*sql.DB` を埋め込む。骨組みが埋め込まないと、昇格したメソッドを呼ぶセルが、本物と違う形で通る)。骨組みの生成器の要件にも足してある([DESIGN-package-models.md](DESIGN-package-models.md) 6.8)。
+
+**Rust のモデルの標準の確認: 本物のクレートでの記号の綴り(macOS のサンドボックスの下だけ)**: 骨組みは本物と綴りが違いうる(定義の経路と公開の経路、別のクレートの型の再エクスポート)ので、行を書いたら、本物のクレートで extractor が書く名前と照合する。(1) 一時のディレクトリに、本物のクレートを**版を固定して**(`=4.20.0`。要る feature は足す。`default-features = false` でよい)使う小さい crate を作り、モデルの各行(source の型と、flows / sinks の関数)を 1 回ずつ通る最小の関数を書く。(2) `cargo generate-lockfile --manifest-path <dir>/Cargo.toml`(取得だけ)。(3) `go run ./cmd/rivus debug extract -lang rust -isolation-env DEVELOPER_DIR=/Library/Developer/CommandLineTools -C <dir> > ir.jsonl`(サンドボックスの下。`-unsafe-host-exec` は使わない。`DEVELOPER_DIR` がないと、サンドボックスが Xcode.app を読めず、ビルドスクリプトのリンクが `xcrun` で失敗する)。(4) `ir.jsonl` の、その crate の関数(`id` が crate 名で始まる)の、`callee.symbol` と、引数の型(`locals` の `name` つき)を、モデルの行と照合する。一致しない行は直す。(5) 一時のディレクトリは、終わったら消す。クラウドの実行には隔離がないので、**Rust のモデルは、当面ローカルで作る**。実例と、骨組みと本物の違い(定義の `id` は、別のクレートの型だと本物は `actix_http::...`、`http::...` になる。呼び出しの `symbol` は、公開の経路で同じ): PR #204(actix-web)。
 
 テスト: `go test ./internal/model/... ./cmd/rivus/ -run 'Builtin|Zoo'`、`regomark check --no-judge`(0)。Dart のセルは、Dart のテスト(`dart analyze` を含む)も通す。
 
@@ -104,6 +110,17 @@ zoo のゲート(`scripts/zoo-loosened-check.sh`、#167): 新しいセル(`bench
 - **例からの昇格の、さわってよい範囲の事実(洗い出し)**: 例のファイルを使っているのは、`bench/compare.sh`(gin: 145、147 行。`gin-vue-admin` と `go-test-bench` のルール)、`bench/parity/collect.sh`(103 行。gin)、`bench/README.md`(gin: 8、158〜160、258 行)、`cmd/rivus/notbuiltin.go` と `notbuiltin_test.go`(actix-web のファイルを名指し。テストが読む)、`bench/parseable/rules.yaml` と `bench/parseable/README.md`(actix-web の写し)、`internal/model/builtin/rust-web.yaml` の 3 行目のコメント、`extractor/rust/README.md` の 108 行。ファイルを消すと、`compare.sh` の gin の 2 つのベンチは、ルールのファイルがなく飛ばされる。**gin は、例のファイルを消さず、中身を空のルール(「組み込みになった」のコメントつき)にして残す案が、使っている所を壊さない**(`compare.sh` は、比べる 2 つのバージョンが、それぞれの木のファイルを読むので、古いバージョンは昔の gin のルール、新しいバージョンは組み込み、になり、昇格の前後の比較の意味が保たれる)。**actix-web は、`notbuiltin.go` の表の行と、そのテストを直す必要がある**(昇格すると、`actix_web::` が組み込みのルールにあるので、知らせは出ない)。この 2 ファイルは、actix-web の昇格の PR で、さわってよい。決める(相談役。ADR-101 の「消す」との関係)まで、gin は、消さずに残す。
 
 - ほかのファイル(`docs/DECISIONS.md`、`docs/ISSUES.md`、直下の README、コード、ゲート、ワークフロー)は、さわらない。conflict が出たら、main 側の行を残して、自分の行を足し直す。
+- **module の path に major が入る Go のパッケージ**(`/v2` 以上。`pgx/v5`、`go-redis/v9`、`go-github/v93` など): major ごとにファイルや行を写さない。シンボル、`field`、`type`、`verified_versions` の `package` に、major の要素を `/v*` と書く(`(*github.com/google/go-github/v*/github.Client).Do`、`package: github.com/google/go-github/v*`。ADR-110、設計 6.9)。`/v*` は `/v` と数字の 1 要素だけに当たる(`/vendor` などには当たらない)。`verified_versions` の `versions` は、**実際に差分テストを通した範囲だけ**を書く(`make model-diff PKG=github.com/google/go-github/v93/github` に `-version v93.0.0`: `/v*` の行は、`-version` の major の package として照合される)。zoo のセルの骨組みは、読んだ major 1 つ分のモジュールで足りる(`replace github.com/google/go-github/v93 => ./skel`)。ほかの major を確認したら、`versions` の範囲を広げる。`aws-sdk-go-v2` のように、`/vN` の要素でない名前は対象外(そのままの path で書く)。接尾辞のない v0 / v1 の path には `/v*` は当たらない: v1 と v2 以降の両方を対象にするパッケージは、接尾辞のない行と `/v*` の行の両方が要る。
+
+### Rust の zoo のセルを足すとき(確認と骨組みの注意)
+
+- **`RIVUS_RUST` を設定しないと、`TestZooPkgRust` は SKIP のまま通る**(`go test` は `ok`。SKIP は `-v` でしか見えない)。Rust のパッケージのセルを足したら、必ず `RIVUS_RUST=<rivus-rust のバイナリ>` と `RIVUS_REQUIRE_RUST=1` を付けて実行する(`RIVUS_REQUIRE_RUST=1` なら、未設定は SKIP でなく失敗になる。CI の `rust` ジョブは、これを設定してあるので、SKIP は失敗になる)。`bench/zoo-rust-pkg/` にパッケージがあって `RIVUS_RUST` がないときは、`-v` で「NOT checked」と出る。実行したら、`found N / N`、`@miss 0` の行を PR の本文に書く。行を使っているかは、sink の行を全部消して、vuln が見つからずに落ちることで確かめる。
+- **骨組みの `#[track_caller]`**: 記録の場所をセルの行にするには、sink を記録する関数だけでなく、**呼び出しの連鎖のすべて**(骨組みの公開の関数、それが呼ぶ内部の記録の関数)に付ける。1 つでも欠けると、記録の場所が骨組みの中になる。
+- **`fixed` のセルは、`clean_cmd`、`clean_sql`、`clean_html`、`clean_path` の 4 つを通す**: `zoo_mark::sink_any` は、全部の class で判断するので、1 つだけでは「清められていない」と判断される。例: `m::clean_path(&m::clean_html(&m::clean_sql(&m::clean_cmd(&m::src("..")))))`。
+**4 節の補足(骨組みの記録、ロックの生成、Rust の型の綴り)**:
+- **Go の骨組みが、名前の sink(`resource_name` など)で記録するもの**: `zoo/mark` の `mark.SinkCmd` で、その引数(名前)を記録する(fixed のセルでは、`mark.CleanCmd` で消した値が入るので、記録が空になる)。骨組みの本体は「公開のシグネチャ + 記録するだけ」で、それ以外はしない。見本は `bench/zoo-go-pkg/zoo_synth/skel/zoosynth.go` の `Run`(`func Run(cmd string) { mark.SinkCmd(cmd) }`)と、`bench/zoo-go-pkg/gin/skel/gin.go`(`mark.Src` を呼ぶ source の側)。
+- **`bench/zoo/marks.d/` のロックの生成**: 新しいセルを足したら、`ZOO_MARKS_UPDATE=1 go test ./cmd/rivus -run '^TestZooMarksLock$'`(`bench/zoo/README.md`、`cmd/rivus/zoo_marks_test.go`)。新しいセルの `@sink(none)`、`@miss`、`@fp` の行は、承認なしで通る(`@miss` と `@fp` は `@ref` が要る。3 節)。既存のセルの行は変えない。
+- **Rust の型の綴りは、extractor が書く名前で確認する**: 実例: axum の `axum::extract::Request` は、IR では `axum::http::Request` と書かれる。綴りを確認せずに `param_type` の `type:` を書くと、source が当たらない。
 
 ## 5. PR(完成)
 
@@ -161,6 +178,7 @@ go run ./bench/model-diff -pkg google.golang.org/grpc -model mine.yaml -version 
 - **やること**: モデルの行にある関数を、source の値で、位置(`recv`、`arg0`、...)ごとに 1 つずつ呼ぶコードを作り、出てくるもの(戻り値ごと、書き込まれうる引数、レシーバ)を、**関数と場所ごとに別の sink** に渡す。同じコードを、(A) そのパッケージの行を外した組み込みモデルで、本体を読んで解析し、(B) モデルで解析して、比べる。出力は、表と、JSON(`-json`。既定は `<out>/report.json`)。
 - **結果の種類**: `agree`(一致。`agree_no_flow` は、A も B も流れがなく、その位置について何も言えなかった数)、**`MISS`**(A にあって B にない流れ。モデルが落とした)、**`EXTRA`**(B にあって A にない流れ。モデルが広い)、`EXTRA-intended`(意図した差。下の注釈)、`unverified`(未検証。理由つき)。
 - **終了コード**: MISS があれば 1。EXTRA は、注釈のないものがあれば 1。注釈に理由がない、sink の行が存在しない位置を宣言している、生成したコードがビルドできない、も 1。**MISS は、原則、注釈でも許さない**(落ちた流れは、モデルを直す)。例外は、本体を読んで、データの流れではないと確認した 1 つの位置だけ(下の `miss-reviewed`)。
+- **行がない関数の一覧: `-coverage-gaps`**: 上のプローブは、モデルの行にある関数だけを対象にするので、**行がない関数は原理的に見つからない**(`database/sql.Conn` の sink の行が足りなかったのはこの形)。`go run ./bench/model-diff -coverage-gaps -pkg database/sql` は、Go の標準ライブラリのパッケージについて、文字列・バイト列・`any` を受ける公開の関数とメソッドのうち、組み込みのモデルに行がないものを一覧にする(情報だけ。終了コードは 0)。型の単位で、SQL・コマンド・パスを受ける関数に行があるかを見るときに使う。
 - **`miss-reviewed` の扱い**: 差分テストの出力は、毎回、`miss-reviewed` の件数と一覧(`miss-reviewed: N` と、1 行ずつ)を出す(JSON は `miss_reviewed`)。**モデルを作るセッション(クラウドのルーチン、ローカルの検証のサブエージェント)は `miss-reviewed` を足さない**。必要だと思ったら、下書きのまま、理由を書いて終わる(足すかどうかは、相談役が決める)。PR で増えた注釈は、`go run ./bench/model-diff -changed-reviewed origin/main` が、`miss-reviewed-added <ファイル> <symbol>@<位置> <種類>` の行で出す(ジョブは、これを失敗でなく目立つ注意として表示する。`ci-ok` は止めない)。
 - **意図した差の置き方**: モデルの YAML の、その行の近くに、コメントで書く。理由は必須(ない注釈は失敗)。注釈は、コメントの行を読む(`internal/model` のパーサではない)。
 

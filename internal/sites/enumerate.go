@@ -233,12 +233,25 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 	return res
 }
 
-// fieldKeyOf is the key of a field in the rules, "pkg/path.Type.field", from
+// fieldKeyOf is the key of a field in the rules, "pkg/path.Type.field" (Rust: "crate::module::Type.field"), from
 // the type of the base (a struct or a pointer to one) as the IR writes it.
 func fieldKeyOf(typ, field string) string {
 	typ = strings.TrimPrefix(typ, "*")
 	if typ == "" || field == "" {
 		return ""
+	}
+	if strings.Contains(typ, "::") {
+		// A Rust type, "crate::module::Type" (a reference, "&T" or "&mut T", is the type it points to; the arguments of a
+		// generic type are left out): the key is "crate::module::Type.field". The names of Rust have no ".", so the
+		// check of the form below, which is for "path.Name", does not apply.
+		typ = strings.TrimPrefix(strings.TrimPrefix(typ, "&"), "mut ")
+		if i := strings.IndexByte(typ, '<'); i >= 0 {
+			typ = typ[:i]
+		}
+		if strings.ContainsAny(typ, " {}()*[]&,;") || strings.HasPrefix(typ, "::") || strings.HasSuffix(typ, "::") {
+			return ""
+		}
+		return typ + "." + field
 	}
 	if i := strings.IndexByte(typ, '['); i >= 0 {
 		typ = typ[:i] // an instantiated type: the name of the generic type

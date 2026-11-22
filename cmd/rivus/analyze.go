@@ -288,7 +288,14 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	rep := report.Build(packages, l.loadErrors(), st, res, rules)
 	rep.Summary.Isolation = o.rustIsolation
 	rep.Summary.BodyReplacedPackages = replaced
+	if fs := report.FunctionsSkippedOf(l.ir.FnSkipped); fs != nil {
+		rep.Summary.FunctionsSkipped = fs
+		fmt.Fprintf(os.Stderr, "rivus: %d functions could not be read by the extractor and were skipped (%d of the project, %d of dependencies): summary.functions_skipped\n", fs.Functions, fs.Project, fs.Dependencies)
+	}
 	rep.Summary.BodyReplacedIgnored = o.declIgnored
+	if l.gossa != nil {
+		rep.Summary.UnverifiedVersions = rules.UnverifiedVersions(l.gossa.ModuleVersions, "go.mod")
+	}
 	if len(o.skipped) > 0 {
 		if rep.Summary.Unread == nil {
 			rep.Summary.Unread = &report.Unread{Top: []report.UnreadPackage{}}
@@ -350,6 +357,10 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 		}
 	}
 	rep.Target = o.target(o.irFile != "")
+	if fs := rep.Summary.FunctionsSkipped; fs != nil && fs.Project > 0 {
+		// the last line of the run: the code of the project is not all in the analysis, and a flow through these functions is not seen
+		fmt.Fprintf(os.Stderr, "rivus: WARNING: %d function(s) of the project were skipped (the extractor could not read them): flows through them are not seen; see summary.functions_skipped\n", fs.Project)
+	}
 	return rep, nil
 }
 

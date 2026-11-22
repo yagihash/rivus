@@ -1,0 +1,2 @@
+rust	pkg/google_cloud_storage/control_move_object.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	pkg/google_cloud_storage/control_move_object.rs	sink-none	@sink(none) @nosink(pkg-gcs-control-move-object-decoy)	fn decoy() { @decoy

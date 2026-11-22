@@ -132,17 +132,49 @@ func LoadRows(path, lang, pkg string) ([]Row, string, error) {
 	var rows []Row
 	for i := range rs.Propagators {
 		p := &rs.Propagators[i]
-		if SymbolPackage(lang, p.Symbol) == pkg && len(p.Flows) > 0 {
+		if model.MatchMajor(SymbolPackage(lang, p.Symbol), pkg) && len(p.Flows) > 0 {
+			p.Symbol = concreteIn(p.Symbol, pkg)
 			rows = append(rows, Row{Symbol: p.Symbol, Prop: p})
 		}
 	}
 	for i := range rs.Sinks {
 		s := &rs.Sinks[i]
-		if SymbolPackage(lang, s.Symbol) == pkg {
+		if model.MatchMajor(SymbolPackage(lang, s.Symbol), pkg) {
+			s.Symbol = concreteIn(s.Symbol, pkg)
 			rows = append(rows, Row{Symbol: s.Symbol, Sink: s})
 		}
 	}
 	return rows, string(data), nil
+}
+
+// concreteIn writes the symbol of a row for the major of the package that is checked: a row with /v* is for every major, and
+// the generated code and the probes name the one function of this major.
+func concreteIn(sym, pkg string) string {
+	if !model.HasMajorWildcard(sym) {
+		return sym
+	}
+	i := strings.Index(sym, model.MajorWildcard)
+	// the package of the symbol up to the end of /v*, in the package that is checked, is /v and the digits
+	start := strings.LastIndexAny(sym[:i], "()*[] ") + 1
+	mod := sym[start:i]
+	if !strings.HasPrefix(pkg, mod+"/v") {
+		return sym
+	}
+	rest := pkg[len(mod)+2:]
+	if k := strings.IndexByte(rest, '/'); k >= 0 {
+		rest = rest[:k]
+	}
+	return model.ConcreteMajor(sym, rest)
+}
+
+// majorOfVersion is the major of a version (v93.0.0, 93.1.2): the digits before the first dot.
+func majorOfVersion(v string) (string, bool) {
+	v = strings.TrimPrefix(v, "v")
+	n, _, _ := strings.Cut(v, ".")
+	if n == "" || strings.Trim(n, "0123456789") != "" {
+		return "", false
+	}
+	return n, true
 }
 
 var goPkgRe = regexp.MustCompile(`^(.*?)(\.v[0-9]+)?\.`)
@@ -201,7 +233,7 @@ func DropPackage(text, lang, pkg string) string {
 		drop := false
 		for _, l := range lines[i:k] {
 			if m := symbolLineRe.FindStringSubmatch(l); m != nil {
-				drop = SymbolPackage(lang, strings.Trim(m[1], `"'`)) == pkg
+				drop = model.MatchMajor(SymbolPackage(lang, strings.Trim(m[1], `"'`)), pkg)
 				break
 			}
 		}

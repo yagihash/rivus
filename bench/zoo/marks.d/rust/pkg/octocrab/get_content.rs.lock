@@ -1,0 +1,2 @@
+rust	pkg/octocrab/get_content.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	pkg/octocrab/get_content.rs	sink-none	@sink(none) @nosink(pkg-octocrab-get-content-decoy)	fn decoy() { @decoy

@@ -1,0 +1,7 @@
+# The rows of rust-actix-web.yaml that no call in the zoo or the curated targets hits (TestBuiltinRowsAreHitByTheZoo). "symbol | reason"; see bench/parity/README.md.
+actix_web::HttpRequest::uri | not called: same shape as HttpRequest::path (a getter of the request), and the type it returns (http::Uri) has no row here
+actix_web::HttpRequest::cookies | not called: same shape as HttpRequest::cookie
+actix_web::HttpRequest::peer_addr | no cell can carry the marker: the result is a socket address (a number), not a text
+actix_web::dev::ConnectionInfo::realip_remote_addr | not called: same shape as ConnectionInfo::host
+actix_web::dev::ConnectionInfo::remote_addr | not called: same shape as ConnectionInfo::host
+actix_web::web::Path::into_inner | no cell can call it: a web::Path is made by the extractor only (its field is private), so the zoo cannot make one

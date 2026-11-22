@@ -137,7 +137,8 @@ fn driver() -> ExitCode {
             // a crate that is built to be loaded or linked by another program is called from outside
             let open_crate = args.windows(2).any(|w| w[0] == "--crate-type" && matches!(w[1].as_str(), "cdylib" | "staticlib" | "dylib"))
                 || args.iter().any(|a| matches!(a.as_str(), "--crate-type=cdylib" | "--crate-type=staticlib" | "--crate-type=dylib"));
-            let records = extract(tcx, &root, dep, open_crate);
+            install_panic_hook();
+            let records = extract(tcx, &root, dep, open_crate, &crate_name);
             // a test build of a crate (`--test`) is told apart by its name: the merge prefers it to the library build
             let kind = if args.iter().any(|a| a == "--test") { "-test" } else { "" };
             let path = PathBuf::from(&out_dir).join(format!("{}{}-{}.jsonl", crate_name, kind, std::process::id()));
@@ -161,12 +162,14 @@ fn driver() -> ExitCode {
 }
 
 /// The records of the crate being compiled: its functions, and the texts.
-fn extract(tcx: rustc_middle::ty::TyCtxt<'_>, root: &str, dep: bool, open_crate: bool) -> Vec<Value> {
+fn extract(tcx: rustc_middle::ty::TyCtxt<'_>, root: &str, dep: bool, open_crate: bool, crate_name: &str) -> Vec<Value> {
     let items: Vec<_> = rustc_public::all_local_items().into_iter().filter(|i| i.has_body()).collect();
     let bodies: HashSet<String> = items.iter().map(|i| i.name()).collect();
     let mut cx = lower::Ctx::new(root.to_string(), bodies);
     // what the crate holds that is not read, said at the end (a load error that names the function)
     let mut unread: Vec<(String, String)> = Vec::new();
+    // the functions whose body could not be converted (a panic of the conversion that was caught): name, why
+    let mut skipped: Vec<(String, String)> = Vec::new();
     // the promoted constants of the crate: the functions in them are used as values (`&helper`)
     for ldid in tcx.mir_keys(()) {
         let did = ldid.to_def_id();
@@ -195,11 +198,17 @@ fn extract(tcx: rustc_middle::ty::TyCtxt<'_>, root: &str, dep: bool, open_crate:
     for item in &items {
         let name = item.name();
         if name.contains("{closure#") {
-            if let Some(b) = item.body() {
-                if lower::is_closure_body(&b) {
-                    let tys = b.arg_locals().iter().skip(1).map(|l| lower::closure_key(&l.ty)).collect();
-                    cx.closures.insert(name, tys);
-                }
+            // a body that cannot be converted is skipped here without a word: the loop below meets the same function and says it
+            if let Ok(Some(tys)) = guarded(|| {
+                item.body().and_then(|b| {
+                    if lower::is_closure_body(&b) {
+                        Some(b.arg_locals().iter().skip(1).map(|l| lower::closure_key(&l.ty)).collect::<Vec<_>>())
+                    } else {
+                        None
+                    }
+                })
+            }) {
+                cx.closures.insert(name, tys);
             }
         }
     }
@@ -214,13 +223,21 @@ fn extract(tcx: rustc_middle::ty::TyCtxt<'_>, root: &str, dep: bool, open_crate:
         *count.entry(item.name()).or_default() += 1;
     }
     for item in &items {
-        let Some(body) = item.body() else {
-            // an item that has a body and gives none: left out (what input does this: not known; no fixture)
-            unread.push((item.name(), "the body of this function could not be read: it is left out".to_string()));
-            continue;
-        };
         let name = item.name();
-        let f = lower::Lower::lower(&mut cx, name.clone(), &body, item.span());
+        // The conversion of a body to stable MIR can panic (`unimplemented!` of rustc_public: async closures are not lowered
+        // yet): that function is skipped, and said (fn_skipped), and the others are read (docs/DESIGN-rust-extractor-panic.md)
+        let f = match guarded(|| item.body().map(|body| lower::Lower::lower(&mut cx, name.clone(), &body, item.span()))) {
+            Ok(Some(f)) => f,
+            Ok(None) => {
+                // an item that has a body and gives none: left out (what input does this: not known; no fixture)
+                unread.push((item.name(), "the body of this function could not be read: it is left out".to_string()));
+                continue;
+            }
+            Err(why) => {
+                skipped.push((name.clone(), why));
+                continue;
+            }
+        };
         let mut j = f.to_json();
         if count.get(&name).copied().unwrap_or(0) > 1 {
             let text = j.to_string();
@@ -252,6 +269,10 @@ fn extract(tcx: rustc_middle::ty::TyCtxt<'_>, root: &str, dep: bool, open_crate:
     }
     if !dep {
         cx.texts.write(&mut out);
+    }
+    report_skipped(crate_name, &skipped);
+    for (name, why) in &skipped {
+        out.push(json!({"kind": "fn_skipped", "fn_skipped": {"unit": crate_name, "func": name, "dependency": dep, "why": why}}));
     }
     for (name, why) in unread {
         out.push(json!({"kind": "load_error", "load_error": {"package": name, "message": why, "unread": true, "func": name}}));
@@ -348,12 +369,14 @@ fn cli() -> ExitCode {
     if include_tests {
         check.push("--all-targets");
     }
+    let extra_flags: Vec<String> = cargo_flags.iter().map(|f| f.to_string()).collect();
     check.extend(cargo_flags);
     // With the dependencies, the driver stands in for rustc for every crate (cargo
     // tells the members of the workspace apart); without, for the members only.
     let wrapper = if deps { "RUSTC_WRAPPER" } else { "RUSTC_WORKSPACE_WRAPPER" };
-    let status = Command::new("cargo")
-        .args(plus())
+    // cargo's own messages go to the standard error as they are; they are also kept, to name the crate that did not compile
+    let mut cmd = Command::new("cargo");
+    cmd.args(plus())
         .args(&check)
         .current_dir(&root)
         .env("CARGO_TARGET_DIR", tmp.join("target"))
@@ -363,11 +386,19 @@ fn cli() -> ExitCode {
         .env("RIVUS_ROOT", &root)
         .env("DYLD_FALLBACK_LIBRARY_PATH", with_lib("DYLD_FALLBACK_LIBRARY_PATH"))
         .env("LD_LIBRARY_PATH", with_lib("LD_LIBRARY_PATH"))
-        .status();
+        .stderr(std::process::Stdio::piped());
+    let status = run_tee_stderr(&mut cmd);
     match status {
-        Ok(s) if s.success() => {}
-        Ok(s) => {
-            eprintln!("rivus-rust: cargo check failed ({}): the code has to compile", s);
+        Ok((s, _)) if s.success() => {}
+        Ok((s, errs)) => {
+            let msg = match failed_crate(&errs) {
+                Some(name) => {
+                    let known = crate_versions(&root, &tmp, &name, &extra_flags);
+                    compile_failure_message(&s.to_string(), &name, &known, deps)
+                }
+                None => format!("rivus-rust: cargo check failed ({}): the code has to compile", s),
+            };
+            eprintln!("{}", msg);
             return ExitCode::from(1);
         }
         Err(e) => {
@@ -395,6 +426,142 @@ fn cli() -> ExitCode {
         }
     }
     ExitCode::SUCCESS
+}
+
+thread_local! {
+    /// Set while a conversion runs under `guarded`: the hook of panics keeps the message and says nothing.
+    static GUARDED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// The message (first line) and the place of the last panic under `guarded`.
+    static LAST_PANIC: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
+}
+
+/// Puts a hook of panics in (once): a panic under `guarded` is not written (its first line and place are kept for the
+/// summary line and for fn_skipped; RIVUS_RUST_PANIC_VERBOSE=1 writes it as it is); a panic anywhere else goes to the hook
+/// that was there.
+fn install_panic_hook() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let prev = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            if GUARDED.with(|g| g.get()) {
+                LAST_PANIC.with(|m| *m.borrow_mut() = panic_summary(info));
+                if std::env::var_os("RIVUS_RUST_PANIC_VERBOSE").is_none() {
+                    return;
+                }
+            }
+            prev(info);
+        }));
+    });
+}
+
+fn panic_summary(info: &std::panic::PanicHookInfo<'_>) -> String {
+    let payload = info.payload();
+    let msg = payload.downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| payload.downcast_ref::<String>().cloned()).unwrap_or_else(|| "a panic".to_string());
+    let first = msg.lines().next().unwrap_or("").to_string();
+    match info.location() {
+        // the place in the source of the compiler, without the directory of the toolchain: `rustc_public/src/.../ty.rs:484`
+        Some(l) => format!("{} (at {}:{})", first, l.file().rsplit("/compiler/").next().unwrap_or(l.file()), l.line()),
+        None => first,
+    }
+}
+
+/// Runs `f`; a panic in it is caught, and the first line of its message is the error. Only for what is read from rustc
+/// after the queries are done (the conversion of a body to stable MIR and the lowering of it): a panic inside a query
+/// leaves the query active, and the compiler aborts later (lower.rs, `resolve`). If it aborts, the crate fails as before.
+fn guarded<T>(f: impl FnOnce() -> T) -> Result<T, String> {
+    GUARDED.with(|g| g.set(true));
+    let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
+    GUARDED.with(|g| g.set(false));
+    r.map_err(|_| LAST_PANIC.with(|m| std::mem::take(&mut *m.borrow_mut())))
+}
+
+/// How many skipped functions of a crate are said one by one on the standard error; the rest is counted in one line.
+const SKIPPED_SAID: usize = 5;
+
+/// One line for each of the first functions that were skipped, and one for the rest.
+fn report_skipped(crate_name: &str, skipped: &[(String, String)]) {
+    for (name, why) in skipped.iter().take(SKIPPED_SAID) {
+        eprintln!("rivus-rust: skipped {} ({}): {}", name, crate_name, why);
+    }
+    if skipped.len() > SKIPPED_SAID {
+        eprintln!("rivus-rust: ... and {} more functions skipped in {}", skipped.len() - SKIPPED_SAID, crate_name);
+    }
+}
+
+/// Runs the command (its standard error piped) and passes its standard error on to ours line by line; returns the status and
+/// the text of the standard error.
+fn run_tee_stderr(cmd: &mut Command) -> std::io::Result<(std::process::ExitStatus, String)> {
+    use std::io::{BufRead, Write};
+    let mut child = cmd.spawn()?;
+    let mut all = String::new();
+    if let Some(e) = child.stderr.take() {
+        let mut r = std::io::BufReader::new(e);
+        let mut line = Vec::new();
+        loop {
+            line.clear();
+            match r.read_until(b'\n', &mut line) {
+                Ok(0) | Err(_) => break,
+                Ok(_) => {
+                    let _ = std::io::stderr().write_all(&line);
+                    all.push_str(&String::from_utf8_lossy(&line));
+                }
+            }
+        }
+    }
+    Ok((child.wait()?, all))
+}
+
+/// The name of the crate that cargo says it could not compile: "error: could not compile `NAME` (lib)" (the first one).
+fn failed_crate(stderr: &str) -> Option<String> {
+    for l in stderr.lines() {
+        if let Some(rest) = l.trim_start().strip_prefix("error: could not compile `") {
+            if let Some(end) = rest.find('`') {
+                return Some(rest[..end].to_string());
+            }
+        }
+    }
+    None
+}
+
+/// What `cargo metadata` knows of the packages with this name: (version, is a member of the workspace).
+fn crate_versions(root: &Path, tmp: &Path, name: &str, flags: &[String]) -> Vec<(String, bool)> {
+    let out = Command::new("cargo")
+        .args(plus())
+        .args(["metadata", "--format-version", "1"])
+        .args(flags)
+        .current_dir(root)
+        .env("CARGO_TARGET_DIR", tmp.join("target"))
+        .output();
+    let Ok(out) = out else { return Vec::new() };
+    if !out.status.success() {
+        return Vec::new();
+    }
+    let Ok(meta) = serde_json::from_slice::<Value>(&out.stdout) else { return Vec::new() };
+    let members: HashSet<&str> = meta["workspace_members"].as_array().into_iter().flatten().filter_map(|m| m.as_str()).collect();
+    let mut found = Vec::new();
+    for p in meta["packages"].as_array().into_iter().flatten() {
+        if p["name"].as_str() == Some(name) {
+            let version = p["version"].as_str().unwrap_or("").to_string();
+            let member = p["id"].as_str().map_or(false, |id| members.contains(id));
+            found.push((version, member));
+        }
+    }
+    found
+}
+
+/// The last message when cargo check fails and the crate that did not compile is known: a crate of the workspace is the
+/// code of the user; a dependency is not (it is the extractor, or the compiler under it, that stopped on it).
+fn compile_failure_message(status: &str, name: &str, known: &[(String, bool)], deps: bool) -> String {
+    if known.iter().any(|(_, member)| *member) {
+        return format!("rivus-rust: cargo check failed ({}): the crate {} of the project does not compile; the code has to compile", status, name);
+    }
+    let versions: Vec<&str> = known.iter().map(|(v, _)| v.as_str()).collect();
+    let what = if versions.is_empty() { name.to_string() } else { format!("{} {}", name, versions.join(", ")) };
+    let hint = if deps { " The project can be read without its dependencies: -no-deps." } else { "" };
+    format!(
+        "rivus-rust: cargo check failed ({}): the dependency {} did not compile under the extractor. This is not a fault of the code of the project: the extractor (or the compiler it uses, {}) stops on that crate; the lines above say how.{}",
+        status, what, TOOLCHAIN, hint
+    )
 }
 
 /// The targets that `cargo check` leaves out without `--include-tests` (kind test, example, bench), and the
@@ -681,5 +848,41 @@ mod tests {
         assert!(is_build_script(&args(&["rustc", "--crate-name", "build_script_build", "build.rs"])));
         assert!(is_build_script(&args(&["rustc", "--crate-name", "build_script_codegen", "codegen.rs"])));
         assert!(!is_build_script(&args(&["rustc", "--crate-name", "mylib", "src/lib.rs"])));
+    }
+
+    #[test]
+    fn a_panic_under_guarded_is_caught_with_its_first_line_and_place_and_the_next_call_goes_on() {
+        install_panic_hook();
+        let e = guarded(|| -> u32 { unimplemented!("FIXME(x): lower\nmore") }).unwrap_err();
+        assert!(e.starts_with("not implemented: FIXME(x): lower (at "), "{e}");
+        assert!(!e.contains("more"), "{e}");
+        assert_eq!(guarded(|| 7).unwrap(), 7);
+    }
+
+    const GOOGLE_AUTH: &str = "thread 'rustc' panicked at /rustc-dev/x/ty.rs:484:17:\nnot implemented: FIXME(async_closures): Lower these to SMIR\nerror: could not compile `google-cloud-auth` (lib)\n\nCaused by:\n  process didn't exit successfully: `rivus-rust rustc --crate-name google_cloud_auth` (exit status: 101)\n";
+
+    #[test]
+    fn the_failed_crate_is_the_one_cargo_names() {
+        assert_eq!(failed_crate(GOOGLE_AUTH).as_deref(), Some("google-cloud-auth"));
+        assert_eq!(failed_crate("error[E0433]: cannot find x\nerror: could not compile `f` (lib) due to 1 previous error\n").as_deref(), Some("f"));
+        assert_eq!(failed_crate("warning: unused\n"), None);
+    }
+
+    #[test]
+    fn a_dependency_that_does_not_compile_is_said_as_not_the_code_of_the_project() {
+        let m = compile_failure_message("exit status: 101", "google-cloud-auth", &[("1.19.0".into(), false)], true);
+        assert!(m.contains("the dependency google-cloud-auth 1.19.0"), "{m}");
+        assert!(m.contains("not a fault of the code of the project"), "{m}");
+        assert!(m.contains("-no-deps"), "{m}");
+        assert!(!m.contains("the code has to compile"), "{m}");
+        // already without the dependencies: no advice to leave them out
+        assert!(!compile_failure_message("exit status: 101", "x", &[("1.0.0".into(), false)], false).contains("-no-deps"));
+    }
+
+    #[test]
+    fn a_crate_of_the_project_is_still_the_code_that_has_to_compile() {
+        let m = compile_failure_message("exit status: 101", "mine", &[("0.1.0".into(), true)], true);
+        assert!(m.contains("the code has to compile"), "{m}");
+        assert!(!m.contains("-no-deps"), "{m}");
     }
 }

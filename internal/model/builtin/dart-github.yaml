@@ -16,10 +16,10 @@
 #   program chose to call, and here the text is that of the users of a repository, which the program does not control.
 #   `GitHubFile.text`, the decoded content of a file of a repository, is the source. The rule format has no label that tells
 #   "from an external service" from the default `user_input`, so it has the default (docs/ISSUES.md, #159).
-#   Candidates that are not sources, and why: `GitHubFile.content` (the same text, undecoded), the `body` and the title of
-#   `Issue`, `IssueComment` and `PullRequest`, the message of a commit: they are plain fields, and a `kind: field` source fires
-#   also on the constructor of the class and on every read of the field inside the package, which the zoo reports as unexpected
-#   flows (the skeleton of the zoo is read as part of the project). Known miss, with the cells: docs/issues/model-github-field-source-in-dependency.md.
+#   The plain fields that hold such text are sources of kind `field`: `GitHubFile.content` (the undecoded text), the title and the
+#   body of `Issue` and `PullRequest`, the body of `IssueComment`, the message of a `GitCommit`. (A `kind: field` source fires on the
+#   reads of the field in the project's code; the packages of the pub cache are not read for sites, ADR-099. The zoo reads its skeleton
+#   of the package as a dependency too: `--dep-dir`, docs/issues/model-github-field-source-in-dependency.md.)
 # * The service methods have no `flows` row: their bodies are read (they are a few lines each and reach `GitHub.request`, which
 #   reaches `package:http`, whose own rows stand for the clients).
 # The notes `# model-diff:` are for `bench/model-diff` (docs/MODEL-RUNBOOK.md, 9): how to make a value of a class for the generated calls.
@@ -36,6 +36,27 @@ verified_versions:
 
 sources:
   - symbol: package:github/src/common/model/repos_contents.dart#GitHubFile.text
+    labels: [user_input]
+  - kind: field
+    field: package:github/src/common/model/repos_contents.dart#GitHubFile.content
+    labels: [user_input]
+  - kind: field
+    field: package:github/src/common/model/issues.dart#Issue.title
+    labels: [user_input]
+  - kind: field
+    field: package:github/src/common/model/issues.dart#Issue.body
+    labels: [user_input]
+  - kind: field
+    field: package:github/src/common/model/issues.dart#IssueComment.body
+    labels: [user_input]
+  - kind: field
+    field: package:github/src/common/model/pulls.dart#PullRequest.title
+    labels: [user_input]
+  - kind: field
+    field: package:github/src/common/model/pulls.dart#PullRequest.body
+    labels: [user_input]
+  - kind: field
+    field: package:github/src/common/model/git.dart#GitCommit.message
     labels: [user_input]
 
 sinks:

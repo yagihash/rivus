@@ -155,6 +155,16 @@ type Summary struct {
 	// when it has a row for the function, and unmodeled_library_call when it has none; code inside them is not
 	// analysed. Sorted by package. Absent when none was left out.
 	BodyReplacedPackages []BodyReplacedPackage `json:"body_replaced_packages,omitempty"`
+	// FunctionsSkipped are the functions whose body the extractor could not read (the compiler's interface stopped on it: Rust,
+	// an async closure), counted by crate; the functions are not in the analysis, and a call of one is a note
+	// (dependency_body_unread, project_body_unread). Project is how many are code of the project: a flow through them is not
+	// seen. Absent when none was skipped.
+	FunctionsSkipped *FunctionsSkipped `json:"functions_skipped,omitempty"`
+	// UnverifiedVersions are the modules that a model has a verified_versions record for, and that the program uses at a
+	// version outside the records' ranges: the rows were applied to a version that was not checked (the rows are applied all
+	// the same). One entry for each module, sorted by package. Absent when there is none, and for a module that has no record.
+	// Go only for now (the version is the one go.mod says).
+	UnverifiedVersions []model.UnverifiedVersion `json:"unverified_versions,omitempty"`
 	// BodyReplacedIgnored is how many declarations -read-declared-bodies left out: the bodies were read. Absent when 0.
 	BodyReplacedIgnored int `json:"body_replaced_ignored,omitempty"`
 	// DependencySites says that the sources and the sinks were listed in the functions of the project only, not in those of the
@@ -231,6 +241,94 @@ type BodyReplacedPackage struct {
 	// FunctionsDeclared is how many functions the package declares, for a package that the extractor was told not to
 	// read: nothing was read, so nothing was left out (Functions). Not there when the extractor read the package.
 	FunctionsDeclared int `json:"functions_declared,omitempty"`
+}
+
+// FunctionsSkipped is what the extractor could not read, function by function (docs/DESIGN-rust-extractor-panic.md).
+type FunctionsSkipped struct {
+	Functions    int `json:"functions"`
+	Project      int `json:"project"`
+	Dependencies int `json:"dependencies"`
+	// Crates are the units, the project's first, then by the number of functions (at most 10).
+	Crates []SkippedCrate `json:"crates"`
+}
+
+// SkippedCrate is a unit (a crate) with functions that were skipped.
+type SkippedCrate struct {
+	Crate      string `json:"crate"`
+	Dependency bool   `json:"dependency"`
+	Functions  int    `json:"functions"`
+	// Why is the reason that most of the functions have; WhyOther is how many have another one.
+	Why      string `json:"why"`
+	WhyOther int    `json:"why_other,omitempty"`
+	// Examples are the first three functions.
+	Examples []string `json:"examples"`
+}
+
+// maxSkippedCrates is how many crates summary.functions_skipped lists; maxSkippedExamples how many functions of each.
+const (
+	maxSkippedCrates   = 10
+	maxSkippedExamples = 3
+)
+
+// FunctionsSkippedOf counts the functions that an extractor skipped. nil when there are none.
+func FunctionsSkippedOf(skipped []ir.FnSkipped) *FunctionsSkipped {
+	if len(skipped) == 0 {
+		return nil
+	}
+	out := &FunctionsSkipped{Crates: []SkippedCrate{}}
+	type key struct {
+		unit string
+		dep  bool
+	}
+	by := map[key]*SkippedCrate{}
+	reasons := map[key]map[string]int{}
+	var order []key
+	for _, f := range skipped {
+		out.Functions++
+		if f.Dependency {
+			out.Dependencies++
+		} else {
+			out.Project++
+		}
+		k := key{f.Unit, f.Dependency}
+		c := by[k]
+		if c == nil {
+			c = &SkippedCrate{Crate: f.Unit, Dependency: f.Dependency, Examples: []string{}}
+			by[k] = c
+			reasons[k] = map[string]int{}
+			order = append(order, k)
+		}
+		c.Functions++
+		reasons[k][f.Why]++
+		if len(c.Examples) < maxSkippedExamples {
+			c.Examples = append(c.Examples, f.Func)
+		}
+	}
+	for _, k := range order {
+		c := by[k]
+		best, n := "", -1
+		for why, cnt := range reasons[k] {
+			if cnt > n || (cnt == n && why < best) {
+				best, n = why, cnt
+			}
+		}
+		c.Why, c.WhyOther = best, c.Functions-n
+		out.Crates = append(out.Crates, *c)
+	}
+	sort.SliceStable(out.Crates, func(i, j int) bool {
+		a, b := out.Crates[i], out.Crates[j]
+		if a.Dependency != b.Dependency {
+			return !a.Dependency
+		}
+		if a.Functions != b.Functions {
+			return a.Functions > b.Functions
+		}
+		return a.Crate < b.Crate
+	})
+	if len(out.Crates) > maxSkippedCrates {
+		out.Crates = out.Crates[:maxSkippedCrates]
+	}
+	return out
 }
 
 // DependencySites is where the sites were not looked for.

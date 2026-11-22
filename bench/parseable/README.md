@@ -17,8 +17,8 @@ python3 /path/to/rivus/bench/score.py /path/to/rivus/bench/parseable/truth-5c20b
 
 The settings the results were measured with: `--no-deps` (the dependencies are not read; with them
 the extraction takes 174 s and the findings are the same, 24 against 24 at the time), the rules in
-`rules.yaml`, the default of `rivus analyze`. actix-web is not built in (ADR-063), so `rules.yaml`
-holds its sources and getters (the same as `examples/rules/rust-actix-web.yaml`).
+`rules.yaml`, the default of `rivus analyze`. actix-web is built in now (`internal/model/builtin/rust-actix-web.yaml`);
+`rules.yaml` still holds its sources and getters, as they were when the results were measured (the rows are the same).
 
 Results are in `docs/DECISIONS.md`.
 

@@ -388,6 +388,7 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `dynamic_dispatch` | インターフェースや関数値を通る呼び出し。`candidates` の全部に届くと仮定した | 経路が通る実装が、実行時に本当に呼ばれる型かを確認する(`graph impls` / `dispatchers`)。`candidates` が空なら、実装が読んだコードにない |
 | `unmodeled_library_call` | 本体もモデルもない関数を通った。「引数は結果に伝わる」と近似した | その関数の動作を調べる(値を加工して無害にするか、そのまま返すか)。必要ならモデルを書く |
 | `dependency_body_unread` | モデルのあるインターフェースの呼び出しの候補に、依存の本体があったが、読まなかった(Go) | 依存が、自分のコードの実装へ値を渡していないかを確認する |
+| `project_body_unread` | プロジェクトの関数の本体を、extractor が読めなかった(Rust の async closure など)。依存の関数なら `dependency_body_unread`。数は `summary.functions_skipped` | その関数の中を、自分で読む。`detail` に理由 |
 | `depth_limit` | 解析の上限で止めた。理由は `detail` の先頭の語: `budget`(作業量)、`func_timeout` / `run_timeout`(時計)、`candidate_limit`(関数値の候補が多すぎて、どれも追わなかった)、`path_limit`(アクセスパスを切った)など | その関数の要約は、流れを落としていることがある。その関数の周辺は、見逃しがある前提で、コードを読む |
 | `recursion_approximation` | 互いに呼び合う関数のかたまりを、近似で閉じた | そのかたまりの中の流れは、粗い |
 | `missing_source` | コードが見えなかった(型エラーでビルドできないパッケージ、生成されていないコード) | そのパッケージの中は見ていない。`summary.unread` を見て、ビルドや生成を済ませてやり直す |
@@ -423,6 +424,7 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `summary.skipped_dirs`、`outside_configuration` | 読まなかったディレクトリ、ビルドの条件で外れたファイル |
 | `summary.load_dependent` | `true` なら、時計の上限(`-timeout`、`-func-timeout`)で止めた所があり、結果がマシンの負荷で変わる |
 | `summary.dependency_sites` | 依存の本体を読んだ実行で毎回出る。`searched` は常に `false`、`dependency_functions` は読んだ依存の関数の数。**source と sink は、プロジェクトの関数の中だけで探す**(依存の本体は、流れを追うために読む)。ライブラリの中で危険な処理に届く形は、プロジェクトがその API を呼ぶ所に sink のモデルがないと検出されないので、「finding なし」は、その形がないことの証拠ではない。`-no-deps` と、依存の関数が 0 のときは出ない |
+| `summary.unverified_versions` | `verified_versions`(モデルが確認したバージョンの記録)を持つ Go の module を、記録の範囲の**外**のバージョンで使っている(`package`、`used`、`verified[]`、`source`: `go.mod`)。**モデルの行は、そのまま当たっている**(止めない)。確認していないバージョンに当てたので、その module の API が変わっていれば、行が当たらない、または古い意味のまま。finding が 0 件でも出る。記録のない module は出ない。Dart と Rust は未(課題 #162) |
 | `summary.isolation` | Rust をどう読んだか: `mode` が `sandbox` か `host` |
 | `stats.converged` | `false` なら、解析が上限で止まっていて、**結果は途中のもの** |
 | `stats.timed_out` | `true` なら `-timeout` で止まった。フィールドがない(`jq` では `null`)のは、時間切れでないという意味 |

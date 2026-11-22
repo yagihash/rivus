@@ -218,7 +218,7 @@ func zooDartStream(t *testing.T, dir string) []byte {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmd := zooDartCmd(t, extractor, nil, "run", "bin/rivus_dart.dart", dir)
+	cmd := zooDartCmd(t, extractor, nil, "run", "bin/rivus_dart.dart", "--dep-dir", "packages", dir) // the skeletons of cells/packages are read as dependencies (a path dependency is under the project, and would be read as the project's own)
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	stream, err := cmd.Output()

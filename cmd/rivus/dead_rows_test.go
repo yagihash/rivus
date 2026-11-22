@@ -171,7 +171,8 @@ func dartZooIR(t *testing.T, visit func(dir string, p *ir.Program)) {
 			t.Fatal(err)
 		}
 		zooDartPubGet(t, dir)
-		cmd := exec.Command(words[0], append(append([]string{}, words[1:]...), "run", "bin/rivus_dart.dart", dir)...)
+		depDir := "packages" // the skeletons of the zoo are read as dependencies (bench/zoo-dart/cells/packages)
+		cmd := exec.Command(words[0], append(append([]string{}, words[1:]...), "run", "bin/rivus_dart.dart", "--dep-dir", depDir, dir)...)
 		cmd.Dir = ext
 		var stderr strings.Builder
 		cmd.Stderr = &stderr
@@ -272,7 +273,7 @@ func TestBuiltinRowsAreHitByTheZoo(t *testing.T) {
 				}
 				key := lang + " " + r.symbol
 				isRow[key] = true
-				hit := set[r.symbol]
+				hit := set[r.symbol] || hitByMajor(set, r.symbol)
 				_, allowed := allow[key]
 				if allowed && allowFile[key] != r.file {
 					t.Errorf("%s is a row of %s and is allowed in the file of %s: the allowance is in the .dead-allow of the file of the row", key, r.file, allowFile[key])
@@ -308,4 +309,17 @@ func TestBuiltinRowsAreHitByTheZoo(t *testing.T) {
 			}
 		})
 	}
+}
+
+// hitByMajor: a row of a Go module written with /v* (any major, model.MajorWildcard) is hit by a call of the symbol of any major.
+func hitByMajor(set map[string]bool, pattern string) bool {
+	if !model.HasMajorWildcard(pattern) {
+		return false
+	}
+	for sym := range set {
+		if model.MatchMajor(pattern, sym) {
+			return true
+		}
+	}
+	return false
 }

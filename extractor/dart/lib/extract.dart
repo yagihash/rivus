@@ -25,9 +25,14 @@ Future<void> extract(String root, StringSink sink,
     bool includeTests = false,
     List<String> allowDepsUnder = const [],
     List<String> bodyReplaced = const [],
+    List<String> depDirs = const [],
     Future<void> Function()? drain,
     String? failIn}) async {
   root = p.normalize(p.absolute(root));
+  // --dep-dir: directories of the project whose files are read as dependencies (their functions are marked dep, as those
+  // of the pub cache are), though they are under the project: the skeletons of the packages that the zoo stands in for
+  final depRoots = [for (final d in depDirs) p.normalize(p.isAbsolute(d) ? d : p.join(root, d))];
+  bool inDepDir(String path) => depRoots.any((d) => p.equals(d, path) || p.isWithin(d, path));
   final out = StreamOut(sink);
   final prog = Program(root, out)..failIn = failIn;
   final collection = AnalysisContextCollection(includedPaths: [root], sdkPath: findSdk());
@@ -52,13 +57,14 @@ Future<void> extract(String root, StringSink sink,
   }
   for (final context in collection.contexts) {
     for (final path in context.contextRoot.analyzedFiles()) {
-      if (path.endsWith('.dart') && p.isWithin(root, path) && !_skipped(root, path)) take(path);
+      if (path.endsWith('.dart') && p.isWithin(root, path) && !_skipped(root, path) && !inDepDir(path)) take(path);
     }
   }
   // the directories of the project with code that is not read because of where they are (said at the end)
   final skippedDirs = <String>{};
   for (final e in Directory(root).listSync(recursive: true, followLinks: false)) {
     if (e is! File || !e.path.endsWith('.dart')) continue;
+    if (inDepDir(e.path)) continue; // read as a dependency, when the code imports it (below)
     if (_skipped(root, e.path)) {
       skippedDirs.add(_skippedDir(root, e.path));
     } else {
@@ -128,7 +134,7 @@ Future<void> extract(String root, StringSink sink,
         if (isReplaced) replacedFiles.add(path);
         // a file of the project that was left out above (a hidden directory such as `.dart_tool`,
         // the `build` at the top) is read as a dependency when the code imports it
-        if (!p.isWithin(root, path) || _skipped(root, path) || testFiles.contains(path)) {
+        if (!p.isWithin(root, path) || _skipped(root, path) || inDepDir(path) || testFiles.contains(path)) {
           files.add(path);
           if (visiting != null) importedIn.putIfAbsent(path, () => visiting!);
         }

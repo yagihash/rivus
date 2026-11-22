@@ -1,5 +1,7 @@
 # github: GitHubFile.content と、Issue、IssueComment、PullRequest の body を source にできない
 
+解決: extractor の `--dep-dir`(zoo のテストが `packages` を渡す)で、骨組みを依存として読むようにした。`dart-github.yaml` に `kind: field` の行を足し、セル `dart/github-file-content` と `dart/github-issue-body` は検出になった(`@miss` を外した)。以下は、当時の記録。
+
 優先度: 高め(`Issue.body` などは、GitHub のクライアントでいちばん代表的な入力。サイレントな見逃しのまま長く置かない)。
 
 ## 何が見逃されるか(または、何が誤って報告されるか)
@@ -16,6 +18,8 @@
 - 本物の `github` 9.26.0(pub のキャッシュの依存)を使う小さなプロジェクトで、同じ `kind: field` の行(`GitHubFile.content`、`Issue.body`)を試すと、source の場所は、プロジェクトの `main.dart` の中だけで、パッケージの中には出ない(`internal/sites/enumerate.go` の `if fn.Dep { continue }`、ADR-099 のとおり)。
 
 つまり、**本物の依存では起きず、zoo の骨組みがプロジェクトの側として読まれるためだけの問題**。モデルの `kind: field` の行を足してよいが、zoo のテストが失敗する。
+
+Go では起きない(2026-11-23 に確認): `bench/zoo-go-pkg/go_github` の骨組み(`replace` の別のモジュール `github.com/google/go-github/v93`)の関数は、すべて `Dep` で、プロジェクトの関数にならない(`goir.Extract` の `Options{All: true}` で見て、骨組み 69 関数が `dep`、`zoo/mark` 7 関数が `dep`、セル 23 関数が `dep` でない。`Func.Dep` は `!Own`、つまり `./cells/...` で読み込んだ package でないこと。`summary.dependency_sites.dependency_functions` も 76 = 69 + 7)。そのため、`kind: field` の source の行(`Issue.Body` など)は、骨組みの中で source の場所にならず、zoo で想定外の流れが出ない。
 
 ## 直す方向の候補
 

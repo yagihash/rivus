@@ -1,0 +1,8 @@
+name: googleapis_auth
+description: "The skeleton of package:googleapis_auth that the cells of the Dart zoo need (the real package is not in the zoo): ServiceAccountCredentials and the impersonation, so that the built-in rows of package:googleapis_auth are the ones the cells hit."
+publish_to: none
+environment:
+  sdk: ^3.10.0
+dependencies:
+  zoo_mark:
+    path: ../zoo_mark

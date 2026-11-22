@@ -14,7 +14,7 @@
 
 1. この一覧の 1 節の表を、上から見る。**順番が正**である。[DART-MODEL-CANDIDATES.md](DART-MODEL-CANDIDATES.md) は調査の記録で、順番を決めるのは、この一覧。
 2. 次の 2 つのどちらにも当てはまらない、最初の 1 行を取る(どちらかに当てはまると「取られている」)。
-   - モデルのファイルが main にある: `ls internal/model/builtin/` に `<言語>-<パッケージ>*.yaml`。(「広げる」の行には使わない。広げる対象のファイルは、もともと main にあるため。広げる行は、PR の題だけで判定する)
+   - モデルのファイルが main にある: `ls internal/model/builtin/` に `<言語>-<パッケージ>*.yaml`。(作業の種類は、この列でなく、このファイルがあるかで決める(MODEL-RUNBOOK.md の 1 節)。一覧が「広げる」でも、ファイルがなければ新規として扱う。ファイルがあり、種類が「広げる」の行は、このファイルの有無でなく、PR の題(`のモデルを広げる`)だけで取られたかを判定する)
    - そのパッケージの PR が、開いている / マージ済み: `gh pr list --state all --search "<パッケージ> in:title" --limit 20`。題の形は `feat(model): <言語> <パッケージ> の組み込みモデル`(広げるときは `feat(model): <言語> <パッケージ> のモデルを広げる`、例から昇格するときは `feat(model): <言語> <パッケージ> の組み込みモデル(例から昇格)`)。MODEL-RUNBOOK.md の 1 節の例外(閉じてある PR、24 時間以上更新のないドラフトは、取られていない)に従う。
 3. 済みかどうかを、この一覧に書き込まない(PR のたびに同じファイルをさわらない)。
 4. 「新規 / 広げる / 例から昇格」の列で、作業の種類が決まる(MODEL-RUNBOOK.md の 1 節に、広げる、例から昇格の手順がある)。
@@ -56,7 +56,7 @@
 | 28 | Go | go.opentelemetry.io/otel | 新規 | sink: `Tracer.Start` の名前、`Span.SetAttributes/RecordError` の値。外への送信が主 | imported by 13.5k モジュール / 16.1k パッケージ。v1.47.0(2026-10-02) | 監視 / トレース | トレースで最多 |
 | 29 | Go | DataDog/datadog-go statsd | 新規 | sink: `Client.Gauge/Count/Incr` のタグ、名前 | imported by 204 モジュール / 276 パッケージ。(パッケージ `statsd` で取得) | 監視 | Datadog の公式クライアント。値は低いが、指標で他の候補を特定できなかった |
 | 30 | Dart | drift | 新規 | sink: `customSelect/customStatement/customUpdate` の SQL。source: `QueryRow.data` | 30 日 DL 2.1M、2.5k likes。最終公開 2026-11-08。Dart(ドキュメントの上では Flutter でも使う) | DB / ORM | 2 番目 |
-| 31 | Go | jmoiron/sqlx | 広げる | sink: `Get/Select/Query*/Exec/NamedExec` の SQL。`database/sql` の既存のモデルを継ぐ | imported by 17.3k モジュール / 27.2k パッケージ。v1.4.0(2024-04-15) | DB | 既存の `database/sql` の行と重複を避けて広げる |
+| 31 | Go | jmoiron/sqlx | 新規 | sink: `Get/Select/Query*/Exec/NamedExec` の SQL。`database/sql` の既存のモデルを継ぐ | imported by 17.3k モジュール / 27.2k パッケージ。v1.4.0(2024-04-15) | DB | 既存の `database/sql` の行と重複を避けて広げる |
 | 32 | Rust | warp | 広げる | source: `warp::query`、`path::param`、`body::json`(既存の 1 行) | 直近 90 日 6.9M / 全期間 53.6M。0.4.4(2026-11-13) | Web フレームワーク | Web フレームワークの 3 番目 |
 | 33 | Dart | firebase_storage | 新規 | resource_name: `ref(path)`。sink: `putData/putFile`。source: `getData` | 30 日 DL 981k、1.8k likes。最終公開 2026-11-16。Flutter 依存 | クラウド(Firebase) | 4 番目 |
 | 34 | Go | jackc/pgx/v5 | 新規 | sink: `Conn/Pool` の `Exec/Query/QueryRow/CopyFrom` の SQL。source: `Rows.Scan` | imported by 12.1k モジュール / 12.1k パッケージ。v5.13.0(2026-11-11) | DB | PostgreSQL のドライバで imported by が最多 |

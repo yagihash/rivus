@@ -489,6 +489,7 @@ LLM に判定を委譲する設計では、由来そのものより「不確実�
 | `dynamic_dispatch` | インタフェース。候補 N 件を列挙 |
 | `unmodeled_library_call` | 外部ライブラリでモデル未定義 |
 | `dependency_body_unread` | モデルのあるインターフェースの呼び出しの候補に、本体のある依存の関数があったが、読まなかった(ADR-075) |
+| `project_body_unread` | プロジェクトの関数の本体を、extractor が読めなかった(Rust の async closure など。ADR-109)。依存の関数は `dependency_body_unread` |
 | `reflection` | reflect / DI。追跡不能 |
 | `concurrency` | channel / goroutine 境界 |
 | `container_element_imprecision` | コレクション要素を区別していない |

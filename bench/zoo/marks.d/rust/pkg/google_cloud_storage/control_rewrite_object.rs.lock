@@ -1,0 +1,2 @@
+rust	pkg/google_cloud_storage/control_rewrite_object.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	pkg/google_cloud_storage/control_rewrite_object.rs	sink-none	@sink(none) @nosink(pkg-gcs-control-rewrite-object-decoy)	fn decoy() { @decoy

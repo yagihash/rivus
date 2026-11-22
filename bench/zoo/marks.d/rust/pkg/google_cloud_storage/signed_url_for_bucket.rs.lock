@@ -1,0 +1,2 @@
+rust	pkg/google_cloud_storage/signed_url_for_bucket.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	pkg/google_cloud_storage/signed_url_for_bucket.rs	sink-none	@sink(none) @nosink(pkg-gcs-signed-url-for-bucket-decoy)	fn decoy() { @decoy

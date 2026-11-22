@@ -1,0 +1,8 @@
+[package]
+name = "google-cloud-storage"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+zoo-mark = { path = "../../../zoo-rust/zoo-mark" }

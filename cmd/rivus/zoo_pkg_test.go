@@ -303,6 +303,10 @@ zoo-mark = { path = %q, features = ["exec"] }
 // TestZooPkgRust is TestZooPkgGo for the packages of the Rust zoo (where the extractor and the isolation are).
 func TestZooPkgRust(t *testing.T) {
 	if os.Getenv("RIVUS_RUST") == "" {
+		// a skip passes: say what it means (CI sets RIVUS_REQUIRE_RUST=1, which makes it a failure)
+		if len(zooPkgDirs(t, "rust")) > 0 {
+			t.Log("the packages of bench/zoo-rust-pkg are NOT checked: if you added or changed the cells of a Rust package, run again with RIVUS_RUST=<path of rivus-rust> and RIVUS_REQUIRE_RUST=1 (a skip is not a pass)")
+		}
 		skipOrFail(t, "RIVUS_RUST")
 	}
 	dirs := zooPkgDirs(t, "rust")
