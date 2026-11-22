@@ -162,7 +162,24 @@ called, with what, and where its result goes; rivus then reads the callback at t
 called with and returns a marker. A `with` that is not what the closure was given, a parameter that has the marker of an
 argument the row does not name, a `ret` that is not in what the call returned, a `ret` that is missing and the marker is there, a
 callback that was not called, are all errors of the row (corrected; not marked as misses). A row that no harness calls fails the
-test too. When you write a row for a function of a library, write the call in the harness first, and read what it gives.
+test too. When you write a row for a function of the **standard library**, write the call in the harness first, and read what it gives.
+
+**A row of a package: `checked_by: cell`.** A harness runs the code it calls, and the code of a package is a third party's: it is not
+run. A row of `calls` of a package (not the standard library: `dart:`, `std::`, a Go path with no dot in its first element) says
+`checked_by: cell` on each of its rows, instead of being in a harness:
+
+```yaml
+- symbol: package:dio/src/interceptor.dart#Interceptor.onRequest      # a package
+  calls: [{fn: arg0, with: [recv], checked_by: cell}]
+```
+
+`TestCallsRowsAreHeldByCells` (`cmd/rivus`) then wants a **cell** of the zoo (a file under a `cells` directory of `bench/zoo-*`) that calls
+the function of the row (it is read from the IR, as `TestBuiltinRowsAreHitByTheZoo` does) and that has a `@sink(<id>)` (not `none`) or
+a `@miss(...)` mark. The marks are held by the zoo tests of the language, at the level of the analysis: the flow that goes through the
+callback is found, or is a miss with its reason. This is a weaker check than the run (it is the model compared with the analysis, not
+with what the library does), so read the library's source for the row, and write the cell so that the flow can only go through the
+callback. `checked_by: cell` on a row of the standard library fails the test (a harness can call it), and so does a harness that calls a
+row that says it. All the rows of one function say it, or none does. Without it, nothing changes.
 
 **A provided method that calls a method of its own trait: `method`.** `Write::write_all` is a method of the library that has a body
 there (it calls `write` of the receiver in a loop). When the receiver is a type of the project that implements `Write`, what
@@ -183,8 +200,8 @@ is a call, and its result, what it throws and what it writes are those of the me
 `write` was given.
 
 Not yet: a projection (`recv.elem`, `result0.err`: whole values only), a result that is itself a function (`sync.OnceValue`), a callback
-that is a field of an argument, `feed` (the accumulator of `fold`), and the libraries that are not the standard one (a row for
-`dio` or `tokio` is the next step; the harness takes them from a lockfile of their own).
+that is a field of an argument, `feed` (the accumulator of `fold`), and the libraries that are not the standard one
+have no harness (`checked_by: cell`, above).
 
 A sink is found where the **project's own code** calls it: rivus lists sources and sinks in the functions of the project, not inside the
 bodies of dependencies (ADR-099; the bodies are read to follow flows). A flow from the user's input to a dangerous call inside a

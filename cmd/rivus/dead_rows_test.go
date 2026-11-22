@@ -109,6 +109,12 @@ func deadReadIR(t *testing.T, stream []byte) *ir.Program {
 
 func goZooSymbols(t *testing.T, set map[string]bool) {
 	t.Helper()
+	goZooIR(t, func(_ string, p *ir.Program) { irSymbols(set, p) })
+}
+
+// goZooIR hands the IR of each Go tree of the zoo and the curated targets (and its directory) to visit.
+func goZooIR(t *testing.T, visit func(dir string, p *ir.Program)) {
+	t.Helper()
 	// the harnesses of the zoo (the pure rows, the rows of calls) are behind a build tag
 	t.Setenv("GOFLAGS", "-tags=zooexec")
 	for _, d := range []string{"bench/zoo-go", "bench/go-curated"} {
@@ -124,7 +130,7 @@ func goZooSymbols(t *testing.T, set map[string]bool) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		irSymbols(set, out)
+		visit(dir, out)
 	}
 	// the packages of the zoo (bench/zoo-go-pkg/<package>, zoo_pkg_test.go): a cell hits the row of an external package by calling
 	// the skeleton, so the functions of the skeleton count here (they are a dependency of that package, not of the zoo)
@@ -137,11 +143,17 @@ func goZooSymbols(t *testing.T, set map[string]bool) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		irSymbols(set, out)
+		visit(dir, out)
 	}
 }
 
 func dartZooSymbols(t *testing.T, set map[string]bool) {
+	t.Helper()
+	dartZooIR(t, func(_ string, p *ir.Program) { irSymbols(set, p) })
+}
+
+// dartZooIR is goZooIR for the Dart trees.
+func dartZooIR(t *testing.T, visit func(dir string, p *ir.Program)) {
 	t.Helper()
 	dart := os.Getenv("RIVUS_DART")
 	if dart == "" {
@@ -167,27 +179,33 @@ func dartZooSymbols(t *testing.T, set map[string]bool) {
 		if err != nil {
 			t.Fatalf("the Dart extractor on %s: %v\n%s", d, err, stderr.String())
 		}
-		irSymbols(set, deadReadIR(t, stream))
+		visit(dir, deadReadIR(t, stream))
 	}
 }
 
 func rustZooSymbols(t *testing.T, set map[string]bool) {
+	t.Helper()
+	rustZooIR(t, func(_ string, p *ir.Program) { irSymbols(set, p) })
+}
+
+// rustZooIR is goZooIR for the Rust trees.
+func rustZooIR(t *testing.T, visit func(dir string, p *ir.Program)) {
 	t.Helper()
 	if os.Getenv("RIVUS_RUST") == "" {
 		skipOrFail(t, "RIVUS_RUST")
 	}
 	// our own code: read on this machine, as the zoo tests do (nothing of a third party is read here)
 	zoo := zooRustCopy(t, zooRustRoot(t))
-	irSymbols(set, deadReadIR(t, zooRustStream(t, zoo)))
+	visit(zoo, deadReadIR(t, zooRustStream(t, zoo)))
 	for _, dir := range zooPkgDirs(t, "rust") {
 		cp := zooRustPkgCopy(t, dir)
-		irSymbols(set, deadReadIR(t, zooRustStream(t, cp)))
+		visit(cp, deadReadIR(t, zooRustStream(t, cp)))
 	}
 	cur, err := filepath.Abs("../../bench/rust-curated")
 	if err != nil {
 		t.Fatal(err)
 	}
-	irSymbols(set, deadReadIR(t, zooRustStream(t, cur)))
+	visit(cur, deadReadIR(t, zooRustStream(t, cur)))
 }
 
 // readDeadAllow reads internal/model/builtin/<model file>.dead-allow (next to <model file>.yaml): "symbol | reason", and "#"

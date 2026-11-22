@@ -719,6 +719,7 @@ rivus models coverage ./...
    - 上記の φ の配置と到達定義が一致することを確認する
    SSA 化は自作部分で最もバグを埋め込みやすく、症状が「なぜか汚染が消える / 増える」という分かりにくい形で出るため（ADR-036）
 3. **zoo と curated、言語間の比較** — `bench/zoo`、`bench/zoo-go`、`bench/zoo-dart`、`bench/zoo-rust` は、流れの形を 1 つずつ、同じ意味のコードを 3 言語で書く。期待値は、ケースを実際に動かした結果（[DESIGN-zoo.md](DESIGN-zoo.md)）。`bench/*-curated` は、実プロジェクトと CVE の形を写したもの。`bench/parity` は、組み込みモデルの整備の言語間の差を数える。IR の中立性の検証にもなる
+   - `calls:` の行の確認: 標準ライブラリの行は、道具が実際に呼んで照合する（`TestZooCallbacks*`）。パッケージの行は、第三者のコードを実行しないので、各行に `checked_by: cell` を書き、それを通るセルがあること（`@sink` か `@miss` のマーク付き）を `TestCallsRowsAreHeldByCells` が確認する（MODELING.md 3 節）
 4. **ドッグフーディング** — rivus 自身を rivus で解析する（`cmd/rivus/dogfood_test.go`）。`attributable_to: rivus` の比率を監視する
 5. **隔離のテスト** — 敵対的なビルドを、コンテナが閉じ込めること（`TestIsolation*`。15 節）
 

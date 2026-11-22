@@ -244,6 +244,8 @@ func (c *Coverage) YAML(n int) string {
 	b.WriteString("# a source, not a flow. Add a source like this one (the position of the handler among the operands, the first\n")
 	b.WriteString("# parameter that is input), and keep the flows below for what the function does with its arguments:\n")
 	b.WriteString("#   sources:\n#     - {kind: callback_param, symbol: \"<the registering function>\", operand: 1, from: 1, labels: [user_input]}\n")
+	b.WriteString("# A function that calls a function it is given (`calls:`, docs/MODELING.md section 3): in a built-in model, the row of a package\n")
+	b.WriteString("# (not the standard library) says `checked_by: cell`, and a test cell that goes through it is the check.\n")
 	b.WriteString("ruleset: myorg/models@1\npropagators:\n")
 	for i, s := range c.Symbols {
 		if n > 0 && i >= n {

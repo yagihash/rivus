@@ -1,0 +1,2 @@
+dart	dart/github_slug_owner.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	dart/github_slug_owner.dart	sink-none	@sink(none) @nosink(dart-github-slug-owner-decoy)	Future<void> decoy() async { @decoy

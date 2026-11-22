@@ -1,0 +1,2 @@
+dart	dart/shelf_response_body.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	dart/shelf_response_body.dart	sink-none	@sink(none) @nosink(dart-shelf-response-body-decoy)	Future<void> decoy() async { @decoy
