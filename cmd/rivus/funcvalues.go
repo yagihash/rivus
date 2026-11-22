@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 
 	"github.com/yagihash/rivus/internal/model"
 	"github.com/yagihash/rivus/internal/sg"
@@ -22,6 +23,9 @@ type funcValueRow struct {
 	ValueCalls []string `json:"valuecalls,omitempty"`
 	Extractor  []string `json:"extractor,omitempty"`
 	Limit      string   `json:"limit,omitempty"`
+	// DroppedAtModel are the symbols of the calls, in the function that holds this call, that have a model and were given a
+	// function value that the model says nothing of (the function value is lost there: FV-2, docs/DESIGN-callouts.md 5.6).
+	DroppedAtModel []string `json:"dropped_at_model,omitempty"`
 }
 
 // writeFuncValues runs the analysis once more with the function values as elements and writes the table. Nothing that
@@ -36,6 +40,23 @@ func writeFuncValues(path string, graph *sg.Program, l *loaded, st *sites.Result
 	for _, c := range res.FuncCandidates {
 		carried[c.Site.ID] = c.Candidates
 	}
+	dropped := map[string][]string{}
+	for _, d := range res.FuncDropped {
+		for _, fn := range d.Funcs {
+			dropped[fn] = append(dropped[fn], d.Symbol)
+		}
+	}
+	for _, syms := range dropped {
+		sort.Strings(syms)
+	}
+	if n := len(res.FuncDropped); n > 0 {
+		top := res.FuncDropped[:min(n, 10)]
+		var parts []string
+		for _, d := range top {
+			parts = append(parts, fmt.Sprintf("%s (%d)", d.Symbol, d.Calls))
+		}
+		fmt.Fprintf(os.Stderr, "rivus: -func-values: %d symbol(s) with a model were given a function value they say nothing of; most: %s\n", n, strings.Join(parts, ", "))
+	}
 	f, err := os.Create(path)
 	if err != nil {
 		return err
@@ -48,6 +69,7 @@ func writeFuncValues(path string, graph *sg.Program, l *loaded, st *sites.Result
 		if err := enc.Encode(funcValueRow{
 			Func: c.Site.Func, Pos: fmt.Sprintf("%s:%d:%d", pos.File, pos.Line, pos.Column),
 			Carried: carried[c.Site.ID], ValueCalls: c.ValueCands, Extractor: c.Extractor, Limit: c.Limit,
+			DroppedAtModel: dropped[c.Site.Func],
 		}); err != nil {
 			return err
 		}

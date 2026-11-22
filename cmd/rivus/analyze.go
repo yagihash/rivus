@@ -32,6 +32,9 @@ type analyzeOpts struct {
 	passStats    bool
 	traceElement string
 	funcValues   string
+	// resolveFuncValues gives the calls of function values that have no candidate the functions that the analysis of the
+	// function values carries to them, before the taint analysis (docs/DESIGN-callouts.md, 5.6). Off by default.
+	resolveFuncValues bool
 	// rustIsolation is how the Rust project was read (set when it was); it goes to the summary
 	rustIsolation *report.Isolation
 	timeout       time.Duration
@@ -101,6 +104,7 @@ func (o *analyzeOpts) register(fs *flag.FlagSet) {
 	fs.StringVar(&o.irFile, "ir", "", "analyse the neutral IR in this JSON Lines file (from an extractor of another language) instead of Go packages")
 	fs.BoolVar(&o.passStats, "pass-stats", false, "add to stats what changed in the summaries in each pass (pass_changes) and the functions without a model that tainted values reached the most (unmodeled_top); the findings are the same (development)")
 	fs.StringVar(&o.funcValues, "func-values", "", "write to this file (JSON Lines) the diagnostic of the function values: for each call of a function value, the functions that the elements carried by the analysis say it may call, beside the candidates it has otherwise (the analysis is run once more, about twice the time; the findings and the output are the same) (development, docs/DESIGN-callouts.md 5)")
+	fs.BoolVar(&o.resolveFuncValues, "resolve-func-values", false, "give the calls of function values that have no candidate the functions that the analysis of the function values carries to them (functions made in the code of the project), then run the taint analysis; the calls keep their unresolved_callee uncertainty. It runs the analysis of the function values up to 4 times more (nothing runs when no such call exists), and stats.func_values says what it did (docs/DESIGN-callouts.md 5.6)")
 	fs.StringVar(&o.traceElement, "trace-element", "", "print to stderr where the taint of this source (a site ID) first leaves its function and enters a package variable; the findings are the same (development)")
 	fs.StringVar(&o.memProf, "memprofile", "", "write a heap profile (allocations) to this file after the taint phase (development)")
 	fs.StringVar(&o.lockProf, "lockprofile", "", "write the mutex and block profiles of the taint phase to <this>.mutex and <this>.block (development)")
@@ -182,14 +186,21 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 		runtime.SetMutexProfileFraction(5)
 		runtime.SetBlockProfileRate(1000)
 	}
-	eng := taint.New(graph, l.texts, st, rules, opts)
-	eng.SetLoadErrors(l.loadErrors())
-	res = eng.Run()
 	if o.funcValues != "" {
+		// before the candidates are given (-resolve-func-values): the table says what the rest of the analysis has
 		if err := writeFuncValues(o.funcValues, graph, l, st, rules, opts); err != nil {
 			fmt.Fprintf(os.Stderr, "rivus: -func-values: %v\n", err)
 		}
 	}
+	var fvStats *taint.FuncValuesStats
+	if o.resolveFuncValues {
+		fvStats = taint.ResolveFuncValues(graph, l.texts, st, rules, opts, l.loadErrors())
+		phase("func-values")
+	}
+	eng := taint.New(graph, l.texts, st, rules, opts)
+	eng.SetLoadErrors(l.loadErrors())
+	res = eng.Run()
+	res.Stats.FuncValues = fvStats
 	if ts := l.testsSkipped(); ts != nil {
 		// the directories that were not read are not tests: they are in summary.skipped_dirs, not here
 		stats := *ts
