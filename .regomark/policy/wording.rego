@@ -14,7 +14,7 @@ terms := [
 	{"pattern": `黙った見逃し`, "use": "サイレントな見逃し"},
 	{"pattern": `痕跡`, "use": "不確実性の注記（2 回目以降は「注記」）"},
 	{"pattern": `関門`, "use": "ゲート（CI では「必須チェック」）"},
-	{"pattern": `汚れ`, "use": "テイント"},
+	{"pattern": `汚れ`, "use": "汚染（docs/GLOSSARY.md の用語）"},
 	{"pattern": `受け手`, "use": "レシーバ"},
 	{"pattern": `呼び(元|先)`, "use": "呼び出し元 / 呼び出し先"},
 	{"pattern": `種まき`, "use": "シード"},
