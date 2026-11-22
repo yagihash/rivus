@@ -380,7 +380,7 @@ propagators:
     flows: [{from: recv, to: result0}, {from: arg0, to: result1}]
   # model-diff: miss-reviewed (*os.Root).WriteFile@arg1 body-default #150 the data goes to the write call (an unresolved call that the reading takes as "arguments to results"); the error is the operating system's and names the file, the data is not in it
   - symbol: (*os.Root).WriteFile
-    flows: [{from: arg0, to: result}, {from: arg1, to: recv}]
+    flows: [{from: arg0, to: result}]
   - symbol: (*os.Root).Chmod
     flows: [{from: arg0, to: result}]
   - symbol: (*os.Root).Chown
