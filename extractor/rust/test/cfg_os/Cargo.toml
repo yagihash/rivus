@@ -1,0 +1,10 @@
+[package]
+name = "cfg_os"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# A crate whose code differs by the operating system (cfg(target_os)): the extractor reads the one that it is built for, so
+# what it reads in a Linux container and on macOS differs (docs/DESIGN-macos-sandbox.md, SBX-7).
+[lib]
+path = "src/lib.rs"

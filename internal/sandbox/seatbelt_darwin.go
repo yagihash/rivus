@@ -39,6 +39,9 @@ type Spec struct {
 	// ExecFiles are programs that may be run, each by its path (a file, not a directory): the way to allow the few programs a build
 	// needs without allowing everything in /usr/bin (osascript, security, curl, ssh ... are there).
 	ExecFiles []string
+	// ReadFiles are single files that may be read, each by its path: the manifests above the project (cargo looks for a workspace in
+	// every directory above it, and stops with an error when it is not allowed to read one that is there).
+	ReadFiles []string
 	// ProxyPort, when not 0, is the one TCP port on the loopback that the program may connect to (the proxy of the fetch).
 	// 0: no network at all.
 	ProxyPort int
@@ -65,7 +68,7 @@ type Result struct {
 // profile is the text of the profile. Every path comes in as a parameter ((param "P0")), never in the text: a directory
 // whose name has a parenthesis or a quote in it cannot change the profile (TestSandboxProfileTakesNoPathInItsText).
 // A rule that is allowed has the reason beside it.
-func profile(nRead, nExec, nWrite, nFiles int, proxy bool) string {
+func profile(nRead, nExec, nWrite, nFiles, nReadFiles int, proxy bool) string {
 	var b strings.Builder
 	b.WriteString(`(version 1)
 ; Everything is denied, and what is needed is allowed, one line at a time with its reason.
@@ -102,6 +105,10 @@ func profile(nRead, nExec, nWrite, nFiles int, proxy bool) string {
 		fmt.Fprintf(&b, "; this program may be run (it is named by its path): one that a build needs\n(allow file-read* process-exec* (literal (param \"E%d\")))\n", i)
 		ancestors("E", i)
 	}
+	for i := 0; i < nReadFiles; i++ {
+		fmt.Fprintf(&b, "; this file may be read (named by its path): a manifest above the project\n(allow file-read* (literal (param \"F%d\")))\n", i)
+		ancestors("F", i)
+	}
 	for i := 0; i < nWrite; i++ {
 		fmt.Fprintf(&b, "; may be written: the working directory of this run only\n(allow file-read* file-write* (subpath (param \"W%d\")))\n", i)
 		ancestors("W", i)
@@ -128,7 +135,7 @@ func Run(ctx context.Context, s Spec) (*Result, error) {
 	}
 	defer os.RemoveAll(dir)
 	pf := filepath.Join(dir, "profile.sb")
-	if err := os.WriteFile(pf, []byte(profile(len(s.Read), len(s.Exec)+1, len(s.Write), len(s.ExecFiles), s.ProxyPort != 0)), 0o600); err != nil {
+	if err := os.WriteFile(pf, []byte(profile(len(s.Read), len(s.Exec)+1, len(s.Write), len(s.ExecFiles), len(s.ReadFiles), s.ProxyPort != 0)), 0o600); err != nil {
 		return nil, err
 	}
 	args := []string{"-f", pf}
@@ -142,6 +149,9 @@ func Run(ctx context.Context, s Spec) (*Result, error) {
 	execs := append([]string{filepath.Dir(s.Argv[0])}, s.Exec...)
 	for i, d := range execs {
 		param(fmt.Sprintf("X%d", i), real(d))
+	}
+	for i, f := range s.ReadFiles {
+		param(fmt.Sprintf("F%d", i), real(f))
 	}
 	for i, f := range s.ExecFiles {
 		param(fmt.Sprintf("E%d", i), real(f))
@@ -257,3 +267,15 @@ func (c *capWriter) Write(p []byte) (int, error) {
 }
 
 var _ = sort.Strings
+
+// ManifestsAbove are the Cargo.toml files that exist in the directories above dir (not in dir itself).
+func ManifestsAbove(dir string) []string {
+	var out []string
+	for d := filepath.Dir(real(dir)); d != "/" && d != "."; d = filepath.Dir(d) {
+		m := filepath.Join(d, "Cargo.toml")
+		if _, err := os.Stat(m); err == nil {
+			out = append(out, m)
+		}
+	}
+	return out
+}

@@ -120,6 +120,10 @@
 - **extractor の版の確認**(課題 #109): 版が合わなければ止まる。
 - **同一性の確認の結果**(2026-11-22): `bench/zoo-rust`(174 件)、`bench/rust-curated`(280 件)で、サンドボックスで抽出した IR の finding の ID が、**Docker(イメージを今のソースから作り直したもの)と一致**。ホストの直接とも一致。最初の基準(298 / 597)は、古いイメージのもので、間違いだった(`~/rivus-docker-baseline/v2/` が正)。**target は、Docker(Linux)とサンドボックス(macOS)で違う**: 動物園は OS で分かれるコードを持たないので一致したが、`cfg(target_os)` で分かれるコードでは、読む関数が変わる。SBX-7 の試験で、数字を 1 つ出す。
 
+### 3.7c SBX-7 の数字(2026-11-22)
+
+`extractor/rust/test/cfg_os`(`cfg(target_os)` で分かれる、関数 3 つの crate)を、Docker(Linux)とサンドボックス(macOS)で抽出した: **Docker は `cfg_os::everywhere` と `cfg_os::only_on_linux`、サンドボックスは `everywhere` と `only_on_macos`**。読むコードが変わる(同一性の確認が一致したのは、動物園と rust-curated が、OS で分かれるコードを持たないため)。出力に target triple を出す(実装はまだ)。**ワークスペースの中の crate**(祖先に `Cargo.toml` があり、cargo がワークスペースを探す)は、サンドボックスでは、祖先のディレクトリを読めないので、`failed searching for potential workspace` で落ちる(Docker は、対象のディレクトリの外が見えないので、同じ制限: 外の path 依存は見えない)。祖先の `Cargo.toml` を名指しで許すだけでは、足りなかった(`.cargo/config.toml` の探索などが、EPERM になるため。次に調べる)。
+
 ### 3.8 抜け道の一覧(試験の項目。advisor のレビュー SBX-1〜8)
 
 各項目に、1 つ以上の試験を書く(サンドボックスなしで成功 → サンドボックスの下で失敗)。どの規則で止まるかを、1 行書く。
