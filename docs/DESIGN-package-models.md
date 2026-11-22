@@ -81,7 +81,7 @@
 | `dart-gcp` | 試作: `googleapis`、`googleapis_auth`、`gcloud`、`google_cloud_storage`、`google_cloud_protobuf`、`google_cloud_rpc` を宣言 | 25.0 秒 | 0.30 秒 | 25.4 秒 | 2,669 | 19 | 注記 833 |
 
 - 試作は、extractor のコピーで、`visit`(import をたどる処理)が、宣言のあるパッケージのライブラリを見たら、そのファイルを追加せず、import もたどらないようにしたもの(環境変数で指定。リポジトリには入っていない)。finding は全部同じ件数。
-- **Dart は、extractor が時間の大半(既定で 9 割以上)。** 宣言を extractor に渡す段階 (b) で、`dart-gcp` の load が 50.6 秒 → 22〜25 秒に減った(`-no-deps` の 9.4 秒が下限)。2 番目の宣言(6 パッケージ)で load が増えたのは、負荷のぶれの範囲(2 つの実行は別の時刻)。解析側だけ(段階 (a))では、解析 1.4 秒しか減らず、extractor の時間は変わらない。
+- **Dart は、extractor が時間の大半(既定で 9 割以上)。** 宣言を extractor に渡す段階 (b) で、`dart-gcp` の load が 50.6 秒 → 22〜25 秒に減った(`-no-deps` の 9.4 秒が下限)。**これは試作の数字で、実装(7a 節)の実測は 14.6 → 10.7 秒、最大 RSS 1.59 → 1.23 GB(`dart-grpc` はほぼ同じ)。ライブラリの要素の構築が残り、試作のように `import` をたどらない版は、結果が変わるので入れなかった。**2 番目の宣言(6 パッケージ)で load が増えたのは、負荷のぶれの範囲(2 つの実行は別の時刻)。解析側だけ(段階 (a))では、解析 1.4 秒しか減らず、extractor の時間は変わらない。
 - パッケージごとのコスト(`packages_top` の関数の数。コアが読む関数で、extractor が読むファイルの数ではない):
 
 | パッケージ | `dart-gcp` の関数 | 解析の時間 | `dart-grpc` の関数 |
@@ -376,7 +376,7 @@ verified_versions:
 | 1 | 0 | 準備: 6.1 の共有のファイルの分割、zoo-dart の `pubspec.lock` をコミットしない、`cases.dart` の生成。(6.2 のゲートは #167 で済み) | 中(1〜2 PR。スクリプトとテストの読み込み) | モデルの PR が並べて出せる |
 | 2 | 2 | **(a) 宣言の書式と、解析側**(`-no-deps` のパッケージ版)。`unread_packages` をルールに足し(書いたパッケージだけに効く。配下は明示の書き方)、コアが、IR を読むとき、宣言のあるパッケージの関数を、本体のない関数として扱う。`summary` に一覧。フラグ(指定と無効化)。index の鍵。呼び返しの既定(関数の値や利用者の実装が渡されたのに `calls:` がないときは、呼ばれるものとして扱い、注記) | 中(`internal/model`、`internal/sg`、`internal/taint`、`cmd/rivus`。コア側だけ。言語を問わない) | 解析の時間とメモリ(Go の S3 合成: 12 GB → 0.6〜1.6 GB、打ち切り → 数秒)。読み込みの時間は減らない |
 | 3 | 1 | 差分テスト(`bench/model-diff`)。本体とモデルの flows を、公開の API ごとに比べる。sink の行は宣言と照合する。**状態: 実装済み(Go と Dart。Rust は隔離が要るので対象外)**。使い方は手順書 9 節。段階 3 の生成器とは別(コールバックを渡す形は、まだない) | 中〜大(実際: 約 1,500 行。生成器 2 つ、比較、テスト) | 宣言の条件(i) |
-| 4 | 4 | **(b) extractor に宣言を渡す**(Go と Dart は実装済み、7a 節)。Go(`Load` で `Syntax` / `TypesInfo` を捨てる、`skip` を拡張: 約 50 行)、Dart(`visit` が、宣言のあるパッケージをたどらない + `getResolvedUnit` を飛ばす: 約 30 行 + フラグ)、Rust(ドライバが、宣言のあるクレートの `extract` を飛ばす: 約 20 行) | 小〜中(言語ごと。試作で Go と Dart が動いた) | Dart の読み込み(`dart-gcp`: 50.6 → 22〜25 秒)。Go の読み込み(約 3 秒)はほぼ変わらない。メモリ(extractor の 1〜1.7 GB)の減りは、測れていない |
+| 4 | 4 | **(b) extractor に宣言を渡す**(Go と Dart は実装済み、7a 節)。Go(`Load` で `Syntax` / `TypesInfo` を捨てる、`skip` を拡張: 約 50 行)、Dart(`visit` が、宣言のあるパッケージをたどらない + `getResolvedUnit` を飛ばす: 約 30 行 + フラグ)、Rust(ドライバが、宣言のあるクレートの `extract` を飛ばす: 約 20 行) | 小〜中(言語ごと。試作で Go と Dart が動いた) | Dart の読み込み(試作の数字は `dart-gcp`: 50.6 → 22〜25 秒。実装の実測は 14.6 → 10.7 秒、7a 節)。Go の読み込み(約 3 秒)はほぼ変わらない。メモリ(extractor の 1〜1.7 GB)の減りは、測れていない |
 | 5 | 3 | 生成器(型 → 粗いモデル)と差分テストを組にする。差分テストにコールバックを渡す形を入れる。Go、Dart、Rust の順 | 中(言語ごとに、4.2 の足場。Go が最小) | モデル作成の速さ。4.1 の(i)(ii) |
 | 6 | 5 | **(c) 到達性で推移的な依存を落とす**(Go: 宣言のあるパッケージを通らずに届かないパッケージ、Dart: import をたどらない) | 小(4 の中に含まれる。試作に入っている) | Go の S3 合成: 宣言のあるパッケージだけを落としたときより、IR が -62% → -88〜-91%、解析も 11.6 秒 → 0.1〜1.9 秒 |
 
@@ -390,9 +390,9 @@ verified_versions:
 | --- | --- | --- |
 | Go | `gossa/load.go` 約 40 行、`cmd/rivus/common.go` 約 25 行 | `packages.Load` のあと、`go/ssa` の前に、宣言のある依存(標準ライブラリとプロジェクトは除く)の `Syntax` と `TypesInfo` を捨てる(`Options.ReplacedPackage`)。型ごとに作られるラッパーと `init` など、本体のある関数が残るので、`ReplacedFunc`(`taint.UnitOf` が宣言のある単位)で IR に出さない |
 | Dart | `extract.dart` 約 85 行、フラグと `body_not_read` | `--body-replaced package:<名前>`。そのパッケージのファイルは、`getResolvedUnit` も、下ろしもしない。**クラスの階層、動的呼び出しの候補、本体のある演算子、コンストラクタは、ライブラリの要素から作る**(`_Index.library`)。ファイルを解決しないと、これらがなくなり、呼び出しの注記(`unmodeled_library_call` と動的呼び出しの候補なし)が、フィルタの IR と変わった(最初の実装で、`dart-gcp` の 注記 196 → 105)。要素から分からないこと(引数のないコンストラクタの本体と初期化子に仕事があるか)は、ないものとして扱う |
-| 共通 | IR に `body_not_read`(`unit`、`functions`)、`dropReplacedBodies` のあとの `PruneDeps` | 読まなかった関数の数を、`summary.body_replaced_packages[].functions` に出す。落とした関数だけが届いていたもの(ジェネリクスのインスタンス、ラッパー、そこだけが import するパッケージ)を、フィルタの側でも落とす(これで、`stats.functions` が、extractor の段階と同じになる) |
+| 共通 | IR に `body_not_read`(`unit`、`functions`)、`dropReplacedBodies` のあとの `PruneDeps` | 読まなかった関数の数を、`summary.body_replaced_packages[].functions_declared` に出す(`functions` は、読んで落とした数のままで、extractor が読まなかったパッケージには出ない)。落とした関数だけが届いていたもの(ジェネリクスのインスタンス、ラッパー、そこだけが import するパッケージ)を、フィルタの側でも落とす(これで、`stats.functions` が、extractor の段階と同じになる) |
 
-**finding の同一性**(`-drop-after-read` との比較。`TestBodyReplacedInTheExtractorIsTheSameAsTheFilter`、`TestBodyReplacedGenericsInTheExtractor`、`TestBodyReplacedOfADartPackage`、`TestDartExtractorBodyReplaced`): 合成の Go(ジェネリクスと型のラッパーを含む)と Dart、公開のベンチ(下)で、**finding の ID の集合、`stats.functions`、`summary` の注記と数(`dispatch_candidates`、`program`、`top_symbols` など)が同じ。違うのは、`body_replaced_packages[].functions` だけ**: フィルタは「読んで落とした関数の数」、extractor の段階は「読まなかったパッケージが宣言している関数の数」(Go: 宣言のある関数とメソッド。Dart: 最上位の関数、メソッド、コンストラクタ、アクセサ。到達の数ではない)。
+**finding の同一性**(`-drop-after-read` との比較。`TestBodyReplacedInTheExtractorIsTheSameAsTheFilter`、`TestBodyReplacedGenericsInTheExtractor`、`TestBodyReplacedOfADartPackage`、`TestDartExtractorBodyReplaced`): 合成の Go(ジェネリクスと型のラッパーを含む)と Dart、公開のベンチ(下)で、**finding の ID の集合、`stats.functions`、`summary` の注記と数(`dispatch_candidates`、`program`、`top_symbols` など)が同じ。違うのは、`body_replaced_packages` の項目だけ**: フィルタは `functions`(読んで落とした関数の数)、extractor の段階は `functions_declared`(読まなかったパッケージが宣言している関数の数。`functions` は出さない)(数の意味を、項目の名前で分けた。Go: 宣言のある関数とメソッド。Dart: 最上位の関数、メソッド、コンストラクタ、アクセサ。到達の数ではない)。
 
 **測定**(公開のベンチ。`dart-gcp` は 6 パッケージ、`dart-grpc` は `package:grpc`、Go は AWS SDK v2 `service/s3` の合成で `aws-sdk-go-v2/...` と `smithy-go/...`。`-body-replaced` で宣言。1 つずつ実行、1 回 540 秒で打ち切り。`uptime` の load average(1 分)は、Dart が 2.7〜3.8、Go の `なし` が 3.0、段階 2 が 11.7、段階 4 が 16.4(他の作業と同時なので、Go の段階 2 と 4 の差は、負荷が高かった側が不利)。単位: 秒、GB):
 
