@@ -1,0 +1,2 @@
+rust	pkg/google_cloud_storage/control_list_objects.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	pkg/google_cloud_storage/control_list_objects.rs	sink-none	@sink(none) @nosink(pkg-gcs-control-list-objects-decoy)	fn decoy() { @decoy

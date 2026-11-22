@@ -1,5 +1,6 @@
 # Rules for parseable (the project's own: what an actix-web handler is given, and the
-# operations the project treats as dangerous; actix-web is not built in, ADR-063). Used with
+# operations the project treats as dangerous; actix-web is built in now, and its rows here are the
+# ones the results were measured with). Used with
 #   rivus analyze -rules bench/parseable/rules.yaml
 # (the Rust extractor writes the types of the extractors without their parameters).
 ruleset: project/parseable@1
@@ -57,8 +58,8 @@ sinks:
     args: [0]
     category: path_traversal
 
-# the models of the actix-web getters (the same as examples/rules/rust-actix-web.yaml: actix-web is not
-# built in, ADR-063, so the rules of the benchmark name them)
+# the models of the actix-web getters (the same as the ones of internal/model/builtin/rust-actix-web.yaml,
+# which was examples/rules/rust-actix-web.yaml when the results were measured)
 propagators:
   - symbol: actix_web::HttpRequest::query_string
     flows: [{from: args, to: result}]

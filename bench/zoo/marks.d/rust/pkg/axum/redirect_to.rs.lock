@@ -1,0 +1,2 @@
+rust	pkg/axum/redirect_to.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	pkg/axum/redirect_to.rs	sink-none	@sink(none) @nosink(pkg-axum-redirect-to-decoy)	fn decoy() { @decoy
