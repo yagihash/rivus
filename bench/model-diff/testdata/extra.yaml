@@ -1,0 +1,5 @@
+ruleset: test/synth@1
+propagators:
+  # the body ignores its argument
+  - symbol: example.com/synth.Drop
+    flows: [{from: args, to: result}]

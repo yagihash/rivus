@@ -1,0 +1,5 @@
+ruleset: test/synth@1
+propagators:
+  # model-diff: extra example.com/synth.Drop the real function may keep the argument in other versions; wider on purpose
+  - symbol: example.com/synth.Drop
+    flows: [{from: args, to: result}]
