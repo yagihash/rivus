@@ -125,7 +125,7 @@ rivus query -site <ID> ./...           # sites の 1 件から始める
 
 フラグは `rivus <command> -h` で出ます。`-h` は、普段使うフラグだけを出します。診断と調整のフラグ（プロファイル、解析の上限、サンドボックスの調整など）は、`-h -help-all`（または `-help-all` だけ）で全部出ます。フラグそのものは、どちらの表示でも同じように使えます。よく使うもの: `-C <dir>`、`-rules <file>`（繰り返し可）、`-no-deps`（依存のソースを読まない。軽いが、依存への呼び出しは推測になる）、`-tests`（テストのコードも読む）、`-detail summary`（経路とコードを省く）、`-timeout`、`-v`。`-resolve-func-values`（実験。既定 off）は、呼び出し先が分からない関数値の呼び出しに、自分のコードで作った関数を候補として補ってから解析します（`stats.func_values` に、補った数が出ます）。`rivus index` に付けると、補った辺が索引に入り、`graph callers / callees / path` の答えに `supplemented` で出ます（このフラグの有無は索引のキーに入るので、索引を作ったときと同じ指定で問い合わせます）。`-timeout` は、補う解析と、そのあとの解析を合わせた上限です。
 
-`index` と `graph` の詳しい使い方は [docs/GRAPH.md](docs/GRAPH.md) にあります。
+`index` と `graph` の詳しい使い方は [docs/GRAPH.md](docs/GRAPH.md) にあります。AI エージェントに rivus を使わせるときの手引き(どのコマンドを、どのフラグで実行し、出力のどこを読むか)は [docs/AGENT-GUIDE.md](docs/AGENT-GUIDE.md) にあります。
 
 ### 自分のプロジェクトで、どの依存が重いかの表を得る
 
@@ -274,7 +274,7 @@ PR の CI は `go test -short` で実行します(重いテストは、`-short` 
 |---|---|
 | 使い手 | この README。信頼できないコードの扱いは [docs/rust-isolation.md](docs/rust-isolation.md)。用語は [docs/GLOSSARY.md](docs/GLOSSARY.md) |
 | ルールを書く人 | [docs/MODELING.md](docs/MODELING.md)(書式)、[examples/rules](examples/rules)(見本)、[docs/GCP-MODELS.md](docs/GCP-MODELS.md) |
-| rivus を使う AI エージェント | [docs/GRAPH.md](docs/GRAPH.md)(`rivus index` と `rivus graph`)。出力の読み方はこの README の「何が出るか」 |
+| rivus を使う AI エージェント | [docs/AGENT-GUIDE.md](docs/AGENT-GUIDE.md)(コマンドの選び方、フラグ、出力の読み方、ユースケース別の手順)、[docs/GRAPH.md](docs/GRAPH.md)(`rivus index` と `rivus graph`)。出力の読み方はこの README の「何が出るか」にもあります |
 | 開発者 | [docs/PRINCIPLES.md](docs/PRINCIPLES.md)(設計思想)、[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)(今の構成)、[docs/DECISIONS.md](docs/DECISIONS.md) と [docs/ADR-INDEX.md](docs/ADR-INDEX.md)(判断の経緯と一覧)、`docs/DESIGN-*.md`(個別の設計。冒頭に状態がある)、[bench/README.md](bench/README.md)(テストと測定) |
 | レビューする人 | [docs/PRINCIPLES.md](docs/PRINCIPLES.md)(原則と、まだ届いていない所)、[bench/MISSES.md](bench/MISSES.md)(既知の見逃し) |
 

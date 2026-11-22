@@ -12,7 +12,7 @@
 |---|---|---|
 | 使い手 | 何が出るか、何を報告しないか、使い方、出力の読み方 | [../README.md](../README.md)、[rust-isolation.md](rust-isolation.md)(信頼できない Rust)、[GLOSSARY.md](GLOSSARY.md) |
 | ルールを書く人 | ルールの書式、何が書けるか、確認方法 | [MODELING.md](MODELING.md)、[../examples/rules/README.md](../examples/rules/README.md)、[GCP-MODELS.md](GCP-MODELS.md) |
-| rivus を使う AI エージェント | `rivus index` と `rivus graph`、答えの読み方 | [GRAPH.md](GRAPH.md)、[../README.md](../README.md) |
+| rivus を使う AI エージェント | どのコマンドを、どのフラグで実行し、出力のどこを読むか。`rivus index` と `rivus graph`、答えの読み方 | [AGENT-GUIDE.md](AGENT-GUIDE.md)、[GRAPH.md](GRAPH.md)、[../README.md](../README.md) |
 | 開発者 | 設計思想、今の構成、経緯、テストと測定 | [PRINCIPLES.md](PRINCIPLES.md)、[ROADMAP.md](ROADMAP.md)、[ISSUES.md](ISSUES.md)(課題の一覧)、[ARCHITECTURE.md](ARCHITECTURE.md)、[DECISIONS.md](DECISIONS.md)、[ADR-INDEX.md](ADR-INDEX.md)、`DESIGN-*.md`、[../bench/README.md](../bench/README.md) |
 | レビューする人 | 不変条件、失敗の重さ、受け入れ済みの制約 | [PRINCIPLES.md](PRINCIPLES.md)、[../bench/MISSES.md](../bench/MISSES.md) |
 
@@ -38,6 +38,7 @@
 
 | 文書 | 内容 |
 |---|---|
+| [AGENT-GUIDE.md](AGENT-GUIDE.md) | AI エージェント向けの利用ガイド(コマンド、フラグ、出力の読み方、ユースケース別の手順) |
 | [GRAPH.md](GRAPH.md) | `rivus index` と `rivus graph` |
 | [MODELING.md](MODELING.md) | ルールとモデルの書式(英語) |
 | [GCP-MODELS.md](GCP-MODELS.md) | Google Cloud のモデルの、製品ごとの表 |
