@@ -1,5 +1,4 @@
 // @cell(F/dart/http-client-get)
-// @na(go: a Dart package; the Go API has its own rows)
 // @shape: a value goes into the URL of Client.get of package:http (a skeleton of it): the SSRF sink of the built-in rows
 import 'package:http/http.dart' as http;
 import 'package:zoo_mark/zoo_mark.dart';

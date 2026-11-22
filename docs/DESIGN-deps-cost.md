@@ -419,7 +419,7 @@ RIVUS_DART=dart RIVUS_DART_EXTRACTOR="dart run <worktree>/extractor/dart/bin/riv
 | 4 モデルのない呼び出し | 注記つきで、今までどおり |
 | 5 `summary` に読まなかったパッケージの一覧 | **ない**(今は `dependency_body_unread` の注記が、呼び出しごとにあるだけ) |
 
-### 11.3 測定(同じ extractor、`rivus` は `origin/main` の `809d199`、head は dart-http.yaml を足したもの)
+### 11.3 測定(同じ extractor、`rivus` は `origin/main` の `db82c10`、head は dart-http.yaml を足したもの)
 
 「なし」は、dart-http.yaml を空にしたビルドに、sink だけの行(`flows` を除いたもの)を `-rules` で足したもの = 候補の本体を読む。「あり」は、組み込み。「base」は、変更前の組み込み(`Client.get` / `post` の `flows` だけ、sink 3 行)。
 

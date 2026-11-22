@@ -111,6 +111,8 @@ dart	dart/flutter_override_arg.dart	sink-none	@sink(none) @nosink(dart-flutter-o
 dart	dart/flutter_route_args.dart	na	@na(go: no such form; the arguments that a caller gave to a route)	-
 dart	dart/flutter_route_args.dart	sink-none	@sink(none)	void fixed() { @fixed
 dart	dart/flutter_route_args.dart	sink-none	@sink(none) @nosink(dart-flutter-route-args-decoy)	void decoy() { @decoy
+dart	dart/http_client_get.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	dart/http_client_get.dart	sink-none	@sink(none) @nosink(dart-http-client-get-decoy)	Future<void> decoy() async { @decoy
 dart	dart/interp_tostring.dart	fp	@sink(none) @fp @nosink(dart-interp-tostring-decoy) @fp @ref(R-16)	void decoy() { @decoy
 dart	dart/interp_tostring.dart	na	@na(go: no implicit String()	-
 dart	dart/interp_tostring.dart	sink-none	@sink(none)	void fixed() { @fixed
