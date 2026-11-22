@@ -1,0 +1,4 @@
+dart	state/global_chain.dart	miss	@source(state-global-chain-vuln13) @miss(recursion_approximation) @ref(PASS-LIMIT)	void vuln13() { @vuln
+dart	state/global_chain.dart	miss	@source(state-global-chain-vuln30) @miss(recursion_approximation) @ref(PASS-LIMIT)	void vuln30() { @vuln
+dart	state/global_chain.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	state/global_chain.dart	sink-none	@sink(none) @nosink(state-global-chain-decoy)	void decoy() { @decoy

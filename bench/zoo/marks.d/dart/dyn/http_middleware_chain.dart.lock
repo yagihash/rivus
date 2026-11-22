@@ -1,0 +1,6 @@
+dart	dyn/http_middleware_chain.dart	fp	@sink(none) @fp @nosink(dyn-http-middleware-chain-decoy) @fp @ref(XTALK)	void fixed() { @fixed
+dart	dyn/http_middleware_chain.dart	fp	@sink(none) @fp @ref(XTALK)	void vuln() { @vuln
+dart	dyn/http_middleware_chain.dart	noisy	@sink(dyn-http-middleware-chain-decoy) @noisy(1) @ref(DYN-IMPLS)	void fixed() { @fixed
+dart	dyn/http_middleware_chain.dart	noisy	@sink(dyn-http-middleware-chain-vuln) @noisy(1) @ref(DYN-IMPLS)	-
+dart	dyn/http_middleware_chain.dart	sink-none	@sink(none) @fp @nosink(dyn-http-middleware-chain-decoy) @fp @ref(XTALK)	void fixed() { @fixed
+dart	dyn/http_middleware_chain.dart	sink-none	@sink(none) @fp @ref(XTALK)	void vuln() { @vuln

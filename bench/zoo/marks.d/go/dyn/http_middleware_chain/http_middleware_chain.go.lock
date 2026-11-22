@@ -1,0 +1,2 @@
+go	dyn/http_middleware_chain/http_middleware_chain.go	sink-none	@sink(none)	func vuln() { @vuln
+go	dyn/http_middleware_chain/http_middleware_chain.go	sink-none	@sink(none) @nosink(dyn-http-middleware-chain-decoy)	func fixed() { @fixed

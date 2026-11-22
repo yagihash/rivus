@@ -1,0 +1,2 @@
+go	clos/two_callers/two_callers.go	sink-none	@sink(none)	func fixed() { @fixed
+go	clos/two_callers/two_callers.go	sink-none	@sink(none) @nosink(clos-two-callers-decoy)	func fixed() { @fixed

@@ -1,0 +1,3 @@
+dart	dart/googleapis_datastore_run_query.dart	fp	@sink(none) @fp @nosink(dart-googleapis-datastore-run-query-decoy) @fp @ref(#141)	Future<void> decoy() async { @decoy
+dart	dart/googleapis_datastore_run_query.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	dart/googleapis_datastore_run_query.dart	sink-none	@sink(none) @fp @nosink(dart-googleapis-datastore-run-query-decoy) @fp @ref(#141)	Future<void> decoy() async { @decoy

@@ -1,0 +1,2 @@
+dart	conv/struct_field_opaque.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	conv/struct_field_opaque.dart	sink-none	@sink(none) @nosink(conv-struct-field-opaque-decoy)	void decoy() { @decoy

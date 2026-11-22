@@ -1,0 +1,2 @@
+dart	dart/gcloud_pubsub_lookup_topic.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	dart/gcloud_pubsub_lookup_topic.dart	sink-none	@sink(none) @nosink(dart-gcloud-pubsub-lookup-topic-decoy)	Future<void> decoy() async { @decoy

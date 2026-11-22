@@ -1,0 +1,2 @@
+go	conv/builtin_minmax/builtin_minmax.go	sink-none	@sink(none)	func fixed() { @fixed
+go	conv/builtin_minmax/builtin_minmax.go	sink-none	@sink(none) @nosink(conv-builtin-minmax-decoy)	func decoy() { @decoy

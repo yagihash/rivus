@@ -1,0 +1,3 @@
+go	conv/struct_field_deep/struct_field_deep.go	fp	@sink(none) @fp @nosink(conv-struct-field-deep-decoy) @fp @ref(FIELD-SINK)	func decoy() { @decoy
+go	conv/struct_field_deep/struct_field_deep.go	sink-none	@sink(none)	func fixed() { @fixed
+go	conv/struct_field_deep/struct_field_deep.go	sink-none	@sink(none) @fp @nosink(conv-struct-field-deep-decoy) @fp @ref(FIELD-SINK)	func decoy() { @decoy

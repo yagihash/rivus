@@ -1,0 +1,5 @@
+dart	dart/patterns_record.dart	miss	@source(dart-patterns-record-vuln4) @miss(silent) @ref(R-15)	void vuln4() { @vuln
+dart	dart/patterns_record.dart	miss	@source(dart-patterns-record-vuln7) @miss(silent) @ref(R-15)	void vuln7() { @vuln
+dart	dart/patterns_record.dart	na	@na(go: no patterns and no for-in pattern variables; the multiple return is call/multiret)	-
+dart	dart/patterns_record.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	dart/patterns_record.dart	sink-none	@sink(none) @nosink(dart-patterns-record-decoy)	void decoy() { @decoy

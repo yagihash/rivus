@@ -1,0 +1,3 @@
+go	dyn/func_map/func_map.go	fp	@sink(none) @fp @nosink(dyn-func-map-decoy) @fp @ref(XTALK)	func decoy() { @decoy
+go	dyn/func_map/func_map.go	sink-none	@sink(none)	func fixed() { @fixed
+go	dyn/func_map/func_map.go	sink-none	@sink(none) @fp @nosink(dyn-func-map-decoy) @fp @ref(XTALK)	func decoy() { @decoy

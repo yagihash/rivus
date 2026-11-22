@@ -1,0 +1,2 @@
+dart	clos/two_callers.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	clos/two_callers.dart	sink-none	@sink(none) @nosink(clos-two-callers-decoy)	void fixed() { @fixed

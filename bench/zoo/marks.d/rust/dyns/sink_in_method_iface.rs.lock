@@ -1,0 +1,6 @@
+rust	dyns/sink_in_method_iface.rs	fp	@sink(none) @fp @nosink(dyn-sink-in-method-iface-decoy) @fp @ref(DYN-IMPLS,PARITY)	fn fixed() { @fixed
+rust	dyns/sink_in_method_iface.rs	fp	@sink(none) @fp @ref(DYN-IMPLS,PARITY)	fn vuln() { @vuln
+rust	dyns/sink_in_method_iface.rs	noisy	@sink(dyn-sink-in-method-iface-decoy) @noisy(1) @ref(DYN-IMPLS)	fn fixed() { @fixed
+rust	dyns/sink_in_method_iface.rs	noisy	@sink(dyn-sink-in-method-iface-vuln) @noisy(1) @ref(DYN-IMPLS)	-
+rust	dyns/sink_in_method_iface.rs	sink-none	@sink(none) @fp @nosink(dyn-sink-in-method-iface-decoy) @fp @ref(DYN-IMPLS,PARITY)	fn fixed() { @fixed
+rust	dyns/sink_in_method_iface.rs	sink-none	@sink(none) @fp @ref(DYN-IMPLS,PARITY)	fn vuln() { @vuln

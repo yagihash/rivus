@@ -1,0 +1,2 @@
+rust	dyns/sink_as_value_map.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	dyns/sink_as_value_map.rs	sink-none	@sink(none) @nosink(dyn-sink-as-value-map-decoy)	fn decoy() { @decoy

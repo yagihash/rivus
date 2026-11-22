@@ -1,0 +1,5 @@
+dart	dyn/through_dependency.dart	fp	@sink(none) @fp @nosink(dyn-through-dependency-decoy) @fp @ref(XTALK)	void fixed() { @fixed
+dart	dyn/through_dependency.dart	noisy	@sink(dyn-through-dependency-decoy) @noisy(2) @ref(DYN-IMPLS)	void fixed() { @fixed
+dart	dyn/through_dependency.dart	noisy	@sink(dyn-through-dependency-vuln) @noisy(2) @ref(DYN-IMPLS)	-
+dart	dyn/through_dependency.dart	sink-none	@sink(none)	void vuln() { @vuln
+dart	dyn/through_dependency.dart	sink-none	@sink(none) @fp @nosink(dyn-through-dependency-decoy) @fp @ref(XTALK)	void fixed() { @fixed

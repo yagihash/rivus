@@ -1,0 +1,4 @@
+rust	clos/capture_write_by_ref.rs	miss	@source(clos-capture-write-by-ref-vuln3) @miss(unmodeled_library_call) @ref(FUNC-VALUE-MEMORY,PARITY)	fn vuln3() { @vuln
+rust	clos/capture_write_by_ref.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	clos/capture_write_by_ref.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	clos/capture_write_by_ref.rs	sink-none	@sink(none) @nosink(clos-capture-write-by-ref-decoy)	fn decoy() { @decoy

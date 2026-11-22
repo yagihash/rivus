@@ -1,0 +1,3 @@
+go	cont/slice/slice.go	fp	@sink(none) @fp @nosink(cont-slice-decoy) @fp @ref(KEYED-MAP)	func decoy() { @decoy
+go	cont/slice/slice.go	sink-none	@sink(none)	func fixed() { @fixed
+go	cont/slice/slice.go	sink-none	@sink(none) @fp @nosink(cont-slice-decoy) @fp @ref(KEYED-MAP)	func decoy() { @decoy

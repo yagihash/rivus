@@ -1,0 +1,2 @@
+go	conv/exec_output_echo/exec_output_echo.go	sink-none	@sink(none)	func fixed() { @fixed
+go	conv/exec_output_echo/exec_output_echo.go	sink-none	@sink(none) @nosink(conv-exec-output-echo-decoy)	func decoy() { @decoy

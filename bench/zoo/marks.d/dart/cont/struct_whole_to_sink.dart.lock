@@ -1,0 +1,2 @@
+dart	cont/struct_whole_to_sink.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	cont/struct_whole_to_sink.dart	sink-none	@sink(none) @nosink(cont-struct-whole-to-sink-decoy)	void decoy() { @decoy

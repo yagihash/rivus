@@ -1,0 +1,6 @@
+rust	rust/drop_.rs	miss	@source(rust-drop-vuln2) @miss(unmodeled_library_call) @ref(R-17)	fn vuln2() { @vuln
+rust	rust/drop_.rs	miss	@source(rust-drop-vuln3) @miss(unmodeled_library_call) @ref(R-17)	fn vuln3() { @vuln
+rust	rust/drop_.rs	miss	@source(rust-drop-vuln4) @miss(unmodeled_library_call) @ref(R-17)	fn vuln4() { @vuln
+rust	rust/drop_.rs	miss	@source(rust-drop-vuln5) @miss(unmodeled_library_call) @ref(R-17)	fn vuln5() { @vuln
+rust	rust/drop_.rs	sink-none	@sink(none)	fn vuln5() { @vuln
+rust	rust/drop_.rs	sink-none	@sink(none) @nosink(rust-drop-decoy)	fn fixed() { @fixed

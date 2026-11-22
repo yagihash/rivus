@@ -1,0 +1,3 @@
+dart	dyn/sink_in_method_iface.dart	fp	@sink(none) @fp @ref(XTALK)	void vuln() { @vuln
+dart	dyn/sink_in_method_iface.dart	sink-none	@sink(none) @fp @ref(XTALK)	void vuln() { @vuln
+dart	dyn/sink_in_method_iface.dart	sink-none	@sink(none) @nosink(dyn-sink-in-method-iface-decoy)	void fixed() { @fixed

@@ -1,0 +1,4 @@
+rust	rust/macro_rules.rs	miss	@source(rust-macro-rules-vuln2) @miss(unmodeled_library_call) @ref(R-35)	fn vuln2() { @vuln
+rust	rust/macro_rules.rs	noisy	@noisy(1) @ref(R-35)	fn vuln() { @vuln
+rust	rust/macro_rules.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	rust/macro_rules.rs	sink-none	@sink(none) @nosink(rust-macro-rules-decoy)	fn decoy() { @decoy

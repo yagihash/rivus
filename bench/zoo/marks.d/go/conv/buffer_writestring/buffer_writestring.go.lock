@@ -1,0 +1,2 @@
+go	conv/buffer_writestring/buffer_writestring.go	sink-none	@sink(none)	func fixed() { @fixed
+go	conv/buffer_writestring/buffer_writestring.go	sink-none	@sink(none) @nosink(conv-buffer-writestring-decoy)	func decoy() { @decoy

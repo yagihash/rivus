@@ -1,0 +1,2 @@
+dart	state/global_struct_copy.dart	sink-none	@sink(none)	void vuln() { @vuln
+dart	state/global_struct_copy.dart	sink-none	@sink(none) @nosink(state-global-struct-copy-decoy)	void fixed() { @fixed

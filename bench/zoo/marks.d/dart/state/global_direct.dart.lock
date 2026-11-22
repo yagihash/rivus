@@ -1,0 +1,2 @@
+dart	state/global_direct.dart	sink-none	@sink(none)	void vuln() { @vuln
+dart	state/global_direct.dart	sink-none	@sink(none) @nosink(state-global-direct-decoy)	void fixed() { @fixed

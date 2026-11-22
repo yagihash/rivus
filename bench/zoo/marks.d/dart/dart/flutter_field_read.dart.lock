@@ -1,0 +1,3 @@
+dart	dart/flutter_field_read.dart	na	@na(go: no such form; the framework's field that holds what the user typed)	-
+dart	dart/flutter_field_read.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	dart/flutter_field_read.dart	sink-none	@sink(none) @nosink(dart-flutter-field-read-decoy)	void decoy() { @decoy

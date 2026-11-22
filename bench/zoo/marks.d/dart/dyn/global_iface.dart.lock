@@ -1,0 +1,2 @@
+dart	dyn/global_iface.dart	sink-none	@sink(none)	void vuln() { @vuln
+dart	dyn/global_iface.dart	sink-none	@sink(none) @nosink(dyn-global-iface-decoy)	void fixed() { @fixed

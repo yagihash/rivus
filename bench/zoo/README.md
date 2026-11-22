@@ -197,11 +197,11 @@ refs are `XTALK` (a call of a function value reaches a closure that was given to
 the standard library calls its argument, and no model says so), `CLOSURE-IN-MEMORY` and `FUNC-VALUE-MEMORY` (a function value that
 was kept in a field, a variable, a list or a map is not followed to its call).
 
-## 正解を緩めるマークの固定(`marks.lock`)
+## 正解を緩めるマークの固定(`marks.d`)
 
-`@miss` / `@fp` / `@noisy` / `@na` / `@todo` / `@manual` / `@sink(none)` を、3 言語の zoo から集めて `bench/zoo/marks.lock` に固定している(1 行 = 言語、ファイル、種類、その行の注釈。行番号は持たない)。
+`@miss` / `@fp` / `@noisy` / `@na` / `@todo` / `@manual` / `@sink(none)` を、3 言語の zoo から集めて `bench/zoo/marks.d` に固定している(1 行 = 言語、ファイル、種類、その行の注釈、ケース。行番号は持たない)。**セルのファイル 1 つにつき、固定のファイルも 1 つ**: `bench/zoo/marks.d/<言語>/<セルのパス>.lock`(例: `marks.d/dart/call/direct.dart.lock`)。セルを足す PR は、そのセルのファイルを足すだけで、ほかの PR と同じファイルを触らない。
 
-- `TestZooMarksLock` が、ソースから作った一覧とファイルを比べる。マークを足す・変える・外すと失敗する。書き直すのは `ZOO_MARKS_UPDATE=1 go test -run ZooMarksLock ./cmd/rivus`。
-- CI の `zoo-loosened` が、PR 全体の `marks.lock` の変更を、**merge-base との差分**で見る(main を取り込んだマージコミットが持ち込む main の行は、差分に出ない)。承認の行(`Zoo-Loosened: <理由>。ユーザーの承認: <日付>`。範囲のどれかのコミットのメッセージ)を求めるのは、**緩め**だけ: (a) `marks.lock` にすでにあるセル(ファイル)に**行を足す**、または、そのセルのマークを**変える**(消して別の行を足す形も同じ)、(b) 新しいセルの行のうち、`@sink(none)`、`@miss`、`@fp` **以外**の種類(`@noisy`、`@na`、`@todo`、`@manual`)。**求めない**のは、新しいセル(`marks.lock` にまだないファイル)の `@sink(none)`、`@miss`、`@fp` の行(ユーザーが 2026-11-23 に承認した)。ただし、新しい `@miss` と `@fp` の行は、課題の `@ref(#N)` が付いていることを、承認の行があっても確認する。行が減る(直ってマークが外れる)のは何も不要。`marks.lock` を消して作り直す形(あるコミットがファイルを消す)は失敗する。
+- `TestZooMarksLock` が、ソースから作った行とファイルの組(ファイルの過不足を含む)を比べる。マークを足す・変える・外すと失敗する。書き直すのは `ZOO_MARKS_UPDATE=1 go test -run ZooMarksLock ./cmd/rivus`。
+- CI の `zoo-loosened` が、PR 全体の `marks.d` の変更を、**merge-base との差分**で見る(main を取り込んだマージコミットが持ち込む main の行は、差分に出ない)。承認の行(`Zoo-Loosened: <理由>。ユーザーの承認: <日付>`。範囲のどれかのコミットのメッセージ)を求めるのは、**緩め**だけ: (a) merge-base の `marks.d` にすでにあるセル(そのセルのファイルが merge-base にある)に**行を足す**、または、そのセルのマークを**変える**(消して別の行を足す形も同じ)、(b) 新しいセルの行のうち、`@sink(none)`、`@miss`、`@fp` **以外**の種類(`@noisy`、`@na`、`@todo`、`@manual`)。**求めない**のは、新しいセル(そのセルのファイルが merge-base にない)の `@sink(none)`、`@miss`、`@fp` の行(ユーザーが 2026-11-23 に承認した)。ただし、新しい `@miss` と `@fp` の行は、課題の `@ref(#N)`(`docs/issues/N-*.md` がある)か `@ref(model-<パッケージ>-<名前>)`(`docs/issues/model-<パッケージ>-<名前>.md` があり、`docs/issues/README.md` の節がある)が付いていることを、承認の行があっても確認する(`PARITY` のような別の名前は、課題のほかに足してよい)。すでにある行は、再確認しない。行が減る(直ってマークが外れる)のは何も不要。セルのファイルを消して作り直す形(範囲のコミットがファイルを消し、head にまたある)、パスと行のセルが合わないファイル、`marks.d` に `.lock` でないファイルがあること、単一の `marks.lock` が head にあること、列が減ることは失敗する。セルのソースのファイルを移すと、新しいセルとして扱う(分ける前と同じ)。
 - **付け替えの決まり**(ユーザーが相談役に判断を任せた、2026-11-22): `@miss(silent)` を「テストが確かめた不確実性の注記の kind」(`@miss(depth_limit)` など)へ付け替えるのは、テストが「a trace has come」と出力し、kind を指定したときに限り、相談役やユーザーに聞かずに行ってよい(`Zoo-Loosened:` の行は、事実のとおりに書く)。逆向き(注記つき → silent)、`@miss` / `@fp` を既存の行に新しく足す、`@sink(tag)` → `none`、`@na` / `@todo` の追加は、これまでどおり、聞く。
 - 範囲: zoo だけ。`@sink(tag)` の数が減る向きと、curated / wild / go-scale の正解の件数は、まだ固定していない([ROADMAP.md](../../docs/ROADMAP.md))。

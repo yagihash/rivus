@@ -1,0 +1,3 @@
+rust	conv/struct_field_deep.rs	fp	@sink(none) @fp @nosink(conv-struct-field-deep-decoy) @fp @ref(FIELD-SINK,PARITY)	fn decoy() { @decoy
+rust	conv/struct_field_deep.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	conv/struct_field_deep.rs	sink-none	@sink(none) @fp @nosink(conv-struct-field-deep-decoy) @fp @ref(FIELD-SINK,PARITY)	fn decoy() { @decoy

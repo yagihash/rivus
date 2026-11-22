@@ -1,0 +1,2 @@
+dart	guard/one_branch.dart	sink-none	@sink(none)	void vuln() { @vuln
+dart	guard/one_branch.dart	sink-none	@sink(none) @nosink(guard-one-branch-decoy)	void fixed() { @fixed

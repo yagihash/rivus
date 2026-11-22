@@ -1,0 +1,2 @@
+go	dyn/sanitizer_own_impl/sanitizer_own_impl.go	sink-none	@sink(none)	func vuln() { @vuln
+go	dyn/sanitizer_own_impl/sanitizer_own_impl.go	sink-none	@sink(none) @nosink(dyn-sanitizer-own-impl-decoy)	func fixed() { @fixed

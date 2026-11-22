@@ -1,0 +1,3 @@
+rust	cont/slice.rs	fp	@sink(none) @fp @nosink(cont-slice-decoy) @fp @ref(KEYED-MAP,PARITY)	fn decoy() { @decoy
+rust	cont/slice.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	cont/slice.rs	sink-none	@sink(none) @fp @nosink(cont-slice-decoy) @fp @ref(KEYED-MAP,PARITY)	fn decoy() { @decoy

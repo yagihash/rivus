@@ -1,0 +1,2 @@
+go	dyn/stdlib_writer_own/stdlib_writer_own.go	sink-none	@sink(none)	func vuln() { @vuln
+go	dyn/stdlib_writer_own/stdlib_writer_own.go	sink-none	@sink(none) @nosink(dyn-stdlib-writer-own-decoy)	func fixed() { @fixed

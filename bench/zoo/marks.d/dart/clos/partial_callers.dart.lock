@@ -1,0 +1,3 @@
+dart	clos/partial_callers.dart	miss	@source(clos-partial-callers-vuln) @miss(silent) @ref(PARTIAL-CALLERS,PARITY)	void vuln() { @vuln
+dart	clos/partial_callers.dart	sink-none	@sink(none)	void decoy() { @decoy
+dart	clos/partial_callers.dart	sink-none	@sink(none)	void fixed() { @fixed

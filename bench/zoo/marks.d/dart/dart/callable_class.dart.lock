@@ -1,0 +1,3 @@
+dart	dart/callable_class.dart	na	@na(go: a value of a Go type has no `call` method; a func value is the nearest, and F/clos has it)	-
+dart	dart/callable_class.dart	sink-none	@sink(none)	void vuln() { @vuln
+dart	dart/callable_class.dart	sink-none	@sink(none) @nosink(dart-callable-class-decoy)	void fixed() { @fixed

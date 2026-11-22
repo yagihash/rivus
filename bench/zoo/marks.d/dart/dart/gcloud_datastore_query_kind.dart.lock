@@ -1,0 +1,3 @@
+dart	dart/gcloud_datastore_query_kind.dart	miss	@source(dart-gcloud-datastore-query-kind-vuln) @miss(unmodeled_library_call) @ref(#139)	Future<void> vuln() async { @vuln
+dart	dart/gcloud_datastore_query_kind.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	dart/gcloud_datastore_query_kind.dart	sink-none	@sink(none) @nosink(dart-gcloud-datastore-query-kind-decoy)	Future<void> decoy() async { @decoy

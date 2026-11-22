@@ -1,0 +1,2 @@
+dart	dyn/sink_in_method.dart	sink-none	@sink(none)	void vuln() { @vuln
+dart	dyn/sink_in_method.dart	sink-none	@sink(none) @nosink(dyn-sink-in-method-decoy)	void fixed() { @fixed

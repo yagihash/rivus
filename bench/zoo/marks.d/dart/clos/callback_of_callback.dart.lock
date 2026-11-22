@@ -1,0 +1,4 @@
+dart	clos/callback_of_callback.dart	miss	@source(clos-callback-of-callback-decoy) @miss(depth_limit) @ref(#81)	void decoy() { @decoy
+dart	clos/callback_of_callback.dart	miss	@source(clos-callback-of-callback-vuln) @miss(depth_limit) @ref(#81)	void vuln() { @vuln
+dart	clos/callback_of_callback.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	clos/callback_of_callback.dart	sink-none	@sink(none) @nosink(clos-callback-of-callback-decoy)	void decoy() { @decoy

@@ -1,0 +1,2 @@
+rust	cont/struct_whole_to_sink.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	cont/struct_whole_to_sink.rs	sink-none	@sink(none) @nosink(cont-struct-whole-to-sink-decoy)	fn decoy() { @decoy

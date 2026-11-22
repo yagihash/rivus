@@ -1,0 +1,2 @@
+dart	dyn/xtalk_n_by_m.dart	sink-none	@sink(none)	void vuln() { @vuln
+dart	dyn/xtalk_n_by_m.dart	sink-none	@sink(none) @nosink(dyn-xtalk-n-by-m-decoy) @nosink(dyn-xtalk-n-by-m-decoy-b)	void fixed() { @fixed

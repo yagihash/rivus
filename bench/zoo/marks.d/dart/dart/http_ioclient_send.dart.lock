@@ -1,0 +1,2 @@
+dart	dart/http_ioclient_send.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	dart/http_ioclient_send.dart	sink-none	@sink(none) @nosink(dart-http-ioclient-send-decoy)	Future<void> decoy() async { @decoy

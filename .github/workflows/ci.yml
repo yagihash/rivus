@@ -382,9 +382,9 @@ jobs:
         working-directory: bench/gcp
         run: go test -tags gcpexec -timeout 10m ./...
 
-  # A mark that loosens the truth of the zoo (a row added to a cell that bench/zoo/marks.lock already has, or a row of a new cell of
+  # A mark that loosens the truth of the zoo (a row added to a cell that bench/zoo/marks.d already has a file of, or a row of a new cell of
   # a kind other than @sink(none), @miss and @fp; against the merge base) needs a "Zoo-Loosened:" line in a commit message (the
-  # user's approval); a new @miss or @fp row needs an @ref(#N). TestZooMarksLock (in the shards of the test job) holds the file to the sources.
+  # user's approval); a new @miss or @fp row needs an @ref(#N) or @ref(model-<package>-<name>) whose file is in docs/issues. TestZooMarksLock (in the shards of the test job) holds the file to the sources.
   zoo-loosened:
     needs: changes
     if: needs.changes.outputs.code == 'true'

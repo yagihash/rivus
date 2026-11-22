@@ -1,0 +1,2 @@
+rust	conv/unsafe_string.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	conv/unsafe_string.rs	sink-none	@sink(none) @nosink(conv-unsafe-string-decoy)	fn decoy() { @decoy

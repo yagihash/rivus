@@ -1,0 +1,4 @@
+go	clos/to_lib/to_lib.go	miss	@source(clos-to-lib-decoy) @miss(assumed_call) @ref(CALLBACK-MODEL)	func decoy() { @decoy
+go	clos/to_lib/to_lib.go	miss	@source(clos-to-lib-vuln2) @miss(assumed_call) @ref(CALLBACK-MODEL)	func vuln2() { @vuln
+go	clos/to_lib/to_lib.go	sink-none	@sink(none)	func fixed() { @fixed
+go	clos/to_lib/to_lib.go	sink-none	@sink(none) @nosink(clos-to-lib-decoy)	func decoy() { @decoy

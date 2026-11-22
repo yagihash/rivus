@@ -1,0 +1,2 @@
+go	guard/one_branch/one_branch.go	sink-none	@sink(none)	func vuln() { @vuln
+go	guard/one_branch/one_branch.go	sink-none	@sink(none) @nosink(guard-one-branch-decoy)	func fixed() { @fixed
