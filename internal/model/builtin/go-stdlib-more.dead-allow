@@ -244,3 +244,22 @@ text/template.ParseFS | debt | the standard library: no cell of the zoo calls it
 text/template.ParseFiles | debt | the standard library: no cell of the zoo calls it yet
 time.Date | debt | the standard library: no cell of the zoo calls it yet
 time.NewTimer | debt | the standard library: no cell of the zoo calls it yet
+(*os.Root).Create | not called: it writes into the file system (a cell would make files in the temporary directory); same shape as (*os.Root).Open and (*os.Root).ReadFile, which pkg/os/root calls
+(*os.Root).OpenFile | not called: it writes into the file system (a cell would make files in the temporary directory); same shape as (*os.Root).Open and (*os.Root).ReadFile, which pkg/os/root calls
+(*os.Root).OpenRoot | not called: it writes into the file system (a cell would make files in the temporary directory); same shape as (*os.Root).Open and (*os.Root).ReadFile, which pkg/os/root calls
+(*os.Root).WriteFile | not called: it writes into the file system (a cell would make files in the temporary directory); same shape as (*os.Root).Open and (*os.Root).ReadFile, which pkg/os/root calls
+(*os.Root).Chmod | not called: it writes into the file system (a cell would make files in the temporary directory); same shape as (*os.Root).Open and (*os.Root).ReadFile, which pkg/os/root calls
+(*os.Root).Chown | not called: it writes into the file system (a cell would make files in the temporary directory); same shape as (*os.Root).Open and (*os.Root).ReadFile, which pkg/os/root calls
+(*os.Root).Chtimes | not called: it writes into the file system (a cell would make files in the temporary directory); same shape as (*os.Root).Open and (*os.Root).ReadFile, which pkg/os/root calls
+(*os.Root).Lchown | not called: it writes into the file system (a cell would make files in the temporary directory); same shape as (*os.Root).Open and (*os.Root).ReadFile, which pkg/os/root calls
+(*os.Root).Mkdir | not called: it writes into the file system (a cell would make files in the temporary directory); same shape as (*os.Root).Open and (*os.Root).ReadFile, which pkg/os/root calls
+(*os.Root).MkdirAll | not called: it writes into the file system (a cell would make files in the temporary directory); same shape as (*os.Root).Open and (*os.Root).ReadFile, which pkg/os/root calls
+(*os.Root).Remove | not called: it writes into the file system (a cell would make files in the temporary directory); same shape as (*os.Root).Open and (*os.Root).ReadFile, which pkg/os/root calls
+(*os.Root).RemoveAll | not called: it writes into the file system (a cell would make files in the temporary directory); same shape as (*os.Root).Open and (*os.Root).ReadFile, which pkg/os/root calls
+(*os.Root).Link | not called: it writes into the file system (a cell would make files in the temporary directory); same shape as (*os.Root).Open and (*os.Root).ReadFile, which pkg/os/root calls
+(*os.Root).Rename | not called: it writes into the file system (a cell would make files in the temporary directory); same shape as (*os.Root).Open and (*os.Root).ReadFile, which pkg/os/root calls
+(*os.Root).Symlink | not called: it writes into the file system (a cell would make files in the temporary directory); same shape as (*os.Root).Open and (*os.Root).ReadFile, which pkg/os/root calls
+(*os.File).Read | not called: the content of a file does not come through the disk in the zoo (the marker cannot be put into a file that the analysis follows); same shape as (io.Reader).Read
+(*os.File).ReadAt | not called: the content of a file does not come through the disk in the zoo (the marker cannot be put into a file that the analysis follows); same shape as (io.Reader).Read
+(*os.File).ReadFrom | not called: the content of a file does not come through the disk in the zoo (the marker cannot be put into a file that the analysis follows); same shape as (io.Reader).Read
+(*os.File).WriteTo | not called: the content of a file does not come through the disk in the zoo (the marker cannot be put into a file that the analysis follows); same shape as (io.Reader).Read

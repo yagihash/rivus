@@ -71,3 +71,4 @@ time.Now | debt | the standard library: no cell of the zoo calls it yet
 time.Since | debt | the standard library: no cell of the zoo calls it yet
 time.Sleep | debt | the standard library: no cell of the zoo calls it yet
 time.Until | debt | the standard library: no cell of the zoo calls it yet
+(*os.File).WriteAt | not called: same shape as (*os.File).Write
