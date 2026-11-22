@@ -1,6 +1,6 @@
 # ADR の一覧
 
-[DECISIONS.md](DECISIONS.md)(ADR-001〜095)の、番号、題、今の状態、関連する文書の一覧。ADR は決めた時点の記録で、書き換えない。**今どうなっているか**は、ここと、[ARCHITECTURE.md](ARCHITECTURE.md)、[PRINCIPLES.md](PRINCIPLES.md) で見る。
+[DECISIONS.md](DECISIONS.md)(ADR-001〜099)の、番号、題、今の状態、関連する文書の一覧。ADR は決めた時点の記録で、書き換えない。**今どうなっているか**は、ここと、[ARCHITECTURE.md](ARCHITECTURE.md)、[PRINCIPLES.md](PRINCIPLES.md) で見る。
 
 - 確認: 2026-11-22、9c26a39。状態は、ADR の本文と、後の ADR・実装を読んで付けた。古くなる前提で読むこと。
 - 状態の意味:
@@ -91,7 +91,7 @@
 | 074 | sink が引数のフィールドを指定できる(`parts`) | 有効 | 084 がサイレントな見逃しを直す | MODELING §4, DESIGN-field-sinks | `field_imprecision` |
 | 075 | モデルありの interface で自前実装の本体も読む | 一部覆った | sanitizer を対象外にした点を 086 が変更; 訂正・追記あり(書き方を保つ)。追記あり。覆した先・注意: 086 | - | 和を取る。追記で `dependency_body_unread` |
 | 076 | 型エラーで SSA が作られなかったパッケージを示す | 有効 |  | README | `summary.unread` |
-| 077 | Google Cloud を組み込む(メンテナの例外) | 有効 | 例外は 044/063 の基準の外と明記 | GCP-MODELS | Spanner / BigQuery の SQL |
+| 077 | Google Cloud を組み込む(メンテナの例外) | 一部覆った | 「例外」という位置づけは、ADR-097 が、範囲の 1 つ目に置き換えた | GCP-MODELS | Spanner / BigQuery の SQL |
 | 078 | ガード出所の断定は定数/単純コピーのみ | 有効 | F4/F5 訂正が本文内; 訂正・追記あり(書き方を保つ) | ARCHITECTURE 5.6 | 誤った注記の中で最も重い、と明記 |
 | 079 | Rust `Fn*::call` の候補を出所で絞る | 有効 | 訂正が本文内。085 が拡張; 訂正・追記あり(書き方を保つ) | DESIGN-generics-dispatch | `closed_world_entry` |
 | 080 | `calls:` に `method:` | 有効 |  | MODELING §3 | - |
@@ -106,9 +106,12 @@
 | 089 | Rust `write!` のモデル | 有効 |  | - | - |
 | 090 | ポインタ包みの interface への書き込みを指す先にも | 有効 | 060/082 の続き | - | - |
 | 091 | 下げられなかった式が値を返すとき、`unsupported` が元の値と結果を持つ | 有効 | 相談役の判断(2026-11-22)。Dart の解決できないコンストラクタ呼び出しから | ARCHITECTURE の IR の命令 | Go と Rust の extractor は未確認 |
-| 092 | 依存のパッケージを、流れのモデルで切る(本体を読まない)のは、コストが著しく大きいときも。ただし条件つき | 有効 |  | PRINCIPLES 3 節、GCP-MODELS P12、MODELING | コストの測定の記録、照合の検査、`calls:`、保守的な不確実性の注記、切ったことの表示。実装は未(ROADMAP) |
+| 092 | 依存のパッケージを、流れのモデルで切る(本体を読まない)のは、コストが著しく大きいときも。ただし条件つき | 一部覆った | 条件 1(時間かメモリの 9 割)は、パッケージ全体を切るときの条件として残る。実装の多いインターフェースのメソッドを切る別の基準を、ADR-098 が足した | PRINCIPLES 3 節、GCP-MODELS P12、MODELING | コストの測定の記録、照合の検査、`calls:`、保守的な不確実性の注記、切ったことの表示。実装は未(ROADMAP) |
 | 093 | Rust の extractor の隔離を、Docker から macOS のサンドボックス(Seatbelt)に替える | 有効 | ユーザーの決定(2026-11-22)。ADR-064 を一部覆す。Linux では止まる(`-unsafe-host-exec`) | rust-isolation、PRINCIPLES 8 節 | 承知している弱さと、後回しのハードニングを載せた |
 | 095 | `index -taint` の JSON の index の既定の書き先を、対象のディレクトリから利用者のキャッシュに移す(互換性を壊す) | 有効 | 相談役の決定(2026-11-22)。課題 #135 | README、GRAPH、AGENT-GUIDE | 古い既定の場所のファイルは読まない |
+| 096 | 組み込みモデルの範囲を、標準ライブラリと代わりのないパッケージに、Google Cloud と pub の人気の上位を加えた 4 つにする | 一部覆った | ADR-097 が範囲を書き直した(外部のサービスのクライアントを足し、Google Cloud を範囲の 1 つ目にした)。ADR-044、063、077 の線引きは、これらの範囲で読む | README、ARCHITECTURE 5.5、DESIGN-model-authoring、DART-MODEL-CANDIDATES | 公開の指標だけで選ぶ |
+| 097 | 組み込みモデルの範囲に「外部のサービスのクライアント」を足し、Google Cloud をその範囲の 1 つ目にする | 有効 | ユーザーの希望を受けた相談役の決定(2026-11-22)。ADR-096 を更新。ADR-077 の「例外」は、この範囲で読む | README、ARCHITECTURE 5.5、GCP-MODELS、DART-MODEL-CANDIDATES | 範囲は 5 つ |
+| 098 | 実装の多いインターフェースのメソッドを、委譲のクリーク全体をモデルにして切る基準 | 有効 | ADR-092 の条件 1 とは別の基準。`package:http` の `Client.send` | MODELING 4a、DESIGN-deps-cost 11 節、ARCHITECTURE 5.5 | 公開の対象で finding が同じ + `dependency_body_unread` |
 | 099 | source と sink は、プロジェクトの関数の中だけで探す。依存を読んだ実行では `summary.dependency_sites` が毎回言う | 有効 | 相談役の決定(2026-11-23)。ADR-096、097 の根拠の 1 つ。課題 #144 | README、AGENT-GUIDE、ARCHITECTURE 5.5、MODELING | sink のモデルは、検出のためにも必要 |
 
 ## 訂正・追記の書き方を保つ ADR
