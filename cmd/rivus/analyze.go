@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -40,7 +41,22 @@ type analyzeOpts struct {
 	numeric     bool
 	workers     int
 	// lang is the language to read: auto (what the directory holds), or a list.
-	lang                         string
+	lang string
+	yes  bool
+	// what the question of -lang auto (a Rust project in the directory) uses; a test replaces them. isTerminal: is the
+	// standard input a terminal (nil: ask the system; never true in a test binary). confirmIn: where the answer is read
+	// from (nil: the standard input). sandboxCheck, installCheck: nil is the system's.
+	isTerminal   func() bool
+	confirmIn    io.Reader
+	sandboxCheck func() error
+	installCheck func() error
+	// the languages are decided once for a run: the answer to the question is not asked twice
+	langsDone bool
+	langsKey  string
+	langsOut  []string
+	langsErr  error
+	// skipped are the languages of the directory that were not read, and why (summary.unread.skipped_languages)
+	skipped                      []report.SkippedLanguage
 	dartExtractor, rustExtractor string
 	// the isolation of the Rust extractor (ADR-062)
 	unsafeHostExec   bool
@@ -64,7 +80,8 @@ type analyzeOpts struct {
 func (o *analyzeOpts) register(fs *flag.FlagSet) {
 	o.common.register(fs)
 	fs.IntVar(&o.k, "k", taint.DefaultOptions().K, "maximum access path depth")
-	fs.StringVar(&o.lang, "lang", "auto", "languages to read: auto (what the directory holds: go.mod / go.work, pubspec.yaml; Rust is read only when asked for, because reading it builds the project), or go, dart, rust, separated by commas")
+	fs.StringVar(&o.lang, "lang", "auto", "languages to read: auto (what the directory holds: go.mod / go.work, pubspec.yaml, Cargo.toml; a Rust project is read after a question [Y/n] on the terminal, or with -yes, because reading it builds it; where there is no sandbox it is not read), or go, dart, rust, separated by commas (-lang rust asks nothing). The answer makes a different index")
+	fs.BoolVar(&o.yes, "yes", false, "-lang auto: read the Rust project of the directory without asking (what the question would say yes to; needed where there is no terminal to ask)")
 	fs.StringVar(&o.dartExtractor, "dart-extractor", "", "command of the Dart extractor (default: $RIVUS_DART_EXTRACTOR, then rivus-dart)")
 	fs.StringVar(&o.rustExtractor, "rust-extractor", "", "command of the Rust extractor (default: $RIVUS_RUST_EXTRACTOR, then rivus-rust)")
 	fs.BoolVar(&o.unsafeHostExec, "unsafe-host-exec", false, "run the Rust extractor on this machine, with your rights: the build scripts and proc macros of the project run here. Only for code you trust (default: under the sandbox of macOS; on another system nothing is run without this flag; docs/rust-isolation.md; also RIVUS_UNSAFE_HOST_EXEC=1)")
@@ -208,6 +225,12 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	}
 	rep := report.Build(packages, l.loadErrors(), st, res, rules)
 	rep.Summary.Isolation = o.rustIsolation
+	if len(o.skipped) > 0 {
+		if rep.Summary.Unread == nil {
+			rep.Summary.Unread = &report.Unread{Top: []report.UnreadPackage{}}
+		}
+		rep.Summary.Unread.SkippedLanguages = append([]report.SkippedLanguage(nil), o.skipped...)
+	}
 	if ts := l.testsSkipped(); ts != nil {
 		if ts.SkippedDirs > 0 {
 			rep.Summary.SkippedDirs = &report.SkippedDirs{Total: ts.SkippedDirs, Examples: ts.SkippedDirNames}
@@ -216,7 +239,7 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 			rep.Summary.OutsideConfiguration = &report.OutsideConfiguration{Files: ts.OutsideBuildFiles, Examples: ts.OutsideBuildFileNames}
 		}
 	}
-	if u := rep.Summary.Unread; u != nil {
+	if u := rep.Summary.Unread; u != nil && u.Packages > 0 {
 		// the exit code stays 0 (a flag for it is a decision of its own): a result without the packages that
 		// did not build must not look like the analysis of all of them
 		names := make([]string, 0, 3)

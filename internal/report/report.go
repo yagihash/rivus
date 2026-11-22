@@ -171,6 +171,16 @@ type Unread struct {
 	Functions int `json:"functions"`
 	// Top lists the packages with the most functions (at most 10).
 	Top []UnreadPackage `json:"top"`
+	// SkippedLanguages are the languages of the directory that were not read at all (not a package that failed): why is
+	// "declined" (asked, and no), "no-terminal" (could not ask, no -yes), "not-installed" (the extractor or the
+	// toolchain is not there), "no-sandbox". Absent when every language was read.
+	SkippedLanguages []SkippedLanguage `json:"skipped_languages,omitempty"`
+}
+
+// SkippedLanguage is a language of the project that was not read, and why.
+type SkippedLanguage struct {
+	Lang string `json:"lang"`
+	Why  string `json:"why"`
 }
 
 // UnreadPackage is one package that was read and not built.

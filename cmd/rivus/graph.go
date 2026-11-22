@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/yagihash/rivus/internal/graphdb"
@@ -106,6 +107,9 @@ func (o *analyzeOpts) graphIndexer(path string, patterns []string, since time.Ti
 				meta.Unread.Uncounted = append(meta.Unread.Uncounted, lang+":failed_units")
 			}
 		}
+		for _, sl := range o.skipped {
+			meta.Unread.SkippedLanguages = append(meta.Unread.SkippedLanguages, graphdb.SkippedLanguage{Lang: sl.Lang, Why: sl.Why})
+		}
 		if ts := l.testsSkipped(); ts != nil {
 			meta.Unread.SkippedDirs = ts.SkippedDirs
 			meta.Unread.OutsideBuildFiles = ts.OutsideBuildFiles
@@ -151,8 +155,14 @@ func graphLangs(g *sg.Program) []string {
 
 // flagValues are the analysis flags as the file records them (for a reader).
 func (o *analyzeOpts) flagValues(patterns []string) map[string]string {
+	lang := o.lang
+	if (lang == "" || lang == "auto") && o.langsDone && o.langsErr == nil && (has(o.langsOut, langRust) || o.skippedLang(langRust)) {
+		// A Rust project in the directory made the answer of a question (or of -yes): the file holds what the answer
+		// was, so that a later question about it (graph -C) neither asks again nor holds the file against another answer.
+		lang = strings.Join(o.langsOut, ",")
+	}
 	m := map[string]string{
-		"lang":                o.lang,
+		"lang":                lang,
 		"tests":               fmt.Sprint(o.tests),
 		"no-deps":             fmt.Sprint(o.noDeps),
 		"k":                   fmt.Sprint(o.k),

@@ -56,6 +56,8 @@ func TestRustIsNotReadUnlessAsked(t *testing.T) {
 	}
 	// Go and Rust: Go is read, and Rust is left out (and said)
 	o := analyzeOpts{}
+	o.isTerminal = func() bool { return false } // not a question: the test is run from a terminal too
+	o.sandboxCheck, o.installCheck = func() error { return nil }, func() error { return nil }
 	o.dir = t.TempDir()
 	write(o.dir, "go.mod", "Cargo.toml")
 	o.lang = "auto"
