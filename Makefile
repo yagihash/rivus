@@ -34,6 +34,6 @@ test: ## every test, with the Dart and Rust extractors (what CI runs on main)
 	go vet ./...
 	RIVUS_DART="$(RIVUS_DART)" RIVUS_RUST="$(RIVUS_RUST)" RIVUS_REQUIRE_DART=1 RIVUS_REQUIRE_RUST=1 go test -count=1 -timeout 40m ./...
 
-zoo-loosened: ## check that a commit that loosens the zoo has a "Zoo-Loosened:" line (BASE=<commit> HEAD=<commit>)
+zoo-loosened: ## check that what the commits change in the zoo marks (marks.lock, against the merge base) is not a loosening without a "Zoo-Loosened:" line (BASE=<commit> HEAD=<commit>)
 	@[ -n "$(BASE)" ] && [ -n "$(HEAD)" ] || { echo "usage: make zoo-loosened BASE=<commit> HEAD=<commit>"; exit 1; }
 	bash scripts/zoo-loosened-check.sh "$(BASE)" "$(HEAD)"
