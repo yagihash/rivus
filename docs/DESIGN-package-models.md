@@ -365,6 +365,30 @@ verified_versions:
 
 **推奨: (b) に、本物での解析の照合を足す。** セルは、生成した骨組みで、解析と exec を行う(実行の裏付けを残す。本物のコードは動かさない)。**同じセルを、本物のパッケージ(バージョン固定。パッケージごとのディレクトリ、ロックをコミット)に対しても、解析だけして、骨組みの解析と、finding の集合が同じことを確認する**(上の実験で、`http` は 197 件が同じだった)。これで、(i) 骨組みの手書きのずれ(名前、ファイルのパス、引数の渡し方)が、照合で見つかる(骨組みが本物とずれると、finding が違う)、(ii) 本物のコードは実行しない(規則と整合)、(iii) 生成器が入る前も、照合は今すぐ入れられる(生成器は後)。理由: (a) は、exec の記録と、本物の実行の安全を失う。(c) は、本物とのずれに気づけない問題が残る。
 
+**外部のパッケージを使うセルの置き方(3 言語で 1 つの方針。事実は、一時の場所で骨組みだけを置いて確かめた。取得はしていない)**:
+
+方針: **セルは、解析では骨組み(本物の公開のシグネチャから作る)に向け、実行では、第三者のコードを新たに動かさない。パッケージごとに、独立したモジュール(Go)、独立したクレート(Rust)に置く**。共有のファイルは、足さない。
+
+| | Go | Rust | Dart |
+| --- | --- | --- | --- |
+| 置き場所 | `bench/zoo-go-pkg/<パッケージ>/`。自分の `go.mod`(`module zoopkg/<パッケージ>`、`replace zoo => ../../zoo-go`(`zoo/mark` を使う)、`replace <本物のモジュールのパス> => ./skel`)、`skel/`(骨組み。自分の `go.mod` の名前は本物のモジュールのパス)、`cells/`、`rules.yaml` | `bench/zoo-rust-pkg/<パッケージ>/`。自分の `Cargo.toml`(空の `[workspace]` で、zoo の workspace に入れない)、`skel/`(骨組みのクレート。名前は本物)、`zoo-mark`、`src/`(セル)、コミットした `Cargo.lock`、`rules.yaml` | 今は `bench/zoo-dart/cells/packages/<パッケージ>`(path の依存。`cells/pubspec.yaml` は、そのディレクトリから生成される)。同じ形で、パッケージごとのディレクトリ(`bench/zoo-dart-pkg/<パッケージ>/`)にもできるが、exec の `dependency_overrides` も、パッケージごとの exec になる |
+| 解析で何を読むか | 骨組み(`replace` で `./skel`)。別のモジュールなので、`Func.Dep` になる(試した: finding は 1 件で、`dependency_functions` は 6) | 骨組みのクレート(path の依存)。`cargo check` は、自前のコードだけ(`build.rs`、proc macro なし)。サンドボックスの下で読めた(finding 1 件) | 骨組み(cells の path の依存)。本物の依存は、cells に入らない |
+| 実行(exec) | パッケージごとの `cmd/observe`(`-tags zooexec`)で、記録する `zoo/mark` に向ける。骨組みは、記録のために `zoo/mark` を呼べる(`zoo` を `replace` で持つ) | パッケージごとの exec(記録する `zoo-mark`)。骨組みは自前のコード | exec は、`dependency_overrides` で、`test` がすでに動かしている本物(`shelf` など、`test` の依存と名前がぶつかるもの)に解決する |
+| 共有のファイル | なし(`zoo-go` の `go.mod` は読むだけ。`cmd/observe/imports.go` の cells の一覧にも足さない) | なし(`zoo-rust` の `Cargo.toml` と `exec/src/cases.rs` に足さない) | `exec/pubspec.yaml` に、ぶつかる名前の `dependency_overrides` が 1 行(今。パッケージごとの exec にするか、生成するかは、未定) |
+
+事実(試して分かったこと):
+- Go: 独立したモジュール(`zoo-go` の外)は、`zoo-go` の `./...` に入らない。`go build`、`-tags zooexec`、`rivus analyze` が通り、`github.com/gin-gonic/gin` の骨組みの `Context.Query` から `mark.SinkCmd` への finding が出た。
+- Rust: **サンドボックスは、対象のディレクトリの外にある path の依存を読めない**(`../../zoo-rust/zoo-mark` は、取得の段で読めずに失敗した)。`zoo-mark` は、テストが対象のディレクトリに写す(今の `zooRustCopy` と同じ)。写せば、サンドボックスの下で動き、finding が出た。取得したクレートは動かしていない(取得そのものがない)。
+- 今の zoo のテストは、ディレクトリを固定で数える(`zoo-go/cells`、`zoo-dart/cells/lib`、`zoo-rust/cells/src`。`zooMarksRows`、`TestZooGo`、`TestZooExecGo`、`TestZooRust` など)ので、**独立したモジュールのセルは、テストの側に、パッケージのディレクトリを列挙する処理を足さないと、数えられず、実行もされない**。`TestBuiltinRowsAreHitByTheZoo` の `goZooSymbols`、`rustZooSymbols` も同じ(依存の関数の記号を数えるので、骨組みの関数が、行に一致する)。
+- CI の paths-filter は、`bench/**` を拾う。`bench/zoo-go-pkg/**` と `bench/zoo-rust-pkg/**` は、dart と rust のフィルタの除外にないので、足さないと、Dart と Rust のジョブも走る(安全だが、無駄)。Rust の CI は、`bench/zoo-rust` と `exec` だけをビルドするので、パッケージごとのステップが要る。
+
+| 条件 | Go | Rust | Dart |
+| --- | --- | --- | --- |
+| (i) 共有のファイルをさわらない | 満たす | 満たす | `exec/pubspec.yaml` の 1 行が残る |
+| (ii) zoo 全体を検査するテストに、依存のコードが入らない | 満たす(別のモジュールで、固定のディレクトリに入らない。骨組みの検査は、パッケージごとの処理で行う) | 満たす(同じ) | 満たす(cells に本物の依存がない) |
+| (iii) 第三者のコードを動かさない | 満たす(取得なし) | 満たす(取得なし。`build.rs` なし) | 満たす(本物は `test` がすでに動かすものだけ) |
+| (iv) 骨組みは機械的に生成する | 未(生成器ができるまで、手で書き、本物と見比べる) | 未(同じ) | 未(同じ) |
+
 **開発用の依存とぶつかる骨組み(Dart。`shelf_router` で起きた。解決済み)**: 骨組みの `shelf_router` が本物の `shelf` に依存すると、`shelf` とその依存(`async`、`collection`、`http_parser` など)が zoo のプログラムに入り、zoo 全体を検査するテスト(`TestFuncValuesDart` など)が、依存の関数に引っかかる。骨組みの `shelf` を置くと、`exec` の `test` が持ってくる本物の `shelf` と名前でぶつかる。解決は、**解析と実行で、依存の解決を分ける**こと。cells(`bench/zoo-dart/cells`)は、`shelf` を骨組み(`packages/shelf`、path の依存)に解決し、rivus は骨組みだけを読む。exec は、`dependency_overrides` で `shelf` を本物(`test` がすでに動かしているもの)に解決し、セルのコードは本物で動く。骨組みは本物の公開のシグネチャから作るので、セルは両方で型が合う。取得したコードを新たに動かさない(上の「exec の安全」の線の内側)。検査のテストは、依存の関数を対象から外さない(zoo に本物の依存を置けないことを守る検査でもあるため)。`test` の依存の名前が、モデルの候補(`shelf`、`shelf_web_socket`、`web_socket_channel`、`async` など)と重なるが、この形で骨組みを置ける。
 
 実装の順(コードは書いていない): 1. 照合の仕組み(`bench/zoo-dart/real/<パッケージ>/` と、比べるテスト。CI で `dart pub get`)。2. 生成器(段階 3)ができたら、骨組みを生成に替える。手順書の 2 節(作る)には、相談役の判断のあとに反映する。

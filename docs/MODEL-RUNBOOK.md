@@ -59,6 +59,8 @@
 
 **開発用の依存とぶつかるパッケージの骨組み(Dart)**: `bench/zoo-dart/exec` の `test` が持ってくる本物のパッケージ(`shelf`、`shelf_static`、`shelf_web_socket`、`web_socket_channel`、`async`、`collection`、`http_parser`、`stream_channel`、`path` など)と同じ名前の骨組みは、`bench/zoo-dart/cells/packages/<名前>`(path の依存。本物の依存は書かない)に置き、`exec/pubspec.yaml` の `dependency_overrides` に `<名前>: <本物の範囲>`(hosted)を 1 行足す。解析(cells)は骨組みを読み、実行(exec)は、`test` がすでに動かしている本物で動く。cells の `pubspec.yaml` の依存に本物の名前を hosted で書かない(zoo のプログラムに本物の依存が入り、依存の関数を検査するテストが失敗する)。骨組みは、本物の公開のシグネチャに合わせる(セルのコードが、両方で型が合うこと)。
 
+**骨組みの置き場(Go と Rust。事実。[DESIGN-package-models.md](DESIGN-package-models.md) 6.8 の表)**: 外部のパッケージを使うセルは、パッケージごとに独立したモジュールに置く案(Go: `bench/zoo-go-pkg/<パッケージ>/`、Rust: `bench/zoo-rust-pkg/<パッケージ>/`)で、一時の場所で動くことを確かめた。**ただし、zoo のテストが、そのディレクトリを数える処理は、まだない**(固定のディレクトリを数えている)。その処理が入るまでは、Go と Rust の外部のパッケージのセルは、置かない(着手せず、次に進む)。Rust は、サンドボックスが対象の外の path の依存を読めないので、`zoo-mark` を対象に写して読む。
+
 テスト: `go test ./internal/model/... ./cmd/rivus/ -run 'Builtin|Zoo'`、`regomark check --no-judge`(0)。Dart のセルは、Dart のテスト(`dart analyze` を含む)も通す。
 
 ## 3. 既知の見逃しと誤検出は、セルと課題のファイルで残す
@@ -80,6 +82,8 @@ zoo のゲート(`scripts/zoo-loosened-check.sh`、#167): 新しいセル(`bench
 - `bench/zoo-<lang>/` の自分のディレクトリ(セル、骨組み)、`bench/zoo/marks.d/<lang>/` の自分のファイル、`docs/issues/model-<パッケージ>-*.md`。
 - **広げる PR**(1 節): もともと main にある、そのパッケージのモデルのファイル(と、その `.dead-allow`)。
 - **例からの昇格の PR**(1 節): 昇格する `examples/rules/<その 1 つ>`(消す)と、`examples/rules/README.md` のその行(「組み込みになった」の 1 行に)、`bench/*/rules.yaml` の例(あれば)。
+- **例からの昇格の、さわってよい範囲の事実(洗い出し)**: 例のファイルを使っているのは、`bench/compare.sh`(gin: 145、147 行。`gin-vue-admin` と `go-test-bench` のルール)、`bench/parity/collect.sh`(103 行。gin)、`bench/README.md`(gin: 8、158〜160、258 行)、`cmd/rivus/notbuiltin.go` と `notbuiltin_test.go`(actix-web のファイルを名指し。テストが読む)、`bench/parseable/rules.yaml` と `bench/parseable/README.md`(actix-web の写し)、`internal/model/builtin/rust-web.yaml` の 3 行目のコメント、`extractor/rust/README.md` の 108 行。ファイルを消すと、`compare.sh` の gin の 2 つのベンチは、ルールのファイルがなく飛ばされる。**gin は、例のファイルを消さず、中身を空のルール(「組み込みになった」のコメントつき)にして残す案が、使っている所を壊さない**(`compare.sh` は、比べる 2 つのバージョンが、それぞれの木のファイルを読むので、古いバージョンは昔の gin のルール、新しいバージョンは組み込み、になり、昇格の前後の比較の意味が保たれる)。**actix-web は、`notbuiltin.go` の表の行と、そのテストを直す必要がある**(昇格すると、`actix_web::` が組み込みのルールにあるので、知らせは出ない)。この 2 ファイルは、actix-web の昇格の PR で、さわってよい。決める(相談役。ADR-101 の「消す」との関係)まで、gin は、消さずに残す。
+
 - ほかのファイル(`docs/DECISIONS.md`、`docs/ISSUES.md`、直下の README、コード、ゲート、ワークフロー)は、さわらない。conflict が出たら、main 側の行を残して、自分の行を足し直す。
 
 ## 5. PR(完成)
@@ -151,3 +155,7 @@ go run ./bench/model-diff -pkg google.golang.org/grpc -model mine.yaml -version 
 - **バージョン**: `-version` がなければ、Go は、このリポジトリの `go.mod` にあるバージョン(なければ最新)、Dart は、`bench/` などの `pubspec.lock` にあるバージョン(なければ `any`)。標準ライブラリは、いまの Go のバージョン。`verified_versions` への記録は、別の作業。
 - **取得と実行**: 依存の取得(`go get`、`dart pub get`)だけで、取得したコードは実行しない(Go は型検査と解析まで、Dart は analyzer まで)。ライブラリごとに分けるので、1 回は数秒〜十数秒、依存込みで 1 GB 前後。
 - **PR で動かす対象の求め方**: `go run ./bench/model-diff -changed origin/main` が、`internal/model/builtin/` の行(flows と sinks)が変わったパッケージだけを、`go <pkg>` / `dart <pkg>` の形で出す。CI の定期と手動の層に、`model-diff` のジョブがある(PR には入れていない。設計 6.3)。
+
+## 10. この手順書を「使える」と言う条件
+
+手順書の種類(1 節の「新規」「広げる」「例からの昇格」)ごとに、**ローカルのサブエージェントが、この手順書だけを見て、1 回通す(着手の判定から、PR の本文まで。push はしない)**。通せたら、その種類は「使える」。通せなかった所(読み違えた所、さわってはいけないファイルをさわった所、書いていなくて聞いた所)は、手順書に書き足してから、もう 1 回通す。3 種類とも、1 回ずつ通るまで、クラウドの定期の実行(`rivus-model-author`)は有効にしない。
