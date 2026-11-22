@@ -47,7 +47,7 @@
 | fixnum | 42 | 43 | 13 | 2 | 147 |
 | term_glyph / clock / googleapis_auth / http | 30 / 10 / 6 / 2 | 30 / 10 / 6 / 2 | 4 / 3 / 10 / 4 | 0 | 189 / 50 / 174 / 128 |
 
-この対象では、重さは http2(`spent_ms` 145、`summary_elems` 2,038)、grpc、collection、protobuf の順で、全部で 0.5 秒。重い依存は無い。`packages_top` は上位 20 件で、ここでは `spent_ms` が 0 のものまで入っていて足りている。大きい対象(後述の corpus)では 20 件で切れるので、全件を出すには、`stats.packages_top` の件数の上限を、フラグ(例: `-pass-stats-all`)で外す変更が要る(今は上限 20 で固定。変更は案だけ)。
+この対象では、重さは http2(`spent_ms` 145、`summary_elems` 2,038)、grpc、collection、protobuf の順で、全部で 0.5 秒。重い依存は無い。`packages_top` は上位 20 件で、ここでは `spent_ms` が 0 のものまで入っていて足りている。大きい対象(後述の corpus)では 20 件で切れるので、全件を出すには、`stats.packages_top` の件数の上限を、フラグ(例: `-pass-stats-all`)で外す変更が要る(今は上限 20 で固定。変更は案だけ)。→ その後、`-pass-stats-top N`(0 で全件)と `-pass-stats-sort` を足した(ADR-061 の追記)。
 
 IR の関数の数は `rivus_dart` の出力の `kind: func` を、`package:<名前>` ごとに数えた。ここまでは extractor が依存を全部出し、コアが到達できるものだけ解析に残す(`extract.dart` の読み取りの順序)。
 

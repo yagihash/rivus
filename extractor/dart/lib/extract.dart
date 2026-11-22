@@ -102,13 +102,20 @@ Future<void> extract(String root, StringSink sink,
   if (deps) {
     final seen = <String>{};
     final files = <String>[];
+    // the context that resolved the library which imports a file of a dependency: that file is resolved in it too,
+    // because only its package_config.json says where the dependency is (the first one of the collection need not have it)
+    final importedIn = <String, AnalysisContext>{};
+    AnalysisContext? visiting;
     void visit(LibraryElement lib) {
-      if (lib.uri.scheme == 'dart' || !seen.add(lib.uri.toString())) return;
+      if (lib.uri.scheme == 'dart' || !seen.add('${lib.uri} ${lib.firstFragment.source.fullName}')) return;
       for (final f in lib.fragments) {
         final path = f.source.fullName;
         // a file of the project that was left out above (a hidden directory such as `.dart_tool`,
         // the `build` at the top) is read as a dependency when the code imports it
-        if (!p.isWithin(root, path) || _skipped(root, path) || testFiles.contains(path)) files.add(path);
+        if (!p.isWithin(root, path) || _skipped(root, path) || testFiles.contains(path)) {
+          files.add(path);
+          if (visiting != null) importedIn.putIfAbsent(path, () => visiting!);
+        }
       }
       if (lib.uri.scheme == 'package') readPackages.add(lib.uri.pathSegments.first);
       for (final i in lib.firstFragment.libraryImports) {
@@ -121,7 +128,10 @@ Future<void> extract(String root, StringSink sink,
       }
     }
     for (final context in collection.contexts) {
+      visiting = context;
       for (final u in List.of(units)) {
+        // a file is resolved in the context of its own package, not in the ones of the others
+        if (!identical(_contextOf(collection, p.join(root, u.file)), context)) continue;
         final r = await context.currentSession.getResolvedUnit(p.join(root, u.file));
         if (r is ResolvedUnitResult) {
           for (final i in r.libraryElement.firstFragment.libraryImports) {
@@ -133,6 +143,8 @@ Future<void> extract(String root, StringSink sink,
       }
     }
     final done = <String>{};
+    final packageDirOf = <String, String>{}; // the name of a dependency -> the directory that was read for it
+    final notSaid = <String>{};
     final trusted = _trustedDependencyRoots(allowDepsUnder);
     for (final path in files) {
       if (!path.endsWith('.dart') || !done.add(path)) continue;
@@ -142,12 +154,36 @@ Future<void> extract(String root, StringSink sink,
         refused.putIfAbsent(_packageDir(path), () => path);
         continue;
       }
-      final context = (p.isWithin(root, path) ? _contextOf(collection, path) : null) ?? collection.contexts.first;
+      final context = (p.isWithin(root, path) ? _contextOf(collection, path) : null) ?? importedIn[path] ?? collection.contexts.first;
       final r = await context.currentSession.getResolvedUnit(path);
       if (r is! ResolvedUnitResult) {
         // (what input does this: not known; no fixture)
         out.loadError(p.isWithin(root, path) ? p.relative(path, from: root) : path, 'a file of a dependency could not be resolved and was not read', unread: true);
         continue;
+      }
+      if (!p.isWithin(root, path)) {
+        final uri = r.libraryElement.uri;
+        final dir = _packageDir(path);
+        // A file of a dependency that is not named by a package: URI cannot be matched with the calls to it (they are
+        // named by package: URIs): it is not analysed, and that is said (once for a package).
+        if (uri.scheme == 'file') {
+          if (notSaid.add(dir)) {
+            out.loadError(dir, '$_depNotLinked: the file of a dependency is not resolved to a package: URI (its package_config.json does not name it), so the calls to it do not reach it and its functions are not analysed; point -C at one package, or run `dart pub get` in each package', unread: true);
+          }
+          continue;
+        }
+        // Two packages of the tree that read different versions of one dependency: the functions have the same IDs, so
+        // only the first is read, and the others are said.
+        if (uri.scheme == 'package') {
+          final name = uri.pathSegments.first;
+          final first = packageDirOf.putIfAbsent(name, () => dir);
+          if (first != dir) {
+            if (notSaid.add(dir)) {
+              out.loadError(dir, '$_depNotLinked: $name is read from another directory by another package of the tree ($first), and the functions of the two have the same IDs, so this one is not analysed; use the same version of $name in the packages, or point -C at one package', unread: true);
+            }
+            continue;
+          }
+        }
       }
       units.add(UnitInfo(prog, p.isWithin(root, path) ? p.relative(path, from: root) : path, r.unit, r.content, r.lineInfo, dep: true));
     }
@@ -254,6 +290,9 @@ String _advisedDir(String packageDir) {
   final shallow = parent == packageDir || p.dirname(parent) == parent || (home != null && p.equals(parent, home));
   return shallow ? packageDir : parent;
 }
+
+/// The start of the messages about a dependency that is not read as the calls to it name it (the core and the tests take it by this).
+const _depNotLinked = 'dependency_not_linked';
 
 /// The directory of the package a file is in: the one above its `lib` (or else the file's own).
 String _packageDir(String path) {

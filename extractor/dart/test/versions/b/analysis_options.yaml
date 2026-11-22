@@ -1,0 +1,6 @@
+# What the usual setups of json_serializable and freezed write: the generated
+# files are left out of the analysis of the project.
+analyzer:
+  exclude:
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
