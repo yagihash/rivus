@@ -1,0 +1,16 @@
+// The generated code (lib/src/generated/files.*.dart) was written by hand in the shape of
+// protoc_plugin's output. protoc was not run.
+syntax = "proto3";
+package bench.files;
+
+service Files {
+  rpc Read(ReadRequest) returns (ReadReply);
+  rpc Write(stream WriteRequest) returns (WriteReply);
+  rpc Stat(StatRequest) returns (StatReply);
+}
+message ReadRequest { string path = 1; }
+message ReadReply { string data = 1; }
+message WriteRequest { string path = 1; string content = 2; }
+message WriteReply { int32 bytes_written = 1; }
+message StatRequest { string path = 1; }
+message StatReply { int32 size = 1; bool exists = 2; }
