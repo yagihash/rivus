@@ -210,6 +210,10 @@ source から sink への経路を、全部探します。主な作業のコマ�
   - `rematched` は、式が変わって構造の鍵だけで一致した、または同じ式が関数の中の別の位置に移った、という意味です。`ambiguous` は、候補が複数あります(`candidates`)。どちらも、`previous_snippet` と今の `snippet` を見比べて、同じ箇所かを確認します。
   - `-detail summary` の出力から作ったブックマークでも動きますが、コードの見比べができません。既定の出力から作ります。
 
+### `rivus models versions`
+
+モデルのファイルが記録した、確認したバージョン(`verified_versions`。書式は [MODELING.md](MODELING.md) 4c)を JSON で出します。`-rules <file>`、`-no-builtin-rules` が使えます。出力は `verified_versions[]`(`package`、`versions`、`checked_with`、`checked`、`source`)。記録は、利用者のプロジェクトのバージョンとの照合には、まだ使いません。
+
 ### `rivus models coverage`
 
 モデルのない関数のうち、どれにモデルを書くと効果が大きいかを、効果の大きい順に出します。
@@ -523,6 +527,7 @@ rivus analyze -C <dir> -rules app.yaml -timeout 10m ./... > out.json
 ```
 
 - ハンドラが型で入口を受け取るフレームワーク(gin の `*gin.Context` など)は、`kind: param_type` と `type:` で、その型の引数を source にします。見本は [examples/rules](../examples/rules) にあります。
+- ハンドラを引数に取って登録する関数(ルーターの `router.get('/x/<id>', (Request r, String id) => ...)`)の、ハンドラの引数(`id`)を source にするときは、`kind: callback_param`(`symbol`、`operand`、`from`)を使います。`String` のような一般の型は `param_type` で指せないためです。書き方と、`operand` の数え方(言語ごと)は [MODELING.md 4d 節](MODELING.md)。ハンドラを変数、フィールド、登録のヘルパーの引数として渡す形は引けず、`unresolved_callee` の注記になります。
 - シンボルの書き方は言語ごとに違います(Go は `go/types` の形。Dart と Rust は各 extractor の README)。**シンボルが一致しないルールは、何も報告せずに効きません。** 足したあと、`sites` の件数が増えたことを確認します。
 - 流れを切るルール(sanitizer、`pure: true`)は、誤ると見逃しになります。迷ったら書きません。
 - 書式は [MODELING.md](MODELING.md) と、[README の「ルールとモデル」](../README.md#ルールとモデル)にあります。モデルを足す対象は `rivus models coverage -yaml -top 20` で得ます。
@@ -562,7 +567,7 @@ rivus analyze -C <dir> -rules app.yaml -timeout 10m ./... > out.json
    - 共有してよいのは、この表(パッケージ名と数字)だけです。コードや経路は共有しません。パッケージ名が非公開のものなら、共有の前に利用者に確認します。
 
 4. **`-no-deps`** で、依存のソースを読まない。軽くなりますが、依存への呼び出しは全部、推測(`unmodeled_library_call`)になり、依存の中を通る流れの精度が落ちます。**原因の切り分けには、3 より先に使ってよい**(`-no-deps` で終わるなら、原因は依存の本体です)。結果を報告するときは、`-no-deps` で得たと書きます。
-5. **モデルで切る。** 3 の表で、少数の依存が重さを決めているとき、または `on_findings_top` に、実装の多いインターフェースのメソッドが、注記を集めているときは、そのメソッドの行を `flows` のモデルにして、実装全体の本体を読まないようにできます(ADR-098。条件: 公開の対象で、本体を読んだ場合と finding の集合が同じ。読まなかった本体は `dependency_body_unread` の注記で示される。[docs/MODELING.md](MODELING.md) の 4a 節)。モデルは、解析のコストだけでなく、依存の中の sink の検出のためにも要ります(ADR-099)。**パッケージ単位で、本体を読まない宣言**(`body_replaced_packages`、または試すための `-body-replaced <パッケージ>`。繰り返せます)は、実装済みです(ADR-100、105)。宣言のあるパッケージの関数は、IR から落とされ、呼び出しは、モデルの行があればモデル、なければ `unmodeled_library_call` です。**解析の時間とメモリが減ります。** Go と Dart の extractor も、そのパッケージの本体を読みません(読み込みの時間の減りは、パッケージの使われ方による。Rust は未実装。`-drop-after-read` で、読んでから落とす実行と比べられます)。 書いたパッケージだけに効き(配下は `パス/...`)、プロジェクトのコードは落ちません。宣言したら、**`-read-declared-bodies` を付けた実行と finding の集合を比べます**(同じであること。違いは、行のない関数だけ)。出力は `summary.body_replaced_packages`(パッケージ、宣言の場所、理由、落とした関数の数)で、宣言を無効にして本体を読んだ数は `summary.body_replaced_ignored` です。**関数や、利用者が実装するインターフェースを引数に取る API は、`calls:` の行が要ります**(ない関数に関数の値などを渡すと、呼ばれるものとして扱い、`assumed_call` を出します。精度のためには、行を書きます)。組み込みのモデルに宣言を付けるのは、ADR-092 / 098 の条件を満たしたあとです。
+5. **モデルで切る。** 3 の表で、少数の依存が重さを決めているとき、または `on_findings_top` に、実装の多いインターフェースのメソッドが、注記を集めているときは、そのメソッドの行を `flows` のモデルにして、実装全体の本体を読まないようにできます(ADR-098。条件: 公開の対象で、本体を読んだ場合と finding の集合が同じ。読まなかった本体は `dependency_body_unread` の注記で示される。[docs/MODELING.md](MODELING.md) の 4a 節)。モデルは、解析のコストだけでなく、依存の中の sink の検出のためにも要ります(ADR-099)。**パッケージ単位で、本体を読まない宣言**(`body_replaced_packages`、または試すための `-body-replaced <パッケージ>`。繰り返せます)は、実装済みです(ADR-100、105)。宣言のあるパッケージの関数は、IR から落とされ、呼び出しは、モデルの行があればモデル、なければ `unmodeled_library_call` です。**解析の時間とメモリが減ります。** Go と Dart の extractor も、そのパッケージの本体を読みません(読み込みの時間の減りは、パッケージの使われ方による。Rust は未実装。`-drop-after-read` で、読んでから落とす実行と比べられます)。 書いたパッケージだけに効き(配下は `パス/...`)、プロジェクトのコードは落ちません。宣言したら、**`-read-declared-bodies` を付けた実行と finding の集合を比べます**(同じであること。違いは、行のない関数だけ)。出力は `summary.body_replaced_packages`(パッケージ、宣言の場所、理由、`functions`(読んで落とした関数の数)または `functions_declared`(extractor が読まなかったパッケージが宣言している数))で、宣言を無効にして本体を読んだ数は `summary.body_replaced_ignored` です。**関数や、利用者が実装するインターフェースを引数に取る API は、`calls:` の行が要ります**(ない関数に関数の値などを渡すと、呼ばれるものとして扱い、`assumed_call` を出します。精度のためには、行を書きます)。組み込みのモデルに宣言を付けるのは、ADR-092 / 098 の条件を満たしたあとです。
 6. Go は、パッケージの指定で範囲を絞る(`./cmd/server/...`)。絞った外から来る流れは見えません。
 
 時間やメモリを減らすために精度を落とした結果は、落とす前の結果の代わりにはなりません。どのフラグで得た結果かを、必ず報告に書きます。

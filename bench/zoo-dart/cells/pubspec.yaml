@@ -20,3 +20,5 @@ dependencies:
     path: packages/zoo_flutter
   zoo_mark:
     path: packages/zoo_mark
+  zoo_router:
+    path: packages/zoo_router

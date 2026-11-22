@@ -1,0 +1,2 @@
+dart	dart/callback_param_closure.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	dart/callback_param_closure.dart	sink-none	@sink(none) @nosink(dart-callback-param-closure-decoy)	Future<void> decoy() async { @decoy

@@ -35,6 +35,9 @@ var startRe = regexp.MustCompile(`^\s*#\s*model-diff:`)
 var noteRe = regexp.MustCompile(`^\s*#\s*model-diff:\s*(\S+)\s+(\S+)\s*(.*?)\s*$`)
 
 // ParseNotes collects the notes of a model file, line by line (not with the parser of the model: a comment is not data of the model).
+// `miss-reviewed <symbol>@<position> <reason>` (for example `encoding/json.Unmarshal@arg1`): a MISS at that one position that was read
+// against the body and is not a flow of data (the reading follows only the type of the value, or goes through a call that it cannot resolve).
+// It is shown as `MISS-reviewed` and does not fail; the note is what records the reading, so it is for one position, never a whole function.
 // `extra` needs a reason; `value <Type> <expression>` (Dart) says how to make a value of a class (the receiver, an argument): `$S` is where the source goes.
 func ParseNotes(file, text string) ([]Note, []string) {
 	var notes []Note
@@ -43,19 +46,19 @@ func ParseNotes(file, text string) ([]Note, []string) {
 		m := noteRe.FindStringSubmatch(l)
 		if m == nil {
 			if startRe.MatchString(l) {
-				errs = append(errs, fmt.Sprintf("%s:%d: a note is `# model-diff: <extra|value> <symbol> <text>`", file, i+1))
+				errs = append(errs, fmt.Sprintf("%s:%d: a note is `# model-diff: <extra|value|miss-reviewed> <symbol> <text>`", file, i+1))
 			}
 			continue
 		}
 		n := Note{Kind: m[1], Symbol: m[2], Text: m[3], File: file, Line: i + 1}
 		switch n.Kind {
-		case "extra", "value":
+		case "extra", "value", "miss-reviewed":
 			if n.Text == "" {
-				errs = append(errs, fmt.Sprintf("%s:%d: the note `%s %s` has no %s", file, n.Line, n.Kind, n.Symbol, map[string]string{"extra": "reason", "value": "expression"}[n.Kind]))
+				errs = append(errs, fmt.Sprintf("%s:%d: the note `%s %s` has no %s", file, n.Line, n.Kind, n.Symbol, map[string]string{"extra": "reason", "value": "expression", "miss-reviewed": "reason"}[n.Kind]))
 				continue
 			}
 		default:
-			errs = append(errs, fmt.Sprintf("%s:%d: unknown kind of note %q (extra, value)", file, n.Line, n.Kind))
+			errs = append(errs, fmt.Sprintf("%s:%d: unknown kind of note %q (extra, value, miss-reviewed)", file, n.Line, n.Kind))
 			continue
 		}
 		notes = append(notes, n)

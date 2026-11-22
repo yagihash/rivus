@@ -40,6 +40,8 @@ func FuncValueSites(p *sg.Program, st *sites.Result) (*sites.Result, []FuncCall)
 		ByIRInstr: make(map[sites.IRInstr][]*sites.Site, len(st.ByIRInstr)),
 		ByIRParam: st.ByIRParam,
 		ByID:      make(map[string]*sites.Site, len(st.ByID)),
+
+		UnresolvedCallbacks: st.UnresolvedCallbacks,
 	}
 	for k, v := range st.ByIRInstr {
 		out.ByIRInstr[k] = v

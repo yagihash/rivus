@@ -170,8 +170,12 @@ type BodyReplacedPackage struct {
 	// DeclaredIn is the rule set that declares it: its file, "builtin:..." or "-body-replaced".
 	DeclaredIn string `json:"declared_in"`
 	Reason     string `json:"reason"`
-	// Functions is how many functions were left out.
-	Functions int `json:"functions"`
+	// Functions is how many functions were read and then left out of the program (the core drops them after the extractor
+	// read the package). Not there when the extractor did not read the package.
+	Functions int `json:"functions,omitempty"`
+	// FunctionsDeclared is how many functions the package declares, for a package that the extractor was told not to
+	// read: nothing was read, so nothing was left out (Functions). Not there when the extractor read the package.
+	FunctionsDeclared int `json:"functions_declared,omitempty"`
 }
 
 // DependencySites is where the sites were not looked for.
