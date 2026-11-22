@@ -21,6 +21,7 @@ import (
 	"github.com/yagihash/rivus/internal/model"
 	"github.com/yagihash/rivus/internal/model/builtin"
 	"github.com/yagihash/rivus/internal/report"
+	"github.com/yagihash/rivus/internal/taint"
 	"github.com/yagihash/rivus/internal/vcs"
 )
 
@@ -52,6 +53,11 @@ type common struct {
 	// readDeclared reads the bodies of the packages that are declared (the declarations of the rule files and of
 	// -body-replaced are left out): the run that a declaration is checked against.
 	readDeclared bool
+	// dropAfterRead leaves the declared packages to the filter of the IR (dropReplacedBodies) alone: the extractors read
+	// them, as they did before the extractors were told not to (docs/DESIGN-package-models.md 2).
+	dropAfterRead bool
+	// extractorBodyReplaced are the packages the extractor of Dart is told not to read (loadLangs sets it).
+	extractorBodyReplaced []string
 	// declIgnored is how many declarations readDeclared left out (loadRules sets it).
 	declIgnored int
 }
@@ -70,8 +76,10 @@ func (c *common) register(fs *flag.FlagSet) {
 	fs.Var(&c.allowDepsUnder, "allow-deps-under", "Dart: a directory outside the project whose packages may be read as dependencies (repeatable). The package_config.json of the project says where its dependencies are, and it is not trusted: only the project, the pub cache and the SDKs are read without being asked (a monorepo's sibling packages need this)")
 	fs.BoolVar(&c.deterministic, "deterministic-only", false, "ignore the rules decided by an LLM (origin: llm)")
 	fs.Var(&c.bodyReplaced, "body-replaced", "PACKAGE: do not read the body of this package of the dependencies; the models stand for it (a call of its functions is the model's row, or unmodeled_library_call when there is none). The import path of a Go package, package:name of a Dart package, a Rust crate; the package named and no other, `PATH/...` for it and what is under it. For a try: the rule files declare it with body_replaced_packages, with the reason (repeatable; docs/MODELING.md)")
+	fs.BoolVar(&c.dropAfterRead, "drop-after-read", false, "read the packages that are declared as the extractors do without the declaration, and leave their functions out of the program afterwards (the result is the same as when the extractor does not read them; it takes more time and memory; to compare the two) (development)")
 	fs.BoolVar(&c.readDeclared, "read-declared-bodies", false, "read the body of the packages that the rule files and -body-replaced declare, as if there were no declaration: to compare the result with the one that leaves them out (summary.body_replaced_ignored says how many were left out)")
 	usual(fs, "C", "rules", "no-builtin-rules", "no-project-rules", "tests", "no-deps", "allow-deps-under", "deterministic-only", "body-replaced", "read-declared-bodies")
+	diagnostic(fs, "drop-after-read")
 	kind(fs, "dir", "C", "allow-deps-under")
 	kind(fs, "file", "rules")
 }
@@ -176,11 +184,18 @@ func (c *common) loadRules(extra ...*model.RuleSet) (*model.Rules, error) {
 // load reads the code: the Go packages, and the neutral IR made of them.
 // withGraph also builds what the call graph needs (the analysis does; the
 // listing of sites does not).
-func (c *common) load(patterns []string, withGraph bool) (*loaded, error) {
+func (c *common) load(patterns []string, withGraph bool, rules *model.Rules) (*loaded, error) {
 	if len(patterns) == 0 {
 		patterns = []string{"./..."}
 	}
-	p, err := gossa.Load(c.dir, patterns, gossa.Options{Tests: c.tests, NaiveForm: true, WithLifted: withGraph, Deps: !c.noDeps && withGraph})
+	opts := gossa.Options{Tests: c.tests, NaiveForm: true, WithLifted: withGraph, Deps: !c.noDeps && withGraph}
+	if rules.HasDeclared() && !c.dropAfterRead {
+		// the extractor does not read what the models stand for (docs/DESIGN-package-models.md 2): the IR is the one
+		// that dropReplacedBodies would make
+		opts.ReplacedPackage = rules.ReplacedBody
+		opts.ReplacedFunc = func(id string) bool { return rules.ReplacedBody(taint.UnitOf(id)) }
+	}
+	p, err := gossa.Load(c.dir, patterns, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -192,7 +207,7 @@ func (c *common) load(patterns []string, withGraph bool) (*loaded, error) {
 // implementations) are expanded against the program, then the IR is made.
 // "sites" and "analyze -sites" list the same sites because both come here.
 func (c *common) loadGo(patterns []string, rules *model.Rules, maxImpl int) (*loaded, error) {
-	l, err := c.load(patterns, true)
+	l, err := c.load(patterns, true, rules)
 	if err != nil {
 		return nil, err
 	}
@@ -207,6 +222,17 @@ func (c *common) loadGo(patterns []string, rules *model.Rules, maxImpl int) (*lo
 	}
 	if err := l.extract(true); err != nil {
 		return nil, err
+	}
+	// what the extractor was told not to read is counted for the report (dropReplacedBodies)
+	if l.gossa != nil {
+		units := make([]string, 0, len(l.gossa.BodiesNotRead))
+		for u := range l.gossa.BodiesNotRead {
+			units = append(units, u)
+		}
+		sort.Strings(units)
+		for _, u := range units {
+			l.ir.BodiesNotRead = append(l.ir.BodiesNotRead, ir.BodyNotRead{Unit: u, Functions: l.gossa.BodiesNotRead[u]})
+		}
 	}
 	return l, nil
 }

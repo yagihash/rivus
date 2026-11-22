@@ -92,6 +92,9 @@ type RuleSet struct {
 	// BodyReplaced declares the packages whose code this set stands for: they are not read by the analysis
 	// (docs/MODELING.md, "Declaring a package").
 	BodyReplaced []BodyReplaced `yaml:"body_replaced_packages"`
+	// VerifiedVersions record the versions of the packages that the rows were checked against (verified.go). A
+	// record only: the analysis does not read it.
+	VerifiedVersions []VerifiedVersion `yaml:"verified_versions"`
 
 	// Origin is where the rule set came from (file name or "builtin:...").
 	Origin string `yaml:"-"`
@@ -830,6 +833,9 @@ func (rs *RuleSet) validate() error {
 	if err := rs.validateBodyReplaced(); err != nil {
 		return err
 	}
+	if err := rs.validateVerified(); err != nil {
+		return err
+	}
 	checkMatch := func(m, what string) error {
 		switch m {
 		case "", MatchExact:
@@ -1243,6 +1249,8 @@ type Rules struct {
 
 	// Declared are the packages whose body the models replace, sorted (see BodyReplaced).
 	Declared []Declaration
+	// Verified are the records of verified_versions of all the sets, by package.
+	Verified []Verified
 	declared *declaredSet
 }
 
@@ -1333,6 +1341,7 @@ func Merge(sets ...*RuleSet) *Rules {
 	for sym := range everything {
 		delete(r.GlobalsHoldNothing, sym)
 	}
+	r.Verified = mergeVerified(sets)
 	r.Declared = mergeDeclarations(sets)
 	r.declared = indexDeclared(r.Declared)
 	return r

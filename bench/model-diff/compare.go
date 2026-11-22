@@ -107,6 +107,13 @@ func Compare(probes []Probe, skips []Skip, a, b Hits, notes []Note) *Report {
 			extra[n.Symbol] = n
 		}
 	}
+	reviewed := map[string]Note{}
+	for _, n := range notes {
+		if n.Kind == "miss-reviewed" {
+			reviewed[n.Symbol] = n
+		}
+	}
+	usedMiss := map[string]bool{}
 	used := map[string]bool{}
 	rep := &Report{Counts: map[string]int{}, Unverified: skips}
 	if rep.Unverified == nil {
@@ -133,7 +140,16 @@ func Compare(probes []Probe, skips []Skip, a, b Hits, notes []Note) *Report {
 		}
 		switch {
 		case len(r.Miss) > 0:
-			r.Status = "MISS"
+			pos := p.Variant
+			if i := strings.IndexByte(pos, ' '); i > 0 {
+				pos = pos[:i]
+			}
+			if n, ok := reviewed[p.Symbol+"@"+pos]; ok {
+				r.Status, r.Reason = "MISS-reviewed", n.Text
+				usedMiss[n.Symbol] = true
+			} else {
+				r.Status = "MISS"
+			}
 		case len(r.Extra) > 0:
 			if n, ok := extra[p.Symbol]; ok {
 				r.Status, r.Reason = "EXTRA-intended", n.Text
@@ -150,6 +166,9 @@ func Compare(probes []Probe, skips []Skip, a, b Hits, notes []Note) *Report {
 	}
 	rep.Counts["unverified"] = len(skips)
 	for _, n := range notes {
+		if n.Kind == "miss-reviewed" && !usedMiss[n.Symbol] {
+			rep.Stale = append(rep.Stale, fmt.Sprintf("%s:%d: no MISS for %s (the note is not needed)", n.File, n.Line, n.Symbol))
+		}
 		if n.Kind == "extra" && !used[n.Symbol] {
 			rep.Stale = append(rep.Stale, fmt.Sprintf("%s:%d: no EXTRA for %s (the note is not needed)", n.File, n.Line, n.Symbol))
 		}

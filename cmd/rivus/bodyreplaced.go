@@ -45,7 +45,8 @@ func dropReplacedBodies(prog *ir.Program, rules *model.Rules, warn io.Writer) []
 		return nil
 	}
 	count := make([]int, len(decls))
-	cache := map[string][]int{} // unit -> the declarations that name it
+	declared := make([]int, len(decls)) // what the extractor was told not to read: counted, not dropped
+	cache := map[string][]int{}         // unit -> the declarations that name it
 	covering := func(unit string) []int {
 		if v, ok := cache[unit]; ok {
 			return v
@@ -60,6 +61,12 @@ func dropReplacedBodies(prog *ir.Program, rules *model.Rules, warn io.Writer) []
 		}
 		cache[unit] = idx
 		return idx
+	}
+	// the units that the extractor was told not to read: nothing of them is in the program to be left out here
+	for _, n := range prog.BodiesNotRead {
+		for _, i := range covering(n.Unit) {
+			declared[i] += n.Functions
+		}
 	}
 	out := prog.Funcs[:0]
 	for _, f := range prog.Funcs {
@@ -79,13 +86,13 @@ func dropReplacedBodies(prog *ir.Program, rules *model.Rules, warn io.Writer) []
 	prog.Funcs = out
 	var res []report.BodyReplacedPackage
 	for i, d := range decls {
-		if count[i] == 0 {
+		if count[i] == 0 && declared[i] == 0 {
 			if d.Source == flagDeclaration && warn != nil {
 				fmt.Fprintf(warn, "rivus: warning: -body-replaced %s: no function of a dependency is in this program (a package of the project is always read, and a package that is not used has nothing to leave out)\n", d.Package)
 			}
 			continue
 		}
-		res = append(res, report.BodyReplacedPackage{Package: d.Package, DeclaredIn: d.Source, Reason: d.Reason, Functions: count[i]})
+		res = append(res, report.BodyReplacedPackage{Package: d.Package, DeclaredIn: d.Source, Reason: d.Reason, Functions: count[i], FunctionsDeclared: declared[i]})
 	}
 	sort.SliceStable(res, func(i, j int) bool {
 		if res[i].Package != res[j].Package {

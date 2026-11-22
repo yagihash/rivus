@@ -2036,6 +2036,22 @@ Go では、解析の時間とメモリが、宣言で大きく減る(最大 RSS
 
 **しないこと(この ADR では)**: 組み込みモデルへの宣言(`dart-http`、Google Cloud、Go の AWS SDK)。宣言を付けてよい条件(設計 2 節 5)は、ADR-092 / 098 のまま。extractor への宣言の受け渡し。読まない依存だけが使う依存の、到達性による自動の除外(結果が変わりうるので、extractor の段階と合わせて決める)。
 
+## ADR-105: 宣言のあるパッケージの本体を、extractor が読まない(Go と Dart。ADR-100 の続き。2026-11-23)
+
+**背景:** ADR-100 は、宣言のあるパッケージの関数を、IR を読んだあと、解析の前に落とした。extractor は全部読むので、読み込みの時間とメモリは減らなかった(Dart は、extractor が時間の 9 割)。設計は `docs/DESIGN-package-models.md` の 2 節と 7a 節。
+
+**決めたこと:**
+1. **宣言を extractor に渡す**(`-read-declared-bodies` のときは渡さない)。Go: `packages.Load` のあと、`go/ssa` の前に、宣言のある依存の `Syntax` と `TypesInfo` を捨てる(型検査は残る)。Dart: `--body-replaced package:<名前>`(繰り返し可)。そのパッケージのファイルは、解決も下ろしもしない。Rust は未実装(隔離と nightly がなく、測れない。CI で確認する)。
+2. **結果を変えない。** finding の ID の集合、`stats.functions`、`summary` の注記と数は、IR のフィルタ(`-drop-after-read`)と同じ。Dart は、ファイルを解決しないので、クラスの階層、動的呼び出しの候補、本体のある演算子、コンストラクタを、ライブラリの要素から作る(`_Index.library`)。これがないと、候補がなくなり、注記が変わった。要素から分からないこと(引数のないコンストラクタの本体と初期化子に仕事があるか)は、ないものとして扱う。
+3. **`summary.body_replaced_packages` の項目を分ける**(同じ名前で違う意味にしない): `functions`(#179 から。読んで落とした数)は、そのままの意味で、extractor が読まなかったパッケージには出さない(読んでいないので、落とした数はない)。extractor が読まなかったパッケージには、`functions_declared`(パッケージが宣言している数。IR の `body_not_read`。到達の数ではない)を出す。`-drop-after-read` と Rust は `functions`。
+4. **落とした後に `PruneDeps`**: 落とした関数だけが届いていたもの(ジェネリクスのインスタンス、ラッパー、そこだけが import するパッケージ)を、フィルタの側でも落とす。段階 2 と 4 の `stats.functions` を同じにするため。プロジェクトが届くものは落ちない。 **事実: 宣言があるときの Go の `stats.functions` が、#179(ADR-100)のときと変わる**(宣言がないときは変わらない)。AWS SDK v2 の `service/s3` の合成で、`aws-sdk-go-v2/...` と `smithy-go/...` を宣言したとき、46 が 5 になる(宣言のあるパッケージの本体が作った、標準ライブラリのジェネリクスのインスタンスなど、41 関数が落ちる)。finding の ID は同じ。
+5. **読まないパッケージだけが使う依存を、extractor が読まない版(Dart の `visit` が `import` をたどらない)は、入れなかった。** finding の ID は同じだが、`stats.functions` と注記が変わり(宣言のあるパッケージのクラスが継承する、別のパッケージのメソッドの本体を読まなくなる)、時間の減りも誤差の中だった。結果を変えない約束のほうを選んだ。
+6. 開発用のフラグ `-drop-after-read`(読んでから落とす、段階 2 の実行。比較用)。
+
+**測定**(7a 節の表): `dart-gcp`(6 パッケージ)で、読み込み 14.3 → 10.7 秒、最大 RSS 1.63 → 1.23 GB。`dart-grpc` はほぼ変わらない。Go の S3 の合成で、読み込み 2.0 → 0.76 秒、RSS 1.25 → 0.57 GB。finding の ID は、いずれも同じ。
+
+**しないこと:** Rust。到達性で読まない依存を落とすこと(5)。組み込みモデルへの宣言。
+
 ## ADR-101: `examples/rules` のフレームワークのルールは、`docs/MODEL-QUEUE.md` に入ったものから、組み込みに昇格する(ADR-063 を ADR-096 / 097 の範囲で上書きする。2026-11-23)
 
 **背景:** ADR-063 は「特定のフレームワークは、組み込みでなく `examples/rules` に置く(利用者が足す)」と決めた。ADR-096 / 097 は、組み込みの範囲を、外部のサービスのクライアントと、pub / Go / Rust の人気のパッケージ(公開の指標の順)まで広げた。`examples/rules/` の `go-gin.yaml`、`rust-actix-web.yaml`(ADR-063 より前に組み込みだったもの)は、`docs/MODEL-QUEUE.md` の「例から昇格」の行になった。手順書(`docs/MODEL-RUNBOOK.md`)は、最初の昇格の PR が新しい ADR を足す、としていたが、モデルの PR は `docs/DECISIONS.md` をさわらない(4 節)、ADR を書かない(6 節)ので、昇格の PR が、手順書のとおりには作れなかった(検証用の 2 本目)。
@@ -2054,7 +2070,7 @@ Go では、解析の時間とメモリが、宣言で大きく減る(最大 RSS
 
 **決めたこと:**
 1. `sources:` に `kind: callback_param`(`symbol`、`operand`、`from`、`to`、`labels`)を足す。「`symbol` の呼び出しの `operand` 番目のオペランドとして渡された関数の、`from` から `to` までの(宣言された)引数が source」。`operand` は必須、`from` の既定は 0、`to`(含む)の既定は最後。キーは、この kind だけが持つ(ほかの kind に書くとファイルごと拒否する)。
-2. **`operand` の数え方は、同じファイルの `calls:` の `fn: argN` と同じ**: Go と Dart はレシーバを数えない。Rust(`self_first: true` の集合)は、`self` が `arg0`。1 つのファイルの中で数え方が 2 種類にならない。言語ごとの表は MODELING.md 4c 節。
+2. **`operand` の数え方は、同じファイルの `calls:` の `fn: argN` と同じ**: Go と Dart はレシーバを数えない。Rust(`self_first: true` の集合)は、`self` が `arg0`。1 つのファイルの中で数え方が 2 種類にならない。言語ごとの表は MODELING.md 4d 節。
 3. **実装は、model と sites だけ**(`internal/model/model.go`、`internal/sites/callback.go`)。呼び出しのオペランドから、コピーと変換をたどって `make_closure` を引き、その関数の引数に、`param` / `param_type` と同じサイト(`ByIRParam`)を付ける。taint、IR、extractor は変えない。`Rules.CallbackParams`(シンボル別。集合の `self_first` を持つ)、`sites.Result.UnresolvedCallbacks`。
 4. **引けない形は、段階 1 では引かない**: 変数が 2 つの関数を持つ(φ)、フィールド、要素、呼び出しの結果、呼ぶ関数の引数(登録のヘルパー)。引けない呼び出しは、その呼び出しの位置に `unresolved_callee`(新しい種類は足さない)を付ける。**注記は、呼び出しを持つ関数にある**(ヘルパーが登録するときは、ヘルパー)ので、source の関数と sink の関数の不確実性を数える `@miss` の分類(zoo)では `silent` になる。zoo のセル `F/dart/callback-param-helper` がそれを確認している。
 5. **宣言がないとき(`callback_param` の行がないとき)は、結果も出力も index も今までと変わらない**(`CallbackParams` が空なら、sites は何もしない)。古い rivus は、新しい kind とキーをファイルごと拒否する(`KnownFields(true)`)。
