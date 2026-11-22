@@ -31,11 +31,7 @@ type funcValueRow struct {
 // writeFuncValues runs the analysis once more with the function values as elements and writes the table. Nothing that
 // the analysis reports depends on it.
 func writeFuncValues(path string, graph *sg.Program, l *loaded, st *sites.Result, rules *model.Rules, opts taint.Options) error {
-	st2, calls := taint.FuncValueSites(graph, st)
-	opts.FuncValues = true
-	eng := taint.New(graph, l.texts, st2, rules, opts)
-	eng.SetLoadErrors(l.loadErrors())
-	res := eng.Run()
+	res, calls := runFuncValues(graph, l, st, rules, opts)
 	carried := map[string][]string{}
 	for _, c := range res.FuncCandidates {
 		carried[c.Site.ID] = c.Candidates
@@ -75,4 +71,14 @@ func writeFuncValues(path string, graph *sg.Program, l *loaded, st *sites.Result
 		}
 	}
 	return nil
+}
+
+// runFuncValues is the run of the analysis of the function values (Options.FuncValues, with the synthetic sites): its
+// result, and the calls of function values with the candidates that the rest of the analysis has for them.
+func runFuncValues(graph *sg.Program, l *loaded, st *sites.Result, rules *model.Rules, opts taint.Options) (*taint.Result, []taint.FuncCall) {
+	st2, calls := taint.FuncValueSites(graph, st)
+	opts.FuncValues = true
+	eng := taint.New(graph, l.texts, st2, rules, opts)
+	eng.SetLoadErrors(l.loadErrors())
+	return eng.Run(), calls
 }

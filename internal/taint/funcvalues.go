@@ -200,7 +200,7 @@ type FuncValuesStats struct {
 }
 
 // FuncValueRounds is the most runs of the analysis of the function values that -resolve-func-values makes. Provisional:
-// the number of rounds that the zoo and the curated targets need is measured (docs/DESIGN-callouts.md, 5.6) and the
+// the number of rounds that the benchmarks need is measured (docs/DESIGN-callouts.md, 5.6) and the
 // limit is chosen from that.
 const FuncValueRounds = 4
 
