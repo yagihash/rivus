@@ -45,6 +45,8 @@ import (
 	_ "zoo/cells/dyn/method_value_iface"
 	_ "zoo/cells/dyn/sanitizer_own_impl"
 	_ "zoo/cells/dyn/sink_as_value"
+	_ "zoo/cells/dyn/sink_as_value_field"
+	_ "zoo/cells/dyn/sink_as_value_map"
 	_ "zoo/cells/dyn/sink_behind_own_interface"
 	_ "zoo/cells/dyn/sink_in_method"
 	_ "zoo/cells/dyn/sink_in_method_iface"

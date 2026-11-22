@@ -46,6 +46,8 @@ import 'package:zoo_cells/dyn/method_value.dart' as dyn_method_value;
 import 'package:zoo_cells/dyn/method_value_iface.dart' as dyn_method_value_iface;
 import 'package:zoo_cells/dyn/sanitizer_own_impl.dart' as dyn_sanitizer_own_impl;
 import 'package:zoo_cells/dyn/sink_as_value.dart' as dyn_sink_as_value;
+import 'package:zoo_cells/dyn/sink_as_value_map.dart' as dyn_sink_as_value_map;
+import 'package:zoo_cells/dyn/sink_as_value_field.dart' as dyn_sink_as_value_field;
 import 'package:zoo_cells/dyn/sink_behind_own_interface.dart' as dyn_sink_behind_own_interface;
 import 'package:zoo_cells/dyn/sink_in_method.dart' as dyn_sink_in_method;
 import 'package:zoo_cells/dyn/sink_in_method_iface.dart' as dyn_sink_in_method_iface;
@@ -110,6 +112,8 @@ void registerAll() {
   dyn_method_value_iface.register();
   dyn_sanitizer_own_impl.register();
   dyn_sink_as_value.register();
+  dyn_sink_as_value_map.register();
+  dyn_sink_as_value_field.register();
   dyn_sink_behind_own_interface.register();
   dyn_sink_in_method.register();
   dyn_sink_in_method_iface.register();

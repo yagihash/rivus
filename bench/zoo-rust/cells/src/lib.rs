@@ -51,6 +51,8 @@ pub mod dyns {
     pub mod method_value;
     pub mod method_value_iface;
     pub mod sink_as_value;
+    pub mod sink_as_value_map;
+    pub mod sink_as_value_field;
     pub mod sink_behind_own_interface;
     pub mod sink_in_method;
     pub mod sanitizer_own_impl;
