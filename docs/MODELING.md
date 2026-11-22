@@ -9,7 +9,32 @@ examples in `examples/rules`. The principles behind the models are in [PRINCIPLE
 
 ## 0. A row replaces what the analysis does by itself
 
-A call that has no model is read this way: the receiver and the arguments flow to the result, and **the memory that the arguments point to is read as unknown** (a function that is not read may write into what it is given: `unmodeled_library_call`). **A row for the function replaces all of that with what the row says.** So a row that says only `flows: [{from: args, to: result}]` takes away the other two: the receiver no longer flows to the result, and what the function writes into its arguments is no longer there. A flow can be lost by adding a row, and nothing says so. (Found on `bench/gcp`: the first stub of `rivus models coverage` left the receiver out and lost 3 of 27 findings; the second left the writes into the arguments out and lost 2 more. The stub now says the broad thing: receiver and arguments, to the result and into the arguments. `TestModelsCoverageStubsLoseNoFinding`.) When you narrow a row, check what you took away: the receiver, each argument, the writes into the arguments, the callbacks.
+A call that has no model is read this way: the receiver and the arguments flow to the result, and **the memory that the arguments point to is read as unknown** (a function that is not read may write into what it is given: `unmodeled_library_call`). **A row for the function replaces all of that with what the row says.** So a row that says only `flows: [{from: args, to: result}]` takes away the other two: the receiver no longer flows to the result, and what the function writes into its arguments is no longer there. A flow can be lost by adding a row, and nothing says so. (Found on `bench/gcp`: the first stub of `rivus models coverage` left the receiver out and lost 3 of 27 findings; the second left the writes into the arguments out and lost 2 more. The stub says the broad thing for the result (see below) and keeps the writes into the arguments as a comment. `TestModelsCoverageStubsLoseNoFinding` takes the comment away and checks that the widest row loses nothing.) When you narrow a row, check what you took away: the receiver, each argument, the writes into the arguments, the callbacks.
+
+### `result` is the first result only; every result is `results`
+
+`to: result` (the same as `result0`) is **the first result only**. A function that returns `(value, error)` and has the row
+`{from: args, to: result}` does not carry its arguments into the `error`: `err.Error()` of it reaches no sink, and nothing says so
+(`strconv`-like functions that put the input in the error are the case that matters). Write `to: results` for every result, or one
+row per result (`result0`, `result1`) when they differ. `result` is right only for a function with one result (and for Rust and Dart,
+where a call has one result: `Result<T, E>`, a tuple and a Record are each one value). `rivus models coverage -yaml` writes `results`.
+`TestGoRowsThatSayResultAreForOneResult` reads the signature of every Go function that has a `to: result` row in the built-in rule
+sets, and fails for one with more than one result unless `testdata/result-first-only.txt` says, with the reason, that the other
+results never hold the data (the error is a fixed text). In a model made from types (a stub for every function of a package), 19 of
+1,475 rows had dropped such a flow, and `to: results` was the fix.
+
+### A write into `args` is wide: name the argument
+
+`{from: args, to: args}` and `{from: recv, to: args}` write the taint into **every** argument. An argument that is a shared
+object (a mux, a client, a configuration, a `context.Context` that carries values) then holds the taint of every call that
+passed through it, and the findings that follow from it grow (one project: about 8 times as many). Name the destination
+(`to: arg1`: the buffer, the struct that is filled) and give the source as narrowly (`from: arg0`). The stub of
+`rivus models coverage -yaml` has the write as a comment for this reason; a row without it reads the memory of the arguments as
+untouched, so check whether the function fills one of them and add that one.
+
+Proposal, not implemented (issue #140): `from: args_except: [0]` (and `to: args_except: [0]`), so that `context.Context` and other
+arguments that only carry configuration are left out of a flow without listing every other argument by hand. Today the other way is
+`arg1`, `arg2`, one flow each.
 
 ## 1. When a function may be `pure`
 

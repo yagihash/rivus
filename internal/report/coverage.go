@@ -114,13 +114,14 @@ func (r *Report) Coverage() *Coverage {
 
 // stub is the start of a propagator rule for the symbol. A rule replaces what the analysis does for a call that has
 // no model: the receiver and the arguments flow to the result, and the memory the arguments point to is read as
-// unknown (a function that is not read may write into what it is given). The stub says both: the receiver and the
-// arguments flow to the result and into the arguments, so that putting every stub in loses no finding (it can add
-// some). A narrower rule is a decision to take after checking, and it can lose a flow
-// (TestModelsCoverageStubsLoseNoFinding: the first stub left the receiver out, and then left the writes into the
-// arguments out; 3 and 2 of the 27 findings of bench/gcp went).
+// unknown (a function that is not read may write into what it is given). The stub keeps the first part: the receiver
+// and the arguments flow to `results`, every result (`result` is the first result only, so a function that returns
+// `(value, error)` would lose the flow into the error). The writes into the arguments are a comment: `args` and `recv`
+// as a destination write into every argument, and a shared object (a mux, a client, a configuration) then holds the
+// taint of every call (the findings of a project went up about 8 times). Name the arguments that are written
+// (`arg1`) and take the comment away. TestModelsCoverageStubsLoseNoFinding says what that costs on bench/gcp.
 func stub(symbol string) string {
-	return fmt.Sprintf("  - symbol: %q\n    flows: [{from: recv, to: result}, {from: args, to: result}, {from: recv, to: args}, {from: args, to: args}]  # TODO: broader than the default on purpose (it also writes into the arguments); narrow it only after checking\n", symbol)
+	return fmt.Sprintf("  - symbol: %q\n    flows: [{from: recv, to: results}, {from: args, to: results}]  # TODO: check how taint moves; `results` is every result (`result` is the first only)\n    # writes into the arguments, off by default (the memory the arguments point to is then not read as unknown): name the destination (`to: arg1`), not `args`; a write into a shared object (mux, client, configuration) adds findings\n    # flows: [{from: recv, to: results}, {from: args, to: results}, {from: recv, to: arg1}, {from: args, to: arg1}]\n", symbol)
 }
 
 // YAML renders the first n symbols as a rule file to fill in.
