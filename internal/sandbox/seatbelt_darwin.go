@@ -78,8 +78,8 @@ func profile(nRead, nExec, nWrite int, proxy bool) string {
 (deny signal (target others))
 ; The home directory of the user: not its names, not its contents (what the caller names below it is allowed again, after this line).
 (deny file-read* (subpath (param "HOME")))
-; The arguments and the environment of other processes of the user (kern.procargs2) are not readable: a process may hold a token.
-(deny sysctl-read (sysctl-name-prefix "kern.proc"))
+; (Not here: the arguments and the environment of other processes of the user (kern.procargs2) can be read, and the sandbox cannot
+; refuse it: a deny of the name, of the prefix "kern.", of process-info*, none of them stopped it. What is read cannot leave: TestSandboxClosesEveryWayOut.)
 ; The names of the top of the file system are not shown (nothing needs them: the paths that are allowed are named whole).
 (deny file-read-metadata (literal "/Users") (literal "/Volumes") (literal "/Applications"))
 `)
