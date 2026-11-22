@@ -4,6 +4,10 @@ publish_to: none
 environment:
   sdk: ^3.10.0
 dependencies:
+  gcloud:
+    path: packages/gcloud
+  googleapis:
+    path: packages/googleapis
   http:
     path: packages/http
   zoo_mark:

@@ -229,6 +229,22 @@ field:
 
 A model that stands in for the body of a dependency (so that the body is not read) is allowed when the body does not exist, when reading it does not converge, when the library calls the user's code (`calls:`), or when reading it costs the analysis a great deal (ADR-092). The last one only for a package that meets all of these: (1) the cost is measured and written down with the target it was measured on (a rule of thumb: the dependency is 90% of the time, or gigabytes); (2) a check compares the result with the body read and the result with the model, on a fixture that uses the API: the set of flows and the **edges at the border** (which function of your code a call into the dependency calls back) have to be the same, and the model may only be the side that has more, with a note; (3) every API that calls a function it is given or holds has a `calls:` row (a form that the format cannot write is a problem of the format, and the call site says so, not silence). A function of a cut package without a row is read as the unmodelled call it is (its arguments flow to its result, with `unmodeled_library_call`). The packages that were cut are listed in the output. As of today there is no way to cut one package (it is all dependencies or none: `-no-deps`) and no comparing check yet.
 
+## 4b. Categories
+
+A sink has a `category`: what kind of harm the value does there. It is a free string in the format, and these are the ones the built-in rows use:
+
+| category | the value is |
+| --- | --- |
+| `command_injection` | a command or its arguments |
+| `path_traversal` | a path of the file system |
+| `sql_injection` | the text of a query (SQL, BigQuery, GQL). A value that the service binds (a parameter, a filter value) is not one |
+| `ssrf` | a URL or a host that the program sends a request to |
+| `xss` | text that is written into HTML |
+| `open_redirect` | the address of a redirect |
+| `resource_name` | the name of a resource of a service that the user decides: a bucket, an object, a topic, a subscription, the kind of a datastore key. It can point to another resource of the project, or of another project. It is not a path of the file system (`dart-gcp.yaml`, `docs/GCP-MODELS.md` section 8) |
+
+A new category is made when no other one fits (not for a new library). It is added to this table, and to the decision of the product (`docs/GCP-MODELS.md`, judgement E, for `resource_name`). One symbol has one category (#140).
+
 ## 5. A row has to be hit
 
 A row whose key is not the name the extractor writes never matches a call, and nothing says so: the call is read as an
