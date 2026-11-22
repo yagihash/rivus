@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -56,11 +57,22 @@ func TestDartPackageWithoutPackageConfigIsSaid(t *testing.T) {
 			Detail string `json:"detail"`
 		} `json:"uncertainties"`
 	}
+	var lastStderr string
+	// the standard error says it in a sentence of its own (what to run), not as a type error with "0 functions"
+	saidOnStderr := func(what string) {
+		t.Helper()
+		if !strings.Contains(lastStderr, "dart pub get") || strings.Contains(lastStderr, "a type error in them") {
+			t.Errorf("%s: the standard error does not say to run dart pub get (or says it is a type error):\n%s", what, lastStderr)
+		}
+	}
 	run := func(dir string) result {
 		cmd := exec.Command(binary, "analyze", "-lang", "dart", ".")
 		cmd.Dir = dir
 		cmd.Env = append(os.Environ(), "RIVUS_DART_EXTRACTOR="+dart+" run "+filepath.Join(extractor, "bin", "rivus_dart.dart"))
+		var se bytes.Buffer
+		cmd.Stderr = &se
 		out, err := cmd.Output()
+		lastStderr = se.String()
 		if err != nil {
 			t.Fatalf("analyze: %v", err)
 		}
@@ -88,6 +100,7 @@ func TestDartPackageWithoutPackageConfigIsSaid(t *testing.T) {
 	if got := unread(run(one)); len(got) != 1 || got[0] != "." {
 		t.Errorf("a package without a package config: unread %v", got)
 	}
+	saidOnStderr("a package without a package config")
 	// a tree of two packages: only the one that was not pub-got
 	tree := t.TempDir()
 	pkg(filepath.Join(tree, "a"), "a", "")
@@ -119,6 +132,7 @@ func TestDartPackageWithoutPackageConfigIsSaid(t *testing.T) {
 	if !oldSaid {
 		t.Errorf("an old package config (a dependency added after pub get): not said: %+v", r.Summary.Unread)
 	}
+	saidOnStderr("an old package config")
 	// after pub get again: not old
 	pubGet(old)
 	if r2 := run(old); r2.Summary.Unread != nil {

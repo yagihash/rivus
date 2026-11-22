@@ -81,6 +81,15 @@ const DependencyNotLinkedPrefix = "dependency_not_linked"
 // (extractor/dart/lib/extract.dart, "dependency_not_allowed"). A test holds the two to each other (cmd/rivus/dart_test.go).
 const DependencyNotAllowedPrefix = "dependency_not_allowed"
 
+// PackageConfigMissingPrefix and PackageConfigOldPrefix start the messages of the load errors that the Dart extractor writes
+// (unread set, with the directory of the package) for a package that `dart pub get` was not run in, or was run in before a
+// dependency was added: the imports of other packages do not resolve (extractor/dart/lib/extract.dart,
+// _missingPackageConfigs). A test holds the two to each other (cmd/rivus/dart_packageconfig_test.go).
+const (
+	PackageConfigMissingPrefix = "package_config.json is not there"
+	PackageConfigOldPrefix     = "package_config.json is old"
+)
+
 // LoadError records something that could not be read: it maps to the
 // missing_source terminal kind.
 type LoadError struct {
