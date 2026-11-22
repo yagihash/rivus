@@ -897,8 +897,6 @@ rust std::cmp::PartialOrd::gt | debt | the standard library: no cell of the zoo 
 rust std::cmp::PartialOrd::le | debt | the standard library: no cell of the zoo calls it yet
 rust std::cmp::PartialOrd::lt | debt | the standard library: no cell of the zoo calls it yet
 rust std::cmp::PartialOrd::partial_cmp | debt | the standard library: no cell of the zoo calls it yet
-rust std::cmp::max | debt | the standard library: no cell of the zoo calls it yet
-rust std::cmp::min | debt | the standard library: no cell of the zoo calls it yet
 rust std::collections::BTreeMap::get | debt | the standard library: no cell of the zoo calls it yet
 rust std::collections::BTreeMap::iter | debt | the standard library: no cell of the zoo calls it yet
 rust std::collections::BTreeMap::keys | debt | the standard library: no cell of the zoo calls it yet
@@ -1069,7 +1067,6 @@ rust std::slice::iter_mut | debt | the standard library: no cell of the zoo call
 rust std::slice::join | debt | the standard library: no cell of the zoo calls it yet
 rust std::slice::len | debt | the standard library: no cell of the zoo calls it yet
 rust std::slice::split | debt | the standard library: no cell of the zoo calls it yet
-rust std::slice::to_vec | debt | the standard library: no cell of the zoo calls it yet
 rust std::slice::windows | debt | the standard library: no cell of the zoo calls it yet
 rust std::str::FromStr::from_str | debt | the standard library: no cell of the zoo calls it yet
 rust std::str::bytes | debt | the standard library: no cell of the zoo calls it yet
@@ -1102,7 +1099,6 @@ rust std::string::String::from_utf8 | debt | the standard library: no cell of th
 rust std::string::String::insert | debt | the standard library: no cell of the zoo calls it yet
 rust std::string::String::insert_str | debt | the standard library: no cell of the zoo calls it yet
 rust std::string::String::into_boxed_str | debt | the standard library: no cell of the zoo calls it yet
-rust std::string::String::into_bytes | debt | the standard library: no cell of the zoo calls it yet
 rust std::string::String::push | debt | the standard library: no cell of the zoo calls it yet
 rust std::string::String::to_ascii_lowercase | debt | the standard library: no cell of the zoo calls it yet
 rust std::string::String::with_capacity | debt | the standard library: no cell of the zoo calls it yet
@@ -1124,7 +1120,6 @@ rust std::time::Instant::elapsed | debt | the standard library: no cell of the z
 rust std::time::Instant::now | debt | the standard library: no cell of the zoo calls it yet
 rust std::time::SystemTime::now | debt | the standard library: no cell of the zoo calls it yet
 rust std::vec::Vec::as_mut_slice | debt | the standard library: no cell of the zoo calls it yet
-rust std::vec::Vec::as_ptr | debt | the standard library: no cell of the zoo calls it yet
 rust std::vec::Vec::as_slice | debt | the standard library: no cell of the zoo calls it yet
 rust std::vec::Vec::capacity | debt | the standard library: no cell of the zoo calls it yet
 rust std::vec::Vec::clone | debt | the standard library: no cell of the zoo calls it yet
@@ -1137,7 +1132,6 @@ rust std::vec::Vec::get | debt | the standard library: no cell of the zoo calls 
 rust std::vec::Vec::insert | debt | the standard library: no cell of the zoo calls it yet
 rust std::vec::Vec::into_boxed_slice | debt | the standard library: no cell of the zoo calls it yet
 rust std::vec::Vec::is_empty | debt | the standard library: no cell of the zoo calls it yet
-rust std::vec::Vec::len | debt | the standard library: no cell of the zoo calls it yet
 rust std::vec::Vec::pop | debt | the standard library: no cell of the zoo calls it yet
 rust std::vec::Vec::remove | debt | the standard library: no cell of the zoo calls it yet
 rust std::vec::Vec::split_off | debt | the standard library: no cell of the zoo calls it yet

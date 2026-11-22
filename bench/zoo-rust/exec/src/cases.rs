@@ -21,6 +21,8 @@ pub fn register_all() {
     c::cont::slice::register();
     c::cont::struct_whole_to_sink::register();
     c::conv::buffer_writestring::register();
+    c::conv::builtin_minmax::register();
+    c::conv::unsafe_string::register();
     c::conv::exec_output_echo::register();
     c::conv::struct_field_boxed::register();
     c::conv::struct_field_deep::register();

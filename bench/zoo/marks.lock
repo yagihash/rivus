@@ -217,6 +217,8 @@ go	cont/struct_whole_to_sink/struct_whole_to_sink.go	sink-none	@sink(none)	func 
 go	cont/struct_whole_to_sink/struct_whole_to_sink.go	sink-none	@sink(none) @nosink(cont-struct-whole-to-sink-decoy)	func decoy() { @decoy
 go	conv/buffer_writestring/buffer_writestring.go	sink-none	@sink(none)	func fixed() { @fixed
 go	conv/buffer_writestring/buffer_writestring.go	sink-none	@sink(none) @nosink(conv-buffer-writestring-decoy)	func decoy() { @decoy
+go	conv/builtin_minmax/builtin_minmax.go	sink-none	@sink(none)	func fixed() { @fixed
+go	conv/builtin_minmax/builtin_minmax.go	sink-none	@sink(none) @nosink(conv-builtin-minmax-decoy)	func decoy() { @decoy
 go	conv/exec_output_echo/exec_output_echo.go	sink-none	@sink(none)	func fixed() { @fixed
 go	conv/exec_output_echo/exec_output_echo.go	sink-none	@sink(none) @nosink(conv-exec-output-echo-decoy)	func decoy() { @decoy
 go	conv/struct_field_boxed/struct_field_boxed.go	sink-none	@sink(none)	func fixed() { @fixed
@@ -228,6 +230,8 @@ go	conv/struct_field_opaque/struct_field_opaque.go	sink-none	@sink(none)	func fi
 go	conv/struct_field_opaque/struct_field_opaque.go	sink-none	@sink(none) @nosink(conv-struct-field-opaque-decoy)	func decoy() { @decoy
 go	conv/struct_field_shallow/struct_field_shallow.go	sink-none	@sink(none)	func fixed() { @fixed
 go	conv/struct_field_shallow/struct_field_shallow.go	sink-none	@sink(none) @nosink(conv-struct-field-shallow-decoy)	func decoy() { @decoy
+go	conv/unsafe_string/unsafe_string.go	sink-none	@sink(none)	func fixed() { @fixed
+go	conv/unsafe_string/unsafe_string.go	sink-none	@sink(none) @nosink(conv-unsafe-string-decoy)	func decoy() { @decoy
 go	dyn/fprint_writer_own/fprint_writer_own.go	fp	@sink(none) @fp @nosink(dyn-fprint-writer-own-decoy) @fp @ref(FIELD-SINK)	func decoy() { @decoy
 go	dyn/fprint_writer_own/fprint_writer_own.go	sink-none	@sink(none)	func fixed() { @fixed
 go	dyn/fprint_writer_own/fprint_writer_own.go	sink-none	@sink(none) @fp @nosink(dyn-fprint-writer-own-decoy) @fp @ref(FIELD-SINK)	func decoy() { @decoy
@@ -341,6 +345,8 @@ rust	conv/buffer_writestring.rs	miss	@source(conv-buffer-writestring-decoy) @mis
 rust	conv/buffer_writestring.rs	miss	@source(conv-buffer-writestring-vuln) @miss(unmodeled_library_call) @ref(CORE-K) @ref(PARITY)	fn vuln() { @vuln
 rust	conv/buffer_writestring.rs	sink-none	@sink(none)	fn fixed() { @fixed
 rust	conv/buffer_writestring.rs	sink-none	@sink(none) @nosink(conv-buffer-writestring-decoy)	fn decoy() { @decoy
+rust	conv/builtin_minmax.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	conv/builtin_minmax.rs	sink-none	@sink(none) @nosink(conv-builtin-minmax-decoy)	fn decoy() { @decoy
 rust	conv/exec_output_echo.rs	sink-none	@sink(none)	fn fixed() { @fixed
 rust	conv/exec_output_echo.rs	sink-none	@sink(none) @nosink(conv-exec-output-echo-decoy)	fn decoy() { @decoy
 rust	conv/struct_field_boxed.rs	fp	@sink(none) @fp @nosink(conv-struct-field-boxed-decoy) @fp @ref(FIELD-SINK,PARITY)	fn decoy() { @decoy
@@ -353,6 +359,8 @@ rust	conv/struct_field_opaque.rs	sink-none	@sink(none)	fn fixed() { @fixed
 rust	conv/struct_field_opaque.rs	sink-none	@sink(none) @nosink(conv-struct-field-opaque-decoy)	fn decoy() { @decoy
 rust	conv/struct_field_shallow.rs	sink-none	@sink(none)	fn fixed() { @fixed
 rust	conv/struct_field_shallow.rs	sink-none	@sink(none) @nosink(conv-struct-field-shallow-decoy)	fn decoy() { @decoy
+rust	conv/unsafe_string.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	conv/unsafe_string.rs	sink-none	@sink(none) @nosink(conv-unsafe-string-decoy)	fn decoy() { @decoy
 rust	dyns/fprint_writer_own.rs	sink-none	@sink(none)	fn fixed() { @fixed
 rust	dyns/fprint_writer_own.rs	sink-none	@sink(none) @nosink(dyn-fprint-writer-own-decoy)	fn decoy() { @decoy
 rust	dyns/func_field.rs	miss	@source(dyn-func-field-decoy) @miss(unmodeled_library_call) @ref(FUNC-VALUE-MEMORY,PARITY)	fn decoy() { @decoy

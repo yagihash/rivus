@@ -28,6 +28,12 @@ fails the day rivus agrees, and the mark is to be removed). **Never change an an
 2. Three cases, registered in `init` with `mark.Case("F/<family>/<shape>/vuln" | "fixed" | "decoy", fn)`; the function
    has no argument and no result, and the line of its `func` has `@vuln`, `@fixed` or `@decoy`. A cell with more than one
    vulnerable case (the chains of 3, 13 and 30 stages) names the others `vuln13` ...
+   **A Go cell has a counterpart in the other two zoos:** `TestZooRust` fails when a cell of the Go zoo has no Rust cell
+   of the same name, nor an `@na(F/<family>/<shape>: reason)` (the form does not exist in Rust) or `@todo(F/<family>/<shape>:
+   PARITY: reason)` in `bench/zoo-rust/cells/src/lib.rs` (the Dart zoo counts a Go cell with no mark as a `@todo`; it has
+   `@na` lines in `bench/zoo-dart/na.txt`). `@na` and `@todo` are marks that loosen the truth: they need the user's approval.
+   Run `.github/scripts/prepush.sh` before the push (it fails, and does not skip, when the Dart SDK or the Rust extractor is
+   not there, as CI does).
 3. Annotate (the same syntax as the curated projects, plus the ones below). Tags are `[a-z0-9-]+`, one source per tag,
    and the tag of the source is the tag given to `mark.Src` / `mark.NewIn`:
 

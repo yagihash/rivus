@@ -63,10 +63,12 @@ propagators:
     pure: true
   - symbol: std::cmp::Ord::cmp
     pure: true
+  # min and max give one of their arguments (an Ord: a String as well as a number): the result is made of the arguments (a
+  # number that comes out stops where a number does)
   - symbol: std::cmp::min
-    pure: true
+    flows: [{from: args, to: result}]
   - symbol: std::cmp::max
-    pure: true
+    flows: [{from: args, to: result}]
   - symbol: std::fmt::Arguments::new_const
     pure: true
   - symbol: std::io::_print

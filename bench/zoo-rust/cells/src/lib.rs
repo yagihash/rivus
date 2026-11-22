@@ -30,6 +30,8 @@ pub mod cont {
 }
 pub mod conv {
     pub mod buffer_writestring;
+    pub mod builtin_minmax;
+    pub mod unsafe_string;
     pub mod exec_output_echo;
     pub mod struct_field_boxed;
     pub mod struct_field_deep;
