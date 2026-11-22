@@ -1,4 +1,2 @@
-dart	dart/github_file_content.dart	miss	@source(dart-github-file-content-decoy) @miss(silent) @ref(model-github-field-source-in-dependency)	Future<void> decoy() async { @decoy
-dart	dart/github_file_content.dart	miss	@source(dart-github-file-content-vuln) @miss(silent) @ref(model-github-field-source-in-dependency) @sink(dart-github-file-content-vuln)	Future<void> vuln() async { @vuln
 dart	dart/github_file_content.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
 dart	dart/github_file_content.dart	sink-none	@sink(none) @nosink(dart-github-file-content-decoy)	Future<void> decoy() async { @decoy

@@ -1,5 +1,7 @@
 # github: GitHubFile.content と、Issue、IssueComment、PullRequest の body を source にできない
 
+解決: extractor の `--dep-dir`(zoo のテストが `packages` を渡す)で、骨組みを依存として読むようにした。`dart-github.yaml` に `kind: field` の行を足し、セル `dart/github-file-content` と `dart/github-issue-body` は検出になった(`@miss` を外した)。以下は、当時の記録。
+
 優先度: 高め(`Issue.body` などは、GitHub のクライアントでいちばん代表的な入力。サイレントな見逃しのまま長く置かない)。
 
 ## 何が見逃されるか(または、何が誤って報告されるか)
