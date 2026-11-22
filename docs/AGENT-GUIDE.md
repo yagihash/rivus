@@ -402,7 +402,7 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `summary.program.by_kind`、`by_attribution` | プログラム全体の不確実性の、kind ごと、原因ごとの数 |
 | `summary.on_findings` | kind ごとの、その不確実性を経路に持つ finding の数 |
 | `summary.top_symbols` | モデルのない関数と、実装の見つからないインターフェースのメソッドの上位 |
-| `summary.unread` | **読んだがビルドできなかったパッケージ**(`packages`、`functions`、`top[]` の `package` と `why`)。その中の関数からは、finding は出ません。Dart で `dart pub get` をしていないときも、ここに出ます |
+| `summary.unread` | **読んだがビルドできなかったパッケージ**(`packages`、`functions`、`top[]` の `package` と `why`)。その中の関数からは、finding は出ません。Dart で `dart pub get` をしていないときも、ここに出ます。Dart で、許可の外の依存(`-allow-deps-under` で許していない `path:` の依存など)を読まなかったときは `why` が `dependency_not_allowed` で始まり、同じ依存の別バージョンを 2 つのパッケージが使うときは `dependency_not_linked` で始まります(標準エラーにも 1 行出ます) |
 | `summary.unread.skipped_languages` | ディレクトリにあるのに読まなかった言語と理由: `declined`、`no-terminal`、`not-installed`、`no-sandbox` |
 | `summary.skipped_dirs`、`outside_configuration` | 読まなかったディレクトリ、ビルドの条件で外れたファイル |
 | `summary.load_dependent` | `true` なら、時計の上限(`-timeout`、`-func-timeout`)で止めた所があり、結果がマシンの負荷で変わる |
@@ -522,6 +522,8 @@ rivus analyze -C <dir> -rules app.yaml -timeout 10m ./... > out.json
   ```sh
   rivus analyze -C apps/mobile -allow-deps-under "$PWD" -lang dart -timeout 10m > out.json
   ```
+
+  許していない依存は読まれず、`summary.unread`(`dependency_not_allowed`)と標準エラーに出ます。複数のパッケージの親を `-C` に指しても読めます(同じ依存の別バージョンは、1 つだけ読まれ、もう 1 つは `dependency_not_linked` で出ます)。
 
 - **Go**: `-C` で、`go.mod`(または `go.work`)のあるディレクトリを指します。パッケージの指定(`./services/api/...`)で、読む範囲を絞れます。
 - 複数の言語があるディレクトリは、`-lang auto` で全部読みます(Rust は 8 章の条件つき)。読まなかった言語は `summary.unread.skipped_languages` に出ます。
