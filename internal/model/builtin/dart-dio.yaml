@@ -1,0 +1,210 @@
+# package:dio: the HTTP client (`Dio`, the methods that take the URL of a request first).
+#
+# Checked against dio 5.11.1 (range >=5.11.0 <6.0.0), 2026-11-23, by reading the published source. Hand written rows
+# (origin: human); the generator and the differential test for a Dart package with generic methods do not cover it (the
+# methods are generic, `get<T>`: unverified in the sense of docs/MODEL-RUNBOOK.md, section 8).
+#
+# The path or the URL of a request is an SSRF sink: `Dio.get('...')` takes a path that dio puts after `baseUrl`, and an
+# absolute URL replaces `baseUrl`, so the whole argument decides where the request goes. `Dio.download` writes the response
+# to `savePath` (a path, or a function that returns it), a path traversal sink. `data` and `queryParameters` are the body and
+# the query of a request, not the target, and are not sinks (as the body of `package:http`).
+#
+# The response is not a source, as in dart-http.yaml: `Response.data` is what the server sent, and the server is not an
+# attacker of the program (`net/http` and `dart:io` `HttpClient` are modelled so). The flow from the arguments to the response
+# is what a call that has no model does (the receiver and the arguments flow to the result), and it is left so: the methods
+# have sinks and no `flows` row on purpose, as the convenience methods of `Client` in dart-http.yaml (ADR-092). `Dio` is an
+# abstract class and `DioMixin` is its implementation (`DioForNative` is `Dio` made with it); a call on a variable of either
+# type has a sink, so that a call through `Dio` is found when the package is not read (`-no-deps`) or the class is the project's own.
+#
+# Not modelled: the callbacks that dio calls (`Interceptor.onRequest` and the like, the `InterceptorsWrapper` constructor,
+# `validateStatus`, `onReceiveProgress`). A `calls:` row is held to the run of a harness (`TestZooCallbacksDart`), which
+# calls the core library only, so a row for a package would fail it; and `Interceptor.onRequest` is a method that the
+# project overrides, which `calls:` (`fn: argN`) cannot name. Whether the value that dio hands to an interceptor of the
+# project is followed by reading the body of dio was not checked (no cell: the zoo has only a skeleton of Dio).
+# `BaseOptions(baseUrl: ...)` is not a sink: the base of a client is a configuration, rarely user input.
+ruleset: rivus/dart/dio@1
+verified_versions:
+  - package: dio
+    versions: ">=5.11.0 <6.0.0"
+    checked_with: 5.11.1
+    checked: 2026-11-23
+
+sinks:
+  # Dio
+  - symbol: package:dio/src/dio.dart#Dio.head
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio.dart#Dio.headUri
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio.dart#Dio.get
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio.dart#Dio.getUri
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio.dart#Dio.post
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio.dart#Dio.postUri
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio.dart#Dio.put
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio.dart#Dio.putUri
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio.dart#Dio.patch
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio.dart#Dio.patchUri
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio.dart#Dio.delete
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio.dart#Dio.deleteUri
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio.dart#Dio.query
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio.dart#Dio.queryUri
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio.dart#Dio.request
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio.dart#Dio.requestUri
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio.dart#Dio.download
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio.dart#Dio.downloadUri
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio.dart#Dio.fetch
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio.dart#Dio.download
+    args: [1]
+    category: path_traversal
+    accepts: [user_input]
+  - symbol: package:dio/src/dio.dart#Dio.downloadUri
+    args: [1]
+    category: path_traversal
+    accepts: [user_input]
+  # DioMixin
+  - symbol: package:dio/src/dio_mixin.dart#DioMixin.head
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio_mixin.dart#DioMixin.headUri
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio_mixin.dart#DioMixin.get
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio_mixin.dart#DioMixin.getUri
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio_mixin.dart#DioMixin.post
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio_mixin.dart#DioMixin.postUri
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio_mixin.dart#DioMixin.put
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio_mixin.dart#DioMixin.putUri
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio_mixin.dart#DioMixin.patch
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio_mixin.dart#DioMixin.patchUri
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio_mixin.dart#DioMixin.delete
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio_mixin.dart#DioMixin.deleteUri
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio_mixin.dart#DioMixin.query
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio_mixin.dart#DioMixin.queryUri
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio_mixin.dart#DioMixin.request
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio_mixin.dart#DioMixin.requestUri
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio_mixin.dart#DioMixin.download
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio_mixin.dart#DioMixin.downloadUri
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio_mixin.dart#DioMixin.fetch
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio_mixin.dart#DioMixin.download
+    args: [1]
+    category: path_traversal
+    accepts: [user_input]
+  - symbol: package:dio/src/dio_mixin.dart#DioMixin.downloadUri
+    args: [1]
+    category: path_traversal
+    accepts: [user_input]
+  - symbol: package:dio/src/dio/dio_for_native.dart#DioForNative.download
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:dio/src/dio/dio_for_native.dart#DioForNative.download
+    args: [1]
+    category: path_traversal
+    accepts: [user_input]
