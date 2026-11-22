@@ -299,7 +299,11 @@ func TestZooLoosenedCheck(t *testing.T) {
 	// both branches edited the end of the file: the merge stops, and the rows of the two are put together by hand
 	merge := exec.Command("git", "merge", "-q", "--no-ff", "--no-commit", "main")
 	merge.Dir = repo
+	merge.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@e", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@e")
 	_, _ = merge.CombinedOutput()
+	if _, err := os.Stat(filepath.Join(repo, ".git", "MERGE_HEAD")); err != nil {
+		t.Fatalf("the merge of main did not start (the commit would not be a merge): %v", err)
+	}
 	write("go\ta.go\tmiss\t@miss @ref(#1)\ngo\tb.go\tsink-none\t@sink(none)\ngo\tc.go\tnoisy\t@noisy\n")
 	run("add", ".")
 	run("commit", "-qm", "merge main")
