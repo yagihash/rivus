@@ -1,0 +1,5 @@
+name: shelf
+description: "The skeleton of package:shelf that the cells of the Dart zoo need (the real package is not read by rivus here; the harness runs the cells against the real one, see exec/pubspec.yaml): the shape of Request, Response and Handler, so that the built-in rows of package:shelf are the ones the cells hit."
+publish_to: none
+environment:
+  sdk: ^3.10.0

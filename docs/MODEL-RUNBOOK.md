@@ -57,6 +57,8 @@
 4. **追加**: `<lang>-<package>.yaml`(手の部分)に、sink、source、sanitizer、`calls:`(利用者のコードを呼び返す API: コールバック、利用者が実装するインターフェース)を足す。`origin: human` か `llm`。zoo に、肯定と否定のセルを足す。`rivus models coverage` で、未モデルの呼び出しを確認する。
 5. **宣言(未実装)**: [DESIGN-package-models.md](DESIGN-package-models.md) 2 節 5 の条件(差分テストで照合済み、`calls:` が書いてある、ほかのパッケージから呼ばれる扱いが決まっている)を満たしたときだけ。満たさなければ、宣言なしで PR を出す。
 
+**開発用の依存とぶつかるパッケージの骨組み(Dart)**: `bench/zoo-dart/exec` の `test` が持ってくる本物のパッケージ(`shelf`、`shelf_static`、`shelf_web_socket`、`web_socket_channel`、`async`、`collection`、`http_parser`、`stream_channel`、`path` など)と同じ名前の骨組みは、`bench/zoo-dart/cells/packages/<名前>`(path の依存。本物の依存は書かない)に置き、`exec/pubspec.yaml` の `dependency_overrides` に `<名前>: <本物の範囲>`(hosted)を 1 行足す。解析(cells)は骨組みを読み、実行(exec)は、`test` がすでに動かしている本物で動く。cells の `pubspec.yaml` の依存に本物の名前を hosted で書かない(zoo のプログラムに本物の依存が入り、依存の関数を検査するテストが失敗する)。骨組みは、本物の公開のシグネチャに合わせる(セルのコードが、両方で型が合うこと)。
+
 テスト: `go test ./internal/model/... ./cmd/rivus/ -run 'Builtin|Zoo'`、`regomark check --no-judge`(0)。Dart のセルは、Dart のテスト(`dart analyze` を含む)も通す。
 
 ## 3. 既知の見逃しと誤検出は、セルと課題のファイルで残す

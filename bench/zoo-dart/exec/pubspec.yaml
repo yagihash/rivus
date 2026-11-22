@@ -14,3 +14,5 @@ dev_dependencies:
 dependency_overrides:
   zoo_mark:
     path: zoo_mark
+  # `test` depends on the real shelf, which has the name of the skeleton in cells/packages; the cells run against the real one
+  shelf: ^1.4.0

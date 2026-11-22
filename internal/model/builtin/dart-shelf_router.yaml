@@ -1,0 +1,19 @@
+# package:shelf_router: the router of package:shelf (a `Router` is a `Handler`; the routes are registered with `get`, `post`, ...).
+#
+# Checked against shelf_router 1.1.5 (range >=1.1.0 <2.0.0), 2026-11-22, by reading the published source. `verified_versions`
+# (docs/DESIGN-package-models.md, 6.7) is not a field of the loader yet, so the record is kept here, in a comment.
+# Hand written rows (origin: human); the generator and the differential test do not exist yet.
+#
+# The source is the `Request` that the handler takes: `package:shelf/src/request.dart#Request` is a `param_type` source in
+# dart-packages.yaml, so a handler registered with `Router.get` already has it. What this file adds is how the value
+# gets out of the request (`Request.params`, an extension getter that reads `context['shelf_router/params']`: the segments
+# that the route `/item/<id>` captured) and that the router calls the handler it was given.
+#
+# The extra arguments of a handler (`router.get('/item/<id>', (Request r, String id) => ...)`: the captured segments come as
+# `String` parameters after the request) are user input too. A `calls:` row cannot make a parameter a source, and there is
+# no `param_type` for a bare `String`; that case is not modelled (docs/issues/model-shelf_router-extra-path-params.md).
+ruleset: rivus/dart/shelf_router@1
+
+propagators:
+  - symbol: package:shelf_router/src/router.dart#RouterParams.params
+    flows: [{from: recv, to: result}]
