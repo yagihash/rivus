@@ -5,7 +5,7 @@
 | 形 | ファイル名 | 誰が付けるか | 一覧(`ISSUES.md`)への反映 |
 | --- | --- | --- | --- |
 | 番号 | `<番号>-<短い名前>.md`(例 `77-many-closures-to-helper.md`) | 相談役 | 表に載せる |
-| 名前 | `model-<パッケージ>-<名前>.md`(例 `model-dart-gcloud-pubsub-lookup.md`。英小文字・数字・`-`・`.`・`_`) | モデルを作った PR(番号を取らない) | **要らない**。zoo の `@ref(model-...)` から辿れる。あとでまとめて番号にしてよい |
+| 名前 | `model-<パッケージ>-<名前>.md`(例 `model-dart-gcloud-pubsub-lookup.md`。英小文字・数字・`-`・`.`・`_`) | モデルを作った PR(番号を取らない) | **要らない**。zoo の `@ref(model-...)` からたどれる。あとでまとめて番号にしてよい |
 
 zoo の `@miss` と `@fp` の行(新しいセルの行)の `@ref` は、この 2 つの形で、**ファイルが実際にある**ものを指す(`scripts/zoo-loosened-check.sh` が確かめる)。`@ref(#N)` は `docs/issues/N-*.md`、`@ref(model-...)` は `docs/issues/model-....md`。
 
