@@ -168,6 +168,11 @@ Not yet: a projection (`recv.elem`, `result0.err`: whole values only), a result 
 that is a field of an argument, `feed` (the accumulator of `fold`), and the libraries that are not the standard one (a row for
 `dio` or `tokio` is the next step; the harness takes them from a lockfile of their own).
 
+A sink is found where the **project's own code** calls it: rivus lists sources and sinks in the functions of the project, not inside the
+bodies of dependencies (ADR-099; the bodies are read to follow flows). A flow from the user's input to a dangerous call inside a
+library is found only when a sink row stands at the library's API that the project calls. So a sink model is needed for detection, not
+only to cut the cost of the analysis.
+
 ## 4. A sink that is one field of an argument: `parts`
 
 A sink says which **position** is dangerous (`args`, `recv`). A request of a generated API is one value with a dangerous field and

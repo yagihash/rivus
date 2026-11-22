@@ -49,15 +49,15 @@
 | 032 | 不確実性の記録範囲と集計 | 有効 | 訂正あり; 訂正・追記あり(書き方を保つ) | ARCHITECTURE 4.4 | 全体一覧と経路区間に分ける。x/tools の件数を訂正 |
 | 033 | `rivus resolve` の実装 | 有効 |  | ARCHITECTURE 4.7 | - |
 | 034 | モデルの運用機能 | 有効 |  | MODELING, README | `models coverage`、`pure`、`origin`、`--deterministic-only`。複数経路は見送り |
-| 035 | 値依存サニタイズと由来追跡 | 有効 | 訂正 078、`when_arg_type` 追記; 訂正・追記あり(書き方を保つ)。追記あり | ARCHITECTURE 5.6 | 由来追跡、定数/設定読みで打ち切り |
+| 035 | 値依存サニタイズと由来追跡 | 有効 | 訂正 078、`when_arg_type` 追記; 訂正・追記あり(書き方を保つ)。追記あり | ARCHITECTURE 5.6 | 由来追跡、定数と設定の読み出しで打ち切り |
 | 036 | 自作 SSA 化と differential test | 有効 |  | ARCHITECTURE 2.7 | - |
 | 037 | Dart スパイクの結果とドッグフーディング | 有効 |  | ARCHITECTURE 10 | 実現可能。例外エッジとブロック切り、`finally` は複製 |
 | 038 | 出力にリビジョン(`target`) | 一部覆った | `dirty` を廃止、git を実行しない; 訂正・追記あり(書き方を保つ)。追記あり。覆した先・注意: 冒頭に「`dirty` は廃止」 | ARCHITECTURE 4.5 | `target: {revision}`。追記で `.git/config` の実行を避ける |
 | 039 | Phase 2 の IR(案) | 一部覆った | 「コアがテキストを切る」を 040 が修正; 覆した先・注意: 040(状態が「案」のまま) | ARCHITECTURE 2.7 | 命令数 26 のまま、型は TypeClass のみ |
 | 040 | Phase 2 の結果: 中立 IR の上に移した | 有効 |  | ARCHITECTURE 2.7 | 旧経路を除く。コアは go/ssa を知らない |
 | 041 | Dart extractor の最初のバージョン | 有効 | 追記多数: gRPC、型階層、ベンチ; 訂正・追記あり(書き方を保つ)。追記あり | extractor/dart | `package:analyzer` から IR |
-| 042 | Rust extractor の最初のバージョン | 一部覆った | ホスト実行は 064 で既定が隔離に、テスト読みは 062; 訂正・追記あり(書き方を保つ)。追記あり。覆した先・注意: 064/062 | extractor/rust, rust-isolation | `rustc_public` で MIR、固定 nightly、`cargo check` |
-| 043 | 精度のベンチマーク(go-test-bench) | 一部覆った | 追記「組み込みは標準まで」→ 044 → 063; 訂正・追記あり(書き方を保つ)。追記の運用。覆した先・注意: 044/063 | bench/README | 正解付きベンチ。追記が長大(依存読み、決定性、並列化、性能) |
+| 042 | Rust extractor の最初のバージョン | 一部覆った | ホスト実行は 064 で既定が隔離に、テストを読むことは 062; 訂正・追記あり(書き方を保つ)。追記あり。覆した先・注意: 064/062 | extractor/rust, rust-isolation | `rustc_public` で MIR、固定 nightly、`cargo check` |
+| 043 | 精度のベンチマーク(go-test-bench) | 一部覆った | 追記「組み込みは標準まで」→ 044 → 063; 訂正・追記あり(書き方を保つ)。追記の運用。覆した先・注意: 044/063 | bench/README | 正解付きベンチ。追記が長大(依存を読むこと、決定性、並列化、性能) |
 | 044 | 組み込みの範囲(有名サードパーティ) | 一部覆った | 063。追記で gin を外した; 覆した先・注意: 063。本文内矛盾あり | README, GCP-MODELS | 有名サードパーティも組み込みに |
 | 045 | 関数値の呼び出しに sink/source/モデルを適用する | 有効 | 拡張: 050/068/070 | DESIGN-callouts | 候補は IR 上で一元決定(`valuecalls`) |
 | 046 | 独自ベンチ(go-curated、go-synth) | 有効 |  | bench/README | 精度回帰と性能スケールを分ける |
@@ -109,6 +109,7 @@
 | 092 | 依存のパッケージを、流れのモデルで切る(本体を読まない)のは、コストが著しく大きいときも。ただし条件つき | 有効 |  | PRINCIPLES 3 節、GCP-MODELS P12、MODELING | コストの測定の記録、照合の検査、`calls:`、保守的な不確実性の注記、切ったことの表示。実装は未(ROADMAP) |
 | 093 | Rust の extractor の隔離を、Docker から macOS のサンドボックス(Seatbelt)に替える | 有効 | ユーザーの決定(2026-11-22)。ADR-064 を一部覆す。Linux では止まる(`-unsafe-host-exec`) | rust-isolation、PRINCIPLES 8 節 | 承知している弱さと、後回しのハードニングを載せた |
 | 095 | `index -taint` の JSON の index の既定の書き先を、対象のディレクトリから利用者のキャッシュに移す(互換性を壊す) | 有効 | 相談役の決定(2026-11-22)。課題 #135 | README、GRAPH、AGENT-GUIDE | 古い既定の場所のファイルは読まない |
+| 099 | source と sink は、プロジェクトの関数の中だけで探す。依存を読んだ実行では `summary.dependency_sites` が毎回言う | 有効 | 相談役の決定(2026-11-23)。ADR-096、097 の根拠の 1 つ。課題 #144 | README、AGENT-GUIDE、ARCHITECTURE 5.5、MODELING | sink のモデルは、検出のためにも必要 |
 
 ## 訂正・追記の書き方を保つ ADR
 
