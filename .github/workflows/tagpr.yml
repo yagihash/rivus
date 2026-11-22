@@ -41,11 +41,9 @@ jobs:
   # タグが打たれたときだけ、tap の formula の url と sha256 を書き換える。
   # トークンは homebrew-tap だけに書けるもの（ghmint の homebrew-tap/.github/ghmint/bump-from-rivus.rego）。
   # Contents API で書くので、コミットは Verified になる。
-  #
-  # いまは常に skip する（if: false）。tap に最初の formula を置いたら、false && を外す。
   bump-tap:
     needs: tagpr
-    if: false && needs.tagpr.outputs.tag != ''
+    if: needs.tagpr.outputs.tag != ''
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment:
