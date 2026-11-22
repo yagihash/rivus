@@ -191,8 +191,11 @@ type Finding struct {
 	Source      SiteRef           `json:"source"`
 	Sink        SiteRef           `json:"sink"`
 	Category    string            `json:"category,omitempty"`
-	Labels      []string          `json:"labels"`
-	Paths       []Path            `json:"paths"`
+	// Categories are all the categories of the rows that name the sink with the same positions (Category is the first);
+	// only when there are two or more.
+	Categories []string `json:"categories,omitempty"`
+	Labels     []string `json:"labels"`
+	Paths      []Path   `json:"paths"`
 	// OtherSources are more sources of the same kind (a parameter of the same
 	// type, in other functions) that reach this sink with the same labels. The
 	// finding shows the shortest path; the rest are not repeated as findings,

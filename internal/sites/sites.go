@@ -24,12 +24,15 @@ var Roles = []string{RoleSource, RoleSink}
 
 // Site is one place where a rule matches.
 type Site struct {
-	ID          string            `json:"id"`
-	Role        string            `json:"role"`
-	Kind        string            `json:"kind"` // call_result, param_type, field, call
-	Func        string            `json:"func"`
-	Symbol      string            `json:"symbol"`
-	Category    string            `json:"category,omitempty"`
+	ID       string `json:"id"`
+	Role     string `json:"role"`
+	Kind     string `json:"kind"` // call_result, param_type, field, call
+	Func     string `json:"func"`
+	Symbol   string `json:"symbol"`
+	Category string `json:"category,omitempty"`
+	// Categories are all the categories of the sink rows that read the same positions (a built-in row and a project
+	// row of another category for the symbol), the first being Category. Only when there are two or more.
+	Categories  []string          `json:"categories,omitempty"`
 	Labels      []string          `json:"labels,omitempty"` // source labels, or the labels a sink accepts
 	Position    ir.Position       `json:"position"`
 	Snippet     string            `json:"snippet"`
@@ -101,6 +104,24 @@ func SinkPartsAt(sinks []model.Sink, nargs int) []model.SinkPart {
 			}
 			out = append(out, p)
 		}
+	}
+	return out
+}
+
+// categoriesOf are the distinct categories of the sinks in order, or nil when there is one.
+func categoriesOf(sinks []model.Sink) []string {
+	var out []string
+next:
+	for _, s := range sinks {
+		for _, c := range out {
+			if c == s.Category {
+				continue next
+			}
+		}
+		out = append(out, s.Category)
+	}
+	if len(out) < 2 {
+		return nil
 	}
 	return out
 }
