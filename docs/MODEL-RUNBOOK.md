@@ -54,8 +54,10 @@
 1. **生成(未実装)**: 型から粗いモデルを作る。`internal/model/builtin/<lang>-<package>.gen.yaml`(コミットする。先頭に生成器のバージョンと入力のパッケージとバージョン)。書き込み先の引数は、`results` とレシーバへの流れの読み取り元にも含める。
 2. **照合(未実装)**: 差分テストで本体と比べる。MISS は 0。EXTRA は、意図した差だけ、手の部分のファイルの冒頭のコメントに、理由つきで書く。
 3. **確認したバージョンを書く**: モデルのファイルの冒頭に `verified_versions`(形式と検証: [DESIGN-package-models.md](DESIGN-package-models.md) 6.7)。パッケージ(Go: モジュールのパス、Dart: パッケージ名、Rust: クレート名)、確認したバージョンの範囲、実際に確認したバージョン(`checked_with`)、日付(`checked`)。手で書いた行だけのファイルにも書く。生成物があれば、先頭の入力のバージョンと同じにする。検証が入る前も、書く。
-4. **追加**: `<lang>-<package>.yaml`(手の部分)に、sink、source、sanitizer、`calls:`(利用者のコードを呼び返す API: コールバック、利用者が実装するインターフェース)を足す。`origin: human` か `llm`。zoo に、肯定と否定のセルを足す。`rivus models coverage` で、未モデルの呼び出しを確認する。
+4. **追加**: `<lang>-<package>.yaml`(手の部分)に、sink、source、sanitizer、`calls:`(利用者のコードを呼び返す API: コールバック、利用者が実装するインターフェース)を足す。`origin: human` か `llm`。zoo に、肯定と否定のセルを足す。`rivus models coverage` で、未モデルの呼び出しを確認する。**`calls:` の行は、実行の確認の道具が、パッケージの行に未対応。入れられないときは、PR の本文に書いて、次に進む。**
 5. **宣言(未実装)**: [DESIGN-package-models.md](DESIGN-package-models.md) 2 節 5 の条件(差分テストで照合済み、`calls:` が書いてある、ほかのパッケージから呼ばれる扱いが決まっている)を満たしたときだけ。満たさなければ、宣言なしで PR を出す。
+
+**骨組みは、公開のシグネチャと、記録するだけの本体にする**: rivus は、骨組みの本体も読む(依存として)。interceptor を呼ぶ、検査をするなど、凝った本体にすると、本物と違う流れになり、モデルの確認が、骨組みの形に引きずられる(実例: Dart の `dio` の最初の骨組み)。本体は、引数を記録する(`zoo_mark` の `recordAny` など)か、空にする。
 
 **開発用の依存とぶつかるパッケージの骨組み(Dart)**: `bench/zoo-dart/exec` の `test` が持ってくる本物のパッケージ(`shelf`、`shelf_static`、`shelf_web_socket`、`web_socket_channel`、`async`、`collection`、`http_parser`、`stream_channel`、`path` など)と同じ名前の骨組みは、`bench/zoo-dart/cells/packages/<名前>`(path の依存。本物の依存は書かない)に置き、`exec/pubspec.yaml` の `dependency_overrides` に `<名前>: <本物の範囲>`(hosted)を 1 行足す。解析(cells)は骨組みを読み、実行(exec)は、`test` がすでに動かしている本物で動く。cells の `pubspec.yaml` の依存に本物の名前を hosted で書かない(zoo のプログラムに本物の依存が入り、依存の関数を検査するテストが失敗する)。骨組みは、本物の公開のシグネチャに合わせる(セルのコードが、両方で型が合うこと)。
 
@@ -78,7 +80,7 @@ zoo のゲート(`scripts/zoo-loosened-check.sh`、#167): 新しいセル(`bench
 ## 4. conflict を避ける置き方
 
 1 パッケージ = 1 つのモデルのファイル + 専用の zoo のセルのディレクトリ + 専用のマークのファイル(`bench/zoo/marks.d/`)。`cases.dart` は生成、zoo-dart の `pubspec.lock` はコミットしない。共有のファイルをさわらない。**さわってよいファイルは、次のものだけ**:
-- `internal/model/builtin/<lang>-<package>*.yaml`(`verified_versions` も、このファイルに書く)と、そのモデルの `.dead-allow`(`internal/model/builtin/<lang>-<package>*.dead-allow`。**さわるのは、「新しい行がどこにも一致しない」という失敗が出たとき(その行を、理由つきで足す)だけ。「zoo から一致するようになったので外せ」の指摘は、無視する**(#187 のあと、通常は記録だけになる。掃除は定期の別の作業で、モデルの PR は、ほかのモデルの `.dead-allow` をさわらない))。
+- `internal/model/builtin/<lang>-<package>*.yaml`(`verified_versions` も、このファイルに書く)と、そのモデルの `.dead-allow`(`internal/model/builtin/<lang>-<package>*.dead-allow`。**さわるのは、「新しい行がどこにも一致しない」という失敗が出たとき(その行を、理由つきで足す)だけ。「zoo から一致するようになったので外せ」の指摘は、無視する**(#187 のあと、通常は記録だけになる。掃除は定期の別の作業で、モデルの PR は、ほかのモデルの `.dead-allow` をさわらない))。**`.dead-allow` の書式は、1 行 1 シンボルの `symbol | 理由`(同じシンボルを 2 回は書けない。ワイルドカードや、まとめの行はない)。zoo のセルが当たらないメソッドで、同じクラスの同じ形のもの(例: 同じ形のオーバーロード、`get`、`post`、`put` のような同じ形の HTTP のメソッド)は、1 行ずつ、同じ理由の文(例: `debt | no cell of the zoo calls it yet`、または `not called: same shape as <当たっているメソッド>`)で書いてよい(書式の拡張は要らない)。1 行のグループにまとめる書式は、いまはない。**
 - `bench/zoo-<lang>/` の自分のディレクトリ(セル、骨組み)、`bench/zoo/marks.d/<lang>/` の自分のファイル、`docs/issues/model-<パッケージ>-*.md`。
 - **広げる PR**(1 節): もともと main にある、そのパッケージのモデルのファイル(と、その `.dead-allow`)。
 - **例からの昇格の PR**(1 節): 昇格する `examples/rules/<その 1 つ>`(消す)と、`examples/rules/README.md` のその行(「組み込みになった」の 1 行に)、`bench/*/rules.yaml` の例(あれば)。
@@ -96,7 +98,7 @@ zoo のゲート(`scripts/zoo-loosened-check.sh`、#167): 新しいセル(`bench
   4. **既知の見逃しと課題**: `@miss` / `@fp` のセルと、`docs/issues/model-<パッケージ>-<名前>.md` の一覧(なければ「なし」)。
   5. **公開のベンチでの前後の数字**: finding(件数と ID の集合が同じか)、`dynamic_dispatch` の注記の数、`summary_elems`、時間(`-pass-stats`)。中を読んだ場合(モデルなし)との照合と、違いの理由。公開のベンチに、そのパッケージを使うものがなければ、「該当するベンチなし」と書く。
   6. **確認したバージョン**: `verified_versions` に書いた、パッケージ、範囲、確認したバージョン。
-  7. **手順のとおりにできなかった所**: 手順書が曖昧だった所、道具がなかった所、自分で判断した所。なければ「なし」。手順書の改善の入力になる。
+  7. **手順のとおりにできなかった所**: 手順書が曖昧だった所、道具がなかった所、自分で判断した所。なければ「なし」。手順書の改善の入力になる。**`docs/MODEL-QUEUE.md` の案(境界の案)と違う判断をしたとき(source にしない、sink を足す・外すなど)は、ここに、理由を書く。**
 - **最初の 3 本(言語ごとに 1 本)は、相談役が、中身を確認する。** そのために、上の 7 に加えて、**手順の改善案**(次のセッションの手順書に足したいこと)を、本文の最後に書く。
 - 触るファイルは 4 節のとおり(広げる PR と、例からの昇格の PR の分も、4 節に書いてある)。それ以外(コード、ゲート、ワークフロー、共有の文書)は触らない。触る必要が出たら、完成にせず、ドラフトのまま、理由を本文に書いて終わる。
 - push のあと、コミットの署名(0 節)と、CI の結果を確認する。CI が失敗したら、直して push し直す(自分で `gh pr merge` はしない)。
