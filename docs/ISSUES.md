@@ -66,3 +66,4 @@
 | [#105](issues/105-rust-cmp-min-max-pure.md) | Rust: std::cmp::min / max の pure | 誤ったモデル(直した) | Rust | 5 | closed | 動物園 `F/conv/builtin-minmax`(Rust) |
 | [#106](issues/106-path-exhaustive-honesty.md) | graph: path の exhaustive | 誤った答え(直した) | 全(graph) | 1 | closed | `internal/graphq/exhaustive_test.go` |
 | [#107](issues/107-zoo-recursion-approximation-verdict.md) | 動物園: recursion_approximation の判定 | 道具・ベンチ(直した) | 全 | 1 | closed | 動物園のテスト(`cmd/rivus/zoo_*_test.go`) |
+| [#123](issues/123-graph-callers-skipped-languages.md) | graph callers / callees / dispatchers の答えが、読まなかった言語を言わない | 黙った見逃し | 全(graph) | 0 | open | - |

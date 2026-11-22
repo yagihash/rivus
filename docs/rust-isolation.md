@@ -4,6 +4,24 @@
 
 どちらで読んだかは、出力の `summary.isolation`(`mode`: `sandbox` / `host`)に出ます(Rust の抽出をしたときだけ)。
 
+## `-lang` なし(auto)の動き
+
+`Cargo.toml` のある対象を `-lang` なしで読むと、次のとおりになります(ADR-093 の追記)。`-lang rust` と書いたときは、聞かずに読みます。
+
+| 状況 | 動き |
+|---|---|
+| macOS、サンドボックスが使える、extractor とツールチェインがある、標準入力が端末 | 標準エラーに警告を出して `[Y/n]`(Enter は Yes) |
+| 同じで `-yes` あり | 聞かずに読む |
+| 標準入力が端末でない(`claude -p`、CI、パイプ)、`-yes` なし | 聞けない。黙って Yes にしない。混在なら Rust を読まずに注記し、Rust だけの対象はエラー(`-lang rust か -yes を`。終了コード 1) |
+| extractor かツールチェインがない | 聞かずに、Rust は読まなかったと言う(`rivus setup rust` か Homebrew で入る)。Rust だけの対象はエラー |
+| サンドボックスがない(Linux など) | 聞かない、読まない。`-unsafe-host-exec` があっても auto では Yes にしない(隔離なしは、`-lang rust` と `-unsafe-host-exec` の両方を書いたときだけ) |
+
+聞く文は、読むにはビルドが要り、対象の build script と proc macro が動くこと、macOS のサンドボックスの下で動くこと(ビルドの間はネットワークなし、対象・依存・作業ディレクトリの外は書けない)、依存を crates.io から取得すること、聞かれたくなければ `-lang rust`(か `-yes`)、読みたくなければ `-lang go,dart` のように名指しすること、答えによって別の index になること、を言います。端末かどうかは、`unix.IoctlGetTermios`(`/dev/null` を端末と誤らない)で見ます。答えは 1 回の実行で 1 度だけ聞きます。index に載った言語は、あとの `graph -C` が引き継ぎます(また聞かない)。
+
+読まなかった Rust は、`summary.unread.skipped_languages` と index の `meta.unread.skipped_languages` に、`{"lang":"rust","why":...}` で残ります。`why`: `declined`(聞いて No)、`no-terminal`(聞けず、`-yes` もない)、`not-installed`(extractor かツールチェインがない)、`no-sandbox`。失敗したパッケージ(`failed_packages`、`load_errors`)には数えません。この index では、`graph path` の「経路なし」は `exhaustive: false` で、`not_exhaustive_because.skipped_languages` が理由を言います。
+
+終了コード: 0 = 成功、1 = エラー、2 = 使い方の誤り、3 = Rust だけの対象で断った(何も読まなかった)、130 = 中断。
+
 ## 要件(macOS)
 
 - `sandbox-exec`(macOS に入っています)。使えないとき(プロファイルが受け入れられないとき)は、**対象を動かす前に、rivus が確かめ**、何も実行せずに止まります。
