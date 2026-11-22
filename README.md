@@ -142,7 +142,7 @@ rivus query -site <ID> ./...           # sites の 1 件から始める
 ```sh
 rivus analyze -pass-stats -pass-stats-top 0 -pass-stats-sort time -timeout 600s -detail summary > out.json
 jq -r '["package","dep","functions","reanalyses","spent_ms","summary_elems"], (.stats.packages_top[] | [.package, (.dep // false), .functions, .reanalyses, .spent_ms, .summary_elems]) | @tsv' out.json > table.tsv
-jq '.stats | {timed_out, converged, largest_scc, largest_scc_packages}' out.json
+jq '.stats | {timed_out, converged, largest_scc, largest_scc_packages, summary_elems, functions, summary_sizes}' out.json
 ```
 
 - `-pass-stats-top 0` は全パッケージ、`-pass-stats-sort time` は、かかった時間の順です(`time` は時計なので、実行ごとに少し違います。時計に依らない並びは `reanalyses`(既定)、`functions`、`elems`)。
@@ -150,6 +150,7 @@ jq '.stats | {timed_out, converged, largest_scc, largest_scc_packages}' out.json
 - `summary_sizes` は、関数の要約の要素(解析が関数ごとに持ち運ぶ、taint の単位)が、関数にどう散らばっているか、何でできているかの数字です(関数名やコードは出ません)。要約の大きさの偏り(少数の関数が大きい要約を持つのか、多くの関数が同じくらいずつ持つのか)を、数字で見られます。
   - 大きさの分布: `functions`(要約が空でない関数)、`empty`(空の関数)、`median`、`p90`、`p99`、`max`、`over_100` / `over_1000` / `over_10000`(その個数より大きい要約を持つ関数の数)、`top_1pct_share_permille`(要約が大きい上位 1% の関数が、全要素の何‰を持つか。1000 に近いと少数の関数に集中、10 に近いと均等)。`own_elems` と `dep_elems` は、プロジェクト自身と依存の関数の要素の数です。`summary_elems` を、関数の数で割ると、1 関数あたりの平均です。
   - 内訳: `by_output`(要素が行き着く先。`result`、`param`(引数の指す先への書き込み)、`global`、`throw`)、`by_element`(`real` は source 由来、`param` は引数の中身(呼び出し側が渡すもの)、`param_0` はそのうち 0 番目の引数(メソッドではレシーバ)、`with_path` は引数の中のパスつき、`with_guards` は引数の条件つき)、`by_path_depth`(引数の中のパスの深さ。`3+` は 3 以上。深さの上限は `-k`)。
+  - source の広がり: `real_origins`(要約に載っている、source の箇所の種類の数)と、`origin_reach`(その source の箇所 1 つ 1 つが、何個の関数の要約に載っているかの分布。`max`、`median`、`p90`、`over_100` / `over_1000`(それより多い関数に載っている source の箇所の数))。少数の箇所が全関数に広がっているのか、各箇所が少数の関数にだけ載っているのかが分かります。`globals_top`(要約が各グローバル変数に入れた要素の数の上位 10。名前は出ません)と、`globals_with_elems`(要素を持つグローバルの数)も出ます。
 - `largest_scc_packages` は、互いに呼び合う関数の最大のかたまり(`largest_scc`)が、どのパッケージの関数でできているかの上位 10 件です。かたまりの大きさが解析の重さを決めるので、ここに出る依存が、モデルで切る候補です。
 - `stats.timed_out` が true でも、途中までの内訳が出ます。`packages_top` と `largest_summary` は、時間切れまでに解析した分で、`largest_scc_packages` は呼び出しグラフから解析の前に作るので、解析が始まる前に切れても出ます。`-timeout` は、互いに呼び合う大きいかたまりの中でも、関数ごとに見ます(1 つの関数の解析の中は `-func-timeout`)。
 - `stats.timed_out` は、時間切れでないとき、出力にありません(jq では `null`)。

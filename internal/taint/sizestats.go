@@ -4,6 +4,8 @@ import (
 	"math"
 	"sort"
 	"strconv"
+
+	"github.com/yagihash/rivus/internal/sg"
 )
 
 // SummarySizes is how the elements of the summaries are spread over the functions, and what they are made of
@@ -38,23 +40,51 @@ type SummarySizes struct {
 	// "with_path" (of a parameter, below a path inside it), "with_guards" (under a condition on a parameter) and
 	// "with_mods" (after a sanitizer operation).
 	ByElement map[string]int `json:"by_element"`
+	// RealOrigins is how many different source sites the Real elements of the summaries come from, and OriginReach is, over
+	// them, in how many functions each one is carried (Max, Median, P90; Over100 and Over1000 are how many source sites
+	// are in more functions than that): a few sites in every function, or each site in a few functions.
+	RealOrigins int          `json:"real_origins"`
+	OriginReach *ReachSpread `json:"origin_reach,omitempty"`
+	// GlobalsTop is the number of elements that the summaries put into each global variable (the 10 with the most, in
+	// numbers only: no name), and GlobalsWithElems is how many globals have any.
+	GlobalsTop       []int `json:"globals_top,omitempty"`
+	GlobalsWithElems int   `json:"globals_with_elems"`
 	// ByPathDepth is the elements of a parameter by the depth of their path inside it ("0" is the parameter itself, "3+"
 	// is three or more: the depth that the analysis keeps is -k).
 	ByPathDepth map[string]int `json:"by_path_depth"`
+}
+
+// ReachSpread is how a count (the functions that a source site is carried in) is spread over a set of source sites.
+type ReachSpread struct {
+	Max      int `json:"max"`
+	Median   int `json:"median"`
+	P90      int `json:"p90"`
+	Over100  int `json:"over_100"`
+	Over1000 int `json:"over_1000"`
 }
 
 func (e *Engine) summarySizes() *SummarySizes {
 	s := &SummarySizes{ByOutput: map[string]int{}, ByElement: map[string]int{}, ByPathDepth: map[string]int{}}
 	var sizes []int
 	total := 0
+	reach := map[strID]int{} // source site -> the functions that carry it
+	globals := map[*sg.Value]int{}
 	for fn, sum := range e.summaries {
 		n := 0
+		seen := map[strID]struct{}{}
 		for _, o := range sum.Outputs {
 			n += len(o.Elems)
 			s.ByOutput[o.Kind] += len(o.Elems)
+			if o.Kind == OutGlobal && o.Global != nil {
+				globals[o.Global] += len(o.Elems)
+			}
 			for _, oe := range o.Elems {
 				if oe.E.Kind == Real {
 					s.ByElement["real"]++
+					if _, ok := seen[oe.E.origin]; !ok {
+						seen[oe.E.origin] = struct{}{}
+						reach[oe.E.origin]++
+					}
 					continue
 				}
 				s.ByElement["param"]++
@@ -89,6 +119,37 @@ func (e *Engine) summarySizes() *SummarySizes {
 		} else {
 			s.OwnElems += n
 		}
+	}
+	s.RealOrigins = len(reach)
+	if len(reach) > 0 {
+		counts := make([]int, 0, len(reach))
+		for _, c := range reach {
+			counts = append(counts, c)
+		}
+		sort.Ints(counts)
+		q := func(f float64) int {
+			return counts[int(math.Min(float64(len(counts)-1), math.Floor(f*float64(len(counts)))))]
+		}
+		r := &ReachSpread{Max: counts[len(counts)-1], Median: q(0.5), P90: q(0.9)}
+		for _, c := range counts {
+			if c > 100 {
+				r.Over100++
+			}
+			if c > 1000 {
+				r.Over1000++
+			}
+		}
+		s.OriginReach = r
+	}
+	for _, n := range globals {
+		if n > 0 {
+			s.GlobalsWithElems++
+			s.GlobalsTop = append(s.GlobalsTop, n)
+		}
+	}
+	sort.Sort(sort.Reverse(sort.IntSlice(s.GlobalsTop)))
+	if len(s.GlobalsTop) > 10 {
+		s.GlobalsTop = s.GlobalsTop[:10]
 	}
 	s.Functions = len(sizes)
 	if len(sizes) == 0 {
