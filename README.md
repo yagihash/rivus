@@ -77,21 +77,33 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 ## 使い方
 
-### 入れ方
+### インストール
 
-**Homebrew(v0.0.1 から。まだ出ていません。下の行は、出てから動きます)**:
+**Homebrew(macOS)**:
 
 ```sh
 brew install yagihash/tap/rivus
+rivus version
 ```
 
-Go のツールチェーンと、Dart SDK(`dart-sdk`)は、formula の依存で入ります。Dart のプロジェクトを読むときは、対象で `dart pub get` を済ませておいてください。Rust の固定した nightly と extractor(`rivus-rust`)も、formula がインストールの中で作ります(約 1.1 GB。インストールの間、static.rust-lang.org と crates.io に接続します。macOS の Xcode コマンドラインツールが要ります)。実行時に rustup や `~/.cargo` は使いません。設計は [docs/DESIGN-install.md](docs/DESIGN-install.md)。
+- Go のツールチェーンと Dart SDK(`dart-sdk`)は、formula の依存としてインストールされます。
+- Rust を読むための固定した nightly と extractor(`rivus-rust`)も、formula がインストール時に用意します。初回だけ、static.rust-lang.org と crates.io から約 1.1 GB を取得します。Xcode のコマンドラインツールが必要です。実行時に rustup や `~/.cargo` は使いません。
+- nightly は `$(brew --prefix)/var/rivus` に置かれます。rivus を更新しても、nightly の版が同じなら取得し直しません。`brew uninstall rivus` では削除されないので、不要になったら `rm -rf "$(brew --prefix)/var/rivus"` で削除してください。
+- 更新は `brew upgrade rivus` です。
 
-**ソースから(いまはこちら)**:
+設計は [docs/DESIGN-install.md](docs/DESIGN-install.md) にあります。
+
+**ソースからビルドする**(Go 1.27 以降):
 
 ```sh
-go build -o rivus ./cmd/rivus          # Go 1.27 以降
+go build -o rivus ./cmd/rivus
+```
 
+Dart と Rust を読むには、それぞれの extractor が必要です(下の「言語ごとの準備」)。開発用のコマンドは「開発」にあります。
+
+### コマンド
+
+```sh
 rivus analyze ./...                    # source から sink への経路を全部
 rivus analyze -C path/to/project       # ディレクトリを指す。言語は自動で判別（go.mod、pubspec.yaml）
 rivus sites ./...                      # source / sink になりうる箇所の一覧（解析なし。速い）
@@ -224,7 +236,7 @@ RIVUS_DART="dart" go test ./cmd/rivus           # Dart の extractor を使う�
 RIVUS_RUST=$PWD/extractor/rust/target/debug/rivus-rust go test ./cmd/rivus   # Rust の extractor を使うテストも（先に extractor/rust をビルド）
 ```
 
-PR の CI は `go test -short`(重い試験は、自分で `-short` を見て飛ばす)で、main への push、週 1 回の実行、tagpr のリリース PR が全部を走らせます。main の実行が失敗したら、次の作業より先に、直すか原因の PR を戻します。
+PR の CI は `go test -short` で実行します(重いテストは、`-short` のときにスキップされます)。main への push、週 1 回の実行、tagpr のリリース PR では、全部のテストを実行します。main の実行が失敗したら、次の作業より先に、修正するか、原因の PR を取り消します。
 
 正しさは、役目の違うテストとベンチで確かめています（[bench/README.md](bench/README.md)）。
 
