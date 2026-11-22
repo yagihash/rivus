@@ -39,8 +39,9 @@ func adoptStoredFlags(fs *flag.FlagSet, stored map[string]string) {
 		if name == "patterns" || name == "allow-deps-under" || given[name] {
 			continue
 		}
-		if name == "rules" {
+		if name == "rules" || name == "body-replaced" {
 			// the rule files given to index: each is a -rules, and a file that is gone or changed shows as stale
+			// (the packages given to -body-replaced, one for each, are the same)
 			for _, f := range strings.Split(v, "\n") {
 				if f != "" {
 					fs.Set(name, f)

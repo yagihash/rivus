@@ -97,6 +97,11 @@ type Engine struct {
 	// trait and the method (callrows.go, methodImpls)
 	implsOnce  sync.Once
 	implsIndex map[string][]*sg.Func
+	// projectUnits are the packages that have a function of the code of the project (bodyreplaced.go)
+	projectOnce   sync.Once
+	projectUnits  map[string]bool
+	methodsOnce   sync.Once
+	methodsByType map[string][]*sg.Func
 	// identityStores are the closures made (the make_closure instructions) whose write of a global was left out because it
 	// writes back the value that was read from it (stats.identity_global_stores).
 	identityStores sync.Map // *sg.Instr -> struct{}

@@ -86,6 +86,9 @@ type RuleSet struct {
 	// stops and says config_read: the value is in the repository's
 	// configuration, not in its code.
 	ConfigReads []ConfigRead `yaml:"config_reads"`
+	// BodyReplaced declares the packages whose code this set stands for: they are not read by the analysis
+	// (docs/MODELING.md, "Declaring a package").
+	BodyReplaced []BodyReplaced `yaml:"body_replaced_packages"`
 
 	// Origin is where the rule set came from (file name or "builtin:...").
 	Origin string `yaml:"-"`
@@ -408,6 +411,9 @@ type CallRow struct {
 	Throw  string         `yaml:"throw"`
 	Writes map[int]string `yaml:"writes"`
 	Mode   string         `yaml:"mode"`
+	// Assumed, when set, is the text of the assumed_call note that the use of the row carries: the rows that the
+	// engine makes for the function values given to a function of a declared package (not read from a file).
+	Assumed string `yaml:"-"`
 }
 
 // WithList is the `with` of a row of calls (see CallRow.With).
@@ -484,7 +490,11 @@ func (p *Propagator) DerivedFlows(row int) []Flow {
 		if w == "" {
 			continue
 		}
-		out = append(out, Flow{From: w, To: c.Ret, Assumed: "assumed_call: the function given to " + p.Symbol + " is not known here: what it is called with is taken to come out as what it returns"})
+		text := "assumed_call: the function given to " + p.Symbol + " is not known here: what it is called with is taken to come out as what it returns"
+		if c.Assumed != "" {
+			text = c.Assumed
+		}
+		out = append(out, Flow{From: w, To: c.Ret, Assumed: text})
 	}
 	return out
 }
@@ -787,6 +797,9 @@ func (s *Source) checkFields(what string) error {
 }
 
 func (rs *RuleSet) validate() error {
+	if err := rs.validateBodyReplaced(); err != nil {
+		return err
+	}
 	checkMatch := func(m, what string) error {
 		switch m {
 		case "", MatchExact:
@@ -1172,6 +1185,10 @@ type Rules struct {
 	// out, and IgnoredModels says how many (ADR-010).
 	DeterministicOnly bool
 	IgnoredModels     int
+
+	// Declared are the packages whose body the models replace, sorted (see BodyReplaced).
+	Declared []Declaration
+	declared *declaredSet
 }
 
 // WithoutOrigin merges the rule sets after leaving out the rules of one
@@ -1258,6 +1275,8 @@ func Merge(sets ...*RuleSet) *Rules {
 	for sym := range everything {
 		delete(r.GlobalsHoldNothing, sym)
 	}
+	r.Declared = mergeDeclarations(sets)
+	r.declared = indexDeclared(r.Declared)
 	return r
 }
 

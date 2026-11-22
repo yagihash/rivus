@@ -324,11 +324,35 @@ A model that stands in for the body of a dependency (so that the body is not rea
 1. **A whole package** (ADR-092): all of these: (a) the cost is measured and written down with the target it was measured on (a rule of thumb: the dependency is 90% of the time, or gigabytes); (b) a check compares the result with the body read and the result with the model, on a fixture that uses the API: the set of flows and the **edges at the border** (which function of your code a call into the dependency calls back) have to be the same, and the model may only be the side that has more, with a note; (c) every API that calls a function it is given or holds has a `calls:` row (a form that the format cannot write is a problem of the format, and the call site says so, not silence).
 2. **One method of an interface with many implementations** (ADR-098): when the implementations delegate to the same method (a clique of delegation, such as `Client.send` of `package:http`), the row of that method is a `flows` model and the bodies of the implementations in dependencies are not read. Two conditions: (a) on public targets the set of findings is the same as with the bodies read, and the targets used are written in the design document; (b) the bodies that were not read are marked with a note of kind `dependency_body_unread`, not silently. The model is only for that method. A thin convenience method that calls it (`get`, `post`) has no model, only a sink if it needs one, and its body is read (cutting it would remove the edge from your code to the call of `send`). The implementations in your own code are read as before. The limit: a function passed to a constructor and called later (`RetryClient(when:)`) cannot be written with `calls:` yet, so only the note appears.
 
-A function of a cut package without a row is read as the unmodelled call it is (its arguments flow to its result, with `unmodeled_library_call`).
+A function of a cut package without a row is the unmodelled call it is (its arguments flow to its result, with `unmodeled_library_call`).
 
-### Cutting by package: not available yet
+### Cutting by package: `body_replaced_packages`
 
-As of today there is no way to cut one package: it is all dependencies or none (`-no-deps`), and a model does not stop the extractor from reading the package. A declaration per package, and not reading the packages that models stand in for from the loading stage on, are **under design** (`docs/DESIGN-package-models.md`, on another branch). They are not decided; do not rely on them. The comparing check of criterion 1(b) does not exist as a tool yet either, and the output does not list the methods that were cut (only the notes on the paths).
+A rule file (a built-in one, or yours) can declare that its models stand for the code of a package of the dependencies, and that the analysis does not read it:
+
+```yaml
+body_replaced_packages:
+  - package: github.com/aws/aws-sdk-go-v2/service/s3/...
+    reason: the rows of s3.yaml were compared with the body (MISS 0); the callbacks are in calls: rows
+  - package: package:googleapis
+    reason: ...
+```
+
+- `package` is the unit of the functions, the one `summary` and the notes use: the import path of a Go package, `package:<name>` of a Dart package, the name of a Rust crate. **It names that package and no other**: `example.com/m/a` does not take `example.com/m/a/b`. `example.com/m/a/...` (the ending `/...`, as the go tool writes it) names the package and everything under it. `reason` is required: what was checked.
+- Only the functions of **dependencies** are left out. A package of the project is always read (a declaration for one has no effect, and `-body-replaced` says so). The standard library is not read anyway.
+- A declared package is not read by the analysis: its functions have no body in the program. A call of one of its functions is **the model when the model has a row for it, and `unmodeled_library_call` when it has none** (what `-no-deps` does, for this package alone). The note says that the package is declared, so the call is not silent. `-no-deps` makes a declaration pointless.
+- **Callbacks into your code.** A package that is not read cannot be seen calling a function it was given. Where the model has no `calls:` row for the function, rivus does not drop the callback: a function value given to the call is taken to be called with what the other operands hold, and its result is the result of the call; the methods (up to 8) of a value of a type of the project that is given as an interface (Go) are taken to be called the same way. Each is an `assumed_call` note. This is the safe default, and it is a guess: write the `calls:` row (section 3) to say what the function really does, and no note is made. A value that is made an interface somewhere else than at the call (a field, a parameter) is not seen: the check before a declaration is yours.
+- **This stage does not make the extractor read less.** The extractor reads the whole program as before, and the functions are dropped before the analysis. The time and the memory of the analysis go down (a Go program that uses `service/s3`: the analysis of a package that does not finish in 9 minutes finishes in 12 s with `service/s3/...` declared, and in 0.2 s with `smithy-go/...` too; the findings are the same). The time of the extractor does not (ADR-100).
+- The summary says what was left out: `summary.body_replaced_packages`, a list sorted by package, with `package`, `declared_in` (the rule file, `builtin:<file>`, or `-body-replaced`), `reason` and `functions` (how many functions were left out). A declaration that left out nothing is not listed.
+
+For a try, or to compare, without editing a file:
+
+| Flag | What it does |
+| --- | --- |
+| `-body-replaced PACKAGE` (repeatable) | declares the package for this run. The reason is "named on the command line". |
+| `-read-declared-bodies` | reads the bodies of every declared package (the rule files' and the flag's): the run that a declaration is compared against. `summary.body_replaced_ignored` says how many were left out. |
+
+**When to declare** is the condition of ADR-092 and ADR-098: the flows are compared with the body (no MISS; the extra flows only on purpose), and every API that calls a function it is given or holds has a `calls:` row. Compare with `-read-declared-bodies`: the findings have to be the same, and the differences are only on the functions that have no row (they are `unmodeled_library_call`, on purpose). The declarations are part of the key of an index (`rivus index`): an index made with other declarations is stale.
 
 ## 4b. Categories
 
@@ -366,4 +390,4 @@ flows to the run; `lib/probe.dart` only has calls whose spelling is looked at). 
 this: a real project does not use every API, and a row it does not use is not wrong. The `.dead-allow` file is for what
 a run cannot check (an API that needs a server, a device, a network, or a library the zoo has no dependency on); the lines
 marked `debt` are the rows of the standard library that no cell calls yet: they only go down, and none is added for a new
-row. The test fails on a line for a row that is hit now, on one for a row that does not exist, and on one that is in the file of another model file than the row's (so a pull request that adds a model file adds its `.dead-allow` file, and touches no shared list).
+row. The test fails on a line for a row that does not exist, and on one that is in the file of another model file than the row's (so a pull request that adds a model file adds its `.dead-allow` file, and touches no shared list). A line for a row that is hit now is only logged: what hits it can be the code of a dependency of a cell, and a model pull request must not have to edit the `.dead-allow` of other models. The clean-up of such lines is a run of its own with `RIVUS_DEAD_ALLOW_STRICT=1`, where it fails.

@@ -20,6 +20,23 @@
 # has two findings (the interface and the implementation, ADR-068): the row of the interface alone would miss the
 # call when the packages are not read (`-no-deps`) or the class is the project's own. `match: implementations` is
 # not available for Dart (the expansion is of Go only).
+#
+# The notes `# model-diff:` are for `bench/model-diff` (docs/MODEL-RUNBOOK.md, the differential test): `value` says how to make a
+# value of a class for the generated calls (`$S` is where the source goes; `Class.member` is for the receiver of that member), `extra`
+# says that a flow of the model that the body does not have is on purpose, with the reason.
+# model-diff: value Client Client()
+# model-diff: value BaseClient IOClient()
+# model-diff: value IOClient IOClient()
+# model-diff: value RetryClient RetryClient(Client())
+# model-diff: value MockClient MockClient((q) async => Response('ok', 200))
+# model-diff: value BaseRequest Request('GET', Uri.parse($S))
+# model-diff: value Response Response($S, 200)
+# model-diff: value Response.headers Response('', 200, headers: {'a': $S})
+# model-diff: value BaseResponse.headers Response('', 200, headers: {'a': $S})
+# model-diff: value StreamedResponse StreamedResponse(Stream.value(($S).codeUnits), 200)
+# model-diff: extra package:http/http.dart#get the body hands the request to `_withClient` as a closure, which the reading of the body does not follow (a function value), so the reading has no flow; the flow is real: the request goes to `Client.send`, whose model says the result carries it
+# model-diff: extra package:http/http.dart#post same as `get`
+# model-diff: extra package:http/http.dart#read same as `get`
 ruleset: rivus/dart/http@1
 
 propagators:
