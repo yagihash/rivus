@@ -259,3 +259,15 @@ func TestNoPathSaysThatFilesOutsideTheBuildConfigurationAreOutsideTheRange(t *te
 		t.Fatalf("%v %+v limits %v", err, r.Exhaustive, r.Limits)
 	}
 }
+
+// A record of the unread code that cannot be read is not "nothing was left out": the answer is not exhaustive, and says why
+// (the record of the skipped languages is in the same place, so it is not known either).
+func TestNoPathIsNotExhaustiveWhenTheRecordOfUnreadCodeCannotBeRead(t *testing.T) {
+	testBrokenUnread = true
+	e := build(t, unreadFixture())
+	r, err := e.Path("S", "T", graphq.Options{})
+	if err != nil || r.Reachable || r.Exhaustive || r.NotExhaustiveBecause == nil || r.NotExhaustiveBecause.UnreadCode.Total != -1 ||
+		!strings.Contains(r.NotExhaustiveBecause.UnreadCode.Why, "cannot be read") {
+		t.Fatalf("%v %+v because %+v", err, r.Exhaustive, r.NotExhaustiveBecause)
+	}
+}

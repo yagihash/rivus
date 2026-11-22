@@ -49,6 +49,7 @@
 | [#120](issues/120-sandbox-ancestor-cargo-config.md) | 祖先の .cargo/config.toml があると、抽出が止まる(読み取りだけ許す案) | 利用者を止める(閉じる向き) | Rust | 0 | open | - |
 | [#121](issues/121-sandbox-review-sw6-sw7.md) | サンドボックスのレビューの小さい点(SW-6、SW-7) | 隔離の仕上げ | Rust | 0 | open | - |
 | [#122](issues/122-ir-file-has-toolchain-path.md) | IR の `file` に、std のソースの絶対パス(ツールチェインの場所)が入る | 再現性(重さ: 低) | Rust | 0 | open | - |
+| [#123](issues/123-graph-callers-skipped-languages.md) | graph callers / callees / dispatchers の答えが、読まなかった言語を示さない | サイレントな見逃し | 全(graph) | 0 | open | - |
 
 ## 閉じたもの
 

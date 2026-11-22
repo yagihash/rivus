@@ -141,6 +141,7 @@ rivus の設計判断を、後から経緯を追えるように記録する。
 - **理由:** これらを `depth_limit` に押し込むと「rivus の都合」と「対象の性質」が混ざる。
   `attributable_to: rivus` の比率がそのまま「rivus の未熟さの指標」になり、どこに投資すべきかが数字で出る。既製 SAST では得られないフィードバックループ。
 - **追記(ADR-059、C-7):** `assumed_call`(`attributable_to: mixed`)を足した。使う条件: **呼ばれるところが見えないクロージャ(渡す、保存する、返す)を、作った場所で、呼ばれるものとして当てた**ときだけ。クロージャの要約が、捕獲した値に依る効果(sink への到達、書き込み、throw、結果)を持つものにだけ付く。`unresolved_callee` は、呼び出し先の関数が分からないとき(候補を増やせば直る)で、こちらは、呼び出し先は分かっていて、呼ぶ側が見えないとき(メモリを辿る、モデルを足す、で直る)。修正方法が違うので、集計と `attributable_to` の指標を濁らせないために、別の kind にした。
+- **追記(ADR-093、auto で Rust を読む):** 欄 `skipped_languages`(`{"lang","why"}` の並び。`summary.unread` と index の `meta.unread`)を足した。読まなかった言語を残す欄で、失敗した package ではない。スキーマの版は上げない(欄の追加)。
 - **帰結:** kind ごとの割り当て初版は ARCHITECTURE.md 4.4。`dynamic_dispatch` / `unresolved_callee` / `concurrency` は `mixed`。
   コールグラフの精度を実装前に見積もれないため、2 値に決め打ちせず 3 値で様子を見る。Phase 1 のステップ 1.12 の実測後に見直す（レビューで決定）。
   `container_element_imprecision` は結論に影響した場合のみ記録する（ノイズで集計が無意味にならないように）。
@@ -1933,3 +1934,9 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 **ADR-064 との関係:** 2 段階(取得と抽出)、取得で対象の設定を読ませないこと、取得前の検査、`-unsafe-host-exec` の意味は、そのまま。コンテナ(非 root、`--cap-drop ALL`、`--read-only`、メモリ・CPU・プロセス数の上限、専用ネットワークの案)は、サンドボックスに替わり、上の弱さを承知している。
 
 **限界(まだ届かないもの):** macOS の CI のワークフローがない(試験は、開発のマシンで `RIVUS_SBX_RED=1` / `RIVUS_SBX_NET=1` で回す)。extractor の版の確認(古い extractor を何も報告せずに使わない。課題 #109)。
+
+**追記(2026-11-22、ユーザーの決定: 「既定で Rust も解析、必要な警告と [Y/n] の確認だけ」): `-lang` なし(auto)でも、聞いたうえで Rust を読む。**
+1. macOS でサンドボックスが使え、標準入力が端末のとき、警告(ビルドが要り build script と proc macro が動く、サンドボックスの下で動く、依存を crates.io から取る、`-lang rust` / `-yes` / `-lang go,dart` の名指し、答えによって別の index)を出して `[Y/n]` を聞く。Enter は Yes。`-yes` で聞かない。`-lang rust` は聞かない(今までどおり)。
+2. 聞けないとき(端末でない)は、何も報告せずに Yes にしない。`-yes` がなければ、混在は Rust を読まずに注記、Rust だけはエラー。サンドボックスがない環境は、auto では聞かず、読まない(`-unsafe-host-exec` があっても Yes 既定にしない)。extractor かツールチェインがなければ、聞く前に分かって、聞かずに読まない。
+3. 読まなかった言語は、`summary.unread.skipped_languages` と `meta.unread.skipped_languages`(`why`: `declined` / `no-terminal` / `not-installed` / `no-sandbox`)に残る。`failed_packages` には数えない。そういう index の `path` の「経路なし」は `exhaustive: false`。Rust だけで断ると何も読まず、終了コード 3。
+4. 答えは 1 回の実行で 1 度だけ決める。index は、答えを `lang` に記録する(あとの `graph -C` は聞かない)。

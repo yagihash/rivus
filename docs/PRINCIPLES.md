@@ -218,6 +218,7 @@ rivus の設計の判断は、ここに書いた原則に沿う。ほかの文�
 **現状と、まだ届いていない所**
 
 - **隔離が既定なのは、Rust だけ:** Go と Dart に隔離は無い。README が明記している。Rust の隔離は、macOS のサンドボックス(ADR-093)。メモリ・CPU・プロセス数の強い上限がなく、ユーザー境界もない。承知している弱さの一覧は、[rust-isolation.md](rust-isolation.md)。Linux では、信頼できないコードの Rust は読めない(止まる)。
+- **auto で Rust を読むかは、聞く:** 端末でない実行(`claude -p`、CI)は、`-yes` か `-lang rust` がないと Rust を読まない(読まなかったことは `skipped_languages` に残る)。聞いた答えで別の index になる。`callers` / `dispatchers` の答えは、`skipped_languages` をまだ言わない(#123)。
 - **取得の段階のネットワーク:** 開いたまま(宛先の許可リストがない)。`DESIGN-fetch-network.md` は案のまま(コンテナなしで実装する案は、後回しの課題)。
 - **制御を外したことが、出力に出ない:** `-unsafe-host-exec`、`-allow-fetch-host`、`-allow-deps-under` を使ったことは、出力に記録されない。警告が出るかは、確認した範囲では見つからなかった。
 - **Go の環境:** `go list` は `GOFLAGS`、`GOTOOLCHAIN`、`GOPROXY` などの環境をそのまま使う。対象の `go.mod` の `toolchain` 指定が、toolchain の取得を起こすかは、未確認。

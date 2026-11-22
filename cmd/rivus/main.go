@@ -3,6 +3,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"runtime/debug"
@@ -71,8 +72,17 @@ func main() {
 	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "rivus: %v\n", err)
-		os.Exit(1)
+		os.Exit(exitCode(err))
 	}
+}
+
+// exitCode is the exit code of a run that ended with err: 1, and exitDeclined for a Rust project that was declined and was all there was.
+func exitCode(err error) int {
+	var d *declinedError
+	if errors.As(err, &d) {
+		return exitDeclined
+	}
+	return 1
 }
 
 // tuneGC makes the collector keep less garbage than its default. The analysis
