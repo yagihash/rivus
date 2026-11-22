@@ -204,7 +204,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2]
+        shard: [0, 1, 2, 3, 4]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -233,10 +233,10 @@ jobs:
           for d in bench/zoo-dart/cells bench/zoo-dart/exec; do
             (cd "$d" && dart analyze)
           done
-      - name: Test with the Dart extractor (one shard of three)
+      - name: Test with the Dart extractor (one shard of five)
         env:
           SHARD_INDEX: ${{ matrix.shard }}
-          SHARD_TOTAL: "3"
+          SHARD_TOTAL: "5"
           ONLY: "1"
           HEAVY: *heavy
           RIVUS_DART: dart
