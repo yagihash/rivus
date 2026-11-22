@@ -14,7 +14,7 @@
 | 同じで `-yes` あり | 聞かずに読む |
 | 標準入力が端末でない(`claude -p`、CI、パイプ)、`-yes` なし | 聞けない。黙って Yes にしない。混在なら Rust を読まずに注記し、Rust だけの対象はエラー(`-lang rust か -yes を`。終了コード 1) |
 | extractor かツールチェインがない | 聞かずに、Rust は読まなかったと言う(`rivus setup rust` か Homebrew で入る)。Rust だけの対象はエラー |
-| サンドボックスがない(Linux など) | 聞かない、読まない。`-unsafe-host-exec` があっても auto では Yes にしない(隔離なしは、`-lang rust` と `-unsafe-host-exec` の両方を書いたときだけ) |
+| サンドボックスがない(Linux など) | 聞かない、読まない。`-unsafe-host-exec` があっても auto では Yes にしない(隔離なしは、`-lang rust` と `-unsafe-host-exec` の両方を書いたときだけ)。macOS でも、`-unsafe-host-exec` があれば、聞く文(サンドボックスの下で動く)と合わないので、auto では聞かず、読まない(`no-sandbox`) |
 
 聞く文は、読むにはビルドが要り、対象の build script と proc macro が動くこと、macOS のサンドボックスの下で動くこと(ビルドの間はネットワークなし、対象・依存・作業ディレクトリの外は書けない)、依存を crates.io から取得すること、聞かれたくなければ `-lang rust`(か `-yes`)、読みたくなければ `-lang go,dart` のように名指しすること、答えによって別の index になること、を言います。端末かどうかは、`unix.IoctlGetTermios`(`/dev/null` を端末と誤らない)で見ます。答えは 1 回の実行で 1 度だけ聞きます。index に載った言語は、あとの `graph -C` が引き継ぎます(また聞かない)。
 
