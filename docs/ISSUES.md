@@ -69,6 +69,7 @@
 | [#157](issues/157-dart-generic-method-model-diff.md) | Dart のジェネリクスのメソッド(`get<T>`)が、差分テストで検証できない | 道具(重さ: 中) | Dart | 3 | open | - |
 | [#158](issues/158-service-client-sources-review.md) | 既存のサービスのクライアントのモデル(`dart-gcp` など)を、「その値を誰が書いたか」の基準(ADR-108)で見直す(候補: Pub/Sub のメッセージの本文) | モデル(重さ: 中) | 全 | 1 | open | - |
 | [#159](issues/159-source-label-external-service.md) | source に、外部のサービスが運んだ、ほかの利用者の入力を区別するラベルがない | 書式(重さ: 低) | 共通 | 3 | open | - |
+| [#160](issues/160-rust-async-closure-extractor.md) | Rust の extractor が、`google-cloud-auth` 1.19.0 を読むときに rustc の未実装(async closure)で落ちる(`-no-deps` では動く)。落ちた理由も利用者に伝わらない | 道具(Rust の extractor) | Rust | 3 | open | - |
 
 ## 閉じたもの
 

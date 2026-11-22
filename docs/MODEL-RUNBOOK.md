@@ -59,6 +59,8 @@
 - 例の位置づけ(ADR-063)の上書きは、**[ADR-101](DECISIONS.md) で済んでいる**。昇格の PR は ADR を書かない(ADR-101 を参照するだけ)。
 - PR の題は `feat(model): <言語> <パッケージ> の組み込みモデル(例から昇格)`。判定は、この題の形で行う(1 節)。昇格のあと、例のファイルは無いか短くなるので、`ls internal/model/builtin/` の判定は、`<言語>-<パッケージ>*.yaml` で使える。
 
+作業の種類は、一覧の「新規 / 広げる / 例から昇格」の列ではなく、**main にそのパッケージのモデルのファイルがあるか**(`ls internal/model/builtin/<言語>-<パッケージ>*.yaml`)で決める。ファイルがなければ、一覧が「広げる」でも新規として扱う(標準ライブラリの行に乗る薄いラッパーなど)。
+
 ## 2. 作る(標準の 4 段)
 
 1. **生成(未実装)**: 型から粗いモデルを作る。`internal/model/builtin/<lang>-<package>.gen.yaml`(コミットする。先頭に生成器のバージョンと入力のパッケージとバージョン)。書き込み先の引数は、`results` とレシーバへの流れの読み取り元にも含める。
@@ -104,6 +106,12 @@ zoo のゲート(`scripts/zoo-loosened-check.sh`、#167): 新しいセル(`bench
 - **例からの昇格の、さわってよい範囲の事実(洗い出し)**: 例のファイルを使っているのは、`bench/compare.sh`(gin: 145、147 行。`gin-vue-admin` と `go-test-bench` のルール)、`bench/parity/collect.sh`(103 行。gin)、`bench/README.md`(gin: 8、158〜160、258 行)、`cmd/rivus/notbuiltin.go` と `notbuiltin_test.go`(actix-web のファイルを名指し。テストが読む)、`bench/parseable/rules.yaml` と `bench/parseable/README.md`(actix-web の写し)、`internal/model/builtin/rust-web.yaml` の 3 行目のコメント、`extractor/rust/README.md` の 108 行。ファイルを消すと、`compare.sh` の gin の 2 つのベンチは、ルールのファイルがなく飛ばされる。**gin は、例のファイルを消さず、中身を空のルール(「組み込みになった」のコメントつき)にして残す案が、使っている所を壊さない**(`compare.sh` は、比べる 2 つのバージョンが、それぞれの木のファイルを読むので、古いバージョンは昔の gin のルール、新しいバージョンは組み込み、になり、昇格の前後の比較の意味が保たれる)。**actix-web は、`notbuiltin.go` の表の行と、そのテストを直す必要がある**(昇格すると、`actix_web::` が組み込みのルールにあるので、知らせは出ない)。この 2 ファイルは、actix-web の昇格の PR で、さわってよい。決める(相談役。ADR-101 の「消す」との関係)まで、gin は、消さずに残す。
 
 - ほかのファイル(`docs/DECISIONS.md`、`docs/ISSUES.md`、直下の README、コード、ゲート、ワークフロー)は、さわらない。conflict が出たら、main 側の行を残して、自分の行を足し直す。
+
+### Rust の zoo のセルを足すとき(確認と骨組みの注意)
+
+- **`RIVUS_RUST` を設定しないと、`TestZooPkgRust` は SKIP のまま通る**(`go test` は `ok`。SKIP は `-v` でしか見えない)。Rust のパッケージのセルを足したら、必ず `RIVUS_RUST=<rivus-rust のバイナリ>` と `RIVUS_REQUIRE_RUST=1` を付けて実行する(`RIVUS_REQUIRE_RUST=1` なら、未設定は SKIP でなく失敗になる。CI の `rust` ジョブは、これを設定してあるので、SKIP は失敗になる)。`bench/zoo-rust-pkg/` にパッケージがあって `RIVUS_RUST` がないときは、`-v` で「NOT checked」と出る。実行したら、`found N / N`、`@miss 0` の行を PR の本文に書く。行を使っているかは、sink の行を全部消して、vuln が見つからずに落ちることで確かめる。
+- **骨組みの `#[track_caller]`**: 記録の場所をセルの行にするには、sink を記録する関数だけでなく、**呼び出しの連鎖のすべて**(骨組みの公開の関数、それが呼ぶ内部の記録の関数)に付ける。1 つでも欠けると、記録の場所が骨組みの中になる。
+- **`fixed` のセルは、`clean_cmd`、`clean_sql`、`clean_html`、`clean_path` の 4 つを通す**: `zoo_mark::sink_any` は、全部の class で判断するので、1 つだけでは「清められていない」と判断される。例: `m::clean_path(&m::clean_html(&m::clean_sql(&m::clean_cmd(&m::src("..")))))`。
 
 ## 5. PR(完成)
 
