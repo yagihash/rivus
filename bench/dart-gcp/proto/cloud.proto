@@ -11,6 +11,9 @@ service Gcloud {
   rpc PublishFixed(TopicRequest) returns (CloudReply);
   rpc Query(SqlRequest) returns (CloudReply);
   rpc QueryFixed(SqlRequest) returns (CloudReply);
+  rpc FilterValue(SqlRequest) returns (CloudReply);
+  rpc PushEndpoint(TopicRequest) returns (CloudReply);
+  rpc PushEndpointFixed(TopicRequest) returns (CloudReply);
 }
 service Apis {
   rpc GetObject(ObjectRequest) returns (CloudReply);
@@ -19,6 +22,10 @@ service Apis {
   rpc PublishTopicFixed(TopicRequest) returns (CloudReply);
   rpc RunQuery(SqlRequest) returns (CloudReply);
   rpc RunQueryFixed(SqlRequest) returns (CloudReply);
+  rpc RunGql(SqlRequest) returns (CloudReply);
+  rpc RunGqlFixed(SqlRequest) returns (CloudReply);
+  rpc ModifyPush(TopicRequest) returns (CloudReply);
+  rpc ModifyPushFixed(TopicRequest) returns (CloudReply);
 }
 service Json {
   rpc InsertBucket(ObjectRequest) returns (CloudReply);

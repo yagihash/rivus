@@ -70,11 +70,33 @@ class GcloudService extends GcloudServiceBase {
 
   @override
   Future<CloudReply> query(ServiceCall call, SqlRequest request) async {
-    // a: the kind and the filter value of the request reach the datastore query.
+    // a: the kind of the request is the kind of the key that is looked up.
     final client = await auth.clientViaApplicationDefaultCredentials(
         scopes: ds.Datastore.Scopes);
     final store = ds.Datastore(client, _project);
-    final q = ds.Query(kind: request.kind, filters: [
+    final key = ds.Key([ds.KeyElement(request.kind, 1)]);
+    final found = await store.lookup([key]);
+    return CloudReply()..body = '${found.length}';
+  }
+
+  @override
+  Future<CloudReply> queryFixed(ServiceCall call, SqlRequest request) async {
+    // b: the key of the request is only used for a map lookup; the kind is a constant.
+    final client = await auth.clientViaApplicationDefaultCredentials(
+        scopes: ds.Datastore.Scopes);
+    final store = ds.Datastore(client, _project);
+    final key = ds.Key([ds.KeyElement(_names[request.key] ?? 'Item', 1)]);
+    final found = await store.lookup([key]);
+    return CloudReply()..body = '${found.length}';
+  }
+
+  @override
+  Future<CloudReply> filterValue(ServiceCall call, SqlRequest request) async {
+    // b: the value of the request is the value of a filter, which the service binds; the kind is a constant.
+    final client = await auth.clientViaApplicationDefaultCredentials(
+        scopes: ds.Datastore.Scopes);
+    final store = ds.Datastore(client, _project);
+    final q = ds.Query(kind: 'Item', filters: [
       ds.Filter(ds.FilterRelation.Equal, 'name', request.value),
     ]);
     final page = await store.query(q);
@@ -82,13 +104,26 @@ class GcloudService extends GcloudServiceBase {
   }
 
   @override
-  Future<CloudReply> queryFixed(ServiceCall call, SqlRequest request) async {
-    // b: the key is only used for a map lookup; the query is a constant.
+  Future<CloudReply> pushEndpoint(ServiceCall call, TopicRequest request) async {
+    // a: the URL of the request is where the subscription delivers its messages (SSRF).
     final client = await auth.clientViaApplicationDefaultCredentials(
-        scopes: ds.Datastore.Scopes);
-    final store = ds.Datastore(client, _project);
-    final q = ds.Query(kind: _names[request.key] ?? 'Item', limit: 10);
-    final page = await store.query(q);
-    return CloudReply()..body = '${page.items.length}';
+        scopes: pubsub.PubSub.SCOPES);
+    final ps = pubsub.PubSub(client, _project);
+    final sub = await ps.lookupSubscription('events-sub');
+    await sub.updatePushConfiguration(Uri.parse(request.message));
+    return CloudReply()..status = '200';
+  }
+
+  @override
+  Future<CloudReply> pushEndpointFixed(
+      ServiceCall call, TopicRequest request) async {
+    // b: the key of the request is only used for a map lookup; the endpoint is a constant.
+    final client = await auth.clientViaApplicationDefaultCredentials(
+        scopes: pubsub.PubSub.SCOPES);
+    final ps = pubsub.PubSub(client, _project);
+    final sub = await ps.lookupSubscription('events-sub');
+    await sub.updatePushConfiguration(
+        Uri.parse(_names[request.key] ?? 'https://example.invalid/push'));
+    return CloudReply()..status = '200';
   }
 }

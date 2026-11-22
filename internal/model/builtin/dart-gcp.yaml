@@ -1,0 +1,254 @@
+# Google Cloud clients for Dart: package:gcloud, package:googleapis (storage/v1, pubsub/v1, bigquery/v2, datastore/v1),
+# package:google_cloud_storage.
+#
+# These are built in because the maintainer uses them: it is the maintainer's choice, as for the Go clients
+# (go-gcp.yaml, ADR-077). It is not a criterion for any other library. Only sinks are here (the body of a dependency is
+# read as before), and no source: what a subscription delivers, and what a bucket or a table returns, is data that the
+# user chooses to trust or not (docs/GCP-MODELS.md, section 0), as for Go.
+#
+# * A name that the user decides (a bucket, an object, a topic, a subscription, the kind of a key) can point to another
+#   resource of the project, or of another project. No older category fits, so they are `resource_name`.
+# * The text of a BigQuery or a GQL query is `sql_injection`; the push endpoint of a subscription is `ssrf`.
+# * Only the positional arguments are named (docs/MODELING.md, section 4): `Query(kind: ...)` and
+#   `QueryRequest(query: ...)` are not a position. `parts` names the field of a request that is handed to a resource.
+# * One symbol has one category: the subscription calls that carry a push endpoint (`modifyPushConfig`, `create`, `patch`) have the
+#   endpoint (`ssrf`) and not the name of the subscription.
+# * The rows are on the interface of a package (a call through it reaches the implementation: ADR-068) and not on the
+#   implementation too, so that one flow is one finding.
+# docs/GCP-MODELS.md (the tables of Dart) says which API has a row, and which has not and why.
+ruleset: rivus/dart/gcp@1
+
+sinks:
+  # package:gcloud, Cloud Storage (storage.dart): the names of a bucket, and of an object in a bucket. The rows are on the interface
+  # (Storage, Bucket); a call through the interface reaches the implementation of the package, whose body is read as before.
+  - symbol: package:gcloud/storage.dart#Storage.bucket
+    args: [0]
+    category: resource_name
+  - symbol: package:gcloud/storage.dart#Storage.bucketInfo
+    args: [0]
+    category: resource_name
+  - symbol: package:gcloud/storage.dart#Storage.bucketExists
+    args: [0]
+    category: resource_name
+  - symbol: package:gcloud/storage.dart#Storage.createBucket
+    args: [0]
+    category: resource_name
+  - symbol: package:gcloud/storage.dart#Storage.deleteBucket
+    args: [0]
+    category: resource_name
+  - symbol: package:gcloud/storage.dart#Storage.copyObject
+    args: [0, 1]
+    category: resource_name
+  - symbol: package:gcloud/storage.dart#Bucket.read
+    args: [0]
+    category: resource_name
+  - symbol: package:gcloud/storage.dart#Bucket.info
+    args: [0]
+    category: resource_name
+  - symbol: package:gcloud/storage.dart#Bucket.delete
+    args: [0]
+    category: resource_name
+  - symbol: package:gcloud/storage.dart#Bucket.updateMetadata
+    args: [0]
+    category: resource_name
+  - symbol: package:gcloud/storage.dart#Bucket.write
+    args: [0]
+    category: resource_name
+  - symbol: package:gcloud/storage.dart#Bucket.writeBytes
+    args: [0]
+    category: resource_name
+
+  # package:gcloud, Pub/Sub (pubsub.dart): the names of a topic and of a subscription; the URL that a push subscription is delivered to.
+  - symbol: package:gcloud/pubsub.dart#PubSub.createTopic
+    args: [0]
+    category: resource_name
+  - symbol: package:gcloud/pubsub.dart#PubSub.deleteTopic
+    args: [0]
+    category: resource_name
+  - symbol: package:gcloud/pubsub.dart#PubSub.lookupTopic
+    args: [0]
+    category: resource_name
+  - symbol: package:gcloud/pubsub.dart#PubSub.createSubscription
+    args: [0, 1]
+    category: resource_name
+  - symbol: package:gcloud/pubsub.dart#PubSub.deleteSubscription
+    args: [0]
+    category: resource_name
+  - symbol: package:gcloud/pubsub.dart#PubSub.lookupSubscription
+    args: [0]
+    category: resource_name
+  - symbol: package:gcloud/pubsub.dart#Subscription.updatePushConfiguration
+    args: [0]
+    category: ssrf
+
+  # package:gcloud, Datastore (datastore.dart): the kind of a key. (The id of a key, and the values of a filter, are data; see docs/GCP-MODELS.md.)
+  - symbol: package:gcloud/datastore.dart#KeyElement.new
+    args: [0]
+    category: resource_name
+
+  # package:googleapis, storage/v1: the bucket and the object of a request (positional arguments)
+  - symbol: package:googleapis/storage/v1.dart#ObjectsResource.get
+    args: [0, 1]
+    category: resource_name
+  - symbol: package:googleapis/storage/v1.dart#ObjectsResource.delete
+    args: [0, 1]
+    category: resource_name
+  - symbol: package:googleapis/storage/v1.dart#ObjectsResource.insert
+    args: [1]
+    category: resource_name
+  - symbol: package:googleapis/storage/v1.dart#ObjectsResource.list
+    args: [0]
+    category: resource_name
+  - symbol: package:googleapis/storage/v1.dart#ObjectsResource.patch
+    args: [1, 2]
+    category: resource_name
+  - symbol: package:googleapis/storage/v1.dart#ObjectsResource.update
+    args: [1, 2]
+    category: resource_name
+  - symbol: package:googleapis/storage/v1.dart#ObjectsResource.copy
+    args: [1, 2, 3, 4]
+    category: resource_name
+  - symbol: package:googleapis/storage/v1.dart#ObjectsResource.rewrite
+    args: [1, 2, 3, 4]
+    category: resource_name
+  - symbol: package:googleapis/storage/v1.dart#ObjectsResource.compose
+    args: [1, 2]
+    category: resource_name
+  - symbol: package:googleapis/storage/v1.dart#ObjectsResource.move
+    args: [0, 1, 2]
+    category: resource_name
+  - symbol: package:googleapis/storage/v1.dart#BucketsResource.get
+    args: [0]
+    category: resource_name
+  - symbol: package:googleapis/storage/v1.dart#BucketsResource.delete
+    args: [0]
+    category: resource_name
+  - symbol: package:googleapis/storage/v1.dart#BucketsResource.patch
+    args: [1]
+    category: resource_name
+  - symbol: package:googleapis/storage/v1.dart#BucketsResource.update
+    args: [1]
+    category: resource_name
+
+  # package:googleapis, pubsub/v1: the full name of a topic or of a subscription; the push endpoint of a subscription
+  - symbol: package:googleapis/pubsub/v1.dart#ProjectsTopicsResource.publish
+    args: [1]
+    category: resource_name
+  - symbol: package:googleapis/pubsub/v1.dart#ProjectsTopicsResource.get
+    args: [0]
+    category: resource_name
+  - symbol: package:googleapis/pubsub/v1.dart#ProjectsTopicsResource.delete
+    args: [0]
+    category: resource_name
+  - symbol: package:googleapis/pubsub/v1.dart#ProjectsTopicsResource.create
+    args: [1]
+    category: resource_name
+  - symbol: package:googleapis/pubsub/v1.dart#ProjectsTopicsResource.patch
+    args: [1]
+    category: resource_name
+  - symbol: package:googleapis/pubsub/v1.dart#ProjectsSubscriptionsResource.pull
+    args: [1]
+    category: resource_name
+  - symbol: package:googleapis/pubsub/v1.dart#ProjectsSubscriptionsResource.acknowledge
+    args: [1]
+    category: resource_name
+  - symbol: package:googleapis/pubsub/v1.dart#ProjectsSubscriptionsResource.get
+    args: [0]
+    category: resource_name
+  - symbol: package:googleapis/pubsub/v1.dart#ProjectsSubscriptionsResource.delete
+    args: [0]
+    category: resource_name
+  - symbol: package:googleapis/pubsub/v1.dart#ProjectsSubscriptionsResource.modifyAckDeadline
+    args: [1]
+    category: resource_name
+  - symbol: package:googleapis/pubsub/v1.dart#ProjectsSubscriptionsResource.modifyPushConfig
+    category: ssrf
+    parts:
+      - {arg: 0, field: pushConfig.pushEndpoint}
+  - symbol: package:googleapis/pubsub/v1.dart#ProjectsSubscriptionsResource.create
+    category: ssrf
+    parts:
+      - {arg: 0, field: pushConfig.pushEndpoint}
+  - symbol: package:googleapis/pubsub/v1.dart#ProjectsSubscriptionsResource.patch
+    category: ssrf
+    parts:
+      - {arg: 0, field: subscription.pushConfig.pushEndpoint}
+
+  # package:googleapis, bigquery/v2: the text of a query. The parameters (queryParameters) and the labels are bound or plain data.
+  - symbol: package:googleapis/bigquery/v2.dart#JobsResource.query
+    category: sql_injection
+    parts:
+      - {arg: 0, field: query}
+  - symbol: package:googleapis/bigquery/v2.dart#JobsResource.insert
+    category: sql_injection
+    parts:
+      - {arg: 0, field: configuration.query.query}
+  - symbol: package:googleapis/bigquery/v2.dart#JobsResource.get
+    args: [1]
+    category: resource_name
+  - symbol: package:googleapis/bigquery/v2.dart#JobsResource.getQueryResults
+    args: [1]
+    category: resource_name
+  - symbol: package:googleapis/bigquery/v2.dart#JobsResource.cancel
+    args: [1]
+    category: resource_name
+  - symbol: package:googleapis/bigquery/v2.dart#JobsResource.delete
+    args: [1]
+    category: resource_name
+
+  # package:googleapis, datastore/v1: the text of a GQL query. (The bindings of a GqlQuery are bound values.)
+  - symbol: package:googleapis/datastore/v1.dart#ProjectsResource.runQuery
+    category: sql_injection
+    parts:
+      - {arg: 0, field: gqlQuery.queryString}
+  - symbol: package:googleapis/datastore/v1.dart#ProjectsResource.runAggregationQuery
+    category: sql_injection
+    parts:
+      - {arg: 0, field: gqlQuery.queryString}
+
+  # package:google_cloud_storage: the names of a bucket and of an object
+  - symbol: package:google_cloud_storage/src/client.dart#Storage.bucket
+    args: [0]
+    category: resource_name
+  - symbol: package:google_cloud_storage/src/client.dart#Storage.bucketMetadata
+    args: [0]
+    category: resource_name
+  - symbol: package:google_cloud_storage/src/client.dart#Storage.deleteBucket
+    args: [0]
+    category: resource_name
+  - symbol: package:google_cloud_storage/src/client.dart#Storage.deleteObject
+    args: [0, 1]
+    category: resource_name
+  - symbol: package:google_cloud_storage/src/client.dart#Storage.downloadObject
+    args: [0, 1]
+    category: resource_name
+  - symbol: package:google_cloud_storage/src/client.dart#Storage.listObjects
+    args: [0]
+    category: resource_name
+  - symbol: package:google_cloud_storage/src/client.dart#Storage.makeObjectPublic
+    args: [0, 1]
+    category: resource_name
+  - symbol: package:google_cloud_storage/src/client.dart#Storage.objectMetadata
+    args: [0, 1]
+    category: resource_name
+  - symbol: package:google_cloud_storage/src/client.dart#Storage.moveObject
+    args: [0, 1, 2]
+    category: resource_name
+  - symbol: package:google_cloud_storage/src/client.dart#Storage.patchObject
+    args: [0, 1]
+    category: resource_name
+  - symbol: package:google_cloud_storage/src/client.dart#Storage.rewriteObject
+    args: [0, 1, 2, 3]
+    category: resource_name
+  - symbol: package:google_cloud_storage/src/client.dart#Storage.uploadObject
+    args: [0, 1]
+    category: resource_name
+  - symbol: package:google_cloud_storage/src/client.dart#Storage.uploadObjectFromSink
+    args: [0, 1]
+    category: resource_name
+  - symbol: package:google_cloud_storage/src/client.dart#Storage.uploadObjectFromString
+    args: [0, 1]
+    category: resource_name
+  - symbol: package:google_cloud_storage/src/bucket.dart#Bucket.object
+    args: [0]
+    category: resource_name

@@ -387,3 +387,45 @@ RIVUS_DART=dart RIVUS_DART_EXTRACTOR="dart run <worktree>/extractor/dart/bin/riv
 ```
 
 変種(行 0〜6)は、`bench/dart-gcp` の `lib/src/services/*.dart` から、必要なサービスだけを `bin/server.dart` に入れ、`pubspec.yaml` を削って作った。試作の sink の 12 行は、リポジトリに入れていない。
+
+## 12. Google Cloud の Dart のクライアントの組み込みモデル(`dart-gcp.yaml`)の測定
+
+状態: 測定の記録。`internal/model/builtin/dart-gcp.yaml`(sink だけ、70 行)を足した前後を、公開の合成 `bench/dart-gcp` と `bench/dart-grpc` で比べた。モデルの中身と、しなかった API は `docs/GCP-MODELS.md` の 8 節。
+
+### 12.1 測定の条件
+
+| 項目 | 値 |
+| --- | --- |
+| rivus | `origin/main` の `3ce2b5d` に `dart-gcp.yaml` を足したビルド。「なし」は、同じコミットで `dart-gcp.yaml` だけを外したビルド |
+| Dart SDK | 3.13.7(stable)、macos_arm64 |
+| 対象 | `bench/dart-gcp`(`pubspec.lock` はそのパス)と `bench/dart-grpc`。`bench/dart-gcp` には、a(リクエストのフィールドが名前、クエリ、URL に届く)と b(届かない)のハンドラを足した(`Gcloud`、`Apis`、`CloudStorage`、`Json`) |
+| コマンド | `rivus analyze -lang dart -C <dir> -pass-stats -pass-stats-top 0 -detail summary -timeout 540s`、`/usr/bin/time -l`。上限は 10 分(どれも届かなかった) |
+| 時間の読み方 | この測定の間、機械の load average は 3 前後。wall は 1〜2 秒ぶれる(同じビルドで 15.6 秒と 18.3 秒) |
+
+### 12.2 モデルあり / なし
+
+| 対象 | モデル | 解析した関数 | `largest_scc` | `summary_elems` | 解析 `duration_ms` | `dynamic_dispatch` の注記 | 注記の合計 | wall | 最大 RSS | finding |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `bench/dart-gcp` | なし | 4,583 | 263 | 25,165 | 925 | 584 | 712 | 17.0 秒 | 1.64 GB | 3 |
+| `bench/dart-gcp` | あり | 4,583 | 263 | 25,165 | 936 | 584 | 713 | 15.6 / 18.3 秒 | 1.64 GB | 19 |
+| `bench/dart-grpc` | なし | 2,409 | 195 | 5,471 | 150 | 213 | - | 12.4 秒 | 1.15 GB | 3 |
+| `bench/dart-grpc` | あり | 2,409 | 195 | 5,471 | 113 | 213 | - | 11.2 秒 | 1.15 GB | 3 |
+
+- 解析のコスト(関数の数、`summary_elems`、`dynamic_dispatch`)は同じ。sink の行だけなので、本体の読み方は変わらない。注記の合計が +1 なのは、下の誤検出の `field_imprecision`。
+- `bench/dart-grpc` は、finding が同じ 3 件(Google Cloud を使わないので、行は一致しない)。
+
+### 12.3 a / b の検出
+
+| 項目 | 結果 |
+| --- | --- |
+| a: 届く 15 経路(`gcloud` 5、`googleapis` 5、`google_cloud_storage` 2、JSON の Map を `fromJson` に渡す `Json` 3) | 15 件とも出る |
+| b: 届かない 12 経路 | 11 件は出ない。1 件が誤検出: `ApisService.runGqlFixed`(定数の GQL の `namedBindings` に入力を入れる)が `sql_injection` で出る。`field_imprecision`(`whole_value`)と `container_element_imprecision` つき |
+| 新しいカテゴリ | `resource_name` が 10 件(バケット、オブジェクト、トピック、kind)、`sql_injection` が 4 件、`ssrf` が 2 件(push の送り先)、そのほかに基準の 3 件 |
+| `-no-deps`(依存の本体を読まない)との照合 | 同じ 19 件(組の集合が一致)。wall 8.3 秒、解析した関数 560。sink の行は、依存の本体を読まなくても一致する |
+
+- 照合(ADR-092 の条件 2 は、本体を切る行に対するもの): sink だけの行なので、本体を読んだ場合(依存込み)と、読まない場合(`-no-deps`)で、finding の集合は同じ。
+- 1 つの流れが 2 件にならないことの確認: `gcloud` の `Bucket.read` は、インターフェースの行だけで 1 件(実装の `_BucketImpl.read` にも行を置いた試作では 2 件だった。10 節)。
+
+### 12.4 zoo のセル
+
+`bench/zoo-dart` に 3 セル(骨組みの `gcloud` と `googleapis` を `cells/packages` に置く。`http` の骨組みと同じ形): `F/dart/gcloud-storage-read`(`Bucket.read` のオブジェクト名)、`F/dart/gcloud-pubsub-lookup-topic`(`PubSub.lookupTopic` のトピック名)、`F/dart/googleapis-bigquery-query`(`JobsResource.query` の `QueryRequest.query`)。それぞれ vuln / fixed / decoy が 1 つ。3 セルとも、`@miss` / `@fp` なしで、行の期待どおり(vuln は出て、fixed と decoy の行は出ない)。

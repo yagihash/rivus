@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:googleapis/bigquery/v2.dart' as bq;
+import 'package:googleapis/datastore/v1.dart' as ds;
 import 'package:googleapis/pubsub/v1.dart' as pubsub;
 import 'package:googleapis/storage/v1.dart' as storage;
 import 'package:googleapis_auth/auth_io.dart' as auth;
@@ -84,5 +85,63 @@ class ApisService extends ApisServiceBase {
         : 'SELECT name FROM dataset.items LIMIT 10';
     final res = await api.jobs.query(bq.QueryRequest(query: sql), _project);
     return CloudReply()..body = '${res.totalRows}';
+  }
+
+  @override
+  Future<CloudReply> runGql(ServiceCall call, SqlRequest request) async {
+    // a: the GQL text of the request.
+    final client = await auth.clientViaApplicationDefaultCredentials(
+        scopes: [ds.DatastoreApi.datastoreScope]);
+    final api = ds.DatastoreApi(client);
+    final res = await api.projects.runQuery(
+        ds.RunQueryRequest(gqlQuery: ds.GqlQuery(queryString: request.sql)),
+        _project);
+    return CloudReply()..body = '${res.batch}';
+  }
+
+  @override
+  Future<CloudReply> runGqlFixed(ServiceCall call, SqlRequest request) async {
+    // b: the value of the request is a binding of a constant GQL text.
+    final client = await auth.clientViaApplicationDefaultCredentials(
+        scopes: [ds.DatastoreApi.datastoreScope]);
+    final api = ds.DatastoreApi(client);
+    final query = ds.GqlQuery(
+        queryString: 'SELECT * FROM Item WHERE name = @name',
+        namedBindings: {
+          'name': ds.GqlQueryParameter(value: ds.Value(stringValue: request.value)),
+        });
+    final res = await api.projects
+        .runQuery(ds.RunQueryRequest(gqlQuery: query), _project);
+    return CloudReply()..body = '${res.batch}';
+  }
+
+  @override
+  Future<CloudReply> modifyPush(ServiceCall call, TopicRequest request) async {
+    // a: the URL of the request is the push endpoint of the subscription (SSRF).
+    final client = await auth.clientViaApplicationDefaultCredentials(
+        scopes: [pubsub.PubsubApi.pubsubScope]);
+    final api = pubsub.PubsubApi(client);
+    await api.projects.subscriptions.modifyPushConfig(
+        pubsub.ModifyPushConfigRequest(
+            pushConfig: pubsub.PushConfig(pushEndpoint: request.message)),
+        'projects/$_project/subscriptions/events-sub');
+    return CloudReply()..status = '200';
+  }
+
+  @override
+  Future<CloudReply> modifyPushFixed(
+      ServiceCall call, TopicRequest request) async {
+    // b: the key of the request is only used for a map lookup; the endpoint is a constant.
+    final client = await auth.clientViaApplicationDefaultCredentials(
+        scopes: [pubsub.PubsubApi.pubsubScope]);
+    final api = pubsub.PubsubApi(client);
+    final endpoint = _names[request.key] == null
+        ? 'https://example.invalid/a'
+        : 'https://example.invalid/b';
+    await api.projects.subscriptions.modifyPushConfig(
+        pubsub.ModifyPushConfigRequest(
+            pushConfig: pubsub.PushConfig(pushEndpoint: endpoint)),
+        'projects/$_project/subscriptions/events-sub');
+    return CloudReply()..status = '200';
   }
 }

@@ -11,8 +11,8 @@ script that is not kept (`protoc` was not run); `proto/cloud.proto` is for refer
 
 | service | packages | methods |
 | --- | --- | --- |
-| `Gcloud` | `gcloud` (`storage.dart`, `pubsub.dart`, `datastore.dart`) | `ReadObject`, `BucketInfo`, `Publish`, `Query` reach a name or a filter value; `*Fixed` do not |
-| `Apis` | `googleapis` (`storage/v1`, `pubsub/v1`, `bigquery/v2`) | `GetObject`, `PublishTopic`, `RunQuery` reach a name or the SQL; `*Fixed` do not |
+| `Gcloud` | `gcloud` (`storage.dart`, `pubsub.dart`, `datastore.dart`) | `ReadObject`, `BucketInfo`, `Publish`, `Query` (the kind of a key), `PushEndpoint` reach a name or a URL; `*Fixed` and `FilterValue` (the value of a filter, which the service binds) do not |
+| `Apis` | `googleapis` (`storage/v1`, `pubsub/v1`, `bigquery/v2`, `datastore/v1`) | `GetObject`, `PublishTopic`, `RunQuery`, `RunGql`, `ModifyPush` reach a name, the text of a query or a URL; `*Fixed` do not (`RunGqlFixed` puts the request in the bindings of a constant GQL text) |
 | `CloudStorage` | `google_cloud_storage` | `Download`, `Upload` reach the bucket and object names; `*Fixed` do not (only the content comes from the request) |
 | `Json` | `googleapis`, `google_cloud_protobuf` | the request holds a JSON text that is decoded into a `Map` and given to `fromJson`; the result goes through `toJson` |
 | `ManyApis` | `googleapis` (ten more APIs) | one call each, the ids come from the request |

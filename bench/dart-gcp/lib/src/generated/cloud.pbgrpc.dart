@@ -75,6 +75,27 @@ abstract class GcloudServiceBase extends $grpc.Service {
         false,
         ($core.List<$core.int> value) => $0.SqlRequest.fromBuffer(value),
         ($0.CloudReply value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.SqlRequest, $0.CloudReply>(
+        'FilterValue',
+        filterValue_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) => $0.SqlRequest.fromBuffer(value),
+        ($0.CloudReply value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.TopicRequest, $0.CloudReply>(
+        'PushEndpoint',
+        pushEndpoint_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) => $0.TopicRequest.fromBuffer(value),
+        ($0.CloudReply value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.TopicRequest, $0.CloudReply>(
+        'PushEndpointFixed',
+        pushEndpointFixed_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) => $0.TopicRequest.fromBuffer(value),
+        ($0.CloudReply value) => value.writeToBuffer()));
   }
 
   $async.Future<$0.CloudReply> readObject_Pre(
@@ -112,6 +133,21 @@ abstract class GcloudServiceBase extends $grpc.Service {
     return queryFixed($call, await $request);
   }
 
+  $async.Future<$0.CloudReply> filterValue_Pre(
+      $grpc.ServiceCall $call, $async.Future<$0.SqlRequest> $request) async {
+    return filterValue($call, await $request);
+  }
+
+  $async.Future<$0.CloudReply> pushEndpoint_Pre(
+      $grpc.ServiceCall $call, $async.Future<$0.TopicRequest> $request) async {
+    return pushEndpoint($call, await $request);
+  }
+
+  $async.Future<$0.CloudReply> pushEndpointFixed_Pre(
+      $grpc.ServiceCall $call, $async.Future<$0.TopicRequest> $request) async {
+    return pushEndpointFixed($call, await $request);
+  }
+
   $async.Future<$0.CloudReply> readObject($grpc.ServiceCall call, $0.ObjectRequest request);
   $async.Future<$0.CloudReply> readObjectFixed($grpc.ServiceCall call, $0.ObjectRequest request);
   $async.Future<$0.CloudReply> bucketInfo($grpc.ServiceCall call, $0.ObjectRequest request);
@@ -119,6 +155,9 @@ abstract class GcloudServiceBase extends $grpc.Service {
   $async.Future<$0.CloudReply> publishFixed($grpc.ServiceCall call, $0.TopicRequest request);
   $async.Future<$0.CloudReply> query($grpc.ServiceCall call, $0.SqlRequest request);
   $async.Future<$0.CloudReply> queryFixed($grpc.ServiceCall call, $0.SqlRequest request);
+  $async.Future<$0.CloudReply> filterValue($grpc.ServiceCall call, $0.SqlRequest request);
+  $async.Future<$0.CloudReply> pushEndpoint($grpc.ServiceCall call, $0.TopicRequest request);
+  $async.Future<$0.CloudReply> pushEndpointFixed($grpc.ServiceCall call, $0.TopicRequest request);
 }
 
 @$pb.GrpcServiceName('bench.cloud.Apis')
@@ -168,6 +207,34 @@ abstract class ApisServiceBase extends $grpc.Service {
         false,
         ($core.List<$core.int> value) => $0.SqlRequest.fromBuffer(value),
         ($0.CloudReply value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.SqlRequest, $0.CloudReply>(
+        'RunGql',
+        runGql_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) => $0.SqlRequest.fromBuffer(value),
+        ($0.CloudReply value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.SqlRequest, $0.CloudReply>(
+        'RunGqlFixed',
+        runGqlFixed_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) => $0.SqlRequest.fromBuffer(value),
+        ($0.CloudReply value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.TopicRequest, $0.CloudReply>(
+        'ModifyPush',
+        modifyPush_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) => $0.TopicRequest.fromBuffer(value),
+        ($0.CloudReply value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.TopicRequest, $0.CloudReply>(
+        'ModifyPushFixed',
+        modifyPushFixed_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) => $0.TopicRequest.fromBuffer(value),
+        ($0.CloudReply value) => value.writeToBuffer()));
   }
 
   $async.Future<$0.CloudReply> getObject_Pre(
@@ -200,12 +267,36 @@ abstract class ApisServiceBase extends $grpc.Service {
     return runQueryFixed($call, await $request);
   }
 
+  $async.Future<$0.CloudReply> runGql_Pre(
+      $grpc.ServiceCall $call, $async.Future<$0.SqlRequest> $request) async {
+    return runGql($call, await $request);
+  }
+
+  $async.Future<$0.CloudReply> runGqlFixed_Pre(
+      $grpc.ServiceCall $call, $async.Future<$0.SqlRequest> $request) async {
+    return runGqlFixed($call, await $request);
+  }
+
+  $async.Future<$0.CloudReply> modifyPush_Pre(
+      $grpc.ServiceCall $call, $async.Future<$0.TopicRequest> $request) async {
+    return modifyPush($call, await $request);
+  }
+
+  $async.Future<$0.CloudReply> modifyPushFixed_Pre(
+      $grpc.ServiceCall $call, $async.Future<$0.TopicRequest> $request) async {
+    return modifyPushFixed($call, await $request);
+  }
+
   $async.Future<$0.CloudReply> getObject($grpc.ServiceCall call, $0.ObjectRequest request);
   $async.Future<$0.CloudReply> getObjectFixed($grpc.ServiceCall call, $0.ObjectRequest request);
   $async.Future<$0.CloudReply> publishTopic($grpc.ServiceCall call, $0.TopicRequest request);
   $async.Future<$0.CloudReply> publishTopicFixed($grpc.ServiceCall call, $0.TopicRequest request);
   $async.Future<$0.CloudReply> runQuery($grpc.ServiceCall call, $0.SqlRequest request);
   $async.Future<$0.CloudReply> runQueryFixed($grpc.ServiceCall call, $0.SqlRequest request);
+  $async.Future<$0.CloudReply> runGql($grpc.ServiceCall call, $0.SqlRequest request);
+  $async.Future<$0.CloudReply> runGqlFixed($grpc.ServiceCall call, $0.SqlRequest request);
+  $async.Future<$0.CloudReply> modifyPush($grpc.ServiceCall call, $0.TopicRequest request);
+  $async.Future<$0.CloudReply> modifyPushFixed($grpc.ServiceCall call, $0.TopicRequest request);
 }
 
 @$pb.GrpcServiceName('bench.cloud.Json')
