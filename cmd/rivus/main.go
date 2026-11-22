@@ -4,6 +4,7 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"runtime/debug"
@@ -73,10 +74,37 @@ func main() {
 		fmt.Fprintf(os.Stderr, "rivus: unknown command %q\n\n%s", os.Args[1], usage)
 		os.Exit(2)
 	}
+	if errors.Is(err, flag.ErrHelp) {
+		// -h of a command that parses its own flags (ContinueOnError): its usage is printed; asking for it is not an error.
+		return
+	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "rivus: %v\n", err)
 		os.Exit(exitCode(err))
 	}
+}
+
+// checkSubcommand looks at the first argument of a command that has only commands under it ("rivus models", "rivus setup"). With no argument it
+// prints the usage and exits with 2; with -h it prints the usage and says it is handled (exit code 0); with a name that is not known it exits
+// with 2. With a known name it returns false: the caller goes on.
+func checkSubcommand(command string, args []string, usage string, known ...string) (handled bool) {
+	if len(args) == 0 {
+		fmt.Fprint(os.Stderr, usage)
+		os.Exit(2)
+	}
+	switch args[0] {
+	case "-h", "--help", "help", "-help":
+		fmt.Print(usage)
+		return true
+	}
+	for _, k := range known {
+		if args[0] == k {
+			return false
+		}
+	}
+	fmt.Fprintf(os.Stderr, "rivus: unknown %s command %q\n\n%s", command, args[0], usage)
+	os.Exit(2)
+	return true
 }
 
 // exitCode is the exit code of a run that ended with err: 1, and exitDeclined for a Rust project that was declined and was all there was.

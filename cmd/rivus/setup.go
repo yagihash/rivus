@@ -14,9 +14,20 @@ import (
 // rivus setup rust: prepares what the extraction of Rust needs, outside the sandbox, from trusted sources: the pinned toolchain (from the Rust
 // project, with rustup) and the extractor (built from the source of rivus). It is a command of its own, run on purpose: the commands that
 // read a project never download or build anything for themselves.
+const setupUsage = `rivus setup - prepare what reading a language needs
+
+Usage:
+  rivus setup <command> [flags]
+
+Commands:
+  rust      the toolchain and the extractor that reading Rust needs (on purpose, outside the sandbox)
+
+Run "rivus setup <command> -h" for the flags of a command.
+`
+
 func runSetup(argv []string) error {
-	if len(argv) == 0 || argv[0] != "rust" {
-		return fmt.Errorf("usage: rivus setup rust [-source <directory of extractor/rust>] [-y]")
+	if handled := checkSubcommand("setup", argv, setupUsage, "rust"); handled {
+		return nil
 	}
 	fs := flag.NewFlagSet("setup rust", flag.ContinueOnError)
 	source := fs.String("source", "", "the directory of the source of the Rust extractor (extractor/rust of the repository of rivus). Required: it is built and run on this machine, outside the sandbox, so it is never taken from the directory you are in (that may be a project that you are reading)")

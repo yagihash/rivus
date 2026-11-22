@@ -8,9 +8,20 @@ import (
 	"github.com/yagihash/rivus/internal/report"
 )
 
+const modelsUsage = `rivus models - look at the models of functions
+
+Usage:
+  rivus models <command> [flags] [packages]
+
+Commands:
+  coverage  which functions need a model most
+
+Run "rivus models <command> -h" for the flags of a command.
+`
+
 func runModels(args []string) error {
-	if len(args) == 0 || args[0] != "coverage" {
-		return fmt.Errorf("usage: rivus models coverage [flags] [packages]")
+	if handled := checkSubcommand("models", args, modelsUsage, "coverage"); handled {
+		return nil
 	}
 	fs := flag.NewFlagSet("models coverage", flag.ExitOnError)
 	var o analyzeOpts
