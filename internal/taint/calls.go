@@ -910,7 +910,7 @@ func (s *state) suppressed(cc *callCtx, m *ModelRef, e Elem) {
 // a rule file) does not let through to a result of a call: with `pure`, or with flows that leave an operand out
 // of a result, what the call would have returned from that operand (the guess of a call that is not modelled)
 // is gone. The finding that this removes cannot say so; the record can. A built-in model is not recorded: it
-// is checked by a person and by the zoo, and recording every one of them would fill the output. A result that is
+// is checked by a person and by the tests, and recording every one of them would fill the output. A result that is
 // a number or a bool is the business of the numeric stop, not of this record.
 func (s *state) suppressedByCut(cc *callCtx, p *model.Propagator, mref *ModelRef) {
 	if mref == nil || mref.Origin == model.OriginBuiltin || len(cc.in.Dsts) == 0 {
