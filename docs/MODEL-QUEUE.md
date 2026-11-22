@@ -70,7 +70,7 @@
 | 42 | Dart | postgres | 新規 | sink: `Connection.execute`、`Session.execute` の SQL。source: `Result` の行 | 30 日 DL 697k、416 likes。最終公開 2026-11-22。Dart のみ | DB | 純 Dart のドライバで、中を読むコストが大きい |
 | 43 | Go | labstack/echo/v4 | 新規 | source: `echo.Context` の `QueryParam/Param/FormValue/Bind/Cookie`、sink: `Redirect/File` | imported by 14.8k モジュール / 32.2k パッケージ。v4.16.6(2026-11-20) | Web フレームワーク | Web フレームワークで packages が 3 番目(32.2k) |
 | 44 | Rust | tokio-postgres | 新規 | sink: `Client::query/execute/prepare` の SQL。source: `Row::get` | 直近 90 日 29.1M / 全期間 91.5M。0.7.18(2026-06-12) | DB | 3 番目 |
-| 45 | Dart | shelf | 広げる | sink: `Response` のボディ、`Response.found` などの URL。`Handler`、`Middleware` の合流(既存の 14 行を残す) | 30 日 DL 16.6M、1.0k likes。最終公開 2026-10-16。Dart のみ | Web フレームワーク | サーバ側で DL が最多 |
+| 45 | Dart | shelf | 広げる | sink: `Response` のボディ、`Response.found` などの URL。既存の 14 行を残す。`Handler`、`Middleware` の合流は、行にしない(本体が数行で読まれ、行にすると包んだハンドラへの呼び出しを切って流れを失う) | 30 日 DL 16.6M、1.0k likes。最終公開 2026-10-16。Dart のみ | Web フレームワーク | サーバ側で DL が最多 |
 | 46 | Go | gofiber/fiber/v2 | 新規 | source: `*fiber.Ctx` の `Query/Params/FormValue/Body/BodyParser` | imported by 13.3k モジュール / 30.9k パッケージ。v2.52.16(2026-10-23) | Web フレームワーク | Web フレームワークで packages が 4 番目 |
 | 47 | Rust | diesel | 新規 | sink: `sql_query`、`sql` の文字列。source: ロードした行 | 直近 90 日 13.3M / 全期間 47.2M。2.4.0(2026-11-13) | DB / ORM | ORM で最多 |
 | 48 | Dart | shelf_web_socket | 新規 | source: `webSocketHandler` のコールバックのメッセージ | 30 日 DL 14.3M、158 likes。最終公開 2025-01-30。Dart のみ | Web フレームワーク | DL が多い |
