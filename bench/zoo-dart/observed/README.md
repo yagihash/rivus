@@ -1,12 +1,12 @@
 # 観測した呼び出しとの照合(試行)
 
-設計は [../../../docs/DESIGN-observed-calls.md](../../../docs/DESIGN-observed-calls.md)。**CI では実行しない**。zoo の Dart を 1 回通し、実際に起きた呼び出しのうち、rivus のグラフにない辺を出す。
+設計は [../../../docs/DESIGN-observed-calls.md](../../../docs/DESIGN-observed-calls.md)。**CI では実行しない**。zoo の Dart を 1 回通し、実際に起きた呼び出しのうち、rivus のグラフにないエッジを出す。
 
 | ファイル | 役目 |
 |---|---|
-| `compare.py` | 記録した stack と、`rivus index` が作ったグラフ(SQLite)を比べ、辺ごとに `ok` / `no_edge` / `no_callsite` / `callee_unresolved` を出す |
+| `compare.py` | 記録した stack と、`rivus index` が作ったグラフ(SQLite)を比べ、エッジごとに `ok` / `no_edge` / `no_callsite` / `callee_unresolved` を出す |
 | `instrument.dart` | 方法 B。cells の**コピー**の、全部の関数の先頭に `__rv.rvEnter()` を差す(構文だけ。型は見ない) |
-| `vs_miss.py` | `@miss` の行ごとに、同じファイルに「グラフにない観測の辺」があるかを数える。`--others` で、`@miss` のないファイルの辺も出す |
+| `vs_miss.py` | `@miss` の行ごとに、同じファイルに「グラフにない観測のエッジ」があるかを数える。`--others` で、`@miss` のないファイルのエッジも出す |
 
 記録の側は `bench/zoo-dart/exec/zoo_mark/lib/zoo_mark.dart`(`ZOO_STACKS=1` のときだけ stack を持つ。ふだんの出力は変わらない)と、`exec/test/zoo_test.dart`(`ZOO_STACKS_OUT` に書く)にある。
 
@@ -34,4 +34,4 @@ python3 bench/zoo-dart/observed/compare.py $T/stacks-enter.json $T/zoo-dart.db -
 python3 bench/zoo-dart/observed/vs_miss.py $T/zoo-B.json bench/zoo-dart/cells/lib package:zoo_cells/ --others
 ```
 
-方法 B は差した分だけ同じ行の桁がずれるので、`--line-only`(同じ行の呼び出し点のどれかが、その呼び出し先への辺を持てば `ok`)で比べる。グラフは、差す前の元の cells から作る(行番号が同じ)。
+方法 B は差した分だけ同じ行の桁がずれるので、`--line-only`(同じ行の呼び出し点のどれかが、その呼び出し先へのエッジを持てば `ok`)で比べる。グラフは、差す前の元の cells から作る(行番号が同じ)。

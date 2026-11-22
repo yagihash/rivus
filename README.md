@@ -123,7 +123,7 @@ rivus query -site <ID> ./...           # sites の 1 件から始める
 | `models coverage` | どの関数にモデルを書くと効果があるかを、効果の大きい順に出す |
 | `debug` | 調査と開発のためのコマンド。普段は使わない（今は `debug extract`: 中立の IR を書き出す） |
 
-フラグは `rivus <command> -h` で出ます。`-h` は、普段使うフラグだけを出します。診断と調整のフラグ（プロファイル、解析の上限、サンドボックスの調整など）は、`-h -help-all`（または `-help-all` だけ）で全部出ます。フラグそのものは、どちらの表示でも同じように使えます。よく使うもの: `-C <dir>`、`-rules <file>`（繰り返し可）、`-no-deps`（依存のソースを読まない。軽いが、依存への呼び出しは推測になる）、`-tests`（テストのコードも読む）、`-detail summary`（経路とコードを省く）、`-timeout`、`-v`。`-resolve-func-values`（実験。既定 off）は、呼び出し先が分からない関数値の呼び出しに、自分のコードで作った関数を候補として補ってから解析します（`stats.func_values` に、補った数が出ます）。`rivus index` に付けると、補った辺が索引に入り、`graph callers / callees / path` の答えに `supplemented` で出ます（このフラグの有無は索引のキーに入るので、索引を作ったときと同じ指定で問い合わせます）。`-timeout` は、補う解析と、そのあとの解析を合わせた上限です。
+フラグは `rivus <command> -h` で出ます。`-h` は、普段使うフラグだけを出します。診断と調整のフラグ（プロファイル、解析の上限、サンドボックスの調整など）は、`-h -help-all`（または `-help-all` だけ）で全部出ます。フラグそのものは、どちらの表示でも同じように使えます。よく使うもの: `-C <dir>`、`-rules <file>`（繰り返し可）、`-no-deps`（依存のソースを読まない。軽いが、依存への呼び出しは推測になる）、`-tests`（テストのコードも読む）、`-detail summary`（経路とコードを省く）、`-timeout`、`-v`。`-resolve-func-values`（実験。既定 off）は、呼び出し先が分からない関数値の呼び出しに、自分のコードで作った関数を候補として補ってから解析します（`stats.func_values` に、補った数が出ます）。`rivus index` に付けると、補ったエッジが索引に入り、`graph callers / callees / path` の答えに `supplemented` で出ます（このフラグの有無は索引のキーに入るので、索引を作ったときと同じ指定で問い合わせます）。`-timeout` は、補う解析と、そのあとの解析を合わせた上限です。
 
 `index` と `graph` の詳しい使い方は [docs/GRAPH.md](docs/GRAPH.md) にあります。
 
@@ -253,6 +253,8 @@ RIVUS_RUST=$PWD/extractor/rust/target/debug/rivus-rust go test ./cmd/rivus   # R
 ```
 
 PR の CI は `go test -short` で実行します(重いテストは、`-short` のときにスキップされます)。main への push、週 1 回の実行、tagpr のリリース PR では、全部のテストを実行します。main の実行が失敗したら、次の作業より先に、修正するか、原因の PR を取り消します。
+
+言語に閉じた変更の PR(`extractor/dart` や `bench/zoo-dart` だけの変更など)では、ほかの言語の extractor のジョブ(`dart` または `rust`)をスキップします。共通の場所(`cmd`、`internal`、`testdata`、共通の `bench` など)を変えた PR は、両方を実行します。
 
 正しさは、役目の違うテストとベンチで確かめています（[bench/README.md](bench/README.md)）。
 

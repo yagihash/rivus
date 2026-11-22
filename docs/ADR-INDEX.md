@@ -51,7 +51,7 @@
 | 034 | モデルの運用機能 | 有効 |  | MODELING, README | `models coverage`、`pure`、`origin`、`--deterministic-only`。複数経路は見送り |
 | 035 | 値依存サニタイズと由来追跡 | 有効 | 訂正 078、`when_arg_type` 追記; 訂正・追記あり(書き方を保つ)。追記あり | ARCHITECTURE 5.6 | 由来追跡、定数/設定読みで打ち切り |
 | 036 | 自作 SSA 化と differential test | 有効 |  | ARCHITECTURE 2.7 | - |
-| 037 | Dart スパイクの結果とドッグフーディング | 有効 |  | ARCHITECTURE 10 | 実現可能。例外辺とブロック切り、`finally` は複製 |
+| 037 | Dart スパイクの結果とドッグフーディング | 有効 |  | ARCHITECTURE 10 | 実現可能。例外エッジとブロック切り、`finally` は複製 |
 | 038 | 出力にリビジョン(`target`) | 一部覆った | `dirty` を廃止、git を実行しない; 訂正・追記あり(書き方を保つ)。追記あり。覆した先・注意: 冒頭に「`dirty` は廃止」 | ARCHITECTURE 4.5 | `target: {revision}`。追記で `.git/config` の実行を避ける |
 | 039 | Phase 2 の IR(案) | 一部覆った | 「コアがテキストを切る」を 040 が修正; 覆した先・注意: 040(状態が「案」のまま) | ARCHITECTURE 2.7 | 命令数 26 のまま、型は TypeClass のみ |
 | 040 | Phase 2 の結果: 中立 IR の上に移した | 有効 |  | ARCHITECTURE 2.7 | 旧経路を除く。コアは go/ssa を知らない |

@@ -16,7 +16,7 @@
 | **1. 分類する** | 一覧 → 表(API ごとに source / sink / `flows` / `calls:` / `pure` / 対象外、と根拠 1 行: ライブラリのソースの場所か公式の文書)。表は、**言語に依らない部分**(その API が source か sink か、何を流すか)と、**言語ごとの部分**(シンボルの綴り、レシーバの扱い、コールバックの形)に分けて書く。複数の言語を作るときは、1 枚の表から言語ごとの YAML を作る(「API の項目の表 1 枚から 3 言語の規則を作る」形) | 全行に分類と根拠がある。分類できない行は、そう書いてある | なし(AI が下書きし、人か AI が確かめる)。`docs/MODELING.md` の 1〜4 節が基準(`pure` にしてよいとき、`approximate`、`calls`、`parts`) | **MODELING.md に、基本の節がない**(`sources` / `sinks` / `flows` / `sanitizers` の書き方と、迷ったときの選び方)。分類の基準を 1 つの文書に |
 | **2. YAML を書く** | 表 → ルールの YAML | `model.Parse` の厳しい検査を通る。`origin`: 組み込みに入れるなら `builtin`、AI の下書きのまま使うなら `llm` と必須のフィールド(`decided_at`、`rationale`、`model_version`)。`--deterministic-only` で外せる | `model.Parse`(未知のフィールドの拒否、`origin: llm` の必須フィールド)。`docs/MODELING.md`、`examples/rules/` の見本 4 つ(go-database-sql、go-gin、go-macaron、rust-actix-web) | 利用者が、書いた YAML だけを検査するコマンド(`rivus rules check` のような。今、`analyze` に渡したときの検査に頼っているか、確かめる) |
 | **3. 実行で確かめる**(流れのモデル) | YAML → 行ごとの「実行で確かめた / 確かめていない(理由)」 | API を目印つきの値で実際に呼び、結果・書き込み先・コールバックの引数に目印が出るかを見て、YAML と比べて、同じ(または、モデルが多めで不確実性の注記がある)。source / sink は実行で決まらないので、肯定と否定のフィクスチャで | リポジトリの中の仕組み: zoo の表 S と `TestZooPureGo`(`bench/zoo-go/pure/`)、Dart の `bench/zoo-dart/pure`、`bench/gcp` の実行(`exec_test.go`)。**利用者のモデルには使えない**(リポジトリのテストの形) | **利用者のモデルにも使えるコマンド**(例 `rivus models verify`)。実行は第三者のコードを動かすので、**信頼できるコードに対してだけ使う**と、コマンドの出力と `--help` で知らせる。実行なしで進める方法(静的に読むだけ。行は「実行で確かめていない」と記録され、`approximate` の扱い)も用意する |
-| **4. 照合**(依存をモデルで切るとき。ADR-092 の条件 2) | 本体を読んだ結果と、モデルで切った結果 → 差の一覧 | 流れ(source → sink の組)と、境界の呼び出しの辺が同じ。違ってよいのは、モデルの側が多めで不確実性の注記がある向きだけ | `rivus analyze` と `-no-deps` を、手で比べる(今回の測定のように)。`bench/zoo-dart/observed/compare.py`(Dart の観測した辺との照合) | **比べるコマンド**(`rivus models compare` のような)。パッケージごとに切る仕組み自体もない(ROADMAP の「依存をモデルで切る」) |
+| **4. 照合**(依存をモデルで切るとき。ADR-092 の条件 2) | 本体を読んだ結果と、モデルで切った結果 → 差の一覧 | 流れ(source → sink の組)と、境界の呼び出しのエッジが同じ。違ってよいのは、モデルの側が多めで不確実性の注記がある向きだけ | `rivus analyze` と `-no-deps` を、手で比べる(今回の測定のように)。`bench/zoo-dart/observed/compare.py`(Dart の観測したエッジとの照合) | **比べるコマンド**(`rivus models compare` のような)。パッケージごとに切る仕組み自体もない(ROADMAP の「依存をモデルで切る」) |
 | **5. 一致することを確かめる** | YAML → 全行が、フィクスチャで一致する | どの行も一致する(一致しない行は入れない)。一致しない行は、理由つきで `dead-allow.txt` | `TestBuiltinRowsAreHitByTheZoo`(組み込みの行だけ。リポジトリのテスト)、`docs/MODELING.md` の 5 節 | **利用者のルールの一致しない行への警告**(ROADMAP 3 節に既にある項目) |
 | **6. 報告** | 作った行 → 報告 | 作った行の数(種類ごと)、**パッケージのバージョン**、実行で確かめた行 / 本体を読んだ結果と同じ行 / 確かめていない行(理由つき)、書式で書けなかった API(= 書式の課題)、コストの測定が、1 つの文書にある | `rivus models coverage` の数字、`stub` | 報告のテンプレート(スキルの中に) |
 | **7. パッケージのバージョンが上がったとき** | 新しいバージョン → 落ちた行の一覧 | 同じ `verify` と `compare` を、新しいバージョンで実行し直して、**落ちた行だけを直す**。バージョンの記録を更新する | 段階 3 と 4 の道具(足りない) | これがないと、モデルは静かに古くなる |
@@ -35,7 +35,7 @@
 | | Go | Dart | Rust |
 | --- | --- | --- | --- |
 | 段階 3(実行で確かめる) | あり(リポジトリの中: `TestZooPureGo`、`bench/gcp` の実行。利用者向けの `verify` はない) | リポジトリの中: `bench/zoo-dart/pure`(`TestZooPathDart`)。利用者向けはない | zoo の表 S の Rust 版(リポジトリの中)。利用者向けはない |
-| 段階 4(照合) | 手(`-no-deps` との比較)。`compare` はない | `bench/zoo-dart/observed/compare.py`(観測した辺との照合)。モデルとの比較はない | なし |
+| 段階 4(照合) | 手(`-no-deps` との比較)。`compare` はない | `bench/zoo-dart/observed/compare.py`(観測したエッジとの照合)。モデルとの比較はない | なし |
 | 段階 5(一致の検査) | 組み込みの行のみ(`TestBuiltinRowsAreHitByTheZoo`) | 同じ | 同じ |
 
 **書式で書けない形(レシーバの状態を通る、登録してあとで呼ぶ)**は、書式の課題として挙げる。書けるまでは、その API の呼び出し点に不確実性の注記を出す(何も報告せずに切ることはしない。ADR-092 の条件 3)。
