@@ -9,7 +9,17 @@
 ## 0. 環境
 
 - `make setup` 済み。`go`、`dart`(3.13.6)、`regomark` が PATH にある。`RIVUS_DART=dart`、`GOMODCACHE`、`PUB_CACHE` は環境変数で設定済み。
-- **Rust は、いまは CI に任せる。** rivus の Rust extractor は、読むときに `build.rs` と proc macro を実行する(隔離の下でだけ許される)。この環境には、Rust の nightly も、Linux の隔離もない(`make setup` は対象外。理由と案: [DESIGN-package-models.md](DESIGN-package-models.md) 6.5)。**隔離が動かないので、Rust のパッケージは、「モデルは書くが、extractor を使う確認は CI に任せる」形にする。取得したクレートのコードを、隔離なしで実行しない**(`cargo check`、`cargo build`、`cargo test`、`rivus-rust`、`-unsafe-host-exec` を、取得したクレートに対して使わない)。モデルの YAML は Go のテスト(`internal/model/builtin`)で確認し、zoo のセルは、自前のスタブ(`path:`、第三者のコードなし)で作って、CI の `rust` ジョブに確認させる。差分テストの Rust 版は、隔離が入るまで「未実施」と書く。CI が失敗したときは、ログを読んで修正して push し直す。手元で試せないので、Go と Dart のパッケージを先に取る。
+- **クラウドのセッションでは、Rust は、いまは CI に任せる(ローカルは下の表)。** rivus の Rust extractor は、読むときに `build.rs` と proc macro を実行する(隔離の下でだけ許される)。この環境には、Rust の nightly も、Linux の隔離もない(`make setup` は対象外。理由と案: [DESIGN-package-models.md](DESIGN-package-models.md) 6.5)。**隔離が動かないので、Rust のパッケージは、「モデルは書くが、extractor を使う確認は CI に任せる」形にする。取得したクレートのコードを、隔離なしで実行しない**(`cargo check`、`cargo build`、`cargo test`、`rivus-rust`、`-unsafe-host-exec` を、取得したクレートに対して使わない)。モデルの YAML は Go のテスト(`internal/model/builtin`)で確認し、zoo のセルは、自前のスタブ(`path:`、第三者のコードなし)で作って、CI の `rust` ジョブに確認させる。差分テストの Rust 版は、隔離が入るまで「未実施」と書く。CI が失敗したときは、ログを読んで修正して push し直す。手元で試せないので、Go と Dart のパッケージを先に取る。
+**取得と実行の範囲(ユーザーが承認した上限。2026-11-23)**: 指示文に書かれていなくても、この範囲が上限になる。これより広いことは、先にユーザーに確認する。クラウドのセッションと、ローカルのサブエージェントは、確認が要る場面では、止まって、理由を書いて終わる。
+
+| 行為 | 認められているか | 条件 |
+| --- | --- | --- |
+| `docs/MODEL-QUEUE.md` に載っている公開パッケージ(Go のモジュール、Rust の crate、pub のパッケージ)のソースの取得(`go mod download`、`cargo fetch`、`dart pub get`) | 認められている | そのつど聞かない。**取得だけ** |
+| 取得したコードの実行(`dart run`、`dart test`、`go run`、`go test` を取得したパッケージに対して行う。取得したコードのビルドスクリプトを動かす) | 認められていない | 例外は次の行だけ |
+| 一覧の Rust の crate に対する、rivus の Rust の extractor の実行(ビルドスクリプトとマクロの実行を含む。解析だけ。モデルのシンボルの確認のため) | 認められている | **macOS のサンドボックスの下だけ**([DESIGN-macos-sandbox.md](DESIGN-macos-sandbox.md) 8 節と同じ線) |
+| クラウドのセッションでの Rust の extractor の実行 | 認められていない | 隔離(macOS のサンドボックス)がない。Rust のモデルは、当面ローカルで作る。クラウドでは、モデルは書き、extractor を使う確認は、CI かローカルに任せる |
+| 一覧にないパッケージの取得、サンドボックスの外での実行、実在のプロジェクトをまるごと解析する長い実行 | 先にユーザーに確認 | 確認が取れるまで、始めない |
+
 - ブランチは `claude/` で始まる名前になる(セッションごとに決まる)。名前は変えない。
 - 新しいセッションは、その時点の `main` から始まる。
 - コミットには、GitHub の上で署名が付く。手元の `gpgsig` の確認は要らない。push のあと、API(`gh api repos/<owner>/<repo>/commits/<sha> --jq .commit.verification.verified`)で `true` を確認する。
@@ -56,6 +66,8 @@
 3. **確認したバージョンを書く**: モデルのファイルの冒頭に `verified_versions`(形式と検証: [DESIGN-package-models.md](DESIGN-package-models.md) 6.7)。パッケージ(Go: モジュールのパス、Dart: パッケージ名、Rust: クレート名)、確認したバージョンの範囲、実際に確認したバージョン(`checked_with`)、日付(`checked`)。手で書いた行だけのファイルにも書く。生成物があれば、先頭の入力のバージョンと同じにする。検証が入る前も、書く。
 4. **追加**: `<lang>-<package>.yaml`(手の部分)に、sink、source、sanitizer、`calls:`(利用者のコードを呼び返す API: コールバック、利用者が実装するインターフェース)を足す。`origin: human` か `llm`。zoo に、肯定と否定のセルを足す。`rivus models coverage` で、未モデルの呼び出しを確認する。**`calls:` の行は、実行の確認の道具が、パッケージの行に未対応。入れられないときは、PR の本文に書いて、次に進む。**
 5. **宣言(未実装)**: [DESIGN-package-models.md](DESIGN-package-models.md) 2 節 5 の条件(差分テストで照合済み、`calls:` が書いてある、ほかのパッケージから呼ばれる扱いが決まっている)を満たしたときだけ。満たさなければ、宣言なしで PR を出す。
+
+**source の選び方**: サービスのクライアントは、「その値を誰が書いたか」で選ぶ([ADR-108](DECISIONS.md))。迷う値は入れず、モデルのファイルのコメントに、入れなかった理由を書く。
 
 **骨組みは、公開のシグネチャと、記録するだけの本体にする**: rivus は、骨組みの本体も読む(依存として)。interceptor を呼ぶ、検査をするなど、凝った本体にすると、本物と違う流れになり、モデルの確認が、骨組みの形に引きずられる(実例: Dart の `dio` の最初の骨組み)。本体は、引数を記録する(`zoo_mark` の `recordAny` など)か、空にする。
 

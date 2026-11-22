@@ -15,7 +15,7 @@
 #   This is why the body of a response is a source here and not in `dart-http.yaml`: there the server is the one that the
 #   program chose to call, and here the text is that of the users of a repository, which the program does not control.
 #   `GitHubFile.text`, the decoded content of a file of a repository, is the source. The rule format has no label that tells
-#   "from an external service" from the default `user_input`, so it has the default (docs/ISSUES.md, #158).
+#   "from an external service" from the default `user_input`, so it has the default (docs/ISSUES.md, #159).
 #   Candidates that are not sources, and why: `GitHubFile.content` (the same text, undecoded), the `body` and the title of
 #   `Issue`, `IssueComment` and `PullRequest`, the message of a commit: they are plain fields, and a `kind: field` source fires
 #   also on the constructor of the class and on every read of the field inside the package, which the zoo reports as unexpected
