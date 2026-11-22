@@ -1,0 +1,2 @@
+dart	dart/googleapis_auth_impersonate.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	dart/googleapis_auth_impersonate.dart	sink-none	@sink(none) @nosink(dart-googleapis-auth-impersonate-decoy)	Future<void> decoy() async { @decoy

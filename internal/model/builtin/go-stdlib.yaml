@@ -387,6 +387,44 @@ sinks:
   - symbol: os.Link
     args: [0, 1]
     category: path_traversal
+  # The directory of the siblings above is a path of the program: os.Chdir changes what every relative path means, os.DirFS / os.OpenRoot / os.OpenInRoot
+  # (dir) are the root of what is opened after, os.CreateTemp (dir) and os.CopyFS (dir) are where files are made. The pattern of os.CreateTemp and the name of
+  # os.OpenInRoot cannot leave the directory, so they are not sinks.
+  - symbol: os.Chdir
+    args: [0]
+    category: path_traversal
+  - symbol: os.Chown
+    args: [0]
+    category: path_traversal
+  - symbol: os.Lchown
+    args: [0]
+    category: path_traversal
+  - symbol: os.Chtimes
+    args: [0]
+    category: path_traversal
+  - symbol: os.CreateTemp
+    args: [0]
+    category: path_traversal
+  - symbol: os.DirFS
+    args: [0]
+    category: path_traversal
+  - symbol: os.CopyFS
+    args: [0]
+    category: path_traversal
+  - symbol: os.OpenRoot
+    args: [0]
+    category: path_traversal
+  - symbol: os.OpenInRoot
+    args: [0]
+    category: path_traversal
+  # (*os.Root) has no sink on purpose: a name that is given to a Root cannot leave the root (that is what the type is for), so a sink would be a false
+  # positive by construction. The flows through it are in go-stdlib-more.yaml.
+  # os.Setenv / os.Unsetenv are not sinks: no category fits (the effect is on the children of the process: LD_PRELOAD, PATH), and a new category needs a reason
+  # that is not here.
+  # os.StartProcess is os/exec.Command without the wrapper: the name (0) and the arguments (1).
+  - symbol: os.StartProcess
+    args: [0, 1]
+    category: command_injection
   # io/ioutil: the same operations (deprecated, and still everywhere)
   - symbol: io/ioutil.ReadFile
     args: [0]

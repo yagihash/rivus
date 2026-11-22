@@ -171,7 +171,8 @@ func dartZooIR(t *testing.T, visit func(dir string, p *ir.Program)) {
 			t.Fatal(err)
 		}
 		zooDartPubGet(t, dir)
-		cmd := exec.Command(words[0], append(append([]string{}, words[1:]...), "run", "bin/rivus_dart.dart", dir)...)
+		depDir := "packages" // the skeletons of the zoo are read as dependencies (bench/zoo-dart/cells/packages)
+		cmd := exec.Command(words[0], append(append([]string{}, words[1:]...), "run", "bin/rivus_dart.dart", "--dep-dir", depDir, dir)...)
 		cmd.Dir = ext
 		var stderr strings.Builder
 		cmd.Stderr = &stderr
