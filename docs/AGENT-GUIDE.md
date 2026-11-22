@@ -32,6 +32,8 @@ rivus graph callers -C <dir> <関数>                  # finding の周辺を調
    - `rivus sites` は、`analyze` と同じ言語の選択(`-lang`、auto: ディレクトリにある言語)で読みます。Dart と Rust のディレクトリでも、箇所が出ます(Rust は、`analyze` と同じ確認があり、読むとビルドが実行されます)。読まなかった言語は、出力の `skipped_languages` に出ます(`summary.unread.skipped_languages` と同じ形)。読める言語がないときは、エラーで止まります。
 3. **`rivus analyze`**: 必ず `-timeout` を付けます。標準出力が JSON、標準エラーが経過と警告です。出力は大きいので、ファイルに保存して `jq` で読みます。
 4. **最初に全体を見る**: `stats.converged` が `false`、`stats.timed_out` が `true`、`summary.unread` や `load_errors` がある、のどれかなら、結果は途中のもの、または一部のコードを読んでいないものです(5 章)。
+   - **依存込みで収束しない、または時間切れのとき**(依存の多い対象で起きます。最初の `-timeout` つきの実行で、`timed_out: true` になる): 続けて finding を読む前に、6 章の (h) に進みます。順は、(1) 同じ対象を `-no-deps` で実行して、依存が原因かを切り分ける(`-no-deps` で終わるなら、原因は依存の本体)、(2) `-pass-stats` で、どの依存が重いか(`largest_scc_packages`、`packages_top`)と、注記の集中(`summary_sizes`、`on_findings_top`)を見る、(3) 候補が見つかったら、その依存のメソッドをモデルで切る(ADR-098 の基準。条件は `docs/MODELING.md` の 4a 節)。`-no-deps` の結果は、依存への呼び出しが推測で、依存の中の sink の検出も減る(`summary.dependency_sites` は出ない)ので、報告には `-no-deps` で得たと書き、本番の結果の代わりにはしません。
+   - `summary.dependency_sites` がある結果は、依存の本体を読んでいても、依存の関数の中の source と sink は探していません(ADR-099)。「finding なし」は、依存の中の危険な処理が無い、という意味ではありません。
 5. **finding を 1 件ずつ読む**: 一覧を作り、`paths[0].steps` のコードを、対象のファイルと照らして読みます。
 
    ```sh
@@ -415,6 +417,7 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `summary.unread.skipped_languages` | ディレクトリにあるのに読まなかった言語と理由: `declined`、`no-terminal`、`not-installed`、`no-sandbox` |
 | `summary.skipped_dirs`、`outside_configuration` | 読まなかったディレクトリ、ビルドの条件で外れたファイル |
 | `summary.load_dependent` | `true` なら、時計の上限(`-timeout`、`-func-timeout`)で止めた所があり、結果がマシンの負荷で変わる |
+| `summary.dependency_sites` | 依存の本体を読んだ実行で毎回出る。`searched` は常に `false`、`dependency_functions` は読んだ依存の関数の数。**source と sink は、プロジェクトの関数の中だけで探す**(依存の本体は、流れを追うために読む)。ライブラリの中で危険な処理に届く形は、プロジェクトがその API を呼ぶ所に sink のモデルがないと検出されないので、「finding なし」は、その形がないことの証拠ではない。`-no-deps` と、依存の関数が 0 のときは出ない |
 | `summary.isolation` | Rust をどう読んだか: `mode` が `sandbox` か `host` |
 | `stats.converged` | `false` なら、解析が上限で止まっていて、**結果は途中のもの** |
 | `stats.timed_out` | `true` なら `-timeout` で止まった。フィールドがない(`jq` では `null`)のは、時間切れでないという意味 |
@@ -558,8 +561,9 @@ rivus analyze -C <dir> -rules app.yaml -timeout 10m ./... > out.json
    - `timed_out` が `null` なのは、時間切れでないという意味です(`true` のときだけ、フィールドがあります)。
    - 共有してよいのは、この表(パッケージ名と数字)だけです。コードや経路は共有しません。パッケージ名が非公開のものなら、共有の前に利用者に確認します。
 
-4. **`-no-deps`** で、依存のソースを読まない。軽くなりますが、依存への呼び出しは全部、推測(`unmodeled_library_call`)になり、依存の中を通る流れの精度が落ちます。結果を報告するときは、`-no-deps` で得たと書きます。
-5. Go は、パッケージの指定で範囲を絞る(`./cmd/server/...`)。絞った外から来る流れは見えません。
+4. **`-no-deps`** で、依存のソースを読まない。軽くなりますが、依存への呼び出しは全部、推測(`unmodeled_library_call`)になり、依存の中を通る流れの精度が落ちます。**原因の切り分けには、3 より先に使ってよい**(`-no-deps` で終わるなら、原因は依存の本体です)。結果を報告するときは、`-no-deps` で得たと書きます。
+5. **モデルで切る。** 3 の表で、少数の依存が重さを決めているとき、または `on_findings_top` に、実装の多いインターフェースのメソッドが、注記を集めているときは、そのメソッドの行を `flows` のモデルにして、実装全体の本体を読まないようにできます(ADR-098。条件: 公開の対象で、本体を読んだ場合と finding の集合が同じ。読まなかった本体は `dependency_body_unread` の注記で示される。[docs/MODELING.md](MODELING.md) の 4a 節)。モデルは、解析のコストだけでなく、依存の中の sink の検出のためにも要ります(ADR-099)。**パッケージ単位で、まるごと読まない指定は、まだありません(設計中です)。** 今あるのは、モデルのある呼び出しの所でモデルを使い、そのメソッドの本体の要約を使わない、という動作です。
+6. Go は、パッケージの指定で範囲を絞る(`./cmd/server/...`)。絞った外から来る流れは見えません。
 
 時間やメモリを減らすために精度を落とした結果は、落とす前の結果の代わりにはなりません。どのフラグで得た結果かを、必ず報告に書きます。
 

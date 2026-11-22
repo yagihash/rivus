@@ -61,6 +61,9 @@ type Result struct {
 	ByIRParam map[IRParam][]*Site
 	// ByID finds a site by ID.
 	ByID map[string]*Site
+	// DependencyFunctions is the number of functions of dependencies in the program. Sites are listed only in the
+	// functions of the project (ADR-099), so none is searched for in these.
+	DependencyFunctions int
 }
 
 // SinkArgs returns the dangerous argument positions of a call with n

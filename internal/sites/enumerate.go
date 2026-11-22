@@ -64,6 +64,8 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 	}
 	for _, fn := range prog.Funcs {
 		if fn.Dep {
+			// ADR-099: sites are listed in the functions of the project only
+			res.DependencyFunctions++
 			continue
 		}
 		var raw []*Site

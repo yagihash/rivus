@@ -55,6 +55,9 @@
 | [DESIGN-callouts.md](DESIGN-callouts.md) | 一部実装 | 関数値を通る流れ(関数値の正本) |
 | [DESIGN-shared-state.md](DESIGN-shared-state.md) | 一部実装 | グローバルと共有される場所(グローバルの正本) |
 | [DESIGN-capture.md](DESIGN-capture.md) | 一部実装 | クロージャのキャプチャの値 |
+| [DESIGN-package-models.md](DESIGN-package-models.md) | 案 | パッケージ単位の「本体を読まない」宣言(extractor の段階から)と、モデルを書く標準の流れ(生成、差分テスト、宣言)、モデル作成のセッションを並べる準備 |
+| [MODEL-RUNBOOK.md](MODEL-RUNBOOK.md) | 手順書 | 1 パッケージ分の組み込みモデルを作る手順(モデル作成のセッション向け) |
+| [MODEL-QUEUE.md](MODEL-QUEUE.md) | 一覧(決定) | 組み込みモデルを作る順番(3 言語をまたぐ 1 本)と、公開の指標、カバー済みの表 |
 | [DESIGN-field-sinks.md](DESIGN-field-sinks.md) | 一部実装 | 構造体のフィールドを sink にする(`parts`) |
 | [DESIGN-async-dispatch.md](DESIGN-async-dispatch.md) | 実装済み | Rust の `async` の中の `Fn::call` |
 | [DESIGN-generics-dispatch.md](DESIGN-generics-dispatch.md) | 一部実装 | Rust のジェネリクスと `Box<dyn Fn>` |
