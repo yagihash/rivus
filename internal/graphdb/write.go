@@ -160,6 +160,9 @@ type writer struct {
 	nFuncs  int64
 
 	insFile, insFunc, insCall, insEdge, insSite, insRef *sql.Stmt
+	// supplementedC are the call sites (rows) of the calls that the analysis of the function values gave candidates
+	// (-resolve-func-values; ir.Callee.ValueSupplemented).
+	supplementedC []int64
 }
 
 func write(path string, in *Input) (*Counts, error) {
@@ -485,6 +488,9 @@ func (w *writer) callSite(fn *sg.Func, from int64, in *sg.Instr) (int64, int, er
 	if err != nil {
 		return 0, 0, err
 	}
+	if in.Callee.ValueSupplemented {
+		w.supplementedC = append(w.supplementedC, cs)
+	}
 	for _, t := range targets {
 		sym := t.symbol
 		if sym == "" {
@@ -545,6 +551,9 @@ func writeMeta(tx *sql.Tx, in *Input, c *Counts, w *writer) error {
 		{"roots", js(m.Roots)},
 		{"revision", m.Revision},
 		{"layers", js(layers)},
+	}
+	if len(w.supplementedC) > 0 {
+		rows = append(rows, [2]string{MetaFuncValues, js(w.supplementedC)})
 	}
 	if m.Unread != nil {
 		rows = append(rows, [2]string{"unread", js(m.Unread)})

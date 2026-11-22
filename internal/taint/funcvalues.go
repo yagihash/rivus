@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/yagihash/rivus/internal/ir"
 	"github.com/yagihash/rivus/internal/model"
@@ -197,6 +198,17 @@ type FuncValuesStats struct {
 	Skipped   bool `json:"skipped"`
 	// Violations counts the rounds in which a candidate of a call was gone (a defect: the candidates only grow).
 	Violations int `json:"monotone_violations,omitempty"`
+	// TimedOut is true when the time limit of the run (-timeout) was reached in a round: the candidates of that round
+	// are not used (a round that did not finish may have found only some of them), the rounds before it were whole and
+	// are kept, and the calls that have candidates from them say that the rounds were cut. The limit is shared by all
+	// the rounds and the taint analysis after them.
+	TimedOut bool `json:"timed_out,omitempty"`
+}
+
+// roundIncomplete says that a run of the analysis was stopped by the time limit of the run: functions were left
+// unanalysed or analysed in part, so the candidates it carried are not all that it would have carried.
+func roundIncomplete(res *Result) bool {
+	return res.Stats.TimedOut || res.Stats.RunTimeouts > 0
 }
 
 // FuncValueRounds is the most runs of the analysis of the function values that -resolve-func-values makes. Provisional:
@@ -235,14 +247,29 @@ func ResolveFuncValuesRounds(graph *sg.Program, texts ir.Texts, st *sites.Result
 	}
 	opts.FuncValues = true
 	opts.PassStats, opts.TraceElement, opts.SlowFunc = false, "", nil
+	// opts.Timeout is the limit of all the rounds together (and of the taint analysis after them: the caller gives it
+	// what is left): each round gets what is left of it, not the whole.
+	total, begun := opts.Timeout, time.Now()
 	have := make([][]string, len(zero))
 	limited := make([]bool, len(zero))
 	grew := make([]bool, len(zero))
 	for round := 0; round < rounds; round++ {
+		if total > 0 {
+			opts.Timeout = total - time.Since(begun)
+			if opts.Timeout <= 0 {
+				out.TimedOut = true
+				break
+			}
+		}
 		eng := New(graph, texts, st2, rules, opts)
 		eng.SetLoadErrors(loadErrors)
 		res := eng.Run()
 		out.Rounds++
+		if roundIncomplete(res) {
+			// not used: candidates of a run that did not finish would hide the ones it missed
+			out.TimedOut = true
+			break
+		}
 		carried := map[string][]string{}
 		for _, c := range res.FuncCandidates {
 			carried[c.Site.ID] = c.Candidates
@@ -271,7 +298,7 @@ func ResolveFuncValuesRounds(graph *sg.Program, texts ir.Texts, st *sites.Result
 		}
 	}
 	for i, c := range zero {
-		if grew[i] && !limited[i] {
+		if (grew[i] || out.TimedOut && len(have[i]) > 0) && !limited[i] {
 			c.Instr.Callee.ValueRoundsLimit = true
 			out.RoundsCut++
 		}

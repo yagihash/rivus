@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/yagihash/rivus/internal/model"
 	"github.com/yagihash/rivus/internal/report"
@@ -509,33 +510,211 @@ func TestResolveFuncValuesRust(t *testing.T) {
 	t.Logf("rust-curated: %+v; findings added %d, removed %d", *fs, len(added), len(removed))
 }
 
-// TestNoPathStaysNotExhaustiveThroughACallThatGotCandidates: `rivus index -resolve-func-values`. The file is made from the
-// graph before the candidates are given (the analysis of the function values needs the taint engine, which `index` does
-// not run unless -taint is given), so a call that got candidates later is still a call with none in it, and a "no path"
-// through it is not exhaustive: the flag does not loosen the judgement of graph path.
-func TestNoPathStaysNotExhaustiveThroughACallThatGotCandidates(t *testing.T) {
+// fvIndex makes the graph file of the fixture, with the flag on or off (and with -taint or not).
+func fvIndex(t *testing.T, on, taintFlag bool) string {
+	t.Helper()
 	db := filepath.Join(t.TempDir(), "g.db")
+	args := []string{"index", "-ir", fvIR, "-rules", fvRules, "-no-project-rules", "-graph", db}
+	if on {
+		args = append(args, "-resolve-func-values")
+	}
+	if taintFlag {
+		args = append(args, "-taint", "-o", filepath.Join(t.TempDir(), "index.json"))
+	}
+	runIn(t, binary, ".", nil, args...)
+	return db
+}
+
+const (
+	fvFnRun = "package:fvsample/cells.dart#run"
+	fvPosCb = "package:fvsample/cells.dart#pos$1"
+	fvDecoy = "package:fvsample/cells.dart#negDecoy$1"
+)
+
+type fvPath struct {
+	Reachable            bool `json:"reachable"`
+	Exhaustive           bool `json:"exhaustive"`
+	NotExhaustiveBecause struct {
+		Unresolved struct {
+			Total int `json:"total"`
+		} `json:"unresolved_calls"`
+	} `json:"not_exhaustive_because"`
+	Paths []struct {
+		Supplemented int `json:"supplemented_calls"`
+		Steps        []struct {
+			Func         string `json:"func"`
+			Kind         string `json:"kind"`
+			Candidates   int    `json:"candidates"`
+			Supplemented bool   `json:"supplemented"`
+		} `json:"steps"`
+	} `json:"paths"`
+}
+
+func fvGraphPath(t *testing.T, db, from, to string) fvPath {
+	t.Helper()
+	var r fvPath
+	if err := json.Unmarshal(runIn(t, binary, ".", nil, "graph", "path", "-graph", db, "--from", from, "--to", to), &r); err != nil {
+		t.Fatal(err)
+	}
+	return r
+}
+
+// TestIndexHoldsTheEdgesThatGotCandidates: `rivus index -resolve-func-values` gives the calls of function values their
+// candidates before the file is written, so they are edges of it, and the answers say which edges they are
+// ("supplemented"). The file without the flag has no such edge, and the two files are not of the same key.
+func TestIndexHoldsTheEdgesThatGotCandidates(t *testing.T) {
 	for _, taintFlag := range []bool{false, true} {
-		args := []string{"index", "-ir", fvIR, "-rules", fvRules, "-no-project-rules", "-resolve-func-values", "-graph", db}
-		if taintFlag {
-			args = append(args, "-taint", "-o", filepath.Join(t.TempDir(), "index.json"))
+		on, off := fvIndex(t, true, taintFlag), fvIndex(t, false, taintFlag)
+
+		// callees: the edge is there with the flag, and says it was supplemented
+		callees := func(db string) (edges []struct {
+			To           string `json:"to"`
+			Kind         string `json:"kind"`
+			Candidates   int    `json:"candidates"`
+			Supplemented bool   `json:"supplemented"`
+		}) {
+			var g struct {
+				Edges []struct {
+					To           string `json:"to"`
+					Kind         string `json:"kind"`
+					Candidates   int    `json:"candidates"`
+					Supplemented bool   `json:"supplemented"`
+				} `json:"edges"`
+			}
+			if err := json.Unmarshal(runIn(t, binary, ".", nil, "graph", "callees", "-graph", db, fvFnRun), &g); err != nil {
+				t.Fatal(err)
+			}
+			return g.Edges
 		}
-		runIn(t, binary, ".", nil, args...)
-		out := runIn(t, binary, ".", nil, "graph", "path", "-graph", db, "--from", "package:fvsample/cells.dart#run", "--to", "package:fvsample/cells.dart#pos$1")
-		var r struct {
-			Reachable            bool `json:"reachable"`
-			Exhaustive           bool `json:"exhaustive"`
-			NotExhaustiveBecause struct {
-				Unresolved struct {
-					Total int `json:"total"`
-				} `json:"unresolved_calls"`
-			} `json:"not_exhaustive_because"`
+		if e := callees(on); len(e) != 1 || e[0].To != fvPosCb || e[0].Kind != "value" || e[0].Candidates != 1 || !e[0].Supplemented {
+			t.Errorf("-taint=%v: callees of run with the flag: %+v, want one edge of kind value to the closure of pos, supplemented", taintFlag, e)
 		}
-		if err := json.Unmarshal(out, &r); err != nil {
+		if e := callees(off); len(e) != 0 {
+			t.Errorf("-taint=%v: callees of run without the flag: %+v, want none", taintFlag, e)
+		}
+
+		// callers and dispatchers of the candidate: the edge says it was supplemented
+		for _, op := range []string{"callers", "dispatchers"} {
+			out := string(runIn(t, binary, ".", nil, "graph", op, "-graph", on, fvPosCb))
+			if !strings.Contains(out, `"supplemented":true`) {
+				t.Errorf("-taint=%v: graph %s of the candidate does not say the call was supplemented: %s", taintFlag, op, out)
+			}
+			if out := string(runIn(t, binary, ".", nil, "graph", op, "-graph", off, fvPosCb)); strings.Contains(out, "supplemented") {
+				t.Errorf("-taint=%v: graph %s without the flag says supplemented: %s", taintFlag, op, out)
+			}
+		}
+
+		// the key: another file for another setting (the flag is in the flags the file records, and in the hash)
+		info := func(db string) (hash string, flags map[string]string) {
+			var in struct {
+				Graph struct {
+					SourceHash string            `json:"source_hash"`
+					Flags      map[string]string `json:"flags"`
+				} `json:"graph"`
+			}
+			if err := json.Unmarshal(runIn(t, binary, ".", nil, "graph", "info", "-graph", db), &in); err != nil {
+				t.Fatal(err)
+			}
+			return in.Graph.SourceHash, in.Graph.Flags
+		}
+		hOn, fOn := info(on)
+		hOff, fOff := info(off)
+		if hOn == hOff {
+			t.Errorf("-taint=%v: the key of the file with the flag is the key of the file without it", taintFlag)
+		}
+		if fOn["resolve-func-values"] != "true" || fOff["resolve-func-values"] != "" {
+			t.Errorf("-taint=%v: flags with %v, without %v", taintFlag, fOn, fOff)
+		}
+
+		// path: a way through the supplemented call is found, says so, and is not exhaustive
+		r := fvGraphPath(t, on, fvFnRun, fvPosCb)
+		if !r.Reachable || r.Exhaustive || len(r.Paths) != 1 || r.Paths[0].Supplemented != 1 || len(r.Paths[0].Steps) != 2 ||
+			!r.Paths[0].Steps[0].Supplemented || r.Paths[0].Steps[0].Kind != "value" || r.Paths[0].Steps[0].Candidates != 1 {
+			t.Errorf("-taint=%v: path with the flag: %+v, want one path through the supplemented call, not exhaustive", taintFlag, r)
+		}
+		// no path: not exhaustive through the call that got candidates (they are not all that it may reach), as through a call with none
+		r = fvGraphPath(t, on, fvFnRun, fvDecoy)
+		if r.Reachable || r.Exhaustive || r.NotExhaustiveBecause.Unresolved.Total != 1 {
+			t.Errorf("-taint=%v: path to the decoy with the flag: reachable %v, exhaustive %v, unresolved calls %d; want no path, not exhaustive, 1", taintFlag, r.Reachable, r.Exhaustive, r.NotExhaustiveBecause.Unresolved.Total)
+		}
+		// the file without the flag: no path, not exhaustive, the call has no candidate (as before)
+		r = fvGraphPath(t, off, fvFnRun, fvPosCb)
+		if r.Reachable || r.Exhaustive || r.NotExhaustiveBecause.Unresolved.Total != 1 {
+			t.Errorf("-taint=%v: path without the flag: reachable %v, exhaustive %v, unresolved calls %d; want no path, not exhaustive, 1 call with no candidate", taintFlag, r.Reachable, r.Exhaustive, r.NotExhaustiveBecause.Unresolved.Total)
+		}
+	}
+}
+
+// TestIndexKeyDiffersByFlag: a question about an index made with the flag, asked without it (or the other way round),
+// says that the file is stale (the key differs), as for any other flag of the analysis.
+func TestIndexKeyDiffersByFlag(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "go.mod"), "module m\n\ngo 1.22\n")
+	write(t, filepath.Join(dir, "a.go"), "package m\n\nfunc F() {}\n")
+	db := filepath.Join(t.TempDir(), "g.db")
+	runIn(t, binary, ".", nil, "index", "-C", dir, "-graph", db, "-resolve-func-values")
+	stale := func(extra ...string) (bool, string) {
+		args := append([]string{"graph", "info", "-graph", db, "-C", dir}, extra...)
+		var in struct {
+			Snapshot struct {
+				Fresh   *bool    `json:"fresh"`
+				Reasons []string `json:"stale_reasons"`
+			} `json:"snapshot"`
+		}
+		if err := json.Unmarshal(runIn(t, binary, ".", nil, args...), &in); err != nil {
 			t.Fatal(err)
 		}
-		if r.Reachable || r.Exhaustive || r.NotExhaustiveBecause.Unresolved.Total != 1 {
-			t.Errorf("-taint=%v: reachable %v, exhaustive %v, unresolved calls %d; want no path, not exhaustive, 1 call with no candidate (the one that got candidates)", taintFlag, r.Reachable, r.Exhaustive, r.NotExhaustiveBecause.Unresolved.Total)
+		return in.Snapshot.Fresh != nil && !*in.Snapshot.Fresh, strings.Join(in.Snapshot.Reasons, ";")
+	}
+	if s, why := stale("-resolve-func-values"); s {
+		t.Errorf("the same flag: stale (%s)", why)
+	}
+	if s, why := stale("-resolve-func-values=false"); !s || !strings.Contains(why, "resolve-func-values") {
+		t.Errorf("the flag off against a file made with it: stale %v (%s), want stale because of resolve-func-values", s, why)
+	}
+}
+
+// TestResolveFuncValuesTimeout: -timeout is the limit of all the rounds of the analysis of the function values and of
+// the taint analysis together. A round that the limit stopped is not used (its candidates would be some of the
+// candidates only), and stats.func_values says so (timed_out).
+func TestResolveFuncValuesTimeout(t *testing.T) {
+	on := fvParse(t, fvRun(t, ".", "-ir", fvIR, "-rules", fvRules, "-resolve-func-values", "-timeout", "1ns"))
+	fs := on.funcValues(t)
+	if fs == nil || !fs.TimedOut || fs.Supplemented != 0 || fs.ZeroAfter != fs.ZeroBefore {
+		t.Fatalf("stats.func_values = %+v, want timed out and no call supplemented", fs)
+	}
+	for _, u := range on.rep.Uncertainties {
+		if strings.HasPrefix(u.Detail, "func_values_supplemented:") {
+			t.Errorf("a call has candidates from a round that the limit stopped: %+v", u)
+		}
+	}
+	var st struct {
+		TimedOut bool `json:"timed_out"`
+	}
+	if err := json.Unmarshal(on.raw["stats"], &st); err != nil || !st.TimedOut {
+		t.Errorf("stats.timed_out = %v (%v): the taint analysis after the rounds has no time left", st.TimedOut, err)
+	}
+	// a limit that is not reached changes nothing
+	long := fvParse(t, fvRun(t, ".", "-ir", fvIR, "-rules", fvRules, "-resolve-func-values", "-timeout", "10m"))
+	if fs := long.funcValues(t); fs == nil || fs.TimedOut || fs.Supplemented != 2 {
+		t.Errorf("stats.func_values with a long limit = %+v", fs)
+	}
+}
+
+// TestResolveFuncValuesRoundsShareTheLimit: the library call. A round gets what is left of Options.Timeout, and one that is
+// stopped by it leaves the graph as it was.
+func TestResolveFuncValuesRoundsShareTheLimit(t *testing.T) {
+	a := fvLoad(t, fvIR, fvRules)
+	opts := taint.DefaultOptions()
+	opts.Timeout = time.Nanosecond
+	fs := taint.ResolveFuncValues(a.graph, a.l.texts, a.st, a.rules, opts, a.l.loadErrors())
+	if !fs.TimedOut || fs.Supplemented != 0 || fs.ZeroAfter != fs.ZeroBefore {
+		t.Errorf("stats %+v: want timed out, nothing supplemented", fs)
+	}
+	_, calls := taint.FuncValueSites(a.graph, a.st)
+	for i := range calls {
+		if calls[i].Instr.Callee.ValueSupplemented {
+			t.Errorf("%s: candidates from a round that did not finish", calls[i].Site.ID)
 		}
 	}
 }

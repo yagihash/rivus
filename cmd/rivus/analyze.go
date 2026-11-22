@@ -139,15 +139,6 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 		return nil, err
 	}
 	phase("graph")
-	if o.afterRead != nil {
-		if err := o.afterRead(l, rules, st, graph, bodies); err != nil {
-			return nil, err
-		}
-		phase("graphdb")
-		if o.structureOnly {
-			return nil, nil
-		}
-	}
 	opts := taint.DefaultOptions()
 	opts.K = o.k
 	opts.Timeout = o.timeout
@@ -162,6 +153,43 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 		opts.SlowFunc = func(fn string, d, cpu time.Duration, outputs, roots int) {
 			// cpu: the thread's own CPU time over the same span (0: no clock on this system); wall time swells with the collector
 			fmt.Fprintf(os.Stderr, "rivus: slow function %s: %v (cpu %v, %d outputs, %d roots)\n", fn, d.Round(time.Millisecond), cpu.Round(time.Millisecond), outputs, roots)
+		}
+	}
+	// -func-values and -resolve-func-values come before the structure layer is written when the flag is on (the calls that
+	// get candidates are edges of the file), and after it otherwise (as they always did). They run once.
+	var fvStats *taint.FuncValuesStats
+	fvDone := false
+	resolveFV := func() {
+		if fvDone {
+			return
+		}
+		fvDone = true
+		if o.funcValues != "" {
+			// before the candidates are given (-resolve-func-values): the table says what the rest of the analysis has
+			if err := writeFuncValues(o.funcValues, graph, l, st, rules, opts); err != nil {
+				fmt.Fprintf(os.Stderr, "rivus: -func-values: %v\n", err)
+			}
+		}
+		if o.resolveFuncValues {
+			begun := time.Now()
+			fvStats = taint.ResolveFuncValues(graph, l.texts, st, rules, opts, l.loadErrors())
+			phase("func-values")
+			if o.timeout > 0 {
+				// -timeout is the limit of the rounds and of the analysis after them together
+				opts.Timeout = max(o.timeout-time.Since(begun), time.Nanosecond)
+			}
+		}
+	}
+	if o.afterRead != nil && o.resolveFuncValues {
+		resolveFV()
+	}
+	if o.afterRead != nil {
+		if err := o.afterRead(l, rules, st, graph, bodies); err != nil {
+			return nil, err
+		}
+		phase("graphdb")
+		if o.structureOnly {
+			return nil, nil
 		}
 	}
 	var res *taint.Result
@@ -186,17 +214,7 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 		runtime.SetMutexProfileFraction(5)
 		runtime.SetBlockProfileRate(1000)
 	}
-	if o.funcValues != "" {
-		// before the candidates are given (-resolve-func-values): the table says what the rest of the analysis has
-		if err := writeFuncValues(o.funcValues, graph, l, st, rules, opts); err != nil {
-			fmt.Fprintf(os.Stderr, "rivus: -func-values: %v\n", err)
-		}
-	}
-	var fvStats *taint.FuncValuesStats
-	if o.resolveFuncValues {
-		fvStats = taint.ResolveFuncValues(graph, l.texts, st, rules, opts, l.loadErrors())
-		phase("func-values")
-	}
+	resolveFV()
 	eng := taint.New(graph, l.texts, st, rules, opts)
 	eng.SetLoadErrors(l.loadErrors())
 	res = eng.Run()
