@@ -1,6 +1,6 @@
 # 設計: インストールに何が要るか(Homebrew の formula の形を決める材料)
 
-> **ユーザーの指示による例外(2026-11-22)。方向性(導入の手軽さには投資しない)は変えていない。** この仕事の範囲は、「ユーザーが `brew install` で使える所まで」。それを超える仕上げ(いろいろな環境への対応、ビルド済みの配布の整備、インストールの文書の作り込み)は、ユーザーが頼まない限り、しない。
+> **ユーザーの指示による例外(2026-11-22)。方向性(導入の手軽さには投資しない)は変えていない。** この作業の範囲は、「ユーザーが `brew install` で使える所まで」。それを超える仕上げ(いろいろな環境への対応、ビルド済みの配布の整備、インストールの文書の作り込み)は、ユーザーが頼まない限り、しない。
 > **状態: Rust の入れ方(6 節)は、ユーザーが決めた(2026-11-22)。ほかは案**(棚卸し。formula はまだない)。ユーザーの指示(2026-11-22): **Homebrew でのインストールを、当面の最優先にする**。相談役の順: 棚卸し(この文書)→ 隔離の移行([DESIGN-macos-sandbox.md](DESIGN-macos-sandbox.md))→ formula と tap。**tap のリポジトリを作る、リリースのタグを打つ、は外に出る・戻せない操作なので、そのつどユーザーの確認が要る。**
 
 ## 1. 実行時に rivus が要るもの(言語ごと)
@@ -8,7 +8,7 @@
 | 言語 | 実行時に要るもの | 見つけ方(今) | 確かめたこと(2026-11-22、手元、macOS arm64) |
 | --- | --- | --- | --- |
 | Go | `go` コマンド(`go list`、`go env GOROOT` を呼ぶ。`internal/frontend/gossa/load.go`)と、対象の依存(モジュールキャッシュ)。`go.mod` は `go 1.27` | `PATH` の `go` | Go のバイナリだけでは足りない: **実行時に Go のツールチェインが要る** |
-| Dart | Dart SDK(extractor は `package:analyzer` で、SDK の `dart:*` のソースを読む)。extractor は Dart のパッケージ(`extractor/dart`、`executables: rivus-dart`) | `-dart-extractor` > `RIVUS_DART_EXTRACTOR` > `PATH` の `rivus-dart`。入れ方の案内は「`dart pub global activate --source path extractor/dart`」 | **`dart compile exe` で、単体の実行ファイル(19 MB、約 10 秒)にできる。ただし、実行時に Dart SDK が要る**: extractor は、SDK の場所を `Platform.resolvedExecutable` の 2 つ上のディレクトリから導く(`extractor/dart/lib/extract.dart:203`)ので、コンパイルした実行ファイルは、SDK の中にないと動かない(`version` ファイルが開けず落ちた)。SDK の場所を、環境変数か引数で渡せるようにする直しが要る |
+| Dart | Dart SDK(extractor は `package:analyzer` で、SDK の `dart:*` のソースを読む)。extractor は Dart のパッケージ(`extractor/dart`、`executables: rivus-dart`) | `-dart-extractor` > `RIVUS_DART_EXTRACTOR` > `PATH` の `rivus-dart`。入れ方の案内は「`dart pub global activate --source path extractor/dart`」 | **`dart compile exe` で、単体の実行ファイル(19 MB、約 10 秒)にできる。ただし、実行時に Dart SDK が要る**: extractor は、SDK の場所を `Platform.resolvedExecutable` の 2 つ上のディレクトリから導く(`extractor/dart/lib/extract.dart:203`)ので、コンパイルした実行ファイルは、SDK の中にないと動かない(`version` ファイルが開けず落ちた)。SDK の場所を、環境変数か引数で渡せるようにする修正が要る |
 | Rust | 固定の nightly(`nightly-2026-11-15`、`rustc-dev`、`llvm-tools`、`rust-src`)、extractor(`rivus-rust`。`cargo +nightly-2026-11-15 install rivus`)、C コンパイラとリンカ(対象のビルド)。macOS は、サンドボックスの下で動かす(既定。ADR-093)。`-unsafe-host-exec` でホストの直接 | `-rust-extractor` > `RIVUS_RUST_EXTRACTOR` > `PATH` の `rivus-rust`。`RIVUS_RUST_TOOLCHAIN_DIR`(固定のツールチェインのディレクトリ。なければ `~/.rustup/toolchains/...`) | 決まった(6 節): formula が、インストールの中で、固定のツールチェインと extractor を keg の `libexec` に作る。ソースから作る人は `rivus setup rust -source` |
 
 ## 2. rivus が、それらを、どこから探すか
@@ -52,7 +52,7 @@ Go と Dart は動く(`go` と Dart SDK が、それぞれ `brew` で入る)。*
 - **`SDKROOT` が要る。** なければ、この機械の `cc` が CLT の `MacOSX27.0.sdk` を選び、`libSystem.tbd` が読めず `tapi error: malformed file` でリンクに失敗した(Homebrew のビルド環境が `SDKROOT` を設定するはずだが、formula の中で確かめる)。`CARGO_TARGET_DIR` を指さないと、ソースの中の `extractor/rust/target` に出る。
 - **確かめたこと(2026-11-22、macOS arm64、scratch の中、`HOME` を空にして)**: 上の形で、`bench/zoo-rust` の `rivus extract -lang rust`(サンドボックスの下)が、`~/.rustup` と `~/Library/Application Support/rivus` に頼らずに動き、IR は今の環境のものと同一だった(違うのは、IR の `file` に入る std のソースの絶対パスだけ。課題 #122)。ビルドの場所のツールチェインを消して、ツールチェインと extractor を移した場合は、rpath の書き換えと再署名で動き、IR は同一だった。
 - **要るもの**: Xcode CLT(`cc` とリンカ)。ディスク約 1.1 GB。インストールの間のネットワーク(static.rust-lang.org と crates.io)。
-- **`rivus setup rust -source <extractor/rust>`** は、Homebrew を使わない人(リポジトリから作る人)の道として残す。置き場所は、利用者のデータのディレクトリ(`~/Library/Application Support/rivus/`)。
+- **`rivus setup rust -source <extractor/rust>`** は、Homebrew を使わない人(リポジトリから作る人)の手段として残す。置き場所は、利用者のデータのディレクトリ(`~/Library/Application Support/rivus/`)。
 
 ## 6a. 版の一致
 
@@ -62,7 +62,7 @@ extractor が自分の版を答え、rivus は合わなければ止まる(課題
 
 formula の中身(`depends_on`、`caveats`、`test do`)は、先にこのリポジトリの中に下書きとして置ける(外に出ない)。`depends_on`: ビルド時 `go`、実行時 `go`(`go list` のため)、Dart の扱い(上の表。`dart-sdk` を依存に)、Rust は `rustup`(6 節)。`test do`: `rivus version`(足したあと)と、小さい Go のプロジェクトの解析。
 
-## 8. なっていない所の一覧(直す仕事)
+## 8. なっていない所の一覧(直す作業)
 
 1. Dart の extractor の SDK の場所を、実行ファイルの位置からでなく、環境変数または `dart` の位置から導く(単体の実行ファイルにするため)。
 2. 見本のルールを、インストールした利用者が使える形にする(`share` に入れる、または書き出すコマンド)。

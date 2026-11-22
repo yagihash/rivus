@@ -5,7 +5,7 @@
 - 今のアーキテクチャは [ARCHITECTURE.md](../ARCHITECTURE.md)。設計思想は [PRINCIPLES.md](../PRINCIPLES.md)。
 - 決めた経緯と理由は [DECISIONS.md](../DECISIONS.md)。各 ADR の今の状態は [ADR-INDEX.md](../ADR-INDEX.md)。
 - 本文の数字（行数、秒、MB、検出数）は、書いた当時の実測で、今の値ではない。本文の「今」「現在」も、書いた当時を指す。
-- 節番号（2.7.x、9、10、11）は、ARCHITECTURE.md の旧い番号のまま。ADR などの引用が、ここへ辿れるようにしてある。
+- 節番号（2.7.x、9、10、11）は、ARCHITECTURE.md の旧い番号のまま。ADR などの引用が、ここへたどれるようにしてある。
 - 本文中の `ARCHITECTURE.md` の節への参照は、旧い版のもの。
 
 目次:
@@ -35,7 +35,7 @@ IR が運ぶべきものを実測から決め直す。**ここに書くのは案
 - `rivus extract [-text] [-func 部分文字列] [-all]` で、IR を JSON Lines か人間向けの文字列で出せる。`testdata`、ghmint、rivus 自身、x/tools（5,258 関数、87MB、約 2 秒）が、検証つきで通り、`unsupported` は 0 件
 - go/ssa の内部用の呼び出し（`ssa:deferstack`、`ssa:wrapnilchk`）は、シンボル `builtin.ssa:...` の静的な `call` として、そのまま出る。`defer` を持つ関数の出口には `rt.rundefers` の `call` が出る
 - アドレス計算（`FieldAddr` / `IndexAddr`）は、使い道が `load` / `store` だけなら畳み込む。アドレスが値として渡るときだけ `addr_of` になる。グローバルのアドレスは、引数のない `addr_of`（`global` つき）
-- `call` の `callee` は、静的な呼び出しで `func`（呼び先の関数 ID）と `symbol`（ルールのシンボル。無名関数では空）の両方を持つ。クロージャの直接呼び出しは、`value` の呼び出しにする（束縛した値を失わないため）
+- `call` の `callee` は、静的な呼び出しで `func`（呼び出し先の関数 ID）と `symbol`（ルールのシンボル。無名関数では空）の両方を持つ。クロージャの直接呼び出しは、`value` の呼び出しにする（束縛した値を失わないため）
 - φ は、前任ブロックの末尾の `copy` に落とす。1 つの前任が複数の φ に値を渡すときは、一時変数を経由する
 - **まだ入れていないもの:** `ArgPos`（2.3 でサイトを IR の上に載せるときに入れる）、`dynamic` の `candidates`（2.5）、`implementations`（`-implementations` で指定したメソッドだけ）
 
@@ -55,7 +55,7 @@ IR が運ぶべきものを実測から決め直す。**ここに書くのは案
 - **エンジンを動かす言語固有の操作は、シンボル付きの `call`:** `chan.send` / `chan.recv`、`iter.start` / `iter.next` / `iter.next_string`、`rt.rundefers`。`select` は、extractor が送信と受信の `call` に分ける（どれが起きるかはデータではない）。`index_load` / `index_store` の `Keyed` は、キーで引くこと（map、文字列）。`Folded` は、アドレス計算を畳んだ `load` / `store`。`convert` の `Operator` は、変換の種類
 - **値の同一性:** `go/ssa` のタプル（複数戻り値）は、`call` の `Dsts` の 1 つずつが値になる。`Extract` は消える
 - **コールグラフ:** VTA は NaiveForm の上だと lifted の上より粗い（`(go/types.Object).Name` の候補が増える）。そこで `gossa.Options.WithLifted` で lifted 版も作り、グラフはそちらから取って、NaiveForm の `call` へ位置と種類で対応づけて `candidates` に入れる。この対応づけで、`ssa:deferstack` のような lifting で消える呼び出しを避ける
-- **関数だけの値:** 何も捕捉しない無名関数を変数に入れて呼ぶ場合、`sg` が `make_closure`（捕捉なし）から呼び先を静的に解く（これを落とすと、`unresolved_callee` が増えた）
+- **関数だけの値:** 何もキャプチャしない無名関数を変数に入れて呼ぶ場合、`sg` が `make_closure`（キャプチャなし）から呼び出し先を静的に解く（これを落とすと、`unresolved_callee` が増えた）
 - **検証（旧経路との突き合わせ。JSON を比べた）:** `testdata` の全ケース、rivus 自身（36 検出、614 不確実性）、ghmint（15 検出、176 不確実性）で完全に一致。x/tools（4 検出、10,628 不確実性）も、検出・抑制・収束は一致し、不確実性は 1 件だけ違う（generic な関数の中の range-over-func で、位置のない合成された呼び出し。`excfg.CFG.Out$1` を呼ぶ側）。許容する
 - **性能（x/tools、15.6 万行）:** 107 秒・最大 4.9 GB → 97 秒・最大 2.4 GB（ADR-040）。メモリが増えた原因は、関数ごとの解析の状態を結果の収集まで持っていたことだった（`analyzeFunc` の最後に、検出・抑制・不確実性だけ残して手放す）
 - **依存:** `go list -deps` で、`taint`・`sites`・`sg`・`irssa`・`ir`・`report`・`model` に `go/ssa`・`x/tools`・`gossa`・`go/types`・`go/ast` は入っていない。`taint`（ガードの定数評価）と `report` には `go/token` と `go/constant` が入る（標準ライブラリの、言語に依らない部分。いずれ自前にできる）。`gossa` は、Go の extractor と、`rules.Expand`（実装列挙。Go のパッケージを引く）からだけ使われる
@@ -156,10 +156,10 @@ Phase 1 では中立 IR を経由せず、`go/ssa` から直接 taint 解析ま�
 | 1.0 | 足場: `go.mod`（Go 1.27、`golang.org/x/tools` 最新）、CI（GitHub Actions）、LICENSE（Apache-2.0）、`testdata/` ハーネス | `go test ./...` が通る CI |
 | 1.1 | ローダ: `go/packages` → `go/ssa`（`InstantiateGenerics` 付き）、`FuncID` 付与、ソース位置とスニペット切り出し | 小さな Go プロジェクトの全関数と位置を列挙できる |
 | 1.2 | モデル: YAML 読み込み、シンボル照合（`exact` のみ先に）、組み込みの最小セット | source/sink/sanitizer を YAML で書いて照合できる |
-| 1.2b | サイト列挙（`rivus sites`）: L0 の列挙、L1 のリテラル印、サイト ID、JSON 出力 | 型解決つきで sink の呼び出し箇所を列挙でき、grep との差（別名インポートなど）がテストで示せる |
+| 1.2b | サイト列挙（`rivus sites`）: L0 の列挙、L1 のリテラルマーク、サイト ID、JSON 出力 | 型解決つきで sink の呼び出し箇所を列挙でき、grep との差（別名インポートなど）がテストで示せる |
 | 1.3 | 手続き内 taint: ラベル、worklist、φ 相当の合流、sanitizer の `Drop` | 1 関数内の `testdata` ケース（検出する / しない）が通る |
 | 1.4 | 出力 v0: 構造化 JSON（経路ノードとスニペット） | 1.3 の結果が JSON で読める |
-| 1.5 | コールグラフ: `CallGraphBuilder` インタフェース、Go 実装（CHA → VTA）、SCC 縮約、トポロジカル順 | 呼び先から順に関数を列挙できる |
+| 1.5 | コールグラフ: `CallGraphBuilder` インタフェース、Go 実装（CHA → VTA）、SCC 縮約、トポロジカル順 | 呼び出し先から順に関数を列挙できる |
 | 1.6 | 関数サマリ: 算出、展開、SCC 内の不動点。ファイル・パッケージ跨ぎ | 複数ファイル・複数パッケージにまたがる `testdata` が通る |
 | 1.7 | ヒープ: フィールド感度（k=3）、クロージャ、グローバル、コンテナの扱い | 構造体・クロージャ経由のケースが通る |
 | ★ Dart スパイク | **（実施済み。ADR-037。コードは削除した。git の履歴にある）** 1.5〜1.7 のあいだ、ただし Phase 2 の前に。2 日のタイムボックス（下記） | 可否の判断 ＋ IR 設計に反映すべき難所のリスト |

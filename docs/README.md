@@ -1,17 +1,17 @@
 # docs の目次
 
-読み手ごとに、入口の文書を並べる。リポジトリ全体の入口は [../README.md](../README.md)。
+読者ごとに、入口の文書を並べる。リポジトリ全体の入口は [../README.md](../README.md)。
 
 - 状態は、2026-11-22、9c26a39 時点の確認。
 - 1 つの話題に、正本の文書は 1 つ。ほかの文書は、要約とリンクだけにする。
 - 「今どうなっているか」は ARCHITECTURE などの文書、「なぜそうなったか」は ADR。ADR は書き換えない。
 
-## 読み手ごとの入口
+## 読者ごとの入口
 
-| 読み手 | 知りたいこと | 読む文書 |
+| 読者 | 知りたいこと | 読む文書 |
 |---|---|---|
-| 使い手 | 何が出るか、何を言わないか、使い方、出力の読み方 | [../README.md](../README.md)、[rust-isolation.md](rust-isolation.md)(信頼できない Rust)、[GLOSSARY.md](GLOSSARY.md) |
-| ルールを書く人 | ルールの書式、何が書けるか、確かめ方 | [MODELING.md](MODELING.md)、[../examples/rules/README.md](../examples/rules/README.md)、[GCP-MODELS.md](GCP-MODELS.md) |
+| 使い手 | 何が出るか、何を報告しないか、使い方、出力の読み方 | [../README.md](../README.md)、[rust-isolation.md](rust-isolation.md)(信頼できない Rust)、[GLOSSARY.md](GLOSSARY.md) |
+| ルールを書く人 | ルールの書式、何が書けるか、確認方法 | [MODELING.md](MODELING.md)、[../examples/rules/README.md](../examples/rules/README.md)、[GCP-MODELS.md](GCP-MODELS.md) |
 | rivus を使う AI エージェント | `rivus index` と `rivus graph`、答えの読み方 | [GRAPH.md](GRAPH.md)、[../README.md](../README.md) |
 | 開発者 | 設計思想、今の構成、経緯、テストと測定 | [PRINCIPLES.md](PRINCIPLES.md)、[ROADMAP.md](ROADMAP.md)、[ISSUES.md](ISSUES.md)(課題の一覧)、[ARCHITECTURE.md](ARCHITECTURE.md)、[DECISIONS.md](DECISIONS.md)、[ADR-INDEX.md](ADR-INDEX.md)、`DESIGN-*.md`、[../bench/README.md](../bench/README.md) |
 | レビューする人 | 不変条件、失敗の重さ、受け入れ済みの制約 | [PRINCIPLES.md](PRINCIPLES.md)、[../bench/MISSES.md](../bench/MISSES.md) |
@@ -53,13 +53,13 @@
 | [DESIGN-zoo.md](DESIGN-zoo.md) | 一部実装 | zoo と wild のベンチ。使い方の正本は `bench/zoo/README.md` |
 | [DESIGN-callouts.md](DESIGN-callouts.md) | 一部実装 | 関数値を通る流れ(関数値の正本) |
 | [DESIGN-shared-state.md](DESIGN-shared-state.md) | 一部実装 | グローバルと共有される場所(グローバルの正本) |
-| [DESIGN-capture.md](DESIGN-capture.md) | 一部実装 | クロージャの捕獲の値 |
+| [DESIGN-capture.md](DESIGN-capture.md) | 一部実装 | クロージャのキャプチャの値 |
 | [DESIGN-field-sinks.md](DESIGN-field-sinks.md) | 一部実装 | 構造体のフィールドを sink にする(`parts`) |
 | [DESIGN-async-dispatch.md](DESIGN-async-dispatch.md) | 実装済み | Rust の `async` の中の `Fn::call` |
 | [DESIGN-generics-dispatch.md](DESIGN-generics-dispatch.md) | 一部実装 | Rust のジェネリクスと `Box<dyn Fn>` |
 | [DESIGN-memory.md](DESIGN-memory.md) | 一部実装 | メモリ(英語) |
 | [DESIGN-fetch-network.md](DESIGN-fetch-network.md) | 案 | 取得のコンテナのネットワークを絞る |
-| [DESIGN-observed-calls.md](DESIGN-observed-calls.md) | 案(最小の試しあり) | 実行して観測した呼び出しと、グラフの突き合わせ(Dart から) |
+| [DESIGN-observed-calls.md](DESIGN-observed-calls.md) | 案(最小の試行あり) | 実行して観測した呼び出しと、グラフの突き合わせ(Dart から) |
 
 ### 歴史的な文書
 

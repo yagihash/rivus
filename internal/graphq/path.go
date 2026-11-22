@@ -1367,7 +1367,20 @@ func (e *Engine) notExhaustive(starts, goals []int64, refs bool) (*NotExhaustive
 			ne.UnreadCode.Examples = u.FailedExamples
 		}
 	}
-	if !ne.Cut && ne.UnresolvedCalls.Total == 0 && ne.OpenFunctions.Total == 0 && ne.UnreadCode.Total == 0 {
+	// a language of the directory that the index does not hold: what it would call is not an edge
+	if raw != "" {
+		var u graphdb.Unread
+		if json.Unmarshal([]byte(raw), &u) == nil && len(u.SkippedLanguages) > 0 {
+			var names []string
+			for _, sl := range u.SkippedLanguages {
+				names = append(names, sl.Lang+" ("+sl.Why+")")
+			}
+			ne.SkippedLanguages.Total = len(u.SkippedLanguages)
+			ne.SkippedLanguages.Why = strings.Join(langsOf(u.SkippedLanguages), ", ") + " was not read: the project holds code of it that this index does not (a call from it is not an edge)"
+			ne.SkippedLanguages.Examples = names
+		}
+	}
+	if !ne.Cut && ne.SkippedLanguages.Total == 0 && ne.UnresolvedCalls.Total == 0 && ne.OpenFunctions.Total == 0 && ne.UnreadCode.Total == 0 {
 		return nil, nil
 	}
 	return ne, nil
@@ -1394,4 +1407,12 @@ func (e *Engine) buildConfigLine() string {
 		return ""
 	}
 	return "this answer is about the configuration the index was made in (" + strings.Join(parts, ", ") + "; the build constraints, and the cfg and features of Rust, leave files out): a file that this configuration does not build is outside it"
+}
+
+func langsOf(s []graphdb.SkippedLanguage) []string {
+	var out []string
+	for _, x := range s {
+		out = append(out, x.Lang)
+	}
+	return out
 }

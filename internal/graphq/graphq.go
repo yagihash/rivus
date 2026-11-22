@@ -345,6 +345,9 @@ type NotExhaustive struct {
 	// package with a type error, a file or crate that failed): a call from it is not an edge. Or the index has no
 	// record of it (it was made before it was recorded): it is not known that nothing was left out.
 	UnreadCode Caveat `json:"unread_code"`
+	// SkippedLanguages: a language of the directory that the index was made without (it was declined, there was no
+	// terminal to ask, or it is not installed): a call from its code is not an edge.
+	SkippedLanguages Caveat `json:"skipped_languages"`
 	// Cut is set when the sets that were read (what the start reaches, what reaches the goal) were cut by a bound.
 	Cut bool `json:"cut,omitempty"`
 }

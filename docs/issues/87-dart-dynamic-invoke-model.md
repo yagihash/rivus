@@ -1,7 +1,7 @@
-# #87 Dart: dynamic なメソッド呼び出しが dart:core#dynamic.invoke のモデルで覆われ、本体の source と sink の見逃し・誤検出が痕跡なしに起きる
+# #87 Dart: dynamic なメソッド呼び出しが dart:core#dynamic.invoke のモデルで覆われ、本体の source と sink の見逃し・誤検出が注記なしに起きる
 
 - 状態: **partial**
-- 種類: 痕跡なしの見逃し・誤検出(一部)
+- 種類: 注記なしの見逃し・誤検出(一部)
 - 言語: Dart
 - ROADMAP の節: 2
 - 守るもの: `graph` の `exhaustive`(GRAPH-3 まで)
@@ -17,7 +17,7 @@
 コード読解 + フィクスチャで実行確認(78c3bdb。`@miss` 2、`@fp` 1)。モデルを外す対照はしていない。
 
 ## 場所
-- `extractor/dart/lib/exprs.dart:347` `_methodInvocation`: `dynamic` な受け手のメソッド呼び出しを `dart:core#dynamic.invoke` の静的呼び出しにする
+- `extractor/dart/lib/exprs.dart:347` `_methodInvocation`: `dynamic` なレシーバのメソッド呼び出しを `dart:core#dynamic.invoke` の静的呼び出しにする
 - `internal/model/builtin/dart-core.yaml:8`: そのモデルは `flows: [{from: args, to: result}]`
 
 ## 再現
@@ -28,16 +28,16 @@
 
 ## 期待と実際
 期待: `dynamic` のメソッド呼び出しは、候補の本体を読むか、近似であることが不確実性に出る。
-実際: モデルで覆われて痕跡が残らない。黙った見逃しと誤検出。
+実際: モデルで覆われて不確実性の注記が残らない。サイレントな見逃しと誤検出。
 
 ## 影響
-Dart の `dynamic` を使うコード(JSON を扱う部分など)で、黙って流れが落ちる、または混ざる。モデルが正体を隠す型(RUST-14 と同じ型。バックログ C-8 の属性案と関連)。
+Dart の `dynamic` を使うコード(JSON を扱う部分など)で、何も報告せずに流れが落ちる、または混ざる。モデルが正体を隠す型(RUST-14 と同じ型。バックログ C-8 の属性案と関連)。
 
 ## 修正の方向
-`dynamic.invoke` を、受け手の動的な型の候補(メソッド名で絞る)への呼び出しとして扱うか、モデルに「近似」の不確実性を付ける。案 2(ADR-047)では直らない。
+`dynamic.invoke` を、レシーバの動的な型の候補(メソッド名で絞る)への呼び出しとして扱うか、モデルに「近似」の不確実性を付ける。案 2(ADR-047)では直らない。
 
 ## 関連
-bench/MISSES.md「未解決のレビュー指摘」節、#30(受け手の式が落ちる件。閉じた)
+bench/MISSES.md「未解決のレビュー指摘」節、#30(レシーバの式が落ちる件。閉じた)
 
 別セッションのレビューの識別子: DART-12
 

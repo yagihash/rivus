@@ -1,6 +1,7 @@
 package graphq_test
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -40,6 +41,9 @@ var offset = 0
 
 // what the next build records of the code that was not read (nil: the index has no record), and its key_config
 var testUnread = &graphdb.Unread{}
+
+// testBrokenUnread: the next build() makes the record of the unread code unreadable (it is set back after the build)
+var testBrokenUnread bool
 var testKeyConfig map[string]string
 
 // the program the last build made, for the tests that compare it with sg.Program.Reachable
@@ -124,7 +128,7 @@ func build(t *testing.T, fns []fnDef, ss ...*sites.Site) *graphq.Engine {
 		p.Funcs = append(p.Funcs, fn)
 	}
 	entryIDs, exportedIDs = nil, nil
-	defer func() { testUnread, testKeyConfig = &graphdb.Unread{}, nil }()
+	defer func() { testUnread, testKeyConfig, testBrokenUnread = &graphdb.Unread{}, nil, false }()
 	g, err := sg.Build(p)
 	if err != nil {
 		t.Fatal(err)
@@ -134,6 +138,17 @@ func build(t *testing.T, fns []fnDef, ss ...*sites.Site) *graphq.Engine {
 	_, err = graphdb.Write(path, &graphdb.Input{Graph: g, Sites: ss, Meta: graphdb.Meta{RivusVersion: "t", CreatedAt: time.Now(), SourceHash: "h", Dir: "/proj", Unread: testUnread, KeyConfig: testKeyConfig}})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if testBrokenUnread {
+		// the record of the unread code of the index cannot be read (a file that was cut, or written by something else)
+		raw, err := sql.Open("sqlite", "file:"+filepath.ToSlash(path))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := raw.Exec(`UPDATE meta SET value = '{not json' WHERE key = 'unread'`); err != nil {
+			t.Fatal(err)
+		}
+		raw.Close()
 	}
 	db, err := graphdb.Open(path)
 	if err != nil {
