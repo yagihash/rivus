@@ -1,5 +1,6 @@
 // The driver: resolves the code, lowers every function with a body and writes
 // the stream.
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:analyzer/dart/analysis/analysis_context.dart';
@@ -155,6 +156,7 @@ Future<void> extract(String root, StringSink sink,
     out.loadError(e.key,
         'a dependency outside the project, the pub cache and the SDKs is not read (what package_config.json points to is not trusted): --allow-deps-under ${_advisedDir(e.key)} reads it');
   }
+  _missingPackageConfigs(root, out);
   if (!includeTests) {
     final dev = _devOnlyDependencies(root, out);
     final unread = deps ? dev.where((d) => !readPackages.contains(d)).toList() : <String>[];
@@ -1009,5 +1011,61 @@ class _DeclFinder extends RecursiveAstVisitor<void> {
       }
     }
     super.visitVariableDeclaration(node);
+  }
+}
+
+/// A package whose `package_config.json` is not there (`dart pub get` was not run, or failed): its imports of other packages
+/// do not resolve, its functions are named by `file:` URIs and not by `package:` ones, and what the rules say about
+/// `package:...` does not match: nothing is found, and nothing said. The package config is looked for in the directory of
+/// the package and above it (a workspace has one at its root). It is said as a load error that the package was not read as
+/// it is, and what to do: rivus does not run `dart pub get` itself (what is fetched is the user's to start).
+/// And a package config that is there and old: the pubspec.yaml declares a dependency that the package config does not list
+/// (it was added after `dart pub get`): said too, with the names. (Not by the age of the files: a file that was touched
+/// and not changed would be called old when it is not.)
+void _missingPackageConfigs(String root, StreamOut out) {
+  String? configOf(String dir) {
+    for (var d = dir;; d = p.dirname(d)) {
+      final f = p.join(d, '.dart_tool', 'package_config.json');
+      if (File(f).existsSync()) return f;
+      if (p.dirname(d) == d) return null;
+    }
+  }
+
+  for (final e in Directory(root).listSync(recursive: true, followLinks: false)) {
+    if (e is! File || p.basename(e.path) != 'pubspec.yaml' || _skipped(root, e.path)) continue;
+    final dir = p.dirname(e.path);
+    final rel = p.relative(dir, from: root);
+    final cfg = configOf(dir);
+    if (cfg == null) {
+      out.loadError(rel,
+          'package_config.json is not there: run `dart pub get` in ${rel == '.' ? 'the directory of the project' : rel} (rivus does not run it). The imports of other packages do not resolve, and the names of the functions are file: ones, so the rules that name package:... do not match: what this package holds is not read as it is',
+          unread: true);
+      continue;
+    }
+    try {
+      final y = loadYaml(e.readAsStringSync());
+      final listed = <String>{};
+      final c = jsonDecode(File(cfg).readAsStringSync());
+      if (c is Map && c['packages'] is List) {
+        for (final pk in c['packages'] as List) {
+          if (pk is Map && pk['name'] is String) listed.add(pk['name'] as String);
+        }
+      }
+      final declared = <String>{};
+      if (y is YamlMap) {
+        for (final k in ['dependencies', 'dev_dependencies']) {
+          final d = y[k];
+          if (d is YamlMap) declared.addAll(d.keys.cast<String>());
+        }
+      }
+      final missing = (declared.difference(listed).toList())..sort();
+      if (missing.isNotEmpty) {
+        out.loadError(rel,
+            'package_config.json is old: pubspec.yaml declares ${missing.join(', ')}, which it does not list: run `dart pub get` in ${rel == '.' ? 'the directory of the project' : rel} (rivus does not run it). The imports of these packages do not resolve',
+            unread: true);
+      }
+    } catch (_) {
+      // a pubspec.yaml or a package config that cannot be read: nothing to compare (the pubspec case is said elsewhere)
+    }
   }
 }

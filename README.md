@@ -108,7 +108,7 @@ rivus query -site <ID> ./...           # sites の 1 件から始める
 | 言語 | どう読むか | 要るもの |
 |---|---|---|
 | Go | `go/packages` と `go/ssa` で直接読む | Go のツールチェーン。コードがビルドできること |
-| Dart | 別プロセスの extractor（`package:analyzer`）が IR を書き、rivus が読む | Dart SDK。`dart pub get` と、コード生成（`build_runner`）が済んでいること。[extractor/dart](extractor/dart/README.md) |
+| Dart | 別プロセスの extractor（`package:analyzer`）が IR を書き、rivus が読む | Dart SDK。**解析の前に、そのパッケージで `dart pub get` を実行する**（rivus は実行しません。していない、または古いとき、rivus は `summary.unread` と stderr でそう言います）。コード生成（`build_runner`）も済んでいること。[extractor/dart](extractor/dart/README.md) |
 | Rust | 別プロセスの extractor（rustc のドライバ。MIR を読む）が IR を書き、rivus が読む | Docker（既定。固定した nightly を入れたイメージを、このリポジトリから作る）か、`-unsafe-host-exec` のときは固定した nightly の Rust。コードがビルドできること、`Cargo.lock` があること。**読むと、対象のビルドが走る**（下の「信頼できないコード」）。[extractor/rust](extractor/rust/README.md) |
 
 - Dart と Rust の extractor（`rivus-dart`、`rivus-rust`）は、PATH に置くか、`-dart-extractor` / `-rust-extractor`（または環境変数 `RIVUS_DART_EXTRACTOR` / `RIVUS_RUST_EXTRACTOR`）で指します。extractor が書いた IR のファイルを、`rivus analyze -ir file.jsonl` で読むこともできます。
