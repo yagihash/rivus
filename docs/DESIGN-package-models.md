@@ -389,7 +389,7 @@ verified_versions:
 | (iii) 第三者のコードを動かさない | 満たす(取得なし) | 満たす(取得なし。`build.rs` なし) | 満たす(本物は `test` がすでに動かすものだけ) |
 | (iv) 骨組みは機械的に生成する | 未(生成器ができるまで、手で書き、本物と見比べる) | 未(同じ) | 未(同じ) |
 
-**開発用の依存とぶつかる骨組み(Dart。`shelf_router` で起きた)**: 骨組みの `shelf_router` が本物の `shelf` に依存すると、`shelf` とその依存(`async`、`collection`、`http_parser` など)が zoo のプログラムに入り、zoo 全体を検査するテスト(`TestFuncValuesDart` など)が、依存の関数に引っかかる。骨組みの `shelf` を置くと、`exec` の `test` が持ってくる本物の `shelf` と名前でぶつかる。解決は、**解析と実行で、依存の解決を分ける**こと。cells は、`shelf` を骨組み(`packages/shelf`、path の依存)に解決し、rivus は骨組みだけを読む。exec は、`dependency_overrides` で `shelf` を本物(`test` がすでに動かしているもの)に解決する。骨組みは本物の公開のシグネチャから作るので、セルは両方で型が合う。検査のテストは、依存の関数を対象から外さない(zoo に本物の依存を置けないことを守る検査でもあるため)。
+**開発用の依存とぶつかる骨組み(Dart。`shelf_router` で起きた。解決済み)**: 骨組みの `shelf_router` が本物の `shelf` に依存すると、`shelf` とその依存(`async`、`collection`、`http_parser` など)が zoo のプログラムに入り、zoo 全体を検査するテスト(`TestFuncValuesDart` など)が、依存の関数に引っかかる。骨組みの `shelf` を置くと、`exec` の `test` が持ってくる本物の `shelf` と名前でぶつかる。解決は、**解析と実行で、依存の解決を分ける**こと。cells(`bench/zoo-dart/cells`)は、`shelf` を骨組み(`packages/shelf`、path の依存)に解決し、rivus は骨組みだけを読む。exec は、`dependency_overrides` で `shelf` を本物(`test` がすでに動かしているもの)に解決し、セルのコードは本物で動く。骨組みは本物の公開のシグネチャから作るので、セルは両方で型が合う。取得したコードを新たに動かさない(上の「exec の安全」の線の内側)。検査のテストは、依存の関数を対象から外さない(zoo に本物の依存を置けないことを守る検査でもあるため)。`test` の依存の名前が、モデルの候補(`shelf`、`shelf_web_socket`、`web_socket_channel`、`async` など)と重なるが、この形で骨組みを置ける。
 
 実装の順(コードは書いていない): 1. 照合の仕組み(`bench/zoo-dart/real/<パッケージ>/` と、比べるテスト。CI で `dart pub get`)。2. 生成器(段階 3)ができたら、骨組みを生成に替える。手順書の 2 節(作る)には、相談役の判断のあとに反映する。
 
