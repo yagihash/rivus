@@ -12,3 +12,4 @@ __pycache__/
 *.go-e
 # the reviews of the advisor session (they can hold the details of a vulnerability that is not fixed yet; the repository is public)
 /.claude/reviews/
+/.claude/work/
