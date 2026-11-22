@@ -14,3 +14,6 @@ zoo-mark = { path = "../../zoo-rust/zoo-mark" }
 octocrab = { path = "skel" }
 
 [workspace]
+# the skeleton is not a member (cargo makes a path dependency under the root a member, and the extractor reads the members as the
+# program: a field source would fire in the skeleton): it is read as a dependency, as the real crate is
+exclude = ["skel"]

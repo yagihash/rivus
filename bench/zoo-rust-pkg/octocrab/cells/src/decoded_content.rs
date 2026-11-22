@@ -11,9 +11,7 @@ pub fn register() {
 
 // (the value is made with In::new, which is not a source of the rules: the source of the cell is the call of the package)
 fn file(tag: &str) -> Content {
-    let mut c = Content::default();
-    c.content = Some(m::In::new(tag).value);
-    c
+    Content::zoo(m::In::new(tag).value)
 }
 
 fn vuln() { // @vuln
