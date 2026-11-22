@@ -2,8 +2,10 @@
 # The check before a push (the same as CI: a language whose extractor is not there FAILS, it is not skipped).
 #
 #   .github/scripts/prepush.sh            go vet, the packages, and every test of cmd/rivus with the extractors
-#   .github/scripts/prepush.sh '<regexp>' the tests of cmd/rivus that match, with the extractors (a change of a cell of the zoo, the core, the IR: use the
-#                                         names of the three languages: 'Zoo|Curated|Dart|Rust|Builtin|Marks')
+#   .github/scripts/prepush.sh '<regexp>' the tests of cmd/rivus that match, with the extractors (only for a change that cannot change a result: a cell
+#                                         of the zoo, a document. A change of the core, the IR, an extractor or the models: run it with NO
+#                                         argument, everything: TestDogfood (rivus analyses itself) and the others catch what a pattern
+#                                         leaves out)
 #
 # It needs the Dart SDK (dart) and the Rust extractor (extractor/rust: cargo build; RIVUS_RUST names it if it is not at
 # target/debug/rivus-rust). The Docker tests of the isolation are left to CI.
