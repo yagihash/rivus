@@ -190,7 +190,8 @@ Future<void> extract(String root, StringSink sink,
   }
   for (final e in refused.entries) {
     out.loadError(e.key,
-        'a dependency outside the project, the pub cache and the SDKs is not read (what package_config.json points to is not trusted): --allow-deps-under ${_advisedDir(e.key)} reads it');
+        '$_depNotAllowed: a dependency outside the project, the pub cache and the SDKs is not read (what package_config.json points to is not trusted): --allow-deps-under ${_advisedDir(e.key)} reads it',
+        unread: true);
   }
   _missingPackageConfigs(root, out);
   if (!includeTests) {
@@ -293,6 +294,9 @@ String _advisedDir(String packageDir) {
 
 /// The start of the messages about a dependency that is not read as the calls to it name it (the core and the tests take it by this).
 const _depNotLinked = 'dependency_not_linked';
+
+/// The start of the message about a dependency that is outside the places that are trusted (the project, the pub cache, the SDKs, --allow-deps-under): it is not read.
+const _depNotAllowed = 'dependency_not_allowed';
 
 /// The directory of the package a file is in: the one above its `lib` (or else the file's own).
 String _packageDir(String path) {
