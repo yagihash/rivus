@@ -4,8 +4,10 @@
 # range >=1.4.0 <2.0.0, 2026-11-23, by reading the published source; hand written rows, origin: human; the generator does not exist yet):
 # the body of a response (`xss`, as `net/http.ResponseWriter.Write` is in go-net-http.yaml: shelf does not escape, the content type is
 # the caller's), and the `location` of the three redirect constructors (`open_redirect`). `Response.change(body:)` is the same body.
-# The default content type of a `String` body is `text/plain`, so a text body is a sink only when the caller sets an HTML type;
-# the row is as wide as the Go one and does not look at the headers.
+# Content type (shelf 1.4.3, message.dart): a `String` body gets no `content-type` of its own (only a body whose encoding differs from the
+# header's gets `application/octet-stream; charset=...` when the caller gave none); the caller sets it with `headers:`. The row does not
+# look at the headers: it is the same as `(net/http.ResponseWriter).Write` in go-net-http.yaml (category `xss`, `accepts: [user_input]`,
+# no distinction by content type), so a body that the caller sends as text/plain or JSON is a sink as well (a known noise of the row).
 # `Handler` and `Middleware` (`Pipeline`, `Cascade`, `createMiddleware`) have no row on purpose: a handler is a function value that
 # the project's own code builds, and the few lines of `Pipeline.addHandler` and `Cascade.handler` are read as a dependency (a row
 # would cut the call from a middleware to the handler it wraps: ADR-092). `calls:` rows: none (the request reaches a handler
