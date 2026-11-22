@@ -239,6 +239,7 @@ extractor が読む量(ファイル数)は、`docs/DESIGN-deps-cost.md` の 10 �
 
 - 今の `ci.yml` は、`internal/**` の変更で、`code`、`dart`、`rust` の 3 つの許可の一覧に当たり、全部のジョブを走らせる(`internal/model/builtin/*.yaml` も `internal/**`)。`cmd/rivus` のテストは、5 つのシャードに分かれ、その中に、zoo のテスト(`TestBuiltinRowsAreHitByTheZoo` など、行が zoo で一致するテスト)がある。**だから、行が zoo で一致するテストは、モデルの PR で、今も必ず実行される。** CI が通れば入る(auto-merge)ので、これがゲートになる。
 - 差分テスト(MISS 0): **道具は実装済み**(`bench/model-diff`。手順書 9 節)。CI には、定期と手動の層に `model-diff` のジョブ(`continue-on-error`。週 1 回と `workflow_dispatch`。標準ライブラリの 6 パッケージと `package:http`)だけを足した。**PR のジョブには、まだ入れない**(動かしてから決める)。入れるなら、次の形: `ci.yml` の paths-filter に、`models` の一覧(`internal/model/builtin/*.yaml`、`bench/model-diff/**`。`dart` / `rust` の書き方と同じ「許可の一覧」)を足し、`decide` に `models` を足して、`model-diff` のジョブを、その一覧が変わったときだけ走らせる。ジョブは、`go run ./bench/model-diff -changed origin/main` が出す、**行(flows と sinks)が変わったパッケージだけ**を、`make model-diff PKG=<pkg>` にかける(ファイルの全パッケージでなく。コメントだけの変更では 0 件)。CI の時間は、そのパッケージの分だけ増える(測定: Go のパッケージで 0.5〜1 秒の解析と、取得と `go mod tidy`。Dart の `package:http` で、解析 2 回が約 18 秒、1 GB、取得を含めて 30 秒前後)。
+- **差分テストの範囲の外(型からの生成器と、sink / source の候補の導出(課題 #144 の設計)の前提)**: モデルの行がない関数は、差分テストの範囲の外(プローブは、モデルの行にある関数だけを対象にする)。標準ライブラリの型の公開メソッドを全部並べて、行の有無を見る照合が、別に要る(例: `database/sql.Conn` の `QueryContext` の行の欠け)。
 - 依存の取得(差分テストに要る): Go は `go mod download`(`actions/setup-go` のキャッシュ。バージョンは、モデルのファイルの冒頭に固定)。Dart は `dart pub get`(`~/.pub-cache` のキャッシュ。`pubspec.lock` をキーに)。Rust は `cargo fetch --locked`(`Cargo.lock` で固定)。取得先は、公開のレジストリ(proxy.golang.org、pub.dev、crates.io)だけを許可する。取得したコードは実行しない(Go は型検査まで、Dart は analyzer まで、Rust は rustdoc の JSON まで。ビルドスクリプトと proc macro が動くので、Rust は、サンドボックス(macOS)の下か、信頼できるコードだけ)。ネットワークの制限: `permissions: contents: read` のまま、取得のステップ以外はネットワークなし(ランナーの設定では絞れないので、ステップを分けて、テストのステップに取得物の実行がないことを、レビューで守る)。
 - PR の範囲の確認(モデルの PR が、モデル以外を触っていないこと): ジョブが、変更されたファイルが、`internal/model/builtin/*.yaml` / `*.gen.yaml`、`bench/zoo-*/` の中の自分のパッケージのディレクトリ、`bench/zoo/marks.d/` だけであることを確認する。範囲の外(コード、ゲート、ワークフロー)を触る PR は、自動で通さない(`ci-ok` が、人のレビューを要求する)。**これは、ブランチ名 `model/*` の PR だけに適用する**(提案)。
 
@@ -393,6 +394,8 @@ verified_versions:
 **開発用の依存とぶつかる骨組み(Dart。`shelf_router` で起きた。解決済み)**: 骨組みの `shelf_router` が本物の `shelf` に依存すると、`shelf` とその依存(`async`、`collection`、`http_parser` など)が zoo のプログラムに入り、zoo 全体を検査するテスト(`TestFuncValuesDart` など)が、依存の関数に引っかかる。骨組みの `shelf` を置くと、`exec` の `test` が持ってくる本物の `shelf` と名前でぶつかる。解決は、**解析と実行で、依存の解決を分ける**こと。cells(`bench/zoo-dart/cells`)は、`shelf` を骨組み(`packages/shelf`、path の依存)に解決し、rivus は骨組みだけを読む。exec は、`dependency_overrides` で `shelf` を本物(`test` がすでに動かしているもの)に解決し、セルのコードは本物で動く。骨組みは本物の公開のシグネチャから作るので、セルは両方で型が合う。取得したコードを新たに動かさない(上の「exec の安全」の線の内側)。検査のテストは、依存の関数を対象から外さない(zoo に本物の依存を置けないことを守る検査でもあるため)。`test` の依存の名前が、モデルの候補(`shelf`、`shelf_web_socket`、`web_socket_channel`、`async` など)と重なるが、この形で骨組みを置ける。
 
 実装の順(コードは書いていない): 1. 照合の仕組み(`bench/zoo-dart/real/<パッケージ>/` と、比べるテスト。CI で `dart pub get`)。2. 生成器(段階 3)ができたら、骨組みを生成に替える。手順書の 2 節(作る)には、相談役の判断のあとに反映する。
+
+**生成器の要件(骨組み)**: 本物の型の埋め込みと、インターフェースの実装の関係を、本物と同じ形にする(昇格したメソッドが、別のパッケージの行に当たるため。実例: Go の `sqlx.DB` は `*sql.DB` を埋め込む。骨組みが埋め込まないと、昇格したメソッドを呼ぶセルが、本物と違う形で通る)。
 
 ## 7. 実装の段階と規模
 
