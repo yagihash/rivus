@@ -409,9 +409,9 @@ RIVUS_DART=dart RIVUS_DART_EXTRACTOR="dart run <worktree>/extractor/dart/bin/riv
 
 同じ型の既存のモデルとの比較: Go の `net/http` も `dart:io` の `HttpClient` も、URL だけが sink で、body とヘッダーは sink にしていない。同じにした。戻り値は source にせず、引数 → 戻り値の flow にした(`(*net/http.Client).Do` と同じ)。
 
-### 11.2 ADR-092 の条件と、ADR-096 の基準
+### 11.2 ADR-092 の条件と、ADR-098 の基準
 
-ADR-092 の条件 1(依存が時間の 9 割以上、または数 GB)は、パッケージを丸ごと切るときの条件で、**今回の形は満たさない**: `bench/dart-gcp` で、解析(`duration_ms`)は wall の 1 割以下で(extractor が大半)、モデルで 1,018 → 325 ms、`summary_elems` は 28,543 → 22,158(-22%)。今回の形(実装の多いインターフェースのメソッドで、実装どうしが同じメソッドに委譲する)には、**ADR-096 の基準**を使う。
+ADR-092 の条件 1(依存が時間の 9 割以上、または数 GB)は、パッケージを丸ごと切るときの条件で、**今回の形は満たさない**: `bench/dart-gcp` で、解析(`duration_ms`)は wall の 1 割以下で(extractor が大半)、モデルで 1,018 → 325 ms、`summary_elems` は 28,543 → 22,158(-22%)。今回の形(実装の多いインターフェースのメソッドで、実装どうしが同じメソッドに委譲する)には、**ADR-098 の基準**を使う。
 
 | 基準 | 状態 |
 | --- | --- |

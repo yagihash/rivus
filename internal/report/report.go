@@ -123,6 +123,13 @@ type Summary struct {
 	// reduce itself: library calls without a model, and interface methods
 	// without a known implementation. They show where a model helps most.
 	TopSymbols map[string][]SymbolCount `json:"top_symbols"`
+	// OnFindingsTop is, with -pass-stats, where the notes that the findings carry are: for each kind of note, the 10
+	// symbols with the most notes (Notes), and in how many findings (Findings). The notes of a finding are on its path, so
+	// a call that many paths go through is counted for each of them; this says which calls those are. OnFindingsCandidates
+	// is, of the notes of calls through an interface or a function value (dynamic_dispatch), how many have 0, 1, 2-5,
+	// 6-20, 21+ candidates. Both are absent without -pass-stats.
+	OnFindingsTop        map[string][]NoteSymbol `json:"on_findings_top,omitempty"`
+	OnFindingsCandidates map[string]int          `json:"on_findings_dispatch_candidates,omitempty"`
 	// LoadDependent is true when the result depends on the load of the machine: a time limit
 	// (-func-timeout, -timeout) stopped the analysis of a function or of the run, and what a clock
 	// cuts is not the same twice. LoadDependentNote says it, with the numbers (stats has them).
@@ -220,6 +227,13 @@ func unreadOf(errs []ir.LoadError) *Unread {
 	return u
 }
 
+// NoteSymbol is a symbol and how many notes on findings are about it, and in how many findings.
+type NoteSymbol struct {
+	Symbol   string `json:"symbol"`
+	Notes    int    `json:"notes"`
+	Findings int    `json:"findings"`
+}
+
 // SymbolCount is a symbol and how often it was uncertain.
 type SymbolCount struct {
 	Symbol string `json:"symbol"`
@@ -303,13 +317,58 @@ func summarize(r *Report) Summary {
 			s.TopSymbols[group] = s.TopSymbols[group][:10]
 		}
 	}
+	passStats := len(r.Stats.PackagesTop) > 0 || r.Stats.SummarySizes != nil
+	type noteAcc struct{ notes, findings int }
+	notes := map[string]map[string]*noteAcc{}
 	for _, f := range r.Findings {
 		seen := map[string]bool{}
+		seenSym := map[[2]string]bool{}
 		for _, u := range f.Uncertainties {
 			if !seen[u.Kind] {
 				seen[u.Kind] = true
 				s.OnFindings[u.Kind]++
 			}
+			if !passStats {
+				continue
+			}
+			if notes[u.Kind] == nil {
+				notes[u.Kind] = map[string]*noteAcc{}
+			}
+			a := notes[u.Kind][u.Symbol]
+			if a == nil {
+				a = &noteAcc{}
+				notes[u.Kind][u.Symbol] = a
+			}
+			a.notes++
+			if k := [2]string{u.Kind, u.Symbol}; !seenSym[k] {
+				seenSym[k] = true
+				a.findings++
+			}
+			if u.Kind == taint.KindDynamicDispatch {
+				if s.OnFindingsCandidates == nil {
+					s.OnFindingsCandidates = map[string]int{}
+				}
+				s.OnFindingsCandidates[bucket(len(u.Candidates))]++
+			}
+		}
+	}
+	if passStats && len(notes) > 0 {
+		s.OnFindingsTop = map[string][]NoteSymbol{}
+		for kind, m := range notes {
+			var l []NoteSymbol
+			for sym, a := range m {
+				l = append(l, NoteSymbol{Symbol: sym, Notes: a.notes, Findings: a.findings})
+			}
+			sort.Slice(l, func(i, j int) bool {
+				if l[i].Notes != l[j].Notes {
+					return l[i].Notes > l[j].Notes
+				}
+				return l[i].Symbol < l[j].Symbol
+			})
+			if len(l) > 10 {
+				l = l[:10]
+			}
+			s.OnFindingsTop[kind] = l
 		}
 	}
 	if st := r.Stats; st.LoadDependent {
