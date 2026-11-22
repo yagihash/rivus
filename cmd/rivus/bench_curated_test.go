@@ -129,6 +129,7 @@ type annotOpts struct {
 	pattern          string
 	allowUnconverged bool
 	programWide      bool
+	ignoreSinkUnder  string   // a flow whose sink is in a file under this path is not held to the annotations: the sink call of a skeleton that records (zoo_pkg_test.go)
 	extraRules       []string // more rules files (absolute), after the rules.yaml of the directory: a package of the zoo adds the rules of zoo/mark
 }
 
@@ -386,6 +387,9 @@ func checkCuratedReportOpts(t *testing.T, dir string, out []byte, ext string, o 
 	for _, fd := range rep.Findings {
 		// a flow into a quiet sink is told below, with the sink
 		k := fmt.Sprintf("%s:%d -> %s:%d", fd.Source.Position.File, fd.Source.Position.Line, fd.Sink.Position.File, fd.Sink.Position.Line)
+		if o.ignoreSinkUnder != "" && strings.HasPrefix(fd.Sink.Position.File, o.ignoreSinkUnder) {
+			continue
+		}
 		if hitNone[curatedAt{fd.Sink.Position.File, fd.Sink.Position.Line}] {
 			continue
 		}

@@ -1,3 +1,9 @@
 # Rules of the package zoo_synth of the Go zoo. The sources, sinks and sanitizers of zoo/mark are in bench/zoo-go/rules.yaml
-# (the tests give both files); this package has nothing to add: Echo of the skeleton is read as a dependency.
+# (the tests give both files). Echo of the skeleton is read as a dependency; Run is the sink row of the package (the skeleton of
+# it records with zoo/mark, so that the run of the cell checks the row).
 ruleset: rivus/bench-zoo-go-pkg-zoo-synth@1
+
+sinks:
+  - symbol: example.invalid/zoosynth.Run
+    args: [0]
+    category: command_injection
