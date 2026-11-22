@@ -90,7 +90,9 @@ func zooCommand(dir string, env []string, name string, args ...string) *exec.Cmd
 func zooObserve(t testing.TB) zooObserved {
 	t.Helper()
 	dir := zooRoot(t)
-	zooOnce.Do(func() { zooObs, zooErr = zooObserveOnce(dir, filepath.Join(filepath.Dir(binary), "zoo"), "zoo/cells/...", "") })
+	zooOnce.Do(func() {
+		zooObs, zooErr = zooObserveOnce(dir, filepath.Join(filepath.Dir(binary), "zoo"), "zoo/cells/...", "")
+	})
 	if zooErr != nil {
 		t.Fatal(zooErr)
 	}
