@@ -46,6 +46,15 @@ type Options struct {
 	// The standard library keeps to the models: its bodies are large, full of
 	// unsafe and assembly, and the common calls are modelled.
 	Deps bool
+	// ReplacedPackage reports whether the models stand for the body of a dependency's package (a declaration,
+	// docs/DESIGN-package-models.md): its syntax and type information are let go of before go/ssa is built, so the
+	// package has functions without a body, as with no source. The packages that were asked for are always read.
+	// It acts only with Deps. nil: none.
+	ReplacedPackage func(path string) bool
+	// ReplacedFunc reports whether a function of a dependency (by FuncID) is one of a declared package. The wrappers
+	// that go/ssa makes for a type of the package in another package have a body of their own and carry the ID of
+	// the package: they are left out of Funcs too, as dropReplacedBodies leaves them out of the IR.
+	ReplacedFunc func(id string) bool
 }
 
 // LoadError records something rivus could not see. It maps to the
@@ -88,6 +97,10 @@ type Program struct {
 
 	// Lifted is the program built with lifting (Options.WithLifted).
 	Lifted *ssa.Program
+
+	// BodiesNotRead is, per package whose body Options.ReplacedPackage said the models replace, how many functions
+	// and methods it declares that were left without a body.
+	BodiesNotRead map[string]int
 
 	mu      sync.Mutex           // guards sources and byRel, which fill as they are asked for
 	files   map[string]*ast.File // absolute file name -> syntax
@@ -237,6 +250,17 @@ func Load(dir string, patterns []string, opts Options) (*Program, error) {
 	mk := ssautil.Packages
 	if opts.Deps {
 		mk = ssautil.AllPackages
+		if opts.ReplacedPackage != nil {
+			initial := map[*packages.Package]bool{}
+			for _, pkg := range pkgs {
+				initial[pkg] = true
+			}
+			packages.Visit(pkgs, nil, func(pkg *packages.Package) {
+				if !initial[pkg] && !skip[pkg.PkgPath] && opts.ReplacedPackage(pkg.PkgPath) {
+					pkg.Syntax, pkg.TypesInfo = nil, nil
+				}
+			})
+		}
 	}
 	prog, ssaPkgs := mk(pkgs, mode)
 	p.SSA = prog
@@ -289,10 +313,26 @@ func Load(dir string, patterns []string, opts Options) (*Program, error) {
 	}
 	for fn := range ssautil.AllFunctions(prog) {
 		if len(fn.Blocks) == 0 {
+			// a declared function of a package that was not read: the count that the report says
+			if opts.Deps && opts.ReplacedFunc != nil && fn.Object() != nil && (fn.Synthetic == "" || fn.Synthetic == noSyntax || fn.Synthetic == noSyntaxOld) && fn.Origin() == nil {
+				if pkg := ownerPkg(fn); pkg != nil && !own[pkg] && !skip[pkg.Pkg.Path()] && opts.ReplacedPackage != nil && opts.ReplacedPackage(pkg.Pkg.Path()) {
+					if p.BodiesNotRead == nil {
+						p.BodiesNotRead = map[string]int{}
+					}
+					p.BodiesNotRead[pkg.Pkg.Path()]++
+				}
+			}
+			continue
+		}
+		isOwn := false
+		if pkg := ownerPkg(fn); pkg != nil && own[pkg] {
+			isOwn = true
+		}
+		if !isOwn && opts.Deps && opts.ReplacedFunc != nil && opts.ReplacedFunc(FuncID(fn)) {
 			continue
 		}
 		p.Funcs = append(p.Funcs, fn)
-		if pkg := ownerPkg(fn); pkg != nil && own[pkg] {
+		if isOwn {
 			p.Own[fn] = true
 		}
 	}
@@ -337,6 +377,12 @@ func Load(dir string, patterns []string, opts Options) (*Program, error) {
 	})
 	return p, nil
 }
+
+// noSyntax is what go/ssa says (Function.Synthetic) of a declared function that it was given no syntax for.
+const (
+	noSyntax    = "from type information"
+	noSyntaxOld = "loaded from gc object file" // the older word for it
+)
 
 // FuncID returns the stable identifier of a function: its fully qualified
 // name, e.g. "example.com/m/pkg.(*T).Method" or "example.com/m/pkg.F$1" for

@@ -429,11 +429,42 @@ jobs:
           RIVUS_SBX_RED: "1"
         run: go test -count=1 -timeout 20m -run 'TestSandbox(Stops|Closes|Time|Output|Environment|Unavailable|Stderr|Program)' ./internal/sandbox
 
+  # The differential test of the models (bench/model-diff, docs/MODEL-RUNBOOK.md): a package at a time, its model against its body. Only the
+  # weekly run and a run by hand, and it reports without blocking (`continue-on-error`) until it has been run for a while; it is not in a pull request
+  # (the plan for that: docs/DESIGN-package-models.md, 7). Go and Dart only: a Rust crate is built to be read, and that needs the isolation.
+  model-diff:
+    needs: changes
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        pkg: [strings, path/filepath, encoding/json, net/url, bytes, strconv, "package:http"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - uses: dart-lang/setup-dart@2286a0c042b44434fe26d292bbce8d34f7ec662b # v1.8.2
+        with:
+          sdk: 3.13.6
+      - name: Check the model of the package
+        env:
+          PKG: ${{ matrix.pkg }}
+          RIVUS_DART: dart
+        run: make model-diff PKG="$PKG"
+
   # The one check that a ruleset requires. Every job above is in `needs`: it fails when one of them failed or was cancelled, and passes
   # when they passed or were skipped (nothing that a test reads changed). A job added above has to be added here.
   ci-ok:
     if: always()
-    needs: [changes, go-packages, test, bench-tools, dart, rust, gcp-exec, zoo-loosened, sandbox]
+    needs: [changes, go-packages, test, bench-tools, dart, rust, gcp-exec, zoo-loosened, sandbox, model-diff]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
