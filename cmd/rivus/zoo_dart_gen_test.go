@@ -102,6 +102,10 @@ func writeIfChanged(path, content string) (bool, error) {
 	if old, err := os.ReadFile(path); err == nil && string(old) == content {
 		return false, nil
 	}
+	// a checkout has no directory for a file that is not committed (exec/lib holds only cases.dart)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return false, err
+	}
 	return true, os.WriteFile(path, []byte(content), 0o644)
 }
 
