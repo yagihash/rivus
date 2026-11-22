@@ -184,6 +184,9 @@ propagators:
     pure: true
   - symbol: time.NewTimer
     pure: true
+  # The input goes to the error (ParseError has the value and the layout), not to the Time. model-diff shows a MISS for arg1 -> result0: the only text of the
+  # value that is in the Time is the zone name (3 to 5 capital letters, or GMT+n), so the flow is not modelled on purpose: a time that is made from a request
+  # value would otherwise be reported at every query or template that takes it (docs/MODELING.md, section 1).
   - symbol: time.Parse
     flows: [{from: arg0, to: result1}, {from: arg1, to: result1}]
   - symbol: time.ParseDuration
