@@ -2,7 +2,7 @@
 
 課題は、リポジトリの中のファイルで持つ(GitHub の Issue は使わない)。一覧は、この `ISSUES.md`。1 件は `docs/issues/<番号>-<短い名前>.md`。
 
-- **番号**: GitHub の番号を引き継ぐ(#74〜#99)。zoo の `@ref(#N)` と、コミットの `Zoo-Loosened:` の行が指すのは、この番号。新しい課題は 127 から(100〜107 は、直してから記録したもの。108、109、110〜122 は 2026-11-22 に開いた)。#1〜#73 は、日次レビューの指摘(GitHub 側で閉じ済み。ここには写していない)。
+- **番号**: GitHub の番号を引き継ぐ(#74〜#99)。zoo の `@ref(#N)` と、コミットの `Zoo-Loosened:` の行が指すのは、この番号。新しい課題は 128 から(100〜107 は、直してから記録したもの。108、109、110〜122 は 2026-11-22 に開いた)。#1〜#73 は、日次レビューの指摘(GitHub 側で閉じ済み。ここには写していない)。
 - **状態**: `open` / `partial`(一部直った。残りを題に書く)/ `closed`(直した: コミットとテスト)/ `deferred`(後回し。理由と見直す条件)/ `wontfix`(やらない)。
 - **誰が何をするか**: 中身と状態は相談役が決め、開発者が書いてコミットする。開発者が作業中に見つけたものは、相談役を待たずに `open` で足してよい(次の報告に番号を書く)。閉じるのは、相談役がレビューで確かめてから(開発者は「閉じられる」と報告する)。`deferred` と `wontfix` は相談役が決める。
 - **公開のリポジトリの決まり**: 直していない rivus 自身の弱点(対象が意図して起こせるサイレントな見逃し、隔離の漏れ)の再現の詳細は、ここに書かない。直るまでは、相談役のレビューのファイル(`.claude/reviews/`。追跡されない)にだけ置き、直ってから `closed` で記録する。
@@ -51,8 +51,8 @@
 | [#122](issues/122-ir-file-has-toolchain-path.md) | IR の `file` に、std のソースの絶対パス(ツールチェインの場所)が入る | 再現性(重さ: 低) | Rust | 0 | open | - |
 | [#123](issues/123-graph-callers-skipped-languages.md) | graph callers / callees / dispatchers の答えが、読まなかった言語を示さない | サイレントな見逃し | 全(graph) | 0 | open | - |
 | [#124](issues/124-resolve-func-values-sites-and-external-candidates.md) | `-resolve-func-values`: 補った候補がサイトの列挙に戻らない。本体のない候補では補った注記が出ない | 道具・ベンチ(重さ: 低) | 全 | 0 | open | - |
-| [#125](issues/125-timeout-inside-large-scc.md) | `-timeout` の超過: 巨大な SCC の中で期限を見ない(並列ラウンドの中は直した) | 利用者を止める(直した) | 全 | 0 | closed | `cmd/rivus/passstats_top_test.go`(`TestTimeoutInsideALargeSCC`) |
-| [#126](issues/126-timeout-overrun-remaining.md) | `-timeout` の超過の残り: 1 つの関数の中と、extractor の段階の時間が `stats` に出ない | 利用者を止める | 全 | 0 | open | - |
+| [#126](issues/126-timeout-inside-large-scc.md) | `-timeout` の超過: 巨大な SCC の中で期限を見ない(並列ラウンドの中は直した) | 利用者を止める(直した) | 全 | 0 | closed | `cmd/rivus/passstats_top_test.go`(`TestTimeoutInsideALargeSCC`) |
+| [#127](issues/127-timeout-overrun-remaining.md) | `-timeout` の超過の残り: 1 つの関数の中と、extractor の段階の時間が `stats` に出ない | 利用者を止める | 全 | 0 | open | - |
 
 ## 閉じたもの
 
