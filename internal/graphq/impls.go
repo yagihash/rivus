@@ -290,6 +290,8 @@ type DispatchSite struct {
 	// through (for a call of a function value, the name of the value).
 	Callee string   `json:"callee,omitempty"`
 	Sites  []string `json:"sites,omitempty"`
+	// Supplemented: the candidates of the call were given by the analysis of the function values (-resolve-func-values).
+	Supplemented bool `json:"supplemented,omitempty"`
 }
 
 // CalleeCount is a count of the call sites that name a callee.
@@ -389,7 +391,7 @@ func (e *Engine) Dispatchers(target string, o Options) (*DispatchersResult, erro
 			if err != nil {
 				return nil, err
 			}
-			all = append(all, site{DispatchSite{At: pos(ed.File, ed.Line, ed.Col), In: from.FID, Kind: ed.Kind, Candidates: ed.NCand, Callee: ed.Callee, Sites: sites}, ed.CallSite})
+			all = append(all, site{DispatchSite{At: pos(ed.File, ed.Line, ed.Col), In: from.FID, Kind: ed.Kind, Candidates: ed.NCand, Callee: ed.Callee, Sites: sites, Supplemented: ed.Supplemented}, ed.CallSite})
 		}
 	}
 	// the calls that name the function most closely first: few candidates, then by place

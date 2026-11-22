@@ -17,6 +17,11 @@ package graphdb
 const SchemaVersion = 2
 
 // SchemaName is the name of the JSON that the graph commands print.
+// MetaFuncValues is the key of the meta row that lists the call sites (rows of callsites, a JSON array) whose
+// candidates the analysis of the function values gave (-resolve-func-values). A file made without the flag has no such
+// row. It is in meta and not a column of callsites: the tables are the same, so the version of the schema is too.
+const MetaFuncValues = "func_values_supplemented"
+
 const SchemaName = "rivus.graph/1"
 
 // LayerStructure is the layer of functions, call sites, edges and sites.

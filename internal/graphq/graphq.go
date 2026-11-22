@@ -153,6 +153,9 @@ type EdgeOut struct {
 	// the call that takes it as an argument, when it is one.
 	RefKind   string `json:"ref_kind,omitempty"`
 	ViaCallee string `json:"via_callee,omitempty"`
+	// Supplemented: the candidates of this call were given by the analysis of the function values
+	// (-resolve-func-values): they are what that analysis found, not all that the call may reach.
+	Supplemented bool `json:"supplemented,omitempty"`
 }
 
 // Frontier is a dynamic call where a forward search stopped.
@@ -173,6 +176,8 @@ type CallSiteOut struct {
 	Candidates int      `json:"candidates"`
 	Callee     string   `json:"callee,omitempty"`
 	Sites      []string `json:"sites,omitempty"`
+	// Supplemented: the candidates were given by the analysis of the function values (-resolve-func-values).
+	Supplemented bool `json:"supplemented,omitempty"`
 }
 
 // Graph is the answer of callers and callees: nodes and edges.
@@ -237,8 +242,10 @@ type Step struct {
 	Kind        string `json:"kind,omitempty"`
 	Candidates  int    `json:"candidates,omitempty"`
 	// Hub: the call has more candidates than HubCandidates.
-	Hub   bool     `json:"hub,omitempty"`
-	Sites []string `json:"sites,omitempty"`
+	Hub bool `json:"hub,omitempty"`
+	// Supplemented: the candidates of this call were given by the analysis of the function values.
+	Supplemented bool     `json:"supplemented,omitempty"`
+	Sites        []string `json:"sites,omitempty"`
 	// NoBody: the function has no body in the graph (a library function that was not read).
 	NoBody bool `json:"no_body,omitempty"`
 	// Kind "ref": this function holds the next one as a value at At; it does not
@@ -263,6 +270,9 @@ type Path struct {
 	Hops      int    `json:"hops"`
 	Refs      int    `json:"refs,omitempty"`
 	Steps     []Step `json:"steps"`
+	// Supplemented is the number of calls on the path whose candidates the analysis of the function values gave
+	// (-resolve-func-values); each such step says so. The path then says the function may be reached, as for any dynamic call.
+	Supplemented int `json:"supplemented_calls,omitempty"`
 	// Note (a path with a reference) says how far to trust it.
 	Note string `json:"note,omitempty"`
 }
@@ -489,7 +499,7 @@ func (e *Engine) edgeOut(ed *graphdb.Edge) (EdgeOut, error) {
 			return EdgeOut{}, err
 		}
 	}
-	out := EdgeOut{From: from.FID, To: to.FID, At: pos(ed.File, ed.Line, ed.Col), Kind: ed.Kind, Sites: sites, RefKind: ed.RefKind, ViaCallee: ed.Via}
+	out := EdgeOut{From: from.FID, To: to.FID, At: pos(ed.File, ed.Line, ed.Col), Kind: ed.Kind, Sites: sites, RefKind: ed.RefKind, ViaCallee: ed.Via, Supplemented: ed.Supplemented}
 	if dynamic(ed.Kind) {
 		out.Candidates = ed.NCand
 	}
@@ -505,7 +515,7 @@ func (e *Engine) callSiteOut(c *graphdb.CallRow) (CallSiteOut, error) {
 	if err != nil {
 		return CallSiteOut{}, err
 	}
-	return CallSiteOut{At: pos(c.File, c.Line, c.Col), In: f.FID, Kind: c.Kind, Candidates: c.NCand, Callee: c.Callee, Sites: sites}, nil
+	return CallSiteOut{At: pos(c.File, c.Line, c.Col), In: f.FID, Kind: c.Kind, Candidates: c.NCand, Callee: c.Callee, Sites: sites, Supplemented: c.Supplemented}, nil
 }
 
 func (e *Engine) common(op string, o Options) Common {

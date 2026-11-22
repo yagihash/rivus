@@ -722,7 +722,7 @@ func (c *Callee) ValueRoundsDetail() string {
 	if !c.ValueRoundsLimit {
 		return ""
 	}
-	return "func_values_rounds: the candidates of the function value were still growing in the last round of the analysis of the function values (-resolve-func-values), which was the limit; more functions may be called (rivus' limit)"
+	return "func_values_rounds: the candidates of the function value were still growing in the last round of the analysis of the function values (-resolve-func-values) that finished, and the rounds stopped there (the limit of the rounds, or the time limit -timeout); more functions may be called (rivus' limit)"
 }
 
 // NarrowStats is what the narrowing of the candidates of the calls of Rust closures did: the calls that were
