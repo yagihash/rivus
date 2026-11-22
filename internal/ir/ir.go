@@ -549,6 +549,13 @@ type Instr struct {
 	// ArgPos are the source ranges of the arguments of a call, when the
 	// extractor knows them (parallel to Args, or empty).
 	ArgPos []Pos `json:"arg_pos,omitempty"`
+	// ArgNames are the names of the named parameters that the operands of a call are for (parallel to
+	// Args, or empty; "" for an operand that is not a named parameter, and for the receiver). A language
+	// with named arguments (Dart) puts them after the positional ones, by name, so the position of one
+	// depends on the declaration; a rule that says `named: kind` finds it by this name. It names the
+	// parameters of the callee, so an argument that the call leaves out still has its name (and holds
+	// nil). Empty for a language without named arguments, and for a callee the extractor could not resolve.
+	ArgNames []string `json:"arg_names,omitempty"`
 }
 
 // Implementations lists the known implementations of an interface method:

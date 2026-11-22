@@ -2,7 +2,7 @@
 
 課題は、リポジトリの中のファイルで持つ(GitHub の Issue は使わない)。一覧は、この `ISSUES.md`。1 件は `docs/issues/<番号>-<短い名前>.md`。
 
-- **番号**: GitHub の番号を引き継ぐ(#74〜#99)。zoo の `@ref(#N)` と、コミットの `Zoo-Loosened:` の行が指すのは、この番号。新しい課題は 143 から(100〜107 は、直してから記録したもの。108、109、110〜122 は 2026-11-22 に開いた)。#1〜#73 は、日次レビューの指摘(GitHub 側で閉じ済み。ここには写していない)。
+- **番号**: GitHub の番号を引き継ぐ(#74〜#99)。zoo の `@ref(#N)` と、コミットの `Zoo-Loosened:` の行が指すのは、この番号。新しい課題は 145 から(100〜107 は、直してから記録したもの。108、109、110〜122 は 2026-11-22 に開いた)。#1〜#73 は、日次レビューの指摘(GitHub 側で閉じ済み。ここには写していない)。
 - **状態**: `open` / `partial`(一部直った。残りを題に書く)/ `closed`(直した: コミットとテスト)/ `deferred`(後回し。理由と見直す条件)/ `wontfix`(やらない)。
 - **誰が何をするか**: 中身と状態は相談役が決め、開発者が書いてコミットする。開発者が作業中に見つけたものは、相談役を待たずに `open` で足してよい(次の報告に番号を書く)。閉じるのは、相談役がレビューで確かめてから(開発者は「閉じられる」と報告する)。`deferred` と `wontfix` は相談役が決める。
 - **公開のリポジトリの決まり**: 直していない rivus 自身の弱点(対象が意図して起こせるサイレントな見逃し、隔離の漏れ)の再現の詳細は、ここに書かない。直るまでは、相談役のレビューのファイル(`.claude/reviews/`。追跡されない)にだけ置き、直ってから `closed` で記録する。
@@ -53,6 +53,7 @@
 | [#124](issues/124-resolve-func-values-sites-and-external-candidates.md) | `-resolve-func-values`: 補った候補がサイトの列挙に戻らない。本体のない候補では補った注記が出ない | 道具・ベンチ(重さ: 低) | 全 | 0 | open | - |
 | [#126](issues/126-timeout-inside-large-scc.md) | `-timeout` の超過: 巨大な SCC の中で期限を見ない(並列ラウンドの中は直した) | 利用者を止める(直した) | 全 | 0 | closed | `cmd/rivus/passstats_top_test.go`(`TestTimeoutInsideALargeSCC`) |
 | [#127](issues/127-timeout-overrun-remaining.md) | `-timeout` の超過の残り: 1 つの関数の中と、extractor の段階の時間が `stats` に出ない | 利用者を止める | 全 | 0 | open | - |
+| [#144](issues/144-dependency-sink-reach-list.md) | 汚染された値が、依存の中の sink のルールに一致する呼び出しに届いたことを、finding とは別の一覧で出す(案) | 検出の見逃し(サイレント。案) | 全 | 0 | open | - |
 | [#137](issues/137-dart-implementations-of-interface-sinks.md) | Dart で、インターフェースのメソッドの sink が、パッケージの外の実装の型の変数からの直接の呼び出しに届かない | 検出の見逃し(重さ: 低) | Dart | 0 | open | - |
 | [#138](issues/138-suppressions-pure-flows.md) | `origin: llm` の `pure` と、流れを切る `flows` のモデルが流れを消しても、`suppressions` と `llm_influenced` に残らない | 正確さ(サイレントな見逃し) | Go | 0 | closed | `cmd/rivus/resolve_test.go`(`TestLLMPureModelSuppressionIsRecorded`) |
 | [#136](issues/136-zsh-completion-equals-form.md) | zsh の補完で、`-lang=` のように `=` でつなぐ形のとき、値の一覧が出ない | 道具(重さ: 低) | 全 | 0 | open | - |

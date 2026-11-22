@@ -72,6 +72,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 - 解析が上限で止まった所は `depth_limit` として記録され、理由が付きます: `budget`（作業量。どのマシンでも同じ所で止まる）、`func_timeout` / `run_timeout`（時計。マシンの負荷で止まる所が変わる）。時計で止まったものがあれば、`summary.load_dependent` が `true` になります。
 - Go で、型エラーのあるパッケージと、それを import するパッケージは、SSA が作られず、解析から落ちます(`packages` には載ったままです)。読んだが作れなかったパッケージの数、落ちた関数の数、上位 10 のパッケージ(と理由)は、`summary.unread` に出ます(1 つもなければ、フィールドはありません)。パッケージごとに `missing_source` の不確実性も出て、stderr に 1 行出ます。終了コードと finding は変わりません。
+- **依存の本体を読むのは、流れを追うためです。source と sink は、プロジェクトのコードの中にだけ付きます**(依存の関数の中では探しません。ADR-099)。依存を読んだ実行では、`summary.dependency_sites`(`searched: false`、`dependency_functions`: 読んだ依存の関数の数)が、毎回そのことを言います(`-no-deps` や、依存の関数が 0 のときは出ません)。**利用者の入力が、ライブラリの中で危険な処理(ファイルを開く、コマンドを実行する、など)に届く形は、プロジェクトのコードがそのライブラリの API を呼ぶ所に sink のモデルがない限り、検出されません。** sink のモデルは、解析のコストを減らすためだけでなく、検出のためにも必要です(`rivus models coverage` で、モデルのない呼び出しを多い順に見られます)。
 - 数値と真偽値になった値は、既定では追いません（`numeric_stop` として記録。`-numeric-taint` で追う）。
 - `rivus resolve` の答えは、`unchanged` / `changed` / `rematched` / `ambiguous` / `unresolved` と、finding については今も届くか（`flow`）です。
 
@@ -131,7 +132,7 @@ rivus query -site <ID> ./...           # sites の 1 件から始める
 | `completion` | シェルの補完のスクリプトを出す(今は `completion zsh`)。コマンドとフラグの表から作るので、増減に追従する |
 | `debug` | 調査と開発のためのコマンド。普段は使わない（今は `debug extract`: 中立の IR を書き出す） |
 
-フラグは `rivus <command> -h` で出ます。`-h` は、普段使うフラグだけを出します。診断と調整のフラグ（プロファイル、解析の上限、サンドボックスの調整など）は、`-h -help-all`（または `-help-all` だけ）で全部出ます。フラグそのものは、どちらの表示でも同じように使えます。よく使うもの: `-C <dir>`、`-rules <file>`（繰り返し可）、`-no-deps`（依存のソースを読まない。軽いが、依存への呼び出しは推測になる）、`-tests`（テストのコードも読む）、`-detail summary`（経路とコードを省く）、`-timeout`、`-v`。`-resolve-func-values`（実験。既定 off）は、呼び出し先が分からない関数値の呼び出しに、自分のコードで作った関数を候補として補ってから解析します（`stats.func_values` に、補った数が出ます）。`rivus index` に付けると、補ったエッジが索引に入り、`graph callers / callees / path` の答えに `supplemented` で出ます（このフラグの有無は索引のキーに入るので、索引を作ったときと同じ指定で問い合わせます）。`-timeout` は、補う解析と、そのあとの解析を合わせた上限です。
+フラグは `rivus <command> -h` で出ます。`-h` は、普段使うフラグだけを出します。診断と調整のフラグ（プロファイル、解析の上限、サンドボックスの調整など）は、`-h -help-all`（または `-help-all` だけ）で全部出ます。フラグそのものは、どちらの表示でも同じように使えます。よく使うもの: `-C <dir>`、`-rules <file>`（繰り返し可）、`-no-deps`（依存のソースを読まない。軽いが、依存への呼び出しは推測になる。読んだ場合も、source と sink は依存の関数の中では探しません）、`-tests`（テストのコードも読む）、`-detail summary`（経路とコードを省く）、`-timeout`、`-v`。`-resolve-func-values`（実験。既定 off）は、呼び出し先が分からない関数値の呼び出しに、自分のコードで作った関数を候補として補ってから解析します（`stats.func_values` に、補った数が出ます）。`rivus index` に付けると、補ったエッジが索引に入り、`graph callers / callees / path` の答えに `supplemented` で出ます（このフラグの有無は索引のキーに入るので、索引を作ったときと同じ指定で問い合わせます）。`-timeout` は、補う解析と、そのあとの解析を合わせた上限です。
 
 `index` と `graph` の詳しい使い方は [docs/GRAPH.md](docs/GRAPH.md) にあります。AI エージェントに rivus を使わせるときの手引き(どのコマンドを、どのフラグで実行し、出力のどこを読むか)は [docs/AGENT-GUIDE.md](docs/AGENT-GUIDE.md) にあります。
 
