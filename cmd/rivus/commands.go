@@ -75,7 +75,7 @@ func init() {
 				{name: "extract", summary: "write the neutral IR of the code (JSON Lines, or -text to read it)", args: "packages",
 					flags: func(fs *flag.FlagSet) { extractFlags(fs) }, run: runExtract},
 			}},
-		{name: "completion", usual: true, summary: "print the completion script of a shell (zsh)", sub: completionShells},
+		{name: "completion", summary: "print the completion script of a shell (zsh)", sub: completionShells},
 		{name: "version", summary: "print the version (also --version)",
 			run: func([]string) error { fmt.Println(versionString()); return nil }},
 	}
