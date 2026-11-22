@@ -16,10 +16,7 @@ jobs:
   # CHANGELOG.md は、tagpr がリリース PR の中で更新する（.tagpr の changelog = true）。
   # トークンは rivus だけに書けるもの（ghmint の rivus/.github/ghmint/tagpr.rego）。
   # App のトークンで作るので、リリース PR でも CI が走り、コミットは Verified になる。
-  #
-  # いまは常に skip する（if: false）。PR の必須化と最初のリリースの準備ができたら、この if を外す。
   tagpr:
-    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -45,8 +42,7 @@ jobs:
   # トークンは homebrew-tap だけに書けるもの（ghmint の homebrew-tap/.github/ghmint/bump-from-rivus.rego）。
   # Contents API で書くので、コミットは Verified になる。
   #
-  # tagpr のジョブが skip されている間は、needs によってこのジョブも skip される。
-  # tagpr の if を外しても、こちらは別に止めておけるよう、同じ if: false を置く（tap の側の準備ができたら外す）。
+  # いまは常に skip する（if: false）。tap に最初の formula を置いたら、false && を外す。
   bump-tap:
     needs: tagpr
     if: false && needs.tagpr.outputs.tag != ''
