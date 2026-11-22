@@ -502,8 +502,8 @@ LLM に判定を委譲する設計では、由来そのものより「不確実�
 | `numeric_stop` | source のデータが数値や真偽値になり、そこから先は追わない（`-numeric-taint` で追える） |
 | `unsupported_construct` | extractor が表せなかった構文。その中の動作は解析に入っていない |
 | `assumed_call` | 呼び出し先が見えない所で呼ばれるクロージャを、作った場所で、呼ばれたものとして当てた（ADR-059） |
-| `field_imprecision` | sink が引数のフィールドを名指すのに、汚染がそのフィールドにあると言えない（ADR-074） |
-| `field_unresolved` | sink が名指すフィールドが、プログラムに無い（綴りの誤りなど）。sink は値全体として扱う |
+| `field_imprecision` | sink が引数のフィールドを指定するのに、汚染がそのフィールドにあると言えない（ADR-074） |
+| `field_unresolved` | sink が指定するフィールドが、プログラムに無い（綴りの誤りなど）。sink は値全体として扱う |
 | `global_holds_nothing` | `holds: nothing` のモデルが、グローバルへの流れを止めた（ADR-056） |
 
 リテラル定数に着いた由来追跡は、kind ではなく `resolved` として出る（terminal kind は「たどれなかった理由」のための分類）。
@@ -534,7 +534,7 @@ LLM の出力はこの 2 種類に分け、混ぜない。
 `model_version`（判定した LLM）を必須とする。
 
 **`--deterministic-only`**
-`origin: llm` のモデルをすべて無視して走るフラグ。
+`origin: llm` のモデルをすべて無視して実行されるフラグ。
 これにより「rivus 単体は決定論的」と断定できる。
 
 **ガード（guard）**
@@ -547,8 +547,8 @@ LLM の出力はこの 2 種類に分け、混ぜない。
 サマリの外から見て意味があるのは、呼び出し側が制御できる引数に由来する条件だけだから。
 
 **differential test**
-同じ入力を 2 つの独立した実装に通し、結果を突き合わせるテスト。
-rivus では、コアの SSA 化と lifted `go/ssa` の出力を突き合わせる。
+同じ入力を 2 つの独立した実装に通し、結果を照合するテスト。
+rivus では、コアの SSA 化と lifted `go/ssa` の出力を照合する。
 
 **functional approach / tabulation の使い分け**
 rivus の「sink だけ指定して到達し得る source を列挙する」クエリは、
@@ -628,7 +628,7 @@ rivus では ID ではなく、リネームや移動をまたぐ対応付けの�
 taint 解析が汚染を持つ場所。`Root`（SSA の値、複数の戻り値のうちの 1 つ、または解析中の関数の戻り値）と、アクセスパスの組。汚染の状態は、セルから汚染の要素の集合への写像（ARCHITECTURE.md 4.2）。
 
 **parts（sink の欄）**
-sink が、位置の引数のうち、どの欄（フィールド）が危険かを名指す書き方（ADR-074。`parts: [{arg: n, field: "A.B"}]`）。欄にある汚染は確かな検出で、欄にあるとは言えない汚染は `field_imprecision` を付けて出す。書き方は MODELING.md、設計の理由は DESIGN-field-sinks.md。
+sink が、位置の引数のうち、どの欄（フィールド）が危険かを指定する書き方（ADR-074。`parts: [{arg: n, field: "A.B"}]`）。欄にある汚染は確かな検出で、欄にあるとは言えない汚染は `field_imprecision` を付けて出す。書き方は MODELING.md、設計の理由は DESIGN-field-sinks.md。
 
 **valuecalls（関数値の候補）**
 関数値(クロージャ、関数ポインタ、`dyn Fn`)の呼び出しの呼び出し先の候補を、IR の上で 1 か所で決める層（`internal/valuecalls`）。候補を絞ってよいのは、出所をもれなくたどれたときだけで、たどれなければ全候補を残す。絞ったときは、絞る前の数（`narrowed_from`）と、根拠（`basis`）を出力に残す（ADR-045、079）。

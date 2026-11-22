@@ -8,4 +8,4 @@
 
 ## 案(PR #107 のレビューで出た。やるかは、あとで決める)
 
-`-lang go` のように言語を名指ししたとき、ディレクトリに `Cargo.toml` や `pubspec.yaml` があっても、`skipped_languages` には何も残らない(今までと同じ。利用者が範囲を自分で決めたため)。ただ、エージェントが `-lang go` で作った索引の「経路なし」を `exhaustive` と読む場面は、auto で断ったときと同じ形になる。`why: "not-selected"` として残す案。`-lang` の範囲外の言語を、marker のファイルで見つけたときだけ(読まない)。
+`-lang go` のように言語を指定したとき、ディレクトリに `Cargo.toml` や `pubspec.yaml` があっても、`skipped_languages` には何も残らない(今までと同じ。利用者が範囲を自分で決めたため)。ただ、エージェントが `-lang go` で作った索引の「経路なし」を `exhaustive` と読む場面は、auto で断ったときと同じ形になる。`why: "not-selected"` として残す案。`-lang` の範囲外の言語を、marker のファイルで見つけたときだけ(読まない)。

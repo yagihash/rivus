@@ -8,7 +8,7 @@
 
 ## 今の状態(2026-11-22 の見直し)
 
-直した: zoo の `@miss` の不確実性の注記の判定を、大域の `recursion_approximation` では数えず、注釈が名指すときだけ数える形にした(`missTraces`)。
+直した: zoo の `@miss` の不確実性の注記の判定を、大域の `recursion_approximation` では数えず、注釈が指定するときだけ数える形にした(`missTraces`)。
 
 ## 経緯
 

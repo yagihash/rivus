@@ -71,7 +71,7 @@ func main() {
 呼ぶところが見えないクロージャに、キャプチャの値を当てたことを、不確実性で残す。
 
 * kind: **新しい kind `assumed_call`**(`attributable_to: mixed`)。`unresolved_callee` は使わない。理由: `unresolved_callee` の意味は「呼び出し先が分からない」で、ここで分からないのは、**呼ぶ側**(このクロージャを、誰が、いつ、どの引数で呼ぶか)。`unresolved_callee` は「候補を増やせば直る」、こちらは「メモリをたどる、モデルを足す、で直る」で、修正方法が違う。同じ kind にすると、kind ごとの集計と `attributable_to` の指標が濁る。LLM の判定にも、「この finding は、クロージャが呼ばれると仮定した結果」を、finding ごとに見分けさせたい。名前は `assumed_call`(「呼ばれると仮定した」。代案: `closure_call_assumed`。短いほうにした)。
-* **閉じた集合に 1 つ足す**: kind の一覧は閉じた集合なので、**ADR-008 の追記が要る**(`result.go` の定数、`attributable()`、出力のスキーマ、`docs` の kind の表、`cases_test.go` の kind ごとの期待)。
+* **閉じた集合に 1 つ足す**: kind の一覧は閉じた集合なので、**ADR-008 の追記が必要**(`result.go` の定数、`attributable()`、出力のスキーマ、`docs` の kind の表、`cases_test.go` の kind ごとの期待)。
 * 文面(`detail`): `the closure is made here and called where it cannot be seen (it is given to another function, or stored): what it captured is applied at the place it was made, and it is taken to be called`。日本語の意味: このクロージャが呼ばれるところは見えていない。作った場所で、キャプチャの値を当てた(呼ばれるものとして扱っている)。throw を当てなかったときは、`; what it throws is not applied` を足す。
 * `symbol` は、クロージャの関数 ID。`position` は `make_closure` の位置(`graph` の `refs` の `closure` と同じ)。`func` は作った関数。
 * **出す条件**: クロージャの要約が、キャプチャした値に依る効果(FreeVar 由来の sink への到達、書き込み、**throw の出力**、**戻り値(`OutResult`)の出力**)を**持つ**ときだけ。当てなかったもの(throw、結果)は、detail に `; what it throws is not applied` / `; what it returns is not applied` と書く。毎回出すと、Gitea で数千件になる(キャプチャのあるクロージャ 1,496)。`sum.Sinks` と `sum.Outputs` の要素が FreeVar の `ParamElem` を含むか、で決まる(`applySummary` の前に調べる)。
@@ -99,7 +99,7 @@ func main() {
 
 * **できるか**: 同じことは、**別の段階**で、できる。環境の `alloc` の type(`{closure@file:l:c}`)と、クロージャの関数の `params[0].type` が一致するので、alloc → クロージャの関数が引ける(extractor は変えなくてよい見込み。型の文字列が、ファイルと位置を含むので、一意)。`applySummary(cc, closureFn, nil, notes, nil)` を、`argv = [環境の値]`(束縛ではなく、Params の 1 つ目)で当てる。ただし、環境の `field_store` が `alloc` の後に来る(流れに依らない解析なので、順序は、問題にならないはずだが、**確かめていない**)。
 * **効く範囲**: 読む側(`run(|| sink(&a))`)は、`Fn::call` の候補で、**今でも見つかる**(XTALK の過検出つき。`run-a/b` は `@fp`)。C-7 は、これを直さない(XTALK は別の原因。案 2 の作業)。`rust-curated/src/callbacks.rs` の 3 件(`returned`、`nested_cap`、`param_clean`)と `never_called` の検出されない側は、**今、見つかっている**(`@miss` が無い)。書く側(`write-a/b`、`push-list` など 7 件、ENV-PTR)は、環境のフィールドのポインタが、指す先と別名にならない(`locs.go:215`、`transfer.go:148`)ことが原因なので、**alloc で当てても直らない**。ENV-PTR の修正が先。
-* 結論(**条件つき**): 前の版は「読む側は、今でも見つかる」を理由に、Rust を最初の版の対象外にしたが、これは**呼ぶ側が見える形**(`Fn::call` の候補になる)でしか確かめていなかった。**渡すだけの形**で確かめた(`rust-curated/src/callbacks.rs`、今の main): `std::thread::spawn(move || sink(&t))`(`@miss(unmodeled_library_call)`)、キャプチャのあるクロージャを `Box<dyn Fn(i16, u128)>` にして構造体のフィールドに入れ、別の関数が呼ぶ(`@miss(silent)`)、モデルのない標準ライブラリの関数に渡す(`Vec::retain`、`@miss(silent)`)の **3 件とも見つからない**。つまり、Rust にも、サイレントな見逃しがある。**Rust の環境の `alloc` で当てる段階(上の「できるか」)は、次の段階に入れる**(最初の版は Go と Dart。ENV-PTR の修正は、書く側 7 件で、別)。最初の版を Go と Dart にするのは、実装の大きさ(extractor の type で引く、環境の `field_store` の順序の確認)を分けるためで、「Rust は見つかるから要らない」ではない。`thread::spawn` と `retain` のクロージャは、他の呼び出しの候補にもなり、他のソースが誤って届く(`@noisy` 8 と 3)。
+* 結論(**条件つき**): 前の版は「読む側は、今でも見つかる」を理由に、Rust を最初の版の対象外にしたが、これは**呼ぶ側が見える形**(`Fn::call` の候補になる)でしか確かめていなかった。**渡すだけの形**で確かめた(`rust-curated/src/callbacks.rs`、今の main): `std::thread::spawn(move || sink(&t))`(`@miss(unmodeled_library_call)`)、キャプチャのあるクロージャを `Box<dyn Fn(i16, u128)>` にして構造体のフィールドに入れ、別の関数が呼ぶ(`@miss(silent)`)、モデルのない標準ライブラリの関数に渡す(`Vec::retain`、`@miss(silent)`)の **3 件とも見つからない**。つまり、Rust にも、サイレントな見逃しがある。**Rust の環境の `alloc` で当てる段階(上の「できるか」)は、次の段階に入れる**(最初の版は Go と Dart。ENV-PTR の修正は、書く側 7 件で、別)。最初の版を Go と Dart にするのは、実装の大きさ(extractor の type で引く、環境の `field_store` の順序の確認)を分けるためで、「Rust は見つかるから不要」ではない。`thread::spawn` と `retain` のクロージャは、他の呼び出しの候補にもなり、他のソースが誤って届く(`@noisy` 8 と 3)。
 
 ### (8) 案 2(ADR-047 の下書き: scratchpad/scc/adr-draft.md)との関係
 
@@ -128,7 +128,7 @@ func main() {
 
 ### (10) 検証の計画
 
-0. **最初に**: 収束する 4 つ(gogs、gin-vue-admin、ech0、go-test-bench)を、走らせられる状態にする。C-1 では、scratchpad の複製に go.mod が無く、走らせられなかった。`bench/README.md` の取得の手順で、複製を作り直し、**C-7 の前**の finding を基準として保存する。
+0. **最初に**: 収束する 4 つ(gogs、gin-vue-admin、ech0、go-test-bench)を、実行できる状態にする。C-1 では、scratchpad の複製に go.mod が無く、実行できなかった。`bench/README.md` の取得の手順で、複製を作り直し、**C-7 の前**の finding を基準として保存する。
 1. **網羅の不変条件**(`internal/taint` の既存のもの): finding の増加が、`make_closure` の経路の finding だけ。使われ方で飛ばす版は、**既存の finding が 1 件も消えず、経路も変わらない**ことを、全ベンチで確かめる。変わりうる形(「キャプチャもあり、候補としても束縛つきで解決されている」)は、差分で数える。
 2. **ベンチの差分**: 収束する 4 つ(gogs、gin-vue-admin、ech0、go-test-bench)、`bench/go-curated`、`bench/go-synth`(S、M)、`testdata/go/cases`、Dart(`dart-curated`、`dart-pub`、`dart-corpus` 系)、Rust(変更なしのはず。finding が 1 件も変わらないことを確かめる)。**前後で findings を比べ、増えたもの全部を 1 件ずつ分類**(正しい流れ / 呼ばれないクロージャの過検出 / 順序の過検出)。Gitea は、C-1(ADR-048)のあとは、収束する見込み(競合なしの再実行を待つ)。収束するなら、**Gitea 全体で前後を比べる**(`./modules/...` と `services/` の一部は、その予備。`db.WithTx` を含む)。収束しなければ、予備で比べる。分類できなければ push しない。
 3. **curated の `@miss` / `@fp` の増減**(下の表。**実装して確かめたものではない**):
@@ -196,7 +196,7 @@ func main() {
 
 ## 測定(Go のキャプチャのあるクロージャの数)
 
-`rivus index` の索引は、**作っていない**(スワップが 74%(4.5 GB / 6 GB)、別の解析が 5.3 GB で動いていて、50% を超えていた: 始めない)。`gr/gitea.db` は、`refs` の表が無い古い版(schema 1)。gogs と gin-vue-admin の**ソースは、scratchpad/bench に無い**(truth の JSON だけ)。そこで、**構文の近似**(`go/parser` だけ、型もメモリも要らない。scratchpad/c7/caps)で、Gitea と zitadel の**関数リテラル**を数えた。「キャプチャあり」= 関数の中の変数 / 引数 / 定数を、リテラルの外で宣言して使っているもの。
+`rivus index` の索引は、**作っていない**(スワップが 74%(4.5 GB / 6 GB)、別の解析が 5.3 GB で動いていて、50% を超えていた: 始めない)。`gr/gitea.db` は、`refs` の表が無い古い版(schema 1)。gogs と gin-vue-admin の**ソースは、scratchpad/bench に無い**(truth の JSON だけ)。そこで、**構文の近似**(`go/parser` だけ、型もメモリも不要。scratchpad/c7/caps)で、Gitea と zitadel の**関数リテラル**を数えた。「キャプチャあり」= 関数の中の変数 / 引数 / 定数を、リテラルの外で宣言して使っているもの。
 
 | 対象 | ファイル | 関数リテラル | キャプチャあり | 引数 | 代入 | return | リテラル | `go f(){}()` / `defer` / その場 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -226,7 +226,7 @@ advisor の意見を反映して決めた点: 飛ばす条件は**使われ方**
 最初の版は、結果(`OutResult`)を当てない(不確実性の注記は出す)。次の段階: **`make_closure` の場所で、クロージャの要約の `OutResult`(キャプチャの値で具体化したもの)を、クロージャの値の、決まったパス(たとえば `/()`: 「呼ぶと、これが返る」)のセルに置く。関数値の呼び出しは、呼ぶ値の `/()` を、結果に流す。** 値(クロージャ)は、引数、フィールド、return を、ふつうの汚染と同じに運ばれるので、**ヘルパー越し、フィールド越し、返されたクロージャの呼び出しに、仕組みを足さずに届く**。案 2 を待たずに、RET-CLOSURE(`holder-a/b`、`curry`、`getter-fn`)と `WithTx2`、`map` / `then` の型が直る見込み。クロージャの値ごとに別のセルなので、交差は起きない。
 
 * `/()` のパスの規則: 呼び出し側(`call` の関数値の呼び出し)が、候補が決まらなくても、呼ぶ値のセルを読む。関数値のセルに汚染が付くのは、`make_closure` だけ。
-* **ユーザーの判断が要る**(新しいパスの規則を、汚染のモデルに足す)ので、**C-7 の最初の版が入ってから、`cap-result` ほかの `@miss(assumed_call)` の数字と一緒に上げる**。
+* **ユーザーの判断が必要**(新しいパスの規則を、汚染のモデルに足す)ので、**C-7 の最初の版が入ってから、`cap-result` ほかの `@miss(assumed_call)` の数字と一緒に上げる**。
 
 ## Rust の dynamic な呼び出し(`Fn*::call`)の候補を、レシーバの出所で絞る(XTALK、案 A。実装した: ADR-079、下の「実装」)
 
@@ -277,7 +277,7 @@ Rust の `Fn::call` の候補は、「引数の型が合う全クロージャ」
 2. **「読んだコードの呼び出し元をもれなく」の範囲を、広くとる:** (i) **読んだ依存のクレート**(`--no-deps` でない実行)の呼び出し元と、(ii) **テスト(`--include-tests`)の中**の呼び出し元を、数える(数えない = 見逃す、ではなく、数えて、渡されたクロージャも出所に入れる)。(iii) **関数アイテムとして値で使われた所**(`let f = for_each_live_node;`、`.map(for_each_live_node)`、`convert` を経た関数ポインタ)が 1 つでもあれば、**呼び出し元が閉じていない → 全候補**(`Reachable` と graph の `refs` の数え方に揃える: `refs` の `arg` / `other` の参照、`Value.FuncValue`)。
 3. **前提の名前を、出力に残す:** `narrowed_from` に加えて、絞った不確実性に **`basis: closed_world_entry`** の欄を付け、1 文で言えるようにする: 「起点のあるプログラムとして読んだので、外からの呼び出しは数えていない」(`reachability_note` と同じ作り。全言語で同じ文字列。絞ったすべての呼び出しに付く。`basis` が無いのは、パラメータに由来しない絞り込み = レシーバが、その関数の中で作られているとき)。
 
-**Dart の同じ規則(dart-pub の dynamic、レシーバが `make_closure`、257 件):** 同じ段(条件 1 の表。Dart は `make_closure` がキャプチャの値を持つので `EnvClosures` は要らない)を使う。呼び出し元が閉じている条件は、**ライブラリ非公開**(名前が `_` で始まる。`library` の外から見えない)かつ、**tear-off されていない**(関数値として使われない = `refs` に参照がない)かつ、**メソッドなら、オーバーライドされない**(サブクラスの呼び出しが、名前に出ない)こと。公開の関数は、Rust の公開と同じ閉じた世界(上の 3 条件。Dart の「外から呼ばれるマーク」は、`@pragma("vm:entry-point")`、FFI の export とコールバック、ライブラリでの起点なし)に従う。Dart への適用は、Rust の実装と測定が済んでから。
+**Dart の同じ規則(dart-pub の dynamic、レシーバが `make_closure`、257 件):** 同じ段(条件 1 の表。Dart は `make_closure` がキャプチャの値を持つので `EnvClosures` は不要)を使う。呼び出し元が閉じている条件は、**ライブラリ非公開**(名前が `_` で始まる。`library` の外から見えない)かつ、**tear-off されていない**(関数値として使われない = `refs` に参照がない)かつ、**メソッドなら、オーバーライドされない**(サブクラスの呼び出しが、名前に出ない)こと。公開の関数は、Rust の公開と同じ閉じた世界(上の 3 条件。Dart の「外から呼ばれるマーク」は、`@pragma("vm:entry-point")`、FFI の export とコールバック、ライブラリでの起点なし)に従う。Dart への適用は、Rust の実装と測定が済んでから。
 
 #### 条件 3: 絞ったことを出力に出す
 
@@ -339,17 +339,17 @@ Rust の抽出器(`extractor/rust/src/main.rs` の `merge`)は、クレートご
 
 ### CORE-M: `valuecalls` が、一部の呼び出し元しか追えないとき、見つかった分を全部として扱う(案 A の前に塞ぐ)
 
-**穴:** `internal/valuecalls/valuecalls.go` の `funcsOf` は、値の出所が `refOther`(フィールドの読み出し、戻り値、グローバル、未対応の命令。`classify` の既定)に当たると、**何も報告せずに戻る**。見つかった関数(`found`)が 1 つ以上あれば、それが全部として `ValueCands` になる(`found` が 0 のときだけ `unresolved_callee` / `ValueLimit` が出る)。`r.cut` も、`found` が 0 のときにしか見ない。パラメータの呼び出し元をたどるときの、引数の数が足りない(`k >= len(cin.Args)`)と、`form` が作れない呼び出し元も、何も報告せずに `continue` する。**つまり、案 A の条件 1(全部たどれたときだけ絞る)が、今の `valuecalls` で、すでに破れている。**
+**抜け:** `internal/valuecalls/valuecalls.go` の `funcsOf` は、値の出所が `refOther`(フィールドの読み出し、戻り値、グローバル、未対応の命令。`classify` の既定)に当たると、**何も報告せずに戻る**。見つかった関数(`found`)が 1 つ以上あれば、それが全部として `ValueCands` になる(`found` が 0 のときだけ `unresolved_callee` / `ValueLimit` が出る)。`r.cut` も、`found` が 0 のときにしか見ない。パラメータの呼び出し元をたどるときの、引数の数が足りない(`k >= len(cin.Args)`)と、`form` が作れない呼び出し元も、何も報告せずに `continue` する。**つまり、案 A の条件 1(全部たどれたときだけ絞る)が、今の `valuecalls` で、すでに破れている。**
 
 **再現(確かめた):**
 * **Dart: 再現した。** `apply((s){}, 'x')`(たどれる)と `apply(h.cb, source())`(フィールドの読み出し = `refOther`)の 2 呼び出し元があるヘルパー `apply(f, s) { f(s); }`: 候補は前者 1 つだけになり、**finding も不確実性も出ない**(`h.cb` の中の `sink(s)` を見逃す)。`apply2((s){}, 'x')` と `apply2(pick(), source())`(戻り値)も同じ。**対照**: たどれない呼び出し元だけの `apply3(pick(), source())` は、`unresolved_callee` が 1 件出る。つまり、**全部がたどれないときは報告し、一部がたどれないときは報告しない**。再現の入力: `rev/taintB/d1/lib/v.dart`(コーディネーターのスクラッチパッド)、出力 0 件、`summary.program` の不確実性は `apply3` の 1 件のみ。
-* **Go: 再現しなかった。** 同じ形(`apply(func(string){}, "x")` と `apply(h.cb, source())`、`apply2(mk(), source())`)で、finding は 2 件とも見つかる。Go の抽出器が、VTA の呼び出しグラフの候補を `Callee.Candidates` に入れるので、`valuecalls` は `funcsOf` まで来ない(「The extractor's call graph says」の枝)。**ただし**、Go でも候補が付かない呼び出し(抽出器の呼び出しグラフが解かないもの)では、同じ穴に当たりうる(未確認。Go のフィクスチャを、`valuecalls` の単体テストで固定する)。
+* **Go: 再現しなかった。** 同じ形(`apply(func(string){}, "x")` と `apply(h.cb, source())`、`apply2(mk(), source())`)で、finding は 2 件とも見つかる。Go の抽出器が、VTA の呼び出しグラフの候補を `Callee.Candidates` に入れるので、`valuecalls` は `funcsOf` まで来ない(「The extractor's call graph says」の枝)。**ただし**、Go でも候補が付かない呼び出し(抽出器の呼び出しグラフが解かないもの)では、同じ抜けに当たりうる(未確認。Go のフィクスチャを、`valuecalls` の単体テストで固定する)。
 * **Rust: 再現が不確か。** `fn apply(f: fn(&str), s: &str) { f(s) }` を、`apply(noop, "x")` と `apply(h.cb, &source())`(`h.cb` は構造体のフィールドの関数ポインタ)で呼ぶと、finding は 0 件、不確実性も 0 件(`a` の呼び出しを外して、`b` だけにしても 0 件・0 件)。**部分的にたどれたときの、サイレントな見逃し、とは断定できない**(たどれない呼び出し元だけのときも、不確実性が出ていない。別の原因がある可能性がある。Rust の `f(s)`(関数ポインタ)の呼び出しが `valuecalls` を通るかを、先に確かめる)。Rust の `Fn::call`(dynamic)は、そもそも `valuecalls` を通らない(`CalleeValue` だけを解く)。
 
 **修正方法(案):**
 1. `funcsOf` が、**「不完全」のマーク**を返す: `refOther` に当たった、呼び出し元の引数が足りない、`form` が作れない、`maxDepth` で切った(`r.cut`)、のどれかで、`incomplete = true`。`found` があっても、`incomplete` なら、
    * **不確実性を出す**(`unresolved_callee`。detail に「一部の呼び出し元の値は、たどれなかった。たどれた分は n 個」)。`ValueLimit = "partial"`、`ValueFound = n` を残す(`candidate_limit` と同じ作り)。
-   * **見つかった分は、候補に残す**(finding を減らさない。見つかった分で今見つかっている流れを、消さない)。ただし、**「全部」ではないマーク**(`ValueCand` を持つ呼び出しの `Incomplete`)を付け、案 A の絞り込みは、このマークのある呼び出しを使わない。**見つかった分だけを「全部」として扱うのが穴**なので、これで、(i) 見逃しをサイレントにしない(不確実性が付く)、(ii) 今ある finding は消さない、(iii) 案 A の絞り込みが、見つかった分だけに絞るのを止める、の 3 つを満たす。
+   * **見つかった分は、候補に残す**(finding を減らさない。見つかった分で今見つかっている流れを、消さない)。ただし、**「全部」ではないマーク**(`ValueCand` を持つ呼び出しの `Incomplete`)を付け、案 A の絞り込みは、このマークのある呼び出しを使わない。**見つかった分だけを「全部」として扱うのが抜け**なので、これで、(i) 見逃しをサイレントにしない(不確実性が付く)、(ii) 今ある finding は消さない、(iii) 案 A の絞り込みが、見つかった分だけに絞るのを止める、の 3 つを満たす。
 2. **候補を空にして、`unresolved_callee` だけにする案は採らない**: 今、「見つかった分」で見つけている finding が消える。本物でも、全部がたどれた上での絞り込みではないが、finding の削除は、検証(`compare.sh`)で止める対象になる。第 1 段階は、finding を減らさず、不確実性を足す。マークのある呼び出しの候補を、型の合う全関数(Rust の `Fn::call` の候補、Dart の全 `make_closure`)に広げるのは、別の判断(精度を下げずに見逃しを減らす方向だが、XTALK を増やす)。
 3. 案 A の条件 1・2 は、この `incomplete` を使う: **`incomplete` のある呼び出しは、絞らない**。CORE-D の上限(`most`、`maxDepth`)も、同じマークで、全候補に戻す。
 
@@ -371,5 +371,5 @@ Rust の抽出器(`extractor/rust/src/main.rs` の `merge`)は、クレートご
 * **使われ方(飛ばす条件)**: `alloc` の結果(環境の値)の使われ方を、同じ表(`sg` の使用箇所)で見る。呼び出し(`Fn::call` の dynamic 呼び出し)の位置、または、`field_store` / `field_load` だけなら、ホーム関数内の直接の呼び出し。`field_store`(環境への書き込み)は、環境を作る側の使い方なので、**数えない**(`make_closure` には無い、Rust 固有の例外)。環境の値が、引数、`store`、`return`、別の `alloc` の `field_store` の値に入るなら、当てる。
 * **不確実性の注記**: 同じ `assumed_call`(`attributable_to: mixed`)。
 * **効く範囲(`rust-curated/src/callbacks.rs`)**: 渡すだけの形の 3 件(`spawned` = `std::thread::spawn`、`boxed` = `Box<dyn Fn>` をフィールドに入れて別の関数が呼ぶ、`retained` = `Vec::retain`)。読む側(`run(|| sink(&a))`)は `Fn::call` の候補で今も見つかる(XTALK の過検出つき。`run-a/b` は `@fp`)。書く側(`write-a/b`、`push-list` など 7 件、ENV-PTR)は、環境のフィールドのポインタが、指す先と別名にならない(`locs.go:215`、`transfer.go:148`)ことが原因で、**`alloc` で当てても直らない**。ENV-PTR の修正が先(ADR-072 で直した。書く側 7 件のうち、`write-a`、`write-b`、`write-param`、`push-list`、`late`、`for-each-cap` が見つかる。環境のフィールドは、クロージャの名前で呼ぶので、候補どうしが環境のセルを混ぜない)。
-* **気をつけること**: 型 `{closure@file:l:c}` が、マクロで複数の場所に書かれるクロージャは、`EnvClosures` が引けない(ちょうど 1 つ一致のときだけ引く)。そのクロージャは、今と同じく、何も報告せずに落ちる。`assumed_call` ではなく、引けなかったことの不確実性の注記が要る(次の段階で決める)。`thread::spawn` と `retain` のクロージャは、`Fn::call` の候補にもなり、他のソースが誤って届く(`@noisy` 8 と 3)ことは、この段で直らない(XTALK)。
+* **気をつけること**: 型 `{closure@file:l:c}` が、マクロで複数の場所に書かれるクロージャは、`EnvClosures` が引けない(ちょうど 1 つ一致のときだけ引く)。そのクロージャは、今と同じく、何も報告せずに落ちる。`assumed_call` ではなく、引けなかったことの不確実性の注記が必要(次の段階で決める)。`thread::spawn` と `retain` のクロージャは、`Fn::call` の候補にもなり、他のソースが誤って届く(`@noisy` 8 と 3)ことは、この段で直らない(XTALK)。
 * **受け入れ(次の段階)**: `callbacks.rs` の渡すだけの 3 件が見つかる。`cap-run` 相当の「その場で呼ぶ」クロージャで、finding が増えず、`assumed_call` も出ない。`parseable` で、追加の finding を分類する。

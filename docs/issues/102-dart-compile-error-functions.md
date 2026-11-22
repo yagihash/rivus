@@ -8,7 +8,7 @@
 
 ## 今の状態(2026-11-22 の見直し)
 
-直した: cf5cbf4(コンパイルエラーのある関数を通る finding に `missing_source` を付ける)、31f1096(関数 ID の突き合わせ。CORE-7、CORE-8)。詳細は書かない。
+直した: cf5cbf4(コンパイルエラーのある関数を通る finding に `missing_source` を付ける)、31f1096(関数 ID の照合。CORE-7、CORE-8)。詳細は書かない。
 
 ## 経緯
 

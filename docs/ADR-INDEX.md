@@ -98,7 +98,7 @@
 | 081 | Rust のモデル位置は dynamic でも `arg0` がレシーバ(`self_first`) | 有効 |  | DESIGN-generics-dispatch | `Box<dyn Fn>` は入れない |
 | 082 | ライターモデルは `.content` に置く | 有効 | 訂正が本文内。090 が続き; 訂正・追記あり(書き方を保つ) | MODELING に記載なし | - |
 | 083 | Go の型の別名はルール側で同義扱い(`type_aliases`) | 有効 | 訂正が本文内; 訂正・追記あり(書き方を保つ) | GCP-MODELS | - |
-| 084 | 「読まない関数に渡った」マークをセルに付ける | 有効 | 074 の穴を直す。訂正が本文内; 訂正・追記あり(書き方を保つ) | DESIGN-field-sinks | - |
+| 084 | 「読まない関数に渡った」マークをセルに付ける | 有効 | 074 の抜けを直す。訂正が本文内; 訂正・追記あり(書き方を保つ) | DESIGN-field-sinks | - |
 | 085 | Rust の async 内 `Fn::call` も絞る | 有効 | 079 の続き | DESIGN-async-dispatch | - |
 | 086 | sanitizer のある interface メソッドは実装の本体を読む | 有効 | 075 を一部置換 | - | 組み込みの sanitizer の影響は 0 行 |
 | 087 | `other_sources` に `via_shared_state` | 有効 | 069 の続き | - | 出力の追加のみ |
@@ -106,7 +106,7 @@
 | 089 | Rust `write!` のモデル | 有効 |  | - | - |
 | 090 | ポインタ包みの interface への書き込みを指す先にも | 有効 | 060/082 の続き | - | - |
 | 091 | 下げられなかった式が値を返すとき、`unsupported` が元の値と結果を持つ | 有効 | 相談役の判断(2026-11-22)。Dart の解決できないコンストラクタ呼び出しから | ARCHITECTURE の IR の命令 | Go と Rust の extractor は未確認 |
-| 092 | 依存のパッケージを、流れのモデルで切る(本体を読まない)のは、コストが著しく大きいときも。ただし条件つき | 有効 |  | PRINCIPLES 3 節、GCP-MODELS P12、MODELING | コストの測定の記録、突き合わせの検査、`calls:`、保守的な不確実性の注記、切ったことの表示。実装は未(ROADMAP) |
+| 092 | 依存のパッケージを、流れのモデルで切る(本体を読まない)のは、コストが著しく大きいときも。ただし条件つき | 有効 |  | PRINCIPLES 3 節、GCP-MODELS P12、MODELING | コストの測定の記録、照合の検査、`calls:`、保守的な不確実性の注記、切ったことの表示。実装は未(ROADMAP) |
 | 093 | Rust の extractor の隔離を、Docker から macOS のサンドボックス(Seatbelt)に替える | 有効 | ユーザーの決定(2026-11-22)。ADR-064 を一部覆す。Linux では止まる(`-unsafe-host-exec`) | rust-isolation、PRINCIPLES 8 節 | 承知している弱さと、後回しのハードニングを載せた |
 
 ## 訂正・追記の書き方を保つ ADR

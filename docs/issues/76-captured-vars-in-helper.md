@@ -61,5 +61,5 @@ ADR-047(案 2)で直る見込み(呼び出し元が、自分が渡したクロ�
 
 ## コメント(GitHub から移した写し)
 
-再開後の確認(2026-11-22): Dart の dart-curated で、run-a / run-b / write-a / write-b など、この Issue の主な形は `@miss` が外れて見つかる。残り: `write-param`(`bench/dart-curated/lib/capture.dart`、`@miss(depth_limit)`、注記つき)と、holder 系の `@miss(unresolved_callee)`。Go の `apply(func(q *Q){ q.name = n }, q)` の形は今回は走らせていない。この Issue は、残りの形を指すものとして開けておく。
+再開後の確認(2026-11-22): Dart の dart-curated で、run-a / run-b / write-a / write-b など、この Issue の主な形は `@miss` が外れて見つかる。残り: `write-param`(`bench/dart-curated/lib/capture.dart`、`@miss(depth_limit)`、注記つき)と、holder 系の `@miss(unresolved_callee)`。Go の `apply(func(q *Q){ q.name = n }, q)` の形は今回は実行していない。この Issue は、残りの形を指すものとして開けておく。
 
