@@ -207,6 +207,10 @@ void opaque(Stmt s) {
 /// elements).
 void sinkAny(Object? v) => _record(classAny, '', [v.toString()]);
 
+/// What a skeleton of a library records of what it was given (packages/http): the same as [sinkAny] at run time, and
+/// **not a sink of rules.yaml**: the sink of such a cell is the built-in row of the library, at the call of the cell.
+void recordAny(Object? v) => _record(classAny, '', [v.toString()]);
+
 String _clean(String c, String s) {
   final set = specs[c]!.set;
   final b = StringBuffer();

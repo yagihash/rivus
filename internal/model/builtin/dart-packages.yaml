@@ -1,5 +1,4 @@
-# package:shelf and package:http, package:sqflite: the common server side
-# libraries.
+# package:shelf and package:sqflite: the common server side libraries (package:http is in dart-http.yaml).
 ruleset: rivus/dart/packages@1
 
 sources:
@@ -34,69 +33,8 @@ propagators:
     flows: [{from: recv, to: result}]
   - symbol: package:shelf/src/request.dart#Request.contentLength
     flows: [{from: recv, to: result}]
-  - symbol: package:http/src/response.dart#Response.body
-    flows: [{from: recv, to: result}]
-  - symbol: package:http/src/response.dart#Response.bodyBytes
-    flows: [{from: recv, to: result}]
-  - symbol: package:http/src/response.dart#Response.headers
-    flows: [{from: recv, to: result}]
-  - symbol: package:http/src/base_response.dart#BaseResponse.headers
-    flows: [{from: recv, to: result}]
-  - symbol: package:http/src/streamed_response.dart#StreamedResponse.stream
-    flows: [{from: recv, to: result}]
-  - symbol: package:http/src/client.dart#Client.get
-    flows: [{from: args, to: result}]
-  - symbol: package:http/src/client.dart#Client.post
-    flows: [{from: args, to: result}]
-  - symbol: package:http/http.dart#get
-    flows: [{from: args, to: result}]
-  - symbol: package:http/http.dart#post
-    flows: [{from: args, to: result}]
-  - symbol: package:http/http.dart#read
-    flows: [{from: args, to: result}]
 
 sinks:
-  # SSRF
-  - symbol: package:http/http.dart#get
-    args: [0]
-    category: ssrf
-    accepts: [user_input]
-  - symbol: package:http/http.dart#post
-    args: [0]
-    category: ssrf
-    accepts: [user_input]
-  - symbol: package:http/http.dart#put
-    args: [0]
-    category: ssrf
-    accepts: [user_input]
-  - symbol: package:http/http.dart#delete
-    args: [0]
-    category: ssrf
-    accepts: [user_input]
-  - symbol: package:http/http.dart#head
-    args: [0]
-    category: ssrf
-    accepts: [user_input]
-  - symbol: package:http/http.dart#patch
-    args: [0]
-    category: ssrf
-    accepts: [user_input]
-  - symbol: package:http/http.dart#read
-    args: [0]
-    category: ssrf
-    accepts: [user_input]
-  - symbol: package:http/src/client.dart#Client.get
-    args: [0]
-    category: ssrf
-    accepts: [user_input]
-  - symbol: package:http/src/client.dart#Client.post
-    args: [0]
-    category: ssrf
-    accepts: [user_input]
-  - symbol: package:http/src/client.dart#Client.send
-    args: [0]
-    category: ssrf
-    accepts: [user_input]
   # SQL injection: only the query text is dangerous, not the bound arguments
   - symbol: package:sqflite_common/src/database_mixin.dart#SqfliteDatabaseMixin.rawQuery
     args: [0]

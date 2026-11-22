@@ -1,6 +1,7 @@
 package sites
 
 import (
+	"reflect"
 	"sort"
 	"strings"
 
@@ -145,7 +146,8 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 					if srcs := rules.CallSources[sym]; len(srcs) > 0 {
 						add(&Site{Role: RoleSource, Kind: model.KindCallResult, Symbol: sym, Labels: labelsOf(srcs), IR: at, Src: srcs, irpos: in.Pos})
 					}
-					if sinks := sinksAt(fn, in, in.Callee.Kind == ir.CalleeDynamic || (in.Callee.Kind == ir.CalleeStatic && in.Callee.Recv), rules.Sinks[sym], canon); len(sinks) > 0 {
+					ownSinks := sinksAt(fn, in, in.Callee.Kind == ir.CalleeDynamic || (in.Callee.Kind == ir.CalleeStatic && in.Callee.Recv), rules.Sinks[sym], canon)
+					if sinks := ownSinks; len(sinks) > 0 {
 						add(&Site{Role: RoleSink, Kind: "call", Symbol: sym, Category: sinks[0].Category, Labels: acceptsOf(sinks), IR: at, Sink: sinks, irpos: in.Pos})
 					}
 					if in.Callee.Kind == ir.CalleeDynamic {
@@ -161,7 +163,10 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 							if csym == "" || csym == sym {
 								continue
 							}
-							if sinks := sinksAt(fn, in, true, rules.Sinks[csym], canon); len(sinks) > 0 {
+							// a sink of the implementation that says what the sink of the interface method says (the same
+							// positions, category and labels) adds no site: the call has one finding, not one for each
+							// name it is written under
+							if sinks := uncovered(sinksAt(fn, in, true, rules.Sinks[csym], canon), ownSinks); len(sinks) > 0 {
 								add(&Site{Role: RoleSink, Kind: "call", Symbol: csym, Category: sinks[0].Category, Labels: acceptsOf(sinks), IR: at, Sink: sinks, irpos: in.Pos, Callee: string(id)})
 							}
 						}
@@ -454,4 +459,24 @@ func argTypeHolds(fn *ir.Func, l ir.LocalID, c *model.ArgTypeCond, canon ir.Type
 		l = src
 	}
 	return false
+}
+
+// uncovered are the sinks of an implementation that no sink of the interface method (own) says the same of: the same
+// positions, the same part of the value, the same category and labels.
+func uncovered(sinks, own []model.Sink) []model.Sink {
+	if len(own) == 0 {
+		return sinks
+	}
+	var out []model.Sink
+next:
+	for _, s := range sinks {
+		for _, o := range own {
+			if o.Category == s.Category && o.Recv == s.Recv && o.Field == s.Field && o.WhenArgType == s.WhenArgType &&
+				reflect.DeepEqual(o.Args, s.Args) && reflect.DeepEqual(o.Accepts, s.Accepts) && reflect.DeepEqual(o.Parts, s.Parts) {
+				continue next
+			}
+		}
+		out = append(out, s)
+	}
+	return out
 }

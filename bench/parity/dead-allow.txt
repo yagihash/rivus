@@ -660,7 +660,6 @@ dart dart:core#UnsupportedError.new | debt | the standard library: no cell of th
 dart dart:core#Uri.authority | debt | the standard library: no cell of the zoo calls it yet
 dart dart:core#Uri.data | debt | the standard library: no cell of the zoo calls it yet
 dart dart:core#Uri.dataFromString | debt | the standard library: no cell of the zoo calls it yet
-dart dart:core#Uri.decodeFull | debt | the standard library: no cell of the zoo calls it yet
 dart dart:core#Uri.decodeQueryComponent | debt | the standard library: no cell of the zoo calls it yet
 dart dart:core#Uri.encodeComponent | debt | the standard library: no cell of the zoo calls it yet
 dart dart:core#Uri.encodeFull | debt | the standard library: no cell of the zoo calls it yet
@@ -790,10 +789,28 @@ dart package:http/http.dart#patch | dependency | not the standard library: the z
 dart package:http/http.dart#post | dependency | not the standard library: the zoo has no such dependency
 dart package:http/http.dart#put | dependency | not the standard library: the zoo has no such dependency
 dart package:http/http.dart#read | dependency | not the standard library: the zoo has no such dependency
+dart package:http/http.dart#readBytes | dependency | not the standard library: the zoo has no such dependency
+dart package:http/retry.dart#RetryClient.send | dependency | not the standard library: the zoo has no such dependency
+dart package:http/src/base_client.dart#BaseClient.delete | dependency | not the standard library: the zoo has no such dependency
+dart package:http/src/base_client.dart#BaseClient.get | dependency | not the standard library: the zoo has no such dependency
+dart package:http/src/base_client.dart#BaseClient.head | dependency | not the standard library: the zoo has no such dependency
+dart package:http/src/base_client.dart#BaseClient.patch | dependency | not the standard library: the zoo has no such dependency
+dart package:http/src/base_client.dart#BaseClient.post | dependency | not the standard library: the zoo has no such dependency
+dart package:http/src/base_client.dart#BaseClient.put | dependency | not the standard library: the zoo has no such dependency
+dart package:http/src/base_client.dart#BaseClient.read | dependency | not the standard library: the zoo has no such dependency
+dart package:http/src/base_client.dart#BaseClient.readBytes | dependency | not the standard library: the zoo has no such dependency
+dart package:http/src/base_client.dart#BaseClient.send | dependency | not the standard library: the zoo has no such dependency
 dart package:http/src/base_response.dart#BaseResponse.headers | dependency | not the standard library: the zoo has no such dependency
-dart package:http/src/client.dart#Client.get | dependency | not the standard library: the zoo has no such dependency
+dart package:http/src/browser_client.dart#BrowserClient.send | dependency | not the standard library: the zoo has no such dependency
+dart package:http/src/client.dart#Client.delete | dependency | not the standard library: the zoo has no such dependency
+dart package:http/src/client.dart#Client.head | dependency | not the standard library: the zoo has no such dependency
+dart package:http/src/client.dart#Client.patch | dependency | not the standard library: the zoo has no such dependency
 dart package:http/src/client.dart#Client.post | dependency | not the standard library: the zoo has no such dependency
+dart package:http/src/client.dart#Client.put | dependency | not the standard library: the zoo has no such dependency
+dart package:http/src/client.dart#Client.read | dependency | not the standard library: the zoo has no such dependency
+dart package:http/src/client.dart#Client.readBytes | dependency | not the standard library: the zoo has no such dependency
 dart package:http/src/client.dart#Client.send | dependency | not the standard library: the zoo has no such dependency
+dart package:http/src/mock_client.dart#MockClient.send | dependency | not the standard library: the zoo has no such dependency
 dart package:http/src/response.dart#Response.body | dependency | not the standard library: the zoo has no such dependency
 dart package:http/src/response.dart#Response.bodyBytes | dependency | not the standard library: the zoo has no such dependency
 dart package:http/src/response.dart#Response.headers | dependency | not the standard library: the zoo has no such dependency

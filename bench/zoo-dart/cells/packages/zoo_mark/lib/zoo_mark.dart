@@ -84,6 +84,10 @@ external void opaque(Stmt s);
 /// A sink for structs and containers only: the text of the value (its `toString`) is what is recorded.
 void sinkAny(Object? v) {}
 
+/// What a skeleton of a library records of what it was given (packages/http): the same as [sinkAny] at run time, and
+/// **not a sink of rules.yaml**: the sink of such a cell is the built-in row of the library, at the call of the cell.
+void recordAny(Object? v) {}
+
 /// The sanitizers: each replaces the dangerous characters of its class by '_'.
 String cleanCmd(String s) => '';
 String cleanSql(String s) => '';

@@ -1,0 +1,170 @@
+# package:http: the HTTP client of the Dart team (the `Client` interface, `BaseClient`, the functions of `http.dart`).
+#
+# The URL that a request goes to is an SSRF sink; the result of a request is what the arguments flow to (as
+# `(*net/http.Client).Do` and `dart:io` `HttpClient` do: the response is not a source, the server is not an
+# attacker of the program). The body and the headers of a request are not sinks (nothing in `net/http` or
+# `dart:io` says they are either).
+#
+# `Client` is an interface that many classes implement (`IOClient`, `RetryClient`, the authenticated clients of
+# googleapis_auth, ...) and that call each other. The row of `Client.send` (a `flows` row: the model) stands for
+# the implementations of the packages: a call through the interface does not read them (the note
+# `dependency_body_unread` says so), and the implementations that the project writes itself are still read.
+# The convenience methods (`get`, `post`, ...) have sinks and no model on purpose: their bodies (a few lines
+# each) are read, and they reach `send`. A model for them would cut the call that they make to the `send` of a
+# class of the project (an own `BaseClient` subclass), and a flow through that class would be lost
+# (ADR-092: the edges at the border; docs/DESIGN-deps-cost.md, section 11). The three functions of `http.dart`
+# that had a model before keep it.
+# `BaseClient` has the sinks too, for a call on a variable typed `IOClient` or `RetryClient` (the call is of the
+# method of `BaseClient`). The `send` of `IOClient`, `BrowserClient`, `RetryClient` and `MockClient` has a sink and no
+# model (its body is read), for a call on a variable of that type. A call through `Client` that reaches one of them
+# has two findings (the interface and the implementation, ADR-068): the row of the interface alone would miss the
+# call when the packages are not read (`-no-deps`) or the class is the project's own. `match: implementations` is
+# not available for Dart (the expansion is of Go only).
+ruleset: rivus/dart/http@1
+
+propagators:
+  - symbol: package:http/src/response.dart#Response.body
+    flows: [{from: recv, to: result}]
+  - symbol: package:http/src/response.dart#Response.bodyBytes
+    flows: [{from: recv, to: result}]
+  - symbol: package:http/src/response.dart#Response.headers
+    flows: [{from: recv, to: result}]
+  - symbol: package:http/src/base_response.dart#BaseResponse.headers
+    flows: [{from: recv, to: result}]
+  - symbol: package:http/src/streamed_response.dart#StreamedResponse.stream
+    flows: [{from: recv, to: result}]
+  - symbol: package:http/src/request.dart#Request.new
+    flows: [{from: args, to: result}]
+  - symbol: package:http/src/client.dart#Client.send
+    flows: [{from: args, to: result}]
+  - symbol: package:http/src/base_client.dart#BaseClient.send
+    flows: [{from: args, to: result}]
+  - symbol: package:http/http.dart#get
+    flows: [{from: args, to: result}]
+  - symbol: package:http/http.dart#post
+    flows: [{from: args, to: result}]
+  - symbol: package:http/http.dart#read
+    flows: [{from: args, to: result}]
+
+sinks:
+  # SSRF: the URL of a request (`send` takes the request, whose URL is the target)
+  - symbol: package:http/src/client.dart#Client.head
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:http/src/client.dart#Client.get
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:http/src/client.dart#Client.post
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:http/src/client.dart#Client.put
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:http/src/client.dart#Client.patch
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:http/src/client.dart#Client.delete
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:http/src/client.dart#Client.read
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:http/src/client.dart#Client.readBytes
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:http/src/base_client.dart#BaseClient.head
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:http/src/base_client.dart#BaseClient.get
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:http/src/base_client.dart#BaseClient.post
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:http/src/base_client.dart#BaseClient.put
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:http/src/base_client.dart#BaseClient.patch
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:http/src/base_client.dart#BaseClient.delete
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:http/src/base_client.dart#BaseClient.read
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:http/src/base_client.dart#BaseClient.readBytes
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:http/src/client.dart#Client.send
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:http/src/base_client.dart#BaseClient.send
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:http/http.dart#head
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:http/http.dart#get
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:http/http.dart#post
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:http/http.dart#put
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:http/http.dart#patch
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:http/http.dart#delete
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:http/http.dart#read
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:http/http.dart#readBytes
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:http/src/io_client.dart#IOClient.send
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:http/src/browser_client.dart#BrowserClient.send
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:http/retry.dart#RetryClient.send
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:http/src/mock_client.dart#MockClient.send
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
