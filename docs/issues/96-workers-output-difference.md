@@ -1,10 +1,10 @@
 # #96 -workers 1 と 2 以上で、8 関数以上の SCC を含む入力の出力(代表の経路、stats)が違う(R-43)
 
-- 状態: **open**
+- 状態: **closed**(決まった形の差は直した。まれな失敗は再現せず)
 - 種類: 道具・ベンチ
 - 言語: 全
 - ROADMAP の節: 2(経路の欠け・揺れ)
-- 守るもの: -
+- 守るもの: `cmd/rivus/determinism_test.go` の `TestDeterministicLargeSCC`(`-workers` 1・2・16・既定の出力の完全一致。Skip はなし)、`sameEveryTime` の `-workers 1`(例外なし)
 - GitHub: #96(移行前の番号は同じ。2026-11-21 に開いた。移行時の状態: OPEN)
 
 ## 今の状態(2026-11-22 の見直し)
@@ -47,3 +47,9 @@ rivus analyze -workers 16 -rules rules.yaml ./... > w16.json
 ## 追記(2026-11-22、開発者)
 
 `TestDeterministicParamshare` が、手元で 3 回中 1 回、`GOMAXPROCS="1" -workers="" と -workers="2" の出力が違う` で落ちた(残りの 2 回は通る)。`GOMAXPROCS=1` で `-workers` 未指定は、`-workers 1` と同じ並びになり、この課題(`-workers 1` と 2 以上の差)が現れる。`sameEveryTime` が Skip にするのは、`-workers="1"` の差だけで、`-workers=""`(GOMAXPROCS が 1 のとき)の差は、Skip にならずに落ちる。CI でも、まれに赤くなりうる(今日の変更とは関係しない)。直すなら、`sameEveryTime` の Skip の条件を、実際の worker 数で決める(`-workers=""` と GOMAXPROCS=1 の組を、`-workers=1` と同じに扱う)。
+
+## 経緯(直し)
+
+- 2026-11-22: `internal/taint/engine.go` の `workers > 1 &&` を外し、8 関数以上の SCC は、`-workers` によらず「回ごと」(前の回の要約に対して解析し、順に commit)の道を通す。既定(workers = CPU 数 > 1)の出力は変わらず、変わるのは `-workers 1` だけ。相談役の判断で、この形にした。
+- 確かめたこと: `-workers 1` と既定の出力の完全一致を、`testdata/scc`(試験に固定)、go-curated、dart-curated、rust-curated、動物園の Dart と Rust で確かめた。動物園の Go は、`stats.functions` などが、`-workers` を変えなくても同じ入力で 579〜586 に揺れる(#84。go/ssa のラッパー由来)ので、完全一致の比較には向かない(`-workers` の差ではない)。
+- 「まれに TestDeterministic* が落ちる」は、ローカルの `-count=8` と、直近の CI 25 回で再現しなかった。次に出たら、実行の番号つきで開き直す。

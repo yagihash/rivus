@@ -77,7 +77,7 @@ func analyzeWith(t *testing.T, dir, procs string, args ...string) []byte {
 func sameEveryTime(t *testing.T, dir string, runs int, args ...string) {
 	t.Helper()
 	var first []byte
-	var firstHow, oneWorker string
+	var firstHow string
 	for _, procs := range []string{"1", "4", ""} {
 		for _, workers := range []string{"", "1", "2", "16"} {
 			for i := 0; i < runs; i++ {
@@ -92,17 +92,10 @@ func sameEveryTime(t *testing.T, dir string, runs int, args ...string) {
 					continue
 				}
 				if !bytes.Equal(first, got) {
-					if workers == "1" { // -workers 1 goes through a component of 8 functions or more in another way: yagihash/rivus#96
-						oneWorker = fmt.Sprintf("%s and %s\n%s", firstHow, how, firstDifference(first, got))
-						continue
-					}
 					t.Fatalf("the output differs: %s and %s\n%s", firstHow, how, firstDifference(first, got))
 				}
 			}
 		}
-	}
-	if oneWorker != "" {
-		t.Skipf("everything else is the same, but -workers 1 differs (yagihash/rivus#96, R-43): %s", oneWorker)
 	}
 }
 
@@ -132,26 +125,26 @@ func stepFuncs(steps []taint.Step) string {
 	return strings.Join(s, " ")
 }
 
-// TestDeterministicLargeSCC: testdata/scc has a strongly connected component of 8 functions or more, which
-// `-workers 1` goes through one function at a time and `-workers 2` or more all together, round by round
-// (engine.go: parallelSCC). The other inputs of these tests have no such component, so they did not see that the
-// two ways give different representative paths and stats (R-43, yagihash/rivus#96). The test records the fact:
-// it is skipped while the output differs, and passes once the two ways agree.
+// TestDeterministicLargeSCC: testdata/scc has a strongly connected component of 8 functions or more, which is
+// gone through round by round (engine.go: parallelSCC), each function against the summaries the last round left,
+// whatever -workers is. The other inputs of these tests have no such component. With -workers 1 it used to be gone
+// through one function at a time, so the representative paths and the stats differed (R-43, #96). The whole
+// output (findings, uncertainties, stats) is the same for -workers 1, 2, 16 and the default.
 func TestDeterministicLargeSCC(t *testing.T) {
 	dir := filepath.Join(testutil.Testdata(), "..", "scc")
 	var first []byte
 	var firstW string
-	var diff string
-	for _, w := range []string{"1", "2", "16"} {
-		got := analyzeWith(t, dir, "", "-workers", w, "-rules", "rules.yaml", "./...")
+	for _, w := range []string{"1", "2", "16", ""} {
+		args := []string{"-rules", "rules.yaml", "./..."}
+		if w != "" {
+			args = append([]string{"-workers", w}, args...)
+		}
+		got := analyzeWith(t, dir, "", args...)
 		if first == nil {
 			first, firstW = got, w
-		} else if !bytes.Equal(first, got) && diff == "" {
-			diff = fmt.Sprintf("-workers %s and -workers %s differ\n%s", firstW, w, firstDifference(first, got))
+		} else if !bytes.Equal(first, got) {
+			t.Fatalf("-workers %q and -workers %q differ\n%s", firstW, w, firstDifference(first, got))
 		}
-	}
-	if diff != "" {
-		t.Skipf("yagihash/rivus#96 (R-43): the output depends on -workers when a component has 8 functions or more: %s", diff)
 	}
 }
 

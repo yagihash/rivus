@@ -589,10 +589,12 @@ func (e *Engine) Run() *Result {
 			// together, and what they write to the global state is merged
 			// after them
 			runLevel(level, workers, func(scc []*sg.Func) {
-				if workers > 1 && len(scc) >= parallelSCC {
+				if len(scc) >= parallelSCC {
 					// A large component: its functions are analysed together, each
 					// against the summaries the last round left, and published
 					// in the order of the component after the round.
+					// This is so for any number of workers (with one, the round runs one
+					// function after the other): the output does not depend on -workers (#96).
 					for iter := 0; iter < 8; iter++ {
 						var todo []*sg.Func
 						for _, fn := range scc {
