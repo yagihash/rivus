@@ -29,4 +29,13 @@ RIVUS_DART_EXTRACTOR="..." rivus analyze -lang dart -C . -no-deps -detail snippe
 | `Reports.Fetch` | unary | vuln | `HttpClient().getUrl(Uri.parse(request.url))` (SSRF) |
 | `Reports.Lookup` | unary | fixed | `request.key` is only used for a map lookup |
 
-Not in the CI workflows: first the measurement (`docs/DESIGN-deps-cost.md`).
+## Generated code of a larger size
+
+`gen/gen.dart` writes N messages in the shape of protoc_plugin's output (many fields, nesting, repeated, map,
+oneof and enum fields, hand-checked with `dart analyze`) and one service of N/4 methods that use them, with
+vuln and fixed handlers. The output is a few MB (2.6 MB for 300 messages), so it is not committed.
+`gen/layouts.sh MESSAGES OUT` builds the two layouts the measurement compares: the generated code in the app
+package (`OUT/own`), and in a path dependency (`OUT/mono/protos`, read with `-allow-deps-under OUT/mono`).
+Not run in CI. The results are in `docs/DESIGN-deps-cost.md`.
+
+Not in the CI workflows: first the measurement.
