@@ -18,6 +18,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"go.yaml.in/yaml/v3"
 )
@@ -148,6 +149,15 @@ type Sink struct {
 	// Args are the argument positions (receiver excluded) that are dangerous.
 	// Empty means every argument. Use "recv" in Selectors for the receiver.
 	Args []int `yaml:"args"`
+	// Named are the names of named parameters (Dart) that are dangerous, whatever their position:
+	// `named: [kind]`. A call that does not pass the name has no such argument. The site is made from
+	// the call, which carries the names of the parameters (ir.Instr.ArgNames): sites.sinksAt turns them
+	// into positions, and what is read after that is Args.
+	Named []string `yaml:"named"`
+	// NamedUnresolved are the names of Named that no call of the symbol in the program has: a
+	// misspelling, or a parameter that was renamed. sinksAt sets it, and the sink then reads the whole
+	// call (the taint engine says so: named_unresolved). Not a field of the rules.
+	NamedUnresolved []string `yaml:"-"`
 	// Recv marks the receiver as dangerous too.
 	Recv bool `yaml:"recv"`
 	// Accepts lists the labels the sink reacts to. Empty means any label.
@@ -174,6 +184,8 @@ type SinkPart struct {
 	// Arg is the position of an argument (the receiver is not one of them); Recv: true is the receiver.
 	Arg  *int `yaml:"arg"`
 	Recv bool `yaml:"recv"`
+	// Named is the name of a named parameter (Dart) in place of Arg.
+	Named string `yaml:"named"`
 	// Field is the names of the fields from the value to the dangerous one, separated by dots. "[]" is
 	// an element of a slice, an array or a map. The names are those the IR has; the steps that are
 	// not names (the pointer behind a field, the pointer in an interface) are not written.
@@ -186,9 +198,11 @@ func (s *Sink) PartList() []SinkPart {
 		return s.Parts
 	}
 	switch {
-	case len(s.Args) == 1 && !s.Recv:
+	case len(s.Args) == 1 && !s.Recv && len(s.Named) == 0:
 		a := s.Args[0]
 		return []SinkPart{{Arg: &a, Field: s.Field}}
+	case len(s.Args) == 0 && !s.Recv && len(s.Named) == 1:
+		return []SinkPart{{Named: s.Named[0], Field: s.Field}}
 	case len(s.Args) == 0 && s.Recv:
 		return []SinkPart{{Recv: true, Field: s.Field}}
 	}
@@ -205,7 +219,7 @@ func (s *Sink) WholeArgs(n int) []int {
 	if s.Field != "" {
 		return nil // the short form: its one position is the part
 	}
-	if len(s.Args) == 0 && !s.HasParts() {
+	if len(s.Args) == 0 && !s.HasParts() && len(s.Named) == 0 {
 		out := make([]int, n)
 		for i := range out {
 			out[i] = i
@@ -872,6 +886,11 @@ func (rs *RuleSet) validate() error {
 				return fmt.Errorf("%s: args: %d is not an argument position (the receiver is recv: true)", what, a)
 			}
 		}
+		for _, n := range s.Named {
+			if err := checkParamName(n, what+": named"); err != nil {
+				return err
+			}
+		}
 		if err := validateSinkParts(&s, what); err != nil {
 			return err
 		}
@@ -1285,18 +1304,24 @@ func validateSinkParts(s *Sink, what string) error {
 		if len(s.Parts) > 0 {
 			return fmt.Errorf("%s: field is the short form of one part: it cannot come with parts", what)
 		}
-		if !(len(s.Args) == 1 && !s.Recv) && !(len(s.Args) == 0 && s.Recv) {
-			return fmt.Errorf("%s: field names the part of one position: give one position (args: [n], or recv: true), or write parts", what)
+		if !(len(s.Args)+len(s.Named) == 1 && !s.Recv) && !(len(s.Args)+len(s.Named) == 0 && s.Recv) {
+			return fmt.Errorf("%s: field names the part of one position: give one position (args: [n], named: [name], or recv: true), or write parts", what)
 		}
 		return checkFieldPath(s.Field, what+": field")
 	}
 	for i, p := range s.Parts {
 		w := fmt.Sprintf("%s: parts[%d]", what, i)
 		switch {
-		case p.Recv && p.Arg != nil:
-			return fmt.Errorf("%s: arg and recv: true are one or the other", w)
+		case p.Recv && (p.Arg != nil || p.Named != ""):
+			return fmt.Errorf("%s: arg, named and recv: true are one or the other", w)
+		case p.Arg != nil && p.Named != "":
+			return fmt.Errorf("%s: arg and named are one or the other", w)
+		case p.Named != "":
+			if err := checkParamName(p.Named, w+": named"); err != nil {
+				return err
+			}
 		case !p.Recv && p.Arg == nil:
-			return fmt.Errorf("%s: arg (an argument position) or recv: true is required", w)
+			return fmt.Errorf("%s: arg (an argument position), named (the name of a named parameter) or recv: true is required", w)
 		case p.Arg != nil && *p.Arg < 0:
 			return fmt.Errorf("%s: arg: %d is not an argument position (the receiver is recv: true)", w, *p.Arg)
 		}
@@ -1306,6 +1331,20 @@ func validateSinkParts(s *Sink, what string) error {
 		if err := checkFieldPath(p.Field, w+": field"); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// checkParamName checks the name of a named parameter: an identifier of the language.
+func checkParamName(n, what string) error {
+	if n == "" {
+		return fmt.Errorf("%s: the name is empty", what)
+	}
+	for i, r := range n {
+		if r == '_' || r == '$' || unicode.IsLetter(r) || i > 0 && unicode.IsDigit(r) {
+			continue
+		}
+		return fmt.Errorf("%s: %q is not the name of a parameter", what, n)
 	}
 	return nil
 }

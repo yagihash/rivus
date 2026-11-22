@@ -404,7 +404,7 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 - `Program`: `Funcs`、`Impls`、`Types`（上位の型）、`Globals`、`TypeAliases`、テキスト（`Texts`、`CallTexts`、`FuncTexts`）、`LoadErrors`、`CallerMarks`、`TestsSkipped`
 - `Func`: `ID`、`Params`（`Class`、`Captured`）、`Results`、`Locals`、`Blocks`（先頭が entry）、`Roots`、`Pos`、`File`。マークとして `Exported`、`Entry`、`Init`、`Symbol`、`Recv`、`Dep`、`Private`、`ExternalEntry`、`Overrides`
 - `Block`: `Instrs`、`Term`（`Kind`、`Cond`、`CondPos`、`Values`）、`Succs`（種別つきのエッジ）
-- `Instr`: `Op`、`Dsts`（呼び出しは戻り値の数だけ）、`Args`、`Const`、`Operator`、`Field`、`Path`、`Global`、`Func`、`View`、`Folded`、`Keyed`、`Callee`、`Go` / `Defer` / `Await`、`Reason`、`Pos`、`AddrPos`、`ArgPos`
+- `Instr`: `Op`、`Dsts`（呼び出しは戻り値の数だけ）、`Args`、`Const`、`Operator`、`Field`、`Path`、`Global`、`Func`、`View`、`Folded`、`Keyed`、`Callee`、`Go` / `Defer` / `Await`、`Reason`、`Pos`、`AddrPos`、`ArgPos`、`ArgNames`（名前つき引数の名前。`Args` と並ぶ。Dart だけが付ける。足しただけで、`schema_version` は `rivus.ir/0` のまま。読む側は、ないものとして扱う。`named:` の sink が使う）
 - `Callee`: `Kind`（`static` / `dynamic` / `value`）、`Func`、`Symbol`、`Recv`、`Candidates`、`FFI`。ストリームには載らず、コアが埋めるもの: `ValueCands`、`ValueLimit` など（13 節）
 - `Pos` は `File`、`Offset`、`Length`、`Line`、`Col`
 
@@ -465,6 +465,7 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 | `recursion_approximation` | rivus | |
 | `field_imprecision` | rivus | フィールドを指定する sink に、そのフィールドにあるとは言えない汚染が届いた（14 節）。detail は `whole_value`、`path_limit`、`element`、`opaque_callee` |
 | `field_unresolved` | rivus | sink が指定したフィールドが、プログラムにない（綴りの誤りなど）。sink を全体として扱った（14 節） |
+| `named_unresolved` | rivus | sink が `named:` で指定した引数の名前が、プログラムのその関数の呼び出しのどれにもない（綴りの誤りなど）。sink を呼び出し全体として扱った（`docs/MODELING.md` 4a-1 節） |
 | `global_holds_nothing` | rivus | 読み戻す人がいないとルールが宣言する変数（ADR-056）に、汚染を書いた関数を、変数ごとに 1 件記録する（`internal/taint/heldnothing.go`） |
 
 `mixed` は「言語機能由来で、かつ rivus の精度向上でも減らせる」もの。

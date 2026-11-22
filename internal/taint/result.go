@@ -47,10 +47,13 @@ const (
 	// field names a name that the program does not have (a misspelling): the sink was taken whole.
 	KindFieldImprecision = "field_imprecision"
 	KindFieldUnresolved  = "field_unresolved"
-	AttributableTarget   = "target"
-	AttributableRivus    = "rivus"
-	AttributableMixed    = "mixed"
-	maxPathSteps         = 200
+	// KindNamedUnresolved marks a sink that names a named parameter (`named:`) that no call of the symbol in
+	// the program has (a misspelling, or a parameter that was renamed): the sink was taken whole.
+	KindNamedUnresolved = "named_unresolved"
+	AttributableTarget  = "target"
+	AttributableRivus   = "rivus"
+	AttributableMixed   = "mixed"
+	maxPathSteps        = 200
 )
 
 // attributable gives the attributable_to value of each kind

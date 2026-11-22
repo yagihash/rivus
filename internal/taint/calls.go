@@ -585,9 +585,17 @@ func (s *state) checkSink(cc *callCtx, site *sites.Site) {
 			break
 		}
 	}
+	var note *Uncertainty
+	for i := range site.Sink {
+		if bad := site.Sink[i].NamedUnresolved; len(bad) > 0 {
+			note = s.newNote(cc.in, KindNamedUnresolved,
+				fmt.Sprintf("the sink %s names the parameter %s, which no call of it in the program has: the sink reads the whole call", site.Symbol, strings.Join(bad, ", ")), site.Symbol)
+			break
+		}
+	}
 	for _, v := range vals {
 		for _, f := range s.flatten(s.locs(v)) {
-			s.reach(site, f, cc.in, nil, "")
+			s.reach(site, f, cc.in, note, "")
 		}
 	}
 	for _, p := range sites.SinkPartsAt(site.Sink, len(cc.args)) {
