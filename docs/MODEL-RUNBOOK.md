@@ -1,15 +1,36 @@
 # 手順書: 1 パッケージ分の組み込みモデルを作る
 
-読む人: モデルを作って PR を立て続けるセッション。ユーザーに承認を聞けない。並行のセッションが複数ある。この文書だけで作業できるようにする。設計は [DESIGN-package-models.md](DESIGN-package-models.md)、モデルの書き方は [MODELING.md](MODELING.md)、候補の一覧は [DART-MODEL-CANDIDATES.md](DART-MODEL-CANDIDATES.md)(Dart)。
+読む人: 前の記憶のない、新しいセッション。**1 パッケージ = 1 つの新しいセッション = 1 つの PR。** 起動の指示文は数行で、「この手順書を読んで、その手順で 1 パッケージ分だけ作り、PR を 1 本立てて終わる」。ユーザーに承認を聞けない。別のセッションが、同じ時間に走っていることがある。上から順に、迷わず進める。
 
-道具の状態: 差分テスト、生成器、宣言(`unread_packages`)は、段階が入るまで **(未実装)**。未実装の段では、ない道具の代わりに、`rivus models coverage` と zoo のセルで進め、PR の本文に「その段は未実装のため省いた」と書く。
+必要なときだけ読むもの: 設計 [DESIGN-package-models.md](DESIGN-package-models.md)、モデルの書き方 [MODELING.md](MODELING.md)、候補の一覧 [DART-MODEL-CANDIDATES.md](DART-MODEL-CANDIDATES.md)(Dart。Go と Rust は、同じ種類の一覧があればそれ)。
 
-## 1. 次の 1 つを取る
+道具の状態: 差分テスト、生成器、宣言(`unread_packages`)は、段階が入るまで **(未実装)**。未実装の段は、ない道具の代わりに `rivus models coverage` と zoo のセルで進め、PR の本文に「その段は未実装のため省いた」と書く。
 
-1. 候補の一覧(Dart は `DART-MODEL-CANDIDATES.md` の 3 節の順。Go と Rust は、同じ種類の一覧)から、先頭の、着手していないものを選ぶ。
-2. `git ls-remote --heads origin 'model/*'` で、`model/<言語>-<パッケージ>` がまだないことを確認する。
-3. そのブランチを作り、署名つきの空のコミットを 1 つ載せて、**すぐ push する。これが着手の宣言。** push が拒否されたら(同じ名前が先に取られた)、別のパッケージを取る。
-4. リポジトリのファイル(候補の一覧、`docs/ISSUES.md` など)に、着手のマークを書かない(conflict の元)。
+## 0. 環境
+
+- `make setup` 済み。`go`、`dart`(3.13.6)、`regomark` が PATH にある。`RIVUS_DART=dart`、`GOMODCACHE`、`PUB_CACHE` は環境変数で設定済み。
+- **Rust はない。** Rust のテスト(`TestRust*`、Rust の zoo)は、手元で実行できない。CI に任せる。Rust のパッケージのモデルは、Rust の extractor を要する確認ができないので、**Rust は取らない**(Go と Dart だけ)。
+- ブランチは `claude/` で始まる名前になる(セッションごとに決まる)。名前は変えない。
+- 新しいセッションは、その時点の `main` から始まる。
+- コミットには、GitHub の上で署名が付く。手元の `gpgsig` の確認は要らない。push のあと、API(`gh api repos/<owner>/<repo>/commits/<sha> --jq .commit.verification.verified`)で `true` を確認する。
+
+## 1. 次の 1 つを取る(着手の判定と宣言)
+
+ブランチ名では宣言できない(`claude/` で始まる、セッションごとの名前)ので、**PR の題と、main にあるモデルのファイル**で判定する。題の形(固定): `feat(model): <言語> <パッケージ> の組み込みモデル`(例: `feat(model): dart dio の組み込みモデル`)。
+
+1. 候補の一覧の順(先頭から)に、1 つずつ見て、**取られていないもの**を選ぶ。取られている = 次のどれか。
+   - `gh pr list --state all --search 'feat(model): <言語> <パッケージ> in:title' --limit 20` に、題が一致する PR がある(開いている、ドラフト、マージ済み)。ただし、**閉じて(マージせずに)あるもの、24 時間以上更新のないドラフト**は、取られていないとみなす。
+   - `ls internal/model/builtin/` に、`<言語>-<パッケージ>*.yaml` がある(別の題で入った)。
+2. 選んだら、**作業の最初に、ドラフトの PR を先に立てて宣言する**(下の案 (a))。空に近いコミット(`docs/` や `internal/` を触らない。例: 空のコミット `git commit --allow-empty -m 'chore(model): <言語> <パッケージ> に着手'`)と、上の題と、本文 1 行(「着手の宣言。作業中のドラフト」)で、`/pr` のスキルでドラフトにする。
+3. ドラフトを立てたあと、もう一度 `gh pr list --state all --search '<題> in:title'` を見る。**同じ題の PR が、自分のより先(番号が小さい)にあったら、自分のドラフトを閉じて、次の候補を取る。**
+4. 作業が終わったら、そのドラフトを、同じ PR のまま、完成の PR にする(コミットを足して push、本文を書き直し、ドラフトを外す)。
+5. リポジトリのファイル(候補の一覧、`docs/ISSUES.md` など)に、着手のマークを書かない。
+
+### 同じものを取り合わない案(相談役が選ぶ)
+
+- **(a) ドラフトの PR を先に立てて宣言する(推奨)。** 同じ時刻に 2 つのセッションが同じものを取るのを、題の一致で検出できる(上の 3)。放棄されたドラフトは、24 時間更新がなければ無効とみなす(上の 1)。
+- (b) 定期実行の間隔を、作業の時間より長くして、重ならないようにする。仕組みは要らないが、作業の時間は、パッケージで違う(数分〜数時間)ので、保証にならない。重なる事故が起きたとき、検出できない。
+- **推奨は (a)。** (b) も併用してよい(重なる確率を下げる)。
 
 取得してよいもの: 候補の一覧にある公開のパッケージだけ(`go mod download`、`dart pub get`、`cargo fetch` まで)。取得したコードは実行しない(`go run`、取得物の `go test`、`dart run`、ビルドスクリプトなし)。
 
@@ -20,27 +41,38 @@
 3. **追加**: `<lang>-<package>.yaml`(手の部分)に、sink、source、sanitizer、`calls:`(利用者のコードを呼び返す API: コールバック、利用者が実装するインターフェース)を足す。`origin: human` か `llm`。zoo に、肯定と否定のセルを足す。`rivus models coverage` で、未モデルの呼び出しを確認する。
 4. **宣言(未実装)**: [DESIGN-package-models.md](DESIGN-package-models.md) 2 節 5 の条件(差分テストで照合済み、`calls:` が書いてある、ほかのパッケージから呼ばれる扱いが決まっている)を満たしたときだけ。満たさなければ、宣言なしで PR を出す。
 
-テスト: `go test ./internal/model/... ./cmd/rivus/ -run 'Builtin|Zoo'`、`regomark check --no-judge`(0)。
+テスト: `go test ./internal/model/... ./cmd/rivus/ -run 'Builtin|Zoo'`、`regomark check --no-judge`(0)。Dart のセルは、Dart のテスト(`dart analyze` を含む)も通す。
 
-## 3. zoo と、conflict を避ける置き方
+## 3. 既知の見逃しと誤検出は、セルと課題のファイルで残す
 
-zoo のゲート(`scripts/zoo-loosened-check.sh`、#167): 新しいセル(`bench/zoo/marks.lock` にまだないファイル)の `@sink(none)`、`@miss`、`@fp` の行の追加は、承認を求めない。新しい `@miss` / `@fp` には、`@ref(#N)` が必須(課題は `docs/issues/` にある番号。新しい課題は作らず、既にある課題に当てはまるものだけ。当てはまるものがなければ、そのセルは作らず、PR の本文に書く)。`@noisy`、`@na`、`@todo`、`@manual` の新しいセルと、既存のセルへの行の追加は、承認の行が要る。**モデルの PR では作らない。**
+PR の本文は、マージのあと誰も見ない。**見逃し(`@miss`)と誤検出(`@fp`)は、セルとして残す。**
 
-- **いまの形**(共有のファイルの分割が入る前): 共有のファイルは、`bench/zoo/marks.lock`、`bench/parity/dead-allow.txt`、`bench/zoo-dart/cells/pubspec.yaml` と各 `pubspec.lock`、`bench/zoo-dart/exec/lib/cases.dart`、`docs/ISSUES.md`、`docs/DECISIONS.md`、`docs/DESIGN-deps-cost.md`。ISSUES、DECISIONS、DESIGN-deps-cost は、モデルの PR で触らない(測定は PR の本文とモデルのファイルの冒頭のコメントに書く)。zoo の共有のファイルは、触る必要がある(セルを足す)ので、main を取り込むたびに conflict が出うる。出たら、main 側の行を残して、自分の行を足し直す(行は並べ替えて、重複を消す)。`pubspec.lock` は、`dart pub get --offline` で作り直す。
-- **段階 0 が入ったあとの形**: 1 パッケージ = 1 つのモデルのファイル + 専用の zoo のセルのディレクトリ + 専用のマークのファイル(`bench/zoo/marks.d/`)。`cases.dart` は生成、zoo-dart の `pubspec.lock` はコミットしない。共有のファイルを触らない。変更は、`internal/model/builtin/<lang>-<package>*.yaml`、`bench/zoo-<lang>/` の自分のディレクトリ、`bench/zoo/marks.d/<lang>/` の自分のファイルだけ。
+1. セルを、新しいセルとして作る(既存のセルのマークは変えない)。
+2. 課題を、**番号を取らないファイル名** `docs/issues/model-<パッケージ>-<名前>.md` で作る(GitHub の Issue は作らない)。
+3. セルから `@ref(model-<パッケージ>-<名前>)` で結ぶ(新しい `@miss` / `@fp` には `@ref` が必須。ゲートが確認する)。
+4. 課題のファイルは、決まったテンプレート(何が見逃されるか / 誤検出されるか、原因、再現するセル)を満たす。テンプレートは `docs/issues/` の README を見る(ゲートが確認する)。段階 0 の PR が入ったあとに、この節に具体的な手順を書く(いまは、README がなければ、既存の `docs/issues/*.md` の 1 つを、形の見本にする)。
+5. `docs/ISSUES.md` の一覧への反映は、モデルの PR では要らない。
 
-## 4. PR
+zoo のゲート(`scripts/zoo-loosened-check.sh`、#167): 新しいセル(`bench/zoo/marks.lock` にまだないファイル)の `@sink(none)`、`@miss`、`@fp` の行の追加は、承認を求めない。`@noisy`、`@na`、`@todo`、`@manual` の新しいセルと、既存のセルへの行の追加は、承認の行が要る。**モデルの PR では作らない。**
 
-- ブランチは `model/<言語>-<パッケージ>`。`/pr` のスキルで作る。
-- 本文は、公開の事実だけ(パッケージ名とバージョン、公開の API)。表: finding の件数、`dynamic_dispatch` の注記の数、`summary_elems`、時間(`-pass-stats`)。宣言の前後。差分テストの一致の割合、MISS、EXTRA の理由(差分テストが入ってから)。
-- 触るファイルは 3 節のとおり。それ以外(コード、ゲート、ワークフロー、共有の文書)は触らない。触る必要が出たら、PR を出さず、理由を書いた下書きの PR にする。
+## 4. conflict を避ける置き方
 
-## 5. 守ること
+- **いまの形**(共有のファイルの分割が入る前): 共有のファイルは、`bench/zoo/marks.lock`、`bench/parity/dead-allow.txt`、`bench/zoo-dart/cells/pubspec.yaml` と各 `pubspec.lock`、`bench/zoo-dart/exec/lib/cases.dart`、`docs/ISSUES.md`、`docs/DECISIONS.md`、`docs/DESIGN-deps-cost.md`。ISSUES、DECISIONS、DESIGN-deps-cost は、モデルの PR で触らない(測定は、PR の本文とモデルのファイルの冒頭のコメントに書く)。zoo の共有のファイルは、セルを足すので触る。conflict が出たら、main 側の行を残して、自分の行を足し直す(行は並べ替えて、重複を消す)。`pubspec.lock` は、`dart pub get --offline` で作り直す。
+- **段階 0 が入ったあとの形**: 1 パッケージ = 1 つのモデルのファイル + 専用の zoo のセルのディレクトリ + 専用のマークのファイル(`bench/zoo/marks.d/`)。`cases.dart` は生成、zoo-dart の `pubspec.lock` はコミットしない。共有のファイルを触らない。変更は、`internal/model/builtin/<lang>-<package>*.yaml`、`bench/zoo-<lang>/` の自分のディレクトリ、`bench/zoo/marks.d/<lang>/` の自分のファイル、`docs/issues/model-<パッケージ>-*.md` だけ。
+
+## 5. PR(完成)
+
+- 題: `feat(model): <言語> <パッケージ> の組み込みモデル`(1 節の題と同じ)。`/pr` のスキルで作る(1 節のドラフトを更新する)。
+- 本文は、公開の事実だけ(パッケージ名とバージョン、公開の API)。表: 公開のベンチ(あれば)での前後の数字(finding の件数、`dynamic_dispatch` の注記の数、`summary_elems`、時間(`-pass-stats`))、中を読んだ場合(`-no-deps` なし、モデルなし)との照合(finding の ID の集合が同じか、違いと理由)。差分テストの一致の割合、MISS、EXTRA の理由(差分テストが入ってから)。
+- 触るファイルは 4 節のとおり。それ以外(コード、ゲート、ワークフロー、共有の文書)は触らない。触る必要が出たら、完成にせず、ドラフトのまま、理由を本文に書いて終わる。
+- push のあと、コミットの署名(0 節)と、CI の結果を確認する。CI が失敗したら、直して push し直す(自分で `gh pr merge` はしない)。
+
+## 6. 守ること
 
 - 公開の事実だけ。特定の利用者・プロジェクトを書かない。
-- GitHub の Issue を作らない・閉じない・編集しない(課題は `docs/issues/` で、相談役が管理する)。既知の見逃しは、`@miss` のセルの記述と、`@ref(#N)` で既にある課題に結ぶ。
-- コミットは署名つき。`git cat-file commit <sha> | grep -c ^gpgsig` が 1。履歴は書き換えない。
-- 自分でマージしない(CI が通れば自動で入る)。
+- GitHub の Issue を作らない・閉じない・編集しない(課題は `docs/issues/` のファイル。3 節)。
+- 自分でマージしない(CI が通れば自動で入る)。履歴は書き換えない。
 - 既存のセルのマークを緩めない(既存の行の変更・削除は、ユーザーの承認が要るので、しない)。
 - 言い回しは `.regomark/policy/wording.rego` に従う(`regomark check --no-judge` が 0)。
 - ADR を書かない。方針の変更が要ると思ったら、PR の本文に書く。
+- 1 つの PR で、1 パッケージだけ。終わったら、次のパッケージには進まず、終わる。
