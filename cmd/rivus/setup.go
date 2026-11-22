@@ -21,6 +21,8 @@ func runSetup(argv []string) error {
 	fs := flag.NewFlagSet("setup rust", flag.ContinueOnError)
 	source := fs.String("source", "", "the directory of the source of the Rust extractor (extractor/rust of the repository of rivus). Required: it is built and run on this machine, outside the sandbox, so it is never taken from the directory you are in (that may be a project that you are reading)")
 	yes := fs.Bool("y", false, "do not ask before the download")
+	usual(fs, "source", "y")
+	prepareFlags(fs, argv[1:])
 	if err := fs.Parse(argv[1:]); err != nil {
 		return err
 	}

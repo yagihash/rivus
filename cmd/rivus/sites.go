@@ -26,6 +26,9 @@ func runSites(args []string) error {
 	role := fs.String("role", "", `only "source" or "sink" sites`)
 	irFile := fs.String("ir", "", "list the sites of the neutral IR in this JSON Lines file (from an extractor of another language)")
 	maxImpl := fs.Int("max-implementations", model.DefaultMaxImplementations, "default limit of match: implementations")
+	usual(fs, "role")
+	diagnostic(fs, "ir", "max-implementations")
+	prepareFlags(fs, args)
 	fs.Parse(args)
 	if *role != "" && *role != sites.RoleSource && *role != sites.RoleSink {
 		return fmt.Errorf("-role: unknown role %q (source or sink)", *role)

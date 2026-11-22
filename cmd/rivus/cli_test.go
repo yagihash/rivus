@@ -322,7 +322,7 @@ func TestSitesCommandAgreesWithAnalyze(t *testing.T) {
 func TestResolveFromAnIRIndexTellsGoneFromNotAnalysed(t *testing.T) {
 	dir := t.TempDir()
 	irFile := filepath.Join(dir, "g.jsonl")
-	if err := os.WriteFile(irFile, rivus(t, "extract", "-texts", "./cases/grpcsrv"), 0o644); err != nil {
+	if err := os.WriteFile(irFile, rivus(t, "debug", "extract", "-texts", "./cases/grpcsrv"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	idx := filepath.Join(dir, "idx.json")
@@ -359,7 +359,7 @@ func TestResolveFromAnIRIndexTellsGoneFromNotAnalysed(t *testing.T) {
 func TestIRInputHasNoTargetUnlessDirIsGiven(t *testing.T) {
 	dir := t.TempDir()
 	irFile := filepath.Join(dir, "g.jsonl")
-	if err := os.WriteFile(irFile, rivus(t, "extract", "-texts", "./cases/grpcsrv"), 0o644); err != nil {
+	if err := os.WriteFile(irFile, rivus(t, "debug", "extract", "-texts", "./cases/grpcsrv"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	hasTarget := func(args ...string) bool {

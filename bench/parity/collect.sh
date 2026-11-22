@@ -12,7 +12,7 @@
 #   RIVUS_DART    the command of the Dart SDK ("mise exec dart@3.13.6 -- dart")
 #   RIVUS_RUST    the Rust extractor binary (extractor/rust: cargo build)
 #   PARSEABLE_IR  an IR of parseable that already exists (the extraction is not run). Without it parseable is
-#                 extracted under the sandbox of macOS (`rivus extract -lang rust`: without the sandbox the step fails)
+#                 extracted under the sandbox of macOS (`rivus debug extract -lang rust`: without the sandbox the step fails)
 #
 # Rust: only our own code (bench/zoo-rust, bench/rust-curated, extractor/rust/test) is read on this machine
 # (-unsafe-host-exec, the extractor RIVUS_RUST); third-party code is read in the container only, as in bench/compare.sh.
@@ -46,7 +46,7 @@ rust_ir() { # name source_dir read_dir [extractor flags]: the IR of the Rust pro
     "$RIVUS_RUST" "$@" "$dir" > "$WORK/ir/$name.jsonl"
   else
     { [ "$(uname -s)" = Darwin ] && command -v sandbox-exec > /dev/null 2>&1; } || { echo "Rust の第三者のコードは隔離の中でだけ読む。macOS のサンドボックス(sandbox-exec)が使えないので、このベンチを外す ($name)" >&2; return 1; }
-    env -u RIVUS_UNSAFE_HOST_EXEC "$RIVUS" extract -lang rust -C "$dir" "$@" > "$WORK/ir/$name.jsonl"
+    env -u RIVUS_UNSAFE_HOST_EXEC "$RIVUS" debug extract -lang rust -C "$dir" "$@" > "$WORK/ir/$name.jsonl"
   fi
 }
 
@@ -72,7 +72,7 @@ digest() { # name lang json [note]
 go_target() { # name dir rules real [note]
   local name=$1 dir=$2 rules=$3 real=$4
   free_ok
-  (cd "$dir" && "$RIVUS" extract ./... > "$WORK/ir/$name.jsonl")
+  (cd "$dir" && "$RIVUS" debug extract ./... > "$WORK/ir/$name.jsonl")
   scan "$name" go "$real" "$WORK/ir/$name.jsonl" "${5:-}"
   if [ "${ANALYZE:-}" = 1 ] && [ -n "$rules" ]; then
     free_ok

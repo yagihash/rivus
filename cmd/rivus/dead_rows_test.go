@@ -229,7 +229,7 @@ func TestBuiltinRowsAreHitByTheZoo(t *testing.T) {
 					t.Errorf("%s is hit by the zoo now: take it out of bench/parity/dead-allow.txt", key)
 				case !hit && !allowed:
 					t.Errorf("%s (%s): no call in the zoo or the curated targets hits this row. Either the key is not the name the extractor writes "+
-						"(read the IR: `rivus extract` / the extractor of the language), or a cell of bench/zoo-%s has to call it. "+
+						"(read the IR: `rivus debug extract` / the extractor of the language), or a cell of bench/zoo-%s has to call it. "+
 						"Only an API that a run cannot check (it needs a server, a device) goes in bench/parity/dead-allow.txt, with the reason (docs/MODELING.md)", key, r.file, lang)
 				}
 			}

@@ -74,7 +74,7 @@ type analyzeOpts struct {
 	allowFetchHosts  multiFlag
 	maxImpl          int
 	// irFile is a stream of the neutral IR made by an extractor of another
-	// language (rivus extract writes the same form): the analysis starts there.
+	// language (rivus debug extract writes the same form): the analysis starts there.
 	irFile string
 	// afterRead, if set, is called with the program once the graph is built
 	// and before the analysis (what the structure layer of the graph file is made from).
@@ -114,6 +114,8 @@ func (o *analyzeOpts) register(fs *flag.FlagSet) {
 	fs.StringVar(&o.memProf, "memprofile", "", "write a heap profile (allocations) to this file after the taint phase (development)")
 	fs.StringVar(&o.lockProf, "lockprofile", "", "write the mutex and block profiles of the taint phase to <this>.mutex and <this>.block (development)")
 	fs.StringVar(&o.cpuProf, "cpuprofile", "", "write a CPU profile of the taint phase to this file (development)")
+	usual(fs, "lang", "yes", "dart-extractor", "rust-extractor", "unsafe-host-exec", "isolation-env", "isolation-read", "workers", "numeric-taint", "v", "timeout", "resolve-func-values")
+	diagnostic(fs, "k", "isolation-timeout", "no-fetch", "isolation-max-output", "allow-fetch-host", "max-implementations", "max-passes", "func-timeout", "ir", "pass-stats", "pass-stats-top", "pass-stats-sort", "func-values", "trace-element", "memprofile", "lockprofile", "cpuprofile")
 }
 
 // analyze runs the whole pipeline. extra rule sets are added to the ones
@@ -355,6 +357,8 @@ func runAnalyze(args []string) error {
 	o.register(fs)
 	detail := fs.String("detail", report.DetailSnippet, "level of detail: summary or snippet")
 	withSites := fs.Bool("sites", false, "also list the sites")
+	usual(fs, "detail", "sites")
+	prepareFlags(fs, args)
 	fs.Parse(args)
 	// What can be checked is checked before the analysis, which can take minutes.
 	if err := report.ValidDetail(*detail); err != nil {
@@ -385,6 +389,8 @@ func runIndex(args []string) error {
 	out := fs.String("o", "", "with -taint: the JSON index to write (default: .rivus/index.json below -C)")
 	graph := fs.String("graph", "", "the graph file to write (default: in the user's cache, by the absolute path of -C)")
 	taintFlag := fs.Bool("taint", false, "also run the taint analysis (slow) and write its result as the JSON index that query -index and resolve -index read (-o implies it)")
+	usual(fs, "o", "graph", "taint")
+	prepareFlags(fs, args)
 	fs.Parse(args)
 	// -o has always meant the JSON index: it is not left out silently
 	taint := taintFlag
@@ -433,6 +439,8 @@ func runQuery(args []string) error {
 	site := fs.String("site", "", "ID of a site (see \"rivus sites\")")
 	index := fs.String("index", "", "answer from a saved index instead of analysing the source")
 	detail := fs.String("detail", report.DetailSnippet, "level of detail: summary or snippet")
+	usual(fs, "sink", "source", "site", "index", "detail")
+	prepareFlags(fs, args)
 	fs.Parse(args)
 
 	q := report.Query{Sink: *sink, Source: *source, Site: *site}
@@ -506,6 +514,8 @@ func runResolve(args []string) error {
 	o.register(fs)
 	bookmarks := fs.String("bookmarks", "", "file with the bookmarks: sites or findings as rivus printed them (- for stdin)")
 	index := fs.String("index", "", "resolve against a saved index of the current code instead of analysing the source")
+	usual(fs, "bookmarks", "index")
+	prepareFlags(fs, args)
 	fs.Parse(args)
 	if *bookmarks == "" {
 		return fmt.Errorf("resolve needs -bookmarks")

@@ -6,7 +6,7 @@
 #  - analyze: the paths of the flags reach os.Create (the output files, the profiles) and the extractor command.
 #  - isolate.go (ADR-093): the directory of -C and the paths of -isolation-read reach os.ReadFile (Cargo.lock, the toolchain file, the cargo
 #    configuration, the manifests). They are what the isolation is about: the project is untrusted, and the paths that name it are read by
-#    rivus only to decide what to give the sandbox (the program it runs is in the Darwin view: dogfood-flows-darwin.txt). `rivus extract -lang rust`
+#    rivus only to decide what to give the sandbox (the program it runs is in the Darwin view: dogfood-flows-darwin.txt). `rivus debug extract -lang rust`
 #    (runExtract) reads the project the way analyze does, so it has the same flows.
 #  - graph (ADR-059): graphIndexer's closure keeps the path of -o and applies it where it is made: the files graphdb.Write
 #    creates. runVersion runs the extractor command that the flag names (exec.LookPath carries its argument: R-03, ADR-066).

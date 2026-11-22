@@ -320,7 +320,7 @@ func TestGraphCountsAgreeWithTheProgram(t *testing.T) {
 	info := graphInfoOf(t, binary, app, nil, "-graph", db)
 
 	// extract -all: the functions with a body, and the calls they make
-	out := runIn(t, binary, app, nil, "extract", "-all", "./...")
+	out := runIn(t, binary, app, nil, "debug", "extract", "-all", "./...")
 	prog, err := ir.Read(bytes.NewReader(out))
 	if err != nil {
 		t.Fatal(err)

@@ -62,6 +62,7 @@ func (c *common) register(fs *flag.FlagSet) {
 	fs.BoolVar(&c.noDeps, "no-deps", false, "do not read the source of the dependencies (which is done by default, except for the standard library, so that calls into them are followed instead of guessed): lighter (about a sixth of the memory), and every call into a dependency is a guess")
 	fs.Var(&c.allowDepsUnder, "allow-deps-under", "Dart: a directory outside the project whose packages may be read as dependencies (repeatable). The package_config.json of the project says where its dependencies are, and it is not trusted: only the project, the pub cache and the SDKs are read without being asked (a monorepo's sibling packages need this)")
 	fs.BoolVar(&c.deterministic, "deterministic-only", false, "ignore the rules decided by an LLM (origin: llm)")
+	usual(fs, "C", "rules", "no-builtin-rules", "no-project-rules", "tests", "no-deps", "allow-deps-under", "deterministic-only")
 }
 
 // projectRuleFiles lists the rule files the analysed directory brings: <dir>/.rivus/rules/*.yaml, in name order.

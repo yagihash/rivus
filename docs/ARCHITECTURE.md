@@ -200,8 +200,8 @@ call dst? callee args flags
 ### 2.6 ストリーム形式
 
 JSON Lines。**先頭行は必ず `{"schema_version": "rivus.ir/0"}`**。以降は 1 行 1 レコードで、`kind` が種類を示す。種類は `func`（関数）、`implementations`、`global`、`type`、`type_alias`、`text`、`call_text`、`func_text`、`load_error`、`tests_skipped`、`caller_marks`（`internal/ir/stream.go`）。
-`rivus extract` で、Go の IR を単独で出せる。`-text` で人間向けの形、`-func` で関数を絞り、`-all` で依存も出す。`-implementations`、`-texts`、`-check` もある（`cmd/rivus/extract.go`）。
-`-lang rust` は、Rust の extractor が出すストリームをそのまま出す（既定ではコンテナの中で動かす。15 節）。`-lang` は `go` か `rust` で、Dart の extractor は `rivus extract` からは呼べない（`rivus-dart` を直接動かす）。
+`rivus debug extract` で、Go の IR を単独で出せる。`-text` で人間向けの形、`-func` で関数を絞り、`-all` で依存も出す。`-implementations`、`-texts`、`-check` もある（`cmd/rivus/extract.go`）。
+`-lang rust` は、Rust の extractor が出すストリームをそのまま出す（既定ではコンテナの中で動かす。15 節）。`-lang` は `go` か `rust` で、Dart の extractor は `rivus debug extract` からは呼べない（`rivus-dart` を直接動かす）。
 人間が読んで検証できることを一級の要件とする。
 
 ### 2.7 IR の具体化（エンジンの要求と、extractor の契約）
@@ -291,7 +291,7 @@ NaiveForm のローカルは、`Alloc` の結果がそのままローカル変�
 
 #### 2.7.5 構成
 
-履歴・計画は [history/ARCHITECTURE-plans.md](history/ARCHITECTURE-plans.md) の 2.7.5 節にある。今の構成は 3 節。要点だけ: Go では同じプロセスの中で IR の型を直接渡し、JSON Lines は `rivus extract` の出力と、Dart / Rust の extractor（別プロセス）の入力に使う。直接渡す経路と JSON を経由する経路の結果が一致することは、`TestTheStreamGivesTheSameResultAsTheDirectIR`（`internal/taint/helper_test.go`）で確かめている。
+履歴・計画は [history/ARCHITECTURE-plans.md](history/ARCHITECTURE-plans.md) の 2.7.5 節にある。今の構成は 3 節。要点だけ: Go では同じプロセスの中で IR の型を直接渡し、JSON Lines は `rivus debug extract` の出力と、Dart / Rust の extractor（別プロセス）の入力に使う。直接渡す経路と JSON を経由する経路の結果が一致することは、`TestTheStreamGivesTheSameResultAsTheDirectIR`（`internal/taint/helper_test.go`）で確かめている。
 
 #### 2.7.6 移行の戦略
 
@@ -303,7 +303,7 @@ Go の extractor は、コアと同じプロセスで、`ir.Program` と `ir.Tex
 
 | コアが必要なもの | Go（同じプロセス） | 別プロセスの extractor |
 |---|---|---|
-| 関数と命令 | `ir.Program` | JSON Lines（2.6）。`rivus extract` と同じ形式 |
+| 関数と命令 | `ir.Program` | JSON Lines（2.6）。`rivus debug extract` と同じ形式 |
 | コールグラフ | `call` の `candidates` | 同じ。extractor が、その言語の方法で解き、`candidates` に入れる |
 | 実装列挙（`match: implementations`） | `rules.Expand` が `gossa` を引く（`internal/frontend/gossa/implementations.go`） | ストリームに `implementations` レコードの形はあるが、今、Dart / Rust の extractor は出さず、コアも展開には使わない（`cmd/rivus/common.go` の `rules.Expand` は `gossa` だけ）。Dart / Rust の継承の問い合わせは `type` レコード（`extends:`、`marker:`）で行う |
 | テキスト（スニペット、式、本体、条件、引数） | `ir.Texts` | **ストリームに載せる**（下の「テキスト」） |
@@ -317,7 +317,7 @@ Go の extractor は、コアと同じプロセスで、`ir.Program` と `ir.Tex
 - 形式: `text`（種類、ファイル、テキスト、**その位置のオフセットの一覧**）、`call_text`、`func_text`、`load_error` のレコード。同じ文に属する位置は多いので、テキストを 1 回だけ書き、オフセットを並べる
 - コア側は `ir.StreamTexts`（`internal/ir/streamtexts.go`）が `ir.Texts` を満たす。**Go の extractor も `goir.AddTexts` で同じレコードを出せ、ストリームを通した結果（テキストも含む）が、直接渡した結果と一致する**ことをテストしている（`TestTheStreamGivesTheSameResultAsTheDirectIR`）。他言語の extractor は、`AddTexts` が何を出すかを、契約の見本にする
 - テキストは、`rivus sites` が必要な分（サイトの位置）と、`analyze` が必要な分（ガードの条件、呼び出しの引数）を、**最初から全部**出す。コアと extractor の間に、問い合わせの対話はない
-- Go の `rivus extract` は、`-texts` を付けたときだけテキストを出す。`-implementations <シンボル>` は、そのインタフェースメソッドの `implementations` レコードを出す
+- Go の `rivus debug extract` は、`-texts` を付けたときだけテキストを出す。`-implementations <シンボル>` は、そのインタフェースメソッドの `implementations` レコードを出す
 
 **モジュール境界:** 複数パッケージ（Dart の melos、Rust の workspace）を 1 回の実行で出し、`Func.Dep` で、解析の対象と依存を分ける。依存は、ソースがあるものだけを出す。
 **バージョン:** ストリームの先頭の `schema_version`（今は `rivus.ir/0`）が違えば、読まずに止める（`internal/ir/stream.go`）。Dart の extractor は、自分のバージョンを `--version` で返す（`rivus_dart rivus.ir/0`）。コアは、グラフの鍵に、extractor の実行ファイルのハッシュと、Dart ではこのバージョンを入れる（`cmd/rivus/graphkey.go`）。

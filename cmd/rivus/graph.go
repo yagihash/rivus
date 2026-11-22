@@ -299,6 +299,8 @@ func runGraphInfo(args []string) error {
 	var o analyzeOpts
 	o.register(fs)
 	graph := fs.String("graph", "", "the graph file (default: the cache of -C)")
+	usual(fs, "graph")
+	prepareFlags(fs, args)
 	fs.Parse(args)
 	if *graph == "" && !o.dirSet {
 		return fmt.Errorf("graph info needs -graph <file>, or -C <dir> to find the file in the cache")

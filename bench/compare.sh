@@ -180,7 +180,7 @@ done
 
 # Rust: third-party code is read only under the sandbox of macOS (ADR-093, docs/rust-isolation.md): its build.rs and proc macros run
 # during the extraction. Only these paths of this repository (our own code) may be read on this machine, with
-# -unsafe-host-exec; everything else, a clone of someone else's project included, goes through `rivus extract -lang rust`,
+# -unsafe-host-exec; everything else, a clone of someone else's project included, goes through `rivus debug extract -lang rust`,
 # which is the sandbox. Without the sandbox (another system, or no sandbox-exec) the third-party benchmark FAILS; it never falls back to the machine.
 OWN_RUST_PATHS="bench/zoo-rust bench/rust-curated extractor/rust/test"
 NO_SANDBOX_MSG="Rust の第三者のコードは隔離の中でだけ読む。macOS のサンドボックス(sandbox-exec)が使えないので、このベンチを外す"
@@ -223,7 +223,7 @@ if [ "$DRY" = 1 ]; then
     case "$KIND" in dart) ex="extractor: ${RIVUS_DART:-dart} run wt/<sha7>/extractor/dart/bin/rivus_dart.dart";; rust)
       if [ "$(rust_mode "$DIR" "$ROOT")" = host ]; then ex="extractor: host (our own code: -unsafe-host-exec) ${RIVUS_RUST:-cargo build --locked in wt/<sha7>/extractor/rust}"
       else
-        ex="extractor: sandbox (cargo build of wt/<sha7>/extractor/rust, then rivus extract -lang rust under the sandbox of macOS)"
+        ex="extractor: sandbox (cargo build of wt/<sha7>/extractor/rust, then rivus debug extract -lang rust under the sandbox of macOS)"
         if ! sandbox_ok; then ex="$ex; the sandbox is not available: this benchmark FAILS ($NO_SANDBOX_MSG)"; NOSANDBOX_FAIL=1; fi
       fi;; *) ex="";; esac
     src="in-tree (wt/<sha7>/bench/$b)"; [ -n "$URL" ] && src="git clone $URL ; git checkout ${COMMIT:-<default branch>} ; ls go.mod ; go list ./..."
@@ -299,7 +299,7 @@ tree() {   # tree <sha> <path>: the hash of that directory in that version (with
   if [ "$FIXED" = 1 ]; then wtree "$2"; else git -C "$ROOT" rev-parse -q --verify "$1:$2" 2>/dev/null; fi
 }
 h16() { shasum -a 256 | cut -c1-16; }
-# the rivus of this script's tree that drives the sandbox (`rivus extract -lang rust`): a base that is older may not have it
+# the rivus of this script's tree that drives the sandbox (`rivus debug extract -lang rust`): a base that is older may not have it
 DRIVER="$WORK/bin/driver/rivus"
 ensure_driver() {
   [ -n "${DRIVER_OK:-}" ] && return 0
@@ -413,7 +413,7 @@ local xargs=(-lang rust -C "$DIR" -rust-extractor "$rr")
             xargs+=(-no-deps -isolation-env "LOCAL_ASSETS_PATH=$WORK/parseable-assets" -isolation-read "$WORK/parseable-assets")
           fi
           # RIVUS_UNSAFE_HOST_EXEC is removed: there is no way to the host from here
-          env -u RIVUS_UNSAFE_HOST_EXEC "$DRIVER" extract "${xargs[@]}" > "$IR.tmp" 2>"$WORK/ir/$b.$key.err" \
+          env -u RIVUS_UNSAFE_HOST_EXEC "$DRIVER" debug extract "${xargs[@]}" > "$IR.tmp" 2>"$WORK/ir/$b.$key.err" \
             || { /bin/rm -f "$IR.tmp"; skip "$b" "the Rust extractor failed under the sandbox (see $WORK/ir/$b.$key.err)"; return 1; }
         else
           (cd "$wt" && "$rr" "$DIR" > "$IR.tmp") 2>"$WORK/ir/$b.$key.err" || { /bin/rm -f "$IR.tmp"; skip "$b" "the Rust extractor failed (see $WORK/ir/$b.$key.err)"; return 1; }

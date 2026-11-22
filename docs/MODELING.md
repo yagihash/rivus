@@ -213,7 +213,7 @@ field:
 1. **Write the symbol that the IR names, not the one the documentation names.** `client.Single().Query(ctx, stmt)` and
    `tx.Query(ctx, stmt)` of a `ReadWriteTransaction` are both a call of `(*spanner.txReadOnly).Query`: the method is declared on
    an unexported type that the public ones embed. Read the symbols off the IR of a small project that calls the API
-   (`rivus extract`, and look at `callee.symbol`), and do not guess them. A row whose key matches nothing is quiet for ever.
+   (`rivus debug extract`, and look at `callee.symbol`), and do not guess them. A row whose key matches nothing is quiet for ever.
 2. **`[]` is the elements.** A finding through an element carries `container_element_imprecision`: the elements are not told apart.
 3. **Do not write the safe fields.** `Params`, `Parameters`, `Labels` are not a sink: a row names only the dangerous field, and the
    others are quiet because nothing reads them.
@@ -237,7 +237,7 @@ sanitizer, the call is not seen as one. The extractors do not always write the n
 Dart is the member of `Iterable` (`dart:core#Iterable.join`); a call on a `Vec` in Rust is the member of the slice
 (`std::slice::sort`, `std::slice::iter`), a call on a `String` the member of `str`, a method of a trait the method of the
 trait (`std::iter::Extend::extend`); a type that a library re-exports is written with the re-export (`tonic::Request`), and
-serde writes its private module with its version in it. **Read the name from the IR** (`rivus extract` for Go;
+serde writes its private module with its version in it. **Read the name from the IR** (`rivus debug extract` for Go;
 `rivus-dart` and `rivus-rust` for the others), do not write it from the source.
 
 `TestBuiltinRowsAreHitByTheZoo` (`cmd/rivus`) holds every row of the built-in model that names a function to the IR of

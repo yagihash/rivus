@@ -12,10 +12,10 @@ import (
 	"github.com/yagihash/rivus/internal/ir"
 )
 
-// runExtract writes the neutral IR of the code: as a JSON Lines stream, or
+// runExtract ("rivus debug extract") writes the neutral IR of the code: as a JSON Lines stream, or
 // as text a person can read.
 func runExtract(args []string) error {
-	fs := flag.NewFlagSet("extract", flag.ExitOnError)
+	fs := flag.NewFlagSet("debug extract", flag.ExitOnError)
 	dir := fs.String("C", ".", "directory to extract from")
 	tests := fs.Bool("tests", false, "include _test.go files")
 	all := fs.Bool("all", false, "also extract the functions of dependencies")
@@ -25,7 +25,7 @@ func runExtract(args []string) error {
 	fs.Var(&impls, "implementations", "interface method whose implementations are recorded (repeatable)")
 	texts := fs.Bool("texts", false, "also write the texts the core needs (snippets, expressions, bodies), as an extractor in another process has to")
 	check := fs.Bool("check", true, "validate the IR before writing it")
-	lang := fs.String("lang", "go", "go, or rust: the IR of the Rust extractor as it writes it (under the sandbox, as `analyze -lang rust` does; the flags below are the ones of analyze)")
+	lang := fs.String("lang", "go", "go, or rust: the IR of the Rust extractor as it writes it (under the sandbox, as analyze -lang rust does; the flags below are the ones of analyze)")
 	var ro analyzeOpts
 	fs.BoolVar(&ro.unsafeHostExec, "unsafe-host-exec", false, "-lang rust: run the extractor on this machine (code you trust only; also RIVUS_UNSAFE_HOST_EXEC=1)")
 	fs.StringVar(&ro.rustExtractor, "rust-extractor", "", "-lang rust: command of the extractor for -unsafe-host-exec")
@@ -36,6 +36,9 @@ func runExtract(args []string) error {
 	fs.Var(&ro.isolationRead, "isolation-read", "-lang rust: PATH that the build may read (repeatable)")
 	fs.Int64Var(&ro.isolationMaxOut, "isolation-max-output", 4<<30, "-lang rust: the most bytes the extractor may write")
 	fs.Var(&ro.allowFetchHosts, "allow-fetch-host", "-lang rust: HOST the fetch stage may get from although it is not crates.io (git dependencies on any host, other registries). The repository can send the fetch on to other places (its submodules, redirects); that is not prevented until the network of the fetch stage is narrowed (repeatable)")
+	usual(fs, "C", "tests", "all", "text", "func", "implementations", "lang", "unsafe-host-exec", "rust-extractor", "no-deps", "isolation-env", "isolation-read")
+	diagnostic(fs, "texts", "check", "isolation-timeout", "no-fetch", "isolation-max-output", "allow-fetch-host")
+	prepareFlags(fs, args)
 	fs.Parse(args)
 
 	if *lang == langRust {

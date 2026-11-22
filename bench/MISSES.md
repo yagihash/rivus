@@ -12,7 +12,7 @@
 * **`@miss` の注釈(BENCH-1、2026-11-21)**: `@miss(silent)` か `@miss(<kind>)`(複数なら `,` 区切り)。ソースの注釈に書いてあり、`cmd/rivus/bench_curated_test.go` が両側から確かめる。**不確実性の注記**は、source の行と sink の行にあるサイト(`rivus analyze -sites`)の**関数**にある不確実性の kind(`rivus resolve` が `absent_now` に出すのと同じ定義)。次は数えない: 関数を持たない(実行全体の)もの(Rust の `depth_limit`/`path_limit` など)、`numeric_stop`(数は注入を運ばないので、見逃しの説明にならない)、**候補がちょうど 1 つの `dynamic_dispatch`**(メソッド呼び出しのたびに出て、コールバックが失われたことを示さない。以前の「弱い注記」。advisor の方針で `silent` に数える)。`@miss(silent)` は、注記が 1 つも無いこと、`@miss(<kind>)` は、その kind が(source / sink の関数のどちらかに)出ていることを確かめる。注記が付くと(注記を足す修正、DART-15 や CORE-D の効果)、`@miss(silent)` の行が「改善」として失敗する。注記が消えると、`@miss(<kind>)` の行が落ちる。ヘルパー側(経路の途中)の不確実性は数えない。
   * 限界: 不確実性の注記は、落ちた呼び出しを指すとは限らない。`dyn-arg` と `dyn-body`(DART-12)の `unmodeled_library_call` は、本体の無い既定のコンストラクタ(`Loud()`、`Maker()`)に付いたもので、落ちたメソッド呼び出しではない(それでも kind が出ているので、`@miss(unmodeled_library_call)`)。DART-12 が直って、`dynamic` の呼び出しに注記が付いても、この 2 つの注釈は変わらない。
   * 注釈の書き換え(今回): 前の分類との差は、`takes-a` / `takes-b`(不確実性の注記は、source / sink の関数ではなく、間のクロージャの中の `g(a)` にあった: `silent`)、`dyn-arg` / `dyn-body`(上の限界)、`across-hub` ほかの「弱い」6 件と Rust の `across-each`(`silent`)。MISSES.md の前のバージョンが間違っていたものは、他に無かった。
-* IR: `rivus extract -text` は Go 専用なので、`ir.Read` / `Func.Format` で Dart と Rust の IR を読んだ(extractor の出力 `*.jsonl`)。**どの `@miss` でも、IR に流れは載っている**(Dart のクロージャのキャプチャは `make_closure` の束縛、Rust は環境の構造体のフィールド)。extractor の側で落ちているものは、無い。
+* IR: `rivus debug extract -text` は Go 専用なので、`ir.Read` / `Func.Format` で Dart と Rust の IR を読んだ(extractor の出力 `*.jsonl`)。**どの `@miss` でも、IR に流れは載っている**(Dart のクロージャのキャプチャは `make_closure` の束縛、Rust は環境の構造体のフィールド)。extractor の側で落ちているものは、無い。
 * 実験: bench のコピー(scratchpad)に、小さいケースを足して、原因を 1 つずつ切り分けた(呼び出し元の数、同じ関数の中で呼ぶか、ジェネリックかなど)。実験の結果は備考に「実験」と書いた。
 
 ## 原因の型
