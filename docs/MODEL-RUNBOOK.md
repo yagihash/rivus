@@ -9,7 +9,7 @@
 ## 0. 環境
 
 - `make setup` 済み。`go`、`dart`(3.13.6)、`regomark` が PATH にある。`RIVUS_DART=dart`、`GOMODCACHE`、`PUB_CACHE` は環境変数で設定済み。
-- **Rust はない。** Rust のテスト(`TestRust*`、Rust の zoo)は、手元で実行できない。CI に任せる。Rust のパッケージのモデルは、Rust の extractor を要する確認ができないので、**Rust は取らない**(Go と Dart だけ)。
+- **Rust は、いまは CI に任せる。** rivus の Rust extractor は、読むときに `build.rs` と proc macro を実行する(隔離の下でだけ許される)。この環境には、Rust の nightly も、Linux の隔離もない(`make setup` は対象外。理由と案: [DESIGN-package-models.md](DESIGN-package-models.md) 6.5)。**隔離が動かないので、Rust のパッケージは、「モデルは書くが、extractor を使う確認は CI に任せる」形にする。取得したクレートのコードを、隔離なしで実行しない**(`cargo check`、`cargo build`、`cargo test`、`rivus-rust`、`-unsafe-host-exec` を、取得したクレートに対して使わない)。モデルの YAML は Go のテスト(`internal/model/builtin`)で確認し、zoo のセルは、自前のスタブ(`path:`、第三者のコードなし)で作って、CI の `rust` ジョブに確認させる。差分テストの Rust 版は、隔離が入るまで「未実施」と書く。CI が失敗したときは、ログを読んで修正して push し直す。手元で試せないので、Go と Dart のパッケージを先に取る。
 - ブランチは `claude/` で始まる名前になる(セッションごとに決まる)。名前は変えない。
 - 新しいセッションは、その時点の `main` から始まる。
 - コミットには、GitHub の上で署名が付く。手元の `gpgsig` の確認は要らない。push のあと、API(`gh api repos/<owner>/<repo>/commits/<sha> --jq .commit.verification.verified`)で `true` を確認する。
@@ -63,7 +63,14 @@ zoo のゲート(`scripts/zoo-loosened-check.sh`、#167): 新しいセル(`bench
 ## 5. PR(完成)
 
 - 題: `feat(model): <言語> <パッケージ> の組み込みモデル`(1 節の題と同じ)。`/pr` のスキルで作る(1 節のドラフトを更新する)。
-- 本文は、公開の事実だけ(パッケージ名とバージョン、公開の API)。表: 公開のベンチ(あれば)での前後の数字(finding の件数、`dynamic_dispatch` の注記の数、`summary_elems`、時間(`-pass-stats`))、中を読んだ場合(`-no-deps` なし、モデルなし)との照合(finding の ID の集合が同じか、違いと理由)。差分テストの一致の割合、MISS、EXTRA の理由(差分テストが入ってから)。
+- 本文は、公開の事実だけ(パッケージ名とバージョン、公開の API)。**次の項目を、必ず、この順で書く**(ないものは「なし」、できなかったものは「未実施」と理由を書く。空にしない):
+  1. **モデルの行の数と種類**: sink / source / sanitizer / flows / pure / calls の、それぞれの数。生成した行と手で書いた行の内訳(生成器が入ってから)。
+  2. **差分テストの結果**: MISS / EXTRA / 意図した差(理由つき)。差分テストが main にないうちは、「未実施(差分テストは未実装)」と書く。
+  3. **zoo のセル**: vuln / fixed / decoy の数。
+  4. **既知の見逃しと課題**: `@miss` / `@fp` のセルと、`docs/issues/model-<パッケージ>-<名前>.md` の一覧(なければ「なし」)。
+  5. **公開のベンチでの前後の数字**: finding(件数と ID の集合が同じか)、`dynamic_dispatch` の注記の数、`summary_elems`、時間(`-pass-stats`)。中を読んだ場合(モデルなし)との照合と、違いの理由。公開のベンチに、そのパッケージを使うものがなければ、「該当するベンチなし」と書く。
+  6. **手順のとおりにできなかった所**: 手順書が曖昧だった所、道具がなかった所、自分で判断した所。なければ「なし」。手順書の改善の入力になる。
+- **最初の 3 本(言語ごとに 1 本)は、相談役が、中身を確認する。** そのために、上の 6 に加えて、**手順の改善案**(次のセッションの手順書に足したいこと)を、本文の最後に書く。
 - 触るファイルは 4 節のとおり。それ以外(コード、ゲート、ワークフロー、共有の文書)は触らない。触る必要が出たら、完成にせず、ドラフトのまま、理由を本文に書いて終わる。
 - push のあと、コミットの署名(0 節)と、CI の結果を確認する。CI が失敗したら、直して push し直す(自分で `gh pr merge` はしない)。
 

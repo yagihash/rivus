@@ -221,6 +221,27 @@ extractor が読む量(ファイル数)は、`docs/DESIGN-deps-cost.md` の 10 �
 
 [MODEL-RUNBOOK.md](MODEL-RUNBOOK.md)。クラウドのセッションが、リポジトリの中のそれだけを読んで作業できる形にした。要点: 着手の宣言 = 題が固定の形(`feat(model): <言語> <パッケージ> の組み込みモデル`)のドラフトの PR を先に立てる(ブランチ名は `claude/` で始まり、宣言に使えない。判定は、PR の題とマージ済みの PR、main のモデルのファイル。リポジトリのファイルにマークを書かない)、標準の 4 段、PR の本文の形、守ること(GitHub の Issue を使わない、署名つき、自分でマージしない、新しい `@miss` / `@fp` には、番号を取らない課題のファイル `docs/issues/model-<パッケージ>-<名前>.md` への `@ref`)、conflict を避ける置き方(段階 0 の前と後を分けて書いた)。
 
+### 6.5 Rust の環境(調査と案。実装はしない)
+
+状況: `make setup`(`scripts/dev-setup.sh`)は、Go と Dart だけを入れる(「Rust は対象外」)。Rust のモデルを作って確認するには、Rust の extractor が動く必要がある。調べたことと、見積もり(**この環境では入れて測っていない**。数字は、ドキュメントと CI の設定からの見積もり)。
+
+1. **Linux でのビルドの手順と時間**: CI の `rust` ジョブと同じ。`rustup toolchain install`(`extractor/rust/rust-toolchain.toml` の `nightly-2026-11-15`、`minimal` + `rustc-dev`、`llvm-tools`、`rust-src`。取得は約 1 GB: `docs/rust-isolation.md`)、`cargo build --locked`(`rustc_private` にリンクする extractor のビルド)。時間は、回線とマシンしだいで、nightly の取得に 1〜数分、ビルドに数分(CI の `timeout-minutes` は 60)と見込む。実測は、段階の最初に取る。
+2. **Linux の隔離**: rivus には、ない(`-lang rust` は、サンドボックスがないと何も実行せずに止まる。`-unsafe-host-exec` だけが通る。ADR-093、`docs/rust-isolation.md`。`docs/DESIGN-macos-sandbox.md` は、「あとで bubblewrap などを足せるよう、起動のインターフェースを 1 つにする」としている)。候補: bubblewrap(`bwrap`。名前空間でファイルとネットワークを絞る。取得の段階はネットワークあり、抽出の段階は `--unshare-net`。macOS のプロファイルと同じ 2 段階にできる)、`unshare`(同じ名前空間。ファイルの絞り込みを自分で組む)、gVisor(ランタイム。コンテナの外から使うもので、クラウドのセッションの中では使えない)。**クラウドのコンテナの中では、非特権のユーザー名前空間が使えないことが多く、`bwrap` が動くかは、環境で確かめるまで分からない(未確認)。** 動かないなら、Linux の隔離は、特権のあるホスト(VM)が要る。コンテナそのものを隔離として使うのは、セッションの資格情報(トークン、署名の鍵)が同じコンテナにあるので、勧めない。
+3. **`make setup` に含めるか**: **含めない。別のターゲット(`make setup-rust`)にする。** 取得が大きく、Go と Dart のモデルには要らない。
+4. **5 分の制約**: クラウドのセットアップは、5 分以内に終わらないとキャッシュされない。nightly の取得(約 1 GB)と extractor のビルドを足すと、超える見込みが高い(未測定)。超えるものを `make setup` に入れると、Go と Dart のキャッシュまで失う。キャッシュの置き場所は、`~/.rustup`、`~/.cargo`、`extractor/rust/target`。`make setup-rust` は、Rust のモデルを取るセッションの最初に走らせる(毎回のコスト)か、別のキャッシュ(別のセットアップ)に分ける。
+5. **動かせない場合: 「作るが、Rust のテストは CI に任せる」は成り立つか**: **部分的に成り立つ。** モデルの YAML の検証は、Go のテスト(`internal/model/builtin` のテスト)で手元でも確認できる。Rust の zoo のセルは、第三者のコードを実行しない形(`bench/zoo-rust` は std だけ。依存のスタブは `path:` の自前のコード)で作れるので、CI の `rust` ジョブ(`-unsafe-host-exec`、自分のリポジトリのコードだけ)で確認できる。ただし、手元で試せないので、PR が赤くなる確率が高く、修正の往復が CI の時間になる。**差分テストの Rust 版は、第三者のクレートの本体を読む(= `cargo check` で、その `build.rs` と proc macro が動く)ので、取得したコードを実行しない規則と衝突する。** rivus の Rust extractor は、読むときに `build.rs` と proc macro を実行する設計で、隔離(2)がないと、この環境では動かせない。CI のランナーで、取得した第三者のクレートを読む差分テストを走らせるのも、同じ理由で勧めない(隔離のあるジョブに限る)。
+
+**推奨: Rust は、いまは CI に任せる。つまり、定期のセッションでは Rust のパッケージを取らない(Go と Dart だけ)。** Rust のモデルは、Linux の隔離(bubblewrap など。段階を 1 つ足す。中規模。環境で `bwrap` が動くことを先に確かめる)と `make setup-rust` が入ってから、差分テストとあわせて始める。それまでに Rust のモデルが要るときは、人(開発者)が、手元(macOS のサンドボックス)で作る。
+
+### 6.6 最初の 3 本(Dart、Go、Rust)の確認の基準
+
+最初の 3 本(言語ごとに 1 本。Rust は、いまの推奨では取らないので、人が作るか、2 本で始める)は、相談役が中身を確認する。「うまくいったか」の基準:
+1. **手順書を読むだけで作れたか**: 質問も、手順書にない判断もなく進んだか。手順どおりにできなかった所が、PR の本文に書いてあるか(書いてあれば手順書の改善の入力)。
+2. **PR の本文の項目がそろっているか**: [MODEL-RUNBOOK.md](MODEL-RUNBOOK.md) 5 節の必須の項目がすべてあり、未実施のものに理由があるか。
+3. **CI が通るか**: 最初の push で通ったか、修正が何回要ったか。
+4. **conflict がないか**: main を取り込んだか、共有のファイルの conflict が出たか(出たなら、どのファイルか)。
+5. **署名**: すべてのコミットで、API の `verification.verified` が `true` か。
+
 ## 7. 実装の段階と規模
 
 **順番(相談役の判断): 0 → 2 → 1 → 4 → 3 → 5。** 0 と 2 は、別の PR で並行する。4 は、Dart の extractor が時間の 9 割なので、2 のすぐあと。**各段階の PR に、公開のベンチ(`bench/dart-gcp`、`bench/dart-grpc`、`bench/go-s3`)の前後の数字(時間、メモリ、finding の ID の集合)を付ける。** `bench/go-s3`(3.1 節の合成。約 60 行の `main.go` と `go.mod` / `go.sum`)は、ベンチとして入れる(定期の層だけ。PR の CI には入れない)。
