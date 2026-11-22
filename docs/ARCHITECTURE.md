@@ -195,7 +195,7 @@ call dst? callee args flags
 `normal` / `true` / `false` / `exception` / `defer` / `back`（ループの後方エッジ。必須ではなく補助情報）。
 `finally` が複数経路から到達されるときは、extractor が経路ごとにブロックを複製する（Dart スパイクで決定。ADR-037）。
 複製されたコードは同じソース位置を持つので、サイトの列挙は 1 つとして数える。
-保護された範囲（`try`）の中では、投げうる呼び出しはブロックの終端で、例外の辺と正常な継続の辺を 1 本ずつ持つ。
+保護された範囲（`try`）の中では、投げうる呼び出しはブロックの終端で、例外のエッジと正常な継続のエッジを 1 本ずつ持つ。
 
 ### 2.6 ストリーム形式
 
@@ -403,7 +403,7 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 
 - `Program`: `Funcs`、`Impls`、`Types`（上位の型）、`Globals`、`TypeAliases`、テキスト（`Texts`、`CallTexts`、`FuncTexts`）、`LoadErrors`、`CallerMarks`、`TestsSkipped`
 - `Func`: `ID`、`Params`（`Class`、`Captured`）、`Results`、`Locals`、`Blocks`（先頭が entry）、`Roots`、`Pos`、`File`。マークとして `Exported`、`Entry`、`Init`、`Symbol`、`Recv`、`Dep`、`Private`、`ExternalEntry`、`Overrides`
-- `Block`: `Instrs`、`Term`（`Kind`、`Cond`、`CondPos`、`Values`）、`Succs`（種別つきの辺）
+- `Block`: `Instrs`、`Term`（`Kind`、`Cond`、`CondPos`、`Values`）、`Succs`（種別つきのエッジ）
 - `Instr`: `Op`、`Dsts`（呼び出しは戻り値の数だけ）、`Args`、`Const`、`Operator`、`Field`、`Path`、`Global`、`Func`、`View`、`Folded`、`Keyed`、`Callee`、`Go` / `Defer` / `Await`、`Reason`、`Pos`、`AddrPos`、`ArgPos`
 - `Callee`: `Kind`（`static` / `dynamic` / `value`）、`Func`、`Symbol`、`Recv`、`Candidates`、`FFI`。ストリームには載らず、コアが埋めるもの: `ValueCands`、`ValueLimit` など（13 節）
 - `Pos` は `File`、`Offset`、`Length`、`Line`、`Col`
@@ -738,7 +738,7 @@ rivus models coverage ./...
 使い方は [GRAPH.md](GRAPH.md)、設計の理由は [DESIGN-graph.md](DESIGN-graph.md)。
 
 - **保存（`internal/graphdb`）:** 1 つの SQLite ファイル（純 Go の `modernc.org/sqlite`。cgo なし）。表は `meta`、`files`、`funcs`、`callsites`、`edges`、`refs`（関数が値として参照される所）、`sites`（`schema.go`）。**使い捨てのキャッシュ**で、移行はしない。スキーマのバージョン（今は 2）が違うファイルは拒み、作り直しを案内する。
-- **層:** 今あるのは構造の層（関数、呼び出し点、辺、サイト）だけ。taint の層（findings、不確実性）は、このファイルにはない（`index -taint` は、JSON の index に出す）。`meta` が、どの層があるかを記録するので、層がないことを「findings がない」と読み違えない。
+- **層:** 今あるのは構造の層（関数、呼び出し点、エッジ、サイト）だけ。taint の層（findings、不確実性）は、このファイルにはない（`index -taint` は、JSON の index に出す）。`meta` が、どの層があるかを記録するので、層がないことを「findings がない」と読み違えない。
 - **書き先:** `-graph <file>`、なければユーザーのキャッシュ（`os.UserCacheDir()/rivus/<-C の絶対パスのハッシュ>/graph.db`。`RIVUS_CACHE_DIR` で変えられる）。解析対象のディレクトリには作らない（`cmd/rivus/graph.go`）。
 - **鍵（source hash。`internal/graphdb/key.go`、`cmd/rivus/graphkey.go`）:** 設定（フラグ、ルール、rivus のバージョン、環境、ツールチェイン）、読んだファイルの内容のハッシュ、ファイル一覧のハッシュ（新しく読めるようになったファイルに気づくため）で作る。疑わしいときは、いつも「作り直す」ほうを選ぶ。偽の「新しい」は変更を見逃し、偽の「古い」は index の時間だけで済むため。`graph info -C` が、今のソースと照合して `fresh` を返す。
 - **問い合わせ（`internal/graphq`）:** `callers`、`callees`、`path`、`impls`、`dispatchers`。1 関数ずつ、ファイルから隣を引くので、グラフを全部メモリに持たない。必ず、深さと件数に上限を持つ（深さは既定 1、最大 6。件数は既定 50。経路は既定 5 本）。動的な呼び出しは、候補が 3 以下なら展開し、それより多いものは境界（フロンティア）として見せ、20 を超えるもの（ハブ）は `path` に使わない（`hub_skipped`）。**切ったものと、絞ったもの（`--via`、`--avoid`、`--only-impl`）は、必ず出力に書く。**
