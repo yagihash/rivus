@@ -1,0 +1,10 @@
+# The rows of dart-github.yaml that no call in the zoo or the curated targets hits (TestBuiltinRowsAreHitByTheZoo). "symbol | reason"; see bench/parity/README.md.
+package:github/src/common/repos_service.dart#RepositoriesService.getBranch | dependency | not called: same shape as RepositoriesService.getContents (the zoo skeleton has the methods of the cells only)
+package:github/src/common/repos_service.dart#RepositoriesService.getCommit | dependency | not called: same shape as RepositoriesService.getContents (the zoo skeleton has the methods of the cells only)
+package:github/src/common/repos_service.dart#RepositoriesService.compareCommits | dependency | not called: same shape as RepositoriesService.getContents (the zoo skeleton has the methods of the cells only)
+package:github/src/common/repos_service.dart#RepositoriesService.updateFile | dependency | not called: same shape as RepositoriesService.getContents (the zoo skeleton has the methods of the cells only)
+package:github/src/common/repos_service.dart#RepositoriesService.deleteFile | dependency | not called: same shape as RepositoriesService.getContents (the zoo skeleton has the methods of the cells only)
+package:github/src/common/repos_service.dart#RepositoriesService.getArchiveLink | dependency | not called: same shape as RepositoriesService.getContents (the zoo skeleton has the methods of the cells only)
+package:github/src/common/github.dart#GitHub.requestJson | dependency | not called: same shape as GitHub.request (the zoo skeleton has the methods of the cells only)
+package:github/src/common/github.dart#GitHub.getJSON | dependency | not called: same shape as GitHub.request (the zoo skeleton has the methods of the cells only)
+package:github/src/common/github.dart#GitHub.postJSON | dependency | not called: same shape as GitHub.request (the zoo skeleton has the methods of the cells only)

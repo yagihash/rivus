@@ -1,0 +1,27 @@
+// @cell(F/dart/github-issue-body)
+// @shape: a value that a user of GitHub wrote is read with Issue.body of package:github (a skeleton of it): no row makes it a source (a known miss)
+import 'package:github/github.dart';
+import 'package:zoo_mark/zoo_mark.dart';
+
+void register() {
+  zooCase('F/dart/github-issue-body/vuln', vuln);
+  zooCase('F/dart/github-issue-body/fixed', fixed);
+  zooCase('F/dart/github-issue-body/decoy', decoy);
+}
+
+Future<void> vuln() async { // @vuln
+  final file = Issue(body: typed('dart-github-issue-body-vuln'));
+  sinkCmd(file.body!); // @source(dart-github-issue-body-vuln) @miss(silent) @ref(model-github-field-source-in-dependency) @sink(dart-github-issue-body-vuln)
+}
+
+Future<void> fixed() async { // @fixed
+  final file = Issue(body: typed('dart-github-issue-body-fixed'));
+  sinkCmd(cleanCmd(file.body!)); // @sink(none)
+}
+
+Future<void> decoy() async { // @decoy
+  final file = Issue(body: typed('dart-github-issue-body-decoy'));
+  final v = file.body!; // @source(dart-github-issue-body-decoy) @miss(silent) @ref(model-github-field-source-in-dependency)
+  sinkCmd('constant'); // @sink(none) @nosink(dart-github-issue-body-decoy)
+  sinkSql(v); // @sink(dart-github-issue-body-decoy)
+}

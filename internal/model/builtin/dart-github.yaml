@@ -1,0 +1,93 @@
+# package:github: the GitHub API client of Dart (`GitHub`, `RepositoriesService`, the models of repositories, files, issues and pull requests).
+#
+# verified_versions:
+#   - package: github
+#     range: ">=9.0.0 <10.0.0"
+#     checked_with: 9.26.0
+#     checked: 2026-11-23
+# (`verified_versions`, docs/DESIGN-package-models.md, 6.7, is not a field of the loader yet, so the record is kept here, in a comment.)
+# Checked by reading the published source of 9.26.0. Hand written rows (origin: human); the generator does not exist yet.
+# The differential test (`make model-diff PKG=package:github`) was not run: see the note in the pull request.
+#
+# The boundary (docs/MODEL-QUEUE.md, row 7):
+# * `resource_name`: what decides the resource that a call reaches. The owner and the name of a `RepositorySlug` (the slug is
+#   put into the path of the request, `/repos/<owner>/<name>/...`), and the path, the ref, the branch and the sha that a call of
+#   `RepositoriesService` takes. A value of the user there can point to another repository, another file or another ref than
+#   the program meant. (As the names of the Google Cloud resources: dart-gcp.yaml.) The rows are on the service methods that
+#   take a path or a ref and not on every method that takes a slug: the slug is a sink where it is made.
+# * `GitHub.request`, `requestJson`, `getJSON`, `postJSON`: the `path` is put after the endpoint. The same category.
+# * Source: `GitHubFile.text`, the decoded content of a file of a repository: text that other people wrote and the API gives
+#   back. This differs from `dart-http.yaml`, where the body of a response is not a source (the server is the one the program
+#   chose to call); here the data is that of the users of a repository, which the program does not control.
+#   The plain fields that hold such text (`GitHubFile.content`, the `body` of `Issue`, `IssueComment`, `PullRequest`) are NOT
+#   sources: a `kind: field` source also fires on the constructor of the class in the dependency and on every read of the field
+#   inside it, so each flow gets a second, spurious source in the package (docs/issues/model-github-field-source-in-dependency.md).
+# * The service methods have no `flows` row: their bodies are read (they are a few lines each and reach `GitHub.request`, which
+#   reaches `package:http`, whose own rows stand for the clients).
+# The notes `# model-diff:` are for `bench/model-diff` (docs/MODEL-RUNBOOK.md, 9): how to make a value of a class for the generated calls.
+# model-diff: value RepositorySlug RepositorySlug('o', 'r')
+# model-diff: value RepositoriesService RepositoriesService(GitHub())
+# model-diff: value GitHub GitHub()
+# Known result of `make model-diff` (9.26.0): `RepositorySlug.full` is reported as MISS at arg0. The probe code cannot call a named
+# constructor: it writes `rc.full(s)` on an instance, so the finding is not there. The row is on the factory `RepositorySlug.full(String)`
+# (the zoo does not call it either; the dead-allow does not list it because its key is in the skeleton). It is not hidden with
+# `miss-reviewed`, which is for a flow that is not data flow.
+ruleset: rivus/dart/github@1
+
+sources:
+  - symbol: package:github/src/common/model/repos_contents.dart#GitHubFile.text
+    labels: [user_input]
+
+sinks:
+  # the slug: where the owner and the name are put together
+  - symbol: package:github/src/common/model/repos.dart#RepositorySlug.new
+    args: [0, 1]
+    category: resource_name
+  - symbol: package:github/src/common/model/repos.dart#RepositorySlug.full
+    args: [0]
+    category: resource_name
+
+  # the service of repositories: the path, the ref, the branch, the sha
+  - symbol: package:github/src/common/repos_service.dart#RepositoriesService.getBranch
+    args: [1]
+    category: resource_name
+  - symbol: package:github/src/common/repos_service.dart#RepositoriesService.getCommit
+    args: [1]
+    category: resource_name
+  - symbol: package:github/src/common/repos_service.dart#RepositoriesService.compareCommits
+    args: [1, 2]
+    category: resource_name
+  - symbol: package:github/src/common/repos_service.dart#RepositoriesService.getReadme
+    named: [ref]
+    category: resource_name
+  - symbol: package:github/src/common/repos_service.dart#RepositoriesService.getContents
+    args: [1]
+    named: [ref]
+    category: resource_name
+  - symbol: package:github/src/common/repos_service.dart#RepositoriesService.updateFile
+    args: [1]
+    named: [branch]
+    category: resource_name
+  - symbol: package:github/src/common/repos_service.dart#RepositoriesService.deleteFile
+    args: [1, 4]
+    category: resource_name
+  - symbol: package:github/src/common/repos_service.dart#RepositoriesService.getArchiveLink
+    args: [1]
+    category: resource_name
+  - symbol: package:github/src/common/model/repos_contents.dart#CreateFile.new
+    named: [path, branch]
+    category: resource_name
+
+  # the path of a request, after the endpoint
+  - symbol: package:github/src/common/github.dart#GitHub.request
+    args: [1]
+    category: resource_name
+  - symbol: package:github/src/common/github.dart#GitHub.requestJson
+    args: [1]
+    category: resource_name
+  - symbol: package:github/src/common/github.dart#GitHub.getJSON
+    args: [0]
+    category: resource_name
+  - symbol: package:github/src/common/github.dart#GitHub.postJSON
+    args: [0]
+    category: resource_name
