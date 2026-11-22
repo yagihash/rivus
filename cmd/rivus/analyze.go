@@ -293,8 +293,29 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 			}
 			names = append(names, fmt.Sprintf("%s (%d)", p.Package, p.Functions))
 		}
-		fmt.Fprintf(os.Stderr, "rivus: %d package(s) or file(s) were read and not built (a type error in them or in a package they import), or read on a syntax tree that the analyzer recovered (a syntax error: a declaration may be missing); %d function(s) of them are not analysed: %s; see summary.unread\n",
-			u.Packages, u.Functions, strings.Join(names, ", "))
+		// the kinds that have a sentence of their own below: the sentence about a type error is not about them
+		specific := func(why string) bool {
+			for _, pre := range []string{ir.DependencyNotAllowedPrefix, ir.DependencyNotLinkedPrefix, ir.PackageConfigMissingPrefix, ir.PackageConfigOldPrefix} {
+				if strings.HasPrefix(why, pre) {
+					return true
+				}
+			}
+			return false
+		}
+		allSpecific := len(u.Top) == u.Packages
+		for _, p := range u.Top {
+			allSpecific = allSpecific && specific(p.Why)
+		}
+		if !allSpecific {
+			fmt.Fprintf(os.Stderr, "rivus: %d package(s) or file(s) were read and not built (a type error in them or in a package they import), or read on a syntax tree that the analyzer recovered (a syntax error: a declaration may be missing); %d function(s) of them are not analysed: %s; see summary.unread\n",
+				u.Packages, u.Functions, strings.Join(names, ", "))
+		}
+		for _, p := range u.Top {
+			if strings.HasPrefix(p.Why, ir.PackageConfigMissingPrefix) || strings.HasPrefix(p.Why, ir.PackageConfigOldPrefix) {
+				fmt.Fprintf(os.Stderr, "rivus: the Dart package %s is not prepared (package_config.json is not there, or old): the imports of other packages do not resolve, so its dependencies are not read; run `dart pub get` in it (rivus does not run it); see summary.unread\n", p.Package)
+				break
+			}
+		}
 		for _, p := range u.Top {
 			if strings.HasPrefix(p.Why, ir.DependencyNotAllowedPrefix) {
 				fmt.Fprintf(os.Stderr, "rivus: a dependency (%s) is outside the places that are trusted (the project, the pub cache, the SDKs), so it is not read and its functions are not analysed; -allow-deps-under <its parent directory> reads it\n", p.Package)
