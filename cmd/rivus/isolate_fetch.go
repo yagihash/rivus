@@ -1,11 +1,8 @@
 package main
 
 import (
-	"bytes"
-	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -89,28 +86,4 @@ func scanCargoConfig(text, dir string) (vendored, needs bool) {
 		needs = false
 	}
 	return vendored, needs
-}
-
-// dropConfigOfVolume removes the volume of the dependencies when it holds a cargo configuration or credentials: an
-// earlier run could have left one there, and cargo reads $CARGO_HOME/config.toml in the stage that has a network.
-func (o *isolationOpts) dropConfigOfVolume(ctx context.Context, volume string) error {
-	if err := exec.CommandContext(ctx, "docker", "volume", "inspect", volume).Run(); err != nil {
-		return nil // no volume yet
-	}
-	name := randomName("rivus-check-")
-	a := o.limits(name)
-	a = append(a, "--network", "none", "--mount", "type=volume,src="+volume+",dst=/cargo-home,readonly",
-		"--entrypoint", "find", o.image, "/cargo-home", "-maxdepth", "1", "(", "-name", "config*", "-o", "-name", "credentials*", ")")
-	var out bytes.Buffer
-	if err := o.runContainer(ctx, name, a, &out, "check"); err != nil {
-		return err
-	}
-	if strings.TrimSpace(out.String()) == "" {
-		return nil
-	}
-	fmt.Fprintf(o.err(), "rivus: the volume %s holds a cargo configuration (%s): it is removed (cargo would read it in the stage that has a network)\n", volume, strings.Join(strings.Fields(out.String()), " "))
-	if b, err := exec.CommandContext(ctx, "docker", "volume", "rm", "-f", volume).CombinedOutput(); err != nil {
-		return fmt.Errorf("docker volume rm %s: %v: %s", volume, err, strings.TrimSpace(string(b)))
-	}
-	return nil
 }

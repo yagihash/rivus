@@ -111,10 +111,7 @@ func (o *isolationOpts) extractRustSandboxed(ctx context.Context, dir string, ex
 		// the system's configuration of TLS: without it the cargo that is not bundled with its own cannot start
 		Timeout: o.timeout,
 	}
-	for _, m := range o.mounts {
-		src, _, _ := strings.Cut(m, ":")
-		common.Read = append(common.Read, src)
-	}
+	common.Read = append(common.Read, o.read...)
 
 	if !o.noFetch {
 		plan, err := planFetch(dir)
@@ -197,10 +194,10 @@ func (o *isolationOpts) sandboxResult(stage string, res *sandbox.Result, err err
 		return fmt.Errorf("the %s stage under the sandbox: %v", stage, err)
 	}
 	if res.TimedOut {
-		return fmt.Errorf("the %s stage under the sandbox did not finish in %v and was stopped (-container-timeout)", stage, o.timeout)
+		return fmt.Errorf("the %s stage under the sandbox did not finish in %v and was stopped (-isolation-timeout)", stage, o.timeout)
 	}
 	if res.OutputTooBig {
-		return fmt.Errorf("the %s stage under the sandbox wrote more than the output limit and was stopped (-container-max-output)", stage)
+		return fmt.Errorf("the %s stage under the sandbox wrote more than the output limit and was stopped (-isolation-max-output)", stage)
 	}
 	if len(res.Stderr) > 0 {
 		o.err().Write(res.Stderr)

@@ -8,7 +8,10 @@
 #                                         leaves out)
 #
 # It needs the Dart SDK (dart) and the Rust extractor (extractor/rust: cargo build; RIVUS_RUST names it if it is not at
-# target/debug/rivus-rust). The Docker tests of the isolation are left to CI.
+# target/debug/rivus-rust). The tests of the sandbox of macOS (internal/sandbox, cmd/rivus/isolate_sandbox_darwin_test.go) make harmless marks
+# outside the sandbox if it does not hold, and the fetch one downloads a crate: they run with RIVUS_SBX_RED=1 and RIVUS_SBX_NET=1 set (macOS only;
+# CI runs the small part of them, .github/workflows/isolation.yml). Run it with them when the isolation changes:
+#   RIVUS_SBX_RED=1 RIVUS_SBX_NET=1 .github/scripts/prepush.sh
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 export RIVUS_DART="${RIVUS_DART:-dart}"

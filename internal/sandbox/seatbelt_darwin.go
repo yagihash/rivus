@@ -73,7 +73,7 @@ type Result struct {
 // profile is the text of the profile. Every path comes in as a parameter ((param "P0")), never in the text: a directory
 // whose name has a parenthesis or a quote in it cannot change the profile (TestSandboxProfileTakesNoPathInItsText).
 // A rule that is allowed has the reason beside it.
-func profile(nRead, nExec, nWrite, nFiles, nReadFiles int, proxy bool, network bool, nMach int) string {
+func profile(nRead, nExec, nWrite, nFiles int, proxy bool, network bool, nMach int) string {
 	var b strings.Builder
 	b.WriteString(`(version 1)
 ; Everything is denied, and what is needed is allowed, one line at a time with its reason.
@@ -106,10 +106,6 @@ func profile(nRead, nExec, nWrite, nFiles, nReadFiles int, proxy bool, network b
 	for i := 0; i < nFiles; i++ {
 		fmt.Fprintf(&b, "; this program may be run (it is named by its path): one that a build needs\n(allow file-read* process-exec* (literal (param \"E%d\")))\n", i)
 		writeAncestors(&b, "E", i)
-	}
-	for i := 0; i < nReadFiles; i++ {
-		fmt.Fprintf(&b, "; this file may be read (named by its path): a manifest above the project\n(allow file-read* (literal (param \"F%d\")))\n", i)
-		writeAncestors(&b, "F", i)
 	}
 	for i := 0; i < nWrite; i++ {
 		fmt.Fprintf(&b, "; may be written: the working directory of this run only. Programs may be run from it too: the build scripts and the proc macros that the build makes there. THIS IS THE RUN OF THE CODE OF THE PROJECT ITSELF (a build script is the code that is being read): it cannot be narrowed, and what the sandbox does is to keep that code in.\n(allow file-read* file-write* process-exec* (subpath (param \"W%d\")))\n(allow file-map-executable (subpath (param \"W%d\")))\n", i, i)
@@ -160,7 +156,7 @@ func Run(ctx context.Context, s Spec) (*Result, error) {
 	// or cargo holds other programs)
 	files := append(append([]string(nil), s.ExecFiles...), s.Argv[0])
 	pf := filepath.Join(dir, "profile.sb")
-	if err := os.WriteFile(pf, []byte(profile(len(s.Read), len(s.Exec), len(s.Write), len(files), len(s.ReadFiles), s.ProxyPort != 0, s.Network, len(s.NetworkMach))), 0o600); err != nil {
+	if err := os.WriteFile(pf, []byte(profile(len(s.Read), len(s.Exec), len(s.Write), len(files), s.ProxyPort != 0, s.Network, len(s.NetworkMach))), 0o600); err != nil {
 		return nil, err
 	}
 	args := argList{"-f", pf}
@@ -171,9 +167,6 @@ func Run(ctx context.Context, s Spec) (*Result, error) {
 	}
 	for i, d := range s.Exec {
 		args.param(fmt.Sprintf("X%d", i), real(d))
-	}
-	for i, f := range s.ReadFiles {
-		args.param(fmt.Sprintf("F%d", i), real(f))
 	}
 	for i, f := range files {
 		args.param(fmt.Sprintf("E%d", i), real(f))
@@ -289,18 +282,6 @@ func (c *capWriter) Write(p []byte) (int, error) {
 }
 
 var _ = sort.Strings
-
-// ManifestsAbove are the Cargo.toml files that exist in the directories above dir (not in dir itself).
-func ManifestsAbove(dir string) []string {
-	var out []string
-	for d := filepath.Dir(real(dir)); d != "/" && d != "."; d = filepath.Dir(d) {
-		m := filepath.Join(d, "Cargo.toml")
-		if _, err := os.Stat(m); err == nil {
-			out = append(out, m)
-		}
-	}
-	return out
-}
 
 // Available says whether the sandbox can be made on this machine: sandbox-exec is there and accepts the profile that a run uses (a
 // program that does nothing is run under it once). A caller asks before it runs the code of a project, and never takes what

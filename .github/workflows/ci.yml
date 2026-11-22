@@ -178,28 +178,6 @@ jobs:
           # a missing RIVUS_RUST fails the tests, and does not skip them
           RIVUS_REQUIRE_RUST: "1"
 
-  # The Rust extractor in a container (ADR-064, docs/rust-isolation.md): the image is built from this repository,
-  # and the project that is hostile on purpose is built in it, never outside.
-  rust-isolation:
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-      - name: Build the image
-        run: docker build -f docker/rust-extractor/Dockerfile -t rivus-rust-extractor:nightly-2026-11-15 extractor/rust
-      - name: Test the isolation
-        run: go test -timeout 30m -run 'Isolation|Hostile|Mountable|CargoVolume|NoDocker|LimitWriter|ProjectToolchain' ./cmd/rivus
-        env:
-          # a missing Docker or image fails the tests, and does not skip them
-          RIVUS_REQUIRE_DOCKER: "1"
-
   # bench/gcp run for real, against fakes (exec_test.go): the value of a vulnerable case reaches the SQL text, the
   # value of a fixed one only the parameters. The test refuses every connection that is not loopback.
   gcp-exec:

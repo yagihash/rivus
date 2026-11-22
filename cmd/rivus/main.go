@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"runtime/debug"
+	"strings"
 )
 
 const usage = `rivus - taint analysis query engine
@@ -32,6 +33,10 @@ func main() {
 	tuneGC()
 	if len(os.Args) < 2 {
 		fmt.Fprint(os.Stderr, usage)
+		os.Exit(2)
+	}
+	if err := oldIsolationFlag(os.Args[2:]); err != nil {
+		fmt.Fprintf(os.Stderr, "rivus: %v\n", err)
 		os.Exit(2)
 	}
 	var err error
@@ -78,4 +83,32 @@ func tuneGC() {
 	if os.Getenv("GOGC") == "" {
 		debug.SetGCPercent(50)
 	}
+}
+
+// oldIsolationFlags are the flags of the container (ADR-064), which went with the container (ADR-093). They are not kept as other names: a
+// flag that is given and ignored would hide that the limit it set is gone; so it is said, and nothing runs.
+var oldIsolationFlags = map[string]string{
+	"container-timeout":    "-isolation-timeout",
+	"container-max-output": "-isolation-max-output",
+	"container-env":        "-isolation-env",
+	"container-ro-mount":   "-isolation-read PATH (the build may read the path; there is no DST any more)",
+	"container-memory":     "(gone: the sandbox has no limit of memory; docs/rust-isolation.md)",
+	"container-cpus":       "(gone: the sandbox has no limit of CPUs)",
+	"container-pids":       "(gone: the sandbox has no limit of processes)",
+	"rust-image":           "(gone: there is no image; the extractor runs under the sandbox of macOS)",
+}
+
+// oldIsolationFlag says, for an argument that names a flag of the container, what it is now.
+func oldIsolationFlag(args []string) error {
+	for _, a := range args {
+		if !strings.HasPrefix(a, "-") {
+			continue
+		}
+		name := strings.TrimLeft(a, "-")
+		name, _, _ = strings.Cut(name, "=")
+		if now, ok := oldIsolationFlags[name]; ok {
+			return fmt.Errorf("-%s is not a flag any more: it is %s", name, now)
+		}
+	}
+	return nil
 }

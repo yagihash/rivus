@@ -1,0 +1,54 @@
+name: isolation
+
+# The tests of the sandbox of macOS (internal/sandbox, docs/DESIGN-macos-sandbox.md) on a runner of macOS. They run only when something that
+# the isolation is made of changes, once a week (the sandbox and its profile can break when macOS or Xcode is updated, with no change of
+# the code), by hand, and on a tag. Not a required check: a workflow that is filtered by paths does not run on every change, and a
+# required check that does not run keeps a pull request waiting.
+#
+# Only the tests that need no toolchain: what the probe cannot do under the sandbox, the ways out that are closed, the limits. The
+# extraction of Rust under the sandbox (the toolchain, the fetch) is tried on the machine of the developer (RIVUS_SBX_RED=1, RIVUS_SBX_NET=1).
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths:
+      - "internal/sandbox/**"
+      - "cmd/rivus/isolate*.go"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/isolation.yml"
+  pull_request:
+    paths:
+      - "internal/sandbox/**"
+      - "cmd/rivus/isolate*.go"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/isolation.yml"
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: isolation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sandbox:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Test the sandbox
+        env:
+          # the tests make harmless marks outside the sandbox when it does not hold (a name rivus-sbx-<id>, removed after), and say so
+          RIVUS_SBX_RED: "1"
+        run: go test -count=1 -timeout 20m -run 'TestSandbox(Stops|Closes|Time|Output|Environment|Unavailable|Stderr|Program)' ./internal/sandbox

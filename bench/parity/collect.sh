@@ -12,7 +12,7 @@
 #   RIVUS_DART    the command of the Dart SDK ("mise exec dart@3.13.6 -- dart")
 #   RIVUS_RUST    the Rust extractor binary (extractor/rust: cargo build)
 #   PARSEABLE_IR  an IR of parseable that already exists (the extraction is not run). Without it parseable is
-#                 extracted in the container (`rivus extract -lang rust`: Docker is needed; without it the step fails)
+#                 extracted under the sandbox of macOS (`rivus extract -lang rust`: without the sandbox the step fails)
 #
 # Rust: only our own code (bench/zoo-rust, bench/rust-curated, extractor/rust/test) is read on this machine
 # (-unsafe-host-exec, the extractor RIVUS_RUST); third-party code is read in the container only, as in bench/compare.sh.
@@ -45,7 +45,7 @@ rust_ir() { # name source_dir read_dir [extractor flags]: the IR of the Rust pro
   if rust_is_own "$src"; then
     "$RIVUS_RUST" "$@" "$dir" > "$WORK/ir/$name.jsonl"
   else
-    docker info > /dev/null 2>&1 || { echo "Rust の第三者のコードは隔離の中でだけ読む。Docker を起動するか、このベンチを外す ($name)" >&2; return 1; }
+    { [ "$(uname -s)" = Darwin ] && command -v sandbox-exec > /dev/null 2>&1; } || { echo "Rust の第三者のコードは隔離の中でだけ読む。macOS のサンドボックス(sandbox-exec)が使えないので、このベンチを外す ($name)" >&2; return 1; }
     env -u RIVUS_UNSAFE_HOST_EXEC "$RIVUS" extract -lang rust -C "$dir" "$@" > "$WORK/ir/$name.jsonl"
   fi
 }

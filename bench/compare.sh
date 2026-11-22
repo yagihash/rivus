@@ -178,12 +178,12 @@ for kv in $BIGS; do
   [ "$n" -le 1 ] || { echo "--big: the name '$name' is given twice" >&2; exit 64; }
 done
 
-# Rust: third-party code is read only in the container (ADR-064, docs/rust-isolation.md): its build.rs and proc macros run
+# Rust: third-party code is read only under the sandbox of macOS (ADR-093, docs/rust-isolation.md): its build.rs and proc macros run
 # during the extraction. Only these paths of this repository (our own code) may be read on this machine, with
 # -unsafe-host-exec; everything else, a clone of someone else's project included, goes through `rivus extract -lang rust`,
-# which is the container. Without Docker the third-party benchmark FAILS; it never falls back to the machine.
+# which is the sandbox. Without the sandbox (another system, or no sandbox-exec) the third-party benchmark FAILS; it never falls back to the machine.
 OWN_RUST_PATHS="bench/zoo-rust bench/rust-curated extractor/rust/test"
-NO_DOCKER_MSG="Rust の第三者のコードは隔離の中でだけ読む。Docker を起動するか、このベンチを外す"
+NO_DOCKER_MSG="Rust の第三者のコードは隔離の中でだけ読む。macOS のサンドボックス(sandbox-exec)が使えないので、このベンチを外す"
 rust_is_own() { # dir root: 0 only when dir is, or is under, one of OWN_RUST_PATHS of root
   local d r p
   d="$(cd "$1" 2>/dev/null && pwd -P)" || return 1
@@ -191,8 +191,8 @@ rust_is_own() { # dir root: 0 only when dir is, or is under, one of OWN_RUST_PAT
   for p in $OWN_RUST_PATHS; do case "$d" in "$r/$p"|"$r/$p"/*) return 0 ;; esac; done
   return 1
 }
-rust_mode() { rust_is_own "$1" "$2" && echo host || echo container; } # dir root
-docker_ok() { docker info --format '{{.ServerVersion}}' > /dev/null 2>&1; }
+rust_mode() { rust_is_own "$1" "$2" && echo host || echo sandbox; } # dir root
+docker_ok() { command -v sandbox-exec > /dev/null 2>&1; } # (the name is from the time of the container: whether the sandbox can be used; sandbox-exec is only on macOS)
 
 # the flags (and the packages instead of ./...) that a benchmark is run with
 flags_of() {
@@ -223,7 +223,7 @@ if [ "$DRY" = 1 ]; then
     case "$KIND" in dart) ex="extractor: ${RIVUS_DART:-dart} run wt/<sha7>/extractor/dart/bin/rivus_dart.dart";; rust)
       if [ "$(rust_mode "$DIR" "$ROOT")" = host ]; then ex="extractor: host (our own code: -unsafe-host-exec) ${RIVUS_RUST:-cargo build --locked in wt/<sha7>/extractor/rust}"
       else
-        ex="extractor: container (docker build of wt/<sha7>/extractor/rust, then rivus extract -lang rust)"
+        ex="extractor: sandbox (cargo build of wt/<sha7>/extractor/rust, then rivus extract -lang rust under the sandbox of macOS)"
         if ! docker_ok; then ex="$ex; Docker is not available: this benchmark FAILS ($NO_DOCKER_MSG)"; NODOCKER_FAIL=1; fi
       fi;; *) ex="";; esac
     src="in-tree (wt/<sha7>/bench/$b)"; [ -n "$URL" ] && src="git clone $URL ; git checkout ${COMMIT:-<default branch>} ; ls go.mod ; go list ./..."
@@ -299,7 +299,7 @@ tree() {   # tree <sha> <path>: the hash of that directory in that version (with
   if [ "$FIXED" = 1 ]; then wtree "$2"; else git -C "$ROOT" rev-parse -q --verify "$1:$2" 2>/dev/null; fi
 }
 h16() { shasum -a 256 | cut -c1-16; }
-# the rivus of this script's tree that drives the container (`rivus extract -lang rust`): a base that is older may not have it
+# the rivus of this script's tree that drives the sandbox (`rivus extract -lang rust`): a base that is older may not have it
 DRIVER="$WORK/bin/driver/rivus"
 ensure_driver() {
   [ -n "${DRIVER_OK:-}" ] && return 0
@@ -372,7 +372,7 @@ setup() { # name side: makes the copy and the IR of that version; sets DIR, RULE
       fi ;;
     rust)
       mkdir -p "$WORK/ir"
-      local mode image=""
+      local mode
       mode="$(rust_mode "$DIR" "$wt")"
       if [ "$mode" = host ]; then   # our own code (OWN_RUST_PATHS)
         if [ -n "${RIVUS_RUST:-}" ]; then   # an extractor named by the caller is used for both sides
@@ -389,36 +389,32 @@ setup() { # name side: makes the copy and the IR of that version; sets DIR, RULE
           fi
         fi
         extkey="rust ${ext:0:12}"
-      else   # someone else's code: the container, or nothing
+      else   # someone else's code: under the sandbox, or nothing
         docker_ok || { skip "$b" "$NO_DOCKER_MSG"; return 1; }
-        if [ -n "${RIVUS_RUST_IMAGE:-}" ]; then   # an image named by the caller is used for both sides
-          image="$RIVUS_RUST_IMAGE"
-          ext="image-$(docker image inspect --format '{{.Id}}' "$image" 2>/dev/null | h16)"
-        else
-          ext="$(tree "$sha" extractor/rust)"; [ -n "$ext" ] || { skip "$b" "no extractor/rust in $w ($s7)"; return 1; }
-          image="rivus-rust-extractor:cmp-${ext:0:12}"   # one image per extractor tree: the extractor of THIS version runs in it
-          if ! docker image inspect "$image" > /dev/null 2>&1; then
-            say "building the image of the Rust extractor of $w ($s7, tree ${ext:0:12})"
-            docker build -q -f "$ROOT/docker/rust-extractor/Dockerfile" -t "$image" "$wt/extractor/rust" > "$WORK/ir/rust-image-$ext.log" 2>&1 \
-              || { skip "$b" "docker build of the extractor failed in $w ($s7) (see $WORK/ir/rust-image-$ext.log)"; return 1; }
-          fi
+        ext="$(tree "$sha" extractor/rust)"; [ -n "$ext" ] || { skip "$b" "no extractor/rust in $w ($s7)"; return 1; }
+        rr="$WORK/bin/rust-extractor/$ext/rivus-rust"   # the extractor of THIS version: one binary per extractor tree
+        if [ ! -x "$rr" ]; then
+          say "building the Rust extractor of $w ($s7, tree ${ext:0:12})"
+          (cd "$wt/extractor/rust" && CARGO_TARGET_DIR="$WORK/cargo-target" cargo build --locked) > "$WORK/ir/rust-extractor-$ext.log" 2>&1 \
+            || { skip "$b" "cargo build --locked failed in $w ($s7) (see $WORK/ir/rust-extractor-$ext.log)"; return 1; }
+          mkdir -p "$WORK/bin/rust-extractor/$ext" && cp "$WORK/cargo-target/debug/rivus-rust" "$rr" || { skip "$b" "no rivus-rust after cargo build"; return 1; }
         fi
-        ensure_driver || { skip "$b" "go build of the rivus that drives the container failed"; return 1; }
-        extkey="rust-container ${ext:0:12}"
+        ensure_driver || { skip "$b" "go build of the rivus that drives the sandbox failed"; return 1; }
+        extkey="rust-sandbox ${ext:0:12}"
       fi
       key="$(printf '%s|%s|%s|%s' "$b" "$ext" "$tgt" "$mode" | h16)"
       IR="$WORK/ir/$b.$key.jsonl"
       if [ ! -s "$IR" ]; then
         say "$b: making the IR with the extractor of $w ($s7), $mode"
-        if [ "$mode" = container ]; then
-local xargs=(-lang rust -C "$DIR" -rust-image "$image")
+        if [ "$mode" = sandbox ]; then
+local xargs=(-lang rust -C "$DIR" -rust-extractor "$rr")
           if [ "$b" = parseable ]; then
             mkdir -p "$WORK/parseable-assets"   # build.rs would fetch the UI from the network without it
-            xargs+=(-no-deps -container-env LOCAL_ASSETS_PATH=/assets -container-ro-mount "$WORK/parseable-assets:/assets")
+            xargs+=(-no-deps -isolation-env "LOCAL_ASSETS_PATH=$WORK/parseable-assets" -isolation-read "$WORK/parseable-assets")
           fi
           # RIVUS_UNSAFE_HOST_EXEC is removed: there is no way to the host from here
           env -u RIVUS_UNSAFE_HOST_EXEC "$DRIVER" extract "${xargs[@]}" > "$IR.tmp" 2>"$WORK/ir/$b.$key.err" \
-            || { /bin/rm -f "$IR.tmp"; skip "$b" "the Rust extractor failed in the container (see $WORK/ir/$b.$key.err)"; return 1; }
+            || { /bin/rm -f "$IR.tmp"; skip "$b" "the Rust extractor failed under the sandbox (see $WORK/ir/$b.$key.err)"; return 1; }
         else
           (cd "$wt" && "$rr" "$DIR" > "$IR.tmp") 2>"$WORK/ir/$b.$key.err" || { /bin/rm -f "$IR.tmp"; skip "$b" "the Rust extractor failed (see $WORK/ir/$b.$key.err)"; return 1; }
         fi

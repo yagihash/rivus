@@ -211,7 +211,7 @@ func (o *analyzeOpts) hostExec() bool {
 	return o.unsafeHostExec || os.Getenv("RIVUS_UNSAFE_HOST_EXEC") == "1"
 }
 
-// runRustIsolated reads a Rust project in a container (ADR-064).
+// rawRustIsolated reads a Rust project under the sandbox of macOS (ADR-093); on another system nothing is run.
 func (o *analyzeOpts) rawRustIsolated() ([]byte, error) {
 	dir, err := filepath.Abs(o.dir)
 	if err != nil {
@@ -229,19 +229,12 @@ func (o *analyzeOpts) rawRustIsolated() ([]byte, error) {
 		args = append(args, "--include-tests")
 	}
 	args = append(args, dir)
-	return iso.extractRustIsolated(context.Background(), dir, args)
+	return iso.extractRustSandboxed(context.Background(), dir, args)
 }
 
 func (o *analyzeOpts) isolation() *isolationOpts {
-	image := o.rustImage
-	if image == "" {
-		image = os.Getenv("RIVUS_RUST_IMAGE")
-	}
-	if image == "" {
-		image = rustImageName
-	}
 	extractor, _ := o.extractorCommand(langRust)
-	return &isolationOpts{extractor: extractor, image: image, memory: o.containerMemory, cpus: o.containerCPUs, pids: o.containerPids, timeout: o.containerTimeout, noFetch: o.noFetch, env: o.containerEnv, mounts: o.containerMounts, maxOutput: o.containerMaxOut, allowHosts: o.allowFetchHosts}
+	return &isolationOpts{extractor: extractor, timeout: o.isolationTimeout, noFetch: o.noFetch, env: o.isolationEnv, read: o.isolationRead, maxOutput: o.isolationMaxOut, allowHosts: o.allowFetchHosts}
 }
 
 // loadLangs reads several languages into one program. The functions of the

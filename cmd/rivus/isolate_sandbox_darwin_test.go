@@ -45,7 +45,7 @@ func TestSandboxedBuildScriptCannotEscape(t *testing.T) {
 		execExtra: []string{probe},
 	}
 	// the probe is read by path: it is in a temporary directory outside the project
-	iso.mounts = []string{filepath.Dir(probe) + ":" + filepath.Dir(probe)}
+	iso.read = []string{filepath.Dir(probe)}
 	out, err := iso.extractRustSandboxed(context.Background(), project, []string{project})
 	if err != nil {
 		t.Fatalf("the extraction under the sandbox: %v\n%s", err, iso.stderr.(*bytes.Buffer).String())
