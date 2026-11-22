@@ -1,0 +1,6 @@
+name: pkg_a
+publish_to: none
+environment:
+  sdk: ^3.10.0
+dependencies:
+  collection: 1.18.0
