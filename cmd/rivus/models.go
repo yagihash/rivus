@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/yagihash/rivus/internal/model"
 	"github.com/yagihash/rivus/internal/report"
 )
 
@@ -53,4 +54,35 @@ func runModelsCoverage(args []string) error {
 		cov.Symbols = cov.Symbols[:*top]
 	}
 	return writeJSON(os.Stdout, cov)
+}
+
+// versionsCmd is "rivus models versions": the verified_versions records of the models.
+type versionsCmd struct{ c common }
+
+func versionsFlags(fs *flag.FlagSet) *versionsCmd {
+	v := &versionsCmd{}
+	fs.Var(&v.c.rules, "rules", "additional rule file (repeatable)")
+	fs.BoolVar(&v.c.noBuiltin, "no-builtin-rules", false, "do not load the built-in rules")
+	usual(fs, "rules", "no-builtin-rules")
+	kind(fs, "file", "rules")
+	return v
+}
+
+func runModelsVersions(args []string) error {
+	fs := flag.NewFlagSet("models versions", flag.ExitOnError)
+	v := versionsFlags(fs)
+	prepareFlags(fs, args)
+	fs.Parse(args)
+	v.c.noProject = true
+	rules, err := v.c.loadRules()
+	if err != nil {
+		return err
+	}
+	list := rules.Verified
+	if list == nil {
+		list = []model.Verified{}
+	}
+	return writeJSON(os.Stdout, struct {
+		VerifiedVersions []model.Verified `json:"verified_versions"`
+	}{list})
 }

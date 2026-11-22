@@ -85,6 +85,7 @@ type brReport struct {
 			DeclaredIn string `json:"declared_in"`
 			Reason     string `json:"reason"`
 			Functions  int    `json:"functions"`
+			Declared   int    `json:"functions_declared"`
 		} `json:"body_replaced_packages"`
 		Ignored int `json:"body_replaced_ignored"`
 	} `json:"summary"`
@@ -166,7 +167,7 @@ propagators:
 	if len(got.Summary.Replaced) != 1 {
 		t.Fatalf("summary.body_replaced_packages: %+v", got.Summary.Replaced)
 	}
-	if p := got.Summary.Replaced[0]; p.Package != "example.com/third" || p.Functions != 5 || p.DeclaredIn != rules || !strings.Contains(p.Reason, "checked") {
+	if p := got.Summary.Replaced[0]; p.Package != "example.com/third" || p.Declared != 5 || p.Functions != 0 || p.DeclaredIn != rules || !strings.Contains(p.Reason, "checked") {
 		t.Errorf("summary.body_replaced_packages: %+v", p)
 	}
 	if got.Stats.Functions >= read.Stats.Functions {
@@ -258,15 +259,15 @@ propagators:
 func TestBodyReplacedNamesThePackageAndNoOtherUnlessSaid(t *testing.T) {
 	app := bodyReplacedProject(t)
 	one := brAnalyze(t, app, "-body-replaced", "example.com/third")
-	if len(one.Summary.Replaced) != 1 || one.Summary.Replaced[0].Functions != 5 || one.Summary.Replaced[0].DeclaredIn != "-body-replaced" {
+	if len(one.Summary.Replaced) != 1 || one.Summary.Replaced[0].Declared != 5 || one.Summary.Replaced[0].DeclaredIn != "-body-replaced" {
 		t.Fatalf("-body-replaced example.com/third: %+v", one.Summary.Replaced)
 	}
 	tree := brAnalyze(t, app, "-body-replaced", "example.com/third/...")
-	if len(tree.Summary.Replaced) != 1 || tree.Summary.Replaced[0].Functions != 7 {
+	if len(tree.Summary.Replaced) != 1 || tree.Summary.Replaced[0].Declared != 7 {
 		t.Fatalf("-body-replaced example.com/third/...: %+v", tree.Summary.Replaced)
 	}
 	sub := brAnalyze(t, app, "-body-replaced", "example.com/third/sub", "-body-replaced", "example.com/third/other")
-	if len(sub.Summary.Replaced) != 2 || sub.Summary.Replaced[0].Package != "example.com/third/other" || sub.Summary.Replaced[1].Functions != 1 {
+	if len(sub.Summary.Replaced) != 2 || sub.Summary.Replaced[0].Package != "example.com/third/other" || sub.Summary.Replaced[1].Declared != 1 {
 		t.Fatalf("the two subpackages: %+v", sub.Summary.Replaced)
 	}
 	// a package of the project is always read; what names no function is said
@@ -400,14 +401,14 @@ func TestBodyReplacedOfADartPackage(t *testing.T) {
 	}
 	read := run()
 	got := run("-body-replaced", "package:fixnum", "-body-replaced", "package:no_such")
-	if len(got.Summary.Replaced) != 1 || got.Summary.Replaced[0].Package != "package:fixnum" || got.Summary.Replaced[0].Functions == 0 {
+	if len(got.Summary.Replaced) != 1 || got.Summary.Replaced[0].Package != "package:fixnum" || got.Summary.Replaced[0].Declared == 0 || got.Summary.Replaced[0].Functions != 0 {
 		t.Fatalf("summary: %+v", got.Summary.Replaced)
 	}
 	// the extractor does not read the package (stage 4), or reads it and the core leaves it out (stage 2,
 	// -drop-after-read): the result is the same, but for the count of the functions that the report says were left out
 	// (stage 2 counts what was read, stage 4 what the package declares)
 	filtered := run("-body-replaced", "package:fixnum", "-body-replaced", "package:no_such", "-drop-after-read")
-	if len(filtered.Summary.Replaced) != 1 || filtered.Summary.Replaced[0].Functions == 0 {
+	if len(filtered.Summary.Replaced) != 1 || filtered.Summary.Replaced[0].Functions == 0 || filtered.Summary.Replaced[0].Declared != 0 {
 		t.Fatalf("summary of the filter: %+v", filtered.Summary.Replaced)
 	}
 	if got.Stats.Functions != filtered.Stats.Functions || got.Stats.Functions >= read.Stats.Functions {
@@ -497,7 +498,7 @@ propagators:
 		}
 		for i, e := range extractor.Summary.Replaced {
 			f := filter.Summary.Replaced[i]
-			if e.Package != f.Package || e.DeclaredIn != f.DeclaredIn || e.Reason != f.Reason || e.Functions == 0 {
+			if e.Package != f.Package || e.DeclaredIn != f.DeclaredIn || e.Reason != f.Reason || e.Declared == 0 || e.Functions != 0 || f.Declared != 0 || f.Functions == 0 {
 				t.Errorf("%v: summary %+v, %+v in the filter", args, e, f)
 			}
 		}

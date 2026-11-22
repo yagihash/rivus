@@ -28,6 +28,9 @@ const (
 	KindCallResult = "call_result" // the result of calling Symbol
 	KindParamType  = "param_type"  // every parameter whose type is Type
 	KindField      = "field"       // reads of the struct field Field ("pkg.Type.*": any field of the type)
+	// KindCallbackParam: the parameters From..To of the function that a call of Symbol is given as its operand
+	// Operand (a handler that a router calls: the parameters of the path).
+	KindCallbackParam = "callback_param"
 
 	// BoundaryStoredData is a call that moves data between the code and a data
 	// store that is not followed.
@@ -89,6 +92,9 @@ type RuleSet struct {
 	// BodyReplaced declares the packages whose code this set stands for: they are not read by the analysis
 	// (docs/MODELING.md, "Declaring a package").
 	BodyReplaced []BodyReplaced `yaml:"body_replaced_packages"`
+	// VerifiedVersions record the versions of the packages that the rows were checked against (verified.go). A
+	// record only: the analysis does not read it.
+	VerifiedVersions []VerifiedVersion `yaml:"verified_versions"`
 
 	// Origin is where the rule set came from (file name or "builtin:...").
 	Origin string `yaml:"-"`
@@ -123,6 +129,16 @@ type Source struct {
 	// framework hands to them in parameters that are messages is the input. The
 	// generated code has to exist when the analysis runs.
 	Marker string `yaml:"marker"`
+	// Operand, From and To, with kind: callback_param, say which parameters of the function that a call of Symbol
+	// is given are the source. Operand is the position of the function among the operands of the call, counted
+	// as the rows of calls count them (the receiver is not counted, except in a set with self_first, where it is
+	// arg0). From and To are positions among the parameters that the function declares (the first is 0), To
+	// included; From defaults to 0, To to the last. The function is found where the call is made (a function
+	// literal or a function that is named there, or a local that holds one): a call where it is not found says so
+	// (unresolved_callee).
+	Operand *int `yaml:"operand"`
+	From    *int `yaml:"from"`
+	To      *int `yaml:"to"`
 	// Extends, with kind: param and no symbol, picks the methods of the
 	// subtypes of this type (a type ID, as the extractor writes it) that take a
 	// parameter of the type WithParamType, and declares them entry points: what
@@ -758,7 +774,24 @@ func (s *Source) checkFields(what string) error {
 			bad = append(bad, name)
 		}
 	}
+	if s.Kind != KindCallbackParam {
+		has("operand", s.Operand != nil)
+		has("from", s.From != nil)
+		has("to", s.To != nil)
+	}
 	switch s.Kind {
+	case KindCallbackParam:
+		has("type", s.Type != "")
+		has("field", s.Field != "")
+		has("params", len(s.Params) > 0)
+		has("recv", s.Recv)
+		has("out", len(s.Out) > 0)
+		has("marker", s.Marker != "")
+		has("extends", s.Extends != "")
+		has("with_param_type", s.WithParamType != "")
+		has("exclude_methods", len(s.ExcludeMethods) > 0)
+		has("marker_call", s.MarkerCall != "")
+		has("match", s.Match != "")
 	case KindCallResult:
 		has("type", s.Type != "")
 		has("field", s.Field != "")
@@ -798,6 +831,9 @@ func (s *Source) checkFields(what string) error {
 
 func (rs *RuleSet) validate() error {
 	if err := rs.validateBodyReplaced(); err != nil {
+		return err
+	}
+	if err := rs.validateVerified(); err != nil {
 		return err
 	}
 	checkMatch := func(m, what string) error {
@@ -840,6 +876,22 @@ func (rs *RuleSet) validate() error {
 				if o < 0 {
 					return fmt.Errorf("%s: out: %d is not an argument position", what, o)
 				}
+			}
+		case KindCallbackParam:
+			if s.Symbol == "" {
+				return fmt.Errorf("%s: symbol is required for kind %s", what, s.Kind)
+			}
+			if err := checkSymbol(s.Symbol, what); err != nil {
+				return err
+			}
+			if s.Operand == nil || *s.Operand < 0 {
+				return fmt.Errorf("%s: operand is required for kind %s, a position of the call (0 is the first, the receiver is not counted)", what, s.Kind)
+			}
+			if s.From != nil && *s.From < 0 {
+				return fmt.Errorf("%s: from: %d is not a parameter position", what, *s.From)
+			}
+			if s.To != nil && (*s.To < 0 || (s.From != nil && *s.To < *s.From)) {
+				return fmt.Errorf("%s: to: %d is not a parameter position at or after from", what, *s.To)
 			}
 		case KindParamType:
 			if s.Type == "" {
@@ -1156,6 +1208,13 @@ func (r *Rules) Validate() error {
 	return err
 }
 
+// CallbackParam is a callback_param source with what the set it is in says of how its operand is counted.
+type CallbackParam struct {
+	Source
+	// SelfFirst: the set counts the receiver of the call as arg0, so Operand counts it too.
+	SelfFirst bool
+}
+
 // Rules is the merged, indexed view of several rule sets.
 type Rules struct {
 	Sets []*RuleSet
@@ -1163,10 +1222,12 @@ type Rules struct {
 	CallSources map[string][]Source // by symbol
 	ParamTypes  []Source            // param_type sources
 	ParamFuncs  map[string][]Source // param sources, by function symbol
-	Fields      map[string][]Source // by "pkg.Type.Field"
-	Sinks       map[string][]Sink
-	Sanitizers  map[string][]Sanitizer
-	Propagators map[string][]Propagator
+	// CallbackParams are the callback_param sources, by the symbol of the call that is given the function.
+	CallbackParams map[string][]CallbackParam
+	Fields         map[string][]Source // by "pkg.Type.Field"
+	Sinks          map[string][]Sink
+	Sanitizers     map[string][]Sanitizer
+	Propagators    map[string][]Propagator
 	// Calls are the symbols that have a row of calls in a propagator.
 	Calls map[string]bool
 	// ReadImpls are the symbols of the propagators of a set with read_impls.
@@ -1188,6 +1249,8 @@ type Rules struct {
 
 	// Declared are the packages whose body the models replace, sorted (see BodyReplaced).
 	Declared []Declaration
+	// Verified are the records of verified_versions of all the sets, by package.
+	Verified []Verified
 	declared *declaredSet
 }
 
@@ -1212,17 +1275,18 @@ func WithoutOrigin(origin string, sets ...*RuleSet) *Rules {
 // symbol accumulate.
 func Merge(sets ...*RuleSet) *Rules {
 	r := &Rules{
-		Sets:        sets,
-		CallSources: map[string][]Source{},
-		Fields:      map[string][]Source{},
-		ParamFuncs:  map[string][]Source{},
-		Sinks:       map[string][]Sink{},
-		Sanitizers:  map[string][]Sanitizer{},
-		Propagators: map[string][]Propagator{},
-		Calls:       map[string]bool{},
-		ReadImpls:   map[string]bool{},
-		SelfFirst:   map[string]bool{},
-		ConfigReads: map[string]bool{},
+		Sets:           sets,
+		CallSources:    map[string][]Source{},
+		Fields:         map[string][]Source{},
+		ParamFuncs:     map[string][]Source{},
+		CallbackParams: map[string][]CallbackParam{},
+		Sinks:          map[string][]Sink{},
+		Sanitizers:     map[string][]Sanitizer{},
+		Propagators:    map[string][]Propagator{},
+		Calls:          map[string]bool{},
+		ReadImpls:      map[string]bool{},
+		SelfFirst:      map[string]bool{},
+		ConfigReads:    map[string]bool{},
 
 		GlobalsHoldNothing: map[string]bool{},
 	}
@@ -1248,6 +1312,8 @@ func Merge(sets ...*RuleSet) *Rules {
 				r.ParamFuncs[s.Symbol] = append(r.ParamFuncs[s.Symbol], s)
 			case KindField:
 				r.Fields[s.Field] = append(r.Fields[s.Field], s)
+			case KindCallbackParam:
+				r.CallbackParams[s.Symbol] = append(r.CallbackParams[s.Symbol], CallbackParam{Source: s, SelfFirst: rs.SelfFirst})
 			}
 		}
 		for _, s := range rs.Sinks {
@@ -1275,6 +1341,7 @@ func Merge(sets ...*RuleSet) *Rules {
 	for sym := range everything {
 		delete(r.GlobalsHoldNothing, sym)
 	}
+	r.Verified = mergeVerified(sets)
 	r.Declared = mergeDeclarations(sets)
 	r.declared = indexDeclared(r.Declared)
 	return r
