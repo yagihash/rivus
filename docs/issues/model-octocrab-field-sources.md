@@ -6,7 +6,9 @@ issue、コメント、プルリクエストの本文や題(`Issue.body`、`Issu
 
 ## 原因
 
-`rust-octocrab.yaml` に、これらのフィールドを source にする行がない。Rust の組み込みモデルに、フィールドの source の前例がなく(`param_type` と `call_result` だけ)、Dart の `dart-github.yaml` と同じ形の穴(`docs/issues/model-github-field-source-in-dependency.md`)で、`kind: field` の行を足すと zoo の骨組みの中の行が source の場所に出る恐れがある。Rust で行を足せるかは、調べていない。
+仕組みの制限。フィールドの source は `kind: field` の行で書くが、サイトの列挙(`internal/sites/enumerate.go` の `fieldKeyOf`)は、`<型>.<フィールド>` のキーを、`.` を含む型名(`pkg.Type`。Go と Dart の形)からしか作らない。Rust の型は `octocrab::models::issues::Issue` のように `::` で書かれ、`.` がないので、キーが空になり、行は一致しない。実際に `kind: field`、`field: octocrab::models::issues::Issue.body` の行を足して zoo を実行したが、セル `issue-body` の結果は変わらなかった(行は戻した)。Rust の組み込みモデルの source は `param_type` と `call_result` だけ。extractor は、フィールドの読み出しを `field_load`(フィールド名だけ)にする。
+
+直す方向: `fieldKeyOf` が Rust の型名(`::` 区切り)を扱うようにする。そのとき、Dart の `dart-github` と同じ、骨組みの中の行(コンストラクタなど)が source の場所に出る問題が、Rust でも起きるかを確認する。
 
 ## 再現するセル
 

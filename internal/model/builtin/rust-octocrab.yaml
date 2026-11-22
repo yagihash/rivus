@@ -20,9 +20,14 @@
 #   tells "from an external service" from the default `user_input`, so it has the default (docs/ISSUES.md, #159).
 #   Candidates that are not sources, and why:
 #   - `Content.content` (the same text, still base64), `Issue.body`, `Comment.body`, `PullRequest.body`, the titles, and the
-#     message of a commit: they are plain public fields, and a field source is not made here (the built-in Rust models have none;
-#     it is the same gap as dart-github.yaml). The cell `issue-body` and docs/issues/model-octocrab-field-sources.md keep it as
-#     a known miss. The text of a file is a source once it is read through `decoded_content`.
+#     message of a commit: by the criterion of ADR-108 (3: the text of an issue, a comment, a commit message, a file) they ARE
+#     values to make sources, as `go-github` does. They are not in the rows because the rule format cannot carry them in Rust
+#     (a limit of the tool, not a decision): a field source is a `kind: field` row, and `fieldKeyOf` (internal/sites/enumerate.go)
+#     makes the key `<type>.<field>` only for a type name that has a `.` ("pkg.Type", Go and Dart); the type of a Rust value is
+#     written with `::` (`octocrab::models::issues::Issue`), so the key is empty and the row is never hit (tried with
+#     `Issue.body`: the cell `issue-body` did not change). No built-in Rust set has a field source (only `param_type` and
+#     `call_result`). The cell `issue-body` and docs/issues/model-octocrab-field-sources.md keep it as a known miss. The text of a
+#     file is a source once it is read through `decoded_content`.
 #   - the raw body of `GetRawContentBuilder::send` (the text of the file as an `http::Response`): it is the same kind of value,
 #     but the zoo cannot stand for it (the response is built from the `http` and `http-body` types, and `send` is async), so a row
 #     would not be run by a cell. Not made a source for now.
