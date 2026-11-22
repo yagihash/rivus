@@ -108,3 +108,10 @@ file_content]`, so that the label a sanitizer adds does not make it fire.
   directory, `unread` set, its message starts with `dependency_not_allowed`: rivus reports it in `summary.unread` and on
   the standard error). `--allow-deps-under DIR` (repeatable; `rivus analyze -allow-deps-under DIR`) reads the packages
   under `DIR` too: a monorepo whose packages are siblings of the one that is analysed needs it.
+- `--body-replaced package:<name>` (repeatable; `rivus analyze` passes the packages that the rule files and
+  `-body-replaced` declare, docs/MODELING.md 4a): the models stand for the package, so its files are not resolved or
+  lowered and the stream has no function of it. The library is still built (the declarations and the types of the
+  package are what the code of the project is resolved against), and the stream has what the code asks of it: the class
+  hierarchy (`type`), the candidates of dynamic calls, and the constructors that have something to do, made from the
+  elements, not from the files. A `body_not_read` record (`unit`, `functions`) says how many functions the package
+  declares. A name that is no package of the dependencies does nothing.
