@@ -18,6 +18,10 @@ GitHub のクライアントなど、サービスのクライアントの代表�
 - (b) extractor が `field_load` に型名を足す。(a) で型名は取れているので、要らない見込み。
 - (c) アクセサの `call_result` で代える。`octocrab` のフィールドは公開フィールドで、アクセサがないので、書けない。
 
+## 実装と、Rust の骨組みの `Dep`
+
+実装: `dcf3fb2`(ブランチ `feat/rust-field-source-key`)。Rust の骨組みは、既定では `Dep` ではない(cargo が、ワークスペースの根の下の path の依存をメンバーにするため)。`[workspace]` の `exclude = ["skel"]` で `Dep` になる。
+
 ## 目標
 
 3 言語で、`kind: field` の source が同じ形で確認できる状態。いまの状態: Go は、骨組みが `Dep` として読まれるので、想定外の流れが出ない(確認済み)。Dart は、骨組みがプロジェクトの側として読まれるので、想定外の流れが出る(`model-github-field-source-in-dependency`)。Rust は、(a) のあと、骨組み(path の依存)が `Dep` として読まれるかを確認する。出たら Dart と同じ課題になる。
