@@ -15,7 +15,11 @@ const (
 	// model says what they do). What the body does with the value, a call to an implementation of the
 	// project's own (a wrapper that hands the value on), is not followed. It is rivus' limit, and it is
 	// recorded beside dynamic_dispatch, which cannot tell this from a call with no unread candidate.
-	KindDependencyBodyUnread   = "dependency_body_unread"
+	KindDependencyBodyUnread = "dependency_body_unread"
+	// KindProjectBodyUnread: a call of a function of the project whose body the extractor could not read (fn_skipped:
+	// the compiler's interface stopped on it). Not a library call that has no model: the code is the project's, and what
+	// it does with the value is not in the analysis (rivus' limit; the extractor says why in the detail).
+	KindProjectBodyUnread      = "project_body_unread"
 	KindUnresolvedCallee       = "unresolved_callee"
 	KindContainerImprecision   = "container_element_imprecision"
 	KindDepthLimit             = "depth_limit"

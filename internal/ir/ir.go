@@ -110,6 +110,19 @@ type BodyNotRead struct {
 	Functions int    `json:"functions"`
 }
 
+// FnSkipped is a function whose body the extractor could not read: the compiler's interface stopped on it (Rust:
+// rustc_public panics on an async closure), so the function is not in the program, and the extractor read the others
+// (docs/DESIGN-rust-extractor-panic.md). A call of it is followed as a call to a function with no body.
+type FnSkipped struct {
+	// Unit is the unit of the function (Rust: the crate).
+	Unit string `json:"unit"`
+	// Func is the ID of the function, as a call of it names it.
+	Func string `json:"func"`
+	// Dependency says that the function is code of a dependency, not of the project.
+	Dependency bool   `json:"dependency,omitempty"`
+	Why        string `json:"why"`
+}
+
 // TestsSkipped says what an extractor did not read because the build of the project does not ship it
 // (ADR-062): the test files, the tests, examples and benchmarks of a crate, the dependencies that are
 // declared for development only. The same shape for every language.
@@ -612,6 +625,8 @@ type Program struct {
 	// (docs/DESIGN-package-models.md 2): per unit, how many functions it has that were left without a body. Empty
 	// when the extractor was told no such package.
 	BodiesNotRead []BodyNotRead `json:"bodies_not_read,omitempty"`
+	// FnSkipped are the functions whose body the extractor could not read, one by one (see FnSkipped).
+	FnSkipped []FnSkipped `json:"fn_skipped,omitempty"`
 
 	// Files are the source files named by the positions, set by the reader
 	// before the functions of dependencies that nothing reaches are dropped

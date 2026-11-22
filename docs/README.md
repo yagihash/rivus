@@ -60,7 +60,7 @@
 | [MODEL-RUNBOOK.md](MODEL-RUNBOOK.md) | 手順書 | 1 パッケージ分の組み込みモデルを作る手順(モデル作成のセッション向け) |
 | [MODEL-QUEUE.md](MODEL-QUEUE.md) | 一覧(決定) | 組み込みモデルを作る順番(3 言語をまたぐ 1 本)と、公開の指標、カバー済みの表 |
 | [DESIGN-field-sinks.md](DESIGN-field-sinks.md) | 一部実装 | 構造体のフィールドを sink にする(`parts`) |
-| [DESIGN-rust-extractor-panic.md](DESIGN-rust-extractor-panic.md) | 案 | Rust の extractor が、1 つの関数のパニック(async closure の未実装など)で止まらず、その関数だけ飛ばして続ける。飛ばしたことの見せ方(#160) |
+| [DESIGN-rust-extractor-panic.md](DESIGN-rust-extractor-panic.md) | 実装済み | Rust の extractor が、1 つの関数のパニック(async closure の未実装など)で止まらず、その関数だけ飛ばして続ける。飛ばしたことの見せ方(#160) |
 | [DESIGN-async-dispatch.md](DESIGN-async-dispatch.md) | 実装済み | Rust の `async` の中の `Fn::call` |
 | [DESIGN-generics-dispatch.md](DESIGN-generics-dispatch.md) | 一部実装 | Rust のジェネリクスと `Box<dyn Fn>` |
 | [DESIGN-memory.md](DESIGN-memory.md) | 一部実装 | メモリ(英語) |

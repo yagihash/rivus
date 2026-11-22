@@ -160,10 +160,12 @@ type Engine struct {
 	deadline time.Time
 	writers  map[*sg.Value][]string
 	// loadErrors are the problems the loading of the code had.
-	loadErrors []ir.LoadError
-	loadOnce   sync.Once         // indexLoadErrors runs once (buildFinding may run in several goroutines)
-	recovered  map[string]string // recoveredFiles
-	errFuncs   map[string]string // errorFunctions, made once
+	loadErrors  []ir.LoadError
+	skippedOnce sync.Once                // skippedBody indexes ir.FnSkipped once
+	skipped     map[string]*ir.FnSkipped // the functions whose body the extractor could not read, by ID
+	loadOnce    sync.Once                // indexLoadErrors runs once (buildFinding may run in several goroutines)
+	recovered   map[string]string        // recoveredFiles
+	errFuncs    map[string]string        // errorFunctions, made once
 	// callSites lists, for each function, the calls that may reach it.
 	callSites map[*sg.Func][]*sg.Instr
 	// heldNothing: for each package variable that holds nothing, the functions that wrote to it (ADR-056).
