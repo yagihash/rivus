@@ -745,3 +745,42 @@ func TestResolveFuncValuesRoundsLimit(t *testing.T) {
 		t.Errorf("notes: %d cut (want %d), %d supplemented (want %d)", cut, fs.RoundsCut, supplemented, fs.Supplemented)
 	}
 }
+
+// TestResolveFuncValuesBudgetKeepsTheTimeOfTheTaintAnalysis: the rounds may use only a part of -timeout (taint.FuncValuesBudget),
+// so that when they run out of it the taint analysis after them still has the rest and finishes: the findings are those of the
+// run with the flag off, and the run is not stopped by the limit. (Without this, a target that finishes with the flag off
+// would end with almost nothing with the flag on, because the rounds had taken the whole limit.)
+func TestResolveFuncValuesBudgetKeepsTheTimeOfTheTaintAnalysis(t *testing.T) {
+	defer func(v float64) { taint.FuncValuesBudget = v }(taint.FuncValuesBudget)
+	const limit = 10 * time.Minute
+	base := fvLoad(t, fvIR, fvRules)
+	opts := taint.DefaultOptions()
+	opts.Timeout = limit
+	want := taint.New(base.graph, base.l.texts, base.st, base.rules, opts).Run()
+	if want.Stats.RunTimeouts != 0 || want.Stats.Passes == 0 {
+		t.Fatalf("the run with the flag off: %d passes, %d run timeouts", want.Stats.Passes, want.Stats.RunTimeouts)
+	}
+	// 1e-12 of the limit: the first round does not start; 1e-7 of it (60 microseconds): the first round starts and the limit ends it
+	for _, share := range []float64{1e-12, 1e-7} {
+		taint.FuncValuesBudget = share
+		a := fvLoad(t, fvIR, fvRules)
+		begun := time.Now()
+		o := taint.DefaultOptions()
+		o.Timeout = limit
+		fs := taint.ResolveFuncValues(a.graph, a.l.texts, a.st, a.rules, o, a.l.loadErrors())
+		if !fs.TimedOut || fs.Supplemented != 0 {
+			t.Errorf("share %g: stats %+v, want the rounds stopped by their part and nothing supplemented", share, fs)
+		}
+		o.Timeout = limit - time.Since(begun) // what cmd/rivus gives the taint analysis
+		if o.Timeout < limit/2 {
+			t.Errorf("share %g: %v is left for the taint analysis, want at least half of the limit", share, o.Timeout)
+		}
+		got := taint.New(a.graph, a.l.texts, a.st, a.rules, o).Run()
+		if got.Stats.RunTimeouts != 0 || len(got.Findings) != len(want.Findings) || len(got.Uncertainties) != len(want.Uncertainties) ||
+			got.Stats.Passes != want.Stats.Passes || got.Stats.Reanalyses != want.Stats.Reanalyses {
+			t.Errorf("share %g: %d findings, %d notes, %d passes, %d reanalyses, %d run timeouts; the run with the flag off: %d, %d, %d, %d, 0",
+				share, len(got.Findings), len(got.Uncertainties), got.Stats.Passes, got.Stats.Reanalyses, got.Stats.RunTimeouts,
+				len(want.Findings), len(want.Uncertainties), want.Stats.Passes, want.Stats.Reanalyses)
+		}
+	}
+}

@@ -175,7 +175,8 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 			fvStats = taint.ResolveFuncValues(graph, l.texts, st, rules, opts, l.loadErrors())
 			phase("func-values")
 			if o.timeout > 0 {
-				// -timeout is the limit of the rounds and of the analysis after them together
+				// -timeout is the limit of the rounds and of the analysis after them together; the rounds use at most
+				// taint.FuncValuesBudget of it, so what is left here is at least the rest
 				opts.Timeout = max(o.timeout-time.Since(begun), time.Nanosecond)
 			}
 		}

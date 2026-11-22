@@ -216,6 +216,11 @@ func roundIncomplete(res *Result) bool {
 // limit is chosen from that.
 const FuncValueRounds = 4
 
+// FuncValuesBudget is the share of -timeout that all the rounds of ResolveFuncValues may use together; the taint analysis after
+// them gets the rest of the limit, at least 1 - FuncValuesBudget of it. A variable, so that a test can make the rounds run out
+// of their part while the limit of the run is long.
+var FuncValuesBudget = 0.5
+
 // ResolveFuncValues gives the calls of function values that have no candidate the functions that the analysis of the
 // function values carries to them, before the taint analysis (docs/DESIGN-callouts.md, 5.6). It writes into the graph:
 // only the calls that had no candidate are changed (Callee.ValueCands, Instr.CandidateFns).
@@ -247,15 +252,19 @@ func ResolveFuncValuesRounds(graph *sg.Program, texts ir.Texts, st *sites.Result
 	}
 	opts.FuncValues = true
 	opts.PassStats, opts.TraceElement, opts.SlowFunc = false, "", nil
-	// opts.Timeout is the limit of all the rounds together (and of the taint analysis after them: the caller gives it
-	// what is left): each round gets what is left of it, not the whole.
+	// opts.Timeout (-timeout) is the limit of the rounds and of the taint analysis after them together. The rounds only help
+	// the analysis (they add candidates), so they must not eat its time: they may use FuncValuesBudget of it, and each round
+	// gets what is left of that part, not the whole. What the caller then gives the taint analysis is at least the rest of the
+	// limit: with the flag on, a target that finishes with the flag off still finishes. A round that the part ends is not used
+	// (TimedOut, as when the limit of the run ends it). Without -timeout (0) nothing is limited.
 	total, begun := opts.Timeout, time.Now()
+	budget := time.Duration(float64(total) * FuncValuesBudget)
 	have := make([][]string, len(zero))
 	limited := make([]bool, len(zero))
 	grew := make([]bool, len(zero))
 	for round := 0; round < rounds; round++ {
 		if total > 0 {
-			opts.Timeout = total - time.Since(begun)
+			opts.Timeout = budget - time.Since(begun)
 			if opts.Timeout <= 0 {
 				out.TimedOut = true
 				break
