@@ -748,7 +748,7 @@ rivus models coverage ./...
 関数値の呼び出し（`call` の `value`）の候補を、**IR の上で 1 か所で決める**。サイトの列挙（ルールが、変数が持つ関数を名指せる。ADR-045）と、解析のグラフが、同じ候補を見るため（`sites` と `sg` が `valuecalls.Resolve` を呼ぶ）。
 
 - **候補の出所:** Go は、extractor の VTA の結果。ほかの言語は、`valuecalls` が、値に流れ込む関数を、コピー、φ、引数（呼び出し元が渡すもの）を通して探す。メモリは追わない（フィールドやリストに入れた関数は見つからず、呼び出しは未解決のまま）。
-- **限界:** 候補が 8 を超えたとき（`most`）、呼び出し元を 3 段より上までたどるとき（`maxDepth`）は、候補を付けない。理由は `Callee.ValueLimit`（`candidate_limit`、`caller_depth_limit`）に残り、不確実性の detail になる。
+- **限界:** 候補が 32 を超えたとき（`ir.ValueCandidateMost`）、呼び出し元を 3 段より上までたどるとき（`maxDepth`）は、候補を付けない。理由は `Callee.ValueLimit`（`candidate_limit`、`caller_depth_limit`）に残り、不確実性の detail になる。
 - **引数を通って届く関数:** どの候補が呼ばれるかは、呼び出し元に依る。候補は、通った引数の番号を持ち（`ValueCand.Param`）、呼び出し元が、渡した関数以外を通る流れを外す。
 - **絞り込み（`narrow.go`）:** Rust の `Fn::call` / `FnMut::call_mut` / `FnOnce::call_once` の候補は、extractor が「型の合うクロージャすべて」で作る。ここでは、**レシーバに流れ込む関数に絞る**（ADR-079、[DESIGN-capture.md](DESIGN-capture.md)）。
   - 規則は「**全部たどれたときだけ絞る**」。絞ると流れを失いうるが、作り出すことはない。たどれない物（規則のない命令、構造体の欄、呼び出しの結果、グローバル、トレイトオブジェクト、呼び出し元が全部は分からない引数、上限）に当たったら、候補を全部残す。
