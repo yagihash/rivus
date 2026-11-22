@@ -77,6 +77,18 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 ## 使い方
 
+### 入れ方
+
+**Homebrew(v0.0.1 から。まだ出ていません。下の行は、出てから動きます)**:
+
+```sh
+brew install yagihash/tap/rivus
+```
+
+Go のツールチェーンと、Dart SDK(`dart-sdk`)は、formula の依存で入ります。Dart のプロジェクトを読むときは、対象で `dart pub get` を済ませておいてください。Rust の固定した nightly と extractor(`rivus-rust`)も、formula がインストールの中で作ります(約 1.1 GB。インストールの間、static.rust-lang.org と crates.io に接続します。macOS の Xcode コマンドラインツールが要ります)。実行時に rustup や `~/.cargo` は使いません。設計は [docs/DESIGN-install.md](docs/DESIGN-install.md)。
+
+**ソースから(いまはこちら)**:
+
 ```sh
 go build -o rivus ./cmd/rivus          # Go 1.27 以降
 

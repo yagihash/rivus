@@ -21,3 +21,4 @@ extractor が自分の版(rivus と同じ出どころの版の文字列、また
 ## 経緯
 
 - 2026-11-22: Docker の基準を取り直すときに見つかった。相談役の判断で、課題に上げた。
+- 2026-11-22(追記 ii): Homebrew では、formula の wrapper が `RIVUS_RUST_TOOLCHAIN_DIR` と `RIVUS_RUST_EXTRACTOR` を keg の中に固定するので、版がずれる余地は小さい(DESIGN-install.md の 6a)。この課題が主に効くのは、`rivus setup rust` で作る人。
