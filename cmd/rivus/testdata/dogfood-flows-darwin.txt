@@ -75,5 +75,7 @@ cmd/rivus.runResolve -> internal/graphdb.hashFile [os.Open]  # the same kind of 
 cmd/rivus.runResolve -> internal/report.Load [os.ReadFile]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
 cmd/rivus.runResolve -> internal/report.ReadBookmarks [os.ReadFile]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
 cmd/rivus.runResolve -> internal/sandbox.Run [os/exec.Command]  # the project, the extractor and the paths that the flags name are what the sandbox runs and prepares (the run of a build under the sandbox: docs/DESIGN-macos-sandbox.md)
+cmd/rivus.runSites -> (*cmd/rivus.analyzeOpts).extractRaw [os/exec.Command]  # the project, the extractor and the paths that the flags name are what the sandbox runs and prepares (the run of a build under the sandbox: docs/DESIGN-macos-sandbox.md)
 cmd/rivus.runSites -> cmd/rivus.readIR [os.Open]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
 cmd/rivus.runSites -> internal/frontend/gossa.countTestFiles [os.ReadDir]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
+cmd/rivus.runSites -> internal/sandbox.Run [os/exec.Command]  # the project, the extractor and the paths that the flags name are what the sandbox runs and prepares (the run of a build under the sandbox: docs/DESIGN-macos-sandbox.md)

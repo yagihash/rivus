@@ -92,11 +92,11 @@ func (o *analyzeOpts) registerLanguages(fs *flag.FlagSet) {
 	fs.StringVar(&o.rustExtractor, "rust-extractor", "", "command of the Rust extractor (default: $RIVUS_RUST_EXTRACTOR, then rivus-rust)")
 	fs.BoolVar(&o.unsafeHostExec, "unsafe-host-exec", false, "run the Rust extractor on this machine, with your rights: the build scripts and proc macros of the project run here. Only for code you trust (default: under the sandbox of macOS; on another system nothing is run without this flag; docs/rust-isolation.md; also RIVUS_UNSAFE_HOST_EXEC=1)")
 	fs.DurationVar(&o.isolationTimeout, "isolation-timeout", 30*time.Minute, "stop a stage of the Rust extraction (fetch, extract) after this long")
-	fs.BoolVar(&o.noFetch, "no-fetch", false, "do not fetch the dependencies of the Rust project (use what an earlier run put in the volume)")
+	fs.BoolVar(&o.noFetch, "no-fetch", false, "do not fetch the dependencies of the Rust project (use what an earlier run fetched)")
 	fs.Var(&o.isolationEnv, "isolation-env", "NAME=VALUE for the build of the Rust project (repeatable). The value is written here; nothing is taken from your environment (a build script that needs a setting that it would fetch otherwise, like LOCAL_ASSETS_PATH)")
 	fs.Var(&o.isolationRead, "isolation-read", "PATH: a directory or file of this machine that the build of the Rust project may read besides the project and its dependencies (repeatable; not your home directory)")
 	fs.Int64Var(&o.isolationMaxOut, "isolation-max-output", 4<<30, "the most bytes the Rust extractor may write (the stream of the IR)")
-	fs.Var(&o.allowFetchHosts, "allow-fetch-host", "HOST: let the fetch stage of the Rust project (in the container, with a network) get from this host, which Cargo.lock names (git dependencies on any host, other registries; by default only crates.io is allowed). The repository can send the fetch on to other places (its submodules, redirects); that is not prevented until the network of the fetch stage is narrowed (repeatable)")
+	fs.Var(&o.allowFetchHosts, "allow-fetch-host", "HOST: let the fetch stage of the Rust project (under the sandbox, with a network) get from this host, which Cargo.lock names (git dependencies on any host, other registries; by default only crates.io is allowed). The repository can send the fetch on to other places (its submodules, redirects); that is not prevented until the network of the fetch stage is narrowed (repeatable)")
 	usual(fs, "lang", "yes", "dart-extractor", "rust-extractor", "unsafe-host-exec", "isolation-env", "isolation-read")
 	diagnostic(fs, "isolation-timeout", "no-fetch", "isolation-max-output", "allow-fetch-host")
 }
