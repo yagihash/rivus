@@ -1,5 +1,22 @@
 # Changelog
 
+## [v0.0.7](https://github.com/yagihash/rivus/compare/v0.0.6...v0.0.7) - 2026-11-22
+
+### Features
+- feat: -pass-stats で、finding の注記が集中するシンボルの上位と、動的な呼び出しの候補の数の分布を出す by @yagihash in https://github.com/yagihash/rivus/pull/156
+- feat(model): package:http の Client の組み込みモデル(dart-http.yaml)と、委譲のクリーク全体をモデルで切る基準(ADR-098) by @yagihash in https://github.com/yagihash/rivus/pull/160
+- feat(model): Google Cloud の Dart のクライアントの組み込みモデル(dart-gcp.yaml: Storage、Pub/Sub、Datastore、BigQuery の sink) by @yagihash in https://github.com/yagihash/rivus/pull/162
+- feat(model): 名前つき引数を指す sink(named:)と、1 つのシンボルの複数カテゴリの sink(課題 #139、#140) by @yagihash in https://github.com/yagihash/rivus/pull/169
+- feat: summary.dependency_sites で「依存の中の source と sink は探していない」ことを言う(ADR-099)。言い回しの規則の追加 by @yagihash in https://github.com/yagihash/rivus/pull/165
+- feat: finding に categories(同じ位置を読む行の全部のカテゴリ)を足す。flows / sources の named を課題 #145 にする by @yagihash in https://github.com/yagihash/rivus/pull/176
+- chore: モデルの PR が並んで出ても conflict しない置き方(marks.d、dead-allow の分割、cases.dart の生成、課題の model-*)と、ゲートの @ref の確認 by @yagihash in https://github.com/yagihash/rivus/pull/178
+- feat: パッケージ単位の宣言(body_replaced_packages)。モデルが代わりをするパッケージは、解析の前に本体を落とす(段階 2、ADR-100) by @yagihash in https://github.com/yagihash/rivus/pull/179
+### Bug Fixes
+- fix: origin が builtin でないモデルの pure と、結果に届かない flows が流れを消した場所を、suppressions に記録する by @yagihash in https://github.com/yagihash/rivus/pull/161
+- fix: models coverage のテンプレートと組み込みの行で、複数の戻り値の関数に to: results を使う(to: result は最初の戻り値だけ) by @yagihash in https://github.com/yagihash/rivus/pull/163
+- fix: models coverage のテンプレートで、インターフェース、slice、map のレシーバへの書き込みの行も書く by @yagihash in https://github.com/yagihash/rivus/pull/164
+- fix(ci): zoo-loosened を merge-base との差分で見て、新しいセルの @sink(none) / @miss / @fp の行の追加は承認の行を求めない by @yagihash in https://github.com/yagihash/rivus/pull/167
+
 ## [v0.0.6](https://github.com/yagihash/rivus/compare/v0.0.5...v0.0.6) - 2026-11-22
 
 ### Features
