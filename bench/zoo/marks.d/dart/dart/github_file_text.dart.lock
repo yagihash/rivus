@@ -1,0 +1,2 @@
+dart	dart/github_file_text.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	dart/github_file_text.dart	sink-none	@sink(none) @nosink(dart-github-file-text-decoy)	Future<void> decoy() async { @decoy
