@@ -350,7 +350,7 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `target` | 解析したコードのリビジョン(git の作業ツリーのとき) |
 | `load_errors` | 読めなかったもの(あるときだけ) |
 | `project_rules` | 対象の `.rivus/rules/` から読んだファイルと、その中身の数(あるときだけ)。`sanitizers`、`pure_models`、`drop_all_sanitizers` が 0 でなければ、対象が finding を消せます |
-| `suppressions` | LLM 由来のモデルが汚染を消した場所(あるときだけ) |
+| `suppressions` | モデルが汚染を消した場所(あるときだけ)。`origin: llm` の sanitizer、`builtin` 以外の `pure` と、結果に届かない `flows` |
 | `sites` | サイトの一覧(`-sites` のときだけ) |
 
 ### finding

@@ -358,6 +358,121 @@ func TestLLMModelSuppressesAndIsRecorded(t *testing.T) {
 	}
 }
 
+// runCut runs the rules and the main of a workspace that has one call of a model that cuts a flow, with and
+// without the models decided by an LLM.
+func runCut(t *testing.T, libExtra, rules, main string) (rep, det report.Report) {
+	t.Helper()
+	w := newWorkspace(t)
+	w.write("lib/lib.go", wsLib+libExtra)
+	w.write("rules.yaml", wsRules+rules)
+	w.write("main/main.go", main)
+	if err := json.Unmarshal(w.run("analyze", "-rules", "rules.yaml", "./main"), &rep); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(w.run("analyze", "-rules", "rules.yaml", "-deterministic-only", "./main"), &det); err != nil {
+		t.Fatal(err)
+	}
+	return rep, det
+}
+
+const wsCutMain = `package main
+
+import "example.com/tmp/lib"
+
+func F() {
+	a := lib.Source()
+	lib.Sink(lib.Cut(a, "x"))
+}
+`
+
+func checkCut(t *testing.T, rep, det report.Report) {
+	t.Helper()
+	if len(rep.Findings) != 0 {
+		t.Fatalf("the model cuts the flow, so there is no finding: %d", len(rep.Findings))
+	}
+	if len(rep.Suppressions) != 1 {
+		t.Fatalf("the cut must be recorded: %+v", rep.Suppressions)
+	}
+	sp := rep.Suppressions[0]
+	if sp.Model.Origin != "llm" || sp.Model.Symbol != "example.com/tmp/lib.Cut" || sp.Model.Rationale == "" ||
+		sp.Labels[0] != "user_input" || len(sp.Origins) != 1 || !strings.Contains(sp.Snippet, "lib.Cut") {
+		t.Errorf("suppression = %+v", sp)
+	}
+	if len(det.Findings) != 1 || len(det.Suppressions) != 0 || det.IgnoredModels != 1 {
+		t.Errorf("deterministic run: findings=%d suppressions=%d ignored=%d", len(det.Findings), len(det.Suppressions), det.IgnoredModels)
+	}
+}
+
+func TestLLMPureModelSuppressionIsRecorded(t *testing.T) {
+	rep, det := runCut(t, "\nfunc Cut(s, t string) string { return s }\n", `
+propagators:
+  - symbol: example.com/tmp/lib.Cut
+    pure: true
+    origin: llm
+    decided_at: "2026-11-20"
+    rationale: "Cut returns a constant"
+    model_version: test-model
+`, wsCutMain)
+	checkCut(t, rep, det)
+}
+
+func TestLLMFlowsModelSuppressionIsRecorded(t *testing.T) {
+	rep, det := runCut(t, "\nfunc Cut(s, t string) string { return s + t }\n", `
+propagators:
+  - symbol: example.com/tmp/lib.Cut
+    flows: [{from: arg1, to: result}]
+    origin: llm
+    decided_at: "2026-11-20"
+    rationale: "Cut returns its second argument"
+    model_version: test-model
+`, wsCutMain)
+	checkCut(t, rep, det)
+}
+
+func TestLLMModelThatLetsTheOperandThroughRecordsNoCut(t *testing.T) {
+	// a model that lets the operand through records nothing
+	rep, _ := runCut(t, "\nfunc Cut(s, t string) string { return s }\n", `
+propagators:
+  - symbol: example.com/tmp/lib.Cut
+    flows: [{from: arg0, to: result}]
+    origin: llm
+    decided_at: "2026-11-20"
+    rationale: "Cut returns its first argument"
+    model_version: test-model
+`, wsCutMain)
+	if len(rep.Suppressions) != 0 || len(rep.Findings) != 1 || !rep.Findings[0].LLMInfluenced {
+		t.Errorf("suppressions=%d findings=%d", len(rep.Suppressions), len(rep.Findings))
+	}
+}
+
+func TestFindingIsInfluencedByModelThatCutAnotherWay(t *testing.T) {
+	rep, _ := runCut(t, "\nfunc Cut(s, t string) string { return s }\n", `
+propagators:
+  - symbol: example.com/tmp/lib.Cut
+    pure: true
+    origin: llm
+    decided_at: "2026-11-20"
+    rationale: "Cut returns a constant"
+    model_version: test-model
+`, `package main
+
+import "example.com/tmp/lib"
+
+func F() {
+	a := lib.Source()
+	lib.Sink(lib.Cut(a, "x"))
+	lib.Sink(a)
+}
+`)
+	if len(rep.Suppressions) != 1 || len(rep.Findings) != 1 {
+		t.Fatalf("suppressions=%d findings=%d", len(rep.Suppressions), len(rep.Findings))
+	}
+	f := rep.Findings[0]
+	if !f.LLMInfluenced {
+		t.Error("the finding stands, but the model cut the other way from the same source in the same function")
+	}
+}
+
 func TestFindingNamesTheModelsOnItsPath(t *testing.T) {
 	w := newWorkspace(t)
 	w.write("lib/lib.go", wsLib+"\nfunc Wrap(s string) string { return s }\n")
