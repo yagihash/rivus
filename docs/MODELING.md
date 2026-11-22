@@ -307,7 +307,27 @@ positional ones **by name**, and a call that leaves one out holds nil there, so 
 
 ## 4a. Cutting a dependency with a model (not reading its body)
 
-A model that stands in for the body of a dependency (so that the body is not read) is allowed when the body does not exist, when reading it does not converge, when the library calls the user's code (`calls:`), or when reading it costs the analysis a great deal (ADR-092). The last one only for a package that meets all of these: (1) the cost is measured and written down with the target it was measured on (a rule of thumb: the dependency is 90% of the time, or gigabytes); (2) a check compares the result with the body read and the result with the model, on a fixture that uses the API: the set of flows and the **edges at the border** (which function of your code a call into the dependency calls back) have to be the same, and the model may only be the side that has more, with a note; (3) every API that calls a function it is given or holds has a `calls:` row (a form that the format cannot write is a problem of the format, and the call site says so, not silence). A function of a cut package without a row is read as the unmodelled call it is (its arguments flow to its result, with `unmodeled_library_call`). The packages that were cut are listed in the output. As of today there is no way to cut one package (it is all dependencies or none: `-no-deps`) and no comparing check yet.
+### What a model does and does not skip today
+
+A row with a sanitizer or a propagator makes `HasModel` true for the symbol (`internal/model/model.go`). At a call to that symbol the model is applied and the summary of the body is not used (`internal/taint/calls.go`). That is all it skips:
+
+- The summary of the body is still computed: the function is in the IR and is analysed like any other. Nothing about the model makes the analysis skip it.
+- A row that is only a source or only a sink is not a model: `HasModel` is false and the body is used.
+- A function of the same package without a row is read as before. A package is not cut because one function of it has a model.
+- Sites (sources and sinks) are listed only in the functions of the project, never inside a dependency (ADR-099; `summary.dependency_sites` says so whenever a body of a dependency was read). A dangerous operation that the library does inside itself is found only when the call into the library has a sink row. So a model is needed for detection as well as for cost.
+
+### When a flow model may stand in for a body
+
+A model that stands in for the body of a dependency (so that the body is not read) is allowed when the body does not exist, when reading it does not converge, when the library calls the user's code (`calls:`), or when reading it costs the analysis a great deal (ADR-092). The last one has two criteria, and a package or a method has to meet one of them.
+
+1. **A whole package** (ADR-092): all of these: (a) the cost is measured and written down with the target it was measured on (a rule of thumb: the dependency is 90% of the time, or gigabytes); (b) a check compares the result with the body read and the result with the model, on a fixture that uses the API: the set of flows and the **edges at the border** (which function of your code a call into the dependency calls back) have to be the same, and the model may only be the side that has more, with a note; (c) every API that calls a function it is given or holds has a `calls:` row (a form that the format cannot write is a problem of the format, and the call site says so, not silence).
+2. **One method of an interface with many implementations** (ADR-098): when the implementations delegate to the same method (a clique of delegation, such as `Client.send` of `package:http`), the row of that method is a `flows` model and the bodies of the implementations in dependencies are not read. Two conditions: (a) on public targets the set of findings is the same as with the bodies read, and the targets used are written in the design document; (b) the bodies that were not read are marked with a note of kind `dependency_body_unread`, not silently. The model is only for that method. A thin convenience method that calls it (`get`, `post`) has no model, only a sink if it needs one, and its body is read (cutting it would remove the edge from your code to the call of `send`). The implementations in your own code are read as before. The limit: a function passed to a constructor and called later (`RetryClient(when:)`) cannot be written with `calls:` yet, so only the note appears.
+
+A function of a cut package without a row is read as the unmodelled call it is (its arguments flow to its result, with `unmodeled_library_call`).
+
+### Cutting by package: not available yet
+
+As of today there is no way to cut one package: it is all dependencies or none (`-no-deps`), and a model does not stop the extractor from reading the package. A declaration per package, and not reading the packages that models stand in for from the loading stage on, are **under design** (`docs/DESIGN-package-models.md`, on another branch). They are not decided; do not rely on them. The comparing check of criterion 1(b) does not exist as a tool yet either, and the output does not list the methods that were cut (only the notes on the paths).
 
 ## 4b. Categories
 
