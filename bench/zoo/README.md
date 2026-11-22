@@ -118,7 +118,7 @@ The rest is as for Go (steps 3 and 4 above). Things that are Dart's:
 * A case may be `async` (the harness awaits it). An Isolate cannot be a case yet: its code runs in another isolate and the coverage does not see it.
 * `In` (a source that is a parameter type, `rules.yaml` `param_type`) is a class with a final field `value`; the handler under test takes it: `void handle(In req) { // @source(tag)`.
 * Flutter itself is not in the zoo: `build`, `onPressed` and the state store are written as small skeletons in the cell (`state/provider-store`, `dart/tearoff-instance` `vuln3`).
-* A pubspec.lock is committed for `cells` and `exec`; CI resolves both with `dart pub get --enforce-lockfile`.
+* No pubspec.lock is committed for `cells` and `exec` (`.gitignore`: two branches that add a cell would conflict on it); CI and `scripts/dev-setup.sh` run `dart pub get`, and the tests run it when `.dart_tool/package_config.json` is missing.
 
 Stage 2 has 33 cells: **25 common forms** (the first 14 below, and `dyn/sink-behind-own-interface`, then 10 that came with the closure and global-variable cells of all three languages, see "Closure and global cells" at the end), which have the name of the Go cell (`call/direct`, `call/direct-in`, `call/depth3`, `call/multiret`,
 `clos/inline`, `clos/returned`, `clos/to-own-helper`, `cont/slice` (a list), `cont/map-key-vs-value`, `state/global-direct`,

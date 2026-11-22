@@ -283,12 +283,16 @@ jobs:
         with:
           sdk: 3.13.6
       - name: Resolve the packages of the extractor and the samples
-        # every one of them has a pubspec.lock: the versions are the locked ones, or the step fails
+        # every one of them has a pubspec.lock (the versions are the locked ones, or the step fails), but the two of the Dart zoo
+        # (bench/zoo-dart/cells, bench/zoo-dart/exec): those are not committed, and `dart pub get` makes them
         run: |
-          for d in extractor/dart extractor/dart/test/sample extractor/dart/test/monorepo/app extractor/dart/test/monorepo/shared extractor/dart/test/versions/a extractor/dart/test/versions/b bench/dart-curated bench/zoo-dart/cells bench/zoo-dart/exec; do
+          for d in extractor/dart extractor/dart/test/sample extractor/dart/test/monorepo/app extractor/dart/test/monorepo/shared extractor/dart/test/versions/a extractor/dart/test/versions/b bench/dart-curated; do
             if [ -f "$d/pubspec.yaml" ]; then
               (cd "$d" && dart pub get --enforce-lockfile)
             fi
+          done
+          for d in bench/zoo-dart/cells bench/zoo-dart/exec; do
+            (cd "$d" && dart pub get)
           done
       - name: Analyze the extractor
         if: matrix.shard == 0
