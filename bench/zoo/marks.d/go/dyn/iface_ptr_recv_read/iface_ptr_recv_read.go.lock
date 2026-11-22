@@ -1,0 +1,2 @@
+go	dyn/iface_ptr_recv_read/iface_ptr_recv_read.go	sink-none	@sink(none)	func fixed() { @fixed
+go	dyn/iface_ptr_recv_read/iface_ptr_recv_read.go	sink-none	@sink(none) @nosink(dyn-iface-ptr-recv-read-decoy)	func decoy() { @decoy

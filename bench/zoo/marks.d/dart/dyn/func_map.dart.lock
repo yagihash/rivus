@@ -1,0 +1,4 @@
+dart	dyn/func_map.dart	miss	@source(dyn-func-map-decoy) @miss(unresolved_callee) @ref(FUNC-VALUE-MEMORY,PARITY)	void decoy() { @decoy
+dart	dyn/func_map.dart	miss	@source(dyn-func-map-vuln) @miss(unresolved_callee) @ref(FUNC-VALUE-MEMORY,PARITY)	void vuln() { @vuln
+dart	dyn/func_map.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	dyn/func_map.dart	sink-none	@sink(none) @nosink(dyn-func-map-decoy)	void decoy() { @decoy

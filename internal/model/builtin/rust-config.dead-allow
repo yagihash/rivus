@@ -1,0 +1,6 @@
+# The rows of rust-config.yaml that no call in the zoo or the curated targets hits (TestBuiltinRowsAreHitByTheZoo). "symbol | reason"; see bench/parity/README.md.
+std::env::current_dir | debt | the standard library: no cell of the zoo calls it yet
+std::env::current_exe | debt | the standard library: no cell of the zoo calls it yet
+std::env::var | debt | the standard library: no cell of the zoo calls it yet
+std::env::var_os | debt | the standard library: no cell of the zoo calls it yet
+std::env::vars | debt | the standard library: no cell of the zoo calls it yet

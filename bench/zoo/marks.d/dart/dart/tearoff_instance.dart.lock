@@ -1,0 +1,4 @@
+dart	dart/tearoff_instance.dart	miss	@source(dart-tearoff-instance-vuln3) @miss(unmodeled_library_call) @ref(R-14)	void vuln3() { @vuln
+dart	dart/tearoff_instance.dart	na	@na(go: the method value is dyn/method-value; this cell adds Stream.listen and onPressed, which are the common Flutter forms)	-
+dart	dart/tearoff_instance.dart	sink-none	@sink(none)	void vuln3() { @vuln
+dart	dart/tearoff_instance.dart	sink-none	@sink(none) @nosink(dart-tearoff-instance-decoy)	void fixed() { @fixed

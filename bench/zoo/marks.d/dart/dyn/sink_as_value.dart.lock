@@ -1,0 +1,2 @@
+dart	dyn/sink_as_value.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	dyn/sink_as_value.dart	sink-none	@sink(none) @nosink(dyn-sink-as-value-decoy)	void decoy() { @decoy

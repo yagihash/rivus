@@ -1,0 +1,2 @@
+go	dyn/method_value_iface/method_value_iface.go	sink-none	@sink(none)	func fixed() { @fixed
+go	dyn/method_value_iface/method_value_iface.go	sink-none	@sink(none) @nosink(dyn-method-value-iface-decoy)	func decoy() { @decoy

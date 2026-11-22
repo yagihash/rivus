@@ -1,0 +1,3 @@
+dart	dart/closure_to_sdk.dart	na	@na(go: a Go closure is handed to a goroutine or a library the same way, F/clos has the forms that Go has)	-
+dart	dart/closure_to_sdk.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	dart/closure_to_sdk.dart	sink-none	@sink(none) @nosink(dart-closure-to-sdk-decoy)	Future<void> decoy() async { @decoy

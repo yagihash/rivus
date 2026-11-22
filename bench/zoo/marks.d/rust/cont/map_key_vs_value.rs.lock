@@ -1,0 +1,3 @@
+rust	cont/map_key_vs_value.rs	fp	@sink(none) @fp @nosink(cont-map-key-vs-value-decoy) @fp @ref(KEYED-MAP,PARITY)	fn decoy() { @decoy
+rust	cont/map_key_vs_value.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	cont/map_key_vs_value.rs	sink-none	@sink(none) @fp @nosink(cont-map-key-vs-value-decoy) @fp @ref(KEYED-MAP,PARITY)	fn decoy() { @decoy

@@ -1,0 +1,3 @@
+dart	dart/googleapis_pubsub_subscription_name.dart	miss	@source(dart-googleapis-pubsub-subscription-name-vuln) @miss(unmodeled_library_call) @ref(#140)	Future<void> vuln() async { @vuln
+dart	dart/googleapis_pubsub_subscription_name.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	dart/googleapis_pubsub_subscription_name.dart	sink-none	@sink(none) @nosink(dart-googleapis-pubsub-subscription-name-decoy)	Future<void> decoy() async { @decoy

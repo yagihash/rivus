@@ -1,0 +1,2 @@
+go	call/direct/direct.go	sink-none	@sink(none)	func fixed() { @fixed
+go	call/direct/direct.go	sink-none	@sink(none) @nosink(call-direct-decoy)	func decoy() { @decoy

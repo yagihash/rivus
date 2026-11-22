@@ -1,0 +1,2 @@
+dart	dyn/method_value_iface.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	dyn/method_value_iface.dart	sink-none	@sink(none) @nosink(dyn-method-value-iface-decoy)	void decoy() { @decoy

@@ -1,0 +1,2 @@
+rust	clos/inline.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	clos/inline.rs	sink-none	@sink(none) @nosink(clos-inline-decoy)	fn decoy() { @decoy

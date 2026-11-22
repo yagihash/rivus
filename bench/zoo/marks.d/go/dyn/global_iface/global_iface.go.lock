@@ -1,0 +1,2 @@
+go	dyn/global_iface/global_iface.go	sink-none	@sink(none)	func vuln() { @vuln
+go	dyn/global_iface/global_iface.go	sink-none	@sink(none) @nosink(dyn-global-iface-decoy)	func fixed() { @fixed

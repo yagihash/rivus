@@ -1,0 +1,4 @@
+go	state/global_chain/global_chain.go	miss	@source(state-global-chain-vuln13) @miss(recursion_approximation) @ref(R-44)	func vuln13() { @vuln
+go	state/global_chain/global_chain.go	miss	@source(state-global-chain-vuln30) @miss(recursion_approximation) @ref(R-44)	func vuln30() { @vuln
+go	state/global_chain/global_chain.go	sink-none	@sink(none)	func fixed() { @fixed
+go	state/global_chain/global_chain.go	sink-none	@sink(none) @nosink(state-global-chain-decoy)	func decoy() { @decoy

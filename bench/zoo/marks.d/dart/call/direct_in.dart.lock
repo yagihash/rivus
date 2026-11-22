@@ -1,0 +1,2 @@
+dart	call/direct_in.dart	sink-none	@sink(none)	void vuln() { @vuln
+dart	call/direct_in.dart	sink-none	@sink(none) @nosink(call-direct-in-decoy)	void fixed() { @fixed

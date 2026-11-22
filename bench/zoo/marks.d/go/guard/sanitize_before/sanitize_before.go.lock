@@ -1,0 +1,3 @@
+go	guard/sanitize_before/sanitize_before.go	sink-none	@sink(none)	func fixed() { @fixed
+go	guard/sanitize_before/sanitize_before.go	sink-none	@sink(none)	func vuln() { @vuln
+go	guard/sanitize_before/sanitize_before.go	sink-none	@sink(none) @nosink(guard-sanitize-before-decoy)	func decoy() { @decoy

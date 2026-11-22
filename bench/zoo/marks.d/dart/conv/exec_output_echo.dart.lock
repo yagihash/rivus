@@ -1,0 +1,4 @@
+dart	conv/exec_output_echo.dart	noisy	@source(conv-exec-output-echo-decoy) @noisy(1) @ref(PROCESS-ARGS)	void decoy() { @decoy
+dart	conv/exec_output_echo.dart	noisy	@source(conv-exec-output-echo-vuln) @noisy(1) @ref(PROCESS-ARGS)	void vuln() { @vuln
+dart	conv/exec_output_echo.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	conv/exec_output_echo.dart	sink-none	@sink(none) @nosink(conv-exec-output-echo-decoy)	void decoy() { @decoy

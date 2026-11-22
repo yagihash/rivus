@@ -1,0 +1,2 @@
+go	conv/unsafe_string/unsafe_string.go	sink-none	@sink(none)	func fixed() { @fixed
+go	conv/unsafe_string/unsafe_string.go	sink-none	@sink(none) @nosink(conv-unsafe-string-decoy)	func decoy() { @decoy

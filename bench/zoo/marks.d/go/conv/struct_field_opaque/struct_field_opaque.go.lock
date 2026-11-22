@@ -1,0 +1,2 @@
+go	conv/struct_field_opaque/struct_field_opaque.go	sink-none	@sink(none)	func fixed() { @fixed
+go	conv/struct_field_opaque/struct_field_opaque.go	sink-none	@sink(none) @nosink(conv-struct-field-opaque-decoy)	func decoy() { @decoy

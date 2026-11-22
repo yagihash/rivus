@@ -1,0 +1,2 @@
+go	dyn/iface_assert_ptr_recv/iface_assert_ptr_recv.go	sink-none	@sink(none)	func fixed() { @fixed
+go	dyn/iface_assert_ptr_recv/iface_assert_ptr_recv.go	sink-none	@sink(none) @nosink(dyn-iface-assert-ptr-recv-decoy)	func decoy() { @decoy

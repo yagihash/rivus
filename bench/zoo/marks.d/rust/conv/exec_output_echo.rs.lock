@@ -1,0 +1,2 @@
+rust	conv/exec_output_echo.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	conv/exec_output_echo.rs	sink-none	@sink(none) @nosink(conv-exec-output-echo-decoy)	fn decoy() { @decoy

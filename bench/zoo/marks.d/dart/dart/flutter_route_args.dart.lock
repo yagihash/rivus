@@ -1,0 +1,3 @@
+dart	dart/flutter_route_args.dart	na	@na(go: no such form; the arguments that a caller gave to a route)	-
+dart	dart/flutter_route_args.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	dart/flutter_route_args.dart	sink-none	@sink(none) @nosink(dart-flutter-route-args-decoy)	void decoy() { @decoy

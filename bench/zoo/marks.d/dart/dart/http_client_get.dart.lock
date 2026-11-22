@@ -1,0 +1,2 @@
+dart	dart/http_client_get.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	dart/http_client_get.dart	sink-none	@sink(none) @nosink(dart-http-client-get-decoy)	Future<void> decoy() async { @decoy

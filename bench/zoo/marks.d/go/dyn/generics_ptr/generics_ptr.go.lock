@@ -1,0 +1,2 @@
+go	dyn/generics_ptr/generics_ptr.go	sink-none	@sink(none)	func fixed() { @fixed
+go	dyn/generics_ptr/generics_ptr.go	sink-none	@sink(none) @nosink(dyn-generics-ptr-decoy)	func decoy() { @decoy

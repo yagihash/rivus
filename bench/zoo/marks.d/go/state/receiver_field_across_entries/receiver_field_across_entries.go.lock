@@ -1,0 +1,2 @@
+go	state/receiver_field_across_entries/receiver_field_across_entries.go	sink-none	@sink(none)	func vuln() { @vuln
+go	state/receiver_field_across_entries/receiver_field_across_entries.go	sink-none	@sink(none) @nosink(state-receiver-field-across-entries-decoy)	func fixed() { @fixed

@@ -1,0 +1,2 @@
+dart	state/handler_then_reader.dart	sink-none	@sink(none)	void vuln() { @vuln
+dart	state/handler_then_reader.dart	sink-none	@sink(none) @nosink(state-handler-then-reader-decoy)	void fixed() { @fixed

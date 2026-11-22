@@ -1,0 +1,4 @@
+rust	rust/cfg_feature.rs	miss	@source(rust-cfg-feature-decoy) @miss(silent) @ref(R-17)	fn decoy() { @decoy
+rust	rust/cfg_feature.rs	miss	@source(rust-cfg-feature-vuln) @miss(silent) @ref(R-17)	fn vuln() { @vuln
+rust	rust/cfg_feature.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	rust/cfg_feature.rs	sink-none	@sink(none) @nosink(rust-cfg-feature-decoy)	fn decoy() { @decoy

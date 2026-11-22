@@ -1,0 +1,24 @@
+# The rows of go-net-http.yaml that no call in the zoo or the curated targets hits (TestBuiltinRowsAreHitByTheZoo). "symbol | reason"; see bench/parity/README.md.
+(*net/http.Client).Get | debt | the standard library: no cell of the zoo calls it yet
+(*net/http.Client).Head | debt | the standard library: no cell of the zoo calls it yet
+(*net/http.Client).Post | debt | the standard library: no cell of the zoo calls it yet
+(*net/http.Request).BasicAuth | debt | the standard library: no cell of the zoo calls it yet
+(*net/http.Request).Cookie | debt | the standard library: no cell of the zoo calls it yet
+(*net/http.Request).Cookies | debt | the standard library: no cell of the zoo calls it yet
+(*net/http.Request).ParseForm | debt | the standard library: no cell of the zoo calls it yet
+(*net/http.Request).PathValue | debt | the standard library: no cell of the zoo calls it yet
+(*net/http.Request).PostFormValue | debt | the standard library: no cell of the zoo calls it yet
+(net/http.Header).Add | debt | the standard library: no cell of the zoo calls it yet
+(net/http.Header).Get | debt | the standard library: no cell of the zoo calls it yet
+(net/http.Header).Set | debt | the standard library: no cell of the zoo calls it yet
+(net/http.Header).Values | debt | the standard library: no cell of the zoo calls it yet
+(net/http.ResponseWriter).Header | debt | the standard library: no cell of the zoo calls it yet
+(net/http.ResponseWriter).Write | debt | the standard library: no cell of the zoo calls it yet
+fmt.Fprintf | debt | the standard library: no cell of the zoo calls it yet
+net/http.Get | debt | the standard library: no cell of the zoo calls it yet
+net/http.Head | debt | the standard library: no cell of the zoo calls it yet
+net/http.MaxBytesReader | debt | the standard library: no cell of the zoo calls it yet
+net/http.NewRequest | debt | the standard library: no cell of the zoo calls it yet
+net/http.Post | debt | the standard library: no cell of the zoo calls it yet
+net/http.PostForm | debt | the standard library: no cell of the zoo calls it yet
+net/http.Redirect | debt | the standard library: no cell of the zoo calls it yet

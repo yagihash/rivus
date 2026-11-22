@@ -1,0 +1,4 @@
+rust	conv/buffer_writestring.rs	miss	@source(conv-buffer-writestring-decoy) @miss(unmodeled_library_call) @ref(CORE-K)	fn decoy() { @decoy
+rust	conv/buffer_writestring.rs	miss	@source(conv-buffer-writestring-vuln) @miss(unmodeled_library_call) @ref(CORE-K) @ref(PARITY)	fn vuln() { @vuln
+rust	conv/buffer_writestring.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	conv/buffer_writestring.rs	sink-none	@sink(none) @nosink(conv-buffer-writestring-decoy)	fn decoy() { @decoy

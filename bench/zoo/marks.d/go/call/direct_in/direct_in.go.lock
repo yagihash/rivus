@@ -1,0 +1,2 @@
+go	call/direct_in/direct_in.go	sink-none	@sink(none)	func vuln() { @vuln
+go	call/direct_in/direct_in.go	sink-none	@sink(none) @nosink(call-direct-in-decoy)	func fixed() { @fixed

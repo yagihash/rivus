@@ -1,0 +1,49 @@
+# The rows of rust-grpc.yaml that no call in the zoo or the curated targets hits (TestBuiltinRowsAreHitByTheZoo). "symbol | reason"; see bench/parity/README.md.
+tokio::fs::File::create | dependency | not the standard library: the zoo has no such dependency
+tokio::fs::File::open | dependency | not the standard library: the zoo has no such dependency
+tokio::fs::read | dependency | not the standard library: the zoo has no such dependency
+tokio::fs::read_to_string | dependency | not the standard library: the zoo has no such dependency
+tokio::fs::remove_dir_all | dependency | not the standard library: the zoo has no such dependency
+tokio::fs::remove_file | dependency | not the standard library: the zoo has no such dependency
+tokio::fs::write | dependency | not the standard library: the zoo has no such dependency
+tonic::Request::get_mut | dependency | not the standard library: the zoo has no such dependency
+tonic::Request::get_ref | dependency | not the standard library: the zoo has no such dependency
+tonic::Request::into_inner | dependency | not the standard library: the zoo has no such dependency
+tonic::Request::into_parts | dependency | not the standard library: the zoo has no such dependency
+tonic::Request::metadata | dependency | not the standard library: the zoo has no such dependency
+tonic::Request::metadata_mut | dependency | not the standard library: the zoo has no such dependency
+tonic::Request::remote_addr | dependency | not the standard library: the zoo has no such dependency
+tonic::Response::new | dependency | not the standard library: the zoo has no such dependency
+tonic::Streaming::into_inner | dependency | not the standard library: the zoo has no such dependency
+tonic::Streaming::message | dependency | not the standard library: the zoo has no such dependency
+tonic::Streaming::trailers | dependency | not the standard library: the zoo has no such dependency
+tonic::codec::decode::Streaming::into_inner | spelling | the definition path (or the older name) of an API whose other spelling has a row and is the one the extractor writes
+tonic::codec::decode::Streaming::message | spelling | the definition path (or the older name) of an API whose other spelling has a row and is the one the extractor writes
+tonic::codec::decode::Streaming::trailers | spelling | the definition path (or the older name) of an API whose other spelling has a row and is the one the extractor writes
+tonic::metadata::MetadataMap::as_ref | dependency | not the standard library: the zoo has no such dependency
+tonic::metadata::MetadataMap::get | dependency | not the standard library: the zoo has no such dependency
+tonic::metadata::MetadataMap::get_all | dependency | not the standard library: the zoo has no such dependency
+tonic::metadata::MetadataMap::get_bin | dependency | not the standard library: the zoo has no such dependency
+tonic::metadata::MetadataMap::into_headers | dependency | not the standard library: the zoo has no such dependency
+tonic::metadata::MetadataMap::iter | dependency | not the standard library: the zoo has no such dependency
+tonic::metadata::MetadataMap::values | dependency | not the standard library: the zoo has no such dependency
+tonic::metadata::MetadataValue::as_bytes | dependency | not the standard library: the zoo has no such dependency
+tonic::metadata::MetadataValue::to_bytes | dependency | not the standard library: the zoo has no such dependency
+tonic::metadata::MetadataValue::to_str | dependency | not the standard library: the zoo has no such dependency
+tonic::metadata::map::MetadataMap::get | spelling | the definition path (or the older name) of an API whose other spelling has a row and is the one the extractor writes
+tonic::metadata::map::MetadataMap::get_all | spelling | the definition path (or the older name) of an API whose other spelling has a row and is the one the extractor writes
+tonic::metadata::map::MetadataMap::get_bin | spelling | the definition path (or the older name) of an API whose other spelling has a row and is the one the extractor writes
+tonic::metadata::map::MetadataMap::into_headers | spelling | the definition path (or the older name) of an API whose other spelling has a row and is the one the extractor writes
+tonic::metadata::map::MetadataMap::iter | spelling | the definition path (or the older name) of an API whose other spelling has a row and is the one the extractor writes
+tonic::metadata::map::MetadataMap::values | spelling | the definition path (or the older name) of an API whose other spelling has a row and is the one the extractor writes
+tonic::metadata::value::MetadataValue::as_bytes | spelling | the definition path (or the older name) of an API whose other spelling has a row and is the one the extractor writes
+tonic::metadata::value::MetadataValue::to_bytes | spelling | the definition path (or the older name) of an API whose other spelling has a row and is the one the extractor writes
+tonic::metadata::value::MetadataValue::to_str | spelling | the definition path (or the older name) of an API whose other spelling has a row and is the one the extractor writes
+tonic::request::Request::get_mut | spelling | the definition path (or the older name) of an API whose other spelling has a row and is the one the extractor writes
+tonic::request::Request::get_ref | spelling | the definition path (or the older name) of an API whose other spelling has a row and is the one the extractor writes
+tonic::request::Request::into_inner | spelling | the definition path (or the older name) of an API whose other spelling has a row and is the one the extractor writes
+tonic::request::Request::into_parts | spelling | the definition path (or the older name) of an API whose other spelling has a row and is the one the extractor writes
+tonic::request::Request::metadata | spelling | the definition path (or the older name) of an API whose other spelling has a row and is the one the extractor writes
+tonic::request::Request::metadata_mut | spelling | the definition path (or the older name) of an API whose other spelling has a row and is the one the extractor writes
+tonic::request::Request::remote_addr | spelling | the definition path (or the older name) of an API whose other spelling has a row and is the one the extractor writes
+tonic::response::Response::new | spelling | the definition path (or the older name) of an API whose other spelling has a row and is the one the extractor writes

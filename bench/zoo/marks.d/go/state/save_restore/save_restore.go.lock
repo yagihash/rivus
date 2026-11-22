@@ -1,0 +1,2 @@
+go	state/save_restore/save_restore.go	sink-none	@sink(none)	func vuln() { @vuln
+go	state/save_restore/save_restore.go	sink-none	@sink(none) @nosink(state-save-restore-decoy)	func fixed() { @fixed

@@ -1,0 +1,2 @@
+dart	clos/returned.dart	sink-none	@sink(none)	void vuln() { @vuln
+dart	clos/returned.dart	sink-none	@sink(none) @nosink(clos-returned-decoy)	void fixed() { @fixed

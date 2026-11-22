@@ -1,0 +1,3 @@
+go	cont/map_key_vs_value/map_key_vs_value.go	fp	@sink(none) @fp @nosink(cont-map-key-vs-value-decoy) @fp @ref(KEYED-MAP)	func decoy() { @decoy
+go	cont/map_key_vs_value/map_key_vs_value.go	sink-none	@sink(none)	func fixed() { @fixed
+go	cont/map_key_vs_value/map_key_vs_value.go	sink-none	@sink(none) @fp @nosink(cont-map-key-vs-value-decoy) @fp @ref(KEYED-MAP)	func decoy() { @decoy

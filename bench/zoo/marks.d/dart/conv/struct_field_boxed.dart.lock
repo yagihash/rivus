@@ -1,0 +1,2 @@
+dart	conv/struct_field_boxed.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	conv/struct_field_boxed.dart	sink-none	@sink(none) @nosink(conv-struct-field-boxed-decoy)	void decoy() { @decoy

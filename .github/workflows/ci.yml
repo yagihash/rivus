@@ -283,13 +283,20 @@ jobs:
         with:
           sdk: 3.13.6
       - name: Resolve the packages of the extractor and the samples
-        # every one of them has a pubspec.lock: the versions are the locked ones, or the step fails
+        # every one of them has a pubspec.lock (the versions are the locked ones, or the step fails), but the two of the Dart zoo
+        # (bench/zoo-dart/cells, bench/zoo-dart/exec): those are not committed, and `dart pub get` makes them
         run: |
-          for d in extractor/dart extractor/dart/test/sample extractor/dart/test/monorepo/app extractor/dart/test/monorepo/shared extractor/dart/test/versions/a extractor/dart/test/versions/b bench/dart-curated bench/zoo-dart/cells bench/zoo-dart/exec; do
+          for d in extractor/dart extractor/dart/test/sample extractor/dart/test/monorepo/app extractor/dart/test/monorepo/shared extractor/dart/test/versions/a extractor/dart/test/versions/b bench/dart-curated; do
             if [ -f "$d/pubspec.yaml" ]; then
               (cd "$d" && dart pub get --enforce-lockfile)
             fi
           done
+          for d in bench/zoo-dart/cells bench/zoo-dart/exec; do
+            (cd "$d" && dart pub get)
+          done
+      - name: Write the generated files of the Dart zoo
+        # exec/lib/cases.dart is not committed (it is made from the cells); the tests write it too, `dart analyze` needs it first
+        run: make zoo-dart-gen
       - name: Analyze the extractor
         if: matrix.shard == 0
         working-directory: extractor/dart
@@ -375,9 +382,9 @@ jobs:
         working-directory: bench/gcp
         run: go test -tags gcpexec -timeout 10m ./...
 
-  # A mark that loosens the truth of the zoo (a row added to a cell that bench/zoo/marks.lock already has, or a row of a new cell of
+  # A mark that loosens the truth of the zoo (a row added to a cell that bench/zoo/marks.d already has a file of, or a row of a new cell of
   # a kind other than @sink(none), @miss and @fp; against the merge base) needs a "Zoo-Loosened:" line in a commit message (the
-  # user's approval); a new @miss or @fp row needs an @ref(#N). TestZooMarksLock (in the shards of the test job) holds the file to the sources.
+  # user's approval); a new @miss or @fp row needs an @ref(#N) or @ref(model-<package>-<name>) whose file is in docs/issues. TestZooMarksLock (in the shards of the test job) holds the file to the sources.
   zoo-loosened:
     needs: changes
     if: needs.changes.outputs.code == 'true'

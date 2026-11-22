@@ -1,0 +1,6 @@
+rust	dyns/http_middleware_chain.rs	fp	@sink(none) @fp @nosink(dyn-http-middleware-chain-decoy) @fp @ref(DYN-IMPLS,PARITY)	fn fixed() { @fixed
+rust	dyns/http_middleware_chain.rs	fp	@sink(none) @fp @ref(DYN-IMPLS,PARITY)	fn vuln() { @vuln
+rust	dyns/http_middleware_chain.rs	noisy	@sink(dyn-http-middleware-chain-decoy) @noisy(1) @ref(DYN-IMPLS)	fn fixed() { @fixed
+rust	dyns/http_middleware_chain.rs	noisy	@sink(dyn-http-middleware-chain-vuln) @noisy(1) @ref(DYN-IMPLS)	-
+rust	dyns/http_middleware_chain.rs	sink-none	@sink(none) @fp @nosink(dyn-http-middleware-chain-decoy) @fp @ref(DYN-IMPLS,PARITY)	fn fixed() { @fixed
+rust	dyns/http_middleware_chain.rs	sink-none	@sink(none) @fp @ref(DYN-IMPLS,PARITY)	fn vuln() { @vuln

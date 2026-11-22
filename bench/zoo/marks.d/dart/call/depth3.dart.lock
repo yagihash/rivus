@@ -1,0 +1,2 @@
+dart	call/depth3.dart	sink-none	@sink(none)	void vuln() { @vuln
+dart	call/depth3.dart	sink-none	@sink(none) @nosink(call-depth3-decoy)	void fixed() { @fixed

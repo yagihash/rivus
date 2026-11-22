@@ -1,0 +1,2 @@
+go	cont/struct_whole_to_sink/struct_whole_to_sink.go	sink-none	@sink(none)	func fixed() { @fixed
+go	cont/struct_whole_to_sink/struct_whole_to_sink.go	sink-none	@sink(none) @nosink(cont-struct-whole-to-sink-decoy)	func decoy() { @decoy

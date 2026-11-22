@@ -1,0 +1,9 @@
+# The rows of dart-config.yaml that no call in the zoo or the curated targets hits (TestBuiltinRowsAreHitByTheZoo). "symbol | reason"; see bench/parity/README.md.
+dart:core#String.fromEnvironment | debt | the standard library: no cell of the zoo calls it yet
+dart:core#bool.fromEnvironment | debt | the standard library: no cell of the zoo calls it yet
+dart:core#int.fromEnvironment | debt | the standard library: no cell of the zoo calls it yet
+dart:io#Directory.current | debt | the standard library: no cell of the zoo calls it yet
+dart:io#File.readAsString | debt | the standard library: no cell of the zoo calls it yet
+dart:io#File.readAsStringSync | debt | the standard library: no cell of the zoo calls it yet
+dart:io#Platform.executable | debt | the standard library: no cell of the zoo calls it yet
+dart:io#Platform.script | debt | the standard library: no cell of the zoo calls it yet

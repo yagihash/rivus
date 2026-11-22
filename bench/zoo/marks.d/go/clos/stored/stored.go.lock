@@ -1,0 +1,2 @@
+go	clos/stored/stored.go	sink-none	@sink(none)	func fixed() { @fixed
+go	clos/stored/stored.go	sink-none	@sink(none) @nosink(clos-stored-decoy)	func decoy() { @decoy

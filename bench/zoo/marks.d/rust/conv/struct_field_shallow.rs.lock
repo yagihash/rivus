@@ -1,0 +1,2 @@
+rust	conv/struct_field_shallow.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	conv/struct_field_shallow.rs	sink-none	@sink(none) @nosink(conv-struct-field-shallow-decoy)	fn decoy() { @decoy

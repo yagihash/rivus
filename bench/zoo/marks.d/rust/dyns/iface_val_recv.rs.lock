@@ -1,0 +1,2 @@
+rust	dyns/iface_val_recv.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	dyns/iface_val_recv.rs	sink-none	@sink(none) @nosink(dyn-iface-val-recv-decoy)	fn decoy() { @decoy

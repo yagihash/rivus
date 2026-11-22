@@ -1,0 +1,4 @@
+rust	clos/partial_callers.rs	miss	@source(clos-partial-callers-decoy) @miss(unmodeled_library_call) @ref(PARTIAL-CALLERS,PARITY)	fn decoy() { @decoy
+rust	clos/partial_callers.rs	miss	@source(clos-partial-callers-vuln) @miss(unmodeled_library_call) @ref(PARTIAL-CALLERS,PARITY)	fn vuln() { @vuln
+rust	clos/partial_callers.rs	sink-none	@sink(none)	fn decoy() { @decoy
+rust	clos/partial_callers.rs	sink-none	@sink(none)	fn fixed() { @fixed

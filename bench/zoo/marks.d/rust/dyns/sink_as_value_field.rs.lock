@@ -1,0 +1,2 @@
+rust	dyns/sink_as_value_field.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	dyns/sink_as_value_field.rs	sink-none	@sink(none) @nosink(dyn-sink-as-value-field-decoy)	fn decoy() { @decoy

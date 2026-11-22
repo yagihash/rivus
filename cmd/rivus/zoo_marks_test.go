@@ -13,7 +13,9 @@ import (
 )
 
 // The marks that loosen the truth of the zoo (docs/ROADMAP.md, section 1): @miss, @fp, @noisy, @na, @todo, @manual
-// and @sink(none) of the three zoos are listed in bench/zoo/marks.lock, one row for a mark of a line:
+// and @sink(none) of the three zoos are listed in bench/zoo/marks.d, one file for a cell file
+// (bench/zoo/marks.d/<lang>/<path of the cell file>.lock: so that two pull requests that add cells do not touch the same file),
+// one row for a mark of a line:
 //
 //	<lang> TAB <file> TAB <kind> TAB <the annotations of the line> TAB <the header of the case the line is in>
 //
@@ -21,9 +23,9 @@ import (
 // @fixed / @decoy that comes before it, or "-", so that a mark that is moved to another case is a new row). TestZooMarksLock holds the file to the sources;
 // scripts/zoo-loosened-check.sh fails a PR whose rows (against the merge base) loosen the zoo without a "Zoo-Loosened:"
 // line in a commit message (a row added to a cell that the lock has, a row of a new cell of a kind other than @sink(none),
-// @miss and @fp), and a new @miss or @fp row that names no issue. A row that goes away (a mark that is fixed) needs nothing. To write the file again: ZOO_MARKS_UPDATE=1.
+// @miss and @fp), and a new @miss or @fp row that names no issue file. A row that goes away (a mark that is fixed) needs nothing. To write the files again: ZOO_MARKS_UPDATE=1.
 
-const zooMarksLockPath = "bench/zoo/marks.lock"
+const zooMarksDirPath = "bench/zoo/marks.d"
 
 var (
 	zooMarksRoleRe  = regexp.MustCompile(`@(vuln|fixed|decoy)\b`)
@@ -98,6 +100,17 @@ func zooMarksRows(bench string) ([]string, error) {
 	return rows, nil
 }
 
+// zooMarksFiles groups the rows by the file that holds them: "<lang>/<cell file>.lock" -> the text of the file.
+func zooMarksFiles(rows []string) map[string]string {
+	out := map[string]string{}
+	for _, r := range rows {
+		f := strings.SplitN(r, "\t", 3)
+		name := f[0] + "/" + f[1] + ".lock"
+		out[name] += r + "\n"
+	}
+	return out
+}
+
 func TestZooMarksLock(t *testing.T) {
 	root := filepath.Join(zooRoot(t), "..", "..")
 	rows, err := zooMarksRows(filepath.Join(root, "bench"))
@@ -107,21 +120,51 @@ func TestZooMarksLock(t *testing.T) {
 	if len(rows) == 0 {
 		t.Fatal("no marks found: the zoo directories moved?")
 	}
-	want := strings.Join(rows, "\n") + "\n"
-	path := filepath.Join(root, zooMarksLockPath)
+	want := zooMarksFiles(rows)
+	dir := filepath.Join(root, zooMarksDirPath)
 	if os.Getenv("ZOO_MARKS_UPDATE") == "1" {
-		if err := os.WriteFile(path, []byte(want), 0o644); err != nil {
+		if err := os.RemoveAll(dir); err != nil {
 			t.Fatal(err)
+		}
+		for name, text := range want {
+			p := filepath.Join(dir, filepath.FromSlash(name))
+			if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(p, []byte(text), 0o644); err != nil {
+				t.Fatal(err)
+			}
 		}
 		return
 	}
-	got, err := os.ReadFile(path)
+	got := map[string]string{}
+	err = filepath.Walk(dir, func(p string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return err
+		}
+		rel, _ := filepath.Rel(dir, p)
+		b, err := os.ReadFile(p)
+		got[filepath.ToSlash(rel)] = string(b)
+		return err
+	})
 	if err != nil {
-		t.Fatalf("%v (ZOO_MARKS_UPDATE=1 go test -run ZooMarksLock ./cmd/rivus writes it)", err)
+		t.Fatalf("%v (ZOO_MARKS_UPDATE=1 go test -run ZooMarksLock ./cmd/rivus writes the files)", err)
 	}
-	if string(got) != want {
-		t.Errorf("%s differs from the sources of the zoos:\n%s\n(a mark that loosens the truth needs a %q line in the commit message; ZOO_MARKS_UPDATE=1 writes the file)",
-			zooMarksLockPath, zooMarksDiff(strings.Split(strings.TrimSuffix(string(got), "\n"), "\n"), rows), "Zoo-Loosened:")
+	var fileRows []string
+	for name, text := range got {
+		if _, ok := want[name]; !ok {
+			t.Errorf("%s/%s is the lock of a cell that has no mark in the sources (or a stray file): ZOO_MARKS_UPDATE=1 writes the files again", zooMarksDirPath, name)
+		}
+		fileRows = append(fileRows, strings.Split(strings.TrimSuffix(text, "\n"), "\n")...)
+	}
+	if diff := zooMarksDiff(fileRows, rows); diff != "" {
+		t.Errorf("%s differs from the sources of the zoos:\n%s\n(a mark that loosens the truth needs a %q line in the commit message; ZOO_MARKS_UPDATE=1 writes the files)",
+			zooMarksDirPath, diff, "Zoo-Loosened:")
+	}
+	for name, text := range want {
+		if got[name] != text {
+			t.Errorf("%s/%s differs from the sources of the zoos (the rows are in the file of their cell, in the order of the sort): ZOO_MARKS_UPDATE=1 writes the files", zooMarksDirPath, name)
+		}
 	}
 }
 
@@ -202,15 +245,53 @@ func TestZooLoosenedCheck(t *testing.T) {
 		}
 		return strings.TrimSpace(string(out))
 	}
-	lock := filepath.Join(repo, "bench/zoo/marks.lock")
+	// write puts the rows (the text of the old single file) into the lock files of their cells, and stages everything
 	write := func(s string) {
-		if err := os.MkdirAll(filepath.Dir(lock), 0o755); err != nil {
+		dir := filepath.Join(repo, "bench/zoo/marks.d")
+		if err := os.RemoveAll(dir); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(lock, []byte(s), 0o644); err != nil {
-			t.Fatal(err)
+		files := map[string]string{}
+		for _, line := range strings.Split(strings.TrimSuffix(s, "\n"), "\n") {
+			if line == "" {
+				continue
+			}
+			f := strings.SplitN(line, "\t", 3)
+			files[f[0]+"/"+f[1]+".lock"] += line + "\n"
 		}
+		for name, text := range files {
+			p := filepath.Join(dir, filepath.FromSlash(name))
+			if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(p, []byte(text), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		run("add", "-A")
 	}
+	// issue puts a file in docs/issues, and stages it
+	issue := func(name, body string) {
+		p := filepath.Join(repo, "docs/issues", name)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		run("add", "-A")
+	}
+	rawfile := func(name, body string) {
+		p := filepath.Join(repo, name)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		run("add", "-A")
+	}
+	const template = "# the title\n\n## 何が見逃されるか\n\nx\n\n## 原因\n\nx\n\n## 再現するセル\n\nx\n"
 	check := func(base string) error {
 		cmd := exec.Command("bash", script, base, "HEAD")
 		cmd.Dir = repo
@@ -220,40 +301,90 @@ func TestZooLoosenedCheck(t *testing.T) {
 	}
 	const approved = "\n\nZoo-Loosened: test。ユーザーの承認: 2026-01-01"
 	run("init", "-q", "-b", "main")
-	write("go\ta.go\tmiss\t@miss @ref(#1)\n")
-	run("add", ".")
+	issue("1-a.md", "# a\n")
+	issue("2-b.md", "# b\n")
+	issue("model-p-x.md", template)
+	issue("model-p-nosection.md", "# the title\n\n## 何が見逃されるか\n\nx\n")
+	write("go\ta.go\tmiss\t@miss @ref(#1)\ngo\tz.go\tsink-none\t@sink(none)\n")
 	run("commit", "-q", "-m", "base")
 	first := run("rev-parse", "HEAD")
 	base := first
 	reset := func(to string) { run("reset", "-q", "--hard", to) }
 	// a new cell of @sink(none): nothing is needed
-	write("go\ta.go\tmiss\t@miss @ref(#1)\ngo\tb.go\tsink-none\t@sink(none)\n")
+	write("go\tz.go\tsink-none\t@sink(none)\ngo\ta.go\tmiss\t@miss @ref(#1)\ngo\tb.go\tsink-none\t@sink(none)\n")
 	run("commit", "-qam", "a new cell of @sink(none)")
 	if err := check(base); err != nil {
 		t.Errorf("the row of a new cell of @sink(none) failed: %v", err)
 	}
 	reset(base)
 	// a new cell of @fp that names an issue: nothing is needed. Without @ref it fails, with or without the line.
-	write("go\ta.go\tmiss\t@miss @ref(#1)\ngo\tb.go\tfp\t@fp @ref(#2)\n")
+	write("go\tz.go\tsink-none\t@sink(none)\ngo\ta.go\tmiss\t@miss @ref(#1)\ngo\tb.go\tfp\t@fp @ref(#2)\n")
 	run("commit", "-qam", "a new cell of @fp")
 	if err := check(base); err != nil {
 		t.Errorf("the row of a new cell of @fp with @ref failed: %v", err)
 	}
 	reset(base)
-	write("go\ta.go\tmiss\t@miss @ref(#1)\ngo\tb.go\tfp\t@fp\n")
+	write("go\tz.go\tsink-none\t@sink(none)\ngo\ta.go\tmiss\t@miss @ref(#1)\ngo\tb.go\tfp\t@fp\n")
 	run("commit", "-qam", "a new cell of @fp without the issue"+approved)
 	if check(base) == nil {
 		t.Error("a new @fp row without @ref passed")
 	}
 	reset(base)
-	write("go\ta.go\tmiss\t@miss @ref(#1)\ngo\tb.go\tmiss\t@miss\n")
+	write("go\tz.go\tsink-none\t@sink(none)\ngo\ta.go\tmiss\t@miss @ref(#1)\ngo\tb.go\tmiss\t@miss\n")
 	run("commit", "-qam", "a new cell of @miss without the issue")
 	if check(base) == nil {
 		t.Error("a new @miss row without @ref passed")
 	}
 	reset(base)
+	// the issue of a new row: a name (model-<package>-<name>) with its file and the sections passes; no file, a file without
+	// the sections, and a number with no file fail (a number is stricter than before: the file must be there)
+	write("go\ta.go\tmiss\t@miss @ref(#1)\ngo\tz.go\tsink-none\t@sink(none)\ngo\tb.go\tmiss\t@miss @ref(model-p-x)\n")
+	run("commit", "-qam", "a new @miss with the name of an issue")
+	if err := check(base); err != nil {
+		t.Errorf("a new @miss with @ref(model-p-x) and its file failed: %v", err)
+	}
+	reset(base)
+	write("go\ta.go\tmiss\t@miss @ref(#1)\ngo\tz.go\tsink-none\t@sink(none)\ngo\tb.go\tfp\t@fp @ref(model-p-nofile)\n")
+	run("commit", "-qam", "a name with no file")
+	if check(base) == nil {
+		t.Error("a new @fp with the name of an issue that has no file passed")
+	}
+	reset(base)
+	write("go\ta.go\tmiss\t@miss @ref(#1)\ngo\tz.go\tsink-none\t@sink(none)\ngo\tb.go\tmiss\t@miss @ref(model-p-nosection)\n")
+	run("commit", "-qam", "a name whose file lacks the sections")
+	if check(base) == nil {
+		t.Error("a new @miss with a file that does not have the sections of the template passed")
+	}
+	reset(base)
+	write("go\ta.go\tmiss\t@miss @ref(#1)\ngo\tz.go\tsink-none\t@sink(none)\ngo\tb.go\tmiss\t@miss @ref(#999)\n")
+	run("commit", "-qam", "a number with no file")
+	if check(base) == nil {
+		t.Error("a new @miss with a number that has no file passed")
+	}
+	reset(base)
+	// a list of references: the issue and another name (PARITY) pass; the other name alone fails
+	write("go\ta.go\tmiss\t@miss @ref(#1)\ngo\tz.go\tsink-none\t@sink(none)\ngo\tb.go\tmiss\t@miss @ref(#2,PARITY)\n")
+	run("commit", "-qam", "a list of references")
+	if err := check(base); err != nil {
+		t.Errorf("@ref(#2,PARITY) failed: %v", err)
+	}
+	reset(base)
+	write("go\ta.go\tmiss\t@miss @ref(#1)\ngo\tz.go\tsink-none\t@sink(none)\ngo\tb.go\tmiss\t@miss @ref(PARITY)\n")
+	run("commit", "-qam", "a name that is not an issue")
+	if check(base) == nil {
+		t.Error("@ref(PARITY) alone passed")
+	}
+	reset(base)
+	// the rows that are there already (an issue that has no file now, an old name) are not checked again
+	run("rm", "-q", "docs/issues/1-a.md")
+	write("go\ta.go\tmiss\t@miss @ref(#1)\ngo\tz.go\tsink-none\t@sink(none)\n")
+	run("commit", "-qm", "the file of the issue of an old row goes away")
+	if err := check(base); err != nil {
+		t.Errorf("an old row was checked again: %v", err)
+	}
+	reset(base)
 	// a new cell of another kind (@noisy): fails without the line, passes with it
-	write("go\ta.go\tmiss\t@miss @ref(#1)\ngo\tb.go\tnoisy\t@noisy\n")
+	write("go\tz.go\tsink-none\t@sink(none)\ngo\ta.go\tmiss\t@miss @ref(#1)\ngo\tb.go\tnoisy\t@noisy\n")
 	run("commit", "-qam", "a new cell of @noisy")
 	if check(base) == nil {
 		t.Error("the row of a new cell of @noisy passed without Zoo-Loosened")
@@ -264,7 +395,7 @@ func TestZooLoosenedCheck(t *testing.T) {
 	}
 	reset(base)
 	// a row added to a cell that the lock already has (a mark added, or a mark changed): fails without the line
-	write("go\ta.go\tmiss\t@miss @ref(#1)\ngo\ta.go\tsink-none\t@sink(none)\n")
+	write("go\tz.go\tsink-none\t@sink(none)\ngo\ta.go\tmiss\t@miss @ref(#1)\ngo\ta.go\tsink-none\t@sink(none)\n")
 	run("commit", "-qam", "a mark added to an existing cell")
 	if check(base) == nil {
 		t.Error("a row added to an existing cell passed without Zoo-Loosened")
@@ -274,14 +405,14 @@ func TestZooLoosenedCheck(t *testing.T) {
 		t.Errorf("a row added to an existing cell with Zoo-Loosened failed: %v", err)
 	}
 	reset(base)
-	write("go\ta.go\tmiss\t@miss(depth_limit) @ref(#1)\n")
+	write("go\tz.go\tsink-none\t@sink(none)\ngo\ta.go\tmiss\t@miss(depth_limit) @ref(#1)\n")
 	run("commit", "-qam", "a mark of an existing cell changed")
 	if check(base) == nil {
 		t.Error("a mark of an existing cell that was changed passed without Zoo-Loosened")
 	}
 	reset(base)
 	// a wrong form of the line (no approval date) fails
-	write("go\ta.go\tmiss\t@miss @ref(#1)\ngo\ta.go\tsink-none\t@sink(none)\n")
+	write("go\tz.go\tsink-none\t@sink(none)\ngo\ta.go\tmiss\t@miss @ref(#1)\ngo\ta.go\tsink-none\t@sink(none)\n")
 	run("commit", "-qam", "add\n\nZoo-Loosened: no date")
 	if check(base) == nil {
 		t.Error("a Zoo-Loosened line without the approval date passed")
@@ -289,10 +420,10 @@ func TestZooLoosenedCheck(t *testing.T) {
 	reset(base)
 	// the rows that main brings in with a merge are not "added" (main checked them): passes with nothing
 	run("checkout", "-q", "-b", "feat")
-	write("go\ta.go\tmiss\t@miss @ref(#1)\ngo\tb.go\tsink-none\t@sink(none)\n")
+	write("go\tz.go\tsink-none\t@sink(none)\ngo\ta.go\tmiss\t@miss @ref(#1)\ngo\tb.go\tsink-none\t@sink(none)\n")
 	run("commit", "-qam", "a new cell on the branch")
 	run("checkout", "-q", "main")
-	write("go\ta.go\tmiss\t@miss @ref(#1)\ngo\tc.go\tnoisy\t@noisy\n")
+	write("go\tz.go\tsink-none\t@sink(none)\ngo\ta.go\tmiss\t@miss @ref(#1)\ngo\tc.go\tnoisy\t@noisy\n")
 	run("commit", "-qam", "main adds a @noisy row"+approved)
 	mainTip := run("rev-parse", "HEAD")
 	run("checkout", "-q", "feat")
@@ -304,7 +435,7 @@ func TestZooLoosenedCheck(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(repo, ".git", "MERGE_HEAD")); err != nil {
 		t.Fatalf("the merge of main did not start (the commit would not be a merge): %v", err)
 	}
-	write("go\ta.go\tmiss\t@miss @ref(#1)\ngo\tb.go\tsink-none\t@sink(none)\ngo\tc.go\tnoisy\t@noisy\n")
+	write("go\tz.go\tsink-none\t@sink(none)\ngo\ta.go\tmiss\t@miss @ref(#1)\ngo\tb.go\tsink-none\t@sink(none)\ngo\tc.go\tnoisy\t@noisy\n")
 	run("add", ".")
 	run("commit", "-qm", "merge main")
 	if err := check(mainTip); err != nil {
@@ -313,14 +444,46 @@ func TestZooLoosenedCheck(t *testing.T) {
 	run("checkout", "-q", "main")
 	reset(first)
 	// CI-1: delete the file in one commit and make it again with a new row in the next one: fails
-	write("go\ta.go\tmiss\t@miss @ref(#1)\n")
-	run("rm", "-q", "bench/zoo/marks.lock")
-	run("commit", "-qm", "delete the lock")
-	write("go\ta.go\tmiss\t@miss @ref(#1)\ngo\tb.go\tsink-none\t@sink(none)\n")
-	run("add", ".")
+	run("rm", "-q", "bench/zoo/marks.d/go/z.go.lock")
+	run("commit", "-qm", "delete the lock of a cell")
+	write("go\ta.go\tmiss\t@miss @ref(#1)\ngo\tz.go\tsink-none\t@sink(none)\tfunc f()\ngo\tz.go\tnoisy\t@noisy\n")
 	run("commit", "-qm", "make it again")
 	if check(base) == nil {
 		t.Error("delete and make again passed")
+	}
+	// the lock file of a cell that goes away (and stays away) needs nothing
+	reset(first)
+	run("rm", "-q", "bench/zoo/marks.d/go/z.go.lock")
+	run("commit", "-qm", "the marks of a cell are fixed")
+	if err := check(base); err != nil {
+		t.Errorf("the lock file of a cell that went away failed: %v", err)
+	}
+	// moving the lock of a cell to another cell (the rows say the old cell): fails
+	reset(first)
+	run("mv", "bench/zoo/marks.d/go/z.go.lock", "bench/zoo/marks.d/go/y.go.lock")
+	run("commit", "-qm", "move the lock file")
+	if check(base) == nil {
+		t.Error("a lock file with the rows of another cell passed")
+	}
+	// the cell file moved (the rows and the lock follow it): a new cell, as before the split: @noisy needs the line
+	reset(first)
+	write("go\ta.go\tmiss\t@miss @ref(#1)\ngo\ty.go\tsink-none\t@sink(none)\n")
+	run("commit", "-qm", "a cell moved")
+	if err := check(base); err != nil {
+		t.Errorf("a moved cell with @sink(none) is a new cell and needs nothing: %v", err)
+	}
+	// a stray file in marks.d and the single file of the old layout at the head: fail
+	reset(first)
+	rawfile("bench/zoo/marks.d/go/a.go.txt", "x\n")
+	run("commit", "-qm", "a stray file")
+	if check(base) == nil {
+		t.Error("a stray file in marks.d passed")
+	}
+	reset(first)
+	rawfile("bench/zoo/marks.lock", "go\ta.go\tmiss\t@miss @ref(#1)\n")
+	run("commit", "-qm", "the old file again")
+	if check(base) == nil {
+		t.Error("the single lock file at the head passed")
 	}
 	reset(first)
 	// a base that is not usable fails
@@ -328,7 +491,7 @@ func TestZooLoosenedCheck(t *testing.T) {
 		t.Error("an unusable base passed")
 	}
 	// a row is removed: passes with nothing
-	write("")
+	write("go\ta.go\tmiss\t@miss @ref(#1)\n")
 	run("commit", "-qam", "fix a mark")
 	if err := check(base); err != nil {
 		t.Errorf("a removed row failed: %v", err)
@@ -363,5 +526,22 @@ func TestZooLoosenedCheck(t *testing.T) {
 	run("commit", "-qam", "four columns")
 	if check(five) == nil {
 		t.Error("a column taken away passed")
+	}
+	// the split itself: the base has the single file of the old layout, the head the same rows in the lock files of the cells
+	reset(first)
+	run("rm", "-rq", "bench/zoo/marks.d")
+	rawfile("bench/zoo/marks.lock", "go\ta.go\tmiss\t@miss @ref(#1)\ngo\tz.go\tsink-none\t@sink(none)\n")
+	run("commit", "-qm", "the old layout")
+	oldLayout := run("rev-parse", "HEAD")
+	run("rm", "-q", "bench/zoo/marks.lock")
+	write("go\ta.go\tmiss\t@miss @ref(#1)\ngo\tz.go\tsink-none\t@sink(none)\n")
+	run("commit", "-qm", "split")
+	if err := check(oldLayout); err != nil {
+		t.Errorf("the split of the single file with the same rows failed: %v", err)
+	}
+	write("go\ta.go\tmiss\t@miss @ref(#1)\ngo\tz.go\tsink-none\t@sink(none)\ngo\tz.go\tnoisy\t@noisy\n")
+	run("commit", "-qm", "split and a row of an existing cell added")
+	if check(oldLayout) == nil {
+		t.Error("a row added to an existing cell in the commit that splits the file passed")
 	}
 }

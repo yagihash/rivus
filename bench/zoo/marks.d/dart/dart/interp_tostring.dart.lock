@@ -1,0 +1,4 @@
+dart	dart/interp_tostring.dart	fp	@sink(none) @fp @nosink(dart-interp-tostring-decoy) @fp @ref(R-16)	void decoy() { @decoy
+dart	dart/interp_tostring.dart	na	@na(go: no implicit String()	-
+dart	dart/interp_tostring.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	dart/interp_tostring.dart	sink-none	@sink(none) @fp @nosink(dart-interp-tostring-decoy) @fp @ref(R-16)	void decoy() { @decoy

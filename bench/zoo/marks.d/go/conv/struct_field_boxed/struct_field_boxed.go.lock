@@ -1,0 +1,2 @@
+go	conv/struct_field_boxed/struct_field_boxed.go	sink-none	@sink(none)	func fixed() { @fixed
+go	conv/struct_field_boxed/struct_field_boxed.go	sink-none	@sink(none) @nosink(conv-struct-field-boxed-decoy)	func decoy() { @decoy

@@ -1,0 +1,2 @@
+go	state/handler_then_reader/handler_then_reader.go	sink-none	@sink(none)	func vuln() { @vuln
+go	state/handler_then_reader/handler_then_reader.go	sink-none	@sink(none) @nosink(state-handler-then-reader-decoy)	func fixed() { @fixed

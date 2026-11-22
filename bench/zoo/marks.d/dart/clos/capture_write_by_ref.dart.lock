@@ -1,0 +1,3 @@
+dart	clos/capture_write_by_ref.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	clos/capture_write_by_ref.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	clos/capture_write_by_ref.dart	sink-none	@sink(none) @nosink(clos-capture-write-by-ref-decoy)	void decoy() { @decoy

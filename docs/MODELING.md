@@ -359,11 +359,11 @@ serde writes its private module with its version in it. **Read the name from the
 
 `TestBuiltinRowsAreHitByTheZoo` (`cmd/rivus`) holds every row of the built-in model that names a function to the IR of
 the zoo (`bench/zoo-*`) and the curated targets (`bench/*-curated`): a row has to be hit by a call (or, for an entry point,
-by a function) in it, or be in `bench/parity/dead-allow.txt` with its reason. **A new row is a failing test until a cell
+by a function) in it, or be in the `.dead-allow` file next to the model file of the row (`internal/model/builtin/<model file>.dead-allow`, one line `symbol | reason`; the language is the one of the file name) with its reason. **A new row is a failing test until a cell
 calls it**: add the call to a cell of the zoo, to a function of a curated target, or, for a package of the Dart team, to
 `bench/zoo-dart/pure` (`lib/observe.dart` calls the rows of package:path with a marker and `TestZooPathDart` holds the
 flows to the run; `lib/probe.dart` only has calls whose spelling is looked at). The IR of real projects is not used for
-this: a real project does not use every API, and a row it does not use is not wrong. The file `dead-allow.txt` is for what
+this: a real project does not use every API, and a row it does not use is not wrong. The `.dead-allow` file is for what
 a run cannot check (an API that needs a server, a device, a network, or a library the zoo has no dependency on); the lines
 marked `debt` are the rows of the standard library that no cell calls yet: they only go down, and none is added for a new
-row. The test fails on a line for a row that is hit now, and on one for a row that does not exist.
+row. The test fails on a line for a row that is hit now, on one for a row that does not exist, and on one that is in the file of another model file than the row's (so a pull request that adds a model file adds its `.dead-allow` file, and touches no shared list).

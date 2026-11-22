@@ -1,0 +1,3 @@
+# The rows of dart-grpc.yaml that no call in the zoo or the curated targets hits (TestBuiltinRowsAreHitByTheZoo). "symbol | reason"; see bench/parity/README.md.
+package:grpc/src/client/http2_channel.dart#ClientChannel.new | dependency | not the standard library: the zoo has no such dependency
+package:grpc/src/server/call.dart#ServiceCall.clientMetadata | dependency | not the standard library: the zoo has no such dependency

@@ -1,0 +1,3 @@
+rust	clos/relay.rs	fp	@sink(none) @fp @nosink(clos-relay-decoy) @fp @ref(XTALK)	fn fixed() { @fixed
+rust	clos/relay.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	clos/relay.rs	sink-none	@sink(none) @fp @nosink(clos-relay-decoy) @fp @ref(XTALK)	fn fixed() { @fixed
