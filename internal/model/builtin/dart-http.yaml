@@ -5,17 +5,19 @@
 # attacker of the program). The body and the headers of a request are not sinks (nothing in `net/http` or
 # `dart:io` says they are either).
 #
-# `Client` is an interface that many classes implement and that call each other (`IOClient`, `RetryClient`,
-# the authenticated clients of googleapis_auth, ...). A row on the interface method stands for the
-# implementations of the packages: a call through the interface does not read them (a note says so:
-# `dependency_body_unread`), and the implementations that the project writes itself are still read.
-# What is not followed: what a convenience method (`get`, `post`, ...) hands to the `send` of a class of the
-# project, and the callbacks that the project gives to an implementation of a package (`RetryClient(when:)`).
-# `BaseClient` has the rows too, for a call on a variable that is typed `IOClient` or `RetryClient` (the call is of the
-# method of `BaseClient`); a call through `Client` that reaches `BaseClient.get` then has two findings (the interface and the
-# implementation, ADR-068). The `send` of `IOClient` and `RetryClient` has no row: only a call on a variable of that
-# type is missed.
-# docs/DESIGN-deps-cost.md, section 11.
+# `Client` is an interface that many classes implement (`IOClient`, `RetryClient`, the authenticated clients of
+# googleapis_auth, ...) and that call each other. The row of `Client.send` (a `flows` row: the model) stands for
+# the implementations of the packages: a call through the interface does not read them (the note
+# `dependency_body_unread` says so), and the implementations that the project writes itself are still read.
+# The convenience methods (`get`, `post`, ...) have sinks and no model on purpose: their bodies (a few lines
+# each) are read, and they reach `send`. A model for them would cut the call that they make to the `send` of a
+# class of the project (an own `BaseClient` subclass), and a flow through that class would be lost
+# (ADR-092: the edges at the border; docs/DESIGN-deps-cost.md, section 11). The three functions of `http.dart`
+# that had a model before keep it.
+# `BaseClient` has the sinks too, for a call on a variable typed `IOClient` or `RetryClient` (the call is of the
+# method of `BaseClient`); a call through `Client` that reaches `BaseClient.get` then has two findings (the
+# interface and the implementation, ADR-068). The `send` of `IOClient` and `RetryClient` has no row: only a call
+# on a variable of that type is missed.
 ruleset: rivus/dart/http@1
 
 propagators:
@@ -31,57 +33,15 @@ propagators:
     flows: [{from: recv, to: result}]
   - symbol: package:http/src/request.dart#Request.new
     flows: [{from: args, to: result}]
-  - symbol: package:http/src/client.dart#Client.head
-    flows: [{from: args, to: result}]
-  - symbol: package:http/src/client.dart#Client.get
-    flows: [{from: args, to: result}]
-  - symbol: package:http/src/client.dart#Client.post
-    flows: [{from: args, to: result}]
-  - symbol: package:http/src/client.dart#Client.put
-    flows: [{from: args, to: result}]
-  - symbol: package:http/src/client.dart#Client.patch
-    flows: [{from: args, to: result}]
-  - symbol: package:http/src/client.dart#Client.delete
-    flows: [{from: args, to: result}]
-  - symbol: package:http/src/client.dart#Client.read
-    flows: [{from: args, to: result}]
-  - symbol: package:http/src/client.dart#Client.readBytes
-    flows: [{from: args, to: result}]
-  - symbol: package:http/src/base_client.dart#BaseClient.head
-    flows: [{from: args, to: result}]
-  - symbol: package:http/src/base_client.dart#BaseClient.get
-    flows: [{from: args, to: result}]
-  - symbol: package:http/src/base_client.dart#BaseClient.post
-    flows: [{from: args, to: result}]
-  - symbol: package:http/src/base_client.dart#BaseClient.put
-    flows: [{from: args, to: result}]
-  - symbol: package:http/src/base_client.dart#BaseClient.patch
-    flows: [{from: args, to: result}]
-  - symbol: package:http/src/base_client.dart#BaseClient.delete
-    flows: [{from: args, to: result}]
-  - symbol: package:http/src/base_client.dart#BaseClient.read
-    flows: [{from: args, to: result}]
-  - symbol: package:http/src/base_client.dart#BaseClient.readBytes
-    flows: [{from: args, to: result}]
   - symbol: package:http/src/client.dart#Client.send
     flows: [{from: args, to: result}]
   - symbol: package:http/src/base_client.dart#BaseClient.send
-    flows: [{from: args, to: result}]
-  - symbol: package:http/http.dart#head
     flows: [{from: args, to: result}]
   - symbol: package:http/http.dart#get
     flows: [{from: args, to: result}]
   - symbol: package:http/http.dart#post
     flows: [{from: args, to: result}]
-  - symbol: package:http/http.dart#put
-    flows: [{from: args, to: result}]
-  - symbol: package:http/http.dart#patch
-    flows: [{from: args, to: result}]
-  - symbol: package:http/http.dart#delete
-    flows: [{from: args, to: result}]
   - symbol: package:http/http.dart#read
-    flows: [{from: args, to: result}]
-  - symbol: package:http/http.dart#readBytes
     flows: [{from: args, to: result}]
 
 sinks:

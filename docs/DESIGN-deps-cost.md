@@ -387,3 +387,59 @@ RIVUS_DART=dart RIVUS_DART_EXTRACTOR="dart run <worktree>/extractor/dart/bin/riv
 ```
 
 変種(行 0〜6)は、`bench/dart-gcp` の `lib/src/services/*.dart` から、必要なサービスだけを `bin/server.dart` に入れ、`pubspec.yaml` を削って作った。試作の sink の 12 行は、リポジトリに入れていない。
+
+## 11. `package:http` の `Client` を、API の境界でモデルにする(`internal/model/builtin/dart-http.yaml`)
+
+状態: 組み込みのモデルを書いた。読んだ場合との照合と測定は、公開のパッケージ(`bench/dart-gcp`、`bench/dart-grpc`、公開のパッケージだけを使う小さい合成の例)で行った。
+
+### 11.1 今の仕組みで、インターフェースのメソッドのモデルだけで足りるか
+
+足りる部分と、足りない部分がある。
+
+- **足りる部分。** インターフェースのメソッド(`Client.send`)に、`flows` の行(モデル)があると、その呼び出し(動的な呼び出し)の候補のうち、**依存のパッケージにある実装(`IOClient.send`、`RetryClient.send`、`googleapis_auth` の認証つきクライアント)の本体は読まれない**。`internal/taint/calls.go` の `callBody` は、モデルがあって呼び出しが動的なとき、候補のうち自分のコードの本体だけを読み、依存の候補には `dependency_body_unread` の注記を付ける(ADR-075)。自分のコードの実装(`BaseClient` を継承した自前のクラスなど)は、今までどおり読まれる。**sink だけの行は、モデルに数えられない**(`HasModel` は `flows` / `pure` / `calls` などがある行だけ)ので、本体は読まれる。
+- **足りない部分 1: 便利なメソッド(`get`、`post`、...)。** `BaseClient.get` などは、本体が `send` を呼ぶ(`this.send`)。`Client.get` にモデルを書くと、この呼び出しは読まれず、自分のコードの `send`(自前の `BaseClient` の継承クラス)に、値が届かなくなる(ADR-092 の条件 2 の(b)「境界の呼び出しのエッジ」が減る)。公開の合成の例(11.3)で、このモデルを書いて測ると、読んだ場合にある 2 件の finding(`get` の URL → 自前の `send` の `_inner.send(request)`)が消えた。`dependency_body_unread` の注記は出るが、finding は減る。Rust の `calls: [{method: ...}]`(MODELING 3 節)が、これを書くためのもので、**Dart では、まだ動かない**(`methodImpls` は Rust の `<T as Trait>::method` の ID だけを探す)。
+- **足りない部分 2: 依存の実装に渡した関数(`RetryClient(when:, onRetry:)`)。** コンストラクタで渡して、あとで `send` の中から呼ばれる。`calls:` の「登録してあとで呼ぶ」の形は、今の書式では書けない(ADR-092 の条件 3 の「書式の課題」)。`dependency_body_unread` の注記だけが出る。
+- **足りない部分 3: 動的な呼び出しの数、SCC、`functions`。** モデルは、解析の中身(要約の計算)を省くだけで、呼び出しのグラフは変えない。このため、`dynamic_dispatch` の注記、`stats.functions`、`largest_scc` は、モデルの有無で変わらない(11.3)。「動的な呼び出しがまとめて消える」のではなく、**候補の本体の要約の計算が省かれる**。
+
+そのため、モデルは次の形にした。
+
+- `Client.send`(インターフェース)と `BaseClient.send`: sink(引数 0 の `BaseRequest`)と、`flows`(引数 → 戻り値)。これが、依存の実装を切る行。
+- 便利なメソッド(`Client.*`、`BaseClient.*` の `head` / `get` / `post` / `put` / `patch` / `delete` / `read` / `readBytes`): **sink だけ**(引数 0 の `Uri`)。モデルにしない。本体(数行)は読まれ、そこから `send` に入る。`send` のモデルが、依存の実装を切り、自分の実装を読む。これで、自前の `send` への流れが残る(11.3)。
+- `http.dart` の関数: sink(8 つ)。`get` / `post` / `read` は、これまでの `flows` の行を残した(`runWithClient` の側のエッジは、測っていない)。
+
+同じ型の既存のモデルとの比較: Go の `net/http` も `dart:io` の `HttpClient` も、URL だけが sink で、body とヘッダーは sink にしていない。同じにした。戻り値は source にせず、引数 → 戻り値の flow にした(`(*net/http.Client).Do` と同じ)。
+
+### 11.2 ADR-092 の条件に対して
+
+| 条件 | 状態 |
+| --- | --- |
+| 1 コストの測定の記録 | 11.3 の表。**目安(依存が時間の 9 割以上、または数 GB)には届かない**: `bench/dart-gcp` で、解析(`duration_ms`)は wall の 1 割以下(extractor が大半)。モデルで 1.0 秒 → 0.3 秒、`summary_elems` は 28,543 → 22,158(-22%)。判断は相談役 |
+| 2 照合の検査 | 11.3 の「finding の集合」の行。モデルの有無で、同じ集合(`dart-gcp`、`dart-grpc`、合成の 3 つ)。CI の検査にはしていない(合成の例は `bench/` に入れていない) |
+| 3 `calls:` | 上の「足りない部分 2」。書けない。注記で示す |
+| 4 モデルのない呼び出し | 注記つきで、今までどおり |
+| 5 `summary` に読まなかったパッケージの一覧 | **ない**(今は `dependency_body_unread` の注記が、呼び出しごとにあるだけ) |
+
+### 11.3 測定(同じ extractor、`rivus` は `origin/main` の `809d199`、head は dart-http.yaml を足したもの)
+
+「なし」は、dart-http.yaml を空にしたビルドに、sink だけの行(`flows` を除いたもの)を `-rules` で足したもの = 候補の本体を読む。「あり」は、組み込み。「base」は、変更前の組み込み(`Client.get` / `post` の `flows` だけ、sink 3 行)。
+
+| 対象 | 側 | finding | `dynamic_dispatch` | `dependency_body_unread` | `summary_elems` | `functions` | `largest_scc` | `duration_ms` | wall | RSS |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `bench/dart-gcp` | base | 3 | 529 | 3 | 24,444 | 4,494 | 263 | 937 | 15.6 秒 | 1.64 GB |
+| `bench/dart-gcp` | なし | 3 | 529 | 3 | 28,543 | 4,494 | 263 | 1,018 | 15.6 秒 | 1.64 GB |
+| `bench/dart-gcp` | あり | 3 | 529 | 3 | 22,158 | 4,494 | 263 | 325 | 14.9 秒 | 1.61 GB |
+| `bench/dart-grpc` | base / なし / あり | 3 | 213 | 7 | 5,471 | 2,409 | 195 | 98 | 9.4 秒 | 1.14 GB |
+| 合成 3(`http` + `googleapis_auth` + `gcloud` + `googleapis`) | なし | 7 | 9 | 0 | 7,951 | 1,088 | 120 | 643 | 8.1 秒 | 1.12 GB |
+| 合成 3 | あり | 7 | 8 | 2 | 4,869 | 1,088 | 120 | 63 | 7.3 秒 | 1.15 GB |
+| 合成 3 | base | 3 | 6 | 3 | 8,617 | 1,088 | 120 | 642 | 7.5 秒 | 1.15 GB |
+
+- `dart-gcp` と `dart-grpc` は、`http` の URL に値が届く呼び出しがない。finding の集合は、3 つの側で同じ(`dart-grpc` の数字は、3 つの側で同じ)。
+- 合成 3 は、自前の `BaseClient` の継承クラス(`send` が `_inner.send(request)` を呼ぶ)に、認証つきクライアントを渡し、`get(Uri.parse(input))` と `send(Request('GET', ...))` を呼ぶ。**finding の集合は、なしとありで同じ 7 件**(`get` の URL → `get` の呼び出し 2 件、→ 自前の `send` 4 件、`send` 1 件。ヘッダーだけに値がある `fixed` の呼び出しが、自前の `send` で 1 件出る: リクエスト全体が汚染として扱われるため。なしでも同じ)。base は 3 件(自前の `send` に届く 4 件のうち 2 件を失う。`get` の `flows` が、`send` への呼び出しを切るため)。
+- `IOClient` / `RetryClient` の型の変数からの `get`(`BaseClient.get` の呼び出し)は、base では sink がなく、0 件。`BaseClient` の行を足して、検出する。インターフェースの `Client.get` と、候補の `BaseClient.get` の両方に一致して、1 つの呼び出しに 2 件の finding が出る(ADR-068。`dart-gcp` の試作と同じ注意。10.7)。
+- wall と RSS は、ほぼ変わらない: 時間は extractor が大半(10.3)。モデルで減るのは、解析の `duration_ms` と `summary_elems` だけ。
+
+### 11.4 次の案(まだ書いていない)
+
+1. **Dart の `calls: [{method: ...}]`。** `Client.get` などの便利なメソッドにも `flows` を書き、`send` を呼ぶことを `method: send` で書く。実装は、自分のコードの関数のうち、メソッド名が `send` で、レシーバの型が `Client` の部分型のもの(`type` レコードの `extends:` / `implements:`)を探して、`with` で呼ぶ(`applyMethodRow` の Dart 版。Rust の `methodImpls` は ID の形が違う)。約 100 行の見込み。これができれば、便利なメソッドも切れる。
+2. **`summary` に、モデルで切ったパッケージの一覧**(ADR-092 の 5)。今は、注記が呼び出しごとにあるだけ。
+3. **コンストラクタで渡した関数を、あとで呼ぶ形**(`RetryClient(when:)`)の書式。
