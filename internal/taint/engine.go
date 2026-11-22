@@ -3,6 +3,7 @@ package taint
 import (
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -75,6 +76,7 @@ func DefaultOptions() Options {
 
 // Engine runs the whole-program analysis.
 type Engine struct {
+	suppressions []*Suppression // the places that models removed taint, for the findings that are built after them
 	// the diagnostics (ADR-061)
 	pass        int
 	passChanges []PassChange
@@ -1379,6 +1381,7 @@ func (e *Engine) collect(st Stats) *Result {
 		res.FuncCandidates = e.collectFuncCandidates(merged)
 		res.FuncDropped = e.droppedAtModel()
 	}
+	e.suppressions = res.Suppressions
 	keys := make([]findingKey, 0, len(merged))
 	for k := range merged {
 		keys = append(keys, k)
@@ -1583,6 +1586,15 @@ func (e *Engine) buildFinding(rf *rawFinding) *Finding {
 	}
 	for _, k := range rf.site.Sink {
 		addModel(*modelRef(rf.site.Symbol, "sink", k.Provenance))
+	}
+
+	// a model decided by an LLM that cut another way from this source, in a function of this path: the finding
+	// stands, but what it shows was decided in part by that model
+	for _, sp := range e.suppressions {
+		if sp.Model.Origin != "llm" || !slices.Contains(sp.Origins, rf.origin) || !slices.Contains(allFuncs, sp.Func) {
+			continue
+		}
+		addModel(sp.Model)
 	}
 
 	fp := fingerprint.Combine(src.Fingerprint, rf.site.Fingerprint)

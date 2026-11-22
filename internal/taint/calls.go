@@ -798,6 +798,7 @@ func (s *state) applyModel(cc *callCtx) {
 		if p.Boundary != "" {
 			s.newNote(cc.in, KindStoredDataBoundary, "data moves between the code and a data store here; what is read back is not followed unless a source rule says what comes from it", cc.sym)
 		}
+		s.suppressedByCut(cc, &p, modelRef(cc.sym, "propagator", p.Provenance))
 		if p.Pure {
 			// nothing flows: that is the model. When what comes out is a number or a bool, and what went
 			// in came from a source, this is where the input becomes a number: said, where it happens
@@ -903,6 +904,46 @@ func (s *state) suppressed(cc *callCtx, m *ModelRef, e Elem) {
 	}
 	sp.Labels = addSorted(sp.Labels, e.Label())
 	sp.Origins = addSorted(sp.Origins, e.Origin())
+}
+
+// suppressedByCut records what a model that is not a built-in one (decided by an LLM, or written by a person in
+// a rule file) does not let through to a result of a call: with `pure`, or with flows that leave an operand out
+// of a result, what the call would have returned from that operand (the guess of a call that is not modelled)
+// is gone. The finding that this removes cannot say so; the record can. A built-in model is not recorded: it
+// is checked by a person and by the tests, and recording every one of them would fill the output. A result that is
+// a number or a bool is the business of the numeric stop, not of this record.
+func (s *state) suppressedByCut(cc *callCtx, p *model.Propagator, mref *ModelRef) {
+	if mref == nil || mref.Origin == model.OriginBuiltin || len(cc.in.Dsts) == 0 {
+		return
+	}
+	for i, d := range cc.in.Dsts {
+		if d == nil || d.Class == ir.ClassNumber || d.Class == ir.ClassBool {
+			continue
+		}
+		kept := map[*sg.Value]bool{}
+		if !p.Pure {
+			for _, fl := range p.Flows {
+				to, err1 := model.ParseDest(fl.To)
+				from, err2 := model.ParseSelector(fl.From)
+				if err1 != nil || err2 != nil || to.Kind != model.SelResult || !(to.All || to.Index == i) {
+					continue
+				}
+				for _, v := range s.selectVals(cc, from) {
+					kept[v] = true
+				}
+			}
+		}
+		for _, v := range cc.argv() {
+			if kept[v] {
+				continue
+			}
+			for _, f := range s.flatten(s.locs(v)) {
+				if f.E.Kind == Real {
+					s.suppressed(cc, mref, f.E)
+				}
+			}
+		}
+	}
 }
 
 func addSorted(list []string, v string) []string {
