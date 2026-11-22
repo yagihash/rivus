@@ -1,7 +1,7 @@
-# #102 Dart: コンパイルエラーのある関数を通る finding に、痕跡が付かない
+# #102 Dart: コンパイルエラーのある関数を通る finding に、不確実性の注記が付かない
 
 - 状態: **closed**
-- 種類: 痕跡なしの finding(直した)
+- 種類: 注記なしの finding(直した)
 - 言語: Dart
 - ROADMAP の節: 1
 - 守るもの: `cmd/rivus/dart_syntax_test.go`

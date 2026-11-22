@@ -1,7 +1,7 @@
 # #103 Dart: package_config.json がない・古い対象で、何も報告せずに finding が 0 件になる
 
 - 状態: **closed**
-- 種類: 黙った見逃し(直した)
+- 種類: サイレントな見逃し(直した)
 - 言語: Dart
 - ROADMAP の節: 1
 - 守るもの: `cmd/rivus/dart_packageconfig_test.go`(`TestDartPackageWithoutPackageConfigIsSaid`)

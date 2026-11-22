@@ -58,7 +58,7 @@ rivus の主な利用者の 1 つは、脆弱性の有無を判定する **LLM �
 | レベル | 内容 | 必要な処理 |
 |---|---|---|
 | L0 | ルールの source / sink にマッチする**サイト**（箇所）を列挙する | ローダ ＋ シンボル照合のみ（ほぼ即時） |
-| L1 | L0 に加えて、sink の引数が**リテラル定数だけ**のものに印を付ける。落とさず、事実として印を付けるだけ | 手続き内の簡単な確認 |
+| L1 | L0 に加えて、sink の引数が**リテラル定数だけ**のものにマークを付ける。落とさず、事実としてマークを付けるだけ | 手続き内の簡単な確認 |
 | L2 | 詳細分析（サマリ、ラベル、由来追跡、不確実性の記録） | 全部 |
 
 ```
@@ -69,7 +69,7 @@ rivus resolve --bookmarks b.json ./...  # 前回見た箇所が今どこにあ�
 
 - L0 / L1 は判定ではなく**列挙**であり、ADR-001（事実を出し、判定はしない）と矛盾しない
 - サイトには**安定した ID**と**指紋（fingerprint）**を持たせ（4.6、ADR-028）、ID を L2 のクエリの seed として受け取れるようにする
-- サイトの列挙は IR の `call`（呼び先 `FuncID`）で行うので、言語中立
+- サイトの列挙は IR の `call`（呼び出し先 `FuncID`）で行うので、言語中立
   - 関数値の呼び出し（`value`）は、候補（`internal/valuecalls`。コピー・φ・パラメータを通って届く関数、または extractor のコールグラフ）のシンボルで照合し、候補ごとにサイトを作る（ADR-045）。同じ候補を、列挙と解析のグラフが見る
 - 呼び出し口は、まず **CLI ＋ JSON 出力**。`query` 層は差し替え可能に保ち、必要になれば常駐サーバ（MCP など）を足す
 - エージェントのコンテキストを圧迫しないよう、出力の詳細度を選べるようにする（7 節）
@@ -144,7 +144,7 @@ rivus resolve --bookmarks b.json ./...  # 前回見た箇所が今どこにあ�
 
 | 命令 | 内容 |
 |---|---|
-| `make_closure` | クロージャ生成。呼び先 `FuncID` と捕捉した値のリスト |
+| `make_closure` | クロージャ生成。呼び出し先 `FuncID` と捕捉した値のリスト |
 | `call` | 関数呼び出し（2.4 参照） |
 
 **例外・不明**
@@ -220,7 +220,7 @@ Phase 2 の実施記録、実装メモ、移行の戦略、実測は、[history/
 | ポインタ様の値の位置 | ポインタ型なら位置は指す先 | `alloc` / `load` / `store` / `addr_of` と、**値の型の分類**（2.7.3） |
 | フィールド・添字経路 | `FieldAddr` / `IndexAddr` / `Field` / `Index`、k=3 の切り詰め | `field_load/store`、`index_load/store`。アドレスが値として渡る場合は `addr_of`（base と経路を持つ） |
 | グローバル | `ssa.Global` | `global_load` / `global_store`（2.3） |
-| クロージャ | `MakeClosure`、`FreeVar` | `make_closure`（呼び先と捕捉値）。呼び先の関数は捕捉値を `param` の続きとして受ける |
+| クロージャ | `MakeClosure`、`FreeVar` | `make_closure`（呼び出し先と捕捉値）。呼び出し先の関数は捕捉値を `param` の続きとして受ける |
 | ガード | `If` の条件と、`BinOp` の木 | `branch` の `cond` ＋ `CondPos`。条件の値は SSA 上の `binop` / `unop` / `call` の木として辿れる |
 | 定数 | `Const`、`IsConstant` | `const`（値と型） |
 | スニペット・式テキスト | AST から切り出す（`text.go`） | 命令の `Pos`、呼び出しの引数ごとの `Pos`、`branch` の `CondPos`。**言語ごとの `ir.Texts` が位置から切り出す**（IR 自体はテキストを運ばない。2.3 で修正。下の実装メモ） |
@@ -243,7 +243,7 @@ Phase 2 の実施記録、実装メモ、移行の戦略、実測は、[history/
 
 IR からテキストを落としても、「SQL 文に変数が直接展開されているか」のような判定は、値の流れで行える。
 
-- `const` は、文字列リテラルの中身を省略せずに持つ。長さの上限を設ける場合は、超えたことを `truncated` として明示する（黙って切らない）
+- `const` は、文字列リテラルの中身を省略せずに持つ。長さの上限を設ける場合は、超えたことを `truncated` として明示する（何も報告せずに切らない）
 - 文字列補間は、各言語の extractor が `binop`（結合）か、補間専用のシンボルの `call` に展開する。断片は `const`、式は値の参照として残す（Go の `+` と `fmt.Sprintf`、Dart の `'$x'`、Rust の `format!`）
 - extractor が定数の畳み込みをしてもよいが、`const` の中身を捨ててはいけない
 - テキストの切り出し（スニペット、式、本体）は、表示と指紋のためだけに使う。判定には使わない
@@ -280,11 +280,11 @@ Phase 1 のエンジンが型について実際に問うのは、この分類（
 NaiveForm のローカルは、`Alloc` の結果がそのままローカル変数になる。コアの `ssabuild` が、ローカルの代入 ＋ 使用から φ と到達定義を作る（Phase 1 で検証済み。ADR-036）。
 
 **Go extractor の決めごと**（`internal/frontend/goir/`、`internal/ir/ir.go`）:
-- `call` の `callee` は、静的な呼び出しで `func`（呼び先の関数 ID）と `symbol`（ルールのシンボル。無名関数では空）の両方を持つ。組み込み関数は、`builtin.<名前>` のシンボルの静的な `call`
+- `call` の `callee` は、静的な呼び出しで `func`（呼び出し先の関数 ID）と `symbol`（ルールのシンボル。無名関数では空）の両方を持つ。組み込み関数は、`builtin.<名前>` のシンボルの静的な `call`
 - アドレス計算（`FieldAddr` / `IndexAddr`）は、使い道が 1 つの `load` / `store` だけなら畳む（`Folded`。位置は `AddrPos`）。アドレスが値として渡るときだけ `addr_of` になる。グローバルのアドレスは、引数のない `addr_of`（`global` つき）
 - φ は、前任ブロックの末尾の `copy` に落とす（NaiveForm には φ がない。コアが `ssabuild` で作る）
 - エンジンを動かす言語固有の操作は、シンボル付きの `call` で表す: `chan.send` / `chan.recv`、`iter.start` / `iter.next` / `iter.next_string`、`rt.rundefers`。`select` は、extractor が送信と受信の `call` に分ける。`index_load` / `index_store` の `Keyed` は、キーで引くこと（map、文字列）
-- 何も捕捉しない無名関数を変数に入れて呼ぶ場合は、`make_closure`（捕捉なし）から呼び先を、コアの `sg` が静的に解く
+- 何も捕捉しない無名関数を変数に入れて呼ぶ場合は、`make_closure`（捕捉なし）から呼び出し先を、コアの `sg` が静的に解く
 - 型の別名（Go の `type A = B`）は、`type_alias` レコードで渡す（ADR-083）
 
 2.7.4 の末尾にあった「で分かったこと（実装メモ）」（検証の結果と、その時点の実測）は、履歴・計画は [history/ARCHITECTURE-plans.md](history/ARCHITECTURE-plans.md) の 2.7.4 節（実装メモ）にある。
@@ -322,7 +322,7 @@ Go の extractor は、コアと同じプロセスで、`ir.Program` と `ir.Tex
 **モジュール境界:** 複数パッケージ（Dart の melos、Rust の workspace）を 1 回の実行で出し、`Func.Dep` で、解析の対象と依存を分ける。依存は、ソースがあるものだけを出す。
 **バージョン:** ストリームの先頭の `schema_version`（今は `rivus.ir/0`）が違えば、読まずに止める（`internal/ir/stream.go`）。Dart の extractor は、自分の版を `--version` で返す（`rivus_dart rivus.ir/0`）。コアは、グラフの鍵に、extractor の実行ファイルのハッシュと、Dart ではこの版を入れる（`cmd/rivus/graphkey.go`）。
 **失敗:** 読めなかったもの（解決できないパッケージ、生成コードがない）は、`load_error` として出す。コアは `missing_source` の不確実性にする。
-**読まなかったもの:** ビルドが出荷しないもの（テスト、example、開発用の依存）を読まなかったときは、`tests_skipped` レコードで示す（ADR-062）。呼び元が全部読まれているかは、`caller_marks` と `Func.Private` / `Func.ExternalEntry` で示す（13 節）。
+**読まなかったもの:** ビルドが出荷しないもの（テスト、example、開発用の依存）を読まなかったときは、`tests_skipped` レコードで示す（ADR-062）。呼び出し元が全部読まれているかは、`caller_marks` と `Func.Private` / `Func.ExternalEntry` で示す（13 節）。
 
 2.7.7 のレビュー待ちだった項目と、問い合わせの案、実測は、履歴・計画は [history/ARCHITECTURE-plans.md](history/ARCHITECTURE-plans.md) の 2.7.7 節にある。
 
@@ -402,7 +402,7 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 型は `internal/ir/ir.go`。主な形:
 
 - `Program`: `Funcs`、`Impls`、`Types`（上位の型）、`Globals`、`TypeAliases`、テキスト（`Texts`、`CallTexts`、`FuncTexts`）、`LoadErrors`、`CallerMarks`、`TestsSkipped`
-- `Func`: `ID`、`Params`（`Class`、`Captured`）、`Results`、`Locals`、`Blocks`（先頭が entry）、`Roots`、`Pos`、`File`。印として `Exported`、`Entry`、`Init`、`Symbol`、`Recv`、`Dep`、`Private`、`ExternalEntry`、`Overrides`
+- `Func`: `ID`、`Params`（`Class`、`Captured`）、`Results`、`Locals`、`Blocks`（先頭が entry）、`Roots`、`Pos`、`File`。マークとして `Exported`、`Entry`、`Init`、`Symbol`、`Recv`、`Dep`、`Private`、`ExternalEntry`、`Overrides`
 - `Block`: `Instrs`、`Term`（`Kind`、`Cond`、`CondPos`、`Values`）、`Succs`（種別つきの辺）
 - `Instr`: `Op`、`Dsts`（呼び出しは戻り値の数だけ）、`Args`、`Const`、`Operator`、`Field`、`Path`、`Global`、`Func`、`View`、`Folded`、`Keyed`、`Callee`、`Go` / `Defer` / `Await`、`Reason`、`Pos`、`AddrPos`、`ArgPos`
 - `Callee`: `Kind`（`static` / `dynamic` / `value`）、`Func`、`Symbol`、`Recv`、`Candidates`、`FFI`。ストリームには載らず、コアが埋めるもの: `ValueCands`、`ValueLimit` など（13 節）
@@ -425,7 +425,7 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 
 - `Summary`: 関数 ID、`Outputs`、`Sinks`、`Opaque`（読まれなかった関数が触ったかもしれない引数）
 - `Output`: 汚染がどこに出るか。種類は戻り値、引数が指す先、グローバル変数、例外（`OutResult`、`OutParam`、`OutGlobal`、`OutThrow`）。中身は `OutElem` の並びで、各要素に経路（`Steps`）と、その要素が届く条件（`Guards`）が付く
-- `SinkReach`: 引数が、関数の中（またはその呼び先）の sink に届くこと
+- `SinkReach`: 引数が、関数の中（またはその呼び出し先）の sink に届くこと
 - `Guard`: 条件が依存する引数（`Params`）、条件式のソース（`Cond`）、通った側（`Polarity`）、呼び出し側から見たときの呼び出し点（`Call`）
 
 **ガードの制約:** 記録するのは引数由来の条件のみ。「その条件値が引数からのデータフローで到達可能か」で判定し、
@@ -451,17 +451,17 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 | `ffi_boundary` | target | |
 | `stored_data_boundary` | target | データストアに出し入れする呼び出し。その先は追わない |
 | `missing_source` | target | ワークフロー前提（`go generate` / `build_runner` 未実行）に由来 |
-| `dynamic_dispatch` | 候補 1 件以上: mixed／候補 0 件: rivus | 言語機能として呼び先が決まらないが、候補の絞り込み精度（VTA など）は rivus の改善余地がある。候補が 0 件なのは、実装が読み込んだコードの外にあるときで、モデルを書けば減る（rivus）。detail が `expansion_limit` のものは、`match: implementations` の展開を上限で止めた記録（5.4） |
+| `dynamic_dispatch` | 候補 1 件以上: mixed／候補 0 件: rivus | 言語機能として呼び出し先が決まらないが、候補の絞り込み精度（VTA など）は rivus の改善余地がある。候補が 0 件なのは、実装が読み込んだコードの外にあるときで、モデルを書けば減る（rivus）。detail が `expansion_limit` のものは、`match: implementations` の展開を上限で止めた記録（5.4） |
 | `assumed_call` | mixed | 呼ばれるところが見えないクロージャ（渡す、保存する、返す）を、作った場所で、呼ばれるものとして当てた（捕獲した値を、クロージャの要約に当てる。ADR-059）。付くのは、要約が捕獲した値に依る効果を持つクロージャだけ。throw と結果は当てず、そのとき detail に書く。1 度も呼ばれないクロージャの流れも、finding になりうる（過検出） |
 | `unresolved_callee` | mixed | 関数値は実行時に決まるが、生成箇所を追う型フロー解析で候補を絞れる |
 | `concurrency` | mixed | 実行順序に依存するが、channel を単純なキューとしてモデル化すれば追える範囲が広がる |
 | `unmodeled_library_call` | rivus | モデルを書けば減る |
 | `dependency_body_unread` | rivus | モデルのあるインターフェースのメソッドの動的な呼び出しで、候補に本体のある依存の関数（プロジェクトの外）があったが、読まなかった（ADR-075）。依存が値を包んで渡した先の、自前の実装の中の sink は、辿っていない。`dynamic_dispatch` と並べて付き、候補に、読まなかった依存の関数を並べる |
 | `model_approximation` | rivus | 流れのモデルが、自分で「近似」と宣言している（`approximate` の文）。モデルの限界（ADR-067） |
-| `numeric_stop` | rivus | source のデータが数値や bool になり、それ以降は追わない（既定。`-numeric-taint` で追う）。source の種類（シンボルとラベル）ごとに 1 件で、最初の場所と、起きた関数の一覧（10 件まで）を持つ。サマリを通って止まる分（呼び先の中の、引数の記号的なデータの止まり）は、記録されない |
+| `numeric_stop` | rivus | source のデータが数値や bool になり、それ以降は追わない（既定。`-numeric-taint` で追う）。source の種類（シンボルとラベル）ごとに 1 件で、最初の場所と、起きた関数の一覧（10 件まで）を持つ。サマリを通って止まる分（呼び出し先の中の、引数の記号的なデータの止まり）は、記録されない |
 | `unsupported_construct` | rivus | extractor が下げられなかった構文（IR の `unsupported`）。その場所で何が起きるかは、解析に入っていない。`missing_source` ではない（対象のコードが足りないのではなく、rivus が読めなかった） |
 | `container_element_imprecision` | rivus | 結論に影響した場合のみ記録（ノイズ防止） |
-| `depth_limit` | rivus | 打ち切り。detail が理由を示す（`guard_limit`、`candidate_limit`、`caller_depth_limit`、`func_timeout` など）。例外: detail が `path_steps_omitted:` のものは、**解析の打ち切りではなく、表示の省略**（流れは見た。200 段を超える経路の、真ん中の段を見せていない。省いた段の不確実性・モデル・到達性は finding に入っている）。ただし、source までさかのぼる途中の打ち切り（`the path was followed back for ...`）は、その先の段を見ていない |
+| `depth_limit` | rivus | 打ち切り。detail が理由を示す（`guard_limit`、`candidate_limit`、`caller_depth_limit`、`func_timeout` など）。例外: detail が `path_steps_omitted:` のものは、**解析の打ち切りではなく、表示の省略**（流れは見た。200 段を超える経路の、真ん中の段を見せていない。省いたステップの不確実性・モデル・到達性は finding に入っている）。ただし、source までさかのぼる途中の打ち切り（`the path was followed back for ...`）は、その先の段を見ていない |
 | `recursion_approximation` | rivus | |
 | `field_imprecision` | rivus | 欄を名指す sink に、その欄にあるとは言えない汚染が届いた（14 節）。detail は `whole_value`、`path_limit`、`element`、`opaque_callee` |
 | `field_unresolved` | rivus | sink が名指した欄が、プログラムにない（綴りの誤りなど）。sink を全体として扱った（14 節） |
@@ -481,10 +481,10 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 
 - `id`、`fingerprint`: (source サイト, sink サイト) の組から生成（4.6）
 - `source`、`sink`（`SiteRef`）、`category`、`labels`
-- `paths`: 経路。今は**常に 1 本**（`internal/taint/engine.go`。7 節）。各段は `steps`（`func`、`position`、`snippet`、`desc`、`notes`、`model`）
+- `paths`: 経路。今は**常に 1 本**（`internal/taint/engine.go`。7 節）。各ステップは `steps`（`func`、`position`、`snippet`、`desc`、`notes`、`model`）
 - `other_sources`、`other_sources_count`: 同じ sink に届く、同じ種類の別の source。経路は繰り返さない
 - `uncertainties`: 経路上で解決できなかったこと
-- `path_steps`: 表示する経路の段数（順位付けのための事実）
+- `path_steps`: 表示する経路のステップ数（順位付けのための事実）
 - `reachability`（`from_entry` / `from_framework_callback` / `not_from_entry`）と `reachability_note`: 経路上の関数が、プログラムの起点から届くか
 - `dispatch_widened`、`dispatch_candidates`: インタフェースや関数値の呼び出しが、複数の実装すべてに届くとして進めた数（順位付けのための事実）
 - `confidence`: `no_uncertainty_on_path`（経路に未解決がない）か `requires_review`。判定ではなく、確定度の分類
@@ -497,7 +497,7 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 ### 4.6 サイトと指紋（fingerprint）
 
 サイトは「関数の中の、ルールにマッチした 1 箇所」。検出結果は (source サイト, sink サイト) の組。型は `internal/sites/sites.go` の `Site`（`id`、`role`、`kind`、`func`、`symbol`、`category`、`labels`、`position`、`snippet`、`literal_only`、`fingerprint`）。
-`id` は公開用で、`"s1:"` ＋ `structural@1` の値から作る。`literal_only` は L1 の印（sink の引数がリテラル定数だけ）。
+`id` は公開用で、`"s1:"` ＋ `structural@1` の値から作る。`literal_only` は L1 のマーク（sink の引数がリテラル定数だけ）。
 
 指紋は**入れ物 1 つの中に、複数の種類を並べる**。種類は役割で名付け、版は `@N` で表す（`internal/fingerprint`）。
 
@@ -568,7 +568,7 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 
 ### 5.2 手続き間（bottom-up の関数サマリ）
 
-1. コールグラフを構築し、SCC に縮約してトポロジカル順（呼び先から）に処理する
+1. コールグラフを構築し、SCC に縮約してトポロジカル順（呼び出し先から）に処理する
 2. 各関数の手続き内 taint を解き、サマリを算出する
 3. 呼び出し側でサマリを展開する。**SCC の内部だけ**不動点まで反復する。グローバル変数への書き込みなどでサマリが変わったときは、関数を解析し直す。プログラム全体のパスの上限は `-max-passes`（既定 12）。収束したかは `stats.converged` に出る
 
@@ -604,7 +604,7 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 
 #### `match: implementations` の展開
 
-- 展開先は、コールグラフ（呼び先の候補）から求める
+- 展開先は、コールグラフ（呼び出し先の候補）から求める
 - **上限を超えたら、展開を中止する。** 先頭 N 個だけ展開する（切り捨てる）ことはしない。部分的に展開すると「見ている部分」と「見ていない部分」の境界が見えなくなり、
   「列挙は網羅的に」に反するため。中止したときは `exact` と同じ扱いに縮退し、総数を `dynamic_dispatch`（`attributable_to: mixed`、サブ理由 `expansion_limit`）として記録する
 - 上限の既定値は 300（`internal/model/expand.go` の `DefaultMaxImplementations`。ADR-030 の追記）。ルールごとに `max_implementations` で上書きできる。暫定値だった頃の記録は [history/ARCHITECTURE-plans.md](history/ARCHITECTURE-plans.md) の 5.4 の移動分
@@ -693,7 +693,7 @@ rivus models coverage ./...
 
 - 検出結果の単位は **(source サイト, sink サイト) の組**。経路はその中に入れる（シンボルの組ではない。シンボルの組だと、プロジェクト中の同じ関数の呼び出しがすべて 1 件に混ざってしまうため）
 - **経路は 1 本だけ出す**（`internal/taint/engine.go`）。ADR-023 の「3 本まで。あふれは `omitted_paths` に数える」は、実装されていない（`omitted_paths` という欄はない）。経路が複数あっても、残りは出力に出ない。1 本の経路は、起点から届くもの、未解決の少ないもの、短いものを選ぶ。同じ sink に届く別の source は、`other_sources` に、本数と経路の素性だけを出す
-- 経路が 200 段（`maxPathSteps`）を超えると、途中を落とす。これは痕跡を残さない（PRINCIPLES.md 1 節）
+- 経路が 200 段（`maxPathSteps`）を超えると、途中を落とす。これは不確実性の注記を残さない（PRINCIPLES.md 1 節）
 - 検出結果とサイトに**安定した ID と指紋**を持たせる（4.6、ADR-028）。「前回から新規に増えたもの」を、前回の結果（ベースライン）との比較で CI が扱えるようにする
 - **サイト ID**（`rivus sites` の各項目）も同じ方針で安定させる。ID を `rivus query --site` の seed に使える
 - **出力の詳細度を選べる。** `-detail` は `summary`（経路とスニペットを省く）と `snippet`（全部。既定）の 2 つ（`internal/report/report.go`）。関数全文を付ける段階はない。エージェントのコンテキストを圧迫しないため
@@ -747,12 +747,12 @@ rivus models coverage ./...
 
 関数値の呼び出し（`call` の `value`）の候補を、**IR の上で 1 か所で決める**。サイトの列挙（ルールが、変数が持つ関数を名指せる。ADR-045）と、解析のグラフが、同じ候補を見るため（`sites` と `sg` が `valuecalls.Resolve` を呼ぶ）。
 
-- **候補の出どころ:** Go は、extractor の VTA の結果。ほかの言語は、`valuecalls` が、値に流れ込む関数を、コピー、φ、引数（呼び元が渡すもの）を通して探す。メモリは追わない（フィールドやリストに入れた関数は見つからず、呼び出しは未解決のまま）。
-- **限界:** 候補が 8 を超えたとき（`most`）、呼び元を 3 段より上まで辿るとき（`maxDepth`）は、候補を付けない。理由は `Callee.ValueLimit`（`candidate_limit`、`caller_depth_limit`）に残り、不確実性の detail になる。
-- **引数を通って届く関数:** どの候補が呼ばれるかは、呼び元に依る。候補は、通った引数の番号を持ち（`ValueCand.Param`）、呼び元が、渡した関数以外を通る流れを外す。
-- **絞り込み（`narrow.go`）:** Rust の `Fn::call` / `FnMut::call_mut` / `FnOnce::call_once` の候補は、extractor が「型の合うクロージャすべて」で作る。ここでは、**受け手に流れ込む関数に絞る**（ADR-079、[DESIGN-capture.md](DESIGN-capture.md)）。
-  - 規則は「**全部辿れたときだけ絞る**」。絞ると流れを失いうるが、作り出すことはない。辿れない物（規則のない命令、構造体の欄、呼び出しの結果、グローバル、トレイトオブジェクト、呼び元が全部は分からない引数、上限）に当たったら、候補を全部残す。
-  - 引数を辿るときは、呼び元が全部読まれていることが条件。`Func.Private`（`pub` がない）か、**閉じた世界**（起点があり、外からシンボルで呼べる関数がなく、extractor が `caller_marks` を付けた）。閉じた世界は前提を 1 つ入れるので、絞った不確実性に `basis: closed_world_entry` を付けて示す（「起点のあるプログラムとして読んだので、外からの呼び出しは数えていない」）。絞る前の候補数は `narrowed_from`。
+- **候補の出どころ:** Go は、extractor の VTA の結果。ほかの言語は、`valuecalls` が、値に流れ込む関数を、コピー、φ、引数（呼び出し元が渡すもの）を通して探す。メモリは追わない（フィールドやリストに入れた関数は見つからず、呼び出しは未解決のまま）。
+- **限界:** 候補が 8 を超えたとき（`most`）、呼び出し元を 3 段より上まで辿るとき（`maxDepth`）は、候補を付けない。理由は `Callee.ValueLimit`（`candidate_limit`、`caller_depth_limit`）に残り、不確実性の detail になる。
+- **引数を通って届く関数:** どの候補が呼ばれるかは、呼び出し元に依る。候補は、通った引数の番号を持ち（`ValueCand.Param`）、呼び出し元が、渡した関数以外を通る流れを外す。
+- **絞り込み（`narrow.go`）:** Rust の `Fn::call` / `FnMut::call_mut` / `FnOnce::call_once` の候補は、extractor が「型の合うクロージャすべて」で作る。ここでは、**レシーバに流れ込む関数に絞る**（ADR-079、[DESIGN-capture.md](DESIGN-capture.md)）。
+  - 規則は「**全部辿れたときだけ絞る**」。絞ると流れを失いうるが、作り出すことはない。辿れない物（規則のない命令、構造体の欄、呼び出しの結果、グローバル、トレイトオブジェクト、呼び出し元が全部は分からない引数、上限）に当たったら、候補を全部残す。
+  - 引数を辿るときは、呼び出し元が全部読まれていることが条件。`Func.Private`（`pub` がない）か、**閉じた世界**（起点があり、外からシンボルで呼べる関数がなく、extractor が `caller_marks` を付けた）。閉じた世界は前提を 1 つ入れるので、絞った不確実性に `basis: closed_world_entry` を付けて示す（「起点のあるプログラムとして読んだので、外からの呼び出しは数えていない」）。絞る前の候補数は `narrowed_from`。
   - Dart の動的な呼び出しへの同じ絞り込みは、まだない（設計だけ）。
 
 ## 14. `parts`（sink が引数の欄を名指す）
@@ -761,7 +761,7 @@ sink は、位置の引数のうち、**どの欄が危険か**を指定でき�
 
 - **ルール:** `parts: [{arg: n | recv: true, field: "A.B"}]`。1 か所だけなら短い形（`args: [n]` ＋ `field:`）。欄は、IR にある名前を `.` でつなぐ。`[]` は、スライス、配列、map の要素。`args` で名指した位置は、全体が危険で、`parts` はそれ以外の位置のためにある（`internal/model/model.go` の `Sink`、`SinkPart`、`WholeArgs`）。
 - **照合（`internal/taint/fieldsink.go` の `matchParts`）:** モデルの名前は、値からのアクセスパスの**部分列**として照合する。名前でない段（欄の後ろのポインタ、インタフェースの中身、コンテナの要素）は飛ばせる。名前のほうは、飛ばせない。
-- **結果:** その欄（かその下）にある汚染は、確かな検出。欄の隣の汚染は、流れではない。欄にあるとは言えない汚染（値全体が汚れている、パスの上限で切れた、コンテナの要素、読まれていない関数を通った）は、検出として出し、不確実性 `field_imprecision`（detail は `whole_value` / `path_limit` / `element` / `opaque_callee`）を付ける。欄の名前がプログラムにないときは、`field_unresolved` を付けて、sink を全体として扱う。黙って落とすことはしない。
+- **結果:** その欄（かその下）にある汚染は、確かな検出。欄の隣の汚染は、流れではない。欄にあるとは言えない汚染（値全体が汚染されている、パスの上限で切れた、コンテナの要素、読まれていない関数を通った）は、検出として出し、不確実性 `field_imprecision`（detail は `whole_value` / `path_limit` / `element` / `opaque_callee`）を付ける。欄の名前がプログラムにないときは、`field_unresolved` を付けて、sink を全体として扱う。何も報告せずに落とすことはしない。
 
 ## 15. 隔離（信頼できない Rust の読み込み）
 

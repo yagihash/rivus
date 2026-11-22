@@ -163,7 +163,7 @@ taint 解析に必要な情報は、コンパイラ IR よりずっと少ない�
 型は「sink を識別できる」「フィールドを区別できる」程度の粒度で足りる。
 
 - 基本ブロックと後続エッジ
-- 命令: `call`（解決済み呼び先 ID + 仮想呼び出しの候補リスト）、`binop`、
+- 命令: `call`（解決済み呼び出し先 ID + 仮想呼び出しの候補リスト）、`binop`、
   `field_load` / `field_store`、`index_load` / `index_store`、`alloc`、`param`、
   `return`、`const`
 - 関数の一意な ID（完全修飾名）とシグネチャ

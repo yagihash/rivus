@@ -1,7 +1,7 @@
 # #101 Dart: 解決できないコンストラクタ呼び出しの結果が、汚染のない定数になる
 
 - 状態: **closed**
-- 種類: 黙った見逃し(直した)
+- 種類: サイレントな見逃し(直した)
 - 言語: Dart
 - ROADMAP の節: 1
 - 守るもの: `cmd/rivus/dart_syntax_test.go`(`TestDartUnresolvedConstructorKeepsTheFlow`)

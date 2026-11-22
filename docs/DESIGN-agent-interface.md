@@ -17,7 +17,7 @@
 ## 3. スキルの組(`gh skill` でインストールできる形)
 
 - 中身: rivus の使い方(`analyze`、`index`、`graph` の読み方、`exhaustive` と不確実性の読み方)と、モデル化のタスク([DESIGN-model-authoring.md](DESIGN-model-authoring.md))。
-- **`gh skill` の仕様(`gh` 2.105.0 の `--help` で確かめたこと。preview で、予告なしに変わりうる)**: `gh skill install <リポジトリ>` が、GitHub のリポジトリ(か、ローカルのディレクトリ)から、スキルを、エージェントごとのディレクトリへ入れる(`--agent` に claude-code、github-copilot、cursor、codex、gemini-cli など多数。プロジェクトの範囲か、ユーザーの範囲)。`gh skill publish` が、スキルを検証して、GitHub のリリースを作る(トピック `agent-skills`、版のタグ)。**スキルの見つけ方**: `skills/*/SKILL.md`、`skills/{scope}/*/SKILL.md`、`*/SKILL.md`(ルート)、`plugins/{scope}/skills/*/SKILL.md`。**検証**: スキル名は agentskills.io の名前の規則に従い、**ディレクトリ名と一致**する。frontmatter に `name` と `description` が必須。`allowed-tools` は配列でなく文字列。`metadata.github-*` は、インストールの印なので、コミットしない(`gh skill publish --fix` が外す)。`--dry-run` で、検証だけ。
+- **`gh skill` の仕様(`gh` 2.105.0 の `--help` で確かめたこと。preview で、予告なしに変わりうる)**: `gh skill install <リポジトリ>` が、GitHub のリポジトリ(か、ローカルのディレクトリ)から、スキルを、エージェントごとのディレクトリへ入れる(`--agent` に claude-code、github-copilot、cursor、codex、gemini-cli など多数。プロジェクトの範囲か、ユーザーの範囲)。`gh skill publish` が、スキルを検証して、GitHub のリリースを作る(トピック `agent-skills`、版のタグ)。**スキルの見つけ方**: `skills/*/SKILL.md`、`skills/{scope}/*/SKILL.md`、`*/SKILL.md`(ルート)、`plugins/{scope}/skills/*/SKILL.md`。**検証**: スキル名は agentskills.io の名前の規則に従い、**ディレクトリ名と一致**する。frontmatter に `name` と `description` が必須。`allowed-tools` は配列でなく文字列。`metadata.github-*` は、インストールのマーカーなので、コミットしない(`gh skill publish --fix` が外す)。`--dry-run` で、検証だけ。
 - **まだ分かっていないこと**: SKILL.md の本文の書式の細かい規則(agentskills.io の仕様を、読んで確かめる)。`allowed-tools` の書き方(MCP の道具をどう指すか)。**公開(リリースを作る)は、外へ出す操作なので、ユーザーの許可を取る。**
 - 置き場所は、`skills/<名前>/SKILL.md`(上の「見つけ方」の 1 つ目)が候補。**スキルは薄く**: 手順の判断や計算を、スキルの文(LLM が読んで実行する)に置かない。コマンド(`rivus ...`)とスクリプトに置き、スキルは「どの順で、どのコマンドを呼び、どこで LLM が判断するか」だけ。組織やプロジェクトに固有の名前を入れない。
 
@@ -25,7 +25,7 @@
 
 - **目的**: `claude -p` に、**最小の権限**で渡す(シェルを許さずに、rivus の問い合わせだけを道具として渡せる)。
 - **道具の一覧**: **読むだけの問い合わせ**(保存した索引への `graph` など)と、**解析を走らせるもの**(`analyze`、`index`: 対象のコードを読み、言語によっては実行を伴う)を、分ける。最初のインターフェースは、前者だけ。
-- **入力の検査**: パスは、許した根の下だけ。ルールのファイル、旗(制御を外す旗は、渡せない)。
+- **入力の検査**: パスは、許した根の下だけ。ルールのファイル、フラグ(制御を外すフラグは、渡せない)。
 - **脅威モデル**: 対象のコードは、攻撃者のものでありうる。**道具の出力(スニペット、名前)は、エージェントに渡る。出力は、データで、指示ではない**(エージェントは、出力の文に従わない)。スキルに、そう書く。
 - 既存の「保存した結果への点の問い合わせ」(3.4 の 4 番)との関係: 最初のインターフェースは、これを MCP の道具として出すもの。
 - モデル化のタスクは、当面、スキルだけ(MCP にしない)。
