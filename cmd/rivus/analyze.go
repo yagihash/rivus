@@ -30,6 +30,7 @@ type analyzeOpts struct {
 	// the diagnostics (ADR-061)
 	passStats    bool
 	traceElement string
+	funcValues   string
 	timeout      time.Duration
 	// funcTimeout bounds the analysis of one function.
 	funcTimeout time.Duration
@@ -88,6 +89,7 @@ func (o *analyzeOpts) register(fs *flag.FlagSet) {
 	fs.DurationVar(&o.funcTimeout, "func-timeout", taint.DefaultOptions().FuncTimeout, "stop the analysis of one function after this long (it is then recorded as depth_limit, func_timeout: a clock, so the result then depends on the load of the machine)")
 	fs.StringVar(&o.irFile, "ir", "", "analyse the neutral IR in this JSON Lines file (from an extractor of another language) instead of Go packages")
 	fs.BoolVar(&o.passStats, "pass-stats", false, "add to stats what changed in the summaries in each pass (pass_changes) and the functions without a model that tainted values reached the most (unmodeled_top); the findings are the same (development)")
+	fs.StringVar(&o.funcValues, "func-values", "", "write to this file (JSON Lines) the diagnostic of the function values: for each call of a function value, the functions that the elements carried by the analysis say it may call, beside the candidates it has otherwise (the analysis is run once more, about twice the time; the findings and the output are the same) (development, docs/DESIGN-callouts.md 5)")
 	fs.StringVar(&o.traceElement, "trace-element", "", "print to stderr where the taint of this source (a site ID) first leaves its function and enters a package variable; the findings are the same (development)")
 	fs.StringVar(&o.memProf, "memprofile", "", "write a heap profile (allocations) to this file after the taint phase (development)")
 	fs.StringVar(&o.lockProf, "lockprofile", "", "write the mutex and block profiles of the taint phase to <this>.mutex and <this>.block (development)")
@@ -172,6 +174,11 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	eng := taint.New(graph, l.texts, st, rules, opts)
 	eng.SetLoadErrors(l.loadErrors())
 	res = eng.Run()
+	if o.funcValues != "" {
+		if err := writeFuncValues(o.funcValues, graph, l, st, rules, opts); err != nil {
+			fmt.Fprintf(os.Stderr, "rivus: -func-values: %v\n", err)
+		}
+	}
 	if ts := l.testsSkipped(); ts != nil {
 		// the directories that were not read are not tests: they are in summary.skipped_dirs, not here
 		stats := *ts

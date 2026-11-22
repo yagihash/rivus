@@ -104,6 +104,10 @@ func (s *state) callSig(cc *callCtx) int {
 	for _, b := range cc.in.Bindings {
 		add(b)
 	}
+	// the value that is called is read by the synthetic sink of the diagnostic of the function values
+	if s.eng.opts.FuncValues && cc.in.Callee != nil && cc.in.Callee.Kind == ir.CalleeValue && len(cc.in.Args) > 0 {
+		add(cc.in.Args[0])
+	}
 	// the values that the closures given to a callback row captured are read by the call too
 	for _, b := range s.callBindings(cc) {
 		add(b)
@@ -124,6 +128,11 @@ func (s *state) callBody(cc *callCtx) {
 	// Sources and sinks matched by the rules at this call.
 	sitesHere := s.eng.sites.ByIRInstr[sites.IRInstr{Func: s.fn.IR.ID, Block: ci.IRBlock, Instr: ci.IRIndex}]
 	for _, site := range sitesHere {
+		if site.Symbol == FuncValueSymbol {
+			// the sink that the engine makes for the diagnostic of the function values: what is called is the first operand
+			s.funcValueSink(site, ci)
+			continue
+		}
 		// a site on a call of a function value is for one of the functions it may reach
 		sc := cc
 		if site.Callee != "" && ci.Callee.Kind == ir.CalleeDynamic {

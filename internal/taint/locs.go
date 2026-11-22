@@ -110,7 +110,19 @@ const maxLocPositions = 5_000_000
 // locs returns the locations value v refers to, in a stable order.
 func (s *state) locs(v *sg.Value) []Loc {
 	switch v.Kind {
-	case sg.KConst, sg.KFunc, sg.KUndef:
+	case sg.KFunc:
+		if s.eng.opts.FuncValues {
+			if !s.funcSeeded[v] {
+				if s.funcSeeded == nil {
+					s.funcSeeded = map[*sg.Value]bool{}
+				}
+				s.funcSeeded[v] = true
+				s.seedFuncValue(Loc{own(v), ""}, string(v.FuncID), ir.Pos{}, "function value: function")
+			}
+			return []Loc{{own(v), ""}}
+		}
+		return nil
+	case sg.KConst, sg.KUndef:
 		return nil
 	case sg.KParam, sg.KFreeVar, sg.KGlobal:
 		return []Loc{{own(v), ""}}

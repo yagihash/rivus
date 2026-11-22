@@ -249,6 +249,9 @@ func (s *state) transfer(in *sg.Instr) {
 		s.callInstr(in)
 
 	case ir.OpMakeClosure:
+		if s.eng.opts.FuncValues && len(in.Dsts) > 0 && in.IR != nil && in.IR.Func != "" {
+			s.seedFuncValue(Loc{own(in.Dsts[0]), ""}, string(in.IR.Func), in.Pos, "function value: closure")
+		}
 		s.captured(in)
 	}
 }

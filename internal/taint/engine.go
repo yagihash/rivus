@@ -54,8 +54,12 @@ type Options struct {
 	// PassStats adds to the stats what changed in the summaries in each pass, and the functions without a
 	// model that tainted values reached the most (ADR-061). TraceElement is a site ID: where its
 	// elements first leave their function is printed to stderr. Neither changes the findings.
-	PassStats     bool
-	TraceElement  string
+	PassStats    bool
+	TraceElement string
+	// FuncValues is the diagnostic of the function values (funcvalues.go): the places that make a function value are
+	// synthetic sources, the calls of a function value are synthetic sinks (the sites must be those of
+	// FuncValueSites), and Result.FuncCandidates says what each call may call. The findings are not reported.
+	FuncValues    bool
 	SlowFunc      func(fn string, d, cpu time.Duration, outputs, roots int)
 	SlowThreshold time.Duration
 }
@@ -497,6 +501,8 @@ type Result struct {
 	// taint.
 	Suppressions []*Suppression `json:"suppressions,omitempty"`
 	Stats        Stats          `json:"stats"`
+	// FuncCandidates is the result of the diagnostic Options.FuncValues (not in the output).
+	FuncCandidates []FuncCandidates `json:"-"`
 }
 
 // Run analyses every function with a body, callees before callers, until the
@@ -1336,6 +1342,9 @@ func (e *Engine) collect(st Stats) *Result {
 		return a.Kind < b.Kind
 	})
 
+	if e.opts.FuncValues {
+		res.FuncCandidates = e.collectFuncCandidates(merged)
+	}
 	keys := make([]findingKey, 0, len(merged))
 	for k := range merged {
 		keys = append(keys, k)
