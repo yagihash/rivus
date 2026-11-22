@@ -515,7 +515,7 @@ stages: [param_source, dyn/iface-ptr-recv-read, clos/to-lib, state/global-field,
 - OSV(osv.dev)は、3 言語の横断の検索に使う。
 - アプリ(ハンドラ → sink の経路がある)の報告を優先する(rivus の用途に近い。道の段がある)。
 - **Dart が薄いことは、数字に出して隠さない**: `bench/wild/README.md` に、**言語 × 種類(コマンド / SQL / パス / SSRF / XSS / リダイレクト / テンプレート / デシリアライズ)の件数の表**を置き、見出しの数字に含める。
-- 最初の目標: **Go 10、Dart 5、Rust 5**。最初の 3 件は Gitea の 3 件(GHSA-4p89-xcq8-xfhm、GHSA-x77v-q46j-393g、GHSA-8vmh-w35x-73qr)。W1(切り出し。`bench/gitea-cve-paths.md` がある)と W2(骨組み。`go-curated/gitea` を出発点にし、段の列を経路の文書と照合する)の両方。3 件目(oauth)の本筋(プロバイダの応答 → `AvatarURL`)は `@miss`(rivus に HTTP の応答を source にする規則がない。B-41)。
+- 最初の目標: **Go 10、Dart 5、Rust 5**。最初の 3 件は Gitea の 3 件(GHSA-4p89-xcq8-xfhm、GHSA-x77v-q46j-393g、GHSA-8vmh-w35x-73qr)。W1(切り出し。`bench/gitea-cve-paths.md` がある)と W2(骨組み。`go-curated/gitea` を出発点にし、段の列を経路の文書と照合する)の両方。3 件目(oauth)の主な経路(プロバイダの応答 → `AvatarURL`)は `@miss`(rivus に HTTP の応答を source にする規則がない。B-41)。
 
 ### 9.5 1 件の形式
 
