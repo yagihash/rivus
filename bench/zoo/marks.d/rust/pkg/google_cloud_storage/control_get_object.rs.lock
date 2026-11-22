@@ -1,0 +1,2 @@
+rust	pkg/google_cloud_storage/control_get_object.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	pkg/google_cloud_storage/control_get_object.rs	sink-none	@sink(none) @nosink(pkg-gcs-control-get-object-decoy)	fn decoy() { @decoy
