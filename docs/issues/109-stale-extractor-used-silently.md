@@ -12,7 +12,7 @@ rivus は、extractor(`rivus-rust`、`rivus-dart`、Docker のイメージの中
 
 ## あるべき出力
 
-extractor が自分の版(rivus と同じ出どころの版の文字列、または IR の書式の版)を答えるインターフェースを持ち、rivus は、使う前に、版の一致を確かめる。合わなければ、**止まって、作り直し方を示す**(何も報告せずに使わない)。IR の先頭のレコードに extractor の版を入れ、`summary` にも出す(どの extractor で読んだ結果かが、出力に残る)。Dart と Rust の両方。Docker の経路は消すが、同じ穴は、サンドボックスでも、Homebrew(`rivus setup rust` で作った extractor が、rivus 本体より古い / 新しい)でも残る。
+extractor が自分の版(rivus と同じ出所の版の文字列、または IR の書式の版)を答えるインターフェースを持ち、rivus は、使う前に、版の一致を確かめる。合わなければ、**止まって、作り直し方を示す**(何も報告せずに使うことはしない)。IR の先頭のレコードに extractor の版を入れ、`summary` にも出す(どの extractor で読んだ結果かが、出力に残る)。Dart と Rust の両方。Docker の経路は消すが、同じ穴は、サンドボックスでも、Homebrew(`rivus setup rust` で作った extractor が、rivus 本体より古い / 新しい)でも残る。
 
 ## 終わりの条件
 

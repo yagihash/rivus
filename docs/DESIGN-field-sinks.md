@@ -2,8 +2,8 @@
 
 > **状態: 一部実装**(確認: 2026-11-22、9c26a39)
 > - 実装済み: 段階 0〜2(ADR-074、`parts`、`field_imprecision`)。段階 3 は `go-gcp.yaml` で一部。
-> - 未実装: 段階 4〜6(zoo には 4 マスある)。
-> - 注意: マス名 `conv/struct-field-at-call` は、実際の名前と違う。
+> - 未実装: 段階 4〜6(zoo には 4 セルある)。
+> - 注意: セル名 `conv/struct-field-at-call` は、実際の名前と違う。
 > - 利用者向けの書式の正本は [MODELING.md](MODELING.md)(`parts`)。この文書は設計の理由。
 
 設計時の状態の記述(今の状態は上の枠が正本): **設計は決まった(アーキテクチャ助言者のレビュー済み)。段階 0〜2 を実装する**(段階 3 以降は、各段階の受け入れを満たしてから)。11 節の「決めること」は、すべて答えを書いた。
@@ -28,7 +28,7 @@ Google Cloud のライブラリ(と、`googleapis` が生成する API 全般)�
 
 ソースの `kind: field`(`pkg.Type.Field` の読み出しが source)と対になる、「`pkg.Type.Field` への書き込みが sink」。
 
-- 要る物: 新しい種類の site(書き込みの命令に付ける。`enumerate.go` の `OpFieldStore` / `OpAddrOf`)、書き込む値が sink に届く新しい経路(要約の `SinkReach` の、新しい出どころ)。
+- 要る物: 新しい種類の site(書き込みの命令に付ける。`enumerate.go` の `OpFieldStore` / `OpAddrOf`)、書き込む値が sink に届く新しい経路(要約の `SinkReach` の、新しい出所)。
 - **finding の場所が、代入の行になる**(危険な処理が起きる、送る・実行する呼び出しではない)。
 - **組み立てただけで使われない構造体でも検出される**(`stmt := spanner.Statement{SQL: x}` を作って捨てる)。
 - **見逃す形**: 構造体の丸ごとのコピー(`*dst = *src`、値渡しのコピー)、ポインタ越し、**読んでいない関数が中で詰める形**(`spanner.NewStatement(sql)`、protobuf の `Unmarshal`、ビルダー)、埋め込み(`Base.Url` を `x.Url` と書く)。これらは、フィールドへの `field_store` が、読んだコードに現れない。**見逃しが増える方向**。
@@ -89,13 +89,13 @@ sinks:
 - **`parts` を書かなければ、今までどおり全部**(既存のルールは変わらない)。`args` / `recv`(全部)と `parts` を同じ sink に書いたとき、**同じ位置は全部が勝つ**(`parts` は、その位置については何も制限しない)。`args` が空で `parts` があるときは、「全部の引数」とは読まず、`parts` の位置だけ(今の「空 = 全部の引数」は、`parts` のない sink だけ)。同じ symbol の複数の行は、今までどおり和。
 - `field` は、**位置の値の中の、フィールド名の列**(`.` 区切り)。先頭は、位置の値の型の**フィールド**(型の名前ではない: `CreateTaskRequest` ではなく `Task` から)。名前は、**IR が示すフィールド名**そのまま(Go は Go のフィールド名。Dart は `url`、Rust は構造体のフィールド名か `0`)。要素の区切りは `[]`(スライス、配列、マップの値)。
 - **型のパス(`pkg.Type.Field`)との関係**: `kind: field` の source は、`pkg.Type.Field` で、**アクセスする側の型**から決まる。`parts` の `field` は、位置の値から**下る**アクセスパスで、型は書かない(型は、位置の値の静的な型で、`when_arg_type` で絞れる)。
-- **アクセスパスの綴りの誤りは、永久にサイレントな見逃しになる(段階 1 までに、設計に入れる)**。`field: Task.MessageType.HttpRequst.Url`(書き損じ)や、ライブラリの版でのフィールド名の変更では、下にも上にも当たらず、検出されなくなる。おとり(`Body` だけ汚染されて、`Url` のセルがまだない)と、**セルの状態では区別がつかない**。3 つの手で防ぐ。
+- **アクセスパスの綴りの誤りは、永久にサイレントな見逃しになる(段階 1 までに、設計に入れる)**。`field: Task.MessageType.HttpRequst.Url`(書き損じ)や、ライブラリの版でのフィールド名の変更では、下にも上にも当たらず、検出されなくなる。デコイ(`Body` だけ汚染されて、`Url` のセルがまだない)と、**セルの状態では区別がつかない**。3 つの手で防ぐ。
   1. **site での検査(`field_unresolved`)**。照合の前に、`field` の名前の列の各名前が、**解析した IR のどこかで、フィールド名として使われているか**(`field_load` / `field_store` / `addr_of` の `field` の段)を調べる。1 つでも、どこにも出ない名前があれば、**その sink は、その site で `parts` なし(位置の値の全部)として扱い**、不確実性 `field_unresolved`(`detail` に、出ない名前と指定したアクセスパス)を出す。見逃しにならず、綴りの誤りは、出力で見える。
      **型の鎖をたどる検査は、今の IR ではできない**(段階 0 で確かめた): 位置の値の静的な型から、フィールドの型をたどる(ポインタは透過、インターフェースの段に来たらそこで打ち切って「不明」)には、構造体のフィールドの並びと型が要る。IR は、型の ID と分類(`class`)だけを持つ(`TypeInfo` は `supers` だけ。3 言語とも)。構造体の定義を IR に足せば型の鎖の検査になるが、3 つの抽出器と IR の書式の変更なので、**この設計の範囲に入れない**。名前の検査は、広げすぎない側にある: IR のどこにも出ない名前は、どの型のフィールドとしても、書き込まれも読まれもしていない。
   2. **「死んだ行」のゲートを、`parts` のアクセスパスの単位に広げる**(`bench/parity` と、zoo ・curated の IR に、モデルの各行が 1 度でも当たる検査)。zoo のルールの `parts` の各行は、zoo の解析で、**アクセスパスが「下」で 1 度も当たらなければ失敗**(試験: 段階 1)。組み込みの行は、段階 3 で足すときに同じ検査を入れる。
-  3. **利用者のモデル**には、`docs/MODELING.md` に、「脆弱とおとりの 2 つの試験を付ける」「出力に `field_unresolved` が出ていないことを見る」を書く(AI に書かせるときの手引き)。
-- **アクセスパスの突き当たりの正規化(`*` は透明)**: エンジンのアクセスパスには、`/*`(ポインタの指す先、**インターフェースに包んだ値の中身**)の段が入る(`make_interface` は、ポインタの指す先を、インターフェースの値の `/*` の下に置く)。モデルの書き手が、それを知らなくてよいように、**照合は、`*` の段を読み飛ばして**行う: セルのアクセスパスから `*` を除いたものと、`field` を比べる。oneof(`Task.MessageType` はインターフェース、`Task_HttpRequest{HttpRequest: ...}` が中身)は、`MessageType` の次に、そのまま `HttpRequest`(ラッパーのフィールド名)と書く。読み飛ばしで広がるのは、`*` が実際に別の物を指す形だけで、見逃しにはならない。ADR-060(ポインタレシーバのメソッドで `/*` の下を読み書きする)が直した、「`/*` が 1 段ずれる」場所と同じ所を通るので、**ずれても拾える**ように、この読み飛ばしにした(`Param0` の展開は、今までの場所と `/*` を足した場所の和、と同じ考え)。
-- **`*` 以外の「書き手が知らない段」**(Rust の `Option` の中身、enum の variant、Dart のラッパー、Go の想定外の段): 照合は、`*` の読み飛ばしだけでなく、**「`field` の名前の列が、セルのアクセスパスの部分列(間に、名前でない段が挟まってよい)」**にする。名前でない段は、`*`、`[]`、`[k]`(`field` がその段を書いていないとき)。言語ごとの透過な段(Rust の `Option` の中身など)は、段階 6 で、この一覧に足す(`transparentStep`)。**フィールド名の段を飛ばすことはしない**(別の型の同じ名前の下に当たって、広げすぎるため)。照合の関数の形は、段階 1 で、この形にする(`matchParts(field []string, rel []string) (kind, rest)`: `kind` は、下 / 上 / 当たらない。`rest` は、上のとき、残りの名前)。
+  3. **利用者のモデル**には、`docs/MODELING.md` に、「脆弱とデコイの 2 つの試験を付ける」「出力に `field_unresolved` が出ていないことを見る」を書く(AI に書かせるときの手引き)。
+- **アクセスパスの突き当たりの正規化(`*` は透明)**: エンジンのアクセスパスには、`/*`(ポインタの指す先、**インターフェースに包んだ値の中身**)の段が入る(`make_interface` は、ポインタの指す先を、インターフェースの値の `/*` の下に置く)。モデルを書く人が、それを知らなくてよいように、**照合は、`*` の段を読み飛ばして**行う: セルのアクセスパスから `*` を除いたものと、`field` を比べる。oneof(`Task.MessageType` はインターフェース、`Task_HttpRequest{HttpRequest: ...}` が中身)は、`MessageType` の次に、そのまま `HttpRequest`(ラッパーのフィールド名)と書く。読み飛ばしで広がるのは、`*` が実際に別の物を指す形だけで、見逃しにはならない。ADR-060(ポインタレシーバのメソッドで `/*` の下を読み書きする)が直した、「`/*` が 1 段ずれる」場所と同じ所を通るので、**ずれても拾える**ように、この読み飛ばしにした(`Param0` の展開は、今までの場所と `/*` を足した場所の和、と同じ考え)。
+- **`*` 以外の「モデルを書く人が知らない段」**(Rust の `Option` の中身、enum の variant、Dart のラッパー、Go の想定外の段): 照合は、`*` の読み飛ばしだけでなく、**「`field` の名前の列が、セルのアクセスパスの部分列(間に、名前でない段が挟まってよい)」**にする。名前でない段は、`*`、`[]`、`[k]`(`field` がその段を書いていないとき)。言語ごとの透過な段(Rust の `Option` の中身など)は、段階 6 で、この一覧に足す(`transparentStep`)。**フィールド名の段を飛ばすことはしない**(別の型の同じ名前の下に当たって、広げすぎるため)。照合の関数の形は、段階 1 で、この形にする(`matchParts(field []string, rel []string) (kind, rest)`: `kind` は、下 / 上 / 当たらない。`rest` は、上のとき、残りの名前)。
 - **埋め込み**: Go の埋め込みは、IR でもアクセスパスに出る(`Query` の `QueryConfig`)ので、`QueryConfig.Q` と書く(昇格したフィールドの、短い名前 `Q` は読まない。最初は、書いたアクセスパスだけ)。
 
 ## 4. 意味: `checkSink` が見る範囲
@@ -122,7 +122,7 @@ sinks:
 | モデルのない関数が返した構造体(`flows: [{from: arg0, to: result}]` で、結果が丸ごと汚染される。`spanner.NewStatement(sql)`、`json.Unmarshal(src, &req)`) | 根の `""` が汚染されている(上) | 検出される + `field_imprecision`(why: `whole_value`) |
 | アクセスパスの切り詰め(k = 3)に当たった深いアクセスパス | `Task/MessageType/*` で切られ、`HttpRequest/Url` と `HttpRequest/Body` が 1 つのセルに混ざる(上) | 検出される + `field_imprecision`(why: `path_limit`) |
 | 要素(スライス、マップ)の中のフィールド | `[]` の要素は区別しない(`container_element_imprecision` の、今の扱い)。要素のセルが上 | 検出される + `field_imprecision`(why: `element`)。今の `container_element_imprecision` と同じ経路 |
-| モデルも本体もない関数に、ポインタで渡した構造体(`opaque(&req)`)。`Body` のセルだけがあり、`Url` のセルはない | 根の下に、アクセスパスが合わない(兄弟)汚染があり、根は「不明の関数に渡した」と覚えられている | 検出される + `field_imprecision`(why: `opaque_callee`)。zoo の vuln 側のマス: `opaque` が、実際に `Body` を `Url` に写す |
+| モデルも本体もない関数に、ポインタで渡した構造体(`opaque(&req)`)。`Body` のセルだけがあり、`Url` のセルはない | 根の下に、アクセスパスが合わない(兄弟)汚染があり、根は「不明の関数に渡した」と覚えられている | 検出される + `field_imprecision`(why: `opaque_callee`)。zoo の vuln 側のセル: `opaque` が、実際に `Body` を `Url` に写す |
 | `parts` の名前が、IR のどこにも出ない(綴りの誤り) | セルの照合は、どれにも当たらない | **`parts` なし(全部)として検出される** + `field_unresolved` |
 | 細かく書き込まれた(`stmt.SQL = x`、リテラル `Statement{SQL: x}`) | `SQL` のセル(下) | 普通の finding(不確実性なし) |
 
@@ -130,7 +130,7 @@ sinks:
 
 **不確実性の種類**: 今の `depth_limit`(`path_limit`)は、「関数の中で、アクセスパスを切った」という、関数単位の記録(`engine.coarsened`)で、finding の経路には付かない。ここで言いたいのは、**その finding の sink で、「どのフィールドかは分からない」**ことなので、**sink の段(`sinkStep` の `Notes`。今、動的な呼び出しの `dynamic_dispatch` が付く所)に付ける新しい種類 `field_imprecision`** を足す(出力の追加だけ。`rivus.result/1` の版は上げない。ADR-034)。`detail` に、`why` と、指定したアクセスパス、汚染されていたセルのアクセスパスを書く。代案: `path_limit` と `container_element_imprecision` を再利用する(新しい種類なし)。**推す: 新しい種類**(読む人が、「sink の指定したアクセスパスの上が汚染されていた」と、「関数の中でアクセスパスを切った」を、見分けられる)。
 
-**k = 3 の扱い**: (段階 0 で実測した: 12 節。**段は 5 ではなく 7**: `Task`、`*`、`MessageType`、`*`、`HttpRequest`、`*`、`Url`。ポインタのフィールドの先が `*` の段になる。以下は 5 と書いてあるが、K = 3 を超える、という結論は同じ。): アクセスパスが `Task` / `MessageType` / `*` / `HttpRequest` / `Url` と、**段が 5**(`/` が 5 つ)で、K = 3 を超える。`Task` は `*CreateTaskRequest` のポインタの先で、ポインタの値のセルは指す先と別名なので段にならない(`locs`)、と読んだが、**`/*` の数え方は、zoo のセルで実測してから**確定する(段階 0)。k を超える形では、**書き込みのアクセスパスが `Task/MessageType/*` で切られる**(`pathTrunc`)ので、`Url` と `Body` を区別できない。この形では、`field_imprecision`(`path_limit`)で検出される。おとりの(`Body` だけ汚染された)finding は、**消えない**。「消えた finding は本物でないことを示す」の対象は、k に収まる形だけ。深い形を細かくするのは、段階 4(7 節)。
+**k = 3 の扱い**: (段階 0 で実測した: 12 節。**段は 5 ではなく 7**: `Task`、`*`、`MessageType`、`*`、`HttpRequest`、`*`、`Url`。ポインタのフィールドの先が `*` の段になる。以下は 5 と書いてあるが、K = 3 を超える、という結論は同じ。): アクセスパスが `Task` / `MessageType` / `*` / `HttpRequest` / `Url` と、**段が 5**(`/` が 5 つ)で、K = 3 を超える。`Task` は `*CreateTaskRequest` のポインタの先で、ポインタの値のセルは指す先と別名なので段にならない(`locs`)、と読んだが、**`/*` の数え方は、zoo のセルで実測してから**確定する(段階 0)。k を超える形では、**書き込みのアクセスパスが `Task/MessageType/*` で切られる**(`pathTrunc`)ので、`Url` と `Body` を区別できない。この形では、`field_imprecision`(`path_limit`)で検出される。デコイの(`Body` だけ汚染された)finding は、**消えない**。「消えた finding は本物でないことを示す」の対象は、k に収まる形だけ。深い形を細かくするのは、段階 4(7 節)。
 
 **要約(`SinkReach`)で確かめたこと(コードを読んだ。段階 2 で、テストで固定する)**
 
@@ -146,7 +146,7 @@ sinks:
 | --- | --- | --- |
 | `spanner.Statement{SQL}`(`txn.Query(ctx, stmt)`、`BatchUpdate`) | 浅い(1 段、`[]`) | 偽陽性(`Params` だけ汚染される)が消えること。`NewStatement(sql)` を通る形(丸ごとの汚染)が、不確実性つきで検出されること |
 | `bigquery` の `Query` の `QueryConfig.Q`(`q.Run` / `q.Read`) | 埋め込み 1 段 + 1 | 今、関数の引数で書ける形(`client.Query(q)` の引数 0)との比較。**`client.Query(q)` の sink も残す(両方。決定)**: 「`Run` に届く経路をエンジンが落としたときに何も報告しない」ほうが、「同じ流れが 2 件になる」より重い。重複は、段階 3 で数を測り、多ければ、報告の側で「同じ source で、一方の経路が他方の site を通るなら、1 件にまとめて、両方の場所を載せる」(別の設計の、別の入口からの経路をまとめて見せる件と、同じ場所の話) |
-| Cloud Tasks の `CreateTaskRequest.Task.MessageType.HttpRequest.Url` | 深い(5 段)+ oneof(インターフェース) | k = 3 に当たる。`/*` の読み飛ばし。おとり(`Body` だけ汚染)は、段階 4 まで検出される(不確実性つき) |
+| Cloud Tasks の `CreateTaskRequest.Task.MessageType.HttpRequest.Url` | 深い(5 段)+ oneof(インターフェース) | k = 3 に当たる。`/*` の読み飛ばし。デコイ(`Body` だけ汚染)は、段階 4 まで検出される(不確実性つき) |
 
 **`exec.Cmd` を対象外にしない**(段階 3 の後ろでよい): `cmd := &exec.Cmd{Path: x}`、`cmd.Args = append(cmd.Args, x)`、`cmd.Dir` / `cmd.Env` を `Run` / `Start` / `Output` に渡す形は、今はサイレントな見逃しで、標準ライブラリなので整備の対象(`exec.Command(x)` と重なる流れは、BigQuery と同じ扱い)。段階 0 の数える対象に、`(*http.Client).Do(req)` の `URL` / `Host`(`req.URL.Host = x`)も入れる。`tls.Config.InsecureSkipVerify` は対象外(汚染された値の流れでなく、定数の設定の話)。
 
@@ -165,8 +165,8 @@ sinks:
 
 **使える**(表現は、位置と、フィールド名の列で、言語に依らない)。照合は、IR のフィールド名と `*` の読み飛ばしだけで、型の言語に依らない。
 
-- **Dart**(`googleapis` の生成クラス。`CreateTaskRequest(task: Task(httpRequest: HttpRequest(url: x)))`): 名前付きのコンストラクタ引数が、`field_store` として IR に出るかどうかで決まる(`this.url` の初期化の形式と、通常のコンストラクタの本体)。段階 6 で、zoo-dart の同じ 3 つのマスで測る。セッター(`req.url = x`)が、呼び出しとして出るなら、モデルの `flows` が要る(Dart の extractor が、フィールドの書き込みを、`field_store` にしているか、測る)。
-- **Rust**(生成された構造体。`prost` / `tonic` のリクエスト): 構造体のフィールドは、`/name` か `/0`。`Option<T>` と `oneof` の enum は、`Some(..)` のペイロードや enum の値のアクセスパスが、どう出るかが、Go の `/*` と違う。ビルダー(`Request::builder().url(x).build()`)は、ビルダーの内部のフィールドを通る(モデルの書き手は、内部の名前に頼れない)ので、**ビルダーの最後の呼び出し(`.send()`)のレシーバに、アクセスパスを書く**か、ビルダーのメソッドに `flows` を書く。段階 6 で測る。
+- **Dart**(`googleapis` の生成クラス。`CreateTaskRequest(task: Task(httpRequest: HttpRequest(url: x)))`): 名前付きのコンストラクタ引数が、`field_store` として IR に出るかどうかで決まる(`this.url` の初期化の形式と、通常のコンストラクタの本体)。段階 6 で、zoo-dart の同じ 3 つのセルで測る。セッター(`req.url = x`)が、呼び出しとして出るなら、モデルの `flows` が要る(Dart の extractor が、フィールドの書き込みを、`field_store` にしているか、測る)。
+- **Rust**(生成された構造体。`prost` / `tonic` のリクエスト): 構造体のフィールドは、`/name` か `/0`。`Option<T>` と `oneof` の enum は、`Some(..)` のペイロードや enum の値のアクセスパスが、どう出るかが、Go の `/*` と違う。ビルダー(`Request::builder().url(x).build()`)は、ビルダーの内部のフィールドを通る(モデルを書く人は、内部の名前に頼れない)ので、**ビルダーの最後の呼び出し(`.send()`)のレシーバに、アクセスパスを書く**か、ビルダーのメソッドに `flows` を書く。段階 6 で測る。
 - 3 言語とも、**アクセスパスの名前を知る補助**(5 節の診断)が、モデルを書くのに要る。
 
 ## 9. 段階と、各段階の受け入れ
@@ -175,23 +175,23 @@ sinks:
 
 | 段階 | 内容 | 受け入れ |
 | --- | --- | --- |
-| **0. 測る**(何も変えない) | (a) zoo の 3 つの形(浅い / 5 段 / インターフェースに包む)で、実際のセルのアクセスパスを出す(診断の追加だけ)。`/*` の段の数え方と、k に当たる所を確定する。(b) 実コード(gogs、gin-vue-admin、gophish、casdoor、dart-pub、parseable)で、`req.URL` / `cmd.Path` のように、**フィールドへの代入のあとに呼ぶ形**の数(`exec.Cmd{Path: ...}`、`http.Request`、`(*http.Client).Do(req)` の `URL` / `Host`)。(c) 型の情報が IR にあるか(上の 3 節)と、既定の伝播が引数の中を混ぜるか(4 節の 3)。(d) `parts` の照合の費用 | 数とアクセスパスを、この文書に書き戻す。結果は変わらない。zoo のマスは別の push で、今の出方を `@miss` / `@fp` で記録 |
-| **1. 書式と、1 つの呼び出し** | `model.Sink.Parts`(読み込みの検査: 位置と `field` の整合、糖衣)。`sites.SinkArgs` と、`sinksAt` の整理。`checkSink` を、`parts` のある sink で、アクセスパスの照合に。`field_imprecision`(sink の段の `Notes`)。**`parts` のない sink は、今と同じ**。zoo の新しいマス `conv/struct-field-at-call`(下) | `compare.sh`: **`parts` を使うルールがまだないので、finding の差 0**(本物と偽のどちらも)。zoo のマスが期待どおり |
+| **0. 測る**(何も変えない) | (a) zoo の 3 つの形(浅い / 5 段 / インターフェースに包む)で、実際のセルのアクセスパスを出す(診断の追加だけ)。`/*` の段の数え方と、k に当たる所を確定する。(b) 実コード(gogs、gin-vue-admin、gophish、casdoor、dart-pub、parseable)で、`req.URL` / `cmd.Path` のように、**フィールドへの代入のあとに呼ぶ形**の数(`exec.Cmd{Path: ...}`、`http.Request`、`(*http.Client).Do(req)` の `URL` / `Host`)。(c) 型の情報が IR にあるか(上の 3 節)と、既定の伝播が引数の中を混ぜるか(4 節の 3)。(d) `parts` の照合の費用 | 数とアクセスパスを、この文書に書き戻す。結果は変わらない。zoo のセルは別の push で、今の出方を `@miss` / `@fp` で記録 |
+| **1. 書式と、1 つの呼び出し** | `model.Sink.Parts`(読み込みの検査: 位置と `field` の整合、糖衣)。`sites.SinkArgs` と、`sinksAt` の整理。`checkSink` を、`parts` のある sink で、アクセスパスの照合に。`field_imprecision`(sink の段の `Notes`)。**`parts` のない sink は、今と同じ**。zoo の新しいセル `conv/struct-field-at-call`(下) | `compare.sh`: **`parts` を使うルールがまだないので、finding の差 0**(本物と偽のどちらも)。zoo のセルが期待どおり |
 | **2. 要約(`SinkReach`)** | `SinkReach` の不確実性のマーク。`mergeSinkReach` と `joinSummaries` / `signature`。試験: 構造体を別の関数に渡す、`*dst = *src` のコピー、ポインタ、ビルダー風の関数(中で詰める)、`flows` のあるモデルが詰める形 | 試験(`testdata/go/cases`)が、1 つずつ。差 0(まだルールがない) |
 | **3. 最初のモデル** | `go-google-cloud.yaml`(6 節の 3 つ)。既存の sink に `parts` を足すもの(段階 0(b) で選ぶ)は、**1 つずつ**足す | **足すたびに `compare.sh`**: 消えた finding は、「危険でないフィールドだけが汚染されていた」ものと、経路で示す(ソースが、`Body` や `Params` だけに入っている)。増えた finding は、sink の単位で分類。`go-scale`: 時間と不確実性の数 |
-| **4. 要求された深さ**(k の、局所的な拡張。**測ってから決める**) | 規則の `parts` が示すアクセスパス(例: 5 段)の上だけ、切り詰めを `max(K, 道の段数)` にする(エンジンの全体の `K` は 3 のまま)。アクセスパスの集合は規則で決まり有限なので、収束は変わらない。要約の `Param` のアクセスパスの切り詰めも同じ。**やるなら、「規則が示すアクセスパスの上だけ」の判定が、要約の `Param` の切り詰めと呼び出し元で食い違わないこと**(片方だけ深いと、アクセスパスが当たらなくなる = 見逃し)を、試験で固定する | 先に測る(段階 0 の続き): 要素数、収束、`go-scale` の時間。**結果が変わる(おとりが消える)ので、compare で、消えたものを分類**。深い形の `field_imprecision`(`path_limit`)が、細かい finding に変わる |
+| **4. 要求された深さ**(k の、局所的な拡張。**測ってから決める**) | 規則の `parts` が示すアクセスパス(例: 5 段)の上だけ、切り詰めを `max(K, 道の段数)` にする(エンジンの全体の `K` は 3 のまま)。アクセスパスの集合は規則で決まり有限なので、収束は変わらない。要約の `Param` のアクセスパスの切り詰めも同じ。**やるなら、「規則が示すアクセスパスの上だけ」の判定が、要約の `Param` の切り詰めと呼び出し元で食い違わないこと**(片方だけ深いと、アクセスパスが当たらなくなる = 見逃し)を、試験で固定する | 先に測る(段階 0 の続き): 要素数、収束、`go-scale` の時間。**結果が変わる(デコイが消える)ので、compare で、消えたものを分類**。深い形の `field_imprecision`(`path_limit`)が、細かい finding に変わる |
 | **5. `flows` の `to:` にアクセスパス**(**精度の改善ではなく、`parts` が働くための前提**。下の注) | `to: result.QueryConfig.Q` のように、結果や引数の、フィールドを示す。`client.Query(q)`、`spanner.NewStatement(sql)` を細かくする | `whole_value` の `field_imprecision` が、細かい finding に変わる。差は、compare で分類 |
-| **6. Dart と Rust** | zoo-dart、zoo-rust の同じ 3 マス。`googleapis` の生成クラス、Rust の生成された構造体 | マスの期待値。出ない形は、`@miss(理由)` で記録 |
+| **6. Dart と Rust** | zoo-dart、zoo-rust の同じ 3 セル。`googleapis` の生成クラス、Rust の生成された構造体 | セルの期待値。出ない形は、`@miss(理由)` で記録 |
 
 **段階 5 の位置づけ**: 生成コードが、フィールドを公開しない形(Go protobuf の Opaque API、ビルダー、Dart のセッター、Rust のビルダー)では、**書き込みが全部、呼び出しになる**(`req.SetUrl(x)`、`b.url(x)`)。呼び出しの書き込みは、モデルの `flows` が示すしかなく、`to:` がアクセスパスを示せなければ、構造体は丸ごと汚染、`parts` は、いつも `whole_value` の不確実性つきで検出されるだけになる。つまり、**その形で `parts` が働くための前提**であって、あとで磨く精度の話ではない。
 
-**zoo の新しいマス `conv/struct-field-at-call`**(3 言語。`bench/zoo-go/cells/conv/struct_field_at_call/`)。形は 3 つ:
+**zoo の新しいセル `conv/struct-field-at-call`**(3 言語。`bench/zoo-go/cells/conv/struct_field_at_call/`)。形は 3 つ:
 
 1. **浅い**: `req.SQL = src` → `mark.SinkStmt(req)`(`SQL` を sink とする、zoo 用のルール)。
 2. **5 段**: `req.Task.MessageType` に oneof のラッパーを入れ、`HttpRequest.Url` に入れる → `mark.SinkTask(req)`。
 3. **インターフェースに包む**: ポインタレシーバの値をインターフェースに入れて渡す(`any(&X{...})`、ADR-060 の形)。
 
-おとりは、形ごとに 1 つ: **別のフィールドだけ**(`Params`、`Body`)に source を入れる(`@decoy`。`@nosink`)。期待値: 浅い = vuln は出る、おとりは**検出されない**(今は、`SinkAny` のように、出る)。5 段 = vuln は出る(`field_imprecision`、`path_limit` つき)、おとりは**段階 4 まで出る**(`@fp`、理由 `path_limit`、参照 = この文書)。包む形 = vuln は出る、おとりは、k に入れば検出されない。`@miss` は 1 つもなく、見逃しの形は、`vuln` のどの形にもない(実行で裏付ける)。
+デコイは、形ごとに 1 つ: **別のフィールドだけ**(`Params`、`Body`)に source を入れる(`@decoy`。`@nosink`)。期待値: 浅い = vuln は出る、デコイは**検出されない**(今は、`SinkAny` のように、出る)。5 段 = vuln は出る(`field_imprecision`、`path_limit` つき)、デコイは**段階 4 まで出る**(`@fp`、理由 `path_limit`、参照 = この文書)。包む形 = vuln は出る、デコイは、k に入れば検出されない。`@miss` は 1 つもなく、見逃しの形は、`vuln` のどの形にもない(実行で裏付ける)。
 
 ## 10. 案 A を、後で足す条件
 
@@ -205,7 +205,7 @@ sinks:
 2. 書式 `parts: [{arg|recv, field}]` と、糖衣 `args + field`: **はい**。
 3. 照合で `*` を読み飛ばす: **はい**。**部分列に広げる**(3 節)。
 4. Google Cloud のモデルの置き場: **組み込みの `go-gcp.yaml`**(「組み込みは言語と標準ライブラリまで」の方針の、ユーザーの明示の例外)。
-5. 段階 4(k の局所拡張): **測ってから**(段階 0 の続き)。やらなければ、深い形のおとりは、`field_imprecision` つきで検出され続ける(見逃しはない)。
+5. 段階 4(k の局所拡張): **測ってから**(段階 0 の続き)。やらなければ、深い形のデコイは、`field_imprecision` つきで検出され続ける(見逃しはない)。
 6. BigQuery: **両方**(`client.Query(q)` の sink も残す。6 節)。
 
 ## 確かめていないこと
@@ -222,11 +222,11 @@ sinks:
 | 形 | 位置の値の `Loc` | セルのアクセスパス | 読み取り |
 | --- | --- | --- | --- |
 | 浅い: `req.SQL = x`(`req` は `*Stmt`) | `""` | `/SQL` | 1 段。`*` なし |
-| 浅いおとり: `req.Params["p"] = x` | `""` | `/Params/*/[]` | マップは、`*`(マップの指す先)と `[]`(要素) |
+| 浅いデコイ: `req.Params["p"] = x` | `""` | `/Params/*/[]` | マップは、`*`(マップの指す先)と `[]`(要素) |
 | インターフェースに包む: `any(req)` | `""` | `/*/SQL` | 先頭に `*`(ADR-060 の `/*`) |
 | 深い: `CreateTask{Task: &Task{MessageType: &TaskHTTPRequest{HTTPRequest: h}}}` の `URL` | `""` | **`/Task/*/MessageType`**(`URL` も `Body` もこのセルに混ざる) | 本当のアクセスパスは `/Task/*/MessageType/*/HTTPRequest/*/URL` と **7 段**(`Task`、`*`、`MessageType`、`*`、`HTTPRequest`、`*`、`URL`)。K = 3 で、3 段目の `MessageType` で切れる |
 
-- **5 節の「5 段」は誤り**: ポインタのフィールド(`Task *Task`、`HTTPRequest *HTTPRequest`)と、oneof のインターフェースの段は、**それぞれ `*` の段を足す**。深い形は 7 段で、k = 3 の 2 倍以上。段階 4 でやるなら `max(K, 7)` で、要素数と収束を測ってから決める。今は、深い形は、`path_limit` の不確実性つきで検出される(`URL` のおとりも検出される)。
+- **5 節の「5 段」は誤り**: ポインタのフィールド(`Task *Task`、`HTTPRequest *HTTPRequest`)と、oneof のインターフェースの段は、**それぞれ `*` の段を足す**。深い形は 7 段で、k = 3 の 2 倍以上。段階 4 でやるなら `max(K, 7)` で、要素数と収束を測ってから決める。今は、深い形は、`path_limit` の不確実性つきで検出される(`URL` のデコイも検出される)。
 - **型の情報は IR にない**(Go、Dart、Rust の IR とも。`ir.TypeInfo` は `supers` だけ)。ので、3 節の型の鎖の検査はできず、IR の名前の検査(`field_unresolved`)と、死んだ行のゲートを使う。
 - **既定の伝播は、引数の中を混ぜない**: `unmodeled`(`internal/taint/calls.go`)は、引数とレシーバの中身の全部を、**結果のセルだけ**に流し、引数へは何も書かない。`opaque(&req)` の後でも、`req` のセルは変わらない。この設計の 4 節の 3 が、これを補う(`TestZooGo` の `conv/struct-field-opaque`: 実行では `Opaque` が `Params["body"]` を `SQL` に写し、今の sink(構造体の全部)は検出される。`parts` の後でも検出されること、が受け入れ)。
 - **実コードの数**(`grep` による。流れではなく、書く形の行数。Dart と Rust は、段階 6 で数える):

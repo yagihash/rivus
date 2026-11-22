@@ -14,9 +14,9 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | [#74](issues/74-path-widening.md) | 位置集合の不動点: 上限超過時のパスの widening と、locs() のソート回避(#18 の残り) | 道具・ベンチ(性能) | 全 | 後回し | open | - |
 | [#75](issues/75-when-arg-type-via-variable.md) | when_arg_type の型の条件が、変数を経由した値で成り立たず、sink が見逃される | サイレントな見逃し | Go | 3 | open | - |
-| [#76](issues/76-captured-vars-in-helper.md) | Dart / Go: ヘルパーに渡したクロージャが捕獲した変数の読み書きが、ヘルパーの中の呼び出しで落ちる(サイレントな見逃し) | サイレントな見逃し | Dart / Go | 2 | partial | zoo `F/clos/*`、`bench/rust-curated` |
+| [#76](issues/76-captured-vars-in-helper.md) | Dart / Go: ヘルパーに渡したクロージャがキャプチャした変数の読み書きが、ヘルパーの中の呼び出しで落ちる(サイレントな見逃し) | サイレントな見逃し | Dart / Go | 2 | partial | zoo `F/clos/*`、`bench/rust-curated` |
 | [#77](issues/77-many-closures-to-helper.md) | Dart: 同じヘルパーに渡すクロージャが 9 種類以上だと、呼び出しが未解決になり、コールバックの中の sink・throw・書き込み… | 注記つきの見逃し(push 後) | Dart | 1 / 2 | partial | zoo `F/clos/helper-overflow`(32 まで)、`F/clos/helper-overflow-many`(33 以上。`@miss(depth_limit)`)、`cmd/rivus/dart_limit_test.go` |
-| [#78](issues/78-returned-closure-captures.md) | Dart / Go: 関数が返したクロージャを呼ぶと、捕獲した値と中の source が落ちる(カリー化、ファクトリ、functiona… | サイレントな見逃し | Dart / Go | 2 | open | zoo `F/clos/returned` |
+| [#78](issues/78-returned-closure-captures.md) | Dart / Go: 関数が返したクロージャを呼ぶと、キャプチャした値と中の source が落ちる(カリー化、ファクトリ、functiona… | サイレントな見逃し | Dart / Go | 2 | open | zoo `F/clos/returned` |
 | [#79](issues/79-callbacks-held-in-fields.md) | Dart / Rust: List やフィールドに持たれたコールバック(エミッタ、リスナー、遅延評価)の中の sink に、値が届かない | サイレントな見逃し | Dart / Rust | 2 | open | zoo `F/clos/stored`、`F/dyn/func-field` |
 | [#80](issues/80-stdlib-callbacks-dart.md) | Dart: 標準ライブラリのコールバック(catchError、whenComplete、putIfAbsent、Map.forEach… | サイレントな見逃し | Dart | 2 / 3 | open | - |
 | [#81](issues/81-callback-of-callback.md) | Dart: クロージャが、パラメータで受けた関数を呼ぶ形(g(a)。コールバックのコールバック)で、流れが落ちる | サイレントな見逃し(一部) | Dart | 2 | partial | zoo `F/clos/callback-of-callback`(`@miss(depth_limit)`) |

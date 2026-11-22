@@ -12,9 +12,9 @@
 
 - **zoo** は、「流れの形」を体系的に並べた、小さな、動くコードのベンチ。`bench/zoo-go`、`bench/zoo-dart`、`bench/zoo-rust`。
 - **正解は、注釈を実行で裏付けたもの**。source は目印の文字列を返す関数、sink は受け取った引数を記録するだけの関数(本物の exec や SQL は呼ばない)。ケースを実際に動かし、「目印が sink に届いた / 届かなかった」を観測し、それがソースの注釈(`@sink(tag)` / `@sink(none)`)と一致することを CI で見る。**rivus の出力を見て注釈を合わせることはできない**。rivus が出せないものは `@miss`。緑にするために注釈は変えない。
-- **1 マス = 3 ケース**: 脆弱な版(`@sink`)、直した版(`none`)、おとり(同じ形で、汚染された値が別のオブジェクト・引数・フィールド・ハンドラに行く。`none`)。
+- **1 セル = 3 ケース**: 脆弱な版(`@sink`)、直した版(`none`)、デコイ(同じ形で、汚染された値が別のオブジェクト・引数・フィールド・ハンドラに行く。`none`)。
 - **立方体にしない**: 表 F(流れの形、言語ごとに手で書く)、表 S(伝播のモデル = `pure` / propagator / sanitizer の 1 行ごと。機械で生成。正解は YAML からでなく実行から。source / sink のルールは対象外)、少しの組み合わせ(形 × 族の被覆)。
-- **wild** は、実世界の脆弱性を 1 件ずつ足して育てるベンチ。1 件に 2 つの形(W1 = 本物の切り出し、W2 = 経路の骨組みの書き起こし)を持つ。流れの向きは wild → zoo(wild で見つけた新しい形は、zoo にマスとして足す)。
+- **wild** は、実世界の脆弱性を 1 件ずつ足して育てるベンチ。1 件に 2 つの形(W1 = 本物の切り出し、W2 = 経路の骨組みの書き起こし)を持つ。流れの向きは wild → zoo(wild で見つけた新しい形は、zoo にセルとして足す)。
 - 段階: (1) Go の仕組みと 20 形、(2) Dart の仕組みと 20 形(同時)、(3) 残りと表 S、(4) Rust、(5) 組み合わせ。**実行での裏付けを先に作る**。
 
 ## 1. 何のためか、何でないか
@@ -34,9 +34,9 @@ zoo は、それを埋める。**zoo が見ないもの**は §10 に書く。
 ## 2. curated との関係(決めること a)
 
 - 別のディレクトリ: `bench/zoo-go`、`bench/zoo-dart`、`bench/zoo-rust`。curated は、「実プロジェクトの形」と「CVE の形」を持つものとして、そのまま残す。
-- **注釈の書き方と採点の仕組みは 1 つ**にする。今の `cmd/rivus/bench_curated_test.go` の `checkCurated`(`checkCuratedIR` / `checkCuratedReport`)を `checkAnnotated(dir, options)` に一般化し、`TestCuratedGo/Dart/Rust` と `TestZooGo/Dart/Rust` と `TestWild*` が同じ関数を呼ぶ。zoo 用の追加(マス・役割の検査、`@ref` の検査、実行との照合)は options で足す。curated の既存の振る舞いは変えない(カウントの下限、`@miss` / `@fp` / `@noisy` の両側検査、`offSourcePath` の上限)。
-- curated のケースが、zoo のマスに当たるとき(例: `go-curated/api/capture.go` の `cap-run-a` / `cap-run-b` は、`closure/two-callers` のマス)は、注釈に `@cell(<マスの名前>)` を付ける。テストは「マスごとに、curated のどのケースが当たるか」の対応表をログに出す(重複を削る判断の材料。強制はしない)。
-- 新しい見逃しや誤検出が見つかったときの置き場の順: **最小の形は zoo のマス、実プロジェクトの形が要る話だけ curated、実世界の再現は wild**。
+- **注釈の書き方と採点の仕組みは 1 つ**にする。今の `cmd/rivus/bench_curated_test.go` の `checkCurated`(`checkCuratedIR` / `checkCuratedReport`)を `checkAnnotated(dir, options)` に一般化し、`TestCuratedGo/Dart/Rust` と `TestZooGo/Dart/Rust` と `TestWild*` が同じ関数を呼ぶ。zoo 用の追加(セル・役割の検査、`@ref` の検査、実行との照合)は options で足す。curated の既存の振る舞いは変えない(カウントの下限、`@miss` / `@fp` / `@noisy` の両側検査、`offSourcePath` の上限)。
+- curated のケースが、zoo のセルに当たるとき(例: `go-curated/api/capture.go` の `cap-run-a` / `cap-run-b` は、`closure/two-callers` のセル)は、注釈に `@cell(<マスの名前>)` を付ける。テストは「セルごとに、curated のどのケースが当たるか」の対応表をログに出す(重複を削る判断の材料。強制はしない)。
+- 新しい見逃しや誤検出が見つかったときの置き場の順: **最小の形は zoo のセル、実プロジェクトの形が要る話だけ curated、実世界の再現は wild**。
 
 ## 3. 実行での裏付け(設計の中心)
 
@@ -125,7 +125,7 @@ func CleanCmd(s string) string   // 同じ形で CleanSQL, CleanHTML, CleanPath
 func Case(id string, fn func())
 ```
 
-ケースは 1 マス = 1 ファイル(または 1 パッケージ)。
+ケースは 1 セル = 1 ファイル(または 1 パッケージ)。
 
 ```go
 // bench/zoo-go/cells/call/depth3/depth3.go     @cell(F/call/depth3)
@@ -165,12 +165,12 @@ func decoy() { // @decoy
 
 - **ケースの関数は引数なし、戻り値なし**。状態はケース専用の変数(`g_<ケース名>_`)だけを使う(ケース間で共有しない。lint で検査)。
 - 同じ sink の呼び出し行を、複数のケースで共有してよいのは、形がそれを要求するとき(= 共有そのものが形。例: `dyn/xtalk-n-by-m`)だけ。
-- おとりは、**汚染された値の行き先を持つ**: 汚染された値は別の場所に行く。別の sink 行(`@sink(tag)`)に届くのが望ましい(エンジンが全部切る、という退化を、おとりが見逃さないため。これは「共存する流れ」と呼ぶ)。判定の対象の行が `@sink(none)`。
+- デコイは、**汚染された値の行き先を持つ**: 汚染された値は別の場所に行く。別の sink 行(`@sink(tag)`)に届くのが望ましい(エンジンが全部切る、という退化を、デコイが見逃さないため。これは「共存する流れ」と呼ぶ)。判定の対象の行が `@sink(none)`。
 - 非同期(goroutine、`select`)は、ケース自身が待つ(`sync.WaitGroup`)。待てないものは `@manual`。
-- **sink の既定を `any` にしない**。`SinkCmd(v any)` が既定だと、全ケースの最後の段が make_interface + reflect の深い走査になり、その扱いの誤り(CORE-J の近く)が、全マスを一斉に赤か緑に変える。`SinkAny` は、構造体やコンテナを渡す形のマスだけ。**「構造体を丸ごと sink に渡したら、中のフィールドの汚染は届いたとみなすか」は、それ自体を 1 つのマス**(`F/cont/struct-whole-to-sink`)にする。
+- **sink の既定を `any` にしない**。`SinkCmd(v any)` が既定だと、全ケースの最後の段が make_interface + reflect の深い走査になり、その扱いの誤り(CORE-J の近く)が、全セルを一斉に赤か緑に変える。`SinkAny` は、構造体やコンテナを渡す形のセルだけ。**「構造体を丸ごと sink に渡したら、中のフィールドの汚染は届いたとみなすか」は、それ自体を 1 つのセル**(`F/cont/struct-whole-to-sink`)にする。
 - **解析が見る `mark` は、本体のない宣言だけ**。`mark` の本体(記録のグローバルへの追記、reflect)を rivus が読むと、全ケースの値が 1 つのグローバルに書かれる合流点になる(今日の `os.Stderr` と同じ形)。Go: ビルドタグ。既定(解析)は空の本体(`func SinkCmd(s string) {}`)、実行のときだけ `-tags zooexec` で本物の記録。rivus は、ルールだけで source / sink / sanitizer を与える(`symbol: zoo/mark.SinkCmd` など)。Dart / Rust も、解析の対象から `zoo_mark` / `zoo-mark` の実装を外す(実装は別ファイルにし、rivus の入力のパターンから外す。公開の宣言だけを解析に見せる)。解析の結果が、`mark` の実装の有無で変わらないことを、段階 1 で確かめる。
-- harness(`cmd/observe`)は解析の対象に含めない(登録の `fn()` は動的な呼び出しで、全ケースの汚染源になる)。**登録(`init` で関数値をグローバルの表に入れる)**は、全ケースの関数が「保存された関数値」になる。C-7(`assumed_call`)や `Reachable` に触れないこと(捕獲がないので当たらないはず)を、段階 1 の最初の表で確かめる。
-- 入口の形で `In`(引数の型の source)を使うとき、ケースの関数は引数なしなので、内側のハンドラ `h(in mark.In)` をケースが呼ぶ形になる(`h(mark.NewIn("tag"))`)。rivus から見ると source は `h` の引数、実行では `NewIn(tag)` の値で、**両者が同じ tag で対になる**。これを、`call/direct` の次の 1 マス(`F/call/direct-in`)で先に確かめる(CORE-A の N×M は、この形でしか出ない)。
+- harness(`cmd/observe`)は解析の対象に含めない(登録の `fn()` は動的な呼び出しで、全ケースの汚染源になる)。**登録(`init` で関数値をグローバルの表に入れる)**は、全ケースの関数が「保存された関数値」になる。C-7(`assumed_call`)や `Reachable` に触れないこと(キャプチャがないので当たらないはず)を、段階 1 の最初の表で確かめる。
+- 入口の形で `In`(引数の型の source)を使うとき、ケースの関数は引数なしなので、内側のハンドラ `h(in mark.In)` をケースが呼ぶ形になる(`h(mark.NewIn("tag"))`)。rivus から見ると source は `h` の引数、実行では `NewIn(tag)` の値で、**両者が同じ tag で対になる**。これを、`call/direct` の次の 1 セル(`F/call/direct-in`)で先に確かめる(CORE-A の N×M は、この形でしか出ない)。
 
 ### 3.4 Dart: `package:zoo_mark`
 
@@ -204,7 +204,7 @@ pub fn clean_cmd(s: &str) -> String;                   // clean_sql ...
 pub fn case(id: &'static str, f: fn());                // 登録(明示的な一覧 `pub fn cases() -> Vec<..>`)
 ```
 
-- ワークスペース: `zoo-mark`(記録)、`zoo-cases`(ケース。マスごとに `mod`)、`zoo-run`(harness、`observe` のバイナリ)。ケースごとのテストは `libtest-mimic`(`harness = false`)で、登録 1 件を 1 つのテストにする。
+- ワークスペース: `zoo-mark`(記録)、`zoo-cases`(ケース。セルごとに `mod`)、`zoo-run`(harness、`observe` のバイナリ)。ケースごとのテストは `libtest-mimic`(`harness = false`)で、登録 1 件を 1 つのテストにする。
 - 登録の一覧は明示的に書く(`inventory` やマクロを使わない: マクロは解析する側の形になり、形 `macro` を汚すため)。登録に漏れたケースは、`@cell` 注釈の関数との照合で見つかる(§3.6)。
 
 ### 3.6 実行と照合の流れ
@@ -219,8 +219,8 @@ pub fn case(id: &'static str, f: fn());                // 登録(明示的な一
    - `@miss` / `@fp` の行: `@miss` は実行で reached(流れは本物)、`@fp` は none。
    - **`@sink(none)` は、ケースの全部の枝を実行したときだけ正解**。実行は 1 本の経路の証人で、「届かなかった」は「その実行では届かなかった」でしかない。だから照合の条件に、**ケースのコード(`cells/`)の文のカバレッジが 100%** を入れる(Go は `-cover` と `-coverprofile`、Dart は `--coverage`、Rust は `-C instrument-coverage`。段階 1 は Go と Dart)。実行されない文があるケースは落とす(`@manual` を除く)。枝のある形(`guard/one-branch`、`allowlist-early-return`、`ctl/type-switch`、`select`)は、**ケースが両方の枝を自分で通る**(条件を変えて 2 回呼ぶ)。観測は「どれかの実行で届いた」を reached とする。
    - **非決定な形**(goroutine の順、map の走査順)は、variant 0 を数回(5 回)走らせて、観測が同じことを見る。違えば `@manual`。
-   - 各マスは、`@vuln`(または役割なしの本体)、`@fixed`、`@decoy` の 3 つを持つ。`@cell` の名前が表と対応する。表 F にない `@cell` と、`@cell` のない表 F の行は、落ちる。
-4. そのあと、rivus を `rules.yaml` で走らせ、`checkAnnotated` の既存の検査(出る・出ない・`@miss` / `@fp` の両側検査、不確実性の注記の検査)を行う。**失敗したマスは、そのマスだけで解析し直して**(`./cells/<family>/<shape>/...`)、「単独では緑 / 赤」をログに出す(全体の中での混ざりと、そのマスの誤りを分けるため)。
+   - 各セルは、`@vuln`(または役割なしの本体)、`@fixed`、`@decoy` の 3 つを持つ。`@cell` の名前が表と対応する。表 F にない `@cell` と、`@cell` のない表 F の行は、落ちる。
+4. そのあと、rivus を `rules.yaml` で走らせ、`checkAnnotated` の既存の検査(出る・出ない・`@miss` / `@fp` の両側検査、不確実性の注記の検査)を行う。**失敗したセルは、そのセルだけで解析し直して**(`./cells/<family>/<shape>/...`)、「単独では緑 / 赤」をログに出す(全体の中での混ざりと、そのセルの誤りを分けるため)。
 
 ### 3.7 `@miss` の書き方(zoo の追加)
 
@@ -234,23 +234,23 @@ x := Src("a") // @source(a) @miss(silent) @ref(R-03)
 
 ### 3.8 手の注釈 `@manual(理由)`
 
-実行で確かめられない形(並行の順、実際の時間、外部の入力)だけ。sink の行に `@sink(tag) @manual(<理由>)` と書くと、その行の実行との照合を免除する(行の存在と、rivus との照合は残る)。上限: ケース全体の 3% と、マスごとに 1 つ。一覧を報告に出す。理由が「面倒」なものは受け付けない(レビューで落とす)。
+実行で確かめられない形(並行の順、実際の時間、外部の入力)だけ。sink の行に `@sink(tag) @manual(<理由>)` と書くと、その行の実行との照合を免除する(行の存在と、rivus との照合は残る)。上限: ケース全体の 3% と、セルごとに 1 つ。一覧を報告に出す。理由が「面倒」なものは受け付けない(レビューで落とす)。
 
 ### 3.9 真理の変更の一覧
 
 `@sink(x)` と `@sink(none)` の入れ替え、`@miss` / `@fp` の削除、`@carry` の追加は、**エンジンの変更がなければ起きないはず**のもの(`@miss` の削除は、エンジンが直ったときだけ)。CI が、ベースとの差分から、これらを「真理の変更」として列挙し、PR の要約に出す(強制ではなく、見えるようにする)。実行の結果が変わる変更(ケースのコードの変更)と、注釈だけの変更を、別に数える。
 
-**「ケースを弱くして緑にする」を監視する**: 既存のマスのコードを変え、かつ `@miss` / `@fp` が減るコミットは、「形の変更」として一覧の**先頭**に出す。`internal/` と既存の `cells/` を**同時に**変えるコミットも同じ。そのために、**各マスは、形を 1 行で表す説明**(`@shape: インターフェース越しのポインタレシーバのフィールドを読む`)を持つ。形の変更は、説明が変わらないか、変わった理由が書かれていること、をレビューで見る。
+**「ケースを弱くして緑にする」を監視する**: 既存のセルのコードを変え、かつ `@miss` / `@fp` が減るコミットは、「形の変更」として一覧の**先頭**に出す。`internal/` と既存の `cells/` を**同時に**変えるコミットも同じ。そのために、**各セルは、形を 1 行で表す説明**(`@shape: インターフェース越しのポインタレシーバのフィールドを読む`)を持つ。形の変更は、説明が変わらないか、変わった理由が書かれていること、をレビューで見る。
 
-## 4. マスと表
+## 4. セルと表
 
-### 4.1 1 マス = 3 ケース
+### 4.1 1 セル = 3 ケース
 
 | 役割 | 内容 | 注釈 | 何を見るか |
 | --- | --- | --- | --- |
 | 脆弱 | source の値が、その形を通って sink に届く | `@sink(tag)` | 見逃し(`@miss`) |
 | 直した | 前(または途中)でサニタイザ / ガードを通す | `@sink(none)` | 誤検出、サニタイザの効き |
-| おとり | 同じ形。汚染された値は、別のオブジェクト・別の引数・別のフィールド・別のハンドラに行き、判定の行には届かない。共存する流れを持つ | `@sink(none)`(+ 共存する流れは `@sink(tag)`) | 混ざり: XTALK、N×M、tear-off の receiver と引数の入れ替わり、構造体全体への持ち上げ |
+| デコイ | 同じ形。汚染された値は、別のオブジェクト・別の引数・別のフィールド・別のハンドラに行き、判定の行には届かない。共存する流れを持つ | `@sink(none)`(+ 共存する流れは `@sink(tag)`) | 混ざり: XTALK、N×M、tear-off の receiver と引数の入れ替わり、構造体全体への持ち上げ |
 
 source は 2 種(戻り値: `src(tag)`、引数の型: `In`)。**既定は戻り値**。入口の形(ハンドラ、receiver、グローバルを書く入口、クロージャ)の約 20 形は、2 種の両方を持つ。
 
@@ -260,28 +260,28 @@ source は 2 種(戻り値: `src(tag)`、引数の型: `In`)。**既定は戻り
 
 #### 4.2.1 Go
 
-| 族 | 形(ID の末尾)と、おとりの入れ替え | 参照 |
+| 族 | 形(ID の末尾)と、デコイの入れ替え | 参照 |
 | --- | --- | --- |
-| call | **direct**、depth1、**depth3**、depth10、**file**(ファイル越し)、pkg(パッケージ越し)、**variadic**(可変長に束ねて展開。おとりは別の位置)、**multiret**(複数の戻り値。おとりは別の戻り値だけを使う)、named-ret-defer(名前付き戻り値を defer が書く)、recursion、mutual-rec | |
-| dyn | **iface-val-recv**(値レシーバ)、**iface-ptr-recv-read**(ポインタレシーバのフィールドを読む)、iface-ptr-recv-write(書く)、**sink-in-method**(sink がメソッドの中)、embed(埋め込み。おとりは外側のフィールド)、stdlib-writer-own(`io.Writer` の自前の実装)、stdlib-error-own(`error` の自前の実装)、http-middleware-chain(`http.Handler` の連鎖)、**method-value**(メソッド値。おとりは receiver と引数の入れ替え)、method-expr、func-returning-func、**func-field**、func-map、func-slice、**xtalk-n-by-m**(N 個のハンドラが同じ型の引数を共有。おとりは別のハンドラ) | R-01(CORE-J)、R-04、バックテスト #7 |
-| clos | **inline**(その場で呼ぶ)、**to-own-helper**(自分のヘルパーに渡す)、to-lib(`sort.Slice`、`sync.Once` など)、**returned**(返す)、stored(保存して後で呼ぶ)、capture-write-by-ref(参照で捕獲して中で書く)、loop-var(ループ変数)、two-callers(同じヘルパーに、2 つの呼び出し元が別のクロージャ。おとりは相手のクロージャ) | C-7 |
-| state | **global-direct**、global-accessor、global-ptr、global-field(構造体のフィールド)、**save-restore**(保存して戻す。おとりは別のフィールド)、global-init(`init`)、**handler-then-reader**(ハンドラが書いて、別の入口が読む)、struct-copy(構造体の丸ごとのコピー)、deep-field(アクセスパス 4 段以上)、alias(別名) | CORE-H(#6)、C-7 の雑音(#8)、R-19 |
-| cont | **slice**、map-key-vs-value(2 つのキーで別の値。おとりは別のキー)、chan、array、range、append-copy、sync-map、atomic-value、ctx-value(`context.WithValue`)、map-two-keys | |
+| call | **direct**、depth1、**depth3**、depth10、**file**(ファイル越し)、pkg(パッケージ越し)、**variadic**(可変長に束ねて展開。デコイは別の位置)、**multiret**(複数の戻り値。デコイは別の戻り値だけを使う)、named-ret-defer(名前付き戻り値を defer が書く)、recursion、mutual-rec | |
+| dyn | **iface-val-recv**(値レシーバ)、**iface-ptr-recv-read**(ポインタレシーバのフィールドを読む)、iface-ptr-recv-write(書く)、**sink-in-method**(sink がメソッドの中)、embed(埋め込み。デコイは外側のフィールド)、stdlib-writer-own(`io.Writer` の自前の実装)、stdlib-error-own(`error` の自前の実装)、http-middleware-chain(`http.Handler` の連鎖)、**method-value**(メソッド値。デコイは receiver と引数の入れ替え)、method-expr、func-returning-func、**func-field**、func-map、func-slice、**xtalk-n-by-m**(N 個のハンドラが同じ型の引数を共有。デコイは別のハンドラ) | R-01(CORE-J)、R-04、バックテスト #7 |
+| clos | **inline**(その場で呼ぶ)、**to-own-helper**(自分のヘルパーに渡す)、to-lib(`sort.Slice`、`sync.Once` など)、**returned**(返す)、stored(保存して後で呼ぶ)、capture-write-by-ref(参照でキャプチャして中で書く)、loop-var(ループ変数)、two-callers(同じヘルパーに、2 つの呼び出し元が別のクロージャ。デコイは相手のクロージャ) | C-7 |
+| state | **global-direct**、global-accessor、global-ptr、global-field(構造体のフィールド)、**save-restore**(保存して戻す。デコイは別のフィールド)、global-init(`init`)、**handler-then-reader**(ハンドラが書いて、別の入口が読む)、struct-copy(構造体の丸ごとのコピー)、deep-field(アクセスパス 4 段以上)、alias(別名) | CORE-H(#6)、C-7 の雑音(#8)、R-19 |
+| cont | **slice**、map-key-vs-value(2 つのキーで別の値。デコイは別のキー)、chan、array、range、append-copy、sync-map、atomic-value、ctx-value(`context.WithValue`)、map-two-keys | |
 | ctl | defer、go、select、panic-recover、type-switch、type-assert、err-wrap(エラーの包み)、range-over-func(返されたイテレータ)、builtin-unsupported(未対応の builtin) | R-08、R-18 |
-| conv | concat、sprintf、builder、bytes-string(`[]byte` と string)、**buffer-writestring**(`io.WriteString(&b, s)` と `b.String()`)、buffer-fprintf、json-decode、reflect-set、reflect-typeof-decoy(型の記述子だけでつながる組。おとり)、generics(`*G[string]`)、stderr-logger-decoy(`os.Stderr` を通るロガー。おとり) | R-02(CORE-K)、バックテスト #1、#3 |
+| conv | concat、sprintf、builder、bytes-string(`[]byte` と string)、**buffer-writestring**(`io.WriteString(&b, s)` と `b.String()`)、buffer-fprintf、json-decode、reflect-set、reflect-typeof-decoy(型の記述子だけでつながる組。デコイ)、generics(`*G[string]`)、stderr-logger-decoy(`os.Stderr` を通るロガー。デコイ) | R-02(CORE-K)、バックテスト #1、#3 |
 | guard | **sanitize-before**、**one-branch**(片方の枝だけ。出るべき)、resanitize-after-taint(サニタイズのあとで再び汚す。出るべき)、allowlist-early-return、const-cond(定数の条件のガード)、guards-5plus(ガード 5 個以上)、kind-mismatch(HTML のエスケープのあとで `SinkCmd`。出るべき)、sanitize-copy-only(コピーだけをサニタイズ。出るべき) | R-30、R-32 |
 
 形の数: 80 弱。ケースは形 × 3 に、source の 2 種目の分(約 30)を足して 240 前後。**段階 1 の形**: call/direct、**direct-in**(`In` の対。`direct` の次)、depth3、multiret、dyn/iface-val-recv、iface-ptr-recv-read、sink-in-method、method-value、xtalk-n-by-m、**stdlib-writer-own**、**http-middleware-chain**(この 2 つは R-04。未修正の第 1 群を全部入れる)、clos/inline、to-own-helper、returned、state/global-direct、save-restore、handler-then-reader、cont/slice、map-key-vs-value、conv/buffer-writestring、guard/sanitize-before、one-branch。**後ろに回してよい順**: file、variadic、func-field。(表の太字は、この一覧に合わせて読み替える。)
 
 **R-03 の先出し**: 表 S(段階 3)を待たず、**`pure` の行だけの実行の検査**を段階 1 で切り出す(引数が文字列 / バイト列で、呼ぶだけで安全な行に限る)。R-03 の修正の受け入れ条件になる。
 
-追加の形: call/`direct-in`、cont/`struct-whole-to-sink`(構造体を丸ごと sink に渡す。中のフィールドの汚染は届いたとみなすか。`SinkAny` を使うマス)。
+追加の形: call/`direct-in`、cont/`struct-whole-to-sink`(構造体を丸ごと sink に渡す。中のフィールドの汚染は届いたとみなすか。`SinkAny` を使うセル)。
 
 #### 4.2.2 Dart(共通の族を Dart の言葉で + 固有)
 
 共通の族の対応(Go の写しにしない): interface → `abstract class` / `implements`、embedding → `extends` / `mixin`、`defer` → `try` / `finally`、`go` → `Future` / `Isolate`、channel → `StreamController`、panic/recover → `throw` / `catch`、type switch → パターンの `switch`、range-over-func → `sync*` ジェネレータ、`io.Writer` の自前の実装 → `StringSink` / `Sink` の自前の実装、ミドルウェアの連鎖 → `shelf` 風の `Handler` の連鎖。表 F の共通の形は、この対応で言い直して書く。
 
-固有の形(`F/dart/<形>`): **async-await**、**future-then**(`then` / `catchError` / `whenComplete`)、stream(`listen` / `map` / `await for`)、cascade(`..`)、**extension**、mixin、**named-args**(名前付き引数。おとりは位置の入れ替え)、**getter-setter**、**patterns-record**(パターン、record、`if-case`、`switch` の case)、**for-in**、late(`late` の遅延初期化)、**interp-tostring**(補間の `toString`)、**callable-class**(`call`)、dynamic(`dynamic` の呼び出し)、isolate、**tearoff-instance**(インスタンスメソッドの tear-off。receiver と引数の入れ替わり)、tearoff-static、super-mixin-impl(mixin や上位クラスから来る実装)、flutter-build / flutter-onpressed / flutter-initstate(自前の骨組み)。参照: R-14(tear-off)、R-15(パターン / for-in)、R-16(mixin / 補間)、DART-12。**段階 2 の 20 形**: 太字の 11 に、共通の族から 9(直接、深さ 3、クロージャ 2 つ、グローバル、ハンドラ → 読む入口、リスト、map、サニタイズ、片方の枝)。
+固有の形(`F/dart/<形>`): **async-await**、**future-then**(`then` / `catchError` / `whenComplete`)、stream(`listen` / `map` / `await for`)、cascade(`..`)、**extension**、mixin、**named-args**(名前付き引数。デコイは位置の入れ替え)、**getter-setter**、**patterns-record**(パターン、record、`if-case`、`switch` の case)、**for-in**、late(`late` の遅延初期化)、**interp-tostring**(補間の `toString`)、**callable-class**(`call`)、dynamic(`dynamic` の呼び出し)、isolate、**tearoff-instance**(インスタンスメソッドの tear-off。receiver と引数の入れ替わり)、tearoff-static、super-mixin-impl(mixin や上位クラスから来る実装)、flutter-build / flutter-onpressed / flutter-initstate(自前の骨組み)。参照: R-14(tear-off)、R-15(パターン / for-in)、R-16(mixin / 補間)、DART-12。**段階 2 の 20 形**: 太字の 11 に、共通の族から 9(直接、深さ 3、クロージャ 2 つ、グローバル、ハンドラ → 読む入口、リスト、map、サニタイズ、片方の枝)。
 
 #### 4.2.3 Rust(共通の族 + 固有)
 
@@ -295,19 +295,19 @@ source は 2 種(戻り値: `src(tag)`、引数の型: `In`)。**既定は戻り
 
 #### 4.2.5 言語間の parity と、2 つのマーク `@na` / `@todo`
 
-Go のマスには、Rust と Dart の同じ名前のマスか、次の 2 つのマークのどちらかが要る(`TestZooRust` / `TestZooDart` の parity の検査。どちらも無いと落ちる)。**2 つのマークは、検査では同じ扱いで、表では別に数える**(`bench/parity/TABLE.md` の 3 節)。
+Go のセルには、Rust と Dart の同じ名前のセルか、次の 2 つのマークのどちらかが要る(`TestZooRust` / `TestZooDart` の parity の検査。どちらも無いと落ちる)。**2 つのマークは、検査では同じ扱いで、表では別に数える**(`bench/parity/TABLE.md` の 3 節)。
 
 | マーク | 意味 | 書き方 |
 | --- | --- | --- |
 | `@na(F/<族>/<形>: 理由)` | **その言語に、本当に無い形**。書こうとしても、同じ形にならない(言語の機能がない) | Rust: `cells/src/lib.rs` の先頭。Dart: `bench/zoo-dart/na.txt` |
-| `@todo(F/<族>/<形>: PARITY: 理由)` | **その言語でも書ける形で、まだマスが無い(未実装)** | 同じ場所。Dart でマークの無い Go のマスは、`@todo` と同じに数える |
+| `@todo(F/<族>/<形>: PARITY: 理由)` | **その言語でも書ける形で、まだセルが無い(未実装)** | 同じ場所。Dart でマークの無い Go のセルは、`@todo` と同じに数える |
 
 使い分けの基準(迷ったら `@todo`。ただし「迷う」ものは、`@na` のまま理由に書いて助言者に聞く):
 
 1. **近い形が書けるなら `@todo`**。例: Go の `fmt.Fprint` を自前の `io.Writer` に → Rust の `write!` を自前の `io::Write` に。形の見かけが違っても、エンジンが試される経路(自前の実装の呼び出し先、書いた値を別のところで読む)が同じなら、書ける。
 2. **`@na` は、言語に無い機能だけ**。例: Go のゴルーチンの形を持たない言語、Rust の借用だけの形、Go のポインタレシーバを Dart に。
 3. **「まだ測っていない」「エンジンの側が未対応」は `@na` の理由にならない**。書けるのだから `@todo`。エンジンが出せないなら、書いて `@miss` にする(`@na` は、見逃しを表から消す)。
-4. 逆向き(Dart だけにあるマス)は、`@na(go: 理由)`(Go に無い形)。Go で書けるが、まだ無いものは、同じ名前のマスを zoo-go に足すまで「まだ」として数える。
+4. 逆向き(Dart だけにあるセル)は、`@na(go: 理由)`(Go に無い形)。Go で書けるが、まだ無いものは、同じ名前のセルを zoo-go に足すまで「まだ」として数える。
 
 数は、`TestZoo*` の出力の `zoo-<言語>: parity marks: @na N [名前] | @todo N [名前]` の行に出て、`bench/parity` の表の 3 節に、言語ごとの件数と名前が並ぶ。**`@todo` の件数を 0 に近づけるのが、言語間の差の是正の進み具合**。
 
@@ -360,25 +360,25 @@ Go のマスには、Rust と Dart の同じ名前のマスか、次の 2 つの
 全組(80 × 79 / 2 = 3,160)は作らない。**形 × 族の被覆**: 各形が、**ほかの各族と最低 1 回**組む(8 族なら、各形は 7 つの別の族と)。
 
 - 組み合わせ = 4 つの**段**(stage)の直列。`sink(S4(S3(S2(S1(src)))))`。段は、別々の族から選ぶ。
-- 各形に、**段の形**を手で書く(`stage_*.go`): `S(v) string`(値を、その形で通す)と、`D(v) string`(おとりの形: 汚染された値を、別の場所に置き、きれいな値を返す)。段にできない形(sink-in-method、入口の形)は `stage: no` とし、一覧に出す。
-- 生成器(決定的、シードつき、貪欲な被覆)が、`combo_gen.go` を出す。各組み合わせは 3 ケース: 脆弱(全段 `S`)、直した(ランダムな 1 段の前にサニタイザ)、おとり(1 段を `D`)。**正解は、実行から**(§3.6)。
+- 各形に、**段の形**を手で書く(`stage_*.go`): `S(v) string`(値を、その形で通す)と、`D(v) string`(デコイの形: 汚染された値を、別の場所に置き、きれいな値を返す)。段にできない形(sink-in-method、入口の形)は `stage: no` とし、一覧に出す。
+- 生成器(決定的、シードつき、貪欲な被覆)が、`combo_gen.go` を出す。各組み合わせは 3 ケース: 脆弱(全段 `S`)、直した(ランダムな 1 段の前にサニタイザ)、デコイ(1 段を `D`)。**正解は、実行から**(§3.6)。
 - 数: 段になる形が約 55 なら、50 前後。言語ごとに 30〜50。
 
-### 4.5 おとりの設計の注意
+### 4.5 デコイの設計の注意
 
-おとりが「何でも通る空のテスト」にならないための規則: (1) 共存する流れを持つ(汚染された値が、確かに存在し、別の sink に届く)。(2) 判定の行が、実行で hit を持つ。(3) 「入れ替える対象」(別のオブジェクト、別の引数、別のフィールド、別のハンドラ)が、形ごとに表に書いてある(上の表の括弧)。書いていない形は、別の引数(位置の入れ替え)を既定とする。
+デコイが「何でも通る空のテスト」にならないための規則: (1) 共存する流れを持つ(汚染された値が、確かに存在し、別の sink に届く)。(2) 判定の行が、実行で hit を持つ。(3) 「入れ替える対象」(別のオブジェクト、別の引数、別のフィールド、別のハンドラ)が、形ごとに表に書いてある(上の表の括弧)。書いていない形は、別の引数(位置の入れ替え)を既定とする。
 
-## 5. エンジンの未修正の項目を、直す前にマスにする(決めること c の後半)
+## 5. エンジンの未修正の項目を、直す前にセルにする(決めること c の後半)
 
-今日のレビュー(2026-11-21)の未修正の項目は、**直す前に zoo のマスを先に置き**、`@miss` で赤が出ることを確かめてから直す。手順:
+今日のレビュー(2026-11-21)の未修正の項目は、**直す前に zoo のセルを先に置き**、`@miss` で赤が出ることを確かめてから直す。手順:
 
-1. 項目の再現(レビューの一時ディレクトリにある。消えうる)を、表 F の形に直して、3 ケースにする(脆弱、直した、おとり)。
+1. 項目の再現(レビューの一時ディレクトリにある。消えうる)を、表 F の形に直して、3 ケースにする(脆弱、直した、デコイ)。
 2. 実行で、注釈を確かめる(§3.6)。
 3. rivus で走らせる。落ちるなら(`@sink` の注釈のまま `TestZoo` が落ちる)、それが「赤」。`@miss(<silent|kind>) @ref(<項目>)` を付けてコミット(赤が出ていた証拠を、コミットメッセージに書く)。
 4. 直す。ratchet が落ちる(`@miss` が真でなくなる)。同じコミットで `@miss` を外す。
 5. 直す前後で、`compare.sh` の差分を分類する(`bench/README.md` の手順どおり)。
 
-| 項目 | 置くマス |
+| 項目 | 置くセル |
 | --- | --- |
 | R-01 / CORE-J | dyn/iface-ptr-recv-read、iface-ptr-recv-write、sink-in-method、method-value、generics |
 | R-02 / CORE-K | conv/buffer-writestring、buffer-fprintf、表 S の propagator の行 |
@@ -396,7 +396,7 @@ Go のマスには、Rust と Dart の同じ名前のマスか、次の 2 つの
 
 ### 6.1 規模
 
-| 言語 | 形 | マス × 3 | 2 種目の source | 組み合わせ | 表 S | ケースの目安 |
+| 言語 | 形 | セル × 3 | 2 種目の source | 組み合わせ | 表 S | ケースの目安 |
 | --- | --- | --- | --- | --- | --- | --- |
 | Go | 80 弱 | 約 240 | 約 30 | 約 50 × 3 | 生成 | 400〜600(表 S を除く) |
 | Dart | 55 前後 | 約 165 | 約 20 | 30〜40 × 3 | 生成 | 300 前後 |
@@ -406,7 +406,7 @@ Go のマスには、Rust と Dart の同じ名前のマスか、次の 2 つの
 
 | 段階 | 内容 | 終わりの条件 |
 | --- | --- | --- |
-| 1 | Go の仕組み(`mark`、harness、`TestZooTruthGo`、`checkAnnotated` の一般化)と、表 F の 20 形 | 実行と注釈が一致。`TestZooGo` が curated の `go test` と同じ流れで走る。バックテストに要る 3 マス(#6 handler-then-reader、#7 xtalk-n-by-m、#8 save-restore)がある。`mark` の有無で結果が同じ |
+| 1 | Go の仕組み(`mark`、harness、`TestZooTruthGo`、`checkAnnotated` の一般化)と、表 F の 20 形 | 実行と注釈が一致。`TestZooGo` が curated の `go test` と同じ流れで走る。バックテストに要る 3 セル(#6 handler-then-reader、#7 xtalk-n-by-m、#8 save-restore)がある。`mark` の有無で結果が同じ |
 | 2 | Dart の仕組み(`zoo_mark`、`dart test`、`dart:mirrors`)と、20 形(段階 1 と**同時**: 仕組みを 2 言語で試すため) | 同上。Go と Dart で、目印の仕様が同じ(`spec.json` の自己検査) |
 | 3 | Go / Dart の残りの形と、表 S の生成(標準ライブラリの行。デファクトは一覧が決まってから) | 組み込みの全行にケース(skip は理由つき)。再生成の差分なし |
 | 4 | Rust(仕組みと形) | 同上 |
@@ -422,10 +422,10 @@ Go のマスには、Rust と Dart の同じ名前のマスか、次の 2 つの
 zoo-go: マス 78 / ケース 234 | 出る 61 / 78 | @miss 17(痕跡あり 6、黙っている 8、ルールなし 3) | 直した版で誤って出る 1 | おとりで誤って出る 4 / 78 | carry: encode 出る 9 / 10、digest 方針 2、numeric 出ない 3 / 3(numeric_stop あり 3) | 手の注釈 2(0.9%) | 実行と注釈の不一致 0 | 実行されない文 0
 ```
 
-- **マス**: 3 ケースそろったマスの数。
+- **セル**: 3 ケースそろったセルの数。
 - **出る**: 脆弱なケースのうち、rivus が出したもの(`@miss` でないもの)。
 - **`@miss`**: 注記あり(`@miss(<kind>)`)、何も報告していない(`@miss(silent)`)、ルールなし(`@miss(norule)`。**範囲の中の API、つまり標準ライブラリとデファクトのライブラリだけ**。範囲の外の API は数えない)の内訳。
-- **おとりで誤って出る**: おとりの `@sink(none)` の行を、rivus が報告した数(`@fp`)。直した版の分は別に数える。
+- **デコイで誤って出る**: デコイの `@sink(none)` の行を、rivus が報告した数(`@fp`)。直した版の分は別に数える。
 - **手の注釈**: `@manual` の数と割合。
 - **実行と注釈の不一致**: **常に 0**。0 でなければ、CI が落ちる。
 
@@ -438,16 +438,16 @@ zoo-go: マス 78 / ケース 234 | 出る 61 / 78 | @miss 17(痕跡あり 6、�
 
 `advisor` のバックテスト(Gitea 離脱のためのもの)の台帳に、**zoo の列**を足す。入力は head のものに固定し、エンジンだけを古い版にする(同じ決まり)。
 
-| # | 現象 | 悪い版で赤になるべき zoo のマス | 赤の種類 |
+| # | 現象 | 悪い版で赤になるべき zoo のセル | 赤の種類 |
 | --- | --- | --- | --- |
 | 6 | 明示のグローバルへの書き込みを落とす(CORE-H。`623b620` 〜 `ae5fdf6`) | state/handler-then-reader の脆弱 | **MISS** |
-| 7 | param の source の書き戻しで N×M(CORE-A。`8e8b866`) | dyn/xtalk-n-by-m のおとり | **FAKE** |
-| 8 | 保存して戻すでサブセルが根に持ち上がる(C-7 の案 D の前) | state/save-restore のおとり | **FAKE** |
-| 1、3 | reflect のモデルなし、`holds: nothing` なし(`2dd5022`) | conv/reflect-typeof-decoy、stderr-logger-decoy のおとり | FAKE(小さい形でも出るなら。出なければ、規模の現象として層 A に任せる) |
+| 7 | param の source の書き戻しで N×M(CORE-A。`8e8b866`) | dyn/xtalk-n-by-m のデコイ | **FAKE** |
+| 8 | 保存して戻すでサブセルが根に持ち上がる(C-7 の案 D の前) | state/save-restore のデコイ | **FAKE** |
+| 1、3 | reflect のモデルなし、`holds: nothing` なし(`2dd5022`) | conv/reflect-typeof-decoy、stderr-logger-decoy のデコイ | FAKE(小さい形でも出るなら。出なければ、規模の現象として層 A に任せる) |
 
-- 良い版では、同じマスが緑であること(悪い版が赤、良い版が緑の両方。赤の指標が期待した指標であること)。
+- 良い版では、同じセルが緑であること(悪い版が赤、良い版が緑の両方。赤の指標が期待した指標であること)。
 - zoo が悪い版で赤にならない行は、zoo の形が足りない(足す)。
-- `compare.sh` の差分の分類で、zoo の finding は**ラベルがある**ので、`compare.py` が注釈と突き合わせ、追加 / 削除された finding を「脆弱が出た / 脆弱が消えた(MISS)/ おとりが出た(FAKE)/ 直した版が出た」に自動で分類して、`details/zoo-*.md` に出す(分類が機械的になる。実コードの NOISE の分類は、今までどおり人)。
+- `compare.sh` の差分の分類で、zoo の finding は**ラベルがある**ので、`compare.py` が注釈と突き合わせ、追加 / 削除された finding を「脆弱が出た / 脆弱が消えた(MISS)/ デコイが出た(FAKE)/ 直した版が出た」に自動で分類して、`details/zoo-*.md` に出す(分類が機械的になる。実コードの NOISE の分類は、今までどおり人)。
 - 古い版が読めない IR(Dart / Rust)は「対象外」と書く(緑に数えない)。
 
 ## 8. 軽い層に入る(決めること d)
@@ -461,7 +461,7 @@ zoo-dart) KIND=dart; DIR="$R/bench/zoo-dart"; RULES="$DIR/rules.yaml"
 zoo-rust) KIND=rust; DIR="$R/bench/zoo-rust"; RULES="$DIR/rules.yaml"
 ```
 
-  `BENCHES` と `--light` の一覧に足す。基準と head は、それぞれの版のフィクスチャで解析される(R-41。head で足したマスは `+N` に出る)。IR のキャッシュのキーは、抽出器の tree と対象の tree(既存の仕組み)。
+  `BENCHES` と `--light` の一覧に足す。基準と head は、それぞれの版のフィクスチャで解析される(R-41。head で足したセルは `+N` に出る)。IR のキャッシュのキーは、抽出器の tree と対象の tree(既存の仕組み)。
 - 軽い層の合計は、zoo の分で +60 秒を超えないこと。超えたら、重い層に移す前に、サイズを削る(ケースを削るのでなく、形の整理を先に)。
 - CI: `test` ジョブが `TestZoo*` を走らせる(`RIVUS_DART` と `RIVUS_RUST` の既存の設定で)。生成物の再生成の差分、`spec.json` の自己検査、grep の検査(§11)も、同じジョブ。
 
@@ -496,7 +496,7 @@ stages: [param_source, dyn/iface-ptr-recv-read, clos/to-lib, state/global-field,
 
 ### 9.2 zoo との関係: 流れの向きは wild → zoo
 
-- 現実の経路を、**形の列に分解**する。表 F にない形が見つかったら、**zoo にマスを足す**(§4.2.4)。
+- 現実の経路を、**形の列に分解**する。表 F にない形が見つかったら、**zoo にセルを足す**(§4.2.4)。
 - wild の 1 件ごとに、「この経路のステップの形は、全部 zoo にあるか」を検査する: `meta.yaml` の `stages` の形の名前が、zoo の表 F に存在すること。**CI で検査**する(`TestWildStagesInZoo`)。ない形は、同じ変更で zoo に足す(足せなければ、`stages` に `todo:<名前>` と書き、一覧に出して、期限つきの課題にする)。
 - 逆(zoo → wild)は作らない。
 
@@ -590,7 +590,7 @@ bench/wild/<lang>/<id>/
 
 ### 9.9 育て方
 
-- 探索や層 C で、見逃しや新しい形を見つけたら、**同種の実世界の脆弱性を探して足す**(wild)。還元した最小の形は、**zoo のマス**にする(§9.2)。
+- 探索や層 C で、見逃しや新しい形を見つけたら、**同種の実世界の脆弱性を探して足す**(wild)。還元した最小の形は、**zoo のセル**にする(§9.2)。
 - 新しい脆弱性が公開されたら足す(§9.7 の公開日の確認のあと)。
 
 ## 10. 限界(決めること e)
@@ -619,9 +619,9 @@ zoo と wild が**見ないもの**:
 | 検査 | 内容 |
 | --- | --- |
 | 実行と注釈の照合 | `TestZooTruth{Go,Dart,Rust}`(§3.6)。不一致 0 |
-| マスの完全性 | 全マスが 3 ケース。表 F と `@cell` の一致 |
+| セルの完全性 | 全セルが 3 ケース。表 F と `@cell` の一致 |
 | `@ref` | `@miss` / `@fp` に参照がある |
-| 手の注釈 | `@manual` が上限(3%、マスごとに 1)以内。一覧を出す |
+| 手の注釈 | `@manual` が上限(3%、セルごとに 1)以内。一覧を出す |
 | 表 S | 組み込みの全行にケースか理由つきの skip。再生成の差分なし |
 | 目印の仕様 | 3 言語の `mark` の定数が `spec.json` と同じ(自己検査) |
 | 順序の依存 | 逆順の観測が同じ |

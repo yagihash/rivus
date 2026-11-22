@@ -14,7 +14,7 @@
 ## 本文(GitHub から移した写し)
 
 ## 現象
-Rust で、クロージャが**捕獲した変数に書く**(`out = t`、`items.push(t)`、`last = x`)と、書いた値が、元の変数に届かない。ヘルパーなし、関数 1 つでも落ちる。不確実性は出ない(**サイレントな見逃し**)。`for_each(|x| last = x)` や、カウンタ・バッファへの書き込みで、とてもよくある書き方。
+Rust で、クロージャが**キャプチャした変数に書く**(`out = t`、`items.push(t)`、`last = x`)と、書いた値が、元の変数に届かない。ヘルパーなし、関数 1 つでも落ちる。不確実性は出ない(**サイレントな見逃し**)。`for_each(|x| last = x)` や、カウンタ・バッファへの書き込みで、とてもよくある書き方。
 
 ## 再現(Rust、`rivus-rust` の IR)
 ```rust
@@ -40,7 +40,7 @@ pub fn q2() {
 `bench/rust-curated`: `write-a` `write-b` `write-param` `push-list` `late` `for-each-cap` `across-cap`(7 件、すべて何も報告しなかった)。`bench/MISSES.md` の型 `ENV-PTR`。
 
 ## 落ちる場所の推定
-クロージャの環境は、捕獲した変数へのポインタを持つ構造体(IR: `field_store .0 env, <ポインタ>`)。
+クロージャの環境は、キャプチャした変数へのポインタを持つ構造体(IR: `field_store .0 env, <ポインタ>`)。
 * `internal/taint/locs.go:215` `computeLocs`(`OpFieldLoad`): ポインタを `locs(base) + field + "*"` とする。
 * `internal/taint/transfer.go:148` `OpFieldStore`: ポインタの値を保存するだけで、フィールドの指す先と、元の変数の位置を同一視しない。
 そのため、`*env.0 = v` が、`env.0/*` という別の位置に書かれ、`out` の位置に届かない。ポインタをフィールドに入れる形の別名の追跡が要る。ADR-047(案 2)では直らない。
@@ -56,9 +56,9 @@ pub fn q2() {
 **直したこと(ADR-072):** セルが持つポインタの指す先を覚え(`internal/taint/ptrcells.go`)、`field_load` の結果と、呼び出し先が書いたものを、指す先にも当てる。値の写しの中のポインタ経由の書き込みは、写し元にも当てる。Rust の extractor は、環境のフィールドをクロージャの名前で呼ぶ(`<クロージャ>.0`)。範囲は、クロージャの環境がある(Rust)プログラムだけ。Go と Dart は変わらない。
 
 **結果(`main` の 1caf62b 比):**
-- zoo(Rust): 見つかる 59 → 65 / 89。`clos/capture-write-by-ref` の `vuln2`、`vuln6`、`vuln7`(`calls:` の `Once::call_once` と合わせて)、`rust/closure-fnmut` の `vuln`、`vuln2`、`decoy`、`rust/iterator-chain` の `vuln2`。`@miss` 30 → 24、直した版の誤検出 11 → 4、おとりの誤検出 16 → 9。`@noisy` の注釈 17 か所と、`@fp` の注釈 15 か所を外した。
+- zoo(Rust): 見つかる 59 → 65 / 89。`clos/capture-write-by-ref` の `vuln2`、`vuln6`、`vuln7`(`calls:` の `Once::call_once` と合わせて)、`rust/closure-fnmut` の `vuln`、`vuln2`、`decoy`、`rust/iterator-chain` の `vuln2`。`@miss` 30 → 24、直した版の誤検出 11 → 4、デコイの誤検出 16 → 9。`@noisy` の注釈 17 か所と、`@fp` の注釈 15 か所を外した。
 - `rust-curated`: `write-a`、`write-b`、`write-param`、`push-list`、`late`、`for-each-cap` が見つかる(`@miss` 15 → 9)。`@noisy` の流れ 194 → 152。クロージャのない `&mut` のフィールド(`struct_mut_field`、`struct_mut_field_helper`)のフィクスチャを足した(直す前は落ちる)。
-- `compare.sh`: parseable は finding 159 → 159、追加 0、削除 0(経路の長さが 31 件で 1 段短くなる)。rust-curated と zoo-rust の削除は、すべて、別のマスのクロージャの sink に届いていた過検出(source と sink が別の関数)。本物の流れの削除は 0。
+- `compare.sh`: parseable は finding 159 → 159、追加 0、削除 0(経路の長さが 31 件で 1 段短くなる)。rust-curated と zoo-rust の削除は、すべて、別のセルのクロージャの sink に届いていた過検出(source と sink が別の関数)。本物の流れの削除は 0。
 
 **残り:** `rust-curated` の `across-cap`(`shared::each(vec![1], |_i| ...)`。`for i in items { f(i) }` の `IntoIterator` / `next` の候補が 0。GEN-DYN と同じ根に見える。未確認)。zoo の `vuln3`(ループの変数を `move` で環境に入れる)と `vuln5`(`Once::call_once` が、あとで書かれた変数を読む)。
 

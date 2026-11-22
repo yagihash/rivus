@@ -144,14 +144,14 @@ rivus resolve --bookmarks b.json ./...  # 前回見た箇所が今どこにあ�
 
 | 命令 | 内容 |
 |---|---|
-| `make_closure` | クロージャ生成。呼び出し先 `FuncID` と捕捉した値のリスト |
+| `make_closure` | クロージャ生成。呼び出し先 `FuncID` とキャプチャした値のリスト |
 | `call` | 関数呼び出し（2.4 参照） |
 
 **例外・不明**
 
 | 命令 | 内容 |
 |---|---|
-| `exception_value` | 例外ハンドラブロックの先頭で、捕捉した値を受ける |
+| `exception_value` | 例外ハンドラブロックの先頭で、キャプチャした値を受ける |
 | `unsupported` | extractor が脱糖できなかった構文。理由の文字列を持ち、不確実性 `unsupported_construct` の起点になる（4.4）。値を作る構文は、元の値を引数、結果を `dsts` に持てる。コアは、引数の位置から結果を作り、note を流れの途中に付ける（ADR-091） |
 
 **終端命令（各ブロックに 1 つ）**
@@ -220,8 +220,8 @@ Phase 2 の実施記録、実装メモ、移行の戦略、実測は、[history/
 | ポインタ様の値の位置 | ポインタ型なら位置は指す先 | `alloc` / `load` / `store` / `addr_of` と、**値の型の分類**（2.7.3） |
 | フィールド・添字経路 | `FieldAddr` / `IndexAddr` / `Field` / `Index`、k=3 の切り詰め | `field_load/store`、`index_load/store`。アドレスが値として渡る場合は `addr_of`（base と経路を持つ） |
 | グローバル | `ssa.Global` | `global_load` / `global_store`（2.3） |
-| クロージャ | `MakeClosure`、`FreeVar` | `make_closure`（呼び出し先と捕捉値）。呼び出し先の関数は捕捉値を `param` の続きとして受ける |
-| ガード | `If` の条件と、`BinOp` の木 | `branch` の `cond` ＋ `CondPos`。条件の値は SSA 上の `binop` / `unop` / `call` の木として辿れる |
+| クロージャ | `MakeClosure`、`FreeVar` | `make_closure`（呼び出し先とキャプチャ値）。呼び出し先の関数はキャプチャ値を `param` の続きとして受ける |
+| ガード | `If` の条件と、`BinOp` の木 | `branch` の `cond` ＋ `CondPos`。条件の値は SSA 上の `binop` / `unop` / `call` の木としてたどれる |
 | 定数 | `Const`、`IsConstant` | `const`（値と型） |
 | スニペット・式テキスト | AST から切り出す（`text.go`） | 命令の `Pos`、呼び出しの引数ごとの `Pos`、`branch` の `CondPos`。**言語ごとの `ir.Texts` が位置から切り出す**（IR 自体はテキストを運ばない。2.3 で修正。下の実装メモ） |
 | 指紋 | シンボル、関数、出現順、式テキスト、本体テキスト | すべて `Pos` とシンボルから作れる。コアに置く |
@@ -234,7 +234,7 @@ Phase 2 の実施記録、実装メモ、移行の戦略、実測は、[history/
 
 1. **`call` の戻り値はリスト**（`dsts []LocalID`）。Go の複数戻り値と `Extract` を、IR の側で「`call` の n 番目の戻り値」として持つ。タプル型の値は作らない
 2. **`addr_of` は base と経路を持つ**（`&x.f[i]`）。経路は `field` と `index` の列で、`taint` のセルの経路表現と同じ
-3. **`param` はクロージャの捕捉値も受ける。** 位置番号の後ろに、捕捉値の番号を並べる
+3. **`param` はクロージャのキャプチャ値も受ける。** 位置番号の後ろに、キャプチャ値の番号を並べる
 4. **`call` / `branch` / `return` に、引数ごとのソース範囲**（`ArgPos`）を持たせる。テキストの切り出しとガードの対応づけに必要
 5. 命令数は 26 のまま。上の 1〜4 はどれもフィールドの追加で、命令は増やさない
 
@@ -243,7 +243,7 @@ Phase 2 の実施記録、実装メモ、移行の戦略、実測は、[history/
 
 IR からテキストを落としても、「SQL 文に変数が直接展開されているか」のような判定は、値の流れで行える。
 
-- `const` は、文字列リテラルの中身を省略せずに持つ。長さの上限を設ける場合は、超えたことを `truncated` として明示する（何も報告せずに切らない）
+- `const` は、文字列リテラルの中身を省略せずに持つ。長さの上限を設ける場合は、超えたことを `truncated` として明示する（何も報告せずに切ることはしない）
 - 文字列補間は、各言語の extractor が `binop`（結合）か、補間専用のシンボルの `call` に展開する。断片は `const`、式は値の参照として残す（Go の `+` と `fmt.Sprintf`、Dart の `'$x'`、Rust の `format!`）
 - extractor が定数の畳み込みをしてもよいが、`const` の中身を捨ててはいけない
 - テキストの切り出し（スニペット、式、本体）は、表示と指紋のためだけに使う。判定には使わない
@@ -270,7 +270,7 @@ Phase 1 のエンジンが型について実際に問うのは、この分類（
 | `BinOp` / `UnOp` | `binop` / `unop` |
 | `Call`（静的 / インタフェース / 関数値） | `call`（`static` / `dynamic` / `value`）。`Builtin` はシンボル付きの静的な `call` |
 | `Go` / `Defer` | `call` の `go` / `defer` フラグ |
-| `MakeClosure` / `FreeVar` | `make_closure` / `param`（捕捉値） |
+| `MakeClosure` / `FreeVar` | `make_closure` / `param`（キャプチャ値） |
 | `Range` / `Next` | イテレータ取得の `call` ＋ `next` の `call` ＋ 後方エッジ |
 | `Select` / `Send` / `Recv` | `call`（シンボル `chan.send` など）。`concurrency` の不確実性は、コアがこのシンボルから出す |
 | `Phi` | **出さない**（NaiveForm には出ない。φ はコアが作る） |
@@ -284,7 +284,7 @@ NaiveForm のローカルは、`Alloc` の結果がそのままローカル変�
 - アドレス計算（`FieldAddr` / `IndexAddr`）は、使い道が 1 つの `load` / `store` だけなら畳む（`Folded`。位置は `AddrPos`）。アドレスが値として渡るときだけ `addr_of` になる。グローバルのアドレスは、引数のない `addr_of`（`global` つき）
 - φ は、前任ブロックの末尾の `copy` に落とす（NaiveForm には φ がない。コアが `ssabuild` で作る）
 - エンジンを動かす言語固有の操作は、シンボル付きの `call` で表す: `chan.send` / `chan.recv`、`iter.start` / `iter.next` / `iter.next_string`、`rt.rundefers`。`select` は、extractor が送信と受信の `call` に分ける。`index_load` / `index_store` の `Keyed` は、キーで引くこと（map、文字列）
-- 何も捕捉しない無名関数を変数に入れて呼ぶ場合は、`make_closure`（捕捉なし）から呼び出し先を、コアの `sg` が静的に解く
+- 何もキャプチャしない無名関数を変数に入れて呼ぶ場合は、`make_closure`（キャプチャなし）から呼び出し先を、コアの `sg` が静的に解く
 - 型の別名（Go の `type A = B`）は、`type_alias` レコードで渡す（ADR-083）
 
 2.7.4 の末尾にあった「で分かったこと（実装メモ）」（検証の結果と、その時点の実測）は、履歴・計画は [history/ARCHITECTURE-plans.md](history/ARCHITECTURE-plans.md) の 2.7.4 節（実装メモ）にある。
@@ -452,11 +452,11 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 | `stored_data_boundary` | target | データストアに出し入れする呼び出し。その先は追わない |
 | `missing_source` | target | ワークフロー前提（`go generate` / `build_runner` 未実行）に由来 |
 | `dynamic_dispatch` | 候補 1 件以上: mixed／候補 0 件: rivus | 言語機能として呼び出し先が決まらないが、候補の絞り込み精度（VTA など）は rivus の改善余地がある。候補が 0 件なのは、実装が読み込んだコードの外にあるときで、モデルを書けば減る（rivus）。detail が `expansion_limit` のものは、`match: implementations` の展開を上限で止めた記録（5.4） |
-| `assumed_call` | mixed | 呼ばれるところが見えないクロージャ（渡す、保存する、返す）を、作った場所で、呼ばれるものとして当てた（捕獲した値を、クロージャの要約に当てる。ADR-059）。付くのは、要約が捕獲した値に依る効果を持つクロージャだけ。throw と結果は当てず、そのとき detail に書く。1 度も呼ばれないクロージャの流れも、finding になりうる（過検出） |
+| `assumed_call` | mixed | 呼ばれるところが見えないクロージャ（渡す、保存する、返す）を、作った場所で、呼ばれるものとして当てた（キャプチャした値を、クロージャの要約に当てる。ADR-059）。付くのは、要約がキャプチャした値に依る効果を持つクロージャだけ。throw と結果は当てず、そのとき detail に書く。1 度も呼ばれないクロージャの流れも、finding になりうる（過検出） |
 | `unresolved_callee` | mixed | 関数値は実行時に決まるが、生成箇所を追う型フロー解析で候補を絞れる |
 | `concurrency` | mixed | 実行順序に依存するが、channel を単純なキューとしてモデル化すれば追える範囲が広がる |
 | `unmodeled_library_call` | rivus | モデルを書けば減る |
-| `dependency_body_unread` | rivus | モデルのあるインターフェースのメソッドの動的な呼び出しで、候補に本体のある依存の関数（プロジェクトの外）があったが、読まなかった（ADR-075）。依存が値を包んで渡した先の、自前の実装の中の sink は、辿っていない。`dynamic_dispatch` と並べて付き、候補に、読まなかった依存の関数を並べる |
+| `dependency_body_unread` | rivus | モデルのあるインターフェースのメソッドの動的な呼び出しで、候補に本体のある依存の関数（プロジェクトの外）があったが、読まなかった（ADR-075）。依存が値を包んで渡した先の、自前の実装の中の sink は、たどっていない。`dynamic_dispatch` と並べて付き、候補に、読まなかった依存の関数を並べる |
 | `model_approximation` | rivus | 流れのモデルが、自分で「近似」と宣言している（`approximate` の文）。モデルの限界（ADR-067） |
 | `numeric_stop` | rivus | source のデータが数値や bool になり、それ以降は追わない（既定。`-numeric-taint` で追う）。source の種類（シンボルとラベル）ごとに 1 件で、最初の場所と、起きた関数の一覧（10 件まで）を持つ。サマリを通って止まる分（呼び出し先の中の、引数の記号的なデータの止まり）は、記録されない |
 | `unsupported_construct` | rivus | extractor が下げられなかった構文（IR の `unsupported`）。その場所で何が起きるかは、解析に入っていない。`missing_source` ではない（対象のコードが足りないのではなく、rivus が読めなかった） |
@@ -490,7 +490,7 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 - `confidence`: `no_uncertainty_on_path`（経路に未解決がない）か `requires_review`。判定ではなく、確定度の分類
 - `models`、`llm_influenced`: 経路を決めたモデルと、LLM が決めたものが影響したか
 - `conditional_nodes`: 結果が呼び出し側の値に依る所（5.6）
-- `shared_state`: パッケージ変数を通る流れの根拠（書き手の数など）。出力だけで、結果を変えない
+- `shared_state`: パッケージ変数を通る流れの根拠（書き込み側の数など）。出力だけで、結果を変えない
 
 `Report` は、`findings` のほか、`sites`、`uncertainties`（全体）、`suppressions`、`load_errors`、`expansions`、`project_rules`、`stats`、`summary` を持つ（`internal/report/report.go`）。出力の読み方は [README.md](../README.md)。
 
@@ -664,7 +664,7 @@ rivus models coverage ./...
 述語付きサマリ、シンボリック実行、SMT は実装しない。
 
 由来追跡（provenance）は、値依存ノードの引数について、呼び出し側で何が渡されているかを後ろ向きに式のまま提示する。
-辿れなくなったところで terminal kind を記録する。
+たどれなくなったところで terminal kind を記録する。
 値を断定してよいのは、定数そのものか、定数の単純なコピー(変数・フィールドへの格納と読み出し、呼び出しの結果が返す定数)だけ。途中に演算(否定、算術、比較、変換)があれば、オペランドを別々にたどって定数を畳み、畳んだ値を報告する。畳めなければ `unresolved`(オペランドの値を、結果の値として報告することはしない)。
 `zero_value` は、その場所に届く書き込みが(フィールドへの格納、丸ごとの代入、関数の結果、ポインタ越しのコピー、配列の要素のコピー、アドレスを取られた変数のどれも)1 つもないと分かるときだけ(ADR-078)。
 
@@ -747,12 +747,12 @@ rivus models coverage ./...
 
 関数値の呼び出し（`call` の `value`）の候補を、**IR の上で 1 か所で決める**。サイトの列挙（ルールが、変数が持つ関数を名指せる。ADR-045）と、解析のグラフが、同じ候補を見るため（`sites` と `sg` が `valuecalls.Resolve` を呼ぶ）。
 
-- **候補の出どころ:** Go は、extractor の VTA の結果。ほかの言語は、`valuecalls` が、値に流れ込む関数を、コピー、φ、引数（呼び出し元が渡すもの）を通して探す。メモリは追わない（フィールドやリストに入れた関数は見つからず、呼び出しは未解決のまま）。
-- **限界:** 候補が 8 を超えたとき（`most`）、呼び出し元を 3 段より上まで辿るとき（`maxDepth`）は、候補を付けない。理由は `Callee.ValueLimit`（`candidate_limit`、`caller_depth_limit`）に残り、不確実性の detail になる。
+- **候補の出所:** Go は、extractor の VTA の結果。ほかの言語は、`valuecalls` が、値に流れ込む関数を、コピー、φ、引数（呼び出し元が渡すもの）を通して探す。メモリは追わない（フィールドやリストに入れた関数は見つからず、呼び出しは未解決のまま）。
+- **限界:** 候補が 8 を超えたとき（`most`）、呼び出し元を 3 段より上までたどるとき（`maxDepth`）は、候補を付けない。理由は `Callee.ValueLimit`（`candidate_limit`、`caller_depth_limit`）に残り、不確実性の detail になる。
 - **引数を通って届く関数:** どの候補が呼ばれるかは、呼び出し元に依る。候補は、通った引数の番号を持ち（`ValueCand.Param`）、呼び出し元が、渡した関数以外を通る流れを外す。
 - **絞り込み（`narrow.go`）:** Rust の `Fn::call` / `FnMut::call_mut` / `FnOnce::call_once` の候補は、extractor が「型の合うクロージャすべて」で作る。ここでは、**レシーバに流れ込む関数に絞る**（ADR-079、[DESIGN-capture.md](DESIGN-capture.md)）。
-  - 規則は「**全部辿れたときだけ絞る**」。絞ると流れを失いうるが、作り出すことはない。辿れない物（規則のない命令、構造体の欄、呼び出しの結果、グローバル、トレイトオブジェクト、呼び出し元が全部は分からない引数、上限）に当たったら、候補を全部残す。
-  - 引数を辿るときは、呼び出し元が全部読まれていることが条件。`Func.Private`（`pub` がない）か、**閉じた世界**（起点があり、外からシンボルで呼べる関数がなく、extractor が `caller_marks` を付けた）。閉じた世界は前提を 1 つ入れるので、絞った不確実性に `basis: closed_world_entry` を付けて示す（「起点のあるプログラムとして読んだので、外からの呼び出しは数えていない」）。絞る前の候補数は `narrowed_from`。
+  - 規則は「**全部たどれたときだけ絞る**」。絞ると流れを失いうるが、作り出すことはない。たどれない物（規則のない命令、構造体の欄、呼び出しの結果、グローバル、トレイトオブジェクト、呼び出し元が全部は分からない引数、上限）に当たったら、候補を全部残す。
+  - 引数をたどるときは、呼び出し元が全部読まれていることが条件。`Func.Private`（`pub` がない）か、**閉じた世界**（起点があり、外からシンボルで呼べる関数がなく、extractor が `caller_marks` を付けた）。閉じた世界は前提を 1 つ入れるので、絞った不確実性に `basis: closed_world_entry` を付けて示す（「起点のあるプログラムとして読んだので、外からの呼び出しは数えていない」）。絞る前の候補数は `narrowed_from`。
   - Dart の動的な呼び出しへの同じ絞り込みは、まだない（設計だけ）。
 
 ## 14. `parts`（sink が引数の欄を名指す）

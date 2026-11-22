@@ -5,7 +5,7 @@
 - 今のアーキテクチャは [ARCHITECTURE.md](../ARCHITECTURE.md)。設計思想は [PRINCIPLES.md](../PRINCIPLES.md)。
 - 決めた経緯と理由は [DECISIONS.md](../DECISIONS.md)。各 ADR の今の状態は [ADR-INDEX.md](../ADR-INDEX.md)。
 - 本文の数字（行数、秒、MB、検出数）は、書いた当時の実測で、今の値ではない。本文の「今」「現在」も、書いた当時を指す。
-- 節番号（2.7.x、9、10、11）は、ARCHITECTURE.md の旧い番号のまま。ADR などの引用が、ここへ辿れるようにしてある。
+- 節番号（2.7.x、9、10、11）は、ARCHITECTURE.md の旧い番号のまま。ADR などの引用が、ここへたどれるようにしてある。
 - 本文中の `ARCHITECTURE.md` の節への参照は、旧い版のもの。
 
 目次:
@@ -55,7 +55,7 @@ IR が運ぶべきものを実測から決め直す。**ここに書くのは案
 - **エンジンを動かす言語固有の操作は、シンボル付きの `call`:** `chan.send` / `chan.recv`、`iter.start` / `iter.next` / `iter.next_string`、`rt.rundefers`。`select` は、extractor が送信と受信の `call` に分ける（どれが起きるかはデータではない）。`index_load` / `index_store` の `Keyed` は、キーで引くこと（map、文字列）。`Folded` は、アドレス計算を畳んだ `load` / `store`。`convert` の `Operator` は、変換の種類
 - **値の同一性:** `go/ssa` のタプル（複数戻り値）は、`call` の `Dsts` の 1 つずつが値になる。`Extract` は消える
 - **コールグラフ:** VTA は NaiveForm の上だと lifted の上より粗い（`(go/types.Object).Name` の候補が増える）。そこで `gossa.Options.WithLifted` で lifted 版も作り、グラフはそちらから取って、NaiveForm の `call` へ位置と種類で対応づけて `candidates` に入れる。この対応づけで、`ssa:deferstack` のような lifting で消える呼び出しを避ける
-- **関数だけの値:** 何も捕捉しない無名関数を変数に入れて呼ぶ場合、`sg` が `make_closure`（捕捉なし）から呼び出し先を静的に解く（これを落とすと、`unresolved_callee` が増えた）
+- **関数だけの値:** 何もキャプチャしない無名関数を変数に入れて呼ぶ場合、`sg` が `make_closure`（キャプチャなし）から呼び出し先を静的に解く（これを落とすと、`unresolved_callee` が増えた）
 - **検証（旧経路との突き合わせ。JSON を比べた）:** `testdata` の全ケース、rivus 自身（36 検出、614 不確実性）、ghmint（15 検出、176 不確実性）で完全に一致。x/tools（4 検出、10,628 不確実性）も、検出・抑制・収束は一致し、不確実性は 1 件だけ違う（generic な関数の中の range-over-func で、位置のない合成された呼び出し。`excfg.CFG.Out$1` を呼ぶ側）。許容する
 - **性能（x/tools、15.6 万行）:** 107 秒・最大 4.9 GB → 97 秒・最大 2.4 GB（ADR-040）。メモリが増えた原因は、関数ごとの解析の状態を結果の収集まで持っていたことだった（`analyzeFunc` の最後に、検出・抑制・不確実性だけ残して手放す）
 - **依存:** `go list -deps` で、`taint`・`sites`・`sg`・`irssa`・`ir`・`report`・`model` に `go/ssa`・`x/tools`・`gossa`・`go/types`・`go/ast` は入っていない。`taint`（ガードの定数評価）と `report` には `go/token` と `go/constant` が入る（標準ライブラリの、言語に依らない部分。いずれ自前にできる）。`gossa` は、Go の extractor と、`rules.Expand`（実装列挙。Go のパッケージを引く）からだけ使われる

@@ -9,7 +9,7 @@
 
 - 届く経路と、その各ステップのコード
 - 経路の途中で、確かめられなかったこと（不確実性）と、その理由
-- 条件によって結果が変わる所（値によってサニタイズされる関数、ガード）と、その条件の出どころ
+- 条件によって結果が変わる所（値によってサニタイズされる関数、ガード）と、その条件の出所
 
 名前の `rivus` はラテン語で「小川・水路」。英語 *derive* の語源です。
 
@@ -62,8 +62,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 - **`paths`**: source から sink までのステップ。各ステップに、関数、位置、その行のコード（`snippet`）、何が起きたか（`desc`）、使ったモデルがあります。
 - **`uncertainties`**: その経路で、rivus が確かめられなかったこと。種類（`kind`）と、原因が対象のコードにあるか rivus の側にあるか（`attributable_to`: `target` / `rivus` / `mixed`。`mixed` は、言語の機能に由来するが、rivus の精度向上でも減らせるもの）を示します。種類は、`dynamic_dispatch`（呼び出し先が実行時に決まる）、`unmodeled_library_call`（中身もモデルもない関数を通った）、`dependency_body_unread`（モデルのあるインターフェースの呼び出しの候補に、依存の本体があったが、読まなかった: 依存が包んだ先の自前の実装へは進んでいない。Go）、`depth_limit`（解析の上限で止めた）、`assumed_call`（渡したクロージャが呼ばれると仮定した）、`container_element_imprecision`、`reflection`、`config_read`、`global_var` などです。
 - **`confidence`**: 経路に不確実性が 1 つもなければ `no_uncertainty_on_path`、あれば `requires_review`。**本物かどうかの判定ではありません。**
-- **`reachability`**: 経路の関数が、プログラムの起点（`main` など）から届くか（`from_entry` / `from_framework_callback` / `not_from_entry`）。`from_framework_callback` は、起点からは届かないが、依存の型が宣言するメソッドを上書きしている関数（Flutter の `build`、`initState` など。フレームワークが呼ぶ）から届く、という意味です（Dart）。`not_from_entry` は「死んだコード」の意味ではありません（フレームワークに値として登録されたハンドラは、起点から辿れないことがあります）。
-- **`conditional_nodes`**（上の例にはありません）: 引数の値でサニタイズするかが変わる関数（`render(s, escape bool)` のような形）を通ったとき、条件、条件ごとの結果、呼び出し元が渡した値の出どころ（定数、設定の読み出し、など）を書き出します。どちらが起きるかは、判定しません。
+- **`reachability`**: 経路の関数が、プログラムの起点（`main` など）から届くか（`from_entry` / `from_framework_callback` / `not_from_entry`）。`from_framework_callback` は、起点からは届かないが、依存の型が宣言するメソッドを上書きしている関数（Flutter の `build`、`initState` など。フレームワークが呼ぶ）から届く、という意味です（Dart）。`not_from_entry` は「死んだコード」の意味ではありません（フレームワークに値として登録されたハンドラは、起点からたどれないことがあります）。
+- **`conditional_nodes`**（上の例にはありません）: 引数の値でサニタイズするかが変わる関数（`render(s, escape bool)` のような形）を通ったとき、条件、条件ごとの結果、呼び出し元が渡した値の出所（定数、設定の読み出し、など）を書き出します。どちらが起きるかは、判定しません。
 - **`id` と `fingerprint`**: コードが少し変わっても同じ箇所を指せるようにするための鍵。`rivus resolve` が使います。
 
 出力の全体は、`findings` のほかに、プログラム全体の `uncertainties`、`stats`（関数の数、収束したか、など）、`summary`（不確実性の集計、モデルを書くと減る関数の上位）を持ちます。
@@ -138,7 +138,7 @@ Go から作り始めたので、**Go が最も進んでいて、Dart と Rust �
 | 動的な呼び出しの候補 | 型に基づく解析で絞る | rivus 自身が値を追う。追えないと候補なし（不確実性として出る） | extractor が型で候補を出す（型が合うだけの候補も入る）。一部は rivus 自身が値を追う |
 | 実コードでの確認 | 複数のプロジェクト | 少ない（Flutter のアプリは、これから） | 少ない |
 
-- 言語間の差は、**同じ流れの形を 3 言語で書いたテスト**（[bench/zoo](bench/zoo/README.md)）で数えています。`go test ./cmd/rivus -run Zoo -v` が、言語ごとに「出る / 注記つきで見逃す / 何も報告せずに見逃す / おとりを誤って出す」の数を出します。
+- 言語間の差は、**同じ流れの形を 3 言語で書いたテスト**（[bench/zoo](bench/zoo/README.md)）で数えています。`go test ./cmd/rivus -run Zoo -v` が、言語ごとに「出る / 注記つきで見逃す / 何も報告せずに見逃す / デコイを誤って出す」の数を出します。
 - 既知の見逃しの一覧と、その原因は [bench/MISSES.md](bench/MISSES.md) にあります。
 
 ## 何を報告しないか
@@ -229,7 +229,7 @@ PR の CI は `go test -short`(重い試験は、自分で `-short` を見て飛
 | 置き場 | 何を見るか |
 |---|---|
 | `testdata/`、`bench/*-curated` | 小さいケース。ソースの `@source(tag)` / `@sink(tag)` / `@sink(none)` が期待値 |
-| `bench/zoo-go`、`zoo-dart`、`zoo-rust` | 流れの形を 1 つずつ。**期待値は、ケースを実際に動かした結果**（rivus の出力に合わせて書けない）。脆弱な版、直した版、おとりの 3 つ組 |
+| `bench/zoo-go`、`zoo-dart`、`zoo-rust` | 流れの形を 1 つずつ。**期待値は、ケースを実際に動かした結果**（rivus の出力に合わせて書けない）。脆弱な版、直した版、デコイの 3 つ組 |
 | `bench/go-scale` | 大きなコードで起きる現象（要約の膨張、収束しない）を、数秒で再現する生成コード |
 | `bench/wild` | 公開された実世界の脆弱性。その件の source と sink を与えたとき、本物の経路を組み立てられるか |
 | 実在のプロジェクト（`bench/gogs` ほか） | 変更の前後で、finding の増減を比べる（`bench/compare.sh`）。コードは置かず、版の指定だけ |
@@ -238,9 +238,9 @@ PR の CI は `go test -short`(重い試験は、自分で `-short` を見て飛
 
 ## ドキュメント
 
-読み手ごとの入口です。全体の目次は [docs/README.md](docs/README.md)。
+読者ごとの入口です。全体の目次は [docs/README.md](docs/README.md)。
 
-| 読み手 | 読む文書 |
+| 読者 | 読む文書 |
 |---|---|
 | 使い手 | この README。信頼できないコードの扱いは [docs/rust-isolation.md](docs/rust-isolation.md)。用語は [docs/GLOSSARY.md](docs/GLOSSARY.md) |
 | ルールを書く人 | [docs/MODELING.md](docs/MODELING.md)(書式)、[examples/rules](examples/rules)(見本)、[docs/GCP-MODELS.md](docs/GCP-MODELS.md) |

@@ -1,4 +1,4 @@
-# #78 Dart / Go: 関数が返したクロージャを呼ぶと、捕獲した値と中の source が落ちる(カリー化、ファクトリ、functional options)
+# #78 Dart / Go: 関数が返したクロージャを呼ぶと、キャプチャした値と中の source が落ちる(カリー化、ファクトリ、functional options)
 
 - 状態: **open**
 - 種類: サイレントな見逃し
@@ -10,7 +10,7 @@
 ## 本文(GitHub から移した写し)
 
 ## 現象
-**関数が返したクロージャ**を呼ぶと、そのクロージャが捕獲した値や、中の source が落ちる。ファクトリ、カリー化、functional options(Go)、関数を返す getter でよくある書き方。
+**関数が返したクロージャ**を呼ぶと、そのクロージャがキャプチャした値や、中の source が落ちる。ファクトリ、カリー化、functional options(Go)、関数を返す getter でよくある書き方。
 
 ## 再現(Dart)
 ```dart
@@ -45,6 +45,6 @@ snk(q.name)                  // 期待: src → snk   実際: 出ない(黙っ�
 
 ## 落ちる場所の推定
 * Dart: `internal/valuecalls/valuecalls.go` の `classify`: 呼び出しの結果は `refOther`(候補が付かない)。
-* Go: VTA の候補は付くが、束縛が無い(`internal/taint/calls.go` の `callees` は、静的なクロージャの `Bindings` だけ)。捕獲した `n` が落ちる。
+* Go: VTA の候補は付くが、束縛が無い(`internal/taint/calls.go` の `callees` は、静的なクロージャの `Bindings` だけ)。キャプチャした `n` が落ちる。
 ADR-047(案 2)では直らない(別の原因: 関数の戻り値としてのクロージャの追跡)。
 

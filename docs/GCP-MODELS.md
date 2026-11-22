@@ -13,7 +13,7 @@ ADR-077 の例外(メンテナの選択。ほかのベンダーの根拠にな�
 
 Google Cloud は、何を「外からの入力」と数えるかが製品ごとに違う。HTTP は外から来る。保存データ(DB の行、オブジェクトの中身)は、誰かが書いたもので、外から来たとは限らない。メッセージ(Pub/Sub、イベント)は、トピックが内部専用か、外から書けるかで違い、**rivus には分からない**。そこで、ラベルを 3 つに分けて、**利用者が選ぶ**形を全製品で同じにする。
 
-| ラベル | 何 | 既定 | 出どころ |
+| ラベル | 何 | 既定 | 出所 |
 |---|---|---|---|
 | `user_input` | 呼び出し元が直接決める(HTTP のリクエスト、gRPC) | **入る**(組み込み) | `*net/http.Request` ほか、今あるもの |
 | `stored` | 保存されたデータの読み出し(Spanner の行、BigQuery の行、Firestore のドキュメント、Storage のオブジェクト) | **入らない**(利用者の選択) | `rules-stored.yaml` の形(`bench/gcp/rules-stored.yaml`、`examples/rules/go-database-sql.yaml`) |
@@ -114,4 +114,4 @@ ID トークンの検証と、復号したクレーム。ラベルを決める(�
 | `URewrite` | `Statement` を値で、読まない関数に渡して、結果を使う | 検出される。`field_imprecision`(`whole_value`) |
 | `UOpaque`、`UOpaqueAssign` | `Params` だけが汚染された `Statement` の**アドレス**を、読まない関数に渡し、`Statement` を値で `Query` に渡す。**実行では、値が SQL に届く** | 検出される。`field_imprecision`(`opaque_callee`)。もとはサイレントな見逃しだった(ADR-084: マークは変数に付き、値のコピーと要約を通して運ぶ)。同じ 8 形が `testdata/go/cases/fieldsink` にある |
 
-見逃しの確認方法: 小さいプロジェクトで、依存なしに、同じ形を書いた(`testdata/go/cases/fieldsink` の `ValAfterPtr*`、`ValRewrite`、おとり 2 つ)。今は、ポインタを渡して値で sink = `opaque_callee`、値を渡して値で返す = `whole_value`、おとり(読まない関数を呼ばない、別の変数に渡す)= 検出されない。
+見逃しの確認方法: 小さいプロジェクトで、依存なしに、同じ形を書いた(`testdata/go/cases/fieldsink` の `ValAfterPtr*`、`ValRewrite`、デコイ 2 つ)。今は、ポインタを渡して値で sink = `opaque_callee`、値を渡して値で返す = `whole_value`、デコイ(読まない関数を呼ばない、別の変数に渡す)= 検出されない。
