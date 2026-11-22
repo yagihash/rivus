@@ -508,3 +508,61 @@ func TestResolveFuncValuesRust(t *testing.T) {
 	added, removed := fvDiff(t, "rust-curated", off, on)
 	t.Logf("rust-curated: %+v; findings added %d, removed %d", *fs, len(added), len(removed))
 }
+
+// TestNoPathStaysNotExhaustiveThroughACallThatGotCandidates: `rivus index -resolve-func-values`. The file is made from the
+// graph before the candidates are given (the analysis of the function values needs the taint engine, which `index` does
+// not run unless -taint is given), so a call that got candidates later is still a call with none in it, and a "no path"
+// through it is not exhaustive: the flag does not loosen the judgement of graph path.
+func TestNoPathStaysNotExhaustiveThroughACallThatGotCandidates(t *testing.T) {
+	db := filepath.Join(t.TempDir(), "g.db")
+	for _, taintFlag := range []bool{false, true} {
+		args := []string{"index", "-ir", fvIR, "-rules", fvRules, "-no-project-rules", "-resolve-func-values", "-graph", db}
+		if taintFlag {
+			args = append(args, "-taint", "-o", filepath.Join(t.TempDir(), "index.json"))
+		}
+		runIn(t, binary, ".", nil, args...)
+		out := runIn(t, binary, ".", nil, "graph", "path", "-graph", db, "--from", "package:fvsample/cells.dart#run", "--to", "package:fvsample/cells.dart#pos$1")
+		var r struct {
+			Reachable            bool `json:"reachable"`
+			Exhaustive           bool `json:"exhaustive"`
+			NotExhaustiveBecause struct {
+				Unresolved struct {
+					Total int `json:"total"`
+				} `json:"unresolved_calls"`
+			} `json:"not_exhaustive_because"`
+		}
+		if err := json.Unmarshal(out, &r); err != nil {
+			t.Fatal(err)
+		}
+		if r.Reachable || r.Exhaustive || r.NotExhaustiveBecause.Unresolved.Total != 1 {
+			t.Errorf("-taint=%v: reachable %v, exhaustive %v, unresolved calls %d; want no path, not exhaustive, 1 call with no candidate (the one that got candidates)", taintFlag, r.Reachable, r.Exhaustive, r.NotExhaustiveBecause.Unresolved.Total)
+		}
+	}
+}
+
+// TestResolveFuncValuesRoundsLimit: when the last round still gave a call new candidates (here the rounds are cut to one;
+// the callback of a callback needs two), that call, and only that one, says so (depth_limit, func_values_rounds); it is not
+// a note of the whole result.
+func TestResolveFuncValuesRoundsLimit(t *testing.T) {
+	a := fvLoad(t, fvIR, fvRules)
+	fs := taint.ResolveFuncValuesRounds(a.graph, a.l.texts, a.st, a.rules, taint.DefaultOptions(), a.l.loadErrors(), 1)
+	if fs.Rounds != 1 || fs.RoundsCut == 0 || fs.RoundsCut > fs.Supplemented {
+		t.Fatalf("stats %+v: want one round, and some of the supplemented calls cut", fs)
+	}
+	res := taint.New(a.graph, a.l.texts, a.st, a.rules, taint.DefaultOptions()).Run()
+	var cut, supplemented int
+	for _, u := range res.Uncertainties {
+		if strings.HasPrefix(u.Detail, "func_values_rounds:") {
+			cut++
+			if u.Kind != taint.KindDepthLimit || u.Position.Line == 0 {
+				t.Errorf("the note of the rounds: %+v", u)
+			}
+		}
+		if strings.HasPrefix(u.Detail, "func_values_supplemented:") {
+			supplemented++
+		}
+	}
+	if cut != fs.RoundsCut || supplemented != fs.Supplemented {
+		t.Errorf("notes: %d cut (want %d), %d supplemented (want %d)", cut, fs.RoundsCut, supplemented, fs.Supplemented)
+	}
+}

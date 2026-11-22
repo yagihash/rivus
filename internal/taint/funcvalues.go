@@ -216,6 +216,11 @@ const FuncValueRounds = 4
 // gave it) has no candidate, nothing is run: the candidates are used only for the calls that have none, so the result
 // would be the same.
 func ResolveFuncValues(graph *sg.Program, texts ir.Texts, st *sites.Result, rules *model.Rules, opts Options, loadErrors []ir.LoadError) *FuncValuesStats {
+	return ResolveFuncValuesRounds(graph, texts, st, rules, opts, loadErrors, FuncValueRounds)
+}
+
+// ResolveFuncValuesRounds is ResolveFuncValues with the limit of the rounds given (the tests cut them short).
+func ResolveFuncValuesRounds(graph *sg.Program, texts ir.Texts, st *sites.Result, rules *model.Rules, opts Options, loadErrors []ir.LoadError, rounds int) *FuncValuesStats {
 	st2, calls := FuncValueSites(graph, st)
 	var zero []*FuncCall
 	for i := range calls {
@@ -233,7 +238,7 @@ func ResolveFuncValues(graph *sg.Program, texts ir.Texts, st *sites.Result, rule
 	have := make([][]string, len(zero))
 	limited := make([]bool, len(zero))
 	grew := make([]bool, len(zero))
-	for round := 0; round < FuncValueRounds; round++ {
+	for round := 0; round < rounds; round++ {
 		eng := New(graph, texts, st2, rules, opts)
 		eng.SetLoadErrors(loadErrors)
 		res := eng.Run()
