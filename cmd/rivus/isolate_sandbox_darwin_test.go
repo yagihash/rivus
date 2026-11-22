@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/yagihash/rivus/internal/sandbox"
 )
 
 // TestSandboxedBuildScriptCannotEscape: a build script that is hostile on purpose (extractor/rust/test/hostile_sandbox) runs the probe
@@ -151,5 +153,77 @@ func TestSandboxAncestorCargoConfig(t *testing.T) {
 	}
 	if strings.Contains(errbuf.String(), "extracting rust under the sandbox") {
 		t.Errorf("something was started although the run was to be stopped:\n%s", errbuf.String())
+	}
+}
+
+// The stage that fetches has a network, so no code of the project may run in it: not a build script, not a macro. And the cargo of the
+// pinned toolchain is a nightly: the unstable features that a manifest can switch on (cargo-features) are about how a package is built
+// and described, and none of them may make the stage that fetches run a program or choose where it gets from. What this shows, for the features
+// that this nightly accepts: with no network at all, `cargo fetch --locked` of a manifest that switches them on succeeds, a build script of a
+// dependency (and a metabuild) does not run. (The -Z flags and [unstable] come from the command line, the environment and the cargo
+// configuration: the stage passes no environment of the host and does not read the configuration of the project: TestSandboxFetchReadsNoConfigOfTheProject.)
+func TestSandboxFetchRunsNoCodeAndAcceptsUnstableManifestFeatures(t *testing.T) {
+	if os.Getenv("RIVUS_RUST") == "" {
+		skipOrFail(t, "RIVUS_RUST")
+	}
+	tc, err := pinnedToolchainDir()
+	if err != nil {
+		t.Skipf("the pinned toolchain is not there: %v", err)
+	}
+	manifest := `cargo-features = ["profile-rustflags", "codegen-backend", "different-binary-name", "trim-paths", "metabuild", "per-package-target", "public-dependency", "open-namespaces"]
+[package]
+name = "t"
+version = "0.1.0"
+edition = "2021"
+metabuild = ["mb"]
+forced-target = "x86_64-unknown-linux-gnu"
+[build-dependencies]
+mb = { path = "mb" }
+[profile.dev]
+codegen-backend = "cranelift"
+rustflags = ["--cfg=x"]
+trim-paths = "all"
+[[bin]]
+name = "t"
+filename = "tt"
+path = "src/main.rs"
+[workspace]
+`
+	dir := t.TempDir()
+	work := t.TempDir()
+	cargoHome := t.TempDir()
+	for f, body := range map[string]string{
+		"Cargo.toml":    manifest,
+		"Cargo.lock":    "version = 4\n\n[[package]]\nname = \"mb\"\nversion = \"0.1.0\"\n\n[[package]]\nname = \"t\"\nversion = \"0.1.0\"\ndependencies = [\n \"mb\",\n]\n",
+		"src/main.rs":   "fn main(){}\n",
+		"mb/Cargo.toml": "[package]\nname = \"mb\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+		"mb/src/lib.rs": "",
+		// it writes to the two places that the stage may write, if it runs
+		"mb/build.rs": "fn main(){ for v in [\"CARGO_HOME\", \"TMPDIR\"] { if let Ok(d) = std::env::var(v) { std::fs::write(format!(\"{}/BUILD-RAN\", d), \"x\").ok(); } } }\n",
+	} {
+		p := filepath.Join(dir, f)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	env := []string{"PATH=" + filepath.Join(tc, "bin") + ":/usr/bin:/bin", "HOME=" + work, "TMPDIR=" + work, "CARGO_HOME=" + cargoHome, "RUSTUP_TOOLCHAIN=" + pinnedToolchain}
+	if sdk := sdkRoot(); sdk != "" {
+		env = append(env, "SDKROOT="+sdk)
+	}
+	common := sandbox.Spec{Exec: []string{tc, "/Library/Developer/CommandLineTools"}, ExecFiles: sandboxPrograms, Timeout: 2 * time.Minute}
+	s := fetchSpec(common, tc, dir, work, cargoHome, env)
+	s.Network = false // no network at all: it must succeed all the same
+	res, err := sandbox.Run(context.Background(), s)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if res.ExitCode != 0 {
+		t.Fatalf("the fetch of a manifest with unstable features failed (no network): exit %d\n%s", res.ExitCode, res.Stderr)
+	}
+	for _, d := range []string{cargoHome, work} {
+		if _, err := os.Stat(filepath.Join(d, "BUILD-RAN")); err == nil {
+			t.Errorf("a build script ran in the stage that fetches (it wrote in %s)", d)
+		}
 	}
 }

@@ -19,11 +19,26 @@ import (
 // line says reaches the file operations of rivus: that is what a CLI does,
 // and it is what the analysis must find in its own code.
 func TestDogfood(t *testing.T) {
+	// rivus reads its own code in two views: as it is on Linux (the system of CI) and as it is on macOS (where the sandbox is:
+	// internal/sandbox, and the call of it that runs a program that a flag names). Both are read statically, whatever system the test
+	// runs on (GOOS and CGO_ENABLED=0), so each has its flows file and its ceiling, and the same on every machine.
+	for _, v := range []struct {
+		goos, flows string
+		capture     int
+	}{{"linux", "testdata/dogfood-flows.txt", 37}, {"darwin", "testdata/dogfood-flows-darwin.txt", 37}} {
+		t.Run(v.goos, func(t *testing.T) { checkDogfood(t, v.goos, v.flows, v.capture) })
+	}
+}
+
+func checkDogfood(t *testing.T, goos, flowsFile string, wantCaptureUnbound int) {
 	_, file, _, _ := runtime.Caller(0)
 	root := filepath.Join(filepath.Dir(file), "..", "..")
 
 	cmd := exec.Command(binary, "analyze", "-rules", "dogfood/rules.yaml", "-timeout", "120s", "./...")
 	cmd.Dir = root
+	// rivus reads its own code as it is on Linux (the system of CI), whatever system the test runs on: the code that is only for macOS (the sandbox,
+	// internal/sandbox) is not read, so the flows and the counts below are the same everywhere. (The sandbox is tested by its own tests.)
+	cmd.Env = append(os.Environ(), "GOOS="+goos, "CGO_ENABLED=0")
 	out, err := cmd.Output()
 	if err != nil {
 		var stderr []byte
@@ -81,7 +96,7 @@ func TestDogfood(t *testing.T) {
 	if noSourceOnPath > maxNoSourceOnPath {
 		t.Errorf("%d findings have a path without a step in their source function: more than the %d of today", noSourceOnPath, maxNoSourceOnPath)
 	}
-	checkDogfoodFlows(t, &rep)
+	checkDogfoodFlows(t, &rep, flowsFile)
 	for _, s := range []string{"os.ReadFile", "os.Create", "os.WriteFile"} {
 		if !sinks[s] {
 			t.Errorf("no finding reaches %s: %v", s, sinks)
@@ -111,7 +126,7 @@ func TestDogfood(t *testing.T) {
 			capture++
 		}
 	}
-	const wantCaptureUnbound = 37 // the closures of the code of C-7 itself (the same set with and without it); 37: sg.ExactClosures has two (add, walk) where ExactFuncs had one
+	// (wantCaptureUnbound, per view) the closures of the code of C-7 itself (the same set with and without it); 37: sg.ExactClosures has two (add, walk) where ExactFuncs had one
 	t.Logf("capture_unbound: %d (ceiling %d)", capture, wantCaptureUnbound)
 	if capture != wantCaptureUnbound {
 		t.Errorf("capture_unbound is %d, the ceiling is %d: if it went down, lower the ceiling (that is the point of C-7); if it went up, a closure capture is lost silently somewhere new", capture, wantCaptureUnbound)
@@ -128,8 +143,6 @@ func TestDogfood(t *testing.T) {
 // today. Without the flag the test is read-only.
 var updateDogfoodFlows = flag.Bool("update", false, "rewrite cmd/rivus/testdata/dogfood-flows.txt from the findings of this run")
 
-const dogfoodFlowsFile = "testdata/dogfood-flows.txt"
-
 // checkDogfoodFlows holds the findings of rivus on itself as a list of (the function of the source, the function that has the
 // sink, the sink), not as a count: a count hides a swap (a real flow that is lost while another one appears keeps the same
 // number). A flow that is added or lost is red. A flow is listed once per finding, so a finding that is added to a pair that
@@ -144,7 +157,7 @@ const dogfoodFlowsFile = "testdata/dogfood-flows.txt"
 //   - A flow that is lost is taken off the list by -update. Say in the commit why it is gone (a fix, or a flow that was
 //     lost by mistake: look at it, a lost flow is a lost detection).
 //   - Never put the flows back in by hand to make the test green. The comments at the head of the file say why the groups exist.
-func checkDogfoodFlows(t *testing.T, rep *report.Report) {
+func checkDogfoodFlows(t *testing.T, rep *report.Report, dogfoodFlowsFile string) {
 	t.Helper()
 	const prefix = "github.com/yagihash/rivus/"
 	var got []string

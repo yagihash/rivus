@@ -147,14 +147,7 @@ func (o *isolationOpts) extractRustSandboxed(ctx context.Context, dir string, ex
 			}
 			defer os.RemoveAll(work)
 			fmt.Fprintf(o.err(), "rivus: fetching the dependencies (cargo fetch --locked, under the sandbox, with a network; the cargo configuration of the project is not read in this stage) into %s\n", cargoHome)
-			s := common
-			// cargo looks for its configuration from the directory it is run in, not from the manifest: the work directory has none
-			s.Argv = []string{filepath.Join(tc, "bin", "cargo"), "fetch", "--locked", "--manifest-path", filepath.Join(dir, "Cargo.toml")}
-			s.Dir = work
-			s.Env = env(work)
-			s.Read = append(append([]string(nil), common.Read...), dir, "/private/etc/ssl")
-			s.Write = []string{work, cargoHome}
-			s.Network = true
+			s := fetchSpec(common, tc, dir, work, cargoHome, env(work))
 			res, err := sandbox.Run(ctx, s)
 			if err := o.sandboxResult("fetch", res, err); err != nil {
 				if plan.hasConfig {
@@ -270,4 +263,18 @@ func cargoConfigsAbove(dir string) []string {
 		}
 	}
 	return out
+}
+
+// fetchSpec is the run of the stage that fetches: cargo fetch --locked, with the network, from a work directory that has no cargo
+// configuration (cargo looks for it from the directory it is run in, not from the manifest), the project read-only, the CARGO_HOME of rivus
+// and the work directory the only places that are written.
+func fetchSpec(common sandbox.Spec, tc, dir, work, cargoHome string, env []string) sandbox.Spec {
+	s := common
+	s.Argv = []string{filepath.Join(tc, "bin", "cargo"), "fetch", "--locked", "--manifest-path", filepath.Join(dir, "Cargo.toml")}
+	s.Dir = work
+	s.Env = env
+	s.Read = append(append([]string(nil), common.Read...), dir, "/private/etc/ssl")
+	s.Write = []string{work, cargoHome}
+	s.Network = true
+	return s
 }
