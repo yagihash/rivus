@@ -93,3 +93,22 @@ func TestCallsRowWithAMethod(t *testing.T) {
 		t.Errorf("the symbol of a row with a method is in the index of calls")
 	}
 }
+
+// checked_by says that a cell holds the row (not a harness): cell, or nothing, and the same on all the rows of a function.
+func TestCallsCheckedBy(t *testing.T) {
+	rs, err := parseCalls(t, "propagators:\n  - symbol: example.com/lib.Subscribe\n    calls: [{fn: arg0, checked_by: cell}, {fn: arg1, checked_by: cell}]\n  - symbol: a.Once\n    calls: [{fn: arg0}]\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !rs.Propagators[0].CallsCheckedByCell() || rs.Propagators[1].CallsCheckedByCell() {
+		t.Errorf("checked_by was not read: %+v", rs.Propagators)
+	}
+	for _, bad := range []string{
+		"propagators:\n  - symbol: a.F\n    calls: [{fn: arg0, checked_by: harness}]\n",
+		"propagators:\n  - symbol: a.F\n    calls: [{fn: arg0, checked_by: cell}, {fn: arg1}]\n",
+	} {
+		if _, err := parseCalls(t, bad); err == nil || !strings.Contains(err.Error(), "checked_by") {
+			t.Errorf("want a checked_by error for %q: %v", bad, err)
+		}
+	}
+}
