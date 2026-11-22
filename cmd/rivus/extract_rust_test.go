@@ -7,16 +7,17 @@ import (
 	"testing"
 )
 
-// `extract -lang rust` reads in the container too, and without Docker it stops: it does not fall back to the machine.
-func TestExtractRustWithoutDockerFails(t *testing.T) {
+// `extract -lang rust` reads under the sandbox too, and when the sandbox cannot be made (sandbox-exec is not there; on another system there is none) it stops
+// and runs nothing: it does not fall back to the machine.
+func TestExtractRustWithoutTheSandboxStops(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "Cargo.lock"), []byte("version = 3\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("PATH", t.TempDir()) // no docker
+	t.Setenv("PATH", t.TempDir()) // no sandbox-exec
 	t.Setenv("RIVUS_UNSAFE_HOST_EXEC", "")
 	err := runExtract([]string{"-lang", "rust", "-C", dir})
-	if err == nil || !strings.Contains(err.Error(), "Docker") || !strings.Contains(err.Error(), "-unsafe-host-exec") {
-		t.Fatalf("want the error that names Docker, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "-unsafe-host-exec") || !strings.Contains(err.Error(), "nothing was run") {
+		t.Fatalf("want the error that says nothing was run and names -unsafe-host-exec, got %v", err)
 	}
 }

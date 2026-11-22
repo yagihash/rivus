@@ -78,7 +78,6 @@ func sameEveryTime(t *testing.T, dir string, runs int, args ...string) {
 	t.Helper()
 	var first []byte
 	var firstHow, oneWorker string
-	var firstOne bool
 	for _, procs := range []string{"1", "4", ""} {
 		for _, workers := range []string{"", "1", "2", "16"} {
 			for i := 0; i < runs; i++ {
@@ -88,16 +87,12 @@ func sameEveryTime(t *testing.T, dir string, runs int, args ...string) {
 				}
 				got := analyzeWith(t, dir, procs, a...)
 				how := fmt.Sprintf("GOMAXPROCS=%q -workers=%q run %d", procs, workers, i)
-				// One worker is -workers 1, or no -workers with GOMAXPROCS=1 (the number of workers is the number of CPUs).
-				one := workers == "1" || (workers == "" && procs == "1")
 				if first == nil {
-					first, firstHow, firstOne = got, how, one
+					first, firstHow = got, how
 					continue
 				}
 				if !bytes.Equal(first, got) {
-					// one worker goes through a component of 8 functions or more in another way than two or more do: yagihash/rivus#96.
-					// Only a difference between the two ways is that; two runs of the same way must be the same.
-					if one != firstOne {
+					if workers == "1" { // -workers 1 goes through a component of 8 functions or more in another way: yagihash/rivus#96
 						oneWorker = fmt.Sprintf("%s and %s\n%s", firstHow, how, firstDifference(first, got))
 						continue
 					}
