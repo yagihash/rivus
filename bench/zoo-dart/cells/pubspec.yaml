@@ -4,6 +4,8 @@ publish_to: none
 environment:
   sdk: ^3.10.0
 dependencies:
+  http:
+    path: packages/http
   zoo_mark:
     path: packages/zoo_mark
   zoo_dep:
