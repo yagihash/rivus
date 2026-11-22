@@ -114,7 +114,7 @@ propagators:
     pure: true
   - symbol: go/token.NewFileSet
     pure: true
-  # model-diff: extra go/parser.ParseFile `src` is an `any` read through a type switch, which the reading of the body loses; the syntax tree is made of it
+  # model-diff: extra go/parser.ParseFile #153 `src` is an `any` read through a type switch, which the reading of the body loses; the syntax tree is made of it
   - symbol: go/parser.ParseFile
     flows: [{from: args, to: results}]
   - symbol: go/printer.Fprint
@@ -165,10 +165,13 @@ propagators:
     pure: true
   - symbol: crypto/sha512.New
     pure: true
+  # model-diff: miss-reviewed crypto/x509.CreateCertificate@arg3 type-only the error names the type of the public key (%T)
+  # model-diff: miss-reviewed crypto/x509.CreateCertificate@arg4 body-default #150 the error is the signer's (`crypto.Signer.Sign`, an unresolved call that the reading takes as "arguments to results")
   - symbol: crypto/x509.CreateCertificate
-    flows: [{from: args, to: result0}]
+    flows: [{from: args, to: result0}, {from: arg0, to: result1}]
+  # model-diff: extra crypto/x509.ParsePKIXPublicKey #151 the key is read from the DER bytes one by one (numbers), which the analysis stops; the result is made of the input
   - symbol: crypto/x509.ParsePKIXPublicKey
-    flows: [{from: arg0, to: result0}]
+    flows: [{from: arg0, to: results}]
   - symbol: (*sync/atomic.Bool).Load
     pure: true
   - symbol: (*sync/atomic.Bool).Store
@@ -181,6 +184,8 @@ propagators:
     pure: true
   - symbol: time.NewTimer
     pure: true
+  # The input goes to the error (ParseError has the value and the layout), not to the Time (docs/MODELING.md, "Stopping at a number, and a value of a narrow shape").
+  # model-diff: miss-reviewed time.Parse@arg1 non-payload the zone name that the Time keeps: 3 to 5 capital letters or GMT+n; src=time/format.go:parseTimeZone
   - symbol: time.Parse
     flows: [{from: arg0, to: result1}, {from: arg1, to: result1}]
   - symbol: time.ParseDuration
@@ -286,24 +291,24 @@ propagators:
   - symbol: errors.Join
     flows: [{from: arg0, to: result}]
   - symbol: log/slog.String
-    flows: [{from: arg1, to: result}]
+    flows: [{from: arg0, to: result}, {from: arg1, to: result}]
   - symbol: log/slog.Any
-    flows: [{from: arg1, to: result}]
+    flows: [{from: arg0, to: result}, {from: arg1, to: result}]
   - symbol: log/slog.Int
-    flows: [{from: arg1, to: result}]
+    flows: [{from: arg0, to: result}, {from: arg1, to: result}]
   - symbol: log/slog.Uint64
-    flows: [{from: arg1, to: result}]
+    flows: [{from: arg0, to: result}, {from: arg1, to: result}]
   - symbol: log/slog.Time
-    flows: [{from: arg1, to: result}]
+    flows: [{from: arg0, to: result}, {from: arg1, to: result}]
   - symbol: log/slog.Duration
-    flows: [{from: arg1, to: result}]
+    flows: [{from: arg0, to: result}, {from: arg1, to: result}]
   - symbol: log/slog.StringValue
     flows: [{from: arg0, to: result}]
   - symbol: log/slog.GroupValue
     flows: [{from: arg0, to: result}]
   - symbol: (*log/slog.Logger).With
     flows: [{from: recv, to: result}, {from: arg0, to: result}]
-  # model-diff: extra (*text/template.Template).Execute the data is read through reflect, which the reading of the body does not follow into the writer; the output is made of it
+  # model-diff: extra (*text/template.Template).Execute #152 the data is read through reflect, which the reading of the body does not follow into the writer; the output is made of it
   - symbol: (*text/template.Template).Execute
     flows: [{from: arg1, to: arg0.content}]
   # the error names the template
@@ -325,8 +330,10 @@ propagators:
     flows: [{from: arg0, to: results}]
   - symbol: (*mime/multipart.FileHeader).Open
     flows: [{from: recv, to: result0}]
+  # model-diff: extra (*net/http.Request).FormFile the model takes the request as one value (what is in it reaches what it returns); the probe puts the source in the argument of NewRequest that makes one field (the method or the URL), which this one does not read
   - symbol: (*net/http.Request).FormFile
     flows: [{from: recv, to: result0}, {from: recv, to: result1}]
+  # model-diff: extra (*net/http.Request).UserAgent the model takes the request as one value (what is in it reaches what it returns); the probe puts the source in the argument of NewRequest that makes one field (the method or the URL), which this one does not read
   - symbol: (*net/http.Request).UserAgent
     flows: [{from: recv, to: result}]
   - symbol: (*net/http.Request).WithContext
@@ -334,17 +341,19 @@ propagators:
   - symbol: net.ParseIP
     flows: [{from: arg0, to: result}]
   - symbol: net.SplitHostPort
-    flows: [{from: arg0, to: result0}, {from: arg0, to: result1}]
+    flows: [{from: arg0, to: result0}, {from: arg0, to: result1}, {from: arg0, to: result2}]
   - symbol: net.JoinHostPort
     flows: [{from: arg0, to: result}, {from: arg1, to: result}]
+  # model-diff: extra net.ParseCIDR #151 the network (result1) is made from the address bytes one by one (numbers), which the analysis stops; it carries the input
   - symbol: net.ParseCIDR
-    flows: [{from: arg0, to: result0}, {from: arg0, to: result1}]
+    flows: [{from: arg0, to: result0}, {from: arg0, to: result1}, {from: arg0, to: result2}]
   - symbol: encoding/pem.Decode
     flows: [{from: arg0, to: results}]
   - symbol: encoding/pem.Encode
     flows: [{from: arg1, to: arg0.content}]
   - symbol: crypto/x509.ParseCertificate
-    flows: [{from: arg0, to: result0}]
+    flows: [{from: arg0, to: results}]
+  # model-diff: extra crypto/tls.X509KeyPair #151 the certificate and the key are read from the PEM and DER bytes one by one (numbers), which the analysis stops; the result is made of them
   - symbol: crypto/tls.X509KeyPair
     flows: [{from: arg0, to: result0}, {from: arg1, to: result0}]
   - symbol: crypto/cipher.NewGCM
@@ -352,15 +361,18 @@ propagators:
   - symbol: os.ExpandEnv
     flows: [{from: arg0, to: result}]
   - symbol: os.MkdirTemp
-    flows: [{from: arg0, to: result0}, {from: arg1, to: result0}]
+    flows: [{from: arg0, to: result0}, {from: arg1, to: result0}, {from: arg0, to: result1}, {from: arg1, to: result1}]
   - symbol: (*regexp.Regexp).FindSubmatch
     flows: [{from: arg0, to: result}]
+  # model-diff: extra (*regexp.Regexp).ReplaceAll #76 the result is built in a closure that is given to a helper (`allMatches` / `replaceAll`) and written to a captured variable; the reading of the body loses it
   - symbol: (*regexp.Regexp).ReplaceAll
     flows: [{from: arg0, to: result}, {from: arg1, to: result}]
   - symbol: (*regexp.Regexp).FindStringSubmatch
     flows: [{from: arg0, to: result}]
+  # model-diff: extra (*regexp.Regexp).FindAllString #76 the result is built in a closure that is given to a helper (`allMatches` / `replaceAll`) and written to a captured variable; the reading of the body loses it
   - symbol: (*regexp.Regexp).FindAllString
     flows: [{from: arg0, to: result}]
+  # model-diff: extra (*regexp.Regexp).ReplaceAllString #76 the result is built in a closure that is given to a helper (`allMatches` / `replaceAll`) and written to a captured variable; the reading of the body loses it
   - symbol: (*regexp.Regexp).ReplaceAllString
     flows: [{from: arg0, to: result}, {from: arg1, to: result}]
   - symbol: strings.CutSuffix
@@ -389,7 +401,7 @@ propagators:
     flows: [{from: arg0, to: result}]
   - symbol: (*archive/zip.Writer).CreateHeader
     flows: [{from: recv, to: result0}]
-  # model-diff: miss-reviewed (*encoding/xml.Decoder).Decode@arg0 only the type of `v` goes into the error (as for encoding/json)
+  # model-diff: miss-reviewed (*encoding/xml.Decoder).Decode@arg0 type-only only the type of `v` goes into the error (as for encoding/json)
   - symbol: (*encoding/xml.Decoder).Decode
     flows: [{from: recv, to: arg0}, {from: recv, to: result0}]
   - symbol: (*go/ast.CommentGroup).Text
@@ -494,10 +506,10 @@ propagators:
     flows: [{from: args, to: result}]
   - symbol: encoding/json.Valid
     pure: true
-  # model-diff: extra encoding/hex.Encode the reading of the body works on bytes one by one (numbers), which the analysis stops; the result is the input recoded
+  # model-diff: extra encoding/hex.Encode #151 the reading of the body works on bytes one by one (numbers), which the analysis stops; the result is the input recoded
   - symbol: encoding/hex.Encode
     flows: [{from: arg1, to: arg0}]
-  # model-diff: extra encoding/hex.AppendEncode the reading of the body works on bytes one by one (numbers), which the analysis stops; the result is the input recoded
+  # model-diff: extra encoding/hex.AppendEncode #151 the reading of the body works on bytes one by one (numbers), which the analysis stops; the result is the input recoded
   - symbol: encoding/hex.AppendEncode
     flows: [{from: args, to: result}]
   - symbol: unicode/utf8.ValidString
@@ -524,7 +536,7 @@ propagators:
     pure: true
   - symbol: (go/ast.Node).End
     pure: true
-  # model-diff: extra (*encoding/json.Decoder).Token the strings of the tokens are read by `Decode(&x)`, which writes through reflect; the reading of the body does not see that write, and the result does carry the input
+  # model-diff: extra (*encoding/json.Decoder).Token #152 the strings of the tokens are read by `Decode(&x)`, which writes through reflect; the reading of the body does not see that write, and the result does carry the input
   - symbol: (*encoding/json.Decoder).Token
     flows: [{from: recv, to: results}]
   - symbol: (*net/url.URL).RequestURI
@@ -537,30 +549,37 @@ propagators:
     pure: true
   - symbol: crypto/x509.MarshalPKCS1PrivateKey
     flows: [{from: arg0, to: result}]
+  # model-diff: miss-reviewed crypto/x509.MarshalPKCS8PrivateKey@arg0 type-only the error names the type of the key (%T)
   - symbol: crypto/x509.MarshalPKCS8PrivateKey
     flows: [{from: arg0, to: result0}]
+  # model-diff: miss-reviewed crypto/x509.MarshalPKIXPublicKey@arg0 type-only the error names the type of the key (%T)
   - symbol: crypto/x509.MarshalPKIXPublicKey
     flows: [{from: arg0, to: result0}]
+  # model-diff: extra crypto/x509.ParsePKCS1PrivateKey #151 the key is read from the DER bytes one by one (numbers), which the analysis stops; the result is made of the input
   - symbol: crypto/x509.ParsePKCS1PrivateKey
-    flows: [{from: arg0, to: result0}]
+    flows: [{from: arg0, to: results}]
+  # model-diff: extra crypto/x509.ParsePKCS8PrivateKey #151 the key is read from the DER bytes one by one (numbers), which the analysis stops; the result is made of the input
   - symbol: crypto/x509.ParsePKCS8PrivateKey
-    flows: [{from: arg0, to: result0}]
+    flows: [{from: arg0, to: results}]
+  # model-diff: miss-reviewed crypto/x509.DecryptPEMBlock@arg1 body-default #150 every error of the function is a fixed text; the reading takes a call of the cipher that it cannot resolve as "arguments to results"
   - symbol: crypto/x509.DecryptPEMBlock
     flows: [{from: arg0, to: result0}]
   - symbol: encoding/pem.EncodeToMemory
     flows: [{from: arg0, to: result}]
   - symbol: net/mail.ParseAddress
     flows: [{from: arg0, to: results}]
+  # model-diff: extra (*mime/multipart.Writer).CreateFormFile #153 the header line is made by `fmt.Sprintf` from the names (`any`), and written through the header map; the reading of the body loses it. What is written is made of them
   - symbol: (*mime/multipart.Writer).CreateFormFile
     flows: [{from: arg0, to: recv}, {from: arg1, to: recv}]
+  # model-diff: extra (*mime/multipart.Writer).WriteField the part is written to the `io.Writer` that NewWriter was given, which is held in a field of an interface type; the reading of the body does not carry the write to the receiver. What is written is made of the name and the value
   - symbol: (*mime/multipart.Writer).WriteField
     flows: [{from: arg0, to: recv}, {from: arg1, to: recv}]
-  # model-diff: extra (*encoding/xml.Decoder).Token the names and texts of the tokens come from the input byte by byte (numbers), which the analysis stops; the result carries the input
+  # model-diff: extra (*encoding/xml.Decoder).Token #151 the names and texts of the tokens come from the input byte by byte (numbers), which the analysis stops; the result carries the input
   - symbol: (*encoding/xml.Decoder).Token
     flows: [{from: recv, to: results}]
   - symbol: encoding/xml.NewDecoder
     flows: [{from: arg0, to: result}]
-  # model-diff: extra (*text/template.Template).ExecuteTemplate same as Execute
+  # model-diff: extra (*text/template.Template).ExecuteTemplate #152 same as Execute
   - symbol: (*text/template.Template).ExecuteTemplate
     flows: [{from: arg2, to: arg0.content}, {from: recv, to: result0}, {from: arg1, to: result0}]
   - symbol: (*html/template.Template).ExecuteTemplate
