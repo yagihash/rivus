@@ -1,0 +1,12 @@
+# 文書の用語と言い回しのチェック（regomark）。CI では実行しない。
+# Claude Code の hook（.claude/settings.json）が、.md を編集した直後に実行する。
+# 手元で実行するとき: regomark check
+documents:
+  - "README.md"
+  - "docs/**/*.md"
+  - "extractor/*/README.md"
+  - "bench/**/README.md"
+  - "examples/**/*.md"
+  - ".claude/prompts/*.md"
+policy: .regomark/policy
+entrypoint: wording
