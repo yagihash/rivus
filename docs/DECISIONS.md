@@ -140,7 +140,7 @@ rivus の設計判断を、後から経緯を追えるように記録する。
     `mixed` は「言語機能由来だが rivus の精度向上でも減らせる」もの。集計では `rivus` と別々に出す
 - **理由:** これらを `depth_limit` に押し込むと「rivus の都合」と「対象の性質」が混ざる。
   `attributable_to: rivus` の比率がそのまま「rivus の未熟さの指標」になり、どこに投資すべきかが数字で出る。既製 SAST では得られないフィードバックループ。
-- **追記(ADR-059、C-7):** `assumed_call`(`attributable_to: mixed`)を足した。使う条件: **呼ばれるところが見えないクロージャ(渡す、保存する、返す)を、作った場所で、呼ばれるものとして当てた**ときだけ。クロージャの要約が、捕獲した値に依る効果(sink への到達、書き込み、throw、結果)を持つものにだけ付く。`unresolved_callee` は、呼び先の関数が分からないとき(候補を増やせば直る)で、こちらは、呼び先は分かっていて、呼ぶ側が見えないとき(メモリを辿る、モデルを足す、で直る)。直し方が違うので、集計と `attributable_to` の指標を濁らせないために、別の kind にした。
+- **追記(ADR-059、C-7):** `assumed_call`(`attributable_to: mixed`)を足した。使う条件: **呼ばれるところが見えないクロージャ(渡す、保存する、返す)を、作った場所で、呼ばれるものとして当てた**ときだけ。クロージャの要約が、捕獲した値に依る効果(sink への到達、書き込み、throw、結果)を持つものにだけ付く。`unresolved_callee` は、呼び先の関数が分からないとき(候補を増やせば直る)で、こちらは、呼び先は分かっていて、呼ぶ側が見えないとき(メモリを辿る、モデルを足す、で直る)。修正方法が違うので、集計と `attributable_to` の指標を濁らせないために、別の kind にした。
 - **帰結:** kind ごとの割り当て初版は ARCHITECTURE.md 4.4。`dynamic_dispatch` / `unresolved_callee` / `concurrency` は `mixed`。
   コールグラフの精度を実装前に見積もれないため、2 値に決め打ちせず 3 値で様子を見る。Phase 1 のステップ 1.12 の実測後に見直す（レビューで決定）。
   `container_element_imprecision` は結論に影響した場合のみ記録する（ノイズで集計が無意味にならないように）。
@@ -373,7 +373,7 @@ rivus の設計判断を、後から経緯を追えるように記録する。
 - **理由:** V1 と V2 は失敗する場面が逆なので、両方を持つと片方が外れてもう片方で当たる。
   内容キーを先に当てるのは、構造キーだけだと挿入のときに誤った相手と結び付くため。
   指紋を入れ物にすると、新しい種類のキーを足してもデータ構造とマッチャーを変えずに済む。
-  ID は同一性、変化検知は判断の有効性、と役割を分けることで、ID を安定側に倒しても見落としにつながりにくい。
+  ID は同一性、変化検知は判断の有効性、と役割を分けることで、ID を安定側に寄せても見落としにつながりにくい。
 - **帰結:** 版をまたぐ同一性は ID だけで保証するものではなく、比較時の対応付けで成立する。CI の「新規」判定は、もともと前回の結果（ベースライン）との比較が要るので、これで足りる。
   simhash は決定論的でなければならない（トークン化の規則、ハッシュ関数、次元数を固定し、キー名の `@N` で版を表す）。
   リネームや抽出（関数 ID が変わるケース）への耐性は、`sim@1` と比較機能で後から足す。
@@ -905,7 +905,7 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
   - **数値型（number、bool）の値には、タイントを入れない**（`state.add`）。組み込みのシンクはすべて文字列を受ける（path、sql、command、xss、ssrf、redirect）ので、数値は注入を運べない。`com.ToStr(repo.ID)` のように、構造体全体のタイントが、整数のフィールドを通ってパスに入る誤検出が消える。数量をシンクにするルールのために、`-numeric-taint` で戻せる
   - 結果: Gogs（`-deps`）108 → 76 件。**消えたのは path_traversal だけ**（`repo.ID`、`user.ID` などの整数を通る流れ。さきほどの DB 経由の 6 件も）。採点は変わらない（Gogs 4/4 と 2/2、go-test-bench 18/18、gin-vue-admin 2/2）。消えたものを読んだ範囲（wiki.go など）は、すべて整数の ID を通る経路だった（全 32 件は読んでいない）
 - **追記（標準ライブラリのモデルを足す、Gogs `-deps`）:** 不確実性の内訳を数えて、よく出る標準の関数と、標準の interface のメソッド（`fs.FileInfo`、`hash.Hash`、`io.Writer`、`os.File`、`time`、`context`、`database/sql`、`os/exec` など）にモデルを足した。`unmodeled_library_call` 627 → 310、`dynamic_dispatch` 743 → 698、findings は同じ 76 件、採点も同じ。**教訓:** `(*os.File).WriteString` に「引数 → 受け手」の流れを書くと、ファイルの内容のタイントが、ファイルのハンドル全体に付き、`File.Name()` を通ってパスに流れる誤検出が 2 件出た（セルがフィールドを区別しない）ので、書き込みは `pure` にした
-- **追記（IR のストリーム読み込みは、やらない）:** 測った。Go は、IR をファイルを通さず、メモリの中で作るので、読み込みの節約は効かない（`-deps` のピークは go/ssa のビルド）。ファイルから読む Dart と Rust の IR は、手元の実在のパッケージで数 MB、Go の Gogs（依存を含まない）でも 25 MB で、`analyze -ir` のピークは 0.24 GB。**節約できるのは、数十 MB の IR で、数十 MB なので、複雑さに見合わない**。IR が桁違いに大きくなる対象（Rust の大きなワークスペース）が現れたら、測り直す
+- **追記（IR のストリーム読み込みは、やらない）:** 測った。Go は、IR をファイルを通さず、メモリの中で作るので、読み込みの節約は効果がない（`-deps` のピークは go/ssa のビルド）。ファイルから読む Dart と Rust の IR は、手元の実在のパッケージで数 MB、Go の Gogs（依存を含まない）でも 25 MB で、`analyze -ir` のピークは 0.24 GB。**節約できるのは、数十 MB の IR で、数十 MB なので、複雑さに見合わない**。IR が桁違いに大きくなる対象（Rust の大きなワークスペース）が現れたら、測り直す
 - **追記（`-deps` を既定でオンにする）:** メモリの多いマシンで動かす前提なので、既定をオンにした。軽くしたいときは `-deps=false`（メモリは約 6 分の 1、依存への呼び出しはすべて推測になる）。呼び出しグラフのいらない経路（サイトの列挙だけ）では、依存を読まない
 
 ## ADR-044: 組み込みモデルの範囲 — 言語、標準ライブラリ、めちゃくちゃ有名なサードパーティ
@@ -928,7 +928,7 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
   - `-no-deps` と `-tests` は、extractor にも渡す
 - **追記（Go の標準ライブラリのモデルを足す、2 回目。ZITADEL、Gogs、gin-vue-admin の、モデルのない標準の呼び出しを数えて）:** `go-stdlib-more.yaml`（約 280 のシンボル）を足した。頻度の高い順に、`fmt.Println`、`strconv`、`context`、`log/slog`、`database/sql`、`os`、`net`、`regexp`、`text/template`、`crypto/*`、`errors.As` など。流れのあるものは `flows`、ないものは `pure`、`net/http.ServeFile` は path_traversal のシンク。結果（findings と採点は同じ）: gin-vue-admin の不確実性 550 → 263、go-test-bench 274 → 228、Gogs の `unmodeled_library_call` 310 → 172。3 つのプロジェクトで、モデルのない標準の呼び出しは、残り約 120 件（約 110 種、ほとんど 1 件ずつ）
   - **判断:** `database/sql` の読み取り（`Row.Scan`、`Rows.Scan`）は `pure`（DB を通る 2 次の流れは追わない）。`(*sync.Once).Do` と `Cleanup` は、引数の関数を呼ぶので、`pure` にすると関数の中の流れを捨てるおそれがあり、モデルを付けなかった。`template.Parse` はテンプレートの文字列の流れだけを足し、シンクにはしていない
-  - **ZITADEL の試し（このまま ./... で）:** 生成コード（gRPC の protobuf）が repo になく、`missing_source` が 8,668 件で、findings は 0 件。12 パスで収束せず（gRPC の要約が振動）、ピーク 8 GB、約 100 秒。ベンチには使えない。収束しない件は、別に調べる
+  - **ZITADEL の試行（このまま ./... で）:** 生成コード（gRPC の protobuf）が repo になく、`missing_source` が 8,668 件で、findings は 0 件。12 パスで収束せず（gRPC の要約が振動）、ピーク 8 GB、約 100 秒。ベンチには使えない。収束しない件は、別に調べる
 - **追記（ループの中の `append` でタイントが消えていた、Gitea の CVE の見逃しから見つけた）:** Gitea v1.26.4 の GHSA-4p89（リリースの編集で、フォームのキーを `append` で集めて、ストレージの削除に渡す）を見逃した。小さな例に削ると、**ループの中で、前のラウンドの `append` の結果に `append` するとき**（`for { out = append(out, s) }`）に、タイントが消える。原因: `prepareLocs`（各値が指す場所を、不動点まで求める）の途中で、`locs()` が結果をキャッシュしていた。ループの φ が、ループの末尾の値（まだ計算していない）を読むと、「場所なし」をキャッシュして、そのまま残った。**直した:** 不動点に着くまでキャッシュしない。そのままだと、ループで伸びる経路（ロードのロードの…）が収束しなくなるので、場所の経路を K で切る
   - 回帰のテストを `heap` に足した（`AppendInLoop`、`AppendInRangeLoop`、`ExpAppendLoopSinkInside` など）。採点は変わらない（go-test-bench 18/18、gin-vue-admin 2/2、Gogs 4/4）。findings は、gin-vue-admin 27 → 29、Gogs 76 → 78（ループの中の `append` の先の流れが、見つかるようになった）
   - Go のコードでは、ループで slice に集めるのは、ごく普通の書き方なので、**これは大きな見逃しだった**。実在のプロジェクトで、CVE を引いて、初めて見つかった
@@ -1171,7 +1171,7 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
 
 **限界:**
 - 別のオブジェクト経由の書き戻し（source のパラメータが指す値が、ほかのパラメータやグローバルが指すオブジェクトに入れられて、それが書き戻る）は、止めていない。止めるのは、param source のサイトが起点の要素が、そのパラメータ自身（`OutParam`）と `OutGlobal` に出る場合だけ。
-- Gitea の on / off の差は、実験の保存された出力の読みで、呼び出しの到達の確認ではない。
+- Gitea の on / off の差は、実験の保存された出力を読んだもので、呼び出しの到達の確認ではない。
 - 巨大 SCC（Gitea の 3370）は、この変更では小さくならない。
 
 ## ADR-049: グローバルを通る流れの経路に、書いた側の段を入れる（CORE-B / CORE-C）
@@ -1192,7 +1192,7 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
 **書き手が複数のとき（advisor の 3 つの質問。コード `internal/taint/engine.go` を読んで確かめた。実行で確かめてはいない）:**
 1. どれを見せるか: **最初にストアへ入れた 1 つ**。`commitGlobals` が `merge`（セルに要素が無ければ入れて `true`）が `true` のときだけ `noteWriter` を呼ぶ。同じ要素の 2 つ目以降の書き込みは、`merge` が `false` なので、段は記録されない。
 2. 短い経路の書き手があとから来たら入れ替わるか: **入れ替わらない**。要素がストアにある間は `merge` が `false` で、`noteWriter` は呼ばれない（`compute` も、ストアに既にある要素はトレースしない）。「短いほう」を選ぶのは、finding の経路の選び方（`collect`）で、書き手の段の選び方ではない。
-3. パスをまたいで決定的か: **パスをまたぐ部分は決定的**（最初に入った書き手の段は、後のパスで変わらない。ストアはパスの間で保たれる）。**同じレベルの中は、整列で決定的にした**: `pendingGlobals` への追加は `commit` の中で、レベルの中で並列に走る SCC（`runLevel`、`workers > 1`）が終わった順に入る。整列がなかったとき（009c0d5）、同じレベルの別の SCC の 2 つの関数が同じ要素を書くと、最初の書き手が、ゴルーチンの終わる順で決まり、**書き手の段（経路の前半）と `fingerprint["path@1"]` が、実行ごとに変わった**（`rivus resolve` が `path_changed` と読む。finding の ID と集合は変わらない）。`gwriters`（書き手 8 つ）と `TestDeterministic*`（`GOMAXPROCS` 1 / 4 / 既定、`-workers` 既定 / 2 / 16）で再現した。直し: `commitGlobals` が、`pendingGlobals` を（セル、パス、要素、書いた関数の ID）で整列してから `merge` する（`globalWrite.fn`）。**選び方に意味はない**（関数 ID の順で最初の書き手。短い書き手を選ぶものではない）。**全部の書き手は `global_var` の不確実性の候補に残る**。finding の集合は変わらない。この種の「並列の順が出力に漏れる」不具合は、常設の `TestDeterministic*` が見る。
+3. パスをまたいで決定的か: **パスをまたぐ部分は決定的**（最初に入った書き手の段は、後のパスで変わらない。ストアはパスの間で保たれる）。**同じレベルの中は、整列で決定的にした**: `pendingGlobals` への追加は `commit` の中で、レベルの中で並列に走る SCC（`runLevel`、`workers > 1`）が終わった順に入る。整列がなかったとき（009c0d5）、同じレベルの別の SCC の 2 つの関数が同じ要素を書くと、最初の書き手が、ゴルーチンの終わる順で決まり、**書き手の段（経路の前半）と `fingerprint["path@1"]` が、実行ごとに変わった**（`rivus resolve` が `path_changed` と読む。finding の ID と集合は変わらない）。`gwriters`（書き手 8 つ）と `TestDeterministic*`（`GOMAXPROCS` 1 / 4 / 既定、`-workers` 既定 / 2 / 16）で再現した。修正: `commitGlobals` が、`pendingGlobals` を（セル、パス、要素、書いた関数の ID）で整列してから `merge` する（`globalWrite.fn`）。**選び方に意味はない**（関数 ID の順で最初の書き手。短い書き手を選ぶものではない）。**全部の書き手は `global_var` の不確実性の候補に残る**。finding の集合は変わらない。この種の「並列の順が出力に漏れる」不具合は、常設の `TestDeterministic*` が見る。
 
 ## ADR-050: 関数値の呼び出しを、rivus の上限で解決しなかったときは、「知らない」と言わない（CORE-D）
 
@@ -1209,7 +1209,7 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
 
 **検証:** `bench/dart-curated/lib/limits.dart`（9 個の関数を渡すヘルパー、5 段のヘルパーに渡すクロージャ。`TestCuratedDart` が、`depth_limit` の `candidate_limit` と `caller_depth_limit` を要求する）。Go は、VTA が候補を持つので、この経路を通らない。curated の `@miss(silent)` の数え方（source と sink の関数にある不確実性だけを痕跡とする）では、ヘルパーの中の痕跡は数えない。そのため、足した 2 つの見逃しは `@miss(silent)` のまま（Dart 27/34 → 29/36）。数えているのは、足したケースの 2 件だけで、既存の見逃しの痕跡は変わらない。
 
-**追記(2026-11-22、相談役の判断): 上限を 8 から 32 にした(`ir.ValueCandidateMost`)。** 本文の「3. 上限そのもの(8、3 段)は変えない」は、候補の数の上限については、この追記で変わった。理由: 動物園の Dart で、同じヘルパーに 10 種類のクロージャを渡す形(`F/clos/helper-overflow`)が、source の関数にも sink の関数にも何も出ずに流れが消えていた(黙った見逃し。痕跡は途中のヘルパーにだけ付く)。測定(`RIVUS_MOST` で変えた試作の bin): 今のベンチで 8 を超える呼び出し点は 4 か所で、全部 Dart(zoo-dart の 1 か所〔候補 12〕、dart-curated の 3 か所〔9、10、22〕)。8 → 16 / 32 / 上限なしで、増えた finding は本物の流れだけ(zoo-dart +10、dart-curated +2。消えた本物の流れは 0)、Rust の rust-curated は過検出が 10 件消える(`narrow.rs` の `lim9`。絞り込みが効く)、Go と Rust の動物園、go-curated、gcp は差 0。時間とメモリは同じ(zoo-dart 5.5 → 5.6 秒、最大 RSS 1088 → 1085 MB。gcp 39.9 → 40.0 秒)。Go と Rust は、コールグラフが候補を持つので、この経路を通らない(10 種類のクロージャでも流れが残る)。32 にした理由: 上限なしは、候補が数百の呼び出し点での費用が未測定(go-scale と wild は取得済みがない)。33 以上は、これまでどおり黙った見逃し(`F/clos/helper-overflow-many`、`@miss(silent)`、`dart-curated` の `limit_many` は 33 種類に増やした)。痕跡は途中のヘルパーにしか付かない(渡した側の関数には付かない)ので、要約に「どのパラメータの値の呼び出しが上限に当たったか」を持たせて渡した側に注記する直しが残る(要約の形が変わるので、相談のうえで)。
+**追記(2026-11-22、相談役の判断): 上限を 8 から 32 にした(`ir.ValueCandidateMost`)。** 本文の「3. 上限そのもの(8、3 段)は変えない」は、候補の数の上限については、この追記で変わった。理由: 動物園の Dart で、同じヘルパーに 10 種類のクロージャを渡す形(`F/clos/helper-overflow`)が、source の関数にも sink の関数にも何も出ずに流れが消えていた(黙った見逃し。痕跡は途中のヘルパーにだけ付く)。測定(`RIVUS_MOST` で変えた試作の bin): 今のベンチで 8 を超える呼び出し点は 4 か所で、全部 Dart(zoo-dart の 1 か所〔候補 12〕、dart-curated の 3 か所〔9、10、22〕)。8 → 16 / 32 / 上限なしで、増えた finding は本物の流れだけ(zoo-dart +10、dart-curated +2。消えた本物の流れは 0)、Rust の rust-curated は過検出が 10 件消える(`narrow.rs` の `lim9`。絞り込みが効く)、Go と Rust の動物園、go-curated、gcp は差 0。時間とメモリは同じ(zoo-dart 5.5 → 5.6 秒、最大 RSS 1088 → 1085 MB。gcp 39.9 → 40.0 秒)。Go と Rust は、コールグラフが候補を持つので、この経路を通らない(10 種類のクロージャでも流れが残る)。32 にした理由: 上限なしは、候補が数百の呼び出し点での費用が未測定(go-scale と wild は取得済みがない)。33 以上は、これまでどおり黙った見逃し(`F/clos/helper-overflow-many`、`@miss(silent)`、`dart-curated` の `limit_many` は 33 種類に増やした)。痕跡は途中のヘルパーにしか付かない(渡した側の関数には付かない)ので、要約に「どのパラメータの値の呼び出しが上限に当たったか」を持たせて渡した側に注記する修正が残る(要約の形が変わるので、相談のうえで)。
 
 ## ADR-051: `Reachable` が、捕まえる値のあるクロージャの関数も辿る（CORE-E）
 
@@ -1223,7 +1223,7 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
 
 ## ADR-052: `not_from_entry` に、起点に入っていないものの説明を添える（つなぎ）
 
-**背景:** finding の `reachability: not_from_entry` は、「経路のどれかの関数が、起点（`main`、`init`、Dart の `main`、Rust の `entry_fn`。なければ exported）から届かない」と言う。**フレームワークが呼ぶメソッド（依存の型のメソッドの上書き）や、フレームワークに登録するハンドラは、起点に入っていない**（依存を読まない Dart と、依存を読まないときの Go / Rust では、フレームワークの側が読まれず、そこから呼ぶ辺もない）。読む人が「死んだコード」と読むと、誤り。C-4（`overrides` の辺）が入るまでのつなぎ。
+**背景:** finding の `reachability: not_from_entry` は、「経路のどれかの関数が、起点（`main`、`init`、Dart の `main`、Rust の `entry_fn`。なければ exported）から届かない」と報告する。**フレームワークが呼ぶメソッド（依存の型のメソッドの上書き）や、フレームワークに登録するハンドラは、起点に入っていない**（依存を読まない Dart と、依存を読まないときの Go / Rust では、フレームワークの側が読まれず、そこから呼ぶ辺もない）。読む人が「死んだコード」と読むと、誤り。C-4（`overrides` の辺）が入るまでのつなぎ。
 
 **決めたこと:** `not_from_entry` の finding に、説明の文字列 `reachability_note`（`taint.NotFromEntryNote`）を付ける（新しいフィールド。`from_entry` と、起点が分からないとき〔`reachability` が無いとき〕には付けない）。内容: 「`not_from_entry` はコードが死んでいるという意味ではない。フレームワークが呼ぶ関数（依存の型のメソッドの上書き、フレームワークに登録したハンドラ）は、ここでは起点に入っておらず、読まなかった依存のコードは、それを呼ばない」。全言語で同じ文字列（言語ごとに分けると、依存を読んだかどうかの情報が、解析の側に要る。C-4 で、辺として入れるときに、説明ごとなくす）。finding の集合も、`reachability` の値も変わらない。出力の形は、フィールドの追加だけ。
 
@@ -1281,7 +1281,7 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
 - 本物の v1.26.4 の Gitea での測り直しは、別に記録する（ここまでの Gitea の数字は、2026-11-18 の main の木で取った: `bench/README.md` の注意）。
 
 **仮説の履歴（Gitea が収束しない原因。次に同じ形の問題が出たとき、要素の追跡と `stats.unmodeled_top` から始められるように）:**
-1. 巨大な SCC（3,370 関数）が、反復を遅くする → 案 2（コールアウト、ADR-047）で、最大 SCC は 3,134（事前測定は 322）にしか割れず、収束には効かなかった（収束は、モデルで足りた）。
+1. 巨大な SCC（3,370 関数）が、反復を遅くする → 案 2（コールアウト、ADR-047）で、最大 SCC は 3,134（事前測定は 322）にしか割れず、収束には効果がなかった（収束は、モデルで足りた）。
 2. 関数値の呼び出しの、中継（`WithTx` → `txWithNoCheck`）で、ガードが外へ伝わらず、渡していない関数へ漏れる（測定: 直接渡す形の適用の 97 %）→ 実在する漏れだが、収束の原因ではなかった（ガードを上限の外に置いても、新しい流れの増え方は変わらない）。
 3. source が、同じパラメータの `OutParam` に書き戻される（C-1、ADR-048）→ 直したが、Gitea は収束しなかった。
 4. 要約の join が単調でない（`widen` のあと、要素が往復する）→ 実在した（gogs の protobuf の `RegisterFile`）が、Gitea の増加は往復ではなく、新しい要素だった（`returned_elems` ≒ 0）。`absorbWhole`（別のコミット）で直した。
@@ -1291,7 +1291,7 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
 **限界:** 型の記述から、型の名前（`(reflect.Type).String`）を作って、攻撃者が選んだ型名が、sink に入る形（型の選択の注入）は、追わない。
 ## ADR-057: join した要約で、全体を表す要素があるとき、一部を表す要素を落とす（`absorbWhole`）
 
-**背景:** `joinSummaries` のコメントは、「結果は増えるだけで、要素の集合は有限なので、止まる」と言う。しかし、join のあとの `widen`（1 つの出力が 24 要素を超えるとき、同じパラメータの `Param` の要素を、パラメータ全体を表す 1 つにまとめる）が、要素を減らす。widen された出力（全体）と、widen されていない出力（一部の要素が複数）を join すると、全体と一部の両方が残り、もう一度 widen されて、要素が 63 → 82 → 85 → 63 … と往復する（gogs の protobuf の `(*resolverByIndex).RegisterFile`、`filedesc.Builder.Build`。12 パスまで行って収束しなかった）。
+**背景:** `joinSummaries` のコメントは、「結果は増えるだけで、要素の集合は有限なので、止まる」と書いている。しかし、join のあとの `widen`（1 つの出力が 24 要素を超えるとき、同じパラメータの `Param` の要素を、パラメータ全体を表す 1 つにまとめる）が、要素を減らす。widen された出力（全体）と、widen されていない出力（一部の要素が複数）を join すると、全体と一部の両方が残り、もう一度 widen されて、要素が 63 → 82 → 85 → 63 … と往復する（gogs の protobuf の `(*resolverByIndex).RegisterFile`、`filedesc.Builder.Build`。12 パスまで行って収束しなかった）。
 
 **決めたこと:** `joinSummaries` で、widen の前に、`Param(i, 一部)` の要素を、同じ `(i, mods)` の全体の要素 `Param(i, "")` があり、その条件（ガード）が、無条件か、同じなら、落とす（`absorbWhole`）。`Param(i, "")` の展開は、そのセルと、その下に保存されたもの全部を読むので、全体を表す要素は、一部を表す要素を含む。意味は変わらない。ラベルの操作（`mods`）が違うものは、落とさない。
 
@@ -1303,7 +1303,7 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
 **決めたこと:**
 1. ルールの書式に `globals:` を足す（`symbol`: パッケージ付きの変数名、`holds: nothing | everything`）。`nothing`: そのグローバル（と、その指す先）への書き込みは、(a) 関数の要約の出力（`OutGlobal`）に出さない、(b) グローバルの格納に書かない、(c) 読む関数として登録しない。つまり、他の関数から見て、読んでも汚染は返らない。**書き込みの呼び出し自体（`fmt.Fprintf(os.Stderr, x)`）は、今までどおり呼び出しとして見える**（sink のルールが名前で当てられる。ログへの書き込みを sink にしたい利用者は、呼び出しで捕まえる）。
 2. **関数の中では、変数は、ふつうの変数のまま**（同じ関数の中で `os.Stderr` に書いて、すぐ読む形は、今までどおり流れる。フィクスチャ `globalshold` の `WriteAndRead`）。流れなくなるのは、関数の外へ、変数を通って出る流れだけ。
-3. 組み込みのモデル（`go-pure.yaml`）に、`os.Stderr` と `os.Stdout` を書く。プロジェクトのルールで、`holds: everything` と書くと、外れる（精度の限界を、利用者が外せる）。`Merge` は、どの集合でも `everything` と言われた変数を、`nothing` から外す（集合の順序によらない）。
+3. 組み込みのモデル（`go-pure.yaml`）に、`os.Stderr` と `os.Stdout` を書く。プロジェクトのルールで、`holds: everything` と書くと、外れる（精度の限界を、利用者が外せる）。`Merge` は、どの集合でも `everything` とされた変数を、`nothing` から外す（集合の順序によらない）。
 4. エンジンのコードに、`os.Stderr` とは書かない（`Rules.HoldsNothing(name)` を引くだけ）。
 
 **測定（Gitea、`reflect` のモデルあり、callouts なし）:** `summary_elems` 839,401 → 439,321、`summary_steps` 35.1M → 16.5M、最大の要約 15,200 → 935、`reanalyses` 134,075 → 120,899、`depth_limit` 1,431 → 1,217、収束は 8 パスのまま、finding 37 → 38（source の入れ替わり: 出ていく 6 組、入る 7 組）。最大 RSS（13.5 GB）とパスの数は変わらない。rivus 自身（dogfood、同じ木 = main の 2dd5022 を、main のバイナリと `holds` のバイナリで解析）: `reanalyses` 10,163 → 7,656（−24.7 %）、`summary_elems` 31,653 → 27,426、finding は 39 件で同一（`(source, sink)` の組 39、sink 11 か所。数え方は、finding の件数と、組の数の両方）、`depth_limit` 39 → 38（`capture_unbound`）。gogs: 変わらない。（C-1 の前の版で測った数字は、finding 88 だった。測り直した。）
@@ -1312,7 +1312,7 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
 - **見逃す形**: `os.Stdout` / `os.Stderr` を差し替えて、読み戻すコード（`os.Pipe` と、`os.Stdout = w`、別の端から読む）は、追わない。`holds: everything` で戻せる。
 - 黙った見逃しにしない: 書き込みがあった変数ごとに、不確実性を **1 件**出す（`global_holds_nothing`、`attributable_to: rivus`。書いた関数（上位 10 件）を `candidates` に、最初の 1 つを `func` に）。理由: `numeric_stop` と同じく、モデルの判断で、利用者がルール（`holds: everything`）で取り戻せるので、rivus の側の限界として扱う。新しい種類の値は足さず、既存の `rivus` を使う（`kind` は新しい）。`stats.dropped_globals` に、変数ごとの、書いた関数の数を出す。件数は、変数の数（組み込みでは最大 2）。
 - `holds` の値は、今は 2 つ。将来の 3 つ目（「メタデータだけ持つ」）を足せる名前にしてある。
-- `sync.Pool`（`sync.allPools`、`sync.oldPools`）のような、型のモデルで言う形は、別。
+- `sync.Pool`（`sync.allPools`、`sync.oldPools`）のような、型のモデルで示す形は、別。
 
 ## ADR-058: Rust で、`Reachable` が、再 export されたトレイトの dyn 呼び出しと、環境の `alloc` のクロージャを辿る（ADR-051 の続き）
 
@@ -1332,10 +1332,10 @@ Phase 1 の最後に挙げた 4 つの判断を、ユーザーが承認した。
 
 ## ADR-059: 呼ばれるところが見えないクロージャは、作った場所で、捕獲した値を当てる(C-7、採用: ユーザーが承認した)
 
-**背景:** クロージャが捕獲した値が、**ヘルパーが呼ぶクロージャの中で**使われると、流れが黙って落ちた(Go の `run(func(){ exec.Command(a).Run() })`、Dart の `Button(onPressed: () => sink(t))`、`Timer.run`。CORE-F、DART-16、`CAP`)。束縛(捕獲した値)を呼び出しに付けるのは、クロージャを作った関数の中の呼び出しだけで、ヘルパーの中の `f()` には付かない。ADR-053 は、この落ちたことを `capture_unbound` で言った。直すのは C-7(`docs/DESIGN-capture.md`)。
+**背景:** クロージャが捕獲した値が、**ヘルパーが呼ぶクロージャの中で**使われると、流れが黙って落ちた(Go の `run(func(){ exec.Command(a).Run() })`、Dart の `Button(onPressed: () => sink(t))`、`Timer.run`。CORE-F、DART-16、`CAP`)。束縛(捕獲した値)を呼び出しに付けるのは、クロージャを作った関数の中の呼び出しだけで、ヘルパーの中の `f()` には付かない。ADR-053 は、この落ちたことを `capture_unbound` で示した。直すのは C-7(`docs/DESIGN-capture.md`)。
 
 **決めたこと:**
-1. `make_closure`(捕獲する値がある)の命令で、クロージャの要約を、捕獲の値で当てる(`captured`、`applyMade`)。Params は `KUndef`。**当てるもの**: sink への到達、捕獲した変数への書き込み、グローバルへの書き込み。**当てないもの**: throw と結果(呼ぶところのもの)。これらが捕獲した値に依るときは、`assumed_call` の detail に言う。
+1. `make_closure`(捕獲する値がある)の命令で、クロージャの要約を、捕獲の値で当てる(`captured`、`applyMade`)。Params は `KUndef`。**当てるもの**: sink への到達、捕獲した変数への書き込み、グローバルへの書き込み。**当てないもの**: throw と結果(呼ぶところのもの)。これらが捕獲した値に依るときは、`assumed_call` の detail に書く。
 2. **飛ばす条件は、使われ方**(`sg.Instr.Escapes`): クロージャの値の使われ方が、作った関数の中での直接の呼び出し(callee の位置。`go`、`defer` を含む)だけなら当てない(その呼び出しが、値を持っている)。引数、`store`、`return`、別のクロージャの捕獲などが 1 つでもあれば当てる。コピーと φ は辿る。使用が 0 件のクロージャは、当てない(呼ばれない。`capNever` は静かなまま)。候補の解決のされ方には依らない。
 3. **痕跡**: 新しい kind `assumed_call`(`attributable_to: mixed`、ADR-008 の追記)。クロージャの要約が、捕獲した値に依る効果を持つときだけ。`symbol` はクロージャの関数 ID、場所は `make_closure`。finding の経路に載り、`confidence` は `no_uncertainty_on_path` にならない(全 finding に効く検査を、curated に足した)。
 4. エンジン: `make_closure` → クロージャの辺を、`order` と `levelsOf` に足した(クロージャの要約が変わると、作った関数が再解析される)。
@@ -1376,7 +1376,7 @@ rivus 自身(dogfood): 39 → 44(追加の 5 は `rivus index` の `-o` の経�
    - `dispatch_candidates`: interface、trait、関数値を通る呼び出し（コードの呼び出し箇所を 1 回ずつ。解析の前の、静的な候補）を、候補の数で数える（`one`、`two_to_8`、`9_to_16`、`over_16`、候補なし `none`）と、最大の数とその関数。候補が多い呼び出しが、合流点。
 2. **`-trace-element <site id>`**（開発用。既定は切）: その source の要素が、関数の要約へ最初に出た場所（関数ごとに 1 度）と、パッケージ変数の格納に入った場所を、stderr に印字する（`TRACE`、`TRACEWRITE`）。環境変数（`RIVUS_TRACE_ELEM`）だった。フラグにしたのは、`-memprofile` と同じく、開発用のフラグを、`analyze` の一覧に集めるため。**印字の行の順は、解析の順で、実行ごとに違いうる**（並列の解析）ので、結果には出さない（`stats` にも入れない）。
 3. **スキーマ版数は上げない**（`rivus.result/1`）。足すだけで、欄は `omitempty`、既定では出ない（ADR-034 の、足すだけの変更の扱い）。
-4. **決定的であること**: 新しい欄は、時計に依存しない（要素の数と、呼び出しの回数だけ）。`TestDeterministicPassStats`（Go）と、Dart・Rust の `TestDeterministicCurated*`（`-pass-stats` つき）は、出力全体を、`GOMAXPROCS` と `-workers` を変えて比べる（`stable()` が落とすのは、時間の欄だけ: 3 欄と、`packages_top` の `spent_ms`）。`TestPassStatsChangeNothing` は、`-pass-stats` ありなしの出力が、新しい 2 欄を除いて同じことを見る。時間の上限（`-timeout`、`-func-timeout`）が効いた実行は、`load_dependent` が言うとおり、ほかの欄と同じく、時計に依存する。
+4. **決定的であること**: 新しい欄は、時計に依存しない（要素の数と、呼び出しの回数だけ）。`TestDeterministicPassStats`（Go）と、Dart・Rust の `TestDeterministicCurated*`（`-pass-stats` つき）は、出力全体を、`GOMAXPROCS` と `-workers` を変えて比べる（`stable()` が落とすのは、時間の欄だけ: 3 欄と、`packages_top` の `spent_ms`）。`TestPassStatsChangeNothing` は、`-pass-stats` ありなしの出力が、新しい 2 欄を除いて同じことを見る。時間の上限（`-timeout`、`-func-timeout`）が効いた実行は、`load_dependent` が示すとおり、ほかの欄と同じく、時計に依存する。
 
 **限界:** 診断は、実行の費用を増やす（`pass_changes` は、要約が変わるたびに、要素の集合を作って比べる。`unmodeled_top` は、ロックを取る）ので、既定では切。数えるのは、実行がたどった解析で、要約の値ではない。
 
@@ -1451,7 +1451,7 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 
 **限界（`docs/rust-isolation.md`）:** コンテナは VM ではない（カーネルは共有。runc とカーネルの脆弱性は防げない）。macOS の Docker Desktop は、境界が VM とファイル共有になる。**対象のビルドは、コンテナの中で、IR を書き換えられる**（隔離が守るのはマシンと秘密で、結果の正しさではない）。取得は、対象の `.cargo/config.toml` が指す先に出る（コンテナの中。ホームも認証情報もない）。依存が `/work` を超える大きさのビルドは失敗する。`Cargo.lock` が要る。
 
-**訂正(安全の穴。ユーザーが発見):** 上の「取得(ビルドしないので、対象のコードは動かない)」は、**事実ではなかった**。取得の段階も、対象の `.cargo/config.toml` を cargo が読む。`credential-provider` などに同梱のスクリプトを指し、`Cargo.lock` にそのレジストリの依存があって、レジストリが認証を要求すると、cargo はそのスクリプトを、**ビルドの前、ネットワークのあるコンテナで**実行する。**直し(済み)**: 取得の段階では、対象の cargo の設定を読ませない(`.cargo` を空の tmpfs で覆う。ボリュームの中の設定は取得の前に捨てる。設定が要るプロジェクトは、理由を言って止める。vendor 済みは取得を飛ばす)。試験は `TestIsolationFetchRunsNoCodeOfTheProject`(修正前に赤、修正後に緑)。**残り**: `Cargo.lock` の取得元(内側のホストなどへの要求)の検査と、取得のネットワークの絞り込み(`docs/DESIGN-fetch-network.md`)。
+**訂正(安全の穴。ユーザーが発見):** 上の「取得(ビルドしないので、対象のコードは動かない)」は、**事実ではなかった**。取得の段階も、対象の `.cargo/config.toml` を cargo が読む。`credential-provider` などに同梱のスクリプトを指し、`Cargo.lock` にそのレジストリの依存があって、レジストリが認証を要求すると、cargo はそのスクリプトを、**ビルドの前、ネットワークのあるコンテナで**実行する。**修正(済み)**: 取得の段階では、対象の cargo の設定を読ませない(`.cargo` を空の tmpfs で覆う。ボリュームの中の設定は取得の前に捨てる。設定が要るプロジェクトは、理由を示して止める。vendor 済みは取得を飛ばす)。試験は `TestIsolationFetchRunsNoCodeOfTheProject`(修正前は失敗、修正後は成功)。**残り**: `Cargo.lock` の取得元(内側のホストなどへの要求)の検査と、取得のネットワークの絞り込み(`docs/DESIGN-fetch-network.md`)。
 
 **R-21（残る。課題として記録）:** 対象の `.cargo/config.toml` の `[env]` で `RIVUS_IR_DIR` を空にすると、IR が空になり終了コード 0 になる。隔離では直らない（コンテナの中でも、同じことが起きる。安全の問題ではなく、結果の正しさの問題）。隔離のモードでも、「コンパイルした crate と IR の断片の突き合わせ（0 件なら失敗、欠けたら load_error）」が別に要る。今回は直さない（`extractor/rust` の別の変更）。
 
@@ -1461,19 +1461,19 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 
 **背景:** `callBody` の `ruleOnly`(`CallSources` か `Sinks` にシンボルがある)が真のとき、「ルールがモデル」として、既定の「入ったものは出る」と、`unmodeled_library_call` の両方を通さなかった。sink のルールは「ここへ汚れが来てはならない」とだけ言い、戻り値に何が乗るかは言わない。組み込みの Go の sink 53 個のうち 48 個は、propagator がなく(`os.Open`、`http.Get`、`(*sql.DB).Prepare`)、戻り値に引数の汚れが乗らず、不確実性も出なかった(黙った見逃し)。`io.WriteString` は、ResponseWriter のときだけの sink なのに、`io.WriteString(&b, src)` で、`b` へ流れず、不確実性もなかった。
 
-**決めたこと:** `ruleOnly` は **source のルールがあるとき**だけ(source は結果が何かを言う)。sink だけのシンボルは、本体がなければ、既定(引数から結果へ)と `unmodeled_library_call` を通す。`valueCandidates` も同じ。`io.WriteString` には、引数 1 から引数 0 への propagator を足した(`fmt.Fprint*` と同じ形。`flows` を持てば、モデルになり、不確実性は出ない)。
+**決めたこと:** `ruleOnly` は **source のルールがあるとき**だけ(source は結果が何かを示す)。sink だけのシンボルは、本体がなければ、既定(引数から結果へ)と `unmodeled_library_call` を通す。`valueCandidates` も同じ。`io.WriteString` には、引数 1 から引数 0 への propagator を足した(`fmt.Fprint*` と同じ形。`flows` を持てば、モデルになり、不確実性は出ない)。
 
-**検証:** `testdata/go/cases/sinkret`(`lib.Open`、`(*lib.DB).Prepare` の戻り値が、次の sink へ届く。`io.WriteString` から `bytes.Buffer`)と、`unmodeled_library_call` が出ること(直す前は、2 つの finding が落ち、不確実性が出なかった)。`compare.sh`(軽い層 + Gitea v1.26.4): 削除 0。追加は gogs の 1 件(2 リビジョンで同じコード): `getServiceType`(`r.FormValue("service")`、`upload-pack` か `receive-pack` に等しいときだけ通る)から `gitCommand`(`exec.Command(...).Output()`)の出力を、`ResponseWriter.Write` へ、の経路。`exec.Command`(sink のみ)の戻り値に引数が乗るようになり、`cmd.Output()` へ届く。入力は 2 つの定数のどちらかに限られ、出力は引数の文字列でない(git の出力)。**偽陽性として分類**(実コードの追加は、この 1 件のみ)。この finding の経路の `exec.Command` と `(*exec.Cmd).Output` の 2 つの呼び出しには、`unmodeled_library_call` が付いていて(`confidence` は `requires_review`)、痕跡のある過大近似。`Output` の流れを切るモデルは入れない(`exec.Command("sh", "-c", "echo "+x).Output()` のように、引数の中身が標準出力に出る形は実在する。この偽陽性の理由は、値が定数の集合と等しいことを確かめてから使う許可リストで、モデルの理由ではない)。go-test-bench の 2 件は、同じ `sink` の `other_sources` の 6 件の集合が同じで、代表の source が替わっただけ。Gitea: finding 259 のまま、パス 6、不確実性 `unmodeled_library_call` 2087 → 2313(+226)。`unmodeled_library_call` は、gogs で 172 → 302、gin-vue-admin で 53 → 113 に増える(本来の「分からない」を言うようになった)。
+**検証:** `testdata/go/cases/sinkret`(`lib.Open`、`(*lib.DB).Prepare` の戻り値が、次の sink へ届く。`io.WriteString` から `bytes.Buffer`)と、`unmodeled_library_call` が出ること(直す前は、2 つの finding が落ち、不確実性が出なかった)。`compare.sh`(軽い層 + Gitea v1.26.4): 削除 0。追加は gogs の 1 件(2 リビジョンで同じコード): `getServiceType`(`r.FormValue("service")`、`upload-pack` か `receive-pack` に等しいときだけ通る)から `gitCommand`(`exec.Command(...).Output()`)の出力を、`ResponseWriter.Write` へ、の経路。`exec.Command`(sink のみ)の戻り値に引数が乗るようになり、`cmd.Output()` へ届く。入力は 2 つの定数のどちらかに限られ、出力は引数の文字列でない(git の出力)。**偽陽性として分類**(実コードの追加は、この 1 件のみ)。この finding の経路の `exec.Command` と `(*exec.Cmd).Output` の 2 つの呼び出しには、`unmodeled_library_call` が付いていて(`confidence` は `requires_review`)、痕跡のある過大近似。`Output` の流れを切るモデルは入れない(`exec.Command("sh", "-c", "echo "+x).Output()` のように、引数の中身が標準出力に出る形は実在する。この偽陽性の理由は、値が定数の集合と等しいことを確かめてから使う許可リストで、モデルの理由ではない)。go-test-bench の 2 件は、同じ `sink` の `other_sources` の 6 件の集合が同じで、代表の source が替わっただけ。Gitea: finding 259 のまま、パス 6、不確実性 `unmodeled_library_call` 2087 → 2313(+226)。`unmodeled_library_call` は、gogs で 172 → 302、gin-vue-admin で 53 → 113 に増える(本来の「分からない」を示すようになった)。
 
 **限界:** `exec.Command` のような sink は、結果(`*exec.Cmd`)の中身が、引数の汚れを運ぶとして扱われる(既定)。sink のシンボルごとに、戻り値に乗せるかを決める(`flows:` を書く)ことで、雑音を落とせる。
 
 ## ADR-066: 組み込みの `pure` から、入力を出力に伝える関数を外す。基準を決め、実行で確かめる(R-03)
 
-**背景:** `go-pure.yaml` / `go-stdlib-more.yaml` の `pure: true` は「戻り値に汚れが乗らない」と言う。実行で確かめると(zoo、`TestZooPureGo`)、文字列・バイト列の引数を持つ `pure` の行 50 件のうち 18 件が誤りだった: 値に入る(`(*json.Decoder).Token`、`(*http.Cookie).String`、`(*url.URL).RequestURI`、`(time.Time).Format`、`hex.AppendEncode`、`hex.Encode`(書き込み先)、`url.UserPassword`、`regexp.Compile`)と、**error の文字列に入る**(`os.Stat`、`exec.LookPath`、`netip.ParseAddr`、`strconv.Atoi/ParseBool/ParseFloat/ParseUint`、`time.Parse/ParseInLocation/ParseDuration`)。error の文字列は、応答やログに書かれる(エラー文をそのまま返す XSS)。
+**背景:** `go-pure.yaml` / `go-stdlib-more.yaml` の `pure: true` は「戻り値に汚れが乗らない」という宣言。実行で確かめると(zoo、`TestZooPureGo`)、文字列・バイト列の引数を持つ `pure` の行 50 件のうち 18 件が誤りだった: 値に入る(`(*json.Decoder).Token`、`(*http.Cookie).String`、`(*url.URL).RequestURI`、`(time.Time).Format`、`hex.AppendEncode`、`hex.Encode`(書き込み先)、`url.UserPassword`、`regexp.Compile`)と、**error の文字列に入る**(`os.Stat`、`exec.LookPath`、`netip.ParseAddr`、`strconv.Atoi/ParseBool/ParseFloat/ParseUint`、`time.Parse/ParseInLocation/ParseDuration`)。error の文字列は、応答やログに書かれる(エラー文をそのまま返す XSS)。
 
 **決めたこと:**
 1. **`pure` の基準**(`docs/MODELING.md` の「When a function may be `pure`」): 結果と、書き込み先(引数、レシーバ)のどれにも、引数・レシーバの中身が入らない。**error の文字列も含める**。
-2. 直し方は、**結果ごとに書く**(`pure` を外して「引数 → 全部の結果」にしない): 数や時刻を作る関数(`strconv.Atoi` ほか 4、`time.Parse` ほか 2、`ParseDuration`)は、入力を `result1`(error)へだけ流し、`result0`(数、時刻)へは流さない(`numeric_stop` が止める値を汚すと過検出になる)。`os.Stat`、`exec.LookPath`、`netip.ParseAddr`、`regexp.Compile` は、`result0` と `result1` の両方。`hex.Encode` は、`arg1 → arg0`。`Token`、`Cookie.String`、`RequestURI` は、レシーバ → 結果。`Format` は、レイアウト(`arg0`) → 結果(日時の値は数なので止める)。`UserPassword`、`AppendEncode`、`x509.CreateCertificate`、`ParsePKIXPublicKey`、`sql.Named`、`parser.ParseFile`、`tls.Client`、`slog.Group` ほか、全部で 30 の行(レシーバの値に目印を入れて呼ぶ検査が、`(*log/slog.Level).UnmarshalText` の error の文字列に入力が入る 19 件目の誤りを見つけた)。
+2. 修正方法は、**結果ごとに書く**(`pure` を外して「引数 → 全部の結果」にしない): 数や時刻を作る関数(`strconv.Atoi` ほか 4、`time.Parse` ほか 2、`ParseDuration`)は、入力を `result1`(error)へだけ流し、`result0`(数、時刻)へは流さない(`numeric_stop` が止める値を汚すと過検出になる)。`os.Stat`、`exec.LookPath`、`netip.ParseAddr`、`regexp.Compile` は、`result0` と `result1` の両方。`hex.Encode` は、`arg1 → arg0`。`Token`、`Cookie.String`、`RequestURI` は、レシーバ → 結果。`Format` は、レイアウト(`arg0`) → 結果(日時の値は数なので止める)。`UserPassword`、`AppendEncode`、`x509.CreateCertificate`、`ParsePKIXPublicKey`、`sql.Named`、`parser.ParseFile`、`tls.Client`、`slog.Group` ほか、全部で 30 の行(レシーバの値に目印を入れて呼ぶ検査が、`(*log/slog.Level).UnmarshalText` の error の文字列に入力が入る 19 件目の誤りを見つけた)。
 3. 検査: `TestPureFunctionsThatReturnDataAreReviewed`(型から、文字列・バイト列・構造体などを返す標準ライブラリの `pure` を列挙し、`testdata/pure-carriers.txt` の 84 件と比べる。増えても減っても落ちる)。`TestZooPureGo`(実行): 既知の誤りの一覧(ratchet)は空になった。264 の Go の `pure` の行のうち、呼んで確かめたのは 22(引数に目印を入れる 20 と、レシーバの型の値に目印を入れて呼ぶ 2(`(*net/url.URL).Port`、`(*regexp.Regexp).Match`))、確かめていないのは 242(`bench/zoo-go/pure/unchecked.txt`、理由つき。呼んでいない行が増えるとテストが落ちる)。
 
 **検証:** `compare.sh`: R-03 の変更だけを、CORE-K の上で測ると、全ベンチで、finding の追加 0、削除 0、不確実性の変更 0(error や値に新しく流れが乗っても、sink に届く形が、これらのコードにはない)。Gitea は、R-03 だけでは測っていない(CORE-K と合わせて測った: ADR-065)。
@@ -1536,7 +1536,7 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 1. `funcsOf` が、(a) `refOther`、(b) 呼び元の引数が足りない、(c) 呼び元の `form` が作れない、(d) 呼び元をたどる深さの上限(3)で切った、のどれかに当たったとき、**不完全**の印を付ける。見つかった関数は、**候補に残す**(finding は減らさない)。
 2. 印: `Callee.ValueLimit = "partial"`、`ValueFound`(見つかった数)、`ValueWhy`(原因: `untraced_value`、`missing_argument`、`no_ssa_form`、`caller_depth`)。候補が 0 のときの `candidate_limit` と `caller_depth_limit` は、そのまま(候補が 0 なら `partial` にしない)。
 3. 不確実性: 候補が 1 つでも複数でも、その呼び出しに `unresolved_callee`(detail は `partial: ...`、原因と見つかった数)を、**呼び出しの位置に**足す。その呼び出しを通った finding の経路にも付く(確信度は `no_uncertainty_on_path` にならない)。
-4. **候補を絞る案は、この印のある呼び出しには使わない**(印は、そのための前提)。いまの絞り(ガード)は、候補が複数あるとき、呼び元が直接渡した関数だけで絞るもので、変わらない。
+4. **候補を絞る案は、この印のある呼び出しには使わない**(印は、そのための前提)。いまの絞り込み(ガード)は、候補が複数あるとき、呼び元が直接渡した関数だけで絞るもので、変わらない。
 5. zoo に共通のマス `clos/partial-callers`(3 言語。脆弱、直した版、おとり)を足した。Go は VTA の候補があり、`valuecalls` に来ないので、見つかる(印も出ない)。Dart は、脆弱が `@miss(silent)`(見逃しは今までと同じ。不確実性はヘルパーの中に出るので、見逃した流れの source と sink の関数の痕跡にはならない: `TestZooPartialCallersSaysItIsPartialDart` が、ヘルパーの `unresolved_callee`(`partial:`)を検査する)。Rust は、関数ポインタの呼び出しが `valuecalls` を通らず、追えない呼び元がなくても、脆弱とおとりが見つからない(`@miss(unmodeled_library_call)`。別の穴)。
 6. スキーマは変えない(不確実性の `kind` は既存。`detail` の追加)。
 
@@ -1583,7 +1583,7 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 
 **`Fn::call` の候補が 0 件、について(調べた):** parseable で `std::ops::Fn::call` の呼び出しは 36 件。**dynamic は 3 件で、候補は全部ある。** 残る 33 件は `static` で、29 種類の呼び先のうち 28 は本体がある(その `async` ブロックや、クロージャの関数)。本体も候補もないのは、`<Box<dyn Fn(String) -> bool + Send> as Fn<(String,)>>::call`(標準ライブラリの `Box<dyn Fn>` の実装。4 呼び出し)だけ。つまり、「dynamic で 0 件」ではなく、「`Box<dyn Fn>` の呼び出しが、`dyn` の仮想呼び出しにならず、標準ライブラリの本体のない static 呼び出しになる」。直すには、extractor が、この形を、`dyn Fn` の呼び出し(候補は、引数の型の合うクロージャ)にする必要がある。別の変更(別の issue)に回した。この ADR の範囲ではない。
 
-**限界:** `across-cap`(`shared::each(vec![1], |_i| out = t.clone())`)は、まだ落ちる。呼ぶ側 `for i in items { f(i) }` で、`IntoIterator::into_iter` / `Iterator::next` の候補が 0(GEN-DYN と同じ根に見える。未確認)。`vuln5`(`Once::call_once` が、あとで書かれた変数を読む形)は、まだ落ちる(`RefCell` の書き込みの順と、`call_once` のモデルの組み合わせ。未調査)。ループの変数を `move` で環境に入れる形(`vuln3`)は、関数値のメモリ(`FUNC-VALUE-MEMORY`)。環境が `Box` に入って別の関数から呼ばれる形は、ポインタのコピーを `store` で追うところまでで、`Box<dyn Fn>` の内側の別名は追っていない。ポインタを入れた構造体を値で関数に渡し、その関数が書くのは追う(`struct_mut_field_helper`)が、返り値で返した構造体のポインタは追わない。`Fn::call` の候補の集合そのもの(XTALK の候補の絞り)は、案 A のまま(この変更は、候補が環境を混ぜるのを止めただけ)。
+**限界:** `across-cap`(`shared::each(vec![1], |_i| out = t.clone())`)は、まだ落ちる。呼ぶ側 `for i in items { f(i) }` で、`IntoIterator::into_iter` / `Iterator::next` の候補が 0(GEN-DYN と同じ根に見える。未確認)。`vuln5`(`Once::call_once` が、あとで書かれた変数を読む形)は、まだ落ちる(`RefCell` の書き込みの順と、`call_once` のモデルの組み合わせ。未調査)。ループの変数を `move` で環境に入れる形(`vuln3`)は、関数値のメモリ(`FUNC-VALUE-MEMORY`)。環境が `Box` に入って別の関数から呼ばれる形は、ポインタのコピーを `store` で追うところまでで、`Box<dyn Fn>` の内側の別名は追っていない。ポインタを入れた構造体を値で関数に渡し、その関数が書くのは追う(`struct_mut_field_helper`)が、返り値で返した構造体のポインタは追わない。`Fn::call` の候補の集合そのもの(XTALK の候補の絞り込み)は、案 A のまま(この変更は、候補が環境を混ぜるのを止めただけ)。
 
 
 ## ADR-073: フレームワークが呼ぶメソッド(依存の型のメソッドの上書き)を、入口の集合に足す。`reachability` に `from_framework_callback` を足す
@@ -1635,8 +1635,8 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 1. **書式:** `model.Sink.Parts`(`{arg|recv, field}` の列)と、糖衣(`args: [n]` か `recv: true` と `field`)。`field` は、位置の値から下るフィールド名の列(`.` 区切り、`[]` は要素)。`args` / `recv` に書いた位置は、`parts` があっても全部が勝つ。`parts` があって `args` がないときは、「全部の引数」とは読まない。`parts` のない sink は、今までどおり(既存のルールの結果は変わらない)。
 2. **照合:** セルの道(位置の値からの残り)から、名前でない段(`*`、`[]`)を飛ばして、`field` の名前の列が、**部分列**として先頭から当たるか(`matchParts`)。下(当たる、または、その下)は、確かな finding。上(値が丸ごと汚れている、道が切れている)は、鳴らして `field_imprecision`(`why`: `whole_value` / `path_limit` / `element`)。別のフィールドは、当たらない(鳴らない)。名前の段は飛ばさない。
 3. **モデルも本体もない呼び先に渡された値**(`unmodeled`): 渡した値の根を覚える(汚れは足さない。`parts` のない sink と、今の伝播は変わらない)。`parts` の sink が、その根の下の汚れを見つけたら、道に当たらなくても、鳴らして `field_imprecision`(`why`: `opaque_callee`)。今の既定の伝播は、引数の中を混ぜない(結果にだけ流す)ことを、段階 0 で確かめた。
-4. **綴りの誤り(永久に黙る見逃し):** `field` の名前が、解析した IR のどの命令のフィールド名にも出ないとき、その sink は、その site で `parts` なし(全部)として扱い、`field_unresolved`(プログラム全体の不確実性と、finding の経路)を出す。**型の鎖の検査は、IR に構造体の定義(フィールド名と型)がないのでできない**(3 言語とも。`ir.TypeInfo` は `supers` だけ)。IR に足すのは、3 つの抽出器と書式の変更なので、別の設計。かわりに、死んだ行の関門を `parts` の道の単位に広げた(`TestZooFieldSinkRowsAreHit`: 動物園のルールの `parts` の各行は、道が「下」で当たる finding を持たなければ赤。道が `K` を超える行は、理由つきの一覧)。
-5. **要約(`SinkReach`):** 要約の中では、呼び元の道(`*` の段)を知らないので、`parts` の照合は、呼び元の実引数のセルに対して行う。`SinkReach` に、まだ照合していない残りの名前(`Field`)と、不確実の印(`Unsure`)を足した。`expandParam` は、`parts` のある到達では、同じ要素を 1 つにまとめない(同じ要素が、フィールドの中と、別のフィールドにある形を区別するため)。**印は、キー(`sinkKey`)に入れて、確かな到達と不確実な到達を別々に持つ**(OR で 1 つにすると、確かな到達があるのに不確実と報告する誤った痕跡になる)。finding(`recordFinding`)は、**確かな経路があれば、確かが勝つ**(不確実性は、確かな経路がないときだけ)。`signature` と `joinSummaries` の比べに `Field` と印を入れた。
+4. **綴りの誤り(永久に黙る見逃し):** `field` の名前が、解析した IR のどの命令のフィールド名にも出ないとき、その sink は、その site で `parts` なし(全部)として扱い、`field_unresolved`(プログラム全体の不確実性と、finding の経路)を出す。**型の鎖の検査は、IR に構造体の定義(フィールド名と型)がないのでできない**(3 言語とも。`ir.TypeInfo` は `supers` だけ)。IR に足すのは、3 つの抽出器と書式の変更なので、別の設計。かわりに、死んだ行の関門を `parts` の道の単位に広げた(`TestZooFieldSinkRowsAreHit`: 動物園のルールの `parts` の各行は、道が「下」で当たる finding を持たなければ失敗。道が `K` を超える行は、理由つきの一覧)。
+5. **要約(`SinkReach`):** 要約の中では、呼び元の道(`*` の段)を知らないので、`parts` の照合は、呼び元の実引数のセルに対して行う。`SinkReach` に、まだ照合していない残りの名前(`Field`)と、不確実の印(`Unsure`)を足した。`expandParam` は、`parts` のある到達では、同じ要素を 1 つにまとめない(同じ要素が、フィールドの中と、別のフィールドにある形を区別するため)。**印は、キー(`sinkKey`)に入れて、確かな到達と不確実な到達を別々に持つ**(OR で 1 つにすると、確かな到達があるのに不確実と報告する誤った痕跡になる)。finding(`recordFinding`)は、**確かな経路があれば、確かが勝つ**(不確実性は、確かな経路がないときだけ)。`signature` と `joinSummaries` の比較に `Field` と印を入れた。
 6. **`literal_only`:** `parts` のある sink は、定数だけの引数とは見ない(過検出側)。
 
 **実測(段階 0。何も変えずに測った):** セルの道は、ポインタの値そのものには `*` が出ず、ポインタを持つフィールドの先とインターフェースに包んだポインタの先に出る。Cloud Tasks の形(`CreateTask.Task.MessageType.HTTPRequest.URL`)は、設計の見積りの 5 段ではなく **7 段**(`Task`、`*`、`MessageType`、`*`、`HTTPRequest`、`*`、`URL`)で、K = 3 で `/Task/*/MessageType` に切れ、`URL` と `Body` が混ざる。この形は、`field_imprecision`(`path_limit`)で鳴り、おとりも鳴る(動物園の `conv/struct-field-deep` の `@fp`)。段階 4(`max(K, 道の段数)`)は、測ってから。
@@ -1651,19 +1651,19 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 
 **決めたこと:**
 1. dynamic な呼び出しで呼び先にモデルがあるとき、モデルを当てたあと、**本体のある候補(依存でなく、プロジェクト自身のもの)の要約も当てる**(`internal/taint/calls.go` の `readsImpls`)。モデルと本体の**和**: モデルが与える流れは失われない(`pure` のモデルとの和は、本体そのもの)。
-2. **候補の集合が閉じていないとき**(プロジェクトの外の実装がありうる)は、モデルがその分を言う。今までと同じで、本体のない候補は、モデルに任せる。
+2. **候補の集合が閉じていないとき**(プロジェクトの外の実装がありうる)は、モデルがその分を示す。今までと同じで、本体のない候補は、モデルに任せる。
 3. **sanitizer のモデルは除く**: sanitizer は「結果は無害だ」という宣言で、本体を読むと取り戻してしまう。sanitizer のあるシンボルは、今までどおり、本体を読まない。propagator だけのシンボルが対象(`read_impls` の行は、これまでどおり)。
 4. 言語は区別しない(Go、Dart、Rust の dynamic な呼び出し)。
 
 **確かめたこと:**
 - 動物園(Go): `dyn/stdlib-writer-own` と `dyn/http-middleware-chain` の `@miss`(vuln と decoy、4 か所)が見つかる側に変わった(`@miss` を外した)。直した版(`fixed`)の sink は静かなまま、おとりの `@nosink` も静かなまま。動物園(Rust)は、`dyn/stdlib-writer-own` が**まだ見つからない**: `out.write_all(..)` は標準ライブラリの既定のメソッドで、候補は `ShellWriter::write` でなく、`write_all` の本体はプログラムにない(`@ref(PARITY)` に直した)。Dart は、動物園に同じ形のマスがない。作業用に、`StringSink` の自前の実装を `dart:io` の `Process.run` に渡す 1 ファイルで測った: 変更前 0 件、変更後 1 件。
-- `rust-curated/src/modelled.rs` の `model_body`(自前の trait のモデルが、実装の本体の source を隠していた)が見つかる側に変わった(`@miss` を外した。`model_drop` の `@fp` は残る: モデルが「受け手が結果に入る」と言い続けるので、和でも消えない)。
-- `bench/compare.sh 7e276b5 58c3e0f`(軽い層。base は変更の前の main): **削除 0**。追加は 5 件、sink の単位で、経路を読んで分類した: 動物園(Go)の 4 件と `rust-curated` の 1 件。5 件とも、本物(source が、呼び出しの引数や、実装の本体の中にあり、`@miss` の注記が「あるはずの流れ」と言っていたもの)。**実コード(gogs 2 つ、gin-vue-admin、go-test-bench、gophish、casdoor、dart-pub、parseable)は、finding の追加 0・削除 0**: 雑音はない(基準の 1 割どころか 0)。変わったのは不確実性の数(`dynamic_dispatch`: gogs-9a9388ac 703 → 728、dart-pub 3,573 → 3,643、go-test-bench 105 → 106、gophish 28 → 32。本体を読む候補が増えた分)と、再解析の数(gin-vue-admin 25,651 → 26,362、+2.8%。収束は同じ)、メモリ(gin-vue-admin 5,242 → 5,688 MB)。
+- `rust-curated/src/modelled.rs` の `model_body`(自前の trait のモデルが、実装の本体の source を隠していた)が見つかる側に変わった(`@miss` を外した。`model_drop` の `@fp` は残る: モデルが「受け手が結果に入る」と宣言し続けるので、和でも消えない)。
+- `bench/compare.sh 7e276b5 58c3e0f`(軽い層。base は変更の前の main): **削除 0**。追加は 5 件、sink の単位で、経路を読んで分類した: 動物園(Go)の 4 件と `rust-curated` の 1 件。5 件とも、本物(source が、呼び出しの引数や、実装の本体の中にあり、`@miss` の注記が「あるはずの流れ」としていたもの)。**実コード(gogs 2 つ、gin-vue-admin、go-test-bench、gophish、casdoor、dart-pub、parseable)は、finding の追加 0・削除 0**: 雑音はない(基準の 1 割どころか 0)。変わったのは不確実性の数(`dynamic_dispatch`: gogs-9a9388ac 703 → 728、dart-pub 3,573 → 3,643、go-test-bench 105 → 106、gophish 28 → 32。本体を読む候補が増えた分)と、再解析の数(gin-vue-admin 25,651 → 26,362、+2.8%。収束は同じ)、メモリ(gin-vue-admin 5,242 → 5,688 MB)。
 - Gitea(`bench/compare.sh --heavy 7e276b5 58c3e0f`): finding 350 → 367、**削除 0**(3 件は、ほかの finding の `other_sources` に畳まれた、失われていない流れ)、**追加 20 件(sink の単位で 7 か所)**、パスが変わったのが 35、`other_sources` の変化が 24。7 パスのまま収束、再解析 110,120 → 112,688(+2.3%)、メモリ 12,291 → 11,873 MB。時間 593 → 949 秒は、同じ時間に別の解析が走っていた(ほかの比較)ので、基準にしない(`func_timeout` の 8 → 11 も、同じ時計の影響)。**追加の分類(経路を読んだ): 20 件とも雑音。** (a) ログのファイルに書く `io.Writer` の実装(回転する書き手)の、ファイル名を開く・名前を変える・消す sink、5 か所 18 件: 呼び出し側が `w.Write(data)` を呼び、モデル(「引数が受け手に入る」)が書き手の**オブジェクト全体**に汚れを置き、読むようになった本体が、書き手の**ファイル名のフィールド**(`file.Name()`)を読んで sink に渡す。書いたデータは、書き手のファイル名を決めない。(b) 圧縮の書き手に `ctx.Resp` を包んで `Close` → `Flush` → 自前の `Response.Write` に至る、`ResponseWriter.Write` の XSS 2 か所 2 件: source は、リクエストの context そのもの(包まれた書き手のオブジェクト)で、書かれる圧縮データではない。(a)(b) とも、同じ根: **モデルが書き手の中身を、オブジェクト全体の汚れとして持つ**(書き手のフィールドの区別がない)。追加 20 件は、基準 350 件の 5.7%(雑音の上限 1 割 = 35 件の内)で、収束も変わらない。受け入れの基準は満たすが、雑音の根は残る(下の限界)。
 
-**追記(読まなかった候補を言う):** 依存の本体は読まない(上の 2。gin-vue-admin で 24 秒が 15 分以上になる)ので、`io.Writer` の動的な呼び出しの候補に、依存の `Write`(受け取った値を、包んだ先の `Write` に渡す)があると、その先の自前の実装の中の sink は見つからず、`dynamic_dispatch` だけが出て、区別がつかなかった。種類 `dependency_body_unread`(`attributable_to: rivus`)を足した(足すだけ。スキーマ版はそのまま): モデルのある呼び先の候補に、本体のある依存の関数があるとき、その関数を `candidates` に並べて記録する。動物園 `dyn/through-dependency`(Go。`bench/zoo-go/dep` は依存の代わりの別モジュール)の `@miss(dependency_body_unread)` で、見逃しの痕跡として確かめる。
+**追記(読まなかった候補を示す):** 依存の本体は読まない(上の 2。gin-vue-admin で 24 秒が 15 分以上になる)ので、`io.Writer` の動的な呼び出しの候補に、依存の `Write`(受け取った値を、包んだ先の `Write` に渡す)があると、その先の自前の実装の中の sink は見つからず、`dynamic_dispatch` だけが出て、区別がつかなかった。種類 `dependency_body_unread`(`attributable_to: rivus`)を足した(足すだけ。スキーマ版はそのまま): モデルのある呼び先の候補に、本体のある依存の関数があるとき、その関数を `candidates` に並べて記録する。動物園 `dyn/through-dependency`(Go。`bench/zoo-go/dep` は依存の代わりの別モジュール)の `@miss(dependency_body_unread)` で、見逃しの痕跡として確かめる。
 
-**限界:** (1) Rust の標準の既定のメソッド(`write_all`、`Iterator::map` など)は、候補が実装の `write` / `next` でなく、本体のない標準のメソッドなので、この修正の対象外(`write_all` のモデルが `write` を呼ぶ、という行が要る。`calls:` の延長: ADR-080 で `write_all` を足した)。(2) **書き手のフィールドの区別がない**: `(io.Writer).Write` のモデルは、書いたデータを受け手の全体に置く。本体を読むと、書き手の別のフィールド(ファイル名、ロガーの設定)が汚れて見える。Gitea の追加 20 件は、これだった。直し方の案: モデルの置き先を、受け手の「中身」の要素にする(フィールドとは別の要素)。この変更の対象外。(3) 同じインターフェースの実装が複数あるときの絞り込みは、Go と Dart で違う。Go の動物園(実装が 4 つ以上)は、おとりの `@nosink` が静かなまま。Dart で、`StringSink` の実装 4 つ(vuln、fixed、おとり用の 2 つ)を 1 ファイルに置いて試すと、ある実装に渡した source が、他の実装の sink にも届いた(受け手の静的な型の全実装が候補。XTALK と同じ根)ので、Dart の動物園のマスにはしていない。Dart の実コード(dart-pub)に、finding の増減はない。
+**限界:** (1) Rust の標準の既定のメソッド(`write_all`、`Iterator::map` など)は、候補が実装の `write` / `next` でなく、本体のない標準のメソッドなので、この修正の対象外(`write_all` のモデルが `write` を呼ぶ、という行が要る。`calls:` の延長: ADR-080 で `write_all` を足した)。(2) **書き手のフィールドの区別がない**: `(io.Writer).Write` のモデルは、書いたデータを受け手の全体に置く。本体を読むと、書き手の別のフィールド(ファイル名、ロガーの設定)が汚れて見える。Gitea の追加 20 件は、これだった。修正方法の案: モデルの置き先を、受け手の「中身」の要素にする(フィールドとは別の要素)。この変更の対象外。(3) 同じインターフェースの実装が複数あるときの絞り込みは、Go と Dart で違う。Go の動物園(実装が 4 つ以上)は、おとりの `@nosink` が静かなまま。Dart で、`StringSink` の実装 4 つ(vuln、fixed、おとり用の 2 つ)を 1 ファイルに置いて試すと、ある実装に渡した source が、他の実装の sink にも届いた(受け手の静的な型の全実装が候補。XTALK と同じ根)ので、Dart の動物園のマスにはしていない。Dart の実コード(dart-pub)に、finding の増減はない。
 
 
 ## ADR-076: 型エラーで SSA が作られなかったパッケージを、出力で言う(読めなかったパッケージの数と名前、落ちた関数の数)
@@ -1686,7 +1686,7 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 
 **決めたこと:**
 1. 組み込みの `internal/model/builtin/go-gcp.yaml`(ルールの組 `rivus/go/gcp@1`)に置く。**ファイルを分けて、境界を見えるようにする**。冒頭のコメントと README に、例外であることと理由を書く。
-2. **Cloud Spanner**(`cloud.google.com/go/spanner` v1.96.1、`/v2` はない): sink は、`Statement` を取る呼び出しの、`SQL` フィールドだけ(`parts`)。`txReadOnly` の `Query` / `QueryWithOptions` / `QueryWithStats` / `AnalyzeQuery`(`Single()`、`ReadOnlyTransaction()`、`ReadWriteTransaction` から呼ぶと、IR は宣言した型の `txReadOnly` で言う)、`ReadWriteTransaction` の `Update(WithOptions)` / `BatchUpdate(WithOptions)`(`[].SQL`)、`Client.PartitionedUpdate(WithOptions)`、`BatchReadOnlyTransaction.PartitionQuery(WithOptions)`。**`Params` は sink にしない**(バインド変数)。`spanner.NewStatement(sql)` は、行を足さない(依存の本体が読まれ、`SQL` に細かく入る)。読み出し(`Row.Columns` / `ColumnByName` / `ToStruct` / `ToStructLenient`)は、受け手から出力引数への flows だけ。保存データの境界(`boundary: stored_data`)は、`database/sql` と同じく選択式で、入れない。
+2. **Cloud Spanner**(`cloud.google.com/go/spanner` v1.96.1、`/v2` はない): sink は、`Statement` を取る呼び出しの、`SQL` フィールドだけ(`parts`)。`txReadOnly` の `Query` / `QueryWithOptions` / `QueryWithStats` / `AnalyzeQuery`(`Single()`、`ReadOnlyTransaction()`、`ReadWriteTransaction` から呼ぶと、IR は宣言した型の `txReadOnly` で示す)、`ReadWriteTransaction` の `Update(WithOptions)` / `BatchUpdate(WithOptions)`(`[].SQL`)、`Client.PartitionedUpdate(WithOptions)`、`BatchReadOnlyTransaction.PartitionQuery(WithOptions)`。**`Params` は sink にしない**(バインド変数)。`spanner.NewStatement(sql)` は、行を足さない(依存の本体が読まれ、`SQL` に細かく入る)。読み出し(`Row.Columns` / `ColumnByName` / `ToStruct` / `ToStructLenient`)は、受け手から出力引数への flows だけ。保存データの境界(`boundary: stored_data`)は、`database/sql` と同じく選択式で、入れない。
 3. **BigQuery**(`cloud.google.com/go/bigquery` v1.86.3。`cloud.google.com/go/bigquery/v2` は別のモジュール(生成された低水準の API)で、この版の対象外): `Client.Query(q)` の引数 0 と、`Query.Run` / `Query.Read` の受け手の `QueryConfig.Q`(埋め込み 1 段 + 1)の**両方を sink にする**(設計の判断: `q.Q = x` は `Client.Query` を通らないので、`Run` / `Read` の側にしか見えない。`Run` に届く道をエンジンが落としたときに黙るより、重複のほうが軽い)。`Parameters` と `Labels` は安全な側。`Job` の結果の読み出しは入れない。
 4. Dart と Rust の Google Cloud(`googleapis` など)、Cloud Tasks、Pub/Sub、Storage、Firestore、Firebase Auth は、この ADR の範囲外(あとの段で、1 つの API 項目の表から作る)。
 
@@ -1698,23 +1698,23 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 - **重複**: `Client.Query(q)` で組み立てて `Run` / `Read` するケース(2)は、1 つの流れが 2 件(`Client.Query` と `Run` / `Read`)。`q.Q = x` は `Run` の 1 件。まとめる報告の側の仕事は、数が多くなってから(DESIGN-field-sinks.md の 6 節)。
 - 時間とメモリ(`rivus analyze`、1 つの解析の間に別の解析が走っていた Mac で、2 回): 42 から 45 秒、最大 3.4 から 4.1 GB。**依存の中の時間が 99.7%**(`dep_spent_ms` 106 秒に対して、プロジェクト自身は 0.27 秒)。20,785 関数(spanner と bigquery が、grpc、xds、monitoring、arrow などを引く)。上位は `google.golang.org/grpc`(10.5 秒、2,259 回の再解析)、`grpc/internal/xds/httpfilter/extproc`(7.7 秒)、`cloud.google.com/go/spanner`(4.0 秒)。遅い関数は、`grpclb.lbBalancer.refreshSubConns`(1 回 300 から 380ms)と、gax の `invoke`(356ms、出力 44)。1 つの動的な呼び出しに全部の操作が通る形(memos の AWS SDK)かは、まだ調べていない。**別の課題として報告**。
 
-**限界:** (1) `Row.Columns(&a)` の flows は、可変長の出力引数の中身に届かない(`ColumnByName` と `ToStruct` は届く)。`flows` が可変長の宛先の要素を書けないエンジン側の限界(`bench/gcp` の `ReadColumns`、`TestGCPRows` の `gcpKnownMisses` で記録)。(2) `spanner/apiv1` の `ExecuteSqlRequest.Sql` と、データベース管理の DDL は、まだない。(3) 版が上がってメソッドの名前や置き場所が変わると、行は当たらなくなる: `TestGCPRows` が赤になる(モジュールを上げるときの検査)。(4) 重い試験で、モジュールのキャッシュが要る(`RIVUS_REQUIRE_GCP=1` で、ないことを失敗にする)。
+**限界:** (1) `Row.Columns(&a)` の flows は、可変長の出力引数の中身に届かない(`ColumnByName` と `ToStruct` は届く)。`flows` が可変長の宛先の要素を書けないエンジン側の限界(`bench/gcp` の `ReadColumns`、`TestGCPRows` の `gcpKnownMisses` で記録)。(2) `spanner/apiv1` の `ExecuteSqlRequest.Sql` と、データベース管理の DDL は、まだない。(3) 版が上がってメソッドの名前や置き場所が変わると、行は当たらなくなる: `TestGCPRows` が失敗する(モジュールを上げるときの検査)。(4) 重い試験で、モジュールのキャッシュが要る(`RIVUS_REQUIRE_GCP=1` で、ないことを失敗にする)。
 
 ## ADR-078: ガードの出どころ(provenance)は、定数そのものか定数の単純なコピーだけを言い切る。演算を越えるときは畳むか `unresolved`、`zero_value` は書き込みが 1 つも届かないと分かるときだけ
 
-**背景:** 判定役は `conditional_nodes` の `provenance.resolved`(`literal` / `zero_value`)を、「この呼び出しでは条件の値が決まっている」と読み、サニタイズ済みの側なら流れを捨てる。それで、言い切った値が実際と逆だと、本物の流れが捨てられる(誤った痕跡の中で最も重い)。head で 3 つの形が確かめられた。(1) 単項・二項の演算(`!`、算術)を、オペランドへそのまま素通ししていた(`render(!c.raw, src)` の `c.raw = true` を `true / literal` と言う。実際の引数は `false`。`level(c.n-9, src)` を `9 / literal`。実際は 0)。比較は定数側だけを除いて、もう一方のオペランドの値を言っていた。(2) フィールドを読む先が、関数内の変数のとき、その変数への丸ごとの代入(関数の結果、`*p` のコピー、配列の要素のコピー)を書き込みと数えず、「誰も設定しない」と見てゼロ値と言っていた。(3) 呼び出しの結果をたどって callee の引数に着くと、その呼び出しの引数ではなく、callee の全部の呼び出し元の引数を混ぜていた。アドレスを取られた変数への、ポインタ越しの書き込みも数えていなかった。
+**背景:** 判定役は `conditional_nodes` の `provenance.resolved`(`literal` / `zero_value`)を、「この呼び出しでは条件の値が決まっている」と読み、サニタイズ済みの側なら流れを捨てる。それで、言い切った値が実際と逆だと、本物の流れが捨てられる(誤った痕跡の中で最も重い)。head で 3 つの形が確かめられた。(1) 単項・二項の演算(`!`、算術)を、オペランドへそのまま素通ししていた(`render(!c.raw, src)` の `c.raw = true` を `true / literal` と報告する。実際の引数は `false`。`level(c.n-9, src)` を `9 / literal`。実際は 0)。比較は定数側だけを除いて、もう一方のオペランドの値を報告していた。(2) フィールドを読む先が、関数内の変数のとき、その変数への丸ごとの代入(関数の結果、`*p` のコピー、配列の要素のコピー)を書き込みと数えず、「誰も設定しない」と見てゼロ値と報告していた。(3) 呼び出しの結果をたどって callee の引数に着くと、その呼び出しの引数ではなく、callee の全部の呼び出し元の引数を混ぜていた。アドレスを取られた変数への、ポインタ越しの書き込みも数えていなかった。
 
 **決めたこと(provenance だけの変更。コアの要約、finding の集合は変えない):**
 1. 値を言い切ってよいのは、定数そのもの、定数の単純なコピー(変数・フィールドへの格納と読み出し、`make_interface`、型表明、callee が返す定数)だけ。
-2. 途中に演算(`convert`、単項、二項: 比較を含む)があるときは、オペランドを別々にたどる(`derived`)。オペランドの値は、結果の値としては報告しない(集める枠に入れる)。全オペランドが定数に着き、演算が畳めれば、畳んだ値を `literal`(全部ゼロ値なら `zero_value`)で言う。畳めない(オペランドが `unresolved`、定数でない、演算が分からない、型の大きさが分からない、オーバーフロー、0 での除算)ときは、`depth_limit`(`attributable_to: rivus`)で「演算で計算される値で、定数に畳めなかった」と言う。オペランドがすでに止まった理由を言っているときは、それだけにする。畳み方(`provfold.go`)は Go、Rust、Dart の演算子と型名の綴りを受ける。φ が複数の値を運ぶときは、組み合わせ(16 まで)ごとに畳む。
+2. 途中に演算(`convert`、単項、二項: 比較を含む)があるときは、オペランドを別々にたどる(`derived`)。オペランドの値は、結果の値としては報告しない(集める枠に入れる)。全オペランドが定数に着き、演算が畳めれば、畳んだ値を `literal`(全部ゼロ値なら `zero_value`)で示す。畳めない(オペランドが `unresolved`、定数でない、演算が分からない、型の大きさが分からない、オーバーフロー、0 での除算)ときは、`depth_limit`(`attributable_to: rivus`)で「演算で計算される値で、定数に畳めなかった」と報告する。オペランドがすでに止まった理由を報告しているときは、それだけにする。畳み方(`provfold.go`)は Go、Rust、Dart の演算子と型名の綴りを受ける。φ が複数の値を運ぶときは、組み合わせ(16 まで)ごとに畳む。
 3. `zero_value` は、フィールドへの格納、フィールドの一部への格納、変数の丸ごとの代入のどれも、そのオブジェクトに届かないときだけ。丸ごとの代入のうち、同じ関数の別の変数のコピー(リテラルは別の変数に作ってコピーされる)は、その変数のフィールドをたどる。型のゼロ値の代入は、何も変えない。それ以外(関数の結果、`*p`、配列の要素)は `unresolved`。変数の値を読むとき(`walkAddr`)も、アドレスが渡っていれば `unresolved`。
 4. 呼び出しの結果をたどって callee の引数に着いたら、その呼び出しの引数に結ぶ(ほかの呼び出し元の引数は混ぜない)。
 
-**確かめたこと:** `testdata/go/cases/guard/provenance.go`(報告された 7 つの形+アドレスを取られた変数、callee の引数、比較の畳み込み): 否定と算術は畳んだ値(`false`、`0`)、丸ごとの代入と配列の要素は `unresolved`、本当のゼロ値は `false / zero_value`、ポインタ越しの `*pc = true` は `true / literal`(`TestProvenanceTellsNoValueThatIsNotKnown`)。畳み込みの単体試験は、Rust(`i32`、`u32`)と Dart(`int`)の型名も含む(`TestProvenanceFoldsOperations`)。Dart と Rust は同じコアで、`!` と `n - 9` を引数にした小さな例で、`unresolved`(誤った値は言わない)になることを確かめた。`bench/compare.sh --light`: finding の追加・削除 0、`path@1` の変化 0。軽い層の実コードで言い切っていた件数は、`literal` が 0、`zero_value` が 2(gogs の 2 つの版で同じノード。`PatchPath` の `repo` に `nil / zero_value`)で、どちらも `unresolved` になった(誤って言い切っていた数の上界は 2)。
+**確かめたこと:** `testdata/go/cases/guard/provenance.go`(報告された 7 つの形+アドレスを取られた変数、callee の引数、比較の畳み込み): 否定と算術は畳んだ値(`false`、`0`)、丸ごとの代入と配列の要素は `unresolved`、本当のゼロ値は `false / zero_value`、ポインタ越しの `*pc = true` は `true / literal`(`TestProvenanceTellsNoValueThatIsNotKnown`)。畳み込みの単体試験は、Rust(`i32`、`u32`)と Dart(`int`)の型名も含む(`TestProvenanceFoldsOperations`)。Dart と Rust は同じコアで、`!` と `n - 9` を引数にした小さな例で、`unresolved`(誤った値は報告しない)になることを確かめた。`bench/compare.sh --light`: finding の追加・削除 0、`path@1` の変化 0。軽い層の実コードで言い切っていた件数は、`literal` が 0、`zero_value` が 2(gogs の 2 つの版で同じノード。`PatchPath` の `repo` に `nil / zero_value`)で、どちらも `unresolved` になった(誤って言い切っていた数の上界は 2)。
 
-**限界:** 変数の丸ごとの代入は、別の関数の変数のコピーや、構造体の中の構造体の一部の格納は、たどらず `unresolved`(多めに言わない側)。Dart と Rust は、変数の読み出し(`not followed: *ssa.Slice`)で止まるため、定数を畳む前に `unresolved` になる(今までも値は言っていない)。
+**限界:** 変数の丸ごとの代入は、別の関数の変数のコピーや、構造体の中の構造体の一部の格納は、たどらず `unresolved`(多めに報告しない側)。Dart と Rust は、変数の読み出し(`not followed: *ssa.Slice`)で止まるため、定数を畳む前に `unresolved` になる(今までも値は報告していない)。
 
-**F4 / F5 の訂正(アーキテクチャ助言者のコードレビュー、ADR-078 の続き):** 上の決めたことに、言い切りの誤りが 2 つ残っていた。(F4) φ を通る循環を黙って切るので、その上に定数の枝を持つ別の φ があると、不完全な集合を「全部分かった」と報告した(`a := 1; for ... { b := a; if i == 3 { b = 7 }; a = b + 1 }` で `[1, 8]`、`unresolved` は空。実際は 2、3、4、8、9、…)。直し: 値(と、オブジェクトのフィールド)を辿る途中で同じ点に戻ったとき、戻るまでに演算(`derived`)を通っていたら、その枠を失敗(`depth_limit`、「循環が演算を通る」)にする。コピーだけの循環は値を足さないので、これまでどおり黙って切る。(F5) `zero_value` を、関数のどこにも書き込みがないときだけ言っていたので、読んだ後の書き込み(`v := c.n; c.n = 9` で `9 / literal`、実際は 0)や、片方の枝だけの書き込み(`if k > 2 { c.n = 9 }; v := c.n` で `{9}`、実際は `{0, 9}`)で間違った。直し: 読み出しの地点に**届く**書き込みで決める。読み出しに届かない書き込み(同じブロックの後ろで、戻る道もない)は数えない。読み出しに至る全部の道にある書き込み(同じブロックの前、または読み出しのブロックを支配するブロック)があるときだけ、ゼロ値を外す。支配が分からなければ、ゼロ値も候補に入れる(多めに言う側)。呼び元の関数へ進むときの読み出しの地点は、その呼び出し。ポインタ越しのフィールド読み出し(`walkAddr`)も、ゼロ値を言う(以前は何も言わなかった)。限界: 全部の枝が書いていても、1 つの書き込みが支配しないなら、ゼロ値が候補に残る(`{9, 0}`)。**確かめたこと:** `testdata/go/cases/guard/provenance.go` に `SteppedInLoop`、`ReadThenWrite`、`WrittenOnOneBranch`、`WrittenOnBothBranches` を足した(期待値は、正しい集合か `unresolved`)。`!c.raw`、`c.n-9`、`getCfg()` の形、`*pc = true`、本当のゼロ値は前と同じ。`bench/compare.sh --light`(F4: 2faa8aa から 9736701、F5: dc811ca から f88be02)で、finding の集合は同じ(追加 0、削除 0、経路の変化 0、不確かさの数も同じ)。実コードの `conditional_nodes` は、gogs の 2 つに計 8 件だけで、どれも `resolved` が空(`unresolved` のみ)で、前後とも同じ。誤って言い切っていた数の上界は、軽い層で 0。
+**F4 / F5 の訂正(アーキテクチャ助言者のコードレビュー、ADR-078 の続き):** 上の決めたことに、言い切りの誤りが 2 つ残っていた。(F4) φ を通る循環を黙って切るので、その上に定数の枝を持つ別の φ があると、不完全な集合を「全部分かった」と報告した(`a := 1; for ... { b := a; if i == 3 { b = 7 }; a = b + 1 }` で `[1, 8]`、`unresolved` は空。実際は 2、3、4、8、9、…)。修正: 値(と、オブジェクトのフィールド)を辿る途中で同じ点に戻ったとき、戻るまでに演算(`derived`)を通っていたら、その枠を失敗(`depth_limit`、「循環が演算を通る」)にする。コピーだけの循環は値を足さないので、これまでどおり黙って切る。(F5) `zero_value` を、関数のどこにも書き込みがないときだけ報告していたので、読んだ後の書き込み(`v := c.n; c.n = 9` で `9 / literal`、実際は 0)や、片方の枝だけの書き込み(`if k > 2 { c.n = 9 }; v := c.n` で `{9}`、実際は `{0, 9}`)で間違った。修正: 読み出しの地点に**届く**書き込みで決める。読み出しに届かない書き込み(同じブロックの後ろで、戻る道もない)は数えない。読み出しに至る全部の道にある書き込み(同じブロックの前、または読み出しのブロックを支配するブロック)があるときだけ、ゼロ値を外す。支配が分からなければ、ゼロ値も候補に入れる(多めに報告する側)。呼び元の関数へ進むときの読み出しの地点は、その呼び出し。ポインタ越しのフィールド読み出し(`walkAddr`)も、ゼロ値を報告する(以前は何も報告しなかった)。限界: 全部の枝が書いていても、1 つの書き込みが支配しないなら、ゼロ値が候補に残る(`{9, 0}`)。**確かめたこと:** `testdata/go/cases/guard/provenance.go` に `SteppedInLoop`、`ReadThenWrite`、`WrittenOnOneBranch`、`WrittenOnBothBranches` を足した(期待値は、正しい集合か `unresolved`)。`!c.raw`、`c.n-9`、`getCfg()` の形、`*pc = true`、本当のゼロ値は前と同じ。`bench/compare.sh --light`(F4: 2faa8aa から 9736701、F5: dc811ca から f88be02)で、finding の集合は同じ(追加 0、削除 0、経路の変化 0、不確かさの数も同じ)。実コードの `conditional_nodes` は、gogs の 2 つに計 8 件だけで、どれも `resolved` が空(`unresolved` のみ)で、前後とも同じ。誤って言い切っていた数の上界は、軽い層で 0。
 
 ## ADR-079: Rust の `Fn*::call` の候補を、受け手に流れ込む関数値の出どころで絞る(XTALK、案 A)。閉じた世界は `closed_world_entry`
 
@@ -1758,8 +1758,8 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 **背景:** `GEN-DYN`(bench/MISSES.md): ジェネリックな `T` に対する `items.into_iter()`、`it.next()` は、抽出器が呼び先を決められず、dynamic な呼び出しになる。コアは dynamic な呼び出しの受け手を引数と別に持ち(`args` は受け手を除く。Go のインターフェースのメソッドの規約)、Rust のモデルは `self` を先頭に引数を数える(`from: args`、`arg1`)ので、`from: args` が受け手(`Vec` そのもの)を含まず、結果に何も流れなかった。同じ関数が、型が分かる呼び出しでは見つかり、`T` では落ちる(docs/DESIGN-generics-dispatch.md)。
 
 **決めたこと:**
-1. モデルの集合に `self_first: true`(`rust-std.yaml`、`rust-misc.yaml`)。その集合のシンボルの dynamic な呼び出しでは、受け手を引数の先頭に置いて、モデルを当てる(`internal/taint/calls.go` の `applyModel`)。型が分かる呼び出しと同じ位置になる。受け手を別に持つ規約は、ガード、候補の絞りのために、そのまま。
-2. **`Box<dyn Fn>` の呼び出しは、入れない**(docs/DESIGN-generics-dispatch.md の (2))。抽出器で `Box` の `Fn` の実装の呼び出しを dynamic にし、モデルの行(今までの既定と同じ)を足す試作は、動物園で本物の流れが 7 件増える一方、静かなはずの sink に届く所が 16 か所増えた(受け手の出どころが、`Option` / `HashMap` / `Vec` の中で、ADR-079 の絞りが辿れない)。精度を犠牲にする判断なので、入れない。コンテナの要素まで辿る設計が済んでから、同じ測定で入れる。
+1. モデルの集合に `self_first: true`(`rust-std.yaml`、`rust-misc.yaml`)。その集合のシンボルの dynamic な呼び出しでは、受け手を引数の先頭に置いて、モデルを当てる(`internal/taint/calls.go` の `applyModel`)。型が分かる呼び出しと同じ位置になる。受け手を別に持つ規約は、ガード、候補の絞り込みのために、そのまま。
+2. **`Box<dyn Fn>` の呼び出しは、入れない**(docs/DESIGN-generics-dispatch.md の (2))。抽出器で `Box` の `Fn` の実装の呼び出しを dynamic にし、モデルの行(今までの既定と同じ)を足す試作は、動物園で本物の流れが 7 件増える一方、静かなはずの sink に届く所が 16 か所増えた(受け手の出どころが、`Option` / `HashMap` / `Vec` の中で、ADR-079 の絞り込みが辿れない)。精度を犠牲にする判断なので、入れない。コンテナの要素まで辿る設計が済んでから、同じ測定で入れる。
 
 **確かめたこと:** 動物園(Rust)の `dyn/generics-ptr` の vuln と decoy の本物の流れが見つかる(`@miss` を外した)。動物園 Rust: 本物の流れ 114 → 116、`@miss` 36 → 34、静かなはずの sink に届く所の増減 0。rust-curated: 変化なし(147、`@miss` 8)。
 
@@ -1767,16 +1767,16 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 
 ## ADR-082: 書き込み器のモデルは、書かれたデータを受け手の全体でなく「中身」の要素(`.content`)に置く
 
-**背景:** ADR-075 で、`(io.Writer).Write` の類のモデルが「引数が受け手に入る」と言い、本体も読むようになった。受け手の**全体**に汚れが載るので、自前の実装の本体が自分のフィールド(ファイル名、設定)を読んで sink に渡すと、書かれたデータとは関係のない流れが出た(Gitea の追加 20 件の主な根)。
+**背景:** ADR-075 で、`(io.Writer).Write` の類のモデルが「引数が受け手に入る」と宣言し、本体も読むようになった。受け手の**全体**に汚れが載るので、自前の実装の本体が自分のフィールド(ファイル名、設定)を読んで sink に渡すと、書かれたデータとは関係のない流れが出た(Gitea の追加 20 件の主な根)。
 
-**決めたこと:** モデルの `flows` の `to:` に `recv.content` / `argN.content` を書けるようにした(`model.ParseDest`。`from:` と結果には書けない)。エンジンでは、書き込み先の場所(Loc)のアクセスパスに、どの言語のフィールド名にもならない 1 段 `#content`(`model.ContentStep`)を足した場所に載せる。値の**フィールドとは別の要素**なので、書き手のフィールドの読みには届かず、書き手の全体(`from: recv`)の読み、`String()` などの中身の読みは、今までどおり汚れを見る(全体の読みは部分の汚れを含むため)。sink の `parts` の照合では `#content` を透過の段として飛ばす(`transparentStep`)。対象は、`io.Writer` の類に限る: `Write`、`WriteString`、`WriteByte`、`WriteRune`、`ReadFrom`、`fmt.Fprint*` と `io.WriteString` の先、`bytes.Buffer` と `strings.Builder` の書き込み(`go-stdlib.yaml`、`go-stdlib-more.yaml`)。Dart と Rust のモデルは変えない。
+**決めたこと:** モデルの `flows` の `to:` に `recv.content` / `argN.content` を書けるようにした(`model.ParseDest`。`from:` と結果には書けない)。エンジンでは、書き込み先の場所(Loc)のアクセスパスに、どの言語のフィールド名にもならない 1 段 `#content`(`model.ContentStep`)を足した場所に載せる。値の**フィールドとは別の要素**なので、書き手のフィールドの読み出しには届かず、書き手の全体(`from: recv`)の読み、`String()` などの中身の読み出しは、今までどおり汚れを見る(全体の読み出しは部分の汚れを含むため)。sink の `parts` の照合では `#content` を透過の段として飛ばす(`transparentStep`)。対象は、`io.Writer` の類に限る: `Write`、`WriteString`、`WriteByte`、`WriteRune`、`ReadFrom`、`fmt.Fprint*` と `io.WriteString` の先、`bytes.Buffer` と `strings.Builder` の書き込み(`go-stdlib.yaml`、`go-stdlib-more.yaml`)。Dart と Rust のモデルは変えない。
 
-**確かめたこと:** `testdata/go/cases/writer`(書き手のフィールドを読む本体は鳴らない。書いたデータを読む本体と、書き手全体の読みは鳴る)。動物園の `dyn/stdlib-writer-own`、`dyn/http-middleware-chain`、`conv/buffer-writestring` は出たまま。Gitea(`bench/compare.sh --heavy`、base は ADR-078 の main): 367 → 358、追加 3、削除 12、7 パスで収束(再解析 112,695 → 112,353)。削除 12 は、1 件ずつ経路を読んだ: 9 件は、ログのファイルの書き手(`rotatingfilewriter`)の 3 つの sink に、書いたデータでなく書き手のファイル名を通って届いていた雑音(経路 100 以上、source の関数で始まらない)。3 件(`UploadPackage` と `PutManifest` を source にしたもの)は、同じ sink が別の source(同じ形の `Context`)で見つかっており、代表の source が変わっただけで、sink は失われていない(追加の 3 件も同じ入れ替わり)。本物の finding が消えた例はない。
+**確かめたこと:** `testdata/go/cases/writer`(書き手のフィールドを読む本体は鳴らない。書いたデータを読む本体と、書き手全体の読み出しは鳴る)。動物園の `dyn/stdlib-writer-own`、`dyn/http-middleware-chain`、`conv/buffer-writestring` は出たまま。Gitea(`bench/compare.sh --heavy`、base は ADR-078 の main): 367 → 358、追加 3、削除 12、7 パスで収束(再解析 112,695 → 112,353)。削除 12 は、1 件ずつ経路を読んだ: 9 件は、ログのファイルの書き手(`rotatingfilewriter`)の 3 つの sink に、書いたデータでなく書き手のファイル名を通って届いていた雑音(経路 100 以上、source の関数で始まらない)。3 件(`UploadPackage` と `PutManifest` を source にしたもの)は、同じ sink が別の source(同じ形の `Context`)で見つかっており、代表の source が変わっただけで、sink は失われていない(追加の 3 件も同じ入れ替わり)。本物の finding が消えた例はない。
 
 **限界:** ADR-075 の追加 20 件のうち、残るのは 8 件(sink は 4 か所)。この変更の根(書き込みの置き先)ではない: (1) 汚れたリクエストの context そのものを `io.Writer` として渡した先(`event.WriteTo(ctx)`)で、`w.Write` の候補に別の実装(`RotatingFileWriter`)が入り、その受け手が汚れる。これは受け手の同一視(XTALK)の根で、呼び出し元が渡した型で候補を絞る仕事(`narrow.go`)の範囲。(2) 共有状態を通る長い経路(`shared_state`)。`ctx.Resp` を包む形(XSS 2 件)は、sink 単位では、変更の前後で件数が同じで、この変更の効果は区別できない。
 
 
-**訂正(黙った見逃しを直した):** `.content` に置くだけでは、`fmt.Fprint*`、`io.WriteString`、`io.Copy`、`template.Execute*`、`pem.Encode`、`png.Encode` のように**書き手の `Write` の本体を当てない**モデルで、書き手の本当のフィールド(`w.data`、`w.buf`、`httptest.ResponseRecorder.Body`)に流れが届かず、本物の流れが黙って消えた(自前の書き手 `Fprintf(w, …)` のあと `string(w.data)` を sink へ、`Fprint(rec, …)` のあと `rec.Body.String()` を sink へ)。試験は `w.Write` を直接呼ぶ形だけだった。**今の決め**(`contentOnly`): `.content` の段だけに置くのは、(1) `recv.content`(書き手自身のメソッド。動的な呼び出しでは本体を当てる)、(2) 受け手の型が `bytes.Buffer` / `strings.Builder`(モデルが読み戻す)のときだけ。それ以外(プロジェクトの型、インターフェース、他のライブラリの型)の `argN.content` は、`.content` の段に加えて**書き手の全体にも**置く(ADR-082 以前と同じ)。代わりに、本体を当てない呼び出し(`fmt.Fprint(w, x)`)で、書き手のフィールド(ファイル名)を読む本体の sink は、書いたデータと無関係に鳴る(雑音。zoo の `dyn/fprint-writer-own` の decoy は `@fp`)。本体を当てる直接の `w.Write` / インターフェースの `Write` では、ADR-082 のとおり静か(`bench/go-curated/api/rotate.go`)。根の直し(`Fprint` の先の `Write` の本体を当てる)は未着手。試験: `testdata/go/cases/writer`(自前の書き手、`httptest.NewRecorder`、`io.Copy`、`bytes.Buffer` の `Fprint`)、zoo の `dyn/fprint-writer-own`。なお、インターフェース型のパラメータで受けたヘルパー(`func h(w io.Writer){ fmt.Fprintf(w, …) }`)に自前の書き手を渡す形は、ADR-082 より前から出ない(別の見逃し。未着手)。
+**訂正(黙った見逃しを直した):** `.content` に置くだけでは、`fmt.Fprint*`、`io.WriteString`、`io.Copy`、`template.Execute*`、`pem.Encode`、`png.Encode` のように**書き手の `Write` の本体を当てない**モデルで、書き手の本当のフィールド(`w.data`、`w.buf`、`httptest.ResponseRecorder.Body`)に流れが届かず、本物の流れが黙って消えた(自前の書き手 `Fprintf(w, …)` のあと `string(w.data)` を sink へ、`Fprint(rec, …)` のあと `rec.Body.String()` を sink へ)。試験は `w.Write` を直接呼ぶ形だけだった。**今の決定**(`contentOnly`): `.content` の段だけに置くのは、(1) `recv.content`(書き手自身のメソッド。動的な呼び出しでは本体を当てる)、(2) 受け手の型が `bytes.Buffer` / `strings.Builder`(モデルが読み戻す)のときだけ。それ以外(プロジェクトの型、インターフェース、他のライブラリの型)の `argN.content` は、`.content` の段に加えて**書き手の全体にも**置く(ADR-082 以前と同じ)。代わりに、本体を当てない呼び出し(`fmt.Fprint(w, x)`)で、書き手のフィールド(ファイル名)を読む本体の sink は、書いたデータと無関係に鳴る(雑音。zoo の `dyn/fprint-writer-own` の decoy は `@fp`)。本体を当てる直接の `w.Write` / インターフェースの `Write` では、ADR-082 のとおり静か(`bench/go-curated/api/rotate.go`)。根の修正(`Fprint` の先の `Write` の本体を当てる)は未着手。試験: `testdata/go/cases/writer`(自前の書き手、`httptest.NewRecorder`、`io.Copy`、`bytes.Buffer` の `Fprint`)、zoo の `dyn/fprint-writer-own`。なお、インターフェース型のパラメータで受けたヘルパー(`func h(w io.Writer){ fmt.Fprintf(w, …) }`)に自前の書き手を渡す形は、ADR-082 より前から出ない(別の見逃し。未着手)。
 
 ## ADR-083: Go の型の別名は、ルールの側で同義に扱う。IR は使った名前のまま、別名の表(`type_aliases`)を足す
 
@@ -1789,7 +1789,7 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 
 **限界:** メソッドのシンボル(`pkg.Type.Method`)は、メソッドが実体の型に宣言されるので、IR のシンボルは常に実体の側。ルールを別名の名前の受け手で書くと当たらない(実体の側で書く。docs/GCP-MODELS.md の `DataAs` の行)。入れ子の中の別名(`map[string]Alias`、`Foo[Alias]`、`[]*Alias`、関数の型の中)も、`CanonType` が型の文字列の名前ごとにほどく(追記: 以前は先頭の `*` と `[]` の接頭辞だけだった。`testdata/go/cases/typealias` の e / f / g / h)。Dart の `typedef`: 抽出器の型は `element` のクラスで、型の側はすでに実体(別名の名前で書いたルールが当たらない穴は、同じ表を足せば塞げる。未着手)。Rust: 型の別名は rustc が展開し、`use … as` は定義の道に影響しないので、同じ穴はない(未確認の範囲は、`impl` の対象の別名)。
 
-**訂正(関数の中で定義した同名の型):** 別名の表は名前を鍵にするので、関数の中で定義した型が、そのパッケージの別名と同じ名前(`type Shadow = real.S` と、関数の中の `type Shadow struct{…}`)だと、別名の先と同じ型として扱われ、別名の先のルールが当たった(誤検出)。直し: 抽出器は、パッケージの別名と同じ名前の、関数の中の型を、`pkg.Name·位置` の名前で出す(`typeString`。`*`、`[]`、配列、`map`、`chan`、型引数の下も)。別名の表は、パッケージ直下の宣言だけなので、この型には当たらない。ほかの型の名前は変わらない。試験: `testdata/go/cases/typealias` の `SShadowDecoy`(前は鳴った、今は静か)。限界: 関数の型、構造体の型の中の、同名の関数内の型は、名前のまま(`typeString` が下りない)。
+**訂正(関数の中で定義した同名の型):** 別名の表は名前を鍵にするので、関数の中で定義した型が、そのパッケージの別名と同じ名前(`type Shadow = real.S` と、関数の中の `type Shadow struct{…}`)だと、別名の先と同じ型として扱われ、別名の先のルールが当たった(誤検出)。修正: 抽出器は、パッケージの別名と同じ名前の、関数の中の型を、`pkg.Name·位置` の名前で出す(`typeString`。`*`、`[]`、配列、`map`、`chan`、型引数の下も)。別名の表は、パッケージ直下の宣言だけなので、この型には当たらない。ほかの型の名前は変わらない。試験: `testdata/go/cases/typealias` の `SShadowDecoy`(前は鳴った、今は静か)。限界: 関数の型、構造体の型の中の、同名の関数内の型は、名前のまま(`typeString` が下りない)。
 
 **確かめ直した(別名の別名、ポインタ、スライス、マップの別名):** `type PT = *T`、`type LT = []T`、`type M = map[string]PT`、`type PCT = *CT` 越しのフィールドは、`CanonType` が型の文字列の名前ごとに、別名の先を再帰的にほどく(目標も別名を含みうる。深さ 8 まで)ので、置き換えたあとの `*` / `[]` / `map` / `chan` / 関数の型の接頭辞は、実体の型として並ぶ(別名のまま残らない)。`map[string]api.T` も当たる(上の「限界」の入れ子)。試験: `testdata/go/cases/typealias` の `PtrAliasSpelling`、`ListAliasSpelling`、`MapAliasSpelling`、`FieldThroughPtrAlias`、`internal/ir/canon_test.go`。接頭辞を外し直す処理は要らなかった(文字列の名前ごとの置き換えが、固定点まで進む)。
 
@@ -1799,7 +1799,7 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 
 **決めたこと:**
 1. 印は**セル**(変数そのもの、アドレスの指す先)に付いたまま。そこから**構造を持つ値**(構造体、コンテナ、インターフェース)を作る値の読み出し(`load`、コピー、フィールドや要素の読み出し、φ。`copyLocsNoted` の全体を 1 か所で)は、印を、作った値の根に運ぶ(`carryOpaque`)。文字列や数値は運ばない(構造の一部を動かす先ではない)。ポインタは、同じセルなので、そのまま。
-2. **関数を越える:** 要約(`Summary.Opaque`)が、本体の中で読まない関数に渡った引数の位置を持つ。呼び元は、要約を当てるとき、渡した実引数に同じ印を付ける(`markOpaque`。呼び出しがそこで行われたのと同じ)。要約の比べ(`signature`)と合流(`joinSummaries`)に入れた。ヘルパーに `&stmt` を渡して、その中で読まない関数が呼ばれる形も鳴る。
+2. **関数を越える:** 要約(`Summary.Opaque`)が、本体の中で読まない関数に渡った引数の位置を持つ。呼び元は、要約を当てるとき、渡した実引数に同じ印を付ける(`markOpaque`。呼び出しがそこで行われたのと同じ)。要約の比較(`signature`)と合流(`joinSummaries`)に入れた。ヘルパーに `&stmt` を渡して、その中で読まない関数が呼ばれる形も鳴る。
 3. 印は汚れを足さない(ADR-074 の 3 と同じ)。足されるのは、`parts` の sink が、印のある値の下の汚れを見つけたときの `opaque_callee` の finding だけ。`parts` のない sink と、今の伝播は変わらない。
 
 4. **同じ仕事で直した、別の黙る見逃し:** モデルの `flows` の `to: argN` が可変長引数のスライス(`row.Columns(&a, &b)`)のとき、スライスのセルに書くだけで、中のポインタの指す先に届かなかった(`bench/gcp` の `ReadColumns`)。`source` の `out:` と同じく、スライスに入れたポインタの指す先(`variadicElems`)にも書く。`testdata/go/cases/variadicdst`。
@@ -1808,7 +1808,7 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 
 **限界:** 流れの順序を見ない(解析は、順序を持たない)ので、読まない関数に渡す前にした値のコピーも、印を持つ(鳴らす側の誤り。`parts` の sink で、汚れた道が確かでないときの `field_imprecision` だけが増える)。
 
-**訂正(命令の順に依る見逃しを直した):** 印は汚れを足さず `rootVer` も上げないので、前のパスで評価済みの sink の呼び出しは、`callSig` が同じで飛ばされ、あとから付いた印(ループの 2 周目、`defer` の sink、読まない関数に渡す前にしたコピーを sink に渡す形)を聞き直さず、黙っていた。直し: (1) `callSig` に、その呼び出しが読むセルの、**自分の印でない印**の数(`markSig`)を入れる。(2) 印は、付けた命令を覚える(`opaqueBy`。2 つ以上、または印のあるセルの読みで運ばれたものは `multiMark`)。sink は、自分が呼び出しの中で付けた印(読まない sink は引数に印を付ける)を見ない(`touchedByOpaque` の `self`): 見ると、どの sink も、渡されたものの印で鳴ってしまう。つまり、順序に依らず、ある印が付いた時点で、それを自分の印でないと見る sink は、もう一度評価される。試験: `testdata/go/cases/fieldsink` の `LoopMark`、`DeferMark`、`CopyBeforeMark`(変える前は 3 つとも鳴らなかった)。「流れの順序を見ない」のは、印が付いたあとの流れの先を絞らない、という意味(鳴らす側の誤りは上のまま)。
+**訂正(命令の順に依る見逃しを直した):** 印は汚れを足さず `rootVer` も上げないので、前のパスで評価済みの sink の呼び出しは、`callSig` が同じで飛ばされ、あとから付いた印(ループの 2 周目、`defer` の sink、読まない関数に渡す前にしたコピーを sink に渡す形)を聞き直さず、黙っていた。修正: (1) `callSig` に、その呼び出しが読むセルの、**自分の印でない印**の数(`markSig`)を入れる。(2) 印は、付けた命令を覚える(`opaqueBy`。2 つ以上、または印のあるセルの読み出しで運ばれたものは `multiMark`)。sink は、自分が呼び出しの中で付けた印(読まない sink は引数に印を付ける)を見ない(`touchedByOpaque` の `self`): 見ると、どの sink も、渡されたものの印で鳴ってしまう。つまり、順序に依らず、ある印が付いた時点で、それを自分の印でないと見る sink は、もう一度評価される。試験: `testdata/go/cases/fieldsink` の `LoopMark`、`DeferMark`、`CopyBeforeMark`(変える前は 3 つとも鳴らなかった)。「流れの順序を見ない」のは、印が付いたあとの流れの先を絞らない、という意味(鳴らす側の誤りは上のまま)。
 
 
 
@@ -1829,7 +1829,7 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 
 **背景:** ADR-075 は、sanitizer のあるシンボルを、本体を読まない対象から外していた(本体を読むと「結果は無害」を取り戻すため)。その結果、`type Cleaner interface{ Clean(string) string }` に `Clean` の sanitizer を書くと、プロジェクトの実装の本体の中の sink(`Clean` が自分で `exec` に渡す、グローバルに書く)が見えなかった。
 
-**決めたこと:** (1) 呼び先のモデルが sanitizer で、動的な呼び出しのとき、プロジェクト自身の実装の本体も読み、**結果への流れだけ捨てる**(`callCtx.noResult`、`applySummary` の `OutResult`)。本体の中の sink への到達、引数・受け手・グローバルへの書き込みは採る。`read_impls` のある行は、今までどおり結果も採る。依存の本体は読まない(ADR-075 のまま)。(2) 組み込みの sanitizer の全行を `internal/model/builtin/testdata/sanitizers-reviewed.txt` に、種類(関数、static、上書きされうるクラスのメソッド、インターフェース / trait のメソッド)つきで持ち、行が増えて一覧にないと `go test` が赤くなる(`TestSanitizersAreReviewed`)。
+**決めたこと:** (1) 呼び先のモデルが sanitizer で、動的な呼び出しのとき、プロジェクト自身の実装の本体も読み、**結果への流れだけ捨てる**(`callCtx.noResult`、`applySummary` の `OutResult`)。本体の中の sink への到達、引数・受け手・グローバルへの書き込みは採る。`read_impls` のある行は、今までどおり結果も採る。依存の本体は読まない(ADR-075 のまま)。(2) 組み込みの sanitizer の全行を `internal/model/builtin/testdata/sanitizers-reviewed.txt` に、種類(関数、static、上書きされうるクラスのメソッド、インターフェース / trait のメソッド)つきで持ち、行が増えて一覧にないと `go test` が失敗する(`TestSanitizersAreReviewed`)。
 
 **数えたこと:** 3 言語の組み込みモデルの sanitizer 7 行のうち、インターフェース / trait のメソッドは **0 行**(Go の関数 3、Dart の static 3、Dart の上書きされうるクラスのメソッド 1)。したがって組み込みの結果は変わらない。この実装は、利用者のルールの sanitizer(自前のインターフェースへの行)のためのもの。
 
@@ -1893,13 +1893,13 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 
 切ったパッケージの扱い:
 4. **モデルのない呼び出しは、保守的に、痕跡つきで。** モデルの行がない関数の呼び出しは、今の `-no-deps` と同じ(引数 → 結果を多めに、渡した関数は呼ばれるものとして扱う、`unmodeled_library_call`)。汚染のない値にしない。
-5. **切ったことを言う。** 出力(`summary` と索引の meta)に、モデルで切ったパッケージの一覧。`rivus graph` の「経路なし」の `exhaustive` は、探索がモデルのない境界の関数に当たったら false。利用者が本体を読ませる旗(全体と、パッケージごと)を残す。
+5. **切ったことを示す。** 出力(`summary` と索引の meta)に、モデルで切ったパッケージの一覧。`rivus graph` の「経路なし」の `exhaustive` は、探索がモデルのない境界の関数に当たったら false。利用者が本体を読ませる旗(全体と、パッケージごと)を残す。
 
 変わらないもの: 自分のコードは必ず読む。依存のインターフェースの自分の実装の本体は読む(ADR-075、ADR-086)。標準ライブラリは今のまま。切るのは 1〜3 を満たしたパッケージだけで、それ以外の依存は、今までどおり既定で読む。組み込みのモデルでも、利用者が外から差し込むルールでも、同じ条件(同じ検査の道具)で切れるようにする。
 
 **確かめたこと:** 上の測定(`bench/gcp`、`bench/go-curated`: 依存がほぼなく、`-no-deps` でも finding・確信・不確実性が同一)。
 
-**限界(まだ届かないもの):** パッケージごとに切る仕組みがない(今は、全部読むか、全部読まないか)。突き合わせの検査がない。第三者の依存が多い対象では測っていない(gcp は、Google Cloud の組み込みモデルが既にあるベンチ。実アプリで、finding に効く未モデルの呼び先が、全体のどれだけかは未測定: gcp では 5 / 29)。切った結果の確信は、gcp で 19 → 15 に下がる(約 30 種のモデルで戻す見込みで、finding に効くのは 5 種)。実装の順は、段階 4 の第 2 歩のあとに決める(ROADMAP)。
+**限界(まだ届かないもの):** パッケージごとに切る仕組みがない(今は、全部読むか、全部読まないか)。突き合わせの検査がない。第三者の依存が多い対象では測っていない(gcp は、Google Cloud の組み込みモデルが既にあるベンチ。実アプリで、finding に影響する未モデルの呼び先が、全体のどれだけかは未測定: gcp では 5 / 29)。切った結果の確信は、gcp で 19 → 15 に下がる(約 30 種のモデルで戻す見込みで、finding に影響するのは 5 種)。実装の順は、段階 4 の第 2 歩のあとに決める(ROADMAP)。
 
 ## ADR-093: Rust の extractor の隔離を、Docker から macOS のサンドボックス(Seatbelt)に替える(ユーザーの決定、2026-11-22。ADR-064 を一部覆す)
 
@@ -1914,21 +1914,21 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 
 **承知している弱さ(ユーザーが受け入れた。Docker より弱い / ない所):**
 - `sandbox-exec` は、Apple が非推奨にしたまま動いている仕組み。
-- メモリ、CPU、プロセス数の**強い上限がない**(時間の上限、プロセスグループごとの kill で代える)。メモリとプロセス数の見張りは、後回し。
-- **ユーザー境界がない**(利用者と同じユーザーで動く。守りは、プロファイルだけ)。ホストのカーネルに直接触れる(Docker Desktop では、Linux の VM のカーネルだった)。
+- メモリ、CPU、プロセス数の**強い上限がない**(時間の上限、プロセスグループごとの kill で代える)。メモリとプロセス数の監視は、後回し。
+- **ユーザー境界がない**(利用者と同じユーザーで動く。防御は、プロファイルだけ)。ホストのカーネルに直接触れる(Docker Desktop では、Linux の VM のカーネルだった)。
 - **システムのファイルが、読み取りの範囲で見える**。実行できるプログラムは、ホストにある名指しの一覧(`/bin/sh`、`/bin/bash`、`cc`、`ld` など)とツールチェイン。
 - **同じユーザーの他のプロセスの引数と環境(`kern.procargs2`)が、サンドボックスの下から読める**(拒否できなかった: 名前、`kern.` の接頭辞、`process-info*` の拒否、どれも止まらない。全体の拒否は、Go のランタイムが落ちる)。**受け入れの根拠: 読んだものを外に出す道が、抽出の段階にない**(試験の組 `TestSandboxClosesEveryWayOut`)。**残る道 = rivus の出力(解析の結果とログ)に、対象が決める文字列が載ること。これも承知のうえで受け入れた**(信頼できないコードの解析の結果とログは、そのコードが書いたものを含みうる。そのまま公開の場所に出さない)。
-- **グループを抜けるプロセス**(`setsid`、二重フォーク)は、実行の終わりに止められない(サンドボックスの下のまま。ファイルとネットワークには触れない)。残ったかもしれないことを、言うだけ。
+- **グループを抜けるプロセス**(`setsid`、二重フォーク)は、実行の終わりに止められない(サンドボックスの下のまま。ファイルとネットワークには触れない)。残ったかもしれないことを、報告するだけ。
 - **取得の段階のネットワークは、絞っていない**(宛先の許可リストがない)。Docker の既定の bridge と同じで、今より弱くはならない。
 - **解析する構成が、macOS 向けに変わる**: `cfg(target_os)` で分かれるコードは、macOS の側を読む(試験用の crate で確かめた: Docker は `only_on_linux`、サンドボックスは `only_on_macos`)。
 - **Linux では、信頼できないコードの Rust の解析ができなくなる**(ユーザーが受け入れた。理由: 主な使い手は全員 macOS。`-unsafe-host-exec` で、隔離なしに読める)。
 - **祖先の `.cargo/config.toml` があると、何も実行せずに止まる**(cargo はそれを読めない。ホームの `~/.cargo/config.toml` を持つ利用者は、ホームの下の対象を、サンドボックスの下で抽出できない。回避: そのファイルを一時的に退ける。信頼できるコードなら `-unsafe-host-exec`)。
 
-**後回しにしたハードニング**(課題の一覧に 1 件ずつ。#110 以降): 取得のプロキシ(宛先の許可リスト、解決したアドレスの検査)、`bsd.sb` の許可の棚卸しと変わったら落ちる試験、メタデータ(存在)が見える範囲の絞り込みとホームの外の利用者のデータの試験、メモリとプロセス数の見張り、残ったかもしれないプロセスの報告(列挙だけ)、プロファイルの各行の「拒否が効いている」試験、シグナルの `same-sandbox`、端末(制御文字)、macOS の CI のワークフロー(と macOS の `TestDogfood`)、`rivus setup rust` の作り込み、祖先の設定を名指しで読み取り専用に許す案。
+**後回しにしたハードニング**(課題の一覧に 1 件ずつ。#110 以降): 取得のプロキシ(宛先の許可リスト、解決したアドレスの検査)、`bsd.sb` の許可の棚卸しと変わったら落ちる試験、メタデータ(存在)が見える範囲の絞り込みとホームの外の利用者のデータの試験、メモリとプロセス数の監視、残ったかもしれないプロセスの報告(列挙だけ)、プロファイルの各行の「拒否が効いている」試験、シグナルの `same-sandbox`、端末(制御文字)、macOS の CI のワークフロー(と macOS の `TestDogfood`)、`rivus setup rust` の作り込み、祖先の設定を名指しで読み取り専用に許す案。
 
 **確かめたこと:** `bench/zoo-rust`(174 件)、`bench/rust-curated`(280 件)、crates.io の依存を持つ `extractor/rust`(関数 179 件)で、サンドボックスの下で抽出した結果の finding の ID が、Docker(取り直した基準)と一致。悪意のあるビルドスクリプトが `probe` を動かす試験(`extractor/rust/test/hostile_sandbox`)と、外に出る道の組(21 項目)、取得の段階で対象の設定を読まないこと、時間・出力の上限・環境変数・使えないとき止まる、が通る。(最初の Docker の基準 298 / 597 は、古いイメージのもので、誤り。取り直した。)
 
-**旗**: `-container-timeout` / `-container-max-output` / `-container-env` / `-container-ro-mount` は `-isolation-timeout` / `-isolation-max-output` / `-isolation-env` / `-isolation-read` になった(古い名前は、別名にせず、新しい名前を言って止まる)。`-container-memory` / `-container-cpus` / `-container-pids` と `-rust-image` は消えた(対応する上限と、イメージがない)。
+**旗**: `-container-timeout` / `-container-max-output` / `-container-env` / `-container-ro-mount` は `-isolation-timeout` / `-isolation-max-output` / `-isolation-env` / `-isolation-read` になった(古い名前は、別名にせず、新しい名前を示して止まる)。`-container-memory` / `-container-cpus` / `-container-pids` と `-rust-image` は消えた(対応する上限と、イメージがない)。
 
 **ADR-064 との関係:** 2 段階(取得と抽出)、取得で対象の設定を読ませないこと、取得前の検査、`-unsafe-host-exec` の意味は、そのまま。コンテナ(非 root、`--cap-drop ALL`、`--read-only`、メモリ・CPU・プロセス数の上限、専用ネットワークの案)は、サンドボックスに替わり、上の弱さを承知している。
 

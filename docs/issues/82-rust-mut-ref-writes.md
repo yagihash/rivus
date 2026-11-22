@@ -39,7 +39,7 @@ pub fn q2() {
 ## `@miss`
 `bench/rust-curated`: `write-a` `write-b` `write-param` `push-list` `late` `for-each-cap` `across-cap`(7 件、すべて黙った)。`bench/MISSES.md` の型 `ENV-PTR`。
 
-## 落ちる場所の見立て
+## 落ちる場所の推定
 クロージャの環境は、捕獲した変数へのポインタを持つ構造体(IR: `field_store .0 env, <ポインタ>`)。
 * `internal/taint/locs.go:215` `computeLocs`(`OpFieldLoad`): ポインタを `locs(base) + field + "*"` とする。
 * `internal/taint/transfer.go:148` `OpFieldStore`: ポインタの値を保存するだけで、フィールドの指す先と、元の変数の位置を同一視しない。
@@ -66,5 +66,5 @@ pub fn q2() {
 
 ## コメント(GitHub から移した写し)
 
-再開後の確認(2026-11-22): `bench/rust-curated/src/capture.rs` の write-a / write-b / write-param / push-list / late / for-each-cap / across-cap から `@miss` が外れていて(e79e21f、ENV-PTR。環境のフィールドが持つ &mut を、指す先の変数と同じものとして扱う)、main 0bd0a00 の CI(rust のジョブ)は緑。この Issue の最小の再現(クロージャ 1 つ・構造体のフィールド)そのものは、今回は走らせていない(Rust の隔離の環境が要るため)。curated の同じ形が緑であることを根拠に閉じる。再現が残っていたら再び開ける。
+再開後の確認(2026-11-22): `bench/rust-curated/src/capture.rs` の write-a / write-b / write-param / push-list / late / for-each-cap / across-cap から `@miss` が外れていて(e79e21f、ENV-PTR。環境のフィールドが持つ &mut を、指す先の変数と同じものとして扱う)、main 0bd0a00 の CI(rust のジョブ)は成功。この Issue の最小の再現(クロージャ 1 つ・構造体のフィールド)そのものは、今回は走らせていない(Rust の隔離の環境が要るため)。curated の同じ形が成功していることを根拠に閉じる。再現が残っていたら再び開ける。
 

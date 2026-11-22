@@ -1,4 +1,4 @@
-# 観測した呼び出しとの突き合わせ(試し)
+# 観測した呼び出しとの突き合わせ(試行)
 
 設計は [../../../docs/DESIGN-observed-calls.md](../../../docs/DESIGN-observed-calls.md)。**CI では走らせない**。動物園の Dart を 1 回通し、実際に起きた呼び出しのうち、rivus のグラフにない辺を出す。
 

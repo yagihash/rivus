@@ -39,7 +39,7 @@
 | [#110](issues/110-sandbox-fetch-proxy.md) | 取得の段階のネットワークを絞る(宛先の許可リストと、解決したアドレスの検査) | 黙った見逃しではない(隔離の穴) | Rust | 0 | open | - |
 | [#111](issues/111-sandbox-bsd-inventory.md) | bsd.sb の許可の棚卸しと、変わったら落ちる試験 | 隔離の穴の見落とし | Rust | 0 | open | - |
 | [#112](issues/112-sandbox-metadata-and-userdata.md) | メタデータ(存在)が見える範囲と、ホームの外の利用者のデータの試験 | 隔離の穴の見落とし | Rust | 0 | open | - |
-| [#113](issues/113-sandbox-memory-process-watch.md) | メモリとプロセス数の見張り | 隔離の穴(DoS) | Rust | 0 | open | - |
+| [#113](issues/113-sandbox-memory-process-watch.md) | メモリとプロセス数の監視 | 隔離の穴(DoS) | Rust | 0 | open | - |
 | [#114](issues/114-sandbox-leftover-report.md) | 残ったかもしれないプロセスの報告(列挙だけ。kill しない) | 痕跡つきの限界 | Rust | 0 | open | - |
 | [#115](issues/115-sandbox-profile-line-tests.md) | プロファイルの各行に、「拒否が実際に効いている」試験を対応させる | 隔離の穴の見落とし | Rust | 0 | open | - |
 | [#116](issues/116-sandbox-signal-same-sandbox.md) | シグナルを same-sandbox にする(cargo が子にシグナルを送れるように) | 隔離の仕上げ | Rust | 0 | open | - |

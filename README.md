@@ -60,7 +60,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 読み方:
 
 - **`paths`**: source から sink までの段。各段に、関数、位置、その行のコード（`snippet`）、何が起きたか（`desc`）、使ったモデルがあります。
-- **`uncertainties`**: その経路で、rivus が確かめられなかったこと。種類（`kind`）と、原因が対象のコードにあるか rivus の側にあるか（`attributable_to`: `target` / `rivus` / `mixed`。`mixed` は、言語の機能に由来するが、rivus の精度向上でも減らせるもの）を言います。種類は、`dynamic_dispatch`（呼び先が実行時に決まる）、`unmodeled_library_call`（中身もモデルもない関数を通った）、`dependency_body_unread`（モデルのあるインターフェースの呼び出しの候補に、依存の本体があったが、読まなかった: 依存が包んだ先の自前の実装へは進んでいない。Go）、`depth_limit`（解析の上限で止めた）、`assumed_call`（渡したクロージャが呼ばれると仮定した）、`container_element_imprecision`、`reflection`、`config_read`、`global_var` などです。
+- **`uncertainties`**: その経路で、rivus が確かめられなかったこと。種類（`kind`）と、原因が対象のコードにあるか rivus の側にあるか（`attributable_to`: `target` / `rivus` / `mixed`。`mixed` は、言語の機能に由来するが、rivus の精度向上でも減らせるもの）を示します。種類は、`dynamic_dispatch`（呼び先が実行時に決まる）、`unmodeled_library_call`（中身もモデルもない関数を通った）、`dependency_body_unread`（モデルのあるインターフェースの呼び出しの候補に、依存の本体があったが、読まなかった: 依存が包んだ先の自前の実装へは進んでいない。Go）、`depth_limit`（解析の上限で止めた）、`assumed_call`（渡したクロージャが呼ばれると仮定した）、`container_element_imprecision`、`reflection`、`config_read`、`global_var` などです。
 - **`confidence`**: 経路に不確実性が 1 つもなければ `no_uncertainty_on_path`、あれば `requires_review`。**本物かどうかの判定ではありません。**
 - **`reachability`**: 経路の関数が、プログラムの起点（`main` など）から届くか（`from_entry` / `from_framework_callback` / `not_from_entry`）。`from_framework_callback` は、起点からは届かないが、依存の型が宣言するメソッドを上書きしている関数（Flutter の `build`、`initState` など。フレームワークが呼ぶ）から届く、という意味です（Dart）。`not_from_entry` は「死んだコード」の意味ではありません（フレームワークに値として登録されたハンドラは、起点から辿れないことがあります）。
 - **`conditional_nodes`**（上の例にはありません）: 引数の値でサニタイズするかが変わる関数（`render(s, escape bool)` のような形）を通ったとき、条件、条件ごとの結果、呼び元が渡した値の出どころ（定数、設定の読み出し、など）を書き出します。どちらが起きるかは、判定しません。
@@ -108,7 +108,7 @@ rivus query -site <ID> ./...           # sites の 1 件から始める
 | `index` | コードを 1 回読んで、呼び出しグラフを保存する（`-taint` で、解析の結果も） |
 | `graph` | 保存した呼び出しグラフを調べる（呼び元、呼び先、経路、インターフェースの実装）。**呼び出しの関係であって、データの流れではない** |
 | `resolve` | 前に見た箇所（finding や site）が、今のコードのどこにあるか、今も届くかを答える |
-| `models coverage` | どの関数にモデルを書くと効くかを、効く順に出す |
+| `models coverage` | どの関数にモデルを書くと効果があるかを、効果の大きい順に出す |
 | `extract` | 中立の IR を書き出す（調査用） |
 
 フラグは `rivus <command> -h` で出ます。よく使うもの: `-C <dir>`、`-rules <file>`（繰り返し可）、`-no-deps`（依存のソースを読まない。軽いが、依存への呼び出しは推測になる）、`-tests`（テストのコードも読む）、`-detail summary`（経路とコードを省く）、`-timeout`、`-v`。
@@ -161,7 +161,7 @@ rivus が出さなかったことは、「流れがない」という意味で�
 **組み込みで持つ範囲**は、各言語の標準ライブラリと、広く使われているライブラリです。**何を組み込むかは、その都度判断します**(組み込みのモデルは、ある程度充実させる方向です。[ADR-063](docs/DECISIONS.md) の 2026-11-22 の追記)。今の組み込みは、標準ライブラリ、代わりのないパッケージ(Rust の `serde`、`tonic`、`tokio`、`futures`、`bytes`、`libc`、HTTP の型の `http` / `url` など)、SQL のドライバ(`sqlx`、`rusqlite`、Dart の `sqflite`。あらゆるプロダクトで要る)、Rust の一部の Web フレームワークと Dart の `shelf`、Google Cloud のクライアント(今は Go の Cloud Spanner と BigQuery。`internal/model/builtin/go-gcp.yaml`。[ADR-077](docs/DECISIONS.md))です。プロジェクト固有のラッパーや、組み込みでないフレームワークは、使う側がルールで足します。見本は [examples/rules](examples/rules) に置いています: Go の gin と macaron、Rust の actix-web(`examples/rules/rust-actix-web.yaml`)。組み込みでないフレームワークの入口は、ルールを足すまで source として見えず、その分、検出が減ります。コードがそのフレームワークを呼んでいるのに、モデルがルールにないときは、`analyze` が stderr に 1 行知らせます([ADR-063](docs/DECISIONS.md))。そのための仕組み:
 
 1. 置き場所: 解析するディレクトリの `.rivus/rules/*.yaml`（フラグなしで読まれる）か、`-rules file.yaml`。書き方の見本は [examples/rules](examples/rules)。
-2. 何を書けばよいか: `rivus models coverage` が、finding の経路に載っているのにモデルがない関数を、効く順に出します。`-yaml` で、埋めるためのひな形が出ます。
+2. 何を書けばよいか: `rivus models coverage` が、finding の経路に載っているのにモデルがない関数を、効果の大きい順に出します。`-yaml` で、埋めるためのひな形が出ます。
 
    ```sh
    rivus models coverage -yaml -top 20 ./...

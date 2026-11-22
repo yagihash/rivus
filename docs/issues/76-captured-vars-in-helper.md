@@ -41,7 +41,7 @@ Go でも同じ形: `apply(func(q *Q){ q.name = n }, q)`(`n` は source)が落�
 ## `@miss`
 `bench/dart-curated`: `run-a` `run-b` `write-a` `write-b` `write-param` `add-list` `nest-a` `nest-b` `twice-args` `across-cap`(黙った)、`builder` `bound-prefix`(弱い痕跡)。`bench/MISSES.md` の型 `CAP`(Dart 12 件)。
 
-## 落ちる場所の見立て
+## 落ちる場所の推定
 * `internal/valuecalls/valuecalls.go:319` `funcsOf`: 束縛(`make_closure` の引数)を付けるのは、クロージャを作った関数 `home` の中だけ(コメント: 「from another function they are not at hand」)。引数で渡された候補には束縛が付かない。
 * `internal/sg/build.go:362` `resolveValueCalls`: `c.Bind != nil` のときだけ `CandidateBindings`。
 * `internal/taint/summary.go:283-286` `applySummary`: 束縛が無いと `FreeVars` を `KUndef` で埋める(不確実性なし)。
