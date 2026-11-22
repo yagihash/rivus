@@ -1,0 +1,14 @@
+// The generated code (lib/src/generated/jobs.*.dart) was written by hand in the shape of
+// protoc_plugin's output. protoc was not run.
+syntax = "proto3";
+package bench.jobs;
+
+service Jobs {
+  rpc Run(RunRequest) returns (stream RunReply);
+  rpc Cancel(CancelRequest) returns (CancelReply);
+}
+enum JobState { RUNNING = 0; DONE = 1; FAILED = 2; }
+message RunRequest { string command = 1; string arguments = 2; }
+message RunReply { string line = 1; int32 exit_code = 2; JobState state = 3; }
+message CancelRequest { string job_id = 1; }
+message CancelReply { bool ok = 1; }

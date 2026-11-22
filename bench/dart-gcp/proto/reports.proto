@@ -1,0 +1,13 @@
+// The generated code (lib/src/generated/reports.*.dart) was written by hand in the shape of
+// protoc_plugin's output. protoc was not run.
+syntax = "proto3";
+package bench.reports;
+
+service Reports {
+  rpc Fetch(FetchRequest) returns (FetchReply);
+  rpc Lookup(LookupRequest) returns (LookupReply);
+}
+message FetchRequest { string url = 1; }
+message FetchReply { int32 status = 1; string body = 2; }
+message LookupRequest { string key = 1; }
+message LookupReply { string value = 1; }
