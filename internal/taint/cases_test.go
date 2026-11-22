@@ -751,3 +751,22 @@ func TestSinkBehindOwnInterfaceKeepsTheDispatchUncertainty(t *testing.T) {
 		t.Errorf("found %d findings, want 2", found)
 	}
 }
+
+// A built-in row and a project row of another category that read the same positions are one sink: the finding keeps the
+// first category and lists both in categories (ownif: the rules have category test beside sql_injection).
+func TestFindingListsTheCategoriesOfRowsWithTheSamePositions(t *testing.T) {
+	res, _ := runCase(t, "ownif")
+	n := 0
+	for _, f := range res.Findings {
+		if !strings.Contains(f.Sink.Snippet, "@sink(ownif_direct)") {
+			continue
+		}
+		n++
+		if len(f.Categories) != 2 || f.Categories[0] != f.Category || f.Categories[0] == f.Categories[1] {
+			t.Errorf("category %q, categories %v: want the first one and both listed", f.Category, f.Categories)
+		}
+	}
+	if n != 1 {
+		t.Errorf("%d findings, want 1 (the rows read the same positions)", n)
+	}
+}

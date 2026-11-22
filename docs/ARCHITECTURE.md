@@ -481,7 +481,7 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 `Finding` の主なフィールド（JSON の名前）:
 
 - `id`、`fingerprint`: (source サイト, sink サイト) の組から生成（4.6）
-- `source`、`sink`（`SiteRef`）、`category`、`labels`
+- `source`、`sink`（`SiteRef`）、`category`、`categories`、`labels`。`categories` は、同じ位置を読む別カテゴリの行がある sink の、全部のカテゴリ（先頭が `category`。2 つ以上のときだけ出る。項目を足しただけなので `schema_version` は変えない）
 - `paths`: 経路。今は**常に 1 本**（`internal/taint/engine.go`。7 節）。各ステップは `steps`（`func`、`position`、`snippet`、`desc`、`notes`、`model`）
 - `other_sources`、`other_sources_count`: 同じ sink に届く、同じ種類の別の source。経路は繰り返さない
 - `uncertainties`: 経路上で解決できなかったこと
@@ -497,7 +497,7 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 
 ### 4.6 サイトと指紋（fingerprint）
 
-サイトは「関数の中の、ルールにマッチした 1 箇所」。検出結果は (source サイト, sink サイト) の組。型は `internal/sites/sites.go` の `Site`（`id`、`role`、`kind`、`func`、`symbol`、`category`、`labels`、`position`、`snippet`、`literal_only`、`fingerprint`）。
+サイトは「関数の中の、ルールにマッチした 1 箇所」。検出結果は (source サイト, sink サイト) の組。型は `internal/sites/sites.go` の `Site`（`id`、`role`、`kind`、`func`、`symbol`、`category`、`categories`、`labels`、`position`、`snippet`、`literal_only`、`fingerprint`）。
 `id` は公開用で、`"s1:"` ＋ `structural@1` の値から作る。`literal_only` は L1 のマーク（sink の引数がリテラル定数だけ）。
 
 指紋は**入れ物 1 つの中に、複数の種類を並べる**。種類は役割で名付け、バージョンは `@N` で表す（`internal/fingerprint`）。
