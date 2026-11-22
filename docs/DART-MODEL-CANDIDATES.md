@@ -1,6 +1,6 @@
 # Dart の組み込みモデルにする pub パッケージの候補
 
-状態: 案(決めてもらうための資料)。組み込みモデルの方針は [DESIGN-model-authoring.md](DESIGN-model-authoring.md) に従う(組み込みは標準ライブラリと、代わりのないパッケージまで)。
+状態: 案(決めてもらうための資料)。組み込みモデルの方針は [DESIGN-model-authoring.md](DESIGN-model-authoring.md) に従う(ADR-096: 組み込みは標準ライブラリ、代わりのないパッケージ、Google Cloud、pub の人気の上位)。
 
 ## 1. 基準
 
@@ -20,58 +20,100 @@
 
 純粋な計算やデータ構造のパッケージは、中を読めば足りるので後回し(表に入れても「後回し」と書く)。
 
-## 3. 候補の表
+## 3. 進める順
 
-順位は 2026-11-22 時点。DL は直近 30 日(M は百万)。優先度は観点 1 と 2 による。
+1. `http`(進行中)。
+2. Google Cloud(進行中)。`googleapis`、`googleapis_auth`、`gcloud`、`google_cloud_storage` に加えて、Firebase 系(`firebase_auth`、`cloud_firestore`、`firebase_messaging`、`cloud_functions`)も、Google Cloud の例外の範囲に含める。
+3. 4 節(サーバ側と、どこでも使う基本のパッケージ)の上位: `dio`、`shelf` の残り、`shelf_router`、`logging`、`postgres`、`grpc` のクライアント側、`web_socket_channel`、`dart_jsonwebtoken`、`process_run`。そのあとに 4 節の残り。
+4. 5 節(Flutter のクライアント側): `url_launcher`、`drift`、`shared_preferences` など。`firebase_auth` は、2 の範囲に入るので 2 に前倒しする。
+5. 6 節(後回し)。
+
+`dio` は組み込みにする(人気の順に組み込む、という決定)。
+
+## 4. サーバ側と、どこでも使う基本のパッケージ
+
+pub.dev の公開の指標で、Flutter に依存しないパッケージ(最新版の `pubspec.yaml` の `dependencies` と `environment` に `flutter` が無い。2026-11-22 に `/api/packages/<名前>` で確認)のうち、種類ごとに上位のものを選んだ。理由は公開のものだけ: サーバ側の Dart(例: gRPC サーバ。`bench/dart-grpc`)で使え、Flutter を必要としない。DL は直近 30 日。
 
 | 順位 | パッケージ | 説明 | モデルにする API の境界の案 | 種類 | 組み込み | 優先度と理由 |
 |---|---|---|---|---|---|---|
 | 10 | dio | HTTP クライアント(8.4k likes、DL 5.6M) | sink: `Dio.get/post/request/download` の URL とデータ。source: `Response.data`。flow: `Options`、`BaseOptions`。`Interceptor` は実装の多いインターフェース | HTTP クライアント | なし | 高: 実装の多い `Interceptor` と `HttpClientAdapter` で呼び出しが合流する |
-| 11 | flutter_secure_storage | キーと値の安全な保存(DL 6.6M) | source: `read/readAll`。sink: `write`。flow: 保存したキーと値 | ファイル / 保存 | なし | 中: 値が保存を経由して戻る流れを繋げる |
-| 4 | path_provider | 標準的なディレクトリのパスを返す(DL 11.1M) | source(信頼済み): `getApplicationDocumentsDirectory` などの戻り値。パスの構築の起点 | ファイル | なし | 中: ファイルの sink に至る経路の起点 |
-| 6 | shared_preferences | 小さな設定の保存(DL 9.7M、10.6k likes) | source: `getString/get`。sink: `setString/set`。flow: キーと値 | 保存 | なし | 中: 保存を経由する流れ |
+| 794 | http2 | HTTP/2 の実装(DL 1.0M) | source: `ClientTransportConnection` / `ServerTransportConnection` の `incomingStreams` と `StreamMessage`。sink: `makeRequest` のヘッダ | HTTP / ネットワーク | なし | 中: `grpc` の下の層。ストリームのコールバックの合流 |
+| 99 | http_parser | HTTP のヘッダや日付のパーサ(DL 14.1M) | propagator: `MediaType.parse`、`parseHttpDate` の入力から戻り値へ | HTTP | なし | 中: DL が多い。`http` と `shelf` の中で使われる |
+| 48 | retry | リトライ(DL 3.1M) | `RetryOptions.retry(fn)` の `fn` の戻り値が戻り値へ。呼び戻し(`fn`)を呼ぶ | 非同期 / HTTP | なし | 中: 呼び戻しの呼び出しを繋ぐ(HTTP の呼び出しを包むことが多い) |
+| 504 | grpc(クライアント側) | gRPC の Dart 実装(DL 0.7M) | sink: `ClientChannel.new` のホスト(済み)、`Client.$createCall` の呼び出しのメタデータ。source: `ResponseFuture`/`ResponseStream` の中身 | RPC | 一部(`dart-grpc.yaml` はサーバ側と `ClientChannel.new`) | 高: 生成コードの `Client` から呼ぶ。実装の多い `ClientChannel`/`ClientTransportConnector` |
+| 535 | protobuf | Protocol Buffers のランタイム(DL 3.2M) | propagator: `GeneratedMessage.fromBuffer/fromJson/writeToBuffer/toProto3Json` と、生成コードのフィールドの getter/setter の flow | RPC / シリアライズ | なし | 高: gRPC の入力のメッセージはここを通る。生成コードの中を読むコストが大きい |
+| 340 / 21 | json_annotation / json_serializable | JSON の注釈とジェネレータ(DL 16.2M / 4.5M) | 生成コードの `fromJson`/`toJson` の flow。ランタイムの関数は少ない(`$checkedCreate` など) | シリアライズ | なし | 中: 生成コードを読めば足りる面が大きい。DL は多い |
+| 549 | googleapis_auth | Google API の認証(DL 2.3M) | source: `AccessCredentials`、`clientViaServiceAccount` などが返す `AuthClient`(`http.Client` の実装)。sink: 資格情報の JSON | 認証 / クラウド | なし | 高(Google Cloud の範囲): `googleapis` の前提 |
+| 139 | oauth2 | OAuth2 のクライアント(DL 0.6M) | source: `Credentials`、`Client` が返す `http.Response`。sink: `authorizationUrl` の引数。`http.BaseClient` を継承 | 認証 | なし | 中: `http` の `Client` の実装でもある |
+| 105 | dart_jsonwebtoken | JWT の生成と検証(DL 2.2M) | source: `JWT.verify` の `payload`(検証後も外から来たデータ)。sanitizer の候補: 検証の成功。sink: `JWT.sign` の key | 認証 | なし | 高: 認証の判断に関わる |
+| 121 | postgres | PostgreSQL のドライバ(DL 0.7M) | sink: `Connection.execute` と `Session.execute` の SQL。source: `Result` の行 | DB | なし | 高: 純 Dart のドライバで、中を読むコストが大きい |
+| 408 / 1917 | mysql1 / mysql_client | MySQL のドライバ(DL 11k / 14k) | sink: `MySqlConnection.query`、`prepared` の SQL 文字列。source: 結果の `Row` | DB | なし | 中: DL は少ない(公開の指標では低い) |
+| 2775 | redis | Redis のクライアント(DL 0.3M) | sink: `Command.send_object` のコマンドと引数。source: 戻り値 | DB | なし | 低: 順位が低い |
+| 645 | mongo_dart | MongoDB のドライバ(DL 0.1M) | sink: `DbCollection.find/insert/update/deleteOne` の selector(NoSQL 注入)。source: 戻り値の `Map` | DB | なし | 中: クエリを `Map` で渡す形が注入の経路になる |
+| 435 | sqlite3 | SQLite の FFI のバインディング(DL 3.9M) | sink: `Database.execute/select`、`prepare` の SQL。source: `ResultSet` の行 | DB | なし | 高: SQL の sink が明確。FFI の本体は読みにくい(中を読むコストが大きい) |
+| 26 | shelf | サーバのミドルウェア(DL 16.6M) | source: `Request`(済み)。sink: `Response` のボディ、`Response.found`/`movedPermanently` の URL(リダイレクト) | Web フレームワーク | 一部(8 節) | 高: 残りは `Response` と `Handler`/`Middleware` の合流 |
+| 146 | shelf_router | shelf のルーター(DL 0.6M) | source: `Request.params`。`Router.get/post` に登録したハンドラが入口 | Web フレームワーク | なし | 高: 入口の登録が動的な呼び出し |
+| 163 | shelf_web_socket | shelf で WebSocket(DL 14.3M) | source: `webSocketHandler` のコールバックに渡るメッセージ | Web フレームワーク | なし | 中: 入口が 1 つ |
+| 132 | dart_frog | サーバのフレームワーク(DL 0.2M) | source: `RequestContext.request`、`Request.json/body`。`onRequest(RequestContext)` が入口 | Web フレームワーク | なし | 中: 入口の規約(ファイルの配置)が特別 |
+| 32 | logging | ロギング(DL 14.0M) | sink: `Logger.info/warning/severe` のメッセージ(ログへの注入)。`Logger.onRecord` と `LogRecord` | ロギング | なし | 中: ダウンロード数が多い。実装の多いリスナへ合流 |
+| 171 | process_run | プロセスの実行(DL 0.3M) | sink: `run`、`runExecutableArguments` のコマンドと引数(コマンド注入) | プロセス | なし | 高: コマンドの sink で、組み込みで見える範囲が広がる |
+| 458 | file | `dart:io` のファイルシステムの抽象(DL 14.1M) | `FileSystem` のメソッドは `dart:io` の `File`/`Directory` と同じ境界(`dart-io.yaml` を参照する形で同じ sink/source) | ファイル | なし | 高: `FileSystem` は実装の多いインターフェース(Local、Memory、Chroot) |
+| 12 | path | パスの操作(DL 14.0M) | propagator: `join`、`normalize` など | ファイル | 済み(`dart-path.yaml`) | 済み |
+| 298 | io | `dart:io` の補助(DL 17.9M) | `copyPath`、`ProcessManager.spawn`、`sharedStdIn`。sink: プロセスの引数 | プロセス / ファイル | なし | 中: DL が多い。`dart:io` の上の薄い層 |
+| 378 | async | `dart:async` の補助(DL 16.9M) | propagator: `StreamGroup`、`StreamQueue`、`FutureGroup`、`AsyncCache`、`CancelableOperation` の入力から出力へ | 非同期の基盤 | なし | 高: 呼び戻しと Future/Stream の合流が多い。中を読むコストが大きい |
+| 1542 | stream_channel | 2 方向のストリーム(DL 13.4M) | propagator: `StreamChannel.stream`/`sink` の入出力、`StreamChannelController` の `local`/`foreign` の対 | 非同期の基盤 | なし | 中: `web_socket_channel` と `shelf_web_socket` の下の層 |
+| 333 | web_socket_channel | WebSocket(DL 13.9M) | source: `WebSocketChannel.stream`。sink: `WebSocketChannel.sink.add`、`connect` の URL | ネットワーク | なし | 高: ダウンロードが多い。sink と source が両方ある |
+
+`http` と Google Cloud は 7 節の「すでに決まっているもの」に書いた。`dart_firebase_admin`(サーバ側の Firebase)は、上位 20000 件の一覧に無く、DL 17.5k なので、Google Cloud の範囲で扱う場合は別に決める。
+
+## 5. Flutter のクライアント側の候補の表
+
+Flutter に依存するパッケージ(`flutter_secure_storage`、`path_provider`、`url_launcher`、`shared_preferences`、`firebase_*` など)と、Flutter を使うアプリで主に使う `drift`、`sqflite`。`firebase_auth`、`firebase_messaging`、`cloud_firestore`、`cloud_functions` は Google Cloud の範囲(3 節の 2)なので、先に進める。
+
+| 順位 | パッケージ | 説明 | モデルにする API の境界の案 | 種類 | 組み込み | 優先度と理由 |
+|---|---|---|---|---|---|---|
 | 5 | url_launcher | URL やアプリを開く(DL 10.2M) | sink: `launchUrl`、`launchUrlString` の URL | 外部の呼び出し | なし | 高: URL が外へ出る sink が 1 つに集まる |
 | 31 | firebase_auth | Firebase の認証(DL 2.4M) | source: `User.getIdToken`、`currentUser`、`signIn*` の戻り値。sink: `signIn*` の資格情報 | 認証 / クラウド | なし | 高: 認証の結果が source になる |
 | 18 | firebase_messaging | プッシュ通知(DL 4.7M) | source: `onMessage` と `getInitialMessage` の `RemoteMessage.data` | クラウド | なし | 中: 外から来るデータの source |
 | 369 | cloud_firestore | Firestore のクライアント(DL 1.8M) | source: `DocumentSnapshot.data`。sink: `set/add/update` のデータ、`where` の値 | DB / クラウド | なし | 中: 実装の多いクエリの型を持つ |
 | 101 | cloud_functions | Cloud Functions の呼び出し(DL 0.8M) | sink: `HttpsCallable.call` の引数。source: `HttpsCallableResult.data` | クラウド | なし | 低: 呼び出しの範囲が狭い |
 | 38 | drift | リアクティブな SQLite(DL 2.1M) | sink: `customSelect`、`customStatement`、`customUpdate` の SQL 文字列。source: 行の `QueryRow.data` | DB | なし | 高: 生の SQL の sink が明確 |
-| 121 | postgres | PostgreSQL のドライバ(DL 0.7M) | sink: `Connection.execute` と `Session.execute` の SQL。source: `Result` の行 | DB | なし | 高: 純 Dart のドライバで、中を読むコストが大きい |
-| 22 | sqflite | SQLite(DL 3.9M) | sink: `rawQuery/rawInsert/rawUpdate/rawDelete/execute`(`sqflite_common` 側) | DB | 一部(下の 5 節) | 低: 主要部分は済み。`query` の `where` 文字列と `Batch` が残り |
-| 144 | sqflite_common_ffi | デスクトップ用の sqflite(DL 0.7M) | `databaseFactoryFfi` から `sqflite_common` の API に入る | DB | 間接(`sqflite_common`) | 低: 入口だけで済む可能性 |
-| 87 | sembast | Dart だけで書いた NoSQL の DB(DL 0.5M) | sink: `store.add/put`。source: `find`、`get` の戻り値。`Finder` の filter | DB | なし | 低: 注入の sink が少ない |
-| 84 | hive_ce | ローカルのキー値の DB(DL 1.4M) | source: `Box.get`。sink: `Box.put` | DB | なし | 低: 保存を経由する流れ |
-| 105 | dart_jsonwebtoken | JWT の生成と検証(DL 2.2M) | source: `JWT.verify` の `payload`(検証後も外から来たデータ)。sanitizer の候補: 検証の成功。sink: `JWT.sign` の key | 認証 | なし | 高: 認証の判断に関わる |
-| 106 | jwt_decoder | JWT のデコード(DL 0.7M) | source: `JwtDecoder.decode` の戻り値(検証なし) | 認証 | なし | 低: 範囲が狭い |
-| 139 | oauth2 | OAuth2 のクライアント(DL 0.6M) | source: `Credentials`、`Client` が返す `http.Response`。sink: `authorizationUrl` の引数。`http.BaseClient` を継承 | 認証 | なし | 中: `http` の `Client` の実装でもある |
-| 133 | flutter_appauth | OAuth / OpenID Connect(DL 0.5M) | source: `TokenResponse` の各トークン。sink: `AuthorizationTokenRequest` の URL | 認証 | なし | 低: 範囲が狭い |
+| 6 | shared_preferences | 小さな設定の保存(DL 9.7M、10.6k likes) | source: `getString/get`。sink: `setString/set`。flow: キーと値 | 保存 | なし | 中: 保存を経由する流れ |
+| 11 | flutter_secure_storage | キーと値の安全な保存(DL 6.6M) | source: `read/readAll`。sink: `write`。flow: 保存したキーと値 | ファイル / 保存 | なし | 中: 値が保存を経由して戻る流れを繋げる |
+| 4 | path_provider | 標準的なディレクトリのパスを返す(DL 11.1M) | source(信頼済み): `getApplicationDocumentsDirectory` などの戻り値。パスの構築の起点 | ファイル | なし | 中: ファイルの sink に至る経路の起点 |
+| 22 | sqflite | SQLite(DL 3.9M) | sink: `rawQuery/rawInsert/rawUpdate/rawDelete/execute`(`sqflite_common` 側) | DB | 一部(8 節) | 低: 主要部分は済み。`query` の `where` 文字列と `Batch` が残り |
+
+## 6. 後回し
+
+優先度が低い行(外との境界の範囲が狭い、利用者の操作が起点、順位や DL が低い)と、純粋な計算のパッケージ。表から消さずにここに置く。
+
+xml、yaml、crypto は後回しのまま。流れだけのモデルで前に出すのは、公開の対象で「中を読むコストが大きい」数字が出たときだけ。
+
+| 順位 | パッケージ | 説明 | モデルにする API の境界の案 | 種類 | 組み込み | 優先度と理由 |
+|---|---|---|---|---|---|---|
+| 53 | xml | XML のパース(DL 19.2M) | source: `XmlDocument.parse` の戻り値へ flow。propagator: `XmlElement.getAttribute`、`innerText` | シリアライズ | なし | 後回し: 中を読めば足りる。ただし DL が多く、flow モデルで解析のコストは下がる |
+| 88 | yaml | YAML のパース(DL 21.3M) | propagator: `loadYaml` の入力から戻り値へ | シリアライズ | なし | 後回し: 純粋なパース |
+| 7 | crypto | ハッシュ(DL 21.4M) | propagator: `sha256.convert`、`Hmac.convert` の入力から戻り値へ。sanitizer の候補ではない | 暗号 | なし | 後回し: 純粋な計算。ただし flow を切れば解析が軽くなる |
 | 36 | local_auth | 生体認証(DL 2.1M) | 判定の戻り値(`authenticate` の bool)が sanitizer のように使われる | 認証 | なし | 低: データの流れにほぼ関わらない |
-| 32 | logging | ロギング(DL 14.0M) | sink: `Logger.info/warning/severe` のメッセージ(ログへの注入)。`Logger.onRecord` と `LogRecord` | ロギング | なし | 中: ダウンロード数が多い。実装の多いリスナへ合流 |
 | 74 | sentry | エラー報告(DL 2.3M) | sink: `Sentry.captureException/captureMessage` | ロギング / クラウド | なし | 低: 外へ出るデータだけ |
-| 26 | shelf | サーバのミドルウェア(DL 16.6M) | source: `Request`(済み)。sink: `Response` のボディ、`Response.found`/`movedPermanently` の URL(リダイレクト) | Web フレームワーク | 一部(5 節) | 高: 残りは `Response` と `Handler`/`Middleware` の合流 |
-| 146 | shelf_router | shelf のルーター(DL 0.6M) | source: `Request.params`。`Router.get/post` に登録したハンドラが入口 | Web フレームワーク | なし | 高: 入口の登録が動的な呼び出し |
-| 163 | shelf_web_socket | shelf で WebSocket(DL 14.3M) | source: `webSocketHandler` のコールバックに渡るメッセージ | Web フレームワーク | なし | 中: 入口が 1 つ |
-| 132 | dart_frog | サーバのフレームワーク(DL 0.2M) | source: `RequestContext.request`、`Request.json/body`。`onRequest(RequestContext)` が入口 | Web フレームワーク | なし | 中: 入口の規約(ファイルの配置)が特別 |
-| 333 | web_socket_channel | WebSocket(DL 13.9M) | source: `WebSocketChannel.stream`。sink: `WebSocketChannel.sink.add`、`connect` の URL | ネットワーク | なし | 高: ダウンロードが多い。sink と source が両方ある |
 | 175 | mqtt_client | MQTT(DL 0.1M) | source: 購読した `MqttPublishMessage`。sink: `publishMessage`、`connect` のホスト | ネットワーク | なし | 低: 利用が少ない |
-| 143 | chopper | HTTP クライアントのジェネレータ(DL 0.2M) | `ChopperClient` の呼び出しと、生成コードの `Response.body` | HTTP クライアント | なし | 低: 生成コードに依存 |
-| 190 | retrofit_generator | HTTP クライアントのジェネレータ(DL 0.6M) | 生成コードが `dio` の呼び出しに行き着くので、`dio` のモデルで足りる可能性 | HTTP クライアント | なし | 低: `dio` が先 |
-| 171 | process_run | プロセスの実行(DL 0.3M) | sink: `run`、`runExecutableArguments` のコマンドと引数(コマンド注入) | プロセス | なし | 高: コマンドの sink で、組み込みで見える範囲が広がる |
 | 86 | open_file | 外部のアプリでファイルを開く(DL 0.5M) | sink: `OpenFile.open` のパス | ファイル | なし | 低: 範囲が狭い |
 | 8 | image_picker | 画像の選択(DL 6.4M) | source: `ImagePicker.pickImage` の `XFile.path/name` | ファイル | なし | 低: 利用者の操作が起点 |
 | 104 | file_selector | ファイルの選択(DL 1.2M) | source: `openFile` の `XFile`。sink: `getSaveLocation` に続く書き込み | ファイル | なし | 低: 同上 |
 | 187 | cross_file | `XFile`(DL 0.2M) | source: `XFile.path`、`readAsString`、`readAsBytes`。sink: `saveTo` のパス | ファイル | なし | 中: `image_picker`/`file_selector` の戻り値の型 |
 | 49 | flutter_dotenv | `.env` の読み込み(DL 1.0M) | source: `dotenv.env[...]`(設定の値) | 設定 | なし(`dart-config.yaml` は別) | 低: 設定は信頼済みとして扱うことが多い |
-| 53 | xml | XML のパース(DL 19.2M) | source: `XmlDocument.parse` の戻り値へ flow。propagator: `XmlElement.getAttribute`、`innerText` | シリアライズ | なし | 後回し: 中を読めば足りる。ただし DL が多く、flow モデルで解析のコストは下がる |
-| 88 | yaml | YAML のパース(DL 21.3M) | propagator: `loadYaml` の入力から戻り値へ | シリアライズ | なし | 後回し: 純粋なパース |
-| 7 | crypto | ハッシュ(DL 21.4M) | propagator: `sha256.convert`、`Hmac.convert` の入力から戻り値へ。sanitizer の候補ではない | 暗号 | なし | 後回し: 純粋な計算。ただし flow を切れば解析が軽くなる |
+| 133 | flutter_appauth | OAuth / OpenID Connect(DL 0.5M) | source: `TokenResponse` の各トークン。sink: `AuthorizationTokenRequest` の URL | 認証 | なし | 低: 範囲が狭い |
+| 106 | jwt_decoder | JWT のデコード(DL 0.7M) | source: `JwtDecoder.decode` の戻り値(検証なし) | 認証 | なし | 低: 範囲が狭い |
+| 87 | sembast | Dart だけで書いた NoSQL の DB(DL 0.5M) | sink: `store.add/put`。source: `find`、`get` の戻り値。`Finder` の filter | DB | なし | 低: 注入の sink が少ない |
+| 84 | hive_ce | ローカルのキー値の DB(DL 1.4M) | source: `Box.get`。sink: `Box.put` | DB | なし | 低: 保存を経由する流れ |
+| 143 | chopper | HTTP クライアントのジェネレータ(DL 0.2M) | `ChopperClient` の呼び出しと、生成コードの `Response.body` | HTTP クライアント | なし | 低: 生成コードに依存 |
+| 190 | retrofit_generator | HTTP クライアントのジェネレータ(DL 0.6M) | 生成コードが `dio` の呼び出しに行き着くので、`dio` のモデルで足りる可能性 | HTTP クライアント | なし | 低: `dio` が先 |
 | 100 | pretty_dio_logger | `dio` のログ(DL 0.4M) | `Interceptor` の実装。`dio` の後 | ロギング | なし | 低: `dio` の後 |
 | 156 | dio_cache_interceptor | `dio` のキャッシュ(DL 0.3M) | `Interceptor` の実装。`dio` の後 | HTTP クライアント | なし | 低: `dio` の後 |
 | 158 | puppeteer | ヘッドレスブラウザの操作(DL 0.3M) | sink: `Page.goto` の URL、`Page.evaluate` のコード | ネットワーク / 動的実行 | なし | 低: コード実行の sink は明確 |
+| 144 | sqflite_common_ffi | デスクトップ用の sqflite(DL 0.7M) | `databaseFactoryFfi` から `sqflite_common` の API に入る | DB | 間接(`sqflite_common`) | 低: 入口だけで済む可能性 |
 
-表は 42 行(優先度の観点で幅を持たせた。外すものは決めてもらう)。優先度「高」だけ先に取る場合は、`dio`、`url_launcher`、`firebase_auth`、`drift`、`postgres`、`dart_jsonwebtoken`、`shelf` の残り、`shelf_router`、`web_socket_channel`、`process_run`。
-
-## 4. すでに決まっているもの(別の作業で進行中)
+## 7. すでに決まっているもの(別の作業で進行中)
 
 一覧の候補には入れない。
 
@@ -83,7 +125,7 @@
 | Google Cloud: `google_cloud_storage` | 進行中 | 3476、DL 29k |
 | `grpc` | 部分的に済み(`dart-grpc.yaml`) | 504、DL 0.7M |
 
-## 5. カバー済みの確認
+## 8. カバー済みの確認
 
 `internal/model/builtin/dart-*.yaml` を読み、`package:` で始まる参照を数えた(2026-11-22)。
 
@@ -95,4 +137,4 @@
 | grpc | `dart-grpc.yaml`(32 行) | 6 | サーバ側のハンドラを入口に(`Service` の継承と `ServiceCall`)、`ServiceCall.clientMetadata`、`ClientChannel.new` |
 | path | `dart-path.yaml`(34 行) | 13 | パスの操作の flow |
 
-`dart-io.yaml`(169 行)、`dart-core.yaml`(337 行)、`dart-async.yaml`(140 行)、`dart-misc.yaml`(173 行)、`dart-pure.yaml`(96 行)、`dart-config.yaml`(13 行)は標準ライブラリ(`dart:*`)で、パッケージの参照は無い。したがって、3 節の表のうち shelf、sqflite、http、grpc 以外は「なし」。
+`dart-io.yaml`(169 行)、`dart-core.yaml`(337 行)、`dart-async.yaml`(140 行)、`dart-misc.yaml`(173 行)、`dart-pure.yaml`(96 行)、`dart-config.yaml`(13 行)は標準ライブラリ(`dart:*`)で、パッケージの参照は無い。したがって、4 節から 6 節の表のうち shelf、sqflite、http、grpc 以外は「なし」。
