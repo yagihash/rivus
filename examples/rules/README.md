@@ -13,7 +13,7 @@ These files are examples to copy and edit, not part of rivus:
 - `go-macaron.yaml`: macaron (used by Gogs). A wrapper that embeds `*macaron.Context` has to be
   named as a source in the project's own rules (see `bench/gogs/rules.yaml`).
 
-- `rust-actix-web.yaml`: actix-web (`HttpRequest` and the `web::Query` / `Path` / `Json` / `Form` / `Bytes` extractors are the request). It was built in before ADR-063; a specific framework is for the project to add. `rivus analyze` writes a line to stderr when the project calls actix-web and no rule names it.
+- `rust-actix-web.yaml`: actix-web is built in now (`internal/model/builtin/rust-actix-web.yaml`); this file has no rules.
 
 What is built in: the standard library, the packages that have no replacement (`serde`, `tonic`, `tokio`, `futures`, `bytes`, `libc`, `http`, `url`...) and the SQL drivers (`sqlx`, `rusqlite`, `sqflite`). A specific framework is not: its model is here.
 

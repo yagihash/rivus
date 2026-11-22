@@ -1,0 +1,19 @@
+# A package of the Rust zoo (docs/DESIGN-package-models.md, 6.8): the cells of the crate octocrab, with a skeleton of it in skel/. Nothing is fetched:
+# every dependency is a path (the tests copy zoo-mark next to the crate for the extractor).
+[package]
+name = "zoo-pkg-octocrab"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+path = "cells/src/lib.rs"
+
+[dependencies]
+zoo-mark = { path = "../../zoo-rust/zoo-mark" }
+octocrab = { path = "skel" }
+
+[workspace]
+# the skeleton is not a member (cargo makes a path dependency under the root a member, and the extractor reads the members as the
+# program: a field source would fire in the skeleton): it is read as a dependency, as the real crate is
+exclude = ["skel"]

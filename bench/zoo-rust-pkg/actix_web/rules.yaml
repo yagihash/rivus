@@ -1,0 +1,4 @@
+# Rules of the package actix_web of the Rust zoo. The sources, sinks and sanitizers of zoo-mark are in bench/zoo-rust/rules.yaml
+# (the tests give both files); the model of actix-web is the built-in one (internal/model/builtin/rust-actix-web.yaml), so
+# this package has nothing to add.
+ruleset: rivus/bench-zoo-rust-pkg-actix-web@1

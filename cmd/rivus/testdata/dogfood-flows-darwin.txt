@@ -42,6 +42,7 @@ cmd/rivus.runIndex -> cmd/rivus.runVersion [os/exec.CommandContext]  # the same 
 cmd/rivus.runIndex -> cmd/rivus.writeFuncValues [os.Create]  # the path of -func-values (an output file of analyze: the table of the diagnostic); the other commands share the flags
 cmd/rivus.runIndex -> internal/frontend/gossa.countTestFiles [os.ReadDir]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
 cmd/rivus.runIndex -> internal/graphdb.Write [os.Chmod]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
+cmd/rivus.runIndex -> internal/graphdb.Write [os.CreateTemp]  # the same kind of flow as os.MkdirAll on the line before: the directory of -o is where the temporary file beside the index is made (os.CreateTemp is a sink since the row of the directory was added)
 cmd/rivus.runIndex -> internal/graphdb.Write [os.MkdirAll]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
 cmd/rivus.runIndex -> internal/graphdb.Write [os.Rename]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
 cmd/rivus.runIndex -> internal/graphdb.Write$1 [os.Remove]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it

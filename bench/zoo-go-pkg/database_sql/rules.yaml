@@ -1,0 +1,5 @@
+# Rules of the standard library package database/sql in the Go zoo (the cells of sql.Conn and sql.Tx). The sources, sinks and sanitizers of zoo/mark are in
+# bench/zoo-go/rules.yaml (the tests give both files); the rows of database/sql are the built-in model, which is in force as always. The standard library
+# has no skeleton: the cells call the real package with mark.FakeDB(), a database/sql driver that hands the query string it is asked to prepare to
+# the recording sink, so that the run of the cell checks the sink rows.
+ruleset: rivus/bench-zoo-go-pkg-database-sql@1

@@ -19,9 +19,9 @@ type notBuiltin struct {
 	what   string // what the model tells rivus
 }
 
-var notBuiltinFrameworks = []notBuiltin{
-	{"actix-web", "actix_web::", "examples/rules/rust-actix-web.yaml", "the entry points of the handlers"},
-}
+// None now: actix-web, the one that was here, is built in (internal/model/builtin/rust-actix-web.yaml). A framework whose
+// model is only an example (examples/rules) goes here, and the mechanism below tells the project about it.
+var notBuiltinFrameworks = []notBuiltin{}
 
 // noteNotBuiltin writes one line for each framework that the code uses and that no rule names (a
 // framework with its model in the rules, given by -rules or the project, is not mentioned). The result is

@@ -11,6 +11,7 @@
 package callbacks
 
 import (
+	"os"
 	"slices"
 	"sort"
 	"strings"
@@ -109,6 +110,11 @@ func Run() []Observed {
 		var r rec
 		s := strings.Map(func(c rune) rune { r.see(string(c)); return retRune }, "ÿ")
 		add("strings.Map", map[string]string{"arg1": "ÿ"}, &r, s)
+	}
+	{
+		var r rec
+		s := os.Expand("ÿ-${ÿ}", func(name string) string { r.see(name); return retStr })
+		add("os.Expand", map[string]string{"arg0": "ÿ"}, &r, s)
 	}
 	{
 		var r rec

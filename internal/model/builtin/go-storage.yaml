@@ -1,0 +1,66 @@
+# cloud.google.com/go/storage: the Cloud Storage client for Go (the names of a bucket and of an object).
+#
+# Checked against cloud.google.com/go/storage v1.71.0 (range >=1.71.0 <2.0.0), 2026-11-23, by reading the published source.
+# Hand written rows (origin: human); the generator does not exist yet. This is a package of Google Cloud, which the
+# maintainer asked to be built in (go-gcp.yaml has the same exception); the file is its own so that the boundary stays visible.
+#
+# What is here: sinks of the category `resource_name` (docs/MODELING.md, section 4a: the name of a resource that the user
+# decides), as for Dart (`dart-gcp.yaml`, docs/GCP-MODELS.md 8.1). The bucket name enters at `Client.Bucket`, the object name at
+# `BucketHandle.Object`: every later call (`NewReader`, `NewWriter`, `Attrs`, `Delete`, `CopierFrom`, `ComposerFrom`, ...) works on
+# a handle that was made by one of the two, so the two calls are the places that name a resource, and the rows are there (one
+# flow is one finding; the rows are not on `ObjectHandle.NewReader` and the like). The other places that take a name: the
+# signing of a URL (`SignedURL`, `BucketHandle.SignedURL`, `GenerateSignedPostPolicyV4`: the URL that is signed names the
+# resource), the destination of `ObjectHandle.Move` (`MoveObjectDestination.Object`), and the prefix of a listing
+# (`Query.Prefix` of `BucketHandle.Objects`: which names are listed).
+#
+# Not modelled, on purpose:
+# * The content of an object is NOT a source: `Reader.Read`, `Reader.WriteTo`, `Reader.Metadata`. MODEL-QUEUE.md proposed it, and
+#   ADR-108 names the content of a file as what a user of a service wrote. It is left out because a bucket is written by the
+#   project itself as often as by its users, and docs/GCP-MODELS.md (section 0, `stored`) decided that what is read back from a
+#   store is the user's choice, as for `database/sql`, Spanner, BigQuery and the Dart clients: the same decision, not a new one
+#   (ADR-108 item 5: a value in doubt is not a source; the review of the earlier models is #158). The body of the reader is read
+#   as a dependency, so a user's own rule that makes the reader a source finds the flows.
+# * `Writer.Write` is NOT a sink (MODEL-QUEUE.md proposed it): what is written is the content of an object, which no category of
+#   rivus fits (not a command, a path, a query), and the name of the object is the sink already. Same for the metadata that is set
+#   on a `Writer` (`ObjectAttrs.ContentType`, `Metadata`).
+# * `Client.Buckets(ctx, projectID)`, `BucketHandle.Create(ctx, projectID, ...)`, `Client.ServiceAccount`, `HMACKeyHandle`: a
+#   project ID, not a bucket or an object (Dart has no row for it either).
+# * `Query.StartOffset`, `Query.EndOffset`, `Query.MatchGlob`: the range or the pattern of names that a listing returns; the
+#   prefix is the one that names the part of the bucket that is read, so only it has a row.
+# * No `calls:` row: the library calls no function of the user's code. `Writer.ProgressFunc` is a field that the user sets, and
+#   a function that is stored in a field is not a call that a `calls:` row can name.
+ruleset: rivus/go/storage@1
+
+verified_versions:
+  - package: cloud.google.com/go/storage
+    versions: ">=1.71.0 <2.0.0"
+    checked_with: v1.71.0
+    checked: 2026-11-23
+
+sinks:
+  - symbol: (*cloud.google.com/go/storage.Client).Bucket
+    args: [0]
+    category: resource_name
+  - symbol: (*cloud.google.com/go/storage.BucketHandle).Object
+    args: [0]
+    category: resource_name
+  # SignedURL(bucket, object, opts), and the method on a bucket handle that takes the object.
+  - symbol: cloud.google.com/go/storage.SignedURL
+    args: [0, 1]
+    category: resource_name
+  - symbol: (*cloud.google.com/go/storage.BucketHandle).SignedURL
+    args: [0]
+    category: resource_name
+  - symbol: (*cloud.google.com/go/storage.BucketHandle).GenerateSignedPostPolicyV4
+    args: [0]
+    category: resource_name
+  # Move(ctx, destination): the destination is a value, and the name is its Object (the Conditions are not a name).
+  - symbol: (*cloud.google.com/go/storage.ObjectHandle).Move
+    parts:
+      - {arg: 1, field: Object}
+    category: resource_name
+  # Objects(ctx, q): the Prefix of the query.
+  - symbol: (*cloud.google.com/go/storage.BucketHandle).Objects
+    parts:
+      - {arg: 1, field: Prefix}
+    category: resource_name
