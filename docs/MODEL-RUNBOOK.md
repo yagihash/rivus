@@ -146,7 +146,12 @@ go run ./bench/model-diff -pkg google.golang.org/grpc -model mine.yaml -version 
 
   ```yaml
   # model-diff: extra <symbol> <理由>        # その関数の EXTRA は、意図した差
-  # model-diff: miss-reviewed <symbol>@<位置> <種類> <短い説明>   # その 1 つの位置の MISS は、本体を読んで確認した、データの流れではないもの。種類は `type-only`(値ではなく型の情報だけが出力に届く)か `body-default`(本体を読む側の、未解決の呼び出しの既定の近似による見かけの流れ。直す課題の `#N` が要る)。種類のない理由は失敗。MISS-reviewed と表示され、失敗にしない。関数全体には付けない
+  # model-diff: miss-reviewed <symbol>@<位置> <種類> <短い説明>   # その 1 つの位置の MISS は、本体を調べて確認した、モデルに足さないもの。種類は下の表の 3 つ。種類のない理由は失敗。MISS-reviewed と表示され、失敗にしない。関数全体には付けない
+  | 種類 | 意味 | 使える条件 | 必須の記述 |
+  | --- | --- | --- | --- |
+  | `type-only` | 値でなく、値の型の情報だけが出力に届く | エラーの文が `%T` や `reflect.TypeOf` で型名を入れるだけ | 短い説明 |
+  | `non-payload` | 本体の流れは実在するが、届く値が、決まった狭い形に絞られる | 数値、bool、列挙に近い値、文字の種類と長さが固定で短い値(例: ゾーン名) | 何に絞られるか、と、標準ライブラリのソースの場所 `src=<ファイル>.go:<関数>`([MODELING.md](MODELING.md) の「Stopping at a number, and a value of a narrow shape」) |
+  | `body-default` | 本体を分析する側の、未解決の呼び出しなどの既定の近似による見かけの流れ | 本体を調べて、データの流れがないと確認した | 直す課題の番号 `#N` |
   # model-diff: value <型> <Dart の式>       # Dart: その型の値(レシーバ、引数)の作り方。$S が source の位置。`<型>.<メンバ>` は、そのメンバのレシーバだけ
   ```
 

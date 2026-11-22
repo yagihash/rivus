@@ -350,3 +350,28 @@ func TestParseNotesMissReviewed(t *testing.T) {
 		}
 	}
 }
+
+func TestMissReviewedNonPayload(t *testing.T) {
+	good := "# model-diff: miss-reviewed time.Parse@arg1 non-payload the zone name: 3 to 5 capital letters, or GMT+n; src=time/format.go:parseTimeZone\n"
+	notes, errs := ParseNotes("m.yaml", good)
+	if len(errs) != 0 || len(notes) != 1 {
+		t.Fatalf("notes %v, errors %v", notes, errs)
+	}
+	if k, _ := ReviewKind(notes[0]); k != "non-payload" {
+		t.Errorf("kind %q", k)
+	}
+	for _, bad := range []string{
+		"# model-diff: miss-reviewed time.Parse@arg1 non-payload the zone name\n",            // no source
+		"# model-diff: miss-reviewed time.Parse@arg1 non-payload src=time/format.go:parse\n", // no narrowing
+		"# model-diff: miss-reviewed time.Parse@arg1 non-payload\n",
+	} {
+		if _, errs := ParseNotes("m.yaml", bad); len(errs) != 1 {
+			t.Errorf("%q: errors %v", bad, errs)
+		}
+	}
+	probes := []Probe{{ID: 0, Symbol: "time.Parse", Kind: "flow", Variant: "arg1", Outputs: []string{"result0"}}}
+	rep := Compare(probes, nil, Hits{key(0, "result0"): true}, Hits{}, notes)
+	if rep.Results[0].Status != "MISS-reviewed" || len(rep.Reviewed) != 1 || rep.Failed() {
+		t.Errorf("status %s, reviewed %v, failed %v", rep.Results[0].Status, rep.Reviewed, rep.Failed())
+	}
+}

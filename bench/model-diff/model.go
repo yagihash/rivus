@@ -75,9 +75,12 @@ func ParseNotes(file, text string) ([]Note, []string) {
 // ReviewKinds are the kinds that the text of a `miss-reviewed` note starts with (the reason is one of these, then a short explanation):
 //
 //	type-only     not the value but only information of its type reaches the output (the error of encoding/json names the type of `v`)
+//	non-payload   the flow of the body is real, but what arrives is of a fixed narrow shape (a number, a bool, a name of a few capital
+//	              letters): it needs what it is narrowed to, then `src=<file of the standard library>.go:<function>` (docs/MODELING.md,
+//	              "Stopping at a number, and a value of a narrow shape")
 //	body-default  an apparent flow of the reading of the bodies: an unresolved call that it takes as "arguments to results" (it needs the
 //	              number of the issue, `#N`, that is to make the reading better; the kind goes away when that is fixed)
-var ReviewKinds = []string{"type-only", "body-default"}
+var ReviewKinds = []string{"type-only", "non-payload", "body-default"}
 
 // ReviewKind returns the kind that the note starts with ("" if it is none of the ReviewKinds) and the explanation after it.
 func ReviewKind(n Note) (kind, text string) {
@@ -95,6 +98,9 @@ func ReviewKind(n Note) (kind, text string) {
 
 var issueRe = regexp.MustCompile(`#[0-9]+`)
 
+// srcRe is the place that shows a non-payload: `src=<path>.go` (then `:<function>`).
+var srcRe = regexp.MustCompile(`\bsrc=\S+\.go\S*`)
+
 func checkReviewed(n Note) string {
 	if !strings.Contains(n.Symbol, "@") {
 		return fmt.Sprintf("the note `miss-reviewed %s` needs a position: <symbol>@<position>", n.Symbol)
@@ -105,6 +111,8 @@ func checkReviewed(n Note) string {
 		return fmt.Sprintf("the note `miss-reviewed %s` starts with a kind (%s), then a short explanation", n.Symbol, strings.Join(ReviewKinds, ", "))
 	case text == "":
 		return fmt.Sprintf("the note `miss-reviewed %s` has a kind and no explanation", n.Symbol)
+	case k == "non-payload" && (!srcRe.MatchString(text) || strings.TrimSpace(srcRe.ReplaceAllString(text, "")) == ""):
+		return fmt.Sprintf("the note `miss-reviewed %s` of the kind non-payload needs what the value is narrowed to and where the source shows it (`src=<file>.go:<function>`)", n.Symbol)
 	case k == "body-default" && !issueRe.MatchString(text):
 		return fmt.Sprintf("the note `miss-reviewed %s` of the kind body-default needs the number of the issue (#N)", n.Symbol)
 	}
