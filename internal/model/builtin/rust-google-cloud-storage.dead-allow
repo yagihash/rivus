@@ -1,0 +1,7 @@
+# The rows of rust-google-cloud-storage.yaml that no call in the zoo or the curated targets hits (TestBuiltinRowsAreHitByTheZoo). "symbol | reason"; see bench/parity/README.md.
+google_cloud_storage::client::Storage::open_appendable_object | dependency | not called: same shape as Storage::open_object (the skeleton of the zoo has no cell for it)
+google_cloud_storage::client::Storage::reopen_appendable_object | dependency | not called: same shape as Storage::open_object (the skeleton of the zoo has no cell for it)
+google_cloud_storage::builder::storage_control::RestoreObject::set_bucket | dependency | not called: same shape as DeleteObject::set_bucket
+google_cloud_storage::builder::storage_control::RestoreObject::set_object | dependency | not called: same shape as DeleteObject::set_object
+google_cloud_storage::builder::storage_control::GetBucket::set_name | dependency | not called: same shape as ListObjects::set_parent
+google_cloud_storage::builder::storage_control::DeleteBucket::set_name | dependency | not called: same shape as ListObjects::set_parent

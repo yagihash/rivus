@@ -1,0 +1,2 @@
+# The rows of dart-googleapis_auth.yaml that no call in the zoo or the curated targets hits (TestBuiltinRowsAreHitByTheZoo). "symbol | reason"; see bench/parity/README.md.
+package:googleapis_auth/src/impersonated_auth_client.dart#ImpersonatedAuthClient.new | dependency | not called: the public way to make the client is clientViaServiceAccountImpersonation (same arguments); the zoo skeleton has the function of the cells only

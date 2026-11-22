@@ -1,0 +1,4 @@
+go	pkg/storage/names/names.go	sink-none	@sink(none)	func fixed() { @fixed
+go	pkg/storage/names/names.go	sink-none	@sink(none)	func fixed() { @fixed
+go	pkg/storage/names/names.go	sink-none	@sink(none) @nosink(pkg-storage-names-decoy)	func decoy() { @decoy
+go	pkg/storage/names/names.go	sink-none	@sink(none) @nosink(pkg-storage-names-decoy)	func decoy() { @decoy

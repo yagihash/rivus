@@ -360,6 +360,62 @@ propagators:
     flows: [{from: arg0, to: result0}]
   - symbol: os.ExpandEnv
     flows: [{from: arg0, to: result}]
+  # (*os.Root): the same flows as the functions of the package that have the path (the name goes into the file and into the error), and what is
+  # read through a Root is made of the Root (the files under it). No sink: a name given to a Root cannot leave the root (see go-stdlib.yaml).
+  - symbol: (*os.Root).Open
+    flows: [{from: recv, to: result0}, {from: arg0, to: result0}, {from: arg0, to: result1}]
+  - symbol: (*os.Root).Create
+    flows: [{from: recv, to: result0}, {from: arg0, to: result0}, {from: arg0, to: result1}]
+  - symbol: (*os.Root).OpenFile
+    flows: [{from: recv, to: result0}, {from: arg0, to: result0}, {from: arg0, to: result1}]
+  - symbol: (*os.Root).OpenRoot
+    flows: [{from: recv, to: result0}, {from: arg0, to: result0}, {from: arg0, to: result1}]
+  - symbol: (*os.Root).Stat
+    flows: [{from: arg0, to: result1}]
+  - symbol: (*os.Root).Lstat
+    flows: [{from: arg0, to: result1}]
+  - symbol: (*os.Root).ReadFile
+    flows: [{from: recv, to: result0}, {from: arg0, to: result1}]
+  - symbol: (*os.Root).Readlink
+    flows: [{from: recv, to: result0}, {from: arg0, to: result1}]
+  # model-diff: miss-reviewed (*os.Root).WriteFile@arg1 body-default #150 the data goes to the write call (an unresolved call that the reading takes as "arguments to results"); the error is the operating system's and names the file, the data is not in it
+  - symbol: (*os.Root).WriteFile
+    flows: [{from: arg0, to: result}]
+  - symbol: (*os.Root).Chmod
+    flows: [{from: arg0, to: result}]
+  - symbol: (*os.Root).Chown
+    flows: [{from: arg0, to: result}]
+  - symbol: (*os.Root).Chtimes
+    flows: [{from: arg0, to: result}]
+  - symbol: (*os.Root).Lchown
+    flows: [{from: arg0, to: result}]
+  - symbol: (*os.Root).Mkdir
+    flows: [{from: arg0, to: result}]
+  - symbol: (*os.Root).MkdirAll
+    flows: [{from: arg0, to: result}]
+  - symbol: (*os.Root).Remove
+    flows: [{from: arg0, to: result}]
+  - symbol: (*os.Root).RemoveAll
+    flows: [{from: arg0, to: result}]
+  - symbol: (*os.Root).Link
+    flows: [{from: arg0, to: result}, {from: arg1, to: result}]
+  - symbol: (*os.Root).Rename
+    flows: [{from: arg0, to: result}, {from: arg1, to: result}]
+  - symbol: (*os.Root).Symlink
+    flows: [{from: arg0, to: result}, {from: arg1, to: result}]
+  # the error of a read names the file (`read <name>: ...`), so the receiver reaches it
+  # model-diff: miss-reviewed (*os.File).Read@arg0 body-default #150 the buffer goes to the read call (an unresolved call that the reading takes as "arguments to results"); the error is the operating system's, the buffer is not in it
+  # model-diff: extra (*os.File).Read the content of the file is the disk, which the analysis does not follow: the file (the receiver) stands for it, and the buffer is made of it
+  - symbol: (*os.File).Read
+    flows: [{from: recv, to: arg0}, {from: recv, to: result1}]
+  # model-diff: extra (*os.File).ReadAt the same as Read
+  - symbol: (*os.File).ReadAt
+    flows: [{from: recv, to: arg0}, {from: recv, to: result1}]
+  # model-diff: extra (*os.File).ReadFrom what is read from the reader is written to the file; the file is the disk, which the analysis does not follow, and what the file then gives (Read, WriteTo) is made of it
+  - symbol: (*os.File).ReadFrom
+    flows: [{from: arg0, to: recv}, {from: recv, to: result1}]
+  - symbol: (*os.File).WriteTo
+    flows: [{from: recv, to: arg0.content}, {from: recv, to: result1}]
   - symbol: os.MkdirTemp
     flows: [{from: arg0, to: result0}, {from: arg1, to: result0}, {from: arg0, to: result1}, {from: arg1, to: result1}]
   - symbol: (*regexp.Regexp).FindSubmatch

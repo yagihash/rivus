@@ -1,0 +1,2 @@
+rust	pkg/actix_web/web_form.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	pkg/actix_web/web_form.rs	sink-none	@sink(none) @nosink(pkg-actix-web-web-form-decoy)	fn decoy() { @decoy

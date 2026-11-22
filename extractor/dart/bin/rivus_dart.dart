@@ -1,4 +1,4 @@
-// rivus_dart [--no-deps] [--include-tests] [--allow-deps-under DIR]... [--body-replaced PACKAGE]... [directory]: writes the neutral IR of the Dart code under the
+// rivus_dart [--no-deps] [--include-tests] [--allow-deps-under DIR]... [--dep-dir DIR]... [--body-replaced PACKAGE]... [directory]: writes the neutral IR of the Dart code under the
 // directory (the current one by default) to the standard output, as JSON
 // Lines (--no-deps leaves out the dependencies). See docs/ARCHITECTURE.md 2.7.7.
 import 'dart:io';
@@ -16,11 +16,17 @@ Future<void> main(List<String> args) async {
   final allow = <String>[];
   // --body-replaced PACKAGE (repeatable): package:name whose models stand for its code: it is not resolved or lowered
   final replaced = <String>[];
+  // --dep-dir DIR (repeatable): a directory of the project (relative to the root, or absolute) whose files are read as dependencies
+  final depDirs = <String>[];
   final rest = <String>[];
   for (var i = 0; i < args.length; i++) {
     if (args[i] == '--no-deps' || args[i] == '--include-tests') continue;
     if (args[i] == '--allow-deps-under' && i + 1 < args.length) {
       allow.add(args[++i]);
+      continue;
+    }
+    if (args[i] == '--dep-dir' && i + 1 < args.length) {
+      depDirs.add(args[++i]);
       continue;
     }
     if (args[i] == '--body-replaced' && i + 1 < args.length) {
@@ -31,7 +37,7 @@ Future<void> main(List<String> args) async {
   }
   final root = rest.isEmpty ? '.' : rest.first;
   final sink = _Stdout();
-  await extract(root, sink, deps: deps, includeTests: includeTests, allowDepsUnder: allow, bodyReplaced: replaced, drain: sink.drain, failIn: Platform.environment['RIVUS_DART_FAIL_IN']); // RIVUS_DART_FAIL_IN: for the tests only (a function that fails)
+  await extract(root, sink, deps: deps, includeTests: includeTests, allowDepsUnder: allow, bodyReplaced: replaced, depDirs: depDirs, drain: sink.drain, failIn: Platform.environment['RIVUS_DART_FAIL_IN']); // RIVUS_DART_FAIL_IN: for the tests only (a function that fails)
   await sink.drain();
 }
 

@@ -1,0 +1,47 @@
+# package:googleapis_auth: the authentication of the Google APIs for Dart (`ServiceAccountCredentials`, `clientViaServiceAccount`,
+# `clientViaServiceAccountImpersonation`, `AuthClient`, `AccessCredentials`).
+#
+# Checked by reading the published source of 2.3.7. Hand written rows (origin: human); the generator does not exist yet.
+#
+# The boundary (docs/MODEL-QUEUE.md, row 9):
+# * `resource_name`: what decides which identity the program acts as. The service account that is impersonated
+#   (`targetServiceAccount`, `delegates`), the e-mail of a `ServiceAccountCredentials`, and the JSON that
+#   `ServiceAccountCredentials.fromJson` reads (it holds the e-mail, the key and the project). A value of the user there can
+#   make the program act as another account of the project, or of another project. No older category fits; the same one as
+#   the names of the Google Cloud resources (dart-gcp.yaml).
+# * No source. The queue (row 9) proposes `AuthClient` and `AccessCredentials` as sources. By ADR-108 (who wrote the value),
+#   they are not: the access token, the refresh token and the id token are minted by the token endpoint of Google, not
+#   written by a user of the service. A token is a secret to keep, not data that an attacker writes, and the rule format has
+#   no label for a secret. `AuthClient` is an `http.Client`: what it sends is checked by the rows of dart-http.yaml.
+# * Not rows, and why: `AuthEndpoints.tokenEndpoint` and `authorizationEndpoint` are getters that the user implements (a
+#   row is on the package, and the user's class has no row). The `userPrompt` callbacks of `clientViaUserConsent` receive the
+#   consent URL that the package builds. `clientViaMetadataServer` and `clientViaApplicationDefaultCredentials` take no value
+#   that a user decides. `obtainAccessCredentialsViaCodeExchange` takes the code that the sign-in returned; a code of the user
+#   there is what the exchange is for, and the value is not carried to a place of the program.
+# * The functions that build a client have no `flows` row: their bodies are read (they reach `package:http`).
+# model-diff: value ServiceAccountCredentials ServiceAccountCredentials('e', ClientId('i'), 'k')
+# model-diff: value ClientId ClientId('i')
+ruleset: rivus/dart/googleapis_auth@1
+
+verified_versions:
+  - package: googleapis_auth
+    versions: ">=2.0.0 <3.0.0"
+    checked_with: 2.3.7
+    checked: 2026-11-23
+
+sinks:
+  # the credentials of a service account: the e-mail, and the JSON that holds the e-mail, the key and the project
+  - symbol: package:googleapis_auth/src/service_account_credentials.dart#ServiceAccountCredentials.new
+    args: [0]
+    category: resource_name
+  - symbol: package:googleapis_auth/src/service_account_credentials.dart#ServiceAccountCredentials.fromJson
+    args: [0]
+    category: resource_name
+
+  # the impersonation: the account that the program acts as, and the accounts that the request is delegated through
+  - symbol: package:googleapis_auth/src/impersonated_auth_client.dart#clientViaServiceAccountImpersonation
+    named: [targetServiceAccount, delegates]
+    category: resource_name
+  - symbol: package:googleapis_auth/src/impersonated_auth_client.dart#ImpersonatedAuthClient.new
+    named: [targetServiceAccount, delegates]
+    category: resource_name

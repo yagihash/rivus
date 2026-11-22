@@ -96,3 +96,12 @@ strings.TrimLeft | debt | the standard library: no cell of the zoo calls it yet
 strings.TrimPrefix | debt | the standard library: no cell of the zoo calls it yet
 strings.TrimRight | debt | the standard library: no cell of the zoo calls it yet
 strings.TrimSuffix | debt | the standard library: no cell of the zoo calls it yet
+os.Chdir | the zoo records only the sinks of zoo/mark, so a cell cannot show a sink of the standard library reached (the tainted call would be an unexpected flow); same shape as os.Open
+os.Chown | the zoo records only the sinks of zoo/mark, so a cell cannot show a sink of the standard library reached (the tainted call would be an unexpected flow); same shape as os.Open
+os.Lchown | the zoo records only the sinks of zoo/mark, so a cell cannot show a sink of the standard library reached (the tainted call would be an unexpected flow); same shape as os.Open
+os.Chtimes | the zoo records only the sinks of zoo/mark, so a cell cannot show a sink of the standard library reached (the tainted call would be an unexpected flow); same shape as os.Open
+os.CreateTemp | the zoo records only the sinks of zoo/mark, so a cell cannot show a sink of the standard library reached (the tainted call would be an unexpected flow); same shape as os.Open
+os.DirFS | the zoo records only the sinks of zoo/mark, so a cell cannot show a sink of the standard library reached (the tainted call would be an unexpected flow); same shape as os.Open
+os.CopyFS | the zoo records only the sinks of zoo/mark, so a cell cannot show a sink of the standard library reached (the tainted call would be an unexpected flow); same shape as os.Open
+os.OpenInRoot | the zoo records only the sinks of zoo/mark, so a cell cannot show a sink of the standard library reached (the tainted call would be an unexpected flow); same shape as os.Open
+os.StartProcess | the zoo records only the sinks of zoo/mark, so a cell cannot show a sink of the standard library reached (the tainted call would be an unexpected flow); same shape as os.Open

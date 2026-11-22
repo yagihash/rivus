@@ -1,0 +1,183 @@
+# sqlx (github.com/jmoiron/sqlx): the query-string sinks of the wrapper over database/sql. The rows of database/sql itself
+# (`(*database/sql.DB).Query` and the others) are in go-stdlib.yaml and are not repeated: `sqlx.DB`, `sqlx.Tx` and `sqlx.Conn`
+# embed the database/sql types, so Query/Exec/Prepare and their Context forms are the rows there. This file has the methods and
+# functions that sqlx adds, each with the query string as the only dangerous argument (the bound args are not).
+#
+# Checked against sqlx v1.4.0 (range >=1.4.0 <2.0.0), 2026-11-23, by reading the published source. Hand written rows
+# (origin: human); the generator does not exist yet.
+#
+# Not modelled, on purpose: `NamedStmt` and `Stmt` methods (the query was fixed when the statement was prepared: the sink is
+# `Preparex` / `PrepareNamed`), `Named`, `BindNamed`, `Rebind`, `In` (they build a string but run nothing; the string reaches
+# a sink below if it is used), `LoadFile` (the argument is a path to a file, not a query), the interfaces `Queryer`, `Execer`,
+# `Ext` and the Context forms (the call through an interface has no symbol of its own to put a row on; the call is a call of
+# the concrete method when the type is known), and the sources: sqlx has no source (the values of a row come from the stored
+# data, which is a boundary the user sets, as for database/sql).
+ruleset: rivus/go/sqlx@1
+
+verified_versions:
+  - package: github.com/jmoiron/sqlx
+    versions: ">=1.4.0 <2.0.0"
+    checked_with: v1.4.0
+    checked: 2026-11-23
+
+sinks:
+  # (*sqlx.DB)
+  - symbol: (*github.com/jmoiron/sqlx.DB).NamedQuery
+    args: [0]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.DB).NamedQueryContext
+    args: [1]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.DB).NamedExec
+    args: [0]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.DB).NamedExecContext
+    args: [1]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.DB).Select
+    args: [1]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.DB).SelectContext
+    args: [2]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.DB).Get
+    args: [1]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.DB).GetContext
+    args: [2]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.DB).Queryx
+    args: [0]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.DB).QueryxContext
+    args: [1]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.DB).QueryRowx
+    args: [0]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.DB).QueryRowxContext
+    args: [1]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.DB).MustExec
+    args: [0]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.DB).MustExecContext
+    args: [1]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.DB).Preparex
+    args: [0]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.DB).PreparexContext
+    args: [1]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.DB).PrepareNamed
+    args: [0]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.DB).PrepareNamedContext
+    args: [1]
+    category: sql_injection
+  # (*sqlx.Tx)
+  - symbol: (*github.com/jmoiron/sqlx.Tx).NamedQuery
+    args: [0]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.Tx).NamedExec
+    args: [0]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.Tx).NamedExecContext
+    args: [1]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.Tx).Select
+    args: [1]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.Tx).SelectContext
+    args: [2]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.Tx).Get
+    args: [1]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.Tx).GetContext
+    args: [2]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.Tx).Queryx
+    args: [0]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.Tx).QueryxContext
+    args: [1]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.Tx).QueryRowx
+    args: [0]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.Tx).QueryRowxContext
+    args: [1]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.Tx).MustExec
+    args: [0]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.Tx).MustExecContext
+    args: [1]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.Tx).Preparex
+    args: [0]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.Tx).PreparexContext
+    args: [1]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.Tx).PrepareNamed
+    args: [0]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.Tx).PrepareNamedContext
+    args: [1]
+    category: sql_injection
+  # (*sqlx.Conn)
+  - symbol: (*github.com/jmoiron/sqlx.Conn).SelectContext
+    args: [2]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.Conn).GetContext
+    args: [2]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.Conn).PreparexContext
+    args: [1]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.Conn).QueryxContext
+    args: [1]
+    category: sql_injection
+  - symbol: (*github.com/jmoiron/sqlx.Conn).QueryRowxContext
+    args: [1]
+    category: sql_injection
+  # package functions (the first argument is the Queryer, Execer, Preparer or Ext)
+  - symbol: github.com/jmoiron/sqlx.Select
+    args: [2]
+    category: sql_injection
+  - symbol: github.com/jmoiron/sqlx.SelectContext
+    args: [3]
+    category: sql_injection
+  - symbol: github.com/jmoiron/sqlx.Get
+    args: [2]
+    category: sql_injection
+  - symbol: github.com/jmoiron/sqlx.GetContext
+    args: [3]
+    category: sql_injection
+  - symbol: github.com/jmoiron/sqlx.MustExec
+    args: [1]
+    category: sql_injection
+  - symbol: github.com/jmoiron/sqlx.MustExecContext
+    args: [2]
+    category: sql_injection
+  - symbol: github.com/jmoiron/sqlx.Preparex
+    args: [1]
+    category: sql_injection
+  - symbol: github.com/jmoiron/sqlx.PreparexContext
+    args: [2]
+    category: sql_injection
+  - symbol: github.com/jmoiron/sqlx.NamedQuery
+    args: [1]
+    category: sql_injection
+  - symbol: github.com/jmoiron/sqlx.NamedQueryContext
+    args: [2]
+    category: sql_injection
+  - symbol: github.com/jmoiron/sqlx.NamedExec
+    args: [1]
+    category: sql_injection
+  - symbol: github.com/jmoiron/sqlx.NamedExecContext
+    args: [2]
+    category: sql_injection

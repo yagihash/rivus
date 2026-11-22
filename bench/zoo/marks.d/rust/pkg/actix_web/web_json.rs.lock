@@ -1,0 +1,2 @@
+rust	pkg/actix_web/web_json.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	pkg/actix_web/web_json.rs	sink-none	@sink(none) @nosink(pkg-actix-web-web-json-decoy)	fn decoy() { @decoy

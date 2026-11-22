@@ -1,7 +1,17 @@
 # Web frameworks and HTTP clients: the request a handler is given is attacker
 # controlled. The types are the paths of the structs (without type arguments), `&` kept.
-# actix-web is not here: it is a specific framework, see examples/rules/rust-actix-web.yaml (ADR-063).
+# actix-web has its own file: rust-actix-web.yaml.
 ruleset: rivus/rust/web@1
+
+# axum: the extractors that carry what the client wrote are sources, as the types of the parameters of a handler. Not sources
+# (ADR-108: who wrote the value): State (the application's own value), Extension (set by a layer of the application),
+# MatchedPath (the route pattern, written by the application), ConnectInfo (the address of the peer, a narrow value).
+# `axum::extract::Request` is an alias of http::Request<Body>, and the extractor writes it `axum::http::Request`.
+verified_versions:
+  - package: axum
+    versions: ">=0.8.0 <0.9.0"
+    checked_with: 0.8.9
+    checked: 2026-11-23
 
 sources:
   - kind: param_type
@@ -30,6 +40,30 @@ sources:
     labels: [user_input]
   - kind: param_type
     type: "axum::http::Uri"
+    labels: [user_input]
+  - kind: param_type
+    type: "axum::http::HeaderMap"
+    labels: [user_input]
+  - kind: param_type
+    type: "&axum::http::HeaderMap"
+    labels: [user_input]
+  - kind: param_type
+    type: "axum::http::Request"
+    labels: [user_input]
+  - kind: param_type
+    type: "&axum::http::Request"
+    labels: [user_input]
+  - kind: param_type
+    type: "axum::http::request::Parts"
+    labels: [user_input]
+  - kind: param_type
+    type: "axum::extract::OriginalUri"
+    labels: [user_input]
+  - kind: param_type
+    type: "axum::extract::RawPathParams"
+    labels: [user_input]
+  - kind: param_type
+    type: "axum::body::Body"
     labels: [user_input]
   - kind: param_type
     type: "http::request::Request"
@@ -61,6 +95,22 @@ sources:
   - kind: param_type
     type: "warp::filters::query::Query"
     labels: [user_input]
+
+# axum: the response that redirects to a place the client chose (open redirect). The argument is the first of an associated
+# function (no receiver). `Html(..)` is the constructor of a tuple struct and is no call: it has no row.
+sinks:
+  - symbol: axum::response::Redirect::to
+    args: [0]
+    category: open_redirect
+    accepts: [user_input]
+  - symbol: axum::response::Redirect::temporary
+    args: [0]
+    category: open_redirect
+    accepts: [user_input]
+  - symbol: axum::response::Redirect::permanent
+    args: [0]
+    category: open_redirect
+    accepts: [user_input]
 
 propagators:
   - symbol: http::request::Request::uri

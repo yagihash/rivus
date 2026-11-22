@@ -426,3 +426,23 @@ func TestMajorWildcardRows(t *testing.T) {
 		t.Errorf("a path that is not a major drops nothing:\n%s", got)
 	}
 }
+
+func TestCoverageGapsFindsAFunctionWithoutARow(t *testing.T) {
+	dir := t.TempDir()
+	f := filepath.Join(dir, "m.yaml")
+	if err := os.WriteFile(f, []byte("flows:\n  - symbol: strings.ToUpper\n    flows: [{from: arg0, to: result}]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := coverageGaps("strings", []string{f})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var upper, lower bool
+	for _, g := range got {
+		upper = upper || strings.HasPrefix(g, "strings.ToUpper(")
+		lower = lower || strings.HasPrefix(g, "strings.ToLower(")
+	}
+	if upper || !lower {
+		t.Errorf("ToUpper has a row (%v), ToLower has none (%v)", upper, lower)
+	}
+}
