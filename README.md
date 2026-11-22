@@ -210,7 +210,7 @@ rivus が出さなかったことは、「流れがない」という意味で�
    ```
 
 3. 確信のない流れ: モデルの `flows` に `approximate: "理由"` を書くと、流れは消さずに、通った finding に不確実性 `model_approximation` が付きます（書き方は [docs/MODELING.md](docs/MODELING.md)）。
-4. 誰が書いたか: ルールの `origin: builtin | human | llm` で区別できます。`-deterministic-only` は `llm` のルールを無視します。LLM 由来のモデルが効いた finding には `llm_influenced` が付き、モデルが流れを消した場所は `suppressions` に残ります。
+4. 誰が書いたか: ルールの `origin: builtin | human | llm` で区別できます。`-deterministic-only` は `llm` のルールを無視します。LLM 由来のモデルが効いた finding には `llm_influenced` が付きます。モデルが流れを消した場所は `suppressions` に残ります(`origin: llm` の `sanitizers` の `drops`、`builtin` 以外のモデル(`llm` と、人が `-rules` に書いたもの)の `pure: true` と、結果に届かない `flows`。組み込み(`builtin`)の `pure` と `flows`、組み込みと人が書いた `sanitizers` の `drops` は、確認済みなので残しません)。同じ source から別の流れが消えた関数を通る finding にも、その LLM 由来のモデルを `models` に入れ、`llm_influenced` を付けます。
 
 LLM にモデルを書かせ、人や別の手段で確かめる、という使い方を想定しています。書式の手引きは [docs/MODELING.md](docs/MODELING.md)(英語。まだ全部の節は無い)。モデルを実行で確かめる道具は、これから整えます。
 

@@ -8,6 +8,8 @@ dependencies:
     path: packages/gcloud
   googleapis:
     path: packages/googleapis
+  http:
+    path: packages/http
   zoo_mark:
     path: packages/zoo_mark
   zoo_dep:

@@ -34,6 +34,8 @@ import 'package:zoo_cells/dart/googleapis_pubsub_subscription_name.dart' as dart
 import 'package:zoo_cells/dart/gcloud_pubsub_lookup_topic.dart' as dart_gcloud_pubsub_lookup_topic;
 import 'package:zoo_cells/dart/gcloud_storage_read.dart' as dart_gcloud_storage_read;
 import 'package:zoo_cells/dart/googleapis_bigquery_query.dart' as dart_googleapis_bigquery_query;
+import 'package:zoo_cells/dart/http_client_get.dart' as dart_http_client_get;
+import 'package:zoo_cells/dart/http_ioclient_send.dart' as dart_http_ioclient_send;
 import 'package:zoo_cells/dart/flutter_field_read.dart' as dart_flutter_field_read;
 import 'package:zoo_cells/dart/flutter_override_arg.dart' as dart_flutter_override_arg;
 import 'package:zoo_cells/dart/flutter_route_args.dart' as dart_flutter_route_args;
@@ -106,6 +108,8 @@ void registerAll() {
   dart_gcloud_pubsub_lookup_topic.register();
   dart_gcloud_storage_read.register();
   dart_googleapis_bigquery_query.register();
+  dart_http_client_get.register();
+  dart_http_ioclient_send.register();
   dart_flutter_field_read.register();
   dart_flutter_override_arg.register();
   dart_flutter_route_args.register();

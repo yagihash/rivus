@@ -126,6 +126,10 @@ dart	dart/googleapis_datastore_run_query.dart	sink-none	@sink(none) @fp @nosink(
 dart	dart/googleapis_pubsub_subscription_name.dart	miss	@source(dart-googleapis-pubsub-subscription-name-vuln) @miss(unmodeled_library_call) @ref(#140)	Future<void> vuln() async { @vuln
 dart	dart/googleapis_pubsub_subscription_name.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
 dart	dart/googleapis_pubsub_subscription_name.dart	sink-none	@sink(none) @nosink(dart-googleapis-pubsub-subscription-name-decoy)	Future<void> decoy() async { @decoy
+dart	dart/http_client_get.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	dart/http_client_get.dart	sink-none	@sink(none) @nosink(dart-http-client-get-decoy)	Future<void> decoy() async { @decoy
+dart	dart/http_ioclient_send.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	dart/http_ioclient_send.dart	sink-none	@sink(none) @nosink(dart-http-ioclient-send-decoy)	Future<void> decoy() async { @decoy
 dart	dart/interp_tostring.dart	fp	@sink(none) @fp @nosink(dart-interp-tostring-decoy) @fp @ref(R-16)	void decoy() { @decoy
 dart	dart/interp_tostring.dart	na	@na(go: no implicit String()	-
 dart	dart/interp_tostring.dart	sink-none	@sink(none)	void fixed() { @fixed
