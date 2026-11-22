@@ -156,8 +156,11 @@ func Run(ctx context.Context, s Spec) (*Result, error) {
 		return nil, err
 	}
 	defer os.RemoveAll(dir)
+	// the program itself is run as a file: its directory is not allowed with it (the directory of a program that was installed with brew
+	// or cargo holds other programs)
+	files := append(append([]string(nil), s.ExecFiles...), s.Argv[0])
 	pf := filepath.Join(dir, "profile.sb")
-	if err := os.WriteFile(pf, []byte(profile(len(s.Read), len(s.Exec)+1, len(s.Write), len(s.ExecFiles), len(s.ReadFiles), s.ProxyPort != 0, s.Network, len(s.NetworkMach))), 0o600); err != nil {
+	if err := os.WriteFile(pf, []byte(profile(len(s.Read), len(s.Exec), len(s.Write), len(files), len(s.ReadFiles), s.ProxyPort != 0, s.Network, len(s.NetworkMach))), 0o600); err != nil {
 		return nil, err
 	}
 	args := argList{"-f", pf}
@@ -166,15 +169,13 @@ func Run(ctx context.Context, s Spec) (*Result, error) {
 	for i, d := range s.Read {
 		args.param(fmt.Sprintf("R%d", i), real(d))
 	}
-	// the program itself is run from its own directory
-	execs := append([]string{filepath.Dir(s.Argv[0])}, s.Exec...)
-	for i, d := range execs {
+	for i, d := range s.Exec {
 		args.param(fmt.Sprintf("X%d", i), real(d))
 	}
 	for i, f := range s.ReadFiles {
 		args.param(fmt.Sprintf("F%d", i), real(f))
 	}
-	for i, f := range s.ExecFiles {
+	for i, f := range files {
 		args.param(fmt.Sprintf("E%d", i), real(f))
 	}
 	for i, d := range s.Write {
@@ -235,9 +236,6 @@ func Run(ctx context.Context, s Spec) (*Result, error) {
 		res.ExitCode = ee.ExitCode()
 	} else if werr != nil {
 		return res, werr
-	}
-	if bytes.Contains(res.Stderr, []byte("sandbox_apply")) && res.ExitCode != 0 {
-		return res, ErrUnavailable
 	}
 	return res, nil
 }
@@ -302,4 +300,18 @@ func ManifestsAbove(dir string) []string {
 		}
 	}
 	return out
+}
+
+// Available says whether the sandbox can be made on this machine: sandbox-exec is there and accepts the profile that a run uses (a
+// program that does nothing is run under it once). A caller asks before it runs the code of a project, and never takes what
+// the project's program writes to its standard error for an answer.
+func Available() error {
+	res, err := Run(context.Background(), Spec{Argv: []string{"/usr/bin/true"}, Dir: "/", Env: []string{"PATH=/usr/bin:/bin"}, Timeout: 30 * time.Second})
+	if err != nil {
+		return err
+	}
+	if res.ExitCode != 0 {
+		return fmt.Errorf("%w: the profile of a run was not accepted (a program that does nothing exited %d): %s", ErrUnavailable, res.ExitCode, strings.TrimSpace(string(res.Stderr)))
+	}
+	return nil
 }

@@ -19,7 +19,7 @@ func runSetup(argv []string) error {
 		return fmt.Errorf("usage: rivus setup rust [-source <directory of extractor/rust>] [-y]")
 	}
 	fs := flag.NewFlagSet("setup rust", flag.ContinueOnError)
-	source := fs.String("source", "", "the directory of the source of the Rust extractor (extractor/rust of the repository of rivus; default: ./extractor/rust)")
+	source := fs.String("source", "", "the directory of the source of the Rust extractor (extractor/rust of the repository of rivus). Required: it is built and run on this machine, outside the sandbox, so it is never taken from the directory you are in (that may be a project that you are reading)")
 	yes := fs.Bool("y", false, "do not ask before the download")
 	if err := fs.Parse(argv[1:]); err != nil {
 		return err
@@ -55,7 +55,7 @@ func runSetup(argv []string) error {
 	// 2. the extractor, built from the source of rivus (trusted), into the directory of rivus
 	src := *source
 	if src == "" {
-		src = "extractor/rust"
+		return fmt.Errorf("-source is required: the directory of extractor/rust of the repository of rivus. It is built and run here, outside the sandbox, so it is not taken from the current directory (which may hold a project that you are reading)")
 	}
 	if _, err := os.Stat(filepath.Join(src, "Cargo.toml")); err != nil {
 		return fmt.Errorf("the source of the Rust extractor is not at %s: name it with -source (the extractor/rust directory of the repository of rivus)", src)
@@ -64,7 +64,12 @@ func runSetup(argv []string) error {
 	root := filepath.Join(data, "extractor")
 	fmt.Fprintf(os.Stderr, "rivus: building the extractor from %s into %s (cargo install --locked)\n", src, root)
 	cmd := exec.Command(filepath.Join(tc, "bin", "cargo"), "install", "--path", src, "--locked", "--root", root, "--force")
-	cmd.Env = append(os.Environ(), "PATH="+filepath.Join(tc, "bin")+":"+os.Getenv("PATH"), "RUSTUP_TOOLCHAIN="+pinnedToolchain)
+	// what cargo needs and nothing else of this environment (not the variables that a repository you are in could have set up)
+	home, _ := os.UserHomeDir()
+	cmd.Env = []string{"PATH=" + filepath.Join(tc, "bin") + ":/usr/bin:/bin", "HOME=" + home, "RUSTUP_TOOLCHAIN=" + pinnedToolchain, "TMPDIR=" + os.TempDir()}
+	if sdk := sdkRoot(); sdk != "" {
+		cmd.Env = append(cmd.Env, "SDKROOT="+sdk)
+	}
 	cmd.Stdout, cmd.Stderr = os.Stderr, os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("cargo install: %v", err)

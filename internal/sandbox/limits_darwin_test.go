@@ -4,6 +4,8 @@ package sandbox
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -61,5 +63,42 @@ func TestSandboxUnavailableStopsWithoutRunning(t *testing.T) {
 	t.Setenv("PATH", "/nonexistent")
 	if _, err := Run(context.Background(), Spec{Argv: []string{"/usr/bin/true"}}); err != ErrUnavailable {
 		t.Errorf("without sandbox-exec: %v, want ErrUnavailable (nothing is run)", err)
+	}
+}
+
+// A program that is run under the sandbox writes what it likes to its standard error: it must not be able to make rivus say that the sandbox
+// cannot be made (which would send the user to run the code without it). Whether the sandbox can be made is found out by rivus before it
+// runs anything (Available), and what a program writes is only what it wrote.
+func TestSandboxStderrOfTheProgramIsNotAnAnswer(t *testing.T) {
+	res, err := Run(context.Background(), Spec{Argv: []string{"/bin/sh", "-c", "echo 'sandbox_apply: Operation not permitted' >&2; exit 1"}, Dir: "/",
+		Env: []string{"PATH=/usr/bin:/bin"}, Exec: []string{"/bin", "/usr/bin"}, Timeout: time.Minute})
+	if err != nil {
+		t.Fatalf("Run: %v (a program that says sandbox_apply and exits 1 is a program that failed, not a sandbox that cannot be made)", err)
+	}
+	if res.ExitCode != 1 {
+		t.Errorf("exit %d, want the 1 that the program gave", res.ExitCode)
+	}
+	if err := Available(); err != nil {
+		t.Errorf("Available: %v", err)
+	}
+}
+
+// The directory of the program is not allowed with it: a program that is installed with brew or cargo is among the others of its directory.
+func TestSandboxProgramIsAllowedAsAFileNotAsItsDirectory(t *testing.T) {
+	dir := t.TempDir()
+	a, b := filepath.Join(dir, "a"), filepath.Join(dir, "b")
+	for _, p := range []string{a, b} {
+		os.WriteFile(p, []byte("#!/bin/sh\necho ran\n"), 0o755)
+	}
+	spec := Spec{Dir: "/", Env: []string{"PATH=/usr/bin:/bin"}, ExecFiles: []string{"/bin/sh", "/bin/bash"}, Timeout: time.Minute}
+	spec.Argv = []string{"/bin/sh", "-c", a + "; " + b}
+	spec.ExecFiles = append(spec.ExecFiles, a)
+	spec.Read = []string{dir}
+	res, err := Run(context.Background(), spec)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if strings.Count(string(res.Stdout), "ran") != 1 {
+		t.Errorf("the program that was allowed ran, and the one beside it must not have:\n%s%s", res.Stdout, res.Stderr)
 	}
 }

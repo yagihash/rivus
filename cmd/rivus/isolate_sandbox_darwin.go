@@ -52,7 +52,7 @@ func pinnedToolchainDir() (string, error) {
 
 // sandboxPrograms are the programs that a build may run, each by its path (not the directories /usr/bin and /bin: osascript,
 // security, curl, ssh ... are there).
-var sandboxPrograms = []string{"/bin/sh", "/usr/bin/cc", "/usr/bin/clang", "/usr/bin/ld", "/usr/bin/ar", "/usr/bin/xcrun", "/usr/bin/xcode-select"}
+var sandboxPrograms = []string{"/bin/sh", "/bin/bash", "/usr/bin/cc", "/usr/bin/clang", "/usr/bin/ld", "/usr/bin/ar", "/usr/bin/xcrun", "/usr/bin/xcode-select"}
 
 // sdkRoot is the SDK that the linker uses, asked outside the sandbox (xcrun cannot run in it, and the linker would pick another one).
 func sdkRoot() string {
@@ -65,6 +65,11 @@ func sdkRoot() string {
 
 // extractRustSandboxed reads the project under the sandbox and returns the IR. It runs nothing on this machine outside the sandbox.
 func (o *isolationOpts) extractRustSandboxed(ctx context.Context, dir string, extractorArgs []string) ([]byte, error) {
+	// whether the sandbox can be made is found out here, before any code of the project runs, by rivus itself (a program that does nothing, under the
+	// profile): never from what the project's own programs write to their standard error
+	if err := sandbox.Available(); err != nil {
+		return nil, noSandboxError(err)
+	}
 	if err := mountable(dir); err != nil {
 		return nil, err
 	}
@@ -74,6 +79,9 @@ func (o *isolationOpts) extractRustSandboxed(ctx context.Context, dir string, ex
 	}
 	if want := projectToolchain(dir); want != "" && want != pinnedToolchain {
 		fmt.Fprintf(o.err(), "rivus: the project asks for the toolchain %q; the extractor is pinned to %s and the sandbox does not fetch another one, so it is built with %s (it may not compile)\n", want, pinnedToolchain, pinnedToolchain)
+	}
+	if above := cargoConfigsAbove(dir); len(above) > 0 {
+		return nil, fmt.Errorf("cargo reads the configuration of every directory above the one it is run in, and the sandbox does not let it read %s (a configuration outside the project could change the build: a rustc-wrapper is a program that cargo runs instead of rustc). Nothing was run. Move the project to a place without a .cargo/config(.toml) above it, or, if the code and the configuration are yours, use -unsafe-host-exec", strings.Join(above, ", "))
 	}
 	tc, err := pinnedToolchainDir()
 	if err != nil {
@@ -247,4 +255,19 @@ func (o *isolationOpts) rustExtractorPath() (string, error) {
 		return "", err
 	}
 	return filepath.Abs(p)
+}
+
+// cargoConfigsAbove are the cargo configuration files in the directories above the project (the project's own .cargo is read: it is part of the
+// project). cargo stops with "Operation not permitted" when it finds one that it may not read, so it is said before anything runs.
+func cargoConfigsAbove(dir string) []string {
+	var out []string
+	for d := filepath.Dir(dir); d != "/" && d != "."; d = filepath.Dir(d) {
+		for _, f := range []string{"config.toml", "config"} {
+			p := filepath.Join(d, ".cargo", f)
+			if _, err := os.Stat(p); err == nil {
+				out = append(out, p)
+			}
+		}
+	}
+	return out
 }

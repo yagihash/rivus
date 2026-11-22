@@ -12,3 +12,5 @@ import (
 func (o *isolationOpts) extractRustSandboxed(ctx context.Context, dir string, extractorArgs []string) ([]byte, error) {
 	return nil, fmt.Errorf("the extractor of Rust runs the build scripts and the macros of the project, and the only isolation is the sandbox of macOS, which this system does not have, so nothing was run. If the code is yours or you trust it, -unsafe-host-exec runs it directly on this machine, without any isolation (the build scripts of the project run here, with your rights)")
 }
+
+func sdkRoot() string { return "" }
