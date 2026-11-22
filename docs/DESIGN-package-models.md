@@ -397,7 +397,7 @@ verified_versions:
 
 **生成器の要件(骨組み)**: 本物の型の埋め込みと、インターフェースの実装の関係を、本物と同じ形にする(昇格したメソッドが、別のパッケージの行に当たるため。実例: Go の `sqlx.DB` は `*sql.DB` を埋め込む。骨組みが埋め込まないと、昇格したメソッドを呼ぶセルが、本物と違う形で通る)。
 
-### 6.9 モデル作成の手順のスクリプト化(設計案)
+### 6.11 モデル作成の手順のスクリプト化(設計案)
 
 背景: クラウドで 1 パッケージ分のモデルを作る作業(手順書 [MODEL-RUNBOOK.md](MODEL-RUNBOOK.md))は、Dart(dio、github、shelf、googleapis_auth)、Go(gin、storage、sqlx、go-github、`os` と `database/sql` の行)、Rust(actix-web、axum、google-cloud-storage、octocrab)の 10 本あまりで、ほぼ毎回、手順書への追記が要った。クラウドで確実に回すには、手順を全部スクリプトにして、人や LLM の判断を「sink、source、sanitizer をどれにするか」だけに絞る必要がある。最初の要件(決まった手順はスクリプト、LLM は sink / source / sanitizer の選択だけ)に戻る。この節は設計案で、実装はしない。事実は、手順書の履歴(`git log --follow docs/MODEL-RUNBOOK.md`)と、リポジトリのファイルで確認した。
 
