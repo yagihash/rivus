@@ -19,8 +19,9 @@ import (
 //
 // (no line number, so that an edit above does not change the rows; the last column is the line of the @vuln /
 // @fixed / @decoy that comes before it, or "-", so that a mark that is moved to another case is a new row). TestZooMarksLock holds the file to the sources;
-// scripts/zoo-loosened-check.sh fails a commit that adds a row without a "Zoo-Loosened:" line in its message.
-// A row that goes away (a mark that is fixed) needs nothing. To write the file again: ZOO_MARKS_UPDATE=1.
+// scripts/zoo-loosened-check.sh fails a PR whose rows (against the merge base) loosen the zoo without a "Zoo-Loosened:"
+// line in a commit message (a row added to a cell that the lock has, a row of a new cell of a kind other than @sink(none),
+// @miss and @fp), and a new @miss or @fp row that names no issue. A row that goes away (a mark that is fixed) needs nothing. To write the file again: ZOO_MARKS_UPDATE=1.
 
 const zooMarksLockPath = "bench/zoo/marks.lock"
 
@@ -183,7 +184,10 @@ func TestZooMarksRowsTool(t *testing.T) {
 	}
 }
 
-// The check of the commits (scripts/zoo-loosened-check.sh) in a temporary repository.
+// The check of the commits (scripts/zoo-loosened-check.sh) in a temporary repository: what the commits change in
+// the lock as a whole, against the merge base. The rows of a new cell of @sink(none), @miss and @fp need no approval
+// (a @miss and a @fp must name an issue), a row added to a cell that the lock already has does, and so does a row of a
+// new cell of another kind; the rows of main that a merge brings in are not "added".
 func TestZooLoosenedCheck(t *testing.T) {
 	root := filepath.Join(zooRoot(t), "..", "..")
 	script, _ := filepath.Abs(filepath.Join(root, "scripts/zoo-loosened-check.sh"))
@@ -207,82 +211,140 @@ func TestZooLoosenedCheck(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	first := ""
 	check := func(base string) error {
 		cmd := exec.Command("bash", script, base, "HEAD")
 		cmd.Dir = repo
-		cmd.Env = append(os.Environ(), "ZOO_LOCK_FIRST="+first)
 		out, err := cmd.CombinedOutput()
 		t.Logf("%s", out)
 		return err
 	}
-	run("init", "-q")
-	write("go\ta.go\tmiss\t@miss\n")
+	const approved = "\n\nZoo-Loosened: test。ユーザーの承認: 2026-01-01"
+	run("init", "-q", "-b", "main")
+	write("go\ta.go\tmiss\t@miss @ref(#1)\n")
 	run("add", ".")
 	run("commit", "-q", "-m", "base")
-	first = run("rev-parse", "HEAD") // the commit that made the file: the only one that is let off
+	first := run("rev-parse", "HEAD")
 	base := first
-	// (b) a row is added without the line: fails
-	write("go\ta.go\tmiss\t@miss\ngo\tb.go\tfp\t@fp\n")
-	run("commit", "-qam", "add a mark")
-	if check(base) == nil {
-		t.Error("a row added without Zoo-Loosened passed")
-	}
-	// with the line: passes
-	run("commit", "-q", "--amend", "-m", "add a mark\n\nZoo-Loosened: test。ユーザーの承認: 2026-01-01")
+	reset := func(to string) { run("reset", "-q", "--hard", to) }
+	// a new cell of @sink(none): nothing is needed
+	write("go\ta.go\tmiss\t@miss @ref(#1)\ngo\tb.go\tsink-none\t@sink(none)\n")
+	run("commit", "-qam", "a new cell of @sink(none)")
 	if err := check(base); err != nil {
-		t.Errorf("a row added with Zoo-Loosened failed: %v", err)
+		t.Errorf("the row of a new cell of @sink(none) failed: %v", err)
 	}
+	reset(base)
+	// a new cell of @fp that names an issue: nothing is needed. Without @ref it fails, with or without the line.
+	write("go\ta.go\tmiss\t@miss @ref(#1)\ngo\tb.go\tfp\t@fp @ref(#2)\n")
+	run("commit", "-qam", "a new cell of @fp")
+	if err := check(base); err != nil {
+		t.Errorf("the row of a new cell of @fp with @ref failed: %v", err)
+	}
+	reset(base)
+	write("go\ta.go\tmiss\t@miss @ref(#1)\ngo\tb.go\tfp\t@fp\n")
+	run("commit", "-qam", "a new cell of @fp without the issue"+approved)
+	if check(base) == nil {
+		t.Error("a new @fp row without @ref passed")
+	}
+	reset(base)
+	write("go\ta.go\tmiss\t@miss @ref(#1)\ngo\tb.go\tmiss\t@miss\n")
+	run("commit", "-qam", "a new cell of @miss without the issue")
+	if check(base) == nil {
+		t.Error("a new @miss row without @ref passed")
+	}
+	reset(base)
+	// a new cell of another kind (@noisy): fails without the line, passes with it
+	write("go\ta.go\tmiss\t@miss @ref(#1)\ngo\tb.go\tnoisy\t@noisy\n")
+	run("commit", "-qam", "a new cell of @noisy")
+	if check(base) == nil {
+		t.Error("the row of a new cell of @noisy passed without Zoo-Loosened")
+	}
+	run("commit", "-q", "--amend", "-m", "a new cell of @noisy"+approved)
+	if err := check(base); err != nil {
+		t.Errorf("the row of a new cell of @noisy with Zoo-Loosened failed: %v", err)
+	}
+	reset(base)
+	// a row added to a cell that the lock already has (a mark added, or a mark changed): fails without the line
+	write("go\ta.go\tmiss\t@miss @ref(#1)\ngo\ta.go\tsink-none\t@sink(none)\n")
+	run("commit", "-qam", "a mark added to an existing cell")
+	if check(base) == nil {
+		t.Error("a row added to an existing cell passed without Zoo-Loosened")
+	}
+	run("commit", "-q", "--amend", "-m", "a mark added to an existing cell"+approved)
+	if err := check(base); err != nil {
+		t.Errorf("a row added to an existing cell with Zoo-Loosened failed: %v", err)
+	}
+	reset(base)
+	write("go\ta.go\tmiss\t@miss(depth_limit) @ref(#1)\n")
+	run("commit", "-qam", "a mark of an existing cell changed")
+	if check(base) == nil {
+		t.Error("a mark of an existing cell that was changed passed without Zoo-Loosened")
+	}
+	reset(base)
+	// a wrong form of the line (no approval date) fails
+	write("go\ta.go\tmiss\t@miss @ref(#1)\ngo\ta.go\tsink-none\t@sink(none)\n")
+	run("commit", "-qam", "add\n\nZoo-Loosened: no date")
+	if check(base) == nil {
+		t.Error("a Zoo-Loosened line without the approval date passed")
+	}
+	reset(base)
+	// the rows that main brings in with a merge are not "added" (main checked them): passes with nothing
+	run("checkout", "-q", "-b", "feat")
+	write("go\ta.go\tmiss\t@miss @ref(#1)\ngo\tb.go\tsink-none\t@sink(none)\n")
+	run("commit", "-qam", "a new cell on the branch")
+	run("checkout", "-q", "main")
+	write("go\ta.go\tmiss\t@miss @ref(#1)\ngo\tc.go\tnoisy\t@noisy\n")
+	run("commit", "-qam", "main adds a @noisy row"+approved)
+	mainTip := run("rev-parse", "HEAD")
+	run("checkout", "-q", "feat")
+	// both branches edited the end of the file: the merge stops, and the rows of the two are put together by hand
+	merge := exec.Command("git", "merge", "-q", "--no-ff", "--no-commit", "main")
+	merge.Dir = repo
+	_, _ = merge.CombinedOutput()
+	write("go\ta.go\tmiss\t@miss @ref(#1)\ngo\tb.go\tsink-none\t@sink(none)\ngo\tc.go\tnoisy\t@noisy\n")
+	run("add", ".")
+	run("commit", "-qm", "merge main")
+	if err := check(mainTip); err != nil {
+		t.Errorf("a merge of main failed: %v", err)
+	}
+	run("checkout", "-q", "main")
+	reset(first)
 	// CI-1: delete the file in one commit and make it again with a new row in the next one: fails
-	base = run("rev-parse", "HEAD")
+	write("go\ta.go\tmiss\t@miss @ref(#1)\n")
 	run("rm", "-q", "bench/zoo/marks.lock")
 	run("commit", "-qm", "delete the lock")
-	write("go\ta.go\tmiss\t@miss\ngo\tb.go\tfp\t@fp\ngo\tc.go\tfp\t@fp\n")
+	write("go\ta.go\tmiss\t@miss @ref(#1)\ngo\tb.go\tsink-none\t@sink(none)\n")
 	run("add", ".")
 	run("commit", "-qm", "make it again")
 	if check(base) == nil {
 		t.Error("delete and make again passed")
 	}
-	// a wrong form of the line (no approval date) fails
-	run("reset", "-q", "--hard", base)
-	write("go\ta.go\tmiss\t@miss\ngo\tb.go\tfp\t@fp\ngo\tc.go\tfp\t@fp\n")
-	run("commit", "-qam", "add\n\nZoo-Loosened: no date")
-	if check(base) == nil {
-		t.Error("a Zoo-Loosened line without the approval date passed")
-	}
-	run("reset", "-q", "--hard", base)
+	reset(first)
 	// a base that is not usable fails
 	if check("0000000000000000000000000000000000000000") == nil {
 		t.Error("an unusable base passed")
 	}
-	// (c) a row is removed: passes with nothing
-	base = run("rev-parse", "HEAD")
-	write("go\ta.go\tmiss\t@miss\n")
+	// a row is removed: passes with nothing
+	write("")
 	run("commit", "-qam", "fix a mark")
 	if err := check(base); err != nil {
 		t.Errorf("a removed row failed: %v", err)
 	}
 	// ZOO-1: a column is added. Only the columns that both files have are compared.
-	run("reset", "-q", "--hard", first)
-	base = first
-	write("go\ta.go\tmiss\t@miss\n")
-	run("commit", "-qam", "back to the base", "--allow-empty")
-	base = run("rev-parse", "HEAD")
-	// 4 -> 5 columns, the same content: passes
-	write("go\ta.go\tmiss\t@miss\tfunc vuln()\n")
+	reset(first)
+	write("go\ta.go\tmiss\t@miss @ref(#1)\tfunc vuln()\n")
 	run("commit", "-qam", "add a column")
 	if err := check(base); err != nil {
 		t.Errorf("a column added with the same rows failed: %v", err)
 	}
-	// 4 -> 5 columns and a row more: fails
-	run("reset", "-q", "--hard", base)
-	write("go\ta.go\tmiss\t@miss\tfunc vuln()\ngo\tb.go\tfp\t@fp\tfunc f()\n")
+	// a column and a row of a new @noisy cell at once: the row needs the line
+	reset(first)
+	write("go\ta.go\tmiss\t@miss @ref(#1)\tfunc vuln()\ngo\tb.go\tnoisy\t@noisy\tfunc f()\n")
 	run("commit", "-qam", "add a column and a row")
 	if check(base) == nil {
-		t.Error("a column and a row added at once passed")
+		t.Error("a column and a @noisy row added at once passed")
 	}
-	// 5 columns: a @sink(none) moved to another case (the 5th column differs): fails
-	run("reset", "-q", "--hard", base)
+	// 5 columns: a @sink(none) moved to another case (the 5th column differs): the cell is old, so it fails
+	reset(first)
 	write("go\ta.go\tsink-none\t@sink(none)\tfunc vuln()\n")
 	run("commit", "-qam", "five columns")
 	five := run("rev-parse", "HEAD")
@@ -292,11 +354,10 @@ func TestZooLoosenedCheck(t *testing.T) {
 		t.Error("a mark moved to another case passed")
 	}
 	// 5 -> 4 columns: fails
-	run("reset", "-q", "--hard", five)
+	reset(five)
 	write("go\ta.go\tsink-none\t@sink(none)\n")
 	run("commit", "-qam", "four columns")
 	if check(five) == nil {
 		t.Error("a column taken away passed")
 	}
-
 }
