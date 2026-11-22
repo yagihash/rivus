@@ -127,6 +127,22 @@ rivus query -site <ID> ./...           # sites の 1 件から始める
 
 `index` と `graph` の詳しい使い方は [docs/GRAPH.md](docs/GRAPH.md) にあります。
 
+### 自分のプロジェクトで、どの依存が重いかの表を得る
+
+依存を含む大きいプロジェクトで、`analyze` が時間切れや収束しないで終わるとき、どの依存が重いかを、パッケージ名と数字だけの表で出せます。
+
+```sh
+rivus analyze -pass-stats -pass-stats-top 0 -pass-stats-sort time -timeout 600s -detail summary > out.json
+jq -r '["package","dep","functions","reanalyses","spent_ms","summary_elems"], (.stats.packages_top[] | [.package, (.dep // false), .functions, .reanalyses, .spent_ms, .summary_elems]) | @tsv' out.json > table.tsv
+jq '.stats | {timed_out, converged, largest_scc, largest_scc_packages}' out.json
+```
+
+- `-pass-stats-top 0` は全パッケージ、`-pass-stats-sort time` は、かかった時間の順です(`time` は時計なので、実行ごとに少し違います。時計に依らない並びは `reanalyses`(既定)、`functions`、`elems`)。
+- 表の列は、`dep`(依存のパッケージか)、`functions`(関数の数)、`reanalyses`(関数の解析の回数)、`spent_ms`(かかった時間)、`summary_elems`(要約の要素の数)です。
+- `largest_scc_packages` は、互いに呼び合う関数の最大のかたまり(`largest_scc`)が、どのパッケージの関数でできているかの上位 10 件です。かたまりの大きさが解析の重さを決めるので、ここに出る依存が、モデルで切る候補です。
+- `stats.timed_out` が true でも、途中までの内訳が出ます。`packages_top` と `largest_summary` は、時間切れまでに解析した分で、`largest_scc_packages` は呼び出しグラフから解析の前に作るので、解析が始まる前に切れても出ます。`-timeout` は、互いに呼び合う大きいかたまりの中でも、関数ごとに見ます(1 つの関数の解析の中は `-func-timeout`)。
+- 共有してよいのは、この表(パッケージ名と数字)だけです。コードや経路(`-detail summary` で省いています)は共有しないでください。パッケージ名が非公開のものなら、共有の前に確認してください。
+
 ### 言語ごとの準備
 
 | 言語 | どう読むか | 必要なもの |
