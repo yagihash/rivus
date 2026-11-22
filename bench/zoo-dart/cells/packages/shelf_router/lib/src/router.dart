@@ -5,7 +5,15 @@ import 'package:shelf/shelf.dart';
 class Router {
   final List<(String, Function)> _routes = [];
 
-  void get(String route, Function handler) => _routes.add((route, handler));
+  void add(String verb, String route, Function handler) => _routes.add((route, handler));
+  void all(String route, Function handler) => add('ALL', route, handler);
+  void get(String route, Function handler) => add('GET', route, handler);
+  void head(String route, Function handler) => add('HEAD', route, handler);
+  void post(String route, Function handler) => add('POST', route, handler);
+  void put(String route, Function handler) => add('PUT', route, handler);
+  void delete(String route, Function handler) => add('DELETE', route, handler);
+  void options(String route, Function handler) => add('OPTIONS', route, handler);
+  void patch(String route, Function handler) => add('PATCH', route, handler);
 
   Future<Response> call(Request request) async {
     for (final (route, handler) in _routes) {
