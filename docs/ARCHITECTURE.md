@@ -199,7 +199,7 @@ call dst? callee args flags
 
 ### 2.6 ストリーム形式
 
-JSON Lines。**先頭行は必ず `{"schema_version": "rivus.ir/0"}`**。以降は 1 行 1 レコードで、`kind` が種類を言う。種類は `func`（関数）、`implementations`、`global`、`type`、`type_alias`、`text`、`call_text`、`func_text`、`load_error`、`tests_skipped`、`caller_marks`（`internal/ir/stream.go`）。
+JSON Lines。**先頭行は必ず `{"schema_version": "rivus.ir/0"}`**。以降は 1 行 1 レコードで、`kind` が種類を示す。種類は `func`（関数）、`implementations`、`global`、`type`、`type_alias`、`text`、`call_text`、`func_text`、`load_error`、`tests_skipped`、`caller_marks`（`internal/ir/stream.go`）。
 `rivus extract` で、Go の IR を単独で出せる。`-text` で人間向けの形、`-func` で関数を絞り、`-all` で依存も出す。`-implementations`、`-texts`、`-check` もある（`cmd/rivus/extract.go`）。
 `-lang rust` は、Rust の extractor が出すストリームをそのまま出す（既定ではコンテナの中で動かす。15 節）。`-lang` は `go` か `rust` で、Dart の extractor は `rivus extract` からは呼べない（`rivus-dart` を直接動かす）。
 人間が読んで検証できることを一級の要件とする。
@@ -322,7 +322,7 @@ Go の extractor は、コアと同じプロセスで、`ir.Program` と `ir.Tex
 **モジュール境界:** 複数パッケージ（Dart の melos、Rust の workspace）を 1 回の実行で出し、`Func.Dep` で、解析の対象と依存を分ける。依存は、ソースがあるものだけを出す。
 **バージョン:** ストリームの先頭の `schema_version`（今は `rivus.ir/0`）が違えば、読まずに止める（`internal/ir/stream.go`）。Dart の extractor は、自分の版を `--version` で返す（`rivus_dart rivus.ir/0`）。コアは、グラフの鍵に、extractor の実行ファイルのハッシュと、Dart ではこの版を入れる（`cmd/rivus/graphkey.go`）。
 **失敗:** 読めなかったもの（解決できないパッケージ、生成コードがない）は、`load_error` として出す。コアは `missing_source` の不確実性にする。
-**読まなかったもの:** ビルドが出荷しないもの（テスト、example、開発用の依存）を読まなかったときは、`tests_skipped` レコードで言う（ADR-062）。呼び元が全部読まれているかは、`caller_marks` と `Func.Private` / `Func.ExternalEntry` で言う（13 節）。
+**読まなかったもの:** ビルドが出荷しないもの（テスト、example、開発用の依存）を読まなかったときは、`tests_skipped` レコードで示す（ADR-062）。呼び元が全部読まれているかは、`caller_marks` と `Func.Private` / `Func.ExternalEntry` で示す（13 節）。
 
 2.7.7 のレビュー待ちだった項目と、問い合わせの案、実測は、履歴・計画は [history/ARCHITECTURE-plans.md](history/ARCHITECTURE-plans.md) の 2.7.7 節にある。
 
@@ -452,26 +452,26 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 | `stored_data_boundary` | target | データストアに出し入れする呼び出し。その先は追わない |
 | `missing_source` | target | ワークフロー前提（`go generate` / `build_runner` 未実行）に由来 |
 | `dynamic_dispatch` | 候補 1 件以上: mixed／候補 0 件: rivus | 言語機能として呼び先が決まらないが、候補の絞り込み精度（VTA など）は rivus の改善余地がある。候補が 0 件なのは、実装が読み込んだコードの外にあるときで、モデルを書けば減る（rivus）。detail が `expansion_limit` のものは、`match: implementations` の展開を上限で止めた記録（5.4） |
-| `assumed_call` | mixed | 呼ばれるところが見えないクロージャ（渡す、保存する、返す）を、作った場所で、呼ばれるものとして当てた（捕獲した値を、クロージャの要約に当てる。ADR-059）。付くのは、要約が捕獲した値に依る効果を持つクロージャだけ。throw と結果は当てず、そのとき detail に言う。1 度も呼ばれないクロージャの流れも、finding になりうる（過検出） |
+| `assumed_call` | mixed | 呼ばれるところが見えないクロージャ（渡す、保存する、返す）を、作った場所で、呼ばれるものとして当てた（捕獲した値を、クロージャの要約に当てる。ADR-059）。付くのは、要約が捕獲した値に依る効果を持つクロージャだけ。throw と結果は当てず、そのとき detail に書く。1 度も呼ばれないクロージャの流れも、finding になりうる（過検出） |
 | `unresolved_callee` | mixed | 関数値は実行時に決まるが、生成箇所を追う型フロー解析で候補を絞れる |
 | `concurrency` | mixed | 実行順序に依存するが、channel を単純なキューとしてモデル化すれば追える範囲が広がる |
 | `unmodeled_library_call` | rivus | モデルを書けば減る |
 | `dependency_body_unread` | rivus | モデルのあるインターフェースのメソッドの動的な呼び出しで、候補に本体のある依存の関数（プロジェクトの外）があったが、読まなかった（ADR-075）。依存が値を包んで渡した先の、自前の実装の中の sink は、辿っていない。`dynamic_dispatch` と並べて付き、候補に、読まなかった依存の関数を並べる |
-| `model_approximation` | rivus | 流れのモデルが、自分で「近似」と言っている（`approximate` の文）。モデルの限界（ADR-067） |
+| `model_approximation` | rivus | 流れのモデルが、自分で「近似」と宣言している（`approximate` の文）。モデルの限界（ADR-067） |
 | `numeric_stop` | rivus | source のデータが数値や bool になり、それ以降は追わない（既定。`-numeric-taint` で追う）。source の種類（シンボルとラベル）ごとに 1 件で、最初の場所と、起きた関数の一覧（10 件まで）を持つ。サマリを通って止まる分（呼び先の中の、引数の記号的なデータの止まり）は、記録されない |
 | `unsupported_construct` | rivus | extractor が下げられなかった構文（IR の `unsupported`）。その場所で何が起きるかは、解析に入っていない。`missing_source` ではない（対象のコードが足りないのではなく、rivus が読めなかった） |
 | `container_element_imprecision` | rivus | 結論に影響した場合のみ記録（ノイズ防止） |
-| `depth_limit` | rivus | 打ち切り。detail が理由を言う（`guard_limit`、`candidate_limit`、`caller_depth_limit`、`func_timeout` など）。例外: detail が `path_steps_omitted:` のものは、**解析の打ち切りではなく、表示の省略**（流れは見た。200 段を超える経路の、真ん中の段を見せていない。省いた段の不確実性・モデル・到達性は finding に入っている）。ただし、source までさかのぼる途中の打ち切り（`the path was followed back for ...`）は、その先の段を見ていない |
+| `depth_limit` | rivus | 打ち切り。detail が理由を示す（`guard_limit`、`candidate_limit`、`caller_depth_limit`、`func_timeout` など）。例外: detail が `path_steps_omitted:` のものは、**解析の打ち切りではなく、表示の省略**（流れは見た。200 段を超える経路の、真ん中の段を見せていない。省いた段の不確実性・モデル・到達性は finding に入っている）。ただし、source までさかのぼる途中の打ち切り（`the path was followed back for ...`）は、その先の段を見ていない |
 | `recursion_approximation` | rivus | |
 | `field_imprecision` | rivus | 欄を名指す sink に、その欄にあるとは言えない汚染が届いた（14 節）。detail は `whole_value`、`path_limit`、`element`、`opaque_callee` |
 | `field_unresolved` | rivus | sink が名指した欄が、プログラムにない（綴りの誤りなど）。sink を全体として扱った（14 節） |
-| `global_holds_nothing` | rivus | 読み戻す人がいないとルールが言う変数（ADR-056）に、汚染を書いた関数を、変数ごとに 1 件記録する（`internal/taint/heldnothing.go`） |
+| `global_holds_nothing` | rivus | 読み戻す人がいないとルールが宣言する変数（ADR-056）に、汚染を書いた関数を、変数ごとに 1 件記録する（`internal/taint/heldnothing.go`） |
 
 `mixed` は「言語機能由来で、かつ rivus の精度向上でも減らせる」もの。
 集計では `target` / `rivus` / `mixed` を**別々に**出し、`mixed` を `rivus` に含めない（投資で減らせる量を過大に見積もらないため）。
 `mixed` の割り当てが暫定だった時期の見直し予定は、[history/ARCHITECTURE-plans.md](history/ARCHITECTURE-plans.md) の 4.4 の移動分にある。
 
-`literal` は kind ではない。値が定数だと分かったことは、由来追跡（5.6）の確度（`certainty`。`internal/taint/provenance.go`）で言う。
+`literal` は kind ではない。値が定数だと分かったことは、由来追跡（5.6）の確度（`certainty`。`internal/taint/provenance.go`）で示す。
 
 ### 4.5 出力
 
@@ -650,7 +650,7 @@ rivus models coverage ./...
 
 - **依存の本体は、既定で読む。** 標準ライブラリは読まず、モデルで扱う。依存のソースを読むと、依存の中への呼び出しを推測でなく追えるので、メモリは増える。`-no-deps` で読まなくなり、そのとき依存への呼び出しは、すべてモデルか `unmodeled_library_call` になる（`cmd/rivus/common.go` のフラグの説明。メモリの数字は 16 節）
 - Dart は、プロジェクトの外の依存を、頼まれたものだけ読む（`-allow-deps-under`。`package_config.json` は信用しない）。Rust の依存の取得は、既定でコンテナの中（15 節）
-- モデルのあるインタフェースのメソッドの動的な呼び出しで、候補に本体のある依存の関数があるとき、本体は読まず、`dependency_body_unread` で言う（ADR-075）
+- モデルのあるインタフェースのメソッドの動的な呼び出しで、候補に本体のある依存の関数があるとき、本体は読まず、`dependency_body_unread` で示す（ADR-075）
 - 組み込みモデルの範囲は、標準ライブラリと、代わりのないパッケージまで（ADR-044、063、077。README と `docs/GCP-MODELS.md`）。ユーザーは、ルールを足せる
 
 ### 5.6 値依存サニタイズと由来追跡
@@ -665,14 +665,14 @@ rivus models coverage ./...
 
 由来追跡（provenance）は、値依存ノードの引数について、呼び出し側で何が渡されているかを後ろ向きに式のまま提示する。
 辿れなくなったところで terminal kind を記録する。
-値を言い切ってよいのは、定数そのものか、定数の単純なコピー(変数・フィールドへの格納と読み出し、呼び出しの結果が返す定数)だけ。途中に演算(否定、算術、比較、変換)があれば、オペランドを別々にたどって定数を畳み、畳んだ値を言う。畳めなければ `unresolved`(オペランドの値を、結果の値として言うことはしない)。
+値を言い切ってよいのは、定数そのものか、定数の単純なコピー(変数・フィールドへの格納と読み出し、呼び出しの結果が返す定数)だけ。途中に演算(否定、算術、比較、変換)があれば、オペランドを別々にたどって定数を畳み、畳んだ値を報告する。畳めなければ `unresolved`(オペランドの値を、結果の値として言うことはしない)。
 `zero_value` は、その場所に届く書き込みが(フィールドへの格納、丸ごとの代入、関数の結果、ポインタ越しのコピー、配列の要素のコピー、アドレスを取られた変数のどれも)1 つもないと分かるときだけ(ADR-078)。
 
 ---
 
 ## 6. エントリポイント
 
-コールグラフの根（プログラムの起点）は、extractor が `Func.Entry` で言う。外から来る値の入口は、ルールの `kind: param` の source で書く。
+コールグラフの根（プログラムの起点）は、extractor が `Func.Entry` で示す。外から来る値の入口は、ルールの `kind: param` の source で書く。
 `exported_api_param` を定義した以上、「どこから先が外部か」を明示する必要がある。
 
 | 対象 | 起点（`Func.Entry`） |
@@ -682,7 +682,7 @@ rivus models coverage ./...
 | Rust | extractor が決めた `main`（`extractor/rust/src/main.rs`） |
 
 - **ユーザー追加指定:** ルールの source に `kind: param` を書く。シンボルの関数の引数（`params`、`recv`）を、フレームワークが渡す入力として宣言する。`marker`（インタフェースのメソッド名の glob。生成コードのサービス）と `extends` / `with_param_type`（継承の階層を持つ言語のサブクラス）は、複数の関数をまとめて宣言する（`internal/model/model.go`）。ルールファイルに `entrypoints:` という節はない
-- 起点から届くかは、検出結果の `reachability` が言う（4.5）。フレームワークが呼ぶメソッド（外の型のメソッドを上書きしたもの。`Func.Overrides`）は、`from_framework_callback`（ADR-073）
+- 起点から届くかは、検出結果の `reachability` が示す（4.5）。フレームワークが呼ぶメソッド（外の型のメソッドを上書きしたもの。`Func.Overrides`）は、`from_framework_callback`（ADR-073）
 - ライブラリの公開関数の引数は `exported_api_param` の起点になる
 
 ---
@@ -740,8 +740,8 @@ rivus models coverage ./...
 - **保存（`internal/graphdb`）:** 1 つの SQLite ファイル（純 Go の `modernc.org/sqlite`。cgo なし）。表は `meta`、`files`、`funcs`、`callsites`、`edges`、`refs`（関数が値として名指される所）、`sites`（`schema.go`）。**使い捨てのキャッシュ**で、移行はしない。スキーマの版（今は 2）が違うファイルは拒み、作り直しを案内する。
 - **層:** 今あるのは構造の層（関数、呼び出し点、辺、サイト）だけ。taint の層（findings、不確実性）は、このファイルにはない（`index -taint` は、JSON の index に出す）。`meta` が、どの層があるかを記録するので、層がないことを「findings がない」と読み違えない。
 - **書き先:** `-graph <file>`、なければユーザーのキャッシュ（`os.UserCacheDir()/rivus/<-C の絶対パスのハッシュ>/graph.db`。`RIVUS_CACHE_DIR` で変えられる）。解析対象のディレクトリには作らない（`cmd/rivus/graph.go`）。
-- **鍵（source hash。`internal/graphdb/key.go`、`cmd/rivus/graphkey.go`）:** 設定（フラグ、ルール、rivus の版、環境、ツールチェイン）、読んだファイルの内容のハッシュ、ファイル一覧のハッシュ（新しく読めるようになったファイルに気づくため）で作る。疑わしいときは、いつも「作り直す」側に倒す。偽の「新しい」は変更を見逃し、偽の「古い」は index の時間だけで済むため。`graph info -C` が、今のソースと照合して `fresh` を返す。
-- **問い合わせ（`internal/graphq`）:** `callers`、`callees`、`path`、`impls`、`dispatchers`。1 関数ずつ、ファイルから隣を引くので、グラフを全部メモリに持たない。必ず、深さと件数に上限を持つ（深さは既定 1、最大 6。件数は既定 50。経路は既定 5 本）。動的な呼び出しは、候補が 3 以下なら展開し、それより多いものは境界（フロンティア）として見せ、20 を超えるもの（ハブ）は `path` に使わない（`hub_skipped`）。**切ったものと、絞ったもの（`--via`、`--avoid`、`--only-impl`）は、必ず出力に言う。**
+- **鍵（source hash。`internal/graphdb/key.go`、`cmd/rivus/graphkey.go`）:** 設定（フラグ、ルール、rivus の版、環境、ツールチェイン）、読んだファイルの内容のハッシュ、ファイル一覧のハッシュ（新しく読めるようになったファイルに気づくため）で作る。疑わしいときは、いつも「作り直す」ほうを選ぶ。偽の「新しい」は変更を見逃し、偽の「古い」は index の時間だけで済むため。`graph info -C` が、今のソースと照合して `fresh` を返す。
+- **問い合わせ（`internal/graphq`）:** `callers`、`callees`、`path`、`impls`、`dispatchers`。1 関数ずつ、ファイルから隣を引くので、グラフを全部メモリに持たない。必ず、深さと件数に上限を持つ（深さは既定 1、最大 6。件数は既定 50。経路は既定 5 本）。動的な呼び出しは、候補が 3 以下なら展開し、それより多いものは境界（フロンティア）として見せ、20 を超えるもの（ハブ）は `path` に使わない（`hub_skipped`）。**切ったものと、絞ったもの（`--via`、`--avoid`、`--only-impl`）は、必ず出力に書く。**
 
 ## 13. 関数値の呼び出しの候補（`internal/valuecalls`）
 
@@ -752,7 +752,7 @@ rivus models coverage ./...
 - **引数を通って届く関数:** どの候補が呼ばれるかは、呼び元に依る。候補は、通った引数の番号を持ち（`ValueCand.Param`）、呼び元が、渡した関数以外を通る流れを外す。
 - **絞り込み（`narrow.go`）:** Rust の `Fn::call` / `FnMut::call_mut` / `FnOnce::call_once` の候補は、extractor が「型の合うクロージャすべて」で作る。ここでは、**受け手に流れ込む関数に絞る**（ADR-079、[DESIGN-capture.md](DESIGN-capture.md)）。
   - 規則は「**全部辿れたときだけ絞る**」。絞ると流れを失いうるが、作り出すことはない。辿れない物（規則のない命令、構造体の欄、呼び出しの結果、グローバル、トレイトオブジェクト、呼び元が全部は分からない引数、上限）に当たったら、候補を全部残す。
-  - 引数を辿るときは、呼び元が全部読まれていることが条件。`Func.Private`（`pub` がない）か、**閉じた世界**（起点があり、外からシンボルで呼べる関数がなく、extractor が `caller_marks` を付けた）。閉じた世界は前提を 1 つ入れるので、絞った不確実性に `basis: closed_world_entry` を付けて言う（「起点のあるプログラムとして読んだので、外からの呼び出しは数えていない」）。絞る前の候補数は `narrowed_from`。
+  - 引数を辿るときは、呼び元が全部読まれていることが条件。`Func.Private`（`pub` がない）か、**閉じた世界**（起点があり、外からシンボルで呼べる関数がなく、extractor が `caller_marks` を付けた）。閉じた世界は前提を 1 つ入れるので、絞った不確実性に `basis: closed_world_entry` を付けて示す（「起点のあるプログラムとして読んだので、外からの呼び出しは数えていない」）。絞る前の候補数は `narrowed_from`。
   - Dart の動的な呼び出しへの同じ絞り込みは、まだない（設計だけ）。
 
 ## 14. `parts`（sink が引数の欄を名指す）

@@ -25,11 +25,11 @@ void vuln() {
   sinkCmd('run $w');
 }
 ```
-`rivus index` のあと `rivus graph path --from vuln --to Wrapper.toString`: 実際に起きる呼び出しなのに、経路なし(2026-11-22 の直し以前は `exhaustive: true` だった。今は `false`)。
+`rivus index` のあと `rivus graph path --from vuln --to Wrapper.toString`: 実際に起きる呼び出しなのに、経路なし(2026-11-22 の修正以前は `exhaustive: true` だった。今は `false`)。
 
 ## どう見つけたか
 動物園の Dart を実行して観測した呼び出しと、グラフの辺の突き合わせ(`docs/DESIGN-observed-calls.md`、`bench/zoo-dart/observed/`)。`no_ref` の 6 件がこの形。
 
-## 直し方の方向
-文字列補間の `toString` 呼び出しは言語の意味(脱糖は extractor の責務)なので、extractor が呼び出しとして出す(候補を広げる直し。否定のフィクスチャが要る: 補間する値の型の `toString` だけに絞る)。
+## 修正の方向
+文字列補間の `toString` 呼び出しは言語の意味(脱糖は extractor の責務)なので、extractor が呼び出しとして出す(候補を広げる修正。否定のフィクスチャが要る: 補間する値の型の `toString` だけに絞る)。
 

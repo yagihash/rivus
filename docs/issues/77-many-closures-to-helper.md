@@ -30,7 +30,7 @@ void c0() { final a = source(); transform(a, (x) { sink(x); return x + '0'; }); 
 ## `@miss` / `@fp`
 `bench/dart-curated`: `through`(黙った)、`ret-clean` と `tear-drop`(`@fp`)。`nest-a/b` と `bound-prefix` も `transform` が未解決で、捕獲(別 issue の `CAP`)と重なる。`bench/MISSES.md` の型 `OVERFLOW`。
 
-## 落ちる場所の見立て
+## 落ちる場所の推定
 `internal/valuecalls/valuecalls.go:124`: `if len(found) == 0 || len(found) > most`(`most = 8`)で候補を捨てる → `internal/taint/calls.go` の `callBody` で `len(fns) == 0` → `s.unmodeled`(引数を結果へ流すだけ)。
 ADR-047(案 2)で直る見込み(ヘルパーが候補を持たず、呼び元が渡したクロージャで具体化する)。それまでは、上限を超えたとき、せめてユーザーに分かる不確実性(source / sink の関数にも)を出すべき。
 
@@ -51,5 +51,5 @@ ADR-047(案 2)で直る見込み(ヘルパーが候補を持たず、呼び元�
 
 ## コメント(GitHub から移した写し)
 
-再開後の追跡(2026-11-22): 動物園の `F/clos/helper-overflow` の `@miss` の痕跡が `recursion_approximation` になっていた理由は、**動物園全体の解析が収束していない(`stats.converged: false`、12 パス、`state/global_chain` の 2 関数が不安定)ことで出る、全体の `recursion_approximation`** を、痕跡の判定が拾っていたため。そのセルだけを解析すると、`converged: true` で、不確実性は `depth_limit`(`candidate_limit: the function value may be any of 12 functions, more than the 8 ...`)、`unresolved_callee`、`dynamic_dispatch`。**本当の理由は `depth_limit(candidate_limit)`**で、この Issue の見立て(候補が 8 を超えると捨てる)と合う。動物園の注釈の kind の付け替えは、別に扱う。
+再開後の追跡(2026-11-22): 動物園の `F/clos/helper-overflow` の `@miss` の痕跡が `recursion_approximation` になっていた理由は、**動物園全体の解析が収束していない(`stats.converged: false`、12 パス、`state/global_chain` の 2 関数が不安定)ことで出る、全体の `recursion_approximation`** を、痕跡の判定が拾っていたため。そのセルだけを解析すると、`converged: true` で、不確実性は `depth_limit`(`candidate_limit: the function value may be any of 12 functions, more than the 8 ...`)、`unresolved_callee`、`dynamic_dispatch`。**本当の理由は `depth_limit(candidate_limit)`**で、この Issue の推定(候補が 8 を超えると捨てる)と合う。動物園の注釈の kind の付け替えは、別に扱う。
 

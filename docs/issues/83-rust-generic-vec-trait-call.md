@@ -27,7 +27,7 @@ pub fn e() {
 ## `@miss`
 `bench/rust-curated`: `across-each`(弱い痕跡: 無関係な `numeric_stop`)。`bench/MISSES.md` の型 `GEN-DYN`。
 
-## 落ちる場所の見立て(確かめた)
+## 落ちる場所の推定(確かめた)
 `T` に対する `IntoIterator::into_iter` / `Iterator::next` は、IR で `call dynamic`(具体的な型では `call static`)。dynamic では receiver が `Args[0]` で、`CallArgs()`(`internal/sg/sg.go:139`)は `Args[1:]`。モデル(`internal/model/builtin/rust-std.yaml`: `from: args`)は `selectVals`(`internal/taint/calls.go`)で `cc.args`(receiver を含まない)になるので、イテレータ(receiver)の中身が結果に流れない。
-確かめた: `-rules` で `std::iter::IntoIterator::into_iter` と `std::iter::Iterator::next` に `flows: [{from: recv, to: result}]` を足すと、上の再現で source → sink が出る(足さないと出ない)。直し方の候補: モデルの `from: args` が、dynamic のときも receiver を含むようにする(`args` の意味を、static と dynamic で揃える)。ADR-047(案 2)では直らない。
+確かめた: `-rules` で `std::iter::IntoIterator::into_iter` と `std::iter::Iterator::next` に `flows: [{from: recv, to: result}]` を足すと、上の再現で source → sink が出る(足さないと出ない)。修正方法の候補: モデルの `from: args` が、dynamic のときも receiver を含むようにする(`args` の意味を、static と dynamic で揃える)。ADR-047(案 2)では直らない。
 

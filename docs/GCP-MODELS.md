@@ -34,7 +34,7 @@ Google Cloud は、何を「外からの入力」と数えるかが製品ごと�
 | 手書きのクライアント | `Client.Subscription(id)` → `Subscription.Receive`、`Client.Topic(id)` → `Topic.Publish` | `Client.Subscriber(nameOrID)` → `Subscriber.Receive`、`Client.Publisher(nameOrID)` → `Publisher.Publish` |
 | 生成されたクライアント(`apiv1`) | `PublisherClient.Publish`、`SubscriberClient.Pull` / `StreamingPull` / `Acknowledge`(データの面) | `TopicAdminClient.Publish`、`SubscriptionAdminClient.Pull` / `StreamingPull` / `Acknowledge`(管理のクライアントが、データの面も持つ。`PublisherClient` と `SubscriberClient` はない) |
 | メッセージの型 | `pubsub.Message` は、ルートのモジュール `cloud.google.com/go` の `internal/pubsub.Message` の**別名** | 同じ型の別名 |
-| **IR が言う型の名前** | `*cloud.google.com/go/pubsub.Message` | `*cloud.google.com/go/pubsub/v2.Message` |
+| **IR が示す型の名前** | `*cloud.google.com/go/pubsub.Message` | `*cloud.google.com/go/pubsub/v2.Message` |
 | 生成された protobuf の型 | `cloud.google.com/go/pubsub/apiv1/pubsubpb` | `cloud.google.com/go/pubsub/v2/apiv1/pubsubpb`(別の型) |
 
 * **別名は、使った名前で IR に出る**が、照合は別名をほどいて行う(ADR-083)。別名の名前(`.../pubsub.Message`)でも、実体の名前(`.../internal/pubsub.Message`)でも当たる。v1 と v2 は別の型なので、`param_type` の行は別の 2 行のまま。メソッドのシンボルは実体の型の側(別名の名前では当たらない)。
@@ -114,4 +114,4 @@ ID トークンの検証と、復号したクレーム。ラベルを決める(�
 | `URewrite` | `Statement` を値で、読まない関数に渡して、結果を使う | 鳴る。`field_imprecision`(`whole_value`) |
 | `UOpaque`、`UOpaqueAssign` | `Params` だけが汚れた `Statement` の**アドレス**を、読まない関数に渡し、`Statement` を値で `Query` に渡す。**実行では、値が SQL に届く** | 鳴る。`field_imprecision`(`opaque_callee`)。もとは黙る見逃しだった(ADR-084: 印は変数に付き、値のコピーと要約を通して運ぶ)。同じ 8 形が `testdata/go/cases/fieldsink` にある |
 
-見逃しの確かめ方: 小さいプロジェクトで、依存なしに、同じ形を書いた(`testdata/go/cases/fieldsink` の `ValAfterPtr*`、`ValRewrite`、おとり 2 つ)。今は、ポインタを渡して値で sink = `opaque_callee`、値を渡して値で返す = `whole_value`、おとり(読まない関数を呼ばない、別の変数に渡す)= 鳴らない。
+見逃しの確認方法: 小さいプロジェクトで、依存なしに、同じ形を書いた(`testdata/go/cases/fieldsink` の `ValAfterPtr*`、`ValRewrite`、おとり 2 つ)。今は、ポインタを渡して値で sink = `opaque_callee`、値を渡して値で返す = `whole_value`、おとり(読まない関数を呼ばない、別の変数に渡す)= 鳴らない。

@@ -8,7 +8,7 @@
 
 ## 問題
 
-取得の段階(`cargo fetch --locked`)のコンテナは、Docker の既定の bridge に付くので、**どこへでも出られる**: インターネット、利用者の LAN、`host.docker.internal`(Docker Desktop)、クラウドのメタデータのアドレス、同じホストの別のコンテナ。取得で動くのは cargo だけで、対象の設定は読ませない(済み)。`Cargo.lock` の取得元は、既定では crates.io だけ(済み。git の依存は、ホストを問わず、`-allow-fetch-host` で許したものだけ)。残るのは次の 2 つで、どちらも**多層の守り**で塞ぐ。
+取得の段階(`cargo fetch --locked`)のコンテナは、Docker の既定の bridge に付くので、**どこへでも出られる**: インターネット、利用者の LAN、`host.docker.internal`(Docker Desktop)、クラウドのメタデータのアドレス、同じホストの別のコンテナ。取得で動くのは cargo だけで、対象の設定は読ませない(済み)。`Cargo.lock` の取得元は、既定では crates.io だけ(済み。git の依存は、ホストを問わず、`-allow-fetch-host` で許したものだけ)。残るのは次の 2 つで、どちらも**多層の防御**で塞ぐ。
 
 1. 取得元の検査をすり抜けるもの: 公開の名前が、内側のアドレスに解決される(DNS)。**リダイレクト**: 許したホストが、30x で内側のアドレスや別のホストへ飛ばす(git の smart HTTP の最初の要求、sparse レジストリ。確かめた: `TestIsolationFetchFollowsWhatTheAllowedRepositorySays`)。**サブモジュール**: cargo は git の依存を取るとき、サブモジュールも再帰的に取る。その URL は依存のリポジトリの `.gitmodules` にあり、`Cargo.lock` には出ないので、取得元の検査では見えない(同じ試験で、要求が出ることを確かめた)。
 2. cargo や、cargo が使うライブラリ(libgit2、libcurl)の、未知の穴。コードが動いたときの被害を、コンテナの外の内側へ広げない。
@@ -28,7 +28,7 @@
   - 接続の数、時間、転送量に上限。ログ(拒否した宛先)は、取得の段階の報告に出す。
 - **後始末**: 段階が終わったら、取得のコンテナ、プロキシ、ネットワークを消す(`--rm`、`network rm`。時間切れや中断でも、`rivus=rust-extractor` のラベルで消す)。
 
-## 守りの層
+## 防御の層
 
 | 層 | 何を止めるか |
 |---|---|
