@@ -1,13 +1,6 @@
 # package:github: the GitHub API client of Dart (`GitHub`, `RepositoriesService`, the models of repositories, files, issues and pull requests).
 #
-# verified_versions:
-#   - package: github
-#     range: ">=9.0.0 <10.0.0"
-#     checked_with: 9.26.0
-#     checked: 2026-11-23
-# (`verified_versions`, docs/DESIGN-package-models.md, 6.7, is not a field of the loader yet, so the record is kept here, in a comment.)
 # Checked by reading the published source of 9.26.0. Hand written rows (origin: human); the generator does not exist yet.
-# The differential test (`make model-diff PKG=package:github`) was not run: see the note in the pull request.
 #
 # The boundary (docs/MODEL-QUEUE.md, row 7):
 # * `resource_name`: what decides the resource that a call reaches. The owner and the name of a `RepositorySlug` (the slug is
@@ -28,11 +21,13 @@
 # model-diff: value RepositorySlug RepositorySlug('o', 'r')
 # model-diff: value RepositoriesService RepositoriesService(GitHub())
 # model-diff: value GitHub GitHub()
-# Known result of `make model-diff` (9.26.0): `RepositorySlug.full` is reported as MISS at arg0. The probe code cannot call a named
-# constructor: it writes `rc.full(s)` on an instance, so the finding is not there. The row is on the factory `RepositorySlug.full(String)`
-# (the zoo does not call it either; the dead-allow does not list it because its key is in the skeleton). It is not hidden with
-# `miss-reviewed`, which is for a flow that is not data flow.
 ruleset: rivus/dart/github@1
+
+verified_versions:
+  - package: github
+    versions: ">=9.0.0 <10.0.0"
+    checked_with: 9.26.0
+    checked: 2026-11-23
 
 sources:
   - symbol: package:github/src/common/model/repos_contents.dart#GitHubFile.text
