@@ -5,6 +5,7 @@ name: CI
 # something that a test reads, a build takes in, or CI itself changed. A job that is skipped passes in `ci-ok`; a job that failed or was
 # cancelled does not. So the number of shards can change without the ruleset. A push to main runs everything.
 # The runner of macOS (the sandbox, docs/DESIGN-macos-sandbox.md) runs when what the isolation is made of changes, and once a week.
+# A pull request runs the tests with -short; a push to main, the weekly run and a run by hand run all of them.
 on:
   push:
     branches: [main]
@@ -30,7 +31,7 @@ jobs:
   # Which of the jobs below have to run. It is the first job, and a job that failed here fails `ci-ok`.
   #   push (main)        everything runs, whatever the lists say (a wrong list shows there)
   #   pull_request       the files that changed, against the lists below (dorny/paths-filter)
-  #   schedule           only the macOS job; workflow_dispatch: everything
+  #   schedule           everything, without -short (once a week); workflow_dispatch: everything
   # A pull request that the action cannot judge fails here (an empty answer must not skip the heavy jobs: the step `decide`, and `ci-ok`).
   changes:
     runs-on: ubuntu-latest
@@ -86,7 +87,6 @@ jobs:
           FILTER_ISOLATION: ${{ steps.paths.outputs.isolation }}
         run: |
           case "$EVENT_NAME" in
-            schedule) code=false isolation=true ;;
             pull_request)
               for v in "$FILTER_CODE" "$FILTER_ISOLATION"; do
                 case "$v" in
@@ -95,7 +95,7 @@ jobs:
                 esac
               done
               code=$FILTER_CODE isolation=$FILTER_ISOLATION ;;
-            *) code=true isolation=true ;; # push, workflow_dispatch
+            *) code=true isolation=true ;; # push, schedule, workflow_dispatch
           esac
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "isolation=$isolation" >> "$GITHUB_OUTPUT"
@@ -358,7 +358,7 @@ jobs:
   # when they passed or were skipped (nothing that a test reads changed). A job added above has to be added here.
   ci-ok:
     if: always()
-    needs: [changes, test, bench-tools, dart, rust, gcp-exec, zoo-loosened, sandbox]
+    needs: [changes, go-packages, test, bench-tools, dart, rust, gcp-exec, zoo-loosened, sandbox]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
