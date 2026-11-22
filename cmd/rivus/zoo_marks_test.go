@@ -19,7 +19,7 @@ import (
 //
 // (no line number, so that an edit above does not change the rows; the last column is the line of the @vuln /
 // @fixed / @decoy that comes before it, or "-", so that a mark that is moved to another case is a new row). TestZooMarksLock holds the file to the sources;
-// .github/scripts/zoo-loosened-check.sh fails a commit that adds a row without a "Zoo-Loosened:" line in its message.
+// scripts/zoo-loosened-check.sh fails a commit that adds a row without a "Zoo-Loosened:" line in its message.
 // A row that goes away (a mark that is fixed) needs nothing. To write the file again: ZOO_MARKS_UPDATE=1.
 
 const zooMarksLockPath = "bench/zoo/marks.lock"
@@ -183,10 +183,10 @@ func TestZooMarksRowsTool(t *testing.T) {
 	}
 }
 
-// The check of the commits (.github/scripts/zoo-loosened-check.sh) in a temporary repository.
+// The check of the commits (scripts/zoo-loosened-check.sh) in a temporary repository.
 func TestZooLoosenedCheck(t *testing.T) {
 	root := filepath.Join(zooRoot(t), "..", "..")
-	script, _ := filepath.Abs(filepath.Join(root, ".github/scripts/zoo-loosened-check.sh"))
+	script, _ := filepath.Abs(filepath.Join(root, "scripts/zoo-loosened-check.sh"))
 	repo := t.TempDir()
 	run := func(args ...string) string {
 		cmd := exec.Command("git", args...)
