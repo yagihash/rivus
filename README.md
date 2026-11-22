@@ -262,7 +262,7 @@ Go / Dart / Rust の extractor ──→ 中立の IR（CFG、JSON Lines）─�
 
 ## 開発
 
-新しいマシン(Linux)では、先に `make setup` を 1 回実行します。go.mod の Go(1.27 系の最新のパッチを固定)と、CI と同じバージョンの Dart SDK がなければ、バージョンとチェックサムを固定して `~/.local/rivus-dev` に入れ(sudo は不要)、Dart の各パッケージの `dart pub get` を実行します。入っていれば何もしないので、何度実行しても同じです。終わりに PATH の設定が表示されます。Rust の nightly と隔離の仕組みは入れません(`make test` に必要。`.github/workflows/ci.yml` の `rust` ジョブを参照)。
+新しいマシン(Linux)では、先に `make setup` を 1 回実行します。go.mod の Go(1.27 系の最新のパッチを固定)と、CI と同じバージョンの Dart SDK がなければ、バージョンとチェックサムを固定して `~/.local/rivus-dev` に入れ(sudo は不要)、Dart の各パッケージの `dart pub get` を実行します。インストール先は環境変数 `RIVUS_DEV_TOOLS` で変えられます(未設定なら `~/.local/rivus-dev`)。入っていれば何もしないので、何度実行しても同じです。終わりに PATH の設定が表示されます。Rust の nightly と隔離の仕組みは入れません(`make test` に必要。`.github/workflows/ci.yml` の `rust` ジョブを参照)。
 
 ```sh
 make setup                                      # 新しいマシンで 1 回(Go、Dart SDK、dart pub get)。そのあと make check
