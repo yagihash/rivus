@@ -534,3 +534,41 @@ func mustGlob(t *testing.T, pattern string) string {
 	}
 	return m[0]
 }
+
+// -rules given to index is recorded: graph -C uses the record when -rules is left out, and says so
+// when the file has changed or is gone. An explicit -rules wins over the record.
+func TestGraphUsesTheRecordedRulesFile(t *testing.T) {
+	app, _ := graphProject(t)
+	rules := filepath.Join(t.TempDir(), "extra.yaml")
+	write(t, rules, "ruleset: t@1\nsinks:\n  - symbol: os/exec.Command\n    category: x\n")
+	db := filepath.Join(t.TempDir(), "g.db")
+	runIn(t, binary, app, nil, "index", "-graph", db, "-rules", rules)
+	elsewhere := t.TempDir()
+	if info := graphInfoOf(t, binary, elsewhere, nil, "-graph", db, "-C", app); info.Snapshot.Fresh == nil || !*info.Snapshot.Fresh {
+		t.Errorf("without -rules, the recorded file is used: %+v", info.Snapshot)
+	}
+	// an explicit -rules wins: another file is another key
+	other := filepath.Join(t.TempDir(), "other.yaml")
+	write(t, other, "ruleset: t@1\nsinks:\n  - symbol: os/exec.CommandContext\n    category: x\n")
+	if info := graphInfoOf(t, binary, elsewhere, nil, "-graph", db, "-C", app, "-rules", other); *info.Snapshot.Fresh {
+		t.Error("an explicit -rules is not replaced by the record")
+	}
+	// graph callers is the same
+	out := runIn(t, binary, elsewhere, nil, "graph", "callers", "-graph", db, "-C", app, "os/exec.Command")
+	if strings.Contains(string(out), `"fresh": false`) || strings.Contains(string(out), `"fresh":false`) {
+		t.Errorf("callers without -rules: %s", out)
+	}
+	// the content changed
+	write(t, rules, "ruleset: t@1\nsinks:\n  - symbol: os/exec.CommandContext\n    category: x\n")
+	if info := graphInfoOf(t, binary, elsewhere, nil, "-graph", db, "-C", app); *info.Snapshot.Fresh {
+		t.Error("a changed recorded rule file makes the file stale")
+	}
+	// the file is gone
+	if err := os.Remove(rules); err != nil {
+		t.Fatal(err)
+	}
+	info := graphInfoOf(t, binary, elsewhere, nil, "-graph", db, "-C", app)
+	if info.Snapshot.Fresh == nil || *info.Snapshot.Fresh || len(info.Snapshot.Reasons) == 0 {
+		t.Errorf("a missing recorded rule file is stale, with a reason: %+v", info.Snapshot)
+	}
+}

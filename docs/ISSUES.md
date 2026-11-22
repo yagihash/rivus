@@ -59,7 +59,6 @@
 | [#131](issues/131-help-exit-codes.md) | `rivus setup rust -h`、`rivus models -h`、`rivus setup -h` の終了コードが 1(usage のエラー) | 道具(重さ: 低) | 全 | 0 | open | - |
 | [#132](issues/132-setup-usage-source.md) | `rivus setup` の usage が `[-source …]` を任意に見せている(実際は必須) | 文書(重さ: 低) | Rust | 0 | open | - |
 | [#133](issues/133-graph-doc-certainty-threshold.md) | docs/GRAPH.md の「答えの読み方(要約)」の certainty の閾値が、コードと help と違う(3 と 20) | 文書(重さ: 低) | 全 | 0 | open | - |
-| [#134](issues/134-graph-doc-rules-not-recorded.md) | docs/GRAPH.md の「index に渡したフラグは、与えなければ DB に記録されたものを使う」が `-rules` に当てはまらない | 文書または道具(重さ: 中) | 全 | 0 | open | - |
 
 ## 閉じたもの
 
@@ -79,3 +78,4 @@
 | [#107](issues/107-zoo-recursion-approximation-verdict.md) | zoo: recursion_approximation の判定 | 道具・ベンチ(直した) | 全 | 1 | closed | zoo のテスト(`cmd/rivus/zoo_*_test.go`) |
 | [#125](issues/125-dart-parent-of-packages-dependency-ids.md) | Dart: 複数のパッケージの親を -C に指すと、依存が file: ID になり、解析されない(サイレント) | サイレントな見逃し(直した) | Dart | 1 | closed | `cmd/rivus/dart_depcontext_test.go` |
 | [#135](issues/135-index-taint-default-output.md) | `rivus index -taint` が `-o` を省くと、対象のディレクトリの `.rivus/index.json` に書く | 安全・文書(重さ: 中) | 全 | 0 | closed | `TestIndexTaintDefaultsToTheUserCache` |
+| [#134](issues/134-graph-doc-rules-not-recorded.md) | docs/GRAPH.md の「index に渡したフラグは、与えなければ DB に記録されたものを使う」が `-rules` に当てはまらない | 文書または道具(重さ: 中) | 全 | 0 | closed | `TestGraphUsesTheRecordedRulesFile` |
