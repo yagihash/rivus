@@ -42,6 +42,11 @@ type Spec struct {
 	// ReadFiles are single files that may be read, each by its path: the manifests above the project (cargo looks for a workspace in
 	// every directory above it, and stops with an error when it is not allowed to read one that is there).
 	ReadFiles []string
+	// Network allows the network (the fetch stage: cargo gets the sources of the dependencies, and resolves names itself): the
+	// outgoing connections, and the services of the system that name resolution and TLS need (NetworkMach). The extraction never has it.
+	Network bool
+	// NetworkMach are the mach services that are allowed with the network (what the spike found that name resolution and TLS need).
+	NetworkMach []string
 	// ProxyPort, when not 0, is the one TCP port on the loopback that the program may connect to (the proxy of the fetch).
 	// 0: no network at all.
 	ProxyPort int
@@ -68,7 +73,7 @@ type Result struct {
 // profile is the text of the profile. Every path comes in as a parameter ((param "P0")), never in the text: a directory
 // whose name has a parenthesis or a quote in it cannot change the profile (TestSandboxProfileTakesNoPathInItsText).
 // A rule that is allowed has the reason beside it.
-func profile(nRead, nExec, nWrite, nFiles, nReadFiles int, proxy bool) string {
+func profile(nRead, nExec, nWrite, nFiles, nReadFiles int, proxy bool, network bool, nMach int) string {
 	var b strings.Builder
 	b.WriteString(`(version 1)
 ; Everything is denied, and what is needed is allowed, one line at a time with its reason.
@@ -107,10 +112,16 @@ func profile(nRead, nExec, nWrite, nFiles, nReadFiles int, proxy bool) string {
 		writeAncestors(&b, "F", i)
 	}
 	for i := 0; i < nWrite; i++ {
-		fmt.Fprintf(&b, "; may be written: the working directory of this run only\n(allow file-read* file-write* (subpath (param \"W%d\")))\n", i)
+		fmt.Fprintf(&b, "; may be written: the working directory of this run only. Programs may be run from it too: the build scripts and the proc macros that the build makes there. THIS IS THE RUN OF THE CODE OF THE PROJECT ITSELF (a build script is the code that is being read): it cannot be narrowed, and what the sandbox does is to keep that code in.\n(allow file-read* file-write* process-exec* (subpath (param \"W%d\")))\n(allow file-map-executable (subpath (param \"W%d\")))\n", i, i)
 		writeAncestors(&b, "W", i)
 	}
 	b.WriteString("; a program may start programs (a build script runs the compiler)\n(allow process-fork)\n")
+	if network {
+		b.WriteString("; the fetch stage only: the network, and the services of the system that name resolution and TLS use (each named; see Spec.NetworkMach)\n(allow network-outbound)\n(allow system-socket)\n")
+		for i := 0; i < nMach; i++ {
+			fmt.Fprintf(&b, "(allow mach-lookup (global-name (param \"M%d\")))\n", i)
+		}
+	}
 	if proxy {
 		b.WriteString("; the one TCP port on the loopback that the caller named: the proxy of the fetch. Nothing else: no other port, address, protocol or name resolution.\n(allow network-outbound (remote tcp (string-append \"localhost:\" (param \"PROXY\"))))\n")
 	}
@@ -146,7 +157,7 @@ func Run(ctx context.Context, s Spec) (*Result, error) {
 	}
 	defer os.RemoveAll(dir)
 	pf := filepath.Join(dir, "profile.sb")
-	if err := os.WriteFile(pf, []byte(profile(len(s.Read), len(s.Exec)+1, len(s.Write), len(s.ExecFiles), len(s.ReadFiles), s.ProxyPort != 0)), 0o600); err != nil {
+	if err := os.WriteFile(pf, []byte(profile(len(s.Read), len(s.Exec)+1, len(s.Write), len(s.ExecFiles), len(s.ReadFiles), s.ProxyPort != 0, s.Network, len(s.NetworkMach))), 0o600); err != nil {
 		return nil, err
 	}
 	args := argList{"-f", pf}
@@ -168,6 +179,9 @@ func Run(ctx context.Context, s Spec) (*Result, error) {
 	}
 	for i, d := range s.Write {
 		args.param(fmt.Sprintf("W%d", i), real(d))
+	}
+	for i, m := range s.NetworkMach {
+		args.param(fmt.Sprintf("M%d", i), m)
 	}
 	if s.ProxyPort != 0 {
 		args.param("PROXY", fmt.Sprint(s.ProxyPort))

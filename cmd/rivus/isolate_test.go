@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -115,6 +116,7 @@ func TestHostileProjectIsRefusedOnTheHost(t *testing.T) {
 
 // Without Docker the code is not run: the error says so (the daemon is made unreachable).
 func TestNoDockerIsNotARunOnTheHost(t *testing.T) {
+	skipDockerPathOnMac(t)
 	t.Setenv("PATH", t.TempDir())
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "Cargo.lock"), []byte("version = 4\n"), 0o644)
@@ -201,6 +203,7 @@ func noContainerLeft(t *testing.T) {
 // The build that does not stop, the one that forks without end, and the one that takes all the memory, stop in
 // the container; this machine goes on.
 func TestIsolationResourceLimits(t *testing.T) {
+	skipDockerPathOnMac(t)
 	o := dockerForTests(t)
 	o.pids, o.memory, o.timeout = 64, "384m", 20*time.Second
 	for _, c := range []struct{ mode, want string }{
@@ -238,6 +241,7 @@ func TestLimitWriter(t *testing.T) {
 
 // A build script and a proc macro that are hostile on purpose run in the container, and what they try fails.
 func TestIsolationHostileBuild(t *testing.T) {
+	skipDockerPathOnMac(t)
 	o := dockerForTests(t)
 	proj, secret, out, stderr, err := hostileRun(t, o, "")
 	if err != nil {
@@ -367,5 +371,15 @@ func checkWhatIsSeen(t *testing.T, report string) {
 	}
 	for _, n := range field("FILES_READABLE") {
 		t.Logf("files that can be read from the container: %s", n)
+	}
+}
+
+// skipDockerPathOnMac: on macOS the extraction of Rust runs under the sandbox (isolate_sandbox_darwin.go), not in a container, so a test of the
+// container path has nothing to run. The container path goes (docs/DESIGN-macos-sandbox.md), and the sandbox has tests of its own
+// (internal/sandbox, TestSandboxedBuildScriptCannotEscape).
+func skipDockerPathOnMac(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "darwin" {
+		t.Skip("the container path is not the isolation on macOS any more: the sandbox is (see internal/sandbox)")
 	}
 }

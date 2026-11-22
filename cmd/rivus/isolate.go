@@ -45,6 +45,8 @@ const hostileMarker = ".rivus-hostile"
 
 // isolationOpts are the limits of the container and where it is found.
 type isolationOpts struct {
+	// extractor is the command of the Rust extractor (the sandbox runs it by its path)
+	extractor []string
 	image   string
 	memory  string
 	cpus    int
@@ -271,6 +273,9 @@ func (l *limitWriter) Write(p []byte) (int, error) {
 
 // extractRustIsolated reads the Rust project in dir in the container and returns the stream of the IR.
 func (o *isolationOpts) extractRustIsolated(ctx context.Context, dir string, extractorArgs []string) ([]byte, error) {
+	if runtime.GOOS == "darwin" {
+		return o.extractRustSandboxed(ctx, dir, extractorArgs) // the sandbox of macOS (isolate_sandbox_darwin.go)
+	}
 	if err := mountable(dir); err != nil {
 		return nil, err
 	}
