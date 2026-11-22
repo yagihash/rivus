@@ -227,7 +227,7 @@ jobs:
       - name: Resolve the packages of the extractor and the samples
         # every one of them has a pubspec.lock: the versions are the locked ones, or the step fails
         run: |
-          for d in extractor/dart extractor/dart/test/sample bench/dart-curated bench/zoo-dart/cells bench/zoo-dart/exec; do
+          for d in extractor/dart extractor/dart/test/sample extractor/dart/test/monorepo/app extractor/dart/test/monorepo/shared extractor/dart/test/versions/a extractor/dart/test/versions/b bench/dart-curated bench/zoo-dart/cells bench/zoo-dart/exec; do
             if [ -f "$d/pubspec.yaml" ]; then
               (cd "$d" && dart pub get --enforce-lockfile)
             fi
