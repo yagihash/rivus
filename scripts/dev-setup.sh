@@ -15,11 +15,11 @@
 #   pub.dev (Dart packages)
 set -euo pipefail
 
-GO_VERSION=1.27.0
+GO_VERSION=1.27.4
 DART_VERSION=3.13.6
 # sha256 of go${GO_VERSION}.linux-<arch>.tar.gz (go.dev/dl) and dartsdk-linux-<arch>-release.zip (the .sha256sum next to it in dart-archive)
-GO_SHA256_amd64=675c26c449cbb18fc24b74650de1eabbae6e16f64326fd85a283fb3b58280685
-GO_SHA256_arm64=51798d2c42d0e1c6ed7fd9f48728b4193abac9e8aad6dbac2fe96a81f5909bda
+GO_SHA256_amd64=7226736c2339719cda28fbf3a54d71aa63bcefe376e98cef00034268dab24840
+GO_SHA256_arm64=3392582988a273a87ab5043ee1b2c9c17a2c3c00580bf9326c47a2e0aaaeac92
 DART_SHA256_x64=f80780c01ade17b789cf4dc2425d662f63bdd40eceda53b36c0d46af650de41b
 DART_SHA256_arm64=73753a2e009505a2ba0d0c0bd449e248001a01984c805a3fcc19671dbb9616b1
 
@@ -54,9 +54,17 @@ download() {
 }
 
 # --- Go ---
-# With GOTOOLCHAIN=auto (the default) an older go fetches the toolchain of go.mod itself (checked by the Go checksum database),
-# so "go in the directory of go.mod says go${GO_VERSION}" is the test. Only when that fails, the pinned archive is installed.
-if ! (go version 2>/dev/null | grep -q "^go version go${GO_VERSION} "); then
+# What is there counts when it is the minor version of go.mod (1.27) and not older than GO_VERSION (a newer patch is kept).
+# With GOTOOLCHAIN=auto (the default) an older go fetches the toolchain that go.mod names (1.27.0, checked by the Go checksum
+# database), which is older than the pin, so the pinned archive is installed then.
+go_ok() {
+  local v
+  v=$(go version 2>/dev/null | awk '{ sub(/^go/, "", $3); print $3 }')
+  [ -n "$v" ] || return 1
+  case "$v" in "$want_go".*) ;; *) return 1 ;; esac
+  [ "${v##*.}" -ge "${GO_VERSION##*.}" ] 2>/dev/null
+}
+if ! go_ok; then
   echo "dev-setup: installing Go ${GO_VERSION} in ${tools}"
   mkdir -p "$tools"
   sum=GO_SHA256_$go_arch
