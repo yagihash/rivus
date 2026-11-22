@@ -1776,7 +1776,7 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 
 **背景:** ADR-075 で、`(io.Writer).Write` の類のモデルが「引数がレシーバに入る」と宣言し、本体も読むようになった。レシーバの**全体**に汚染が載るので、自前の実装の本体が自分のフィールド(ファイル名、設定)を読んで sink に渡すと、書かれたデータとは関係のない流れが出た(Gitea の追加 20 件の主な根)。
 
-**決めたこと:** モデルの `flows` の `to:` に `recv.content` / `argN.content` を書けるようにした(`model.ParseDest`。`from:` と結果には書けない)。エンジンでは、書き込み先の場所(Loc)のアクセスパスに、どの言語のフィールド名にもならない 1 段 `#content`(`model.ContentStep`)を足した場所に載せる。値の**フィールドとは別の要素**なので、ライターのフィールドの読み出しには届かず、ライターの全体(`from: recv`)の読み、`String()` などの中身の読み出しは、今までどおり汚染を見る(全体の読み出しは部分の汚染を含むため)。sink の `parts` の照合では `#content` を透過の段として飛ばす(`transparentStep`)。対象は、`io.Writer` の類に限る: `Write`、`WriteString`、`WriteByte`、`WriteRune`、`ReadFrom`、`fmt.Fprint*` と `io.WriteString` の先、`bytes.Buffer` と `strings.Builder` の書き込み(`go-stdlib.yaml`、`go-stdlib-more.yaml`)。Dart と Rust のモデルは変えない。
+**決めたこと:** モデルの `flows` の `to:` に `recv.content` / `argN.content` を書けるようにした(`model.ParseDest`。`from:` と結果には書けない)。エンジンでは、書き込み先の場所(Loc)のアクセスパスに、どの言語のフィールド名にもならない 1 段 `#content`(`model.ContentStep`)を足した場所に載せる。値の**フィールドとは別の要素**なので、ライターのフィールドの読み出しには届かず、ライターの全体(`from: recv`)の読み出し、`String()` などの中身の読み出しは、今までどおり汚染を見る(全体の読み出しは部分の汚染を含むため)。sink の `parts` の照合では `#content` を透過の段として飛ばす(`transparentStep`)。対象は、`io.Writer` の類に限る: `Write`、`WriteString`、`WriteByte`、`WriteRune`、`ReadFrom`、`fmt.Fprint*` と `io.WriteString` の先、`bytes.Buffer` と `strings.Builder` の書き込み(`go-stdlib.yaml`、`go-stdlib-more.yaml`)。Dart と Rust のモデルは変えない。
 
 **確かめたこと:** `testdata/go/cases/writer`(ライターのフィールドを読む本体は検出されない。書いたデータを読む本体と、ライター全体の読み出しは検出される)。zoo の `dyn/stdlib-writer-own`、`dyn/http-middleware-chain`、`conv/buffer-writestring` は出たまま。Gitea(`bench/compare.sh --heavy`、base は ADR-078 の main): 367 → 358、追加 3、削除 12、7 パスで収束(再解析 112,695 → 112,353)。削除 12 は、1 件ずつ経路を読んだ: 9 件は、ログのファイルのライター(`rotatingfilewriter`)の 3 つの sink に、書いたデータでなくライターのファイル名を通って届いていたノイズ(経路 100 以上、source の関数で始まらない)。3 件(`UploadPackage` と `PutManifest` を source にしたもの)は、同じ sink が別の source(同じ形の `Context`)で見つかっており、代表の source が変わっただけで、sink は失われていない(追加の 3 件も同じ入れ替わり)。本物の finding が消えた例はない。
 
@@ -1993,3 +1993,13 @@ dart-pub で消えた 2 件は、**どちらも source と sink が `test/` の�
 
 **限界:** コンストラクタで渡した関数をあとで呼ぶ形(`RetryClient(when:)`)は、`calls:` で書けず、注記だけが出る。`summary` に、切ったメソッドの一覧はない(ADR-092 の 5)。Dart の `calls: [{method: ...}]` があれば、便利なメソッドも切れる。
 
+
+## ADR-099: source と sink は、プロジェクトの関数の中だけで探す。依存の本体を読んだ実行では、そのことを `summary.dependency_sites` が毎回言う(相談役の決定、2026-11-23)
+
+**背景:** `internal/sites/enumerate.go` は、サイト(source と sink)を、プロジェクトの関数からだけ列挙し、依存の関数の中では列挙しない(ADR の記録は、これまで測定の追記に「依存の中の sink は探さない(既定の設計)」とあるだけだった)。依存の本体を読むのは、流れを追うため(依存の中への呼び出しを、推測でなく追う)で、サイトを探すためではない。この結果、「利用者の入力が、ライブラリの中で危険な処理に届く」形は、プロジェクトのコードがそのライブラリの API を呼ぶ所に sink のモデルがない限り、依存を読んでも検出されない。出力に、そのことを言う項目も注記もなかった。サイレントな見逃しの 1 つ(Go の実際のプロジェクトでの利用から見つかった)。
+
+**決めたこと:**
+1. 今の設計を、決定として記録する: サイトは、プロジェクトの関数からだけ列挙する。理由: 依存の内部の `os.Open` などの呼び出しが、すべて sink になり、依存の内部の使い方に由来する誤検出が大きく増える。利用者が見るべき所(自分のコードが、どの API をどう呼ぶか)から離れた finding も増える。
+2. その結果として、**sink のモデルは、解析のコストを下げるためだけでなく、検出のためにも必要になる**: ライブラリの中で危険な処理に届く形は、その API に sink のモデルがあって初めて、プロジェクトの呼び出しの所で見つかる。ADR-096 と ADR-097 が組み込みモデルの範囲を広げる根拠の 1 つは、これ(コストに加えて、検出)。
+3. 新しい項目: 依存の関数が 1 つでも解析に入った実行では、`summary.dependency_sites` を毎回出す: `{"searched": false, "dependency_functions": N}`(N は、読んだ依存の関数の数)。`-no-deps` のとき、依存のない対象のとき(N が 0)は出さない。`summary.unread` や `stats.tests_skipped` と同じく、確認していないことを、出力が毎回言う形。標準エラーには出さない。finding と、他の項目は変えない。`schema_version` は、項目を足すだけなので変えない。
+4. finding にはしない: 依存の中の sink を finding にする案は取らない(1 の理由)。代わりの案(汚染された値が、依存の中の sink のルールに一致する呼び出しに届いた数を、finding とは別の一覧で出す)は、課題 #144 に記録した。実装は、まだしない。

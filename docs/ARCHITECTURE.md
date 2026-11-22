@@ -404,7 +404,7 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 - `Program`: `Funcs`、`Impls`、`Types`（上位の型）、`Globals`、`TypeAliases`、テキスト（`Texts`、`CallTexts`、`FuncTexts`）、`LoadErrors`、`CallerMarks`、`TestsSkipped`
 - `Func`: `ID`、`Params`（`Class`、`Captured`）、`Results`、`Locals`、`Blocks`（先頭が entry）、`Roots`、`Pos`、`File`。マークとして `Exported`、`Entry`、`Init`、`Symbol`、`Recv`、`Dep`、`Private`、`ExternalEntry`、`Overrides`
 - `Block`: `Instrs`、`Term`（`Kind`、`Cond`、`CondPos`、`Values`）、`Succs`（種別つきのエッジ）
-- `Instr`: `Op`、`Dsts`（呼び出しは戻り値の数だけ）、`Args`、`Const`、`Operator`、`Field`、`Path`、`Global`、`Func`、`View`、`Folded`、`Keyed`、`Callee`、`Go` / `Defer` / `Await`、`Reason`、`Pos`、`AddrPos`、`ArgPos`
+- `Instr`: `Op`、`Dsts`（呼び出しは戻り値の数だけ）、`Args`、`Const`、`Operator`、`Field`、`Path`、`Global`、`Func`、`View`、`Folded`、`Keyed`、`Callee`、`Go` / `Defer` / `Await`、`Reason`、`Pos`、`AddrPos`、`ArgPos`、`ArgNames`（名前つき引数の名前。`Args` と並ぶ。Dart だけが付ける。足しただけで、`schema_version` は `rivus.ir/0` のまま。読む側は、ないものとして扱う。`named:` の sink が使う）
 - `Callee`: `Kind`（`static` / `dynamic` / `value`）、`Func`、`Symbol`、`Recv`、`Candidates`、`FFI`。ストリームには載らず、コアが埋めるもの: `ValueCands`、`ValueLimit` など（13 節）
 - `Pos` は `File`、`Offset`、`Length`、`Line`、`Col`
 
@@ -465,6 +465,7 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 | `recursion_approximation` | rivus | |
 | `field_imprecision` | rivus | フィールドを指定する sink に、そのフィールドにあるとは言えない汚染が届いた（14 節）。detail は `whole_value`、`path_limit`、`element`、`opaque_callee` |
 | `field_unresolved` | rivus | sink が指定したフィールドが、プログラムにない（綴りの誤りなど）。sink を全体として扱った（14 節） |
+| `named_unresolved` | rivus | sink が `named:` で指定した引数の名前が、プログラムのその関数の呼び出しのどれにもない（綴りの誤りなど）。sink を呼び出し全体として扱った（`docs/MODELING.md` 4a-1 節） |
 | `global_holds_nothing` | rivus | 読み戻す人がいないとルールが宣言する変数（ADR-056）に、汚染を書いた関数を、変数ごとに 1 件記録する（`internal/taint/heldnothing.go`） |
 
 `mixed` は「言語機能由来で、かつ rivus の精度向上でも減らせる」もの。
@@ -650,8 +651,10 @@ rivus models coverage ./...
 
 - **依存の本体は、既定で読む。** 標準ライブラリは読まず、モデルで扱う。依存のソースを読むと、依存の中への呼び出しを推測でなく追えるので、メモリは増える。`-no-deps` で読まなくなり、そのとき依存への呼び出しは、すべてモデルか `unmodeled_library_call` になる（`cmd/rivus/common.go` のフラグの説明。メモリの数字は 16 節）
 - Dart は、プロジェクトの外の依存を、頼まれたものだけ読む（`-allow-deps-under`。`package_config.json` は信用しない）。Rust の依存の取得は、既定でコンテナの中（15 節）
-- モデルのあるインタフェースのメソッドの動的な呼び出しで、候補に本体のある依存の関数があるとき、本体は読まず、`dependency_body_unread` で示す（ADR-075）
-- 組み込みモデルの範囲は、標準ライブラリと、代わりのないパッケージまで（ADR-044、063、077。README と `docs/GCP-MODELS.md`）。ユーザーは、ルールを足せる
+- **依存の関数の中では、source と sink を探さない**(`internal/sites/enumerate.go`。ADR-099)。依存の本体は、流れを追うために読む。結果、ライブラリの中で危険な処理に届く形は、プロジェクトがその API を呼ぶ所に sink のモデルがないと検出されない。依存の関数が 1 つでもあれば、`summary.dependency_sites` がそのことを毎回言う
+- モデルのあるインタフェースのメソッドの動的な呼び出しで、候補に本体のある依存の関数があるとき、本体は読まず、`dependency_body_unread` で示す（ADR-075）。実装の多いインターフェースのメソッドで、実装どうしが同じメソッドに委譲する形（委譲のクリーク）は、そのメソッドの行を `flows` のモデルにして、実装全体の本体を読まない（ADR-098。照合した対象と、注記の条件は `docs/MODELING.md` 4a 節）
+- **モデルが何を省くか**（`internal/taint/calls.go`、`internal/model/model.go` の `HasModel`）: シンボルに sanitizer か propagator の行があると、呼び出しの所ではモデルが使われ、その関数の本体の要約は使われない。省かれないものもある。(1) 本体の要約の計算（その関数は、IR にあるかぎり、ほかの関数と同じく解析される）。(2) source だけ、sink だけの行は `HasModel` にならないので、本体が使われる。(3) 同じパッケージで、モデルのない関数は、本体が読まれる。モデルのあるパッケージを、**読み込みの段階から読まない**宣言（パッケージ単位の指定、extractor に本体を出さない指定）は、まだない。設計中（`docs/DESIGN-package-models.md`、別のブランチで進行中。決まっていない）
+- 組み込みモデルの範囲は、(a) Google Cloud（Firebase を含む。範囲の 1 つ目）、(b) 外部のサービスのクライアント（公開の指標の上位）、(c) 標準ライブラリ、(d) 代わりのないパッケージ、(e) pub の人気の上位（ADR-096、097。README、`docs/DART-MODEL-CANDIDATES.md`、`docs/GCP-MODELS.md`）。広げる理由は、コストを下げるためと、依存の中の sink を検出するため（ADR-099）。ユーザーは、ルールを足せる
 
 ### 5.6 値依存サニタイズと由来追跡
 

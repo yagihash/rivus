@@ -61,7 +61,9 @@ Field rules use the same form (`field: package:app/a.dart#Request.url`).
 - `&&`, `||`, `?:`, `??` are control flow, joined in a local.
 - String interpolation is a chain of `+` of the constant parts and the expressions.
 - A named parameter is placed after the positional ones, **by name** (so that a method
-  and its overrides line up). A call leaves out what it does not pass.
+  and its overrides line up). A call leaves out what it does not pass. The call has `arg_names`, parallel to the
+  operands: the name of each named parameter (`""` for the others), also for one that the call leaves out. A rule's
+  `named: kind` finds the operand by it.
 - A class instance is a `pointer`; `List`, `Set`, `Map`, `Iterable` are `container`.
 - Calls on an instance go through the receiver (`dynamic`), with the candidates found
   by class hierarchy analysis over the code that was read.

@@ -150,6 +150,18 @@ type Summary struct {
 	// Isolation says how a Rust project was read: reading it runs the build scripts and the macros of the project. Absent when no Rust
 	// project was read (Go and Dart are not built).
 	Isolation *Isolation `json:"isolation,omitempty"`
+	// DependencySites says that the sources and the sinks were listed in the functions of the project only, not in those of the
+	// dependencies (ADR-099): a flow from the input of the user to a dangerous call inside a library is not found unless a
+	// sink model says so at the call of the library's API. Present when the run read the body of any dependency function.
+	DependencySites *DependencySites `json:"dependency_sites,omitempty"`
+}
+
+// DependencySites is where the sites were not looked for.
+type DependencySites struct {
+	// Searched is always false: the functions of the dependencies were read to follow the flow, not to find sites in them.
+	Searched bool `json:"searched"`
+	// DependencyFunctions is how many functions of dependencies were read.
+	DependencyFunctions int `json:"dependency_functions"`
 }
 
 // Isolation is how the code of a project was run to read it.
@@ -435,6 +447,9 @@ func Build(packages []string, loadErrors []ir.LoadError, st *sites.Result, res *
 		r.Rules = []string{}
 	}
 	r.Summary = summarize(r)
+	if st.DependencyFunctions > 0 {
+		r.Summary.DependencySites = &DependencySites{DependencyFunctions: st.DependencyFunctions}
+	}
 	return r
 }
 

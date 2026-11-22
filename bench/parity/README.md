@@ -57,7 +57,7 @@ go test ./cmd/rivus -run 'TestZooPureGo|TestZooGo$|TestZooDart$|TestZooRust$' -v
 go run ./bench/parity report -work $WORK/out -table bench/parity/TABLE.md -dead bench/parity/DEAD.md -zoo $WORK/zoo-lines.txt
 ```
 
-`TABLE.md` と `DEAD.md` は**手で直さない**。組み込みのモデル(`internal/model/builtin/*.yaml`)、extractor、読む入力を変えたら作り直し、コミットメッセージに、前の表からの差(一致しない行の数、(B) の割合)を書く。`-no-gotypes` は (A) と Go の形の型からの判定を省く(速い確認用)。`go test ./bench/parity`(`-short` で標準ライブラリの読み込みを省く)が、形・名前・IR の読み・一致の判定の単体テスト。
+`TABLE.md` と `DEAD.md` は**手で直さない**。組み込みのモデル(`internal/model/builtin/*.yaml`)、extractor、読む入力を変えたら作り直し、コミットメッセージに、前の表からの差(一致しない行の数、(B) の割合)を書く。`-no-gotypes` は (A) と Go の形の型からの判定を省く(速い確認用)。`go test ./bench/parity`(`-short` で標準ライブラリの読み込みを省く)が、形・名前・IR の解釈・一致の判定の単体テスト。
 
 ## 入力(`TABLE.md` の 6 に書く)
 
