@@ -242,7 +242,7 @@ Go / Dart / Rust の extractor ──→ 中立の IR（CFG、JSON Lines）─�
 
 - 言語ごとの extractor が、ソースを、制御フローグラフの水準の IR に下ろします。コアは、言語を知りません。
 - コアは、関数ごとに「引数や戻り値のあいだで、何が何に伝わるか」の要約を作り、呼び出しグラフの下から順に組み合わせます。
-- `rivus index` は、呼び出しグラフを SQLite のファイルに保存します（利用者のキャッシュに置き、解析の対象のディレクトリには書きません）。
+- `rivus index` は、呼び出しグラフを SQLite のファイルに保存します（利用者のキャッシュに置き、解析の対象のディレクトリには書きません）。`index -taint` の JSON の index も、`-o` を省くと、同じキャッシュの下（`graph.db` の隣の `index.json`）に書きます。
 
 詳しくは [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。設計の判断の記録は [docs/DECISIONS.md](docs/DECISIONS.md)。
 

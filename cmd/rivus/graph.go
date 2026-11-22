@@ -58,6 +58,16 @@ func graphCachePath(dir string) (string, error) {
 	return filepath.Join(cache, "rivus", hex.EncodeToString(sum[:8]), "graph.db"), nil
 }
 
+// indexCachePath is where the JSON index of a directory is written when -o is not given: index.json beside
+// its graph file in the user's cache, never in the analysed directory.
+func indexCachePath(dir string) (string, error) {
+	g, err := graphCachePath(dir)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(filepath.Dir(g), "index.json"), nil
+}
+
 // graphFile is the file the flags name: -graph, or the cache of -C.
 func graphFile(explicit string, o *analyzeOpts) (string, error) {
 	if explicit != "" {

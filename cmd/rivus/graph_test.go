@@ -488,3 +488,49 @@ func otherGOOS() string {
 	}
 	return "linux"
 }
+
+// index -taint without -o writes the JSON index in the user's cache, beside the graph file, and never in the
+// analysed directory (what is there is not read by default, and is not written by rivus).
+func TestIndexTaintDefaultsToTheUserCache(t *testing.T) {
+	app, _ := graphProject(t)
+	cache := t.TempDir()
+	env := []string{"RIVUS_CACHE_DIR=" + cache}
+	// an old default file in the analysed directory is left alone
+	old := filepath.Join(app, ".rivus", "index.json")
+	write(t, old, "old")
+	cmd := exec.Command(binary, "index", "-taint", "-C", app, "./...")
+	cmd.Dir = app
+	cmd.Env = append(os.Environ(), env...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if b, _ := os.ReadFile(old); string(b) != "old" {
+		t.Errorf("the analysed directory is not written: %q", b)
+	}
+	matches, _ := filepath.Glob(filepath.Join(cache, "*", "index.json"))
+	if len(matches) != 1 {
+		t.Fatalf("index.json is in the cache: %v", matches)
+	}
+	if filepath.Dir(matches[0]) != filepath.Dir(mustGlob(t, filepath.Join(cache, "*", "graph.db"))) {
+		t.Errorf("index.json is beside graph.db: %s", matches[0])
+	}
+	if !strings.Contains(string(out), "wrote "+matches[0]) {
+		t.Errorf("the path is printed: %s", out)
+	}
+	// -o is where it says
+	explicit := filepath.Join(t.TempDir(), "x.json")
+	runIn(t, binary, app, env, "index", "-C", app, "-o", explicit, "./...")
+	if _, err := os.Stat(explicit); err != nil {
+		t.Error(err)
+	}
+}
+
+func mustGlob(t *testing.T, pattern string) string {
+	t.Helper()
+	m, _ := filepath.Glob(pattern)
+	if len(m) != 1 {
+		t.Fatalf("%s: %v", pattern, m)
+	}
+	return m[0]
+}
