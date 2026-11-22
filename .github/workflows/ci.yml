@@ -15,6 +15,11 @@ on:
 
 permissions: {}
 
+env:
+  # A pull request runs the tests with -short: the heavy ones (many runs of the same analysis, the scale profiles, the Google Cloud rows)
+  # skip themselves, and run on a push to main, once a week, and by hand. A red run of main is fixed first (or the pull request is reverted).
+  SHORT: ${{ github.event_name == 'pull_request' && '-short' || '' }}
+
 # A push to main that lands on a run in progress cancels it: only the newest commit is checked (to find which commit
 # broke what, use `git bisect` and a local reproduction). A pull request is checked per branch.
 concurrency:
@@ -46,8 +51,34 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
         run: bash .github/scripts/changed-paths.sh
 
+  # `go vet` and the tests of the packages other than cmd/rivus.
+  go-packages:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Vet
+        run: go vet ./...
+      - name: Test the packages other than cmd/rivus
+        run: |
+          mapfile -t pkgs < <(go list ./... | grep -v '/cmd/rivus$')
+          go test ${SHORT:+"$SHORT"} -timeout 30m "${pkgs[@]}"
+
   # The tests of `cmd/rivus` are most of the time (the tests of a package run one after the other): they are divided
-  # into shards that run in parallel (every test runs in exactly one shard). Shard 0 runs the other packages.
+  # into shards that run in parallel. Every test runs in exactly one shard of this job: the names are sorted, and a shard takes
+  # the ones at its places. The heaviest one (the first of HEAVY) is alone in shard 0, the other heavy ones are spread over the
+  # other shards, and the rest by their places in the list: a new test is in some shard whatever its name.
+  # The jobs `dart` and `rust` run these lines too (`run: *shard`), for the tests that need their extractor only: ONLY is set
+  # there, and the heavy tests, which use no extractor, are left to this job (HEAVY is the same list).
   test:
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -60,10 +91,6 @@ jobs:
       fail-fast: false
       matrix:
         shard: [0, 1, 2, 3, 4]
-    env:
-      SHARD: ${{ matrix.shard }}
-      # a missing module cache of bench/gcp fails the Google Cloud gate, and does not skip it
-      RIVUS_REQUIRE_GCP: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -71,17 +98,32 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - name: Vet
-        if: matrix.shard == 0
-        run: go vet ./...
-      - name: Test the packages other than cmd/rivus
-        if: matrix.shard == 0
-        run: |
-          mapfile -t pkgs < <(go list ./... | grep -v '/cmd/rivus$')
-          go test -timeout 30m "${pkgs[@]}"
-      - name: Test cmd/rivus (shards 1 to 4 of four)
-        if: matrix.shard != 0
-        run: bash .github/scripts/go-test-shard.sh ./cmd/rivus "$((SHARD - 1))" 4 -timeout 30m
+      - name: Test cmd/rivus (one shard of five)
+        env:
+          SHARD_INDEX: ${{ matrix.shard }}
+          SHARD_TOTAL: "5"
+          # the heavy tests that need no extractor, the heaviest first
+          HEAVY: &heavy TestDeterministicDogfood TestDeterministicParamshare TestGCPRows TestDogfood TestDeterministicPassStats TestDeterministicCuratedGo TestScaleSynth
+          # a missing module cache of bench/gcp fails the Google Cloud gate, and does not skip it
+          RIVUS_REQUIRE_GCP: "1"
+        run: &shard |
+          all=$(go test -list '.' ./cmd/rivus | grep -E '^(Test|Example)' | LC_ALL=C sort)
+          names=$(echo "$all" | awk -v i="$SHARD_INDEX" -v n="$SHARD_TOTAL" -v heavy="$HEAVY" -v only="${ONLY:-}" '
+            BEGIN { split(heavy, h, " "); for (k = 1; k in h; k++) rank[h[k]] = k - 1; lone = (only == "" && n > 1) }
+            $0 in rank {
+              if (only != "") next
+              s = (!lone) ? rank[$0] % n : (rank[$0] == 0 ? 0 : 1 + (rank[$0] - 1) % (n - 1))
+              if (s == i) print
+              next
+            }
+            { s = lone ? 1 + (r++ % (n - 1)) : (r++ % n); if (s == i) print }')
+          if [ -z "$names" ]; then
+            echo "shard $SHARD_INDEX/$SHARD_TOTAL has no test" >&2
+            exit 1
+          fi
+          echo "shard $SHARD_INDEX/$SHARD_TOTAL: $(echo "$names" | wc -l | tr -d ' ') tests"
+          regex="^($(echo "$names" | paste -sd'|' -))\$"
+          go test ${SHORT:+"$SHORT"} -timeout 30m -run "$regex" ./cmd/rivus
 
   # The tools of the bench (the comparison, the backtest, the ledger) have their own job: a red `test` job must not keep
   # them from running (they were the last step of it, and did not run while it was red). Python only, no build.
@@ -114,8 +156,6 @@ jobs:
       fail-fast: false
       matrix:
         shard: [0, 1, 2]
-    env:
-      SHARD: ${{ matrix.shard }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -146,10 +186,14 @@ jobs:
           done
       - name: Test with the Dart extractor (one shard of three)
         env:
+          SHARD_INDEX: ${{ matrix.shard }}
+          SHARD_TOTAL: "3"
+          ONLY: "1"
+          HEAVY: *heavy
           RIVUS_DART: dart
           # a missing RIVUS_DART fails the tests, and does not skip them
           RIVUS_REQUIRE_DART: "1"
-        run: bash .github/scripts/go-test-shard.sh ./cmd/rivus "$SHARD" 3 -timeout 30m
+        run: *shard
 
   # The Rust extractor is built against the compiler's MIR (rustc_public), which is nightly only: it is pinned
   # to one nightly by extractor/rust/rust-toolchain.toml.
@@ -160,12 +204,6 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [0, 1, 2]
-    env:
-      SHARD: ${{ matrix.shard }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -180,7 +218,6 @@ jobs:
         working-directory: extractor/rust
         run: cargo build --locked
       - name: Test the extractor
-        if: matrix.shard == 0
         working-directory: extractor/rust
         run: cargo test --locked
       # The Rust zoo has no dependency (std only, no build.rs, no proc macro): the extractor builds what it reads.
@@ -188,12 +225,15 @@ jobs:
         working-directory: bench/zoo-rust
         run: cargo build --locked --offline
       - name: Test the harness of the Rust zoo
-        if: matrix.shard == 0
         working-directory: bench/zoo-rust/exec
         run: cargo test --locked --offline
-      - name: Test with the Rust extractor (one shard of three)
-        run: bash .github/scripts/go-test-shard.sh ./cmd/rivus "$SHARD" 3 -timeout 30m
+      - name: Test with the Rust extractor
+        run: *shard
         env:
+          SHARD_INDEX: "0"
+          SHARD_TOTAL: "1"
+          ONLY: "1"
+          HEAVY: *heavy
           RIVUS_RUST: ${{ github.workspace }}/extractor/rust/target/debug/rivus-rust
           # a missing RIVUS_RUST fails the tests, and does not skip them
           RIVUS_REQUIRE_RUST: "1"
@@ -202,7 +242,8 @@ jobs:
   # value of a fixed one only the parameters. The test refuses every connection that is not loopback.
   gcp-exec:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    # the cases run for real: main and once a week (a pull request runs the tests with -short)
+    if: needs.changes.outputs.code == 'true' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
