@@ -9,6 +9,10 @@ import (
 	"github.com/yagihash/rivus/internal/model"
 )
 
+// CallbackUnresolvedPrefix starts the detail of the unresolved_callee note of a call that a callback_param source names and whose function was
+// not found: the summary counts the notes by it (summary.callback_param_unresolved).
+const CallbackUnresolvedPrefix = "callback_param_unresolved:"
+
 // callbackTarget is a function that a call of the symbol of a callback_param source is given, and the source.
 type callbackTarget struct {
 	src    model.CallbackParam
@@ -153,6 +157,6 @@ func (res *Result) noteCallback(k IRInstr, symbol string, operand int, why strin
 		res.UnresolvedCallbacks = map[IRInstr]string{}
 	}
 	if _, ok := res.UnresolvedCallbacks[k]; !ok {
-		res.UnresolvedCallbacks[k] = fmt.Sprintf("the function given to %s as operand %d is %s: its parameters that callback_param marks as sources are not marked here (a function written at the call is followed)", symbol, operand, why)
+		res.UnresolvedCallbacks[k] = fmt.Sprintf(CallbackUnresolvedPrefix+" the function given to %s as operand %d is %s: its parameters that callback_param marks as sources are not marked here (a function written at the call is followed)", symbol, operand, why)
 	}
 }
