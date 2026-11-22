@@ -10,6 +10,8 @@ dependencies:
     path: packages/googleapis
   http:
     path: packages/http
+  shelf:
+    path: packages/shelf
   shelf_router:
     path: packages/shelf_router
   zoo_dep:
