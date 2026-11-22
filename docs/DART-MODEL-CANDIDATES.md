@@ -7,6 +7,7 @@
 選ぶ根拠は pub.dev の公開の指標だけ。特定の利用者やプロジェクトが何を使うかは考えていない。
 
 - 取得日: 2026-11-22
+- 並べ方: 4 節と 5 節の表は、直近 30 日のダウンロード数(DL)の順に並べる(全行で取れる指標)。3 節の「上位」も、DL の順の意味。
 - 順位: `https://pub.dev/api/package-name-completion-data`(20000 件)の並び順。この一覧は人気の順に並んでいるように見える(先頭は http、intl、uuid、path_provider、url_launcher)が、並びの基準を pub.dev は明記していないので、順位は「その一覧での位置」とする。
 - ダウンロード数: `https://pub.dev/api/packages/<名前>/score` の `downloadCount30Days`(直近 30 日)。
 - likes: 同じく `likeCount`。pub points: `grantedPoints`(160 が満点)。
@@ -24,7 +25,7 @@
 
 1. `http`(進行中)。
 2. Google Cloud(進行中)。`googleapis`、`googleapis_auth`、`gcloud`、`google_cloud_storage`、`dart_firebase_admin` に加えて、Firebase 系(`firebase_auth`、`cloud_firestore`、`firebase_messaging`、`cloud_functions`、`firebase_storage`、`firebase_ai`)も含める。
-3. このあとは、4 節(サーバ側の基本のパッケージ)の上位と、5 節(外部のサービスのクライアント)の上位を、交互に進める。
+3. このあとは、4 節(サーバ側の基本のパッケージ)の上位と、5 節(外部のサービスのクライアント)の上位(どちらも DL の順)を、交互に進める。
    1. 4 節: `dio`。5 節: `supabase`(`supabase_flutter` と共通の層)。
    2. 4 節: `shelf` の残り、`shelf_router`。5 節: `sentry_flutter`(エラー報告)。
    3. 4 節: `logging`、`postgres`。5 節: `openai_dart` と `google_generative_ai`(AI の API)。
@@ -38,43 +39,43 @@
 
 ## 4. サーバ側と、どこでも使う基本のパッケージ
 
-pub.dev の公開の指標で、Flutter に依存しないパッケージ(最新版の `pubspec.yaml` の `dependencies` と `environment` に `flutter` が無い。2026-11-22 に `/api/packages/<名前>` で確認)のうち、種類ごとに上位のものを選んだ。理由は公開のものだけ: サーバ側の Dart(例: gRPC サーバ。`bench/dart-grpc`)で使え、Flutter を必要としない。DL は直近 30 日。
+pub.dev の公開の指標で、Flutter に依存しないパッケージ(最新版の `pubspec.yaml` の `dependencies` と `environment` に `flutter` が無い。2026-11-22 に `/api/packages/<名前>` で確認)のうち、種類ごとに上位のものを選んだ。表は直近 30 日の DL の順に並べた。理由は公開のものだけ: サーバ側の Dart(例: gRPC サーバ。`bench/dart-grpc`)で使え、Flutter を必要としない。DL は直近 30 日。
 
-| 順位 | パッケージ | 説明 | モデルにする API の境界の案 | 種類 | 組み込み | 優先度と理由 |
+| 順位(一覧での位置) | パッケージ | 説明 | モデルにする API の境界の案 | 種類 | 組み込み | 優先度と理由 |
 |---|---|---|---|---|---|---|
-| 10 | dio | HTTP クライアント(8.4k likes、DL 5.6M) | sink: `Dio.get/post/request/download` の URL とデータ。source: `Response.data`。flow: `Options`、`BaseOptions`。`Interceptor` は実装の多いインターフェース | HTTP クライアント | なし | 高: 実装の多い `Interceptor` と `HttpClientAdapter` で呼び出しが合流する |
-| 794 | http2 | HTTP/2 の実装(DL 1.0M) | source: `ClientTransportConnection` / `ServerTransportConnection` の `incomingStreams` と `StreamMessage`。sink: `makeRequest` のヘッダ | HTTP / ネットワーク | なし | 中: `grpc` の下の層。ストリームのコールバックの合流 |
-| 99 | http_parser | HTTP のヘッダや日付のパーサ(DL 14.1M) | propagator: `MediaType.parse`、`parseHttpDate` の入力から戻り値へ | HTTP | なし | 中: DL が多い。`http` と `shelf` の中で使われる |
-| 48 | retry | リトライ(DL 3.1M) | `RetryOptions.retry(fn)` の `fn` の戻り値が戻り値へ。呼び戻し(`fn`)を呼ぶ | 非同期 / HTTP | なし | 中: 呼び戻しの呼び出しを繋ぐ(HTTP の呼び出しを包むことが多い) |
-| 504 | grpc(クライアント側) | gRPC の Dart 実装(DL 0.7M) | sink: `ClientChannel.new` のホスト(済み)、`Client.$createCall` の呼び出しのメタデータ。source: `ResponseFuture`/`ResponseStream` の中身 | RPC | 一部(`dart-grpc.yaml` はサーバ側と `ClientChannel.new`) | 高: 生成コードの `Client` から呼ぶ。実装の多い `ClientChannel`/`ClientTransportConnector` |
-| 535 | protobuf | Protocol Buffers のランタイム(DL 3.2M) | propagator: `GeneratedMessage.fromBuffer/fromJson/writeToBuffer/toProto3Json` と、生成コードのフィールドの getter/setter の flow | RPC / シリアライズ | なし | 高: gRPC の入力のメッセージはここを通る。生成コードの中を読むコストが大きい |
-| 340 / 21 | json_annotation / json_serializable | JSON の注釈とジェネレータ(DL 16.2M / 4.5M) | 生成コードの `fromJson`/`toJson` の flow。ランタイムの関数は少ない(`$checkedCreate` など) | シリアライズ | なし | 中: 生成コードを読めば足りる面が大きい。DL は多い |
-| 549 | googleapis_auth | Google API の認証(DL 2.3M) | source: `AccessCredentials`、`clientViaServiceAccount` などが返す `AuthClient`(`http.Client` の実装)。sink: 資格情報の JSON | 認証 / クラウド | なし | 高(Google Cloud の範囲): `googleapis` の前提 |
-| 139 | oauth2 | OAuth2 のクライアント(DL 0.6M) | source: `Credentials`、`Client` が返す `http.Response`。sink: `authorizationUrl` の引数。`http.BaseClient` を継承 | 認証 | なし | 中: `http` の `Client` の実装でもある |
-| 105 | dart_jsonwebtoken | JWT の生成と検証(DL 2.2M) | source: `JWT.verify` の `payload`(検証後も外から来たデータ)。sanitizer の候補: 検証の成功。sink: `JWT.sign` の key | 認証 | なし | 高: 認証の判断に関わる |
-| 121 | postgres | PostgreSQL のドライバ(DL 0.7M) | sink: `Connection.execute` と `Session.execute` の SQL。source: `Result` の行 | DB | なし | 高: 純 Dart のドライバで、中を読むコストが大きい |
-| 408 / 1917 | mysql1 / mysql_client | MySQL のドライバ(DL 11k / 14k) | sink: `MySqlConnection.query`、`prepared` の SQL 文字列。source: 結果の `Row` | DB | なし | 中: DL は少ない(公開の指標では低い) |
-| 2775 | redis | Redis のクライアント(DL 0.3M) | sink: `Command.send_object` のコマンドと引数。source: 戻り値 | DB | なし | 低: 順位が低い |
-| 645 | mongo_dart | MongoDB のドライバ(DL 0.1M) | sink: `DbCollection.find/insert/update/deleteOne` の selector(NoSQL 注入)。source: 戻り値の `Map` | DB | なし | 中: クエリを `Map` で渡す形が注入の経路になる |
-| 435 | sqlite3 | SQLite の FFI のバインディング(DL 3.9M) | sink: `Database.execute/select`、`prepare` の SQL。source: `ResultSet` の行 | DB | なし | 高: SQL の sink が明確。FFI の本体は読みにくい(中を読むコストが大きい) |
-| 26 | shelf | サーバのミドルウェア(DL 16.6M) | source: `Request`(済み)。sink: `Response` のボディ、`Response.found`/`movedPermanently` の URL(リダイレクト) | Web フレームワーク | 一部(9 節) | 高: 残りは `Response` と `Handler`/`Middleware` の合流 |
-| 146 | shelf_router | shelf のルーター(DL 0.6M) | source: `Request.params`。`Router.get/post` に登録したハンドラが入口 | Web フレームワーク | なし | 高: 入口の登録が動的な呼び出し |
-| 163 | shelf_web_socket | shelf で WebSocket(DL 14.3M) | source: `webSocketHandler` のコールバックに渡るメッセージ | Web フレームワーク | なし | 中: 入口が 1 つ |
-| 132 | dart_frog | サーバのフレームワーク(DL 0.2M) | source: `RequestContext.request`、`Request.json/body`。`onRequest(RequestContext)` が入口 | Web フレームワーク | なし | 中: 入口の規約(ファイルの配置)が特別 |
-| 32 | logging | ロギング(DL 14.0M) | sink: `Logger.info/warning/severe` のメッセージ(ログへの注入)。`Logger.onRecord` と `LogRecord` | ロギング | なし | 中: ダウンロード数が多い。実装の多いリスナへ合流 |
-| 171 | process_run | プロセスの実行(DL 0.3M) | sink: `run`、`runExecutableArguments` のコマンドと引数(コマンド注入) | プロセス | なし | 高: コマンドの sink で、組み込みで見える範囲が広がる |
-| 458 | file | `dart:io` のファイルシステムの抽象(DL 14.1M) | `FileSystem` のメソッドは `dart:io` の `File`/`Directory` と同じ境界(`dart-io.yaml` を参照する形で同じ sink/source) | ファイル | なし | 高: `FileSystem` は実装の多いインターフェース(Local、Memory、Chroot) |
-| 12 | path | パスの操作(DL 14.0M) | propagator: `join`、`normalize` など | ファイル | 済み(`dart-path.yaml`) | 済み |
 | 298 | io | `dart:io` の補助(DL 17.9M) | `copyPath`、`ProcessManager.spawn`、`sharedStdIn`。sink: プロセスの引数 | プロセス / ファイル | なし | 中: DL が多い。`dart:io` の上の薄い層 |
 | 378 | async | `dart:async` の補助(DL 16.9M) | propagator: `StreamGroup`、`StreamQueue`、`FutureGroup`、`AsyncCache`、`CancelableOperation` の入力から出力へ | 非同期の基盤 | なし | 高: 呼び戻しと Future/Stream の合流が多い。中を読むコストが大きい |
-| 1542 | stream_channel | 2 方向のストリーム(DL 13.4M) | propagator: `StreamChannel.stream`/`sink` の入出力、`StreamChannelController` の `local`/`foreign` の対 | 非同期の基盤 | なし | 中: `web_socket_channel` と `shelf_web_socket` の下の層 |
+| 26 | shelf | サーバのミドルウェア(DL 16.6M) | source: `Request`(済み)。sink: `Response` のボディ、`Response.found`/`movedPermanently` の URL(リダイレクト) | Web フレームワーク | 一部(9 節) | 高: 残りは `Response` と `Handler`/`Middleware` の合流 |
+| 340 / 21 | json_annotation / json_serializable | JSON の注釈とジェネレータ(DL 16.2M / 4.5M) | 生成コードの `fromJson`/`toJson` の flow。ランタイムの関数は少ない(`$checkedCreate` など) | シリアライズ | なし | 中: 生成コードを読めば足りる面が大きい。DL は多い |
+| 163 | shelf_web_socket | shelf で WebSocket(DL 14.3M) | source: `webSocketHandler` のコールバックに渡るメッセージ | Web フレームワーク | なし | 中: 入口が 1 つ |
+| 99 | http_parser | HTTP のヘッダや日付のパーサ(DL 14.1M) | propagator: `MediaType.parse`、`parseHttpDate` の入力から戻り値へ | HTTP | なし | 中: DL が多い。`http` と `shelf` の中で使われる |
+| 458 | file | `dart:io` のファイルシステムの抽象(DL 14.1M) | `FileSystem` のメソッドは `dart:io` の `File`/`Directory` と同じ境界(`dart-io.yaml` を参照する形で同じ sink/source) | ファイル | なし | 高: `FileSystem` は実装の多いインターフェース(Local、Memory、Chroot) |
+| 32 | logging | ロギング(DL 14.0M) | sink: `Logger.info/warning/severe` のメッセージ(ログへの注入)。`Logger.onRecord` と `LogRecord` | ロギング | なし | 中: ダウンロード数が多い。実装の多いリスナへ合流 |
+| 12 | path | パスの操作(DL 14.0M) | propagator: `join`、`normalize` など | ファイル | 済み(`dart-path.yaml`) | 済み |
 | 333 | web_socket_channel | WebSocket(DL 13.9M) | source: `WebSocketChannel.stream`。sink: `WebSocketChannel.sink.add`、`connect` の URL | ネットワーク | なし | 高: ダウンロードが多い。sink と source が両方ある |
+| 1542 | stream_channel | 2 方向のストリーム(DL 13.4M) | propagator: `StreamChannel.stream`/`sink` の入出力、`StreamChannelController` の `local`/`foreign` の対 | 非同期の基盤 | なし | 中: `web_socket_channel` と `shelf_web_socket` の下の層 |
+| 10 | dio | HTTP クライアント(8.4k likes、DL 5.6M) | sink: `Dio.get/post/request/download` の URL とデータ。source: `Response.data`。flow: `Options`、`BaseOptions`。`Interceptor` は実装の多いインターフェース | HTTP クライアント | なし | 高: 実装の多い `Interceptor` と `HttpClientAdapter` で呼び出しが合流する |
+| 435 | sqlite3 | SQLite の FFI のバインディング(DL 3.9M) | sink: `Database.execute/select`、`prepare` の SQL。source: `ResultSet` の行 | DB | なし | 高: SQL の sink が明確。FFI の本体は読みにくい(中を読むコストが大きい) |
+| 535 | protobuf | Protocol Buffers のランタイム(DL 3.2M) | propagator: `GeneratedMessage.fromBuffer/fromJson/writeToBuffer/toProto3Json` と、生成コードのフィールドの getter/setter の flow | RPC / シリアライズ | なし | 高: gRPC の入力のメッセージはここを通る。生成コードの中を読むコストが大きい |
+| 48 | retry | リトライ(DL 3.1M) | `RetryOptions.retry(fn)` の `fn` の戻り値が戻り値へ。呼び戻し(`fn`)を呼ぶ | 非同期 / HTTP | なし | 中: 呼び戻しの呼び出しを繋ぐ(HTTP の呼び出しを包むことが多い) |
+| 549 | googleapis_auth | Google API の認証(DL 2.3M) | source: `AccessCredentials`、`clientViaServiceAccount` などが返す `AuthClient`(`http.Client` の実装)。sink: 資格情報の JSON | 認証 / クラウド | なし | 高(Google Cloud の範囲): `googleapis` の前提 |
+| 105 | dart_jsonwebtoken | JWT の生成と検証(DL 2.2M) | source: `JWT.verify` の `payload`(検証後も外から来たデータ)。sanitizer の候補: 検証の成功。sink: `JWT.sign` の key | 認証 | なし | 高: 認証の判断に関わる |
+| 794 | http2 | HTTP/2 の実装(DL 1.0M) | source: `ClientTransportConnection` / `ServerTransportConnection` の `incomingStreams` と `StreamMessage`。sink: `makeRequest` のヘッダ | HTTP / ネットワーク | なし | 中: `grpc` の下の層。ストリームのコールバックの合流 |
+| 504 | grpc(クライアント側) | gRPC の Dart 実装(DL 0.7M) | sink: `ClientChannel.new` のホスト(済み)、`Client.$createCall` の呼び出しのメタデータ。source: `ResponseFuture`/`ResponseStream` の中身 | RPC | 一部(`dart-grpc.yaml` はサーバ側と `ClientChannel.new`) | 高: 生成コードの `Client` から呼ぶ。実装の多い `ClientChannel`/`ClientTransportConnector` |
+| 121 | postgres | PostgreSQL のドライバ(DL 0.7M) | sink: `Connection.execute` と `Session.execute` の SQL。source: `Result` の行 | DB | なし | 高: 純 Dart のドライバで、中を読むコストが大きい |
+| 139 | oauth2 | OAuth2 のクライアント(DL 0.6M) | source: `Credentials`、`Client` が返す `http.Response`。sink: `authorizationUrl` の引数。`http.BaseClient` を継承 | 認証 | なし | 中: `http` の `Client` の実装でもある |
+| 146 | shelf_router | shelf のルーター(DL 0.6M) | source: `Request.params`。`Router.get/post` に登録したハンドラが入口 | Web フレームワーク | なし | 高: 入口の登録が動的な呼び出し |
+| 2775 | redis | Redis のクライアント(DL 0.3M) | sink: `Command.send_object` のコマンドと引数。source: 戻り値 | DB | なし | 低: 順位が低い |
+| 171 | process_run | プロセスの実行(DL 0.3M) | sink: `run`、`runExecutableArguments` のコマンドと引数(コマンド注入) | プロセス | なし | 高: コマンドの sink で、組み込みで見える範囲が広がる |
+| 132 | dart_frog | サーバのフレームワーク(DL 0.2M) | source: `RequestContext.request`、`Request.json/body`。`onRequest(RequestContext)` が入口 | Web フレームワーク | なし | 中: 入口の規約(ファイルの配置)が特別 |
+| 645 | mongo_dart | MongoDB のドライバ(DL 0.1M) | sink: `DbCollection.find/insert/update/deleteOne` の selector(NoSQL 注入)。source: 戻り値の `Map` | DB | なし | 中: クエリを `Map` で渡す形が注入の経路になる |
+| 408 / 1917 | mysql1 / mysql_client | MySQL のドライバ(DL 11k / 14k) | sink: `MySqlConnection.query`、`prepared` の SQL 文字列。source: 結果の `Row` | DB | なし | 中: DL は少ない(公開の指標では低い) |
 
 `http` と Google Cloud は 8 節の「すでに決まっているもの」に書いた。`dart_firebase_admin`(サーバ側の Firebase)は、5 節に置いた(Google Cloud の範囲)。
 
 ## 5. 外部のサービスのクライアント
 
-クラウド、認証、決済、メールと通知、検索、監視とエラー報告、メッセージング、ストレージ、BaaS、AI の API のクライアントを、pub.dev の公開の指標(DL、likes、一覧での位置)で、種類ごとに上位のものを選んだ。選び方は 1 節と同じで、特定の利用者が使うものを推測していない。取得日 2026-11-22。
+クラウド、認証、決済、メールと通知、検索、監視とエラー報告、メッセージング、ストレージ、BaaS、AI の API のクライアントを、pub.dev の公開の指標(DL、likes、一覧での位置)で、種類ごとに上位のものを選んだ。表は直近 30 日の DL の順に並べた(全行で取れる指標。順位は一覧に無いものがあるので並びに使わない)。「最終公開」は `latest.published`(公開 API)。選び方は 1 節と同じで、特定の利用者が使うものを推測していない。取得日 2026-11-22。
 
 - 「公式」は、pub.dev の publisher(検証済みの発行者)がサービスの運営元か、説明がそれを明記しているもの。publisher の表示がなく、説明からの推定のものは、そう書いた。「コミュニティ」は運営元以外が出しているもので、「事実上の標準」は、その種類の中で DL と likes が最も多いもの。
 - 「Flutter 依存」は、最新版の `pubspec.yaml` の `dependencies` と `environment` に `flutter` があるもの。「Dart のみ」は無いもの(`/api/packages/<名前>` で確認)。
@@ -82,37 +83,37 @@ pub.dev の公開の指標で、Flutter に依存しないパッケージ(最新
 - Kafka は、pub.dev に DL の多いクライアントが見つからなかった(`kafka` は 12 DL)ので入れていない。Azure は `azblob`(DL 1.7k、コミュニティ)が見つかっただけで、公開の指標が低いので入れていない。
 - `dart_firebase_admin` は Google Cloud の範囲(3 節の 2)。ADR-097 では、Google Cloud はこの範囲の 1 つ目。
 
-| 順位 | パッケージ | 説明 | モデルにする API の境界の案 | 種類 | 組み込み | 優先度と理由 |
+| 順位(一覧での位置) | パッケージ | 説明 | モデルにする API の境界の案 | 種類 | 組み込み | 優先度と理由 |
 |---|---|---|---|---|---|---|
-| 443 | supabase | Supabase の Dart クライアント(公式。Dart のみ。DL 1.3M、615 likes) | sink: `from(t).select/insert/update/delete/eq` のフィルタの文字列、`rpc` の引数、`auth.signIn*` の資格情報。source: 戻り値の行、`auth.currentUser` | BaaS | なし | 高: BaaS の中で DL が最も多い。`supabase_flutter` と共通 |
-| 414 | supabase_flutter | Supabase の Flutter 版(公式。Flutter 依存。DL 1.3M) | `supabase` と同じ。`Supabase.instance.client` から入る | BaaS | なし | 高: `supabase` の後ろに足す(同じ API) |
-| 1031 | sentry_flutter | Sentry の Flutter 版(公式。Flutter 依存。DL 2.1M) | sink: `Sentry.captureException/captureMessage`、`addBreadcrumb` のデータ(外へ出る) | 監視とエラー報告 | なし(`sentry` も無し) | 中: DL が多いが、外へ出るだけ |
-| 356 | openai_dart | OpenAI の REST のクライアント(コミュニティ。Dart のみ。DL 45k) | sink: `createChatCompletion` などのプロンプト(プロンプトの注入)。source: 応答の `choices` の文字列 | AI の API | なし | 高: 応答が次の処理に流れる(間接の注入)。DL は少なめ |
-| 307 | dart_openai | OpenAI のクライアント(コミュニティ。Dart のみ。DL 17k) | 同上。`OpenAI.instance.chat.create` | AI の API | なし | 中: `openai_dart` と同じ種類 |
-| 未取得(一覧に無い) | google_generative_ai | Google の Gemini の Dart SDK(公式、publisher: google.dev。Dart のみ。DL 89k) | sink: `GenerativeModel.generateContent` のプロンプト。source: `GenerateContentResponse.text` | AI の API | なし | 高: Google Cloud の範囲に近い |
-| 866 | firebase_ai | Firebase AI Logic(公式。Flutter 依存。DL 127k) | 同上(`GenerativeModel` と `LiveGenerativeModel`) | AI の API | なし | 高(Google Cloud の範囲): 3 節の 2 |
-| 1784 | anthropic_sdk_dart | Anthropic の API のクライアント(コミュニティ。Dart のみ。DL 27k) | sink: `messages.create` のプロンプト。source: 応答の内容 | AI の API | なし | 中: 同じ種類 |
-| 1106 | aws_signature_v4 | AWS の署名 V4(公式 aws-amplify.com。Dart のみ。DL 192k) | sink: `AWSSigV4Signer.sign` の要求(宛先とヘッダ)。`AWSHttpRequest` の流れ | クラウド(AWS) | なし | 高: AWS のクライアントが通る共通の層 |
-| 220 | amplify_flutter | AWS Amplify(公式。Flutter 依存。DL 165k) | sink/source: `Amplify.Auth.signIn*`、`Amplify.API.*`、`Amplify.Storage.*` の引数と戻り値 | クラウド(AWS)/ BaaS | なし | 中: 入口が多い(カテゴリごとのプラグイン)。登録して後で呼ぶ形 |
-| 未取得(一覧に無い。DL 89k) | aws_client | AWS の API のクライアント集(コミュニティの事実上の標準。Dart のみ。generated。pub points 0) | sink: 各サービスの要求(`S3.putObject` の key、`SQS.sendMessage` の本文、`DynamoDB.query` の式)。source: 応答 | クラウド(AWS) | なし | 高: 生成コードが大きく、中を読むコストが大きい。pub points が 0 なので扱いに注意 |
-| 1694 | minio | S3 互換のストレージ(コミュニティ。Dart のみ。DL 69k) | sink: `getObject/putObject/presignedGetObject` のバケットと key。source: オブジェクトの `Stream` | ストレージ | なし | 中: S3 互換の API 1 つに集まる |
-| 1782 | auth0_flutter | Auth0(公式。Flutter 依存。DL 210k) | source: `Credentials.accessToken/idToken`、`UserProfile`。sink: `login`/`webAuthentication` の `audience` と `parameters` | 認証 | なし | 中: 認証の結果が source |
-| 1287 | openid_client | OpenID Connect のクライアント(コミュニティの事実上の標準。Dart のみ。DL 16k) | source: `Credential.getTokenResponse`、`idToken.claims`。sink: `Flow.authorizationUrl`、`Client.discover` の URL | 認証 | なし | 中: OIDC の標準。DL は少なめ |
-| 433 | flutter_stripe | Stripe(コミュニティ。Stripe 公式ではない。Flutter 依存。DL 514k) | sink: `Stripe.instance.confirmPayment` などの `clientSecret` と支払い情報。source: `PaymentIntent` | 決済 | なし | 中: 支払い情報は外へ出る。サーバ側の Stripe のクライアントは別 |
-| 1107 | purchases_flutter | RevenueCat(公式。Flutter 依存。DL 720k) | source: `CustomerInfo`、`Offerings`。sink: `Purchases.logIn` の ID、`purchasePackage` | 決済 | なし | 中: DL が多い |
-| 566 | mailer | メールの送信 SMTP(コミュニティの事実上の標準。Dart のみ。DL 287k) | sink: `send(Message, SmtpServer)` の宛先、件名、本文、ヘッダ(メールヘッダの注入)。`SmtpServer` のホスト | メール | なし | 高: ヘッダと本文の sink が明確。Dart のみ |
-| 401 | enough_mail | IMAP/POP3/SMTP(コミュニティ。Dart のみ。DL 34k) | source: `fetchMessages` の `MimeMessage`(本文、ヘッダ)。sink: `sendMessage` | メール | なし | 中: 受信の source がある |
-| 2478 | onesignal_flutter | OneSignal の通知(公式と思われる。publisher の表示なし。Flutter 依存。DL 202k) | sink: `OneSignal.login` の ID、`User.addTags`。source: 通知のクリックのデータ | 通知 | なし | 低: 外へ出るデータが中心 |
-| 923 | algoliasearch | Algolia(公式。Dart のみ。DL 38k) | sink: `searchSingleIndex` の `query`、`filters`(フィルタの注入)。source: 応答の `hits` | 検索 | なし | 中: 検索の中では公式で、Dart のみ |
-| 2669 | meilisearch | Meilisearch(公式。Dart のみ。DL 5.8k) | sink: `index.search` の query、filter。source: 応答 | 検索 | なし | 低: DL が少ない |
-| 3047 | elastic_client | Elasticsearch の HTTP API(コミュニティ。Dart のみ。DL 1.3k) | sink: `Client.search` の `Query` と、`Doc` | 検索 | なし | 低: DL が少ない。ただし Elasticsearch の選択肢が少ない |
-| 518 | mqtt5_client | MQTT 5(コミュニティの事実上の標準。Dart のみ。DL 66k) | source: `updates` の `MqttPublishMessage`。sink: `publishMessage`、`connect` のホスト | メッセージング | なし(`mqtt_client` も無し) | 中: MQTT は 7 節の `mqtt_client` と同じ種類 |
-| 1343 | dart_nats | NATS のクライアント(コミュニティ。Dart のみ。DL 6.4k) | source: `Subscription.stream` の `Message`。sink: `pub`/`request` の subject とデータ | メッセージング | なし | 低: DL が少ない |
-| 1684 | dart_amqp | AMQP 0.9.1(コミュニティ。Dart のみ。DL 9.9k) | source: `Queue.consume` の `AmqpMessage`。sink: `Exchange.publish` | メッセージング | なし | 低: DL が少ない |
-| 460 | socket_io_client | socket.io(コミュニティの事実上の標準。Dart のみ。DL 336k、1.5k likes) | source: `socket.on(event, handler)` のデータ。sink: `socket.emit`、`io(url)` の URL | メッセージング / ネットワーク | なし | 高: DL と likes が多い。呼び戻しの登録 |
-| 2020 | dart_appwrite | Appwrite のサーバ側 SDK(公式。Dart のみ。DL 20k) | sink: `Databases.listDocuments` の `queries`、`createDocument` のデータ。source: 戻り値 | BaaS | なし | 中: 公式の SDK。Flutter 版 `appwrite`(3423 位、DL 17k、Flutter 依存)も同じ API |
-| 344 | pocketbase | PocketBase(公式。Dart のみ。DL 20k) | sink: `collection(c).getList/create/update` の `filter`、`body`。source: `RecordModel` | BaaS | なし | 中: 公式の SDK |
-| 未取得(一覧に無い) | dart_firebase_admin | Firebase の Admin SDK(コミュニティ、publisher: invertase.io。Dart のみ。DL 17.5k) | source: `Auth.verifyIdToken` の `DecodedIdToken`。sink: `Firestore` の操作、`Messaging.send` | クラウド(Google Cloud の範囲) | なし | 高(Google Cloud の範囲): サーバ側の Firebase |
+| 1031 | sentry_flutter | Sentry の Flutter 版(公式。Flutter 依存。DL 2.1M、最終公開 2026-11-19) | sink: `Sentry.captureException/captureMessage`、`addBreadcrumb` のデータ(外へ出る) | 監視とエラー報告 | なし(`sentry` も無し) | 中: DL が多いが、外へ出るだけ |
+| 443 | supabase | Supabase の Dart クライアント(公式。Dart のみ。DL 1.3M、615 likes、最終公開 2026-10-12) | sink: `from(t).select/insert/update/delete/eq` のフィルタの文字列、`rpc` の引数、`auth.signIn*` の資格情報。source: 戻り値の行、`auth.currentUser` | BaaS | なし | 高: BaaS の中で DL が最も多い。`supabase_flutter` と共通 |
+| 414 | supabase_flutter | Supabase の Flutter 版(公式。Flutter 依存。DL 1.3M、最終公開 2026-10-12) | `supabase` と同じ。`Supabase.instance.client` から入る | BaaS | なし | 高: `supabase` の後ろに足す(同じ API) |
+| 1107 | purchases_flutter | RevenueCat(公式。Flutter 依存。DL 720k、最終公開 2026-11-18) | source: `CustomerInfo`、`Offerings`。sink: `Purchases.logIn` の ID、`purchasePackage` | 決済 | なし | 中: DL が多い |
+| 433 | flutter_stripe | Stripe(コミュニティ。Stripe 公式ではない。Flutter 依存。DL 514k、最終公開 2026-11-13) | sink: `Stripe.instance.confirmPayment` などの `clientSecret` と支払い情報。source: `PaymentIntent` | 決済 | なし | 中: 支払い情報は外へ出る。サーバ側の Stripe のクライアントは別 |
+| 460 | socket_io_client | socket.io(コミュニティの事実上の標準。Dart のみ。DL 336k、1.5k likes、最終公開 2026-06-13) | source: `socket.on(event, handler)` のデータ。sink: `socket.emit`、`io(url)` の URL | メッセージング / ネットワーク | なし | 高: DL と likes が多い。呼び戻しの登録 |
+| 566 | mailer | メールの送信 SMTP(コミュニティの事実上の標準。Dart のみ。DL 287k、最終公開 2026-11-08) | sink: `send(Message, SmtpServer)` の宛先、件名、本文、ヘッダ(メールヘッダの注入)。`SmtpServer` のホスト | メール | なし | 高: ヘッダと本文の sink が明確。Dart のみ |
+| 1782 | auth0_flutter | Auth0(公式。Flutter 依存。DL 210k、最終公開 2026-11-06) | source: `Credentials.accessToken/idToken`、`UserProfile`。sink: `login`/`webAuthentication` の `audience` と `parameters` | 認証 | なし | 中: 認証の結果が source |
+| 2478 | onesignal_flutter | OneSignal の通知(公式と思われる。publisher の表示なし。Flutter 依存。DL 202k、最終公開 2026-11-10) | sink: `OneSignal.login` の ID、`User.addTags`。source: 通知のクリックのデータ | 通知 | なし | 低: 外へ出るデータが中心 |
+| 1106 | aws_signature_v4 | AWS の署名 V4(公式 aws-amplify.com。Dart のみ。DL 192k、最終公開 2026-07-31) | sink: `AWSSigV4Signer.sign` の要求(宛先とヘッダ)。`AWSHttpRequest` の流れ | クラウド(AWS) | なし | 高: AWS のクライアントが通る共通の層 |
+| 220 | amplify_flutter | AWS Amplify(公式。Flutter 依存。DL 165k、最終公開 2026-10-14) | sink/source: `Amplify.Auth.signIn*`、`Amplify.API.*`、`Amplify.Storage.*` の引数と戻り値 | クラウド(AWS)/ BaaS | なし | 中: 入口が多い(カテゴリごとのプラグイン)。登録して後で呼ぶ形 |
+| 866 | firebase_ai | Firebase AI Logic(公式。Flutter 依存。DL 127k、最終公開 2026-11-16) | 同上(`GenerativeModel` と `LiveGenerativeModel`) | AI の API | なし | 高(Google Cloud の範囲): 3 節の 2 |
+| 未取得(一覧に無い) | google_generative_ai | Google の Gemini の Dart SDK(公式、publisher: google.dev。Dart のみ。DL 89k、最終公開 2025-04-17) | sink: `GenerativeModel.generateContent` のプロンプト。source: `GenerateContentResponse.text` | AI の API | なし | 高: Google Cloud の範囲に近い |
+| 未取得(一覧に無い。DL 89k) | aws_client | AWS の API のクライアント集(コミュニティの事実上の標準。Dart のみ。generated。pub points 0、最終公開 2026-08-10) | sink: 各サービスの要求(`S3.putObject` の key、`SQS.sendMessage` の本文、`DynamoDB.query` の式)。source: 応答 | クラウド(AWS) | なし | 低: 組み込みにするかは、着手するときに、保守の状態(最終公開日、pub points)を見て決める。pub points が 0、生成コードが大きく、中を読むコストは大きい |
+| 1694 | minio | S3 互換のストレージ(コミュニティ。Dart のみ。DL 69k、最終公開 2025-08-15) | sink: `getObject/putObject/presignedGetObject` のバケットと key。source: オブジェクトの `Stream` | ストレージ | なし | 中: S3 互換の API 1 つに集まる |
+| 518 | mqtt5_client | MQTT 5(コミュニティの事実上の標準。Dart のみ。DL 66k、最終公開 2026-11-19) | source: `updates` の `MqttPublishMessage`。sink: `publishMessage`、`connect` のホスト | メッセージング | なし(`mqtt_client` も無し) | 中: MQTT は 7 節の `mqtt_client` と同じ種類 |
+| 356 | openai_dart | OpenAI の REST のクライアント(コミュニティ。Dart のみ。DL 45k、最終公開 2026-11-18) | sink: `createChatCompletion` などのプロンプト(プロンプトの注入)。source: 応答の `choices` の文字列 | AI の API | なし | 高: 応答が次の処理に流れる(間接の注入)。DL は少なめ |
+| 923 | algoliasearch | Algolia(公式。Dart のみ。DL 38k、最終公開 2026-11-17) | sink: `searchSingleIndex` の `query`、`filters`(フィルタの注入)。source: 応答の `hits` | 検索 | なし | 中: 検索の中では公式で、Dart のみ |
+| 401 | enough_mail | IMAP/POP3/SMTP(コミュニティ。Dart のみ。DL 34k、最終公開 2026-10-26) | source: `fetchMessages` の `MimeMessage`(本文、ヘッダ)。sink: `sendMessage` | メール | なし | 中: 受信の source がある |
+| 1784 | anthropic_sdk_dart | Anthropic の API のクライアント(コミュニティ。Dart のみ。DL 27k、最終公開 2026-11-12) | sink: `messages.create` のプロンプト。source: 応答の内容 | AI の API | なし | 中: 同じ種類 |
+| 2020 | dart_appwrite | Appwrite のサーバ側 SDK(公式。Dart のみ。DL 20k、最終公開 2026-11-16) | sink: `Databases.listDocuments` の `queries`、`createDocument` のデータ。source: 戻り値 | BaaS | なし | 中: 公式の SDK。Flutter 版 `appwrite`(3423 位、DL 17k、Flutter 依存)も同じ API |
+| 344 | pocketbase | PocketBase(公式。Dart のみ。DL 20k、最終公開 2026-11-11) | sink: `collection(c).getList/create/update` の `filter`、`body`。source: `RecordModel` | BaaS | なし | 中: 公式の SDK |
+| 未取得(一覧に無い) | dart_firebase_admin | Firebase の Admin SDK(コミュニティ、publisher: invertase.io。Dart のみ。DL 17.5k、最終公開 2025-03-21) | source: `Auth.verifyIdToken` の `DecodedIdToken`。sink: `Firestore` の操作、`Messaging.send` | クラウド(Google Cloud の範囲) | なし | 高(Google Cloud の範囲): サーバ側の Firebase |
+| 307 | dart_openai | OpenAI のクライアント(コミュニティ。Dart のみ。DL 17k、最終公開 2026-08-25) | 同上。`OpenAI.instance.chat.create` | AI の API | なし | 中: `openai_dart` と同じ種類 |
+| 1287 | openid_client | OpenID Connect のクライアント(コミュニティの事実上の標準。Dart のみ。DL 16k、最終公開 2026-09-16) | source: `Credential.getTokenResponse`、`idToken.claims`。sink: `Flow.authorizationUrl`、`Client.discover` の URL | 認証 | なし | 中: OIDC の標準。DL は少なめ |
+| 1684 | dart_amqp | AMQP 0.9.1(コミュニティ。Dart のみ。DL 9.9k、最終公開 2024-05-31) | source: `Queue.consume` の `AmqpMessage`。sink: `Exchange.publish` | メッセージング | なし | 低: DL が少ない |
+| 1343 | dart_nats | NATS のクライアント(コミュニティ。Dart のみ。DL 6.4k、最終公開 2026-11-04) | source: `Subscription.stream` の `Message`。sink: `pub`/`request` の subject とデータ | メッセージング | なし | 低: DL が少ない |
+| 2669 | meilisearch | Meilisearch(公式。Dart のみ。DL 5.8k、最終公開 2026-04-01) | sink: `index.search` の query、filter。source: 応答 | 検索 | なし | 低: DL が少ない |
+| 3047 | elastic_client | Elasticsearch の HTTP API(コミュニティ。Dart のみ。DL 1.3k、最終公開 2023-10-06) | sink: `Client.search` の `Query` と、`Doc` | 検索 | なし | 低: DL が少ない。ただし Elasticsearch の選択肢が少ない |
 
 ## 6. Flutter のクライアント側の候補の表
 
