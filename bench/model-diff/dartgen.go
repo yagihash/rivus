@@ -195,48 +195,53 @@ func splitParams(s string) []string {
 func parseParams(params, body string) []dartParam {
 	var out []dartParam
 	named := false
-	rest := params
 	var pos, nm string
-	if i := strings.IndexAny(rest, "{["); i >= 0 {
-		pos, nm = rest[:i], rest[i+1:]
-		named = rest[i] == '{'
+	if i := strings.IndexAny(params, "{["); i >= 0 {
+		pos, nm = params[:i], params[i+1:]
+		named = params[i] == '{'
 		nm = strings.TrimRight(strings.TrimSpace(nm), "}]")
 	} else {
-		pos = rest
-	}
-	field := func(n string) string {
-		m := regexp.MustCompile(`(?m)^\s*(?:final |late )*([\w<>?,. ]+?)\s+` + n + `;`).FindStringSubmatch(body)
-		if m != nil {
-			return strings.TrimSpace(m[1])
-		}
-		return ""
-	}
-	mk := func(p string, isNamed bool) {
-		req := strings.HasPrefix(p, "required ")
-		p = strings.TrimPrefix(strings.TrimPrefix(p, "required "), "covariant ")
-		if i := strings.Index(p, "="); i > 0 {
-			p = strings.TrimSpace(p[:i])
-		}
-		if m := regexp.MustCompile(`^(?:this|super)\.(\w+)$`).FindStringSubmatch(p); m != nil {
-			out = append(out, dartParam{Type: field(m[1]), Name: m[1], Named: isNamed, Required: req || !isNamed})
-			return
-		}
-		m := regexp.MustCompile(`^(.+?)\s+(\w+)$`).FindStringSubmatch(p)
-		if m == nil {
-			out = append(out, dartParam{Name: p, Named: isNamed, Required: req || !isNamed})
-			return
-		}
-		out = append(out, dartParam{Type: strings.TrimSpace(m[1]), Name: m[2], Named: isNamed, Required: req || !isNamed})
+		pos = params
 	}
 	for _, p := range splitParams(pos) {
-		mk(p, false)
+		out = append(out, parseParam(p, false, body))
 	}
 	if named || nm != "" {
 		for _, p := range splitParams(nm) {
-			mk(p, named)
+			out = append(out, parseParam(p, named, body))
 		}
 	}
 	return out
+}
+
+// fieldType is the type of the field `name` of the class (for `this.name` in a constructor).
+func fieldType(body, name string) string {
+	m := regexp.MustCompile(`(?m)^\s*(?:final |late )*([\w<>?,. ]+?)\s+` + name + `;`).FindStringSubmatch(body)
+	if m != nil {
+		return strings.TrimSpace(m[1])
+	}
+	return ""
+}
+
+var (
+	formalRe = regexp.MustCompile(`^(?:this|super)\.(\w+)$`)
+	paramRe  = regexp.MustCompile(`^(.+?)\s+(\w+)$`)
+)
+
+func parseParam(p string, isNamed bool, body string) dartParam {
+	req := strings.HasPrefix(p, "required ")
+	p = strings.TrimPrefix(strings.TrimPrefix(p, "required "), "covariant ")
+	if i := strings.Index(p, "="); i > 0 {
+		p = strings.TrimSpace(p[:i])
+	}
+	if m := formalRe.FindStringSubmatch(p); m != nil {
+		return dartParam{Type: fieldType(body, m[1]), Name: m[1], Named: isNamed, Required: req || !isNamed}
+	}
+	m := paramRe.FindStringSubmatch(p)
+	if m == nil {
+		return dartParam{Name: p, Named: isNamed, Required: req || !isNamed}
+	}
+	return dartParam{Type: strings.TrimSpace(m[1]), Name: m[2], Named: isNamed, Required: req || !isNamed}
 }
 
 // signature finds a method, a getter, a constructor (`new`) or a top-level function in the source of the package.
