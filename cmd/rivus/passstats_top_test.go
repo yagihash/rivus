@@ -121,3 +121,78 @@ func TestPassStatsTopAndSort(t *testing.T) {
 		t.Error("an unknown -pass-stats-sort should be an error")
 	}
 }
+
+// -pass-stats says how the elements of the summaries are spread over the functions (summary_sizes) and what they are
+// made of, in numbers only: the parts add up to summary_elems, the quantiles are in order, and nothing is there without
+// the flag.
+func TestPassStatsSummarySizes(t *testing.T) {
+	type sizes struct {
+		Functions, Empty, Median, P90, P99, Max int
+		Over100, Over1000, Over10000            int
+		Top1PctShare                            int            `json:"top_1pct_share_permille"`
+		OwnElems                                int            `json:"own_elems"`
+		DepElems                                int            `json:"dep_elems"`
+		ByOutput                                map[string]int `json:"by_output"`
+		ByElement                               map[string]int `json:"by_element"`
+		ByPathDepth                             map[string]int `json:"by_path_depth"`
+	}
+	type out struct {
+		Stats struct {
+			SummaryElems int    `json:"summary_elems"`
+			Sizes        *sizes `json:"summary_sizes"`
+		} `json:"stats"`
+	}
+	run := func(args ...string) (out, []byte) {
+		cmd := exec.Command(binary, append([]string{"analyze", "-rules", "rules.yaml"}, append(args, "./...")...)...)
+		cmd.Dir = bigSCC(t, 40)
+		b, err := cmd.Output()
+		if err != nil {
+			t.Fatalf("analyze %v: %v", args, err)
+		}
+		var r out
+		if err := json.Unmarshal(b, &r); err != nil {
+			t.Fatal(err)
+		}
+		return r, b
+	}
+	if plain, _ := run(); plain.Stats.Sizes != nil {
+		t.Errorf("summary_sizes is there without -pass-stats: %+v", plain.Stats.Sizes)
+	}
+	r, _ := run("-pass-stats")
+	s := r.Stats.Sizes
+	if s == nil {
+		t.Fatal("no summary_sizes with -pass-stats")
+	}
+	sum := func(m map[string]int) int {
+		n := 0
+		for _, v := range m {
+			n += v
+		}
+		return n
+	}
+	if sum(s.ByOutput) != r.Stats.SummaryElems {
+		t.Errorf("by_output adds up to %d, summary_elems is %d: %+v", sum(s.ByOutput), r.Stats.SummaryElems, s.ByOutput)
+	}
+	if s.ByElement["real"]+s.ByElement["param"] != r.Stats.SummaryElems {
+		t.Errorf("real + param is %d, summary_elems is %d: %+v", s.ByElement["real"]+s.ByElement["param"], r.Stats.SummaryElems, s.ByElement)
+	}
+	if sum(s.ByPathDepth) != s.ByElement["param"] {
+		t.Errorf("by_path_depth adds up to %d, the parameter elements are %d", sum(s.ByPathDepth), s.ByElement["param"])
+	}
+	if s.OwnElems+s.DepElems != r.Stats.SummaryElems {
+		t.Errorf("own + dep is %d, summary_elems is %d", s.OwnElems+s.DepElems, r.Stats.SummaryElems)
+	}
+	if s.Functions == 0 || !(s.Median <= s.P90 && s.P90 <= s.P99 && s.P99 <= s.Max) || s.Max == 0 {
+		t.Errorf("the sizes are not in order: %+v", s)
+	}
+	if s.Top1PctShare <= 0 || s.Top1PctShare > 1000 || s.Over100 < s.Over1000 || s.Over1000 < s.Over10000 {
+		t.Errorf("the shares or counts are not consistent: %+v", s)
+	}
+	// the same run gives the same numbers (they have no clock)
+	r2, _ := run("-pass-stats")
+	a, _ := json.Marshal(r.Stats.Sizes)
+	b, _ := json.Marshal(r2.Stats.Sizes)
+	if string(a) != string(b) {
+		t.Errorf("summary_sizes differs between two runs:\n%s\n%s", a, b)
+	}
+}

@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"runtime"
 	"runtime/pprof"
 	"strings"
@@ -83,20 +82,28 @@ type analyzeOpts struct {
 	afterRead     func(l *loaded, rules *model.Rules, st *sites.Result, g *sg.Program, bodies map[string]string) error
 }
 
-func (o *analyzeOpts) register(fs *flag.FlagSet) {
-	o.common.register(fs)
-	fs.IntVar(&o.k, "k", taint.DefaultOptions().K, "maximum access path depth")
+// registerLanguages adds the flags that say which languages are read and how (the Rust extractor runs under a sandbox). The commands that
+// read the code of a directory (analyze, index, sites, ...) have them.
+func (o *analyzeOpts) registerLanguages(fs *flag.FlagSet) {
 	fs.StringVar(&o.lang, "lang", "auto", "languages to read: auto (what the directory holds: go.mod / go.work, pubspec.yaml, Cargo.toml; a Rust project is read after a question [Y/n] on the terminal, or with -yes, because reading it builds it; where there is no sandbox it is not read), or go, dart, rust, separated by commas (-lang rust asks nothing). The answer makes a different index")
 	fs.BoolVar(&o.yes, "yes", false, "-lang auto: read the Rust project of the directory without asking (what the question would say yes to; needed where there is no terminal to ask)")
 	fs.StringVar(&o.dartExtractor, "dart-extractor", "", "command of the Dart extractor (default: $RIVUS_DART_EXTRACTOR, then rivus-dart)")
 	fs.StringVar(&o.rustExtractor, "rust-extractor", "", "command of the Rust extractor (default: $RIVUS_RUST_EXTRACTOR, then rivus-rust)")
 	fs.BoolVar(&o.unsafeHostExec, "unsafe-host-exec", false, "run the Rust extractor on this machine, with your rights: the build scripts and proc macros of the project run here. Only for code you trust (default: under the sandbox of macOS; on another system nothing is run without this flag; docs/rust-isolation.md; also RIVUS_UNSAFE_HOST_EXEC=1)")
 	fs.DurationVar(&o.isolationTimeout, "isolation-timeout", 30*time.Minute, "stop a stage of the Rust extraction (fetch, extract) after this long")
-	fs.BoolVar(&o.noFetch, "no-fetch", false, "do not fetch the dependencies of the Rust project (use what an earlier run put in the volume)")
+	fs.BoolVar(&o.noFetch, "no-fetch", false, "do not fetch the dependencies of the Rust project (use what an earlier run fetched)")
 	fs.Var(&o.isolationEnv, "isolation-env", "NAME=VALUE for the build of the Rust project (repeatable). The value is written here; nothing is taken from your environment (a build script that needs a setting that it would fetch otherwise, like LOCAL_ASSETS_PATH)")
 	fs.Var(&o.isolationRead, "isolation-read", "PATH: a directory or file of this machine that the build of the Rust project may read besides the project and its dependencies (repeatable; not your home directory)")
 	fs.Int64Var(&o.isolationMaxOut, "isolation-max-output", 4<<30, "the most bytes the Rust extractor may write (the stream of the IR)")
-	fs.Var(&o.allowFetchHosts, "allow-fetch-host", "HOST: let the fetch stage of the Rust project (in the container, with a network) get from this host, which Cargo.lock names (git dependencies on any host, other registries; by default only crates.io is allowed). The repository can send the fetch on to other places (its submodules, redirects); that is not prevented until the network of the fetch stage is narrowed (repeatable)")
+	fs.Var(&o.allowFetchHosts, "allow-fetch-host", "HOST: let the fetch stage of the Rust project (under the sandbox, with a network) get from this host, which Cargo.lock names (git dependencies on any host, other registries; by default only crates.io is allowed). The repository can send the fetch on to other places (its submodules, redirects); that is not prevented until the network of the fetch stage is narrowed (repeatable)")
+	usual(fs, "lang", "yes", "dart-extractor", "rust-extractor", "unsafe-host-exec", "isolation-env", "isolation-read")
+	diagnostic(fs, "isolation-timeout", "no-fetch", "isolation-max-output", "allow-fetch-host")
+}
+
+func (o *analyzeOpts) register(fs *flag.FlagSet) {
+	o.common.register(fs)
+	o.registerLanguages(fs)
+	fs.IntVar(&o.k, "k", taint.DefaultOptions().K, "maximum access path depth")
 	fs.IntVar(&o.workers, "workers", 0, "functions analysed at the same time (0: one per CPU; 1: one at a time). The result does not depend on it")
 	fs.BoolVar(&o.numeric, "numeric-taint", false, "follow taint through numbers and bools (by default it stops there: they cannot carry an injection)")
 	fs.BoolVar(&o.verbose, "v", false, "print the time of each phase to stderr")
@@ -114,8 +121,8 @@ func (o *analyzeOpts) register(fs *flag.FlagSet) {
 	fs.StringVar(&o.memProf, "memprofile", "", "write a heap profile (allocations) to this file after the taint phase (development)")
 	fs.StringVar(&o.lockProf, "lockprofile", "", "write the mutex and block profiles of the taint phase to <this>.mutex and <this>.block (development)")
 	fs.StringVar(&o.cpuProf, "cpuprofile", "", "write a CPU profile of the taint phase to this file (development)")
-	usual(fs, "lang", "yes", "dart-extractor", "rust-extractor", "unsafe-host-exec", "isolation-env", "isolation-read", "workers", "numeric-taint", "v", "timeout", "resolve-func-values")
-	diagnostic(fs, "k", "isolation-timeout", "no-fetch", "isolation-max-output", "allow-fetch-host", "max-implementations", "max-passes", "func-timeout", "ir", "pass-stats", "pass-stats-top", "pass-stats-sort", "func-values", "trace-element", "memprofile", "lockprofile", "cpuprofile")
+	usual(fs, "workers", "numeric-taint", "v", "timeout", "resolve-func-values")
+	diagnostic(fs, "k", "max-implementations", "max-passes", "func-timeout", "ir", "pass-stats", "pass-stats-top", "pass-stats-sort", "func-values", "trace-element", "memprofile", "lockprofile", "cpuprofile")
 }
 
 // analyze runs the whole pipeline. extra rule sets are added to the ones
@@ -293,8 +300,29 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 			}
 			names = append(names, fmt.Sprintf("%s (%d)", p.Package, p.Functions))
 		}
-		fmt.Fprintf(os.Stderr, "rivus: %d package(s) or file(s) were read and not built (a type error in them or in a package they import), or read on a syntax tree that the analyzer recovered (a syntax error: a declaration may be missing); %d function(s) of them are not analysed: %s; see summary.unread\n",
-			u.Packages, u.Functions, strings.Join(names, ", "))
+		// the kinds that have a sentence of their own below: the sentence about a type error is not about them
+		specific := func(why string) bool {
+			for _, pre := range []string{ir.DependencyNotAllowedPrefix, ir.DependencyNotLinkedPrefix, ir.PackageConfigMissingPrefix, ir.PackageConfigOldPrefix} {
+				if strings.HasPrefix(why, pre) {
+					return true
+				}
+			}
+			return false
+		}
+		allSpecific := len(u.Top) == u.Packages
+		for _, p := range u.Top {
+			allSpecific = allSpecific && specific(p.Why)
+		}
+		if !allSpecific {
+			fmt.Fprintf(os.Stderr, "rivus: %d package(s) or file(s) were read and not built (a type error in them or in a package they import), or read on a syntax tree that the analyzer recovered (a syntax error: a declaration may be missing); %d function(s) of them are not analysed: %s; see summary.unread\n",
+				u.Packages, u.Functions, strings.Join(names, ", "))
+		}
+		for _, p := range u.Top {
+			if strings.HasPrefix(p.Why, ir.PackageConfigMissingPrefix) || strings.HasPrefix(p.Why, ir.PackageConfigOldPrefix) {
+				fmt.Fprintf(os.Stderr, "rivus: the Dart package %s is not prepared (package_config.json is not there, or old): the imports of other packages do not resolve, so its dependencies are not read; run `dart pub get` in it (rivus does not run it); see summary.unread\n", p.Package)
+				break
+			}
+		}
 		for _, p := range u.Top {
 			if strings.HasPrefix(p.Why, ir.DependencyNotAllowedPrefix) {
 				fmt.Fprintf(os.Stderr, "rivus: a dependency (%s) is outside the places that are trusted (the project, the pub cache, the SDKs), so it is not read and its functions are not analysed; -allow-deps-under <its parent directory> reads it\n", p.Package)
@@ -392,7 +420,7 @@ func runIndex(args []string) error {
 	fs := flag.NewFlagSet("index", flag.ExitOnError)
 	var o analyzeOpts
 	o.register(fs)
-	out := fs.String("o", "", "with -taint: the JSON index to write (default: .rivus/index.json below -C)")
+	out := fs.String("o", "", "with -taint: the JSON index to write (default: index.json beside the default graph file, in the user's cache by the absolute path of -C; never in the analysed directory)")
 	graph := fs.String("graph", "", "the graph file to write (default: in the user's cache, by the absolute path of -C)")
 	taintFlag := fs.Bool("taint", false, "also run the taint analysis (slow) and write its result as the JSON index that query -index and resolve -index read (-o implies it)")
 	usual(fs, "o", "graph", "taint")
@@ -425,7 +453,10 @@ func runIndex(args []string) error {
 	}
 	jpath := *out
 	if jpath == "" {
-		jpath = filepath.Join(o.dir, ".rivus", "index.json")
+		jpath, err = indexCachePath(o.dir)
+		if err != nil {
+			return err
+		}
 	}
 	if err := rep.Save(jpath); err != nil {
 		return err

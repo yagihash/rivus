@@ -114,7 +114,7 @@ rivus query -site <ID> ./...           # sites の 1 件から始める
 
 | コマンド | 何をするか |
 |---|---|
-| `sites` | source と sink のルールが一致する箇所を並べる。解析はしない |
+| `sites` | source と sink のルールが一致する箇所を並べる。解析はしない。読む言語は `analyze` と同じ(`-lang`)で、読まなかった言語は出力の `skipped_languages` に出る |
 | `analyze` | source から sink への経路を、関数とパッケージを跨いで探す |
 | `query` | 片側からの問い（この sink に届く source / この source が届く sink / この箇所について） |
 | `index` | コードを 1 回読んで、呼び出しグラフを保存する（`-taint` で、解析の結果も） |
@@ -139,6 +139,9 @@ jq '.stats | {timed_out, converged, largest_scc, largest_scc_packages}' out.json
 
 - `-pass-stats-top 0` は全パッケージ、`-pass-stats-sort time` は、かかった時間の順です(`time` は時計なので、実行ごとに少し違います。時計に依らない並びは `reanalyses`(既定)、`functions`、`elems`)。
 - 表の列は、`dep`(依存のパッケージか)、`functions`(関数の数)、`reanalyses`(関数の解析の回数)、`spent_ms`(かかった時間)、`summary_elems`(要約の要素の数)です。
+- `summary_sizes` は、関数の要約の要素(解析が関数ごとに持ち運ぶ、taint の単位)が、関数にどう散らばっているか、何でできているかの数字です(関数名やコードは出ません)。要約の大きさの偏り(少数の関数が大きい要約を持つのか、多くの関数が同じくらいずつ持つのか)を、数字で見られます。
+  - 大きさの分布: `functions`(要約が空でない関数)、`empty`(空の関数)、`median`、`p90`、`p99`、`max`、`over_100` / `over_1000` / `over_10000`(その個数より大きい要約を持つ関数の数)、`top_1pct_share_permille`(要約が大きい上位 1% の関数が、全要素の何‰を持つか。1000 に近いと少数の関数に集中、10 に近いと均等)。`own_elems` と `dep_elems` は、プロジェクト自身と依存の関数の要素の数です。`summary_elems` を、関数の数で割ると、1 関数あたりの平均です。
+  - 内訳: `by_output`(要素が行き着く先。`result`、`param`(引数の指す先への書き込み)、`global`、`throw`)、`by_element`(`real` は source 由来、`param` は引数の中身(呼び出し側が渡すもの)、`param_0` はそのうち 0 番目の引数(メソッドではレシーバ)、`with_path` は引数の中のパスつき、`with_guards` は引数の条件つき)、`by_path_depth`(引数の中のパスの深さ。`3+` は 3 以上。深さの上限は `-k`)。
 - `largest_scc_packages` は、互いに呼び合う関数の最大のかたまり(`largest_scc`)が、どのパッケージの関数でできているかの上位 10 件です。かたまりの大きさが解析の重さを決めるので、ここに出る依存が、モデルで切る候補です。
 - `stats.timed_out` が true でも、途中までの内訳が出ます。`packages_top` と `largest_summary` は、時間切れまでに解析した分で、`largest_scc_packages` は呼び出しグラフから解析の前に作るので、解析が始まる前に切れても出ます。`-timeout` は、互いに呼び合う大きいかたまりの中でも、関数ごとに見ます(1 つの関数の解析の中は `-func-timeout`)。
 - `stats.timed_out` は、時間切れでないとき、出力にありません(jq では `null`)。
@@ -242,7 +245,7 @@ Go / Dart / Rust の extractor ──→ 中立の IR（CFG、JSON Lines）─�
 
 - 言語ごとの extractor が、ソースを、制御フローグラフの水準の IR に下ろします。コアは、言語を知りません。
 - コアは、関数ごとに「引数や戻り値のあいだで、何が何に伝わるか」の要約を作り、呼び出しグラフの下から順に組み合わせます。
-- `rivus index` は、呼び出しグラフを SQLite のファイルに保存します（利用者のキャッシュに置き、解析の対象のディレクトリには書きません）。
+- `rivus index` は、呼び出しグラフを SQLite のファイルに保存します（利用者のキャッシュに置き、解析の対象のディレクトリには書きません）。`index -taint` の JSON の index も、`-o` を省くと、同じキャッシュの下（`graph.db` の隣の `index.json`）に書きます。
 
 詳しくは [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。設計の判断の記録は [docs/DECISIONS.md](docs/DECISIONS.md)。
 

@@ -1,6 +1,6 @@
 # ADR の一覧
 
-[DECISIONS.md](DECISIONS.md)(ADR-001〜093)の、番号、題、今の状態、関連する文書の一覧。ADR は決めた時点の記録で、書き換えない。**今どうなっているか**は、ここと、[ARCHITECTURE.md](ARCHITECTURE.md)、[PRINCIPLES.md](PRINCIPLES.md) で見る。
+[DECISIONS.md](DECISIONS.md)(ADR-001〜095)の、番号、題、今の状態、関連する文書の一覧。ADR は決めた時点の記録で、書き換えない。**今どうなっているか**は、ここと、[ARCHITECTURE.md](ARCHITECTURE.md)、[PRINCIPLES.md](PRINCIPLES.md) で見る。
 
 - 確認: 2026-11-22、9c26a39。状態は、ADR の本文と、後の ADR・実装を読んで付けた。古くなる前提で読むこと。
 - 状態の意味:
@@ -108,6 +108,7 @@
 | 091 | 下げられなかった式が値を返すとき、`unsupported` が元の値と結果を持つ | 有効 | 相談役の判断(2026-11-22)。Dart の解決できないコンストラクタ呼び出しから | ARCHITECTURE の IR の命令 | Go と Rust の extractor は未確認 |
 | 092 | 依存のパッケージを、流れのモデルで切る(本体を読まない)のは、コストが著しく大きいときも。ただし条件つき | 有効 |  | PRINCIPLES 3 節、GCP-MODELS P12、MODELING | コストの測定の記録、照合の検査、`calls:`、保守的な不確実性の注記、切ったことの表示。実装は未(ROADMAP) |
 | 093 | Rust の extractor の隔離を、Docker から macOS のサンドボックス(Seatbelt)に替える | 有効 | ユーザーの決定(2026-11-22)。ADR-064 を一部覆す。Linux では止まる(`-unsafe-host-exec`) | rust-isolation、PRINCIPLES 8 節 | 承知している弱さと、後回しのハードニングを載せた |
+| 095 | `index -taint` の JSON の index の既定の書き先を、対象のディレクトリから利用者のキャッシュに移す(互換性を壊す) | 有効 | 相談役の決定(2026-11-22)。課題 #135 | README、GRAPH、AGENT-GUIDE | 古い既定の場所のファイルは読まない |
 
 ## 訂正・追記の書き方を保つ ADR
 

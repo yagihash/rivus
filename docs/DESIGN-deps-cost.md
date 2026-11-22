@@ -243,3 +243,147 @@ rivus analyze -lang dart -C /tmp/out/mono/app -allow-deps-under /tmp/out/mono -p
 ```
 
 `RIVUS_DART_EXTRACTOR="dart run <worktree>/extractor/dart/bin/rivus_dart.dart"` を設定する。
+
+## 10. Google Cloud の Dart のクライアントを足した測定(`bench/dart-gcp`)
+
+状態: 測定の記録と案(実装はしていない)。目的は、依存を含む Dart のプロジェクトで解析が終わらないことがある(公開の測定は 1 節の `dart_services`)原因を、Google Cloud のクライアントのパッケージに探すこと。結論を先に書く: **この合成では、どの依存を足しても収束した**。Google Cloud のパッケージは、解析(コア)のコストを増やさず、最大の SCC も大きくしなかった。増えるのは extractor の時間とメモリで、これは読むファイルの数に比例する。
+
+### 10.1 測定の条件
+
+| 項目 | 値 |
+| --- | --- |
+| rivus | `c40fcca` のビルド(`go build -o <scratchpad>/rivus ./cmd/rivus`)。コアと extractor は同じ worktree |
+| Dart SDK | 3.13.7 (stable)、macos_arm64 |
+| 対象 | `bench/dart-gcp`(README 参照)。`pubspec.lock` は `bench/dart-gcp/pubspec.lock`(コミット済み) |
+| コマンド | `rivus analyze -lang dart -C <dir> -pass-stats -pass-stats-top 0 -pass-stats-sort time -detail summary -timeout 540s`。1 回の実行の上限は 10 分(どの実行も上限に届かなかった) |
+| 計測 | `/usr/bin/time -l`(wall、最大 RSS = 子プロセスの extractor を含む) |
+| 取得したパッケージ | `dart pub get` で解決した、`googleapis` 15.0.0、`gcloud` 0.9.0、`google_cloud_storage` 0.6.4、`google_cloud_protobuf` 0.5.5、`google_cloud_rpc` 0.6.0、と、その推移的な依存(`_discoveryapis_commons` 1.0.8、`convert` 3.1.2、`ffi` 2.2.0、`retry` 3.1.2)。`googleapis_auth` 2.3.7 と `google_cloud` は pub のキャッシュにあった。取得したコードは実行していない(読むのは rivus の extractor と `dart analyze` だけ) |
+| 時間の読み方 | **測定中、この機械は他の作業で負荷が高かった(load average 20 以上)。wall は 2 回目の測定で 1〜2 割ずれた(基準の `dart-grpc` は 17.3 秒と 19.2 秒。2 節の 10.0 秒は別の時の値)。比べるときは、wall の差より、関数の数、`summary_elems`、`duration_ms`(解析の本体)、最大 RSS を見る** |
+
+### 10.2 1 つずつ足して測る(依存込み)
+
+変種は、`bench/dart-gcp` から、サービスと `pubspec.yaml` を削って作った(scratchpad。リポジトリには、全部入りの `bench/dart-gcp` だけを置く)。行は上から足していく。`largest_scc_packages` の上位 3 は、その行で最大の SCC のものだけ書く。
+
+| # | 足したもの | 解析した関数 | converged / passes | `largest_scc`(上位のパッケージ) | `levels` | `summary_elems` | 解析 `duration_ms` | wall | 最大 RSS | finding |
+| --- | --- | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 0 | 基準(`dart-grpc` と同じ 3 サービス) | 2,409 | 収束 / 4 | 195(collection 87、typed_data 51、protobuf 34) | 32 | 5,471 | 201 | 17.3 秒 | 1.15 GB | 3 |
+| 1 | `googleapis`(`storage/v1`、`pubsub/v1`、`bigquery/v2`)と `googleapis_auth` | 3,025 | 収束 / 4 | 202(collection 87、typed_data 51、protobuf 34) | 46 | 12,645 | 927 | 16.7 秒 | 1.15 GB | 3 |
+| 2 | `gcloud`(Storage、Pub/Sub、Datastore) | 3,322 | 収束 / 4 | 176(collection 71、typed_data 51、protobuf 29) | 49 | 13,967 | 857 | 16.9 秒 | 1.13 GB | 3 |
+| 3 | `google_cloud_storage`(と `google_cloud_protobuf`、`google_cloud_rpc`) | 3,638 | 収束 / 4 | **263(http2 106、async 38、grpc 38)** | 49 | 20,274 | 1,735 | 18.1 秒 | 1.14 GB | 3 |
+| 4 | JSON の Map を `fromJson` / `toJson` に渡すサービス(`googleapis` の 4 つの型、`google_cloud_protobuf`) | 4,008 | 収束 / 4 | 263(同上) | 49 | 22,077 | 2,311 | 23.1 秒 | 1.16 GB | 3 |
+| 5 | `googleapis` の 10 個の API をもう 1 回ずつ呼ぶ(`drive`、`sheets`、`gmail`、`compute`、`youtube` ほか) | 4,493 | 収束 / 4 | 263(同上) | 49 | 24,444 | 1,744 | 29.8 秒 | 1.54 GB | 3 |
+| 6 | (上限の確認)`googleapis` の 305 個の API のクラスを、全部 1 回ずつ作る | 4,792 | 収束 / 4 | 263(同上) | 49 | 25,318 | 1,693 | 50.7 秒 | 3.83 GB | 3 |
+
+- 5 の行までが `bench/dart-gcp` の内容。6 は、実際の利用者のコードではなく、規模の上限を見る確認(`googleapis` のすべてのライブラリを import し、`XxxApi(client)` を 1 つずつ作る)。変種は scratchpad にだけ置いた。
+- `timed_out` は、どの実行でも出なかった(時間切れなし)。**収束しなくなる依存は無かった。大きく遅くなる依存も、解析のコアの側には無かった**(`duration_ms` は 0.2 秒 → 1.7 秒、6 でも同じ)。
+- 行 3 で `largest_scc` が 195 → 263 になり、中身が変わる(collection / typed_data / protobuf → http2 / async / grpc)。足した `google_cloud_storage` が `http` / `convert` / `crypto` を通る流れで、`grpc` と `http2` の SCC に合流したため。ただし、263 の中は、`google_cloud_storage` 10 関数、`_discoveryapis_commons` 6、`http` 5 で、**Google Cloud の側の関数は 1 割未満(16 関数)**。残りは `grpc` の依存の関数で、基準の時点で別の SCC にあったものが、1 つに繋がった。生成された `googleapis` のコード(1 つの API が数百〜数千の関数)は、行 6 まで足しても SCC に入らない(上位 10 件にも出ない)。
+- 全部入り(行 5)の依存込みと `-no-deps` の比較:
+
+| 項目 | 依存込み | `-no-deps` |
+| --- | --- | --- |
+| 行 0 の wall / 解析した関数 / finding | 19.2 秒(2 回目)/ 2,409 / 3 | 9.0 秒 / 307 / 3 |
+| 行 3 の wall / 解析した関数 / finding | 20.2 秒(2 回目)/ 3,638 / 3 | 12.1 秒 / 489 / 3 |
+| 行 5 の wall / 解析した関数 | (上の表)29.8 秒 / 4,493 | 16.2 秒 / 525 |
+| 行 3 の不確実性の注記(`unmodeled_library_call`) | 13 | 180 |
+
+### 10.3 時間とメモリは、どこで使われるか
+
+extractor だけ(`rivus_dart.dart`、読むだけ)の時間と、IR の大きさ。
+
+| 変種 | IR の関数 | extractor の wall | 最大 RSS | 解析の `duration_ms` | 全体の wall |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 0 基準 | 5,126 | 11.3 秒 | 1.13 GB | 201 | 17.3 秒 |
+| 3 | 10,709 | 13.1 秒 | 1.15 GB | 1,735 | 18.1 秒 |
+| 6 上限 | 94,437 | 39.0 秒 | 3.70 GB | 1,693 | 50.7 秒 |
+
+- **wall の 7〜8 割は extractor**(行 6 でも)。IR は、import からたどれるファイルを全部出す(行 6 は 94,437 関数のうち、解析に残るのは 4,792 = 5%)。コアは到達できる関数だけを解析するので、`googleapis` のうち 1 つも触れない API は、解析のコストにならない。ただし extractor は読む。
+- **解析の `duration_ms` は、足した依存の「関数の数」ではなく、「到達する関数の形」で決まる**。`googleapis` 255 関数と `gcloud` 107 関数の `spent_ms` は、合わせて 28 ms(行 3)。時間は、`googleapis_auth`(137 関数、3,591 ms)、`convert`(62、1,579 ms)、`google_cloud_storage`(107、1,140 ms)、`google_cloud`(11、902 ms)、`http`(82、676 ms)、`async`(138、631 ms)が使っていて、`dep_spent_ms` の約 73%。`googleapis_auth` と `convert` は、ハンドラが認証のクライアントを作る(`clientViaApplicationDefaultCredentials`)ためと、`ChunkedConversionSink` の経路のため。
+
+### 10.4 a(届く)/ b(届かない)の検出
+
+組み込みのモデルには、Dart の Google Cloud のクライアントの sink が無い(`rivus/dart/*` に `googleapis` / `gcloud` / `google_cloud_*` の行は無い)。そのため、組み込みのままでは、**Google Cloud の呼び出しで finding は出ない**(行 0〜6 のとおり、3 件は基準の `Files.Read`、`Jobs.Run`、`Reports.Fetch` だけ)。
+
+sink が書かれたとして届くかを見るため、scratchpad に、12 行の sink の試作(`args` と `parts`。リポジトリに入れていない)を作って `-rules` で足した(行 3 の変種)。
+
+| 項目 | 依存込み | `-no-deps` |
+| --- | --- | --- |
+| wall / 最大 RSS | 15.8 秒 / 1.13 GB | 7.1 秒 / 1.14 GB |
+| finding | 13(基準の 3 件 + a の 9 件 + `Bucket.read` のインターフェースと実装で重複 1 件) | 12(重複なし) |
+| a: 届く 9 経路(`gcloud` 4、`googleapis` 3、`google_cloud_storage` 2) | 9 件とも出る | 9 件とも出る |
+| b: 届かない 8 経路(`*Fixed`) | 0 件(誤検出なし) | 0 件 |
+
+- 試作の sink は、`Bucket.read` / `Storage.bucketInfo` / `PubSub.lookupTopic` / `Filter.new` の `args: [2]`(`gcloud`)、`ObjectsResource.get` / `ProjectsTopicsResource.publish` / `JobsResource.query`(`googleapis`)、`Storage.downloadObject` / `Storage.uploadObjectFromString`(`google_cloud_storage`)。リクエストのフィールドから、位置引数に届く経路は、本体を読まなくても(`-no-deps`)出る。**名前つき引数**(`Query(kind: ...)`、`QueryRequest(query: ...)` の `parts`)は、`gcloud` の `Query` の `kind:` では試していない(`Filter.new` の位置引数で代えた)。
+- 届かない経路(キーの参照だけ、メッセージの本文だけ)は、sink が引数の位置を決めているので、誤検出にならない。
+- `Json` サービス(`fromJson` に Map を渡し、`toJson` で戻す)は、`insert` / `patch` の本体(`bucket` や `job` の中身)が sink になっていないので、この 12 行では何も出ない。JSON の Map 経由の経路の検出は、測っていない(sink を `parts` で書いた場合の確認が要る)。
+
+### 10.5 最大の SCC の中を 1 段掘る
+
+rivus の出力の `largest_scc_packages` は、パッケージごとの関数の数だけ(行 3 は 10.2 のとおり)。関数の中身は出ないので、IR(`rivus_dart` の出力)から、静的な呼び出しと、候補つきの動的な呼び出しで、自分で SCC を作って調べた(コアの SCC とは一致しない: 到達の仕方と候補の決め方が違い、最大が 66 関数。向きと傾向だけを見る)。
+
+| 呼び出しの候補の上限 | 到達した関数 | 最大の SCC |
+| --- | ---: | ---: |
+| 制限なし(`ChunkedConversionSink` などを全部) | 1,899 | 66 |
+| 候補 16 個まで | 1,698 | 27 |
+| 候補 8 個まで | 1,466 | 23 |
+| 候補 3 個まで | 1,251 | 9 |
+| 候補 1 個だけ | 964 | 7 |
+| 静的な呼び出しだけ | 595 | 1(SCC なし) |
+
+- 基準(`dart-grpc`)も、同じ方法で、最大 27(collection 12、typed_data 11、protobuf 4。`setRange` / `fillRange` / `length=` といった、`List` の操作)。
+- 行 3 の最大(66)の中身は、`async` 27、`convert` 18、`crypto` 7、`http_parser` 6、`grpc` 5、`google_cloud_storage` 3。関数の名前は、`close` 22、`add` 18、`addError` 7、`_close` 5、`addSlice` 3 など。**`Sink` / `EventSink` / `ChunkedConversionSink` の `add` と `close` が、互いを呼ぶ**(ダイジェストの計算 → チャンクの変換 → 次のシンク、の連鎖が、動的な呼び出しで循環に見えると思われる。1 つずつの確認はしていない)。
+- 動的な呼び出しの候補が多いほど、SCC が大きい(上の表)。**候補を 8 個までに切るだけで、最大の SCC は 66 → 23 になる**。
+- コアの統計(`stats.dispatch_candidates`、1 つの呼び出しに候補がいくつあるか)。足すほど増えるが、桁は変わらない。
+
+| 変種 | 候補 1 | 2〜8 | 9〜16 | 17 以上 | 候補なし | 最大 |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| 0 基準 | 1,833 | 826 | 317 | 58 | 830 | 61(`DelegatingMap.toString`) |
+| 3 | 2,371 | 1,232 | 409 | 78 | 1,177 | 155(同じ呼び出し。`Object.toString`) |
+| 5 | 2,628 | 1,742 | 411 | 78 | 1,316 | 155 |
+
+- IR の中で、Google Cloud の 6 パッケージ(`googleapis`、`gcloud`、`google_cloud_storage`、`google_cloud_protobuf`、`google_cloud_rpc`、`_discoveryapis_commons`)の呼び出しの形(行 3 の IR、全 20,972 呼び出しのうち)。`googleapis` は 5,278 呼び出しのうち、静的 2,940、動的 1,973(候補 0 個 867、1 個 595、2〜8 個 876)、関数値 365 で、**候補が 9 個以上の動的な呼び出しは `googleapis` に 0**。9 個以上の呼び出しが多いのは `protobuf` と `collection`、`async`、`grpc`、`http2` で、`gcloud` に 24 件、`google_cloud_storage` に 8 件、`google_cloud_protobuf` に 4 件だけ。
+- Google Cloud の側で候補が 9 個以上の呼び出しの記号は、`List.length`(37。動的 = レシーバの型が分からない)、`JsonEncodable.toJson`(2 件、最大 49 候補。`google_cloud_protobuf` のインターフェース)、`Object.hashCode`(2)、`Object.toString`(1、155 候補)。**JSON の Map を動的に渡す呼び出し(`fromJson(Map)`)は静的に解決される**(`X.fromJson(json_ as Map)` はコンストラクタの呼び出し)ので、SCC を作らない。
+
+### 10.6 `rivus index` と `analyze` の時間の違い
+
+行 3 の変種(`bench/dart-gcp` の部分集合)で、同じ機械で、続けて 1 回ずつ測った(この時の load average は 25 前後で、2 節の測定より遅い。比は目安)。
+
+| コマンド | wall | 最大 RSS | 出力 |
+| --- | ---: | ---: | --- |
+| `rivus analyze -detail summary` | 44.2 秒 | 0.70 GB | JSON(finding と統計) |
+| `rivus index`(グラフだけ) | 55.9 秒 | 1.02 GB | グラフのファイル 3.3 MB(3,790 関数、9,043 呼び出し、18,784 エッジ) |
+| `rivus index -taint -o <file>` | 88.6 秒 | 1.10 GB | グラフ 3.3 MB + JSON のインデックス 479 KB(finding 3、不確実性 550) |
+
+- 負荷が低かった時の別の測定(同じ変種): `analyze` 18.1〜20.2 秒、`index -o <file>` 23.1〜23.5 秒(`-o` は解析まで走らせる)。どちらの時も、`index` は `analyze` より 1.2〜1.3 倍遅い。
+- 違い: `analyze` は、extractor の出力を読んで解析するだけ。`index` は、同じ extractor と IR の読み込みに加えて、呼び出しグラフを作って書く(`rivus graph` が使う)。`-taint` は、その上で解析も走らせ、結果のインデックスも書く。つまり、**`index` は `analyze` より安くない**。インデックスは、1 回作って、`graph` / `query` で何度も引くためのもの。
+- この対象では、`index`(グラフだけ)と `index -taint` の差は解析の分(`duration_ms` で 1.7 秒ほど。上の表は負荷で広がった)。グラフ側の時間も、大半は extractor。
+
+### 10.7 モデルで切る提案(コードは書いていない)
+
+測定の数字から、Google Cloud の Dart のクライアントについて、最小で効果が大きい順:
+
+| 順 | 提案 | 根拠(数字) | 効果 |
+| --- | --- | --- | --- |
+| 1 | **(i) source / sink のモデル**(`dart-gcp.yaml` のような組み込み。`MODELING.md` の `args` と `parts`) | 組み込みに Google Cloud の sink が 0 行。試作の 12 行で、a の 9 経路が出て、b の 8 経路は 0 件(誤検出なし)。`-no-deps` でも同じ(位置引数の経路は、本体を読まなくても出る)。コストは変わらない(行を足すだけ) | **検出が 3 → 12 件になる(検出力)。コストの面では無害** |
+| 2 | **(ii) 値の流れだけのモデル**(中を読まずに、引数から戻りへ)を、少数の、候補が多い呼び出しに | `JsonEncodable.toJson`(最大 49 候補)、`Object.toString`(155 候補)、`List.length` などの動的な呼び出しが、SCC を大きくする(10.5: 候補を 8 個までに切ると 66 → 23)。ただし、いまの SCC は、Google Cloud でなく、`async` / `convert` / `crypto` の `Sink` の連鎖で、`dart:*` のモデルの領域(`ChunkedConversionSink.add` / `close`)。Google Cloud のパッケージだけのモデルは、SCC に効かない | Google Cloud のパッケージのモデルでは、効果が小さい(`googleapis` と `gcloud` の `spent_ms` は合わせて 28 ms)。効くとすれば、`dart:convert` の `ChunkedConversionSink` / `Sink` のモデル(Google Cloud に限らない) |
+| 3 | **(iii) `unread_packages`(読まないパッケージ)** | ADR-092 の条件 1(コストの測定の記録: 時間か GB の 9 割が、その依存)が**満たされない**。解析の `duration_ms` は 1.7 秒で、wall(18 秒)の 1 割弱。extractor が 7〜8 割。`googleapis_auth` / `convert` / `google_cloud_storage` を切っても、解析は最大 1.7 秒しか減らず、extractor の読む量は変わらない(コアだけの変更。7 節の案 3)。`-no-deps`(全部を切った場合)の上限で、wall は 20.2 → 12.1 秒(1 回の比較)、finding は同じ | **最小の効果**。条件 1 を満たさないので、いまは勧めない。要るなら、extractor が読まない(出力しない)指定で、`googleapis` の使われない API のライブラリを読まない(行 6 の 39 秒 / 3.7 GB を減らす)ほうが効く |
+
+- **1 位が、最小で効果が大きい**(行を足すだけで、検出が 3 → 12)。2 位、3 位は、いまの数字では、Google Cloud のパッケージには要らない。
+- 切る必要が出るのは、Google Cloud のパッケージではない。`dart_services` で 12,130 関数の SCC を作るのは、1 節のとおり `analyzer` 系で、Google Cloud ではない(この測定で、Google Cloud の依存は、SCC に入る関数が 1 割未満。生成された `googleapis` の関数は 0)。`dart_services` 型の終わらない解析を再現するには、`analyzer` を含む合成の対象が要る。
+- (iii) の ADR-092 の条件(測定の記録、読んだ場合との照合、`calls:`、保守的な注記、`summary` に読まなかったパッケージの一覧)は、7 節の最小の仕組みの案のまま。`googleapis_auth` を切る場合は、認証のクライアントが利用者の `http.Client` を呼び返すかどうかを調べて、必要なら `calls:` の行を書く(調べていない)。
+- (i) の注意: `gcloud` の `Bucket` / `Storage` / `PubSub` は抽象クラス(インターフェース)で、実装は `_BucketImpl` など。インターフェースの記号(`package:gcloud/storage.dart#Bucket.read`)で行を書くと、呼び出しの候補になる実装の側(`_BucketImpl.read`)でも一致し、finding が 2 件になる(重複)。どちらか 1 つの書き方に決める必要がある。名前つき引数(`kind:`)を指す書き方は、`MODELING.md` で確認できなかった。
+
+### 10.8 見つけた rivus の不具合と注意
+
+- `rivus index -o <file>` は、`-taint` を付けなくても、解析まで走らせる(`-o implies it` と `-h` に書いてある。意図どおり)。グラフだけの時間を測るには、`-o` を付けない。
+- `.dart_tool/package_config.json` が無い(`dart pub get` をしていない)プロジェクトは、終了コード 0、finding 0 で終わり、`uncertainties` に `missing_source` が出るだけ(6 節と同じ。この測定でも、最初の 1 回で踏んだ)。
+- `stats.timed_out` は、時間切れでないときは出力に無い(キーが存在しない)。収束の記録では、「無い = 時間切れなし」と読んだ。
+
+### 10.9 再現
+
+```sh
+cd bench/dart-gcp && dart pub get          # pubspec.lock があるので、同じバージョンになる
+RIVUS_DART=dart RIVUS_DART_EXTRACTOR="dart run <worktree>/extractor/dart/bin/rivus_dart.dart" \
+  rivus analyze -lang dart -C bench/dart-gcp -pass-stats -pass-stats-top 0 -pass-stats-sort time -detail summary -timeout 540s
+```
+
+変種(行 0〜6)は、`bench/dart-gcp` の `lib/src/services/*.dart` から、必要なサービスだけを `bin/server.dart` に入れ、`pubspec.yaml` を削って作った。試作の sink の 12 行は、リポジトリに入れていない。
