@@ -46,7 +46,7 @@ func dropReplacedBodies(prog *ir.Program, rules *model.Rules, warn io.Writer) []
 	}
 	count := make([]int, len(decls))
 	declared := make([]int, len(decls)) // what the extractor was told not to read: counted, not dropped
-	cache := map[string][]int{} // unit -> the declarations that name it
+	cache := map[string][]int{}         // unit -> the declarations that name it
 	covering := func(unit string) []int {
 		if v, ok := cache[unit]; ok {
 			return v
