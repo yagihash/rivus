@@ -41,7 +41,7 @@ AI エージェントが、コード上の 1 点を指して、「そこへ届�
 - **`rivus index` 1 つで作る**。既定は構造の層だけ。`rivus index -taint` で、taint の層も足す。構造だけで作ったときは、出力に「taint の層はない。`-taint` で追加できる」と書く(何も報告せずに、findings がないと誤解させない)。`graph build` は作らない。`graph` は、読む専用。JSON の index の互換は気にしない。
 - **サイト ID を、指定の 4 つ目**として受ける(`graph callers --site <ID>`)。サイトの列挙は解析なしで速いので、サイトの表は構造の層に入れる。逆に、`graph` の出力のノードと辺に、そこに載っているサイト ID を付ける。taint の層があるときは、経路に重なる finding を付ける(橋)。
 - **言葉を分ける**: 呼び出しの関係は `calls`、データの流れは `flows`。`graph` は `calls` だけを示し、すべての経路に `"relation": "calls"` を付ける。taint の層があれば `"findings_at_sites": [...]`(経路の呼び出し点にあるサイトを source / sink とする finding。名前は決定済み。`also_flows` ではない)、なければ `"flows": "not_checked"`(確認していないことを明記する)。`reaches` という名前は使わず、`graph path` に一本化する(届くかは出力の `reachable`、最短 1 本は `--limit 1`)。`--help` の冒頭に、1 行で、違いを書く。
-- コマンド: `index [-taint]`、`graph callers` / `callees` / `path` / `impls` / `dispatchers` / `info`。ほかは、今のまま(`sites`、`analyze`、`query`、`resolve`、`extract`、`models`)。
+- コマンド: `index [-taint]`、`graph callers` / `callees` / `path` / `impls` / `dispatchers` / `info`。ほかは、今のまま(`sites`、`analyze`、`query`、`resolve`、`models`。`extract` は、あとで `debug extract` に移った)。
 
 ### 2e. 出力の形(`rivus.graph/1`)
 - 問いの種類で形を変える。`callers` / `callees` / `impls` / `dispatchers` は、**ノードと辺を分ける**(広がりの結果。共通の関数が多い)。`path` は、**経路を、ステップの列**で返す(順番が大事。そのまま読める)。
@@ -83,7 +83,7 @@ AI エージェントが、コード上の 1 点を指して、「そこへ届�
 - **足りないこと(保守的にしていないもの)**: Dart の extractor 自体のソース(`pub global activate --source path` で入れたもの)の内容は、ハッシュしていない(`--version` と shim の実行ファイルだけ)。Rust のプロジェクトが、`-C` より上のワークスペースのルートの `Cargo.lock` を使うときは、読まない(`-C` をルートにする)。Dart / Rust の `-C` の外の、パス依存(`path:`)の中の、IR に関数が出ないファイル(宣言のない定数だけのファイルなど)は、見ない。
 - **測定(2026-11-21。他のエージェントが動いていて、時間は揺れる)**: x/tools v0.52(関数 9,549、呼び出し点 57,989、辺 48,328、サイト 274): `rivus index` 全体 4.2 秒(鍵 0.28 秒、書き込み 0.24 秒)、DB 10 MB、開く 3 ms、`file:line:col` の検索 0.2 ms、`graph info -C` 0.28 秒。Gitea(関数 63,591、呼び出し点 482,450、辺 584,929、サイト 696、ファイル 12,640): 全体 90 秒(ロードと IR が 77 秒。構築のコストは、鍵 0.9 秒 + 書き込み 2.2 秒 + 本体のハッシュ)、DB 91 MB、開く 3 ms、位置の検索 0.2 ms、`graph info -C` 0.77 秒。
 
-- **既知の揺れ**: 同じソースから作っても、関数の件数が数件違うことがある(x/tools で 9,542〜9,549)。違うのは標準ライブラリの関数(`(*sync.Mutex).Lock`、`slices.Repeat` など)の本体の有無で、`Deps` つきの Go のロード(`ssautil.AllFunctions`)の、もとからある揺れ。`rivus extract -all`(依存なし)は安定している。DB の鍵には影響しない(鍵は入力から作る)が、段階 2 で「件数が同じか」を比べるときは、これを踏まえる。
+- **既知の揺れ**: 同じソースから作っても、関数の件数が数件違うことがある(x/tools で 9,542〜9,549)。違うのは標準ライブラリの関数(`(*sync.Mutex).Lock`、`slices.Repeat` など)の本体の有無で、`Deps` つきの Go のロード(`ssautil.AllFunctions`)の、もとからある揺れ。`rivus debug extract -all`(依存なし)は安定している。DB の鍵には影響しない(鍵は入力から作る)が、段階 2 で「件数が同じか」を比べるときは、これを踏まえる。
 
 ## 段階 2 の実装(2026-11-21)で決まったこと
 

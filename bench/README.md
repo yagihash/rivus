@@ -68,7 +68,7 @@ taken from the tree of the script, and the other way round is not done. `bench/c
 
 **Rust: third-party code is read in the container only.** The extraction of a Rust target runs its `build.rs` and proc macros.
 `compare.sh` therefore reads only our own code on the host (with `-unsafe-host-exec`): the paths listed in `OWN_RUST_PATHS` of the script
-(`bench/zoo-rust`, `bench/rust-curated`, `extractor/rust/test`). Every other Rust target (parseable) is read by `rivus extract -lang rust`,
+(`bench/zoo-rust`, `bench/rust-curated`, `extractor/rust/test`). Every other Rust target (parseable) is read by `rivus debug extract -lang rust`,
 which is the default of rivus: the container, a fetch with the network and no build, then the extraction with no network
 (docs/rust-isolation.md). The extractor that runs is the one of the version: it is built from `<work>/wt/<sha7>/extractor/rust` (once per tree), and the IR is cached per
 that tree as before. Without the sandbox the third-party benchmark does not run (exit status 2, "Rust の第三者のコードは隔離の中でだけ読む。macOS のサンドボックス(sandbox-exec)が使えないので、このベンチを外す");

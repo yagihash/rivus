@@ -12,10 +12,10 @@ import (
 )
 
 // TestZeroCandidateCalls is a measure, not a check: how many calls of function values have no candidate, and where the called
-// value comes from. It reads the IR of the benchmarks (the streams that the extractors write; `rivus extract` for Go), named
+// value comes from. It reads the IR of the benchmarks (the streams that the extractors write; `rivus debug extract` for Go), named
 // in RIVUS_ZERO_CAND_IR (a comma separated list of files), and prints one table:
 //
-//	rivus extract ./... > go.jsonl            (Go)    dart run extractor/dart/bin/rivus_dart.dart <dir> > dart.jsonl
+//	rivus debug extract ./... > go.jsonl            (Go)    dart run extractor/dart/bin/rivus_dart.dart <dir> > dart.jsonl
 //	RIVUS_ZERO_CAND_IR=go.jsonl,dart.jsonl go test -run ZeroCandidateCalls -v ./internal/valuecalls
 //
 // A call is counted when the extractor gave no candidate, valuecalls found none, and no limit was hit (the call is left as

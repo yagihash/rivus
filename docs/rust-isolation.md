@@ -60,7 +60,7 @@
 
 `-unsafe-host-exec`(または `RIVUS_UNSAFE_HOST_EXEC=1`)で、このマシンの上で、`rivus-rust` を直接動かします(`-rust-extractor` / `RIVUS_RUST_EXTRACTOR` / `PATH`)。自分のコード、CI で自分のリポジトリを読むとき、このリポジトリのベンチ(`bench/rust-curated`、`bench/zoo-rust`、`extractor/rust/test`)向けです。Linux では、これが普通の使い方です。**`.rivus-hostile` のあるプロジェクト(隔離の検証用の、悪意のある crate)は、このモードでは、動かしません。**
 
-ベンチの道具(`bench/compare.sh`、`bench/parity/collect.sh`)は、この許可リストを、コードで持ちます。**この 3 つのパスの中だけ**をホストで読み、それ以外の Rust の対象(第三者のもの)は、`rivus extract -lang rust`(サンドボックス)で読みます。サンドボックスがないときは、ホストに切り替えずに、**失敗します**。
+ベンチの道具(`bench/compare.sh`、`bench/parity/collect.sh`)は、この許可リストを、コードで持ちます。**この 3 つのパスの中だけ**をホストで読み、それ以外の Rust の対象(第三者のもの)は、`rivus debug extract -lang rust`(サンドボックス)で読みます。サンドボックスがないときは、ホストに切り替えずに、**失敗します**。
 
 ## 承知している弱さ(ADR-093。ユーザーが受け入れた)
 

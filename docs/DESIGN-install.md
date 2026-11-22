@@ -52,7 +52,7 @@ Go と Dart は動く(`go` と Dart SDK が、それぞれ `brew` で入る)。*
   2. ネットワーク(crates.io。extractor の依存、`--locked`): `env -i SDKROOT=$(/usr/bin/xcrun --show-sdk-path) PATH=TC/bin:/usr/bin:/bin HOME=<ビルドの空き> RUSTUP_TOOLCHAIN=nightly-2026-11-15 CARGO_HOME=<ビルドの空き>/cargo CARGO_TARGET_DIR=<ビルドの空き>/target TC/bin/cargo install --path extractor/rust --locked --root L/rust-ext`(`rivus setup rust` と同じ環境)。
   3. wrapper(`write_env_script`)が、`RIVUS_RUST_TOOLCHAIN_DIR=TC` と `RIVUS_RUST_EXTRACTOR=L/rust-ext/bin/rivus-rust` を設定して、`rivus` を呼ぶ。実行時に rustup は使わない。利用者の `~/.rustup` と `~/.cargo` は、読みも書きもしない。
 - **`SDKROOT` が必要。** なければ、この機械の `cc` が CLT の `MacOSX27.0.sdk` を選び、`libSystem.tbd` が読めず `tapi error: malformed file` でリンクに失敗した(Homebrew のビルド環境が `SDKROOT` を設定するはずだが、formula の中で確かめる)。`CARGO_TARGET_DIR` を指さないと、ソースの中の `extractor/rust/target` に出る。
-- **確かめたこと(2026-11-22、macOS arm64、scratch の中、`HOME` を空にして)**: 上の形で、`bench/zoo-rust` の `rivus extract -lang rust`(サンドボックスの下)が、`~/.rustup` と `~/Library/Application Support/rivus` に頼らずに動き、IR は今の環境のものと同一だった(違うのは、IR の `file` に入る std のソースの絶対パスだけ。課題 #122)。ビルドの場所のツールチェインを消して、ツールチェインと extractor を移した場合は、rpath の書き換えと再署名で動き、IR は同一だった。
+- **確かめたこと(2026-11-22、macOS arm64、scratch の中、`HOME` を空にして)**: 上の形で、`bench/zoo-rust` の `rivus debug extract -lang rust`(サンドボックスの下)が、`~/.rustup` と `~/Library/Application Support/rivus` に頼らずに動き、IR は今の環境のものと同一だった(違うのは、IR の `file` に入る std のソースの絶対パスだけ。課題 #122)。ビルドの場所のツールチェインを消して、ツールチェインと extractor を移した場合は、rpath の書き換えと再署名で動き、IR は同一だった。
 - **必要なもの**: Xcode CLT(`cc` とリンカ)。ディスク約 1.1 GB。インストールの間のネットワーク(static.rust-lang.org と crates.io)。
 - **`rivus setup rust -source <extractor/rust>`** は、Homebrew を使わない人(リポジトリから作る人)の手段として残す。置き場所は、利用者のデータのディレクトリ(`~/Library/Application Support/rivus/`)。
 
