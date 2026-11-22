@@ -208,6 +208,102 @@ abstract class ApisServiceBase extends $grpc.Service {
   $async.Future<$0.CloudReply> runQueryFixed($grpc.ServiceCall call, $0.SqlRequest request);
 }
 
+@$pb.GrpcServiceName('bench.cloud.Json')
+abstract class JsonServiceBase extends $grpc.Service {
+  $core.String get $name => 'bench.cloud.Json';
+
+  JsonServiceBase() {
+    $addMethod($grpc.ServiceMethod<$0.ObjectRequest, $0.CloudReply>(
+        'InsertBucket',
+        insertBucket_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) => $0.ObjectRequest.fromBuffer(value),
+        ($0.CloudReply value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ObjectRequest, $0.CloudReply>(
+        'PatchObject',
+        patchObject_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) => $0.ObjectRequest.fromBuffer(value),
+        ($0.CloudReply value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.SqlRequest, $0.CloudReply>(
+        'InsertJob',
+        insertJob_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) => $0.SqlRequest.fromBuffer(value),
+        ($0.CloudReply value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.TopicRequest, $0.CloudReply>(
+        'CreateTopic',
+        createTopic_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) => $0.TopicRequest.fromBuffer(value),
+        ($0.CloudReply value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.TopicRequest, $0.CloudReply>(
+        'Mask',
+        mask_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) => $0.TopicRequest.fromBuffer(value),
+        ($0.CloudReply value) => value.writeToBuffer()));
+  }
+
+  $async.Future<$0.CloudReply> insertBucket_Pre(
+      $grpc.ServiceCall $call, $async.Future<$0.ObjectRequest> $request) async {
+    return insertBucket($call, await $request);
+  }
+
+  $async.Future<$0.CloudReply> patchObject_Pre(
+      $grpc.ServiceCall $call, $async.Future<$0.ObjectRequest> $request) async {
+    return patchObject($call, await $request);
+  }
+
+  $async.Future<$0.CloudReply> insertJob_Pre(
+      $grpc.ServiceCall $call, $async.Future<$0.SqlRequest> $request) async {
+    return insertJob($call, await $request);
+  }
+
+  $async.Future<$0.CloudReply> createTopic_Pre(
+      $grpc.ServiceCall $call, $async.Future<$0.TopicRequest> $request) async {
+    return createTopic($call, await $request);
+  }
+
+  $async.Future<$0.CloudReply> mask_Pre(
+      $grpc.ServiceCall $call, $async.Future<$0.TopicRequest> $request) async {
+    return mask($call, await $request);
+  }
+
+  $async.Future<$0.CloudReply> insertBucket($grpc.ServiceCall call, $0.ObjectRequest request);
+  $async.Future<$0.CloudReply> patchObject($grpc.ServiceCall call, $0.ObjectRequest request);
+  $async.Future<$0.CloudReply> insertJob($grpc.ServiceCall call, $0.SqlRequest request);
+  $async.Future<$0.CloudReply> createTopic($grpc.ServiceCall call, $0.TopicRequest request);
+  $async.Future<$0.CloudReply> mask($grpc.ServiceCall call, $0.TopicRequest request);
+}
+
+@$pb.GrpcServiceName('bench.cloud.ManyApis')
+abstract class ManyApisServiceBase extends $grpc.Service {
+  $core.String get $name => 'bench.cloud.ManyApis';
+
+  ManyApisServiceBase() {
+    $addMethod($grpc.ServiceMethod<$0.ObjectRequest, $0.CloudReply>(
+        'Inspect',
+        inspect_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) => $0.ObjectRequest.fromBuffer(value),
+        ($0.CloudReply value) => value.writeToBuffer()));
+  }
+
+  $async.Future<$0.CloudReply> inspect_Pre(
+      $grpc.ServiceCall $call, $async.Future<$0.ObjectRequest> $request) async {
+    return inspect($call, await $request);
+  }
+
+  $async.Future<$0.CloudReply> inspect($grpc.ServiceCall call, $0.ObjectRequest request);
+}
+
 @$pb.GrpcServiceName('bench.cloud.CloudStorage')
 abstract class CloudStorageServiceBase extends $grpc.Service {
   $core.String get $name => 'bench.cloud.CloudStorage';

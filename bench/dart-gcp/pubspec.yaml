@@ -3,12 +3,13 @@ description: A small synthetic gRPC server that calls Google Cloud client packag
 publish_to: none
 environment:
   sdk: ^3.10.0
-# The base versions are those of ../dart-grpc/pubspec.lock. The Google Cloud packages are added one by one in the measurement.
+# The versions of grpc, protobuf, http2 and what they import are those of ../dart-grpc/pubspec.lock. The Google Cloud packages are locked in pubspec.lock.
 dependencies:
   async: ^2.13.1
   fixnum: ^1.1.1
   gcloud: ^0.9.0
   google_cloud_storage: any
+  google_cloud_protobuf: any
   googleapis: ^15.0.0
   googleapis_auth: ^2.3.5
   grpc: 5.2.0

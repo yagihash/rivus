@@ -82,7 +82,7 @@ packages:
     source: hosted
     version: "0.5.0"
   google_cloud_protobuf:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: google_cloud_protobuf
       sha256: "5c09f29ac930089e0347e4e0212845b810025e7602b7f62d8708614dc4897947"
