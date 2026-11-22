@@ -62,6 +62,7 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 			fields[k] = append(fields[k], v...)
 		}
 	}
+	callbacks := callbackTargets(prog, rules, res)
 	for _, fn := range prog.Funcs {
 		if fn.Dep {
 			// ADR-099: sites are listed in the functions of the project only
@@ -104,6 +105,15 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 					if i >= 0 && i+off < declared {
 						add(&Site{Role: RoleSource, Kind: model.KindParam, Symbol: sym, Labels: src.Labels, Src: []model.Source{src}, irpos: paramPos(i + off), IR: &IRRef{Func: fn, Param: i + off}})
 					}
+				}
+			}
+		}
+		if ts := callbacks[fn.ID]; len(ts) > 0 {
+			idx := callbackParamIndexes(fn)
+			for _, t := range ts {
+				from, to := t.span(len(idx))
+				for k := from; k <= to; k++ {
+					add(&Site{Role: RoleSource, Kind: model.KindCallbackParam, Symbol: t.symbol, Labels: t.src.Labels, Src: []model.Source{t.src.Source}, irpos: paramPos(idx[k]), IR: &IRRef{Func: fn, Param: idx[k]}})
 				}
 			}
 		}

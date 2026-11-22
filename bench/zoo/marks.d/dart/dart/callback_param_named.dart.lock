@@ -1,0 +1,2 @@
+dart	dart/callback_param_named.dart	sink-none	@sink(none)	Future<void> vuln() async { @vuln
+dart	dart/callback_param_named.dart	sink-none	@sink(none) @nosink(dart-callback-param-named-decoy)	Future<void> decoy() async { @decoy

@@ -1,6 +1,6 @@
 # 149: ハンドラの引数が source になる書式がない(callback params)
 
-- 状態: **open**
+- 状態: **部分的に解決**(段階 1 = `callback_param` が入った。ADR-106。関数リテラル、名前のある関数、それを持つ変数は source になる。**登録のヘルパーの引数として渡す形、変数が 2 つの関数を持つ形、フィールド・要素は引けない**: 注記(`unresolved_callee`)は呼び出しを持つ関数に付くので、source / sink の関数から見ると `@miss(silent)`。zoo の `F/dart/callback-param-helper`。shelf_router のモデルの行は、モデルの PR が足す)
 - 種類: サイレントな見逃し(書式の不足。モデルを足しても検出されない行が増える)
 - 言語: Dart(shelf_router)。同じ形が Dart の dart_frog、Rust の actix-web、Go の gin の登録の形にも出る
 - 設計: [../DESIGN-callback-sources.md](../DESIGN-callback-sources.md)

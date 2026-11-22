@@ -61,6 +61,9 @@ type Result struct {
 	ByIRParam map[IRParam][]*Site
 	// ByID finds a site by ID.
 	ByID map[string]*Site
+	// UnresolvedCallbacks are the calls of a symbol that a callback_param source names, whose function operand was
+	// not found: the text of the note the analysis makes there (unresolved_callee).
+	UnresolvedCallbacks map[IRInstr]string
 	// DependencyFunctions is the number of functions of dependencies in the program. Sites are listed only in the
 	// functions of the project (ADR-099), so none is searched for in these.
 	DependencyFunctions int

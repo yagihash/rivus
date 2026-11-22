@@ -1,0 +1,5 @@
+name: zoo_router
+description: "The skeleton of a router that calls a handler with the segments of the path (the shape of shelf_router; the name is the zoo's own, so that it does not meet a real package)."
+publish_to: none
+environment:
+  sdk: ^3.10.0
