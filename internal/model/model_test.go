@@ -257,3 +257,31 @@ func TestSinkParts(t *testing.T) {
 		t.Errorf("parts and no args is not every argument: %v", got)
 	}
 }
+
+func TestSinkNamed(t *testing.T) {
+	bad := map[string]string{
+		"empty name":             "sinks:\n  - symbol: a.B\n    named: [\"\"]\n",
+		"name with a dot":        "sinks:\n  - symbol: a.B\n    named: [\"x.y\"]\n",
+		"short form, two names":  "sinks:\n  - symbol: a.B\n    named: [x, y]\n    field: X\n",
+		"short form, arg+named":  "sinks:\n  - symbol: a.B\n    args: [0]\n    named: [x]\n    field: X\n",
+		"part arg and named":     "sinks:\n  - symbol: a.B\n    parts: [{arg: 0, named: x, field: X}]\n",
+		"part recv and named":    "sinks:\n  - symbol: a.B\n    parts: [{recv: true, named: x, field: X}]\n",
+		"part with a bad name":   "sinks:\n  - symbol: a.B\n    parts: [{named: \"1x\", field: X}]\n",
+		"part named w/o a field": "sinks:\n  - symbol: a.B\n    parts: [{named: x}]\n",
+	}
+	for name, src := range bad {
+		if _, err := Parse(strings.NewReader(src), name); err == nil {
+			t.Errorf("%s: expected an error", name)
+		}
+	}
+	rs, err := Parse(strings.NewReader("sinks:\n  - symbol: a.B\n    named: [kind]\n  - symbol: a.C\n    named: [r]\n    field: url\n  - symbol: a.D\n    parts: [{named: r, field: url}]\n"), "ok")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := rs.Sinks[0].WholeArgs(3); len(got) != 0 {
+		t.Errorf("named and no args is not every argument: %v", got)
+	}
+	if p := rs.Sinks[1].PartList(); len(p) != 1 || p[0].Named != "r" || p[0].Field != "url" {
+		t.Errorf("short form by name: %+v", p)
+	}
+}
