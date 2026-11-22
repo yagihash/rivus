@@ -1,0 +1,8 @@
+# The rows of go-grpc.yaml that no call in the zoo or the curated targets hits (TestBuiltinRowsAreHitByTheZoo). "symbol | reason"; see bench/parity/README.md.
+(*google.golang.org/grpc.serverStream).RecvMsg | debt | the standard library: no cell of the zoo calls it yet
+(google.golang.org/grpc.ServerStream).RecvMsg | debt | the standard library: no cell of the zoo calls it yet
+google.golang.org/grpc.Dial | debt | the standard library: no cell of the zoo calls it yet
+google.golang.org/grpc.DialContext | debt | the standard library: no cell of the zoo calls it yet
+google.golang.org/grpc.NewClient | debt | the standard library: no cell of the zoo calls it yet
+google.golang.org/grpc/metadata.FromIncomingContext | debt | the standard library: no cell of the zoo calls it yet
+google.golang.org/grpc/metadata.ValueFromIncomingContext | debt | the standard library: no cell of the zoo calls it yet

@@ -1,0 +1,29 @@
+# The rows of rust-web.yaml that no call in the zoo or the curated targets hits (TestBuiltinRowsAreHitByTheZoo). "symbol | reason"; see bench/parity/README.md.
+http::HeaderMap::get | spelling | the types of the crate http are written with the re-export of the framework (actix_web::http::header::HeaderMap, object_store::HeaderMap). No row has that spelling: a row named actix_web:: would say that actix-web has a model, and rivus says it has none (noteNotBuiltin)
+http::HeaderValue::as_bytes | spelling | the types of the crate http are written with the re-export of the framework (actix_web::http::header::HeaderMap, object_store::HeaderMap). No row has that spelling: a row named actix_web:: would say that actix-web has a model, and rivus says it has none (noteNotBuiltin)
+http::HeaderValue::to_str | spelling | the types of the crate http are written with the re-export of the framework (actix_web::http::header::HeaderMap, object_store::HeaderMap). No row has that spelling: a row named actix_web:: would say that actix-web has a model, and rivus says it has none (noteNotBuiltin)
+http::Uri::host | dependency | not the standard library: the zoo has no such dependency
+http::Uri::path | dependency | not the standard library: the zoo has no such dependency
+http::Uri::query | dependency | not the standard library: the zoo has no such dependency
+http::Uri::to_string | dependency | not the standard library: the zoo has no such dependency
+http::request::Request::body | dependency | not the standard library: the zoo has no such dependency
+http::request::Request::headers | dependency | not the standard library: the zoo has no such dependency
+http::request::Request::into_body | dependency | not the standard library: the zoo has no such dependency
+http::request::Request::into_parts | dependency | not the standard library: the zoo has no such dependency
+http::request::Request::uri | dependency | not the standard library: the zoo has no such dependency
+serde_json::Map::get | dependency | not the standard library: the zoo has no such dependency
+serde_json::from_slice | dependency | not the standard library: the zoo has no such dependency
+serde_json::from_str | dependency | not the standard library: the zoo has no such dependency
+serde_json::from_value | dependency | not the standard library: the zoo has no such dependency
+serde_json::to_string | dependency | not the standard library: the zoo has no such dependency
+serde_json::to_vec | dependency | not the standard library: the zoo has no such dependency
+serde_urlencoded::from_str | dependency | not the standard library: the zoo has no such dependency
+serde_urlencoded::to_string | dependency | not the standard library: the zoo has no such dependency
+url::Url::as_str | dependency | not the standard library: the zoo has no such dependency
+url::Url::host_str | dependency | not the standard library: the zoo has no such dependency
+url::Url::join | dependency | not the standard library: the zoo has no such dependency
+url::Url::parse | dependency | not the standard library: the zoo has no such dependency
+url::Url::path | dependency | not the standard library: the zoo has no such dependency
+url::Url::query | dependency | not the standard library: the zoo has no such dependency
+url::Url::query_pairs | dependency | not the standard library: the zoo has no such dependency
+urlencoding::decode | dependency | not the standard library: the zoo has no such dependency

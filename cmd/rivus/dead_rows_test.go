@@ -21,13 +21,13 @@ import (
 // extractor writes, or the API is not what the row thinks it is, and nothing says so. This test holds every row of
 // the built-in model that names a function to the IR of the zoo (bench/zoo-*) and of the curated targets
 // (bench/*-curated): a row has to be hit by a call (or, for an entry point, by a function) of one of them, or be in
-// bench/parity/dead-allow.txt with its reason. The IR of real projects is not used: a real project does not use
+// internal/model/builtin/<model file>.dead-allow (next to the file of the row) with its reason. The IR of real projects is not used: a real project does not use
 // every API, and a row that it does not use is not wrong.
 //
 // A new row is a test that fails until a cell of the zoo calls it (docs/MODELING.md, "A row has to be hit").
 // RIVUS_DEAD_ROWS_PRINT=1 prints the rows that are not hit, in the form of the allow file.
 
-const deadAllowFile = "../../bench/parity/dead-allow.txt"
+const deadAllowDir = "../../internal/model/builtin"
 
 type deadRow struct{ lang, symbol, file string }
 
@@ -171,34 +171,50 @@ func rustZooSymbols(t *testing.T, set map[string]bool) {
 	irSymbols(set, deadReadIR(t, zooRustStream(t, cur)))
 }
 
-// readDeadAllow reads bench/parity/dead-allow.txt: "lang symbol | reason", and "#" for a comment.
-func readDeadAllow(t *testing.T) map[string]string {
+// readDeadAllow reads internal/model/builtin/<model file>.dead-allow (next to <model file>.yaml): "symbol | reason", and "#"
+// for a comment. The language is the one of the file name (go-, dart-, rust-). It returns "lang symbol" -> the file of the
+// row (the .yaml name) and the reason.
+func readDeadAllow(t *testing.T) (reasons, files map[string]string) {
 	t.Helper()
-	b, err := os.ReadFile(deadAllowFile)
+	names, err := filepath.Glob(filepath.Join(deadAllowDir, "*.dead-allow"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	out := map[string]string{}
-	for i, l := range strings.Split(string(b), "\n") {
-		l = strings.TrimSpace(l)
-		if l == "" || strings.HasPrefix(l, "#") {
-			continue
+	reasons, files = map[string]string{}, map[string]string{}
+	for _, path := range names {
+		base := filepath.Base(path)
+		yaml := strings.TrimSuffix(base, ".dead-allow") + ".yaml"
+		if _, err := os.Stat(filepath.Join(deadAllowDir, yaml)); err != nil {
+			t.Fatalf("%s: there is no %s next to it", base, yaml)
 		}
-		key, reason, ok := strings.Cut(l, " | ")
-		if !ok || strings.TrimSpace(reason) == "" {
-			t.Fatalf("%s:%d: no reason (the form is: lang symbol | reason)", deadAllowFile, i+1)
+		lang, _, _ := strings.Cut(base, "-")
+		b, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
 		}
-		if _, dup := out[strings.TrimSpace(key)]; dup {
-			t.Fatalf("%s:%d: %s is listed twice", deadAllowFile, i+1, key)
+		for i, l := range strings.Split(string(b), "\n") {
+			l = strings.TrimSpace(l)
+			if l == "" || strings.HasPrefix(l, "#") {
+				continue
+			}
+			sym, reason, ok := strings.Cut(l, " | ")
+			if !ok || strings.TrimSpace(reason) == "" {
+				t.Fatalf("%s:%d: no reason (the form is: symbol | reason)", base, i+1)
+			}
+			key := lang + " " + strings.TrimSpace(sym)
+			if _, dup := reasons[key]; dup {
+				t.Fatalf("%s:%d: %s is listed twice (in this file or in another)", base, i+1, key)
+			}
+			reasons[key] = strings.TrimSpace(reason)
+			files[key] = yaml
 		}
-		out[strings.TrimSpace(key)] = strings.TrimSpace(reason)
 	}
-	return out
+	return reasons, files
 }
 
 func TestBuiltinRowsAreHitByTheZoo(t *testing.T) {
 	rows := builtinCallRows(t)
-	allow := readDeadAllow(t)
+	allow, allowFile := readDeadAllow(t)
 	for _, lang := range []string{"go", "dart", "rust"} {
 		lang := lang
 		t.Run(lang, func(t *testing.T) {
@@ -221,21 +237,24 @@ func TestBuiltinRowsAreHitByTheZoo(t *testing.T) {
 				isRow[key] = true
 				hit := set[r.symbol]
 				_, allowed := allow[key]
+				if allowed && allowFile[key] != r.file {
+					t.Errorf("%s is a row of %s and is allowed in the file of %s: the allowance is in the .dead-allow of the file of the row", key, r.file, allowFile[key])
+				}
 				if !hit {
 					dead = append(dead, key+" | ")
 				}
 				switch {
 				case hit && allowed:
-					t.Errorf("%s is hit by the zoo now: take it out of bench/parity/dead-allow.txt", key)
+					t.Errorf("%s is hit by the zoo now: take it out of internal/model/builtin/%s", key, strings.TrimSuffix(r.file, ".yaml")+".dead-allow")
 				case !hit && !allowed:
 					t.Errorf("%s (%s): no call in the zoo or the curated targets hits this row. Either the key is not the name the extractor writes "+
 						"(read the IR: `rivus debug extract` / the extractor of the language), or a cell of bench/zoo-%s has to call it. "+
-						"Only an API that a run cannot check (it needs a server, a device) goes in bench/parity/dead-allow.txt, with the reason (docs/MODELING.md)", key, r.file, lang)
+						"Only an API that a run cannot check (it needs a server, a device) goes in internal/model/builtin/%s, with the reason (docs/MODELING.md)", key, r.file, lang, strings.TrimSuffix(r.file, ".yaml")+".dead-allow")
 				}
 			}
 			for key := range allow {
 				if strings.HasPrefix(key, lang+" ") && !isRow[key] {
-					t.Errorf("dead-allow.txt: %s is not a row of the built-in model: take it out", key)
+					t.Errorf("%s: %s is not a row of the built-in model: take it out", strings.TrimSuffix(allowFile[key], ".yaml")+".dead-allow", key)
 				}
 			}
 			if os.Getenv("RIVUS_DEAD_ROWS_PRINT") == "1" {
