@@ -179,20 +179,37 @@ func zooRustPkgCopy(t *testing.T, dir string) string {
 		t.Fatalf("cp zoo-mark: %v\n%s", err, out)
 	}
 	os.RemoveAll(filepath.Join(dst, "zoo-mark", "target"))
-	toml := filepath.Join(dst, "Cargo.toml")
-	b, err := os.ReadFile(toml)
+	// every Cargo.toml of the copy (the crate of the package, and the skeleton crates under it) that has zoo-mark as a path
+	// dependency (../../zoo-rust/zoo-mark in the repository: it works there) points to the copy of zoo-mark
+	found := false
+	err = filepath.Walk(dst, func(p string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() || filepath.Base(p) != "Cargo.toml" || strings.HasPrefix(p, filepath.Join(dst, "zoo-mark")+string(filepath.Separator)) {
+			return err
+		}
+		b, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		out := zooRustMarkPathRe.ReplaceAllStringFunc(string(b), func(string) string {
+			found = true
+			rel, _ := filepath.Rel(filepath.Dir(p), filepath.Join(dst, "zoo-mark"))
+			return `path = "` + filepath.ToSlash(rel) + `"`
+		})
+		if out == string(b) {
+			return nil
+		}
+		return os.WriteFile(p, []byte(out), 0o644)
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	const from = "../../zoo-rust/zoo-mark"
-	if !strings.Contains(string(b), from) {
-		t.Fatalf("Cargo.toml of the package does not name zoo-mark as path = %q", from)
-	}
-	if err := os.WriteFile(toml, []byte(strings.ReplaceAll(string(b), from, "zoo-mark")), 0o644); err != nil {
-		t.Fatal(err)
+	if !found {
+		t.Fatal("no Cargo.toml of the package names zoo-mark as path = \"../../zoo-rust/zoo-mark\"")
 	}
 	return dst
 }
+
+var zooRustMarkPathRe = regexp.MustCompile(`path\s*=\s*"(?:\.\./)+zoo-rust/zoo-mark"`)
 
 var zooRustPkgNameRe = regexp.MustCompile(`(?m)^name\s*=\s*"([^"]+)"`)
 
@@ -317,7 +334,7 @@ func TestZooPkgRust(t *testing.T) {
 			}
 			zooHoldLines(t, lines, cells, obs)
 			cp := zooRustPkgCopy(t, dir)
-			c := checkCuratedIROpts(t, cp, zooRustStream(t, cp), ".rs", annotOpts{extraRules: []string{rules}})
+			c := checkCuratedIROpts(t, cp, zooRustStream(t, cp), ".rs", annotOpts{extraRules: []string{rules}, ignoreSinkUnder: "skel/"})
 			zooHeadline(t, "zoo-rust-pkg/"+filepath.Base(dir), lines, cells, obs, c)
 		})
 	}
