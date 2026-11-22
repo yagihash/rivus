@@ -58,7 +58,7 @@ func (c *common) register(fs *flag.FlagSet) {
 	fs.Var(&c.rules, "rules", "additional rule file (repeatable)")
 	fs.BoolVar(&c.noBuiltin, "no-builtin-rules", false, "do not load the built-in rules")
 	fs.BoolVar(&c.noProject, "no-project-rules", false, "do not load the rules found in <dir>/.rivus/rules/*.yaml")
-	fs.BoolVar(&c.tests, "tests", false, "include _test.go files")
+	fs.BoolVar(&c.tests, "tests", false, "also read what the build does not ship: tests (Go: _test.go files; Dart: test/ and the dependencies declared for development only; Rust: tests, examples, benches and [dev-dependencies])")
 	fs.BoolVar(&c.noDeps, "no-deps", false, "do not read the source of the dependencies (which is done by default, except for the standard library, so that calls into them are followed instead of guessed): lighter (about a sixth of the memory), and every call into a dependency is a guess")
 	fs.Var(&c.allowDepsUnder, "allow-deps-under", "Dart: a directory outside the project whose packages may be read as dependencies (repeatable). The package_config.json of the project says where its dependencies are, and it is not trusted: only the project, the pub cache and the SDKs are read without being asked (a monorepo's sibling packages need this)")
 	fs.BoolVar(&c.deterministic, "deterministic-only", false, "ignore the rules decided by an LLM (origin: llm)")

@@ -309,7 +309,7 @@ func (o *analyzeOpts) runExtractor(lang string) (*ir.Program, error) {
 	return readExtracted(lang, out)
 }
 
-// extractRaw runs the extractor of a language (Rust: in the container unless -unsafe-host-exec) and returns the stream of the IR as it wrote it.
+// extractRaw runs the extractor of a language (Rust: under the sandbox unless -unsafe-host-exec) and returns the stream of the IR as it wrote it.
 func (o *analyzeOpts) extractRaw(lang string) ([]byte, error) {
 	if lang == langRust && !o.hostExec() {
 		o.rustIsolation = &report.Isolation{Mode: "sandbox", Detail: "the build scripts and the macros of the project ran under the sandbox of macOS: no network while it was built (the fetch stage has one, and runs no code of the project), no files but the project, its dependencies and a work directory"}
