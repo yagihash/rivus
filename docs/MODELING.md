@@ -370,6 +370,47 @@ A sink has a `category`: what kind of harm the value does there. It is a free st
 
 A new category is made when no other one fits (not for a new library). It is added to this table, and to the decision of the product (`docs/GCP-MODELS.md`, judgement E, for `resource_name`). One symbol has one category (#140).
 
+## 4c. A source that is a parameter of a function that is given: `callback_param`
+
+A router calls the handler that it is given with what it took from the request: `router.get('/item/<id>', (Request r, String id) => ...)`
+hands the text of the path to `id`. The type of `id` is `String`, so `param_type` cannot name it, and `calls:` has no place for a source.
+`kind: callback_param` says: the parameters `from` to `to` of the function that this call is given as its operand are a source.
+
+```yaml
+sources:
+  - kind: callback_param
+    symbol: package:shelf_router/src/router.dart#Router.get   # the call that is given the function
+    operand: 1        # which operand of the call is the function (required; counted as the table below says)
+    from: 1           # the first parameter of the function that is a source (0 is the first; default 0)
+    # to: 2           # the last one, included (default: the last parameter the function declares)
+    labels: [user_input]
+```
+
+* The function is found **where the call is made**: a function written there (a closure, a function literal), a function that is
+  named there (a top-level function, a method value), or a local that holds one of them, also through copies and conversions. Then
+  its parameters are a source, as those of a `kind: param` row are, and the flow in it is found by the analysis as any other.
+* A function that is not found where the call is made (a parameter of the function that registers, a field, an element, a
+  result of a call, a variable that two functions are stored in) is **not followed**, and the call says so: an `unresolved_callee`
+  uncertainty at the call (in the function that makes it, which is the helper when a helper registers). The parameters of such a function are not
+  a source: the flow is missed, with the note. Write the row for the call that has the function literal (the helper's own callers are not followed).
+* `from` and `to` are positions among the parameters that the function declares (a captured value is not one; a method
+  value's receiver is not one). Named parameters are not counted: positions only (#145).
+* **`operand` is counted the way the `calls:` rows of the same file count**, so that one model file does not have two ways:
+
+| language | `operand: 0` is | the receiver |
+| --- | --- | --- |
+| Go | the first argument | not counted (`recv` in `calls:`) |
+| Dart | the first argument | not counted (`fn: arg0` is the first argument after the receiver) |
+| Rust (a set with `self_first: true`) | the receiver of a method, else the first argument (`self` is `arg0`) | counted: `arg0` |
+
+* The row is read by the loader, with its keys (`operand`, `from`, `to`) only on this kind; an older rivus refuses the file
+  (it does not drop the row quietly).
+* The row cannot be checked against a body (the source is what the framework promises, not what the code of the function says):
+  `bench/model-diff` compares the propagator rows only, so a `callback_param` row is not compared with the code of the library
+  (a function that takes a function stays `unverified` there). The zoo is what holds it:
+  `bench/zoo-dart/cells/lib/dart/callback_param_*.dart` run a router, and the rules of the zoo (`bench/zoo-dart/cells/rules.yaml`) have the row.
+* `rivus models coverage -yaml` starts with a commented example of the row.
+
 ## 5. A row has to be hit
 
 A row whose key is not the name the extractor writes never matches a call, and nothing says so: the call is read as an

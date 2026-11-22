@@ -52,6 +52,15 @@ func TestParseErrors(t *testing.T) {
 		"param_type with symbol":          "sources:\n  - kind: param_type\n    type: a.T\n    symbol: a.B\n    labels: [x]\n",
 		"param_type implementations":      "sources:\n  - kind: param_type\n    type: a.T\n    match: implementations\n    labels: [x]\n",
 		"call_result with params":         "sources:\n  - symbol: a.B\n    params: [0]\n    labels: [x]\n",
+		"callback_param no operand":       "sources:\n  - kind: callback_param\n    symbol: a.B\n    labels: [x]\n",
+		"callback_param negative operand": "sources:\n  - kind: callback_param\n    symbol: a.B\n    operand: -1\n    labels: [x]\n",
+		"callback_param negative from":    "sources:\n  - kind: callback_param\n    symbol: a.B\n    operand: 0\n    from: -1\n    labels: [x]\n",
+		"callback_param to before from":   "sources:\n  - kind: callback_param\n    symbol: a.B\n    operand: 0\n    from: 2\n    to: 1\n    labels: [x]\n",
+		"callback_param no symbol":        "sources:\n  - kind: callback_param\n    operand: 0\n    labels: [x]\n",
+		"callback_param with params":      "sources:\n  - kind: callback_param\n    symbol: a.B\n    operand: 0\n    params: [0]\n    labels: [x]\n",
+		"callback_param implementations":  "sources:\n  - kind: callback_param\n    symbol: a.B\n    operand: 0\n    match: implementations\n    labels: [x]\n",
+		"operand on param":                "sources:\n  - kind: param\n    symbol: a.B\n    params: [0]\n    operand: 0\n    labels: [x]\n",
+		"from on call_result":             "sources:\n  - symbol: a.B\n    from: 1\n    labels: [x]\n",
 		"second document":                 "ruleset: t\nsources:\n  - symbol: a.B\n    labels: [x]\n---\nruleset: t2\nsinks:\n  - symbol: a.C\n    category: x\n  - this_is: garbage\n",
 	}
 	for name, src := range cases {
@@ -283,5 +292,27 @@ func TestSinkNamed(t *testing.T) {
 	}
 	if p := rs.Sinks[1].PartList(); len(p) != 1 || p[0].Named != "r" || p[0].Field != "url" {
 		t.Errorf("short form by name: %+v", p)
+	}
+}
+
+func TestCallbackParamIsIndexedBySymbolWithItsSetsCounting(t *testing.T) {
+	a, err := Parse(strings.NewReader("sources:\n  - kind: callback_param\n    symbol: a.Route\n    operand: 1\n    from: 1\n    to: 2\n    labels: [user_input]\n"), "a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := Parse(strings.NewReader("self_first: true\nsources:\n  - kind: callback_param\n    symbol: a.Rs\n    operand: 1\n    labels: [user_input]\n"), "b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := Merge(a, b)
+	g := r.CallbackParams["a.Route"]
+	if len(g) != 1 || *g[0].Operand != 1 || *g[0].From != 1 || *g[0].To != 2 || g[0].SelfFirst {
+		t.Errorf("a.Route: %+v", g)
+	}
+	if g := r.CallbackParams["a.Rs"]; len(g) != 1 || !g[0].SelfFirst || g[0].From != nil {
+		t.Errorf("a.Rs: %+v", g)
+	}
+	if len(r.ParamFuncs)+len(r.ParamTypes)+len(r.CallSources) != 0 {
+		t.Errorf("a callback_param is no other kind of source")
 	}
 }
