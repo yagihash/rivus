@@ -53,6 +53,7 @@
 | [DESIGN-graph.md](DESIGN-graph.md) | 実装済み | `rivus graph` と保存するファイル。使い方の正本は GRAPH.md |
 | [DESIGN-zoo.md](DESIGN-zoo.md) | 一部実装 | zoo と wild のベンチ。使い方の正本は `bench/zoo/README.md` |
 | [DESIGN-callouts.md](DESIGN-callouts.md) | 一部実装 | 関数値を通る流れ(関数値の正本) |
+| [DESIGN-callback-sources.md](DESIGN-callback-sources.md) | 案 | 引数として渡された関数の、N 番目以降の引数を source にする書式(shelf_router のハンドラの追加の引数から。#149) |
 | [DESIGN-shared-state.md](DESIGN-shared-state.md) | 一部実装 | グローバルと共有される場所(グローバルの正本) |
 | [DESIGN-capture.md](DESIGN-capture.md) | 一部実装 | クロージャのキャプチャの値 |
 | [DESIGN-package-models.md](DESIGN-package-models.md) | 案 | パッケージ単位の「本体を読まない」宣言(extractor の段階から)と、モデルを書く標準の流れ(生成、差分テスト、宣言)、モデル作成のセッションを並べる準備 |
