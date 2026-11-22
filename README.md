@@ -123,7 +123,7 @@ rivus query -site <ID> ./...           # sites の 1 件から始める
 | `models coverage` | どの関数にモデルを書くと効果があるかを、効果の大きい順に出す |
 | `extract` | 中立の IR を書き出す（調査用） |
 
-フラグは `rivus <command> -h` で出ます。よく使うもの: `-C <dir>`、`-rules <file>`（繰り返し可）、`-no-deps`（依存のソースを読まない。軽いが、依存への呼び出しは推測になる）、`-tests`（テストのコードも読む）、`-detail summary`（経路とコードを省く）、`-timeout`、`-v`。
+フラグは `rivus <command> -h` で出ます。よく使うもの: `-C <dir>`、`-rules <file>`（繰り返し可）、`-no-deps`（依存のソースを読まない。軽いが、依存への呼び出しは推測になる）、`-tests`（テストのコードも読む）、`-detail summary`（経路とコードを省く）、`-timeout`、`-v`。`-resolve-func-values`（実験。既定 off）は、呼び出し先が分からない関数値の呼び出しに、自分のコードで作った関数を候補として補ってから解析します（`stats.func_values` に、補った数が出ます）。
 
 `index` と `graph` の詳しい使い方は [docs/GRAPH.md](docs/GRAPH.md) にあります。
 

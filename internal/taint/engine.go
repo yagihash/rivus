@@ -83,6 +83,8 @@ type Engine struct {
 	dispatch sync.Map // *sg.Instr -> map[*sg.Func][]Guard
 	// valueGuards is the same for the calls of function values (valueGuards).
 	valueGuards sync.Map // *sg.Instr -> map[string][]Guard
+	// fvDropped is the calls (symbol, then the call) where a model dropped a function value (Options.FuncValues).
+	fvDropped sync.Map // string -> *sync.Map of *sg.Instr
 
 	// implsIndex are the implementations of the trait methods that the program has, by the last name of the
 	// trait and the method (callrows.go, methodImpls)
@@ -482,6 +484,8 @@ type Stats struct {
 	BudgetExhausted int `json:"budget_exhausted,omitempty"`
 	FuncTimeouts    int `json:"func_timeouts,omitempty"`
 	RunTimeouts     int `json:"run_timeouts,omitempty"`
+	// FuncValues is what -resolve-func-values did (docs/DESIGN-callouts.md, 5.6); absent when the flag is off.
+	FuncValues *FuncValuesStats `json:"func_values,omitempty"`
 	// LoadDependent is true when the result depends on the load of the machine: a function was
 	// stopped by a clock, or the run was.
 	LoadDependent bool `json:"load_dependent,omitempty"`
@@ -503,6 +507,9 @@ type Result struct {
 	Stats        Stats          `json:"stats"`
 	// FuncCandidates is the result of the diagnostic Options.FuncValues (not in the output).
 	FuncCandidates []FuncCandidates `json:"-"`
+	// FuncDropped is, of the same run, the calls with a model that were given a function value that the model does not
+	// say anything of (by symbol; not in the output).
+	FuncDropped []FuncDropped `json:"-"`
 }
 
 // Run analyses every function with a body, callees before callers, until the
@@ -1346,6 +1353,7 @@ func (e *Engine) collect(st Stats) *Result {
 
 	if e.opts.FuncValues {
 		res.FuncCandidates = e.collectFuncCandidates(merged)
+		res.FuncDropped = e.droppedAtModel()
 	}
 	keys := make([]findingKey, 0, len(merged))
 	for k := range merged {

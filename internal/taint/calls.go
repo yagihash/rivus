@@ -293,6 +293,7 @@ func (s *state) callBody(cc *callCtx) {
 		// one function was found (several are told by valueCandidates): followed, and said not to be all
 		notes = append(notes, s.newNote(ci, KindUnresolvedCallee, ci.Callee.ValueLimitDetail(), ""))
 	}
+	notes = append(notes, s.supplementNotes(ci)...)
 	if ci.IR.Go {
 		notes = append(notes, s.pathNote(KindConcurrency, "the callee runs in another goroutine; the order of effects is not modelled", ci.Pos))
 	}
@@ -364,6 +365,7 @@ func (s *state) valueCandidates(cc *callCtx) {
 		// the candidates found are followed, and said not to be all of them
 		notes = append(notes, s.newNote(ci, KindUnresolvedCallee, ci.Callee.ValueLimitDetail(), ""))
 	}
+	notes = append(notes, s.supplementNotes(ci)...)
 	if ci.IR.Go {
 		notes = append(notes, s.pathNote(KindConcurrency, "the callee runs in another goroutine; the order of effects is not modelled", ci.Pos))
 	}
@@ -807,6 +809,9 @@ func (s *state) applyModel(cc *callCtx) {
 		for i := range p.Calls {
 			s.applyCallRow(cc, &p, i, modelRef(cc.sym, "propagator", p.Provenance))
 		}
+	}
+	if s.eng.opts.FuncValues {
+		s.countDroppedFuncValues(cc)
 	}
 }
 

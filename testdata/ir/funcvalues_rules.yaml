@@ -1,0 +1,15 @@
+ruleset: rivus/dart-funcvalues@1
+
+sources:
+  - symbol: package:fvsample/mark.dart#src
+    labels: [user_input]
+
+sinks:
+  - symbol: package:fvsample/mark.dart#sink
+    category: test
+  - symbol: package:fvsample/cells.dart#exec
+    category: test
+
+propagators:
+  - symbol: package:fvsample/cells.dart#keep
+    pure: true

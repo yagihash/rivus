@@ -1,0 +1,5 @@
+name: fvsample
+description: "Calls of function values that nothing resolves, for -resolve-func-values (cmd/rivus/resolvefv_test.go)."
+publish_to: none
+environment:
+  sdk: ^3.0.0
