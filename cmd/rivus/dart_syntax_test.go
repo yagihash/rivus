@@ -313,3 +313,154 @@ func TestDartSkippedDirectoriesAreSaid(t *testing.T) {
 		t.Errorf("a project with nothing skipped has skipped_dirs: %+v", none)
 	}
 }
+
+// A function whose name has a "$" of its own (a generated `_$FromJson`, `mid$dle`) and a closure in it: a compile error in
+// it is on the findings that go through it. The ID is not cut at the first "$" (ir.ParentFuncIDs).
+func TestDartCompileErrorInAFunctionWithADollarInItsName(t *testing.T) {
+	dart := os.Getenv("RIVUS_DART")
+	if dart == "" {
+		skipOrFail(t, "RIVUS_DART")
+	}
+	extractor, err := filepath.Abs("../../extractor/dart")
+	if err != nil {
+		t.Fatal(err)
+	}
+	words := strings.Fields(dart)
+	dir := t.TempDir()
+	write := func(name, text string) {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("pubspec.yaml", "name: dx\npublish_to: none\nenvironment:\n  sdk: ^3.10.0\n")
+	write("rules.yaml", "ruleset: t/dx@1\nsources:\n  - symbol: package:dx/lib.dart#source\n    labels: [user_input]\nsinks:\n  - symbol: package:dx/lib.dart#sink\n    category: test\n")
+	write("lib/lib.dart", "String source() => 'x';\nvoid sink(String s) {}\n")
+	write("lib/c.dart", "import 'lib.dart';\n"+
+		"void _$gen() { final a = source(); var z = 1 + 'x'; sink(a); }\n"+
+		"void mid$dle() { final a = source(); var z = 1 + 'x'; sink(a); }\n"+
+		"void _$inClosure() { final f = () { final a = source(); sink(a); }; var z = 1 + 'x'; f(); }\n"+
+		"void clean$one() { final a = source(); sink(a); }\n")
+	get := exec.Command(words[0], append(append([]string{}, words[1:]...), "pub", "get")...)
+	get.Dir = dir
+	if out, err := get.CombinedOutput(); err != nil {
+		t.Fatalf("dart pub get: %v\n%s", err, out)
+	}
+	cmd := exec.Command(binary, "analyze", "-rules", "rules.yaml", "./...")
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "RIVUS_DART_EXTRACTOR="+dart+" run "+filepath.Join(extractor, "bin", "rivus_dart.dart"))
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("analyze: %v", err)
+	}
+	var r struct {
+		Findings []struct {
+			Source        struct{ Func string }   `json:"source"`
+			Confidence    string                  `json:"confidence"`
+			Uncertainties []struct{ Kind string } `json:"uncertainties"`
+		} `json:"findings"`
+	}
+	if err := json.Unmarshal(out, &r); err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{}
+	for _, f := range r.Findings {
+		name := f.Source.Func[strings.LastIndex(f.Source.Func, "#")+1:]
+		seen[name] = true
+		note := false
+		for _, u := range f.Uncertainties {
+			note = note || u.Kind == "missing_source"
+		}
+		if strings.HasPrefix(name, "clean$one") {
+			if note || f.Confidence != "no_uncertainty_on_path" {
+				t.Errorf("a function with no error is not clear: %s %+v", name, f)
+			}
+			continue
+		}
+		if !note || f.Confidence == "no_uncertainty_on_path" {
+			t.Errorf("%s (a compile error in it): no missing_source on the finding: %+v", name, f)
+		}
+	}
+	for _, want := range []string{"_$gen", "mid$dle", "clean$one"} {
+		if !seen[want] {
+			t.Errorf("no finding of %s", want)
+		}
+	}
+}
+
+// A compile error inside each kind of declaration that holds code: the finding that goes through it has the note. The
+// extractor names the function that holds the error (_enclosingFunction), and it has to be the ID that the IR gives it.
+func TestDartCompileErrorInEveryKindOfDeclaration(t *testing.T) {
+	dart := os.Getenv("RIVUS_DART")
+	if dart == "" {
+		skipOrFail(t, "RIVUS_DART")
+	}
+	extractor, err := filepath.Abs("../../extractor/dart")
+	if err != nil {
+		t.Fatal(err)
+	}
+	words := strings.Fields(dart)
+	dir := t.TempDir()
+	write := func(name, text string) {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("pubspec.yaml", "name: dx\npublish_to: none\nenvironment:\n  sdk: ^3.10.0\n")
+	write("rules.yaml", "ruleset: t/dx@1\nsources:\n  - symbol: package:dx/lib.dart#source\n    labels: [user_input]\nsinks:\n  - symbol: package:dx/lib.dart#sink\n    category: test\n")
+	write("lib/lib.dart", "String source() => 'x';\nvoid sink(String s) {}\n")
+	write("lib/c.dart", "import 'lib.dart';\n"+
+		"void localNamed() { void inner() { final a = source(); var z = 1 + 'x'; sink(a); } inner(); }\n"+
+		"final topInit = () { final a = source(); var z = 1 + 'x'; sink(a); };\n"+
+		"class G { String get got { final a = source(); var z = 1 + 'x'; sink(a); return a; } }\n"+
+		"extension E on String { void ext() { final a = source(); var z = 1 + 'x'; sink(a); } }\n"+
+		"class F { F(); factory F.make() { final a = source(); var z = 1 + 'x'; sink(a); return F(); } }\n"+
+		"class Fld { final f = () { final a = source(); var z = 1 + 'x'; sink(a); }; }\n"+
+		"void useAll() { localNamed(); topInit(); G().got; 'x'.ext(); F.make(); Fld().f(); }\n")
+	get := exec.Command(words[0], append(append([]string{}, words[1:]...), "pub", "get")...)
+	get.Dir = dir
+	if out, err := get.CombinedOutput(); err != nil {
+		t.Fatalf("dart pub get: %v\n%s", err, out)
+	}
+	cmd := exec.Command(binary, "analyze", "-rules", "rules.yaml", "./...")
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "RIVUS_DART_EXTRACTOR="+dart+" run "+filepath.Join(extractor, "bin", "rivus_dart.dart"))
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("analyze: %v", err)
+	}
+	var r struct {
+		Findings []struct {
+			Source        struct{ Func string }   `json:"source"`
+			Confidence    string                  `json:"confidence"`
+			Uncertainties []struct{ Kind string } `json:"uncertainties"`
+		} `json:"findings"`
+		LoadErrors []struct {
+			Package string `json:"package"`
+			Func    string `json:"func"`
+		} `json:"load_errors"`
+	}
+	if err := json.Unmarshal(out, &r); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Findings) < 6 {
+		t.Errorf("findings: %d, want one for each of the six forms", len(r.Findings))
+	}
+	for _, f := range r.Findings {
+		note := false
+		for _, u := range f.Uncertainties {
+			note = note || u.Kind == "missing_source"
+		}
+		if !note || f.Confidence == "no_uncertainty_on_path" {
+			t.Errorf("%s (a compile error in it): no missing_source on the finding: %+v", f.Source.Func, f)
+		}
+	}
+	for _, e := range r.LoadErrors {
+		t.Logf("load error func %q", e.Func)
+	}
+}

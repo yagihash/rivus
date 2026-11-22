@@ -957,9 +957,9 @@ Set<String> _devOnlyDependencies(String root, StreamOut out) {
 String? _enclosingFunction(CompilationUnit unit, int offset) {
   String? best;
   var bestLen = 1 << 30;
-  void consider(AstNode n, Element? el) {
-    if (el == null || offset < n.offset || offset > n.end || n.length >= bestLen) return;
-    best = funcId(el);
+  void consider(AstNode n, String? id) {
+    if (id == null || offset < n.offset || offset > n.end || n.length >= bestLen) return;
+    best = id;
     bestLen = n.length;
   }
 
@@ -969,22 +969,45 @@ String? _enclosingFunction(CompilationUnit unit, int offset) {
 
 class _DeclFinder extends RecursiveAstVisitor<void> {
   _DeclFinder(this.consider);
-  final void Function(AstNode, Element?) consider;
+  final void Function(AstNode, String?) consider;
   @override
   void visitFunctionDeclaration(FunctionDeclaration node) {
-    consider(node, node.declaredFragment?.element);
+    // a local function is named after the function around it in the IR (`f$1`), not by its own name: the error is in
+    // the function around it (a closure counts as it too)
+    if (node.parent is CompilationUnit) {
+      final el = node.declaredFragment?.element;
+      consider(node, el == null ? null : funcId(el));
+    }
     super.visitFunctionDeclaration(node);
   }
 
   @override
   void visitMethodDeclaration(MethodDeclaration node) {
-    consider(node, node.declaredFragment?.element);
+    final el = node.declaredFragment?.element;
+    consider(node, el == null ? null : funcId(el));
     super.visitMethodDeclaration(node);
   }
 
   @override
   void visitConstructorDeclaration(ConstructorDeclaration node) {
-    consider(node, node.declaredFragment?.element);
+    final el = node.declaredFragment?.element;
+    consider(node, el == null ? null : funcId(el));
     super.visitConstructorDeclaration(node);
+  }
+
+  /// The initializer of a variable of the library or a static field is a function of its own (`name$init`); the one of a
+  /// field of an object is lowered in the constructor that the class has by default (`Class.new`).
+  @override
+  void visitVariableDeclaration(VariableDeclaration node) {
+    final el = node.declaredFragment?.element;
+    if (node.initializer != null && el != null) {
+      if (el is TopLevelVariableElement || (el is FieldElement && el.isStatic)) {
+        consider(node, '${symbolOf(el)}\$init');
+      } else if (el is FieldElement) {
+        final cls = el.enclosingElement;
+        if (cls is ClassElement && cls.unnamedConstructor != null) consider(node, funcId(cls.unnamedConstructor!));
+      }
+    }
+    super.visitVariableDeclaration(node);
   }
 }

@@ -1428,14 +1428,16 @@ func (e *Engine) buildFinding(rf *rawFinding) *Finding {
 		}
 		seenFn := map[string]bool{}
 		for _, id := range ids {
-			// a closure ("f$1") counts as the function around it
-			base := id
-			if i := strings.Index(id, "$"); i >= 0 {
-				base = id[:i]
-			}
-			if msg, ok := byFunc[base]; ok && !seenFn[base] {
-				seenFn[base] = true
-				f.Uncertainties = append(f.Uncertainties, newUncertainty(KindMissingSource, msg, base))
+			// a closure ("f$1") counts as the function around it (ir.ParentFuncIDs: the ID itself first, then the ones
+			// around it, a trailing "$<digits>" at a time: a name with a "$" of its own is not cut)
+			for _, base := range ir.ParentFuncIDs(id) {
+				if msg, ok := byFunc[base]; ok {
+					if !seenFn[base] {
+						seenFn[base] = true
+						f.Uncertainties = append(f.Uncertainties, newUncertainty(KindMissingSource, msg, base))
+					}
+					break
+				}
 			}
 		}
 	}
