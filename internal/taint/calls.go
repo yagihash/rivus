@@ -312,8 +312,26 @@ func (s *state) callBody(cc *callCtx) {
 	case len(fns) == 0 && ci.Callee != nil && ci.Callee.ValueLimit != "":
 		// the functions are known and rivus left them out: its limit, not the code's
 		s.unmodeled(cc, s.newNote(ci, KindDepthLimit, ci.Callee.ValueLimitDetail(), cc.sym))
+		if ci.Callee.ValueLimit == ir.ValueCandidateLimit {
+			// the callers of this function that pass a function there are told (applySummary)
+			for _, p := range ci.Callee.ValueLimitParams {
+				if s.limited == nil {
+					s.limited = map[int]bool{}
+				}
+				s.limited[p] = true
+			}
+		}
 	case len(fns) == 0:
 		s.unmodeled(cc, s.newNote(ci, KindUnresolvedCallee, "the called function is not known", cc.sym))
+		if ci.Callee != nil && ci.Callee.Kind == ir.CalleeValue {
+			// the callers of this function that pass something there are told (applySummary)
+			for _, p := range ci.Callee.ValueUnresolvedParams {
+				if s.unresolved == nil {
+					s.unresolved = map[int]bool{}
+				}
+				s.unresolved[p] = true
+			}
+		}
 	case external:
 		ids := make([]string, len(fns))
 		for i, c := range fns {

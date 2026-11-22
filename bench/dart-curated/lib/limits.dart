@@ -40,7 +40,7 @@ String f31(String s) => s;
 String f32(String s) => s;
 
 void limit_many() {
-  final a = source(); // @source(limit-many) @miss(silent)
+  final a = source(); // @source(limit-many) @miss(depth_limit)
   callIt(a, f1);
   callIt(a, f2);
   callIt(a, f3);

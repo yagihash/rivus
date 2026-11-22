@@ -139,11 +139,19 @@ func (r *resolver) resolve(fn *ir.Func, bi, ii int, in *ir.Instr) {
 	if len(found) > most {
 		// the functions are known, rivus leaves them out: not "the callee is not known"
 		in.Callee.ValueLimit, in.Callee.ValueFound = ir.ValueCandidateLimit, len(found)
+		if p := r.onlyParam(fn, form, root); p >= 0 {
+			// the value came through the parameter p: a caller that passes a function there is told (taint, LimitedParams)
+			in.Callee.ValueLimitParams = []int{p}
+		}
 		return
 	}
 	if len(found) == 0 {
 		if r.cut {
 			in.Callee.ValueLimit = ir.ValueCallerDepthLimit
+		} else if p := r.paramThroughFields(fn, form, root); p >= 0 {
+			// no function is known, and the value is what a parameter holds: a caller that passes something there is told
+			// (taint, UnresolvedParams)
+			in.Callee.ValueUnresolvedParams = []int{p}
 		}
 		return
 	}
@@ -385,5 +393,55 @@ func (r *resolver) funcsOf(f *ir.Func, ref irssa.Ref, home *ir.Func, out map[ir.
 			}
 			r.funcsOf(c.fn, cf.Operand(c.b, c.i, k), home, out, seen, depth+1, via)
 		}
+	}
+}
+
+// paramThroughFields is onlyParam for a value that may also be read from a field, an element or a cell of what a
+// parameter holds (a function kept in an object, a list or a map that was passed): the parameter is the one that holds
+// it. -1 when there is not one such parameter.
+func (r *resolver) paramThroughFields(fn *ir.Func, form *irssa.Form, root irssa.Ref) int {
+	w := &fieldWalk{r: r, fn: fn, form: form, param: -1, ok: true, seen: map[irssa.Ref]bool{}}
+	w.walk(root)
+	if !w.ok {
+		return -1
+	}
+	return w.param
+}
+
+// fieldWalk is the walk of paramThroughFields. (A method, not a closure that calls itself: the analysis of rivus by
+// itself counts a closure that is called through a variable it captured as a capture it did not follow, TestDogfood.)
+type fieldWalk struct {
+	r     *resolver
+	fn    *ir.Func
+	form  *irssa.Form
+	param int
+	ok    bool
+	seen  map[irssa.Ref]bool
+}
+
+func (w *fieldWalk) walk(ref irssa.Ref) {
+	if w.seen[ref] || !w.ok {
+		return
+	}
+	w.seen[ref] = true
+	if ref.Kind == irssa.RefInstr {
+		if in := &w.fn.Blocks[ref.Block].Instrs[ref.Index]; (in.Op == ir.OpFieldLoad || in.Op == ir.OpIndexLoad || in.Op == ir.OpLoad) && len(in.Args) > 0 {
+			w.walk(w.form.Operand(ref.Block, ref.Index, 0))
+			return
+		}
+	}
+	k, in, from := w.r.classify(w.fn, w.form, ref)
+	switch k {
+	case refParam:
+		if w.param >= 0 && w.param != in.Index {
+			w.ok = false
+		}
+		w.param = in.Index
+	case refFrom:
+		for _, a := range from {
+			w.walk(a)
+		}
+	default:
+		w.ok = false
 	}
 }

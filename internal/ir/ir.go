@@ -434,6 +434,13 @@ type Callee struct {
 	// enough to find any. Empty when nothing was cut.
 	ValueLimit string `json:"-"`
 	ValueFound int    `json:"-"`
+	// ValueLimitParams are, when ValueLimit is "candidate_limit", the parameters of the function that the called value
+	// came through (the one parameter, when it is one): what is passed there is called, and not followed. Not in the stream.
+	ValueLimitParams []int `json:"-"`
+	// ValueUnresolvedParams are, when the call has no candidate and the callers did not give one, the parameter of the
+	// function that the called value came through, also through a field or an element of what the parameter holds: what a
+	// caller passes there is called, and which function it is, is not known. Not in the stream.
+	ValueUnresolvedParams []int `json:"-"`
 	// ValueWhy is, when ValueLimit is "partial" (ValueCands are set, ValueFound of them), why not
 	// every caller's value could be followed: the causes, sorted.
 	ValueWhy []string `json:"-"`

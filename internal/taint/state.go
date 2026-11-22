@@ -196,6 +196,13 @@ type state struct {
 	cells   map[Root]map[string]Set
 	changed bool
 
+	// limited are the parameters whose value this function calls through a call that is over the candidate limit
+	// (Summary.LimitedParams)
+	limited map[int]bool
+	// unresolved are the parameters that this function holds a function in that it calls with no candidate
+	// (Summary.UnresolvedParams)
+	unresolved map[int]bool
+
 	paramRoot map[Root]int // parameter and free variable roots -> index
 	numbering map[*sg.Value]int
 	// numericStops: by source site, where its data stopped at a number or a bool here.

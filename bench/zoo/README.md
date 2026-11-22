@@ -203,4 +203,5 @@ was kept in a field, a variable, a list or a map is not followed to its call).
 
 - `TestZooMarksLock` が、ソースから作った一覧とファイルを比べる。印を足す・変える・外すと落ちる。書き直すのは `ZOO_MARKS_UPDATE=1 go test -run ZooMarksLock ./cmd/rivus`。
 - CI の `zoo-loosened` が、`marks.lock` に**行が増えた**コミットのメッセージに `Zoo-Loosened: <理由>。ユーザーの承認: <日付>` の行がなければ落とす。行が減る(直って印が外れる)のは何も要らない。
+- **付け替えの決まり**(ユーザーが相談役に判断を任せた、2026-11-22): `@miss(silent)` を「テストが確かめた痕跡の kind」(`@miss(depth_limit)` など)へ付け替えるのは、テストが「a trace has come」と言い、kind を名指したときに限り、相談役やユーザーに聞かずに行ってよい(`Zoo-Loosened:` の行は、事実のとおりに書く)。逆向き(痕跡つき → silent)、`@miss` / `@fp` を既存の行に新しく足す、`@sink(tag)` → `none`、`@na` / `@todo` の追加は、これまでどおり、聞く。
 - 範囲: 動物園だけ。`@sink(tag)` の数が減る向きと、curated / wild / go-scale の正解の件数は、まだ固定していない([ROADMAP.md](../../docs/ROADMAP.md))。

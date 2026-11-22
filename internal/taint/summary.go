@@ -56,7 +56,14 @@ type Summary struct {
 	Sinks   []*SinkReach
 	// Opaque are the parameters whose memory a function that is not read had (opaqueParams)
 	Opaque []int
-	Sig    string
+	// LimitedParams are the parameters whose value this function (or a function it passes the parameter to) calls through a
+	// call that has more candidates than rivus keeps (candidate_limit): what a caller passes there is not followed, and
+	// the caller is told. Internal: it is not in the result, nor in the index file.
+	LimitedParams []int
+	// UnresolvedParams are the parameters that this function (or a function it passes the parameter to) holds a function in
+	// that it calls, with no candidate: which function it is, is not known. A caller that passes something there is told.
+	UnresolvedParams []int
+	Sig              string
 }
 
 // summarize turns the final state of the analysis into a summary.
@@ -150,6 +157,14 @@ func (s *state) summarize() *Summary {
 		sum.Sinks = append(sum.Sinks, s.sinkReaches[k])
 	}
 	sum.Opaque = s.opaqueParams()
+	for p := range s.limited {
+		sum.LimitedParams = append(sum.LimitedParams, p)
+	}
+	sort.Ints(sum.LimitedParams)
+	for p := range s.unresolved {
+		sum.UnresolvedParams = append(sum.UnresolvedParams, p)
+	}
+	sort.Ints(sum.UnresolvedParams)
 	sum.Sig = sum.signature()
 	return sum
 }
@@ -224,6 +239,12 @@ func (sum *Summary) signature() string {
 	}
 	for _, i := range sum.Opaque {
 		parts = append(parts, "opaque", strconv.Itoa(i))
+	}
+	for _, i := range sum.LimitedParams {
+		parts = append(parts, "limited", strconv.Itoa(i))
+	}
+	for _, i := range sum.UnresolvedParams {
+		parts = append(parts, "unresolved", strconv.Itoa(i))
 	}
 	return fingerprint.Hash(parts...)
 }
@@ -354,6 +375,34 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 	for _, i := range sum.Opaque {
 		if i < len(argv) {
 			s.markOpaque(argv[i], cc.in)
+		}
+	}
+	for _, i := range sum.UnresolvedParams {
+		if i >= len(argv) {
+			continue
+		}
+		// a function that is held in what is passed at the parameter i is called there, and which one is not known
+		s.newNote(cc.in, KindUnresolvedCallee, "the function that is passed as "+paramPhrase(fn, i)+" of "+s.eng.funcID(fn)+" (or one that it holds) is called there, and which function it is is not known: none is followed", s.eng.funcID(fn))
+		if a := argv[i]; a != nil && a.Kind == sg.KParam && a.Func == s.fn {
+			if s.unresolved == nil {
+				s.unresolved = map[int]bool{}
+			}
+			s.unresolved[a.Param] = true
+		}
+	}
+	for _, i := range sum.LimitedParams {
+		if i >= len(argv) {
+			continue
+		}
+		// what is passed at the parameter i is called there through a call that has more candidates than rivus keeps: the
+		// caller is told, whatever the argument looks like (a closure, a variable, a value that holds one)
+		s.newNote(cc.in, KindDepthLimit, "candidate_limit: what is passed as "+paramPhrase(fn, i)+" of "+s.eng.funcID(fn)+" is called there through a value that more than "+itoa(ir.ValueCandidateMost)+" functions may reach; none of them is followed (rivus' limit, not the code's)", s.eng.funcID(fn))
+		// and a function that passes its own parameter on passes the limit on to its callers
+		if a := argv[i]; a != nil && a.Kind == sg.KParam && a.Func == s.fn {
+			if s.limited == nil {
+				s.limited = map[int]bool{}
+			}
+			s.limited[a.Param] = true
 		}
 	}
 	for _, o := range sum.Outputs {
@@ -653,6 +702,26 @@ func joinSummaries(old, cur *Summary) *Summary {
 		}
 	}
 	sort.Ints(out.Opaque)
+	limited := map[int]bool{}
+	for _, sum := range []*Summary{old, cur} {
+		for _, i := range sum.LimitedParams {
+			if !limited[i] {
+				limited[i] = true
+				out.LimitedParams = append(out.LimitedParams, i)
+			}
+		}
+	}
+	sort.Ints(out.LimitedParams)
+	unresolved := map[int]bool{}
+	for _, sum := range []*Summary{old, cur} {
+		for _, i := range sum.UnresolvedParams {
+			if !unresolved[i] {
+				unresolved[i] = true
+				out.UnresolvedParams = append(out.UnresolvedParams, i)
+			}
+		}
+	}
+	sort.Ints(out.UnresolvedParams)
 	out.Sig = out.signature()
 	return out
 }
@@ -831,4 +900,13 @@ func isLoadOfGlobal(v *sg.Value, g *sg.Value) bool {
 		return false
 	}
 	return walk(v, 0)
+}
+
+// paramPhrase says which parameter a note is about: "the receiver" for the receiver of a method (a function that an
+// object holds: a callback kept in a field), "argument k" for the others.
+func paramPhrase(fn *sg.Func, i int) string {
+	if i == 0 && fn.Recv {
+		return "the receiver"
+	}
+	return "argument " + itoa(i)
 }
