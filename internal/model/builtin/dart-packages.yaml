@@ -42,8 +42,10 @@ propagators:
     flows: [{from: recv, to: result}]
   - symbol: package:shelf/src/request.dart#Request.handlerPath
     flows: [{from: recv, to: result}]
+  # change(headers:, context:, path:, body:): the new request is made of the old one and of what is given (`handlerPath += path`, `body`, the headers and the
+  # context merged in), as shelf 1.4.3 lib/src/request.dart `Request.change` shows. A flow cannot name a named argument (#145): `args`.
   - symbol: package:shelf/src/request.dart#Request.change
-    flows: [{from: recv, to: result}]
+    flows: [{from: recv, to: result}, {from: args, to: result}]
   - symbol: package:shelf/src/request.dart#Request.read
     flows: [{from: recv, to: result}]
   - symbol: package:shelf/src/request.dart#Request.readAsString
