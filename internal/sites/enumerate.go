@@ -50,6 +50,7 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 		byID[f.ID] = f
 	}
 	canon := prog.CanonType()
+	known := namedKnown(prog, byID, rules)
 	// the field rules by the type behind its aliases
 	fields := rules.Fields
 	if len(prog.TypeAliases) > 0 {
@@ -127,6 +128,7 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 						// it may reach, each its own site (ADR-045).
 						vin := in
 						vin.Args = in.Args[min(1, len(in.Args)):]
+						vin.ArgNames = nil
 						for _, c := range in.Callee.ValueCands {
 							sym := c.Symbol
 							if sym == "" {
@@ -135,7 +137,7 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 							if srcs := rules.CallSources[sym]; len(srcs) > 0 {
 								add(&Site{Role: RoleSource, Kind: model.KindCallResult, Symbol: sym, Labels: labelsOf(srcs), IR: at, Src: srcs, irpos: in.Pos, Callee: string(c.ID)})
 							}
-							if sinks := sinksAt(fn, vin, c.Recv, rules.Sinks[sym], canon); len(sinks) > 0 {
+							for _, sinks := range byCategory(sinksAt(fn, vin, c.Recv, rules.Sinks[sym], canon, known, sym)) {
 								add(&Site{Role: RoleSink, Kind: "call", Symbol: sym, Category: sinks[0].Category, Labels: acceptsOf(sinks), IR: at, Sink: sinks, irpos: in.Pos, Callee: string(c.ID)})
 							}
 						}
@@ -148,8 +150,8 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 					if srcs := rules.CallSources[sym]; len(srcs) > 0 {
 						add(&Site{Role: RoleSource, Kind: model.KindCallResult, Symbol: sym, Labels: labelsOf(srcs), IR: at, Src: srcs, irpos: in.Pos})
 					}
-					ownSinks := sinksAt(fn, in, in.Callee.Kind == ir.CalleeDynamic || (in.Callee.Kind == ir.CalleeStatic && in.Callee.Recv), rules.Sinks[sym], canon)
-					if sinks := ownSinks; len(sinks) > 0 {
+					ownSinks := sinksAt(fn, in, in.Callee.Kind == ir.CalleeDynamic || (in.Callee.Kind == ir.CalleeStatic && in.Callee.Recv), rules.Sinks[sym], canon, known, sym)
+					for _, sinks := range byCategory(ownSinks) {
 						add(&Site{Role: RoleSink, Kind: "call", Symbol: sym, Category: sinks[0].Category, Labels: acceptsOf(sinks), IR: at, Sink: sinks, irpos: in.Pos})
 					}
 					if in.Callee.Kind == ir.CalleeDynamic {
@@ -168,7 +170,7 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 							// a sink of the implementation that says what the sink of the interface method says (the same
 							// positions, category and labels) adds no site: the call has one finding, not one for each
 							// name it is written under
-							if sinks := uncovered(sinksAt(fn, in, true, rules.Sinks[csym], canon), ownSinks); len(sinks) > 0 {
+							for _, sinks := range byCategory(uncovered(sinksAt(fn, in, true, rules.Sinks[csym], canon, known, csym, sym), ownSinks)) {
 								add(&Site{Role: RoleSink, Kind: "call", Symbol: csym, Category: sinks[0].Category, Labels: acceptsOf(sinks), IR: at, Sink: sinks, irpos: in.Pos, Callee: string(id)})
 							}
 						}
@@ -408,7 +410,7 @@ func isConstantRef(form *irssa.Form, r irssa.Ref, depth int) bool {
 // sinksAt keeps the sinks whose condition on the type of an argument holds at
 // this call. hasRecv says that the first of in.Args is the receiver: when_arg_type counts the arguments
 // without it, as args does, and recv: true is the condition on it.
-func sinksAt(fn *ir.Func, in ir.Instr, hasRecv bool, sinks []model.Sink, canon ir.TypeCanon) []model.Sink {
+func sinksAt(fn *ir.Func, in ir.Instr, hasRecv bool, sinks []model.Sink, canon ir.TypeCanon, known namedNames, syms ...string) []model.Sink {
 	var out []model.Sink
 	for _, s := range sinks {
 		if c := s.WhenArgType; c != nil {
@@ -426,9 +428,173 @@ func sinksAt(fn *ir.Func, in ir.Instr, hasRecv bool, sinks []model.Sink, canon i
 				continue
 			}
 		}
+		s, ok := resolveNamed(s, in, hasRecv, known, syms)
+		if !ok {
+			continue
+		}
 		out = append(out, s)
 	}
 	return out
+}
+
+// byCategory splits the sinks of a call by category: a symbol that has rows of several categories has a site for each (the
+// rows of one category are one site). A row that reads the same positions as one of an earlier category is not a sink of
+// its own (a project row for a symbol that a built-in row already names is the same sink, reported under the first
+// category, as it always was): its category does not make a second finding of the same flow. The order of first appearance.
+func byCategory(sinks []model.Sink) [][]model.Sink {
+	var out [][]model.Sink
+next:
+	for _, s := range sinks {
+		for i := range out {
+			if out[i][0].Category == s.Category {
+				out[i] = append(out[i], s)
+				continue next
+			}
+		}
+		for i := range out {
+			for _, o := range out[i] {
+				if o.Recv == s.Recv && o.Field == s.Field && reflect.DeepEqual(o.Args, s.Args) && reflect.DeepEqual(o.Named, s.Named) &&
+					reflect.DeepEqual(o.Parts, s.Parts) && reflect.DeepEqual(o.WhenArgType, s.WhenArgType) {
+					out[i] = append(out[i], s)
+					continue next
+				}
+			}
+		}
+		out = append(out, []model.Sink{s})
+	}
+	return out
+}
+
+// namedNames are the names of the named parameters that the calls of the program carry, by the symbol of the callee. It
+// holds only the symbols that a sink with a `named` names.
+type namedNames map[string]map[string]bool
+
+// namedKnown collects the names of the calls to the symbols that a sink names by `named` (docs/MODELING.md): a name that
+// no call of the symbol has is a misspelling, and the sink says so instead of being quiet. It reads the program only
+// when a rule has `named`.
+func namedKnown(prog *ir.Program, byID map[ir.FuncID]*ir.Func, rules *model.Rules) namedNames {
+	want := map[string]bool{}
+	for sym, sinks := range rules.Sinks {
+		for _, s := range sinks {
+			if len(s.Named) > 0 {
+				want[sym] = true
+			}
+			for _, p := range s.Parts {
+				if p.Named != "" {
+					want[sym] = true
+				}
+			}
+		}
+	}
+	if len(want) == 0 {
+		return nil
+	}
+	out := namedNames{}
+	note := func(sym string, names []string) {
+		if !want[sym] {
+			return
+		}
+		if out[sym] == nil {
+			out[sym] = map[string]bool{}
+		}
+		for _, n := range names {
+			if n != "" {
+				out[sym][n] = true
+			}
+		}
+	}
+	for _, fn := range prog.Funcs {
+		for _, b := range fn.Blocks {
+			for _, in := range b.Instrs {
+				if in.Op != ir.OpCall || in.Callee == nil || len(in.ArgNames) == 0 {
+					continue
+				}
+				note(in.Callee.Symbol, in.ArgNames)
+				for _, id := range in.Callee.Candidates {
+					if f := byID[id]; f != nil {
+						note(f.Symbol, in.ArgNames)
+					}
+				}
+			}
+		}
+	}
+	return out
+}
+
+// resolveNamed turns the names of a sink into the positions of this call (the arguments after the receiver). A name
+// that the call does not pass has no argument: it adds none, and a sink with nothing left is not a site. A name that no
+// call of the symbol in the program has (known) makes the sink read the whole call, with NamedUnresolved to say why.
+func resolveNamed(s model.Sink, in ir.Instr, hasRecv bool, known namedNames, syms []string) (model.Sink, bool) {
+	named := len(s.Named) > 0
+	for _, p := range s.Parts {
+		named = named || p.Named != ""
+	}
+	if !named {
+		return s, true
+	}
+	off := 0
+	if hasRecv {
+		off = 1
+	}
+	at := func(name string) (int, bool) {
+		for i, n := range in.ArgNames {
+			if n == name && i >= off {
+				return i - off, true
+			}
+		}
+		return 0, false
+	}
+	seen := func(name string) bool {
+		for _, sym := range syms {
+			if known[sym][name] {
+				return true
+			}
+		}
+		return false
+	}
+	var unresolved []string
+	pos := func(name string) (int, bool) {
+		i, ok := at(name)
+		if !ok && !seen(name) {
+			unresolved = append(unresolved, name)
+		}
+		return i, ok
+	}
+	cp := s
+	cp.Named, cp.Args, cp.Parts = nil, append([]int(nil), s.Args...), nil
+	names := s.Named
+	if s.Field != "" && len(names) == 1 { // the short form: its one position is the part
+		if i, ok := pos(names[0]); ok {
+			cp.Parts = []model.SinkPart{{Arg: &i, Field: s.Field}}
+		}
+		cp.Field, names = "", nil
+	}
+	for _, n := range names {
+		if i, ok := pos(n); ok {
+			cp.Args = append(cp.Args, i)
+		}
+	}
+	for _, p := range s.Parts {
+		if p.Named == "" {
+			cp.Parts = append(cp.Parts, p)
+			continue
+		}
+		if i, ok := pos(p.Named); ok {
+			cp.Parts = append(cp.Parts, model.SinkPart{Arg: &i, Field: p.Field})
+		}
+	}
+	if len(unresolved) > 0 {
+		cp.NamedUnresolved = unresolved
+		cp.Args, cp.Parts, cp.Field = nil, nil, ""
+		return cp, true
+	}
+	if len(cp.Args) == 0 && len(cp.Parts) == 0 {
+		if !s.Recv {
+			return cp, false
+		}
+		cp.Args = []int{-1} // only the receiver: no position is not every argument
+	}
+	return cp, true
 }
 
 // argTypeHolds checks the condition against the type of the local and, when the

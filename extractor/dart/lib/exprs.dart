@@ -337,6 +337,18 @@ void _globalStore(FnLower f, Element variable, int value, Pos at) {
   return ([for (final s in slots) s ?? f.nilConst(at)], nodes);
 }
 
+/// The names of the named parameters that the arguments are for, parallel to them ("" for a positional one):
+/// a rule that says `named: kind` finds the argument by it. Null when the callee has no named parameter.
+List<String>? _argNames(ExecutableElement? callee, int n, {bool recv = false}) {
+  if (callee == null) return null;
+  final params = orderedParams(callee);
+  if (!params.any((p) => p.isNamed)) return null;
+  return [
+    if (recv) '',
+    for (var i = 0; i < n; i++) i < params.length && params[i].isNamed ? (params[i].name ?? '') : '',
+  ];
+}
+
 /// Emits a call. [base] is the receiver of an instance method.
 int _call(FnLower f, ExecutableElement callee, int? base, List<int> args, DartType? resultType, AstNode n, Pos at,
     {bool isGetter = false, ArgumentList? argList, List<AstNode?> slots = const []}) {
@@ -365,7 +377,8 @@ int _call(FnLower f, ExecutableElement callee, int? base, List<int> args, DartTy
       ..['symbol'] = sym;
     if (isMethod || isExt) callee_['recv'] = true;
   }
-  final instr = f.emit('call', dsts: [d], args: all, at: pos, more: {'callee': callee_});
+  final names = _argNames(el, args.length, recv: recv != null);
+  final instr = f.emit('call', dsts: [d], args: all, at: pos, more: {'callee': callee_, if (names != null) 'arg_names': names});
   f._lastCall = instr;
   f.mayThrow();
   return d;
@@ -576,8 +589,10 @@ int _constructorCall(FnLower f, ConstructorElement ctor, ArgumentList list, AstN
   final d = f.tmp(t);
   final pos = f.unit.callPos(n, list, nodes);
   final sym = symbolOf(ctor);
+  final names = _argNames(ctor, args.length);
   final instr = f.emit('call', dsts: [d], args: args, at: pos, more: {
-    'callee': {'kind': 'static', 'func': funcId(ctor), 'symbol': sym}
+    'callee': {'kind': 'static', 'func': funcId(ctor), 'symbol': sym},
+    if (names != null) 'arg_names': names,
   });
   f._lastCall = instr;
   f.mayThrow();
