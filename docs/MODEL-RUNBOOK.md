@@ -45,8 +45,8 @@
 `examples/rules/*.yaml` と `bench/*/rules.yaml` の例を、組み込みに昇格する作業(一覧の「例から昇格」の行)。
 
 - 例のまま移さない。ほかのモデルと同じ確認を通す: 差分テスト(入っていれば)、`result` / `results` の点検、zoo のセル、すでに組み込みにある行との重複の確認。
-- 昇格したら、例のファイルは消すか、「組み込みになった」と書いて短くする。`examples/rules/README.md` の説明も合わせる。
-- 例の位置づけ(ADR-063)を、**新しい ADR で上書きする**。既存の ADR の本文は書き換えない。ADR の番号は、`git fetch` して `origin/*` の `docs/DECISIONS.md` の最後の番号を確認し、重ならない番号を使う。最初の昇格の PR で足し、2 回目からは、その ADR を参照するだけにする。
+- 昇格したら、**例のファイルは消す**。`examples/rules/README.md` の、そのファイルの行は、「組み込みになった(`internal/model/builtin/<ファイル>`)」の 1 行にする(ファイル名で探す利用者のため)。`bench/*/rules.yaml` の例も同じ。リポジトリの直下の README は、昇格の PR ではさわらない(例の一覧は `examples/rules/README.md` を見る、という形にしてある。README に、昇格するファイルを名指しした記述が残っていたら、書き直さず、PR の本文の「手順のとおりにできなかった所」に書く)。
+- 例の位置づけ(ADR-063)の上書きは、**[ADR-101](DECISIONS.md) で済んでいる**。昇格の PR は ADR を書かない(ADR-101 を参照するだけ)。
 - PR の題は `feat(model): <言語> <パッケージ> の組み込みモデル(例から昇格)`。判定は、この題の形で行う(1 節)。昇格のあと、例のファイルは無いか短くなるので、`ls internal/model/builtin/` の判定は、`<言語>-<パッケージ>*.yaml` で使える。
 
 ## 2. 作る(標準の 4 段)
@@ -73,8 +73,12 @@ zoo のゲート(`scripts/zoo-loosened-check.sh`、#167): 新しいセル(`bench
 
 ## 4. conflict を避ける置き方
 
-- **いまの形**(共有のファイルの分割が入る前): 共有のファイルは、`bench/zoo/marks.lock`、`bench/parity/dead-allow.txt`、`bench/zoo-dart/cells/pubspec.yaml` と各 `pubspec.lock`、`bench/zoo-dart/exec/lib/cases.dart`、`docs/ISSUES.md`、`docs/DECISIONS.md`、`docs/DESIGN-deps-cost.md`。ISSUES、DECISIONS、DESIGN-deps-cost は、モデルの PR で触らない(測定は、PR の本文とモデルのファイルの冒頭のコメントに書く)。zoo の共有のファイルは、セルを足すので触る。conflict が出たら、main 側の行を残して、自分の行を足し直す(行は並べ替えて、重複を消す)。`pubspec.lock` は、`dart pub get --offline` で作り直す。
-- **段階 0 が入ったあとの形**: 1 パッケージ = 1 つのモデルのファイル + 専用の zoo のセルのディレクトリ + 専用のマークのファイル(`bench/zoo/marks.d/`)。`cases.dart` は生成、zoo-dart の `pubspec.lock` はコミットしない。共有のファイルを触らない。変更は、`internal/model/builtin/<lang>-<package>*.yaml`、`bench/zoo-<lang>/` の自分のディレクトリ、`bench/zoo/marks.d/<lang>/` の自分のファイル、`docs/issues/model-<パッケージ>-*.md` だけ。
+1 パッケージ = 1 つのモデルのファイル + 専用の zoo のセルのディレクトリ + 専用のマークのファイル(`bench/zoo/marks.d/`)。`cases.dart` は生成、zoo-dart の `pubspec.lock` はコミットしない。共有のファイルをさわらない。**さわってよいファイルは、次のものだけ**:
+- `internal/model/builtin/<lang>-<package>*.yaml`(`verified_versions` も、このファイルに書く)と、そのモデルの `.dead-allow`(`internal/model/builtin/<lang>-<package>*.dead-allow`。**さわるのは、「新しい行がどこにも一致しない」という失敗が出たとき(その行を、理由つきで足す)だけ。「zoo から一致するようになったので外せ」の指摘は、無視する**(#187 のあと、通常は記録だけになる。掃除は定期の別の作業で、モデルの PR は、ほかのモデルの `.dead-allow` をさわらない))。
+- `bench/zoo-<lang>/` の自分のディレクトリ(セル、骨組み)、`bench/zoo/marks.d/<lang>/` の自分のファイル、`docs/issues/model-<パッケージ>-*.md`。
+- **広げる PR**(1 節): もともと main にある、そのパッケージのモデルのファイル(と、その `.dead-allow`)。
+- **例からの昇格の PR**(1 節): 昇格する `examples/rules/<その 1 つ>`(消す)と、`examples/rules/README.md` のその行(「組み込みになった」の 1 行に)、`bench/*/rules.yaml` の例(あれば)。
+- ほかのファイル(`docs/DECISIONS.md`、`docs/ISSUES.md`、直下の README、コード、ゲート、ワークフロー)は、さわらない。conflict が出たら、main 側の行を残して、自分の行を足し直す。
 
 ## 5. PR(完成)
 
@@ -88,7 +92,7 @@ zoo のゲート(`scripts/zoo-loosened-check.sh`、#167): 新しいセル(`bench
   6. **確認したバージョン**: `verified_versions` に書いた、パッケージ、範囲、確認したバージョン。
   7. **手順のとおりにできなかった所**: 手順書が曖昧だった所、道具がなかった所、自分で判断した所。なければ「なし」。手順書の改善の入力になる。
 - **最初の 3 本(言語ごとに 1 本)は、相談役が、中身を確認する。** そのために、上の 7 に加えて、**手順の改善案**(次のセッションの手順書に足したいこと)を、本文の最後に書く。
-- 触るファイルは 4 節のとおり。それ以外(コード、ゲート、ワークフロー、共有の文書)は触らない。触る必要が出たら、完成にせず、ドラフトのまま、理由を本文に書いて終わる。
+- 触るファイルは 4 節のとおり(広げる PR と、例からの昇格の PR の分も、4 節に書いてある)。それ以外(コード、ゲート、ワークフロー、共有の文書)は触らない。触る必要が出たら、完成にせず、ドラフトのまま、理由を本文に書いて終わる。
 - push のあと、コミットの署名(0 節)と、CI の結果を確認する。CI が失敗したら、直して push し直す(自分で `gh pr merge` はしない)。
 
 ## 6. 守ること
@@ -98,7 +102,7 @@ zoo のゲート(`scripts/zoo-loosened-check.sh`、#167): 新しいセル(`bench
 - 自分でマージしない(CI が通れば自動で入る)。履歴は書き換えない。
 - 既存のセルのマークを緩めない(既存の行の変更・削除は、ユーザーの承認が要るので、しない)。
 - 言い回しは `.regomark/policy/wording.rego` に従う(`regomark check --no-judge` が 0)。
-- ADR を書かない。方針の変更が要ると思ったら、PR の本文に書く。
+- ADR を書かない(昇格は、[ADR-101](DECISIONS.md) で済んでいる)。方針の変更が要ると思ったら、PR の本文に書く。
 - 1 つの PR で、1 パッケージだけ。終わったら、次のパッケージには進まず、終わる。
 
 ## 7. 更新の PR(案。定期の照合が入ってから)
