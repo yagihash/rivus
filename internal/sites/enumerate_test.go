@@ -48,8 +48,13 @@ func TestResolveNamedFindsTheParameterByItsName(t *testing.T) {
 }
 
 func TestByCategoryKeepsTheOrderAndTheRowsOfACategoryTogether(t *testing.T) {
-	got := byCategory([]model.Sink{{Category: "a"}, {Category: "b"}, {Category: "a", Args: []int{1}}})
+	got := byCategory([]model.Sink{{Category: "a", Args: []int{0}}, {Category: "b", Args: []int{1}}, {Category: "a", Args: []int{1}}})
 	if len(got) != 2 || len(got[0]) != 2 || got[0][0].Category != "a" || got[1][0].Category != "b" {
 		t.Fatalf("byCategory = %+v", got)
+	}
+	// the same positions under another category: one sink, as it was
+	got = byCategory([]model.Sink{{Category: "a", Args: []int{1}}, {Category: "b", Args: []int{1}}})
+	if len(got) != 1 || len(got[0]) != 2 || got[0][0].Category != "a" {
+		t.Fatalf("the same positions are one site: %+v", got)
 	}
 }

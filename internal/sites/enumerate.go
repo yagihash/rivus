@@ -435,8 +435,10 @@ func sinksAt(fn *ir.Func, in ir.Instr, hasRecv bool, sinks []model.Sink, canon i
 	return out
 }
 
-// byCategory splits the sinks of a call by category: a symbol that has rows of several categories has a
-// site for each (the rows of one category are one site, as before). The order of first appearance.
+// byCategory splits the sinks of a call by category: a symbol that has rows of several categories has a site for each (the
+// rows of one category are one site). A row that reads the same positions as one of an earlier category is not a sink of
+// its own (a project row for a symbol that a built-in row already names is the same sink, reported under the first
+// category, as it always was): its category does not make a second finding of the same flow. The order of first appearance.
 func byCategory(sinks []model.Sink) [][]model.Sink {
 	var out [][]model.Sink
 next:
@@ -445,6 +447,15 @@ next:
 			if out[i][0].Category == s.Category {
 				out[i] = append(out[i], s)
 				continue next
+			}
+		}
+		for i := range out {
+			for _, o := range out[i] {
+				if o.Recv == s.Recv && o.Field == s.Field && reflect.DeepEqual(o.Args, s.Args) && reflect.DeepEqual(o.Named, s.Named) &&
+					reflect.DeepEqual(o.Parts, s.Parts) && reflect.DeepEqual(o.WhenArgType, s.WhenArgType) {
+					out[i] = append(out[i], s)
+					continue next
+				}
 			}
 		}
 		out = append(out, []model.Sink{s})

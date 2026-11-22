@@ -265,7 +265,9 @@ positional ones **by name**, and a call that leaves one out holds nil there, so 
   (read whole): do not write one in a model of Go or Rust.
 * **A symbol with rows of several categories** has a site, and so a finding, for each category (one call is then several sites,
   and findings from the same source can come out of it, one per category). Before, the rows were one site that was reported under
-  the category of the first row. `named` is for `sinks` only: `flows` and `sources` still name positions (a flow that takes a named
+  the category of the first row. **A row that reads the same positions as an earlier row of another category is not a sink of
+  its own** (the same `args`, `recv`, `named`, `parts`): a project row for a symbol that a built-in row already names is one
+  sink, under the first category, as it was. `named` is for `sinks` only: `flows` and `sources` still name positions (a flow that takes a named
   argument is written by position: the declared one, until `flows` can say `named`).
 
 ## 4a. Cutting a dependency with a model (not reading its body)
