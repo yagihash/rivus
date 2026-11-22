@@ -30,7 +30,7 @@ func TestFuncValuesDart(t *testing.T) {
 		zeroCalls   int
 		minWithCand int
 	}{
-		{"../../bench/zoo-dart/cells", 30, 30, 42},
+		{"../../bench/zoo-dart/cells", 38, 38, 46}, // the cells dyn/sink-as-value-map and -field added 8 calls with no candidate (#127)
 		{"../../bench/dart-curated", 20, 21, 51},
 	} {
 		run := func(args ...string) []byte {
