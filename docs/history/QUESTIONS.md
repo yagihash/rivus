@@ -1,6 +1,6 @@
 # ブリーフへの質問・指摘
 
-> **歴史的な文書。** 最初のブリーフ（[BRIEF.md](BRIEF.md)）への質問と指摘の記録で、各項目の「回答」欄は空のまま。回答に当たる判断は [DECISIONS.md](../DECISIONS.md) の ADR にある。今の設計とは異なる所がある（例: Q3 の推奨「自モジュールのみ解析」は、今の既定と逆で、依存のソースも既定で読む）。中身は書き換えていない。
+> **歴史的な文書。** 最初のブリーフ（[BRIEF.md](BRIEF.md)）への質問と指摘の記録で、各項目の「回答」欄は空のまま。回答に相当する判断は [DECISIONS.md](../DECISIONS.md) の ADR にある。今の設計とは異なる所がある（例: Q3 の推奨「自モジュールのみ解析」は、今の既定と逆で、依存のソースも既定で読む）。中身は書き換えていない。
 > 今の正本は [PRINCIPLES.md](../PRINCIPLES.md)、[ARCHITECTURE.md](../ARCHITECTURE.md)、[DECISIONS.md](../DECISIONS.md)。
 
 ARCHITECTURE.md を書く前に確認したい事項。回答は各項目の「回答」欄に書く。
@@ -103,7 +103,7 @@ Rust の MIR は SSA ではなく、書き換え可能なローカル変数を�
 | Q4 | ルール（source / sink / sanitizer / propagator）の記述形式 | YAML。シンボルは完全修飾名（レシーバ・ジェネリクス込み） | |
 | Q5 | extractor とコアの通信形式 | サブプロセス起動＋バージョン付き JSON Lines。重くなったら protobuf に移行 | |
 | Q6 | Dart の実現性スパイク（`async`/`await` と `try`/`finally` の CFG が `package:analyzer` から素直に組めるかの確認、1〜2日）を Phase 1 の合間に挟むか。Phase の順序は変えない | 挟む | |
-| Q7 | B5 の kind 追加案を採用するか。列挙は閉じた集合（追加はスキーマ版上げ）でよいか | 採用。集合は閉じる | |
+| Q7 | B5 の kind 追加案を採用するか。列挙は閉じた集合（追加はスキーマバージョン上げ）でよいか | 採用。集合は閉じる | |
 | Q8 | GLOSSARY.md の扱い | 受領済み。`docs/GLOSSARY.md` として置いてよいか | |
 
 ---

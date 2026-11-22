@@ -7,7 +7,7 @@
 
 ADR-077 の例外(メンテナの選択。ほかのベンダーの根拠にならない)で組み込む Google Cloud のクライアントを、**製品ごとに、書く前に、1 枚の表で決める**文書。ここは設計の置き場で、YAML はない。表をレビューしてから `internal/model/builtin/go-gcp.yaml` に行を足す。
 
-順番: **Pub/Sub と Functions の入口(この版で書いた)** → Storage / BigQuery の残り → Firestore → Firebase Auth。後ろの 3 つは節の見出しだけ(まだ表がない)。Spanner と BigQuery の SQL は ADR-077 で済み。
+順番: **Pub/Sub と Functions の入口(このバージョンで書いた)** → Storage / BigQuery の残り → Firestore → Firebase Auth。後ろの 3 つは節の見出しだけ(まだ表がない)。Spanner と BigQuery の SQL は ADR-077 で済み。
 
 ## 0. 全製品で同じにする線
 
@@ -26,7 +26,7 @@ Google Cloud は、何を「外からの入力」と数えるかが製品ごと�
 
 ## 1. Pub/Sub
 
-### 1.1 Go のパッケージの版(確かめた)
+### 1.1 Go のパッケージのバージョン(確かめた)
 
 | | v1 | v2 |
 |---|---|---|
@@ -37,9 +37,9 @@ Google Cloud は、何を「外からの入力」と数えるかが製品ごと�
 | **IR が示す型の名前** | `*cloud.google.com/go/pubsub.Message` | `*cloud.google.com/go/pubsub/v2.Message` |
 | 生成された protobuf の型 | `cloud.google.com/go/pubsub/apiv1/pubsubpb` | `cloud.google.com/go/pubsub/v2/apiv1/pubsubpb`(別の型) |
 
-* **別名は、使った名前で IR に出る**が、照合は別名をほどいて行う(ADR-083)。別名の名前(`.../pubsub.Message`)でも、実体の名前(`.../internal/pubsub.Message`)でも当たる。v1 と v2 は別の型なので、`param_type` の行は別の 2 行のまま。メソッドのシンボルは実体の型の側(別名の名前では当たらない)。
-* 2026-11-21 の時点で、v1 のサポートは 6 週間で終わる。それでも、既存のコードの多くが v1 なので、**両方の版に行を置く**(形は同じ。行は安い)。v2 を先に書く。
-* `bench/gcp` に、どちらの版も、まだない(YAML の段で足す)。
+* **別名は、使った名前で IR に出る**が、照合は別名をほどいて行う(ADR-083)。別名の名前(`.../pubsub.Message`)でも、実体の名前(`.../internal/pubsub.Message`)でも一致する。v1 と v2 は別の型なので、`param_type` の行は別の 2 行のまま。メソッドのシンボルは実体の型の側(別名の名前では一致しない)。
+* 2026-11-21 の時点で、v1 のサポートは 6 週間で終わる。それでも、既存のコードの多くが v1 なので、**両方のバージョンに行を置く**(形は同じ。行は安い)。v2 を先に書く。
+* `bench/gcp` に、どちらのバージョンも、まだない(YAML の段で足す)。
 
 ### 1.2 表
 
@@ -53,14 +53,14 @@ Google Cloud は、何を「外からの入力」と数えるかが製品ごと�
 | P4 | `m.OrderingKey` | 危険(プロデューサが決める) | P1 の一部 | P1 と同じ |
 | P5 | `m.ID`、`m.PublishTime`、`m.DeliveryAttempt` | 安全(基盤が付ける) | **分けない**(`param_type` は、構造体の全体を汚す) | 安全なフィールドを除く道具がない。許す(opt-in のラベルなので、判定役が見る) |
 | P6 | `m.Ack()`、`m.Nack()` | 安全、流れなし | 行なし | 依存の本体が読まれる。効果なし |
-| P7 | `Topic.Publish(ctx, msg)` / `Publisher.Publish(ctx, msg)` の `Message.Data` / `Attributes` / `OrderingKey` | **sink にしない** | 行なし | 宛先は topic の名前で、メッセージの中身は**データ**(読む側が危険になるが、読む側は rivus に見えない。6 つのカテゴリのどれにも当たらない) |
+| P7 | `Topic.Publish(ctx, msg)` / `Publisher.Publish(ctx, msg)` の `Message.Data` / `Attributes` / `OrderingKey` | **sink にしない** | 行なし | 宛先は topic の名前で、メッセージの中身は**データ**(読む側が危険になるが、読む側は rivus に見えない。6 つのカテゴリのどれにも一致しない) |
 | P8 | `Client.Topic(id)` / `Client.Publisher(nameOrID)` / `Subscriber(nameOrID)` の名前 | **今は sink にしない**(下の判断 E) | 行なし | v2 の `Publisher` は、`/` で区切って 4 つなら、名前を**そのまま**使う(`projects/<別のプロジェクト>/topics/x`)。入力が名前なら、別のプロジェクトを指せる。カテゴリがない |
 | P9 | Pull の形: `SubscriberClient.Pull`(v1)、`SubscriptionAdminClient.Pull`(v2)の結果(`ReceivedMessages[].Message`)、`StreamingPull().Recv()` | **source**、`queue_message` | `call_result`(結果が source)。`param_type` や `kind: field` は使えない | `pubsubpb.PubsubMessage` は送る側(`PublishRequest.Messages`)でも組み立てる型で、型やフィールドで source にすると、送る側が全部検出される。**未確認**(YAML の段で、ケースを足す) |
 | P10 | `Publish` の生成されたクライアント: `PublishRequest.Messages[].Data` | sink にしない | 行なし | P7 と同じ |
 | P11 | 管理: `CreateSubscription` / `ModifyPushConfig` / `UpdateSubscription` の `PushConfig.PushEndpoint`(v1 の手書きは `SubscriptionConfig.PushConfig.Endpoint`) | **sink**、`ssrf`(基盤が、その URL に、メッセージを送る。攻撃者の URL に流れる) | `parts`(`pubsubpb.Subscription` と `ModifyPushConfigRequest` の `PushConfig.PushEndpoint`。v1 と v2 で別のシンボル) | 低い優先。メンテナの使い方では少ない。**未確認** |
 | P12 | **依存の中の時間**(grpc と gax の `invoke`) | source でも sink でもない。**コストの行** | なし(**モデルで依存の中を切らない**。ただし、ADR-092 の条件(コストの測定の記録、本体を読んだ結果との照合の検査、`calls:`、注記つきの保守的な扱い、切ったことの表示)を満たせば、切ってよい。今は、パッケージごとに切る仕組みも、照合の検査もない) | Spanner と BigQuery の `bench/gcp`: 42〜45 秒、3.4〜4.1 GB、時間の 99.7% が依存。grpc が 10.5 秒(2,259 回の再解析)、gax の `invoke` が 356ms。Pub/Sub を足したときの数字は、別のエージェントが測る。**速くする作業は、結果が同一であること**(`pure` を、実行で確かめずに足して、依存の本体を飛ばさない) |
 
-**P1 の `calls:` の行(原因が分かった。確かめた)。** `Receive` の `calls:` 行を `fn: arg1`、`with: [recv]` と書くと、実際の Pub/Sub(v1、v2)で当たらなかった。**原因は、エンジンでもシンボルでもなく、行の書き方**: `with` は、コールバックの**パラメータを先頭から順に**埋める。コールバックは `func(ctx context.Context, m *Message)` で、`[recv]` は第 1 パラメータの `ctx` に入り、`m` には何も入らない。小さい自前のライブラリのコールバックは、パラメータが 1 つだったので当たった。`with: [arg0, recv]`(`arg0` は `ctx`)と書くと、v1 の `Subscription.Receive`、v2 の `Subscriber.Receive` ともに当たる(確認: テスト用のプロジェクトで、コールバックの中の `exec.Command("sh", "-c", string(m.Data))` と `m.Attributes[...]` に finding が出て、送る側の関数 `send(m *Message)` の `m.Data` には出ない = `param_type` のノイズがない)。モデルと本体は、`calls:` の行がある関数では、**モデルが勝ち**、依存の本体は読まれない(`Receive` の本体のゴルーチンやチャネルは関係しない)。組み込みの `calls:` の行(Go、Dart、Rust)は、どれもコールバックのパラメータが 1 つか、`with` が全部を埋めており、同じ書き間違いはない。**YAML の段で、`calls:` に乗り換える**(判断 B)。テスト: `testdata/go/cases/callbacks` の `SecondParameter`、`FirstParameterDecoy`。
+**P1 の `calls:` の行(原因が分かった。確かめた)。** `Receive` の `calls:` 行を `fn: arg1`、`with: [recv]` と書くと、実際の Pub/Sub(v1、v2)で一致しなかった。**原因は、エンジンでもシンボルでもなく、行の書き方**: `with` は、コールバックの**パラメータを先頭から順に**埋める。コールバックは `func(ctx context.Context, m *Message)` で、`[recv]` は第 1 パラメータの `ctx` に入り、`m` には何も入らない。小さい自前のライブラリのコールバックは、パラメータが 1 つだったので一致した。`with: [arg0, recv]`(`arg0` は `ctx`)と書くと、v1 の `Subscription.Receive`、v2 の `Subscriber.Receive` ともに一致する(確認: テスト用のプロジェクトで、コールバックの中の `exec.Command("sh", "-c", string(m.Data))` と `m.Attributes[...]` に finding が出て、送る側の関数 `send(m *Message)` の `m.Data` には出ない = `param_type` のノイズがない)。モデルと本体は、`calls:` の行がある関数では、**モデルが勝ち**、依存の本体は読まれない(`Receive` の本体のゴルーチンやチャネルは関係しない)。組み込みの `calls:` の行(Go、Dart、Rust)は、どれもコールバックのパラメータが 1 つか、`with` が全部を埋めており、同じ書き間違いはない。**YAML の段で、`calls:` に乗り換える**(判断 B)。テスト: `testdata/go/cases/callbacks` の `SecondParameter`、`FirstParameterDecoy`。
 
 ## 2. Functions と Cloud Run(イベントと HTTP の入口)
 
@@ -89,17 +89,17 @@ Google Cloud は、何を「外からの入力」と数えるかが製品ごと�
 
 ## 5. Firebase Auth(予定)
 
-ID トークンの検証と、復号したクレーム。ラベルを決める(署名されたクレームの `uid` と `email` は、攻撃者が決める値ではない。カスタムクレームと、利用者が書いたプロフィールの欄は、信頼する値ではない)。Admin SDK のユーザー作成・更新が sink の候補。
+ID トークンの検証と、復号したクレーム。ラベルを決める(署名されたクレームの `uid` と `email` は、攻撃者が決める値ではない。カスタムクレームと、利用者が書いたプロフィールのフィールドは、信頼する値ではない)。Admin SDK のユーザー作成・更新が sink の候補。
 
 ## 6. 判断が必要な点
 
 | | 問い | 案 |
 |---|---|---|
 | A | `queue_message` を、組み込みの既定で入れるか | **入れない**(全製品で `stored` と同じ選択。ファイル 1 つ)。理由: トピックが内部専用なら、全部が偽陽性。組み込みには、sink と `flows` だけ |
-| B | Pub/Sub の入口を、`param_type`(確認済み、ノイズあり)にするか、`calls:`(正確。`with: [arg0, recv]` と書けば実際の Pub/Sub で当たる。P1 の注)にするか | `calls:` に乗り換える(ノイズが消える)。YAML の段 |
+| B | Pub/Sub の入口を、`param_type`(確認済み、ノイズあり)にするか、`calls:`(正確。`with: [arg0, recv]` と書けば実際の Pub/Sub で一致する。P1 の注)にするか | `calls:` に乗り換える(ノイズが消える)。YAML の段 |
 | C | 「関数を登録する呼び出しが、渡された関数の引数を入口にする」道具(`functions.Typed`、第 1 世代の関数、`Receive` のような API を、利用者の型でも) | エンジンの変更(`flows` の `to:` のアクセスパスと並ぶ大きさ)。ADR が必要。入れるまで、利用者が自分の型を `param_type` で書く |
 | D | **エンジンの見逃し**: 構造体を、**ポインタで**、読んでいない関数に渡し、あとで、**値で** sink に渡すと、何も報告しなかった | **直した**(ADR-084。7 節) |
-| E | トピック、バケットなどの**名前**が入力のとき(別のプロジェクトのリソースを指せる)のカテゴリ | 今のカテゴリ(6 つ)に当たらない。新しいカテゴリ(`resource_name`)を作るか、作らないか。**作るまで sink にしない** |
+| E | トピック、バケットなどの**名前**が入力のとき(別のプロジェクトのリソースを指せる)のカテゴリ | 今のカテゴリ(6 つ)に一致しない。新しいカテゴリ(`resource_name`)を作るか、作らないか。**作るまで sink にしない** |
 | F | CloudEvent を `queue_message` にする(Eventarc は、Pub/Sub、Storage、Firestore と、HTTP の呼び出し元のどれでも運ぶ) | 同じラベルで始める。細かく分ける必要が出たら、ラベルを足す |
 
 ## 7. `bench/gcp` の今の出方(固定したもの)

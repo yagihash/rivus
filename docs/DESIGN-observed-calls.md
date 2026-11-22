@@ -62,7 +62,7 @@ stack の行と、グラフの関数(`funcs.fid`、extractor の `symbolOf`)を�
 | `@miss` のないファイルの「グラフにない辺」 | 16 | 26 |
 
 - **既知の `@miss` は出る**。zoo の、呼び出しが未解決の `@miss`(`dyn/func_field`、`dyn/func_map`、`dart/tearoff_instance`、`dart/super_mixin_impl`、`clos/partial_callers`)は、すべて「グラフにない辺」として出た。出なかった 4 行は、辺の欠落ではない種類のもの(`state/global_chain` の `recursion_approximation` 2 行、`dart/patterns_record` の `silent` 2 行。パターンの流れと、不動点の打ち切り)。
-- `bench/dart-curated`(自前のコード。runner だけ作業用に足した。方法 A のみ): 131 の stack、178 の辺、グラフにない辺 16。`@miss` 27 行のうち 15 行が、同じファイルに「グラフにない辺」を持つ(`callbacks.dart` の `captured_fn`、`capture.dart` の `relay_cap_*`、`classes.dart` の `emitter_*`、`limits.dart`、`across.dart`、`dynamic_calls.dart` など)。出なかった 12 行(`nesting.dart`、`futures.dart`、`errors.dart`、`iterables.dart`、`tearoff.dart`)の理由は**確かめていない**。推測: 呼び出しの辺が sink の stack に載らない形(クロージャを返して、呼ぶ所と sink が別)、非同期(4 節)、例外。**方法 B を curated に当てるのは、まだ**(当てれば、推測が合うかが分かる)。
+- `bench/dart-curated`(自前のコード。runner だけ作業用に足した。方法 A のみ): 131 の stack、178 の辺、グラフにない辺 16。`@miss` 27 行のうち 15 行が、同じファイルに「グラフにない辺」を持つ(`callbacks.dart` の `captured_fn`、`capture.dart` の `relay_cap_*`、`classes.dart` の `emitter_*`、`limits.dart`、`across.dart`、`dynamic_calls.dart` など)。出なかった 12 行(`nesting.dart`、`futures.dart`、`errors.dart`、`iterables.dart`、`tearoff.dart`)の理由は**確かめていない**。推測: 呼び出しの辺が sink の stack に載らない形(クロージャを返して、呼ぶ所と sink が別)、非同期(4 節)、例外。**方法 B を curated に適用するのは、まだ**(適用すれば、推測が合うかが分かる)。
 - **新しい欠落の候補**(`@miss` のないファイル。方法 B で 26 件、1 件ずつ見る前の数)。例: 返したクロージャをその場で呼ぶ(`clos/returned`)、リストや変数に入れたクロージャを呼ぶ(`clos/stored`、候補 0 の `value` 呼び出し)、メソッドの tear-off(`dyn/method_value`)、フレームワーク(`Navigator.pushNamed`)が呼ぶコールバック、`toString` の暗黙の呼び出し。zoo の既存の注釈が「見つかる」としているものも含む(辺がなくても、taint は作った所で扱うため。1 節)。**辺の欠落であって、taint の見逃しとは限らない**。
 - **Issue #77、#81、#88、#97 の形**は、zoo にも curated にも `@miss` として入っていないので、この照合では確かめていない(#97 の `call` メソッドの形は、zoo にセルがない)。これらの形を足せば、同じ道具で見えるはず、という見込みで、**確かめてはいない**。
 
@@ -93,7 +93,7 @@ stack の行と、グラフの関数(`funcs.fid`、extractor の `symbolOf`)を�
 
 ## 9. 次の作業(案)
 
-1. 方法 B を curated に当てる(runner の書き方を、`instrument.dart` の `import` の引数にして一般化する)。
+1. 方法 B を curated に適用する(runner の書き方を、`instrument.dart` の `import` の引数にして一般化する)。
 2. 試行で出た 26 件の候補を、1 件ずつ分類する(欠落 / 注釈にない既知 / 方法の限界)。欠落なら、zoo のセルと Issue にする。
 3. #77、#81、#88、#97 の形を、zoo のセルとして足し、この照合で出ることを確かめる(出なければ、方法が見えない形として、この文書に足す)。
 4. `compare.py` を Go に移し、定期の層に載せる(6 節)。

@@ -6,7 +6,7 @@
 - 決めた経緯と理由は [DECISIONS.md](../DECISIONS.md)。各 ADR の今の状態は [ADR-INDEX.md](../ADR-INDEX.md)。
 - 本文の数字（行数、秒、MB、検出数）は、書いた当時の実測で、今の値ではない。本文の「今」「現在」も、書いた当時を指す。
 - 節番号（2.7.x、9、10、11）は、ARCHITECTURE.md の旧い番号のまま。ADR などの引用が、ここへたどれるようにしてある。
-- 本文中の `ARCHITECTURE.md` の節への参照は、旧い版のもの。
+- 本文中の `ARCHITECTURE.md` の節への参照は、旧いバージョンのもの。
 
 目次:
 
@@ -196,7 +196,7 @@ Phase 2 のステップ（案。2.7 のレビュー後に確定する）:
 
 | ステップ | 内容 | 完了の目安 |
 |---|---|---|
-| 2.0 | **（実装済み）** `internal/ir`: 型、JSON Lines の符号化・復号、検証、人間が読める整形 | 手書きの IR が往復でき、不正な IR が検証で落ちる |
+| 2.0 | **（実装済み）** `internal/ir`: 型、JSON Lines の符号化・復号、検証、人間が読める整形 | 手書きの IR が往復でき、不正な IR が検証で失敗する |
 | 2.1 | **（実装済み）** Go extractor（`goir`）: NaiveForm → IR。`rivus extract` | `testdata` の全関数が IR になり、検証を通る。目視用の出力が読める。SQL への補間（`+`、`Sprintf`、`strings.Builder`）のケースで、`const` の中身と補間の形が IR に残ることを確かめる |
 | 2.2 | **（実装済み）** IR → SSA 形（`ssabuild` の接続）。`testdata` と `x/tools` で、旧経路の SSA の値の使用関係と一致 | differential test が IR 経由でも通る |
 | 2.3 | **（実装済み）** `sites` と指紋を IR の上へ。**ID と指紋が、旧経路と全ケースで一致** | `rivus sites` / `resolve` の出力が変わらない |
@@ -204,7 +204,7 @@ Phase 2 のステップ（案。2.7 のレビュー後に確定する）:
 | 2.5 | **（実装済み。2.4 の中でやった）** コールグラフを extractor へ。`call` の `candidates` として IR に入れ、コアは IR だけから SCC を作る | `x/tools` で一致し、時間が Phase 1 の ±20% 以内（実測: 107 秒 → 100 秒） |
 | 2.6 | **（実装済み）** 旧経路の除去。`taint` / `sites` / `report` から `go/ssa` と `gossa` の import を消す | `go list -deps` で確認（`taint` に `go/token`・`go/constant` が残る。下記） |
 - **Phase 3:** Rust。最初のタスクは「`stable-mir-json` 等の既存ツールで、実在のクレートがどれくらい通るかの確認」。成果物は「固定した nightly でビルドが通る Rust プロジェクトを解析できるツール」。想定より通らなければ、Rust の優先度を下げる判断もあり得る
-- **Phase 4:** Dart。解決済み AST → CFG → IR。**最初の版を実装済み**（`extractor/dart`、ADR-041）。残りは、パターン、関数値のコールグラフ、`Stream`、依存パッケージのモデル
+- **Phase 4:** Dart。解決済み AST → CFG → IR。**最初のバージョンを実装済み**（`extractor/dart`、ADR-041）。残りは、パターン、関数値のコールグラフ、`Stream`、依存パッケージのモデル
 
 ---
 
