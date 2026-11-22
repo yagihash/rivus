@@ -5,7 +5,7 @@
 - 言語: Go
 - 見つけたもの: `bench/model-diff`(`make model-diff PKG=...`)、PR #195
 
-`bench/model-diff` の A は、引数が `any` で、本体が型 switch で取り出す関数の流れを見つけない。`fmt` の `Sprintf`(arg1)、`Sprint`、`Sprintln`(arg0)、`Fprintf`、`Fprint`、`Fprintln`(書き手へ)と、`go/parser.ParseFile` の `src`。**8 プローブ**(fmt 6、`ParseFile` 2)。`fmt` の出力は引数でできているので、モデルの行は正しい。
+`bench/model-diff` の A は、引数が `any` で、本体が型 switch で取り出す関数の流れを見つけない。`fmt` の `Sprintf`(arg1)、`Sprint`、`Sprintln`(arg0)、`Fprintf`、`Fprint`、`Fprintln`(書き手へ)と、`go/parser.ParseFile` の `src`。`mime/multipart.Writer.CreateFormFile` は、ヘッダの行を `fmt.Sprintf` で作る(**2 プローブ**)。**10 プローブ**(fmt 6、`ParseFile` 2、`CreateFormFile` 2)。`fmt` の出力は引数でできているので、モデルの行は正しい。
 
 `# model-diff: extra ...` の注釈で残している。
 

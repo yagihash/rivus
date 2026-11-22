@@ -121,7 +121,12 @@ func realMain(args []string) int {
 		if len(rs) > 0 {
 			used = append(used, f)
 			rows = append(rows, rs...)
-			notes = append(notes, n...)
+			for _, x := range n {
+				// a note of a package other than the one that is checked is not judged here (it would be stale in every other run)
+				if x.Kind == "value" || SymbolPackage(*lang, strings.SplitN(x.Symbol, "@", 2)[0]) == *pkg {
+					notes = append(notes, x)
+				}
+			}
 			errs = append(errs, e...)
 		}
 	}
