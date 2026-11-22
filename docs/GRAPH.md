@@ -9,13 +9,13 @@
 ```sh
 rivus index -C path/to/project ./...       # コールグラフ(構造の層)を SQLite に保存する。速い(taint 解析はしない)。書き先は、ユーザーのキャッシュ(-graph <file> で指定)
 rivus graph info -C path/to/project ./...  # 保存したファイルの中身(件数、作成日時、source_hash)と、今のソースと一致するか(fresh: true/false)
-rivus graph callers -C . os/exec.Command   # この関数を呼ぶ関数(逆向き)。--depth N(既定 1、最大 6)、--limit K(既定 50 辺)
+rivus graph callers -C . os/exec.Command   # この関数を呼ぶ関数(逆向き)。--depth N(既定 1、最大 6)、--limit K(既定 50 エッジ)
 rivus graph callees -C . main.go:42        # その行の呼び出し点が呼ぶ関数(順向き)。複数あれば、候補の一覧を返して選ばせる
 rivus graph path -C . --from cmd.run --to os/exec.Command  # 経路を k 本(--limit、既定 5)、最短から。静的 → 動的 → ハブ込みの順に探す(searched に、どこまで探したかを書く)
 rivus graph path -C . --from-entry --to os/exec.Command    # main と init(ライブラリなら exported な関数)から届く経路。出力の entry に、何を entry としたかを書く
 rivus graph path -C . --from-entry --to routers/web/repo.Activity  # ルータに登録しただけの関数(m.Get("/x", repo.Activity))にも、4 段目(参照)で届く。--refs で 4 段目から、--no-refs で使わない
-rivus graph callers -C . repo.Activity --refs   # この関数を、値として持つ関数(登録、保存、受け渡し)も、kind: ref の辺として足す。callees --refs は、持っている関数
-rivus graph path -C . --from a --to b --avoid log.Error --via db.Query --only-impl bytes.Buffer  # 辺のフィルタ(callers / callees でも使える。繰り返し可。filters に必ず書く)
+rivus graph callers -C . repo.Activity --refs   # この関数を、値として持つ関数(登録、保存、受け渡し)も、kind: ref のエッジとして足す。callees --refs は、持っている関数
+rivus graph path -C . --from a --to b --avoid log.Error --via db.Query --only-impl bytes.Buffer  # エッジのフィルタ(callers / callees でも使える。繰り返し可。filters に必ず書く)
 rivus graph path -C . --from a --to b --avoid-call server/handler.go:42:7  # 呼び出し点を 1 つだけ切る(--avoid は関数を丸ごと切る)
 rivus graph impls -C . '(io.Writer).Write'        # インターフェースのメソッドの、実装(関数)の一覧。短い指定(io.Writer.Write、Writer.Write)も可。--limit で切り、総数と by_package(上位 10)を言う
 rivus graph dispatchers -C . '(*bytes.Buffer).Write'  # その実装を候補として呼ぶ、動的な呼び出し点(位置、含む関数、kind、candidates、通るインターフェースのメソッド = callee)
