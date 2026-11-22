@@ -272,7 +272,7 @@ func TestBuiltinRowsAreHitByTheZoo(t *testing.T) {
 				}
 				key := lang + " " + r.symbol
 				isRow[key] = true
-				hit := set[r.symbol]
+				hit := set[r.symbol] || hitByMajor(set, r.symbol)
 				_, allowed := allow[key]
 				if allowed && allowFile[key] != r.file {
 					t.Errorf("%s is a row of %s and is allowed in the file of %s: the allowance is in the .dead-allow of the file of the row", key, r.file, allowFile[key])
@@ -308,4 +308,17 @@ func TestBuiltinRowsAreHitByTheZoo(t *testing.T) {
 			}
 		})
 	}
+}
+
+// hitByMajor: a row of a Go module written with /v* (any major, model.MajorWildcard) is hit by a call of the symbol of any major.
+func hitByMajor(set map[string]bool, pattern string) bool {
+	if !model.HasMajorWildcard(pattern) {
+		return false
+	}
+	for sym := range set {
+		if model.MatchMajor(pattern, sym) {
+			return true
+		}
+	}
+	return false
 }

@@ -396,3 +396,33 @@ func TestDartNamedConstructorIsCalledAsConstructor(t *testing.T) {
 		t.Errorf("change is a method: %+v", sig)
 	}
 }
+
+// A row written with /v* (any major of a Go module, docs/DESIGN-package-models.md 6.9) is a row of the package of the major that is
+// checked (-version names it): the package that the symbol names has /v*, the package that is checked has its digits.
+func TestMajorWildcardRows(t *testing.T) {
+	if got := SymbolPackage("go", "(*github.com/google/go-github/v*/github.RepositoriesService).GetContents"); got != "github.com/google/go-github/v*/github" {
+		t.Errorf("SymbolPackage = %q", got)
+	}
+	if got := SymbolPackage("go", "github.com/jackc/pgx/v*.Connect"); got != "github.com/jackc/pgx/v*" {
+		t.Errorf("SymbolPackage of a root package = %q", got)
+	}
+	if got := concreteIn("(*github.com/google/go-github/v*/github.RepositoriesService).GetContents", "github.com/google/go-github/v93/github"); got != "(*github.com/google/go-github/v93/github.RepositoriesService).GetContents" {
+		t.Errorf("concreteIn = %q", got)
+	}
+	if got := concreteIn("github.com/google/go-github/v93/github.F", "github.com/google/go-github/v93/github"); got != "github.com/google/go-github/v93/github.F" {
+		t.Errorf("a symbol without /v* is as it was: %q", got)
+	}
+	for in, want := range map[string]string{"v93.0.0": "93", "93.1.2": "93", "v2": "2", "latest": "", "": ""} {
+		if got, ok := majorOfVersion(in); got != want || ok != (want != "") {
+			t.Errorf("majorOfVersion(%q) = %q, %v", in, got, ok)
+		}
+	}
+	text := "sinks:\n  - symbol: x.org/m/v*/pkg.F\n    args: [0]\n  - symbol: x.org/m/v*/other.F\n    args: [0]\n  - symbol: strings.Join\n    args: [0]\n"
+	got := DropPackage(text, "go", "x.org/m/v7/pkg")
+	if strings.Contains(got, "v*/pkg.F") || !strings.Contains(got, "v*/other.F") || !strings.Contains(got, "strings.Join") {
+		t.Errorf("DropPackage:\n%s", got)
+	}
+	if got := DropPackage(text, "go", "x.org/m/vault/pkg"); got != text {
+		t.Errorf("a path that is not a major drops nothing:\n%s", got)
+	}
+}

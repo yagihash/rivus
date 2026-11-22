@@ -18,6 +18,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/yagihash/rivus/internal/model"
 )
 
 func main() { os.Exit(realMain(os.Args[1:])) }
@@ -68,6 +70,15 @@ func realMain(args []string) int {
 	if *pkg == "" {
 		fmt.Fprintln(os.Stderr, "model-diff: -pkg is needed")
 		return 2
+	}
+	// a package named by /v* (any major of a Go module): the check is of one major, the one of -version
+	if model.HasMajorWildcard(*pkg) {
+		major, ok := majorOfVersion(*version)
+		if !ok {
+			fmt.Fprintf(os.Stderr, "model-diff: %s has /v* (any major): give the version to check with -version (v93.0.0): its major is the one that is checked\n", *pkg)
+			return 2
+		}
+		*pkg = model.ConcreteMajor(*pkg, major)
 	}
 	if *lang == "rust" {
 		fmt.Fprintln(os.Stderr, "model-diff: Rust is not checked: the build of a crate runs its build scripts and needs the isolation (docs/rust-isolation.md)")
@@ -123,7 +134,7 @@ func realMain(args []string) int {
 			rows = append(rows, rs...)
 			for _, x := range n {
 				// a note of a package other than the one that is checked is not judged here (it would be stale in every other run)
-				if x.Kind == "value" || SymbolPackage(*lang, strings.SplitN(x.Symbol, "@", 2)[0]) == *pkg {
+				if x.Kind == "value" || model.MatchMajor(SymbolPackage(*lang, strings.SplitN(x.Symbol, "@", 2)[0]), *pkg) {
 					notes = append(notes, x)
 				}
 			}
