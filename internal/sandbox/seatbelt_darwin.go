@@ -90,28 +90,25 @@ func profile(nRead, nExec, nWrite, nFiles, nReadFiles int, proxy bool) string {
 (deny file-read-metadata (literal "/Users") (literal "/Volumes") (literal "/Applications"))
 `)
 	// the directories above a directory that is named can be stat-ed (not listed, not read): the path is resolved by looking at them
-	ancestors := func(kind string, i int) {
-		fmt.Fprintf(&b, "(allow file-read-metadata (path-ancestors (param \"%s%d\")))\n", kind, i)
-	}
 	for i := 0; i < nRead; i++ {
 		fmt.Fprintf(&b, "; may be read: a directory that the caller named (the project, the dependencies, the toolchain)\n(allow file-read* (subpath (param \"R%d\")))\n", i)
-		ancestors("R", i)
+		writeAncestors(&b, "R", i)
 	}
 	for i := 0; i < nExec; i++ {
 		fmt.Fprintf(&b, "; programs may be run from here, and the directory is read: the toolchain, the compilers, the extractor\n(allow file-read* process-exec* (subpath (param \"X%d\")))\n", i)
-		ancestors("X", i)
+		writeAncestors(&b, "X", i)
 	}
 	for i := 0; i < nFiles; i++ {
 		fmt.Fprintf(&b, "; this program may be run (it is named by its path): one that a build needs\n(allow file-read* process-exec* (literal (param \"E%d\")))\n", i)
-		ancestors("E", i)
+		writeAncestors(&b, "E", i)
 	}
 	for i := 0; i < nReadFiles; i++ {
 		fmt.Fprintf(&b, "; this file may be read (named by its path): a manifest above the project\n(allow file-read* (literal (param \"F%d\")))\n", i)
-		ancestors("F", i)
+		writeAncestors(&b, "F", i)
 	}
 	for i := 0; i < nWrite; i++ {
 		fmt.Fprintf(&b, "; may be written: the working directory of this run only\n(allow file-read* file-write* (subpath (param \"W%d\")))\n", i)
-		ancestors("W", i)
+		writeAncestors(&b, "W", i)
 	}
 	b.WriteString("; a program may start programs (a build script runs the compiler)\n(allow process-fork)\n")
 	if proxy {
@@ -119,6 +116,20 @@ func profile(nRead, nExec, nWrite, nFiles, nReadFiles int, proxy bool) string {
 	}
 	return b.String()
 }
+
+// writeAncestors writes the line that lets the directories above the directory of a parameter be stat-ed (not listed, not read): the
+// path is resolved by looking at them.
+func writeAncestors(b *strings.Builder, kind string, i int) {
+	fmt.Fprintf(b, "(allow file-read-metadata (path-ancestors (param \"%s%d\")))\n", kind, i)
+}
+
+// argList is the arguments of sandbox-exec: the parameters of the profile are added one by one.
+type argList []string
+
+func (a *argList) param(k, v string) { *a = append(*a, "-D", k+"="+v) }
+
+// waitFor waits for the command and says how it ended.
+func waitFor(cmd *exec.Cmd, done chan<- error) { done <- cmd.Wait() }
 
 // Run runs the program under the sandbox and waits for it.
 func Run(ctx context.Context, s Spec) (*Result, error) {
@@ -138,29 +149,28 @@ func Run(ctx context.Context, s Spec) (*Result, error) {
 	if err := os.WriteFile(pf, []byte(profile(len(s.Read), len(s.Exec)+1, len(s.Write), len(s.ExecFiles), len(s.ReadFiles), s.ProxyPort != 0)), 0o600); err != nil {
 		return nil, err
 	}
-	args := []string{"-f", pf}
+	args := argList{"-f", pf}
 	home, _ := os.UserHomeDir()
-	args = append(args, "-D", "HOME="+real(home))
-	param := func(k, v string) { args = append(args, "-D", k+"="+v) }
+	args.param("HOME", real(home))
 	for i, d := range s.Read {
-		param(fmt.Sprintf("R%d", i), real(d))
+		args.param(fmt.Sprintf("R%d", i), real(d))
 	}
 	// the program itself is run from its own directory
 	execs := append([]string{filepath.Dir(s.Argv[0])}, s.Exec...)
 	for i, d := range execs {
-		param(fmt.Sprintf("X%d", i), real(d))
+		args.param(fmt.Sprintf("X%d", i), real(d))
 	}
 	for i, f := range s.ReadFiles {
-		param(fmt.Sprintf("F%d", i), real(f))
+		args.param(fmt.Sprintf("F%d", i), real(f))
 	}
 	for i, f := range s.ExecFiles {
-		param(fmt.Sprintf("E%d", i), real(f))
+		args.param(fmt.Sprintf("E%d", i), real(f))
 	}
 	for i, d := range s.Write {
-		param(fmt.Sprintf("W%d", i), real(d))
+		args.param(fmt.Sprintf("W%d", i), real(d))
 	}
 	if s.ProxyPort != 0 {
-		param("PROXY", fmt.Sprint(s.ProxyPort))
+		args.param("PROXY", fmt.Sprint(s.ProxyPort))
 	}
 	args = append(args, "--")
 	args = append(args, s.Argv...)
@@ -188,7 +198,7 @@ func Run(ctx context.Context, s Spec) (*Result, error) {
 	}
 	pgid := cmd.Process.Pid
 	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
+	go waitFor(cmd, done)
 	res := &Result{}
 	var werr error
 	select {

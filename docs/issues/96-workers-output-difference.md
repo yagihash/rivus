@@ -43,3 +43,7 @@ rivus analyze -workers 16 -rules rules.yaml ./... > w16.json
 
 追記: 既存の入力の rust-curated(bench/rust-curated)にも 8 関数以上の SCC があり、-workers 1 だけ代表の経路が違う(TestDeterministicCuratedRust)。sameEveryTime は -workers 1 の差を、この issue の番号つきで Skip にした。上の「既存の入力には 8 関数以上の SCC がない」は、Go の入力についてのみ正しい。
 
+
+## 追記(2026-11-22、開発者)
+
+`TestDeterministicParamshare` が、手元で 3 回中 1 回、`GOMAXPROCS="1" -workers="" と -workers="2" の出力が違う` で落ちた(残りの 2 回は通る)。`GOMAXPROCS=1` で `-workers` 未指定は、`-workers 1` と同じ並びになり、この課題(`-workers 1` と 2 以上の差)が現れる。`sameEveryTime` が Skip にするのは、`-workers="1"` の差だけで、`-workers=""`(GOMAXPROCS が 1 のとき)の差は、Skip にならずに落ちる。CI でも、まれに赤くなりうる(今日の変更とは関係しない)。直すなら、`sameEveryTime` の Skip の条件を、実際の worker 数で決める(`-workers=""` と GOMAXPROCS=1 の組を、`-workers=1` と同じに扱う)。
