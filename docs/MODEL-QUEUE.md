@@ -4,6 +4,8 @@
 
 候補に入れる基準は公開の指標。順番はメンテナが決める。
 
+**この一覧の案(境界の案)は、コードを読まずに書いたもの。モデルを作るときに、公開のソースを読んで、案と違う判断をしてよい(その理由を、PR の本文に書く)。**
+
 パッケージ単位の宣言(段階 2)の最初の適用先は、`dart-http`、Dart と Go の Google Cloud。`bench/go-s3` は、仕組みの効果を示すベンチで、AWS SDK の組み込みモデルを本格的に作るのは後回し。
 
 **Rust の行の注意(2 行)。** rivus の Rust extractor は、読むときに `build.rs` と proc macro を実行する(隔離の下でだけ許される)。隔離が動かない環境では、Rust は「モデルは書くが、extractor を使う確認は CI に任せる」にして、取得したクレートのコードを、隔離なしで実行しない(線の詳細は MODEL-RUNBOOK.md の 0 節)。
@@ -27,7 +29,7 @@
 | 1 | Dart | shelf_router | 新規 | source: `Request.params`、`Router.get/post/...` に登録したハンドラが入口 | 30 日 DL 637k、325 likes。最終公開 2026-10-16。Dart のみ | Web フレームワーク | 検証用。shelf の上の層で、API の境界が明確 |
 | 2 | Go | gin | 例から昇格 | source: `*gin.Context` の `Query/Param/PostForm/ShouldBind*/GetHeader`、sink: `Context.File`/`Redirect` など(`examples/rules/go-gin.yaml` の 103 行が材料) | imported by 80.8k モジュール / 191.4k パッケージ。v1.12.0(2026-02-28) | Web フレームワーク | 検証用。Go の Web フレームワークで imported by が最多 |
 | 3 | Rust | actix-web | 例から昇格 | source: `HttpRequest`、`web::Query/Path/Json/Form/Bytes`。`examples/rules/rust-actix-web.yaml` の 58 行と、`bench/parseable/rules.yaml` の actix-web の 14 行が材料 | 直近 90 日 13.9M / 全期間 92.1M。4.20.0(2026-11-17) | Web フレームワーク | 検証用。Web フレームワークの中でも全期間 92.1M |
-| 4 | Dart | dio | 新規 | sink: `Dio.get/post/request/download` の URL とデータ。source: `Response.data`。`Interceptor`、`HttpClientAdapter` が合流点 | 30 日 DL 5.6M、8.4k likes。最終公開 2026-09-04。Dart のみ | HTTP クライアント | 最初の本番。Dart の HTTP で DL が 2 番目(http は進行中) |
+| 4 | Dart | dio | 新規 | sink: `Dio.get/post/request/download` の URL とデータ。source: `Response.data`。`Interceptor`、`HttpClientAdapter` が合流点(**`Response.data` は、モデルの側が、`dart-http.yaml` の前例に合わせて source にしないと判断した。#202**) | 30 日 DL 5.6M、8.4k likes。最終公開 2026-09-04。Dart のみ | HTTP クライアント | 最初の本番。Dart の HTTP で DL が 2 番目(http は進行中) |
 | 5 | Go | cloud.google.com/go/storage | 新規 | resource_name: `Bucket/Object` の名前。source: `Reader.Read`、sink: `Writer.Write` | imported by 5.7k モジュール / 6.6k パッケージ。v1.71.0(2026-11-16) | クラウド(Google Cloud) | Google Cloud の残りで最多 |
 | 6 | Rust | octocrab | 新規 | resource_name: owner、repo、path、ref。source: 戻り値の本文とファイル | 直近 90 日 3.5M / 全期間 20.3M。0.54.9(2026-10-31) | API クライアント(GitHub) | GitHub のクライアントで最多 |
 | 7 | Dart | github(package:github) | 新規 | resource_name: `RepositorySlug`、パス、ref。source: 戻り値の本文とファイル | 30 日 DL 295k、165 likes。最終公開 2026-07-28。Dart のみ | API クライアント(GitHub) | GitHub のクライアントで最多 |

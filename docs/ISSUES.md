@@ -65,6 +65,8 @@
 | [#146](issues/146-sandbox-target-triple.md) | Rust の出力に、読んだ構成(target triple)が出ない(macOS のサンドボックスは macOS 向けの分岐を読む) | 注記つきの限界 | Rust | 0 | open | - |
 | [#147](issues/147-sandbox-workspace-crate.md) | ワークスペースの中の crate が、サンドボックスの下で抽出できない | 利用者を止める(閉じる向き) | Rust | 0 | open | - |
 | [#148](issues/148-linux-rust-extractor-without-isolation.md) | Linux(CI、クラウドのモデル作成)での Rust の extractor の扱い(隔離なしでは、取得したクレートを実行しない) | 道具(重さ: 中) | Rust | 0 / 3 | open | - |
+| [#156](issues/156-override-method-params-source.md) | 利用者がオーバーライドするメソッド(`Interceptor.onRequest` など)を、ライブラリが呼ぶ形のモデルの書式がない | サイレントな見逃し(書式の不足) | 全 | 2 / 3 | open | - |
+| [#157](issues/157-dart-generic-method-model-diff.md) | Dart のジェネリクスのメソッド(`get<T>`)が、差分テストで検証できない | 道具(重さ: 中) | Dart | 3 | open | - |
 
 ## 閉じたもの
 
