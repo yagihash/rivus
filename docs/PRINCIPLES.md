@@ -113,7 +113,7 @@ rivus の設計の判断は、ここに書いた原則に沿う。ほかの文�
 **原則**
 
 - 中立な IR を、CFG のレベルで切る。φ のない CFG と、再代入できるローカル変数。
-- 判断の基準は「言語に固有の知識が要るか」。CFG を作るまでは extractor、SSA から先はコアで、1 回だけ実装する。
+- 判断の基準は「言語に固有の知識が必要か」。CFG を作るまでは extractor、SSA から先はコアで、1 回だけ実装する。
 - 言語に固有の脱糖は extractor の責務。IR の命令を増やして逃げない。
 - 型・名前・パッケージの解決は、言語のツールチェインに任せる。フロントエンドを自作しない。
 
@@ -134,7 +134,7 @@ rivus の設計の判断は、ここに書いた原則に沿う。ほかの文�
 **原則**
 
 - functional approach で、IFDS の tabulation ではない。
-- 理由は機能から来る。「ある sink に届く source を全部挙げる」のような、起点を決めない問い合わせには、全関数の完全なサマリが先に要る。
+- 理由は機能から来る。「ある sink に届く source を全部挙げる」のような、起点を決めない問い合わせには、全関数の完全なサマリが先に必要。
 
 **根拠の ADR:** 004（理由を明記）、021、031、047
 
@@ -209,7 +209,7 @@ rivus の設計の判断は、ここに書いた原則に沿う。ほかの文�
 
 **コード:**
 
-- 隔離: `internal/sandbox`（macOS のサンドボックス。既定ですべて拒否し、要るものだけ許す。ネットワークは取得の段階だけ）、`cmd/rivus/isolate_sandbox_darwin.go`（Rust の取得と抽出の 2 段階）、`isolate_fetch.go`（取得の段階で対象の設定を読まず、取得元を検査）
+- 隔離: `internal/sandbox`（macOS のサンドボックス。既定ですべて拒否し、必要なものだけ許す。ネットワークは取得の段階だけ）、`cmd/rivus/isolate_sandbox_darwin.go`（Rust の取得と抽出の 2 段階）、`isolate_fetch.go`（取得の段階で対象の設定を読まず、取得元を検査）
 - サンドボックスが作れなければ、Linux では、何も実行せず止まる: `cmd/rivus/isolate_sandbox_darwin.go`、`isolate_sandbox_other.go`。隔離の下か、ホストでかは、`summary.isolation` に出る
 - git の HEAD を直接読む: `internal/vcs`
 - 対象内のルール: `.rivus/rules` は既定で読み、`-no-project-rules` で止める。symlink は拒否する。出力に、対象内ルールが消せる量を出す（`internal/report/report.go` の `ProjectRules`）

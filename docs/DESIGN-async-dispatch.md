@@ -13,7 +13,7 @@ ADR-079(案 A)は、zoo と rust-curated で `@fp` / `@noisy` を減らしたが
 
 * **`async move { g(&s) }`**: 呼び出し元の関数で、coroutine を `alloc`(型 `{async block@…}`)し、キャプチャした値を `field_store`(フィールド名は `"0"`、`"1"`…: **番号だけ**)で入れる。`Poll` する側(executor)はコードにないので、抽出器は、coroutine を作った所で、本体を呼ぶ(`Pin { pointer: &mut coroutine }` を作って、`call 本体(pin, 0)`。lower.rs の `AggregateKind::Coroutine`)。
 * **本体**(`関数名::{closure#N}`): パラメータは `pin`(と resume の引数)。coroutine は `pin.pointer`(`field_load`)から取り、キャプチャした値は、その `addr_of`(path = フィールド `"0"`)で読む。中の `g(&s)` は `Fn::call`(レシーバ = そのアドレス)。
-* **`async fn`** は、同じ形: 関数自身は、パラメータを coroutine の `"0"`、`"1"` に入れて、本体を呼ぶ。`.await` と `Future` は、本体の `Poll` の分岐(`Ready.0` の `field_store`)になり、呼び出しの先ではない(`spawn` の中の `tokio::spawn` は、本体のない関数。引数の future は、すでに本体が走っている)。
+* **`async fn`** は、同じ形: 関数自身は、パラメータを coroutine の `"0"`、`"1"` に入れて、本体を呼ぶ。`.await` と `Future` は、本体の `Poll` の分岐(`Ready.0` の `field_store`)になり、呼び出しの先ではない(`spawn` の中の `tokio::spawn` は、本体のない関数。引数の future は、すでに本体が実行されている)。
 
 ## たどれなかった原因(根拠つき。2 つ)
 
@@ -32,7 +32,7 @@ ADR-079(案 A)は、zoo と rust-curated で `@fp` / `@noisy` を減らしたが
 2. **`narrow.go`**: dynamic な `std::clone::Clone::clone`(引数 1 つ)を、`copy` と同じく、引数の出所をたどる。`&f` のセルの別名が、この `clone` のレシーバになるのは、読むだけなので許す(外に出たとはしない)。静的な `{closure} as Clone>::clone` も同じ。「全部たどれたときだけ絞る」は変えない: たどれない部分が 1 つでもあれば、全候補のまま(`narrow_async.rs` の (4))。
 
 3. **`narrow.go`(深さ)**: 環境のフィールドの 1 段は、呼び出し元を 1 つ上る段ではないので、深さ(`maxDepth`)に数えない(async の入れ子は、フィールドを 3〜4 段通る)。
-4. **`narrow.go`(共有参照)**: 環境のフィールドのアドレスが、**共有参照 `&F` の型の局所変数**にだけコピーされるとき(`&mut` や、型のない複製が 1 つも無いとき)、そのアドレスが環境や呼び出しに渡っても、フィールドへの書き込みの経路とは数えない(関数値の中身が、共有参照越しに別の関数になることは無い)。`async fn` の本体が、状態のフィールドの `&api_fn` を、`map` のクロージャの環境に入れる形(`for_each_live_node`)で要る。
+4. **`narrow.go`(共有参照)**: 環境のフィールドのアドレスが、**共有参照 `&F` の型の局所変数**にだけコピーされるとき(`&mut` や、型のない複製が 1 つも無いとき)、そのアドレスが環境や呼び出しに渡っても、フィールドへの書き込みの経路とは数えない(関数値の中身が、共有参照越しに別の関数になることは無い)。`async fn` の本体が、状態のフィールドの `&api_fn` を、`map` のクロージャの環境に入れる形(`for_each_live_node`)で必要。
 
 **効果(`narrow_async.rs`)**: どの呼び出し元も渡さないクロージャ(`*_extra`)の sink は、検出されなくなる(候補 3 → 2)。(4)(片方が、関数の結果でたどれない)は、全候補のまま、`@sink(async-unknown)` が見つかる。await を挟む形(5)も同じ。
 

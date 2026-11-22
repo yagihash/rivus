@@ -37,5 +37,5 @@ void s() {
 `bench/dart-curated`: `emit` `emit-two` `lazy` `across-hub`。`bench/rust-curated`: `emit` `emit-two` `across-hub`(何も報告しなかった)。`bench/MISSES.md` の型 `STORE`(7 件)。
 
 ## 落ちる場所の推定
-`internal/valuecalls/valuecalls.go` は、メモリ(フィールド、リスト)をたどらない(ファイル冒頭のコメント)。`iter.next` / `field_load` の結果は `refOther` で、呼び出しは候補なしになる。ADR-047(案 2)では直らない(条件 1: 保存されて、別の関数から呼ばれる)。フィールド / 要素を通る関数値の追跡(点の解析)が要る。
+`internal/valuecalls/valuecalls.go` は、メモリ(フィールド、リスト)をたどらない(ファイル冒頭のコメント)。`iter.next` / `field_load` の結果は `refOther` で、呼び出しは候補なしになる。ADR-047(案 2)では直らない(条件 1: 保存されて、別の関数から呼ばれる)。フィールド / 要素を通る関数値の追跡(点の解析)が必要。
 
