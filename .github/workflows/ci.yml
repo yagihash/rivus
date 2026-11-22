@@ -94,6 +94,8 @@ jobs:
               - '!bench/rust-curated-lib/**'
               - '!bench/rust-curated-ffi/**'
               - '!bench/zoo-rust/**'
+              - '!bench/zoo-go-pkg/**'
+              - '!bench/zoo-rust-pkg/**'
               - '!bench/rust-synth/**'
               - '!bench/**/README.md'
               - '!bench/MISSES.md'
@@ -115,6 +117,7 @@ jobs:
               - 'bench/**'
               - '!bench/dart-curated/**'
               - '!bench/zoo-dart/**'
+              - '!bench/zoo-go-pkg/**'
               - '!bench/dart-synth/**'
               - '!bench/dart-corpus/**'
               - '!bench/dart-pub/**'
@@ -282,9 +285,13 @@ jobs:
       - uses: dart-lang/setup-dart@2286a0c042b44434fe26d292bbce8d34f7ec662b # v1.8.2
         with:
           sdk: 3.13.6
+      - name: Write the generated files of the Dart zoo
+        # the two pubspec.yaml of the zoo (cells, exec) and exec/lib/cases.dart are made from the directories of the cells and of the skeleton packages:
+        # they are not committed, and `dart pub get` and `dart analyze` need them first
+        run: make zoo-dart-gen
       - name: Resolve the packages of the extractor and the samples
         # every one of them has a pubspec.lock (the versions are the locked ones, or the step fails), but the two of the Dart zoo
-        # (bench/zoo-dart/cells, bench/zoo-dart/exec): those are not committed, and `dart pub get` makes them
+        # (bench/zoo-dart/cells, bench/zoo-dart/exec): those are not committed (written above), and `dart pub get` makes the lock
         run: |
           for d in extractor/dart extractor/dart/test/sample extractor/dart/test/monorepo/app extractor/dart/test/monorepo/shared extractor/dart/test/versions/a extractor/dart/test/versions/b bench/dart-curated; do
             if [ -f "$d/pubspec.yaml" ]; then
@@ -294,9 +301,6 @@ jobs:
           for d in bench/zoo-dart/cells bench/zoo-dart/exec; do
             (cd "$d" && dart pub get)
           done
-      - name: Write the generated files of the Dart zoo
-        # exec/lib/cases.dart is not committed (it is made from the cells); the tests write it too, `dart analyze` needs it first
-        run: make zoo-dart-gen
       - name: Analyze the extractor
         if: matrix.shard == 0
         working-directory: extractor/dart
@@ -344,6 +348,8 @@ jobs:
         working-directory: extractor/rust
         run: cargo test --locked
       # The Rust zoo has no dependency (std only, no build.rs, no proc macro): the extractor builds what it reads.
+      # The packages of the Rust zoo (bench/zoo-rust-pkg/<package>: a skeleton of an external package, path dependencies only) are found, built and run by
+      # TestZooPkgRust in the step below, one after another with one target directory: nothing is listed here, and the time grows by the cells and the skeleton of a package.
       - name: Build the Rust zoo
         working-directory: bench/zoo-rust
         run: cargo build --locked --offline

@@ -168,6 +168,8 @@ propagators:
     pure: true
   - symbol: (time.Time).Nanosecond
     pure: true
+  # The input goes to the error (ParseError has the value and the layout), not to the Time (docs/MODELING.md, "Stopping at a number, and a value of a narrow shape").
+  # model-diff: miss-reviewed time.ParseInLocation@arg1 non-payload the zone name that the Time keeps: 3 to 5 capital letters or GMT+n; src=time/format.go:parseTimeZone
   - symbol: time.ParseInLocation
     flows: [{from: arg0, to: result1}, {from: arg1, to: result1}]
   - symbol: (*os.File).Close
@@ -223,7 +225,7 @@ propagators:
   - symbol: (*net/url.URL).Hostname
     flows: [{from: recv, to: result}]
   - symbol: (embed.FS).ReadFile
-    flows: [{from: recv, to: result0}]
+    flows: [{from: recv, to: result0}, {from: arg0, to: result1}]
   - symbol: (*os.File).WriteString
     pure: true
   - symbol: (*os.File).Write

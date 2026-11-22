@@ -132,6 +132,19 @@ func goZooIR(t *testing.T, visit func(dir string, p *ir.Program)) {
 		}
 		visit(dir, out)
 	}
+	// the packages of the zoo (bench/zoo-go-pkg/<package>, zoo_pkg_test.go): a cell hits the row of an external package by calling
+	// the skeleton, so the functions of the skeleton count here (they are a dependency of that package, not of the zoo)
+	for _, dir := range zooPkgDirs(t, "go") {
+		prog, err := gossa.Load(dir, []string{"./..."}, gossa.Options{NaiveForm: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		out, err := goir.Extract(prog, goir.Options{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		visit(dir, out)
+	}
 }
 
 func dartZooSymbols(t *testing.T, set map[string]bool) {
@@ -151,6 +164,7 @@ func dartZooIR(t *testing.T, visit func(dir string, p *ir.Program)) {
 		t.Fatal(err)
 	}
 	words := strings.Fields(dart)
+	zooDartRoot(t) // writes the pubspec.yaml of bench/zoo-dart/cells (generated, not committed)
 	for _, d := range []string{"bench/zoo-dart/cells", "bench/zoo-dart/pure", "bench/dart-curated"} {
 		dir, err := filepath.Abs(filepath.Join("..", "..", d))
 		if err != nil {
@@ -183,6 +197,10 @@ func rustZooIR(t *testing.T, visit func(dir string, p *ir.Program)) {
 	// our own code: read on this machine, as the zoo tests do (nothing of a third party is read here)
 	zoo := zooRustCopy(t, zooRustRoot(t))
 	visit(zoo, deadReadIR(t, zooRustStream(t, zoo)))
+	for _, dir := range zooPkgDirs(t, "rust") {
+		cp := zooRustPkgCopy(t, dir)
+		visit(cp, deadReadIR(t, zooRustStream(t, cp)))
+	}
 	cur, err := filepath.Abs("../../bench/rust-curated")
 	if err != nil {
 		t.Fatal(err)

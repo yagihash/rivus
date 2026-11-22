@@ -38,7 +38,7 @@ zoo-loosened: ## check that what the commits change in the zoo marks (bench/zoo/
 	@[ -n "$(BASE)" ] && [ -n "$(HEAD)" ] || { echo "usage: make zoo-loosened BASE=<commit> HEAD=<commit>"; exit 1; }
 	bash scripts/zoo-loosened-check.sh "$(BASE)" "$(HEAD)"
 
-zoo-dart-gen: ## write bench/zoo-dart/exec/lib/cases.dart (not committed) and bench/zoo-dart/cells/pubspec.yaml from the directories of the cells and of the skeleton packages
+zoo-dart-gen: ## write bench/zoo-dart/exec/lib/cases.dart and the two pubspec.yaml of the Dart zoo (generated, not committed) from the directories of the cells and of the skeleton packages
 	go test ./cmd/rivus -run '^TestZooDartGenerate$$' -count=1 -update
 
 model-diff: ## the differential test of the model of a package: PKG=<Go import path | package:name> [MODEL=<file>] (bench/model-diff, docs/MODEL-RUNBOOK.md); fetches the package, does not run it

@@ -1,5 +1,5 @@
 // @cell(F/dart/shelf-router-extra-param)
-// @shape: the handler of Router.get takes the captured segment as a String parameter after the Request (shelf_router passes it): the text is user input, and no row says so
+// @shape: the handler of Router.get takes the captured segment as a String parameter after the Request (shelf_router passes it): the text is user input, and the built-in callback_param rows of shelf_router say so
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 import 'package:zoo_mark/zoo_mark.dart';
@@ -12,7 +12,7 @@ void register() {
 
 Future<void> vuln() async { // @vuln
   final router = Router();
-  router.get('/item/<id>', (Request request, String id) async { // @source(dart-shelf-router-extra-param-vuln) @miss(silent) @ref(model-shelf_router-extra-path-params)
+  router.get('/item/<id>', (Request request, String id) async { // @source(dart-shelf-router-extra-param-vuln)
     sinkCmd(id); // @sink(dart-shelf-router-extra-param-vuln)
     return Response.ok('');
   });
@@ -30,7 +30,7 @@ Future<void> fixed() async { // @fixed
 
 Future<void> decoy() async { // @decoy
   final router = Router();
-  router.get('/item/<id>', (Request request, String id) async { // @source(dart-shelf-router-extra-param-decoy) @miss(silent) @ref(model-shelf_router-extra-path-params)
+  router.get('/item/<id>', (Request request, String id) async { // @source(dart-shelf-router-extra-param-decoy)
     sinkCmd('constant'); // @sink(none) @nosink(dart-shelf-router-extra-param-decoy)
     sinkSql(id); // @sink(dart-shelf-router-extra-param-decoy)
     return Response.ok('');

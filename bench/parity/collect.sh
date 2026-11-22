@@ -107,6 +107,7 @@ for step in "$@"; do
       dart_ir dart-curated "$ROOT/bench/dart-curated"
       scan dart-curated dart "" "$WORK/ir/dart-curated.jsonl" ;;
     zoo-dart)
+      [ -f "$ROOT/bench/zoo-dart/cells/pubspec.yaml" ] || make -C "$ROOT" zoo-dart-gen >/dev/null   # generated, not committed
       dart_ir zoo-dart "$ROOT/bench/zoo-dart/cells"
       scan zoo-dart dart "" "$WORK/ir/zoo-dart.jsonl" ;;
     dart-pub)

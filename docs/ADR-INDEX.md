@@ -115,6 +115,7 @@
 | 099 | source と sink は、プロジェクトの関数の中だけで探す。依存を読んだ実行では `summary.dependency_sites` が毎回言う | 有効 | 相談役の決定(2026-11-23)。ADR-096、097 の根拠の 1 つ。課題 #144 | README、AGENT-GUIDE、ARCHITECTURE 5.5、MODELING | sink のモデルは、検出のためにも必要 |
 | 100 | モデルのファイルに、パッケージ単位で「本体を読まない」宣言を書ける(解析の側) | 有効 | ADR-092、098 の続き。`body_replaced_packages`、`-body-replaced`、`-read-declared-bodies`。extractor への受け渡し、組み込みへの宣言は未 | MODELING 4a、ARCHITECTURE 5.5、AGENT-GUIDE、DESIGN-package-models | `summary.body_replaced_packages`、呼び返しの `assumed_call` |
 | 101 | `examples/rules` のフレームワークのルールは、`docs/MODEL-QUEUE.md` に入ったものから、組み込みに昇格する(ADR-063 を上書き) | 有効 | ADR-096 / 097 の範囲。個々の昇格の PR は ADR を書かない。手順書の「例からの昇格」 | MODEL-RUNBOOK、MODEL-QUEUE、examples/rules/README | 一覧にないフレームワークは、今までどおり利用者が足す |
+| 102 | 昇格した例のファイルは、リポジトリの中に参照が残るなら、中身が空のルールとして残す(ADR-101 の補足) | 有効 | gin: `bench/compare.sh` ほかが名指しで使う。参照がなければ消す | MODEL-RUNBOOK(1 節、4 節) | 前後の比較を保つ |
 | 107 | パッケージの `calls:` の行は、解析の水準のセル(`checked_by: cell`)で確認する(実行との照合より弱い) | 有効 | 第三者のコードを実行しない。補い: 行を通るセルが必須、モデルを空にするとセルが落ちる確認、本物のパッケージでの照合(DESIGN-package-models.md 6.8 (b))。Dart と Rust のパス解決は最初の実際の行の PR で確認 | MODELING.md 3 節、MODEL-RUNBOOK.md | 標準ライブラリの行は、今までどおり実行で確認 |
 
 ## 訂正・追記の書き方を保つ ADR

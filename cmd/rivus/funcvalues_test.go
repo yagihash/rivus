@@ -20,6 +20,7 @@ func TestFuncValuesDart(t *testing.T) {
 	if dart == "" {
 		skipOrFail(t, "RIVUS_DART")
 	}
+	zooDartRoot(t) // writes the pubspec.yaml of bench/zoo-dart/cells (generated, not committed)
 	extractor, err := filepath.Abs("../../extractor/dart/bin/rivus_dart.dart")
 	if err != nil {
 		t.Fatal(err)

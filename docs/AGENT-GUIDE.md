@@ -31,7 +31,7 @@ rivus graph callers -C <dir> <関数>                  # finding の周辺を調
 2. **`rivus sites`**: source と sink のルールが一致する箇所を数えます。**source が 0 件なら、ルールが足りません**(フレームワークの入口が、組み込みのルールにない)。そのまま `analyze` しても finding は出ません。6 章の (f) でルールを足します。
    - `rivus sites` は、`analyze` と同じ言語の選択(`-lang`、auto: ディレクトリにある言語)で読みます。Dart と Rust のディレクトリでも、箇所が出ます(Rust は、`analyze` と同じ確認があり、読むとビルドが実行されます)。読まなかった言語は、出力の `skipped_languages` に出ます(`summary.unread.skipped_languages` と同じ形)。読める言語がないときは、エラーで止まります。
 3. **`rivus analyze`**: 必ず `-timeout` を付けます。標準出力が JSON、標準エラーが経過と警告です。出力は大きいので、ファイルに保存して `jq` で読みます。
-4. **最初に全体を見る**: `stats.converged` が `false`、`stats.timed_out` が `true`、`summary.unread` や `load_errors` がある、のどれかなら、結果は途中のもの、または一部のコードを読んでいないものです(5 章)。
+4. **最初に全体を見る**: `summary.callback_param_unresolved`(`callback_param` のルールがあるのに、ハンドラの関数を特定できなかった登録の呼び出しの数と場所。その関数の引数は source として扱われていないので、finding が 0 件でも、入口を確認できていない場所です)、`stats.converged` が `false`、`stats.timed_out` が `true`、`summary.unread` や `load_errors` がある、のどれかなら、結果は途中のもの、または一部のコードを読んでいないものです(5 章)。
    - **依存込みで収束しない、または時間切れのとき**(依存の多い対象で起きます。最初の `-timeout` つきの実行で、`timed_out: true` になる): 続けて finding を読む前に、6 章の (h) に進みます。順は、(1) 同じ対象を `-no-deps` で実行して、依存が原因かを切り分ける(`-no-deps` で終わるなら、原因は依存の本体)、(2) `-pass-stats` で、どの依存が重いか(`largest_scc_packages`、`packages_top`)と、注記の集中(`summary_sizes`、`on_findings_top`)を見る、(3) 候補が見つかったら、その依存のメソッドをモデルで切る(ADR-098 の基準。条件は `docs/MODELING.md` の 4a 節)。`-no-deps` の結果は、依存への呼び出しが推測で、依存の中の sink の検出も減る(`summary.dependency_sites` は出ない)ので、報告には `-no-deps` で得たと書き、本番の結果の代わりにはしません。
    - `summary.dependency_sites` がある結果は、依存の本体を読んでいても、依存の関数の中の source と sink は探していません(ADR-099)。「finding なし」は、依存の中の危険な処理が無い、という意味ではありません。
 5. **finding を 1 件ずつ読む**: 一覧を作り、`paths[0].steps` のコードを、対象のファイルと照らして読みます。
@@ -419,6 +419,7 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `summary.top_symbols` | モデルのない関数と、実装の見つからないインターフェースのメソッドの上位 |
 | `summary.unread` | **読んだがビルドできなかったパッケージ**(`packages`、`functions`、`top[]` の `package` と `why`)。その中の関数からは、finding は出ません。Dart で `dart pub get` をしていないときも、ここに出ます。Dart で、許可の外の依存(`-allow-deps-under` で許していない `path:` の依存など)を読まなかったときは `why` が `dependency_not_allowed` で始まり、同じ依存の別バージョンを 2 つのパッケージが使うときは `dependency_not_linked` で始まります(標準エラーにも 1 行出ます) |
 | `summary.unread.skipped_languages` | ディレクトリにあるのに読まなかった言語と理由: `declined`、`no-terminal`、`not-installed`、`no-sandbox` |
+| `summary.callback_param_unresolved` | `callback_param` のルールが指す呼び出しのうち、ハンドラの関数を特定できなかったもの(`count`、`sites[]` の `func`・`position`・`symbol`)。**呼び出しの場所**で、source になるはずだった関数の場所ではない。その関数の引数は source として扱われていない。ルールの行がなければ出ない |
 | `summary.skipped_dirs`、`outside_configuration` | 読まなかったディレクトリ、ビルドの条件で外れたファイル |
 | `summary.load_dependent` | `true` なら、時計の上限(`-timeout`、`-func-timeout`)で止めた所があり、結果がマシンの負荷で変わる |
 | `summary.dependency_sites` | 依存の本体を読んだ実行で毎回出る。`searched` は常に `false`、`dependency_functions` は読んだ依存の関数の数。**source と sink は、プロジェクトの関数の中だけで探す**(依存の本体は、流れを追うために読む)。ライブラリの中で危険な処理に届く形は、プロジェクトがその API を呼ぶ所に sink のモデルがないと検出されないので、「finding なし」は、その形がないことの証拠ではない。`-no-deps` と、依存の関数が 0 のときは出ない |

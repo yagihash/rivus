@@ -80,6 +80,24 @@ the clock, or need a value the harness cannot make; 190 have no string or bytes 
 in, which a call with a marker does not cover). Dart (`dart-pure.yaml`) and Rust (`rust-pure.yaml`) are checked in the zoo of
 each language, by the same rule.
 
+### Stopping at a number, and a value of a narrow shape: `non-payload`
+
+A parser of a number or a time puts its input in the error and **not** in the value (`numeric_stop`, above): a number cannot carry an injection, and
+tainting it would report every query or template that takes it. The same holds for a value that is not a number but has a fixed narrow
+shape: a bool, a value close to an enumeration, a short name of a fixed set of characters. `time.Parse` is the case: the only text of the value that
+the `Time` keeps is the zone name (3 to 5 capital letters, or `GMT+n`; `parseTimeZone` in `time/format.go`).
+
+When `make model-diff` shows a MISS for such a flow (the body has it, the model leaves it out on purpose), the row is not changed. The reason is recorded as a
+`miss-reviewed` note of the kind `non-payload` (the three kinds are in `docs/MODEL-RUNBOOK.md`, section 9):
+
+```yaml
+# model-diff: miss-reviewed time.Parse@arg1 non-payload the zone name that the Time keeps: 3 to 5 capital letters or GMT+n; src=time/format.go:parseTimeZone
+```
+
+It needs **what the value is narrowed to** and **where the source shows it** (`src=<file>.go:<function>`); the tool fails without either. The flow of the body has to
+be real (a flow that the reading of the bodies only guesses is `body-default`), and the narrow shape has to be certain from the source, not from a guess.
+A session that builds models does not add this note: it writes the reason in the draft and leaves the decision to the advisor.
+
 ## 2. When a flow is a guess: `approximate`
 
 If a flow is real in some cases and not in others (the output of an external program may or may not carry its
@@ -425,7 +443,9 @@ sources:
 * A function that is not found where the call is made (a parameter of the function that registers, a field, an element, a
   result of a call, a variable that two functions are stored in) is **not followed**, and the call says so: an `unresolved_callee`
   uncertainty at the call (in the function that makes it, which is the helper when a helper registers). The parameters of such a function are not
-  a source: the flow is missed, with the note. Write the row for the call that has the function literal (the helper's own callers are not followed).
+  a source: the flow is missed, with the note. The detail of the note starts with `callback_param_unresolved:` (so that it is not taken for any other
+  `unresolved_callee`), and `summary.callback_param_unresolved` has `count` and `sites[]` (`func`, `position`, `symbol`: the call, not the function
+  that would have been the source, which is not known), also when there is no finding at all. Write the row for the call that has the function literal (the helper's own callers are not followed).
 * `from` and `to` are positions among the parameters that the function declares (a captured value is not one; a method
   value's receiver is not one). Named parameters are not counted: positions only (#145).
 * **`operand` is counted the way the `calls:` rows of the same file count**, so that one model file does not have two ways:
