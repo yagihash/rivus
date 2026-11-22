@@ -88,3 +88,42 @@ func TestDartTestsAreNotReadUnlessAsked(t *testing.T) {
 		t.Errorf("-tests adds the findings of the tests only: %d with (%d in test/), %d without", len(with.Findings), inTest(with), len(def.Findings))
 	}
 }
+
+// "rivus sites" reads the languages that the directory holds, as analyze does. It read only Go: a Dart directory gave
+// no site, with no error and no word about the language that was not read (a list of sites that was taken for "the
+// rules have nothing to say").
+func TestSitesReadsTheLanguagesOfTheDirectory(t *testing.T) {
+	dart := os.Getenv("RIVUS_DART")
+	if dart == "" {
+		skipOrFail(t, "RIVUS_DART")
+	}
+	ensureDartSamplePub(t, dart)
+	extractor, err := filepath.Abs("../../extractor/dart")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(binary, "sites", "-C", filepath.Join(extractor, "test", "sample"))
+	cmd.Env = append(os.Environ(), "RIVUS_DART_EXTRACTOR="+dart+" run "+filepath.Join(extractor, "bin", "rivus_dart.dart"))
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("sites: %v\n%s", err, stderr.String())
+	}
+	var r struct {
+		Sites []struct {
+			Role string `json:"role"`
+		} `json:"sites"`
+	}
+	if err := json.Unmarshal(out, &r); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Sites) == 0 {
+		t.Error("no site of the Dart directory: sites reads only Go")
+	}
+	// the language that is not read is said: a Dart directory whose extractor is not there is an error, not an empty list
+	bad := exec.Command(binary, "sites", "-C", filepath.Join(extractor, "test", "sample"), "-lang", "dart", "-dart-extractor", "rivus-dart-does-not-exist-xyz")
+	if err := bad.Run(); err == nil {
+		t.Error("sites -lang dart without the extractor did not fail")
+	}
+}

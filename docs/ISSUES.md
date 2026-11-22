@@ -53,7 +53,6 @@
 | [#124](issues/124-resolve-func-values-sites-and-external-candidates.md) | `-resolve-func-values`: 補った候補がサイトの列挙に戻らない。本体のない候補では補った注記が出ない | 道具・ベンチ(重さ: 低) | 全 | 0 | open | - |
 | [#126](issues/126-timeout-inside-large-scc.md) | `-timeout` の超過: 巨大な SCC の中で期限を見ない(並列ラウンドの中は直した) | 利用者を止める(直した) | 全 | 0 | closed | `cmd/rivus/passstats_top_test.go`(`TestTimeoutInsideALargeSCC`) |
 | [#127](issues/127-timeout-overrun-remaining.md) | `-timeout` の超過の残り: 1 つの関数の中と、extractor の段階の時間が `stats` に出ない | 利用者を止める | 全 | 0 | open | - |
-| [#128](issues/128-sites-go-only.md) | `rivus sites` が Go だけを読む: Dart と Rust のディレクトリで、エラーなしの空の結果になる | サイレントな見逃し(重さ: 高) | 全 | 0 | open | - |
 | [#131](issues/131-help-exit-codes.md) | `rivus setup rust -h`、`rivus models -h`、`rivus setup -h` の終了コードが 1(usage のエラー) | 道具(重さ: 低) | 全 | 0 | open | - |
 | [#134](issues/134-graph-doc-rules-not-recorded.md) | docs/GRAPH.md の「index に渡したフラグは、与えなければ DB に記録されたものを使う」が `-rules` に当てはまらない | 文書または道具(重さ: 中) | 全 | 0 | open | - |
 | [#135](issues/135-index-taint-default-output.md) | `rivus index -taint` が `-o` を省くと、対象のディレクトリの `.rivus/index.json` に書く | 安全・文書(重さ: 中) | 全 | 0 | open | - |
@@ -66,6 +65,7 @@
 | [#132](issues/132-setup-usage-source.md) | `rivus setup` の usage が `[-source …]` を任意に見せている(実際は必須) | 文書(重さ: 低) | Rust | 0 | closed | `cmd/rivus/setup.go`(usage) |
 | [#130](issues/130-container-leftovers.md) | `-allow-fetch-host`、`-no-fetch` の help と `lang.go` のコメントに、廃止済みのコンテナの記述が残っている | 文書(重さ: 低) | Rust | 0 | closed | `cmd/rivus/analyze.go`、`lang.go`(help とコメント) |
 | [#129](issues/129-tests-flag-help.md) | `-tests` の help が「`_test.go` を含める」だけ(Dart と Rust にも効く) | 文書(重さ: 低) | 全 | 0 | closed | `cmd/rivus/common.go`(`-tests` の help) |
+| [#128](issues/128-sites-go-only.md) | `rivus sites` が Go だけを読む: Dart と Rust のディレクトリで、エラーなしの空の結果になる | サイレントな見逃し(重さ: 高) | 全 | 0 | closed | `cmd/rivus/dart_tests_default_test.go`(`TestSitesReadsTheLanguagesOfTheDirectory`) |
 | [#82](issues/82-rust-mut-ref-writes.md) | Rust: クロージャや構造体のフィールドが持つ &mut 経由の書き込みが、元の変数に届かない(サイレントな見逃し) | サイレントな見逃し | Rust | 2 | closed | `bench/rust-curated/src/capture.rs`(`@miss` が外れた) |
 | [#88](issues/88-dart-passed-closures.md) | Dart: 渡しただけのクロージャ(Timer.run、scheduleMicrotask、Future.delayed、Button(… | サイレントな見逃し | Dart | 1 | closed | zoo `F/dart/closure-to-sdk`(`Timer.run`、`scheduleMicrotask`、`Future.microtask`、`Future.delayed`、`Button(onPressed:)`) |
 | [#89](issues/89-param-source-leaks-to-callers.md) | param の source の汚染が、呼び出し元へ書き戻り、source と関係のない関数の sink に届く(構造的な誤検出) | 過検出 | Go | 2 | closed | Go の最小の再現(`kind: param` の source) |

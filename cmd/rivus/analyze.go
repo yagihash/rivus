@@ -83,9 +83,9 @@ type analyzeOpts struct {
 	afterRead     func(l *loaded, rules *model.Rules, st *sites.Result, g *sg.Program, bodies map[string]string) error
 }
 
-func (o *analyzeOpts) register(fs *flag.FlagSet) {
-	o.common.register(fs)
-	fs.IntVar(&o.k, "k", taint.DefaultOptions().K, "maximum access path depth")
+// registerLanguages adds the flags that say which languages are read and how (the Rust extractor runs under a sandbox). The commands that
+// read the code of a directory (analyze, index, sites, ...) have them.
+func (o *analyzeOpts) registerLanguages(fs *flag.FlagSet) {
 	fs.StringVar(&o.lang, "lang", "auto", "languages to read: auto (what the directory holds: go.mod / go.work, pubspec.yaml, Cargo.toml; a Rust project is read after a question [Y/n] on the terminal, or with -yes, because reading it builds it; where there is no sandbox it is not read), or go, dart, rust, separated by commas (-lang rust asks nothing). The answer makes a different index")
 	fs.BoolVar(&o.yes, "yes", false, "-lang auto: read the Rust project of the directory without asking (what the question would say yes to; needed where there is no terminal to ask)")
 	fs.StringVar(&o.dartExtractor, "dart-extractor", "", "command of the Dart extractor (default: $RIVUS_DART_EXTRACTOR, then rivus-dart)")
@@ -97,6 +97,14 @@ func (o *analyzeOpts) register(fs *flag.FlagSet) {
 	fs.Var(&o.isolationRead, "isolation-read", "PATH: a directory or file of this machine that the build of the Rust project may read besides the project and its dependencies (repeatable; not your home directory)")
 	fs.Int64Var(&o.isolationMaxOut, "isolation-max-output", 4<<30, "the most bytes the Rust extractor may write (the stream of the IR)")
 	fs.Var(&o.allowFetchHosts, "allow-fetch-host", "HOST: let the fetch stage of the Rust project (under the sandbox, with a network) get from this host, which Cargo.lock names (git dependencies on any host, other registries; by default only crates.io is allowed). The repository can send the fetch on to other places (its submodules, redirects); that is not prevented until the network of the fetch stage is narrowed (repeatable)")
+	usual(fs, "lang", "yes", "dart-extractor", "rust-extractor", "unsafe-host-exec", "isolation-env", "isolation-read")
+	diagnostic(fs, "isolation-timeout", "no-fetch", "isolation-max-output", "allow-fetch-host")
+}
+
+func (o *analyzeOpts) register(fs *flag.FlagSet) {
+	o.common.register(fs)
+	o.registerLanguages(fs)
+	fs.IntVar(&o.k, "k", taint.DefaultOptions().K, "maximum access path depth")
 	fs.IntVar(&o.workers, "workers", 0, "functions analysed at the same time (0: one per CPU; 1: one at a time). The result does not depend on it")
 	fs.BoolVar(&o.numeric, "numeric-taint", false, "follow taint through numbers and bools (by default it stops there: they cannot carry an injection)")
 	fs.BoolVar(&o.verbose, "v", false, "print the time of each phase to stderr")
@@ -114,8 +122,8 @@ func (o *analyzeOpts) register(fs *flag.FlagSet) {
 	fs.StringVar(&o.memProf, "memprofile", "", "write a heap profile (allocations) to this file after the taint phase (development)")
 	fs.StringVar(&o.lockProf, "lockprofile", "", "write the mutex and block profiles of the taint phase to <this>.mutex and <this>.block (development)")
 	fs.StringVar(&o.cpuProf, "cpuprofile", "", "write a CPU profile of the taint phase to this file (development)")
-	usual(fs, "lang", "yes", "dart-extractor", "rust-extractor", "unsafe-host-exec", "isolation-env", "isolation-read", "workers", "numeric-taint", "v", "timeout", "resolve-func-values")
-	diagnostic(fs, "k", "isolation-timeout", "no-fetch", "isolation-max-output", "allow-fetch-host", "max-implementations", "max-passes", "func-timeout", "ir", "pass-stats", "pass-stats-top", "pass-stats-sort", "func-values", "trace-element", "memprofile", "lockprofile", "cpuprofile")
+	usual(fs, "workers", "numeric-taint", "v", "timeout", "resolve-func-values")
+	diagnostic(fs, "k", "max-implementations", "max-passes", "func-timeout", "ir", "pass-stats", "pass-stats-top", "pass-stats-sort", "func-values", "trace-element", "memprofile", "lockprofile", "cpuprofile")
 }
 
 // analyze runs the whole pipeline. extra rule sets are added to the ones
