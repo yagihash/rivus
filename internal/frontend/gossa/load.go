@@ -91,6 +91,11 @@ type Program struct {
 	// and the directories of the modules that are not in the module cache.
 	Inputs Inputs
 
+	// ModuleVersions are the versions of the modules that the program uses, by module path (from go.mod and go.sum, as `go list`
+	// says): the version the build is made with. A module that has no version is left out: the main module, a replacement by a
+	// directory, a replacement by another module.
+	ModuleVersions map[string]string
+
 	// OwnPkgs are the packages that were loaded from source, as opposed to
 	// their dependencies.
 	OwnPkgs []*ssa.Package
@@ -197,6 +202,7 @@ func Load(dir string, patterns []string, opts Options) (*Program, error) {
 		p.PkgPaths = append(p.PkgPaths, pkg.PkgPath)
 	}
 	p.Inputs = collectInputs(pkgs)
+	p.ModuleVersions = moduleVersions(pkgs)
 	if !opts.Tests {
 		p.TestFilesSkipped = countTestFiles(pkgs)
 	}
@@ -610,4 +616,27 @@ func countTestFiles(pkgs []*packages.Package) int {
 		}
 	}
 	return n
+}
+
+// moduleVersions are the versions of the modules of the packages and of what they import.
+func moduleVersions(pkgs []*packages.Package) map[string]string {
+	out := map[string]string{}
+	packages.Visit(pkgs, nil, func(pkg *packages.Package) {
+		m := pkg.Module
+		if m == nil || m.Main {
+			return
+		}
+		v := m.Version
+		if r := m.Replace; r != nil {
+			// a replacement by a module of the same path at a version says the version; a directory, or another module's code, does not
+			if r.Path != m.Path || r.Version == "" {
+				return
+			}
+			v = r.Version
+		}
+		if v != "" {
+			out[m.Path] = v
+		}
+	})
+	return out
 }

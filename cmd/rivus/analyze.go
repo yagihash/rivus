@@ -293,6 +293,9 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 		fmt.Fprintf(os.Stderr, "rivus: %d functions could not be read by the extractor and were skipped (%d of the project, %d of dependencies): summary.functions_skipped\n", fs.Functions, fs.Project, fs.Dependencies)
 	}
 	rep.Summary.BodyReplacedIgnored = o.declIgnored
+	if l.gossa != nil {
+		rep.Summary.UnverifiedVersions = rules.UnverifiedVersions(l.gossa.ModuleVersions, "go.mod")
+	}
 	if len(o.skipped) > 0 {
 		if rep.Summary.Unread == nil {
 			rep.Summary.Unread = &report.Unread{Top: []report.UnreadPackage{}}

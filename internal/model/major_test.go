@@ -156,3 +156,36 @@ propagators:
 		t.Errorf("a second call adds the rows again")
 	}
 }
+
+func TestUnverifiedVersions(t *testing.T) {
+	rs, err := Parse(strings.NewReader(`ruleset: t@1
+verified_versions:
+  - package: x.org/m/v*
+    versions: ">=93.0.0 <94.0.0"
+    checked: 2026-11-23
+  - package: x.org/exact
+    versions: "^1.2.0"
+    checked: 2026-11-23
+`), "t.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := Merge(rs)
+	got := r.UnverifiedVersions(map[string]string{
+		"x.org/m/v93":   "v93.0.1",             // in the range
+		"x.org/m/v84":   "v84.2.0",             // another major: out
+		"x.org/exact":   "v1.9.0+incompatible", // in
+		"x.org/unknown": "v0.1.0",              // no record: not listed
+		"x.org/m/vault": "v1.0.0",              // not a major: no record
+	}, "go.mod")
+	if len(got) != 1 || got[0].Package != "x.org/m/v84" || got[0].Used != "v84.2.0" || got[0].Source != "go.mod" || len(got[0].Verified) != 1 || got[0].Verified[0] != ">=93.0.0 <94.0.0" {
+		t.Errorf("unverified: %+v", got)
+	}
+	out := r.UnverifiedVersions(map[string]string{"x.org/exact": "v2.0.0", "x.org/m/v2": "v2.0.0"}, "go.mod")
+	if len(out) != 2 || out[0].Package != "x.org/exact" || out[1].Package != "x.org/m/v2" {
+		t.Errorf("sorted by package: %+v", out)
+	}
+	if (VerifiedVersion{Versions: "^1.2.0"}).Holds("garbage") {
+		t.Errorf("a text that is not a version is not in a range")
+	}
+}

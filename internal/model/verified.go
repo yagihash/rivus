@@ -200,3 +200,63 @@ func mergeVerified(sets []*RuleSet) []Verified {
 	})
 	return out
 }
+
+// Holds reports whether the version (v1.2.3, 1.2.3, with a pre-release or +incompatible suffix that is not read) is in the range
+// of the record. A text that is not a version is not in it.
+func (e VerifiedVersion) Holds(version string) bool {
+	v, ok := parseVersion(version, false)
+	if !ok {
+		return false
+	}
+	bs, err := parseRange(e.Versions)
+	if err != nil {
+		return false
+	}
+	for _, b := range bs {
+		if !b.holds(v) {
+			return false
+		}
+	}
+	return true
+}
+
+// UnverifiedVersion is a module of the program that a model has a verified_versions record for (the record names the module,
+// or names it by /v*), used at a version that no record covers: the rows were applied to a version that nobody checked them
+// against.
+type UnverifiedVersion struct {
+	// Package is the module path that the program uses (with the major that it has, when the record says /v*).
+	Package string `json:"package"`
+	// Used is the version the program is built with.
+	Used string `json:"used"`
+	// Verified are the ranges of the records of the module (all of them, sorted).
+	Verified []string `json:"verified"`
+	// Source says where Used comes from.
+	Source string `json:"source"`
+}
+
+// UnverifiedVersions lists the modules of the program (module path -> version) that have a record, and are used at a version
+// outside every range of their records. A module with no record is not listed: most built-in files have none, and a note on
+// every run for them would say nothing. Sorted by package. Nil when there is none.
+func (r *Rules) UnverifiedVersions(used map[string]string, source string) []UnverifiedVersion {
+	var out []UnverifiedVersion
+	for mod, ver := range used {
+		var ranges []string
+		covered := false
+		for _, rec := range r.Verified {
+			if !MatchMajor(rec.Package, mod) {
+				continue
+			}
+			ranges = append(ranges, rec.Versions)
+			if rec.Holds(ver) {
+				covered = true
+			}
+		}
+		if len(ranges) == 0 || covered {
+			continue
+		}
+		sort.Strings(ranges)
+		out = append(out, UnverifiedVersion{Package: mod, Used: ver, Verified: ranges, Source: source})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Package < out[j].Package })
+	return out
+}
