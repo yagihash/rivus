@@ -140,7 +140,7 @@ func (sh *shape) add(u *taint.Uncertainty) {
 	sh.known = true
 	if u.Recv != nil {
 		sh.recv = true
-		sh.recvPtr = sh.recvPtr || u.Recv.Class == "pointer"
+		sh.recvPtr = sh.recvPtr || u.Recv.Class == "pointer" || u.Recv.Class == "interface" || u.Recv.Class == "container"
 	}
 	for len(sh.args) < len(u.Operands) {
 		sh.args = append(sh.args, operandShape{})
@@ -168,7 +168,7 @@ func (sh *shape) add(u *taint.Uncertainty) {
 // arguments flow to `results`, every result (`result` is the first result only, so a function that returns
 // `(value, error)` would lose the flow into the error), and into each argument that can be written into (a pointer, a
 // slice, a map, an interface: from the type of the operand at the calls; a string or a number cannot) and into the
-// receiver when it is a pointer, so that putting every stub in loses no finding (it can add some). A
+// receiver when it is a pointer, an interface, a slice or a map, so that putting every stub in loses no finding (it can add some). A
 // `context.Context` is left out of the writes (it stays a source of the results). A row that names an argument says in a comment to delete it when the
 // function does not write there: a shared object (a mux, a client, a configuration) that is kept adds findings.
 // TestModelsCoverageStubsLoseNoFinding: the first stub left the receiver out, and then left the writes into the
@@ -219,7 +219,7 @@ func stub(symbol string, sh *shape) string {
 		}
 	}
 	if sh.recv && sh.recvPtr {
-		b.WriteString("      # writes into the receiver (a pointer): delete these lines if the function does not write into it\n")
+		b.WriteString("      # writes into the receiver (a pointer, an interface, a slice or a map: a value receiver is a copy and is not written): delete these lines if the function does not write into it\n")
 		for _, f := range srcs {
 			flow(f, "recv", "")
 		}
