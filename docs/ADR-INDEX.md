@@ -77,7 +77,7 @@
 | 060 | ポインタレシーバ越しのインターフェース呼び出し | 有効 | 090 が続き | - | - |
 | 061 | 診断出力(`-pass-stats` 等)は結果を変えない | 有効 |  | - | - |
 | 062 | ビルドが除くものは既定で読まない(3 言語) | 有効 |  | README | 読まなかった数を `tests_skipped` に出す |
-| 063 | 特定のフレームワークは `examples/rules` | 一部覆った | 2026-11-22 の追記で、線引きは固定でなくなった(組み込みに入れるかは、その都度判断。保留は決着); 覆した先・注意: 044 に逆リンク | README, examples/rules | 標準 + 代わりのないパッケージ + SQL ドライバ |
+| 063 | 特定のフレームワークは `examples/rules` | 一部覆った | 2026-11-22 の追記で、線引きは固定でなくなった(組み込みに入れるかは、その都度判断。保留は決着); 覆した先・注意: 044 に逆リンク。ADR-101 が、MODEL-QUEUE の範囲で上書き | README, examples/rules | 標準 + 代わりのないパッケージ + SQL ドライバ |
 | 064 | 信頼しない Rust の隔離抽出 | 一部覆った | 同 ADR 内の訂正で「取得の段階は安全」を撤回; 訂正・追記あり(書き方を保つ)(ユーザー発見)。**コンテナの部分は ADR-093 が覆した**(macOS のサンドボックス) | rust-isolation, DESIGN-fetch-network | Docker、2 段階、ネットワークなし抽出 |
 | 065 | sink のルールだけの関数をモデル扱いしない | 有効 |  | - | - |
 | 066 | 組み込み `pure` から入力を出力に伝える関数を外す | 有効 |  | MODELING §1 | 基準を決め、実行で確かめる |
@@ -114,6 +114,7 @@
 | 098 | 実装の多いインターフェースのメソッドを、委譲のクリーク全体をモデルにして切る基準 | 有効 | ADR-092 の条件 1 とは別の基準。`package:http` の `Client.send` | MODELING 4a、DESIGN-deps-cost 11 節、ARCHITECTURE 5.5 | 公開の対象で finding が同じ + `dependency_body_unread` |
 | 099 | source と sink は、プロジェクトの関数の中だけで探す。依存を読んだ実行では `summary.dependency_sites` が毎回言う | 有効 | 相談役の決定(2026-11-23)。ADR-096、097 の根拠の 1 つ。課題 #144 | README、AGENT-GUIDE、ARCHITECTURE 5.5、MODELING | sink のモデルは、検出のためにも必要 |
 | 100 | モデルのファイルに、パッケージ単位で「本体を読まない」宣言を書ける(解析の側) | 有効 | ADR-092、098 の続き。`body_replaced_packages`、`-body-replaced`、`-read-declared-bodies`。extractor への受け渡し、組み込みへの宣言は未 | MODELING 4a、ARCHITECTURE 5.5、AGENT-GUIDE、DESIGN-package-models | `summary.body_replaced_packages`、呼び返しの `assumed_call` |
+| 101 | `examples/rules` のフレームワークのルールは、`docs/MODEL-QUEUE.md` に入ったものから、組み込みに昇格する(ADR-063 を上書き) | 有効 | ADR-096 / 097 の範囲。個々の昇格の PR は ADR を書かない。手順書の「例からの昇格」 | MODEL-RUNBOOK、MODEL-QUEUE、examples/rules/README | 一覧にないフレームワークは、今までどおり利用者が足す |
 
 ## 訂正・追記の書き方を保つ ADR
 

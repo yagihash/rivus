@@ -1,6 +1,6 @@
 # 設計: Rust の extractor の隔離を、Docker から macOS のサンドボックス(Seatbelt)に移す
 
-> **状態: 案**(2026-11-22。実装はない。advisor のレビュー前)。ユーザーの決定(2026-11-22)の実行計画。ADR-064 を一部覆す ADR を、実装と一緒に書く。
+> **状態: 実装済み(2026-11-23 に書き直した)。** ユーザーの決定(2026-11-22)の実行計画で、ADR-093 が ADR-064 を一部覆した。済んだもの: 抽出と取得の 2 段階のサンドボックス(`internal/sandbox/`、`cmd/rivus/isolate_sandbox_darwin.go`)、既定の切り替え、Docker の経路の削除(`docker/rust-extractor/`、`-container-*` と `-rust-image`、CI の `rust-isolation`)、CI の `sandbox` ジョブ(`ci.yml`)、Homebrew での配布(ツールチェインは keg の外の `$(brew --prefix)/var/rivus/rustup`)。**まだのものは、課題で持つ**: #110〜#122(後回しのハードニング)、#146(出力に target triple)、#147(ワークスペースの中の crate)、#148(Linux での Rust の扱い。8 節)。利用者向けの説明の正本は [rust-isolation.md](rust-isolation.md)、インストールは [DESIGN-install.md](DESIGN-install.md)。この文書は、設計の記録(1 〜 7 節)と、残る論点(8 節)。
 
 ## 0. ユーザーの決定と、前提
 
@@ -8,7 +8,7 @@
 - **決めたこと**: Rust の抽出を、Docker のコンテナの代わりに、**macOS のサンドボックス(Seatbelt、`sandbox-exec`)**の下で動かす。**Docker の経路は、CI を含めて丸ごと消す**。対象の環境は macOS(Apple Silicon)。
 - **ユーザーが承知のうえで受け入れたこと**: (1) `sandbox-exec` は、Apple が非推奨にしたまま動いている仕組み。(2) Docker の `--memory` / `--cpus` / `--pids-limit` に相当する**強い**上限がない(時間の上限、プロセスグループごとの kill などで代わりにする)。
 - **上のほかに、Docker より弱くなる所が見つかったら、ユーザーに聞く**(セキュリティの制御の変更。PRINCIPLES 8 節、ADR-064)。7 節に、見つかったものを並べる。
-- Linux: サンドボックスがないので、信頼できないコードの Rust の解析は、**何も実行せずに止まる**。既知のコードは `-unsafe-host-exec`。
+- Linux: サンドボックスがないので、信頼できないコードの Rust の解析は、**何も実行せずに止まる**。既知のコードは `-unsafe-host-exec`(今もこのとおり。Linux での扱いの論点は 8 節)。
 
 ## 1. 手元で確かめたこと(2026-11-22、macOS 26.7.1、arm64。使い捨ての試行。コードは残していない)
 
@@ -60,11 +60,11 @@
 
 ### 3.1 構成(言語と OS を知らない部分と、Seatbelt に固有の部分を分ける)
 
-- `internal/sandbox/`(新しい。サンドボックス関連を 1 か所に: CI のパス絞り込みのため)
+- `internal/sandbox/`(実装済み。サンドボックス関連を 1 か所に: CI のパス絞り込みのため)
   - **言語も OS も知らない部分**: 起動(新しいプロセスグループ)、時間と出力の上限、プロセスグループごとの kill、監視(メモリ、プロセス数)、後始末(目印)、取得の前の検査(対象の cargo の設定を読ませない、`Cargo.lock` / `Cargo.toml` の取得元の検査)。今の `cmd/rivus/isolate.go` の、言語を知らない部分を移す。
   - **Seatbelt に固有の部分**: プロファイルの生成と、`sandbox-exec` での起動。
   - **取得のプロキシ**: 許可リスト、解決したアドレスの検査、検査したアドレスへの接続。
-  - Linux の実装は、**「隔離の手段がない」と表示して止まる**スタブ。あとで bubblewrap などを足せるよう、起動のインターフェースを 1 つにする。
+  - Linux の実装は、**「隔離の手段がない」と表示して止まる**スタブ(`cmd/rivus/isolate_sandbox_other.go`)。あとで bubblewrap などを足せるよう、起動のインターフェースは 1 つ(8 節)。
 - `cmd/rivus` の Rust 固有の部分(取得の段階の呼び出し、抽出の呼び出し、ツールチェインの固定)は、`internal/sandbox` を呼ぶだけにする。
 
 ### 3.2 プロファイル
@@ -81,7 +81,7 @@
 
 ### 3.4 ツールチェインと extractor の用意
 
-固定の nightly(`nightly-2026-11-15`、`rustc-dev`、`llvm-tools`、`rust-src`)と extractor のビルドは、**サンドボックスの外で、信頼できるソース(rivus 自身)から**行う。対象のコードを使わない。用意の仕方は、**明示のコマンド `rivus setup rust`** を案とする(初回の Rust の解析で、断ってから行う形にもできる。advisor と決める)。後で formula から呼べる形にする。用意の段階のダウンロード(rustup、crates.io)は、rivus のソースの `Cargo.lock` で固定したもの。置き場所は、利用者のデータのディレクトリ(`~/Library/Application Support/rivus/` など。要決定)。
+固定の nightly(`nightly-2026-11-15`、`rustc-dev`、`llvm-tools`、`rust-src`)と extractor のビルドは、**サンドボックスの外で、信頼できるソース(rivus 自身)から**行う。対象のコードを使わない。用意の仕方は、**明示のコマンド `rivus setup rust -source <extractor/rust>`**(実装済み。解析のコマンドは、断りなくネットワークに出ない)。置き場所は、利用者のデータのディレクトリ(`~/Library/Application Support/rivus/rust/`)。Homebrew では、formula がインストールの中で同じものを作る(ツールチェインは keg の外の `$(brew --prefix)/var/rivus/rustup`、`rivus-rust` は keg の `libexec`。理由と手順は DESIGN-install.md の 6 節)。用意の段階のダウンロード(rustup、crates.io)は、rivus のソースの `Cargo.lock` で固定したもの。
 
 ### 3.5 テスト(先に書く。赤を確かめる)
 
@@ -89,13 +89,13 @@
 
 - **順**: (1) サンドボックスなし(`-unsafe-host-exec` 相当)で、抜け道がそれぞれ成功することを確かめる(赤)。(2) サンドボックスの下で、すべて失敗する(緑)。
 - hostile の crate は、**サンドボックス用の目印**(たとえば、サンドボックスが作業用の一時ディレクトリに置く、決まった名前のファイルと、環境変数)がないと何もしない。ホストで誤って動かないこと(目印がホストに残らない、rivus が `.rivus-hostile` を拒否する)は、今と同じ。
-- Docker を前提にしたテスト(`Mountable`、`CargoVolume`、`NoDocker` など)は、サンドボックスで同じことを確かめるテストに置き換えるか、確かめる必要がなくなったことを ADR に書いて消す。
+- Docker を前提にしたテストは、サンドボックスで同じことを確かめるテストに置き換えた(`internal/sandbox` の `red_darwin_test.go`、`green_darwin_test.go` ほか、`cmd/rivus/isolate_sandbox_darwin_test.go`)。
 
 ### 3.6 CI と、開発のマシンでの回し方
 
-- `rust-isolation` ジョブ(Docker)は消す。macOS(Apple Silicon)の runner の、**ワークフロー(のちに `.github/workflows/ci.yml` の `sandbox` ジョブに移した。下の追記)**を足す。実行されるきっかけは、`push`(main)と `pull_request` が、隔離に関わるパスの変更のときだけ(`paths`)、`schedule` が週 1 回、`workflow_dispatch`、tag の `push`。テストは、Skip でなく必須(`RIVUS_REQUIRE_*` と同じ形)。パスの一覧は、`internal/sandbox/`、隔離を呼ぶ `cmd/rivus` のファイル、`extractor/rust/test/hostile/`、`extractor/rust/`、`extractor/rust/rust-toolchain.toml`、取得の前の検査、`go.mod` / `go.sum`、このワークフロー自身。`permissions`、`concurrency` は、今の `ci.yml` と同じ。必須のチェックにしない。パスの一覧の漏れを見つけるテストを足す。
-  - 追記(2026-11-22、PR の必須化): `isolation.yml` は消し、`ci.yml` の `sandbox` ジョブにした。`ci-ok`(必須の 1 つのチェック)の `needs` に入る(隔離を守るテストを必須の側に)。動くのは、変更されたパスが `internal/sandbox/`、`cmd/rivus/isolate*.go`、`extractor/rust/`(Markdown の一覧を除く)、`go.mod` / `go.sum`、`ci.yml` のとき(`ci.yml` の `changes` ジョブの `dorny/paths-filter`。「ここに変更が入ったら回す」の一覧は、そのジョブの中に書く)と、週 1 回(`schedule`)と、手動(`workflow_dispatch`)。tag の `push` では動かさない(同じコミットは main で動いている)。
-- 日々の確認は、開発のマシン(macOS)で回す(`docs/rust-isolation.md` に、1 行のコマンドと環境変数を書く)。
+- `rust-isolation` ジョブ(Docker)は消した。代わりに、macOS の runner のジョブを、`ci.yml` の `sandbox` ジョブとして持つ(下の追記)。設計のときの案(参考)の実行されるきっかけは、`push`(main)と `pull_request` が、隔離に関わるパスの変更のときだけ(`paths`)、`schedule` が週 1 回、`workflow_dispatch`、tag の `push`。設計のときは、テストは Skip でなく必須にする、としていた。パスの一覧は、`internal/sandbox/`、隔離を呼ぶ `cmd/rivus` のファイル、`extractor/rust/test/hostile/`、`extractor/rust/`、`extractor/rust/rust-toolchain.toml`、取得の前の検査、`go.mod` / `go.sum`、このワークフロー自身。`permissions`、`concurrency` は、今の `ci.yml` と同じ。必須のチェックにしない。パスの一覧の漏れを見つけるテストを足す。
+  - **今の CI**(2026-11-23 に確認): `isolation.yml` は消し、`ci.yml` の `sandbox` ジョブ(`macos-latest`、30 分)にした。回すのは `go test -run TestSandbox(Stops|Closes|Time|Output|Environment|Unavailable|Stderr|Program) ./internal/sandbox`(`RIVUS_SBX_RED=1`)で、ツールチェインを入れて抽出まで通す確認と、macOS の `TestDogfood` はない(#118)。`ci-ok`(必須の 1 つのチェック)の `needs` に入る(隔離を守るテストを必須の側に)。動くのは、変更されたパスが `internal/sandbox/`、`cmd/rivus/isolate*.go`、`extractor/rust/`(Markdown の一覧を除く)、`go.mod` / `go.sum`、`ci.yml` のとき(`ci.yml` の `changes` ジョブの `dorny/paths-filter`。「ここに変更が入ったら回す」の一覧は、そのジョブの中に書く)と、週 1 回(`schedule`)と、手動(`workflow_dispatch`)。tag の `push` では動かさない(同じコミットは main で動いている)。
+- 日々の確認は、開発のマシン(macOS)で回す(`docs/rust-isolation.md` に書く)。
 - 既知のコードを読むジョブ(`test`、`dart`、`rust`)は、今のまま Linux のホスト。
 
 ### 3.7 OS ごとの動き
@@ -123,7 +123,7 @@
 
 ### 3.7c SBX-7 の数字(2026-11-22)
 
-`extractor/rust/test/cfg_os`(`cfg(target_os)` で分かれる、関数 3 つの crate)を、Docker(Linux)とサンドボックス(macOS)で抽出した: **Docker は `cfg_os::everywhere` と `cfg_os::only_on_linux`、サンドボックスは `everywhere` と `only_on_macos`**。読むコードが変わる(同一性の確認が一致したのは、zoo と rust-curated が、OS で分かれるコードを持たないため)。出力に target triple を出す(実装はまだ)。**ワークスペースの中の crate**(祖先に `Cargo.toml` があり、cargo がワークスペースを探す)は、サンドボックスでは、祖先のディレクトリを読めないので、`failed searching for potential workspace` で落ちる(Docker は、対象のディレクトリの外が見えないので、同じ制限: 外の path 依存は見えない)。祖先の `Cargo.toml` を名指しで許すだけでは、足りなかった(`.cargo/config.toml` の探索などが、EPERM になるため。次に調べる)。
+`extractor/rust/test/cfg_os`(`cfg(target_os)` で分かれる、関数 3 つの crate)を、Docker(Linux)とサンドボックス(macOS)で抽出した: **Docker は `cfg_os::everywhere` と `cfg_os::only_on_linux`、サンドボックスは `everywhere` と `only_on_macos`**。読むコードが変わる(同一性の確認が一致したのは、zoo と rust-curated が、OS で分かれるコードを持たないため)。出力に target triple を出すことは、まだしていない(課題 #146)。**ワークスペースの中の crate**(祖先に `Cargo.toml` があり、cargo がワークスペースを探す)は、サンドボックスでは、祖先のディレクトリを読めないので、`failed searching for potential workspace` で落ちる(Docker は、対象のディレクトリの外が見えないので、同じ制限: 外の path 依存は見えない)。祖先の `Cargo.toml` を名指しで許すだけでは、足りなかった(`.cargo/config.toml` の探索などが、EPERM になるため)。課題 #147(関連: #120)。
 
 ### 3.8 抜け道の一覧(テストの項目。advisor のレビュー SBX-1〜8)
 
@@ -174,26 +174,31 @@
 
 赤の確認の順: 1〜5、7、8、10〜12、14、16、17 と、20、21、23 は、サンドボックスなしで、**成功する**ことを先に確かめる(この確認自体が、抜け道が実在することの証拠)。13 は、サンドボックスなしだと危険(フォーク爆弾、メモリ)なので、**赤の確認はせず**、サンドボックスの下だけで確かめる(今のテストも、コンテナの中だけ)。6、22 と 13 は赤をしない。15 と 18 は、赤のかわりに、それぞれ「今の出力に構成がない」「今のコンテナの経路は防げていない(反転前のテスト)」を、現状の記録とする。
 
-## 4. 進め方(段階。各段階の終わりで advisor のレビュー)
+## 4. 進め方(段階)と、今の状態
 
-(**Docker での結果の保存場所**: `~/rivus-docker-baseline/`(`zoo-rust.json`、`rust-curated.json`、`commit.txt`)。**比べ終わるまで、消さない**。)
+(**Docker での結果の保存場所**: `~/rivus-docker-baseline/`(`zoo-rust.json`、`rust-curated.json`、`commit.txt`)は、同一性の確認(5 節)のために取った。確認は済んだ。)
 
-1. この文書(対応表、方針、テストの一覧)→ advisor のレビュー → 7 節をユーザーに。
-2. **Docker での結果を取っておく**(`bench/zoo-rust`、`bench/rust-curated` の finding。Docker の経路を消す前。同一性の確認のため)。
-3. テストを先に書く(3.5。赤)。
-4. 抽出の段階のサンドボックス → 取得の段階とプロキシ → ツールチェインと extractor の用意。
-5. 既定を切り替え、Docker の経路(`docker/rust-extractor/`、`cmd/rivus/isolate*.go` のコンテナの部分、`-container-*` と `-rust-image`、CI の `rust-isolation`)を消す。CI に macOS のジョブ。
-6. 文書と ADR(ADR-064 を一部覆す。**ユーザーの決定であることを書く**)、ADR-INDEX、PRINCIPLES 8 節の「現状」、README、`docs/rust-isolation.md`、`docs/DESIGN-fetch-network.md`。
+| 段階 | 内容 | 状態(2026-11-23) |
+| --- | --- | --- |
+| 1 | この文書(対応表、方針、テストの一覧)のレビューと、7 節をユーザーに聞く | 済み(7 節に結果。ADR-093) |
+| 2 | Docker での結果を取っておく | 済み |
+| 3 | テストを先に書く(3.5。赤を確かめる) | 済み |
+| 4 | 抽出の段階のサンドボックス → 取得の段階 → ツールチェインと extractor の用意(`rivus setup rust`) | 済み。取得のプロキシ(宛先の許可リストと、解決したアドレスの検査)は、していない(#110) |
+| 5 | 既定を切り替え、Docker の経路を消す。CI に macOS のジョブ | 済み(`sandbox` ジョブ)。ツールチェインを入れて抽出まで通す macOS の CI と `TestDogfood` は、まだ(#118) |
+| 6 | 文書と ADR(ADR-093)、ADR-INDEX、PRINCIPLES 8 節、README、`rust-isolation.md`、`DESIGN-fetch-network.md` | 済み。ADR-093 は、ユーザーの決定であることを書いている |
+| 7 | Homebrew での配布(formula、tap) | 済み(v0.0.2 から。DESIGN-install.md) |
+
+残るもの(課題): #110(取得のプロキシ)、#111(`bsd.sb` の棚卸し)、#112(メタデータとホームの外のデータ)、#113(メモリとプロセス数の監視)、#114(残ったかもしれないプロセスの報告)、#115(プロファイルの各行のテスト)、#116(シグナル)、#117(端末)、#118(macOS の CI)、#119(`rivus setup rust` の作り込み)、#120(祖先の `.cargo/config.toml`)、#146(target triple)、#147(ワークスペースの中の crate)、#148(Linux)。
 
 ## 5. 結果の同一性
 
 隔離の方法を変えても IR は変わらないはず。`bench/zoo-rust` と `bench/rust-curated` の finding が、Docker のときと完全に同一であることを確かめる。比べる Docker の結果は、Docker の経路を消す前に取る(4 節の 2)。
 
-## 6. やらないこと
+## 6. やらないこと(この設計の範囲)
 
-Linux の隔離の新設(余地は残す)、Go と Dart の隔離(後で載せられるよう、言語を知らない部分を分ける)、tap と formula、`-unsafe-host-exec` の意味の変更。
+Linux の隔離の新設(余地は残した。論点は 8 節、課題 #148)、Go と Dart の隔離(後で載せられるよう、言語を知らない部分を分けてある。`rust-isolation.md` の「同じ作りを、ほかの言語に」)、`-unsafe-host-exec` の意味の変更。tap と formula は、この設計のあとで作業した(DESIGN-install.md)。
 
-## 7. 1 節の範囲を超えて「弱い」になる行(ユーザーに聞く案。advisor のレビューのあと)
+## 7. 1 節の範囲を超えて「弱い」になる行(ユーザーに聞いた。結果は ADR-093 の「承知している弱さ」。以下は、聞いたときの並べ方)
 
 ユーザーが受け入れた「弱い」は、強いメモリ・CPU・プロセス数の上限がないこと(と、非推奨の仕組みであること)。**次は、それ以外で、Docker より弱い所**:
 
@@ -209,3 +214,20 @@ Linux の隔離の新設(余地は残す)、Go と Dart の隔離(後で載せ�
 **advisor の意見**: 2、4、5 は受け入れ可。3 は「何が見えるか」の一覧(SBX-5 のテストで取る)を付けて聞く。1 は SBX-6 の調査のあとに聞く。**5 つ(と、6、7)とも、ユーザーに見せる**(脅威モデルを決めるのはユーザー)。
 
 聞くときに並べるもの: 弱い所、代わりの対策、残る危険(上のとおり)。
+
+## 8. Linux での Rust の extractor の扱い(論点。課題 #148)
+
+rivus の Rust の extractor は、対象を `cargo check` でビルドするので、対象と依存の `build.rs` と proc macro を実行する。Linux には、隔離の手段がない。
+
+**線(決定。MODEL-RUNBOOK.md の 0 節、MODEL-QUEUE.md): 隔離なしでは、取得したクレートのビルドスクリプトとマクロを実行しない。** 今の動作:
+- `-lang rust` は、サンドボックスがないと何も実行せずに止まる。`-unsafe-host-exec` だけが通る(ADR-093、rust-isolation.md)。auto では読まない(`no-sandbox`)。
+- CI の `rust` ジョブは、このリポジトリのコード(ベンチ、zoo、`extractor/rust/test`)だけを、`-unsafe-host-exec` で読む。取得した第三者のクレートは読まない。
+- クラウドの定期実行のモデル作成(`rivus-model-author`)は、Rust のモデルについて、**モデルは書き、extractor を使う確認は CI に任せる**。取得したクレートを読む差分テストの Rust 版は、隔離のあるジョブに限る。
+
+**Linux の隔離の調査**(DESIGN-package-models.md の 6.5 節。実測はしていない):
+- bubblewrap(`bwrap`)が最有力。名前空間でファイルとネットワークを絞れ、取得はネットワークあり、抽出は `--unshare-net` の 2 段階にできる(macOS のプロファイルと同じ形)。
+- `unshare` は、同じ名前空間でファイルの絞り込みを自分で組む必要がある。gVisor は、コンテナの外から使うもので、クラウドのセッションの中では使えない。
+- **クラウドのコンテナの中では、非特権のユーザー名前空間が使えないことが多く、`bwrap` が動くかは、環境で確かめるまで分からない(未確認)。** 動かないなら、特権のあるホスト(VM)が要る。コンテナそのものを隔離として使うのは、セッションの資格情報が同じコンテナにあるので、勧めない。
+- 足すなら、`internal/sandbox` に Linux の実装を足す(起動のインターフェースは 1 つ。3.1)。macOS の 2 節の対応表と同じ形で、弱くなる所を並べ直して、ユーザーに聞く(ユーザー境界、カーネルの攻撃面など)。
+
+**Go と Dart の extractor** は、既知の隔離の外にある(`go list` の cgo、`dart pub get` と `build_runner`)。ここでの線は Rust だけを扱う。

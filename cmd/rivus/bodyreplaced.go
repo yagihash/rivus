@@ -61,6 +61,12 @@ func dropReplacedBodies(prog *ir.Program, rules *model.Rules, warn io.Writer) []
 		cache[unit] = idx
 		return idx
 	}
+	// the units that the extractor was told not to read: nothing of them is in the program to be left out here
+	for _, n := range prog.BodiesNotRead {
+		for _, i := range covering(n.Unit) {
+			count[i] += n.Functions
+		}
+	}
 	out := prog.Funcs[:0]
 	for _, f := range prog.Funcs {
 		if f != nil && f.Dep {

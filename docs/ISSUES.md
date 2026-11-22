@@ -62,6 +62,9 @@
 | [#140](issues/140-one-category-per-symbol.md) | モデル: 1 つのシンボルに複数のカテゴリの行を持てない(同じシンボルの行は足し合わされ、先頭のカテゴリになる) | 道具(重さ: 低) | 全 | 0 | open | zoo `F/dart/googleapis-pubsub-subscription-name` |
 | [#141](issues/141-gql-named-bindings-fp.md) | Dart: 定数の GQL の `namedBindings` に入力を入れる形が、`gqlQuery.queryString` の sink で報告される(`field_imprecision`) | 精度(誤検出。重さ: 低) | Dart | 0 | open | zoo `F/dart/googleapis-datastore-run-query` |
 | [#142](issues/142-go-gcp-resource-name.md) | Go の Google Cloud のモデルに、名前の sink(`resource_name`)を足す(Storage のバケットとオブジェクト、Pub/Sub のトピックと購読) | モデル(重さ: 中) | Go | 1 | open | - |
+| [#146](issues/146-sandbox-target-triple.md) | Rust の出力に、読んだ構成(target triple)が出ない(macOS のサンドボックスは macOS 向けの分岐を読む) | 注記つきの限界 | Rust | 0 | open | - |
+| [#147](issues/147-sandbox-workspace-crate.md) | ワークスペースの中の crate が、サンドボックスの下で抽出できない | 利用者を止める(閉じる向き) | Rust | 0 | open | - |
+| [#148](issues/148-linux-rust-extractor-without-isolation.md) | Linux(CI、クラウドのモデル作成)での Rust の extractor の扱い(隔離なしでは、取得したクレートを実行しない) | 道具(重さ: 中) | Rust | 0 / 3 | open | - |
 
 ## 閉じたもの
 
@@ -90,3 +93,4 @@
 | [#134](issues/134-graph-doc-rules-not-recorded.md) | docs/GRAPH.md の「index に渡したフラグは、与えなければ DB に記録されたものを使う」が `-rules` に当てはまらない | 文書または道具(重さ: 中) | 全 | 0 | closed | `TestGraphUsesTheRecordedRulesFile` |
 | [#143](issues/143-model-template-result-first-only.md) | モデルの `to: result` は最初の戻り値だけ。テンプレートと組み込みの行が、error への流れを落とす | サイレントな見逃し(直した) | Go | 1 | closed | `TestGoRowsThatSayResultAreForOneResult`、`TestModelsCoverageStubsLoseNoFinding` |
 | [#145](issues/145-named-in-flows-and-sources.md) | モデルの `flows` と `sources` に、名前つき引数を指す書式がない(`named:` は sink だけ) | 道具(重さ: 低) | Dart | 後回し | open | - |
+| [#149](issues/149-callback-params-source.md) | ハンドラの引数が source になる書式がない(callback params): shelf_router の `router.get('/item/<id>', (Request r, String id) => ...)` の `id` | サイレントな見逃し(書式の不足) | Dart / Go / Rust | 2 / 3 | open | - |

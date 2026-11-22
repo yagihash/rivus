@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -245,7 +246,15 @@ func TestBuiltinRowsAreHitByTheZoo(t *testing.T) {
 				}
 				switch {
 				case hit && allowed:
-					t.Errorf("%s is hit by the zoo now: take it out of internal/model/builtin/%s", key, strings.TrimSuffix(r.file, ".yaml")+".dead-allow")
+					// A row that the zoo hits now and that is still allowed is not a failure of a model PR: what hits it can be the code of a
+					// dependency of a cell (a package of pub that a cell uses), and a PR that adds a package must not have to edit the
+					// .dead-allow of five models. The clean-up is a run of its own: RIVUS_DEAD_ALLOW_STRICT=1 fails on it.
+					msg := fmt.Sprintf("%s is hit by the zoo now: take it out of internal/model/builtin/%s", key, strings.TrimSuffix(r.file, ".yaml")+".dead-allow")
+					if os.Getenv("RIVUS_DEAD_ALLOW_STRICT") == "1" {
+						t.Error(msg)
+					} else {
+						t.Log(msg)
+					}
 				case !hit && !allowed:
 					t.Errorf("%s (%s): no call in the zoo or the curated targets hits this row. Either the key is not the name the extractor writes "+
 						"(read the IR: `rivus debug extract` / the extractor of the language), or a cell of bench/zoo-%s has to call it. "+

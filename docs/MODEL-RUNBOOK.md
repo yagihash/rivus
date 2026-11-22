@@ -45,8 +45,8 @@
 `examples/rules/*.yaml` と `bench/*/rules.yaml` の例を、組み込みに昇格する作業(一覧の「例から昇格」の行)。
 
 - 例のまま移さない。ほかのモデルと同じ確認を通す: 差分テスト(入っていれば)、`result` / `results` の点検、zoo のセル、すでに組み込みにある行との重複の確認。
-- 昇格したら、例のファイルは消すか、「組み込みになった」と書いて短くする。`examples/rules/README.md` の説明も合わせる。
-- 例の位置づけ(ADR-063)を、**新しい ADR で上書きする**。既存の ADR の本文は書き換えない。ADR の番号は、`git fetch` して `origin/*` の `docs/DECISIONS.md` の最後の番号を確認し、重ならない番号を使う。最初の昇格の PR で足し、2 回目からは、その ADR を参照するだけにする。
+- 昇格したら、**例のファイルは消す**。`examples/rules/README.md` の、そのファイルの行は、「組み込みになった(`internal/model/builtin/<ファイル>`)」の 1 行にする(ファイル名で探す利用者のため)。`bench/*/rules.yaml` の例も同じ。リポジトリの直下の README は、昇格の PR ではさわらない(例の一覧は `examples/rules/README.md` を見る、という形にしてある。README に、昇格するファイルを名指しした記述が残っていたら、書き直さず、PR の本文の「手順のとおりにできなかった所」に書く)。
+- 例の位置づけ(ADR-063)の上書きは、**[ADR-101](DECISIONS.md) で済んでいる**。昇格の PR は ADR を書かない(ADR-101 を参照するだけ)。
 - PR の題は `feat(model): <言語> <パッケージ> の組み込みモデル(例から昇格)`。判定は、この題の形で行う(1 節)。昇格のあと、例のファイルは無いか短くなるので、`ls internal/model/builtin/` の判定は、`<言語>-<パッケージ>*.yaml` で使える。
 
 ## 2. 作る(標準の 4 段)
@@ -56,6 +56,10 @@
 3. **確認したバージョンを書く**: モデルのファイルの冒頭に `verified_versions`(形式と検証: [DESIGN-package-models.md](DESIGN-package-models.md) 6.7)。パッケージ(Go: モジュールのパス、Dart: パッケージ名、Rust: クレート名)、確認したバージョンの範囲、実際に確認したバージョン(`checked_with`)、日付(`checked`)。手で書いた行だけのファイルにも書く。生成物があれば、先頭の入力のバージョンと同じにする。検証が入る前も、書く。
 4. **追加**: `<lang>-<package>.yaml`(手の部分)に、sink、source、sanitizer、`calls:`(利用者のコードを呼び返す API: コールバック、利用者が実装するインターフェース)を足す。`origin: human` か `llm`。zoo に、肯定と否定のセルを足す。`rivus models coverage` で、未モデルの呼び出しを確認する。
 5. **宣言(未実装)**: [DESIGN-package-models.md](DESIGN-package-models.md) 2 節 5 の条件(差分テストで照合済み、`calls:` が書いてある、ほかのパッケージから呼ばれる扱いが決まっている)を満たしたときだけ。満たさなければ、宣言なしで PR を出す。
+
+**開発用の依存とぶつかるパッケージの骨組み(Dart)**: `bench/zoo-dart/exec` の `test` が持ってくる本物のパッケージ(`shelf`、`shelf_static`、`shelf_web_socket`、`web_socket_channel`、`async`、`collection`、`http_parser`、`stream_channel`、`path` など)と同じ名前の骨組みは、`bench/zoo-dart/cells/packages/<名前>`(path の依存。本物の依存は書かない)に置き、`exec/pubspec.yaml` の `dependency_overrides` に `<名前>: <本物の範囲>`(hosted)を 1 行足す。解析(cells)は骨組みを読み、実行(exec)は、`test` がすでに動かしている本物で動く。cells の `pubspec.yaml` の依存に本物の名前を hosted で書かない(zoo のプログラムに本物の依存が入り、依存の関数を検査するテストが失敗する)。骨組みは、本物の公開のシグネチャに合わせる(セルのコードが、両方で型が合うこと)。
+
+**骨組みの置き場(Go と Rust。事実。[DESIGN-package-models.md](DESIGN-package-models.md) 6.8 の表)**: 外部のパッケージを使うセルは、パッケージごとに独立したモジュールに置く案(Go: `bench/zoo-go-pkg/<パッケージ>/`、Rust: `bench/zoo-rust-pkg/<パッケージ>/`)で、一時の場所で動くことを確かめた。**ただし、zoo のテストが、そのディレクトリを数える処理は、まだない**(固定のディレクトリを数えている)。その処理が入るまでは、Go と Rust の外部のパッケージのセルは、置かない(着手せず、次に進む)。Rust は、サンドボックスが対象の外の path の依存を読めないので、`zoo-mark` を対象に写して読む。
 
 テスト: `go test ./internal/model/... ./cmd/rivus/ -run 'Builtin|Zoo'`、`regomark check --no-judge`(0)。Dart のセルは、Dart のテスト(`dart analyze` を含む)も通す。
 
@@ -73,8 +77,14 @@ zoo のゲート(`scripts/zoo-loosened-check.sh`、#167): 新しいセル(`bench
 
 ## 4. conflict を避ける置き方
 
-- **いまの形**(共有のファイルの分割が入る前): 共有のファイルは、`bench/zoo/marks.lock`、`bench/parity/dead-allow.txt`、`bench/zoo-dart/cells/pubspec.yaml` と各 `pubspec.lock`、`bench/zoo-dart/exec/lib/cases.dart`、`docs/ISSUES.md`、`docs/DECISIONS.md`、`docs/DESIGN-deps-cost.md`。ISSUES、DECISIONS、DESIGN-deps-cost は、モデルの PR で触らない(測定は、PR の本文とモデルのファイルの冒頭のコメントに書く)。zoo の共有のファイルは、セルを足すので触る。conflict が出たら、main 側の行を残して、自分の行を足し直す(行は並べ替えて、重複を消す)。`pubspec.lock` は、`dart pub get --offline` で作り直す。
-- **段階 0 が入ったあとの形**: 1 パッケージ = 1 つのモデルのファイル + 専用の zoo のセルのディレクトリ + 専用のマークのファイル(`bench/zoo/marks.d/`)。`cases.dart` は生成、zoo-dart の `pubspec.lock` はコミットしない。共有のファイルを触らない。変更は、`internal/model/builtin/<lang>-<package>*.yaml`、`bench/zoo-<lang>/` の自分のディレクトリ、`bench/zoo/marks.d/<lang>/` の自分のファイル、`docs/issues/model-<パッケージ>-*.md` だけ。
+1 パッケージ = 1 つのモデルのファイル + 専用の zoo のセルのディレクトリ + 専用のマークのファイル(`bench/zoo/marks.d/`)。`cases.dart` は生成、zoo-dart の `pubspec.lock` はコミットしない。共有のファイルをさわらない。**さわってよいファイルは、次のものだけ**:
+- `internal/model/builtin/<lang>-<package>*.yaml`(`verified_versions` も、このファイルに書く)と、そのモデルの `.dead-allow`(`internal/model/builtin/<lang>-<package>*.dead-allow`。**さわるのは、「新しい行がどこにも一致しない」という失敗が出たとき(その行を、理由つきで足す)だけ。「zoo から一致するようになったので外せ」の指摘は、無視する**(#187 のあと、通常は記録だけになる。掃除は定期の別の作業で、モデルの PR は、ほかのモデルの `.dead-allow` をさわらない))。
+- `bench/zoo-<lang>/` の自分のディレクトリ(セル、骨組み)、`bench/zoo/marks.d/<lang>/` の自分のファイル、`docs/issues/model-<パッケージ>-*.md`。
+- **広げる PR**(1 節): もともと main にある、そのパッケージのモデルのファイル(と、その `.dead-allow`)。
+- **例からの昇格の PR**(1 節): 昇格する `examples/rules/<その 1 つ>`(消す)と、`examples/rules/README.md` のその行(「組み込みになった」の 1 行に)、`bench/*/rules.yaml` の例(あれば)。
+- **例からの昇格の、さわってよい範囲の事実(洗い出し)**: 例のファイルを使っているのは、`bench/compare.sh`(gin: 145、147 行。`gin-vue-admin` と `go-test-bench` のルール)、`bench/parity/collect.sh`(103 行。gin)、`bench/README.md`(gin: 8、158〜160、258 行)、`cmd/rivus/notbuiltin.go` と `notbuiltin_test.go`(actix-web のファイルを名指し。テストが読む)、`bench/parseable/rules.yaml` と `bench/parseable/README.md`(actix-web の写し)、`internal/model/builtin/rust-web.yaml` の 3 行目のコメント、`extractor/rust/README.md` の 108 行。ファイルを消すと、`compare.sh` の gin の 2 つのベンチは、ルールのファイルがなく飛ばされる。**gin は、例のファイルを消さず、中身を空のルール(「組み込みになった」のコメントつき)にして残す案が、使っている所を壊さない**(`compare.sh` は、比べる 2 つのバージョンが、それぞれの木のファイルを読むので、古いバージョンは昔の gin のルール、新しいバージョンは組み込み、になり、昇格の前後の比較の意味が保たれる)。**actix-web は、`notbuiltin.go` の表の行と、そのテストを直す必要がある**(昇格すると、`actix_web::` が組み込みのルールにあるので、知らせは出ない)。この 2 ファイルは、actix-web の昇格の PR で、さわってよい。決める(相談役。ADR-101 の「消す」との関係)まで、gin は、消さずに残す。
+
+- ほかのファイル(`docs/DECISIONS.md`、`docs/ISSUES.md`、直下の README、コード、ゲート、ワークフロー)は、さわらない。conflict が出たら、main 側の行を残して、自分の行を足し直す。
 
 ## 5. PR(完成)
 
@@ -88,7 +98,7 @@ zoo のゲート(`scripts/zoo-loosened-check.sh`、#167): 新しいセル(`bench
   6. **確認したバージョン**: `verified_versions` に書いた、パッケージ、範囲、確認したバージョン。
   7. **手順のとおりにできなかった所**: 手順書が曖昧だった所、道具がなかった所、自分で判断した所。なければ「なし」。手順書の改善の入力になる。
 - **最初の 3 本(言語ごとに 1 本)は、相談役が、中身を確認する。** そのために、上の 7 に加えて、**手順の改善案**(次のセッションの手順書に足したいこと)を、本文の最後に書く。
-- 触るファイルは 4 節のとおり。それ以外(コード、ゲート、ワークフロー、共有の文書)は触らない。触る必要が出たら、完成にせず、ドラフトのまま、理由を本文に書いて終わる。
+- 触るファイルは 4 節のとおり(広げる PR と、例からの昇格の PR の分も、4 節に書いてある)。それ以外(コード、ゲート、ワークフロー、共有の文書)は触らない。触る必要が出たら、完成にせず、ドラフトのまま、理由を本文に書いて終わる。
 - push のあと、コミットの署名(0 節)と、CI の結果を確認する。CI が失敗したら、直して push し直す(自分で `gh pr merge` はしない)。
 
 ## 6. 守ること
@@ -98,7 +108,7 @@ zoo のゲート(`scripts/zoo-loosened-check.sh`、#167): 新しいセル(`bench
 - 自分でマージしない(CI が通れば自動で入る)。履歴は書き換えない。
 - 既存のセルのマークを緩めない(既存の行の変更・削除は、ユーザーの承認が要るので、しない)。
 - 言い回しは `.regomark/policy/wording.rego` に従う(`regomark check --no-judge` が 0)。
-- ADR を書かない。方針の変更が要ると思ったら、PR の本文に書く。
+- ADR を書かない(昇格は、[ADR-101](DECISIONS.md) で済んでいる)。方針の変更が要ると思ったら、PR の本文に書く。
 - 1 つの PR で、1 パッケージだけ。終わったら、次のパッケージには進まず、終わる。
 
 ## 7. 更新の PR(案。定期の照合が入ってから)
@@ -146,3 +156,7 @@ go run ./bench/model-diff -pkg google.golang.org/grpc -model mine.yaml -version 
 - **バージョン**: `-version` がなければ、Go は、このリポジトリの `go.mod` にあるバージョン(なければ最新)、Dart は、`bench/` などの `pubspec.lock` にあるバージョン(なければ `any`)。標準ライブラリは、いまの Go のバージョン。`verified_versions` への記録は、別の作業。
 - **取得と実行**: 依存の取得(`go get`、`dart pub get`)だけで、取得したコードは実行しない(Go は型検査と解析まで、Dart は analyzer まで)。ライブラリごとに分けるので、1 回は数秒〜十数秒、依存込みで 1 GB 前後。
 - **PR で動かす対象の求め方**: `go run ./bench/model-diff -changed origin/main` が、`internal/model/builtin/` の行(flows と sinks)が変わったパッケージだけを、`go <pkg>` / `dart <pkg>` の形で出す。CI の定期と手動の層に、`model-diff` のジョブがある(PR には入れていない。設計 6.3)。
+
+## 10. この手順書を「使える」と言う条件
+
+手順書の種類(1 節の「新規」「広げる」「例からの昇格」)ごとに、**ローカルのサブエージェントが、この手順書だけを見て、1 回通す(着手の判定から、PR の本文まで。push はしない)**。通せたら、その種類は「使える」。通せなかった所(読み違えた所、さわってはいけないファイルをさわった所、書いていなくて聞いた所)は、手順書に書き足してから、もう 1 回通す。3 種類とも、1 回ずつ通るまで、クラウドの定期の実行(`rivus-model-author`)は有効にしない。

@@ -148,6 +148,11 @@ class StreamOut {
           if (skippedDirNames.isNotEmpty) 'skipped_dir_names': skippedDirNames
         }
       });
+  /// The functions of a package that were left without a body because the models stand for it (--body-replaced).
+  void bodyNotRead(String unit, int functions) => _line({
+        'kind': 'body_not_read',
+        'body_not_read': {'unit': unit, 'functions': functions}
+      });
   /// [unread]: the file is in the result on a tree that is not what its text says (the core lists it in summary.unread).
   /// [func]: the function that holds what the message says (the findings that go through it carry the message).
   void loadError(String package, String message, {bool unread = false, String? func}) => _line(
