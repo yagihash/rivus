@@ -348,12 +348,14 @@ fn cli() -> ExitCode {
     if include_tests {
         check.push("--all-targets");
     }
+    let extra_flags: Vec<String> = cargo_flags.iter().map(|f| f.to_string()).collect();
     check.extend(cargo_flags);
     // With the dependencies, the driver stands in for rustc for every crate (cargo
     // tells the members of the workspace apart); without, for the members only.
     let wrapper = if deps { "RUSTC_WRAPPER" } else { "RUSTC_WORKSPACE_WRAPPER" };
-    let status = Command::new("cargo")
-        .args(plus())
+    // cargo's own messages go to the standard error as they are; they are also kept, to name the crate that did not compile
+    let mut cmd = Command::new("cargo");
+    cmd.args(plus())
         .args(&check)
         .current_dir(&root)
         .env("CARGO_TARGET_DIR", tmp.join("target"))
@@ -363,11 +365,19 @@ fn cli() -> ExitCode {
         .env("RIVUS_ROOT", &root)
         .env("DYLD_FALLBACK_LIBRARY_PATH", with_lib("DYLD_FALLBACK_LIBRARY_PATH"))
         .env("LD_LIBRARY_PATH", with_lib("LD_LIBRARY_PATH"))
-        .status();
+        .stderr(std::process::Stdio::piped());
+    let status = run_tee_stderr(&mut cmd);
     match status {
-        Ok(s) if s.success() => {}
-        Ok(s) => {
-            eprintln!("rivus-rust: cargo check failed ({}): the code has to compile", s);
+        Ok((s, _)) if s.success() => {}
+        Ok((s, errs)) => {
+            let msg = match failed_crate(&errs) {
+                Some(name) => {
+                    let known = crate_versions(&root, &tmp, &name, &extra_flags);
+                    compile_failure_message(&s.to_string(), &name, &known, deps)
+                }
+                None => format!("rivus-rust: cargo check failed ({}): the code has to compile", s),
+            };
+            eprintln!("{}", msg);
             return ExitCode::from(1);
         }
         Err(e) => {
@@ -395,6 +405,82 @@ fn cli() -> ExitCode {
         }
     }
     ExitCode::SUCCESS
+}
+
+/// Runs the command (its standard error piped) and passes its standard error on to ours line by line; returns the status and
+/// the text of the standard error.
+fn run_tee_stderr(cmd: &mut Command) -> std::io::Result<(std::process::ExitStatus, String)> {
+    use std::io::{BufRead, Write};
+    let mut child = cmd.spawn()?;
+    let mut all = String::new();
+    if let Some(e) = child.stderr.take() {
+        let mut r = std::io::BufReader::new(e);
+        let mut line = Vec::new();
+        loop {
+            line.clear();
+            match r.read_until(b'\n', &mut line) {
+                Ok(0) | Err(_) => break,
+                Ok(_) => {
+                    let _ = std::io::stderr().write_all(&line);
+                    all.push_str(&String::from_utf8_lossy(&line));
+                }
+            }
+        }
+    }
+    Ok((child.wait()?, all))
+}
+
+/// The name of the crate that cargo says it could not compile: "error: could not compile `NAME` (lib)" (the first one).
+fn failed_crate(stderr: &str) -> Option<String> {
+    for l in stderr.lines() {
+        if let Some(rest) = l.trim_start().strip_prefix("error: could not compile `") {
+            if let Some(end) = rest.find('`') {
+                return Some(rest[..end].to_string());
+            }
+        }
+    }
+    None
+}
+
+/// What `cargo metadata` knows of the packages with this name: (version, is a member of the workspace).
+fn crate_versions(root: &Path, tmp: &Path, name: &str, flags: &[String]) -> Vec<(String, bool)> {
+    let out = Command::new("cargo")
+        .args(plus())
+        .args(["metadata", "--format-version", "1"])
+        .args(flags)
+        .current_dir(root)
+        .env("CARGO_TARGET_DIR", tmp.join("target"))
+        .output();
+    let Ok(out) = out else { return Vec::new() };
+    if !out.status.success() {
+        return Vec::new();
+    }
+    let Ok(meta) = serde_json::from_slice::<Value>(&out.stdout) else { return Vec::new() };
+    let members: HashSet<&str> = meta["workspace_members"].as_array().into_iter().flatten().filter_map(|m| m.as_str()).collect();
+    let mut found = Vec::new();
+    for p in meta["packages"].as_array().into_iter().flatten() {
+        if p["name"].as_str() == Some(name) {
+            let version = p["version"].as_str().unwrap_or("").to_string();
+            let member = p["id"].as_str().map_or(false, |id| members.contains(id));
+            found.push((version, member));
+        }
+    }
+    found
+}
+
+/// The last message when cargo check fails and the crate that did not compile is known: a crate of the workspace is the
+/// code of the user; a dependency is not (it is the extractor, or the compiler under it, that stopped on it).
+fn compile_failure_message(status: &str, name: &str, known: &[(String, bool)], deps: bool) -> String {
+    if known.iter().any(|(_, member)| *member) {
+        return format!("rivus-rust: cargo check failed ({}): the crate {} of the project does not compile; the code has to compile", status, name);
+    }
+    let versions: Vec<&str> = known.iter().map(|(v, _)| v.as_str()).collect();
+    let what = if versions.is_empty() { name.to_string() } else { format!("{} {}", name, versions.join(", ")) };
+    let hint = if deps { " The project can be read without its dependencies: -no-deps." } else { "" };
+    format!(
+        "rivus-rust: cargo check failed ({}): the dependency {} did not compile under the extractor. This is not a fault of the code of the project: the extractor (or the compiler it uses, {}) stops on that crate; the lines above say how.{}",
+        status, what, TOOLCHAIN, hint
+    )
 }
 
 /// The targets that `cargo check` leaves out without `--include-tests` (kind test, example, bench), and the
@@ -681,5 +767,32 @@ mod tests {
         assert!(is_build_script(&args(&["rustc", "--crate-name", "build_script_build", "build.rs"])));
         assert!(is_build_script(&args(&["rustc", "--crate-name", "build_script_codegen", "codegen.rs"])));
         assert!(!is_build_script(&args(&["rustc", "--crate-name", "mylib", "src/lib.rs"])));
+    }
+
+    const GOOGLE_AUTH: &str = "thread 'rustc' panicked at /rustc-dev/x/ty.rs:484:17:\nnot implemented: FIXME(async_closures): Lower these to SMIR\nerror: could not compile `google-cloud-auth` (lib)\n\nCaused by:\n  process didn't exit successfully: `rivus-rust rustc --crate-name google_cloud_auth` (exit status: 101)\n";
+
+    #[test]
+    fn the_failed_crate_is_the_one_cargo_names() {
+        assert_eq!(failed_crate(GOOGLE_AUTH).as_deref(), Some("google-cloud-auth"));
+        assert_eq!(failed_crate("error[E0433]: cannot find x\nerror: could not compile `f` (lib) due to 1 previous error\n").as_deref(), Some("f"));
+        assert_eq!(failed_crate("warning: unused\n"), None);
+    }
+
+    #[test]
+    fn a_dependency_that_does_not_compile_is_said_as_not_the_code_of_the_project() {
+        let m = compile_failure_message("exit status: 101", "google-cloud-auth", &[("1.19.0".into(), false)], true);
+        assert!(m.contains("the dependency google-cloud-auth 1.19.0"), "{m}");
+        assert!(m.contains("not a fault of the code of the project"), "{m}");
+        assert!(m.contains("-no-deps"), "{m}");
+        assert!(!m.contains("the code has to compile"), "{m}");
+        // already without the dependencies: no advice to leave them out
+        assert!(!compile_failure_message("exit status: 101", "x", &[("1.0.0".into(), false)], false).contains("-no-deps"));
+    }
+
+    #[test]
+    fn a_crate_of_the_project_is_still_the_code_that_has_to_compile() {
+        let m = compile_failure_message("exit status: 101", "mine", &[("0.1.0".into(), true)], true);
+        assert!(m.contains("the code has to compile"), "{m}");
+        assert!(!m.contains("-no-deps"), "{m}");
     }
 }
