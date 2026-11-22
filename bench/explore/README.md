@@ -5,6 +5,10 @@ codebase is a step of a change, and none is a fixed target: what the big ones gi
 **outside the gate, now and then, on targets that change** (a target that is always the same finds nothing new after the first time). Nothing here is a gate; a run that goes wrong is a measurement,
 not a failure.
 
+**The rule of the user (2026-11-22): ask first.** A run on a real external project takes long and slows the development, so before each such need,
+ask the user (through the advisor): what it is for, which target, the time limit. Nothing is run on a target of `pool.yaml`, or on a new one, without it;
+only what the user has allowed is added to the list. Fetching and reading a target is fine; the run is what needs the answer.
+
 ## One run
 
 A run has **two targets: one new, one from the last run** (the second says whether a number moved by the engine or by the target).
@@ -16,6 +20,11 @@ A run has **two targets: one new, one from the last run** (the second says wheth
    else heavy running. A run on a loaded machine is not a measurement (`LOG.md`, Anomaly 1: 865 s against 198 s).
 3. **Copy.** `git clone`, `git checkout <commit>`, `go list ./...` (the module must load). The copy lives in the work directory of
    `compare.sh`, never in this repository (`bench/wild/README.md`: the code of a target is not copied here).
+   **A Dart target** (`lang: dart`): `git clone`, `git checkout <commit>`, and `dart pub get` in the package, and nothing else of the target: never
+   `dart run`, `dart test`, `dart build` or `build_runner` (the code of the target is not run; a hook such as `hook/build.dart` runs only at a build).
+   A workspace that has a Flutter package cannot be resolved without the Flutter SDK: take that member out of the `workspace:` list of the root
+   `pubspec.yaml` of the copy (a change of the copy, never committed). Run it with `RIVUS_DART_EXTRACTOR="dart run <rivus>/extractor/dart/bin/rivus_dart.dart"`
+   and `rivus analyze -lang dart -C <package> -timeout <limit>`; a part that cannot be read for the code that is not generated is said in the section.
 4. **Run** the head build, `-timeout 5400s`, `GOMEMLIMIT` at 70 % of the free memory, `-pass-stats` when the build has it, rules: the built-in ones
    (a framework rule file only when the target uses it, named in the section):
    `rivus analyze -timeout 5400s -pass-stats ./... > out.json` and `/usr/bin/time -l` for the peak memory.
