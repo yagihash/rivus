@@ -371,20 +371,21 @@ verified_versions:
 
 | | Go | Rust | Dart |
 | --- | --- | --- | --- |
-| 置き場所 | `bench/zoo-go-pkg/<パッケージ>/`。自分の `go.mod`(`module zoopkg/<パッケージ>`、`replace zoo => ../../zoo-go`(`zoo/mark` を使う)、`replace <本物のモジュールのパス> => ./skel`)、`skel/`(骨組み。自分の `go.mod` の名前は本物のモジュールのパス)、`cells/`、`rules.yaml` | `bench/zoo-rust-pkg/<パッケージ>/`。自分の `Cargo.toml`(空の `[workspace]` で、zoo の workspace に入れない)、`skel/`(骨組みのクレート。名前は本物)、`zoo-mark`、`src/`(セル)、コミットした `Cargo.lock`、`rules.yaml` | 今は `bench/zoo-dart/cells/packages/<パッケージ>`(path の依存。`cells/pubspec.yaml` は、そのディレクトリから生成される)。同じ形で、パッケージごとのディレクトリ(`bench/zoo-dart-pkg/<パッケージ>/`)にもできるが、exec の `dependency_overrides` も、パッケージごとの exec になる |
+| 置き場所 | `bench/zoo-go-pkg/<パッケージ>/`。自分の `go.mod`(`module zoopkg/<パッケージ>`、`replace zoo => ../../zoo-go`(`zoo/mark` を使う)、`replace <本物のモジュールのパス> => ./skel`)、`skel/`(骨組み。自分の `go.mod` の名前は本物のモジュールのパス)、`cells/`、`rules.yaml` | `bench/zoo-rust-pkg/<パッケージ>/`。自分の `Cargo.toml`(空の `[workspace]` で、zoo の workspace に入れない)、`skel/`(骨組みのクレート。名前は本物)、`zoo-mark`、`src/`(セル)、コミットした `Cargo.lock`、`rules.yaml` | `bench/zoo-dart/cells/packages/<パッケージ>`(path の依存)。`cells/pubspec.yaml` と `exec/pubspec.yaml` は、そのディレクトリから生成する(コミットしない)。`test` の依存と名前がぶつかる骨組みは、自分の `pubspec.yaml` に `zoo_exec_override: <範囲>` を書く(exec の `dependency_overrides` に出る) |
 | 解析で何を読むか | 骨組み(`replace` で `./skel`)。別のモジュールなので、`Func.Dep` になる(試した: finding は 1 件で、`dependency_functions` は 6) | 骨組みのクレート(path の依存)。`cargo check` は、自前のコードだけ(`build.rs`、proc macro なし)。サンドボックスの下で読めた(finding 1 件) | 骨組み(cells の path の依存)。本物の依存は、cells に入らない |
 | 実行(exec) | パッケージごとの `cmd/observe`(`-tags zooexec`)で、記録する `zoo/mark` に向ける。骨組みは、記録のために `zoo/mark` を呼べる(`zoo` を `replace` で持つ) | パッケージごとの exec(記録する `zoo-mark`)。骨組みは自前のコード | exec は、`dependency_overrides` で、`test` がすでに動かしている本物(`shelf` など、`test` の依存と名前がぶつかるもの)に解決する |
-| 共有のファイル | なし(`zoo-go` の `go.mod` は読むだけ。`cmd/observe/imports.go` の cells の一覧にも足さない) | なし(`zoo-rust` の `Cargo.toml` と `exec/src/cases.rs` に足さない) | `exec/pubspec.yaml` に、ぶつかる名前の `dependency_overrides` が 1 行(今。パッケージごとの exec にするか、生成するかは、未定) |
+| 共有のファイル | なし(`zoo-go` の `go.mod` は読むだけ。`cmd/observe` はテストが overlay で作る) | なし(`zoo-rust` の `Cargo.toml` と `exec/src/cases.rs` に足さない。実行の crate はテストが書く) | なし(パッケージのディレクトリだけ。2 つの `pubspec.yaml` は生成) |
 
 事実(試して分かったこと):
 - Go: 独立したモジュール(`zoo-go` の外)は、`zoo-go` の `./...` に入らない。`go build`、`-tags zooexec`、`rivus analyze` が通り、`github.com/gin-gonic/gin` の骨組みの `Context.Query` から `mark.SinkCmd` への finding が出た。
 - Rust: **サンドボックスは、対象のディレクトリの外にある path の依存を読めない**(`../../zoo-rust/zoo-mark` は、取得の段で読めずに失敗した)。`zoo-mark` は、テストが対象のディレクトリに写す(今の `zooRustCopy` と同じ)。写せば、サンドボックスの下で動き、finding が出た。取得したクレートは動かしていない(取得そのものがない)。
-- 今の zoo のテストは、ディレクトリを固定で数える(`zoo-go/cells`、`zoo-dart/cells/lib`、`zoo-rust/cells/src`。`zooMarksRows`、`TestZooGo`、`TestZooExecGo`、`TestZooRust` など)ので、**独立したモジュールのセルは、テストの側に、パッケージのディレクトリを列挙する処理を足さないと、数えられず、実行もされない**。`TestBuiltinRowsAreHitByTheZoo` の `goZooSymbols`、`rustZooSymbols` も同じ(依存の関数の記号を数えるので、骨組みの関数が、行に一致する)。
-- CI の paths-filter は、`bench/**` を拾う。`bench/zoo-go-pkg/**` と `bench/zoo-rust-pkg/**` は、dart と rust のフィルタの除外にないので、足さないと、Dart と Rust のジョブも走る(安全だが、無駄)。Rust の CI は、`bench/zoo-rust` と `exec` だけをビルドするので、パッケージごとのステップが要る。
+- **実装済み(`cmd/rivus/zoo_pkg_test.go`)**: テストは、`bench/zoo-go-pkg/*` と `bench/zoo-rust-pkg/*` を、ディレクトリから探す(一覧はない)。`TestZooPkgGo` と `TestZooPkgRust` が、パッケージごとに、3 回の実行(全部のケースが走り、全部の文が走る)、真の注釈の照合、rivus の照合を行う。Go の実行用の `cmd/observe` は、overlay で作る(リポジトリに生成しない)。Rust の実行用の crate は、一時のディレクトリに書く(共有の target で、zoo-mark は 1 度だけビルド)。マークの固定(`zooMarksRows`)と、一致した行の数え上げ(`goZooSymbols`、`rustZooSymbols`)も、同じディレクトリを探す。**zoo 全体の検査(`TestFuncValues*`、パリティ、純粋の行、コールバックの行など)は、`bench/zoo-go`、`bench/zoo-rust` だけを読む**ので、骨組みの `Dep` は入らない。依存の関数を数えるのは、一致した行の数え上げだけ(骨組みを呼ぶことが、その行に当たることなので)。合成の `zoo_synth`(Go と Rust)で確かめた。
+- CI: paths-filter の dart と rust に `!bench/zoo-go-pkg/**`(rust と dart)と `!bench/zoo-rust-pkg/**`(dart)を足した。Go のパッケージは `test` のジョブが、Rust のパッケージは `rust` のジョブが、テストの中で拾う(ステップを足さない)。Rust のパッケージは、1 つのジョブの中で順に、共有の target で動く(zoo-mark と標準ライブラリのビルドは 1 度。パッケージごとに足されるのは、骨組みとセルのビルドと、抽出の数秒)。
+- **zoo-mark の渡し方(Rust のサンドボックス)**: (a) テストが、パッケージを一時のディレクトリに写し、zoo-mark も写して、`Cargo.toml` の path を書き換える(採用。共有のファイルが増えない。コミットしたパッケージは、リポジトリの中でも `cargo check` が通る)。(b) サンドボックスの読み取りの許可に、zoo-mark の場所を足す(エンジンの隔離の変更になり、対象の外を読ませる許可が増える。採らない)。(c) パッケージごとに zoo-mark をコミットする(写しが増える。採らない)。
 
 | 条件 | Go | Rust | Dart |
 | --- | --- | --- | --- |
-| (i) 共有のファイルをさわらない | 満たす | 満たす | `exec/pubspec.yaml` の 1 行が残る |
+| (i) 共有のファイルをさわらない | 満たす | 満たす | 満たす(2 つの `pubspec.yaml` は生成物) |
 | (ii) zoo 全体を検査するテストに、依存のコードが入らない | 満たす(別のモジュールで、固定のディレクトリに入らない。骨組みの検査は、パッケージごとの処理で行う) | 満たす(同じ) | 満たす(cells に本物の依存がない) |
 | (iii) 第三者のコードを動かさない | 満たす(取得なし) | 満たす(取得なし。`build.rs` なし) | 満たす(本物は `test` がすでに動かすものだけ) |
 | (iv) 骨組みは機械的に生成する | 未(生成器ができるまで、手で書き、本物と見比べる) | 未(同じ) | 未(同じ) |
