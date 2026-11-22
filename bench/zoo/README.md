@@ -197,6 +197,20 @@ refs are `XTALK` (a call of a function value reaches a closure that was given to
 the standard library calls its argument, and no model says so), `CLOSURE-IN-MEMORY` and `FUNC-VALUE-MEMORY` (a function value that
 was kept in a field, a variable, a list or a map is not followed to its call).
 
+## 並べて出す PR が触るファイル(共有の一覧を持たない置き方)
+
+モデル(組み込みの 1 パッケージ)や zoo のセルを足す PR は、**そのパッケージ・セル専用のファイルだけ**を触る。次の共有の一覧は、持たないか、ディレクトリから作るか、セルごとに分けてある。
+
+| もとの共有のファイル | 今の置き方 | 並べて出したときの conflict |
+| --- | --- | --- |
+| `bench/zoo/marks.lock` | `bench/zoo/marks.d/<言語>/<セルのパス>.lock`(1 セル 1 ファイル。下の節) | なし(セルごとに別のファイル) |
+| `bench/parity/dead-allow.txt` | `internal/model/builtin/<モデルのファイル>.dead-allow`(1 モデルのファイル 1 ファイル。`bench/parity/README.md`) | なし |
+| `bench/zoo-dart/exec/lib/cases.dart` | `cells/lib` から**生成**(コミットしない。`make zoo-dart-gen`、テストも書く) | なし |
+| `bench/zoo-dart/{cells,exec}/pubspec.lock` | コミットしない(`.gitignore`。CI と `make setup` が `dart pub get`) | なし |
+| `bench/zoo-dart/cells/pubspec.yaml` の path 依存 | `cells/packages/` のディレクトリの一覧から生成(名前順。`TestZooDartGenerate` が固定) | 同じ 2 つの名前の間に足す PR 同士だけ(機械的に直せる: `make zoo-dart-gen`) |
+| `docs/ISSUES.md` の「次の番号」の行と表 | 行は廃止(最大 + 1)。モデルの PR の課題は `docs/issues/model-<パッケージ>-<名前>.md`(番号なし、表に載せない) | なし |
+| `docs/DECISIONS.md`、`docs/DESIGN-deps-cost.md` | モデルの PR は触らない(ADR は段階の PR とモデルの範囲の変更だけ。測定は PR の本文) | なし |
+
 ## 正解を緩めるマークの固定(`marks.d`)
 
 `@miss` / `@fp` / `@noisy` / `@na` / `@todo` / `@manual` / `@sink(none)` を、3 言語の zoo から集めて `bench/zoo/marks.d` に固定している(1 行 = 言語、ファイル、種類、その行の注釈、ケース。行番号は持たない)。**セルのファイル 1 つにつき、固定のファイルも 1 つ**: `bench/zoo/marks.d/<言語>/<セルのパス>.lock`(例: `marks.d/dart/call/direct.dart.lock`)。セルを足す PR は、そのセルのファイルを足すだけで、ほかの PR と同じファイルを触らない。
