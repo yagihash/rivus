@@ -94,7 +94,7 @@
 ### 3.6 CI と、開発のマシンでの回し方
 
 - `rust-isolation` ジョブ(Docker)は消す。macOS(Apple Silicon)の runner の、**ワークフロー(のちに `.github/workflows/ci.yml` の `sandbox` ジョブに移した。下の追記)**を足す。走るきっかけは、`push`(main)と `pull_request` が、隔離に関わるパスの変更のときだけ(`paths`)、`schedule` が週 1 回、`workflow_dispatch`、tag の `push`。試験は、Skip でなく必須(`RIVUS_REQUIRE_*` と同じ形)。パスの一覧は、`internal/sandbox/`、隔離を呼ぶ `cmd/rivus` のファイル、`extractor/rust/test/hostile/`、`extractor/rust/`、`extractor/rust/rust-toolchain.toml`、取得の前の検査、`go.mod` / `go.sum`、このワークフロー自身。`permissions`、`concurrency` は、今の `ci.yml` と同じ。必須のチェックにしない。パスの一覧の漏れを見つける試験を足す。
-  - 追記(2026-11-22、PR の必須化): `isolation.yml` は消し、`ci.yml` の `sandbox` ジョブにした。`ci-ok`(必須の 1 つのチェック)の `needs` に入る(隔離を守る試験を必須の側に)。動くのは、変更されたパスが `internal/sandbox/`、`cmd/rivus/isolate*.go`、`extractor/rust/`(Markdown の一覧を除く)、`go.mod` / `go.sum`、`ci.yml` と `changed-paths.sh` のとき(`.github/scripts/changed-paths.sh`)と、週 1 回(`schedule`)と、手動(`workflow_dispatch`)。tag の `push` では動かさない(同じコミットは main で動いている)。
+  - 追記(2026-11-22、PR の必須化): `isolation.yml` は消し、`ci.yml` の `sandbox` ジョブにした。`ci-ok`(必須の 1 つのチェック)の `needs` に入る(隔離を守る試験を必須の側に)。動くのは、変更されたパスが `internal/sandbox/`、`cmd/rivus/isolate*.go`、`extractor/rust/`(Markdown の一覧を除く)、`go.mod` / `go.sum`、`ci.yml` と `changed-paths.sh` のとき(`ci.yml` の `changes` ジョブ。`dorny/paths-filter`。当初の自前の `.github/scripts/changed-paths.sh` は、ユーザーの決定で置き換えた)と、週 1 回(`schedule`)と、手動(`workflow_dispatch`)。tag の `push` では動かさない(同じコミットは main で動いている)。
 - 日々の確かめは、開発のマシン(macOS)で回す(`docs/rust-isolation.md` に、1 行のコマンドと環境変数を書く)。
 - 既知のコードを読むジョブ(`test`、`dart`、`rust`)は、今のまま Linux のホスト。
 
