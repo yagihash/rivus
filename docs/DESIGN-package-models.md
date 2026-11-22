@@ -415,6 +415,15 @@ sinks:
 - 接尾辞のない v0 / v1 の path には `/v*` は当たらない。v1 と v2 以降の両方を対象にするパッケージは、接尾辞のない行と `/v*` の行の両方が要る(一覧の 14 行で該当するものがあれば、そのパッケージの回で扱う)。
 - **しないこと(この節では)**: 解析した対象の major が `verified_versions` の範囲にないとき、`summary` に注記を出す(6.7 の 3。別の PR)。`body_replaced_packages` の `package` に `/v*` を書くこと。`-ir` で渡された Go の IR への展開(展開は、Go の解析の読み込みの中だけ)。
 
+### 6.10 確認していないバージョンへの適用の注記(`summary.unverified_versions`。Go から。6.7 の 3 の最初の実装)
+
+解析した対象が使っている module のバージョンが、`verified_versions` の範囲の外のとき、**モデルの行は当てたまま**、`summary.unverified_versions` に 1 件ずつ出す(`[{package, used, verified: [範囲...], source: "go.mod"}]`。`package` は、使っている module の path(`/v*` の記録のときは、対象が持つ major の path)。`body_replaced_packages` と同じく、package でソートされ、決定論)。finding が 0 件でも出る。
+
+- **出す条件**: (1) `verified_versions` の記録があり、その `package`(`/v*` を含む)が、対象が使っている module の path に当たる。(2) 使っているバージョン(完全なバージョン。`go list` の `Module.Version`)が、その module に当たるどの記録の `versions` にも入らない。記録が複数あれば、どれかに入れば出さない。
+- **記録のない module には出さない**(組み込みのファイルの大半は、記録がない。全部の解析に注記が付くとうるさく、「確認していない」と言うにも、何を基準にするかがない)。記録を持つモデルが当たっていないとき(対象がその module を使っていない)は、出力は今までと同じ。記録を足すのは、手順書の 2 節の 3 段(新しいファイルは必須)で進む。
+- **バージョンが分からない module は出さない**: ディレクトリへの `replace`、別の module への `replace`(`go.mod` のバージョンは、実際に読むコードのバージョンではない)、主 module。バージョンの接尾辞(`-pre`、`+incompatible`)は読まない(疑似バージョンは、前のバージョンの番号とみなされる)。
+- **実装**: `gossa.Program.ModuleVersions`(読み込みのとき、`packages.Package.Module` から)、`model.Rules.UnverifiedVersions`、`report.Summary.UnverifiedVersions`。`-ir` で渡された IR と、`-index` の IR からの解析は、モジュール情報がないので出ない。Dart(`pubspec.lock`)と Rust(`Cargo.lock`)は未(課題 #162)。
+
 ## 7. 実装の段階と規模
 
 **順番(相談役の判断): 0 → 2 → 1 → 4 → 3 → 5。** 0 と 2 は、別の PR で並行する。4 は、Dart の extractor が時間の 9 割なので、2 のすぐあと。**各段階の PR に、公開のベンチ(`bench/dart-gcp`、`bench/dart-grpc`、`bench/go-s3`)の前後の数字(時間、メモリ、finding の ID の集合)を付ける。** `bench/go-s3`(3.1 節の合成。約 60 行の `main.go` と `go.mod` / `go.sum`)は、ベンチとして入れる(定期の層だけ。PR の CI には入れない)。

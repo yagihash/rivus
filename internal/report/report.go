@@ -155,6 +155,11 @@ type Summary struct {
 	// when it has a row for the function, and unmodeled_library_call when it has none; code inside them is not
 	// analysed. Sorted by package. Absent when none was left out.
 	BodyReplacedPackages []BodyReplacedPackage `json:"body_replaced_packages,omitempty"`
+	// UnverifiedVersions are the modules that a model has a verified_versions record for, and that the program uses at a
+	// version outside the records' ranges: the rows were applied to a version that was not checked (the rows are applied all
+	// the same). One entry for each module, sorted by package. Absent when there is none, and for a module that has no record.
+	// Go only for now (the version is the one go.mod says).
+	UnverifiedVersions []model.UnverifiedVersion `json:"unverified_versions,omitempty"`
 	// BodyReplacedIgnored is how many declarations -read-declared-bodies left out: the bodies were read. Absent when 0.
 	BodyReplacedIgnored int `json:"body_replaced_ignored,omitempty"`
 	// DependencySites says that the sources and the sinks were listed in the functions of the project only, not in those of the

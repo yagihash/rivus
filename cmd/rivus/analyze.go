@@ -289,6 +289,9 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	rep.Summary.Isolation = o.rustIsolation
 	rep.Summary.BodyReplacedPackages = replaced
 	rep.Summary.BodyReplacedIgnored = o.declIgnored
+	if l.gossa != nil {
+		rep.Summary.UnverifiedVersions = rules.UnverifiedVersions(l.gossa.ModuleVersions, "go.mod")
+	}
 	if len(o.skipped) > 0 {
 		if rep.Summary.Unread == nil {
 			rep.Summary.Unread = &report.Unread{Top: []report.UnreadPackage{}}
