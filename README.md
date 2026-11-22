@@ -254,6 +254,8 @@ RIVUS_RUST=$PWD/extractor/rust/target/debug/rivus-rust go test ./cmd/rivus   # R
 
 PR の CI は `go test -short` で実行します(重いテストは、`-short` のときにスキップされます)。main への push、週 1 回の実行、tagpr のリリース PR では、全部のテストを実行します。main の実行が失敗したら、次の作業より先に、修正するか、原因の PR を取り消します。
 
+言語に閉じた変更の PR(`extractor/dart` や `bench/zoo-dart` だけの変更など)では、ほかの言語の extractor のジョブ(`dart` または `rust`)をスキップします。共通の場所(`cmd`、`internal`、`testdata`、共通の `bench` など)を変えた PR は、両方を実行します。
+
 正しさは、役目の違うテストとベンチで確かめています（[bench/README.md](bench/README.md)）。
 
 | 置き場 | 何を見るか |
