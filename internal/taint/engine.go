@@ -474,7 +474,9 @@ type Stats struct {
 	PackagesTop []PackageStat `json:"packages_top,omitempty"`
 	// LargestSCCPackages is the packages of the functions of the largest component, the 10 with the most (-pass-stats).
 	// It is made from the call graph before the analysis starts, so a run that timed out has it too.
-	LargestSCCPackages []SCCPackage        `json:"largest_scc_packages,omitempty"`
+	LargestSCCPackages []SCCPackage `json:"largest_scc_packages,omitempty"`
+	// SummarySizes is how the elements of the summaries are spread over the functions, and what they are made of (-pass-stats).
+	SummarySizes       *SummarySizes       `json:"summary_sizes,omitempty"`
 	DispatchCandidates *DispatchCandidates `json:"dispatch_candidates,omitempty"`
 	// DispatchNotNarrowed counts the calls through Fn::call (Rust) that have several candidates and kept every
 	// one, by why: the callers of a function may not all be read, the receiver comes from something that is not
@@ -1404,6 +1406,7 @@ func (e *Engine) collect(st Stats) *Result {
 	if e.opts.PassStats {
 		res.Stats.UnmodeledTop = e.unmodeledTop(res.Findings)
 		res.Stats.PackagesTop = e.packagesTop()
+		res.Stats.SummarySizes = e.summarySizes()
 		res.Stats.LargestSCCPackages = e.largestSCCPackages()
 		res.Stats.DispatchCandidates = e.dispatchCandidates()
 	}

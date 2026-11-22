@@ -351,7 +351,7 @@ func TestPassStatsChangeNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 	st := with["stats"].(map[string]any)
-	for _, k := range []string{"unmodeled_top", "packages_top", "largest_scc_packages", "dispatch_candidates"} {
+	for _, k := range []string{"unmodeled_top", "packages_top", "largest_scc_packages", "summary_sizes", "dispatch_candidates"} {
 		if _, ok := st[k]; !ok {
 			t.Errorf("no %s in stats: %v", k, st)
 		}
@@ -360,6 +360,7 @@ func TestPassStatsChangeNothing(t *testing.T) {
 	delete(st, "unmodeled_top")
 	delete(st, "packages_top")
 	delete(st, "largest_scc_packages")
+	delete(st, "summary_sizes")
 	delete(st, "dispatch_candidates")
 	a, _ := json.Marshal(plain)
 	b, _ := json.Marshal(with)
