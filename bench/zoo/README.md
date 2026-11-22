@@ -61,7 +61,7 @@ fails the day rivus agrees, and the mark is to be removed). **Never change an an
   program, and `converged: false` is then expected (and checked from both sides).
 * A report that must not be there: `@sink(none) @fp @nosink(tag) @fp @ref(<item>)` (the `@fp` goes after `@sink(none)` and after
   `@nosink(...)`).
-* `@ref(...)` is required on both (a review item such as `CORE-J`, an issue, a CWE). A `@miss` without it fails.
+* `@ref(...)` is required on both (a review item such as `CORE-J`, an issue of `docs/ISSUES.md` such as `#77`, a CWE). A `@miss` without it fails.
 * `@manual(<reason>)` on a sink line: only for what a run cannot show. At most 3% of the cases and one to a cell.
 * When the whole zoo fails, each cell is analysed alone (`ZOO_ALONE=1` asks for it): green alone and red in the whole is a
   mix with the others (the engine's problem); red alone is the cell.

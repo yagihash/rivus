@@ -95,4 +95,4 @@ repository do not compile it as part of rivus.
 Write the handler the way the real project would, in the file of its kind; register the route in
 `routers/routers.go` so that it is reached from the program; tag it. Mark the line of what you want
 to be quiet `@sink(none)`. If the engine gets it wrong, say so with `@miss` or `@fp`, and say in the
-issue tracker why. Keep the count of the cases that are not marked up (the test checks a floor).
+list of issues (docs/ISSUES.md) why. Keep the count of the cases that are not marked up (the test checks a floor).
