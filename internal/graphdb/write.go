@@ -75,6 +75,15 @@ type Unread struct {
 	// OutsideBuildFiles is the number of files that the build constraints leave out of the configuration of this index
 	// (a range declaration, like SkippedDirs).
 	OutsideBuildFiles int `json:"outside_build_files,omitempty"`
+	// SkippedLanguages are the languages of the directory that were not read at all, and why ("declined", "no-terminal",
+	// "not-installed", "no-sandbox"). Not a failed package: a "no path" in an index with one is not exhaustive.
+	SkippedLanguages []SkippedLanguage `json:"skipped_languages,omitempty"`
+}
+
+// SkippedLanguage is a language of the project that this index does not hold, and why.
+type SkippedLanguage struct {
+	Lang string `json:"lang"`
+	Why  string `json:"why"`
 }
 
 // Input is what Write stores.

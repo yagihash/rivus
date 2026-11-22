@@ -3,6 +3,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"runtime/debug"
@@ -71,6 +72,10 @@ func main() {
 	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "rivus: %v\n", err)
+		var d *declinedError
+		if errors.As(err, &d) {
+			os.Exit(exitDeclined)
+		}
 		os.Exit(1)
 	}
 }
