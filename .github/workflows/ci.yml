@@ -74,7 +74,8 @@ jobs:
               - 'examples/**'
               - '!examples/**/*.md'
               - '.github/workflows/**'
-              - '.github/scripts/**'
+              - 'scripts/**'
+              - 'Makefile'
             isolation:
               - 'internal/sandbox/**'
               - 'cmd/rivus/isolate*.go'
@@ -334,7 +335,7 @@ jobs:
         env:
           BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: bash .github/scripts/zoo-loosened-check.sh "$BASE" "$HEAD_SHA"
+        run: make zoo-loosened BASE="$BASE" HEAD="$HEAD_SHA"
 
   # The tests of the sandbox of macOS (internal/sandbox, docs/DESIGN-macos-sandbox.md) on a runner of macOS. They run when something that
   # the isolation is made of changes, and once a week (the sandbox and its profile can break when macOS or Xcode is updated, with no change

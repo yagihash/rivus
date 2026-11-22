@@ -217,6 +217,8 @@ Go / Dart / Rust の extractor ──→ 中立の IR（CFG、JSON Lines）─�
 ## 開発
 
 ```sh
+make check                                      # push の前(約 1 分): ビルド、gofmt、go vet、短いテスト(go test -short)
+make test                                       # 全部のテスト(Dart と Rust の extractor つき。CI の main と同じ)
 go test ./...                                   # Go だけで走るテスト
 RIVUS_DART="dart" go test ./cmd/rivus           # Dart の extractor を使うテストも
 RIVUS_RUST=$PWD/extractor/rust/target/debug/rivus-rust go test ./cmd/rivus   # Rust の extractor を使うテストも（先に extractor/rust をビルド）
