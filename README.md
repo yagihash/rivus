@@ -114,7 +114,7 @@ rivus query -site <ID> ./...           # sites の 1 件から始める
 
 | コマンド | 何をするか |
 |---|---|
-| `sites` | source と sink のルールが一致する箇所を並べる。解析はしない |
+| `sites` | source と sink のルールが一致する箇所を並べる。解析はしない。読む言語は `analyze` と同じ(`-lang`)で、読まなかった言語は出力の `skipped_languages` に出る |
 | `analyze` | source から sink への経路を、関数とパッケージを跨いで探す |
 | `query` | 片側からの問い（この sink に届く source / この source が届く sink / この箇所について） |
 | `index` | コードを 1 回読んで、呼び出しグラフを保存する（`-taint` で、解析の結果も） |
@@ -242,7 +242,7 @@ Go / Dart / Rust の extractor ──→ 中立の IR（CFG、JSON Lines）─�
 
 - 言語ごとの extractor が、ソースを、制御フローグラフの水準の IR に下ろします。コアは、言語を知りません。
 - コアは、関数ごとに「引数や戻り値のあいだで、何が何に伝わるか」の要約を作り、呼び出しグラフの下から順に組み合わせます。
-- `rivus index` は、呼び出しグラフを SQLite のファイルに保存します（利用者のキャッシュに置き、解析の対象のディレクトリには書きません）。
+- `rivus index` は、呼び出しグラフを SQLite のファイルに保存します（利用者のキャッシュに置き、解析の対象のディレクトリには書きません）。`index -taint` の JSON の index も、`-o` を省くと、同じキャッシュの下（`graph.db` の隣の `index.json`）に書きます。
 
 詳しくは [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。設計の判断の記録は [docs/DECISIONS.md](docs/DECISIONS.md)。
 

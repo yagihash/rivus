@@ -30,12 +30,22 @@ func parseInterspersed(fs *flag.FlagSet, args []string) ([]string, error) {
 
 // adoptStoredFlags sets the analysis flags the person did not give to what the
 // file was made with, so that "-C" holds the source against the settings the
-// file has (a file made with -tests is not stale for a question without it).
+// file has (a file made with -tests is not stale for a question without it). An explicit -rules wins over
+// the record.
 func adoptStoredFlags(fs *flag.FlagSet, stored map[string]string) {
 	given := map[string]bool{}
 	fs.Visit(func(f *flag.Flag) { given[f.Name] = true })
 	for name, v := range stored {
 		if name == "patterns" || name == "allow-deps-under" || given[name] {
+			continue
+		}
+		if name == "rules" {
+			// the rule files given to index: each is a -rules, and a file that is gone or changed shows as stale
+			for _, f := range strings.Split(v, "\n") {
+				if f != "" {
+					fs.Set(name, f)
+				}
+			}
 			continue
 		}
 		if fs.Lookup(name) != nil {
