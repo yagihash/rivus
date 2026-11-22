@@ -1,5 +1,24 @@
 # package:shelf and package:sqflite: the common server side libraries (package:http is in dart-http.yaml).
+#
+# shelf: the `Request` is the source (`param_type`) and its getters are flows. The sinks are on `Response` (checked against shelf 1.4.3,
+# range >=1.4.0 <2.0.0, 2026-11-23, by reading the published source; hand written rows, origin: human; the generator does not exist yet):
+# the body of a response (`xss`, as `net/http.ResponseWriter.Write` is in go-net-http.yaml: shelf does not escape, the content type is
+# the caller's), and the `location` of the three redirect constructors (`open_redirect`). `Response.change(body:)` is the same body.
+# The default content type of a `String` body is `text/plain`, so a text body is a sink only when the caller sets an HTML type;
+# the row is as wide as the Go one and does not look at the headers.
+# `Handler` and `Middleware` (`Pipeline`, `Cascade`, `createMiddleware`) have no row on purpose: a handler is a function value that
+# the project's own code builds, and the few lines of `Pipeline.addHandler` and `Cascade.handler` are read as a dependency (a row
+# would cut the call from a middleware to the handler it wraps: ADR-092). `calls:` rows: none (the request reaches a handler
+# through `param_type`, not through a call of the package).
+# model-diff: value Request Request('GET', Uri.parse('http://localhost/'))
+# model-diff: value Response Response(200)
 ruleset: rivus/dart/packages@1
+
+verified_versions:
+  - package: shelf
+    versions: ">=1.4.0 <2.0.0"
+    checked_with: 1.4.3
+    checked: 2026-11-23
 
 sources:
   - kind: param_type
@@ -35,6 +54,63 @@ propagators:
     flows: [{from: recv, to: result}]
 
 sinks:
+  # shelf: the body of a response (the content type is the caller's; the body is not escaped)
+  - symbol: package:shelf/src/response.dart#Response.new
+    named: [body]
+    category: xss
+    accepts: [user_input]
+  - symbol: package:shelf/src/response.dart#Response.ok
+    args: [0]
+    category: xss
+    accepts: [user_input]
+  - symbol: package:shelf/src/response.dart#Response.change
+    named: [body]
+    category: xss
+    accepts: [user_input]
+  - symbol: package:shelf/src/response.dart#Response.movedPermanently
+    args: [0]
+    category: open_redirect
+    accepts: [user_input]
+  - symbol: package:shelf/src/response.dart#Response.movedPermanently
+    named: [body]
+    category: xss
+    accepts: [user_input]
+  - symbol: package:shelf/src/response.dart#Response.found
+    args: [0]
+    category: open_redirect
+    accepts: [user_input]
+  - symbol: package:shelf/src/response.dart#Response.found
+    named: [body]
+    category: xss
+    accepts: [user_input]
+  - symbol: package:shelf/src/response.dart#Response.seeOther
+    args: [0]
+    category: open_redirect
+    accepts: [user_input]
+  - symbol: package:shelf/src/response.dart#Response.seeOther
+    named: [body]
+    category: xss
+    accepts: [user_input]
+  - symbol: package:shelf/src/response.dart#Response.badRequest
+    named: [body]
+    category: xss
+    accepts: [user_input]
+  - symbol: package:shelf/src/response.dart#Response.unauthorized
+    args: [0]
+    category: xss
+    accepts: [user_input]
+  - symbol: package:shelf/src/response.dart#Response.forbidden
+    args: [0]
+    category: xss
+    accepts: [user_input]
+  - symbol: package:shelf/src/response.dart#Response.notFound
+    args: [0]
+    category: xss
+    accepts: [user_input]
+  - symbol: package:shelf/src/response.dart#Response.internalServerError
+    named: [body]
+    category: xss
+    accepts: [user_input]
   # SQL injection: only the query text is dangerous, not the bound arguments
   - symbol: package:sqflite_common/src/database_mixin.dart#SqfliteDatabaseMixin.rawQuery
     args: [0]
