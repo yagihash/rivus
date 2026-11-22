@@ -1,0 +1,4 @@
+rust	dyns/func_map.rs	miss	@source(dyn-func-map-decoy) @miss(unmodeled_library_call) @ref(FUNC-VALUE-MEMORY,PARITY)	fn decoy() { @decoy
+rust	dyns/func_map.rs	miss	@source(dyn-func-map-vuln) @miss(unmodeled_library_call) @ref(FUNC-VALUE-MEMORY,PARITY)	fn vuln() { @vuln
+rust	dyns/func_map.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	dyns/func_map.rs	sink-none	@sink(none) @nosink(dyn-func-map-decoy)	fn decoy() { @decoy

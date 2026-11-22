@@ -1,0 +1,3 @@
+go	clos/capture_write_by_ref/capture_write_by_ref.go	sink-none	@sink(none)	func fixed() { @fixed
+go	clos/capture_write_by_ref/capture_write_by_ref.go	sink-none	@sink(none)	func fixed() { @fixed
+go	clos/capture_write_by_ref/capture_write_by_ref.go	sink-none	@sink(none) @nosink(clos-capture-write-by-ref-decoy)	func decoy() { @decoy

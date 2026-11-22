@@ -1,0 +1,4 @@
+rust	state/global_chain.rs	miss	@source(state-global-chain-vuln13) @miss(recursion_approximation) @ref(R-44)	fn vuln13() { @vuln
+rust	state/global_chain.rs	miss	@source(state-global-chain-vuln30) @miss(recursion_approximation) @ref(R-44)	fn vuln30() { @vuln
+rust	state/global_chain.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	state/global_chain.rs	sink-none	@sink(none) @nosink(state-global-chain-decoy)	fn decoy() { @decoy

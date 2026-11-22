@@ -1,0 +1,4 @@
+dart	clos/wrapped_by_dependency.dart	fp	@sink(none) @fp @nosink(clos-wrapped-by-dependency-decoy) @fp @ref(XTALK)	void decoy() { @decoy
+dart	clos/wrapped_by_dependency.dart	fp	@sink(none) @fp @ref(XTALK)	void fixed() { @fixed
+dart	clos/wrapped_by_dependency.dart	sink-none	@sink(none) @fp @nosink(clos-wrapped-by-dependency-decoy) @fp @ref(XTALK)	void decoy() { @decoy
+dart	clos/wrapped_by_dependency.dart	sink-none	@sink(none) @fp @ref(XTALK)	void fixed() { @fixed

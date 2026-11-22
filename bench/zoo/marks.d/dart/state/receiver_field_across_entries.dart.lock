@@ -1,0 +1,2 @@
+dart	state/receiver_field_across_entries.dart	sink-none	@sink(none)	void vuln2() { @vuln
+dart	state/receiver_field_across_entries.dart	sink-none	@sink(none) @nosink(state-receiver-field-across-entries-decoy)	void fixed() { @fixed

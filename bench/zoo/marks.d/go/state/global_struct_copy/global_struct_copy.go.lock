@@ -1,0 +1,2 @@
+go	state/global_struct_copy/global_struct_copy.go	sink-none	@sink(none)	func vuln() { @vuln
+go	state/global_struct_copy/global_struct_copy.go	sink-none	@sink(none) @nosink(state-global-struct-copy-decoy)	func fixed() { @fixed

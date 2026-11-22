@@ -17,7 +17,7 @@
 
 - **環境変数と `PATH` だけ**(`cmd/rivus/lang.go`)。**インストール先からの相対(`$(brew --prefix)/…`)で見つける仕組みはない**。formula は、`bin` に `rivus-dart` と `rivus-rust` を置けば `PATH` で見つかる(`brew` の `bin` は `PATH` にある)。
 - テストとベンチは、`RIVUS_DART` / `RIVUS_RUST`(リポジトリの中の extractor)を使う(リポジトリの外では使わない)。
-- 今のなっていない所: (a) Dart の extractor が、SDK の場所を実行ファイルの位置から導く(上の表)。(b) Rust の extractor の入れ方の案内が、Docker 前提(イメージをリポジトリから作る)。(c) どの言語の入れ方の案内も、`brew` の言葉でない(`dart pub global activate --source path extractor/dart` は、リポジトリのチェックアウトが必要)。
+- 棚卸しのときに「なっていない」とした所の今: (a) Dart の extractor の SDK の場所は、`RIVUS_DART_SDK`、`PATH` の `dart`、実行ファイルのある SDK の順で探す(直した。`extractor/dart/lib/extract.dart`)。(b) Rust の入れ方の案内の Docker 前提は、Docker の経路の削除(ADR-093)でなくなった。(c) 入れ方の案内は、README の「インストール」が `brew` の言葉で書いている。
 
 ## 3. バイナリに埋め込まれているもの
 
@@ -41,7 +41,7 @@
 
 ## 5. `brew` の Linux
 
-Go と Dart は動く(`go` と Dart SDK が、それぞれ `brew` で入る)。**Rust の信頼できないコードは、隔離の手段がない(macOS のサンドボックスだけにする)ので、何も実行せずに止まる**(DESIGN-macos-sandbox.md の 3.7)。既知のコードは `-unsafe-host-exec`。formula の `caveats` に、そう書く。
+Go と Dart は動く(`go` と Dart SDK が、それぞれ `brew` で入る)。**Rust の信頼できないコードは、隔離の手段がない(macOS のサンドボックスだけ)ので、何も実行せずに止まる**(DESIGN-macos-sandbox.md の 3.7 と 8 節。Linux の隔離は課題 #148)。既知のコードは `-unsafe-host-exec`。formula の `caveats` に、そう書く。
 
 ## 6. Rust: formula が、インストールの中で、ツールチェインと extractor を作る(**決まった**。ユーザー、2026-11-22。相談役が手元で確かめた)
 
@@ -64,15 +64,15 @@ extractor が自分のバージョンを答え、rivus は合わなければ止�
 
 formula の中身(`depends_on`、`caveats`、`test do`)は、先にこのリポジトリの中に下書きとして置ける(外に出ない)。`depends_on`: ビルド時 `go`、実行時 `go`(`go list` のため)、Dart の扱い(上の表。`dart-sdk` を依存に)、Rust は `rustup`(6 節)。`test do`: `rivus version`(足したあと)と、小さい Go のプロジェクトの解析。
 
-## 8. なっていない所の一覧(直す作業)
+## 8. 棚卸しの項目の今(2026-11-23)
 
-1. Dart の extractor の SDK の場所を、実行ファイルの位置からでなく、環境変数または `dart` の位置から導く(単体の実行ファイルにするため)。
-2. 見本のルールを、インストールした利用者が使える形にする(`share` に入れる、または書き出すコマンド)。
-3. 入れ方の案内を、`brew` の言葉にする(README、エラーメッセージ)。
-4. **`rivus version` / `--version` が、ない**(確かめた: `unknown command`)。formula の `test do` に必要なので、足す。バージョンの埋め込み(`-ldflags`)と、リリースのタグ付け。
-5. Rust: `rivus setup rust` と、隔離の移行。
-6. `go` のバージョン(`go 1.27`)を、formula の `depends_on` で満たせるか(`brew` の `go` のバージョンが、`go.mod` の要求より古いと、ビルドできない。**確かめた(2026-11-22): `brew info go` は stable 1.27.4 で、`go 1.27` を満たす**)。
+1. Dart の extractor の SDK の場所: 済み(2 節)。
+2. 見本のルール(`examples/rules/`)をインストールした利用者が使える形にする: README は、リポジトリの `examples/rules` を指す。formula が `share` に入れるかは、tap の側で、この文書では確認していない。
+3. 入れ方の案内を `brew` の言葉にする: 済み(README の「インストール」)。
+4. `rivus version`: 済み(formula の `test do` に使える)。
+5. Rust: `rivus setup rust`(済み)、隔離の移行(済み。ADR-093)、formula が、インストールの中でツールチェインと extractor を作る(済み。6 節)。
+6. `go` のバージョンの要求: 満たしている(確認済み)。
 
-## 9. ユーザーに聞くこと(相談役が聞く)
+## 9. 決まったこと
 
-配り方(i) か (ii)、tap の名前、Dart の extractor を、ソースからビルド・単体の実行ファイル・実行時に `dart` のどれにするか。
+配り方は (i)(formula がソースからビルドする)。tap は `yagihash/homebrew-tap`。リリースのタグが打たれると、`bump-tap` のジョブが `url` と `sha256` を書き換える。Dart の extractor は、実行時に `dart`(Dart SDK は formula の依存)を使う。

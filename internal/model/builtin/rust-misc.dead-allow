@@ -1,0 +1,113 @@
+# The rows of rust-misc.yaml that no call in the zoo or the curated targets hits (TestBuiltinRowsAreHitByTheZoo). "symbol | reason"; see bench/parity/README.md.
+futures_util::Future::poll | dependency | not the standard library: the zoo has no such dependency
+log::debug | dependency | not the standard library: the zoo has no such dependency
+log::error | dependency | not the standard library: the zoo has no such dependency
+log::info | dependency | not the standard library: the zoo has no such dependency
+log::trace | dependency | not the standard library: the zoo has no such dependency
+log::warn | dependency | not the standard library: the zoo has no such dependency
+serde::__private228::de::missing_field | dependency | not the standard library: the zoo has no such dependency
+serde::__private228::from_utf8_lossy | dependency | not the standard library: the zoo has no such dependency
+serde::__private::from_utf8_lossy | spelling | the definition path (or the older name) of an API whose other spelling has a row and is the one the extractor writes
+serde::__private::missing_field | spelling | the definition path (or the older name) of an API whose other spelling has a row and is the one the extractor writes
+serde::de::Error::custom | dependency | not the standard library: the zoo has no such dependency
+serde::de::Error::invalid_type | dependency | not the standard library: the zoo has no such dependency
+serde::de::Error::missing_field | dependency | not the standard library: the zoo has no such dependency
+serde::de::Error::unknown_field | dependency | not the standard library: the zoo has no such dependency
+serde_json::Map::insert | dependency | not the standard library: the zoo has no such dependency
+serde_json::Map::new | dependency | not the standard library: the zoo has no such dependency
+serde_json::Value::as_array | dependency | not the standard library: the zoo has no such dependency
+serde_json::Value::as_bool | dependency | not the standard library: the zoo has no such dependency
+serde_json::Value::as_f64 | dependency | not the standard library: the zoo has no such dependency
+serde_json::Value::as_i64 | dependency | not the standard library: the zoo has no such dependency
+serde_json::Value::as_object | dependency | not the standard library: the zoo has no such dependency
+serde_json::Value::as_str | dependency | not the standard library: the zoo has no such dependency
+serde_json::Value::as_u64 | dependency | not the standard library: the zoo has no such dependency
+serde_json::Value::get | dependency | not the standard library: the zoo has no such dependency
+serde_json::Value::pointer | dependency | not the standard library: the zoo has no such dependency
+serde_json::from_reader | dependency | not the standard library: the zoo has no such dependency
+serde_json::to_string_pretty | dependency | not the standard library: the zoo has no such dependency
+serde_json::to_value | dependency | not the standard library: the zoo has no such dependency
+serde_json::to_writer | dependency | not the standard library: the zoo has no such dependency
+std::collections::BTreeMap::get | debt | the standard library: no cell of the zoo calls it yet
+std::collections::BTreeMap::iter | debt | the standard library: no cell of the zoo calls it yet
+std::collections::BTreeMap::keys | debt | the standard library: no cell of the zoo calls it yet
+std::collections::BTreeMap::new | debt | the standard library: no cell of the zoo calls it yet
+std::collections::BTreeMap::values | debt | the standard library: no cell of the zoo calls it yet
+std::collections::HashSet::get | debt | the standard library: no cell of the zoo calls it yet
+std::collections::HashSet::iter | debt | the standard library: no cell of the zoo calls it yet
+std::collections::HashSet::new | debt | the standard library: no cell of the zoo calls it yet
+std::collections::VecDeque::back | debt | the standard library: no cell of the zoo calls it yet
+std::collections::VecDeque::front | debt | the standard library: no cell of the zoo calls it yet
+std::collections::VecDeque::new | debt | the standard library: no cell of the zoo calls it yet
+std::collections::VecDeque::pop_back | debt | the standard library: no cell of the zoo calls it yet
+std::collections::VecDeque::pop_front | debt | the standard library: no cell of the zoo calls it yet
+std::default::Default::default | debt | the standard library: no cell of the zoo calls it yet
+std::fmt::Formatter::debug_list | debt | the standard library: no cell of the zoo calls it yet
+std::fmt::Formatter::debug_struct | debt | the standard library: no cell of the zoo calls it yet
+std::fmt::Formatter::debug_struct_field3_finish | debt | the standard library: no cell of the zoo calls it yet
+std::fmt::Formatter::debug_struct_field4_finish | debt | the standard library: no cell of the zoo calls it yet
+std::fmt::Formatter::debug_struct_field5_finish | debt | the standard library: no cell of the zoo calls it yet
+std::fmt::Formatter::debug_struct_fields_finish | debt | the standard library: no cell of the zoo calls it yet
+std::fmt::Formatter::debug_tuple | debt | the standard library: no cell of the zoo calls it yet
+std::fmt::Formatter::debug_tuple_field1_finish | debt | the standard library: no cell of the zoo calls it yet
+std::fmt::Formatter::debug_tuple_field2_finish | debt | the standard library: no cell of the zoo calls it yet
+std::fmt::Formatter::pad | debt | the standard library: no cell of the zoo calls it yet
+std::fmt::Formatter::write_str | debt | the standard library: no cell of the zoo calls it yet
+std::iter::Iterator::last | debt | the standard library: no cell of the zoo calls it yet
+std::iter::Iterator::max_by_key | debt | the standard library: no cell of the zoo calls it yet
+std::iter::Iterator::min_by_key | debt | the standard library: no cell of the zoo calls it yet
+std::iter::Iterator::product | debt | the standard library: no cell of the zoo calls it yet
+std::iter::Iterator::rposition | debt | the standard library: no cell of the zoo calls it yet
+std::iter::Iterator::step_by | debt | the standard library: no cell of the zoo calls it yet
+std::iter::Iterator::sum | debt | the standard library: no cell of the zoo calls it yet
+std::iter::Iterator::unzip | debt | the standard library: no cell of the zoo calls it yet
+std::option::Option::get_or_insert_with | debt | the standard library: no cell of the zoo calls it yet
+std::option::Option::is_some_and | debt | the standard library: no cell of the zoo calls it yet
+std::option::Option::map_or_else | debt | the standard library: no cell of the zoo calls it yet
+std::option::Option::zip | debt | the standard library: no cell of the zoo calls it yet
+std::result::Result::expect_err | debt | the standard library: no cell of the zoo calls it yet
+std::result::Result::map_or | debt | the standard library: no cell of the zoo calls it yet
+std::result::Result::map_or_else | debt | the standard library: no cell of the zoo calls it yet
+std::slice::chunks | debt | the standard library: no cell of the zoo calls it yet
+std::slice::split | debt | the standard library: no cell of the zoo calls it yet
+std::slice::windows | debt | the standard library: no cell of the zoo calls it yet
+std::str::to_ascii_lowercase | debt | the standard library: no cell of the zoo calls it yet
+std::str::to_ascii_uppercase | debt | the standard library: no cell of the zoo calls it yet
+std::string::String::to_ascii_lowercase | debt | the standard library: no cell of the zoo calls it yet
+std::sync::atomic::AtomicI64::fetch_add | debt | the standard library: no cell of the zoo calls it yet
+std::sync::atomic::AtomicU64::fetch_add | debt | the standard library: no cell of the zoo calls it yet
+std::sync::atomic::AtomicUsize::fetch_add | debt | the standard library: no cell of the zoo calls it yet
+std::task::Poll::Ready | debt | the standard library: no cell of the zoo calls it yet
+std::thread::yield_now | debt | the standard library: no cell of the zoo calls it yet
+std::vec::Vec::dedup | debt | the standard library: no cell of the zoo calls it yet
+std::vec::Vec::drain | debt | the standard library: no cell of the zoo calls it yet
+std::vec::Vec::split_off | debt | the standard library: no cell of the zoo calls it yet
+std::vec::Vec::truncate | debt | the standard library: no cell of the zoo calls it yet
+test::assert_test_result | dependency | not the standard library: the zoo has no such dependency
+tokio::io::AsyncReadExt::read | dependency | not the standard library: the zoo has no such dependency
+tokio::io::AsyncReadExt::read_to_end | dependency | not the standard library: the zoo has no such dependency
+tokio::io::AsyncReadExt::read_to_string | dependency | not the standard library: the zoo has no such dependency
+tokio::io::AsyncWriteExt::write | dependency | not the standard library: the zoo has no such dependency
+tokio::io::AsyncWriteExt::write_all | dependency | not the standard library: the zoo has no such dependency
+tokio::net::TcpListener::accept | dependency | not the standard library: the zoo has no such dependency
+tokio::net::TcpListener::bind | dependency | not the standard library: the zoo has no such dependency
+tokio::net::TcpStream::connect | dependency | not the standard library: the zoo has no such dependency
+tokio::process::Command::new | dependency | not the standard library: the zoo has no such dependency
+tokio::spawn | dependency | not the standard library: the zoo has no such dependency
+tokio::sync::Mutex::lock | dependency | not the standard library: the zoo has no such dependency
+tokio::sync::Mutex::new | dependency | not the standard library: the zoo has no such dependency
+tokio::sync::RwLock::new | dependency | not the standard library: the zoo has no such dependency
+tokio::sync::RwLock::read | dependency | not the standard library: the zoo has no such dependency
+tokio::sync::RwLock::write | dependency | not the standard library: the zoo has no such dependency
+tokio::sync::mpsc::Receiver::recv | dependency | not the standard library: the zoo has no such dependency
+tokio::sync::mpsc::Sender::send | dependency | not the standard library: the zoo has no such dependency
+tokio::sync::mpsc::channel | dependency | not the standard library: the zoo has no such dependency
+tokio::sync::oneshot::Sender::send | dependency | not the standard library: the zoo has no such dependency
+tokio::sync::oneshot::channel | dependency | not the standard library: the zoo has no such dependency
+tokio::task::spawn | dependency | not the standard library: the zoo has no such dependency
+tokio::task::spawn_blocking | dependency | not the standard library: the zoo has no such dependency
+tokio::time::Instant::now | dependency | not the standard library: the zoo has no such dependency
+tokio::time::interval | dependency | not the standard library: the zoo has no such dependency
+tokio::time::sleep | dependency | not the standard library: the zoo has no such dependency
+tokio::time::timeout | dependency | not the standard library: the zoo has no such dependency
+tracing::event | dependency | not the standard library: the zoo has no such dependency

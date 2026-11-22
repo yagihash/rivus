@@ -1,0 +1,2 @@
+go	clos/inline/inline.go	sink-none	@sink(none)	func fixed() { @fixed
+go	clos/inline/inline.go	sink-none	@sink(none) @nosink(clos-inline-decoy)	func decoy() { @decoy

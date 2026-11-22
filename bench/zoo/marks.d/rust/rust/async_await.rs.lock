@@ -1,0 +1,4 @@
+rust	rust/async_await.rs	miss	@source(rust-async-await-decoy) @miss(unmodeled_library_call) @ref(ASYNC)	fn decoy() { @decoy
+rust	rust/async_await.rs	miss	@source(rust-async-await-vuln) @miss(unmodeled_library_call) @ref(ASYNC)	fn vuln() { @vuln
+rust	rust/async_await.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	rust/async_await.rs	sink-none	@sink(none) @nosink(rust-async-await-decoy)	fn decoy() { @decoy

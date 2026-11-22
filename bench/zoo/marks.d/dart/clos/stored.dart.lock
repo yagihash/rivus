@@ -1,0 +1,2 @@
+dart	clos/stored.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	clos/stored.dart	sink-none	@sink(none) @nosink(clos-stored-decoy)	void decoy() { @decoy

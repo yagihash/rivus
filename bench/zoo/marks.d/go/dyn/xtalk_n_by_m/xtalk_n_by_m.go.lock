@@ -1,0 +1,2 @@
+go	dyn/xtalk_n_by_m/xtalk_n_by_m.go	sink-none	@sink(none)	func vuln() { @vuln
+go	dyn/xtalk_n_by_m/xtalk_n_by_m.go	sink-none	@sink(none) @nosink(dyn-xtalk-n-by-m-decoy) @nosink(dyn-xtalk-n-by-m-decoy-b)	func fixed() { @fixed

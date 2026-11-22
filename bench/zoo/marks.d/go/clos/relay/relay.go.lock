@@ -1,0 +1,3 @@
+go	clos/relay/relay.go	fp	@sink(none) @fp @nosink(clos-relay-decoy) @fp @ref(XTALK)	func fixed() { @fixed
+go	clos/relay/relay.go	sink-none	@sink(none)	func fixed() { @fixed
+go	clos/relay/relay.go	sink-none	@sink(none) @fp @nosink(clos-relay-decoy) @fp @ref(XTALK)	func fixed() { @fixed

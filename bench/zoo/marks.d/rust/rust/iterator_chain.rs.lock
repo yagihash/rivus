@@ -1,0 +1,2 @@
+rust	rust/iterator_chain.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	rust/iterator_chain.rs	sink-none	@sink(none) @nosink(rust-iterator-chain-decoy)	fn decoy() { @decoy

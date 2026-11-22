@@ -1,0 +1,2 @@
+go	call/multiret/multiret.go	sink-none	@sink(none)	func fixed() { @fixed
+go	call/multiret/multiret.go	sink-none	@sink(none) @nosink(call-multiret-decoy)	func decoy() { @decoy

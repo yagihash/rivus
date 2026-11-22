@@ -283,13 +283,20 @@ jobs:
         with:
           sdk: 3.13.6
       - name: Resolve the packages of the extractor and the samples
-        # every one of them has a pubspec.lock: the versions are the locked ones, or the step fails
+        # every one of them has a pubspec.lock (the versions are the locked ones, or the step fails), but the two of the Dart zoo
+        # (bench/zoo-dart/cells, bench/zoo-dart/exec): those are not committed, and `dart pub get` makes them
         run: |
-          for d in extractor/dart extractor/dart/test/sample extractor/dart/test/monorepo/app extractor/dart/test/monorepo/shared extractor/dart/test/versions/a extractor/dart/test/versions/b bench/dart-curated bench/zoo-dart/cells bench/zoo-dart/exec; do
+          for d in extractor/dart extractor/dart/test/sample extractor/dart/test/monorepo/app extractor/dart/test/monorepo/shared extractor/dart/test/versions/a extractor/dart/test/versions/b bench/dart-curated; do
             if [ -f "$d/pubspec.yaml" ]; then
               (cd "$d" && dart pub get --enforce-lockfile)
             fi
           done
+          for d in bench/zoo-dart/cells bench/zoo-dart/exec; do
+            (cd "$d" && dart pub get)
+          done
+      - name: Write the generated files of the Dart zoo
+        # exec/lib/cases.dart is not committed (it is made from the cells); the tests write it too, `dart analyze` needs it first
+        run: make zoo-dart-gen
       - name: Analyze the extractor
         if: matrix.shard == 0
         working-directory: extractor/dart
@@ -375,9 +382,9 @@ jobs:
         working-directory: bench/gcp
         run: go test -tags gcpexec -timeout 10m ./...
 
-  # A mark that loosens the truth of the zoo (a row added to a cell that bench/zoo/marks.lock already has, or a row of a new cell of
+  # A mark that loosens the truth of the zoo (a row added to a cell that bench/zoo/marks.d already has a file of, or a row of a new cell of
   # a kind other than @sink(none), @miss and @fp; against the merge base) needs a "Zoo-Loosened:" line in a commit message (the
-  # user's approval); a new @miss or @fp row needs an @ref(#N). TestZooMarksLock (in the shards of the test job) holds the file to the sources.
+  # user's approval); a new @miss or @fp row needs an @ref(#N) or @ref(model-<package>-<name>) whose file is in docs/issues. TestZooMarksLock (in the shards of the test job) holds the file to the sources.
   zoo-loosened:
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -422,11 +429,42 @@ jobs:
           RIVUS_SBX_RED: "1"
         run: go test -count=1 -timeout 20m -run 'TestSandbox(Stops|Closes|Time|Output|Environment|Unavailable|Stderr|Program)' ./internal/sandbox
 
+  # The differential test of the models (bench/model-diff, docs/MODEL-RUNBOOK.md): a package at a time, its model against its body. Only the
+  # weekly run and a run by hand, and it reports without blocking (`continue-on-error`) until it has been run for a while; it is not in a pull request
+  # (the plan for that: docs/DESIGN-package-models.md, 7). Go and Dart only: a Rust crate is built to be read, and that needs the isolation.
+  model-diff:
+    needs: changes
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        pkg: [strings, path/filepath, encoding/json, net/url, bytes, strconv, "package:http"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - uses: dart-lang/setup-dart@2286a0c042b44434fe26d292bbce8d34f7ec662b # v1.8.2
+        with:
+          sdk: 3.13.6
+      - name: Check the model of the package
+        env:
+          PKG: ${{ matrix.pkg }}
+          RIVUS_DART: dart
+        run: make model-diff PKG="$PKG"
+
   # The one check that a ruleset requires. Every job above is in `needs`: it fails when one of them failed or was cancelled, and passes
   # when they passed or were skipped (nothing that a test reads changed). A job added above has to be added here.
   ci-ok:
     if: always()
-    needs: [changes, go-packages, test, bench-tools, dart, rust, gcp-exec, zoo-loosened, sandbox]
+    needs: [changes, go-packages, test, bench-tools, dart, rust, gcp-exec, zoo-loosened, sandbox, model-diff]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}

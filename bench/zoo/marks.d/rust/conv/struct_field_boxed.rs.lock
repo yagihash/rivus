@@ -1,0 +1,3 @@
+rust	conv/struct_field_boxed.rs	fp	@sink(none) @fp @nosink(conv-struct-field-boxed-decoy) @fp @ref(FIELD-SINK,PARITY)	fn decoy() { @decoy
+rust	conv/struct_field_boxed.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	conv/struct_field_boxed.rs	sink-none	@sink(none) @fp @nosink(conv-struct-field-boxed-decoy) @fp @ref(FIELD-SINK,PARITY)	fn decoy() { @decoy

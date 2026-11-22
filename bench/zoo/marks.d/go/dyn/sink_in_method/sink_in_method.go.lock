@@ -1,0 +1,2 @@
+go	dyn/sink_in_method/sink_in_method.go	sink-none	@sink(none)	func vuln() { @vuln
+go	dyn/sink_in_method/sink_in_method.go	sink-none	@sink(none) @nosink(dyn-sink-in-method-decoy)	func fixed() { @fixed

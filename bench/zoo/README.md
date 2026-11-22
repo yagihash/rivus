@@ -107,10 +107,10 @@ The same marker, the same judgement (`spec.json`), the same annotations and the 
 | file | what |
 | --- | --- |
 | `bench/zoo-dart/cells` | the package that rivus analyses (`rivus analyze` reads this directory; `compare.sh` has `zoo-dart`). `lib/<family>/<shape>.dart` is one cell = one file = three cases; `rules.yaml`; `packages/zoo_mark` has the **declarations** of the marks with empty bodies (`src`, `In`, `sinkCmd`/`sinkCmdBytes`/`sinkSql`/`sinkHtml`/`sinkPath(base, s)`/`sinkAny`, `cleanCmd` ..., `zooCase`) |
-| `bench/zoo-dart/exec` | the harness: the recording `zoo_mark` (`exec/zoo_mark`, put in place of the declarations by `dependency_overrides`), `lib/cases.dart` (the list of the cells' `register()`; the test checks that every file of `cells/lib` is there), `test/zoo_test.dart` (one `test()` per case) and `test/spec_test.dart` (the constants and the probes of `spec.json`, in both variants). rivus does not read this directory |
+| `bench/zoo-dart/exec` | the harness: the recording `zoo_mark` (`exec/zoo_mark`, put in place of the declarations by `dependency_overrides`), `lib/cases.dart` (the list of the cells' `register()`: **generated** from the files of `cells/lib` that have a `void register()`, not committed; the tests write it, `make zoo-dart-gen` writes it by hand), `test/zoo_test.dart` (one `test()` per case) and `test/spec_test.dart` (the constants and the probes of `spec.json`, in both variants). rivus does not read this directory |
 | `cmd/rivus/zoo_dart_test.go` | `TestZooExecDart` (`dart test --coverage` three times: variant 0, variant 1, variant 0 in the reverse order, in different processes; the lines of `cells/lib` that no run executed fail), `TestZooTruthDart`, `TestZooDart`, `TestZooMarkIndependentDart`. They share the comparison of the runs, the checks of the cells and of the lines, and the headline with the Go ones (`zoo_test.go`). `RIVUS_DART` names the Dart command; without it they skip (`RIVUS_REQUIRE_DART=1`: they fail) |
 
-Adding a cell: `cells/lib/<family>/<shape>.dart` with `// @cell(F/<family>/<shape>)` and `// @shape: ...` in the first lines, `void register() { zooCase('F/<family>/<shape>/vuln', vuln); ... }`, the three functions with `// @vuln`, `// @fixed`, `// @decoy` on the line of their declaration (more vulnerable cases are `vuln2` ... with their own tags: `<family>-<shape>-vuln2`), and the file in `exec/lib/cases.dart`.
+Adding a cell: `cells/lib/<family>/<shape>.dart` with `// @cell(F/<family>/<shape>)` and `// @shape: ...` in the first lines, `void register() { zooCase('F/<family>/<shape>/vuln', vuln); ... }`, the three functions with `// @vuln`, `// @fixed`, `// @decoy` on the line of their declaration (more vulnerable cases are `vuln2` ... with their own tags: `<family>-<shape>-vuln2`), and nothing else to register (`exec/lib/cases.dart` is generated). A skeleton package for a cell is a directory in `cells/packages/<name>/`; `make zoo-dart-gen` adds it to `cells/pubspec.yaml` (path dependencies in the order of the names, held by `TestZooDartGenerate`).
 The rest is as for Go (steps 3 and 4 above). Things that are Dart's:
 
 * The position of a sink is the first frame of the stack that is in `package:zoo_cells/` (a sink that a callback of the core library calls is the line of the callback). Keep a call of a sink on one line.
@@ -118,7 +118,7 @@ The rest is as for Go (steps 3 and 4 above). Things that are Dart's:
 * A case may be `async` (the harness awaits it). An Isolate cannot be a case yet: its code runs in another isolate and the coverage does not see it.
 * `In` (a source that is a parameter type, `rules.yaml` `param_type`) is a class with a final field `value`; the handler under test takes it: `void handle(In req) { // @source(tag)`.
 * Flutter itself is not in the zoo: `build`, `onPressed` and the state store are written as small skeletons in the cell (`state/provider-store`, `dart/tearoff-instance` `vuln3`).
-* A pubspec.lock is committed for `cells` and `exec`; CI resolves both with `dart pub get --enforce-lockfile`.
+* No pubspec.lock is committed for `cells` and `exec` (`.gitignore`: two branches that add a cell would conflict on it); CI and `scripts/dev-setup.sh` run `dart pub get`, and the tests run it when `.dart_tool/package_config.json` is missing.
 
 Stage 2 has 33 cells: **25 common forms** (the first 14 below, and `dyn/sink-behind-own-interface`, then 10 that came with the closure and global-variable cells of all three languages, see "Closure and global cells" at the end), which have the name of the Go cell (`call/direct`, `call/direct-in`, `call/depth3`, `call/multiret`,
 `clos/inline`, `clos/returned`, `clos/to-own-helper`, `cont/slice` (a list), `cont/map-key-vs-value`, `state/global-direct`,
@@ -197,11 +197,25 @@ refs are `XTALK` (a call of a function value reaches a closure that was given to
 the standard library calls its argument, and no model says so), `CLOSURE-IN-MEMORY` and `FUNC-VALUE-MEMORY` (a function value that
 was kept in a field, a variable, a list or a map is not followed to its call).
 
-## 正解を緩めるマークの固定(`marks.lock`)
+## 並べて出す PR が触るファイル(共有の一覧を持たない置き方)
 
-`@miss` / `@fp` / `@noisy` / `@na` / `@todo` / `@manual` / `@sink(none)` を、3 言語の zoo から集めて `bench/zoo/marks.lock` に固定している(1 行 = 言語、ファイル、種類、その行の注釈。行番号は持たない)。
+モデル(組み込みの 1 パッケージ)や zoo のセルを足す PR は、**そのパッケージ・セル専用のファイルだけ**を触る。次の共有の一覧は、持たないか、ディレクトリから作るか、セルごとに分けてある。
 
-- `TestZooMarksLock` が、ソースから作った一覧とファイルを比べる。マークを足す・変える・外すと失敗する。書き直すのは `ZOO_MARKS_UPDATE=1 go test -run ZooMarksLock ./cmd/rivus`。
-- CI の `zoo-loosened` が、PR 全体の `marks.lock` の変更を、**merge-base との差分**で見る(main を取り込んだマージコミットが持ち込む main の行は、差分に出ない)。承認の行(`Zoo-Loosened: <理由>。ユーザーの承認: <日付>`。範囲のどれかのコミットのメッセージ)を求めるのは、**緩め**だけ: (a) `marks.lock` にすでにあるセル(ファイル)に**行を足す**、または、そのセルのマークを**変える**(消して別の行を足す形も同じ)、(b) 新しいセルの行のうち、`@sink(none)`、`@miss`、`@fp` **以外**の種類(`@noisy`、`@na`、`@todo`、`@manual`)。**求めない**のは、新しいセル(`marks.lock` にまだないファイル)の `@sink(none)`、`@miss`、`@fp` の行(ユーザーが 2026-11-23 に承認した)。ただし、新しい `@miss` と `@fp` の行は、課題の `@ref(#N)` が付いていることを、承認の行があっても確認する。行が減る(直ってマークが外れる)のは何も不要。`marks.lock` を消して作り直す形(あるコミットがファイルを消す)は失敗する。
+| もとの共有のファイル | 今の置き方 | 並べて出したときの conflict |
+| --- | --- | --- |
+| `bench/zoo/marks.lock` | `bench/zoo/marks.d/<言語>/<セルのパス>.lock`(1 セル 1 ファイル。下の節) | なし(セルごとに別のファイル) |
+| `bench/parity/dead-allow.txt` | `internal/model/builtin/<モデルのファイル>.dead-allow`(1 モデルのファイル 1 ファイル。`bench/parity/README.md`) | なし |
+| `bench/zoo-dart/exec/lib/cases.dart` | `cells/lib` から**生成**(コミットしない。`make zoo-dart-gen`、テストも書く) | なし |
+| `bench/zoo-dart/{cells,exec}/pubspec.lock` | コミットしない(`.gitignore`。CI と `make setup` が `dart pub get`) | なし |
+| `bench/zoo-dart/cells/pubspec.yaml` の path 依存 | `cells/packages/` のディレクトリの一覧から生成(名前順。`TestZooDartGenerate` が固定) | 同じ 2 つの名前の間に足す PR 同士だけ(機械的に直せる: `make zoo-dart-gen`) |
+| `docs/ISSUES.md` の「次の番号」の行と表 | 行は廃止(最大 + 1)。モデルの PR の課題は `docs/issues/model-<パッケージ>-<名前>.md`(番号なし、表に載せない) | なし |
+| `docs/DECISIONS.md`、`docs/DESIGN-deps-cost.md` | モデルの PR は触らない(ADR は段階の PR とモデルの範囲の変更だけ。測定は PR の本文) | なし |
+
+## 正解を緩めるマークの固定(`marks.d`)
+
+`@miss` / `@fp` / `@noisy` / `@na` / `@todo` / `@manual` / `@sink(none)` を、3 言語の zoo から集めて `bench/zoo/marks.d` に固定している(1 行 = 言語、ファイル、種類、その行の注釈、ケース。行番号は持たない)。**セルのファイル 1 つにつき、固定のファイルも 1 つ**: `bench/zoo/marks.d/<言語>/<セルのパス>.lock`(例: `marks.d/dart/call/direct.dart.lock`)。セルを足す PR は、そのセルのファイルを足すだけで、ほかの PR と同じファイルを触らない。
+
+- `TestZooMarksLock` が、ソースから作った行とファイルの組(ファイルの過不足を含む)を比べる。マークを足す・変える・外すと失敗する。書き直すのは `ZOO_MARKS_UPDATE=1 go test -run ZooMarksLock ./cmd/rivus`。
+- CI の `zoo-loosened` が、PR 全体の `marks.d` の変更を、**merge-base との差分**で見る(main を取り込んだマージコミットが持ち込む main の行は、差分に出ない)。承認の行(`Zoo-Loosened: <理由>。ユーザーの承認: <日付>`。範囲のどれかのコミットのメッセージ)を求めるのは、**緩め**だけ: (a) merge-base の `marks.d` にすでにあるセル(そのセルのファイルが merge-base にある)に**行を足す**、または、そのセルのマークを**変える**(消して別の行を足す形も同じ)、(b) 新しいセルの行のうち、`@sink(none)`、`@miss`、`@fp` **以外**の種類(`@noisy`、`@na`、`@todo`、`@manual`)。**求めない**のは、新しいセル(そのセルのファイルが merge-base にない)の `@sink(none)`、`@miss`、`@fp` の行(ユーザーが 2026-11-23 に承認した)。ただし、新しい `@miss` と `@fp` の行は、課題の `@ref(#N)`(`docs/issues/N-*.md` がある)か `@ref(model-<パッケージ>-<名前>)`(`docs/issues/model-<パッケージ>-<名前>.md` があり、`docs/issues/README.md` の節がある)が付いていることを、承認の行があっても確認する(`PARITY` のような別の名前は、課題のほかに足してよい)。すでにある行は、再確認しない。行が減る(直ってマークが外れる)のは何も不要。セルのファイルを消して作り直す形(範囲のコミットがファイルを消し、head にまたある)、パスと行のセルが合わないファイル、`marks.d` に `.lock` でないファイルがあること、単一の `marks.lock` が head にあること、列が減ることは失敗する。セルのソースのファイルを移すと、新しいセルとして扱う(分ける前と同じ)。
 - **付け替えの決まり**(ユーザーが相談役に判断を任せた、2026-11-22): `@miss(silent)` を「テストが確かめた不確実性の注記の kind」(`@miss(depth_limit)` など)へ付け替えるのは、テストが「a trace has come」と出力し、kind を指定したときに限り、相談役やユーザーに聞かずに行ってよい(`Zoo-Loosened:` の行は、事実のとおりに書く)。逆向き(注記つき → silent)、`@miss` / `@fp` を既存の行に新しく足す、`@sink(tag)` → `none`、`@na` / `@todo` の追加は、これまでどおり、聞く。
 - 範囲: zoo だけ。`@sink(tag)` の数が減る向きと、curated / wild / go-scale の正解の件数は、まだ固定していない([ROADMAP.md](../../docs/ROADMAP.md))。

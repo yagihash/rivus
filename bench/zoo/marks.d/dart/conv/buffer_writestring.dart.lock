@@ -1,0 +1,2 @@
+dart	conv/buffer_writestring.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	conv/buffer_writestring.dart	sink-none	@sink(none) @nosink(conv-buffer-writestring-decoy)	void decoy() { @decoy

@@ -1,0 +1,2 @@
+go	call/depth3/depth3.go	sink-none	@sink(none)	func vuln() { @vuln
+go	call/depth3/depth3.go	sink-none	@sink(none) @nosink(call-depth3-decoy)	func fixed() { @fixed

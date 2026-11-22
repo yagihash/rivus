@@ -1,0 +1,2 @@
+go	clos/to_own_helper/to_own_helper.go	sink-none	@sink(none)	func fixed() { @fixed
+go	clos/to_own_helper/to_own_helper.go	sink-none	@sink(none) @nosink(clos-to-own-helper-decoy)	func decoy() { @decoy

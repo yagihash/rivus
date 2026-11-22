@@ -2,7 +2,8 @@
 
 課題は、リポジトリの中のファイルで持つ(GitHub の Issue は使わない)。一覧は、この `ISSUES.md`。1 件は `docs/issues/<番号>-<短い名前>.md`。
 
-- **番号**: GitHub の番号を引き継ぐ(#74〜#99)。zoo の `@ref(#N)` と、コミットの `Zoo-Loosened:` の行が指すのは、この番号。新しい課題は 145 から(100〜107 は、直してから記録したもの。108、109、110〜122 は 2026-11-22 に開いた)。#1〜#73 は、日次レビューの指摘(GitHub 側で閉じ済み。ここには写していない)。
+- **番号**: GitHub の番号を引き継ぐ(#74〜#99)。zoo の `@ref(#N)` と、コミットの `Zoo-Loosened:` の行が指すのは、この番号。**新しい課題の番号は、`docs/issues/` の最大の番号 + 1**(この文書に「次の番号」の行は持たない。PR のたびに衝突するため)。番号は相談役が付ける。100〜107 は、直してから記録したもの。#1〜#73 は、日次レビューの指摘(GitHub 側で閉じ済み。ここには写していない)。
+- **番号を持たない課題**: モデルを作る PR が見つけた見逃しと誤検出は、`docs/issues/model-<パッケージ>-<名前>.md`(様式は [`issues/README.md`](issues/README.md))に書き、zoo の `@ref(model-<パッケージ>-<名前>)` から指す。**この一覧の表には、PR では載せない**(載せると、PR のたびに表の末尾で衝突する)。相談役が、あとでまとめて番号にして表に載せる。`TestIssuesFiles` が、番号の一意性、表と番号つきのファイルの一致、名前の形のファイルの節を確かめる。
 - **状態**: `open` / `partial`(一部直った。残りを題に書く)/ `closed`(直した: コミットとテスト)/ `deferred`(後回し。理由と見直す条件)/ `wontfix`(やらない)。
 - **誰が何をするか**: 中身と状態は相談役が決め、開発者が書いてコミットする。開発者が作業中に見つけたものは、相談役を待たずに `open` で足してよい(次の報告に番号を書く)。閉じるのは、相談役がレビューで確かめてから(開発者は「閉じられる」と報告する)。`deferred` と `wontfix` は相談役が決める。
 - **公開のリポジトリの決まり**: 直していない rivus 自身の弱点(対象が意図して起こせるサイレントな見逃し、隔離の漏れ)の再現の詳細は、ここに書かない。直るまでは、相談役のレビューのファイル(`.claude/reviews/`。追跡されない)にだけ置き、直ってから `closed` で記録する。
@@ -61,6 +62,9 @@
 | [#140](issues/140-one-category-per-symbol.md) | モデル: 1 つのシンボルに複数のカテゴリの行を持てない(同じシンボルの行は足し合わされ、先頭のカテゴリになる) | 道具(重さ: 低) | 全 | 0 | open | zoo `F/dart/googleapis-pubsub-subscription-name` |
 | [#141](issues/141-gql-named-bindings-fp.md) | Dart: 定数の GQL の `namedBindings` に入力を入れる形が、`gqlQuery.queryString` の sink で報告される(`field_imprecision`) | 精度(誤検出。重さ: 低) | Dart | 0 | open | zoo `F/dart/googleapis-datastore-run-query` |
 | [#142](issues/142-go-gcp-resource-name.md) | Go の Google Cloud のモデルに、名前の sink(`resource_name`)を足す(Storage のバケットとオブジェクト、Pub/Sub のトピックと購読) | モデル(重さ: 中) | Go | 1 | open | - |
+| [#146](issues/146-sandbox-target-triple.md) | Rust の出力に、読んだ構成(target triple)が出ない(macOS のサンドボックスは macOS 向けの分岐を読む) | 注記つきの限界 | Rust | 0 | open | - |
+| [#147](issues/147-sandbox-workspace-crate.md) | ワークスペースの中の crate が、サンドボックスの下で抽出できない | 利用者を止める(閉じる向き) | Rust | 0 | open | - |
+| [#148](issues/148-linux-rust-extractor-without-isolation.md) | Linux(CI、クラウドのモデル作成)での Rust の extractor の扱い(隔離なしでは、取得したクレートを実行しない) | 道具(重さ: 中) | Rust | 0 / 3 | open | - |
 
 ## 閉じたもの
 

@@ -1,0 +1,2 @@
+dart	state/save_restore.dart	sink-none	@sink(none)	void vuln() { @vuln
+dart	state/save_restore.dart	sink-none	@sink(none) @nosink(state-save-restore-decoy)	void fixed() { @fixed

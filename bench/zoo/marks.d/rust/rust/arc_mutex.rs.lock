@@ -1,0 +1,4 @@
+rust	rust/arc_mutex.rs	miss	@source(rust-arc-mutex-decoy) @miss(unmodeled_library_call) @ref(CAP)	fn decoy() { @decoy
+rust	rust/arc_mutex.rs	miss	@source(rust-arc-mutex-vuln) @miss(unmodeled_library_call) @ref(CAP)	fn vuln() { @vuln
+rust	rust/arc_mutex.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	rust/arc_mutex.rs	sink-none	@sink(none) @nosink(rust-arc-mutex-decoy)	fn decoy() { @decoy

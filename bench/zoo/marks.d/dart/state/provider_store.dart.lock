@@ -1,0 +1,4 @@
+dart	state/provider_store.dart	fp	@sink(none) @fp @nosink(state-provider-store-decoy) @fp @ref(KEYED-MAP)	void fixed() { @fixed
+dart	state/provider_store.dart	na	@na(go: no state-management store of a framework)	-
+dart	state/provider_store.dart	sink-none	@sink(none)	void vuln() { @vuln
+dart	state/provider_store.dart	sink-none	@sink(none) @fp @nosink(state-provider-store-decoy) @fp @ref(KEYED-MAP)	void fixed() { @fixed

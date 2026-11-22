@@ -1,0 +1,2 @@
+go	dyn/sink_as_value/sink_as_value.go	sink-none	@sink(none)	func fixed() { @fixed
+go	dyn/sink_as_value/sink_as_value.go	sink-none	@sink(none) @nosink(dyn-sink-as-value-decoy)	func decoy() { @decoy

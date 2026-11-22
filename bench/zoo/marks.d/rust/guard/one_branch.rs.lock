@@ -1,0 +1,3 @@
+rust	guard/one_branch.rs	fp	@sink(none) @fp @ref(PARITY)	fn vuln() { @vuln
+rust	guard/one_branch.rs	sink-none	@sink(none) @fp @ref(PARITY)	fn vuln() { @vuln
+rust	guard/one_branch.rs	sink-none	@sink(none) @nosink(guard-one-branch-decoy)	fn fixed() { @fixed

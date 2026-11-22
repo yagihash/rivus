@@ -10,9 +10,9 @@ dependencies:
     path: packages/googleapis
   http:
     path: packages/http
-  zoo_mark:
-    path: packages/zoo_mark
   zoo_dep:
     path: packages/zoo_dep
   zoo_flutter:
     path: packages/zoo_flutter
+  zoo_mark:
+    path: packages/zoo_mark

@@ -1,0 +1,14 @@
+ruleset: test/synth@1
+sinks:
+  - symbol: example.com/synth.Query
+    args: [0]
+    category: sql_injection
+  - symbol: example.com/synth.Run
+    args: [5]
+    category: command_injection
+  # accepts a label that the source does not have: the declared position gives no finding
+  - symbol: example.com/synth.Open
+    parts:
+      - {arg: 0, field: URL}
+    accepts: [secret]
+    category: ssrf

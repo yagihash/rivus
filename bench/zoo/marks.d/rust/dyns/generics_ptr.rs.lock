@@ -1,0 +1,2 @@
+rust	dyns/generics_ptr.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	dyns/generics_ptr.rs	sink-none	@sink(none) @nosink(dyn-generics-ptr-decoy)	fn decoy() { @decoy

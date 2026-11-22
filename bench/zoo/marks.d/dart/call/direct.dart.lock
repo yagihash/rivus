@@ -1,0 +1,2 @@
+dart	call/direct.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	call/direct.dart	sink-none	@sink(none) @nosink(call-direct-decoy)	void decoy() { @decoy

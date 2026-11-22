@@ -1,0 +1,2 @@
+rust	rust/closure_fn.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	rust/closure_fn.rs	sink-none	@sink(none) @nosink(rust-closure-fn-decoy)	fn decoy() { @decoy

@@ -1,0 +1,5 @@
+dart	dyn/stdlib_writer_own.dart	fp	@sink(none) @fp @nosink(dyn-stdlib-writer-own-decoy) @fp @ref(XTALK)	void fixed() { @fixed
+dart	dyn/stdlib_writer_own.dart	noisy	@sink(dyn-stdlib-writer-own-decoy) @noisy(2) @ref(DYN-IMPLS)	void fixed() { @fixed
+dart	dyn/stdlib_writer_own.dart	noisy	@sink(dyn-stdlib-writer-own-vuln) @noisy(2) @ref(DYN-IMPLS)	-
+dart	dyn/stdlib_writer_own.dart	sink-none	@sink(none)	void vuln() { @vuln
+dart	dyn/stdlib_writer_own.dart	sink-none	@sink(none) @fp @nosink(dyn-stdlib-writer-own-decoy) @fp @ref(XTALK)	void fixed() { @fixed

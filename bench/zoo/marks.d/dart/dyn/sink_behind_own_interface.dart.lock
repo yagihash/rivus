@@ -1,0 +1,2 @@
+dart	dyn/sink_behind_own_interface.dart	sink-none	@sink(none)	void vuln() { @vuln
+dart	dyn/sink_behind_own_interface.dart	sink-none	@sink(none) @nosink(dyn-sink-behind-own-interface-decoy)	void fixed() { @fixed

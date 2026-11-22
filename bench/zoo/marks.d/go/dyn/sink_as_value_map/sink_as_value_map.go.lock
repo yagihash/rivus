@@ -1,0 +1,2 @@
+go	dyn/sink_as_value_map/sink_as_value_map.go	sink-none	@sink(none)	func fixed() { @fixed
+go	dyn/sink_as_value_map/sink_as_value_map.go	sink-none	@sink(none) @nosink(dyn-sink-as-value-map-decoy)	func decoy() { @decoy

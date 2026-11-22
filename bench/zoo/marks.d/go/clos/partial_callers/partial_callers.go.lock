@@ -1,0 +1,2 @@
+go	clos/partial_callers/partial_callers.go	sink-none	@sink(none)	func decoy() { @decoy
+go	clos/partial_callers/partial_callers.go	sink-none	@sink(none)	func fixed() { @fixed

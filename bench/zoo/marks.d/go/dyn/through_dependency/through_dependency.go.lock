@@ -1,0 +1,4 @@
+go	dyn/through_dependency/through_dependency.go	miss	@source(dyn-through-dependency-decoy) @miss(dependency_body_unread) @ref(ADR-075)	func decoy() { @decoy
+go	dyn/through_dependency/through_dependency.go	miss	@source(dyn-through-dependency-vuln) @miss(dependency_body_unread) @ref(ADR-075)	func vuln() { @vuln
+go	dyn/through_dependency/through_dependency.go	sink-none	@sink(none)	func vuln() { @vuln
+go	dyn/through_dependency/through_dependency.go	sink-none	@sink(none) @nosink(dyn-through-dependency-decoy)	func fixed() { @fixed

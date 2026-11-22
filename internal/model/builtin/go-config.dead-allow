@@ -1,0 +1,10 @@
+# The rows of go-config.yaml that no call in the zoo or the curated targets hits (TestBuiltinRowsAreHitByTheZoo). "symbol | reason"; see bench/parity/README.md.
+(*flag.FlagSet).Bool | debt | the standard library: no cell of the zoo calls it yet
+(*flag.FlagSet).Duration | debt | the standard library: no cell of the zoo calls it yet
+(*flag.FlagSet).Int | debt | the standard library: no cell of the zoo calls it yet
+(*flag.FlagSet).String | debt | the standard library: no cell of the zoo calls it yet
+flag.Duration | debt | the standard library: no cell of the zoo calls it yet
+flag.Int | debt | the standard library: no cell of the zoo calls it yet
+os.Environ | debt | the standard library: no cell of the zoo calls it yet
+os.LookupEnv | debt | the standard library: no cell of the zoo calls it yet
+os.ReadFile | debt | the standard library: no cell of the zoo calls it yet

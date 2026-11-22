@@ -1,0 +1,168 @@
+package main
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strings"
+
+	"go.yaml.in/yaml/v3"
+
+	"github.com/yagihash/rivus/internal/model"
+)
+
+// A model file as the tool needs it: the rows of one package (flows and sinks), the notes in the comments next to the rows,
+// and the text of the file without the rows of the package (the run that reads the bodies).
+
+// Row is one row of a model file that is checked.
+type Row struct {
+	Symbol string
+	Sink   *model.Sink       // a sinks row
+	Prop   *model.Propagator // a propagators row
+}
+
+// Note is a `# model-diff: <kind> <symbol> <text>` comment.
+type Note struct {
+	Kind, Symbol, Text string
+	File               string
+	Line               int
+}
+
+var startRe = regexp.MustCompile(`^\s*#\s*model-diff:`)
+
+var noteRe = regexp.MustCompile(`^\s*#\s*model-diff:\s*(\S+)\s+(\S+)\s*(.*?)\s*$`)
+
+// ParseNotes collects the notes of a model file, line by line (not with the parser of the model: a comment is not data of the model).
+// `extra` needs a reason; `value <Type> <expression>` (Dart) says how to make a value of a class (the receiver, an argument): `$S` is where the source goes.
+func ParseNotes(file, text string) ([]Note, []string) {
+	var notes []Note
+	var errs []string
+	for i, l := range strings.Split(text, "\n") {
+		m := noteRe.FindStringSubmatch(l)
+		if m == nil {
+			if startRe.MatchString(l) {
+				errs = append(errs, fmt.Sprintf("%s:%d: a note is `# model-diff: <extra|value> <symbol> <text>`", file, i+1))
+			}
+			continue
+		}
+		n := Note{Kind: m[1], Symbol: m[2], Text: m[3], File: file, Line: i + 1}
+		switch n.Kind {
+		case "extra", "value":
+			if n.Text == "" {
+				errs = append(errs, fmt.Sprintf("%s:%d: the note `%s %s` has no %s", file, n.Line, n.Kind, n.Symbol, map[string]string{"extra": "reason", "value": "expression"}[n.Kind]))
+				continue
+			}
+		default:
+			errs = append(errs, fmt.Sprintf("%s:%d: unknown kind of note %q (extra, value)", file, n.Line, n.Kind))
+			continue
+		}
+		notes = append(notes, n)
+	}
+	return notes, errs
+}
+
+// LoadRows reads a model file and returns its flows rows and sinks rows whose symbol is of the package.
+func LoadRows(path, lang, pkg string) ([]Row, string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, "", err
+	}
+	var rs model.RuleSet
+	if err := yaml.Unmarshal(data, &rs); err != nil {
+		return nil, "", fmt.Errorf("%s: %v", path, err)
+	}
+	var rows []Row
+	for i := range rs.Propagators {
+		p := &rs.Propagators[i]
+		if SymbolPackage(lang, p.Symbol) == pkg && len(p.Flows) > 0 {
+			rows = append(rows, Row{Symbol: p.Symbol, Prop: p})
+		}
+	}
+	for i := range rs.Sinks {
+		s := &rs.Sinks[i]
+		if SymbolPackage(lang, s.Symbol) == pkg {
+			rows = append(rows, Row{Symbol: s.Symbol, Sink: s})
+		}
+	}
+	return rows, string(data), nil
+}
+
+var goPkgRe = regexp.MustCompile(`^(.*?)(\.v[0-9]+)?\.`)
+
+// SymbolPackage is the package that a symbol of a model names ("" when it names none).
+func SymbolPackage(lang, sym string) string {
+	if lang == "dart" {
+		if i := strings.Index(sym, "#"); strings.HasPrefix(sym, "package:") && i > 0 {
+			name := sym[len("package:"):i]
+			if j := strings.Index(name, "/"); j > 0 {
+				name = name[:j]
+			}
+			return "package:" + name
+		}
+		return ""
+	}
+	s := strings.TrimPrefix(sym, "(")
+	s = strings.TrimPrefix(s, "*")
+	if i := strings.Index(s, ")"); i >= 0 {
+		s = s[:i]
+	}
+	slash := strings.LastIndex(s, "/") + 1
+	m := goPkgRe.FindStringSubmatchIndex(s[slash:])
+	if m == nil {
+		return ""
+	}
+	end := m[3] // the end of the name before ".vN" or before the dot
+	if m[4] >= 0 {
+		end = m[5]
+	}
+	return s[:slash+end]
+}
+
+var rowStartRe = regexp.MustCompile(`^  - `)
+
+// DropPackage returns the text of a model file without the rows (of any section) whose symbol is of the package: the models
+// of the others stay as they are. A row is the lines from its `  - ` to the next one or to the next key.
+func DropPackage(text, lang, pkg string) string {
+	lines := strings.Split(text, "\n")
+	var out []string
+	for i := 0; i < len(lines); {
+		if !rowStartRe.MatchString(lines[i]) {
+			out = append(out, lines[i])
+			i++
+			continue
+		}
+		j := i + 1
+		for j < len(lines) && !rowStartRe.MatchString(lines[j]) && (lines[j] == "" || lines[j][0] == ' ' || lines[j][0] == '#') {
+			j++
+		}
+		// the comment lines at the end of the block belong to the next row
+		k := j
+		for k > i+1 && (strings.TrimSpace(lines[k-1]) == "" || strings.HasPrefix(strings.TrimSpace(lines[k-1]), "#") && !strings.HasPrefix(lines[k-1], "    ")) {
+			k--
+		}
+		drop := false
+		for _, l := range lines[i:k] {
+			if m := symbolLineRe.FindStringSubmatch(l); m != nil {
+				drop = SymbolPackage(lang, strings.Trim(m[1], `"'`)) == pkg
+				break
+			}
+		}
+		if !drop {
+			out = append(out, lines[i:k]...)
+		}
+		out = append(out, lines[k:j]...)
+		i = j
+	}
+	return strings.Join(out, "\n")
+}
+
+var symbolLineRe = regexp.MustCompile(`^(?:  - |    )symbol:\s*(\S+)`)
+
+// BuiltinFiles lists the built-in model files of a checkout.
+func BuiltinFiles(repo string) ([]string, error) {
+	fs, err := filepath.Glob(filepath.Join(repo, "internal", "model", "builtin", "*.yaml"))
+	sort.Strings(fs)
+	return fs, err
+}

@@ -100,11 +100,16 @@ echo "dev-setup: $(dart --version 2>&1)"
 # --- dart pub get: the packages that the tests and the Dart extractor read (the list of the job `dart` in ci.yml) ---
 # every one has a pubspec.lock: the locked versions are used, or the step fails
 for d in extractor/dart extractor/dart/test/sample extractor/dart/test/monorepo/app extractor/dart/test/monorepo/shared \
-  extractor/dart/test/versions/a extractor/dart/test/versions/b bench/dart-curated bench/zoo-dart/cells bench/zoo-dart/exec; do
+  extractor/dart/test/versions/a extractor/dart/test/versions/b bench/dart-curated; do
   if [ -f "$d/pubspec.yaml" ]; then
     echo "dev-setup: dart pub get in $d"
     (cd "$d" && dart pub get --enforce-lockfile)
   fi
+done
+# the two of the Dart zoo have no pubspec.lock in the repository (not committed): the versions are resolved now
+for d in bench/zoo-dart/cells bench/zoo-dart/exec; do
+  echo "dev-setup: dart pub get in $d"
+  (cd "$d" && dart pub get)
 done
 
 echo

@@ -1,0 +1,2 @@
+go	clos/range_func/range_func.go	sink-none	@sink(none)	func fixed() { @fixed
+go	clos/range_func/range_func.go	sink-none	@sink(none) @nosink(clos-range-func-decoy)	func decoy() { @decoy

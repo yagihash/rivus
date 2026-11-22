@@ -1,0 +1,3 @@
+dart	cont/map_key_vs_value.dart	fp	@sink(none) @fp @nosink(cont-map-key-vs-value-decoy) @fp @ref(KEYED-MAP)	void decoy() { @decoy
+dart	cont/map_key_vs_value.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	cont/map_key_vs_value.dart	sink-none	@sink(none) @fp @nosink(cont-map-key-vs-value-decoy) @fp @ref(KEYED-MAP)	void decoy() { @decoy

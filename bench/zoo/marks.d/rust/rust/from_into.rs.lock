@@ -1,0 +1,2 @@
+rust	rust/from_into.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	rust/from_into.rs	sink-none	@sink(none) @nosink(rust-from-into-decoy)	fn decoy() { @decoy

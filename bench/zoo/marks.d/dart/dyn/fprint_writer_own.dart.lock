@@ -1,0 +1,2 @@
+dart	dyn/fprint_writer_own.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	dyn/fprint_writer_own.dart	sink-none	@sink(none) @nosink(dyn-fprint-writer-own-decoy)	void decoy() { @decoy
