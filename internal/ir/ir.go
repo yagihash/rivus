@@ -104,6 +104,12 @@ type LoadError struct {
 	Func string `json:"func,omitempty"`
 }
 
+// BodyNotRead is a unit (a Go package, `package:name` of Dart) whose functions the extractor left without a body.
+type BodyNotRead struct {
+	Unit      string `json:"unit"`
+	Functions int    `json:"functions"`
+}
+
 // TestsSkipped says what an extractor did not read because the build of the project does not ship it
 // (ADR-062): the test files, the tests, examples and benchmarks of a crate, the dependencies that are
 // declared for development only. The same shape for every language.
@@ -602,6 +608,10 @@ type Program struct {
 	CallerMarks bool `json:"caller_marks,omitempty"`
 	// TestsSkipped is what was not read because the build does not ship it (ADR-062).
 	TestsSkipped *TestsSkipped `json:"tests_skipped,omitempty"`
+	// BodiesNotRead is what the extractor did not read because it was told the models stand for the package
+	// (docs/DESIGN-package-models.md 2): per unit, how many functions it has that were left without a body. Empty
+	// when the extractor was told no such package.
+	BodiesNotRead []BodyNotRead `json:"bodies_not_read,omitempty"`
 
 	// Files are the source files named by the positions, set by the reader
 	// before the functions of dependencies that nothing reaches are dropped

@@ -335,6 +335,17 @@ func (o *analyzeOpts) extractRaw(lang string) ([]byte, error) {
 			args = append(args, "--allow-deps-under", d)
 		}
 	}
+	if lang == langDart {
+		// the code of these packages is not read: the models stand for it (Rust: the extractor reads it all, and the
+		// filter of the core leaves it out)
+		seen := map[string]bool{}
+		for _, d := range o.extractorBodyReplaced {
+			if !seen[d] {
+				seen[d] = true
+				args = append(args, "--body-replaced", d)
+			}
+		}
+	}
 	if (lang == langRust || lang == langDart) && o.tests {
 		args = append(args, "--include-tests")
 	}
@@ -400,6 +411,12 @@ func (o *analyzeOpts) isolation() *isolationOpts {
 // concatenation, and the texts all come from the stream.
 func (o *analyzeOpts) loadLangs(langs []string, patterns []string, rules *model.Rules) (*loaded, error) {
 	merged := &ir.Program{}
+	o.extractorBodyReplaced = nil
+	if !o.dropAfterRead {
+		for _, d := range rules.Declared {
+			o.extractorBodyReplaced = append(o.extractorBodyReplaced, d.Package)
+		}
+	}
 	var goProg *loaded
 	for _, lang := range langs {
 		var p *ir.Program
@@ -437,6 +454,7 @@ func (o *analyzeOpts) loadLangs(langs []string, patterns []string, rules *model.
 		merged.FuncTexts = append(merged.FuncTexts, p.FuncTexts...)
 		merged.LoadErrors = append(merged.LoadErrors, p.LoadErrors...)
 		merged.TestsSkipped = merged.TestsSkipped.Add(p.TestsSkipped)
+		merged.BodiesNotRead = append(merged.BodiesNotRead, p.BodiesNotRead...)
 		// (a program of several languages is not read as a closed world: what the other language calls is not said)
 		merged.CallerMarks = len(langs) == 1 && p.CallerMarks
 		merged.Files = append(merged.Files, p.Files...)
