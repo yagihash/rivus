@@ -362,6 +362,11 @@ func TestPassStatsChangeNothing(t *testing.T) {
 	delete(st, "largest_scc_packages")
 	delete(st, "summary_sizes")
 	delete(st, "dispatch_candidates")
+	// the notes of the findings by symbol are in the summary, with -pass-stats only
+	if sm, ok := with["summary"].(map[string]any); ok {
+		delete(sm, "on_findings_top")
+		delete(sm, "on_findings_dispatch_candidates")
+	}
 	a, _ := json.Marshal(plain)
 	b, _ := json.Marshal(with)
 	if !bytes.Equal(a, b) {
