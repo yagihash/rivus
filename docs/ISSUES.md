@@ -49,6 +49,7 @@
 | [#120](issues/120-sandbox-ancestor-cargo-config.md) | 祖先の .cargo/config.toml があると、抽出が止まる(読み取りだけ許す案) | 利用者を止める(閉じる向き) | Rust | 0 | open | - |
 | [#121](issues/121-sandbox-review-sw6-sw7.md) | サンドボックスのレビューの小さい点(SW-6、SW-7) | 隔離の仕上げ | Rust | 0 | open | - |
 | [#122](issues/122-ir-file-has-toolchain-path.md) | IR の `file` に、std のソースの絶対パス(ツールチェインの場所)が入る | 再現性(重さ: 低) | Rust | 0 | open | - |
+| [#123](issues/123-graph-callers-skipped-languages.md) | graph callers / callees / dispatchers の答えが、読まなかった言語を言わない | 黙った見逃し | 全(graph) | 0 | open | - |
 
 ## 閉じたもの
 
@@ -66,4 +67,3 @@
 | [#105](issues/105-rust-cmp-min-max-pure.md) | Rust: std::cmp::min / max の pure | 誤ったモデル(直した) | Rust | 5 | closed | 動物園 `F/conv/builtin-minmax`(Rust) |
 | [#106](issues/106-path-exhaustive-honesty.md) | graph: path の exhaustive | 誤った答え(直した) | 全(graph) | 1 | closed | `internal/graphq/exhaustive_test.go` |
 | [#107](issues/107-zoo-recursion-approximation-verdict.md) | 動物園: recursion_approximation の判定 | 道具・ベンチ(直した) | 全 | 1 | closed | 動物園のテスト(`cmd/rivus/zoo_*_test.go`) |
-| [#123](issues/123-graph-callers-skipped-languages.md) | graph callers / callees / dispatchers の答えが、読まなかった言語を言わない | 黙った見逃し | 全(graph) | 0 | open | - |
