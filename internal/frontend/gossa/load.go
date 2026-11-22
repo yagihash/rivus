@@ -186,12 +186,18 @@ func Load(dir string, patterns []string, opts Options) (*Program, error) {
 	p.Inputs = collectInputs(pkgs)
 	if !opts.Tests {
 		p.TestFilesSkipped = countTestFiles(pkgs)
-		for _, pkg := range pkgs {
-			for _, f := range pkg.IgnoredFiles {
-				p.IgnoredFiles++
-				if len(p.IgnoredFileNames) < 5 {
-					p.IgnoredFileNames = append(p.IgnoredFileNames, filepath.Base(f))
+	}
+	// the files that the build constraints leave out of the packages that were asked for (not the dependencies: their
+	// constraints are the library's own), by the path under the directory when there is one
+	for _, pkg := range pkgs {
+		for _, f := range pkg.IgnoredFiles {
+			p.IgnoredFiles++
+			if len(p.IgnoredFileNames) < 5 {
+				name := f
+				if rel, err := filepath.Rel(absDir, f); err == nil && !strings.HasPrefix(rel, "..") {
+					name = filepath.ToSlash(rel)
 				}
+				p.IgnoredFileNames = append(p.IgnoredFileNames, name)
 			}
 		}
 	}

@@ -12,7 +12,7 @@ import (
 // The files that the build constraints leave out of the configuration (`//go:build ignore`, a `_windows.go` on another
 // system) are counted in summary.outside_configuration (not in the tests); a project with none has no such field.
 func TestFilesOutsideTheBuildConfigurationAreSaid(t *testing.T) {
-	run := func(files map[string]string) (oc *struct {
+	run := func(files map[string]string, extra ...string) (oc *struct {
 		Files    int      `json:"files"`
 		Examples []string `json:"examples"`
 	}, inTests bool) {
@@ -24,7 +24,7 @@ func TestFilesOutsideTheBuildConfigurationAreSaid(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		cmd := exec.Command(binary, "analyze", "./...")
+		cmd := exec.Command(binary, append(append([]string{"analyze"}, extra...), "./...")...)
 		cmd.Dir = dir
 		out, err := cmd.Output()
 		if err != nil {
@@ -52,6 +52,10 @@ func TestFilesOutsideTheBuildConfigurationAreSaid(t *testing.T) {
 	})
 	if got == nil || got.Files != 2 || len(got.Examples) != 2 || inTests {
 		t.Errorf("outside_configuration: %+v (in stats.tests_skipped: %v)", got, inTests)
+	}
+	// (also with -tests: the count did not depend on it)
+	if withTests, _ := run(map[string]string{"only_windows.go": "package main\n\nfunc win() {}\n"}, "-tests"); withTests == nil || withTests.Files != 1 || len(withTests.Examples) != 1 || withTests.Examples[0] != "only_windows.go" {
+		t.Errorf("outside_configuration with -tests: %+v", withTests)
 	}
 	if none, _ := run(map[string]string{}); none != nil {
 		t.Errorf("a project with nothing left out has outside_configuration: %+v", none)

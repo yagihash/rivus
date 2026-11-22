@@ -101,7 +101,13 @@ func (c *conv) call(ci ssa.CallInstruction, v *ssa.Call, cc *ssa.CallCommon, pos
 	default:
 		switch fn := cc.Value.(type) {
 		case *ssa.Builtin:
-			in.Callee = &ir.Callee{Kind: ir.CalleeStatic, Symbol: "builtin." + fn.Name()}
+			// the builtins of package unsafe are named with it ("builtin.unsafe.String"): another extractor's builtin of the
+			// same short name is not taken for them (taint.builtin)
+			name := fn.Name()
+			if obj := fn.Object(); obj != nil && obj.Pkg() != nil && obj.Pkg().Path() == "unsafe" {
+				name = "unsafe." + name
+			}
+			in.Callee = &ir.Callee{Kind: ir.CalleeStatic, Symbol: "builtin." + name}
 			in.Args = c.vals(cc.Args)
 		case *ssa.Function:
 			in.Callee = &ir.Callee{Kind: ir.CalleeStatic, Func: ir.FuncID(gossa.FuncID(fn)), Symbol: gossa.Symbol(fn), Recv: fn.Signature.Recv() != nil && len(cc.Args) > 0}

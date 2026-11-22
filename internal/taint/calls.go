@@ -724,8 +724,8 @@ func (s *state) builtin(cc *callCtx, name string) {
 				s.copyLocs(s.locs(a), []Loc{{cc.roots[0], ""}}, name, cc.in)
 			}
 		}
-	case "String", "Slice", "StringData", "SliceData", "Add":
-		// unsafe.String / Slice / StringData / SliceData / Add: the result is made of the first argument (the
+	case "unsafe.String", "unsafe.Slice", "unsafe.StringData", "unsafe.SliceData", "unsafe.Add":
+		// unsafe.String / Slice / StringData / SliceData / Add (the Go extractor names them with the package): the result is made of the first argument (the
 		// pointer, or the data); the length does not flow
 		if len(args) > 0 && len(cc.roots) > 0 {
 			s.copyLocs(s.locs(args[0]), []Loc{{cc.roots[0], ""}}, "unsafe."+name, cc.in)
