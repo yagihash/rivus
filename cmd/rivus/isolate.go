@@ -47,12 +47,14 @@ const hostileMarker = ".rivus-hostile"
 type isolationOpts struct {
 	// extractor is the command of the Rust extractor (the sandbox runs it by its path)
 	extractor []string
-	image   string
-	memory  string
-	cpus    int
-	pids    int
-	timeout time.Duration
-	noFetch bool
+	// execExtra are programs that the extraction may run besides the build's own (a test of the sandbox runs its probe so)
+	execExtra []string
+	image     string
+	memory    string
+	cpus      int
+	pids      int
+	timeout   time.Duration
+	noFetch   bool
 	// maxOutput is the most the container may write to its standard output (the stream of the IR); 0: 4 GiB
 	maxOutput int64
 	// allowHosts are the hosts (-allow-fetch-host) that the fetch stage may get from although Cargo.lock names them and

@@ -39,6 +39,7 @@ var (
 	udp       = flag.String("udp", "", "host:port of a UDP listener that the test started")
 	sensitive = flag.Bool("sensitive", false, "also run the checks that touch what is private to the user (the pasteboard, the keychain): only under the sandbox, where they must fail; never without it")
 	targets   = flag.String("targets", "", "label=pid,label=pid: processes of the machine whose arguments and environment the probe asks for (kern.procargs2); only whether it could read them is said, never what they hold")
+	homeFlag  = flag.String("home", "", "the real home directory of the user (default: $HOME, which a test may have set to a work directory)")
 	child     = flag.Bool("child", false, "(internal) setsid, then sleep: the process that is left behind")
 	daemon    = flag.Bool("daemon", false, "also leave a process behind (setsid and a double fork), marked with the id")
 	only      = flag.String("only", "", "comma separated names of the checks to run (default: all)")
@@ -127,7 +128,10 @@ func main() {
 		fmt.Fprintln(os.Stderr, "probe: -id and -dir are required")
 		os.Exit(2)
 	}
-	home, _ = os.UserHomeDir()
+	home = *homeFlag
+	if home == "" {
+		home, _ = os.UserHomeDir()
+	}
 	mark = "rivus-sbx-" + *id
 
 	// 1. the files of the host

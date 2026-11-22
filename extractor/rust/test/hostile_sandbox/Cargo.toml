@@ -1,0 +1,11 @@
+# A project that is hostile on purpose, for the sandbox of macOS (docs/DESIGN-macos-sandbox.md): its build script runs the probe
+# (internal/sandbox/probe), which tries to get out of the sandbox in every way that the tests know of. It is only ever built under
+# the sandbox: the marker file .rivus-hostile makes rivus refuse it on this machine without it, and the build script does nothing
+# when it can list the home directory (it is not in the sandbox).
+[package]
+name = "hostile_sandbox"
+version = "0.0.0"
+edition = "2021"
+build = "build.rs"
+
+[workspace]

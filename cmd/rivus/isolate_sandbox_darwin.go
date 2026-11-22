@@ -173,7 +173,7 @@ func (o *isolationOpts) extractRustSandboxed(ctx context.Context, dir string, ex
 	s.Dir = dir
 	s.Env = env(work)
 	s.Read = append(append([]string(nil), common.Read...), dir, cargoHome, "/private/etc/ssl")
-	s.ExecFiles = append(append([]string(nil), sandboxPrograms...), extractor)
+	s.ExecFiles = append(append(append([]string(nil), sandboxPrograms...), extractor), o.execExtra...)
 	s.Write = []string{work}
 	s.MaxOutput = o.maxOutput
 	if s.MaxOutput <= 0 {
