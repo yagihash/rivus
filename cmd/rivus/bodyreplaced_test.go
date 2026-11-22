@@ -166,7 +166,7 @@ propagators:
 	if len(got.Summary.Replaced) != 1 {
 		t.Fatalf("summary.body_replaced_packages: %+v", got.Summary.Replaced)
 	}
-	if p := got.Summary.Replaced[0]; p.Package != "example.com/third" || p.Functions != 6 || p.DeclaredIn != rules || !strings.Contains(p.Reason, "checked") {
+	if p := got.Summary.Replaced[0]; p.Package != "example.com/third" || p.Functions != 5 || p.DeclaredIn != rules || !strings.Contains(p.Reason, "checked") {
 		t.Errorf("summary.body_replaced_packages: %+v", p)
 	}
 	if got.Stats.Functions >= read.Stats.Functions {
@@ -258,15 +258,15 @@ propagators:
 func TestBodyReplacedNamesThePackageAndNoOtherUnlessSaid(t *testing.T) {
 	app := bodyReplacedProject(t)
 	one := brAnalyze(t, app, "-body-replaced", "example.com/third")
-	if len(one.Summary.Replaced) != 1 || one.Summary.Replaced[0].Functions != 6 || one.Summary.Replaced[0].DeclaredIn != "-body-replaced" {
+	if len(one.Summary.Replaced) != 1 || one.Summary.Replaced[0].Functions != 5 || one.Summary.Replaced[0].DeclaredIn != "-body-replaced" {
 		t.Fatalf("-body-replaced example.com/third: %+v", one.Summary.Replaced)
 	}
 	tree := brAnalyze(t, app, "-body-replaced", "example.com/third/...")
-	if len(tree.Summary.Replaced) != 1 || tree.Summary.Replaced[0].Functions != 10 {
+	if len(tree.Summary.Replaced) != 1 || tree.Summary.Replaced[0].Functions != 7 {
 		t.Fatalf("-body-replaced example.com/third/...: %+v", tree.Summary.Replaced)
 	}
 	sub := brAnalyze(t, app, "-body-replaced", "example.com/third/sub", "-body-replaced", "example.com/third/other")
-	if len(sub.Summary.Replaced) != 2 || sub.Summary.Replaced[0].Package != "example.com/third/other" || sub.Summary.Replaced[1].Functions != 2 {
+	if len(sub.Summary.Replaced) != 2 || sub.Summary.Replaced[0].Package != "example.com/third/other" || sub.Summary.Replaced[1].Functions != 1 {
 		t.Fatalf("the two subpackages: %+v", sub.Summary.Replaced)
 	}
 	// a package of the project is always read; what names no function is said
@@ -403,8 +403,19 @@ func TestBodyReplacedOfADartPackage(t *testing.T) {
 	if len(got.Summary.Replaced) != 1 || got.Summary.Replaced[0].Package != "package:fixnum" || got.Summary.Replaced[0].Functions == 0 {
 		t.Fatalf("summary: %+v", got.Summary.Replaced)
 	}
-	if want := read.Stats.Functions - got.Summary.Replaced[0].Functions; got.Stats.Functions != want {
-		t.Errorf("functions: %d, want %d (%d read, %d left out)", got.Stats.Functions, want, read.Stats.Functions, got.Summary.Replaced[0].Functions)
+	// the extractor does not read the package (stage 4), or reads it and the core leaves it out (stage 2,
+	// -drop-after-read): the result is the same, but for the count of the functions that the report says were left out
+	// (stage 2 counts what was read, stage 4 what the package declares)
+	filtered := run("-body-replaced", "package:fixnum", "-body-replaced", "package:no_such", "-drop-after-read")
+	if len(filtered.Summary.Replaced) != 1 || filtered.Summary.Replaced[0].Functions == 0 {
+		t.Fatalf("summary of the filter: %+v", filtered.Summary.Replaced)
+	}
+	if got.Stats.Functions != filtered.Stats.Functions || got.Stats.Functions >= read.Stats.Functions {
+		t.Errorf("functions: %d in the extractor, %d in the filter, %d read", got.Stats.Functions, filtered.Stats.Functions, read.Stats.Functions)
+	}
+	if !reflect.DeepEqual(got.ids(), filtered.ids()) || strings.Join(got.Packages, ",") != strings.Join(filtered.Packages, ",") ||
+		got.Summary.Replaced[0].Package != filtered.Summary.Replaced[0].Package || got.Summary.Replaced[0].Reason != filtered.Summary.Replaced[0].Reason {
+		t.Errorf("the extractor and the filter differ: %+v, %+v", got, filtered)
 	}
 	if !reflect.DeepEqual(got.ids(), read.ids()) {
 		t.Errorf("findings: %v, want %v", got.ids(), read.ids())
@@ -453,5 +464,147 @@ func TestBodyReplacedIsInTheIndexKey(t *testing.T) {
 	write(t, rules, "ruleset: d@1\nbody_replaced_packages:\n  - {package: example.com/dep, reason: r}\n  - {package: example.com/x, reason: r}\n")
 	if check() {
 		t.Error("a declaration added to the rule file: the index is stale")
+	}
+}
+
+// The extractor that is told not to read a declared package (stage 4) and the filter of the core after it read it
+// (stage 2, -drop-after-read) make the same program: the same findings, the same notes, the same functions. What the
+// report says was left out is counted by what each saw (the filter: the functions that were read; the extractor: the
+// functions the package declares).
+func TestBodyReplacedInTheExtractorIsTheSameAsTheFilter(t *testing.T) {
+	app := bodyReplacedProject(t)
+	rules := brRules(t, app, "decl.yaml", `ruleset: t@1`+brDeclare+`
+propagators:
+  - symbol: example.com/third.Run
+    flows: [{from: arg0, to: result}]
+`)
+	for _, args := range [][]string{
+		{"-rules", rules},
+		{"-body-replaced", "example.com/third/...", "-body-replaced", "net/http"},
+		{"-body-replaced", "example.com/third/sub"},
+	} {
+		extractor := brAnalyze(t, app, args...)
+		filter := brAnalyze(t, app, append([]string{"-drop-after-read"}, args...)...)
+		if !reflect.DeepEqual(extractor.ids(), filter.ids()) || extractor.Stats.Functions != filter.Stats.Functions {
+			t.Errorf("%v: findings %v (%d functions) in the extractor, %v (%d) in the filter", args, extractor.ids(), extractor.Stats.Functions, filter.ids(), filter.Stats.Functions)
+		}
+		if !reflect.DeepEqual(extractor.notes("unmodeled_library_call"), filter.notes("unmodeled_library_call")) || strings.Join(extractor.Packages, ",") != strings.Join(filter.Packages, ",") {
+			t.Errorf("%v: the notes or the packages differ", args)
+		}
+		if len(extractor.Summary.Replaced) != len(filter.Summary.Replaced) {
+			t.Errorf("%v: summary %+v, %+v in the filter", args, extractor.Summary.Replaced, filter.Summary.Replaced)
+			continue
+		}
+		for i, e := range extractor.Summary.Replaced {
+			f := filter.Summary.Replaced[i]
+			if e.Package != f.Package || e.DeclaredIn != f.DeclaredIn || e.Reason != f.Reason || e.Functions == 0 {
+				t.Errorf("%v: summary %+v, %+v in the filter", args, e, f)
+			}
+		}
+	}
+}
+
+// A generic function and a generic type of a package that is not read: go/ssa has no body to instantiate, and the
+// program is the one the filter makes.
+func TestBodyReplacedGenericsInTheExtractor(t *testing.T) {
+	root := t.TempDir()
+	app, third := filepath.Join(root, "app"), filepath.Join(root, "third")
+	write(t, filepath.Join(third, "go.mod"), "module example.com/third\n\ngo 1.21\n")
+	write(t, filepath.Join(third, "third.go"), `package third
+
+type Box[T any] struct{ v T }
+
+func (b *Box[T]) Get() T { return b.v }
+
+func Of[T any](v T) *Box[T] { return &Box[T]{v} }
+
+func Map[T any](v T, f func(T) T) T { return f(v) }
+
+type Named string
+
+func (n Named) String() string { return string(n) }
+`)
+	write(t, filepath.Join(app, "go.mod"), "module example.com/app\n\ngo 1.21\n\nrequire example.com/third v0.0.0\n\nreplace example.com/third => ../third\n")
+	write(t, filepath.Join(app, "main.go"), `package main
+
+import (
+	"fmt"
+	"net/http"
+	"os/exec"
+
+	"example.com/third"
+)
+
+func main() {
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query().Get("q")
+		b := third.Of(q)
+		exec.Command(b.Get()).Run()
+		exec.Command(third.Map(q, func(s string) string { return s })).Run()
+		fmt.Println(third.Named(q).String())
+		var s fmt.Stringer = third.Named(q)
+		exec.Command(s.String()).Run()
+	})
+}
+`)
+	extractor := brAnalyze(t, app, "-body-replaced", "example.com/third")
+	filter := brAnalyze(t, app, "-body-replaced", "example.com/third", "-drop-after-read")
+	if len(extractor.ids()) == 0 {
+		t.Error("no finding: the test says nothing")
+	}
+	if !reflect.DeepEqual(extractor.ids(), filter.ids()) || extractor.Stats.Functions != filter.Stats.Functions {
+		t.Errorf("findings %v (%d functions) in the extractor, %v (%d) in the filter", extractor.ids(), extractor.Stats.Functions, filter.ids(), filter.Stats.Functions)
+	}
+}
+
+// The Dart extractor told --body-replaced does not write the functions of the package (it does not resolve its files),
+// says how many functions it declares, and writes the rest as it does without the flag (the functions of the other
+// packages, and of the project, are the same).
+func TestDartExtractorBodyReplaced(t *testing.T) {
+	dart := os.Getenv("RIVUS_DART")
+	if dart == "" {
+		skipOrFail(t, "RIVUS_DART")
+	}
+	extractor, err := filepath.Abs("../../extractor/dart")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dartTreeIR(t, dart, "monorepo/app", "monorepo/app", "monorepo/shared")
+	words := strings.Fields(dart)
+	run := func(flags ...string) string {
+		args := append(append([]string{}, words[1:]...), "run", filepath.Join(extractor, "bin", "rivus_dart.dart"))
+		args = append(append(args, flags...), filepath.Join(extractor, "test", "monorepo", "app"))
+		cmd := exec.Command(words[0], args...)
+		cmd.Dir = extractor
+		out, err := cmd.Output()
+		if err != nil {
+			t.Fatalf("extractor %v: %v", flags, err)
+		}
+		return string(out)
+	}
+	funcsOf := func(stream string) (n int, fixnum int, noBody string) {
+		for _, line := range strings.Split(stream, "\n") {
+			switch {
+			case strings.HasPrefix(line, `{"kind":"func"`):
+				n++
+				if strings.Contains(line, `"id":"package:fixnum/`) {
+					fixnum++
+				}
+			case strings.Contains(line, `"kind":"body_not_read"`):
+				noBody = line
+			}
+		}
+		return
+	}
+	n, fixnum, noBody := funcsOf(run())
+	if fixnum == 0 || noBody != "" {
+		t.Fatalf("without the flag: %d functions of fixnum, %q", fixnum, noBody)
+	}
+	m, left, noBody := funcsOf(run("--body-replaced", "package:fixnum", "--body-replaced", "package:no_such"))
+	if left != 0 || m != n-fixnum {
+		t.Errorf("with the flag: %d functions (%d of fixnum), want %d and none of fixnum", m, left, n-fixnum)
+	}
+	if !strings.Contains(noBody, `"unit":"package:fixnum"`) || strings.Contains(noBody, "no_such") {
+		t.Errorf("body_not_read: %q", noBody)
 	}
 }
