@@ -108,6 +108,7 @@ func (o *analyzeOpts) graphIndexer(path string, patterns []string, since time.Ti
 		}
 		if ts := l.testsSkipped(); ts != nil {
 			meta.Unread.SkippedDirs = ts.SkippedDirs
+			meta.Unread.OutsideBuildFiles = ts.OutsideBuildFiles
 		}
 		failed := map[string]bool{} // a package with several errors is one
 		for _, e := range l.loadErrors() {

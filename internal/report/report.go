@@ -135,6 +135,16 @@ type Summary struct {
 	// hidden directory, and `build` at the top): code in them is not in the analysis, and may be shipped. Not tests
 	// (stats.tests_skipped is the tests). Absent when none.
 	SkippedDirs *SkippedDirs `json:"skipped_dirs,omitempty"`
+	// OutsideConfiguration are the files of the project that the build constraints leave out of the configuration this
+	// run stands for (Go: `//go:build ignore`, `_windows.go` on another system): code that is not in the analysis, and is
+	// not a test. The answer is about this configuration (a range declaration; nothing else changes). Absent when none.
+	OutsideConfiguration *OutsideConfiguration `json:"outside_configuration,omitempty"`
+}
+
+// OutsideConfiguration counts the files that the build constraints leave out.
+type OutsideConfiguration struct {
+	Files    int      `json:"files"`
+	Examples []string `json:"examples,omitempty"`
 }
 
 // SkippedDirs counts the directories that were not read because of where they are.

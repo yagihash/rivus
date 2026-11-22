@@ -249,3 +249,13 @@ func TestNoPathSaysThatSkippedDirectoriesAreOutsideTheRange(t *testing.T) {
 		t.Fatalf("%v %+v limits %v", err, r.Exhaustive, r.Limits)
 	}
 }
+
+// Files that the build constraints leave out: a range declaration in limits; exhaustive stays true.
+func TestNoPathSaysThatFilesOutsideTheBuildConfigurationAreOutsideTheRange(t *testing.T) {
+	testUnread = &graphdb.Unread{OutsideBuildFiles: 3}
+	e := build(t, unreadFixture())
+	r, err := e.Path("S", "T", graphq.Options{})
+	if err != nil || r.Reachable || !r.Exhaustive || !strings.Contains(strings.Join(r.Limits, " "), "3 file(s)") {
+		t.Fatalf("%v %+v limits %v", err, r.Exhaustive, r.Limits)
+	}
+}

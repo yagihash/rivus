@@ -102,6 +102,11 @@ type TestsSkipped struct {
 	// code in them may be shipped. The result says them in summary.skipped_dirs (not in stats.tests_skipped).
 	SkippedDirs     int      `json:"skipped_dirs,omitempty"`
 	SkippedDirNames []string `json:"skipped_dir_names,omitempty"`
+	// OutsideBuildFiles are the files of the project that the build constraints leave out of this configuration (Go:
+	// `//go:build ignore`, `_windows.go` on another system), OutsideBuildFileNames names some of them (up to 5). They are
+	// not tests: the result says them in summary.outside_configuration (not in stats.tests_skipped).
+	OutsideBuildFiles     int      `json:"outside_build_files,omitempty"`
+	OutsideBuildFileNames []string `json:"outside_build_file_names,omitempty"`
 }
 
 // Add adds the counts of another language.
@@ -122,6 +127,11 @@ func (t *TestsSkipped) Add(o *TestsSkipped) *TestsSkipped {
 	t.SkippedDirNames = append(t.SkippedDirNames, o.SkippedDirNames...)
 	if len(t.SkippedDirNames) > 5 {
 		t.SkippedDirNames = t.SkippedDirNames[:5]
+	}
+	t.OutsideBuildFiles += o.OutsideBuildFiles
+	t.OutsideBuildFileNames = append(t.OutsideBuildFileNames, o.OutsideBuildFileNames...)
+	if len(t.OutsideBuildFileNames) > 5 {
+		t.OutsideBuildFileNames = t.OutsideBuildFileNames[:5]
 	}
 	return t
 }

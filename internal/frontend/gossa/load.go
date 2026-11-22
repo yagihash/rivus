@@ -72,6 +72,10 @@ type Program struct {
 	// TestFilesSkipped is the number of _test.go files in the directories of the loaded packages that
 	// were not read, because Options.Tests did not ask for them (ADR-062).
 	TestFilesSkipped int
+	// IgnoredFiles are the files of the loaded packages that the build constraints leave out of this configuration (up
+	// to 5 names in IgnoredFileNames): code that is not in the analysis, and is not a test.
+	IgnoredFiles     int
+	IgnoredFileNames []string
 
 	// Inputs is what the load read: the files of the packages (the standard
 	// library and the dependencies included), the go.mod files of their modules,
@@ -182,6 +186,14 @@ func Load(dir string, patterns []string, opts Options) (*Program, error) {
 	p.Inputs = collectInputs(pkgs)
 	if !opts.Tests {
 		p.TestFilesSkipped = countTestFiles(pkgs)
+		for _, pkg := range pkgs {
+			for _, f := range pkg.IgnoredFiles {
+				p.IgnoredFiles++
+				if len(p.IgnoredFileNames) < 5 {
+					p.IgnoredFileNames = append(p.IgnoredFileNames, filepath.Base(f))
+				}
+			}
+		}
 	}
 	seenErr := map[string]bool{}
 	packages.Visit(pkgs, nil, func(pkg *packages.Package) {

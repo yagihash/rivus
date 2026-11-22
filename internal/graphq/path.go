@@ -845,6 +845,9 @@ func (e *Engine) Path(from, to string, o Options) (*PathResult, error) {
 			}
 			if raw := e.db.Meta("unread"); raw != "" {
 				var u graphdb.Unread
+				if json.Unmarshal([]byte(raw), &u) == nil && u.OutsideBuildFiles > 0 {
+					res.Limits = append(res.Limits, strconv.Itoa(u.OutsideBuildFiles)+" file(s) of the project are left out by the build constraints of this configuration: code in them is outside the range of the answer")
+				}
 				if json.Unmarshal([]byte(raw), &u) == nil && u.SkippedDirs > 0 {
 					res.Limits = append(res.Limits, strconv.Itoa(u.SkippedDirs)+" director(ies) of the project were not read because of where they are (hidden, or build at the top): code in them is outside the range of the answer")
 				}
