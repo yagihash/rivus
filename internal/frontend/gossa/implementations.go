@@ -183,3 +183,17 @@ func (p *Program) MarkedMethods(marker string) []model.MarkedMethod {
 	}
 	return out
 }
+
+// PackagePaths are the import paths of every package of the program: the loaded packages and what they import, the standard
+// library included. The rows of the models that name a module by its major (`/v*`) are made for the majors that are here
+// (model.Rules.ExpandMajors).
+func (p *Program) PackagePaths() []string {
+	if p == nil || p.SSA == nil {
+		return nil
+	}
+	var out []string
+	for _, pkg := range p.SSA.AllPackages() {
+		out = append(out, pkg.Pkg.Path())
+	}
+	return out
+}

@@ -118,6 +118,7 @@
 | 102 | 昇格した例のファイルは、リポジトリの中に参照が残るなら、中身が空のルールとして残す(ADR-101 の補足) | 有効 | gin: `bench/compare.sh` ほかが名指しで使う。参照がなければ消す | MODEL-RUNBOOK(1 節、4 節) | 前後の比較を保つ |
 | 107 | パッケージの `calls:` の行は、解析の水準のセル(`checked_by: cell`)で確認する(実行との照合より弱い) | 有効 | 第三者のコードを実行しない。補い: 行を通るセルが必須、モデルを空にするとセルが落ちる確認、本物のパッケージでの照合(DESIGN-package-models.md 6.8 (b))。Dart と Rust のパス解決は最初の実際の行の PR で確認 | MODELING.md 3 節、MODEL-RUNBOOK.md | 標準ライブラリの行は、今までどおり実行で確認 |
 | 108 | サービスのクライアントのモデルで、何を source にするかの基準は「その値を誰が書いたか」(汎用の HTTP クライアントの応答は既定で source にしない。サービスが決める値は source にしない。迷う値は入れず、理由をコメントに書く) | 有効 | 既存の `dart-gcp` などは変えない(見直しは課題 #158) | MODEL-RUNBOOK(2 節)、MODEL-QUEUE | `dio` の `Response.data` の判断(#202) |
+| 110 | Go のモデルの行は、module の path の major を `/v*` と書いて、どの major にも当てる(`/v` と数字の 1 要素だけ。任意の glob にしない) | 有効 | 解析の読み込みで major ごとの写しを足す(`Rules.ExpandMajors`)。範囲の外の major の注記は別の変更 | DESIGN-package-models.md 6.9、MODEL-RUNBOOK.md 4 節 | major ごとにファイルや行を写さない |
 
 ## 訂正・追記の書き方を保つ ADR
 

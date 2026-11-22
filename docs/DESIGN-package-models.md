@@ -397,6 +397,36 @@ verified_versions:
 
 **生成器の要件(骨組み)**: 本物の型の埋め込みと、インターフェースの実装の関係を、本物と同じ形にする(昇格したメソッドが、別のパッケージの行に当たるため。実例: Go の `sqlx.DB` は `*sql.DB` を埋め込む。骨組みが埋め込まないと、昇格したメソッドを呼ぶセルが、本物と違う形で通る)。
 
+### 6.9 module の path に major を持つ Go のパッケージ(`/v*`。ADR-110)
+
+背景: Go の module は、major が 2 以上になると、path に `/vN` を持つ(`github.com/google/go-github/v93`、`github.com/jackc/pgx/v5`)。シンボル(`(*github.com/google/go-github/v93/github.Client).Do`)も、組み込みのモデルの行の鍵も、この path をそのまま含む。そのため、1 つの行は 1 つの major にしか当たらない。major ごとにファイルや行を写すと、行が major の数だけ増え、`.dead-allow` と zoo のセルも同じだけ増える。
+
+**書式**: シンボル(`symbol`)、`kind: field` の `field`、`kind: param_type` の `type`、`verified_versions` の `package` で、module path の major の要素を `/v*` と書く。
+
+```yaml
+verified_versions:
+  - package: github.com/google/go-github/v*
+    versions: ">=93.0.0 <94.0.0"      # 差分テストを通した範囲。いまは v93 だけ
+sinks:
+  - symbol: (*github.com/google/go-github/v*/github.RepositoriesService).GetContents
+```
+
+- **`/v*` が当たるのは、path の 1 要素で、`/v` と数字(2 以上、先頭が 0 でない)だけ**: `/v2`、`/v93` には当たる。`/vendor`、`/v2x`、`/v`、`/v1`、`/v0` と、major のない path には当たらない(`v0`、`v1` は、Go の module の path に現れない)。任意の glob ではない。
+- 1 つの文字列に、1 回だけ書ける。module の path のあとに、要素の全体として書く(あとに `/`、`.`、`)` が来る、または文字列の終わり: `x/v*/pkg.F`、`(*x/v*/pkg.T).M`、`x/v*.F`)。それ以外(`v*x`、`v*2`、2 回、path の先頭)は、読み込みで失敗する(検証)。Go のモデルだけ。Dart と Rust には、この書式はない。
+- **照合のしくみ**: 索引は、シンボルの文字列そのものが鍵なので、鍵は変えない。解析の読み込みのとき(`loadGo`)、プログラムが持つ package の import path(依存を含む)から、`/v*` の行ごとに、module の path が合う major を集め、major ごとに行の写しを、具体的なシンボルの鍵で足す(`match: implementations` の展開と同じ形。`Rules.ExpandMajors`)。モデルのファイルの行は変わらない。プログラムがその module を使っていなければ、写しはできず、行は何にも当たらない(今までの、当たらない行と同じ)。`rivus models coverage` は、解析の結果から出すので、そのまま動く。
+- **道具の側**: `bench/model-diff` は、`-pkg` に `/v*` を書けて、`-version`(`v93.0.0`)の major で具体的な package に直す(`-version` がなければ失敗)。`TestBuiltinRowsAreHitByTheZoo` は、`/v*` の行を、どれかの major のシンボルへの呼び出しが当てれば、当たったとみなす。`.dead-allow` は、行と同じ文字列(`/v*` つき)で書く。`verified_versions` の `package` の `/v*` は、全部の major を指す記録で、`versions` は、実際に差分テストを通した範囲(そのときに確認した major だけ)にする。
+- 接尾辞のない v0 / v1 の path には `/v*` は当たらない。v1 と v2 以降の両方を対象にするパッケージは、接尾辞のない行と `/v*` の行の両方が要る(一覧の 14 行で該当するものがあれば、そのパッケージの回で扱う)。
+- **しないこと(この節では)**: 解析した対象の major が `verified_versions` の範囲にないとき、`summary` に注記を出す(6.7 の 3。別の PR)。`body_replaced_packages` の `package` に `/v*` を書くこと。`-ir` で渡された Go の IR への展開(展開は、Go の解析の読み込みの中だけ)。
+
+### 6.10 確認していないバージョンへの適用の注記(`summary.unverified_versions`。Go から。6.7 の 3 の最初の実装)
+
+解析した対象が使っている module のバージョンが、`verified_versions` の範囲の外のとき、**モデルの行は当てたまま**、`summary.unverified_versions` に 1 件ずつ出す(`[{package, used, verified: [範囲...], source: "go.mod"}]`。`package` は、使っている module の path(`/v*` の記録のときは、対象が持つ major の path)。`body_replaced_packages` と同じく、package でソートされ、決定論)。finding が 0 件でも出る。
+
+- **出す条件**: (1) `verified_versions` の記録があり、その `package`(`/v*` を含む)が、対象が使っている module の path に当たる。(2) 使っているバージョン(完全なバージョン。`go list` の `Module.Version`)が、その module に当たるどの記録の `versions` にも入らない。記録が複数あれば、どれかに入れば出さない。
+- **記録のない module には出さない**(組み込みのファイルの大半は、記録がない。全部の解析に注記が付くとうるさく、「確認していない」と言うにも、何を基準にするかがない)。記録を持つモデルが当たっていないとき(対象がその module を使っていない)は、出力は今までと同じ。記録を足すのは、手順書の 2 節の 3 段(新しいファイルは必須)で進む。
+- **バージョンが分からない module は出さない**: ディレクトリへの `replace`、別の module への `replace`(`go.mod` のバージョンは、実際に読むコードのバージョンではない)、主 module。バージョンの接尾辞(`-pre`、`+incompatible`)は読まない(疑似バージョンは、前のバージョンの番号とみなされる)。
+- **実装**: `gossa.Program.ModuleVersions`(読み込みのとき、`packages.Package.Module` から)、`model.Rules.UnverifiedVersions`、`report.Summary.UnverifiedVersions`。`-ir` で渡された IR と、`-index` の IR からの解析は、モジュール情報がないので出ない。Dart(`pubspec.lock`)と Rust(`Cargo.lock`)は未(課題 #162)。
+
 ### 6.11 モデル作成の手順のスクリプト化(設計案)
 
 背景: クラウドで 1 パッケージ分のモデルを作る作業(手順書 [MODEL-RUNBOOK.md](MODEL-RUNBOOK.md))は、Dart(dio、github、shelf、googleapis_auth)、Go(gin、storage、sqlx、go-github、`os` と `database/sql` の行)、Rust(actix-web、axum、google-cloud-storage、octocrab)の 10 本あまりで、ほぼ毎回、手順書への追記が要った。クラウドで確実に回すには、手順を全部スクリプトにして、人や LLM の判断を「sink、source、sanitizer をどれにするか」だけに絞る必要がある。最初の要件(決まった手順はスクリプト、LLM は sink / source / sanitizer の選択だけ)に戻る。この節は設計案で、実装はしない。事実は、手順書の履歴(`git log --follow docs/MODEL-RUNBOOK.md`)と、リポジトリのファイルで確認した。

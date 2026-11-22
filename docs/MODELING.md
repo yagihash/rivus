@@ -417,7 +417,7 @@ verified_versions:
     checked: 2026-11-22          # the day, YYYY-MM-DD (not in the future)
 ```
 
-- A record, nothing more: it changes no row and no result. Comparing it with the versions a project uses (the lock files) is not done yet.
+- A record changes no row and no result. **For Go, the analysis compares it with the versions that the program uses** (`go.mod`, as `go list` says): a module that has a record, used at a version outside every range of its records, is one entry of `summary.unverified_versions` (`package`, `used`, `verified[]`, `source`), sorted by package, also when there is no finding. The rows are applied all the same. A module with no record is not listed (most built-in files have none, and a note on every run would say nothing); neither is one that a directory replaces (no version). A pre-release or `+incompatible` suffix of the used version is not read. Dart (`pubspec.lock`) and Rust (`Cargo.lock`) are not compared yet (issue #162).
 - The file is refused when `package` is empty or a pattern (`/...`), `versions` is empty or not a version or a comparator, `checked` is missing or not a day, `checked_with` is not one version or is outside `versions`, a key is unknown, or a package is recorded twice in the file. The same package in two files is kept as two records. It is not checked that a row names the package.
 - `rivus models versions [-rules FILE] [-no-builtin-rules]` lists the records (JSON: `package`, `versions`, `checked_with`, `checked`, `source`).
 

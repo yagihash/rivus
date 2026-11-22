@@ -211,6 +211,8 @@ func (c *common) loadGo(patterns []string, rules *model.Rules, maxImpl int) (*lo
 	if err != nil {
 		return nil, err
 	}
+	// the rows of a module that name it by /v* (any major) are made for the majors the program has
+	rules.ExpandMajors(l.gossa.PackagePaths())
 	for _, e := range rules.Expand(l.gossa, maxImpl) {
 		if e.Limited || e.Note != "" {
 			fmt.Fprintf(os.Stderr, "rivus: %s\n", e)
