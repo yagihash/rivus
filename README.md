@@ -114,7 +114,7 @@ rivus query -site <ID> ./...           # sites の 1 件から始める
 
 | コマンド | 何をするか |
 |---|---|
-| `sites` | source と sink のルールが一致する箇所を並べる。解析はしない |
+| `sites` | source と sink のルールが一致する箇所を並べる。解析はしない。読む言語は `analyze` と同じ(`-lang`)で、読まなかった言語は出力の `skipped_languages` に出る |
 | `analyze` | source から sink への経路を、関数とパッケージを跨いで探す |
 | `query` | 片側からの問い（この sink に届く source / この source が届く sink / この箇所について） |
 | `index` | コードを 1 回読んで、呼び出しグラフを保存する（`-taint` で、解析の結果も） |
