@@ -37,6 +37,7 @@ func zooDartRoot(t testing.TB) string {
 	if err != nil {
 		t.Fatal(err)
 	}
+	zooDartGenerateCases(t, dir)
 	return dir
 }
 
@@ -57,8 +58,11 @@ func zooDartCmd(t *testing.T, dir string, env []string, args ...string) *exec.Cm
 // zooDartPubGet resolves the packages of dir when that has not been done.
 func zooDartPubGet(t *testing.T, dir string) {
 	t.Helper()
-	if _, err := os.Stat(filepath.Join(dir, ".dart_tool", "package_config.json")); err == nil {
-		return
+	// the config is made, and not older than the pubspec (a skeleton package that was added)
+	if cfg, err := os.Stat(filepath.Join(dir, ".dart_tool", "package_config.json")); err == nil {
+		if ps, err := os.Stat(filepath.Join(dir, "pubspec.yaml")); err != nil || !ps.ModTime().After(cfg.ModTime()) {
+			return
+		}
 	}
 	if out, err := zooDartCmd(t, dir, nil, "pub", "get").CombinedOutput(); err != nil {
 		t.Fatalf("pub get in %s: %v\n%s", dir, err, out)
@@ -193,7 +197,7 @@ func TestZooTruthDart(t *testing.T) {
 	obs := zooDartObserve(t)
 	lines, cells := zooDartScan(t, root)
 	zooCheckCells(t, cells, obs)
-	// every file of the cells is registered by the harness
+	// every file of the cells is registered by the harness (exec/lib/cases.dart is generated from the files: zooDartRoot)
 	cases, err := os.ReadFile(filepath.Join(root, "exec", "lib", "cases.dart"))
 	if err != nil {
 		t.Fatal(err)

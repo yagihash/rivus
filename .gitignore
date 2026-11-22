@@ -16,3 +16,4 @@ __pycache__/
 # the Dart zoo's lock files are not committed (two cells' branches would conflict on them); `dart pub get` makes them
 /bench/zoo-dart/cells/pubspec.lock
 /bench/zoo-dart/exec/pubspec.lock
+/bench/zoo-dart/exec/lib/cases.dart

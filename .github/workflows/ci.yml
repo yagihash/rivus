@@ -294,6 +294,9 @@ jobs:
           for d in bench/zoo-dart/cells bench/zoo-dart/exec; do
             (cd "$d" && dart pub get)
           done
+      - name: Write the generated files of the Dart zoo
+        # exec/lib/cases.dart is not committed (it is made from the cells); the tests write it too, `dart analyze` needs it first
+        run: make zoo-dart-gen
       - name: Analyze the extractor
         if: matrix.shard == 0
         working-directory: extractor/dart
