@@ -661,7 +661,10 @@ func (p *Program) SourceFiles() []string {
 
 // The reasons of Callee.ValueLimit.
 const (
-	ValueCandidateLimit   = "candidate_limit"
+	ValueCandidateLimit = "candidate_limit"
+	// ValueCandidateMost is the number of candidates beyond which a call of a function value is left unresolved (ADR-050;
+	// 8 until 2026-11-22, then 32: measured, and the cost did not change on the benches).
+	ValueCandidateMost    = 32
 	ValueCallerDepthLimit = "caller_depth_limit"
 	// ValuePartial: some functions were found (they are ValueCands) but not every caller's value
 	// could be followed, so the candidates are not known to be all of them.
@@ -681,7 +684,7 @@ const (
 func (c *Callee) ValueLimitDetail() string {
 	switch c.ValueLimit {
 	case ValueCandidateLimit:
-		return fmt.Sprintf("candidate_limit: the function value may be any of %d functions, more than the 8 that rivus keeps; none is followed (the functions are known: this is rivus' limit, not the code's)", c.ValueFound)
+		return fmt.Sprintf("candidate_limit: the function value may be any of %d functions, more than the %d that rivus keeps; none is followed (the functions are known: this is rivus' limit, not the code's)", c.ValueFound, ValueCandidateMost)
 	case ValuePartial:
 		return fmt.Sprintf("partial: the callers that pass the function value were followed only in part (%s); %d functions were found and are followed, others may be called (rivus' limit: the candidates are not known to be all of them)", strings.Join(c.ValueWhy, ", "), c.ValueFound)
 	case ValueCallerDepthLimit:

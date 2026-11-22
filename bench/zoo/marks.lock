@@ -13,18 +13,44 @@ dart	clos/callback_of_callback.dart	sink-none	@sink(none) @nosink(clos-callback-
 dart	clos/capture_write_by_ref.dart	sink-none	@sink(none)	void fixed() { @fixed
 dart	clos/capture_write_by_ref.dart	sink-none	@sink(none)	void fixed() { @fixed
 dart	clos/capture_write_by_ref.dart	sink-none	@sink(none) @nosink(clos-capture-write-by-ref-decoy)	void decoy() { @decoy
-dart	clos/helper_overflow.dart	miss	@source(clos-helper-overflow-vuln) @miss(recursion_approximation) @ref(#77)	void vuln() { @vuln
-dart	clos/helper_overflow.dart	miss	@source(clos-helper-overflow-vuln10) @miss(recursion_approximation) @ref(#77)	void vuln10() { @vuln
-dart	clos/helper_overflow.dart	miss	@source(clos-helper-overflow-vuln2) @miss(recursion_approximation) @ref(#77)	void vuln2() { @vuln
-dart	clos/helper_overflow.dart	miss	@source(clos-helper-overflow-vuln3) @miss(recursion_approximation) @ref(#77)	void vuln3() { @vuln
-dart	clos/helper_overflow.dart	miss	@source(clos-helper-overflow-vuln4) @miss(recursion_approximation) @ref(#77)	void vuln4() { @vuln
-dart	clos/helper_overflow.dart	miss	@source(clos-helper-overflow-vuln5) @miss(recursion_approximation) @ref(#77)	void vuln5() { @vuln
-dart	clos/helper_overflow.dart	miss	@source(clos-helper-overflow-vuln6) @miss(recursion_approximation) @ref(#77)	void vuln6() { @vuln
-dart	clos/helper_overflow.dart	miss	@source(clos-helper-overflow-vuln7) @miss(recursion_approximation) @ref(#77)	void vuln7() { @vuln
-dart	clos/helper_overflow.dart	miss	@source(clos-helper-overflow-vuln8) @miss(recursion_approximation) @ref(#77)	void vuln8() { @vuln
-dart	clos/helper_overflow.dart	miss	@source(clos-helper-overflow-vuln9) @miss(recursion_approximation) @ref(#77)	void vuln9() { @vuln
 dart	clos/helper_overflow.dart	sink-none	@sink(none)	void fixed() { @fixed
 dart	clos/helper_overflow.dart	sink-none	@sink(none) @nosink(clos-helper-overflow-decoy)	void decoy() { @decoy
+dart	clos/helper_overflow_many.dart	miss	@source(clos-helper-overflow-many-vuln) @miss(silent) @ref(#77)	void vuln() { @vuln
+dart	clos/helper_overflow_many.dart	miss	@source(clos-helper-overflow-many-vuln10) @miss(silent) @ref(#77)	void vuln10() { @vuln
+dart	clos/helper_overflow_many.dart	miss	@source(clos-helper-overflow-many-vuln11) @miss(silent) @ref(#77)	void vuln11() { @vuln
+dart	clos/helper_overflow_many.dart	miss	@source(clos-helper-overflow-many-vuln12) @miss(silent) @ref(#77)	void vuln12() { @vuln
+dart	clos/helper_overflow_many.dart	miss	@source(clos-helper-overflow-many-vuln13) @miss(silent) @ref(#77)	void vuln13() { @vuln
+dart	clos/helper_overflow_many.dart	miss	@source(clos-helper-overflow-many-vuln14) @miss(silent) @ref(#77)	void vuln14() { @vuln
+dart	clos/helper_overflow_many.dart	miss	@source(clos-helper-overflow-many-vuln15) @miss(silent) @ref(#77)	void vuln15() { @vuln
+dart	clos/helper_overflow_many.dart	miss	@source(clos-helper-overflow-many-vuln16) @miss(silent) @ref(#77)	void vuln16() { @vuln
+dart	clos/helper_overflow_many.dart	miss	@source(clos-helper-overflow-many-vuln17) @miss(silent) @ref(#77)	void vuln17() { @vuln
+dart	clos/helper_overflow_many.dart	miss	@source(clos-helper-overflow-many-vuln18) @miss(silent) @ref(#77)	void vuln18() { @vuln
+dart	clos/helper_overflow_many.dart	miss	@source(clos-helper-overflow-many-vuln19) @miss(silent) @ref(#77)	void vuln19() { @vuln
+dart	clos/helper_overflow_many.dart	miss	@source(clos-helper-overflow-many-vuln2) @miss(silent) @ref(#77)	void vuln2() { @vuln
+dart	clos/helper_overflow_many.dart	miss	@source(clos-helper-overflow-many-vuln20) @miss(silent) @ref(#77)	void vuln20() { @vuln
+dart	clos/helper_overflow_many.dart	miss	@source(clos-helper-overflow-many-vuln21) @miss(silent) @ref(#77)	void vuln21() { @vuln
+dart	clos/helper_overflow_many.dart	miss	@source(clos-helper-overflow-many-vuln22) @miss(silent) @ref(#77)	void vuln22() { @vuln
+dart	clos/helper_overflow_many.dart	miss	@source(clos-helper-overflow-many-vuln23) @miss(silent) @ref(#77)	void vuln23() { @vuln
+dart	clos/helper_overflow_many.dart	miss	@source(clos-helper-overflow-many-vuln24) @miss(silent) @ref(#77)	void vuln24() { @vuln
+dart	clos/helper_overflow_many.dart	miss	@source(clos-helper-overflow-many-vuln25) @miss(silent) @ref(#77)	void vuln25() { @vuln
+dart	clos/helper_overflow_many.dart	miss	@source(clos-helper-overflow-many-vuln26) @miss(silent) @ref(#77)	void vuln26() { @vuln
+dart	clos/helper_overflow_many.dart	miss	@source(clos-helper-overflow-many-vuln27) @miss(silent) @ref(#77)	void vuln27() { @vuln
+dart	clos/helper_overflow_many.dart	miss	@source(clos-helper-overflow-many-vuln28) @miss(silent) @ref(#77)	void vuln28() { @vuln
+dart	clos/helper_overflow_many.dart	miss	@source(clos-helper-overflow-many-vuln29) @miss(silent) @ref(#77)	void vuln29() { @vuln
+dart	clos/helper_overflow_many.dart	miss	@source(clos-helper-overflow-many-vuln3) @miss(silent) @ref(#77)	void vuln3() { @vuln
+dart	clos/helper_overflow_many.dart	miss	@source(clos-helper-overflow-many-vuln30) @miss(silent) @ref(#77)	void vuln30() { @vuln
+dart	clos/helper_overflow_many.dart	miss	@source(clos-helper-overflow-many-vuln31) @miss(silent) @ref(#77)	void vuln31() { @vuln
+dart	clos/helper_overflow_many.dart	miss	@source(clos-helper-overflow-many-vuln32) @miss(silent) @ref(#77)	void vuln32() { @vuln
+dart	clos/helper_overflow_many.dart	miss	@source(clos-helper-overflow-many-vuln33) @miss(silent) @ref(#77)	void vuln33() { @vuln
+dart	clos/helper_overflow_many.dart	miss	@source(clos-helper-overflow-many-vuln34) @miss(silent) @ref(#77)	void vuln34() { @vuln
+dart	clos/helper_overflow_many.dart	miss	@source(clos-helper-overflow-many-vuln4) @miss(silent) @ref(#77)	void vuln4() { @vuln
+dart	clos/helper_overflow_many.dart	miss	@source(clos-helper-overflow-many-vuln5) @miss(silent) @ref(#77)	void vuln5() { @vuln
+dart	clos/helper_overflow_many.dart	miss	@source(clos-helper-overflow-many-vuln6) @miss(silent) @ref(#77)	void vuln6() { @vuln
+dart	clos/helper_overflow_many.dart	miss	@source(clos-helper-overflow-many-vuln7) @miss(silent) @ref(#77)	void vuln7() { @vuln
+dart	clos/helper_overflow_many.dart	miss	@source(clos-helper-overflow-many-vuln8) @miss(silent) @ref(#77)	void vuln8() { @vuln
+dart	clos/helper_overflow_many.dart	miss	@source(clos-helper-overflow-many-vuln9) @miss(silent) @ref(#77)	void vuln9() { @vuln
+dart	clos/helper_overflow_many.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	clos/helper_overflow_many.dart	sink-none	@sink(none) @nosink(clos-helper-overflow-many-decoy)	void decoy() { @decoy
 dart	clos/inline.dart	sink-none	@sink(none)	void fixed() { @fixed
 dart	clos/inline.dart	sink-none	@sink(none) @nosink(clos-inline-decoy)	void decoy() { @decoy
 dart	clos/partial_callers.dart	miss	@source(clos-partial-callers-vuln) @miss(silent) @ref(PARTIAL-CALLERS,PARITY)	void vuln() { @vuln

@@ -28,7 +28,7 @@ import (
 
 // most is the number of candidates beyond which a call is left unresolved: a
 // value that many functions flow to says little.
-const most = 8
+const most = ir.ValueCandidateMost
 
 // maxDepth is how many calls up the arguments are followed.
 const maxDepth = 3

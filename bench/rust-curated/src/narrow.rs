@@ -196,7 +196,7 @@ pub fn lim8_extra_2() {
 }
 
 // (4) 9 callers of one helper, and two more closures of the type that are not passed to it: the candidates are 11, and the
-// functions that flow to the receiver are 9 (more than the limit of 8: not narrowed)
+// functions that flow to the receiver are 9 (narrowed: the limit is 32 since 2026-11-22; it was 8, and 9 were not narrowed)
 struct P9(String);
 
 fn run_lim9(f: impl Fn(&P9), s: &P9) {
@@ -216,7 +216,7 @@ pub fn lim9_1() {
 pub fn lim9_2() {
     run_lim9(
         |x| {
-            sink(&x.0); // @sink(none) @fp
+            sink(&x.0); // @sink(none)
         },
         &P9(String::from("constant")),
     );
@@ -225,7 +225,7 @@ pub fn lim9_2() {
 pub fn lim9_3() {
     run_lim9(
         |x| {
-            sink(&x.0); // @sink(none) @fp
+            sink(&x.0); // @sink(none)
         },
         &P9(String::from("constant")),
     );
@@ -234,7 +234,7 @@ pub fn lim9_3() {
 pub fn lim9_4() {
     run_lim9(
         |x| {
-            sink(&x.0); // @sink(none) @fp
+            sink(&x.0); // @sink(none)
         },
         &P9(String::from("constant")),
     );
@@ -243,7 +243,7 @@ pub fn lim9_4() {
 pub fn lim9_5() {
     run_lim9(
         |x| {
-            sink(&x.0); // @sink(none) @fp
+            sink(&x.0); // @sink(none)
         },
         &P9(String::from("constant")),
     );
@@ -252,7 +252,7 @@ pub fn lim9_5() {
 pub fn lim9_6() {
     run_lim9(
         |x| {
-            sink(&x.0); // @sink(none) @fp
+            sink(&x.0); // @sink(none)
         },
         &P9(String::from("constant")),
     );
@@ -261,7 +261,7 @@ pub fn lim9_6() {
 pub fn lim9_7() {
     run_lim9(
         |x| {
-            sink(&x.0); // @sink(none) @fp
+            sink(&x.0); // @sink(none)
         },
         &P9(String::from("constant")),
     );
@@ -270,7 +270,7 @@ pub fn lim9_7() {
 pub fn lim9_8() {
     run_lim9(
         |x| {
-            sink(&x.0); // @sink(none) @fp
+            sink(&x.0); // @sink(none)
         },
         &P9(String::from("constant")),
     );
@@ -279,7 +279,7 @@ pub fn lim9_8() {
 pub fn lim9_9() {
     run_lim9(
         |x| {
-            sink(&x.0); // @sink(none) @fp
+            sink(&x.0); // @sink(none)
         },
         &P9(String::from("constant")),
     );
@@ -287,14 +287,14 @@ pub fn lim9_9() {
 
 pub fn lim9_extra_1() {
     let g = |x: &P9| {
-        sink(&x.0); // @sink(none) @fp
+        sink(&x.0); // @sink(none)
     };
     g(&P9(String::from("constant")));
 }
 
 pub fn lim9_extra_2() {
     let g = |x: &P9| {
-        sink(&x.0); // @sink(none) @fp
+        sink(&x.0); // @sink(none)
     };
     g(&P9(String::from("constant")));
 }

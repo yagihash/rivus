@@ -50,7 +50,7 @@ String mayThrow(String s) {
 }
 
 void throw_through_helper() {
-  final a = source(); // @source(through) @miss(silent)
+  final a = source(); // @source(through)
   try {
     transform(a, (x) => throw AppError(x));
   } on AppError catch (e) {

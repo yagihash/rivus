@@ -1,30 +1,78 @@
 import 'lib.dart';
 
-// A helper that nine different closures are given to: more than the eight
-// candidates rivus keeps for a call of a function value (ADR-050). The functions
+// A helper that thirty-three different functions are given to: more than the thirty-two
+// candidates rivus keeps for a call of a function value (ADR-050; 8 until 2026-11-22). The functions
 // are known; rivus leaves them out, and says so (depth_limit, candidate_limit).
 
 String callIt(String s, String Function(String) f) => f(s);
 
-String one(String s) => s;
-String two(String s) => s;
-String three(String s) => s;
-String four(String s) => s;
-String five(String s) => s;
-String six(String s) => s;
-String seven(String s) => s;
-String eight(String s) => s;
+String f1(String s) => s;
+String f2(String s) => s;
+String f3(String s) => s;
+String f4(String s) => s;
+String f5(String s) => s;
+String f6(String s) => s;
+String f7(String s) => s;
+String f8(String s) => s;
+String f9(String s) => s;
+String f10(String s) => s;
+String f11(String s) => s;
+String f12(String s) => s;
+String f13(String s) => s;
+String f14(String s) => s;
+String f15(String s) => s;
+String f16(String s) => s;
+String f17(String s) => s;
+String f18(String s) => s;
+String f19(String s) => s;
+String f20(String s) => s;
+String f21(String s) => s;
+String f22(String s) => s;
+String f23(String s) => s;
+String f24(String s) => s;
+String f25(String s) => s;
+String f26(String s) => s;
+String f27(String s) => s;
+String f28(String s) => s;
+String f29(String s) => s;
+String f30(String s) => s;
+String f31(String s) => s;
+String f32(String s) => s;
 
 void limit_many() {
   final a = source(); // @source(limit-many) @miss(silent)
-  callIt(a, one);
-  callIt(a, two);
-  callIt(a, three);
-  callIt(a, four);
-  callIt(a, five);
-  callIt(a, six);
-  callIt(a, seven);
-  callIt(a, eight);
+  callIt(a, f1);
+  callIt(a, f2);
+  callIt(a, f3);
+  callIt(a, f4);
+  callIt(a, f5);
+  callIt(a, f6);
+  callIt(a, f7);
+  callIt(a, f8);
+  callIt(a, f9);
+  callIt(a, f10);
+  callIt(a, f11);
+  callIt(a, f12);
+  callIt(a, f13);
+  callIt(a, f14);
+  callIt(a, f15);
+  callIt(a, f16);
+  callIt(a, f17);
+  callIt(a, f18);
+  callIt(a, f19);
+  callIt(a, f20);
+  callIt(a, f21);
+  callIt(a, f22);
+  callIt(a, f23);
+  callIt(a, f24);
+  callIt(a, f25);
+  callIt(a, f26);
+  callIt(a, f27);
+  callIt(a, f28);
+  callIt(a, f29);
+  callIt(a, f30);
+  callIt(a, f31);
+  callIt(a, f32);
   callIt(a, (x) {
     sink(x); // @sink(limit-many)
     return x;
