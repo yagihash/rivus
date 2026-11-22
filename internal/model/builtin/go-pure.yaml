@@ -229,7 +229,7 @@ propagators:
   - symbol: (*os.File).Write
     pure: true
   - symbol: strconv.ParseInt
-    flows: [{from: arg0, to: result0}]
+    flows: [{from: arg0, to: result1}]
 
 globals:
   # What is written to the standard output and the standard error goes out of the program: nobody reads it back.

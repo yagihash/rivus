@@ -17,10 +17,11 @@ propagators:
   # strings
   - symbol: strings.Join
     flows: [{from: args, to: result}]
+  # `old` (arg1) is only searched for, it is not in the result (model-diff: EXTRA); `new` and `s` are.
   - symbol: strings.Replace
-    flows: [{from: args, to: result}]
+    flows: [{from: arg0, to: result}, {from: arg2, to: result}]
   - symbol: strings.ReplaceAll
-    flows: [{from: args, to: result}]
+    flows: [{from: arg0, to: result}, {from: arg2, to: result}]
   - symbol: strings.ToUpper
     flows: [{from: args, to: result}]
   - symbol: strings.ToLower
@@ -107,6 +108,7 @@ propagators:
     flows: [{from: recv, to: result}]
 
   # strconv, path, filepath
+  # model-diff: extra strconv.Quote the reading of the body goes through runes (numbers), which the analysis stops; the result is `s` quoted
   - symbol: strconv.Quote
     flows: [{from: arg0, to: result}]
   - symbol: path.Join
@@ -187,16 +189,18 @@ propagators:
     flows: [{from: recv, to: result}]
 
   # encoding/json
+  # the error of a syntax error quotes the byte of the input (`invalid character 'x' ...`): input -> error
   - symbol: encoding/json.Unmarshal
-    flows: [{from: arg0, to: arg1}]
+    flows: [{from: arg0, to: arg1}, {from: arg0, to: result0}]
   - symbol: encoding/json.NewDecoder
     flows: [{from: arg0, to: result}]
   - symbol: (*encoding/json.Decoder).Decode
-    flows: [{from: recv, to: arg0}]
+    flows: [{from: recv, to: arg0}, {from: recv, to: result0}]
   - symbol: encoding/json.Marshal
     flows: [{from: arg0, to: result0}]
+  # model-diff: extra encoding/json.MarshalIndent the reading of the body copies the bytes of the encoding one by one (numbers), which the analysis stops; the result is the value indented
   - symbol: encoding/json.MarshalIndent
-    flows: [{from: arg0, to: result0}]
+    flows: [{from: arg0, to: result0}, {from: arg1, to: result0}, {from: arg2, to: result0}]
 
   # encoding/base64, encoding/hex
   - symbol: (*encoding/base64.Encoding).DecodeString
@@ -210,17 +214,17 @@ propagators:
 
   # net/url
   - symbol: net/url.Parse
-    flows: [{from: arg0, to: result0}]
+    flows: [{from: arg0, to: results}]
   - symbol: net/url.ParseRequestURI
-    flows: [{from: arg0, to: result0}]
+    flows: [{from: arg0, to: results}]
   - symbol: net/url.ParseQuery
-    flows: [{from: arg0, to: result0}]
+    flows: [{from: arg0, to: results}]
   - symbol: net/url.QueryEscape
     flows: [{from: arg0, to: result}]
   - symbol: net/url.PathEscape
     flows: [{from: arg0, to: result}]
   - symbol: net/url.QueryUnescape
-    flows: [{from: arg0, to: result0}]
+    flows: [{from: arg0, to: results}]
   - symbol: (*net/url.URL).String
     flows: [{from: recv, to: result}]
   - symbol: (*net/url.URL).Query
@@ -232,9 +236,9 @@ propagators:
   - symbol: (net/url.Values).Encode
     flows: [{from: recv, to: result}]
   - symbol: (net/url.Values).Set
-    flows: [{from: arg1, to: recv}]
+    flows: [{from: arg0, to: recv}, {from: arg1, to: recv}]
   - symbol: (net/url.Values).Add
-    flows: [{from: arg1, to: recv}]
+    flows: [{from: arg0, to: recv}, {from: arg1, to: recv}]
   - symbol: mime.ParseMediaType
     flows: [{from: arg0, to: result0}, {from: arg0, to: result1}]
 

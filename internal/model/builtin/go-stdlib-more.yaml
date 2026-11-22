@@ -518,8 +518,9 @@ propagators:
     pure: true
   - symbol: (go/ast.Node).End
     pure: true
+  # model-diff: extra (*encoding/json.Decoder).Token the strings of the tokens are read by `Decode(&x)`, which writes through reflect; the reading of the body does not see that write, and the result does carry the input
   - symbol: (*encoding/json.Decoder).Token
-    flows: [{from: recv, to: result0}]
+    flows: [{from: recv, to: results}]
   - symbol: (*net/url.URL).RequestURI
     flows: [{from: recv, to: result}]
   - symbol: mime/multipart.NewWriter
