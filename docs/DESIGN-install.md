@@ -46,14 +46,14 @@ Go と Dart は動く(`go` と Dart SDK が、それぞれ `brew` で入る)。*
 
 ## 7. formula の下書き(このリポジトリの中に置ける。tap を作る前)
 
-formula の中身(`depends_on`、`caveats`、`test do`)は、先にこのリポジトリの中に下書きとして置ける(外に出ない)。`depends_on`: ビルド時 `go`、実行時 `go`(`go list` のため)と、Dart の扱い(上の表)。`test do`: `rivus --version` と、小さい Go のプロジェクトの解析。
+formula の中身(`depends_on`、`caveats`、`test do`)は、先にこのリポジトリの中に下書きとして置ける(外に出ない)。`depends_on`: ビルド時 `go`、実行時 `go`(`go list` のため)と、Dart の扱い(上の表)。`test do`: `rivus version`(足したあと)と、小さい Go のプロジェクトの解析。
 
 ## 8. なっていない所の一覧(直す仕事)
 
 1. Dart の extractor の SDK の場所を、実行ファイルの位置からでなく、環境変数または `dart` の位置から導く(単体の実行ファイルにするため)。
 2. 見本のルールを、インストールした利用者が使える形にする(`share` に入れる、または書き出すコマンド)。
 3. 入れ方の案内を、`brew` の言葉にする(README、エラーメッセージ)。
-4. `rivus --version`(あるか確かめる)と、リリースのタグ付け、版の埋め込み。
+4. **`rivus version` / `--version` が、ない**(確かめた: `unknown command`)。formula の `test do` に要るので、足す。版の埋め込み(`-ldflags`)と、リリースのタグ付け。
 5. Rust: `rivus setup rust` と、隔離の移行。
 6. `go` の版(`go 1.27`)を、formula の `depends_on` で満たせるか(`brew` の `go` の版が、`go.mod` の要求より古いと、ビルドできない)。
 
