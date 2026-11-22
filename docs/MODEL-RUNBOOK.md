@@ -45,7 +45,7 @@
 `examples/rules/*.yaml` と `bench/*/rules.yaml` の例を、組み込みに昇格する作業(一覧の「例から昇格」の行)。
 
 - 例のまま移さない。ほかのモデルと同じ確認を通す: 差分テスト(入っていれば)、`result` / `results` の点検、zoo のセル、すでに組み込みにある行との重複の確認。
-- 昇格したら、**例のファイルは消す**。`examples/rules/README.md` の、そのファイルの行は、「組み込みになった(`internal/model/builtin/<ファイル>`)」の 1 行にする(ファイル名で探す利用者のため)。`bench/*/rules.yaml` の例も同じ。リポジトリの直下の README は、昇格の PR ではさわらない(例の一覧は `examples/rules/README.md` を見る、という形にしてある。README に、昇格するファイルを名指しした記述が残っていたら、書き直さず、PR の本文の「手順のとおりにできなかった所」に書く)。
+- 昇格したら、**例のファイルは、リポジトリの中に、ファイルを名指しで使う参照が残る場合は、中身が空のルール(「組み込みになった。`internal/model/builtin/<ファイル>`」のコメントだけ)として残し、参照がなければ消す**([ADR-102](DECISIONS.md))。決め方: `grep -rn` で、ファイル名と `examples/rules` を、リポジトリ全体(`bench/`、`cmd/`、`internal/`、`extractor/`、`docs/`、`.github/`、`Makefile`)で探し、結果を PR の本文に書く。参照の側を直す必要があるとき(例: `cmd/rivus/notbuiltin.go` とそのテスト)は、その PR でさわってよい。`examples/rules/README.md` の、そのファイルの行は、「組み込みになった(`internal/model/builtin/<ファイル>`)」の 1 行にする(ファイル名で探す利用者のため)。`bench/*/rules.yaml` の例も同じ。リポジトリの直下の README は、昇格の PR ではさわらない(例の一覧は `examples/rules/README.md` を見る、という形にしてある。README に、昇格するファイルを名指しした記述が残っていたら、書き直さず、PR の本文の「手順のとおりにできなかった所」に書く)。
 - 例の位置づけ(ADR-063)の上書きは、**[ADR-101](DECISIONS.md) で済んでいる**。昇格の PR は ADR を書かない(ADR-101 を参照するだけ)。
 - PR の題は `feat(model): <言語> <パッケージ> の組み込みモデル(例から昇格)`。判定は、この題の形で行う(1 節)。昇格のあと、例のファイルは無いか短くなるので、`ls internal/model/builtin/` の判定は、`<言語>-<パッケージ>*.yaml` で使える。
 
@@ -81,7 +81,7 @@ zoo のゲート(`scripts/zoo-loosened-check.sh`、#167): 新しいセル(`bench
 - `internal/model/builtin/<lang>-<package>*.yaml`(`verified_versions` も、このファイルに書く)と、そのモデルの `.dead-allow`(`internal/model/builtin/<lang>-<package>*.dead-allow`。**さわるのは、「新しい行がどこにも一致しない」という失敗が出たとき(その行を、理由つきで足す)だけ。「zoo から一致するようになったので外せ」の指摘は、無視する**(#187 のあと、通常は記録だけになる。掃除は定期の別の作業で、モデルの PR は、ほかのモデルの `.dead-allow` をさわらない))。
 - `bench/zoo-<lang>/` の自分のディレクトリ(セル、骨組み)、`bench/zoo/marks.d/<lang>/` の自分のファイル、`docs/issues/model-<パッケージ>-*.md`。
 - **広げる PR**(1 節): もともと main にある、そのパッケージのモデルのファイル(と、その `.dead-allow`)。
-- **例からの昇格の PR**(1 節): 昇格する `examples/rules/<その 1 つ>`(消す)と、`examples/rules/README.md` のその行(「組み込みになった」の 1 行に)、`bench/*/rules.yaml` の例(あれば)。
+- **例からの昇格の PR**(1 節): 昇格する `examples/rules/<その 1 つ>`(消すか、空のルールにする。1 節)と、参照の側(洗い出して必要なものだけ)、`examples/rules/README.md` のその行(「組み込みになった」の 1 行に)、`bench/*/rules.yaml` の例(あれば)。
 - **例からの昇格の、さわってよい範囲の事実(洗い出し)**: 例のファイルを使っているのは、`bench/compare.sh`(gin: 145、147 行。`gin-vue-admin` と `go-test-bench` のルール)、`bench/parity/collect.sh`(103 行。gin)、`bench/README.md`(gin: 8、158〜160、258 行)、`cmd/rivus/notbuiltin.go` と `notbuiltin_test.go`(actix-web のファイルを名指し。テストが読む)、`bench/parseable/rules.yaml` と `bench/parseable/README.md`(actix-web の写し)、`internal/model/builtin/rust-web.yaml` の 3 行目のコメント、`extractor/rust/README.md` の 108 行。ファイルを消すと、`compare.sh` の gin の 2 つのベンチは、ルールのファイルがなく飛ばされる。**gin は、例のファイルを消さず、中身を空のルール(「組み込みになった」のコメントつき)にして残す案が、使っている所を壊さない**(`compare.sh` は、比べる 2 つのバージョンが、それぞれの木のファイルを読むので、古いバージョンは昔の gin のルール、新しいバージョンは組み込み、になり、昇格の前後の比較の意味が保たれる)。**actix-web は、`notbuiltin.go` の表の行と、そのテストを直す必要がある**(昇格すると、`actix_web::` が組み込みのルールにあるので、知らせは出ない)。この 2 ファイルは、actix-web の昇格の PR で、さわってよい。決める(相談役。ADR-101 の「消す」との関係)まで、gin は、消さずに残す。
 
 - ほかのファイル(`docs/DECISIONS.md`、`docs/ISSUES.md`、直下の README、コード、ゲート、ワークフロー)は、さわらない。conflict が出たら、main 側の行を残して、自分の行を足し直す。
