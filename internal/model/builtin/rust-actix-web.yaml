@@ -1,0 +1,96 @@
+# actix-web: the web framework (crate `actix-web`, 4.x). Where untrusted requests come from: a handler is given an
+# `HttpRequest` or an extractor (`web::Query`, `web::Path`, `web::Json`, `web::Form`), and that is the request; what its getters
+# return comes from it. The types are the paths of the structs without their type arguments, `&` kept, as the extractor writes
+# them: the path that the crate makes public (`actix_web::HttpRequest`, `actix_web::web::Query`), not the module that defines the
+# item (`actix_web::request::HttpRequest`).
+#
+# It was `examples/rules/rust-actix-web.yaml` before (ADR-063: a specific framework is for the project to add). It is built in
+# now (ADR-101 settles what that does to the examples); the rows of the example are here, with the changes below.
+#
+# Hand written rows (origin: human); the generator and the differential test do not exist, and the differential test is not for
+# Rust (the extractor reads a crate by building it: docs/MODEL-RUNBOOK.md, section 0 and 9). The crate was read as source
+# (4.20.0), not built, and not run; the zoo has a skeleton of it (bench/zoo-rust-pkg/actix_web).
+#
+# What is not here, and why:
+#  * `web::Bytes` (the example had it): it is `bytes::Bytes`, a type of another crate that the framework re-exports. The
+#    extractor names a type by the crate that defines it, so a row `actix_web::web::Bytes` matches nothing, and a row
+#    `bytes::Bytes` would make every function of a project that takes `Bytes` a source.
+#  * `web::Payload`, `web::Header`, `web::Data`, the multipart of `actix-multipart`: a `Payload` and a `Header<T>` are made by
+#    the extractor only (no cell can make one), so no row of them could be checked. `web::Data` is the state that the program
+#    sets, not the request.
+#  * The sinks (`Redirect::to`, `HttpResponseBuilder::insert_header`): the zoo of a package cannot check a sink of a skeleton in
+#    Rust yet (a sink is a function of zoo-mark, which the skeleton cannot call). `insert_header` takes any header, so it is not a
+#    sink as a whole (a project's rule can name the `Location` case).
+#  * `actix_router::Path` (what `match_info()` returns, `get` of it) and `http::HeaderValue` of the crate `http` have no row of
+#    their own: they are other crates. The rows of the headers are here under the spelling that a project that uses actix-web
+#    has (`actix_web::http::header::HeaderMap`), as the examples of rust-web.yaml.dead-allow say.
+ruleset: rivus/rust/actix-web@1
+verified_versions:
+  - package: actix-web
+    versions: ">=4.0.0 <5.0.0"
+    checked_with: 4.20.0
+    checked: 2026-11-23
+
+sources:
+  - kind: param_type
+    type: "actix_web::HttpRequest"
+    labels: [user_input]
+  - kind: param_type
+    type: "&actix_web::HttpRequest"
+    labels: [user_input]
+  - kind: param_type
+    type: "actix_web::web::Query"
+    labels: [user_input]
+  - kind: param_type
+    type: "actix_web::web::Path"
+    labels: [user_input]
+  - kind: param_type
+    type: "actix_web::web::Json"
+    labels: [user_input]
+  - kind: param_type
+    type: "actix_web::web::Form"
+    labels: [user_input]
+
+propagators:
+  # the getters of the request
+  - symbol: actix_web::HttpRequest::query_string
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::HttpRequest::path
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::HttpRequest::uri
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::HttpRequest::headers
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::HttpRequest::match_info
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::HttpRequest::cookie
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::HttpRequest::cookies
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::HttpRequest::peer_addr
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::HttpRequest::connection_info
+    flows: [{from: args, to: result}]
+  # the host and the address of the peer that the connection info reads from the headers (Host, Forwarded, X-Forwarded-*)
+  - symbol: actix_web::dev::ConnectionInfo::host
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::dev::ConnectionInfo::realip_remote_addr
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::dev::ConnectionInfo::remote_addr
+    flows: [{from: args, to: result}]
+  # the headers: the types are the crate http's, spelled as the framework re-exports them
+  - symbol: actix_web::http::header::HeaderMap::get
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::http::header::HeaderValue::to_str
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::http::header::HeaderValue::as_bytes
+    flows: [{from: args, to: result}]
+  # the extractors
+  - symbol: actix_web::web::Query::into_inner
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::web::Path::into_inner
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::web::Json::into_inner
+    flows: [{from: args, to: result}]
+  - symbol: actix_web::web::Form::into_inner
+    flows: [{from: args, to: result}]

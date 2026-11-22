@@ -1,6 +1,6 @@
 # Web frameworks and HTTP clients: the request a handler is given is attacker
 # controlled. The types are the paths of the structs (without type arguments), `&` kept.
-# actix-web is not here: it is a specific framework, see examples/rules/rust-actix-web.yaml (ADR-063).
+# actix-web has its own file: rust-actix-web.yaml.
 ruleset: rivus/rust/web@1
 
 sources:

@@ -1,0 +1,2 @@
+rust	pkg/actix_web/request_query_string.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	pkg/actix_web/request_query_string.rs	sink-none	@sink(none) @nosink(pkg-actix-web-request-query-string-decoy)	fn decoy() { @decoy

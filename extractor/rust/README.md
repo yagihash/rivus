@@ -104,5 +104,5 @@ receiver apart from the arguments), and a sink's `args: [1]` is the first argume
 - Models: `internal/model/builtin/rust-*.yaml` cover the common part of `std`. Others
   (`reqwest`, `sqlx`) have their sinks in `rust-std.yaml`, and `rust-web.yaml` has sources for
   `axum` and some other web frameworks (ADR-063 left the question of which frameworks are built in
-  open; see `docs/PRINCIPLES.md`, section 3). actix-web is not built in
-  (`examples/rules/rust-actix-web.yaml`, ADR-063).
+  open; see `docs/PRINCIPLES.md`, section 3). actix-web is built in
+  (`internal/model/builtin/rust-actix-web.yaml`).
