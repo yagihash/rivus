@@ -1,0 +1,105 @@
+# google-cloud-storage: the Cloud Storage client of Rust (`client::Storage` for the data plane, `client::StorageControl` for the
+# control plane, `builder::storage::SignedUrlBuilder`).
+#
+# Checked by reading the published source of 1.22.0. Hand written rows (origin: human); the generator does not exist yet.
+#
+# The boundary (docs/MODEL-QUEUE.md, row 11):
+# * `resource_name`: the name of a bucket and of an object that the user decides can point to another resource of the project, or
+#   of another project (as the Go and Dart clients: dart-gcp.yaml, docs/GCP-MODELS.md). The rows are on where the name is given:
+#   the arguments of `Storage::read_object`, `write_object`, `open_object`, `open_appendable_object`, `reopen_appendable_object`
+#   (bucket 1, object 2: the receiver is `arg0`), of `SignedUrlBuilder::for_object` / `for_bucket` (no receiver), and the setters of
+#   the bucket and the object of the request builders of `StorageControl` (`get_object().set_bucket(..).set_object(..)`, the
+#   same for delete, restore, move, rewrite; `set_parent` of `list_objects`; `set_name` of `get_bucket`, `delete_bucket`). The
+#   symbols are the paths that the code of the user writes (the re-exports `client`, `builder::storage`, `builder::storage_control`).
+# * Not made rows, and why: the setters that take a model object and not a name (`UpdateObject::set_object`, `ComposeObject::
+#   set_destination`, `CreateBucket::set_bucket`, `UpdateBucket::set_bucket`: a field of the struct that the user filled is where the
+#   name is, which a position of the call does not name); `CreateBucket::set_parent` / `set_bucket_id` and `ListBuckets::set_parent`
+#   (the project and the new bucket id: a project is the identity of the caller, as `dart-gcp.yaml` leaves the project out);
+#   `LockBucketRetentionPolicy::set_bucket`; the folder, managed folder and anywhere-cache builders; the setters whose values are
+#   not names (`set_generation`, the preconditions, the metadata).
+# * No source (ADR-108, 5): the bytes that `ReadObjectResponse::next` returns are what was written into the object, by whoever
+#   uploaded it, and the program reads the bucket that it chose (as `dart-gcp.yaml` and the Go `go-gcp.yaml`: docs/GCP-MODELS.md,
+#   section 0, `stored`). A value of the response that the service decides (the generation, the checksums, the size) is not one
+#   either. The queue's draft (docs/MODEL-QUEUE.md, row 11) said "source: the body of a download, sink: an upload"; this file
+#   differs from it on the source, and has no sink for an upload (the payload of `write_object` is stored, not run: no category fits).
+# * No `flows` row: the bodies of the builders are read as before. No `calls:` row: the crate has no API that calls back the code
+#   of the user for a value (the callbacks are policies: retry, backoff, read resume, which get no user data).
+ruleset: rivus/rust/google-cloud-storage@1
+self_first: true     # the positions count the receiver (arg0), also for a call through a trait
+
+verified_versions:
+  - package: google-cloud-storage
+    versions: ">=1.0.0 <2.0.0"
+    checked_with: 1.22.0
+    checked: 2026-11-23
+
+sinks:
+  - symbol: google_cloud_storage::client::Storage::read_object
+    args: [1, 2]
+    category: resource_name
+  - symbol: google_cloud_storage::client::Storage::write_object
+    args: [1, 2]
+    category: resource_name
+  - symbol: google_cloud_storage::client::Storage::open_object
+    args: [1, 2]
+    category: resource_name
+  - symbol: google_cloud_storage::client::Storage::open_appendable_object
+    args: [1, 2]
+    category: resource_name
+  - symbol: google_cloud_storage::client::Storage::reopen_appendable_object
+    args: [1, 2]
+    category: resource_name
+  - symbol: google_cloud_storage::builder::storage::SignedUrlBuilder::for_object
+    args: [0, 1]
+    category: resource_name
+  - symbol: google_cloud_storage::builder::storage::SignedUrlBuilder::for_bucket
+    args: [0]
+    category: resource_name
+  - symbol: google_cloud_storage::builder::storage_control::GetObject::set_bucket
+    args: [1]
+    category: resource_name
+  - symbol: google_cloud_storage::builder::storage_control::GetObject::set_object
+    args: [1]
+    category: resource_name
+  - symbol: google_cloud_storage::builder::storage_control::DeleteObject::set_bucket
+    args: [1]
+    category: resource_name
+  - symbol: google_cloud_storage::builder::storage_control::DeleteObject::set_object
+    args: [1]
+    category: resource_name
+  - symbol: google_cloud_storage::builder::storage_control::RestoreObject::set_bucket
+    args: [1]
+    category: resource_name
+  - symbol: google_cloud_storage::builder::storage_control::RestoreObject::set_object
+    args: [1]
+    category: resource_name
+  - symbol: google_cloud_storage::builder::storage_control::MoveObject::set_bucket
+    args: [1]
+    category: resource_name
+  - symbol: google_cloud_storage::builder::storage_control::MoveObject::set_source_object
+    args: [1]
+    category: resource_name
+  - symbol: google_cloud_storage::builder::storage_control::MoveObject::set_destination_object
+    args: [1]
+    category: resource_name
+  - symbol: google_cloud_storage::builder::storage_control::RewriteObject::set_source_bucket
+    args: [1]
+    category: resource_name
+  - symbol: google_cloud_storage::builder::storage_control::RewriteObject::set_source_object
+    args: [1]
+    category: resource_name
+  - symbol: google_cloud_storage::builder::storage_control::RewriteObject::set_destination_bucket
+    args: [1]
+    category: resource_name
+  - symbol: google_cloud_storage::builder::storage_control::RewriteObject::set_destination_name
+    args: [1]
+    category: resource_name
+  - symbol: google_cloud_storage::builder::storage_control::ListObjects::set_parent
+    args: [1]
+    category: resource_name
+  - symbol: google_cloud_storage::builder::storage_control::GetBucket::set_name
+    args: [1]
+    category: resource_name
+  - symbol: google_cloud_storage::builder::storage_control::DeleteBucket::set_name
+    args: [1]
+    category: resource_name
