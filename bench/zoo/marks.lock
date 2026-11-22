@@ -220,6 +220,8 @@ go	clos/inline/inline.go	sink-none	@sink(none)	func fixed() { @fixed
 go	clos/inline/inline.go	sink-none	@sink(none) @nosink(clos-inline-decoy)	func decoy() { @decoy
 go	clos/partial_callers/partial_callers.go	sink-none	@sink(none)	func decoy() { @decoy
 go	clos/partial_callers/partial_callers.go	sink-none	@sink(none)	func fixed() { @fixed
+go	clos/range_func/range_func.go	sink-none	@sink(none)	func fixed() { @fixed
+go	clos/range_func/range_func.go	sink-none	@sink(none) @nosink(clos-range-func-decoy)	func decoy() { @decoy
 go	clos/relay/relay.go	fp	@sink(none) @fp @nosink(clos-relay-decoy) @fp @ref(XTALK)	func fixed() { @fixed
 go	clos/relay/relay.go	sink-none	@sink(none)	func fixed() { @fixed
 go	clos/relay/relay.go	sink-none	@sink(none) @fp @nosink(clos-relay-decoy) @fp @ref(XTALK)	func fixed() { @fixed
