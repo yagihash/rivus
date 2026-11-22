@@ -8,7 +8,7 @@ without a flag) or with `-rules file.yaml`.
 
 These files are examples to copy and edit, not part of rivus:
 
-- `go-gin.yaml`: gin (`*gin.Context` is the request; `Query`, `Param`, `ShouldBindJSON` and so on).
+- `go-gin.yaml`: built in now (`internal/model/builtin/go-gin.yaml`). The file stays, with no rules, because the benchmark scripts name it.
 - `go-database-sql.yaml`: what database/sql reads back is a source (label `stored`): second order flows (stored XSS, stored path), with `out`, `field: Type.*` and the `stored_data_boundary` uncertainty.
 - `go-macaron.yaml`: macaron (used by Gogs). A wrapper that embeds `*macaron.Context` has to be
   named as a source in the project's own rules (see `bench/gogs/rules.yaml`).
@@ -18,5 +18,5 @@ These files are examples to copy and edit, not part of rivus:
 What is built in: the standard library, the packages that have no replacement (`serde`, `tonic`, `tokio`, `futures`, `bytes`, `libc`, `http`, `url`...) and the SQL drivers (`sqlx`, `rusqlite`, `sqflite`). A specific framework is not: its model is here.
 
 ```sh
-rivus analyze -rules examples/rules/go-gin.yaml ./...
+rivus analyze -rules examples/rules/go-database-sql.yaml ./...
 ```
