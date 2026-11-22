@@ -1,0 +1,7 @@
+name: shelf_router
+description: "The skeleton of package:shelf_router that the cells of the Dart zoo need (the real package is not in the zoo): Router and the params of a Request, so that the built-in rows of package:shelf_router are the ones the cells hit."
+publish_to: none
+environment:
+  sdk: ^3.10.0
+dependencies:
+  shelf: ^1.4.0

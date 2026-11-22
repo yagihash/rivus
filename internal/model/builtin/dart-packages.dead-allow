@@ -1,5 +1,4 @@
 # The rows of dart-packages.yaml that no call in the zoo or the curated targets hits (TestBuiltinRowsAreHitByTheZoo). "symbol | reason"; see bench/parity/README.md.
-package:shelf/src/request.dart#Request.change | dependency | not the standard library: the zoo has no such dependency
 package:shelf/src/request.dart#Request.contentLength | dependency | not the standard library: the zoo has no such dependency
 package:shelf/src/request.dart#Request.context | dependency | not the standard library: the zoo has no such dependency
 package:shelf/src/request.dart#Request.encoding | dependency | not the standard library: the zoo has no such dependency
