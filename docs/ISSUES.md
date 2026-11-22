@@ -70,3 +70,4 @@
 | [#105](issues/105-rust-cmp-min-max-pure.md) | Rust: std::cmp::min / max の pure | 誤ったモデル(直した) | Rust | 5 | closed | zoo `F/conv/builtin-minmax`(Rust) |
 | [#106](issues/106-path-exhaustive-honesty.md) | graph: path の exhaustive | 誤った答え(直した) | 全(graph) | 1 | closed | `internal/graphq/exhaustive_test.go` |
 | [#107](issues/107-zoo-recursion-approximation-verdict.md) | zoo: recursion_approximation の判定 | 道具・ベンチ(直した) | 全 | 1 | closed | zoo のテスト(`cmd/rivus/zoo_*_test.go`) |
+| [#125](issues/125-dart-parent-of-packages-dependency-ids.md) | Dart: 複数のパッケージの親を -C に指すと、依存が file: ID になり、解析されない(サイレント) | サイレントな見逃し(直した) | Dart | 1 | closed | `cmd/rivus/dart_depcontext_test.go` |

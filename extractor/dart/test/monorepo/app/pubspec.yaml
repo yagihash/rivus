@@ -1,0 +1,8 @@
+name: app
+publish_to: none
+environment:
+  sdk: ^3.10.0
+dependencies:
+  shared:
+    path: ../shared
+  fixnum: 1.1.1

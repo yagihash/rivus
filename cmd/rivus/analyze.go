@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/yagihash/rivus/internal/graphdb"
+	"github.com/yagihash/rivus/internal/ir"
 	"github.com/yagihash/rivus/internal/model"
 	"github.com/yagihash/rivus/internal/report"
 	"github.com/yagihash/rivus/internal/sg"
@@ -292,6 +293,12 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 		}
 		fmt.Fprintf(os.Stderr, "rivus: %d package(s) or file(s) were read and not built (a type error in them or in a package they import), or read on a syntax tree that the analyzer recovered (a syntax error: a declaration may be missing); %d function(s) of them are not analysed: %s; see summary.unread\n",
 			u.Packages, u.Functions, strings.Join(names, ", "))
+		for _, p := range u.Top {
+			if strings.HasPrefix(p.Why, ir.DependencyNotLinkedPrefix) {
+				fmt.Fprintf(os.Stderr, "rivus: a dependency (%s) is not read as the calls to it name it (not resolved to a package: URI, or another version of it is read in the same tree), so its functions are not analysed; point -C at one package, or run `dart pub get` in each package\n", p.Package)
+				break
+			}
+		}
 	}
 	rep.Target = o.target(o.irFile != "")
 	return rep, nil
