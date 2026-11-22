@@ -224,7 +224,11 @@ func (g *goGen) val(t types.Type, taint bool) (string, bool) {
 			return "", false
 		case u.Info()&types.IsBoolean != 0:
 			return ty + "(false)", true
-		case u.Info()&(types.IsInteger|types.IsFloat) != 0:
+		case u.Info()&types.IsInteger != 0:
+			// Not a constant: a count (`strings.Replace`'s n) of 0 would make the analysis of the body drop the branch that
+			// the probe is about, and the models are compared on a call that does nothing.
+			return ty + "(fxn)", true
+		case u.Info()&types.IsFloat != 0:
 			return ty + "(0)", true
 		}
 	case *types.Slice:
@@ -611,6 +615,10 @@ func goVersion() string {
 
 const goHelpers = `
 func src() string { return "" }
+
+var fxn int
+
+func init() { fxn++ }
 
 type terr struct{ s string }
 
