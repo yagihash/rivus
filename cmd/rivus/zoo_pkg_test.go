@@ -301,7 +301,7 @@ func TestZooPkgRust(t *testing.T) {
 			if err := os.MkdirAll(work, 0o755); err != nil {
 				t.Fatal(err)
 			}
-			obs, err := zooRustObserveAt(t, harness, work, "zoo-pkg-observe")
+			obs, err := zooRustObserveAt(t, harness, work, filepath.Join(filepath.Dir(binary), "zoo-pkg", "rust-target"), "zoo-pkg-observe")
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -152,6 +152,7 @@ func dartZooSymbols(t *testing.T, set map[string]bool) {
 		t.Fatal(err)
 	}
 	words := strings.Fields(dart)
+	zooDartRoot(t) // writes the pubspec.yaml of bench/zoo-dart/cells (generated, not committed)
 	for _, d := range []string{"bench/zoo-dart/cells", "bench/zoo-dart/pure", "bench/dart-curated"} {
 		dir, err := filepath.Abs(filepath.Join("..", "..", d))
 		if err != nil {

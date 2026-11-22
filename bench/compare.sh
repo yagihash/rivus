@@ -360,6 +360,8 @@ setup() { # name side: makes the copy and the IR of that version; sets DIR, RULE
       local dartcmd="${RIVUS_DART:-dart}" nodeps="--no-deps" extdir="$wt/extractor/dart"
       case "$b" in dart-curated|zoo-dart) nodeps="" ;; esac
       [ -d "$extdir" ] || { skip "$b" "no extractor/dart in $w ($s7)"; return 1; }
+      # the pubspec.yaml of the Dart zoo is generated and not committed (a version before that has it committed)
+      if [ "$b" = zoo-dart ] && [ ! -f "$DIR/pubspec.yaml" ]; then (cd "$wt" && make zoo-dart-gen) > /dev/null 2>&1; fi
       (cd "$DIR" && $dartcmd pub get) > /dev/null 2>&1 || { skip "$b" "dart pub get failed (RIVUS_DART=$dartcmd)"; return 1; }
       [ -d "$extdir/.dart_tool" ] || (cd "$extdir" && $dartcmd pub get) > /dev/null 2>&1
       ext="$(tree "$sha" extractor/dart)"; extkey="dart ${ext:0:12}"

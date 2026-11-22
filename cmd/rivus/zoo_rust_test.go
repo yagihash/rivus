@@ -96,17 +96,18 @@ func zooRustObserve(t *testing.T) zooObserved {
 }
 
 func zooRustObserveOnce(t *testing.T, root string) (zooObserved, error) {
-	return zooRustObserveAt(t, filepath.Join(root, "exec"), filepath.Join(filepath.Dir(binary), "zoo-rust"), "zoo-observe")
+	work := filepath.Join(filepath.Dir(binary), "zoo-rust")
+	return zooRustObserveAt(t, filepath.Join(root, "exec"), work, filepath.Join(work, "target"), "zoo-observe")
 }
 
-// zooRustObserveAt builds the harness in exe (a crate whose binary bin runs the cases) and runs it three times; work is where the
-// target and the runs go. A package of the zoo has a harness that the test writes (zoo_pkg_test.go).
-func zooRustObserveAt(t *testing.T, exe, work, bin string) (zooObserved, error) {
+// zooRustObserveAt builds the harness in exe (a crate whose binary bin runs the cases) and runs it three times; work is where
+// the runs go, target the target directory of cargo (the packages of the zoo share one, so that zoo-mark is built once).
+// A package of the zoo has a harness that the test writes (zoo_pkg_test.go).
+func zooRustObserveAt(t *testing.T, exe, work, target, bin string) (zooObserved, error) {
 	var obs zooObserved
 	if err := os.MkdirAll(work, 0o755); err != nil {
 		return obs, err
 	}
-	target := filepath.Join(work, "target")
 	build := zooRustCargo(t, exe, []string{"RUSTFLAGS=-C instrument-coverage", "CARGO_TARGET_DIR=" + target},
 		"build", "--locked", "--offline", "--quiet", "--bin", bin)
 	if out, err := build.CombinedOutput(); err != nil {

@@ -454,6 +454,7 @@ func TestResolveFuncValuesDart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	zooDartRoot(t) // writes the pubspec.yaml of bench/zoo-dart/cells (generated, not committed)
 	for _, dir := range []string{"../../bench/zoo-dart/cells", "../../bench/dart-curated"} {
 		run := func(args ...string) []byte {
 			cmd := exec.Command(binary, append([]string{"analyze"}, args...)...)
