@@ -1,0 +1,321 @@
+# go-github (github.com/google/go-github/v93): the GitHub API client of Go. `Client`, its services (`Repositories`, `Issues`,
+# `PullRequests`, `Git`), and the values that come back.
+#
+# Checked by reading the published source of v93.0.0 (the module proxy), 2026-11-23. Hand written rows (origin: human); the
+# generator does not exist yet.
+#
+# Which major: the module path of go-github has the major in it (`github.com/google/go-github/v93`), and the symbols of the IR
+# have it too, so a row is for one major. These rows are for v93, the latest at the day, and the range of verified_versions is
+# that of v93 only (`>=93.0.0 <94.0.0`). A program that imports another major (`/v84`, ...) is not covered by this file: no row
+# matches, and nothing says so. The majors are separate modules, and the rows were not read against the code of the others.
+# docs/MODEL-RUNBOOK.md has no rule for a module whose path changes with the major; this file is the first.
+#
+# The boundary (docs/MODEL-QUEUE.md, row 8):
+# * `resource_name`: what decides the resource that a call reaches. go-github has no slug type: the owner and the repository are
+#   two plain strings of each call (they are put into the path `repos/<owner>/<repo>/...`), so the rows are on the methods that
+#   take them, for the services of repositories, issues, pull requests and git objects. The path, the ref, the sha, the branch, the
+#   tag, and the `Ref` of `RepositoryContentGetOptions` are put into the path too. A value of a user there can point to another
+#   repository, another file or another ref than the program meant (as the names of the Google Cloud resources: go-gcp.yaml).
+#   The ids and numbers (`number int`, `id int64`) are not strings that a user can shape into a path; they are not rows.
+# * `Client.NewRequest`, `NewFormRequest`, `NewUploadRequest`: the `urlStr` is put after the base URL (the same category).
+#   `WithEnterpriseURLs`: the base URL and the upload URL of the server that the client talks to (`ssrf`).
+# * Sources, the criterion (ADR-108): a client of a service makes a value a source when it carries what a user of the service wrote.
+#   The sources are the accessors and the fields of the values that come back (the accessors are `call_result` rows, and the
+#   fields are `kind: field` rows: a program may read either, `issue.GetBody()` or `*issue.Body`; the rows of the fields fire only
+#   in the code of the project, never inside go-github): the text of a file (`RepositoryContent.GetContent` and `.Content`,
+#   `DownloadContents*`, `Blob.GetContent` and `.Content`, `GetBlobRaw`), the title and the body of an issue, a pull request, a
+#   comment and a review, the message of a commit, the body of a release, and the patch text of a commit or a pull request
+#   (`GetCommitRaw`, `GetRaw`; the diff is what the committer wrote). A `Get*` accessor is the same value as its field, so a
+#   program is found whichever it reads.
+# * Not sources, with the reason (ADR-108, 4 and 5): the ids, the numbers, the times, the shas, the counts, and the URLs that the
+#   service builds (`GetHTMLURL`, `GetURL`, `GetDownloadURL`) are decided by the service. The login of a user, the name of a
+#   branch (`PullRequestBranch.GetRef`), a label name, the name of a file in a diff (`CommitFile.GetFilename`), the title of a
+#   milestone, the description of a repository, the name of a commit's author: written by a user of GitHub, but it is hard to
+#   say how far they are shaped by the service (a login is narrow; a branch name and a file name are wide), so they are not made
+#   sources (the reviewer can decide them again). The results of `Search.*`, `ListByRepo` and the other lists are values of the
+#   types above (their accessors are the sources); the list itself is not.
+# * Not modelled: the fields of the request bodies that name a resource (`CreateRef.Ref`, `CreatePullRequest.Head/Base`,
+#   `RepositoryContentFileOptions.Branch`, `CommitsListOptions.SHA/Path`); the search queries of `Search.*` (a query is a
+#   language of its own); the webhook functions (`ValidatePayload`, `ParseWebHook`: their bodies are read, and the request is
+#   already a source by net/http).
+# * No `flows` row, no `calls:` row, no `pure` row: the bodies of the services are read (a few lines each: they reach
+#   `Client.Do`, which reaches `net/http`, whose rows stand for the clients). `NewRequest` calls the `RequestOption`s that it is
+#   given; the package is not declared (`body_replaced_packages`), so the body is read and the callback with it.
+ruleset: rivus/go/go-github@1
+
+verified_versions:
+  - package: github.com/google/go-github/v93
+    versions: ">=93.0.0 <94.0.0"
+    checked_with: v93.0.0
+    checked: 2026-11-23
+
+sources:
+  - kind: call_result
+    symbol: (*github.com/google/go-github/v93/github.Issue).GetTitle
+    labels: [user_input]
+  - kind: call_result
+    symbol: (*github.com/google/go-github/v93/github.Issue).GetBody
+    labels: [user_input]
+  - kind: call_result
+    symbol: (*github.com/google/go-github/v93/github.IssueComment).GetBody
+    labels: [user_input]
+  - kind: call_result
+    symbol: (*github.com/google/go-github/v93/github.PullRequest).GetTitle
+    labels: [user_input]
+  - kind: call_result
+    symbol: (*github.com/google/go-github/v93/github.PullRequest).GetBody
+    labels: [user_input]
+  - kind: call_result
+    symbol: (*github.com/google/go-github/v93/github.PullRequestComment).GetBody
+    labels: [user_input]
+  - kind: call_result
+    symbol: (*github.com/google/go-github/v93/github.PullRequestReview).GetBody
+    labels: [user_input]
+  - kind: call_result
+    symbol: (*github.com/google/go-github/v93/github.Commit).GetMessage
+    labels: [user_input]
+  - kind: call_result
+    symbol: (*github.com/google/go-github/v93/github.RepositoryRelease).GetBody
+    labels: [user_input]
+  - kind: call_result
+    symbol: (*github.com/google/go-github/v93/github.RepositoryContent).GetContent
+    labels: [user_input]
+  - kind: call_result
+    symbol: (*github.com/google/go-github/v93/github.Blob).GetContent
+    labels: [user_input]
+  - kind: call_result
+    symbol: (*github.com/google/go-github/v93/github.RepositoriesService).DownloadContents
+    labels: [user_input]
+  - kind: call_result
+    symbol: (*github.com/google/go-github/v93/github.RepositoriesService).DownloadContentsWithMeta
+    labels: [user_input]
+  - kind: call_result
+    symbol: (*github.com/google/go-github/v93/github.RepositoriesService).GetCommitRaw
+    labels: [user_input]
+  - kind: call_result
+    symbol: (*github.com/google/go-github/v93/github.PullRequestsService).GetRaw
+    labels: [user_input]
+  - kind: call_result
+    symbol: (*github.com/google/go-github/v93/github.GitService).GetBlobRaw
+    labels: [user_input]
+  - kind: field
+    field: github.com/google/go-github/v93/github.Issue.Title
+    labels: [user_input]
+  - kind: field
+    field: github.com/google/go-github/v93/github.Issue.Body
+    labels: [user_input]
+  - kind: field
+    field: github.com/google/go-github/v93/github.IssueComment.Body
+    labels: [user_input]
+  - kind: field
+    field: github.com/google/go-github/v93/github.PullRequest.Title
+    labels: [user_input]
+  - kind: field
+    field: github.com/google/go-github/v93/github.PullRequest.Body
+    labels: [user_input]
+  - kind: field
+    field: github.com/google/go-github/v93/github.PullRequestComment.Body
+    labels: [user_input]
+  - kind: field
+    field: github.com/google/go-github/v93/github.PullRequestReview.Body
+    labels: [user_input]
+  - kind: field
+    field: github.com/google/go-github/v93/github.Commit.Message
+    labels: [user_input]
+  - kind: field
+    field: github.com/google/go-github/v93/github.RepositoryRelease.Body
+    labels: [user_input]
+  - kind: field
+    field: github.com/google/go-github/v93/github.RepositoryContent.Content
+    labels: [user_input]
+  - kind: field
+    field: github.com/google/go-github/v93/github.Blob.Content
+    labels: [user_input]
+
+sinks:
+
+  # RepositoriesService
+  - symbol: (*github.com/google/go-github/v93/github.RepositoriesService).Get
+    args: [1, 2]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.RepositoriesService).ListCommits
+    args: [1, 2]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.RepositoriesService).GetCommit
+    args: [1, 2, 3]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.RepositoriesService).GetCommitRaw
+    args: [1, 2, 3]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.RepositoriesService).GetCommitSHA1
+    args: [1, 2, 3]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.RepositoriesService).CompareCommits
+    args: [1, 2, 3, 4]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.RepositoriesService).GetReadme
+    args: [1, 2]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.RepositoriesService).GetReadme
+    args: [3]
+    field: Ref
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.RepositoriesService).GetContents
+    args: [1, 2, 3]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.RepositoriesService).GetContents
+    args: [4]
+    field: Ref
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.RepositoriesService).DownloadContents
+    args: [1, 2, 3]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.RepositoriesService).DownloadContents
+    args: [4]
+    field: Ref
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.RepositoriesService).DownloadContentsWithMeta
+    args: [1, 2, 3]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.RepositoriesService).DownloadContentsWithMeta
+    args: [4]
+    field: Ref
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.RepositoriesService).CreateFile
+    args: [1, 2, 3]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.RepositoriesService).UpdateFile
+    args: [1, 2, 3]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.RepositoriesService).DeleteFile
+    args: [1, 2, 3]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.RepositoriesService).GetArchiveLink
+    args: [1, 2]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.RepositoriesService).GetArchiveLink
+    args: [4]
+    field: Ref
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.RepositoriesService).GetBranch
+    args: [1, 2, 3]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.RepositoriesService).GetBranchProtection
+    args: [1, 2, 3]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.RepositoriesService).ListReleases
+    args: [1, 2]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.RepositoriesService).GetRelease
+    args: [1, 2]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.RepositoriesService).GetLatestRelease
+    args: [1, 2]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.RepositoriesService).GetReleaseByTag
+    args: [1, 2, 3]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.RepositoriesService).CreateRelease
+    args: [1, 2]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.RepositoriesService).DownloadReleaseAsset
+    args: [1, 2]
+    category: resource_name
+
+  # IssuesService
+  - symbol: (*github.com/google/go-github/v93/github.IssuesService).Get
+    args: [1, 2]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.IssuesService).ListByRepo
+    args: [1, 2]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.IssuesService).Create
+    args: [1, 2]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.IssuesService).ListComments
+    args: [1, 2]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.IssuesService).GetComment
+    args: [1, 2]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.IssuesService).CreateComment
+    args: [1, 2]
+    category: resource_name
+
+  # PullRequestsService
+  - symbol: (*github.com/google/go-github/v93/github.PullRequestsService).Get
+    args: [1, 2]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.PullRequestsService).GetRaw
+    args: [1, 2]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.PullRequestsService).Create
+    args: [1, 2]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.PullRequestsService).Edit
+    args: [1, 2]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.PullRequestsService).ListFiles
+    args: [1, 2]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.PullRequestsService).ListCommits
+    args: [1, 2]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.PullRequestsService).ListComments
+    args: [1, 2]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.PullRequestsService).CreateComment
+    args: [1, 2]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.PullRequestsService).ListReviews
+    args: [1, 2]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.PullRequestsService).CreateReview
+    args: [1, 2]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.PullRequestsService).Merge
+    args: [1, 2]
+    category: resource_name
+
+  # GitService
+  - symbol: (*github.com/google/go-github/v93/github.GitService).GetCommit
+    args: [1, 2, 3]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.GitService).GetBlob
+    args: [1, 2, 3]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.GitService).GetBlobRaw
+    args: [1, 2, 3]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.GitService).GetTree
+    args: [1, 2, 3]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.GitService).GetRef
+    args: [1, 2, 3]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.GitService).ListMatchingRefs
+    args: [1, 2, 3]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.GitService).UpdateRef
+    args: [1, 2, 3]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.GitService).DeleteRef
+    args: [1, 2, 3]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.GitService).CreateRef
+    args: [1, 2]
+    category: resource_name
+
+  # the client: the path of a request, the server that it talks to
+  - symbol: (*github.com/google/go-github/v93/github.Client).NewRequest
+    args: [2]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.Client).NewFormRequest
+    args: [1]
+    category: resource_name
+  - symbol: (*github.com/google/go-github/v93/github.Client).NewUploadRequest
+    args: [1]
+    category: resource_name
+  - symbol: github.com/google/go-github/v93/github.WithEnterpriseURLs
+    args: [0, 1]
+    category: ssrf
