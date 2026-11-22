@@ -6,13 +6,38 @@ import (
 	"testing"
 )
 
+// flagCommands are the commands that have flags (the list that the tests of the flags and of -h go through).
+var flagCommands = [][]string{
+	{"analyze"}, {"index"}, {"query"}, {"resolve"}, {"sites"}, {"models", "coverage"}, {"setup", "rust"}, {"debug", "extract"},
+	{"graph", "info"}, {"graph", "callers"}, {"graph", "callees"}, {"graph", "path"}, {"graph", "impls"}, {"graph", "dispatchers"},
+}
+
+// -h of every command ends with 0 and prints no error; a command that needs a command under it ends with 2 when it is given none.
+func TestHelpExitsZeroEverywhere(t *testing.T) {
+	cmds := append([][]string{}, flagCommands...)
+	cmds = append(cmds, []string{"models"}, []string{"setup"}, []string{"graph"}, []string{"debug"})
+	for _, c := range cmds {
+		for _, extra := range [][]string{{"-h"}, {"-h", "-help-all"}} {
+			var stderr strings.Builder
+			cmd := exec.Command(binary, append(append([]string{}, c...), extra...)...)
+			cmd.Stderr = &stderr
+			if err := cmd.Run(); err != nil || strings.Contains(stderr.String(), "help requested") {
+				t.Errorf("rivus %s %s: %v, stderr %q", strings.Join(c, " "), strings.Join(extra, " "), err, stderr.String())
+			}
+		}
+	}
+	for _, c := range [][]string{{"models"}, {"setup"}, {"graph"}, {"debug"}} {
+		out, err := exec.Command(binary, c...).CombinedOutput()
+		if ee, ok := err.(*exec.ExitError); !ok || ee.ExitCode() != 2 || !strings.Contains(string(out), "Usage") {
+			t.Errorf("rivus %s: %v, %s", c[0], err, out)
+		}
+	}
+}
+
 // Every flag of every command has exactly one side, usual or diagnostic (flagsides.go). The check runs when a command prepares its flags, so
 // "-h" of each command reaches it: a flag added without a side makes that command stop with the names, and this test fails.
 func TestEveryFlagHasOneSide(t *testing.T) {
-	for _, c := range [][]string{
-		{"analyze"}, {"index"}, {"query"}, {"resolve"}, {"sites"}, {"models", "coverage"}, {"setup", "rust"}, {"debug", "extract"},
-		{"graph", "info"}, {"graph", "callers"}, {"graph", "callees"}, {"graph", "path"}, {"graph", "impls"}, {"graph", "dispatchers"},
-	} {
+	for _, c := range flagCommands {
 		name := strings.Join(c, " ")
 		out, _ := exec.Command(binary, append(append([]string{}, c...), "-h")...).CombinedOutput()
 		if strings.Contains(string(out), "without exactly one side") || strings.Contains(string(out), "panic") {

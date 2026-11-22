@@ -53,7 +53,6 @@
 | [#124](issues/124-resolve-func-values-sites-and-external-candidates.md) | `-resolve-func-values`: 補った候補がサイトの列挙に戻らない。本体のない候補では補った注記が出ない | 道具・ベンチ(重さ: 低) | 全 | 0 | open | - |
 | [#126](issues/126-timeout-inside-large-scc.md) | `-timeout` の超過: 巨大な SCC の中で期限を見ない(並列ラウンドの中は直した) | 利用者を止める(直した) | 全 | 0 | closed | `cmd/rivus/passstats_top_test.go`(`TestTimeoutInsideALargeSCC`) |
 | [#127](issues/127-timeout-overrun-remaining.md) | `-timeout` の超過の残り: 1 つの関数の中と、extractor の段階の時間が `stats` に出ない | 利用者を止める | 全 | 0 | open | - |
-| [#131](issues/131-help-exit-codes.md) | `rivus setup rust -h`、`rivus models -h`、`rivus setup -h` の終了コードが 1(usage のエラー) | 道具(重さ: 低) | 全 | 0 | open | - |
 
 ## 閉じたもの
 
@@ -77,5 +76,6 @@
 | [#106](issues/106-path-exhaustive-honesty.md) | graph: path の exhaustive | 誤った答え(直した) | 全(graph) | 1 | closed | `internal/graphq/exhaustive_test.go` |
 | [#107](issues/107-zoo-recursion-approximation-verdict.md) | zoo: recursion_approximation の判定 | 道具・ベンチ(直した) | 全 | 1 | closed | zoo のテスト(`cmd/rivus/zoo_*_test.go`) |
 | [#125](issues/125-dart-parent-of-packages-dependency-ids.md) | Dart: 複数のパッケージの親を -C に指すと、依存が file: ID になり、解析されない(サイレント) | サイレントな見逃し(直した) | Dart | 1 | closed | `cmd/rivus/dart_depcontext_test.go` |
+| [#131](issues/131-help-exit-codes.md) | `rivus setup rust -h`、`rivus models -h`、`rivus setup -h` の終了コードが 1(usage のエラー) | 道具(直した) | 全 | 0 | closed | `cmd/rivus/flagsides_test.go`(`TestHelpExitsZeroEverywhere`) |
 | [#135](issues/135-index-taint-default-output.md) | `rivus index -taint` が `-o` を省くと、対象のディレクトリの `.rivus/index.json` に書く | 安全・文書(重さ: 中) | 全 | 0 | closed | `TestIndexTaintDefaultsToTheUserCache` |
 | [#134](issues/134-graph-doc-rules-not-recorded.md) | docs/GRAPH.md の「index に渡したフラグは、与えなければ DB に記録されたものを使う」が `-rules` に当てはまらない | 文書または道具(重さ: 中) | 全 | 0 | closed | `TestGraphUsesTheRecordedRulesFile` |
