@@ -1,6 +1,6 @@
 # ADR の一覧
 
-[DECISIONS.md](DECISIONS.md)(ADR-001〜091)の、番号、題、今の状態、関連する文書の一覧。ADR は決めた時点の記録で、書き換えない。**今どうなっているか**は、ここと、[ARCHITECTURE.md](ARCHITECTURE.md)、[PRINCIPLES.md](PRINCIPLES.md) で見る。
+[DECISIONS.md](DECISIONS.md)(ADR-001〜092)の、番号、題、今の状態、関連する文書の一覧。ADR は決めた時点の記録で、書き換えない。**今どうなっているか**は、ここと、[ARCHITECTURE.md](ARCHITECTURE.md)、[PRINCIPLES.md](PRINCIPLES.md) で見る。
 
 - 確認: 2026-11-22、9c26a39。状態は、ADR の本文と、後の ADR・実装を読んで付けた。古くなる前提で読むこと。
 - 状態の意味:
@@ -106,6 +106,7 @@
 | 089 | Rust `write!` のモデル | 有効 |  | - | - |
 | 090 | ポインタ包みの interface への書き込みを指す先にも | 有効 | 060/082 の続き | - | - |
 | 091 | 下げられなかった式が値を返すとき、`unsupported` が元の値と結果を持つ | 有効 | 相談役の判断(2026-11-22)。Dart の解決できないコンストラクタ呼び出しから | ARCHITECTURE の IR の命令 | Go と Rust の extractor は未確認 |
+| 092 | 依存のパッケージを、流れのモデルで切る(本体を読まない)のは、費用が著しいときも。ただし条件つき | 有効 |  | PRINCIPLES 3 節、GCP-MODELS P12、MODELING | 費用の測定の記録、突き合わせの検査、`calls:`、保守的な痕跡、切ったことの表示。実装は未(ROADMAP) |
 
 ## 訂正・追記の書き方を保つ ADR
 

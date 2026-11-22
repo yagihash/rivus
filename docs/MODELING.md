@@ -221,6 +221,10 @@ field:
    in another field of the same value) that must be quiet. The test also fails for a row that no case reaches.
 
 
+## 4a. Cutting a dependency with a model (not reading its body)
+
+A model that stands in for the body of a dependency (so that the body is not read) is allowed when the body does not exist, when reading it does not converge, when the library calls the user's code (`calls:`), or when reading it costs the analysis a great deal (ADR-092). The last one only for a package that meets all of these: (1) the cost is measured and written down with the target it was measured on (a rule of thumb: the dependency is 90% of the time, or gigabytes); (2) a check compares the result with the body read and the result with the model, on a fixture that uses the API: the set of flows and the **edges at the border** (which function of your code a call into the dependency calls back) have to be the same, and the model may only be the side that has more, with a note; (3) every API that calls a function it is given or holds has a `calls:` row (a form that the format cannot write is a problem of the format, and the call site says so, not silence). A function of a cut package without a row is read as the unmodelled call it is (its arguments flow to its result, with `unmodeled_library_call`). The packages that were cut are listed in the output. As of today there is no way to cut one package (it is all dependencies or none: `-no-deps`) and no comparing check yet.
+
 ## 5. A row has to be hit
 
 A row whose key is not the name the extractor writes never matches a call, and nothing says so: the call is read as an
