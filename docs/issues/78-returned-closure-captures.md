@@ -43,7 +43,7 @@ snk(q.name)                  // 期待: src → snk   実際: 出ない(黙っ�
 ## `@miss`
 `bench/dart-curated`: `holder-a` `holder-b` `curry` `getter-fn`(痕跡あり: `unresolved_callee` が sink の行)。`bench/go-curated`: `options`(**黙った**。ヘルパーの `o(q)` に `dynamic_dispatch` だけ)。`bench/MISSES.md` の型 `RET-CLOSURE`(5 件)。
 
-## 落ちる場所の見立て
+## 落ちる場所の推定
 * Dart: `internal/valuecalls/valuecalls.go` の `classify`: 呼び出しの結果は `refOther`(候補が付かない)。
 * Go: VTA の候補は付くが、束縛が無い(`internal/taint/calls.go` の `callees` は、静的なクロージャの `Bindings` だけ)。捕獲した `n` が落ちる。
 ADR-047(案 2)では直らない(別の原因: 関数の戻り値としてのクロージャの追跡)。

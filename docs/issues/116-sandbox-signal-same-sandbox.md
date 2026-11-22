@@ -12,7 +12,7 @@
 
 ## 終わりの条件
 
-`(allow signal (target same-sandbox))` を足し、利用者のほかのプロセスに `kill -0` が通らない試験が緑のままであること。
+`(allow signal (target same-sandbox))` を足し、利用者のほかのプロセスに `kill -0` が通らない試験が成功したままであること。
 
 ## 経緯
 

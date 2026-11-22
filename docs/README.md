@@ -11,7 +11,7 @@
 | 読み手 | 知りたいこと | 読む文書 |
 |---|---|---|
 | 使い手 | 何が出るか、何を言わないか、使い方、出力の読み方 | [../README.md](../README.md)、[rust-isolation.md](rust-isolation.md)(信頼できない Rust)、[GLOSSARY.md](GLOSSARY.md) |
-| ルールを書く人 | ルールの書式、何が書けるか、確かめ方 | [MODELING.md](MODELING.md)、[../examples/rules/README.md](../examples/rules/README.md)、[GCP-MODELS.md](GCP-MODELS.md) |
+| ルールを書く人 | ルールの書式、何が書けるか、確認方法 | [MODELING.md](MODELING.md)、[../examples/rules/README.md](../examples/rules/README.md)、[GCP-MODELS.md](GCP-MODELS.md) |
 | rivus を使う AI エージェント | `rivus index` と `rivus graph`、答えの読み方 | [GRAPH.md](GRAPH.md)、[../README.md](../README.md) |
 | 開発者 | 設計思想、今の構成、経緯、テストと測定 | [PRINCIPLES.md](PRINCIPLES.md)、[ROADMAP.md](ROADMAP.md)、[ISSUES.md](ISSUES.md)(課題の一覧)、[ARCHITECTURE.md](ARCHITECTURE.md)、[DECISIONS.md](DECISIONS.md)、[ADR-INDEX.md](ADR-INDEX.md)、`DESIGN-*.md`、[../bench/README.md](../bench/README.md) |
 | レビューする人 | 不変条件、失敗の重さ、受け入れ済みの制約 | [PRINCIPLES.md](PRINCIPLES.md)、[../bench/MISSES.md](../bench/MISSES.md) |
@@ -59,7 +59,7 @@
 | [DESIGN-generics-dispatch.md](DESIGN-generics-dispatch.md) | 一部実装 | Rust のジェネリクスと `Box<dyn Fn>` |
 | [DESIGN-memory.md](DESIGN-memory.md) | 一部実装 | メモリ(英語) |
 | [DESIGN-fetch-network.md](DESIGN-fetch-network.md) | 案 | 取得のコンテナのネットワークを絞る |
-| [DESIGN-observed-calls.md](DESIGN-observed-calls.md) | 案(最小の試しあり) | 実行して観測した呼び出しと、グラフの突き合わせ(Dart から) |
+| [DESIGN-observed-calls.md](DESIGN-observed-calls.md) | 案(最小の試行あり) | 実行して観測した呼び出しと、グラフの突き合わせ(Dart から) |
 
 ### 歴史的な文書
 

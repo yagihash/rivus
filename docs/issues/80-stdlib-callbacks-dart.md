@@ -28,6 +28,6 @@ Future<String>.error(a).then((v) => v, onError: (e) => sink(e));           // on
 ## `@miss`
 `bench/dart-curated`: `catch-error` `when-complete` `completer` `put-if-absent` `on-error` `map-entries` `future-error`。`bench/MISSES.md` の型 `CB-LIST`(6 件)と `AWAIT-ERR`(1 件)。
 
-## 落ちる場所の見立て
+## 落ちる場所の推定
 `extractor/dart/lib/exprs.dart` の `_callbackMode`(決め打ち)、`internal/model/builtin/dart-async.yaml` / `dart-core.yaml`(モデルは args → 結果、recv → 結果だけで、コールバックの戻り値と引数を繋がない)。ADR-047(案 2)では直らない。表(コールバックを呼ぶ API、引数、結果の繋ぎ方)をモデルの側に持つのが筋。
 
