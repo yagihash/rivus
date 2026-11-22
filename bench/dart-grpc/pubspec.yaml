@@ -1,0 +1,13 @@
+name: grpc_bench
+description: A small synthetic gRPC server, to measure the analysis of a project with its dependencies.
+publish_to: none
+environment:
+  sdk: ^3.10.0
+# The versions are those of ../dart-corpus/pubspec.lock (all of them are in the pub cache).
+dependencies:
+  async: ^2.13.1
+  fixnum: ^1.1.1
+  grpc: 5.2.0
+  http: ^1.6.0
+  http2: ^2.3.1
+  protobuf: ^6.1.0
