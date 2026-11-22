@@ -91,7 +91,8 @@ type brReport struct {
 	Stats struct {
 		Functions int `json:"functions"`
 	} `json:"stats"`
-	raw []byte
+	Packages []string `json:"packages"`
+	raw      []byte
 }
 
 func (r *brReport) ids() []string {
@@ -407,6 +408,9 @@ func TestBodyReplacedOfADartPackage(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got.ids(), read.ids()) {
 		t.Errorf("findings: %v, want %v", got.ids(), read.ids())
+	}
+	if strings.Join(read.Packages, ",") != "package:app,package:fixnum" || strings.Join(got.Packages, ",") != "package:app" {
+		t.Errorf("packages analysed: %v, and %v with the declaration", read.Packages, got.Packages)
 	}
 	if again := run("-body-replaced", "package:fixnum", "-read-declared-bodies"); !reflect.DeepEqual(again.ids(), read.ids()) || again.Stats.Functions != read.Stats.Functions {
 		t.Errorf("-read-declared-bodies is the run without the declaration: %d functions, %d", again.Stats.Functions, read.Stats.Functions)
