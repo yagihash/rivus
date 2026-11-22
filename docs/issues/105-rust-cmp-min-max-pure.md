@@ -1,4 +1,4 @@
-# #105 Rust: std::cmp::min / max が pure で、流れが落ちる
+# #105 Rust: std::cmp::min / max が pure で、流れが失われる
 
 - 状態: **closed**
 - 種類: 誤ったモデル(直した)

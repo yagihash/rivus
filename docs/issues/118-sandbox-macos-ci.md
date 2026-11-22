@@ -4,15 +4,15 @@
 - 種類: CI
 - 言語: Rust
 - ROADMAP の節: 0(Homebrew のインストールの作業の続き)
-- 守るもの: まだない(直すときに試験を足す)
+- 守るもの: まだない(直すときにテストを足す)
 
 ## 今の状態
 
-今の `ci.yml` の `sandbox` ジョブは、`internal/sandbox` の試験だけ(ツールチェイン不要)。Rust の抽出と取得は、開発のマシンで回す。`TestDogfood` の darwin の見え方は、静的に読むので Linux の CI でも読めるが、macOS で走らせる試験(`RIVUS_SBX_*`)は CI にない。
+今の `ci.yml` の `sandbox` ジョブは、`internal/sandbox` のテストだけ(ツールチェイン不要)。Rust の抽出と取得は、開発のマシンで回す。`TestDogfood` の darwin の見え方は、静的に読むので Linux の CI でも読めるが、macOS で実行するテスト(`RIVUS_SBX_*`)は CI にない。
 
 ## 終わりの条件
 
-ツールチェインを入れ、抽出まで、`RIVUS_SBX_RED=1` / `RIVUS_SBX_NET=1` で走らせる macOS のワークフロー。隔離に関わるパスが変わったとき、週 1、手動、タグ。
+ツールチェインを入れ、抽出まで、`RIVUS_SBX_RED=1` / `RIVUS_SBX_NET=1` で実行する macOS のワークフロー。隔離に関わるパスが変わったとき、週 1、手動、タグ。
 
 ## 経緯
 

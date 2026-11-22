@@ -71,7 +71,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 細かい点:
 
 - 解析が上限で止まった所は `depth_limit` として記録され、理由が付きます: `budget`（作業量。どのマシンでも同じ所で止まる）、`func_timeout` / `run_timeout`（時計。マシンの負荷で止まる所が変わる）。時計で止まったものがあれば、`summary.load_dependent` が `true` になります。
-- Go で、型エラーのあるパッケージと、それを import するパッケージは、SSA が作られず、解析から落ちます(`packages` には載ったままです)。読んだが作れなかったパッケージの数、落ちた関数の数、上位 10 のパッケージ(と理由)は、`summary.unread` に出ます(1 つもなければ、欄はありません)。パッケージごとに `missing_source` の不確実性も出て、stderr に 1 行出ます。終了コードと finding は変わりません。
+- Go で、型エラーのあるパッケージと、それを import するパッケージは、SSA が作られず、解析から落ちます(`packages` には載ったままです)。読んだが作れなかったパッケージの数、落ちた関数の数、上位 10 のパッケージ(と理由)は、`summary.unread` に出ます(1 つもなければ、フィールドはありません)。パッケージごとに `missing_source` の不確実性も出て、stderr に 1 行出ます。終了コードと finding は変わりません。
 - 数値と真偽値になった値は、既定では追いません（`numeric_stop` として記録。`-numeric-taint` で追う）。
 - `rivus resolve` の答えは、`unchanged` / `changed` / `rematched` / `ambiguous` / `unresolved` と、finding については今も届くか（`flow`）です。
 
@@ -88,7 +88,7 @@ rivus version
 
 - Go のツールチェーンと Dart SDK(`dart-sdk`)は、formula の依存としてインストールされます。
 - Rust を読むための固定した nightly と extractor(`rivus-rust`)も、formula がインストール時に用意します。初回だけ、static.rust-lang.org と crates.io から約 1.1 GB を取得します。Xcode のコマンドラインツールが必要です。実行時に rustup や `~/.cargo` は使いません。
-- nightly は `$(brew --prefix)/var/rivus` に置かれます。rivus を更新しても、nightly の版が同じなら取得し直しません。`brew uninstall rivus` では削除されないので、不要になったら `rm -rf "$(brew --prefix)/var/rivus"` で削除してください。
+- nightly は `$(brew --prefix)/var/rivus` に置かれます。rivus を更新しても、nightly のバージョンが同じなら取得し直しません。`brew uninstall rivus` では削除されないので、不要になったら `rm -rf "$(brew --prefix)/var/rivus"` で削除してください。
 - 更新は `brew upgrade rivus` です。
 
 設計は [docs/DESIGN-install.md](docs/DESIGN-install.md) にあります。
@@ -114,7 +114,7 @@ rivus query -site <ID> ./...           # sites の 1 件から始める
 
 | コマンド | 何をするか |
 |---|---|
-| `sites` | source と sink のルールが当たる箇所を並べる。解析はしない |
+| `sites` | source と sink のルールが一致する箇所を並べる。解析はしない |
 | `analyze` | source から sink への経路を、関数とパッケージを跨いで探す |
 | `query` | 片側からの問い（この sink に届く source / この source が届く sink / この箇所について） |
 | `index` | コードを 1 回読んで、呼び出しグラフを保存する（`-taint` で、解析の結果も） |
@@ -129,16 +129,16 @@ rivus query -site <ID> ./...           # sites の 1 件から始める
 
 ### 言語ごとの準備
 
-| 言語 | どう読むか | 要るもの |
+| 言語 | どう読むか | 必要なもの |
 |---|---|---|
 | Go | `go/packages` と `go/ssa` で直接読む | Go のツールチェーン。コードがビルドできること |
 | Dart | 別プロセスの extractor（`package:analyzer`）が IR を書き、rivus が読む | Dart SDK。**解析の前に、そのパッケージで `dart pub get` を実行する**（rivus は実行しません。していない、または古いとき、rivus は `summary.unread` と stderr でそう報告します）。コード生成（`build_runner`）も済んでいること。[extractor/dart](extractor/dart/README.md) |
-| Rust | 別プロセスの extractor（rustc のドライバ。MIR を読む）が IR を書き、rivus が読む | 固定した nightly の Rust と extractor（`rivus setup rust -source extractor/rust` か Homebrew で用意する。macOS は既定でサンドボックスの下、Linux は `-unsafe-host-exec` のときだけ読める）。`-lang` なしでは、macOS で `[Y/n]` と聞いてから読む(`-yes` で聞かない)。コードがビルドできること、`Cargo.lock` があること。**読むと、対象のビルドが走る**（下の「信頼できないコード」）。[extractor/rust](extractor/rust/README.md) |
+| Rust | 別プロセスの extractor（rustc のドライバ。MIR を読む）が IR を書き、rivus が読む | 固定した nightly の Rust と extractor（`rivus setup rust -source extractor/rust` か Homebrew で用意する。macOS は既定でサンドボックスの下、Linux は `-unsafe-host-exec` のときだけ読める）。`-lang` なしでは、macOS で `[Y/n]` と聞いてから読む(`-yes` で聞かない)。コードがビルドできること、`Cargo.lock` があること。**読むと、対象のビルドが実行される**（下の「信頼できないコード」）。[extractor/rust](extractor/rust/README.md) |
 
 - Dart と Rust の extractor（`rivus-dart`、`rivus-rust`）は、PATH に置くか、`-dart-extractor` / `-rust-extractor`（または環境変数 `RIVUS_DART_EXTRACTOR` / `RIVUS_RUST_EXTRACTOR`）で指します。extractor が書いた IR のファイルを、`rivus analyze -ir file.jsonl` で読むこともできます。
-- `-lang` を書かない(auto)とき、`Cargo.toml` のある対象では、**読む前に聞きます**(macOS で、標準入力が端末のとき): 「読むにはビルドが要り、`build.rs` と proc macro が動く。macOS のサンドボックスの下で動く。依存を crates.io から取得する」と言って、`[Y/n]`(Enter は Yes)。聞かれたくないときは `-lang rust`(または `-yes`)、読みたくないときは `-lang go,dart` のように名指しします。**答えによって別の index になります**(Rust ありと、なしは、別のもの)。端末でないとき(`claude -p`、CI、パイプ)は聞けないので、`-yes` がなければ Rust は読みません(Rust だけの対象はエラー)。サンドボックスのない環境(Linux)も、auto では読みません(`-lang rust -unsafe-host-exec` と明示したときだけ)。**読まなかった言語は、結果に残ります**: `summary.unread.skipped_languages`(と、index の `meta.unread`)に `{"lang":"rust","why":"declined"|"no-terminal"|"not-installed"|"no-sandbox"}`。この index の `path` の「経路なし」は、`exhaustive: false` になります。Rust だけの対象で断ると、何も読まずに終了コード 3 で終わります(0 = 成功、1 = エラー、2 = 使い方の誤り、3 = Rust を断った、130 = 中断)。
+- `-lang` を書かない(auto)とき、`Cargo.toml` のある対象では、**読む前に聞きます**(macOS で、標準入力が端末のとき): 「読むにはビルドが要り、`build.rs` と proc macro が動く。macOS のサンドボックスの下で動く。依存を crates.io から取得する」と言って、`[Y/n]`(Enter は Yes)。聞かれたくないときは `-lang rust`(または `-yes`)、読みたくないときは `-lang go,dart` のように指定します。**答えによって別の index になります**(Rust ありと、なしは、別のもの)。端末でないとき(`claude -p`、CI、パイプ)は聞けないので、`-yes` がなければ Rust は読みません(Rust だけの対象はエラー)。サンドボックスのない環境(Linux)も、auto では読みません(`-lang rust -unsafe-host-exec` と明示したときだけ)。**読まなかった言語は、結果に残ります**: `summary.unread.skipped_languages`(と、index の `meta.unread`)に `{"lang":"rust","why":"declined"|"no-terminal"|"not-installed"|"no-sandbox"}`。この index の `path` の「経路なし」は、`exhaustive: false` になります。Rust だけの対象で断ると、何も読まずに終了コード 3 で終わります(0 = 成功、1 = エラー、2 = 使い方の誤り、3 = Rust を断った、130 = 中断)。
 - **テストと、開発用の依存は、既定で読みません**（Go の `_test.go`、Dart の `test/` などと `dev_dependencies` だけから使われるパッケージ、Rust のテスト・例・ベンチと `[dev-dependencies]`）。本番のビルドに入らないコードだからです。読まなかった数は、出力の `stats.tests_skipped` に出ます。`-tests` で読みます。
-- 対象のコード生成（`go generate`、`build_runner`）は、rivus はしません。先に済ませてください。ビルドも、Go と Dart ではしません。**Rust は例外で、読むときに `cargo check` が走ります**（上の表と「信頼できないコード」）。
+- 対象のコード生成（`go generate`、`build_runner`）は、rivus はしません。先に済ませてください。ビルドも、Go と Dart ではしません。**Rust は例外で、読むときに `cargo check` が実行されます**（上の表と「信頼できないコード」）。
 
 ## 今の状態
 
@@ -146,7 +146,7 @@ Go から作り始めたので、**Go が最も進んでいて、Dart と Rust �
 
 | | Go | Dart | Rust |
 |---|---|---|---|
-| 読み込み | 直接（`go/ssa`） | extractor（最初の版） | extractor（最初の版） |
+| 読み込み | 直接（`go/ssa`） | extractor（最初のバージョン） | extractor（最初のバージョン） |
 | 動的な呼び出しの候補 | 型に基づく解析で絞る | rivus 自身が値を追う。追えないと候補なし（不確実性として出る） | extractor が型で候補を出す（型が合うだけの候補も入る）。一部は rivus 自身が値を追う |
 | 実コードでの確認 | 複数のプロジェクト | 少ない（Flutter のアプリは、これから） | 少ない |
 
@@ -170,10 +170,10 @@ rivus が出さなかったことは、「流れがない」という意味で�
 
 どちらも YAML で書き、組み込みのものと同じ書式です（[internal/model/builtin](internal/model/builtin)）。
 
-**組み込みで持つ範囲**は、各言語の標準ライブラリと、広く使われているライブラリです。**何を組み込むかは、その都度判断します**(組み込みのモデルは、ある程度充実させる方向です。[ADR-063](docs/DECISIONS.md) の 2026-11-22 の追記)。今の組み込みは、標準ライブラリ、代わりのないパッケージ(Rust の `serde`、`tonic`、`tokio`、`futures`、`bytes`、`libc`、HTTP の型の `http` / `url` など)、SQL のドライバ(`sqlx`、`rusqlite`、Dart の `sqflite`。あらゆるプロダクトで要る)、Rust の一部の Web フレームワークと Dart の `shelf`、Google Cloud のクライアント(今は Go の Cloud Spanner と BigQuery。`internal/model/builtin/go-gcp.yaml`。[ADR-077](docs/DECISIONS.md))です。プロジェクト固有のラッパーや、組み込みでないフレームワークは、使う側がルールで足します。見本は [examples/rules](examples/rules) に置いています: Go の gin と macaron、Rust の actix-web(`examples/rules/rust-actix-web.yaml`)。組み込みでないフレームワークの入口は、ルールを足すまで source として見えず、その分、検出が減ります。コードがそのフレームワークを呼んでいるのに、モデルがルールにないときは、`analyze` が stderr に 1 行知らせます([ADR-063](docs/DECISIONS.md))。そのための仕組み:
+**組み込みで持つ範囲**は、各言語の標準ライブラリと、広く使われているライブラリです。**何を組み込むかは、その都度判断します**(組み込みのモデルは、ある程度充実させる方向です。[ADR-063](docs/DECISIONS.md) の 2026-11-22 の追記)。今の組み込みは、標準ライブラリ、代わりのないパッケージ(Rust の `serde`、`tonic`、`tokio`、`futures`、`bytes`、`libc`、HTTP の型の `http` / `url` など)、SQL のドライバ(`sqlx`、`rusqlite`、Dart の `sqflite`。あらゆるプロダクトで必要)、Rust の一部の Web フレームワークと Dart の `shelf`、Google Cloud のクライアント(今は Go の Cloud Spanner と BigQuery。`internal/model/builtin/go-gcp.yaml`。[ADR-077](docs/DECISIONS.md))です。プロジェクト固有のラッパーや、組み込みでないフレームワークは、使う側がルールで足します。見本は [examples/rules](examples/rules) に置いています: Go の gin と macaron、Rust の actix-web(`examples/rules/rust-actix-web.yaml`)。組み込みでないフレームワークの入口は、ルールを足すまで source として見えず、その分、検出が減ります。コードがそのフレームワークを呼んでいるのに、モデルがルールにないときは、`analyze` が stderr に 1 行知らせます([ADR-063](docs/DECISIONS.md))。そのための仕組み:
 
 1. 置き場所: 解析するディレクトリの `.rivus/rules/*.yaml`（フラグなしで読まれる）か、`-rules file.yaml`。書き方の見本は [examples/rules](examples/rules)。
-2. 何を書けばよいか: `rivus models coverage` が、finding の経路に載っているのにモデルがない関数を、効果の大きい順に出します。`-yaml` で、埋めるためのひな形が出ます。
+2. 何を書けばよいか: `rivus models coverage` が、finding の経路に載っているのにモデルがない関数を、効果の大きい順に出します。`-yaml` で、埋めるためのテンプレートが出ます。
 
    ```sh
    rivus models coverage -yaml -top 20 ./...
@@ -203,8 +203,8 @@ LLM にモデルを書かせ、人や別の手段で確かめる、という使�
 
 | 言語 | 何が動くか |
 |---|---|
-| Rust | extractor が、対象に `cargo check` を走らせます（**対象をコンパイルします**）。対象と依存の `build.rs`、proc macro が実行されます。**macOS では既定で、OS のサンドボックス（`sandbox-exec`）の下で動かします**（依存を取る段階は、ネットワークがあるが、対象の cargo の設定は読ませない。抽出の段階はネットワークなし、対象は読み取り専用、書き込みは作業ディレクトリだけ。サンドボックスが作れなければ、動かさずに止まります）。**Linux には隔離の手段がなく、既定では何も実行せずに止まります。** ホストで直接動かすのは `-unsafe-host-exec`（信頼できるコードだけ。Linux ではこれが普通の使い方です）。どちらで読んだかは、出力の `summary.isolation` に出ます。**信頼できないコードの解析の結果とログは、そのコードが書き込んだものを含みえます。そのまま公開の場所に出さないでください。**手順と限界は [docs/rust-isolation.md](docs/rust-isolation.md) |
-| Go | `go/packages` が `go list` を走らせます。依存の取得（ネットワーク）が起きることがあります。cgo のあるパッケージは、cgo の前処理（C コンパイラ）が走ります。**対象のソースそのものは実行しません**が、「Go はコードを実行しない」とは言えません。隔離はありません（Rust と同じ作りに載せる予定） |
+| Rust | extractor が、対象に `cargo check` を実行します（**対象をコンパイルします**）。対象と依存の `build.rs`、proc macro が実行されます。**macOS では既定で、OS のサンドボックス（`sandbox-exec`）の下で動かします**（依存を取る段階は、ネットワークがあるが、対象の cargo の設定は読ませない。抽出の段階はネットワークなし、対象は読み取り専用、書き込みは作業ディレクトリだけ。サンドボックスが作れなければ、動かさずに止まります）。**Linux には隔離の手段がなく、既定では何も実行せずに止まります。** ホストで直接動かすのは `-unsafe-host-exec`（信頼できるコードだけ。Linux ではこれが普通の使い方です）。どちらで読んだかは、出力の `summary.isolation` に出ます。**信頼できないコードの解析の結果とログは、そのコードが書き込んだものを含みえます。そのまま公開の場所に出さないでください。**手順と限界は [docs/rust-isolation.md](docs/rust-isolation.md) |
+| Go | `go/packages` が `go list` を実行します。依存の取得（ネットワーク）が起きることがあります。cgo のあるパッケージは、cgo の前処理（C コンパイラ）が実行されます。**対象のソースそのものは実行しません**が、「Go はコードを実行しない」とは言えません。隔離はありません（Rust と同じ作りに載せる予定） |
 | Dart | extractor は、静的に読むだけです。ただし、前提の手順（`dart pub get`、`build_runner`）は、対象の依存と生成器のコードを実行します |
 
 - **Rust は、対象のビルドが、解析の結果そのものも書き換えられます。** IR の断片を書く場所が、対象のビルドから見えるためです（隔離の下でも同じです。隔離が守るのは、マシンと秘密で、結果の正しさではありません）。
@@ -243,10 +243,10 @@ PR の CI は `go test -short` で実行します(重いテストは、`-short` 
 | 置き場 | 何を見るか |
 |---|---|
 | `testdata/`、`bench/*-curated` | 小さいケース。ソースの `@source(tag)` / `@sink(tag)` / `@sink(none)` が期待値 |
-| `bench/zoo-go`、`zoo-dart`、`zoo-rust` | 流れの形を 1 つずつ。**期待値は、ケースを実際に動かした結果**（rivus の出力に合わせて書けない）。脆弱な版、直した版、デコイの 3 つ組 |
+| `bench/zoo-go`、`zoo-dart`、`zoo-rust` | 流れの形を 1 つずつ。**期待値は、ケースを実際に動かした結果**（rivus の出力に合わせて書けない）。脆弱なケース、修正済みのケース、デコイの 3 つ組 |
 | `bench/go-scale` | 大きなコードで起きる現象（要約の膨張、収束しない）を、数秒で再現する生成コード |
 | `bench/wild` | 公開された実世界の脆弱性。その件の source と sink を与えたとき、本物の経路を組み立てられるか |
-| 実在のプロジェクト（`bench/gogs` ほか） | 変更の前後で、finding の増減を比べる（`bench/compare.sh`）。コードは置かず、版の指定だけ |
+| 実在のプロジェクト（`bench/gogs` ほか） | 変更の前後で、finding の増減を比べる（`bench/compare.sh`）。コードは置かず、バージョンの指定だけ |
 
 解析の精度に関わる変更は、`bench/compare.sh <前> <後>` で前後を比べ、消えた finding が本物でなかったことを確かめてから入れます。
 

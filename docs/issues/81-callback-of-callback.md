@@ -1,4 +1,4 @@
-# #81 Dart: クロージャが、パラメータで受けた関数を呼ぶ形(g(a)。コールバックのコールバック)で、流れが落ちる
+# #81 Dart: クロージャが、パラメータで受けた関数を呼ぶ形(g(a)。コールバックのコールバック)で、流れが失われる
 
 - 状態: **partial**
 - 種類: サイレントな見逃し(一部)
@@ -36,7 +36,7 @@ void b() {
 `bench/dart-curated`: `relay-c-a` `relay-c-b`(source / sink の関数には注記なし)、`takes-a` `takes-b`。`bench/MISSES.md` の型 `PARAM-CALL`(4 件)。
 
 ## 落ちる場所の推定
-`internal/valuecalls/valuecalls.go`: `indexCallers`(値の呼び出し経由で呼ばれる関数を callers に入れない。クロージャの引数 `g` の呼び出し元が見つからない)と、`classify` の `refParam`(宣言した引数だけ。キャプチャした関数は `refOther`)。ADR-047(案 2)は、中継を最初の版では扱わない(条件 3)ので、これも別に直す必要がある可能性が高い。
+`internal/valuecalls/valuecalls.go`: `indexCallers`(値の呼び出し経由で呼ばれる関数を callers に入れない。クロージャの引数 `g` の呼び出し元が見つからない)と、`classify` の `refParam`(宣言した引数だけ。キャプチャした関数は `refOther`)。ADR-047(案 2)は、中継を最初のバージョンでは扱わない(条件 3)ので、これも別に直す必要がある可能性が高い。
 
 ## コメント(GitHub から移した写し)
 

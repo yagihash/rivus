@@ -201,7 +201,7 @@ was kept in a field, a variable, a list or a map is not followed to its call).
 
 `@miss` / `@fp` / `@noisy` / `@na` / `@todo` / `@manual` / `@sink(none)` を、3 言語の zoo から集めて `bench/zoo/marks.lock` に固定している(1 行 = 言語、ファイル、種類、その行の注釈。行番号は持たない)。
 
-- `TestZooMarksLock` が、ソースから作った一覧とファイルを比べる。マークを足す・変える・外すと落ちる。書き直すのは `ZOO_MARKS_UPDATE=1 go test -run ZooMarksLock ./cmd/rivus`。
-- CI の `zoo-loosened` が、`marks.lock` に**行が増えた**コミットのメッセージに `Zoo-Loosened: <理由>。ユーザーの承認: <日付>` の行がなければ落とす。行が減る(直ってマークが外れる)のは何も要らない。
-- **付け替えの決まり**(ユーザーが相談役に判断を任せた、2026-11-22): `@miss(silent)` を「テストが確かめた不確実性の注記の kind」(`@miss(depth_limit)` など)へ付け替えるのは、テストが「a trace has come」と出力し、kind を名指したときに限り、相談役やユーザーに聞かずに行ってよい(`Zoo-Loosened:` の行は、事実のとおりに書く)。逆向き(注記つき → silent)、`@miss` / `@fp` を既存の行に新しく足す、`@sink(tag)` → `none`、`@na` / `@todo` の追加は、これまでどおり、聞く。
+- `TestZooMarksLock` が、ソースから作った一覧とファイルを比べる。マークを足す・変える・外すと失敗する。書き直すのは `ZOO_MARKS_UPDATE=1 go test -run ZooMarksLock ./cmd/rivus`。
+- CI の `zoo-loosened` が、`marks.lock` に**行が増えた**コミットのメッセージに `Zoo-Loosened: <理由>。ユーザーの承認: <日付>` の行がなければ失敗させる。行が減る(直ってマークが外れる)のは何も不要。
+- **付け替えの決まり**(ユーザーが相談役に判断を任せた、2026-11-22): `@miss(silent)` を「テストが確かめた不確実性の注記の kind」(`@miss(depth_limit)` など)へ付け替えるのは、テストが「a trace has come」と出力し、kind を指定したときに限り、相談役やユーザーに聞かずに行ってよい(`Zoo-Loosened:` の行は、事実のとおりに書く)。逆向き(注記つき → silent)、`@miss` / `@fp` を既存の行に新しく足す、`@sink(tag)` → `none`、`@na` / `@todo` の追加は、これまでどおり、聞く。
 - 範囲: zoo だけ。`@sink(tag)` の数が減る向きと、curated / wild / go-scale の正解の件数は、まだ固定していない([ROADMAP.md](../../docs/ROADMAP.md))。

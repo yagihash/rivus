@@ -59,7 +59,7 @@
 | [DESIGN-generics-dispatch.md](DESIGN-generics-dispatch.md) | 一部実装 | Rust のジェネリクスと `Box<dyn Fn>` |
 | [DESIGN-memory.md](DESIGN-memory.md) | 一部実装 | メモリ(英語) |
 | [DESIGN-fetch-network.md](DESIGN-fetch-network.md) | 案 | 取得のコンテナのネットワークを絞る |
-| [DESIGN-observed-calls.md](DESIGN-observed-calls.md) | 案(最小の試行あり) | 実行して観測した呼び出しと、グラフの突き合わせ(Dart から) |
+| [DESIGN-observed-calls.md](DESIGN-observed-calls.md) | 案(最小の試行あり) | 実行して観測した呼び出しと、グラフの照合(Dart から) |
 
 ### 歴史的な文書
 
