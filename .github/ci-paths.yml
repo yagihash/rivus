@@ -1,0 +1,53 @@
+# Which files make CI run. The step `changes` of ci.yml gives this file to dorny/paths-filter (predicate-quantifier: some-with-excludes: a file
+# is in a filter when it matches one of its patterns and none of the ones that start with '!'), and .github/scripts/ci-paths-check.py reads the
+# same file. Only the plain forms are used (a name, dir/**, dir/**/name, *.ext): picomatch and the check read them the same way.
+#
+#   code       a change of one of them runs the heavy jobs: what a test reads, what goes into a build, and CI itself
+#   isolation  a change of one of them runs the job of macOS (the sandbox, docs/DESIGN-macos-sandbox.md)
+#   ignored    a change of ONLY these runs nothing but the check of this file. They are named on purpose
+#
+# Every file of the repository (`git ls-files`) is in `code` or in `ignored`, exactly one of them: ci-paths-check.py fails when a file is in
+# neither (a new place that was not put in a list: its tests would be skipped without a word) or in both. Add the new place to one of them.
+# A push to main runs everything whatever these say (a wrong list shows there).
+code:
+  - 'go.mod'
+  - 'go.sum'
+  - 'cmd/**'
+  - 'internal/**'
+  - 'testdata/**'
+  - 'dogfood/**'
+  - 'extractor/**'
+  - '!extractor/*/README.md'
+  - 'bench/**'
+  - '!bench/**/README.md'
+  - '!bench/MISSES.md'
+  - '!bench/gitea-cve-paths.md'
+  - 'examples/**'
+  - '!examples/**/*.md'
+  - '.github/workflows/**'
+  - '.github/scripts/**'
+  - '.github/ci-paths.yml'
+isolation:
+  - 'internal/sandbox/**'
+  - 'cmd/rivus/isolate*.go'
+  - 'extractor/rust/**'
+  - '!extractor/*/README.md'
+  - 'go.mod'
+  - 'go.sum'
+  - '.github/workflows/ci.yml'
+ignored:
+  - 'README.md'
+  - 'LICENSE'
+  - '.gitignore'
+  - '.tagpr'
+  - 'CHANGELOG.md'
+  - 'renovate.json'
+  - 'docs/**'
+  - '.claude/**'
+  - '.github/ghmint/**'
+  - '.github/release.yml'
+  - 'extractor/*/README.md'
+  - 'bench/**/README.md'
+  - 'bench/MISSES.md'
+  - 'bench/gitea-cve-paths.md'
+  - 'examples/**/*.md'
