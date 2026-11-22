@@ -1,4 +1,2 @@
-dart	dart/shelf_router_extra_param.dart	miss	@source(dart-shelf-router-extra-param-decoy) @miss(silent) @ref(model-shelf_router-extra-path-params)	Future<void> decoy() async { @decoy
-dart	dart/shelf_router_extra_param.dart	miss	@source(dart-shelf-router-extra-param-vuln) @miss(silent) @ref(model-shelf_router-extra-path-params)	Future<void> vuln() async { @vuln
 dart	dart/shelf_router_extra_param.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
 dart	dart/shelf_router_extra_param.dart	sink-none	@sink(none) @nosink(dart-shelf-router-extra-param-decoy)	Future<void> decoy() async { @decoy
