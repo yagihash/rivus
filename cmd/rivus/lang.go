@@ -112,6 +112,16 @@ func (o *analyzeOpts) extractorCommand(lang string) ([]string, error) {
 	if cmd == "" {
 		cmd = name
 	}
+	if lang == langRust && flagVal == "" && os.Getenv(env) == "" {
+		// the extractor that `rivus setup rust` built is found when none is named and none is on PATH
+		if _, err := exec.LookPath(name); err != nil {
+			if data, derr := rustDataDir(); derr == nil {
+				if p := filepath.Join(data, "extractor", "bin", "rivus-rust"); fileExists(p) {
+					return []string{p}, nil // (a path with a space in it is one word: it is not split)
+				}
+			}
+		}
+	}
 	words := strings.Fields(cmd)
 	if len(words) == 0 {
 		return nil, fmt.Errorf("the %s extractor is named by a blank command (-%s-extractor or %s): name the command, or leave it unset", lang, lang, env)
@@ -287,4 +297,9 @@ func (o *analyzeOpts) loadLangs(langs []string, patterns []string, rules *model.
 		l.gossa = goProg.gossa
 	}
 	return l, nil
+}
+
+func fileExists(p string) bool {
+	fi, err := os.Stat(p)
+	return err == nil && !fi.IsDir()
 }
