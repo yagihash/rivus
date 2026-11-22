@@ -112,9 +112,15 @@ func (r *Report) Coverage() *Coverage {
 	return out
 }
 
-// stub is the start of a propagator rule for the symbol.
+// stub is the start of a propagator rule for the symbol. A rule replaces what the analysis does for a call that has
+// no model: the receiver and the arguments flow to the result, and the memory the arguments point to is read as
+// unknown (a function that is not read may write into what it is given). The stub says both: the receiver and the
+// arguments flow to the result and into the arguments, so that putting every stub in loses no finding (it can add
+// some). A narrower rule is a decision to take after checking, and it can lose a flow
+// (TestModelsCoverageStubsLoseNoFinding: the first stub left the receiver out, and then left the writes into the
+// arguments out; 3 and 2 of the 27 findings of bench/gcp went).
 func stub(symbol string) string {
-	return fmt.Sprintf("  - symbol: %q\n    flows: [{from: args, to: result}]  # TODO: how does taint move through this?\n", symbol)
+	return fmt.Sprintf("  - symbol: %q\n    flows: [{from: recv, to: result}, {from: args, to: result}, {from: recv, to: args}, {from: args, to: args}]  # TODO: broader than the default on purpose (it also writes into the arguments); narrow it only after checking\n", symbol)
 }
 
 // YAML renders the first n symbols as a rule file to fill in.
