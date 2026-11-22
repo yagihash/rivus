@@ -1,0 +1,2 @@
+rust	pkg/actix_web/request_match_info.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	pkg/actix_web/request_match_info.rs	sink-none	@sink(none) @nosink(pkg-actix-web-request-match-info-decoy)	fn decoy() { @decoy
