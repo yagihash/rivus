@@ -421,6 +421,23 @@ verified_versions:
 - The file is refused when `package` is empty or a pattern (`/...`), `versions` is empty or not a version or a comparator, `checked` is missing or not a day, `checked_with` is not one version or is outside `versions`, a key is unknown, or a package is recorded twice in the file. The same package in two files is kept as two records. It is not checked that a row names the package.
 - `rivus models versions [-rules FILE] [-no-builtin-rules]` lists the records (JSON: `package`, `versions`, `checked_with`, `checked`, `source`).
 
+## 4c-1. Candidates that were looked at and not adopted: `rejected:`
+
+A model file records the candidates that were looked at and left out, in the same file as the rows ([DESIGN-package-models.md](DESIGN-package-models.md), 6.11):
+
+```yaml
+rejected:
+  - symbol: github.com/jmoiron/sqlx.LoadFile   # as in the rows
+    kind: sink                                  # sink | source | sanitizer | calls
+    position: arg1                              # optional: the place that was looked at (arg0, recv, result, field, arg1.Field)
+    why: "the argument is the path of a file, not a query"
+```
+
+- A record, nothing more: the analysis does not read it, and it changes no row. It replaces the comment "not modelled, on purpose" at the top of a file, as data.
+- The file is refused when `symbol`, `kind` or `why` is missing (or blank), `kind` is not one of the four, a key is unknown, or the same symbol, kind and position are written twice. `rivus models` and every other reader of a rule file take the key.
+- `make model PKG=<Go package> VERSION=<v>` (`bench/model-author`) lists the candidates of layer 1 of a package (the rule table is `bench/model-author/rules.go`) and matches each with a row or with an entry here. A candidate with neither is undecided: the command exits with 70 and writes the list in `.claude/work/model-author/` (a work file, not committed). An entry whose symbol is not in the package any more is a warning.
+- An entry with no `position` covers every place of the candidate; with `position`, only that place.
+
 ## 4d. A source that is a parameter of a function that is given: `callback_param`
 
 A router calls the handler that it is given with what it took from the request: `router.get('/item/<id>', (Request r, String id) => ...)`

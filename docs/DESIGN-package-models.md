@@ -510,6 +510,8 @@ Rust は、extractor を動かす段(型の取得、セルの解析の確認、�
 | 4 | Dart(骨組み、`zoo_exec_override`、`--dep-dir`、型の取得) | 中〜大 |
 | 5 | 同じコマンドの Rust 対応(extractor を使う。サンドボックスの下でローカルに実行) | 大 |
 
+**段階 1 の状態(2026-11-23): 実装済み(`bench/model-author`、`make model`。Go だけ)。型からの flows の生成、骨組みとセルの生成、Dart、Rust は含めない。差分テストを PR のジョブに入れる部分は、まだ(CI の `model-diff` は、定期の実行と手動のまま)。**
+
 **最初の段の範囲(正確に)**:
 
 - 入るもの: (i) `make model PKG=<Go のモジュール> VERSION=<v> LANG=go`。(ii) `rejected:` の書式の確定と、ローダーでの読み込み、検証(`symbol`、`kind`、`why` の有無、解析には使わない)。(iii) 候補の一覧(層 1 は規則の表から、層 2 は件数と一覧だけ)と、行と `rejected:` との照合。未決があれば、終了コード 70 と、作業ファイルへの一覧。消えた候補の警告。(iv) 層 1 の規則の評価(再現率)。(v) `verified_versions`、`.dead-allow` の書き出し。(vi) 差分テストの実行(`bench/model-diff`)と、PR のジョブへの組み込み。結果を、PR の本文の材料にまとめる。(vii) 終了コードの表。

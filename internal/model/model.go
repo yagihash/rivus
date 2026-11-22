@@ -95,6 +95,9 @@ type RuleSet struct {
 	// VerifiedVersions record the versions of the packages that the rows were checked against (verified.go). A
 	// record only: the analysis does not read it.
 	VerifiedVersions []VerifiedVersion `yaml:"verified_versions"`
+	// Rejected are the candidates that were looked at and not adopted, with the reason (rejected.go). A record
+	// only: the analysis does not read it; `make model` matches the candidates of a package against it.
+	Rejected []Rejected `yaml:"rejected"`
 
 	// Origin is where the rule set came from (file name or "builtin:...").
 	Origin string `yaml:"-"`
@@ -849,6 +852,9 @@ func (rs *RuleSet) validate() error {
 		return err
 	}
 	if err := rs.validateVerified(); err != nil {
+		return err
+	}
+	if err := rs.validateRejected(); err != nil {
 		return err
 	}
 	checkMatch := func(m, what string) error {

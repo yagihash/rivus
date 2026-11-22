@@ -7,7 +7,7 @@
 # CI runs the same tests (a pull request with -short, main and the weekly run without): .github/workflows/ci.yml.
 
 .DEFAULT_GOAL := help
-.PHONY: help setup build check test zoo-loosened zoo-dart-gen model-diff
+.PHONY: help setup build check test zoo-loosened zoo-dart-gen model-diff model
 
 # the extractors that `make test` needs (a language whose extractor is not there FAILS, it is not skipped)
 RIVUS_DART ?= dart
@@ -44,3 +44,7 @@ zoo-dart-gen: ## write bench/zoo-dart/exec/lib/cases.dart and the two pubspec.ya
 model-diff: ## the differential test of the model of a package: PKG=<Go import path | package:name> [MODEL=<file>] (bench/model-diff, docs/MODEL-RUNBOOK.md); fetches the package, does not run it
 	@[ -n "$(PKG)" ] || { echo "usage: make model-diff PKG=strings   (or PKG=package:http, MODEL=internal/model/builtin/dart-http.yaml)"; exit 1; }
 	go run ./bench/model-diff -pkg "$(PKG)" $(if $(MODEL),-model "$(MODEL)")
+
+model: ## the steps of making the model of a Go package: PKG=<import path> [VERSION=v1.2.3] [LANG=go] [ARGS="-diff -write-verified"] (bench/model-author, docs/MODEL-RUNBOOK.md); exit 70 = a candidate has no row and is not in rejected:; fetches the package, does not run it
+	@[ -n "$(PKG)" ] || { echo "usage: make model PKG=github.com/jmoiron/sqlx VERSION=v1.4.0 LANG=go   (ARGS=\"-recall\" for the recall of layer 1)"; exit 1; }
+	go run ./bench/model-author -pkg "$(PKG)" $(if $(VERSION),-version "$(VERSION)") -lang $(if $(filter command line,$(origin LANG)),$(LANG),go) $(ARGS)
