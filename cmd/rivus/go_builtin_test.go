@@ -145,7 +145,7 @@ func TestBuiltinResultIsMadeOfItsArguments(t *testing.T) {
 // A builtin that this version does not know: its result comes from its arguments, and it is said on the way.
 func TestUnknownBuiltinKeepsTheFlowAndSaysSo(t *testing.T) {
 	dir := goBuiltinProject(t)
-	ex := exec.Command(binary, "extract", "./...")
+	ex := exec.Command(binary, "debug", "extract", "./...")
 	ex.Dir = dir
 	ir, err := ex.Output()
 	if err != nil {

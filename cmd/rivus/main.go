@@ -22,12 +22,12 @@ Commands:
   index     read the code once and save its call graph (and with -taint, the analysis) for later queries
   graph     search the call graph saved by index ("rivus graph info"): calls, not the flow of data
   resolve   find where the places seen earlier (bookmarks) are in the current code
-  extract   write the neutral IR of the code (JSON Lines, or -text to read it)
   models    "rivus models coverage": which functions need a model most
+  debug     commands for investigation and development; not for everyday use ("rivus debug" lists them)
   setup     "rivus setup rust": prepare the toolchain and the extractor that reading Rust needs (on purpose, outside the sandbox)
   version   print the version (also --version)
 
-Run "rivus <command> -h" for the flags of a command.
+Run "rivus <command> -h" for the flags of a command (the flags for diagnosis and tuning: -help-all).
 `
 
 func main() {
@@ -54,8 +54,11 @@ func main() {
 		err = runGraph(os.Args[2:])
 	case "resolve":
 		err = runResolve(os.Args[2:])
+	case "debug":
+		err = runDebug(os.Args[2:])
 	case "extract":
-		err = runExtract(os.Args[2:])
+		fmt.Fprint(os.Stderr, "rivus: extract is not a command any more: it is \"rivus debug extract\" (the same flags, the same output)\n")
+		os.Exit(2)
 	case "models":
 		err = runModels(os.Args[2:])
 	case "setup":
@@ -120,5 +123,34 @@ func oldIsolationFlag(args []string) error {
 			return fmt.Errorf("-%s is not a flag any more: it is %s", name, now)
 		}
 	}
+	return nil
+}
+
+const debugUsage = `rivus debug - commands for investigation and development; not for everyday use
+
+Usage:
+  rivus debug <command> [flags] [packages]
+
+Commands:
+  extract   write the neutral IR of the code (JSON Lines, or -text to read it)
+
+Run "rivus debug <command> -h" for the flags of a command.
+`
+
+// runDebug runs a command of "rivus debug".
+func runDebug(args []string) error {
+	if len(args) == 0 {
+		fmt.Fprint(os.Stderr, debugUsage)
+		os.Exit(2)
+	}
+	switch args[0] {
+	case "-h", "--help", "help":
+		fmt.Print(debugUsage)
+		return nil
+	case "extract":
+		return runExtract(args[1:])
+	}
+	fmt.Fprintf(os.Stderr, "rivus: unknown debug command %q\n\n%s", args[0], debugUsage)
+	os.Exit(2)
 	return nil
 }

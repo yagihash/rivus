@@ -84,12 +84,13 @@ func runGraphQuery(op string, args []string) error {
 		noRefs = fs.Bool("no-refs", false, "path: do not search through the references (a function named as a value); the search ends at the calls")
 		hubs = fs.Bool("hubs", false, "search with the calls of many candidates (hubs) at once, in place of only when there is no path without them")
 	}
-	fs.Usage = func() {
-		fmt.Fprintf(os.Stderr, "usage: rivus graph %s [flags] %s\n\n", op, map[bool]string{true: "--from <target> --to <target>", false: "<target>"}[op == "path"])
-		fmt.Fprint(os.Stderr, strings.SplitN(graphUsage, "\nCommands:", 2)[0][len("rivus graph - search the call graph saved by \"rivus index\"\n"):])
-		fmt.Fprint(os.Stderr, "\nflags:\n")
-		fs.PrintDefaults()
+	sidesOf(fs).header = fmt.Sprintf("usage: rivus graph %s [flags] %s\n\n", op, map[bool]string{true: "--from <target> --to <target>", false: "<target>"}[op == "path"]) +
+		strings.SplitN(graphUsage, "\nCommands:", 2)[0][len("rivus graph - search the call graph saved by \"rivus index\"\n"):] + "\nflags:\n"
+	usual(fs, "graph", "depth", "limit", "include-builtin", "pretty", "site", "avoid", "avoid-call", "via", "only-impl", "refs")
+	if op == "path" {
+		usual(fs, "from", "to", "from-entry", "no-refs", "hubs")
 	}
+	prepareFlags(fs, args)
 	positional, err := parseInterspersed(fs, args)
 	if err != nil {
 		return err

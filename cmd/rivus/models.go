@@ -18,6 +18,8 @@ func runModels(args []string) error {
 	index := fs.String("index", "", "use a saved index instead of analysing the source")
 	top := fs.Int("top", 0, "only the first n symbols (0: all)")
 	yaml := fs.Bool("yaml", false, "write a rule file to fill in instead of JSON")
+	usual(fs, "index", "top", "yaml")
+	prepareFlags(fs, args[1:])
 	fs.Parse(args[1:])
 
 	var rep *report.Report
