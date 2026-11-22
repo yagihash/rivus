@@ -7,14 +7,13 @@ import (
 	"strings"
 )
 
-// version is the version of the release. A build that is made for a release sets it
-// (`go build -ldflags "-X main.version=v1.2.3"`); a build from a checkout leaves it empty, and rivus says what the
-// build information of Go knows (the module version, or the revision and whether the tree was modified).
-var version = ""
+// The version of a release is versionStamp (graphkey.go: `go build -ldflags "-X main.versionStamp=1.2.3"`; it is also
+// part of the key of an index). A build from a checkout leaves it empty, and rivus says what the build information of Go
+// knows (the module version, or the revision and whether the tree was modified).
 
 // versionString is what `rivus version` prints (one line, so that a script and a formula's test can read it).
 func versionString() string {
-	v := version
+	v := versionStamp
 	extra := ""
 	if info, ok := debug.ReadBuildInfo(); ok {
 		if v == "" && info.Main.Version != "" && info.Main.Version != "(devel)" {
