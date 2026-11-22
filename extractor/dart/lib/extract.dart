@@ -25,7 +25,7 @@ Future<void> extract(String root, StringSink sink,
   root = p.normalize(p.absolute(root));
   final out = StreamOut(sink);
   final prog = Program(root, out)..failIn = failIn;
-  final collection = AnalysisContextCollection(includedPaths: [root]);
+  final collection = AnalysisContextCollection(includedPaths: [root], sdkPath: findSdk());
 
   // Resolve everything first: the call graph needs all of the classes.
   final units = <UnitInfo>[];
@@ -200,8 +200,8 @@ List<String> _trustedDependencyRoots(List<String> extra) {
   if (cache != null) roots.add(p.normalize(p.absolute(cache)));
   // The SDK is two above the executable (<sdk>/bin/dart) only when that is an SDK: a compiled extractor in
   // ~/bin would make the whole home directory trusted (yagihash/rivus #61).
-  final sdk = p.dirname(p.dirname(Platform.resolvedExecutable));
-  if (_isSdk(sdk)) {
+  final sdk = findSdk();
+  if (sdk != null) {
     roots.add(sdk);
     // <flutter>/bin/cache/dart-sdk
     if (p.basename(sdk) == 'dart-sdk' && p.basename(p.dirname(sdk)) == 'cache') roots.add(p.dirname(p.dirname(p.dirname(sdk))));
@@ -210,6 +210,37 @@ List<String> _trustedDependencyRoots(List<String> extra) {
   if (flutter != null && flutter.isNotEmpty) roots.add(p.normalize(p.absolute(flutter)));
   roots.addAll(extra.map((d) => p.normalize(p.absolute(d))));
   return roots;
+}
+
+/// The Dart SDK that the analysis reads `dart:*` from, or null (then the analyzer looks for it above the executable). In this
+/// order: RIVUS_DART_SDK (named by the user); the SDK that the executable is in (<sdk>/bin/dart: `dart run`, or the
+/// extractor compiled and put in the SDK); the SDK of the `dart` that PATH finds (a compiled extractor, which is
+/// anywhere: `dart compile exe`, then `brew install`). Only a directory that is an SDK is taken: a compiled extractor in
+/// ~/bin would make the whole home directory trusted (yagihash/rivus #61).
+String? findSdk({Map<String, String>? environment, String? executable}) {
+  final env = environment ?? Platform.environment;
+  final named = env['RIVUS_DART_SDK'];
+  if (named != null && named.isNotEmpty) {
+    final d = p.normalize(p.absolute(named));
+    return _isSdk(d) ? d : null;
+  }
+  final own = p.dirname(p.dirname(executable ?? Platform.resolvedExecutable));
+  if (_isSdk(own)) return own;
+  final exe = Platform.isWindows ? 'dart.exe' : 'dart';
+  for (final dir in (env['PATH'] ?? '').split(Platform.isWindows ? ';' : ':')) {
+    if (dir.isEmpty) continue;
+    final f = File(p.join(dir, exe));
+    if (!f.existsSync()) continue;
+    String real;
+    try {
+      real = f.resolveSymbolicLinksSync();
+    } on FileSystemException {
+      continue;
+    }
+    final sdk = p.dirname(p.dirname(real));
+    if (_isSdk(sdk)) return sdk;
+  }
+  return null;
 }
 
 bool _isSdk(String dir) =>
