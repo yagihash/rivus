@@ -103,6 +103,7 @@ Future<void> extract(String root, StringSink sink,
   // code reaches.
   final readPackages = <String>{}; // the packages of the dependencies that were reached
   final usedByProduction = <String>{}; // the packages that the code of the project imports directly
+  final replacedLibs = <LibraryElement>[]; // the libraries of the packages that are not read: indexed from their elements
   final notRead = <String, int>{}; // package:name -> how many functions it declares, of the packages that were not read
   final refused = <String, String>{}; // the directory of a dependency that was not read -> a file in it
   if (deps) {
@@ -120,6 +121,7 @@ Future<void> extract(String root, StringSink sink,
     void visit(LibraryElement lib) {
       if (lib.uri.scheme == 'dart' || !seen.add('${lib.uri} ${lib.firstFragment.source.fullName}')) return;
       final isReplaced = lib.uri.scheme == 'package' && replaced.contains(lib.uri.pathSegments.first) && !p.isWithin(root, lib.firstFragment.source.fullName);
+      if (isReplaced) replacedLibs.add(lib);
       if (isReplaced) notRead.update('package:${lib.uri.pathSegments.first}', (n) => n + _declaredFunctions(lib), ifAbsent: () => _declaredFunctions(lib));
       for (final f in lib.fragments) {
         final path = f.source.fullName;
@@ -226,6 +228,10 @@ Future<void> extract(String root, StringSink sink,
   units.sort((a, b) => a.file.compareTo(b.file));
   for (final u in units) {
     u.unit.accept(_Index(prog));
+  }
+  replacedLibs.sort((a, b) => a.uri.toString().compareTo(b.uri.toString()));
+  for (final lib in replacedLibs) {
+    _Index(prog).library(lib);
   }
   prog.closeCtors();
   for (final u in units) {
@@ -381,12 +387,54 @@ class _Index extends RecursiveAstVisitor<void> {
 
   void _note(Element? el, FunctionBody? body) {
     if (el == null || body == null || body is EmptyFunctionBody || body is NativeFunctionBody) return;
+    _noteBody(el);
+  }
+
+  void _noteBody(Element el) {
     final base = el.baseElement;
     final id = funcId(base);
     prog.bodies.add(id);
     final cls = base.enclosingElement;
     if (cls is InterfaceElement && base is! ConstructorElement) {
       (prog.methods[(base.name ?? '').replaceAll('=', '')] ??= []).add(MethodImpl(cls, id));
+    }
+  }
+
+  /// A library whose files are not resolved (--body-replaced): the same index, made from its elements. The program has
+  /// no function of it, but what the code of the project asks of it is still answered the way it is when the files are
+  /// read: the class hierarchy (the rules ask for the subtypes of its classes), the methods that a call through an
+  /// interface may reach (the candidates, which name the functions that are left out), the operators that have a body,
+  /// and the constructors that have something to do. What the elements do not say (whether a constructor that has no
+  /// parameter has anything in its body or its initializers) is taken to be nothing.
+  void library(LibraryElement lib) {
+    bool body(ExecutableElement e) =>
+        (e is MethodElement ? e.isOriginDeclaration : e is PropertyAccessorElement ? e.isOriginDeclaration : e is TopLevelFunctionElement) &&
+        !e.isAbstract &&
+        !e.isExternal;
+    for (final t in <InterfaceElement>[...lib.classes, ...lib.enums, ...lib.mixins, ...lib.extensionTypes]) {
+      _type(t);
+      for (final m in <ExecutableElement>[...t.methods, ...t.getters, ...t.setters]) {
+        if (body(m)) _noteBody(m);
+      }
+      if (t is ClassElement && !t.isMixinApplication) {
+        final explicit = t.constructors.where((c) => c.isOriginDeclaration).toList();
+        if (explicit.isEmpty) {
+          final ctor = t.unnamedConstructor;
+          if (ctor != null) _noteCtor(ctor, own: _hasFieldInit(t), calls: ctor.superConstructor);
+        }
+        for (final c in explicit) {
+          if (c.isFactory) continue;
+          _noteCtor(c, own: c.formalParameters.isNotEmpty || _hasFieldInit(t), calls: c.redirectedConstructor ?? c.superConstructor);
+        }
+      }
+    }
+    for (final e in lib.extensions) {
+      for (final m in <ExecutableElement>[...e.methods, ...e.getters, ...e.setters]) {
+        if (body(m)) _noteBody(m);
+      }
+    }
+    for (final f in <ExecutableElement>[...lib.topLevelFunctions, ...lib.getters, ...lib.setters]) {
+      if (body(f)) _noteBody(f);
     }
   }
 
