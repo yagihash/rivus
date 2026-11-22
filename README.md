@@ -222,6 +222,8 @@ RIVUS_DART="dart" go test ./cmd/rivus           # Dart の extractor を使う�
 RIVUS_RUST=$PWD/extractor/rust/target/debug/rivus-rust go test ./cmd/rivus   # Rust の extractor を使うテストも（先に extractor/rust をビルド）
 ```
 
+PR の CI は `go test -short`(重い試験は、自分で `-short` を見て飛ばす)で、main への push と週 1 回の実行が全部を走らせます。main の実行が赤になったら、次の仕事より先に、直すか原因の PR を戻します。
+
 正しさは、役目の違うテストとベンチで確かめています（[bench/README.md](bench/README.md)）。
 
 | 置き場 | 何を見るか |
