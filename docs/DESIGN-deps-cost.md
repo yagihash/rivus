@@ -1,6 +1,11 @@
 # 依存を含む Dart のプロジェクトの解析コスト(合成の gRPC サーバでの測定)
 
-状態: 測定の記録と案(実装はしていない)。2026-11-22、origin/main の `7e7143f` を基に、`bench/dart-grpc` で測った。
+状態(2026-11-23 に更新): 1 〜 10 節は測定の記録(2026-11-22、origin/main の `7e7143f` を基にした `bench/dart-grpc` の数字。書き換えない)。その後の決定と、今の状態は次のとおり。
+- 依存の本体を読む実行のコストは、対象によっては大きい(この文書の 1 節の `dart_services` 型の対象。合成の gRPC サーバでは小さい)。
+- 実装の多いインターフェースのメソッドを、委譲のクリーク全体のモデルで切る基準(ADR-098)は、11 節の測定で決まり、`package:http` の `Client.send` に入っている。
+- 依存の中の source と sink は探さない(ADR-099)。このため、モデルは、コストだけでなく検出のためにも要る(10.7 節の 1 位)。
+- 7 節の `unread_packages`(パッケージ単位で本体を読まない指定)と、extractor に出力させない指定は、**まだない。設計中**([`docs/DESIGN-package-models.md`](DESIGN-package-models.md)。段階 0 と 2 を実装中。extractor に渡す段階は、まだ決まっていない)。7 節と 10.7 節の 3 位は、その案の記録として読む。
+- 組み込みモデルの範囲は ADR-096、097 で広がった(README)。
 
 ## 1. 目的と対象
 
@@ -47,7 +52,7 @@
 | fixnum | 42 | 43 | 13 | 2 | 147 |
 | term_glyph / clock / googleapis_auth / http | 30 / 10 / 6 / 2 | 30 / 10 / 6 / 2 | 4 / 3 / 10 / 4 | 0 | 189 / 50 / 174 / 128 |
 
-この対象では、重さは http2(`spent_ms` 145、`summary_elems` 2,038)、grpc、collection、protobuf の順で、全部で 0.5 秒。重い依存は無い。`packages_top` は上位 20 件で、ここでは `spent_ms` が 0 のものまで入っていて足りている。大きい対象(後述の corpus)では 20 件で切れるので、全件を出すには、`stats.packages_top` の件数の上限を、フラグ(例: `-pass-stats-all`)で外す変更が要る(今は上限 20 で固定。変更は案だけ)。→ その後、`-pass-stats-top N`(0 で全件)と `-pass-stats-sort` を足した(ADR-061 の追記)。
+この対象では、重さは http2(`spent_ms` 145、`summary_elems` 2,038)、grpc、collection、protobuf の順で、全部で 0.5 秒。重い依存は無い(この合成の対象では)。`packages_top` は上位 20 件で、ここでは `spent_ms` が 0 のものまで入っていて足りている。大きい対象(後述の corpus)では 20 件で切れるので、全件を出すには、`stats.packages_top` の件数の上限を、フラグ(例: `-pass-stats-all`)で外す変更が要る(今は上限 20 で固定。変更は案だけ)。→ その後、`-pass-stats-top N`(0 で全件)と `-pass-stats-sort` を足した(ADR-061 の追記)。
 
 IR の関数の数は `rivus_dart` の出力の `kind: func` を、`package:<名前>` ごとに数えた。ここまでは extractor が依存を全部出し、コアが到達できるものだけ解析に残す(`extract.dart` の読み取りの順序)。
 
