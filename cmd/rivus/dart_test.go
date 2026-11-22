@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/url"
 	"os"
 	"os/exec"
@@ -157,10 +158,40 @@ func TestDartDependenciesOutsideTheProjectAreNotReadUnlessAsked(t *testing.T) {
 	for _, e := range refused.LoadErrors {
 		if strings.Contains(e.Message, "--allow-deps-under") {
 			said = true
+			// it is also unread: summary.unread and the standard error say it (a result without it must not look
+			// like the analysis of the dependency)
+			if !e.Unread || !strings.HasPrefix(e.Message, ir.DependencyNotAllowedPrefix) {
+				t.Errorf("the dependency that was left out is not reported as unread: %+v", e)
+			}
 		}
 	}
 	if !said {
 		t.Errorf("the stream does not say that a dependency was left out: %+v", refused.LoadErrors)
+	}
+	// rivus says it where the user reads: summary.unread and the standard error
+	cmd := exec.Command(binary, "analyze", "-lang", "dart", "-C", project)
+	cmd.Env = append(os.Environ(), "RIVUS_DART_EXTRACTOR="+dart+" run "+filepath.Join(extractor, "bin", "rivus_dart.dart"))
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	aout, aerr := cmd.Output()
+	if aerr != nil {
+		t.Fatalf("analyze: %v\n%s", aerr, stderr.String())
+	}
+	var rep struct {
+		Summary struct {
+			Unread *struct {
+				Top []struct{ Package, Why string } `json:"top"`
+			} `json:"unread"`
+		} `json:"summary"`
+	}
+	if err := json.Unmarshal(aout, &rep); err != nil {
+		t.Fatal(err)
+	}
+	if rep.Summary.Unread == nil || len(rep.Summary.Unread.Top) == 0 || !strings.HasPrefix(rep.Summary.Unread.Top[0].Why, ir.DependencyNotAllowedPrefix) {
+		t.Errorf("summary.unread does not say that a dependency outside the trusted places was left out: %+v", rep.Summary.Unread)
+	}
+	if !strings.Contains(stderr.String(), "-allow-deps-under") {
+		t.Errorf("the standard error does not say that a dependency was left out:\n%s", stderr.String())
 	}
 	// an empty PUB_CACHE is not read as a trusted directory (yagihash/rivus #61)
 	if emptyCache := extractIn("", []string{"PUB_CACHE="}); has(emptyCache, "secret.dart#leak") {

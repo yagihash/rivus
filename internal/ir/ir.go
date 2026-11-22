@@ -75,6 +75,12 @@ const SyntaxErrorPrefix = "syntax_error:"
 // other (cmd/rivus/dart_depcontext_test.go).
 const DependencyNotLinkedPrefix = "dependency_not_linked"
 
+// DependencyNotAllowedPrefix starts the message of the load error that the Dart extractor writes (unread set, with the
+// directory of the dependency as the package) for a dependency that is outside the places that are trusted (the
+// project, the pub cache, the SDKs and -allow-deps-under): it is not read, and its functions are not analysed
+// (extractor/dart/lib/extract.dart, "dependency_not_allowed"). A test holds the two to each other (cmd/rivus/dart_test.go).
+const DependencyNotAllowedPrefix = "dependency_not_allowed"
+
 // LoadError records something that could not be read: it maps to the
 // missing_source terminal kind.
 type LoadError struct {
