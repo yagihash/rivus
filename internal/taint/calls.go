@@ -127,6 +127,10 @@ func (s *state) callBody(cc *callCtx) {
 
 	// Sources and sinks matched by the rules at this call.
 	sitesHere := s.eng.sites.ByIRInstr[sites.IRInstr{Func: s.fn.IR.ID, Block: ci.IRBlock, Instr: ci.IRIndex}]
+	if why, ok := s.eng.sites.UnresolvedCallbacks[sites.IRInstr{Func: s.fn.IR.ID, Block: ci.IRBlock, Instr: ci.IRIndex}]; ok {
+		// a callback_param source names this call, and the function it is given was not found
+		s.newNote(ci, KindUnresolvedCallee, why, cc.sym)
+	}
 	for _, site := range sitesHere {
 		if site.Symbol == FuncValueSymbol {
 			// the sink that the engine makes for the diagnostic of the function values: what is called is the first operand

@@ -614,7 +614,7 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
   許可するときはルール側で明示する（`allow_sanitizer_expansion: true`）
 
 - シンボルは `go/types` の `FullName` 形式（`(*net/http.Request).FormValue`、`os/exec.Command`、`(io.Writer).Write`）
-- source の種類は `call_result`（呼び出しの結果）、`param_type`（その型の引数すべて）、`field`（構造体フィールドの読み出し）。
+- source の種類は `call_result`（呼び出しの結果）、`param_type`（その型の引数すべて）、`field`（構造体フィールドの読み出し）、`callback_param`（呼び出しに渡された関数の引数。ADR-106）。
   sanitizer は `drops`（除去するラベル。`"*"` は全部）と `adds`（落とした値に付くラベル。`html_escaped` など）を持つ
 - ジェネリクスは**型引数を消去して一致**させる
 - 各モデルに `origin: builtin | human | llm`。`llm` の場合は `decided_at`、`rationale`、`model_version` が必須
@@ -687,7 +687,7 @@ rivus models coverage ./...
 | Dart | トップレベルの `main`（`extractor/dart/lib/extract.dart`）。変数の初期化は `Init` |
 | Rust | extractor が決めた `main`（`extractor/rust/src/main.rs`） |
 
-- **ユーザー追加指定:** ルールの source に `kind: param` を書く。シンボルの関数の引数（`params`、`recv`）を、フレームワークが渡す入力として宣言する。`marker`（インタフェースのメソッド名の glob。生成コードのサービス）と `extends` / `with_param_type`（継承の階層を持つ言語のサブクラス）は、複数の関数をまとめて宣言する（`internal/model/model.go`）。ルールファイルに `entrypoints:` という節はない
+- **ユーザー追加指定:** ルールの source に `kind: param` を書く。シンボルの関数の引数（`params`、`recv`）を、フレームワークが渡す入力として宣言する。`marker`（インタフェースのメソッド名の glob。生成コードのサービス）と `extends` / `with_param_type`（継承の階層を持つ言語のサブクラス）は、複数の関数をまとめて宣言する（`internal/model/model.go`）。`kind: callback_param` は、シンボルの呼び出しのオペランド（`operand`。数え方は `calls:` と同じ。MODELING.md 4d 節）に渡された関数（`make_closure` を、コピーと変換をたどって引く）の、`from` から `to` の引数を source にする（`internal/sites/callback.go`。taint は変えない）。引けない呼び出しは `unresolved_callee` の注記になる（`sites.Result.UnresolvedCallbacks`）。ルールファイルに `entrypoints:` という節はない
 - 起点から届くかは、検出結果の `reachability` が示す（4.5）。フレームワークが呼ぶメソッド（外の型のメソッドを上書きしたもの。`Func.Overrides`）は、`from_framework_callback`（ADR-073）
 - ライブラリの公開関数の引数は `exported_api_param` の起点になる
 

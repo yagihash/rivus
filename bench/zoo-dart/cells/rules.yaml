@@ -27,6 +27,13 @@ sources:
     symbol: package:zoo_cells/dart/flutter_override_arg.dart#OpenHandlerDecoy.onMethodCall
     params: [0]
     labels: [user_input]
+  # the parameters after the request of the function that is given to the router (callback_param: the function is
+  # found where the route is registered; the segments of the path are what the router hands to it)
+  - kind: callback_param
+    symbol: package:zoo_router/zoo_router.dart#ZooRouter.get
+    operand: 1
+    from: 1
+    labels: [user_input]
   # a source that is the type of a parameter: the handler under test takes an In
   - kind: param_type
     type: package:zoo_mark/zoo_mark.dart#In

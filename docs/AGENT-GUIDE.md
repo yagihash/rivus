@@ -527,6 +527,7 @@ rivus analyze -C <dir> -rules app.yaml -timeout 10m ./... > out.json
 ```
 
 - ハンドラが型で入口を受け取るフレームワーク(gin の `*gin.Context` など)は、`kind: param_type` と `type:` で、その型の引数を source にします。見本は [examples/rules](../examples/rules) にあります。
+- ハンドラを引数に取って登録する関数(ルーターの `router.get('/x/<id>', (Request r, String id) => ...)`)の、ハンドラの引数(`id`)を source にするときは、`kind: callback_param`(`symbol`、`operand`、`from`)を使います。`String` のような一般の型は `param_type` で指せないためです。書き方と、`operand` の数え方(言語ごと)は [MODELING.md 4d 節](MODELING.md)。ハンドラを変数、フィールド、登録のヘルパーの引数として渡す形は引けず、`unresolved_callee` の注記になります。
 - シンボルの書き方は言語ごとに違います(Go は `go/types` の形。Dart と Rust は各 extractor の README)。**シンボルが一致しないルールは、何も報告せずに効きません。** 足したあと、`sites` の件数が増えたことを確認します。
 - 流れを切るルール(sanitizer、`pure: true`)は、誤ると見逃しになります。迷ったら書きません。
 - 書式は [MODELING.md](MODELING.md) と、[README の「ルールとモデル」](../README.md#ルールとモデル)にあります。モデルを足す対象は `rivus models coverage -yaml -top 20` で得ます。
