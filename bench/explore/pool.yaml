@@ -5,6 +5,9 @@
 # of bench/explore/LOG.md; "never"), note (why it is in the pool: the shape that it may show; never a finding).
 # Rules: the commit of a run is written here BEFORE the run. A target whose run showed a shape of scale is not "done":
 # the shape is reduced to a go-scale profile or a corpus of the layer C (bench/README.md), and its row here says which.
+# The rule of the user (2026-11-22): a run on a real external project takes long and slows the development. Ask the user (through the
+# advisor) before each such need: what it is for, which target, the time limit. Nothing is run on a target of this list, or on a new
+# one, without it; and only what the user has allowed is added to this list.
 targets:
   - name: memos
     url: https://github.com/usememos/memos
@@ -90,3 +93,17 @@ targets:
     size: unmeasured
     last_run: never
     note: "the largest in the pool: an app layer with a store of hundreds of methods, and plugins over RPC."
+  - name: cocoon
+    url: https://github.com/flutter/cocoon
+    commit: ae9eb1beaf765d644cc85dde38def030c80b4b7d
+    lang: dart
+    size: "15,075 functions with the dependencies (2026-11-22); plain analysis 17 s; one round of the function-value analysis over 270 s"
+    last_run: "2026-11-22, LOG.md Measurement 6"
+    note: "app_dart (the server that manages the CI of Flutter; BSD-3-Clause): the handlers are dispatched by a map ('/api/...': Handler(...), 45 entries), the form that a function value kept in a map has. The generated files (*.g.dart) are committed. Allowed by the user 2026-11-22, with a limit of 10 minutes."
+  - name: dart-pad
+    url: https://github.com/dart-lang/dart-pad
+    commit: ad668d137e631beeaef3e263054a45696e8d4499
+    lang: dart
+    size: "28,072 functions with the dependencies (2026-11-22); not finished in 540 s (10.1 GB); `analyzer` is a dependency"
+    last_run: "2026-11-22, LOG.md Measurement 6"
+    note: "pkgs/dart_services (the server of DartPad; BSD-3-Clause): shelf and shelf_router (handlers given to a router), and it starts processes. Allowed by the user 2026-11-22, with a limit of 10 minutes."

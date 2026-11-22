@@ -278,3 +278,34 @@ Same build and rules, cumulative (each row keeps the switches of the rows above)
 **Reading.** No single carrier explains the spread. `ctx` is the first step of 59 of the 65 sources, and 12 % of the elements; the options change nothing (the same route continues through other calls); the connection and the stream, which take the message and are then tainted as a whole object, are another 43 points of the elements (-55 % in all), and 43 sources still reach a package variable after the three cuts (the router cache route, 28 of them through `boundedCache`, and others). **What the carriers have in common is not a key (constant or not) and not `ctx`: they are long-lived objects of the dependencies (the connection and stream, the router and its caches, the options) into which the real data of the request (the statement text, the message) is stored as a field or an element, and which are then read whole by every other call that holds the object.** The elements in the 1,082 functions are the same 65 or fewer origins repeated. The false `other_sources` of the three `ReadColumns` / `ReadColumnByName` / `ReadToStruct` findings stay (42 of 64 are left after all three cuts).
 
 **What it means for the design (for the advisor to decide; the design is not changed here).** (A) stage 3 (constant keys) does not fix `bench/gcp`: the places are fields, slices, and maps keyed by hashes or names. (C) as written (`from: recv.ctx`, a `param_type` source that does not taint a private `ctx`) takes the `ctx` part only: 10 of the 65 sources and 12 % of the elements, no change in CPU. The rest is a **whole-object read of a tainted long-lived receiver in library code**, which is what the stage-2 lift (keep the `Rel` of the sub-cell) is about, and which blew up when done on every output. So by the rule of the brief this is the case "neither", and (B) (keep `Rel` only where the sub-cells are few) is the candidate; but the measurement does not show (B) reduces `bench/gcp`, so `bench/gcp` should stay a measurement and not be an acceptance of stages 2 or 3. A small profile of the real shape is the next step: a message stored into a field of a long-lived receiver (a stream, a cache entry), then the receiver passed whole to a function that reads another field and writes a package variable, for N handlers.
+
+## Measurement 6: two real Dart servers, with the dependencies and without, with `-resolve-func-values` off and on (2026-11-22)
+
+Targets (the user allowed these two, with a limit of 10 minutes each; `pool.yaml`): `cocoon` (`app_dart`, ae9eb1be) and `dart-pad` (`pkgs/dart_services`, ad668d13).
+Engine: main at 635cc6e (#126 merged: `-timeout` is shared by the rounds of `-resolve-func-values` and the taint analysis; the rounds may use half of it).
+Rules: the built-in ones (no source of these targets matches, so a result with the dependencies has no finding). `-timeout 540s`. The code of the targets was not run
+(`dart pub get` only; the Flutter packages of the workspaces were taken out of the root `pubspec.yaml` of the copies).
+
+| target | flag | wall | peak memory | functions | findings | zero-candidate calls | rounds / supplemented |
+|---|---|---|---|---|---|---|---|
+| dart_services, with the dependencies | off | 585 s (stopped by `-timeout`) | 10.1 GB | 28,072 | 0 (1 pass) | | |
+| dart_services, with the dependencies | on | 576 s (stopped by `-timeout`) | 13.1 GB | 28,072 | 0 | 999 | 1 round, stopped by its half of the limit, not used / 0 |
+| cocoon, with the dependencies | off | 44 s (the analysis 17 s) | 1.8 GB | 15,075 | 0 (4 passes, converged) | 363 | |
+| cocoon, with the dependencies | on | 325 s | 12.3 GB | 15,075 | 0 | 363 | 1 round, stopped by its half of the limit (270 s), not used / 0 |
+| dart_services, `-no-deps` | off / on | 9 s | 1.4 GB | 349 | 6 / 6 (new 0) | 8 / 6 | 2 rounds / 2 |
+| cocoon, `-no-deps` | off / on | 10 s / 12 s | 1.3 GB | 2,265 | 0 / **5** (new 5, lost 0) | 51 / 21 | 2 rounds / 30 |
+
+**What looks wrong.** (1) The analysis of `dart_services` with the dependencies does not finish in 9 minutes with the flag off: the time is the dependencies
+(`own_spent_ms` 410 ms against `dep_spent_ms` 6,077 s), `largest_scc` is 12,130 functions, `summary_elems` 1,011,666. The packages that carry the uncertainty notes
+the most: `dart_style` 671, `dart_services` 515, `analyzer` 224. It has `analyzer` as a dependency (as `extractor/dart` does: 27,748 functions). (2) `cocoon` has no `analyzer`
+and its plain analysis is light (17 s), but **one round of the function-value analysis takes more than 270 s: 16 times a plain analysis or more**. (3) Without the dependencies
+the rounds are light (about 200 ms for `cocoon`).
+
+**Supplemented calls (`-no-deps`).** `cocoon`: 30 calls got candidates (median 7, most 8, none at the limit of 32). The 5 new findings (all `ssrf`) go through one of them, the call
+`server(request.toRequest())` of the entry of the server (the candidate `createServer$1` is the real callee), and then through `handler.service(request)`, a dynamic dispatch over the classes
+of the handlers: one right supplement gives one finding per handler that has an outgoing HTTP call. Each has uncertainty notes (`unresolved_callee`, `dynamic_dispatch` 4 to 21,
+`container_element_imprecision`). Whether each is a vulnerability needs the code of the handler: not judged here.
+
+**Reduced to**: nothing yet. The cost of the dependencies is for the models that cut a heavy dependency (ADR-092): the table of the packages (functions, time, summary elements) is the
+input; a small synthetic project with one huge dependency is the case for the gate.
+
