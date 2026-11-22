@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/yagihash/rivus/internal/report"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -152,9 +153,11 @@ func (o *analyzeOpts) runExtractor(lang string) (*ir.Program, error) {
 // extractRaw runs the extractor of a language (Rust: in the container unless -unsafe-host-exec) and returns the stream of the IR as it wrote it.
 func (o *analyzeOpts) extractRaw(lang string) ([]byte, error) {
 	if lang == langRust && !o.hostExec() {
+		o.rustIsolation = &report.Isolation{Mode: "sandbox", Detail: "the build scripts and the macros of the project ran under the sandbox of macOS: no network while it was built (the fetch stage has one, and runs no code of the project), no files but the project, its dependencies and a work directory"}
 		return o.rawRustIsolated()
 	}
 	if lang == langRust {
+		o.rustIsolation = &report.Isolation{Mode: "host", Detail: "-unsafe-host-exec: the build scripts and the macros of the project ran on this machine, with your rights, without any isolation"}
 		if d, err := filepath.Abs(o.dir); err == nil {
 			if _, err := os.Stat(filepath.Join(d, hostileMarker)); err == nil {
 				return nil, fmt.Errorf("%s is a project that is hostile on purpose (a test of the isolation): it is never run on this machine", d)

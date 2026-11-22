@@ -31,7 +31,9 @@ type analyzeOpts struct {
 	passStats    bool
 	traceElement string
 	funcValues   string
-	timeout      time.Duration
+	// rustIsolation is how the Rust project was read (set when it was); it goes to the summary
+	rustIsolation *report.Isolation
+	timeout       time.Duration
 	// funcTimeout bounds the analysis of one function.
 	funcTimeout time.Duration
 	passes      int
@@ -213,6 +215,7 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 		}
 	}
 	rep := report.Build(packages, l.loadErrors(), st, res, rules)
+	rep.Summary.Isolation = o.rustIsolation
 	if ts := l.testsSkipped(); ts != nil {
 		if ts.SkippedDirs > 0 {
 			rep.Summary.SkippedDirs = &report.SkippedDirs{Total: ts.SkippedDirs, Examples: ts.SkippedDirNames}

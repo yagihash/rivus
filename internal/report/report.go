@@ -139,6 +139,17 @@ type Summary struct {
 	// run stands for (Go: `//go:build ignore`, `_windows.go` on another system): code that is not in the analysis, and is
 	// not a test. The answer is about this configuration (a range declaration; nothing else changes). Absent when none.
 	OutsideConfiguration *OutsideConfiguration `json:"outside_configuration,omitempty"`
+	// Isolation says how a Rust project was read: reading it runs the build scripts and the macros of the project. Absent when no Rust
+	// project was read (Go and Dart are not built).
+	Isolation *Isolation `json:"isolation,omitempty"`
+}
+
+// Isolation is how the code of a project was run to read it.
+type Isolation struct {
+	// Mode is "sandbox" (under the sandbox of macOS: no network while it was built, no files but the project's and the work directory)
+	// or "host" (-unsafe-host-exec: the build scripts and the macros ran on this machine, with the rights of the user, without isolation).
+	Mode   string `json:"mode"`
+	Detail string `json:"detail"`
 }
 
 // OutsideConfiguration counts the files that the build constraints leave out.
