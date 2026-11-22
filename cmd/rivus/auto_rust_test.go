@@ -136,6 +136,13 @@ func TestAutoRustNotAskedWhenItCannotBeRead(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(got, []string{"go"}) || *asks != 0 || !reflect.DeepEqual(o.skipped, []report.SkippedLanguage{{Lang: "rust", Why: "no-sandbox"}}) {
 		t.Errorf("no sandbox: %v, %v, asked %d, %v", got, err, *asks, o.skipped)
 	}
+	// the sandbox is there, but -unsafe-host-exec is set: the question speaks of the sandbox, so auto reads nothing (-lang rust and -unsafe-host-exec, both said, is the way)
+	o, asks = autoOpts(dir, true, "y\n", true)
+	o.unsafeHostExec = true
+	got, err = o.languages()
+	if err != nil || !reflect.DeepEqual(got, []string{"go"}) || *asks != 0 || !reflect.DeepEqual(o.skipped, []report.SkippedLanguage{{Lang: "rust", Why: "no-sandbox"}}) {
+		t.Errorf("-unsafe-host-exec with auto: %v, %v, asked %d, %v", got, err, *asks, o.skipped)
+	}
 	// not installed: said before it is asked
 	o, asks = autoOpts(dir, true, "y\n", false)
 	o.installCheck = func() error { return errors.New("no rivus-rust") }

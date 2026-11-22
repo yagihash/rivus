@@ -156,7 +156,15 @@ func (o *analyzeOpts) autoRust(others []string) (bool, error) {
 	if sbx == nil {
 		sbx = sandboxUsable
 	}
-	if err := sbx(); err != nil {
+	// with -unsafe-host-exec the project would not run under the sandbox that the question speaks of: auto does not read it
+	// (running without the isolation is -lang rust together with -unsafe-host-exec, both said)
+	sbxErr := error(nil)
+	if o.hostExec() {
+		sbxErr = errors.New("-unsafe-host-exec is set: the project would run on this machine, not under the sandbox")
+	} else {
+		sbxErr = sbx()
+	}
+	if err := sbxErr; err != nil {
 		if alone {
 			return false, fmt.Errorf("%s holds a Rust project (Cargo.toml), and reading it builds it: its build scripts and proc macros run. There is no sandbox here (%v), so it is not read unless it is asked for with -lang rust and -unsafe-host-exec (for code you trust)", o.dir, err)
 		}
