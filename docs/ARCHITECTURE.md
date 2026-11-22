@@ -782,4 +782,4 @@ Rust の extractor は、対象をビルドする（`cargo check`）ので、対
 
 ## 診断出力 `-v`
 
-`-v` の `slow function` の行(300 ms 超の関数)は `(cpu …)` の列を持つ: その関数の解析中の、goroutine 自身のスレッドの CPU 時間(`CLOCK_THREAD_CPUTIME_ID`。`-v` のときだけ、解析の間 goroutine をスレッドに固定して読む。時計のない OS では 0)。壁時計の時間は GC と他のワーカーで 4〜5 倍に膨らむので、関数の費用は cpu の列で読む。出力の追加だけで、解析結果、finding、JSON の report は変わらない。
+`-v` の `slow function` の行(300 ms 超の関数)は `(cpu …)` の列を持つ: その関数の解析中の、goroutine 自身のスレッドの CPU 時間(`CLOCK_THREAD_CPUTIME_ID`。`-v` のときだけ、解析の間 goroutine をスレッドに固定して読む。時計のない OS では 0)。壁時計の時間は GC と他のワーカーで 4〜5 倍に膨らむので、関数のコストは cpu の列で読む。出力の追加だけで、解析結果、finding、JSON の report は変わらない。
