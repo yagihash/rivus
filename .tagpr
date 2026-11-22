@@ -1,0 +1,13 @@
+# tagpr の設定（https://github.com/Songmu/tagpr）。
+#
+# releaseBranch: リリース PR を向けるブランチ。
+# versionFile:   版を書いたファイルは持たない（版は、ビルドのときに -ldflags "-X main.versionStamp=..." で入れる）ので "-"。
+# vPrefix:       タグは v0.0.1 の形（Homebrew の formula の url が、この形を前提にしている）。
+# changelog:     リリース PR の中で CHANGELOG.md を更新する（マージされた PR の題から作る）。
+# release:       タグと一緒に GitHub Release を作る。
+[tagpr]
+	releaseBranch = main
+	versionFile = -
+	vPrefix = true
+	changelog = true
+	release = true

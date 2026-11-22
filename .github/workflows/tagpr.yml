@@ -1,0 +1,86 @@
+name: tagpr
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: tagpr
+  cancel-in-progress: false
+
+jobs:
+  # リリース PR を作る・更新する。マージされたら、タグと GitHub Release を作る。
+  # CHANGELOG.md は、tagpr がリリース PR の中で更新する（.tagpr の changelog = true）。
+  # トークンは rivus だけに書けるもの（ghmint の rivus/.github/ghmint/tagpr.rego）。
+  # App のトークンで作るので、リリース PR でも CI が走り、コミットは Verified になる。
+  #
+  # いまは常に skip する（if: false）。PR の必須化と最初のリリースの準備ができたら、この if を外す。
+  tagpr:
+    if: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      id-token: write
+    outputs:
+      tag: ${{ steps.tagpr.outputs.tag }}
+    steps:
+      - id: token
+        uses: yagihash/ghmint-action@be57533eef7f69550d06f0c93eede5589158281a # v1.0.0
+        with:
+          scope: yagihash/rivus
+          policy: tagpr
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          token: ${{ steps.token.outputs.token }}
+          persist-credentials: false
+      - id: tagpr
+        uses: Songmu/tagpr@047aec4b6c0ce166f52958b5a97f5a3d927fd65b # v1.22.0
+        env:
+          GITHUB_TOKEN: ${{ steps.token.outputs.token }}
+
+  # タグが打たれたときだけ、tap の formula の url と sha256 を書き換える。
+  # トークンは homebrew-tap だけに書けるもの（ghmint の homebrew-tap/.github/ghmint/bump-from-rivus.rego）。
+  # Contents API で書くので、コミットは Verified になる。
+  #
+  # tagpr のジョブが skip されている間は、needs によってこのジョブも skip される。
+  # tagpr の if を外しても、こちらは別に止めておけるよう、同じ if: false を置く（tap の側の準備ができたら外す）。
+  bump-tap:
+    needs: tagpr
+    if: false && needs.tagpr.outputs.tag != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: release
+      deployment: false
+    permissions:
+      id-token: write
+    steps:
+      - id: token
+        uses: yagihash/ghmint-action@be57533eef7f69550d06f0c93eede5589158281a # v1.0.0
+        with:
+          scope: yagihash/homebrew-tap
+          policy: bump-from-rivus
+      - name: Update the formula
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          TAG: ${{ needs.tagpr.outputs.tag }}
+        run: |
+          set -euo pipefail
+          repo=yagihash/homebrew-tap
+          path=Formula/rivus.rb
+          url="https://github.com/yagihash/rivus/archive/refs/tags/${TAG}.tar.gz"
+          sha=$(curl -fsSL "$url" | sha256sum | cut -d' ' -f1)
+          blob=$(gh api "repos/${repo}/contents/${path}" --jq .sha)
+          gh api "repos/${repo}/contents/${path}" --jq .content | base64 -d \
+            | sed -E "s|^  url \".*\"|  url \"${url}\"|; s|^  sha256 \".*\"|  sha256 \"${sha}\"|" > rivus.rb
+          if ! grep -qF "url \"${url}\"" rivus.rb || ! grep -qF "sha256 \"${sha}\"" rivus.rb; then
+            echo "the formula has no url or sha256 line to rewrite" >&2
+            exit 1
+          fi
+          gh api -X PUT "repos/${repo}/contents/${path}" \
+            -f message="rivus ${TAG#v}" \
+            -f content="$(base64 -w0 rivus.rb)" \
+            -f sha="$blob"
