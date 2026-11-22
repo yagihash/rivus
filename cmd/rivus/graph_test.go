@@ -158,6 +158,8 @@ func TestGraphIndexIsFreshUntilSomethingChanges(t *testing.T) {
 		{name: "the go.mod of a module that replace points to", do: edit(t, filepath.Join(dep, "go.mod"), func(s string) string { return s + "\n// x\n" })},
 		{name: "-tests", args: []string{"-tests"}},
 		{name: "-no-deps", args: []string{"-no-deps"}},
+		{name: "-body-replaced (a package whose body is not read)", args: []string{"-body-replaced", "example.com/dep"}},
+		{name: "-read-declared-bodies", args: []string{"-read-declared-bodies"}},
 		{name: "-k", args: []string{"-k", "2"}},
 		{name: "-numeric-taint", args: []string{"-numeric-taint"}},
 		{name: "-max-implementations", args: []string{"-max-implementations", "7"}},

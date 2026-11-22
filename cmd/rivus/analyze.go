@@ -146,6 +146,8 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	}
 	// The graph drops the IR as it is built: what was analysed is listed first.
 	packages := l.packages()
+	// what the rule files declare is not read: the functions go before the sites and the graph see them
+	replaced := dropReplacedBodies(l.ir, rules, os.Stderr)
 	noteNotBuiltin(os.Stderr, l.ir, rules)
 	// The sites read the IR, and the graph drops it as it is built.
 	expandSubtypes(rules, l.ir)
@@ -278,6 +280,8 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	}
 	rep := report.Build(packages, l.loadErrors(), st, res, rules)
 	rep.Summary.Isolation = o.rustIsolation
+	rep.Summary.BodyReplacedPackages = replaced
+	rep.Summary.BodyReplacedIgnored = o.declIgnored
 	if len(o.skipped) > 0 {
 		if rep.Summary.Unread == nil {
 			rep.Summary.Unread = &report.Unread{Top: []report.UnreadPackage{}}

@@ -150,6 +150,24 @@ type Summary struct {
 	// Isolation says how a Rust project was read: reading it runs the build scripts and the macros of the project. Absent when no Rust
 	// project was read (Go and Dart are not built).
 	Isolation *Isolation `json:"isolation,omitempty"`
+	// BodyReplacedPackages are the packages of the dependencies whose body was not read because a model declares that it
+	// stands for it (body_replaced_packages of a rule file, or -body-replaced): a call of their functions is the model
+	// when it has a row for the function, and unmodeled_library_call when it has none; code inside them is not
+	// analysed. Sorted by package. Absent when none was left out.
+	BodyReplacedPackages []BodyReplacedPackage `json:"body_replaced_packages,omitempty"`
+	// BodyReplacedIgnored is how many declarations -read-declared-bodies left out: the bodies were read. Absent when 0.
+	BodyReplacedIgnored int `json:"body_replaced_ignored,omitempty"`
+}
+
+// BodyReplacedPackage is a package whose body was not read, and why.
+type BodyReplacedPackage struct {
+	// Package is the declaration as it was written (it may end in /...: the package and what is under it).
+	Package string `json:"package"`
+	// DeclaredIn is the rule set that declares it: its file, "builtin:..." or "-body-replaced".
+	DeclaredIn string `json:"declared_in"`
+	Reason     string `json:"reason"`
+	// Functions is how many functions were left out.
+	Functions int `json:"functions"`
 }
 
 // Isolation is how the code of a project was run to read it.

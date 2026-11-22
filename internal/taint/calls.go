@@ -220,6 +220,8 @@ func (s *state) callBody(cc *callCtx) {
 		return
 	}
 	rules := s.eng.rules
+	// a package whose body is not read: what it may call back is applied where the model does not say it
+	s.replacedCallbacks(cc)
 	modelled := cc.sym != "" && rules.HasModel(cc.sym)
 	if modelled {
 		s.applyModel(cc)
@@ -341,6 +343,9 @@ func (s *state) callBody(cc *callCtx) {
 		kind, detail := externalKind(ids, cc.sym)
 		if ci.Callee != nil && ci.Callee.FFI {
 			kind, detail = KindFFIBoundary, "the call leaves the language (a foreign function)"
+		}
+		if u := s.eng.replacedUnit(ci); u != "" && kind == KindUnmodeledLibraryCall {
+			detail = "the body of the package " + u + " is not read (a rule file declares that its models stand for it) and the model has no row for the function"
 		}
 		s.unmodeled(cc, s.newNote(ci, kind, detail, cc.sym))
 	}

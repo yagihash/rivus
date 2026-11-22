@@ -185,6 +185,12 @@ func (o *analyzeOpts) flagValues(patterns []string) map[string]string {
 	if o.resolveFuncValues {
 		m["resolve-func-values"] = "true"
 	}
+	if len(o.bodyReplaced) > 0 {
+		m["body-replaced"] = strings.Join(sortedUnique(o.bodyReplaced), "\n")
+	}
+	if o.readDeclared {
+		m["read-declared-bodies"] = "true"
+	}
 	if len(o.rules) > 0 {
 		// the explicit rule files, by absolute path, one per line: a question with -C reads them again from the record
 		var abs []string
