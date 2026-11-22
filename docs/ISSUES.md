@@ -53,6 +53,7 @@
 | [#124](issues/124-resolve-func-values-sites-and-external-candidates.md) | `-resolve-func-values`: 補った候補がサイトの列挙に戻らない。本体のない候補では補った注記が出ない | 道具・ベンチ(重さ: 低) | 全 | 0 | open | - |
 | [#126](issues/126-timeout-inside-large-scc.md) | `-timeout` の超過: 巨大な SCC の中で期限を見ない(並列ラウンドの中は直した) | 利用者を止める(直した) | 全 | 0 | closed | `cmd/rivus/passstats_top_test.go`(`TestTimeoutInsideALargeSCC`) |
 | [#127](issues/127-timeout-overrun-remaining.md) | `-timeout` の超過の残り: 1 つの関数の中と、extractor の段階の時間が `stats` に出ない | 利用者を止める | 全 | 0 | open | - |
+| [#144](issues/144-dependency-sink-reach-list.md) | 汚染された値が、依存の中の sink のルールに一致する呼び出しに届いたことを、finding とは別の一覧で出す(案) | 検出の見逃し(サイレント。案) | 全 | 0 | open | - |
 | [#137](issues/137-dart-implementations-of-interface-sinks.md) | Dart で、インターフェースのメソッドの sink が、パッケージの外の実装の型の変数からの直接の呼び出しに届かない | 検出の見逃し(重さ: 低) | Dart | 0 | open | - |
 | [#138](issues/138-suppressions-pure-flows.md) | `origin: llm` の `pure` と、流れを切る `flows` のモデルが流れを消しても、`suppressions` と `llm_influenced` に残らない | 正確さ(サイレントな見逃し) | Go | 0 | closed | `cmd/rivus/resolve_test.go`(`TestLLMPureModelSuppressionIsRecorded`) |
 | [#136](issues/136-zsh-completion-equals-form.md) | zsh の補完で、`-lang=` のように `=` でつなぐ形のとき、値の一覧が出ない | 道具(重さ: 低) | 全 | 0 | open | - |

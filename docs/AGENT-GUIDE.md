@@ -414,6 +414,7 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `summary.unread.skipped_languages` | ディレクトリにあるのに読まなかった言語と理由: `declined`、`no-terminal`、`not-installed`、`no-sandbox` |
 | `summary.skipped_dirs`、`outside_configuration` | 読まなかったディレクトリ、ビルドの条件で外れたファイル |
 | `summary.load_dependent` | `true` なら、時計の上限(`-timeout`、`-func-timeout`)で止めた所があり、結果がマシンの負荷で変わる |
+| `summary.dependency_sites` | 依存の本体を読んだ実行で毎回出る。`searched` は常に `false`、`dependency_functions` は読んだ依存の関数の数。**source と sink は、プロジェクトの関数の中だけで探す**(依存の本体は、流れを追うために読む)。ライブラリの中で危険な処理に届く形は、プロジェクトがその API を呼ぶ所に sink のモデルがないと検出されないので、「finding なし」は、その形がないことの証拠ではない。`-no-deps` と、依存の関数が 0 のときは出ない |
 | `summary.isolation` | Rust をどう読んだか: `mode` が `sandbox` か `host` |
 | `stats.converged` | `false` なら、解析が上限で止まっていて、**結果は途中のもの** |
 | `stats.timed_out` | `true` なら `-timeout` で止まった。フィールドがない(`jq` では `null`)のは、時間切れでないという意味 |
