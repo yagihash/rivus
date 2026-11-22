@@ -17,3 +17,6 @@ dependencies = [
 [[package]]
 name = "zoosynth"
 version = "0.0.0"
+dependencies = [
+ "zoo-mark",
+]

@@ -86,36 +86,36 @@ propagators:
     flows: [{from: arg0, to: result}]
 
   # fmt and errors
-  # model-diff: extra fmt.Sprintf the arguments are `any`; the reading of the body goes through the type switch of the printer and loses them. The result is made of them
+  # model-diff: extra fmt.Sprintf #153 the arguments are `any`; the reading of the body goes through the type switch of the printer and loses them. The result is made of them
   - symbol: fmt.Sprintf
     flows: [{from: args, to: result}]
-  # model-diff: extra fmt.Sprint the arguments are `any`; the reading of the body goes through the type switch of the printer and loses them. The result is made of them
+  # model-diff: extra fmt.Sprint #153 the arguments are `any`; the reading of the body goes through the type switch of the printer and loses them. The result is made of them
   - symbol: fmt.Sprint
     flows: [{from: args, to: result}]
-  # model-diff: extra fmt.Sprintln the arguments are `any`; the reading of the body goes through the type switch of the printer and loses them. The result is made of them
+  # model-diff: extra fmt.Sprintln #153 the arguments are `any`; the reading of the body goes through the type switch of the printer and loses them. The result is made of them
   - symbol: fmt.Sprintln
     flows: [{from: args, to: result}]
   - symbol: fmt.Errorf
     flows: [{from: args, to: result}]
   - symbol: errors.New
     flows: [{from: args, to: result}]
-  # model-diff: extra fmt.Fprintf same as Sprintf: the arguments are `any` and the printer is read through a type switch; what is written is made of them
+  # model-diff: extra fmt.Fprintf #153 same as Sprintf: the arguments are `any` and the printer is read through a type switch; what is written is made of them
   - symbol: fmt.Fprintf
     flows: [{from: args, to: arg0.content}]
-  # model-diff: extra fmt.Fprint same as Sprintf: the arguments are `any` and the printer is read through a type switch; what is written is made of them
+  # model-diff: extra fmt.Fprint #153 same as Sprintf: the arguments are `any` and the printer is read through a type switch; what is written is made of them
   - symbol: fmt.Fprint
     flows: [{from: args, to: arg0.content}]
-  # model-diff: extra fmt.Fprintln same as Sprintf: the arguments are `any` and the printer is read through a type switch; what is written is made of them
+  # model-diff: extra fmt.Fprintln #153 same as Sprintf: the arguments are `any` and the printer is read through a type switch; what is written is made of them
   - symbol: fmt.Fprintln
     flows: [{from: args, to: arg0.content}]
-  # model-diff: miss-reviewed io.WriteString@arg1 the error is the writer's (an unresolved `StringWriter` call that the reading takes as "arguments to results"); the text is not in it
+  # model-diff: miss-reviewed io.WriteString@arg1 body-default #150 the error is the writer's (an unresolved `StringWriter` call that the reading takes as "arguments to results"); the text is not in it
   - symbol: io.WriteString
     flows: [{from: arg1, to: arg0.content}]
   - symbol: (error).Error
     flows: [{from: recv, to: result}]
 
   # strconv, path, filepath
-  # model-diff: extra strconv.Quote the reading of the body goes through runes (numbers), which the analysis stops; the result is `s` quoted
+  # model-diff: extra strconv.Quote #151 the reading of the body goes through runes (numbers), which the analysis stops; the result is `s` quoted
   - symbol: strconv.Quote
     flows: [{from: arg0, to: result}]
   - symbol: path.Join
@@ -179,7 +179,7 @@ propagators:
     flows: [{from: arg0, to: result0}]
   - symbol: io.LimitReader
     flows: [{from: arg0, to: result}]
-  # model-diff: miss-reviewed io.Copy@arg1 the error is the reader's or the writer's (an unresolved `ReaderFrom` / `WriterTo` call that the reading takes as "arguments to results"); the data is not in it
+  # model-diff: miss-reviewed io.Copy@arg1 body-default #150 the error is the reader's or the writer's (an unresolved `ReaderFrom` / `WriterTo` call that the reading takes as "arguments to results"); the data is not in it
   - symbol: io.Copy
     flows: [{from: arg1, to: arg0.content}]
   - symbol: (io.Reader).Read
@@ -211,31 +211,31 @@ propagators:
 
   # encoding/json
   # the error of a syntax error quotes the byte of the input (`invalid character 'x' ...`): input -> error
-  # model-diff: miss-reviewed encoding/json.Unmarshal@arg1 the reading of the body puts only the type of `v` (reflect.TypeOf) in the error, not what it holds; no flow of data
+  # model-diff: miss-reviewed encoding/json.Unmarshal@arg1 type-only the reading of the body puts only the type of `v` (reflect.TypeOf) in the error, not what it holds; no flow of data
   - symbol: encoding/json.Unmarshal
     flows: [{from: arg0, to: arg1}, {from: arg0, to: result0}]
   - symbol: encoding/json.NewDecoder
     flows: [{from: arg0, to: result}]
-  # model-diff: miss-reviewed (*encoding/json.Decoder).Decode@arg0 the same: only the type of `v` goes into the error
+  # model-diff: miss-reviewed (*encoding/json.Decoder).Decode@arg0 type-only the same: only the type of `v` goes into the error
   - symbol: (*encoding/json.Decoder).Decode
     flows: [{from: recv, to: arg0}, {from: recv, to: result0}]
   - symbol: encoding/json.Marshal
     flows: [{from: arg0, to: result0}]
-  # model-diff: extra encoding/json.MarshalIndent the reading of the body copies the bytes of the encoding one by one (numbers), which the analysis stops; the result is the value indented
+  # model-diff: extra encoding/json.MarshalIndent #151 the reading of the body copies the bytes of the encoding one by one (numbers), which the analysis stops; the result is the value indented
   - symbol: encoding/json.MarshalIndent
     flows: [{from: arg0, to: result0}, {from: arg1, to: result0}, {from: arg2, to: result0}]
 
   # encoding/base64, encoding/hex
-  # model-diff: extra (*encoding/base64.Encoding).DecodeString the reading of the body works on bytes one by one (numbers), which the analysis stops; the result is the input recoded
+  # model-diff: extra (*encoding/base64.Encoding).DecodeString #151 the reading of the body works on bytes one by one (numbers), which the analysis stops; the result is the input recoded
   - symbol: (*encoding/base64.Encoding).DecodeString
     flows: [{from: arg0, to: result0}]
-  # model-diff: extra (*encoding/base64.Encoding).EncodeToString the reading of the body works on bytes one by one (numbers), which the analysis stops; the result is the input recoded
+  # model-diff: extra (*encoding/base64.Encoding).EncodeToString #151 the reading of the body works on bytes one by one (numbers), which the analysis stops; the result is the input recoded
   - symbol: (*encoding/base64.Encoding).EncodeToString
     flows: [{from: arg0, to: result}]
-  # model-diff: extra encoding/hex.DecodeString the reading of the body works on bytes one by one (numbers), which the analysis stops; the result is the input recoded
+  # model-diff: extra encoding/hex.DecodeString #151 the reading of the body works on bytes one by one (numbers), which the analysis stops; the result is the input recoded
   - symbol: encoding/hex.DecodeString
     flows: [{from: arg0, to: result0}]
-  # model-diff: extra encoding/hex.EncodeToString the reading of the body works on bytes one by one (numbers), which the analysis stops; the result is the input recoded
+  # model-diff: extra encoding/hex.EncodeToString #151 the reading of the body works on bytes one by one (numbers), which the analysis stops; the result is the input recoded
   - symbol: encoding/hex.EncodeToString
     flows: [{from: arg0, to: result}]
 

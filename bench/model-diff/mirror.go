@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+
+	"golang.org/x/tools/go/packages"
 )
 
 // mirrorStd makes the code that the bodies are read from for a package of the standard library. rivus does not read the standard library
@@ -17,13 +19,50 @@ import (
 // files are chosen for a machine that has no assembly, so the Go version of each function is the one that is read. The assembly
 // files are not copied (a function that has no body there is read as a function without a body). A package that cannot be copied
 // makes its rows "unverified".
+//
+// The files are chosen for `wasm` first (few files per package). A package that has a file for the architecture only (`os`:
+// `executable_wasm.go` next to `executable_darwin.go`) then declares a name twice and does not build: the files are chosen again for the
+// architecture of this machine (a function that has its body in assembly is then read as one without a body).
 func mirrorStd(o GoOptions, g *goGen, dirB string) (string, error) {
+	var last error
+	for _, arch := range []string{"wasm", runtime.GOARCH} {
+		dirA, err := mirrorStdFor(o, g, dirB, arch)
+		if err != nil {
+			return "", err
+		}
+		if last = mirrorErrors(dirA); last == nil {
+			return dirA, nil
+		}
+	}
+	return "", fmt.Errorf("the copy of %s does not build for wasm nor for %s: %v", o.Pkg, runtime.GOARCH, last)
+}
+
+// mirrorErrors type-checks the copy and returns the first error that is not a function without a body (the assembly is not copied).
+func mirrorErrors(dir string) error {
+	cfg := &packages.Config{Mode: packages.NeedName | packages.NeedTypes | packages.NeedSyntax | packages.NeedImports | packages.NeedDeps | packages.NeedTypesInfo, Dir: dir,
+		Env: append(os.Environ(), "GOFLAGS=-mod=mod")}
+	ps, err := packages.Load(cfg, "./...")
+	if err != nil {
+		return err
+	}
+	var first error
+	packages.Visit(ps, nil, func(p *packages.Package) {
+		for _, e := range p.Errors {
+			if first == nil && !strings.Contains(e.Msg, "missing function body") {
+				first = fmt.Errorf("%s: %v", p.PkgPath, e)
+			}
+		}
+	})
+	return first
+}
+
+func mirrorStdFor(o GoOptions, g *goGen, dirB, arch string) (string, error) {
 	dirA := filepath.Join(filepath.Dir(dirB), "fxA")
 	if err := os.RemoveAll(dirA); err != nil {
 		return "", err
 	}
 	ctx := build.Default
-	ctx.GOARCH = "wasm" // a machine with few files per package (the assembly is not copied: a function that has none is read as one without a body)
+	ctx.GOARCH = arch
 	ctx.CgoEnabled = false
 	ctx.ToolTags = nil // no goexperiment: the register ABI is not for this machine
 	m := &mirror{ctx: ctx, dir: dirA, done: map[string]bool{}}

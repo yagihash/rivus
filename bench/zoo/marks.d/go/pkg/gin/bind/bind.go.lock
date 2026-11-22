@@ -1,0 +1,2 @@
+go	pkg/gin/bind/bind.go	sink-none	@sink(none)	func vuln() { @vuln
+go	pkg/gin/bind/bind.go	sink-none	@sink(none) @nosink(pkg-gin-bind-decoy)	func fixed() { @fixed

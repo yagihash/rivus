@@ -272,6 +272,10 @@ func (g *dartGen) signature(sym string, propertyRow bool) (*dartSig, string) {
 	case isMember && name == "new":
 		re = regexp.MustCompile(`(?m)^  (?:const )?(?:factory )?` + cls + `\(`)
 		sig.Ctor = true
+	case isMember && regexp.MustCompile(`(?m)^  (?:const )?(?:factory )?`+regexp.QuoteMeta(cls+"."+name)+`\(`).MatchString(body):
+		// a named constructor or a factory (`Response.ok(...)`): called as `Response.ok(x)`, not as a method of a value
+		re = regexp.MustCompile(`(?m)^  (?:const )?(?:factory )?` + regexp.QuoteMeta(cls+"."+name) + `\(`)
+		sig.Ctor = true
 	case isMember:
 		re = regexp.MustCompile(`(?m)^  (?:static )?([\w<>?,.\[\] ]*?)\b` + name + `\(`)
 		if g := regexp.MustCompile(`(?m)^  ([\w<>?,.\[\] ]*?)\bget ` + name + `\b`).FindStringSubmatch(body); g != nil {
@@ -516,6 +520,9 @@ func (g *dartGen) emit(r Row, sig *dartSig, variant string, taintPos int, taintR
 	switch {
 	case sig.Ctor:
 		call = sig.Class + "(" + strings.Join(args, ", ") + ")"
+		if sig.Name != "new" {
+			call = sig.Class + "." + sig.Name + "(" + strings.Join(args, ", ") + ")" // a named constructor or a factory
+		}
 		await = ""
 	case sig.Class != "":
 		rc, _ := g.valFor(sig.Class, sig.Class+"."+sig.Name, taintRecv)

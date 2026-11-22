@@ -1,0 +1,2 @@
+go	pkg/gin/query/query.go	sink-none	@sink(none)	func vuln() { @vuln
+go	pkg/gin/query/query.go	sink-none	@sink(none) @nosink(pkg-gin-query-decoy)	func fixed() { @fixed

@@ -1,0 +1,3 @@
+# Rules of the package gin of the Go zoo. The sources, sinks and sanitizers of zoo/mark are in bench/zoo-go/rules.yaml (the tests
+# give both files); the rows of gin itself are the built-in model internal/model/builtin/go-gin.yaml, which is in force as always.
+ruleset: rivus/bench-zoo-go-pkg-gin@1
