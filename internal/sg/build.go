@@ -441,6 +441,33 @@ func (p *Program) resolveValueCalls() {
 	}
 }
 
+// SetValueCandidates gives a call of a function value the candidates that the analysis of the function values found
+// (internal/taint, -resolve-func-values): the same fields that resolveValueCalls fills, for this call only. The
+// candidates are not bound to a closure that was made in the function (Bind is nil: the value was carried to the call),
+// and none is chosen by a parameter (Param -1). More than ir.ValueCandidateMost are not kept, as for a call that
+// valuecalls resolved: the limit is said, and none is followed. The Callee is the one of the IR (shared).
+func (p *Program) SetValueCandidates(in *Instr, ids []string) {
+	c := in.Callee
+	c.ValueCands, in.Candidates, in.CandidateFns, in.CandidateBindings = nil, nil, nil, nil
+	if len(ids) > ir.ValueCandidateMost {
+		c.ValueLimit, c.ValueFound, c.ValueSupplemented = ir.ValueCandidateLimit, len(ids), false
+		return
+	}
+	c.ValueLimit, c.ValueFound, c.ValueSupplemented = "", 0, len(ids) > 0
+	for _, id := range ids {
+		vc := ir.ValueCand{ID: ir.FuncID(id), Symbol: id, Param: -1, Recv: strings.HasPrefix(id, "(")}
+		f := p.ByID[id]
+		if f != nil {
+			vc.Symbol, vc.Recv = f.Symbol, f.Recv
+		}
+		c.ValueCands = append(c.ValueCands, vc)
+		in.Candidates = append(in.Candidates, vc.ID)
+		if f != nil {
+			in.CandidateFns = append(in.CandidateFns, f)
+		}
+	}
+}
+
 // instrAt is the instruction that came from the instruction of the IR.
 func (f *Func) instrAt(block, instr int) *Instr {
 	if block < 0 || block >= len(f.Blocks) {

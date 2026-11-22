@@ -308,7 +308,7 @@ K が、ヘルパー H を呼ぶとき、H の `CallOut` ごとに:
 
 ### 5.6 第 2 歩の設計: レビュー FV-1〜FV-5 への回答(2026-11-22。コードを書く前)
 
-レビュー(88c4cf2 の第 1 歩に対するもの)の 5 点に、答える。第 2 歩のコードは、相談役の確認のあとに書く。
+レビュー(88c4cf2 の第 1 歩に対するもの)の 5 点に、答える。第 2 歩の最初の版(PR (1))は実装した。実装した形は、この節の終わり。
 
 **指標(第 2 歩の前の値。`TestZeroCandidateCalls`、`main` の 3d43dd3 以降)**: 値の呼び出しのうち、候補が 0 件のもの。zoo-dart は 73 件中 30 件(パラメータ 4、フィールドや要素を通るパラメータ 6、キャプチャした変数 1、グローバル 1、その場で作った値 4、呼び出しの結果 14)。dart-curated は 74 件中 21 件(キャプチャ 5、グローバル 1、その場 1、パラメータ 2、フィールドや要素 2、結果 10)。zoo-go は 50 件中 2 件、go-curated は 22 件中 1 件、zoo-rust は 3 件中 3 件、rust-curated は 7 件中 3 件。ROADMAP 1 節の表(zoo-dart 68 件中 25 件など)より増えているのは、zoo が増えたため。この数字が、第 2 歩のあとにどれだけ減るかを見る。
 
@@ -327,7 +327,7 @@ K が、ヘルパー H を呼ぶとき、H の `CallOut` ごとに:
 - 繰り返し: 候補が増えなくなるまで。**上限 4 は仮の値**で、zoo と curated で、何回で止まるかを測ってから決める(診断の表に回数の分布を出す)。
 - 上限に当たったとき: 全体の注記にしない。**最後の回でも候補が増えた値の呼び出し**に、`depth_limit`(詳細に `func_values_rounds`)を付ける(その呼び出し点と、その関数)。
 - 候補は増える向きだけ(単調)。減る回があれば不具合として、テストで落とす(`TestFuncValuesMonotone`)。
-- コスト: 1 回の実行は、エンジンの丸 1 回(回数 + 1 倍)。`Run` の途中結果を再利用する仕組みは、今はない(`taint.New` は毎回、要約と状態を新しく作る。共有するのは `sg.Program`、sites、rules)。まず作らない。代わりに、**関数値のパスを丸ごとスキップする条件**を置く: **読んだ関数の全部(依存を含む)に、候補が 0 件の値の呼び出しがないとき**(`FuncValueSites` の結果だけで判定できる。今の `FuncValueSites` は、読んだ全部の関数を数えるので、条件を足す必要はない)。候補を使うのは候補 0 件の呼び出しだけなので、この条件のとき、結果は変わらない(理屈とテスト)。依存の中に候補 0 件の値の呼び出しがある対象(gcp など)では、スキップされず、コストが増える。gcp での時間は、実装のあとに測る(試しでは、自分のコードだけ運ぶ版で、要素数は +0%)。
+- コスト: 1 回の実行は、エンジンの丸 1 回(回数 + 1 倍)。`Run` の途中結果を再利用する仕組みは、今はない(`taint.New` は毎回、要約と状態を新しく作る。共有するのは `sg.Program`、sites、rules)。まず作らない。代わりに、**関数値のパスを丸ごとスキップする条件**を置く: **読んだ関数の全部(依存を含む)に、候補が 0 件の値の呼び出しがないとき**(`FuncValueSites` の結果だけで判定できる。今の `FuncValueSites` は、読んだ全部の関数を数えるので、条件を足す必要はない)。候補を使うのは候補 0 件の呼び出しだけなので、この条件のとき、結果は変わらない(理屈とテスト)。依存の中に候補 0 件の値の呼び出しがある対象(gcp など)では、スキップされず、コストが増える。gcp での時間は、実装のあとに測る(試行では、自分のコードだけ運ぶ版で、要素数は +0%)。
 
 **範囲(相談役の追加の確認 1。シードと、補う呼び出しは別の話)**
 - **シード(関数値を作る所)は、自分のコードに限る**(依存の中で作るものは、シードにしない。コストが 8〜16 倍になる測定のため)。
@@ -363,6 +363,32 @@ K が、ヘルパー H を呼ぶとき、H の `CallOut` ごとに:
 対応づけ: Go の「39 / 47」の残りは、`sync.Once` の中(モデルが `FUNC` を流さない。FV-2)、フィールドやコンテナの区別、`$bound` の ID の食い違い(候補の ID と、観測の呼び出し先の ID が合わない)。Rust の「0 / 3」は、クロージャがシードにならない(表の 1 行目)ことと合う(個別の確認はまだ)。**第 2 歩ではシードを増やさない**。Rust のクロージャのシードは、キャプチャセルの段階で扱う。`$bound` は、候補を出力するときに、元のメソッドの ID に写す(エンジンは変えない)案を、そのときに決める。
 
 **テストの追加(レビュー 6 節)**: フラグの有無で出力と finding が同一であることを、Go と Rust にも。診断の表の決定性(同じ入力で同じ並び。`-workers` を変えても)。依存の関数の中で作られた関数値を、シードにしないことの否定のテスト。
+
+#### 実装した形(第 2 歩の PR (1)。2026-11-22)
+
+- **フラグ**: `analyze`(と `index`、`query`、`resolve` など、`analyzeOpts` を使う全部)に `-resolve-func-values`。**既定 off**。off のとき、コードの経路は変わらず、出力は今と同一(`TestResolveFuncValuesOffIsTheSame`: `-func-values` の有無、`-workers` を変えても同一)。on のときだけ、結果の `stats` に `func_values` が付く。スキーマの版は上げない。
+- **順序**(`taint.ResolveFuncValues`): ① `FuncValueSites` で、読んだ全部の関数(依存を含む)の値の呼び出しを数え、候補 0 件(`TestZeroCandidateCalls` と同じ定義)のものを選ぶ。1 件もなければ、関数値のパスを丸ごとスキップする(候補を使うのは候補 0 件の呼び出しだけなので、結果は変わらない)。② 関数値のパス(`Options.FuncValues` の別の `Engine`)を実行し、候補 0 件の呼び出しごとに `carried` を読む。③ 増えた分を、その呼び出しにだけ書く(`sg.Program.SetValueCandidates`: `Callee.ValueCands`、`Instr.Candidates`、`Instr.CandidateFns`。`sg` は作り直さない。`Callee` は `ir` と `sg` で同じポインタなので、IR にも見える)。④ 候補が増えなくなるまで ②③ を繰り返す。⑤ 通常のテイントのパス(フラグ off の `Engine`)を実行する。
+- **繰り返しの上限**: `taint.FuncValueRounds`(定数、仮の値 4。測って決める)。**測った回数**: `rounds` は、候補が増えた回 + 増えないと確認する最後の 1 回。zoo-dart と dart-curated と rust-curated とフィクスチャは 2(1 回目で全部増え、2 回目で増えない)、go-curated と zoo-rust は 1(補う候補がない)、zoo-go は 0(スキップ)。**4 回に当たった呼び出しは、まだない**(どの対象でも、候補が増えるのは 1 回目だけ)。コールバックのコールバックが 2 回目に増える形は、この対象には出ていない。上限は、そういう対象が出てから決める。
+- **単調**: 回をまたいで、候補は増える向きだけ。減った回があれば、前の候補を残し(合併)、`stats.func_values.monotone_violations` に数える(不具合のマーク。0 のときは欄が出ない)。`taint.CheckMonotone` が検査で、`TestFuncValuesMonotone` が、減ったときに検出することを固定する。
+- **上限**: 補った候補が `ir.ValueCandidateMost`(32)を超える呼び出しは、どの候補も採らず、既存の呼び出しと同じ `ValueLimit = candidate_limit`(`candidate_limit` の不確実性の注記)。`stats.func_values.candidate_limit_calls` に数える。繰り返しの上限に当たったとき、**最後の回でも候補が増えた呼び出し**に、`Callee.ValueRoundsLimit` を立て、`depth_limit`(詳細が `func_values_rounds:`)の注記をその呼び出しに付ける(全体の注記にはしない。`TestResolveFuncValuesRoundsLimit`)。
+- **`unresolved_callee` は消さない**: 候補を補った呼び出しは `Callee.ValueSupplemented` を持ち、`unresolved_callee` の注記を、詳細が `func_values_supplemented:` で始まる文言で残す(「関数値の解析で候補を補った。候補は自分のコードで作られた関数だけで、ほかの関数も呼ばれうる」。`candidates` に補った関数の ID)。`calls.go` の `len(fns)==0` の分岐の外(`callBody` と `valueCandidates` の、`ValuePartial` の注記の隣)で出す。
+- **`graph path` の `exhaustive`**: 変えない。索引(graphdb)は、`afterRead`(グラフを作った直後、テイントの前)に書かれるので、補った候補は索引に入らない。補う呼び出しは、索引では「候補のない呼び出し」のままで、そこを通る「経路なし」は `exhaustive: false` のまま(`TestNoPathStaysNotExhaustiveThroughACallThatGotCandidates`)。補った候補を索引に入れる案(`ncand` と別の欄)は、今は採らない: 注記が残る間 `exhaustive` を緩めない、という条件が、書かないだけで満たされる。
+- **シード**: 今のまま(自分のコードで作る関数値だけ。`TestResolveFuncValuesFixture` の `negDep` が、依存の中で作った関数値がシードにならないことを固定する)。補う呼び出しは、依存の本体の中のものを含む。
+- **FV-2 の計測**: 関数値のパスで、関数値の要素を持つ値が、モデルのある呼び出しの引数になり、モデルの流れ(`flows`、`calls` の行、sanitizer)がその引数を読まないとき、シンボルごとに数える(`applyModel` の propagators のあと。エンジンに `FUNC` だけの例外はない)。`-func-values` の表の列 `dropped_at_model`(その呼び出しを含む関数で落ちたシンボル)と、stderr のシンボルごとの上位。
+- **指標**(`stats.func_values`: `zero_candidate_calls_before`、`zero_candidate_calls_after`、`supplemented_calls`、`rounds`、`skipped`。フラグ on の対象を、フラグ off と並べた値):
+
+| 対象 | 候補 0 件(前 → 後) | 補った | rounds | finding(off → on) |
+|---|---|---|---|---|
+| zoo-go | 0 → 0 | 0 | 0(スキップ) | 121 → 121 |
+| go-curated | 1 → 1 | 0 | 1 | 67 → 67 |
+| zoo-dart | 30 → 0 | 30 | 2 | 180 → 192(増えた 12、消えた 0) |
+| dart-curated | 21 → 1 | 20 | 2 | 115 → 124(増えた 9、消えた 0) |
+| zoo-rust | 3 → 3 | 0 | 1 | 174 → 174 |
+| rust-curated | 3 → 1 | 2 | 2 | 280 → 280 |
+
+  増えた finding の経路は、どれも、補った呼び出しを通る(差の各行が、`func_values_supplemented:` の注記をその経路に持つこと。`TestResolveFuncValuesDart`)。増えた finding が正しい経路かどうかの分類は、PR (2) の作業。
+- **テスト**: `testdata/dart/funcvalues`(Dart の小さなパッケージ。`regen.sh` で `testdata/ir/funcvalues.jsonl` を作る)の、肯定(`pos`、`pos2`: 2 つの値の呼び出しに候補が付き、finding が出る)と否定(`runNone`: 関数値が届かない / デコイ、`runDep`: 依存の中で作った関数値、`exec` に渡したクロージャ、`keep`: pure のモデル)。Go は、Go のコールグラフが関数値の呼び出しのほぼ全部を解くため、候補 0 件の呼び出しが、zoo-go で 0、go-curated で 1(`atomic.Value` の中の関数)しかない。Go のテストは、「差がない(on = off)」ことを測る。Dart と Rust は `RIVUS_DART` / `RIVUS_RUST`(`skipOrFail`)。
+- **実装しなかったもの**: 補った候補を、サイトの列挙(`sites.Enumerate`)に戻すこと(ルールが、補った候補の関数を指定する形。列挙は IR を読み、グラフを作るときに IR を捨てるので、ここでは戻さない)。候補に本体がない関数(外部の関数への参照)の呼び出しでは、補った注記が出ない(`external` の分岐の注記だけが出る)。
 
 ## 6. 段階と、各段階の受け入れ
 
