@@ -58,6 +58,6 @@ rivus analyze -workers 16 -rules rules.yaml ./... > w16.json
 
 - 日時とコミット: 2026-11-22 16:07(JST)、手元(macOS)、main の 1094049(#96 の修正のあと)。`RIVUS_RUST` つき(rust 環境)で `go test -json ./cmd/rivus` を取っている間。ほかのテスト(別の作業)も同じマシンで動いていて、負荷が高かった。
 - テスト: `TestDeterministicParamshare/gqueue`(`testdata/cases/paramshare/gqueue`)。
-- 出力: `determinism_test.go:161: the output differs: GOMAXPROCS="1" -workers="" run 0 and GOMAXPROCS="1" -workers="1" run 5` / `(not in the findings' paths)`(findings の経路は同じで、ほかの欄が違った。どの欄かは、そのときの診断では出なかった)。
+- 出力: `determinism_test.go:161: the output differs: GOMAXPROCS="1" -workers="" run 0 and GOMAXPROCS="1" -workers="1" run 5` / `(not in the findings' paths)`(findings の経路は同じで、ほかのフィールドが違った。どのフィールドかは、そのときの診断では出なかった)。
 - 再現: 負荷つき(6 個の busy loop)で `-run 'TestDeterministicParamshare/gqueue' -count=12` は、全部通った。CI の直近 25 回にも、`TestDeterministic*` の失敗はない。
-- 次の手: `firstDifference` に、どの欄が違うかを出す診断(`jsonDiff`)を足した(このブランチ)。次に落ちたら、その欄から、時計に依る上限(`func_timeouts`、`load_dependent`)か、順序の揺れかが分かる。
+- 次の手: `firstDifference` に、どのフィールドが違うかを出す診断(`jsonDiff`)を足した(このブランチ)。次に落ちたら、そのフィールドから、時計に依る上限(`func_timeouts`、`load_dependent`)か、順序の揺れかが分かる。

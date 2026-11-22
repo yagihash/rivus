@@ -69,7 +69,7 @@ rivus の設計の判断は、ここに書いた原則に沿う。ほかの文�
 - **200 段を超える経路の切り詰め:** 記録している（`omitted_steps`、`path_steps_omitted:`。1 節に同じ）。
 - **流れを止めるモデルの記録が、一部だけ:** 記録するのは、`origin: llm` の sanitizer の抑制、`numeric_stop`、`global_holds_nothing`、`approximate`。`builtin` や人が書いた sanitizer の停止と、`pure` による停止は、出力に残らない。ADR-010 の文面（「抑制した・伝播させたを必ず記録する」）のほうが、実装より広い。
 - **`numeric_stop`:** サマリを通って止まる分は記録しない。ADR-043 の追記が自己申告している。
-- **`kind` の追加と、スキーマの版:** ADR-008 は「種類は閉じた集合で、追加はスキーマを上げる」と書くが、実際は `assumed_call`、`model_approximation`、`field_imprecision`、`numeric_stop` などを `rivus.result/1` のまま足している（ADR-043 の追記が認めている）。運用と ADR の文面が食い違っていて、どちらに合わせるかは **未決**。
+- **`kind` の追加と、スキーマのバージョン:** ADR-008 は「種類は閉じた集合で、追加はスキーマを上げる」と書くが、実際は `assumed_call`、`model_approximation`、`field_imprecision`、`numeric_stop` などを `rivus.result/1` のまま足している（ADR-043 の追記が認めている）。運用と ADR の文面が食い違っていて、どちらに合わせるかは **未決**。
 - **ADR-079 の訂正:** 「全部たどれたときだけ絞る」が守られていなかった 6 件が、訂正として記録されている。
 
 ---
@@ -93,7 +93,7 @@ rivus の設計の判断は、ここに書いた原則に沿う。ほかの文�
 - モデル: `internal/model/builtin/*.yaml`、`internal/model/model.go`（`RuleSet` の `Sources` / `Sinks` / `Sanitizers` / `Propagators` / `Globals` / `ConfigReads`。propagator が `flows` / `pure` / `calls` を持つ）
 - 外から差し込む例: `examples/rules/`
 - 組み込みから外したフレームワークを使っているとき stderr に 1 行出す: `cmd/rivus/notbuiltin.go`
-- 書き間違いの検証: `model.Parse` の `KnownFields(true)`、外部ファイルの `origin: builtin` の拒否、`origin: llm` の必須欄
+- 書き間違いの検証: `model.Parse` の `KnownFields(true)`、外部ファイルの `origin: builtin` の拒否、`origin: llm` の必須フィールド
 
 **現状と、まだ届いていない所**
 
@@ -102,8 +102,8 @@ rivus の設計の判断は、ここに書いた原則に沿う。ほかの文�
   - `calls.go:460`（`reflect.*`）、`calls.go:959`（`bytes.Buffer` / `strings.Builder`）
   - `callrows.go` の `isStdType`（Rust の `std` / `core` / `alloc`）
   - `valuecalls/narrow.go:46`（Rust の `Fn::call` のシンボル）
-- **ルールの書式:** 書き間違いを弾く検証はある。ただし書式の版は無く（`ruleset: name@N` はルールセットの版）、README は「書式は変わる」と書く。安定の約束は、まだ文書になっていない。
-- **MODELING.md:** `pure` / `approximate` / `calls:` / `parts` / 「行は当たらなければならない」の節は実装と合っている。基本の `flows` / `sources` / `sanitizers`、`globals` / `holds`（ADR-056）、`.content`（ADR-082）などの節は、まだ無い。
+- **ルールの書式:** 書き間違いを弾く検証はある。ただし書式のバージョンは無く（`ruleset: name@N` はルールセットのバージョン）、README は「書式は変わる」と書く。安定の約束は、まだ文書になっていない。
+- **MODELING.md:** `pure` / `approximate` / `calls:` / `parts` / 「行は一致しなければならない」の節は実装と合っている。基本の `flows` / `sources` / `sanitizers`、`globals` / `holds`（ADR-056）、`.content`（ADR-082）などの節は、まだ無い。
 - **構文の多様さの精度:** Dart と Rust は Go より見逃しが多い。数字は `bench/zoo/README.md`、`bench/MISSES.md`、`bench/parity/` にある。
 
 ---

@@ -19,11 +19,11 @@
 | [#78](issues/78-returned-closure-captures.md) | Dart / Go: 関数が返したクロージャを呼ぶと、キャプチャした値と中の source が落ちる(カリー化、ファクトリ、functiona… | サイレントな見逃し | Dart / Go | 2 | open | zoo `F/clos/returned` |
 | [#79](issues/79-callbacks-held-in-fields.md) | Dart / Rust: List やフィールドに持たれたコールバック(エミッタ、リスナー、遅延評価)の中の sink に、値が届かない | サイレントな見逃し | Dart / Rust | 2 | open | zoo `F/clos/stored`、`F/dyn/func-field` |
 | [#80](issues/80-stdlib-callbacks-dart.md) | Dart: 標準ライブラリのコールバック(catchError、whenComplete、putIfAbsent、Map.forEach… | サイレントな見逃し | Dart | 2 / 3 | open | - |
-| [#81](issues/81-callback-of-callback.md) | Dart: クロージャが、パラメータで受けた関数を呼ぶ形(g(a)。コールバックのコールバック)で、流れが落ちる | サイレントな見逃し(一部) | Dart | 2 | partial | zoo `F/clos/callback-of-callback`(`@miss(depth_limit)`) |
+| [#81](issues/81-callback-of-callback.md) | Dart: クロージャが、パラメータで受けた関数を呼ぶ形(g(a)。コールバックのコールバック)で、流れが失われる | サイレントな見逃し(一部) | Dart | 2 | partial | zoo `F/clos/callback-of-callback`(`@miss(depth_limit)`) |
 | [#83](issues/83-rust-generic-vec-trait-call.md) | Rust: ジェネリックな T の Vec を for で回すと、trait 呼び出しが dynamic になり、モデルが receiv… | サイレントな見逃し | Rust | 2 | open | - |
 | [#84](issues/84-gossa-load-instability.md) | go/ssa のロードの揺れ: 同じ入力で、関数の数が実行ごとに数件違う(stats.functions) | 道具・ベンチ | Go | 2(経路の欠け・揺れ) | open | - |
 | [#85](issues/85-rust-fn-call-ref-self.md) | Rust: Fn / FnMut を &self で呼ぶと、レシーバがセルでクロージャ候補にガードが付かず、呼び出し元ごとに絞れない(誤検出) | 過検出 | Rust | 後回し | open | zoo(Rust)`F/clos/two-callers` |
-| [#86](issues/86-rust-model-dynamic-read-impls.md) | Rust: モデルを当てた動的呼び出しは read_impls でないと実装の本体を読まず、本体の source の見逃しと、捨てる値の… | サイレントな見逃し | Rust | 2 | open | - |
+| [#86](issues/86-rust-model-dynamic-read-impls.md) | Rust: モデルを適用した動的呼び出しは read_impls でないと実装の本体を読まず、本体の source の見逃しと、捨てる値の… | サイレントな見逃し | Rust | 2 | open | - |
 | [#87](issues/87-dart-dynamic-invoke-model.md) | Dart: dynamic なメソッド呼び出しが dart:core#dynamic.invoke のモデルで覆われ、本体の sourc… | 注記なしの見逃し・誤検出(一部) | Dart | 2 | partial | `graph` の `exhaustive`(GRAPH-3 まで) |
 | [#90](issues/90-global-path-missing-writer-step.md) | グローバルを通る流れの経路から書いた側の段が消える(経路が読んだ側から始まる)。同じ長さの経路は関数 ID の順で選ばれる | 誤った経路 | 全 | 2(経路の欠け・揺れ) | open | - |
 | [#91](issues/91-graph-avoid-call-and-paths.md) | graph: --avoid-call の位置の寄せと複数の呼び出し点、位置なしのステップ、culprits が空のヒント、依存の絶対パ… | 道具・ベンチ | 全(graph) | 4 | open | - |
@@ -34,10 +34,10 @@
 | [#96](issues/96-workers-output-difference.md) | -workers 1 と 2 以上で、8 関数以上の SCC を含む入力の出力(代表の経路、stats)が違う(R-43。直した) | 道具・ベンチ(直した) | 全 | 2(経路の欠け・揺れ) | closed | `cmd/rivus/determinism_test.go`(`TestDeterministicLargeSCC`) |
 | [#98](issues/98-dart-tostring-edges.md) | Dart: 文字列補間と sinkAny が呼ぶ toString が、呼び出しの辺(グラフ)にならない | 道具・ベンチ(グラフの辺) | Dart | 1 | open | - |
 | [#99](issues/99-dart-value-calls-zero-candidates.md) | Dart: 値として持たれた関数・クロージャ(フィールド、map、返したクロージャ、変数)の呼び出しが、候補 0 件のグラフの辺になる | 道具・ベンチ(グラフの辺) | Dart | 1 | open | zoo `F/clos/*`、`TestZeroCandidateCalls`、`TestFuncValuesDart` |
-| [#108](issues/108-model-row-loses-flows-silently.md) | モデルの行が、既定の扱いより流れを減らしても、何も報告しない | サイレントな見逃し(モデルの書き方の抜け) | 全 | 3 / 5 | open | `cmd/rivus/coverage_stub_test.go`(雛形のみ) |
+| [#108](issues/108-model-row-loses-flows-silently.md) | モデルの行が、既定の扱いより流れを減らしても、何も報告しない | サイレントな見逃し(モデルの書き方の抜け) | 全 | 3 / 5 | open | `cmd/rivus/coverage_stub_test.go`(テンプレートのみ) |
 | [#109](issues/109-stale-extractor-used-silently.md) | extractor(やイメージ)が古くても、何も報告せずに、その結果を出す | 誤った結果を何も報告せずに出す | Rust / Dart | 0 / 1 | open | -(直すときにテスト) |
 | [#110](issues/110-sandbox-fetch-proxy.md) | 取得の段階のネットワークを絞る(宛先の許可リストと、解決したアドレスの検査) | サイレントな見逃しではない(隔離の漏れ) | Rust | 0 | open | - |
-| [#111](issues/111-sandbox-bsd-inventory.md) | bsd.sb の許可の棚卸しと、変わったら落ちるテスト | 隔離の漏れの見落とし | Rust | 0 | open | - |
+| [#111](issues/111-sandbox-bsd-inventory.md) | bsd.sb の許可の棚卸しと、変わったら失敗するテスト | 隔離の漏れの見落とし | Rust | 0 | open | - |
 | [#112](issues/112-sandbox-metadata-and-userdata.md) | メタデータ(存在)が見える範囲と、ホームの外の利用者のデータのテスト | 隔離の漏れの見落とし | Rust | 0 | open | - |
 | [#113](issues/113-sandbox-memory-process-watch.md) | メモリとプロセス数の監視 | 隔離の漏れ(DoS) | Rust | 0 | open | - |
 | [#114](issues/114-sandbox-leftover-report.md) | 残ったかもしれないプロセスの報告(列挙だけ。kill しない) | 注記つきの限界 | Rust | 0 | open | - |

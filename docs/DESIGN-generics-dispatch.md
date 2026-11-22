@@ -12,7 +12,7 @@ ADR-081 の背景。Rust の zoo(`bench/zoo-rust`)と rust-curated で、2 つ�
 
 **原因(確かめた):** Rust の標準ライブラリのモデルは、引数の位置を `self` を先頭にして数える(`flows: [{from: arg1, to: arg0}]`、`Iterator::next` は `from: args`)。型が分かっていて、関数そのものを静的に呼ぶときは、`call` 命令の引数がそのまま `arg0`、`arg1` になる。型パラメータ `T` に対する呼び出し(`items.into_iter()`、`it.next()`)は、抽出器が呼び出し先を決められず、**dynamic な呼び出し**になる。コアは、dynamic な呼び出しのレシーバを、引数とは別に持つ(`recv`、`args` はレシーバを除く。Go のインターフェースのメソッドの規約)。そのため、`from: args` はレシーバ(`Vec` そのもの)を含まず、`into_iter` の結果に何も流れなかった。同じ関数が、型が分かる呼び出しでは見つかり、`T` では落ちる。
 
-**修正方法(ADR-081):** モデルの集合に `self_first: true` を足し(`rust-std.yaml`、`rust-misc.yaml`)、その集合のシンボルの dynamic な呼び出しでは、レシーバを引数の先頭に置いて、モデルを当てる(`internal/taint/calls.go` の `applyModel`)。型が分かる呼び出しと同じ位置になる。レシーバを別に持つ規約は、ほかのこと(ガード、候補の絞り込み)のために、そのまま。
+**修正方法(ADR-081):** モデルの集合に `self_first: true` を足し(`rust-std.yaml`、`rust-misc.yaml`)、その集合のシンボルの dynamic な呼び出しでは、レシーバを引数の先頭に置いて、モデルを適用する(`internal/taint/calls.go` の `applyModel`)。型が分かる呼び出しと同じ位置になる。レシーバを別に持つ規約は、ほかのこと(ガード、候補の絞り込み)のために、そのまま。
 
 **確かめたこと:** zoo(Rust)の `dyn/generics-ptr`(vuln と decoy の本物の流れ)が見つかる。ほかの流れの増減は、rust-curated、zoo で 0(`@miss` が外れたのは 2 件だけ)。parseable は `bench/compare.sh` で確かめた(ADR-081)。
 
@@ -20,11 +20,11 @@ ADR-081 の背景。Rust の zoo(`bench/zoo-rust`)と rust-curated で、2 つ�
 
 ## (2) `Box<dyn Fn>` の呼び出し: 試して、入れなかった(設計の判断が必要)
 
-**何が起きるか(確かめた):** `f(x)` で `f: Box<dyn Fn(&Td)>`(多くは、`Option` や `HashMap` の中、構造体のフィールドにある)は、MIR では `<Box<dyn Fn(&Td)> as Fn<(&Td,)>>::call(&f, (x,))`。解決された先が `Box` の `Fn` の実装(本体なし)で、抽出器は、本体のない静的な呼び出しにする。モデルもないので、`unmodeled_library_call` の既定(入るものは出る)だけが当たり、クロージャの中の sink は読まれない(zoo の `dyn/func-field`、`dyn/func-map`、`clos/stored` の vuln2 / vuln3、`clos/capture-write-by-ref` の vuln3、の 4〜6 件)。
+**何が起きるか(確かめた):** `f(x)` で `f: Box<dyn Fn(&Td)>`(多くは、`Option` や `HashMap` の中、構造体のフィールドにある)は、MIR では `<Box<dyn Fn(&Td)> as Fn<(&Td,)>>::call(&f, (x,))`。解決された先が `Box` の `Fn` の実装(本体なし)で、抽出器は、本体のない静的な呼び出しにする。モデルもないので、`unmodeled_library_call` の既定(入るものは出る)だけが一致し、クロージャの中の sink は読まれない(zoo の `dyn/func-field`、`dyn/func-map`、`clos/stored` の vuln2 / vuln3、`clos/capture-write-by-ref` の vuln3、の 4〜6 件)。
 
 **試した修正:** (a) 抽出器で、`Box` の `Fn` / `FnMut` / `FnOnce` の実装の呼び出しを、dynamic な呼び出し(候補は、引数の型の合うクロージャ。`&dyn Fn` の仮想呼び出しと同じ。シンボルは `std::boxed::Box::call`)にする。(b) そのシンボルのモデルの行(`flows: [{from: args, to: result}]`。`self_first` なので、レシーバと引数が結果に入る = 今までの既定)を足し、ADR-075 の「モデルと本体の和」で、候補のクロージャの本体も読む。(c) レシーバの出所の絞り込み(ADR-079)に、`Box::new(クロージャ)` の結果を足す。
 
-**測った結果(zoo Rust と rust-curated。(a)〜(c) を入れた版と、入れない版):**
+**測った結果(zoo Rust と rust-curated。(a)〜(c) を入れたバージョンと、入れないバージョン):**
 
 | | 入れない | 入れた |
 | --- | --- | --- |

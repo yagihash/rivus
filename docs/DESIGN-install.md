@@ -10,7 +10,7 @@
 | 言語 | 実行時に必要なもの | 見つけ方(今) | 確かめたこと(2026-11-22、手元、macOS arm64) |
 | --- | --- | --- | --- |
 | Go | `go` コマンド(`go list`、`go env GOROOT` を呼ぶ。`internal/frontend/gossa/load.go`)と、対象の依存(モジュールキャッシュ)。`go.mod` は `go 1.27` | `PATH` の `go` | Go のバイナリだけでは足りない: **実行時に Go のツールチェインが必要** |
-| Dart | Dart SDK(extractor は `package:analyzer` で、SDK の `dart:*` のソースを読む)。extractor は Dart のパッケージ(`extractor/dart`、`executables: rivus-dart`) | `-dart-extractor` > `RIVUS_DART_EXTRACTOR` > `PATH` の `rivus-dart`。入れ方の案内は「`dart pub global activate --source path extractor/dart`」 | **`dart compile exe` で、単体の実行ファイル(19 MB、約 10 秒)にできる。ただし、実行時に Dart SDK が必要**: extractor は、SDK の場所を `Platform.resolvedExecutable` の 2 つ上のディレクトリから導く(`extractor/dart/lib/extract.dart:203`)ので、コンパイルした実行ファイルは、SDK の中にないと動かない(`version` ファイルが開けず落ちた)。SDK の場所を、環境変数か引数で渡せるようにする修正が必要 |
+| Dart | Dart SDK(extractor は `package:analyzer` で、SDK の `dart:*` のソースを読む)。extractor は Dart のパッケージ(`extractor/dart`、`executables: rivus-dart`) | `-dart-extractor` > `RIVUS_DART_EXTRACTOR` > `PATH` の `rivus-dart`。入れ方の案内は「`dart pub global activate --source path extractor/dart`」 | **`dart compile exe` で、単体の実行ファイル(19 MB、約 10 秒)にできる。ただし、実行時に Dart SDK が必要**: extractor は、SDK の場所を `Platform.resolvedExecutable` の 2 つ上のディレクトリから導く(`extractor/dart/lib/extract.dart:203`)ので、コンパイルした実行ファイルは、SDK の中にないと動かない(`version` ファイルが開けず異常終了した)。SDK の場所を、環境変数か引数で渡せるようにする修正が必要 |
 | Rust | 固定の nightly(`nightly-2026-11-15`、`rustc-dev`、`llvm-tools`、`rust-src`)、extractor(`rivus-rust`。`cargo +nightly-2026-11-15 install rivus`)、C コンパイラとリンカ(対象のビルド)。macOS は、サンドボックスの下で動かす(既定。ADR-093)。`-unsafe-host-exec` でホストの直接 | `-rust-extractor` > `RIVUS_RUST_EXTRACTOR` > `PATH` の `rivus-rust`。`RIVUS_RUST_TOOLCHAIN_DIR`(固定のツールチェインのディレクトリ。なければ `~/.rustup/toolchains/...`) | 決まった(6 節): formula が、インストールの中で、固定のツールチェインと extractor を keg の `libexec` に作る。ソースから作る人は `rivus setup rust -source` |
 
 ## 2. rivus が、それらを、どこから探すか
@@ -56,9 +56,9 @@ Go と Dart は動く(`go` と Dart SDK が、それぞれ `brew` で入る)。*
 - **必要なもの**: Xcode CLT(`cc` とリンカ)。ディスク約 1.1 GB。インストールの間のネットワーク(static.rust-lang.org と crates.io)。
 - **`rivus setup rust -source <extractor/rust>`** は、Homebrew を使わない人(リポジトリから作る人)の手段として残す。置き場所は、利用者のデータのディレクトリ(`~/Library/Application Support/rivus/`)。
 
-## 6a. 版の一致
+## 6a. バージョンの一致
 
-extractor が自分の版を答え、rivus は合わなければ止まる(課題 #109)。formula では、wrapper が env を固定するので、ずれる余地は小さい。`setup rust` で作る人は、この確認が前提(#109、#119)。
+extractor が自分のバージョンを答え、rivus は合わなければ止まる(課題 #109)。formula では、wrapper が env を固定するので、ずれる余地は小さい。`setup rust` で作る人は、この確認が前提(#109、#119)。
 
 ## 7. formula の下書き(このリポジトリの中に置ける。tap を作る前)
 
@@ -69,9 +69,9 @@ formula の中身(`depends_on`、`caveats`、`test do`)は、先にこのリポ�
 1. Dart の extractor の SDK の場所を、実行ファイルの位置からでなく、環境変数または `dart` の位置から導く(単体の実行ファイルにするため)。
 2. 見本のルールを、インストールした利用者が使える形にする(`share` に入れる、または書き出すコマンド)。
 3. 入れ方の案内を、`brew` の言葉にする(README、エラーメッセージ)。
-4. **`rivus version` / `--version` が、ない**(確かめた: `unknown command`)。formula の `test do` に必要なので、足す。版の埋め込み(`-ldflags`)と、リリースのタグ付け。
+4. **`rivus version` / `--version` が、ない**(確かめた: `unknown command`)。formula の `test do` に必要なので、足す。バージョンの埋め込み(`-ldflags`)と、リリースのタグ付け。
 5. Rust: `rivus setup rust` と、隔離の移行。
-6. `go` の版(`go 1.27`)を、formula の `depends_on` で満たせるか(`brew` の `go` の版が、`go.mod` の要求より古いと、ビルドできない。**確かめた(2026-11-22): `brew info go` は stable 1.27.4 で、`go 1.27` を満たす**)。
+6. `go` のバージョン(`go 1.27`)を、formula の `depends_on` で満たせるか(`brew` の `go` のバージョンが、`go.mod` の要求より古いと、ビルドできない。**確かめた(2026-11-22): `brew info go` は stable 1.27.4 で、`go 1.27` を満たす**)。
 
 ## 9. ユーザーに聞くこと(相談役が聞く)
 

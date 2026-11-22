@@ -14,7 +14,7 @@
 ## 本文(GitHub から移した写し)
 
 ## 確度
-実行で確認(最小の Go の再現)。`param_type` の版は未確認。
+実行で確認(最小の Go の再現)。`param_type` のバージョンは未確認。
 
 ## 場所
 `internal/taint/summary.go` の `summarize`: パラメータのルートの要素を `OutParam` に出す箇所。除いているのは `ParamElem(idx, "")` だけ。
@@ -37,7 +37,7 @@ func main() { r := &Req{Path: "x"}; runA(r); runB(r) }
 構造的な誤検出。rivus 自身の解析の 66 件(source 6 × sink 11)のうち、24 件は、source の関数から sink の関数へ呼び出しでは届かない(別セッションの集計)。
 
 ## 修正の方向(方針は承認済み: 書き戻さない)
-source を定義したパラメータに由来する `Real` の要素を、その関数の、同じパラメータの `OutParam` とそこから届く `OutGlobal` に出さない。関数の中で source の値を別のパラメータやグローバルに書いた場合は、今までどおり出す。失う流れ(source の関数を呼んだあと、呼び出し元が同じオブジェクトを sink に渡す)をフィクスチャと ADR に明記する。ADR に、`param_type` で N × M が `other_sources` に隠れる形も書く。フィクスチャは `param_type` の版と、起きない形(別々のオブジェクト、同じローカル、string)も。
+source を定義したパラメータに由来する `Real` の要素を、その関数の、同じパラメータの `OutParam` とそこから届く `OutGlobal` に出さない。関数の中で source の値を別のパラメータやグローバルに書いた場合は、今までどおり出す。失う流れ(source の関数を呼んだあと、呼び出し元が同じオブジェクトを sink に渡す)をフィクスチャと ADR に明記する。ADR に、`param_type` で N × M が `other_sources` に隠れる形も書く。フィクスチャは `param_type` のバージョンと、起きない形(別々のオブジェクト、同じローカル、string)も。
 
 ## 関連
 CORE-B / CORE-C の issue(グローバル経由の経路)、ADR-047

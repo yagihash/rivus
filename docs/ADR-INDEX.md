@@ -19,10 +19,10 @@
 | 002 | extractor と解析エンジンの分離 | 有効 |  | ARCHITECTURE 2 | 言語別 extractor が中立 IR を出し、Go 製コアが解析。型/名前/パッケージ解決は各言語の道具 |
 | 003 | IR は φ なし CFG + 書き換え可能ローカル | 有効 | 命令数は 039/040 で具体化、IR 増分は ADR-043 追記 | ARCHITECTURE 2.1-2.3 | CFG の高さで切る。SSA 化はコア一本。Go は NaiveForm、lifted go/ssa は oracle |
 | 004 | bottom-up の関数サマリ | 有効 |  | ARCHITECTURE 5.2 | SCC 縮約・トポ順の functional approach。seed なしクエリのために選ぶ |
-| 005 | 汚染はラベル集合 | 有効 |  | ARCHITECTURE 4.2 | ラベル集合。sanitizer は特定ラベルだけ落とす |
+| 005 | 汚染はラベル集合 | 有効 |  | ARCHITECTURE 4.2 | ラベル集合。sanitizer は特定ラベルだけを除去する |
 | 006 | 値依存サニタイズと条件ガード | 有効 | 出所追跡は 035、訂正は 078; 覆した先・注意: 078 | ARCHITECTURE 5.6 | 引数由来のガードだけ記録(約 4 個まで)、評価はしない。SMT/シンボリック実行はしない |
 | 007 | soundy を宣言、扱わなかった箇所は記録 | 有効 |  | ARCHITECTURE 4.4 | リフレクション等は意図的に扱わず、必ず出力に残す |
-| 008 | 不確実性は閉じた kind + attributable_to | 一部覆った | 「追加は版を上げる」は運用で逆。ADR-043 追記 CORE-1、ARCH 4.4; 訂正・追記あり(書き方を保つ)。追記あり。覆した先・注意: 版運用 | ARCHITECTURE 4.4 | 10 種 + 4 種、`target`/`rivus`/`mixed`。追記: ADR-059 で `assumed_call` |
+| 008 | 不確実性は閉じた kind + attributable_to | 一部覆った | 「追加はバージョンを上げる」は運用で逆。ADR-043 追記 CORE-1、ARCH 4.4; 訂正・追記あり(書き方を保つ)。追記あり。覆した先・注意: バージョン運用 | ARCHITECTURE 4.4 | 10 種 + 4 種、`target`/`rivus`/`mixed`。追記: ADR-059 で `assumed_call` |
 | 009 | 出力は JSON が本体、SARIF は副次 | 有効 | SARIF は未実装。Phase 1 範囲外と明記; 訂正・追記あり(書き方を保つ)(ブリーフの誤り) | README | SARIF は private repo で GHAS 無しには使えない(訂正)。JSON が一級 |
 | 010 | LLM の出力は「モデル」と「判定」 | 有効 | 実装: 034 | ARCHITECTURE 5.4, MODELING | `origin`(builtin, human, llm)、`--deterministic-only`、suppressions |
 | 011 | フェーズ順序と Dart スパイク | 有効 | 完了: 037 | BRIEF | Go→IR→Rust→Dart。Phase 1 の間に Dart 2 日スパイク |
@@ -30,7 +30,7 @@
 | 013 | Rust は固定 nightly が前提 | 有効 | 固定値: 042 の `nightly-2026-11-15` | rust-isolation | 対象も固定 nightly でビルドできる必要。通る範囲を先に確認 |
 | 014 | フィールド感度(k=3)、エイリアス解析なし | 有効 | ただし 072/084/090 は別名風の扱いを足す。要注意 | ARCHITECTURE 5.3 | フィールド名ベース、オブジェクト感度なし、完全エイリアス解析は作らない |
 | 015 | 依存の境界はモデルで扱う | 一部覆った | 依存のソースを読む `-deps` が既定オン: ADR-043 追記。範囲: 044→063; 覆した先・注意: 043 追記 / 063 | ARCHITECTURE 5.5, README | 解析は自モジュールのみ、依存は手書きモデル。`models coverage` |
-| 016 | ルールは宣言的 YAML、クエリ言語は作らない | 有効 | 書式の拡張: 034/071/074/080/082/083 | MODELING | `exact`/`implementations` を区別。名前空間 + 版 |
+| 016 | ルールは宣言的 YAML、クエリ言語は作らない | 有効 | 書式の拡張: 034/071/074/080/082/083 | MODELING | `exact`/`implementations` を区別。名前空間 + バージョン |
 | 017 | extractor はサブプロセス + JSON Lines | 一部覆った | Go は同プロセスで IR を渡す: 039/040 | ARCHITECTURE 2.6 | バージョン付き JSON Lines、IR ダンプは一級 |
 | 018 | コールグラフ構築は差し替え可能 | 有効 | 訂正・追記あり(書き方を保つ) | ARCHITECTURE 3 | CHA は VTA の入力として必須(訂正)。言語固有手法はコアに漏らさない |
 | 019 | ライセンス Apache-2.0 | 有効 |  | - | - |
@@ -55,11 +55,11 @@
 | 038 | 出力にリビジョン(`target`) | 一部覆った | `dirty` を廃止、git を実行しない; 訂正・追記あり(書き方を保つ)。追記あり。覆した先・注意: 冒頭に「`dirty` は廃止」 | ARCHITECTURE 4.5 | `target: {revision}`。追記で `.git/config` の実行を避ける |
 | 039 | Phase 2 の IR(案) | 一部覆った | 「コアがテキストを切る」を 040 が修正; 覆した先・注意: 040(状態が「案」のまま) | ARCHITECTURE 2.7 | 命令数 26 のまま、型は TypeClass のみ |
 | 040 | Phase 2 の結果: 中立 IR の上に移した | 有効 |  | ARCHITECTURE 2.7 | 旧経路を除く。コアは go/ssa を知らない |
-| 041 | Dart extractor の最初の版 | 有効 | 追記多数: gRPC、型階層、ベンチ; 訂正・追記あり(書き方を保つ)。追記あり | extractor/dart | `package:analyzer` から IR |
-| 042 | Rust extractor の最初の版 | 一部覆った | ホスト実行は 064 で既定が隔離に、テスト読みは 062; 訂正・追記あり(書き方を保つ)。追記あり。覆した先・注意: 064/062 | extractor/rust, rust-isolation | `rustc_public` で MIR、固定 nightly、`cargo check` |
+| 041 | Dart extractor の最初のバージョン | 有効 | 追記多数: gRPC、型階層、ベンチ; 訂正・追記あり(書き方を保つ)。追記あり | extractor/dart | `package:analyzer` から IR |
+| 042 | Rust extractor の最初のバージョン | 一部覆った | ホスト実行は 064 で既定が隔離に、テスト読みは 062; 訂正・追記あり(書き方を保つ)。追記あり。覆した先・注意: 064/062 | extractor/rust, rust-isolation | `rustc_public` で MIR、固定 nightly、`cargo check` |
 | 043 | 精度のベンチマーク(go-test-bench) | 一部覆った | 追記「組み込みは標準まで」→ 044 → 063; 訂正・追記あり(書き方を保つ)。追記の運用。覆した先・注意: 044/063 | bench/README | 正解付きベンチ。追記が長大(依存読み、決定性、並列化、性能) |
 | 044 | 組み込みの範囲(有名サードパーティ) | 一部覆った | 063。追記で gin を外した; 覆した先・注意: 063。本文内矛盾あり | README, GCP-MODELS | 有名サードパーティも組み込みに |
-| 045 | 関数値の呼び出しに sink/source/モデルを当てる | 有効 | 拡張: 050/068/070 | DESIGN-callouts | 候補は IR 上で一元決定(`valuecalls`) |
+| 045 | 関数値の呼び出しに sink/source/モデルを適用する | 有効 | 拡張: 050/068/070 | DESIGN-callouts | 候補は IR 上で一元決定(`valuecalls`) |
 | 046 | 独自ベンチ(go-curated、go-synth) | 有効 |  | bench/README | 精度回帰と性能スケールを分ける |
 | 047 | パラメータの関数の呼び出しを記号的な出力に(コールアウト) | 有効 | 状態: 棚上げ→精度のため再開。段階 2 は 071 が実装; 訂正・追記あり(書き方を保つ)。状態注記 | DESIGN-callouts | 状態の注記が本文中に 2 つある |
 | 048 | `kind: param` の source を呼び出し元へ書き戻さない | 有効 |  | - | 「シード」だけ書き戻さない |
@@ -67,13 +67,13 @@
 | 050 | 上限で解決しなかった関数値は「知らない」と報告しない | 一部覆った | 拡張: 070。追記(2026-11-22): 候補の上限を 8 から 32 にした | - | `candidate_limit` を区別。32 を超える形はサイレントな見逃し(#77) |
 | 051 | `Reachable` がキャプチャありクロージャもたどる | 有効 | Rust は 058 | - | - |
 | 052 | `not_from_entry` に説明を添える | 有効 | 073 が拡張 | - | - |
-| 053 | キャプチャ値が呼ぶ所で分からないとき何も報告せずに埋めることはしない | 有効 | 059 が作った場所で当てる経路を足す。`capture_unbound` は残る | DESIGN-capture | `depth_limit`/`capture_unbound` |
+| 053 | キャプチャ値が呼ぶ所で分からないとき何も報告せずに埋めることはしない | 有効 | 059 が作った場所で適用する経路を足す。`capture_unbound` は残る | DESIGN-capture | `depth_limit`/`capture_unbound` |
 | 054 | 作業量の上限と実時間の上限を区別 | 有効 |  | README | `budget:` / `func_timeout:` / `run_timeout:`、`load_dependent` |
 | 055 | 値の型は値のデータを運ばない(reflect) | 有効 | 採用; 訂正・追記あり(書き方を保つ)。仮説履歴 | - | 仮説の履歴を本文に残す(収束の原因探索) |
 | 057 | join した要約で全体が一部を吸収(`absorbWhole`) | 有効 | 位置注意 | - | ファイル上は 056 より前に置かれている(番号順でない) |
 | 056 | `globals:` の `holds: nothing` | 有効 | 採用、ユーザー承認 | MODELING に記載なし | 流れを止めたことを `global_holds_nothing` で記録 |
 | 058 | Rust の `Reachable`(再 export trait、環境 alloc) | 有効 | 051 の続き | - | - |
-| 059 | 見えない呼び出し先のクロージャを作った場所で当てる | 有効 | 採用 | DESIGN-capture | `assumed_call`。008 に追記あり |
+| 059 | 見えない呼び出し先のクロージャを作った場所で適用する | 有効 | 採用 | DESIGN-capture | `assumed_call`。008 に追記あり |
 | 060 | ポインタレシーバ越しのインターフェース呼び出し | 有効 | 090 が続き | - | - |
 | 061 | 診断出力(`-pass-stats` 等)は結果を変えない | 有効 |  | - | - |
 | 062 | ビルドが除くものは既定で読まない(3 言語) | 有効 |  | README | 読まなかった数を `tests_skipped` に出す |
@@ -82,7 +82,7 @@
 | 065 | sink のルールだけの関数をモデル扱いしない | 有効 |  | - | - |
 | 066 | 組み込み `pure` から入力を出力に伝える関数を外す | 有効 |  | MODELING §1 | 基準を決め、実行で確かめる |
 | 067 | モデルの流れに「近似」(`approximate`) | 有効 |  | MODELING §2 | `model_approximation` が通った finding に付く |
-| 068 | インターフェース越しの呼び出しで候補の sink を当てる | 有効 | 045 の延長 | MODELING §4 | - |
+| 068 | インターフェース越しの呼び出しで候補の sink を適用する | 有効 | 045 の延長 | MODELING §4 | - |
 | 069 | グローバル経由の finding に `shared_state` | 有効 | 087 が拡張 | DESIGN-shared-state | 出力の追加のみ |
 | 070 | 関数値の候補が一部しか追えないことを示す | 有効 |  | - | `unresolved_callee`(`partial`) |
 | 071 | モデルの `calls:` | 有効 | 080 が `method:` を追加 | MODELING §3 | 段階 2 |
@@ -124,4 +124,4 @@
 - ADR-064: 本文の「残り」のうち、取得元の検査は実装済み。ネットワークの絞り込みは設計のみ([DESIGN-fetch-network.md](DESIGN-fetch-network.md))。
 - ADR-031: 「go/ssa に直接依存」は ADR-040 で解消した。
 - ADR-039: 状態が「案」のまま。ADR-040 で実装された。
-- ADR-008: 「kind の追加はスキーマ版を上げる」は、実際は上げていない(ADR-043 の追記が認めている)。
+- ADR-008: 「kind の追加はスキーマバージョンを上げる」は、実際は上げていない(ADR-043 の追記が認めている)。

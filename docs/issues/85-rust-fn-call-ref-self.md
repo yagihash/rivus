@@ -10,11 +10,11 @@
 ## 本文(GitHub から移した写し)
 
 ## 確度
-コード読解 + フィクスチャで実行確認(78c3bdb。`@fp` のフィクスチャが落ちる)。
+コード読解 + フィクスチャで実行確認(78c3bdb。`@fp` のフィクスチャが失敗する)。
 
 ## 場所
 - `internal/taint/calls.go:357` `dispatchGuards`: `recv.Kind != sg.KParam` のとき nil を返す
-- `makeDispatchGuards`: 候補が method でない(`!fn.Recv`)と、ガードを付けない。クロージャは全部これに当たる
+- `makeDispatchGuards`: 候補が method でない(`!fn.Recv`)と、ガードを付けない。クロージャは全部これに該当する
 
 ## 再現
 `bench/rust-curated/src/fnself.rs`
