@@ -444,7 +444,7 @@ make model PKG=<パッケージ> VERSION=<バージョン> LANG=<go|dart|rust>  
 | 1 | 取得(取得だけ。実行しない) | なし(一時の場所) | `go mod download`、`dart pub get`、`cargo fetch` |
 | 2 | 型から flows を生成する(4.3a の規則) | `internal/model/builtin/<lang>-<package>.gen.yaml`(コミットする。毎回上書き。先頭に生成器のバージョンと入力) | 新規(生成器) |
 | 3 | 骨組みを生成する(公開の署名、埋め込み、実装、記録の呼び出し、`#[track_caller]`、`exclude`) | `bench/zoo-<lang>-pkg/<パッケージ>/skel/`(コミットする。先頭に生成器のバージョン) | 新規(骨組みの生成器) |
-| 4 | 候補を出し、モデルのファイルと突き合わせる(下) | 未決があれば、作業ファイルに一覧(コミットしない)。終了コード 70 | 新規(候補の一覧)。`rivus models coverage`、`-coverage-gaps` |
+| 4 | 候補を出し、モデルのファイルと照合る(下) | 未決があれば、作業ファイルに一覧(コミットしない)。終了コード 70 | 新規(候補の一覧)。`rivus models coverage`、`-coverage-gaps` |
 | 5 | zoo のセルのテンプレート、`rules.yaml`、`pubspec.yaml` の設定 | `bench/zoo-<lang>-pkg/<パッケージ>/cells/`(テンプレートはコミットする。中身は人か LLM が足す) | 新規(テンプレート)。`make zoo-dart-gen` |
 | 6 | マークの固定、`.dead-allow`、`verified_versions` | `bench/zoo/marks.d/`、`*.dead-allow`、モデルの先頭(コミットする) | `TestZooMarksLock`、`readDeadAllow` |
 | 7 | 差分テスト(MISS が 0。EXTRA は理由を注釈にする)。PR のジョブにも入れる(段 1 と同時) | なし(結果は PR の本文へ) | `bench/model-diff` |
@@ -468,7 +468,7 @@ rejected:
     why: "クエリは準備のときに決まる。sink は Preparex / PrepareNamed"
 ```
 
-- **コマンドの動き**: 毎回、候補の一覧を作り直す。各候補を「行がある」か「`rejected:` にある」かに突き合わせる。どちらでもない候補(未決)が 1 つでもあれば、終了コード 70 で止まり、未決の一覧を作業ファイル(コミットしない)に書く。人か LLM は、一覧を見て、行を足すか `rejected:` に足す。`rejected:` にあって候補から消えたもの(API が消えた)は、警告として出力に一覧する(止めない)。
+- **コマンドの動き**: 毎回、候補の一覧を作り直す。各候補を「行がある」か「`rejected:` にある」かに照合る。どちらでもない候補(未決)が 1 つでもあれば、終了コード 70 で止まり、未決の一覧を作業ファイル(コミットしない)に書く。人か LLM は、一覧を見て、行を足すか `rejected:` に足す。`rejected:` にあって候補から消えたもの(API が消えた)は、警告として出力に一覧する(止めない)。
 - **状態はモデルのファイルだけにある**。同じ入力(パッケージとバージョン)と同じモデルのファイルなら、同じ結果になる。型から作る `*.gen.yaml` は、別のファイルで、毎回上書きする(手で直さない。直したいときは生成器を直す)。
 - **既存のモデルは移行しない**。そのパッケージを次にコマンドに通したときに、未決の一覧を `rejected:` に書いて、足す。
 
@@ -478,7 +478,7 @@ rejected:
 - **層 2(判断は要らない)**: ほかの公開の関数で、string / `[]byte` / `any` を取るもの。件数と一覧を、PR の本文の材料に出すだけ。
 - 規則の外の行(手の行)は、今までどおり足してよい。
 
-**層 1 の規則の最初の評価(段階 1 の最初の作業)**: 前の晩に採用した 12 個のモデル(dio、github(Dart)、shelf、googleapis_auth、gin、go の storage、sqlx、go-github、actix-web、axum、google-cloud-storage、octocrab)の採用した行のうち、層 1 に入るものがいくつかを数える(再現率)。入らない行は、規則の表に足すか、手の行として残す。この評価は、まだしていない。出発点として、モデルのファイルごとの行の数(`symbol:` の行を節ごとに数えた。2026-11-23)を置く: `dart-dio` sinks 44、`dart-github` sources 1・sinks 15、`dart-googleapis_auth` sinks 4、`go-gin` sinks 7・propagators 51、`go-storage` sinks 7、`go-sqlx` sinks 52、`rust-actix-web` propagators 19、`rust-google-cloud-storage` sinks 23、`rust-octocrab` sinks 21、`rust-web`(axum を含む)sinks 3・propagators 30。shelf、go-github、axum の行は、ファイル名から特定できていない(評価のとき、行の出どころを確認する)。
+**層 1 の規則の最初の評価(段階 1 の最初の作業)**: 前の晩に採用した 12 個のモデル(dio、github(Dart)、shelf、googleapis_auth、gin、go の storage、sqlx、go-github、actix-web、axum、google-cloud-storage、octocrab)の採用した行のうち、層 1 に入るものがいくつかを数える(再現率)。入らない行は、規則の表に足すか、手の行として残す。この評価は、まだしていない。出発点として、モデルのファイルごとの行の数(`symbol:` の行を節ごとに数えた。2026-11-23)を置く: `dart-dio` sinks 44、`dart-github` sources 1・sinks 15、`dart-googleapis_auth` sinks 4、`go-gin` sinks 7・propagators 51、`go-storage` sinks 7、`go-sqlx` sinks 52、`rust-actix-web` propagators 19、`rust-google-cloud-storage` sinks 23、`rust-octocrab` sinks 21、`rust-web`(axum を含む)sinks 3・propagators 30。shelf、go-github、axum の行は、ファイル名から特定できていない(評価のとき、行の出所を確認する)。
 
 **候補の元**: 段階 1 は、**ライブラリ単体の型の規則だけ**を使う。「ライブラリをプロジェクトとして解析して、公開の関数の引数が、すでにモデルのある sink に届くかを見る」案は、課題 #163([docs/issues/163-library-as-project-candidates.md](issues/163-library-as-project-candidates.md))に分ける。層 1 の強い根拠になる。段階 3 のあとに入れる。課題 #144(利用者のプロジェクトで、汚染された値が届いた入口の API の一覧)は、別の課題のまま。
 
@@ -503,7 +503,7 @@ Rust は、extractor を動かす段(型の取得、セルの解析の確認、�
 
 | 段 | 内容 | 規模(見積もり) |
 | --- | --- | --- |
-| 1(最初) | **Go だけ。`make model` の枠、候補の一覧(層 1 と層 2)、`rejected:` の読み込みと検証、突き合わせと終了コード 70、`.dead-allow` と `verified_versions`、差分テスト(PR のジョブにも入れる)、PR の本文の材料**。最初の作業は、層 1 の規則の評価(2 節)。型からの flows の生成と、骨組みの生成は含めない(今の `rivus models coverage -yaml` と、手で書いた骨組みを使う) | 中。コマンド 1 つ(Go の小さいプログラム。`bench/model-diff` と同じ形)と、ローダーの検証と、テスト |
+| 1(最初) | **Go だけ。`make model` の枠、候補の一覧(層 1 と層 2)、`rejected:` の読み込みと検証、照合と終了コード 70、`.dead-allow` と `verified_versions`、差分テスト(PR のジョブにも入れる)、PR の本文の材料**。最初の作業は、層 1 の規則の評価(2 節)。型からの flows の生成と、骨組みの生成は含めない(今の `rivus models coverage -yaml` と、手で書いた骨組みを使う) | 中。コマンド 1 つ(Go の小さいプログラム。`bench/model-diff` と同じ形)と、ローダーの検証と、テスト |
 | 2 | Go の骨組みの生成(署名、埋め込み、`zoo/mark` の記録)と、セルのテンプレート。**既存の骨組みに `--dep-dir` と `exclude` を足して揃える作業を、1 つの PR で行う** | 中 |
 | 3 | Go の型からの flows の生成(4.3a の規則 a〜f。段階 3 の生成器) | 中。`-coverage-gaps` の拡張(第三者のパッケージ)を含む |
 | 3 のあと | 課題 #163(ライブラリをプロジェクトとして解析する候補。Go が先) | 中 |
@@ -512,7 +512,7 @@ Rust は、extractor を動かす段(型の取得、セルの解析の確認、�
 
 **最初の段の範囲(正確に)**:
 
-- 入るもの: (i) `make model PKG=<Go のモジュール> VERSION=<v> LANG=go`。(ii) `rejected:` の書式の確定と、ローダーでの読み込み、検証(`symbol`、`kind`、`why` の有無、解析には使わない)。(iii) 候補の一覧(層 1 は規則の表から、層 2 は件数と一覧だけ)と、行と `rejected:` との突き合わせ。未決があれば、終了コード 70 と、作業ファイルへの一覧。消えた候補の警告。(iv) 層 1 の規則の評価(再現率)。(v) `verified_versions`、`.dead-allow` の書き出し。(vi) 差分テストの実行(`bench/model-diff`)と、PR のジョブへの組み込み。結果を、PR の本文の材料にまとめる。(vii) 終了コードの表。
+- 入るもの: (i) `make model PKG=<Go のモジュール> VERSION=<v> LANG=go`。(ii) `rejected:` の書式の確定と、ローダーでの読み込み、検証(`symbol`、`kind`、`why` の有無、解析には使わない)。(iii) 候補の一覧(層 1 は規則の表から、層 2 は件数と一覧だけ)と、行と `rejected:` との照合。未決があれば、終了コード 70 と、作業ファイルへの一覧。消えた候補の警告。(iv) 層 1 の規則の評価(再現率)。(v) `verified_versions`、`.dead-allow` の書き出し。(vi) 差分テストの実行(`bench/model-diff`)と、PR のジョブへの組み込み。結果を、PR の本文の材料にまとめる。(vii) 終了コードの表。
 - 入らないもの: 型からの flows の生成、骨組みの生成、セルの生成、Dart と Rust、マークの固定の自動実行(まず、手順書に 1 行で書く)、既存のモデルの移行。
 - 完了の基準: main にある Go のモデル 1 つをコマンドに通すと、未決の一覧が出る。それを `rejected:` に書くと、終了コードが 0 になり、モデルの行は変わらない。
 
