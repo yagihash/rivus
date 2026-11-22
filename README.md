@@ -109,7 +109,7 @@ rivus query -site <ID> ./...           # sites の 1 件から始める
 |---|---|---|
 | Go | `go/packages` と `go/ssa` で直接読む | Go のツールチェーン。コードがビルドできること |
 | Dart | 別プロセスの extractor（`package:analyzer`）が IR を書き、rivus が読む | Dart SDK。**解析の前に、そのパッケージで `dart pub get` を実行する**（rivus は実行しません。していない、または古いとき、rivus は `summary.unread` と stderr でそう言います）。コード生成（`build_runner`）も済んでいること。[extractor/dart](extractor/dart/README.md) |
-| Rust | 別プロセスの extractor（rustc のドライバ。MIR を読む）が IR を書き、rivus が読む | Docker（既定。固定した nightly を入れたイメージを、このリポジトリから作る）か、`-unsafe-host-exec` のときは固定した nightly の Rust。コードがビルドできること、`Cargo.lock` があること。**読むと、対象のビルドが走る**（下の「信頼できないコード」）。[extractor/rust](extractor/rust/README.md) |
+| Rust | 別プロセスの extractor（rustc のドライバ。MIR を読む）が IR を書き、rivus が読む | 固定した nightly の Rust と extractor（`rivus setup rust -source extractor/rust` で用意する。macOS は既定でサンドボックスの下、Linux は `-unsafe-host-exec` のときだけ読める）。コードがビルドできること、`Cargo.lock` があること。**読むと、対象のビルドが走る**（下の「信頼できないコード」）。[extractor/rust](extractor/rust/README.md) |
 
 - Dart と Rust の extractor（`rivus-dart`、`rivus-rust`）は、PATH に置くか、`-dart-extractor` / `-rust-extractor`（または環境変数 `RIVUS_DART_EXTRACTOR` / `RIVUS_RUST_EXTRACTOR`）で指します。extractor が書いた IR のファイルを、`rivus analyze -ir file.jsonl` で読むこともできます。
 - Rust は、`Cargo.toml` があるだけでは読みません。`-lang rust` と書いたときだけ読みます。
@@ -179,21 +179,15 @@ LLM にモデルを書かせ、人や別の手段で確かめる、という使�
 
 | 言語 | 何が動くか |
 |---|---|
-| Rust | extractor が、対象に `cargo check` を走らせます（**対象をコンパイルします**）。対象と依存の `build.rs`、proc macro が実行されます。**既定は、Docker のコンテナの中で動かします**（依存を取る段階は、ネットワークがあるが、対象の cargo の設定は読ませない。抽出の段階はネットワークなし、対象は読み取り専用、非 root、権限なし。Docker がなければ、動かさずに止まります）。ホストで直接動かすのは `-unsafe-host-exec`（信頼できるコードだけ）。手順と限界は [docs/rust-isolation.md](docs/rust-isolation.md) |
+| Rust | extractor が、対象に `cargo check` を走らせます（**対象をコンパイルします**）。対象と依存の `build.rs`、proc macro が実行されます。**macOS では既定で、OS のサンドボックス（`sandbox-exec`）の下で動かします**（依存を取る段階は、ネットワークがあるが、対象の cargo の設定は読ませない。抽出の段階はネットワークなし、対象は読み取り専用、書き込みは作業ディレクトリだけ。サンドボックスが作れなければ、動かさずに止まります）。**Linux には隔離の手段がなく、既定では何も実行せずに止まります。** ホストで直接動かすのは `-unsafe-host-exec`（信頼できるコードだけ。Linux ではこれが普通の使い方です）。どちらで読んだかは、出力の `summary.isolation` に出ます。**信頼できないコードの解析の結果とログは、そのコードが書き込んだものを含みえます。そのまま公開の場所に出さないでください。**手順と限界は [docs/rust-isolation.md](docs/rust-isolation.md) |
 | Go | `go/packages` が `go list` を走らせます。依存の取得（ネットワーク）が起きることがあります。cgo のあるパッケージは、cgo の前処理（C コンパイラ）が走ります。**対象のソースそのものは実行しません**が、「Go はコードを実行しない」とは言えません。隔離はありません（Rust と同じ作りに載せる予定） |
 | Dart | extractor は、静的に読むだけです。ただし、前提の手順（`dart pub get`、`build_runner`）は、対象の依存と生成器のコードを実行します |
 
-- **Rust は、対象のビルドが、解析の結果そのものも書き換えられます。** IR の断片を書く場所が、対象のビルドから見えるためです（コンテナの中でも同じです。隔離が守るのは、マシンと秘密で、結果の正しさではありません）。
+- **Rust は、対象のビルドが、解析の結果そのものも書き換えられます。** IR の断片を書く場所が、対象のビルドから見えるためです（隔離の下でも同じです。隔離が守るのは、マシンと秘密で、結果の正しさではありません）。
 - **対象のディレクトリに付いてくるルール（`.rivus/rules/*.yaml`）は、フラグなしで読まれます。** 対象を書いた人は、そこで finding を消せます。読んだファイルと、消せるものの数は、出力の `project_rules` に出ます。**信頼できないコードでは `-no-project-rules` を付けてください。**
 - Dart の依存は、プロジェクト、pub のキャッシュ、SDK の下のものだけ読みます（`package_config.json` は対象の一部で、どこでも指せるため）。ほかの場所は `-allow-deps-under DIR` で足します。
 
-Rust 以外の信頼できないリポジトリは、使い捨ての環境（コンテナや VM）で解析してください。依存を先に取得してから、ネットワークを切り、ソースを読み取り専用で渡す形です。
-
-```sh
-docker run --rm --network none -v "$PWD":/src:ro -w /src my-rivus-image rivus analyze ./...
-```
-
-`my-rivus-image` は、rivus と、対象の言語のツールチェーンを入れた、自分で用意するイメージです。
+Rust 以外の信頼できないリポジトリは、使い捨ての環境（VM など）で解析してください。依存を先に取得してから、ネットワークを切り、ソースを読み取り専用で渡す形です。
 
 ## 仕組み
 

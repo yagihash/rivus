@@ -42,7 +42,7 @@ export WORK=/path/to/work           # 作業ディレクトリ(IR と中間フ�
 export SRC=/path/to/checkouts       # gogs, gin-vue-admin, gophish, casdoor, pub のチェックアウト(下の表の SHA)
 export RIVUS_DART="mise exec dart@3.13.6 -- dart"       # extractor/dart で dart pub get 済み
 export RIVUS_RUST=/path/to/rivus-rust                    # extractor/rust のバイナリ(自前のコード rust-curated だけに使う)
-export PARSEABLE_IR=/path/to/parseable.jsonl             # すでにある parseable の IR(新しく抽出しない)。なければ、コンテナの中で抽出する(Docker が要る。ないときは失敗。ホストでは読まない)
+export PARSEABLE_IR=/path/to/parseable.jsonl             # すでにある parseable の IR(新しく抽出しない)。なければ、サンドボックスの下で抽出する(macOS のサンドボックスが要る。ないときは失敗。ホストでは読まない)
 
 # 1. 重い解析は 1 度に 1 つ(collect.sh は空きメモリ 40% 以上まで待つ)
 ANALYZE=1 bench/parity/collect.sh go-curated zoo-go gogs gva gophish casdoor \

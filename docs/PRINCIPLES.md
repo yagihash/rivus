@@ -205,20 +205,20 @@ rivus の設計の判断は、ここに書いた原則に沿う。ほかの文�
 - 対象のリポジトリの中のデータ（設定ファイル、git の設定、ルール、DB など）も、rivus への攻撃の入力になりうる。
 - セキュリティの制御を外す設定は、外したことが分かる形にする。
 
-**根拠の ADR:** 038（追記: `.git/config` を信頼せず、git を実行しない）、062、064（隔離。訂正を含む）。設計は [rust-isolation.md](rust-isolation.md) と `docs/DESIGN-fetch-network.md`。
+**根拠の ADR:** 038（追記: `.git/config` を信頼せず、git を実行しない）、062、064（隔離。訂正を含む。コンテナの部分は 093 が覆した）、093（macOS のサンドボックス）。設計は [rust-isolation.md](rust-isolation.md) と `docs/DESIGN-fetch-network.md`。
 
 **コード:**
 
-- 隔離: `cmd/rivus/isolate.go`（非 root、`--cap-drop ALL`、`no-new-privileges`、`--read-only`、抽出は `--network none`）、`isolate_fetch.go`（取得の段階で `.cargo` を覆い、取得元を検査）
-- Docker が無ければ何も実行せず止まる: `cmd/rivus/lang.go`
+- 隔離: `internal/sandbox`（macOS のサンドボックス。既定ですべて拒否し、要るものだけ許す。ネットワークは取得の段階だけ）、`cmd/rivus/isolate_sandbox_darwin.go`（Rust の取得と抽出の 2 段階）、`isolate_fetch.go`（取得の段階で対象の設定を読まず、取得元を検査）
+- サンドボックスが作れなければ、Linux では、何も実行せず止まる: `cmd/rivus/isolate_sandbox_darwin.go`、`isolate_sandbox_other.go`。隔離の下か、ホストでかは、`summary.isolation` に出る
 - git の HEAD を直接読む: `internal/vcs`
 - 対象内のルール: `.rivus/rules` は既定で読み、`-no-project-rules` で止める。symlink は拒否する。出力に、対象内ルールが消せる量を出す（`internal/report/report.go` の `ProjectRules`）
-- テスト: `TestIsolationHostileBuild`、`TestIsolationFetchRunsNoCodeOfTheProject`、`TestIsolationResourceLimits`
+- テスト: `TestSandboxedBuildScriptCannotEscape`、`TestSandboxClosesEveryWayOut`、`TestSandboxFetchReadsNoConfigOfTheProject`、`TestSandboxFetchRunsNoCodeAndAcceptsUnstableManifestFeatures`、`TestSandboxTimeLimitStopsTheProgramAndItsGroup`（`internal/sandbox`、`cmd/rivus`。開発のマシンで `RIVUS_SBX_RED=1` / `RIVUS_SBX_NET=1`。CI は `isolation.yml` で小さい部分）
 
 **現状と、まだ届いていない所**
 
-- **隔離が既定なのは、Rust だけ:** Go と Dart に隔離は無い。README が明記している。
-- **取得の段階のネットワーク:** 開いたまま。`DESIGN-fetch-network.md` は案のまま。
+- **隔離が既定なのは、Rust だけ:** Go と Dart に隔離は無い。README が明記している。Rust の隔離は、macOS のサンドボックス(ADR-093)。メモリ・CPU・プロセス数の強い上限がなく、ユーザー境界もない。承知している弱さの一覧は、[rust-isolation.md](rust-isolation.md)。Linux では、信頼できないコードの Rust は読めない(止まる)。
+- **取得の段階のネットワーク:** 開いたまま(宛先の許可リストがない)。`DESIGN-fetch-network.md` は案のまま(コンテナなしで実装する案は、後回しの課題)。
 - **制御を外したことが、出力に出ない:** `-unsafe-host-exec`、`-allow-fetch-host`、`-allow-deps-under` を使ったことは、出力に記録されない。警告が出るかは、確認した範囲では見つからなかった。
 - **Go の環境:** `go list` は `GOFLAGS`、`GOTOOLCHAIN`、`GOPROXY` などの環境をそのまま使う。対象の `go.mod` の `toolchain` 指定が、toolchain の取得を起こすかは、未確認。
 - **結果の正しさへの攻撃:** 対象の `.cargo/config.toml` の `[env]` で IR を空にできる（R-21。ADR-064 に課題として記録）。隔離は、これを守らない。

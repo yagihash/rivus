@@ -2,7 +2,7 @@
 
 課題は、リポジトリの中のファイルで持つ(GitHub の Issue は使わない)。一覧は、この `ISSUES.md`。1 件は `docs/issues/<番号>-<短い名前>.md`。
 
-- **番号**: GitHub の番号を引き継ぐ(#74〜#99)。動物園の `@ref(#N)` と、コミットの `Zoo-Loosened:` の行が指すのは、この番号。新しい課題は 110 から(100〜107 は、直してから記録したもの。108、109 は 2026-11-22 に開いた)。#1〜#73 は、日次レビューの指摘(GitHub 側で閉じ済み。ここには写していない)。
+- **番号**: GitHub の番号を引き継ぐ(#74〜#99)。動物園の `@ref(#N)` と、コミットの `Zoo-Loosened:` の行が指すのは、この番号。新しい課題は 122 から(100〜107 は、直してから記録したもの。108、109、110〜121 は 2026-11-22 に開いた)。#1〜#73 は、日次レビューの指摘(GitHub 側で閉じ済み。ここには写していない)。
 - **状態**: `open` / `partial`(一部直った。残りを題に書く)/ `closed`(直した: コミットとテスト)/ `deferred`(後回し。理由と見直す条件)/ `wontfix`(やらない)。
 - **誰が何をするか**: 中身と状態は相談役が決め、開発者が書いてコミットする。開発者が作業中に見つけたものは、相談役を待たずに `open` で足してよい(次の報告に番号を書く)。閉じるのは、相談役がレビューで確かめてから(開発者は「閉じられる」と報告する)。`deferred` と `wontfix` は相談役が決める。
 - **公開のリポジトリの決まり**: 直していない rivus 自身の弱点(対象が意図して起こせる黙った見逃し、隔離の穴)の再現の詳細は、ここに書かない。直るまでは、相談役のレビューのファイル(`.claude/reviews/`。追跡されない)にだけ置き、直ってから `closed` で記録する。
@@ -36,6 +36,18 @@
 | [#99](issues/99-dart-value-calls-zero-candidates.md) | Dart: 値として持たれた関数・クロージャ(フィールド、map、返したクロージャ、変数)の呼び出しが、候補 0 件のグラフの辺になる | 道具・ベンチ(グラフの辺) | Dart | 1 | open | 動物園 `F/clos/*`、`TestZeroCandidateCalls`、`TestFuncValuesDart` |
 | [#108](issues/108-model-row-loses-flows-silently.md) | モデルの行が、既定の扱いより流れを減らしても、何も言わない | 黙った見逃し(モデルの書き方の穴) | 全 | 3 / 5 | open | `cmd/rivus/coverage_stub_test.go`(雛形のみ) |
 | [#109](issues/109-stale-extractor-used-silently.md) | extractor(やイメージ)が古くても、何も言わずに、その結果を出す | 誤った結果を黙って出す | Rust / Dart | 0 / 1 | open | -(直すときに試験) |
+| [#110](issues/110-sandbox-fetch-proxy.md) | 取得の段階のネットワークを絞る(宛先の許可リストと、解決したアドレスの検査) | 黙った見逃しではない(隔離の穴) | Rust | 0 | open | - |
+| [#111](issues/111-sandbox-bsd-inventory.md) | bsd.sb の許可の棚卸しと、変わったら落ちる試験 | 隔離の穴の見落とし | Rust | 0 | open | - |
+| [#112](issues/112-sandbox-metadata-and-userdata.md) | メタデータ(存在)が見える範囲と、ホームの外の利用者のデータの試験 | 隔離の穴の見落とし | Rust | 0 | open | - |
+| [#113](issues/113-sandbox-memory-process-watch.md) | メモリとプロセス数の見張り | 隔離の穴(DoS) | Rust | 0 | open | - |
+| [#114](issues/114-sandbox-leftover-report.md) | 残ったかもしれないプロセスの報告(列挙だけ。kill しない) | 痕跡つきの限界 | Rust | 0 | open | - |
+| [#115](issues/115-sandbox-profile-line-tests.md) | プロファイルの各行に、「拒否が実際に効いている」試験を対応させる | 隔離の穴の見落とし | Rust | 0 | open | - |
+| [#116](issues/116-sandbox-signal-same-sandbox.md) | シグナルを same-sandbox にする(cargo が子にシグナルを送れるように) | 隔離の仕上げ | Rust | 0 | open | - |
+| [#117](issues/117-sandbox-terminal.md) | 端末(制御文字、/dev/tty) | 隔離の仕上げ | Rust | 0 | open | - |
+| [#118](issues/118-sandbox-macos-ci.md) | macOS の CI のワークフロー(ツールチェインを入れて抽出まで)と、macOS の TestDogfood | CI | Rust | 0 | open | - |
+| [#119](issues/119-setup-rust-polish.md) | rivus setup rust の作り込み(進み具合、更新、掃除) | 道具 | Rust | 0 | open | - |
+| [#120](issues/120-sandbox-ancestor-cargo-config.md) | 祖先の .cargo/config.toml があると、抽出が止まる(読み取りだけ許す案) | 利用者を止める(閉じる向き) | Rust | 0 | open | - |
+| [#121](issues/121-sandbox-review-sw6-sw7.md) | サンドボックスのレビューの小さい点(SW-6、SW-7) | 隔離の仕上げ | Rust | 0 | open | - |
 
 ## 閉じたもの
 

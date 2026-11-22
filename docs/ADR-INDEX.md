@@ -1,6 +1,6 @@
 # ADR の一覧
 
-[DECISIONS.md](DECISIONS.md)(ADR-001〜092)の、番号、題、今の状態、関連する文書の一覧。ADR は決めた時点の記録で、書き換えない。**今どうなっているか**は、ここと、[ARCHITECTURE.md](ARCHITECTURE.md)、[PRINCIPLES.md](PRINCIPLES.md) で見る。
+[DECISIONS.md](DECISIONS.md)(ADR-001〜093)の、番号、題、今の状態、関連する文書の一覧。ADR は決めた時点の記録で、書き換えない。**今どうなっているか**は、ここと、[ARCHITECTURE.md](ARCHITECTURE.md)、[PRINCIPLES.md](PRINCIPLES.md) で見る。
 
 - 確認: 2026-11-22、9c26a39。状態は、ADR の本文と、後の ADR・実装を読んで付けた。古くなる前提で読むこと。
 - 状態の意味:
@@ -78,7 +78,7 @@
 | 061 | 診断出力(`-pass-stats` 等)は結果を変えない | 有効 |  | - | - |
 | 062 | ビルドが除くものは既定で読まない(3 言語) | 有効 |  | README | 読まなかった数を `tests_skipped` に出す |
 | 063 | 特定のフレームワークは `examples/rules` | 一部覆った | 2026-11-22 の追記で、線引きは固定でなくなった(組み込みに入れるかは、その都度判断。保留は決着); 覆した先・注意: 044 に逆リンク | README, examples/rules | 標準 + 代わりのないパッケージ + SQL ドライバ |
-| 064 | 信頼しない Rust の隔離抽出 | 一部覆った | 同 ADR 内の訂正で「取得の段階は安全」を撤回; 訂正・追記あり(書き方を保つ)(ユーザー発見)。残課題の更新が要 | rust-isolation, DESIGN-fetch-network | Docker、2 段階、ネットワークなし抽出 |
+| 064 | 信頼しない Rust の隔離抽出 | 一部覆った | 同 ADR 内の訂正で「取得の段階は安全」を撤回; 訂正・追記あり(書き方を保つ)(ユーザー発見)。**コンテナの部分は ADR-093 が覆した**(macOS のサンドボックス) | rust-isolation, DESIGN-fetch-network | Docker、2 段階、ネットワークなし抽出 |
 | 065 | sink のルールだけの関数をモデル扱いしない | 有効 |  | - | - |
 | 066 | 組み込み `pure` から入力を出力に伝える関数を外す | 有効 |  | MODELING §1 | 基準を決め、実行で確かめる |
 | 067 | モデルの流れに「近似」(`approximate`) | 有効 |  | MODELING §2 | `model_approximation` が通った finding に付く |
@@ -107,6 +107,7 @@
 | 090 | ポインタ包みの interface への書き込みを指す先にも | 有効 | 060/082 の続き | - | - |
 | 091 | 下げられなかった式が値を返すとき、`unsupported` が元の値と結果を持つ | 有効 | 相談役の判断(2026-11-22)。Dart の解決できないコンストラクタ呼び出しから | ARCHITECTURE の IR の命令 | Go と Rust の extractor は未確認 |
 | 092 | 依存のパッケージを、流れのモデルで切る(本体を読まない)のは、費用が著しいときも。ただし条件つき | 有効 |  | PRINCIPLES 3 節、GCP-MODELS P12、MODELING | 費用の測定の記録、突き合わせの検査、`calls:`、保守的な痕跡、切ったことの表示。実装は未(ROADMAP) |
+| 093 | Rust の extractor の隔離を、Docker から macOS のサンドボックス(Seatbelt)に替える | 有効 | ユーザーの決定(2026-11-22)。ADR-064 を一部覆す。Linux では止まる(`-unsafe-host-exec`) | rust-isolation、PRINCIPLES 8 節 | 承知している弱さと、後回しのハードニングを載せた |
 
 ## 訂正・追記の書き方を保つ ADR
 

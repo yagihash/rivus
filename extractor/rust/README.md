@@ -19,8 +19,8 @@ as `rivus analyze` does: running the command is the request. The build also sees
 written (`RIVUS_IR_DIR`): a build script of the project can add to the fragments, or remove from them,
 so what the target built is not only what is analysed, it can also change what the analysis says.
 
-`rivus analyze -lang rust` runs this extractor in a Docker container by default; `-unsafe-host-exec` runs it on the
-host. How, and what the container does not protect: [docs/rust-isolation.md](../../docs/rust-isolation.md).
+`rivus analyze -lang rust` runs this extractor under the sandbox of macOS by default (nothing is run on another system);
+`-unsafe-host-exec` runs it on the host. How, and what the sandbox does not protect: [docs/rust-isolation.md](../../docs/rust-isolation.md).
 
 Reads Rust through the compiler: MIR, by way of `rustc_public` (the stable interface of
 `rustc`'s MIR), and writes the neutral IR (`docs/ARCHITECTURE.md` 2) as JSON Lines. The

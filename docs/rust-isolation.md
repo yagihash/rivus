@@ -1,89 +1,73 @@
 # 信頼しない Rust を、隔離して読む
 
-`rivus analyze -lang rust` は、Rust のプロジェクトを**ビルドします**（`cargo check`）。ビルドは、対象の `build.rs`、proc macro、`[build-dependencies]` を実行します。採用前のライブラリや、怪しいリポジトリを読むときは、それが、あなたのマシンで、あなたの権限（ホームの鍵、トークン、ネットワーク）で動くことになります。そこで、**既定では、Docker のコンテナの中で、隔離して動かします**（ADR-064）。
+`rivus analyze -lang rust` は、Rust のプロジェクトを**ビルドします**(`cargo check`)。ビルドは、対象の `build.rs`、proc macro、`[build-dependencies]` を実行します。採用前のライブラリや、怪しいリポジトリを読むときは、それが、あなたのマシンで、あなたの権限(ホームの鍵、トークン、ネットワーク)で動くことになります。そこで、**macOS では既定で、OS のサンドボックス(Seatbelt、`sandbox-exec`)の下で、隔離して動かします**([ADR-093](DECISIONS.md)。以前は Docker のコンテナ: ADR-064)。**Linux には隔離の手段がないので、既定では何も実行せずに止まります**。信頼できるコードは、`-unsafe-host-exec` で、このマシンの上で、隔離なしに読みます。
 
-## 要件
+どちらで読んだかは、出力の `summary.isolation`(`mode`: `sandbox` / `host`)に出ます(Rust の抽出をしたときだけ)。
 
-- Docker（Docker Desktop、または Linux の Docker Engine）。`docker info` が通ること。Docker Desktop は、VM のメモリが、`-container-memory`（既定 6g）以上であること。
-- イメージ `rivus-rust-extractor:nightly-2026-11-15`。**このリポジトリ（信頼できるソース）から**作ります。
+## 要件(macOS)
 
-  ```sh
-  docker build -f docker/rust-extractor/Dockerfile -t rivus-rust-extractor:nightly-2026-11-15 extractor/rust
-  ```
-
-  ベースの Debian はダイジェストで、Rust は日付つきの nightly で、固定してあります。extractor のバイナリは、同じ Dockerfile の中で、`--locked` でビルドされます。対象のコードは、イメージに入りません。
-- 対象に **`Cargo.lock`** があること（なければ、`cargo generate-lockfile`。これはコードを実行しません）。`--locked` と、ネットワークなしの抽出のためです。
-- 対象のソースが、そのディレクトリの中で閉じていること（ディレクトリの外の path 依存は、見えません）。
-
-Docker が使えないときは、**何も実行せずに、止まります**: 「Rust の extractor は、対象のビルドスクリプトとマクロを実行する。隔離のために Docker を使う。`-unsafe-host-exec` を付けると、この機械の上で直接実行する」。
+- `sandbox-exec`(macOS に入っています)。使えないとき(プロファイルが受け入れられないとき)は、**対象を動かす前に、rivus が確かめ**、何も実行せずに止まります。
+- 固定の nightly(`nightly-2026-11-15`、`rustc-dev`、`llvm-tools`、`rust-src`)と、extractor(`rivus-rust`)。**`rivus setup rust -source <リポジトリの extractor/rust>`**(明示のコマンド)が、サンドボックスの外で、信頼できるソースから用意します: ツールチェインがなければ、rustup でダウンロードする前に断ります(約 1 GB)。extractor は、`~/Library/Application Support/rivus/rust/extractor` に作られ、指定も `PATH` もなければ、そこの `rivus-rust` が使われます。置き場所は、`RIVUS_RUST_TOOLCHAIN_DIR`(固定のツールチェインのディレクトリ)と `RIVUS_RUST_EXTRACTOR`(`rivus-rust` のパス)でも指せます(extractor は、ビルドに使ったツールチェインの `lib` を、実行時に探します: 同じ場所を指すこと)。実行時に rustup は使いません。
+- 対象に **`Cargo.lock`** があること(なければ、`cargo generate-lockfile`。これはコードを実行しません)。
+- 対象のソースが、そのディレクトリの中で閉じていること。**対象の上の(祖先の)ディレクトリに `.cargo/config.toml` があると、何も実行せずに、そのファイルの名前を言って止まります**(cargo は祖先の設定も読み、サンドボックスはそれを読ませません。`~/.cargo/config.toml` を持つ人は、ホームの下の対象を、サンドボックスの下で読めません。回避: そのファイルを一時的に退ける。信頼できるコードなら `-unsafe-host-exec`)。
 
 ## 2 段階
 
 | 段階 | ネットワーク | 動くもの | 書けるところ |
 |---|---|---|---|
-| 1. 取得 | あり | `cargo fetch --locked` だけ。**ビルドしない**ので、`build.rs` もマクロも動かない。**対象の cargo の設定（`.cargo/config.toml`）は、この段階では使わない**（`.cargo` を空の tmpfs で覆う。ボリュームに前の実行の設定があれば、捨てる）。設定が要るプロジェクトは、理由を言って止まる（取得済みなら `-no-fetch`。vendor 済みは、この段階を飛ばす） | 依存のソース用のボリューム（`rivus-cargo-<Cargo.lock と .cargo/config の hash>`）だけ |
-| 2. 抽出 | **なし**（`--network none`） | extractor が `cargo check --offline --locked` を走らせる。`build.rs` と proc macro は、**ここで、コンテナの中で**動く | 作業用の一時ボリューム（`target/` と IR の断片。コンテナと一緒に消える）と、`/tmp`（tmpfs）だけ |
+| 1. 取得 | あり(`network-outbound`)。mach のサービスは、1 つも許さない | `cargo fetch --locked` だけ。**ビルドしない**ので、`build.rs` もマクロも動かない。**対象の cargo の設定は、この段階では使わない**(設定のない作業ディレクトリから走らせる。cargo は設定を、カレントから探す)。設定が要るプロジェクトは、理由を言って止まる(取得済みなら `-no-fetch`。vendor 済みは、この段階を飛ばす)。取得の前に、`Cargo.lock` と `Cargo.toml` の取得元を検査する(crates.io 以外は `-allow-fetch-host`) | rivus 専用の `CARGO_HOME`(`~/Library/Application Support/rivus/rust/rivus-cargo-<ロックファイルと設定のハッシュ>/`)と、作業ディレクトリだけ |
+| 2. 抽出 | **なし** | extractor が `cargo check --offline --locked` を走らせる。`build.rs` と proc macro は、**ここで、サンドボックスの中で**動く | 作業ディレクトリ(`target/` と IR の断片。終わると消える)だけ。取得した `CARGO_HOME` と対象は読み取り専用 |
 
-IR は、コンテナの標準出力から、rivus に返ります。ボリュームは、ロックファイルの内容ごとに別なので、あるプロジェクトが取得したものを、別のプロジェクトが読むことはありません。取得したボリュームは、残ります（次の実行で、速くなる）。消すには:
+利用者の `~/.cargo` は、どちらの段階でも、読みも書きもしません。IR は、extractor の標準出力から、rivus に返ります。
 
-```sh
-docker volume ls --filter name=rivus-cargo-
-docker volume rm $(docker volume ls -q --filter name=rivus-cargo-)
-```
+## サンドボックスの制限
 
-## コンテナの制限
+プロファイル(`internal/sandbox/seatbelt_darwin.go`)は、**既定ですべて拒否し、要るものだけを、1 行ずつ理由つきで許します**。
 
 | 制限 | 値 |
 |---|---|
-| ユーザー | `--user 10001:10001`（root ではない） |
-| 権限 | `--cap-drop ALL`、`--security-opt no-new-privileges` |
-| ルートのファイルシステム | `--read-only` |
-| ネットワーク（抽出） | `--network none` |
-| プロセス・スレッド | `--pids-limit`（`-container-pids`、既定 4096） |
-| メモリ | `--memory` と `--memory-swap` が同じ（`-container-memory`、既定 6g） |
-| CPU | `--cpus`（`-container-cpus`、既定は、この機械の CPU 数、最大 8） |
-| 時間 | 各段階で、`-container-timeout`（既定 30 分）。超えたら、コンテナを `docker rm -f` する |
-| マウント | 対象のディレクトリを、**同じパスで、読み取り専用**。取得した依存を（抽出では）読み取り専用。それだけ。ホームも、`docker.sock` も、マウントしない。ホームそのもの、またはそれを含むディレクトリを対象にすると、拒否する |
-| 環境変数 | ホストのものは、渡さない（`docker run` に `-e` を付けない。イメージの `CARGO_HOME`、`RUSTUP_*`、`HOME`、`TMPDIR`、`PATH` だけ） |
-| ツールチェイン | イメージの nightly だけ。対象の `rust-toolchain(.toml)` が別のものを求めても、取得しない（`RUSTUP_TOOLCHAIN` で固定。警告を出す。コンパイルできなければ、失敗する） |
+| ファイルの読み取り | 対象、取得した依存、固定のツールチェイン、extractor、作業ディレクトリ、システムのライブラリ(Apple の基本のプロファイルの範囲)、`/private/etc/ssl`。**ホームは、対象以外、名前も中身も見せない** |
+| 書き込み | 作業ディレクトリだけ(取得では、`CARGO_HOME` も)。ビルドスクリプトと proc macro は、ビルドが作業ディレクトリに作るもの(= 対象のコードの実行そのもの。絞れない) |
+| ネットワーク(抽出) | すべて拒否(UDP、IPv6、UNIX ソケット、名前解決を含む) |
+| ほかのプログラム・サービス | mach のサービスの lookup は全拒否(Apple Events、`open`、`launchctl`、ペーストボード、キーチェーン、`cfprefsd`、名前解決のデーモン)。ほかのプロセスへのシグナルは拒否 |
+| 実行してよいプログラム | 名指しの一覧(`/bin/sh`、`/bin/bash`、`cc`、`clang`、`ld`、`ar`、`xcrun`、`xcode-select`)、固定のツールチェイン、CommandLineTools、extractor、作業ディレクトリの中のもの |
+| 環境変数 | ホストのものは渡さない(決めたものだけ) |
+| 時間 | 各段階で `-isolation-timeout`(既定 30 分)。超えたら、プロセスグループごと kill |
+| 出力の大きさ | `-isolation-max-output`(既定 4 GiB)。超えたら kill |
+| ツールチェイン | 固定の nightly だけ。対象の `rust-toolchain(.toml)` が別のものを求めても、取得しない(警告を出す)。rustup は使わない |
 
-| 出力 | IR は、コンテナの標準出力でだけ返ります（出力用のディレクトリを、ホストに置きません。ホストは、コンテナが書いたファイルを読みません）。大きさは `-container-max-output`（既定 4 GiB）で切ります |
+**ビルドに設定を足す**(parseable の `build.rs` は、UI をネットワークから取るので、隔離では失敗します): `-isolation-env NAME=VALUE`(ビルドに渡す環境変数。ホストのものは引き継がない)と、`-isolation-read PATH`(ビルドが読める追加のパス)。
 
-対象のビルドが、設定を要るとき（たとえば parseable の `build.rs` は、UI をネットワークから取るので、隔離では失敗します）は、**明示して**足します。ホストの環境変数は、引き継ぎません。
+## 信頼できるコードを、速く読む(ホストで直接)
 
-```sh
-mkdir /path/to/empty-assets
-rivus analyze -lang rust -no-deps -C proj \
-  -container-env LOCAL_ASSETS_PATH=/assets -container-ro-mount /path/to/empty-assets:/assets
-```
+`-unsafe-host-exec`(または `RIVUS_UNSAFE_HOST_EXEC=1`)で、このマシンの上で、`rivus-rust` を直接動かします(`-rust-extractor` / `RIVUS_RUST_EXTRACTOR` / `PATH`)。自分のコード、CI で自分のリポジトリを読むとき、このリポジトリのベンチ(`bench/rust-curated`、`bench/zoo-rust`、`extractor/rust/test`)向けです。Linux では、これが普通の使い方です。**`.rivus-hostile` のあるプロジェクト(隔離の検証用の、悪意のある crate)は、このモードでは、動かしません。**
 
-`-no-fetch` は、取得の段階を飛ばします（前に取得したボリュームがあるとき）。`-rust-image`（`RIVUS_RUST_IMAGE`）は、イメージを変えます。
+ベンチの道具(`bench/compare.sh`、`bench/parity/collect.sh`)は、この許可リストを、コードで持ちます。**この 3 つのパスの中だけ**をホストで読み、それ以外の Rust の対象(第三者のもの)は、`rivus extract -lang rust`(サンドボックス)で読みます。サンドボックスがないときは、ホストに切り替えずに、**失敗します**。
 
-## 信頼できるコードを、速く読む（ホストで直接）
+## 承知している弱さ(ADR-093。ユーザーが受け入れた)
 
-`-unsafe-host-exec`（または `RIVUS_UNSAFE_HOST_EXEC=1`）で、従来どおり、この機械の上で、`rivus-rust` を直接動かします（`-rust-extractor` / `RIVUS_RUST_EXTRACTOR` / `PATH`）。自分のコード、CI で自分のリポジトリを読むとき、このリポジトリのベンチ（`bench/rust-curated`、`bench/zoo-rust`、`extractor/rust/test`）向けです。**`.rivus-hostile` のあるプロジェクト（隔離の検証用の、悪意のある crate）は、このモードでは、動かしません。**
+- **`sandbox-exec` は、Apple が非推奨にしたまま動いている仕組みです。**
+- **メモリ、CPU、プロセス数の強い上限がありません**(Docker にはあった)。時間の上限と、プロセスグループごとの kill で代えます。
+- **ユーザー境界がありません**(あなたと同じユーザーで動きます。守りは、プロファイルだけ)。**ホストのカーネルに直接触れます**(Docker Desktop では、Linux の VM のカーネルでした)。実行できるプログラム、システムのファイルが見える範囲も、Docker より広い。
+- **同じユーザーのほかのプロセスの引数と環境(`kern.procargs2`)が、サンドボックスの下から読めます**(拒否する書き方を、5 通り試して、見つかりませんでした)。受け入れの根拠: **読んだものを外に出す道がありません**(ネットワーク、名前解決、UNIX ソケット、ほかのアプリへの依頼、許可の外への書き込み、共有メモリ: `TestSandboxClosesEveryWayOut`)。**残る道: rivus の出力(解析の結果とログ)に、対象が決める文字列が載ること。信頼できないコードの解析の結果とログは、そのコードが書いたものを含みえます。そのまま公開の場所に出さないでください。**
+- **プロセスグループを抜けるプロセス**(`setsid`、二重フォーク)は、実行の終わりに止められません(サンドボックスの下のまま。ファイルとネットワークには触れません)。残ったかもしれないことは、言うだけです(rivus は、自分が起動したグループの外のプロセスに、シグナルを送りません)。
+- **取得の段階のネットワークは、絞っていません**(宛先の許可リスト、解決したアドレスの検査がない)。リダイレクトとサブモジュールで、許した取得元が別の宛先へ向けられます。Docker の既定の bridge と同じ(今より弱くはならない)。
+- **解析する構成が、macOS 向けに変わります**: `cfg(target_os)` で分かれるコードは、macOS の側を読みます(Docker では Linux の側でした)。
+- **Linux では、信頼できないコードの Rust の解析ができません**(ユーザーが受け入れた。理由: 主な使い手は全員 macOS)。
+- **対象のビルドは、結果を書き換えられます。** 作業ディレクトリの IR の断片は、対象のビルドから見えるので、解析結果(finding を消す、偽の関数を足す)を、好きにできます。**隔離が守るのは、マシンと秘密で、結果の正しさではありません**(信頼できないコードの findings は、信頼できないものとして扱う)。
+- **R-21 は、直りません。** 対象の `.cargo/config.toml` の `[env]` で、IR の断片の場所を変えて、IR を空にできます(安全の問題ではなく、結果の正しさの問題)。
+- **対象が大きいと、時間もメモリも、そのまま使います**(上限がない)。
 
-ベンチの道具（`bench/compare.sh`、`bench/parity/collect.sh`）は、この許可リストを、コードで持ちます。**この 3 つのパスの中だけ**をホストで読み、それ以外の Rust の対象（parseable など第三者のもの）は、`rivus extract -lang rust`（既定のコンテナ）で読みます。Docker がないときは、ホストに切り替えずに、**失敗します**（「Rust の第三者のコードは隔離の中でだけ読む。Docker を起動するか、このベンチを外す」）。`rivus extract -lang rust` は、抽出器の IR を、そのまま標準出力に書きます（`-unsafe-host-exec` がなければ、コンテナ）。
-
-## できないこと（限界）
-
-- **コンテナは、仮想マシンではありません。** カーネルは共有です。Docker（runc、カーネル）の脆弱性による脱出は、防げません。Docker とカーネルを、更新してください。最も硬くするなら、使い捨ての VM の中で、rivus を動かしてください。
-- **macOS / Windows の Docker Desktop は、Linux の VM の中で、コンテナを動かします。** 境界は、コンテナと、VM と、ホストの共有（ファイル共有）の 3 つです。対象のディレクトリは、ファイル共有を通して、読み取り専用で見えます。VM が、ホストの共有ディレクトリ（ホームを丸ごと共有している設定）を持っていても、**コンテナには、対象のディレクトリしか、マウントしません**。VM の外は、Docker Desktop の脆弱性しだいです。
-- **対象のビルドは、結果を書き換えられます。** コンテナの中の `build.rs` と proc macro は、IR の断片のディレクトリに書けるので、解析結果（finding を消す、偽の関数を足す）を、好きにできます。**隔離が守るのは、マシンと秘密で、結果の正しさではありません**（信頼できないコードの findings は、信頼できないものとして扱う）。
-- **取得の段階は、ネットワークを使います。** 以前は、対象の `.cargo/config.toml` が `credential-provider`（同梱のスクリプト。`[registry] global-credential-providers`、`[credential-alias]` も同じ）を指し、`Cargo.lock` にそのレジストリの依存があって、レジストリが認証を要求すると、cargo がそのスクリプトを、ビルドの前に、ネットワークのあるコンテナで実行しました（**「取得の段階では、対象のコードは動かない」は誤りでした**。ADR-064 の訂正）。今は、取得の段階に、対象の設定を読ませません。確かめた範囲（`TestIsolationFetchRunsNoCodeOfTheProject`。ブリッジ上の偽のレジストリと、目印を書くだけのスクリプト）: `credential-provider`、`global-credential-providers` と `[source]` の置き換え、`[credential-alias]` は、修正前に、スクリプトが動き（赤）、修正後は動かない（緑）。`net.git-fetch-with-cli` は、イメージに git がなく、修正前も動かない（イメージに git を入れると赤になる試験がある）。`[http] proxy` は、修正前に、対象が選んだ先へ要求が出て、修正後は出ない。`Cargo.lock` の `source` が指す先へは、cargo 自身が要求を出す（コードは動かないが、内側のネットワークへの要求になる）ので、**取得の前に、`Cargo.lock` の取得元を検査します**: **既定で許すのは crates.io のレジストリだけ**です。git の依存は、ホストを問わず（github.com も）、ほかのレジストリも、**一覧（どのパッケージが、どのリポジトリの、どのコミットか）を出して止まり**、許し方（`-allow-fetch-host HOST`。繰り返せる）を 1 行で言います。見たうえで許してください。許したホストへの取得で、**そのリポジトリが指す先へも、要求が出ます**: git の依存を取るとき、cargo はサブモジュールも取り（URL は、依存のリポジトリの `.gitmodules` にあり、`Cargo.lock` には出ません）、公開のホストは、30x で別のアドレス（内側を含む）へ飛ばせます。確かめた範囲（`TestIsolationFetchFollowsWhatTheAllowedRepositorySays`。ブリッジ上の偽の git ホストと、内側のつもりの偽のレジストリ）: サブモジュールの URL と、30x の先の両方に、要求が出ました（**防げていません**。試験は、この限界を固定するもので、ネットワークの絞り込みが入ったら、要求が出ないことを確かめる試験に反転します）。**取得のネットワークの絞り込み（`docs/DESIGN-fetch-network.md`）が入るまでは、防げません**。許すのは、信用するリポジトリだけにしてください。**`Cargo.lock` だけでは足りません**: `cargo fetch --locked` は、`Cargo.toml` が名指す取得元（git の依存、`[patch]`、`registry-index`）へ、`Cargo.lock` が合わないと気づく**前に**、要求を出します（確かめた: `Cargo.lock` にない git の依存を `Cargo.toml` に書くと、偽のホストに要求が出た）。そこで、対象の中のすべての `Cargo.toml`（`target/` と `.git/` を除く）も、TOML として読み（コードは動かさない）、`git`、`registry-index`、`[patch."URL"]` を、同じ検査にかけます（読めない `Cargo.toml` も止めます）。TOML の読み方が cargo と食い違う入力は、残りうる穴です（絞り込みが塞ぐ）。**残っているもの**: 公開の名前が内側のアドレスに解決される場合（DNS）も、同じ絞り込みで塞ぐ予定です。取得したソースは、そのままボリュームに入ります（抽出では、読み取り専用）。
-- **イメージの cargo は nightly（1.102.0-nightly、2026-11-11）です。取得の段階への、不安定な機能の影響は、確かめた範囲だけ書きます。** (1) `-Z` の機能（`cargo -Zhelp` の一覧: `git`、`gitoxide`、`script`、`bindeps`、`build-std`、`host-config` など）は、コマンドライン、環境変数、cargo の設定（`[unstable]`）からだけ指定できます。取得の段階は、ホストの環境変数を渡さず、対象の設定を読ませないので、対象は `-Z` を足せません（設定を読ませないことは `TestIsolationFetchRunsNoCodeOfTheProject` で確かめた。環境変数は、`docker run` に `-e` を付けないことをコードで確かめただけで、`-Z` の試験はない）。(2) `Cargo.toml` の `cargo-features` は、この nightly が受け付ける 8 つ（`profile-rustflags`、`codegen-backend`、`different-binary-name`、`trim-paths`、`metabuild`、`per-package-target`、`public-dependency`、`open-namespaces`）を、`metabuild` の build スクリプトつきで試した（`TestIsolationFetchUnstableManifestFeatures`）: ネットワークなしで `cargo fetch --locked` が通り、対象のビルドスクリプトは動かない。**確かめていないもの**: 上の 8 つ以外の `cargo-features`（この nightly が受け付けないもの、または、将来の nightly のもの）、cargo のソースの全読み、依存（取得した crate）の `Cargo.toml` の不安定な機能。イメージの nightly を更新したら、この試験を回し直し、この段落を確かめ直してください。**この nightly の cargo は、`git` の実行ファイルがイメージにあると、それを使う（なければ、組み込みの実装に切り替えて警告を出す。将来、警告が失敗になりうる）**ので、イメージに git を入れないこと（`TestIsolationImageHasNoGit` が確かめる）。
-- **CPU とメモリを、使い切らせることは、できます**（上限までは）。サービス妨害は、時間と上限で、有限にするだけです。
-- **カーネルへの、攻撃面は、残ります**（seccomp は、Docker の既定のプロファイル）。
-- **R-21 は、直りません。** 対象の `.cargo/config.toml` の `[env]` で、IR の断片の場所を変えて、IR を空にできます（コンテナの中でも同じ）。安全の問題ではなく、結果の正しさの問題です（別に、コンパイルした crate と断片の突き合わせが要ります）。
-- 対象が大きいと、コンテナの分、遅く、メモリも使います（`docs/DECISIONS.md` の ADR-064 に、測った値）。
-- 同時に走る、ほかの `rivus` のコンテナとは、ボリュームを共有しません（抽出の作業用ボリュームは、コンテナごと）。取得のボリュームは、同じロックファイルなら、共有されます。
+**後回しにしたハードニング**は、課題の一覧にあります([ISSUES.md](ISSUES.md)の #110 以降): 取得のプロキシ、実行の許可の絞り込み、`bsd.sb` の許可の棚卸し、メタデータの見える範囲、メモリとプロセス数の見張り、残ったプロセスの報告、プロファイルの各行の試験、シグナルの `same-sandbox`、端末、macOS の CI(全体)。
 
 ## 同じ作りを、ほかの言語に
 
-コンテナの制限と、起動・時間切れ・出力の上限は、言語を知りません（`cmd/rivus/isolate.go`）。Rust 固有なのは、イメージと、取得（`cargo fetch`）と、抽出の呼び出しだけです。Go（cgo、依存の取得）と Dart（`pub get`、`build_runner`）は、後で、同じ作りに載せます。
+サンドボックス(`internal/sandbox`)は、言語を知りません(プログラムと、読み・書き・実行の許可と、時間・出力の上限だけ)。Rust 固有なのは、2 段階の呼び出しと、取得前の検査(`cmd/rivus/isolate_sandbox_darwin.go`、`isolate_fetch.go`、`isolate_sources.go`)だけです。Go(cgo、依存の取得)と Dart(`pub get`、`build_runner`)は、後で、同じ作りに載せます。
 
-**載せるときに、最初に確かめること**: 取得の道具が、**対象の設定で、コードを動かすか、内側へ要求を出すか**。Go は `go mod download` の `GOPROXY` / `GOFLAGS` / `GONOSUMDB` / `.netrc`（`go.work`、`go.mod` の `replace`、`toolchain`）、Dart は `pub get` の hosted の URL（`pubspec.yaml` の `hosted:`、`PUB_HOSTED_URL`、`pub_cache` の設定）と、フック（`pubspec` の `executables`、`build_runner`）。Rust で、取得が、対象の設定で `credential-provider` のスクリプトを動かした（直した）のと同じ種類のものが、あるはずだと考えて調べる。取得の段階のネットワークの絞り込みは、言語を知らない形にする（`docs/DESIGN-fetch-network.md`）。
+**載せるときに、最初に確かめること**: 取得の道具が、**対象の設定で、コードを動かすか、内側へ要求を出すか**。Go は `go mod download` の `GOPROXY` / `GOFLAGS` / `GONOSUMDB` / `.netrc`(`go.work`、`go.mod` の `replace`、`toolchain`)、Dart は `pub get` の hosted の URL(`pubspec.yaml` の `hosted:`、`PUB_HOSTED_URL`、`pub_cache` の設定)と、フック(`pubspec` の `executables`、`build_runner`)。Rust で、取得が、対象の設定で `credential-provider` のスクリプトを動かした(直した)のと同じ種類のものが、あるはずだと考えて調べる。
 
 ## 検証
 
-`extractor/rust/test/hostile/` は、悪意のある `build.rs` と proc macro を持つ、自作の crate です。見えるもの（マウントの一覧、環境変数の名前、読めるファイルの中の、秘密の置き場の名前）と、止まらない `build.rs`、フォークの無限ループ、メモリを使い切るもの（コンテナの中だけで止まり、コンテナが残らない）、IR の断片のディレクトリに置く、リンクと大きなファイルも試します。ホストの鍵（のつもりのファイル）、プロジェクトの隣のファイル、ネットワーク（1.1.1.1、8.8.8.8、名前の解決）、`/` と `/etc` と対象と依存への書き込み、環境変数（トークンの名前）、`docker.sock`、root と capability を試し、**コンテナの中で、すべて失敗する**ことを、`TestIsolationHostileBuild` が確かめます（`go test ./cmd/rivus -run Isolation`。Docker とイメージが要る。CI では `RIVUS_REQUIRE_DOCKER=1`）。この crate は、ホストでは、動かしません（`.rivus-hostile` を rivus が拒否し、`build.rs` は、イメージの外では、何もせずに panic する。`RIVUS_UNSAFE_HOST_EXEC=1` のときは、テストが skip する）。
+`extractor/rust/test/hostile_sandbox/` は、悪意のあるビルドスクリプトを持つ、自作の crate です。ビルドスクリプトが、probe(`internal/sandbox/probe`)を動かし、サンドボックスから出る、知っている限りの方法を試します(ホームの鍵のつもりのファイル、ネットワーク、書き込み、`osascript` / `launchctl` / `open`、ペーストボード、キーチェーン、設定の書き込み、UNIX ソケット、名前解決)。**すべて失敗する**ことを、`TestSandboxedBuildScriptCannotEscape` が確かめます。サンドボックスなしでは、同じ方法が成功すること(抜け道が実在すること)を、`TestSandboxHolesAreRealWithoutTheSandbox` が確かめ、サンドボックスの下で止まることを `TestSandboxStopsEveryHoleOfTheProbe` と、外に出る道の組 `TestSandboxClosesEveryWayOut` が確かめます。取得の段階で対象の設定を読まないこと、ビルドスクリプトが動かないこと、時間・出力の上限・環境変数も、試験があります。**これらの試験は、開発のマシンで回します**(`RIVUS_SBX_RED=1`、取得の試験は `RIVUS_SBX_NET=1`。害のない印を、サンドボックスの外に作ることがあり、終わりに消します)。CI(`.github/workflows/isolation.yml`)は、隔離に関わるパスが変わったとき、週に 1 回、手動、タグで、`internal/sandbox` の試験だけを macOS で走らせます。
+
+`.rivus-hostile` のあるプロジェクトは、`-unsafe-host-exec` では動かしません(目印がホストに残らない)。
