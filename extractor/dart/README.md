@@ -103,5 +103,6 @@ file_content]`, so that the label a sanitizer adds does not make it fire.
   which is part of the project and is not trusted: it can point at any directory. What is under the project, the
   pub cache (`PUB_CACHE`, or `~/.pub-cache`), the SDK that runs the extractor and the Flutter that holds it
   (`FLUTTER_ROOT`) is read; anything else is left out and the stream says so (a `load_error` that names the
-  directory). `--allow-deps-under DIR` (repeatable; `rivus analyze -allow-deps-under DIR`) reads the packages
+  directory, `unread` set, its message starts with `dependency_not_allowed`: rivus reports it in `summary.unread` and on
+  the standard error). `--allow-deps-under DIR` (repeatable; `rivus analyze -allow-deps-under DIR`) reads the packages
   under `DIR` too: a monorepo whose packages are siblings of the one that is analysed needs it.

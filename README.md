@@ -123,7 +123,7 @@ rivus query -site <ID> ./...           # sites の 1 件から始める
 | `models coverage` | どの関数にモデルを書くと効果があるかを、効果の大きい順に出す |
 | `debug` | 調査と開発のためのコマンド。普段は使わない（今は `debug extract`: 中立の IR を書き出す） |
 
-フラグは `rivus <command> -h` で出ます。`-h` は、普段使うフラグだけを出します。診断と調整のフラグ（プロファイル、解析の上限、サンドボックスの調整など）は、`-h -help-all`（または `-help-all` だけ）で全部出ます。フラグそのものは、どちらの表示でも同じように使えます。よく使うもの: `-C <dir>`、`-rules <file>`（繰り返し可）、`-no-deps`（依存のソースを読まない。軽いが、依存への呼び出しは推測になる）、`-tests`（テストのコードも読む）、`-detail summary`（経路とコードを省く）、`-timeout`、`-v`。`-resolve-func-values`（実験。既定 off）は、呼び出し先が分からない関数値の呼び出しに、自分のコードで作った関数を候補として補ってから解析します（`stats.func_values` に、補った数が出ます）。`rivus index` に付けると、補った辺が索引に入り、`graph callers / callees / path` の答えに `supplemented` で出ます（このフラグの有無は索引のキーに入るので、索引を作ったときと同じ指定で問い合わせます）。`-timeout` は、補う解析と、そのあとの解析を合わせた上限です。
+フラグは `rivus <command> -h` で出ます。`-h` は、普段使うフラグだけを出します。診断と調整のフラグ（プロファイル、解析の上限、サンドボックスの調整など）は、`-h -help-all`（または `-help-all` だけ）で全部出ます。フラグそのものは、どちらの表示でも同じように使えます。よく使うもの: `-C <dir>`、`-rules <file>`（繰り返し可）、`-no-deps`（依存のソースを読まない。軽いが、依存への呼び出しは推測になる）、`-tests`（テストのコードも読む）、`-detail summary`（経路とコードを省く）、`-timeout`、`-v`。`-resolve-func-values`（実験。既定 off）は、呼び出し先が分からない関数値の呼び出しに、自分のコードで作った関数を候補として補ってから解析します（`stats.func_values` に、補った数が出ます）。`rivus index` に付けると、補ったエッジが索引に入り、`graph callers / callees / path` の答えに `supplemented` で出ます（このフラグの有無は索引のキーに入るので、索引を作ったときと同じ指定で問い合わせます）。`-timeout` は、補う解析と、そのあとの解析を合わせた上限です。
 
 `index` と `graph` の詳しい使い方は [docs/GRAPH.md](docs/GRAPH.md) にあります。AI エージェントに rivus を使わせるときの手引き(どのコマンドを、どのフラグで実行し、出力のどこを読むか)は [docs/AGENT-GUIDE.md](docs/AGENT-GUIDE.md) にあります。
 
@@ -141,6 +141,7 @@ jq '.stats | {timed_out, converged, largest_scc, largest_scc_packages}' out.json
 - 表の列は、`dep`(依存のパッケージか)、`functions`(関数の数)、`reanalyses`(関数の解析の回数)、`spent_ms`(かかった時間)、`summary_elems`(要約の要素の数)です。
 - `largest_scc_packages` は、互いに呼び合う関数の最大のかたまり(`largest_scc`)が、どのパッケージの関数でできているかの上位 10 件です。かたまりの大きさが解析の重さを決めるので、ここに出る依存が、モデルで切る候補です。
 - `stats.timed_out` が true でも、途中までの内訳が出ます。`packages_top` と `largest_summary` は、時間切れまでに解析した分で、`largest_scc_packages` は呼び出しグラフから解析の前に作るので、解析が始まる前に切れても出ます。`-timeout` は、互いに呼び合う大きいかたまりの中でも、関数ごとに見ます(1 つの関数の解析の中は `-func-timeout`)。
+- `stats.timed_out` は、時間切れでないとき、出力にありません(jq では `null`)。
 - 共有してよいのは、この表(パッケージ名と数字)だけです。コードや経路(`-detail summary` で省いています)は共有しないでください。パッケージ名が非公開のものなら、共有の前に確認してください。
 
 ### 言語ごとの準備
@@ -226,6 +227,9 @@ LLM にモデルを書かせ、人や別の手段で確かめる、という使�
 - **Rust は、対象のビルドが、解析の結果そのものも書き換えられます。** IR の断片を書く場所が、対象のビルドから見えるためです（隔離の下でも同じです。隔離が守るのは、マシンと秘密で、結果の正しさではありません）。
 - **対象のディレクトリに付いてくるルール（`.rivus/rules/*.yaml`）は、フラグなしで読まれます。** 対象を書いた人は、そこで finding を消せます。読んだファイルと、消せるものの数は、出力の `project_rules` に出ます。**信頼できないコードでは `-no-project-rules` を付けてください。**
 - Dart の依存は、プロジェクト、pub のキャッシュ、SDK の下のものだけ読みます（`package_config.json` は対象の一部で、どこでも指せるため）。ほかの場所は `-allow-deps-under DIR` で足します。
+  - 許可の外の依存は読まず、**読まなかったことを `summary.unread`(理由は `dependency_not_allowed`)と標準エラーに出します**(結果が、その依存を読んだものに見えないように)。
+  - 複数のパッケージを 1 つのリポジトリに置いている(モノレポ)とき、アプリの依存が、同じリポジトリの別のパッケージを `path:` で指していることがあります。そのときは、アプリを `-C` に、リポジトリのルートを `-allow-deps-under` に指します: `rivus analyze -lang dart -C <リポジトリ>/app -allow-deps-under <リポジトリ>`。
+  - 複数のパッケージの親を `-C` に指しても読めます(依存は `package:` の ID で解決されます)。同じ依存の別のバージョンを 2 つのパッケージが使うときは、1 つしか読めず、もう 1 つは `summary.unread`(`dependency_not_linked`)に出ます。
 
 Rust 以外の信頼できないリポジトリは、使い捨ての環境（VM など）で解析してください。依存を先に取得してから、ネットワークを切り、ソースを読み取り専用で渡す形です。
 
@@ -253,6 +257,8 @@ RIVUS_RUST=$PWD/extractor/rust/target/debug/rivus-rust go test ./cmd/rivus   # R
 ```
 
 PR の CI は `go test -short` で実行します(重いテストは、`-short` のときにスキップされます)。main への push、週 1 回の実行、tagpr のリリース PR では、全部のテストを実行します。main の実行が失敗したら、次の作業より先に、修正するか、原因の PR を取り消します。
+
+言語に閉じた変更の PR(`extractor/dart` や `bench/zoo-dart` だけの変更など)では、ほかの言語の extractor のジョブ(`dart` または `rust`)をスキップします。共通の場所(`cmd`、`internal`、`testdata`、共通の `bench` など)を変えた PR は、両方を実行します。
 
 正しさは、役目の違うテストとベンチで確かめています（[bench/README.md](bench/README.md)）。
 

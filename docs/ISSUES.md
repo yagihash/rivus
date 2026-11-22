@@ -32,8 +32,8 @@
 | [#94](issues/94-stats-unstable-misnamed.md) | stats.unstable が、1 回で収束した解析でも 10 件並ぶ(名前と中身が合わない) | 道具・ベンチ | 全 | 後回し | open | - |
 | [#95](issues/95-graph-index-key-gaps.md) | graph の索引の鍵に、Dart の extractor のソース、Rust のワークスペースの Cargo.lock、-C の外の … | 道具・ベンチ | 全(graph) | 4 | open | - |
 | [#96](issues/96-workers-output-difference.md) | -workers 1 と 2 以上で、8 関数以上の SCC を含む入力の出力(代表の経路、stats)が違う(R-43。直した) | 道具・ベンチ(直した) | 全 | 2(経路の欠け・揺れ) | closed | `cmd/rivus/determinism_test.go`(`TestDeterministicLargeSCC`) |
-| [#98](issues/98-dart-tostring-edges.md) | Dart: 文字列補間と sinkAny が呼ぶ toString が、呼び出しの辺(グラフ)にならない | 道具・ベンチ(グラフの辺) | Dart | 1 | open | - |
-| [#99](issues/99-dart-value-calls-zero-candidates.md) | Dart: 値として持たれた関数・クロージャ(フィールド、map、返したクロージャ、変数)の呼び出しが、候補 0 件のグラフの辺になる | 道具・ベンチ(グラフの辺) | Dart | 1 | open | zoo `F/clos/*`、`TestZeroCandidateCalls`、`TestFuncValuesDart` |
+| [#98](issues/98-dart-tostring-edges.md) | Dart: 文字列補間と sinkAny が呼ぶ toString が、呼び出しのエッジ(グラフ)にならない | 道具・ベンチ(グラフのエッジ) | Dart | 1 | open | - |
+| [#99](issues/99-dart-value-calls-zero-candidates.md) | Dart: 値として持たれた関数・クロージャ(フィールド、map、返したクロージャ、変数)の呼び出しが、候補 0 件のグラフのエッジになる | 道具・ベンチ(グラフのエッジ) | Dart | 1 | open | zoo `F/clos/*`、`TestZeroCandidateCalls`、`TestFuncValuesDart` |
 | [#108](issues/108-model-row-loses-flows-silently.md) | モデルの行が、既定の扱いより流れを減らしても、何も報告しない | サイレントな見逃し(モデルの書き方の抜け) | 全 | 3 / 5 | open | `cmd/rivus/coverage_stub_test.go`(テンプレートのみ) |
 | [#109](issues/109-stale-extractor-used-silently.md) | extractor(やイメージ)が古くても、何も報告せずに、その結果を出す | 誤った結果を何も報告せずに出す | Rust / Dart | 0 / 1 | open | -(直すときにテスト) |
 | [#110](issues/110-sandbox-fetch-proxy.md) | 取得の段階のネットワークを絞る(宛先の許可リストと、解決したアドレスの検査) | サイレントな見逃しではない(隔離の漏れ) | Rust | 0 | open | - |
