@@ -1,4 +1,2 @@
-rust	pkg/octocrab/issue_body.rs	miss	@source(pkg-octocrab-issue-body-decoy) @miss(unmodeled_library_call) @ref(model-octocrab-field-sources)	fn decoy() { @decoy
-rust	pkg/octocrab/issue_body.rs	miss	@source(pkg-octocrab-issue-body-vuln) @miss(unmodeled_library_call) @ref(model-octocrab-field-sources) @sink(pkg-octocrab-issue-body-vuln)	fn vuln() { @vuln
 rust	pkg/octocrab/issue_body.rs	sink-none	@sink(none)	fn fixed() { @fixed
 rust	pkg/octocrab/issue_body.rs	sink-none	@sink(none) @nosink(pkg-octocrab-issue-body-decoy)	fn decoy() { @decoy

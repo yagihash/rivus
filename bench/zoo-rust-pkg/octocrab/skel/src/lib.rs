@@ -10,6 +10,14 @@ pub mod models {
             pub title: String,
             pub body: Option<String>,
         }
+
+        impl Issue {
+            /// Not of the crate (it has no constructor; a value comes from the response): how a cell makes an issue without
+            /// writing the field, which is a source of the rows.
+            pub fn zoo(body: String) -> Issue {
+                Issue { title: String::new(), body: Some(body) }
+            }
+        }
     }
 
     pub mod repos {
@@ -22,6 +30,11 @@ pub mod models {
         }
 
         impl Content {
+            /// Not of the crate (a value comes from the response): how a cell makes a file without writing the field.
+            pub fn zoo(content: String) -> Content {
+                Content { name: String::new(), path: String::new(), content: Some(content) }
+            }
+
             /// The text of the file (the crate decodes the base64 of `content`; the skeleton returns it as it is).
             pub fn decoded_content(&self) -> Option<String> {
                 self.content.clone()

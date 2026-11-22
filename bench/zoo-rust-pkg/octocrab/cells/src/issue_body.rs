@@ -1,5 +1,5 @@
 // @cell(F/pkg/octocrab/issue-body)
-// @shape: a value that a user of GitHub wrote is read with the field Issue.body of octocrab (a skeleton of it): no row makes it a source (a known miss)
+// @shape: a value that a user of GitHub wrote is read with the field Issue.body of octocrab (a skeleton of it): the source of the built-in rows (a kind: field row)
 use octocrab::models::issues::Issue;
 use zoo_mark as m;
 
@@ -10,14 +10,12 @@ pub fn register() {
 }
 
 fn issue(tag: &str) -> Issue {
-    let mut i = Issue::default();
-    i.body = Some(m::In::new(tag).value);
-    i
+    Issue::zoo(m::In::new(tag).value)
 }
 
 fn vuln() { // @vuln
     let i = issue("pkg-octocrab-issue-body-vuln");
-    m::sink_cmd(&i.body.unwrap()); // @source(pkg-octocrab-issue-body-vuln) @miss(unmodeled_library_call) @ref(model-octocrab-field-sources) @sink(pkg-octocrab-issue-body-vuln)
+    m::sink_cmd(&i.body.unwrap()); // @source(pkg-octocrab-issue-body-vuln) @sink(pkg-octocrab-issue-body-vuln)
 }
 
 fn fixed() { // @fixed
@@ -27,7 +25,7 @@ fn fixed() { // @fixed
 
 fn decoy() { // @decoy
     let i = issue("pkg-octocrab-issue-body-decoy");
-    let v = i.body.unwrap(); // @source(pkg-octocrab-issue-body-decoy) @miss(unmodeled_library_call) @ref(model-octocrab-field-sources)
+    let v = i.body.unwrap(); // @source(pkg-octocrab-issue-body-decoy)
     m::sink_cmd("constant"); // @sink(none) @nosink(pkg-octocrab-issue-body-decoy)
     m::sink_sql(&v); // @sink(pkg-octocrab-issue-body-decoy)
 }
