@@ -107,6 +107,11 @@ zoo のゲート(`scripts/zoo-loosened-check.sh`、#167): 新しいセル(`bench
 
 - ほかのファイル(`docs/DECISIONS.md`、`docs/ISSUES.md`、直下の README、コード、ゲート、ワークフロー)は、さわらない。conflict が出たら、main 側の行を残して、自分の行を足し直す。
 
+**4 節の補足(骨組みの記録、ロックの生成、Rust の型の綴り)**:
+- **Go の骨組みが、名前の sink(`resource_name` など)で記録するもの**: `zoo/mark` の `mark.SinkCmd` で、その引数(名前)を記録する(fixed のセルでは、`mark.CleanCmd` で消した値が入るので、記録が空になる)。骨組みの本体は「公開のシグネチャ + 記録するだけ」で、それ以外はしない。見本は `bench/zoo-go-pkg/zoo_synth/skel/zoosynth.go` の `Run`(`func Run(cmd string) { mark.SinkCmd(cmd) }`)と、`bench/zoo-go-pkg/gin/skel/gin.go`(`mark.Src` を呼ぶ source の側)。
+- **`bench/zoo/marks.d/` のロックの生成**: 新しいセルを足したら、`ZOO_MARKS_UPDATE=1 go test ./cmd/rivus -run '^TestZooMarksLock$'`(`bench/zoo/README.md`、`cmd/rivus/zoo_marks_test.go`)。新しいセルの `@sink(none)`、`@miss`、`@fp` の行は、承認なしで通る(`@miss` と `@fp` は `@ref` が要る。3 節)。既存のセルの行は変えない。
+- **Rust の型の綴りは、extractor が書く名前で確認する**: 実例: axum の `axum::extract::Request` は、IR では `axum::http::Request` と書かれる。綴りを確認せずに `param_type` の `type:` を書くと、source が当たらない。
+
 ## 5. PR(完成)
 
 - 題: `feat(model): <言語> <パッケージ> の組み込みモデル`(1 節の題と同じ)。`/pr` のスキルで作る(1 節のドラフトを更新する)。
