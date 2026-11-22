@@ -1,0 +1,12 @@
+module zoopkg/sqlx
+
+go 1.27
+
+require (
+	github.com/jmoiron/sqlx v1.4.0
+	zoo v0.0.0
+)
+
+replace zoo => ../../zoo-go
+
+replace github.com/jmoiron/sqlx => ./skel
