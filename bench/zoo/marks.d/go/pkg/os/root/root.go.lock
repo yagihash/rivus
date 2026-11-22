@@ -1,0 +1,2 @@
+go	pkg/os/root/root.go	sink-none	@sink(none)	func fixed() { @fixed
+go	pkg/os/root/root.go	sink-none	@sink(none) @nosink(pkg-os-root-decoy)	func decoy() { @decoy

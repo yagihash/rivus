@@ -33,6 +33,9 @@ propagators:
   - symbol: strings.IndexFunc
     pure: true
     calls: [{fn: arg1, with: [arg0]}]
+  - symbol: os.Expand
+    flows: [{from: arg0, to: result0}]
+    calls: [{fn: arg1, with: [arg0], ret: result0}]
   - symbol: strings.Map
     calls: [{fn: arg0, with: [arg1], ret: result0}]
   - symbol: strings.TrimFunc
