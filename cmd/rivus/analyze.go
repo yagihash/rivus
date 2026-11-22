@@ -29,9 +29,11 @@ type analyzeOpts struct {
 	lockProf string
 	memProf  string
 	// the diagnostics (ADR-061)
-	passStats    bool
-	traceElement string
-	funcValues   string
+	passStats     bool
+	passStatsTop  int
+	passStatsSort string
+	traceElement  string
+	funcValues    string
 	// resolveFuncValues gives the calls of function values that have no candidate the functions that the analysis of the
 	// function values carries to them, before the taint analysis (docs/DESIGN-callouts.md, 5.6). Off by default.
 	resolveFuncValues bool
@@ -103,6 +105,8 @@ func (o *analyzeOpts) register(fs *flag.FlagSet) {
 	fs.DurationVar(&o.funcTimeout, "func-timeout", taint.DefaultOptions().FuncTimeout, "stop the analysis of one function after this long (it is then recorded as depth_limit, func_timeout: a clock, so the result then depends on the load of the machine)")
 	fs.StringVar(&o.irFile, "ir", "", "analyse the neutral IR in this JSON Lines file (from an extractor of another language) instead of Go packages")
 	fs.BoolVar(&o.passStats, "pass-stats", false, "add to stats what changed in the summaries in each pass (pass_changes) and the functions without a model that tainted values reached the most (unmodeled_top); the findings are the same (development)")
+	fs.IntVar(&o.passStatsTop, "pass-stats-top", taint.DefaultOptions().PassStatsTop, "with -pass-stats: how many packages packages_top lists (0: all of them) (development)")
+	fs.StringVar(&o.passStatsSort, "pass-stats-sort", "reanalyses", "with -pass-stats: what packages_top is ordered by: reanalyses, time, functions or elems (equal values go by name; time is a clock, so it differs from run to run) (development)")
 	fs.StringVar(&o.funcValues, "func-values", "", "write to this file (JSON Lines) the diagnostic of the function values: for each call of a function value, the functions that the elements carried by the analysis say it may call, beside the candidates it has otherwise (the analysis is run once more, about twice the time; the findings and the output are the same) (development, docs/DESIGN-callouts.md 5)")
 	fs.BoolVar(&o.resolveFuncValues, "resolve-func-values", false, "give the calls of function values that have no candidate the functions that the analysis of the function values carries to them (functions made in the code of the project), then run the taint analysis; the calls keep their unresolved_callee uncertainty. It runs the analysis of the function values up to 4 times more (nothing runs when no such call exists), and stats.func_values says what it did (docs/DESIGN-callouts.md 5.6)")
 	fs.StringVar(&o.traceElement, "trace-element", "", "print to stderr where the taint of this source (a site ID) first leaves its function and enters a package variable; the findings are the same (development)")
@@ -114,6 +118,11 @@ func (o *analyzeOpts) register(fs *flag.FlagSet) {
 // analyze runs the whole pipeline. extra rule sets are added to the ones
 // loaded from the flags.
 func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*report.Report, error) {
+	switch o.passStatsSort {
+	case "", "reanalyses", "time", "functions", "elems":
+	default:
+		return nil, fmt.Errorf("-pass-stats-sort: %q is not one of reanalyses, time, functions, elems", o.passStatsSort)
+	}
 	phase := o.phaseTimer()
 	rules, err := o.loadRules(extra...)
 	if err != nil {
@@ -147,6 +156,8 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	opts.NumericTaint = o.numeric
 	opts.Workers = o.workers
 	opts.PassStats = o.passStats
+	opts.PassStatsTop = o.passStatsTop
+	opts.PassStatsSort = o.passStatsSort
 	opts.TraceElement = o.traceElement
 	if o.verbose {
 		opts.SlowThreshold = 300 * time.Millisecond

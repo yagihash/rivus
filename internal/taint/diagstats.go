@@ -300,8 +300,9 @@ func (e *Engine) notePackage(fn *sg.Func, took time.Duration) {
 	a.spent += took
 }
 
-// packagesTop is the 20 packages with the most analyses of their functions (the count does not depend on
-// the clock, so the list does not; ties: the larger summaries, then the name).
+// packagesTop is the packages (PassStatsTop of them, 20 by default) with the most analyses of their functions (the count
+// does not depend on the clock, so the list does not, unless -pass-stats-sort is time; ties: the larger summaries, then
+// the name).
 func (e *Engine) packagesTop() []PackageStat {
 	by := map[string]*PackageStat{}
 	get := func(u string) *PackageStat {
@@ -341,16 +342,59 @@ func (e *Engine) packagesTop() []PackageStat {
 	}
 	sort.Slice(out, func(i, j int) bool {
 		a, b := out[i], out[j]
-		if a.Reanalyses != b.Reanalyses {
-			return a.Reanalyses > b.Reanalyses
-		}
-		if a.SummaryElems != b.SummaryElems {
-			return a.SummaryElems > b.SummaryElems
+		switch e.opts.PassStatsSort {
+		case "time":
+			if a.SpentMilli != b.SpentMilli {
+				return a.SpentMilli > b.SpentMilli
+			}
+		case "functions":
+			if a.Functions != b.Functions {
+				return a.Functions > b.Functions
+			}
+		case "elems":
+			if a.SummaryElems != b.SummaryElems {
+				return a.SummaryElems > b.SummaryElems
+			}
+		default:
+			if a.Reanalyses != b.Reanalyses {
+				return a.Reanalyses > b.Reanalyses
+			}
+			if a.SummaryElems != b.SummaryElems {
+				return a.SummaryElems > b.SummaryElems
+			}
 		}
 		return a.Package < b.Package
 	})
-	if len(out) > 20 {
-		out = out[:20]
+	if n := e.opts.PassStatsTop; n > 0 && len(out) > n {
+		out = out[:n]
+	}
+	return out
+}
+
+// SCCPackage is the number of functions of the largest component that belong to one package.
+type SCCPackage struct {
+	Package   string `json:"package"`
+	Functions int    `json:"functions"`
+}
+
+// largestSCCPackages is the 10 packages with the most functions in the largest component (ties: the name).
+func (e *Engine) largestSCCPackages() []SCCPackage {
+	count := map[string]int{}
+	for _, fn := range e.largestSCC {
+		count[UnitOf(fn.ID)]++
+	}
+	out := make([]SCCPackage, 0, len(count))
+	for u, n := range count {
+		out = append(out, SCCPackage{u, n})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Functions != out[j].Functions {
+			return out[i].Functions > out[j].Functions
+		}
+		return out[i].Package < out[j].Package
+	})
+	if len(out) > 10 {
+		out = out[:10]
 	}
 	return out
 }

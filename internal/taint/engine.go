@@ -56,6 +56,10 @@ type Options struct {
 	// elements first leave their function is printed to stderr. Neither changes the findings.
 	PassStats    bool
 	TraceElement string
+	// PassStatsTop is how many packages packages_top lists (0: all of them), and PassStatsSort is what they are
+	// ordered by: "reanalyses" (the default), "time", "functions" or "elems"; equal values go by name.
+	PassStatsTop  int
+	PassStatsSort string
 	// FuncValues is the diagnostic of the function values (funcvalues.go): the places that make a function value are
 	// synthetic sources, the calls of a function value are synthetic sinks (the sites must be those of
 	// FuncValueSites), and Result.FuncCandidates says what each call may call. The findings are not reported.
@@ -66,7 +70,7 @@ type Options struct {
 
 // DefaultOptions are the defaults.
 func DefaultOptions() Options {
-	return Options{K: 3, MaxPasses: 12, Budget: 400000, FuncTimeout: 30 * time.Second}
+	return Options{K: 3, MaxPasses: 12, Budget: 400000, FuncTimeout: 30 * time.Second, PassStatsTop: 20}
 }
 
 // Engine runs the whole-program analysis.
@@ -78,6 +82,7 @@ type Engine struct {
 	unmodeled   unmodeledCount
 	traced      map[*sg.Func]bool
 	pkgs        map[string]*pkgAcc
+	largestSCC  []*sg.Func // the functions of the largest component (-pass-stats only)
 	// dispatch caches dispatchGuards by call: what it makes depends on the call
 	// alone, and it is asked at every analysis of the function.
 	dispatch sync.Map // *sg.Instr -> map[*sg.Func][]Guard
@@ -466,7 +471,10 @@ type Stats struct {
 	UnmodeledTop []UnmodeledSymbol `json:"unmodeled_top,omitempty"`
 	// PackagesTop and DispatchCandidates are the same kind (ADR-059): where the work went, by package, and how many
 	// functions the dynamic calls may reach.
-	PackagesTop        []PackageStat       `json:"packages_top,omitempty"`
+	PackagesTop []PackageStat `json:"packages_top,omitempty"`
+	// LargestSCCPackages is the packages of the functions of the largest component, the 10 with the most (-pass-stats).
+	// It is made from the call graph before the analysis starts, so a run that timed out has it too.
+	LargestSCCPackages []SCCPackage        `json:"largest_scc_packages,omitempty"`
 	DispatchCandidates *DispatchCandidates `json:"dispatch_candidates,omitempty"`
 	// DispatchNotNarrowed counts the calls through Fn::call (Rust) that have several candidates and kept every
 	// one, by why: the callers of a function may not all be read, the receiver comes from something that is not
@@ -560,6 +568,9 @@ func (e *Engine) Run() *Result {
 		for _, scc := range lv {
 			if len(scc) > st0.LargestSCC {
 				st0.LargestSCC = len(scc)
+				if e.opts.PassStats {
+					e.largestSCC = scc
+				}
 			}
 		}
 	}
@@ -619,9 +630,20 @@ func (e *Engine) Run() *Result {
 						anyDone.Store(true)
 						reanalyses.Add(int64(len(todo)))
 						results := make([]*fnResult, len(todo))
-						runParallel(len(todo), workers, func(i int) { results[i] = e.compute(todo[i]) })
+						// the clock is looked at before each function: after the limit the rest of the round is not
+						// computed (its result stays nil and is not published)
+						runParallel(len(todo), workers, func(i int) {
+							if expired() {
+								timedOut.Store(true)
+								return
+							}
+							results[i] = e.compute(todo[i])
+						})
 						progress := false
 						for i, fn := range todo {
+							if results[i] == nil {
+								continue
+							}
 							if e.commit(fn, results[i], callers) {
 								progress = true
 								changedMu.Lock()
@@ -1382,6 +1404,7 @@ func (e *Engine) collect(st Stats) *Result {
 	if e.opts.PassStats {
 		res.Stats.UnmodeledTop = e.unmodeledTop(res.Findings)
 		res.Stats.PackagesTop = e.packagesTop()
+		res.Stats.LargestSCCPackages = e.largestSCCPackages()
 		res.Stats.DispatchCandidates = e.dispatchCandidates()
 	}
 	return res
