@@ -82,9 +82,9 @@ func checkDogfood(t *testing.T, goos, flowsFile string, wantCaptureUnbound int) 
 	}
 	// runExtract is declared as a source too, and no sink of the rules is reachable from
 	// it: it had 11 findings while a param source was written back to the caller
-	// (ADR-048), and none of them had a step in runExtract.
-	if len(entries) != 8 {
-		t.Errorf("want findings from the 8 commands that reach a sink, got from %d: %v", len(entries), entries)
+	// (ADR-048), and none of them had a step in runExtract. "rivus graph" has two entries (runGraphInfo and runGraphQuery), so there are 9.
+	if len(entries) != 9 {
+		t.Errorf("want findings from the 9 commands that reach a sink, got from %d: %v", len(entries), entries)
 	}
 	// Before ADR-048 (8 sources x 11 sinks = 88 findings) 77 paths did not go
 	// through their own source function: the same object was written back by one

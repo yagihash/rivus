@@ -24,9 +24,12 @@ cmd/rivus.runExtract -> cmd/rivus.projectToolchain [os.ReadFile]  # the same kin
 cmd/rivus.runExtract -> cmd/rivus.projectToolchain [os.ReadFile]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
 cmd/rivus.runExtract -> internal/frontend/gossa.countTestFiles [os.ReadDir]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
 cmd/rivus.runExtract -> internal/sandbox.Run [os/exec.Command]  # the project, the extractor and the paths that the flags name are what the sandbox runs and prepares (the run of a build under the sandbox: docs/DESIGN-macos-sandbox.md)
-cmd/rivus.runGraph -> (*cmd/rivus.keyCtx).extractorConfig [os.ReadFile]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
-cmd/rivus.runGraph -> cmd/rivus.runVersion [os/exec.CommandContext]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
-cmd/rivus.runGraph -> internal/graphdb.hashFile [os.Open]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
+cmd/rivus.runGraphInfo -> (*cmd/rivus.keyCtx).extractorConfig [os.ReadFile]
+cmd/rivus.runGraphInfo -> cmd/rivus.runVersion [os/exec.CommandContext]
+cmd/rivus.runGraphInfo -> internal/graphdb.hashFile [os.Open]
+cmd/rivus.runGraphQuery -> (*cmd/rivus.keyCtx).extractorConfig [os.ReadFile]
+cmd/rivus.runGraphQuery -> cmd/rivus.runVersion [os/exec.CommandContext]
+cmd/rivus.runGraphQuery -> internal/graphdb.hashFile [os.Open]
 cmd/rivus.runIndex -> (*cmd/rivus.analyzeOpts).analyze [os.Create]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
 cmd/rivus.runIndex -> (*cmd/rivus.analyzeOpts).analyze [os.Create]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
 cmd/rivus.runIndex -> (*cmd/rivus.analyzeOpts).analyze [os.Create]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
@@ -44,16 +47,16 @@ cmd/rivus.runIndex -> internal/graphdb.Write [os.Rename]  # the same kind of flo
 cmd/rivus.runIndex -> internal/graphdb.Write$1 [os.Remove]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
 cmd/rivus.runIndex -> internal/graphdb.hashFile [os.Open]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
 cmd/rivus.runIndex -> internal/sandbox.Run [os/exec.Command]  # the project, the extractor and the paths that the flags name are what the sandbox runs and prepares (the run of a build under the sandbox: docs/DESIGN-macos-sandbox.md)
-cmd/rivus.runModels -> (*cmd/rivus.analyzeOpts).analyze [os.Create]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
-cmd/rivus.runModels -> (*cmd/rivus.analyzeOpts).analyze [os.Create]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
-cmd/rivus.runModels -> (*cmd/rivus.analyzeOpts).analyze [os.Create]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
-cmd/rivus.runModels -> (*cmd/rivus.analyzeOpts).extractRaw [os/exec.Command]  # the project, the extractor and the paths that the flags name are what the sandbox runs and prepares (the run of a build under the sandbox: docs/DESIGN-macos-sandbox.md)
-cmd/rivus.runModels -> cmd/rivus.readIR [os.Open]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
-cmd/rivus.runModels -> cmd/rivus.writeFuncValues [os.Create]  # the path of -func-values (an output file of analyze: the table of the diagnostic); the other commands share the flags
-cmd/rivus.runModels -> internal/frontend/gossa.countTestFiles [os.ReadDir]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
-cmd/rivus.runModels -> internal/graphdb.hashFile [os.Open]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
-cmd/rivus.runModels -> internal/report.Load [os.ReadFile]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
-cmd/rivus.runModels -> internal/sandbox.Run [os/exec.Command]  # the project, the extractor and the paths that the flags name are what the sandbox runs and prepares (the run of a build under the sandbox: docs/DESIGN-macos-sandbox.md)
+cmd/rivus.runModelsCoverage -> (*cmd/rivus.analyzeOpts).analyze [os.Create]
+cmd/rivus.runModelsCoverage -> (*cmd/rivus.analyzeOpts).analyze [os.Create]
+cmd/rivus.runModelsCoverage -> (*cmd/rivus.analyzeOpts).analyze [os.Create]
+cmd/rivus.runModelsCoverage -> (*cmd/rivus.analyzeOpts).extractRaw [os/exec.Command]
+cmd/rivus.runModelsCoverage -> cmd/rivus.readIR [os.Open]
+cmd/rivus.runModelsCoverage -> cmd/rivus.writeFuncValues [os.Create]  # the path of -func-values (an output file of analyze: the table of the diagnostic); the other commands share the flags
+cmd/rivus.runModelsCoverage -> internal/frontend/gossa.countTestFiles [os.ReadDir]
+cmd/rivus.runModelsCoverage -> internal/graphdb.hashFile [os.Open]
+cmd/rivus.runModelsCoverage -> internal/report.Load [os.ReadFile]
+cmd/rivus.runModelsCoverage -> internal/sandbox.Run [os/exec.Command]
 cmd/rivus.runQuery -> (*cmd/rivus.analyzeOpts).analyze [os.Create]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
 cmd/rivus.runQuery -> (*cmd/rivus.analyzeOpts).analyze [os.Create]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
 cmd/rivus.runQuery -> (*cmd/rivus.analyzeOpts).analyze [os.Create]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it

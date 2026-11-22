@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -384,13 +385,15 @@ const (
 	DetailSnippet = "snippet" // everything (default)
 )
 
+// DetailLevels are the detail levels: the one list that the check (ValidDetail), the help of -detail and the completion read.
+var DetailLevels = []string{DetailSummary, DetailSnippet}
+
 // ValidDetail reports whether level is a detail level.
 func ValidDetail(level string) error {
-	switch level {
-	case "", DetailSnippet, DetailSummary:
+	if level == "" || slices.Contains(DetailLevels, level) {
 		return nil
 	}
-	return fmt.Errorf("unknown detail level %q (want %s or %s)", level, DetailSummary, DetailSnippet)
+	return fmt.Errorf("unknown detail level %q (want %s)", level, strings.Join(DetailLevels, " or "))
 }
 
 // WithDetail returns a copy of the report reduced to the detail level. It

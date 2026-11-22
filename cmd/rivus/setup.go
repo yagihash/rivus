@@ -14,29 +14,29 @@ import (
 // rivus setup rust: prepares what the extraction of Rust needs, outside the sandbox, from trusted sources: the pinned toolchain (from the Rust
 // project, with rustup) and the extractor (built from the source of rivus). It is a command of its own, run on purpose: the commands that
 // read a project never download or build anything for themselves.
-const setupUsage = `rivus setup - prepare what reading a language needs
+// setupRustCmd is "rivus setup rust".
+type setupRustCmd struct {
+	source *string
+	yes    *bool
+}
 
-Usage:
-  rivus setup <command> [flags]
-
-Commands:
-  rust      the toolchain and the extractor that reading Rust needs (on purpose, outside the sandbox)
-
-Run "rivus setup <command> -h" for the flags of a command.
-`
-
-func runSetup(argv []string) error {
-	if handled := checkSubcommand("setup", argv, setupUsage, "rust"); handled {
-		return nil
-	}
-	fs := flag.NewFlagSet("setup rust", flag.ContinueOnError)
-	source := fs.String("source", "", "the directory of the source of the Rust extractor (extractor/rust of the repository of rivus). Required: it is built and run on this machine, outside the sandbox, so it is never taken from the directory you are in (that may be a project that you are reading)")
-	yes := fs.Bool("y", false, "do not ask before the download")
+func setupRustFlags(fs *flag.FlagSet) *setupRustCmd {
+	c := &setupRustCmd{}
+	c.source = fs.String("source", "", "the directory of the source of the Rust extractor (extractor/rust of the repository of rivus). Required: it is built and run on this machine, outside the sandbox, so it is never taken from the directory you are in (that may be a project that you are reading)")
+	c.yes = fs.Bool("y", false, "do not ask before the download")
 	usual(fs, "source", "y")
-	prepareFlags(fs, argv[1:])
-	if err := fs.Parse(argv[1:]); err != nil {
+	kind(fs, "dir", "source")
+	return c
+}
+
+func runSetupRust(argv []string) error {
+	fs := flag.NewFlagSet("setup rust", flag.ContinueOnError)
+	c := setupRustFlags(fs)
+	prepareFlags(fs, argv)
+	if err := fs.Parse(argv); err != nil {
 		return err
 	}
+	source, yes := c.source, c.yes
 	if runtime.GOOS != "darwin" {
 		return fmt.Errorf("rivus setup rust prepares the extraction under the sandbox of macOS, which this system does not have: a Rust project that you trust is read with -unsafe-host-exec, with rivus-rust that you built yourself (extractor/rust/README.md)")
 	}

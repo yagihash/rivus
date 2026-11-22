@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"os"
 
 	"github.com/yagihash/rivus/internal/ir"
@@ -23,21 +22,37 @@ type sitesOutput struct {
 	SkippedLanguages []report.SkippedLanguage `json:"skipped_languages,omitempty"`
 }
 
-func runSites(args []string) error {
-	fs := flag.NewFlagSet("sites", flag.ExitOnError)
-	var o analyzeOpts
-	o.common.register(fs)
-	o.registerLanguages(fs)
-	role := fs.String("role", "", `only "source" or "sink" sites`)
-	irFile := fs.String("ir", "", "list the sites of the neutral IR in this JSON Lines file (from an extractor of another language)")
-	maxImpl := fs.Int("max-implementations", model.DefaultMaxImplementations, "default limit of match: implementations")
+// sitesCmd is "rivus sites".
+type sitesCmd struct {
+	o       analyzeOpts
+	role    *string
+	irFile  *string
+	maxImpl *int
+}
+
+func sitesFlags(fs *flag.FlagSet) *sitesCmd {
+	c := &sitesCmd{}
+	c.o.common.register(fs)
+	c.o.registerLanguages(fs)
+	c.role = fs.String("role", "", "only "+orList(sites.Roles, true)+" sites")
+	c.irFile = fs.String("ir", "", "list the sites of the neutral IR in this JSON Lines file (from an extractor of another language)")
+	c.maxImpl = fs.Int("max-implementations", model.DefaultMaxImplementations, "default limit of match: implementations")
 	usual(fs, "role")
 	diagnostic(fs, "ir", "max-implementations")
+	kind(fs, "enum:role", "role")
+	kind(fs, "file", "ir")
+	return c
+}
+
+func runSites(args []string) error {
+	fs := flag.NewFlagSet("sites", flag.ExitOnError)
+	c := sitesFlags(fs)
 	prepareFlags(fs, args)
 	fs.Parse(args)
-	o.irFile, o.maxImpl = *irFile, *maxImpl
-	if *role != "" && *role != sites.RoleSource && *role != sites.RoleSink {
-		return fmt.Errorf("-role: unknown role %q (source or sink)", *role)
+	o, role, irFile := &c.o, c.role, c.irFile
+	o.irFile, o.maxImpl = *irFile, *c.maxImpl
+	if err := enumFlags["role"].check(*role); err != nil {
+		return err
 	}
 
 	rules, err := o.loadRules()

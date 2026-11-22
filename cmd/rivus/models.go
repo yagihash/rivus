@@ -8,30 +8,31 @@ import (
 	"github.com/yagihash/rivus/internal/report"
 )
 
-const modelsUsage = `rivus models - look at the models of functions
+// coverageCmd is "rivus models coverage".
+type coverageCmd struct {
+	o     analyzeOpts
+	index *string
+	top   *int
+	yaml  *bool
+}
 
-Usage:
-  rivus models <command> [flags] [packages]
-
-Commands:
-  coverage  which functions need a model most
-
-Run "rivus models <command> -h" for the flags of a command.
-`
-
-func runModels(args []string) error {
-	if handled := checkSubcommand("models", args, modelsUsage, "coverage"); handled {
-		return nil
-	}
-	fs := flag.NewFlagSet("models coverage", flag.ExitOnError)
-	var o analyzeOpts
-	o.register(fs)
-	index := fs.String("index", "", "use a saved index instead of analysing the source")
-	top := fs.Int("top", 0, "only the first n symbols (0: all)")
-	yaml := fs.Bool("yaml", false, "write a rule file to fill in instead of JSON")
+func coverageFlags(fs *flag.FlagSet) *coverageCmd {
+	c := &coverageCmd{}
+	c.o.register(fs)
+	c.index = fs.String("index", "", "use a saved index instead of analysing the source")
+	c.top = fs.Int("top", 0, "only the first n symbols (0: all)")
+	c.yaml = fs.Bool("yaml", false, "write a rule file to fill in instead of JSON")
 	usual(fs, "index", "top", "yaml")
-	prepareFlags(fs, args[1:])
-	fs.Parse(args[1:])
+	kind(fs, "file", "index")
+	return c
+}
+
+func runModelsCoverage(args []string) error {
+	fs := flag.NewFlagSet("models coverage", flag.ExitOnError)
+	c := coverageFlags(fs)
+	prepareFlags(fs, args)
+	fs.Parse(args)
+	o, index, top, yaml := &c.o, c.index, c.top, c.yaml
 
 	var rep *report.Report
 	var err error
