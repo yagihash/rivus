@@ -196,3 +196,74 @@ func TestPassStatsSummarySizes(t *testing.T) {
 		t.Errorf("summary_sizes differs between two runs:\n%s\n%s", a, b)
 	}
 }
+
+// summary_sizes also says how many source sites the Real elements come from and in how many functions each is carried, and
+// how many elements the summaries put into the globals (numbers only).
+func TestPassStatsSummarySizesOriginsAndGlobals(t *testing.T) {
+	dir := t.TempDir()
+	src := `package main
+
+import (
+	"os"
+	"os/exec"
+)
+
+var shared string
+
+func set()   { shared = os.Getenv("A") }
+func other() { shared = os.Getenv("B") }
+func use()   { exec.Command(shared).Run() }
+func relay() { use() }
+func main()  { set(); other(); relay() }
+`
+	rules, err := os.ReadFile(filepath.Join(testutil.Testdata(), "..", "scc", "rules.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, body := range map[string][]byte{"a.go": []byte(src), "go.mod": []byte("module example.com/g\n\ngo 1.22\n"), "rules.yaml": rules} {
+		if err := os.WriteFile(filepath.Join(dir, name), body, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cmd := exec.Command(binary, "analyze", "-rules", "rules.yaml", "-pass-stats", "./...")
+	cmd.Dir = dir
+	b, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("analyze: %v", err)
+	}
+	var r struct {
+		Stats struct {
+			Sizes struct {
+				RealOrigins int `json:"real_origins"`
+				OriginReach *struct {
+					Max, Median, P90, Over100, Over1000 int
+				} `json:"origin_reach"`
+				GlobalsTop       []int          `json:"globals_top"`
+				GlobalsWithElems int            `json:"globals_with_elems"`
+				ByOutput         map[string]int `json:"by_output"`
+			} `json:"summary_sizes"`
+		} `json:"stats"`
+	}
+	if err := json.Unmarshal(b, &r); err != nil {
+		t.Fatal(err)
+	}
+	z := r.Stats.Sizes
+	if z.RealOrigins < 2 || z.OriginReach == nil || z.OriginReach.Max < 1 || z.OriginReach.Median > z.OriginReach.P90 || z.OriginReach.P90 > z.OriginReach.Max {
+		t.Errorf("the source sites are not counted: %+v", z)
+	}
+	if z.GlobalsWithElems < 1 || len(z.GlobalsTop) < 1 || z.GlobalsTop[0] < 1 {
+		t.Errorf("the global that holds the sources is not counted: %+v", z)
+	}
+	sum := 0
+	for _, n := range z.GlobalsTop {
+		sum += n
+	}
+	if sum > z.ByOutput["global"] {
+		t.Errorf("globals_top (%d) holds more than the elements of the global outputs (%d)", sum, z.ByOutput["global"])
+	}
+	for i := 1; i < len(z.GlobalsTop); i++ {
+		if z.GlobalsTop[i] > z.GlobalsTop[i-1] {
+			t.Errorf("globals_top is not in order: %v", z.GlobalsTop)
+		}
+	}
+}

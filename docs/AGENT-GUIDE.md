@@ -539,11 +539,12 @@ rivus analyze -C <dir> -rules app.yaml -timeout 10m ./... > out.json
    ```sh
    rivus analyze -pass-stats -pass-stats-top 0 -pass-stats-sort time -timeout 600s -detail summary > out.json
    jq -r '["package","dep","functions","reanalyses","spent_ms","summary_elems"], (.stats.packages_top[] | [.package, (.dep // false), .functions, .reanalyses, .spent_ms, .summary_elems]) | @tsv' out.json > table.tsv
-   jq '.stats | {timed_out, converged, largest_scc, largest_scc_packages}' out.json
+   jq '.stats | {timed_out, converged, largest_scc, largest_scc_packages, summary_elems, functions, summary_sizes}' out.json
    ```
 
    - 表の列は、`dep`(依存のパッケージか)、`functions`(関数の数)、`reanalyses`(関数の解析の回数)、`spent_ms`(かかった時間)、`summary_elems`(要約の要素の数)です。`time` の並びは時計なので、実行ごとに少し違います。
    - `largest_scc_packages` は、互いに呼び合う関数の最大のかたまり(`largest_scc`)が、どのパッケージの関数でできているかの上位 10 件です。かたまりの大きさが解析の重さを決めるので、**ここに出る依存が、モデルで切る候補**です。
+   - `summary_sizes` は、関数の要約の要素が、関数にどう散らばり、何でできているかの数字です(関数名は出ません)。大きさの分布(`median`、`p90`、`p99`、`max`、`over_100` / `over_1000` / `over_10000`、`top_1pct_share_permille`)で、少数の関数に集中しているのか、広く散らばっているのかが分かります。`by_output`(`result`、`param`、`global`、`throw`)と `by_element`(`real`、`param`、`param_0`、`with_path`、`with_guards`)で、何が要素を運んでいるかが分かります。`real_origins` と `origin_reach` は、source の箇所の種類の数と、各箇所が何個の関数の要約に載っているかの分布、`globals_top` は、各グローバル変数に入った要素の数の上位 10 です。`summary_elems` を `functions` で割ると、1 関数あたりの平均です。
    - 時間切れでも内訳は出ます。`packages_top` は時間切れまでに解析した分で、`largest_scc_packages` は解析の前に作るので、解析が始まる前に切れても出ます。
    - `timed_out` が `null` なのは、時間切れでないという意味です(`true` のときだけ、フィールドがあります)。
    - 共有してよいのは、この表(パッケージ名と数字)だけです。コードや経路は共有しません。パッケージ名が非公開のものなら、共有の前に利用者に確認します。
