@@ -93,3 +93,4 @@
 | [#134](issues/134-graph-doc-rules-not-recorded.md) | docs/GRAPH.md の「index に渡したフラグは、与えなければ DB に記録されたものを使う」が `-rules` に当てはまらない | 文書または道具(重さ: 中) | 全 | 0 | closed | `TestGraphUsesTheRecordedRulesFile` |
 | [#143](issues/143-model-template-result-first-only.md) | モデルの `to: result` は最初の戻り値だけ。テンプレートと組み込みの行が、error への流れを落とす | サイレントな見逃し(直した) | Go | 1 | closed | `TestGoRowsThatSayResultAreForOneResult`、`TestModelsCoverageStubsLoseNoFinding` |
 | [#145](issues/145-named-in-flows-and-sources.md) | モデルの `flows` と `sources` に、名前つき引数を指す書式がない(`named:` は sink だけ) | 道具(重さ: 低) | Dart | 後回し | open | - |
+| [#149](issues/149-callback-params-source.md) | ハンドラの引数が source になる書式がない(callback params): shelf_router の `router.get('/item/<id>', (Request r, String id) => ...)` の `id` | サイレントな見逃し(書式の不足) | Dart / Go / Rust | 2 / 3 | open | - |
