@@ -508,6 +508,15 @@ int _dotShorthandConstructor(FnLower f, DotShorthandConstructorInvocation e) {
 
 int _functionInvocation(FnLower f, FunctionExpressionInvocation e) {
   final fn = lowerExpr(f, e.function);
+  // An instance of a class that has a `call` method is called like a function: `r(x)` is `r.call(x)` (a language rule,
+  // and the static type names the method). The analyzer gives the method as the element of the invocation; a function
+  // value has none (and a dynamic one is not known statically): they stay a call of a value.
+  final el = e.element;
+  if (el is MethodElement && el.name == 'call') {
+    final at = f.pos(e, e.argumentList.leftParenthesis.offset);
+    final (args, nodes) = _arguments(f, el, e.argumentList);
+    return _call(f, el, fn, args, e.staticType, e, at, argList: e.argumentList, slots: nodes);
+  }
   return _callValue(f, fn, e.argumentList, e, e.staticType);
 }
 

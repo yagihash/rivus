@@ -17,7 +17,7 @@ class Runner {
 
 void vuln() { // @vuln
   final r = Runner();
-  r(src('dart-callable-class-vuln')); // @source(dart-callable-class-vuln) @miss(unresolved_callee) @ref(#97)
+  r(src('dart-callable-class-vuln')); // @source(dart-callable-class-vuln)
 }
 
 class RunnerFixed {
@@ -40,5 +40,5 @@ class RunnerDecoy {
 
 void decoy() { // @decoy
   final r = RunnerDecoy();
-  r(src('dart-callable-class-decoy'), 'constant'); // @source(dart-callable-class-decoy) @miss(unresolved_callee) @ref(#97)
+  r(src('dart-callable-class-decoy'), 'constant'); // @source(dart-callable-class-decoy)
 }
