@@ -313,3 +313,22 @@ func TestChangedPackages(t *testing.T) {
 		t.Errorf("changed = %v, want the packages of the changed and the added row (not path, not dart)", got)
 	}
 }
+
+func TestCompareMissReviewed(t *testing.T) {
+	probes := []Probe{
+		{ID: 0, Symbol: "p.F", Kind: "flow", Variant: "arg0", Outputs: []string{"result0"}},
+		{ID: 1, Symbol: "p.F", Kind: "flow", Variant: "arg1", Outputs: []string{"result0"}},
+	}
+	a := Hits{key(0, "result0"): true, key(1, "result0"): true}
+	notes := []Note{{Kind: "miss-reviewed", Symbol: "p.F@arg1", Text: "type only"}, {Kind: "miss-reviewed", Symbol: "p.G@arg0", Text: "x", File: "m.yaml", Line: 3}}
+	rep := Compare(probes, nil, a, Hits{}, notes)
+	if rep.Results[0].Status != "MISS" || rep.Results[1].Status != "MISS-reviewed" {
+		t.Errorf("statuses: %s, %s", rep.Results[0].Status, rep.Results[1].Status)
+	}
+	if !rep.Failed() || len(rep.Stale) != 1 {
+		t.Errorf("failed %v, stale %v: the position without a note still fails, the unused note is stale", rep.Failed(), rep.Stale)
+	}
+	if ok := Compare(probes[1:], nil, a, Hits{}, notes); ok.Failed() {
+		t.Error("a reviewed MISS must not fail")
+	}
+}

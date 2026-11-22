@@ -342,8 +342,8 @@ body_replaced_packages:
 - Only the functions of **dependencies** are left out. A package of the project is always read (a declaration for one has no effect, and `-body-replaced` says so). The standard library is not read anyway.
 - A declared package is not read by the analysis: its functions have no body in the program. A call of one of its functions is **the model when the model has a row for it, and `unmodeled_library_call` when it has none** (what `-no-deps` does, for this package alone). The note says that the package is declared, so the call is not silent. `-no-deps` makes a declaration pointless.
 - **Callbacks into your code.** A package that is not read cannot be seen calling a function it was given. Where the model has no `calls:` row for the function, rivus does not drop the callback: a function value given to the call is taken to be called with what the other operands hold, and its result is the result of the call; the methods (up to 8) of a value of a type of the project that is given as an interface (Go) are taken to be called the same way. Each is an `assumed_call` note. This is the safe default, and it is a guess: write the `calls:` row (section 3) to say what the function really does, and no note is made. A value that is made an interface somewhere else than at the call (a field, a parameter) is not seen: the check before a declaration is yours.
-- **The extractor does not read a declared package either** (ADR-105). The analysis of the project and the findings are the same as when the extractor reads it and the core leaves its functions out (`-drop-after-read` runs that, to compare). Go: the syntax and the type information of the package are let go of before `go/ssa` is built (the type check of every package that `go/packages` loads is still done). Dart: the files of the package are not resolved or lowered (the library is still built for its declarations and types, and the packages it imports are still found). Rust: not yet (the declaration acts in the core only). What is read less is in `docs/DESIGN-package-models.md` (section 7a). `summary.body_replaced_packages[].functions` is then the number of functions the package declares, not the number that was read and left out. A package that only a declared package uses is read as before, and does not reach the analysis (it is not in the program when nothing of the project reaches it).
-- The summary says what was left out: `summary.body_replaced_packages`, a list sorted by package, with `package`, `declared_in` (the rule file, `builtin:<file>`, or `-body-replaced`), `reason` and `functions` (how many functions were left out). A declaration that left out nothing is not listed.
+- **The extractor does not read a declared package either** (ADR-105). The analysis of the project and the findings are the same as when the extractor reads it and the core leaves its functions out (`-drop-after-read` runs that, to compare). Go: the syntax and the type information of the package are let go of before `go/ssa` is built (the type check of every package that `go/packages` loads is still done). Dart: the files of the package are not resolved or lowered (the library is still built for its declarations and types, and the packages it imports are still found). Rust: not yet (the declaration acts in the core only). What is read less is in `docs/DESIGN-package-models.md` (section 7a). `summary.body_replaced_packages[]` then has `functions_declared` (what the package declares) and no `functions` (nothing was read, so nothing was left out). A package that only a declared package uses is read as before, and does not reach the analysis (it is not in the program when nothing of the project reaches it).
+- The summary says what was left out: `summary.body_replaced_packages`, a list sorted by package, with `package`, `declared_in` (the rule file, `builtin:<file>`, or `-body-replaced`), `reason` and `functions` (how many functions were read and then left out) or, for a package that the extractor was told not to read, `functions_declared` (how many functions the package declares; `functions` is then not there). A declaration that left out nothing is not listed.
 
 For a try, or to compare, without editing a file:
 
@@ -369,6 +369,22 @@ A sink has a `category`: what kind of harm the value does there. It is a free st
 | `resource_name` | the name of a resource of a service that the user decides: a bucket, an object, a topic, a subscription, the kind of a datastore key. It can point to another resource of the project, or of another project. It is not a path of the file system (`dart-gcp.yaml`, `docs/GCP-MODELS.md` section 8) |
 
 A new category is made when no other one fits (not for a new library). It is added to this table, and to the decision of the product (`docs/GCP-MODELS.md`, judgement E, for `resource_name`). One symbol has one category (#140).
+
+## 4c. Which versions the rows were checked against: `verified_versions`
+
+A rule file (a built-in one, or yours) records the versions of the packages that its rows were checked against ([DESIGN-package-models.md](DESIGN-package-models.md), 6.7):
+
+```yaml
+verified_versions:
+  - package: shelf_router        # Go: the module path; Dart: the pub package; Rust: the crate
+    versions: ">=1.1.0 <2.0.0"   # what was checked: 1.1.5, v1.1.5, ^1.1.0, ~1.1, or comparators (blank or comma between)
+    checked_with: 1.1.5          # optional: the one version that was read; inside `versions`
+    checked: 2026-11-22          # the day, YYYY-MM-DD (not in the future)
+```
+
+- A record, nothing more: it changes no row and no result. Comparing it with the versions a project uses (the lock files) is not done yet.
+- The file is refused when `package` is empty or a pattern (`/...`), `versions` is empty or not a version or a comparator, `checked` is missing or not a day, `checked_with` is not one version or is outside `versions`, a key is unknown, or a package is recorded twice in the file. The same package in two files is kept as two records. It is not checked that a row names the package.
+- `rivus models versions [-rules FILE] [-no-builtin-rules]` lists the records (JSON: `package`, `versions`, `checked_with`, `checked`, `source`).
 
 ## 5. A row has to be hit
 
