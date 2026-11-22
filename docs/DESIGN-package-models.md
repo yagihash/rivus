@@ -295,11 +295,11 @@ verified_versions:
 
 | 言語 | 今、IR にバージョンを出しているか | バージョンの取り方 |
 | --- | --- | --- |
-| Go | 出していない(IR のヘッダは `schema_version` だけ。`internal/ir/stream.go`、`ir.go`) | `go/packages` は `NeedModule` を既に使っていて(`internal/frontend/gossa/load.go` 164 行)、`pkg.Module.Version` が取れる(`collectInputs` が `pkg.Module` を既に読んでいる)。`go.mod` / `go.sum` の版と同じ。取れる |
+| Go | 出していない(IR のヘッダは `schema_version` だけ。`internal/ir/stream.go`、`ir.go`) | `go/packages` は `NeedModule` を既に使っていて(`internal/frontend/gossa/load.go` 164 行)、`pkg.Module.Version` が取れる(`collectInputs` が `pkg.Module` を既に読んでいる)。`go.mod` / `go.sum` のバージョンと同じ。取れる |
 | Dart | 出していない | `package_config.json` の `rootUri` はバージョンを直接持たない。取り方は 2 つ: (a) `pubspec.lock` の `version:`(核の側でも、extractor でも読める。hosted のパッケージ。path / git の依存はバージョンがない)、(b) pub のキャッシュのパス `hosted/pub.dev/<名前>-<バージョン>`(extractor の `_packageDir` が、そのディレクトリを持っている。ただし、git の依存は `<名前>-<ハッシュ>`)。(a) を推奨 |
 | Rust | 出していない | `Cargo.lock`(`version`)。またはドライバの中で、cargo が `rustc` の呼び出しに付ける環境変数 `CARGO_PKG_NAME` / `CARGO_PKG_VERSION`(cargo の仕様から。この環境では未確認)。`extractor/rust/src/main.rs` は、`cargo metadata --no-deps` を既に使っている |
 
-**最小の拡張案**: コア側で、利用者の対象の `go.mod` / `go.sum`(Go は `go/packages` の `Module.Version`)、`pubspec.lock`、`Cargo.lock` を読む(**IR は変えない**)。`-ir` のファイルだけを渡された場合は、版が分からないので、注記は出さない(「バージョンは不明」と `summary` に 1 行)。次の段階で、IR のヘッダに `packages: [{name, version}]` を足す(extractor が出す)と、`-ir` でも注記が出せる。index の鍵に、バージョンの一覧を入れる(バージョンが変わったら、別の index)。
+**最小の拡張案**: コア側で、利用者の対象の `go.mod` / `go.sum`(Go は `go/packages` の `Module.Version`)、`pubspec.lock`、`Cargo.lock` を読む(**IR は変えない**)。`-ir` のファイルだけを渡された場合は、バージョンが分からないので、注記は出さない(「バージョンは不明」と `summary` に 1 行)。次の段階で、IR のヘッダに `packages: [{name, version}]` を足す(extractor が出す)と、`-ir` でも注記が出せる。index の鍵に、バージョンの一覧を入れる(バージョンが変わったら、別の index)。
 
 #### 4. 生成器と差分テストの「対象外として明示する範囲」
 
