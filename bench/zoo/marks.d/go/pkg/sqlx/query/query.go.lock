@@ -1,0 +1,3 @@
+go	pkg/sqlx/query/query.go	sink-none	@sink(none)	func fixed() { @fixed
+go	pkg/sqlx/query/query.go	sink-none	@sink(none)	func fixed() { @fixed
+go	pkg/sqlx/query/query.go	sink-none	@sink(none) @nosink(pkg-sqlx-query-decoy)	func decoy() { @decoy
