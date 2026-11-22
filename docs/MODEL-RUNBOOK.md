@@ -68,6 +68,8 @@
 - Rust(骨組みの `Cargo.toml` に `zoo-mark = { path = "../../../zoo-rust/zoo-mark" }`): `#[track_caller] pub fn run(cmd: &str) { zoo_mark::sink_cmd(cmd); }`
 sink の行は、パッケージの `rules.yaml` の `sinks:` に、骨組みの関数の記号で書く(`zoo/mark` の sink の記号は、zoo の `rules.yaml` が持つ)。Rust のテストは、パッケージの crate と骨組みの crate の `Cargo.toml` の zoo-mark の path 依存を、写した zoo-mark に書き換える。
 
+**Rust のモデルの標準の確認: 本物のクレートでの記号の綴り(macOS のサンドボックスの下だけ)**: 骨組みは本物と綴りが違いうる(定義の経路と公開の経路、別のクレートの型の再エクスポート)ので、行を書いたら、本物のクレートで extractor が書く名前と照合する。(1) 一時のディレクトリに、本物のクレートを**版を固定して**(`=4.20.0`。要る feature は足す。`default-features = false` でよい)使う小さい crate を作り、モデルの各行(source の型と、flows / sinks の関数)を 1 回ずつ通る最小の関数を書く。(2) `cargo generate-lockfile --manifest-path <dir>/Cargo.toml`(取得だけ)。(3) `go run ./cmd/rivus debug extract -lang rust -isolation-env DEVELOPER_DIR=/Library/Developer/CommandLineTools -C <dir> > ir.jsonl`(サンドボックスの下。`-unsafe-host-exec` は使わない。`DEVELOPER_DIR` がないと、サンドボックスが Xcode.app を読めず、ビルドスクリプトのリンクが `xcrun` で失敗する)。(4) `ir.jsonl` の、その crate の関数(`id` が crate 名で始まる)の、`callee.symbol` と、引数の型(`locals` の `name` つき)を、モデルの行と照合する。一致しない行は直す。(5) 一時のディレクトリは、終わったら消す。クラウドの実行には隔離がないので、**Rust のモデルは、当面ローカルで作る**。実例と、骨組みと本物の違い(定義の `id` は、別のクレートの型だと本物は `actix_http::...`、`http::...` になる。呼び出しの `symbol` は、公開の経路で同じ): PR #204(actix-web)。
+
 テスト: `go test ./internal/model/... ./cmd/rivus/ -run 'Builtin|Zoo'`、`regomark check --no-judge`(0)。Dart のセルは、Dart のテスト(`dart analyze` を含む)も通す。
 
 ## 3. 既知の見逃しと誤検出は、セルと課題のファイルで残す
