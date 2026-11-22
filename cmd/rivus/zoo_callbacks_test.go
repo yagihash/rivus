@@ -50,6 +50,7 @@ func checkCallbackRows(t *testing.T, pick func(*model.RuleSet) bool, obs []cbObs
 		bySym[o.Symbol] = append(bySym[o.Symbol], o)
 	}
 	seen := map[string]bool{}
+	declaredCell := map[string]bool{}
 	rows := 0
 	for _, rs := range sets {
 		if !pick(rs) {
@@ -57,6 +58,17 @@ func checkCallbackRows(t *testing.T, pick func(*model.RuleSet) bool, obs []cbObs
 		}
 		for _, p := range rs.Propagators {
 			if len(p.Calls) == 0 {
+				continue
+			}
+			if p.CallsCheckedByCell() {
+				declaredCell[p.Symbol] = true
+				// a row of a package: a cell holds it (TestCallsRowsAreHeldByCells), a harness does not run it
+				if isStdlibSymbol(p.Symbol) {
+					t.Errorf("%s: checked_by: cell is for a package; a row of the standard library is held by a harness", p.Symbol)
+				}
+				if len(bySym[p.Symbol]) > 0 {
+					t.Errorf("%s: a harness calls a row that says checked_by: cell (a package of a third party is not run)", p.Symbol)
+				}
 				continue
 			}
 			if why, ok := uncheckedCalls[p.Symbol]; ok {
@@ -80,7 +92,7 @@ func checkCallbackRows(t *testing.T, pick func(*model.RuleSet) bool, obs []cbObs
 		}
 	}
 	for sym := range bySym {
-		if !seen[sym] && uncheckedCalls[sym] == "" {
+		if !seen[sym] && !declaredCell[sym] && uncheckedCalls[sym] == "" {
 			t.Errorf("%s: called, but the model has no row of calls for it", sym)
 		}
 	}

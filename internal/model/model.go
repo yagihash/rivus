@@ -396,6 +396,14 @@ const (
 	CallModeDefer = "defer" // it runs later: the same
 )
 
+// CallsCheckedByCell is the value of checked_by of a row that a test cell holds (not a harness).
+const CallsCheckedByCell = "cell"
+
+// CallsCheckedByCell says that the rows of calls of the function are held by a test cell.
+func (p *Propagator) CallsCheckedByCell() bool {
+	return len(p.Calls) > 0 && p.Calls[0].CheckedBy == CallsCheckedByCell
+}
+
 // CallRow says that the function calls one of its arguments (or the receiver).
 //
 //	calls:
@@ -405,6 +413,7 @@ const (
 //	    throw: result0        # where what it throws goes (the same; none: it is thrown out of the caller)
 //	    writes: {0: recv}     # where what it writes through its parameter N goes, besides the value that was given
 //	    mode: call            # call (default), go or defer
+//	    checked_by: cell      # a row of a package (not the standard library): a test cell holds it, no harness runs it
 //
 // The names are the positions of the call, as flows names them. Whole values only (no projection:
 // `recv` is the receiver with what is inside it), which is what flows does too.
@@ -427,6 +436,12 @@ type CallRow struct {
 	Throw  string         `yaml:"throw"`
 	Writes map[int]string `yaml:"writes"`
 	Mode   string         `yaml:"mode"`
+	// CheckedBy says how the row is held to what the library really does. Empty: a harness calls the function
+	// (cmd/rivus TestZooCallbacks*; the standard library only, since a harness runs the code). "cell": a test cell
+	// goes through the row and its marks (@sink, @miss) hold the flow at the level of the analysis; the row is
+	// not called by a harness (a package of a third party is not run). For the rows of a package, not of a standard
+	// library; all the rows of one function say it or none does (docs/MODELING.md, section 3).
+	CheckedBy string `yaml:"checked_by"`
 	// Assumed, when set, is the text of the assumed_call note that the use of the row carries: the rows that the
 	// engine makes for the function values given to a function of a declared package (not read from a file).
 	Assumed string `yaml:"-"`
@@ -1107,6 +1122,14 @@ func (p *Propagator) validateCalls(what string) error {
 			if _, err := pos(fmt.Sprintf("writes[%d]", k), x, true); err != nil {
 				return err
 			}
+		}
+		switch c.CheckedBy {
+		case "", CallsCheckedByCell:
+		default:
+			return fmt.Errorf("%s.checked_by: %q (want cell, or nothing)", w, c.CheckedBy)
+		}
+		if c.CheckedBy != p.Calls[0].CheckedBy {
+			return fmt.Errorf("%s.checked_by: the rows of one function say the same (the first row says %q)", w, p.Calls[0].CheckedBy)
 		}
 		switch c.Mode {
 		case "", CallModeCall, CallModeGo, CallModeDefer:
