@@ -213,7 +213,7 @@ rivus の設計の判断は、ここに書いた原則に沿う。ほかの文�
 - サンドボックスが作れなければ、Linux では、何も実行せず止まる: `cmd/rivus/isolate_sandbox_darwin.go`、`isolate_sandbox_other.go`。隔離の下か、ホストでかは、`summary.isolation` に出る
 - git の HEAD を直接読む: `internal/vcs`
 - 対象内のルール: `.rivus/rules` は既定で読み、`-no-project-rules` で止める。symlink は拒否する。出力に、対象内ルールが消せる量を出す（`internal/report/report.go` の `ProjectRules`）
-- テスト: `TestSandboxedBuildScriptCannotEscape`、`TestSandboxClosesEveryWayOut`、`TestSandboxFetchReadsNoConfigOfTheProject`、`TestSandboxFetchRunsNoCodeAndAcceptsUnstableManifestFeatures`、`TestSandboxTimeLimitStopsTheProgramAndItsGroup`（`internal/sandbox`、`cmd/rivus`。開発のマシンで `RIVUS_SBX_RED=1` / `RIVUS_SBX_NET=1`。CI は `isolation.yml` で小さい部分）
+- テスト: `TestSandboxedBuildScriptCannotEscape`、`TestSandboxClosesEveryWayOut`、`TestSandboxFetchReadsNoConfigOfTheProject`、`TestSandboxFetchRunsNoCodeAndAcceptsUnstableManifestFeatures`、`TestSandboxTimeLimitStopsTheProgramAndItsGroup`（`internal/sandbox`、`cmd/rivus`。開発のマシンで `RIVUS_SBX_RED=1` / `RIVUS_SBX_NET=1`。CI は `ci.yml` の `sandbox` ジョブ で小さい部分）
 
 **現状と、まだ届いていない所**
 

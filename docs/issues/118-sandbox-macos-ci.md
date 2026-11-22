@@ -8,7 +8,7 @@
 
 ## 今の状態
 
-今の `isolation.yml` は、`internal/sandbox` の試験だけ(ツールチェイン不要)。Rust の抽出と取得は、開発のマシンで回す。`TestDogfood` の darwin の見え方は、静的に読むので Linux の CI でも読めるが、macOS で走らせる試験(`RIVUS_SBX_*`)は CI にない。
+今の `ci.yml` の `sandbox` ジョブは、`internal/sandbox` の試験だけ(ツールチェイン不要)。Rust の抽出と取得は、開発のマシンで回す。`TestDogfood` の darwin の見え方は、静的に読むので Linux の CI でも読めるが、macOS で走らせる試験(`RIVUS_SBX_*`)は CI にない。
 
 ## 終わりの条件
 
