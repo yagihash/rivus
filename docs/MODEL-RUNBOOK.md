@@ -123,3 +123,31 @@ zoo のゲート(`scripts/zoo-loosened-check.sh`、#167): 新しいセル(`bench
 - 差分テストで照合できなかった生成の行(複雑な型の引数など)は、行に `unverified: true` を付けたまま残す(消さない。PR の本文の「差分テストの結果」に、照合済みの行の割合を書く。設計 4.3a の e)。
 - 生成した行の `origin` は `generated`(生成器のバージョンつき)。手で書いた行は `human` か `llm`(設計 4.3a の f)。
 
+
+## 9. 差分テスト(`bench/model-diff`。実装済み。2 節の 2 の道具)
+
+モデルの行を、依存の本体と照合する。**Go と Dart。Rust は対象外**(クレートを読むには、`build.rs` と proc macro を動かすので、隔離が要る。上の 0 節)。
+
+```sh
+make model-diff PKG=strings                                   # Go の標準ライブラリ。行は、組み込みのモデルのすべてのファイルから取る
+make model-diff PKG=package:http MODEL=internal/model/builtin/dart-http.yaml   # Dart。MODEL は、その 1 ファイルの行だけ
+go run ./bench/model-diff -pkg google.golang.org/grpc -model mine.yaml -version v1.80.0   # -rules で渡すファイル、バージョンの指定
+```
+
+- **やること**: モデルの行にある関数を、source の値で、位置(`recv`、`arg0`、...)ごとに 1 つずつ呼ぶコードを作り、出てくるもの(戻り値ごと、書き込まれうる引数、レシーバ)を、**関数と場所ごとに別の sink** に渡す。同じコードを、(A) そのパッケージの行を外した組み込みモデルで、本体を読んで解析し、(B) モデルで解析して、比べる。出力は、表と、JSON(`-json`。既定は `<out>/report.json`)。
+- **結果の種類**: `agree`(一致。`agree_no_flow` は、A も B も流れがなく、その位置について何も言えなかった数)、**`MISS`**(A にあって B にない流れ。モデルが落とした)、**`EXTRA`**(B にあって A にない流れ。モデルが広い)、`EXTRA-intended`(意図した差。下の注釈)、`unverified`(未検証。理由つき)。
+- **終了コード**: MISS があれば 1。EXTRA は、注釈のないものがあれば 1。注釈に理由がない、sink の行が存在しない位置を宣言している、生成したコードがビルドできない、も 1。**MISS は、注釈でも許さない**(落ちた流れは、モデルを直す)。
+- **意図した差の置き方**: モデルの YAML の、その行の近くに、コメントで書く。理由は必須(ない注釈は失敗)。注釈は、コメントの行を読む(`internal/model` のパーサではない)。
+
+  ```yaml
+  # model-diff: extra <symbol> <理由>        # その関数の EXTRA は、意図した差
+  # model-diff: value <型> <Dart の式>       # Dart: その型の値(レシーバ、引数)の作り方。$S が source の位置。`<型>.<メンバ>` は、そのメンバのレシーバだけ
+  ```
+
+  `extra` に当たる EXTRA がなくなると、「注釈が要らなくなった」と出る(失敗はしない)。例は `internal/model/builtin/dart-http.yaml`。
+- **sink の行は、本体ではなく宣言と照合する**(依存の中の sink は finding にならない。ADR-099)。位置ごとに 1 つだけ source にした呼び出しで、宣言した位置では finding が出て、宣言していない位置と、定数だけの対照では出ないことを確認する。`parts` / `field` は、1 段のフィールドだけ。
+- **未検証として出し、何も報告せずに飛ばさないもの**: ジェネリクスの関数、コールバックを取る関数、作れない型の引数、実装のないインターフェースのメソッド、source を入れられないレシーバ(`new` で作れる値と `New...` の関数で作れない構造体のメソッドなど。Dart は `value` の注釈がないクラス)、`named` / `when_arg_type` / `match` のある sink の行。PR の本文の「差分テストの結果」に、MISS / EXTRA / 未検証の数を書く(5 節)。
+- **Go の標準ライブラリ**: rivus は標準ライブラリの本体を読まないので、A は、パッケージと、それが import する `internal/...` を、一時のモジュールの中に写して読む(アセンブリは写さない。本体のない関数は、本体のない関数として読まれる)。写せないパッケージの flows の行は、未検証になる(sink の行は照合できる)。
+- **バージョン**: `-version` がなければ、Go は、このリポジトリの `go.mod` にあるバージョン(なければ最新)、Dart は、`bench/` などの `pubspec.lock` にあるバージョン(なければ `any`)。標準ライブラリは、いまの Go のバージョン。`verified_versions` への記録は、別の作業。
+- **取得と実行**: 依存の取得(`go get`、`dart pub get`)だけで、取得したコードは実行しない(Go は型検査と解析まで、Dart は analyzer まで)。ライブラリごとに分けるので、1 回は数秒〜十数秒、依存込みで 1 GB 前後。
+- **PR で動かす対象の求め方**: `go run ./bench/model-diff -changed origin/main` が、`internal/model/builtin/` の行(flows と sinks)が変わったパッケージだけを、`go <pkg>` / `dart <pkg>` の形で出す。CI の定期と手動の層に、`model-diff` のジョブがある(PR には入れていない。設計 6.3)。
