@@ -183,7 +183,7 @@ done
 # -unsafe-host-exec; everything else, a clone of someone else's project included, goes through `rivus extract -lang rust`,
 # which is the sandbox. Without the sandbox (another system, or no sandbox-exec) the third-party benchmark FAILS; it never falls back to the machine.
 OWN_RUST_PATHS="bench/zoo-rust bench/rust-curated extractor/rust/test"
-NO_DOCKER_MSG="Rust の第三者のコードは隔離の中でだけ読む。macOS のサンドボックス(sandbox-exec)が使えないので、このベンチを外す"
+NO_SANDBOX_MSG="Rust の第三者のコードは隔離の中でだけ読む。macOS のサンドボックス(sandbox-exec)が使えないので、このベンチを外す"
 rust_is_own() { # dir root: 0 only when dir is, or is under, one of OWN_RUST_PATHS of root
   local d r p
   d="$(cd "$1" 2>/dev/null && pwd -P)" || return 1
@@ -192,7 +192,7 @@ rust_is_own() { # dir root: 0 only when dir is, or is under, one of OWN_RUST_PAT
   return 1
 }
 rust_mode() { rust_is_own "$1" "$2" && echo host || echo sandbox; } # dir root
-docker_ok() { command -v sandbox-exec > /dev/null 2>&1; } # (the name is from the time of the container: whether the sandbox can be used; sandbox-exec is only on macOS)
+sandbox_ok() { command -v sandbox-exec > /dev/null 2>&1; } # whether the sandbox can be used (sandbox-exec is only on macOS)
 
 # the flags (and the packages instead of ./...) that a benchmark is run with
 flags_of() {
@@ -216,7 +216,7 @@ if [ "$DRY" = 1 ]; then
   echo "   git worktree add --detach $WORK/wt/$H7 $H7 ; go build -o $WORK/bin/$PAIR/rivus-head ./cmd/rivus"
   echo "2. light tier: base and head at the same time when the free memory allows, no wait for other analyses (free memory >= 25%); the result of base is cached in ${CACHE_DIR:-$WORK/cache} unless --no-cache; heavy tier (--big): one at a time, no cache."
   echo "   the heavy tier (--big): before each run: wait for free memory >= 40% (swap <= 50% where it cannot be read) and no other rivus / rv-* / rivus-* process (at most $WAIT h)"
-  NODOCKER_FAIL=0
+  NOSANDBOX_FAIL=0
   for b in $BENCHES; do
     if ! spec "$b"; then echo "   $b: unknown benchmark" >&2; continue; fi
     ML=""; memlimit_of "$b"
@@ -224,15 +224,15 @@ if [ "$DRY" = 1 ]; then
       if [ "$(rust_mode "$DIR" "$ROOT")" = host ]; then ex="extractor: host (our own code: -unsafe-host-exec) ${RIVUS_RUST:-cargo build --locked in wt/<sha7>/extractor/rust}"
       else
         ex="extractor: sandbox (cargo build of wt/<sha7>/extractor/rust, then rivus extract -lang rust under the sandbox of macOS)"
-        if ! docker_ok; then ex="$ex; Docker is not available: this benchmark FAILS ($NO_DOCKER_MSG)"; NODOCKER_FAIL=1; fi
+        if ! sandbox_ok; then ex="$ex; the sandbox is not available: this benchmark FAILS ($NO_SANDBOX_MSG)"; NOSANDBOX_FAIL=1; fi
       fi;; *) ex="";; esac
     src="in-tree (wt/<sha7>/bench/$b)"; [ -n "$URL" ] && src="git clone $URL ; git checkout ${COMMIT:-<default branch>} ; ls go.mod ; go list ./..."
     [ "$KIND" = synth ] && src="go run ./bench/go-synth/gen -size S (in wt/<sha7>)"
     printf '   %-14s %-5s %s | rules: %s | GOMEMLIMIT=%s | -timeout %s %s\n' "$b" "$KIND" "$src" "${RULES:-built-in}" "${ML:-unset}" "$TIMEOUT" "$ex"
   done
-  [ "${NODOCKER_FAIL:-0}" = 1 ] && echo "compare: $NO_DOCKER_MSG" >&2
+  [ "${NOSANDBOX_FAIL:-0}" = 1 ] && echo "compare: $NO_SANDBOX_MSG" >&2
   echo "3. python3 bench/compare.py report: $OUT/summary.md, $OUT/details/<bench>.md; exit 1 if a finding was removed, 2 if a benchmark did not run"
-    [ "${NODOCKER_FAIL:-0}" = 1 ] && exit 2
+    [ "${NOSANDBOX_FAIL:-0}" = 1 ] && exit 2
   exit 0
 fi
 
@@ -390,7 +390,7 @@ setup() { # name side: makes the copy and the IR of that version; sets DIR, RULE
         fi
         extkey="rust ${ext:0:12}"
       else   # someone else's code: under the sandbox, or nothing
-        docker_ok || { skip "$b" "$NO_DOCKER_MSG"; return 1; }
+        sandbox_ok || { skip "$b" "$NO_SANDBOX_MSG"; return 1; }
         ext="$(tree "$sha" extractor/rust)"; [ -n "$ext" ] || { skip "$b" "no extractor/rust in $w ($s7)"; return 1; }
         rr="$WORK/bin/rust-extractor/$ext/rivus-rust"   # the extractor of THIS version: one binary per extractor tree
         if [ ! -x "$rr" ]; then
