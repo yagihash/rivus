@@ -30,8 +30,11 @@
 ```
 
 - 既存の `body_not_read`(`internal/ir/ir.go`。ユニット単位の数だけ)は、「宣言したので読まなかった」の数で、理由と関数の名前がないので、使わない。`load_error`(`unread: true`)も、1 エントリ = 1 パッケージで数える(`unreadOf`)ので、関数ごとに出すと、パッケージ数が合わない。
-- **呼び出しの所**: 飛ばした関数は、プログラムに本体がない。呼び出しは、今ある「本体のない関数の呼び出し」(`external`、`externalKind`)として、`unmodeled_library_call`(「the function has no body and no model」)の注記が付く。モデルの行があれば、その行が使われる(これは正しい: 本体の代わり)。**抽出側の確認事項**: 飛ばした関数の名前が、`cx.bodies`(本体のある関数の集合。`extract()` の先頭で作る)に入ったまま、呼び出しが「本体のある関数」として出ないこと。入れ直す(飛ばしたら、集合から外し、あとの関数の呼び出しの出し方が変わる順序に注意)か、呼び出し側が集合を見る箇所を確認する。**これは、合成のテスト(7 節)で、「飛ばした関数を呼ぶ関数の finding に、`unmodeled_library_call` が付く」を確認する**。
-- 理由の文を、注記に出したいので、Go 側で、`fn_skipped` の `func` を、注記の `detail` に使う案(`errorFunctions` と同じ型。ただし、これは「パスの途中の関数」にしか付かず、本体のない関数は途中に出ないので、**呼び出しのサイトで、callee が `fn_skipped` にあれば、`unmodeled_library_call` の detail を「the body was not read by the extractor: <why>」にする**)。
+- **呼び出しの所(2026-11-23 の判断で修正)**: 飛ばした関数は、本体が「ない」のではなく「読めなかった」。だから、`unmodeled_library_call`(本体もモデルもない = ライブラリの呼び出しとして扱う)にはしない。**注記の種類は、飛ばした関数の側で決める**:
+  - **依存の関数**: 既存の `dependency_body_unread`(「依存の本体を読んでいない」)。detail に、`fn_skipped` の `why`(「the extractor could not read the body: <理由>」)を入れる。
+  - **プロジェクト自身の関数**: 別の種類 `project_body_unread`(「プロジェクトの関数の本体を、extractor が読めなかった」。ライブラリの呼び出しと読める名前は避けた)。プロジェクトの関数は、モデルの行で代わりにならないので、見逃しの原因として目立たせる(`summary` の注意と合わせる)。
+  - **モデルの行がある関数が飛ばされたとき**: モデルの行が使われ(本体の代わり)、注記は付かない(今の「本体のない関数にモデルがあれば、行を使う」と同じ)。
+  - 判定は、呼び出しのサイトで、callee が `fn_skipped` にあるか(Go 側で、`fn_skipped` の `func` の集合を持つ)。**抽出側の確認事項**: 飛ばした関数の名前が、`cx.bodies`(本体のある関数の集合。`extract()` の先頭で作る)に入ったまま、呼び出しが「本体のある関数」として出ないこと。合成のテスト(7 節)で、「飛ばした関数を呼ぶ所に、上の注記が付く」を確認する。
 
 **`summary`**: 新しい項目 `functions_skipped`(`body_replaced_packages` と同じ、トップに数、その下に、クレートごとの配列):
 
@@ -47,14 +50,14 @@
 ```
 
 - `crates` は、関数の数の多い順、最大 10。`examples` は、クレートごとに最初の 3 件。理由は、クレートの中で最も多いもの 1 つ(違うものがあれば、`why_other` に数)。`unread`(`summary.unread`)とは別: あちらは「パッケージが読めなかった」、こちらは「読んだが、いくつかの関数を飛ばした」。
-- 標準エラーにも、実行の最後に 1 行(「N functions were skipped (M in the project): see summary.functions_skipped」)を出す。
+- 標準エラーにも、実行の最後に 1 行(「N functions were skipped (M in the project): see summary.functions_skipped」)を出す。**`project` が 0 でないときは、stderr の最後の行に、警告として目立たせる**。
 
 ## 3. プロジェクト自身の関数で起きたときも、同じ扱いにするか
 
 **同じ扱いにする。ただし、分けて数え、目立たせる**(相談役の考え。この実験の `ac` crate のパニックは、プロジェクト自身の関数だった)。
 
 - 同じレコード(`dependency: false`)。`summary.functions_skipped.project` に数、`crates` に、プロジェクトのクレートが、依存より先に並ぶ。
-- プロジェクトの関数を飛ばすと、見逃しが出る(その関数を通る流れが、見えない)。依存の関数は、モデルの行が代わりになりうる。**プロジェクトの関数が 1 つでも飛ばされたら、finding の `summary` の注意に出し(`project > 0`)、標準エラーの行も警告の形にする。** 呼び出しの所は、2 節のとおり(`unmodeled_library_call`)。
+- プロジェクトの関数を飛ばすと、見逃しが出る(その関数を通る流れが、見えない)。依存の関数は、モデルの行が代わりになりうる。**プロジェクトの関数が 1 つでも飛ばされたら、finding の `summary` の注意に出し(`project > 0`)、標準エラーの行も警告の形にする。** 呼び出しの所は、2 節のとおり(プロジェクトの関数は `project_body_unread`)。
 - 既定で失敗にはしない(1 関数のために、解析全体を止めるより、見える形で続ける方がよい)。止めたい人のために、`-strict-extract`(仮の名前)のようなフラグは、実装の PR で、要るかを決める(本メモの範囲外)。
 
 ## 4. rustc のパニックのメッセージが、大量に出ないようにする
@@ -68,7 +71,7 @@
 ## 5. 実装の規模
 
 - `extractor/rust/src/main.rs`: `extract()` の 2 つのループ(約 20 行ずつ)を、`catch_unwind` つきの小さな関数にまとめる。フック(約 30 行)、`fn_skipped` レコードの出力(約 15 行)、`cx.bodies` からの除外の確認(数行)。**合計は、約 100 行。** `lower.rs` は変えない(`resolve` の注意書きは、「クエリの外のパニックだけ catch する」に直す)。
-- Go 側: `internal/ir`(`FnSkipped` の型、ストリームの読み書き。約 30 行)、`cmd/rivus`(読み込みから `Program` への渡し。約 20 行)、`internal/report`(`functions_skipped` の構造と集計。約 60 行。`body_replaced_packages` の書き方に合わせる)、`internal/taint`(呼び出しのサイトで、`fn_skipped` の callee なら、`unmodeled_library_call` の detail を変える。約 20 行)。**合計は、約 130 行 + テスト。**
+- Go 側: `internal/ir`(`FnSkipped` の型、ストリームの読み書き。約 30 行)、`cmd/rivus`(読み込みから `Program` への渡し。約 20 行)、`internal/report`(`functions_skipped` の構造と集計。約 60 行。`body_replaced_packages` の書き方に合わせる)、`internal/taint`(呼び出しのサイトで、callee が `fn_skipped` なら、`dependency_body_unread` / `project_body_unread` の注記を付ける。約 30 行)。**合計は、約 130 行 + テスト。**
 - 文書: `docs/ARCHITECTURE.md`(`summary` の項目)、`docs/AGENT-GUIDE.md`(出力の読み方)、`docs/MODELING.md` は変えない。ADR(実装の PR と一緒)。
 
 ## 6. `rivus` 側の変更と、`-no-deps` との関係
@@ -79,13 +82,14 @@
 
 ## 7. テスト
 
-- **合成の crate**(リポジトリの中、`bench/` の Rust のテスト用。第三者のコードなし): 上の `ac` と同じ形(`before`、async closure を使う `async fn`、`after`。それを呼ぶ関数と、source から sink への流れ)。`RIVUS_RUST` を設定したテストで、(a) 終了コード 0、(b) `functions_skipped` に、その crate と 2 関数、(c) `before` と `after` を通る流れは、今までどおり見つかる、(d) 飛ばした関数を呼ぶ所に `unmodeled_library_call`、(e) stderr に `thread 'rustc' panicked` がなく、`skipped` の行が 1 つ、を確認する(`skipOrFail(t, "RIVUS_RUST")`。CI の `rust` ジョブで必ず動く)。
+- **合成の crate**(リポジトリの中、`bench/` の Rust のテスト用。第三者のコードなし): 上の `ac` と同じ形(`before`、async closure を使う `async fn`、`after`。それを呼ぶ関数と、source から sink への流れ)。`RIVUS_RUST` を設定したテストで、(a) 終了コード 0、(b) `functions_skipped` に、その crate と 2 関数、(c) `before` と `after` を通る流れは、今までどおり見つかる、(d) 飛ばした関数を呼ぶ所に `dependency_body_unread` / `project_body_unread`(モデルの行がある関数は、注記なし)、(e) stderr に `thread 'rustc' panicked` がなく、`skipped` の行が 1 つ、を確認する(`skipOrFail(t, "RIVUS_RUST")`。CI の `rust` ジョブで必ず動く)。
 - Go の単体テスト: `fn_skipped` の読み書き、`functions_skipped` の集計(プロジェクトと依存の分け、上位 10、`examples` 3)。
 - Rust の単体テスト: フックの範囲の中と外(範囲の外のパニックは、既定のフックに行く)。
 - 公開の依存での確認(サンドボックスの下だけ): `google-cloud-storage` 1.22.0 を使う最小の crate が、`rivus analyze -lang rust` で完走し、`functions_skipped.crates` に `google-cloud-auth` が出る。
 
-## 8. 決めること(相談役へ)
+## 8. 決めたこと(相談役。2026-11-23)
 
-- `fn_skipped` を新しいレコードにするか、`load_error` の拡張にするか(本メモは新しいレコード)。
-- プロジェクトの関数が飛ばされたとき、既定で失敗にするか(本メモは、警告つきで続ける)。
-- クレート単位の逃げ道(1 節)を、最初から実装するか(本メモは、見つかってから)。
+- `fn_skipped` は新しいレコード。
+- プロジェクトの関数が飛ばされたとき、失敗にするフラグは、今は作らない(警告つきで続行。`project` が 0 でないときは、stderr の最後の行で目立たせる)。フラグは、求めが出てから。
+- クレート単位の逃げ道(1 節)は、見つかってから。
+- 呼び出しの所の注記は、`unmodeled_library_call` にしない(2 節)。
