@@ -348,6 +348,14 @@ func (s *state) callBody(cc *callCtx) {
 		if ci.Callee != nil && ci.Callee.FFI {
 			kind, detail = KindFFIBoundary, "the call leaves the language (a foreign function)"
 		}
+		if sk := s.eng.skippedBody(ids, cc.sym); sk != nil && kind == KindUnmodeledLibraryCall {
+			// the function has a body, and the extractor could not read it: not a library call without a model
+			kind = KindDependencyBodyUnread
+			if !sk.Dependency {
+				kind = KindProjectBodyUnread
+			}
+			detail = "the extractor could not read the body of " + sk.Func + ": " + sk.Why + " (what the function does with the value is not followed)"
+		}
 		if u := s.eng.replacedUnit(ci); u != "" && kind == KindUnmodeledLibraryCall {
 			detail = "the body of the package " + u + " is not read (a rule file declares that its models stand for it) and the model has no row for the function"
 		}

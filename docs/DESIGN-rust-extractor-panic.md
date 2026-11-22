@@ -1,6 +1,6 @@
 # 設計メモ: Rust の extractor が、1 つの関数でパニックしても、ほかを読み続ける
 
-状態: 案(2026-11-23。実装の前の設計メモ。課題 [#160](issues/160-rust-async-closure-extractor.md))。ADR は、実装の PR と一緒に書く。
+状態: 実装済み(2026-11-23。[ADR-109](DECISIONS.md)。課題 [#160](issues/160-rust-async-closure-extractor.md))。メモのとおりに実装した。
 
 ## 0. 問題と方針
 
