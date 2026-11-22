@@ -7,6 +7,10 @@ Not written yet: the basic shapes of `flows`, `sources`, `sinks` and `sanitizers
 `internal/model/builtin` and the loader in `internal/model/model.go` (it rejects what it does not know), and the
 examples in `examples/rules`. The principles behind the models are in [PRINCIPLES.md](PRINCIPLES.md) (section 3).
 
+## 0. A row replaces what the analysis does by itself
+
+A call that has no model is read this way: the receiver and the arguments flow to the result, and **the memory that the arguments point to is read as unknown** (a function that is not read may write into what it is given: `unmodeled_library_call`). **A row for the function replaces all of that with what the row says.** So a row that says only `flows: [{from: args, to: result}]` takes away the other two: the receiver no longer flows to the result, and what the function writes into its arguments is no longer there. A flow can be lost by adding a row, and nothing says so. (Found on `bench/gcp`: the first stub of `rivus models coverage` left the receiver out and lost 3 of 27 findings; the second left the writes into the arguments out and lost 2 more. The stub now says the broad thing: receiver and arguments, to the result and into the arguments. `TestModelsCoverageStubsLoseNoFinding`.) When you narrow a row, check what you took away: the receiver, each argument, the writes into the arguments, the callbacks.
+
 ## 1. When a function may be `pure`
 
 `pure: true` in a built-in rule set says that **no taint flows through the function**, and removes both the default
