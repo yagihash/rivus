@@ -53,3 +53,11 @@ rivus analyze -workers 16 -rules rules.yaml ./... > w16.json
 - 2026-11-22: `internal/taint/engine.go` の `workers > 1 &&` を外し、8 関数以上の SCC は、`-workers` によらず「回ごと」(前の回の要約に対して解析し、順に commit)の経路を通す。既定(workers = CPU 数 > 1)の出力は変わらず、変わるのは `-workers 1` だけ。相談役の判断で、この形にした。
 - 確かめたこと: `-workers 1` と既定の出力の完全一致を、`testdata/scc`(試験に固定)、go-curated、dart-curated、rust-curated、zoo の Dart と Rust で確かめた。zoo の Go は、`stats.functions` などが、`-workers` を変えなくても同じ入力で 579〜586 に揺れる(#84。go/ssa のラッパー由来)ので、完全一致の比較には向かない(`-workers` の差ではない)。
 - 「まれに TestDeterministic* が落ちる」は、ローカルの `-count=8` と、直近の CI 25 回で再現しなかった。次に出たら、実行の番号つきで開き直す。
+
+## 開き直しの材料(2026-11-22、まれな失敗が 1 回出た)
+
+- 日時とコミット: 2026-11-22 16:07(JST)、手元(macOS)、main の 1094049(#96 の直しのあと)。`RIVUS_RUST` つき(rust 環境)で `go test -json ./cmd/rivus` を取っている間。ほかの試験(別の作業)も同じマシンで動いていて、負荷が高かった。
+- 試験: `TestDeterministicParamshare/gqueue`(`testdata/cases/paramshare/gqueue`)。
+- 出力: `determinism_test.go:161: the output differs: GOMAXPROCS="1" -workers="" run 0 and GOMAXPROCS="1" -workers="1" run 5` / `(not in the findings' paths)`(findings の経路は同じで、ほかの欄が違った。どの欄かは、そのときの診断では出なかった)。
+- 再現: 負荷つき(6 個の busy loop)で `-run 'TestDeterministicParamshare/gqueue' -count=12` は、全部通った。CI の直近 25 回にも、`TestDeterministic*` の失敗はない。
+- 次の手: `firstDifference` に、どの欄が違うかを出す診断(`jsonDiff`)を足した(このブランチ)。次に落ちたら、その欄から、時計に依る上限(`func_timeouts`、`load_dependent`)か、順序の揺れかが分かる。

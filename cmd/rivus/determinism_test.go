@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"testing"
 
@@ -114,7 +115,85 @@ func firstDifference(a, b []byte) string {
 			return fmt.Sprintf("finding %s: path %s and %s\n  %s\n  %s", ra.Findings[i].ID, pa, pb, stepFuncs(ra.Findings[i].Paths[0].Steps), stepFuncs(rb.Findings[i].Paths[0].Steps))
 		}
 	}
+	// not in the paths of the findings: say what else differs (the stats, the uncertainties ...), the first few places
+	var ga, gb any
+	if json.Unmarshal(a, &ga) == nil && json.Unmarshal(b, &gb) == nil {
+		var diffs []string
+		jsonDiff("", ga, gb, &diffs)
+		if len(diffs) > 0 {
+			if len(diffs) > 8 {
+				diffs = append(diffs[:8], "...")
+			}
+			return "differs elsewhere:\n  " + strings.Join(diffs, "\n  ")
+		}
+	}
 	return "(not in the findings' paths)"
+}
+
+// jsonDiff lists where two decoded JSON values differ (a path and the two values, cut short).
+func jsonDiff(path string, a, b any, out *[]string) {
+	if len(*out) > 8 {
+		return
+	}
+	switch x := a.(type) {
+	case map[string]any:
+		y, ok := b.(map[string]any)
+		if !ok {
+			*out = append(*out, path+": an object and something else")
+			return
+		}
+		keys := map[string]bool{}
+		for k := range x {
+			keys[k] = true
+		}
+		for k := range y {
+			keys[k] = true
+		}
+		sorted := make([]string, 0, len(keys))
+		for k := range keys {
+			sorted = append(sorted, k)
+		}
+		sort.Strings(sorted)
+		for _, k := range sorted {
+			xv, xok := x[k]
+			yv, yok := y[k]
+			switch {
+			case !xok:
+				*out = append(*out, fmt.Sprintf("%s/%s: only in the second", path, k))
+			case !yok:
+				*out = append(*out, fmt.Sprintf("%s/%s: only in the first", path, k))
+			default:
+				jsonDiff(path+"/"+k, xv, yv, out)
+			}
+		}
+	case []any:
+		y, ok := b.([]any)
+		if !ok || len(x) != len(y) {
+			*out = append(*out, fmt.Sprintf("%s: lists of %d and %d", path, len(x), lenOf(b)))
+			return
+		}
+		for i := range x {
+			jsonDiff(fmt.Sprintf("%s[%d]", path, i), x[i], y[i], out)
+		}
+	default:
+		if fmt.Sprint(a) != fmt.Sprint(b) {
+			sa, sb := fmt.Sprint(a), fmt.Sprint(b)
+			if len(sa) > 60 {
+				sa = sa[:60] + "..."
+			}
+			if len(sb) > 60 {
+				sb = sb[:60] + "..."
+			}
+			*out = append(*out, fmt.Sprintf("%s: %s and %s", path, sa, sb))
+		}
+	}
+}
+
+func lenOf(v any) int {
+	if l, ok := v.([]any); ok {
+		return len(l)
+	}
+	return -1
 }
 
 func stepFuncs(steps []taint.Step) string {
