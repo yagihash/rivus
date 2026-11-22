@@ -23,7 +23,10 @@
 #     `crate::module::Type.field` (the type as the extractor writes it, with `::`; docs/issues/161-rust-field-source.md):
 #     `Issue` title and body, `PullRequest` title and body, the `body` of a comment (issues, pulls, commits), the message of a
 #     commit (`RepoCommitPage`, `GitCommitObject`), and `Content.content` (the text of a file, still base64). Not made sources:
-#     `body_text` and `body_html` (the same text, rendered by the service: the field that the program reads is `body`).
+#     Checked against the real crate: the extractor, run on a crate that reads each of these fields of octocrab 0.54.9 (under
+#     the sandbox, with the dependencies), writes the type of the field read as `&octocrab::models::<module>::<Type>` and the
+#     name of the field as it is in the source, for all 10 rows; the cell `issue-body` runs `Issue.body`.
+#     Not made sources: `body_text` and `body_html` (the same text, rendered by the service: the field that the program reads is `body`).
 #   - the raw body of `GetRawContentBuilder::send` (the text of the file as an `http::Response`): it is the same kind of value,
 #     but the zoo cannot stand for it (the response is built from the `http` and `http-body` types, and `send` is async), so a row
 #     would not be run by a cell. Not made a source for now.
