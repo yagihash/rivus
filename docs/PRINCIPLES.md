@@ -67,7 +67,7 @@ rivus の設計の判断は、ここに書いた原則に沿う。ほかの文�
 **現状と、まだ届いていない所**
 
 - **200 段を超える経路の切り詰め:** 記録している（`omitted_steps`、`path_steps_omitted:`。1 節に同じ）。
-- **流れを止めるモデルの記録が、一部だけ:** 記録するのは、`origin: llm` の sanitizer の抑制、`numeric_stop`、`global_holds_nothing`、`approximate`。`builtin` や人が書いた sanitizer の停止と、`pure` による停止は、出力に残らない。ADR-010 の文面（「抑制した・伝播させたを必ず記録する」）のほうが、実装より広い。
+- **流れを止めるモデルの記録が、一部だけ:** 記録するのは、`origin: llm` の sanitizer の抑制、`builtin` 以外の `pure` と結果に届かない `flows`(#137)、`numeric_stop`、`global_holds_nothing`、`approximate`。`builtin` の `pure` と `flows`、`builtin` や人が書いた sanitizer の停止は、出力に残らない。ADR-010 の文面（「抑制した・伝播させたを必ず記録する」）のほうが、実装より広い。
 - **`numeric_stop`:** サマリを通って止まる分は記録しない。ADR-043 の追記が自己申告している。
 - **`kind` の追加と、スキーマのバージョン:** ADR-008 は「種類は閉じた集合で、追加はスキーマを上げる」と書くが、実際は `assumed_call`、`model_approximation`、`field_imprecision`、`numeric_stop` などを `rivus.result/1` のまま足している（ADR-043 の追記が認めている）。運用と ADR の文面が食い違っていて、どちらに合わせるかは **未決**。
 - **ADR-079 の訂正:** 「全部たどれたときだけ絞る」が守られていなかった 6 件が、訂正として記録されている。

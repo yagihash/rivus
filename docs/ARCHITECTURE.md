@@ -634,7 +634,7 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 
 #### 決定論性の担保
 
-- 出力に、モデルが決めた所を記録する（`models`、`llm_influenced`、`suppressions`）。LLM 由来モデルが結論に影響した検出結果は、その旨がトレースできる。記録は、`origin: llm` の sanitizer の抑制、`numeric_stop`、`global_holds_nothing`、`approximate` に限られる。`builtin` や人が書いた sanitizer の停止と、`pure` による停止は残らない（PRINCIPLES.md 2 節）
+- 出力に、モデルが決めた所を記録する（`models`、`llm_influenced`、`suppressions`）。LLM 由来モデルが結論に影響した検出結果は、その旨がトレースできる。記録は、`origin: llm` の sanitizer の抑制、`builtin` 以外の propagator の `pure` と結果に届かない `flows`（`suppressions`。#137）、`numeric_stop`、`global_holds_nothing`、`approximate`。`builtin` の `pure` と `flows`、`builtin` や人が書いた sanitizer の停止は残らない（確認済みで、全部残すと出力が膨らむため。PRINCIPLES.md 2 節）。`suppressions` に `origin: llm` の記録がある関数を通り、同じ source から出る finding は、そのモデルを `models` に入れて `llm_influenced` を付ける
 - `--deterministic-only` は `origin: llm` のモデルをすべて無視して実行される
 
 #### モデルカバレッジレポート
