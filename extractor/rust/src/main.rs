@@ -23,6 +23,17 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
+/// The `+toolchain` that goes first in the arguments of rustc and cargo (the proxies of rustup pick the toolchain by it).
+/// With RIVUS_RUST_DIRECT set, nothing: `rustc` and `cargo` on PATH are the ones of the pinned toolchain itself (the
+/// sandbox of macOS runs them so, without rustup: there is nothing to pick, and no proxy has to be allowed).
+fn plus() -> Vec<String> {
+    if std::env::var_os("RIVUS_RUST_DIRECT").is_some() {
+        Vec::new()
+    } else {
+        vec![format!("+{}", TOOLCHAIN)]
+    }
+}
+
 /// The toolchain the extractor is built with and runs rustc with.
 /// It is read from rust-toolchain.toml by build.rs: the nightly is written in that one place.
 const TOOLCHAIN: &str = env!("RIVUS_TOOLCHAIN");
@@ -312,7 +323,7 @@ fn cli() -> ExitCode {
     }
     let exe = std::env::current_exe().expect("the path of the extractor");
     // The toolchain has to be there: a missing one is said as that, not as code that does not compile.
-    let sysroot = match Command::new("rustc").args([&format!("+{}", TOOLCHAIN), "--print", "sysroot"]).output() {
+    let sysroot = match Command::new("rustc").args(plus().iter().map(String::as_str).chain(["--print", "sysroot"])).output() {
         Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).trim().to_string(),
         r => {
             let why = match r {
@@ -342,7 +353,7 @@ fn cli() -> ExitCode {
     // tells the members of the workspace apart); without, for the members only.
     let wrapper = if deps { "RUSTC_WRAPPER" } else { "RUSTC_WORKSPACE_WRAPPER" };
     let status = Command::new("cargo")
-        .arg(format!("+{}", TOOLCHAIN))
+        .args(plus())
         .args(&check)
         .current_dir(&root)
         .env("CARGO_TARGET_DIR", tmp.join("target"))
@@ -391,7 +402,7 @@ fn cli() -> ExitCode {
 /// cargo does not say.
 fn tests_skipped(root: &Path, tmp: &Path) -> Option<serde_json::Value> {
     let out = Command::new("cargo")
-        .arg(format!("+{}", TOOLCHAIN))
+        .args(plus())
         .args(["metadata", "--no-deps", "--format-version", "1"])
         .current_dir(root)
         .env("CARGO_TARGET_DIR", tmp.join("target"))

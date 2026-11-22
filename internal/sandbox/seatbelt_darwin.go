@@ -36,6 +36,9 @@ type Spec struct {
 	// Read are the directories (subpaths) that may be read, Exec the ones that programs may be run from (they are read too),
 	// Write the ones that may be written (and read).
 	Read, Exec, Write []string
+	// ExecFiles are programs that may be run, each by its path (a file, not a directory): the way to allow the few programs a build
+	// needs without allowing everything in /usr/bin (osascript, security, curl, ssh ... are there).
+	ExecFiles []string
 	// ProxyPort, when not 0, is the one TCP port on the loopback that the program may connect to (the proxy of the fetch).
 	// 0: no network at all.
 	ProxyPort int
@@ -62,7 +65,7 @@ type Result struct {
 // profile is the text of the profile. Every path comes in as a parameter ((param "P0")), never in the text: a directory
 // whose name has a parenthesis or a quote in it cannot change the profile (TestSandboxProfileTakesNoPathInItsText).
 // A rule that is allowed has the reason beside it.
-func profile(nRead, nExec, nWrite int, proxy bool) string {
+func profile(nRead, nExec, nWrite, nFiles int, proxy bool) string {
 	var b strings.Builder
 	b.WriteString(`(version 1)
 ; Everything is denied, and what is needed is allowed, one line at a time with its reason.
@@ -83,14 +86,25 @@ func profile(nRead, nExec, nWrite int, proxy bool) string {
 ; The names of the top of the file system are not shown (nothing needs them: the paths that are allowed are named whole).
 (deny file-read-metadata (literal "/Users") (literal "/Volumes") (literal "/Applications"))
 `)
+	// the directories above a directory that is named can be stat-ed (not listed, not read): the path is resolved by looking at them
+	ancestors := func(kind string, i int) {
+		fmt.Fprintf(&b, "(allow file-read-metadata (path-ancestors (param \"%s%d\")))\n", kind, i)
+	}
 	for i := 0; i < nRead; i++ {
 		fmt.Fprintf(&b, "; may be read: a directory that the caller named (the project, the dependencies, the toolchain)\n(allow file-read* (subpath (param \"R%d\")))\n", i)
+		ancestors("R", i)
 	}
 	for i := 0; i < nExec; i++ {
 		fmt.Fprintf(&b, "; programs may be run from here, and the directory is read: the toolchain, the compilers, the extractor\n(allow file-read* process-exec* (subpath (param \"X%d\")))\n", i)
+		ancestors("X", i)
+	}
+	for i := 0; i < nFiles; i++ {
+		fmt.Fprintf(&b, "; this program may be run (it is named by its path): one that a build needs\n(allow file-read* process-exec* (literal (param \"E%d\")))\n", i)
+		ancestors("E", i)
 	}
 	for i := 0; i < nWrite; i++ {
 		fmt.Fprintf(&b, "; may be written: the working directory of this run only\n(allow file-read* file-write* (subpath (param \"W%d\")))\n", i)
+		ancestors("W", i)
 	}
 	b.WriteString("; a program may start programs (a build script runs the compiler)\n(allow process-fork)\n")
 	if proxy {
@@ -114,7 +128,7 @@ func Run(ctx context.Context, s Spec) (*Result, error) {
 	}
 	defer os.RemoveAll(dir)
 	pf := filepath.Join(dir, "profile.sb")
-	if err := os.WriteFile(pf, []byte(profile(len(s.Read), len(s.Exec)+1, len(s.Write), s.ProxyPort != 0)), 0o600); err != nil {
+	if err := os.WriteFile(pf, []byte(profile(len(s.Read), len(s.Exec)+1, len(s.Write), len(s.ExecFiles), s.ProxyPort != 0)), 0o600); err != nil {
 		return nil, err
 	}
 	args := []string{"-f", pf}
@@ -128,6 +142,9 @@ func Run(ctx context.Context, s Spec) (*Result, error) {
 	execs := append([]string{filepath.Dir(s.Argv[0])}, s.Exec...)
 	for i, d := range execs {
 		param(fmt.Sprintf("X%d", i), real(d))
+	}
+	for i, f := range s.ExecFiles {
+		param(fmt.Sprintf("E%d", i), real(f))
 	}
 	for i, d := range s.Write {
 		param(fmt.Sprintf("W%d", i), real(d))

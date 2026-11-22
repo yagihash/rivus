@@ -45,6 +45,10 @@ Go と Dart は動く(`go` と Dart SDK が、それぞれ `brew` で入る)。*
 
 `rivus setup rust`(固定の nightly と extractor を、サンドボックスの外で、信頼できるソース(rivus 自身)から用意する、**明示のコマンド**)。formula は、**`post_install` で勝手にダウンロードしない**。`caveats` で、「Rust を読むときは、`rivus setup rust` を 1 回実行する」と案内する。置き場所は、利用者のデータのディレクトリ(`~/Library/Application Support/rivus/` を案)。
 
+## 6a. `rivus setup rust` は、extractor のソースを、どこから取るか(案)
+
+インストールされた rivus は、リポジトリを持たない。案: (i) formula が `extractor/rust` のソースを `pkgshare` に置き、`rivus setup rust` がそこからビルドする。(ii) rivus のバイナリに、extractor のソースを埋め込む(`go:embed`。数百 KB)。(i) は、formula が 1 つ多くを知る(ユーザーの下書きは、`extractor/dart` を `libexec` に置く形で、同じ考え方)。(ii) は、配り方に依らないが、バイナリが大きくなる。**どちらも、版の一致の確認(課題 #109)が前提**: extractor が自分の版を答え、rivus は合わなければ止まる。実行時は rustup を使わない(固定のツールチェインの `bin` を `PATH` に。`RIVUS_RUST_DIRECT=1`。DESIGN-macos-sandbox.md)。rivus 専用の `CARGO_HOME`(ツールチェインと同じ、rivus のデータのディレクトリの下)を使い、利用者の `~/.cargo` は、読みも書きもしない。
+
 ## 7. formula の下書き(このリポジトリの中に置ける。tap を作る前)
 
 formula の中身(`depends_on`、`caveats`、`test do`)は、先にこのリポジトリの中に下書きとして置ける(外に出ない)。`depends_on`: ビルド時 `go`、実行時 `go`(`go list` のため)と、Dart の扱い(上の表)。`test do`: `rivus version`(足したあと)と、小さい Go のプロジェクトの解析。
