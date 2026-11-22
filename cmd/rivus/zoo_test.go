@@ -90,21 +90,26 @@ func zooCommand(dir string, env []string, name string, args ...string) *exec.Cmd
 func zooObserve(t testing.TB) zooObserved {
 	t.Helper()
 	dir := zooRoot(t)
-	zooOnce.Do(func() { zooObs, zooErr = zooObserveOnce(dir) })
+	zooOnce.Do(func() { zooObs, zooErr = zooObserveOnce(dir, filepath.Join(filepath.Dir(binary), "zoo"), "zoo/cells/...", "") })
 	if zooErr != nil {
 		t.Fatal(zooErr)
 	}
 	return zooObs
 }
 
-func zooObserveOnce(dir string) (zooObserved, error) {
+// zooObserveOnce builds ./cmd/observe of the module in dir (with the overlay file, when there is one: a package of the zoo has
+// no cmd/observe of its own, see zoo_pkg_test.go) and runs it three times. work is where the runs write; coverpkg the cells.
+func zooObserveOnce(dir, work, coverpkg, overlay string) (zooObserved, error) {
 	var obs zooObserved
-	work := filepath.Join(filepath.Dir(binary), "zoo")
 	if err := os.MkdirAll(work, 0o755); err != nil {
 		return obs, err
 	}
 	exe := filepath.Join(work, "observe")
-	if out, err := zooCommand(dir, nil, "go", "build", "-tags", "zooexec", "-cover", "-coverpkg=zoo/cells/...", "-o", exe, "./cmd/observe").CombinedOutput(); err != nil {
+	build := []string{"build", "-tags", "zooexec", "-cover", "-coverpkg=" + coverpkg, "-o", exe}
+	if overlay != "" {
+		build = append(build, "-overlay", overlay)
+	}
+	if out, err := zooCommand(dir, nil, "go", append(build, "./cmd/observe")...).CombinedOutput(); err != nil {
 		return obs, fmt.Errorf("building the harness: %v\n%s", err, out)
 	}
 	type runSpec struct {

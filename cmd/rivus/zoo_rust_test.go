@@ -96,19 +96,23 @@ func zooRustObserve(t *testing.T) zooObserved {
 }
 
 func zooRustObserveOnce(t *testing.T, root string) (zooObserved, error) {
+	return zooRustObserveAt(t, filepath.Join(root, "exec"), filepath.Join(filepath.Dir(binary), "zoo-rust"), "zoo-observe")
+}
+
+// zooRustObserveAt builds the harness in exe (a crate whose binary bin runs the cases) and runs it three times; work is where the
+// target and the runs go. A package of the zoo has a harness that the test writes (zoo_pkg_test.go).
+func zooRustObserveAt(t *testing.T, exe, work, bin string) (zooObserved, error) {
 	var obs zooObserved
-	exe := filepath.Join(root, "exec")
-	work := filepath.Join(filepath.Dir(binary), "zoo-rust")
 	if err := os.MkdirAll(work, 0o755); err != nil {
 		return obs, err
 	}
 	target := filepath.Join(work, "target")
 	build := zooRustCargo(t, exe, []string{"RUSTFLAGS=-C instrument-coverage", "CARGO_TARGET_DIR=" + target},
-		"build", "--locked", "--offline", "--quiet", "--bin", "zoo-observe")
+		"build", "--locked", "--offline", "--quiet", "--bin", bin)
 	if out, err := build.CombinedOutput(); err != nil {
 		return obs, fmt.Errorf("building the harness: %v\n%s", err, out)
 	}
-	bin := filepath.Join(target, "debug", "zoo-observe")
+	binPath := filepath.Join(target, "debug", bin)
 	runs := []struct{ name, variant, reverse string }{{"v0", "0", "0"}, {"v1", "1", "0"}, {"rev", "0", "1"}}
 	got := map[string]zooRun{}
 	var raws []string
@@ -120,7 +124,7 @@ func zooRustObserveOnce(t *testing.T, root string) (zooObserved, error) {
 		}
 		outFile := filepath.Join(work, r.name+".json")
 		os.Remove(outFile)
-		cmd := exec.Command(bin)
+		cmd := exec.Command(binPath)
 		cmd.Dir = exe
 		cmd.Env = append(os.Environ(), "ZOO_VARIANT="+r.variant, "ZOO_REVERSE="+r.reverse, "ZOO_OUT="+outFile,
 			"LLVM_PROFILE_FILE="+filepath.Join(cov, "zoo-%p-%m.profraw"))
@@ -146,7 +150,7 @@ func zooRustObserveOnce(t *testing.T, root string) (zooObserved, error) {
 	if out, err := exec.Command(zooRustLLVM(t, "llvm-profdata"), args...).CombinedOutput(); err != nil {
 		return obs, fmt.Errorf("llvm-profdata: %v\n%s", err, out)
 	}
-	cmd := exec.Command(zooRustLLVM(t, "llvm-cov"), "export", "-instr-profile="+prof, bin)
+	cmd := exec.Command(zooRustLLVM(t, "llvm-cov"), "export", "-instr-profile="+prof, binPath)
 	cmd.Stderr = os.Stderr
 	cj, err := cmd.Output()
 	if err != nil {

@@ -17,3 +17,4 @@ __pycache__/
 /bench/zoo-dart/cells/pubspec.lock
 /bench/zoo-dart/exec/pubspec.lock
 /bench/zoo-dart/exec/lib/cases.dart
+/bench/zoo-rust-pkg/*/target/

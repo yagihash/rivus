@@ -1,0 +1,2 @@
+go	pkg/zoo_synth/echo/echo.go	sink-none	@sink(none)	func fixed() { @fixed
+go	pkg/zoo_synth/echo/echo.go	sink-none	@sink(none) @nosink(pkg-zoo-synth-echo-decoy)	func decoy() { @decoy

@@ -126,6 +126,19 @@ func goZooSymbols(t *testing.T, set map[string]bool) {
 		}
 		irSymbols(set, out)
 	}
+	// the packages of the zoo (bench/zoo-go-pkg/<package>, zoo_pkg_test.go): a cell hits the row of an external package by calling
+	// the skeleton, so the functions of the skeleton count here (they are a dependency of that package, not of the zoo)
+	for _, dir := range zooPkgDirs(t, "go") {
+		prog, err := gossa.Load(dir, []string{"./..."}, gossa.Options{NaiveForm: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		out, err := goir.Extract(prog, goir.Options{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		irSymbols(set, out)
+	}
 }
 
 func dartZooSymbols(t *testing.T, set map[string]bool) {
@@ -165,6 +178,10 @@ func rustZooSymbols(t *testing.T, set map[string]bool) {
 	// our own code: read on this machine, as the zoo tests do (nothing of a third party is read here)
 	zoo := zooRustCopy(t, zooRustRoot(t))
 	irSymbols(set, deadReadIR(t, zooRustStream(t, zoo)))
+	for _, dir := range zooPkgDirs(t, "rust") {
+		cp := zooRustPkgCopy(t, dir)
+		irSymbols(set, deadReadIR(t, zooRustStream(t, cp)))
+	}
 	cur, err := filepath.Abs("../../bench/rust-curated")
 	if err != nil {
 		t.Fatal(err)

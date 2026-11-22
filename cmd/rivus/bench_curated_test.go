@@ -129,12 +129,17 @@ type annotOpts struct {
 	pattern          string
 	allowUnconverged bool
 	programWide      bool
+	extraRules       []string // more rules files (absolute), after the rules.yaml of the directory: a package of the zoo adds the rules of zoo/mark
 }
 
 // checkAnnotated is checkCurated for a project with its own options.
 func checkAnnotated(t *testing.T, dir string, o annotOpts) curatedCounts {
 	t.Helper()
-	cmd := exec.Command(binary, "analyze", "-sites", "-rules", "rules.yaml", o.pattern)
+	args := []string{"analyze", "-sites", "-rules", "rules.yaml"}
+	for _, r := range o.extraRules {
+		args = append(args, "-rules", r)
+	}
+	cmd := exec.Command(binary, append(args, o.pattern)...)
 	cmd.Dir = dir
 	out, err := cmd.Output()
 	if err != nil {
@@ -162,7 +167,11 @@ func checkCuratedIROpts(t *testing.T, dir string, stream []byte, ext string, o a
 	if err := os.WriteFile(irFile, stream, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command(binary, "analyze", "-sites", "-ir", irFile, "-rules", filepath.Join(dir, "rules.yaml"))
+	args := []string{"analyze", "-sites", "-ir", irFile, "-rules", filepath.Join(dir, "rules.yaml")}
+	for _, r := range o.extraRules {
+		args = append(args, "-rules", r)
+	}
+	cmd := exec.Command(binary, args...)
 	cmd.Dir = dir
 	out, err := cmd.Output()
 	if err != nil {
