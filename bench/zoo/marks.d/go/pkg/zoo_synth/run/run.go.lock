@@ -1,0 +1,2 @@
+go	pkg/zoo_synth/run/run.go	sink-none	@sink(none)	func fixed() { @fixed
+go	pkg/zoo_synth/run/run.go	sink-none	@sink(none) @nosink(pkg-zoo-synth-run-decoy)	func decoy() { @decoy

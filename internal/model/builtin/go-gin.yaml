@@ -1,0 +1,154 @@
+# gin (github.com/gin-gonic/gin): where untrusted requests come from, and the dangerous operations. A handler gets a
+# *gin.Context: it is the request (as *http.Request is for net/http), and what its getters return, and what the Bind
+# functions fill in, comes from it.
+#
+# Checked against gin v1.12.0 (range >=1.12.0 <2.0.0), 2026-11-23, by reading the published source. Promoted from
+# examples/rules/go-gin.yaml (ADR-101); the rows of the example are all here, and the getters, binders and sinks of v1.12.0
+# that the example did not have are added. Hand written rows (origin: human); the generator does not exist yet.
+#
+# Not modelled, on purpose: the key-value store of the context (`Set`, `Get`, `GetString`, ...: what a middleware stored, not
+# the request; the body is read), the writers of a response that encode (`JSON`, `XML`, `HTML`, ... : not an XSS of the data), and
+# `Context.Next`, `Abort*`, `Copy`, `Handler*` (the handler chain is the project's own code). A `calls:` row for
+# `Context.Stream(step)` would say nothing that reaches a sink (the step gets the response writer), so there is none.
+ruleset: rivus/go/gin@1
+
+verified_versions:
+  - package: github.com/gin-gonic/gin
+    versions: ">=1.12.0 <2.0.0"
+    checked_with: v1.12.0
+    checked: 2026-11-23
+
+sources:
+  - kind: param_type
+    type: "*github.com/gin-gonic/gin.Context"
+    labels: [user_input]
+
+propagators:
+  - symbol: (*github.com/gin-gonic/gin.Context).Query
+    flows: [{from: recv, to: result}]
+  - symbol: (*github.com/gin-gonic/gin.Context).DefaultQuery
+    flows: [{from: recv, to: result}, {from: arg1, to: result}]
+  - symbol: (*github.com/gin-gonic/gin.Context).QueryArray
+    flows: [{from: recv, to: result}]
+  - symbol: (*github.com/gin-gonic/gin.Context).QueryMap
+    flows: [{from: recv, to: result}]
+  - symbol: (*github.com/gin-gonic/gin.Context).Param
+    flows: [{from: recv, to: result}]
+  - symbol: (*github.com/gin-gonic/gin.Context).PostForm
+    flows: [{from: recv, to: result}]
+  - symbol: (*github.com/gin-gonic/gin.Context).DefaultPostForm
+    flows: [{from: recv, to: result}, {from: arg1, to: result}]
+  - symbol: (*github.com/gin-gonic/gin.Context).PostFormArray
+    flows: [{from: recv, to: result}]
+  - symbol: (*github.com/gin-gonic/gin.Context).PostFormMap
+    flows: [{from: recv, to: result}]
+  - symbol: (*github.com/gin-gonic/gin.Context).GetHeader
+    flows: [{from: recv, to: result}]
+  - symbol: (*github.com/gin-gonic/gin.Context).GetRawData
+    flows: [{from: recv, to: result}]
+  - symbol: (*github.com/gin-gonic/gin.Context).ClientIP
+    flows: [{from: recv, to: result}]
+  - symbol: (*github.com/gin-gonic/gin.Context).FullPath
+    flows: [{from: recv, to: result}]
+  - symbol: (*github.com/gin-gonic/gin.Context).ContentType
+    flows: [{from: recv, to: result}]
+  - symbol: (*github.com/gin-gonic/gin.Context).GetQuery
+    flows: [{from: recv, to: result0}]
+  - symbol: (*github.com/gin-gonic/gin.Context).GetQueryArray
+    flows: [{from: recv, to: result0}]
+  - symbol: (*github.com/gin-gonic/gin.Context).GetQueryMap
+    flows: [{from: recv, to: result0}]
+  - symbol: (*github.com/gin-gonic/gin.Context).GetPostForm
+    flows: [{from: recv, to: result0}]
+  - symbol: (*github.com/gin-gonic/gin.Context).GetPostFormArray
+    flows: [{from: recv, to: result0}]
+  - symbol: (*github.com/gin-gonic/gin.Context).GetPostFormMap
+    flows: [{from: recv, to: result0}]
+  - symbol: (*github.com/gin-gonic/gin.Context).FormFile
+    flows: [{from: recv, to: result0}]
+  - symbol: (*github.com/gin-gonic/gin.Context).MultipartForm
+    flows: [{from: recv, to: result0}]
+  - symbol: (*github.com/gin-gonic/gin.Context).Cookie
+    flows: [{from: recv, to: result0}]
+  - symbol: (*github.com/gin-gonic/gin.Context).Bind
+    flows: [{from: recv, to: arg0}, {from: arg0, to: result}, {from: arg0, to: recv}]
+  - symbol: (*github.com/gin-gonic/gin.Context).BindJSON
+    flows: [{from: recv, to: arg0}, {from: arg0, to: result}, {from: arg0, to: recv}]
+  - symbol: (*github.com/gin-gonic/gin.Context).BindXML
+    flows: [{from: recv, to: arg0}, {from: arg0, to: result}, {from: arg0, to: recv}]
+  - symbol: (*github.com/gin-gonic/gin.Context).BindQuery
+    flows: [{from: recv, to: arg0}, {from: arg0, to: result}, {from: arg0, to: recv}]
+  - symbol: (*github.com/gin-gonic/gin.Context).BindYAML
+    flows: [{from: recv, to: arg0}, {from: arg0, to: result}, {from: arg0, to: recv}]
+  - symbol: (*github.com/gin-gonic/gin.Context).BindTOML
+    flows: [{from: recv, to: arg0}, {from: arg0, to: result}, {from: arg0, to: recv}]
+  - symbol: (*github.com/gin-gonic/gin.Context).BindPlain
+    flows: [{from: recv, to: arg0}, {from: arg0, to: result}, {from: arg0, to: recv}]
+  - symbol: (*github.com/gin-gonic/gin.Context).BindHeader
+    flows: [{from: recv, to: arg0}, {from: arg0, to: result}, {from: arg0, to: recv}]
+  - symbol: (*github.com/gin-gonic/gin.Context).BindUri
+    flows: [{from: recv, to: arg0}, {from: arg0, to: result}, {from: arg0, to: recv}]
+  - symbol: (*github.com/gin-gonic/gin.Context).ShouldBind
+    flows: [{from: recv, to: arg0}, {from: arg0, to: result}]
+  - symbol: (*github.com/gin-gonic/gin.Context).ShouldBindJSON
+    flows: [{from: recv, to: arg0}, {from: arg0, to: result}]
+  - symbol: (*github.com/gin-gonic/gin.Context).ShouldBindXML
+    flows: [{from: recv, to: arg0}, {from: arg0, to: result}]
+  - symbol: (*github.com/gin-gonic/gin.Context).ShouldBindQuery
+    flows: [{from: recv, to: arg0}, {from: arg0, to: result}]
+  - symbol: (*github.com/gin-gonic/gin.Context).ShouldBindYAML
+    flows: [{from: recv, to: arg0}, {from: arg0, to: result}]
+  - symbol: (*github.com/gin-gonic/gin.Context).ShouldBindTOML
+    flows: [{from: recv, to: arg0}, {from: arg0, to: result}]
+  - symbol: (*github.com/gin-gonic/gin.Context).ShouldBindPlain
+    flows: [{from: recv, to: arg0}, {from: arg0, to: result}]
+  - symbol: (*github.com/gin-gonic/gin.Context).ShouldBindHeader
+    flows: [{from: recv, to: arg0}, {from: arg0, to: result}]
+  - symbol: (*github.com/gin-gonic/gin.Context).ShouldBindUri
+    flows: [{from: recv, to: arg0}, {from: arg0, to: result}]
+  - symbol: (*github.com/gin-gonic/gin.Context).MustBindWith
+    flows: [{from: recv, to: arg0}, {from: arg0, to: result}, {from: arg0, to: recv}]
+  - symbol: (*github.com/gin-gonic/gin.Context).ShouldBindWith
+    flows: [{from: recv, to: arg0}, {from: arg0, to: result}]
+  - symbol: (*github.com/gin-gonic/gin.Context).ShouldBindBodyWith
+    flows: [{from: recv, to: arg0}, {from: arg0, to: result}]
+  - symbol: (*github.com/gin-gonic/gin.Context).ShouldBindBodyWithJSON
+    flows: [{from: recv, to: arg0}, {from: arg0, to: result}]
+  - symbol: (*github.com/gin-gonic/gin.Context).ShouldBindBodyWithXML
+    flows: [{from: recv, to: arg0}, {from: arg0, to: result}]
+  - symbol: (*github.com/gin-gonic/gin.Context).ShouldBindBodyWithYAML
+    flows: [{from: recv, to: arg0}, {from: arg0, to: result}]
+  - symbol: (*github.com/gin-gonic/gin.Context).ShouldBindBodyWithTOML
+    flows: [{from: recv, to: arg0}, {from: arg0, to: result}]
+  - symbol: (*github.com/gin-gonic/gin.Context).ShouldBindBodyWithPlain
+    flows: [{from: recv, to: arg0}, {from: arg0, to: result}]
+  - symbol: (github.com/gin-gonic/gin.Params).Get
+    flows: [{from: recv, to: result0}]
+  - symbol: (github.com/gin-gonic/gin.Params).ByName
+    flows: [{from: recv, to: result}]
+
+sinks:
+  - symbol: (*github.com/gin-gonic/gin.Context).Redirect
+    args: [1]
+    category: open_redirect
+  - symbol: (*github.com/gin-gonic/gin.Context).File
+    args: [0]
+    category: path_traversal
+  - symbol: (*github.com/gin-gonic/gin.Context).FileFromFS
+    args: [0]
+    category: path_traversal
+  - symbol: (*github.com/gin-gonic/gin.Context).FileAttachment
+    args: [0]
+    category: path_traversal
+  - symbol: (*github.com/gin-gonic/gin.Context).SaveUploadedFile
+    args: [1]
+    category: path_traversal
+  # XSS: what is written to the response as it is.
+  - symbol: (*github.com/gin-gonic/gin.Context).String
+    args: [1, 2]
+    accepts: [user_input]
+    category: xss
+  - symbol: (*github.com/gin-gonic/gin.Context).Data
+    args: [2]
+    accepts: [user_input]
+    category: xss

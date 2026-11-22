@@ -57,9 +57,16 @@
 4. **追加**: `<lang>-<package>.yaml`(手の部分)に、sink、source、sanitizer、`calls:`(利用者のコードを呼び返す API: コールバック、利用者が実装するインターフェース。パッケージの行には各行に `checked_by: cell` を書く。実行の確認の道具は標準ライブラリだけを呼ぶ。代わりに、その API を呼び、`@sink` か `@miss` のマークがあるセルが要る。[MODELING.md](MODELING.md) 3 節、ADR-107)を足す。パッケージの行を足したら、**その行を空にして(または消して)セルが落ちること**を確認する。セルが行を使っていることの確認で、実行の確認より弱いのを補う)。`origin: human` か `llm`。zoo に、肯定と否定のセルを足す。`rivus models coverage` で、未モデルの呼び出しを確認する。
 5. **宣言(未実装)**: [DESIGN-package-models.md](DESIGN-package-models.md) 2 節 5 の条件(差分テストで照合済み、`calls:` が書いてある、ほかのパッケージから呼ばれる扱いが決まっている)を満たしたときだけ。満たさなければ、宣言なしで PR を出す。
 
+**骨組みは、公開のシグネチャと、記録するだけの本体にする**: rivus は、骨組みの本体も読む(依存として)。interceptor を呼ぶ、検査をするなど、凝った本体にすると、本物と違う流れになり、モデルの確認が、骨組みの形に引きずられる(実例: Dart の `dio` の最初の骨組み)。本体は、引数を記録する(`zoo_mark` の `recordAny` など)か、空にする。
+
 **開発用の依存とぶつかるパッケージの骨組み(Dart)**: `bench/zoo-dart/exec` の `test` が持ってくる本物のパッケージ(`shelf`、`shelf_static`、`shelf_web_socket`、`web_socket_channel`、`async`、`collection`、`http_parser`、`stream_channel`、`path` など)と同じ名前の骨組みは、`bench/zoo-dart/cells/packages/<名前>`(path の依存。本物の依存は書かない)に置き、骨組みの `pubspec.yaml` の末尾に `zoo_exec_override: <本物の範囲>` の 1 行を書く(`exec/pubspec.yaml` の `dependency_overrides` は、これから生成される。`exec/pubspec.yaml` と `cells/pubspec.yaml` は生成物で、コミットしない。`make zoo-dart-gen`)。解析(cells)は骨組みを読み、実行(exec)は、`test` がすでに動かしている本物で動く。cells の `pubspec.yaml` の依存に本物の名前を hosted で書かない(zoo のプログラムに本物の依存が入り、依存の関数を検査するテストが失敗する)。骨組みは、本物の公開のシグネチャに合わせる(セルのコードが、両方で型が合うこと)。
 
 **骨組みの置き場(Go と Rust)**: 外部のパッケージを使うセルは、パッケージごとに独立したモジュールに置く([DESIGN-package-models.md](DESIGN-package-models.md) 6.8 の表)。Go は `bench/zoo-go-pkg/<パッケージ>/`(`go.mod`、`skel/`、`cells/`、`rules.yaml`)、Rust は `bench/zoo-rust-pkg/<パッケージ>/`(`Cargo.toml`、`Cargo.lock`、`skel/`、`cells/src/`、`rules.yaml`)。**テストは、そのディレクトリを探す(一覧はない)ので、ディレクトリを足すだけで、実行、真の注釈の照合、rivus の照合が働く**(合成の `zoo_synth` が、見本)。セルの名前は `F/pkg/<パッケージ(`_` は `-`)>/<セル>`、マークの固定は `bench/zoo/marks.d/<lang>/pkg/<パッケージ>/`。Rust の `Cargo.toml` は、zoo-mark を `path = "../../zoo-rust/zoo-mark"` で指す(テストが、サンドボックスのために、対象に写して書き換える)。
+
+**骨組みは、sink の行の関数が呼ばれたら、記録する**(zoo のセルで sink の行を確認するため。記録しない骨組みでは、実行の確認が、sink に届かない)。Go の骨組みは `zoo/mark` を、Rust の骨組みは `zoo-mark` を呼ぶ。記録の場所は、セルの中の、骨組みの関数の呼び出しの行になる(Go は、スタックの中の最初の `/cells/` のフレーム。Rust は、骨組みの関数に `#[track_caller]` を付ける)。最小の例(見本は、`bench/zoo-go-pkg/zoo_synth`、`bench/zoo-rust-pkg/zoo_synth` の `Run` と `run`):
+- Go(骨組みの `go.mod` に `require zoo v0.0.0` と `replace zoo => ../../../zoo-go`): `func Run(cmd string) { mark.SinkCmd(cmd) }`
+- Rust(骨組みの `Cargo.toml` に `zoo-mark = { path = "../../../zoo-rust/zoo-mark" }`): `#[track_caller] pub fn run(cmd: &str) { zoo_mark::sink_cmd(cmd); }`
+sink の行は、パッケージの `rules.yaml` の `sinks:` に、骨組みの関数の記号で書く(`zoo/mark` の sink の記号は、zoo の `rules.yaml` が持つ)。Rust のテストは、パッケージの crate と骨組みの crate の `Cargo.toml` の zoo-mark の path 依存を、写した zoo-mark に書き換える。
 
 テスト: `go test ./internal/model/... ./cmd/rivus/ -run 'Builtin|Zoo'`、`regomark check --no-judge`(0)。Dart のセルは、Dart のテスト(`dart analyze` を含む)も通す。
 
@@ -78,7 +85,7 @@ zoo のゲート(`scripts/zoo-loosened-check.sh`、#167): 新しいセル(`bench
 ## 4. conflict を避ける置き方
 
 1 パッケージ = 1 つのモデルのファイル + 専用の zoo のセルのディレクトリ + 専用のマークのファイル(`bench/zoo/marks.d/`)。`cases.dart` と、zoo-dart の `cells/pubspec.yaml`、`exec/pubspec.yaml` は生成(コミットしない。`make zoo-dart-gen`)、zoo-dart の `pubspec.lock` もコミットしない。共有のファイルをさわらない。**さわってよいファイルは、次のものだけ**:
-- `internal/model/builtin/<lang>-<package>*.yaml`(`verified_versions` も、このファイルに書く)と、そのモデルの `.dead-allow`(`internal/model/builtin/<lang>-<package>*.dead-allow`。**さわるのは、「新しい行がどこにも一致しない」という失敗が出たとき(その行を、理由つきで足す)だけ。「zoo から一致するようになったので外せ」の指摘は、無視する**(#187 のあと、通常は記録だけになる。掃除は定期の別の作業で、モデルの PR は、ほかのモデルの `.dead-allow` をさわらない))。
+- `internal/model/builtin/<lang>-<package>*.yaml`(`verified_versions` も、このファイルに書く)と、そのモデルの `.dead-allow`(`internal/model/builtin/<lang>-<package>*.dead-allow`。**さわるのは、「新しい行がどこにも一致しない」という失敗が出たとき(その行を、理由つきで足す)だけ。「zoo から一致するようになったので外せ」の指摘は、無視する**(#187 のあと、通常は記録だけになる。掃除は定期の別の作業で、モデルの PR は、ほかのモデルの `.dead-allow` をさわらない))。**`.dead-allow` の書式は、1 行 1 シンボルの `symbol | 理由`(同じシンボルを 2 回は書けない。ワイルドカードや、まとめの行はない)。zoo のセルが当たらないメソッドで、同じクラスの同じ形のもの(例: 同じ形のオーバーロード、`get`、`post`、`put` のような同じ形の HTTP のメソッド)は、1 行ずつ、同じ理由の文(例: `debt | no cell of the zoo calls it yet`、または `not called: same shape as <当たっているメソッド>`)で書いてよい(書式の拡張は要らない)。1 行のグループにまとめる書式は、いまはない。**
 - `bench/zoo-<lang>/` の自分のディレクトリ(セル、骨組み)、外部のパッケージのセルは、`bench/zoo-go-pkg/<パッケージ>/`、`bench/zoo-rust-pkg/<パッケージ>/`(ディレクトリを足すだけでよい。テストも `ci.yml` も足さない)、`bench/zoo/marks.d/<lang>/` の自分のファイル、`docs/issues/model-<パッケージ>-*.md`。
 - **広げる PR**(1 節): もともと main にある、そのパッケージのモデルのファイル(と、その `.dead-allow`)。
 - **例からの昇格の PR**(1 節): 昇格する `examples/rules/<その 1 つ>`(消すか、空のルールにする。1 節)と、参照の側(洗い出して必要なものだけ)、`examples/rules/README.md` のその行(「組み込みになった」の 1 行に)、`bench/*/rules.yaml` の例(あれば)。
@@ -96,7 +103,7 @@ zoo のゲート(`scripts/zoo-loosened-check.sh`、#167): 新しいセル(`bench
   4. **既知の見逃しと課題**: `@miss` / `@fp` のセルと、`docs/issues/model-<パッケージ>-<名前>.md` の一覧(なければ「なし」)。
   5. **公開のベンチでの前後の数字**: finding(件数と ID の集合が同じか)、`dynamic_dispatch` の注記の数、`summary_elems`、時間(`-pass-stats`)。中を読んだ場合(モデルなし)との照合と、違いの理由。公開のベンチに、そのパッケージを使うものがなければ、「該当するベンチなし」と書く。
   6. **確認したバージョン**: `verified_versions` に書いた、パッケージ、範囲、確認したバージョン。
-  7. **手順のとおりにできなかった所**: 手順書が曖昧だった所、道具がなかった所、自分で判断した所。なければ「なし」。手順書の改善の入力になる。
+  7. **手順のとおりにできなかった所**: 手順書が曖昧だった所、道具がなかった所、自分で判断した所。なければ「なし」。手順書の改善の入力になる。**`docs/MODEL-QUEUE.md` の案(境界の案)と違う判断をしたとき(source にしない、sink を足す・外すなど)は、ここに、理由を書く。**
 - **最初の 3 本(言語ごとに 1 本)は、相談役が、中身を確認する。** そのために、上の 7 に加えて、**手順の改善案**(次のセッションの手順書に足したいこと)を、本文の最後に書く。
 - 触るファイルは 4 節のとおり(広げる PR と、例からの昇格の PR の分も、4 節に書いてある)。それ以外(コード、ゲート、ワークフロー、共有の文書)は触らない。触る必要が出たら、完成にせず、ドラフトのまま、理由を本文に書いて終わる。
 - push のあと、コミットの署名(0 節)と、CI の結果を確認する。CI が失敗したら、直して push し直す(自分で `gh pr merge` はしない)。
@@ -110,6 +117,7 @@ zoo のゲート(`scripts/zoo-loosened-check.sh`、#167): 新しいセル(`bench
 - 言い回しは `.regomark/policy/wording.rego` に従う(`regomark check --no-judge` が 0)。
 - ADR を書かない(昇格は、[ADR-101](DECISIONS.md) で済んでいる)。方針の変更が要ると思ったら、PR の本文に書く。
 - 1 つの PR で、1 パッケージだけ。終わったら、次のパッケージには進まず、終わる。
+- `.dead-allow` の書式: 1 行 1 シンボルで、`symbol | 理由`(`readDeadAllow`)。既存のファイルは `symbol | 種類 | 理由` の 3 列だが、テストは `|` の最初の区切りだけで分けるので、「種類 | 理由」の全体が理由の文字列として読まれる(2 列でも 3 列でも読める。種類は検査されない)。種類の意味は `bench/parity/README.md`: `dependency`(標準でないライブラリで、zoo にその依存がない)、`debt`(標準ライブラリで、まだ呼ぶセルがない。**減る一方で、新しい行には足さない**)、`spelling`(extractor が書く別の綴り)。新しいパッケージの行は、`symbol | dependency | 理由` か、`symbol | 理由` の形で足す(`debt` は、標準ライブラリのモデルの、いまある行だけ)。
 
 ## 7. 更新の PR(案。定期の照合が入ってから)
 

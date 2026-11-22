@@ -1,0 +1,12 @@
+module zoopkg/gin
+
+go 1.27
+
+require (
+	github.com/gin-gonic/gin v1.12.0
+	zoo v0.0.0
+)
+
+replace zoo => ../../zoo-go
+
+replace github.com/gin-gonic/gin => ./skel

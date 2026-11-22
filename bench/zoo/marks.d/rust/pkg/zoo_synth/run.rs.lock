@@ -1,0 +1,2 @@
+rust	pkg/zoo_synth/run.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	pkg/zoo_synth/run.rs	sink-none	@sink(none) @nosink(pkg-zoo-synth-run-decoy)	fn decoy() { @decoy
