@@ -320,6 +320,26 @@ sinks:
   - symbol: (*database/sql.Tx).ExecContext
     args: [1]
     category: sql_injection
+  - symbol: (*database/sql.Tx).Prepare
+    args: [0]
+    category: sql_injection
+  - symbol: (*database/sql.Tx).PrepareContext
+    args: [1]
+    category: sql_injection
+  # database/sql.Conn (a connection taken out of the pool with DB.Conn): the same four methods as DB, the query string is arg1 (arg0 is the context).
+  # The methods of Stmt take only the bound args (the query string went in at Prepare), and Conn.Raw takes a function of the driver connection: no row.
+  - symbol: (*database/sql.Conn).QueryContext
+    args: [1]
+    category: sql_injection
+  - symbol: (*database/sql.Conn).QueryRowContext
+    args: [1]
+    category: sql_injection
+  - symbol: (*database/sql.Conn).ExecContext
+    args: [1]
+    category: sql_injection
+  - symbol: (*database/sql.Conn).PrepareContext
+    args: [1]
+    category: sql_injection
 
   # path traversal
   - symbol: os.Open

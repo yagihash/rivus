@@ -7,8 +7,6 @@
 (*database/sql.Conn).PingContext | debt | the standard library: no cell of the zoo calls it yet
 (*database/sql.Conn).Raw | debt | the standard library: no cell of the zoo calls it yet
 (*database/sql.DB).Begin | debt | the standard library: no cell of the zoo calls it yet
-(*database/sql.DB).BeginTx | debt | the standard library: no cell of the zoo calls it yet
-(*database/sql.DB).Conn | debt | the standard library: no cell of the zoo calls it yet
 (*database/sql.DB).Ping | debt | the standard library: no cell of the zoo calls it yet
 (*database/sql.DB).PingContext | debt | the standard library: no cell of the zoo calls it yet
 (*database/sql.DB).SetConnMaxIdleTime | debt | the standard library: no cell of the zoo calls it yet
@@ -16,7 +14,6 @@
 (*database/sql.DB).SetMaxIdleConns | debt | the standard library: no cell of the zoo calls it yet
 (*database/sql.DB).SetMaxOpenConns | debt | the standard library: no cell of the zoo calls it yet
 (*database/sql.DB).Stats | debt | the standard library: no cell of the zoo calls it yet
-(*database/sql.Row).Err | debt | the standard library: no cell of the zoo calls it yet
 (*database/sql.Row).Scan | debt | the standard library: no cell of the zoo calls it yet
 (*database/sql.Rows).Scan | debt | the standard library: no cell of the zoo calls it yet
 (*database/sql.Tx).Commit | debt | the standard library: no cell of the zoo calls it yet
