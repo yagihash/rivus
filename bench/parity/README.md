@@ -1,6 +1,6 @@
 # parity: 言語間の差の表(B-52、段階 1)
 
-組み込みのモデルの整備の状況を、「割合 1 つ」でなく、**量・需要・正しさ・当たっているか**の 4 つの数に分け、Go・Dart・Rust の列に実数と割合で並べる。結果は [`TABLE.md`](TABLE.md)(コミットする表)、当たらなかった行の一覧は [`DEAD.md`](DEAD.md)。**コア(`internal/`)は変えない**: モデルは `internal/model/builtin` を読み、IR は小さな自前のデコーダで読む。
+組み込みのモデルの整備の状況を、「割合 1 つ」でなく、**量・需要・正しさ・当たっているか**の 4 つの数に分け、Go・Dart・Rust の列に実数と割合で並べる。結果は [`TABLE.md`](TABLE.md)(コミットする表)、一致しなかった行の一覧は [`DEAD.md`](DEAD.md)。**コア(`internal/`)は変えない**: モデルは `internal/model/builtin` を読み、IR は小さな自前のデコーダで読む。
 
 ## 4 つの数
 
@@ -9,14 +9,14 @@
 | (A) 量 | 標準ライブラリの公開 API のうち、組み込みの行がある関数の数 | `go/types` で列挙した、データを運びうる関数(**手で作らない**)。Go だけ。Dart と Rust は形が決まってから |
 | (B) 需要 | 実コードの、本体のないライブラリ関数への呼び出し(箇所)のうち、組み込みの行がある箇所の数 | IR の `call` 命令。形((i)〜(iii))ごと。汚染が届いた呼び出しは `-pass-stats` の `unmodeled_top` から(上位 20 だけ。下の「限界」) |
 | (C) 正しさ | `pure` の行の実行の検査(`TestZooPureGo`)と、zoo の表(セル / ケース / 出る / `@miss`) | `pure` の行の数。Dart と Rust は「未」 |
-| (D) 当たっているか | どの IR にも当たらなかった行の数(**死んだ行**) | 鍵が呼び出しの行 |
+| (D) 当たっているか | どの IR にも一致しなかった行の数(**死んだ行**) | 鍵が呼び出しの行 |
 
 ### 形((i)〜(iv))
 
 既定の扱い(`internal/taint/calls.go` の `unmodeled`)は、**レシーバと引数のすべての中身が、結果のすべてに流れる**(bool は除く)。レシーバと引数への書き込みは含まない。コールバックは呼ばれない(CB-LIST)。だから「モデルがない」は見逃しではない。効くのは、既定が間違う形:
 
 - (i) 値を返すだけ: 既定で運ばれる。モデルは不確実性を減らすだけ。
-- (ii) 引数やレシーバに書く(`json.Unmarshal(data, &v)`、`buf.WriteString(s)`、Rust の `&mut` の出力引数、Dart のコレクションへの `add`): 既定は流れを落とす。
+- (ii) 引数やレシーバに書く(`json.Unmarshal(data, &v)`、`buf.WriteString(s)`、Rust の `&mut` の出力引数、Dart のコレクションへの `add`): 既定は流れを除去する。
 - (iii) コールバックを呼ぶ(`sort.Slice`、`then`、`map`、`forEach`): 既定は運べない。モデルの書式もまだ表せない(CB-LIST)。
 - (iv) source / sink / sanitizer / boundary、そして `pure`(流れを切る): モデルが意味そのもの。
 
@@ -24,12 +24,12 @@
 
 ### (D) の分け方
 
-IR の呼び出し先の名前(`callee.symbol`、関数の名前)と、モデルの鍵(`symbol`)の**文字列の一致**。当たらなかった行は 4 つに分ける。
+IR の呼び出し先の名前(`callee.symbol`、関数の名前)と、モデルの鍵(`symbol`)の**文字列の一致**。一致しなかった行は 4 つに分ける。
 
 - **API 不在**(Go のみ): `go/types` にその名前がない(綴りの誤りか、消えた API)。
 - **綴りの疑い**: 同じ API の別の綴りが IR にある(末尾が同じ: Go は `*` を除いた全体、Dart は `#` のあと、Rust は最後の 2 要素)。再エクスポート(`tonic::request::Request` と `tonic::Request`)、レシーバの `*` などで起きる。
 - **別の型の同名メンバ**(Dart と Rust のみ): 同じライブラリ(crate)の別の型に、同じメンバ名の呼び出しが IR にある(`dart:core#List.join` に対する `dart:core#Iterable.join` のように、宣言した型が違う: 継承・Deref・trait の疑い)。`new`・`get` などの一般的な名前は除く。
-- **使われていない**: 似た名前も IR にない。**IR に出ないだけの行と、綴りの誤りで当たらない行は、区別できない**ので、入力(実コード)を増やすと、この数は減る。
+- **使われていない**: 似た名前も IR にない。**IR に出ないだけの行と、綴りの誤りで一致しない行は、区別できない**ので、入力(実コード)を増やすと、この数は減る。
 
 `match: implementations` の展開と、コアが作る関数値の候補(`ValueCands`)は見ない(当たりを数え落とす側の誤り)。
 
@@ -57,11 +57,11 @@ go test ./cmd/rivus -run 'TestZooPureGo|TestZooGo$|TestZooDart$|TestZooRust$' -v
 go run ./bench/parity report -work $WORK/out -table bench/parity/TABLE.md -dead bench/parity/DEAD.md -zoo $WORK/zoo-lines.txt
 ```
 
-`TABLE.md` と `DEAD.md` は**手で直さない**。組み込みのモデル(`internal/model/builtin/*.yaml`)、extractor、読む入力を変えたら作り直し、コミットメッセージに、前の表からの差(当たらない行の数、(B) の割合)を書く。`-no-gotypes` は (A) と Go の形の型からの判定を省く(速い確認用)。`go test ./bench/parity`(`-short` で標準ライブラリの読み込みを省く)が、形・名前・IR の読み・当たりの判定の単体テスト。
+`TABLE.md` と `DEAD.md` は**手で直さない**。組み込みのモデル(`internal/model/builtin/*.yaml`)、extractor、読む入力を変えたら作り直し、コミットメッセージに、前の表からの差(一致しない行の数、(B) の割合)を書く。`-no-gotypes` は (A) と Go の形の型からの判定を省く(速い確認用)。`go test ./bench/parity`(`-short` で標準ライブラリの読み込みを省く)が、形・名前・IR の読み・一致の判定の単体テスト。
 
 ## 入力(`TABLE.md` の 6 に書く)
 
-| 入力 | 何 | 版 |
+| 入力 | 何 | バージョン |
 | --- | --- | --- |
 | gogs | Go、実コード | `8a3b8198a`(`bench/README.md`) |
 | gin-vue-admin | Go、実コード(`server/`) | `7bc7c3051067` |
@@ -75,7 +75,7 @@ go run ./bench/parity report -work $WORK/out -table bench/parity/TABLE.md -dead 
 
 ## 限界(段階 1)
 
-- **「汚染された値が届いた呼び出しのうち、モデルが当たった割合」は出せない**。`-pass-stats` の `unmodeled_top` は、モデルのない関数の上位 20 だけで、モデルがある呼び出しの `reached` と、`reached` の総数は出ない。コアの診断に、「モデルがある呼び出しに汚染が届いた数」と「モデルのない呼び出しに届いた数の総和(20 件で切らない)」を足す必要がある(コアの変更。助言者への依頼)。表の (B) の割合は、IR の呼び出し箇所を数えたもので、**届いたかを見ていない**。
+- **「汚染された値が届いた呼び出しのうち、モデルが一致した割合」は出せない**。`-pass-stats` の `unmodeled_top` は、モデルのない関数の上位 20 だけで、モデルがある呼び出しの `reached` と、`reached` の総数は出ない。コアの診断に、「モデルがある呼び出しに汚染が届いた数」と「モデルのない呼び出しに届いた数の総和(20 件で切らない)」を足す必要がある(コアの変更。助言者への依頼)。表の (B) の割合は、IR の呼び出し箇所を数えたもので、**届いたかを見ていない**。
 - Dart は、main の extractor が `test/` などを既定で読まない(ADR-062)。dart-pub は既定で読み、参考に `--include-tests` の IR(`dart-pub-tests`、合計に入れない)を併記する。
 - Rust は、自前のコードと、すでに IR のある parseable だけ(C-19)。**実コードが 1 つ**なので、Rust の (B) と (D) の「使われていない」は、Go より誤差が大きい。
 - (A) は Go だけ。Dart(`dart:*`)と Rust(`std`)は、同じ基準(レシーバか引数にデータを運びうる型がある公開 API)で列挙する方法を決めてから。

@@ -14,7 +14,7 @@
 ## 本文(GitHub から移した写し)
 
 ## 現象
-クロージャが**キャプチャした値**(読む・書く)を、そのクロージャを別の関数(ヘルパー)に渡して、ヘルパーが呼ぶ形で、流れが落ちる。`uncertainties` に、この見逃しに関わるものは出ない(**サイレントな見逃し**)。ヘルパーの `f()` に出るのは、成功する流れにも出る `dynamic_dispatch` だけ。同じクロージャを、作った関数の中で呼ぶと見つかる。
+クロージャが**キャプチャした値**(読む・書く)を、そのクロージャを別の関数(ヘルパー)に渡して、ヘルパーが呼ぶ形で、流れが失われる。`uncertainties` に、この見逃しに関わるものは出ない(**サイレントな見逃し**)。ヘルパーの `f()` に出るのは、成功する流れにも出る `dynamic_dispatch` だけ。同じクロージャを、作った関数の中で呼ぶと見つかる。
 
 ## 再現(Dart、`rivus analyze -ir`。source() / sink() はルールで指定)
 ```dart
@@ -33,7 +33,7 @@ void write() {
 }
 ```
 `final f = () => sink(a); f();`(作った関数の中で呼ぶ)と、キャプチャしないクロージャ(`fireAndForget(a, (x) => sink(x))`)は見つかる。呼び出し元が 1 つでも落ちる(実験)。
-Go でも同じ形: `apply(func(q *Q){ q.name = n }, q)`(`n` は source)が落ちる。
+Go でも同じ形: `apply(func(q *Q){ q.name = n }, q)`(`n` は source)が失われる。
 
 ## 期待と実際
 期待: 呼び出し元が渡したクロージャのキャプチャ値が、ヘルパーの中の呼び出しに届く。実際: キャプチャ値が、何も無い値(`KUndef`)として扱われ、流れが消える。
@@ -61,5 +61,5 @@ ADR-047(案 2)で直る見込み(呼び出し元が、自分が渡したクロ�
 
 ## コメント(GitHub から移した写し)
 
-再開後の確認(2026-11-22): Dart の dart-curated で、run-a / run-b / write-a / write-b など、この Issue の主な形は `@miss` が外れて見つかる。残り: `write-param`(`bench/dart-curated/lib/capture.dart`、`@miss(depth_limit)`、注記つき)と、holder 系の `@miss(unresolved_callee)`。Go の `apply(func(q *Q){ q.name = n }, q)` の形は今回は走らせていない。この Issue は、残りの形を指すものとして開けておく。
+再開後の確認(2026-11-22): Dart の dart-curated で、run-a / run-b / write-a / write-b など、この Issue の主な形は `@miss` が外れて見つかる。残り: `write-param`(`bench/dart-curated/lib/capture.dart`、`@miss(depth_limit)`、注記つき)と、holder 系の `@miss(unresolved_callee)`。Go の `apply(func(q *Q){ q.name = n }, q)` の形は今回は実行していない。この Issue は、残りの形を指すものとして開けておく。
 

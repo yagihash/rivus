@@ -1,4 +1,4 @@
-# #80 Dart: 標準ライブラリのコールバック(catchError、whenComplete、putIfAbsent、Map.forEach、onError、Future.sync)と await した Future.error が、決め打ちのリストに無く何も報告せずに落ちる
+# #80 Dart: 標準ライブラリのコールバック(catchError、whenComplete、putIfAbsent、Map.forEach、onError、Future.sync)と await した Future.error が、決め打ちのリストに無く何も報告せずに失われる
 
 - 状態: **open**
 - 種類: サイレントな見逃し

@@ -9,9 +9,9 @@
 ## 確認方法
 
 * 流れの有無と不確実性: `rivus analyze -ir <extractor の出力> -rules rules.yaml`(Go は `./...`)の `findings` と `uncertainties`。**不確実性の注記**は、`rivus resolve` が「見つからない理由」として出すのと同じ定義(source か sink の関数にある不確実性)で調べ、source / sink の行の近くのものも見た。ヘルパー側(経路の途中)にある不確実性は「ヘルパー側」と別に書く。
-* **`@miss` の注釈(BENCH-1、2026-11-21)**: `@miss(silent)` か `@miss(<kind>)`(複数なら `,` 区切り)。ソースの注釈に書いてあり、`cmd/rivus/bench_curated_test.go` が両側から確かめる。**不確実性の注記**は、source の行と sink の行にあるサイト(`rivus analyze -sites`)の**関数**にある不確実性の kind(`rivus resolve` が `absent_now` に出すのと同じ定義)。次は数えない: 関数を持たない(実行全体の)もの(Rust の `depth_limit`/`path_limit` など)、`numeric_stop`(数は注入を運ばないので、見逃しの説明にならない)、**候補がちょうど 1 つの `dynamic_dispatch`**(メソッド呼び出しのたびに出て、コールバックが落ちたことを示さない。以前の「弱い注記」。advisor の方針で `silent` に数える)。`@miss(silent)` は、注記が 1 つも無いこと、`@miss(<kind>)` は、その kind が(source / sink の関数のどちらかに)出ていることを確かめる。注記が付くと(注記を足す修正、DART-15 や CORE-D の効果)、`@miss(silent)` の行が「改善」として落ちる。注記が消えると、`@miss(<kind>)` の行が落ちる。ヘルパー側(経路の途中)の不確実性は数えない。
+* **`@miss` の注釈(BENCH-1、2026-11-21)**: `@miss(silent)` か `@miss(<kind>)`(複数なら `,` 区切り)。ソースの注釈に書いてあり、`cmd/rivus/bench_curated_test.go` が両側から確かめる。**不確実性の注記**は、source の行と sink の行にあるサイト(`rivus analyze -sites`)の**関数**にある不確実性の kind(`rivus resolve` が `absent_now` に出すのと同じ定義)。次は数えない: 関数を持たない(実行全体の)もの(Rust の `depth_limit`/`path_limit` など)、`numeric_stop`(数は注入を運ばないので、見逃しの説明にならない)、**候補がちょうど 1 つの `dynamic_dispatch`**(メソッド呼び出しのたびに出て、コールバックが失われたことを示さない。以前の「弱い注記」。advisor の方針で `silent` に数える)。`@miss(silent)` は、注記が 1 つも無いこと、`@miss(<kind>)` は、その kind が(source / sink の関数のどちらかに)出ていることを確かめる。注記が付くと(注記を足す修正、DART-15 や CORE-D の効果)、`@miss(silent)` の行が「改善」として失敗する。注記が消えると、`@miss(<kind>)` の行が落ちる。ヘルパー側(経路の途中)の不確実性は数えない。
   * 限界: 不確実性の注記は、落ちた呼び出しを指すとは限らない。`dyn-arg` と `dyn-body`(DART-12)の `unmodeled_library_call` は、本体の無い既定のコンストラクタ(`Loud()`、`Maker()`)に付いたもので、落ちたメソッド呼び出しではない(それでも kind が出ているので、`@miss(unmodeled_library_call)`)。DART-12 が直って、`dynamic` の呼び出しに注記が付いても、この 2 つの注釈は変わらない。
-  * 注釈の書き換え(今回): 前の分類との差は、`takes-a` / `takes-b`(不確実性の注記は、source / sink の関数ではなく、間のクロージャの中の `g(a)` にあった: `silent`)、`dyn-arg` / `dyn-body`(上の限界)、`across-hub` ほかの「弱い」6 件と Rust の `across-each`(`silent`)。MISSES.md の前の版が間違っていたものは、他に無かった。
+  * 注釈の書き換え(今回): 前の分類との差は、`takes-a` / `takes-b`(不確実性の注記は、source / sink の関数ではなく、間のクロージャの中の `g(a)` にあった: `silent`)、`dyn-arg` / `dyn-body`(上の限界)、`across-hub` ほかの「弱い」6 件と Rust の `across-each`(`silent`)。MISSES.md の前のバージョンが間違っていたものは、他に無かった。
 * IR: `rivus extract -text` は Go 専用なので、`ir.Read` / `Func.Format` で Dart と Rust の IR を読んだ(extractor の出力 `*.jsonl`)。**どの `@miss` でも、IR に流れは載っている**(Dart のクロージャのキャプチャは `make_closure` の束縛、Rust は環境の構造体のフィールド)。extractor の側で落ちているものは、無い。
 * 実験: bench のコピー(scratchpad)に、小さいケースを足して、原因を 1 つずつ切り分けた(呼び出し元の数、同じ関数の中で呼ぶか、ジェネリックかなど)。実験の結果は備考に「実験」と書いた。
 
@@ -26,28 +26,28 @@
 | `STORE` | コールバックを List / フィールドに持ち、あとで呼ぶ | internal/valuecalls/valuecalls.go(冒頭のコメント: メモリをたどらない。`iter.next` / `field_load` は refOther)。呼び出しは、ヘルパー側の unresolved_callee / unmodeled_library_call |
 | `CB-LIST` | 標準ライブラリのコールバックの決め打ちのリストにない | extractor/dart/lib/exprs.dart:_callbackMode(Future.then と、Iterable / Stream の数個だけ)と internal/model/builtin/dart-async.yaml / dart-core.yaml(モデルは args→結果、recv→結果だけ。コールバックの戻り値を結果へ繋がない) |
 | `AWAIT-ERR` | await した Future.error が、catch に値を渡さない | internal/model/builtin/dart-async.yaml の Future.error(args→結果)と extractor の `[await]` 呼び出し(失敗した Future の await を throw にしない)。細部は未特定 |
-| `ENV-PTR`(**直した、ADR-072**) | ポインタをフィールド(クロージャの環境)に入れて、そこから書くと別名にならない | (直す前)internal/taint/locs.go computeLocs(OpFieldLoad: `locs(base)+field+"*"` を指す)と internal/taint/transfer.go(OpFieldStore はポインタの値を保存するだけで、指す先と同一視しない)。関数内の `*e.o = x`(Env{o:&mut out})でも再現。(今)internal/taint/ptrcells.go: セルに入れたポインタの指す先を覚え(`ptrAlias`)、`field_load` の結果と、呼び出し先が書いたもの(`applySummary` の `OutParam`)を、指す先にも当てる。extractor は、環境のフィールドをクロージャの名前で呼ぶ(`<クロージャ>.0`)ので、どのクロージャか分からない `Fn::call` の候補が、別のクロージャの環境のセルを混ぜない |
+| `ENV-PTR`(**直した、ADR-072**) | ポインタをフィールド(クロージャの環境)に入れて、そこから書くと別名にならない | (直す前)internal/taint/locs.go computeLocs(OpFieldLoad: `locs(base)+field+"*"` を指す)と internal/taint/transfer.go(OpFieldStore はポインタの値を保存するだけで、指す先と同一視しない)。関数内の `*e.o = x`(Env{o:&mut out})でも再現。(今)internal/taint/ptrcells.go: セルに入れたポインタの指す先を覚え(`ptrAlias`)、`field_load` の結果と、呼び出し先が書いたもの(`applySummary` の `OutParam`)を、指す先にも適用する。extractor は、環境のフィールドをクロージャの名前で呼ぶ(`<クロージャ>.0`)ので、どのクロージャか分からない `Fn::call` の候補が、別のクロージャの環境のセルを混ぜない |
 | `GEN-DYN`(**直した、ADR-081**: モデルの位置が、trait 越しの呼び出しでもレシーバ = arg0。zoo の `dyn/generics-ptr` が見つかる。rust-curated の `across-each` は別の原因が残る) | ジェネリックな T に対する trait 呼び出し(dynamic)で、モデルの `from: args` が receiver を含まない | internal/taint/calls.go selectVals(`SelArg All` は cc.args)+ internal/sg/sg.go:139 CallArgs(dynamic は Args[1:])+ internal/model/builtin/rust-std.yaml(`Iterator::next` / `IntoIterator::into_iter` は from: args)。`for i in items`(items: Vec<T>)で流れが消える |
 | `XTALK`(**絞った、ADR-079**。レシーバの出所を、もれなくたどれたときだけ絞る。rust-curated の `@fp` 18 → 7、`@noisy` 152 → 84 流れ。残りは、たどれない側: フィールド、`Box<dyn Fn>`、関数の結果、中継) | Fn*::call(dynamic)の候補が「型の合う全クロージャ」で、呼び出し元ごとに絞らない(ADR-072 のあと: 候補の書き込みが、別のクロージャの環境のセルを通って、別のクロージャの sink に届く過検出は消えた。zoo-rust の `@noisy` と、それに伴う `@fp` が減った。候補の集合そのものは絞っていない) | internal/valuecalls/valuecalls.go:50(CalleeValue だけを解決。Rust は dynamic)と internal/taint/calls.go:355-380 dispatchGuards / makeDispatchGuards(候補が method でない(`!fn.Recv`)と、ガードなし) |
 | `MODEL-OVER` | モデルが、コールバックの戻り値を見ずに recv を結果へ流す | internal/model/builtin/dart-async.yaml Future.then / dart-core.yaml Iterable.map / rust-std.yaml Iterator::map・Option::and_then(recv/args→結果) |
 | `KEYED-MAP` | マップのキーを区別しない(Set/Get のキーが違っても同じセル) | internal/taint/transfer.go OpIndexStore / OpIndexLoad(キー付きは、値を `[]` に持つ) |
-| `ALLOWLIST` | 分岐条件(switch の許可リスト)を、汚染を落とすものと見ない | internal/taint/guards.go(条件は記録するだけで、評価しない: Guard の説明) |
+| `ALLOWLIST` | 分岐条件(switch の許可リスト)を、汚染を除去するものと見ない | internal/taint/guards.go(条件は記録するだけで、評価しない: Guard の説明) |
 
 案 2 = ADR-047 の下書き(ヘルパーの要約に、コールバックの出力を「仮想のパラメータ」で持たせ、呼び出し元が、自分で渡したクロージャ(`ExactFuncs`)の要約で具体化する)。「直る(見込み)」は、下書きの記述から読んだ推測で、実装して確かめたものではない。直るには、`ExactFuncs` が、クロージャの束縛(`make_closure` の引数)も返す必要がある(下書きに書いていない)。
 
 ## 未解決のレビュー指摘(RUST-13、RUST-14、DART-12)と、そのフィクスチャ
 
-別セッションのレビューの識別子(docs には無い)。2026-11-21、main(HEAD 793a803 の作業ツリー)で、原因のコードが残っていることと、落ちるフィクスチャを確かめた。**コアは変えていない。** 対応する issue は無い(#76〜#83 は、どれもこの 3 つの原因を挙げていない)。上の集計と表は、この節のフィクスチャを足す前の数のまま(足したあとの数は、下の表)。
+別セッションのレビューの識別子(docs には無い)。2026-11-21、main(HEAD 793a803 の作業ツリー)で、原因のコードが残っていることと、失敗するフィクスチャを確かめた。**コアは変えていない。** 対応する issue は無い(#76〜#83 は、どれもこの 3 つの原因を挙げていない)。上の集計と表は、この節のフィクスチャを足す前の数のまま(足したあとの数は、下の表)。
 
 | 指摘 | 原因のコード(今) | フィクスチャ | 今の結果 |
 | --- | --- | --- | --- |
 | RUST-13: `Fn` / `FnMut` を `&self` で呼ぶと、レシーバがセルで、呼び出し元ごとに絞れない | internal/taint/calls.go:357 `dispatchGuards`(`recv.Kind != sg.KParam` で nil)。さらに makeDispatchGuards は、候補が method でない(`!fn.Recv`)と、ガードを付けない(クロージャは全部これ) | rust-curated/src/fnself.rs: `fn_ret_clean` / `fn_mut_ret_clean`(`@sink(none) @fp`)、`fn_sink_a/b`、`fn_mut_sink_a/b`(`@nosink` + `@fp`)。対照の `fn_ref_clean`(`&impl Fn`、レシーバがパラメータそのもの) | 6 か所とも `@fp`(落ちる)。対照も落ちる: レシーバがセルであることだけが原因ではなく、クロージャの候補にガードが付かない(`!fn.Recv`)ことも原因。案 2 の受け入れは、この 7 か所の `@fp` が全部消えること |
-| RUST-14: モデルを当てると、`read_impls` でない動的呼び出しの本体を読まない | internal/taint/calls.go:182-196(`modelled` のあと、`!rules.ReadsImpls(cc.sym)` で return)。`read_impls: true` は rust-std.yaml と rust-misc.yaml だけ | rust-curated/src/modelled.rs: `model_body`(source が実装の本体の中、`@miss`)、`model_drop`(実装が引数を捨てる、`@sink(none) @fp`)。rules.yaml に、プロジェクトの trait のメソッド(`Render::render`、`Mask::mask`)の propagator(recv→result)を足した | **ADR-075 で `@miss` は直った**(モデルを当てたあと、本体も読む)。`@fp`(`model_drop`)は残る: モデルは「レシーバが結果に入る」と宣言し続け、本体の和でも消えない |
+| RUST-14: モデルを適用すると、`read_impls` でない動的呼び出しの本体を読まない | internal/taint/calls.go:182-196(`modelled` のあと、`!rules.ReadsImpls(cc.sym)` で return)。`read_impls: true` は rust-std.yaml と rust-misc.yaml だけ | rust-curated/src/modelled.rs: `model_body`(source が実装の本体の中、`@miss`)、`model_drop`(実装が引数を捨てる、`@sink(none) @fp`)。rules.yaml に、プロジェクトの trait のメソッド(`Render::render`、`Mask::mask`)の propagator(recv→result)を足した | **ADR-075 で `@miss` は直った**(モデルを適用したあと、本体も読む)。`@fp`(`model_drop`)は残る: モデルは「レシーバが結果に入る」と宣言し続け、本体の和でも消えない |
 | DART-12: `dynamic` のメソッド呼び出しが、`dart:core#dynamic.invoke` の静的呼び出しになり、モデルで覆われて不確実性の注記が残らない | extractor/dart/lib/exprs.dart:347(`_methodInvocation`)、internal/model/builtin/dart-core.yaml:8(`flows: [{from: args, to: result}]`) | dart-curated/lib/dynamic_calls.dart: `dynamic_arg`(メソッドの中の sink、`@miss`)、`dynamic_body`(メソッドの本体の source、`@miss`)、`dynamic_drop`(`@sink(none) @fp`) | `@miss` 2、`@fp` 1。モデルを外す対照は、していない |
 
 足したあとの数: Dart `@miss` 34、`@fp` 5。Rust `@miss` 12、`@fp` 22、`@noisy` は 183 件のまま(新しいフィクスチャは、他と型が重ならない署名(`u8`、`u16`、`u32`、`u64`、`i8`)で、他のクロージャを候補にしない)。
 
-既存の `@miss` / `@fp` のうち、この 3 つに当たるもの: **RUST-13 は、XTALK の `@fp`(12)と `@noisy`(16 か所)が同じ形**(ヘルパーが `f(..)` で呼ぶ `impl Fn`)。1 件ずつ、レシーバがセルかは確かめていない。**RUST-14 と DART-12 に当たる既存のものは、無い**(`@miss` の原因の型のどれにも、モデルが本体を隠すものは無かった)。
+既存の `@miss` / `@fp` のうち、この 3 つに該当するもの: **RUST-13 は、XTALK の `@fp`(12)と `@noisy`(16 か所)が同じ形**(ヘルパーが `f(..)` で呼ぶ `impl Fn`)。1 件ずつ、レシーバがセルかは確かめていない。**RUST-14 と DART-12 に該当する既存のものは、無い**(`@miss` の原因の型のどれにも、モデルが本体を隠すものは無かった)。
 
 案 2(ADR-047)で RUST-13 が直る見込み: 案 2 は、ヘルパーの要約にコールバックの出力を持たせ、呼び出し元が渡したクロージャで具体化するので、`dispatchGuards` を通らない。下書きの記述から読んだ推測で、実装して確かめたものではない。RUST-14 と DART-12 は、案 2 では直らない(別の修正)。
 
@@ -68,9 +68,9 @@
 
 **別名の限界(`alias-ptr`)を足したあと: Go 15(silent 14、注記あり 1)、計 `@miss` 78、silent 66 / 78 = 85%。**(ADR-050 のあとの数 77 / 65 = 84% に、Go 1 を足した。上の C-7 の段落の数は、足す前のまま。)
 
-**C-7 のフィクスチャを足したあと(`docs/DESIGN-capture.md`、今の数。テストが数える): `@miss` 75 = Dart 45(silent 35、注記あり 10)、Rust 16(silent 15、注記あり 1)、Go 14(silent 13、注記あり 1)。silent 63 / 75 = 84%。** 足した分(Dart `callbacks.dart` 11、Go `api/capture.go` 11、Rust `callbacks.rs` 3)は、キャプチャした値が、ヘルパーが呼ぶクロージャの中で落ちる形(`CAP` ほか)で、**エンジンが悪化したのではなく、見えていなかった見逃しを記録した結果**。Rust の 3 件(`thread::spawn` = `unmodeled_library_call`、`Box<dyn Fn>` をフィールドに入れて別の関数が呼ぶ、`Vec::retain`)は、渡すだけの形で、今、**見つからない**(Rust もサイレントな見逃し。C-7 の最初の版の対象外とした前提の、「読む側は今でも見つかる」は、呼ぶ側が見える形だけで成り立つ)。
+**C-7 のフィクスチャを足したあと(`docs/DESIGN-capture.md`、今の数。テストが数える): `@miss` 75 = Dart 45(silent 35、注記あり 10)、Rust 16(silent 15、注記あり 1)、Go 14(silent 13、注記あり 1)。silent 63 / 75 = 84%。** 足した分(Dart `callbacks.dart` 11、Go `api/capture.go` 11、Rust `callbacks.rs` 3)は、キャプチャした値が、ヘルパーが呼ぶクロージャの中で落ちる形(`CAP` ほか)で、**エンジンが悪化したのではなく、見えていなかった見逃しを記録した結果**。Rust の 3 件(`thread::spawn` = `unmodeled_library_call`、`Box<dyn Fn>` をフィールドに入れて別の関数が呼ぶ、`Vec::retain`)は、渡すだけの形で、今、**見つからない**(Rust もサイレントな見逃し。C-7 の最初のバージョンの対象外とした前提の、「読む側は今でも見つかる」は、呼ぶ側が見える形だけで成り立つ)。
 
-`@miss(<kind>)` の 7 件: Dart の `holder-a`、`holder-b`、`curry`(`unresolved_callee`)、`getter-fn`(`unmodeled_library_call,unresolved_callee`)、`map-entries`(`dynamic_dispatch`、候補なし)、`dyn-arg`、`dyn-body`(`unmodeled_library_call`、上の限界)。残りの 40 件は、source と sink の関数に、不確実性の注記が無い(`silent`)。前の版の「サイレント 30、弱い注記 7、注記あり 7」(44 件。Dart 32、Rust 11)に、RUST-13/14・DART-12 のフィクスチャの 3 件(`dyn-arg`、`dyn-body`、`model-body`)を足した 47 件を、定義に当てはめ直した: サイレント 30 + 弱い 7 + `takes-a/b` 2 + `model-body` 1 = 40(`silent`)、注記あり 7 - 2 + `dyn-*` 2 = 7。
+`@miss(<kind>)` の 7 件: Dart の `holder-a`、`holder-b`、`curry`(`unresolved_callee`)、`getter-fn`(`unmodeled_library_call,unresolved_callee`)、`map-entries`(`dynamic_dispatch`、候補なし)、`dyn-arg`、`dyn-body`(`unmodeled_library_call`、上の限界)。残りの 40 件は、source と sink の関数に、不確実性の注記が無い(`silent`)。前のバージョンの「サイレント 30、弱い注記 7、注記あり 7」(44 件。Dart 32、Rust 11)に、RUST-13/14・DART-12 のフィクスチャの 3 件(`dyn-arg`、`dyn-body`、`model-body`)を足した 47 件を、定義に当てはめ直した: サイレント 30 + 弱い 7 + `takes-a/b` 2 + `model-body` 1 = 40(`silent`)、注記あり 7 - 2 + `dyn-*` 2 = 7。
 
 原因の型ごとの件数(`@miss`):
 
@@ -96,7 +96,7 @@
 | Go | `@fp` | 5 | KEYED-MAP 4、ALLOWLIST 1 | 直らない 5 |
 
 Rust の `@fp` 14 件の内訳: XTALK 12 件(直る 9: arg-a/b、run-a/b、sinkwith-a/b の 6 件と ret-clean、produce、fn-drop。不明 3: relay-c-a/b と emit-two の 2 つ目)、MODEL-OVER 2 件(直らない)。
-**ADR-079 のあと(`valuecalls/narrow.go`)**: Rust の `@fp` 14 件のうち、XTALK の直る 9 件に当たる 5 件(arg-a/b、sinkwith-a/b、emit-two の 2 つ目)と、`fnself.rs` の 6 件が消えた(rust-curated の `@fp` は 18 から 7)。`@noisy` は 16 か所 152 流れから 3 か所 84 流れ。zoo(Rust)は、`clos/two-callers` のデコイが消えた(`clos/relay` は残る)。
+**ADR-079 のあと(`valuecalls/narrow.go`)**: Rust の `@fp` 14 件のうち、XTALK の直る 9 件に該当する 5 件(arg-a/b、sinkwith-a/b、emit-two の 2 つ目)と、`fnself.rs` の 6 件が消えた(rust-curated の `@fp` は 18 から 7)。`@noisy` は 16 か所 152 流れから 3 か所 84 流れ。zoo(Rust)は、`clos/two-callers` のデコイが消えた(`clos/relay` は残る)。
 
 Rust の `@noisy` は README に「17 か所」とあるが、ソースの注釈は 16 か所で、合計 183 件になる(下の表)。
 
@@ -168,7 +168,7 @@ Rust の `@noisy` は README に「17 か所」とあるが、ソースの注釈
 | `write-b` | lib/capture.dart:17 → 21 | `silent` | `CAP` | 直る |  |
 | `write-param` | lib/capture.dart:38 → 42 | `silent` | `CAP` | 直る | `fireAndForget(t, (x){ out = x; })`。引数 x ではなく、キャプチャした out のセルが落ちる |
 | `add-list` | lib/capture.dart:48 → 52 | `silent` | `CAP` | 直る | `run(() { items.add(t); })` |
-| `relay-c-a` | lib/capture.dart:76 → 77 | `silent`(ヘルパー側: capture.dart:72 に unresolved_callee) | `PARAM-CALL` | 不明 | `relayCapture(f) => run(() => f())`: 内側のクロージャがキャプチャした関数 `f()` を呼ぶ。draft 条件 3(中継)に当たる |
+| `relay-c-a` | lib/capture.dart:76 → 77 | `silent`(ヘルパー側: capture.dart:72 に unresolved_callee) | `PARAM-CALL` | 不明 | `relayCapture(f) => run(() => f())`: 内側のクロージャがキャプチャした関数 `f()` を呼ぶ。draft 条件 3(中継)に該当する |
 | `relay-c-b` | lib/capture.dart:81 → 82 | `silent`(同上) | `PARAM-CALL` | 不明 |  |
 | `holder-a` | lib/capture.dart:102 → 104 | `@miss(unresolved_callee)`: unresolved_callee(capture.dart:104、sink の行) | `RET-CLOSURE` | 直らない | `holder(a)` が `() => s` を返し、`get()` で呼ぶ |
 | `holder-b` | lib/capture.dart:108 → 110 | `@miss(unresolved_callee)`: unresolved_callee(capture.dart:110) | `RET-CLOSURE` | 直らない |  |
@@ -234,10 +234,10 @@ Rust の `@miss` は、案 2 では 1 つも直らない(11 件とも、別の�
 | `run-a / run-b` | pass_closure.rs:54→50, 49→55(@nosink) | `XTALK` | 直る(見込み) | `run(\|\| sink(&a))` |
 | `sinkwith-a / sinkwith-b` | pass_closure.rs:130→126, 125→131(@nosink) | `XTALK` | 直る(見込み) |  |
 | `relay-c-a / relay-c-b` | capture.rs:80→76, 75→81(@nosink) | `XTALK` | 不明 | 中継(`relay_capture(f) { run(\|\| f()) }`)は draft の条件 3 |
-| `ret-clean` | pass_closure.rs:21 → 23 | `XTALK` | 直る(見込み) | `transform(c.clone(), \|_x\| String::from("fixed"))`: 他の呼び出し元の恒等クロージャの戻りが、この結果に混ざる(候補の全部の要約を当てるため) |
+| `ret-clean` | pass_closure.rs:21 → 23 | `XTALK` | 直る(見込み) | `transform(c.clone(), \|_x\| String::from("fixed"))`: 他の呼び出し元の恒等クロージャの戻りが、この結果に混ざる(候補の全部の要約を適用するため) |
 | `prod(produce)` | pass_closure.rs:42(42 件の source) | `XTALK` | 直る(見込み) | `produce(\|x\| sink(&x))` の x に、他の呼び出し元の source が届く |
 | `fn-drop` | fnvalues.rs:20 → 21 | `XTALK` | 直る(見込み) | `transform(a.clone(), drop_it)`: 同上 |
-| `emit-two(2 つ目)` | structs.rs:→82(5 件) | `XTALK` | 不明 | `e2.on(Box::new(\|s\| sink(s)))`: `Vec<Box<dyn Fn>>`(STORE)の呼び出しも、型で全部に当たる |
+| `emit-two(2 つ目)` | structs.rs:→82(5 件) | `XTALK` | 不明 | `e2.on(Box::new(\|s\| sink(s)))`: `Vec<Box<dyn Fn>>`(STORE)の呼び出しも、型で全部に一致する |
 | `map-const` | iters.rs:50 → 52 | `MODEL-OVER` | 直らない | `iter().map(\|_s\| "fixed")`: Iterator::map のモデル(args→結果) |
 | `opt-then-const` | iters.rs:69 → 71 | `MODEL-OVER` | 直らない | `and_then(\|_s\| Some("fixed"))`: Option::and_then のモデル |
 
@@ -327,7 +327,7 @@ go test ./cmd/rivus -run Curated -v     # 注釈の検査(この表の元の数)
 
 ## BENCH-2: 経路に source の関数が出ない finding(`offSourcePath`)
 
-finding の `source.position` の関数(`source.func`)が、最初の経路(`paths[0]`)のステップのどれにも出ない finding。出ないのは、source が、別の関数が書き戻したオブジェクトから届いたとき(CORE-A / CORE-B。`TestParamSourceSharedObject`)。検査は `cmd/rivus/offsource_test.go` の `offSourcePath` で、`TestDogfood`、`TestCurated{Go,Dart,Rust}`、`TestParamSourceSharedObject`、`TestGlobalWriterIsOnThePath` が使う。数は上限(今の値)で、上がると落ちる。下がっても落ちる(上限を下げる)。CORE-A(ADR-048)と CORE-B(ADR-049。グローバルのストアに書いた側の段を持たせた)で、全部 0 になった。下の表は、2026-11-21(HEAD d85ee95 + CORE-A の前)の値で、記録として残す:
+finding の `source.position` の関数(`source.func`)が、最初の経路(`paths[0]`)のステップのどれにも出ない finding。出ないのは、source が、別の関数が書き戻したオブジェクトから届いたとき(CORE-A / CORE-B。`TestParamSourceSharedObject`)。検査は `cmd/rivus/offsource_test.go` の `offSourcePath` で、`TestDogfood`、`TestCurated{Go,Dart,Rust}`、`TestParamSourceSharedObject`、`TestGlobalWriterIsOnThePath` が使う。数は上限(今の値)で、上がると失敗する。下がっても失敗する(上限を下げる)。CORE-A(ADR-048)と CORE-B(ADR-049。グローバルのストアに書いた側の段を持たせた)で、全部 0 になった。下の表は、2026-11-21(HEAD d85ee95 + CORE-A の前)の値で、記録として残す:
 
 | 場所 | 数 | 型 |
 | --- | --- | --- |
@@ -376,6 +376,6 @@ Gitea の CVE の 3 件(上の表)は**見つかる**。足したときに、**G
 
 ## C-7 のあと(ADR-059): `CAP` の見逃しが直った
 
-`make_closure` のキャプチャした値を、作った場所で、クロージャの要約に当てた(渡す、保存する、返すクロージャだけ。不確実性 `assumed_call`)。`@miss` の数(テストが数える、6c5c28c → 今): Go 15 → 3(silent 5 → 2、注記あり 10 → 1)、Dart 47 → 30(silent 31 → 10、注記あり 16 → 20)、Rust 16 のまま(対象外。次の段階は `docs/DESIGN-capture.md` の「Rust の節」)。外れた `@miss`: Go の `cap-run-a/b`、`cap-write`、`cap-nested`、`cap-loop`、`cap-two-a`、`cap-returned`、`cap-late`、`cap-handler`、`cap-funccall`(設計では直らない見込みだったが、直った)、`tx_capture`、`tx_capture_plain`。Dart の `btn-a/b`、`timer-run`、`periodic`、`timer-write`、`microtask`、`delayed`、`late`、`write-a/b`、`add-list`、`across-cap`、`run-a/b`、`relay-c-a/b`、`when-complete`。`assumed_call` の `@miss`(結果を当てない): Go の `cap-result`、Dart の `cap-result`、`cap-result-then`、`cap-fn`、`nest-a/b` ほか(次の段階: 結果をクロージャの値に持たせる)。残る `CAP` の見逃しは、キャプチャと引数の両方に依る流れ(案 2)、`bound-prefix`(メソッドの tear-off、R-14)。
+`make_closure` のキャプチャした値を、作った場所で、クロージャの要約に適用した(渡す、保存する、返すクロージャだけ。不確実性 `assumed_call`)。`@miss` の数(テストが数える、6c5c28c → 今): Go 15 → 3(silent 5 → 2、注記あり 10 → 1)、Dart 47 → 30(silent 31 → 10、注記あり 16 → 20)、Rust 16 のまま(対象外。次の段階は `docs/DESIGN-capture.md` の「Rust の節」)。外れた `@miss`: Go の `cap-run-a/b`、`cap-write`、`cap-nested`、`cap-loop`、`cap-two-a`、`cap-returned`、`cap-late`、`cap-handler`、`cap-funccall`(設計では直らない見込みだったが、直った)、`tx_capture`、`tx_capture_plain`。Dart の `btn-a/b`、`timer-run`、`periodic`、`timer-write`、`microtask`、`delayed`、`late`、`write-a/b`、`add-list`、`across-cap`、`run-a/b`、`relay-c-a/b`、`when-complete`。`assumed_call` の `@miss`(結果を適用しない): Go の `cap-result`、Dart の `cap-result`、`cap-result-then`、`cap-fn`、`nest-a/b` ほか(次の段階: 結果をクロージャの値に持たせる)。残る `CAP` の見逃しは、キャプチャと引数の両方に依る流れ(案 2)、`bound-prefix`(メソッドの tear-off、R-14)。
 
-**限界(バックログ B)**: `expandParam` が、構造体全体の要素(`Param(i, "")`)を読むとき、サブセルの要素(フィールドの指す先の要素)を、根へ持ち上げる。構造体を丸ごとコピーして書き戻す形(`before := Picture; Picture = before`)で、あるフィールドの指す先の汚染が、全フィールドに広がる。C-7 は、これを gogs の `conf.SetMockPicture$1`(テストのヘルパー)で露出させ(+45 件)、案 D(同じグローバルの全体を読んだ値の書き戻しだけの書き込みは当てない)で、その形だけを避けた。ふつうの呼び出し(`setG(before)`)には、同じ持ち上げが残る。優先度の根拠: gogs の基準の 77 件には、`conf.Picture` を通るものは 0 件(数えた)。
+**限界(バックログ B)**: `expandParam` が、構造体全体の要素(`Param(i, "")`)を読むとき、サブセルの要素(フィールドの指す先の要素)を、根へ持ち上げる。構造体を丸ごとコピーして書き戻す形(`before := Picture; Picture = before`)で、あるフィールドの指す先の汚染が、全フィールドに広がる。C-7 は、これを gogs の `conf.SetMockPicture$1`(テストのヘルパー)で露出させ(+45 件)、案 D(同じグローバルの全体を読んだ値の書き戻しだけの書き込みは適用しない)で、その形だけを避けた。ふつうの呼び出し(`setG(before)`)には、同じ持ち上げが残る。優先度の根拠: gogs の基準の 77 件には、`conf.Picture` を通るものは 0 件(数えた)。

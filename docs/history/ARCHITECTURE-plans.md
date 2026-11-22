@@ -6,7 +6,7 @@
 - 決めた経緯と理由は [DECISIONS.md](../DECISIONS.md)。各 ADR の今の状態は [ADR-INDEX.md](../ADR-INDEX.md)。
 - 本文の数字（行数、秒、MB、検出数）は、書いた当時の実測で、今の値ではない。本文の「今」「現在」も、書いた当時を指す。
 - 節番号（2.7.x、9、10、11）は、ARCHITECTURE.md の旧い番号のまま。ADR などの引用が、ここへたどれるようにしてある。
-- 本文中の `ARCHITECTURE.md` の節への参照は、旧い版のもの。
+- 本文中の `ARCHITECTURE.md` の節への参照は、旧いバージョンのもの。
 
 目次:
 
@@ -56,7 +56,7 @@ IR が運ぶべきものを実測から決め直す。**ここに書くのは案
 - **値の同一性:** `go/ssa` のタプル（複数戻り値）は、`call` の `Dsts` の 1 つずつが値になる。`Extract` は消える
 - **コールグラフ:** VTA は NaiveForm の上だと lifted の上より粗い（`(go/types.Object).Name` の候補が増える）。そこで `gossa.Options.WithLifted` で lifted 版も作り、グラフはそちらから取って、NaiveForm の `call` へ位置と種類で対応づけて `candidates` に入れる。この対応づけで、`ssa:deferstack` のような lifting で消える呼び出しを避ける
 - **関数だけの値:** 何もキャプチャしない無名関数を変数に入れて呼ぶ場合、`sg` が `make_closure`（キャプチャなし）から呼び出し先を静的に解く（これを落とすと、`unresolved_callee` が増えた）
-- **検証（旧経路との突き合わせ。JSON を比べた）:** `testdata` の全ケース、rivus 自身（36 検出、614 不確実性）、ghmint（15 検出、176 不確実性）で完全に一致。x/tools（4 検出、10,628 不確実性）も、検出・抑制・収束は一致し、不確実性は 1 件だけ違う（generic な関数の中の range-over-func で、位置のない合成された呼び出し。`excfg.CFG.Out$1` を呼ぶ側）。許容する
+- **検証（旧経路との照合。JSON を比べた）:** `testdata` の全ケース、rivus 自身（36 検出、614 不確実性）、ghmint（15 検出、176 不確実性）で完全に一致。x/tools（4 検出、10,628 不確実性）も、検出・抑制・収束は一致し、不確実性は 1 件だけ違う（generic な関数の中の range-over-func で、位置のない合成された呼び出し。`excfg.CFG.Out$1` を呼ぶ側）。許容する
 - **性能（x/tools、15.6 万行）:** 107 秒・最大 4.9 GB → 97 秒・最大 2.4 GB（ADR-040）。メモリが増えた原因は、関数ごとの解析の状態を結果の収集まで持っていたことだった（`analyzeFunc` の最後に、検出・抑制・不確実性だけ残して手放す）
 - **依存:** `go list -deps` で、`taint`・`sites`・`sg`・`irssa`・`ir`・`report`・`model` に `go/ssa`・`x/tools`・`gossa`・`go/types`・`go/ast` は入っていない。`taint`（ガードの定数評価）と `report` には `go/token` と `go/constant` が入る（標準ライブラリの、言語に依らない部分。いずれ自前にできる）。`gossa` は、Go の extractor と、`rules.Expand`（実装列挙。Go のパッケージを引く）からだけ使われる
 
@@ -70,7 +70,7 @@ IR が運ぶべきものを実測から決め直す。**ここに書くのは案
 
 ### 2.7.6 移行の戦略（実施済み）
 
-エンジンの移植は大きい（`taint` 約 4,800 行）。壊さないために、**旧経路（`go/ssa` 直）と新経路（IR 経由）を、移行が終わるまで両方動かし、`Report` を突き合わせる。**
+エンジンの移植は大きい（`taint` 約 4,800 行）。壊さないために、**旧経路（`go/ssa` 直）と新経路（IR 経由）を、移行が終わるまで両方動かし、`Report` を照合する。**
 対象は `testdata` の全ケース、ghmint、rivus 自身、`x/tools`。結果が一致するまでは旧経路を消さない。
 意図した差（IR で表せなくなったもの、位置の表現）が出たら、ADR に書いてから許容する。
 
@@ -78,7 +78,7 @@ IR が運ぶべきものを実測から決め直す。**ここに書くのは案
 
 実測（コアの `ir.StreamTexts` の説明にあった数字も、ここに移した: x/tools で、命令の位置 28 万個に対して、異なるスニペットは 1.6 MB 分）:
 
-- **実測（x/tools、依存を含む 8,096 関数）:** IR 120 MB に対し、テキストの分は 27 MB（+23%）。位置ごとにスニペットをそのまま書くと 53 MB になるところを、グループ化で 1.6 MB 分の文字列に絞れた。問い合わせの対話は要らない
+- **実測（x/tools、依存を含む 8,096 関数）:** IR 120 MB に対し、テキストの分は 27 MB（+23%）。位置ごとにスニペットをそのまま書くと 53 MB になるところを、グループ化で 1.6 MB 分の文字列に絞れた。問い合わせの対話は不要
 
 問い合わせの案（実装は、これと違う形になった。今の契約は ARCHITECTURE.md 2.7.7）:
 
@@ -90,7 +90,7 @@ IR が運ぶべきものを実測から決め直す。**ここに書くのは案
 未決だった項目:
 
 **未決（レビューで決めたい）:**
-1. 実装列挙を、事前の一覧で渡す案は、規則の `match: implementations` がモデルのシンボルだけで決まる限りは足りる。呼び出しの先でシンボルが決まる場合は、対話が要る
+1. 実装列挙を、事前の一覧で渡す案は、規則の `match: implementations` がモデルのシンボルだけで決まる限りは足りる。呼び出しの先でシンボルが決まる場合は、対話が必要
 
 ---
 
@@ -168,7 +168,7 @@ Phase 1 では中立 IR を経由せず、`go/ssa` から直接 taint 解析ま�
 | 1.9 | 不確実性の記録: terminal kind、`attributable_to`、`dynamic_dispatch` の候補列挙、`match: implementations`（展開上限と中止時の記録を含む） | すべての打ち切りが分類されて出る。参照コーパスで展開数を実測し、`max_implementations` の既定値を確定する。**実装済み（ADR-030 の追記、ADR-032）。既定値と `mixed` の割り当ての確定はレビュー待ち** |
 | 1.10 | **（実装済み。ADR-035）** 値依存: 引数由来のガード抽出（taint ソルバ流用）、`conditional_nodes`、provenance、ガード上限 | ブリーフの `render` の例が期待どおりに出る |
 | 1.11 | **（実装済み、複数経路を除く。ADR-034）** 運用機能: モデルカバレッジレポート、`origin` と `--deterministic-only`、結果のグループ化・安定 ID・経路数上限、`entrypoints` | `rivus models coverage` が動く |
-| 1.11b | **（実装済み。ADR-036）** 自作 SSA 化（`ssabuild`）と differential test: `go/ssa` の NaiveForm 出力から SSA 化し、lifted `go/ssa` と φ の配置・到達定義を突き合わせる。Phase 1 の `testdata` を回帰テストにする | differential test が全 `testdata` で一致し、解析結果が変わらない |
+| 1.11b | **（実装済み。ADR-036）** 自作 SSA 化（`ssabuild`）と differential test: `go/ssa` の NaiveForm 出力から SSA 化し、lifted `go/ssa` と φ の配置・到達定義を照合する。Phase 1 の `testdata` を回帰テストにする | differential test が全 `testdata` で一致し、解析結果が変わらない |
 | 1.12 | **（実施済み。ADR-037）** ドッグフーディング: rivus 自身を解析。`depth_limit` と `attributable_to: rivus` の比率を計測 | 計測値を README に記録 |
 
 SARIF 出力は Phase 1 のスコープ外。JSON が固まってから。
@@ -196,15 +196,15 @@ Phase 2 のステップ（案。2.7 のレビュー後に確定する）:
 
 | ステップ | 内容 | 完了の目安 |
 |---|---|---|
-| 2.0 | **（実装済み）** `internal/ir`: 型、JSON Lines の符号化・復号、検証、人間が読める整形 | 手書きの IR が往復でき、不正な IR が検証で落ちる |
+| 2.0 | **（実装済み）** `internal/ir`: 型、JSON Lines の符号化・復号、検証、人間が読める整形 | 手書きの IR が往復でき、不正な IR が検証で失敗する |
 | 2.1 | **（実装済み）** Go extractor（`goir`）: NaiveForm → IR。`rivus extract` | `testdata` の全関数が IR になり、検証を通る。目視用の出力が読める。SQL への補間（`+`、`Sprintf`、`strings.Builder`）のケースで、`const` の中身と補間の形が IR に残ることを確かめる |
 | 2.2 | **（実装済み）** IR → SSA 形（`ssabuild` の接続）。`testdata` と `x/tools` で、旧経路の SSA の値の使用関係と一致 | differential test が IR 経由でも通る |
 | 2.3 | **（実装済み）** `sites` と指紋を IR の上へ。**ID と指紋が、旧経路と全ケースで一致** | `rivus sites` / `resolve` の出力が変わらない |
-| 2.4 | **（実装済み）** `taint` の移植（手続き内 → 手続き間 → ヒープ → ガード）。旧経路との `Report` の突き合わせ | `testdata`・ghmint・dogfood で一致 |
+| 2.4 | **（実装済み）** `taint` の移植（手続き内 → 手続き間 → ヒープ → ガード）。旧経路との `Report` の照合 | `testdata`・ghmint・dogfood で一致 |
 | 2.5 | **（実装済み。2.4 の中でやった）** コールグラフを extractor へ。`call` の `candidates` として IR に入れ、コアは IR だけから SCC を作る | `x/tools` で一致し、時間が Phase 1 の ±20% 以内（実測: 107 秒 → 100 秒） |
 | 2.6 | **（実装済み）** 旧経路の除去。`taint` / `sites` / `report` から `go/ssa` と `gossa` の import を消す | `go list -deps` で確認（`taint` に `go/token`・`go/constant` が残る。下記） |
 - **Phase 3:** Rust。最初のタスクは「`stable-mir-json` 等の既存ツールで、実在のクレートがどれくらい通るかの確認」。成果物は「固定した nightly でビルドが通る Rust プロジェクトを解析できるツール」。想定より通らなければ、Rust の優先度を下げる判断もあり得る
-- **Phase 4:** Dart。解決済み AST → CFG → IR。**最初の版を実装済み**（`extractor/dart`、ADR-041）。残りは、パターン、関数値のコールグラフ、`Stream`、依存パッケージのモデル
+- **Phase 4:** Dart。解決済み AST → CFG → IR。**最初のバージョンを実装済み**（`extractor/dart`、ADR-041）。残りは、パターン、関数値のコールグラフ、`Stream`、依存パッケージのモデル
 
 ---
 

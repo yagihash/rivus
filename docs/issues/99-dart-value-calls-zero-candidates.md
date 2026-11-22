@@ -30,7 +30,7 @@ void vuln() {
 `callA` の `h.a!()` の呼び出し点は候補 0 件。実行すると `vuln` のクロージャが呼ばれる。
 
 ## どう見つけたか
-zoo の Dart を実行して観測した呼び出しと、グラフの辺の突き合わせ(`docs/DESIGN-observed-calls.md`)。辺がない 39 件のうち、この形が約 14 件(stored、partial_callers、func_field、func_map、returned、tearoff の一部)。ほかに super / mixin(`super_mixin_impl` 4 件)と `Navigator.pushNamed` のルート(3 件)が、同じく辺がない。
+zoo の Dart を実行して観測した呼び出しと、グラフの辺の照合(`docs/DESIGN-observed-calls.md`)。辺がない 39 件のうち、この形が約 14 件(stored、partial_callers、func_field、func_map、returned、tearoff の一部)。ほかに super / mixin(`super_mixin_impl` 4 件)と `Navigator.pushNamed` のルート(3 件)が、同じく辺がない。
 
 ## 関係
 #77、#81、#97(呼び出しが未解決になる形)と関連する。参照の段(`rivus graph path` の 4 段目)では届くものと届かないものがある。

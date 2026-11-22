@@ -16,7 +16,7 @@
 | extractor かツールチェインがない | 聞かずに、Rust は読まなかったと報告する(`rivus setup rust` か Homebrew で入る)。Rust だけの対象はエラー |
 | サンドボックスがない(Linux など) | 聞かない、読まない。`-unsafe-host-exec` があっても auto では Yes にしない(隔離なしは、`-lang rust` と `-unsafe-host-exec` の両方を書いたときだけ)。macOS でも、`-unsafe-host-exec` があれば、聞く文(サンドボックスの下で動く)と合わないので、auto では聞かず、読まない(`no-sandbox`) |
 
-聞く文は、読むにはビルドが要り、対象の build script と proc macro が動くこと、macOS のサンドボックスの下で動くこと(ビルドの間はネットワークなし、対象・依存・作業ディレクトリの外は書けない)、依存を crates.io から取得すること、聞かれたくなければ `-lang rust`(か `-yes`)、読みたくなければ `-lang go,dart` のように名指しすること、答えによって別の index になること、を示します。端末かどうかは、`unix.IoctlGetTermios`(`/dev/null` を端末と誤らない)で見ます。答えは 1 回の実行で 1 度だけ聞きます。index に載った言語は、あとの `graph -C` が引き継ぎます(また聞かない)。
+聞く文は、読むにはビルドが要り、対象の build script と proc macro が動くこと、macOS のサンドボックスの下で動くこと(ビルドの間はネットワークなし、対象・依存・作業ディレクトリの外は書けない)、依存を crates.io から取得すること、聞かれたくなければ `-lang rust`(か `-yes`)、読みたくなければ `-lang go,dart` のように指定すること、答えによって別の index になること、を示します。端末かどうかは、`unix.IoctlGetTermios`(`/dev/null` を端末と誤らない)で見ます。答えは 1 回の実行で 1 度だけ聞きます。index に載った言語は、あとの `graph -C` が引き継ぎます(また聞かない)。
 
 読まなかった Rust は、`summary.unread.skipped_languages` と index の `meta.unread.skipped_languages` に、`{"lang":"rust","why":...}` で残ります。`why`: `declined`(聞いて No)、`no-terminal`(聞けず、`-yes` もない)、`not-installed`(extractor かツールチェインがない)、`no-sandbox`。失敗したパッケージ(`failed_packages`、`load_errors`)には数えません。この index では、`graph path` の「経路なし」は `exhaustive: false` で、`not_exhaustive_because.skipped_languages` が理由を示します。
 
@@ -33,14 +33,14 @@
 
 | 段階 | ネットワーク | 動くもの | 書けるところ |
 |---|---|---|---|
-| 1. 取得 | あり(`network-outbound`)。mach のサービスは、1 つも許さない | `cargo fetch --locked` だけ。**ビルドしない**ので、`build.rs` もマクロも動かない。**対象の cargo の設定は、この段階では使わない**(設定のない作業ディレクトリから走らせる。cargo は設定を、カレントから探す)。設定が要るプロジェクトは、理由を示して止まる(取得済みなら `-no-fetch`。vendor 済みは、この段階を飛ばす)。取得の前に、`Cargo.lock` と `Cargo.toml` の取得元を検査する(crates.io 以外は `-allow-fetch-host`) | rivus 専用の `CARGO_HOME`(`~/Library/Application Support/rivus/rust/rivus-cargo-<ロックファイルと設定のハッシュ>/`)と、作業ディレクトリだけ |
-| 2. 抽出 | **なし** | extractor が `cargo check --offline --locked` を走らせる。`build.rs` と proc macro は、**ここで、サンドボックスの中で**動く | 作業ディレクトリ(`target/` と IR の断片。終わると消える)だけ。取得した `CARGO_HOME` と対象は読み取り専用 |
+| 1. 取得 | あり(`network-outbound`)。mach のサービスは、1 つも許さない | `cargo fetch --locked` だけ。**ビルドしない**ので、`build.rs` もマクロも動かない。**対象の cargo の設定は、この段階では使わない**(設定のない作業ディレクトリから実行する。cargo は設定を、カレントから探す)。設定が必要なプロジェクトは、理由を示して止まる(取得済みなら `-no-fetch`。vendor 済みは、この段階を飛ばす)。取得の前に、`Cargo.lock` と `Cargo.toml` の取得元を検査する(crates.io 以外は `-allow-fetch-host`) | rivus 専用の `CARGO_HOME`(`~/Library/Application Support/rivus/rust/rivus-cargo-<ロックファイルと設定のハッシュ>/`)と、作業ディレクトリだけ |
+| 2. 抽出 | **なし** | extractor が `cargo check --offline --locked` を実行する。`build.rs` と proc macro は、**ここで、サンドボックスの中で**動く | 作業ディレクトリ(`target/` と IR の断片。終わると消える)だけ。取得した `CARGO_HOME` と対象は読み取り専用 |
 
 利用者の `~/.cargo` は、どちらの段階でも、読みも書きもしません。IR は、extractor の標準出力から、rivus に返ります。
 
 ## サンドボックスの制限
 
-プロファイル(`internal/sandbox/seatbelt_darwin.go`)は、**既定ですべて拒否し、要るものだけを、1 行ずつ理由つきで許します**。
+プロファイル(`internal/sandbox/seatbelt_darwin.go`)は、**既定ですべて拒否し、必要なものだけを、1 行ずつ理由つきで許します**。
 
 | 制限 | 値 |
 |---|---|
@@ -76,7 +76,7 @@
 - **R-21 は、直りません。** 対象の `.cargo/config.toml` の `[env]` で、IR の断片の場所を変えて、IR を空にできます(安全の問題ではなく、結果の正しさの問題)。
 - **対象が大きいと、時間もメモリも、そのまま使います**(上限がない)。
 
-**後回しにしたハードニング**は、課題の一覧にあります([ISSUES.md](ISSUES.md)の #110 以降): 取得のプロキシ、実行の許可の絞り込み、`bsd.sb` の許可の棚卸し、メタデータの見える範囲、メモリとプロセス数の監視、残ったプロセスの報告、プロファイルの各行の試験、シグナルの `same-sandbox`、端末、macOS の CI(全体)。
+**後回しにしたハードニング**は、課題の一覧にあります([ISSUES.md](ISSUES.md)の #110 以降): 取得のプロキシ、実行の許可の絞り込み、`bsd.sb` の許可の棚卸し、メタデータの見える範囲、メモリとプロセス数の監視、残ったプロセスの報告、プロファイルの各行のテスト、シグナルの `same-sandbox`、端末、macOS の CI(全体)。
 
 ## 同じ作りを、ほかの言語に
 
@@ -86,6 +86,6 @@
 
 ## 検証
 
-`extractor/rust/test/hostile_sandbox/` は、悪意のあるビルドスクリプトを持つ、自作の crate です。ビルドスクリプトが、probe(`internal/sandbox/probe`)を動かし、サンドボックスから出る、知っている限りの方法を試します(ホームの鍵のつもりのファイル、ネットワーク、書き込み、`osascript` / `launchctl` / `open`、ペーストボード、キーチェーン、設定の書き込み、UNIX ソケット、名前解決)。**すべて失敗する**ことを、`TestSandboxedBuildScriptCannotEscape` が確かめます。サンドボックスなしでは、同じ方法が成功すること(抜け道が実在すること)を、`TestSandboxHolesAreRealWithoutTheSandbox` が確認し、サンドボックスの下で止まることを `TestSandboxStopsEveryHoleOfTheProbe` と、外に出る経路の組 `TestSandboxClosesEveryWayOut` が確かめます。取得の段階で対象の設定を読まないこと、ビルドスクリプトが動かないこと、時間・出力の上限・環境変数も、試験があります。**これらの試験は、開発のマシンで回します**(`RIVUS_SBX_RED=1`、取得の試験は `RIVUS_SBX_NET=1`。害のないマーカーを、サンドボックスの外に作ることがあり、終わりに消します)。CI(`.github/workflows/ci.yml の sandbox ジョブ`)は、隔離に関わるパスが変わったとき、週に 1 回、手動、タグで、`internal/sandbox` の試験だけを macOS で走らせます。
+`extractor/rust/test/hostile_sandbox/` は、悪意のあるビルドスクリプトを持つ、自作の crate です。ビルドスクリプトが、probe(`internal/sandbox/probe`)を動かし、サンドボックスから出る、知っている限りの方法を試します(ホームの鍵のつもりのファイル、ネットワーク、書き込み、`osascript` / `launchctl` / `open`、ペーストボード、キーチェーン、設定の書き込み、UNIX ソケット、名前解決)。**すべて失敗する**ことを、`TestSandboxedBuildScriptCannotEscape` が確かめます。サンドボックスなしでは、同じ方法が成功すること(抜け道が実在すること)を、`TestSandboxHolesAreRealWithoutTheSandbox` が確認し、サンドボックスの下で止まることを `TestSandboxStopsEveryHoleOfTheProbe` と、外に出る経路の組 `TestSandboxClosesEveryWayOut` が確かめます。取得の段階で対象の設定を読まないこと、ビルドスクリプトが動かないこと、時間・出力の上限・環境変数も、テストがあります。**これらのテストは、開発のマシンで回します**(`RIVUS_SBX_RED=1`、取得のテストは `RIVUS_SBX_NET=1`。害のないマーカーを、サンドボックスの外に作ることがあり、終わりに消します)。CI(`.github/workflows/ci.yml の sandbox ジョブ`)は、隔離に関わるパスが変わったとき、週に 1 回、手動、タグで、`internal/sandbox` のテストだけを macOS で実行します。
 
 `.rivus-hostile` のあるプロジェクトは、`-unsafe-host-exec` では動かしません(目印がホストに残らない)。
