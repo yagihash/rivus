@@ -1,0 +1,2 @@
+rust	pkg/axum/header_map.rs	sink-none	@sink(none)	fn vuln() { @vuln
+rust	pkg/axum/header_map.rs	sink-none	@sink(none) @nosink(pkg-axum-header-map-decoy)	fn fixed() { @fixed
