@@ -22,6 +22,7 @@ Commands:
   resolve   find where the places seen earlier (bookmarks) are in the current code
   extract   write the neutral IR of the code (JSON Lines, or -text to read it)
   models    "rivus models coverage": which functions need a model most
+  version   print the version (also --version)
 
 Run "rivus <command> -h" for the flags of a command.
 `
@@ -50,6 +51,9 @@ func main() {
 		err = runExtract(os.Args[2:])
 	case "models":
 		err = runModels(os.Args[2:])
+	case "version", "-version", "--version":
+		fmt.Println(versionString())
+		return
 	case "-h", "--help", "help":
 		fmt.Print(usage)
 		return
