@@ -17,6 +17,7 @@ import 'package:zoo_cells/clos/stored.dart' as clos_stored;
 import 'package:zoo_cells/clos/to_lib.dart' as clos_to_lib;
 import 'package:zoo_cells/clos/to_own_helper.dart' as clos_to_own_helper;
 import 'package:zoo_cells/clos/two_callers.dart' as clos_two_callers;
+import 'package:zoo_cells/clos/wrapped_by_dependency.dart' as clos_wrapped_by_dependency;
 import 'package:zoo_cells/conv/buffer_writestring.dart' as conv_buffer_writestring;
 import 'package:zoo_cells/conv/exec_output_echo.dart' as conv_exec_output_echo;
 import 'package:zoo_cells/conv/struct_field_boxed.dart' as conv_struct_field_boxed;
@@ -79,6 +80,7 @@ void registerAll() {
   clos_to_lib.register();
   clos_to_own_helper.register();
   clos_two_callers.register();
+  clos_wrapped_by_dependency.register();
   cont_map_key_vs_value.register();
   cont_struct_whole_to_sink.register();
   conv_buffer_writestring.register();

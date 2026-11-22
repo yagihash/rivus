@@ -69,6 +69,10 @@ dart	clos/to_own_helper.dart	sink-none	@sink(none)	void fixed() { @fixed
 dart	clos/to_own_helper.dart	sink-none	@sink(none) @nosink(clos-to-own-helper-decoy)	void decoy() { @decoy
 dart	clos/two_callers.dart	sink-none	@sink(none)	void fixed() { @fixed
 dart	clos/two_callers.dart	sink-none	@sink(none) @nosink(clos-two-callers-decoy)	void fixed() { @fixed
+dart	clos/wrapped_by_dependency.dart	fp	@sink(none) @fp @nosink(clos-wrapped-by-dependency-decoy) @fp @ref(XTALK)	void decoy() { @decoy
+dart	clos/wrapped_by_dependency.dart	fp	@sink(none) @fp @ref(XTALK)	void fixed() { @fixed
+dart	clos/wrapped_by_dependency.dart	sink-none	@sink(none) @fp @nosink(clos-wrapped-by-dependency-decoy) @fp @ref(XTALK)	void decoy() { @decoy
+dart	clos/wrapped_by_dependency.dart	sink-none	@sink(none) @fp @ref(XTALK)	void fixed() { @fixed
 dart	cont/map_key_vs_value.dart	fp	@sink(none) @fp @nosink(cont-map-key-vs-value-decoy) @fp @ref(KEYED-MAP)	void decoy() { @decoy
 dart	cont/map_key_vs_value.dart	sink-none	@sink(none)	void fixed() { @fixed
 dart	cont/map_key_vs_value.dart	sink-none	@sink(none) @fp @nosink(cont-map-key-vs-value-decoy) @fp @ref(KEYED-MAP)	void decoy() { @decoy

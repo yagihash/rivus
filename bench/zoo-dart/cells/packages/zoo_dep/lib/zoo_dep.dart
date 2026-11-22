@@ -17,3 +17,7 @@ class _Wrapper implements Writer {
     _w.write(data);
   }
 }
+
+/// A middleware of a dependency: the function that it returns calls the function that it was given (the shape of the
+/// wrappers of a server framework: `wrapFn(handler)` is called where the handler would have been).
+String Function(String) wrapFn(String Function(String) h) => (x) => h(x);
