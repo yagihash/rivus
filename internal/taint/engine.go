@@ -1439,6 +1439,7 @@ func (e *Engine) buildFinding(rf *rawFinding) *Finding {
 		Source:     e.siteRef(src),
 		Sink:       e.siteRef(rf.site),
 		Category:   rf.site.Category,
+		Categories: rf.site.Categories,
 		Confidence: ConfidenceReview,
 	}
 	for l := range rf.labels {

@@ -298,11 +298,12 @@ positional ones **by name**, and a call that leaves one out holds nil there, so 
   another argument given (quiet). `TestDartNamedArgumentSinks` (`cmd/rivus/dart_named_test.go`) is the shape.
 * Go and Rust have no named arguments: `arg_names` is empty, and a `named` row there is `named_unresolved` at a call of the symbol
   (read whole): do not write one in a model of Go or Rust.
+* **An unresolved name reads the whole call, on purpose**: the sink errs on the side of a finding and not of a missed one (the warning is `named_unresolved`, not a silence). `named` in `flows` and `sources` is #145.
 * **A symbol with rows of several categories** has a site, and so a finding, for each category (one call is then several sites,
   and findings from the same source can come out of it, one per category). Before, the rows were one site that was reported under
   the category of the first row. **A row that reads the same positions as an earlier row of another category is not a sink of
   its own** (the same `args`, `recv`, `named`, `parts`): a project row for a symbol that a built-in row already names is one
-  sink, under the first category, as it was. `named` is for `sinks` only: `flows` and `sources` still name positions (a flow that takes a named
+  sink, under the first category, as it was; the finding lists all the categories in `categories` (only when there are two or more). `named` is for `sinks` only: `flows` and `sources` still name positions (a flow that takes a named
   argument is written by position: the declared one, until `flows` can say `named`).
 
 ## 4a. Cutting a dependency with a model (not reading its body)
