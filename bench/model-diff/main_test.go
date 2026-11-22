@@ -320,7 +320,7 @@ func TestCompareMissReviewed(t *testing.T) {
 		{ID: 1, Symbol: "p.F", Kind: "flow", Variant: "arg1", Outputs: []string{"result0"}},
 	}
 	a := Hits{key(0, "result0"): true, key(1, "result0"): true}
-	notes := []Note{{Kind: "miss-reviewed", Symbol: "p.F@arg1", Text: "type only"}, {Kind: "miss-reviewed", Symbol: "p.G@arg0", Text: "x", File: "m.yaml", Line: 3}}
+	notes := []Note{{Kind: "miss-reviewed", Symbol: "p.F@arg1", Text: "type-only the type"}, {Kind: "miss-reviewed", Symbol: "p.G@arg0", Text: "x", File: "m.yaml", Line: 3}}
 	rep := Compare(probes, nil, a, Hits{}, notes)
 	if rep.Results[0].Status != "MISS" || rep.Results[1].Status != "MISS-reviewed" {
 		t.Errorf("statuses: %s, %s", rep.Results[0].Status, rep.Results[1].Status)
@@ -330,5 +330,23 @@ func TestCompareMissReviewed(t *testing.T) {
 	}
 	if ok := Compare(probes[1:], nil, a, Hits{}, notes); ok.Failed() {
 		t.Error("a reviewed MISS must not fail")
+	}
+}
+
+func TestParseNotesMissReviewed(t *testing.T) {
+	good := "  # model-diff: miss-reviewed a.F@arg1 type-only the type of v\n  # model-diff: miss-reviewed a.G@arg0 body-default #150 unresolved call\n"
+	notes, errs := ParseNotes("m.yaml", good)
+	if len(errs) != 0 || len(notes) != 2 {
+		t.Fatalf("notes %v, errors %v", notes, errs)
+	}
+	for _, bad := range []string{
+		"# model-diff: miss-reviewed a.F@arg1 because it is fine\n",
+		"# model-diff: miss-reviewed a.F@arg1 type-only\n",
+		"# model-diff: miss-reviewed a.F@arg1 body-default no number\n",
+		"# model-diff: miss-reviewed a.F type-only x\n",
+	} {
+		if _, errs := ParseNotes("m.yaml", bad); len(errs) != 1 {
+			t.Errorf("%q: errors %v", bad, errs)
+		}
 	}
 }
