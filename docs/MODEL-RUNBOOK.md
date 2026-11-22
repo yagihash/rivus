@@ -59,6 +59,8 @@
 - 例の位置づけ(ADR-063)の上書きは、**[ADR-101](DECISIONS.md) で済んでいる**。昇格の PR は ADR を書かない(ADR-101 を参照するだけ)。
 - PR の題は `feat(model): <言語> <パッケージ> の組み込みモデル(例から昇格)`。判定は、この題の形で行う(1 節)。昇格のあと、例のファイルは無いか短くなるので、`ls internal/model/builtin/` の判定は、`<言語>-<パッケージ>*.yaml` で使える。
 
+作業の種類は、一覧の「新規 / 広げる / 例から昇格」の列ではなく、**main にそのパッケージのモデルのファイルがあるか**(`ls internal/model/builtin/<言語>-<パッケージ>*.yaml`)で決める。ファイルがなければ、一覧が「広げる」でも新規として扱う(標準ライブラリの行に乗る薄いラッパーなど)。
+
 ## 2. 作る(標準の 4 段)
 
 1. **生成(未実装)**: 型から粗いモデルを作る。`internal/model/builtin/<lang>-<package>.gen.yaml`(コミットする。先頭に生成器のバージョンと入力のパッケージとバージョン)。書き込み先の引数は、`results` とレシーバへの流れの読み取り元にも含める。
@@ -79,6 +81,8 @@
 - Go(骨組みの `go.mod` に `require zoo v0.0.0` と `replace zoo => ../../../zoo-go`): `func Run(cmd string) { mark.SinkCmd(cmd) }`
 - Rust(骨組みの `Cargo.toml` に `zoo-mark = { path = "../../../zoo-rust/zoo-mark" }`): `#[track_caller] pub fn run(cmd: &str) { zoo_mark::sink_cmd(cmd); }`
 sink の行は、パッケージの `rules.yaml` の `sinks:` に、骨組みの関数の記号で書く(`zoo/mark` の sink の記号は、zoo の `rules.yaml` が持つ)。Rust のテストは、パッケージの crate と骨組みの crate の `Cargo.toml` の zoo-mark の path 依存を、写した zoo-mark に書き換える。
+
+**骨組みは、本物の型の埋め込みと、インターフェースの実装の関係を、本物と同じ形にする**(昇格したメソッドが、別のパッケージの行に当たるため。実例: Go の `sqlx.DB` は `*sql.DB` を埋め込む。骨組みが埋め込まないと、昇格したメソッドを呼ぶセルが、本物と違う形で通る)。骨組みの生成器の要件にも足してある([DESIGN-package-models.md](DESIGN-package-models.md) 6.8)。
 
 **Rust のモデルの標準の確認: 本物のクレートでの記号の綴り(macOS のサンドボックスの下だけ)**: 骨組みは本物と綴りが違いうる(定義の経路と公開の経路、別のクレートの型の再エクスポート)ので、行を書いたら、本物のクレートで extractor が書く名前と照合する。(1) 一時のディレクトリに、本物のクレートを**版を固定して**(`=4.20.0`。要る feature は足す。`default-features = false` でよい)使う小さい crate を作り、モデルの各行(source の型と、flows / sinks の関数)を 1 回ずつ通る最小の関数を書く。(2) `cargo generate-lockfile --manifest-path <dir>/Cargo.toml`(取得だけ)。(3) `go run ./cmd/rivus debug extract -lang rust -isolation-env DEVELOPER_DIR=/Library/Developer/CommandLineTools -C <dir> > ir.jsonl`(サンドボックスの下。`-unsafe-host-exec` は使わない。`DEVELOPER_DIR` がないと、サンドボックスが Xcode.app を読めず、ビルドスクリプトのリンクが `xcrun` で失敗する)。(4) `ir.jsonl` の、その crate の関数(`id` が crate 名で始まる)の、`callee.symbol` と、引数の型(`locals` の `name` つき)を、モデルの行と照合する。一致しない行は直す。(5) 一時のディレクトリは、終わったら消す。クラウドの実行には隔離がないので、**Rust のモデルは、当面ローカルで作る**。実例と、骨組みと本物の違い(定義の `id` は、別のクレートの型だと本物は `actix_http::...`、`http::...` になる。呼び出しの `symbol` は、公開の経路で同じ): PR #204(actix-web)。
 
@@ -108,6 +112,11 @@ zoo のゲート(`scripts/zoo-loosened-check.sh`、#167): 新しいセル(`bench
 - ほかのファイル(`docs/DECISIONS.md`、`docs/ISSUES.md`、直下の README、コード、ゲート、ワークフロー)は、さわらない。conflict が出たら、main 側の行を残して、自分の行を足し直す。
 - **module の path に major が入る Go のパッケージ**(`/v2` 以上。`pgx/v5`、`go-redis/v9`、`go-github/v93` など): major ごとにファイルや行を写さない。シンボル、`field`、`type`、`verified_versions` の `package` に、major の要素を `/v*` と書く(`(*github.com/google/go-github/v*/github.Client).Do`、`package: github.com/google/go-github/v*`。ADR-110、設計 6.9)。`/v*` は `/v` と数字の 1 要素だけに当たる(`/vendor` などには当たらない)。`verified_versions` の `versions` は、**実際に差分テストを通した範囲だけ**を書く(`make model-diff PKG=github.com/google/go-github/v93/github` に `-version v93.0.0`: `/v*` の行は、`-version` の major の package として照合される)。zoo のセルの骨組みは、読んだ major 1 つ分のモジュールで足りる(`replace github.com/google/go-github/v93 => ./skel`)。ほかの major を確認したら、`versions` の範囲を広げる。`aws-sdk-go-v2` のように、`/vN` の要素でない名前は対象外(そのままの path で書く)。接尾辞のない v0 / v1 の path には `/v*` は当たらない: v1 と v2 以降の両方を対象にするパッケージは、接尾辞のない行と `/v*` の行の両方が要る。
 
+### Rust の zoo のセルを足すとき(確認と骨組みの注意)
+
+- **`RIVUS_RUST` を設定しないと、`TestZooPkgRust` は SKIP のまま通る**(`go test` は `ok`。SKIP は `-v` でしか見えない)。Rust のパッケージのセルを足したら、必ず `RIVUS_RUST=<rivus-rust のバイナリ>` と `RIVUS_REQUIRE_RUST=1` を付けて実行する(`RIVUS_REQUIRE_RUST=1` なら、未設定は SKIP でなく失敗になる。CI の `rust` ジョブは、これを設定してあるので、SKIP は失敗になる)。`bench/zoo-rust-pkg/` にパッケージがあって `RIVUS_RUST` がないときは、`-v` で「NOT checked」と出る。実行したら、`found N / N`、`@miss 0` の行を PR の本文に書く。行を使っているかは、sink の行を全部消して、vuln が見つからずに落ちることで確かめる。
+- **骨組みの `#[track_caller]`**: 記録の場所をセルの行にするには、sink を記録する関数だけでなく、**呼び出しの連鎖のすべて**(骨組みの公開の関数、それが呼ぶ内部の記録の関数)に付ける。1 つでも欠けると、記録の場所が骨組みの中になる。
+- **`fixed` のセルは、`clean_cmd`、`clean_sql`、`clean_html`、`clean_path` の 4 つを通す**: `zoo_mark::sink_any` は、全部の class で判断するので、1 つだけでは「清められていない」と判断される。例: `m::clean_path(&m::clean_html(&m::clean_sql(&m::clean_cmd(&m::src("..")))))`。
 **4 節の補足(骨組みの記録、ロックの生成、Rust の型の綴り)**:
 - **Go の骨組みが、名前の sink(`resource_name` など)で記録するもの**: `zoo/mark` の `mark.SinkCmd` で、その引数(名前)を記録する(fixed のセルでは、`mark.CleanCmd` で消した値が入るので、記録が空になる)。骨組みの本体は「公開のシグネチャ + 記録するだけ」で、それ以外はしない。見本は `bench/zoo-go-pkg/zoo_synth/skel/zoosynth.go` の `Run`(`func Run(cmd string) { mark.SinkCmd(cmd) }`)と、`bench/zoo-go-pkg/gin/skel/gin.go`(`mark.Src` を呼ぶ source の側)。
 - **`bench/zoo/marks.d/` のロックの生成**: 新しいセルを足したら、`ZOO_MARKS_UPDATE=1 go test ./cmd/rivus -run '^TestZooMarksLock$'`(`bench/zoo/README.md`、`cmd/rivus/zoo_marks_test.go`)。新しいセルの `@sink(none)`、`@miss`、`@fp` の行は、承認なしで通る(`@miss` と `@fp` は `@ref` が要る。3 節)。既存のセルの行は変えない。

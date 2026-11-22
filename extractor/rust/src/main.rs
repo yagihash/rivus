@@ -137,7 +137,8 @@ fn driver() -> ExitCode {
             // a crate that is built to be loaded or linked by another program is called from outside
             let open_crate = args.windows(2).any(|w| w[0] == "--crate-type" && matches!(w[1].as_str(), "cdylib" | "staticlib" | "dylib"))
                 || args.iter().any(|a| matches!(a.as_str(), "--crate-type=cdylib" | "--crate-type=staticlib" | "--crate-type=dylib"));
-            let records = extract(tcx, &root, dep, open_crate);
+            install_panic_hook();
+            let records = extract(tcx, &root, dep, open_crate, &crate_name);
             // a test build of a crate (`--test`) is told apart by its name: the merge prefers it to the library build
             let kind = if args.iter().any(|a| a == "--test") { "-test" } else { "" };
             let path = PathBuf::from(&out_dir).join(format!("{}{}-{}.jsonl", crate_name, kind, std::process::id()));
@@ -161,12 +162,14 @@ fn driver() -> ExitCode {
 }
 
 /// The records of the crate being compiled: its functions, and the texts.
-fn extract(tcx: rustc_middle::ty::TyCtxt<'_>, root: &str, dep: bool, open_crate: bool) -> Vec<Value> {
+fn extract(tcx: rustc_middle::ty::TyCtxt<'_>, root: &str, dep: bool, open_crate: bool, crate_name: &str) -> Vec<Value> {
     let items: Vec<_> = rustc_public::all_local_items().into_iter().filter(|i| i.has_body()).collect();
     let bodies: HashSet<String> = items.iter().map(|i| i.name()).collect();
     let mut cx = lower::Ctx::new(root.to_string(), bodies);
     // what the crate holds that is not read, said at the end (a load error that names the function)
     let mut unread: Vec<(String, String)> = Vec::new();
+    // the functions whose body could not be converted (a panic of the conversion that was caught): name, why
+    let mut skipped: Vec<(String, String)> = Vec::new();
     // the promoted constants of the crate: the functions in them are used as values (`&helper`)
     for ldid in tcx.mir_keys(()) {
         let did = ldid.to_def_id();
@@ -195,11 +198,17 @@ fn extract(tcx: rustc_middle::ty::TyCtxt<'_>, root: &str, dep: bool, open_crate:
     for item in &items {
         let name = item.name();
         if name.contains("{closure#") {
-            if let Some(b) = item.body() {
-                if lower::is_closure_body(&b) {
-                    let tys = b.arg_locals().iter().skip(1).map(|l| lower::closure_key(&l.ty)).collect();
-                    cx.closures.insert(name, tys);
-                }
+            // a body that cannot be converted is skipped here without a word: the loop below meets the same function and says it
+            if let Ok(Some(tys)) = guarded(|| {
+                item.body().and_then(|b| {
+                    if lower::is_closure_body(&b) {
+                        Some(b.arg_locals().iter().skip(1).map(|l| lower::closure_key(&l.ty)).collect::<Vec<_>>())
+                    } else {
+                        None
+                    }
+                })
+            }) {
+                cx.closures.insert(name, tys);
             }
         }
     }
@@ -214,13 +223,21 @@ fn extract(tcx: rustc_middle::ty::TyCtxt<'_>, root: &str, dep: bool, open_crate:
         *count.entry(item.name()).or_default() += 1;
     }
     for item in &items {
-        let Some(body) = item.body() else {
-            // an item that has a body and gives none: left out (what input does this: not known; no fixture)
-            unread.push((item.name(), "the body of this function could not be read: it is left out".to_string()));
-            continue;
-        };
         let name = item.name();
-        let f = lower::Lower::lower(&mut cx, name.clone(), &body, item.span());
+        // The conversion of a body to stable MIR can panic (`unimplemented!` of rustc_public: async closures are not lowered
+        // yet): that function is skipped, and said (fn_skipped), and the others are read (docs/DESIGN-rust-extractor-panic.md)
+        let f = match guarded(|| item.body().map(|body| lower::Lower::lower(&mut cx, name.clone(), &body, item.span()))) {
+            Ok(Some(f)) => f,
+            Ok(None) => {
+                // an item that has a body and gives none: left out (what input does this: not known; no fixture)
+                unread.push((item.name(), "the body of this function could not be read: it is left out".to_string()));
+                continue;
+            }
+            Err(why) => {
+                skipped.push((name.clone(), why));
+                continue;
+            }
+        };
         let mut j = f.to_json();
         if count.get(&name).copied().unwrap_or(0) > 1 {
             let text = j.to_string();
@@ -252,6 +269,10 @@ fn extract(tcx: rustc_middle::ty::TyCtxt<'_>, root: &str, dep: bool, open_crate:
     }
     if !dep {
         cx.texts.write(&mut out);
+    }
+    report_skipped(crate_name, &skipped);
+    for (name, why) in &skipped {
+        out.push(json!({"kind": "fn_skipped", "fn_skipped": {"unit": crate_name, "func": name, "dependency": dep, "why": why}}));
     }
     for (name, why) in unread {
         out.push(json!({"kind": "load_error", "load_error": {"package": name, "message": why, "unread": true, "func": name}}));
@@ -405,6 +426,66 @@ fn cli() -> ExitCode {
         }
     }
     ExitCode::SUCCESS
+}
+
+thread_local! {
+    /// Set while a conversion runs under `guarded`: the hook of panics keeps the message and says nothing.
+    static GUARDED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// The message (first line) and the place of the last panic under `guarded`.
+    static LAST_PANIC: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
+}
+
+/// Puts a hook of panics in (once): a panic under `guarded` is not written (its first line and place are kept for the
+/// summary line and for fn_skipped; RIVUS_RUST_PANIC_VERBOSE=1 writes it as it is); a panic anywhere else goes to the hook
+/// that was there.
+fn install_panic_hook() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let prev = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            if GUARDED.with(|g| g.get()) {
+                LAST_PANIC.with(|m| *m.borrow_mut() = panic_summary(info));
+                if std::env::var_os("RIVUS_RUST_PANIC_VERBOSE").is_none() {
+                    return;
+                }
+            }
+            prev(info);
+        }));
+    });
+}
+
+fn panic_summary(info: &std::panic::PanicHookInfo<'_>) -> String {
+    let payload = info.payload();
+    let msg = payload.downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| payload.downcast_ref::<String>().cloned()).unwrap_or_else(|| "a panic".to_string());
+    let first = msg.lines().next().unwrap_or("").to_string();
+    match info.location() {
+        // the place in the source of the compiler, without the directory of the toolchain: `rustc_public/src/.../ty.rs:484`
+        Some(l) => format!("{} (at {}:{})", first, l.file().rsplit("/compiler/").next().unwrap_or(l.file()), l.line()),
+        None => first,
+    }
+}
+
+/// Runs `f`; a panic in it is caught, and the first line of its message is the error. Only for what is read from rustc
+/// after the queries are done (the conversion of a body to stable MIR and the lowering of it): a panic inside a query
+/// leaves the query active, and the compiler aborts later (lower.rs, `resolve`). If it aborts, the crate fails as before.
+fn guarded<T>(f: impl FnOnce() -> T) -> Result<T, String> {
+    GUARDED.with(|g| g.set(true));
+    let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
+    GUARDED.with(|g| g.set(false));
+    r.map_err(|_| LAST_PANIC.with(|m| std::mem::take(&mut *m.borrow_mut())))
+}
+
+/// How many skipped functions of a crate are said one by one on the standard error; the rest is counted in one line.
+const SKIPPED_SAID: usize = 5;
+
+/// One line for each of the first functions that were skipped, and one for the rest.
+fn report_skipped(crate_name: &str, skipped: &[(String, String)]) {
+    for (name, why) in skipped.iter().take(SKIPPED_SAID) {
+        eprintln!("rivus-rust: skipped {} ({}): {}", name, crate_name, why);
+    }
+    if skipped.len() > SKIPPED_SAID {
+        eprintln!("rivus-rust: ... and {} more functions skipped in {}", skipped.len() - SKIPPED_SAID, crate_name);
+    }
 }
 
 /// Runs the command (its standard error piped) and passes its standard error on to ours line by line; returns the status and
@@ -767,6 +848,15 @@ mod tests {
         assert!(is_build_script(&args(&["rustc", "--crate-name", "build_script_build", "build.rs"])));
         assert!(is_build_script(&args(&["rustc", "--crate-name", "build_script_codegen", "codegen.rs"])));
         assert!(!is_build_script(&args(&["rustc", "--crate-name", "mylib", "src/lib.rs"])));
+    }
+
+    #[test]
+    fn a_panic_under_guarded_is_caught_with_its_first_line_and_place_and_the_next_call_goes_on() {
+        install_panic_hook();
+        let e = guarded(|| -> u32 { unimplemented!("FIXME(x): lower\nmore") }).unwrap_err();
+        assert!(e.starts_with("not implemented: FIXME(x): lower (at "), "{e}");
+        assert!(!e.contains("more"), "{e}");
+        assert_eq!(guarded(|| 7).unwrap(), 7);
     }
 
     const GOOGLE_AUTH: &str = "thread 'rustc' panicked at /rustc-dev/x/ty.rs:484:17:\nnot implemented: FIXME(async_closures): Lower these to SMIR\nerror: could not compile `google-cloud-auth` (lib)\n\nCaused by:\n  process didn't exit successfully: `rivus-rust rustc --crate-name google_cloud_auth` (exit status: 101)\n";

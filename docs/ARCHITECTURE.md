@@ -457,6 +457,7 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 | `concurrency` | mixed | 実行順序に依存するが、channel を単純なキューとしてモデル化すれば追える範囲が広がる |
 | `unmodeled_library_call` | rivus | モデルを書けば減る |
 | `dependency_body_unread` | rivus | モデルのあるインターフェースのメソッドの動的な呼び出しで、候補に本体のある依存の関数（プロジェクトの外）があったが、読まなかった（ADR-075）。依存が値を包んで渡した先の、自前の実装の中の sink は、たどっていない。`dynamic_dispatch` と並べて付き、候補に、読まなかった依存の関数を並べる |
+| `project_body_unread` | rivus | プロジェクトの関数の呼び出しで、extractor がその関数の本体を読めなかった（Rust: `rustc_public` が async closure を変換できず、関数を飛ばした。`fn_skipped`、`summary.functions_skipped`。ADR-109）。関数の中で値がどうなるかは、たどっていない。依存の関数は、`dependency_body_unread`（`detail` に理由）。モデルの行があれば、行が使われ、注記は付かない |
 | `model_approximation` | rivus | 流れのモデルが、自分で「近似」と宣言している（`approximate` の文）。モデルの限界（ADR-067） |
 | `numeric_stop` | rivus | source のデータが数値や bool になり、それ以降は追わない（既定。`-numeric-taint` で追う）。source の種類（シンボルとラベル）ごとに 1 件で、最初の場所と、起きた関数の一覧（10 件まで）を持つ。サマリを通って止まる分（呼び出し先の中の、引数の記号的なデータの止まり）は、記録されない |
 | `unsupported_construct` | rivus | extractor が下げられなかった構文（IR の `unsupported`）。その場所で何が起きるかは、解析に入っていない。`missing_source` ではない（対象のコードが足りないのではなく、rivus が読めなかった） |
