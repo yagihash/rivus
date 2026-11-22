@@ -11,8 +11,8 @@ script that is not kept (`protoc` was not run); `proto/cloud.proto` is for refer
 
 | service | packages | methods |
 | --- | --- | --- |
-| `Gcloud` | `gcloud` (`storage.dart`, `pubsub.dart`, `datastore.dart`) | `ReadObject`, `BucketInfo`, `Publish`, `Query` (the kind of a key), `PushEndpoint` reach a name or a URL; `*Fixed` and `FilterValue` (the value of a filter, which the service binds) do not |
-| `Apis` | `googleapis` (`storage/v1`, `pubsub/v1`, `bigquery/v2`, `datastore/v1`) | `GetObject`, `PublishTopic`, `RunQuery`, `RunGql`, `ModifyPush` reach a name, the text of a query or a URL; `*Fixed` do not (`RunGqlFixed` puts the request in the bindings of a constant GQL text) |
+| `Gcloud` | `gcloud` (`storage.dart`, `pubsub.dart`, `datastore.dart`) | `ReadObject`, `BucketInfo`, `Publish`, `Query` (the kind of a key), `PushEndpoint` reach a name or a URL (`QueryKind` too, a known miss: below); `*Fixed` and `FilterValue` (the value of a filter, which the service binds) do not |
+| `Apis` | `googleapis` (`storage/v1`, `pubsub/v1`, `bigquery/v2`, `datastore/v1`) | `GetObject`, `PublishTopic`, `RunQuery`, `RunGql`, `ModifyPush` reach a name, the text of a query or a URL (`ModifyPushName` too, a known miss: below); `*Fixed` do not (`RunGqlFixed` puts the request in the bindings of a constant GQL text) |
 | `CloudStorage` | `google_cloud_storage` | `Download`, `Upload` reach the bucket and object names; `*Fixed` do not (only the content comes from the request) |
 | `Json` | `googleapis`, `google_cloud_protobuf` | the request holds a JSON text that is decoded into a `Map` and given to `fromJson`; the result goes through `toJson` |
 | `ManyApis` | `googleapis` (ten more APIs) | one call each, the ids come from the request |
@@ -28,3 +28,21 @@ RIVUS_DART=dart RIVUS_DART_EXTRACTOR="dart run $PWD/../../extractor/dart/bin/riv
 
 The packages are read by the extractor of rivus only. Nothing in them is run (no `dart run`, `dart test` or
 `build_runner` on this project). Not in the CI workflows: first the measurement.
+
+## What `rivus analyze` finds here (with the built-in `dart-gcp.yaml`)
+
+| | handlers | found |
+| --- | --- | --- |
+| a: the request reaches a name, a query or a URL | 15 | 15 |
+| a, **known misses** | 2 | 0 |
+| b: the request does not reach it | 12 | 11 quiet, **1 reported wrongly** |
+
+The 3 findings of `Files`, `Jobs` and `Reports` are the same as in `../dart-grpc`: 19 findings in all (3 + 15 + 1). The known misses and the wrong report are written down, each with an issue (`docs/ISSUES.md`), and with a cell of the zoo (`bench/zoo-dart`, `@miss` / `@fp`):
+
+| handler | what | cause | issue |
+| --- | --- | --- | --- |
+| `Gcloud.QueryKind` | the kind is `Query(kind: request.kind)` | a named argument cannot be pointed to by a row | #139 |
+| `Apis.ModifyPushName` | the name of the subscription of `modifyPushConfig` | one symbol has one category: the row is the push endpoint (`ssrf`) only | #140 |
+| `Apis.RunGqlFixed` (b) | a constant GQL text, the request is in `namedBindings` | the elements of a Map are not told apart: the report has `field_imprecision` and `container_element_imprecision` | #141 |
+
+A change of these numbers is a change of the model or of the analysis: check it against this table.

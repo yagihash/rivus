@@ -144,4 +144,17 @@ class ApisService extends ApisServiceBase {
         'projects/$_project/subscriptions/events-sub');
     return CloudReply()..status = '200';
   }
+
+  @override
+  Future<CloudReply> modifyPushName(ServiceCall call, TopicRequest request) async {
+    // a, a known miss (#140): the name of the subscription is the request's; the row of this call is the push endpoint.
+    final client = await auth.clientViaApplicationDefaultCredentials(
+        scopes: [pubsub.PubsubApi.pubsubScope]);
+    final api = pubsub.PubsubApi(client);
+    await api.projects.subscriptions.modifyPushConfig(
+        pubsub.ModifyPushConfigRequest(
+            pushConfig: pubsub.PushConfig(pushEndpoint: 'https://example.invalid/push')),
+        'projects/$_project/subscriptions/${request.topic}');
+    return CloudReply()..status = '200';
+  }
 }

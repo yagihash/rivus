@@ -126,4 +126,14 @@ class GcloudService extends GcloudServiceBase {
         Uri.parse(_names[request.key] ?? 'https://example.invalid/push'));
     return CloudReply()..status = '200';
   }
+
+  @override
+  Future<CloudReply> queryKind(ServiceCall call, SqlRequest request) async {
+    // a, a known miss (#139): the kind of the request is a named argument of the constructor of the query.
+    final client = await auth.clientViaApplicationDefaultCredentials(
+        scopes: ds.Datastore.Scopes);
+    final store = ds.Datastore(client, _project);
+    final page = await store.query(ds.Query(kind: request.kind));
+    return CloudReply()..body = '${page.items.length}';
+  }
 }

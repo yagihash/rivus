@@ -818,13 +818,11 @@ dart package:googleapis/bigquery/v2.dart#JobsResource.get | dependency | not the
 dart package:googleapis/bigquery/v2.dart#JobsResource.getQueryResults | dependency | not the standard library: the zoo has no such dependency
 dart package:googleapis/bigquery/v2.dart#JobsResource.insert | dependency | not the standard library: the zoo has no such dependency
 dart package:googleapis/datastore/v1.dart#ProjectsResource.runAggregationQuery | dependency | not the standard library: the zoo has no such dependency
-dart package:googleapis/datastore/v1.dart#ProjectsResource.runQuery | dependency | not the standard library: the zoo has no such dependency
 dart package:googleapis/pubsub/v1.dart#ProjectsSubscriptionsResource.acknowledge | dependency | not the standard library: the zoo has no such dependency
 dart package:googleapis/pubsub/v1.dart#ProjectsSubscriptionsResource.create | dependency | not the standard library: the zoo has no such dependency
 dart package:googleapis/pubsub/v1.dart#ProjectsSubscriptionsResource.delete | dependency | not the standard library: the zoo has no such dependency
 dart package:googleapis/pubsub/v1.dart#ProjectsSubscriptionsResource.get | dependency | not the standard library: the zoo has no such dependency
 dart package:googleapis/pubsub/v1.dart#ProjectsSubscriptionsResource.modifyAckDeadline | dependency | not the standard library: the zoo has no such dependency
-dart package:googleapis/pubsub/v1.dart#ProjectsSubscriptionsResource.modifyPushConfig | dependency | not the standard library: the zoo has no such dependency
 dart package:googleapis/pubsub/v1.dart#ProjectsSubscriptionsResource.patch | dependency | not the standard library: the zoo has no such dependency
 dart package:googleapis/pubsub/v1.dart#ProjectsSubscriptionsResource.pull | dependency | not the standard library: the zoo has no such dependency
 dart package:googleapis/pubsub/v1.dart#ProjectsTopicsResource.create | dependency | not the standard library: the zoo has no such dependency
