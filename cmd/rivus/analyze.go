@@ -115,7 +115,7 @@ func (o *analyzeOpts) register(fs *flag.FlagSet) {
 	fs.StringVar(&o.lockProf, "lockprofile", "", "write the mutex and block profiles of the taint phase to <this>.mutex and <this>.block (development)")
 	fs.StringVar(&o.cpuProf, "cpuprofile", "", "write a CPU profile of the taint phase to this file (development)")
 	usual(fs, "lang", "yes", "dart-extractor", "rust-extractor", "unsafe-host-exec", "isolation-env", "isolation-read", "workers", "numeric-taint", "v", "timeout", "resolve-func-values")
-	diagnostic(fs, "k", "isolation-timeout", "no-fetch", "isolation-max-output", "allow-fetch-host", "max-implementations", "max-passes", "func-timeout", "ir", "pass-stats", "func-values", "trace-element", "memprofile", "lockprofile", "cpuprofile")
+	diagnostic(fs, "k", "isolation-timeout", "no-fetch", "isolation-max-output", "allow-fetch-host", "max-implementations", "max-passes", "func-timeout", "ir", "pass-stats", "pass-stats-top", "pass-stats-sort", "func-values", "trace-element", "memprofile", "lockprofile", "cpuprofile")
 }
 
 // analyze runs the whole pipeline. extra rule sets are added to the ones
