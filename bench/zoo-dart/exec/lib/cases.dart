@@ -29,6 +29,7 @@ import 'package:zoo_cells/cont/struct_whole_to_sink.dart' as cont_struct_whole_t
 import 'package:zoo_cells/cont/slice.dart' as cont_slice;
 import 'package:zoo_cells/dart/closure_to_sdk.dart' as dart_closure_to_sdk;
 import 'package:zoo_cells/dart/http_client_get.dart' as dart_http_client_get;
+import 'package:zoo_cells/dart/http_ioclient_send.dart' as dart_http_ioclient_send;
 import 'package:zoo_cells/dart/flutter_field_read.dart' as dart_flutter_field_read;
 import 'package:zoo_cells/dart/flutter_override_arg.dart' as dart_flutter_override_arg;
 import 'package:zoo_cells/dart/flutter_route_args.dart' as dart_flutter_route_args;
@@ -96,6 +97,7 @@ void registerAll() {
   cont_slice.register();
   dart_closure_to_sdk.register();
   dart_http_client_get.register();
+  dart_http_ioclient_send.register();
   dart_flutter_field_read.register();
   dart_flutter_override_arg.register();
   dart_flutter_route_args.register();

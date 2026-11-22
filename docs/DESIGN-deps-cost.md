@@ -409,17 +409,23 @@ RIVUS_DART=dart RIVUS_DART_EXTRACTOR="dart run <worktree>/extractor/dart/bin/riv
 
 同じ型の既存のモデルとの比較: Go の `net/http` も `dart:io` の `HttpClient` も、URL だけが sink で、body とヘッダーは sink にしていない。同じにした。戻り値は source にせず、引数 → 戻り値の flow にした(`(*net/http.Client).Do` と同じ)。
 
-### 11.2 ADR-092 の条件に対して
+### 11.2 ADR-092 の条件と、ADR-096 の基準
 
-| 条件 | 状態 |
+ADR-092 の条件 1(依存が時間の 9 割以上、または数 GB)は、パッケージを丸ごと切るときの条件で、**今回の形は満たさない**: `bench/dart-gcp` で、解析(`duration_ms`)は wall の 1 割以下で(extractor が大半)、モデルで 1,018 → 325 ms、`summary_elems` は 28,543 → 22,158(-22%)。今回の形(実装の多いインターフェースのメソッドで、実装どうしが同じメソッドに委譲する)には、**ADR-096 の基準**を使う。
+
+| 基準 | 状態 |
 | --- | --- |
-| 1 コストの測定の記録 | 11.3 の表。**目安(依存が時間の 9 割以上、または数 GB)には届かない**: `bench/dart-gcp` で、解析(`duration_ms`)は wall の 1 割以下(extractor が大半)。モデルで 1.0 秒 → 0.3 秒、`summary_elems` は 28,543 → 22,158(-22%)。判断は相談役 |
-| 2 照合の検査 | 11.3 の「finding の集合」の行。モデルの有無で、同じ集合(`dart-gcp`、`dart-grpc`、合成の 3 つ)。CI の検査にはしていない(合成の例は `bench/` に入れていない) |
-| 3 `calls:` | 上の「足りない部分 2」。書けない。注記で示す |
-| 4 モデルのない呼び出し | 注記つきで、今までどおり |
-| 5 `summary` に読まなかったパッケージの一覧 | **ない**(今は `dependency_body_unread` の注記が、呼び出しごとにあるだけ) |
+| (i) 公開の対象で、本体を読んだ場合と finding の集合が同じ | 11.3: `bench/dart-gcp`、`bench/dart-grpc`、合成 3 で、同じ集合 |
+| (ii) 読まなかった本体に注記 | `dependency_body_unread`(合成 3 で 2 件、`bench/dart-gcp` で 3 件) |
+| ADR-092 の 3(`calls:`) | 書けない形が残る(上の「足りない部分 2」)。注記で示す |
+| ADR-092 の 5(`summary` に一覧) | まだない(11.4 の 2) |
 
-### 11.3 測定(同じ extractor、`rivus` は `origin/main` の `db82c10`、head は dart-http.yaml を足したもの)
+### 11.2a 具体的な型の変数からの呼び出しと、finding の重複
+
+- `match: implementations` は Dart で使えない(課題 #137)。そのため、`package:http` の中の具体的な型(`IOClient`、`BrowserClient`、`RetryClient`、`MockClient`、`BaseClient`)の `send` と便利なメソッドに、sink の行を足した。行を足す前は、`IOClient().send(...)` は 0 件だった。パッケージの外で `Client` を実装した型の変数からの直接の呼び出しは、残る(#137)。
+- インターフェースの行と、候補の実装の行が、同じ位置、category、labels の sink のときは、候補の側に site を作らない(`internal/sites/enumerate.go` の `uncovered`)。1 つの呼び出しに finding が 1 件になる(以前は 2 件。実装が多いと、候補の数だけ増えた: 合成の例で 31 件 → 13 件)。インターフェースの行だけに頼ると、依存を読まないとき(`-no-deps`)や、自分のクラスだけが実装のときに見逃すので、実装の行は残した。
+
+### 11.3 測定(同じ extractor、`rivus` は `origin/main` の `db82c10`(finding の数は、`uncovered` を入れる前の測定)、head は dart-http.yaml を足したもの)
 
 「なし」は、dart-http.yaml を空にしたビルドに、sink だけの行(`flows` を除いたもの)を `-rules` で足したもの = 候補の本体を読む。「あり」は、組み込み。「base」は、変更前の組み込み(`Client.get` / `post` の `flows` だけ、sink 3 行)。
 
@@ -435,7 +441,7 @@ RIVUS_DART=dart RIVUS_DART_EXTRACTOR="dart run <worktree>/extractor/dart/bin/riv
 
 - `dart-gcp` と `dart-grpc` は、`http` の URL に値が届く呼び出しがない。finding の集合は、3 つの側で同じ(`dart-grpc` の数字は、3 つの側で同じ)。
 - 合成 3 は、自前の `BaseClient` の継承クラス(`send` が `_inner.send(request)` を呼ぶ)に、認証つきクライアントを渡し、`get(Uri.parse(input))` と `send(Request('GET', ...))` を呼ぶ。**finding の集合は、なしとありで同じ 7 件**(`get` の URL → `get` の呼び出し 2 件、→ 自前の `send` 4 件、`send` 1 件。ヘッダーだけに値がある `fixed` の呼び出しが、自前の `send` で 1 件出る: リクエスト全体が汚染として扱われるため。なしでも同じ)。base は 3 件(自前の `send` に届く 4 件のうち 2 件を失う。`get` の `flows` が、`send` への呼び出しを切るため)。
-- `IOClient` / `RetryClient` の型の変数からの `get`(`BaseClient.get` の呼び出し)は、base では sink がなく、0 件。`BaseClient` の行を足して、検出する。インターフェースの `Client.get` と、候補の `BaseClient.get` の両方に一致して、1 つの呼び出しに 2 件の finding が出る(ADR-068。`dart-gcp` の試作と同じ注意。10.7)。
+- `IOClient` / `RetryClient` の型の変数からの `get`(`BaseClient.get` の呼び出し)と `send` は、base では sink がなく、0 件。`BaseClient` と具体的な型の行を足して、検出する(11.2a)。
 - wall と RSS は、ほぼ変わらない: 時間は extractor が大半(10.3)。モデルで減るのは、解析の `duration_ms` と `summary_elems` だけ。
 
 ### 11.4 次の案(まだ書いていない)

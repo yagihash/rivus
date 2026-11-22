@@ -15,9 +15,11 @@
 # (ADR-092: the edges at the border; docs/DESIGN-deps-cost.md, section 11). The three functions of `http.dart`
 # that had a model before keep it.
 # `BaseClient` has the sinks too, for a call on a variable typed `IOClient` or `RetryClient` (the call is of the
-# method of `BaseClient`); a call through `Client` that reaches `BaseClient.get` then has two findings (the
-# interface and the implementation, ADR-068). The `send` of `IOClient` and `RetryClient` has no row: only a call
-# on a variable of that type is missed.
+# method of `BaseClient`). The `send` of `IOClient`, `BrowserClient`, `RetryClient` and `MockClient` has a sink and no
+# model (its body is read), for a call on a variable of that type. A call through `Client` that reaches one of them
+# has two findings (the interface and the implementation, ADR-068): the row of the interface alone would miss the
+# call when the packages are not read (`-no-deps`) or the class is the project's own. `match: implementations` is
+# not available for Dart (the expansion is of Go only).
 ruleset: rivus/dart/http@1
 
 propagators:
@@ -147,6 +149,22 @@ sinks:
     category: ssrf
     accepts: [user_input]
   - symbol: package:http/http.dart#readBytes
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:http/src/io_client.dart#IOClient.send
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:http/src/browser_client.dart#BrowserClient.send
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:http/retry.dart#RetryClient.send
+    args: [0]
+    category: ssrf
+    accepts: [user_input]
+  - symbol: package:http/src/mock_client.dart#MockClient.send
     args: [0]
     category: ssrf
     accepts: [user_input]
