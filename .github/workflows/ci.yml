@@ -1,7 +1,7 @@
 name: CI
 
 # One workflow that always starts, and one check that a ruleset can require: `ci-ok` (the last job). The first job (`changes`) looks at
-# the files that changed, against the lists of .github/ci-paths.yml ("a change here runs CI"), and the heavy jobs run only when
+# the files that changed, against the lists in that job ("a change here runs CI"), and the heavy jobs run only when
 # something that a test reads, a build takes in, or CI itself changed. A job that is skipped passes in `ci-ok`; a job that failed or was
 # cancelled does not. So the number of shards can change without the ruleset. A push to main runs everything.
 # The runner of macOS (the sandbox, docs/DESIGN-macos-sandbox.md) runs when what the isolation is made of changes, and once a week.
@@ -22,10 +22,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Which of the jobs below have to run: the lists of .github/ci-paths.yml ("a change here runs CI"; a file in none of its lists fails the check
-  # below). It is the first job, and a job that failed here fails `ci-ok`.
+  # Which of the jobs below have to run. It is the first job, and a job that failed here fails `ci-ok`.
   #   push (main)        everything runs, whatever the lists say (a wrong list shows there)
-  #   pull_request       the files that changed, against the lists (dorny/paths-filter)
+  #   pull_request       the files that changed, against the lists below (dorny/paths-filter)
   #   schedule           only the macOS job; workflow_dispatch: everything
   # A pull request that the action cannot judge fails here (an empty answer must not skip the heavy jobs: the step `decide`, and `ci-ok`).
   changes:
@@ -42,17 +41,39 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      # whatever changed: every file of the repository is in a list (a new place that is in none would have its tests skipped without a word)
-      - name: Check the lists of the paths
-        run: |
-          python3 .github/scripts/ci-paths-check.py --self-test
-          python3 .github/scripts/ci-paths-check.py
+      # A change here runs CI; what is not here does not (README.md, docs/, renovate.json ...). When a new top-level directory is added, add it here.
+      # A file matches a filter when it matches one of its patterns and none of the ones that start with '!' (some-with-excludes).
       - id: paths
         if: github.event_name == 'pull_request'
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
           predicate-quantifier: some-with-excludes
-          filters: .github/ci-paths.yml
+          filters: |
+            code:
+              - 'go.mod'
+              - 'go.sum'
+              - 'cmd/**'
+              - 'internal/**'
+              - 'testdata/**'
+              - 'dogfood/**'
+              - 'extractor/**'
+              - '!extractor/*/README.md'
+              - 'bench/**'
+              - '!bench/**/README.md'
+              - '!bench/MISSES.md'
+              - '!bench/gitea-cve-paths.md'
+              - 'examples/**'
+              - '!examples/**/*.md'
+              - '.github/workflows/**'
+              - '.github/scripts/**'
+            isolation:
+              - 'internal/sandbox/**'
+              - 'cmd/rivus/isolate*.go'
+              - 'extractor/rust/**'
+              - '!extractor/*/README.md'
+              - 'go.mod'
+              - 'go.sum'
+              - '.github/workflows/ci.yml'
       - id: decide
         env:
           EVENT_NAME: ${{ github.event_name }}
