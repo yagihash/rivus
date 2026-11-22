@@ -68,6 +68,13 @@ func (p Pos) Position() Position {
 // (extractor/dart/lib/extract.dart, "syntax_error:"); a test holds the two to each other (cmd/rivus/dart_syntax_test.go).
 const SyntaxErrorPrefix = "syntax_error:"
 
+// DependencyNotLinkedPrefix starts the message of the load error that the Dart extractor writes (unread set, with the
+// directory of the dependency as the package) for a dependency file that is not read as the calls to it name it: it is
+// not resolved to a package: URI, or another package of the tree reads another version of the same dependency, so the
+// functions have the same IDs (extractor/dart/lib/extract.dart, "dependency_not_linked"). A test holds the two to each
+// other (cmd/rivus/dart_depcontext_test.go).
+const DependencyNotLinkedPrefix = "dependency_not_linked"
+
 // LoadError records something that could not be read: it maps to the
 // missing_source terminal kind.
 type LoadError struct {

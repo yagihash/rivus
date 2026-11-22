@@ -26,6 +26,12 @@ A shipped file that imports one of them reads it, as a dependency (ADR-062).
 The package needs its `dart pub get` done (and `build_runner` if it has generated
 code): that is what makes `package:` imports and `part` files resolve.
 
+`-C` may point at one package, or at the parent of several (no `pubspec.yaml` above them). In the second
+case a dependency is resolved by the `package_config.json` of the package that imports it, so its functions
+are named by `package:` URIs as with one package. A dependency that is still not (a `file:` URI), or that two
+packages of the tree read in different versions (the functions would have the same IDs), is said in
+`summary.unread`; point `-C` at one package, or run `dart pub get` in each package.
+
 Test: `RIVUS_DART="dart" go test -run TestDartExtractor ./cmd/rivus` (or
 `RIVUS_DART="mise exec dart@3.13.6 -- dart"`). The sample is `test/sample`: every
 flow the annotations (`@source(tag)`, `@sink(tag)`) declare is found, and no sink
