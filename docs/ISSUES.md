@@ -98,3 +98,5 @@
 | [#151](issues/151-model-diff-blind-bytes-runes.md) | 差分テスト(標準ライブラリ): 本体を読む側は、バイトとルーンを 1 つずつ扱う関数で、入力が結果に届く流れを落とす(数として止める) | 道具・ベンチ(本体の読みの盲点) | Go | 後回し | open | `bench/model-diff` の注釈 |
 | [#152](issues/152-model-diff-blind-reflect.md) | 差分テスト(標準ライブラリ): 本体を読む側は、reflect を通る書き込みを追えず、入力が書き込み先に届く流れを落とす | 道具・ベンチ(本体の読みの盲点) | Go | 後回し | open | `bench/model-diff` の注釈 |
 | [#153](issues/153-model-diff-blind-any-switch.md) | 差分テスト(標準ライブラリ): 本体を読む側は、`any` の型 switch を通る入力を追えず、結果に届く流れを落とす | 道具・ベンチ(本体の読みの盲点) | Go | 後回し | open | `bench/model-diff` の注釈 |
+| [#154](issues/154-model-diff-blind-map-conversion.md) | 差分テスト(標準ライブラリ): 本体を読む側は、マップ型の変換(`textproto.MIMEHeader(h)`)を通る書き込みを、元のマップに結ばない | 道具・ベンチ(本体の読みの盲点) | Go | 後回し | open | `bench/model-diff` の注釈 |
+| [#155](issues/155-body-default-map-lookup-key.md) | 差分テスト(標準ライブラリ): 本体を読む側は、マップの検索のキーが、見つけた値に流れると近似する(Header.Get / Values) | 道具・ベンチ(差分テストの A 側の近似) | Go | 後回し | open | `bench/model-diff` の注釈 |

@@ -223,7 +223,7 @@ propagators:
   - symbol: (*net/url.URL).Hostname
     flows: [{from: recv, to: result}]
   - symbol: (embed.FS).ReadFile
-    flows: [{from: recv, to: result0}]
+    flows: [{from: recv, to: result0}, {from: arg0, to: result1}]
   - symbol: (*os.File).WriteString
     pure: true
   - symbol: (*os.File).Write
