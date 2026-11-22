@@ -1,7 +1,7 @@
 # Writing models for rivus
 
 A guide for whoever writes a model (a rule file that says what a function without a body does with taint), by hand or with
-an AI. The sections below cover `pure`, `approximate`, `calls`, `parts`, and the rule that a row has to be hit.
+an AI. The sections below cover `pure`, `approximate`, `calls`, `parts`, `named`, and the rule that a row has to be hit.
 Not written yet: the basic shapes of `flows`, `sources`, `sinks` and `sanitizers`; `globals` with `holds` (ADR-056);
 `.content` (ADR-082); `read_impls`, `self_first` and `alias`. Until they are, read the built-in rule sets in
 `internal/model/builtin` and the loader in `internal/model/model.go` (it rejects what it does not know), and the
@@ -196,7 +196,8 @@ not the `Body`). A sink that takes the whole value reports a flow that goes only
   Matching is by the names **in order**: a name of the path is never skipped.
 * **A position in `args` or `recv` is dangerous whole**, and `parts` do not limit it. A sink with `parts` and no `args` reads only the
   positions of its parts (no `args` is **not** every argument, as it is for a sink without `parts`). A sink without `parts` is as it
-  was. Several rows of one symbol are added up.
+  was. Several rows of one symbol are added up (rows of the same category are one sink; rows of different categories are a sink each,
+  see 4a-1).
 * **What the finding says.** Taint that is in the field is a finding as any other. Taint in a field **beside** it (`Params`) is not a
   flow to the sink, and the sink is quiet. When the value does not tell which field the taint is in, the finding is **kept and carries
   `field_imprecision`**, with the `why`: `whole_value` (the whole value is tainted: a function that is modelled to return the request
@@ -254,6 +255,50 @@ field:
    and no `field_unresolved`; the fixed form (the value goes in by the bind parameters) that must be quiet; a decoy (the request is
    in another field of the same value) that must be quiet. The test also fails for a row that no case reaches.
 
+
+## 4a-1. A sink that is a named argument, and a symbol with several categories: `named`
+
+Dart's API takes its input by name (`Query(kind: x)`, `bucket.list(prefix: x)`). The extractor puts the named parameters after the
+positional ones **by name**, and a call that leaves one out holds nil there, so the position of `prefix` is that of the declaration
+(it moves when an override adds a parameter) and `args` cannot say it. Say the name:
+
+```yaml
+- symbol: package:gcloud/src/datastore_impl.dart#Query.new
+  named: [kind]                               # the argument `kind:` of the call, wherever it is
+  category: query
+- symbol: package:gcloud/storage.dart#Bucket.list
+  named: [prefix]
+  category: object_name
+- symbol: package:googleapis/pubsub/v1.dart#ProjectsSubscriptionsResource.create
+  parts:
+    - {arg: 0, field: pushConfig.pushEndpoint}
+    - {named: request, field: pushConfig.pushEndpoint}   # `named` in place of `arg`, in parts
+  category: ssrf
+- symbol: package:googleapis/pubsub/v1.dart#ProjectsSubscriptionsResource.create
+  args: [1]
+  category: resource_name                     # the same symbol, another category: a sink of its own
+```
+
+* `named` is a list of names (a part has one, `named:`), beside `args` and `recv`: a position by name. The short form (`named: [x]`
+  with `field:`) is one part. It is read from the call: the IR gives each operand of a call the name of the named parameter it is
+  for (`arg_names`, parallel to `args`; empty for a positional one and for the receiver), so it works for a function that has no
+  body (a dependency that is not read, a model).
+* **A call that does not pass the name has no such argument**, and the sink is not a site there (a sink with only `named` is not
+  every argument, as one without `args` is). Positions of `args` beside it are read as they are.
+* **A misspelt name is not silent.** A name that no call of the symbol in the program has makes the sink read the **whole** call,
+  and the analysis records `named_unresolved` (a misspelling, or a parameter that was renamed: read the output for it, as for
+  `field_unresolved`). A name that other calls pass is only absent from this one. The names a call carries are those of the
+  parameters of the callee as the extractor resolved it: a call whose callee did not resolve has none (a dynamic call through an
+  interface carries the names of the interface method). Write the two tests of 4 for a row with `named`: the name given (found), and
+  another argument given (quiet). `TestDartNamedArgumentSinks` (`cmd/rivus/dart_named_test.go`) is the shape.
+* Go and Rust have no named arguments: `arg_names` is empty, and a `named` row there is `named_unresolved` at a call of the symbol
+  (read whole): do not write one in a model of Go or Rust.
+* **A symbol with rows of several categories** has a site, and so a finding, for each category (one call is then several sites,
+  and findings from the same source can come out of it, one per category). Before, the rows were one site that was reported under
+  the category of the first row. **A row that reads the same positions as an earlier row of another category is not a sink of
+  its own** (the same `args`, `recv`, `named`, `parts`): a project row for a symbol that a built-in row already names is one
+  sink, under the first category, as it was. `named` is for `sinks` only: `flows` and `sources` still name positions (a flow that takes a named
+  argument is written by position: the declared one, until `flows` can say `named`).
 
 ## 4a. Cutting a dependency with a model (not reading its body)
 

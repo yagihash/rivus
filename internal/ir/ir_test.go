@@ -108,6 +108,7 @@ func TestValidateRejects(t *testing.T) {
 		{"block id", func(f *Func) { f.Blocks[1].ID = 5 }, "has the id"},
 		{"unknown op", func(f *Func) { f.Blocks[0].Instrs[1].Op = "frobnicate" }, "unknown op"},
 		{"call without callee", func(f *Func) { f.Blocks[1].Instrs[0].Callee = nil }, "no callee"},
+		{"argument names", func(f *Func) { f.Blocks[1].Instrs[0].ArgNames = []string{"", ""} }, "argument names"},
 		{"argument positions", func(f *Func) { f.Blocks[1].Instrs[0].ArgPos = []Pos{{}, {}} }, "argument positions"},
 		{"entry is not a root", func(f *Func) { f.Roots = []BlockID{3} }, "entry block is not a root"},
 		{"declared parameter without a param instruction", func(f *Func) { f.Params = append(f.Params, Param{Name: "y"}) }, "has 0 param instructions"},

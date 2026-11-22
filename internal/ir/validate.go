@@ -152,6 +152,9 @@ func validateInstr(in Instr, nparams int, w string, local func(LocalID, string) 
 	if len(in.ArgPos) != 0 && len(in.ArgPos) != len(in.Args) {
 		return fmt.Errorf("%s: %d argument positions for %d arguments", w, len(in.ArgPos), len(in.Args))
 	}
+	if len(in.ArgNames) != 0 && len(in.ArgNames) != len(in.Args) {
+		return fmt.Errorf("%s: %d argument names for %d arguments", w, len(in.ArgNames), len(in.Args))
+	}
 	need := func(ok bool, what string) error {
 		if !ok {
 			return fmt.Errorf("%s: %s", w, what)
