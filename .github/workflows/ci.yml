@@ -119,6 +119,7 @@ jobs:
               - '!bench/dart-corpus/**'
               - '!bench/dart-pub/**'
               - '!bench/dart-grpc/**'
+              - '!bench/dart-gcp/**'
               - '!bench/**/README.md'
               - '!bench/MISSES.md'
               - '!bench/gitea-cve-paths.md'

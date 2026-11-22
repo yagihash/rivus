@@ -16,7 +16,7 @@ import (
 // read a project never download or build anything for themselves.
 func runSetup(argv []string) error {
 	if len(argv) == 0 || argv[0] != "rust" {
-		return fmt.Errorf("usage: rivus setup rust [-source <directory of extractor/rust>] [-y]")
+		return fmt.Errorf("usage: rivus setup rust -source <directory of extractor/rust> [-y]")
 	}
 	fs := flag.NewFlagSet("setup rust", flag.ContinueOnError)
 	source := fs.String("source", "", "the directory of the source of the Rust extractor (extractor/rust of the repository of rivus). Required: it is built and run on this machine, outside the sandbox, so it is never taken from the directory you are in (that may be a project that you are reading)")

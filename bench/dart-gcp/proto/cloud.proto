@@ -1,0 +1,42 @@
+// The generated code (lib/src/generated/cloud.*.dart) was written by hand in the shape of
+// protoc_plugin's output. protoc was not run. All fields are strings.
+syntax = "proto3";
+package bench.cloud;
+
+service Gcloud {
+  rpc ReadObject(ObjectRequest) returns (CloudReply);
+  rpc ReadObjectFixed(ObjectRequest) returns (CloudReply);
+  rpc BucketInfo(ObjectRequest) returns (CloudReply);
+  rpc Publish(TopicRequest) returns (CloudReply);
+  rpc PublishFixed(TopicRequest) returns (CloudReply);
+  rpc Query(SqlRequest) returns (CloudReply);
+  rpc QueryFixed(SqlRequest) returns (CloudReply);
+}
+service Apis {
+  rpc GetObject(ObjectRequest) returns (CloudReply);
+  rpc GetObjectFixed(ObjectRequest) returns (CloudReply);
+  rpc PublishTopic(TopicRequest) returns (CloudReply);
+  rpc PublishTopicFixed(TopicRequest) returns (CloudReply);
+  rpc RunQuery(SqlRequest) returns (CloudReply);
+  rpc RunQueryFixed(SqlRequest) returns (CloudReply);
+}
+service Json {
+  rpc InsertBucket(ObjectRequest) returns (CloudReply);
+  rpc PatchObject(ObjectRequest) returns (CloudReply);
+  rpc InsertJob(SqlRequest) returns (CloudReply);
+  rpc CreateTopic(TopicRequest) returns (CloudReply);
+  rpc Mask(TopicRequest) returns (CloudReply);
+}
+service ManyApis {
+  rpc Inspect(ObjectRequest) returns (CloudReply);
+}
+service CloudStorage {
+  rpc Download(ObjectRequest) returns (CloudReply);
+  rpc DownloadFixed(ObjectRequest) returns (CloudReply);
+  rpc Upload(ObjectRequest) returns (CloudReply);
+  rpc UploadFixed(ObjectRequest) returns (CloudReply);
+}
+message ObjectRequest { string bucket = 1; string object = 2; string content = 3; string key = 4; }
+message TopicRequest { string topic = 1; string message = 2; string key = 3; }
+message SqlRequest { string kind = 1; string value = 2; string sql = 3; string key = 4; }
+message CloudReply { string status = 1; string body = 2; }

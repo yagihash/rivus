@@ -14,29 +14,56 @@ concurrency:
 jobs:
   # リリース PR を作る・更新する。マージされたら、タグと GitHub Release を作る。
   # CHANGELOG.md は、tagpr がリリース PR の中で更新する（.tagpr の changelog = true）。
-  # トークンは rivus だけに書けるもの（ghmint の rivus/.github/ghmint/tagpr.rego）。
-  # App のトークンで作るので、リリース PR でも CI が走り、コミットは Verified になる。
+  #
+  # トークンは、実行ごとに使い分ける（tagpr は、渡されたトークンを 1 つ使うだけ。選ぶのは、このワークフロー）。
+  #   - リリース PR を作る・更新する実行（ふつうの push）: このワークフローの GITHUB_TOKEN。
+  #     GITHUB_TOKEN で作った・更新した PR の CI は、承認待ちで止まる（書き込みの権限を持つ人が
+  #     "Approve workflows to run" を押すと実行される）。リリース PR は main へのマージのたびに更新されるので、
+  #     そのたびに全部のテストを実行すると、ほかの PR とジョブを取り合う。リリースするときに承認して、
+  #     そこで初めて全部のテストを実行する。ci-ok は必須のチェックなので、成功するまでマージできない。
+  #   - タグと Release を作る実行（リリース PR がマージされた直後の push）: ghmint のトークン
+  #     （rivus/.github/ghmint/tagpr.rego）。v* のタグを作れるのは、tag の ruleset の例外に入っている
+  #     このアプリだけ。GITHUB_TOKEN では作れない。
+  # 判定を誤って GITHUB_TOKEN でタグを作ろうとした場合は、ruleset に拒否されて、この実行が失敗する
+  # （手動で実行し直す。workflow_dispatch でも、main の先頭がリリース PR のマージなら、同じ判定になる）。
+  # コミットは tagpr が API で作るので、どちらのトークンでも GitHub の署名が付く（main の ruleset は署名を必須にしている）。
+  # リポジトリの設定 "Allow GitHub Actions to create and approve pull requests" が必要。
   tagpr:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      id-token: write
+      id-token: write # ghmint（タグと Release を作る実行だけ）
+      contents: write # リリース PR のブランチ（GITHUB_TOKEN の実行）
+      pull-requests: write # リリース PR の作成と更新、ラベル（GITHUB_TOKEN の実行）
     outputs:
       tag: ${{ steps.tagpr.outputs.tag }}
     steps:
+      # このコミットが、tagpr のリリース PR（ブランチ tagpr-from-*、ラベル tagpr）のマージか。
+      # tagpr 自身の判定（マージ済みのリリース PR があれば、タグを打つ）と同じものを、先に見る。
+      - id: mode
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          n=$(gh api "repos/${REPO}/commits/${SHA}/pulls" --jq '[.[] | select(.merged_at != null and (.head.ref | startswith("tagpr-from-")) and ([.labels[].name] | index("tagpr")))] | length')
+          if [ "$n" -gt 0 ]; then echo "release=true" >> "$GITHUB_OUTPUT"; else echo "release=false" >> "$GITHUB_OUTPUT"; fi
+          echo "release PR merged at this commit: $n"
       - id: token
+        if: steps.mode.outputs.release == 'true'
         uses: yagihash/ghmint-action@be57533eef7f69550d06f0c93eede5589158281a # v1.0.0
         with:
           scope: yagihash/rivus
           policy: tagpr
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          token: ${{ steps.token.outputs.token }}
+          token: ${{ steps.token.outputs.token || github.token }}
           persist-credentials: false
       - id: tagpr
         uses: Songmu/tagpr@047aec4b6c0ce166f52958b5a97f5a3d927fd65b # v1.22.0
         env:
-          GITHUB_TOKEN: ${{ steps.token.outputs.token }}
+          GITHUB_TOKEN: ${{ steps.token.outputs.token || github.token }}
 
   # タグが打たれたときだけ、tap の formula の url と sha256 を書き換える。
   # トークンは homebrew-tap だけに書けるもの（ghmint の homebrew-tap/.github/ghmint/bump-from-rivus.rego）。
