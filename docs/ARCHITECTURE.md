@@ -754,7 +754,7 @@ rivus models coverage ./...
   - 規則は「**全部たどれたときだけ絞る**」。絞ると流れを失いうるが、作り出すことはない。たどれない物（規則のない命令、構造体のフィールド、呼び出しの結果、グローバル、トレイトオブジェクト、呼び出し元が全部は分からない引数、上限）に達したら、候補を全部残す。
   - 引数をたどるときは、呼び出し元が全部読まれていることが条件。`Func.Private`（`pub` がない）か、**閉じた世界**（起点があり、外からシンボルで呼べる関数がなく、extractor が `caller_marks` を付けた）。閉じた世界は前提を 1 つ入れるので、絞った不確実性に `basis: closed_world_entry` を付けて示す（「起点のあるプログラムとして読んだので、外からの呼び出しは数えていない」）。絞る前の候補数は `narrowed_from`。
   - Dart の動的な呼び出しへの同じ絞り込みは、まだない（設計だけ）。
-- **関数値のパスで補う候補（`-resolve-func-values`、既定 off）:** 候補が 0 件の呼び出しに、`valuecalls` ではなく、関数値を汚染の要素として運ぶ別の走り（`taint.ResolveFuncValues`）が、候補を補う。補った呼び出しは `unresolved_callee` の注記を残す（詳細は `func_values_supplemented:`）。設計と指標は [DESIGN-callouts.md](DESIGN-callouts.md) の 5.6。
+- **関数値のパスで補う候補（`-resolve-func-values`、既定 off）:** 候補が 0 件の呼び出しに、`valuecalls` ではなく、関数値を汚染の要素として運ぶ別の走り（`taint.ResolveFuncValues`）が、候補を補う。補った呼び出しは `unresolved_callee` の注記を残す（詳細は `func_values_supplemented:`）。`rivus index` で on のときは、補ってから索引を書く（補った呼び出しは `meta` の `func_values_supplemented`。キーにフラグが入る）。`-timeout` は補う回の全部と通常のパスで共有する。設計と指標は [DESIGN-callouts.md](DESIGN-callouts.md) の 5.6。
 
 ## 14. `parts`（sink が引数のフィールドを指定する）
 

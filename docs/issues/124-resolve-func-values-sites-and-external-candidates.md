@@ -7,6 +7,10 @@
 
 修正の案: (1) 補った候補の分だけ、列挙を足す(`FuncValueSites` と同じ要領で、補ったあとに、`sg` から作る)。(2) `external` の分岐で、`ValueSupplemented` の呼び出しには注記を足す。
 
+## 追記(2026-11-22)
+
+補った辺がグラフの索引に入らない、という限り(この課題の番号つきの 2 つとは別)は直した。フラグ on の `rivus index` が、補ってから索引を書く(docs/DESIGN-callouts.md 5.6)。この課題の (1) サイトの列挙と、(2) 本体のない候補の注記は、まだ。
+
 ## zoo のセル(確認: 2026-11-22)
 
 sink の関数を値にして呼ぶ形を、zoo の `F/dyn/sink-as-value`(ローカル変数)、`F/dyn/sink-as-value-map`(マップの定数キー)、`F/dyn/sink-as-value-field`(構造体のフィールド)に足した。

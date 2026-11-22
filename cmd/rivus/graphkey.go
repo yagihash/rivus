@@ -120,6 +120,11 @@ func (k *keyCtx) compute() (*keyResult, error) {
 	cfg["flags.no-builtin-rules"] = strconv.FormatBool(o.noBuiltin)
 	cfg["flags.no-project-rules"] = strconv.FormatBool(o.noProject)
 	cfg["flags.deterministic-only"] = strconv.FormatBool(o.deterministic)
+	if o.resolveFuncValues {
+		// the calls that got candidates are edges of the file: an index with the flag is not one without it. Set only when
+		// on, so that the key of an index made without it is what it was.
+		cfg["flags.resolve-func-values"] = "true"
+	}
 	allow := append([]string(nil), o.allowDepsUnder...)
 	sort.Strings(allow)
 	cfg["flags.allow-deps-under"] = strings.Join(allow, "\n")
