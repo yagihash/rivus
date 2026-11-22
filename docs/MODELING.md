@@ -370,6 +370,22 @@ A sink has a `category`: what kind of harm the value does there. It is a free st
 
 A new category is made when no other one fits (not for a new library). It is added to this table, and to the decision of the product (`docs/GCP-MODELS.md`, judgement E, for `resource_name`). One symbol has one category (#140).
 
+## 4c. Which versions the rows were checked against: `verified_versions`
+
+A rule file (a built-in one, or yours) records the versions of the packages that its rows were checked against ([DESIGN-package-models.md](DESIGN-package-models.md), 6.7):
+
+```yaml
+verified_versions:
+  - package: shelf_router        # Go: the module path; Dart: the pub package; Rust: the crate
+    versions: ">=1.1.0 <2.0.0"   # what was checked: 1.1.5, v1.1.5, ^1.1.0, ~1.1, or comparators (blank or comma between)
+    checked_with: 1.1.5          # optional: the one version that was read; inside `versions`
+    checked: 2026-11-22          # the day, YYYY-MM-DD (not in the future)
+```
+
+- A record, nothing more: it changes no row and no result. Comparing it with the versions a project uses (the lock files) is not done yet.
+- The file is refused when `package` is empty or a pattern (`/...`), `versions` is empty or not a version or a comparator, `checked` is missing or not a day, `checked_with` is not one version or is outside `versions`, a key is unknown, or a package is recorded twice in the file. The same package in two files is kept as two records. It is not checked that a row names the package.
+- `rivus models versions [-rules FILE] [-no-builtin-rules]` lists the records (JSON: `package`, `versions`, `checked_with`, `checked`, `source`).
+
 ## 5. A row has to be hit
 
 A row whose key is not the name the extractor writes never matches a call, and nothing says so: the call is read as an

@@ -210,6 +210,10 @@ source から sink への経路を、全部探します。主な作業のコマ�
   - `rematched` は、式が変わって構造の鍵だけで一致した、または同じ式が関数の中の別の位置に移った、という意味です。`ambiguous` は、候補が複数あります(`candidates`)。どちらも、`previous_snippet` と今の `snippet` を見比べて、同じ箇所かを確認します。
   - `-detail summary` の出力から作ったブックマークでも動きますが、コードの見比べができません。既定の出力から作ります。
 
+### `rivus models versions`
+
+モデルのファイルが記録した、確認したバージョン(`verified_versions`。書式は [MODELING.md](MODELING.md) 4c)を JSON で出します。`-rules <file>`、`-no-builtin-rules` が使えます。出力は `verified_versions[]`(`package`、`versions`、`checked_with`、`checked`、`source`)。記録は、利用者のプロジェクトのバージョンとの照合には、まだ使いません。
+
 ### `rivus models coverage`
 
 モデルのない関数のうち、どれにモデルを書くと効果が大きいかを、効果の大きい順に出します。

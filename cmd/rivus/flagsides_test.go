@@ -8,7 +8,7 @@ import (
 
 // flagCommands are the commands that have flags (the list that the tests of the flags and of -h go through).
 var flagCommands = [][]string{
-	{"analyze"}, {"index"}, {"query"}, {"resolve"}, {"sites"}, {"models", "coverage"}, {"setup", "rust"}, {"debug", "extract"},
+	{"analyze"}, {"index"}, {"query"}, {"resolve"}, {"sites"}, {"models", "coverage"}, {"models", "versions"}, {"setup", "rust"}, {"debug", "extract"},
 	{"graph", "info"}, {"graph", "callers"}, {"graph", "callees"}, {"graph", "path"}, {"graph", "impls"}, {"graph", "dispatchers"},
 }
 
