@@ -1,17 +1,12 @@
 // Package sql_conn is a cell of the zoo.
 //
 // @cell(F/call/sql-conn)
-// @shape: the query string given to a connection taken out of the pool (sql.Conn) or to Tx.Prepare is a sink, as it is for sql.DB; the driver is a fake that has no database.
-// The cell has no vuln case: a sink of the standard library cannot be recorded at run time, and a manual mark in a new cell needs the approval of the user. That the rows
-// find the sink is checked by `make model-diff PKG=database/sql` (the source in the query string gives a finding, in a bound argument it does not). This cell is what calls the rows
-// (TestBuiltinRowsAreHitByTheZoo) with a cleaned string and with a constant.
+// @shape: the query string given to a connection taken out of the pool (sql.Conn) or to Tx.Prepare is a sink, as it is for sql.DB; the driver (mark.FakeDB) has no database and hands the string it is asked to prepare to the recording sink, so the run sees the standard library's sink at the line of its call in the cell
 package sql_conn
 
 import (
 	"context"
 	"database/sql"
-	"database/sql/driver"
-	"errors"
 
 	"zoo/mark"
 )
@@ -22,51 +17,34 @@ func init() {
 	mark.Case("F/call/sql-conn/decoy", decoy)
 }
 
-var errNoDB = errors.New("no database")
-
-// the connector hands out a connection that takes no statement: the case builds the calls, and the driver says "no database"
-type fakeConnector struct{}
-
-func (fakeConnector) Connect(context.Context) (driver.Conn, error) { return fakeConn{}, nil }
-func (fakeConnector) Driver() driver.Driver                        { return nil }
-
-type fakeConn struct{}
-
-func (fakeConn) Prepare(string) (driver.Stmt, error) { return nil, errNoDB }
-func (fakeConn) Close() error                        { return nil }
-func (fakeConn) Begin() (driver.Tx, error)           { return fakeTx{}, nil }
-
-type fakeTx struct{}
-
-func (fakeTx) Commit() error   { return nil }
-func (fakeTx) Rollback() error { return nil }
-
 func conn() (*sql.Conn, *sql.Tx) {
-	db := sql.OpenDB(fakeConnector{})
+	db := mark.FakeDB()
 	c, _ := db.Conn(context.Background())
 	tx, _ := db.BeginTx(context.Background(), nil)
 	return c, tx
 }
 
-// vuln: the query string is a constant and the source is a bound argument, so the calls of the connection are no sink here; the sink is the mark's, after them
-// (the case needs a sink that the harness can record, and the standard library's cannot be).
 func vuln() { // @vuln
-	c, _ := conn()
-	v := mark.Src("call-sql-conn-vuln") // @source(call-sql-conn-vuln)
-	_, _ = c.QueryContext(context.Background(), "select ?", v)
-	mark.SinkSQL(v) // @sink(call-sql-conn-vuln)
+	c, tx := conn()
+	ctx := context.Background()
+	_, _ = c.QueryContext(ctx, mark.Src("call-sql-conn-vuln-q"))     // @source(call-sql-conn-vuln-q) @sink(call-sql-conn-vuln-q)
+	_ = c.QueryRowContext(ctx, mark.Src("call-sql-conn-vuln-r"))     // @source(call-sql-conn-vuln-r) @sink(call-sql-conn-vuln-r)
+	_, _ = c.ExecContext(ctx, mark.Src("call-sql-conn-vuln-e"))      // @source(call-sql-conn-vuln-e) @sink(call-sql-conn-vuln-e)
+	_, _ = c.PrepareContext(ctx, mark.Src("call-sql-conn-vuln-p"))   // @source(call-sql-conn-vuln-p) @sink(call-sql-conn-vuln-p)
+	_, _ = tx.Prepare(mark.Src("call-sql-conn-vuln-tp"))             // @source(call-sql-conn-vuln-tp) @sink(call-sql-conn-vuln-tp)
+	_, _ = tx.PrepareContext(ctx, mark.Src("call-sql-conn-vuln-tc")) // @source(call-sql-conn-vuln-tc) @sink(call-sql-conn-vuln-tc)
 }
 
 func fixed() { // @fixed
 	c, tx := conn()
 	ctx := context.Background()
 	q := mark.CleanSQL(mark.Src("call-sql-conn-fixed"))
-	_, _ = c.QueryContext(ctx, q)
-	_ = c.QueryRowContext(ctx, q).Err()
-	_, _ = c.ExecContext(ctx, q)
-	_, _ = c.PrepareContext(ctx, q)
-	_, _ = tx.Prepare(q)
-	_, _ = tx.PrepareContext(ctx, q)
+	_, _ = c.QueryContext(ctx, q)       // @sink(none)
+	_ = c.QueryRowContext(ctx, q).Err() // @sink(none)
+	_, _ = c.ExecContext(ctx, q)        // @sink(none)
+	_, _ = c.PrepareContext(ctx, q)     // @sink(none)
+	_, _ = tx.Prepare(q)                // @sink(none)
+	_, _ = tx.PrepareContext(ctx, q)    // @sink(none)
 }
 
 func decoy() { // @decoy
