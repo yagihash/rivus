@@ -179,7 +179,7 @@ Future<void> extract(String root, StringSink sink,
           final first = packageDirOf.putIfAbsent(name, () => dir);
           if (first != dir) {
             if (notSaid.add(dir)) {
-              out.loadError(dir, '$_depNotLinked: $name is read from another directory by another package of the tree ($first), and the functions of the two have the same IDs, so this one is not analysed; use the same version of $name in the packages, or point -C at one package', unread: true);
+              out.loadError(dir, '$_depNotLinked: $name is read from another directory by another package of the tree, and the functions of the two have the same IDs: the one in $first is read and analysed (the calls of every package reach it), and this one is not; use the same version of $name in the packages, or point -C at one package', unread: true);
             }
             continue;
           }
