@@ -67,6 +67,7 @@
 | [#148](issues/148-linux-rust-extractor-without-isolation.md) | Linux(CI、クラウドのモデル作成)での Rust の extractor の扱い(隔離なしでは、取得したクレートを実行しない) | 道具(重さ: 中) | Rust | 0 / 3 | open | - |
 | [#156](issues/156-override-method-params-source.md) | 利用者がオーバーライドするメソッド(`Interceptor.onRequest` など)を、ライブラリが呼ぶ形のモデルの書式がない | サイレントな見逃し(書式の不足) | 全 | 2 / 3 | open | - |
 | [#157](issues/157-dart-generic-method-model-diff.md) | Dart のジェネリクスのメソッド(`get<T>`)が、差分テストで検証できない | 道具(重さ: 中) | Dart | 3 | open | - |
+| [#158](issues/158-service-client-sources-review.md) | 既存のサービスのクライアントのモデル(`dart-gcp` など)を、「その値を誰が書いたか」の基準(ADR-108)で見直す(候補: Pub/Sub のメッセージの本文) | モデル(重さ: 中) | 全 | 1 | open | - |
 
 ## 閉じたもの
 
