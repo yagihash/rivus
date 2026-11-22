@@ -236,6 +236,14 @@ Rust を読むための、固定した nightly のツールチェーンと extra
 - **フラグ**: `-source <dir>`(必須。rivus のリポジトリの `extractor/rust`)、`-y`(ダウンロードの前に聞かない)。
 - **落とし穴**: ツールチェーン(約 1 GB)のダウンロードと、extractor のビルドを、**サンドボックスの外で**行います。利用者に頼まれたときだけ実行してください。`-source` に、解析の対象のディレクトリを指定してはいけません。
 
+### `rivus completion zsh`
+
+zsh の補完のスクリプトを標準出力に書きます。解析はせず、extractor もネットワークも使いません。コマンド、サブコマンド、フラグ、決まった値(`-lang`、`-detail`、`-role` など)の一覧は、rivus 自身の表から作られるので、コマンドやフラグが増えても、同じコマンドで作り直すだけで追従します。
+
+- **使い方**: `source <(rivus completion zsh)`(`compinit` のあと)、または `rivus completion zsh > "${fpath[1]}/_rivus"` で保存します。
+- 診断と調整のフラグも補完に出ます。説明に `(diagnostic)` が付きます。
+- `rivus completion`(引数なし)は、使えるシェルの一覧を標準エラーに出して、終了コード 2 で終わります。
+
 ### `rivus version`
 
 バージョン、コミット、OS とアーキテクチャ、Go のバージョンを 1 行で出します(`rivus --version` も同じ)。

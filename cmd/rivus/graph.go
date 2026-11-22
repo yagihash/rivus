@@ -166,7 +166,7 @@ func graphLangs(g *sg.Program) []string {
 // flagValues are the analysis flags as the file records them (for a reader).
 func (o *analyzeOpts) flagValues(patterns []string) map[string]string {
 	lang := o.lang
-	if (lang == "" || lang == "auto") && o.langsDone && o.langsErr == nil && (has(o.langsOut, langRust) || o.skippedLang(langRust)) {
+	if (lang == "" || lang == langAuto) && o.langsDone && o.langsErr == nil && (has(o.langsOut, langRust) || o.skippedLang(langRust)) {
 		// A Rust project in the directory made the answer of a question (or of -yes): the file holds what the answer
 		// was, so that a later question about it (graph -C) neither asks again nor holds the file against another answer.
 		lang = strings.Join(o.langsOut, ",")
@@ -236,25 +236,6 @@ type layerStatus struct {
 
 const maxReasons = 20
 
-func runGraph(args []string) error {
-	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" {
-		fmt.Print(graphUsage)
-		if len(args) == 0 {
-			os.Exit(2)
-		}
-		return nil
-	}
-	switch args[0] {
-	case "info":
-		return runGraphInfo(args[1:])
-	case "callers", "callees", "path", "impls", "dispatchers":
-		return runGraphQuery(args[0], args[1:])
-	}
-	fmt.Fprintf(os.Stderr, "rivus: unknown graph command %q\n\n%s", args[0], graphUsage)
-	os.Exit(2)
-	return nil
-}
-
 const graphUsage = `rivus graph - search the call graph saved by "rivus index"
 
 It speaks of calls (who calls whom), not of the flow of data (what reaches what):
@@ -316,18 +297,31 @@ that was left out is in "omitted". A call through an interface or a function val
 has "kind" and "candidates" (how many functions the call may reach).
 `
 
+// graphInfoCmd is "rivus graph info".
+type graphInfoCmd struct {
+	o     analyzeOpts
+	graph *string
+}
+
+func graphInfoFlags(fs *flag.FlagSet) *graphInfoCmd {
+	c := &graphInfoCmd{}
+	c.o.register(fs)
+	c.graph = fs.String("graph", "", "the graph file (default: the cache of -C)")
+	usual(fs, "graph")
+	kind(fs, "file", "graph")
+	return c
+}
+
 func runGraphInfo(args []string) error {
 	fs := flag.NewFlagSet("graph info", flag.ExitOnError)
-	var o analyzeOpts
-	o.register(fs)
-	graph := fs.String("graph", "", "the graph file (default: the cache of -C)")
-	usual(fs, "graph")
+	c := graphInfoFlags(fs)
 	prepareFlags(fs, args)
 	fs.Parse(args)
+	o, graph := &c.o, c.graph
 	if *graph == "" && !o.dirSet {
 		return fmt.Errorf("graph info needs -graph <file>, or -C <dir> to find the file in the cache")
 	}
-	path, err := graphFile(*graph, &o)
+	path, err := graphFile(*graph, o)
 	if err != nil {
 		return err
 	}
@@ -351,7 +345,7 @@ func runGraphInfo(args []string) error {
 		return writeJSON(os.Stdout, out)
 	}
 	adoptStoredFlags(fs, info.Flags)
-	if err := verifySnapshot(db, path, &o, fs.Args(), &out.Snapshot); err != nil {
+	if err := verifySnapshot(db, path, o, fs.Args(), &out.Snapshot); err != nil {
 		return err
 	}
 	return writeJSON(os.Stdout, out)

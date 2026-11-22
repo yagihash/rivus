@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/yagihash/rivus/internal/frontend/goir"
@@ -63,7 +64,7 @@ func (o *analyzeOpts) languages() ([]string, error) {
 }
 
 func (o *analyzeOpts) resolveLanguages() ([]string, error) {
-	if o.lang == "" || o.lang == "auto" {
+	if o.lang == "" || o.lang == langAuto {
 		langs := detectLangs(o.dir)
 		// Reading a Rust project builds it: cargo runs its build scripts and its proc macros. A Cargo.toml that happens to
 		// be in the directory is not a request for that, so it is asked (autoRust); Go runs `go list`, which runs cgo and
@@ -96,12 +97,10 @@ func (o *analyzeOpts) resolveLanguages() ([]string, error) {
 	var out []string
 	for _, l := range strings.Split(o.lang, ",") {
 		l = strings.TrimSpace(l)
-		switch l {
-		case langGo, langDart, langRust:
-			out = append(out, l)
-		default:
-			return nil, fmt.Errorf("-lang: unknown language %q (go, dart, rust, auto)", l)
+		if !slices.Contains(languageNames, l) {
+			return nil, fmt.Errorf("-lang: unknown language %q (%s)", l, orList(langValues, false))
 		}
+		out = append(out, l)
 	}
 	return out, nil
 }
@@ -417,7 +416,7 @@ func (o *analyzeOpts) loadLangs(langs []string, patterns []string, rules *model.
 			var err error
 			if p, err = o.runExtractor(lang); err != nil {
 				var missing *extractorMissingError
-				if (o.lang != "" && o.lang != "auto") || !errors.As(err, &missing) {
+				if (o.lang != "" && o.lang != langAuto) || !errors.As(err, &missing) {
 					return nil, err
 				}
 				// found by its marker file, not asked for, and not installed: a

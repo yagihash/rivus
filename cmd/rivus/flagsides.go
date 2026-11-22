@@ -15,11 +15,16 @@ import (
 // The kind is set beside the definition of the flags, by usual(fs, names...) or diagnostic(fs, names...). A flag that is in neither, or in
 // both, stops the command when it is run (and TestEveryFlagHasOneSide), so a new flag cannot be added without deciding its side.
 
-const helpAllFlag = "help-all"
+const (
+	helpAllFlag  = "help-all"
+	helpAllUsage = "with -h: also list the flags for diagnosis and tuning"
+)
 
 type flagSides struct {
 	usual, diag map[string]bool
-	all         bool
+	// kinds is what the value of a flag is ("dir", "file", "enum:<name>"), for the completion; a flag without one has no value completed.
+	kinds map[string]string
+	all   bool
 	// header, if set, is printed by -h in place of "Usage of <name>:".
 	header string
 }
@@ -29,7 +34,7 @@ var flagSideOf = map[*flag.FlagSet]*flagSides{}
 func sidesOf(fs *flag.FlagSet) *flagSides {
 	s := flagSideOf[fs]
 	if s == nil {
-		s = &flagSides{usual: map[string]bool{}, diag: map[string]bool{}}
+		s = &flagSides{usual: map[string]bool{}, diag: map[string]bool{}, kinds: map[string]string{}}
 		flagSideOf[fs] = s
 	}
 	return s
@@ -46,6 +51,14 @@ func usual(fs *flag.FlagSet, names ...string) {
 func diagnostic(fs *flag.FlagSet, names ...string) {
 	for _, n := range names {
 		sidesOf(fs).diag[n] = true
+	}
+}
+
+// kind says what the value of flags is, for the completion: "dir", "file", or "enum:<name>" (a value of fixed set, enumFlags). A flag without a
+// kind has no value completed.
+func kind(fs *flag.FlagSet, k string, names ...string) {
+	for _, n := range names {
+		sidesOf(fs).kinds[n] = k
 	}
 }
 
@@ -69,11 +82,21 @@ func prepareFlags(fs *flag.FlagSet, args []string) {
 			bad = append(bad, n+" (not a flag)")
 		}
 	}
+	for n, k := range s.kinds {
+		if fs.Lookup(n) == nil {
+			bad = append(bad, n+" (not a flag)")
+		}
+		if e, ok := strings.CutPrefix(k, "enum:"); ok {
+			if _, known := enumFlags[e]; !known {
+				bad = append(bad, n+" (kind "+k+": no such set of values)")
+			}
+		}
+	}
 	if len(bad) > 0 {
 		sort.Strings(bad)
 		panic(fmt.Sprintf("rivus: %s: flags without exactly one side (usual or diagnostic): %s", fs.Name(), strings.Join(bad, ", ")))
 	}
-	fs.Bool(helpAllFlag, false, "with -h: also list the flags for diagnosis and tuning")
+	fs.Bool(helpAllFlag, false, helpAllUsage)
 	usageOf = fs
 	fs.Usage = printUsage
 	help := false

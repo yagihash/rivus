@@ -19,6 +19,9 @@ const (
 	RoleSink   = "sink"
 )
 
+// Roles are the roles of a site: the one list that the check of "rivus sites -role", its help and the completion read.
+var Roles = []string{RoleSource, RoleSink}
+
 // Site is one place where a rule matches.
 type Site struct {
 	ID          string            `json:"id"`

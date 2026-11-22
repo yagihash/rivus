@@ -12,7 +12,7 @@ import (
 // the whole suite into a green run of skipped tests.
 func skipOrFail(t *testing.T, name string) {
 	t.Helper()
-	require := "RIVUS_REQUIRE_" + strings.TrimPrefix(name, "RIVUS_")
+	require := "RIVUS_REQUIRE_" + strings.ToUpper(strings.TrimPrefix(name, "RIVUS_"))
 	if os.Getenv(require) == "1" {
 		t.Fatalf("%s is not set, and %s=1 says that the test must run", name, require)
 	}

@@ -26,12 +26,16 @@ sources:
     params: [0]
     labels: [user_input]
   - kind: param
-    symbol: github.com/yagihash/rivus/cmd/rivus.runModels
+    symbol: github.com/yagihash/rivus/cmd/rivus.runModelsCoverage
     params: [0]
     labels: [user_input]
   - kind: param
-    symbol: github.com/yagihash/rivus/cmd/rivus.runGraph
+    symbol: github.com/yagihash/rivus/cmd/rivus.runGraphInfo
     params: [0]
+    labels: [user_input]
+  - kind: param
+    symbol: github.com/yagihash/rivus/cmd/rivus.runGraphQuery
+    params: [1]
     labels: [user_input]
   - kind: param
     symbol: github.com/yagihash/rivus/cmd/rivus.runExtract

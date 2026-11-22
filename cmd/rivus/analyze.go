@@ -85,7 +85,7 @@ type analyzeOpts struct {
 // registerLanguages adds the flags that say which languages are read and how (the Rust extractor runs under a sandbox). The commands that
 // read the code of a directory (analyze, index, sites, ...) have them.
 func (o *analyzeOpts) registerLanguages(fs *flag.FlagSet) {
-	fs.StringVar(&o.lang, "lang", "auto", "languages to read: auto (what the directory holds: go.mod / go.work, pubspec.yaml, Cargo.toml; a Rust project is read after a question [Y/n] on the terminal, or with -yes, because reading it builds it; where there is no sandbox it is not read), or go, dart, rust, separated by commas (-lang rust asks nothing). The answer makes a different index")
+	fs.StringVar(&o.lang, "lang", langAuto, "languages to read: "+langAuto+" (what the directory holds: go.mod / go.work, pubspec.yaml, Cargo.toml; a Rust project is read after a question [Y/n] on the terminal, or with -yes, because reading it builds it; where there is no sandbox it is not read), or "+strings.Join(languageNames, ", ")+", separated by commas (-lang rust asks nothing). The answer makes a different index")
 	fs.BoolVar(&o.yes, "yes", false, "-lang auto: read the Rust project of the directory without asking (what the question would say yes to; needed where there is no terminal to ask)")
 	fs.StringVar(&o.dartExtractor, "dart-extractor", "", "command of the Dart extractor (default: $RIVUS_DART_EXTRACTOR, then rivus-dart)")
 	fs.StringVar(&o.rustExtractor, "rust-extractor", "", "command of the Rust extractor (default: $RIVUS_RUST_EXTRACTOR, then rivus-rust)")
@@ -98,6 +98,8 @@ func (o *analyzeOpts) registerLanguages(fs *flag.FlagSet) {
 	fs.Var(&o.allowFetchHosts, "allow-fetch-host", "HOST: let the fetch stage of the Rust project (under the sandbox, with a network) get from this host, which Cargo.lock names (git dependencies on any host, other registries; by default only crates.io is allowed). The repository can send the fetch on to other places (its submodules, redirects); that is not prevented until the network of the fetch stage is narrowed (repeatable)")
 	usual(fs, "lang", "yes", "dart-extractor", "rust-extractor", "unsafe-host-exec", "isolation-env", "isolation-read")
 	diagnostic(fs, "isolation-timeout", "no-fetch", "isolation-max-output", "allow-fetch-host")
+	kind(fs, "enum:lang", "lang")
+	kind(fs, "file", "dart-extractor", "rust-extractor", "isolation-read")
 }
 
 func (o *analyzeOpts) register(fs *flag.FlagSet) {
@@ -114,7 +116,7 @@ func (o *analyzeOpts) register(fs *flag.FlagSet) {
 	fs.StringVar(&o.irFile, "ir", "", "analyse the neutral IR in this JSON Lines file (from an extractor of another language) instead of Go packages")
 	fs.BoolVar(&o.passStats, "pass-stats", false, "add to stats what changed in the summaries in each pass (pass_changes) and the functions without a model that tainted values reached the most (unmodeled_top); the findings are the same (development)")
 	fs.IntVar(&o.passStatsTop, "pass-stats-top", taint.DefaultOptions().PassStatsTop, "with -pass-stats: how many packages packages_top lists (0: all of them) (development)")
-	fs.StringVar(&o.passStatsSort, "pass-stats-sort", "reanalyses", "with -pass-stats: what packages_top is ordered by: reanalyses, time, functions or elems (equal values go by name; time is a clock, so it differs from run to run) (development)")
+	fs.StringVar(&o.passStatsSort, "pass-stats-sort", "reanalyses", "with -pass-stats: what packages_top is ordered by: "+orList(passStatsSorts, false)+" (equal values go by name; time is a clock, so it differs from run to run) (development)")
 	fs.StringVar(&o.funcValues, "func-values", "", "write to this file (JSON Lines) the diagnostic of the function values: for each call of a function value, the functions that the elements carried by the analysis say it may call, beside the candidates it has otherwise (the analysis is run once more, about twice the time; the findings and the output are the same) (development, docs/DESIGN-callouts.md 5)")
 	fs.BoolVar(&o.resolveFuncValues, "resolve-func-values", false, "give the calls of function values that have no candidate the functions that the analysis of the function values carries to them (functions made in the code of the project), then run the taint analysis; the calls keep their unresolved_callee uncertainty. It runs the analysis of the function values up to 4 times more (nothing runs when no such call exists), and stats.func_values says what it did (docs/DESIGN-callouts.md 5.6)")
 	fs.StringVar(&o.traceElement, "trace-element", "", "print to stderr where the taint of this source (a site ID) first leaves its function and enters a package variable; the findings are the same (development)")
@@ -123,15 +125,15 @@ func (o *analyzeOpts) register(fs *flag.FlagSet) {
 	fs.StringVar(&o.cpuProf, "cpuprofile", "", "write a CPU profile of the taint phase to this file (development)")
 	usual(fs, "workers", "numeric-taint", "v", "timeout", "resolve-func-values")
 	diagnostic(fs, "k", "max-implementations", "max-passes", "func-timeout", "ir", "pass-stats", "pass-stats-top", "pass-stats-sort", "func-values", "trace-element", "memprofile", "lockprofile", "cpuprofile")
+	kind(fs, "enum:pass-stats-sort", "pass-stats-sort")
+	kind(fs, "file", "ir", "func-values", "memprofile", "lockprofile", "cpuprofile")
 }
 
 // analyze runs the whole pipeline. extra rule sets are added to the ones
 // loaded from the flags.
 func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*report.Report, error) {
-	switch o.passStatsSort {
-	case "", "reanalyses", "time", "functions", "elems":
-	default:
-		return nil, fmt.Errorf("-pass-stats-sort: %q is not one of reanalyses, time, functions, elems", o.passStatsSort)
+	if err := enumFlags["pass-stats-sort"].check(o.passStatsSort); err != nil {
+		return nil, err
 	}
 	phase := o.phaseTimer()
 	rules, err := o.loadRules(extra...)
@@ -385,15 +387,29 @@ func (o *analyzeOpts) phaseTimer() func(string) {
 	}
 }
 
+// analyzeCmd is "rivus analyze": its flags (analyzeFlags defines them, and runs nothing) and what it holds of them.
+type analyzeCmd struct {
+	o         analyzeOpts
+	detail    *string
+	withSites *bool
+}
+
+func analyzeFlags(fs *flag.FlagSet) *analyzeCmd {
+	c := &analyzeCmd{}
+	c.o.register(fs)
+	c.detail = fs.String("detail", report.DetailSnippet, "level of detail: "+orList(report.DetailLevels, false))
+	c.withSites = fs.Bool("sites", false, "also list the sites")
+	usual(fs, "detail", "sites")
+	kind(fs, "enum:detail", "detail")
+	return c
+}
+
 func runAnalyze(args []string) error {
 	fs := flag.NewFlagSet("analyze", flag.ExitOnError)
-	var o analyzeOpts
-	o.register(fs)
-	detail := fs.String("detail", report.DetailSnippet, "level of detail: summary or snippet")
-	withSites := fs.Bool("sites", false, "also list the sites")
-	usual(fs, "detail", "sites")
+	c := analyzeFlags(fs)
 	prepareFlags(fs, args)
 	fs.Parse(args)
+	o, detail, withSites := &c.o, c.detail, c.withSites
 	// What can be checked is checked before the analysis, which can take minutes.
 	if err := report.ValidDetail(*detail); err != nil {
 		return err
@@ -416,23 +432,37 @@ func runAnalyze(args []string) error {
 	return writeJSON(os.Stdout, rep)
 }
 
+// indexCmd is "rivus index".
+type indexCmd struct {
+	o          analyzeOpts
+	out, graph *string
+	taintFlag  *bool
+}
+
+func indexFlags(fs *flag.FlagSet) *indexCmd {
+	c := &indexCmd{}
+	c.o.register(fs)
+	c.out = fs.String("o", "", "with -taint: the JSON index to write (default: index.json beside the default graph file, in the user's cache by the absolute path of -C; never in the analysed directory)")
+	c.graph = fs.String("graph", "", "the graph file to write (default: in the user's cache, by the absolute path of -C)")
+	c.taintFlag = fs.Bool("taint", false, "also run the taint analysis (slow) and write its result as the JSON index that query -index and resolve -index read (-o implies it)")
+	usual(fs, "o", "graph", "taint")
+	kind(fs, "file", "o", "graph")
+	return c
+}
+
 func runIndex(args []string) error {
 	fs := flag.NewFlagSet("index", flag.ExitOnError)
-	var o analyzeOpts
-	o.register(fs)
-	out := fs.String("o", "", "with -taint: the JSON index to write (default: index.json beside the default graph file, in the user's cache by the absolute path of -C; never in the analysed directory)")
-	graph := fs.String("graph", "", "the graph file to write (default: in the user's cache, by the absolute path of -C)")
-	taintFlag := fs.Bool("taint", false, "also run the taint analysis (slow) and write its result as the JSON index that query -index and resolve -index read (-o implies it)")
-	usual(fs, "o", "graph", "taint")
+	c := indexFlags(fs)
 	prepareFlags(fs, args)
 	fs.Parse(args)
+	o, out, graph, taintFlag := &c.o, c.out, c.graph, c.taintFlag
 	// -o has always meant the JSON index: it is not left out silently
 	taint := taintFlag
 	if *out != "" {
 		t := true
 		taint = &t
 	}
-	path, err := graphFile(*graph, &o)
+	path, err := graphFile(*graph, o)
 	if err != nil {
 		return err
 	}
@@ -467,18 +497,32 @@ func runIndex(args []string) error {
 	return nil
 }
 
+// queryCmd is "rivus query".
+type queryCmd struct {
+	o                                 analyzeOpts
+	sink, source, site, index, detail *string
+}
+
+func queryFlags(fs *flag.FlagSet) *queryCmd {
+	c := &queryCmd{}
+	c.o.register(fs)
+	c.sink = fs.String("sink", "", "which sources can reach this sink symbol")
+	c.source = fs.String("source", "", "which sinks can be reached from this source symbol")
+	c.site = fs.String("site", "", "ID of a site (see \"rivus sites\")")
+	c.index = fs.String("index", "", "answer from a saved index instead of analysing the source")
+	c.detail = fs.String("detail", report.DetailSnippet, "level of detail: "+orList(report.DetailLevels, false))
+	usual(fs, "sink", "source", "site", "index", "detail")
+	kind(fs, "file", "index")
+	kind(fs, "enum:detail", "detail")
+	return c
+}
+
 func runQuery(args []string) error {
 	fs := flag.NewFlagSet("query", flag.ExitOnError)
-	var o analyzeOpts
-	o.register(fs)
-	sink := fs.String("sink", "", "which sources can reach this sink symbol")
-	source := fs.String("source", "", "which sinks can be reached from this source symbol")
-	site := fs.String("site", "", "ID of a site (see \"rivus sites\")")
-	index := fs.String("index", "", "answer from a saved index instead of analysing the source")
-	detail := fs.String("detail", report.DetailSnippet, "level of detail: summary or snippet")
-	usual(fs, "sink", "source", "site", "index", "detail")
+	c := queryFlags(fs)
 	prepareFlags(fs, args)
 	fs.Parse(args)
+	o, sink, source, site, index, detail := &c.o, c.sink, c.source, c.site, c.index, c.detail
 
 	q := report.Query{Sink: *sink, Source: *source, Site: *site}
 	if err := q.Validate(); err != nil {
@@ -545,15 +589,28 @@ func adHocRules(q report.Query) []*model.RuleSet {
 	return []*model.RuleSet{rs}
 }
 
+// resolveCmd is "rivus resolve".
+type resolveCmd struct {
+	o                analyzeOpts
+	bookmarks, index *string
+}
+
+func resolveFlags(fs *flag.FlagSet) *resolveCmd {
+	c := &resolveCmd{}
+	c.o.register(fs)
+	c.bookmarks = fs.String("bookmarks", "", "file with the bookmarks: sites or findings as rivus printed them (- for stdin)")
+	c.index = fs.String("index", "", "resolve against a saved index of the current code instead of analysing the source")
+	usual(fs, "bookmarks", "index")
+	kind(fs, "file", "bookmarks", "index")
+	return c
+}
+
 func runResolve(args []string) error {
 	fs := flag.NewFlagSet("resolve", flag.ExitOnError)
-	var o analyzeOpts
-	o.register(fs)
-	bookmarks := fs.String("bookmarks", "", "file with the bookmarks: sites or findings as rivus printed them (- for stdin)")
-	index := fs.String("index", "", "resolve against a saved index of the current code instead of analysing the source")
-	usual(fs, "bookmarks", "index")
+	c := resolveFlags(fs)
 	prepareFlags(fs, args)
 	fs.Parse(args)
+	o, bookmarks, index := &c.o, c.bookmarks, c.index
 	if *bookmarks == "" {
 		return fmt.Errorf("resolve needs -bookmarks")
 	}
