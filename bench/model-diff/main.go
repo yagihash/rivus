@@ -29,6 +29,7 @@ func realMain(args []string) int {
 	lang := fs.String("lang", "auto", "go or dart (auto: dart for package:<name>, else go). Rust: not checked, there is no isolation for the build of a crate")
 	changed := fs.String("changed", "", "print the packages whose rows differ from the ones at this commit (what a pull request checks), and stop")
 	reviewed := fs.String("changed-reviewed", "", "print the miss-reviewed notes added since this commit (one line each, `miss-reviewed-added <file> <symbol>@<position> <kind>`; a notice for the pull request, never a failure), and stop")
+	gaps := fs.Bool("coverage-gaps", false, "Go standard library: with -pkg, list the exported functions and methods that take a string, bytes or `any` and have no row in the built-in models (the probes start from rows: a function without a row is not found by them), and stop")
 	pkg := fs.String("pkg", "", "the package: a Go import path, or package:<name> for Dart")
 	modelFile := fs.String("model", "", "the model file (a built-in one or a -rules file); default: the built-in files that have rows of the package")
 	rivus := fs.String("rivus", "", "the rivus binary (default: built from -repo)")
@@ -59,6 +60,26 @@ func realMain(args []string) int {
 			return fail(err)
 		}
 		fmt.Println(strings.Join(pkgs, "\n"))
+		return 0
+	}
+	if *gaps {
+		if *pkg == "" {
+			fmt.Fprintln(os.Stderr, "model-diff: -coverage-gaps needs -pkg")
+			return 2
+		}
+		abs, _ := filepath.Abs(*repo)
+		files, err := BuiltinFiles(abs)
+		if err != nil {
+			return fail(err)
+		}
+		list, err := coverageGaps(*pkg, files)
+		if err != nil {
+			return fail(err)
+		}
+		for _, l := range list {
+			fmt.Println("gap", l)
+		}
+		fmt.Printf("coverage-gaps %s: %d function(s) without a row\n", *pkg, len(list))
 		return 0
 	}
 	if *lang == "auto" {

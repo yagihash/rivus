@@ -1,0 +1,17 @@
+# A package of the Rust zoo (docs/DESIGN-package-models.md, 6.8): a crate of its own (not a member of bench/zoo-rust), with a
+# skeleton of the package google-cloud-storage in skel/ (nothing is fetched: every dependency is a path). The tests copy zoo-mark
+# next to the crate for the extractor (the sandbox does not read a path outside the directory).
+[package]
+name = "zoo-pkg-google-cloud-storage"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+path = "cells/src/lib.rs"
+
+[dependencies]
+zoo-mark = { path = "../../zoo-rust/zoo-mark" }
+google-cloud-storage = { path = "skel" }
+
+[workspace]

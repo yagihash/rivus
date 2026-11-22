@@ -206,6 +206,8 @@ propagators:
     flows: [{from: arg0, to: result0}, {from: arg0, to: result1}]
   - symbol: os.Stat
     flows: [{from: arg0, to: result0}, {from: arg0, to: result1}]
+  - symbol: os.Lstat
+    flows: [{from: arg0, to: result0}, {from: arg0, to: result1}]
   - symbol: (*regexp.Regexp).MatchString
     pure: true
   - symbol: (*net/smtp.Client).Extension
@@ -229,6 +231,8 @@ propagators:
   - symbol: (*os.File).WriteString
     pure: true
   - symbol: (*os.File).Write
+    pure: true
+  - symbol: (*os.File).WriteAt
     pure: true
   - symbol: strconv.ParseInt
     flows: [{from: arg0, to: result1}]

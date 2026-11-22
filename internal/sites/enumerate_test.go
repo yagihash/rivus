@@ -58,3 +58,20 @@ func TestByCategoryKeepsTheOrderAndTheRowsOfACategoryTogether(t *testing.T) {
 		t.Fatalf("the same positions are one site: %+v", got)
 	}
 }
+
+func TestFieldKeyOf(t *testing.T) {
+	for _, c := range []struct{ typ, field, want string }{
+		{"net/http.Request", "Body", "net/http.Request.Body"},
+		{"*net/http.Request", "Body", "net/http.Request.Body"},
+		{"octocrab::models::issues::Issue", "body", "octocrab::models::issues::Issue.body"},
+		{"&octocrab::models::issues::Issue", "body", "octocrab::models::issues::Issue.body"},
+		{"&mut octocrab::models::issues::Issue", "body", "octocrab::models::issues::Issue.body"},
+		{"octocrab::Page<octocrab::models::issues::Issue>", "items", "octocrab::Page.items"},
+		{"(octocrab::A, octocrab::B)", "0", ""},
+		{"std::string::String", "", ""},
+	} {
+		if got := fieldKeyOf(c.typ, c.field); got != c.want {
+			t.Errorf("fieldKeyOf(%q, %q) = %q, want %q", c.typ, c.field, got, c.want)
+		}
+	}
+}

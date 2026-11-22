@@ -1,0 +1,6 @@
+go	pkg/storage/signed/signed.go	sink-none	@sink(none)	func fixed() { @fixed
+go	pkg/storage/signed/signed.go	sink-none	@sink(none)	func fixed() { @fixed
+go	pkg/storage/signed/signed.go	sink-none	@sink(none)	func fixed() { @fixed
+go	pkg/storage/signed/signed.go	sink-none	@sink(none) @nosink(pkg-storage-signed-decoy)	func decoy() { @decoy
+go	pkg/storage/signed/signed.go	sink-none	@sink(none) @nosink(pkg-storage-signed-decoy)	func decoy() { @decoy
+go	pkg/storage/signed/signed.go	sink-none	@sink(none) @nosink(pkg-storage-signed-decoy)	func decoy() { @decoy

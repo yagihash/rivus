@@ -1,0 +1,151 @@
+# octocrab: the GitHub API client of Rust (`Octocrab` and its handlers: repositories, issues, pull requests, commits, git).
+#
+# Checked by reading the published source of 0.54.9 (the symbols are the spellings of the extractor, read from that crate: a type
+# that the module `repos` re-exports is written `octocrab::repos::<Type>`, one that it does not is written with its own module,
+# `octocrab::repos::file::<Type>`). Hand written rows (origin: human); the generator does not exist yet.
+#
+# The boundary (docs/MODEL-QUEUE.md, row 6):
+# * `resource_name`: what decides the resource that a call reaches: the owner and the name of a repository (the handlers are made
+#   with them, and every request of the handler goes to `/repos/<owner>/<repo>/...`), and the path, the ref and the branch of the
+#   file API (`get_content`, `get_readme`, `create_file`, `update_file`, `delete_file`). A value of the user there can point to
+#   another repository, another file or another ref than the program meant. (As the names of the Google Cloud resources:
+#   dart-gcp.yaml; the same category as the Dart client of GitHub, dart-github.yaml.) The rows are on the calls that take such a
+#   value, and not on every method that takes a string.
+# * The generic requests of `Octocrab` (`get`, `post`, `patch`, `put`, `delete`): the route is put after the endpoint. The same
+#   category.
+# * Sources, the criterion (ADR-108, "who wrote the value"): a client of a service makes a value a source when it carries what a
+#   user of the service wrote (the text of a file, an issue, a comment). A value that the service decides (an id, a time, a sha, a
+#   count, a URL that the service builds) is not a source. A value that is hard to say is not made a source, and the reason is
+#   written here. `Content::decoded_content` is the source: the text of a file of a repository. The rule format has no label that
+#   tells "from an external service" from the default `user_input`, so it has the default (docs/ISSUES.md, #159).
+#   Candidates that are not sources, and why:
+#   - The plain fields that carry what a user wrote are sources too (ADR-108, 3), as `kind: field` rows with the key
+#     `crate::module::Type.field` (the type as the extractor writes it, with `::`; docs/issues/161-rust-field-source.md):
+#     `Issue` title and body, `PullRequest` title and body, the `body` of a comment (issues, pulls, commits), the message of a
+#     commit (`RepoCommitPage`, `GitCommitObject`), and `Content.content` (the text of a file, still base64). Not made sources:
+#     Checked against the real crate: the extractor, run on a crate that reads each of these fields of octocrab 0.54.9 (under
+#     the sandbox, with the dependencies), writes the type of the field read as `&octocrab::models::<module>::<Type>` and the
+#     name of the field as it is in the source, for all 10 rows; the cell `issue-body` runs `Issue.body`.
+#     Not made sources: `body_text` and `body_html` (the same text, rendered by the service: the field that the program reads is `body`).
+#   - the raw body of `GetRawContentBuilder::send` (the text of the file as an `http::Response`): it is the same kind of value,
+#     but the zoo cannot stand for it (the response is built from the `http` and `http-body` types, and `send` is async), so a row
+#     would not be run by a cell. Not made a source for now.
+# * The handlers and the builders have no `flows` row: their bodies are read (they are a few lines each, and the requests reach
+#   `hyper`), which is also what keeps what the builders hold (`path`, `ref`, `branch`).
+# * `calls:`: none. The covered API takes no callback and no trait that the user implements (the middleware of the client is
+#   `tower::Layer` in the builder, which is not covered).
+ruleset: rivus/rust/octocrab@1
+
+# the positions count the receiver (arg0), also for a call through a trait (as rust-std.yaml)
+self_first: true
+
+verified_versions:
+  - package: octocrab
+    versions: ">=0.54.0 <0.55.0"
+    checked_with: 0.54.9
+    checked: 2026-11-23
+
+sources:
+  - kind: call_result
+    symbol: octocrab::models::repos::Content::decoded_content
+    labels: [user_input]
+  - kind: field
+    field: octocrab::models::issues::Issue.body
+    labels: [user_input]
+  - kind: field
+    field: octocrab::models::issues::Issue.title
+    labels: [user_input]
+  - kind: field
+    field: octocrab::models::issues::Comment.body
+    labels: [user_input]
+  - kind: field
+    field: octocrab::models::pulls::PullRequest.body
+    labels: [user_input]
+  - kind: field
+    field: octocrab::models::pulls::PullRequest.title
+    labels: [user_input]
+  - kind: field
+    field: octocrab::models::pulls::Comment.body
+    labels: [user_input]
+  - kind: field
+    field: octocrab::models::commits::Comment.body
+    labels: [user_input]
+  - kind: field
+    field: octocrab::models::repos::Content.content
+    labels: [user_input]
+  - kind: field
+    field: octocrab::models::repos::RepoCommitPage.message
+    labels: [user_input]
+  - kind: field
+    field: octocrab::models::commits::GitCommitObject.message
+    labels: [user_input]
+
+sinks:
+  # the repository: where the owner and the name are put together
+  - symbol: octocrab::Octocrab::repos
+    args: [1, 2]
+    category: resource_name
+  - symbol: octocrab::Octocrab::issues
+    args: [1, 2]
+    category: resource_name
+  - symbol: octocrab::Octocrab::pulls
+    args: [1, 2]
+    category: resource_name
+  - symbol: octocrab::Octocrab::commits
+    args: [1, 2]
+    category: resource_name
+  - symbol: octocrab::Octocrab::git
+    args: [1, 2]
+    category: resource_name
+
+  # the files of a repository: the path, the ref, the branch
+  - symbol: octocrab::repos::RepoHandler::create_file
+    args: [1]
+    category: resource_name
+  - symbol: octocrab::repos::RepoHandler::update_file
+    args: [1]
+    category: resource_name
+  - symbol: octocrab::repos::RepoHandler::delete_file
+    args: [1]
+    category: resource_name
+  - symbol: octocrab::repos::GetContentBuilder::path
+    args: [1]
+    category: resource_name
+  - symbol: octocrab::repos::GetContentBuilder::r#ref
+    args: [1]
+    category: resource_name
+  - symbol: octocrab::repos::file::GetRawContentBuilder::path
+    args: [1]
+    category: resource_name
+  - symbol: octocrab::repos::file::GetRawContentBuilder::r#ref
+    args: [1]
+    category: resource_name
+  - symbol: octocrab::repos::file::GetReadmeBuilder::path
+    args: [1]
+    category: resource_name
+  - symbol: octocrab::repos::file::GetReadmeBuilder::r#ref
+    args: [1]
+    category: resource_name
+  - symbol: octocrab::repos::UpdateFileBuilder::branch
+    args: [1]
+    category: resource_name
+  - symbol: octocrab::repos::DeleteFileBuilder::branch
+    args: [1]
+    category: resource_name
+
+  # the route of a request, after the endpoint
+  - symbol: octocrab::Octocrab::get
+    args: [1]
+    category: resource_name
+  - symbol: octocrab::Octocrab::post
+    args: [1]
+    category: resource_name
+  - symbol: octocrab::Octocrab::patch
+    args: [1]
+    category: resource_name
+  - symbol: octocrab::Octocrab::put
+    args: [1]
+    category: resource_name
+  - symbol: octocrab::Octocrab::delete
+    args: [1]
+    category: resource_name
