@@ -388,6 +388,7 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `dynamic_dispatch` | インターフェースや関数値を通る呼び出し。`candidates` の全部に届くと仮定した | 経路が通る実装が、実行時に本当に呼ばれる型かを確認する(`graph impls` / `dispatchers`)。`candidates` が空なら、実装が読んだコードにない |
 | `unmodeled_library_call` | 本体もモデルもない関数を通った。「引数は結果に伝わる」と近似した | その関数の動作を調べる(値を加工して無害にするか、そのまま返すか)。必要ならモデルを書く |
 | `dependency_body_unread` | モデルのあるインターフェースの呼び出しの候補に、依存の本体があったが、読まなかった(Go) | 依存が、自分のコードの実装へ値を渡していないかを確認する |
+| `project_body_unread` | プロジェクトの関数の本体を、extractor が読めなかった(Rust の async closure など)。依存の関数なら `dependency_body_unread`。数は `summary.functions_skipped` | その関数の中を、自分で読む。`detail` に理由 |
 | `depth_limit` | 解析の上限で止めた。理由は `detail` の先頭の語: `budget`(作業量)、`func_timeout` / `run_timeout`(時計)、`candidate_limit`(関数値の候補が多すぎて、どれも追わなかった)、`path_limit`(アクセスパスを切った)など | その関数の要約は、流れを落としていることがある。その関数の周辺は、見逃しがある前提で、コードを読む |
 | `recursion_approximation` | 互いに呼び合う関数のかたまりを、近似で閉じた | そのかたまりの中の流れは、粗い |
 | `missing_source` | コードが見えなかった(型エラーでビルドできないパッケージ、生成されていないコード) | そのパッケージの中は見ていない。`summary.unread` を見て、ビルドや生成を済ませてやり直す |

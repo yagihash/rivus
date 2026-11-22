@@ -1487,8 +1487,9 @@ fn const_of(ty: &Ty, alloc: &Allocation) -> Value {
 /// of a generic function that is analysed as written, when a generic argument
 /// is a const parameter or a bound const (`[T; N]`, `Foo<N>`): rustc cannot
 /// find it in the parameter environment of the function. Such a call is as
-/// unresolved as one through a type parameter: `None`. (A panic is not caught: it leaves the
-/// queries of rustc active, and the compiler then aborts at the end.)
+/// unresolved as one through a type parameter: `None`. (A panic here is not caught: it leaves the
+/// queries of rustc active, and the compiler then aborts at the end. Only what is read after the queries are
+/// done is guarded: `guarded` of main.rs, docs/DESIGN-rust-extractor-panic.md.)
 /// The name of the definition that an instance runs, when it is code of a crate that is not the
 /// standard library (the instance's own name has the type arguments, which no function is named by).
 pub fn definition_name(i: &Instance) -> Option<String> {

@@ -30,21 +30,23 @@ type record struct {
 	TestsSkipped *TestsSkipped `json:"tests_skipped,omitempty"`
 	CallerMarks  bool          `json:"caller_marks,omitempty"`
 	BodyNotRead  *BodyNotRead  `json:"body_not_read,omitempty"`
+	FnSkipped    *FnSkipped    `json:"fn_skipped,omitempty"`
 }
 
 const (
-	recFunc   = "func"
-	recImpls  = "implementations"
-	recGlobal = "global"
-	recType   = "type"
-	recAlias  = "type_alias"
-	recText   = "text"
-	recCall   = "call_text"
-	recFunc2  = "func_text"
-	recLoad   = "load_error"
-	recTests  = "tests_skipped"
-	recMarks  = "caller_marks"
-	recNoBody = "body_not_read"
+	recFunc    = "func"
+	recImpls   = "implementations"
+	recGlobal  = "global"
+	recType    = "type"
+	recAlias   = "type_alias"
+	recText    = "text"
+	recCall    = "call_text"
+	recFunc2   = "func_text"
+	recLoad    = "load_error"
+	recTests   = "tests_skipped"
+	recMarks   = "caller_marks"
+	recNoBody  = "body_not_read"
+	recSkipped = "fn_skipped"
 )
 
 // Write writes the program as a stream. It does not validate: Validate is
@@ -113,6 +115,11 @@ func Write(w io.Writer, p *Program) error {
 			return err
 		}
 	}
+	for i := range p.FnSkipped {
+		if err := enc.Encode(record{Kind: recSkipped, FnSkipped: &p.FnSkipped[i]}); err != nil {
+			return err
+		}
+	}
 	if p.CallerMarks {
 		if err := enc.Encode(record{Kind: recMarks, CallerMarks: true}); err != nil {
 			return err
@@ -169,6 +176,8 @@ func Read(r io.Reader) (*Program, error) {
 			p.TestsSkipped = p.TestsSkipped.Add(rec.TestsSkipped)
 		case rec.Kind == recNoBody && rec.BodyNotRead != nil:
 			p.BodiesNotRead = append(p.BodiesNotRead, *rec.BodyNotRead)
+		case rec.Kind == recSkipped && rec.FnSkipped != nil:
+			p.FnSkipped = append(p.FnSkipped, *rec.FnSkipped)
 		case rec.Kind == recMarks && rec.CallerMarks:
 			p.CallerMarks = true
 		default:

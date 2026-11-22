@@ -455,6 +455,7 @@ func (o *analyzeOpts) loadLangs(langs []string, patterns []string, rules *model.
 		merged.LoadErrors = append(merged.LoadErrors, p.LoadErrors...)
 		merged.TestsSkipped = merged.TestsSkipped.Add(p.TestsSkipped)
 		merged.BodiesNotRead = append(merged.BodiesNotRead, p.BodiesNotRead...)
+		merged.FnSkipped = append(merged.FnSkipped, p.FnSkipped...)
 		// (a program of several languages is not read as a closed world: what the other language calls is not said)
 		merged.CallerMarks = len(langs) == 1 && p.CallerMarks
 		merged.Files = append(merged.Files, p.Files...)
