@@ -86,22 +86,29 @@ propagators:
     flows: [{from: arg0, to: result}]
 
   # fmt and errors
+  # model-diff: extra fmt.Sprintf the arguments are `any`; the reading of the body goes through the type switch of the printer and loses them. The result is made of them
   - symbol: fmt.Sprintf
     flows: [{from: args, to: result}]
+  # model-diff: extra fmt.Sprint the arguments are `any`; the reading of the body goes through the type switch of the printer and loses them. The result is made of them
   - symbol: fmt.Sprint
     flows: [{from: args, to: result}]
+  # model-diff: extra fmt.Sprintln the arguments are `any`; the reading of the body goes through the type switch of the printer and loses them. The result is made of them
   - symbol: fmt.Sprintln
     flows: [{from: args, to: result}]
   - symbol: fmt.Errorf
     flows: [{from: args, to: result}]
   - symbol: errors.New
     flows: [{from: args, to: result}]
+  # model-diff: extra fmt.Fprintf same as Sprintf: the arguments are `any` and the printer is read through a type switch; what is written is made of them
   - symbol: fmt.Fprintf
     flows: [{from: args, to: arg0.content}]
+  # model-diff: extra fmt.Fprint same as Sprintf: the arguments are `any` and the printer is read through a type switch; what is written is made of them
   - symbol: fmt.Fprint
     flows: [{from: args, to: arg0.content}]
+  # model-diff: extra fmt.Fprintln same as Sprintf: the arguments are `any` and the printer is read through a type switch; what is written is made of them
   - symbol: fmt.Fprintln
     flows: [{from: args, to: arg0.content}]
+  # model-diff: miss-reviewed io.WriteString@arg1 the error is the writer's (an unresolved `StringWriter` call that the reading takes as "arguments to results"); the text is not in it
   - symbol: io.WriteString
     flows: [{from: arg1, to: arg0.content}]
   - symbol: (error).Error
@@ -131,36 +138,48 @@ propagators:
     flows: [{from: arg0, to: result0}]
 
   # flag: what the command line says ends up in the variables of the flag set
+  # the error quotes the argument that was not accepted
   - symbol: (*flag.FlagSet).Parse
-    flows: [{from: arg0, to: recv}]
+    flows: [{from: arg0, to: recv}, {from: arg0, to: result0}]
+  # model-diff: extra (*flag.FlagSet).Args the probe puts the source in the name of the set (NewFlagSet); the model is about what Parse was given, and Args returns it
   - symbol: (*flag.FlagSet).Args
     flows: [{from: recv, to: result}]
+  # model-diff: extra (*flag.FlagSet).Arg the probe puts the source in the name of the set; the model is about what Parse was given
   - symbol: (*flag.FlagSet).Arg
     flows: [{from: recv, to: result}]
+  # model-diff: extra (*flag.FlagSet).String the row writes the name and the usage into the set and then reads the set (what Parse was given) into the result, so they reach it too; accepted, they are constants in practice
   - symbol: (*flag.FlagSet).String
-    flows: [{from: recv, to: result}]
+    flows: [{from: recv, to: result}, {from: arg0, to: recv}, {from: arg1, to: result}, {from: arg1, to: recv}, {from: arg2, to: recv}]
+  # model-diff: extra (*flag.FlagSet).Int the row writes the name and the usage into the set and then reads the set (what Parse was given) into the result, so they reach it too; accepted, they are constants in practice
   - symbol: (*flag.FlagSet).Int
-    flows: [{from: recv, to: result}]
+    flows: [{from: recv, to: result}, {from: arg0, to: recv}, {from: arg1, to: result}, {from: arg1, to: recv}, {from: arg2, to: recv}]
+  # model-diff: extra (*flag.FlagSet).Bool the row writes the name and the usage into the set and then reads the set (what Parse was given) into the result, so they reach it too; accepted, they are constants in practice
   - symbol: (*flag.FlagSet).Bool
-    flows: [{from: recv, to: result}]
+    flows: [{from: recv, to: result}, {from: arg0, to: recv}, {from: arg1, to: result}, {from: arg1, to: recv}, {from: arg2, to: recv}]
+  # model-diff: extra (*flag.FlagSet).Duration the row writes the name and the usage into the set and then reads the set (what Parse was given) into the result, so they reach it too; accepted, they are constants in practice
   - symbol: (*flag.FlagSet).Duration
-    flows: [{from: recv, to: result}]
+    flows: [{from: recv, to: result}, {from: arg0, to: recv}, {from: arg1, to: result}, {from: arg1, to: recv}, {from: arg2, to: recv}]
+  # model-diff: extra (*flag.FlagSet).StringVar the row writes the name and the usage into the set and then reads the set (what Parse was given) into the result, so they reach it too; accepted, they are constants in practice
   - symbol: (*flag.FlagSet).StringVar
-    flows: [{from: recv, to: arg0}]
+    flows: [{from: recv, to: arg0}, {from: arg1, to: recv}, {from: arg2, to: arg0}, {from: arg2, to: recv}, {from: arg3, to: recv}]
+  # model-diff: extra (*flag.FlagSet).IntVar the row writes the name and the usage into the set and then reads the set (what Parse was given) into the result, so they reach it too; accepted, they are constants in practice
   - symbol: (*flag.FlagSet).IntVar
-    flows: [{from: recv, to: arg0}]
+    flows: [{from: recv, to: arg0}, {from: arg1, to: recv}, {from: arg2, to: arg0}, {from: arg2, to: recv}, {from: arg3, to: recv}]
+  # model-diff: extra (*flag.FlagSet).BoolVar the row writes the name and the usage into the set and then reads the set (what Parse was given) into the result, so they reach it too; accepted, they are constants in practice
   - symbol: (*flag.FlagSet).BoolVar
-    flows: [{from: recv, to: arg0}]
+    flows: [{from: recv, to: arg0}, {from: arg1, to: recv}, {from: arg2, to: arg0}, {from: arg2, to: recv}, {from: arg3, to: recv}]
+  # model-diff: extra (*flag.FlagSet).DurationVar the row writes the name and the usage into the set and then reads the set (what Parse was given) into the result, so they reach it too; accepted, they are constants in practice
   - symbol: (*flag.FlagSet).DurationVar
-    flows: [{from: recv, to: arg0}]
+    flows: [{from: recv, to: arg0}, {from: arg1, to: recv}, {from: arg2, to: arg0}, {from: arg2, to: recv}, {from: arg3, to: recv}]
   - symbol: (*flag.FlagSet).Var
-    flows: [{from: recv, to: arg0}]
+    flows: [{from: recv, to: arg0}, {from: arg1, to: recv}, {from: arg2, to: recv}]
 
   # io and bufio
   - symbol: io.ReadAll
     flows: [{from: arg0, to: result0}]
   - symbol: io.LimitReader
     flows: [{from: arg0, to: result}]
+  # model-diff: miss-reviewed io.Copy@arg1 the error is the reader's or the writer's (an unresolved `ReaderFrom` / `WriterTo` call that the reading takes as "arguments to results"); the data is not in it
   - symbol: io.Copy
     flows: [{from: arg1, to: arg0.content}]
   - symbol: (io.Reader).Read
@@ -183,17 +202,21 @@ propagators:
     flows: [{from: recv, to: result0}]
   - symbol: (*bufio.Reader).ReadBytes
     flows: [{from: recv, to: result0}]
+  # model-diff: extra (*bufio.Scanner).Text the probe calls Text without Scan; the token is filled by Scan from the reader
   - symbol: (*bufio.Scanner).Text
     flows: [{from: recv, to: result}]
+  # model-diff: extra (*bufio.Scanner).Bytes same as Text
   - symbol: (*bufio.Scanner).Bytes
     flows: [{from: recv, to: result}]
 
   # encoding/json
   # the error of a syntax error quotes the byte of the input (`invalid character 'x' ...`): input -> error
+  # model-diff: miss-reviewed encoding/json.Unmarshal@arg1 the reading of the body puts only the type of `v` (reflect.TypeOf) in the error, not what it holds; no flow of data
   - symbol: encoding/json.Unmarshal
     flows: [{from: arg0, to: arg1}, {from: arg0, to: result0}]
   - symbol: encoding/json.NewDecoder
     flows: [{from: arg0, to: result}]
+  # model-diff: miss-reviewed (*encoding/json.Decoder).Decode@arg0 the same: only the type of `v` goes into the error
   - symbol: (*encoding/json.Decoder).Decode
     flows: [{from: recv, to: arg0}, {from: recv, to: result0}]
   - symbol: encoding/json.Marshal
@@ -203,12 +226,16 @@ propagators:
     flows: [{from: arg0, to: result0}, {from: arg1, to: result0}, {from: arg2, to: result0}]
 
   # encoding/base64, encoding/hex
+  # model-diff: extra (*encoding/base64.Encoding).DecodeString the reading of the body works on bytes one by one (numbers), which the analysis stops; the result is the input recoded
   - symbol: (*encoding/base64.Encoding).DecodeString
     flows: [{from: arg0, to: result0}]
+  # model-diff: extra (*encoding/base64.Encoding).EncodeToString the reading of the body works on bytes one by one (numbers), which the analysis stops; the result is the input recoded
   - symbol: (*encoding/base64.Encoding).EncodeToString
     flows: [{from: arg0, to: result}]
+  # model-diff: extra encoding/hex.DecodeString the reading of the body works on bytes one by one (numbers), which the analysis stops; the result is the input recoded
   - symbol: encoding/hex.DecodeString
     flows: [{from: arg0, to: result0}]
+  # model-diff: extra encoding/hex.EncodeToString the reading of the body works on bytes one by one (numbers), which the analysis stops; the result is the input recoded
   - symbol: encoding/hex.EncodeToString
     flows: [{from: arg0, to: result}]
 

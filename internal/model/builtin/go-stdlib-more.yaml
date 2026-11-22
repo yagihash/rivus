@@ -114,8 +114,9 @@ propagators:
     pure: true
   - symbol: go/token.NewFileSet
     pure: true
+  # model-diff: extra go/parser.ParseFile `src` is an `any` read through a type switch, which the reading of the body loses; the syntax tree is made of it
   - symbol: go/parser.ParseFile
-    flows: [{from: args, to: result0}]
+    flows: [{from: args, to: results}]
   - symbol: go/printer.Fprint
     pure: true
   - symbol: (*go/ast.CommentGroup).Pos
@@ -271,7 +272,7 @@ propagators:
   - symbol: flag.Parse
     pure: true
   - symbol: context.WithValue
-    flows: [{from: arg0, to: result}, {from: arg2, to: result}]
+    flows: [{from: arg0, to: result}, {from: arg1, to: result}, {from: arg2, to: result}]
   - symbol: context.WithCancel
     flows: [{from: arg0, to: result0}]
   - symbol: context.WithTimeout
@@ -302,24 +303,26 @@ propagators:
     flows: [{from: arg0, to: result}]
   - symbol: (*log/slog.Logger).With
     flows: [{from: recv, to: result}, {from: arg0, to: result}]
+  # model-diff: extra (*text/template.Template).Execute the data is read through reflect, which the reading of the body does not follow into the writer; the output is made of it
   - symbol: (*text/template.Template).Execute
     flows: [{from: arg1, to: arg0.content}]
+  # the error names the template
   - symbol: (*html/template.Template).Execute
-    flows: [{from: arg1, to: arg0.content}]
+    flows: [{from: arg1, to: arg0.content}, {from: recv, to: result0}]
   - symbol: text/template.New
     flows: [{from: arg0, to: result}]
   - symbol: html/template.New
     flows: [{from: arg0, to: result}]
   - symbol: (*text/template.Template).Parse
-    flows: [{from: arg0, to: recv}, {from: recv, to: result0}]
+    flows: [{from: arg0, to: recv}, {from: recv, to: results}, {from: arg0, to: result1}]
   - symbol: (*html/template.Template).Parse
-    flows: [{from: arg0, to: recv}, {from: recv, to: result0}]
+    flows: [{from: arg0, to: recv}, {from: recv, to: results}, {from: arg0, to: result1}]
   - symbol: text/template.Must
     flows: [{from: arg0, to: result}]
   - symbol: (*html/template.Template).Funcs
     flows: [{from: recv, to: result}]
   - symbol: text/template.ParseFiles
-    flows: [{from: arg0, to: result0}]
+    flows: [{from: arg0, to: results}]
   - symbol: (*mime/multipart.FileHeader).Open
     flows: [{from: recv, to: result0}]
   - symbol: (*net/http.Request).FormFile
@@ -337,7 +340,7 @@ propagators:
   - symbol: net.ParseCIDR
     flows: [{from: arg0, to: result0}, {from: arg0, to: result1}]
   - symbol: encoding/pem.Decode
-    flows: [{from: arg0, to: result0}]
+    flows: [{from: arg0, to: results}]
   - symbol: encoding/pem.Encode
     flows: [{from: arg1, to: arg0.content}]
   - symbol: crypto/x509.ParseCertificate
@@ -379,15 +382,16 @@ propagators:
   - symbol: net/http/httputil.DumpRequest
     flows: [{from: arg0, to: result0}]
   - symbol: image.Decode
-    flows: [{from: arg0, to: result0}]
+    flows: [{from: arg0, to: result0}, {from: arg0, to: result2}]
   - symbol: image/png.Encode
     flows: [{from: arg1, to: arg0.content}]
   - symbol: archive/zip.NewWriter
     flows: [{from: arg0, to: result}]
   - symbol: (*archive/zip.Writer).CreateHeader
     flows: [{from: recv, to: result0}]
+  # model-diff: miss-reviewed (*encoding/xml.Decoder).Decode@arg0 only the type of `v` goes into the error (as for encoding/json)
   - symbol: (*encoding/xml.Decoder).Decode
-    flows: [{from: recv, to: arg0}]
+    flows: [{from: recv, to: arg0}, {from: recv, to: result0}]
   - symbol: (*go/ast.CommentGroup).Text
     flows: [{from: recv, to: result}]
   - symbol: log/slog.NewRecord
@@ -490,8 +494,10 @@ propagators:
     flows: [{from: args, to: result}]
   - symbol: encoding/json.Valid
     pure: true
+  # model-diff: extra encoding/hex.Encode the reading of the body works on bytes one by one (numbers), which the analysis stops; the result is the input recoded
   - symbol: encoding/hex.Encode
     flows: [{from: arg1, to: arg0}]
+  # model-diff: extra encoding/hex.AppendEncode the reading of the body works on bytes one by one (numbers), which the analysis stops; the result is the input recoded
   - symbol: encoding/hex.AppendEncode
     flows: [{from: args, to: result}]
   - symbol: unicode/utf8.ValidString
@@ -544,25 +550,27 @@ propagators:
   - symbol: encoding/pem.EncodeToMemory
     flows: [{from: arg0, to: result}]
   - symbol: net/mail.ParseAddress
-    flows: [{from: arg0, to: result0}]
+    flows: [{from: arg0, to: results}]
   - symbol: (*mime/multipart.Writer).CreateFormFile
     flows: [{from: arg0, to: recv}, {from: arg1, to: recv}]
   - symbol: (*mime/multipart.Writer).WriteField
     flows: [{from: arg0, to: recv}, {from: arg1, to: recv}]
+  # model-diff: extra (*encoding/xml.Decoder).Token the names and texts of the tokens come from the input byte by byte (numbers), which the analysis stops; the result carries the input
   - symbol: (*encoding/xml.Decoder).Token
-    flows: [{from: recv, to: result0}]
+    flows: [{from: recv, to: results}]
   - symbol: encoding/xml.NewDecoder
     flows: [{from: arg0, to: result}]
+  # model-diff: extra (*text/template.Template).ExecuteTemplate same as Execute
   - symbol: (*text/template.Template).ExecuteTemplate
-    flows: [{from: arg2, to: arg0.content}]
+    flows: [{from: arg2, to: arg0.content}, {from: recv, to: result0}, {from: arg1, to: result0}]
   - symbol: (*html/template.Template).ExecuteTemplate
-    flows: [{from: arg2, to: arg0.content}]
+    flows: [{from: arg2, to: arg0.content}, {from: recv, to: result0}, {from: arg1, to: result0}]
   - symbol: (*html/template.Template).Lookup
     flows: [{from: recv, to: result}]
   - symbol: (*html/template.Template).New
-    flows: [{from: recv, to: result}]
+    flows: [{from: recv, to: result}, {from: arg0, to: result0}]
   - symbol: text/template.ParseFS
-    flows: [{from: arg0, to: result0}]
+    flows: [{from: arg0, to: result0}, {from: arg1, to: results}]
 
   # reflect: a number or a boolean read from a value (the numeric_stop rule stops it, and says where)
   - symbol: (reflect.Value).Len

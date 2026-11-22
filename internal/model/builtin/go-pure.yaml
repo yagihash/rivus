@@ -213,7 +213,7 @@ propagators:
   - symbol: strings.Title
     flows: [{from: arg0, to: result}]
   - symbol: bytes.ReplaceAll
-    flows: [{from: arg0, to: result}]
+    flows: [{from: arg0, to: result}, {from: arg2, to: result}]
   - symbol: strings.TrimRightFunc
     flows: [{from: arg0, to: result}]
   - symbol: path/filepath.Ext
