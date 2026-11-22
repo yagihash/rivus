@@ -38,6 +38,7 @@ pub fn register_all() {
     c::dyns::iface_val_recv::register();
     c::dyns::method_value::register();
     c::dyns::method_value_iface::register();
+    c::dyns::sink_as_value::register();
     c::dyns::sink_behind_own_interface::register();
     c::dyns::sink_in_method::register();
     c::dyns::sanitizer_own_impl::register();
