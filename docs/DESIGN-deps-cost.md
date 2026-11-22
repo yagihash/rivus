@@ -449,3 +449,63 @@ ADR-092 の条件 1(依存が時間の 9 割以上、または数 GB)は、パ�
 1. **Dart の `calls: [{method: ...}]`。** `Client.get` などの便利なメソッドにも `flows` を書き、`send` を呼ぶことを `method: send` で書く。実装は、自分のコードの関数のうち、メソッド名が `send` で、レシーバの型が `Client` の部分型のもの(`type` レコードの `extends:` / `implements:`)を探して、`with` で呼ぶ(`applyMethodRow` の Dart 版。Rust の `methodImpls` は ID の形が違う)。約 100 行の見込み。これができれば、便利なメソッドも切れる。
 2. **`summary` に、モデルで切ったパッケージの一覧**(ADR-092 の 5)。今は、注記が呼び出しごとにあるだけ。
 3. **コンストラクタで渡した関数を、あとで呼ぶ形**(`RetryClient(when:)`)の書式。
+## 12. Google Cloud の Dart のクライアントの組み込みモデル(`dart-gcp.yaml`)の測定
+
+状態: 測定の記録。`internal/model/builtin/dart-gcp.yaml`(sink だけ、70 行)を足した前後を、公開の合成 `bench/dart-gcp` と `bench/dart-grpc` で比べた。モデルの中身と、しなかった API は `docs/GCP-MODELS.md` の 8 節。
+
+### 12.1 測定の条件
+
+| 項目 | 値 |
+| --- | --- |
+| rivus | `origin/main` の `3ce2b5d` に `dart-gcp.yaml` を足したビルド。「なし」は、同じコミットで `dart-gcp.yaml` だけを外したビルド |
+| Dart SDK | 3.13.7(stable)、macos_arm64 |
+| 対象 | `bench/dart-gcp`(`pubspec.lock` はそのパス)と `bench/dart-grpc`。`bench/dart-gcp` には、a(リクエストのフィールドが名前、クエリ、URL に届く)と b(届かない)のハンドラを足した(`Gcloud`、`Apis`、`CloudStorage`、`Json`) |
+| コマンド | `rivus analyze -lang dart -C <dir> -pass-stats -pass-stats-top 0 -detail summary -timeout 540s`、`/usr/bin/time -l`。上限は 10 分(どれも届かなかった) |
+| 時間の読み方 | この測定の間、機械の load average は 3 前後。wall は 1〜2 秒ぶれる(同じビルドで 15.6 秒と 18.3 秒) |
+
+### 12.2 モデルあり / なし
+
+| 対象 | モデル | 解析した関数 | `largest_scc` | `summary_elems` | 解析 `duration_ms` | `dynamic_dispatch` の注記 | 注記の合計 | wall | 最大 RSS | finding |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `bench/dart-gcp` | なし | 4,593 | 263 | 25,248 | 1,089 | 601 | 733 | 19.3 秒 | 1.64 GB | 3 |
+| `bench/dart-gcp` | あり | 4,593 | 263 | 25,248 | 1,503 | 601 | 734 | 20.5 秒 | 1.64 GB | 19 |
+| `bench/dart-grpc` | なし | 2,409 | 195 | 5,471 | 150 | 213 | - | 12.4 秒 | 1.15 GB | 3 |
+| `bench/dart-grpc` | あり | 2,409 | 195 | 5,471 | 113 | 213 | - | 11.2 秒 | 1.15 GB | 3 |
+
+- 解析のコスト(関数の数、`summary_elems`、`dynamic_dispatch`)は同じ。sink の行だけなので、本体の読み方は変わらない。注記の合計が +1 なのは、下の誤検出の `field_imprecision`。
+- `bench/dart-grpc` は、finding が同じ 3 件(Google Cloud を使わないので、行は一致しない)。
+
+### 12.3 a / b の検出と、既知の見逃し
+
+`bench/dart-gcp` のハンドラ(Google Cloud のもの 29 個)の期待と結果。**「19 件」だけでなく、出ないはずのものと、出てしまうものを、既知として書く**(`bench/dart-gcp/README.md` にも同じ表)。
+
+| 項目 | ハンドラ | 結果 |
+| --- | ---: | --- |
+| a: 届く(名前、クエリ、URL に) | 15 | 15 件とも出る(`gcloud` 5、`googleapis` 5、`google_cloud_storage` 2、JSON の Map を `fromJson` に渡す形 3) |
+| a の**既知の見逃し** | 2 | 出ない(下の表) |
+| b: 届かない | 12 | 11 件は出ない。**1 件が誤検出**(下の表) |
+| 新しいカテゴリ | | `resource_name` が 10 件、`sql_injection` が 4 件、`ssrf` が 2 件(push の送り先)、基準の 3 件(合わせて 19 件) |
+| `-no-deps`(依存の本体を読まない)との照合 | | 同じ 19 件(組の集合が一致。ハンドラ 2 つを足す前の測定)。sink の行は、依存の本体を読まなくても一致する |
+
+| ハンドラ | 形 | 原因 | 課題 |
+| --- | --- | --- | --- |
+| `Gcloud.QueryKind`(a、見逃し) | `Query(kind: request.kind)` | 名前つき引数を指す sink の書式がない | #139 |
+| `Apis.ModifyPushName`(a、見逃し) | `modifyPushConfig` の購読の名前(引数 1) | 1 つのシンボルに 1 つのカテゴリ。この呼び出しの行は送り先(`ssrf`)だけで、購読の名前の行がない(`create`、`patch` も同じ) | #140 |
+| `Apis.RunGqlFixed`(b、誤検出) | 定数の GQL の `namedBindings` に入力を入れる | Map の要素を区別せず、`gqlQuery` 全体が汚染される。`field_imprecision`(`whole_value`)と `container_element_imprecision` つきで報告される | #141 |
+
+- 3 つとも、zoo に新しいセルを足した(12.4)。Go の Google Cloud のモデルに同じカテゴリで名前の sink を足す課題は #142。
+- 照合(ADR-092 の条件 2 は、本体を切る行に対するもの): sink だけの行なので、本体を読んだ場合と読まない場合で、finding の集合は同じ。
+- 1 つの流れが 2 件にならないことの確認: `gcloud` の `Bucket.read` は、インターフェースの行だけで 1 件(実装の `_BucketImpl.read` にも行を置いた試作では 2 件だった。10 節)。
+
+### 12.4 zoo のセル
+
+`bench/zoo-dart` に 6 セル(骨組みの `gcloud` と `googleapis` を `cells/packages` に置く。`http` の骨組みと同じ形)。それぞれ vuln / fixed / decoy が 1 つ。
+
+| セル | 形 | マーク |
+| --- | --- | --- |
+| `F/dart/gcloud-storage-read` | `Bucket.read` のオブジェクト名 | なし(期待どおり) |
+| `F/dart/gcloud-pubsub-lookup-topic` | `PubSub.lookupTopic` のトピック名 | なし |
+| `F/dart/googleapis-bigquery-query` | `JobsResource.query` の `QueryRequest.query` | なし |
+| `F/dart/gcloud-datastore-query-kind` | `Query(kind: ...)`(名前つき引数) | `vuln` が `@miss(unmodeled_library_call) @ref(#139)` |
+| `F/dart/googleapis-pubsub-subscription-name` | `modifyPushConfig` の購読の名前 | `vuln` が `@miss(unmodeled_library_call) @ref(#140)` |
+| `F/dart/googleapis-datastore-run-query` | `runQuery` の `gqlQuery.queryString`。decoy は定数の GQL の `namedBindings` に入力を入れる | `decoy` が `@fp @ref(#141)` |

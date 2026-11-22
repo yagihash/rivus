@@ -9,7 +9,37 @@ examples in `examples/rules`. The principles behind the models are in [PRINCIPLE
 
 ## 0. A row replaces what the analysis does by itself
 
-A call that has no model is read this way: the receiver and the arguments flow to the result, and **the memory that the arguments point to is read as unknown** (a function that is not read may write into what it is given: `unmodeled_library_call`). **A row for the function replaces all of that with what the row says.** So a row that says only `flows: [{from: args, to: result}]` takes away the other two: the receiver no longer flows to the result, and what the function writes into its arguments is no longer there. A flow can be lost by adding a row, and nothing says so. (Found on `bench/gcp`: the first stub of `rivus models coverage` left the receiver out and lost 3 of 27 findings; the second left the writes into the arguments out and lost 2 more. The stub now says the broad thing: receiver and arguments, to the result and into the arguments. `TestModelsCoverageStubsLoseNoFinding`.) When you narrow a row, check what you took away: the receiver, each argument, the writes into the arguments, the callbacks.
+A call that has no model is read this way: the receiver and the arguments flow to the result, and **the memory that the arguments point to is read as unknown** (a function that is not read may write into what it is given: `unmodeled_library_call`). **A row for the function replaces all of that with what the row says.** So a row that says only `flows: [{from: args, to: result}]` takes away the other two: the receiver no longer flows to the result, and what the function writes into its arguments is no longer there. A flow can be lost by adding a row, and nothing says so. (Found on `bench/gcp`: the first stub of `rivus models coverage` left the receiver out and lost 3 of 27 findings; the second left the writes into the arguments out and lost 2 more. The stub says the broad thing for the result and the writes, one row per argument that can be written into (see below). `TestModelsCoverageStubsLoseNoFinding`.) When you narrow a row, check what you took away: the receiver, each argument, the writes into the arguments, the callbacks.
+
+### `result` is the first result only; every result is `results`
+
+`to: result` (the same as `result0`) is **the first result only**. A function that returns `(value, error)` and has the row
+`{from: args, to: result}` does not carry its arguments into the `error`: `err.Error()` of it reaches no sink, and nothing says so
+(`strconv`-like functions that put the input in the error are the case that matters). Write `to: results` for every result, or one
+row per result (`result0`, `result1`) when they differ. `result` is right only for a function with one result (and for Rust and Dart,
+where a call has one result: `Result<T, E>`, a tuple and a Record are each one value). `rivus models coverage -yaml` writes `results`.
+`TestGoRowsThatSayResultAreForOneResult` reads the signature of every Go function that has a `to: result` row in the built-in rule
+sets, and fails for one with more than one result unless `testdata/result-first-only.txt` says, with the reason, that the other
+results never hold the data (the error is a fixed text). In a model made from types (a stub for every function of a package), 19 of
+1,475 rows had dropped such a flow, and `to: results` was the fix.
+
+### A write into `args` is wide: name the argument
+
+`{from: args, to: args}` and `{from: recv, to: args}` write the taint into **every** argument. An argument that is a shared
+object (a mux, a client, a configuration) then holds the taint of every call that passed through it, and the findings that
+follow from it grow (one project: about 8 times as many). Name the destination (`to: arg1`: the buffer, the struct that is
+filled) and give the source as narrowly (`from: arg0`).
+
+`rivus models coverage -yaml` writes the rows that way, and keeps the writes **on**: a row replaces the guess that a function
+may write into what it is given, so a stub without the writes would silently lose a flow, and a finding that is lost is worse
+than one that is added (the added ones show in the count). It writes one group of lines per argument that can be written into,
+from the type of the operand at the calls: a pointer, a slice, a map, an interface (not a string, a number, a bool, a struct
+held by value, a function), and one group for the receiver when it is a pointer. Each group has a comment: delete the lines
+when the function does not write there. A `context.Context` is left out of the writes (it stays a source of the results: a
+context made from a request is how that taint reaches what a client returns, and leaving it out lost 3 of the 27 findings of
+`bench/gcp`). `TestModelsCoverageStubsLoseNoFinding` checks that every stub, as it is written, loses no finding of `bench/gcp`
+and `bench/go-curated`. When the types are not known (a coverage index of an older version), the stub has the wide row
+and says so.
 
 ## 1. When a function may be `pure`
 
@@ -273,6 +303,22 @@ positional ones **by name**, and a call that leaves one out holds nil there, so 
 ## 4a. Cutting a dependency with a model (not reading its body)
 
 A model that stands in for the body of a dependency (so that the body is not read) is allowed when the body does not exist, when reading it does not converge, when the library calls the user's code (`calls:`), or when reading it costs the analysis a great deal (ADR-092). The last one only for a package that meets all of these: (1) the cost is measured and written down with the target it was measured on (a rule of thumb: the dependency is 90% of the time, or gigabytes); (2) a check compares the result with the body read and the result with the model, on a fixture that uses the API: the set of flows and the **edges at the border** (which function of your code a call into the dependency calls back) have to be the same, and the model may only be the side that has more, with a note; (3) every API that calls a function it is given or holds has a `calls:` row (a form that the format cannot write is a problem of the format, and the call site says so, not silence). A function of a cut package without a row is read as the unmodelled call it is (its arguments flow to its result, with `unmodeled_library_call`). The packages that were cut are listed in the output. As of today there is no way to cut one package (it is all dependencies or none: `-no-deps`) and no comparing check yet.
+
+## 4b. Categories
+
+A sink has a `category`: what kind of harm the value does there. It is a free string in the format, and these are the ones the built-in rows use:
+
+| category | the value is |
+| --- | --- |
+| `command_injection` | a command or its arguments |
+| `path_traversal` | a path of the file system |
+| `sql_injection` | the text of a query (SQL, BigQuery, GQL). A value that the service binds (a parameter, a filter value) is not one |
+| `ssrf` | a URL or a host that the program sends a request to |
+| `xss` | text that is written into HTML |
+| `open_redirect` | the address of a redirect |
+| `resource_name` | the name of a resource of a service that the user decides: a bucket, an object, a topic, a subscription, the kind of a datastore key. It can point to another resource of the project, or of another project. It is not a path of the file system (`dart-gcp.yaml`, `docs/GCP-MODELS.md` section 8) |
+
+A new category is made when no other one fits (not for a new library). It is added to this table, and to the decision of the product (`docs/GCP-MODELS.md`, judgement E, for `resource_name`). One symbol has one category (#140).
 
 ## 5. A row has to be hit
 

@@ -111,6 +111,21 @@ dart	dart/flutter_override_arg.dart	sink-none	@sink(none) @nosink(dart-flutter-o
 dart	dart/flutter_route_args.dart	na	@na(go: no such form; the arguments that a caller gave to a route)	-
 dart	dart/flutter_route_args.dart	sink-none	@sink(none)	void fixed() { @fixed
 dart	dart/flutter_route_args.dart	sink-none	@sink(none) @nosink(dart-flutter-route-args-decoy)	void decoy() { @decoy
+dart	dart/gcloud_datastore_query_kind.dart	miss	@source(dart-gcloud-datastore-query-kind-vuln) @miss(unmodeled_library_call) @ref(#139)	Future<void> vuln() async { @vuln
+dart	dart/gcloud_datastore_query_kind.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	dart/gcloud_datastore_query_kind.dart	sink-none	@sink(none) @nosink(dart-gcloud-datastore-query-kind-decoy)	Future<void> decoy() async { @decoy
+dart	dart/gcloud_pubsub_lookup_topic.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	dart/gcloud_pubsub_lookup_topic.dart	sink-none	@sink(none) @nosink(dart-gcloud-pubsub-lookup-topic-decoy)	Future<void> decoy() async { @decoy
+dart	dart/gcloud_storage_read.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	dart/gcloud_storage_read.dart	sink-none	@sink(none) @nosink(dart-gcloud-storage-read-decoy)	Future<void> decoy() async { @decoy
+dart	dart/googleapis_bigquery_query.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	dart/googleapis_bigquery_query.dart	sink-none	@sink(none) @nosink(dart-googleapis-bigquery-query-decoy)	Future<void> decoy() async { @decoy
+dart	dart/googleapis_datastore_run_query.dart	fp	@sink(none) @fp @nosink(dart-googleapis-datastore-run-query-decoy) @fp @ref(#141)	Future<void> decoy() async { @decoy
+dart	dart/googleapis_datastore_run_query.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	dart/googleapis_datastore_run_query.dart	sink-none	@sink(none) @fp @nosink(dart-googleapis-datastore-run-query-decoy) @fp @ref(#141)	Future<void> decoy() async { @decoy
+dart	dart/googleapis_pubsub_subscription_name.dart	miss	@source(dart-googleapis-pubsub-subscription-name-vuln) @miss(unmodeled_library_call) @ref(#140)	Future<void> vuln() async { @vuln
+dart	dart/googleapis_pubsub_subscription_name.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	dart/googleapis_pubsub_subscription_name.dart	sink-none	@sink(none) @nosink(dart-googleapis-pubsub-subscription-name-decoy)	Future<void> decoy() async { @decoy
 dart	dart/http_client_get.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
 dart	dart/http_client_get.dart	sink-none	@sink(none) @nosink(dart-http-client-get-decoy)	Future<void> decoy() async { @decoy
 dart	dart/http_ioclient_send.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed

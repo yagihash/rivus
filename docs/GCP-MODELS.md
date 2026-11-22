@@ -2,7 +2,8 @@
 
 > **状態: 一部実装**(確認: 2026-11-22、9c26a39)
 > - 実装済み: Spanner と BigQuery の SQL(`internal/model/builtin/go-gcp.yaml`、ADR-077)。
-> - 未実装(YAML にしていない): Pub/Sub と Functions の表。後ろの 3 つ(Firestore など)は見出しだけ。
+> - 実装済み(Dart): Storage、Pub/Sub、Datastore、BigQuery の sink(`internal/model/builtin/dart-gcp.yaml`)。8 節。
+> - 未実装(YAML にしていない): Go の Pub/Sub と Functions の表。後ろの 3 つ(Firestore など)は見出しだけ。
 > - 注意: ADR-077 から、この文書へのリンクが無い。
 
 ADR-077 の例外(メンテナの選択。ほかのベンダーの根拠にならない)で組み込む Google Cloud のクライアントを、**製品ごとに、書く前に、1 枚の表で決める**文書。ここは設計の置き場で、YAML はない。表をレビューしてから `internal/model/builtin/go-gcp.yaml` に行を足す。
@@ -99,7 +100,7 @@ ID トークンの検証と、復号したクレーム。ラベルを決める(�
 | B | Pub/Sub の入口を、`param_type`(確認済み、ノイズあり)にするか、`calls:`(正確。`with: [arg0, recv]` と書けば実際の Pub/Sub で一致する。P1 の注)にするか | `calls:` に乗り換える(ノイズが消える)。YAML の段 |
 | C | 「関数を登録する呼び出しが、渡された関数の引数を入口にする」道具(`functions.Typed`、第 1 世代の関数、`Receive` のような API を、利用者の型でも) | エンジンの変更(`flows` の `to:` のアクセスパスと並ぶ大きさ)。ADR が必要。入れるまで、利用者が自分の型を `param_type` で書く |
 | D | **エンジンの見逃し**: 構造体を、**ポインタで**、読んでいない関数に渡し、あとで、**値で** sink に渡すと、何も報告しなかった | **直した**(ADR-084。7 節) |
-| E | トピック、バケットなどの**名前**が入力のとき(別のプロジェクトのリソースを指せる)のカテゴリ | 今のカテゴリ(6 つ)に一致しない。新しいカテゴリ(`resource_name`)を作るか、作らないか。**作るまで sink にしない** |
+| E | トピック、バケットなどの**名前**が入力のとき(別のプロジェクトのリソースを指せる)のカテゴリ | **決着(2026-11-23)**: 新しいカテゴリ `resource_name` を作ったので、名前を sink にする(Dart: 8 節、`dart-gcp.yaml`。カテゴリの説明は `MODELING.md` 4b 節)。Go にも同じカテゴリで足す(課題 #142) |
 | F | CloudEvent を `queue_message` にする(Eventarc は、Pub/Sub、Storage、Firestore と、HTTP の呼び出し元のどれでも運ぶ) | 同じラベルで始める。細かく分ける必要が出たら、ラベルを足す |
 
 ## 7. `bench/gcp` の今の出方(固定したもの)
@@ -115,3 +116,79 @@ ID トークンの検証と、復号したクレーム。ラベルを決める(�
 | `UOpaque`、`UOpaqueAssign` | `Params` だけが汚染された `Statement` の**アドレス**を、読まない関数に渡し、`Statement` を値で `Query` に渡す。**実行では、値が SQL に届く** | 検出される。`field_imprecision`(`opaque_callee`)。もとはサイレントな見逃しだった(ADR-084: マークは変数に付き、値のコピーと要約を通して運ぶ)。同じ 8 形が `testdata/go/cases/fieldsink` にある |
 
 見逃しの確認方法: 小さいプロジェクトで、依存なしに、同じ形を書いた(`testdata/go/cases/fieldsink` の `ValAfterPtr*`、`ValRewrite`、デコイ 2 つ)。今は、ポインタを渡して値で sink = `opaque_callee`、値を渡して値で返す = `whole_value`、デコイ(読まない関数を呼ばない、別の変数に渡す)= 検出されない。
+
+## 8. Dart のクライアント(`internal/model/builtin/dart-gcp.yaml`)
+
+対象のパッケージ: `package:gcloud`(Storage、Pub/Sub、Datastore)、`package:googleapis`(`storage/v1`、`pubsub/v1`、`bigquery/v2`、`datastore/v1`)、`package:google_cloud_storage`。Go の表と考え方をそろえた: 組み込みは **sink だけ**(source は持たない。Pub/Sub のメッセージと、バケットや表から読んだ値は、利用者が信頼するかを選ぶ。0 節)。`flows` で本体を切る行は足していない(依存の本体は今までどおり読む。理由は 8.5)。測定は `docs/DESIGN-deps-cost.md` の 12 節。
+
+### 8.0 決めたこと
+
+| 点 | 決め方 |
+| --- | --- |
+| カテゴリ | バケット、オブジェクト、トピック、購読、キーの種類(kind)の**名前**は `resource_name`(新しいカテゴリ。6 節の判断 E の「どのカテゴリにも一致しない」への答えとして、相談役の指示で作った)。クエリの文は `sql_injection`、push の送り先の URL は `ssrf` |
+| 引数の指し方 | 位置引数だけ(`args`)。リクエストの 1 つのフィールドは `parts`(`query`、`pushConfig.pushEndpoint` など)。名前つき引数(`Query(kind: ...)`、`QueryRequest(query: ...)`)は、位置として指せない |
+| 行を置くシンボル | インターフェース(`Storage`、`Bucket`、`PubSub`)。実装(`_BucketImpl` など)には置かない(置くと、1 つの流れが 2 件の finding になる。測定で確認) |
+| 1 つのシンボルのカテゴリ | 1 つだけ。push の送り先を持つ購読の呼び出し(`modifyPushConfig`、`create`、`patch`)は、送り先(`ssrf`)だけを書き、購読の名前の行は置かない |
+| ラベル | `accepts` は書かない(Go と同じ。`user_input` でも、利用者が足した `stored` や `queue_message` の source でも届く) |
+
+### 8.1 Storage
+
+| API | 種類 | 行 |
+| --- | --- | --- |
+| `gcloud` `Storage.bucket` / `bucketInfo` / `bucketExists` / `createBucket` / `deleteBucket`(引数 0)、`copyObject`(0、1) | sink `resource_name` | あり |
+| `gcloud` `Bucket.read` / `info` / `delete` / `updateMetadata` / `write` / `writeBytes`(引数 0 = オブジェクトの名前) | sink `resource_name` | あり |
+| `googleapis` `storage/v1` の `ObjectsResource.get` / `delete`(0、1)、`insert`(1)、`list`(0)、`patch` / `update`(1、2)、`copy` / `rewrite`(1〜4)、`compose`(1、2)、`move`(0、1、2) | sink `resource_name` | あり |
+| `googleapis` `BucketsResource.get` / `delete`(0)、`patch` / `update`(1) | sink `resource_name` | あり |
+| `google_cloud_storage` `Storage.bucket` / `bucketMetadata` / `deleteBucket`(0)、`deleteObject` / `downloadObject` / `makeObjectPublic` / `objectMetadata` / `uploadObject` / `uploadObjectFromSink` / `uploadObjectFromString` / `patchObject`(0、1)、`moveObject`(0、1、2)、`rewriteObject`(0〜3)、`listObjects`(0)、`Bucket.object`(0) | sink `resource_name` | あり |
+| ACL の呼び出し(`insertObjectAcl` の `entity` と `role` など) | **しなかった**。ACL の相手(`user-x@...`)は、名前でなく、権限の付与。カテゴリが別(認可)で、いまの 6 つにない |
+| `StorageObject.download` などの、名前つき引数だけの API(`google_cloud_storage` の `StorageObject`) | **しなかった**。名前は `Bucket.object(name)` で入るので、そこで拾う |
+| `gcloud` `Bucket.list({prefix})`、`Storage.listBucketNames` | **しなかった**。`prefix` は名前つき引数 |
+| 読み出した内容(`Bucket.read` の戻り、`downloadObject` の戻り) | source にしない(`stored`。0 節) |
+
+### 8.2 Pub/Sub
+
+| API | 種類 | 行 |
+| --- | --- | --- |
+| `gcloud` `PubSub.createTopic` / `deleteTopic` / `lookupTopic` / `deleteSubscription` / `lookupSubscription`(0)、`createSubscription`(0、1) | sink `resource_name` | あり |
+| `gcloud` `Subscription.updatePushConfiguration`(0) | sink `ssrf` | あり |
+| `googleapis` `ProjectsTopicsResource.publish` / `get` / `delete` / `create` / `patch`(トピックの名前) | sink `resource_name` | あり |
+| `googleapis` `ProjectsSubscriptionsResource.pull` / `acknowledge` / `get` / `delete` / `modifyAckDeadline` | sink `resource_name` | あり |
+| `googleapis` `ProjectsSubscriptionsResource.modifyPushConfig` / `create` / `patch` の `pushConfig.pushEndpoint` | sink `ssrf`(`parts`) | あり(購読の名前の行はない: 8.0) |
+| `Topic.publish` / `publishString` / `publishBytes` と `PublishRequest.messages` の中身 | **しなかった** | 宛先はトピックの名前(sink 済み)で、本文は**データ**(7 節 P7 と同じ) |
+| `gcloud` `PubSub.createSubscription(..., endpoint:)` | **しなかった** | `endpoint` は名前つき引数 |
+| `googleapis` `PushConfig(pushEndpoint: ...)` の構築 | `parts` が、リクエストのフィールドとして拾う(構築そのものには行を置かない) |
+| メッセージの受け取り(`Subscription.pull` の `PullEvent`、`pull` の戻り) | source にしない(`queue_message`。Go の判断 A と同じ) |
+
+### 8.3 Datastore
+
+| API | 種類 | 行 |
+| --- | --- | --- |
+| `gcloud` `KeyElement.new`(0 = kind) | sink `resource_name` | あり |
+| `gcloud` `KeyElement(kind, id)` の `id` | **しなかった** | 利用者が自分のエンティティの id を渡すのは普通の使い方で、誤検出が多い(アクセスの制御の問題で、注入ではない) |
+| `gcloud` `Filter(relation, name, value)` の `value` | **しなかった** | 値は、サービスが束縛する。注入にならない(測定: `bench/dart-gcp` の `FilterValue` は出ない) |
+| `gcloud` `Query(kind: ...)`、`Filter` の `name`(プロパティ名) | **しなかった** | `kind:` は名前つき引数。`name` は位置だが、プロパティ名への入力は稀で、誤検出が多い |
+| `googleapis` `datastore/v1` `ProjectsResource.runQuery` / `runAggregationQuery` の `gqlQuery.queryString` | sink `sql_injection`(`parts`) | あり。`gqlQuery.namedBindings`(束縛する値)に入力が入る形は、`field_imprecision`(`whole_value`)つきで報告される(8.6 の一覧) |
+| `googleapis` `ProjectsResource.lookup` / `commit` などの `projectId` | **しなかった** | プロジェクトの識別子は利用者が選ぶものでなく、設定の値 |
+
+### 8.4 BigQuery
+
+| API | 種類 | 行 |
+| --- | --- | --- |
+| `googleapis` `bigquery/v2` `JobsResource.query` の `QueryRequest.query` | sink `sql_injection`(`parts`) | あり |
+| `JobsResource.insert` の `Job.configuration.query.query` | sink `sql_injection`(`parts`) | あり。`Job.fromJson(map)` の経路(JSON の Map を復号したもの)は、全体の汚染として拾い、`field_imprecision`(`whole_value`)つきで報告される |
+| `JobsResource.get` / `getQueryResults` / `cancel` / `delete` の `jobId`(引数 1) | sink `resource_name` | あり |
+| `QueryRequest.queryParameters`、`labels` | sink にしない | 束縛する値とラベル(Go の BigQuery と同じ) |
+| `TablesResource` / `DatasetsResource` の名前(`datasetId`、`tableId`) | **しなかった** | 名前の API が多いので、まず一般の形(`JobsResource`)から。名前の sink が要るなら、同じ書き方で足せる |
+
+### 8.5 `flows` で本体を切る行は、足さなかった
+
+`docs/DESIGN-deps-cost.md` の 10 節と 12 節の測定のとおり、Google Cloud のパッケージは解析のコストを増やさず(`googleapis` と `gcloud` の `spent_ms` は合わせて 28 ms)、`largest_scc` も大きくしない。ADR-092 の条件 1(コストの測定)が満たされないので、本体を切る行は足さない。sink だけの行は、本体を読むので、読んだ場合との照合が要らず(finding の集合が同じ: 12 節)、`dependency_body_unread` の注記も付かない。
+
+### 8.6 誤検出が多そうなもの(sink にしていない)と、出るもの
+
+- `Filter` の値、`KeyElement` の `id`: 8.3。
+- `PublishRequest` の本文、`Topic.publish` の本文: 8.2。
+- ACL の `entity` / `role`: 8.1。権限の付与で、カテゴリが別。
+- `projectId`(Datastore、BigQuery、Pub/Sub の第 1 引数の一部): 設定の値で、利用者の入力であることが少ない。
+- **出てしまう誤検出**: `ProjectsResource.runQuery` で、定数の GQL に、入力を `namedBindings` で渡す形(束縛。安全)が、`gqlQuery` 全体が汚染されるため、`field_imprecision`(`whole_value`)つきで報告される(`bench/dart-gcp` の `RunGqlFixed`)。注記があるので、判定役が見る。名前つき引数の構築では、フィールドごとの区別が今は付かない(Map の要素を区別しない)。
+

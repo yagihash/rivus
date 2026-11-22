@@ -1,0 +1,6 @@
+# Rows that say `to: result` (the first result only) for a function with more than one result, and are meant:
+# the other results (the error) never hold the arguments or the receiver. One symbol per line, the reason after `#`.
+# Read by TestGoRowsThatSayResultAreForOneResult. Anything else says `to: results`.
+(*os/exec.Cmd).CombinedOutput # the error is *ExitError or a start failure: "exit status N", no output of the program in it (the output is the first result)
+(*os/exec.Cmd).StdoutPipe # the error is "Stdout already set" or "StdoutPipe after process started": no data
+(*os/exec.Cmd).StderrPipe # the error is "Stderr already set" or "StderrPipe after process started": no data

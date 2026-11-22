@@ -2,7 +2,7 @@
 
 課題は、リポジトリの中のファイルで持つ(GitHub の Issue は使わない)。一覧は、この `ISSUES.md`。1 件は `docs/issues/<番号>-<短い名前>.md`。
 
-- **番号**: GitHub の番号を引き継ぐ(#74〜#99)。zoo の `@ref(#N)` と、コミットの `Zoo-Loosened:` の行が指すのは、この番号。新しい課題は 139 から(100〜107 は、直してから記録したもの。108、109、110〜122 は 2026-11-22 に開いた)。#1〜#73 は、日次レビューの指摘(GitHub 側で閉じ済み。ここには写していない)。
+- **番号**: GitHub の番号を引き継ぐ(#74〜#99)。zoo の `@ref(#N)` と、コミットの `Zoo-Loosened:` の行が指すのは、この番号。新しい課題は 143 から(100〜107 は、直してから記録したもの。108、109、110〜122 は 2026-11-22 に開いた)。#1〜#73 は、日次レビューの指摘(GitHub 側で閉じ済み。ここには写していない)。
 - **状態**: `open` / `partial`(一部直った。残りを題に書く)/ `closed`(直した: コミットとテスト)/ `deferred`(後回し。理由と見直す条件)/ `wontfix`(やらない)。
 - **誰が何をするか**: 中身と状態は相談役が決め、開発者が書いてコミットする。開発者が作業中に見つけたものは、相談役を待たずに `open` で足してよい(次の報告に番号を書く)。閉じるのは、相談役がレビューで確かめてから(開発者は「閉じられる」と報告する)。`deferred` と `wontfix` は相談役が決める。
 - **公開のリポジトリの決まり**: 直していない rivus 自身の弱点(対象が意図して起こせるサイレントな見逃し、隔離の漏れ)の再現の詳細は、ここに書かない。直るまでは、相談役のレビューのファイル(`.claude/reviews/`。追跡されない)にだけ置き、直ってから `closed` で記録する。
@@ -56,6 +56,10 @@
 | [#137](issues/137-dart-implementations-of-interface-sinks.md) | Dart で、インターフェースのメソッドの sink が、パッケージの外の実装の型の変数からの直接の呼び出しに届かない | 検出の見逃し(重さ: 低) | Dart | 0 | open | - |
 | [#138](issues/138-suppressions-pure-flows.md) | `origin: llm` の `pure` と、流れを切る `flows` のモデルが流れを消しても、`suppressions` と `llm_influenced` に残らない | 正確さ(サイレントな見逃し) | Go | 0 | closed | `cmd/rivus/resolve_test.go`(`TestLLMPureModelSuppressionIsRecorded`) |
 | [#136](issues/136-zsh-completion-equals-form.md) | zsh の補完で、`-lang=` のように `=` でつなぐ形のとき、値の一覧が出ない | 道具(重さ: 低) | 全 | 0 | open | - |
+| [#139](issues/139-named-arg-sink.md) | Dart: 名前つき引数を指す sink の書式がない(`Query(kind: ...)` などの、位置でない引数が sink にできない) | 道具(重さ: 中) | Dart | 1 | open | zoo `F/dart/gcloud-datastore-query-kind` |
+| [#140](issues/140-one-category-per-symbol.md) | モデル: 1 つのシンボルに複数のカテゴリの行を持てない(同じシンボルの行は足し合わされ、先頭のカテゴリになる) | 道具(重さ: 低) | 全 | 0 | open | zoo `F/dart/googleapis-pubsub-subscription-name` |
+| [#141](issues/141-gql-named-bindings-fp.md) | Dart: 定数の GQL の `namedBindings` に入力を入れる形が、`gqlQuery.queryString` の sink で報告される(`field_imprecision`) | 精度(誤検出。重さ: 低) | Dart | 0 | open | zoo `F/dart/googleapis-datastore-run-query` |
+| [#142](issues/142-go-gcp-resource-name.md) | Go の Google Cloud のモデルに、名前の sink(`resource_name`)を足す(Storage のバケットとオブジェクト、Pub/Sub のトピックと購読) | モデル(重さ: 中) | Go | 1 | open | - |
 
 ## 閉じたもの
 
@@ -82,3 +86,4 @@
 | [#131](issues/131-help-exit-codes.md) | `rivus setup rust -h`、`rivus models -h`、`rivus setup -h` の終了コードが 1(usage のエラー) | 道具(直した) | 全 | 0 | closed | `cmd/rivus/flagsides_test.go`(`TestHelpExitsZeroEverywhere`) |
 | [#135](issues/135-index-taint-default-output.md) | `rivus index -taint` が `-o` を省くと、対象のディレクトリの `.rivus/index.json` に書く | 安全・文書(重さ: 中) | 全 | 0 | closed | `TestIndexTaintDefaultsToTheUserCache` |
 | [#134](issues/134-graph-doc-rules-not-recorded.md) | docs/GRAPH.md の「index に渡したフラグは、与えなければ DB に記録されたものを使う」が `-rules` に当てはまらない | 文書または道具(重さ: 中) | 全 | 0 | closed | `TestGraphUsesTheRecordedRulesFile` |
+| [#143](issues/143-model-template-result-first-only.md) | モデルの `to: result` は最初の戻り値だけ。テンプレートと組み込みの行が、error への流れを落とす | サイレントな見逃し(直した) | Go | 1 | closed | `TestGoRowsThatSayResultAreForOneResult`、`TestModelsCoverageStubsLoseNoFinding` |

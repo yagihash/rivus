@@ -85,12 +85,24 @@ type Uncertainty struct {
 	Func         string      `json:"func,omitempty"`
 	Position     ir.Position `json:"position"`
 	Snippet      string      `json:"snippet,omitempty"`
+	// Recv and Operands are the type and the class of the receiver and of the arguments (receiver excluded) of a call that
+	// has no model: what `rivus models coverage -yaml` needs to write a row that names the arguments a function may write
+	// into (a pointer, a slice, a map, an interface) and leaves out the ones it cannot (a string, a number), and the
+	// `context.Context`.
+	Recv     *Operand  `json:"recv,omitempty"`
+	Operands []Operand `json:"operands,omitempty"`
 
 	pos ir.Pos
 	// global and globalPath say which package variable (and which path inside it) a global_var
 	// note is about: the evidence of a finding (Finding.SharedState) is made from them.
 	global     *sg.Value
 	globalPath string
+}
+
+// Operand is the type of an operand of a call, as the frontend wrote it, and its class.
+type Operand struct {
+	Type  ir.TypeID    `json:"type,omitempty"`
+	Class ir.TypeClass `json:"class,omitempty"`
 }
 
 // NewUncertainty creates an uncertainty with the attributable_to of its kind.
