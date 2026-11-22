@@ -13,11 +13,6 @@ import (
 // The stub of "rivus models coverage -yaml" is the start of a rule for a call that has no model. Every stub put in must
 // lose no finding (it may add some: it is broader than the default on purpose). The first versions did: they left the
 // receiver out, then the writes into the arguments, and 3 and 2 of the 27 findings of bench/gcp went.
-//
-// The writes into the arguments are a comment in the stub (a write into a shared object adds findings), so the test
-// takes the comment away and writes `args` as the destination: that is the widest row, and it must lose nothing. The
-// stub as it is lets the memory of the arguments be read as it was before the row, so it can lose the flows of a
-// function that writes into an argument; the stub says so.
 func TestModelsCoverageStubsLoseNoFinding(t *testing.T) {
 	for _, c := range []struct {
 		dir  string
@@ -60,9 +55,6 @@ func TestModelsCoverageStubsLoseNoFinding(t *testing.T) {
 			return m
 		}
 		yaml := run(append([]string{"models", "coverage", "-yaml", "-top", "1000"}, c.args...)...)
-		yaml = []byte(strings.ReplaceAll(strings.ReplaceAll(string(yaml), "    # flows: [", "    flows: ["), "to: arg1", "to: args"))
-		// the first `flows:` line of a row is replaced by the wide one: a key twice in a row is an error
-		yaml = []byte(dropFirstFlows(string(yaml)))
 		file := filepath.Join(t.TempDir(), "stubs.yaml")
 		if err := os.WriteFile(file, yaml, 0o644); err != nil {
 			t.Fatal(err)
@@ -85,18 +77,4 @@ func TestModelsCoverageStubsLoseNoFinding(t *testing.T) {
 func itoaT(n int) string {
 	b, _ := json.Marshal(n)
 	return string(b)
-}
-
-// dropFirstFlows removes the narrow `flows:` line of each stub that the wide one follows.
-func dropFirstFlows(y string) string {
-	lines := strings.Split(y, "\n")
-	var out []string
-	for i, l := range lines {
-		if strings.HasPrefix(l, "    flows: [") && !strings.Contains(l, "to: args") &&
-			i+2 < len(lines) && strings.HasPrefix(lines[i+2], "    flows: [") {
-			continue
-		}
-		out = append(out, l)
-	}
-	return strings.Join(out, "\n")
 }

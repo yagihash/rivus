@@ -9,7 +9,7 @@ examples in `examples/rules`. The principles behind the models are in [PRINCIPLE
 
 ## 0. A row replaces what the analysis does by itself
 
-A call that has no model is read this way: the receiver and the arguments flow to the result, and **the memory that the arguments point to is read as unknown** (a function that is not read may write into what it is given: `unmodeled_library_call`). **A row for the function replaces all of that with what the row says.** So a row that says only `flows: [{from: args, to: result}]` takes away the other two: the receiver no longer flows to the result, and what the function writes into its arguments is no longer there. A flow can be lost by adding a row, and nothing says so. (Found on `bench/gcp`: the first stub of `rivus models coverage` left the receiver out and lost 3 of 27 findings; the second left the writes into the arguments out and lost 2 more. The stub says the broad thing for the result (see below) and keeps the writes into the arguments as a comment. `TestModelsCoverageStubsLoseNoFinding` takes the comment away and checks that the widest row loses nothing.) When you narrow a row, check what you took away: the receiver, each argument, the writes into the arguments, the callbacks.
+A call that has no model is read this way: the receiver and the arguments flow to the result, and **the memory that the arguments point to is read as unknown** (a function that is not read may write into what it is given: `unmodeled_library_call`). **A row for the function replaces all of that with what the row says.** So a row that says only `flows: [{from: args, to: result}]` takes away the other two: the receiver no longer flows to the result, and what the function writes into its arguments is no longer there. A flow can be lost by adding a row, and nothing says so. (Found on `bench/gcp`: the first stub of `rivus models coverage` left the receiver out and lost 3 of 27 findings; the second left the writes into the arguments out and lost 2 more. The stub says the broad thing for the result and the writes, one row per argument that can be written into (see below). `TestModelsCoverageStubsLoseNoFinding`.) When you narrow a row, check what you took away: the receiver, each argument, the writes into the arguments, the callbacks.
 
 ### `result` is the first result only; every result is `results`
 
@@ -26,15 +26,20 @@ results never hold the data (the error is a fixed text). In a model made from ty
 ### A write into `args` is wide: name the argument
 
 `{from: args, to: args}` and `{from: recv, to: args}` write the taint into **every** argument. An argument that is a shared
-object (a mux, a client, a configuration, a `context.Context` that carries values) then holds the taint of every call that
-passed through it, and the findings that follow from it grow (one project: about 8 times as many). Name the destination
-(`to: arg1`: the buffer, the struct that is filled) and give the source as narrowly (`from: arg0`). The stub of
-`rivus models coverage -yaml` has the write as a comment for this reason; a row without it reads the memory of the arguments as
-untouched, so check whether the function fills one of them and add that one.
+object (a mux, a client, a configuration) then holds the taint of every call that passed through it, and the findings that
+follow from it grow (one project: about 8 times as many). Name the destination (`to: arg1`: the buffer, the struct that is
+filled) and give the source as narrowly (`from: arg0`).
 
-Proposal, not implemented (issue #140): `from: args_except: [0]` (and `to: args_except: [0]`), so that `context.Context` and other
-arguments that only carry configuration are left out of a flow without listing every other argument by hand. Today the other way is
-`arg1`, `arg2`, one flow each.
+`rivus models coverage -yaml` writes the rows that way, and keeps the writes **on**: a row replaces the guess that a function
+may write into what it is given, so a stub without the writes would silently lose a flow, and a finding that is lost is worse
+than one that is added (the added ones show in the count). It writes one group of lines per argument that can be written into,
+from the type of the operand at the calls: a pointer, a slice, a map, an interface (not a string, a number, a bool, a struct
+held by value, a function), and one group for the receiver when it is a pointer. Each group has a comment: delete the lines
+when the function does not write there. A `context.Context` is left out of the writes (it stays a source of the results: a
+context made from a request is how that taint reaches what a client returns, and leaving it out lost 3 of the 27 findings of
+`bench/gcp`). `TestModelsCoverageStubsLoseNoFinding` checks that every stub, as it is written, loses no finding of `bench/gcp`
+and `bench/go-curated`. When the types are not known (a coverage index of an older version), the stub has the wide row
+and says so.
 
 ## 1. When a function may be `pure`
 

@@ -1061,6 +1061,17 @@ func (s *state) contentOnly(to model.Selector, v *sg.Value, selfFirst bool) bool
 // known: everything that goes in may come out. The result is recorded as
 // uncertainty so that a reviewer sees the guess.
 func (s *state) unmodeled(cc *callCtx, note *Uncertainty) {
+	if cc.recv != nil {
+		note.Recv = &Operand{Type: cc.recv.Type, Class: cc.recv.Class}
+	}
+	note.Operands = nil
+	for _, a := range cc.args {
+		if a == nil {
+			note.Operands = append(note.Operands, Operand{})
+			continue
+		}
+		note.Operands = append(note.Operands, Operand{Type: a.Type, Class: a.Class})
+	}
 	s.noteOpaque(cc)
 	src := s.flatten(valuesLocs(s, cc.argv()))
 	if s.eng.opts.PassStats && cc.sym != "" {
