@@ -116,6 +116,7 @@
 | 100 | モデルのファイルに、パッケージ単位で「本体を読まない」宣言を書ける(解析の側) | 有効 | ADR-092、098 の続き。`body_replaced_packages`、`-body-replaced`、`-read-declared-bodies`。extractor への受け渡し、組み込みへの宣言は未 | MODELING 4a、ARCHITECTURE 5.5、AGENT-GUIDE、DESIGN-package-models | `summary.body_replaced_packages`、呼び返しの `assumed_call` |
 | 101 | `examples/rules` のフレームワークのルールは、`docs/MODEL-QUEUE.md` に入ったものから、組み込みに昇格する(ADR-063 を上書き) | 有効 | ADR-096 / 097 の範囲。個々の昇格の PR は ADR を書かない。手順書の「例からの昇格」 | MODEL-RUNBOOK、MODEL-QUEUE、examples/rules/README | 一覧にないフレームワークは、今までどおり利用者が足す |
 | 102 | 昇格した例のファイルは、リポジトリの中に参照が残るなら、中身が空のルールとして残す(ADR-101 の補足) | 有効 | gin: `bench/compare.sh` ほかが名指しで使う。参照がなければ消す | MODEL-RUNBOOK(1 節、4 節) | 前後の比較を保つ |
+| 108 | サービスのクライアントのモデルで、何を source にするかの基準は「その値を誰が書いたか」(汎用の HTTP クライアントの応答は既定で source にしない。サービスが決める値は source にしない。迷う値は入れず、理由をコメントに書く) | 有効 | 既存の `dart-gcp` などは変えない(見直しは課題 #158) | MODEL-RUNBOOK(2 節)、MODEL-QUEUE | `dio` の `Response.data` の判断(#202) |
 
 ## 訂正・追記の書き方を保つ ADR
 
