@@ -171,11 +171,14 @@ func (o *analyzeOpts) autoRust(others []string) (bool, error) {
 		leave(whyNoSandbox, "because reading it builds it (build scripts and proc macros run) and there is no sandbox on this system; for code you trust, -lang "+hint+" with -unsafe-host-exec reads it without isolation")
 		return false, nil
 	}
-	inst := o.installCheck
-	if inst == nil {
-		inst = o.rustInstalled
+	// (called directly: a method value `o.rustInstalled` is a closure that the dogfood count of unbound captures takes in)
+	var instErr error
+	if o.installCheck != nil {
+		instErr = o.installCheck()
+	} else {
+		instErr = o.rustInstalled()
 	}
-	if err := inst(); err != nil {
+	if err := instErr; err != nil {
 		if alone {
 			return false, fmt.Errorf("%s holds a Rust project (Cargo.toml), and what reads it is not installed: %v", o.dir, err)
 		}
