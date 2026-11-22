@@ -1,4 +1,4 @@
-# #89 param の source の汚染が、呼び元へ書き戻り、source と関係のない関数の sink に届く(構造的な誤検出)
+# #89 param の source の汚染が、呼び出し元へ書き戻り、source と関係のない関数の sink に届く(構造的な誤検出)
 
 - 状態: **closed**
 - 種類: 過検出
@@ -31,13 +31,13 @@ func main() { r := &Req{Path: "x"}; runA(r); runB(r) }
 期待: `runB` は source の値を何にも書いていないので、`runA` の中の sink には届かない。
 
 ## 原因
-`kind: param` の source は、パラメータが指すオブジェクトのセルに `Real` の要素を置く。`summarize` はそれを、そのパラメータの `OutParam`(オブジェクトがグローバルなら `OutGlobal` にも)に出す。呼び元が同じオブジェクトを別の関数に渡すと、source と関係のない関数の中の sink に届く。
+`kind: param` の source は、パラメータが指すオブジェクトのセルに `Real` の要素を置く。`summarize` はそれを、そのパラメータの `OutParam`(オブジェクトがグローバルなら `OutGlobal` にも)に出す。呼び出し元が同じオブジェクトを別の関数に渡すと、source と関係のない関数の中の sink に届く。
 
 ## 影響
 構造的な誤検出。rivus 自身の解析の 66 件(source 6 × sink 11)のうち、24 件は、source の関数から sink の関数へ呼び出しでは届かない(別セッションの集計)。
 
 ## 修正の方向(方針は承認済み: 書き戻さない)
-source を定義したパラメータに由来する `Real` の要素を、その関数の、同じパラメータの `OutParam` とそこから届く `OutGlobal` に出さない。関数の中で source の値を別のパラメータやグローバルに書いた場合は、今までどおり出す。失う流れ(source の関数を呼んだあと、呼び元が同じオブジェクトを sink に渡す)をフィクスチャと ADR に明記する。ADR に、`param_type` で N × M が `other_sources` に隠れる形も書く。フィクスチャは `param_type` の版と、起きない形(別々のオブジェクト、同じローカル、string)も。
+source を定義したパラメータに由来する `Real` の要素を、その関数の、同じパラメータの `OutParam` とそこから届く `OutGlobal` に出さない。関数の中で source の値を別のパラメータやグローバルに書いた場合は、今までどおり出す。失う流れ(source の関数を呼んだあと、呼び出し元が同じオブジェクトを sink に渡す)をフィクスチャと ADR に明記する。ADR に、`param_type` で N × M が `other_sources` に隠れる形も書く。フィクスチャは `param_type` の版と、起きない形(別々のオブジェクト、同じローカル、string)も。
 
 ## 関連
 CORE-B / CORE-C の issue(グローバル経由の経路)、ADR-047
@@ -50,5 +50,5 @@ CORE-B / CORE-C の issue(グローバル経由の経路)、ADR-047
 
 ## コメント(GitHub から移した写し)
 
-再開後の確認(2026-11-22、main 0bd0a00 の木で実行): この Issue の最小の Go の再現(`runB` が `kind: param` の source、`runA` の中の sink)は、finding が 0 件になった。対照として `runA` を source にすると 1 件出るので、ルールは効いている。直したコミット: 623b620、c9aa412(ADR-048、kind: param の source を呼び元へ書き戻さない)。閉じる。
+再開後の確認(2026-11-22、main 0bd0a00 の木で実行): この Issue の最小の Go の再現(`runB` が `kind: param` の source、`runA` の中の sink)は、finding が 0 件になった。対照として `runA` を source にすると 1 件出るので、ルールは効いている。直したコミット: 623b620、c9aa412(ADR-048、kind: param の source を呼び出し元へ書き戻さない)。閉じる。
 

@@ -1,6 +1,6 @@
 # 観測した呼び出しとの突き合わせ(試行)
 
-設計は [../../../docs/DESIGN-observed-calls.md](../../../docs/DESIGN-observed-calls.md)。**CI では走らせない**。動物園の Dart を 1 回通し、実際に起きた呼び出しのうち、rivus のグラフにない辺を出す。
+設計は [../../../docs/DESIGN-observed-calls.md](../../../docs/DESIGN-observed-calls.md)。**CI では走らせない**。zoo の Dart を 1 回通し、実際に起きた呼び出しのうち、rivus のグラフにない辺を出す。
 
 | ファイル | 役目 |
 |---|---|
@@ -34,4 +34,4 @@ python3 bench/zoo-dart/observed/compare.py $T/stacks-enter.json $T/zoo-dart.db -
 python3 bench/zoo-dart/observed/vs_miss.py $T/zoo-B.json bench/zoo-dart/cells/lib package:zoo_cells/ --others
 ```
 
-方法 B は差した分だけ同じ行の桁がずれるので、`--line-only`(同じ行の呼び出し点のどれかが、その呼び先への辺を持てば `ok`)で比べる。グラフは、差す前の元の cells から作る(行番号が同じ)。
+方法 B は差した分だけ同じ行の桁がずれるので、`--line-only`(同じ行の呼び出し点のどれかが、その呼び出し先への辺を持てば `ok`)で比べる。グラフは、差す前の元の cells から作る(行番号が同じ)。

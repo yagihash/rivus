@@ -4,7 +4,7 @@
 - 種類: 誤ったモデル(直した)
 - 言語: Rust
 - ROADMAP の節: 5
-- 守るもの: 動物園 `F/conv/builtin-minmax`(Rust)
+- 守るもの: zoo `F/conv/builtin-minmax`(Rust)
 
 ## 今の状態(2026-11-22 の見直し)
 

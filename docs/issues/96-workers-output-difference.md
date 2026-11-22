@@ -50,6 +50,6 @@ rivus analyze -workers 16 -rules rules.yaml ./... > w16.json
 
 ## 経緯(修正)
 
-- 2026-11-22: `internal/taint/engine.go` の `workers > 1 &&` を外し、8 関数以上の SCC は、`-workers` によらず「回ごと」(前の回の要約に対して解析し、順に commit)の道を通す。既定(workers = CPU 数 > 1)の出力は変わらず、変わるのは `-workers 1` だけ。相談役の判断で、この形にした。
-- 確かめたこと: `-workers 1` と既定の出力の完全一致を、`testdata/scc`(試験に固定)、go-curated、dart-curated、rust-curated、動物園の Dart と Rust で確かめた。動物園の Go は、`stats.functions` などが、`-workers` を変えなくても同じ入力で 579〜586 に揺れる(#84。go/ssa のラッパー由来)ので、完全一致の比較には向かない(`-workers` の差ではない)。
+- 2026-11-22: `internal/taint/engine.go` の `workers > 1 &&` を外し、8 関数以上の SCC は、`-workers` によらず「回ごと」(前の回の要約に対して解析し、順に commit)の経路を通す。既定(workers = CPU 数 > 1)の出力は変わらず、変わるのは `-workers 1` だけ。相談役の判断で、この形にした。
+- 確かめたこと: `-workers 1` と既定の出力の完全一致を、`testdata/scc`(試験に固定)、go-curated、dart-curated、rust-curated、zoo の Dart と Rust で確かめた。zoo の Go は、`stats.functions` などが、`-workers` を変えなくても同じ入力で 579〜586 に揺れる(#84。go/ssa のラッパー由来)ので、完全一致の比較には向かない(`-workers` の差ではない)。
 - 「まれに TestDeterministic* が落ちる」は、ローカルの `-count=8` と、直近の CI 25 回で再現しなかった。次に出たら、実行の番号つきで開き直す。

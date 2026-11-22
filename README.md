@@ -1,15 +1,15 @@
 # rivus
 
 > ⚠️ 開発中です。コマンド、フラグ、出力の形は変わります。
-> **rivus の結果を「通れば安全」の関門として使わないでください。** 見つけられない流れがあります（[何を言わないか](#何を言わないか)）。
+> **rivus の結果を「通れば安全」のゲートとして使わないでください。** 見つけられない流れがあります（[何を報告しないか](#何を報告しないか)）。
 
 `rivus` は、**Go / Dart / Rust のコードについて、「外から来た値が、危険な処理に届くか」の経路を、関数・ファイル・パッケージを跨いで組み立てるツール**です（taint 解析）。
 
 脆弱性を判定する SAST ではありません。**判定は、LLM や人が行う**前提で、rivus は、その材料になる事実を出します。
 
-- 届く経路と、その各段のコード
+- 届く経路と、その各ステップのコード
 - 経路の途中で、確かめられなかったこと（不確実性）と、その理由
-- 条件によって結果が変わる所（値によってサニタイズされる関数、ガード）と、その条件の出どころ
+- 条件によって結果が変わる所（値によってサニタイズされる関数、ガード）と、その条件の出所
 
 名前の `rivus` はラテン語で「小川・水路」。英語 *derive* の語源です。
 
@@ -59,18 +59,18 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 読み方:
 
-- **`paths`**: source から sink までの段。各段に、関数、位置、その行のコード（`snippet`）、何が起きたか（`desc`）、使ったモデルがあります。
-- **`uncertainties`**: その経路で、rivus が確かめられなかったこと。種類（`kind`）と、原因が対象のコードにあるか rivus の側にあるか（`attributable_to`: `target` / `rivus` / `mixed`。`mixed` は、言語の機能に由来するが、rivus の精度向上でも減らせるもの）を示します。種類は、`dynamic_dispatch`（呼び先が実行時に決まる）、`unmodeled_library_call`（中身もモデルもない関数を通った）、`dependency_body_unread`（モデルのあるインターフェースの呼び出しの候補に、依存の本体があったが、読まなかった: 依存が包んだ先の自前の実装へは進んでいない。Go）、`depth_limit`（解析の上限で止めた）、`assumed_call`（渡したクロージャが呼ばれると仮定した）、`container_element_imprecision`、`reflection`、`config_read`、`global_var` などです。
+- **`paths`**: source から sink までのステップ。各ステップに、関数、位置、その行のコード（`snippet`）、何が起きたか（`desc`）、使ったモデルがあります。
+- **`uncertainties`**: その経路で、rivus が確かめられなかったこと。種類（`kind`）と、原因が対象のコードにあるか rivus の側にあるか（`attributable_to`: `target` / `rivus` / `mixed`。`mixed` は、言語の機能に由来するが、rivus の精度向上でも減らせるもの）を示します。種類は、`dynamic_dispatch`（呼び出し先が実行時に決まる）、`unmodeled_library_call`（中身もモデルもない関数を通った）、`dependency_body_unread`（モデルのあるインターフェースの呼び出しの候補に、依存の本体があったが、読まなかった: 依存が包んだ先の自前の実装へは進んでいない。Go）、`depth_limit`（解析の上限で止めた）、`assumed_call`（渡したクロージャが呼ばれると仮定した）、`container_element_imprecision`、`reflection`、`config_read`、`global_var` などです。
 - **`confidence`**: 経路に不確実性が 1 つもなければ `no_uncertainty_on_path`、あれば `requires_review`。**本物かどうかの判定ではありません。**
-- **`reachability`**: 経路の関数が、プログラムの起点（`main` など）から届くか（`from_entry` / `from_framework_callback` / `not_from_entry`）。`from_framework_callback` は、起点からは届かないが、依存の型が宣言するメソッドを上書きしている関数（Flutter の `build`、`initState` など。フレームワークが呼ぶ）から届く、という意味です（Dart）。`not_from_entry` は「死んだコード」の意味ではありません（フレームワークに値として登録されたハンドラは、起点から辿れないことがあります）。
-- **`conditional_nodes`**（上の例にはありません）: 引数の値でサニタイズするかが変わる関数（`render(s, escape bool)` のような形）を通ったとき、条件、条件ごとの結果、呼び元が渡した値の出どころ（定数、設定の読み出し、など）を書き出します。どちらが起きるかは、判定しません。
+- **`reachability`**: 経路の関数が、プログラムの起点（`main` など）から届くか（`from_entry` / `from_framework_callback` / `not_from_entry`）。`from_framework_callback` は、起点からは届かないが、依存の型が宣言するメソッドを上書きしている関数（Flutter の `build`、`initState` など。フレームワークが呼ぶ）から届く、という意味です（Dart）。`not_from_entry` は「死んだコード」の意味ではありません（フレームワークに値として登録されたハンドラは、起点からたどれないことがあります）。
+- **`conditional_nodes`**（上の例にはありません）: 引数の値でサニタイズするかが変わる関数（`render(s, escape bool)` のような形）を通ったとき、条件、条件ごとの結果、呼び出し元が渡した値の出所（定数、設定の読み出し、など）を書き出します。どちらが起きるかは、判定しません。
 - **`id` と `fingerprint`**: コードが少し変わっても同じ箇所を指せるようにするための鍵。`rivus resolve` が使います。
 
 出力の全体は、`findings` のほかに、プログラム全体の `uncertainties`、`stats`（関数の数、収束したか、など）、`summary`（不確実性の集計、モデルを書くと減る関数の上位）を持ちます。
 
 細かい点:
 
-- 解析が上限で止まった所は `depth_limit` として記録され、理由が付きます: `budget`（仕事量。どのマシンでも同じ所で止まる）、`func_timeout` / `run_timeout`（時計。マシンの負荷で止まる所が変わる）。時計で止まったものがあれば、`summary.load_dependent` が `true` になります。
+- 解析が上限で止まった所は `depth_limit` として記録され、理由が付きます: `budget`（作業量。どのマシンでも同じ所で止まる）、`func_timeout` / `run_timeout`（時計。マシンの負荷で止まる所が変わる）。時計で止まったものがあれば、`summary.load_dependent` が `true` になります。
 - Go で、型エラーのあるパッケージと、それを import するパッケージは、SSA が作られず、解析から落ちます(`packages` には載ったままです)。読んだが作れなかったパッケージの数、落ちた関数の数、上位 10 のパッケージ(と理由)は、`summary.unread` に出ます(1 つもなければ、欄はありません)。パッケージごとに `missing_source` の不確実性も出て、stderr に 1 行出ます。終了コードと finding は変わりません。
 - 数値と真偽値になった値は、既定では追いません（`numeric_stop` として記録。`-numeric-taint` で追う）。
 - `rivus resolve` の答えは、`unchanged` / `changed` / `rematched` / `ambiguous` / `unresolved` と、finding については今も届くか（`flow`）です。
@@ -106,7 +106,7 @@ rivus query -site <ID> ./...           # sites の 1 件から始める
 | `analyze` | source から sink への経路を、関数とパッケージを跨いで探す |
 | `query` | 片側からの問い（この sink に届く source / この source が届く sink / この箇所について） |
 | `index` | コードを 1 回読んで、呼び出しグラフを保存する（`-taint` で、解析の結果も） |
-| `graph` | 保存した呼び出しグラフを調べる（呼び元、呼び先、経路、インターフェースの実装）。**呼び出しの関係であって、データの流れではない** |
+| `graph` | 保存した呼び出しグラフを調べる（呼び出し元、呼び出し先、経路、インターフェースの実装）。**呼び出しの関係であって、データの流れではない** |
 | `resolve` | 前に見た箇所（finding や site）が、今のコードのどこにあるか、今も届くかを答える |
 | `models coverage` | どの関数にモデルを書くと効果があるかを、効果の大きい順に出す |
 | `extract` | 中立の IR を書き出す（調査用） |
@@ -120,7 +120,7 @@ rivus query -site <ID> ./...           # sites の 1 件から始める
 | 言語 | どう読むか | 要るもの |
 |---|---|---|
 | Go | `go/packages` と `go/ssa` で直接読む | Go のツールチェーン。コードがビルドできること |
-| Dart | 別プロセスの extractor（`package:analyzer`）が IR を書き、rivus が読む | Dart SDK。**解析の前に、そのパッケージで `dart pub get` を実行する**（rivus は実行しません。していない、または古いとき、rivus は `summary.unread` と stderr でそう言います）。コード生成（`build_runner`）も済んでいること。[extractor/dart](extractor/dart/README.md) |
+| Dart | 別プロセスの extractor（`package:analyzer`）が IR を書き、rivus が読む | Dart SDK。**解析の前に、そのパッケージで `dart pub get` を実行する**（rivus は実行しません。していない、または古いとき、rivus は `summary.unread` と stderr でそう報告します）。コード生成（`build_runner`）も済んでいること。[extractor/dart](extractor/dart/README.md) |
 | Rust | 別プロセスの extractor（rustc のドライバ。MIR を読む）が IR を書き、rivus が読む | 固定した nightly の Rust と extractor（`rivus setup rust -source extractor/rust` か Homebrew で用意する。macOS は既定でサンドボックスの下、Linux は `-unsafe-host-exec` のときだけ読める）。`-lang` なしでは、macOS で `[Y/n]` と聞いてから読む(`-yes` で聞かない)。コードがビルドできること、`Cargo.lock` があること。**読むと、対象のビルドが走る**（下の「信頼できないコード」）。[extractor/rust](extractor/rust/README.md) |
 
 - Dart と Rust の extractor（`rivus-dart`、`rivus-rust`）は、PATH に置くか、`-dart-extractor` / `-rust-extractor`（または環境変数 `RIVUS_DART_EXTRACTOR` / `RIVUS_RUST_EXTRACTOR`）で指します。extractor が書いた IR のファイルを、`rivus analyze -ir file.jsonl` で読むこともできます。
@@ -138,10 +138,10 @@ Go から作り始めたので、**Go が最も進んでいて、Dart と Rust �
 | 動的な呼び出しの候補 | 型に基づく解析で絞る | rivus 自身が値を追う。追えないと候補なし（不確実性として出る） | extractor が型で候補を出す（型が合うだけの候補も入る）。一部は rivus 自身が値を追う |
 | 実コードでの確認 | 複数のプロジェクト | 少ない（Flutter のアプリは、これから） | 少ない |
 
-- 言語間の差は、**同じ流れの形を 3 言語で書いたテスト**（[bench/zoo](bench/zoo/README.md)）で数えています。`go test ./cmd/rivus -run Zoo -v` が、言語ごとに「出る / 痕跡つきで見逃す / 黙って見逃す / おとりを誤って出す」の数を出します。
+- 言語間の差は、**同じ流れの形を 3 言語で書いたテスト**（[bench/zoo](bench/zoo/README.md)）で数えています。`go test ./cmd/rivus -run Zoo -v` が、言語ごとに「出る / 注記つきで見逃す / 何も報告せずに見逃す / デコイを誤って出す」の数を出します。
 - 既知の見逃しの一覧と、その原因は [bench/MISSES.md](bench/MISSES.md) にあります。
 
-## 何を言わないか
+## 何を報告しないか
 
 rivus が出さなかったことは、「流れがない」という意味ではありません。
 
@@ -174,7 +174,7 @@ LLM にモデルを書かせ、人や別の手段で確かめる、という使�
 
 ルールで書けること（抜粋）:
 
-- `kind: param`: 関数の引数を source にする（フレームワークが呼ぶハンドラの入口）。その値は、関数の中では追いますが、呼び元には書き戻しません。
+- `kind: param`: 関数の引数を source にする（フレームワークが呼ぶハンドラの入口）。その値は、関数の中では追いますが、呼び出し元には書き戻しません。
 - `match: implementations`: インターフェースのメソッドに書いたルールを、自分のコードの実装に広げる（上限は `-max-implementations`）。
 - `pure: true`: その関数を通って、値は伝わらない。
 - `accepts` / ラベル: sink が、どの種類の source に反応するかを絞る。
@@ -222,14 +222,14 @@ RIVUS_DART="dart" go test ./cmd/rivus           # Dart の extractor を使う�
 RIVUS_RUST=$PWD/extractor/rust/target/debug/rivus-rust go test ./cmd/rivus   # Rust の extractor を使うテストも（先に extractor/rust をビルド）
 ```
 
-PR の CI は `go test -short`(重い試験は、自分で `-short` を見て飛ばす)で、main への push と週 1 回の実行が全部を走らせます。main の実行が赤になったら、次の仕事より先に、直すか原因の PR を戻します。
+PR の CI は `go test -short`(重い試験は、自分で `-short` を見て飛ばす)で、main への push と週 1 回の実行が全部を走らせます。main の実行が失敗したら、次の作業より先に、直すか原因の PR を戻します。
 
 正しさは、役目の違うテストとベンチで確かめています（[bench/README.md](bench/README.md)）。
 
 | 置き場 | 何を見るか |
 |---|---|
 | `testdata/`、`bench/*-curated` | 小さいケース。ソースの `@source(tag)` / `@sink(tag)` / `@sink(none)` が期待値 |
-| `bench/zoo-go`、`zoo-dart`、`zoo-rust` | 流れの形を 1 つずつ。**期待値は、ケースを実際に動かした結果**（rivus の出力に合わせて書けない）。脆弱な版、直した版、おとりの 3 つ組 |
+| `bench/zoo-go`、`zoo-dart`、`zoo-rust` | 流れの形を 1 つずつ。**期待値は、ケースを実際に動かした結果**（rivus の出力に合わせて書けない）。脆弱な版、直した版、デコイの 3 つ組 |
 | `bench/go-scale` | 大きなコードで起きる現象（要約の膨張、収束しない）を、数秒で再現する生成コード |
 | `bench/wild` | 公開された実世界の脆弱性。その件の source と sink を与えたとき、本物の経路を組み立てられるか |
 | 実在のプロジェクト（`bench/gogs` ほか） | 変更の前後で、finding の増減を比べる（`bench/compare.sh`）。コードは置かず、版の指定だけ |
@@ -238,9 +238,9 @@ PR の CI は `go test -short`(重い試験は、自分で `-short` を見て飛
 
 ## ドキュメント
 
-読み手ごとの入口です。全体の目次は [docs/README.md](docs/README.md)。
+読者ごとの入口です。全体の目次は [docs/README.md](docs/README.md)。
 
-| 読み手 | 読む文書 |
+| 読者 | 読む文書 |
 |---|---|
 | 使い手 | この README。信頼できないコードの扱いは [docs/rust-isolation.md](docs/rust-isolation.md)。用語は [docs/GLOSSARY.md](docs/GLOSSARY.md) |
 | ルールを書く人 | [docs/MODELING.md](docs/MODELING.md)(書式)、[examples/rules](examples/rules)(見本)、[docs/GCP-MODELS.md](docs/GCP-MODELS.md) |

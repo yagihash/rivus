@@ -1,7 +1,7 @@
-# #80 Dart: 標準ライブラリのコールバック(catchError、whenComplete、putIfAbsent、Map.forEach、onError、Future.sync)と await した Future.error が、決め打ちのリストに無く黙って落ちる
+# #80 Dart: 標準ライブラリのコールバック(catchError、whenComplete、putIfAbsent、Map.forEach、onError、Future.sync)と await した Future.error が、決め打ちのリストに無く何も報告せずに落ちる
 
 - 状態: **open**
-- 種類: 黙った見逃し
+- 種類: サイレントな見逃し
 - 言語: Dart
 - ROADMAP の節: 2 / 3
 - 守るもの: -
@@ -10,7 +10,7 @@
 ## 本文(GitHub から移した写し)
 
 ## 現象
-標準ライブラリの高階関数のうち、extractor が「コールバックを呼ぶ」と知っているのは、決め打ちのリストだけ(`Future.then`、`Stream.listen`、`Iterable.forEach` / `map` / `where` など)。**リストに無い呼び出しの、コールバックの中の sink や、コールバックが返す値が、落ちる**。`Map.forEach` 以外は不確実性も出ない(**黙った見逃し**)。実コードで、とてもよく使う形。
+標準ライブラリの高階関数のうち、extractor が「コールバックを呼ぶ」と知っているのは、決め打ちのリストだけ(`Future.then`、`Stream.listen`、`Iterable.forEach` / `map` / `where` など)。**リストに無い呼び出しの、コールバックの中の sink や、コールバックが返す値が、落ちる**。`Map.forEach` 以外は不確実性も出ない(**サイレントな見逃し**)。実コードで、とてもよく使う形。
 
 ## 再現(Dart)
 ```dart

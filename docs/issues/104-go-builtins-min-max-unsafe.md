@@ -1,10 +1,10 @@
 # #104 Go: 組み込み関数(min / max / unsafe)の結果で、流れが落ちる
 
 - 状態: **closed**
-- 種類: 黙った見逃し(直した)
+- 種類: サイレントな見逃し(直した)
 - 言語: Go
 - ROADMAP の節: 1
-- 守るもの: 動物園 `F/conv/builtin-minmax`、`F/conv/unsafe-string`、`cmd/rivus/go_builtin_test.go`
+- 守るもの: zoo `F/conv/builtin-minmax`、`F/conv/unsafe-string`、`cmd/rivus/go_builtin_test.go`
 
 ## 今の状態(2026-11-22 の見直し)
 

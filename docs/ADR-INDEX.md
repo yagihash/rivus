@@ -20,7 +20,7 @@
 | 003 | IR は φ なし CFG + 書き換え可能ローカル | 有効 | 命令数は 039/040 で具体化、IR 増分は ADR-043 追記 | ARCHITECTURE 2.1-2.3 | CFG の高さで切る。SSA 化はコア一本。Go は NaiveForm、lifted go/ssa は oracle |
 | 004 | bottom-up の関数サマリ | 有効 |  | ARCHITECTURE 5.2 | SCC 縮約・トポ順の functional approach。seed なしクエリのために選ぶ |
 | 005 | 汚染はラベル集合 | 有効 |  | ARCHITECTURE 4.2 | ラベル集合。sanitizer は特定ラベルだけ落とす |
-| 006 | 値依存サニタイズと条件ガード | 有効 | 出どころ追跡は 035、訂正は 078; 覆した先・注意: 078 | ARCHITECTURE 5.6 | 引数由来のガードだけ記録(約 4 個まで)、評価はしない。SMT/シンボリック実行はしない |
+| 006 | 値依存サニタイズと条件ガード | 有効 | 出所追跡は 035、訂正は 078; 覆した先・注意: 078 | ARCHITECTURE 5.6 | 引数由来のガードだけ記録(約 4 個まで)、評価はしない。SMT/シンボリック実行はしない |
 | 007 | soundy を宣言、扱わなかった箇所は記録 | 有効 |  | ARCHITECTURE 4.4 | リフレクション等は意図的に扱わず、必ず出力に残す |
 | 008 | 不確実性は閉じた kind + attributable_to | 一部覆った | 「追加は版を上げる」は運用で逆。ADR-043 追記 CORE-1、ARCH 4.4; 訂正・追記あり(書き方を保つ)。追記あり。覆した先・注意: 版運用 | ARCHITECTURE 4.4 | 10 種 + 4 種、`target`/`rivus`/`mixed`。追記: ADR-059 で `assumed_call` |
 | 009 | 出力は JSON が本体、SARIF は副次 | 有効 | SARIF は未実装。Phase 1 範囲外と明記; 訂正・追記あり(書き方を保つ)(ブリーフの誤り) | README | SARIF は private repo で GHAS 無しには使えない(訂正)。JSON が一級 |
@@ -62,18 +62,18 @@
 | 045 | 関数値の呼び出しに sink/source/モデルを当てる | 有効 | 拡張: 050/068/070 | DESIGN-callouts | 候補は IR 上で一元決定(`valuecalls`) |
 | 046 | 独自ベンチ(go-curated、go-synth) | 有効 |  | bench/README | 精度回帰と性能スケールを分ける |
 | 047 | パラメータの関数の呼び出しを記号的な出力に(コールアウト) | 有効 | 状態: 棚上げ→精度のため再開。段階 2 は 071 が実装; 訂正・追記あり(書き方を保つ)。状態注記 | DESIGN-callouts | 状態の注記が本文中に 2 つある |
-| 048 | `kind: param` の source を呼び元へ書き戻さない | 有効 |  | - | 「種」だけ書き戻さない |
-| 049 | グローバル経由の経路に書き手の段を入れる | 有効 | 証拠は 069/087 | DESIGN-shared-state | - |
-| 050 | 上限で解決しなかった関数値は「知らない」と言わない | 一部覆った | 拡張: 070。追記(2026-11-22): 候補の上限を 8 から 32 にした | - | `candidate_limit` を区別。32 を超える形は黙った見逃し(#77) |
-| 051 | `Reachable` が捕獲ありクロージャも辿る | 有効 | Rust は 058 | - | - |
+| 048 | `kind: param` の source を呼び出し元へ書き戻さない | 有効 |  | - | 「シード」だけ書き戻さない |
+| 049 | グローバル経由の経路に書き込み側のステップを入れる | 有効 | 証拠は 069/087 | DESIGN-shared-state | - |
+| 050 | 上限で解決しなかった関数値は「知らない」と報告しない | 一部覆った | 拡張: 070。追記(2026-11-22): 候補の上限を 8 から 32 にした | - | `candidate_limit` を区別。32 を超える形はサイレントな見逃し(#77) |
+| 051 | `Reachable` がキャプチャありクロージャもたどる | 有効 | Rust は 058 | - | - |
 | 052 | `not_from_entry` に説明を添える | 有効 | 073 が拡張 | - | - |
-| 053 | 捕獲値が呼ぶ所で分からないとき黙って埋めない | 有効 | 059 が作った場所で当てる経路を足す。`capture_unbound` は残る | DESIGN-capture | `depth_limit`/`capture_unbound` |
+| 053 | キャプチャ値が呼ぶ所で分からないとき何も報告せずに埋めることはしない | 有効 | 059 が作った場所で当てる経路を足す。`capture_unbound` は残る | DESIGN-capture | `depth_limit`/`capture_unbound` |
 | 054 | 作業量の上限と実時間の上限を区別 | 有効 |  | README | `budget:` / `func_timeout:` / `run_timeout:`、`load_dependent` |
 | 055 | 値の型は値のデータを運ばない(reflect) | 有効 | 採用; 訂正・追記あり(書き方を保つ)。仮説履歴 | - | 仮説の履歴を本文に残す(収束の原因探索) |
 | 057 | join した要約で全体が一部を吸収(`absorbWhole`) | 有効 | 位置注意 | - | ファイル上は 056 より前に置かれている(番号順でない) |
 | 056 | `globals:` の `holds: nothing` | 有効 | 採用、ユーザー承認 | MODELING に記載なし | 流れを止めたことを `global_holds_nothing` で記録 |
 | 058 | Rust の `Reachable`(再 export trait、環境 alloc) | 有効 | 051 の続き | - | - |
-| 059 | 見えない呼び先のクロージャを作った場所で当てる | 有効 | 採用 | DESIGN-capture | `assumed_call`。008 に追記あり |
+| 059 | 見えない呼び出し先のクロージャを作った場所で当てる | 有効 | 採用 | DESIGN-capture | `assumed_call`。008 に追記あり |
 | 060 | ポインタレシーバ越しのインターフェース呼び出し | 有効 | 090 が続き | - | - |
 | 061 | 診断出力(`-pass-stats` 等)は結果を変えない | 有効 |  | - | - |
 | 062 | ビルドが除くものは既定で読まない(3 言語) | 有効 |  | README | 読まなかった数を `tests_skipped` に出す |
@@ -84,21 +84,21 @@
 | 067 | モデルの流れに「近似」(`approximate`) | 有効 |  | MODELING §2 | `model_approximation` が通った finding に付く |
 | 068 | インターフェース越しの呼び出しで候補の sink を当てる | 有効 | 045 の延長 | MODELING §4 | - |
 | 069 | グローバル経由の finding に `shared_state` | 有効 | 087 が拡張 | DESIGN-shared-state | 出力の追加のみ |
-| 070 | 関数値の候補が一部しか追えないことを言う | 有効 |  | - | `unresolved_callee`(`partial`) |
+| 070 | 関数値の候補が一部しか追えないことを示す | 有効 |  | - | `unresolved_callee`(`partial`) |
 | 071 | モデルの `calls:` | 有効 | 080 が `method:` を追加 | MODELING §3 | 段階 2 |
-| 072 | Rust の可変捕獲を指す先と同一視 | 有効 |  | - | - |
+| 072 | Rust の可変キャプチャを指す先と同一視 | 有効 |  | - | - |
 | 073 | フレームワークが呼ぶメソッドを入口に足す | 有効 |  | README | `from_framework_callback` |
-| 074 | sink が引数のフィールドを言える(`parts`) | 有効 | 084 が黙った見逃しを直す | MODELING §4, DESIGN-field-sinks | `field_imprecision` |
+| 074 | sink が引数のフィールドを指定できる(`parts`) | 有効 | 084 がサイレントな見逃しを直す | MODELING §4, DESIGN-field-sinks | `field_imprecision` |
 | 075 | モデルありの interface で自前実装の本体も読む | 一部覆った | sanitizer を対象外にした点を 086 が変更; 訂正・追記あり(書き方を保つ)。追記あり。覆した先・注意: 086 | - | 和を取る。追記で `dependency_body_unread` |
-| 076 | 型エラーで SSA が作られなかったパッケージを言う | 有効 |  | README | `summary.unread` |
+| 076 | 型エラーで SSA が作られなかったパッケージを示す | 有効 |  | README | `summary.unread` |
 | 077 | Google Cloud を組み込む(メンテナの例外) | 有効 | 例外は 044/063 の基準の外と明記 | GCP-MODELS | Spanner / BigQuery の SQL |
-| 078 | ガード出どころの言い切りは定数/単純コピーのみ | 有効 | F4/F5 訂正が本文内; 訂正・追記あり(書き方を保つ) | ARCHITECTURE 5.6 | 誤った痕跡の中で最も重い、と明記 |
-| 079 | Rust `Fn*::call` の候補を出どころで絞る | 有効 | 訂正が本文内。085 が拡張; 訂正・追記あり(書き方を保つ) | DESIGN-generics-dispatch | `closed_world_entry` |
+| 078 | ガード出所の断定は定数/単純コピーのみ | 有効 | F4/F5 訂正が本文内; 訂正・追記あり(書き方を保つ) | ARCHITECTURE 5.6 | 誤った注記の中で最も重い、と明記 |
+| 079 | Rust `Fn*::call` の候補を出所で絞る | 有効 | 訂正が本文内。085 が拡張; 訂正・追記あり(書き方を保つ) | DESIGN-generics-dispatch | `closed_world_entry` |
 | 080 | `calls:` に `method:` | 有効 |  | MODELING §3 | - |
-| 081 | Rust のモデル位置は dynamic でも `arg0` が受け手(`self_first`) | 有効 |  | DESIGN-generics-dispatch | `Box<dyn Fn>` は入れない |
-| 082 | 書き込み器モデルは `.content` に置く | 有効 | 訂正が本文内。090 が続き; 訂正・追記あり(書き方を保つ) | MODELING に記載なし | - |
+| 081 | Rust のモデル位置は dynamic でも `arg0` がレシーバ(`self_first`) | 有効 |  | DESIGN-generics-dispatch | `Box<dyn Fn>` は入れない |
+| 082 | ライターモデルは `.content` に置く | 有効 | 訂正が本文内。090 が続き; 訂正・追記あり(書き方を保つ) | MODELING に記載なし | - |
 | 083 | Go の型の別名はルール側で同義扱い(`type_aliases`) | 有効 | 訂正が本文内; 訂正・追記あり(書き方を保つ) | GCP-MODELS | - |
-| 084 | 「読まない関数に渡った」印をセルに付ける | 有効 | 074 の穴を直す。訂正が本文内; 訂正・追記あり(書き方を保つ) | DESIGN-field-sinks | - |
+| 084 | 「読まない関数に渡った」マークをセルに付ける | 有効 | 074 の穴を直す。訂正が本文内; 訂正・追記あり(書き方を保つ) | DESIGN-field-sinks | - |
 | 085 | Rust の async 内 `Fn::call` も絞る | 有効 | 079 の続き | DESIGN-async-dispatch | - |
 | 086 | sanitizer のある interface メソッドは実装の本体を読む | 有効 | 075 を一部置換 | - | 組み込みの sanitizer の影響は 0 行 |
 | 087 | `other_sources` に `via_shared_state` | 有効 | 069 の続き | - | 出力の追加のみ |
@@ -106,7 +106,7 @@
 | 089 | Rust `write!` のモデル | 有効 |  | - | - |
 | 090 | ポインタ包みの interface への書き込みを指す先にも | 有効 | 060/082 の続き | - | - |
 | 091 | 下げられなかった式が値を返すとき、`unsupported` が元の値と結果を持つ | 有効 | 相談役の判断(2026-11-22)。Dart の解決できないコンストラクタ呼び出しから | ARCHITECTURE の IR の命令 | Go と Rust の extractor は未確認 |
-| 092 | 依存のパッケージを、流れのモデルで切る(本体を読まない)のは、費用が著しいときも。ただし条件つき | 有効 |  | PRINCIPLES 3 節、GCP-MODELS P12、MODELING | 費用の測定の記録、突き合わせの検査、`calls:`、保守的な痕跡、切ったことの表示。実装は未(ROADMAP) |
+| 092 | 依存のパッケージを、流れのモデルで切る(本体を読まない)のは、費用が著しいときも。ただし条件つき | 有効 |  | PRINCIPLES 3 節、GCP-MODELS P12、MODELING | 費用の測定の記録、突き合わせの検査、`calls:`、保守的な不確実性の注記、切ったことの表示。実装は未(ROADMAP) |
 | 093 | Rust の extractor の隔離を、Docker から macOS のサンドボックス(Seatbelt)に替える | 有効 | ユーザーの決定(2026-11-22)。ADR-064 を一部覆す。Linux では止まる(`-unsafe-host-exec`) | rust-isolation、PRINCIPLES 8 節 | 承知している弱さと、後回しのハードニングを載せた |
 
 ## 訂正・追記の書き方を保つ ADR
@@ -117,7 +117,7 @@
 
 ## 本文に古い記述が残るもの
 
-覆った印は付けず、読むときの注意として挙げる。
+覆ったマークは付けず、読むときの注意として挙げる。
 
 - ADR-023: 経路数の上限(既定 3)は実装されていない。常に 1 本(`internal/taint/engine.go:1390`)。
 - ADR-044: 本文の「Go は gin」は、同じ ADR の追記で外れた。題も古い。ADR-063 が範囲を絞り直した。
