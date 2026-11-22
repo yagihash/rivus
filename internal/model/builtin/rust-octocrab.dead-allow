@@ -1,0 +1,17 @@
+# The rows of rust-octocrab.yaml that no call in the zoo or the curated targets hits (TestBuiltinRowsAreHitByTheZoo). "symbol | reason"; see bench/parity/README.md.
+octocrab::Octocrab::commits | dependency | not called: same shape as Octocrab::repos (the zoo skeleton has the methods of the cells only)
+octocrab::Octocrab::git | dependency | not called: same shape as Octocrab::repos (the zoo skeleton has the methods of the cells only)
+octocrab::Octocrab::issues | dependency | not called: same shape as Octocrab::repos (the zoo skeleton has the methods of the cells only)
+octocrab::Octocrab::pulls | dependency | not called: same shape as Octocrab::repos (the zoo skeleton has the methods of the cells only)
+octocrab::repos::RepoHandler::update_file | dependency | not called: same shape as RepoHandler::create_file (the zoo skeleton has the methods of the cells only)
+octocrab::repos::RepoHandler::delete_file | dependency | not called: same shape as RepoHandler::create_file (the zoo skeleton has the methods of the cells only)
+octocrab::repos::DeleteFileBuilder::branch | dependency | not called: same shape as UpdateFileBuilder::branch (the zoo skeleton has the methods of the cells only)
+octocrab::repos::file::GetRawContentBuilder::path | dependency | not called: same shape as GetContentBuilder::path (the zoo skeleton has the methods of the cells only)
+octocrab::repos::file::GetRawContentBuilder::r#ref | dependency | not called: same shape as GetContentBuilder::r#ref (the zoo skeleton has the methods of the cells only)
+octocrab::repos::file::GetReadmeBuilder::path | dependency | not called: same shape as GetContentBuilder::path (the zoo skeleton has the methods of the cells only)
+octocrab::repos::file::GetReadmeBuilder::r#ref | dependency | not called: same shape as GetContentBuilder::r#ref (the zoo skeleton has the methods of the cells only)
+octocrab::Octocrab::get | dependency | not called: the request is async and generic over the response (the skeleton has no async client); same shape as the other rows of the route
+octocrab::Octocrab::post | dependency | not called: the request is async and generic over the response (the skeleton has no async client); same shape as the other rows of the route
+octocrab::Octocrab::patch | dependency | not called: the request is async and generic over the response (the skeleton has no async client); same shape as the other rows of the route
+octocrab::Octocrab::put | dependency | not called: the request is async and generic over the response (the skeleton has no async client); same shape as the other rows of the route
+octocrab::Octocrab::delete | dependency | not called: the request is async and generic over the response (the skeleton has no async client); same shape as the other rows of the route
