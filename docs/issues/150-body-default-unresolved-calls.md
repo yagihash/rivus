@@ -5,7 +5,7 @@
 - 言語: Go
 - 見つけたもの: `bench/model-diff`(`make model-diff PKG=...`)、PR #195
 
-`bench/model-diff` の A(本体を読む側)は、`io.WriteString` と `io.Copy` の `arg1` からエラー(`result1`)への流れを見つける。本体を読むと、エラーは書き手(読み手)のもので、渡したデータは入らない。`w.(StringWriter)` / `dst.(ReaderFrom)` / `src.(WriterTo)` のように、型表明で得たインターフェースの呼び出しが未解決(実装を絞れない)で、未解決の呼び出しの既定(引数は結果へ流れる)が使われたための、見かけの流れ。
+`bench/model-diff` の A(本体を読む側)は、`io.WriteString` と `io.Copy` の `arg1` からエラー(`result1`)への流れを見つける。本体を読むと、エラーは書き込む側(読み出す側)のもので、渡したデータは入らない。`w.(StringWriter)` / `dst.(ReaderFrom)` / `src.(WriterTo)` のように、型表明で得たインターフェースの呼び出しが未解決(実装を絞れない)で、未解決の呼び出しの既定(引数は結果へ流れる)が使われたための、見かけの流れ。
 
 モデルに足すと誤検出が増えるので、差分テストの注釈 `# model-diff: miss-reviewed io.Copy@arg1 body-default ... #150` で残している(`internal/model/builtin/go-stdlib.yaml`)。
 
