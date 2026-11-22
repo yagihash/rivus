@@ -18,7 +18,7 @@ rivus を使って脆弱性を探すエージェントのための文書です�
 
 ```sh
 rivus version                                        # バージョンを記録する(出力の形はバージョンで変わる)
-rivus sites -C <dir> ./... > sites.json              # source と sink の箇所があるか(Go。Dart と Rust は下の注)
+rivus sites -C <dir> ./... > sites.json              # source と sink の箇所があるか(言語は analyze と同じ。-lang)
 jq '.sites | group_by(.role) | map({(.[0].role): length}) | add' sites.json
 rivus analyze -C <dir> -timeout 10m ./... > out.json 2> err.log
 jq '{findings: .summary.findings, converged: .stats.converged, timed_out: .stats.timed_out,
@@ -29,7 +29,7 @@ rivus graph callers -C <dir> <関数>                  # finding の周辺を調
 
 1. **`rivus version`**: 報告にバージョンを書きます。
 2. **`rivus sites`**: source と sink のルールが一致する箇所を数えます。**source が 0 件なら、ルールが足りません**(フレームワークの入口が、組み込みのルールにない)。そのまま `analyze` しても finding は出ません。6 章の (f) でルールを足します。
-   - `rivus sites` が読むのは **Go のパッケージだけ**です(`-lang` はありません)。Dart や Rust だけのディレクトリでは、エラーにならず、`"sites": []` を返します。Dart と Rust の箇所は `rivus analyze -sites` の `sites` で見ます。
+   - `rivus sites` は、`analyze` と同じ言語の選択(`-lang`、auto: ディレクトリにある言語)で読みます。Dart と Rust のディレクトリでも、箇所が出ます(Rust は、`analyze` と同じ確認があり、読むとビルドが実行されます)。読まなかった言語は、出力の `skipped_languages` に出ます(`summary.unread.skipped_languages` と同じ形)。読める言語がないときは、エラーで止まります。
 3. **`rivus analyze`**: 必ず `-timeout` を付けます。標準出力が JSON、標準エラーが経過と警告です。出力は大きいので、ファイルに保存して `jq` で読みます。
 4. **最初に全体を見る**: `stats.converged` が `false`、`stats.timed_out` が `true`、`summary.unread` や `load_errors` がある、のどれかなら、結果は途中のもの、または一部のコードを読んでいないものです(5 章)。
 5. **finding を 1 件ずつ読む**: 一覧を作り、`paths[0].steps` のコードを、対象のファイルと照らして読みます。
@@ -77,7 +77,7 @@ source と sink のルールが一致する箇所(サイト)を並べます。ta
     "snippet": "h.S.Last = c.Query(\"alias\") ...", "fingerprint": { ... } }
   ```
 
-- **落とし穴**: Go だけを読みます(2 章)。サイトがあることは、流れがあることを意味しません。sink が 1 件もない source、source が 1 件もない sink では、finding は出ません。
+- **落とし穴**: 読む言語は `analyze` と同じです(`-lang`)。読まなかった言語は `skipped_languages` に出ます(0 件のとき、まずそれを見ます)。サイトがあることは、流れがあることを意味しません。sink が 1 件もない source、source が 1 件もない sink では、finding は出ません。
 
 ### `rivus analyze`
 
@@ -266,17 +266,17 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `-no-deps` | 依存のソースを読まない | 読む | 重いとき。メモリは約 6 分の 1 になるが、依存への呼び出しは全部、推測になる | ○ |
 | `-tests` | テストのコードも読む(Go の `_test.go`、Dart と Rust のテスト) | 読まない | テストの中の流れも見たいとき | ○ |
 | `-allow-deps-under <dir>` | Dart: プロジェクトの外の、依存として読んでよいディレクトリ(繰り返し可) | なし | モノレポの、隣のパッケージ | ○ |
-| `-lang <list>` | 読む言語。`auto`、または `go`、`dart`、`rust` をカンマで区切る | `auto` | Rust を聞かれずに読む(`-lang rust`)、読みたくない言語を外す | |
-| `-yes` | `-lang auto` で、Rust を聞かずに読む | 聞く | 端末のない実行(`claude -p`、CI)で Rust も読む | |
+| `-lang <list>` | 読む言語。`auto`、または `go`、`dart`、`rust` をカンマで区切る | `auto` | Rust を聞かれずに読む(`-lang rust`)、読みたくない言語を外す | ○ |
+| `-yes` | `-lang auto` で、Rust を聞かずに読む | 聞く | 端末のない実行(`claude -p`、CI)で Rust も読む | ○ |
 | `-timeout <時間>` | 解析をこの時間で止めて、見つけた分を出す(`600s`、`10m`) | `0`(上限なし) | **毎回** | |
 | `-v` | 各段階の時間とメモリを、標準エラーに出す | 出さない | どの段階が遅いかを知る | |
 | `-workers <n>` | 同時に解析する関数の数(0 = CPU の数、1 = 1 つずつ) | `0` | マシンの負荷を下げる。結果は変わらない | |
 | `-numeric-taint` | 数値と真偽値になった値も追う | 追わない | 数値で起きる問題(範囲、ID の指定)を見たいとき | |
 | `-resolve-func-values` | 呼び出し先の分からない関数値の呼び出しに、自分のコードで作った関数を候補として補ってから解析する(実験) | off | `unresolved_callee` が多いとき。`index` にも同じ指定が必要 | |
-| `-unsafe-host-exec` | Rust の extractor を、サンドボックスなしで、このマシンで実行する | off | **信頼できるコードだけ**。Linux で Rust を読むとき | |
-| `-dart-extractor <cmd>`、`-rust-extractor <cmd>` | extractor のコマンド | 環境変数 `RIVUS_DART_EXTRACTOR` / `RIVUS_RUST_EXTRACTOR`、次に `rivus-dart` / `rivus-rust` | extractor が PATH にないとき | |
-| `-isolation-env NAME=VALUE` | Rust のビルドに渡す環境変数(繰り返し可) | なし | ビルドスクリプトが設定を必要とするとき | |
-| `-isolation-read <path>` | Rust のビルドが読んでよい、プロジェクトの外のパス(繰り返し可) | なし | ビルドが外のファイルを読むとき | |
+| `-unsafe-host-exec` | Rust の extractor を、サンドボックスなしで、このマシンで実行する | off | **信頼できるコードだけ**。Linux で Rust を読むとき | ○ |
+| `-dart-extractor <cmd>`、`-rust-extractor <cmd>` | extractor のコマンド | 環境変数 `RIVUS_DART_EXTRACTOR` / `RIVUS_RUST_EXTRACTOR`、次に `rivus-dart` / `rivus-rust` | extractor が PATH にないとき | ○ |
+| `-isolation-env NAME=VALUE` | Rust のビルドに渡す環境変数(繰り返し可) | なし | ビルドスクリプトが設定を必要とするとき | ○ |
+| `-isolation-read <path>` | Rust のビルドが読んでよい、プロジェクトの外のパス(繰り返し可) | なし | ビルドが外のファイルを読むとき | ○ |
 
 ### コマンドごとのフラグ
 
