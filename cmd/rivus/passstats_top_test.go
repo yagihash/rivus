@@ -267,3 +267,75 @@ func main()  { set(); other(); relay() }
 		}
 	}
 }
+
+// With -pass-stats, summary says where the notes that the findings carry are (on_findings_top: by kind, the symbols with
+// the most notes and in how many findings) and how many candidates the calls through an interface have
+// (on_findings_dispatch_candidates). Without the flag the summary is as it was.
+func TestPassStatsNotesOnFindings(t *testing.T) {
+	dir := t.TempDir()
+	src := `package main
+
+import (
+	"os"
+	"os/exec"
+)
+
+type Runner interface{ Run(s string) }
+
+type A struct{}
+type B struct{}
+
+func (A) Run(s string) { exec.Command(s).Run() }
+func (B) Run(s string) { exec.Command("echo", s).Run() }
+
+func main() {
+	var r Runner = A{}
+	if len(os.Args) > 3 {
+		r = B{}
+	}
+	r.Run(os.Getenv("X"))
+}
+`
+	rules, err := os.ReadFile(filepath.Join(testutil.Testdata(), "..", "scc", "rules.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, body := range map[string][]byte{"a.go": []byte(src), "go.mod": []byte("module example.com/n\n\ngo 1.22\n"), "rules.yaml": rules} {
+		if err := os.WriteFile(filepath.Join(dir, name), body, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	type summary struct {
+		Summary struct {
+			Top map[string][]struct {
+				Symbol          string
+				Notes, Findings int
+			} `json:"on_findings_top"`
+			Candidates map[string]int `json:"on_findings_dispatch_candidates"`
+		} `json:"summary"`
+	}
+	run := func(args ...string) summary {
+		cmd := exec.Command(binary, append([]string{"analyze", "-rules", "rules.yaml"}, append(args, "./...")...)...)
+		cmd.Dir = dir
+		b, err := cmd.Output()
+		if err != nil {
+			t.Fatalf("analyze %v: %v", args, err)
+		}
+		var r summary
+		if err := json.Unmarshal(b, &r); err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	if plain := run(); plain.Summary.Top != nil || plain.Summary.Candidates != nil {
+		t.Errorf("on_findings_top is there without -pass-stats: %+v", plain.Summary)
+	}
+	r := run("-pass-stats")
+	top := r.Summary.Top["dynamic_dispatch"]
+	if len(top) == 0 || !strings.Contains(top[0].Symbol, "Run") || top[0].Notes < 1 || top[0].Findings < 1 || top[0].Findings > top[0].Notes {
+		t.Fatalf("the interface call is not the top of the dynamic_dispatch notes: %+v", r.Summary.Top)
+	}
+	if r.Summary.Candidates["2-5"] < 1 {
+		t.Errorf("the call with 2 candidates is not counted: %+v", r.Summary.Candidates)
+	}
+}
