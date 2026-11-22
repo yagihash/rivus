@@ -52,7 +52,7 @@ func main() {
 ### (2) 当てないもの
 
 * **戻り値**: クロージャの結果は、呼ぶところで受け取るもの。`make_closure` の場所に、呼ぶところは無い(行き先が無い)。`cc.roots = nil` にして、`OutResult` の `o.Index < len(cc.roots)` を偽にする。
-* **引数に依る流れ**: クロージャの引数(Params)から sink への流れ(`runArg(a, func(s){ sink(s) })`)は、呼ぶ側の値(ヘルパーが渡す)に依る。`KUndef` なので何も運ばない。これは、今のとおり、呼ぶ側(ヘルパー内の `f(x)` の候補)で見つかる。**C-7 は、捕獲した値だけに依る流れを足す。引数に依る流れは足さない**(これは案 2 = ADR-047 の仕事)。
+* **引数に依る流れ**: クロージャの引数(Params)から sink への流れ(`runArg(a, func(s){ sink(s) })`)は、呼ぶ側の値(ヘルパーが渡す)に依る。`KUndef` なので何も運ばない。これは、今のとおり、呼ぶ側(ヘルパー内の `f(x)` の候補)で見つかる。**C-7 は、捕獲した値だけに依る流れを足す。引数に依る流れは足さない**(これは案 2 = ADR-047 の作業)。
 * 捕獲した値と引数の**両方に依る**流れ(`sink(x + a)`): 要素は 1 起点ずつなので、`a` の分は C-7 で、`x` の分は呼ぶ側で、それぞれ見つかる。
 
 ### (3) 飛ばす条件と、二重になったとき
@@ -98,7 +98,7 @@ func main() {
 **Rust**: 捕獲のあるクロージャは **`make_closure` ではない**。確かめた(`rivus-rust` の出力の IR、`write_a`): 環境の構造体を、`alloc`(class `func`、type `{closure@src/capture.rs:9:9: 9:11}`)で作り、捕獲した値を `field_store`(field `"0"`, `"1"`…。可変の捕獲は、変数へのポインタ)で入れる。クロージャの関数は、**パラメータが 1 つ(その環境、`recv: true`)**で、`field_load` で取り出す。呼び出しは、`Fn::call` の dynamic 呼び出し(候補は、同じ引数の型を持つ全クロージャ = XTALK)。
 
 * **できるか**: 同じことは、**別の段**で、できる。環境の `alloc` の type(`{closure@file:l:c}`)と、クロージャの関数の `params[0].type` が一致するので、alloc → クロージャの関数が引ける(extractor は変えなくてよい見込み。型の文字列が、ファイルと位置を含むので、一意)。`applySummary(cc, closureFn, nil, notes, nil)` を、`argv = [環境の値]`(束縛ではなく、Params の 1 つ目)で当てる。ただし、環境の `field_store` が `alloc` の後に来る(流れに依らない解析なので、順序は、問題にならないはずだが、**確かめていない**)。
-* **効く範囲**: 読む側(`run(|| sink(&a))`)は、`Fn::call` の候補で、**今でも見つかる**(XTALK の過検出つき。`run-a/b` は `@fp`)。C-7 は、これを直さない(XTALK は別の原因。案 2 の仕事)。`rust-curated/src/callbacks.rs` の 3 件(`returned`、`nested_cap`、`param_clean`)と `never_called` の静かな側は、**今、見つかっている**(`@miss` が無い)。書く側(`write-a/b`、`push-list` など 7 件、ENV-PTR)は、環境のフィールドのポインタが、指す先と別名にならない(`locs.go:215`、`transfer.go:148`)ことが原因なので、**alloc で当てても直らない**。ENV-PTR の修正が先。
+* **効く範囲**: 読む側(`run(|| sink(&a))`)は、`Fn::call` の候補で、**今でも見つかる**(XTALK の過検出つき。`run-a/b` は `@fp`)。C-7 は、これを直さない(XTALK は別の原因。案 2 の作業)。`rust-curated/src/callbacks.rs` の 3 件(`returned`、`nested_cap`、`param_clean`)と `never_called` の静かな側は、**今、見つかっている**(`@miss` が無い)。書く側(`write-a/b`、`push-list` など 7 件、ENV-PTR)は、環境のフィールドのポインタが、指す先と別名にならない(`locs.go:215`、`transfer.go:148`)ことが原因なので、**alloc で当てても直らない**。ENV-PTR の修正が先。
 * 結論(**条件つき**): 前の版は「読む側は、今でも見つかる」を理由に、Rust を最初の版の対象外にしたが、これは**呼ぶ側が見える形**(`Fn::call` の候補になる)でしか確かめていなかった。**渡すだけの形**で確かめた(`rust-curated/src/callbacks.rs`、今の main): `std::thread::spawn(move || sink(&t))`(`@miss(unmodeled_library_call)`)、捕獲のあるクロージャを `Box<dyn Fn(i16, u128)>` にして構造体のフィールドに入れ、別の関数が呼ぶ(`@miss(silent)`)、モデルのない標準ライブラリの関数に渡す(`Vec::retain`、`@miss(silent)`)の **3 件とも見つからない**。つまり、Rust にも、黙った見逃しがある。**Rust の環境の `alloc` で当てる段(上の「できるか」)は、次の段に入れる**(最初の版は Go と Dart。ENV-PTR の修正は、書く側 7 件で、別)。最初の版を Go と Dart にするのは、実装の大きさ(extractor の type で引く、環境の `field_store` の順序の確認)を分けるためで、「Rust は見つかるから要らない」ではない。`thread::spawn` と `retain` のクロージャは、他の呼び出しの候補にもなり、他のソースが誤って届く(`@noisy` 8 と 3)。
 
 ### (8) 案 2(ADR-047 の下書き: scratchpad/scc/adr-draft.md)との関係
@@ -136,7 +136,7 @@ func main() {
 | ベンチ | `@miss` の今 | C-7 で直る(見込み) | 備考 |
 | --- | --- | --- | --- |
 | go-curated | 10(うち 9 が `silent`) | 9: `cap-run-a/b`、`cap-write`、`cap-nested`、`cap-loop`、`cap-two-a`、`cap-returned`、`tx_capture`(`dynamic_dispatch`)、`tx_capture_plain` | 残る 1 は `options`(`RET-CLOSURE`: クロージャの**引数**への書き込み) |
-| dart-curated | 41(うち 31 が `silent`) | `callbacks.dart` の 7 件 + `CAP` のうち、捕獲した値だけで足りるもの(`run-a/b`、`write-a/b`、`add-list`、`nest-a/b`、`across-cap`、`builder`、`bound-prefix` など約 10)。`write-param`、`twice-args` は、引数に依る(案 2 の仕事) | |
+| dart-curated | 41(うち 31 が `silent`) | `callbacks.dart` の 7 件 + `CAP` のうち、捕獲した値だけで足りるもの(`run-a/b`、`write-a/b`、`add-list`、`nest-a/b`、`across-cap`、`builder`、`bound-prefix` など約 10)。`write-param`、`twice-args` は、引数に依る(案 2 の作業) | |
 | rust-curated | 13(全部 `silent`) | 0 | (7)のとおり、対象外。`callbacks.rs` の 4 つは、今、見つかっている |
 
    * `@sink(none)` が増える側: `capNever`(go-curated)と、`never_called`(dart-curated)の `@sink(none)`、`rust-curated/callbacks.rs:never_called`(Rust は対象外なので変わらない)。**この 2 つが落ちる**。落ちたら、`@fp` に直すか(限界として記録)、規則を変えるか、決める。
@@ -342,9 +342,9 @@ Rust の抽出器(`extractor/rust/src/main.rs` の `merge`)は、クレートご
 **穴:** `internal/valuecalls/valuecalls.go` の `funcsOf` は、値の出どころが `refOther`(フィールドの読み出し、戻り値、グローバル、未対応の命令。`classify` の既定)に当たると、**黙って戻る**。見つかった関数(`found`)が 1 つ以上あれば、それが全部として `ValueCands` になる(`found` が 0 のときだけ `unresolved_callee` / `ValueLimit` が出る)。`r.cut` も、`found` が 0 のときにしか見ない。パラメータの呼び元をたどるときの、引数の数が足りない(`k >= len(cin.Args)`)と、`form` が作れない呼び元も、黙って `continue` する。**つまり、案 A の条件 1(全部辿れたときだけ絞る)が、今の `valuecalls` で、すでに破れている。**
 
 **再現(確かめた):**
-* **Dart: 再現した。** `apply((s){}, 'x')`(辿れる)と `apply(h.cb, source())`(フィールドの読み出し = `refOther`)の 2 呼び元があるヘルパー `apply(f, s) { f(s); }`: 候補は前者 1 つだけになり、**finding も不確実性も出ない**(`h.cb` の中の `sink(s)` を見逃す)。`apply2((s){}, 'x')` と `apply2(pick(), source())`(戻り値)も同じ。**対照**: 辿れない呼び元だけの `apply3(pick(), source())` は、`unresolved_callee` が 1 件出る。つまり、**全部が辿れないときは言い、一部が辿れないときは言わない**。再現の入力: `rev/taintB/d1/lib/v.dart`(コーディネーターのスクラッチパッド)、出力 0 件、`summary.program` の不確実性は `apply3` の 1 件のみ。
+* **Dart: 再現した。** `apply((s){}, 'x')`(辿れる)と `apply(h.cb, source())`(フィールドの読み出し = `refOther`)の 2 呼び元があるヘルパー `apply(f, s) { f(s); }`: 候補は前者 1 つだけになり、**finding も不確実性も出ない**(`h.cb` の中の `sink(s)` を見逃す)。`apply2((s){}, 'x')` と `apply2(pick(), source())`(戻り値)も同じ。**対照**: 辿れない呼び元だけの `apply3(pick(), source())` は、`unresolved_callee` が 1 件出る。つまり、**全部が辿れないときは報告し、一部が辿れないときは報告しない**。再現の入力: `rev/taintB/d1/lib/v.dart`(コーディネーターのスクラッチパッド)、出力 0 件、`summary.program` の不確実性は `apply3` の 1 件のみ。
 * **Go: 再現しなかった。** 同じ形(`apply(func(string){}, "x")` と `apply(h.cb, source())`、`apply2(mk(), source())`)で、finding は 2 件とも見つかる。Go の抽出器が、VTA の呼び出しグラフの候補を `Callee.Candidates` に入れるので、`valuecalls` は `funcsOf` まで来ない(「The extractor's call graph says」の枝)。**ただし**、Go でも候補が付かない呼び出し(抽出器の呼び出しグラフが解かないもの)では、同じ穴に当たりうる(未確認。Go のフィクスチャを、`valuecalls` の単体テストで固定する)。
-* **Rust: 再現が不確か。** `fn apply(f: fn(&str), s: &str) { f(s) }` を、`apply(noop, "x")` と `apply(h.cb, &source())`(`h.cb` は構造体のフィールドの関数ポインタ)で呼ぶと、finding は 0 件、不確実性も 0 件(`a` の呼び出しを外して、`b` だけにしても 0 件・0 件)。**部分的に辿れたときの、黙った見逃し、とは言い切れない**(辿れない呼び元だけのときも、不確実性が出ていない。別の原因がある可能性がある。Rust の `f(s)`(関数ポインタ)の呼び出しが `valuecalls` を通るかを、先に確かめる)。Rust の `Fn::call`(dynamic)は、そもそも `valuecalls` を通らない(`CalleeValue` だけを解く)。
+* **Rust: 再現が不確か。** `fn apply(f: fn(&str), s: &str) { f(s) }` を、`apply(noop, "x")` と `apply(h.cb, &source())`(`h.cb` は構造体のフィールドの関数ポインタ)で呼ぶと、finding は 0 件、不確実性も 0 件(`a` の呼び出しを外して、`b` だけにしても 0 件・0 件)。**部分的に辿れたときの、黙った見逃し、とは断定できない**(辿れない呼び元だけのときも、不確実性が出ていない。別の原因がある可能性がある。Rust の `f(s)`(関数ポインタ)の呼び出しが `valuecalls` を通るかを、先に確かめる)。Rust の `Fn::call`(dynamic)は、そもそも `valuecalls` を通らない(`CalleeValue` だけを解く)。
 
 **修正方法(案):**
 1. `funcsOf` が、**「不完全」の印**を返す: `refOther` に当たった、呼び元の引数が足りない、`form` が作れない、`maxDepth` で切った(`r.cut`)、のどれかで、`incomplete = true`。`found` があっても、`incomplete` なら、

@@ -97,7 +97,7 @@ ID トークンの検証と、復号したクレーム。ラベルを決める(�
 |---|---|---|
 | A | `queue_message` を、組み込みの既定で入れるか | **入れない**(全製品で `stored` と同じ選択。ファイル 1 つ)。理由: トピックが内部専用なら、全部が偽陽性。組み込みには、sink と `flows` だけ |
 | B | Pub/Sub の入口を、`param_type`(確認済み、ノイズあり)にするか、`calls:`(正確。`with: [arg0, recv]` と書けば実際の Pub/Sub で当たる。P1 の注)にするか | `calls:` に乗り換える(ノイズが消える)。YAML の段 |
-| C | 「関数を登録する呼び出しが、渡された関数の引数を入口にする」道具(`functions.Typed`、第 1 世代の関数、`Receive` のような API を、利用者の型でも) | エンジンの変更(`flows` の `to:` の道と並ぶ大きさ)。ADR が要る。入れるまで、利用者が自分の型を `param_type` で書く |
+| C | 「関数を登録する呼び出しが、渡された関数の引数を入口にする」道具(`functions.Typed`、第 1 世代の関数、`Receive` のような API を、利用者の型でも) | エンジンの変更(`flows` の `to:` のアクセスパスと並ぶ大きさ)。ADR が要る。入れるまで、利用者が自分の型を `param_type` で書く |
 | D | **エンジンの見逃し**: 構造体を、**ポインタで**、読んでいない関数に渡し、あとで、**値で** sink に渡すと、黙った | **直した**(ADR-084。7 節) |
 | E | トピック、バケットなどの**名前**が入力のとき(別のプロジェクトのリソースを指せる)のカテゴリ | 今のカテゴリ(6 つ)に当たらない。新しいカテゴリ(`resource_name`)を作るか、作らないか。**作るまで sink にしない** |
 | F | CloudEvent を `queue_message` にする(Eventarc は、Pub/Sub、Storage、Firestore と、HTTP の呼び出し元のどれでも運ぶ) | 同じラベルで始める。細かく分ける必要が出たら、ラベルを足す |
@@ -110,7 +110,7 @@ ID トークンの検証と、復号したクレーム。ラベルを決める(�
 
 | ケース | 形 | 今の出方 |
 |---|---|---|
-| `VNewStatement`、`VNewStatementBare` | `spanner.NewStatement(src)`(連結あり、なし) | **`SQL` に細かく入って鳴る。`field_imprecision` なし**(`no_uncertainty_on_path`)。依存の本体が読まれる。**`whole_value` ではない**。ビルダーが読まれない(本体がない)ライブラリでは `whole_value` になる。`flows` の `to:` に道(段階 5)が入っても、これは変わらないことが、受け入れ |
+| `VNewStatement`、`VNewStatementBare` | `spanner.NewStatement(src)`(連結あり、なし) | **`SQL` に細かく入って鳴る。`field_imprecision` なし**(`no_uncertainty_on_path`)。依存の本体が読まれる。**`whole_value` ではない**。ビルダーが読まれない(本体がない)ライブラリでは `whole_value` になる。`flows` の `to:` にアクセスパス(段階 5)が入っても、これは変わらないことが、受け入れ |
 | `URewrite` | `Statement` を値で、読まない関数に渡して、結果を使う | 鳴る。`field_imprecision`(`whole_value`) |
 | `UOpaque`、`UOpaqueAssign` | `Params` だけが汚れた `Statement` の**アドレス**を、読まない関数に渡し、`Statement` を値で `Query` に渡す。**実行では、値が SQL に届く** | 鳴る。`field_imprecision`(`opaque_callee`)。もとは黙る見逃しだった(ADR-084: 印は変数に付き、値のコピーと要約を通して運ぶ)。同じ 8 形が `testdata/go/cases/fieldsink` にある |
 

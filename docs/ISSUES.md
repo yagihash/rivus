@@ -34,8 +34,8 @@
 | [#96](issues/96-workers-output-difference.md) | -workers 1 と 2 以上で、8 関数以上の SCC を含む入力の出力(代表の経路、stats)が違う(R-43。直した) | 道具・ベンチ(直した) | 全 | 2(経路の欠け・揺れ) | closed | `cmd/rivus/determinism_test.go`(`TestDeterministicLargeSCC`) |
 | [#98](issues/98-dart-tostring-edges.md) | Dart: 文字列補間と sinkAny が呼ぶ toString が、呼び出しの辺(グラフ)にならない | 道具・ベンチ(グラフの辺) | Dart | 1 | open | - |
 | [#99](issues/99-dart-value-calls-zero-candidates.md) | Dart: 値として持たれた関数・クロージャ(フィールド、map、返したクロージャ、変数)の呼び出しが、候補 0 件のグラフの辺になる | 道具・ベンチ(グラフの辺) | Dart | 1 | open | 動物園 `F/clos/*`、`TestZeroCandidateCalls`、`TestFuncValuesDart` |
-| [#108](issues/108-model-row-loses-flows-silently.md) | モデルの行が、既定の扱いより流れを減らしても、何も言わない | 黙った見逃し(モデルの書き方の穴) | 全 | 3 / 5 | open | `cmd/rivus/coverage_stub_test.go`(雛形のみ) |
-| [#109](issues/109-stale-extractor-used-silently.md) | extractor(やイメージ)が古くても、何も言わずに、その結果を出す | 誤った結果を黙って出す | Rust / Dart | 0 / 1 | open | -(直すときに試験) |
+| [#108](issues/108-model-row-loses-flows-silently.md) | モデルの行が、既定の扱いより流れを減らしても、何も報告しない | 黙った見逃し(モデルの書き方の穴) | 全 | 3 / 5 | open | `cmd/rivus/coverage_stub_test.go`(雛形のみ) |
+| [#109](issues/109-stale-extractor-used-silently.md) | extractor(やイメージ)が古くても、何も報告せずに、その結果を出す | 誤った結果を黙って出す | Rust / Dart | 0 / 1 | open | -(直すときに試験) |
 | [#110](issues/110-sandbox-fetch-proxy.md) | 取得の段階のネットワークを絞る(宛先の許可リストと、解決したアドレスの検査) | 黙った見逃しではない(隔離の穴) | Rust | 0 | open | - |
 | [#111](issues/111-sandbox-bsd-inventory.md) | bsd.sb の許可の棚卸しと、変わったら落ちる試験 | 隔離の穴の見落とし | Rust | 0 | open | - |
 | [#112](issues/112-sandbox-metadata-and-userdata.md) | メタデータ(存在)が見える範囲と、ホームの外の利用者のデータの試験 | 隔離の穴の見落とし | Rust | 0 | open | - |

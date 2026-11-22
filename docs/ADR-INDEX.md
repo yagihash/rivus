@@ -64,7 +64,7 @@
 | 047 | パラメータの関数の呼び出しを記号的な出力に(コールアウト) | 有効 | 状態: 棚上げ→精度のため再開。段階 2 は 071 が実装; 訂正・追記あり(書き方を保つ)。状態注記 | DESIGN-callouts | 状態の注記が本文中に 2 つある |
 | 048 | `kind: param` の source を呼び元へ書き戻さない | 有効 |  | - | 「種」だけ書き戻さない |
 | 049 | グローバル経由の経路に書き手の段を入れる | 有効 | 証拠は 069/087 | DESIGN-shared-state | - |
-| 050 | 上限で解決しなかった関数値は「知らない」と言わない | 一部覆った | 拡張: 070。追記(2026-11-22): 候補の上限を 8 から 32 にした | - | `candidate_limit` を区別。32 を超える形は黙った見逃し(#77) |
+| 050 | 上限で解決しなかった関数値は「知らない」と報告しない | 一部覆った | 拡張: 070。追記(2026-11-22): 候補の上限を 8 から 32 にした | - | `candidate_limit` を区別。32 を超える形は黙った見逃し(#77) |
 | 051 | `Reachable` が捕獲ありクロージャも辿る | 有効 | Rust は 058 | - | - |
 | 052 | `not_from_entry` に説明を添える | 有効 | 073 が拡張 | - | - |
 | 053 | 捕獲値が呼ぶ所で分からないとき黙って埋めない | 有効 | 059 が作った場所で当てる経路を足す。`capture_unbound` は残る | DESIGN-capture | `depth_limit`/`capture_unbound` |
@@ -84,15 +84,15 @@
 | 067 | モデルの流れに「近似」(`approximate`) | 有効 |  | MODELING §2 | `model_approximation` が通った finding に付く |
 | 068 | インターフェース越しの呼び出しで候補の sink を当てる | 有効 | 045 の延長 | MODELING §4 | - |
 | 069 | グローバル経由の finding に `shared_state` | 有効 | 087 が拡張 | DESIGN-shared-state | 出力の追加のみ |
-| 070 | 関数値の候補が一部しか追えないことを言う | 有効 |  | - | `unresolved_callee`(`partial`) |
+| 070 | 関数値の候補が一部しか追えないことを示す | 有効 |  | - | `unresolved_callee`(`partial`) |
 | 071 | モデルの `calls:` | 有効 | 080 が `method:` を追加 | MODELING §3 | 段階 2 |
 | 072 | Rust の可変捕獲を指す先と同一視 | 有効 |  | - | - |
 | 073 | フレームワークが呼ぶメソッドを入口に足す | 有効 |  | README | `from_framework_callback` |
-| 074 | sink が引数のフィールドを言える(`parts`) | 有効 | 084 が黙った見逃しを直す | MODELING §4, DESIGN-field-sinks | `field_imprecision` |
+| 074 | sink が引数のフィールドを指定できる(`parts`) | 有効 | 084 が黙った見逃しを直す | MODELING §4, DESIGN-field-sinks | `field_imprecision` |
 | 075 | モデルありの interface で自前実装の本体も読む | 一部覆った | sanitizer を対象外にした点を 086 が変更; 訂正・追記あり(書き方を保つ)。追記あり。覆した先・注意: 086 | - | 和を取る。追記で `dependency_body_unread` |
-| 076 | 型エラーで SSA が作られなかったパッケージを言う | 有効 |  | README | `summary.unread` |
+| 076 | 型エラーで SSA が作られなかったパッケージを示す | 有効 |  | README | `summary.unread` |
 | 077 | Google Cloud を組み込む(メンテナの例外) | 有効 | 例外は 044/063 の基準の外と明記 | GCP-MODELS | Spanner / BigQuery の SQL |
-| 078 | ガード出どころの言い切りは定数/単純コピーのみ | 有効 | F4/F5 訂正が本文内; 訂正・追記あり(書き方を保つ) | ARCHITECTURE 5.6 | 誤った痕跡の中で最も重い、と明記 |
+| 078 | ガード出どころの断定は定数/単純コピーのみ | 有効 | F4/F5 訂正が本文内; 訂正・追記あり(書き方を保つ) | ARCHITECTURE 5.6 | 誤った痕跡の中で最も重い、と明記 |
 | 079 | Rust `Fn*::call` の候補を出どころで絞る | 有効 | 訂正が本文内。085 が拡張; 訂正・追記あり(書き方を保つ) | DESIGN-generics-dispatch | `closed_world_entry` |
 | 080 | `calls:` に `method:` | 有効 |  | MODELING §3 | - |
 | 081 | Rust のモデル位置は dynamic でも `arg0` が受け手(`self_first`) | 有効 |  | DESIGN-generics-dispatch | `Box<dyn Fn>` は入れない |

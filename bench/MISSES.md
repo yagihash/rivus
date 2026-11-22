@@ -4,12 +4,12 @@
 > 見出しの件数(Dart 27、Rust 12、Go 1 など)は、`bench/README.md` の現在の数(「The share of silent misses」の表)と違う。
 > 現在の数は、`go test ./cmd/rivus -run Curated -v` の出力(`@miss` の注釈をテストが両側から確かめる)が正で、この文書の数ではない。
 
-2026-11-21 の作業ツリー(HEAD ad34d5b)で、`dart-curated` / `rust-curated` / `go-curated` の全部の `@miss` と `@fp` と `@noisy` を、実際に流して確かめた。**エンジン、extractor は変えていない。** 原因の見立てのうち、実験(下の「確かめ方」)で確かめたものは、表の備考に書いた。確かめられていないものは「未特定」と書く。
+2026-11-21 の作業ツリー(HEAD ad34d5b)で、`dart-curated` / `rust-curated` / `go-curated` の全部の `@miss` と `@fp` と `@noisy` を、実際に流して確かめた。**エンジン、extractor は変えていない。** 原因の推定のうち、実験(下の「確認方法」)で確かめたものは、表の備考に書いた。確かめられていないものは「未特定」と書く。
 
-## 確かめ方
+## 確認方法
 
 * 流れの有無と不確実性: `rivus analyze -ir <extractor の出力> -rules rules.yaml`(Go は `./...`)の `findings` と `uncertainties`。**痕跡**は、`rivus resolve` が「見つからない理由」として出すのと同じ定義(source か sink の関数にある不確実性)で調べ、source / sink の行の近くのものも見た。ヘルパー側(経路の途中)にある不確実性は「ヘルパー側」と別に書く。
-* **`@miss` の注釈(BENCH-1、2026-11-21)**: `@miss(silent)` か `@miss(<kind>)`(複数なら `,` 区切り)。ソースの注釈に書いてあり、`cmd/rivus/bench_curated_test.go` が両側から確かめる。**痕跡**は、source の行と sink の行にあるサイト(`rivus analyze -sites`)の**関数**にある不確実性の kind(`rivus resolve` が `absent_now` に出すのと同じ定義)。次は数えない: 関数を持たない(実行全体の)もの(Rust の `depth_limit`/`path_limit` など)、`numeric_stop`(数は注入を運ばないので、見逃しの説明にならない)、**候補がちょうど 1 つの `dynamic_dispatch`**(メソッド呼び出しのたびに出て、コールバックが落ちたことを言わない。以前の「弱い痕跡」。advisor の方針で `silent` に数える)。`@miss(silent)` は、痕跡が 1 つも無いこと、`@miss(<kind>)` は、その kind が(source / sink の関数のどちらかに)出ていることを確かめる。痕跡が付くと(痕跡を足す修正、DART-15 や CORE-D の効果)、`@miss(silent)` の行が「改善」として落ちる。痕跡が消えると、`@miss(<kind>)` の行が落ちる。ヘルパー側(経路の途中)の不確実性は数えない。
+* **`@miss` の注釈(BENCH-1、2026-11-21)**: `@miss(silent)` か `@miss(<kind>)`(複数なら `,` 区切り)。ソースの注釈に書いてあり、`cmd/rivus/bench_curated_test.go` が両側から確かめる。**痕跡**は、source の行と sink の行にあるサイト(`rivus analyze -sites`)の**関数**にある不確実性の kind(`rivus resolve` が `absent_now` に出すのと同じ定義)。次は数えない: 関数を持たない(実行全体の)もの(Rust の `depth_limit`/`path_limit` など)、`numeric_stop`(数は注入を運ばないので、見逃しの説明にならない)、**候補がちょうど 1 つの `dynamic_dispatch`**(メソッド呼び出しのたびに出て、コールバックが落ちたことを示さない。以前の「弱い痕跡」。advisor の方針で `silent` に数える)。`@miss(silent)` は、痕跡が 1 つも無いこと、`@miss(<kind>)` は、その kind が(source / sink の関数のどちらかに)出ていることを確かめる。痕跡が付くと(痕跡を足す修正、DART-15 や CORE-D の効果)、`@miss(silent)` の行が「改善」として落ちる。痕跡が消えると、`@miss(<kind>)` の行が落ちる。ヘルパー側(経路の途中)の不確実性は数えない。
   * 限界: 痕跡は、落ちた呼び出しを指すとは限らない。`dyn-arg` と `dyn-body`(DART-12)の `unmodeled_library_call` は、本体の無い既定のコンストラクタ(`Loud()`、`Maker()`)に付いたもので、落ちたメソッド呼び出しではない(それでも kind が出ているので、`@miss(unmodeled_library_call)`)。DART-12 が直って、`dynamic` の呼び出しに痕跡が付いても、この 2 つの注釈は変わらない。
   * 注釈の書き換え(今回): 前の分類との差は、`takes-a` / `takes-b`(痕跡は、source / sink の関数ではなく、間のクロージャの中の `g(a)` にあった: `silent`)、`dyn-arg` / `dyn-body`(上の限界)、`across-hub` ほかの「弱い」6 件と Rust の `across-each`(`silent`)。MISSES.md の前の版が間違っていたものは、他に無かった。
 * IR: `rivus extract -text` は Go 専用なので、`ir.Read` / `Func.Format` で Dart と Rust の IR を読んだ(extractor の出力 `*.jsonl`)。**どの `@miss` でも、IR に流れは載っている**(Dart のクロージャの捕獲は `make_closure` の束縛、Rust は環境の構造体のフィールド)。extractor の側で落ちているものは、無い。
@@ -42,7 +42,7 @@
 | 指摘 | 原因のコード(今) | フィクスチャ | 今の結果 |
 | --- | --- | --- | --- |
 | RUST-13: `Fn` / `FnMut` を `&self` で呼ぶと、受け手がセルで、呼び元ごとに絞れない | internal/taint/calls.go:357 `dispatchGuards`(`recv.Kind != sg.KParam` で nil)。さらに makeDispatchGuards は、候補が method でない(`!fn.Recv`)と、ガードを付けない(クロージャは全部これ) | rust-curated/src/fnself.rs: `fn_ret_clean` / `fn_mut_ret_clean`(`@sink(none) @fp`)、`fn_sink_a/b`、`fn_mut_sink_a/b`(`@nosink` + `@fp`)。対照の `fn_ref_clean`(`&impl Fn`、受け手がパラメータそのもの) | 6 か所とも `@fp`(落ちる)。対照も落ちる: 受け手がセルであることだけが原因ではなく、クロージャの候補にガードが付かない(`!fn.Recv`)ことも原因。案 2 の受け入れは、この 7 か所の `@fp` が全部消えること |
-| RUST-14: モデルを当てると、`read_impls` でない動的呼び出しの本体を読まない | internal/taint/calls.go:182-196(`modelled` のあと、`!rules.ReadsImpls(cc.sym)` で return)。`read_impls: true` は rust-std.yaml と rust-misc.yaml だけ | rust-curated/src/modelled.rs: `model_body`(source が実装の本体の中、`@miss`)、`model_drop`(実装が引数を捨てる、`@sink(none) @fp`)。rules.yaml に、プロジェクトの trait のメソッド(`Render::render`、`Mask::mask`)の propagator(recv→result)を足した | **ADR-075 で `@miss` は直った**(モデルを当てたあと、本体も読む)。`@fp`(`model_drop`)は残る: モデルは「受け手が結果に入る」と言い続け、本体の和でも消えない |
+| RUST-14: モデルを当てると、`read_impls` でない動的呼び出しの本体を読まない | internal/taint/calls.go:182-196(`modelled` のあと、`!rules.ReadsImpls(cc.sym)` で return)。`read_impls: true` は rust-std.yaml と rust-misc.yaml だけ | rust-curated/src/modelled.rs: `model_body`(source が実装の本体の中、`@miss`)、`model_drop`(実装が引数を捨てる、`@sink(none) @fp`)。rules.yaml に、プロジェクトの trait のメソッド(`Render::render`、`Mask::mask`)の propagator(recv→result)を足した | **ADR-075 で `@miss` は直った**(モデルを当てたあと、本体も読む)。`@fp`(`model_drop`)は残る: モデルは「受け手が結果に入る」と宣言し続け、本体の和でも消えない |
 | DART-12: `dynamic` のメソッド呼び出しが、`dart:core#dynamic.invoke` の静的呼び出しになり、モデルで覆われて痕跡が残らない | extractor/dart/lib/exprs.dart:347(`_methodInvocation`)、internal/model/builtin/dart-core.yaml:8(`flows: [{from: args, to: result}]`) | dart-curated/lib/dynamic_calls.dart: `dynamic_arg`(メソッドの中の sink、`@miss`)、`dynamic_body`(メソッドの本体の source、`@miss`)、`dynamic_drop`(`@sink(none) @fp`) | `@miss` 2、`@fp` 1。モデルを外す対照は、していない |
 
 足したあとの数: Dart `@miss` 34、`@fp` 5。Rust `@miss` 12、`@fp` 22、`@noisy` は 183 件のまま(新しいフィクスチャは、他と型が重ならない署名(`u8`、`u16`、`u32`、`u64`、`i8`)で、他のクロージャを候補にしない)。
@@ -364,7 +364,7 @@ Gitea の CVE の 3 件(上の表)は**見つかる**。足したときに、**G
 | --- | --- | --- | --- | --- |
 | `tx_capture` | gitea/routers/tx.go:17 → 20 | `@miss(dynamic_dispatch)`: sink の関数(`DeleteInTx$1`)に、`ObjectStorage.Delete` の dynamic_dispatch(候補 2)。`db.WithTx` の `f(ctx)` にも dynamic_dispatch(候補は、プログラムのクロージャ 3 つ: `DeleteInTx$1`、`RunInTx$1`、`UpdateRelease$1`) | `CAP`(Go 版) | `db.WithTx(ctx, func(c) error { return storage.Attachments.Delete(uuid) })`。`uuid` は、`ctx.Req.FormValue` から |
 | `tx_capture_plain` | gitea/routers/tx.go:26 → 29 | `@miss(silent)`(`sys.Run` は、インターフェースの後ろではない) | `CAP`(Go 版) | 同じ形で、シンクが直接の関数。**黙った見逃し** |
-| `pb_target` | src/parseable.rs:28 → 173 | `@miss(silent)` | 保存と読み出し(グローバルの `OnceLock<RwLock<HashMap>>`)。ADR の見立てで、私は切り分けていない | 上の表 |
+| `pb_target` | src/parseable.rs:28 → 173 | `@miss(silent)` | 保存と読み出し(グローバルの `OnceLock<RwLock<HashMap>>`)。ADR の推定で、私は切り分けていない | 上の表 |
 
 小さい例での確かめ(`mini`): `func C(s string) { withTx(func() error { sink(s); return nil }) }`(`withTx(f) { return f() }`)は、findings 0 件、不確実性 0 件。クロージャが**引数**を取る形(`withTx(func(a string) error { sink(a) }, s)`)と、クロージャを変数に入れて**その場で**呼ぶ形(`f := func() { sink(s) }; f()`)は、見つかる。
 

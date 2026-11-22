@@ -1,7 +1,7 @@
 # rivus
 
 > ⚠️ 開発中です。コマンド、フラグ、出力の形は変わります。
-> **rivus の結果を「通れば安全」の関門として使わないでください。** 見つけられない流れがあります（[何を言わないか](#何を言わないか)）。
+> **rivus の結果を「通れば安全」の関門として使わないでください。** 見つけられない流れがあります（[何を報告しないか](#何を報告しないか)）。
 
 `rivus` は、**Go / Dart / Rust のコードについて、「外から来た値が、危険な処理に届くか」の経路を、関数・ファイル・パッケージを跨いで組み立てるツール**です（taint 解析）。
 
@@ -70,7 +70,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 細かい点:
 
-- 解析が上限で止まった所は `depth_limit` として記録され、理由が付きます: `budget`（仕事量。どのマシンでも同じ所で止まる）、`func_timeout` / `run_timeout`（時計。マシンの負荷で止まる所が変わる）。時計で止まったものがあれば、`summary.load_dependent` が `true` になります。
+- 解析が上限で止まった所は `depth_limit` として記録され、理由が付きます: `budget`（作業量。どのマシンでも同じ所で止まる）、`func_timeout` / `run_timeout`（時計。マシンの負荷で止まる所が変わる）。時計で止まったものがあれば、`summary.load_dependent` が `true` になります。
 - Go で、型エラーのあるパッケージと、それを import するパッケージは、SSA が作られず、解析から落ちます(`packages` には載ったままです)。読んだが作れなかったパッケージの数、落ちた関数の数、上位 10 のパッケージ(と理由)は、`summary.unread` に出ます(1 つもなければ、欄はありません)。パッケージごとに `missing_source` の不確実性も出て、stderr に 1 行出ます。終了コードと finding は変わりません。
 - 数値と真偽値になった値は、既定では追いません（`numeric_stop` として記録。`-numeric-taint` で追う）。
 - `rivus resolve` の答えは、`unchanged` / `changed` / `rematched` / `ambiguous` / `unresolved` と、finding については今も届くか（`flow`）です。
@@ -120,7 +120,7 @@ rivus query -site <ID> ./...           # sites の 1 件から始める
 | 言語 | どう読むか | 要るもの |
 |---|---|---|
 | Go | `go/packages` と `go/ssa` で直接読む | Go のツールチェーン。コードがビルドできること |
-| Dart | 別プロセスの extractor（`package:analyzer`）が IR を書き、rivus が読む | Dart SDK。**解析の前に、そのパッケージで `dart pub get` を実行する**（rivus は実行しません。していない、または古いとき、rivus は `summary.unread` と stderr でそう言います）。コード生成（`build_runner`）も済んでいること。[extractor/dart](extractor/dart/README.md) |
+| Dart | 別プロセスの extractor（`package:analyzer`）が IR を書き、rivus が読む | Dart SDK。**解析の前に、そのパッケージで `dart pub get` を実行する**（rivus は実行しません。していない、または古いとき、rivus は `summary.unread` と stderr でそう報告します）。コード生成（`build_runner`）も済んでいること。[extractor/dart](extractor/dart/README.md) |
 | Rust | 別プロセスの extractor（rustc のドライバ。MIR を読む）が IR を書き、rivus が読む | 固定した nightly の Rust と extractor（`rivus setup rust -source extractor/rust` で用意する。macOS は既定でサンドボックスの下、Linux は `-unsafe-host-exec` のときだけ読める）。コードがビルドできること、`Cargo.lock` があること。**読むと、対象のビルドが走る**（下の「信頼できないコード」）。[extractor/rust](extractor/rust/README.md) |
 
 - Dart と Rust の extractor（`rivus-dart`、`rivus-rust`）は、PATH に置くか、`-dart-extractor` / `-rust-extractor`（または環境変数 `RIVUS_DART_EXTRACTOR` / `RIVUS_RUST_EXTRACTOR`）で指します。extractor が書いた IR のファイルを、`rivus analyze -ir file.jsonl` で読むこともできます。
@@ -141,7 +141,7 @@ Go から作り始めたので、**Go が最も進んでいて、Dart と Rust �
 - 言語間の差は、**同じ流れの形を 3 言語で書いたテスト**（[bench/zoo](bench/zoo/README.md)）で数えています。`go test ./cmd/rivus -run Zoo -v` が、言語ごとに「出る / 痕跡つきで見逃す / 黙って見逃す / おとりを誤って出す」の数を出します。
 - 既知の見逃しの一覧と、その原因は [bench/MISSES.md](bench/MISSES.md) にあります。
 
-## 何を言わないか
+## 何を報告しないか
 
 rivus が出さなかったことは、「流れがない」という意味ではありません。
 
@@ -222,7 +222,7 @@ RIVUS_DART="dart" go test ./cmd/rivus           # Dart の extractor を使う�
 RIVUS_RUST=$PWD/extractor/rust/target/debug/rivus-rust go test ./cmd/rivus   # Rust の extractor を使うテストも（先に extractor/rust をビルド）
 ```
 
-PR の CI は `go test -short`(重い試験は、自分で `-short` を見て飛ばす)で、main への push と週 1 回の実行が全部を走らせます。main の実行が赤になったら、次の仕事より先に、直すか原因の PR を戻します。
+PR の CI は `go test -short`(重い試験は、自分で `-short` を見て飛ばす)で、main への push と週 1 回の実行が全部を走らせます。main の実行が失敗したら、次の作業より先に、直すか原因の PR を戻します。
 
 正しさは、役目の違うテストとベンチで確かめています（[bench/README.md](bench/README.md)）。
 

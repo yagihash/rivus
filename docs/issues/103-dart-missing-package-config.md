@@ -1,4 +1,4 @@
-# #103 Dart: package_config.json がない・古い対象で、何も言わずに finding が 0 件になる
+# #103 Dart: package_config.json がない・古い対象で、何も報告せずに finding が 0 件になる
 
 - 状態: **closed**
 - 種類: 黙った見逃し(直した)
@@ -8,7 +8,7 @@
 
 ## 今の状態(2026-11-22 の見直し)
 
-直した: 46e28c0(`package_config.json` がない、または古いパッケージを、読めなかったものとして言う。`dart pub get` を実行する、と。rivus は実行しない)。
+直した: 46e28c0(`package_config.json` がない、または古いパッケージを、読めなかったものとして報告する。`dart pub get` を実行する、と。rivus は実行しない)。
 
 ## 経緯
 
