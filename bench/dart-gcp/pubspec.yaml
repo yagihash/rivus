@@ -1,0 +1,17 @@
+name: gcp_bench
+description: A small synthetic gRPC server that calls Google Cloud client packages, to measure the analysis of a project with its dependencies.
+publish_to: none
+environment:
+  sdk: ^3.10.0
+# The base versions are those of ../dart-grpc/pubspec.lock. The Google Cloud packages are added one by one in the measurement.
+dependencies:
+  async: ^2.13.1
+  fixnum: ^1.1.1
+  gcloud: ^0.9.0
+  google_cloud_storage: any
+  googleapis: ^15.0.0
+  googleapis_auth: ^2.3.5
+  grpc: 5.2.0
+  http: ^1.6.0
+  http2: ^2.3.1
+  protobuf: ^6.1.0
