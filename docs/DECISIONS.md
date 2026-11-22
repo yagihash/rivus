@@ -1383,6 +1383,12 @@ rivus 自身(dogfood): 39 → 44(追加の 5 は `rivus index` の `-o` の経�
 
 **測定:** `compare.sh 6c5c28c <この変更>`: finding の追加・削除 0、新しいフィールド以外に差なし（コミットに記す）。
 
+**追記(`-pass-stats-top`、`-pass-stats-sort`、`largest_scc_packages`):**
+- `-pass-stats-top N`(既定 20、0 は全件)は `packages_top` の件数、`-pass-stats-sort KEY` は並びのキー(`reanalyses`(既定)、`time`、`functions`、`elems`。同じ値は名前順)。`time` は時計なので、実行ごとに違う。上の「上位 20 件で、並びは `reanalyses`…」は、既定の動き。
+- `largest_scc_packages`: 最大の SCC の関数を `taint.UnitOf` ごとに数えた上位 10 件(`package`、`functions`)。呼び出しグラフから解析の前に作る(`-pass-stats` のときだけ、SCC の関数を覚える)ので、**時間切れの実行にも出る**(解析が 1 つも進む前に切れても出る)。`packages_top`(解析した分)と `largest_summary` も、途中までの分が出る。0 件のときは出さない。
+- `-timeout` は、8 関数以上の SCC の並列ラウンドの中でも、各関数の計算の前に見る(課題 #125)。期限がなければ結果は変わらない。
+- 使い方(自分のプロジェクトで表を得る手順)は README の「使い方」。
+
 
 ## ADR-062: ビルドが本番から除くものは、既定で読まない(3 言語で揃える)。読まなかった数は出力に出す
 
