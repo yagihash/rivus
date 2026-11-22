@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"runtime"
 	"runtime/pprof"
 	"strings"
@@ -400,7 +399,7 @@ func runIndex(args []string) error {
 	fs := flag.NewFlagSet("index", flag.ExitOnError)
 	var o analyzeOpts
 	o.register(fs)
-	out := fs.String("o", "", "with -taint: the JSON index to write (default: .rivus/index.json below -C)")
+	out := fs.String("o", "", "with -taint: the JSON index to write (default: index.json beside the default graph file, in the user's cache by the absolute path of -C; never in the analysed directory)")
 	graph := fs.String("graph", "", "the graph file to write (default: in the user's cache, by the absolute path of -C)")
 	taintFlag := fs.Bool("taint", false, "also run the taint analysis (slow) and write its result as the JSON index that query -index and resolve -index read (-o implies it)")
 	usual(fs, "o", "graph", "taint")
@@ -433,7 +432,10 @@ func runIndex(args []string) error {
 	}
 	jpath := *out
 	if jpath == "" {
-		jpath = filepath.Join(o.dir, ".rivus", "index.json")
+		jpath, err = indexCachePath(o.dir)
+		if err != nil {
+			return err
+		}
 	}
 	if err := rep.Save(jpath); err != nil {
 		return err

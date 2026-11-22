@@ -58,6 +58,16 @@ func graphCachePath(dir string) (string, error) {
 	return filepath.Join(cache, "rivus", hex.EncodeToString(sum[:8]), "graph.db"), nil
 }
 
+// indexCachePath is where the JSON index of a directory is written when -o is not given: index.json beside
+// its graph file in the user's cache, never in the analysed directory.
+func indexCachePath(dir string) (string, error) {
+	g, err := graphCachePath(dir)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(filepath.Dir(g), "index.json"), nil
+}
+
 // graphFile is the file the flags name: -graph, or the cache of -C.
 func graphFile(explicit string, o *analyzeOpts) (string, error) {
 	if explicit != "" {
@@ -174,6 +184,18 @@ func (o *analyzeOpts) flagValues(patterns []string) map[string]string {
 	}
 	if o.resolveFuncValues {
 		m["resolve-func-values"] = "true"
+	}
+	if len(o.rules) > 0 {
+		// the explicit rule files, by absolute path, one per line: a question with -C reads them again from the record
+		var abs []string
+		for _, f := range o.rules {
+			a, err := realAbs(f)
+			if err != nil {
+				a = f
+			}
+			abs = append(abs, a)
+		}
+		m["rules"] = strings.Join(abs, "\n")
 	}
 	if len(patterns) > 0 {
 		m["patterns"] = fmt.Sprint(patterns)
@@ -328,6 +350,7 @@ func runGraphInfo(args []string) error {
 		out.Snapshot.Note = "not checked against the current source: pass -C <dir> to make the key again from it"
 		return writeJSON(os.Stdout, out)
 	}
+	adoptStoredFlags(fs, info.Flags)
 	if err := verifySnapshot(db, path, &o, fs.Args(), &out.Snapshot); err != nil {
 		return err
 	}

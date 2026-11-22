@@ -131,7 +131,7 @@ source から sink への経路を、全部探します。主な作業のコマ�
 - **読む場所**: 標準エラーの `rivus: wrote <path> (343 functions, 1073 call sites, 609 edges, ...)`。標準出力には何も出ません。
 - **落とし穴**:
   - グラフのファイルは、利用者のキャッシュに置かれます(`RIVUS_CACHE_DIR` で変えられます。`-C` の絶対パスごとに 1 つ)。解析の対象のディレクトリには書きません。
-  - **`-taint` で `-o` を省くと、JSON の index は `-C` の下の `.rivus/index.json` に書かれます**(対象のディレクトリの中)。対象を書き換えたくないときは、`-o` で外の場所を指定します。
+  - `-taint` で `-o` を省くと、JSON の index は、グラフのファイルと同じ利用者のキャッシュの下(`graph.db` の隣の `index.json`)に書かれます。書いたパスは標準エラーに出ます。`query -index` などには、そのパスを渡します。以前の既定の場所(対象の `.rivus/index.json`)は、もう書かず、読みもしません(ADR-095)。
   - `-taint` なしのファイルには、finding も不確実性もありません。「index に finding がない」から何かを結論しないでください。
   - `graph` に `-C` で問い合わせるときは、`index` と同じフラグを渡します(下の `graph` の落とし穴)。
 
@@ -171,7 +171,7 @@ source から sink への経路を、全部探します。主な作業のコマ�
   - `path`: 5 章の「`graph path` の答え」。
 - **落とし穴**:
   - **`-C` を付けて、ファイルが今のソースのものかを照合します。** `-graph <file>` だけだと `snapshot.verified: false` で、古いファイルでも何も言いません。
-  - `index` に `-rules` を渡したなら、`graph` にも同じ `-rules` を渡します。渡さないと、`fresh: false` と `warnings` が出ます(答えは返りますが、照合に失敗しています)。`-tests`、`-no-deps`、`-lang` などは、省くと、ファイルに記録されたものが使われます。ルールを対象の `.rivus/rules/` に置いておけば、どちらにも書かずに済みます。
+  - `-rules`、`-tests`、`-no-deps`、`-lang` などは、`graph` で省くと、ファイルに記録されたものが使われます(`-rules` は、記録されたファイルのパス)。記録された `-rules` のファイルがなくなった、または内容が変わったときは、`fresh: false` と `warnings` が出ます(答えは返りますが、古いルールのままです)。`-rules` を明示すると、記録より優先します。ルールを対象の `.rivus/rules/` に置いておけば、どちらにも書かずに済みます。
   - `impls` の答えは、「グラフの中の、その呼び出しの候補の和」です。その型を実装する型の全部ではありません。
   - 組み込み関数(`len`、`append` など)の呼び出しは、既定で省かれます(`omitted.builtin`。`--include-builtin` で戻す)。
   - 値として渡された関数(ルータに登録したハンドラなど)は、呼び出しのエッジではありません。`callers` に出ないときは `--refs` を付けます。`path` は、ほかに経路がないときだけ、参照をたどります。
@@ -288,7 +288,7 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `query` | `-sink <symbol>` / `-source <symbol>` / `-site <id>` | 問い(ちょうど 1 つ) | なし |
 | `query`、`resolve`、`models coverage` | `-index <file>` | 保存した JSON の index から答える | 解析する |
 | `index` | `-taint` | taint 解析も実行して、JSON の index を書く | しない |
-| `index` | `-o <file>` | JSON の index の書き先(`-taint` を含む) | `-C` の下の `.rivus/index.json` |
+| `index` | `-o <file>` | JSON の index の書き先(`-taint` を含む) | 利用者のキャッシュの `graph.db` の隣の `index.json` |
 | `index` | `-graph <file>` | グラフのファイルの書き先 | 利用者のキャッシュ |
 | `resolve` | `-bookmarks <file>` | ブックマーク(必須。`-` で標準入力) | なし |
 | `models coverage` | `-top <n>` | 上位 n 件だけ | `0`(全部) |
@@ -562,7 +562,7 @@ rivus analyze -C <dir> -rules app.yaml -timeout 10m ./... > out.json
   - Go: `go list` が実行され、依存の取得(ネットワーク)が起きることがあります。cgo のあるパッケージでは、C コンパイラが動きます。隔離はありません。
   - Dart: extractor は読むだけですが、前提の `dart pub get` と `build_runner` は、対象の依存と生成器のコードを実行します。信頼できない対象で、エージェントがこれらを勝手に実行してはいけません。
 - 信頼できないコードの解析の結果とログは、そのコードが書き込んだものを含みえます。そのまま公開の場所に出しません。
-- `rivus index -taint` は、`-o` を省くと、対象のディレクトリに `.rivus/index.json` を書きます。
+- `rivus index` は、`-o` を省いても、対象のディレクトリには何も書きません(グラフのファイルも JSON の index も、利用者のキャッシュに置きます)。
 
 詳しくは、[README の「信頼できないコードを解析するとき」](../README.md#信頼できないコードを解析するとき)と [rust-isolation.md](rust-isolation.md) にあります。
 
