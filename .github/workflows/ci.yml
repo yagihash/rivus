@@ -19,7 +19,9 @@ permissions: {}
 env:
   # A pull request runs the tests with -short: the heavy ones (many runs of the same analysis, the scale profiles, the Google Cloud rows)
   # skip themselves, and run on a push to main, once a week, and by hand. A red run of main is fixed first (or the pull request is reverted).
-  SHORT: ${{ github.event_name == 'pull_request' && '-short' || '' }}
+  # The release pull request of tagpr (its branch starts with `tagpr-from-`) is the exception: it runs what a push to main runs, without -short.
+  # (The branch name is only compared in an expression here; it is never given to a shell.)
+  SHORT: ${{ github.event_name == 'pull_request' && !startsWith(github.head_ref, 'tagpr-from-') && '-short' || '' }}
 
 # A push to main that lands on a run in progress cancels it: only the newest commit is checked (to find which commit
 # broke what, use `git bisect` and a local reproduction). A pull request is checked per branch.
@@ -32,6 +34,7 @@ jobs:
   #   push (main)        everything runs, whatever the lists say (a wrong list shows there)
   #   pull_request       the files that changed, against the lists below (dorny/paths-filter)
   #   schedule           everything, without -short (once a week); workflow_dispatch: everything
+  #   tagpr release PR   everything, without -short, as a push to main (the branch starts with `tagpr-from-`; it changes CHANGELOG.md only)
   # A pull request that the action cannot judge fails here (an empty answer must not skip the heavy jobs: the step `decide`, and `ci-ok`).
   changes:
     runs-on: ubuntu-latest
@@ -83,18 +86,23 @@ jobs:
       - id: decide
         env:
           EVENT_NAME: ${{ github.event_name }}
+          RELEASE_PR: ${{ github.event_name == 'pull_request' && startsWith(github.head_ref, 'tagpr-from-') && 'true' || 'false' }}
           FILTER_CODE: ${{ steps.paths.outputs.code }}
           FILTER_ISOLATION: ${{ steps.paths.outputs.isolation }}
         run: |
           case "$EVENT_NAME" in
             pull_request)
-              for v in "$FILTER_CODE" "$FILTER_ISOLATION"; do
-                case "$v" in
-                  true | false) ;;
-                  *) echo "the filter of the paths gave '$v', not true or false: nothing is skipped on a guess" >&2; exit 1 ;;
-                esac
-              done
-              code=$FILTER_CODE isolation=$FILTER_ISOLATION ;;
+              if [ "$RELEASE_PR" = true ]; then
+                code=true isolation=true
+              else
+                for v in "$FILTER_CODE" "$FILTER_ISOLATION"; do
+                  case "$v" in
+                    true | false) ;;
+                    *) echo "the filter of the paths gave '$v', not true or false: nothing is skipped on a guess" >&2; exit 1 ;;
+                  esac
+                done
+                code=$FILTER_CODE isolation=$FILTER_ISOLATION
+              fi ;;
             *) code=true isolation=true ;; # push, schedule, workflow_dispatch
           esac
           echo "code=$code" >> "$GITHUB_OUTPUT"
@@ -291,8 +299,8 @@ jobs:
   # value of a fixed one only the parameters. The test refuses every connection that is not loopback.
   gcp-exec:
     needs: changes
-    # the cases run for real: main and once a week (a pull request runs the tests with -short)
-    if: needs.changes.outputs.code == 'true' && github.event_name != 'pull_request'
+    # the cases run for real: main, once a week, and the release pull request of tagpr (a pull request runs the tests with -short)
+    if: needs.changes.outputs.code == 'true' && (github.event_name != 'pull_request' || startsWith(github.head_ref, 'tagpr-from-'))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
