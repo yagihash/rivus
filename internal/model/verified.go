@@ -125,7 +125,11 @@ func (b bound) holds(v semver) bool {
 
 // Validate says what is wrong with one record.
 func (e VerifiedVersion) Validate(today time.Time) error {
-	if err := CheckPackage(e.Package); err != nil {
+	// a Go module whose path has the major in it is written with /v* (any major; MajorWildcard): the rest is checked as it is written
+	if err := CheckMajorWildcard(e.Package, "package"); err != nil {
+		return err
+	}
+	if err := CheckPackage(strings.Replace(e.Package, MajorWildcard, "/v2", 1)); err != nil {
 		return err
 	}
 	if strings.Contains(e.Package, "...") {

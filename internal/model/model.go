@@ -912,9 +912,15 @@ func (rs *RuleSet) validate() error {
 			if s.Type == "" {
 				return fmt.Errorf("%s: type is required for kind %s", what, s.Kind)
 			}
+			if err := CheckMajorWildcard(s.Type, what+": type"); err != nil {
+				return err
+			}
 		case KindField:
 			if s.Field == "" {
 				return fmt.Errorf("%s: field is required for kind %s", what, s.Kind)
+			}
+			if err := CheckMajorWildcard(s.Field, what+": field"); err != nil {
+				return err
 			}
 		case KindParam:
 			if s.Extends != "" {
@@ -1154,7 +1160,7 @@ func checkSymbol(sym, what string) error {
 	if sym != strings.TrimSpace(sym) {
 		return fmt.Errorf("%s: symbol %q has a space around it", what, sym)
 	}
-	return nil
+	return CheckMajorWildcard(sym, what)
 }
 
 func validateFlows(flows []Flow, what string) error {
@@ -1275,6 +1281,8 @@ type Rules struct {
 	// Verified are the records of verified_versions of all the sets, by package.
 	Verified []Verified
 	declared *declaredSet
+	// majorsDone: ExpandMajors has been run (a second run would add the rows again).
+	majorsDone bool
 }
 
 // WithoutOrigin merges the rule sets after leaving out the rules of one

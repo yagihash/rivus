@@ -19,6 +19,8 @@
 
 つまり、**本物の依存では起きず、zoo の骨組みがプロジェクトの側として読まれるためだけの問題**。モデルの `kind: field` の行を足してよいが、zoo のテストが失敗する。
 
+Go では起きない(2026-11-23 に確認): `bench/zoo-go-pkg/go_github` の骨組み(`replace` の別のモジュール `github.com/google/go-github/v93`)の関数は、すべて `Dep` で、プロジェクトの関数にならない(`goir.Extract` の `Options{All: true}` で見て、骨組み 69 関数が `dep`、`zoo/mark` 7 関数が `dep`、セル 23 関数が `dep` でない。`Func.Dep` は `!Own`、つまり `./cells/...` で読み込んだ package でないこと。`summary.dependency_sites.dependency_functions` も 76 = 69 + 7)。そのため、`kind: field` の source の行(`Issue.Body` など)は、骨組みの中で source の場所にならず、zoo で想定外の流れが出ない。
+
 ## 直す方向の候補
 
 1. zoo の骨組み(`cells/packages/` の path の依存)を、依存(`Dep`)として扱う(テストの側の設定。サイトの列挙が骨組みを飛ばす。ほかのセルへの影響の確認が要る)。
