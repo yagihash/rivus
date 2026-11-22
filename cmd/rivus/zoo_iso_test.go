@@ -25,12 +25,60 @@ func zooCopy(t *testing.T, dir string, cells []string) string {
 			t.Fatal(err)
 		}
 	}
-	for _, d := range append([]string{"mark"}, cells...) {
+	// (go.mod replaces zoodep with ./dep: a cell that imports it needs the directory)
+	for _, d := range append([]string{"mark", "dep"}, cells...) {
 		if out, err := exec.Command("cp", "-R", filepath.Join(dir, d), mkdirParent(t, filepath.Join(dst, d))).CombinedOutput(); err != nil {
 			t.Fatalf("cp %s: %v\n%s", d, err, out)
 		}
 	}
 	return dst
+}
+
+// zooSplit divides the cells of a zoo into the ones that stop by the pass limit on purpose (a @miss that names
+// recursion_approximation: the chains of 13 and 30 stages of state/global-chain) and the others. The first are
+// analysed as a program of their own, where a run that does not converge is allowed; the others as a program that
+// must converge: what a run that stopped by its limit left in the other cells would depend on the order of the work, and
+// an uncertainty of the whole program (no function) must not stand for the trace of a @miss of another cell.
+func zooSplit(lines []zooLine, cells []*zooCell) (rest, rec []*zooCell) {
+	named := func(c *zooCell) bool {
+		for _, l := range lines {
+			if l.file == c.dir || strings.HasPrefix(l.file, c.dir+"/") {
+				for _, k := range l.missKinds {
+					if k == "recursion_approximation" {
+						return true
+					}
+				}
+			}
+		}
+		return false
+	}
+	for _, c := range cells {
+		if named(c) {
+			rec = append(rec, c)
+		} else {
+			rest = append(rest, c)
+		}
+	}
+	return rest, rec
+}
+
+// zooCheckRecNames holds that only the cell that tests the pass limit (state/global-chain) names recursion_approximation in
+// a @miss: another cell that names it would be a trace of the whole program that stands for the cause of its own miss.
+func zooCheckRecNames(t *testing.T, rec []*zooCell) {
+	t.Helper()
+	for _, c := range rec {
+		if c.name != "F/state/global-chain" {
+			t.Errorf("%s has a @miss(recursion_approximation): only F/state/global-chain stops by the pass limit on purpose; the trace of a miss is the uncertainty of its own functions (see missTraces)", c.name)
+		}
+	}
+}
+
+func zooCellDirs(cells []*zooCell) []string {
+	var out []string
+	for _, c := range cells {
+		out = append(out, c.dir)
+	}
+	return out
 }
 
 func mkdirParent(t *testing.T, p string) string {

@@ -224,6 +224,29 @@ func zooDartStream(t *testing.T, dir string) []byte {
 	return stream
 }
 
+// zooDartCopy copies the given cells of the Dart zoo (and what they need: pubspec.yaml, rules.yaml, packages) to a new
+// directory, to be analysed as a program of its own.
+func zooDartCopy(t *testing.T, root string, cells []*zooCell) string {
+	t.Helper()
+	one := t.TempDir()
+	for _, f := range []string{"pubspec.yaml", "rules.yaml"} {
+		b, err := os.ReadFile(filepath.Join(root, "cells", f))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(one, f), b, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, d := range append([]string{"packages"}, zooCellDirs(cells)...) {
+		if out, err := exec.Command("cp", "-R", filepath.Join(root, "cells", d), mkdirParent(t, filepath.Join(one, d))).CombinedOutput(); err != nil {
+			t.Fatalf("cp %s: %v\n%s", d, err, out)
+		}
+	}
+	os.RemoveAll(filepath.Join(one, "packages", "zoo_mark", ".dart_tool"))
+	return one
+}
+
 // zooDartAlone analyses each cell by itself, as a subtest (green alone and red in the whole is a mix with the
 // others; red alone is the cell).
 func zooDartAlone(t *testing.T, root string, cells []*zooCell) {
@@ -231,22 +254,7 @@ func zooDartAlone(t *testing.T, root string, cells []*zooCell) {
 	for _, c := range cells {
 		c := c
 		t.Run("alone/"+strings.TrimPrefix(c.name, "F/"), func(t *testing.T) {
-			one := t.TempDir()
-			for _, f := range []string{"pubspec.yaml", "rules.yaml"} {
-				b, err := os.ReadFile(filepath.Join(root, "cells", f))
-				if err != nil {
-					t.Fatal(err)
-				}
-				if err := os.WriteFile(filepath.Join(one, f), b, 0o644); err != nil {
-					t.Fatal(err)
-				}
-			}
-			for _, d := range []string{"packages", c.dir} {
-				if out, err := exec.Command("cp", "-R", filepath.Join(root, "cells", d), mkdirParent(t, filepath.Join(one, d))).CombinedOutput(); err != nil {
-					t.Fatalf("cp %s: %v\n%s", d, err, out)
-				}
-			}
-			os.RemoveAll(filepath.Join(one, "packages", "zoo_mark", ".dart_tool"))
+			one := zooDartCopy(t, root, []*zooCell{c})
 			checkCuratedIR(t, one, zooDartStream(t, one), ".dart")
 		})
 	}
@@ -259,13 +267,17 @@ func TestZooDart(t *testing.T) {
 	obs := zooDartObserve(t)
 	lines, cells := zooDartScan(t, root)
 	cellsDir := filepath.Join(root, "cells")
-	rec := false // a chain of 13 and 30 stages stops by the pass limit (the Go and Rust zoos have the same)
-	for _, l := range lines {
-		for _, k := range l.missKinds {
-			rec = rec || k == "recursion_approximation"
-		}
+	// a chain of 13 and 30 stages stops by the pass limit (the Go and Rust zoos have the same): those cells are a program of
+	// their own (zooSplit), and the others must converge
+	rest, recCells := zooSplit(lines, cells)
+	restDir := zooDartCopy(t, root, rest)
+	c := checkCuratedIROpts(t, restDir, zooDartStream(t, restDir), ".dart", annotOpts{})
+	if len(recCells) > 0 {
+		zooCheckRecNames(t, recCells)
+		recDir := zooDartCopy(t, root, recCells)
+		c.add(checkCuratedIROpts(t, recDir, zooDartStream(t, recDir), ".dart", annotOpts{allowUnconverged: true, programWide: true}))
 	}
-	c := checkCuratedIROpts(t, cellsDir, zooDartStream(t, cellsDir), ".dart", annotOpts{allowUnconverged: rec, programWide: rec})
+	_ = cellsDir
 	if t.Failed() {
 		t.Log("the zoo failed as a whole: ZOO_ALONE=1 analyses each cell alone (green alone: mixed up with the others; red alone: the cell; the Dart extractor takes about 10 s for each)")
 	}

@@ -634,14 +634,13 @@ func TestZooGo(t *testing.T) {
 	dir := zooRoot(t)
 	obs := zooObserve(t)
 	lines, cells := zooScan(t, dir)
-	rec := false
-	for _, l := range lines {
-		for _, k := range l.missKinds {
-			rec = rec || k == "recursion_approximation"
-		}
+	// the cells that stop by the pass limit on purpose are a program of their own (zooSplit): the others must converge
+	rest, recCells := zooSplit(lines, cells)
+	c := checkAnnotated(t, zooCopy(t, dir, zooCellDirs(rest)), annotOpts{pattern: "./cells/..."})
+	if len(recCells) > 0 {
+		zooCheckRecNames(t, recCells)
+		c.add(checkAnnotated(t, zooCopy(t, dir, zooCellDirs(recCells)), annotOpts{pattern: "./cells/...", allowUnconverged: true, programWide: true}))
 	}
-	// a failed cell is analysed alone, to tell a mix with the others from an error of the cell
-	c := checkAnnotated(t, dir, annotOpts{pattern: "./cells/...", allowUnconverged: rec, programWide: rec})
 	if t.Failed() || os.Getenv("ZOO_ALONE") == "1" { // ZOO_ALONE=1 asks for it
 		// the cells are analysed one by one: green alone and red in the whole is a mix with the others
 		t.Log("the zoo failed as a whole: each cell is analysed alone below (green alone: mixed up with the others; red alone: the cell)")

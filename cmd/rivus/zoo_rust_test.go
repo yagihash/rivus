@@ -283,6 +283,42 @@ func zooRustCopy(t *testing.T, root string) string {
 	return dst
 }
 
+// zooRustCopyCells copies the Rust zoo with only the given cells: lib.rs lists their modules, and the files of the others
+// are removed (the program of its own that an analysis of those cells reads).
+func zooRustCopyCells(t *testing.T, root string, cells []*zooCell) string {
+	t.Helper()
+	one := zooRustCopy(t, root)
+	keep := map[string]bool{}
+	byGroup := map[string][]string{}
+	var groups []string
+	for _, c := range cells {
+		mod := strings.TrimSuffix(strings.TrimPrefix(c.dir, "cells/src/"), ".rs")
+		keep[mod+".rs"] = true
+		parts := strings.Split(mod, "/")
+		if _, ok := byGroup[parts[0]]; !ok {
+			groups = append(groups, parts[0])
+		}
+		byGroup[parts[0]] = append(byGroup[parts[0]], parts[1])
+	}
+	var lib strings.Builder
+	for _, g := range groups {
+		lib.WriteString("pub mod " + g + " {")
+		for _, m := range byGroup[g] {
+			lib.WriteString(" pub mod " + m + ";")
+		}
+		lib.WriteString(" }\n")
+	}
+	if err := os.WriteFile(filepath.Join(one, "cells", "src", "lib.rs"), []byte(lib.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range zooRustModFiles(t, filepath.Join(one, "cells", "src")) {
+		if !keep[filepath.ToSlash(strings.TrimPrefix(d, filepath.Join(one, "cells", "src")+"/"))] {
+			os.Remove(d)
+		}
+	}
+	return one
+}
+
 // zooRustAlone analyses each cell by itself, as a subtest (green alone and red in the whole is a mix with the
 // others; red alone is the cell).
 func zooRustAlone(t *testing.T, root string, cells []*zooCell) {
@@ -290,19 +326,7 @@ func zooRustAlone(t *testing.T, root string, cells []*zooCell) {
 	for _, c := range cells {
 		c := c
 		t.Run("alone/"+strings.TrimPrefix(c.name, "F/"), func(t *testing.T) {
-			one := zooRustCopy(t, root)
-			// only this cell: lib.rs lists the one module
-			mod := strings.TrimSuffix(strings.TrimPrefix(c.dir, "cells/src/"), ".rs")
-			parts := strings.Split(mod, "/")
-			lib := "pub mod " + parts[0] + " { pub mod " + parts[1] + "; }\n"
-			if err := os.WriteFile(filepath.Join(one, "cells", "src", "lib.rs"), []byte(lib), 0o644); err != nil {
-				t.Fatal(err)
-			}
-			for _, d := range zooRustModFiles(t, filepath.Join(one, "cells", "src")) {
-				if filepath.ToSlash(strings.TrimPrefix(d, filepath.Join(one, "cells", "src")+"/")) != mod+".rs" {
-					os.Remove(d)
-				}
-			}
+			one := zooRustCopyCells(t, root, []*zooCell{c})
 			checkCuratedIR(t, one, zooRustStream(t, one), ".rs")
 		})
 	}
@@ -326,13 +350,16 @@ func TestZooRust(t *testing.T) {
 	root := zooRustRoot(t)
 	obs := zooRustObserve(t)
 	lines, cells := zooRustScan(t, root)
-	rec := false // a chain of 13 and 30 stages stops by the pass limit (the Go zoo has the same)
-	for _, l := range lines {
-		for _, k := range l.missKinds {
-			rec = rec || k == "recursion_approximation"
-		}
+	// a chain of 13 and 30 stages stops by the pass limit (the Go zoo has the same): those cells are a program of their
+	// own (zooSplit), and the others must converge
+	rest, recCells := zooSplit(lines, cells)
+	restDir := zooRustCopyCells(t, root, rest)
+	c := checkCuratedIROpts(t, restDir, zooRustStream(t, restDir), ".rs", annotOpts{})
+	if len(recCells) > 0 {
+		zooCheckRecNames(t, recCells)
+		recDir := zooRustCopyCells(t, root, recCells)
+		c.add(checkCuratedIROpts(t, recDir, zooRustStream(t, recDir), ".rs", annotOpts{allowUnconverged: true, programWide: true}))
 	}
-	c := checkCuratedIROpts(t, root, zooRustStream(t, root), ".rs", annotOpts{allowUnconverged: rec, programWide: rec})
 	if t.Failed() {
 		t.Log("the zoo failed as a whole: ZOO_ALONE=1 analyses each cell alone (green alone: mixed up with the others; red alone: the cell)")
 	}

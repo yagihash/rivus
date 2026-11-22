@@ -82,6 +82,27 @@ type curatedCounts struct {
 	uncertainties []*taint.Uncertainty
 }
 
+// add adds the counts of another run (the zoos are analysed in two: see zooSplit).
+func (c *curatedCounts) add(o curatedCounts) {
+	c.detect += o.detect
+	c.quiet += o.quiet
+	c.miss += o.miss
+	c.fp += o.fp
+	c.noisy += o.noisy
+	c.fpTrace += o.fpTrace
+	c.fpSilent += o.fpSilent
+	c.missSilent += o.missSilent
+	c.missTrace += o.missTrace
+	c.offSource += o.offSource
+	for k, v := range o.offKinds {
+		if c.offKinds == nil {
+			c.offKinds = map[string]int{}
+		}
+		c.offKinds[k] += v
+	}
+	c.uncertainties = append(c.uncertainties, o.uncertainties...)
+}
+
 // hasUncertainty reports whether the run recorded an uncertainty of the kind, in a file whose
 // path ends in file, with a detail that starts with detail.
 func (c curatedCounts) hasUncertainty(kind, file, detail string) bool {
