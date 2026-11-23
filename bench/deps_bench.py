@@ -273,10 +273,16 @@ def remove_flutter_members(root):
     open(path, "w").write("\n".join(out))
 
 
+def expand_args(args, src, subdir):
+    """The flags of the target; `{root}` is the root of the tree (src without its subdir), e.g. for -allow-deps-under."""
+    root = os.path.normpath(os.path.join(src, *([".."] * len([x for x in subdir.split("/") if x])))) if subdir else src
+    return [a.replace("{root}", root) for a in args]
+
+
 def analyze_once(rivus, t, src, env, limit_s, cap_bytes, work, tag):
     """One run with the default flags (t["args"]). Returns dict: wall, peak, converged, findings (report or None)."""
     timer = ["/usr/bin/time", "-l"] if sys.platform == "darwin" else ["/usr/bin/time", "-v"]
-    cmd = timer + [rivus, "analyze", "-lang", t["lang"], "-C", src] + list(t.get("args", []))
+    cmd = timer + [rivus, "analyze", "-lang", t["lang"], "-C", src] + expand_args(t.get("args", []), src, t.get("subdir", ""))
     outp, errp = os.path.join(work, tag + ".out.json"), os.path.join(work, tag + ".err")
     rc, why, wall, peak = run_watched(cmd, ROOT, env, limit_s, cap_bytes, errp, outp)
     rss = max_rss_mb(open(errp, errors="replace").read())
