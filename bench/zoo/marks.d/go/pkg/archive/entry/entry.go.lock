@@ -1,0 +1,5 @@
+go	pkg/archive/entry/entry.go	sink-none	@sink(none)	func fixed() { @fixed
+go	pkg/archive/entry/entry.go	sink-none	@sink(none)	func fixed() { @fixed
+go	pkg/archive/entry/entry.go	sink-none	@sink(none)	func fixed() { @fixed
+go	pkg/archive/entry/entry.go	sink-none	@sink(none) @nosink(pkg-archive-entry-decoy-tar)	func decoy() { @decoy
+go	pkg/archive/entry/entry.go	sink-none	@sink(none) @nosink(pkg-archive-entry-decoy-zip)	func decoy() { @decoy
