@@ -25,6 +25,8 @@ type flagSides struct {
 	// kinds is what the value of a flag is ("dir", "file", "enum:<name>"), for the completion; a flag without one has no value completed.
 	kinds map[string]string
 	all   bool
+	// info is what is said of a flag besides its side (describe, flagInfo).
+	info map[string]flagInfo
 	// header, if set, is printed by -h in place of "Usage of <name>:".
 	header string
 }
@@ -34,7 +36,7 @@ var flagSideOf = map[*flag.FlagSet]*flagSides{}
 func sidesOf(fs *flag.FlagSet) *flagSides {
 	s := flagSideOf[fs]
 	if s == nil {
-		s = &flagSides{usual: map[string]bool{}, diag: map[string]bool{}, kinds: map[string]string{}}
+		s = &flagSides{usual: map[string]bool{}, diag: map[string]bool{}, kinds: map[string]string{}, info: map[string]flagInfo{}}
 		flagSideOf[fs] = s
 	}
 	return s
@@ -52,6 +54,33 @@ func diagnostic(fs *flag.FlagSet, names ...string) {
 	for _, n := range names {
 		sidesOf(fs).diag[n] = true
 	}
+}
+
+// flagInfo says what a flag is for. The list of the features that are off by default is made from it (TestOffByDefaultFlags); there is no other
+// list, so no document says what the code does not.
+//
+// A feature (ChangesResult) is a flag that changes what the result means, and that is off (or on the way to a new default). It says when it was
+// added and by what (Added, AddedBy), and what ends its being a flag: the condition to make it the default (Condition), the date or the work that
+// ends it (Deadline), or why it stays off (KeepOff). One of the three is needed; "undecided" is not an answer.
+//
+// A flag that is not a feature says what it is instead (Not): the range of the analysis (-tests), a stop of a function that is on (-no-deps), a
+// way to isolate or to try (-unsafe-host-exec, -body-replaced), the output (-v). Such a flag has no date and no condition.
+//
+// A flag for diagnosis (diagnostic) needs nothing. A switch inside the implementation (writing the IR to a disk is one) is not a flag of the
+// user: it is an environment variable or a variable of a test, and is not in -h. Do not add a flag for it.
+type flagInfo struct {
+	ChangesResult bool
+	// Not is what a flag that is not a feature is.
+	Not string
+	// Added is the date the flag was added (YYYY-MM-DD), AddedBy the PR (or the commit) that added it.
+	Added, AddedBy string
+	// Condition, Deadline and KeepOff: see above.
+	Condition, Deadline, KeepOff string
+}
+
+// describe says what a flag is (see flagInfo).
+func describe(fs *flag.FlagSet, name string, info flagInfo) {
+	sidesOf(fs).info[name] = info
 }
 
 // kind says what the value of flags is, for the completion: "dir", "file", or "enum:<name>" (a value of fixed set, enumFlags). A flag without a

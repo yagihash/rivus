@@ -38,7 +38,7 @@
 | 関数値の候補の上限(32、ADR-050) | 呼び出しの候補が 32 を超えると、候補を 1 つも付けない(`ir.ValueCandidateMost`、`funcvalues.go` の `limited`)。呼び出し元をたどる深さの上限(3)で切れたときも、候補を付けない | 満たさない: 候補なしの呼び出しは、コールバックの中の流れを落とす(#77。33 種類以上の形が見逃しのまま) | 満たす: 候補の数・深さだけで決まる | 一部: `depth_limit`、detail `candidate_limit:`、`caller_depth_limit:`、`candidate_limit_calls`。3 段で切れて、途中で 1〜8 個見つかったときは、何も報告しない(ADR-050 の限界)。渡した側の関数の注記は、#77 に残っている | (i)、(iii)の一部 |
 | 数値の停止(`numeric stop`、`-numeric-taint` で追う) | 数値と真偽値の型に入るとき、source のデータを追わない(`state.go` の `numericRoot`、`add`、`noteNumericStop`) | 満たさない: 数値の型を通る流れを、設計として消す(「注入を運べない」という前提) | 満たす: 型の分類だけで決まる | 一部: `numeric_stop`(source ごとに 1 件、最初の場所)。サマリを通って止まる分は記録しない(PRINCIPLES 2 節の「現状」)。関数ごとの報告は PR #312 | (i)、(iii)の一部 |
 | `-no-deps` | 依存のソースを読まない。依存への呼び出しは、すべて推測になる(`rivus analyze -h`) | 未確認: モデルのない呼び出しの扱い(`unmodeled_library_call`)が足す側かは、ここでは確認していない | 満たす: フラグ。利用者が決める | 一部: 呼び出しごとに `unmodeled_library_call`。フラグ自体は、出力に記録されない(PRINCIPLES 6 節の「現状」) | 未確認(i)、(iii)の一部。既定では働かない(依存は既定で読む) |
-| 依存の深さ(`-dep-k`) | 依存の関数だけ、アクセスパスの深さを `n` にする(`state.go` の `k()`)。既定は 0(`-k` と同じ) | 満たす: 切った所より下は足す側(ADR-117) | 満たす: 深さだけで決まる | 満たす: `access_path_truncated`、`summary.access_path_depth`(`{project, dependency}`) | なし。既定 off(`docs/FLAGS-OFF-BY-DEFAULT.md`) |
+| 依存の深さ(`-dep-k`) | 依存の関数だけ、アクセスパスの深さを `n` にする(`state.go` の `k()`)。既定は 0(`-k` と同じ) | 満たす: 切った所より下は足す側(ADR-117) | 満たす: 深さだけで決まる | 満たす: `access_path_truncated`、`summary.access_path_depth`(`{project, dependency}`) | なし。既定 off(`cmd/rivus/flagsides.go` の `flagInfo`) |
 | `body_replaced_packages`(`-body-replaced`) | 宣言したパッケージの本体を読まず、モデルが代わりに言う(`bodyreplaced.go`) | 未確認: モデルの行が本体より少ないとき、流れが落ちる。モデルのない呼び出しは `unmodeled_library_call` | 満たす: 宣言で決まる | 満たす: `summary.body_replaced_packages`(理由つき)、`body_replaced_ignored` | 未確認(i) |
 
 **表からの、満たさないものの一覧:**
