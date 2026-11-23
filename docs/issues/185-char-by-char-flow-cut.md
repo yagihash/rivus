@@ -40,3 +40,19 @@ Rust は、`char` と整数を数値と扱う(extractor の型の分類)ので�
 ## 経緯
 
 - 2026-11-23: 依存の中のパーサが、ユーザーの文字列を 1 文字ずつ読んで、その先の流れを失っていた件から見つかった。zoo に、この形のセルが無かった。
+
+## 追記(2026-11-23): numeric_stops の確認から
+
+### 実例(memos、公開のプロジェクト、00fcd170)
+
+`summary.numeric_stops` の `char_reads` は 4967 件、760 関数。上位は、`gopkg.in/yaml.v3` の字句解析(`yaml_parser_fetch_next_token` の 407 など)、`yuin/goldmark` の構文解析(`parseBlock` の 150 など)、`tidwall/pretty`。YAML や Markdown の解析を通る流れが、依存の本体の中で、1 文字ずつ読む処理で切れている、という「どこで切れるか」の実例になる。ここにはパッケージ名と件数だけを書く。
+
+数は、場所の数ではなく止めた回数で、関数の中の反復で同じ場所が複数回入る。大小の比較に使う目安で、407 は 407 か所ではない。
+
+### 方針(相談役の判断)
+
+文字の汚染の本体(由来の bit)を実装するときは、`numeric_stops` の `isCharRead` を、流れの判断には使わない。`isCharRead` は、言語に固有の名前を決め打ちで持つ(`std::iter::Iterator::next`、`std::str::Bytes`、`String.codeUnits`、`::as_bytes`、`iter.next`、型の名前 `byte` / `rune` / `char`)。「文字列の要素の取り出し」は、extractor が IR に付ける(命令のマークか、値の種類)。そのとき、`isCharRead` も IR のマークを見る形に置き換える。コアは IR だけを見る、という分担に戻す。
+
+### CEL / antlr が上位 10 に出ない理由(調査中)
+
+CEL と antlr が、`char_reads` の上位 10 に出ない理由は、調査中。推測: antlr の字句解析は、入力を `IntStream.LA()` のようなインターフェースのメソッドで 1 文字ずつ `int` として受け取り、表を引いて進む。そのため `isCharRead` に当たらず、`other` に入るか、数えられていない。確認の方法: 関数ごとの `char_reads` と `other` の件数を、パッケージ名に `antlr` と `cel` を含むものについて出す。結果が出たら、この節に足す。
