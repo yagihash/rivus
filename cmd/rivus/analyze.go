@@ -114,7 +114,7 @@ func (o *analyzeOpts) register(fs *flag.FlagSet) {
 	o.common.register(fs)
 	o.registerLanguages(fs)
 	fs.IntVar(&o.k, "k", taint.DefaultOptions().K, "maximum access path depth")
-	fs.IntVar(&o.depK, "dep-k", 0, "maximum access path depth in the functions of the dependencies (an experiment; 0: the same as -k). A smaller depth makes the analysis of heavy dependencies cheaper and adds flows (a path that is cut stands for everything below it); the findings that need the cut carry the access_path_truncated uncertainty")
+	fs.IntVar(&o.depK, "dep-k", 0, "maximum access path depth in the functions of the dependencies (an experiment; 0: the same as -k). A smaller depth makes the analysis of heavy dependencies cheaper and adds flows (a path that is cut stands for everything below it)")
 	fs.IntVar(&o.workers, "workers", 0, "functions analysed at the same time (0: one per CPU; 1: one at a time). The result does not depend on it")
 	fs.BoolVar(&o.numeric, "numeric-taint", false, "follow taint through numbers and bools (by default it stops there: they cannot carry an injection)")
 	fs.BoolVar(&o.verbose, "v", false, "print the time of each phase to stderr")
