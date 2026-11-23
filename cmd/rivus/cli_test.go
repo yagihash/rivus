@@ -25,6 +25,8 @@ func TestMain(m *testing.M) {
 	binary = filepath.Join(dir, "rivus")
 	// the graph files go to the cache: not the user's
 	os.Setenv("RIVUS_CACHE_DIR", filepath.Join(dir, "cache"))
+	// the CARGO_HOME of the sandbox (rivus-cargo-*) goes here too, not to ~/Library/Application Support/rivus
+	os.Setenv("RIVUS_RUST_DATA_DIR", filepath.Join(dir, "rust-data"))
 	if b := os.Getenv("RIVUS_BINARY"); b != "" {
 		// the backtest (bench/BACKTEST.md): the tests judge an older build of the engine. A variable left in the
 		// environment would make every test of this package judge the wrong engine and stay green: it is said in
