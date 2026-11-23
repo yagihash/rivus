@@ -1,0 +1,36 @@
+# package:archive: the names inside an archive are sources.
+#
+# The creator of the archive writes the name of each entry (`ArchiveFile.name`) and the target of a link
+# (`ArchiveFile.symbolicLink`), and the name is the entry point of zip slip. Archive origin cannot be known from analysis, so the
+# names are treated as untrusted (label `user_input`, the label that the current sinks accept); users who only handle trusted
+# archives judge by the finding's source.
+#
+# Checked against archive 4.7.1 (range >=3.3.0 <5.0.0; the 3.x rows were read in 3.3.7 and 3.3.8), 2026-11-23, by reading the published source
+# (lib/src/archive/archive_file.dart). Both are plain fields, so they are `kind: field` rows, which fire on the reads in the
+# code of the project (a program may read `file.name` only; there is no getter). `ArchiveFile.name` is a field that the
+# constructors also set for an archive that the program builds itself (`ArchiveFile.bytes('a.txt', ...)`); a name that the program
+# wrote is read the same way, and that is the price of a field row (the same as `github`'s `Issue.title`). No API of the package
+# returns a normalized name. The 3.x layout of the package (3.3.7 and 3.3.8, the versions of CVE-2023-39139; the file is
+# `lib/src/archive_file.dart`, and the target of a link is the field `nameOfLinkedFile`, which 4.x calls `symbolicLink`) has its own
+# two rows: the symbols name the file, and the file moved between 3.x and 4.x. Not sources: the size, the mode, the times, the owner ids, the comment.
+ruleset: rivus/dart/archive@1
+
+verified_versions:
+  - package: archive
+    versions: ">=3.3.0 <5.0.0"
+    checked_with: 4.7.1
+    checked: 2026-11-23
+
+sources:
+  - kind: field
+    field: package:archive/src/archive/archive_file.dart#ArchiveFile.name
+    labels: [user_input]
+  - kind: field
+    field: package:archive/src/archive/archive_file.dart#ArchiveFile.symbolicLink
+    labels: [user_input]
+  - kind: field
+    field: package:archive/src/archive_file.dart#ArchiveFile.name
+    labels: [user_input]
+  - kind: field
+    field: package:archive/src/archive_file.dart#ArchiveFile.nameOfLinkedFile
+    labels: [user_input]

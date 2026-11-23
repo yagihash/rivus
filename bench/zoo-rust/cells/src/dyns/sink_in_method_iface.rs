@@ -38,7 +38,7 @@ impl Execer for RunnerFixed {
 }
 
 fn fixed() { // @fixed
-    let e: Box<dyn Execer> = Box::new(RunnerFixed { cmd: m::clean_cmd(&m::src("dyn-sink-in-method-iface-fixed")) });
+    let e: Box<dyn Execer> = Box::new(RunnerFixed { cmd: m::clean_sql(&m::clean_cmd(&m::src("dyn-sink-in-method-iface-fixed"))) });
     e.exec();
 }
 

@@ -1,0 +1,8 @@
+name: archive
+description: "The skeleton of package:archive that the cells of the Dart zoo need (the real package is not in the zoo): ArchiveFile with the name and the target of a link, so that the built-in rows of package:archive are the ones the cells hit."
+publish_to: none
+environment:
+  sdk: ^3.10.0
+dependencies:
+  zoo_mark:
+    path: ../zoo_mark

@@ -30,7 +30,7 @@ func vuln() { // @vuln
 
 func fixed() { // @fixed
 	c, _ := storage.NewClient(nil)
-	o := mark.CleanCmd(mark.Src("pkg-storage-signed-fixed"))
+	o := mark.CleanResource(mark.Src("pkg-storage-signed-fixed"))
 	opts := &storage.SignedURLOptions{Method: "GET"}
 	storage.SignedURL("constant", o, opts)                  // @sink(none)
 	c.Bucket("constant").SignedURL(o, opts)                 // @sink(none)

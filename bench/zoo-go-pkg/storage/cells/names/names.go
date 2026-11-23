@@ -25,8 +25,8 @@ func vuln() { // @vuln
 
 func fixed() { // @fixed
 	c, _ := storage.NewClient(nil)
-	b := mark.CleanCmd(mark.Src("pkg-storage-names-fixed-bucket"))
-	o := mark.CleanCmd(mark.Src("pkg-storage-names-fixed-object"))
+	b := mark.CleanResource(mark.Src("pkg-storage-names-fixed-bucket"))
+	o := mark.CleanResource(mark.Src("pkg-storage-names-fixed-object"))
 	h := c.Bucket(b) // @sink(none)
 	h.Object(o)      // @sink(none)
 }

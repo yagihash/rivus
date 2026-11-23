@@ -15,7 +15,7 @@ fn vuln() { // @vuln
 }
 
 fn fixed() { // @fixed
-    let _ = Redirect::permanent(&m::clean_cmd(&m::src("pkg-axum-redirect-permanent-fixed"))); // @sink(none)
+    let _ = Redirect::permanent(&m::clean_url(&m::clean_cmd(&m::src("pkg-axum-redirect-permanent-fixed")))); // @sink(none)
 }
 
 fn decoy() { // @decoy

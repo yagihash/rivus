@@ -1,0 +1,4 @@
+rust	pkg/tar/entry_path.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	pkg/tar/entry_path.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	pkg/tar/entry_path.rs	sink-none	@sink(none) @nosink(pkg-tar-entry-path-decoy)	fn decoy() { @decoy
+rust	pkg/tar/entry_path.rs	sink-none	@sink(none) @nosink(pkg-tar-entry-path-decoy)	fn decoy() { @decoy

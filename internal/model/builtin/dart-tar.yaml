@@ -1,0 +1,27 @@
+# package:tar: the names inside an archive are sources.
+#
+# The creator of the archive writes the name of each entry and the target of a link, and the name is the entry point of zip
+# slip: `../../x` or an absolute path written into the archive reaches the path that the extractor creates. Archive origin
+# cannot be known from analysis, so the names are treated as untrusted (label `user_input`, the label that the current sinks
+# accept); users who only handle trusted archives judge by the finding's source.
+#
+# Checked against tar 2.0.0 (the one of the pub lock of the dart-lang/pub checkout; 2.1.0 has the same getters), by reading
+# the published source (lib/src/entry.dart, lib/src/header.dart). `TarEntry.name` is `header.name`; `TarHeader.name` and
+# `TarHeader.linkName` are the getters that a program reads (`entry.header.name`, `entry.header.linkName`). Not sources, on
+# purpose: the size, the mode, the times, the owner names (`userName`, `groupName`), the type: they are not a path that a
+# program creates.
+ruleset: rivus/dart/tar@1
+
+verified_versions:
+  - package: tar
+    versions: ">=2.0.0 <3.0.0"
+    checked_with: 2.0.0
+    checked: 2026-11-23
+
+sources:
+  - symbol: package:tar/src/entry.dart#TarEntry.name
+    labels: [user_input]
+  - symbol: package:tar/src/header.dart#TarHeader.name
+    labels: [user_input]
+  - symbol: package:tar/src/header.dart#TarHeader.linkName
+    labels: [user_input]

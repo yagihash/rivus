@@ -16,7 +16,7 @@ void vuln() { // @vuln
 }
 
 void fixed() { // @fixed
-  final r = Process.runSync('echo', [cleanHtml(src('conv-exec-output-echo-fixed'))]);
+  final r = Process.runSync('echo', [cleanCmd(cleanHtml(src('conv-exec-output-echo-fixed')))]);
   sinkHtml(r.stdout as String); // @sink(none)
 }
 

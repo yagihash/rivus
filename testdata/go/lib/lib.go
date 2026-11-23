@@ -67,6 +67,16 @@ func Exact(s string) string { return s }
 // Apply calls f with s and returns what it returns (the model has calls).
 func Apply(s string, f func(string) string) string { return f(s) }
 
+// Thunk calls f and returns what it returns: the model has no row for it (the rules do not name it), and the body is not
+// read, as the body of a function of the standard library is not.
+func Thunk(f func() string) string { return f() }
+
+// Visit hands what it is given to f and returns nothing (no row for it, and its body is not read).
+func Visit(prefix string, items []string, f func(string)) {}
+
+// VisitN is Visit for a function that takes a number.
+func VisitN(items []string, f func(int)) {}
+
 // Each calls f with every element of xs (the model has calls, and nothing flows).
 func Each(xs []string, f func(string)) {
 	for _, x := range xs {

@@ -19,7 +19,7 @@ fn vuln() { // @vuln
 fn fixed() { // @fixed
     let o = Octocrab::default();
     let h = o.repos("owner", "repo");
-    let v = m::clean_cmd(&m::src("pkg-octocrab-get-content-fixed"));
+    let v = m::clean_resource(&m::clean_cmd(&m::src("pkg-octocrab-get-content-fixed")));
     let _b = h.get_content().path(v); // @sink(none)
 }
 

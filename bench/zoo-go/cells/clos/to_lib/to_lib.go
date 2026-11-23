@@ -1,10 +1,12 @@
 // Package to_lib is a cell of the zoo.
 //
 // @cell(F/clos/to-lib)
-// @shape: a closure that captures a value is given to a function of the standard library that calls it (sync.Once.Do, sync.OnceValue)
+// @shape: a closure that captures a value is given to a function of the standard library that calls it (sync.Once.Do, sync.OnceValue, filepath.Walk)
 package to_lib
 
 import (
+	"io/fs"
+	"path/filepath"
 	"sync"
 
 	"zoo/mark"
@@ -13,6 +15,7 @@ import (
 func init() {
 	mark.Case("F/clos/to-lib/vuln", vuln)
 	mark.Case("F/clos/to-lib/vuln2", vuln2)
+	mark.Case("F/clos/to-lib/vuln3", vuln3)
 	mark.Case("F/clos/to-lib/fixed", fixed)
 	mark.Case("F/clos/to-lib/decoy", decoy)
 }
@@ -30,6 +33,15 @@ func vuln2() { // @vuln
 	v := mark.Src("clos-to-lib-vuln2") // @source(clos-to-lib-vuln2) @miss(assumed_call) @ref(CALLBACK-MODEL)
 	get := sync.OnceValue(func() string { return v })
 	mark.SinkCmd(get()) // @sink(clos-to-lib-vuln2)
+}
+
+// vuln3: the function given to a walk is called with the root it was given (a name that is not there is called with, too).
+func vuln3() { // @vuln
+	v := mark.Src("clos-to-lib-vuln3") // @source(clos-to-lib-vuln3)
+	_ = filepath.Walk(v, func(path string, _ fs.FileInfo, _ error) error {
+		mark.SinkCmd(path) // @sink(clos-to-lib-vuln3)
+		return nil
+	})
 }
 
 func fixed() { // @fixed

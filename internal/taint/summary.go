@@ -318,7 +318,7 @@ func (s *state) expandParam(e Elem, argv []*sg.Value, keepAll bool) []expanded {
 			f := &found[i]
 			enclosing := len(f.Cell.Path) < read[fi]
 			if f.E.Kind == Real {
-				for _, x := range applyMods(f.E, e.Mods()) {
+				for _, x := range applyMods(f.E, e.Mods(), s.eng.rules) {
 					if !seen[x] || keepAll {
 						seen[x] = true
 						out = append(out, expanded{E: x, From: f, Enclosing: enclosing, Rel: f.Rel})
@@ -565,7 +565,7 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 			// only its label counts.
 			switch x.E.Kind {
 			case Real:
-				if !accepted(sr.Accepts, x.E.Label()) {
+				if !s.acceptedAt(sr.Accepts, x.E.Label(), sr.Site) {
 					continue
 				}
 				// A flow that is not shorter is dropped, unless the guards of
@@ -601,7 +601,7 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 			}
 			switch x.E.Kind {
 			case Real:
-				if accepted(sr.Accepts, x.E.Label()) {
+				if s.acceptedAt(sr.Accepts, x.E.Label(), sr.Site) {
 					s.recordFinding(x.E.Origin(), s.eng.sites.ByID[sr.Site], x.E.Label(), steps, gs, unsure)
 				}
 			case Param:

@@ -12,6 +12,7 @@ package callbacks
 
 import (
 	"os"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -125,6 +126,16 @@ func Run() []Observed {
 		var r rec
 		s := strings.FieldsFunc("ÿx", func(c rune) bool { r.see(string(c)); return c == 'x' })
 		add("strings.FieldsFunc", map[string]string{"arg0": "ÿ"}, &r, strings.Join(s, ","))
+	}
+	{
+		var r rec
+		s := regexp.MustCompile("ÿ").ReplaceAllStringFunc("ÿx", func(m string) string { r.see(m); return retStr })
+		add("(*regexp.Regexp).ReplaceAllStringFunc", map[string]string{"arg0": "ÿ"}, &r, s)
+	}
+	{
+		var r rec
+		b := regexp.MustCompile("ÿ").ReplaceAllFunc([]byte("ÿx"), func(m []byte) []byte { r.see(string(m)); return []byte(retStr) })
+		add("(*regexp.Regexp).ReplaceAllFunc", map[string]string{"arg0": "ÿ"}, &r, string(b))
 	}
 	return out
 }

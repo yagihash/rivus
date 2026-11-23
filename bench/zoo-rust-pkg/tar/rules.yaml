@@ -1,0 +1,4 @@
+# Rules of the package tar of the Rust zoo. The sources, sinks and sanitizers of zoo-mark are in bench/zoo-rust/rules.yaml
+# (the tests give both files); the rows of tar itself are the built-in model internal/model/builtin/rust-archive.yaml, which
+# is in force as always.
+ruleset: rivus/bench-zoo-rust-pkg-tar@1

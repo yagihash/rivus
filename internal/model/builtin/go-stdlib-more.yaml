@@ -344,7 +344,7 @@ propagators:
   - symbol: (*net/http.Request).UserAgent
     flows: [{from: recv, to: result}]
   - symbol: (*net/http.Request).WithContext
-    flows: [{from: recv, to: result}]
+    flows: [{from: recv, to: result}, {from: arg0, to: result}]
   - symbol: net.ParseIP
     flows: [{from: arg0, to: result}]
   - symbol: net.SplitHostPort
@@ -429,6 +429,12 @@ propagators:
     flows: [{from: arg0, to: result}]
   # model-diff: extra (*regexp.Regexp).ReplaceAll #76 the result is built in a closure that is given to a helper (`allMatches` / `replaceAll`) and written to a captured variable; the reading of the body loses it
   - symbol: (*regexp.Regexp).ReplaceAll
+    flows: [{from: arg0, to: result}, {from: arg1, to: result}]
+  # model-diff: extra (*regexp.Regexp).ReplaceAllLiteral #76 the result is built in a closure that is given to a helper (`allMatches` / `replaceAll`) and written to a captured variable; the reading of the body loses it
+  - symbol: (*regexp.Regexp).ReplaceAllLiteral
+    flows: [{from: arg0, to: result}, {from: arg1, to: result}]
+  # model-diff: extra (*regexp.Regexp).ReplaceAllLiteralString #76 the result is built in a closure that is given to a helper (`allMatches` / `replaceAll`) and written to a captured variable; the reading of the body loses it
+  - symbol: (*regexp.Regexp).ReplaceAllLiteralString
     flows: [{from: arg0, to: result}, {from: arg1, to: result}]
   - symbol: (*regexp.Regexp).FindStringSubmatch
     flows: [{from: arg0, to: result}]
@@ -596,6 +602,7 @@ propagators:
     pure: true
   - symbol: path/filepath.Walk
     pure: true
+    calls: [{fn: arg1, with: [arg0]}]
   - symbol: (*go/ast.CallExpr).Pos
     pure: true
   - symbol: (*go/ast.CallExpr).End

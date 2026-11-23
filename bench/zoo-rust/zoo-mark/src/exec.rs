@@ -220,6 +220,13 @@ pub fn clean_html(s: &str) -> String {
 pub fn clean_path(s: &str) -> String {
     clean(CLASS_PATH, s)
 }
+// the kinds without a judgement of their own: they do what clean_cmd does when they run (see decl.rs)
+pub fn clean_url(s: &str) -> String {
+    clean(CLASS_CMD, s)
+}
+pub fn clean_resource(s: &str) -> String {
+    clean(CLASS_CMD, s)
+}
 
 /// The place of the call of the sink, as a path from the root of the zoo: `cells/src/...`.
 fn place(loc: &Location) -> (String, u32) {

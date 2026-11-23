@@ -19,7 +19,7 @@ Future<void> vuln() async { // @vuln
 }
 
 Future<void> fixed() async { // @fixed
-  final v = cleanPath(cleanHtml(cleanSql(cleanCmd(src('dart-googleapis-auth-impersonate-fixed')))));
+  final v = cleanResource(cleanPath(cleanHtml(cleanSql(cleanCmd(src('dart-googleapis-auth-impersonate-fixed'))))));
   await clientViaServiceAccountImpersonation(sourceClient: base, targetServiceAccount: v, targetScopes: ['s']); // @sink(none)
 }
 

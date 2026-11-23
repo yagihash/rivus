@@ -98,7 +98,10 @@ func (e *Engine) callRowsFor(ci *sg.Instr, sym string) []callRowRef {
 	if rows := e.callRowsOf(sym); len(rows) > 0 {
 		return rows
 	}
-	return e.replacedRows(ci)
+	if rows := e.replacedRows(ci); len(rows) > 0 {
+		return rows
+	}
+	return e.noModelRows(ci)
 }
 
 // callbackFuncs are the functions that the rows of the call make concrete: the call depends on their

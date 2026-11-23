@@ -53,6 +53,8 @@ rivus の設計の判断は、ここに書いた原則に沿う。ほかの文�
   4. 構造的な誤検出
   5. 注記つきの過大近似
 
+**報告を減らす変更:** 注記、`summary` の報告、警告を減らす・消す変更(`Revert` を含む)は、理由をコミットメッセージか課題に書く。既定の `git revert` のメッセージのままにしない(戻した理由が残らないと、何を省いたかが見えなくなる)。
+
 **根拠の ADR:** 007、008（+059 の追記）、030（`expansion_limit`）、050（`candidate_limit`）、053（`capture_unbound`）、054、056（`global_holds_nothing`）、062（`tests_skipped`）、067（`model_approximation`）、070、074（`field_imprecision`）、076（`summary.unread`）、079（`closed_world_entry`）
 
 **失敗の重さの順について:** この 5 段の順序を 1 か所に書いた ADR は **まだ無い**（根拠の ADR: 未決）。断片は次にある。

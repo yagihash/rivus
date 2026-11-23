@@ -14,6 +14,7 @@ pub fn register_all() {
     c::clos::returned::register();
     c::clos::stored::register();
     c::clos::to_lib::register();
+    c::clos::to_nomodel::register();
     c::clos::capture_write_by_ref::register();
     c::clos::to_own_helper::register();
     c::clos::two_callers::register();
@@ -71,6 +72,7 @@ pub fn register_all() {
     c::rust::option_result_chain::register();
     c::rust::ownership_move::register();
     c::rust::static_lazylock::register();
+    c::san::other_kind::register();
     c::state::global_chain::register();
     c::state::global_direct::register();
     c::state::global_field::register();

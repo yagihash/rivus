@@ -1,0 +1,2 @@
+go	call/regexp_replace/regexp_replace.go	sink-none	@sink(none)	func fixed() { @fixed
+go	call/regexp_replace/regexp_replace.go	sink-none	@sink(none) @nosink(call-regexp-replace-decoy)	func decoy() { @decoy

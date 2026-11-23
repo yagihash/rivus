@@ -29,8 +29,8 @@ func vuln() { // @vuln
 func fixed() { // @fixed
 	ctx := context.Background()
 	h := (&storage.Client{}).Bucket("constant").Object("constant")
-	d := mark.CleanCmd(mark.Src("pkg-storage-move-list-fixed-dest"))
-	p := mark.CleanCmd(mark.Src("pkg-storage-move-list-fixed-prefix"))
+	d := mark.CleanResource(mark.Src("pkg-storage-move-list-fixed-dest"))
+	p := mark.CleanResource(mark.Src("pkg-storage-move-list-fixed-prefix"))
 	h.Move(ctx, storage.MoveObjectDestination{Object: d})                          // @sink(none)
 	(&storage.Client{}).Bucket("constant").Objects(ctx, &storage.Query{Prefix: p}) // @sink(none)
 }

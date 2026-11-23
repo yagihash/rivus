@@ -1,0 +1,3 @@
+rust	san/other_kind.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	san/other_kind.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	san/other_kind.rs	sink-none	@sink(none) @nosink(san-other-kind-decoy)	fn decoy() { @decoy
