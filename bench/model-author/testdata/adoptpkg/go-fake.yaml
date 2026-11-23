@@ -1,0 +1,59 @@
+ruleset: rivus/go/fake-test@1
+origin: human
+
+adopt_rules:
+  - id: owner-repo-of-services
+    kind: sink
+    rule: sink.arg-word
+    words: [owner, repo]
+    category: resource_name
+    scope:
+      package: example.com/fake/v*
+      receiver_suffix: Service
+    why: "owner and repo are in the path of the request"
+    covers: 6
+    representatives:
+      - (*example.com/fake/v*.OrgService).Get
+      - (*example.com/fake/v*.OrgService).List
+  - id: slug-of-services
+    kind: sink
+    rule: sink.arg-type
+    arg_types: [example.com/fake/v*.Slug]
+    category: resource_name
+    scope:
+      package: example.com/fake/v*
+      receiver_suffix: Service
+    why: "the slug is in the path of the request"
+    covers: 2
+    representatives:
+      - (*example.com/fake/v*.IssueService).Move
+      - (*example.com/fake/v*.OrgService).Find
+  - id: text-of-doc
+    kind: source
+    rule: source.field-word
+    words: [body, title]
+    labels: [user_input]
+    scope:
+      package: example.com/fake/v*
+      receiver_types: [example.com/fake/v*.Doc]
+    why: "a user writes the body and the title"
+    covers: 2
+    representatives: [example.com/fake/v*.Doc.Body]
+
+sinks:
+  - symbol: (*example.com/fake/v*.OrgService).Edit
+    args: [1, 2]
+    category: resource_name
+  - symbol: (*example.com/fake/v*.Client).Get
+    args: [0]
+    category: resource_name
+
+sources:
+  - kind: field
+    field: example.com/fake/v*.Doc.Title
+    labels: [user_input]
+
+rejected:
+  - symbol: (*example.com/fake/v*.OrgService).Old
+    kind: sink
+    why: "a test of rejected:"

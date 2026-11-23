@@ -481,7 +481,7 @@ sinks:
 make model PKG=<パッケージ> VERSION=<バージョン> LANG=<go|dart|rust>   # 案。名前は未定
 ```
 
-終了コードで、失敗した段を言う(0: 成功、10: 取得、20: 生成、30: 骨組みのビルド、40: セル、50: 差分テストの MISS、60: zoo のゲート、70: 未決の候補がある、80: 実行できない段(Rust の extractor)で止まった)。数字は例で、決めるのは実装のとき。
+終了コードで、失敗した段を言う(0: 成功、10: 取得、20: 生成、30: 骨組みのビルド、40: セル、50: 差分テストの MISS、60: zoo のゲート、70: 未決の候補がある(`-expand` では、決めの衝突、`covers` を超える増加、代表が生成した行でない)、80: 実行できない段(Rust の extractor)で止まった)。数字は例で、決めるのは実装のとき。
 
 | 順 | やること | 出力(コミットするか) | 使う既存の部分 |
 | --- | --- | --- | --- |
@@ -600,7 +600,7 @@ Rust は、extractor を動かす段(型の取得、セルの解析の確認、�
 
 ### 6.12 一括採用(規則の単位の決定から、行を生成する。設計案)
 
-**状態: 段階 1 は実装済み(ADR-113)。** `adopt_rules:` の書式とローダー、`origin: generated` と `decision:`、`*.adopt.gen.yaml` の読み込みと照合(`model.CheckAdoption`)、規則の id(`bench/model-author/rules.go`)、同じ位置を取る決めの検出(`ResolveClaims`)。展開(コマンド)と、zoo のテストの変更(2 節)は、まだ。
+**状態: 段階 1 と段階 2 は実装済み(ADR-113)。** 段階 1: `adopt_rules:` の書式とローダー、`origin: generated` と `decision:`、`*.adopt.gen.yaml` の読み込みと照合(`model.CheckAdoption`)、規則の id(`bench/model-author/rules.go`)、同じ位置を取る決めの検出(`ResolveClaims`)。段階 2(Go): 展開のコマンド(`make model ... ARGS="-expand"`。`bench/model-author/expand.go`)。位置ごとに規則の id と語を付け(`Item.Tags`。`-recall` の出力は変わらない)、`sink.arg-type` の走査、範囲、手の行と `rejected:` / `deferred:` の優先、`covers` の検査(増えたら終了コード 70。数字を書き戻すのは `-write-covers` だけ)、代表の確認、`-out` を実装した。実際の `*.adopt.gen.yaml` はまだ組み込みに入れない(`TestBuiltinRowsAreHitByTheZoo` の変更(2 節)は、別の承認のあと)。Dart と Rust の展開、source の型の単位の判断(4 節)の検査は、まだ。
 
 背景: 層 1 の候補は、採用した行より桁で多い。測定した数: go-github v93 は sink の行 57 に対して、未決の層 1 の候補が 1,321。Dart の `github` は、行 22 に対して未決 402(source の候補 74。その約 3 分の 1 は、利用者が書いた内容を持つフィールドで、ADR-108 の基準に入る。`RepositorySlug` 型だけで 147)。手のモデルは、同じ形の API の一部だけを採用していて(owner / repo を取るサービスのメソッドは 56 が sink で、同じ形の兄弟が数百、行なし)、残りは「判断して外した」のでなく、**手作業の都合で行がないだけの見逃し**。1 件ずつ `rejected:` に書くのは、判断の中身(同じ理由)の繰り返しで、1 件ずつ行を足すのは量が多すぎる。この節は、**判断を規則の単位で 1 回だけ書き、コマンドが行に展開する**形の設計案。実装はしない。事実は、`bench/model-author/rules.go`、`recall.go`、`internal/model/model.go`、`rejected.go`、`cmd/rivus/dead_rows_test.go`、ADR-108 で確認した。「`rejected:` の型単位のまとめの不採用」は、決めた案として扱うが、コードにはまだない(`rejected.go` は 1 件ずつ。**要確認**)。
 

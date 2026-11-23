@@ -55,6 +55,29 @@ func TestAdoptRuleArgType(t *testing.T) {
 	}
 }
 
+// a Go type of a module that has a major in its path is written with /v*, as the symbols and the scope are (ADR-110); another pattern is refused.
+func TestAdoptRuleArgTypeMajorWildcard(t *testing.T) {
+	body := func(typ string) string {
+		return `  - id: slug
+    kind: sink
+    rule: sink.arg-type
+    arg_types: [` + typ + `]
+    category: resource_name
+    scope: {package: example.com/x/v*, receiver_suffix: Service}
+    why: "in the path"
+    covers: 10
+`
+	}
+	if _, err := parseAdopt(body("example.com/x/v*.Slug")); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []string{"example.com/x/*.Slug", "example.com/x/v*/y/v*.Slug", "example.com/x/v*a.Slug"} {
+		if _, err := parseAdopt(body(bad)); err == nil {
+			t.Errorf("%s: no error", bad)
+		}
+	}
+}
+
 func TestAdoptRulesAreChecked(t *testing.T) {
 	without := func(key string) string {
 		var out []string
