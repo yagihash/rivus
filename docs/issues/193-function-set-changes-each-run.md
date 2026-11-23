@@ -3,7 +3,8 @@
 - 状態: open
 - 種類: ADR-118 の (ii)(順序とマシンに依らない)の違反
 - 言語: Go
-- 守るもの: 再現性
+- ROADMAP の節: -
+- 守るもの: テスト `TestLoadFunctionSetIsStable`、`TestLoadFunctionSetIsClosed`
 - 題: 解析する関数の集合が、実行ごとに変わる(本体を作らないはずの標準ライブラリの関数が、一部だけ入る)
 
 ## 何が起きるか
