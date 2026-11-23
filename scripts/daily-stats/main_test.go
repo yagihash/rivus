@@ -23,3 +23,15 @@ func TestIsEngineChange(t *testing.T) {
 		}
 	}
 }
+
+func TestClassifyBranches(t *testing.T) {
+	ahead := map[string]int{"main": 0, "HEAD": 3, "a": 2, "b": 1, "c": 0, "d": 5, "renovate/x": 1, "renovate/y": 2, "renovate/z": 0}
+	open := map[string]bool{"b": true}
+	orphans, renovate := classifyBranches(ahead, open)
+	if len(orphans) != 2 || orphans[0] != (orphan{"a", 2}) || orphans[1] != (orphan{"d", 5}) {
+		t.Errorf("orphans = %v", orphans)
+	}
+	if renovate != 2 {
+		t.Errorf("renovate = %d, want 2", renovate)
+	}
+}

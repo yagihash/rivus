@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -43,6 +45,68 @@ func git(args ...string) (string, error) {
 	return string(out), err
 }
 
+// orphan is a remote branch with commits that main does not have.
+type orphan struct {
+	Name    string
+	Commits int
+}
+
+// classifyBranches splits the remote branches (name -> commits not in main) into the orphans (commits not in main and
+// no open pull request, sorted by name) and the count of the renovate/ ones (reported apart, not hidden). main and HEAD are skipped.
+func classifyBranches(ahead map[string]int, open map[string]bool) (orphans []orphan, renovate int) {
+	names := make([]string, 0, len(ahead))
+	for n := range ahead {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	for _, n := range names {
+		if n == "main" || n == "HEAD" || ahead[n] == 0 || open[n] {
+			continue
+		}
+		if strings.HasPrefix(n, "renovate/") {
+			renovate++
+			continue
+		}
+		orphans = append(orphans, orphan{n, ahead[n]})
+	}
+	return orphans, renovate
+}
+
+// orphanReport prints the orphan lines from git and gh. A failure is a warning: the line is skipped, not the whole report.
+func orphanReport(ref string) {
+	refs, err := git("for-each-ref", "--format=%(refname:strip=3)", "refs/remotes/origin")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "orphan remote branches: skipped (git for-each-ref):", err)
+		return
+	}
+	heads, err := exec.Command("gh", "pr", "list", "--state", "open", "--limit", "1000", "--json", "headRefName", "--jq", ".[].headRefName").Output()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "orphan remote branches: skipped (gh pr list):", err)
+		return
+	}
+	open := map[string]bool{}
+	for _, h := range strings.Fields(string(heads)) {
+		open[h] = true
+	}
+	ahead := map[string]int{}
+	for _, n := range strings.Fields(refs) {
+		if n == "main" || n == "HEAD" {
+			continue
+		}
+		c, err := git("rev-list", "--count", ref+"..origin/"+n)
+		if err != nil {
+			continue
+		}
+		ahead[n], _ = strconv.Atoi(strings.TrimSpace(c))
+	}
+	orphans, renovate := classifyBranches(ahead, open)
+	fmt.Printf("orphan remote branches: %d\n", len(orphans))
+	for _, o := range orphans {
+		fmt.Printf("  %s (%d commits)\n", o.Name, o.Commits)
+	}
+	fmt.Printf("renovate branches: %d\n", renovate)
+}
+
 func main() {
 	since := flag.String("since", "", "count the merges since this date (git --since: 2026-11-20, \"3 days ago\")")
 	ref := flag.String("ref", "origin/main", "the branch to read")
@@ -70,4 +134,5 @@ func main() {
 		}
 	}
 	fmt.Printf("daily-stats since %s (%s): ENGINE/MODEL/EXTRACTOR %d, TOOLS/CI/DOCS %d\n", *since, *ref, engine, other)
+	orphanReport(*ref)
 }

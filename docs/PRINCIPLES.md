@@ -192,6 +192,7 @@ rivus の設計の判断は、ここに書いた原則に沿う。ほかの文�
   - 作業の前: どの数字が動くはずか。
   - マージの前: 既定の動作で測った数字。合格線の行、zoo の合格数、サイレントな見逃しのセルの数のうち、当てはまるもの。予想が外れたら、そう書く。
 - 1 日の報告の最後に、`make daily-stats SINCE=<日付>` の 1 行(解析・モデル・extractor の PR の数と、それ以外の数)を付ける。
+- マージ済み(または閉じた)PR のブランチへの push は、`.githooks/pre-push` が止める(有効にするのは `make setup`、または `git config core.hooksPath .githooks`。意図した push は `RIVUS_ALLOW_PUSH_TO_MERGED=1`)。日報の `make daily-stats` の行に、`orphan remote branches: N`(main にないコミットがあって、開いている PR がないブランチ。renovate/ は別の行)が出る。0 でなければ、取り込むか消す。
 - 既定で off の機能の一覧と、足すときの規則は [FLAGS-OFF-BY-DEFAULT.md](FLAGS-OFF-BY-DEFAULT.md)。
 
 **根拠の ADR:** 027、043、046、055、057（仮説の履歴を ADR に残す）、061、066、084〜090（「確かめたこと」の節）
