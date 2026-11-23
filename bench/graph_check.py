@@ -2,6 +2,7 @@
 """Compare the graph representation of two versions of rivus on one target (the engine of bench/compare.sh --graph-check).
 
   graph_check.py -name NAME -base-bin B -head-bin H -graphcheck-bin G -out DIR (-dir D [-rules F] [-flags "..."] | -target T)
+                  [-base-workers N -head-workers M]   (the self-check: the same binary as base and head, run with N and M workers)
 
 A change for memory or cost must not change what the analysis builds (docs/WORKFLOW.md). On the same code, each version gives:
   IR         `rivus debug extract -all`            (compared by accept.Compare, the comparison of the acceptance test)
@@ -25,16 +26,20 @@ import deps_bench as db  # noqa: E402
 DUMP_ENV = "RIVUS_INTERNAL_SUMMARY_DUMP"
 
 
-def patterns_of(flags):
-    return [f for f in flags if f.startswith("./")]
+def patterns_of(flags, loose=False):
+    """The packages in a list of flags: ./... and ./pkg; loose (the flags of a benchmark of compare.sh, which has no flag with a value):
+    every word that is not a flag, an import path such as net/http too. A target of deps-targets.json has flags with values (-max-memory 4GiB)."""
+    return [f for f in flags if (not f.startswith("-") if loose else f.startswith("./"))]
 
 
-def run_side(side, binary, src, rules, flags, env_base, work, limit_s, cap, lock_reason):
+def run_side(side, binary, src, rules, flags, env_base, work, limit_s, cap, lock_reason, loose=False, workers=""):
     """Runs extract, index and analyze of one version. Returns (files, error)."""
-    pats = patterns_of(flags)
+    pats = patterns_of(flags, loose)
     files = {"ir": os.path.join(work, side + ".ir.jsonl"), "db": os.path.join(work, side + ".graph.db"),
              "dump": os.path.join(work, side + ".summaries.txt"), "report": os.path.join(work, side + ".report.json")}
     rules_args = ["-rules", rules] if rules else []
+    if workers:  # -workers N: the same result with any number of them (the self-check: the hash does not hold the order of the work)
+        flags = ["-workers", workers] + flags  # before the packages: the flags stop at the first one
     steps = [
         ("extract", [binary, "debug", "extract", "-all", "-C", src] + pats, files["ir"], {}),
         ("index", [binary, "index", "-C", src, "-graph", files["db"]] + rules_args + flags, os.path.join(work, side + ".index.out"), {}),
@@ -118,6 +123,8 @@ def main():
     ap.add_argument("-rules", default="")
     ap.add_argument("-flags", default="")
     ap.add_argument("-target")
+    ap.add_argument("-base-workers", default="", help="-workers of the base run (the self-check: the same binary twice with 1 and 8)")
+    ap.add_argument("-head-workers", default="")
     ap.add_argument("-limit", type=float, default=3600, help="seconds for one run")
     ap.add_argument("-cap", type=float, default=0, help="GB for the process tree (default: 8, or the cap of the target)")
     a = ap.parse_args()
@@ -140,12 +147,12 @@ def main():
             cap = int((a.cap or t["mem_cap_gb"]) * db.GB)
         else:
             src, rules, flags = os.path.abspath(a.dir), os.path.abspath(a.rules) if a.rules else "", shlex.split(a.flags)
-            if not patterns_of(flags):
+            if not patterns_of(flags, True):
                 flags = flags + ["./..."]
             cap = int((a.cap or 8) * db.GB)
         sides = {}
         for side, binary in (("base", a.base_bin), ("head", a.head_bin)):
-            files, err = run_side(side, os.path.abspath(binary), src, rules, flags, env, work, a.limit, cap, a.name)
+            files, err = run_side(side, os.path.abspath(binary), src, rules, flags, env, work, a.limit, cap, a.name, loose=bool(a.dir), workers=a.base_workers if side == "base" else a.head_workers)
             if err:
                 line = "%s: NOT RUN (%s)" % (a.name, err)
                 print(line)

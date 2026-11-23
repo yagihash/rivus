@@ -32,3 +32,22 @@ class Items(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WorkersSelfCheck(unittest.TestCase):
+    """The same binary with 1 and 8 workers gives the same IR, edges, summaries and findings: the hash of the summaries does not hold the order of the work."""
+
+    def test_one_and_eight_workers_are_the_same(self):
+        import shutil, subprocess
+        if not shutil.which("go"):
+            self.skipTest("no go")
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with tempfile.TemporaryDirectory() as d:
+            for name, pkg in (("rivus", "./cmd/rivus"), ("graphcheck", "./bench/graphcheck")):
+                subprocess.run(["go", "build", "-o", os.path.join(d, name), pkg], cwd=root, check=True)
+            cur = os.path.join(root, "bench", "go-curated")
+            p = subprocess.run([sys.executable, os.path.join(root, "bench", "graph_check.py"), "-name", "t", "-dir", cur, "-rules", os.path.join(cur, "rules.yaml"),
+                                "-base-bin", os.path.join(d, "rivus"), "-head-bin", os.path.join(d, "rivus"), "-graphcheck-bin", os.path.join(d, "graphcheck"),
+                                "-base-workers", "1", "-head-workers", "8", "-out", d], capture_output=True, text=True)
+            self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+            self.assertEqual(p.stdout.count(": same"), 5, p.stdout)
