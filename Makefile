@@ -53,7 +53,7 @@ test-shard: ## run one shard of the tests of cmd/rivus, as CI does: I=<index> N=
 	[ -n "$$names" ] || { echo "shard $(I)/$(N) has no test" >&2; exit 1; }; \
 	echo "shard $(I)/$(N): $$(echo "$$names" | wc -l | tr -d ' ') tests"; \
 	regex="^($$(echo "$$names" | paste -sd'|' -))\$$"; \
-	go test $${SHORT:+"$$SHORT"} -timeout 30m -run "$$regex" ./cmd/rivus
+	go test $${SHORT:+"$$SHORT"} $${VERBOSE:+-v} -timeout 30m -run "$$regex" ./cmd/rivus
 
 go-warm: ## compile the dependencies of every module of the bench into the build cache (the tests read them with `go list -export`: 14 s on a cold cache, 3 s on a warm one)
 	@set -e; for gm in $$(find bench -name go.mod | sort); do (cd "$$(dirname "$$gm")" && go list -export -deps ./... > /dev/null); done

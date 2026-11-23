@@ -369,6 +369,7 @@ jobs:
           RIVUS_REQUIRE_RUST: ${{ needs.changes.outputs.rust == 'true' && '1' || '' }}
           # a missing module cache of bench/gcp fails the Google Cloud gate, and does not skip it
           RIVUS_REQUIRE_GCP: "1"
+          VERBOSE: "1"
           # TestDogfood skips itself without this (ADR-112): the weekly run when something changed, and a run by hand
           RIVUS_DOGFOOD: ${{ needs.changes.outputs.dogfood == 'true' && '1' || '' }}
         run: make test-shard I="$SHARD_INDEX" N="$SHARD_TOTAL"
