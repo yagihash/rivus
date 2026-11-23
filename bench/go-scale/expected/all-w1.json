@@ -65,7 +65,7 @@
   },
   "converged": true,
   "passes": 11,
-  "reanalyses": 4833,
-  "summary_elems": 12003,
-  "largest_summary_elems": 37
+  "reanalyses": 4834,
+  "summary_elems": 20801,
+  "largest_summary_elems": 220
 }
