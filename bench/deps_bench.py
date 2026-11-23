@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """The benches with heavy dependencies, run the way a user runs rivus: `rivus analyze` with no flag that
-changes the analysis (docs/DESIGN-deps-cost-status.md). Every run adds ONE row to the one ledger of the heavy
+changes the analysis (docs/ROADMAP.md section 3). Every run adds ONE row to the one ledger of the heavy
 measurements, bench/heavy-ledger.tsv (bench/heavy_ledger.py: the columns, the writer, the table), unless -no-ledger
 (make: NO_LEDGER=1; for a binary with a measurement patch, or a run that is not used as a number). Local only (it is
 heavy; not in CI): `make bench-deps`.
