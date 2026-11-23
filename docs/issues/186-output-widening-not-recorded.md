@@ -22,7 +22,7 @@
 
 ## 済んだこと(2026-11-23)
 
-- すること 1: 出力の widening を記録した。不確実性 `depth_limit` の 1 件(detail は `out_limit:` で始まる。`candidates` に、最終の要約に畳んだ出力がある関数の ID。ソート済み)。`stats` に `out_widened_funcs`(関数の数)と `out_widened_outputs`(畳んだ出力の数)。数えるのは `Summary.WidenedOutputs`(内部。署名、出力、索引には入らない)で、実行の順や時間に依らない。ちょうど 24 要素では畳まず、数えない。結果(finding、要約、ID)は変わらない。期待値のファイルで変わったのは `depth_limit` の数だけ(`middleware` 10 から 11、`all` 62 から 63、`middleware18` を足した)。
+- すること 1: 出力の widening を記録した。不確実性 `depth_limit` の 1 件(detail は `out_limit:` で始まる。`candidates` に、最終の要約に畳んだ出力がある関数の ID。ソート済み)。`stats` に `out_widened_funcs`(関数の数)と `out_widened_outputs`(畳んだ出力の数)。数えるのは `Summary.WidenedOutputs`(内部。署名、出力、索引には入らない)で、最終の要約から集める(順序に依らないことの確認は、すること 2 に入れる: 下の「残り」)。ちょうど 24 要素では畳まず、数えない。結果(finding、要約、ID)は変わらない。期待値のファイルで変わったのは `depth_limit` の数だけ(`middleware` 10 から 11、`all` 62 から 63、`middleware18` を足した。`widen`、`registry`、`longlived` は 0 から 1)。
 - テスト: `internal/taint/outlimit_test.go`(24 と 25 の境目、一覧のソート)、`TestScaleSynth` の `middleware18`(`-workers 1` と `4` で `candidates` が同じ)。
 - 索引: 要約は索引に保存されない(保存されるのは IR)ので、扱うことはない。
 
@@ -30,6 +30,10 @@
 
 - すること 2 のテスト(SCC の処理の順を入れ替えても、セルの widening と `guard_limit` を通る要約と finding が同じ)。
 - finding からの対応: 今の記録は、プログラム全体の一覧。ある finding の経路が、畳まれた出力を通ったかは分からない(`Step.Func` を `candidates` に当てることはできるが、その関数の畳まれていない出力を通った場合と区別できない)。分かるようにするには、`OutElem` に「畳んだ」のマークを持たせ、要約を適用する段の `Notes` に付ける(`access_path_truncated` と同じ形)必要がある。要素の同一性、合成、署名に触れるので、この課題では実装しない。
+
+- 記録されるのは、畳んだ関数だけ。その要約を使った呼び出し元は、一覧に出ない(畳んだ結果を受け取っているのに)。finding の経路の段に付ける設計は、これも解く必要がある。
+- 順序に依らないか: 印は合成で OR なので、SCC の中の処理の順で、途中の要約が畳まれるかどうかが変わるなら、最終の一覧も変わりうる(未確認)。すること 2 のテスト(順序を入れ替える)で、`out_limit` の一覧も、比べる対象に入れる。
+- 数字(2026-11-23、memos 00fcd170、1 回、GOGC=25): 畳まれた出力のある関数 1098(関数の約 2.7%)、畳まれた出力 4550、記録は 1 件。
 
 ## 守るもの
 
