@@ -129,7 +129,7 @@ func TestNumericStopsCountedPerFunction(t *testing.T) {
 		st := prog.sites(rules)
 		m := map[string]int{}
 		for _, c := range prog.engine(st, rules, DefaultOptions()).Run().NumericStops {
-			m[c.Func] = c.Count
+			m[c.Func] = c.Char
 		}
 		return m
 	}

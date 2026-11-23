@@ -209,7 +209,8 @@ type state struct {
 	numericStops map[string]numericStop
 	// numericCount is how many times an element (a real one or a symbolic one of a parameter) was dropped here because
 	// its place is a number or a bool (summary.numeric_stops). A visit counts what it sees; the last complete one stays.
-	numericCount int
+	numericCount int         // other causes: a length, a counter, a conversion, a comparison (real elements only)
+	charCount    int         // a value read as an element of a string, bytes or runes (any element: a parameter's too)
 	stores       []*sg.Instr // the stores of the function (aliasLocs looks for what a cell holds)
 	// ptrStores are the stores (store, field_store) of a pointer into a cell, and valStores the stores of
 	// a value that is not a pointer (a closure's environment copied into the variable that holds it):
@@ -361,6 +362,55 @@ func (s *state) noteNumericStop(e Elem, w *why, v *sg.Value) {
 	s.numericStops[origin] = numericStop{label: e.Label(), pos: pos}
 }
 
+// countNumericStop counts one dropped element (summary.numeric_stops). v is the number or bool that it did not enter: when
+// that is a character read, every element counts (a parameter's too: the text is the parameter); otherwise only the data
+// of a source does (the symbolic elements of parameters are everywhere and say nothing).
+func (s *state) countNumericStop(v *sg.Value, e Elem) {
+	if isCharRead(v) {
+		s.charCount++
+	} else if e.Kind == Real {
+		s.numericCount++
+	}
+}
+
+// isCharRead reports whether the value is one element read out of text (not at a constant index): a byte or a rune of a string (s[i], range s,
+// codeUnitAt, chars()), or of a byte or rune sequence. By its type where the language keeps byte, rune and char apart
+// from the other numbers (Go, Rust), and by the instruction that made it.
+func isCharRead(v *sg.Value) bool {
+	if v == nil {
+		return false
+	}
+	in := v.Instr
+	// s[0]: one place of the text, not the text handled one character at a time
+	if in != nil && in.Op == ir.OpIndexLoad && len(in.Args) > 1 && in.Args[1] != nil && in.Args[1].Kind == sg.KConst {
+		return false
+	}
+	switch string(v.Type) {
+	case "byte", "rune", "char":
+		return true
+	}
+	if in == nil {
+		return false
+	}
+	switch in.Op {
+	case ir.OpIndexLoad:
+		return len(in.Args) > 0 && in.Args[0] != nil && in.Args[0].Class == ir.ClassString
+	case ir.OpCall:
+		if in.Callee != nil {
+			sym := in.Callee.Symbol
+			for _, n := range charReadSymbols {
+				if strings.HasSuffix(sym, n) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// charReadSymbols end the symbols of the calls that give one character (a code unit) of a text.
+var charReadSymbols = []string{".codeUnitAt", ".charCodeAt"}
+
 // numericRoot reports whether the root is a number or a bool that is not followed (what `add` stops at).
 func (s *state) numericRoot(r Root) bool {
 	v := r.V
@@ -421,7 +471,7 @@ func (s *state) targetOf(l Loc, e Elem, create bool) target {
 func (s *state) add(l Loc, e Elem, w *why) {
 	t := s.targetOf(l, e, true)
 	if t.numeric {
-		s.numericCount++
+		s.countNumericStop(l.Root.V, e)
 		if e.Kind == Real {
 			s.noteNumericStop(e, w, l.Root.V)
 		}

@@ -199,14 +199,32 @@ type Summary struct {
 // maxNumericStopsTop is how many functions NumericStops.Top lists.
 const maxNumericStopsTop = 10
 
-// NumericStops is the count of the places where taint stopped at a number or a bool (Summary.NumericStops).
+// NumericStops is the count of the places where taint stopped at a number or a bool (Summary.NumericStops), by cause.
 type NumericStops struct {
+	// Total is CharReads.Total and Other.Total.
+	Total int `json:"total"`
+	// CharReads are the stops at a value read as one character of a text (s[i], range s, a rune, a code unit): text handled
+	// char by char. Misses come from here, so the functions are listed (top 10 by count).
+	CharReads NumericStopCharReads `json:"char_reads"`
+	// Other are the stops at lengths, indexes, counters, conversions to numbers, comparisons and the numbers a model makes: by
+	// design, so counts only.
+	Other NumericStopOther `json:"other"`
+}
+
+// NumericStopCharReads is the character reads of NumericStops.
+type NumericStopCharReads struct {
 	Total     int                `json:"total"`
 	Functions int                `json:"functions"`
 	Top       []NumericStopCount `json:"top"`
 }
 
-// NumericStopCount is one function of NumericStops.Top. Scope is "project" or "dependency".
+// NumericStopOther is the other stops of NumericStops.
+type NumericStopOther struct {
+	Total     int `json:"total"`
+	Functions int `json:"functions"`
+}
+
+// NumericStopCount is one function of NumericStopCharReads.Top. Scope is "project" or "dependency".
 type NumericStopCount struct {
 	Function string `json:"function"`
 	Scope    string `json:"scope"`
@@ -215,24 +233,32 @@ type NumericStopCount struct {
 
 // numericStopsOf makes the summary of the counts of the engine: the top by count, then by function id.
 func numericStopsOf(in []taint.NumericStopCount) NumericStops {
-	out := NumericStops{Top: []NumericStopCount{}}
+	out := NumericStops{CharReads: NumericStopCharReads{Top: []NumericStopCount{}}}
 	for _, c := range in {
-		out.Total += c.Count
-		out.Functions++
-		scope := "project"
-		if c.Dependency {
-			scope = "dependency"
+		if c.Other > 0 {
+			out.Other.Total += c.Other
+			out.Other.Functions++
 		}
-		out.Top = append(out.Top, NumericStopCount{Function: c.Func, Scope: scope, Count: c.Count})
+		if c.Char > 0 {
+			out.CharReads.Total += c.Char
+			out.CharReads.Functions++
+			scope := "project"
+			if c.Dependency {
+				scope = "dependency"
+			}
+			out.CharReads.Top = append(out.CharReads.Top, NumericStopCount{Function: c.Func, Scope: scope, Count: c.Char})
+		}
 	}
-	sort.Slice(out.Top, func(i, j int) bool {
-		if out.Top[i].Count != out.Top[j].Count {
-			return out.Top[i].Count > out.Top[j].Count
+	out.Total = out.CharReads.Total + out.Other.Total
+	top := out.CharReads.Top
+	sort.Slice(top, func(i, j int) bool {
+		if top[i].Count != top[j].Count {
+			return top[i].Count > top[j].Count
 		}
-		return out.Top[i].Function < out.Top[j].Function
+		return top[i].Function < top[j].Function
 	})
-	if len(out.Top) > maxNumericStopsTop {
-		out.Top = out.Top[:maxNumericStopsTop]
+	if len(top) > maxNumericStopsTop {
+		out.CharReads.Top = top[:maxNumericStopsTop]
 	}
 	return out
 }

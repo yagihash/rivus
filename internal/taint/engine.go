@@ -545,7 +545,8 @@ type Result struct {
 type NumericStopCount struct {
 	Func       string
 	Dependency bool
-	Count      int
+	Char       int // values read as one character of a text (a byte, a rune)
+	Other      int // lengths, counters, conversions, comparisons, numbers a model makes
 }
 
 // Run analyses every function with a body, callees before callers, until the
@@ -1072,7 +1073,7 @@ func (e *Engine) commit(fn *sg.Func, r *fnResult, callers map[*sg.Func][]*sg.Fun
 	if prev := e.states[fn]; s.exceeded && prev != nil {
 		keepEarlier(s, prev)
 	}
-	e.states[fn] = &state{eng: e, fn: fn, findings: s.findings, suppressions: s.suppressions, uncertain: s.uncertain, numericStops: s.numericStops, numericCount: s.numericCount}
+	e.states[fn] = &state{eng: e, fn: fn, findings: s.findings, suppressions: s.suppressions, uncertain: s.uncertain, numericStops: s.numericStops, numericCount: s.numericCount, charCount: s.charCount}
 	return changed
 }
 
@@ -1354,8 +1355,8 @@ func (e *Engine) collect(st Stats) *Result {
 		res.Uncertainties = append(res.Uncertainties, u)
 	}
 	for fn, st := range e.states {
-		if st.numericCount > 0 {
-			res.NumericStops = append(res.NumericStops, NumericStopCount{Func: e.funcID(fn), Dependency: fn.Dep, Count: st.numericCount})
+		if st.numericCount > 0 || st.charCount > 0 {
+			res.NumericStops = append(res.NumericStops, NumericStopCount{Func: e.funcID(fn), Dependency: fn.Dep, Other: st.numericCount, Char: st.charCount})
 		}
 	}
 	sort.Slice(res.NumericStops, func(i, j int) bool { return res.NumericStops[i].Func < res.NumericStops[j].Func })
@@ -1766,6 +1767,9 @@ func sharedPlaceNames(ss []SharedState) []string {
 func keepEarlier(s, prev *state) {
 	if prev.numericCount > s.numericCount {
 		s.numericCount = prev.numericCount
+	}
+	if prev.charCount > s.charCount {
+		s.charCount = prev.charCount
 	}
 	if s.findings == nil {
 		s.findings = map[findingKey]*rawFinding{}

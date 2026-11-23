@@ -897,7 +897,7 @@ func (s *state) noteNumericStopOfUncovered(cc *callCtx, flows []model.Flow) {
 		return
 	}
 	for _, f := range s.flatten(valuesLocs(s, cc.argv())) {
-		s.numericCount++
+		s.countNumericStop(numeric, f.E)
 		if f.E.Kind == Real {
 			s.noteNumericStop(f.E, nil, numeric)
 		}
@@ -918,7 +918,7 @@ func (s *state) noteNumericStopOfPure(cc *callCtx) {
 		return
 	}
 	for _, f := range s.flatten(valuesLocs(s, cc.argv())) {
-		s.numericCount++
+		s.countNumericStop(numeric, f.E)
 		if f.E.Kind == Real {
 			s.noteNumericStop(f.E, nil, numeric)
 		}
