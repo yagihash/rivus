@@ -60,7 +60,7 @@ IR の呼び出し先の名前(`callee.symbol`、関数の名前)と、モデル
 | ポインタ越しの書き込みの別名による近似(`ptrAlias`)と、それを通った finding の `pointer_alias` の注記 | ✗(まだ有効にしない) | ✗(同左) | ✓(`HasEnv` の言語。注記はこの PR) |
 | `make model` の段 1(枠、候補、検証、差分テスト。設計 6.11) | PR #233(レビュー中) | ✓(`LANG=dart`。dio で実演。骨組みは段 2 で) | ✗ |
 | クラウドで作れる | ✓ | ✓ | ✗(extractor がサンドボックスを要る) |
-| ベンチの合格の線(`make bench-passline`、1 行の PASS/FAIL。`bench/deps_bench.py`) | ✓(memos。時間、メモリ、収束、CVE-2025-65799 の検出) | 未定(dart_services と cocoon の線は、あとで決める。今は INFO の行だけ) | ✗(まだない) |
+| ベンチの合格基準(`make bench-passline`、1 行の PASS/FAIL。`bench/deps_bench.py`) | ✓(memos。時間、メモリ、収束、CVE-2025-65799 の検出) | 未定(dart_services と cocoon の合格基準は、あとで決める。今は INFO の行だけ) | ✗(まだない) |
 | アーカイブのエントリ名の source(信頼できないアーカイブの名前。zip slip の入口) | ✓(`archive/tar`、`archive/zip`。`go-archive.yaml`) | ✓(`package:tar`、`package:archive`。`dart-tar.yaml`、`dart-archive.yaml`) | ✓(`tar`、`zip` クレート。`rust-archive.yaml`。`zip` の `enclosed_name` は source にしない) |
 
 **規則**: 新しい機能の PR は、この表の行を足すか直す。Go だけで入れるときは、ほかの言語の課題の番号を書く。
