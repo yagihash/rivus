@@ -7,7 +7,7 @@
 # CI runs the same tests (a pull request with -short, main and the weekly run without): .github/workflows/ci.yml.
 
 .DEFAULT_GOAL := help
-.PHONY: help setup build check test merge zoo-loosened shard-check test-shard go-warm zoo-dart-gen model-diff model docs-gen
+.PHONY: help setup build check test merge zoo-loosened shard-check test-shard go-warm zoo-dart-gen model-diff model-diff-changed model docs-gen
 
 # the extractors that `make test` needs (a language whose extractor is not there FAILS, it is not skipped)
 RIVUS_DART ?= dart
@@ -64,6 +64,10 @@ zoo-dart-gen: ## write bench/zoo-dart/exec/lib/cases.dart and the two pubspec.ya
 model-diff: ## the differential test of the model of a package: PKG=<Go import path | package:name> [MODEL=<file>] (bench/model-diff, docs/MODEL-RUNBOOK.md); fetches the package, does not run it
 	@[ -n "$(PKG)" ] || { echo "usage: make model-diff PKG=strings   (or PKG=package:http, MODEL=internal/model/builtin/dart-http.yaml)"; exit 1; }
 	go run ./bench/model-diff -pkg "$(PKG)" $(if $(MODEL),-model "$(MODEL)")
+
+model-diff-changed: ## the differential test of every package whose model rows differ from BASE=<commit> (what a pull request checks; LANGS=go by default; fetches the packages, does not run them)
+	@[ -n "$(BASE)" ] || { echo "usage: make model-diff-changed BASE=origin/main"; exit 1; }
+	go run ./bench/model-diff -run-changed "$(BASE)" $(if $(LANGS),-langs "$(LANGS)")
 
 model: ## the steps of making the model of a Go or Dart package: PKG=<import path | dart package> [VERSION=v1.2.3] [LANG=go|dart] [ARGS="-diff -write-verified"] (bench/model-author, docs/MODEL-RUNBOOK.md); exit 70 = a candidate has no row and is not in rejected:; fetches the package, does not run it
 	@[ -n "$(PKG)" ] || { echo "usage: make model PKG=github.com/jmoiron/sqlx VERSION=v1.4.0 LANG=go   (or PKG=dio VERSION=5.11.1 LANG=dart; ARGS=\"-recall\" for the recall of layer 1; ARGS=\"-gen-skeleton\" makes the skeleton and the cell template for the Go zoo)"; exit 1; }

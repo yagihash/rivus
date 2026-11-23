@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -444,5 +445,64 @@ func TestCoverageGapsFindsAFunctionWithoutARow(t *testing.T) {
 	}
 	if upper || !lower {
 		t.Errorf("ToUpper has a row (%v), ToLower has none (%v)", upper, lower)
+	}
+}
+
+// TestRunChangedListsWhatItDoesNotRun: a changed package of a language that is not run is listed as not run (never as passed), a package
+// whose rows were all removed has nothing to check, and a table of those two is not a failure.
+func TestRunChangedListsWhatItDoesNotRun(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("no git")
+	}
+	repo := t.TempDir()
+	dir := filepath.Join(repo, "internal", "model", "builtin")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	git := func(args ...string) {
+		t.Helper()
+		c := exec.Command("git", append([]string{"-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main"}, args...)...)
+		c.Dir = repo
+		c.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
+		if out, err := c.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	write := func(name, text string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("go-a.yaml", "ruleset: a@1\npropagators:\n  - symbol: strings.Join\n    flows: [{from: args, to: result}]\n")
+	write("dart-a.yaml", "ruleset: b@1\nsinks:\n  - symbol: package:http/src/client.dart#Client.get\n    args: [0]\n    category: ssrf\n")
+	git("init", "-q")
+	git("add", ".")
+	git("commit", "-q", "-m", "base")
+	write("go-a.yaml", "ruleset: a@1\n")
+	write("dart-a.yaml", "ruleset: b@1\nsinks:\n  - symbol: package:http/src/client.dart#Client.get\n    args: [0, 1]\n    category: ssrf\n")
+	r, w, _ := os.Pipe()
+	old := os.Stdout
+	os.Stdout = w
+	code := runChanged(repo, "HEAD", "go", t.TempDir(), nil)
+	os.Stdout = old
+	w.Close()
+	data, _ := io.ReadAll(r)
+	text := string(data)
+	if code != 0 || !strings.Contains(text, "not run") || !strings.Contains(text, "dart package:http") || !strings.Contains(text, "nothing  ") {
+		t.Errorf("exit %d:\n%s", code, text)
+	}
+}
+
+func TestVerifiedVersion(t *testing.T) {
+	f := filepath.Join(t.TempDir(), "go-x.yaml")
+	text := "ruleset: x@1\nverified_versions:\n  - package: example.com/m/v*/p\n    versions: \">=3.0.0 <4.0.0\"\n    checked_with: v3.1.0\n    checked: 2026-11-23\n"
+	if err := os.WriteFile(f, []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := verifiedVersion([]string{f}, "example.com/m/v*/p"); got != "v3.1.0" {
+		t.Errorf("version = %q", got)
+	}
+	if got := verifiedVersion([]string{f}, "example.com/other"); got != "" {
+		t.Errorf("version = %q for a package that has no entry", got)
 	}
 }

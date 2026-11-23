@@ -14,7 +14,7 @@ import (
 	"github.com/yagihash/rivus/internal/model"
 )
 
-// changedPackages lists the packages whose flows or sinks rows differ from the ones at the commit `base`, in the built-in model
+// changedPackages lists the packages whose rows (flows, pure, sinks, sanitizers, sources) differ from the ones at the commit `base`, in the built-in model
 // files: what a pull request that changes a model has to check ("go <pkg>" / "dart <pkg>", one per line; Rust is not checked).
 func changedPackages(repo, base string) ([]string, error) {
 	c := exec.Command("git", "diff", "--name-only", base, "--", "internal/model/builtin")
@@ -39,12 +39,12 @@ func changedPackages(repo, base string) ([]string, error) {
 		a, b := rowsOf(old), rowsOf(now)
 		for k, v := range b {
 			if a[k] != v {
-				set[lang+" "+SymbolPackage(lang, strings.SplitN(k, " ", 2)[1])] = true
+				set[lang+" "+SymbolPackage(lang, rowName(k))] = true
 			}
 		}
 		for k, v := range a {
 			if b[k] != v {
-				set[lang+" "+SymbolPackage(lang, strings.SplitN(k, " ", 2)[1])] = true
+				set[lang+" "+SymbolPackage(lang, rowName(k))] = true
 			}
 		}
 	}
@@ -58,7 +58,11 @@ func changedPackages(repo, base string) ([]string, error) {
 	return res, nil
 }
 
-// rowsOf maps "<kind> <symbol>" to the row as JSON (the flows rows and the sinks rows).
+// rowName is the symbol (or field, or type) of a key of rowsOf: the last word.
+func rowName(k string) string { return k[strings.LastIndexByte(k, ' ')+1:] }
+
+// rowsOf maps "<kind> <symbol>" to the row as JSON: the flows rows, the pure rows, the sinks, the sanitizers and the sources (a source
+// without a symbol is named by its field or its type).
 func rowsOf(text []byte) map[string]string {
 	var rs model.RuleSet
 	m := map[string]string{}
@@ -70,10 +74,28 @@ func rowsOf(text []byte) map[string]string {
 			j, _ := json.Marshal(p.Flows)
 			m["flows "+p.Symbol] = string(j)
 		}
+		if p.Pure {
+			m["pure "+p.Symbol] = "pure"
+		}
 	}
 	for _, s := range rs.Sinks {
 		j, _ := json.Marshal(s)
 		m["sink "+s.Symbol] = string(j)
+	}
+	for _, s := range rs.Sanitizers {
+		j, _ := json.Marshal(s)
+		m["sanitizer "+s.Symbol] = string(j)
+	}
+	for _, s := range rs.Sources {
+		name := s.Symbol
+		if name == "" {
+			name = strings.TrimPrefix(s.Field+s.Type, "*")
+		}
+		if name == "" {
+			continue
+		}
+		j, _ := json.Marshal(s)
+		m["source "+s.Kind+" "+name] = string(j)
 	}
 	return m
 }
