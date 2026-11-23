@@ -337,6 +337,17 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	eng := taint.New(graph, l.texts, st, rules, opts)
 	eng.SetLoadErrors(l.loadErrors())
 	res = eng.Run()
+	// Internal, for bench/compare.sh --graph-check: the summaries of every function, one line each (no flag, not in -h)
+	if p := os.Getenv("RIVUS_INTERNAL_SUMMARY_DUMP"); p != "" {
+		if f, err := os.Create(p); err != nil {
+			fmt.Fprintf(os.Stderr, "rivus: RIVUS_INTERNAL_SUMMARY_DUMP: %v\n", err)
+		} else {
+			if err := eng.WriteSummaryDump(f); err != nil {
+				fmt.Fprintf(os.Stderr, "rivus: RIVUS_INTERNAL_SUMMARY_DUMP: %v\n", err)
+			}
+			f.Close()
+		}
+	}
 	res.Stats.FuncValues = fvStats
 	if ts := l.testsSkipped(); ts != nil {
 		// the directories that were not read are not tests: they are in summary.skipped_dirs, not here

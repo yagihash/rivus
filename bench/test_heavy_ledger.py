@@ -147,6 +147,36 @@ class PasslineRun(unittest.TestCase):
             self.assertEqual(len(open(p).read().splitlines()[1].split("\t")), len(h.COLUMNS))
 
 
+    def test_passline_score_row_has_no_finding_count(self):
+        truth = {"sites": [{"source_func": "a.A", "sink_file": "s.go", "sink_line": 1, "label": "vuln", "category": "ssrf", "vuln": 1}]}
+        rep = dict(NEW, findings=[{"category": "ssrf", "source": {"func": "a.A"}, "sink": {"position": {"file": "s.go", "line": 1}}}] * 2)
+        with tempfile.TemporaryDirectory() as w:
+            fake = os.path.join(w, "rivus")
+            open(fake, "w").write("#!/bin/sh\ncat <<'EOF'\n%s\nEOF\n" % json.dumps(rep))
+            os.chmod(fake, os.stat(fake).st_mode | stat.S_IXUSR)
+            os.makedirs(os.path.join(w, "bench"))
+            json.dump(truth, open(os.path.join(w, "truth.json"), "w"))
+            os.environ["RIVUS_HEAVY_LOCK"] = os.path.join(w, "lock")
+            os.environ["BENCH_OUT"] = os.path.join(w, "out")
+            orig, root = d.prepare, d.ROOT
+            d.prepare = lambda name, t, tree, work, env: (work, env, None)
+            outdir = d.out_dir()
+            d.ROOT = w
+            t = {"lang": "go", "local": "bench", "args": ["-no-project-rules"], "time_limit_s": 600, "mem_cap_gb": 8, "decided": True,
+                 "commit": "c0ffee", "detect": {"id": "x", "mode": "score", "truth": "truth.json"}}
+            try:
+                line, row = d.passline("fakegitea", t, fake, w, outdir, 600, 8)
+            finally:
+                d.prepare, d.ROOT = orig, root
+                del os.environ["RIVUS_HEAVY_LOCK"], os.environ["BENCH_OUT"]
+            self.assertEqual(line, line.split("detected=")[0] + "detected=1/1 quiet_after_fix=n/a")
+            self.assertTrue(line.startswith("PASS fakegitea "))
+            self.assertEqual(row["detected"], "1/1")
+            self.assertNotIn("findings", row)
+            p = os.path.join(w, "l.tsv")
+            d.add_to_ledger(row, args(p), "abc1234")
+            self.assertEqual(len(open(p).read().splitlines()[1].split("\t")), len(h.COLUMNS))
+
 
 class Finished(unittest.TestCase):
     T = {"memos": {"time_limit_s": 180, "mem_cap_gb": 8}}
