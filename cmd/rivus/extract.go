@@ -19,6 +19,7 @@ type extractCmd struct {
 	dir, filter, lang              *string
 	tests, all, text, texts, check *bool
 	impls                          multiFlag
+	bodyReplaced                   multiFlag
 	ro                             analyzeOpts
 }
 
@@ -42,9 +43,10 @@ func extractFlags(fs *flag.FlagSet) *extractCmd {
 	fs.Var(&ro.isolationEnv, "isolation-env", "-lang rust: NAME=VALUE for the build (repeatable)")
 	fs.Var(&ro.isolationRead, "isolation-read", "-lang rust: PATH that the build may read (repeatable)")
 	fs.Int64Var(&ro.isolationMaxOut, "isolation-max-output", 4<<30, "-lang rust: the most bytes the extractor may write")
+	fs.Var(&c.bodyReplaced, "body-replaced", "-lang rust: the crate whose body the extractor does not read (the name with - or _; the extractor says how many functions it has, as body_not_read) (repeatable)")
 	fs.Var(&ro.allowFetchHosts, "allow-fetch-host", "-lang rust: HOST the fetch stage may get from although it is not crates.io (git dependencies on any host, other registries). The repository can send the fetch on to other places (its submodules, redirects); that is not prevented until the network of the fetch stage is narrowed (repeatable)")
 	usual(fs, "C", "tests", "all", "text", "func", "implementations", "lang", "unsafe-host-exec", "rust-extractor", "no-deps", "isolation-env", "isolation-read")
-	diagnostic(fs, "texts", "check", "isolation-timeout", "no-fetch", "isolation-max-output", "allow-fetch-host")
+	diagnostic(fs, "texts", "check", "isolation-timeout", "no-fetch", "isolation-max-output", "allow-fetch-host", "body-replaced")
 	kind(fs, "dir", "C")
 	kind(fs, "enum:extract-lang", "lang")
 	return c
@@ -60,6 +62,7 @@ func runExtract(args []string) error {
 	if *lang == langRust {
 		ro.dir = *dir
 		ro.tests = *tests
+		ro.extractorBodyReplaced = c.bodyReplaced
 		out, err := ro.extractRaw(langRust)
 		if err != nil {
 			return err

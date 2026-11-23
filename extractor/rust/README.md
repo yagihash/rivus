@@ -45,7 +45,7 @@ writes the IR of each crate on the way. The code has to compile. The dependencie
 by `CARGO_PRIMARY_PACKAGE`): their functions are marked `dep`, and `rivus analyze` keeps the ones
 the code reaches, so a flow goes through a dependency instead of being guessed at. Proc macros are
 not read, nor is `std` (the models stand for it). `--no-deps` reads the members only: calls into a
-dependency are then unmodeled library calls, until a model says what they do. The candidates of a
+dependency are then unmodeled library calls, until a model says what they do. `--body-replaced <crate>` (repeatable; `rivus analyze` passes the crates that the rule files and `-body-replaced` declare: `actix-web` and `actix_web` are the same crate) lowers none of the bodies of that dependency: the stream has a `body_not_read` record (`unit`, `functions`) in place of its functions. `cargo check` still compiles the crate, so the time and the memory of the build do not fall; the IR is smaller. The candidates of a
 call through `dyn Trait` (or a type parameter) are the impls of every crate that was read: the crate that
 is compiled does not know the others, so the stream is merged first and the candidates are completed
 then (the same for `Drop::drop` of a type of another crate). Closures are the exception: the candidates

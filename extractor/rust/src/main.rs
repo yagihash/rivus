@@ -131,6 +131,9 @@ fn driver() -> ExitCode {
     let dep = std::env::var_os("CARGO_PRIMARY_PACKAGE").is_none();
     let proc_macro = args.windows(2).any(|w| w[0] == "--crate-type" && w[1] == "proc-macro");
 
+    // a dependency that a model declares (`--body-replaced`, told by the command in RIVUS_BODY_REPLACED): the body is not read
+    let replaced = dep && body_replaced_crate(&std::env::var("RIVUS_BODY_REPLACED").unwrap_or_default(), &crate_name);
+
     let write_failed = std::sync::atomic::AtomicBool::new(false);
     let result = run_with_tcx!(&args, |tcx| {
         if !probing && !skipped && !proc_macro && !out_dir.is_empty() {
@@ -138,7 +141,7 @@ fn driver() -> ExitCode {
             let open_crate = args.windows(2).any(|w| w[0] == "--crate-type" && matches!(w[1].as_str(), "cdylib" | "staticlib" | "dylib"))
                 || args.iter().any(|a| matches!(a.as_str(), "--crate-type=cdylib" | "--crate-type=staticlib" | "--crate-type=dylib"));
             install_panic_hook();
-            let records = extract(tcx, &root, dep, open_crate, &crate_name);
+            let records = extract(tcx, &root, dep, open_crate, &crate_name, replaced);
             // a test build of a crate (`--test`) is told apart by its name: the merge prefers it to the library build
             let kind = if args.iter().any(|a| a == "--test") { "-test" } else { "" };
             let path = PathBuf::from(&out_dir).join(format!("{}{}-{}.jsonl", crate_name, kind, std::process::id()));
@@ -161,9 +164,26 @@ fn driver() -> ExitCode {
     ExitCode::SUCCESS
 }
 
+/// Whether the crate is one of the declared ones (the names are separated by a line break). Cargo reads `-` and `_` of a crate name
+/// as the same (`actix-web` of Cargo.lock and a model, `actix_web` of rustc), so the names are compared that way.
+fn body_replaced_crate(declared: &str, crate_name: &str) -> bool {
+    let norm = |s: &str| s.replace('-', "_");
+    !crate_name.is_empty() && declared.lines().any(|d| !d.is_empty() && norm(d) == norm(crate_name))
+}
+
 /// The records of the crate being compiled: its functions, and the texts.
-fn extract(tcx: rustc_middle::ty::TyCtxt<'_>, root: &str, dep: bool, open_crate: bool, crate_name: &str) -> Vec<Value> {
+fn extract(tcx: rustc_middle::ty::TyCtxt<'_>, root: &str, dep: bool, open_crate: bool, crate_name: &str, replaced: bool) -> Vec<Value> {
     let items: Vec<_> = rustc_public::all_local_items().into_iter().filter(|i| i.has_body()).collect();
+    if replaced {
+        // The model stands for this crate: no body is lowered (no MIR is built for it here). cargo has compiled it as it does for
+        // any dependency; what is left out is the neutral IR of it, and the analysis of it. The functions are counted from the
+        // items that have a body (closures included), so that the report says how many functions the crate declares.
+        // The names go with it (`names`, which merge reads and removes): a call through a trait and a drop of a value in another
+        // crate are linked to the impls of the whole program (link_across_crates), and the impls of this crate are among them
+        // as they are when it is read (the analysis then finds no body for them, as when the filter leaves them out).
+        let names: Vec<String> = items.iter().map(|i| i.name()).collect();
+        return vec![json!({"kind": "body_not_read", "body_not_read": {"unit": crate_name, "functions": items.len(), "names": names}})];
+    }
     let bodies: HashSet<String> = items.iter().map(|i| i.name()).collect();
     let mut cx = lower::Ctx::new(root.to_string(), bodies);
     // what the crate holds that is not read, said at the end (a load error that names the function)
@@ -310,10 +330,20 @@ fn cli() -> ExitCode {
     let mut deps = true;
     let mut cargo_flags: Vec<&str> = Vec::new();
     let mut dir = None;
-    for a in std::env::args().skip(1) {
+    let mut body_replaced: Vec<String> = Vec::new();
+    let mut args = std::env::args().skip(1);
+    while let Some(a) = args.next() {
         match a.as_str() {
             "--include-tests" | "--tests" | "-tests" => include_tests = true,
             "--no-deps" => deps = false,
+            // the crates that a model declares: their bodies are not read (the crate name, with `-` or `_`: cargo reads them alike)
+            "--body-replaced" => match args.next() {
+                Some(c) if !c.is_empty() => body_replaced.push(c),
+                _ => {
+                    eprintln!("rivus-rust: --body-replaced needs the name of a crate");
+                    return ExitCode::from(2);
+                }
+            },
             // what the isolated run asks (docs/rust-isolation.md): the lock file is not written, and nothing is fetched
             "--locked" => cargo_flags.push("--locked"),
             "--offline" => cargo_flags.push("--offline"),
@@ -384,6 +414,7 @@ fn cli() -> ExitCode {
         .env("RIVUS_RUST_DRIVER", "1")
         .env("RIVUS_IR_DIR", &frags)
         .env("RIVUS_ROOT", &root)
+        .env("RIVUS_BODY_REPLACED", body_replaced.join("\n"))
         .env("DYLD_FALLBACK_LIBRARY_PATH", with_lib("DYLD_FALLBACK_LIBRARY_PATH"))
         .env("LD_LIBRARY_PATH", with_lib("LD_LIBRARY_PATH"))
         .stderr(std::process::Stdio::piped());
@@ -643,6 +674,9 @@ fn merge(files: Vec<PathBuf>) {
     let mut origin: std::collections::HashMap<String, (String, bool)> = std::collections::HashMap::new();
     let mut conflicts: Vec<String> = Vec::new();
     let mut rest = Vec::new();
+    // the functions of the crates that are not read (body_not_read): their names take part in the linking, and nothing else of them
+    // (a crate can be built twice, with other features or for another target: the unit is one, and its functions are counted by name)
+    let mut unread: std::collections::BTreeMap<String, std::collections::BTreeSet<String>> = std::collections::BTreeMap::new();
     for f in files {
         let from = fragment_origin(&f);
         let text = match std::fs::read_to_string(&f) {
@@ -687,12 +721,19 @@ fn merge(files: Vec<PathBuf>) {
                         }
                     }
                 }
+            } else if v["kind"] == "body_not_read" {
+                let unit = v["body_not_read"]["unit"].as_str().unwrap_or("").to_string();
+                let names = v["body_not_read"]["names"].as_array().into_iter().flatten().filter_map(|n| n.as_str().map(String::from));
+                unread.entry(unit).or_default().extend(names);
             } else {
                 rest.push(line.to_string());
             }
         }
     }
-    rest.extend(link_across_crates(&mut funcs));
+    for (unit, names) in &unread {
+        rest.push(json!({"kind": "body_not_read", "body_not_read": {"unit": unit, "functions": names.len()}}).to_string());
+    }
+    rest.extend(link_across_crates(&mut funcs, unread.into_values().flatten().collect()));
     for l in funcs.values() {
         println!("{}", l);
     }
@@ -718,12 +759,17 @@ fn merge(files: Vec<PathBuf>) {
 /// The calls through a trait (`dyn Trait`, a type parameter) and the drops of values of another crate, which
 /// one crate cannot resolve: it knows the impls of its own functions only. Here every crate is in, so the
 /// candidates are the impls of the whole program, and the marks the lowering left are removed.
-fn link_across_crates(funcs: &mut std::collections::BTreeMap<String, String>) -> Vec<String> {
+fn link_across_crates(funcs: &mut std::collections::BTreeMap<String, String>, unread: Vec<String>) -> Vec<String> {
     let mut unlinked: Vec<String> = Vec::new();
     let mut by_method: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
     let mut drops: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
     const DROP_TAIL: &str = " as std::ops::Drop>::drop";
-    for id in funcs.keys() {
+    // the names of the functions that are read and of the ones that are not (in one order: the first impl of a drop is the same
+    // with and without the crate being read)
+    let mut all: Vec<&String> = funcs.keys().chain(unread.iter()).collect();
+    all.sort();
+    all.dedup();
+    for id in all {
         if !id.starts_with('<') {
             continue;
         }
@@ -735,7 +781,7 @@ fn link_across_crates(funcs: &mut std::collections::BTreeMap<String, String>) ->
             drops.entry(inner.split('<').next().unwrap_or(inner).to_string()).or_default().push(id.clone());
         }
     }
-    let ids: HashSet<String> = funcs.keys().cloned().collect();
+    let ids: HashSet<String> = funcs.keys().cloned().chain(unread).collect();
     for (id, line) in funcs.iter_mut() {
         if !line.contains("\"by_trait\"") && !line.contains("\"drop_of\"") {
             continue;
@@ -860,6 +906,16 @@ mod tests {
     }
 
     const GOOGLE_AUTH: &str = "thread 'rustc' panicked at /rustc-dev/x/ty.rs:484:17:\nnot implemented: FIXME(async_closures): Lower these to SMIR\nerror: could not compile `google-cloud-auth` (lib)\n\nCaused by:\n  process didn't exit successfully: `rivus-rust rustc --crate-name google_cloud_auth` (exit status: 101)\n";
+
+    #[test]
+    fn a_declared_crate_is_found_with_either_spelling_of_its_name() {
+        assert!(body_replaced_crate("actix-web", "actix_web"));
+        assert!(body_replaced_crate("serde\nactix_web", "actix_web"));
+        assert!(body_replaced_crate("actix_web", "actix-web"));
+        assert!(!body_replaced_crate("actix-web", "actix_web_codegen"));
+        assert!(!body_replaced_crate("", ""));
+        assert!(!body_replaced_crate("actix", "actix_web"));
+    }
 
     #[test]
     fn the_failed_crate_is_the_one_cargo_names() {

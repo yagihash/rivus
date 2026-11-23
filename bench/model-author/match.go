@@ -23,6 +23,7 @@ type Facts struct {
 	SourceRows                               []model.Source     // of the package
 	FlowRows                                 []model.Propagator // of the package: the rows with flows (the skeleton reads them)
 	Rejected                                 []RejectedEntry    // of the package
+	Deferred                                 []DeferredEntry    // of the package
 	BodyReplaced                             []string           // the packages that the files declare (body_replaced_packages)
 }
 
@@ -34,10 +35,21 @@ type RejectedEntry struct {
 	Wild bool
 }
 
+// DeferredEntry is a `deferred:` entry and the file it is in.
+type DeferredEntry struct {
+	model.Deferred
+	File string
+	Wild bool
+}
+
 // inPackage: the symbol (function, method, field, type) is of the package.
 func inPackage(sym, pkg string) bool {
 	s := strings.TrimPrefix(sym, "(")
 	s = strings.TrimPrefix(s, "*")
+	if isDart(pkg) {
+		// package:dio/src/dio.dart#Dio.get is of package:dio (and not of package:dio_foo)
+		return strings.HasPrefix(s, pkg+"/")
+	}
 	return strings.HasPrefix(s, pkg+".")
 }
 
@@ -124,10 +136,18 @@ func LoadFacts(files []string, pkg string) (*Facts, error) {
 		for _, b := range rs.BodyReplaced {
 			f.BodyReplaced = append(f.BodyReplaced, b.Package)
 		}
+		for _, d := range rs.Deferred {
+			wild := model.HasMajorWildcard(d.Symbol)
+			d.Symbol = conc(d.Symbol)
+			if inPackage(d.Symbol, pkg) {
+				f.Deferred = append(f.Deferred, DeferredEntry{d, path, wild})
+				used[path] = true
+			}
+		}
 		for _, r := range rs.Rejected {
-			wild := model.HasMajorWildcard(r.Symbol)
-			r.Symbol = conc(r.Symbol)
-			if inPackage(r.Symbol, pkg) {
+			wild := model.HasMajorWildcard(r.Symbol + r.Type)
+			r.Symbol, r.Type = conc(r.Symbol), conc(r.Type)
+			if inPackage(r.Symbol+r.Type, pkg) {
 				f.Rejected = append(f.Rejected, RejectedEntry{r, path, wild})
 				used[path] = true
 			}
@@ -144,7 +164,7 @@ func LoadFacts(files []string, pkg string) (*Facts, error) {
 // BodiesRead says whether the analysis reads the bodies of the package: not for the standard library, and not for a package that a
 // model file declares in body_replaced_packages (exactly, or under a `/...`).
 func (f *Facts) BodiesRead(pkg string) bool {
-	if isStdlib(pkg) {
+	if !isDart(pkg) && isStdlib(pkg) {
 		return false
 	}
 	for _, b := range f.BodyReplaced {
@@ -157,6 +177,15 @@ func (f *Facts) BodiesRead(pkg string) bool {
 
 // receiverType: `(*a/b.T).M` is `a/b.T`; "" for a function.
 func receiverType(sym string) string {
+	if strings.HasPrefix(sym, "package:") {
+		// Dart: package:a/b.dart#Type.member is of package:a/b.dart#Type
+		if h := strings.Index(sym, "#"); h > 0 {
+			if d := strings.Index(sym[h:], "."); d > 0 {
+				return sym[:h+d]
+			}
+		}
+		return ""
+	}
 	if !strings.HasPrefix(sym, "(") {
 		return ""
 	}
@@ -203,48 +232,119 @@ func (f *Facts) rowFor(it Item) string {
 	return ""
 }
 
-// rejectedFor says whether `rejected:` decides the candidate: an entry of the symbol and kind with no position, or entries that
-// together name every position of the candidate.
-func (f *Facts) rejectedFor(it Item) bool {
-	left := map[string]bool{}
-	for _, p := range it.Positions {
-		left[p] = true
-	}
-	for _, r := range f.Rejected {
-		if r.Symbol != it.Symbol || r.Kind != it.Kind {
-			continue
-		}
-		if r.Position == "" {
-			return true
-		}
-		delete(left, r.Position)
-	}
-	return len(left) == 0
-}
-
 // Matched is the result of the matching.
 type Matched struct {
-	ByRow, ByRejected, Undecided []Item
+	ByRow, ByRejected, ByDeferred, Undecided []Item
 	// Stale are the `rejected:` entries whose symbol is no longer in the API of the package.
 	Stale []RejectedEntry
+	// StaleDeferred: the same for `deferred:`.
+	StaleDeferred []DeferredEntry
+	// NoLongerCandidate are the `rejected:` entries whose symbol is in the API but is not a candidate of the rule table (any more): a note, not a warning.
+	NoLongerCandidate []RejectedEntry
+	// TypeCovers are the `type:` entries with how many candidates each covers now.
+	TypeCovers []TypeCover
 }
 
-// Match sorts the candidates (layer 1) into the ones that have a row, the ones that `rejected:` has, and the undecided ones.
+// TypeCover is the count of a `type:` entry of `rejected:` at this run, against the `covers:` that the file records.
+type TypeCover struct {
+	Entry   RejectedEntry
+	Covered int
+}
+
+// Match sorts the candidates (layer 1) into the ones that have a row, the ones that `rejected:` and `deferred:` decide (together, place by
+// place; one that has any `deferred:` place is a deferred one), and the undecided ones. A `type:` entry of `rejected:` covers the places of
+// its kind that are in an argument of that type.
 func Match(api *API, f *Facts) *Matched {
 	m := &Matched{}
+	for _, e := range f.Rejected {
+		if e.Type != "" {
+			m.TypeCovers = append(m.TypeCovers, TypeCover{Entry: e})
+		}
+	}
 	for _, it := range api.Items {
-		switch {
-		case f.rowFor(it) != "":
+		if f.rowFor(it) != "" {
 			m.ByRow = append(m.ByRow, it)
-		case f.rejectedFor(it):
-			m.ByRejected = append(m.ByRejected, it)
-		default:
+			continue
+		}
+		// the type entries count the candidates (the ones that have no row) that have a place of theirs, whether or not another entry decides the rest
+		for i := range m.TypeCovers {
+			e := m.TypeCovers[i].Entry
+			if e.Kind != it.Kind {
+				continue
+			}
+			for _, p := range it.Positions {
+				if it.PosTypes[p] == e.Type {
+					m.TypeCovers[i].Covered++
+					break
+				}
+			}
+		}
+		left := map[string]bool{}
+		for _, p := range it.Positions {
+			left[p] = true
+		}
+		anyDef := false
+		for _, r := range f.Rejected {
+			if r.Kind != it.Kind {
+				continue
+			}
+			switch {
+			case r.Type != "":
+				for _, p := range it.Positions {
+					if it.PosTypes[p] == r.Type {
+						delete(left, p)
+					}
+				}
+			case r.Symbol == it.Symbol && r.Position == "":
+				left = map[string]bool{}
+			case r.Symbol == it.Symbol:
+				delete(left, r.Position)
+			}
+		}
+		for _, d := range f.Deferred {
+			if d.Kind != it.Kind || d.Symbol != it.Symbol {
+				continue
+			}
+			if d.Position == "" {
+				left, anyDef = map[string]bool{}, true
+			} else if left[d.Position] {
+				delete(left, d.Position)
+				anyDef = true
+			} else {
+				anyDef = true
+			}
+		}
+		switch {
+		case len(left) > 0:
 			m.Undecided = append(m.Undecided, it)
+		case anyDef:
+			m.ByDeferred = append(m.ByDeferred, it)
+		default:
+			m.ByRejected = append(m.ByRejected, it)
 		}
 	}
 	for _, r := range f.Rejected {
-		if _, ok := api.Symbols[r.Symbol]; !ok && !r.Wild {
-			m.Stale = append(m.Stale, r)
+		if r.Type == "" {
+			if _, ok := api.Symbols[r.Symbol]; !ok && !r.Wild {
+				m.Stale = append(m.Stale, r)
+			}
+		}
+	}
+	cand := map[string]bool{}
+	for _, it := range api.Items {
+		cand[it.Kind+"\x00"+it.Symbol] = true
+	}
+	for _, r := range f.Rejected {
+		if r.Type != "" {
+			continue
+		}
+		if _, ok := api.Symbols[r.Symbol]; ok && !cand[r.Kind+"\x00"+r.Symbol] {
+			m.NoLongerCandidate = append(m.NoLongerCandidate, r)
+		}
+	}
+	for _, d := range f.Deferred {
+		if _, ok := api.Symbols[d.Symbol]; !ok && !d.Wild {
+			m.StaleDeferred = append(m.StaleDeferred, d)
 		}
 	}
 	return m
@@ -259,6 +359,9 @@ func UndecidedYAML(pkg string, undecided []Item) string {
 	b.WriteString("rejected:\n")
 	for _, it := range undecided {
 		fmt.Fprintf(&b, "  # %s (%s): %s\n", it.Rule, strings.Join(it.Positions, ", "), it.Sig)
+		if len(it.Detail) > 0 {
+			fmt.Fprintf(&b, "  # detail: %s\n", strings.Join(it.Detail, " "))
+		}
 		fmt.Fprintf(&b, "  - symbol: %s\n    kind: %s\n    why: \"\"\n", yamlScalar(it.Symbol), it.Kind)
 	}
 	return b.String()
