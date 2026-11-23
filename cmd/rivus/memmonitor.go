@@ -46,8 +46,10 @@ type memReport struct {
 	PeakBytes int64
 	// GCCPUFraction is the share of the CPU time of the run (from the start of the monitor) that the collector used, in [0, 1].
 	GCCPUFraction float64
-	// LiveHeapMaxBytes is the most that the collector found live in the heap (the largest of the values of /gc/heap/live:bytes that
-	// were read): a guide to the lowest limit that a soft limit can keep. Below it the limit is not kept.
+	// LiveHeapMaxBytes is the largest value of /gc/heap/live:bytes that was read: what the collector marked
+	// live. It counts what was allocated while it was marking, so in a phase that allocates fast it can be larger than what is
+	// really live (an upper-side guide). It being below the limit is not a necessary condition for keeping the limit (see
+	// memory_limit_exceeded and gc_cpu_fraction).
 	LiveHeapMaxBytes int64
 }
 
