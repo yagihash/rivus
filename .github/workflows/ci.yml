@@ -295,6 +295,20 @@ jobs:
       - name: Test the scale-growth tool
         if: ${{ !cancelled() }}
         run: python3 bench/scale-growth/test_scale_growth.py
+      # The graph check, the dependency bench, the ledger of the heavy runs and the lock of the heavy runs (the lock file of the test is in a temporary
+      # directory: RIVUS_HEAVY_LOCK). The graph check also builds rivus and runs the benchmark go-curated with 1 and with 8 workers (about 20 s): the result must not depend on the number of workers.
+      - name: Test the graph check
+        if: ${{ !cancelled() }}
+        run: python3 bench/test_graph_check.py
+      - name: Test the dependency bench
+        if: ${{ !cancelled() }}
+        run: python3 bench/test_deps_bench.py
+      - name: Test the ledger of the heavy runs
+        if: ${{ !cancelled() }}
+        run: python3 bench/test_heavy_ledger.py
+      - name: Test the lock of the heavy runs
+        if: ${{ !cancelled() }}
+        run: python3 bench/test_heavylock.py
       # A mark that loosens the truth of the zoo (a row added to a cell that bench/zoo/marks.d already has a file of, or a row of a new cell of
       # a kind other than @sink(none), @miss and @fp; against the merge base) needs a "Zoo-Loosened:" line in a commit message (the
       # user's approval); a new @miss or @fp row needs an @ref(#N) or @ref(model-<package>-<name>) whose file is in docs/issues. TestZooMarksLock (in the shards of the test job) holds the file to the sources.
@@ -637,11 +651,35 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
         run: make model-diff-changed BASE="$BASE"
 
+  # The graph check of the same commit with 1 and with 8 workers (bench/compare.sh --graph-check, docs/WORKFLOW.md): the IR, the edges, the summaries and
+  # the findings must be the same, whatever the order of the work. The weekly run and a run by hand only. A difference or a failed run fails the job (and `ci-ok`).
+  # The benchmarks are the small ones (the standard library, the zoo, curated); memos and Gitea are not run here.
+  graph-check:
+    needs: changes
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            bench/*/go.sum
+      - name: Check that the graph does not depend on the number of workers
+        # no other work runs on this machine, so the guard that waits for a quiet one is off
+        run: bench/compare.sh --graph-check go-std10,zoo-go,go-curated --graph-workers 1,8 --no-guard HEAD HEAD
+
   # The one check that a ruleset requires. Every job above is in `needs`: it fails when one of them failed or was cancelled, and passes
   # when they passed or were skipped (nothing that a test reads changed). A job added above has to be added here.
   ci-ok:
     if: always()
-    needs: [changes, go-packages, docs-tests, test, gcp-exec, sandbox, model-diff, model-diff-changed]
+    needs: [changes, go-packages, docs-tests, test, gcp-exec, sandbox, model-diff, model-diff-changed, graph-check]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
