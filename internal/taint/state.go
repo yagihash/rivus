@@ -383,11 +383,11 @@ func isCharRead(v *sg.Value) bool {
 	if v == nil {
 		return false
 	}
-	in := v.Instr
-	// s[0]: one place of the text, not the text handled one character at a time
-	if in != nil && in.Op == ir.OpIndexLoad && len(in.Args) > 1 && in.Args[1] != nil && in.Args[1].Kind == sg.KConst {
-		return false
+	if constIndexRead(v) {
+		return false // s[0]: one place of the text, not the text handled one character at a time
 	}
+	v = throughCopies(v)
+	in := v.Instr
 	switch string(v.Type) {
 	case "byte", "rune", "char":
 		return true
@@ -396,19 +396,76 @@ func isCharRead(v *sg.Value) bool {
 		return false
 	}
 	switch in.Op {
+	case ir.OpFieldLoad:
+		// Rust: the value inside the Option that Iterator::next of the bytes or the chars of a str gave
+		if len(in.Args) > 0 && in.Args[0] != nil {
+			if nx := throughCopies(in.Args[0]); nx.Instr != nil && nx.Instr.Op == ir.OpCall && calleeSymbol(nx.Instr) == "std::iter::Iterator::next" &&
+				len(nx.Instr.Args) > 0 && nx.Instr.Args[0] != nil {
+				it := string(nx.Instr.Args[0].Type)
+				return strings.Contains(it, "std::str::Bytes") || strings.Contains(it, "std::str::Chars") || strings.Contains(it, "std::str::CharIndices")
+			}
+		}
 	case ir.OpIndexLoad:
-		return len(in.Args) > 0 && in.Args[0] != nil && in.Args[0].Class == ir.ClassString
+		// s[i] of a string, or u[i] of the code units or the runes of one (Dart)
+		return len(in.Args) > 0 && in.Args[0] != nil && (in.Args[0].Class == ir.ClassString || isTextSequence(in.Args[0]))
 	case ir.OpCall:
-		if in.Callee != nil {
-			sym := in.Callee.Symbol
-			for _, n := range charReadSymbols {
-				if strings.HasSuffix(sym, n) {
-					return true
-				}
+		sym := calleeSymbol(in)
+		for _, n := range charReadSymbols {
+			if strings.HasSuffix(sym, n) {
+				return true
+			}
+		}
+		// the element of a loop over the code units or the runes of a string (Dart: iter.start(s.codeUnits), then iter.next)
+		if sym == "iter.next" && len(in.Args) > 0 && in.Args[0] != nil {
+			if st := throughCopies(in.Args[0]); st.Instr != nil && st.Instr.Op == ir.OpCall && calleeSymbol(st.Instr) == "iter.start" &&
+				len(st.Instr.Args) > 0 && st.Instr.Args[0] != nil {
+				return isTextSequence(st.Instr.Args[0])
 			}
 		}
 	}
 	return false
+}
+
+// constIndexRead reports whether the value is an element at a constant index (through copies and conversions: Rust
+// `s.as_bytes()[0] as char`).
+func constIndexRead(v *sg.Value) bool {
+	for i := 0; i < 8 && v != nil && v.Instr != nil; i++ {
+		in := v.Instr
+		switch {
+		case (in.Op == ir.OpCopy || in.Op == ir.OpConvert) && len(in.Args) == 1:
+			v = in.Args[0]
+		case in.Op == ir.OpIndexLoad && len(in.Args) > 1 && in.Args[1] != nil:
+			return throughCopies(in.Args[1]).Kind == sg.KConst
+		default:
+			return false
+		}
+	}
+	return false
+}
+
+// throughCopies follows copies back to the value that was made (a few steps: a copy chain is short).
+func throughCopies(v *sg.Value) *sg.Value {
+	for i := 0; i < 8 && v.Instr != nil && v.Instr.Op == ir.OpCopy && len(v.Instr.Args) == 1 && v.Instr.Args[0] != nil; i++ {
+		v = v.Instr.Args[0]
+	}
+	return v
+}
+
+func calleeSymbol(in *sg.Instr) string {
+	if in.Callee == nil {
+		return ""
+	}
+	return in.Callee.Symbol
+}
+
+// isTextSequence reports whether the value is the code units or the runes of a text (Dart: s.codeUnits, s.runes; Rust: s.as_bytes()).
+func isTextSequence(v *sg.Value) bool {
+	v = throughCopies(v)
+	if v.Instr == nil || v.Instr.Op != ir.OpCall {
+		return false
+	}
+	sym := calleeSymbol(v.Instr)
+	return strings.HasSuffix(sym, "String.codeUnits") || strings.HasSuffix(sym, "String.runes") || strings.HasSuffix(sym, "::as_bytes")
 }
 
 // charReadSymbols end the symbols of the calls that give one character (a code unit) of a text.
