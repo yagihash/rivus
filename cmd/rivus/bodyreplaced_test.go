@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -9,15 +11,50 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 )
 
 // A module that calls a dependency (example.com/third, by replace; example.com/third/sub and /other are packages of it)
 // that has a function with a body that matters (Clean returns a constant), a function that calls a function it is given
 // (Each), one that calls a method of a value it is given (Serve), and one that has a sink (Exec).
+//
+// The project is made once for the whole run (brShared) and handed to every test that only reads it, so that the runs that several tests
+// share (the same arguments over the same project) can share their result too (brAnalyze); bodyReplacedProjectCopy is a project of the
+// test's own, for a test that writes into it.
 func bodyReplacedProject(t *testing.T) string {
 	t.Helper()
+	brShared.projectOnce.Do(func() {
+		brShared.project = filepath.Join(filepath.Dir(binary), "br-project")
+		writeBodyReplacedProject(t, brShared.project)
+	})
+	return filepath.Join(brShared.project, "app")
+}
+
+func bodyReplacedProjectCopy(t *testing.T) string {
+	t.Helper()
 	root := t.TempDir()
+	writeBodyReplacedProject(t, root)
+	return filepath.Join(root, "app")
+}
+
+// brShared holds what the tests of this file share in one run of the tests: the project, the rule files by their content (the same text is
+// the same path, so declared_in is the same too), and the result of an analysis by the project and the arguments.
+var brShared struct {
+	projectOnce sync.Once
+	project     string
+	mu          sync.Mutex
+	rules       map[string]string
+	runs        map[string]*brRun
+}
+
+type brRun struct {
+	once sync.Once
+	r    *brReport
+}
+
+func writeBodyReplacedProject(t *testing.T, root string) {
+	t.Helper()
 	app, third := filepath.Join(root, "app"), filepath.Join(root, "third")
 	write(t, filepath.Join(third, "go.mod"), "module example.com/third\n\ngo 1.21\n")
 	write(t, filepath.Join(third, "third.go"), `package third
@@ -67,7 +104,6 @@ func main() {
 	})
 }
 `)
-	return app
 }
 
 type brReport struct {
@@ -123,7 +159,29 @@ func (r *brReport) notes(kind string) []string {
 	return out
 }
 
+// brAnalyze runs `rivus analyze` over dir and decodes the report. The same dir and arguments give the result of the first run to every
+// caller (the reports are only read); a test whose point is a repeated run, or the run of a project that it writes into, uses brAnalyzeFresh.
 func brAnalyze(t *testing.T, dir string, args ...string) *brReport {
+	t.Helper()
+	key := dir + "\x00" + strings.Join(args, "\x00")
+	brShared.mu.Lock()
+	if brShared.runs == nil {
+		brShared.runs = map[string]*brRun{}
+	}
+	run := brShared.runs[key]
+	if run == nil {
+		run = &brRun{}
+		brShared.runs[key] = run
+	}
+	brShared.mu.Unlock()
+	run.once.Do(func() { run.r = brAnalyzeFresh(t, dir, args...) })
+	if run.r == nil { // the first caller failed the test (t.Fatalf in its goroutine)
+		t.Fatalf("the shared run of %v failed in another test", args)
+	}
+	return run.r
+}
+
+func brAnalyzeFresh(t *testing.T, dir string, args ...string) *brReport {
 	t.Helper()
 	out := runIn(t, binary, dir, nil, append([]string{"analyze"}, append(args, "./...")...)...)
 	var r brReport
@@ -134,10 +192,22 @@ func brAnalyze(t *testing.T, dir string, args ...string) *brReport {
 	return &r
 }
 
+// brRules writes a rule file; the same text is the same file (named by the hash of the text), so the runs that name it are the same run.
 func brRules(t *testing.T, dir, name, body string) string {
 	t.Helper()
-	p := filepath.Join(t.TempDir(), name)
+	sum := sha256.Sum256([]byte(body))
+	key := hex.EncodeToString(sum[:8])
+	brShared.mu.Lock()
+	defer brShared.mu.Unlock()
+	if brShared.rules == nil {
+		brShared.rules = map[string]string{}
+	}
+	if p, ok := brShared.rules[key+name]; ok {
+		return p
+	}
+	p := filepath.Join(filepath.Dir(binary), "br-rules", key, name)
 	write(t, p, body)
+	brShared.rules[key+name] = p
 	return p
 }
 
@@ -317,7 +387,7 @@ func TestBodyReplacedIsDeterministic(t *testing.T) {
 	a := brRules(t, app, "a.yaml", "ruleset: a@1\nbody_replaced_packages:\n  - {package: example.com/third/sub, reason: r1}\n  - {package: example.com/third/other, reason: r2}\n")
 	b := brRules(t, app, "b.yaml", "ruleset: b@1\nbody_replaced_packages:\n  - {package: example.com/third/other, reason: r2}\n  - {package: example.com/third/sub, reason: r1}\n")
 	sumOf := func(args ...string) string {
-		r := brAnalyze(t, app, args...)
+		r := brAnalyzeFresh(t, app, args...)
 		j, _ := json.Marshal(r.Summary.Replaced)
 		return string(j) + strings.Join(r.ids(), ",")
 	}
@@ -341,7 +411,7 @@ func TestBodyReplacedIsDeterministic(t *testing.T) {
 // A rule file of the project (<dir>/.rivus/rules) declares like any other.
 func TestBodyReplacedOfAProjectRuleFile(t *testing.T) {
 	t.Parallel()
-	app := bodyReplacedProject(t)
+	app := bodyReplacedProjectCopy(t)
 	write(t, filepath.Join(app, ".rivus", "rules", "third.yaml"), "ruleset: third@1"+brDeclare)
 	got := brAnalyze(t, app)
 	if len(got.Summary.Replaced) != 1 || !strings.HasSuffix(got.Summary.Replaced[0].DeclaredIn, filepath.Join(".rivus", "rules", "third.yaml")) {

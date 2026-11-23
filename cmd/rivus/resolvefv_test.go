@@ -464,35 +464,38 @@ func TestResolveFuncValuesDart(t *testing.T) {
 	}
 	zooDartRoot(t) // writes the pubspec.yaml of bench/zoo-dart/cells (generated, not committed)
 	for _, dir := range []string{"../../bench/zoo-dart/cells", "../../bench/dart-curated"} {
-		run := func(args ...string) []byte {
-			cmd := exec.Command(binary, append([]string{"analyze"}, args...)...)
-			cmd.Dir = dir
-			cmd.Env = append(os.Environ(), "RIVUS_DART_EXTRACTOR="+dart+" run "+extractor)
-			var out bytes.Buffer
-			cmd.Stdout = &out
-			if err := cmd.Run(); err != nil {
-				t.Fatalf("%s: %v", dir, err)
+		t.Run(filepath.Base(dir), func(t *testing.T) {
+			t.Parallel()
+			run := func(args ...string) []byte {
+				cmd := exec.Command(binary, append([]string{"analyze"}, args...)...)
+				cmd.Dir = dir
+				cmd.Env = append(os.Environ(), "RIVUS_DART_EXTRACTOR="+dart+" run "+extractor)
+				var out bytes.Buffer
+				cmd.Stdout = &out
+				if err := cmd.Run(); err != nil {
+					t.Fatalf("%s: %v", dir, err)
+				}
+				return out.Bytes()
 			}
-			return out.Bytes()
-		}
-		args := []string{"-rules", "rules.yaml", "./..."}
-		offRaw := run(args...)
-		table := filepath.Join(t.TempDir(), "fv.jsonl")
-		withTable := run(append([]string{"-func-values", table}, args...)...)
-		if !bytes.Equal(stable(t, offRaw), stable(t, withTable)) {
-			t.Errorf("%s: the output differs with -func-values", dir)
-		}
-		off := fvParse(t, offRaw)
-		on := fvParse(t, run(append([]string{"-resolve-func-values"}, args...)...))
-		fs := on.funcValues(t)
-		if fs == nil || fs.Violations != 0 || fs.Skipped {
-			t.Fatalf("%s: stats.func_values = %+v", dir, fs)
-		}
-		added, removed := fvDiff(t, dir, off, on)
-		t.Logf("%s: %+v; findings added %d, removed %d", filepath.Base(dir), *fs, len(added), len(removed))
-		if fs.Supplemented == 0 {
-			t.Errorf("%s: no call got candidates", dir)
-		}
+			args := []string{"-rules", "rules.yaml", "./..."}
+			offRaw := run(args...)
+			table := filepath.Join(t.TempDir(), "fv.jsonl")
+			withTable := run(append([]string{"-func-values", table}, args...)...)
+			if !bytes.Equal(stable(t, offRaw), stable(t, withTable)) {
+				t.Errorf("%s: the output differs with -func-values", dir)
+			}
+			off := fvParse(t, offRaw)
+			on := fvParse(t, run(append([]string{"-resolve-func-values"}, args...)...))
+			fs := on.funcValues(t)
+			if fs == nil || fs.Violations != 0 || fs.Skipped {
+				t.Fatalf("%s: stats.func_values = %+v", dir, fs)
+			}
+			added, removed := fvDiff(t, dir, off, on)
+			t.Logf("%s: %+v; findings added %d, removed %d", filepath.Base(dir), *fs, len(added), len(removed))
+			if fs.Supplemented == 0 {
+				t.Errorf("%s: no call got candidates", dir)
+			}
+		})
 	}
 }
 
