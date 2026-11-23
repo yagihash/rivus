@@ -25,7 +25,7 @@ class Judge(unittest.TestCase):
     def test_no_detection_is_not_a_failure(self):
         ok, body = d.judge(100, 180, 5, 8, True, None)
         self.assertTrue(ok)
-        self.assertTrue(body.endswith("detected=n/a"))
+        self.assertTrue(body.endswith("detected=n/a quiet_after_fix=n/a"))
 
     def test_missing_numbers_fail(self):
         self.assertFalse(d.judge(None, 180, 5, 8, True, True)[0])
@@ -33,17 +33,25 @@ class Judge(unittest.TestCase):
 
     def test_line(self):
         ok, body = d.judge(67, 180, 8.8, 8, False, False)
-        self.assertEqual(d.format_line("memos", True, ok, body), "FAIL memos time=67/180 mem=8.80/8 converged=no detected=no")
+        self.assertEqual(d.format_line("memos", True, ok, body), "FAIL memos time=67/180 mem=8.80/8 converged=no detected=no quiet_after_fix=n/a")
         self.assertTrue(d.format_line("dart_services", False, ok, body).startswith("INFO dart_services "))
 
 
 class Detection(unittest.TestCase):
-    def test_more_before_than_after(self):
-        self.assertTrue(d.detection(2, 0))
-        self.assertFalse(d.detection(0, 0))
-        self.assertFalse(d.detection(1, 1))
-        self.assertFalse(d.detection(None, 0))   # a run that did not converge
-        self.assertFalse(d.detection(3, None))
+    def test_detected_at_prefix_only(self):
+        self.assertTrue(d.detection(2))
+        self.assertFalse(d.detection(0))
+        self.assertFalse(d.detection(None))   # a run that did not converge
+
+    def test_quiet_after_fix(self):
+        self.assertTrue(d.quiet_after_fix(0))
+        self.assertFalse(d.quiet_after_fix(1))
+        self.assertFalse(d.quiet_after_fix(None))
+
+    def test_quiet_after_fix_is_not_part_of_pass(self):
+        self.assertTrue(d.judge(100, 180, 5, 8, True, True, None, False)[0])
+        self.assertTrue(d.judge(100, 180, 5, 8, True, True, None, True)[0])
+        self.assertTrue(d.judge(100, 180, 5, 8, True, True, None, False)[1].endswith("quiet_after_fix=no"))
 
     def test_count_category_counts_only(self):
         rep = {"findings": [{"category": "path_traversal"}, {"category": "xss"}, {"category": "path_traversal"}]}
@@ -107,8 +115,8 @@ class Through(unittest.TestCase):
     def test_line_has_both_numbers(self):
         ok, body = d.judge(100, 180, 5, 8, True, True, (4, 9))
         self.assertTrue(ok)
-        self.assertTrue(body.endswith("detected=yes through_tp=4/9"))
-        self.assertTrue(d.judge(100, 180, 5, 8, False, False, (None, 9))[1].endswith("detected=no through_tp=-/9"))
+        self.assertTrue(body.endswith("detected=yes quiet_after_fix=n/a through_tp=4/9"))
+        self.assertTrue(d.judge(100, 180, 5, 8, False, False, (None, 9))[1].endswith("detected=no quiet_after_fix=n/a through_tp=-/9"))
 
 
 class Targets(unittest.TestCase):
