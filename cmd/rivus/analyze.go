@@ -246,6 +246,9 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	phase("graph")
 	if o.verbose {
 		noteSpill(os.Stderr, l.disk)
+		for _, d := range l.moreDisks {
+			noteSpill(os.Stderr, d)
+		}
 	}
 	opts := taint.DefaultOptions()
 	opts.K = o.k
@@ -474,7 +477,11 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 // read loads the code (the Go packages, the IR of an extractor, or a stream of IR) and makes the IR of it.
 func (o *analyzeOpts) read(patterns []string, rules *model.Rules, phase func(string)) (*loaded, error) {
 	if o.irFile != "" {
-		l, err := readIR(o.irFile)
+		read := readIR
+		if o.irSpill {
+			read = readIRSpill
+		}
+		l, err := read(o.irFile)
 		if err != nil {
 			return nil, err
 		}

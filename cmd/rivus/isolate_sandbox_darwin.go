@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -94,6 +95,12 @@ func (o *isolationOpts) developerDirFromHost() (value, source string, err error)
 
 // extractRustSandboxed reads the project under the sandbox and returns the IR. It runs nothing on this machine outside the sandbox.
 func (o *isolationOpts) extractRustSandboxed(ctx context.Context, dir string, extractorArgs []string) ([]byte, error) {
+	return o.extractRustSandboxedTo(ctx, dir, extractorArgs, nil)
+}
+
+// extractRustSandboxedTo is extractRustSandboxed with the standard output of the extractor going to w as it is
+// written (nil: it is returned).
+func (o *isolationOpts) extractRustSandboxedTo(ctx context.Context, dir string, extractorArgs []string, w io.Writer) ([]byte, error) {
 	// whether the sandbox can be made is found out here, before any code of the project runs, by rivus itself (a program that does nothing, under the
 	// profile): never from what the project's own programs write to their standard error
 	if err := sandbox.Available(); err != nil {
@@ -217,6 +224,7 @@ func (o *isolationOpts) extractRustSandboxed(ctx context.Context, dir string, ex
 	s.ExecFiles = append(append(append([]string(nil), sandboxPrograms...), extractor), o.execExtra...)
 	s.Write = []string{work}
 	s.MaxOutput = o.maxOutput
+	s.Stdout = w
 	if s.MaxOutput <= 0 {
 		s.MaxOutput = 4 << 30
 	}

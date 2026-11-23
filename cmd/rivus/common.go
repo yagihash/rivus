@@ -271,6 +271,8 @@ type loaded struct {
 	// disk is src when it keeps the functions in a file (nil: it does not); the part of a program that has other
 	// languages too is in src, which then has them all
 	disk *irspill.DiskSource
+	// moreDisks are the files of the other languages of a program that has more than one (-verbose says what they did)
+	moreDisks []*irspill.DiskSource
 }
 
 // source is the Source of the functions of the program.
