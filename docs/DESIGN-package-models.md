@@ -1,6 +1,6 @@
 # パッケージ単位の「本体を読まない」宣言と、モデルを書く標準の流れ(設計案)
 
-状態: 案(2026-11-23。相談役の判断を反映済み)。段階 2(解析側。ADR-100)と段階 4(extractor に宣言を渡す。Go と Dart。ADR-105。7a 節)は実装済み。以下の 1〜6 節は、設計時の調査と試作の記録で、書き換えていない。測定は、Go の実際のプロジェクトでの利用から出た課題と、公開のベンチ(`bench/dart-gcp`、`bench/dart-grpc`)、AWS SDK for Go v2 の `service/s3` を数個呼ぶ小さい合成(リポジトリの外に作った。取得したコードは実行していない)で行った。
+状態: 案(2026-11-23。相談役の判断を反映済み)。段階 2(解析側。ADR-100)と段階 4(extractor に宣言を渡す。Go、Dart、Rust。ADR-105。7a 節)は実装済み。以下の 1〜6 節は、設計時の調査と試作の記録で、書き換えていない。測定は、Go の実際のプロジェクトでの利用から出た課題と、公開のベンチ(`bench/dart-gcp`、`bench/dart-grpc`)、AWS SDK for Go v2 の `service/s3` を数個呼ぶ小さい合成(リポジトリの外に作った。取得したコードは実行していない)で行った。
 
 目的(ユーザーの方針): モデルの拡充が、解析だけでなく、読み込み(extractor)の時間とメモリにも効くようにする。`-no-deps` なしの実行が実用的に動くことが目標。前に止めてあった `unread_packages` の案([DESIGN-deps-cost.md](DESIGN-deps-cost.md) 7 節)を、この目的に合わせて作り直す。条件の土台は ADR-092(依存を流れのモデルで切る)と ADR-098(実装の多いインターフェースのメソッド)。
 
@@ -727,7 +727,7 @@ adopt_rules:
 | 1 | 0 | 準備: 6.1 の共有のファイルの分割、zoo-dart の `pubspec.lock` をコミットしない、`cases.dart` の生成。(6.2 のゲートは #167 で済み) | 中(1〜2 PR。スクリプトとテストの読み込み) | モデルの PR が並べて出せる |
 | 2 | 2 | **(a) 宣言の書式と、解析側**(`-no-deps` のパッケージ版)。`unread_packages` をルールに足し(書いたパッケージだけに効く。配下は明示の書き方)、コアが、IR を読むとき、宣言のあるパッケージの関数を、本体のない関数として扱う。`summary` に一覧。フラグ(指定と無効化)。index の鍵。呼び返しの既定(関数の値や利用者の実装が渡されたのに `calls:` がないときは、呼ばれるものとして扱い、注記) | 中(`internal/model`、`internal/sg`、`internal/taint`、`cmd/rivus`。コア側だけ。言語を問わない) | 解析の時間とメモリ(Go の S3 合成: 12 GB → 0.6〜1.6 GB、打ち切り → 数秒)。読み込みの時間は減らない |
 | 3 | 1 | 差分テスト(`bench/model-diff`)。本体とモデルの flows を、公開の API ごとに比べる。sink の行は宣言と照合する。**状態: 実装済み(Go と Dart。Rust は隔離が要るので対象外)**。使い方は手順書 9 節。段階 3 の生成器とは別(コールバックを渡す形は、まだない) | 中〜大(実際: 約 1,500 行。生成器 2 つ、比較、テスト) | 宣言の条件(i) |
-| 4 | 4 | **(b) extractor に宣言を渡す**(Go と Dart は実装済み、7a 節)。Go(`Load` で `Syntax` / `TypesInfo` を捨てる、`skip` を拡張: 約 50 行)、Dart(`visit` が、宣言のあるパッケージをたどらない + `getResolvedUnit` を飛ばす: 約 30 行 + フラグ)、Rust(ドライバが、宣言のあるクレートの `extract` を飛ばす: 約 20 行) | 小〜中(言語ごと。試作で Go と Dart が動いた) | Dart の読み込み(試作の数字は `dart-gcp`: 50.6 → 22〜25 秒。実装の実測は 14.6 → 10.7 秒、7a 節)。Go の読み込み(約 3 秒)はほぼ変わらない。メモリ(extractor の 1〜1.7 GB)の減りは、測れていない |
+| 4 | 4 | **(b) extractor に宣言を渡す**(Go と Dart は実装済み、7a 節)。Go(`Load` で `Syntax` / `TypesInfo` を捨てる、`skip` を拡張: 約 50 行)、Dart(`visit` が、宣言のあるパッケージをたどらない + `getResolvedUnit` を飛ばす: 約 30 行 + フラグ)、Rust(ドライバが、宣言のあるクレートの `extract` を飛ばす: 約 20 行の見込みが、実装は約 75 行。名前のリンクと、綴りの正規化が要った。7a 節) | 小〜中(言語ごと。試作で Go と Dart が動いた) | Dart の読み込み(試作の数字は `dart-gcp`: 50.6 → 22〜25 秒。実装の実測は 14.6 → 10.7 秒、7a 節)。Go の読み込み(約 3 秒)はほぼ変わらない。メモリ(extractor の 1〜1.7 GB)の減りは、測れていない |
 | 5 | 3 | 生成器(型 → 粗いモデル)と差分テストを組にする。差分テストにコールバックを渡す形を入れる。Go、Dart、Rust の順 | 中(言語ごとに、4.2 の足場。Go が最小) | モデル作成の速さ。4.1 の(i)(ii) |
 | 6 | 5 | **(c) 到達性で推移的な依存を落とす**(Go: 宣言のあるパッケージを通らずに届かないパッケージ、Dart: import をたどらない) | 小(4 の中に含まれる。試作に入っている) | Go の S3 合成: 宣言のあるパッケージだけを落としたときより、IR が -62% → -88〜-91%、解析も 11.6 秒 → 0.1〜1.9 秒 |
 
@@ -735,12 +735,13 @@ adopt_rules:
 
 ## 7a. 段階 4(extractor に宣言を渡す)の状態と測定(ADR-105。2026-11-23)
 
-**実装済み: Go と Dart。Rust は未実装**(ドライバの `extract` を飛ばすだけの見込みで約 20 行。隔離と固定の nightly がないと動作も測定もできないので、CI で確認する)。`-read-declared-bodies` のときは、extractor に宣言を渡さない(本体を読む)。`-drop-after-read`(開発用)は、宣言のあるパッケージを extractor に読ませてから、IR のフィルタ(段階 2)で落とす(比較用)。
+**実装済み: Go、Dart、Rust**(Rust は 2026-11-23。下の表と、「Rust の測定」)。`-read-declared-bodies` のときは、extractor に宣言を渡さない(本体を読む)。`-drop-after-read`(開発用)は、宣言のあるパッケージを extractor に読ませてから、IR のフィルタ(段階 2)で落とす(比較用)。
 
 | 言語 | 規模 | 内容 |
 | --- | --- | --- |
 | Go | `gossa/load.go` 約 40 行、`cmd/rivus/common.go` 約 25 行 | `packages.Load` のあと、`go/ssa` の前に、宣言のある依存(標準ライブラリとプロジェクトは除く)の `Syntax` と `TypesInfo` を捨てる(`Options.ReplacedPackage`)。型ごとに作られるラッパーと `init` など、本体のある関数が残るので、`ReplacedFunc`(`taint.UnitOf` が宣言のある単位)で IR に出さない |
 | Dart | `extract.dart` 約 85 行、フラグと `body_not_read` | `--body-replaced package:<名前>`。そのパッケージのファイルは、`getResolvedUnit` も、下ろしもしない。**クラスの階層、動的呼び出しの候補、本体のある演算子、コンストラクタは、ライブラリの要素から作る**(`_Index.library`)。ファイルを解決しないと、これらがなくなり、呼び出しの注記(`unmodeled_library_call` と動的呼び出しの候補なし)が、フィルタの IR と変わった(最初の実装で、`dart-gcp` の 注記 196 → 105)。要素から分からないこと(引数のないコンストラクタの本体と初期化子に仕事があるか)は、ないものとして扱う |
+| Rust | `extractor/rust/src/main.rs` 約 40 行、`cmd/rivus/lang.go` 約 20 行、`internal/model/bodyreplaced.go` 約 15 行 | `--body-replaced <クレート名>`(繰り返し可。`rivus analyze` が宣言を渡す。`rivus debug extract -lang rust -body-replaced` でも渡せる)。ドライバは、依存のクレート(ワークスペースの構成員でないもの)で、名前が宣言にあるものは、`extract` の最初で、本体を 1 つも下ろさず、`body_not_read`(`unit` と、本体のある項目の数)だけを書く。**`cargo check` は、そのクレートも今までどおりコンパイルする**(rustc は、依存を省かない)。省けるのは、MIR を IR に下ろすことと、IR の書き出し、読み込み、解析。**宣言を渡す経路は環境変数 `RIVUS_BODY_REPLACED`**(cargo の実行を通してドライバに届く)。トレイト経由の呼び出しの候補と、他のクレートの値の `drop` は、`merge` が全クレートの impl に結びつける(`link_across_crates`)ので、**読まないクレートの関数の名前だけを `body_not_read` の `names` で `merge` に渡す**(`merge` が結びつけに使い、書き出す前に消す)。これを渡さないと、フィルタ(`-drop-after-read`)のときと、`drop` の呼び出しの注記が変わった(最初の実装で、`unmodeled_library_call` の注記が 1 つ少なかった)。同じクレートが 2 回ビルドされる(feature や対象が違う)ことがあるので、`body_not_read` は、`merge` が、クレートごとに 1 つにまとめる(関数の名前の数) |
 | 共通 | IR に `body_not_read`(`unit`、`functions`)、`dropReplacedBodies` のあとの `PruneDeps` | 読まなかった関数の数を、`summary.body_replaced_packages[].functions_declared` に出す(`functions` は、読んで落とした数のままで、extractor が読まなかったパッケージには出ない)。落とした関数だけが届いていたもの(ジェネリクスのインスタンス、ラッパー、そこだけが import するパッケージ)を、フィルタの側でも落とす(これで、`stats.functions` が、extractor の段階と同じになる) |
 
 **finding の同一性**(`-drop-after-read` との比較。`TestBodyReplacedInTheExtractorIsTheSameAsTheFilter`、`TestBodyReplacedGenericsInTheExtractor`、`TestBodyReplacedOfADartPackage`、`TestDartExtractorBodyReplaced`): 合成の Go(ジェネリクスと型のラッパーを含む)と Dart、公開のベンチ(下)で、**finding の ID の集合、`stats.functions`、`summary` の注記と数(`dispatch_candidates`、`program`、`top_symbols` など)が同じ。違うのは、`body_replaced_packages` の項目だけ**: フィルタは `functions`(読んで落とした関数の数)、extractor の段階は `functions_declared`(読まなかったパッケージが宣言している関数の数。`functions` は出さない)(数の意味を、項目の名前で分けた。Go: 宣言のある関数とメソッド。Dart: 最上位の関数、メソッド、コンストラクタ、アクセサ。到達の数ではない)。
@@ -763,13 +764,31 @@ adopt_rules:
 - **Go の効果は、読み込みの 3 秒がほぼ半分以下**(段階 2 → 4 で 2.0 → 0.76 秒、RSS 1.25 → 0.57 GB。段階 2 の側の負荷が高かったので、差は大きめに出ている)。型検査(`NeedDeps`)は残り、SSA の本体と IR の下ろしが省かれる。
 - **PruneDeps(到達性で、読まないパッケージだけが使う依存を落とす)は、Dart の extractor には入れなかった。** `visit` が、宣言のあるパッケージの `import` をたどらない版(`export` はたどる)を試した: finding の ID の集合は同じ(`dart-gcp` 19、`dart-grpc` 3)だが、`stats.functions` が変わる(2,766 → 2,671、1,143 → 1,034)。注記(`dispatch_candidates` の候補なし 9 → 15 など)も変わる。プロジェクトのコードが、宣言のあるパッケージのクラスを通して、そのクラスが継承する別パッケージのメソッドを呼ぶと、その本体を読まなくなるため(本体を読んだ実行と、結果が変わりうる)。時間の減りも、測定の誤差の中だった(12.0 秒、9.1 秒)。同一の約束を守るために入れず、判断を相談役に渡す。ただし、**落とした後の `PruneDeps` は入れた**(フィルタの側。読み込みは変わらない。落とした関数だけが届いていたものを落とすだけで、プロジェクトが届くものは落ちない。Go と Dart の `stats.functions` が、段階 2 と 4 で同じになるために要る)。
 
+**Rust のクレート名の綴り**(ADR-105 の続き。2026-11-23): Cargo.lock とモデルの `package` は `actix-web`、rustc と IR の単位は `actix_web`(`-` と `_` は、Cargo では同じクレートの名前)。**どちらの綴りで宣言しても、同じクレートに当たる**: `Declaration.Covers` と `Rules.ReplacedBody` は、区切り(`/`、`.`、`:`)のない名前(Rust のクレートと、Go の標準ライブラリ。後者には `-` も `_` もない)に限って、`-` と `_` を同じとして比べる(`model.SameCrate`、ADR の検証済みバージョンの照合と同じ)。Go の import path(`example.com/a-b` と `example.com/a_b` は別のパッケージ)と Dart の `package:` は、今までどおり文字どおりに比べる。Rust の単位は、`UnitOf` が `::` の前の最初の区切りまでを返すので(`actix_web::web::Query::get` は `actix_web`)、`::` で区切られた単位の扱いは、変更が要らなかった。`/...`(配下)は、Rust には意味がないので、extractor には、`/...` を外して渡す。
+
+**Rust の finding の同一性**(`TestBodyReplacedOfARustCrateIsTheSameAsTheFilter`): 宣言を extractor に渡した実行と、`-drop-after-read` の実行で、レポート全体(finding、不確かさ、`summary` の `body_replaced_packages` 以外、`stats.functions`)が同じ。固定の入力は、`extractor/rust/test/sample` と、その依存 `dep`(名前を `dep-crate` に変えたコピー。`-` を含む名前の経路を通すため)。綴りの違う 2 つの宣言(`dep-crate` と `dep_crate`)と、`-read-declared-bodies`(宣言なしの実行と同じ)も同じテストで確認する。**この確認は extractor が要る**: `RIVUS_RUST` がなければスキップし、`RIVUS_REQUIRE_RUST=1` で失敗する(CI の `rust` ジョブ。macOS では、サンドボックスの下で動き、他の OS では、リポジトリの中の入力なので、`-unsafe-host-exec` で動く)。**違うのは次の 2 つ**: (i) `body_replaced_packages` の項目(`functions` と `functions_declared`)。(ii) 読まなかったクレートの中の、「2 つのクレートに同じ名前の関数がある」の読み込みの注記(`load_errors` と `missing_source` の不確かさ)と、`fn_skipped`(`summary.functions_skipped`): 読まないクレートは、関数ごとの `catch_unwind` に届かないので、その数が減り、同じ名前の関数も、宣言のあるクレートの中の分だけ減る(下の測定で、5,097 → 4,998)。フィルタの実行は、読んで、落としているので、これらの注記が残る。finding と、`summary.program` などの数は、同じ。
+
+**Rust の測定**(2026-11-23。`actix-web` 4 だけに依存する小さいプロジェクト(`/run?cmd=` の値を `Command` に渡す。リポジトリの外に作った。`cargo generate-lockfile` で 155 クレート)。macOS のサンドボックスの下の `rivus analyze -lang rust`。extractor はこの変更のもの。load average は 14〜20(他の作業と同時なので、時間は ±3 秒のぶれ)。宣言は、A: `actix-*` の 8 クレート(`-body-replaced`)。B: A と `tokio`、`tokio-util`、`h2`、`regex`、`regex-automata`、`regex-syntax`、`serde`、`serde_json`、`bytes`、`futures-util`、`mio` の計 19 クレート。単位: 秒、GB):
+
+| 実行 | 読み込み(extractor + IR) | 解析 | 最大 RSS | IR の大きさ(`debug extract -all`) | IR の関数 | finding |
+| --- | --- | --- | --- | --- | --- | --- |
+| 宣言なし(3 回) | 22.8 / 23.8 / 25.7 | 0.003 以下 | 3.74 | 653 MB | 58,540 | 1 |
+| A: フィルタ(段階 2) | 22.7 / 24.5 | 0.003 以下 | 3.74 | (同じ) | 58,540 | 同じ 1 |
+| A: **段階 4** | **21.7 / 22.0** | 0.003 以下 | 3.74 | **596 MB(-9%)** | **53,657** | 同じ 1 |
+| B: フィルタ | 21.6 / 23.4 / 27.5 | 0.003 以下 | 3.73 | (同じ) | 約 58,540 | 同じ 1 |
+| B: **段階 4** | **18.3 / 21.8 / 23.0** | 0.003 以下 | 3.74 | **462 MB(-29%)** | **37,950** | 同じ 1 |
+
+- **予想どおり、extractor の時間と最大メモリは減らない。** `cargo check` は、宣言のあるクレートも含めて、全部コンパイルする(最大 RSS 3.7 GB は、rustc が依存をコンパイルするときの値。宣言のあるなしで変わらない)。読み込みの時間の差は、ぶれの範囲(A では 1〜2 秒、B で 3〜5 秒短い側に出たが、負荷の違う実行の間の差と区別がつかない。両方の実行の組を、同じ負荷で繰り返していない)。**減るのは、IR の大きさ(宣言するクレートの数と大きさによる。A で 9%、B で 29%)と、IR の読み込みと、それ以降(解析の入力)**。この小さいプロジェクトは、依存の関数を数個しか呼ばないので(`stats.functions` は 11。到達性で落ちたあと)、解析の時間は 3 ミリ秒以下で、解析の側の効果は測れなかった(Go の S3 の合成のように、依存の関数が多く届くプロジェクトで出る)。
+- **したがって、Rust の段階 4 は、時間とメモリを減らす手段ではなく、IR を小さくし(ひいては、解析に届く依存の本体を宣言のとおりにする)、宣言の意味を、extractor と解析で同じにするためのもの。** Rust の `cargo check` に宣言を渡して、コンパイルそのものを省く方法はない(依存のクレートは、型のために、コンパイルされる)。コスト(時間、メモリ)を理由に依存を切る(ADR-092)Rust の場合の効果は、ここでは確認できていない。
+- 同じクレートが、2 回ビルドされる(例: `actix-router` で、関数の名前の数が 357 と 376。feature か対象が違う)ので、`functions_declared` は、クレートごとに、名前の重なりを除いた数(`actix_router` で 375)。到達の数でも、`functions`(読んで落とした数)と同じ数でもない。
+
 ## 8. 決めたことと、残る判断
 
 決めたこと(相談役の判断): 宣言は、書いたパッケージだけに効く(暗黙の接頭辞一致はしない。配下は明示の書き方)。`bench/go-s3` を入れる(定期の層だけ)。`*.gen.yaml` はコミットする。呼び返しの検出は 2 と 3 の両方。組み込みの量の上限の目安は 4.4 のとおり。段階の順は 7 節のとおり。zoo のゲートは #167 で直った。手順書は `docs/MODEL-RUNBOOK.md`。
 
 残る判断と未確認:
 - 試作の Dart は、`visit` が、宣言のあるパッケージのライブラリで止まるので、別のパッケージ経由でしか届かない依存が落ちる。到達性としては正しい。宣言のあるパッケージの型を、プロジェクトの型の解決に使う場合は、analyzer が、読まなくても解決できる(要素モデルを作る)ことを、finding が同じこと(`dart-gcp` 19、`dart-grpc` 3)で確認した。解決が失敗するケースは、段階 4 のテストで確認した(7a 節。ファイルを解決しないと、クラスの階層と候補が要素から作る必要があった)。
-- Rust の測定は、していない(サンドボックスと固定の nightly が要る)。
+- Rust の測定は、`actix-web` だけの小さいプロジェクトで 1 回した(7a 節)。依存の関数が多く届くプロジェクトでの、解析の側の効果は、測れていない。
 - 4 節の報告された数字は、rivus の側では未確認(段階 3 の生成器と差分テストで確認する)。
 
 ## 9. 再現

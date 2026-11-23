@@ -347,15 +347,10 @@ func (o *analyzeOpts) extractRaw(lang string) ([]byte, error) {
 		}
 	}
 	if lang == langDart {
-		// the code of these packages is not read: the models stand for it (Rust: the extractor reads it all, and the
-		// filter of the core leaves it out)
-		seen := map[string]bool{}
-		for _, d := range o.extractorBodyReplaced {
-			if !seen[d] {
-				seen[d] = true
-				args = append(args, "--body-replaced", d)
-			}
-		}
+		args = append(args, o.bodyReplacedArgs(langDart)...)
+	}
+	if lang == langRust {
+		args = append(args, o.bodyReplacedArgs(langRust)...)
 	}
 	if (lang == langRust || lang == langDart) && o.tests {
 		args = append(args, "--include-tests")
@@ -408,8 +403,27 @@ func (o *analyzeOpts) rawRustIsolated() ([]byte, error) {
 	if o.tests {
 		args = append(args, "--include-tests")
 	}
+	args = append(args, o.bodyReplacedArgs(langRust)...)
 	args = append(args, dir)
 	return iso.extractRustSandboxed(context.Background(), dir, args)
+}
+
+// bodyReplacedArgs are the flags that tell the extractor of the language which packages it does not read: the models
+// stand for them. Go has no flag (the loader of the core is told); a Rust crate is named by the name of the crate (without a
+// /... ending, which names the subpackages of a Go package and means nothing here).
+func (o *analyzeOpts) bodyReplacedArgs(lang string) []string {
+	var args []string
+	seen := map[string]bool{}
+	for _, d := range o.extractorBodyReplaced {
+		if lang == langRust {
+			d = strings.TrimSuffix(d, model.Subpackages)
+		}
+		if !seen[d] {
+			seen[d] = true
+			args = append(args, "--body-replaced", d)
+		}
+	}
+	return args
 }
 
 func (o *analyzeOpts) isolation() *isolationOpts {
