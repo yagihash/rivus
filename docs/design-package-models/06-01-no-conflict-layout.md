@@ -2,7 +2,7 @@
 
 1 パッケージ = 1 つのモデルのファイル + 専用の zoo のセルのディレクトリ + 専用の期待値。モデルの PR が、共有のファイルをさわらずに済む形にする。
 
-**今の conflict の実例**(`git show` で確認): #160 のブランチに、main(#161)を取り込んだマージ(`38b8cdc`)で、`docs/ISSUES.md` が、両側の変更で衝突した。続けて、#160 の取り込み(`6afd10a`)で `docs/DECISIONS.md`(ADR の番号が両側で 098 を取った)。#162 のブランチに main(#160)を取り込んだマージ(`7c12a31`)では、`bench/parity/dead-allow.txt`、`bench/zoo-dart/cells/pubspec.lock`、`bench/zoo-dart/cells/pubspec.yaml`、`bench/zoo-dart/exec/lib/cases.dart`、`bench/zoo-dart/exec/pubspec.lock`、`bench/zoo/marks.lock`、`docs/DESIGN-deps-cost.md`、`docs/ISSUES.md`、`docs/AGENT-GUIDE.md` などが、両側で変わっていた。
+**今の conflict の実例**(`git show` で確認): #160 のブランチに、main(#161)を取り込んだマージ(`38b8cdc`)で、`docs/ISSUES.md` が、両側の変更でコンフリクトした。続けて、#160 の取り込み(`6afd10a`)で `docs/DECISIONS.md`(ADR の番号が両側で 098 を取った)。#162 のブランチに main(#160)を取り込んだマージ(`7c12a31`)では、`bench/parity/dead-allow.txt`、`bench/zoo-dart/cells/pubspec.lock`、`bench/zoo-dart/cells/pubspec.yaml`、`bench/zoo-dart/exec/lib/cases.dart`、`bench/zoo-dart/exec/pubspec.lock`、`bench/zoo/marks.lock`、`docs/DESIGN-deps-cost.md`、`docs/ISSUES.md`、`docs/AGENT-GUIDE.md` などが、両側で変わっていた。
 
 | 共有のファイル | なぜ共有か | 分ける案 | 規模 |
 | --- | --- | --- | --- |

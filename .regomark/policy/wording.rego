@@ -71,3 +71,34 @@ deny contains {"rule": "WORD001", "path": doc.path, "line": block.line, "message
 	count(found) > 0
 	msg := sprintf("「%s」は使わない → %s", [object.get(term, "word", found[0]), term.use])
 }
+
+# git のマージで、同じ場所を変えた状態は、「衝突」ではなく「コンフリクト」と言う。
+# 見るのは、同じ文（「。」と改行で区切る）の中。次のどちらかのとき、指摘する:
+#   - マージ、取り込み、main、ブランチ、PR、リベース、プッシュの語と、「衝突」が、同じ文にある
+#   - 「衝突を解消」「衝突を解決」がある
+# 名前や値のぶつかり（「名前の衝突」「番号が衝突する」「ハッシュの衝突」「フラグが衝突する」「ID / キーの衝突」）は、普通の日本語なので使ってよい。
+# 文の中に、そのぶつかりの形があれば、指摘しない（同じ文にマージの語があっても）。
+merge_context := `マージ|取り込|ブランチ|リベース|プッシュ|(^|[^A-Za-z])(main|PR|push|rebase|merge)($|[^A-Za-z])`
+
+value_collision := `(名前|ハッシュ|番号|フラグ|ID|キー|シンボル)(が|の|同士で?|を)衝突`
+
+deny contains {"rule": "WORD001", "path": doc.path, "line": block.line, "message": "git のマージの「衝突」は使わない → コンフリクト（名前や値のぶつかり、「名前の衝突」「番号が衝突する」は使ってよい）"} if {
+	some doc in input.documents
+	some block in doc.blocks
+	block.kind in checked_kinds
+	prose := regex.replace(block.text, "`[^`]*`", "")
+	some sentence in regex.split(`[。！？\n]`, prose)
+	contains(sentence, "衝突")
+	not regex.match(value_collision, sentence)
+	regex.match(merge_context, sentence)
+}
+
+deny contains {"rule": "WORD001", "path": doc.path, "line": block.line, "message": "「衝突を解消 / 解決」は使わない → コンフリクトを解消する（git のマージの意味のとき）"} if {
+	some doc in input.documents
+	some block in doc.blocks
+	block.kind in checked_kinds
+	prose := regex.replace(block.text, "`[^`]*`", "")
+	some sentence in regex.split(`[。！？\n]`, prose)
+	regex.match(`衝突(を|は)?(解消|解決)`, sentence)
+	not regex.match(value_collision, sentence)
+}

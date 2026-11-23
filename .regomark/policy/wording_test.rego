@@ -83,3 +83,34 @@ test_violation_has_the_line_and_the_replacement if {
 	v.line == 3
 	contains(v.message, "zoo")
 }
+
+test_merge_conflict_wording_is_denied if {
+	every text in [
+		"main と衝突した", "衝突を解消する", "ブランチの衝突を解決した", "マージで衝突する", "PR が衝突している", "リベースの衝突", "取り込みで衝突した", "push の衝突を直す",
+	] {
+		denied("paragraph", text)
+	}
+}
+
+test_merge_conflict_message_names_the_replacement if {
+	some v in wording.deny with input as doc("paragraph", "main と衝突した")
+	contains(v.message, "コンフリクト")
+}
+
+test_name_and_value_collisions_pass if {
+	every text in [
+		"名前の衝突", "ADR の番号が衝突する", "ハッシュの衝突", "フラグが衝突する", "クロージャの名前が衝突する", "キーの衝突を避ける",
+		"main の関数の名前の衝突を調べる", "コンフリクトを解消する", "main とコンフリクトした", "名前の衝突を解決する",
+	] {
+		not denied("paragraph", text)
+	}
+}
+
+test_merge_conflict_in_code_is_not_checked if {
+	not denied("code", "main と衝突した")
+	not denied("paragraph", "`衝突を解消` の行")
+}
+
+test_a_sentence_without_conflict_word_passes if {
+	not denied("paragraph", "main にマージした。名前が重なる")
+}
