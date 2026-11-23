@@ -56,7 +56,7 @@
 | [DESIGN-callback-sources.md](DESIGN-callback-sources.md) | 案 | 引数として渡された関数の、N 番目以降の引数を source にする書式(shelf_router のハンドラの追加の引数から。#149) |
 | [DESIGN-shared-state.md](DESIGN-shared-state.md) | 一部実装 | グローバルと共有される場所(グローバルの正本) |
 | [DESIGN-capture.md](DESIGN-capture.md) | 一部実装 | クロージャのキャプチャの値 |
-| [DESIGN-package-models.md](DESIGN-package-models.md) | 案 | パッケージ単位の「本体を読まない」宣言(extractor の段階から)と、モデルを書く標準の流れ(生成、差分テスト、宣言)、モデル作成のセッションを並べる準備 |
+| [DESIGN-package-models.md](DESIGN-package-models.md) | 案 | パッケージ単位の「本体を読まない」宣言(extractor の段階から)と、モデルを書く標準の流れ(生成、差分テスト、宣言)、モデル作成のセッションを並べる準備。本文は節ごとのファイル(`design-package-models/`)。設計メモは節のファイルに足し、新しい節は新しいファイルと一覧に 1 行 |
 | [MODEL-RUNBOOK.md](MODEL-RUNBOOK.md) | 手順書 | 1 パッケージ分の組み込みモデルを作る手順(モデル作成のセッション向け) |
 | [MODEL-QUEUE.md](MODEL-QUEUE.md) | 一覧(決定) | 組み込みモデルを作る順番(3 言語をまたぐ 1 本)と、公開の指標、カバー済みの表 |
 | [DESIGN-field-sinks.md](DESIGN-field-sinks.md) | 一部実装 | 構造体のフィールドを sink にする(`parts`) |

@@ -164,7 +164,7 @@
 - **3 言語のテストを CI で走らせる。** 環境変数がないときに、何も報告せずに Skip しない
 - **解析の対象は、攻撃者が制御しうる入力。** 対象のコードやデータが rivus に何をさせうるかを考える。セキュリティの制御を外す設定は、外したことが分かる形にする
 - **リポジトリは公開。** 直していない脆弱性の詳細（再現の手順など）を、課題の一覧（`docs/issues/`）、コミットメッセージ、リポジトリの中の文書に書かない。直してから記録する
-- **ドキュメントとコードを合わせる。** 変更したら、関係する文書を直す。とくに、`docs/PRINCIPLES.md` の「現状と、まだ届いていない所」、`docs/ARCHITECTURE.md`、`docs/adr/`（ADR を足したときは、ファイルを足すだけ。`DECISIONS.md` と `ADR-INDEX.md` は触らない）、`docs/DESIGN-*.md` の「状態」、`docs/ROADMAP.md`。ADR の本文は書き換えず、訂正や追記の節で足す（覆したときは、古い ADR の `状態` の行だけ直す）
+- **ドキュメントとコードを合わせる。** 変更したら、関係する文書を直す。とくに、`docs/PRINCIPLES.md` の「現状と、まだ届いていない所」、`docs/ARCHITECTURE.md`、`docs/adr/`（ADR を足したときは、ファイルを足すだけ。`DECISIONS.md` と `ADR-INDEX.md` は触らない）、`docs/DESIGN-*.md` の「状態」(`DESIGN-package-models.md` は一覧だけ。設計メモは `docs/design-package-models/` の節のファイルに足す。新しい節は、新しいファイルと一覧に 1 行)、`docs/ROADMAP.md`。ADR の本文は書き換えず、訂正や追記の節で足す（覆したときは、古い ADR の `状態` の行だけ直す）
 - **1 つの指摘・1 つのまとまった変更ごとにコミット**し、メッセージに課題の番号やレビューの ID を入れる
 - **push の前は `make check`(約 1 分: ビルド、gofmt、go vet、`go test -short`)。** 全部の確認は CI の仕事(PR は `-short`、main は全部。rivus が自分を解析する `TestDogfood` は、週 1 回の schedule の実行で、前回から差分があるときだけ: ADR-112。手元では `RIVUS_DOGFOOD=1 go test ./cmd/rivus -run TestDogfood -count=1`)。手元で全部を見たいときは `make test`(Dart と Rust の extractor つき。数分)。`make` だけで一覧が出る
 - **PR は `/pr` スキルで立てる。マージはマージコミット(squash しない)。必須のチェックは `ci-ok`。** PR の CI は `-short` で、重いテスト(決定性、規模、モデルの行)は main への push、週 1 回、tagpr のリリース PR だけで走る。**main の全部の実行が失敗したら、次の作業より先に、修正するか、原因の PR を戻す**(PR で見ていない分を、main で検出する)
