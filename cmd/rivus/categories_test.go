@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -173,5 +175,72 @@ func TestIndexHasNoCategoryFlags(t *testing.T) {
 	cmd.Dir = testutil.Testdata()
 	if err := cmd.Run(); err == nil {
 		t.Fatal("index must not take -categories")
+	}
+}
+
+// rawFindings are the findings of an output, each as the bytes of its JSON object, in order.
+func rawFindings(t *testing.T, out []byte) []json.RawMessage {
+	t.Helper()
+	var v struct {
+		Findings []json.RawMessage `json:"findings"`
+	}
+	if err := json.Unmarshal(out, &v); err != nil {
+		t.Fatal(err)
+	}
+	return v.Findings
+}
+
+// expectedByCategory is the list of all the findings cut as the flags say: with include, the findings that have one of the
+// categories; without it, those that have one that is not in skip (a finding with several categories stays when one stays).
+func expectedByCategory(t *testing.T, all []json.RawMessage, include, skip []string) []json.RawMessage {
+	t.Helper()
+	var out []json.RawMessage
+	for _, raw := range all {
+		var f struct {
+			Category   string   `json:"category"`
+			Categories []string `json:"categories"`
+		}
+		if err := json.Unmarshal(raw, &f); err != nil {
+			t.Fatal(err)
+		}
+		cats := f.Categories
+		if len(cats) == 0 {
+			cats = []string{f.Category}
+		}
+		keep := false
+		for _, c := range cats {
+			if len(include) > 0 && slices.Contains(include, c) || len(include) == 0 && !slices.Contains(skip, c) {
+				keep = true
+			}
+		}
+		if keep {
+			out = append(out, raw)
+		}
+	}
+	return out
+}
+
+// The findings of a run with a flag are the findings of the run without it, minus those that the flag leaves out: the same
+// objects in the same order (a count alone would pass with another finding in the place of one).
+func TestAnalyzeCategoryFilterIsExactSubset(t *testing.T) {
+	rules := catRulesFile(t)
+	all := rawFindings(t, rivus(t, "analyze", "-rules", rules, "./cases/intra"))
+	for _, c := range []struct {
+		flag, value   string
+		include, skip []string
+	}{
+		{"-skip-categories", "alpha", nil, []string{"alpha"}},
+		{"-skip-categories", "beta,gamma", nil, []string{"beta", "gamma"}},
+		{"-categories", "beta", []string{"beta"}, nil},
+		{"-categories", "alpha,gamma", []string{"alpha", "gamma"}, nil},
+	} {
+		want := expectedByCategory(t, all, c.include, c.skip)
+		if len(want) == 0 || len(want) == len(all) {
+			t.Fatalf("%s %s: the case must drop some and keep some (%d of %d)", c.flag, c.value, len(want), len(all))
+		}
+		got := rawFindings(t, rivus(t, "analyze", "-rules", rules, c.flag, c.value, "./cases/intra"))
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("%s %s: %d findings, want the %d of the full run, as they are", c.flag, c.value, len(got), len(want))
+		}
 	}
 }
