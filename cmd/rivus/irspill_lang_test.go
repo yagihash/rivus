@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -89,6 +90,16 @@ func TestIRSpillDartSameResult(t *testing.T) {
 
 // irspillRustSample copies the sample crate into a temporary directory, with the crate it depends on inside it: the
 // sandbox reads the project and nothing beside it.
+// irspillRustArgs are the flags that read the sample with the Rust extractor: without a sandbox (not macOS), the code of
+// the sample, which is the repository's own, runs on this machine.
+func irspillRustArgs(bin, sample string) []string {
+	args := []string{"-lang", "rust", "-rust-extractor", bin, "-yes", "-rules", filepath.Join(sample, "rules.yaml")}
+	if runtime.GOOS != "darwin" {
+		args = append(args, "-unsafe-host-exec")
+	}
+	return args
+}
+
 func irspillRustSample(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
@@ -136,7 +147,7 @@ func TestIRSpillRustSameResult(t *testing.T) {
 		t.Fatal(err)
 	}
 	sample := irspillRustSample(t)
-	irspillSameResult(t, sample, "-lang", "rust", "-rust-extractor", bin, "-rules", filepath.Join(sample, "rules.yaml"))
+	irspillSameResult(t, sample, irspillRustArgs(bin, sample)...)
 }
 
 // A function of the IR of Dart or of Rust that cannot be read from the file stops the run with exit code 1, as the
@@ -160,7 +171,7 @@ func TestIRSpillReadFailureRust(t *testing.T) {
 	}
 	bin, _ = filepath.Abs(bin)
 	sample := irspillRustSample(t)
-	irspillReadFailure(t, sample, nil, "-lang", "rust", "-rust-extractor", bin, "-rules", filepath.Join(sample, "rules.yaml"))
+	irspillReadFailure(t, sample, nil, irspillRustArgs(bin, sample)...)
 }
 
 func irspillReadFailure(t *testing.T, dir string, env []string, args ...string) {
