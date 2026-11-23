@@ -3,7 +3,10 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"go/ast"
 	"go/format"
+	"go/parser"
+	"go/token"
 	"go/types"
 	"io"
 	"os"
@@ -84,11 +87,18 @@ func runGenSkeleton(out io.Writer, o *options, repo string, facts *Facts, l *loa
 	}
 	gv := zooGoVersion(repo)
 	if !std {
-		res, err := GenerateSkeleton(&skelInput{Root: l.Types, Module: l.Module, Version: l.Version, ModOf: l.ModOf, Facts: facts})
+		skel := filepath.Join(place.Dir, "skel")
+		res, err := GenerateSkeleton(&skelInput{Root: l.Types, Module: l.Module, Version: l.Version, ModOf: l.ModOf, Facts: facts,
+			UsedNames: usedNames(place.Dir)})
 		if err != nil {
 			return &exitError{ExitSkeleton, err}
 		}
-		skel := filepath.Join(place.Dir, "skel")
+		if len(res.RowsMissing) > 0 {
+			for _, r := range res.RowsMissing {
+				fmt.Fprintf(out, "  row without a place in the skeleton: %s\n", r)
+			}
+			return &exitError{ExitSkeleton, fmt.Errorf("%d row(s) of the model point at something that the skeleton cannot have (a type of another module, or a name that the package does not have): nothing was written", len(res.RowsMissing))}
+		}
 		if err := writeSkeleton(skel, res.Files); err != nil {
 			return &exitError{ExitSkeleton, err}
 		}
@@ -113,8 +123,8 @@ func runGenSkeleton(out io.Writer, o *options, repo string, facts *Facts, l *loa
 			}
 			fmt.Fprintf(out, "  left out (a type of another module is needed): %d: %s\n", len(res.Omitted), f)
 		}
-		for _, r := range res.RowsNotReproduced {
-			fmt.Fprintf(out, "  row not reproduced in the skeleton: %s\n", r)
+		for _, w := range res.Warnings {
+			fmt.Fprintf(out, "  warning: %s (docs/issues/164-skeleton-slice-receiver.md)\n", w)
 		}
 		if err := buildDir(skel); err != nil {
 			return &exitError{ExitSkeleton, fmt.Errorf("the skeleton does not build: %v", err)}
@@ -165,6 +175,39 @@ func buildDir(dir string) error {
 		return fmt.Errorf("%v\n%s", err, b)
 	}
 	return nil
+}
+
+// usedNames are the identifiers of the cells of the package and of the files of skel/ that the generator does not write: what they
+// use is generated besides what the rows point at.
+func usedNames(dir string) map[string]bool {
+	names := map[string]bool{}
+	fset := token.NewFileSet()
+	_ = filepath.Walk(dir, func(p string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() || !strings.HasSuffix(p, ".go") {
+			return nil
+		}
+		rel, _ := filepath.Rel(dir, p)
+		inSkel := strings.HasPrefix(rel, "skel"+string(filepath.Separator))
+		if !inSkel && !strings.HasPrefix(rel, "cells"+string(filepath.Separator)) {
+			return nil
+		}
+		b, rerr := os.ReadFile(p)
+		if rerr != nil || (inSkel && hasGenHeader(b)) {
+			return nil
+		}
+		f, perr := parser.ParseFile(fset, p, b, 0)
+		if perr != nil {
+			return nil
+		}
+		ast.Inspect(f, func(n ast.Node) bool {
+			if id, ok := n.(*ast.Ident); ok && id.IsExported() {
+				names[id.Name] = true
+			}
+			return true
+		})
+		return nil
+	})
+	return names
 }
 
 func hasGenHeader(b []byte) bool {

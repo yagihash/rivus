@@ -49,8 +49,11 @@ type skelResult struct {
 	Files []skelFile
 	// Omitted are the members and types that were left out, with the reason (sorted).
 	Omitted []string
-	// RowsNotReproduced are the rows of the model of the package whose function the skeleton does not have (sorted).
-	RowsNotReproduced     []string
+	// RowsMissing are the rows of the model of the package that point at something the skeleton does not have (sorted). It is a
+	// failure: the rows are what the skeleton is made for, and a row that is dropped silently is a row that the zoo cannot check.
+	RowsMissing []string
+	// Warnings are rows that the skeleton has but whose flow or record it cannot reproduce (docs/issues/164-skeleton-slice-receiver.md).
+	Warnings              []string
 	Funcs, Methods, Types int
 }
 
@@ -60,6 +63,9 @@ type skelInput struct {
 	Version string
 	ModOf   map[string]string
 	Facts   *Facts
+	// UsedNames are the names that the cells and the hand written files of the skeleton use (a function, a type, a method, a field): what
+	// they use is generated besides what the rows point at.
+	UsedNames map[string]bool
 }
 
 type pkgOut struct {
@@ -83,14 +89,20 @@ type skelGen struct {
 	carrier map[*types.TypeName]bool
 	sources map[string]model.Source // call_result rows by symbol
 	// srcFields are the fields that a `kind: field` source names, by type ("*": every field that can hold text)
-	srcFields map[*types.TypeName]map[string]bool
-	memo      map[*types.TypeName]int // 1: in progress or fine, 2: fine, 3: not
-	outs      map[string]*pkgOut
-	queue     []*types.TypeName
-	queued    map[*types.TypeName]bool
-	emitted   map[string]bool
-	omitted   map[string]bool
-	res       skelResult
+	srcFields  map[*types.TypeName]map[string]bool
+	rowSyms    map[string]bool // the symbols that the rows point at
+	rowTypes   map[string]bool // the types (of the root package) that the rows point at
+	rowFields  map[string]bool // the names of the fields that the rows point at
+	ifaceNames map[string]bool // the methods of the interfaces that the skeleton has or that its signatures name: a type has them too
+	emittedTy  []*types.TypeName
+	methodDone map[*types.Func]bool
+	memo       map[*types.TypeName]int // 1: in progress or fine, 2: fine, 3: not
+	outs       map[string]*pkgOut
+	queue      []*types.TypeName
+	queued     map[*types.TypeName]bool
+	emitted    map[string]bool
+	omitted    map[string]bool
+	res        skelResult
 }
 
 // GenerateSkeleton makes the skeleton of in.Root.
@@ -100,7 +112,9 @@ func GenerateSkeleton(in *skelInput) (*skelResult, error) {
 	}
 	g := &skelGen{in: in, sinks: map[string][]model.Sink{}, flows: map[string]model.Propagator{}, carrier: map[*types.TypeName]bool{},
 		sources: map[string]model.Source{}, srcFields: map[*types.TypeName]map[string]bool{},
-		memo: map[*types.TypeName]int{}, outs: map[string]*pkgOut{}, queued: map[*types.TypeName]bool{}, emitted: map[string]bool{}, omitted: map[string]bool{}}
+		memo: map[*types.TypeName]int{}, outs: map[string]*pkgOut{}, queued: map[*types.TypeName]bool{}, emitted: map[string]bool{}, omitted: map[string]bool{},
+		rowSyms: map[string]bool{}, rowTypes: map[string]bool{}, rowFields: map[string]bool{}, ifaceNames: map[string]bool{"Error": true}, methodDone: map[*types.Func]bool{}}
+	g.collectRows()
 	if in.Facts != nil {
 		for _, s := range in.Facts.SinkRows {
 			g.sinks[s.Symbol] = append(g.sinks[s.Symbol], s)
@@ -117,43 +131,50 @@ func GenerateSkeleton(in *skelInput) (*skelResult, error) {
 		if !o.Exported() {
 			continue
 		}
+		wanted := g.in.UsedNames[n]
 		switch o := o.(type) {
 		case *types.Func:
-			g.emitFunc(root, o)
+			if wanted || g.rowSyms[o.FullName()] {
+				g.emitFunc(root, o)
+			}
 		case *types.Const:
-			g.emitConst(root, o)
+			if wanted {
+				g.emitConst(root, o)
+			}
 		case *types.Var:
-			g.emitVar(root, o)
+			if wanted {
+				g.emitVar(root, o)
+			}
 		case *types.TypeName:
-			g.want(o)
+			if wanted || g.rowTypes[n] {
+				g.want(o)
+			}
 		}
 	}
-	for len(g.queue) > 0 {
-		o := g.queue[0]
-		g.queue = g.queue[1:]
-		g.emitType(o)
+	// the types that the signatures name bring more: the methods that satisfy an interface of the skeleton, and the types of their
+	// signatures, until nothing is added
+	for {
+		for len(g.queue) > 0 {
+			o := g.queue[0]
+			g.queue = g.queue[1:]
+			g.emitType(o)
+		}
+		added := false
+		for _, o := range g.emittedTy {
+			if g.emitMethods(o) {
+				added = true
+			}
+		}
+		if !added && len(g.queue) == 0 {
+			break
+		}
 	}
 	g.res.Files = g.render()
 	for sym := range g.omitted {
 		g.res.Omitted = append(g.res.Omitted, sym)
 	}
 	sort.Strings(g.res.Omitted)
-	if in.Facts != nil {
-		seen := map[string]bool{}
-		check := func(sym string) {
-			if !seen[sym] && !g.emitted[sym] {
-				seen[sym] = true
-				g.res.RowsNotReproduced = append(g.res.RowsNotReproduced, sym)
-			}
-		}
-		for _, s := range in.Facts.SinkRows {
-			check(s.Symbol)
-		}
-		for _, p := range in.Facts.FlowRows {
-			check(p.Symbol)
-		}
-		sort.Strings(g.res.RowsNotReproduced)
-	}
+	g.checkRows()
 	return &g.res, nil
 }
 
@@ -247,6 +268,11 @@ func (g *skelGen) namedOK(cur *types.Package, obj *types.TypeName, targs *types.
 	for i := 0; i < targs.Len(); i++ {
 		if !g.typeOK(cur, targs.At(i), refs) {
 			return false
+		}
+	}
+	if it, ok := obj.Type().Underlying().(*types.Interface); ok {
+		for i := 0; i < it.NumMethods(); i++ {
+			g.ifaceNames[it.Method(i).Name()] = true
 		}
 	}
 	switch {
@@ -457,20 +483,149 @@ func (g *skelGen) emitType(obj *types.TypeName) {
 		}
 		g.wantAll(refs)
 		g.res.Types++
-		var ms []*types.Func
-		for i := 0; i < t.NumMethods(); i++ {
-			if m := t.Method(i); m.Exported() {
-				ms = append(ms, m)
+		g.emittedTy = append(g.emittedTy, obj)
+		g.emitMethods(obj)
+	}
+}
+
+// emitMethods writes the methods of a type that the skeleton needs: the ones that a row points at, the ones that the cells use, and the
+// ones that an interface of the skeleton has (so that the type satisfies it as the real type does). It says whether it wrote one.
+func (g *skelGen) emitMethods(obj *types.TypeName) bool {
+	t, ok := obj.Type().(*types.Named)
+	if !ok {
+		return false
+	}
+	var ms []*types.Func
+	for i := 0; i < t.NumMethods(); i++ {
+		m := t.Method(i)
+		if m.Exported() && !g.methodDone[m] && (g.rowSyms[m.FullName()] || g.in.UsedNames[m.Name()] || g.ifaceNames[m.Name()]) {
+			ms = append(ms, m)
+		}
+	}
+	sort.Slice(ms, func(i, j int) bool { return ms[i].Name() < ms[j].Name() })
+	for _, m := range ms {
+		g.methodDone[m] = true
+		g.emitFunc(g.out(obj.Pkg()), m)
+	}
+	return len(ms) > 0
+}
+
+// collectRows reads what the rows of the package point at.
+func (g *skelGen) collectRows() {
+	f := g.in.Facts
+	if f == nil {
+		return
+	}
+	prefix := g.in.Root.Path() + "."
+	typ := func(name string) {
+		if i := strings.IndexAny(name, "."); i > 0 {
+			name = name[:i]
+		}
+		g.rowTypes[name] = true
+	}
+	sym := func(s string) {
+		g.rowSyms[s] = true
+		if rt := receiverType(s); strings.HasPrefix(rt, prefix) {
+			typ(strings.TrimPrefix(rt, prefix))
+		}
+	}
+	for _, r := range f.SinkRows {
+		sym(r.Symbol)
+		for _, p := range r.PartList() {
+			if p.Field != "" {
+				g.rowFields[strings.Split(p.Field, ".")[0]] = true
 			}
 		}
-		sort.Slice(ms, func(i, j int) bool { return ms[i].Name() < ms[j].Name() })
-		for _, m := range ms {
-			g.emitFunc(o, m)
+	}
+	for _, r := range f.FlowRows {
+		sym(r.Symbol)
+	}
+	for _, r := range f.SourceRows {
+		switch {
+		case r.Symbol != "":
+			sym(r.Symbol)
+		case r.Field != "" && strings.HasPrefix(r.Field, prefix):
+			rest := strings.TrimPrefix(r.Field, prefix)
+			typ(rest)
+			if _, fld, ok := strings.Cut(rest, "."); ok {
+				g.rowFields[fld] = true
+			}
+		case r.Type != "":
+			if t := strings.TrimPrefix(r.Type, "*"); strings.HasPrefix(t, prefix) {
+				typ(strings.TrimPrefix(t, prefix))
+			}
 		}
 	}
 }
 
-// keepField says whether the skeleton has the field of a struct of its own module (or the standard library).
+// checkRows fails the generation for a row that points at something the skeleton does not have, and lists the rows that the skeleton
+// has but cannot carry out (a flow from a receiver that cannot hold the marker, a sink that records nothing).
+func (g *skelGen) checkRows() {
+	f := g.in.Facts
+	if f == nil {
+		return
+	}
+	prefix := g.in.Root.Path() + "."
+	missing := map[string]bool{}
+	for _, r := range f.SinkRows {
+		if !g.emitted[r.Symbol] {
+			missing[r.Symbol] = true
+		}
+	}
+	for _, r := range f.FlowRows {
+		if !g.emitted[r.Symbol] {
+			missing[r.Symbol] = true
+		}
+	}
+	for _, r := range f.SourceRows {
+		switch {
+		case r.Symbol != "":
+			if !g.emitted[r.Symbol] {
+				missing[r.Symbol] = true
+			}
+		case r.Field != "" && strings.HasPrefix(r.Field, prefix):
+			typName, fld, ok := strings.Cut(strings.TrimPrefix(r.Field, prefix), ".")
+			tn, _ := g.in.Root.Scope().Lookup(typName).(*types.TypeName)
+			if !ok || tn == nil || !g.queued[tn] {
+				missing[r.Field] = true
+				continue
+			}
+			if st, isStruct := tn.Type().Underlying().(*types.Struct); isStruct && fld != "*" {
+				found := false
+				for i := 0; i < st.NumFields(); i++ {
+					if st.Field(i).Name() == fld && g.keepField(g.in.Root, st.Field(i)) {
+						found = true
+					}
+				}
+				if !found {
+					missing[r.Field] = true
+				}
+			}
+		case r.Type != "":
+			t := strings.TrimPrefix(r.Type, "*")
+			if strings.HasPrefix(t, prefix) {
+				tn, _ := g.in.Root.Scope().Lookup(strings.TrimPrefix(t, prefix)).(*types.TypeName)
+				if tn == nil || !g.queued[tn] {
+					missing[r.Type] = true
+				}
+			}
+		}
+	}
+	for s := range missing {
+		g.res.RowsMissing = append(g.res.RowsMissing, s)
+	}
+	sort.Strings(g.res.RowsMissing)
+	for k := range g.omitted {
+		if strings.Contains(k, "the flow from the receiver is not reproduced") || strings.Contains(k, "records nothing") {
+			g.res.Warnings = append(g.res.Warnings, k)
+		}
+	}
+	sort.Strings(g.res.Warnings)
+}
+
+// keepField says whether the skeleton has the field of a struct of its own module (or the standard library): an embedded field (the
+// embedding is part of the shape), a field that a row or the cells use, and a field whose type brings no other type of the module (so it
+// costs a line and no closure).
 func (g *skelGen) keepField(cur *types.Package, f *types.Var) bool {
 	if !f.Embedded() && !f.Exported() {
 		return false
@@ -479,7 +634,10 @@ func (g *skelGen) keepField(cur *types.Package, f *types.Var) bool {
 		return false
 	}
 	var refs []*types.TypeName
-	return g.typeOK(cur, f.Type(), &refs)
+	if !g.typeOK(cur, f.Type(), &refs) {
+		return false
+	}
+	return f.Embedded() || g.rowFields[f.Name()] || g.in.UsedNames[f.Name()] || len(refs) == 0
 }
 
 func (g *skelGen) structText(p *printer, obj *types.TypeName, s *types.Struct, refs *[]*types.TypeName) string {
@@ -830,7 +988,11 @@ func recordStr(category, s string) string {
 func (g *skelGen) recordLines(o *pkgOut, b *printer, full string, sig *types.Signature, recv *types.Var, rn string, ps []skelParam) []string {
 	var lines []string
 	for _, row := range g.sinks[full] {
-		lines = append(lines, g.recordRow(row, sig, recv, rn, ps, b)...)
+		l := g.recordRow(row, sig, recv, rn, ps, b)
+		if len(l) == 0 {
+			g.omit(full, "a sink row that records nothing (no dangerous position has a type that the skeleton can record)")
+		}
+		lines = append(lines, l...)
 	}
 	return lines
 }
@@ -1087,7 +1249,7 @@ func (g *skelGen) flowBody(o *pkgOut, b *printer, full string, recvNamed *types.
 		}
 	}
 	if recvFlow && carrier == "" {
-		g.omit(full, "the flow from the receiver is not reproduced (the receiver is not a struct of the skeleton)")
+		g.omit(full, "the flow from the receiver is not reproduced (the receiver is not a struct of the skeleton: a slice, a map)")
 	}
 	for ri, t := range results {
 		if exprs[ri] == "" {

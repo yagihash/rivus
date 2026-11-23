@@ -7,126 +7,20 @@
 package gin
 
 import (
-	"encoding/xml"
 	"github.com/gin-gonic/gin/binding"
-	"github.com/gin-gonic/gin/render"
-	"html/template"
-	"io"
 	"io/fs"
 	"mime/multipart"
-	"net"
 	"net/http"
 	"net/textproto"
 	"reflect"
-	"time"
 	"zoo/mark"
 )
 
-const AuthProxyUserKey = "proxy_user"
-
-const AuthUserKey = "user"
-
-const BindKey = "_gin-gonic/gin/bindkey"
-
-const BodyBytesKey = "_gin-gonic/gin/bodybyteskey"
-
-const ContextKey = "_gin-gonic/gin/contextkey"
-
-const ContextRequestKey ContextKeyType = 0
-
-const DebugMode = "debug"
-
-const EnvGinMode = "GIN_MODE"
-
-const ErrorTypeAny ErrorType = 18446744073709551615
-
-const ErrorTypeBind ErrorType = 9223372036854775808
-
-const ErrorTypePrivate ErrorType = 1
-
-const ErrorTypePublic ErrorType = 2
-
-const ErrorTypeRender ErrorType = 4611686018427387904
-
-const MIMEBSON = "application/bson"
-
-const MIMEHTML = "text/html"
-
-const MIMEJSON = "application/json"
-
-const MIMEMultipartPOSTForm = "multipart/form-data"
-
-const MIMEPOSTForm = "application/x-www-form-urlencoded"
-
-const MIMEPROTOBUF = "application/x-protobuf"
-
-const MIMEPlain = "text/plain"
-
-const MIMETOML = "application/toml"
-
-const MIMEXML = "application/xml"
-
-const MIMEXML2 = "text/xml"
-
-const MIMEYAML = "application/x-yaml"
-
-const MIMEYAML2 = "application/yaml"
-
-const PlatformCloudflare = "CF-Connecting-IP"
-
-const PlatformFlyIO = "Fly-Client-IP"
-
-const PlatformGoogleAppEngine = "X-Appengine-Remote-Addr"
-
-const ReleaseMode = "release"
-
-const TestMode = "test"
-
-const Version = "v1.12.0"
-
-var DebugPrintFunc func(format string, values ...any)
-
-var DebugPrintRouteFunc func(httpMethod string, absolutePath string, handlerName string, nuHandlers int)
-
-var DefaultErrorWriter io.Writer
-
-var DefaultWriter io.Writer
-
-type Accounts map[string]string
-
 type Context struct {
 	Request  *http.Request
-	Writer   ResponseWriter
-	Params   Params
 	Keys     map[any]any
-	Errors   errorMsgs
 	Accepted []string
 	v        string // the marker of what the receiver stands for (a request): the getters return it
-}
-
-func (c *Context) Abort() {
-}
-
-func (c *Context) AbortWithError(code int, err error) *Error {
-	return &Error{}
-}
-
-func (c *Context) AbortWithStatus(code int) {
-}
-
-func (c *Context) AbortWithStatusJSON(code int, jsonObj any) {
-}
-
-func (c *Context) AbortWithStatusPureJSON(code int, jsonObj any) {
-}
-
-func (c *Context) AddParam(key string, value string) {
-}
-
-func (c *Context) AsciiJSON(code int, obj any) {
-}
-
-func (c *Context) BSON(code int, obj any) {
 }
 
 func (c *Context) Bind(obj any) error {
@@ -164,10 +58,6 @@ func (c *Context) BindUri(obj any) error {
 	return nil
 }
 
-func (c *Context) BindWith(obj any, b binding.Binding) error {
-	return nil
-}
-
 func (c *Context) BindXML(obj any) error {
 	zooFill(obj, c.v)
 	return nil
@@ -190,19 +80,8 @@ func (c *Context) Cookie(name string) (string, error) {
 	return c.v, nil
 }
 
-func (c *Context) Copy() *Context {
-	return &Context{}
-}
-
 func (c *Context) Data(code int, contentType string, data []byte) {
 	mark.SinkHTML(string(data))
-}
-
-func (c *Context) DataFromReader(code int, contentLength int64, contentType string, reader io.Reader, extraHeaders map[string]string) {
-}
-
-func (c *Context) Deadline() (time.Time, bool) {
-	return time.Time{}, false
 }
 
 func (c *Context) DefaultPostForm(key string, defaultValue string) string {
@@ -211,17 +90,6 @@ func (c *Context) DefaultPostForm(key string, defaultValue string) string {
 
 func (c *Context) DefaultQuery(key string, defaultValue string) string {
 	return c.v
-}
-
-func (c *Context) Delete(key any) {
-}
-
-func (c *Context) Done() <-chan struct{} {
-	return nil
-}
-
-func (c *Context) Err() error {
-	return nil
 }
 
 func (c *Context) Error(err error) *Error {
@@ -248,84 +116,8 @@ func (c *Context) FullPath() string {
 	return c.v
 }
 
-func (c *Context) Get(key any) (any, bool) {
-	return nil, false
-}
-
-func (c *Context) GetBool(key any) bool {
-	return false
-}
-
-func (c *Context) GetDuration(key any) time.Duration {
-	return time.Duration(0)
-}
-
-func (c *Context) GetError(key any) error {
-	return nil
-}
-
-func (c *Context) GetErrorSlice(key any) []error {
-	return nil
-}
-
-func (c *Context) GetFloat32(key any) float32 {
-	return 0
-}
-
-func (c *Context) GetFloat32Slice(key any) []float32 {
-	return nil
-}
-
-func (c *Context) GetFloat64(key any) float64 {
-	return 0
-}
-
-func (c *Context) GetFloat64Slice(key any) []float64 {
-	return nil
-}
-
 func (c *Context) GetHeader(key string) string {
 	return c.v
-}
-
-func (c *Context) GetInt(key any) int {
-	return 0
-}
-
-func (c *Context) GetInt16(key any) int16 {
-	return 0
-}
-
-func (c *Context) GetInt16Slice(key any) []int16 {
-	return nil
-}
-
-func (c *Context) GetInt32(key any) int32 {
-	return 0
-}
-
-func (c *Context) GetInt32Slice(key any) []int32 {
-	return nil
-}
-
-func (c *Context) GetInt64(key any) int64 {
-	return 0
-}
-
-func (c *Context) GetInt64Slice(key any) []int64 {
-	return nil
-}
-
-func (c *Context) GetInt8(key any) int8 {
-	return 0
-}
-
-func (c *Context) GetInt8Slice(key any) []int8 {
-	return nil
-}
-
-func (c *Context) GetIntSlice(key any) []int {
-	return nil
 }
 
 func (c *Context) GetPostForm(key string) (string, bool) {
@@ -356,103 +148,7 @@ func (c *Context) GetRawData() ([]byte, error) {
 	return []byte(c.v), nil
 }
 
-func (c *Context) GetString(key any) string {
-	return ""
-}
-
-func (c *Context) GetStringMap(key any) map[string]any {
-	return nil
-}
-
-func (c *Context) GetStringMapString(key any) map[string]string {
-	return nil
-}
-
-func (c *Context) GetStringMapStringSlice(key any) map[string][]string {
-	return nil
-}
-
-func (c *Context) GetStringSlice(key any) []string {
-	return nil
-}
-
-func (c *Context) GetTime(key any) time.Time {
-	return time.Time{}
-}
-
-func (c *Context) GetUint(key any) uint {
-	return 0
-}
-
-func (c *Context) GetUint16(key any) uint16 {
-	return 0
-}
-
-func (c *Context) GetUint16Slice(key any) []uint16 {
-	return nil
-}
-
-func (c *Context) GetUint32(key any) uint32 {
-	return 0
-}
-
-func (c *Context) GetUint32Slice(key any) []uint32 {
-	return nil
-}
-
-func (c *Context) GetUint64(key any) uint64 {
-	return 0
-}
-
-func (c *Context) GetUint64Slice(key any) []uint64 {
-	return nil
-}
-
-func (c *Context) GetUint8(key any) uint8 {
-	return 0
-}
-
-func (c *Context) GetUint8Slice(key any) []uint8 {
-	return nil
-}
-
-func (c *Context) GetUintSlice(key any) []uint {
-	return nil
-}
-
-func (c *Context) HTML(code int, name string, obj any) {
-}
-
-func (c *Context) Handler() HandlerFunc {
-	return nil
-}
-
-func (c *Context) HandlerName() string {
-	return ""
-}
-
-func (c *Context) HandlerNames() []string {
-	return nil
-}
-
 func (c *Context) Header(key string, value string) {
-}
-
-func (c *Context) IndentedJSON(code int, obj any) {
-}
-
-func (c *Context) IsAborted() bool {
-	return false
-}
-
-func (c *Context) IsWebsocket() bool {
-	return false
-}
-
-func (c *Context) JSON(code int, obj any) {
-}
-
-func (c *Context) JSONP(code int, obj any) {
 }
 
 func (c *Context) MultipartForm() (*multipart.Form, error) {
@@ -462,20 +158,6 @@ func (c *Context) MultipartForm() (*multipart.Form, error) {
 func (c *Context) MustBindWith(obj any, b binding.Binding) error {
 	zooFill(obj, c.v)
 	return nil
-}
-
-func (c *Context) MustGet(key any) any {
-	return nil
-}
-
-func (c *Context) Negotiate(code int, config Negotiate) {
-}
-
-func (c *Context) NegotiateFormat(offered ...string) string {
-	return ""
-}
-
-func (c *Context) Next() {
 }
 
 func (c *Context) Param(key string) string {
@@ -494,12 +176,6 @@ func (c *Context) PostFormMap(key string) map[string]string {
 	return map[string]string{"zoo": c.v}
 }
 
-func (c *Context) ProtoBuf(code int, obj any) {
-}
-
-func (c *Context) PureJSON(code int, obj any) {
-}
-
 func (c *Context) Query(key string) string {
 	return c.v
 }
@@ -516,37 +192,9 @@ func (c *Context) Redirect(code int, location string) {
 	mark.SinkAny(location)
 }
 
-func (c *Context) RemoteIP() string {
-	return ""
-}
-
-func (c *Context) Render(code int, r render.Render) {
-}
-
-func (c *Context) SSEvent(name string, message any) {
-}
-
 func (c *Context) SaveUploadedFile(file *multipart.FileHeader, dst string, perm ...fs.FileMode) error {
 	mark.SinkPath("/zoo/base", dst)
 	return nil
-}
-
-func (c *Context) SecureJSON(code int, obj any) {
-}
-
-func (c *Context) Set(key any, value any) {
-}
-
-func (c *Context) SetAccepted(formats ...string) {
-}
-
-func (c *Context) SetCookie(name string, value string, maxAge int, path string, domain string, secure bool, httpOnly bool) {
-}
-
-func (c *Context) SetCookieData(cookie *http.Cookie) {
-}
-
-func (c *Context) SetSameSite(samesite http.SameSite) {
 }
 
 func (c *Context) ShouldBind(obj any) error {
@@ -632,10 +280,6 @@ func (c *Context) ShouldBindYAML(obj any) error {
 func (c *Context) Status(code int) {
 }
 
-func (c *Context) Stream(step func(w io.Writer) bool) bool {
-	return false
-}
-
 func (c *Context) String(code int, format string, values ...any) {
 	mark.SinkHTML(format)
 	for _, s := range values {
@@ -643,258 +287,14 @@ func (c *Context) String(code int, format string, values ...any) {
 	}
 }
 
-func (c *Context) TOML(code int, obj any) {
-}
-
-func (c *Context) Value(key any) any {
-	return nil
-}
-
-func (c *Context) XML(code int, obj any) {
-}
-
-func (c *Context) YAML(code int, obj any) {
-}
-
-type ContextKeyType int
-
-type Engine struct {
-	RouterGroup
-	RedirectTrailingSlash  bool
-	RedirectFixedPath      bool
-	HandleMethodNotAllowed bool
-	ForwardedByClientIP    bool
-	AppEngine              bool
-	UseRawPath             bool
-	UseEscapedPath         bool
-	UnescapePathValues     bool
-	RemoveExtraSlash       bool
-	RemoteIPHeaders        []string
-	TrustedPlatform        string
-	MaxMultipartMemory     int64
-	UseH2C                 bool
-	ContextWithFallback    bool
-	HTMLRender             render.HTMLRender
-	FuncMap                template.FuncMap
-}
-
-func (engine *Engine) Delims(left string, right string) *Engine {
-	return &Engine{}
-}
-
-func (engine *Engine) HandleContext(c *Context) {
-}
-
-func (engine *Engine) Handler() http.Handler {
-	return nil
-}
-
-func (engine *Engine) LoadHTMLFS(fs http.FileSystem, patterns ...string) {
-}
-
-func (engine *Engine) LoadHTMLFiles(files ...string) {
-}
-
-func (engine *Engine) LoadHTMLGlob(pattern string) {
-}
-
-func (engine *Engine) NoMethod(handlers ...HandlerFunc) {
-}
-
-func (engine *Engine) NoRoute(handlers ...HandlerFunc) {
-}
-
-func (engine *Engine) Routes() RoutesInfo {
-	return nil
-}
-
-func (engine *Engine) Run(addr ...string) error {
-	return nil
-}
-
-func (engine *Engine) RunFd(fd int) error {
-	return nil
-}
-
-func (engine *Engine) RunListener(listener net.Listener) error {
-	return nil
-}
-
-func (engine *Engine) RunQUIC(addr string, certFile string, keyFile string) error {
-	return nil
-}
-
-func (engine *Engine) RunTLS(addr string, certFile string, keyFile string) error {
-	return nil
-}
-
-func (engine *Engine) RunUnix(file string) error {
-	return nil
-}
-
-func (engine *Engine) SecureJsonPrefix(prefix string) *Engine {
-	return &Engine{}
-}
-
-func (engine *Engine) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-}
-
-func (engine *Engine) SetFuncMap(funcMap template.FuncMap) {
-}
-
-func (engine *Engine) SetHTMLTemplate(templ *template.Template) {
-}
-
-func (engine *Engine) SetTrustedProxies(trustedProxies []string) error {
-	return nil
-}
-
-func (engine *Engine) Use(middleware ...HandlerFunc) IRoutes {
-	return nil
-}
-
-func (engine *Engine) With(opts ...OptionFunc) *Engine {
-	return &Engine{}
-}
-
 type Error struct {
 	Err  error
-	Type ErrorType
 	Meta any
 }
 
 func (msg Error) Error() string {
 	return ""
 }
-
-func (msg *Error) IsType(flags ErrorType) bool {
-	return false
-}
-
-func (msg *Error) JSON() any {
-	return nil
-}
-
-func (msg *Error) MarshalJSON() ([]byte, error) {
-	return nil, nil
-}
-
-func (msg *Error) SetMeta(data any) *Error {
-	return &Error{}
-}
-
-func (msg *Error) SetType(flags ErrorType) *Error {
-	return &Error{}
-}
-
-func (msg Error) Unwrap() error {
-	return nil
-}
-
-type ErrorType uint64
-
-type H map[string]any
-
-func (h H) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
-	return nil
-}
-
-type HandlerFunc func(*Context)
-
-type HandlersChain []HandlerFunc
-
-func (c HandlersChain) Last() HandlerFunc {
-	return nil
-}
-
-type IRouter interface {
-	IRoutes
-	Group(string, ...HandlerFunc) *RouterGroup
-}
-
-type IRoutes interface {
-	Any(string, ...HandlerFunc) IRoutes
-	DELETE(string, ...HandlerFunc) IRoutes
-	GET(string, ...HandlerFunc) IRoutes
-	HEAD(string, ...HandlerFunc) IRoutes
-	Handle(string, string, ...HandlerFunc) IRoutes
-	Match([]string, string, ...HandlerFunc) IRoutes
-	OPTIONS(string, ...HandlerFunc) IRoutes
-	PATCH(string, ...HandlerFunc) IRoutes
-	POST(string, ...HandlerFunc) IRoutes
-	PUT(string, ...HandlerFunc) IRoutes
-	Static(string, string) IRoutes
-	StaticFS(string, http.FileSystem) IRoutes
-	StaticFile(string, string) IRoutes
-	StaticFileFS(string, string, http.FileSystem) IRoutes
-	Use(...HandlerFunc) IRoutes
-}
-
-type LogFormatter func(params LogFormatterParams) string
-
-type LogFormatterParams struct {
-	Request      *http.Request
-	TimeStamp    time.Time
-	StatusCode   int
-	Latency      time.Duration
-	ClientIP     string
-	Method       string
-	Path         string
-	ErrorMessage string
-	BodySize     int
-	Keys         map[any]any
-}
-
-func (p *LogFormatterParams) IsOutputColor() bool {
-	return false
-}
-
-func (p *LogFormatterParams) LatencyColor() string {
-	return ""
-}
-
-func (p *LogFormatterParams) MethodColor() string {
-	return ""
-}
-
-func (p *LogFormatterParams) ResetColor() string {
-	return ""
-}
-
-func (p *LogFormatterParams) StatusCodeColor() string {
-	return ""
-}
-
-type LoggerConfig struct {
-	Formatter       LogFormatter
-	Output          io.Writer
-	SkipPaths       []string
-	SkipQueryString bool
-	Skip            Skipper
-}
-
-type Negotiate struct {
-	Offered      []string
-	HTMLName     string
-	HTMLData     any
-	JSONData     any
-	XMLData      any
-	YAMLData     any
-	Data         any
-	TOMLData     any
-	PROTOBUFData any
-	BSONData     any
-}
-
-type OnlyFilesFS struct {
-	FileSystem http.FileSystem
-}
-
-func (o OnlyFilesFS) Open(name string) (http.File, error) {
-	return nil, nil
-}
-
-type OptionFunc func(*Engine)
 
 type Param struct {
 	Key   string
@@ -909,240 +309,6 @@ func (ps Params) ByName(name string) string {
 
 func (ps Params) Get(name string) (string, bool) {
 	return "", false
-}
-
-type RecoveryFunc func(c *Context, err any)
-
-type ResponseWriter interface {
-	http.ResponseWriter
-	http.Hijacker
-	http.Flusher
-	http.CloseNotifier
-	Pusher() http.Pusher
-	Size() int
-	Status() int
-	WriteHeaderNow()
-	WriteString(string) (int, error)
-	Written() bool
-}
-
-type RouteInfo struct {
-	Method      string
-	Path        string
-	Handler     string
-	HandlerFunc HandlerFunc
-}
-
-type RouterGroup struct {
-	Handlers HandlersChain
-}
-
-func (group *RouterGroup) Any(relativePath string, handlers ...HandlerFunc) IRoutes {
-	return nil
-}
-
-func (group *RouterGroup) BasePath() string {
-	return ""
-}
-
-func (group *RouterGroup) DELETE(relativePath string, handlers ...HandlerFunc) IRoutes {
-	return nil
-}
-
-func (group *RouterGroup) GET(relativePath string, handlers ...HandlerFunc) IRoutes {
-	return nil
-}
-
-func (group *RouterGroup) Group(relativePath string, handlers ...HandlerFunc) *RouterGroup {
-	return &RouterGroup{}
-}
-
-func (group *RouterGroup) HEAD(relativePath string, handlers ...HandlerFunc) IRoutes {
-	return nil
-}
-
-func (group *RouterGroup) Handle(httpMethod string, relativePath string, handlers ...HandlerFunc) IRoutes {
-	return nil
-}
-
-func (group *RouterGroup) Match(methods []string, relativePath string, handlers ...HandlerFunc) IRoutes {
-	return nil
-}
-
-func (group *RouterGroup) OPTIONS(relativePath string, handlers ...HandlerFunc) IRoutes {
-	return nil
-}
-
-func (group *RouterGroup) PATCH(relativePath string, handlers ...HandlerFunc) IRoutes {
-	return nil
-}
-
-func (group *RouterGroup) POST(relativePath string, handlers ...HandlerFunc) IRoutes {
-	return nil
-}
-
-func (group *RouterGroup) PUT(relativePath string, handlers ...HandlerFunc) IRoutes {
-	return nil
-}
-
-func (group *RouterGroup) Static(relativePath string, root string) IRoutes {
-	return nil
-}
-
-func (group *RouterGroup) StaticFS(relativePath string, fs http.FileSystem) IRoutes {
-	return nil
-}
-
-func (group *RouterGroup) StaticFile(relativePath string, filepath string) IRoutes {
-	return nil
-}
-
-func (group *RouterGroup) StaticFileFS(relativePath string, filepath string, fs http.FileSystem) IRoutes {
-	return nil
-}
-
-func (group *RouterGroup) Use(middleware ...HandlerFunc) IRoutes {
-	return nil
-}
-
-type RoutesInfo []RouteInfo
-
-type Skipper func(c *Context) bool
-
-type errorMsgs []*Error
-
-func (a errorMsgs) ByType(typ ErrorType) errorMsgs {
-	return nil
-}
-
-func (a errorMsgs) Errors() []string {
-	return nil
-}
-
-func (a errorMsgs) JSON() any {
-	return nil
-}
-
-func (a errorMsgs) Last() *Error {
-	return &Error{}
-}
-
-func (a errorMsgs) MarshalJSON() ([]byte, error) {
-	return nil, nil
-}
-
-func (a errorMsgs) String() string {
-	return ""
-}
-
-func BasicAuth(accounts Accounts) HandlerFunc {
-	return nil
-}
-
-func BasicAuthForProxy(accounts Accounts, realm string) HandlerFunc {
-	return nil
-}
-
-func BasicAuthForRealm(accounts Accounts, realm string) HandlerFunc {
-	return nil
-}
-
-func Bind(val any) HandlerFunc {
-	return nil
-}
-
-func CreateTestContext(w http.ResponseWriter) (*Context, *Engine) {
-	return &Context{}, &Engine{}
-}
-
-func CreateTestContextOnly(w http.ResponseWriter, r *Engine) *Context {
-	return &Context{}
-}
-
-func CustomRecovery(handle RecoveryFunc) HandlerFunc {
-	return nil
-}
-
-func CustomRecoveryWithWriter(out io.Writer, handle RecoveryFunc) HandlerFunc {
-	return nil
-}
-
-func Default(opts ...OptionFunc) *Engine {
-	return &Engine{}
-}
-
-func Dir(root string, listDirectory bool) http.FileSystem {
-	return nil
-}
-
-func DisableBindValidation() {
-}
-
-func DisableConsoleColor() {
-}
-
-func EnableJsonDecoderDisallowUnknownFields() {
-}
-
-func EnableJsonDecoderUseNumber() {
-}
-
-func ErrorLogger() HandlerFunc {
-	return nil
-}
-
-func ErrorLoggerT(typ ErrorType) HandlerFunc {
-	return nil
-}
-
-func ForceConsoleColor() {
-}
-
-func IsDebugging() bool {
-	return false
-}
-
-func Logger() HandlerFunc {
-	return nil
-}
-
-func LoggerWithConfig(conf LoggerConfig) HandlerFunc {
-	return nil
-}
-
-func LoggerWithFormatter(f LogFormatter) HandlerFunc {
-	return nil
-}
-
-func LoggerWithWriter(out io.Writer, notlogged ...string) HandlerFunc {
-	return nil
-}
-
-func Mode() string {
-	return ""
-}
-
-func New(opts ...OptionFunc) *Engine {
-	return &Engine{}
-}
-
-func Recovery() HandlerFunc {
-	return nil
-}
-
-func RecoveryWithWriter(out io.Writer, recovery ...RecoveryFunc) HandlerFunc {
-	return nil
-}
-
-func SetMode(value string) {
-}
-
-func WrapF(f http.HandlerFunc) HandlerFunc {
-	return nil
-}
-
-func WrapH(h http.Handler) HandlerFunc {
-	return nil
 }
 
 // zooFill sets the string fields of the struct that obj points to to the text of the request.
