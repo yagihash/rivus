@@ -52,9 +52,9 @@ func Extract(p *gossa.Program, opts Options) (*ir.Program, error) {
 	if !opts.NoCandidates {
 		if p.Lifted != nil {
 			lifted = liftedTable(p.Lifted)
-			// The call graph and the lifted build are of no use now: what the
+			// The call graph and the lifted SSA are of no use now: what the
 			// conversion asks of them is in the table. Letting go of them here
-			// (not at the end) keeps the lifted go/ssa program out of the
+			// (not at the end) keeps the lifted SSA out of the
 			// conversion's peak.
 			p.Lifted = nil
 		} else {
@@ -152,7 +152,7 @@ func Extract(p *gossa.Program, opts Options) (*ir.Program, error) {
 // releaseBody lets go of the body of a function that has been converted: its
 // blocks and instructions, parameters, free variables and locals. The
 // conversion of another function reads the signature, the name and the
-// position of what it calls, never its body, and the lifted build (which the
+// position of what it calls, never its body, and the lifted SSA (which the
 // call graph is about) is another set of functions. The go/ssa program holds
 // the bodies, with the functions that have not been converted yet, until the
 // extraction ends.
@@ -170,21 +170,21 @@ func releaseBody(fn *ssa.Function) {
 }
 
 // callKey is what pairs a call of a function with the same call of the same
-// function in the lifted build.
+// function in the lifted SSA.
 type callKey struct {
 	pos    token.Pos
 	invoke bool
 	name   string
 }
 
-// liftedCall is a call of the lifted build that goes through an interface or
+// liftedCall is a call of the lifted SSA that goes through an interface or
 // a function value, with the functions the call graph says it may reach.
 type liftedCall struct {
 	key   callKey
 	cands []ir.FuncID
 }
 
-// liftedTable asks the call graph of the lifted build what each of its calls
+// liftedTable asks the call graph of the lifted SSA what each of its calls
 // through an interface or a function value may reach, and keeps the answer
 // (in the order of the calls) by function. The lifted build is not read after
 // this.
@@ -251,7 +251,7 @@ type conv struct {
 	addr   map[ssa.Value]addrInfo
 	graph  callgraph.Graph
 	// liftedCall maps a call of this function to what the call graph says of
-	// the same call in the lifted build (one answer for each lifted function
+	// the same call in the lifted SSA (one answer for each lifted function
 	// of the name).
 	liftedCall map[ssa.CallInstruction][][]ir.FuncID
 	global     map[string]ir.Global
@@ -637,7 +637,7 @@ func (c *conv) noteGlobal(g *ssa.Global) {
 }
 
 // matchCalls pairs the calls that go through an interface or a function value
-// with the same calls of the same function in the lifted build, which the
+// with the same calls of the same function in the lifted SSA, which the
 // call graph is about. Lifting does not move or drop them, but it does drop
 // bookkeeping calls, so they are paired by where they are and what they are
 // (in order, when several are at the same place).
