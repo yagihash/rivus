@@ -14,6 +14,7 @@ pub fn register_all() {
     c::clos::returned::register();
     c::clos::stored::register();
     c::clos::to_lib::register();
+    c::clos::to_nomodel::register();
     c::clos::capture_write_by_ref::register();
     c::clos::to_own_helper::register();
     c::clos::two_callers::register();

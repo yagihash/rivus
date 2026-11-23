@@ -5,6 +5,7 @@
 package to_nomodel
 
 import (
+	"container/ring"
 	"regexp"
 
 	"zoo/mark"
@@ -12,6 +13,7 @@ import (
 
 func init() {
 	mark.Case("F/clos/to-nomodel/vuln", vuln)
+	mark.Case("F/clos/to-nomodel/vuln2", vuln2)
 	mark.Case("F/clos/to-nomodel/fixed", fixed)
 	mark.Case("F/clos/to-nomodel/decoy", decoy)
 }
@@ -28,6 +30,11 @@ func fixed() { // @fixed
 	v := mark.CleanCmd(mark.Src("clos-to-nomodel-fixed"))
 	out := re.ReplaceAllStringFunc("xx", func(string) string { return v })
 	mark.SinkCmd(out) // @sink(none)
+	r := ring.New(1)
+	r.Value = v
+	r.Do(func(x any) {
+		mark.SinkCmd(x.(string)) // @sink(none)
+	})
 }
 
 func decoy() { // @decoy
@@ -35,4 +42,19 @@ func decoy() { // @decoy
 	out := re.ReplaceAllStringFunc("xx", func(string) string { _ = v; return "constant" })
 	mark.SinkCmd(out) // @sink(none) @nosink(clos-to-nomodel-decoy)
 	mark.SinkSQL(v)   // @sink(clos-to-nomodel-decoy)
+	r := ring.New(1)
+	r.Value = "constant"
+	r.Do(func(x any) {
+		mark.SinkCmd(x.(string)) // @sink(none) @nosink(clos-to-nomodel-decoy)
+	})
+}
+
+// vuln2: no result. What the receiver holds reaches the parameter of the function that is given (ring.Do has no row).
+func vuln2() { // @vuln
+	v := mark.Src("clos-to-nomodel-vuln2") // @source(clos-to-nomodel-vuln2)
+	r := ring.New(1)
+	r.Value = v
+	r.Do(func(x any) {
+		mark.SinkCmd(x.(string)) // @sink(clos-to-nomodel-vuln2)
+	})
 }
