@@ -317,13 +317,13 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `graph`(`info` 以外) | `--limit <k>` | 並べる数の上限 | `50`(`path` は 5 本) |
 | `graph callers`、`callees` | `--include-builtin` | 組み込み関数の呼び出しを残す | 省く |
 | `graph callers`、`callees` | `--site <id>` | 対象を、サイトの ID で指定する | なし |
-| `graph callers`、`callees`、`path` | `--refs` | 参照(値として渡された関数)もたどる。`path` は、参照の段から探す | たどらない(`path` は最後の段だけ) |
+| `graph callers`、`callees`、`path` | `--refs` | 参照(値として渡された関数)もたどる。`path` は、参照のフェーズから探す | たどらない(`path` は最後のフェーズだけ) |
 | `graph`(`info` 以外) | `--avoid`、`--avoid-call`、`--only-impl` | フィルタ(3 章) | なし |
 | `graph callers`、`callees`、`path` | `--via <symbol>` | その関数を通るものだけ | なし |
 | `graph path` | `--from <target>` / `--from-entry` | 始点 / プログラムの起点から(どちらか 1 つ) | なし |
 | `graph path` | `--to <target>` | 終点(必須) | なし |
 | `graph path` | `--hubs` | 候補の多い呼び出し(ハブ)も、最初から使って探す | 経路がないときだけ |
-| `graph path` | `--no-refs` | 参照をたどらない | 最後の段でたどる |
+| `graph path` | `--no-refs` | 参照をたどらない | 最後のフェーズでたどる |
 
 ### 診断と調整のフラグ(`-help-all` に出るもの)
 
@@ -374,7 +374,7 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `paths[0].steps[]` | 経路のステップ: `func`、`position`、`snippet`、`desc`(`source: ...`、`call ...`、`store`、`load`、`propagated by ...`、`sink: ...` など)、`notes`(そのステップの不確実性)、`model`(そのステップを決めたモデルと `origin`) |
 | `uncertainties[]` | 経路の上の不確実性の全部。**最初に読む場所** |
 | `confidence` | 経路に不確実性が 1 つもなければ `no_uncertainty_on_path`、あれば `requires_review`。**本物かどうかの判定ではありません**(サニタイズや認証は見ていません) |
-| (注意) | アクセスパスを深さの上限で切った所を、値が通った段には、`access_path_truncated` の注記が付きます(切った所より下は、まるごと汚染として扱うので、その先の流れは、切ったために出ているだけかもしれません)。使った深さは `summary.access_path_depth`。ただし、ポインタの位置のパスを切る所(ループで伸びるパスの打ち切り)には付きません |
+| (注意) | アクセスパスを深さの上限で切った所を、値が通ったステップには、`access_path_truncated` の注記が付きます(切った所より下は、まるごと汚染として扱うので、その先の流れは、切ったために出ているだけかもしれません)。使った深さは `summary.access_path_depth`。ただし、ポインタの位置のパスを切る所(ループで伸びるパスの打ち切り)には付きません |
 | `reachability` | 経路の関数が、プログラムの起点から届くか: `from_entry`、`from_framework_callback`、`not_from_entry`。`not_from_entry` は「使われていないコード」の意味ではありません(フレームワークに登録したハンドラなど) |
 | `dispatch_widened`、`dispatch_candidates` | 経路の上で、複数の実装に広げた動的な呼び出しの数と、その候補の最大の数。大きいほど、経路が本物でない可能性が上がります |
 | `other_sources`、`other_sources_count` | 同じ sink に届く、同じ種類のほかの source(最大 5 件。数は全部) |
@@ -395,8 +395,8 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `unmodeled_library_call` | 本体もモデルもない関数を通った。「引数は結果に伝わる」と近似した | その関数の動作を調べる(値を加工して無害にするか、そのまま返すか)。必要ならモデルを書く |
 | `dependency_body_unread` | モデルのあるインターフェースの呼び出しの候補に、依存の本体があったが、読まなかった(Go) | 依存が、自分のコードの実装へ値を渡していないかを確認する |
 | `project_body_unread` | プロジェクトの関数の本体を、extractor が読めなかった(Rust の async closure など)。依存の関数なら `dependency_body_unread`。数は `summary.functions_skipped` | その関数の中を、自分で読む。`detail` に理由 |
-| `depth_limit` | 解析の上限で止めた。理由は `detail` の先頭の語: `budget`(作業量)、`func_timeout` / `run_timeout`(時計)、`candidate_limit`(関数値の候補が多すぎて、どれも追わなかった)、`path_limit`(アクセスパスを切った)、`out_limit`(要約の 1 つの出力が 24 要素を超え、パラメータの別の部分を、パラメータ全体に畳んだ。`candidates` に関数の一覧。多めに出る側)、`out_widened`(経路の**段**に付き、その段を通る finding の `uncertainties` にも出る。畳んだ出力の、パラメータ全体になった要素を適用した段。付くと `confidence` は `requires_review`。多めに出る側)など | その関数の要約は、流れを落としていることがある。その関数の周辺は、見逃しがある前提で、コードを読む。ただし `out_limit` のときは逆で、その関数を通る流れが、フィールドを区別せずに(多めに)出ていることがある。別のフィールドの値が実際に届くかを、コードで確認する |
-| `access_path_truncated` | 経路のこの段で、値がアクセスパスを深さの上限(`-k`、依存の関数は実験の `-dep-k`)で切った所を通った。切った所より下を、まるごと汚染として扱うので、この先の流れは、切ったために出ているだけかもしれない(別のフィールドへの流れを出していることがある。多めに出る側で、見逃しにはならない)。使った深さは `summary.access_path_depth`(`{project, dependency}`、いつも出る) | その段で、フィールドを通る所が、実際にそのフィールドの値を運ぶかを、コードで確かめる |
+| `depth_limit` | 解析の上限で止めた。理由は `detail` の先頭の語: `budget`(作業量)、`func_timeout` / `run_timeout`(時計)、`candidate_limit`(関数値の候補が多すぎて、どれも追わなかった)、`path_limit`(アクセスパスを切った)、`out_limit`(要約の 1 つの出力が 24 要素を超え、パラメータの別の部分を、パラメータ全体に畳んだ。`candidates` に関数の一覧。多めに出る側)、`out_widened`(経路の**ステップ**に付き、そのステップを通る finding の `uncertainties` にも出る。畳んだ出力の、パラメータ全体になった要素を適用したステップ。付くと `confidence` は `requires_review`。多めに出る側)など | その関数の要約は、流れを落としていることがある。その関数の周辺は、見逃しがある前提で、コードを読む。ただし `out_limit` のときは逆で、その関数を通る流れが、フィールドを区別せずに(多めに)出ていることがある。別のフィールドの値が実際に届くかを、コードで確認する |
+| `access_path_truncated` | 経路のこのステップで、値がアクセスパスを深さの上限(`-k`、依存の関数は実験の `-dep-k`)で切った所を通った。切った所より下を、まるごと汚染として扱うので、この先の流れは、切ったために出ているだけかもしれない(別のフィールドへの流れを出していることがある。多めに出る側で、見逃しにはならない)。使った深さは `summary.access_path_depth`(`{project, dependency}`、いつも出る) | そのステップで、フィールドを通る所が、実際にそのフィールドの値を運ぶかを、コードで確かめる |
 | `recursion_approximation` | 互いに呼び合う関数のかたまりを、近似で閉じた | そのかたまりの中の流れは、粗い |
 | `missing_source` | コードが見えなかった(型エラーでビルドできないパッケージ、生成されていないコード) | そのパッケージの中は見ていない。`summary.unread` を見て、ビルドや生成を済ませてやり直す |
 | `container_element_imprecision` | コンテナ(スライス、マップ)の要素を区別していない | 汚染された要素と、sink に入る要素が同じかを、コードで確認する |
