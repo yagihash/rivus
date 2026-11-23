@@ -592,7 +592,7 @@ func slimFunc(f *ir.Func) *ir.Func {
 type infoKey struct {
 	operator, field, global, path, env, reason string
 	fn                                         ir.FuncID
-	view, folded, keyed, goStmt                bool
+	view, folded, keyed, charRead, goStmt      bool
 }
 
 // infoOf is the InstrInfo of an instruction. Most instructions say the same (a call says nothing, a field
@@ -601,7 +601,7 @@ type infoKey struct {
 // The table is the one of a build; it is dropped when the build ends.
 func (p *Program) infoOf(in *ir.Instr) *InstrInfo {
 	k := infoKey{operator: in.Operator, field: in.Field, global: in.Global, reason: in.Reason, fn: in.Func,
-		view: in.View, folded: in.Folded, keyed: in.Keyed, goStmt: in.Go}
+		view: in.View, folded: in.Folded, keyed: in.Keyed, charRead: in.CharRead, goStmt: in.Go}
 	if in.Op == ir.OpAlloc && strings.HasPrefix(string(in.Type), "{closure@") {
 		k.env = string(in.Type)
 	}
@@ -619,7 +619,7 @@ func (p *Program) infoOf(in *ir.Instr) *InstrInfo {
 		return info
 	}
 	info := &InstrInfo{Operator: in.Operator, Field: in.Field, Global: in.Global, Path: in.Path, Func: in.Func,
-		View: in.View, Folded: in.Folded, Keyed: in.Keyed, Go: in.Go, Reason: in.Reason, Env: k.env}
+		View: in.View, Folded: in.Folded, Keyed: in.Keyed, CharRead: in.CharRead, Go: in.Go, Reason: in.Reason, Env: k.env}
 	if p.infos == nil {
 		p.infos = map[infoKey]*InstrInfo{}
 	}
