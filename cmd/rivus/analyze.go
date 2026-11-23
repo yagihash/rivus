@@ -219,15 +219,15 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	}
 	// what the rule files declare is not read: the functions go before the sites and the graph see them, and the
 	// packages that are listed as analysed
-	replaced := dropReplacedBodies(l.ir, rules, os.Stderr)
+	src := l.source()
+	replaced := dropReplacedBodies(src, rules, os.Stderr)
 	if len(replaced) > 0 {
 		// what only the code that was left out reached is left out too: it is what the extractor that is told not to
 		// read the package makes (the instances of generic functions and the wrappers that the code made, the packages
 		// that only it imports). Nothing the project reaches is lost
-		l.ir.PruneDeps()
+		ir.PruneDepsOf(src)
 	}
 	// the functions are final here: the readers get them from the source
-	src := ir.MemSource(l.ir)
 	// The graph drops the IR as it is built: what was analysed is listed first.
 	packages := l.packages(src)
 	noteNotBuiltin(os.Stderr, src, rules)
@@ -244,6 +244,9 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 		return nil, err
 	}
 	phase("graph")
+	if o.verbose {
+		noteSpill(os.Stderr, l.disk)
+	}
 	opts := taint.DefaultOptions()
 	opts.K = o.k
 	opts.DepK = o.depDepth()

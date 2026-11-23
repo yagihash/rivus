@@ -448,6 +448,10 @@ func (o *analyzeOpts) loadLangs(langs []string, patterns []string, rules *model.
 		}
 	}
 	var goProg *loaded
+	// A program with Go code and the IR on disk keeps the functions in Sources, not in merged.Funcs: the ones of Go are in
+	// the file, the ones of the other languages (read into memory) are a Source of their own.
+	var srcs []ir.Source
+	spill := o.irSpill && slices.Contains(langs, langGo)
 	for _, lang := range langs {
 		var p *ir.Program
 		if lang == langGo {
@@ -456,7 +460,11 @@ func (o *analyzeOpts) loadLangs(langs []string, patterns []string, rules *model.
 				return nil, err
 			}
 			if len(langs) > 1 {
-				goir.AddTexts(l.texts.(*goir.Texts), l.ir)
+				if l.src != nil {
+					goir.AddTextsOf(l.texts.(*goir.Texts), l.src)
+				} else {
+					goir.AddTexts(l.texts.(*goir.Texts), l.ir)
+				}
 			}
 			goProg, p = l, l.ir
 		} else {
@@ -478,7 +486,15 @@ func (o *analyzeOpts) loadLangs(langs []string, patterns []string, rules *model.
 		if lang != langGo {
 			o.lockLangs = append(o.lockLangs, lang)
 		}
-		merged.Funcs = append(merged.Funcs, p.Funcs...)
+		if spill {
+			if lang == langGo {
+				srcs = append(srcs, goProg.source())
+			} else {
+				srcs = append(srcs, ir.MemSource(p))
+			}
+		} else {
+			merged.Funcs = append(merged.Funcs, p.Funcs...)
+		}
 		merged.Impls = append(merged.Impls, p.Impls...)
 		merged.Types = append(merged.Types, p.Types...)
 		merged.Globals = append(merged.Globals, p.Globals...)
@@ -493,10 +509,16 @@ func (o *analyzeOpts) loadLangs(langs []string, patterns []string, rules *model.
 		merged.CallerMarks = len(langs) == 1 && p.CallerMarks
 		merged.Files = append(merged.Files, p.Files...)
 	}
-	if len(merged.Funcs) == 0 && goProg == nil {
+	if len(merged.Funcs) == 0 && len(srcs) == 0 && goProg == nil {
 		return nil, fmt.Errorf("nothing to analyse: no extractor produced code (languages: %s)", strings.Join(langs, ", "))
 	}
 	l := &loaded{ir: merged, texts: ir.NewStreamTexts(merged)}
+	if len(srcs) > 0 {
+		l.src = ir.ConcatSource(merged, srcs...)
+		if goProg != nil {
+			l.disk = goProg.disk
+		}
+	}
 	if goProg != nil && len(langs) == 1 {
 		return goProg, nil
 	}
