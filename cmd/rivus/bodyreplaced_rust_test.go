@@ -108,7 +108,9 @@ func TestBodyReplacedOfARustCrateIsTheSameAsTheFilter(t *testing.T) {
 		}
 		sum := map[string]any{}
 		for k, v := range r["summary"].(map[string]any) {
-			if k != "body_replaced_packages" && k != "body_replaced_ignored" {
+			// the memory figures and the GC share are of the machine and its load, like the times (#359)
+			if k != "body_replaced_packages" && k != "body_replaced_ignored" &&
+				k != "memory_peak_bytes" && k != "memory_limit_exceeded" && k != "gc_cpu_fraction" {
 				sum[k] = v
 			}
 		}
