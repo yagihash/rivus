@@ -242,7 +242,7 @@ jobs:
           fi
           echo "shard $SHARD_INDEX/$SHARD_TOTAL: $(echo "$names" | wc -l | tr -d ' ') tests"
           regex="^($(echo "$names" | paste -sd'|' -))\$"
-          go test ${SHORT:+"$SHORT"} -timeout 30m -run "$regex" ./cmd/rivus
+          go test ${SHORT:+"$SHORT"} ${VERBOSE:+-v} -timeout 30m -run "$regex" ./cmd/rivus
 
   # The tools of the bench (the comparison, the backtest, the ledger) have their own job: a red `test` job must not keep
   # them from running (they were the last step of it, and did not run while it was red). Python only, no build.
@@ -363,6 +363,8 @@ jobs:
           SHARD_TOTAL: "1"
           ONLY: "1"
           HEAVY: *heavy
+          # -v: the time of each test is in the log (to see where the time of this job goes)
+          VERBOSE: "1"
           RIVUS_RUST: ${{ github.workspace }}/extractor/rust/target/debug/rivus-rust
           # a missing RIVUS_RUST fails the tests, and does not skip them
           RIVUS_REQUIRE_RUST: "1"
