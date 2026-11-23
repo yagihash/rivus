@@ -88,7 +88,7 @@ model: ## the steps of making the model of a Go or Dart package: PKG=<import pat
 docs-gen: ## print the tables of the issues and the ADRs (from docs/issues/*.md, docs/adr/*.md); WHAT=issues or WHAT=adr for one; OUT=docs/TABLE.md writes it (ignored by git)
 	go run ./scripts/docs-gen $(if $(OUT),-o $(OUT)) $(WHAT)
 
-daily-stats: ## count the pull requests merged into main since a date, by what they change: ENGINE/MODEL/EXTRACTOR or TOOLS/CI/DOCS (SINCE=2026-11-20; scripts/daily-stats, docs/PRINCIPLES.md section 7)
+daily-stats: ## count the pull requests merged into main since a date, by what they change: ENGINE/MODEL/EXTRACTOR or TOOLS/CI/DOCS (SINCE=2026-11-20; scripts/daily-stats, docs/WORKFLOW.md)
 	@[ -n "$(SINCE)" ] || { echo "usage: make daily-stats SINCE=<date>"; exit 1; }
 	go run ./scripts/daily-stats -since "$(SINCE)"
 

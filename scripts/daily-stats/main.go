@@ -1,7 +1,7 @@
 // daily-stats counts the pull requests merged into main since a date, by what they change: `make daily-stats SINCE=2026-11-20`.
 // A merge is ENGINE/MODEL/EXTRACTOR when it changes a file of the analysis (engine, model, extractor, or the code of cmd/rivus
 // that is not a test), and TOOLS/CI/DOCS otherwise. It reads `git log --first-parent --merges` and, for each merge,
-// `git diff --name-only <merge>^1 <merge>`. (docs/PRINCIPLES.md, section 7.)
+// `git diff --name-only <merge>^1 <merge>`. (docs/WORKFLOW.md.)
 package main
 
 import (
