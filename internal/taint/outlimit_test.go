@@ -61,3 +61,22 @@ func TestOutLimitRecordListsFunctions(t *testing.T) {
 		t.Errorf("no widened output, but a record: %+v", u)
 	}
 }
+
+// An output that was widened stays marked when it is joined with a small one, even if the join has maxOutElems
+// elements or fewer; and the order of old and cur does not matter (#186).
+func TestJoinKeepsWidened(t *testing.T) {
+	big := &Summary{Func: "m.f", Outputs: []Output{{Kind: OutParam, Index: 1, Elems: []OutElem{{E: ParamElem(0, "")}}, Widened: true}}, WidenedOutputs: 1}
+	small := &Summary{Func: "m.f", Outputs: []Output{{Kind: OutParam, Index: 1, Elems: []OutElem{{E: ParamElem(2, "")}}}}}
+	a, b := joinSummaries(big, small), joinSummaries(small, big)
+	for _, j := range []*Summary{a, b} {
+		if len(j.Outputs) != 1 || !j.Outputs[0].Widened || j.WidenedOutputs != 1 {
+			t.Errorf("join = %+v, want one widened output", j)
+		}
+		if len(j.Outputs[0].Elems) > maxOutElems {
+			t.Errorf("the test needs a join of %d elements or fewer", maxOutElems)
+		}
+	}
+	if a.Sig != b.Sig || a.WidenedOutputs != b.WidenedOutputs {
+		t.Errorf("the join depends on the order")
+	}
+}

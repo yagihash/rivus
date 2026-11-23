@@ -47,6 +47,9 @@ type Output struct {
 	Global *sg.Value // OutGlobal
 	Path   string
 	Elems  []OutElem
+	// Widened: widen merged elements of this output, in this summary or in one it was joined from. Internal, like
+	// Summary.LimitedParams: not in signature(), the result or the index (#186).
+	Widened bool
 }
 
 // Summary is what the rest of the program needs to know about a function.
@@ -151,7 +154,7 @@ func (s *state) summarize() *Summary {
 				if merged {
 					sum.WidenedOutputs++
 				}
-				sum.Outputs = append(sum.Outputs, Output{Kind: kind, Index: idx, Global: glob, Path: p, Elems: w})
+				sum.Outputs = append(sum.Outputs, Output{Kind: kind, Index: idx, Global: glob, Path: p, Elems: w, Widened: merged})
 			}
 		}
 	}
@@ -640,9 +643,13 @@ func joinSummaries(old, cur *Summary) *Summary {
 	}
 	elems := map[okey]map[Elem]OutElem{}
 	var keys []okey
+	wasWidened := map[okey]bool{} // an output that was widened in old or in cur stays widened
 	addAll := func(sum *Summary) {
 		for _, o := range sum.Outputs {
 			k := okey{o.Kind, o.Index, o.Global, o.Path}
+			if o.Widened {
+				wasWidened[k] = true
+			}
 			m := elems[k]
 			if m == nil {
 				m = map[Elem]OutElem{}
@@ -697,10 +704,11 @@ func joinSummaries(old, cur *Summary) *Summary {
 		}
 		sort.Slice(list, func(i, j int) bool { return lessElem(list[i].E, list[j].E) })
 		w, merged := widen(absorbWhole(list))
+		merged = merged || wasWidened[k]
 		if merged {
 			out.WidenedOutputs++
 		}
-		out.Outputs = append(out.Outputs, Output{Kind: k.kind, Index: k.index, Global: k.glob, Path: k.path, Elems: w})
+		out.Outputs = append(out.Outputs, Output{Kind: k.kind, Index: k.index, Global: k.glob, Path: k.path, Elems: w, Widened: merged})
 	}
 	sinks := map[sinkKey]*SinkReach{}
 	for _, sum := range []*Summary{old, cur} {

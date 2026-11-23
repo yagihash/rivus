@@ -122,8 +122,12 @@ func TestScaleSynth(t *testing.T) {
 							cands = append(cands, u.Candidates...)
 						}
 					}
-					if len(cands) != 1 || !strings.HasSuffix(cands[0], ".HandleMiddleware") {
-						t.Errorf("out_limit candidates = %v, want the one HandleMiddleware", cands)
+					has := false
+					for _, c := range cands {
+						has = has || c == "(*scale/mw.Step).HandleMiddleware"
+					}
+					if !has {
+						t.Errorf("out_limit candidates = %v, want (*scale/mw.Step).HandleMiddleware among them", cands)
 					}
 					if outLimit18 != nil && !reflect.DeepEqual(outLimit18, cands) {
 						t.Errorf("out_limit candidates differ by workers: %v and %v", outLimit18, cands)
