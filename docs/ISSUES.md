@@ -70,13 +70,13 @@
 | [#158](issues/158-service-client-sources-review.md) | 既存のサービスのクライアントのモデル(`dart-gcp` など)を、「その値を誰が書いたか」の基準(ADR-108)で見直す(候補: Pub/Sub のメッセージの本文) | モデル(重さ: 中) | 全 | 1 | open | - |
 | [#159](issues/159-source-label-external-service.md) | source に、外部のサービスが運んだ、ほかの利用者の入力を区別するラベルがない | 書式(重さ: 低) | 共通 | 3 | open | - |
 | [#160](issues/160-rust-async-closure-extractor.md) | Rust の extractor が、`google-cloud-auth` 1.19.0 を読むときに rustc の未実装(async closure)で落ちる(`-no-deps` では動く)。落ちた理由も利用者に伝わらない | 道具(Rust の extractor) | Rust | 3 | open | - |
-| [#162](issues/162-unverified-versions-dart-rust.md) | 確認していないバージョンへの適用の注記(`summary.unverified_versions`)が Dart と Rust に出ない(`pubspec.lock`、`Cargo.lock` から取る) | 機能(モデルの鮮度。設計 6.10) | Dart、Rust | - | open | 設計 6.7 の 3 |
 | [#161](issues/161-rust-field-source.md) | Rust: `kind: field` の source が書けない(`fieldKeyOf` が `.` を含む型名しか扱わず、`::` 区切りの Rust の型名でキーが空になる)。Issue や PR の本文などが見逃しになる | 道具(重さ: 中) | Rust | 1 | open | zoo `F/pkg/octocrab/issue-body`(#224) |
 
 ## 閉じたもの
 
 | 番号 | 題 | 種類 | 言語 | ROADMAP の節 | 状態 | 守るもの |
 | --- | --- | --- | --- | --- | --- | --- |
+| [#162](issues/162-unverified-versions-dart-rust.md) | 確認していないバージョンへの適用の注記(`summary.unverified_versions`)が、Dart と Rust に出ない(直した: `pubspec.lock`、`Cargo.lock` から取る) | 機能(モデルの鮮度。設計 6.10) | Dart、Rust | - | closed | `cmd/rivus/lockversions_test.go`(`TestUnverifiedVersionsDartLock`、`TestUnverifiedVersionsCargoLock`) |
 | [#133](issues/133-graph-doc-certainty-threshold.md) | docs/GRAPH.md の「答えの読み方(要約)」の certainty の閾値が、コードと help と違う(3 と 20) | 文書(重さ: 低) | 全 | 0 | closed | `docs/GRAPH.md`(閾値は 20) |
 | [#132](issues/132-setup-usage-source.md) | `rivus setup` の usage が `[-source …]` を任意に見せている(実際は必須) | 文書(重さ: 低) | Rust | 0 | closed | `cmd/rivus/setup.go`(usage) |
 | [#130](issues/130-container-leftovers.md) | `-allow-fetch-host`、`-no-fetch` の help と `lang.go` のコメントに、廃止済みのコンテナの記述が残っている | 文書(重さ: 低) | Rust | 0 | closed | `cmd/rivus/analyze.go`、`lang.go`(help とコメント) |
