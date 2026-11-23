@@ -929,13 +929,17 @@ int _cascade(FnLower f, CascadeExpression e) {
 
 // --- closures -------------------------------------------------------------
 
-int lowerClosure(FnLower f, FunctionExpression fe, {String? name}) {
+int lowerClosure(FnLower f, FunctionExpression fe, {String? name, Object? selfKey}) {
   final id = '${f.out.id}\$${f.nextClosure()}';
   final out = FuncOut(id)
     ..symbol = ''
     ..dep = f.out.dep; // a closure of a dependency is a function of the dependency
   out.pos = f.pos(fe);
   final child = FnLower(f.prog, f.unit, out, parent: f, cells: f.cells, assigned: f.assigned);
+  if (selfKey != null) {
+    child.selfKey = selfKey;
+    child.selfFunc = id;
+  }
   final params = <(Object, String, DartType?)>[];
   final fel = fe.declaredFragment?.element;
   for (final p in fel == null ? const <FormalParameterElement>[] : orderedParams(fel)) {

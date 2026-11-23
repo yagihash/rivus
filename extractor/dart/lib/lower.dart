@@ -64,6 +64,11 @@ class FnLower {
   final Map<Object, int> cellVars = {}; // variable -> local holding its cell
   final List<Object> captures = []; // what the closure takes from outside
   final Map<Object, int> captureLocal = {};
+  // a local function that calls itself by its name: the element of the name, the function, and the places that make the
+  // closure again (their arguments are what the closure captures, known when the body is lowered)
+  Object? selfKey;
+  String? selfFunc;
+  final List<Instr> _selfMakes = [];
   final _handlers = <_Try>[];
   final _jumps = <_Jump>[];
   var _pendingLabels = <String>{};
@@ -267,6 +272,11 @@ class FnLower {
       }
     }
     first.instrs.insertAll(0, at);
+    // the closure that a local function makes of itself takes what it has captured (the parameters after the declared ones)
+    for (final m in _selfMakes) {
+      final args = [for (final key in captures) captureLocal[key]!];
+      if (args.isNotEmpty) m['args'] = args;
+    }
   }
 
   // --- variables ----------------------------------------------------------
@@ -298,6 +308,12 @@ class FnLower {
   }
 
   int readVar(Object key, DartType? t, Pos at) {
+    if (selfKey != null && key == selfKey && !vars.containsKey(key)) {
+      // the name of a local function, inside its own body (a recursive call): the function itself
+      final d = tmp(t);
+      _selfMakes.add(emit('make_closure', dsts: [d], at: at, more: {'func': selfFunc}));
+      return d;
+    }
     final l = _lookup(key, t, wantCell: false);
     if (l == null) {
       // a variable that the lowering does not know: a mistake of the extractor, said
@@ -432,7 +448,7 @@ class FnLower {
       case FunctionDeclarationStatement():
         final fd = s.functionDeclaration;
         final el = fd.declaredFragment?.element;
-        final clo = closure(fd.functionExpression, name: fd.name.lexeme);
+        final clo = closure(fd.functionExpression, name: fd.name.lexeme, selfKey: el?.baseElement);
         if (el != null) declare(el.baseElement, fd.name.lexeme, el.type, clo, pos(fd));
       default:
         emit('unsupported', at: pos(s), more: {'reason': 'statement ${s.runtimeType}'});
@@ -820,7 +836,7 @@ class FnLower {
   void assign(Expression target, int value) => lowerAssign(this, target, value);
 
   /// A closure: its own function, made here.
-  int closure(FunctionExpression fe, {String? name}) => lowerClosure(this, fe, name: name);
+  int closure(FunctionExpression fe, {String? name, Object? selfKey}) => lowerClosure(this, fe, name: name, selfKey: selfKey);
 
   int nextClosure() => ++_closures;
 }
