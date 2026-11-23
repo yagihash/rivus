@@ -5,6 +5,7 @@
 - 言語: Dart
 - ROADMAP の節: 2 / 3
 - 守るもの: -
+- 題: Dart: 標準ライブラリのコールバック(catchError、whenComplete、putIfAbsent、Map.forEach…
 - GitHub: #80(移行前の番号は同じ。2026-11-20 に開いた。移行時の状態: OPEN)
 
 ## 本文(GitHub から移した写し)

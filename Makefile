@@ -7,7 +7,7 @@
 # CI runs the same tests (a pull request with -short, main and the weekly run without): .github/workflows/ci.yml.
 
 .DEFAULT_GOAL := help
-.PHONY: help setup build check test zoo-loosened zoo-dart-gen model-diff
+.PHONY: help setup build check test zoo-loosened zoo-dart-gen model-diff docs-gen
 
 # the extractors that `make test` needs (a language whose extractor is not there FAILS, it is not skipped)
 RIVUS_DART ?= dart
@@ -44,3 +44,6 @@ zoo-dart-gen: ## write bench/zoo-dart/exec/lib/cases.dart and the two pubspec.ya
 model-diff: ## the differential test of the model of a package: PKG=<Go import path | package:name> [MODEL=<file>] (bench/model-diff, docs/MODEL-RUNBOOK.md); fetches the package, does not run it
 	@[ -n "$(PKG)" ] || { echo "usage: make model-diff PKG=strings   (or PKG=package:http, MODEL=internal/model/builtin/dart-http.yaml)"; exit 1; }
 	go run ./bench/model-diff -pkg "$(PKG)" $(if $(MODEL),-model "$(MODEL)")
+
+docs-gen: ## print the table of the issues (from docs/issues/*.md); `make docs-gen OUT=docs/ISSUES-TABLE.md` writes it (not committed)
+	go run ./scripts/docs-gen $(if $(OUT),-o $(OUT))

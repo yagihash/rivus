@@ -1,8 +1,12 @@
 # 160: Rust の extractor が、`google-cloud-auth` 1.19.0 を読むときに rustc の未実装(async closure)で落ちる(`-no-deps` では動く)
 
 - 状態: **open**
-- 種類: 道具(Rust の extractor。依存込みの解析が全部止まる。重さ: 中〜大。優先度: 高め)
+- 種類: 道具(Rust の extractor)
 - 言語: Rust
+- ROADMAP の節: 3
+- 守るもの: -
+- 題: Rust の extractor が、`google-cloud-auth` 1.19.0 を読むときに rustc の未実装(async closure)で落ちる(`-no-deps` では動く)。落ちた理由も利用者に伝わらない
+- 補足(種類): 道具(Rust の extractor。依存込みの解析が全部止まる。重さ: 中〜大。優先度: 高め)
 - 見つけた経緯: `google-cloud-storage` 1.22.0 の組み込みモデル(`internal/model/builtin/rust-google-cloud-storage.yaml`)を作るとき
 
 ## 再現(公開のクレートの名前とバージョンだけ)

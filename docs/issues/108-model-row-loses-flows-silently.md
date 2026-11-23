@@ -3,8 +3,10 @@
 - 状態: **open**
 - 種類: サイレントな見逃し(モデルの書き方の抜け)
 - 言語: 全
-- ROADMAP の節: 3 / 5(モデル化の定型。`DESIGN-model-authoring.md` の `compare`)
-- 守るもの: `cmd/rivus/coverage_stub_test.go`(テンプレートが、finding を減らさないこと。テンプレートだけを守っていて、利用者や AI が書いた行は守られていない)
+- ROADMAP の節: 3 / 5
+- 守るもの: `cmd/rivus/coverage_stub_test.go`(テンプレートのみ)
+- 補足(ROADMAP の節): 3 / 5(モデル化の定型。`DESIGN-model-authoring.md` の `compare`)
+- 補足(守るもの): `cmd/rivus/coverage_stub_test.go`(テンプレートが、finding を減らさないこと。テンプレートだけを守っていて、利用者や AI が書いた行は守られていない)
 
 ## 何が起きるか
 

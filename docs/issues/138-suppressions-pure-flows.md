@@ -3,6 +3,9 @@
 - 状態: **closed**
 - 種類: 正確さ(サイレントな見逃し)
 - 言語: Go
+- ROADMAP の節: 0
+- 守るもの: `cmd/rivus/resolve_test.go`(`TestLLMPureModelSuppressionIsRecorded`)
+- 題: `origin: llm` の `pure` と、流れを切る `flows` のモデルが流れを消しても、`suppressions` と `llm_influenced` に残らない
 - 見つけた経緯: Go の実際のプロジェクトでの利用から。
 
 `origin: llm` の `pure: true` のモデル(と、source を載せた引数を結果に流さない `flows`)で finding が消えても、出力の `suppressions` は空で、残った finding の `llm_influenced` は false だった。`-deterministic-only` を付けると、その行が無視されて finding が戻る(消したのは、確かにそのモデル)。記録されていたのは `origin: llm` の sanitizer の `drops` だけで、README の「モデルが流れを消した場所は `suppressions` に残ります」と食い違っていた。LLM が書いた「流れを切るモデル」は、最も見逃しを生みやすい(MODELING.md の警告)ので、記録がいちばん必要な種類だった。

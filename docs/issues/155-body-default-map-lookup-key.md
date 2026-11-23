@@ -3,6 +3,9 @@
 - 状態: **open**
 - 種類: 道具・ベンチ(差分テストの A 側の近似)
 - 言語: Go
+- ROADMAP の節: 後回し
+- 守るもの: `bench/model-diff` の注釈
+- 題: 差分テスト(標準ライブラリ): 本体を読む側は、マップの検索のキーが、見つけた値に流れると近似する(Header.Get / Values)
 - 見つけたもの: `bench/model-diff`(`make model-diff PKG=...`)、PR #195
 
 `bench/model-diff` の A は、`net/http.Header.Get` / `Values` の `arg0`(キー)から結果への流れを見つける(**2 プローブ**)。値はキーでできていないので、データの流れではない。マップの要素の取得を、キーの値にも依存すると近似するための、見かけの流れ。

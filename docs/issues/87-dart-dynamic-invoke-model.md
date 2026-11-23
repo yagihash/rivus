@@ -5,6 +5,7 @@
 - 言語: Dart
 - ROADMAP の節: 2
 - 守るもの: `graph` の `exhaustive`(GRAPH-3 まで)
+- 題: Dart: dynamic なメソッド呼び出しが dart:core#dynamic.invoke のモデルで覆われ、本体の sourc…
 - GitHub: #87(移行前の番号は同じ。2026-11-21 に開いた。移行時の状態: OPEN)
 
 ## 今の状態(2026-11-22 の見直し)

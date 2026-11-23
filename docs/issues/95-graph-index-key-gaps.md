@@ -5,6 +5,7 @@
 - 言語: 全(graph)
 - ROADMAP の節: 4
 - 守るもの: -
+- 題: graph の索引の鍵に、Dart の extractor のソース、Rust のワークスペースの Cargo.lock、-C の外の …
 - GitHub: #95(移行前の番号は同じ。2026-11-21 に開いた。移行時の状態: OPEN)
 
 ## 本文(GitHub から移した写し)
