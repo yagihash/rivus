@@ -388,6 +388,12 @@ func isCharRead(v *sg.Value) bool {
 	}
 	v = throughCopies(v)
 	in := v.Instr
+	if in != nil && in.IR != nil && in.IR.CharRead {
+		return true // what the extractor says (ir.Instr.CharRead)
+	}
+	// The rest is the judgment that the core keeps for the languages whose extractor does not set CharRead yet (Dart, Rust),
+	// and for the values that are one by their type (Go's byte and rune). It names the languages' own symbols, and is used only
+	// to count (numeric_stops): the decision of what flows must read the attribute alone. To be removed (issue 185).
 	switch string(v.Type) {
 	case "byte", "rune", "char":
 		return true

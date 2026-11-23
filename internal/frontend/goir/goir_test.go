@@ -302,3 +302,44 @@ func TestMakeClosureHasAPosition(t *testing.T) {
 		t.Fatal("no closure with captured values in the testdata")
 	}
 }
+
+// charReadOps lists, for the function, the instructions (index_load, call) that carry char_read, as "op symbol".
+func charReadOps(t *testing.T, p *ir.Program, name string) (marked, all []string) {
+	t.Helper()
+	for _, f := range p.Funcs {
+		if string(f.ID) != "example.com/cases/cases/irshape."+name {
+			continue
+		}
+		for _, b := range f.Blocks {
+			for _, in := range b.Instrs {
+				if in.Op != ir.OpIndexLoad && in.Op != ir.OpCall {
+					continue
+				}
+				s := string(in.Op)
+				if in.Callee != nil {
+					s += " " + in.Callee.Symbol
+				}
+				all = append(all, s)
+				if in.CharRead {
+					marked = append(marked, s)
+				}
+			}
+		}
+		return marked, all
+	}
+	t.Fatalf("no function %s", name)
+	return
+}
+
+func TestCharReadIsMarkedOnTheElementOfAString(t *testing.T) {
+	p := extract(t, "./cases/irshape")
+	marked, _ := charReadOps(t, p, "CharReads")
+	got := strings.Join(marked, ",")
+	if got != "index_load,call iter.next_string" && got != "call iter.next_string,index_load" {
+		t.Errorf("CharReads: marked = %q, want the s[i] index_load and the iter.next_string call", got)
+	}
+	marked, all := charReadOps(t, p, "NotCharReads")
+	if len(marked) != 0 || len(all) == 0 {
+		t.Errorf("NotCharReads: marked = %v of %v, want none marked (a map, a slice, len)", marked, all)
+	}
+}

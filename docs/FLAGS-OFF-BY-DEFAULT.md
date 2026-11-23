@@ -17,6 +17,12 @@
 | `-unsafe-host-exec` | Rust の extractor を、サンドボックスなしで、このマシンで実行する | 2026-11-21(`22b6260c`。ADR-064) | 既定にしない。機能のフラグではなく、隔離を外す指定。信頼できるコードだけに使う(`docs/rust-isolation.md`、`docs/AGENT-GUIDE.md`)。環境変数 `RIVUS_UNSAFE_HOST_EXEC=1` でも指定できる | 隔離の仕組みが、どの環境でも使えるようになったとき(未決) |
 | `-body-replaced`、`-read-declared-bodies` | 宣言したパッケージの本体を読まず、モデルが代わりに言う。後者は、その宣言を無視して本体を読み、結果を比べる | 2026-11-23(`a3c84a11`) | 宣言は、モデルのファイルの `body_replaced_packages` に理由つきで書くもので、パッケージごとに決める。フラグは、試すための指定 | 未決 |
 
+## 計画(まだ実装されていない)
+
+次のフラグは**まだ実装されていない。計画**。実装する PR で、上の表に 1 行を足す。
+
+- `-char-taint`(#185。文字列から取り出した 1 文字の byte、rune、コードユニット、char にも汚染を運ぶ)。既定にする条件: (1) 見逃しのセル(zoo の `F/conv/char-*`)が、3 言語で通る、(2) 文字と定数の算術(`c - 'a' + 'A'`)を運ぶ、(3) 既定のフラグ(これを付けた形)で、合否の線を通る、(4) 増える finding のそれぞれで、原因の段に注記が付く。消す条件は未決。先に、IR の `CharRead` を extractor が付ける(Go はこの変更で付く。Dart と Rust は、それぞれの PR)。
+
 既定で働く機能を止めるフラグは、機能の一覧に入れない: `-no-deps`、`-no-builtin-rules`、`-no-project-rules`、`-deterministic-only`、`-no-fetch`。
 
 ## 規則
