@@ -50,8 +50,11 @@ type analyzeOpts struct {
 	// funcTimeout bounds the analysis of one function.
 	funcTimeout time.Duration
 	passes      int
-	numeric     bool
-	workers     int
+	// maxMemory is -max-memory as given ("" when it was not); memLimit is what was decided from it (analyze sets it)
+	maxMemory string
+	memLimit  memoryLimit
+	numeric   bool
+	workers   int
 	// lang is the language to read: auto (what the directory holds), or a list.
 	lang string
 	yes  bool
@@ -150,6 +153,13 @@ func (o *analyzeOpts) register(fs *flag.FlagSet) {
 	fs.BoolVar(&o.numeric, "numeric-taint", false, "follow taint through numbers and bools (by default it stops there: they cannot carry an injection)")
 	fs.BoolVar(&o.verbose, "v", false, "print the time of each phase to stderr")
 	fs.IntVar(&o.maxImpl, "max-implementations", model.DefaultMaxImplementations, "default limit of match: implementations")
+	fs.Func("max-memory", "`size` of the soft memory limit of the Go runtime: when the memory of the process nears it, the collector works harder (6GiB, 6GB, 512MiB, bytes; off: no limit, the default one too). Default: GOMEMLIMIT when it is set, else a quarter of the memory of the machine (of the cgroup if smaller), at least min(4GiB, half of it). Soft: below what the analysis holds live it is not kept and the collector runs all the time. The result does not depend on it (summary.memory_limit_*; ADR-121)", func(v string) error {
+		if _, _, err := parseMemorySize(v); err != nil {
+			return err
+		}
+		o.maxMemory = v
+		return nil
+	})
 	fs.IntVar(&o.passes, "max-passes", taint.DefaultOptions().MaxPasses, "maximum number of passes over the program while summaries change")
 	fs.DurationVar(&o.timeout, "timeout", 0, "stop the analysis after this long and report what was found (0: no limit)")
 	fs.DurationVar(&o.funcTimeout, "func-timeout", taint.DefaultOptions().FuncTimeout, "stop the analysis of one function after this long (it is then recorded as depth_limit, func_timeout: a clock, so the result then depends on the load of the machine)")
@@ -163,7 +173,7 @@ func (o *analyzeOpts) register(fs *flag.FlagSet) {
 	fs.StringVar(&o.memProf, "memprofile", "", "write a heap profile (allocations) to this file after the taint phase (development)")
 	fs.StringVar(&o.lockProf, "lockprofile", "", "write the mutex and block profiles of the taint phase to <this>.mutex and <this>.block (development)")
 	fs.StringVar(&o.cpuProf, "cpuprofile", "", "write a CPU profile of the taint phase to this file (development)")
-	usual(fs, "workers", "numeric-taint", "v", "timeout", "resolve-func-values")
+	usual(fs, "workers", "numeric-taint", "v", "timeout", "resolve-func-values", "max-memory")
 	diagnostic(fs, "k", "dep-k", "max-implementations", "max-passes", "func-timeout", "ir", "pass-stats", "pass-stats-top", "pass-stats-sort", "func-values", "trace-element", "memprofile", "lockprofile", "cpuprofile")
 	kind(fs, "enum:pass-stats-sort", "pass-stats-sort")
 	kind(fs, "file", "ir", "func-values", "memprofile", "lockprofile", "cpuprofile")
@@ -175,6 +185,11 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	if err := enumFlags["pass-stats-sort"].check(o.passStatsSort); err != nil {
 		return nil, err
 	}
+	ml, err := applyMemoryLimit(o.maxMemory)
+	if err != nil {
+		return nil, err
+	}
+	o.memLimit = ml
 	phase := o.phaseTimer()
 	rules, err := o.loadRules(extra...)
 	if err != nil {
@@ -335,6 +350,9 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	rep := report.Build(packages, l.loadErrors(), st, res, rules)
 	rep.Summary.CategoriesExcluded = excluded
 	rep.Summary.Isolation = o.rustIsolation
+	rep.Summary.MemoryLimitBytes = o.memLimit.Bytes
+	rep.Summary.MemoryLimitSource = o.memLimit.Source
+	rep.Summary.MemoryLimitNote = o.memLimit.Note
 	rep.Summary.BodyReplacedPackages = replaced
 	rep.Summary.AccessPathDepth = &report.AccessPathDepth{Project: o.k, Dependency: o.depDepth()}
 	if fs := report.FunctionsSkippedOf(l.ir.FnSkipped); fs != nil {

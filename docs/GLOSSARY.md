@@ -650,3 +650,6 @@ sink が、位置の引数のうち、どのフィールドが危険かを指定
 
 **隔離（isolation）**
 信頼できない Rust を、Docker の中で読むこと。`rivus analyze -lang rust` の既定。ネットワークなし、非 root、読み取り専用などの制限がある。Go と Dart には、まだ無い（docs/rust-isolation.md、ADR-064）。
+
+**メモリの上限（memory limit）**
+`-max-memory`(Go のランタイムの `debug.SetMemoryLimit`、環境変数 `GOMEMLIMIT` と同じ)。やわらかい上限で、プロセスのメモリの合計が近づくと GC が強くなる。守る保証はなく、生きている量より低いと守れず、GC が回り続けて CPU が増える。結果は変えない。指定がなければ、`GOMEMLIMIT`、それもなければ物理メモリ(cgroup があれば小さいほう)の 1/4。`summary.memory_limit_bytes` / `memory_limit_source` / `memory_limit_note` に出る(ADR-121)。
