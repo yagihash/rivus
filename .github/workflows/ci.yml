@@ -23,11 +23,13 @@ env:
   # (The branch name is only compared in an expression here; it is never given to a shell.)
   SHORT: ${{ github.event_name == 'pull_request' && !startsWith(github.head_ref, 'tagpr-from-') && '-short' || '' }}
 
-# A push to main that lands on a run in progress cancels it: only the newest commit is checked (to find which commit
-# broke what, use `git bisect` and a local reproduction). A pull request is checked per branch.
+# A pull request is checked per branch: a new push to it cancels the run in progress. A push to main does NOT cancel the run of the
+# commit before it (and is not cancelled): the tests that run only on main (`TestDeterministic*`, the weekly `TestDogfood`, the ones that
+# -short skips) would never run to the end in an hour of merges that follow one another. To find which commit broke what, use the runs of
+# each commit, `git bisect` and a local reproduction. (The group is the branch of a pull request, and the ref of a push.)
 concurrency:
   group: ci-${{ github.head_ref || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # Which of the jobs below have to run. It is the first job, and a job that failed here fails `ci-ok`.
