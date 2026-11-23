@@ -34,8 +34,8 @@ test: ## every test, with the Dart and Rust extractors (what CI runs on main)
 	go vet ./...
 	RIVUS_DART="$(RIVUS_DART)" RIVUS_RUST="$(RIVUS_RUST)" RIVUS_REQUIRE_DART=1 RIVUS_REQUIRE_RUST=1 go test -count=1 -timeout 40m ./...
 
-test-docs: ## only the tests that read the documents (links, docs/issues, docs/adr, the ADR references); CI runs it for a change of documents only
-	go test ./cmd/rivus -run '^(TestDocLinks|TestIssuesFiles|TestAdrFiles|TestAdrReferences)$$' -count=1
+test-docs: ## only the tests that read the documents (links, docs/issues, docs/adr, the ADR references, no executables or files over 1 MB); CI runs it for a change of documents only
+	go test ./cmd/rivus -run '^(TestDocLinks|TestIssuesFiles|TestAdrFiles|TestAdrReferences|TestNoBinariesOrLargeFiles)$$' -count=1
 
 zoo-loosened: ## check that what the commits change in the zoo marks (bench/zoo/marks.d, against the merge base) is not a loosening without a "Zoo-Loosened:" line (BASE=<commit> HEAD=<commit>)
 	@[ -n "$(BASE)" ] && [ -n "$(HEAD)" ] || { echo "usage: make zoo-loosened BASE=<commit> HEAD=<commit>"; exit 1; }
