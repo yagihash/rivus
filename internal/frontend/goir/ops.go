@@ -182,7 +182,7 @@ func constOf(k *ssa.Const) *ir.Const {
 func qualify(p *types.Package) string { return p.Path() }
 
 // typeString is the name of a type as the IR writes it. A type defined inside a function whose name is
-// also the name of a type alias of the package is told apart by its position (`pkg.Name·N`), so the
+// also the name of a type alias of the package is told apart by its place in the scopes (`pkg.Name·N.M`), so the
 // table of aliases (type_aliases) is not applied to it: the two are not the same type (ADR-083).
 func typeString(t types.Type) string {
 	if !hasShadow(t, 0) {
@@ -232,6 +232,28 @@ func hasShadow(t types.Type, depth int) bool {
 	return false
 }
 
+// scopePath is where the scope of obj is in the package: the index of each scope among the child scopes of its
+// parent, from the package scope down ("2.0.1"). It comes from the order of the source the package was checked in,
+// not from token.Pos, which depends on the order the files were read into the file set (the order of a parallel
+// load), so the name is the same in every run (ADR-118).
+func scopePath(obj types.Object) string {
+	var idx []string
+	for s := obj.Parent(); s != nil && s.Parent() != nil; s = s.Parent() {
+		parent := s.Parent()
+		i := 0
+		for ; i < parent.NumChildren(); i++ {
+			if parent.Child(i) == s {
+				break
+			}
+		}
+		idx = append(idx, strconv.Itoa(i))
+	}
+	for i, j := 0, len(idx)-1; i < j; i, j = i+1, j-1 {
+		idx[i], idx[j] = idx[j], idx[i]
+	}
+	return strings.Join(idx, ".")
+}
+
 func shadowString(t types.Type) string {
 	switch t := t.(type) {
 	case *types.Named:
@@ -240,7 +262,7 @@ func shadowString(t types.Type) string {
 			base = base[:i]
 		}
 		if shadowedBy(t) {
-			base += "·" + strconv.Itoa(int(t.Obj().Pos()))
+			base += "·" + scopePath(t.Obj())
 		}
 		if t.TypeArgs().Len() == 0 {
 			return base
