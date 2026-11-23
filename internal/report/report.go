@@ -144,6 +144,13 @@ type Summary struct {
 	// a sink you expect is missing. Always present (0 when nothing was dropped). It counts the stops while the summaries are
 	// built and applied too, in the function where each happens. Not the same as the numeric_stop notes (one per source).
 	NumericStops NumericStops `json:"numeric_stops"`
+	// MemoryLimitBytes is the soft memory limit the run had (the Go runtime's, as GOMEMLIMIT; ADR-121); absent (0) when there was none.
+	// MemoryLimitSource says where it came from: flag (-max-memory), env (GOMEMLIMIT), default (a quarter of the memory of the
+	// machine) or none. MemoryLimitNote is why there was none, or that -max-memory overrode a GOMEMLIMIT. The limit changes how the
+	// memory is used, not the result. Soft: below what the analysis holds live it is not kept.
+	MemoryLimitBytes  int64  `json:"memory_limit_bytes,omitempty"`
+	MemoryLimitSource string `json:"memory_limit_source,omitempty"`
+	MemoryLimitNote   string `json:"memory_limit_note,omitempty"`
 	// TopSymbols lists the symbols behind the uncertainties rivus can
 	// reduce itself: library calls without a model, and interface methods
 	// without a known implementation. They show where a model helps most.
