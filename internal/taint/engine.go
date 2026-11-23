@@ -529,6 +529,11 @@ type Stats struct {
 	SummarySteps   int    `json:"summary_steps"`
 	LargestSummary string `json:"largest_summary,omitempty"`
 	LargestElems   int    `json:"largest_summary_elems,omitempty"`
+	// OutWidenedFuncs and OutWidenedOutputs: the functions whose final summary has an output that was widened
+	// (more than 24 elements, the parts of a parameter merged into the whole of it), and how many such outputs
+	// there are (the out_limit record, #186).
+	OutWidenedFuncs   int `json:"out_widened_funcs,omitempty"`
+	OutWidenedOutputs int `json:"out_widened_outputs,omitempty"`
 }
 
 // Result is the outcome of a run.
@@ -754,6 +759,9 @@ func (e *Engine) Run() *Result {
 		if n > st.LargestElems || (n == st.LargestElems && n > 0 && sum.Func < st.LargestSummary) {
 			st.LargestElems, st.LargestSummary = n, sum.Func
 		}
+	}
+	if u, funcs, outputs := e.outLimitRecord(); u != nil {
+		st.OutWidenedFuncs, st.OutWidenedOutputs = funcs, outputs
 	}
 	var depSpent, ownSpent time.Duration
 	for fn, d := range e.spent {
@@ -1351,6 +1359,10 @@ func (e *Engine) collect(st Stats) *Result {
 		u.Candidates = ids
 		res.Uncertainties = append(res.Uncertainties, u)
 	}
+	// the functions whose summary has an output that was widened: one record, with the list
+	if u, _, _ := e.outLimitRecord(); u != nil {
+		res.Uncertainties = append(res.Uncertainties, u)
+	}
 	// where the data of a source became a number or a bool: one record for each source site
 	if stops := e.numericStopRecords(); len(stops) > 0 {
 		res.Uncertainties = append(res.Uncertainties, stops...)
@@ -1906,4 +1918,26 @@ func inTestFile(file string) bool {
 	f := filepath.ToSlash(file)
 	return strings.HasSuffix(f, "_test.go") || strings.HasSuffix(f, "_test.dart") ||
 		strings.Contains(f, "/test/") || strings.HasPrefix(f, "test/") || strings.Contains(f, "/tests/") || strings.HasPrefix(f, "tests/")
+}
+
+// outLimitRecord is the record of the outputs of summaries that were widened (widen: more than maxOutElems
+// elements, the parts of a parameter merged into the whole of it), with the number of functions and of outputs; nil
+// when there is none. It reads the final summaries, so the list does not depend on the order or the time of the run.
+func (e *Engine) outLimitRecord() (*Uncertainty, int, int) {
+	var ids []string
+	outputs := 0
+	for fn, sum := range e.summaries {
+		if sum != nil && sum.WidenedOutputs > 0 {
+			ids = append(ids, e.funcID(fn))
+			outputs += sum.WidenedOutputs
+		}
+	}
+	if len(ids) == 0 {
+		return nil, 0, 0
+	}
+	sort.Strings(ids)
+	u := newUncertainty(KindDepthLimit, "out_limit: in "+itoa(len(ids))+" functions an output of the summary had more than "+itoa(maxOutElems)+
+		" elements, and the parts of a parameter were merged into the whole of it: what is told apart in the code is not told apart here (more flows than there are, never fewer)", "")
+	u.Candidates = ids
+	return u, len(ids), outputs
 }

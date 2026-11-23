@@ -20,6 +20,17 @@
 1. 出力の widening を、セルの widening と同じ形で記録する(`path_limit:` の関数の一覧に、widening した関数を入れる、または同じ形の記録を足す)。小さい変更。
 2. テスト 1 つ: SCC の処理の順を入れ替えても、セルの widening と `guard_limit` を通る要約と finding が同じになること。
 
+## 済んだこと(2026-11-23)
+
+- すること 1: 出力の widening を記録した。不確実性 `depth_limit` の 1 件(detail は `out_limit:` で始まる。`candidates` に、最終の要約に畳んだ出力がある関数の ID。ソート済み)。`stats` に `out_widened_funcs`(関数の数)と `out_widened_outputs`(畳んだ出力の数)。数えるのは `Summary.WidenedOutputs`(内部。署名、出力、索引には入らない)で、実行の順や時間に依らない。ちょうど 24 要素では畳まず、数えない。結果(finding、要約、ID)は変わらない。期待値のファイルで変わったのは `depth_limit` の数だけ(`middleware` 10 から 11、`all` 62 から 63、`middleware18` を足した)。
+- テスト: `internal/taint/outlimit_test.go`(24 と 25 の境目、一覧のソート)、`TestScaleSynth` の `middleware18`(`-workers 1` と `4` で `candidates` が同じ)。
+- 索引: 要約は索引に保存されない(保存されるのは IR)ので、扱うことはない。
+
+## 残り
+
+- すること 2 のテスト(SCC の処理の順を入れ替えても、セルの widening と `guard_limit` を通る要約と finding が同じ)。
+- finding からの対応: 今の記録は、プログラム全体の一覧。ある finding の経路が、畳まれた出力を通ったかは分からない(`Step.Func` を `candidates` に当てることはできるが、その関数の畳まれていない出力を通った場合と区別できない)。分かるようにするには、`OutElem` に「畳んだ」の印を持たせ、要約を適用する段の `Notes` に付ける(`access_path_truncated` と同じ形)必要がある。要素の同一性、合成、署名に触れるので、この課題では実装しない。
+
 ## 守るもの
 
 2 のテスト。1 は、widening した関数が一覧に出ること。

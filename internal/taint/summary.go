@@ -60,6 +60,10 @@ type Summary struct {
 	// call that has more candidates than rivus keeps (candidate_limit): what a caller passes there is not followed, and
 	// the caller is told. Internal: it is not in the result, nor in the index file.
 	LimitedParams []int
+	// WidenedOutputs is how many outputs of this summary had more than maxOutElems elements, and had the parts of a
+	// parameter merged into the whole of it (widen). Internal, like LimitedParams: it is not in signature(), the
+	// result's summaries or any index file; the engine reads it from the final summaries to record out_limit (#186).
+	WidenedOutputs int
 	// UnresolvedParams are the parameters that this function (or a function it passes the parameter to) holds a function in
 	// that it calls, with no candidate: which function it is, is not known. A caller that passes something there is told.
 	UnresolvedParams []int
@@ -143,7 +147,11 @@ func (s *state) summarize() *Summary {
 				elems = append(elems, OutElem{E: e, Steps: s.trace(Loc{r, p}, e), Guards: gs})
 			}
 			if len(elems) > 0 {
-				sum.Outputs = append(sum.Outputs, Output{Kind: kind, Index: idx, Global: glob, Path: p, Elems: widen(elems)})
+				w, merged := widen(elems)
+				if merged {
+					sum.WidenedOutputs++
+				}
+				sum.Outputs = append(sum.Outputs, Output{Kind: kind, Index: idx, Global: glob, Path: p, Elems: w})
 			}
 		}
 	}
@@ -177,9 +185,11 @@ func (s *state) summarize() *Summary {
 // number of fields (ADR-014, ADR-031).
 const maxOutElems = 24
 
-func widen(elems []OutElem) []OutElem {
+// widen returns the elements, and whether it merged any: false when there are maxOutElems or fewer, or when no two
+// elements stood for parts of the same parameter.
+func widen(elems []OutElem) ([]OutElem, bool) {
 	if len(elems) <= maxOutElems {
-		return elems
+		return elems, false
 	}
 	type key struct {
 		param int
@@ -213,7 +223,7 @@ func widen(elems []OutElem) []OutElem {
 	for _, k := range order {
 		out = append(out, merged[k])
 	}
-	return out
+	return out, len(out) < len(elems)
 }
 
 func (s *state) isParamRoot(r Root) bool {
@@ -686,7 +696,11 @@ func joinSummaries(old, cur *Summary) *Summary {
 			list = append(list, oe)
 		}
 		sort.Slice(list, func(i, j int) bool { return lessElem(list[i].E, list[j].E) })
-		out.Outputs = append(out.Outputs, Output{Kind: k.kind, Index: k.index, Global: k.glob, Path: k.path, Elems: widen(absorbWhole(list))})
+		w, merged := widen(absorbWhole(list))
+		if merged {
+			out.WidenedOutputs++
+		}
+		out.Outputs = append(out.Outputs, Output{Kind: k.kind, Index: k.index, Global: k.glob, Path: k.path, Elems: w})
 	}
 	sinks := map[sinkKey]*SinkReach{}
 	for _, sum := range []*Summary{old, cur} {
