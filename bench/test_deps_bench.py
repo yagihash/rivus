@@ -51,6 +51,29 @@ class Detection(unittest.TestCase):
         self.assertEqual(d.count_category({}, "path_traversal"), 0)
 
 
+class Peak(unittest.TestCase):
+    GB = 1024 ** 3
+
+    def test_end_of_run_wins_over_samples(self):
+        # the sampler saw 6 GB, the process ended at 9 GB: the verdict uses 9 GB
+        b, how = d.record_peak(9 * self.GB, 6 * self.GB, False, 8 * self.GB)
+        self.assertEqual((b, how), (9 * self.GB, "end-of-run"))
+        self.assertFalse(d.judge(100, 180, b / self.GB, 8, True, None)[0])
+
+    def test_killed_run_has_only_samples_and_is_over_the_cap(self):
+        b, how = d.record_peak(None, 7 * self.GB, True, 8 * self.GB)
+        self.assertEqual(how, "sampled")
+        self.assertGreater(b, 8 * self.GB)
+
+    def test_no_timer_output_without_a_kill(self):
+        self.assertEqual(d.record_peak(None, 3, False, 8 * self.GB), (3, "sampled"))
+
+    def test_timer_output_parsed(self):
+        self.assertEqual(d.max_rss_bytes("  123456  maximum resident set size\n"), 123456)
+        self.assertEqual(d.max_rss_bytes("Maximum resident set size (kbytes): 10\n"), 10240)
+        self.assertIsNone(d.max_rss_bytes("nothing"))
+
+
 class Through(unittest.TestCase):
     truth = [{"file": "a.dart", "line": 1, "label": "vuln", "category": "path_traversal"},
              {"file": "a.dart", "line": 2, "label": "vuln", "category": "path_traversal"},

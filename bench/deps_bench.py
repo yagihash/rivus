@@ -19,7 +19,7 @@ the run was killed by us), functions (stats.functions), findings, uncertainties,
 The pass line (`make bench-passline`; targets in bench/deps-targets.json): one line per target,
   PASS|FAIL memos time=<s>/<limit> mem=<GB>/<cap> converged=<yes|no> detected=<yes|no|n/a>
 with the default flags of rivus. PASS needs all four: it ended by itself within the time limit, the memory of the
-process group never went above the cap (a watchdog kills the group of this run only), it converged (with no function
+child ended at or below the cap (the END-OF-RUN peak of /usr/bin/time, not the max of samples; a watchdog that samples the process group stops a run early and kills the group of this run only), it converged (with no function
 stopped on the clock: stats.load_dependent is not set), and the
 count of findings of the category of the target is higher on the pre-fix commit than on the fixed one (counts
 only; n/a when the target has no pair). A target with `detect.mode` "through" (a truth file, one public fixed
@@ -75,6 +75,20 @@ def max_rss_mb(err):
     if m:
         return int(m.group(1)) // 1024
     return None
+
+
+def max_rss_bytes(err):
+    """The end-of-run peak (bytes) from the output of /usr/bin/time (macOS -l: bytes; Linux -v: KB), or None."""
+    m = re.search(r"^\s*(\d+)\s+maximum resident set size", err, re.M)
+    if m:
+        return int(m.group(1))
+    m = re.search(r"Maximum resident set size \(kbytes\): (\d+)", err)
+    if m:
+        return int(m.group(1)) * 1024
+    return None
+
+
+max_rss_mb_exact = max_rss_bytes
 
 
 def measure(name, rivus, timeout, work):
@@ -176,6 +190,19 @@ def through_counts(truth, rep):
 def detected_through(tp):
     """Per vulnerability: detected when at least one finding passes through a labelled position of its truth."""
     return tp is not None and tp >= 1
+
+
+def record_peak(end_of_run_bytes, sampled_bytes, killed_for_memory, cap_bytes):
+    """RECORD (the number of the verdict), separate from the WATCHDOG (the sampler that stops a run early). The memory
+    of the verdict is the end-of-run peak of the child (`/usr/bin/time` max resident set; the kernel's ru_maxrss), never
+    the max of the samples (a sampler can miss a short peak). Only a run that the watchdog killed has no end-of-run
+    number (its timer was killed with it): then the sampled value, which is above the cap by the watchdog's rule.
+    Returns (bytes, how) with how "end-of-run" or "sampled"."""
+    if end_of_run_bytes is not None:
+        return end_of_run_bytes, "end-of-run"
+    if killed_for_memory:
+        return max(sampled_bytes, cap_bytes + 1), "sampled"
+    return sampled_bytes, "sampled"
 
 
 def process_group_rss(pgid):
@@ -312,9 +339,8 @@ def analyze_once(rivus, t, src, env, limit_s, cap_bytes, work, tag):
     cmd = timer + [rivus, "analyze", "-lang", t["lang"], "-C", src] + expand_args(t.get("args", []), src, t.get("subdir", ""))
     outp, errp = os.path.join(work, tag + ".out.json"), os.path.join(work, tag + ".err")
     rc, why, wall, peak = run_watched(cmd, ROOT, env, limit_s, cap_bytes, errp, outp)
-    rss = max_rss_mb(open(errp, errors="replace").read())
-    if rss is not None:
-        peak = max(peak, rss * 1024 * 1024)
+    rss = max_rss_mb_exact(open(errp, errors="replace").read())
+    peak, how = record_peak(rss, peak, why == "memory", cap_bytes)
     rep, converged = None, False
     if not why and rc == 0:
         try:
@@ -325,7 +351,7 @@ def analyze_once(rivus, t, src, env, limit_s, cap_bytes, work, tag):
             converged = bool(st.get("converged", False)) and not st.get("timed_out", False) and not st.get("load_dependent", False)
         except (OSError, ValueError):
             rep = None
-    return {"wall": wall, "peak": peak, "converged": converged, "why": why, "report": rep}
+    return {"wall": wall, "peak": peak, "converged": converged, "why": why, "report": rep, "peak_how": how}
 
 
 def passline(name, t, rivus, cache, outdir, limit_s, cap_gb):
