@@ -200,6 +200,7 @@ rivus の設計の判断は、ここに書いた原則に沿う。ほかの文�
 - 実行のたびに何度も通る関数(`add`、`applySummary`、`copyLoc` など)を触る PR は、本文に 1 行、そう書く。レビューする人が、割り当てを見る。
 - 1 日の報告の最後に、`make daily-stats SINCE=<日付>` の 1 行(解析・モデル・extractor の PR の数と、それ以外の数)を付ける。
 - マージ済み(または閉じた)PR のブランチへの push は、`.githooks/pre-push` が止める(有効にするのは `make setup`、または `git config core.hooksPath .githooks`。意図した push は `RIVUS_ALLOW_PUSH_TO_MERGED=1`)。日報の `make daily-stats` の行に、`orphan remote branches: N`(main にないコミットがあって、開いている PR がないブランチ。renovate/ は別の行)が出る。0 でなければ、取り込むか消す。
+- `make merge PR=<n>`(`scripts/merge-pr.sh`)は、マージの前に、main の最新の `ci.yml`(push)の結果を確認する。失敗しているとマージしない(実行中のときは、結果のある最新のものを見る。問い合わせられないときも止める)。main の CI を直す PR だけ、`RIVUS_MERGE_FIXES_MAIN=1` で通す(出力に残る)。PR は -short なので、重いテストは main でしか実行されない。
 - 既定で off の機能の一覧と、足すときの規則は [FLAGS-OFF-BY-DEFAULT.md](FLAGS-OFF-BY-DEFAULT.md)。
 
 **根拠の ADR:** 027、043、046、055、057（仮説の履歴を ADR に残す）、061、066、084〜090（「確かめたこと」の節）
