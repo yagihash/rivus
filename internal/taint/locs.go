@@ -212,8 +212,17 @@ func (s *state) computeLocs(v *sg.Value) []Loc {
 		}
 		return ownRoot
 	}
-	if len(in.Dsts) == 0 || in.Dsts[0] != v {
-		return ownRoot // a result after the first: its own root
+	if len(in.Dsts) == 0 {
+		return ownRoot
+	}
+	if in.Dsts[0] != v {
+		// A result after the first is its own root, except the value of a range
+		// step: a pointer taken from it is the pointer stored in the element.
+		if in.Op == ir.OpCall && len(in.Dsts) == 3 && in.Dsts[2] == v && pointerLike(v) &&
+			(in.Callee.Symbol == symRangeNext || in.Callee.Symbol == symRangeNextS) && len(in.Args) >= 1 {
+			return suffix(suffix(s.locs(in.Args[0]), "[]"), "*")
+		}
+		return ownRoot
 	}
 	switch in.Op {
 	case ir.OpAddrOf:
@@ -231,7 +240,7 @@ func (s *state) computeLocs(v *sg.Value) []Loc {
 			return append(suffix(slots, "*"), s.pointees(slots)...)
 		}
 	case ir.OpIndexLoad:
-		if len(in.Dsts) == 1 && pointerLike(v) {
+		if pointerLike(v) {
 			return suffix(suffix(s.locs(in.Args[0]), "[]"), "*")
 		}
 	case ir.OpLoad, ir.OpGlobalLoad:
@@ -256,12 +265,17 @@ func (s *state) computeLocs(v *sg.Value) []Loc {
 			return s.locs(in.Args[0])
 		}
 	case ir.OpTypeAssert:
-		if len(in.Dsts) == 1 && pointerLike(v) {
+		if pointerLike(v) {
 			return suffix(s.locs(in.Args[0]), "*")
 		}
 	case ir.OpCall:
-		if in.Callee.Symbol == symChanRecv && len(in.Dsts) == 1 && len(in.Args) >= 1 && pointerLike(v) {
+		if in.Callee.Symbol == symChanRecv && len(in.Args) >= 1 && pointerLike(v) {
 			return suffix(suffix(s.locs(in.Args[0]), "[]"), "*")
+		}
+		if in.Callee.Symbol == symRangeStart && len(in.Args) == 1 {
+			// The iterator of a range reads the elements of the ranged value
+			// itself: a pointer taken from a step is the one stored in it.
+			return append(ownRoot, s.locs(in.Args[0])...)
 		}
 		if i, ok := s.eng.aliasArgs[in.Callee.Symbol]; ok && i < len(in.Args) {
 			return s.aliasLocs(v, in.Args[i], ownRoot)

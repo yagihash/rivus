@@ -1,0 +1,2 @@
+go	cont/ptr_commaok_assert/ptr_commaok_assert.go	sink-none	@sink(none)	func decoy() { @decoy
+go	cont/ptr_commaok_assert/ptr_commaok_assert.go	sink-none	@sink(none)	func fixed() { @fixed

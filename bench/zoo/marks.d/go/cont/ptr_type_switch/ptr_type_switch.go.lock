@@ -1,0 +1,2 @@
+go	cont/ptr_type_switch/ptr_type_switch.go	sink-none	@sink(none)	func decoy() { @decoy
+go	cont/ptr_type_switch/ptr_type_switch.go	sink-none	@sink(none)	func fixed() { @fixed
