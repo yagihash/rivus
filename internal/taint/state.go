@@ -263,10 +263,14 @@ type state struct {
 	findings     map[findingKey]*rawFinding
 	sinkReaches  map[sinkKey]*SinkReach
 	uncertain    []*Uncertainty
-	truncated    bool
-	widened      bool
-	adds         int
-	exceeded     bool
+	// markChar: the instruction being transferred is a character read: what it puts into a number is a character
+	// (-char-taint). noChar: the call being applied is a model or an unmodelled call: what it puts into a number is
+	// not (a length, a count, a parse of the text), whatever its operands hold.
+	markChar, noChar bool
+	truncated        bool
+	widened          bool
+	adds             int
+	exceeded         bool
 	// exceededBy says which limit stopped the analysis (degBudget, degFuncTimeout, degRunTimeout)
 	exceededBy uint8
 }
@@ -554,12 +558,13 @@ func (s *state) numericRoot(r Root) bool {
 // decide from it, so that a change of what add does (what it leaves out, how it cuts a path, when it
 // widens a cell) is a change of this function and of nothing else.
 type target struct {
-	loc     Loc  // the location, its path cut at K
-	trunc   bool // the path was cut
-	numeric bool // a number or a bool that is not followed: add leaves it out (and says so for a real element)
-	set     Set  // what the cell holds (nil: there is nothing there yet)
-	e       Elem // the element, widened when the cell holds very many symbolic elements of one parameter
-	widened bool // e was widened
+	charNote bool // a character entered a number (-char-taint): the hop says so (char_transform)
+	loc      Loc  // the location, its path cut at K
+	trunc    bool // the path was cut
+	numeric  bool // a number or a bool that is not followed: add leaves it out (and says so for a real element)
+	set      Set  // what the cell holds (nil: there is nothing there yet)
+	e        Elem // the element, widened when the cell holds very many symbolic elements of one parameter
+	widened  bool // e was widened
 }
 
 // numericLoc reports whether the location is a number or a bool as a whole, which taint stops at
@@ -574,8 +579,14 @@ func (s *state) numericLoc(l Loc) bool {
 func (s *state) targetOf(l Loc, e Elem, create bool) target {
 	t := target{loc: l, e: e}
 	if s.numericLoc(l) {
-		t.numeric = true
-		return t
+		if !s.charEnters(e) {
+			t.numeric = true
+			return t
+		}
+		// a character read out of a text, or what was made of one: it enters the number (-char-taint)
+		t.e = e.WithChar(true)
+		t.charNote = true
+		e = t.e
 	}
 	t.loc.Path, t.trunc = pathTrunc(l.Path, s.k())
 	if create {
@@ -600,6 +611,23 @@ func (s *state) targetOf(l Loc, e Elem, create bool) target {
 	return t
 }
 
+// charEnters reports whether the element goes into a number that taint stops at otherwise (-char-taint): a
+// character read (markChar), or an element that is one already (a call that makes a number of a text has taken the mark
+// off what it read from the text: carried).
+func (s *state) charEnters(e Elem) bool {
+	return s.eng.opts.CharTaint && (s.markChar || e.char)
+}
+
+// carried is what an element is when it is read from where it was found, to be put into a cell. A model or a call that has
+// no body (s.noChar) makes no character of a text: the mark stays only on what is read from a number (unicode.ToUpper(r)),
+// not from a text (a length, a count, a parse of what was made of characters).
+func (s *state) carried(f found) Elem {
+	if s.noChar && f.E.char && !(f.Cell.Path == "" && s.numericRoot(f.Cell.Root)) {
+		return f.E.WithChar(false)
+	}
+	return f.E
+}
+
 // add puts an element into a cell. It records w as the reason the first time.
 func (s *state) add(l Loc, e Elem, w *why) {
 	t := s.targetOf(l, e, true)
@@ -612,6 +640,9 @@ func (s *state) add(l Loc, e Elem, w *why) {
 			s.noteCharStopped(int(e.Param), s.eng.funcID(s.fn))
 		}
 		return
+	}
+	if t.charNote {
+		w = s.withCharNote(w)
 	}
 	if t.trunc {
 		s.truncated = true
@@ -801,6 +832,7 @@ func (s *state) collectUncached(l Loc) []found {
 func (s *state) copyLoc(src, dst Loc, w func(f found) *why) {
 	for _, f := range s.collect(src) {
 		dl := Loc{dst.Root, dst.Path + f.Rel}
+		f.E = s.carried(f)
 		if s.plainExists(dl, f.E, ref{f.Cell, f.Orig}, true) {
 			continue
 		}
@@ -837,6 +869,25 @@ func (s *state) withCutNote(w *why, root Root, kept string, fullDepth int, verb 
 		"an access path was cut at depth "+itoa(s.k())+" ("+scope+" function "+s.eng.funcID(s.fn)+"): the value was "+verb+" at "+rn+kept+
 			" from "+deepText(fullDepth)+"; what is below the cut is taken to be tainted as well, so the flow from here "+
 			"may exist only because of the cut (more flows than there are, never fewer)", w.pos.pos())))
+	return &c
+}
+
+// withCharNote is the hop with the char_transform note added (a copy, like withCutNote): a character read out of a text,
+// or something made of one, entered a number here, which taint does not follow without -char-taint. The seed of a
+// parameter has none: nothing was read there.
+func (s *state) withCharNote(w *why) *why {
+	if w == nil || s.fn == nil || hasKind(w.notes(), KindCharTransform) || (w.from == nil && w.desc == "param") {
+		return w
+	}
+	c := *w
+	if w.rare != nil {
+		r := *w.rare
+		c.rare = &r
+	}
+	c.setNotes(appendNote(c.notes(), s.pathNote(KindCharTransform,
+		"a character read out of a text (or a value made of one, by arithmetic with a constant or a conversion to a text) was followed here: "+
+			"the value is taken to be made of the text, which is more than the code may do with it (a comparison or a count of the text, an "+
+			"escaping that rewrites each character) (-char-taint; more flows than there are, never fewer)", w.pos.pos())))
 	return &c
 }
 
@@ -977,6 +1028,7 @@ func (s *state) addsNothing(dsts []Loc, e Elem, from ref, hasFrom bool) bool {
 // put adds the found elements to the destination, collapsed.
 func (s *state) put(dst Loc, fs []found, w func(f found) *why) {
 	for _, f := range fs {
+		f.E = s.carried(f)
 		if s.plainExists(dst, f.E, ref{f.Cell, f.Orig}, true) {
 			continue
 		}

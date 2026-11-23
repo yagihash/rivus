@@ -56,6 +56,10 @@ type Options struct {
 	// text, and a number made from a request has no text to inject. Turn it
 	// on for rules whose sinks are quantities (a size, a count, a delay).
 	NumericTaint bool
+	// CharTaint follows taint through one character read out of a text (a byte, a rune, a code unit: the instructions
+	// the extractor marks CharRead), the arithmetic of it with a constant, and back into a text. A length, an index, a
+	// comparison and a number made of it still stop. It does nothing with NumericTaint (that follows all numbers).
+	CharTaint bool
 	// PassStats adds to the stats what changed in the summaries in each pass, and the functions without a
 	// model that tainted values reached the most (ADR-061). TraceElement is a site ID: where its
 	// elements first leave their function is printed to stderr. Neither changes the findings.

@@ -465,6 +465,7 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 | `container_element_imprecision` | rivus | 結論に影響した場合のみ記録（ノイズ防止） |
 | `depth_limit` | rivus | 打ち切り。detail が理由を示す（`guard_limit`、`candidate_limit`、`caller_depth_limit`、`func_timeout`、`path_limit`、`out_limit` など）。例外: detail が `path_steps_omitted:` のものは、**解析の打ち切りではなく、表示の省略**（流れは見た。200 ステップを超える経路の、真ん中のステップを見せていない。省いたステップの不確実性・モデル・到達性は finding に入っている）。ただし、source までさかのぼる途中の打ち切り（`the path was followed back for ...`）は、その先のステップを見ていない |
 | `access_path_truncated` | rivus | 経路の**このステップ**で、値が深さの上限(`-k`。依存の関数は `-dep-k`)で切ったアクセスパスを通った(切ったセルに入れたステップ、切ったパスで読んだステップ)。切った所より下は「まるごと汚染」として扱うので、ここから先の流れは、切ったために出ているだけかもしれない(多めに出る側。見逃しにはならない)。要素の同一性には入れず、ステップ(why)に付ける(`pointer_alias` と同じ形)。使った深さは `summary.access_path_depth`(`{project, dependency}`、いつも出る)。切ったが値がそこを通らない finding には付かない。付かない場合: ポインタの位置のパスを切る所(`locs.go`。ループで伸びるパスの打ち切り)は注記を付けない。プログラム全体の記録は、`depth_limit` の `path_limit:` |
+| `char_transform` | rivus | 経路の**このステップ**で、文字列の 1 文字を読んだ値(IR の `CharRead`)か、それに由来のマーク(`Elem` の `char`)が付いた値が、数や bool の場所に入った(`-char-taint` のときだけ。ステップに付け、要素の同一性にはマークが入る)。マークは、`CharRead` の命令の結果に付き、コピー、定数との算術、byte・rune・char への変換、文字列・スライスへの書き込みと要約を通る。落ちる所: 比較、`len`、別の数の型への変換(`int(c)`)、モデルや本体のない呼び出しが、文字列から作る数。表を文字で引く `t[c]` は、引いた値に文字のマークが付く。フラグ off では出ない。種類を 1 つ足した(ADR-008 の扱いは未決) |
 | `recursion_approximation` | rivus | |
 | `field_imprecision` | rivus | フィールドを指定する sink に、そのフィールドにあるとは言えない汚染が届いた（14 節）。detail は `whole_value`、`path_limit`、`element`、`opaque_callee` |
 | `field_unresolved` | rivus | sink が指定したフィールドが、プログラムにない（綴りの誤りなど）。sink を全体として扱った（14 節） |

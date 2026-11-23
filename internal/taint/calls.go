@@ -124,6 +124,13 @@ type callee struct {
 
 func (s *state) callBody(cc *callCtx) {
 	ci := cc.in
+	if s.eng.opts.CharTaint && builtinName(ci) == "" {
+		// -char-taint: a call that reads one character of a text gives one; a model or a call with no body makes no
+		// character of its operands (a length, a count, a parse); the summary of a function is applied as it is (applySummary)
+		prevMark, prevNo := s.markChar, s.noChar
+		s.markChar, s.noChar = ci.IR != nil && ci.IR.CharRead, !(ci.IR != nil && ci.IR.CharRead)
+		defer func() { s.markChar, s.noChar = prevMark, prevNo }()
+	}
 
 	// Sources and sinks matched by the rules at this call.
 	sitesHere := s.eng.sites.ByIRInstr[sites.IRInstr{Func: s.fn.IR.ID, Block: ci.IRBlock, Instr: ci.IRIndex}]
@@ -1066,7 +1073,7 @@ func (s *state) applyFlows(cc *callCtx, flows []model.Flow, o *op, desc string, 
 		}
 		for _, d := range dsts {
 			for _, f := range src {
-				elems := []Elem{f.E}
+				elems := []Elem{s.carried(f)}
 				kind := "propagated by " + cc.sym
 				if o != nil {
 					elems = sanitize(elems, *o, s.eng.rules)

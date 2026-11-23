@@ -552,7 +552,9 @@ type Instr struct {
 	Keyed bool `json:"keyed,omitempty"`
 	// CharRead marks an instruction (an index_load, a field_load or a call)
 	// whose result is one element of a text: a byte or a rune of a string,
-	// or one element of the code units, the bytes or the runes of one. An
+	// or one element of the code units, the bytes or the runes of one (Go:
+	// also a byte or a rune out of any slice or array: the extractor does not
+	// tell a text from binary data). An
 	// extractor that does not set it says nothing: the instruction is then
 	// not taken as a character read by what this attribute carries.
 	CharRead bool `json:"char_read,omitempty"`

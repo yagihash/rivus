@@ -123,6 +123,11 @@ func (k *keyCtx) compute() (*keyResult, error) {
 	// the depth the dependencies were read at (the effective one: the default is 2, but not deeper than -k): an index made
 	// at another depth, or by a version that had no such depth, is not this one
 	cfg["flags.dep-k"] = strconv.Itoa(o.depDepth())
+	if o.charTaint && !o.numeric {
+		// the elements of an index made with it carry the mark: not one made without it. Set only when on (and when it does
+		// something), so that the key of an index made without it is what it was.
+		cfg["flags.char-taint"] = "true"
+	}
 	if o.resolveFuncValues {
 		// the calls that got candidates are edges of the file: an index with the flag is not one without it. Set only when
 		// on, so that the key of an index made without it is what it was.

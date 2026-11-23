@@ -289,6 +289,7 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `-v` | 各段階の時間とメモリを、標準エラーに出す | 出さない | どの段階が遅いかを知る | |
 | `-workers <n>` | 同時に解析する関数の数(0 = CPU の数、1 = 1 つずつ) | `0` | マシンの負荷を下げる。結果は変わらない | |
 | `-numeric-taint` | 数値と真偽値になった値も追う | 追わない | 数値で起きる問題(範囲、ID の指定)を見たいとき | |
+| `-char-taint` | 文字列から 1 文字取り出した値(byte、rune、コードユニット、char)にも汚染を運ぶ。文字と定数の算術、表を文字で引く形(`digits[c>>4]`)、文字列に戻る所まで。長さ、添字、比較の結果、別の数への変換(`int(c)`)、モデルが作る数では止める。`-numeric-taint` が on のときは効かない(標準エラーに 1 行) | 追わない | 1 文字ずつ読んで詰め直す関数(字句解析、大文字化、エスケープ)を通る流れが、見逃しになっているとき。通った finding には `char_transform` の注記が付く(Go のみ。Dart と Rust は extractor が未対応) | |
 | `-resolve-func-values` | 呼び出し先の分からない関数値の呼び出しに、自分のコードで作った関数を候補として補ってから解析する(実験) | off | `unresolved_callee` が多いとき。`index` にも同じ指定が必要 | |
 | `-unsafe-host-exec` | Rust の extractor を、サンドボックスなしで、このマシンで実行する | off | **信頼できるコードだけ**。Linux で Rust を読むとき | ○ |
 | `-dart-extractor <cmd>`、`-rust-extractor <cmd>` | extractor のコマンド | 環境変数 `RIVUS_DART_EXTRACTOR` / `RIVUS_RUST_EXTRACTOR`、次に `rivus-dart` / `rivus-rust` | extractor が PATH にないとき | ○ |
@@ -313,7 +314,7 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `setup rust` | `-source <dir>`、`-y` | extractor のソース(必須)、聞かずにダウンロードする | なし |
 | `graph`(全部) | `-graph <file>` / `-C <dir>` | 読むファイル / そのディレクトリのキャッシュ(照合もする) | どちらかが必須 |
 | `graph`(全部) | `--pretty` | JSON を整形する | 1 行 |
-| `graph callers`、`callees` | `--depth <n>` | 何段先まで | `1`(最大 6) |
+| `graph callers`、`callees` | `--depth <n>` | 何階層先まで | `1`(最大 6) |
 | `graph`(`info` 以外) | `--limit <k>` | 並べる数の上限 | `50`(`path` は 5 本) |
 | `graph callers`、`callees` | `--include-builtin` | 組み込み関数の呼び出しを残す | 省く |
 | `graph callers`、`callees` | `--site <id>` | 対象を、サイトの ID で指定する | なし |
@@ -397,6 +398,7 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `project_body_unread` | プロジェクトの関数の本体を、extractor が読めなかった(Rust の async closure など)。依存の関数なら `dependency_body_unread`。数は `summary.functions_skipped` | その関数の中を、自分で読む。`detail` に理由 |
 | `depth_limit` | 解析の上限で止めた。理由は `detail` の先頭の語: `budget`(作業量)、`func_timeout` / `run_timeout`(時計)、`candidate_limit`(関数値の候補が多すぎて、どれも追わなかった)、`path_limit`(アクセスパスを切った)、`out_limit`(要約の 1 つの出力が 24 要素を超え、パラメータの別の部分を、パラメータ全体に畳んだ。`candidates` に関数の一覧。多めに出る側)、`out_widened`(経路の**ステップ**に付き、そのステップを通る finding の `uncertainties` にも出る。畳んだ出力の、パラメータ全体になった要素を適用したステップ。付くと `confidence` は `requires_review`。多めに出る側)など | その関数の要約は、流れを落としていることがある。その関数の周辺は、見逃しがある前提で、コードを読む。ただし `out_limit` のときは逆で、その関数を通る流れが、フィールドを区別せずに(多めに)出ていることがある。別のフィールドの値が実際に届くかを、コードで確認する |
 | `access_path_truncated` | 経路のこのステップで、値がアクセスパスを深さの上限(`-k`、依存の関数は実験の `-dep-k`)で切った所を通った。切った所より下を、まるごと汚染として扱うので、この先の流れは、切ったために出ているだけかもしれない(別のフィールドへの流れを出していることがある。多めに出る側で、見逃しにはならない)。使った深さは `summary.access_path_depth`(`{project, dependency}`、いつも出る) | そのステップで、フィールドを通る所が、実際にそのフィールドの値を運ぶかを、コードで確かめる |
+| `char_transform` | 経路のこのステップで、文字列から取り出した 1 文字(byte、rune)か、それから作った値が、数に入った(`-char-taint`)。流れは、テキストを 1 文字ずつ分けて組み直す所を通っているので、コードが文字ごとに書き換える(エスケープなど)なら、実在しないかもしれない(多めに出る側。見逃しにはならない) |
 | `recursion_approximation` | 互いに呼び合う関数のかたまりを、近似で閉じた | そのかたまりの中の流れは、粗い |
 | `missing_source` | コードが見えなかった(型エラーでビルドできないパッケージ、生成されていないコード) | そのパッケージの中は見ていない。`summary.unread` を見て、ビルドや生成を済ませてやり直す |
 | `container_element_imprecision` | コンテナ(スライス、マップ)の要素を区別していない | 汚染された要素と、sink に入る要素が同じかを、コードで確認する |
