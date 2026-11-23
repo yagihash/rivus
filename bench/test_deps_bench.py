@@ -199,6 +199,30 @@ class Score(unittest.TestCase):
         self.assertEqual(d.score_counts(truth, {"findings": []}), (0, 3))
 
 
+class PinLock(unittest.TestCase):
+    def test_lock_is_copied_to_the_root_of_the_tree(self):
+        with tempfile.TemporaryDirectory() as root:
+            d.pin_lock({"lock": "bench/dart-services/pubspec.lock"}, root)
+            want = open(os.path.join(d.ROOT, "bench/dart-services/pubspec.lock")).read()
+            self.assertEqual(open(os.path.join(root, "pubspec.lock")).read(), want)
+
+    def test_an_existing_lock_in_the_tree_is_replaced(self):
+        with tempfile.TemporaryDirectory() as root:
+            open(os.path.join(root, "pubspec.lock"), "w").write("other")
+            d.pin_lock({"lock": "bench/dart-services/pubspec.lock"}, root)
+            self.assertNotEqual(open(os.path.join(root, "pubspec.lock")).read(), "other")
+
+    def test_no_lock_field_writes_nothing(self):
+        with tempfile.TemporaryDirectory() as root:
+            d.pin_lock({}, root)
+            self.assertEqual(os.listdir(root), [])
+
+    def test_only_dart_services_has_a_lock(self):
+        t = json.load(open(d.TARGETS_FILE))
+        self.assertEqual([n for n, v in t.items() if isinstance(v, dict) and v.get("lock")], ["dart_services"])
+        self.assertTrue(os.path.exists(os.path.join(d.ROOT, t["dart_services"]["lock"])))
+
+
 class Targets(unittest.TestCase):
     def test_pass_line_a_and_c(self):
         t = json.load(open(d.TARGETS_FILE))
