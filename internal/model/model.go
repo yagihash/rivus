@@ -1479,11 +1479,43 @@ func (r *Rules) addDerived(s Sanitizer) {
 // the labels `accepts` (none: any), reacts to a value that has the label. A label that a sanitizer gave with `neutralises` is
 // accepted unless the sink is of a category that the sanitizer neutralises (all the categories of the site must be neutralised
 // to hide it), or unless it would not have accepted the label that was dropped.
+// ChainsOnto says whether a value with the label (a label that a scoped sanitizer gave, or several: `a&b`) goes through another
+// sanitizer that drops the labels `drops`: the sanitizer drops what the first one dropped, so it adds its own label to the value.
+func (r *Rules) ChainsOnto(label string, drops []string) bool {
+	if r == nil || len(r.Derived) == 0 {
+		return false
+	}
+	for _, part := range strings.Split(label, "&") {
+		d := r.Derived[part]
+		if d == nil {
+			return false
+		}
+		for _, f := range d.From {
+			for _, x := range drops {
+				if x == "*" || x == f {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// ChainLabel is the label of a value that has the label and goes through a sanitizer that adds `add`: the names in order, once each.
+func (r *Rules) ChainLabel(label, add string) string {
+	parts := strings.Split(label, "&")
+	if !contains(parts, add) {
+		parts = append(parts, add)
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, "&")
+}
+
 func (r *Rules) AcceptsLabel(accepts []string, label string, categories []string) bool {
 	if len(accepts) > 0 && contains(accepts, label) {
 		return true
 	}
-	d := r.Derived[label]
+	d := r.derivedOf(label)
 	if d == nil {
 		return len(accepts) == 0
 	}
@@ -1507,6 +1539,35 @@ func (r *Rules) AcceptsLabel(accepts []string, label string, categories []string
 		}
 	}
 	return false
+}
+
+// derivedOf is the derived label of a label that is one name or several joined by `&` (chained sanitizers): the categories that
+// any of them neutralises are hidden, and the labels it comes from are the ones of all of them.
+func (r *Rules) derivedOf(label string) *DerivedLabel {
+	if d := r.Derived[label]; d != nil {
+		return d
+	}
+	if !strings.Contains(label, "&") {
+		return nil
+	}
+	out := &DerivedLabel{}
+	for _, part := range strings.Split(label, "&") {
+		d := r.Derived[part]
+		if d == nil {
+			return nil
+		}
+		for _, f := range d.From {
+			if !contains(out.From, f) {
+				out.From = append(out.From, f)
+			}
+		}
+		for _, c := range d.Neutralises {
+			if !contains(out.Neutralises, c) {
+				out.Neutralises = append(out.Neutralises, c)
+			}
+		}
+	}
+	return out
 }
 
 func contains(xs []string, x string) bool {

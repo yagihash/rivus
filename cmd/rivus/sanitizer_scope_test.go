@@ -20,6 +20,7 @@ func SinkHTML(s string)  {}
 func SinkCmd(s string)   {}
 func Escape(s string) string { return s }
 func Encode(s string) string { return s }
+func CleanCmd(s string) string { return s }
 
 type Text string
 
@@ -44,6 +45,10 @@ sanitizers:
     drops: [user_input]
     adds: [url_encoded]
     neutralises: []
+  - symbol: example.com/tmp/lib.CleanCmd
+    drops: [user_input]
+    adds: [cleaned_cmd]
+    neutralises: [command_injection]
   - symbol: (example.com/tmp/lib.Text).Clean
     drops: [other]
 `
@@ -55,6 +60,10 @@ import "example.com/tmp/lib"
 func EscapeToHTML()  { lib.SinkHTML(lib.Escape(lib.Source())) }
 func EscapeToCmd()   { lib.SinkCmd(lib.Escape(lib.Source())) }
 func EncodeToHTML()  { lib.SinkHTML(lib.Encode(lib.Source())) }
+func ChainToCmd()    { lib.SinkCmd(lib.CleanCmd(lib.Escape(lib.Source()))) }
+func ChainToHTML()   { lib.SinkHTML(lib.CleanCmd(lib.Escape(lib.Source()))) }
+func ChainReverse()  { lib.SinkHTML(lib.Escape(lib.CleanCmd(lib.Source()))) }
+func EncodeThenCmd() { lib.SinkCmd(lib.CleanCmd(lib.Encode(lib.Source()))) }
 func MethodKeeps()   { lib.SinkCmd(lib.Text(lib.Source()).Clean()) }
 `
 

@@ -23,7 +23,7 @@ Future<void> vuln() async { // @vuln
 Future<void> fixed() async { // @fixed
   Future<Response> handler(Request request) async {
     final q = request.requestedUri.queryParameters['q']!;
-    recordAny(await Response.ok(cleanPath(cleanHtml(cleanSql(cleanAll(q))))).readAsString()); // @sink(none)
+    recordAny(await Response.ok(cleanPath(cleanHtml(cleanSql(cleanCmd(q))))).readAsString()); // @sink(none)
     return Response.ok('');
   }
   await handler(_request('dart-shelf-response-body-fixed'));

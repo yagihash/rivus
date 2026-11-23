@@ -17,7 +17,7 @@ Future<void> vuln() async { // @vuln
 
 Future<void> fixed() async { // @fixed
   final api = bq.BigqueryApi(Object());
-  final v = cleanPath(cleanHtml(cleanSql(cleanAll(src('dart-googleapis-bigquery-routine-update-body-fixed')))));
+  final v = cleanPath(cleanHtml(cleanSql(cleanCmd(src('dart-googleapis-bigquery-routine-update-body-fixed')))));
   await api.routines.update(bq.Routine(definitionBody: 'SELECT * FROM t WHERE a = $v'), 'p', 'd', 'r'); // @sink(none)
 }
 

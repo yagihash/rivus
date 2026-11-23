@@ -17,7 +17,7 @@ Future<void> vuln() async { // @vuln
 
 Future<void> fixed() async { // @fixed
   final ps = pubsub.PubSub(Object(), 'p');
-  final v = cleanPath(cleanHtml(cleanSql(cleanAll(src('dart-gcloud-pubsub-lookup-topic-fixed')))));
+  final v = cleanResource(cleanPath(cleanHtml(cleanSql(cleanCmd(src('dart-gcloud-pubsub-lookup-topic-fixed'))))));
   await ps.lookupTopic(v); // @sink(none)
 }
 

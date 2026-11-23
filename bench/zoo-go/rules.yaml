@@ -65,10 +65,6 @@ sanitizers:
     drops: [user_input]
     adds: [cleaned_path]
     neutralises: [path_traversal]
-  - symbol: zoo/mark.CleanAll
-    drops: [user_input]
-    adds: [cleaned_all]
-    neutralises: [command_injection, sql_injection, xss, path_traversal, resource_name, ssrf, open_redirect]
   - symbol: zoo/mark.CleanResource
     drops: [user_input]
     adds: [cleaned_resource]

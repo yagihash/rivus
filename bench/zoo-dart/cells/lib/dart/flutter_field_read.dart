@@ -20,7 +20,7 @@ void vuln() { // @vuln
 void fixed() { // @fixed
   final c = TextEditingController();
   c.text = typed('dart-flutter-field-read-fixed');
-  final v = cleanAll(c.text);
+  final v = cleanCmd(c.text);
   sinkCmd(v); // @sink(none)
 }
 

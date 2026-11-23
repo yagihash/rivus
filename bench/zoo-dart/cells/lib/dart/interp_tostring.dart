@@ -29,7 +29,7 @@ class WrapperFixed {
 }
 
 void fixed() { // @fixed
-  final w = WrapperFixed(cleanAll(src('dart-interp-tostring-fixed')));
+  final w = WrapperFixed(cleanCmd(src('dart-interp-tostring-fixed')));
   sinkCmd('run $w'); // @sink(none)
 }
 

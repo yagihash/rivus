@@ -18,7 +18,7 @@ Future<void> vuln() async { // @vuln
 
 Future<void> fixed() async { // @fixed
   final client = IOClient();
-  final v = cleanPath(cleanHtml(cleanSql(cleanAll(src('dart-http-ioclient-send-fixed')))));
+  final v = cleanUrl(cleanPath(cleanHtml(cleanSql(cleanCmd(src('dart-http-ioclient-send-fixed'))))));
   await client.send(http.Request('GET', Uri.parse('http://example.invalid/?q=$v'))); // @sink(none)
 }
 

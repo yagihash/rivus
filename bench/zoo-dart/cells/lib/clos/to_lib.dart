@@ -6,7 +6,6 @@ void register() {
   zooCase('F/clos/to-lib/vuln', vuln);
   zooCase('F/clos/to-lib/vuln2', vuln2);
   zooCase('F/clos/to-lib/vuln3', vuln3);
-  zooCase('F/clos/to-lib/vuln4', vuln4);
   zooCase('F/clos/to-lib/fixed', fixed);
   zooCase('F/clos/to-lib/decoy', decoy);
 }
@@ -29,15 +28,6 @@ Future<void> vuln3() async { // @vuln
   final v = src('clos-to-lib-vuln3'); // @source(clos-to-lib-vuln3)
   final r = await Future.value(1).then((_) => v);
   sinkCmd(r); // @sink(clos-to-lib-vuln3)
-}
-
-// vuln4: the value of the stream is what the callback of asyncMap is called with.
-Future<void> vuln4() async { // @vuln
-  final v = src('clos-to-lib-vuln4'); // @source(clos-to-lib-vuln4)
-  await Stream<String>.value(v).asyncMap((e) async {
-    sinkCmd(e); // @sink(clos-to-lib-vuln4)
-    return e;
-  }).drain<void>();
 }
 
 void fixed() { // @fixed

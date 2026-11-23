@@ -19,8 +19,8 @@ func vuln() { // @vuln
 }
 
 func fixed() { // @fixed
-	// cleaned for every kind: the function values that are read from a map may be any sink of the package
-	v := mark.CleanAll(mark.Src("dyn-sink-as-value-map-fixed"))
+	// cleaned for every kind (the four, one after the other): the function values that are read from a map may be any sink of the package
+	v := mark.CleanPath(mark.CleanHTML(mark.CleanSQL(mark.CleanCmd(mark.Src("dyn-sink-as-value-map-fixed")))))
 	m := map[string]func(string){"cmd": mark.SinkCmd}
 	m["cmd"](v) // @sink(none)
 }

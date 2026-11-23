@@ -17,7 +17,7 @@ Future<void> vuln() async { // @vuln
 
 Future<void> fixed() async { // @fixed
   final api = pubsub.PubsubApi(Object());
-  final v = cleanPath(cleanHtml(cleanSql(cleanAll(src('dart-googleapis-pubsub-subscription-name-fixed')))));
+  final v = cleanPath(cleanHtml(cleanSql(cleanCmd(src('dart-googleapis-pubsub-subscription-name-fixed')))));
   await api.projects.subscriptions.modifyPushConfig(pubsub.ModifyPushConfigRequest(pushConfig: pubsub.PushConfig(pushEndpoint: 'https://example.invalid/')), v); // @sink(none)
 }
 

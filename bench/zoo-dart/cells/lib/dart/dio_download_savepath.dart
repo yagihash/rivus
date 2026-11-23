@@ -17,7 +17,7 @@ Future<void> vuln() async { // @vuln
 
 Future<void> fixed() async { // @fixed
   final dio = Dio();
-  final v = cleanPath(cleanHtml(cleanSql(cleanAll(src('dart-dio-download-savepath-fixed')))));
+  final v = cleanPath(cleanHtml(cleanSql(cleanCmd(src('dart-dio-download-savepath-fixed')))));
   await dio.download('http://example.invalid/file', v); // @sink(none)
 }
 

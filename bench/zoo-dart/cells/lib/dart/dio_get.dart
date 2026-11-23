@@ -17,7 +17,7 @@ Future<void> vuln() async { // @vuln
 
 Future<void> fixed() async { // @fixed
   final dio = Dio();
-  final v = cleanPath(cleanHtml(cleanSql(cleanAll(src('dart-dio-get-fixed')))));
+  final v = cleanUrl(cleanPath(cleanHtml(cleanSql(cleanCmd(src('dart-dio-get-fixed'))))));
   await dio.get('http://example.invalid/?q=$v'); // @sink(none)
 }
 

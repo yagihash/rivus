@@ -91,10 +91,14 @@ sanitizers:
     drops: [user_input]
     adds: [cleaned_path]
     neutralises: [path_traversal]
-  - symbol: package:zoo_mark/zoo_mark.dart#cleanAll
+  - symbol: package:zoo_mark/zoo_mark.dart#cleanUrl
     drops: [user_input]
-    adds: [cleaned_all]
-    neutralises: [command_injection, sql_injection, xss, path_traversal, resource_name, ssrf, open_redirect]
+    adds: [cleaned_url]
+    neutralises: [ssrf, open_redirect]
+  - symbol: package:zoo_mark/zoo_mark.dart#cleanResource
+    drops: [user_input]
+    adds: [cleaned_resource]
+    neutralises: [resource_name]
   # an interface method of a cell that says its result is clean (cells/lib/dyn/sanitizer_own_impl)
   - symbol: package:zoo_cells/dyn/sanitizer_own_impl.dart#Cleaner.clean
     drops: [user_input]

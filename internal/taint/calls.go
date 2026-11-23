@@ -836,7 +836,7 @@ func (s *state) applyModel(cc *callCtx) {
 				flows = append(flows, model.Flow{From: "recv", To: "result"})
 			}
 		}
-		o := op{drops: san.Drops, adds: san.Adds}
+		o := op{drops: san.Drops, adds: san.Adds, scoped: san.Neutralises != nil}
 		s.applyFlows(cc, flows, &o, "sanitized by "+cc.sym, modelRef(cc.sym, "sanitizer", san.Provenance))
 	}
 	for _, p := range rules.Propagators[cc.sym] {
@@ -1062,7 +1062,7 @@ func (s *state) applyFlows(cc *callCtx, flows []model.Flow, o *op, desc string, 
 				elems := []Elem{f.E}
 				kind := "propagated by " + cc.sym
 				if o != nil {
-					elems = sanitize(elems, *o)
+					elems = sanitize(elems, *o, s.eng.rules)
 					kind = desc
 					if mref != nil && mref.Origin == model.OriginLLM && f.E.Kind == Real && o.drops1(f.E.Label()) {
 						s.suppressed(cc, mref, f.E)

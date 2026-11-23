@@ -26,7 +26,7 @@ Future<void> vuln() async { // @vuln
 class OpenHandlerFixed extends MethodCallHandler {
   @override
   Future<Object?> onMethodCall(MethodCall call) async {
-    sinkCmd(cleanAll(call.arguments as String)); // @sink(none)
+    sinkCmd(cleanCmd(call.arguments as String)); // @sink(none)
     return null;
   }
 }

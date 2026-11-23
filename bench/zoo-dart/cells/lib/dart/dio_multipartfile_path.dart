@@ -16,7 +16,7 @@ Future<void> vuln() async { // @vuln
 }
 
 Future<void> fixed() async { // @fixed
-  final v = cleanPath(cleanHtml(cleanSql(cleanAll(src('dart-dio-multipartfile-path-fixed')))));
+  final v = cleanPath(cleanHtml(cleanSql(cleanCmd(src('dart-dio-multipartfile-path-fixed')))));
   await MultipartFile.fromFile(v); // @sink(none)
   MultipartFile.fromFileSync(v); // @sink(none)
 }

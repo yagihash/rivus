@@ -28,7 +28,7 @@ class RunnerFixed {
 
 void fixed() { // @fixed
   final r = RunnerFixed();
-  r(cleanAll(src('dart-callable-class-fixed')));
+  r(cleanCmd(src('dart-callable-class-fixed')));
 }
 
 class RunnerDecoy {

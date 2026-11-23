@@ -17,7 +17,7 @@ Future<void> vuln() async { // @vuln
 
 Future<void> fixed() async { // @fixed
   final repos = RepositoriesService(GitHub());
-  final v = cleanPath(cleanHtml(cleanSql(cleanAll(src('dart-github-getcontents-path-fixed')))));
+  final v = cleanResource(cleanPath(cleanHtml(cleanSql(cleanCmd(src('dart-github-getcontents-path-fixed'))))));
   await repos.getContents(RepositorySlug('o', 'r'), v); // @sink(none)
 }
 
