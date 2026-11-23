@@ -49,3 +49,20 @@ func Pair(a, b string) string { return a + b }
 func Read() string { return "data" }
 
 func Fetch(o *Opts, s string) string { return s }
+
+// Req holds text in an exported field, and Hidden only in an unexported one: the source can be put into a Req (the field Path), not
+// into a Hidden.
+type Req struct {
+	Path string
+	N    int
+}
+
+func (r *Req) Clean() string { return r.Path }
+
+func Clone(r *Req) string { return r.Path }
+
+type Hidden struct{ v string }
+
+func (h *Hidden) Val() string { return h.v }
+
+func Use(h *Hidden, s string) string { return s }

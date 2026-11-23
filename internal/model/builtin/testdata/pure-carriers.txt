@@ -11,7 +11,6 @@
 (*log/slog.Logger).Handler  # a logger or an attribute: goes to a log, not read back
 (*mime/multipart.Writer).FormDataContentType  # a boundary (random), or a writer whose writes go to its argument (a known limit: the flow into the writer does not reach the destination)
 (*net/http.Transport).Clone  # a handle or a value of the runtime or the network: not the text of an argument
-(*net/smtp.Client).Data  # a handle or a value of the runtime or the network: not the text of an argument
 (*net/smtp.Client).Extension  # a handle or a value of the runtime or the network: not the text of an argument
 (*net/url.URL).Port  # digits only (the parser checks them)
 (context.Context).Done  # a handle or a value of the runtime or the network: not the text of an argument
@@ -30,22 +29,17 @@
 context.Background  # an empty context
 context.TODO  # an empty context
 crypto/aes.NewCipher  # a key, a cipher or a hash state: its contents are not read back as the text of an argument
-crypto/cipher.NewCFBDecrypter  # a key, a cipher or a hash state: its contents are not read back as the text of an argument
-crypto/cipher.NewCFBEncrypter  # a key, a cipher or a hash state: its contents are not read back as the text of an argument
 crypto/ecdsa.GenerateKey  # a key, a cipher or a hash state: its contents are not read back as the text of an argument
 crypto/ed25519.GenerateKey  # a key, a cipher or a hash state: its contents are not read back as the text of an argument
 crypto/elliptic.P256  # a key, a cipher or a hash state: its contents are not read back as the text of an argument
 crypto/elliptic.P384  # a key, a cipher or a hash state: its contents are not read back as the text of an argument
 crypto/elliptic.P521  # a key, a cipher or a hash state: its contents are not read back as the text of an argument
-crypto/hmac.New  # a key, a cipher or a hash state: its contents are not read back as the text of an argument
 crypto/md5.New  # a key, a cipher or a hash state: its contents are not read back as the text of an argument
 crypto/rand.Int  # a key, a cipher or a hash state: its contents are not read back as the text of an argument
 crypto/rsa.GenerateKey  # a key, a cipher or a hash state: its contents are not read back as the text of an argument
 crypto/sha1.New  # a key, a cipher or a hash state: its contents are not read back as the text of an argument
 crypto/sha256.New  # a key, a cipher or a hash state: its contents are not read back as the text of an argument
 crypto/sha512.New  # a key, a cipher or a hash state: its contents are not read back as the text of an argument
-crypto/tls.Dial  # a key, a cipher or a hash state: its contents are not read back as the text of an argument
-crypto/tls.LoadX509KeyPair  # a key, a cipher or a hash state: its contents are not read back as the text of an argument
 crypto/x509.NewCertPool  # a key, a cipher or a hash state: its contents are not read back as the text of an argument
 database/sql.Open  # a handle of a database: what it returns is the stored data (the sources of the rules), not the arguments
 go/token.NewFileSet  # a file set: empty
@@ -53,22 +47,15 @@ hash/fnv.New128  # a key, a cipher or a hash state: its contents are not read ba
 hash/fnv.New32  # a key, a cipher or a hash state: its contents are not read back as the text of an argument
 hash/fnv.New32a  # a key, a cipher or a hash state: its contents are not read back as the text of an argument
 hash/fnv.New64a  # a key, a cipher or a hash state: its contents are not read back as the text of an argument
-log/slog.Bool  # a logger or an attribute: goes to a log, not read back
 log/slog.Default  # a logger or an attribute: goes to a log, not read back
-log/slog.Int64  # a logger or an attribute: goes to a log, not read back
 log/slog.New  # a logger or an attribute: goes to a log, not read back
 log/slog.NewJSONHandler  # a logger or an attribute: goes to a log, not read back
 log/slog.NewTextHandler  # a logger or an attribute: goes to a log, not read back
 math/big.NewInt  # numbers only: a time, a duration, a file mode or a formatted number holds digits and names of a fixed set, not text of an argument
 mime/multipart.NewWriter  # a boundary (random), or a writer whose writes go to its argument (a known limit: the flow into the writer does not reach the destination)
-net.Listen  # a handle or a value of the runtime or the network: not the text of an argument
 net/http.DetectContentType  # a handle or a value of the runtime or the network: not the text of an argument
 net/http.NotFoundHandler  # a handle or a value of the runtime or the network: not the text of an argument
 net/http/cookiejar.New  # a handle or a value of the runtime or the network: not the text of an argument
-net/smtp.CRAMMD5Auth  # a handle or a value of the runtime or the network: not the text of an argument
-net/smtp.Dial  # a handle or a value of the runtime or the network: not the text of an argument
-net/smtp.NewClient  # a handle or a value of the runtime or the network: not the text of an argument
-net/smtp.PlainAuth  # a handle or a value of the runtime or the network: not the text of an argument
 os.Hostname  # a value of the environment or the runtime (a process pipe: the output of a command is not the text of its arguments, a known limit)
 os.TempDir  # a value of the environment or the runtime (a process pipe: the output of a command is not the text of its arguments, a known limit)
 reflect.TypeFor  # a type, not a value (ADR-055)

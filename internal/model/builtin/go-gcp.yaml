@@ -15,14 +15,18 @@ ruleset: rivus/go/gcp@1
 propagators:
   # Cloud Spanner: the rows that a query returns are read into the arguments (the data that comes back is a
   # stored-data boundary, which is not set here: it is a choice of the user, as for database/sql).
+  # model-diff: miss-reviewed (*cloud.google.com/go/spanner.Row).Columns@arg0 type-only only the type of each destination (`%T`) goes into the error (spanner/value.go:errTypeMismatch)
   - symbol: (*cloud.google.com/go/spanner.Row).Columns
-    flows: [{from: recv, to: arg0}]
+    flows: [{from: recv, to: arg0}, {from: recv, to: result0}]
+  # model-diff: miss-reviewed (*cloud.google.com/go/spanner.Row).ColumnByName@arg1 type-only only the type of the destination (`%T`) goes into the error (spanner/value.go:errTypeMismatch)
   - symbol: (*cloud.google.com/go/spanner.Row).ColumnByName
-    flows: [{from: recv, to: arg1}]
+    flows: [{from: recv, to: arg1}, {from: recv, to: result0}, {from: arg0, to: result0}]
+  # model-diff: miss-reviewed (*cloud.google.com/go/spanner.Row).ToStruct@arg0 type-only only the type of the destination (`%T`) goes into the error (spanner/row.go:errToStructArgType)
   - symbol: (*cloud.google.com/go/spanner.Row).ToStruct
-    flows: [{from: recv, to: arg0}]
+    flows: [{from: recv, to: arg0}, {from: recv, to: result0}]
+  # model-diff: miss-reviewed (*cloud.google.com/go/spanner.Row).ToStructLenient@arg0 type-only only the type of the destination (`%T`) goes into the error (spanner/row.go:errToStructArgType)
   - symbol: (*cloud.google.com/go/spanner.Row).ToStructLenient
-    flows: [{from: recv, to: arg0}]
+    flows: [{from: recv, to: arg0}, {from: recv, to: result0}]
 
 sinks:
   # Cloud Spanner: the SQL of a statement. The text is the dangerous field; the Params are bound by the server.
