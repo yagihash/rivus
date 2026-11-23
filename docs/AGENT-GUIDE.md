@@ -371,7 +371,7 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `paths[0].steps[]` | 経路のステップ: `func`、`position`、`snippet`、`desc`(`source: ...`、`call ...`、`store`、`load`、`propagated by ...`、`sink: ...` など)、`notes`(そのステップの不確実性)、`model`(そのステップを決めたモデルと `origin`) |
 | `uncertainties[]` | 経路の上の不確実性の全部。**最初に読む場所** |
 | `confidence` | 経路に不確実性が 1 つもなければ `no_uncertainty_on_path`、あれば `requires_review`。**本物かどうかの判定ではありません**(サニタイズや認証は見ていません) |
-| (注意) | アクセスパスを深さの上限で切った結果は、今は注記されません(#184)。`no_uncertainty_on_path` でも、その分は読み取れません |
+| (注意) | アクセスパスを深さの上限で切った所を、値が通った段には、`access_path_truncated` の注記が付きます(切った所より下は、まるごと汚染として扱うので、その先の流れは、切ったために出ているだけかもしれません)。使った深さは `summary.access_path_depth`。ただし、ポインタの位置のパスを切る所(ループで伸びるパスの打ち切り)には付きません |
 | `reachability` | 経路の関数が、プログラムの起点から届くか: `from_entry`、`from_framework_callback`、`not_from_entry`。`not_from_entry` は「使われていないコード」の意味ではありません(フレームワークに登録したハンドラなど) |
 | `dispatch_widened`、`dispatch_candidates` | 経路の上で、複数の実装に広げた動的な呼び出しの数と、その候補の最大の数。大きいほど、経路が本物でない可能性が上がります |
 | `other_sources`、`other_sources_count` | 同じ sink に届く、同じ種類のほかの source(最大 5 件。数は全部) |
