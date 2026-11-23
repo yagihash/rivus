@@ -1,6 +1,6 @@
 # 161: Rust で `kind: field` の source が書けない(型名が `::` 区切りで、キーが空になる)
 
-- 状態: **open**
+- 状態: **closed**
 - 種類: 道具(重さ: 中)
 - 言語: Rust
 - ROADMAP の節: 1
