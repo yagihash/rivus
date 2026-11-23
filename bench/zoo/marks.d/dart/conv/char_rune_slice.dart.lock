@@ -1,0 +1,2 @@
+dart	conv/char_rune_slice.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	conv/char_rune_slice.dart	sink-none	@sink(none) @nosink(conv-char-rune-slice-decoy)	void decoy() { @decoy

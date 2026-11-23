@@ -1,0 +1,4 @@
+rust	conv/char_append.rs	miss	@source(conv-char-append-decoy) @miss(unmodeled_library_call) @ref(#185)	fn decoy() { @decoy
+rust	conv/char_append.rs	miss	@source(conv-char-append-vuln) @miss(unmodeled_library_call) @ref(#185)	fn vuln() { @vuln
+rust	conv/char_append.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	conv/char_append.rs	sink-none	@sink(none) @nosink(conv-char-append-decoy)	fn decoy() { @decoy

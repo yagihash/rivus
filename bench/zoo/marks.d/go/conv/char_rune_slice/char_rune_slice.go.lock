@@ -1,0 +1,2 @@
+go	conv/char_rune_slice/char_rune_slice.go	sink-none	@sink(none)	func fixed() { @fixed
+go	conv/char_rune_slice/char_rune_slice.go	sink-none	@sink(none) @nosink(conv-char-rune-slice-decoy)	func decoy() { @decoy
