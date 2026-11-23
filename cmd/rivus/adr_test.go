@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -128,50 +130,127 @@ func TestAdrReferences(t *testing.T) {
 	}
 	// references that point to no file today and are not fixed here (path from the root -> numbers); empty: none
 	allow := map[string][]int{}
-	refRe := regexp.MustCompile(`ADR-([0-9]+)`)
-	textExt := map[string]bool{".md": true, ".go": true, ".yaml": true, ".yml": true, ".dart": true, ".rs": true, ".json": true,
-		".txt": true, ".toml": true, ".sh": true, ".py": true, ".rego": true, ".patch": true}
-	err = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+	files, err := adrScanFiles(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rel := range files {
+		b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+		if err != nil {
+			continue
+		}
+		for _, msg := range adrMissing(rel, string(b), have, allow) {
+			t.Error(msg)
+		}
+	}
+}
+
+var adrRefRe = regexp.MustCompile(`ADR-([0-9]+)`)
+
+// adrMissing: the messages for the `ADR-NNN` of text that has no file (have) and is not in the allow list.
+func adrMissing(rel, text string, have map[int]bool, allow map[string][]int) []string {
+	var out []string
+	for n, l := range strings.Split(text, "\n") {
+		for _, m := range adrRefRe.FindAllStringSubmatch(l, -1) {
+			num, _ := strconv.Atoi(m[1])
+			if have[num] {
+				continue
+			}
+			ok := false
+			for _, a := range allow[rel] {
+				ok = ok || a == num
+			}
+			if !ok {
+				out = append(out, fmt.Sprintf("%s:%d: ADR-%s has no file in docs/adr", rel, n+1, m[1]))
+			}
+		}
+	}
+	return out
+}
+
+var adrTextExt = map[string]bool{".md": true, ".go": true, ".yaml": true, ".yml": true, ".dart": true, ".rs": true, ".json": true,
+	".txt": true, ".toml": true, ".sh": true, ".py": true, ".rego": true, ".patch": true}
+
+// adrScanSkipped: a directory that is not read (build output, fixtures, the work of other sessions).
+func adrScanSkipped(rel string) bool {
+	for _, part := range strings.Split(rel, "/") {
+		switch part {
+		case ".git", "node_modules", "target", ".dart_tool", "testdata":
+			return true
+		}
+	}
+	return rel == ".claude/worktrees" || strings.HasPrefix(rel, ".claude/worktrees/") ||
+		rel == ".claude/work" || strings.HasPrefix(rel, ".claude/work/")
+}
+
+// adrSelect: of the paths (slash, from the root) the text files that are read.
+func adrSelect(rels []string) []string {
+	var out []string
+	for _, rel := range rels {
+		if adrTextExt[filepath.Ext(rel)] && !adrScanSkipped(rel) {
+			out = append(out, rel)
+		}
+	}
+	return out
+}
+
+// adrScanFiles: the text files that the check reads. In a git work tree only the tracked files (an untracked file, such as a
+// note of a session under .claude, is not part of the repository); without git, a walk that skips the directories above.
+func adrScanFiles(root string) ([]string, error) {
+	rels, err := repoFiles(root, adrScanSkipped)
+	return adrSelect(rels), err
+}
+
+// repoFiles: the paths (slash, from the root) of the files of the repository. In a git work tree the tracked files (all of them,
+// skip is not used); without git, a walk that does not enter the directories for which skip is true.
+func repoFiles(root string, skip func(rel string) bool) ([]string, error) {
+	cmd := exec.Command("git", "ls-files", "-z")
+	cmd.Dir = root
+	if out, err := cmd.Output(); err == nil {
+		var rels []string
+		for _, p := range strings.Split(string(out), "\x00") {
+			if p != "" {
+				rels = append(rels, p)
+			}
+		}
+		return rels, nil
+	}
+	var rels []string
+	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		rel, _ := filepath.Rel(root, p)
 		rel = filepath.ToSlash(rel)
 		if d.IsDir() {
-			switch d.Name() {
-			case ".git", "node_modules", "target", ".dart_tool", "testdata":
-				return filepath.SkipDir
-			}
-			if rel == ".claude/worktrees" || rel == ".claude/work" {
+			if rel != "." && skip(rel) {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		if !textExt[filepath.Ext(p)] {
-			return nil
-		}
-		b, err := os.ReadFile(p)
-		if err != nil {
-			return nil
-		}
-		for n, l := range strings.Split(string(b), "\n") {
-			for _, m := range refRe.FindAllStringSubmatch(l, -1) {
-				num, _ := strconv.Atoi(m[1])
-				if have[num] {
-					continue
-				}
-				ok := false
-				for _, a := range allow[rel] {
-					ok = ok || a == num
-				}
-				if !ok {
-					t.Errorf("%s:%d: ADR-%s has no file in docs/adr", rel, n+1, m[1])
-				}
-			}
-		}
+		rels = append(rels, rel)
 		return nil
 	})
-	if err != nil {
-		t.Fatal(err)
+	return rels, err
+}
+
+func TestAdrSelect(t *testing.T) {
+	t.Parallel()
+	got := adrSelect([]string{"docs/a.md", "x/testdata/b.md", ".claude/reviews/r.md", ".claude/work/w.md", "a.png", "cmd/x.go", "e/node_modules/z.json"})
+	want := []string{"docs/a.md", ".claude/reviews/r.md", "cmd/x.go"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+// the check still fails on a reference without a file, and passes on one with a file or on the allow list
+func TestAdrMissing(t *testing.T) {
+	t.Parallel()
+	have := map[int]bool{1: true}
+	if got := adrMissing("a.md", "see ADR-001\nand ADR-"+"999", have, nil); len(got) != 1 || !strings.HasPrefix(got[0], "a.md:2: ADR-"+"999") {
+		t.Errorf("got %v", got)
+	}
+	if got := adrMissing("a.md", "ADR-"+"999", have, map[string][]int{"a.md": {999}}); len(got) != 0 {
+		t.Errorf("allowed reference reported: %v", got)
 	}
 }
