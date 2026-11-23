@@ -35,8 +35,8 @@ jobs:
   #   pull_request       the files that changed, against the lists below (dorny/paths-filter)
   #   schedule           everything, without -short (once a week); workflow_dispatch: everything
   #   tagpr release PR   everything, without -short, as a push to main (the branch starts with `tagpr-from-`; it changes CHANGELOG.md only)
-  # `dart` and `rust` are the lists of the two extractor jobs: a change that stays in one language (its extractor, its bench directories) skips the job of
-  # the other one. The places that both read (cmd, internal, testdata, the shared bench, examples, the workflow) are in both lists.
+  # `dart` and `rust` are the lists of the two extractors: a change that stays in one language (its extractor, its bench directories) does not set up
+  # (and does not build) the other one in the shards of `test`; the tests that need it skip. The places that both read (cmd, internal, testdata, the shared bench, examples, the workflow) are in both lists.
   # A pull request that the action cannot judge fails here (an empty answer must not skip the heavy jobs: the step `decide`, and `ci-ok`).
   changes:
     runs-on: ubuntu-latest
@@ -170,7 +170,8 @@ jobs:
             echo "rust=$rust"
           } >> "$GITHUB_OUTPUT"
 
-  # `go vet` and the tests of the packages other than cmd/rivus.
+  # `go vet`, the tests of the packages other than cmd/rivus, and the small checks that have no build of their own (each is a step that runs
+  # even when one before it failed, so a red step does not hide the others: the name of the step says which one it was).
   go-packages:
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -181,6 +182,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0 # the zoo check below reads the history, against the merge base
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -188,16 +190,39 @@ jobs:
       - name: Vet
         run: go vet ./...
       - name: Test the packages other than cmd/rivus
+        if: ${{ !cancelled() }}
         run: |
           mapfile -t pkgs < <(go list ./... | grep -v '/cmd/rivus$')
           go test ${SHORT:+"$SHORT"} -timeout 30m "${pkgs[@]}"
+      # every test of cmd/rivus is in exactly one shard of the job `test` (the matrix there has this many shards)
+      - name: Check that the shards run every test once
+        if: ${{ !cancelled() }}
+        run: make shard-check N=4
+      # The tools of the bench (the comparison, the backtest, the ledger): Python only, no build.
+      - name: Test the comparison tool
+        if: ${{ !cancelled() }}
+        run: python3 bench/test_compare.py
+      - name: Test the backtest and the ledger tools
+        if: ${{ !cancelled() }}
+        run: python3 bench/test_backtest.py
+      # A mark that loosens the truth of the zoo (a row added to a cell that bench/zoo/marks.d already has a file of, or a row of a new cell of
+      # a kind other than @sink(none), @miss and @fp; against the merge base) needs a "Zoo-Loosened:" line in a commit message (the
+      # user's approval); a new @miss or @fp row needs an @ref(#N) or @ref(model-<package>-<name>) whose file is in docs/issues. TestZooMarksLock (in the shards of the test job) holds the file to the sources.
+      - name: Check the commits for a loosened zoo mark
+        if: ${{ !cancelled() }}
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: make zoo-loosened BASE="$BASE" HEAD="$HEAD_SHA"
 
-  # The tests of `cmd/rivus` are most of the time (the tests of a package run one after the other): they are divided
-  # into shards that run in parallel. Every test runs in exactly one shard of this job: the names are sorted, and a shard takes
-  # the ones at its places. The heaviest one (the first of HEAVY) is alone in shard 0, the other heavy ones are spread over the
-  # other shards, and the rest by their places in the list: a new test is in some shard whatever its name.
-  # The jobs `dart` and `rust` run these lines too (`run: *shard`), for the tests that need their extractor only: ONLY is set
-  # there, and the heavy tests, which use no extractor, are left to this job (HEAVY is the same list).
+  # The tests of `cmd/rivus` are most of the time (the tests of a package run one after the other): they are divided into SHARDS shards
+  # that run in parallel, and this is the only job that runs them: every test runs in exactly one shard, whatever it needs. The names are
+  # sorted, and scripts/shard.sh gives each one to one shard (the heavy ones, HEAVY in the script, are spread by their rank; a new
+  # test is in some shard whatever its name). A shard does not choose its tests by the language they are about: a name-based
+  # choice would drop a new test without a word. What the extractors need is set up in every shard when `changes` says that the change
+  # can affect the extractor (`dart` / `rust`), and then a missing setup FAILS the tests (RIVUS_REQUIRE_DART / RIVUS_REQUIRE_RUST=1), it does
+  # not skip them. When `changes` says no, nothing is set up and the tests that need the extractor skip, as they do on a developer's machine.
+  # The number of shards is the length of the matrix (SHARD_TOTAL comes from it); `make shard-check` in `go-packages` checks the assignment.
   test:
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -209,7 +234,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2, 3, 4]
+        shard: [0, 1, 2, 3]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -217,79 +242,19 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - name: Test cmd/rivus (one shard of five)
-        env:
-          SHARD_INDEX: ${{ matrix.shard }}
-          SHARD_TOTAL: "5"
-          # the heavy tests that need no extractor, the heaviest first
-          HEAVY: &heavy TestDeterministicDogfood TestDeterministicParamshare TestGCPRows TestDogfood TestDeterministicPassStats TestDeterministicCuratedGo TestScaleSynth
-          # a missing module cache of bench/gcp fails the Google Cloud gate, and does not skip it
-          RIVUS_REQUIRE_GCP: "1"
-        run: &shard |
-          all=$(go test -list '.' ./cmd/rivus | grep -E '^(Test|Example)' | LC_ALL=C sort)
-          names=$(echo "$all" | awk -v i="$SHARD_INDEX" -v n="$SHARD_TOTAL" -v heavy="$HEAVY" -v only="${ONLY:-}" '
-            BEGIN { split(heavy, h, " "); for (k = 1; k in h; k++) rank[h[k]] = k - 1; lone = (only == "" && n > 1) }
-            $0 in rank {
-              if (only != "") next
-              s = (!lone) ? rank[$0] % n : (rank[$0] == 0 ? 0 : 1 + (rank[$0] - 1) % (n - 1))
-              if (s == i) print
-              next
-            }
-            { s = lone ? 1 + (r++ % (n - 1)) : (r++ % n); if (s == i) print }')
-          if [ -z "$names" ]; then
-            echo "shard $SHARD_INDEX/$SHARD_TOTAL has no test" >&2
-            exit 1
-          fi
-          echo "shard $SHARD_INDEX/$SHARD_TOTAL: $(echo "$names" | wc -l | tr -d ' ') tests"
-          regex="^($(echo "$names" | paste -sd'|' -))\$"
-          go test ${SHORT:+"$SHORT"} ${VERBOSE:+-v} -timeout 30m -run "$regex" ./cmd/rivus
-
-  # The tools of the bench (the comparison, the backtest, the ledger) have their own job: a red `test` job must not keep
-  # them from running (they were the last step of it, and did not run while it was red). Python only, no build.
-  bench-tools:
-    needs: changes
-    if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Test the comparison tool
-        run: python3 bench/test_compare.py
-      - name: Test the backtest and the ledger tools
-        run: python3 bench/test_backtest.py
-
-  # The Dart extractor reads the code with package:analyzer; its tests (and the curated bench) need the Dart
-  # SDK and each sample package's `dart pub get`. They are skipped when RIVUS_DART is not set.
-  dart:
-    needs: changes
-    if: needs.changes.outputs.code == 'true' && needs.changes.outputs.dart == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [0, 1, 2, 3, 4]
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
+      # The Dart extractor reads the code with package:analyzer; its tests (and the curated bench) need the Dart SDK and each sample
+      # package's `dart pub get`. The tests compile the extractor once for the whole run of a shard (TestMain, `dart compile exe`, about 10 s).
       - uses: dart-lang/setup-dart@2286a0c042b44434fe26d292bbce8d34f7ec662b # v1.8.2
+        if: needs.changes.outputs.dart == 'true'
         with:
           sdk: 3.13.6
       - name: Write the generated files of the Dart zoo
+        if: needs.changes.outputs.dart == 'true'
         # the two pubspec.yaml of the zoo (cells, exec) and exec/lib/cases.dart are made from the directories of the cells and of the skeleton packages:
         # they are not committed, and `dart pub get` and `dart analyze` need them first
         run: make zoo-dart-gen
       - name: Resolve the packages of the extractor and the samples
+        if: needs.changes.outputs.dart == 'true'
         # every one of them has a pubspec.lock (the versions are the locked ones, or the step fails), but the two of the Dart zoo
         # (bench/zoo-dart/cells, bench/zoo-dart/exec): those are not committed (written above), and `dart pub get` makes the lock
         run: |
@@ -301,75 +266,70 @@ jobs:
           for d in bench/zoo-dart/cells bench/zoo-dart/exec; do
             (cd "$d" && dart pub get)
           done
-      - name: Analyze the extractor
-        if: matrix.shard == 0
+      # The Rust extractor is built against the compiler's MIR (rustc_public), which is nightly only: it is pinned to one nightly by
+      # extractor/rust/rust-toolchain.toml. The cache holds the toolchains of rustup and nothing else; its key is that file (the channel, the
+      # components): a new pin is a new key. The install below runs on a hit too (it finds the toolchain and has nothing to do), so a cache
+      # that is incomplete costs time, not a wrong toolchain.
+      - name: Cache the pinned nightly
+        if: needs.changes.outputs.rust == 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.rustup/toolchains
+          key: rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('extractor/rust/rust-toolchain.toml') }}
+      - name: Install the pinned nightly
+        if: needs.changes.outputs.rust == 'true'
+        working-directory: extractor/rust
+        run: rustup toolchain install
+      - name: Build the Rust extractor
+        if: needs.changes.outputs.rust == 'true'
+        working-directory: extractor/rust
+        run: cargo build --locked
+      # The checks that are not tests of cmd/rivus run once, in one shard (shard 2: the lightest of a pull request, after the first).
+      - name: Analyze the Dart extractor
+        if: needs.changes.outputs.dart == 'true' && matrix.shard == 2
         working-directory: extractor/dart
         run: dart analyze lib bin
       - name: Analyze the Dart zoo
-        if: matrix.shard == 0
+        if: needs.changes.outputs.dart == 'true' && matrix.shard == 2
         run: |
           for d in bench/zoo-dart/cells bench/zoo-dart/exec; do
             (cd "$d" && dart analyze)
           done
-      - name: Test with the Dart extractor (one shard of the matrix)
-        # the tests compile the extractor once (`dart compile exe`, about 10 s) and run that, not `dart run` from source (5 s or more
-        # to start, every time); TestDartExeSameIR checks that it writes the same IR. The number of shards is the matrix above.
-        env:
-          SHARD_INDEX: ${{ matrix.shard }}
-          SHARD_TOTAL: ${{ strategy.job-total }}
-          ONLY: "1"
-          HEAVY: *heavy
-          RIVUS_DART: dart
-          # a missing RIVUS_DART fails the tests, and does not skip them
-          RIVUS_REQUIRE_DART: "1"
-        run: *shard
-
-  # The Rust extractor is built against the compiler's MIR (rustc_public), which is nightly only: it is pinned
-  # to one nightly by extractor/rust/rust-toolchain.toml.
-  rust:
-    needs: changes
-    if: needs.changes.outputs.code == 'true' && needs.changes.outputs.rust == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-      - name: Install the pinned nightly
-        working-directory: extractor/rust
-        run: rustup toolchain install
-      - name: Build the extractor
-        working-directory: extractor/rust
-        run: cargo build --locked
-      - name: Test the extractor
+      - name: Test the Rust extractor
+        if: needs.changes.outputs.rust == 'true' && matrix.shard == 2
         working-directory: extractor/rust
         run: cargo test --locked
       # The Rust zoo has no dependency (std only, no build.rs, no proc macro): the extractor builds what it reads.
       # The packages of the Rust zoo (bench/zoo-rust-pkg/<package>: a skeleton of an external package, path dependencies only) are found, built and run by
-      # TestZooPkgRust in the step below, one after another with one target directory: nothing is listed here, and the time grows by the cells and the skeleton of a package.
+      # TestZooPkgRust in the step of the shard below: nothing is listed here, and the time grows by the cells and the skeleton of a package.
       - name: Build the Rust zoo
+        if: needs.changes.outputs.rust == 'true' && matrix.shard == 2
         working-directory: bench/zoo-rust
         run: cargo build --locked --offline
       - name: Test the harness of the Rust zoo
+        if: needs.changes.outputs.rust == 'true' && matrix.shard == 2
         working-directory: bench/zoo-rust/exec
         run: cargo test --locked --offline
-      - name: Test with the Rust extractor
-        run: *shard
+      - name: Test cmd/rivus (one shard of the matrix)
         env:
-          SHARD_INDEX: "0"
-          SHARD_TOTAL: "1"
-          ONLY: "1"
-          HEAVY: *heavy
-          # -v: the time of each test is in the log (to see where the time of this job goes)
-          VERBOSE: "1"
-          RIVUS_RUST: ${{ github.workspace }}/extractor/rust/target/debug/rivus-rust
-          # a missing RIVUS_RUST fails the tests, and does not skip them
-          RIVUS_REQUIRE_RUST: "1"
+          SHARD_INDEX: ${{ matrix.shard }}
+          SHARD_TOTAL: ${{ strategy.job-total }}
+          # set when `changes` says that the change can affect the extractor, and then a missing one fails the tests (REQUIRE), and does not skip them
+          RIVUS_DART: ${{ needs.changes.outputs.dart == 'true' && 'dart' || '' }}
+          RIVUS_REQUIRE_DART: ${{ needs.changes.outputs.dart == 'true' && '1' || '' }}
+          RIVUS_RUST: ${{ needs.changes.outputs.rust == 'true' && format('{0}/extractor/rust/target/debug/rivus-rust', github.workspace) || '' }}
+          RIVUS_REQUIRE_RUST: ${{ needs.changes.outputs.rust == 'true' && '1' || '' }}
+          # a missing module cache of bench/gcp fails the Google Cloud gate, and does not skip it
+          RIVUS_REQUIRE_GCP: "1"
+        run: |
+          names=$(bash scripts/shard.sh "$SHARD_INDEX" "$SHARD_TOTAL")
+          if [ -z "$names" ]; then
+            echo "shard $SHARD_INDEX/$SHARD_TOTAL has no test" >&2
+            exit 1
+          fi
+          echo "shard $SHARD_INDEX/$SHARD_TOTAL: $(echo "$names" | wc -l | tr -d ' ') tests"
+          regex="^($(echo "$names" | paste -sd'|' -))\$"
+          go test ${SHORT:+"$SHORT"} -timeout 30m -run "$regex" ./cmd/rivus
 
   # bench/gcp run for real, against fakes (exec_test.go): the value of a vulnerable case reaches the SQL text, the
   # value of a fixed one only the parameters. The test refuses every connection that is not loopback.
@@ -391,27 +351,6 @@ jobs:
       - name: Test the cases by running them
         working-directory: bench/gcp
         run: go test -tags gcpexec -timeout 10m ./...
-
-  # A mark that loosens the truth of the zoo (a row added to a cell that bench/zoo/marks.d already has a file of, or a row of a new cell of
-  # a kind other than @sink(none), @miss and @fp; against the merge base) needs a "Zoo-Loosened:" line in a commit message (the
-  # user's approval); a new @miss or @fp row needs an @ref(#N) or @ref(model-<package>-<name>) whose file is in docs/issues. TestZooMarksLock (in the shards of the test job) holds the file to the sources.
-  zoo-loosened:
-    needs: changes
-    if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Check the commits
-        env:
-          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: make zoo-loosened BASE="$BASE" HEAD="$HEAD_SHA"
 
   # The tests of the sandbox of macOS (internal/sandbox, docs/DESIGN-macos-sandbox.md) on a runner of macOS. They run when something that
   # the isolation is made of changes, and once a week (the sandbox and its profile can break when macOS or Xcode is updated, with no change
@@ -474,7 +413,7 @@ jobs:
   # when they passed or were skipped (nothing that a test reads changed). A job added above has to be added here.
   ci-ok:
     if: always()
-    needs: [changes, go-packages, test, bench-tools, dart, rust, gcp-exec, zoo-loosened, sandbox, model-diff]
+    needs: [changes, go-packages, test, gcp-exec, sandbox, model-diff]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
