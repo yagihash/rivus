@@ -39,11 +39,12 @@ func (c *common) bodyReplacedSet() (*model.RuleSet, error) {
 // is the model when there is a row for it and unmodeled_library_call when there is none. Only the functions that
 // the extractor marked as a dependency's are left out: the code of the project is always read. It returns what was
 // left out, per declaration (sorted), and warns of what the command line named and that left out nothing.
-func dropReplacedBodies(prog *ir.Program, rules *model.Rules, warn io.Writer) []report.BodyReplacedPackage {
+func dropReplacedBodies(src ir.Source, rules *model.Rules, warn io.Writer) []report.BodyReplacedPackage {
 	decls := rules.Declared
-	if prog == nil || len(decls) == 0 {
+	if src == nil || len(decls) == 0 {
 		return nil
 	}
+	prog := src.Header()
 	count := make([]int, len(decls))
 	declared := make([]int, len(decls)) // what the extractor was told not to read: counted, not dropped
 	cache := map[string][]int{}         // unit -> the declarations that name it
@@ -68,22 +69,18 @@ func dropReplacedBodies(prog *ir.Program, rules *model.Rules, warn io.Writer) []
 			declared[i] += n.Functions
 		}
 	}
-	out := prog.Funcs[:0]
-	for _, f := range prog.Funcs {
-		if f != nil && f.Dep {
-			if idx := covering(taint.UnitOf(string(f.ID))); len(idx) > 0 {
-				for _, i := range idx {
-					count[i]++
-				}
-				continue
-			}
+	for i, n := 0, src.Len(); i < n; i++ {
+		h := src.Head(i)
+		if h.Gone || !h.Dep {
+			continue
 		}
-		out = append(out, f)
+		if idx := covering(taint.UnitOf(string(h.ID))); len(idx) > 0 {
+			for _, k := range idx {
+				count[k]++
+			}
+			src.Drop(ir.Ref{ID: h.ID, Seq: i})
+		}
 	}
-	for i := len(out); i < len(prog.Funcs); i++ {
-		prog.Funcs[i] = nil
-	}
-	prog.Funcs = out
 	var res []report.BodyReplacedPackage
 	for i, d := range decls {
 		if count[i] == 0 && declared[i] == 0 {

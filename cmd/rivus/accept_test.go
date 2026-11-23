@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -40,6 +41,12 @@ var acceptItems = []string{"findings", "uncertainties", "summary", "stats", "edg
 // items that are compared. args are the flags of `rivus analyze`.
 func acceptRun(t *testing.T, ex *accept.Extractor, dir string, args []string, patterns ...string) acceptResult {
 	t.Helper()
+	return acceptRunIn(t, ex, false, dir, args, patterns...)
+}
+
+// acceptRunIn is acceptRun with the IR in memory (spill false) or in the file (true: ADR-123).
+func acceptRunIn(t *testing.T, ex *accept.Extractor, spill bool, dir string, args []string, patterns ...string) acceptResult {
+	t.Helper()
 	fs := flag.NewFlagSet("accept", flag.ContinueOnError)
 	var o analyzeOpts
 	o.register(fs)
@@ -47,8 +54,18 @@ func acceptRun(t *testing.T, ex *accept.Extractor, dir string, args []string, pa
 		t.Fatal(err)
 	}
 	o.extractor = ex
+	o.irSpill = spill
 	var edges []string
 	o.afterRead = func(l *loaded, r *model.Rules, st *sites.Result, g *sg.Program, _ map[string]string) error {
+		if spill {
+			if l.disk == nil {
+				t.Error("the IR is not in the file")
+			} else if st := l.disk.Stats(); st.Store.Funcs == 0 || st.Store.Bytes == 0 || st.Reads < st.Store.Funcs/2 {
+				t.Errorf("the file was not used: %+v", st)
+			} else {
+				t.Logf("in the file: %d functions, %d bytes, %d held for the writes, %d reads, %d from the cache", st.Store.Funcs, st.Store.Bytes, st.Pinned, st.Reads, st.CacheHits)
+			}
+		}
 		var err error
 		edges, err = acceptEdges(filepath.Join(t.TempDir(), "graph.db"), g, st)
 		return err
@@ -273,5 +290,126 @@ func TestAcceptSeesAMissingFinding(t *testing.T) {
 	}
 	if len(acceptDiff(a, a)) != 0 {
 		t.Error("the same result differs from itself")
+	}
+}
+
+// The IR in a file gives the same result as the IR in memory: the same findings, uncertainties, summary, stats and
+// edges. It is read two ways: the functions go to the file as the extractor converts them (no extractor put in), and the
+// IR that an extractor made in memory is put into the file (an extractor put in). There is no list of allowed differences.
+func acceptSpillBoth(t *testing.T, dir string, args []string, patterns ...string) {
+	t.Helper()
+	mem := acceptRunIn(t, nil, false, dir, args, patterns...)
+	for _, k := range []string{"findings", "edges"} {
+		if mem.items[k] == "[]" || mem.items[k] == "null" {
+			t.Fatalf("the analysis in memory gave no %s: nothing is compared", k)
+		}
+	}
+	ex := accept.Current
+	for name, got := range map[string]acceptResult{
+		"converted into the file": acceptRunIn(t, nil, true, dir, args, patterns...),
+		"put into the file":       acceptRunIn(t, &ex, true, dir, args, patterns...),
+	} {
+		if d := acceptDiff(mem, got); len(d) != 0 {
+			t.Fatalf("the analysis with the IR %s differs from the one in memory:\n%s", name, strings.Join(d, "\n"))
+		}
+	}
+}
+
+func zooArgs(t *testing.T) (string, []string) {
+	dir := zooRoot(t)
+	var args []string
+	for _, d := range zooGoDepDirs {
+		args = append(args, "-dep-dir", d)
+	}
+	return dir, append(args, "-rules", filepath.Join(dir, "rules.yaml"))
+}
+
+func TestAcceptSpillZoo(t *testing.T) {
+	dir, args := zooArgs(t)
+	acceptSpillBoth(t, dir, args, "./cells/...")
+}
+
+func TestAcceptSpillCurated(t *testing.T) {
+	dir, err := filepath.Abs(filepath.Join("..", "..", "bench", "go-curated"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	acceptSpillBoth(t, dir, []string{"-rules", filepath.Join(dir, "rules.yaml")}, "./...")
+}
+
+// The order of the load (RIVUS_INTERNAL_LOAD_ORDER) changes nothing with the IR in the file: each order gives the
+// result that the IR in memory gives for the same order.
+func TestAcceptSpillLoadOrder(t *testing.T) {
+	dir, err := filepath.Abs(filepath.Join("..", "..", "bench", "go-curated"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	args := []string{"-rules", filepath.Join(dir, "rules.yaml")}
+	base := acceptRunIn(t, nil, false, dir, args, "./...")
+	for _, seed := range []string{"a", "b"} {
+		t.Setenv("RIVUS_INTERNAL_LOAD_ORDER", seed)
+		for _, spill := range []bool{false, true} {
+			got := acceptRunIn(t, nil, spill, dir, args, "./...")
+			if d := acceptDiff(base, got); len(d) != 0 {
+				t.Fatalf("order %q, IR in the file %v: differs from the first run:\n%s", seed, spill, strings.Join(d, "\n"))
+			}
+		}
+	}
+}
+
+// The calls of function values get their candidates from valuecalls, which writes them on the function that holds the
+// call: with the IR in the file, that function is held in memory so that the write is there for the graph. A program
+// that has such calls (the function is passed, and called through the parameter and through a variable) gives the same
+// result in the file as in memory, and the file holds those functions.
+func TestAcceptSpillFunctionValues(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, text string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("go.mod", "module example.com/fv\n\ngo 1.22\n")
+	write("main.go", `package main
+
+import (
+	"net/http"
+	"os/exec"
+)
+
+func run(f func(string), s string) { f(s) }
+
+func sink(s string) { exec.Command("sh", "-c", s).Run() }
+
+func quiet(s string) {}
+
+func pick(b bool) func(string) {
+	if b {
+		return sink
+	}
+	return quiet
+}
+
+func h(w http.ResponseWriter, r *http.Request) {
+	run(sink, r.FormValue("x"))
+	g := sink
+	g(r.FormValue("y"))
+	pick(r.FormValue("z") == "")(r.FormValue("w"))
+}
+
+func h2(w http.ResponseWriter, r *http.Request) {
+	// the function that is called is the one that was passed: what is passed to the other is not the flow
+	run(quiet, r.FormValue("a"))
+	run(sink, "constant")
+}
+
+func main() { http.HandleFunc("/", h); http.HandleFunc("/2", h2); http.ListenAndServe(":0", nil) }
+`)
+	mem := acceptRunIn(t, nil, false, dir, nil, "./...")
+	if mem.items["findings"] == "[]" || mem.items["findings"] == "null" {
+		t.Fatalf("no finding in memory: nothing is compared: %s", mem.items["uncertainties"])
+	}
+	got := acceptRunIn(t, nil, true, dir, nil, "./...")
+	if d := acceptDiff(mem, got); len(d) != 0 {
+		t.Fatalf("the IR in the file differs from the one in memory:\n%s", strings.Join(d, "\n"))
 	}
 }

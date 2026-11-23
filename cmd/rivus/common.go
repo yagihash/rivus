@@ -19,6 +19,7 @@ import (
 	"github.com/yagihash/rivus/internal/frontend/goir"
 	"github.com/yagihash/rivus/internal/frontend/gossa"
 	"github.com/yagihash/rivus/internal/ir"
+	"github.com/yagihash/rivus/internal/irspill"
 	"github.com/yagihash/rivus/internal/model"
 	"github.com/yagihash/rivus/internal/model/builtin"
 	"github.com/yagihash/rivus/internal/report"
@@ -65,10 +66,14 @@ type common struct {
 	declIgnored int
 	// extractor, if set, makes the IR of the Go code in place of goir.Extract (a test sets it: extractor.go). No flag.
 	extractor *accept.Extractor
+	// irSpill keeps the functions of the IR in a file and reads them when a reader asks for them (ADR-123), in place of
+	// holding them in memory. Set by RIVUS_INTERNAL_IR_SPILL=1 (and by a test). No flag: the result is the same.
+	irSpill bool
 }
 
 func (c *common) register(fs *flag.FlagSet) {
 	c.dir = "."
+	c.irSpill = os.Getenv(envIRSpill) == "1"
 	fs.Func("C", "directory to analyse from (default \".\")", func(v string) error {
 		c.dir, c.dirSet = v, true
 		return nil
@@ -258,8 +263,22 @@ func (c *common) loadGo(patterns []string, rules *model.Rules, maxImpl int) (*lo
 // loaded is the code read from Go packages.
 type loaded struct {
 	gossa *gossa.Program
+	// ir is the program; when src is set, it is the header of it (its Funcs are not there)
 	ir    *ir.Program
 	texts ir.Texts
+	// src is where the functions are when they are not in ir.Funcs (nil: they are)
+	src ir.Source
+	// disk is src when it keeps the functions in a file (nil: it does not); the part of a program that has other
+	// languages too is in src, which then has them all
+	disk *irspill.DiskSource
+}
+
+// source is the Source of the functions of the program.
+func (l *loaded) source() ir.Source {
+	if l.src != nil {
+		return l.src
+	}
+	return ir.MemSource(l.ir)
 }
 
 // readIR reads a stream of the IR written by an extractor. The texts come from
@@ -380,12 +399,24 @@ func (l *loaded) packages(src ir.Source) []string {
 // extract makes the IR. The analysis needs every function with a body, the
 // dependencies included, and the call graph; the listing of sites needs the
 // functions of the loaded packages only.
-func (l *loaded) extract(withGraph bool) error {
-	prog, err := goir.Extract(l.gossa, goir.Options{All: withGraph, NoCandidates: !withGraph})
+func (l *loaded) extract(withGraph, spill bool) error {
+	opts := goir.Options{All: withGraph, NoCandidates: !withGraph}
+	var b *irspill.Builder
+	if spill {
+		// each function goes to the file when it is converted: the program does not hold it
+		b = newSpillBuilder()
+		opts.Emit = b.Add
+	}
+	prog, err := goir.Extract(l.gossa, opts)
 	if err != nil {
 		return err
 	}
 	l.ir = prog
+	if b != nil {
+		b.SortByID() // the order of the program that Extract returns
+		l.disk = b.Source(prog)
+		l.src = l.disk
+	}
 	l.texts = goir.NewTexts(l.gossa)
 	// The go/ssa programs are the largest thing in memory, and nothing needs
 	// them from here on.
