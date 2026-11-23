@@ -635,6 +635,14 @@ func typeAliases(p *gossa.Program) []ir.TypeAlias {
 }
 
 // isStringType reports whether t is a string type: s[i] of it reads one byte of a text (a map is not).
+// isByteOrRune reports whether the type is a byte or a rune (uint8 or int32): the element of a slice or an array of them is
+// one element of a text (the bytes or the runes of a string, once converted), and one of the binary data as well (the
+// extractor does not tell: what the core does with it is for -char-taint).
+func isByteOrRune(t types.Type) bool {
+	b, ok := t.Underlying().(*types.Basic)
+	return ok && (b.Kind() == types.Uint8 || b.Kind() == types.Int32)
+}
+
 func isStringType(t types.Type) bool {
 	b, ok := t.Underlying().(*types.Basic)
 	return ok && b.Info()&types.IsString != 0

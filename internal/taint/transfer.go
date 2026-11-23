@@ -61,7 +61,11 @@ func (s *state) seed() {
 func (s *state) seedParam(v *sg.Value, idx int) {
 	r := own(v)
 	s.paramRoot[r] = idx
-	s.add(Loc{r, ""}, ParamElem(idx, ""), s.origin(v.Pos, "param"))
+	seed := ParamElem(idx, "")
+	if s.eng.opts.CharTaint && s.numericRoot(r) {
+		seed = seed.WithChar(true) // a number that a character may be passed as: what the callee does with it is followed
+	}
+	s.add(Loc{r, ""}, seed, s.origin(v.Pos, "param"))
 	if v.Kind == sg.KParam {
 		for _, site := range s.eng.sites.ByIRParam[sites.IRParam{Func: s.fn.IR.ID, Index: idx}] {
 			for _, l := range site.Labels {
@@ -172,6 +176,13 @@ func (s *state) transfer(in *sg.Instr) {
 	case ir.OpIndexLoad:
 		dst := in.Dsts[0]
 		src := suffix(s.locs(in.Args[0]), "[]")
+		if s.eng.opts.CharTaint {
+			s.tableLookup(in)
+		}
+		if in.IR.CharRead && s.eng.opts.CharTaint {
+			s.markChar = true // what the extractor says (ir.Instr.CharRead): the value is one character of the text
+			defer func() { s.markChar = false }()
+		}
 		switch {
 		case in.IR.Keyed:
 			s.loadInto(in, Loc{own(dst), ""}, src, pointerLike(dst), "read element", s.globalNote(src, in.Pos))
@@ -282,7 +293,9 @@ func (s *state) callInstr(in *sg.Instr) {
 		iter := s.locs(in.Args[0])
 		s.copyLocs(suffix(iter, "[k]"), []Loc{{own(in.Dsts[1]), ""}}, "range key", in)
 		if in.Callee.Symbol == symRangeNextS {
+			s.markChar = in.IR != nil && in.IR.CharRead && s.eng.opts.CharTaint // the value is one character, the key is not
 			s.copyLocs(iter, []Loc{{own(in.Dsts[2]), ""}}, "range value", in)
+			s.markChar = false
 		} else {
 			s.loadInto(in, Loc{own(in.Dsts[2]), ""}, suffix(iter, "[]"), pointerLike(in.Dsts[2]), "range value", nil)
 		}
@@ -342,6 +355,13 @@ func (s *state) convert(in *sg.Instr) {
 		case pointerLike(dst):
 			// e.g. string to []byte: the content becomes the elements
 			s.put(Loc{own(dst), pathJoin("", "[]")}, s.flatten(s.locs(x)), s.whyFn(in, "convert"))
+		case s.eng.opts.CharTaint && toOtherNumber(dst, x):
+			// int(c): a number that is no character any more (-char-taint stops there)
+			fs := s.flatten(s.locs(x))
+			for i := range fs {
+				fs[i].E = fs[i].E.WithChar(false)
+			}
+			s.put(Loc{own(dst), ""}, fs, s.whyFn(in, "convert"))
 		default:
 			s.copyLocs(s.locs(x), []Loc{{own(dst), ""}}, "convert", in)
 		}
@@ -426,4 +446,38 @@ func reservedShapeOK(in *sg.Instr) bool {
 		return na >= 1 && nd >= 3
 	}
 	return true
+}
+
+// toOtherNumber reports whether a conversion makes a number that is not a character of a number that may be one: a
+// conversion between two number types where the result is not a byte, a rune or a char (int(c), float64(c)). byte(r)
+// and rune(b) keep the character. By the name of the type, like the rest of isCharRead (to be replaced by an
+// attribute of the extractor).
+func toOtherNumber(dst, x *sg.Value) bool {
+	if dst.Class != ir.ClassNumber || x.Class != ir.ClassNumber || dst.Type == x.Type {
+		return false
+	}
+	switch string(dst.Type) {
+	case "byte", "uint8", "rune", "int32", "char":
+		return false
+	}
+	return true
+}
+
+// tableLookup is the part of an index_load that -char-taint adds: a value looked up by an index that is a character (or was
+// made of one: a table of digits indexed by a byte, `digits[c>>4]`, an alphabet indexed by a value of six bits made of
+// bytes) is made of that character: the table is how the text is rewritten (hex, base64). Where the index is not one, it
+// is as it was (an index is not data).
+func (s *state) tableLookup(in *sg.Instr) {
+	if len(in.Args) < 2 || in.Args[1] == nil || pointerLike(in.Dsts[0]) {
+		return
+	}
+	var fs []found
+	for _, f := range s.flatten(s.locs(in.Args[1])) {
+		if f.E.char {
+			fs = append(fs, f)
+		}
+	}
+	if len(fs) > 0 {
+		s.put(Loc{own(in.Dsts[0]), ""}, fs, s.whyFn(in, "table lookup by a character"))
+	}
 }

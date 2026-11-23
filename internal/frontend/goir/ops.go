@@ -39,7 +39,7 @@ func (c *conv) unop(in *ssa.UnOp, pos ir.Pos) {
 	case token.MUL:
 		if info, ok := c.addr[in.X]; ok {
 			if info.isIdx {
-				c.emit(ir.Instr{Op: ir.OpIndexLoad, Dsts: c.dst(in), Args: []ir.LocalID{info.base, info.index}, Pos: pos, AddrPos: info.pos, Folded: true})
+				c.emit(ir.Instr{Op: ir.OpIndexLoad, Dsts: c.dst(in), Args: []ir.LocalID{info.base, info.index}, Pos: pos, AddrPos: info.pos, Folded: true, CharRead: isByteOrRune(in.Type())})
 			} else {
 				c.emit(ir.Instr{Op: ir.OpFieldLoad, Dsts: c.dst(in), Args: []ir.LocalID{info.base}, Field: info.field, Pos: pos, AddrPos: info.pos, Folded: true})
 			}

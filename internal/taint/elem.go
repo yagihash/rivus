@@ -38,6 +38,10 @@ type Elem struct {
 	origin strID // Real: ID of the source site that introduced it
 	path   strID // Param: access path inside the parameter object
 	mods   strID // Param: sanitizer operations applied since (see applyMods)
+	// char: the data was read as one character of a text (a byte, a rune, a code unit: -char-taint). Only an element
+	// that has it enters a number (numericRoot); a length, an index, a comparison and a conversion to another number
+	// do not give it. Always false without the flag.
+	char bool
 }
 
 // Label is, for a Real element, the label name.
@@ -54,6 +58,12 @@ func (e Elem) Mods() string { return e.mods.str() }
 
 // WithPath is the element with another path.
 func (e Elem) WithPath(p string) Elem { e.path = intern(p); return e }
+
+// Char says whether the element was read as one character of a text (-char-taint).
+func (e Elem) Char() bool { return e.char }
+
+// WithChar is the element with the character mark set or cleared.
+func (e Elem) WithChar(c bool) Elem { e.char = c; return e }
 
 // WithMods is the element with other sanitizer operations.
 func (e Elem) WithMods(m string) Elem { e.mods = intern(m); return e }
@@ -104,14 +114,23 @@ func lessElem(a, b Elem) bool {
 			return x < y
 		}
 	}
-	return a.mods != b.mods && a.Mods() < b.Mods()
+	if a.mods != b.mods {
+		if x, y := a.Mods(), b.Mods(); x != y {
+			return x < y
+		}
+	}
+	return !a.char && b.char
 }
 
 func (e Elem) String() string {
-	if e.Kind == Real {
-		return "real(" + e.Label() + "@" + e.Origin() + ")"
+	c := ""
+	if e.char {
+		c = "#c" // only with -char-taint: the strings of the other runs are what they were
 	}
-	return "param" + strconv.Itoa(int(e.Param)) + e.Path() + "[" + e.Mods() + "]"
+	if e.Kind == Real {
+		return "real(" + e.Label() + "@" + e.Origin() + ")" + c
+	}
+	return "param" + strconv.Itoa(int(e.Param)) + e.Path() + "[" + e.Mods() + "]" + c
 }
 
 // --- sanitizer operations ---
@@ -210,7 +229,7 @@ func sanitize(in []Elem, o op, rules *model.Rules) []Elem {
 		if !o.drops1(e.Label()) {
 			if o.scoped && rules.ChainsOnto(e.Label(), o.drops) {
 				for _, a := range o.adds {
-					out = append(out, RealElem(rules.ChainLabel(e.Label(), a), e.Origin()))
+					out = append(out, RealElem(rules.ChainLabel(e.Label(), a), e.Origin()).WithChar(e.char))
 				}
 				continue
 			}
@@ -218,7 +237,7 @@ func sanitize(in []Elem, o op, rules *model.Rules) []Elem {
 			continue
 		}
 		for _, a := range o.adds {
-			out = append(out, RealElem(a, e.Origin()))
+			out = append(out, RealElem(a, e.Origin()).WithChar(e.char))
 		}
 	}
 	return out

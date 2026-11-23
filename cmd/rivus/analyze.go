@@ -54,6 +54,7 @@ type analyzeOpts struct {
 	maxMemory string
 	memLimit  memoryLimit
 	numeric   bool
+	charTaint bool
 	workers   int
 	// lang is the language to read: auto (what the directory holds), or a list.
 	lang string
@@ -151,6 +152,7 @@ func (o *analyzeOpts) register(fs *flag.FlagSet) {
 	fs.Var((*depKValue)(o), "dep-k", "`n` maximum access path depth in the functions of the dependencies (default 2, but not deeper than -k when -dep-k is not given; 0: the same as -k; -dep-k 3 is the depth before the default was 2). A smaller depth makes the analysis of heavy dependencies cheaper and adds flows (a path that is cut stands for everything below it: access_path_truncated)")
 	fs.IntVar(&o.workers, "workers", 0, "functions analysed at the same time (0: one per CPU; 1: one at a time). The result does not depend on it")
 	fs.BoolVar(&o.numeric, "numeric-taint", false, "follow taint through numbers and bools (by default it stops there: they cannot carry an injection)")
+	fs.BoolVar(&o.charTaint, "char-taint", false, "follow taint through one character read out of a text (a byte, a rune, a code unit), the arithmetic of it with a constant, and back into a text; a length, an index, a comparison and a number made of the character still stop. Findings that go through it carry the char_transform note. Does nothing with -numeric-taint. Off by default (docs/FLAGS-OFF-BY-DEFAULT.md)")
 	fs.BoolVar(&o.verbose, "v", false, "print the time of each phase to stderr")
 	fs.IntVar(&o.maxImpl, "max-implementations", model.DefaultMaxImplementations, "default limit of match: implementations")
 	fs.Func("max-memory", "`size` of the soft memory limit of the Go runtime: when the memory of the process nears it, the collector works harder (6GiB, 6GB, 512MiB, bytes; off: no limit, the default one too). Default: GOMEMLIMIT when it is set, else a quarter of the memory of the machine (of the cgroup if smaller), at least min(4GiB, half of it). Soft: below what the analysis holds live it is not kept and the collector runs all the time. The result does not depend on it (summary.memory_limit_*; ADR-121)", func(v string) error {
@@ -173,7 +175,7 @@ func (o *analyzeOpts) register(fs *flag.FlagSet) {
 	fs.StringVar(&o.memProf, "memprofile", "", "write a heap profile (allocations) to this file after the taint phase (development)")
 	fs.StringVar(&o.lockProf, "lockprofile", "", "write the mutex and block profiles of the taint phase to <this>.mutex and <this>.block (development)")
 	fs.StringVar(&o.cpuProf, "cpuprofile", "", "write a CPU profile of the taint phase to this file (development)")
-	usual(fs, "workers", "numeric-taint", "v", "timeout", "resolve-func-values", "max-memory")
+	usual(fs, "workers", "numeric-taint", "char-taint", "v", "timeout", "resolve-func-values", "max-memory")
 	diagnostic(fs, "k", "dep-k", "max-implementations", "max-passes", "func-timeout", "ir", "pass-stats", "pass-stats-top", "pass-stats-sort", "func-values", "trace-element", "memprofile", "lockprofile", "cpuprofile")
 	kind(fs, "enum:pass-stats-sort", "pass-stats-sort")
 	kind(fs, "file", "ir", "func-values", "memprofile", "lockprofile", "cpuprofile")
@@ -237,6 +239,10 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	opts.FuncTimeout = o.funcTimeout
 	opts.MaxPasses = o.passes
 	opts.NumericTaint = o.numeric
+	opts.CharTaint = o.charTaint && !o.numeric
+	if o.charTaint && o.numeric {
+		fmt.Fprintln(os.Stderr, "rivus: -char-taint does nothing with -numeric-taint (which follows every number)")
+	}
 	opts.Workers = o.workers
 	opts.PassStats = o.passStats
 	opts.PassStatsTop = o.passStatsTop

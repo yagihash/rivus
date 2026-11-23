@@ -28,14 +28,18 @@ const (
 	// flow from there on may exist only because of the cut.
 	KindAccessPathTruncated    = "access_path_truncated"
 	KindRecursionApproximation = "recursion_approximation"
-	KindMissingSource          = "missing_source"
-	KindReflection             = "reflection"
-	KindConcurrency            = "concurrency"
-	KindFFIBoundary            = "ffi_boundary"
-	KindGlobalVar              = "global_var"
-	KindConfigRead             = "config_read"
-	KindExportedAPIParam       = "exported_api_param"
-	KindStoredDataBoundary     = "stored_data_boundary"
+	// KindCharTransform is on a hop where a character read out of a text (a byte, a rune, a code unit), or a value made of
+	// one, entered a number that taint stops at otherwise (-char-taint). The finding that goes through it may exist only
+	// because the text was taken apart and put together again (more flows than there are, never fewer).
+	KindCharTransform      = "char_transform"
+	KindMissingSource      = "missing_source"
+	KindReflection         = "reflection"
+	KindConcurrency        = "concurrency"
+	KindFFIBoundary        = "ffi_boundary"
+	KindGlobalVar          = "global_var"
+	KindConfigRead         = "config_read"
+	KindExportedAPIParam   = "exported_api_param"
+	KindStoredDataBoundary = "stored_data_boundary"
 	// KindModelApproximation: a flow that a model says is an approximation (the flow's `approximate` text).
 	KindModelApproximation = "model_approximation"
 	// KindNumericStop marks the data of a source that became a number or a bool: they are

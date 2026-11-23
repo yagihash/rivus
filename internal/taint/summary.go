@@ -130,7 +130,7 @@ func (s *state) summarize() *Summary {
 		for _, p := range s.pathsOf(r, cm) {
 			var elems []OutElem
 			for _, e := range s.elemsOf(r, p, cm[p]) {
-				if kind == OutParam && p == "" && e == (ParamElem(idx, "")) {
+				if kind == OutParam && p == "" && (e == ParamElem(idx, "") || e == ParamElem(idx, "").WithChar(true)) {
 					continue // the parameter's own taint: no flow
 				}
 				if kind == OutParam && cm[p][e].isParamSeed() {
@@ -339,6 +339,7 @@ func (s *state) expandParam(e Elem, argv []*sg.Value, keepAll bool) []expanded {
 			enclosing := len(f.Cell.Path) < read[fi]
 			if f.E.Kind == Real {
 				for _, x := range applyMods(f.E, e.Mods(), s.eng.rules) {
+					x = x.WithChar(x.char || e.char)
 					if !seen[x] || keepAll {
 						seen[x] = true
 						out = append(out, expanded{E: x, From: f, Enclosing: enclosing, Rel: f.Rel})
@@ -347,7 +348,7 @@ func (s *state) expandParam(e Elem, argv []*sg.Value, keepAll bool) []expanded {
 				continue
 			}
 			x := f.E
-			x = x.WithMods(joinMods(f.E.Mods(), e.Mods()))
+			x = x.WithMods(joinMods(f.E.Mods(), e.Mods())).WithChar(f.E.char || e.char)
 			if !seen[x] || keepAll {
 				seen[x] = true
 				out = append(out, expanded{E: x, From: f, Enclosing: enclosing, Rel: f.Rel})
@@ -359,6 +360,12 @@ func (s *state) expandParam(e Elem, argv []*sg.Value, keepAll bool) []expanded {
 
 // applySummary applies the summary of a callee at a call site.
 func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, notes []*Uncertainty, extra []Guard) {
+	if s.eng.opts.CharTaint {
+		// what the function does with a character is in its summary (the elements that are one): no call of a model here
+		prevMark, prevNo := s.markChar, s.noChar
+		s.markChar, s.noChar = false, false
+		defer func() { s.markChar, s.noChar = prevMark, prevNo }()
+	}
 	var widenedNotes []*Uncertainty // notes + out_widened, made on the first element of a widened output
 	sum := s.eng.summaryOf(fn)
 	if sum == nil {

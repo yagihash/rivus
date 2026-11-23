@@ -186,6 +186,9 @@ func (o *analyzeOpts) flagValues(patterns []string) map[string]string {
 	if o.resolveFuncValues {
 		m["resolve-func-values"] = "true"
 	}
+	if o.charTaint && !o.numeric {
+		m["char-taint"] = "true"
+	}
 	if len(o.bodyReplaced) > 0 {
 		m["body-replaced"] = strings.Join(sortedUnique(o.bodyReplaced), "\n")
 	}
