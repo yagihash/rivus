@@ -22,3 +22,6 @@ date	rivus_commit	target	target_commit	kind	settings	wall_s	cpu_s	peak_tree_gb	m
 2026-11-24	364158d0	memos-4gib	00fcd170281a75fc0e95ec4f2f54f43d32fe81bd	passline	-max-memory 4GiB	31.0	174.0	4.08						no	yes	no				-9		8.29	stopped_memory
 2026-11-24	364158d0	gitea	95ba37d9af58db7d9163f9e92e07b5eb4f792bbc	passline	-no-project-rules	94.0	629.8	6.94	6442450944	default	6442450808	4525074704	0.263	yes	0/3			0	0	0		6.50	PASS
 2026-11-24	5c30be74	dart_services	ad668d137e631beeaef3e263054a45696e8d4499	passline	default (-limit 600)	329.8	2513.7	8.04						no						-9		9.72	stopped_memory: 8 GB の監視で 330 秒に止めた(SIGKILL)。収束せず、出力なし(関数の数、反復の回数、func_timeouts、budget_exhausted、incomplete_reasons は取れない)
+2026-11-24	3aa31051	memos-4gib	00fcd170281a75fc0e95ec4f2f54f43d32fe81bd	passline	-max-memory 4GiB	44.2	300.9	3.70	4294967296	flag	3954943704	2443564240	0.227	yes	yes	no	174	0	0	0		2.35	PASS
+2026-11-24	3aa31051	memos-4gib	00fcd170281a75fc0e95ec4f2f54f43d32fe81bd	passline	-max-memory 4GiB	45.8	313.1	3.86	4294967296	flag	4041463560	2529529960	0.23	yes	yes	no	174	0	0	0		9.35	PASS
+2026-11-24	3aa31051	gitea	95ba37d9af58db7d9163f9e92e07b5eb4f792bbc	passline	-no-project-rules	90.0	581.2	7.01	6442450944	default	6442450840	4350041824	0.256	yes	0/3			0	0	0		2.92	PASS
