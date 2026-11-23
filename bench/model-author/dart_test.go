@@ -205,8 +205,14 @@ func TestDartDeadRowsAndVerified(t *testing.T) {
 		t.Errorf("lines = %v", lines)
 	}
 	text := "ruleset: x@1\nverified_versions:\n  - package: dio\n    versions: \">=5.0.0 <6.0.0\"\n    checked_with: 5.0.0\n    checked: 2026-01-01\n\nsinks:\n"
+	// a version that the record covers: the file is not changed
 	upd, err := UpdateVerified(text, "dio", "5.11.1", "2026-11-23")
-	if err != nil || !strings.Contains(upd, "checked_with: 5.11.1") || strings.Contains(upd, "5.0.0\n") {
+	if err != nil || upd != text {
+		t.Errorf("a covered version changed the file: %q, %v", upd, err)
+	}
+	// a version outside the range: the record is replaced
+	upd, err = UpdateVerified(text, "dio", "6.0.1", "2026-11-23")
+	if err != nil || !strings.Contains(upd, "checked_with: 6.0.1") || strings.Contains(upd, "5.0.0\n") {
 		t.Errorf("update = %q, %v", upd, err)
 	}
 }

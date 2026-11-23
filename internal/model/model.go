@@ -98,6 +98,9 @@ type RuleSet struct {
 	// Rejected are the candidates that were looked at and not adopted, with the reason (rejected.go). A record
 	// only: the analysis does not read it; `make model` matches the candidates of a package against it.
 	Rejected []Rejected `yaml:"rejected"`
+	// Deferred are the candidates that could not be decided yet, each with an issue (`ref`) that says why and what is open
+	// (rejected.go). A record only: the analysis does not read it; `make model` does not count them as undecided.
+	Deferred []Deferred `yaml:"deferred"`
 
 	// Origin is where the rule set came from (file name or "builtin:...").
 	Origin string `yaml:"-"`
@@ -855,6 +858,9 @@ func (rs *RuleSet) validate() error {
 		return err
 	}
 	if err := rs.validateRejected(); err != nil {
+		return err
+	}
+	if err := rs.validateDeferred(); err != nil {
 		return err
 	}
 	checkMatch := func(m, what string) error {

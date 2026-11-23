@@ -53,3 +53,22 @@ func TestRejectedIsChecked(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+func TestDeferred(t *testing.T) {
+	ok := "ruleset: t@1\ndeferred:\n  - symbol: a.F\n    kind: sink\n    why: w\n    ref: model-x-y\n  - symbol: a.G\n    kind: sink\n    why: w\n    ref: \"#12\"\n"
+	rs, err := Parse(strings.NewReader(ok), "t.yaml")
+	if err != nil || len(rs.Deferred) != 2 || len(Merge(rs).Symbols()) != 0 {
+		t.Fatalf("deferred = %v, %v", rs, err)
+	}
+	for name, body := range map[string]string{
+		"no ref":  "  - symbol: a.F\n    kind: sink\n    why: w\n",
+		"bad ref": "  - symbol: a.F\n    kind: sink\n    why: w\n    ref: later\n",
+		"no why":  "  - symbol: a.F\n    kind: sink\n    ref: \"#1\"\n",
+		"no kind": "  - symbol: a.F\n    why: w\n    ref: \"#1\"\n",
+		"twice":   "  - symbol: a.F\n    kind: sink\n    why: w\n    ref: \"#1\"\n  - symbol: a.F\n    kind: sink\n    why: w\n    ref: \"#1\"\n",
+	} {
+		if _, err := Parse(strings.NewReader("ruleset: t@1\ndeferred:\n"+body), "t.yaml"); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}

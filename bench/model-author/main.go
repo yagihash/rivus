@@ -45,8 +45,8 @@ func (e *exitError) Error() string { return e.err.Error() }
 func main() { os.Exit(realMain(os.Args[1:], os.Stdout, os.Stderr)) }
 
 type options struct {
-	pkg, version, lang, model, repo, work, dartLibs     string
-	recall, diff, writeVerified, writeDead, genSkeleton bool
+	pkg, version, lang, model, repo, work, dartLibs, base          string
+	breakdown, recall, diff, writeVerified, writeDead, genSkeleton bool
 }
 
 func realMain(args []string, stdout, stderr io.Writer) int {
@@ -60,6 +60,8 @@ func realMain(args []string, stdout, stderr io.Writer) int {
 	fs.StringVar(&o.model, "model", "", "the model file that has the rows of the package (default: the built-in files of -repo that have a row or an entry of it)")
 	fs.StringVar(&o.repo, "repo", ".", "the checkout of rivus")
 	fs.StringVar(&o.work, "work", "", "where the work files go (default: <repo>/.claude/work/model-author, which git ignores)")
+	fs.StringVar(&o.base, "base", "origin/main", "the commit that the summary of rejected: counts the added entries against")
+	fs.BoolVar(&o.breakdown, "breakdown", false, "write the breakdown of the candidates (kind x rule:word/shape: total, row, decided, undecided) to <work>/<package>-breakdown.txt")
 	fs.BoolVar(&o.recall, "recall", false, "report mode: of the sink and source rows of the package, how many a rule of layer 1 finds (exit 0)")
 	fs.BoolVar(&o.diff, "diff", false, "when every candidate is decided, run bench/model-diff for the package and write the material for the pull request")
 	fs.BoolVar(&o.writeVerified, "write-verified", false, "with -diff, when it passes: write verified_versions of the model file")
@@ -169,7 +171,26 @@ func run(o *options, out io.Writer) error {
 
 	fmt.Fprintf(out, "model-author %s %s %s\n", o.lang, o.pkg, l.Version)
 	fmt.Fprintf(out, "  model file: %s\n", target)
-	fmt.Fprintf(out, "  layer 1: %d candidate(s): %d with a row, %d in rejected:, %d undecided\n", len(api.Items), len(m.ByRow), len(m.ByRejected), len(m.Undecided))
+	fmt.Fprintf(out, "  layer 1: %d candidate(s): %d with a row, %d in rejected:, %d deferred:, %d undecided\n", len(api.Items), len(m.ByRow), len(m.ByRejected), len(m.ByDeferred), len(m.Undecided))
+	if err := checkDeferredRefs(repo, facts); err != nil {
+		return &exitError{ExitUsage, err}
+	}
+	if o.breakdown {
+		bf := filepath.Join(o.work, slug+"-breakdown.txt")
+		if err := os.WriteFile(bf, []byte(Breakdown(api, m)), 0o644); err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "  breakdown: %s\n", bf)
+	}
+	summary := RejectedSummary(repo, o.base, facts)
+	sf := filepath.Join(o.work, slug+"-rejected-summary.txt")
+	if err := os.WriteFile(sf, []byte(summary), 0o644); err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "  rejected: and deferred: summary (for the pull request): %s\n", sf)
+	for _, it := range m.ByDeferred {
+		fmt.Fprintf(out, "  deferred: %s %s (%s)\n", it.Kind, it.Symbol, strings.Join(it.Positions, ", "))
+	}
 	l2 := filepath.Join(o.work, slug+"-layer2.txt")
 	if err := os.WriteFile(l2, []byte(strings.Join(api.Layer2, "\n")+"\n"), 0o644); err != nil {
 		return err
@@ -189,6 +210,12 @@ func run(o *options, out io.Writer) error {
 		}
 		fmt.Fprintf(out, "  rows that no rule of layer 1 finds: %d sink, %d source (material for the rule table; not a failure): %s\n", len(rec.SinkMissed), len(rec.SourceMissed), nf)
 	}
+	for _, r := range m.NoLongerCandidate {
+		fmt.Fprintf(out, "  note: %s: rejected %s (%s) is in the API but no rule of layer 1 lists it any more\n", r.File, r.Symbol, r.Kind)
+	}
+	for _, d := range m.StaleDeferred {
+		fmt.Fprintf(out, "  warning: %s: deferred %s (%s) is not in the API of %s any more\n", d.File, d.Symbol, d.Kind, o.pkg)
+	}
 	for _, r := range m.Stale {
 		fmt.Fprintf(out, "  warning: %s: rejected %s (%s) is not in the API of %s any more\n", r.File, r.Symbol, r.Kind, o.pkg)
 	}
@@ -206,7 +233,7 @@ func run(o *options, out io.Writer) error {
 	if !o.diff {
 		return nil
 	}
-	return runDiff(out, o, repo, target, slug, l, api, m)
+	return runDiff(out, o, repo, target, slug, l, api, m, summary)
 }
 
 // majorOfVersion: "93" for v93.0.0 (v0 and v1 have no element in the path: "" and false for them is not needed: they give "0"/"1", which /v* does not match).

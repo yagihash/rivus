@@ -31,6 +31,9 @@ type Item struct {
 	Rule string `json:"rule"`
 	// Sig is the signature, for the person who decides.
 	Sig string `json:"sig"`
+	// Detail says which word of the rule table fired on which shape of type (`path_traversal:path/string`), one per place: the
+	// material of the breakdown (-breakdown). Dart only for now.
+	Detail []string `json:"detail,omitempty"`
 }
 
 // word lists. A name is split into words at an upper-case letter, a digit and `_` (`bucketName` is bucket, name), and a rule fires when a
@@ -44,7 +47,7 @@ var (
 		"open_redirect":     {"location", "redirect"},
 		"xss":               {"html", "markup", "template", "tmpl", "format"},
 		"resource_name": {"bucket", "object", "owner", "repo", "repository", "project", "topic", "subscription", "collection",
-			"table", "dataset", "queue", "prefix", "container", "blob", "organization", "org", "namespace", "ref", "branch", "sha", "account"},
+			"table", "dataset", "queue", "prefix", "container", "blob", "organization", "org", "namespace", "ref", "branch", "sha"},
 	}
 	// bytesSinkWords are the words that make an argument of bytes (not of a string) a candidate: what is written as it is.
 	bytesSinkWords = []string{"html", "markup", "data", "content", "body"}
@@ -53,7 +56,10 @@ var (
 	// fileVerbs are the words of a function that works on a file whose name is given as `name` (`os.Open(name)`, `os.Rename(oldname, newname)`).
 	fileVerbs = []string{"open", "remove", "mkdir", "rename", "chmod", "chown", "lchown", "chtimes", "truncate", "symlink", "link", "readlink", "stat", "lstat", "chdir", "file", "dir"}
 	// sourceWords are the words of a function or a field that carries what somebody else wrote: a body, a content, a header.
-	sourceWords    = []string{"body", "content", "contents", "payload", "raw", "text", "data", "reader", "file", "files", "message", "header", "headers", "cookie", "cookies", "query", "param", "params", "form", "input", "request", "response", "title", "metadata"}
+	sourceWords = []string{"body", "content", "contents", "payload", "raw", "text", "data", "reader", "file", "files", "message", "header", "headers", "cookie", "cookies", "query", "param", "params", "form", "input", "request", "response", "title", "metadata"}
+	// notTextWords: a field with one of these in its name is an address or a kind of content (`rawUrl`, `contentType` of a data class), not what somebody wrote. Only for fields: a function
+	// that returns the Content-Type or the URL of a request does carry what the sender wrote.
+	notTextWords   = []string{"url", "uri", "type", "link", "href"}
 	sanitizerWords = []string{"escape", "quote", "sanitize", "sanitise", "clean"}
 )
 
@@ -95,6 +101,28 @@ func hasWord(name string, list []string) bool {
 		}
 	}
 	return false
+}
+
+// firstWord returns the first word of name that is in list ("" if none).
+func firstWord(name string, list []string) string {
+	for _, w := range words(name) {
+		for _, x := range list {
+			if w == x {
+				return w
+			}
+		}
+	}
+	return ""
+}
+
+// categoryWord is categoryOf and the word that decided.
+func categoryWord(name string) (string, string) {
+	for _, c := range categoryOrder {
+		if w := firstWord(name, sinkWords[c]); w != "" {
+			return c, w
+		}
+	}
+	return "", ""
 }
 
 // categoryOf returns the first category (in the order of categoryOrder) one word of name belongs to.
@@ -240,7 +268,7 @@ func Scan(pkg *types.Package, withCalls bool) *API {
 	}
 	for _, f := range fields {
 		api.Symbols[f.symbol] = f.typ.String()
-		if (isString(f.typ) || isBytes(f.typ) || isReader(f.typ)) && hasWord(f.name, sourceWords) {
+		if (isString(f.typ) || isBytes(f.typ) || isReader(f.typ)) && hasWord(f.name, sourceWords) && !hasWord(f.name, notTextWords) {
 			api.Items = append(api.Items, Item{Symbol: f.symbol, Kind: KindSource, Positions: []string{"field"}, Rule: "source: field that carries a body or content", Sig: "field " + f.typ.String()})
 		}
 	}

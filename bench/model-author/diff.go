@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/yagihash/rivus/internal/model"
 )
 
 // The differential test (bench/model-diff) is run as it is: this file starts it and reads its report; the comparison is not done here.
@@ -27,7 +29,7 @@ type diffReport struct {
 	Errors []string `json:"errors"`
 }
 
-func runDiff(out io.Writer, o *options, repo, target, slug string, l *loaded, api *API, m *Matched) error {
+func runDiff(out io.Writer, o *options, repo, target, slug string, l *loaded, api *API, m *Matched, summary string) error {
 	reportPath := filepath.Join(o.work, slug+"-model-diff.json")
 	args := []string{"run", "./bench/model-diff", "-pkg", o.pkg, "-lang", o.lang, "-repo", repo, "-json", reportPath, "-out", filepath.Join(o.work, "diff-"+slug)}
 	if l.Version != "" {
@@ -52,7 +54,7 @@ func runDiff(out io.Writer, o *options, repo, target, slug string, l *loaded, ap
 		_ = json.Unmarshal(data, &rep)
 	}
 	material := filepath.Join(o.work, slug+"-pr-material.md")
-	if werr := os.WriteFile(material, []byte(Material(o.pkg, l, api, m, &rep, code, buf.String())), 0o644); werr != nil {
+	if werr := os.WriteFile(material, []byte(Material(o.pkg, l, api, m, &rep, code, buf.String(), summary)), 0o644); werr != nil {
 		return werr
 	}
 	fmt.Fprintf(out, "  material for the pull request: %s\n", material)
@@ -87,10 +89,11 @@ func runDiff(out io.Writer, o *options, repo, target, slug string, l *loaded, ap
 }
 
 // Material is the text that the pull request takes its numbers from (a work file: it is not committed).
-func Material(pkg string, l *loaded, api *API, m *Matched, rep *diffReport, code int, log string) string {
+func Material(pkg string, l *loaded, api *API, m *Matched, rep *diffReport, code int, log string, summary string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# model-author: %s %s\n\n", pkg, l.Version)
-	fmt.Fprintf(&b, "- layer 1: %d candidates (%d with a row, %d in rejected:, %d undecided)\n", len(api.Items), len(m.ByRow), len(m.ByRejected), len(m.Undecided))
+	fmt.Fprintf(&b, "- layer 1: %d candidates (%d with a row, %d in rejected:, %d deferred:, %d undecided)\n", len(api.Items), len(m.ByRow), len(m.ByRejected), len(m.ByDeferred), len(m.Undecided))
+	b.WriteString("\n## rejected: and deferred: (for the review)\n\n```\n" + strings.TrimSpace(summary) + "\n```\n\n")
 	fmt.Fprintf(&b, "- layer 2: %d functions (list only)\n", len(api.Layer2))
 	fmt.Fprintf(&b, "- stale rejected: entries: %d\n", len(m.Stale))
 	fmt.Fprintf(&b, "- model-diff: exit %d; ", code)
@@ -169,6 +172,15 @@ func UpdateVerified(text, module, version, day string) (string, error) {
 				j++
 			}
 			if strings.TrimSpace(strings.TrimPrefix(lines[i], "  - package: ")) == module {
+				// a version that the record already covers changes nothing (the file is not touched: no new range, no new day)
+				for _, l := range lines[i+1 : j] {
+					if v, ok := strings.CutPrefix(strings.TrimSpace(l), "versions:"); ok {
+						rng := strings.Trim(strings.TrimSpace(v), "\"'")
+						if (model.VerifiedVersion{Package: module, Versions: rng}).Holds(version) {
+							return text, nil
+						}
+					}
+				}
 				return strings.Join(append(append(append([]string{}, lines[:i]...), block...), lines[j:]...), "\n"), nil
 			}
 			i = j

@@ -318,10 +318,12 @@ rejected:
     why: "filename は multipart の送信時に付けるファイル名で、ローカルの path ではない"
   - symbol: package:dio/src/multipart_file.dart#MultipartFile.fromFile
     kind: sink
-    why: "読んで送るファイルの path(arg0)は path_traversal の候補。今回は行にしていない(次の見直しで決める)。filename は送信時に付ける名前で path ではない"
+    position: named:filename
+    why: "filename は multipart の送信時に付けるファイル名で、ローカルの path ではない"
   - symbol: package:dio/src/multipart_file.dart#MultipartFile.fromFileSync
     kind: sink
-    why: "読んで送るファイルの path(arg0)は path_traversal の候補。今回は行にしていない(次の見直しで決める)。filename は送信時に付ける名前で path ではない"
+    position: named:filename
+    why: "filename は multipart の送信時に付けるファイル名で、ローカルの path ではない"
   - symbol: package:dio/src/multipart_file.dart#MultipartFile.fromStream
     kind: sink
     why: "filename は multipart の送信時に付けるファイル名で、ローカルの path ではない"
@@ -346,9 +348,6 @@ rejected:
   - symbol: package:dio/src/options.dart#Options.compose
     kind: sink
     why: "path は Dio.fetch の行(args 0)で RequestOptions ごと見る。作る、合成する時点では sink にしない"
-  - symbol: package:dio/src/options.dart#Options.contentType
-    kind: source
-    why: "リクエストを組み立てる側の設定値で、外から来た値を運ぶものではない"
   - symbol: package:dio/src/options.dart#Options.headers
     kind: source
     why: "リクエストを組み立てる側の設定値で、外から来た値を運ぶものではない"
@@ -388,9 +387,6 @@ rejected:
   - symbol: package:dio/src/transformer.dart#Transformer.transformResponse
     kind: sink
     why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
-  - symbol: package:dio/src/transformer.dart#Transformer.urlEncodeQueryMap
-    kind: source
-    why: "送る本文を作って返すだけ。受け取った値の入口ではない(応答は source にしない)"
   - symbol: package:dio/src/transformers/fused_transformer.dart#FusedTransformer.transformRequest
     kind: sink
     why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
@@ -409,3 +405,19 @@ rejected:
   - symbol: package:dio/src/transformers/sync_transformer.dart#SyncTransformer.transformResponse
     kind: sink
     why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/transformer.dart#Transformer.urlEncodeQueryMap
+    kind: source
+    why: "送る本文を作って返すだけ。受け取った値の入口ではない(応答は source にしない)"
+
+# The path of the file that is read and sent: to be a sink (a separate pull request). Until it is in, the candidate is kept here.
+deferred:
+  - symbol: package:dio/src/multipart_file.dart#MultipartFile.fromFile
+    kind: sink
+    position: arg0
+    why: "読んで送るファイルの path。sink にする方針で、行は別の PR で足す"
+    ref: model-dart-dio-multipartfile
+  - symbol: package:dio/src/multipart_file.dart#MultipartFile.fromFileSync
+    kind: sink
+    position: arg0
+    why: "同じ(同期版)"
+    ref: model-dart-dio-multipartfile

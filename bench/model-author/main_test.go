@@ -325,8 +325,12 @@ func TestUpdateVerified(t *testing.T) {
 		t.Errorf("no list: %v\n%s", err, got)
 	}
 	old := "ruleset: x@1\n\nverified_versions:\n  - package: example.com/m\n    versions: \">=1.0.0 <2.0.0\"\n    checked_with: v1.0.0\n    checked: 2026-01-01\n  - package: example.com/n\n    versions: v2.0.0\n    checked: 2026-01-02\n\nsinks:\n"
-	got, _ = UpdateVerified(old, "example.com/m", "v1.5.0", day)
-	if strings.Count(got, "package: example.com/m") != 1 || !strings.Contains(got, "checked_with: v1.5.0") || !strings.Contains(got, "package: example.com/n") || strings.Contains(got, "v1.0.0") {
+	// a version that the record covers: nothing changes
+	if got, _ = UpdateVerified(old, "example.com/m", "v1.5.0", day); got != old {
+		t.Errorf("a covered version changed the file:\n%s", got)
+	}
+	got, _ = UpdateVerified(old, "example.com/m", "v2.0.1", day)
+	if strings.Count(got, "package: example.com/m") != 1 || !strings.Contains(got, "checked_with: v2.0.1") || !strings.Contains(got, "package: example.com/n") || strings.Contains(got, "v1.0.0") {
 		t.Errorf("replace:\n%s", got)
 	}
 	got, _ = UpdateVerified(old, "example.com/o", "v0.3.2", day)
@@ -431,8 +435,11 @@ rejected:
 	if _, err := LoadFacts([]string{p}, "example.com/m/v3/pkg"); err != nil {
 		t.Errorf("the loader refuses the two records: %v", err)
 	}
-	// a rerun for v2 replaces its record only
-	upd2, _ := UpdateVerified(upd, "example.com/m/v2", "v2.2.0", "2026-11-03")
+	// a rerun for v2 at a version that its record covers changes nothing; at another one it replaces its record only
+	if same, _ := UpdateVerified(upd, "example.com/m/v2", "v2.2.0", "2026-11-03"); same != upd {
+		t.Errorf("a covered version changed the file:\n%s", same)
+	}
+	upd2, _ := UpdateVerified(strings.Replace(upd, ">=2.1.0 <3.0.0", ">=2.1.0 <2.2.0", 1), "example.com/m/v2", "v2.2.0", "2026-11-03")
 	if strings.Count(upd2, "package: example.com/m/v2") != 1 || !strings.Contains(upd2, "checked_with: v3.0.4") || !strings.Contains(upd2, "checked_with: v2.2.0") {
 		t.Errorf("%s", upd2)
 	}

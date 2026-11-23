@@ -23,6 +23,7 @@ type Facts struct {
 	SourceRows                               []model.Source     // of the package
 	FlowRows                                 []model.Propagator // of the package: the rows with flows (the skeleton reads them)
 	Rejected                                 []RejectedEntry    // of the package
+	Deferred                                 []DeferredEntry    // of the package
 	BodyReplaced                             []string           // the packages that the files declare (body_replaced_packages)
 }
 
@@ -31,6 +32,13 @@ type RejectedEntry struct {
 	model.Rejected
 	File string
 	// Wild: the symbol was written with /v* (every major): it can name something that only another major has, so it is never stale.
+	Wild bool
+}
+
+// DeferredEntry is a `deferred:` entry and the file it is in.
+type DeferredEntry struct {
+	model.Deferred
+	File string
 	Wild bool
 }
 
@@ -128,6 +136,14 @@ func LoadFacts(files []string, pkg string) (*Facts, error) {
 		for _, b := range rs.BodyReplaced {
 			f.BodyReplaced = append(f.BodyReplaced, b.Package)
 		}
+		for _, d := range rs.Deferred {
+			wild := model.HasMajorWildcard(d.Symbol)
+			d.Symbol = conc(d.Symbol)
+			if inPackage(d.Symbol, pkg) {
+				f.Deferred = append(f.Deferred, DeferredEntry{d, path, wild})
+				used[path] = true
+			}
+		}
 		for _, r := range rs.Rejected {
 			wild := model.HasMajorWildcard(r.Symbol)
 			r.Symbol = conc(r.Symbol)
@@ -216,48 +232,85 @@ func (f *Facts) rowFor(it Item) string {
 	return ""
 }
 
-// rejectedFor says whether `rejected:` decides the candidate: an entry of the symbol and kind with no position, or entries that
-// together name every position of the candidate.
-func (f *Facts) rejectedFor(it Item) bool {
+// decidedBy says whether a list of entries (symbol, kind, position) decides the candidate: an entry of the symbol and kind with no
+// position, or entries that together name every position of the candidate. any says whether at least one entry matched.
+func decidedBy(it Item, n int, at func(i int) (sym, kind, pos string)) (all, any bool) {
 	left := map[string]bool{}
 	for _, p := range it.Positions {
 		left[p] = true
 	}
-	for _, r := range f.Rejected {
-		if r.Symbol != it.Symbol || r.Kind != it.Kind {
+	for i := 0; i < n; i++ {
+		sym, kind, pos := at(i)
+		if sym != it.Symbol || kind != it.Kind {
 			continue
 		}
-		if r.Position == "" {
-			return true
+		any = true
+		if pos == "" {
+			return true, true
 		}
-		delete(left, r.Position)
+		delete(left, pos)
 	}
-	return len(left) == 0
+	return len(left) == 0 && any, any
 }
 
 // Matched is the result of the matching.
 type Matched struct {
-	ByRow, ByRejected, Undecided []Item
+	ByRow, ByRejected, ByDeferred, Undecided []Item
 	// Stale are the `rejected:` entries whose symbol is no longer in the API of the package.
 	Stale []RejectedEntry
+	// StaleDeferred: the same for `deferred:`.
+	StaleDeferred []DeferredEntry
+	// NoLongerCandidate are the `rejected:` entries whose symbol is in the API but is not a candidate of the rule table (any more): a note, not a warning.
+	NoLongerCandidate []RejectedEntry
 }
 
-// Match sorts the candidates (layer 1) into the ones that have a row, the ones that `rejected:` has, and the undecided ones.
+// Match sorts the candidates (layer 1) into the ones that have a row, the ones that `rejected:` and `deferred:` decide (together, place by
+// place; one that has any `deferred:` place is a deferred one), and the undecided ones.
 func Match(api *API, f *Facts) *Matched {
 	m := &Matched{}
 	for _, it := range api.Items {
-		switch {
-		case f.rowFor(it) != "":
+		if f.rowFor(it) != "" {
 			m.ByRow = append(m.ByRow, it)
-		case f.rejectedFor(it):
-			m.ByRejected = append(m.ByRejected, it)
-		default:
+			continue
+		}
+		var cov []model.Rejected
+		for _, r := range f.Rejected {
+			cov = append(cov, r.Rejected)
+		}
+		for _, d := range f.Deferred {
+			cov = append(cov, model.Rejected{Symbol: d.Symbol, Kind: d.Kind, Position: d.Position})
+		}
+		all, _ := decidedBy(it, len(cov), func(i int) (string, string, string) { return cov[i].Symbol, cov[i].Kind, cov[i].Position })
+		if !all {
 			m.Undecided = append(m.Undecided, it)
+			continue
+		}
+		_, anyDef := decidedBy(it, len(f.Deferred), func(i int) (string, string, string) {
+			return f.Deferred[i].Symbol, f.Deferred[i].Kind, f.Deferred[i].Position
+		})
+		if anyDef {
+			m.ByDeferred = append(m.ByDeferred, it)
+		} else {
+			m.ByRejected = append(m.ByRejected, it)
 		}
 	}
 	for _, r := range f.Rejected {
 		if _, ok := api.Symbols[r.Symbol]; !ok && !r.Wild {
 			m.Stale = append(m.Stale, r)
+		}
+	}
+	cand := map[string]bool{}
+	for _, it := range api.Items {
+		cand[it.Kind+"\x00"+it.Symbol] = true
+	}
+	for _, r := range f.Rejected {
+		if _, ok := api.Symbols[r.Symbol]; ok && !cand[r.Kind+"\x00"+r.Symbol] {
+			m.NoLongerCandidate = append(m.NoLongerCandidate, r)
+		}
+	}
+	for _, d := range f.Deferred {
+		if _, ok := api.Symbols[d.Symbol]; !ok && !d.Wild {
+			m.StaleDeferred = append(m.StaleDeferred, d)
 		}
 	}
 	return m
