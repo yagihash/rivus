@@ -162,7 +162,7 @@ same files.
 | dart-pub | <https://github.com/dart-lang/pub> | `5e24336e71a05a96b558d496953ebed223f6e40a` | `bench/dart-pub/rules.yaml` | `bench/dart-pub/truth-5e24336e.json` |
 | gophish (GHSA-9c9w-9pq7-f35h, GHSA-hvw3-p9px-gpc9; `bench/wild/go/`) | <https://github.com/gophish/gophish> | `27d13a0584731371033926064d750e5f4f620e7a` | `bench/wild/go/GHSA-9c9w-9pq7-f35h/rules.yaml` | `bench/wild/go/gophish-27d13a05.truth.json` |
 | casdoor (GHSA-9vm3-r8gq-cr6x; `bench/wild/go/`) | <https://github.com/casdoor/casdoor> | `7b0b426a76fd77b89817e0eafcccaed8d15b8cf4` | `bench/wild/go/GHSA-9vm3-r8gq-cr6x/rules.yaml` | `bench/wild/go/GHSA-9vm3-r8gq-cr6x/truth.json` |
-| the cut-out of the three CVEs of Gitea (7 packages, `-no-deps`; **not used by the project since 2026-11-21**, see "Gitea" below) | <https://github.com/go-gitea/gitea> | tag `v1.26.4` | `bench/gitea/rules.yaml` | `bench/gitea-cve-truth.json` |
+| the cut-out of the three CVEs of Gitea (7 packages, `-no-deps`; **not used by the gate since 2026-11-21; the whole of Gitea is a target of the pass line C since 2026-11-24**, see "Gitea" below) | <https://github.com/go-gitea/gitea> | tag `v1.26.4` | `bench/gitea/rules.yaml` | `bench/gitea-cve-truth.json` |
 
 How to run each is in the README of the target where there is one (`dart-pub/`, `parseable/`; the top of
 this file for the Go ones). "Not recorded" is a gap to be filled the next time someone has the
@@ -281,7 +281,7 @@ callouts of ADR-047 (2 passes, 15 GB, 48 findings; the summaries of the AWS midd
 passes, almost all of them new, not coming back). It is a measure of the growth of the summaries, not a baseline to compare findings
 with: a run that does not converge is cut where it was.
 
-**Gitea (a note of 2026-11-22).** The project does not use Gitea since 2026-11-21: it is not in the gate and not a step of a change; the exploration
+**Gitea (a note of 2026-11-22; changed 2026-11-24).** The user decided on 2026-11-24 that the whole of Gitea (`v1.26.4`) is the target of the pass line C (`passline-baseline.md`): it may be fetched and run for that. Periodic runs and exploration on it stay a separate decision. Before that, from 2026-11-21: it is not in the gate and not a step of a change; the exploration
 uses small reproductions and rotating targets (`explore/README.md`). The files below are **still in the repository** and are not removed: the
 cut-out `gitea-cut` is still in the light tier of `compare.sh` (`--light` and the default list), and `bench/gitea/` (`rules.yaml`, `truth-v1.26.4.json`) and
 `bench/gitea-cve-truth.json` are still here. Whether the cut-out leaves `compare.sh` is not decided in these documents. The rest of this section
