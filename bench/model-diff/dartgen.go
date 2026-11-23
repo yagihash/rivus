@@ -529,11 +529,13 @@ func (g *dartGen) emit(r Row, sig *dartSig, variant string, taintPos int, taintR
 		if rc == "" {
 			rc = sig.Class + "()"
 		}
+		recv := "rc"
 		if g.static(r.Symbol) {
-			rc = sig.Class
+			recv = sig.Class // a static member is called on the class itself (a variable that holds the class is a Type, which has no such member)
+		} else {
+			fmt.Fprintf(&sb, "  final rc = %s;\n", rc)
 		}
-		fmt.Fprintf(&sb, "  final rc = %s;\n", rc)
-		call = "rc." + sig.Name
+		call = recv + "." + sig.Name
 		if !sig.Getter {
 			call += "(" + strings.Join(args, ", ") + ")"
 		}
