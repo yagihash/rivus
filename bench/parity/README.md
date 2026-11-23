@@ -33,6 +33,32 @@ IR の呼び出し先の名前(`callee.symbol`、関数の名前)と、モデル
 
 `match: implementations` の展開と、コアが作る関数値の候補(`ValueCands`)は見ない(当たりを数え落とす側の誤り)。
 
+## 機能の差の表(モデルまわり。言語ごとの有無)
+
+上の 4 つの数は「モデルの量と質」の差で、こちらは**道具と機構の差**。✓ は対応済み、✗ は未対応(課題か PR の番号があれば書く)、不要は「言語の性質で要らない」(理由 1 語)。「要確認」は、まだ事実を確かめていない。
+
+| 機能 | Go | Dart | Rust |
+| --- | --- | --- | --- |
+| パッケージ単位の宣言(`body_replaced_packages`。ADR-100) | ✓ | ✓ | ✓ |
+| extractor が宣言のある本体を読まない(段階 4。ADR-105) | ✓ | ✓ | ✗(未実装。隔離と nightly が要る。設計 7a 節) |
+| 差分テスト(`bench/model-diff`) | ✓ | ✓ | ✗(隔離が要る。`-lang rust` は止まる) |
+| 行がない関数の一覧(`-coverage-gaps`) | 一部(標準ライブラリだけ) | ✗ | ✗ |
+| 行がない関数の一覧(`rivus models coverage`) | ✓ | ✓ | ✓ |
+| `kind: field` の source | ✓(`pkg.Type.Field`) | ✓(dart-github) | ✓(`::` 区切りの型名。#161、#230) |
+| `callback_param` の source(ADR-106) | ✓(単体テスト) | ✓(shelf_router) | 要確認(書式の検査だけ。extractor では未確認) |
+| `named:` の sink の選択 | 不要(名前つき引数がない) | ✓ | 不要(名前つき引数がない) |
+| `verified_versions`(読み込みと `rivus models versions`) | ✓ | ✓ | ✓ |
+| `summary.unverified_versions`(確認していないバージョンの注記) | ✓ | ✗(#162) | ✗(#162) |
+| path の major を `/v*` と書く(ADR-110) | ✓ | 不要(path に major がない) | 不要(path に major がない) |
+| zoo で骨組みを依存として読む | ✓(骨組みが独立の module) | ✓(依存として。#231) | ✓(`exclude = ["skel"]`) |
+| `checked_by: cell` の行(ADR-107) | 要確認(機構は共通。Go で使う行があるか未確認) | ✓ | 要確認(同左) |
+| 変換できない関数を飛ばして読み続ける(`fn_skipped`。ADR-109) | 要確認(パニックの報告なし。要るかを見る) | 要確認(同左) | ✓ |
+| zoo の外部パッケージのセルの置き場 | `bench/zoo-go-pkg/<名前>/` | `bench/zoo-dart/cells/packages/<名前>/` | `bench/zoo-rust-pkg/<名前>/` |
+| `make model` の段 1(枠、候補、検証、差分テスト。設計 6.11) | PR #233(レビュー中) | ✗ | ✗ |
+| クラウドで作れる | ✓ | ✓ | ✗(extractor がサンドボックスを要る) |
+
+**規則**: 新しい機能の PR は、この表の行を足すか直す。Go だけで入れるときは、ほかの言語の課題の番号を書く。
+
 ## 表の更新の手順
 
 入力は、(1) 各言語の IR(`bench/parity/collect.sh`)、(2) 実コードの解析の要約(`rivus analyze -pass-stats`、`ANALYZE=1`)、(3) zoo のテストの出力(任意)。
