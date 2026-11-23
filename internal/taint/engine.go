@@ -22,9 +22,9 @@ import (
 type Options struct {
 	// K is the maximum access path depth (ADR-014).
 	K int
-	// DepK is the access path depth of the functions of the dependencies (an experiment, -dep-k): the paths are cut
-	// at DepK steps there, and at K in the functions of the project. Zero is the same as K. A cut path stands for
-	// everything below it, so a smaller DepK only adds flows (docs/DESIGN-deps-cost-status.md).
+	// DepK is the access path depth of the functions of the dependencies (-dep-k): the paths are cut at DepK steps there,
+	// and at K in the functions of the project. Zero is the same as K (-dep-k 3 with the default K is the depth before
+	// the default was changed to 2). A cut path stands for everything below it, so a smaller DepK only adds flows (ADR-118).
 	DepK int
 	// MaxPasses bounds the number of times the whole program is revisited
 	// while summaries change.
@@ -75,7 +75,7 @@ type Options struct {
 
 // DefaultOptions are the defaults.
 func DefaultOptions() Options {
-	return Options{K: 3, MaxPasses: 12, Budget: 400000, FuncTimeout: 30 * time.Second, PassStatsTop: 20}
+	return Options{K: 3, DepK: 2, MaxPasses: 12, Budget: 400000, FuncTimeout: 30 * time.Second, PassStatsTop: 20}
 }
 
 // Engine runs the whole-program analysis.
@@ -377,6 +377,14 @@ func (e *Engine) numericStopRecords() []*Uncertainty {
 		out = append(out, u)
 	}
 	return out
+}
+
+// depK is the access path depth of the functions of the dependencies.
+func (e *Engine) depK() int {
+	if e.opts.DepK > 0 {
+		return e.opts.DepK
+	}
+	return e.opts.K
 }
 
 func (e *Engine) noteCoarsened(fn *sg.Func, truncated, widened bool) {
@@ -1338,7 +1346,7 @@ func (e *Engine) collect(st Stats) *Result {
 			ids = append(ids, e.funcID(fn))
 		}
 		sort.Strings(ids)
-		u := newUncertainty(KindDepthLimit, "path_limit: in "+itoa(len(ids))+" functions the access paths were cut at depth "+itoa(e.opts.K)+
+		u := newUncertainty(KindDepthLimit, "path_limit: in "+itoa(len(ids))+" functions the access paths were cut at depth "+itoa(e.opts.K)+" (in the functions of the dependencies: "+itoa(e.depK())+")"+
 			", or the cells of a parameter were merged into the whole of it: what is told apart in the code is not told apart here (more flows than there are, never fewer)", "")
 		u.Candidates = ids
 		res.Uncertainties = append(res.Uncertainties, u)
