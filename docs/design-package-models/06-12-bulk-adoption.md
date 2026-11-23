@@ -44,7 +44,7 @@ adopt_rules:
 
 1. 層 1 の候補を、今と同じに作る(型だけを読む。シンボルの辞書順)。
 2. 決めごとに、候補のうち、`kind`、`rule` の id、`scope` を満たすものを選ぶ。位置は、候補の位置のうち、`words` の語を持つものだけ(空なら、その候補は対象外)。
-3. すでに手の行(sink なら同じ位置)がある候補、`rejected:` に(位置が合って)ある候補は外す。件数は、`covers` と別に `skipped_by_row` / `skipped_by_rejected` として出力に書く。
+3. すでに手の行(sink なら同じ位置)がある候補、`rejected:` に(位置が合って)ある候補は外す。**行のまとめ方と `covers` の単位**: 行は「(シンボル、カテゴリ、決定の組)」ごとに 1 行にまとめる(同じシンボルが、決定の組が違えば、複数の行に出ることがある)。`covers` は、決定が請求した、重ならない(distinct な)シンボルの個数で、手の行と `rejected:` を引く前の数(手の行を足しても `covers` は動かない)。件数は、`covers` と別に `skipped_by_row` / `skipped_by_rejected` として出力に書く。
 4. 残りを、手の行と同じ形の行にする(`symbol`、`args` または `field`、`category`、`origin: generated`、`decision: <id>`)。2 つの決めが同じ位置を取ったときは、先に書いた決めが勝ち、後の決めは警告(終了コード 70 と同じ扱いにするかは、**要確認**)。
 5. `<lang>-<package>.gen.yaml` に、決めの順、その中で symbol の辞書順で書く。先頭に `generator: model-author@<バージョン>`、`input: <パッケージ>@<バージョン>`、`rules: <規則の表のハッシュ>`、`decisions: <adopt_rules の内容のハッシュ>`。
 
