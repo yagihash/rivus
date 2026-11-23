@@ -228,3 +228,7 @@ The Dart target of the pass line is flutter/cocoon `app_dart` (`ae9eb1beaf765d64
 | cocoon app_dart | ae9eb1be | default, 10m | 101 s | 1.78 GB | 128 s CPU | converged (4 passes) | 16.5k functions (14.3k deps) | 14 findings (ssrf 9, resource_name 4, sql_injection 1) |
 
 Today's line for cocoon: `PASS cocoon time=101/180 mem=1.78/8 converged=yes detected=n/a`.
+
+### Detection: the line is per vulnerability, the detail is per position
+
+`detected` counts per vulnerability, as for memos: `yes` when at least one finding passes through a labelled position of that vulnerability's truth (builtin models, default flags). The position-level count is printed beside it as information: `through_tp=<n>/<N>`. For the Dart target `dart-pub` (dart-lang/pub `5e24336e71a05a96b558d496953ebed223f6e40a`; one public fixed vulnerability, the zip slip of `extractTarGz`, 9 labelled call sites; `bench/dart-pub`), the position count is 4/9 with `-no-deps` and the builtin models (an earlier local measurement). With the default flags the run does not converge today, so the line is `detected=no` (INFO; the line is not decided). `bench/score.py --through` gives the same position count from a saved result.

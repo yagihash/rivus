@@ -20,12 +20,18 @@ An entry with a sink may also name "via": a list of function names (suffixes). I
 a finding of that (source function, sink) pair goes through every one of them (a step's function, or the function
 that a step calls). The pair alone is matched by two ends; "via" is the middle, so that a finding that reaches the
 same sink by another route does not count.
+With --through, an entry that has only "file" and "line" is also scored a second way (printed as "through TP/FN", the default score is unchanged):
+the entry counts when a finding of its category has a path with a call step at that position (file, line): the labelled helper call is on
+the path of the flow, whatever sink the flow ends in (the same flow, the sink placed in the helper or at its call). A path that the
+finding does not list (the findings of one source and one sink keep one path) is not seen.
 A label other than "vuln" or "safe", or an entry without a category, is an error (it would count as safe)."""
 import json
 import sys
 
-truth = json.load(open(sys.argv[1]))["sites"]
-res = json.load(open(sys.argv[2]))
+through = "--through" in sys.argv
+args = [a for a in sys.argv[1:] if a != "--through"]
+truth = json.load(open(args[0]))["sites"]
+res = json.load(open(args[1]))
 for i, s in enumerate(truth):
     if s.get("label") not in ("vuln", "safe") or not s.get("category"):
         sys.exit("truth entry %d: label must be vuln or safe and category must be set: %r" % (i, s))
@@ -46,6 +52,15 @@ for f in res["findings"]:
             if d.startswith("call "):
                 fs.add(d[5:])
         pair_funcs.setdefault((f["source"]["func"], p["file"], p["line"], f["category"]), []).append(fs)
+
+
+call_steps = {}  # (file, line) -> categories of the findings with a call step there
+for f in res["findings"]:
+    for pa in f.get("paths") or []:
+        for st in pa.get("steps", []):
+            if st.get("desc", "").startswith("call "):
+                q = st["position"]
+                call_steps.setdefault((q["file"], q["line"]), set()).add(f["category"])
 
 
 def source_hit(suffix, category, sink=None, via=None):
@@ -84,6 +99,16 @@ for s in truth:
             fp += 1; rows.append(("FP", k, s["category"]))
         else:
             tn += 1; rows.append(("TN", k, s["category"]))
+if through:
+    ttp = tfn = 0
+    for t in truth:
+        if "file" in t and t["label"] == "vuln":
+            ok = t["category"] in call_steps.get((t["file"], t["line"]), ())
+            ttp += ok
+            tfn += not ok
+            print("through %-3s %s:%d %s" % ("TP" if ok else "FN", t["file"], t["line"], t["category"]))
+    print("through TP %d  FN %d" % (ttp, tfn))
+    print()
 for r in rows:
     print("%-3s %s:%d %s" % (r[0], r[1][0], r[1][1], r[2]))
 if any("file" in t for t in truth):

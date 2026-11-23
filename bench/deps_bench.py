@@ -21,7 +21,9 @@ The pass line (`make bench-passline`; targets in bench/deps-targets.json): one l
 with the default flags of rivus. PASS needs all four: it ended by itself within the time limit, the memory of the
 process group never went above the cap (a watchdog kills the group of this run only), it converged, and the
 count of findings of the category of the target is higher on the pre-fix commit than on the fixed one (counts
-only; n/a when the target has no pair). A target that is not decided yet is printed as INFO, not PASS/FAIL.
+only; n/a when the target has no pair). A target with `detect.mode` "through" (a truth file, one public fixed
+vulnerability) counts per vulnerability: detected when at least one finding passes through a labelled position;
+`through_tp=<n>/<N>` (the labelled positions passed through) is printed beside it as information. A target that is not decided yet is printed as INFO, not PASS/FAIL.
 Sources are fetched into $BENCH_CACHE (default ~/.cache/rivus-bench/), outside this tree; the output of the runs
 goes to $BENCH_OUT (default .claude/work/bench-out/, git-ignored). Nothing of a target is run.
 """
@@ -122,8 +124,9 @@ PASSLINE_COLUMNS = ["date", "rivus", "line"]
 GB = 1024 ** 3
 
 
-def judge(time_s, limit_s, mem_gb, cap_gb, converged, detected):
-    """The pass line, pure. detected: True / False / None (no pair for this target). Returns (passed, line_body)."""
+def judge(time_s, limit_s, mem_gb, cap_gb, converged, detected, through=None):
+    """The pass line, pure. detected: True / False / None (no pair for this target). through: None or (tp, n), the
+    position-level count, printed as information only (it does not decide PASS). Returns (passed, line_body)."""
     ok_time = time_s is not None and time_s <= limit_s
     ok_mem = mem_gb is not None and mem_gb <= cap_gb
     ok_det = detected is not False  # None (n/a) does not count against
@@ -132,6 +135,8 @@ def judge(time_s, limit_s, mem_gb, cap_gb, converged, detected):
         "%.0f" % time_s if time_s is not None else "-", "%g" % limit_s,
         "%.2f" % mem_gb if mem_gb is not None else "-", "%g" % cap_gb,
         "yes" if converged else "no", "n/a" if detected is None else ("yes" if detected else "no"))
+    if through is not None:
+        body += " through_tp=%s/%d" % ("-" if through[0] is None else through[0], through[1])
     return passed, body
 
 
@@ -149,6 +154,27 @@ def detection(pre_count, fixed_count):
     if pre_count is None or fixed_count is None:
         return False
     return pre_count > fixed_count
+
+
+def through_counts(truth, rep):
+    """Position level (the same scoring as `bench/score.py --through`): a labelled "vuln" site (file, line) counts when a
+    finding of its category has a path with a `call ...` step at that position (kinds that differ do not count).
+    Returns (tp, n). Counts only."""
+    call_steps = {}
+    for f in (rep or {}).get("findings", []):
+        for pa in f.get("paths") or []:
+            for st in pa.get("steps", []):
+                if st.get("desc", "").startswith("call "):
+                    q = st["position"]
+                    call_steps.setdefault((q["file"], q["line"]), set()).add(f["category"])
+    sites = [t for t in truth if "file" in t and t.get("label") == "vuln"]
+    tp = sum(1 for t in sites if t["category"] in call_steps.get((t["file"], t["line"]), ()))
+    return tp, len(sites)
+
+
+def detected_through(tp):
+    """Per vulnerability: detected when at least one finding passes through a labelled position of its truth."""
+    return tp is not None and tp >= 1
 
 
 def process_group_rss(pgid):
@@ -320,14 +346,18 @@ def passline(name, t, rivus, cache, outdir, limit_s, cap_gb):
             return r
 
         main = run(t.get("commit", ""), "pin")
-        detected, d = None, t.get("detect")
-        if d:
+        detected, d, through = None, t.get("detect"), None
+        if d and d.get("mode") == "through":  # per vulnerability; the position count beside it (information)
+            truth = json.load(open(os.path.join(ROOT, d["truth"])))["sites"]
+            tp, n = through_counts(truth, main["report"]) if main["converged"] else (None, len([x for x in truth if "file" in x and x.get("label") == "vuln"]))
+            detected, through = detected_through(tp), (tp, n)
+        elif d:
             pre = run(d["prefix_commit"], "prefix")
             fix = run(d["fixed_commit"], "fixed")
             cnt = lambda r: count_category(r["report"], d["category"]) if r["converged"] else None
             detected = detection(cnt(pre), cnt(fix))
             print("deps_bench: %s %s findings of %s: pre-fix %s, fixed %s" % (name, d["id"], d["category"], cnt(pre), cnt(fix)), file=sys.stderr)
-        passed, body = judge(main["wall"], limit_s, main["peak"] / GB, cap_gb, main["converged"], detected)
+        passed, body = judge(main["wall"], limit_s, main["peak"] / GB, cap_gb, main["converged"], detected, through)
         return format_line(name, t.get("decided", False), passed, body)
 
 
