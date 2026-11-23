@@ -1,0 +1,21 @@
+# A synthetic package for the tests of adopt_rules (not a built-in model).
+ruleset: rivus/go/fake@1
+sinks:
+  - symbol: (*example.com/fake/v*.Client).Get
+    args: [1]
+    category: resource_name
+adopt_rules:
+  - id: owner-repo-of-services
+    kind: sink
+    rule: sink.arg-word
+    words: [owner, repo]
+    category: resource_name
+    scope:
+      package: example.com/fake/v*
+      receiver_suffix: Service
+    why: "owner and repo are in the path of the request"
+    covers: 2
+    representatives: ["(*example.com/fake/v*.OrgService).Get"]
+    diff_checked: {version: v1.0.0, count: 2}
+    extra_ok: "the same shape as the rows of the hand file"
+    extra_covers: 1
