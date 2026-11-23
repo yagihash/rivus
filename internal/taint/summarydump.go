@@ -6,9 +6,13 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/yagihash/rivus/internal/sg"
 )
 
 // WriteSummaryDump writes the final summary of every function as one line each: the function ID, the number of
@@ -105,4 +109,145 @@ func stepsText(r *rope) string {
 		return true
 	})
 	return b.String()
+}
+
+// dumpMinSCC is the size from which a component is written by the dump of each round.
+var dumpMinSCC = 100
+
+// iterDump is one large component whose summaries are written after each round: its number N in the order of the
+// components (level by level), and the number of rounds done so far, over all passes. Only the goroutine of the
+// component changes round.
+type iterDump struct {
+	n, round int
+	warned   bool
+}
+
+// SetIterationDump makes the engine write, after each round of every large component (dumpMinSCC functions or
+// more), the summaries of its functions to dir/scc<N>-iter<K>.tsv. Internal: no flag; cmd/rivus calls it when
+// RIVUS_INTERNAL_SUMMARY_DUMP_EACH_ITER names a directory. Nothing changes in the analysis: the files are only written.
+func (e *Engine) SetIterationDump(dir string) { e.iterDumpDir = dir }
+
+// planIterDumps chooses the components to write, before the passes.
+func (e *Engine) planIterDumps(levels [][][]*sg.Func) map[*sg.Func]*iterDump {
+	if e.iterDumpDir == "" {
+		return nil
+	}
+	if err := os.MkdirAll(e.iterDumpDir, 0o755); err != nil {
+		fmt.Fprintf(os.Stderr, "rivus: RIVUS_INTERNAL_SUMMARY_DUMP_EACH_ITER: %v\n", err)
+		return nil
+	}
+	out := map[*sg.Func]*iterDump{}
+	n := 0
+	for _, lv := range levels {
+		for _, scc := range lv {
+			if len(scc) >= dumpMinSCC && len(scc) >= parallelSCC {
+				out[scc[0]] = &iterDump{n: n}
+				n++
+			}
+		}
+	}
+	return out
+}
+
+// dumpRound writes the summaries of the functions of a component after a round: one line each, sorted by function ID,
+// with the fields of WriteSummaryDump and then the breakdown of the elements (summaryBreakdown), whether the function
+// changed in this round, and whether its access paths were cut or its cells merged (coarsened). The first line is a
+// comment with the pass, the number of functions analysed in the round and the number that changed.
+func (e *Engine) dumpRound(scc []*sg.Func, pass, analysed int, changed map[*sg.Func]bool) {
+	d := e.iterDumps[scc[0]]
+	d.round++
+	type snap struct {
+		fn     *sg.Func
+		sum    *Summary
+		coarse bool
+	}
+	snaps := make([]snap, 0, len(scc))
+	e.mu.Lock()
+	for _, fn := range scc {
+		if sum := e.summaries[fn]; sum != nil {
+			_, c := e.coarsened[fn]
+			snaps = append(snaps, snap{fn, sum, c})
+		}
+	}
+	e.mu.Unlock()
+	rows := make([][2]string, 0, len(snaps))
+	for _, s := range snaps {
+		id := e.funcID(s.fn)
+		text, elems, steps := summaryText(s.sum)
+		h := sha256.Sum256([]byte(text))
+		chg, coarse := 0, 0
+		if changed[s.fn] {
+			chg = 1
+		}
+		if s.coarse {
+			coarse = 1
+		}
+		rows = append(rows, [2]string{id, fmt.Sprintf("%s\telems=%d\tsteps=%d\t%s\t%s\tchg=%d\tcoarse=%d",
+			id, elems, steps, hex.EncodeToString(h[:]), summaryBreakdown(s.sum), chg, coarse)})
+	}
+	sort.Slice(rows, func(i, j int) bool { return rows[i][0] < rows[j][0] })
+	var b strings.Builder
+	fmt.Fprintf(&b, "# pass=%d analysed=%d changed=%d funcs=%d\n", pass, analysed, len(changed), len(scc))
+	for _, r := range rows {
+		b.WriteString(r[1])
+		b.WriteByte('\n')
+	}
+	name := filepath.Join(e.iterDumpDir, fmt.Sprintf("scc%d-iter%d.tsv", d.n, d.round))
+	if err := os.WriteFile(name, []byte(b.String()), 0o644); err != nil && !d.warned {
+		d.warned = true
+		fmt.Fprintf(os.Stderr, "rivus: RIVUS_INTERNAL_SUMMARY_DUMP_EACH_ITER: %v\n", err)
+	}
+}
+
+// summaryBreakdown is what the elements of a summary are made of, as fields of one line, each sorted by its key so
+// that the order of the work does not matter: outs and sinks (their numbers), real and param (elements by kind),
+// guarded (elements with a condition), widened (outputs that were merged, then the summary's own count), kinds
+// (elements by the kind of the output: result, param, global, throw), depth (param elements by the depth of their
+// access path) and byparam (param elements by the parameter index).
+func summaryBreakdown(sum *Summary) string {
+	real, param, guarded, widened := 0, 0, 0, 0
+	kinds := map[string]int{}
+	depth := map[int]int{}
+	byParam := map[int]int{}
+	for _, o := range sum.Outputs {
+		if o.Widened {
+			widened++
+		}
+		kinds[o.Kind] += len(o.Elems)
+		for _, oe := range o.Elems {
+			if len(oe.Guards) > 0 {
+				guarded++
+			}
+			if oe.E.Kind == Real {
+				real++
+				continue
+			}
+			param++
+			depth[pathDepth(oe.E.Path())]++
+			byParam[int(oe.E.Param)]++
+		}
+	}
+	names := make([]string, 0, len(kinds))
+	for k := range kinds {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	ks := make([]string, len(names))
+	for i, k := range names {
+		ks[i] = k + ":" + strconv.Itoa(kinds[k])
+	}
+	ints := func(m map[int]int) string {
+		keys := make([]int, 0, len(m))
+		for k := range m {
+			keys = append(keys, k)
+		}
+		sort.Ints(keys)
+		parts := make([]string, len(keys))
+		for i, k := range keys {
+			parts[i] = strconv.Itoa(k) + ":" + strconv.Itoa(m[k])
+		}
+		return strings.Join(parts, ",")
+	}
+	return fmt.Sprintf("outs=%d\tsinks=%d\treal=%d\tparam=%d\tguarded=%d\twidened=%d/%d\tkinds=%s\tdepth=%s\tbyparam=%s",
+		len(sum.Outputs), len(sum.Sinks), real, param, guarded, widened, sum.WidenedOutputs, strings.Join(ks, ","), ints(depth), ints(byParam))
 }
