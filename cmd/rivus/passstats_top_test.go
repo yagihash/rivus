@@ -35,7 +35,7 @@ func runPassStats(t *testing.T, dir string, args ...string) passStatsOut {
 	cmd := exec.Command(binary, append([]string{"analyze", "-rules", "rules.yaml", "-pass-stats"}, append(args, "./...")...)...)
 	cmd.Dir = dir
 	out, err := cmd.Output()
-	if err != nil {
+	if err = notFailed(err); err != nil {
 		t.Fatalf("analyze %v: %v", args, err)
 	}
 	var r passStatsOut

@@ -43,7 +43,12 @@ type QueryResult struct {
 	Matched  []taint.SiteRef  `json:"matched"`
 	Groups   []Group          `json:"groups"`
 	Findings []*taint.Finding `json:"findings"`
-	Stats    taint.Stats      `json:"stats"`
+	// Incomplete and IncompleteReasons are those of the analysis that the answer comes from (summary.* of "analyze",
+	// ADR-120): when it is true, empty groups and findings mean "not looked for", not "nothing reaches it". Always in the
+	// output, also for a saved index (the exit code of a saved index stays 0).
+	Incomplete        bool        `json:"incomplete"`
+	IncompleteReasons []string    `json:"incomplete_reasons"`
+	Stats             taint.Stats `json:"stats"`
 	// Notes say what the answer does not tell, when it could be mistaken for
 	// more.
 	Notes []string `json:"notes,omitempty"`
@@ -68,7 +73,8 @@ func (r *Report) Run(q Query) (*QueryResult, error) {
 	if err := q.Validate(); err != nil {
 		return nil, err
 	}
-	out := &QueryResult{SchemaVersion: QuerySchemaVersion, Query: q, Target: r.Target, Stats: r.Stats, Matched: []taint.SiteRef{}, Groups: []Group{}, Findings: []*taint.Finding{}}
+	inc, reasons := r.IncompleteState()
+	out := &QueryResult{SchemaVersion: QuerySchemaVersion, Query: q, Target: r.Target, Stats: r.Stats, Incomplete: inc, IncompleteReasons: reasons, Matched: []taint.SiteRef{}, Groups: []Group{}, Findings: []*taint.Finding{}}
 
 	matched := map[string]bool{}
 	note := func(s taint.SiteRef) {

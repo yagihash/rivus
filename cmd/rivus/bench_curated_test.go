@@ -147,7 +147,9 @@ func checkAnnotated(t *testing.T, dir string, o annotOpts) curatedCounts {
 	cmd := exec.Command(binary, append(args, o.pattern)...)
 	cmd.Dir = dir
 	out, err := cmd.Output()
-	if err != nil {
+	// exit code 4 (the analysis is not complete) is accepted only for a run that may stop by the pass limit (allowUnconverged); any
+	// other run must converge, and a code 4 from it is a failure here (the check of Stats.Converged below would say the same)
+	if err = notFailedIf(err, o.allowUnconverged || curatedAllowUnconverged); err != nil {
 		var stderr []byte
 		if ee, ok := err.(*exec.ExitError); ok {
 			stderr = ee.Stderr
@@ -179,7 +181,9 @@ func checkCuratedIROpts(t *testing.T, dir string, stream []byte, ext string, o a
 	cmd := exec.Command(binary, args...)
 	cmd.Dir = dir
 	out, err := cmd.Output()
-	if err != nil {
+	// exit code 4 (the analysis is not complete) is accepted only for a run that may stop by the pass limit (allowUnconverged); any
+	// other run must converge, and a code 4 from it is a failure here (the check of Stats.Converged below would say the same)
+	if err = notFailedIf(err, o.allowUnconverged || curatedAllowUnconverged); err != nil {
 		var stderr []byte
 		if ee, ok := err.(*exec.ExitError); ok {
 			stderr = ee.Stderr

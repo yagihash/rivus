@@ -60,7 +60,7 @@ rivus graph callers -C <dir> <関数>                  # finding の周辺を調
 
 ## 3. コマンド
 
-終了コードは、0 = 成功、1 = エラー、2 = 使い方の誤り(知らないコマンドやフラグ)、3 = Rust だけの対象で、読むことを断った、130 = 中断です。finding があっても 0 です。`-h` は、どのコマンドでも 0 で、使い方だけを出します(サブコマンドが必要なコマンドを引数なしで呼ぶと、使い方を出して 2 です)。
+終了コードは、0 = 成功、1 = エラー、2 = 使い方の誤り(知らないコマンドやフラグ)、3 = Rust だけの対象で、読むことを断った、4 = 完全でない解析(時間切れ、未収束。結果は出ている。`summary.incomplete` が true で、`summary.incomplete_reasons` に `timeout`、`not_converged`)、130 = 中断です。`analyze`、`index -taint`、`query`、`resolve`、`models coverage` が 4 を返します(保存した index を読むだけのときは 0)。finding があっても、完全なら 0 です。`-h` は、どのコマンドでも 0 で、使い方だけを出します(サブコマンドが必要なコマンドを引数なしで呼ぶと、使い方を出して 2 です)。
 
 ### `rivus sites`
 
@@ -93,7 +93,7 @@ source から sink への経路を、全部探します。主な作業のコマ�
 - **主なフラグ**: `-timeout`(必ず付ける)、`-C`、`-rules`、`-lang`、`-detail summary`(経路とコードを省いた一覧。件数が多いときの最初の 1 回に)、`-sites`(サイトの一覧も出す。`-detail summary` とは併用できない)、`-no-project-rules`(信頼できない対象)、`-tests`、`-no-deps`、`-v`(各段階の時間を標準エラーに出す)。
 - **読む場所**: 5 章。まず `summary` と `stats`、次に `findings[]`。
 - **落とし穴**:
-  - `-timeout` がないと、大きい対象で終わらないことがあります。時間切れでも、そこまでに見つけた分を出して、終了コード 0 で終わります。`stats.timed_out` を必ず見ます。
+  - `-timeout` がないと、大きい対象で終わらないことがあります。時間切れでも、そこまでに見つけた分を出して、終了コード 4(完全でない解析)で終わります。`summary.incomplete_reasons` と `stats.timed_out` を必ず見ます。
   - `-detail summary` の finding には `paths` がありません(`null`)。判定には、既定の `snippet` の出力が必要です。
   - 1 つの sink に、同じ種類の source が複数届くとき、finding は 1 件にまとまり、ほかの source は `other_sources`(最大 5 件)と `other_sources_count` に出ます。
 
@@ -106,17 +106,18 @@ source から sink への経路を、全部探します。主な作業のコマ�
   - `-source '(*net/http.Request).FormValue'`: この source が届く sink を全部知りたい。
   - `-site <ID>`: `sites` の 1 件について、相手側を知りたい。
 - **主なフラグ**: `-sink` / `-source` / `-site`、`-index <file>`(保存した index から答える。解析しない)、`-detail`、`-timeout`、ほかは `analyze` と同じ。
-- **読む場所**: `matched`(問いが一致したサイト)、`groups`(相手側のサイトごとのまとまり。`findings` は ID の一覧、`uncertain` は不確実性のある finding の数)、`findings`(`analyze` と同じ形)、`notes`(答えを読み誤らないための注意)。
+- **読む場所**: `matched`(問いが一致したサイト)、`groups`(相手側のサイトごとのまとまり。`findings` は ID の一覧、`uncertain` は不確実性のある finding の数)、`findings`(`analyze` と同じ形)、`notes`(答えを読み誤らないための注意)、`incomplete` と `incomplete_reasons`(元の解析が完全だったか。`analyze` の `summary.incomplete` と同じ名前と意味で、`-index` のときも、いつも出る)。
 
   ```jsonc
   { "schema_version": "rivus.query/1", "query": { "sink": "curated/sys.Run" },
     "matched": [ { "id": "s1:7be55dca71e96c1d4ba4", "symbol": "curated/sys.Run", "func": "curated/api.use", ... }, ... ],
     "groups":  [ { "site": { "symbol": "(*curated/web.Context).Query", "func": "curated/api.capRunA", ... },
                    "findings": ["f1:f610e033b1e25f1ad830"], "labels": ["user_input"], "uncertain": 1 }, ... ],
-    "findings": [ ... ], "stats": { ... } }
+    "findings": [ ... ], "incomplete": false, "incomplete_reasons": [], "stats": { ... } }
   ```
 
 - **落とし穴**:
+  - **`incomplete` を読んでから、`groups` と `findings` を読みます。`incomplete` が true のとき、`groups` と `findings` が空なのは、「届かない」ではなく「探しきれていない」です**(時間切れや未収束の解析の index でも、`query -index` は終了コード 0 で、答えを返します)。古い形の index(`summary.incomplete` がない)は、保存した `stats` から作ります。`stats` もないときは、`incomplete: true`、`incomplete_reasons: ["unknown"]`(分からない)です。
   - シンボルは、**完全に一致する形**で書きます(`sites` の `symbol` の形。Go は `os/exec.Command`、`(*pkg.T).Method`)。
   - ルールにないシンボルも指定できます。`-sink` は、そのシンボルを、どのラベルにも反応する sink(`category: "query"`)として足し、`-source` は、その戻り値を source(ラベル `queried`)として足して解析します。ただし、**反対側は、ルールにあるものだけ**です。source のルールが 1 つも一致しない対象で `-sink` を問い合わせると、`matched` は出て、`findings` は 0 件になります。
   - `matched` にあって `findings` が 0 件は、「rivus は届く経路を見つけなかった」です。「届かない」の証明ではありません。
@@ -197,7 +198,7 @@ source から sink への経路を、全部探します。主な作業のコマ�
   rivus resolve -C <dir> -bookmarks bm.json -timeout 10m ./...    # 変更のあとに実行する
   ```
 
-- **読む場所**: `results[]` の `status`(`unchanged` / `changed` / `rematched` / `ambiguous` / `unresolved`)、`reason`(`unresolved` のとき: `not_found` = 解析したが、その箇所がない、`not_analyzed` = そのパッケージを解析していない)、finding なら `source`、`sink`、`flow.status`(`present` = 今も届く、`absent_now` = 今は経路がない、`not_evaluated` = source か sink が今のコードに見つからず、調べていない)、`flow.path_changed`、`flow.related_findings`、`flow.uncertainties`。
+- **読む場所**: `results[]` の `status`(`unchanged` / `changed` / `rematched` / `ambiguous` / `unresolved`)、`reason`(`unresolved` のとき: `not_found` = 解析したが、その箇所がない、`not_analyzed` = そのパッケージを解析していない)、finding なら `source`、`sink`、`flow.status`(`present` = 今も届く、`absent_now` = 今は経路がない、`not_evaluated` = source か sink が今のコードに見つからず、調べていない)、`flow.path_changed`、`flow.related_findings`、`flow.uncertainties`。最上位の `incomplete` と `incomplete_reasons` が、今の解析(`-index` の index も)が完全だったかを示します。true のとき、`unresolved` と `absent_now` は「探しきれていない」かもしれません。
 
   ```jsonc
   { "bookmark": "f1:f610e033b1e25f1ad830", "kind": "finding", "status": "unchanged", "revision_change": "same",

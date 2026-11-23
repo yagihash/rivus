@@ -48,6 +48,7 @@ func analyze(o RunOptions, dir string, args ...string) ([]byte, Run, error) {
 			return nil, run, fmt.Errorf("the generated code does not build (a bug of the generator, or of the package): %s", l)
 		}
 	}
+	// exit code 4 (the analysis is not complete) comes with the output: it is used, so only an empty output is an error here.
 	if out.Len() == 0 {
 		return nil, run, fmt.Errorf("rivus analyze: %v\n%s", err, errb.String())
 	}

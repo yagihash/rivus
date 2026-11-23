@@ -94,7 +94,8 @@ func TestScaleSynth(t *testing.T) {
 				cmd := exec.Command(binary, "analyze", "-sites", "-workers", fmt.Sprint(w), "-rules", "rules.yaml", "./...")
 				cmd.Dir = dir
 				out, err := cmd.Output()
-				if err != nil {
+				// exit code 4 (not complete) only for the chains that stop by the pass limit on purpose (noconv); the expected file holds converged
+				if err = notFailedIf(err, pr.noconv); err != nil {
 					t.Fatalf("analyze: %v", err)
 				}
 				var rep report.Report

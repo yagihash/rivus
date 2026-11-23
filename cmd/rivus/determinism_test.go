@@ -63,7 +63,7 @@ func analyzeWith(t *testing.T, dir, procs string, args ...string) []byte {
 		cmd.Env = append(cmd.Env, "GOMAXPROCS="+procs)
 	}
 	out, err := cmd.Output()
-	if err != nil {
+	if err = notFailed(err); err != nil {
 		var stderr []byte
 		if ee, ok := err.(*exec.ExitError); ok {
 			stderr = ee.Stderr
