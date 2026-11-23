@@ -95,13 +95,6 @@ func projectRules(rules *model.Rules) []ProjectRules {
 	return out
 }
 
-// AccessPathDepth is the depth at which the access paths are cut: in the functions of the project, and in those of the
-// dependencies.
-type AccessPathDepth struct {
-	Project    int `json:"project"`
-	Dependency int `json:"dependency"`
-}
-
 // Summary counts the uncertainties. It is the feedback loop of ADR-008: the
 // share of uncertainty attributable to rivus says where to invest, and the
 // share of depth_limit is the number that should go down.
@@ -162,9 +155,6 @@ type Summary struct {
 	// when it has a row for the function, and unmodeled_library_call when it has none; code inside them is not
 	// analysed. Sorted by package. Absent when none was left out.
 	BodyReplacedPackages []BodyReplacedPackage `json:"body_replaced_packages,omitempty"`
-	// AccessPathDepth is the access path depth of the project and of the dependencies, when -dep-k made them differ.
-	// Absent when both are -k. A flow that needs a cut path carries access_path_truncated.
-	AccessPathDepth *AccessPathDepth `json:"access_path_depth,omitempty"`
 	// FunctionsSkipped are the functions whose body the extractor could not read (the compiler's interface stopped on it: Rust,
 	// an async closure), counted by crate; the functions are not in the analysis, and a call of one is a note
 	// (dependency_body_unread, project_body_unread). Project is how many are code of the project: a flow through them is not

@@ -159,8 +159,6 @@ type Engine struct {
 	// k, or the cell of a parameter was merged into the whole of it: the cells are
 	// coarser than the code (more than the truth, never less).
 	coarsened map[*sg.Func]string
-	// cutAt are the functions in which an access path was cut, and the depth it was cut at (access_path_truncated)
-	cutAt map[*sg.Func]int
 	// writers lists, for each package variable, the functions that store to it.
 	// deadline is when the whole run has to stop (zero: no limit).
 	deadline time.Time
@@ -261,7 +259,6 @@ func New(p *sg.Program, texts ir.Texts, st *sites.Result, rules *model.Rules, op
 		spent:      map[*sg.Func]time.Duration{},
 		guardLimit: map[*sg.Func]bool{},
 		coarsened:  map[*sg.Func]string{},
-		cutAt:      map[*sg.Func]int{},
 		globals:    newGlobalStore(),
 		aliasArgs:  aliasArgs,
 	}
@@ -382,18 +379,7 @@ func (e *Engine) numericStopRecords() []*Uncertainty {
 	return out
 }
 
-// depK is the access path depth of the functions of the dependencies.
-func (e *Engine) depK() int {
-	if e.opts.DepK > 0 {
-		return e.opts.DepK
-	}
-	return e.opts.K
-}
-
-// AccessPathDepths are the depths the run used: the project, and the dependencies.
-func (e *Engine) AccessPathDepths() (project, dependency int) { return e.opts.K, e.depK() }
-
-func (e *Engine) noteCoarsened(fn *sg.Func, truncated, widened bool, depth int) {
+func (e *Engine) noteCoarsened(fn *sg.Func, truncated, widened bool) {
 	why := ""
 	switch {
 	case truncated && widened:
@@ -405,9 +391,6 @@ func (e *Engine) noteCoarsened(fn *sg.Func, truncated, widened bool, depth int) 
 	}
 	e.mu.Lock()
 	e.coarsened[fn] = why
-	if truncated {
-		e.cutAt[fn] = depth
-	}
 	e.mu.Unlock()
 }
 
@@ -990,7 +973,7 @@ func (e *Engine) compute(fn *sg.Func) *fnResult {
 		e.noteGuardLimit(fn)
 	}
 	if s.truncated || s.widened {
-		e.noteCoarsened(fn, s.truncated, s.widened, s.k())
+		e.noteCoarsened(fn, s.truncated, s.widened)
 	}
 	if e.opts.SlowFunc != nil {
 		if d := time.Since(began); d > e.opts.SlowThreshold {
@@ -1536,42 +1519,6 @@ func (e *Engine) buildFinding(rf *rawFinding) *Finding {
 				seenRec[fn.Pos.File] = true
 				f.Uncertainties = append(f.Uncertainties, newUncertainty(KindMissingSource, msg, fn.Pos.File))
 			}
-		}
-	}
-	// a function of the path in which an access path was cut at the depth limit: the flow may be there only because of the
-	// cut (the part below the cut is taken to be tainted as well)
-	if len(e.cutAt) > 0 {
-		ids := []string{src.Func, rf.site.Func}
-		for i := range agg {
-			ids = append(ids, agg[i].Func)
-		}
-		seenCut := map[string]bool{}
-		var cut []string
-		deps := 0
-		for _, id := range ids {
-			fn := e.prog.ByID[id]
-			if fn == nil || seenCut[id] {
-				continue
-			}
-			seenCut[id] = true
-			if _, ok := e.cutAt[fn]; ok {
-				cut = append(cut, id)
-				if fn.Dep {
-					deps++
-				}
-			}
-		}
-		if len(cut) > 0 {
-			sort.Strings(cut)
-			shown := cut
-			if len(shown) > 10 {
-				shown = shown[:10]
-			}
-			u := newUncertainty(KindAccessPathTruncated, "access_path_truncated: in "+itoa(len(cut))+" functions of this path ("+itoa(deps)+
-				" of dependencies) an access path was cut at the depth limit (project "+itoa(e.opts.K)+", dependencies "+itoa(e.depK())+
-				"): the part below the cut is taken to be tainted too, so this flow may exist only because of the cut (more flows than there are, never fewer)", "")
-			u.Candidates = shown
-			f.Uncertainties = append(f.Uncertainties, u)
 		}
 	}
 	var funcs []string // the steps that are shown (the fingerprint of the path)

@@ -77,39 +77,6 @@ func TestCutAccessPathsAreRecorded(t *testing.T) {
 	t.Error("no path_limit uncertainty with k = 1")
 }
 
-// A finding whose path goes through a function that cut an access path says so (B-3): it is not "no uncertainty on the
-// path". With a deep limit, the finding that needs no cut has none.
-func TestFindingThroughCutPathCarriesNote(t *testing.T) {
-	run := func(k int) (cut, all int) {
-		prog := loadIR(t, testutil.Testdata(), "./cases/heap/...")
-		rules := testutil.Rules(t)
-		rules.Expand(prog.gossa, 0)
-		st := prog.sites(rules)
-		opts := DefaultOptions()
-		opts.K = k
-		res := prog.engine(st, rules, opts).Run()
-		for _, f := range res.Findings {
-			all++
-			for _, u := range f.Uncertainties {
-				if u.Kind == KindAccessPathTruncated {
-					cut++
-					if len(u.Candidates) == 0 || u.AttributableTo != AttributableRivus || f.Confidence == ConfidenceClear {
-						t.Errorf("k=%d: the note is not complete: %+v (confidence %s)", k, u, f.Confidence)
-					}
-					break
-				}
-			}
-		}
-		return
-	}
-	if cut, all := run(1); cut == 0 || all == 0 {
-		t.Errorf("k = 1: %d of %d findings carry access_path_truncated", cut, all)
-	}
-	if cut, _ := run(8); cut != 0 {
-		t.Errorf("k = 8: %d findings carry access_path_truncated, no path is that deep", cut)
-	}
-}
-
 // The data of a source that becomes a number or a bool is not followed, and the place where it
 // stops is recorded for that source (CORE-5): "no flow" and "stopped at a number" differ.
 func TestNumericStopIsRecorded(t *testing.T) {
