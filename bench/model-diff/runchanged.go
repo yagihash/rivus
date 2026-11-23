@@ -96,7 +96,7 @@ func hasRows(builtins []string, lang, pkg string) bool {
 }
 
 // verifiedVersion is the version that a built-in file has checked the rows of the package with (`checked_with` of its verified_versions
-// entry for that package, written with /v* like the symbols): what a package of any major needs to say which major is read.
+// entry for that package or for the module that has it, written with /v* like the symbols): what a package of any major needs to say which major is read.
 func verifiedVersion(builtins []string, pkg string) string {
 	for _, f := range builtins {
 		data, err := os.ReadFile(f)
@@ -108,7 +108,7 @@ func verifiedVersion(builtins []string, pkg string) string {
 			continue
 		}
 		for _, v := range rs.VerifiedVersions {
-			if v.Package == pkg && v.CheckedWith != "" {
+			if (v.Package == pkg || strings.HasPrefix(pkg, v.Package+"/")) && v.CheckedWith != "" {
 				return v.CheckedWith
 			}
 		}

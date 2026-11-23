@@ -503,6 +503,9 @@ func TestVerifiedVersion(t *testing.T) {
 	if got := verifiedVersion([]string{f}, "example.com/m/v*/p"); got != "v3.1.0" {
 		t.Errorf("version = %q", got)
 	}
+	if got := verifiedVersion([]string{f}, "example.com/m/v*/p/sub"); got != "v3.1.0" {
+		t.Errorf("a package under the module that has the entry: %q", got)
+	}
 	if got := verifiedVersion([]string{f}, "example.com/other"); got != "" {
 		t.Errorf("version = %q for a package that has no entry", got)
 	}
