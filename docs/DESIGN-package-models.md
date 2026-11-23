@@ -432,7 +432,7 @@ sinks:
 - `pubspec.lock` がない(`dart pub get` をしていない)ときは、注記も、エラーもない。読めない(YAML が壊れている)ときは、標準エラーに 1 行出して、注記は出さない。
 - **未対応**: 複数のパッケージの monorepo や pub のワークスペース(`pubspec.lock` が、`-C` のディレクトリでなく、親のディレクトリにある)。`-C` のディレクトリに `pubspec.lock` がなければ出さない(Dart の extractor も、1 つのパッケージを `-C` に指す前提。解析の警告にもそう書いてある)。
 - プレリリース(`6.0.0-beta.1`)は、Go と同じく、接尾辞を読まずに数字だけで比べる(`6.0.0` として、`<6.0.0` の範囲の外)。
-- 記録に言語の区別はない。別の言語のファイルの記録でも、`package` の名前が同じ依存(Dart の `http` と Rust の `http` など)には当たる。組み込みのファイルの `package` は、その言語の依存を指す。名前のぶつかりは、今は直さない(利用者のファイルで起きたら、記録に言語を足す案を考える)。
+- **記録は、言語ごとに照合する**。記録は、どの言語のファイルにあるかを持つ(`model.RuleSetLanguage`。組み込みのファイル名 `dart-*.yaml`、`rust-*.yaml`、`go-*.yaml`、またはルールセット名 `rivus/<言語>/...`)。Go の `go.mod` は Go の記録と、`pubspec.lock` は Dart の記録と、`Cargo.lock` は Rust の記録とだけ照合する。名前が同じで言語が違う記録(Dart の `http` と Rust の `http`)は、別々に扱う。言語が分からないファイル(プロジェクトの `.rivus/rules` や `-rules` で渡したファイル。名前に言語を示すものがない)の記録は、今までどおり、どの言語の依存にも当たる。`rivus models versions` の JSON は変えない。
 
 **Rust(`Cargo.lock`)**: Rust の extractor が動いた解析だけが、`-C` の `Cargo.lock` を読む(IR は変えない。extractor も変えない)。`source` は `Cargo.lock`。
 - 読むのは `[[package]]` のうち、`source` が registry(`registry+`、`sparse+`)のもの。path の crate(`source` なし。対象自身を含む)と git の crate は、比べるバージョンがないので出さない。`package` は、lock の綴り(`actix-web`)で出す。照合は `-` と `_` を同じとみなす(`model.SameCrate`。モデルが `google_cloud_storage` と書いても、lock の `google-cloud-storage` に当たる)。
