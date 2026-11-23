@@ -114,3 +114,24 @@ test_merge_conflict_in_code_is_not_checked if {
 test_a_sentence_without_conflict_word_passes if {
 	not denied("paragraph", "main にマージした。名前が重なる")
 }
+
+test_terminology_rules_are_denied if {
+	every text in [
+		"生きている量が上限に近い", "生きているヒープの最大", "読み込みの段の山", "要約の段で増える", "解析の段", "確保の速い段", "要約を適用する段",
+		"経路の段に注記が付く", "段の単位の注記", "段ごとに数える", "原因の段", "名前でない段を飛ばす",
+		"合否の線を決める", "合格の線を上げる", "合格線", "線を越えた", "線の中に収まる", "線が上がる",
+		"この決まりを守る", "決まりが増える", "決まりは変えない", "守る決まりを", "決まりごと",
+	] {
+		denied("paragraph", text)
+	}
+}
+
+test_terminology_rules_pass_other_words if {
+	every text in [
+		"段階 2 に進む", "取得の段階", "経路の段階", "原因の段階を言う", "手段がない", "値段", "2 段", "1 段目の隣", "3 段で切る", "普段使う", "後段の LLM",
+		"値が決まります", "結果が決まりました", "順序が決まる", "決まらない場合", "値が決まり、次に進む", "きまりを書く", "決まり文句", "決まり手", "ライブヒープ（強制 GC のあと）",
+		"合格基準を厳しくする", "ルールを守る",
+	] {
+		not denied("paragraph", text)
+	}
+}
