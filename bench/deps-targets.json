@@ -18,6 +18,42 @@
       "fixed_commit": "5f57f48673e2054f404b2c5b497a8eaa3690591d"
     }
   },
+  "memos-4gib": {
+    "_doc": "Pass line A, the second row: the same as memos with `-max-memory 4GiB`, the default limit of a machine with 16 GB of physical memory (ADR-121): the same conditions as that machine. Time 180 s, peak of the process tree within 4 GiB, converged, detected (the same places as memos).",
+    "lang": "go",
+    "repo": "https://github.com/usememos/memos",
+    "commit": "00fcd170281a75fc0e95ec4f2f54f43d32fe81bd",
+    "subdir": "",
+    "args": ["-max-memory", "4GiB"],
+    "time_limit_s": 180,
+    "mem_cap_gb": 4,
+    "decided": true,
+    "detect": {
+      "id": "CVE-2025-65799",
+      "mode": "location",
+      "truth": "bench/memos/truth-1d7efb15.json",
+      "category": "path_traversal",
+      "prefix_commit": "1d7efb158045924ab87f58d567bd79cd92edf6af",
+      "fixed_commit": "5f57f48673e2054f404b2c5b497a8eaa3690591d"
+    }
+  },
+  "gitea": {
+    "_doc": "Pass line C: Gitea v1.26.4 (go-gitea/gitea), the whole program with the default flags and the dependencies, `-no-project-rules`. Peak of the process tree within 8 GB, converged; time 600 s (the limit of the earlier runs, 10 minutes; 180 s has no ground for Gitea). Added for its size. detect.mode score: per published vulnerability of bench/gitea-cve-truth.json, judged by place (bench/score.py form: source function, sink file and line, functions on the path); the line prints `detected=<n>/3`, which is NOT part of PASS/FAIL for now (decided 2026-11-24; whether it joins is asked after the line passes). The mode is read by the runner in a later change: until then the runner stops with a message on this target. The ledger row and the line carry the count n/3 only: no finding count, list, path or place.",
+    "lang": "go",
+    "repo": "https://github.com/go-gitea/gitea",
+    "commit": "95ba37d9af58db7d9163f9e92e07b5eb4f792bbc",
+    "subdir": "",
+    "args": ["-no-project-rules"],
+    "time_limit_s": 600,
+    "mem_cap_gb": 8,
+    "decided": true,
+    "detect": {
+      "id": "gitea-cve-truth",
+      "mode": "score",
+      "truth": "bench/gitea-cve-truth.json",
+      "in_verdict": false
+    }
+  },
   "cocoon": {
     "_doc": "flutter/cocoon `app_dart` (the server that manages the CI of Flutter). Launch: -C app_dart, -allow-deps-under the packages of the repository, `dart pub get` only, and the Flutter member of the root workspace removed in the COPY. No public fixed vulnerability of the project is known (no security advisory), so detected is n/a.",
     "lang": "dart",

@@ -380,6 +380,8 @@ def analyze_once(rivus, t, src, env, limit_s, cap_bytes, work, tag):
 
 
 def passline(name, t, rivus, cache, outdir, limit_s, cap_gb):
+    if (t.get("detect") or {}).get("mode") == "score":
+        raise SystemExit("deps_bench: %s: detect.mode score (Gitea: detected=<n>/3 by bench/score.py) is not supported by this runner yet" % name)
     with tempfile.TemporaryDirectory(prefix="passline-") as work:
         env = dict(os.environ)
         cap = int(cap_gb * GB)
