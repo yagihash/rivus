@@ -232,6 +232,7 @@ rivus の設計の判断は、ここに書いた原則に沿う。ほかの文�
 - 隔離: `internal/sandbox`（macOS のサンドボックス。既定ですべて拒否し、必要なものだけ許す。ネットワークは取得の段階だけ）、`cmd/rivus/isolate_sandbox_darwin.go`（Rust の取得と抽出の 2 段階）、`isolate_fetch.go`（取得の段階で対象の設定を読まず、取得元を検査）
 - サンドボックスが作れなければ、Linux では、何も実行せず止まる: `cmd/rivus/isolate_sandbox_darwin.go`、`isolate_sandbox_other.go`。隔離の下か、ホストでかは、`summary.isolation` に出る
 - git の HEAD を直接読む: `internal/vcs`
+- IR をメモリの外に出す部品: `internal/irspill`(まだ解析の流れには繋いでいない)。`TMPDIR` に 0600 で作ってすぐ名前を消したファイルだけに書く(強制終了でも残らない。共有の場所と対象のディレクトリには書かない)。書く量に上限があり、書けなければメモリに持つ。**文字列の定数(ソースにある秘密の文字列を含む)がこのファイルに入る**。読むのは同じ実行の中の rivus だけ
 - 対象内のルール: `.rivus/rules` は既定で読み、`-no-project-rules` で止める。symlink は拒否する。出力に、対象内ルールが消せる量を出す（`internal/report/report.go` の `ProjectRules`）
 - テスト: `TestSandboxedBuildScriptCannotEscape`、`TestSandboxClosesEveryWayOut`、`TestSandboxFetchReadsNoConfigOfTheProject`、`TestSandboxFetchRunsNoCodeAndAcceptsUnstableManifestFeatures`、`TestSandboxTimeLimitStopsTheProgramAndItsGroup`（`internal/sandbox`、`cmd/rivus`。開発のマシンで `RIVUS_SBX_RED=1` / `RIVUS_SBX_NET=1`。CI は `ci.yml` の `sandbox` ジョブ で小さい部分）
 
