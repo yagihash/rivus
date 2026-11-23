@@ -24,3 +24,7 @@ __pycache__/
 /docs/ISSUES-TABLE.md
 /docs/ADR-TABLE.md
 /docs/TABLE.md
+
+# a built binary of bench/model-diff at the root (go build ./bench/model-diff puts it here), and editor/sed backups
+/model-diff
+*.bak

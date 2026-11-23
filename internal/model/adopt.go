@@ -206,8 +206,11 @@ func (a AdoptRule) validateShape(what string) error {
 			return fmt.Errorf("%s: arg_types is required with %s (the full names of the types)", what, a.Rule)
 		}
 		for _, t := range a.ArgTypes {
-			if t == "" || strings.ContainsAny(t, "*? \t,") {
-				return fmt.Errorf("%s: arg_types has the full name of one type each (no pattern, no list): %q", what, t)
+			if t == "" || strings.ContainsAny(strings.ReplaceAll(t, "/v*", "/v"), "*? \t,") {
+				return fmt.Errorf("%s: arg_types has the full name of one type each (no pattern, no list; `/v*` for the major of a Go module is the one allowed): %q", what, t)
+			}
+			if err := CheckMajorWildcard(t, what+".arg_types"); err != nil {
+				return err
 			}
 		}
 	} else if len(a.ArgTypes) > 0 {

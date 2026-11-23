@@ -25,6 +25,15 @@ type Facts struct {
 	Rejected                                 []RejectedEntry    // of the package
 	Deferred                                 []DeferredEntry    // of the package
 	BodyReplaced                             []string           // the packages that the files declare (body_replaced_packages)
+	Adopt                                    []Decision         // the decisions of adopt_rules: whose scope is the package (file order)
+}
+
+// Decision is a decision of `adopt_rules:` for the package, with `/v*` read as the major that is checked, and the file it is in.
+type Decision struct {
+	model.AdoptRule
+	File string
+	// PackageWild is the package as the decision wrote it (`x/v*/pkg`): the generated rows are written with it.
+	PackageWild string
 }
 
 // RejectedEntry is a `rejected:` entry and the file it is in.
@@ -132,6 +141,27 @@ func LoadFacts(files []string, pkg string) (*Facts, error) {
 				f.FlowRows = append(f.FlowRows, p)
 				used[path] = true
 			}
+		}
+		for _, a := range rs.AdoptRules {
+			d := Decision{AdoptRule: a, File: path, PackageWild: a.Scope.Package}
+			d.Scope.Package = conc(a.Scope.Package)
+			if d.Scope.Package != pkg {
+				continue
+			}
+			d.Scope.ReceiverTypes = nil
+			for _, t := range a.Scope.ReceiverTypes {
+				d.Scope.ReceiverTypes = append(d.Scope.ReceiverTypes, conc(t))
+			}
+			d.ArgTypes = nil
+			for _, t := range a.ArgTypes {
+				d.ArgTypes = append(d.ArgTypes, conc(t))
+			}
+			d.Representatives = nil
+			for _, t := range a.Representatives {
+				d.Representatives = append(d.Representatives, conc(t))
+			}
+			f.Adopt = append(f.Adopt, d)
+			used[path] = true
 		}
 		for _, b := range rs.BodyReplaced {
 			f.BodyReplaced = append(f.BodyReplaced, b.Package)

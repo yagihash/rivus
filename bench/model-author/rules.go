@@ -37,6 +37,64 @@ type Item struct {
 	// PosTypes is, for a place that is in an argument of a type of the package (`arg0.path`, or `arg0` of an interface), the full name of
 	// that type: what `type:` entries of `rejected:` match.
 	PosTypes map[string]string `json:"pos_types,omitempty"`
+	// Tags say, for each position, which rule of the table (by its id) produced it and which words of its vocabulary fired: what the expansion of
+	// `adopt_rules:` reads (expand.go). It is not part of the output of the scan (`-recall` and the candidate lists do not show it).
+	Tags map[string][]Tag `json:"-"`
+}
+
+// Tag is a rule id (ruleTable) that produced a position, and the words of the vocabulary of that rule that are in the name that decided
+// (none for a rule that has a fixed vocabulary).
+type Tag struct {
+	Rule  string
+	Words []string
+}
+
+// tagAdd records that the rule produced the position.
+func tagAdd(tags map[string][]Tag, pos, rule string, ws []string) {
+	tags[pos] = append(tags[pos], Tag{Rule: rule, Words: ws})
+}
+
+// wordsIn returns the words of name that are in the list, once each, in the order of the name.
+func wordsIn(name string, lists ...[]string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, w := range words(name) {
+		for _, l := range lists {
+			for _, x := range l {
+				if w == x && !seen[w] {
+					seen[w] = true
+					out = append(out, w)
+				}
+			}
+		}
+	}
+	return out
+}
+
+// allSinkWords is the vocabulary of sink.arg-word and sink.struct-field: the words of every category.
+func allSinkWords() [][]string {
+	var out [][]string
+	for _, c := range categoryOrder {
+		out = append(out, sinkWords[c])
+	}
+	return out
+}
+
+// VocabularyOf returns the words that a decision of the rule may name (nil for a rule with a fixed vocabulary).
+func VocabularyOf(rule string) []string {
+	var out []string
+	switch rule {
+	case "sink.arg-word", "sink.struct-field":
+		for _, l := range allSinkWords() {
+			out = append(out, l...)
+		}
+	case "sink.bytes-word":
+		out = append(out, bytesSinkWords...)
+	case "source.field-word", "source.result-word":
+		out = append(out, sourceWords...)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // RuleDef is a rule of the table with its stable id (docs/DESIGN-package-models.md, 6.12): the id is what `adopt_rules:` names, so it is never
@@ -84,7 +142,7 @@ var (
 		"open_redirect":     {"location", "redirect"},
 		"xss":               {"html", "markup", "template", "tmpl", "format"},
 		"resource_name": {"bucket", "object", "owner", "repo", "repository", "project", "topic", "subscription", "collection",
-			"table", "dataset", "queue", "prefix", "container", "blob", "organization", "org", "namespace", "ref", "branch", "sha"},
+			"table", "dataset", "queue", "prefix", "container", "blob", "organization", "org", "namespace", "ref", "branch", "sha", "base", "head", "tag"},
 	}
 	// bytesSinkWords are the words that make an argument of bytes (not of a string) a candidate: what is written as it is.
 	bytesSinkWords = []string{"html", "markup", "data", "content", "body"}
@@ -227,6 +285,15 @@ type API struct {
 	Items   []Item
 	// Layer2 are the functions that take a string, bytes or `any` and are in no item.
 	Layer2 []string
+	// Params are the types of the arguments of each function and method (by symbol): the places of sink.arg-type. Only an argument of a named type
+	// (a pointer or a slice of one, or the variadic element) is listed.
+	Params map[string][]ParamType
+}
+
+// ParamType is an argument of a named type: its position (arg0, ...) and the full name of the type (`pkg/path.Type`).
+type ParamType struct {
+	Pos  string
+	Type string
 }
 
 type funcInfo struct {
@@ -242,7 +309,7 @@ type funcInfo struct {
 // library, or a package declared in `body_replaced_packages`). For a package whose bodies are read, the analysis resolves the call of a
 // function value or of an interface itself, so there is nothing to decide.
 func Scan(pkg *types.Package, withCalls bool) *API {
-	api := &API{Pkg: pkg.Path(), Symbols: map[string]string{}}
+	api := &API{Pkg: pkg.Path(), Symbols: map[string]string{}, Params: map[string][]ParamType{}}
 	var fns []funcInfo
 	var fields []fieldInfo
 	scope := pkg.Scope()
@@ -297,6 +364,9 @@ func Scan(pkg *types.Package, withCalls bool) *API {
 	taken := map[string]bool{}
 	for _, f := range fns {
 		api.Symbols[f.symbol] = f.sig.String()
+		if pts := paramTypes(f.sig); len(pts) > 0 {
+			api.Params[f.symbol] = pts
+		}
 		items := funcItems(pkg, f, structs, withCalls)
 		for _, it := range items {
 			taken[f.symbol] = true
@@ -306,7 +376,8 @@ func Scan(pkg *types.Package, withCalls bool) *API {
 	for _, f := range fields {
 		api.Symbols[f.symbol] = f.typ.String()
 		if (isString(f.typ) || isBytes(f.typ) || isReader(f.typ)) && hasWord(f.name, sourceWords) && !hasWord(f.name, notTextWords) {
-			api.Items = append(api.Items, Item{Symbol: f.symbol, Kind: KindSource, Positions: []string{"field"}, Rule: "source: field that carries a body or content", Sig: "field " + f.typ.String()})
+			api.Items = append(api.Items, Item{Symbol: f.symbol, Kind: KindSource, Positions: []string{"field"}, Rule: "source: field that carries a body or content", Sig: "field " + f.typ.String(),
+				Tags: map[string][]Tag{"field": {{Rule: "source.field-word", Words: wordsIn(f.name, sourceWords)}}}})
 		}
 	}
 	for _, f := range fns {
@@ -325,6 +396,29 @@ func Scan(pkg *types.Package, withCalls bool) *API {
 	})
 	sort.Strings(api.Layer2)
 	return api
+}
+
+// paramTypes lists the arguments of a named type (through a pointer, a slice and the variadic element).
+func paramTypes(sig *types.Signature) []ParamType {
+	var out []ParamType
+	for i := 0; i < sig.Params().Len(); i++ {
+		t := sig.Params().At(i).Type()
+		for {
+			switch u := t.(type) {
+			case *types.Pointer:
+				t = u.Elem()
+				continue
+			case *types.Slice:
+				t = u.Elem()
+				continue
+			}
+			break
+		}
+		if n, ok := t.(*types.Named); ok && n.Obj().Pkg() != nil {
+			out = append(out, ParamType{Pos: fmt.Sprintf("arg%d", i), Type: n.Obj().Pkg().Path() + "." + n.Obj().Name()})
+		}
+	}
+	return out
 }
 
 type fieldInfo struct {
@@ -371,6 +465,7 @@ func funcItems(pkg *types.Package, f funcInfo, structs map[*types.TypeName]*type
 	var sinkPos []string
 	var cats []string
 	posTypes := map[string]string{}
+	tags := map[string][]Tag{}
 	seenCat := map[string]bool{}
 	addSink := func(pos, cat string) {
 		sinkPos = append(sinkPos, pos)
@@ -393,14 +488,18 @@ func funcItems(pkg *types.Package, f funcInfo, structs map[*types.TypeName]*type
 		case isString(t) || isStrings(t):
 			if c := categoryOf(name); c != "" {
 				addSink(pos, c)
+				tagAdd(tags, pos, "sink.arg-word", wordsIn(name, allSinkWords()...))
 			} else if (name == "name" || name == "id") && hasWord(f.name, resourceNouns) {
 				addSink(pos, "resource_name")
+				tagAdd(tags, pos, "sink.name-of-resource", nil)
 			} else if (name == "name" || name == "oldname" || name == "newname") && hasWord(f.name, fileVerbs) {
 				addSink(pos, "path_traversal")
+				tagAdd(tags, pos, "sink.file-name", nil)
 			}
 		case isBytes(t):
 			if hasWord(name, bytesSinkWords) {
 				addSink(pos, "xss")
+				tagAdd(tags, pos, "sink.bytes-word", wordsIn(name, bytesSinkWords))
 			}
 		default:
 			// a struct of the package with a field that names something (a destination with an Object, a query with a Prefix)
@@ -416,6 +515,7 @@ func funcItems(pkg *types.Package, f funcInfo, structs map[*types.TypeName]*type
 							if c := categoryOf(fl.Name()); c != "" && c != "xss" {
 								addSink(pos+"."+fl.Name(), c)
 								posTypes[pos+"."+fl.Name()] = n.Obj().Pkg().Path() + "." + n.Obj().Name()
+								tagAdd(tags, pos+"."+fl.Name(), "sink.struct-field", wordsIn(fl.Name(), allSinkWords()...))
 							}
 						}
 					}
@@ -430,6 +530,7 @@ func funcItems(pkg *types.Package, f funcInfo, structs map[*types.TypeName]*type
 				for j := 0; j < n-1; j++ {
 					if p := sig.Params().At(j); isString(p.Type()) && hasWord(p.Name(), []string{"format"}) {
 						addSink(fmt.Sprintf("arg%d", n-1), "xss")
+						tagAdd(tags, fmt.Sprintf("arg%d", n-1), "sink.format-values", nil)
 						break
 					}
 				}
@@ -437,14 +538,15 @@ func funcItems(pkg *types.Package, f funcInfo, structs map[*types.TypeName]*type
 		}
 	}
 	if len(sinkPos) > 0 {
-		out = append(out, Item{Symbol: f.symbol, Kind: KindSink, Positions: sinkPos, Rule: "sink: argument that names a " + strings.Join(cats, "/"), Sig: sigText, PosTypes: posTypes})
+		out = append(out, Item{Symbol: f.symbol, Kind: KindSink, Positions: sinkPos, Rule: "sink: argument that names a " + strings.Join(cats, "/"), Sig: sigText, PosTypes: posTypes, Tags: tags})
 	}
 	// source: a result that carries a body or content (a function that is a sanitizer candidate is not one: `EscapeText`)
 	res := sig.Results()
 	for i := 0; i < res.Len(); i++ {
 		t := res.At(i).Type()
 		if (isString(t) || isBytes(t) || isReader(t)) && hasWord(f.name, sourceWords) && !hasWord(f.name, sanitizerWords) {
-			out = append(out, Item{Symbol: f.symbol, Kind: KindSource, Positions: []string{"result"}, Rule: "source: result of a function that carries a body or content", Sig: sigText})
+			out = append(out, Item{Symbol: f.symbol, Kind: KindSource, Positions: []string{"result"}, Rule: "source: result of a function that carries a body or content", Sig: sigText,
+				Tags: map[string][]Tag{"result": {{Rule: "source.result-word", Words: wordsIn(f.name, sourceWords)}}}})
 			break
 		}
 	}
@@ -463,7 +565,8 @@ func funcItems(pkg *types.Package, f funcInfo, structs map[*types.TypeName]*type
 			}
 		}
 		if okParam && okRes {
-			out = append(out, Item{Symbol: f.symbol, Kind: KindSanitizer, Positions: []string{"result"}, Rule: "sanitizer: string to string, named escape/quote/sanitize/clean", Sig: sigText})
+			out = append(out, Item{Symbol: f.symbol, Kind: KindSanitizer, Positions: []string{"result"}, Rule: "sanitizer: string to string, named escape/quote/sanitize/clean", Sig: sigText,
+				Tags: map[string][]Tag{"result": {{Rule: "sanitizer.name", Words: wordsIn(f.name, sanitizerWords)}}}})
 		}
 	}
 	// calls: a function or an interface of the package that the caller gives
