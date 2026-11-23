@@ -1,0 +1,11 @@
+ruleset: test/synth@1
+sanitizers:
+  - symbol: example.com/synth.Esc
+    drops: [user_input]
+    adds: [html_escaped]
+  - symbol: example.com/synth.Pair
+    drops: [user_input]
+    flows: [{from: args, to: result}]
+  # the body ignores its argument: nothing to clean, and the test says it cannot judge it
+  - symbol: example.com/synth.Drop
+    drops: [user_input]
