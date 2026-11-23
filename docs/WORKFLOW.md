@@ -1,6 +1,6 @@
-# 進め方の決まり
+# 進め方のルール
 
-設計の判断の基準は [PRINCIPLES.md](PRINCIPLES.md)。ここには、PR、測定、記録、マージの決まりだけを書く。
+設計の判断の基準は [PRINCIPLES.md](PRINCIPLES.md)。ここには、PR、測定、記録、マージのルールだけを書く。
 - **作業の順**は `.claude/work/QUEUE.md`(追跡されない。相談役が書く)。コストか精度を上げる作業は、始める前に、課題の「修正の方向」に「これで動くはずの数字」を 1 行書く。マージのあとに台帳の行と比べ、外れたら課題にそう書く。
 - **memos の前後の測定**(`bench/compare.sh --cost-check memos`。交互に 2 回ずつ)が必要なのは、(i) 「結果は同一」と言う PR(速さとメモリ)、(ii) 何度も通る関数に触る PR だけ。関数は `internal/taint` の `add`、`copyLoc`、`copyLocs`、`copyLocsNoted`、`copyLocsGuarded`、`copyLocsAlias`、`applySummary`(呼び出しの数をコードで確かめた)。それ以外の解析の PR は、PR の CI(`TestScaleSynth`、zoo、curated)で足りる。
 - **測定から結論を出すとき**: `bench/compare.sh` は、1 回だけの測定を「single run: no conclusion」と出し、結論にしない。手で測るときは、交互に 2 回以上(A、B、A、B)。ロードアベレージ、方法(主なプロセスか木の合計か)、コミットを付け、「疑い」と「確認した」を分ける。
