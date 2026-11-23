@@ -436,6 +436,8 @@ rejected:
 - A record, nothing more: the analysis does not read it, and it changes no row. It replaces the comment "not modelled, on purpose" at the top of a file, as data.
 - The file is refused when `symbol`, `kind` or `why` is missing (or blank), `kind` is not one of the four, a key is unknown, or the same symbol, kind and position are written twice. `rivus models` and every other reader of a rule file take the key.
 - `make model PKG=<Go package> VERSION=<v>` (`bench/model-author`) lists the candidates of layer 1 of a package (the rule table is `bench/model-author/rules.go`) and matches each with a row or with an entry here. A candidate with neither is undecided: the command exits with 70 and writes the list in `.claude/work/model-author/` (a work file, not committed). An entry whose symbol is not in the package any more is a warning.
+- A package whose bodies are read (not the standard library, and not in `body_replaced_packages`) has no `calls` candidates: the analysis resolves the call of a function value or an interface, and a row of `calls:` is for a body that is not read. The methods of exported interfaces are candidates like the others.
+- What is checked is the majors that upstream still supports (decided by public facts; one line of the evidence at the top of the model file or in the pull request). Run the command once per major with `VERSION`; a row or an entry written with `/v*` is read for the major that is run. `verified_versions` keeps one record per major with the concrete module path (`x/v2`, `x/v3`): the loader refuses the same `package` twice.
 - An entry with no `position` covers every place of the candidate; with `position`, only that place.
 
 ## 4d. A source that is a parameter of a function that is given: `callback_param`

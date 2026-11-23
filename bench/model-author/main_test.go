@@ -31,6 +31,7 @@ type Doc struct {
 	Reader  io.Reader
 	private string
 }
+type Sink interface{ Write(data []byte) (int, error) }
 type Client struct{}
 type val struct{}
 
@@ -45,6 +46,7 @@ func Quote(s string) (string, error)                            { return s, nil 
 func Walk(root string, fn func(string)) error                   { return nil }
 func Serve(h Handler)                                           { }
 func Use(h HandlerFunc)                                         { }
+func Print(code int, format string, values ...any)               {}
 func Body() []byte                                              { return nil }
 func Count() int                                                { return 0 }
 func hidden(query string)                                       {}
@@ -69,7 +71,7 @@ func scanSynth(t *testing.T) *API {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return Scan(pkg)
+	return Scan(pkg, true)
 }
 
 func TestWords(t *testing.T) {
@@ -93,6 +95,8 @@ func TestLayer1Rules(t *testing.T) {
 		"sink example.com/synth.Run":                 "arg0",
 		"sink example.com/synth.Open":                "arg0",
 		"sink example.com/synth.Fetch":               "arg0",
+		"sink example.com/synth.Print":               "arg1,arg2",
+		"sink (example.com/synth.Sink).Write":        "arg0",
 		"sink example.com/synth.Render":              "arg0",
 		"calls example.com/synth.Walk":               "arg1",
 		"calls example.com/synth.Serve":              "arg0",
@@ -307,7 +311,7 @@ func TestRecallOnDatabaseSQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := ComputeRecall(Scan(l.Types), f)
+	r := ComputeRecall(Scan(l.Types, true), f)
 	if r.SinkRows < 10 || r.SinkFound != r.SinkRows {
 		t.Errorf("layer 1 must find the sink rows of database/sql: %+v", r)
 	}
@@ -351,5 +355,105 @@ func TestDeadAllow(t *testing.T) {
 	lines := DeadAllowLines(dead, "a", "# header\n(*a.T).C | already\n")
 	if len(lines) != 1 || !strings.HasPrefix(lines[0], "a.B | dependency: ") {
 		t.Errorf("%v", lines)
+	}
+}
+
+func TestNoCallsCandidatesWhenBodiesAreRead(t *testing.T) {
+	fset := token.NewFileSet()
+	f, _ := parser.ParseFile(fset, "synth.go", synth, 0)
+	pkg, err := (&types.Config{Importer: importer.ForCompiler(fset, "source", nil)}).Check("example.com/synth", fset, []*ast.File{f}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, it := range Scan(pkg, false).Items {
+		if it.Kind == KindCalls {
+			t.Errorf("a calls candidate for a package whose bodies are read: %s", it.Symbol)
+		}
+	}
+	p := writeModel(t, "body_replaced_packages:\n  - package: example.com/declared\n    reason: x\n  - package: example.com/tree/...\n    reason: x\n")
+	facts, err := LoadFacts([]string{p}, "example.com/synth")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for pk, want := range map[string]bool{"example.com/synth": true, "example.com/declared": false, "example.com/tree/sub": false, "example.com/declaredx": true, "strings": false} {
+		if got := facts.BodiesRead(pk); got != want {
+			t.Errorf("BodiesRead(%s) = %v", pk, got)
+		}
+	}
+}
+
+// Two majors of one module: a row or an entry written with /v* is read for the major that is checked, and what only the other major
+// has is not a vanished candidate. The records of verified_versions of two majors stand side by side, and a write adds one only.
+func TestMajors(t *testing.T) {
+	p := writeModel(t, `
+verified_versions:
+  - package: example.com/m/v2
+    versions: ">=2.1.0 <3.0.0"
+    checked_with: v2.1.0
+    checked: 2026-11-01
+sinks:
+  - symbol: example.com/m/v*/pkg.Run
+    args: [0]
+    category: command_injection
+rejected:
+  - symbol: example.com/m/v*/pkg.OnlyInV3
+    kind: sink
+    why: "only a later major has it"
+  - symbol: example.com/m/v2/pkg.OnlyInV2
+    kind: sink
+    why: "x"
+`)
+	f2, err := LoadFacts([]string{p}, "example.com/m/v2/pkg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f2.Sinks["example.com/m/v2/pkg.Run"] == "" {
+		t.Errorf("the row with /v* is not read for v2: %v", f2.Sinks)
+	}
+	api := &API{Symbols: map[string]string{"example.com/m/v2/pkg.Run": "", "example.com/m/v2/pkg.OnlyInV2": ""}}
+	if m := Match(api, f2); len(m.Stale) != 0 {
+		t.Errorf("stale in v2: %+v", m.Stale)
+	}
+	// the run of v3: the entry of v2 is not of this package, the entry with /v* is not stale though v3 has no OnlyInV3 here
+	f3, _ := LoadFacts([]string{p}, "example.com/m/v3/pkg")
+	api3 := &API{Symbols: map[string]string{"example.com/m/v3/pkg.Run": ""}}
+	if m := Match(api3, f3); len(m.Stale) != 0 || len(f3.Rejected) != 1 {
+		t.Errorf("stale in v3: %+v, rejected %+v", m.Stale, f3.Rejected)
+	}
+	// the v3 run adds its own record and keeps the v2 one
+	txt, _ := os.ReadFile(p)
+	upd, err := UpdateVerified(string(txt), "example.com/m/v3", "v3.0.4", "2026-11-02")
+	if err != nil || !strings.Contains(upd, "package: example.com/m/v2") || !strings.Contains(upd, "checked_with: v2.1.0") || !strings.Contains(upd, "package: example.com/m/v3") || !strings.Contains(upd, `">=3.0.4 <4.0.0"`) {
+		t.Fatalf("%v\n%s", err, upd)
+	}
+	os.WriteFile(p, []byte(upd), 0o644)
+	if _, err := LoadFacts([]string{p}, "example.com/m/v3/pkg"); err != nil {
+		t.Errorf("the loader refuses the two records: %v", err)
+	}
+	// a rerun for v2 replaces its record only
+	upd2, _ := UpdateVerified(upd, "example.com/m/v2", "v2.2.0", "2026-11-03")
+	if strings.Count(upd2, "package: example.com/m/v2") != 1 || !strings.Contains(upd2, "checked_with: v3.0.4") || !strings.Contains(upd2, "checked_with: v2.2.0") {
+		t.Errorf("%s", upd2)
+	}
+	// a /v* in -pkg needs the version
+	var o, e bytes.Buffer
+	if c := realMain([]string{"-pkg", "example.com/m/v*/pkg", "-model", p, "-work", t.TempDir()}, &o, &e); c != ExitUsage {
+		t.Errorf("/v* without -version: exit %d", c)
+	}
+	if m, _ := majorOfVersion("v93.0.1"); m != "93" || majorOf("example.com/m/v93/pkg") != "93" || majorOf("example.com/m/pkg") != "" {
+		t.Error("major")
+	}
+}
+
+func TestRowsNoRuleFinds(t *testing.T) {
+	api := scanSynth(t)
+	p := writeModel(t, "sinks:\n  - symbol: example.com/synth.Join\n    args: [0]\n    category: path_traversal\n  - symbol: example.com/synth.Run\n    args: [0]\n    category: command_injection\n")
+	f, err := LoadFacts([]string{p}, "example.com/synth")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := ComputeRecall(api, f)
+	if r.SinkRows != 2 || r.SinkFound != 1 || len(r.SinkMissed) != 1 || r.SinkMissed[0] != "example.com/synth.Join" {
+		t.Errorf("%+v", r)
 	}
 }

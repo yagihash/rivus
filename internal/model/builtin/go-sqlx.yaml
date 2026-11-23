@@ -190,9 +190,6 @@ rejected:
   - symbol: (*github.com/jmoiron/sqlx.DB).BindNamed
     kind: sink
     why: "名前付きの形のクエリを書き換えて返すだけで、何も実行しない。クエリは、実行する行で見る"
-  - symbol: (*github.com/jmoiron/sqlx.DB).MapperFunc
-    kind: calls
-    why: "渡す関数は、構造体のフィールド名を列名に変える。呼ばれるときの値は、フィールド名で、利用者の入力ではない"
   - symbol: (*github.com/jmoiron/sqlx.DB).Rebind
     kind: sink
     why: "クエリの文字列を `?` などの形に書き換えて返すだけで、何も実行しない。クエリは、実行する Query / Exec などの行で見る"
@@ -211,69 +208,51 @@ rejected:
   - symbol: github.com/jmoiron/sqlx.BindNamed
     kind: sink
     why: "名前付きの形のクエリを書き換えて返すだけで、何も実行しない。クエリは、実行する行で見る"
-  - symbol: github.com/jmoiron/sqlx.Get
-    kind: calls
-    why: "引数のインターフェースには、ふつう sqlx か database/sql の DB / Tx が渡り、呼ばれる先は別の行があるメソッド。利用者の型を呼び返す形は、モデルにしていない"
-  - symbol: github.com/jmoiron/sqlx.GetContext
-    kind: calls
-    why: "引数のインターフェースには、ふつう sqlx か database/sql の DB / Tx が渡り、呼ばれる先は別の行があるメソッド。利用者の型を呼び返す形は、モデルにしていない"
   - symbol: github.com/jmoiron/sqlx.In
     kind: sink
     why: "名前付きの形のクエリを書き換えて返すだけで、何も実行しない。クエリは、実行する行で見る"
   - symbol: github.com/jmoiron/sqlx.LoadFile
-    kind: calls
-    why: "引数のインターフェースには、ふつう sqlx か database/sql の DB / Tx が渡り、呼ばれる先は別の行があるメソッド。利用者の型を呼び返す形は、モデルにしていない"
-  - symbol: github.com/jmoiron/sqlx.LoadFile
     kind: sink
     why: "ファイルのパスの引数で、クエリではない。path_traversal の sink にするかは、別に判断する(今回は行を変えない)"
   - symbol: github.com/jmoiron/sqlx.LoadFileContext
-    kind: calls
-    why: "引数のインターフェースには、ふつう sqlx か database/sql の DB / Tx が渡り、呼ばれる先は別の行があるメソッド。利用者の型を呼び返す形は、モデルにしていない"
-  - symbol: github.com/jmoiron/sqlx.LoadFileContext
     kind: sink
     why: "ファイルのパスの引数で、クエリではない。path_traversal の sink にするかは、別に判断する(今回は行を変えない)"
-  - symbol: github.com/jmoiron/sqlx.MapScan
-    kind: calls
-    why: "引数のインターフェースには、ふつう sqlx か database/sql の DB / Tx が渡り、呼ばれる先は別の行があるメソッド。利用者の型を呼び返す形は、モデルにしていない"
-  - symbol: github.com/jmoiron/sqlx.MustExec
-    kind: calls
-    why: "引数のインターフェースには、ふつう sqlx か database/sql の DB / Tx が渡り、呼ばれる先は別の行があるメソッド。利用者の型を呼び返す形は、モデルにしていない"
-  - symbol: github.com/jmoiron/sqlx.MustExecContext
-    kind: calls
-    why: "引数のインターフェースには、ふつう sqlx か database/sql の DB / Tx が渡り、呼ばれる先は別の行があるメソッド。利用者の型を呼び返す形は、モデルにしていない"
   - symbol: github.com/jmoiron/sqlx.Named
     kind: sink
     why: "名前付きの形のクエリを書き換えて返すだけで、何も実行しない。クエリは、実行する行で見る"
-  - symbol: github.com/jmoiron/sqlx.NamedExec
-    kind: calls
-    why: "引数のインターフェースには、ふつう sqlx か database/sql の DB / Tx が渡り、呼ばれる先は別の行があるメソッド。利用者の型を呼び返す形は、モデルにしていない"
-  - symbol: github.com/jmoiron/sqlx.NamedExecContext
-    kind: calls
-    why: "引数のインターフェースには、ふつう sqlx か database/sql の DB / Tx が渡り、呼ばれる先は別の行があるメソッド。利用者の型を呼び返す形は、モデルにしていない"
-  - symbol: github.com/jmoiron/sqlx.NamedQuery
-    kind: calls
-    why: "引数のインターフェースには、ふつう sqlx か database/sql の DB / Tx が渡り、呼ばれる先は別の行があるメソッド。利用者の型を呼び返す形は、モデルにしていない"
-  - symbol: github.com/jmoiron/sqlx.NamedQueryContext
-    kind: calls
-    why: "引数のインターフェースには、ふつう sqlx か database/sql の DB / Tx が渡り、呼ばれる先は別の行があるメソッド。利用者の型を呼び返す形は、モデルにしていない"
   - symbol: github.com/jmoiron/sqlx.NamedStmt.QueryString
     kind: source
     why: "準備のときに渡したクエリの文字列を持つフィールド。利用者の入力が入る場所ではなく、sink にするのは Preparex / PrepareNamed"
-  - symbol: github.com/jmoiron/sqlx.Preparex
-    kind: calls
-    why: "引数のインターフェースには、ふつう sqlx か database/sql の DB / Tx が渡り、呼ばれる先は別の行があるメソッド。利用者の型を呼び返す形は、モデルにしていない"
-  - symbol: github.com/jmoiron/sqlx.PreparexContext
-    kind: calls
-    why: "引数のインターフェースには、ふつう sqlx か database/sql の DB / Tx が渡り、呼ばれる先は別の行があるメソッド。利用者の型を呼び返す形は、モデルにしていない"
   - symbol: github.com/jmoiron/sqlx.Rebind
     kind: sink
     why: "クエリの文字列を `?` などの形に書き換えて返すだけで、何も実行しない。クエリは、実行する Query / Exec などの行で見る"
-  - symbol: github.com/jmoiron/sqlx.Select
-    kind: calls
-    why: "引数のインターフェースには、ふつう sqlx か database/sql の DB / Tx が渡り、呼ばれる先は別の行があるメソッド。利用者の型を呼び返す形は、モデルにしていない"
-  - symbol: github.com/jmoiron/sqlx.SelectContext
-    kind: calls
-    why: "引数のインターフェースには、ふつう sqlx か database/sql の DB / Tx が渡り、呼ばれる先は別の行があるメソッド。利用者の型を呼び返す形は、モデルにしていない"
-  - symbol: github.com/jmoiron/sqlx.SliceScan
-    kind: calls
-    why: "引数のインターフェースには、ふつう sqlx か database/sql の DB / Tx が渡り、呼ばれる先は別の行があるメソッド。利用者の型を呼び返す形は、モデルにしていない"
+  - symbol: (github.com/jmoiron/sqlx.Execer).Exec
+    kind: sink
+    why: "インターフェースのメソッドで、呼び出しに自分のシンボルがない(型が分かれば、呼び出しは具体的なメソッドの呼び出し)。sink は、`*DB` / `*Tx` などの具体的なメソッドの行にある(先頭の注釈のとおり)"
+  - symbol: (github.com/jmoiron/sqlx.ExecerContext).ExecContext
+    kind: sink
+    why: "インターフェースのメソッドで、呼び出しに自分のシンボルがない(型が分かれば、呼び出しは具体的なメソッドの呼び出し)。sink は、`*DB` / `*Tx` などの具体的なメソッドの行にある(先頭の注釈のとおり)"
+  - symbol: (github.com/jmoiron/sqlx.Preparer).Prepare
+    kind: sink
+    why: "インターフェースのメソッドで、呼び出しに自分のシンボルがない(型が分かれば、呼び出しは具体的なメソッドの呼び出し)。sink は、`*DB` / `*Tx` などの具体的なメソッドの行にある(先頭の注釈のとおり)"
+  - symbol: (github.com/jmoiron/sqlx.PreparerContext).PrepareContext
+    kind: sink
+    why: "インターフェースのメソッドで、呼び出しに自分のシンボルがない(型が分かれば、呼び出しは具体的なメソッドの呼び出し)。sink は、`*DB` / `*Tx` などの具体的なメソッドの行にある(先頭の注釈のとおり)"
+  - symbol: (github.com/jmoiron/sqlx.Queryer).Query
+    kind: sink
+    why: "インターフェースのメソッドで、呼び出しに自分のシンボルがない(型が分かれば、呼び出しは具体的なメソッドの呼び出し)。sink は、`*DB` / `*Tx` などの具体的なメソッドの行にある(先頭の注釈のとおり)"
+  - symbol: (github.com/jmoiron/sqlx.Queryer).QueryRowx
+    kind: sink
+    why: "インターフェースのメソッドで、呼び出しに自分のシンボルがない(型が分かれば、呼び出しは具体的なメソッドの呼び出し)。sink は、`*DB` / `*Tx` などの具体的なメソッドの行にある(先頭の注釈のとおり)"
+  - symbol: (github.com/jmoiron/sqlx.Queryer).Queryx
+    kind: sink
+    why: "インターフェースのメソッドで、呼び出しに自分のシンボルがない(型が分かれば、呼び出しは具体的なメソッドの呼び出し)。sink は、`*DB` / `*Tx` などの具体的なメソッドの行にある(先頭の注釈のとおり)"
+  - symbol: (github.com/jmoiron/sqlx.QueryerContext).QueryContext
+    kind: sink
+    why: "インターフェースのメソッドで、呼び出しに自分のシンボルがない(型が分かれば、呼び出しは具体的なメソッドの呼び出し)。sink は、`*DB` / `*Tx` などの具体的なメソッドの行にある(先頭の注釈のとおり)"
+  - symbol: (github.com/jmoiron/sqlx.QueryerContext).QueryRowxContext
+    kind: sink
+    why: "インターフェースのメソッドで、呼び出しに自分のシンボルがない(型が分かれば、呼び出しは具体的なメソッドの呼び出し)。sink は、`*DB` / `*Tx` などの具体的なメソッドの行にある(先頭の注釈のとおり)"
+  - symbol: (github.com/jmoiron/sqlx.QueryerContext).QueryxContext
+    kind: sink
+    why: "インターフェースのメソッドで、呼び出しに自分のシンボルがない(型が分かれば、呼び出しは具体的なメソッドの呼び出し)。sink は、`*DB` / `*Tx` などの具体的なメソッドの行にある(先頭の注釈のとおり)"

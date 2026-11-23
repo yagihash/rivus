@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -21,12 +22,15 @@ type Facts struct {
 	SinkRows                                 []model.Sink      // of the package, for the recall
 	SourceRows                               []model.Source    // of the package
 	Rejected                                 []RejectedEntry   // of the package
+	BodyReplaced                             []string          // the packages that the files declare (body_replaced_packages)
 }
 
 // RejectedEntry is a `rejected:` entry and the file it is in.
 type RejectedEntry struct {
 	model.Rejected
 	File string
+	// Wild: the symbol was written with /v* (every major): it can name something that only another major has, so it is never stale.
+	Wild bool
 }
 
 // inPackage: the symbol (function, method, field, type) is of the package.
@@ -43,12 +47,31 @@ func BuiltinFiles(repo string) ([]string, error) {
 	return fs, err
 }
 
+var majorElemRe = regexp.MustCompile(`/v([2-9][0-9]*|[1-9][0-9]+)(/|$)`)
+
+// majorOf is the major of a Go module path as the path writes it ("93" for `x/v93/pkg`, "" if there is none).
+func majorOf(pkg string) string {
+	if m := majorElemRe.FindStringSubmatch(pkg); m != nil {
+		return m[1]
+	}
+	return ""
+}
+
 // LoadFacts reads the model files with the loader of the model (a file that is not valid, a `rejected:` without `why`, is an error).
 // files is the list to read: the built-in files of the checkout, or the one that -model names.
 func LoadFacts(files []string, pkg string) (*Facts, error) {
 	f := &Facts{Sinks: map[string]string{}, Sources: map[string]string{}, Sanitizers: map[string]string{}, Flows: map[string]string{},
 		Calls: map[string]string{}, SourceTypes: map[string]string{}, SourceFieldPrefix: map[string]string{}}
 	used := map[string]bool{}
+	// A row written with /v* (any major of the module, ADR-110) is for the major that is checked: it is read as the concrete symbol of
+	// that major. A row of another major is not of this package, so what only another major has is never taken for a vanished candidate.
+	major := majorOf(pkg)
+	conc := func(s string) string {
+		if major != "" && model.HasMajorWildcard(s) {
+			return model.ConcreteMajor(s, major)
+		}
+		return s
+	}
 	for _, path := range files {
 		fh, err := os.Open(path)
 		if err != nil {
@@ -60,6 +83,7 @@ func LoadFacts(files []string, pkg string) (*Facts, error) {
 			return nil, err
 		}
 		for _, s := range rs.Sinks {
+			s.Symbol = conc(s.Symbol)
 			f.Sinks[s.Symbol] = path
 			if inPackage(s.Symbol, pkg) {
 				f.SinkRows = append(f.SinkRows, s)
@@ -67,6 +91,7 @@ func LoadFacts(files []string, pkg string) (*Facts, error) {
 			}
 		}
 		for _, s := range rs.Sources {
+			s.Symbol, s.Type, s.Field = conc(s.Symbol), conc(s.Type), conc(s.Field)
 			if s.Symbol != "" {
 				f.Sources[s.Symbol] = path
 			}
@@ -82,9 +107,10 @@ func LoadFacts(files []string, pkg string) (*Facts, error) {
 			}
 		}
 		for _, s := range rs.Sanitizers {
-			f.Sanitizers[s.Symbol] = path
+			f.Sanitizers[conc(s.Symbol)] = path
 		}
 		for _, p := range rs.Propagators {
+			p.Symbol = conc(p.Symbol)
 			f.Flows[p.Symbol] = path
 			if len(p.Calls) > 0 {
 				f.Calls[p.Symbol] = path
@@ -93,9 +119,14 @@ func LoadFacts(files []string, pkg string) (*Facts, error) {
 				used[path] = true
 			}
 		}
+		for _, b := range rs.BodyReplaced {
+			f.BodyReplaced = append(f.BodyReplaced, b.Package)
+		}
 		for _, r := range rs.Rejected {
+			wild := model.HasMajorWildcard(r.Symbol)
+			r.Symbol = conc(r.Symbol)
 			if inPackage(r.Symbol, pkg) {
-				f.Rejected = append(f.Rejected, RejectedEntry{r, path})
+				f.Rejected = append(f.Rejected, RejectedEntry{r, path, wild})
 				used[path] = true
 			}
 		}
@@ -106,6 +137,20 @@ func LoadFacts(files []string, pkg string) (*Facts, error) {
 		}
 	}
 	return f, nil
+}
+
+// BodiesRead says whether the analysis reads the bodies of the package: not for the standard library, and not for a package that a
+// model file declares in body_replaced_packages (exactly, or under a `/...`).
+func (f *Facts) BodiesRead(pkg string) bool {
+	if isStdlib(pkg) {
+		return false
+	}
+	for _, b := range f.BodyReplaced {
+		if b == pkg || strings.HasSuffix(b, model.Subpackages) && strings.HasPrefix(pkg+"/", strings.TrimSuffix(b, model.Subpackages)+"/") {
+			return false
+		}
+	}
+	return true
 }
 
 // receiverType: `(*a/b.T).M` is `a/b.T`; "" for a function.
@@ -196,7 +241,7 @@ func Match(api *API, f *Facts) *Matched {
 		}
 	}
 	for _, r := range f.Rejected {
-		if _, ok := api.Symbols[r.Symbol]; !ok {
+		if _, ok := api.Symbols[r.Symbol]; !ok && !r.Wild {
 			m.Stale = append(m.Stale, r)
 		}
 	}

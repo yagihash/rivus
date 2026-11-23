@@ -172,7 +172,11 @@ type funcInfo struct {
 }
 
 // Scan reads the exported API of the package and applies the rule table.
-func Scan(pkg *types.Package) *API {
+//
+// withCalls says whether `calls` candidates are listed: a row of `calls:` stands for a function whose body is not read (the standard
+// library, or a package declared in `body_replaced_packages`). For a package whose bodies are read, the analysis resolves the call of a
+// function value or of an interface itself, so there is nothing to decide.
+func Scan(pkg *types.Package, withCalls bool) *API {
 	api := &API{Pkg: pkg.Path(), Symbols: map[string]string{}}
 	var fns []funcInfo
 	var fields []fieldInfo
@@ -206,6 +210,14 @@ func Scan(pkg *types.Package) *API {
 				}
 				fns = append(fns, funcInfo{symbol: "(" + recv + ")." + m.Name(), name: m.Name(), fn: m, sig: sig})
 			}
+			if it, ok := named.Underlying().(*types.Interface); ok {
+				for i := 0; i < it.NumExplicitMethods(); i++ {
+					m := it.ExplicitMethod(i)
+					if m.Exported() {
+						fns = append(fns, funcInfo{symbol: "(" + pkg.Path() + "." + n + ")." + m.Name(), name: m.Name(), fn: m, sig: m.Type().(*types.Signature)})
+					}
+				}
+			}
 			if st, ok := named.Underlying().(*types.Struct); ok {
 				for i := 0; i < st.NumFields(); i++ {
 					f := st.Field(i)
@@ -220,7 +232,7 @@ func Scan(pkg *types.Package) *API {
 	taken := map[string]bool{}
 	for _, f := range fns {
 		api.Symbols[f.symbol] = f.sig.String()
-		items := funcItems(pkg, f, structs)
+		items := funcItems(pkg, f, structs, withCalls)
 		for _, it := range items {
 			taken[f.symbol] = true
 			api.Items = append(api.Items, it)
@@ -287,7 +299,7 @@ func takesData(sig *types.Signature) bool {
 }
 
 // funcItems applies the rules to one function or method.
-func funcItems(pkg *types.Package, f funcInfo, structs map[*types.TypeName]*types.Struct) []Item {
+func funcItems(pkg *types.Package, f funcInfo, structs map[*types.TypeName]*types.Struct, withCalls bool) []Item {
 	var out []Item
 	sig := f.sig
 	sigText := f.name + sig.String()[len("func"):]
@@ -344,6 +356,19 @@ func funcItems(pkg *types.Package, f funcInfo, structs map[*types.TypeName]*type
 			}
 		}
 	}
+	// a format string and the variadic `any` after it are both candidates (`String(code, format, values ...any)`)
+	if n := sig.Params().Len(); sig.Variadic() && n >= 2 {
+		if sl, ok := sig.Params().At(n - 1).Type().(*types.Slice); ok {
+			if i, ok := sl.Elem().Underlying().(*types.Interface); ok && i.Empty() {
+				for j := 0; j < n-1; j++ {
+					if p := sig.Params().At(j); isString(p.Type()) && hasWord(p.Name(), []string{"format"}) {
+						addSink(fmt.Sprintf("arg%d", n-1), "xss")
+						break
+					}
+				}
+			}
+		}
+	}
 	if len(sinkPos) > 0 {
 		out = append(out, Item{Symbol: f.symbol, Kind: KindSink, Positions: sinkPos, Rule: "sink: argument that names a " + strings.Join(cats, "/"), Sig: sigText})
 	}
@@ -382,7 +407,7 @@ func funcItems(pkg *types.Package, f funcInfo, structs map[*types.TypeName]*type
 			callPos = append(callPos, fmt.Sprintf("arg%d", i))
 		}
 	}
-	if len(callPos) > 0 {
+	if withCalls && len(callPos) > 0 {
 		out = append(out, Item{Symbol: f.symbol, Kind: KindCalls, Positions: callPos, Rule: "calls: takes a function or an interface of the package", Sig: sigText})
 	}
 	return out

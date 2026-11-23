@@ -16,6 +16,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/yagihash/rivus/internal/model"
 )
 
 // Exit codes. The ones that stage 1 does not use are kept for the later stages (the numbers are the ones of the design memo).
@@ -94,6 +96,14 @@ func run(o *options, out io.Writer) error {
 	if err := os.MkdirAll(o.work, 0o755); err != nil {
 		return err
 	}
+	if model.HasMajorWildcard(o.pkg) {
+		// any major of the module: the run is for one, the one of -version (as bench/model-diff)
+		maj, ok := majorOfVersion(o.version)
+		if !ok {
+			return &exitError{ExitUsage, fmt.Errorf("%s has /v* (any major): give the version to check with -version (v93.0.0): its major is the one that is checked", o.pkg)}
+		}
+		o.pkg = model.ConcreteMajor(o.pkg, maj)
+	}
 	slug := slugRe.ReplaceAllString(o.pkg, "_")
 
 	files := []string{o.model}
@@ -123,7 +133,7 @@ func run(o *options, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	api := Scan(l.Types)
+	api := Scan(l.Types, !facts.BodiesRead(o.pkg))
 	m := Match(api, facts)
 
 	if o.recall {
@@ -139,6 +149,20 @@ func run(o *options, out io.Writer) error {
 		return err
 	}
 	fmt.Fprintf(out, "  layer 2: %d function(s) that take a string, bytes or any (a list only, no decision needed): %s\n", len(api.Layer2), l2)
+	if !facts.BodiesRead(o.pkg) {
+		fmt.Fprintln(out, "  calls candidates: listed (the bodies of the package are not read)")
+	} else {
+		fmt.Fprintln(out, "  calls candidates: not listed (the bodies of the package are read: the analysis resolves the calls of a function value or an interface; a row of calls: is for a body that is not read)")
+	}
+	// the rows that no rule found: a material for the rule table, never a failure
+	if rec := ComputeRecall(api, facts); len(rec.SinkMissed)+len(rec.SourceMissed) > 0 {
+		list := append(append([]string{}, rec.SinkMissed...), rec.SourceMissed...)
+		nf := filepath.Join(o.work, slug+"-rows-not-found.txt")
+		if err := os.WriteFile(nf, []byte(strings.Join(list, "\n")+"\n"), 0o644); err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "  rows that no rule of layer 1 finds: %d sink, %d source (material for the rule table; not a failure): %s\n", len(rec.SinkMissed), len(rec.SourceMissed), nf)
+	}
 	for _, r := range m.Stale {
 		fmt.Fprintf(out, "  warning: %s: rejected %s (%s) is not in the API of %s any more\n", r.File, r.Symbol, r.Kind, o.pkg)
 	}
@@ -157,4 +181,13 @@ func run(o *options, out io.Writer) error {
 		return nil
 	}
 	return runDiff(out, o, repo, target, slug, l, api, m)
+}
+
+// majorOfVersion: "93" for v93.0.0 (v0 and v1 have no element in the path: "" and false for them is not needed: they give "0"/"1", which /v* does not match).
+func majorOfVersion(v string) (string, bool) {
+	n, _, _ := strings.Cut(strings.TrimPrefix(v, "v"), ".")
+	if n == "" || strings.Trim(n, "0123456789") != "" {
+		return "", false
+	}
+	return n, true
 }
