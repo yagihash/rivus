@@ -128,6 +128,13 @@ func TestPassStatsTopAndSort(t *testing.T) {
 // -pass-stats says how the elements of the summaries are spread over the functions (summary_sizes) and what they are
 // made of, in numbers only: the parts add up to summary_elems, the quantiles are in order, and nothing is there without
 // the flag.
+type distinctCounts struct {
+	All            int `json:"all"`
+	IgnoringGuards int `json:"ignoring_guards"`
+	IgnoringPath   int `json:"ignoring_path"`
+	IgnoringBoth   int `json:"ignoring_path_and_guards"`
+}
+
 func TestPassStatsSummarySizes(t *testing.T) {
 	t.Parallel()
 	type sizes struct {
@@ -139,6 +146,8 @@ func TestPassStatsSummarySizes(t *testing.T) {
 		ByOutput                                map[string]int `json:"by_output"`
 		ByElement                               map[string]int `json:"by_element"`
 		ByPathDepth                             map[string]int `json:"by_path_depth"`
+		Distinct                                distinctCounts `json:"distinct"`
+		DistinctDep                             distinctCounts `json:"distinct_dep"`
 	}
 	type out struct {
 		Stats struct {
@@ -182,6 +191,13 @@ func TestPassStatsSummarySizes(t *testing.T) {
 	}
 	if sum(s.ByPathDepth) != s.ByElement["param"] {
 		t.Errorf("by_path_depth adds up to %d, the parameter elements are %d", sum(s.ByPathDepth), s.ByElement["param"])
+	}
+	// the distinct counts: each way of leaving something out can only make the number smaller
+	if d := s.Distinct; d.All != r.Stats.SummaryElems || d.IgnoringGuards > d.All || d.IgnoringPath > d.All || d.IgnoringBoth > d.IgnoringGuards || d.IgnoringBoth > d.IgnoringPath || d.IgnoringBoth == 0 {
+		t.Errorf("distinct is not consistent (summary_elems %d): %+v", r.Stats.SummaryElems, d)
+	}
+	if s.DistinctDep.All != s.DepElems || s.DistinctDep.All > s.Distinct.All {
+		t.Errorf("distinct_dep does not match dep_elems %d: %+v", s.DepElems, s.DistinctDep)
 	}
 	if s.OwnElems+s.DepElems != r.Stats.SummaryElems {
 		t.Errorf("own + dep is %d, summary_elems is %d", s.OwnElems+s.DepElems, r.Stats.SummaryElems)
