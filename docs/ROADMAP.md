@@ -55,7 +55,7 @@
   3. 止まっていた課題を、この順で: #75、#76、#78、#79、#80、#81、#83、#86、#87(コールバック: #76、#78、#79、#80、#81。モデルが正体を隠す形: #86、#87。`calls: [{method:}]` が Go / Dart で何もせず、報告もしない件は、課題に上げてから)
   4. 利用から出た要望: #170(ラベルを受ける sink がないときと、`query` の綴りの誤りの警告)、#171(`graph` の答えの `complete`。#123 と同じ種類)、#123
   5. 経路の欠け・揺れ: #90、#84
-- **課題**: #75、#76、#78、#79、#80、#81、#83、#84、#86、#87、#90、#123、#170、#171(#108、#156 は 3 節と 4 節の側)。
+- **課題**: #75、#76、#78、#79、#80、#81、#83、#84、#86、#87、#90、#123、#170、#171、#177(`summary` が読み込みの結果の数を 0 のときも出す。F-2、ADR-114 の 7 と一緒に扱う)(#108、#156 は 3 節と 4 節の側)。
 - **終わりの条件**: 打ち切り・省略が、すべて出力の不確実性に残る。上の止まっていた課題が閉じる。関数値の第 2 歩とキャプチャセルで閉じる分(#76、#78、#79、#81、#99 と #77 の残り)は、1 節のあとに回すものと同じ作業。
 
 ## 3. 依存込みの解析が、実用的な時間で終わること
@@ -69,8 +69,8 @@
   3. 依存込みのベンチと、数字の記録(`bench/LEDGER.md`)
   4. コストの高い依存から、流れのモデルを作る(型からの生成器を差分テストと組にする、段階 3。到達性で推移的な依存を落とす、段階 5。[DESIGN-package-models.md](DESIGN-package-models.md) の 7 節)
   5. エンジンの側のコスト(動的な呼び出しの候補、値の合流、要約の持ち方)の、止めてあった調査の再開
-- **利用から出た要望**: #166(`-max-memory`。メモリの上限で止める)、#167(taint の段階の進捗の表示)。#127(`-timeout` の超過の残り)。
-- **終わりの条件**: 既定のフラグ(`-no-deps` なし、`-body-replaced` を手で書かない)で、memos(usememos/memos 26.11.2、`00fcd170281a75fc0e95ec4f2f54f43d32fe81bd`)について、`PASS memos time=<s>/180 mem=<GB>/8 converged=yes detected=yes` の 1 行が出ること。4 つの条件はすべて必要: 180 秒以内に終わる、メモリが 8 GB 以内、収束する、公開済みで修正済みの CVE-2025-65799(パストラバーサル)を、修正前のコミット `1d7efb158045924ab87f58d567bd79cd92edf6af` で検出し、修正後の `5f57f48673e2054f404b2c5b497a8eaa3690591d` では検出しない(`path_traversal` の finding の件数だけを比べる)。`make bench-passline` で出す(`bench/deps_bench.py`、対象は `bench/deps-targets.json`)。今の線は `FAIL`(2026-11-23。メモリの上限で止まる。数字は `bench/LEDGER.md`)。dart_services(dart-pad の `pkgs/dart_services`、`ad668d137e631beeaef3e263054a45696e8d4499`)と cocoon の線は、あとで決める。宣言したパッケージが、全部、差分テストを通っている。宣言したパッケージが、全部、差分テストを通っている。
+- **利用から出た要望**: #166(`-max-memory`。メモリの上限で止める)、#167(taint の段階の進捗の表示)、#174(extractor の読み込みの進捗)、#175(Dart のモノレポの `-C`)、#176(Flutter のメンバーを含む workspace)。#127(`-timeout` の超過の残り)。
+- **終わりの条件**: 既定のフラグ(`-no-deps` なし、`-body-replaced` を手で書かない)で、memos(usememos/memos 26.11.2、`00fcd170281a75fc0e95ec4f2f54f43d32fe81bd`)について、`PASS memos time=<s>/180 mem=<GB>/8 converged=yes detected=yes` の 1 行が出ること。4 つの条件はすべて必要: 180 秒以内に終わる、メモリが 8 GB 以内、収束する、公開済みで修正済みの CVE-2025-65799(パストラバーサル)を、修正前のコミット `1d7efb158045924ab87f58d567bd79cd92edf6af` で検出し、修正後の `5f57f48673e2054f404b2c5b497a8eaa3690591d` では検出しない(`path_traversal` の finding の件数だけを比べる)。`make bench-passline` で出す(`bench/deps_bench.py`、対象は `bench/deps-targets.json`)。今の線は `FAIL`(2026-11-23。メモリの上限で止まる。数字は `bench/LEDGER.md`)。Dart の線は、cocoon の `app_dart`(`ae9eb1beaf765d644cc85dde38def030c80b4b7d`。cwd は `app_dart`、`-allow-deps-under <cocoon>/packages`、`dart pub get` だけ、ルートの workspace の Flutter のメンバーはコピーで外す)。条件は memos と同じ(既定のフラグ、180 秒と 8 GB 以内、収束)。今の線は `PASS cocoon time=101/180 mem=1.78/8 converged=yes detected=n/a`(2026-11-23。公開の脆弱性の助言がないので、検出は n/a)。dart_services は、重い依存 `package:analyzer` の負荷の対象で、`INFO` のまま(深さの実験の対象でもある)。宣言したパッケージが、全部、差分テストを通っている。
 
 ## 4. 外から差し込むルール
 

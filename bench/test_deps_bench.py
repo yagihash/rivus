@@ -61,6 +61,14 @@ class Targets(unittest.TestCase):
         self.assertEqual(t["dart_services"]["commit"], "ad668d137e631beeaef3e263054a45696e8d4499")
         self.assertFalse(t["dart_services"]["decided"])
 
+    def test_cocoon_target(self):
+        t = json.load(open(d.TARGETS_FILE))["cocoon"]
+        self.assertEqual(t["commit"], "ae9eb1beaf765d644cc85dde38def030c80b4b7d")
+        self.assertEqual((t["subdir"], t["decided"], t["detect"], t["time_limit_s"], t["mem_cap_gb"]), ("app_dart", True, None, 180, 8))
+        self.assertEqual(d.expand_args(t["args"], "/c/app_dart", t["subdir"]), ["-allow-deps-under", "/c/packages"])
+        self.assertEqual(d.expand_args(["-x", "{root}/p"], "/c/a/b", "a/b"), ["-x", "/c/p"])
+        self.assertEqual(d.expand_args([], "/c", ""), [])
+
     def test_cache_outside_repo(self):
         os.environ["BENCH_CACHE"] = os.path.join(d.ROOT, "cache")
         try:

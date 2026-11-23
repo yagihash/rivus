@@ -242,9 +242,11 @@ LLM にモデルを書かせ、人や別の手段で確かめる、という使�
 - **対象のディレクトリに付いてくるルール（`.rivus/rules/*.yaml`）は、フラグなしで読まれます。** 対象を書いた人は、そこで finding を消せます。読んだファイルと、消せるものの数は、出力の `project_rules` に出ます。**信頼できないコードでは `-no-project-rules` を付けてください。**
 - Dart の依存は、プロジェクト、pub のキャッシュ、SDK の下のものだけ読みます（`package_config.json` は対象の一部で、どこでも指せるため）。ほかの場所は `-allow-deps-under DIR` で足します。
   - 許可の外の依存は読まず、**読まなかったことを `summary.unread`(理由は `dependency_not_allowed`)と標準エラーに出します**(結果が、その依存を読んだものに見えないように)。
-  - 複数のパッケージを 1 つのリポジトリに置いている(モノレポ)とき、アプリの依存が、同じリポジトリの別のパッケージを `path:` で指していることがあります。そのときは、アプリを `-C` に、リポジトリのルートを `-allow-deps-under` に指します: `rivus analyze -lang dart -C <リポジトリ>/app -allow-deps-under <リポジトリ>`。`-allow-deps-under` の下のパッケージ(`path:` の依存、`workspace:` のメンバー)は、読むだけでなく、プロジェクトとして扱います(source と sink を探します)。pub のキャッシュと SDK の下は、含まれていても依存のままです(ADR-114)。
+  - 複数のパッケージを 1 つのリポジトリに置いている(モノレポ)とき、`-C` は**解析の始まり**です。解析したいアプリ(サーバ)のディレクトリを指します: `rivus analyze -lang dart -C <リポジトリ>/app -allow-deps-under <リポジトリ>/packages`。アプリの依存が、同じリポジトリの別のパッケージ(兄弟)を `path:` で指しているとき、その兄弟は `-allow-deps-under` で足さないと読まれません(読まなかったことは `summary.unread` に出ます)。`-allow-deps-under` の下のパッケージ(`path:` の依存、`workspace:` のメンバー)は、読むだけでなく、プロジェクトとして扱います(source と sink を探します)。pub のキャッシュと SDK の下は、含まれていても依存のままです(ADR-114)。
+  - `-C` に何を指すかで、解析するものが変わります。リポジトリのルートを指すと、`workspace:` のメンバーの全部が始まりになり、読む範囲が広くなって、解析が終わらないことがあります。`packages` のような、パッケージを束ねたディレクトリを指すと、そこに並ぶ別のプロジェクトが対象になり、アプリではなくなります。サーバのアプリを読みたいときは、そのアプリのディレクトリを指してください。読み込みが長いときに、何を読んでいるかはまだ出ません([#174](docs/issues/174-extraction-progress.md))。
+  - `workspace:` に Flutter のメンバーがあると、Dart SDK だけの `dart pub get` が通りません。読みたいのがサーバ側のパッケージだけのときは、`pub get` の前に、Flutter のメンバーをルートの `pubspec.yaml` の `workspace:` から外してください(解析する側のコピーで。[#176](docs/issues/176-dart-flutter-workspace-members.md))。
   - Go でプロジェクトの範囲を狭めるには、パターンか `-C` を使います: `rivus analyze -C <module> ./cmd/...`、または `-C <module>/cmd/app`。**プロジェクトは、パターンで挙げたパッケージだけではなく、同じ module のパッケージの全部**です(`go.work` に並ぶ module と、`replace` がディレクトリを指す module も)。パターンが決めるのは入口と、頼んだ範囲で、狭めた先のコードが届く、同じ module の他のパッケージの source と sink も探します。module キャッシュの module と、`replace` がバージョンを指す module は依存です。取り込んだ第三者のコピーを `replace` で置いているときは、`-dep-dir <ディレクトリ>` で依存として読ませます(指定は `summary.dep_dirs` に出ます)。狭めた指定に `-no-deps` を付けると、挙げなかった同じ module のパッケージは読まれず、そのことは出力に出ません(ADR-114)。
-  - 複数のパッケージの親を `-C` に指しても読めます(依存は `package:` の ID で解決されます)。同じ依存の別のバージョンを 2 つのパッケージが使うときは、1 つしか読めず、もう 1 つは `summary.unread`(`dependency_not_linked`)に出ます。
+  - 依存は `package:` の ID で解決されます。同じ依存の別のバージョンを 2 つのパッケージが使うときは、1 つしか読めず、もう 1 つは `summary.unread`(`dependency_not_linked`)に出ます。
 
 Rust 以外の信頼できないリポジトリは、使い捨ての環境（VM など）で解析してください。依存を先に取得してから、ネットワークを切り、ソースを読み取り専用で渡す形です。
 
