@@ -1,6 +1,6 @@
 # #184 全: アクセスパスを深さの上限で切った結果の finding に、注記が付かない
 
-- 状態: **closed**(PR #309、ADR-117。値が切ったパスを通った段に `access_path_truncated` を付ける)
+- 状態: **closed**(PR #309、ADR-117。値が切ったパスを通ったステップに `access_path_truncated` を付ける)
 - 種類: 誤った注記
 - 言語: 全
 - ROADMAP の節: 2

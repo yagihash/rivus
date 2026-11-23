@@ -60,10 +60,10 @@
 
 | 形 | 問い合わせ | 経路 | `exhaustive` |
 |---|---|---|---|
-| 返したクロージャをその場で呼ぶ(`clos/returned`) | `vuln` → `make1$1` | あり(参照の段。`certainty: reference`)。`--no-refs` では、なし | 参照ありで true、`--no-refs` で false |
-| 変数・リストに入れたクロージャを呼ぶ(`clos/stored`) | `callA` → `vuln$1` | なし(参照の段まで探しても) | false |
+| 返したクロージャをその場で呼ぶ(`clos/returned`) | `vuln` → `make1$1` | あり(参照のフェーズ。`certainty: reference`)。`--no-refs` では、なし | 参照ありで true、`--no-refs` で false |
+| 変数・リストに入れたクロージャを呼ぶ(`clos/stored`) | `callA` → `vuln$1` | なし(参照のフェーズまで探しても) | false |
 | tear-off(`dyn/method_value`) | `vuln` → `Printer.run` | あり(`$bound` を通る。`certainty: uncertain`) | true |
-| フレームワークが呼ぶコールバック(`shelf_router` の `Router.call` → ハンドラ、`Navigator.pushNamed` → ビルダー) | `Router.call` → ハンドラ、`pushNamed` → ビルダー | なし(`vuln` → ハンドラは、参照の段であり) | false |
+| フレームワークが呼ぶコールバック(`shelf_router` の `Router.call` → ハンドラ、`Navigator.pushNamed` → ビルダー) | `Router.call` → ハンドラ、`pushNamed` → ビルダー | なし(`vuln` → ハンドラは、参照のフェーズであり) | false |
 
 参照で見つかる形は、「呼び出し」ではなく「参照」の経路として、`certainty: reference` で出る。エージェントは、探し尽くしていない、と分かる。
 

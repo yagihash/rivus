@@ -4,7 +4,7 @@
 
 必要なときだけ読むもの: 設計 [DESIGN-package-models.md](DESIGN-package-models.md)(節の一覧。本文は [design-package-models/](design-package-models/) の節ごとのファイル。設計メモの足し方: 節のファイルに足す。新しい節は、新しいファイルと、一覧に 1 行)、モデルの書き方 [MODELING.md](MODELING.md)、候補の一覧 [DART-MODEL-CANDIDATES.md](DART-MODEL-CANDIDATES.md)(Dart。Go と Rust は、同じ種類の一覧があればそれ)。
 
-道具の状態(2026-11-23): `make model`(`bench/model-author`。Go と Dart の段階 1、Go の段階 2)、`make model-diff`(差分テスト。Go と Dart)、一括採用(`adopt_rules:`)、`verified_versions`(major ごとの記録を含む)、パッケージ単位の宣言(`body_replaced_packages`。ADR-100、105)の書式と解析は**実装済み**。**まだない**: 型から flows の行を作る段(段階 3)、Dart の骨組みの生成、Rust の `make model` と差分テスト(隔離が要る。9 節)。ない段は、`rivus models coverage` と zoo のセルと手で書く行で進め、PR の本文に「その段は道具がないため手で行った」と書く。**宣言は、いまのモデルの PR では書かない**(2 節の 5)。
+道具の状態(2026-11-23): `make model`(`bench/model-author`。Go と Dart の段階 1、Go の段階 2)、`make model-diff`(差分テスト。Go と Dart)、一括採用(`adopt_rules:`)、`verified_versions`(major ごとの記録を含む)、パッケージ単位の宣言(`body_replaced_packages`。ADR-100、105)の書式と解析は**実装済み**。**まだない**: 型から flows の行を作るステップ(段階 3)、Dart の骨組みの生成、Rust の `make model` と差分テスト(隔離が要る。9 節)。ないステップは、`rivus models coverage` と zoo のセルと手で書く行で進め、PR の本文に「そのステップは道具がないため手で行った」と書く。**宣言は、いまのモデルの PR では書かない**(2 節の 5)。
 
 ## 0. 環境
 
@@ -44,7 +44,7 @@
 
 候補の一覧([MODEL-QUEUE.md](MODEL-QUEUE.md))の「新規 / 広げる / 例から昇格」の列で、作業の種類が決まる。
 
-- **新規**: そのパッケージのモデルのファイルが、まだ無い。2 節の標準の 4 段で作る。
+- **新規**: そのパッケージのモデルのファイルが、まだ無い。2 節の標準の 4 ステップで作る。
 - **広げる**: 今ある行を残して、足りない API を足す作業。差は次のとおり。
   - 既存の行を変えない。変えるときは、理由と、差分テストでの確認を PR の本文に書く。
   - 既存のセルのマークを緩めない(3 節の zoo のゲートと同じ)。
@@ -63,9 +63,9 @@
 
 作業の種類は、一覧の「新規 / 広げる / 例から昇格」の列ではなく、**main にそのパッケージのモデルのファイルがあるか**(`ls internal/model/builtin/<言語>-<パッケージ>*.yaml`)で決める。ファイルがなければ、一覧が「広げる」でも新規として扱う(標準ライブラリの行に乗る薄いラッパーなど)。
 
-## 2. 作る(標準の 4 段)
+## 2. 作る(標準の 4 ステップ)
 
-1. **候補と生成(Go と Dart。`make model`)**: `make model PKG=<パッケージ> VERSION=<v> LANG=<go|dart>` が、公開 API の候補(第 1 層)を、モデルの行、`rejected:`、`deferred:` に照合する(9 節の最後。`MODELING.md` の 4c-1 節)。どれにもない候補があると、終了コード 70 で止まり、`.claude/work/model-author/` に一覧を書く。一覧の項目ごとに、行を足すか、理由(`why`)つきで `rejected:` に足すか、決められないものを `deferred:`(`ref` で課題のファイルを指す)に置く。同じ形の候補が多いときは、`adopt_rules:`(一括採用の決め。`MODELING.md` の 4c-2 節)を書き、`ARGS="-expand"`(Go だけ)で行に展開して `*.adopt.gen.yaml`(コミットする。`origin: generated`)に書く。`ARGS="-recall"` は第 1 層の規則の再現率、`-breakdown` は候補の内訳を出す。**型から flows の行を作る段(段階 3)は、まだない**: flows と `calls:` の行は手で書く(8 節)。手で行う場合(Rust は `make model` がない): `rivus models coverage` で未モデルの呼び出しを見て、手で書く。
+1. **候補と生成(Go と Dart。`make model`)**: `make model PKG=<パッケージ> VERSION=<v> LANG=<go|dart>` が、公開 API の候補(第 1 層)を、モデルの行、`rejected:`、`deferred:` に照合する(9 節の最後。`MODELING.md` の 4c-1 節)。どれにもない候補があると、終了コード 70 で止まり、`.claude/work/model-author/` に一覧を書く。一覧の項目ごとに、行を足すか、理由(`why`)つきで `rejected:` に足すか、決められないものを `deferred:`(`ref` で課題のファイルを指す)に置く。同じ形の候補が多いときは、`adopt_rules:`(一括採用の決め。`MODELING.md` の 4c-2 節)を書き、`ARGS="-expand"`(Go だけ)で行に展開して `*.adopt.gen.yaml`(コミットする。`origin: generated`)に書く。`ARGS="-recall"` は第 1 層の規則の再現率、`-breakdown` は候補の内訳を出す。**型から flows の行を作るステップ(段階 3)は、まだない**: flows と `calls:` の行は手で書く(8 節)。手で行う場合(Rust は `make model` がない): `rivus models coverage` で未モデルの呼び出しを見て、手で書く。
 2. **差分テスト(Go と Dart)**: モデルの行を本体と照合する。MISS は 0。EXTRA は、意図した差だけ、手の部分のファイルの冒頭のコメントに、理由つきで書く(9 節)。`make model ... ARGS="-diff"`(全部の候補が決まったあとに走る)か、`make model-diff PKG=...`。Rust は、隔離が入るまで「未実施」と書く。
 3. **確認したバージョンを書く**: モデルのファイルの冒頭に `verified_versions`(形式と検証: [DESIGN-package-models.md](DESIGN-package-models.md) 6.7)。パッケージ(Go: モジュールのパス、Dart: パッケージ名、Rust: クレート名)、確認したバージョンの範囲、実際に確認したバージョン(`checked_with`)、日付(`checked`)。**Go と Dart は、差分テストが通ったとき `ARGS="-diff -write-verified"` が書く**。Rust と、手で書いた行だけのファイルは、手で書く。生成物があれば、先頭の入力のバージョンと同じにする。解析した対象のバージョンが範囲の外のときは、`summary.unverified_versions` に注記が出る(Go は `go.mod`、Dart は `pubspec.lock`、Rust は `Cargo.lock` から。6.10)。
 4. **追加**: `<lang>-<package>.yaml`(手の部分)に、sink、source、sanitizer、`calls:`(利用者のコードを呼び返す API: コールバック、利用者が実装するインターフェース。パッケージの行には各行に `checked_by: cell` を書く。実行の確認の道具は標準ライブラリだけを呼ぶ。代わりに、その API を呼び、`@sink` か `@miss` のマークがあるセルが要る。[MODELING.md](MODELING.md) 3 節、ADR-107)を足す。パッケージの行を足したら、**その行を空にして(または消して)セルが落ちること**を確認する。セルが行を使っていることの確認で、実行の確認より弱いのを補う)。**`origin` は、組み込みのファイルの行(propagator、source、sink)には書かない**: 書かなければ、組み込みの行は `builtin` になる(`internal/model/model.go` の `fillOrigins`)。`origin` は「誰がその行を正しいと決めたか」で、`--deterministic-only` が `origin: llm` の行を無視すること、finding の `models` に `origin` が載ること、`llm` の行が経路にあれば `llm_influenced` が立つこと(`internal/taint/engine.go`)にだけ使う。**書くのは、LLM が決めた行だけ**: `origin: llm` に、`decided_at`、`rationale`、`model_version` を付ける(足りないと、ファイルが読めない)。組み込みのファイルに `origin: human` を書くことはできるが、書かなくてよい。zoo に、肯定と否定のセルを足す(Go は、骨組みとセルのテンプレートを `-gen-skeleton` で作れる。下)。`rivus models coverage` で、未モデルの呼び出しを確認する。zoo のセルが当たらないパッケージの行は、`ARGS="-write-dead-allow"` が、モデルのファイルの `.dead-allow` に、理由(`dependency`)つきで足す(4 節の範囲で)。

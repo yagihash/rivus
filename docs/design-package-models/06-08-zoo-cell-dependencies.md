@@ -46,7 +46,7 @@
 
 事実(試して分かったこと):
 - Go: 独立したモジュール(`zoo-go` の外)は、`zoo-go` の `./...` に入らない。`go build`、`-tags zooexec`、`rivus analyze` が通り、`github.com/gin-gonic/gin` の骨組みの `Context.Query` から `mark.SinkCmd` への finding が出た。
-- Rust: **サンドボックスは、対象のディレクトリの外にある path の依存を読めない**(`../../zoo-rust/zoo-mark` は、取得の段で読めずに失敗した)。`zoo-mark` は、テストが対象のディレクトリに写す(今の `zooRustCopy` と同じ)。写せば、サンドボックスの下で動き、finding が出た。取得したクレートは動かしていない(取得そのものがない)。
+- Rust: **サンドボックスは、対象のディレクトリの外にある path の依存を読めない**(`../../zoo-rust/zoo-mark` は、取得のステップで読めずに失敗した)。`zoo-mark` は、テストが対象のディレクトリに写す(今の `zooRustCopy` と同じ)。写せば、サンドボックスの下で動き、finding が出た。取得したクレートは動かしていない(取得そのものがない)。
 - **実装済み(`cmd/rivus/zoo_pkg_test.go`)**: テストは、`bench/zoo-go-pkg/*` と `bench/zoo-rust-pkg/*` を、ディレクトリから探す(一覧はない)。`TestZooPkgGo` と `TestZooPkgRust` が、パッケージごとに、3 回の実行(全部のケースが走り、全部の文が走る)、真の注釈の照合、rivus の照合を行う。Go の実行用の `cmd/observe` は、overlay で作る(リポジトリに生成しない)。Rust の実行用の crate は、一時のディレクトリに書く(共有の target で、zoo-mark は 1 度だけビルド)。マークの固定(`zooMarksRows`)と、一致した行の数え上げ(`goZooSymbols`、`rustZooSymbols`)も、同じディレクトリを探す。**zoo 全体の検査(`TestFuncValues*`、パリティ、純粋の行、コールバックの行など)は、`bench/zoo-go`、`bench/zoo-rust` だけを読む**ので、骨組みの `Dep` は入らない。依存の関数を数えるのは、一致した行の数え上げだけ(骨組みを呼ぶことが、その行に当たることなので)。合成の `zoo_synth`(Go と Rust)で確かめた。
 - CI: paths-filter の dart と rust に `!bench/zoo-go-pkg/**`(rust と dart)と `!bench/zoo-rust-pkg/**`(dart)を足した。Go のパッケージは `test` のジョブが、Rust のパッケージは `rust` のジョブが、テストの中で拾う(ステップを足さない)。Rust のパッケージは、1 つのジョブの中で順に、共有の target で動く(zoo-mark と標準ライブラリのビルドは 1 度。パッケージごとに足されるのは、骨組みとセルのビルドと、抽出の数秒)。
 - **zoo-mark の渡し方(Rust のサンドボックス)**: (a) テストが、パッケージを一時のディレクトリに写し、zoo-mark も写して、`Cargo.toml` の path を書き換える(採用。共有のファイルが増えない。コミットしたパッケージは、リポジトリの中でも `cargo check` が通る)。(b) サンドボックスの読み取りの許可に、zoo-mark の場所を足す(エンジンの隔離の変更になり、対象の外を読ませる許可が増える。採らない)。(c) パッケージごとに zoo-mark をコミットする(写しが増える。採らない)。

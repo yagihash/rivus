@@ -317,13 +317,13 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `graph`(`info` 以外) | `--limit <k>` | 並べる数の上限 | `50`(`path` は 5 本) |
 | `graph callers`、`callees` | `--include-builtin` | 組み込み関数の呼び出しを残す | 省く |
 | `graph callers`、`callees` | `--site <id>` | 対象を、サイトの ID で指定する | なし |
-| `graph callers`、`callees`、`path` | `--refs` | 参照(値として渡された関数)もたどる。`path` は、参照の段から探す | たどらない(`path` は最後の段だけ) |
+| `graph callers`、`callees`、`path` | `--refs` | 参照(値として渡された関数)もたどる。`path` は、参照のフェーズから探す | たどらない(`path` は最後のフェーズだけ) |
 | `graph`(`info` 以外) | `--avoid`、`--avoid-call`、`--only-impl` | フィルタ(3 章) | なし |
 | `graph callers`、`callees`、`path` | `--via <symbol>` | その関数を通るものだけ | なし |
 | `graph path` | `--from <target>` / `--from-entry` | 始点 / プログラムの起点から(どちらか 1 つ) | なし |
 | `graph path` | `--to <target>` | 終点(必須) | なし |
 | `graph path` | `--hubs` | 候補の多い呼び出し(ハブ)も、最初から使って探す | 経路がないときだけ |
-| `graph path` | `--no-refs` | 参照をたどらない | 最後の段でたどる |
+| `graph path` | `--no-refs` | 参照をたどらない | 最後のフェーズでたどる |
 
 ### 診断と調整のフラグ(`-help-all` に出るもの)
 
@@ -335,7 +335,7 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `-pass-stats-top <n>` | `packages_top` に並べるパッケージの数(0 = 全部) | `20` |
 | `-pass-stats-sort <key>` | `packages_top` の並び: `reanalyses`、`time`、`functions`、`elems` | `reanalyses` |
 | `-func-timeout <時間>` | 1 つの関数の解析の上限(止めた所は `depth_limit` の `func_timeout`) | `30s` |
-| `-max-memory <サイズ>` | メモリの上限(やわらかい。`6GiB`、`6GB`、`512MiB`、バイト数、`off`)。合計が上限に近づくと、GC が強くなる。結果は変わらない。**生きている量より低いと守れず、GC が回り続けて CPU が増える**。`GOMEMLIMIT` より優先。`summary.memory_limit_*` に出る(ADR-121) | `GOMEMLIMIT`、なければ物理メモリ(cgroup があれば小さいほう)の 1/4。小さい計算機は `max(1/4, min(4GiB, 1/2))` |
+| `-max-memory <サイズ>` | メモリの上限(やわらかい。`6GiB`、`6GB`、`512MiB`、バイト数、`off`)。合計が上限に近づくと、GC が強くなる。結果は変わらない。**ライブヒープ(強制 GC のあとの量)より低いと守れず、GC が回り続けて CPU が増える**。`GOMEMLIMIT` より優先。`summary.memory_limit_*` に出る(ADR-121) | `GOMEMLIMIT`、なければ物理メモリ(cgroup があれば小さいほう)の 1/4。小さい計算機は `max(1/4, min(4GiB, 1/2))` |
 | `-max-passes <n>` | 要約が変わるあいだ、プログラム全体を繰り返す回数の上限 | `12` |
 | `-k <n>` | アクセスパス(フィールドのたどり方)の深さの上限 | `3` |
 | `-dep-k <n>` | **依存の関数だけ**のアクセスパスの深さ。既定 2(プロジェクトの関数は `-k`、既定 3)。0 は `-k` と同じ。`-dep-k 3` で、既定が 2 になる前の動作。切った所より下はまるごと汚染として扱うので、深さを下げると finding は減らず、増えることがある。切った所を通った値の流れには、`access_path_truncated` の注記が付く(ADR-119) | `2` |
@@ -374,7 +374,7 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `paths[0].steps[]` | 経路のステップ: `func`、`position`、`snippet`、`desc`(`source: ...`、`call ...`、`store`、`load`、`propagated by ...`、`sink: ...` など)、`notes`(そのステップの不確実性)、`model`(そのステップを決めたモデルと `origin`) |
 | `uncertainties[]` | 経路の上の不確実性の全部。**最初に読む場所** |
 | `confidence` | 経路に不確実性が 1 つもなければ `no_uncertainty_on_path`、あれば `requires_review`。**本物かどうかの判定ではありません**(サニタイズや認証は見ていません) |
-| (注意) | アクセスパスを深さの上限で切った所を、値が通った段には、`access_path_truncated` の注記が付きます(切った所より下は、まるごと汚染として扱うので、その先の流れは、切ったために出ているだけかもしれません)。使った深さは `summary.access_path_depth`。ただし、ポインタの位置のパスを切る所(ループで伸びるパスの打ち切り)には付きません |
+| (注意) | アクセスパスを深さの上限で切った所を、値が通ったステップには、`access_path_truncated` の注記が付きます(切った所より下は、まるごと汚染として扱うので、その先の流れは、切ったために出ているだけかもしれません)。使った深さは `summary.access_path_depth`。ただし、ポインタの位置のパスを切る所(ループで伸びるパスの打ち切り)には付きません |
 | `reachability` | 経路の関数が、プログラムの起点から届くか: `from_entry`、`from_framework_callback`、`not_from_entry`。`not_from_entry` は「使われていないコード」の意味ではありません(フレームワークに登録したハンドラなど) |
 | `dispatch_widened`、`dispatch_candidates` | 経路の上で、複数の実装に広げた動的な呼び出しの数と、その候補の最大の数。大きいほど、経路が本物でない可能性が上がります |
 | `other_sources`、`other_sources_count` | 同じ sink に届く、同じ種類のほかの source(最大 5 件。数は全部) |
@@ -395,8 +395,8 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `unmodeled_library_call` | 本体もモデルもない関数を通った。「引数は結果に伝わる」と近似した | その関数の動作を調べる(値を加工して無害にするか、そのまま返すか)。必要ならモデルを書く |
 | `dependency_body_unread` | モデルのあるインターフェースの呼び出しの候補に、依存の本体があったが、読まなかった(Go) | 依存が、自分のコードの実装へ値を渡していないかを確認する |
 | `project_body_unread` | プロジェクトの関数の本体を、extractor が読めなかった(Rust の async closure など)。依存の関数なら `dependency_body_unread`。数は `summary.functions_skipped` | その関数の中を、自分で読む。`detail` に理由 |
-| `depth_limit` | 解析の上限で止めた。理由は `detail` の先頭の語: `budget`(作業量)、`func_timeout` / `run_timeout`(時計)、`candidate_limit`(関数値の候補が多すぎて、どれも追わなかった)、`path_limit`(アクセスパスを切った)、`out_limit`(要約の 1 つの出力が 24 要素を超え、パラメータの別の部分を、パラメータ全体に畳んだ。`candidates` に関数の一覧。多めに出る側)、`out_widened`(経路の**段**に付き、その段を通る finding の `uncertainties` にも出る。畳んだ出力の、パラメータ全体になった要素を適用した段。付くと `confidence` は `requires_review`。多めに出る側)など | その関数の要約は、流れを落としていることがある。その関数の周辺は、見逃しがある前提で、コードを読む。ただし `out_limit` のときは逆で、その関数を通る流れが、フィールドを区別せずに(多めに)出ていることがある。別のフィールドの値が実際に届くかを、コードで確認する |
-| `access_path_truncated` | 経路のこの段で、値がアクセスパスを深さの上限(`-k`、依存の関数は実験の `-dep-k`)で切った所を通った。切った所より下を、まるごと汚染として扱うので、この先の流れは、切ったために出ているだけかもしれない(別のフィールドへの流れを出していることがある。多めに出る側で、見逃しにはならない)。使った深さは `summary.access_path_depth`(`{project, dependency}`、いつも出る) | その段で、フィールドを通る所が、実際にそのフィールドの値を運ぶかを、コードで確かめる |
+| `depth_limit` | 解析の上限で止めた。理由は `detail` の先頭の語: `budget`(作業量)、`func_timeout` / `run_timeout`(時計)、`candidate_limit`(関数値の候補が多すぎて、どれも追わなかった)、`path_limit`(アクセスパスを切った)、`out_limit`(要約の 1 つの出力が 24 要素を超え、パラメータの別の部分を、パラメータ全体に畳んだ。`candidates` に関数の一覧。多めに出る側)、`out_widened`(経路の**ステップ**に付き、そのステップを通る finding の `uncertainties` にも出る。畳んだ出力の、パラメータ全体になった要素を適用したステップ。付くと `confidence` は `requires_review`。多めに出る側)など | その関数の要約は、流れを落としていることがある。その関数の周辺は、見逃しがある前提で、コードを読む。ただし `out_limit` のときは逆で、その関数を通る流れが、フィールドを区別せずに(多めに)出ていることがある。別のフィールドの値が実際に届くかを、コードで確認する |
+| `access_path_truncated` | 経路のこのステップで、値がアクセスパスを深さの上限(`-k`、依存の関数は実験の `-dep-k`)で切った所を通った。切った所より下を、まるごと汚染として扱うので、この先の流れは、切ったために出ているだけかもしれない(別のフィールドへの流れを出していることがある。多めに出る側で、見逃しにはならない)。使った深さは `summary.access_path_depth`(`{project, dependency}`、いつも出る) | そのステップで、フィールドを通る所が、実際にそのフィールドの値を運ぶかを、コードで確かめる |
 | `recursion_approximation` | 互いに呼び合う関数のかたまりを、近似で閉じた | そのかたまりの中の流れは、粗い |
 | `missing_source` | コードが見えなかった(型エラーでビルドできないパッケージ、生成されていないコード) | そのパッケージの中は見ていない。`summary.unread` を見て、ビルドや生成を済ませてやり直す |
 | `container_element_imprecision` | コンテナ(スライス、マップ)の要素を区別していない | 汚染された要素と、sink に入る要素が同じかを、コードで確認する |
@@ -432,10 +432,10 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `summary.numeric_stops` | 数値や bool の型の値に汚染を載せなかった(既定。`-numeric-taint` で追う)回数を、原因で 2 つに分けたもの。`char_reads`: 文字列・byte 列・rune 列の 1 要素として読んだ値(Go の `s[i]`、`range s`、rune、Dart の `codeUnitAt`)で止まった数(`total`、`functions`、回数の多い 10 関数 `top[]` の `function`・`scope`(`project` か `dependency`)・`count`)。定数の添字の `s[0]` は数えない。**数える形は言語で違い、数えない形は 0 のままで、止まっていないとは限らない**: Go は byte・rune の型と、定数でない添字の文字列の添字。Dart は `codeUnitAt`、`codeUnits`・`runes` の繰り返しと添字(`runes.map((r) => ...)` のコールバックに渡る要素は数えない)。Rust は `bytes()`・`chars()`・`char_indices()` の繰り返し、`as_bytes()[i]`、`char` 型(それ以外の Rust の byte の取り出しは数えない。#185)。`other`: 長さ、添字、カウンタ、数値への変換、比較、モデルが作る数で止まった数(`total`、`functions`。仕様どおりなので、数だけ)。`total` は両方の合計。呼び出し先の要約を作る間と使う間の分も、止まった関数に数える。**常に出る**(0 のときも)。**`char_reads` の関数は、文字を 1 つずつ扱っている(字句解析、1 文字ずつの置換・符号化)ので、期待した sink が出ないときは、まずそこを見る**(流れがそこで切れている可能性がある。課題 #185)。**数は、場所の数ではなく、止めた回数で、関数の中の反復で、同じ場所が複数回入ることがある。大小の比較に使う目安であり、たとえば 407 は 407 か所ではない。時間切れが起きた実行では、数が実行ごとに変わりうる(打ち切られた訪問では、前の値との大きいほうを残す。時間切れが 0 の実行では変わらない)。**`project` の関数があると、標準エラーに `N functions stopped a flow at per-character reads: summary.numeric_stops` が 1 行出る。`numeric_stop` の注記(source ごとに 1 件)とは別の数 |
 | `summary.skipped_dirs`、`outside_configuration` | 読まなかったディレクトリ、ビルドの条件で外れたファイル |
 | `summary.memory_limit_bytes` / `memory_limit_source` / `memory_limit_note` | その実行のメモリの上限(上限なしのときは `memory_limit_bytes` がない)。出所は `flag`、`env`、`default`、`none`。`note` は、上限がない理由、または `-max-memory` が `GOMEMLIMIT` を上書きしたこと。結果には影響しない |
-| `summary.memory_limit_exceeded` | **メモリの上限が低すぎたか**。実行の間に、Go のランタイムが使っていたメモリ(`memory_peak_bytes`)が上限を **5% 以上超えた**ことがあれば `true`(`peak > limit × 1.05`。やわらかい上限が守れているときも、ピークは上限の近くに張りつくので、ちょうどを境目にしない)。`true` は、上限が、解析の生きている量より低く、守れず、GC が回り続けて、時間が増えた可能性が高いことを言う。**`-max-memory` を上げて、再実行する**。やわらかい上限なので、`true` でも結果は完全(`incomplete` とは別)。上限がないとき(`memory_limit_source: none`)は、この項目がない |
+| `summary.memory_limit_exceeded` | **メモリの上限が低すぎたか**。実行の間に、Go のランタイムが使っていたメモリ(`memory_peak_bytes`)が上限を **5% 以上超えた**ことがあれば `true`(`peak > limit × 1.05`。やわらかい上限が守れているときも、ピークは上限の近くに張りつくので、ちょうどを境目にしない)。`true` は、上限が、解析のライブヒープ(強制 GC のあとの量)より低く、守れず、GC が回り続けて、時間が増えた可能性が高いことを言う。**`-max-memory` を上げて、再実行する**。やわらかい上限なので、`true` でも結果は完全(`incomplete` とは別)。上限がないとき(`memory_limit_source: none`)は、この項目がない |
 | `summary.memory_peak_bytes` | 実行の間に、ランタイムが使っていたメモリの最大(バイト)。Go の数え方(ランタイムが持つメモリの合計から、OS に返したヒープを引いた量。`SetMemoryLimit` が見る量と同じ)で、プロセスの RSS とは同じでない。250ms ごとと終了時に読む(速く増えて減る山は、見えないことがある)。`memory_limit_exceeded` を決めた根拠 |
 | `summary.gc_cpu_fraction` | 実行全体の CPU 時間のうち、GC が使った割合(0 以上 1 以下、小数 3 桁)。上限がなくても、いつも出る。上限が効いていたかの目安(上限が低すぎると大きくなる) |
-| `summary.live_heap_max_bytes` | 実行の間に、GC が目印を付けた、生きているヒープの最大(バイト。`/gc/heap/live:bytes`、直近の GC が目印を付けた量の最大)。GC がマークをしている間に確保された物も「生き」と数えるので、確保の速い段(要約の段)では、本当の生きている量より大きくなりうる。上限の目安として見るときは上側の値で、読み込みの段の山では本当の生きている量に近い。**これが上限より低いことは、上限が守れることの必要条件ではない**(守れるかは `memory_limit_exceeded` と `gc_cpu_fraction` を見る)。`memory_peak_bytes` と違い、やわらかい上限があっても上限に張りつかない。上限がなくても、いつも出る。250ms ごとと終了時に読み、GC がまだ終わっていないとき(短い実行)は 0 で、項目がない |
+| `summary.live_heap_max_bytes` | 実行の間に、GC のマーク時点のライブヒープの最大(バイト。`/gc/heap/live:bytes`、直近の GC が目印を付けた量の最大)。GC がマークをしている間に確保された物も「ライブ」と数えるので、確保の速いフェーズ(要約のフェーズ)では、強制 GC のあとのライブヒープより大きくなりうる。上限の目安として見るときは上側の値で、読み込みのフェーズの山では強制 GC のあとのライブヒープに近い。**これが上限より低いことは、上限が守れることの必要条件ではない**(守れるかは `memory_limit_exceeded` と `gc_cpu_fraction` を見る)。`memory_peak_bytes` と違い、やわらかい上限があっても上限に張りつかない。上限がなくても、いつも出る。250ms ごとと終了時に読み、GC がまだ終わっていないとき(短い実行)は 0 で、項目がない |
 | `summary.load_dependent` | `true` なら、時計の上限(`-timeout`、`-func-timeout`)で止めた所があり、結果がマシンの負荷で変わる |
 | `summary.dependency_sites` | 依存の本体を読んだ実行で毎回出る。`searched` は常に `false`、`dependency_functions` は読んだ依存の関数の数(同じ module のパッケージと、`-allow-deps-under` の下の path 依存は、プロジェクトなので入らない。ADR-114)。**source と sink は、プロジェクトの関数の中だけで探す**(依存の本体は、流れを追うために読む)。ライブラリの中で危険な処理に届く形は、プロジェクトがその API を呼ぶ所に sink のモデルがないと検出されないので、「finding なし」は、その形がないことの証拠ではない。`-no-deps` と、依存の関数が 0 のときは出ない |
 | `summary.categories_excluded` | `-categories` / `-skip-categories` で出力から外した finding の、カテゴリごとの件数(`category`、`findings`。カテゴリの順)。外した分は `summary.findings` と `findings` に入っていない。**外した件数だけを出す**ので、「この件数の finding が、読んでいない所にある」という意味。何も外さなかったとき(フラグなしを含む)は出ない |

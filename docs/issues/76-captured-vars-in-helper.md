@@ -53,7 +53,7 @@ ADR-047(案 2)で直る見込み(呼び出し元が、自分が渡したクロ�
 
 根は同じ(`applySummary` が、足りない引数を `KUndef` で何も報告せずに埋める)。dart-curated の `@miss` 32 件のうち、「source か sink のある関数に不確実性が 1 つも出ない」ものが 19 件、何か出る(`dynamic_dispatch` / `unresolved_callee`)ものが 13 件。19 件のうち、キャプチャの読み書き(run、write、add-list、nest、relay-c、twice-args、across-cap、when-complete)の 13 件前後がこの型。残り(catch-error、completer、future-error、on-error、through、put-if-absent)は別の原因のはず(#80、#77 など)。集計は関数の範囲を行の見当で取ったので、±1 件の誤差がありうる。
 
-提案の 2 段:
+提案の 2 ステップ:
 1. すぐ: 足りないのが、クロージャのキャプチャの分(`Captured` のパラメータ)のときは、何も報告せずに埋めることはせず、不確実性を出す(`attributable_to: rivus`、「このクロージャがキャプチャした値は、ここでは分からない(クロージャは別の関数で作られた)」)。省略できる引数のための埋め方は今のままでよい
 2. 本体: 案 2(ADR-047)で、呼び出し元が自分のクロージャを具体化するときに `make_closure` の引数をキャプチャの値として渡す。受け入れのフィクスチャに `run-a` / `run-b`
 
