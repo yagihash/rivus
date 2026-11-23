@@ -1,0 +1,2 @@
+go	clos/to_nomodel/to_nomodel.go	sink-none	@sink(none)	func fixed() { @fixed
+go	clos/to_nomodel/to_nomodel.go	sink-none	@sink(none) @nosink(clos-to-nomodel-decoy)	func decoy() { @decoy

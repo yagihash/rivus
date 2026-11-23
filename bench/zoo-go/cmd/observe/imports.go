@@ -17,6 +17,7 @@ import (
 	_ "zoo/cells/clos/returned"
 	_ "zoo/cells/clos/stored"
 	_ "zoo/cells/clos/to_lib"
+	_ "zoo/cells/clos/to_nomodel"
 	_ "zoo/cells/clos/to_own_helper"
 	_ "zoo/cells/clos/two_callers"
 	_ "zoo/cells/cont/map_key_vs_value"
