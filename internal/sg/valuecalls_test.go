@@ -88,7 +88,7 @@ func candidatesOf(t *testing.T, funcs ...*ir.Func) map[string][]string {
 	if err := prog.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	g, err := Build(prog)
+	g, err := Build(ir.MemSource(prog))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +241,7 @@ func TestValueCallBindingsOnlyFromTheFunctionThatMadeTheClosure(t *testing.T) {
 	if err := prog.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	g, err := Build(prog)
+	g, err := Build(ir.MemSource(prog))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -368,7 +368,7 @@ func TestValueCallCandidatesKnowTheParameterTheyCameThrough(t *testing.T) {
 	if err := prog.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Build(prog); err != nil {
+	if _, err := Build(ir.MemSource(prog)); err != nil {
 		t.Fatal(err)
 	}
 	cands := func(fn string) []ir.ValueCand {

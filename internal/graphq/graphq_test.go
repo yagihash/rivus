@@ -129,7 +129,7 @@ func build(t *testing.T, fns []fnDef, ss ...*sites.Site) *graphq.Engine {
 	}
 	entryIDs, exportedIDs = nil, nil
 	defer func() { testUnread, testKeyConfig, testBrokenUnread = &graphdb.Unread{}, nil, false }()
-	g, err := sg.Build(p)
+	g, err := sg.Build(ir.MemSource(p))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -108,27 +108,26 @@ func crateOf(id string) string {
 
 // linkedCrates are the crates of the functions that the entries of the program reach: by calls (static, the
 // candidates of dynamic calls and of function values) and by closures that are made.
-func linkedCrates(prog *ir.Program) map[string]bool {
-	byID := make(map[ir.FuncID]*ir.Func, len(prog.Funcs))
-	for _, f := range prog.Funcs {
-		byID[f.ID] = f
-	}
-	idx := ir.NewClosureIndex(prog.Funcs)
+func linkedCrates(src ir.Source) map[string]bool {
+	idx := ir.NewClosureIndexOf(src)
 	seen := map[ir.FuncID]bool{}
 	var work []ir.FuncID
 	visit := func(id ir.FuncID) {
-		if id != "" && !seen[id] && byID[id] != nil {
+		if id != "" && !seen[id] {
+			if _, ok := src.Lookup(id); !ok {
+				return
+			}
 			seen[id] = true
 			work = append(work, id)
 		}
 	}
-	for _, f := range prog.Funcs {
+	ir.Walk(src, func(_ ir.Ref, f *ir.Func) {
 		if f.Entry && !f.Init {
 			visit(f.ID)
 		}
-	}
+	})
 	for len(work) > 0 {
-		f := byID[work[len(work)-1]]
+		f, _ := ir.Get(src, work[len(work)-1])
 		work = work[:len(work)-1]
 		for bi := range f.Blocks {
 			for ii := range f.Blocks[bi].Instrs {
@@ -171,8 +170,8 @@ func linkedCrates(prog *ir.Program) map[string]bool {
 func narrowCalls(r *resolver) {
 	prog := r.prog
 	any := false
-	for _, f := range prog.Funcs {
-		if ir.IsClosureID(string(f.ID)) {
+	for i, n := 0, r.src.Len(); i < n; i++ {
+		if h := r.src.Head(i); !h.Gone && ir.IsClosureID(string(h.ID)) {
 			any = true
 			break
 		}
@@ -180,24 +179,24 @@ func narrowCalls(r *resolver) {
 	if !any {
 		return
 	}
-	n := &narrower{r: r, idx: ir.NewClosureIndex(prog.Funcs), valueRef: map[ir.FuncID]bool{}, inCands: map[ir.FuncID]bool{},
+	n := &narrower{r: r, idx: ir.NewClosureIndexOf(r.src), valueRef: map[ir.FuncID]bool{}, inCands: map[ir.FuncID]bool{},
 		fields: map[string]*fieldInfo{}, cells: map[cellKey]*cellInfo{}}
 	// the closed world: the program starts somewhere (main), nothing in it is called from outside by its symbol, and the
 	// extractor says it marks what is (without that, "no mark" says nothing)
 	entry, external := false, false
-	for _, f := range prog.Funcs {
+	ir.Walk(r.src, func(_ ir.Ref, f *ir.Func) {
 		external = external || f.ExternalEntry
 		entry = entry || (f.Entry && !f.Init)
-	}
+	})
 	n.closed = entry && !external && prog.CallerMarks
 	if n.closed {
-		n.linked = linkedCrates(prog)
+		n.linked = linkedCrates(r.src)
 	}
 	if r.callers == nil {
 		r.indexCallers()
 	}
 	var calls []*callSite
-	for _, f := range prog.Funcs {
+	ir.Walk(r.src, func(_ ir.Ref, f *ir.Func) {
 		for bi := range f.Blocks {
 			for ii := range f.Blocks[bi].Instrs {
 				in := &f.Blocks[bi].Instrs[ii]
@@ -214,7 +213,7 @@ func narrowCalls(r *resolver) {
 				}
 			}
 		}
-	}
+	})
 	var done []narrowing
 	for _, c := range calls {
 		in := &c.fn.Blocks[c.b].Instrs[c.i]
@@ -509,7 +508,7 @@ func (n *narrower) indexFields() {
 		return
 	}
 	n.indexed = true
-	for _, f := range n.r.prog.Funcs {
+	ir.Walk(n.r.src, func(_ ir.Ref, f *ir.Func) {
 		var form *irssa.Form
 		for bi := range f.Blocks {
 			for ii := range f.Blocks[bi].Instrs {
@@ -547,7 +546,7 @@ func (n *narrower) indexFields() {
 				}
 			}
 		}
-	}
+	})
 }
 
 // sharedLocal: the local is typed as a shared reference (`&T`, not `&mut T`).

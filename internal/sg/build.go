@@ -10,20 +10,30 @@ import (
 )
 
 // Build makes the SSA graph of every function of the program.
-func Build(p *ir.Program) (*Program, error) { return build(p, false) }
+func Build(src ir.Source) (*Program, error) { return build(src, false) }
 
-// BuildConsuming is Build that drops the functions of the IR program as it
-// goes (p.Funcs is empty afterwards): the graph keeps what it needs, and the
-// program is not in memory twice.
-func BuildConsuming(p *ir.Program) (*Program, error) { return build(p, true) }
+// BuildConsuming is Build that lets the source go of the functions as it
+// goes (the source is released afterwards): the graph keeps what it needs, and
+// the program is not in memory twice.
+func BuildConsuming(src ir.Source) (*Program, error) { return build(src, true) }
 
-func build(p *ir.Program, consume bool) (*Program, error) {
-	valuecalls.Resolve(p)
+func build(src ir.Source, consume bool) (*Program, error) {
+	valuecalls.Resolve(src)
+	p := src.Header()
 	out := &Program{IR: p, ByID: map[string]*Func{}, Globals: map[string]*Value{}, GlobalPos: map[string]ir.Pos{}}
 	for _, g := range p.Globals {
 		out.GlobalPos[g.Name] = g.Pos
 	}
-	for i, f := range p.Funcs {
+	for i, n := 0, src.Len(); i < n; i++ {
+		h := src.Head(i)
+		if h.Gone {
+			continue
+		}
+		ref := ir.Ref{ID: h.ID, Seq: i}
+		f, err := src.Func(ref)
+		if err != nil {
+			return nil, &ir.ReadError{Ref: ref, Err: err}
+		}
 		for bi := range f.Blocks {
 			for _, e := range f.Blocks[bi].Succs {
 				if e.Kind == ir.EdgeException {
@@ -38,11 +48,11 @@ func build(p *ir.Program, consume bool) (*Program, error) {
 		out.Funcs = append(out.Funcs, fn)
 		out.ByID[fn.ID] = fn
 		if consume {
-			p.Funcs[i] = nil
+			src.Drop(ref)
 		}
 	}
 	if consume {
-		p.Funcs = nil
+		src.Release()
 	}
 	out.infos = nil
 	out.link()

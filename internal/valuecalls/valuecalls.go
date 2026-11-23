@@ -34,16 +34,17 @@ const most = ir.ValueCandidateMost
 const maxDepth = 3
 
 // Resolve sets ValueCands of the calls of function values. It does it once.
-func Resolve(prog *ir.Program) {
+func Resolve(src ir.Source) {
+	if src == nil {
+		return
+	}
+	prog := src.Header()
 	if prog == nil || prog.ValuesResolved {
 		return
 	}
 	prog.ValuesResolved = true
-	r := &resolver{prog: prog, byID: make(map[ir.FuncID]*ir.Func, len(prog.Funcs)), forms: map[*ir.Func]*irssa.Form{}}
-	for _, f := range prog.Funcs {
-		r.byID[f.ID] = f
-	}
-	for _, f := range prog.Funcs {
+	r := &resolver{src: src, prog: prog, forms: map[*ir.Func]*irssa.Form{}}
+	ir.Walk(src, func(_ ir.Ref, f *ir.Func) {
 		for bi := range f.Blocks {
 			for ii := range f.Blocks[bi].Instrs {
 				in := &f.Blocks[bi].Instrs[ii]
@@ -53,7 +54,7 @@ func Resolve(prog *ir.Program) {
 				r.resolve(f, bi, ii, in)
 			}
 		}
-	}
+	})
 	narrowCalls(r)
 	r.forms = nil
 	r.callers = nil
@@ -66,8 +67,8 @@ type callSite struct {
 }
 
 type resolver struct {
-	prog    *ir.Program
-	byID    map[ir.FuncID]*ir.Func
+	src     ir.Source
+	prog    *ir.Program // the header of src: what is not a function
 	forms   map[*ir.Func]*irssa.Form
 	callers map[ir.FuncID][]callSite
 	// makers lists where each closure is made (the make_closure instructions that name it): what a captured variable holds is
@@ -101,8 +102,8 @@ func (r *resolver) form(f *ir.Func) *irssa.Form {
 
 func (r *resolver) candOf(id ir.FuncID, via int) ir.ValueCand {
 	c := ir.ValueCand{ID: id, Symbol: string(id), Param: via}
-	if f := r.byID[id]; f != nil {
-		c.Symbol, c.Recv = f.Symbol, f.Recv
+	if h, ok := ir.HeadOf(r.src, id); ok {
+		c.Symbol, c.Recv = h.Symbol, h.Recv
 	} else {
 		c.Recv = strings.HasPrefix(string(id), "(")
 	}
@@ -189,7 +190,7 @@ func (r *resolver) resolve(fn *ir.Func, bi, ii int, in *ir.Instr) {
 // the candidates of the others.
 func (r *resolver) indexCallers() {
 	r.callers = map[ir.FuncID][]callSite{}
-	for _, f := range r.prog.Funcs {
+	ir.Walk(r.src, func(_ ir.Ref, f *ir.Func) {
 		for bi := range f.Blocks {
 			for ii := range f.Blocks[bi].Instrs {
 				in := &f.Blocks[bi].Instrs[ii]
@@ -210,13 +211,13 @@ func (r *resolver) indexCallers() {
 				}
 			}
 		}
-	}
+	})
 }
 
 // indexMakers lists the make_closure instructions of each closure.
 func (r *resolver) indexMakers() {
 	r.makers = map[ir.FuncID][]callSite{}
-	for _, f := range r.prog.Funcs {
+	ir.Walk(r.src, func(_ ir.Ref, f *ir.Func) {
 		for bi := range f.Blocks {
 			for ii := range f.Blocks[bi].Instrs {
 				in := &f.Blocks[bi].Instrs[ii]
@@ -225,7 +226,7 @@ func (r *resolver) indexMakers() {
 				}
 			}
 		}
-	}
+	})
 }
 
 // directFunc is the function that a call of a function value calls, when the
