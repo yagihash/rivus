@@ -396,6 +396,7 @@ func (o *analyzeOpts) rawRustIsolated() ([]byte, error) {
 		dir = d
 	}
 	iso := o.isolation()
+	iso.verbose = o.verbose
 	var args []string
 	if o.noDeps {
 		args = append(args, "--no-deps")
@@ -405,7 +406,11 @@ func (o *analyzeOpts) rawRustIsolated() ([]byte, error) {
 	}
 	args = append(args, o.bodyReplacedArgs(langRust)...)
 	args = append(args, dir)
-	return iso.extractRustSandboxed(context.Background(), dir, args)
+	out, err := iso.extractRustSandboxed(context.Background(), dir, args)
+	if o.rustIsolation != nil {
+		o.rustIsolation.DeveloperDir = iso.developerDir
+	}
+	return out, err
 }
 
 // bodyReplacedArgs are the flags that tell the extractor of the language which packages it does not read: the models

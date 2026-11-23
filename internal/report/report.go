@@ -347,6 +347,15 @@ type Isolation struct {
 	// or "host" (-unsafe-host-exec: the build scripts and the macros ran on this machine, with the rights of the user, without isolation).
 	Mode   string `json:"mode"`
 	Detail string `json:"detail"`
+	// DeveloperDir is the DEVELOPER_DIR that the build got under the sandbox (macOS); absent when none was set.
+	DeveloperDir *DeveloperDir `json:"developer_dir,omitempty"`
+}
+
+// DeveloperDir is the developer directory of the build: Source is "user" (-isolation-env) or "default" (the Command Line Tools,
+// because the sandbox cannot read Xcode.app).
+type DeveloperDir struct {
+	Value  string `json:"value"`
+	Source string `json:"source"`
 }
 
 // OutsideConfiguration counts the files that the build constraints leave out.
