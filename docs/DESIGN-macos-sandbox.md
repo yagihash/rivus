@@ -6,7 +6,7 @@
 
 ## 0. ユーザーの決定と、前提
 
-- **目的**: `brew install` だけで rivus を使えるようにする。その前のステップとして、Rust の extractor の Docker への依存をなくす(tap と formula は、このあと別に)。
+- **目的**: `brew install` だけで rivus を使えるようにする。その前の作業として、Rust の extractor の Docker への依存をなくす(tap と formula は、このあと別に)。
 - **決めたこと**: Rust の抽出を、Docker のコンテナの代わりに、**macOS のサンドボックス(Seatbelt、`sandbox-exec`)**の下で動かす。**Docker の経路は、CI を含めて丸ごと消す**。対象の環境は macOS(Apple Silicon)。
 - **ユーザーが承知のうえで受け入れたこと**: (1) `sandbox-exec` は、Apple が非推奨にしたまま動いている仕組み。(2) Docker の `--memory` / `--cpus` / `--pids-limit` に相当する**強い**上限がない(時間の上限、プロセスグループごとの kill などで代わりにする)。
 - **上のほかに、Docker より弱くなる所が見つかったら、ユーザーに聞く**(セキュリティの制御の変更。PRINCIPLES 8 節、ADR-064)。7 節に、見つかったものを並べる。
