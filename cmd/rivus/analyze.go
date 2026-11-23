@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"runtime/pprof"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,6 +27,7 @@ type analyzeOpts struct {
 	common
 	k        int
 	depK     int
+	depKSet  bool // -dep-k was given
 	verbose  bool
 	cpuProf  string
 	lockProf string
@@ -110,11 +112,40 @@ func (o *analyzeOpts) registerLanguages(fs *flag.FlagSet) {
 	kind(fs, "file", "dart-extractor", "rust-extractor", "isolation-read")
 }
 
+// depKValue is the flag -dep-k: it remembers that it was given, so that the default does not go deeper than -k.
+type depKValue analyzeOpts
+
+func (v *depKValue) String() string {
+	if v == nil {
+		return ""
+	}
+	return strconv.Itoa(v.depK)
+}
+
+func (v *depKValue) Set(s string) error {
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return err
+	}
+	v.depK, v.depKSet = n, true
+	return nil
+}
+
+// depDepth is the access path depth that the functions of the dependencies get: -dep-k when it was given (0: the same as
+// -k); else the default (2), but never deeper than -k (-k 1 gives 1 in the dependencies too).
+func (o *analyzeOpts) depDepth() int {
+	if o.depK <= 0 || (!o.depKSet && o.k < o.depK) {
+		return o.k
+	}
+	return o.depK
+}
+
 func (o *analyzeOpts) register(fs *flag.FlagSet) {
 	o.common.register(fs)
 	o.registerLanguages(fs)
 	fs.IntVar(&o.k, "k", taint.DefaultOptions().K, "maximum access path depth")
-	fs.IntVar(&o.depK, "dep-k", taint.DefaultOptions().DepK, "maximum access path depth in the functions of the dependencies (0: the same as -k; -dep-k 3 is the depth before the default was 2). A smaller depth makes the analysis of heavy dependencies cheaper and adds flows (a path that is cut stands for everything below it: access_path_truncated)")
+	o.depK = taint.DefaultOptions().DepK
+	fs.Var((*depKValue)(o), "dep-k", "`n` maximum access path depth in the functions of the dependencies (default 2, but not deeper than -k when -dep-k is not given; 0: the same as -k; -dep-k 3 is the depth before the default was 2). A smaller depth makes the analysis of heavy dependencies cheaper and adds flows (a path that is cut stands for everything below it: access_path_truncated)")
 	fs.IntVar(&o.workers, "workers", 0, "functions analysed at the same time (0: one per CPU; 1: one at a time). The result does not depend on it")
 	fs.BoolVar(&o.numeric, "numeric-taint", false, "follow taint through numbers and bools (by default it stops there: they cannot carry an injection)")
 	fs.BoolVar(&o.verbose, "v", false, "print the time of each phase to stderr")
@@ -184,7 +215,7 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	phase("graph")
 	opts := taint.DefaultOptions()
 	opts.K = o.k
-	opts.DepK = o.depK
+	opts.DepK = o.depDepth()
 	opts.Timeout = o.timeout
 	opts.FuncTimeout = o.funcTimeout
 	opts.MaxPasses = o.passes
@@ -305,10 +336,7 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	rep.Summary.CategoriesExcluded = excluded
 	rep.Summary.Isolation = o.rustIsolation
 	rep.Summary.BodyReplacedPackages = replaced
-	rep.Summary.AccessPathDepth = &report.AccessPathDepth{Project: o.k, Dependency: o.k}
-	if o.depK > 0 {
-		rep.Summary.AccessPathDepth.Dependency = o.depK
-	}
+	rep.Summary.AccessPathDepth = &report.AccessPathDepth{Project: o.k, Dependency: o.depDepth()}
 	if fs := report.FunctionsSkippedOf(l.ir.FnSkipped); fs != nil {
 		rep.Summary.FunctionsSkipped = fs
 		fmt.Fprintf(os.Stderr, "rivus: %d functions could not be read by the extractor and were skipped (%d of the project, %d of dependencies): summary.functions_skipped\n", fs.Functions, fs.Project, fs.Dependencies)

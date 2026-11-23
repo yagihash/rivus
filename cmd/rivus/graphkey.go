@@ -120,9 +120,9 @@ func (k *keyCtx) compute() (*keyResult, error) {
 	cfg["flags.no-builtin-rules"] = strconv.FormatBool(o.noBuiltin)
 	cfg["flags.no-project-rules"] = strconv.FormatBool(o.noProject)
 	cfg["flags.deterministic-only"] = strconv.FormatBool(o.deterministic)
-	if o.depK > 0 {
-		cfg["flags.dep-k"] = strconv.Itoa(o.depK)
-	}
+	// the depth the dependencies were read at (the effective one: the default is 2, but not deeper than -k): an index made
+	// at another depth, or by a version that had no such depth, is not this one
+	cfg["flags.dep-k"] = strconv.Itoa(o.depDepth())
 	if o.resolveFuncValues {
 		// the calls that got candidates are edges of the file: an index with the flag is not one without it. Set only when
 		// on, so that the key of an index made without it is what it was.

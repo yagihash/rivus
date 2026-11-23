@@ -18,6 +18,46 @@ import (
 // The flow itself (C to the sink) is found at every depth: lowering the depth adds flows and never removes one. The truth of each
 // depth is written out below, so that a change of the default or of the cut moves a line of this table and nothing else.
 func TestDepthBoundaryGo(t *testing.T) {
+	app := writeDepthFixture(t)
+	runBoundary(t, app)
+}
+
+// The depth that the dependencies get when -dep-k is not given is the default (2), but never deeper than -k; the summary says the
+// values that were used.
+func TestDepthSummaryValues(t *testing.T) {
+	app := writeDepthFixture(t)
+	for _, c := range []struct {
+		args     []string
+		proj, dp int
+	}{
+		{nil, 3, 2},
+		{[]string{"-k", "2"}, 2, 2},
+		{[]string{"-k", "1"}, 1, 1}, // not deeper than the project
+		{[]string{"-k", "1", "-dep-k", "2"}, 1, 2},
+		{[]string{"-dep-k", "3"}, 3, 3},
+		{[]string{"-dep-k", "0"}, 3, 3},
+		{[]string{"-k", "5"}, 5, 2},
+	} {
+		out := runIn(t, binary, app, nil, append([]string{"analyze", "-dep-dir", "../third"}, append(c.args, "./...")...)...)
+		var r struct {
+			Summary struct {
+				AccessPathDepth *struct {
+					Project    int `json:"project"`
+					Dependency int `json:"dependency"`
+				} `json:"access_path_depth"`
+			} `json:"summary"`
+		}
+		if err := json.Unmarshal(out, &r); err != nil {
+			t.Fatal(err)
+		}
+		if d := r.Summary.AccessPathDepth; d == nil || d.Project != c.proj || d.Dependency != c.dp {
+			t.Errorf("%v: access_path_depth = %+v, want project %d, dependency %d", c.args, d, c.proj, c.dp)
+		}
+	}
+}
+
+func writeDepthFixture(t *testing.T) string {
+	t.Helper()
 	root := t.TempDir()
 	third, app := filepath.Join(root, "third"), filepath.Join(root, "app")
 	write(t, filepath.Join(third, "go.mod"), "module example.com/third\n\ngo 1.21\n")
@@ -73,6 +113,11 @@ func main() {
 	http.ListenAndServe(":0", nil)
 }
 `)
+	return app
+}
+
+func runBoundary(t *testing.T, app string) {
+	t.Helper()
 	type finding struct {
 		Sink struct {
 			Func string `json:"func"`
