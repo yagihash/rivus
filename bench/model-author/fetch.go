@@ -21,6 +21,9 @@ type loaded struct {
 	Types   *types.Package
 	Module  string // the module path ("" for the standard library)
 	Version string // the version of the module ("" for the standard library)
+	// ModOf is the module of every package that was read (the package and its dependencies), by import path: a skeleton follows
+	// the types of its own module, and never the types of another one.
+	ModOf map[string]string
 }
 
 func isStdlib(pkg string) bool {
@@ -73,7 +76,12 @@ func FetchAndLoad(dir, pkg, version string) (*loaded, error) {
 	if len(pkgs[0].Errors) > 0 {
 		return nil, &exitError{ExitLoad, fmt.Errorf("cannot read %s: %v", pkg, pkgs[0].Errors[0])}
 	}
-	l := &loaded{Types: pkgs[0].Types}
+	l := &loaded{Types: pkgs[0].Types, ModOf: map[string]string{}}
+	packages.Visit(pkgs, nil, func(p *packages.Package) {
+		if p.Module != nil {
+			l.ModOf[p.PkgPath] = p.Module.Path
+		}
+	})
 	if m := pkgs[0].Module; m != nil {
 		l.Module, l.Version = m.Path, m.Version
 	}

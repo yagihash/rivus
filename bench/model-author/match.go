@@ -17,12 +17,13 @@ type Facts struct {
 	Files []string
 	// by symbol: the file of the row
 	Sinks, Sources, Sanitizers, Flows, Calls map[string]string
-	SourceTypes                              map[string]string // param_type sources: the type
-	SourceFieldPrefix                        map[string]string // field sources: "pkg.Type.*" or "pkg.Type.Field"
-	SinkRows                                 []model.Sink      // of the package, for the recall
-	SourceRows                               []model.Source    // of the package
-	Rejected                                 []RejectedEntry   // of the package
-	BodyReplaced                             []string          // the packages that the files declare (body_replaced_packages)
+	SourceTypes                              map[string]string  // param_type sources: the type
+	SourceFieldPrefix                        map[string]string  // field sources: "pkg.Type.*" or "pkg.Type.Field"
+	SinkRows                                 []model.Sink       // of the package, for the recall
+	SourceRows                               []model.Source     // of the package
+	FlowRows                                 []model.Propagator // of the package: the rows with flows (the skeleton reads them)
+	Rejected                                 []RejectedEntry    // of the package
+	BodyReplaced                             []string           // the packages that the files declare (body_replaced_packages)
 }
 
 // RejectedEntry is a `rejected:` entry and the file it is in.
@@ -116,6 +117,7 @@ func LoadFacts(files []string, pkg string) (*Facts, error) {
 				f.Calls[p.Symbol] = path
 			}
 			if inPackage(p.Symbol, pkg) {
+				f.FlowRows = append(f.FlowRows, p)
 				used[path] = true
 			}
 		}
