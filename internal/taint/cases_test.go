@@ -628,6 +628,25 @@ func TestCallbackRowsApplyTheFunctionThatWasGiven(t *testing.T) {
 	}
 }
 
+// A function without a body and without a model, given a closure, is taken to call it: what it returns reaches
+// the result, and the finding through it says assumed_call, naming the function (ADR-116).
+func TestUnmodeledCallAssumesTheResultOfTheFunctionGiven(t *testing.T) {
+	checkCase(t, "nomodelcb")
+	res, _ := runCase(t, "nomodelcb")
+	if len(res.Findings) != 1 {
+		t.Fatalf("%d findings, want 1", len(res.Findings))
+	}
+	named := false
+	for _, u := range res.Findings[0].Uncertainties {
+		if u.Kind == KindAssumedCall && strings.Contains(u.Detail, "lib.Thunk") && strings.Contains(u.Detail, "Captured$1") {
+			named = true
+		}
+	}
+	if !named {
+		t.Errorf("the finding has no assumed_call that names lib.Thunk and the closure: %+v", res.Findings[0].Uncertainties)
+	}
+}
+
 // A call through an interface is a call to every implementation, unless the
 // caller made the interface value right there: then only the implementation of
 // its type is called.
