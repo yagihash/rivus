@@ -30,10 +30,6 @@ class Items(unittest.TestCase):
         self.assertEqual(g.worse(0, 0), 0)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class WorkersSelfCheck(unittest.TestCase):
     """The same binary with 1 and 8 workers gives the same IR, edges, summaries and findings: the hash of the summaries does not hold the order of the work."""
 
@@ -51,3 +47,7 @@ class WorkersSelfCheck(unittest.TestCase):
                                 "-base-workers", "1", "-head-workers", "8", "-out", d], capture_output=True, text=True)
             self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
             self.assertEqual(p.stdout.count(": same"), 5, p.stdout)
+
+
+if __name__ == "__main__":
+    unittest.main()
