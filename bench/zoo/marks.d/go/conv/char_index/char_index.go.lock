@@ -1,0 +1,2 @@
+go	conv/char_index/char_index.go	sink-none	@sink(none)	func fixed() { @fixed
+go	conv/char_index/char_index.go	sink-none	@sink(none) @nosink(conv-char-index-decoy)	func decoy() { @decoy

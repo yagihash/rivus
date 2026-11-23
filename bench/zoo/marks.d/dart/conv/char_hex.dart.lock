@@ -1,0 +1,4 @@
+dart	conv/char_hex.dart	miss	@source(conv-char-hex-decoy) @miss(silent) @ref(#185)	void decoy() { @decoy
+dart	conv/char_hex.dart	miss	@source(conv-char-hex-vuln) @miss(silent) @ref(#185)	void vuln() { @vuln
+dart	conv/char_hex.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	conv/char_hex.dart	sink-none	@sink(none) @nosink(conv-char-hex-decoy)	void decoy() { @decoy

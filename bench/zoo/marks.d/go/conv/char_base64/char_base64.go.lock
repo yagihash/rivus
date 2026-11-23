@@ -1,0 +1,4 @@
+go	conv/char_base64/char_base64.go	miss	@source(conv-char-base64-decoy) @miss(silent) @ref(#185)	func decoy() { @decoy
+go	conv/char_base64/char_base64.go	miss	@source(conv-char-base64-vuln) @miss(silent) @ref(#185)	func vuln() { @vuln
+go	conv/char_base64/char_base64.go	sink-none	@sink(none)	func fixed() { @fixed
+go	conv/char_base64/char_base64.go	sink-none	@sink(none) @nosink(conv-char-base64-decoy)	func decoy() { @decoy

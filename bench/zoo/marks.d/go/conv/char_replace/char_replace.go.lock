@@ -1,0 +1,4 @@
+go	conv/char_replace/char_replace.go	miss	@source(conv-char-replace-decoy) @miss(silent) @ref(#185)	func decoy() { @decoy
+go	conv/char_replace/char_replace.go	miss	@source(conv-char-replace-vuln) @miss(silent) @ref(#185)	func vuln() { @vuln
+go	conv/char_replace/char_replace.go	sink-none	@sink(none)	func fixed() { @fixed
+go	conv/char_replace/char_replace.go	sink-none	@sink(none) @nosink(conv-char-replace-decoy)	func decoy() { @decoy

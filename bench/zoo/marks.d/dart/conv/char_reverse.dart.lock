@@ -1,0 +1,2 @@
+dart	conv/char_reverse.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	conv/char_reverse.dart	sink-none	@sink(none) @nosink(conv-char-reverse-decoy)	void decoy() { @decoy
