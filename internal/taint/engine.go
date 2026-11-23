@@ -515,8 +515,8 @@ type Stats struct {
 	// stopped by the work limit (Budget: the same on any machine), by the time limit of one
 	// function (-func-timeout: a clock) and by the time limit of the run (-timeout: a clock);
 	// a function is counted once, under the clock when it was stopped by one.
-	BudgetExhausted int `json:"budget_exhausted,omitempty"`
-	FuncTimeouts    int `json:"func_timeouts,omitempty"`
+	BudgetExhausted int `json:"budget_exhausted"`
+	FuncTimeouts    int `json:"func_timeouts"`
 	RunTimeouts     int `json:"run_timeouts,omitempty"`
 	// FuncValues is what -resolve-func-values did (docs/DESIGN-callouts.md, 5.6); absent when the flag is off.
 	FuncValues *FuncValuesStats `json:"func_values,omitempty"`
