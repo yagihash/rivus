@@ -107,7 +107,7 @@ func h2(req *Request[Msg2]) { lib.Sink(req.Msg.Name) }     // 期待: 出ない(
 - パスは文字列 `/段/段…` で、深さは `/` の数(`internal/taint/elem.go` の `pathDepth`)。k で切るのは `pathTrunc`、呼び出しは `state.go` の `targetOf`。k の既定は 3(`engine.go`)。**段は、フィールド名、`[]`、`*` の区別なく、すべて 1 と数える。**
 - 変形 A の切られたパスは、4 件とも同じ: 関数 `wrap[Msg1]$1`、根 `r`(`any`)、全体 `/*/Msg/*/Kind` → 残り `/*/Msg/*`。段は、①`/*`(`any` の中身。make_interface が、ポインタの指す先を `/*` の下に置く)、②`/Msg`(フィールド)、③`/*`(ポインタ `Msg` の指す先)、④`/Kind`(フィールド)の 4 段で、k=3 を超え、④が失われる。残る `/*/Msg/*` は「その下すべて」なので、`Name` も `Kind` も含む。C、D、E も同じ形。
 - F(`any` なし)は、`/Msg/*/Kind` の 3 段で、k=3 に収まる(切りは 0 件)。つまり、`any` の中身の `/*` が 1 段増やすのが決め手(F の実際のパス文字列は、出していない)。
-- **`access_path_truncated` は、A と C の finding の `uncertainties` に付き、A は、実際に区別を失った段(`wrap[Msg1]$1`、desc は `call h1`)の `notes` にも付く**(「`r/*/Msg/*` に、深さ 4 のパスから保存した。以下は汚れとみなす」)。h2 側の段には付かない。つまり、この誤検出は、経路の段の注記から、どこで区別を失ったかが分かる(注記つきの過大近似。memos の 12 件に `access_path_truncated` が付いていたことと合う)。型の条件(案 (a)(b))は、A の一部しか落とせず、C は落とせない。
+- **`access_path_truncated` は、A と C の finding の `uncertainties` に付き、A は、実際に区別を失った段(`wrap[Msg1]$1`、desc は `call h1`)の `notes` にも付く**(「`r/*/Msg/*` に、深さ 4 のパスから保存した。以下は汚染とみなす」)。h2 側の段には付かない。つまり、この誤検出は、経路の段の注記から、どこで区別を失ったかが分かる(注記つきの過大近似。memos の 12 件に `access_path_truncated` が付いていたことと合う)。型の条件(案 (a)(b))は、A の一部しか落とせず、C は落とせない。
 
 ## 修正の方向(相談役の考え。測定のあとに決める)
 
