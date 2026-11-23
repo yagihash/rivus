@@ -78,7 +78,7 @@ func runExtract(args []string) error {
 	if len(patterns) == 0 {
 		patterns = []string{"./..."}
 	}
-	prog, err := gossa.Load(*dir, patterns, gossa.Options{Tests: *tests, NaiveForm: true})
+	prog, err := gossa.Load(*dir, patterns, extractLoadOptions(*tests))
 	if err != nil {
 		return err
 	}
@@ -113,4 +113,14 @@ func runExtract(args []string) error {
 		return nil
 	}
 	return ir.Write(os.Stdout, out)
+}
+
+// extractLoadOptions are the load options of debug extract: the candidates of a call come from the call graph of the lifted
+// program (the table made while loading), as in the analysis, so that the IR written here is the IR the analysis reads. Without it
+// the call graph is made on the program of the naive form, where the closures that bind one method (the "$bound" functions,
+// one for each place that takes the method as a value) are several functions of one name, the call graph says something
+// different of each, and which of them is converted depends on the order of a map: the candidates of the call in
+// one such closure were all of the implementations in one run and none in the next (found by bench/compare.sh --graph-check).
+func extractLoadOptions(tests bool) gossa.Options {
+	return gossa.Options{Tests: tests, NaiveForm: true, WithLifted: true, OnLifted: goir.LiftedTable}
 }
