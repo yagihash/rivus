@@ -71,8 +71,8 @@ zoo-dart-gen: ## write bench/zoo-dart/exec/lib/cases.dart and the two pubspec.ya
 bench-deps: ## local, heavy: `rivus analyze` (no flags) on the benches with heavy dependencies (go-s3, gcp, dart-gcp) with a timeout; adds one row each to bench/heavy-ledger.tsv, unless NO_LEDGER=1 (TIMEOUT=600 BENCHES="go-s3 gcp"; bench/deps_bench.py)
 	python3 bench/deps_bench.py $(if $(NO_LEDGER),-no-ledger) -timeout $(or $(TIMEOUT),600) $(BENCHES)
 
-bench-passline: ## local, heavy: the pass line (one PASS/FAIL line per target: time, memory, convergence, detection; default flags) of memos, cocoon and dart_services; fetches the sources into $$BENCH_CACHE (bench/deps_bench.py, bench/deps-targets.json); adds one row per target to bench/heavy-ledger.tsv, unless NO_LEDGER=1
-	python3 bench/deps_bench.py $(if $(NO_LEDGER),-no-ledger) $(or $(TARGETS),memos cocoon dart_services)
+bench-passline: ## local, heavy: the pass line (one PASS/FAIL line per target: time, memory, convergence, detection; default flags) of memos, memos-4gib (A: -max-memory 4GiB, peak within 4 GiB), cocoon and dart_services by default; gitea (C: Gitea v1.26.4, 600 s, 8 GB; detected=n/3 is printed, not part of PASS/FAIL; takes 10 minutes) only with TARGETS=gitea or TARGETS="memos memos-4gib gitea"; fetches the sources into $$BENCH_CACHE (bench/deps_bench.py, bench/deps-targets.json); adds one row per target to bench/heavy-ledger.tsv, unless NO_LEDGER=1
+	python3 bench/deps_bench.py $(if $(NO_LEDGER),-no-ledger) $(or $(TARGETS),memos memos-4gib cocoon dart_services)
 
 model-diff: ## the differential test of the model of a package: PKG=<Go import path | package:name> [MODEL=<file>] (bench/model-diff, docs/MODEL-RUNBOOK.md); fetches the package, does not run it
 	@[ -n "$(PKG)" ] || { echo "usage: make model-diff PKG=strings   (or PKG=package:http, MODEL=internal/model/builtin/dart-http.yaml)"; exit 1; }

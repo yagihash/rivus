@@ -38,7 +38,7 @@
     }
   },
   "gitea": {
-    "_doc": "Pass line C: Gitea v1.26.4 (go-gitea/gitea), the whole program with the default flags and the dependencies, `-no-project-rules`. Peak of the process tree within 8 GB, converged; time 600 s (the limit of the earlier runs, 10 minutes; 180 s has no ground for Gitea). Added for its size. detect.mode score: per published vulnerability of bench/gitea-cve-truth.json, judged by place (bench/score.py form: source function, sink file and line, functions on the path); the line prints `detected=<n>/3`, which is NOT part of PASS/FAIL for now (decided 2026-11-24; whether it joins is asked after the line passes). The mode is read by the runner in a later change: until then the runner stops with a message on this target. The ledger row and the line carry the count n/3 only: no finding count, list, path or place.",
+    "_doc": "Pass line C: Gitea v1.26.4 (go-gitea/gitea), the whole program with the default flags and the dependencies, `-no-project-rules`. Peak of the process tree within 8 GB, converged; time 600 s (the limit of the earlier runs, 10 minutes; 180 s has no ground for Gitea). Added for its size. detect.mode score: per published vulnerability of bench/gitea-cve-truth.json, judged by place (bench/score.py form: source function, sink file and line, functions on the path); the line prints `detected=<n>/3`, which is NOT part of PASS/FAIL for now (decided 2026-11-24; whether it joins is asked after the line passes). The ledger row and the line carry the count n/3 only: no finding count, list, path or place.",
     "lang": "go",
     "repo": "https://github.com/go-gitea/gitea",
     "commit": "95ba37d9af58db7d9163f9e92e07b5eb4f792bbc",
