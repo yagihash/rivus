@@ -1,5 +1,13 @@
 # Changelog
 
+## [v0.0.10](https://github.com/yagihash/rivus/compare/v0.0.9...v0.0.10) - 2026-11-23
+
+### Features
+- feat(model): まとめての採用(adopt_rules)の書式とローダー(段階 1) by @yagihash in https://github.com/yagihash/rivus/pull/267
+- feat(model): まとめた行の decision に、重なった決定の id を全部書く by @yagihash in https://github.com/yagihash/rivus/pull/270
+- ci: test のジョブを、arm64 の Linux のランナーで動かす by @yagihash in https://github.com/yagihash/rivus/pull/274
+- perf(test): 重いテストの、同じ解析や exe のコンパイルの繰り返しを減らす by @yagihash in https://github.com/yagihash/rivus/pull/275
+
 ## [v0.0.9](https://github.com/yagihash/rivus/compare/v0.0.8...v0.0.9) - 2026-11-23
 
 ### Features
