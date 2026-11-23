@@ -100,7 +100,7 @@ func zooAlone(t *testing.T, dir string, cells []*zooCell) {
 			b, _ := os.ReadFile(filepath.Join(dir, c.dir, filepath.Base(c.dir)+".go"))
 			rec = strings.Contains(string(b), "@miss(recursion_approximation)")
 			one := zooCopy(t, dir, []string{c.dir})
-			checkAnnotated(t, one, annotOpts{pattern: "./cells/...", allowUnconverged: rec, programWide: rec})
+			checkAnnotated(t, one, annotOpts{pattern: "./cells/...", allowUnconverged: rec, programWide: rec, depDirs: zooGoDepDirs})
 		})
 	}
 }
@@ -108,7 +108,7 @@ func zooAlone(t *testing.T, dir string, cells []*zooCell) {
 // zooFindings analyses the zoo and returns its findings (source -> sink, reachability, confidence).
 func zooFindings(t *testing.T, dir string, env ...string) []string {
 	t.Helper()
-	cmd := exec.Command(binary, "analyze", "-sites", "-rules", "rules.yaml", "./cells/...")
+	cmd := exec.Command(binary, "analyze", "-sites", "-dep-dir", "dep", "-rules", "rules.yaml", "./cells/...")
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), env...)
 	out, err := cmd.Output()
@@ -171,3 +171,7 @@ func TestZooMarkIndependent(t *testing.T) {
 	}
 	t.Logf("zoo-go: %d findings, the same with the implementation of mark and the registration of the cases", len(plain))
 }
+
+// zooGoDepDirs are the directories of the Go zoo that stand for libraries: zoodep is put in place by a replace, and a replace
+// to a directory is the project (ADR-114), so the run says that it is read as a dependency.
+var zooGoDepDirs = []string{"dep"}

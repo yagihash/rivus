@@ -183,7 +183,8 @@ func brAnalyze(t *testing.T, dir string, args ...string) *brReport {
 
 func brAnalyzeFresh(t *testing.T, dir string, args ...string) *brReport {
 	t.Helper()
-	out := runIn(t, binary, dir, nil, append([]string{"analyze"}, append(args, "./...")...)...)
+	// example.com/third stands for a library that a replace puts in place: -dep-dir reads it as a dependency (ADR-114)
+	out := runIn(t, binary, dir, nil, append([]string{"analyze", "-dep-dir", "../third"}, append(args, "./...")...)...)
 	var r brReport
 	if err := json.Unmarshal(out, &r); err != nil {
 		t.Fatalf("%v\n%s", err, out)

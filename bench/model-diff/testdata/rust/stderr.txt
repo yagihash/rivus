@@ -1,0 +1,15 @@
+rivus: extracting rust under the sandbox of macOS
+warning: unused variable: `x`
+ --> src/lib.rs:9:5
+error[E0599]: no associated function or constant named `nope` found for struct `actix_web::HttpRequest` in the current scope
+ --> src/lib.rs:3:47
+  |
+3 | pub fn p3() {}
+error[E0282]: type annotations needed
+ --> src/lib.rs:5:20
+error[E0599]: the associated function or constant `from_query` exists for struct `actix_web::web::Query<A>`, but its trait bounds were not satisfied
+ --> src/lib.rs:6:20
+error[E0107]: struct takes 1 generic argument but 0 generic arguments were supplied
+ --> src/lib.rs:7:20
+error: could not compile `rivus-spelling-probe` (lib) due to 4 previous errors
+ --> Cargo.toml:1:1

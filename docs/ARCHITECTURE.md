@@ -21,7 +21,7 @@ rivus は「脆弱性を報告する SAST」ではなく、**到達可能性に�
                  言語ごとの extractor（言語固有の知識が要る部分）
  ┌──────────────────────────────────────────────────────────────┐
  │ Go   extractor (Go 製・同梱・同じプロセス) go/packages → go/ssa(NaiveForm)│
- │ Rust extractor (Rust 製・外部・既定はコンテナの中) rustc_public → MIR     │──┐
+ │ Rust extractor (Rust 製・外部・macOS は OS のサンドボックス)  rustc_public → MIR     │──┐
  │ Dart extractor (Dart 製・外部)  package:analyzer → 自作 CFG               │  │ サブプロセス起動
  └──────────────────────────────────────────────────────────────┘  │ （Go は IR を直接渡す）
                                                                     ▼ 中立 IR (JSON Lines, schema_version 付き)
@@ -201,7 +201,7 @@ call dst? callee args flags
 
 JSON Lines。**先頭行は必ず `{"schema_version": "rivus.ir/0"}`**。以降は 1 行 1 レコードで、`kind` が種類を示す。種類は `func`（関数）、`implementations`、`global`、`type`、`type_alias`、`text`、`call_text`、`func_text`、`load_error`、`tests_skipped`、`caller_marks`、`body_not_read`（`internal/ir/stream.go`）。
 `rivus debug extract` で、Go の IR を単独で出せる。`-text` で人間向けの形、`-func` で関数を絞り、`-all` で依存も出す。`-implementations`、`-texts`、`-check` もある（`cmd/rivus/extract.go`）。
-`-lang rust` は、Rust の extractor が出すストリームをそのまま出す（既定ではコンテナの中で動かす。15 節）。`-lang` は `go` か `rust` で、Dart の extractor は `rivus debug extract` からは呼べない（`rivus-dart` を直接動かす）。
+`-lang rust` は、Rust の extractor が出すストリームをそのまま出す（macOS では既定で OS のサンドボックスの下で動かす。15 節）。`-lang` は `go` か `rust` で、Dart の extractor は `rivus debug extract` からは呼べない（`rivus-dart` を直接動かす）。
 人間が読んで検証できることを一級の要件とする。
 
 ### 2.7 IR の具体化（エンジンの要求と、extractor の契約）
@@ -299,7 +299,7 @@ NaiveForm のローカルは、`Alloc` の結果がそのままローカル変�
 
 #### 2.7.7 別プロセスの extractor の契約
 
-Go の extractor は、コアと同じプロセスで、`ir.Program` と `ir.Texts` を直接渡す。Dart と Rust の extractor は別プロセス（Rust は既定でコンテナの中。15 節）なので、コアが Go の中で頼っていたものを、ストリームに載せて渡す。
+Go の extractor は、コアと同じプロセスで、`ir.Program` と `ir.Texts` を直接渡す。Dart と Rust の extractor は別プロセス（Rust は macOS では既定でサンドボックスの下。15 節）なので、コアが Go の中で頼っていたものを、ストリームに載せて渡す。
 
 | コアが必要なもの | Go（同じプロセス） | 別プロセスの extractor |
 |---|---|---|
@@ -651,13 +651,13 @@ rivus models coverage ./...
 ### 5.5 依存パッケージ
 
 - **依存の本体は、既定で読む。** 標準ライブラリは読まず、モデルで扱う。依存のソースを読むと、依存の中への呼び出しを推測でなく追えるので、メモリは増える。`-no-deps` で読まなくなり、そのとき依存への呼び出しは、すべてモデルか `unmodeled_library_call` になる（`cmd/rivus/common.go` のフラグの説明。メモリの数字は 16 節）
-- Dart は、プロジェクトの外の依存を、頼まれたものだけ読む（`-allow-deps-under`。`package_config.json` は信用しない）。Rust の依存の取得は、既定でコンテナの中（15 節）
-- **依存の関数の中では、source と sink を探さない**(`internal/sites/enumerate.go`。ADR-099)。プロジェクトは、パターンで挙げたパッケージだけでなく、同じ main module(`go.work` の module を含む。`replace` が指す module は依存)と、Dart の `-C` と `-allow-deps-under` の下のパッケージ。Go の判定は `gossa.projectPackages`、Dart は `extract.dart` の `_isAllowedProjectPath`(ADR-114。Rust のワークスペースは、決めだけ)。依存の本体は、流れを追うために読む。結果、ライブラリの中で危険な処理に届く形は、プロジェクトがその API を呼ぶ所に sink のモデルがないと検出されない。依存の関数が 1 つでもあれば、`summary.dependency_sites` がそのことを毎回言う
+- Dart は、プロジェクトの外の依存を、頼まれたものだけ読む（`-allow-deps-under`。`package_config.json` は信用しない）。Rust の依存の取得は、macOS では既定でサンドボックスの下（15 節）
+- **依存の関数の中では、source と sink を探さない**(`internal/sites/enumerate.go`。ADR-099)。プロジェクトは、パターンで挙げたパッケージだけでなく、同じ main module(`go.work` の module を含む)、ディレクトリを指す `replace` の module(`-dep-dir` で外せる)、Dart の `-C` と `-allow-deps-under` の下のパッケージ。Go の判定は `gossa.projectPackages`、Dart は `extract.dart` の `_isAllowedProjectPath`(ADR-114。Rust のワークスペースは、決めだけ)。依存の本体は、流れを追うために読む。結果、ライブラリの中で危険な処理に届く形は、プロジェクトがその API を呼ぶ所に sink のモデルがないと検出されない。依存の関数が 1 つでもあれば、`summary.dependency_sites` がそのことを毎回言う
 - モデルのあるインタフェースのメソッドの動的な呼び出しで、候補に本体のある依存の関数があるとき、本体は読まず、`dependency_body_unread` で示す（ADR-075）。実装の多いインターフェースのメソッドで、実装どうしが同じメソッドに委譲する形（委譲のクリーク）は、そのメソッドの行を `flows` のモデルにして、実装全体の本体を読まない（ADR-098。照合した対象と、注記の条件は `docs/MODELING.md` 4a 節）
 - **モデルが何を省くか**（`internal/taint/calls.go`、`internal/model/model.go` の `HasModel`）: シンボルに sanitizer か propagator の行があると、呼び出しの所ではモデルが使われ、その関数の本体の要約は使われない。省かれないものもある。(1) 本体の要約の計算（その関数は、IR にあるかぎり、ほかの関数と同じく解析される）。(2) source だけ、sink だけの行は `HasModel` にならないので、本体が使われる。(3) 同じパッケージで、モデルのない関数は、本体が読まれる。(4) パッケージ単位で本体を読まない宣言は、解析の側だけ実装済み（下の項目、ADR-100）。extractor に本体を出さない指定は、Go と Dart が実装済み（下の項目、ADR-105）、Rust は未実装（設計: `docs/DESIGN-package-models.md`）
 - **確認したバージョンの記録**（`internal/model/verified.go`。DESIGN-package-models.md 6.7）: モデルのファイルのトップレベルの `verified_versions`（`package`、`versions`、`checked_with`、`checked`）。`Parse` が書式を検証し（範囲の形、`checked_with` が範囲の内、日付、重複、未知のキーは失敗）、`Merge` が `Rules.Verified` に集める。解析は読まない（記録だけ）。`rivus models versions` が JSON で出す。lock ファイルのバージョンとの照合は未実装。
 - **カテゴリで finding を絞る**(`cmd/rivus/analyze.go` の `categoryFlags`、`internal/report/report.go` の `CategoryFilter`): `rivus analyze` の `-categories` / `-skip-categories`(同時には使えない。名前は、読み込んだルールの sink のカテゴリにあるものだけで、ほかはエラーに有効な名前を並べる)。taint 解析が終わって、報告を組み立てる前に finding の一覧だけを切る(解析、`graph`、`index`、`uncertainties`、`sites` は変わらない)ので、`summary.findings` と `on_findings` は出力に残った finding の数になる。外した finding は `summary.categories_excluded`(`category`、`findings`。カテゴリの順)に数を出し、何も外さないとき(既定)は項目が出ない。複数のカテゴリを持つ finding は、どれかが残る対象なら残し、全部が外す対象のときだけ外す。終了コードは変わらない(`analyze` は finding があっても 0 で終わる)。
-- **確認していないバージョンへの適用の注記**(`internal/model/verified.go` の `UnverifiedVersions`、`internal/frontend/gossa/load.go` の `ModuleVersions`、`cmd/rivus/analyze.go`。DESIGN-package-models.md 6.7 の 3、6.10): 解析した Go の対象が使っている module のバージョン(`go list` の `Module.Version`。ディレクトリへの置き換えと、別の module への置き換えは、バージョンがないので出さない)が、その module の `verified_versions` の範囲(`/v*` の記録を含む)の外のとき、`summary.unverified_versions` に 1 件(`package`、`used`、`verified[]`、`source`)。モデルの行は当てたまま(止めない)。記録のない module と、記録を持つモデルが当たっていないときは、出さない。Dart と Rust は未(課題 #162)。
+- **確認していないバージョンへの適用の注記**(`internal/model/verified.go` の `UnverifiedVersions`、`internal/frontend/gossa/load.go` の `ModuleVersions`、`cmd/rivus/analyze.go`。DESIGN-package-models.md 6.7 の 3、6.10): 解析した Go の対象が使っている module のバージョン(`go list` の `Module.Version`。ディレクトリへの置き換えと、別の module への置き換えは、バージョンがないので出さない)が、その module の `verified_versions` の範囲(`/v*` の記録を含む)の外のとき、`summary.unverified_versions` に 1 件(`package`、`used`、`verified[]`、`source`)。モデルの行は当てたまま(止めない)。記録のない module と、記録を持つモデルが当たっていないときは、出さない。Dart（`pubspec.lock`）と Rust（`Cargo.lock`）も、同じ形で出す（6.10 節。課題 #162）。
 - **パッケージ単位で本体を読まない宣言**（ADR-100。`internal/model/bodyreplaced.go`、`cmd/rivus/bodyreplaced.go`、`internal/taint/bodyreplaced.go`）: モデルのファイルの `body_replaced_packages`（`package` と `reason`）、または `-body-replaced` が、依存のパッケージを指定する。書いたパッケージだけに効く（暗黙の接頭辞一致はしない。配下も指すときは `.../...`）。単位は `taint.UnitOf` と同じ（Go: import パス、Dart: `package:<名前>`、Rust: crate 名）。`analyze` は、IR を読んだあと、`sites.Enumerate` と `sg.BuildConsuming` の前に、宣言のあるパッケージの依存の関数（`Func.Dep`）を IR から落とす（`dropReplacedBodies`。プロジェクトの関数は落とさない）。落とした関数は、`-no-deps` のときと同じ、本体のない関数になる。呼び出しは、モデルの行があればモデル、なければ `unmodeled_library_call`（注記に、パッケージの本体を読んでいないことを書く）。呼び返し: モデルに `calls:` の行がない関数に、関数の値が渡されたときは、呼ばれるものとして扱い（ほかのオペランドを渡し、結果を呼び出しの結果にする。`assumed_call`）、プロジェクトの型のインターフェースの値（Go の `make_interface`）が渡されたときは、その型のメソッド（8 個まで）を同じく呼ばれるものとして扱う（`replacedRows`、`replacedCallbacks`。呼び出しの順序のために `callbackFuncs` にも入る）。出力: `summary.body_replaced_packages`（読まなかったパッケージ、宣言の場所、理由、関数の数。ソート済み）。`-read-declared-bodies` で宣言を無効にして本体を読める（`summary.body_replaced_ignored`）。index の鍵に、`-body-replaced` の一覧と `-read-declared-bodies` が入る（ルールファイルの宣言は、ファイルの内容のハッシュで、組み込みは組み込みのハッシュで入る）。減るのは、解析の時間とメモリ(ADR-100)
 - **宣言を extractor に渡す**(ADR-105。`cmd/rivus/common.go` の `load`、`cmd/rivus/lang.go`): 宣言のあるパッケージは、extractor の段階から本体を読まない。結果(finding の ID の集合、`stats.functions`、`summary` の注記)は、IR のフィルタ(`dropReplacedBodies`)だけのとき(`-drop-after-read`)と同じで、`summary.body_replaced_packages` の項目だけが違う: extractor が読まなかったパッケージは、`functions_declared`(パッケージが宣言している関数の数。IR の `body_not_read`)を出し、`functions` は出さない(読んでいないので、落とした数はない)。`functions` は、読んで落とした数(`-drop-after-read` や Rust)のまま。**Go**: `gossa.Options.ReplacedPackage` が、`packages.Load` のあと、`go/ssa` の前に、宣言のあるパッケージ(依存のみ。標準ライブラリとプロジェクトは除く)の `Syntax` と `TypesInfo` を捨てる。`go/ssa` は本体のない関数だけを作り、`ReplacedFunc` が、型ごとに作られるラッパーや `init` も IR に出さない。型検査(`NeedDeps`)は省けない。**Dart**: `--body-replaced package:<名前>`(繰り返し可)。そのパッケージのファイルは、解決(`getResolvedUnit`)も、IR への下ろしもしない。クラスの階層(`extends:`)、動的呼び出しの候補、本体のある演算子、コンストラクタは、ライブラリの要素から作る(`_Index.library`。要素から分からないこと: 引数のないコンストラクタの本体と初期化子に仕事があるか。ないものとして扱う)。ライブラリの要素モデルを作ること(宣言と型のために要る)と、`import` をたどることは、今までどおり(読まないパッケージだけが使う依存は、読むが、IR に出ない。`PruneDeps` で落ちる)。読まなかった関数の数は、IR の `body_not_read` レコード(`unit`、`functions`)で言う。**Rust**: `--body-replaced <クレート名>`(繰り返し可。`-` と `_` は同じクレート)。ドライバが、宣言のある依存のクレートの本体を下ろさず、`body_not_read`(関数の数と、`merge` が、トレイト経由の呼び出しと `drop` の結びつけに使う名前)だけを書く。`cargo check` はそのクレートもコンパイルするので、extractor の時間とメモリは減らず、IR が小さくなる(7a 節の測定)。読まなかったクレートは `fn_skipped` と、「同じ名前の関数が 2 つのクレートにある」の注記に届かないので、そこはフィルタの実行と数が違う
 - 組み込みモデルの範囲は、(a) Google Cloud（Firebase を含む。範囲の 1 つ目）、(b) 外部のサービスのクライアント（公開の指標の上位）、(c) 標準ライブラリ、(d) 代わりのないパッケージ、(e) pub の人気の上位（ADR-096、097。README、`docs/DART-MODEL-CANDIDATES.md`、`docs/GCP-MODELS.md`）。広げる理由は、コストを下げるためと、依存の中の sink を検出するため（ADR-099）。ユーザーは、ルールを足せる
@@ -724,7 +724,7 @@ rivus models coverage ./...
 3. **zoo と curated、言語間の比較** — `bench/zoo`、`bench/zoo-go`、`bench/zoo-dart`、`bench/zoo-rust` は、流れの形を 1 つずつ、同じ意味のコードを 3 言語で書く。期待値は、ケースを実際に動かした結果（[DESIGN-zoo.md](DESIGN-zoo.md)）。`bench/*-curated` は、実プロジェクトと CVE の形を写したもの。`bench/parity` は、組み込みモデルの整備の言語間の差を数える。IR の中立性の検証にもなる
    - `calls:` の行の確認: 標準ライブラリの行は、道具が実際に呼んで照合する（`TestZooCallbacks*`）。パッケージの行は、第三者のコードを実行しないので、各行に `checked_by: cell` を書き、それを通るセルがあること（`@sink` か `@miss` のマーク付き）を `TestCallsRowsAreHeldByCells` が確認する（MODELING.md 3 節）
 4. **ドッグフーディング** — rivus 自身を rivus で解析する（`cmd/rivus/dogfood_test.go`）。`attributable_to: rivus` の比率を監視する
-5. **隔離のテスト** — 敵対的なビルドを、コンテナが閉じ込めること（`TestIsolation*`。15 節）
+5. **隔離のテスト** — 敵対的なビルドを、サンドボックスが閉じ込めること（`TestSandbox*`、`cmd/rivus/isolate_sandbox_darwin_test.go`。15 節）
 
 ---
 
@@ -776,7 +776,7 @@ sink は、位置の引数のうち、**どのフィールドが危険か**を�
 
 ## 15. 隔離（信頼できない Rust の読み込み）
 
-Rust の extractor は、対象をビルドする（`cargo check`）ので、対象の `build.rs`、proc macro、`[build-dependencies]` が動く。（`-lang` なしでは、`Cargo.toml` があるとき `[Y/n]` と聞く。端末でないときは `-yes` が必要。読まなかった言語は `summary.unread.skipped_languages` に残る。docs/rust-isolation.md）そこで `rivus analyze -lang rust` と `rivus extract -lang rust` は、**既定では Docker のコンテナの中で動かす**（ADR-064）。2 段階で、取得（ネットワークあり。`cargo fetch --locked` だけ。ビルドしない。対象の `.cargo` の設定は使わない）と、抽出（`--network none`。`cargo check --offline --locked`）。コンテナは、非 root、`--cap-drop ALL`、`no-new-privileges`、読み取り専用のルート、プロセス・メモリ・CPU・時間の上限を持ち、ホストの環境変数は渡さず、対象は読み取り専用でマウントし、IR は標準出力でだけ返す。Docker がなければ、何も実行せずに止まる。ホストで直接動かすのは、`-unsafe-host-exec`（信頼できるコードだけ）。コードは `cmd/rivus/isolate.go`、`isolate_fetch.go`、`lang.go`。詳しくは [rust-isolation.md](rust-isolation.md)。ルールは、解析対象の `.rivus/rules` からも読まれる（`-no-project-rules` で外せ、消せる量は `project_rules` が出す）。Go と Dart の extractor は、コンテナの中では動かさない。macOS のサンドボックスでは、`-isolation-env` に `DEVELOPER_DIR` がなく、コマンドラインツールがあるとき、ビルドの `DEVELOPER_DIR` をそこに向ける（Xcode.app は読ませないため。`summary.isolation.developer_dir`。`cmd/rivus/isolate_devdir.go`）。
+Rust の extractor は、対象をビルドする（`cargo check`）ので、対象の `build.rs`、proc macro、`[build-dependencies]` が動く。（`-lang` なしでは、`Cargo.toml` があるとき `[Y/n]` と聞く。端末でないときは `-yes` が必要。読まなかった言語は `summary.unread.skipped_languages` に残る。docs/rust-isolation.md）そこで `rivus analyze -lang rust` と `rivus extract -lang rust` は、**macOS では既定で、OS のサンドボックス（Seatbelt、`sandbox-exec`）の下で動かす**（ADR-093。以前の Docker のコンテナ（ADR-064）の経路は、なくなった）。プロファイルは、既定ですべて拒否し、必要なものだけを許す。2 段階で、取得（ネットワークあり。`cargo fetch --locked` だけ。ビルドしない。対象の `.cargo` の設定は使わない）と、抽出（ネットワークなし。`cargo check --offline --locked`。書けるのは作業ディレクトリだけ）。ホストの環境変数は渡さず、対象と取得したものは読み取り専用で、IR は標準出力でだけ返す。時間の上限と、プロセスグループごとの kill がある（メモリ・CPU・プロセス数の強い上限はない）。**Linux には隔離の手段がないので、既定では何も実行せずに止まる。**ホストで直接動かすのは、`-unsafe-host-exec`（信頼できるコードだけ）。コードは `cmd/rivus/isolate.go`、`isolate_fetch.go`、`isolate_sandbox_darwin.go`、`internal/sandbox/`、`lang.go`。詳しくは [rust-isolation.md](rust-isolation.md)。ルールは、解析対象の `.rivus/rules` からも読まれる（`-no-project-rules` で外せ、消せる量は `project_rules` が出す）。Go と Dart の extractor は、サンドボックスの下では動かさない。macOS のサンドボックスでは、`-isolation-env` に `DEVELOPER_DIR` がなく、コマンドラインツールがあるとき、ビルドの `DEVELOPER_DIR` をそこに向ける（Xcode.app は読ませないため。`summary.isolation.developer_dir`。`cmd/rivus/isolate_devdir.go`）。
 
 ## 16. メモリ
 

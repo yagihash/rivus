@@ -55,6 +55,10 @@ type Options struct {
 	// that go/ssa makes for a type of the package in another package have a body of their own and carry the ID of
 	// the package: they are left out of Funcs too, as dropReplacedBodies leaves them out of the IR.
 	ReplacedFunc func(id string) bool
+	// DepDirs are directories (relative to the load directory, or absolute) whose packages are read as dependencies
+	// although they belong to the project by the rules of ADR-114 (a module that a replace points to by a directory, a
+	// package of the main module). The packages that the patterns name are not left out.
+	DepDirs []string
 }
 
 // LoadError records something rivus could not see. It maps to the
@@ -164,18 +168,48 @@ func collectInputs(pkgs []*packages.Package) Inputs {
 }
 
 // projectPackages returns the import paths of the loaded packages (the packages asked for and everything they import)
-// that belong to the project (ADR-114): the packages asked for, and the packages of the main module(s) of the program
-// (go list marks a module as main when it is the module of the directory, and every module that a go.work lists). A
-// module of the module cache and a module that a replace directive points to (also by a directory: a skeleton, a
-// vendored copy) are dependencies, as are the modules nested in the main module with a go.mod of their own that go.work
-// does not list.
-func projectPackages(pkgs []*packages.Package) map[string]bool {
+// that belong to the project (ADR-114): the packages asked for, the packages of the main module(s) of the program (go
+// list marks a module as main when it is the module of the directory, and every module that a go.work lists), and the
+// packages of a module that a replace directive points to by a directory (a monorepo that links its modules so; a
+// replace to a version, which is a module of the module cache, is a dependency). depDirs name directories whose
+// packages are read as dependencies all the same (a third-party copy that is put in place by a replace, a skeleton): the
+// packages that were asked for are not left out by them.
+func projectPackages(dir string, pkgs []*packages.Package, depDirs []string) map[string]bool {
+	var under []string
+	for _, d := range depDirs {
+		if !filepath.IsAbs(d) {
+			d = filepath.Join(dir, d)
+		}
+		if r, err := filepath.EvalSymlinks(d); err == nil {
+			d = r
+		}
+		under = append(under, filepath.Clean(d))
+	}
+	inDepDir := func(pkg *packages.Package) bool {
+		if len(under) == 0 || len(pkg.GoFiles) == 0 {
+			return false
+		}
+		f := filepath.Dir(pkg.GoFiles[0])
+		if r, err := filepath.EvalSymlinks(f); err == nil {
+			f = r
+		}
+		for _, u := range under {
+			if f == u || strings.HasPrefix(f, u+string(filepath.Separator)) {
+				return true
+			}
+		}
+		return false
+	}
 	out := map[string]bool{}
 	for _, pkg := range pkgs {
 		out[pkg.PkgPath] = true
 	}
 	packages.Visit(pkgs, nil, func(pkg *packages.Package) {
-		if m := pkg.Module; m != nil && m.Main {
+		m := pkg.Module
+		if m == nil || out[pkg.PkgPath] {
+			return
+		}
+		if (m.Main || (m.Replace != nil && m.Replace.Version == "" && m.Replace.Dir != "")) && !inDepDir(pkg) {
 			out[pkg.PkgPath] = true
 		}
 	})
@@ -273,7 +307,7 @@ func Load(dir string, patterns []string, opts Options) (*Program, error) {
 		mode |= ssa.NaiveForm
 	}
 	// ADR-114: the project is the packages asked for and every package of the same main module(s)
-	projectPkgs := projectPackages(pkgs)
+	projectPkgs := projectPackages(absDir, pkgs, opts.DepDirs)
 	mk := ssautil.Packages
 	if opts.Deps {
 		mk = ssautil.AllPackages
@@ -339,7 +373,10 @@ func Load(dir string, patterns []string, opts Options) (*Program, error) {
 		}
 	}
 	// the other packages of the project that were loaded (the pattern only narrows what is asked for)
-	for _, sp := range prog.AllPackages() {
+	// (AllPackages walks a map: in the order of the paths, so that nothing depends on it)
+	all := prog.AllPackages()
+	sort.Slice(all, func(i, j int) bool { return all[i].Pkg.Path() < all[j].Pkg.Path() })
+	for _, sp := range all {
 		if sp != nil && !own[sp] && projectPkgs[sp.Pkg.Path()] {
 			own[sp] = true
 			p.OwnPkgs = append(p.OwnPkgs, sp)

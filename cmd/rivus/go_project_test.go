@@ -16,22 +16,7 @@ import (
 // functions of the module are not counted as dependencies.
 func TestPackagesOfTheSameModuleAreTheProject(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
-	write := func(name, text string) {
-		path := filepath.Join(dir, name)
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	write("go.mod", "module example.com/pj\n\ngo 1.22\n")
-	write("cmd/app/main.go", "package main\n\nimport (\n\t\"net/http\"\n\n\t\"example.com/pj/internal/run\"\n\t\"example.com/pj/internal/store\"\n)\n\nfunc h(w http.ResponseWriter, r *http.Request) {\n\tv := r.FormValue(\"x\")\n\trun.Run(v)\n\tstore.Read(v)\n}\n\nfunc main() { http.HandleFunc(\"/\", h); http.ListenAndServe(\":0\", nil) }\n")
-	write("internal/run/run.go", "package run\n\nimport \"os/exec\"\n\nfunc Run(v string) { exec.Command(\"sh\", \"-c\", v).Run() }\n")
-	write("internal/store/s.go", "package store\n\nimport \"os\"\n\nfunc Read(v string) { os.ReadFile(v) }\n")
-	write("other/o.go", "package other\n\nimport (\n\t\"net/http\"\n\t\"os/exec\"\n)\n\nfunc H(w http.ResponseWriter, r *http.Request) { exec.Command(r.FormValue(\"y\")).Run() }\n")
-
+	dir := writeProjectModule(t)
 	run := func(wd string, args ...string) (flows []string, depSites bool) {
 		t.Helper()
 		cmd := exec.Command(binary, append([]string{"analyze"}, args...)...)
@@ -87,15 +72,16 @@ func TestPackagesOfTheSameModuleAreTheProject(t *testing.T) {
 	}
 }
 
-// A module that go.work lists is the project; one that a replace directive points to (also by a directory: the zoo's
-// skeletons stand for libraries so) is a dependency (ADR-114).
-func TestWorkspaceModulesAreTheProjectAndReplacedOnesAreNot(t *testing.T) {
+// A module that go.work lists is the project, and so is one that a replace directive points to by a directory; -dep-dir
+// reads the packages under a directory as dependencies, and says so in summary.dep_dirs (ADR-114).
+func TestWorkspaceAndReplacedModulesAreTheProject(t *testing.T) {
 	t.Parallel()
 	type result struct {
 		sinks    []string
 		depFuncs int
+		depDirs  []string
 	}
-	run := func(wd string, files map[string]string) result {
+	run := func(wd string, files map[string]string, extra ...string) (res result) {
 		t.Helper()
 		base := t.TempDir()
 		for name, text := range files {
@@ -107,7 +93,7 @@ func TestWorkspaceModulesAreTheProjectAndReplacedOnesAreNot(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		cmd := exec.Command(binary, "analyze", "./...")
+		cmd := exec.Command(binary, append(append([]string{"analyze"}, extra...), "./...")...)
 		cmd.Dir = filepath.Join(base, wd)
 		out, err := cmd.Output()
 		if err != nil {
@@ -118,6 +104,7 @@ func TestWorkspaceModulesAreTheProjectAndReplacedOnesAreNot(t *testing.T) {
 				Sink struct{ Func string }
 			} `json:"findings"`
 			Summary struct {
+				DepDirs         []string `json:"dep_dirs"`
 				DependencySites *struct {
 					Functions int `json:"dependency_functions"`
 				} `json:"dependency_sites"`
@@ -126,7 +113,7 @@ func TestWorkspaceModulesAreTheProjectAndReplacedOnesAreNot(t *testing.T) {
 		if err := json.Unmarshal(out, &r); err != nil {
 			t.Fatal(err)
 		}
-		var res result
+		res.depDirs = r.Summary.DepDirs
 		for _, f := range r.Findings {
 			res.sinks = append(res.sinks, f.Sink.Func)
 		}
@@ -149,13 +136,41 @@ func TestWorkspaceModulesAreTheProjectAndReplacedOnesAreNot(t *testing.T) {
 	if len(work.sinks) != 1 || work.sinks[0] != "example.com/shared.Run" || work.depFuncs != 0 {
 		t.Errorf("a module that go.work lists: %+v", work)
 	}
-	replaced := run("app", map[string]string{
+	linked := map[string]string{
 		"app/go.mod":  "module example.com/app\n\ngo 1.22\n\nrequire example.com/lib v0.0.0\n\nreplace example.com/lib => ../lib\n",
 		"app/main.go": app("example.com/lib", "lib.Run"),
 		"lib/go.mod":  "module example.com/lib\n\ngo 1.22\n",
 		"lib/a.go":    strings.Replace(exe, "%s", "lib", 1),
-	})
-	if len(replaced.sinks) != 0 || replaced.depFuncs == 0 {
-		t.Errorf("a module that a replace points to: %+v (a dependency: its sites are not searched, and the output says so)", replaced)
 	}
+	replaced := run("app", linked)
+	if len(replaced.sinks) != 1 || replaced.sinks[0] != "example.com/lib.Run" || replaced.depFuncs != 0 || replaced.depDirs != nil {
+		t.Errorf("a module that a replace points to by a directory: %+v", replaced)
+	}
+	// a copy of a library that is put in place by a replace: the directory is named, and the output says so
+	copied := run("app", linked, "-dep-dir", "../lib")
+	if len(copied.sinks) != 0 || copied.depFuncs == 0 || len(copied.depDirs) != 1 || copied.depDirs[0] != "../lib" {
+		t.Errorf("-dep-dir: %+v (its sites are not searched, and the output says so)", copied)
+	}
+}
+
+// writeProjectModule writes a module of a command that calls two packages of the module, and a package that the command
+// does not reach.
+func writeProjectModule(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	write := func(name, text string) {
+		path := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("go.mod", "module example.com/pj\n\ngo 1.22\n")
+	write("cmd/app/main.go", "package main\n\nimport (\n\t\"net/http\"\n\n\t\"example.com/pj/internal/run\"\n\t\"example.com/pj/internal/store\"\n)\n\nfunc h(w http.ResponseWriter, r *http.Request) {\n\tv := r.FormValue(\"x\")\n\trun.Run(v)\n\tstore.Read(v)\n}\n\nfunc main() { http.HandleFunc(\"/\", h); http.ListenAndServe(\":0\", nil) }\n")
+	write("internal/run/run.go", "package run\n\nimport \"os/exec\"\n\nfunc Run(v string) { exec.Command(\"sh\", \"-c\", v).Run() }\n")
+	write("internal/store/s.go", "package store\n\nimport \"os\"\n\nfunc Read(v string) { os.ReadFile(v) }\n")
+	write("other/o.go", "package other\n\nimport (\n\t\"net/http\"\n\t\"os/exec\"\n)\n\nfunc H(w http.ResponseWriter, r *http.Request) { exec.Command(r.FormValue(\"y\")).Run() }\n")
+	return dir
 }
