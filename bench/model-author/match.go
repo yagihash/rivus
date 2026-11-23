@@ -38,6 +38,10 @@ type RejectedEntry struct {
 func inPackage(sym, pkg string) bool {
 	s := strings.TrimPrefix(sym, "(")
 	s = strings.TrimPrefix(s, "*")
+	if isDart(pkg) {
+		// package:dio/src/dio.dart#Dio.get is of package:dio (and not of package:dio_foo)
+		return strings.HasPrefix(s, pkg+"/")
+	}
 	return strings.HasPrefix(s, pkg+".")
 }
 
@@ -144,7 +148,7 @@ func LoadFacts(files []string, pkg string) (*Facts, error) {
 // BodiesRead says whether the analysis reads the bodies of the package: not for the standard library, and not for a package that a
 // model file declares in body_replaced_packages (exactly, or under a `/...`).
 func (f *Facts) BodiesRead(pkg string) bool {
-	if isStdlib(pkg) {
+	if !isDart(pkg) && isStdlib(pkg) {
 		return false
 	}
 	for _, b := range f.BodyReplaced {
@@ -157,6 +161,15 @@ func (f *Facts) BodiesRead(pkg string) bool {
 
 // receiverType: `(*a/b.T).M` is `a/b.T`; "" for a function.
 func receiverType(sym string) string {
+	if strings.HasPrefix(sym, "package:") {
+		// Dart: package:a/b.dart#Type.member is of package:a/b.dart#Type
+		if h := strings.Index(sym, "#"); h > 0 {
+			if d := strings.Index(sym[h:], "."); d > 0 {
+				return sym[:h+d]
+			}
+		}
+		return ""
+	}
 	if !strings.HasPrefix(sym, "(") {
 		return ""
 	}

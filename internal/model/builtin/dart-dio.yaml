@@ -208,3 +208,204 @@ sinks:
     args: [1]
     category: path_traversal
     accepts: [user_input]
+
+rejected:
+  # make model PKG=dio LANG=dart (bench/model-author) lists the candidates of layer 1 that no row decides; these were looked at and left out (dio 5.11.1).
+  - symbol: package:dio/src/adapter.dart#HttpClientAdapter.fetch
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/adapter.dart#ResponseBody.headers
+    kind: source
+    why: "サーバーの応答の値。dart-http と同じく、応答は source にしない(冒頭に書いたとおり)"
+  - symbol: package:dio/src/adapter.dart#ResponseBody.statusMessage
+    kind: source
+    why: "サーバーの応答の値。dart-http と同じく、応答は source にしない(冒頭に書いたとおり)"
+  - symbol: package:dio/src/adapters/io_adapter.dart#IOHttpClientAdapter.fetch
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/cancel_token.dart#CancelToken.isCancel
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/dio_exception.dart#DioException.badCertificate
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/dio_exception.dart#DioException.badResponse
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/dio_exception.dart#DioException.connectionError
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/dio_exception.dart#DioException.connectionTimeout
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/dio_exception.dart#DioException.copyWith
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/dio_exception.dart#DioException.message
+    kind: source
+    why: "エラーの説明の文字列で、外から来た値を運ぶものではない"
+  - symbol: package:dio/src/dio_exception.dart#DioException.new
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/dio_exception.dart#DioException.receiveTimeout
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/dio_exception.dart#DioException.requestCancelled
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/dio_exception.dart#DioException.sendTimeout
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/dio_exception.dart#DioException.transformTimeout
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/dio_exception.dart#defaultDioExceptionReadableStringBuilder
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/dio_mixin.dart#ErrorInterceptorHandler.next
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/dio_mixin.dart#ErrorInterceptorHandler.reject
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/dio_mixin.dart#ErrorInterceptorHandler.resolve
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/dio_mixin.dart#Interceptor.onError
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/dio_mixin.dart#Interceptor.onRequest
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/dio_mixin.dart#Interceptor.onResponse
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/dio_mixin.dart#RequestInterceptorHandler.next
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/dio_mixin.dart#RequestInterceptorHandler.reject
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/dio_mixin.dart#RequestInterceptorHandler.resolve
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/dio_mixin.dart#ResponseInterceptorHandler.next
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/dio_mixin.dart#ResponseInterceptorHandler.reject
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/dio_mixin.dart#ResponseInterceptorHandler.resolve
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/headers.dart#Headers.remove
+    kind: sink
+    why: "ヘッダーの名前を消す関数で、path ではない。remove という名前に当たっただけ"
+  - symbol: package:dio/src/headers.dart#Headers.removeAll
+    kind: sink
+    why: "ヘッダーの名前を消す関数で、path ではない。remove という名前に当たっただけ"
+  - symbol: package:dio/src/interceptors/log.dart#LogInterceptor.onError
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/interceptors/log.dart#LogInterceptor.onRequest
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/interceptors/log.dart#LogInterceptor.onResponse
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/multipart_file.dart#MultipartFile.fromBytes
+    kind: sink
+    why: "filename は multipart の送信時に付けるファイル名で、ローカルの path ではない"
+  - symbol: package:dio/src/multipart_file.dart#MultipartFile.fromFile
+    kind: sink
+    why: "読んで送るファイルの path(arg0)は path_traversal の候補。今回は行にしていない(次の見直しで決める)。filename は送信時に付ける名前で path ではない"
+  - symbol: package:dio/src/multipart_file.dart#MultipartFile.fromFileSync
+    kind: sink
+    why: "読んで送るファイルの path(arg0)は path_traversal の候補。今回は行にしていない(次の見直しで決める)。filename は送信時に付ける名前で path ではない"
+  - symbol: package:dio/src/multipart_file.dart#MultipartFile.fromStream
+    kind: sink
+    why: "filename は multipart の送信時に付けるファイル名で、ローカルの path ではない"
+  - symbol: package:dio/src/multipart_file.dart#MultipartFile.fromString
+    kind: sink
+    why: "filename は multipart の送信時に付けるファイル名で、ローカルの path ではない"
+  - symbol: package:dio/src/multipart_file.dart#MultipartFile.headers
+    kind: source
+    why: "リクエストを組み立てる側の設定値で、外から来た値を運ぶものではない"
+  - symbol: package:dio/src/multipart_file.dart#MultipartFile.lookupMediaType
+    kind: sink
+    why: "filename は multipart の送信時に付けるファイル名で、ローカルの path ではない"
+  - symbol: package:dio/src/multipart_file.dart#MultipartFile.new
+    kind: sink
+    why: "filename は multipart の送信時に付けるファイル名で、ローカルの path ではない"
+  - symbol: package:dio/src/options.dart#BaseOptions.copyWith
+    kind: sink
+    why: "BaseOptions の baseUrl は設定で、利用者の入力であることはまれ(冒頭に書いたとおり。sink にしない)"
+  - symbol: package:dio/src/options.dart#BaseOptions.new
+    kind: sink
+    why: "BaseOptions の baseUrl は設定で、利用者の入力であることはまれ(冒頭に書いたとおり。sink にしない)"
+  - symbol: package:dio/src/options.dart#Options.compose
+    kind: sink
+    why: "path は Dio.fetch の行(args 0)で RequestOptions ごと見る。作る、合成する時点では sink にしない"
+  - symbol: package:dio/src/options.dart#Options.contentType
+    kind: source
+    why: "リクエストを組み立てる側の設定値で、外から来た値を運ぶものではない"
+  - symbol: package:dio/src/options.dart#Options.headers
+    kind: source
+    why: "リクエストを組み立てる側の設定値で、外から来た値を運ぶものではない"
+  - symbol: package:dio/src/options.dart#OptionsMixin.baseUrl
+    kind: sink
+    why: "BaseOptions の baseUrl は設定で、利用者の入力であることはまれ(冒頭に書いたとおり。sink にしない)"
+  - symbol: package:dio/src/options.dart#OptionsMixin.queryParameters
+    kind: source
+    why: "リクエストを組み立てる側の設定値で、外から来た値を運ぶものではない"
+  - symbol: package:dio/src/options.dart#RequestOptions.copyWith
+    kind: sink
+    why: "path は Dio.fetch の行(args 0)で RequestOptions ごと見る。作る、合成する時点では sink にしない"
+  - symbol: package:dio/src/options.dart#RequestOptions.new
+    kind: sink
+    why: "path は Dio.fetch の行(args 0)で RequestOptions ごと見る。作る、合成する時点では sink にしない"
+  - symbol: package:dio/src/redirect_record.dart#RedirectRecord.new
+    kind: sink
+    why: "リダイレクトが起きた記録を作るだけ。location は応答の値で、ここから先へ送らない"
+  - symbol: package:dio/src/response.dart#Response.new
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/response.dart#Response.statusMessage
+    kind: source
+    why: "サーバーの応答の値。dart-http と同じく、応答は source にしない(冒頭に書いたとおり)"
+  - symbol: package:dio/src/transformer.dart#Transformer.defaultTransformRequest
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/transformer.dart#Transformer.defaultTransformRequest
+    kind: source
+    why: "送る本文を作って返すだけ。受け取った値の入口ではない(応答は source にしない)"
+  - symbol: package:dio/src/transformer.dart#Transformer.transformRequest
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/transformer.dart#Transformer.transformRequest
+    kind: source
+    why: "送る本文を作って返すだけ。受け取った値の入口ではない(応答は source にしない)"
+  - symbol: package:dio/src/transformer.dart#Transformer.transformResponse
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/transformer.dart#Transformer.urlEncodeQueryMap
+    kind: source
+    why: "送る本文を作って返すだけ。受け取った値の入口ではない(応答は source にしない)"
+  - symbol: package:dio/src/transformers/fused_transformer.dart#FusedTransformer.transformRequest
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/transformers/fused_transformer.dart#FusedTransformer.transformRequest
+    kind: source
+    why: "送る本文を作って返すだけ。受け取った値の入口ではない(応答は source にしない)"
+  - symbol: package:dio/src/transformers/fused_transformer.dart#FusedTransformer.transformResponse
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/transformers/sync_transformer.dart#SyncTransformer.transformRequest
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"
+  - symbol: package:dio/src/transformers/sync_transformer.dart#SyncTransformer.transformRequest
+    kind: source
+    why: "送る本文を作って返すだけ。受け取った値の入口ではない(応答は source にしない)"
+  - symbol: package:dio/src/transformers/sync_transformer.dart#SyncTransformer.transformResponse
+    kind: sink
+    why: "path は Dio.get や Dio.fetch の行(args 0)で見る。ここは作った RequestOptions を受け取って、内側へ渡すか持つだけ"

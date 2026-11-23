@@ -1,0 +1,10 @@
+name: model_author_dartapi
+description: "The public API of a Dart package for bench/model-author (types only: the package is read, never run)."
+publish_to: none
+environment:
+  sdk: ^3.8.0
+dependencies:
+  analyzer: ^14.7.0
+  path: ^1.9.0
+  rivus_dart:
+    path: ../../../extractor/dart

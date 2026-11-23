@@ -111,6 +111,7 @@ func TestLayer1Rules(t *testing.T) {
 		"source example.com/synth.Doc.Body":          "field",
 		"source example.com/synth.Doc.Raw":           "field",
 		"source example.com/synth.Doc.Reader":        "field",
+		"source example.com/synth.Doc.Title":         "field",
 	}
 	// Render also returns a string, but is not named like a sanitizer; Join and Plain have no name that a rule knows.
 	for k, v := range want {

@@ -44,7 +44,7 @@ var (
 		"open_redirect":     {"location", "redirect"},
 		"xss":               {"html", "markup", "template", "tmpl", "format"},
 		"resource_name": {"bucket", "object", "owner", "repo", "repository", "project", "topic", "subscription", "collection",
-			"table", "dataset", "queue", "prefix", "container", "blob", "organization", "org", "namespace"},
+			"table", "dataset", "queue", "prefix", "container", "blob", "organization", "org", "namespace", "ref", "branch", "sha", "account"},
 	}
 	// bytesSinkWords are the words that make an argument of bytes (not of a string) a candidate: what is written as it is.
 	bytesSinkWords = []string{"html", "markup", "data", "content", "body"}
@@ -53,7 +53,7 @@ var (
 	// fileVerbs are the words of a function that works on a file whose name is given as `name` (`os.Open(name)`, `os.Rename(oldname, newname)`).
 	fileVerbs = []string{"open", "remove", "mkdir", "rename", "chmod", "chown", "lchown", "chtimes", "truncate", "symlink", "link", "readlink", "stat", "lstat", "chdir", "file", "dir"}
 	// sourceWords are the words of a function or a field that carries what somebody else wrote: a body, a content, a header.
-	sourceWords    = []string{"body", "content", "contents", "payload", "raw", "text", "data", "reader", "file", "files", "message", "header", "headers", "cookie", "cookies", "query", "param", "params", "form", "input", "request", "response"}
+	sourceWords    = []string{"body", "content", "contents", "payload", "raw", "text", "data", "reader", "file", "files", "message", "header", "headers", "cookie", "cookies", "query", "param", "params", "form", "input", "request", "response", "title", "metadata"}
 	sanitizerWords = []string{"escape", "quote", "sanitize", "sanitise", "clean"}
 )
 

@@ -29,7 +29,7 @@ type diffReport struct {
 
 func runDiff(out io.Writer, o *options, repo, target, slug string, l *loaded, api *API, m *Matched) error {
 	reportPath := filepath.Join(o.work, slug+"-model-diff.json")
-	args := []string{"run", "./bench/model-diff", "-pkg", o.pkg, "-repo", repo, "-json", reportPath, "-out", filepath.Join(o.work, "diff-"+slug)}
+	args := []string{"run", "./bench/model-diff", "-pkg", o.pkg, "-lang", o.lang, "-repo", repo, "-json", reportPath, "-out", filepath.Join(o.work, "diff-"+slug)}
 	if l.Version != "" {
 		args = append(args, "-version", l.Version)
 	}
@@ -179,9 +179,9 @@ func UpdateVerified(text, module, version, day string) (string, error) {
 	return strings.Join(append(append(append([]string{}, lines[:end]...), block...), lines[end:]...), "\n"), nil
 }
 
-var deadRe = regexp.MustCompile(`(?m)^\s+go (\S+) \| *$`)
+var deadRe = regexp.MustCompile(`(?m)^\s+(?:go|dart) (\S+) \| *$`)
 
-// ParseDeadRows reads the symbols that the test lists as not hit (RIVUS_DEAD_ROWS_PRINT=1) for Go.
+// ParseDeadRows reads the symbols that the test lists as not hit (RIVUS_DEAD_ROWS_PRINT=1) for Go or Dart.
 func ParseDeadRows(log string) []string {
 	var out []string
 	for _, m := range deadRe.FindAllStringSubmatch(log, -1) {
@@ -208,16 +208,19 @@ func DeadAllowLines(dead []string, pkg, existing string) []string {
 	return out
 }
 
-func writeDeadAllow(out io.Writer, repo, target, pkg string, f *Facts) error {
+func writeDeadAllow(out io.Writer, repo, target, pkg, lang string, f *Facts) error {
 	if target == "" {
 		return &exitError{ExitUsage, fmt.Errorf("-write-dead-allow needs the model file (-model)")}
 	}
-	c := exec.Command("go", "test", "./cmd/rivus", "-run", "^TestBuiltinRowsAreHitByTheZoo$/go$", "-count=1", "-v")
+	if lang == "dart" && os.Getenv("RIVUS_DART") == "" {
+		return &exitError{ExitLoad, fmt.Errorf("-write-dead-allow for Dart runs the zoo test, which reads Dart with the extractor: set RIVUS_DART to the dart command (RIVUS_DART=dart), and run `dart pub get` in extractor/dart")}
+	}
+	c := exec.Command("go", "test", "./cmd/rivus", "-run", "^TestBuiltinRowsAreHitByTheZoo$/"+lang+"$", "-count=1", "-v")
 	c.Dir = repo
 	c.Env = append(os.Environ(), "RIVUS_DEAD_ROWS_PRINT=1")
 	log, _ := c.CombinedOutput() // the test fails while a row is not allowed: that is what is read
 	dead := ParseDeadRows(string(log))
-	if len(dead) == 0 && !bytes.Contains(log, []byte("rows of go are not hit")) {
+	if len(dead) == 0 && !bytes.Contains(log, []byte("rows of "+lang+" are not hit")) {
 		return &exitError{ExitLoad, fmt.Errorf("the test did not list the rows that are not hit:\n%s", log)}
 	}
 	path := strings.TrimSuffix(target, ".yaml") + ".dead-allow"
