@@ -7,7 +7,7 @@
 # CI runs the same tests (a pull request with -short, main and the weekly run without): .github/workflows/ci.yml.
 
 .DEFAULT_GOAL := help
-.PHONY: help setup build check test test-docs merge daily-stats zoo-loosened shard-check test-shard go-warm zoo-dart-gen model-diff model-diff-changed model docs-gen
+.PHONY: help setup build check test test-docs merge daily-stats zoo-loosened shard-check test-shard go-warm zoo-dart-gen observed-edges-go model-diff model-diff-changed model docs-gen
 
 # the extractors that `make test` needs (a language whose extractor is not there FAILS, it is not skipped)
 RIVUS_DART ?= dart
@@ -61,6 +61,9 @@ test-shard: ## run one shard of the tests of cmd/rivus, as CI does: I=<index> N=
 
 go-warm: ## compile the dependencies of every module of the bench into the build cache (the tests read them with `go list -export`: 14 s on a cold cache, 3 s on a warm one)
 	@set -e; for gm in $$(find bench -name go.mod | sort); do (cd "$$(dirname "$$gm")" && go list -export -deps ./... > /dev/null); done
+
+observed-edges-go: ## run the Go zoo in an instrumented copy and list the calls that happened and the graph of rivus index does not have (a few seconds; the work is in a temporary directory; ARGS=-v lists the over-approximation rows; docs/DESIGN-observed-calls.md)
+	go run ./bench/observed-edges run -zoo bench/zoo-go $(ARGS)
 
 zoo-dart-gen: ## write bench/zoo-dart/exec/lib/cases.dart and the two pubspec.yaml of the Dart zoo (generated, not committed) from the directories of the cells and of the skeleton packages
 	go test ./cmd/rivus -run '^TestZooDartGenerate$$' -count=1 -update
