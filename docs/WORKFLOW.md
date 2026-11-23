@@ -1,0 +1,14 @@
+# 進め方の決まり
+
+設計の判断の基準は [PRINCIPLES.md](PRINCIPLES.md)。ここには、PR、測定、記録、マージの決まりだけを書く。
+- **作業の順**は `.claude/work/QUEUE.md`(追跡されない。相談役が書く)。コストか精度を上げる作業は、始める前に、課題の「修正の方向」に「これで動くはずの数字」を 1 行書く。マージのあとに台帳の行と比べ、外れたら課題にそう書く。
+- **memos の前後の測定**(`bench/compare.sh --cost-check memos`。交互に 2 回ずつ)が必要なのは、(i) 「結果は同一」と言う PR(速さとメモリ)、(ii) 何度も通る関数に触る PR だけ。関数は `internal/taint` の `add`、`copyLoc`、`copyLocs`、`copyLocsNoted`、`copyLocsGuarded`、`copyLocsAlias`、`applySummary`(呼び出しの数をコードで確かめた)。それ以外の解析の PR は、PR の CI(`TestScaleSynth`、zoo、curated)で足りる。
+- **測定から結論を出すとき**: `bench/compare.sh` は、1 回だけの測定を「single run: no conclusion」と出し、結論にしない。手で測るときは、交互に 2 回以上(A、B、A、B)。ロードアベレージ、方法(主なプロセスか木の合計か)、コミットを付け、「疑い」と「確認した」を分ける。
+- **重い測定の記録**は台帳(`bench/heavy-ledger.tsv`、`bench/heavy_ledger.py`)だけ。数字は本文に写さず、行を日付とコミットで指す。道具が書いた行は、その日のうちに、1 つの PR で main に入れる(main に無い行は、記録として扱わない)。重い実行は、ロックの下で 1 本ずつ(`bench/heavylock.py`)。
+- **調査の途中の記録**は、追跡されない作業メモ(`.claude/work/`。課題ごとに 1 ファイル)に置き、課題には、結論が出たときに 1 回だけ書く。公開の場所には、外部の設計者の返事のファイル名ではなく、何を、なぜ決めたかを書く。課題と ADR への追記は、作業の PR に含める。作業の PR に入れられない文書の変更は、まとめて 1 日 1 本。
+- **道具が守るもの**:
+  - 1 日の報告の最後に、`make daily-stats SINCE=<日付>` の 1 行(解析・モデル・extractor の PR の数と、それ以外の数)を付ける。
+  - マージ済み(または閉じた)PR のブランチへの push は、`.githooks/pre-push` が止める(有効にするのは `make setup`。意図した push は `RIVUS_ALLOW_PUSH_TO_MERGED=1`)。`daily-stats` の `orphan remote branches: N` が 0 でなければ、取り込むか消す。
+  - `make merge PR=<n>`(`scripts/merge-pr.sh`)は、main の最新の `ci.yml`(push)が失敗しているとマージしない。main の CI を直す PR だけ `RIVUS_MERGE_FIXES_MAIN=1`。PR は `-short` なので、重いテストは main でしか実行されない。限界: 失敗するコミットの CI が実行中の間は、その前の成功を見て通る。
+  - 既定で off の機能の一覧と規則は [FLAGS-OFF-BY-DEFAULT.md](FLAGS-OFF-BY-DEFAULT.md)。
+- **相談役が読む PR**は、(i) 解析の結果を変える PR、(ii) 出力の項目・注記と不確実性の種類・`summary`・終了コードを変える PR だけ。結果が同一であることを数字で示した PR、道具、文書は読まない。マージは開発者が行う(`ci-ok` のあと、マージコミット)。
