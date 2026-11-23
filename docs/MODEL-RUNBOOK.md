@@ -86,7 +86,7 @@ sink の行は、パッケージの `rules.yaml` の `sinks:` に、骨組みの
 
 **骨組みは、本物の型の埋め込みと、インターフェースの実装の関係を、本物と同じ形にする**(昇格したメソッドが、別のパッケージの行に当たるため。実例: Go の `sqlx.DB` は `*sql.DB` を埋め込む。骨組みが埋め込まないと、昇格したメソッドを呼ぶセルが、本物と違う形で通る)。骨組みの生成器の要件にも足してある([DESIGN-package-models.md](DESIGN-package-models.md) 6.8)。
 
-**Rust のモデルの標準の確認: 本物のクレートでの記号の綴り(macOS のサンドボックスの下だけ)**: 骨組みは本物と綴りが違いうる(定義の経路と公開の経路、別のクレートの型の再エクスポート)ので、行を書いたら、本物のクレートで extractor が書く名前と照合する。(1) 一時のディレクトリに、本物のクレートを**版を固定して**(`=4.20.0`。要る feature は足す。`default-features = false` でよい)使う小さい crate を作り、モデルの各行(source の型と、flows / sinks の関数)を 1 回ずつ通る最小の関数を書く。(2) `cargo generate-lockfile --manifest-path <dir>/Cargo.toml`(取得だけ)。(3) `go run ./cmd/rivus debug extract -lang rust -C <dir> > ir.jsonl`(サンドボックスの下。`-unsafe-host-exec` は使わない。`DEVELOPER_DIR` は、rivus がコマンドラインツールに向ける。ツールがなく Xcode.app が選ばれているときは、実行の前に止まる)。(4) `ir.jsonl` の、その crate の関数(`id` が crate 名で始まる)の、`callee.symbol` と、引数の型(`locals` の `name` つき)を、モデルの行と照合する。一致しない行は直す。(5) 一時のディレクトリは、終わったら消す。クラウドの実行には隔離がないので、**Rust のモデルは、当面ローカルで作る**。実例と、骨組みと本物の違い(定義の `id` は、別のクレートの型だと本物は `actix_http::...`、`http::...` になる。呼び出しの `symbol` は、公開の経路で同じ): PR #204(actix-web)。
+**Rust のモデルの標準の確認: 本物のクレートでの記号の綴り(macOS のサンドボックスの下だけ)**: 骨組みは本物と綴りが違いうる(定義の経路と公開の経路、別のクレートの型の再エクスポート)ので、行を書いたら、本物のクレートで extractor が書く名前と照合する。**コマンド**: 先に、このリポジトリの extractor を別の場所にビルドする(`cd extractor/rust && CARGO_TARGET_DIR=<場所> cargo build`。共有の extractor と `rivus setup rust` は使わない)。そして `go run ./bench/model-diff -lang rust -pkg <crate> [-version <v>] [-features a,b] [-no-default-features] -rust-extractor <場所>/debug/rivus-rust`(`-version` の既定は、モデルの `checked_with`。`-model <ファイル>` で行のファイルを絞れる。`-out` に一時のディレクトリ)。クレートは、版を固定して取得だけし(`docs/MODEL-QUEUE.md` にあるクレートだけ)、行ごとのプローブを extractor に読ませて、行の 1 つずつを found、spelled-differently(extractor は別の綴りを書く)、resolves(コンパイラは経路を知るが、プローブでは名指しできない)、not-found に分ける。終了コード: 0 全部 found、1 spelled-differently か not-found がある、2 失敗、3 実行しなかった(macOS でない、extractor か cargo がない)、4 resolves だけがある(その行は、手で確認する)。`field` の行は、まだ確認しない。**手で確認するときの代わり(この道具が使えないとき)**: 一時の crate で本物のクレートを `=<版>` で使い、モデルの各行を 1 回ずつ通る関数を書き、`cargo generate-lockfile` のあと `rivus debug extract -lang rust -C <dir>`(サンドボックスの下。`-unsafe-host-exec` は使わない)の IR の `callee.symbol` と型を行と照合する。クラウドの実行には隔離がないので、**Rust のモデルは、当面ローカルで作る**。実例と、骨組みと本物の違い(定義の `id` は、別のクレートの型だと本物は `actix_http::...`、`http::...` になる。呼び出しの `symbol` は、公開の経路で同じ): PR #204(actix-web)。
 
 テスト: `go test ./internal/model/... ./cmd/rivus/ -run 'Builtin|Zoo'`、`regomark check --no-judge`(0)。Dart のセルは、Dart のテスト(`dart analyze` を含む)も通す。
 
@@ -170,7 +170,7 @@ zoo のゲート(`scripts/zoo-loosened-check.sh`、#167): 新しいセル(`bench
 
 ## 9. 差分テスト(`bench/model-diff`。実装済み。2 節の 2 の道具)
 
-モデルの行を、依存の本体と照合する。**Go と Dart。Rust は対象外**(クレートを読むには、`build.rs` と proc macro を動かすので、隔離が要る。上の 0 節)。
+モデルの行を、依存の本体と照合する。**Go と Dart。Rust は、綴りの確認だけ(ローカル。上の「Rust のモデルの標準の確認」)。解析 2 回の比較は対象外**(クレートを読むには、`build.rs` と proc macro を動かすので、隔離が要る。上の 0 節)。
 
 ```sh
 make model-diff PKG=strings                                   # Go の標準ライブラリ。行は、組み込みのモデルのすべてのファイルから取る
