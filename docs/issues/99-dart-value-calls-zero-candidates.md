@@ -11,6 +11,10 @@
 
 関数値の要素(段階 4)の第 2 歩とキャプチャセルで閉じる見込み。第 1 歩(`-func-values`、診断)は 88c4cf2。
 
+## 追記(2026-11-24)
+
+**キャプチャした変数を呼ぶ形**(関数の中で宣言したローカル関数を、同じ関数のクロージャから呼ぶ。Dart で最も普通の書き方の 1 つ)は、これまで候補 0 件で、ローカル関数の中の sink に流れが届かなかった(注記のない見逃し。zoo のセル `F/clos/local-fn-from-closure`)。直した(`fix/dart-captured-var-calls`): `internal/valuecalls` が、取り込んだ変数の値を、クロージャを作った `make_closure` の引数からたどる。候補 0 件は、zoo-dart で 49 から 41、curated で 20 から 15。あとで別の関数を代入した変数(セルに入るもの)は、まだ候補が付かない(`vuln2` の `@miss`)。
+
 ## 本文(GitHub から移した写し)
 
 ## 現象
@@ -33,5 +37,5 @@ void vuln() {
 zoo の Dart を実行して観測した呼び出しと、グラフのエッジの照合(`docs/DESIGN-observed-calls.md`)。エッジがない 39 件のうち、この形が約 14 件(stored、partial_callers、func_field、func_map、returned、tearoff の一部)。ほかに super / mixin(`super_mixin_impl` 4 件)と `Navigator.pushNamed` のルート(3 件)が、同じくエッジがない。
 
 ## 関係
-#77、#81、#97(呼び出しが未解決になる形)と関連する。参照の段(`rivus graph path` の 4 段目)では届くものと届かないものがある。
+#77、#81、#97(呼び出しが未解決になる形)と関連する。参照のフェーズ(`rivus graph path` の 4 つ目のフェーズ)では届くものと届かないものがある。
 

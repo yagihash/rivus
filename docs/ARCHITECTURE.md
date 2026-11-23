@@ -53,7 +53,7 @@ rivus は「脆弱性を報告する SAST」ではなく、**到達可能性に�
 ### 想定する使われ方（エージェントの道具）
 
 rivus の主な利用者の 1 つは、脆弱性の有無を判定する **LLM エージェント**である。
-エージェントは「疑わしい箇所を軽く洗い出し → 気になる箇所だけ詳細に分析する」という 2 段構えで使う。
+エージェントは「疑わしい箇所を軽く洗い出し → 気になる箇所だけ詳細に分析する」という 2 ステップで使う。
 
 | レベル | 内容 | 必要な処理 |
 |---|---|---|
@@ -416,7 +416,7 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 
 - 汚染の単位は `Elem`（小さく、比較できる）。`Real`（source のサイトから来た具体的なラベル。ラベル名と、元の source サイトの ID を持つ）と、`Param`（「呼び出し側が引数 i に渡すもの、のこの経路の下」という記号的な汚染。サマリになる）の 2 種
 - 汚染の状態は、**セル**（`Root` ＋ アクセスパス）から `Elem` の集合への写像。`Root` は、SSA の値、複数の戻り値のうちの 1 つ、または解析中の関数の戻り値
-- アクセスパスの深さは k（既定 3。`-k`）で打ち切る。**依存の関数だけ、別の深さ**（既定 2。`-dep-k`。0 は `-k` と同じ、`-dep-k 3` が前の動作。ADR-119）。打ち切りは記録する（全体の `path_limit` と、値が切ったパスを通った段の `access_path_truncated`。ADR-117）。使った深さは `summary.access_path_depth`
+- アクセスパスの深さは k（既定 3。`-k`）で打ち切る。**依存の関数だけ、別の深さ**（既定 2。`-dep-k`。0 は `-k` と同じ、`-dep-k 3` が前の動作。ADR-119）。打ち切りは記録する（全体の `path_limit` と、値が切ったパスを通ったステップの `access_path_truncated`。ADR-117）。使った深さは `summary.access_path_depth`
 - コンテナ要素は区別しない
 
 ### 4.3 関数サマリ
@@ -463,8 +463,8 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 | `numeric_stop` | rivus | source のデータが数値や bool になり、それ以降は追わない（既定。`-numeric-taint` で追う）。source の種類（シンボルとラベル）ごとに 1 件で、最初の場所と、起きた関数の一覧（10 件まで）を持つ。サマリを通って止まる分（呼び出し先の中の、引数の記号的なデータの止まり）は、この 1 件には入らない。そのうち、文字の読み出し（`isCharRead`）で止まった分は、`Summary.CharStopped`（引数の番号と、止まった関数。同じ番号に複数あれば関数 ID が最小のもの。`signature()` に入り、結果には出ない）に持ち、呼び出し元が自分の引数を渡していれば番号を引き継ぎ、本物の汚染（source のデータ）を渡した呼び出しに限り、`detail: char_read_in_callee: <関数名>` の `numeric_stop` を、全体の不確実性の一覧に、呼び出し元と呼び出し先の組ごとに 1 件（場所は組の中で最小のもの）出す。呼び出し先が、数値と bool 以外の型の戻り値か書き込める引数（文字列以外の引数）を持つときだけ記録する（型だけで決まる。bool だけを返す検査の関数は、`-numeric-taint` を付けても流れが増えないので、記録しない）（流れは運ばない。`-numeric-taint` のときは止めないので空）。文字の読み出し以外の止まりは、今も記録されない |
 | `unsupported_construct` | rivus | extractor が下げられなかった構文（IR の `unsupported`）。その場所で何が起きるかは、解析に入っていない。`missing_source` ではない（対象のコードが足りないのではなく、rivus が読めなかった） |
 | `container_element_imprecision` | rivus | 結論に影響した場合のみ記録（ノイズ防止） |
-| `depth_limit` | rivus | 打ち切り。detail が理由を示す（`guard_limit`、`candidate_limit`、`caller_depth_limit`、`func_timeout`、`path_limit`、`out_limit` など）。例外: detail が `path_steps_omitted:` のものは、**解析の打ち切りではなく、表示の省略**（流れは見た。200 段を超える経路の、真ん中の段を見せていない。省いたステップの不確実性・モデル・到達性は finding に入っている）。ただし、source までさかのぼる途中の打ち切り（`the path was followed back for ...`）は、その先の段を見ていない |
-| `access_path_truncated` | rivus | 経路の**この段**で、値が深さの上限(`-k`。依存の関数は `-dep-k`)で切ったアクセスパスを通った(切ったセルに入れた段、切ったパスで読んだ段)。切った所より下は「まるごと汚染」として扱うので、ここから先の流れは、切ったために出ているだけかもしれない(多めに出る側。見逃しにはならない)。要素の同一性には入れず、段(why)に付ける(`pointer_alias` と同じ形)。使った深さは `summary.access_path_depth`(`{project, dependency}`、いつも出る)。切ったが値がそこを通らない finding には付かない。付かない場合: ポインタの位置のパスを切る所(`locs.go`。ループで伸びるパスの打ち切り)は注記を付けない。プログラム全体の記録は、`depth_limit` の `path_limit:` |
+| `depth_limit` | rivus | 打ち切り。detail が理由を示す（`guard_limit`、`candidate_limit`、`caller_depth_limit`、`func_timeout`、`path_limit`、`out_limit` など）。例外: detail が `path_steps_omitted:` のものは、**解析の打ち切りではなく、表示の省略**（流れは見た。200 ステップを超える経路の、真ん中のステップを見せていない。省いたステップの不確実性・モデル・到達性は finding に入っている）。ただし、source までさかのぼる途中の打ち切り（`the path was followed back for ...`）は、その先のステップを見ていない |
+| `access_path_truncated` | rivus | 経路の**このステップ**で、値が深さの上限(`-k`。依存の関数は `-dep-k`)で切ったアクセスパスを通った(切ったセルに入れたステップ、切ったパスで読んだステップ)。切った所より下は「まるごと汚染」として扱うので、ここから先の流れは、切ったために出ているだけかもしれない(多めに出る側。見逃しにはならない)。要素の同一性には入れず、ステップ(why)に付ける(`pointer_alias` と同じ形)。使った深さは `summary.access_path_depth`(`{project, dependency}`、いつも出る)。切ったが値がそこを通らない finding には付かない。付かない場合: ポインタの位置のパスを切る所(`locs.go`。ループで伸びるパスの打ち切り)は注記を付けない。プログラム全体の記録は、`depth_limit` の `path_limit:` |
 | `recursion_approximation` | rivus | |
 | `field_imprecision` | rivus | フィールドを指定する sink に、そのフィールドにあるとは言えない汚染が届いた（14 節）。detail は `whole_value`、`path_limit`、`element`、`opaque_callee` |
 | `field_unresolved` | rivus | sink が指定したフィールドが、プログラムにない（綴りの誤りなど）。sink を全体として扱った（14 節） |
@@ -708,7 +708,7 @@ rivus models coverage ./...
 
 - 検出結果の単位は **(source サイト, sink サイト) の組**。経路はその中に入れる（シンボルの組ではない。シンボルの組だと、プロジェクト中の同じ関数の呼び出しがすべて 1 件に混ざってしまうため）
 - **経路は 1 本だけ出す**（`internal/taint/engine.go`）。ADR-023 の「3 本まで。あふれは `omitted_paths` に数える」は、実装されていない（`omitted_paths` というフィールドはない）。経路が複数あっても、残りは出力に出ない。1 本の経路は、起点から届くもの、未解決の少ないもの、短いものを選ぶ。同じ sink に届く別の source は、`other_sources` に、本数と経路の素性だけを出す
-- 経路が 200 段（`maxPathSteps`）を超えると、途中を落とす。これは不確実性の注記を残さない（PRINCIPLES.md 1 節）
+- 経路が 200 ステップ（`maxPathSteps`）を超えると、途中を落とす。これは不確実性の注記を残さない（PRINCIPLES.md 1 節）
 - 検出結果とサイトに**安定した ID と指紋**を持たせる（4.6、ADR-028）。「前回から新規に増えたもの」を、前回の結果（ベースライン）との比較で CI が扱えるようにする
 - **サイト ID**（`rivus sites` の各項目）も同じ方針で安定させる。ID を `rivus query --site` の seed に使える
 - **出力の詳細度を選べる。** `-detail` は `summary`（経路とスニペットを省く）と `snippet`（全部。既定）の 2 つ（`internal/report/report.go`）。関数全文を付ける段階はない。エージェントのコンテキストを圧迫しないため
@@ -764,7 +764,7 @@ rivus models coverage ./...
 関数値の呼び出し（`call` の `value`）の候補を、**IR の上で 1 か所で決める**。サイトの列挙（ルールが、変数が持つ関数を指定できる。ADR-045）と、解析のグラフが、同じ候補を見るため（`sites` と `sg` が `valuecalls.Resolve` を呼ぶ）。
 
 - **候補の出所:** Go は、extractor の VTA の結果。ほかの言語は、`valuecalls` が、値に流れ込む関数を、コピー、φ、引数（呼び出し元が渡すもの）を通して探す。メモリは追わない（フィールドやリストに入れた関数は見つからず、呼び出しは未解決のまま）。
-- **限界:** 候補が 32 を超えたとき（`ir.ValueCandidateMost`）、呼び出し元を 3 段より上までたどるとき（`maxDepth`）は、候補を付けない。理由は `Callee.ValueLimit`（`candidate_limit`、`caller_depth_limit`）に残り、不確実性の detail になる。
+- **限界:** 候補が 32 を超えたとき（`ir.ValueCandidateMost`）、呼び出し元を 3 階層より上までたどるとき（`maxDepth`）は、候補を付けない。理由は `Callee.ValueLimit`（`candidate_limit`、`caller_depth_limit`）に残り、不確実性の detail になる。
 - **引数を通って届く関数:** どの候補が呼ばれるかは、呼び出し元に依る。候補は、通った引数の番号を持ち（`ValueCand.Param`）、呼び出し元が、渡した関数以外を通る流れを外す。
 - **絞り込み（`narrow.go`）:** Rust の `Fn::call` / `FnMut::call_mut` / `FnOnce::call_once` の候補は、extractor が「型の合うクロージャすべて」で作る。ここでは、**レシーバに流れ込む関数に絞る**（ADR-079、[DESIGN-capture.md](DESIGN-capture.md)）。
   - 規則は「**全部たどれたときだけ絞る**」。絞ると流れを失いうるが、作り出すことはない。たどれない物（規則のない命令、構造体のフィールド、呼び出しの結果、グローバル、トレイトオブジェクト、呼び出し元が全部は分からない引数、上限）に達したら、候補を全部残す。
@@ -777,7 +777,7 @@ rivus models coverage ./...
 sink は、位置の引数のうち、**どのフィールドが危険か**を指定できる（ADR-074。設計は [DESIGN-field-sinks.md](DESIGN-field-sinks.md)、書き方は [MODELING.md](MODELING.md)）。
 
 - **ルール:** `parts: [{arg: n | recv: true, field: "A.B"}]`。1 か所だけなら短い形（`args: [n]` ＋ `field:`）。フィールドは、IR にある名前を `.` でつなぐ。`[]` は、スライス、配列、map の要素。`args` で指定した位置は、全体が危険で、`parts` はそれ以外の位置のためにある（`internal/model/model.go` の `Sink`、`SinkPart`、`WholeArgs`）。
-- **照合（`internal/taint/fieldsink.go` の `matchParts`）:** モデルの名前は、値からのアクセスパスの**部分列**として照合する。名前でない段（フィールドの後ろのポインタ、インタフェースの中身、コンテナの要素）は飛ばせる。名前のほうは、飛ばせない。
+- **照合（`internal/taint/fieldsink.go` の `matchParts`）:** モデルの名前は、値からのアクセスパスの**部分列**として照合する。名前でない要素（フィールドの後ろのポインタ、インタフェースの中身、コンテナの要素）は飛ばせる。名前のほうは、飛ばせない。
 - **結果:** そのフィールド（かその下）にある汚染は、確かな検出。フィールドの隣の汚染は、流れではない。フィールドにあるとは言えない汚染（値全体が汚染されている、パスの上限で切れた、コンテナの要素、読まれていない関数を通った）は、検出として出し、不確実性 `field_imprecision`（detail は `whole_value` / `path_limit` / `element` / `opaque_callee`）を付ける。フィールド名がプログラムにないときは、`field_unresolved` を付けて、sink を全体として扱う。何も報告せずに落とすことはしない。
 
 ## 15. 隔離（信頼できない Rust の読み込み）

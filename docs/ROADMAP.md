@@ -16,8 +16,8 @@
 - **今の状態**: Rust の信頼しないコードは、macOS のサンドボックス(Seatbelt)の下だけで読む(ADR-093。[rust-isolation.md](rust-isolation.md)、[DESIGN-macos-sandbox.md](DESIGN-macos-sandbox.md)。Docker の経路は消した)。Linux には隔離がなく、既定では何も実行せずに止まる(`-unsafe-host-exec` だけ)。**隔離なしでは、取得したクレートのビルドスクリプトとマクロを実行しない**(クラウドのモデル作成では、Rust を扱わない。Rust のモデルの確認は、ローカルの macOS のサンドボックスの下で行う。#148)。取得元の既定は crates.io だけ。取得の段階のネットワークの絞り込みは案([DESIGN-fetch-network.md](DESIGN-fetch-network.md)、#110)。Go と Dart には、隔離がまだない(PRINCIPLES 8 節)。
 - **ユーザーの判断(2026-11-22)**: 取得の段階のネットワークの絞り込みと、Go / Dart の隔離は、しばらくやらない。帰結として、第三者のコードの実行と、新しい第三者のパッケージのまとまった解析は、引き続きしない(観測との照合は、zoo と自前の curated だけで進める)。
 - **次の作業**: 後回しのハードニング(#110〜#122。取得のプロキシ、`bsd.sb` の棚卸し、メモリとプロセス数の監視、macOS の CI の全体など)、出力に target triple を出す(#146)、ワークスペースの中の crate(#147)、Linux での Rust の扱い(#148)。制御を外すフラグ(`-unsafe-host-exec` など)が出力に出ること(`summary.isolation`)は済み。`[env]` で IR が空になる件は、直らない(ADR-093)。
-- **あとで隔離を足すときの最初の対象(相談役の判断、2026-11-22。着手の時期は未定)**: モデル化のタスクの、実行で確かめる段(`DESIGN-model-authoring.md`)。第三者のソースを読むエージェントが、シェルと実行の権限を持つ、いちばん権限の大きい使い方なので。今は、信頼できるコードにだけ使う、と知らせるに留める(ユーザーの判断)。
-- **決まり**: Go / Dart の隔離ができるまで、新しい第三者のパッケージをまとめて解析・実行しない。Rust の第三者のコードは、サンドボックスの中だけ(Linux では実行しない)。
+- **あとで隔離を足すときの最初の対象(相談役の判断、2026-11-22。着手の時期は未定)**: モデル化のタスクの、実行で確かめるステップ(`DESIGN-model-authoring.md`)。第三者のソースを読むエージェントが、シェルと実行の権限を持つ、いちばん権限の大きい使い方なので。今は、信頼できるコードにだけ使う、と知らせるに留める(ユーザーの判断)。
+- **ルール**: Go / Dart の隔離ができるまで、新しい第三者のパッケージをまとめて解析・実行しない。Rust の第三者のコードは、サンドボックスの中だけ(Linux では実行しない)。
 - **終わりの条件**: 3 言語とも、信頼しない入力を隔離の中だけで扱える。#110〜#122、#146〜#148 を閉じる。
 
 ## 1. グラフの正確さと、測る仕組み
@@ -51,12 +51,12 @@
 - **今の状態**: 11-20、21 に起票した #75、#76、#78、#79、#80、#81、#83、#86、#87 は、そのあと進んでおらず、止まっていた。ここから、下の順で進める。2026-11-23 の main の全体のレビューでも、同じ種類の見逃しが見つかった。種類は、次のとおり: 解析の対象の範囲(同じモジュールの自前のパッケージ)、ポインタ越しの書き込みの別名、ガードと収束、sanitizer の文脈、流れを止めるモデルの誤り、読まなかったものの報告、ライブラリの注記。再現の詳細は、直したあとに課題にする。
 - **次の作業(この順)**:
   1. レビューで見つかった上の種類を、1 つずつ直す。直ったら課題にする
-  2. 200 段を超える経路の切り詰めに、不確実性の注記を付ける(PRINCIPLES 1・2 節の、原則に反している所)
+  2. 200 ステップを超える経路の切り詰めに、不確実性の注記を付ける(PRINCIPLES 1・2 節の、原則に反している所)
   3. 止まっていた課題を、この順で: #75、#76、#78、#79、#80、#81、#83、#86、#87(コールバック: #76、#78、#79、#80、#81。モデルが正体を隠す形: #86、#87。`calls: [{method:}]` が Go / Dart で何もせず、報告もしない件は、課題に上げてから)
   4. 利用から出た要望: #170(ラベルを受ける sink がないときと、`query` の綴りの誤りの警告)、#171(`graph` の答えの `complete`。#123 と同じ種類)、#123
   5. 経路の欠け・揺れ: #90、#84
 - **課題**: #75、#76、#78、#79、#80、#81、#83、#84、#86、#87、#90、#123、#170、#171、#177、#180(`summary` が読み込みの結果の数を 0 のときも出す。F-2、ADR-114 の 7 と一緒に扱う)、#182(大きな文脈の値に入れた値が、同じ値から読む別の sink に届く)、#186(出力の widening の記録がない。ADR-118)、#187(流れを落とす上限。粗い形に落とす)、#188(`summary` に `-no-deps` の使用がない)、#183(interceptor を通すハンドラの呼び出しの候補が、登録した全部になる。memos の目標のあとの、最初の候補の 1 つ)(#184 は閉じた。PR #309、ADR-117)、#185(コードが文字を 1 つずつ読み書きすると流れが切れる。数値の型が汚染を持たない既定のため。zoo の `F/conv/char-*` に今日の結果を固定した)(#108、#156 は 3 節と 4 節の側)。
-- **深さの精度(Dart)**: #190(同じ深さで Dart は 1 段粗い。数え方を直す案)、#191(Dart の隣のフィールドが、どの深さでも区別されない。#179 の設計メモと一緒)。
+- **深さの精度(Dart)**: #190(同じ深さで Dart は 1 階層粗い。数え方を直す案)、#191(Dart の隣のフィールドが、どの深さでも区別されない。#179 の設計メモと一緒)。
 - **終わりの条件**: 打ち切り・省略が、すべて出力の不確実性に残る。上の止まっていた課題が閉じる。関数値の第 2 歩とキャプチャセルで閉じる分(#76、#78、#79、#81、#99 と #77 の残り)は、1 節のあとに回すものと同じ作業。
 
 ## 3. 依存込みの解析が、実用的な時間で終わること
@@ -73,7 +73,7 @@
   6. アクセスパスの深さを、場所ごとに決める(#189。memos の目標のあと)
 - **規模のための仕組みの条件**: [ADR-118](adr/118-scale-mechanisms-three-conditions.md) の表で 3 条件を満たさない行は、#186(出力の widening の記録)、#187(予算・反復・実時間の上限が流れを落とす。「予算で粗くする」安全網の、対象の一覧)、#188、#77(関数値の候補の上限)、#185 と PR #312(数値の停止)。
 - **利用から出た要望**: #166(`-max-memory`。メモリの上限で止める)、#167(taint の段階の進捗の表示)、#174(extractor の読み込みの進捗)、#175(Dart のモノレポの `-C`)、#176(Flutter のメンバーを含む workspace)。#127(`-timeout` の超過の残り)。
-- **終わりの条件**: 既定のフラグ(`-no-deps` なし、`-body-replaced` を手で書かない)で、memos(usememos/memos 26.11.2、`00fcd170281a75fc0e95ec4f2f54f43d32fe81bd`)について、`PASS memos time=<s>/180 mem=<GB>/8 converged=yes detected=yes quiet_after_fix=<yes|no|n/a>` の行が出ること。`PASS`/`FAIL` は、時間、メモリ、収束、`detected` の 4 つだけで決める。条件: 180 秒以内に終わる、メモリが 8 GB 以内、収束する、公開済みで修正済みの CVE-2025-65799(パストラバーサル)を、修正前のコミット `1d7efb158045924ab87f58d567bd79cd92edf6af` で検出する(`detected`。既定のフラグ、組み込みのモデルだけ。`path_traversal` の finding の件数だけを見る)。`quiet_after_fix`(修正後の `5f57f48673e2054f404b2c5b497a8eaa3690591d` で検出しない)は別の指標で、`PASS`/`FAIL` には入れない。「検証して早く return する」形の修正は、ガードの仕組み(#169)ができるまで、流れが消えたとは扱わないため。修正後のコミットは、修正前で検出したときだけ解析する(しないときは `n/a`)。`make bench-passline` で出す(`bench/deps_bench.py`、対象は `bench/deps-targets.json`)。今の線は `FAIL`(2026-11-23。`detected=no`、`quiet_after_fix=n/a`。メモリの上限で止まる。数字は `bench/LEDGER.md`)。Dart の線は、cocoon の `app_dart`(`ae9eb1beaf765d644cc85dde38def030c80b4b7d`。cwd は `app_dart`、`-allow-deps-under <cocoon>/packages`、`dart pub get` だけ、ルートの workspace の Flutter のメンバーはコピーで外す)。条件は memos と同じ(既定のフラグ、180 秒と 8 GB 以内、収束)。今の線は `PASS cocoon time=101/180 mem=1.78/8 converged=yes detected=n/a`(2026-11-23。公開の脆弱性の助言がないので、検出は n/a)。**検出は、脆弱性の単位で数える**(memos と同じ。その脆弱性の、ラベルを付けた位置のどれか 1 つを通る finding が 1 つでもあれば `detected=yes`)。位置の単位の数は、同じ行に参考として `through_tp=<n>/<N>` で並べる(判定には入れない)。Dart の検出は、dart-lang/pub の zip slip(`bench/dart-pub`、公開の修正済みの脆弱性 1 つ、ラベル 9 か所)の的 `dart-pub` で見る。線は未決で `INFO`。既定のフラグでは、収束しないので、今は `detected=no`。dart_services は、重い依存 `package:analyzer` の負荷の対象で、`INFO` のまま(深さの実験の対象でもある)。宣言したパッケージが、全部、差分テストを通っている。
+- **終わりの条件**: 既定のフラグ(`-no-deps` なし、`-body-replaced` を手で書かない)で、memos(usememos/memos 26.11.2、`00fcd170281a75fc0e95ec4f2f54f43d32fe81bd`)について、`PASS memos time=<s>/180 mem=<GB>/8 converged=yes detected=yes quiet_after_fix=<yes|no|n/a>` の行が出ること。`PASS`/`FAIL` は、時間、メモリ、収束、`detected` の 4 つだけで決める。条件: 180 秒以内に終わる、メモリが 8 GB 以内、収束する、公開済みで修正済みの CVE-2025-65799(パストラバーサル)を、修正前のコミット `1d7efb158045924ab87f58d567bd79cd92edf6af` で検出する(`detected`。既定のフラグ、組み込みのモデルだけ。`path_traversal` の finding の件数だけを見る)。`quiet_after_fix`(修正後の `5f57f48673e2054f404b2c5b497a8eaa3690591d` で検出しない)は別の指標で、`PASS`/`FAIL` には入れない。「検証して早く return する」形の修正は、ガードの仕組み(#169)ができるまで、流れが消えたとは扱わないため。修正後のコミットは、修正前で検出したときだけ解析する(しないときは `n/a`)。`make bench-passline` で出す(`bench/deps_bench.py`、対象は `bench/deps-targets.json`)。今の結果は `FAIL`(2026-11-23。`detected=no`、`quiet_after_fix=n/a`。メモリの上限で止まる。数字は `bench/LEDGER.md`)。Dart の合格基準は、cocoon の `app_dart`(`ae9eb1beaf765d644cc85dde38def030c80b4b7d`。cwd は `app_dart`、`-allow-deps-under <cocoon>/packages`、`dart pub get` だけ、ルートの workspace の Flutter のメンバーはコピーで外す)。条件は memos と同じ(既定のフラグ、180 秒と 8 GB 以内、収束)。今の結果は `PASS cocoon time=101/180 mem=1.78/8 converged=yes detected=n/a`(2026-11-23。公開の脆弱性の助言がないので、検出は n/a)。**検出は、脆弱性の単位で数える**(memos と同じ。その脆弱性の、ラベルを付けた位置のどれか 1 つを通る finding が 1 つでもあれば `detected=yes`)。位置の単位の数は、同じ行に参考として `through_tp=<n>/<N>` で並べる(判定には入れない)。Dart の検出は、dart-lang/pub の zip slip(`bench/dart-pub`、公開の修正済みの脆弱性 1 つ、ラベル 9 か所)の的 `dart-pub` で見る。合格基準は未決で `INFO`。既定のフラグでは、収束しないので、今は `detected=no`。dart_services は、重い依存 `package:analyzer` の負荷の対象で、`INFO` のまま(深さの実験の対象でもある)。宣言したパッケージが、全部、差分テストを通っている。
 
 ## 4. 外から差し込むルール
 
@@ -92,7 +92,7 @@
 
 - **目的**: 組み込みモデルで、依存の中の source と sink を検出する(コストの側は 3 節)。Dart の基盤を優先する。
 - **範囲**: ADR-096、097。Google Cloud、外部のサービスのクライアント、標準ライブラリ、代わりのないパッケージ、pub の人気の上位。選ぶ基準は公開の指標だけ([DART-MODEL-CANDIDATES.md](DART-MODEL-CANDIDATES.md))。ADR-063 は決まった(組み込みに入れるかは、フレームワークごとに、その都度、相談役が判断する)。
-- **今の状態**: 今あるモデルは `internal/model/builtin/`。作る順番は [MODEL-QUEUE.md](MODEL-QUEUE.md)、手順は [MODEL-RUNBOOK.md](MODEL-RUNBOOK.md)、設計は [DESIGN-model-authoring.md](DESIGN-model-authoring.md)。クラウドの定期実行(`rivus-model-author`)は停止中。Rust は、隔離のない環境では、モデルは書き、extractor を使う確認は CI に任せる(#148)。モデルの鮮度(`verified_versions` と、更新の検知。DESIGN-package-models.md の 6.7 節)は、設計案。実装はまだ。実行で確かめる段は、信頼できるコードに対してだけ使う(隔離は作らない。ユーザーの判断、2026-11-22)。
+- **今の状態**: 今あるモデルは `internal/model/builtin/`。作る順番は [MODEL-QUEUE.md](MODEL-QUEUE.md)、手順は [MODEL-RUNBOOK.md](MODEL-RUNBOOK.md)、設計は [DESIGN-model-authoring.md](DESIGN-model-authoring.md)。クラウドの定期実行(`rivus-model-author`)は停止中。Rust は、隔離のない環境では、モデルは書き、extractor を使う確認は CI に任せる(#148)。モデルの鮮度(`verified_versions` と、更新の検知。DESIGN-package-models.md の 6.7 節)は、設計案。実装はまだ。実行で確かめるステップは、信頼できるコードに対してだけ使う(隔離は作らない。ユーザーの判断、2026-11-22)。
 - **次の作業**: sink の行の**一括採用**(`adopt_rules:`)は、確認の仕組み(3 節の差分テスト)が PR で動いてから使う。新しいパッケージの sink のモデルは、3 節の主な作業のあと。#142(Go の `resource_name`)、#139(`named:`)、#140、#158、#159。Dart の github の課題: `docs/issues/model-dart-github-repositoryslug-miss.md`。
 - **終わりの条件**: 順番の一覧の上位が、手順書どおりの PR で入る。
 
@@ -110,7 +110,7 @@
 - **Homebrew での配布**(ユーザーの指示による例外だった): `brew install yagihash/tap/rivus`(v0.0.2 から。[DESIGN-install.md](DESIGN-install.md))。ツールチェインは keg の外に置く。`rivus version`、`rivus completion zsh`(PR #155)。
 - **Docker の経路の削除と、macOS のサンドボックスへの移行**(ADR-093)。CI の `sandbox` ジョブ。残りは 0 節。
 - **CI の時間**: 言語に閉じた変更の PR では、ほかの言語のジョブをスキップする(PR #134)、Dart の分割の増加、PR は `-short`。
-- **依存の中のサイトの明記**(ADR-099。PR #165)、`rivus debug` と `-h` の 2 段(PR #136)、`summary_sizes` と `on_findings_top`(PR #150、#153、#156)、`-timeout` の巨大な SCC の中の超過(課題 #126)。
+- **依存の中のサイトの明記**(ADR-099。PR #165)、`rivus debug` と `-h` の 2 階層(PR #136)、`summary_sizes` と `on_findings_top`(PR #150、#153、#156)、`-timeout` の巨大な SCC の中の超過(課題 #126)。
 - **名前つき引数を指す sink**(`named:`。PR #169)。フィールドの追加は、finding の `categories`。
 - 課題の移行(GitHub の Issue から `docs/ISSUES.md` へ)。
 

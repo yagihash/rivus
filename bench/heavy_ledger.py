@@ -8,6 +8,10 @@ Read it (read only):
 
   python3 bench/heavy_ledger.py [--kind passline|deps] [--target memos] [--last N] [--ledger FILE]
 
+The pass line is two separate conditions, both needed: it finishes (`finish`: time within the limit, memory within the cap,
+`conv` converged; computed from the limits of bench/deps-targets.json) and it detects (`det`: by place, see
+bench/passline-baseline.md). `result` is PASS when both hold.
+
 The margin is not a column. The table computes it: memory_limit_bytes - memory_peak_bytes, and, when the run recorded
 it, memory_limit_bytes - live_heap_max_bytes (live_margin_gb). live_heap_max_bytes is the largest amount that the GC marked
 live: a guide on the upper side (in the summary phase it is larger than what is really live), not the real live size, so
@@ -16,6 +20,7 @@ those cells are empty and nothing stops.
 """
 import argparse
 import fcntl
+import json
 import os
 import sys
 
@@ -126,9 +131,25 @@ def _gb(b):
     return "-" if b is None else "%.2f" % (b / GB)
 
 
+def finished(r, targets):
+    """The condition "finishes" of the pass line (time within the limit, memory within the cap, converged), apart from the
+    detection. targets: the data of bench/deps-targets.json (the limits). "-" when the row has no limits to compare with."""
+    t = targets.get(r.get("target", ""))
+    try:
+        ok_t, ok_m = float(r["wall_s"]) <= t["time_limit_s"], float(r["peak_tree_gb"]) <= t["mem_cap_gb"]
+    except (KeyError, ValueError, TypeError):
+        return "-"
+    return "yes" if ok_t and ok_m and r.get("converged") in ("True", "true", "yes", True) else "no"
+
+
 def render(rows):
+    try:
+        targets = json.load(open(os.path.join(ROOT, "bench/deps-targets.json")))
+    except (OSError, ValueError):
+        targets = {}
+    # finish (time, memory, convergence) and det (the detection) are two separate conditions; the pass line needs both
     head = ["date", "rivus", "target", "kind", "settings", "wall_s", "cpu_s", "tree_gb", "limit_gb", "peak_gb",
-            "margin_gb", "live_margin_gb", "gc", "conv", "det", "quiet", "find", "exit", "result"]
+            "margin_gb", "live_margin_gb", "gc", "conv", "finish", "det", "quiet", "find", "exit", "result"]
     table = [head]
     for r in rows:
         m_peak, m_live = margins(r)
@@ -143,7 +164,7 @@ def render(rows):
         v = lambda k: r.get(k) or "-"
         table.append([v("date"), v("rivus_commit"), v("target"), v("kind"), v("settings"), v("wall_s"), v("cpu_s"),
                       v("peak_tree_gb"), lim, peak, _gb(m_peak), _gb(m_live), v("gc_cpu_fraction"), v("converged"),
-                      v("detected"), v("quiet_after_fix"), v("findings"), v("exit_code"), v("result")])
+                      finished(r, targets) if r.get("kind") == "passline" else "-", v("detected"), v("quiet_after_fix"), v("findings"), v("exit_code"), v("result")])
     w = [max(len(row[i]) for row in table) for i in range(len(head))]
     return "\n".join("  ".join(c.ljust(w[i]) for i, c in enumerate(row)).rstrip() for row in table)
 

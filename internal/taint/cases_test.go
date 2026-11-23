@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/yagihash/rivus/internal/frontend/gossa"
 	"github.com/yagihash/rivus/internal/sites"
 	"github.com/yagihash/rivus/internal/testutil"
 )
@@ -684,9 +685,15 @@ func TestGRPCHandlersAreFoundFromTheGeneratedCode(t *testing.T) { checkCase(t, "
 // is not.
 func TestMissingGeneratedCodeIsReported(t *testing.T) {
 	missing := func(name string) bool {
-		prog := loadIR(t, testutil.Testdata(), "./cases/"+name+"/...")
+		// the rules are expanded before the IR is made, as rivus does: the
+		// extraction takes the bodies of the go/ssa functions, which "calls
+		// this function" reads
+		p, err := gossa.Load(testutil.Testdata(), []string{"./cases/" + name + "/..."}, gossa.Options{NaiveForm: true, WithLifted: true})
+		if err != nil {
+			t.Fatal(err)
+		}
 		rules := testutil.Rules(t)
-		for _, e := range rules.Expand(prog.gossa, 0) {
+		for _, e := range rules.Expand(p, 0) {
 			if e.Missing {
 				return true
 			}

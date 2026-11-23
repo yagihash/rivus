@@ -114,3 +114,41 @@ test_merge_conflict_in_code_is_not_checked if {
 test_a_sentence_without_conflict_word_passes if {
 	not denied("paragraph", "main にマージした。名前が重なる")
 }
+
+test_terminology_rules_are_denied if {
+	every text in [
+		"生きている量が上限に近い", "生きているヒープの最大", "読み込みの段の山", "要約の段で増える", "解析の段", "確保の速い段", "要約を適用する段",
+		"経路の段に注記が付く", "段の単位の注記", "段ごとに数える", "原因の段", "名前でない段を飛ばす",
+		"合否の線を決める", "合格の線を上げる", "合格線", "線を越えた", "線の中に収まる", "線が上がる",
+		"この決まりを守る", "決まりが増える", "決まりは変えない", "守る決まりを", "決まりごと",
+	] {
+		denied("paragraph", text)
+	}
+}
+
+test_terminology_rules_pass_other_words if {
+	every text in [
+		"段階 2 に進む", "取得の段階", "経路の段階", "原因の段階を言う", "手段がない", "値段", "2 段", "1 段目の隣", "3 段で切る", "普段使う", "後段の LLM",
+		"値が決まります", "結果が決まりました", "順序が決まる", "決まらない場合", "値が決まり、次に進む", "きまりを書く", "決まり文句", "決まり手", "ライブヒープ（強制 GC のあと）",
+		"合格基準を厳しくする", "ルールを守る",
+	] {
+		not denied("paragraph", text)
+	}
+}
+
+test_bridge_lift_peak_depth_are_denied if {
+	every text in [
+		"つなぎの注記を付ける", "つなぎの対策", "持ち上げありの SSA", "持ち上げなしの形", "読み込みの山", "メモリの山が高い", "山を下げる", "山の高さを測る", "ヒープの山", "要約の山",
+		"最大 4 段まで見る", "3 段より上にたどる", "何段もの関数", "1 段深く見る", "4 段のパスなど", "1 段粗い", "5 段のヘルパー",
+	] {
+		denied("paragraph", text)
+	}
+}
+
+test_bridge_lift_peak_depth_pass_other_words if {
+	every text in [
+		"山を越える", "山道を歩く", "山田さん", "2 段階に分ける", "1 段目の隣", "2 段構えで使う", "段階 4", "3 段の探索", "200 段を超える経路", "持ち上げる", "暫定の注記", "ピークが高い", "3 階層まで",
+	] {
+		not denied("paragraph", text)
+	}
+}

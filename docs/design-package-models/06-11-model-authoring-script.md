@@ -2,11 +2,11 @@
 
 背景: クラウドで 1 パッケージ分のモデルを作る作業(手順書 [MODEL-RUNBOOK.md](../MODEL-RUNBOOK.md))は、Dart(dio、github、shelf、googleapis_auth)、Go(gin、storage、sqlx、go-github、`os` と `database/sql` の行)、Rust(actix-web、axum、google-cloud-storage、octocrab)の 10 本あまりで、ほぼ毎回、手順書への追記が要った。クラウドで確実に回すには、手順を全部スクリプトにして、人や LLM の判断を「sink、source、sanitizer をどれにするか」だけに絞る必要がある。最初の要件(決まった手順はスクリプト、LLM は sink / source / sanitizer の選択だけ)に戻る。この節は設計案で、実装はしない。事実は、手順書の履歴(`git log --follow docs/MODEL-RUNBOOK.md`)と、リポジトリのファイルで確認した。
 
-#### 1. 手でやっている段と、スクリプトにできるか
+#### 1. 手でやっているステップと、スクリプトにできるか
 
 追記の原因が「スクリプトがなかった」ものか、「本当に判断が要る」ものかを分ける。
 
-| 順 | 段 | 手順書の追記(根拠) | 分類 | 理由 |
+| 順 | ステップ | 手順書の追記(根拠) | 分類 | 理由 |
 | --- | --- | --- | --- | --- |
 | 1 | 取得(`go mod download`、`dart pub get`、`cargo fetch`。取得だけ) | 0 節の「取得と実行の範囲」の表 | スクリプトにできる | 一覧(MODEL-QUEUE.md)の行から決まる |
 | 2 | 公開の API の列挙と、粗い flows の生成(型から) | 2 節の 1 は「未実装」のまま。`rivus models coverage -yaml` で代用している | スクリプトにできる(新規。4.3a の規則 a〜f) | 型だけで決まる。判断は要らない |
@@ -15,7 +15,7 @@
 | 3b | Rust の `[workspace] exclude = ["skel"]`(`kind: field` の source を使うとき) | 4 節の Rust の注意(octocrab) | スクリプトにできる | 条件を付けず、骨組みに常に足す(3 つの言語とも、骨組みを依存として扱う) |
 | 3c | 埋め込み型・インターフェースの骨組みの形(sqlx の `DB` が `*sql.DB` を埋め込む) | 4 節の補足と 6.8 の生成器の要件 | スクリプトにできる(型の情報から) | 型の埋め込みは `go/types` などで読める |
 | 4 | セルの置き場所(Go は `bench/zoo-go` か `bench/zoo-go-pkg/<名前>/`。パッケージの設定、`go.mod`、`rules.yaml`) | 4 節の「さわってよいファイル」。標準ライブラリの行を、`zoo-go-pkg` のセルで確認するか `zoo-go` のセルでするか、の迷い(`os`、`database/sql`) | スクリプトにできる(規則を決めれば) | 規則: 第三者のパッケージは `zoo-<lang>-pkg`。標準ライブラリは、対のセルの確認を満たせれば `zoo-<lang>`、満たせなければ `zoo-<lang>-pkg/<標準ライブラリの名前>`(#219、#223 の形)。コマンドが決める |
-| 5 | セルの本体(vuln / fixed / decoy の呼び出し) | 2 節の 4 | 骨組み(テンプレート)はスクリプトにできる。中身は判断が要る | 行ごとに「届く / 届かない」のセルが要る。テンプレートは、行から作れる。`fixed` は Rust で 4 つの `clean_*` を通す決まり(4 節)なので、テンプレートに入れる |
+| 5 | セルの本体(vuln / fixed / decoy の呼び出し) | 2 節の 4 | 骨組み(テンプレート)はスクリプトにできる。中身は判断が要る | 行ごとに「届く / 届かない」のセルが要る。テンプレートは、行から作れる。`fixed` は Rust で 4 つの `clean_*` を通すルール(4 節)なので、テンプレートに入れる |
 | 6 | マークの固定(`ZOO_MARKS_UPDATE=1 go test ./cmd/rivus -run '^TestZooMarksLock$'`) | 4 節の補足 | スクリプトにできる | コマンドが決まっている。新しいセルだけが増えたことを確認する |
 | 7 | Dart の依存の解決(`--dep-dir`、`pubspec.yaml` の `dependency_overrides`、`zoo_exec_override`、`make zoo-dart-gen`) | 4 節、6.8(shelf と `test` の名前のぶつかり。github の `field` の source を `--dep-dir` で読む) | スクリプトにできる | `zoo_exec_override` の行は、`cmd/rivus/zoo_dart_gen_test.go` が読む。骨組みの `pubspec.yaml` に書くだけ。`--dep-dir` は条件を付けず、骨組みに常に足す |
 | 8 | Go の major バージョンの接尾辞(`/v2` など)を、シンボルでどう書くか(ワイルドカード) | 手順書の追記の履歴(go-github)。手順書の本文には、いまは規則がない(**要確認**) | スクリプトにできる(モジュールのパスから) | モジュールのパスの `/vN` は、`go list -m` で決まる |
@@ -38,7 +38,7 @@
 make model PKG=<パッケージ> VERSION=<バージョン> LANG=<go|dart|rust>   # 案。名前は未定
 ```
 
-終了コードで、失敗した段を言う(0: 成功、10: 取得、20: 生成、30: 骨組みのビルド、40: セル、50: 差分テストの MISS、60: zoo のゲート、70: 未決の候補がある(`-expand` では、決めの衝突、`covers` を超える増加、代表が生成した行でない)、80: 実行できない段(Rust の extractor)で止まった)。数字は例で、決めるのは実装のとき。
+終了コードで、失敗したステップを言う(0: 成功、10: 取得、20: 生成、30: 骨組みのビルド、40: セル、50: 差分テストの MISS、60: zoo のゲート、70: 未決の候補がある(`-expand` では、決めの衝突、`covers` を超える増加、代表が生成した行でない)、80: 実行できないステップ(Rust の extractor)で止まった)。数字は例で、決めるのは実装のとき。
 
 | 順 | やること | 出力(コミットするか) | 使う既存の部分 |
 | --- | --- | --- | --- |
@@ -48,7 +48,7 @@ make model PKG=<パッケージ> VERSION=<バージョン> LANG=<go|dart|rust>  
 | 4 | 候補を出し、モデルのファイルと照合る(下) | 未決があれば、作業ファイルに一覧(コミットしない)。終了コード 70 | 新規(候補の一覧)。`rivus models coverage`、`-coverage-gaps` |
 | 5 | zoo のセルのテンプレート、`rules.yaml`、`pubspec.yaml` の設定 | `bench/zoo-<lang>-pkg/<パッケージ>/cells/`(テンプレートはコミットする。中身は人か LLM が足す) | 新規(テンプレート)。`make zoo-dart-gen` |
 | 6 | マークの固定、`.dead-allow`、`verified_versions` | `bench/zoo/marks.d/`、`*.dead-allow`、モデルの先頭(コミットする) | `TestZooMarksLock`、`readDeadAllow` |
-| 7 | 差分テスト(MISS が 0。EXTRA は理由を注釈にする)。PR のジョブにも入れる(段 1 と同時) | なし(結果は PR の本文へ) | `bench/model-diff` |
+| 7 | 差分テスト(MISS が 0。EXTRA は理由を注釈にする)。PR のジョブにも入れる(ステップ 1 と同時) | なし(結果は PR の本文へ) | `bench/model-diff` |
 | 8 | 行がない関数の一覧 | なし(PR の本文へ) | `-coverage-gaps`(第三者のパッケージへの拡張は新規) |
 | 9 | zoo のゲート、`regomark check --no-judge` | なし | `scripts/zoo-loosened-check.sh`(`make zoo-loosened`)、`regomark` |
 | 10 | PR の題と本文の材料 | `.claude/work/` などの一時の場所(コミットしない) | 新規(数字の集計) |
@@ -90,34 +90,34 @@ rejected:
 | | Go | Dart | Rust |
 | --- | --- | --- | --- |
 | 型の取り方(4.2) | `go/packages`(`NeedTypes`) | analyzer の `LibraryElement` | extractor を使う(段階 5) |
-| 実行する場所 | クラウドで全段が可能(取得だけ。実行しない) | クラウドで全段が可能 | ローカルのサンドボックスの下。クラウドは Rust を扱わない |
+| 実行する場所 | クラウドで全ステップが可能(取得だけ。実行しない) | クラウドで全ステップが可能 | ローカルのサンドボックスの下。クラウドは Rust を扱わない |
 | 骨組みの形 | `skel/`、`zoo/mark` | `cells/packages/<名前>`(`zoo_exec_override`、`--dep-dir`) | `skel/`、`zoo-mark`、`#[track_caller]` |
 | 差分テスト | あり | あり | 段階 5 で(extractor を動かす。サンドボックスの下) |
 
-Rust は、extractor を動かす段(型の取得、セルの解析の確認、本物のクレートでの記号の綴りの照合、差分テスト)が、macOS のサンドボックスの下でしか許されていない(手順書 0 節、6.5)。クラウドには隔離がなく、クラウドは Rust を扱わない。**構文だけで署名を読む道具は作らない**(再エクスポートや型の別名を解けず、精度が下がるため)。Rust は、同じコマンドを、サンドボックスの下でローカルに走らせる(段階 5)。
+Rust は、extractor を動かすステップ(型の取得、セルの解析の確認、本物のクレートでの記号の綴りの照合、差分テスト)が、macOS のサンドボックスの下でしか許されていない(手順書 0 節、6.5)。クラウドには隔離がなく、クラウドは Rust を扱わない。**構文だけで署名を読む道具は作らない**(再エクスポートや型の別名を解けず、精度が下がるため)。Rust は、同じコマンドを、サンドボックスの下でローカルに走らせる(段階 5)。
 
 **骨組みの共通の決め**: `--dep-dir` と Rust の `exclude = ["skel"]` は、条件付きにしない。骨組みには常に足す(3 つの言語とも、骨組みを依存として扱うため)。
 
 **セルの置き場所の決め**: 第三者のパッケージは `zoo-<lang>-pkg`。標準ライブラリは、対のセル(parity)の確認を満たせるなら `zoo-<lang>`、満たせないなら `zoo-<lang>-pkg/<標準ライブラリの名前>`(#219、#223 の形)。コマンドが決める(選択は残さない)。
 
-**言語を横断する順**(2026-11-23。言語の間の機能の差を大きくしない。[bench/parity/README.md](../../bench/parity/README.md) の機能の差の表で見る): 言語ごとに段 1〜3 を終えるのでなく、段ごとに 3 言語を回す。段 1(枠、候補、検証、差分テスト)は Go → Dart → Rust(Rust はローカルで、サンドボックスの下)。次に段 2(骨組みの生成)を Go → Dart → Rust。段 3(型からの flows の生成)も同じ。Rust を急ぐ必要はないが、段の途中で差が開いたままにしない。Rust の段 1 の前提は、次の 4 つ(見積もりは、あとで足す): (a) Rust の extractor が宣言のある本体を読まない(宣言の段階 4。ADR-105 の続き。7a 節)。(b) Rust の差分テスト。(c) `rust-web.yaml` をパッケージごとのファイルに分ける。(d) `summary.unverified_versions` を Dart と Rust に出す(課題 #162)。
+**言語を横断する順**(2026-11-23。言語の間の機能の差を大きくしない。[bench/parity/README.md](../../bench/parity/README.md) の機能の差の表で見る): 言語ごとにステップ 1〜3 を終えるのでなく、ステップごとに 3 言語を回す。ステップ 1(枠、候補、検証、差分テスト)は Go → Dart → Rust(Rust はローカルで、サンドボックスの下)。次にステップ 2(骨組みの生成)を Go → Dart → Rust。ステップ 3(型からの flows の生成)も同じ。Rust を急ぐ必要はないが、ステップの途中で差が開いたままにしない。Rust のステップ 1 の前提は、次の 4 つ(見積もりは、あとで足す): (a) Rust の extractor が宣言のある本体を読まない(宣言の段階 4。ADR-105 の続き。7a 節)。(b) Rust の差分テスト。(c) `rust-web.yaml` をパッケージごとのファイルに分ける。(d) `summary.unverified_versions` を Dart と Rust に出す(課題 #162)。
 
-#### 4. 実装の順と、最初の段の範囲
+#### 4. 実装の順と、最初のステップの範囲
 
-| 段 | 内容 | 規模(見積もり) |
+| ステップ | 内容 | 規模(見積もり) |
 | --- | --- | --- |
 | 1(最初) | **Go だけ。`make model` の枠、候補の一覧(層 1 と層 2)、`rejected:` の読み込みと検証、照合と終了コード 70、`.dead-allow` と `verified_versions`、差分テスト(PR のジョブにも入れる)、PR の本文の材料**。最初の作業は、層 1 の規則の評価(2 節)。型からの flows の生成と、骨組みの生成は含めない(今の `rivus models coverage -yaml` と、手で書いた骨組みを使う) | 中。コマンド 1 つ(Go の小さいプログラム。`bench/model-diff` と同じ形)と、ローダーの検証と、テスト |
 | 2 | Go の骨組みの生成(署名、埋め込み、`zoo/mark` の記録)と、セルのテンプレート。**既存の骨組みに `--dep-dir` と `exclude` を足して揃える作業を、1 つの PR で行う** | 中 |
 | 3 | Go の型からの flows の生成(4.3a の規則 a〜f。段階 3 の生成器) | 中。`-coverage-gaps` の拡張(第三者のパッケージ)を含む |
 | 3 のあと | 課題 #163(ライブラリをプロジェクトとして解析する候補。Go が先) | 中 |
-| 4 | 段 1〜3 の Dart 版(下の「言語を横断する順」。骨組み、`zoo_exec_override`、`--dep-dir`、型の取得) | 中〜大 |
-| 5 | 段 1〜3 の Rust 版(クラウドでできる段だけ。3 の表。ローカルはサンドボックスの下) | 大(構文だけの署名の取得) |
+| 4 | ステップ 1〜3 の Dart 版(下の「言語を横断する順」。骨組み、`zoo_exec_override`、`--dep-dir`、型の取得) | 中〜大 |
+| 5 | ステップ 1〜3 の Rust 版(クラウドでできるステップだけ。3 の表。ローカルはサンドボックスの下) | 大(構文だけの署名の取得) |
 
 **段階 1 の状態(2026-11-23): 差分テストは、構造体の引数とレシーバに、文字を持てるフィールドすべてへ source を入れて確認する(手順書 9 節。確認していない行は、標準ライブラリで 44.6% から 43.6%。数と理由別の内訳は `bench/model-ledger.md`)。実装済み(`bench/model-author`、`make model`。Go だけ)。型からの flows の生成、骨組みとセルの生成、Dart、Rust は含めない。差分テストを PR のジョブに入れる部分は、入れた(2026-11-23。`model-diff-changed`。06-03)。CI の `model-diff` は、定期の実行と手動のまま。**
 
 **段階 1(Rust)の状態(2026-11-23): (b) の最初の一部だけ。モデルの行の綴りを、extractor が書く綴りと照合する(`go run ./bench/model-diff -lang rust -pkg <crate> [-version <v>]`。ローカルの macOS のサンドボックスの下だけ。CI には入れない)。** 一時のディレクトリに、本物のクレートを版を固定して(`=<v>`)使う crate を作り、`cargo generate-lockfile` と `cargo fetch`(取得だけ)をして、モデルの行(sinks、sources の `call_result` と `param_type`、sanitizers、propagators、`config_reads`)ごとに 1 つの関数(プローブ)を書く。関数の行は、パスを値として使う(`std::hint::black_box(path)`。IR では `make_closure` の `func` に、extractor の綴りが出る)、型の行は、関数の引数の型にする(型引数の数は 0〜3 を順に試す)。`rivus debug extract -lang rust` を走らせ、プローブの IR と行を照合する。**公開 API の一覧は作らない**(rustdoc の JSON は、`cargo rustdoc` が `build.rs` を動かすので、サンドボックスの外では使えず、extractor のサンドボックスの道は rustdoc に通っていない。行を名指しするプローブなら、コンパイラが「その経路があるか」を答える)。コンパイルできないプローブは、エラーの `src/lib.rs:行` で行が分かるので、その行だけを外して繰り返す。結果は 1 行ごとに、found(extractor が同じ綴りを書く)、spelled-differently(コンパイルできるが、extractor が別の綴りを書く。その綴りを出す)、resolves(コンパイラは経路を知っているが、型の注釈やトレイト境界のため、プローブでは名指しできない)、not-found(経路がない。定義の経路で末尾 2 要素が同じ関数を、近い候補として出す)。終了コード: 0 全部 found、1 spelled-differently か not-found がある、2 失敗(取得、extract、フラグ)、3 実行しなかった(macOS でない、extractor か cargo がない。何も確認していない)、4 欠けはないが resolves がある。`field` の行は、まだ確認しない(報告に出す)。取得してよいのは `docs/MODEL-QUEUE.md` にあるクレートだけ(なければ終了コード 2)。extractor は、このリポジトリから別の場所にビルドして `-rust-extractor`(か `RIVUS_RUST_EXTRACTOR`)で渡す(`rivus setup rust` と、共有の extractor は使わない)。`-unsafe-host-exec` は渡さない。まだないもの: 解析 2 回の比較(A と B)、`-write-dead-allow`、`-write-verified`、CI への組み込み、`make model` からの呼び出し。
 
-**段階 1(Dart)の状態(2026-11-23): 実装済み(`make model PKG=<パッケージ名> VERSION=<v> LANG=dart`。`bench/model-author/dart*.go`。骨組みの生成は含めない)。** 取得は、空のプロジェクトで `dart pub get` するだけ(`hook/build.dart` か `hook/link.dart` を持つパッケージが 1 つでもあれば、終了コード 10 で止める)。公開 API は、`bench/model-author/dartapi`(Dart の analyzer。型を読むだけで、パッケージのコードは実行しない)が、`lib/` の `src/` の外の各ライブラリの export から読む。シンボルは、extractor と同じ形(宣言したライブラリの `package:x/src/a.dart#Class.member`)なので、行とそのまま照合する。規則の表は Go と同じ(同じ語、同じ形)で、Dart の署名の形に読み替える: 位置は、位置引数が `arg<i>`、名前つき引数が `named:<名前>`、クラスの引数のフィールドは `arg0.owner`(3 段まで)。`dynamic` と `Object` の引数は、名前が決める(dio の `savePath`)。`Map` を返すもの(ヘッダー、メタデータ)は、本文と同じに source の候補。`static` の定数は source の候補にしない。`calls` の候補は、`body_replaced_packages` にあるパッケージだけ(Go と同じ決め。Dart の組み込みのモデルには、今ない)。終了コードは Go と同じ(10: `dart pub get` の失敗かフック、20: API を読めない、差分テストが動かない、50、70)。`-write-dead-allow` は、zoo のテストが Dart の extractor を使うので `RIVUS_DART` が要る(未設定なら 20)。再現率は、`bench/model-author` の `-recall`(`-dart-libs storage/,pubsub/` で、`googleapis` のように大きいパッケージを一部のライブラリに絞れる)。
+**段階 1(Dart)の状態(2026-11-23): 実装済み(`make model PKG=<パッケージ名> VERSION=<v> LANG=dart`。`bench/model-author/dart*.go`。骨組みの生成は含めない)。** 取得は、空のプロジェクトで `dart pub get` するだけ(`hook/build.dart` か `hook/link.dart` を持つパッケージが 1 つでもあれば、終了コード 10 で止める)。公開 API は、`bench/model-author/dartapi`(Dart の analyzer。型を読むだけで、パッケージのコードは実行しない)が、`lib/` の `src/` の外の各ライブラリの export から読む。シンボルは、extractor と同じ形(宣言したライブラリの `package:x/src/a.dart#Class.member`)なので、行とそのまま照合する。規則の表は Go と同じ(同じ語、同じ形)で、Dart の署名の形に読み替える: 位置は、位置引数が `arg<i>`、名前つき引数が `named:<名前>`、クラスの引数のフィールドは `arg0.owner`(3 階層まで)。`dynamic` と `Object` の引数は、名前が決める(dio の `savePath`)。`Map` を返すもの(ヘッダー、メタデータ)は、本文と同じに source の候補。`static` の定数は source の候補にしない。`calls` の候補は、`body_replaced_packages` にあるパッケージだけ(Go と同じ決め。Dart の組み込みのモデルには、今ない)。終了コードは Go と同じ(10: `dart pub get` の失敗かフック、20: API を読めない、差分テストが動かない、50、70)。`-write-dead-allow` は、zoo のテストが Dart の extractor を使うので `RIVUS_DART` が要る(未設定なら 20)。再現率は、`bench/model-author` の `-recall`(`-dart-libs storage/,pubsub/` で、`googleapis` のように大きいパッケージを一部のライブラリに絞れる)。
 
 **段階 2 の状態(2026-11-23): Go の骨組みの生成とセルのテンプレートを実装した(`make model PKG=<パッケージ> VERSION=<v> ARGS="-gen-skeleton"`。`bench/model-author`)。** 入力は、取得した本物のパッケージの公開 API(`go/packages` で型だけ読む。実行しない)と、モデルのファイルの行。出力は、次のとおり(同じ入力なら同じ結果。毎回上書きする)。
 - **置き場所(コマンドが決める)**: 第三者のパッケージは `bench/zoo-go-pkg/<モジュールの名前>/`(モジュールの path の最後の要素。major は除く。`go-github/v93` は `go_github`)に、依存の形(独立したモジュール。`skel/` を `replace` で読む)で置く。標準ライブラリは、常に `bench/zoo-go-pkg/<名前(`/` は `_`)>/` に、骨組みなしで置く(`os`、`database_sql` の形)。
@@ -130,7 +130,7 @@ Rust は、extractor を動かす段(型の取得、セルの解析の確認、�
 
 **モデルを確認する対象(ユーザーの方針。2026-11-23)**: 上流が今もサポートしている major(公開の事実で決める。根拠をモデルのファイルの冒頭か PR の本文に 1 行)。既定は最新で、並行してサポートされている major は、`make model` を `VERSION` を替えて複数回実行する。Go の `/v*` の行は、実行した major の具体的なシンボルに直して照合し、片方の major にしかない候補は、もう片方の実行で「消えた候補」の警告にならない(`/v*` で書いた `rejected:` の項目は、警告しない)。`verified_versions` は、ローダーが同じ `package` の重複を拒むので、major ごとに具体的な module の path(`x/v2`、`x/v3`)の記録を並べる。Dart と Rust は、パスに major が入らないので行は共通で、並行サポートのバージョンがあれば、それぞれのバージョンで確認する。
 
-**最初の段の範囲(正確に)**:
+**最初のステップの範囲(正確に)**:
 
 - 入るもの: (i) `make model PKG=<Go のモジュール> VERSION=<v> LANG=go`。(ii) `rejected:` の書式の確定と、ローダーでの読み込み、検証(`symbol`、`kind`、`why` の有無、解析には使わない)。(iii) 候補の一覧(層 1 は規則の表から、層 2 は件数と一覧だけ)と、行と `rejected:` との照合。未決があれば、終了コード 70 と、作業ファイルへの一覧。消えた候補の警告。(iv) 層 1 の規則の評価(再現率)。(v) `verified_versions`、`.dead-allow` の書き出し。(vi) 差分テストの実行(`bench/model-diff`)と、PR のジョブへの組み込み。結果を、PR の本文の材料にまとめる。(vii) 終了コードの表。
 - 入らないもの: 型からの flows の生成、骨組みの生成、セルの生成、Dart と Rust、マークの固定の自動実行(まず、手順書に 1 行で書く)、既存のモデルの移行。
@@ -141,16 +141,16 @@ Rust は、extractor を動かす段(型の取得、セルの解析の確認、�
 | 部分 | 状態 | 使い方 |
 | --- | --- | --- |
 | `rivus models coverage`(`-yaml`、`-index`) | 足りる | 候補の一覧の、source と呼び出しの候補の元。スタブの形 |
-| `bench/model-diff`(`make model-diff`) | 足りる | 段 7。`-changed`、`-changed-reviewed` も |
+| `bench/model-diff`(`make model-diff`) | 足りる | ステップ 7。`-changed`、`-changed-reviewed` も |
 | `-coverage-gaps` | 一部(Go の標準ライブラリだけ) | 第三者のパッケージと、Dart、Rust への拡張が新規 |
 | `zoo_exec_override`、`make zoo-dart-gen` | 足りる(Dart) | 骨組みの `pubspec.yaml` に 1 行。生成した骨組みに入れる |
-| `scripts/zoo-loosened-check.sh`(`make zoo-loosened`) | 足りる | 段 9 |
-| `TestZooMarksLock`(`ZOO_MARKS_UPDATE=1`) | 足りる | 段 6 |
-| `regomark check --no-judge` | 足りる | 段 9 |
+| `scripts/zoo-loosened-check.sh`(`make zoo-loosened`) | 足りる | ステップ 9 |
+| `TestZooMarksLock`(`ZOO_MARKS_UPDATE=1`) | 足りる | ステップ 6 |
+| `regomark check --no-judge` | 足りる | ステップ 9 |
 | 骨組みの生成器 | **新規** | 公開の署名、埋め込み、実装、記録、`#[track_caller]` |
 | 型からの生成器(4.3a) | **新規** | 4.2 の足場の上 |
 | 候補の一覧(規則の表) | **新規** | 上の層 1、層 2 |
-| オーケストレータ(`make model`) | **新規** | 段の順と終了コード |
+| オーケストレータ(`make model`) | **新規** | ステップの順と終了コード |
 | `rejected:` のローダー | **新規** | 読み込みと検証だけ |
 
 **相談役の判断で決まったこと**: 判断はモデルのファイルの中に置く。`models-src/` は作らない。候補は 2 層。段階 1 の候補の元は、ライブラリ単体の型の規則だけ。Rust はクラウドで扱わない。セルの置き場所、`--dep-dir` と `exclude` の扱い、差分テストを PR のジョブに入れる時期は、上のとおり。
