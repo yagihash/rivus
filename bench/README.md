@@ -168,6 +168,16 @@ How to run each is in the README of the target where there is one (`dart-pub/`, 
 this file for the Go ones). "Not recorded" is a gap to be filled the next time someone has the
 checkout: write the commit here when it is known.
 
+## The ledger of the heavy runs
+
+`make bench-passline` and `make bench-deps` add **one row per run** to `bench/heavy-ledger.tsv`, whatever the result (the columns: the top of `bench/heavy_ledger.py`; notes: `bench/heavy-ledger.md`). Only the tools write it (one `O_APPEND` write under a lock on the file, so two runs at the same time keep their lines whole); a number in a PR or a document points to a row (date and commit) and is not copied. `NO_LEDGER=1` adds no row (a binary with a measurement patch, or a run that is not used as a number). The JSON of a result stays in `$BENCH_OUT` (default `.claude/work/bench-out/`, git-ignored; the ledger holds numbers only). A binary without `summary.memory_*` or `gc_cpu_fraction` gives empty cells, not an error.
+
+```sh
+python3 bench/heavy_ledger.py [--kind passline|deps] [--target memos] [--last N]   # read only; prints the margin (limit - peak, limit - live heap)
+```
+
+How to measure and what a line means: [`passline-baseline.md`](passline-baseline.md). The light benches: [`LEDGER.md`](LEDGER.md) (unchanged).
+
 ## One lock for the heavy runs
 
 The tools that run an analysis of several GB (`make bench-passline`, `make bench-deps`, `bench/compare.sh --cost-check`,

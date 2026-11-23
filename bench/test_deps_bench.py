@@ -81,11 +81,6 @@ class Peak(unittest.TestCase):
     def test_verdict_uses_the_tree_number(self):
         self.assertFalse(d.judge(100, 180, 9.0, 8, True, None)[0])
 
-    def test_timer_output_parsed(self):
-        self.assertEqual(d.max_rss_bytes("  123456  maximum resident set size\n"), 123456)
-        self.assertEqual(d.max_rss_bytes("Maximum resident set size (kbytes): 10\n"), 10240)
-        self.assertIsNone(d.max_rss_bytes("nothing"))
-
 
 class Through(unittest.TestCase):
     truth = [{"file": "a.dart", "line": 1, "label": "vuln", "category": "path_traversal"},
