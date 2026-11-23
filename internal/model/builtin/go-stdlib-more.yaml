@@ -423,6 +423,12 @@ propagators:
   # model-diff: extra (*regexp.Regexp).ReplaceAll #76 the result is built in a closure that is given to a helper (`allMatches` / `replaceAll`) and written to a captured variable; the reading of the body loses it
   - symbol: (*regexp.Regexp).ReplaceAll
     flows: [{from: arg0, to: result}, {from: arg1, to: result}]
+  # model-diff: extra (*regexp.Regexp).ReplaceAllLiteral #76 the result is built in a closure that is given to a helper (`allMatches` / `replaceAll`) and written to a captured variable; the reading of the body loses it
+  - symbol: (*regexp.Regexp).ReplaceAllLiteral
+    flows: [{from: arg0, to: result}, {from: arg1, to: result}]
+  # model-diff: extra (*regexp.Regexp).ReplaceAllLiteralString #76 the result is built in a closure that is given to a helper (`allMatches` / `replaceAll`) and written to a captured variable; the reading of the body loses it
+  - symbol: (*regexp.Regexp).ReplaceAllLiteralString
+    flows: [{from: arg0, to: result}, {from: arg1, to: result}]
   - symbol: (*regexp.Regexp).FindStringSubmatch
     flows: [{from: arg0, to: result}]
   # model-diff: extra (*regexp.Regexp).FindAllString #76 the result is built in a closure that is given to a helper (`allMatches` / `replaceAll`) and written to a captured variable; the reading of the body loses it

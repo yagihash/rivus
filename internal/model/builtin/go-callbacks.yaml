@@ -44,3 +44,10 @@ propagators:
   - symbol: strings.FieldsFunc
     flows: [{from: arg0, to: result0}]
     calls: [{fn: arg1, with: [arg0]}]
+  # the match is given to the function, and what it returns is put in place of the match
+  - symbol: (*regexp.Regexp).ReplaceAllStringFunc
+    flows: [{from: arg0, to: result0}]
+    calls: [{fn: arg1, with: [arg0], ret: result0}]
+  - symbol: (*regexp.Regexp).ReplaceAllFunc
+    flows: [{from: arg0, to: result0}]
+    calls: [{fn: arg1, with: [arg0], ret: result0}]

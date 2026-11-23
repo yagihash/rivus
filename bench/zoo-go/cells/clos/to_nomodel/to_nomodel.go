@@ -1,7 +1,7 @@
 // Package to_nomodel is a cell of the zoo.
 //
 // @cell(F/clos/to-nomodel)
-// @shape: a closure that captures a value is given to a function of the standard library that has no row of calls, and the result of the call is used
+// @shape: a closure that captures a value is given to a function of the standard library (regexp's ReplaceAllStringFunc), and the result of the call is used
 package to_nomodel
 
 import (

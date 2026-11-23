@@ -9,6 +9,7 @@ import (
 	_ "zoo/cells/call/direct"
 	_ "zoo/cells/call/direct_in"
 	_ "zoo/cells/call/multiret"
+	_ "zoo/cells/call/regexp_replace"
 	_ "zoo/cells/clos/capture_write_by_ref"
 	_ "zoo/cells/clos/inline"
 	_ "zoo/cells/clos/partial_callers"
