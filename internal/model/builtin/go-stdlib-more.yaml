@@ -117,44 +117,51 @@ propagators:
   # model-diff: extra go/parser.ParseFile #153 `src` is an `any` read through a type switch, which the reading of the body loses; the syntax tree is made of it
   - symbol: go/parser.ParseFile
     flows: [{from: args, to: results}]
+  # model-diff: miss-reviewed go/printer.Fprint@arg2 type-only the error of an unsupported node names only its type (`%T`, go/printer/printer.go:printNode)
   - symbol: go/printer.Fprint
     pure: true
   - symbol: (*go/ast.CommentGroup).Pos
     pure: true
   - symbol: net.Listen
-    pure: true
+    flows: [{from: arg0, to: results}, {from: arg1, to: result1}]
   - symbol: net/smtp.PlainAuth
-    pure: true
+    flows: [{from: args, to: result0}]
   - symbol: net/smtp.Dial
-    pure: true
+    flows: [{from: arg0, to: results}]
   - symbol: net/smtp.NewClient
-    pure: true
+    flows: [{from: arg1, to: result0}]
+  # model-diff: miss-reviewed (*net/smtp.Client).Auth@recv body-default #150 the error is a fixed text or the server's reply read through the connection (an unresolved call that the reading takes as "arguments to results"); the receiver is not in it
   - symbol: (*net/smtp.Client).Auth
     pure: true
   - symbol: (*net/smtp.Client).Close
     pure: true
+  # model-diff: miss-reviewed (*net/smtp.Client).Mail@arg0 body-default #150 the address goes to the connection (`c.cmd`, an unresolved call that the reading takes as "arguments to results"); the error is a fixed text or the server's reply, the address is not in it
   - symbol: (*net/smtp.Client).Mail
     pure: true
+  # model-diff: miss-reviewed (*net/smtp.Client).Rcpt@arg0 body-default #150 the address goes to the connection (`c.cmd`, an unresolved call that the reading takes as "arguments to results"); the error is a fixed text or the server's reply, the address is not in it
   - symbol: (*net/smtp.Client).Rcpt
     pure: true
   - symbol: (*net/smtp.Client).Data
-    pure: true
+    flows: [{from: recv, to: result0}]
   - symbol: (*net/smtp.Client).Quit
     pure: true
   - symbol: (*net/smtp.Client).StartTLS
     pure: true
+  # model-diff: miss-reviewed (*net/smtp.Client).Hello@arg0 body-default #150 the name reaches the client (`c.localName`, the row); the error is a fixed text (`validateLine`) or the server's reply read through the connection (an unresolved call that the reading takes as "arguments to results")
   - symbol: (*net/smtp.Client).Hello
-    pure: true
+    flows: [{from: arg0, to: recv}]
   - symbol: crypto/aes.NewCipher
     pure: true
   - symbol: crypto/hmac.New
-    pure: true
+    flows: [{from: arg1, to: result0}]
   - symbol: crypto/hmac.Equal
     pure: true
   - symbol: crypto/rand.Read
     pure: true
+  # model-diff: miss-reviewed crypto/rand.Int@arg0 body-default #150 the error is the reader's (`io.ReadFull` on an `io.Reader`, an unresolved call that the reading takes as "arguments to results"); the reader's bytes are numbers in the result
   - symbol: crypto/rand.Int
     pure: true
+  # model-diff: miss-reviewed crypto/rsa.GenerateKey@arg0 body-default #150 the error is the reader's (`io.ReadFull` on an `io.Reader` inside the key generation, an unresolved call that the reading takes as "arguments to results")
   - symbol: crypto/rsa.GenerateKey
     pure: true
   - symbol: crypto/md5.New
@@ -469,11 +476,11 @@ propagators:
   - symbol: log/slog.SetDefault
     pure: true
   - symbol: log/slog.Int64
-    pure: true
+    flows: [{from: arg0, to: result}]
   - symbol: log/slog.Bool
-    pure: true
+    flows: [{from: arg0, to: result}]
   - symbol: (*log/slog.Record).Add
-    pure: true
+    flows: [{from: args, to: recv}]
   - symbol: (*log/slog.Record).AddAttrs
     pure: true
   - symbol: (log/slog.Record).Attrs
@@ -497,11 +504,12 @@ propagators:
   - symbol: net/http.SetCookie
     pure: true
   - symbol: net/http.ListenAndServe
-    pure: true
+    flows: [{from: arg0, to: result0}]
   - symbol: net/http.Serve
     pure: true
   - symbol: (*net/http.Server).ListenAndServeTLS
-    pure: true
+    flows: [{from: recv, to: result0}, {from: arg0, to: result0}, {from: arg1, to: result0}]
+  # model-diff: miss-reviewed (*net/http.ServeMux).Handle@arg0 non-payload the pattern is routing information (a method, a host and a path that the mux matches against), not data that a later call reads back as a value; src=net/http/server.go:registerErr
   - symbol: (*net/http.ServeMux).Handle
     pure: true
   - symbol: net/http/fcgi.Serve
@@ -527,9 +535,9 @@ propagators:
   - symbol: database/sql.Named
     flows: [{from: args, to: result}]
   - symbol: crypto/cipher.NewCFBEncrypter
-    pure: true
+    flows: [{from: arg1, to: result0}]
   - symbol: crypto/cipher.NewCFBDecrypter
-    pure: true
+    flows: [{from: arg1, to: result0}]
   - symbol: crypto/x509.NewCertPool
     pure: true
   - symbol: crypto/x509.IsEncryptedPEMBlock
@@ -540,16 +548,20 @@ propagators:
     pure: true
   - symbol: crypto/elliptic.P521
     pure: true
+  # model-diff: miss-reviewed crypto/ecdsa.GenerateKey@arg1 body-default #150 the error is the reader's (`io.ReadFull` on an `io.Reader` inside the key generation, an unresolved call that the reading takes as "arguments to results")
   - symbol: crypto/ecdsa.GenerateKey
     pure: true
+  # model-diff: miss-reviewed crypto/ed25519.GenerateKey@arg0 body-default #150 the error is the reader's (`io.ReadFull(random, seed)`, an unresolved call that the reading takes as "arguments to results")
   - symbol: crypto/ed25519.GenerateKey
     pure: true
   - symbol: crypto/tls.Dial
-    pure: true
+    flows: [{from: arg0, to: results}, {from: arg1, to: results}, {from: arg2, to: result0}]
   - symbol: crypto/tls.Client
     flows: [{from: arg0, to: result}]
+  # model-diff: miss-reviewed crypto/tls.LoadX509KeyPair@arg0 body-default #150 the path reaches the error (the row), not the certificate: `os.ReadFile` has no flows row, and the reading takes the call as "arguments to results"
+  # model-diff: miss-reviewed crypto/tls.LoadX509KeyPair@arg1 body-default #150 the path reaches the error (the row), not the certificate: `os.ReadFile` has no flows row, and the reading takes the call as "arguments to results"
   - symbol: crypto/tls.LoadX509KeyPair
-    pure: true
+    flows: [{from: arg0, to: result1}, {from: arg1, to: result1}]
   - symbol: (*crypto/x509.CertPool).AppendCertsFromPEM
     pure: true
   - symbol: net/netip.ParseAddr
@@ -557,7 +569,7 @@ propagators:
   - symbol: (net/netip.Addr).IsLoopback
     pure: true
   - symbol: net/smtp.CRAMMD5Auth
-    pure: true
+    flows: [{from: args, to: result0}]
   - symbol: net/url.UserPassword
     flows: [{from: args, to: result}]
   - symbol: encoding/json.Valid

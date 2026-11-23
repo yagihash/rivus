@@ -1,4 +1,4 @@
 ruleset: test/synth@1
 propagators:
-  - symbol: example.com/synth.Fetch
+  - symbol: example.com/synth.Use
     flows: [{from: arg1, to: result}]

@@ -42,6 +42,9 @@ type goGen struct {
 	errs    []string
 	states  []RowState
 	cur     *Row // the row that the probes are made for
+	// fieldTaint: while the probes of a flows, pure or sanitizer row are made, a struct is given the source in its exported fields (structLit)
+	fieldTaint bool
+	partial    bool // the position that has the source was made by structLit in the probe being made (fields that the code could not set may carry data)
 }
 
 type goTarget struct {
@@ -188,6 +191,33 @@ func nameable(t types.Type) bool {
 	return false
 }
 
+// structLit is a value of a struct type whose exported fields hold the source: every field that can hold text (a string, bytes, a
+// list or a map of strings, an `any`, an error, a reader) is given it. The model takes a value as one thing (what is in it reaches what
+// comes out), and the source is put into all of its fields at once, so that a flow is found whichever field the body reads. "" when the
+// struct has no such field (a lock, a time, a handle with unexported fields: the source cannot be put into it).
+func (g *goGen) structLit(t types.Type, s *types.Struct) string {
+	var fields []string
+	for i := 0; i < s.NumFields(); i++ {
+		f := s.Field(i)
+		if !f.Exported() || f.Embedded() || !nameable(f.Type()) {
+			continue
+		}
+		// one level only: a field that is itself a struct or a pointer is not followed (a type can refer to itself)
+		switch f.Type().Underlying().(type) {
+		case *types.Struct, *types.Pointer:
+			continue
+		}
+		if e, ok := g.val(f.Type(), true); ok && e != "" {
+			fields = append(fields, f.Name()+": "+e)
+		}
+	}
+	if len(fields) == 0 {
+		return ""
+	}
+	g.partial = true
+	return g.ts(t) + "{" + strings.Join(fields, ", ") + "}"
+}
+
 func isBasic(t types.Type, info types.BasicInfo) bool {
 	b, ok := t.Underlying().(*types.Basic)
 	return ok && b.Info()&info != 0
@@ -252,7 +282,7 @@ func (g *goGen) val(t types.Type, taint bool) (string, bool) {
 		if !taint {
 			return "nil", true
 		}
-		if isBasic(u.Key(), types.IsString) && isBasic(u.Elem(), types.IsString) {
+		if isBasic(u.Key(), types.IsString) && (isBasic(u.Elem(), types.IsString) || g.fieldTaint && u.Elem().String() == "any") {
 			k, _ := g.val(u.Key(), false)
 			e, _ := g.val(u.Elem(), true)
 			return ty + "{" + k + ": " + e + "}", true
@@ -261,9 +291,21 @@ func (g *goGen) val(t types.Type, taint bool) (string, bool) {
 		if !taint && nameable(u.Elem()) {
 			return "new(" + g.ts(u.Elem()) + ")", true
 		}
+		if taint && g.fieldTaint && nameable(u.Elem()) {
+			if s, ok := u.Elem().Underlying().(*types.Struct); ok {
+				if lit := g.structLit(u.Elem(), s); lit != "" {
+					return "&" + lit, true
+				}
+			}
+		}
 	case *types.Struct:
 		if !taint {
 			return ty + "{}", true
+		}
+		if g.fieldTaint {
+			if lit := g.structLit(t, u); lit != "" {
+				return lit, true
+			}
 		}
 	case *types.Interface:
 		if !taint {
@@ -715,6 +757,7 @@ func (g *goGen) nextID() int { return len(g.probes) }
 // emit writes the function fixN: the setup, the call and the sinks of the places that the call writes into.
 func (g *goGen) emit(sym, kind, variant string, t *goTarget, taintPos int, recvTaint bool, expect *bool, category string, partField string, outputs bool) {
 	id := g.nextID()
+	g.partial = false
 	base := "recv"
 	if taintPos >= 0 {
 		base = fmt.Sprintf("arg%d", taintPos)
@@ -788,7 +831,7 @@ func (g *goGen) emit(sym, kind, variant string, t *goTarget, taintPos int, recvT
 	}
 	sb.WriteString("}\n")
 	g.funcs = append(g.funcs, sb.String())
-	p := Probe{ID: id, Symbol: sym, Kind: kind, Variant: variant, Outputs: places, Expect: expect, Category: category}
+	p := Probe{ID: id, Symbol: sym, Kind: kind, Variant: variant, Outputs: places, Expect: expect, Category: category, Partial: g.partial}
 	if g.cur != nil {
 		p.Row = g.cur.Kind
 		if g.cur.Kind == RowSanitizer {
@@ -819,6 +862,8 @@ func (g *goGen) fieldValue(t types.Type, field string) string {
 }
 
 func (g *goGen) flowProbes(r Row, t *goTarget) {
+	g.fieldTaint = true // a struct can be given the source in its exported fields (only for the flows: a sink row keeps its positions)
+	defer func() { g.fieldTaint = false }()
 	kind := "flow"
 	if r.Kind == RowSanitizer {
 		kind = "sanitizer"

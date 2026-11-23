@@ -173,7 +173,7 @@ propagators:
   - symbol: time.ParseInLocation
     flows: [{from: arg0, to: result1}, {from: arg1, to: result1}]
   - symbol: (*os.File).Close
-    pure: true
+    flows: [{from: recv, to: result0}]
   - symbol: os.TempDir
     pure: true
   - symbol: bytes.Index
@@ -228,12 +228,15 @@ propagators:
     flows: [{from: recv, to: result}]
   - symbol: (embed.FS).ReadFile
     flows: [{from: recv, to: result0}, {from: arg0, to: result1}]
+  # model-diff: miss-reviewed (*os.File).WriteString@arg0 body-default #150 the data goes to the write call (an unresolved call that the reading takes as "arguments to results"); the error is the operating system's and names the file, the data is not in it
   - symbol: (*os.File).WriteString
-    pure: true
+    flows: [{from: recv, to: result1}]
+  # model-diff: miss-reviewed (*os.File).Write@arg0 body-default #150 the data goes to the write call (an unresolved call that the reading takes as "arguments to results"); the error is the operating system's and names the file, the data is not in it
   - symbol: (*os.File).Write
-    pure: true
+    flows: [{from: recv, to: result1}]
+  # model-diff: miss-reviewed (*os.File).WriteAt@arg0 body-default #150 the data goes to the write call (an unresolved call that the reading takes as "arguments to results"); the error is the operating system's and names the file, the data is not in it
   - symbol: (*os.File).WriteAt
-    pure: true
+    flows: [{from: recv, to: result1}]
   - symbol: strconv.ParseInt
     flows: [{from: arg0, to: result1}]
 

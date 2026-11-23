@@ -1,0 +1,8 @@
+ruleset: test/synth@1
+propagators:
+  - symbol: (*example.com/synth.Req).Clean
+    flows: [{from: recv, to: result}]
+  - symbol: example.com/synth.Clone
+    flows: [{from: arg0, to: result}]
+  - symbol: (*example.com/synth.Hidden).Val
+    flows: [{from: recv, to: result}]

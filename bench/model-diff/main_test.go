@@ -640,11 +640,40 @@ func TestSourceRows(t *testing.T) {
 // is still judged by the positions that can be probed.
 func TestArgumentThatCannotHoldTheSource(t *testing.T) {
 	code, rep := runSynth(t, "arg-struct.yaml")
-	if code != 0 || len(rep.Unverified) != 1 || rep.Unverified[0].Variant != "arg0" || !strings.Contains(rep.Unverified[0].Reason, "cannot be put into: *example.com/synth.Opts") {
+	if code != 0 || len(rep.Unverified) != 1 || rep.Unverified[0].Variant != "arg0" || !strings.Contains(rep.Unverified[0].Reason, "cannot be put into: *example.com/synth.Hidden") {
 		t.Errorf("exit %d, unverified %+v", code, rep.Unverified)
 	}
 	if rep.Counts["rows_judged"] != 1 {
 		t.Errorf("counts %v", rep.Counts)
+	}
+}
+
+// A struct that has an exported field that can hold text is given the source in it (a receiver and an argument); a struct that has none
+// is still unverified. A pure row is judged through it too (the body reads the field, so the row is wrong).
+func TestStructThatHoldsTheSourceInAField(t *testing.T) {
+	code, rep := runSynth(t, "recv-field.yaml")
+	if code != 0 || rep.Counts["MISS"] != 0 || rep.Counts["EXTRA"] != 0 {
+		t.Fatalf("exit %d, counts %v", code, rep.Counts)
+	}
+	state := map[string]RowState{}
+	for _, r := range rep.Rows {
+		state[r.Symbol] = r
+	}
+	if !state["(*example.com/synth.Req).Clean"].Judged || !state["example.com/synth.Clone"].Judged {
+		t.Errorf("rows %+v: the receiver and the argument that hold the source in Path must be judged", rep.Rows)
+	}
+	if h := state["(*example.com/synth.Hidden).Val"]; h.Judged || !strings.Contains(h.Reason, "receiver") {
+		t.Errorf("Hidden.Val = %+v: a struct with no exported field that holds text is not judged", h)
+	}
+	// a struct that was given the source in some of its fields shows a flow that the body has and the row lacks, never one that only the row
+	// has (the body may carry it through what the code could not set): no EXTRA, and the row is not judged
+	code, rep = runSynth(t, "recv-field-extra.yaml")
+	if code != 0 || rep.Counts["EXTRA"] != 0 || rep.Counts["rows_judged"] != 0 {
+		t.Errorf("exit %d, counts %v: a flow that only the row has, on a struct filled in part, shows nothing", code, rep.Counts)
+	}
+	code, rep = runSynth(t, "recv-field-wrong.yaml")
+	if code != 1 || rep.Counts["MISS"] != 1 {
+		t.Errorf("exit %d, counts %v: a pure row on a method that returns the field must be a MISS", code, rep.Counts)
 	}
 }
 

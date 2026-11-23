@@ -21,6 +21,10 @@ type Probe struct {
 	Outputs  []string `json:"outputs,omitempty"`  // flow: the places that have a sink of their own (result0, arg1, recv, ...)
 	Category string   `json:"category,omitempty"`
 	Expect   *bool    `json:"expect,omitempty"` // sink: whether a finding is declared
+	// Partial: the source was put into the exported fields of a struct, and the body may read what the code could not set (an unexported
+	// field, a pointer). A flow that the body has and the row lacks is a MISS as always; a flow that only the row has is not an EXTRA (the
+	// body may carry it through what was not set), and shows nothing about the row.
+	Partial bool `json:"partial,omitempty"`
 }
 
 // Skip is what the generator did not make: not checked, and said so.
@@ -152,6 +156,13 @@ func Compare(probes []Probe, skips []Skip, a, b Hits, notes []Note) *Report {
 				}
 			}
 			r.Informative = p.Row == RowPure && len(p.Outputs) > 0 || anyHit(a, b, p)
+			if p.Partial {
+				r.Extra = nil
+				r.Informative = false
+				for _, o := range p.Outputs {
+					r.Informative = r.Informative || a[key(p.ID, o)]
+				}
+			}
 		case "sanitizer":
 			// The body is read (A); the model drops the label, so B says nothing. The value must go where the row says (Covered; the
 			// default of a row without flows is result0), and where the row's own flows say it goes, the body must have it too.
