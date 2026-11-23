@@ -22,3 +22,5 @@ __pycache__/
 /bench/zoo-dart/exec/pubspec.yaml
 # the table of the issues that `make docs-gen OUT=...` writes (a generated view: docs/issues has the data)
 /docs/ISSUES-TABLE.md
+/docs/ADR-TABLE.md
+/docs/TABLE.md

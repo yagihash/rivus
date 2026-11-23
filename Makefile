@@ -45,5 +45,5 @@ model-diff: ## the differential test of the model of a package: PKG=<Go import p
 	@[ -n "$(PKG)" ] || { echo "usage: make model-diff PKG=strings   (or PKG=package:http, MODEL=internal/model/builtin/dart-http.yaml)"; exit 1; }
 	go run ./bench/model-diff -pkg "$(PKG)" $(if $(MODEL),-model "$(MODEL)")
 
-docs-gen: ## print the table of the issues (from docs/issues/*.md); `make docs-gen OUT=docs/ISSUES-TABLE.md` writes it (not committed)
-	go run ./scripts/docs-gen $(if $(OUT),-o $(OUT))
+docs-gen: ## print the tables of the issues and the ADRs (from docs/issues/*.md, docs/adr/*.md); WHAT=issues or WHAT=adr for one; OUT=docs/TABLE.md writes it (ignored by git)
+	go run ./scripts/docs-gen $(if $(OUT),-o $(OUT)) $(WHAT)
