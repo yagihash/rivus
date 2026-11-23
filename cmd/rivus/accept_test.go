@@ -63,7 +63,7 @@ func acceptRunIn(t *testing.T, ex *accept.Extractor, spill bool, dir string, arg
 			} else if st := l.disk.Stats(); st.Store.Funcs == 0 || st.Store.Bytes == 0 || st.Reads < st.Store.Funcs/2 {
 				t.Errorf("the file was not used: %+v", st)
 			} else {
-				t.Logf("in the file: %d functions, %d bytes, %d held for the writes, %d reads, %d from the cache", st.Store.Funcs, st.Store.Bytes, st.Pinned, st.Reads, st.CacheHits)
+				t.Logf("in the file: %d functions, %d bytes, %d calls in the table of candidates, %d reads, %d from the cache", st.Store.Funcs, st.Store.Bytes, st.Updates, st.Reads, st.CacheHits)
 			}
 		}
 		var err error

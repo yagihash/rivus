@@ -6,6 +6,7 @@ import (
 	"sort"
 	"sync"
 	"time"
+	"weak"
 
 	"github.com/yagihash/rivus/internal/ir"
 )
@@ -19,10 +20,6 @@ const decodedPerRecord = 8
 
 // SourceOptions are the choices of a DiskSource.
 type SourceOptions struct {
-	// Pin says which functions a reader writes to (the candidates of the calls of function values are not in the
-	// record: valuecalls sets them on the function it has read). Such a function is read once and held in memory for
-	// the run, so that what was written to it is what the next reader sees, as it is in memory. nil: none.
-	Pin func(*ir.Func) bool
 	// Fault, when it is set, is called with the number of the reads so far (the first is 1) before each read of a
 	// function from the store; the error it returns is the error of the read. It is for the tests of what the readers do
 	// when a function cannot be read (the command: RIVUS_INTERNAL_IR_SPILL_FAULT).
@@ -34,7 +31,7 @@ type SourceOptions struct {
 // SourceStats is what a DiskSource did.
 type SourceStats struct {
 	Store     Stats
-	Pinned    int           // the functions held in memory because a reader writes to them (while they were not dropped)
+	Updates   int           // the calls whose candidates a reader wrote (Update): the table of the candidates that valuecalls set
 	Reads     int           // the functions read and decoded (a function read twice is counted twice)
 	CacheHits int           // the reads that the cache answered
 	ReadTime  time.Duration // the time of the reads (the file, the decoding, the check of the record)
@@ -48,16 +45,19 @@ type Builder struct {
 	st     *Store
 	opt    SourceOptions
 	heads  []ir.Head
-	pin    []bool
+	marks  []ir.Marks
+	syms   [][]string // the symbols of the calls of a function of the project
 	reach  [][]ir.FuncID
+	sites  *ir.SiteIndex
 	intern map[ir.FuncID]ir.FuncID
+	strs   map[string]string
 	put    time.Duration
 	slot   []int // the number in the store of the function at each place (nil: the same number)
 }
 
 // NewBuilder makes a Builder that writes to the store.
 func NewBuilder(st *Store, opt SourceOptions) *Builder {
-	return &Builder{st: st, opt: opt, intern: map[ir.FuncID]ir.FuncID{}}
+	return &Builder{st: st, opt: opt, intern: map[ir.FuncID]ir.FuncID{}, strs: map[string]string{}, sites: ir.NewSiteIndex()}
 }
 
 // Add puts the function into the store. Its number is the place it has in the order of the program.
@@ -72,17 +72,34 @@ func (b *Builder) Add(f *ir.Func) {
 		panic(fmt.Sprintf("irspill: the store gave the number %d for the function %d", n, len(b.heads)))
 	}
 	b.heads = append(b.heads, ir.Head{ID: f.ID, Dep: f.Dep, Symbol: f.Symbol, Recv: f.Recv})
-	b.pin = append(b.pin, b.opt.Pin != nil && b.opt.Pin(f))
+	b.marks = append(b.marks, ir.MarksOf(f))
+	var syms []string
+	if !f.Dep {
+		for _, s := range ir.CallSymbolsOf(f) {
+			if c, ok := b.strs[s]; ok {
+				s = c
+			} else {
+				b.strs[s] = s
+			}
+			syms = append(syms, s)
+		}
+	}
+	b.syms = append(b.syms, syms)
 	var ids []ir.FuncID
 	ir.Targets(f, func(id ir.FuncID) {
-		if c, ok := b.intern[id]; ok {
-			id = c
-		} else {
-			b.intern[id] = id
-		}
-		ids = append(ids, id)
+		ids = append(ids, b.interned(id))
 	})
 	b.reach = append(b.reach, ids)
+	b.sites.Add(n, f, b.interned)
+}
+
+// interned is the one string for the ID: the tables of the Builder do not keep the strings of the functions.
+func (b *Builder) interned(id ir.FuncID) ir.FuncID {
+	if c, ok := b.intern[id]; ok {
+		return c
+	}
+	b.intern[id] = id
+	return id
 }
 
 // SortByID puts the functions in the order of their IDs (functions with one ID stay in the order they came in), the
@@ -94,11 +111,14 @@ func (b *Builder) SortByID() {
 		order[i] = i
 	}
 	sort.SliceStable(order, func(i, j int) bool { return b.heads[order[i]].ID < b.heads[order[j]].ID })
-	heads, pin, reach := make([]ir.Head, n), make([]bool, n), make([][]ir.FuncID, n)
-	for to, from := range order {
-		heads[to], pin[to], reach[to] = b.heads[from], b.pin[from], b.reach[from]
+	heads, marks, syms, reach := make([]ir.Head, n), make([]ir.Marks, n), make([][]string, n), make([][]ir.FuncID, n)
+	to := make([]int, n)
+	for at, from := range order {
+		heads[at], marks[at], syms[at], reach[at] = b.heads[from], b.marks[from], b.syms[from], b.reach[from]
+		to[from] = at
 	}
-	b.heads, b.pin, b.reach, b.slot = heads, pin, reach, order
+	b.sites.Remap(to)
+	b.heads, b.marks, b.syms, b.reach, b.slot = heads, marks, syms, reach, order
 }
 
 // Discard lets go of what was written (the extractor failed: there is no Source).
@@ -114,9 +134,9 @@ func (b *Builder) Source(hdr *ir.Program) *DiskSource {
 	if limit == 0 {
 		limit = DefaultCache
 	}
-	b.intern = nil
-	return &DiskSource{st: b.st, hdr: hdr, heads: b.heads, pin: b.pin, reach: b.reach, slot: b.slot, putTime: b.put,
-		limit: limit, fault: b.opt.Fault, pinned: map[int]*ir.Func{}, cached: map[int]*list.Element{}, lru: list.New()}
+	b.intern, b.strs = nil, nil
+	return &DiskSource{st: b.st, hdr: hdr, heads: b.heads, marks: b.marks, syms: b.syms, reach: b.reach, sites: b.sites, slot: b.slot,
+		putTime: b.put, limit: limit, fault: b.opt.Fault, cached: map[int]*list.Element{}, lru: list.New()}
 }
 
 // FromProgram puts the functions of a program into a store and takes them out of the program (its Funcs are nil
@@ -141,7 +161,8 @@ func FromProgram(st *Store, p *ir.Program, opt SourceOptions) *DiskSource {
 func (b *Builder) AddGone() {
 	b.st.Add(&ir.Func{})
 	b.heads = append(b.heads, ir.Head{Gone: true})
-	b.pin = append(b.pin, false)
+	b.marks = append(b.marks, 0)
+	b.syms = append(b.syms, nil)
 	b.reach = append(b.reach, nil)
 }
 
@@ -150,16 +171,23 @@ type DiskSource struct {
 	st      *Store
 	hdr     *ir.Program
 	heads   []ir.Head
-	pin     []bool
+	marks   []ir.Marks
+	syms    [][]string
 	reach   [][]ir.FuncID
+	sites   *ir.SiteIndex
 	slot    []int // the number in the store of the function at each place (nil: the same number)
 	fault   func(read int) error
 	nfault  int
 	putTime time.Duration
 
-	mu     sync.Mutex
-	last   map[ir.FuncID]int
-	pinned map[int]*ir.Func
+	mu   sync.Mutex
+	last map[ir.FuncID]int
+	// table is what valuecalls wrote to the calls: a function that is read again has it (Update). It is the
+	// candidates of the calls that have some, not the functions.
+	table map[int]map[place]*ir.Callee
+	// alive holds, for the functions that were read, the function as long as a reader has it: a second read gives the same
+	// pointer, so that a reader that compares the functions it holds (valuecalls) does not see two for one.
+	alive  []weak.Pointer[ir.Func]
 	cached map[int]*list.Element
 	lru    *list.List // of *cacheEntry, the latest first
 	used   int
@@ -167,6 +195,9 @@ type DiskSource struct {
 	stats  SourceStats
 	closed bool
 }
+
+// place is a call in a function: the block and the instruction.
+type place struct{ block, instr int32 }
 
 type cacheEntry struct {
 	seq int
@@ -228,14 +259,18 @@ func (d *DiskSource) read(ref ir.Ref, keep bool) (*ir.Func, error) {
 		d.mu.Unlock()
 		return nil, fmt.Errorf("the function at number %d is %s", ref.Seq, h.ID)
 	}
-	if f, ok := d.pinned[ref.Seq]; ok {
-		d.mu.Unlock()
-		return f, nil
-	}
 	if el, ok := d.cached[ref.Seq]; ok {
 		d.lru.MoveToFront(el)
 		d.stats.CacheHits++
 		f := el.Value.(*cacheEntry).f
+		d.mu.Unlock()
+		return f, nil
+	}
+	if f := d.liveLocked(ref.Seq); f != nil {
+		d.stats.CacheHits++
+		if keep {
+			d.keepLocked(ref.Seq, f)
+		}
 		d.mu.Unlock()
 		return f, nil
 	}
@@ -262,30 +297,111 @@ func (d *DiskSource) read(ref ir.Ref, keep bool) (*ir.Func, error) {
 	defer d.mu.Unlock()
 	d.stats.Reads++
 	d.stats.ReadTime += took
-	if d.pin[ref.Seq] {
-		if g, ok := d.pinned[ref.Seq]; ok {
-			return g, nil // another goroutine was first: there is one copy that is written to
+	if keep {
+		if g := d.liveLocked(ref.Seq); g != nil {
+			return g, nil // another goroutine was first: there is one copy
 		}
-		d.pinned[ref.Seq] = f
-		d.stats.Pinned++
-		return f, nil
 	}
-	if keep && d.limit > 0 {
-		w := d.st.Size(d.slotOf(ref.Seq)) * decodedPerRecord
-		if w == 0 {
-			w = 1 << 10
-		}
-		d.cached[ref.Seq] = d.lru.PushFront(&cacheEntry{ref.Seq, f, w})
-		d.used += w
-		for d.used > d.limit && d.lru.Len() > 1 {
-			el := d.lru.Back()
-			e := el.Value.(*cacheEntry)
-			d.lru.Remove(el)
-			delete(d.cached, e.seq)
-			d.used -= e.w
-		}
+	d.applyLocked(ref.Seq, f)
+	if keep {
+		d.keepLocked(ref.Seq, f)
 	}
 	return f, nil
+}
+
+// liveLocked is the function at seq that a reader still has (read by Func), or nil.
+func (d *DiskSource) liveLocked(seq int) *ir.Func {
+	if d.alive == nil || d.alive[seq] == (weak.Pointer[ir.Func]{}) {
+		return nil
+	}
+	return d.alive[seq].Value()
+}
+
+// keepLocked puts the function into the cache (the latest read ones are kept up to the limit) and remembers it as the
+// one that is given while a reader has it.
+func (d *DiskSource) keepLocked(seq int, f *ir.Func) {
+	if d.alive == nil {
+		d.alive = make([]weak.Pointer[ir.Func], len(d.heads))
+	}
+	d.alive[seq] = weak.Make(f)
+	if d.limit <= 0 {
+		return
+	}
+	if el, ok := d.cached[seq]; ok {
+		d.lru.MoveToFront(el)
+		return
+	}
+	w := d.st.Size(d.slotOf(seq)) * decodedPerRecord
+	if w == 0 {
+		w = 1 << 10
+	}
+	d.cached[seq] = d.lru.PushFront(&cacheEntry{seq, f, w})
+	d.used += w
+	for d.used > d.limit && d.lru.Len() > 1 {
+		el := d.lru.Back()
+		e := el.Value.(*cacheEntry)
+		d.lru.Remove(el)
+		delete(d.cached, e.seq)
+		d.used -= e.w
+	}
+}
+
+// applyLocked gives the function what was written to its calls (Update).
+func (d *DiskSource) applyLocked(seq int, f *ir.Func) {
+	for at, c := range d.table[seq] {
+		cp := *c
+		f.Blocks[at.block].Instrs[at.instr].Callee = &cp
+	}
+}
+
+// Update keeps what a reader wrote to a call: the candidates that valuecalls set. The function that is read again has
+// them. A function that a reader has now (read by Func) is given them too.
+func (d *DiskSource) Update(ref ir.Ref, block, instr int, c *ir.Callee) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.closed || ref.Seq < 0 || ref.Seq >= len(d.heads) {
+		return
+	}
+	if d.table == nil {
+		d.table = map[int]map[place]*ir.Callee{}
+	}
+	t := d.table[ref.Seq]
+	if t == nil {
+		t = map[place]*ir.Callee{}
+		d.table[ref.Seq] = t
+	}
+	at := place{int32(block), int32(instr)}
+	if _, ok := t[at]; !ok {
+		d.stats.Updates++
+	}
+	cp := *c
+	t[at] = &cp
+	if f := d.liveLocked(ref.Seq); f != nil && f.Blocks[block].Instrs[instr].Callee != c {
+		cp2 := *c
+		f.Blocks[block].Instrs[instr].Callee = &cp2
+	}
+}
+
+// Marks are what is known of the function at seq (ir.Marker).
+func (d *DiskSource) Marks(seq int) ir.Marks { return d.marks[seq] }
+
+// CallSymbols are the symbols of the calls of the function at seq, when it is a function of the project (ir.CallSymbolser).
+func (d *DiskSource) CallSymbols(seq int) []string { return d.syms[seq] }
+
+func (d *DiskSource) gone(seq int) bool { return d.heads[seq].Gone }
+
+// CallersOf are the calls that reach the function with the ID (ir.Sited).
+func (d *DiskSource) CallersOf(id ir.FuncID) []ir.CallSite {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.sites.Callers(id, d.gone)
+}
+
+// MakersOf are the make_closure instructions that name the function with the ID (ir.Sited).
+func (d *DiskSource) MakersOf(id ir.FuncID) []ir.CallSite {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.sites.Makers(id, d.gone)
 }
 
 func (d *DiskSource) Each(fn func(ref ir.Ref, f *ir.Func) error) error {
@@ -314,7 +430,8 @@ func (d *DiskSource) Drop(ref ir.Ref) {
 	}
 	d.heads[ref.Seq].Gone = true
 	d.reach[ref.Seq] = nil
-	delete(d.pinned, ref.Seq)
+	delete(d.table, ref.Seq)
+	d.syms[ref.Seq] = nil
 	if el, ok := d.cached[ref.Seq]; ok {
 		d.used -= el.Value.(*cacheEntry).w
 		d.lru.Remove(el)
@@ -331,7 +448,7 @@ func (d *DiskSource) Release() {
 	defer d.mu.Unlock()
 	d.stats = d.statsLocked()
 	d.closed = true
-	d.pinned, d.cached, d.last = nil, nil, nil
+	d.table, d.alive, d.cached, d.last, d.sites = nil, nil, nil, nil, nil
 	d.lru.Init()
 	d.st.Close()
 }

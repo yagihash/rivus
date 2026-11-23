@@ -30,7 +30,16 @@ func callbackTargets(irsrc ir.Source, rules *model.Rules, res *Result) map[ir.Fu
 		return nil
 	}
 	out := map[ir.FuncID][]callbackTarget{}
-	ir.WalkProject(irsrc, func(_ ir.Ref, fn *ir.Func) bool {
+	// only the functions of the project that call such a symbol are read (the Source knows the symbols of the calls)
+	callsOne := func(seq int) bool {
+		for _, sym := range ir.CallSymbols(irsrc, seq) {
+			if len(rules.CallbackParams[sym]) > 0 {
+				return true
+			}
+		}
+		return false
+	}
+	ir.WalkProjectIf(irsrc, callsOne, func(_ ir.Ref, fn *ir.Func) bool {
 		var form *irssa.Form
 		for bi, b := range fn.Blocks {
 			for ii, in := range b.Instrs {
