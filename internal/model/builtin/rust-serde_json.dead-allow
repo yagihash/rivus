@@ -1,0 +1,7 @@
+# The rows of rust-serde_json.yaml that no call in the zoo or the curated targets hits (TestBuiltinRowsAreHitByTheZoo). "symbol | reason"; see bench/parity/README.md.
+serde_json::Map::get | dependency | not the standard library: the zoo has no such dependency
+serde_json::from_slice | dependency | not the standard library: the zoo has no such dependency
+serde_json::from_str | dependency | not the standard library: the zoo has no such dependency
+serde_json::from_value | dependency | not the standard library: the zoo has no such dependency
+serde_json::to_string | dependency | not the standard library: the zoo has no such dependency
+serde_json::to_vec | dependency | not the standard library: the zoo has no such dependency

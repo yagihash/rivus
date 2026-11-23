@@ -1,0 +1,4 @@
+go	pkg/go_github/issues/issues.go	sink-none	@sink(none)	func fixed() { @fixed
+go	pkg/go_github/issues/issues.go	sink-none	@sink(none)	func fixed() { @fixed
+go	pkg/go_github/issues/issues.go	sink-none	@sink(none)	func fixed() { @fixed
+go	pkg/go_github/issues/issues.go	sink-none	@sink(none) @nosink(pkg-go-github-issues-decoy)	func decoy() { @decoy
