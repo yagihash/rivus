@@ -4,33 +4,14 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/yagihash/rivus/internal/ir"
 	"github.com/yagihash/rivus/internal/irspill"
 )
 
-// envIRSpill is the switch of the IR on disk (ADR-123): "1" keeps the functions of the Go code in a file, and the
-// readers ask for them one at a time. It is not a flag and is not in -h: the result is the same, and the switch goes
-// away when the disk is the default.
-const envIRSpill = "RIVUS_INTERNAL_IR_SPILL"
-
-// envIRSpillFault is for the tests of the failure to read: with a number n, every read of a function from the file from
-// the n-th on fails. It is not a flag and is not in -h.
-const envIRSpillFault = "RIVUS_INTERNAL_IR_SPILL_FAULT"
-
 func spillOptions() irspill.SourceOptions {
-	var o irspill.SourceOptions
-	if n, err := strconv.Atoi(os.Getenv(envIRSpillFault)); err == nil && n > 0 {
-		o.Fault = func(read int) error {
-			if read >= n {
-				return fmt.Errorf("a failure put in by %s=%d", envIRSpillFault, n)
-			}
-			return nil
-		}
-	}
-	return o
+	return irspill.SourceOptions{Fault: spillFault()}
 }
 
 func newSpillBuilder() *irspill.Builder {

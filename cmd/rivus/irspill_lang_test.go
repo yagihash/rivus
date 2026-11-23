@@ -177,7 +177,7 @@ func TestIRSpillReadFailureRust(t *testing.T) {
 func irspillReadFailure(t *testing.T, dir string, env []string, args ...string) {
 	t.Helper()
 	run := func(extra ...string) (int, string) {
-		cmd := exec.Command(binary, append([]string{"analyze", "-C", dir}, args...)...)
+		cmd := exec.Command(faultBinary(t), append([]string{"analyze", "-C", dir}, args...)...)
 		cmd.Env = append(append(cmd.Environ(), env...), extra...)
 		var stderr bytes.Buffer
 		cmd.Stderr = &stderr
@@ -190,14 +190,14 @@ func irspillReadFailure(t *testing.T, dir string, env []string, args ...string) 
 		}
 		return 0, stderr.String()
 	}
-	if code, out := run(envIRSpill + "=1"); code != 0 && code != 3 && code != 4 {
+	if code, out := run(); code != 0 && code != 3 && code != 4 {
 		if strings.Contains(out, "are not fetched") {
 			t.Skip("the dependencies of the sample are not fetched on this machine")
 		}
 		t.Fatalf("the run without a failure: exit %d\n%s", code, out)
 	}
 	for _, n := range []string{"1", "50"} {
-		code, out := run(envIRSpill+"=1", envIRSpillFault+"="+n)
+		code, out := run(envIRSpillFault + "=" + n)
 		if code != 1 {
 			t.Errorf("the read %s fails: exit %d, want 1\n%s", n, code, out)
 		}

@@ -209,7 +209,7 @@ rivus の設計の判断は、ここに書いた原則に沿う。ほかの文�
 - フラグが増えたら、新しいフラグを足す前に、既存のものを整理する(既定にする、消す、残す理由を `flagInfo` に書く)。足した日から長く動かないものも同じ。
 - 規模のために精度を落とす機能をフラグにするときは、[ADR-118](adr/118-scale-mechanisms-three-conditions.md) の 3 条件を、その ADR に書く。
 - 機能に数えないもの: 診断と調整(`diagnostic`)、解析の範囲(`-tests`、`-lang`)、隔離を外す指定(`-unsafe-host-exec`)、試すための指定(`-body-replaced`、`-read-declared-bodies`)、既定で働く機能を止める指定(`-no-deps`、`-no-builtin-rules`、`-no-project-rules`、`-deterministic-only`、`-no-fetch`)。これらは `Not` に何かを書く。
-- 内部の切り替え(IR をディスクに出す仕組みなど)は、利用者向けのフラグを足さない。環境変数かテストの中で切り替え、`-h` に出さない。
+- 内部の切り替え(IR をディスクに出す仕組みなど)は、利用者向けのフラグを足さない。切り替えが要る間は環境変数かテストの中で行い、`-h` に出さない。済んだら消す(IR をディスクに出す切り替えは、既定になって消えた。失敗の注入は、ビルドタグ `irspillfault` のバイナリだけが読む)。
 
 **根拠の ADR:** 027、043、046、055、057（仮説の履歴を ADR に残す）、061、066、084〜090（「確かめたこと」の節）
 
@@ -242,7 +242,7 @@ rivus の設計の判断は、ここに書いた原則に沿う。ほかの文�
 - 隔離: `internal/sandbox`（macOS のサンドボックス。既定ですべて拒否し、必要なものだけ許す。ネットワークは取得の段階だけ）、`cmd/rivus/isolate_sandbox_darwin.go`（Rust の取得と抽出の 2 段階）、`isolate_fetch.go`（取得の段階で対象の設定を読まず、取得元を検査）
 - サンドボックスが作れなければ、Linux では、何も実行せず止まる: `cmd/rivus/isolate_sandbox_darwin.go`、`isolate_sandbox_other.go`。隔離の下か、ホストでかは、`summary.isolation` に出る
 - git の HEAD を直接読む: `internal/vcs`
-- IR をメモリの外に出す部品: `internal/irspill`(まだ解析の流れには繋いでいない)。`TMPDIR` に 0600 で作ってすぐ名前を消したファイルだけに書く(強制終了でも残らない。共有の場所と対象のディレクトリには書かない)。書く量に上限があり、書けなければメモリに持つ。**文字列の定数(ソースにある秘密の文字列を含む)がこのファイルに入る**。読むのは同じ実行の中の rivus だけ
+- IR をメモリの外に出す部品: `internal/irspill`(解析の流れの既定で使う。ADR-123)。`TMPDIR` に 0600 で作ってすぐ名前を消したファイルだけに書く(強制終了でも残らない。共有の場所と対象のディレクトリには書かない)。書く量に上限があり、書けなければメモリに持つ。**文字列の定数(ソースにある秘密の文字列を含む)がこのファイルに入る**。読むのは同じ実行の中の rivus だけ
 - 対象内のルール: `.rivus/rules` は既定で読み、`-no-project-rules` で止める。symlink は拒否する。出力に、対象内ルールが消せる量を出す（`internal/report/report.go` の `ProjectRules`）
 - テスト: `TestSandboxedBuildScriptCannotEscape`、`TestSandboxClosesEveryWayOut`、`TestSandboxFetchReadsNoConfigOfTheProject`、`TestSandboxFetchRunsNoCodeAndAcceptsUnstableManifestFeatures`、`TestSandboxTimeLimitStopsTheProgramAndItsGroup`（`internal/sandbox`、`cmd/rivus`。開発のマシンで `RIVUS_SBX_RED=1` / `RIVUS_SBX_NET=1`。CI は `ci.yml` の `sandbox` ジョブ で小さい部分）
 
