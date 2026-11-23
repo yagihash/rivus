@@ -63,11 +63,13 @@ zoo-dart-gen: ## write bench/zoo-dart/exec/lib/cases.dart and the two pubspec.ya
 
 model-diff: ## the differential test of the model of a package: PKG=<Go import path | package:name> [MODEL=<file>] (bench/model-diff, docs/MODEL-RUNBOOK.md); fetches the package, does not run it
 	@[ -n "$(PKG)" ] || { echo "usage: make model-diff PKG=strings   (or PKG=package:http, MODEL=internal/model/builtin/dart-http.yaml)"; exit 1; }
-	go run ./bench/model-diff -pkg "$(PKG)" $(if $(MODEL),-model "$(MODEL)")
+	@# built once and run, not `go run`: `go run` turns the exit status of the program into 1 ("exit status N")
+	@d=$$(mktemp -d) && go build -o "$$d/model-diff" ./bench/model-diff && "$$d/model-diff" -pkg "$(PKG)" $(if $(MODEL),-model "$(MODEL)"); rc=$$?; rm -rf "$$d"; exit $$rc
 
 model: ## the steps of making the model of a Go or Dart package: PKG=<import path | dart package> [VERSION=v1.2.3] [LANG=go|dart] [ARGS="-diff -write-verified"] (bench/model-author, docs/MODEL-RUNBOOK.md); exit 70 = a candidate has no row and is not in rejected:; fetches the package, does not run it
 	@[ -n "$(PKG)" ] || { echo "usage: make model PKG=github.com/jmoiron/sqlx VERSION=v1.4.0 LANG=go   (or PKG=dio VERSION=5.11.1 LANG=dart; ARGS=\"-recall\" for the recall of layer 1; ARGS=\"-gen-skeleton\" makes the skeleton and the cell template for the Go zoo)"; exit 1; }
-	go run ./bench/model-author -pkg "$(PKG)" $(if $(VERSION),-version "$(VERSION)") -lang $(if $(filter command line,$(origin LANG)),$(LANG),go) $(ARGS)
+	@# built once and run, not `go run`: `go run` turns the exit status of the program (70, 2) into 1 ("exit status N")
+	@d=$$(mktemp -d) && go build -o "$$d/model-author" ./bench/model-author && "$$d/model-author" -pkg "$(PKG)" $(if $(VERSION),-version "$(VERSION)") -lang $(if $(filter command line,$(origin LANG)),$(LANG),go) $(ARGS); rc=$$?; rm -rf "$$d"; exit $$rc
 
 docs-gen: ## print the tables of the issues and the ADRs (from docs/issues/*.md, docs/adr/*.md); WHAT=issues or WHAT=adr for one; OUT=docs/TABLE.md writes it (ignored by git)
 	go run ./scripts/docs-gen $(if $(OUT),-o $(OUT)) $(WHAT)
