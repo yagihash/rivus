@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/yagihash/rivus/internal/report"
 )
 
 // Reading a Rust project builds it: cargo runs its build scripts and its proc macros. For code that is not trusted
@@ -48,6 +50,9 @@ type isolationOpts struct {
 	// env are NAME=VALUE pairs given on the command line (the extract stage only), and read are paths that the build may read
 	// besides the project and its dependencies: the only way something of the host gets in. Nothing is passed on from the environment.
 	env, read []string
+	// verbose prints the DEVELOPER_DIR that the build gets; developerDir is set by the run (nil: none was set) and goes to the summary
+	verbose      bool
+	developerDir *report.DeveloperDir
 	// stderr is where what the stages say goes (the standard error by default)
 	stderr io.Writer
 }

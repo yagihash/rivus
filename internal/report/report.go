@@ -167,6 +167,10 @@ type Summary struct {
 	// project that was read without its directory (-ir, -index) has none. A lock file with several versions of a package lists the
 	// package once (all_used).
 	UnverifiedVersions []model.UnverifiedVersion `json:"unverified_versions,omitempty"`
+	// CategoriesExcluded are the categories whose findings were left out of the output by -categories or -skip-categories, with how
+	// many findings each had (sorted by category). Findings is the count of the findings of this run, and the findings of these
+	// categories are not in it. Absent when no finding was left out (and by default).
+	CategoriesExcluded []CategoryExcluded `json:"categories_excluded,omitempty"`
 	// BodyReplacedIgnored is how many declarations -read-declared-bodies left out: the bodies were read. Absent when 0.
 	BodyReplacedIgnored int `json:"body_replaced_ignored,omitempty"`
 	// DependencySites says that the sources and the sinks were listed in the functions of the project only, not in those of the
@@ -347,6 +351,15 @@ type Isolation struct {
 	// or "host" (-unsafe-host-exec: the build scripts and the macros ran on this machine, with the rights of the user, without isolation).
 	Mode   string `json:"mode"`
 	Detail string `json:"detail"`
+	// DeveloperDir is the DEVELOPER_DIR that the build got under the sandbox (macOS); absent when none was set.
+	DeveloperDir *DeveloperDir `json:"developer_dir,omitempty"`
+}
+
+// DeveloperDir is the developer directory of the build: Source is "user" (-isolation-env) or "default" (the Command Line Tools,
+// because the sandbox cannot read Xcode.app).
+type DeveloperDir struct {
+	Value  string `json:"value"`
+	Source string `json:"source"`
 }
 
 // OutsideConfiguration counts the files that the build constraints leave out.
@@ -702,4 +715,63 @@ func Load(path string) (*Report, error) {
 		return nil, fmt.Errorf("%s: unsupported schema %q (want %q)", path, r.SchemaVersion, SchemaVersion)
 	}
 	return &r, nil
+}
+
+// CategoryExcluded is a category whose findings were left out of the output, and how many.
+type CategoryExcluded struct {
+	Category string `json:"category"`
+	Findings int    `json:"findings"`
+}
+
+// CategoryFilter says which findings are reported, by category. Include (when not empty) are the only categories reported;
+// Exclude are the categories left out. They are not combined (the command refuses both).
+type CategoryFilter struct {
+	Include, Exclude []string
+}
+
+// Active reports whether the filter leaves anything out by itself.
+func (c *CategoryFilter) Active() bool {
+	return c != nil && (len(c.Include) > 0 || len(c.Exclude) > 0)
+}
+
+// keeps reports whether a finding stays. A finding with several categories (Categories, the first is Category) stays when it
+// has one that is included, and is left out when all of them are left out.
+func (c *CategoryFilter) keeps(f *taint.Finding) bool {
+	cats := f.Categories
+	if len(cats) == 0 {
+		cats = []string{f.Category}
+	}
+	for _, k := range cats {
+		if len(c.Include) > 0 {
+			if slices.Contains(c.Include, k) {
+				return true
+			}
+		} else if !slices.Contains(c.Exclude, k) {
+			return true
+		}
+	}
+	return false
+}
+
+// Apply returns the findings that stay, and the categories (by the first category of the finding) of those that do not, with the
+// counts, sorted by category. Nothing is changed in the analysis: it is the list of findings that is cut.
+func (c *CategoryFilter) Apply(fs []*taint.Finding) ([]*taint.Finding, []CategoryExcluded) {
+	if !c.Active() {
+		return fs, nil
+	}
+	kept := make([]*taint.Finding, 0, len(fs))
+	dropped := map[string]int{}
+	for _, f := range fs {
+		if c.keeps(f) {
+			kept = append(kept, f)
+		} else {
+			dropped[f.Category]++
+		}
+	}
+	var out []CategoryExcluded
+	for k, n := range dropped {
+		out = append(out, CategoryExcluded{Category: k, Findings: n})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Category < out[j].Category })
+	return kept, out
 }
