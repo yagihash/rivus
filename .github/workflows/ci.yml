@@ -187,6 +187,16 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+          # the key is the go.sum of the root and of every module of the bench that has one (bench/gcp): the cache that holds the compiled
+          # dependencies of the bench modules is not the one that was made without them
+          cache-dependency-path: |
+            go.sum
+            bench/*/go.sum
+      # The tests read the modules of the bench with `go list -export`, which compiles their dependencies (about 14 s on a cold cache, 3 s on a warm
+      # one). The cache of setup-go is saved by the first job that finishes after a change of its key: the step below puts the compiled bench
+      # dependencies in it, in this job and in the shards of `test`, so whichever saves it, it is complete.
+      - name: Compile the dependencies of the bench for the cache
+        run: make go-warm
       - name: Vet
         run: go vet ./...
       - name: Test the packages other than cmd/rivus
@@ -242,6 +252,11 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+          # the key is the go.sum of the root and of every module of the bench that has one (bench/gcp): the cache that holds the compiled
+          # dependencies of the bench modules is not the one that was made without them
+          cache-dependency-path: |
+            go.sum
+            bench/*/go.sum
       # The Dart extractor reads the code with package:analyzer; its tests (and the curated bench) need the Dart SDK and each sample
       # package's `dart pub get`. The tests compile the extractor once for the whole run of a shard (TestMain, `dart compile exe`, about 10 s).
       - uses: dart-lang/setup-dart@2286a0c042b44434fe26d292bbce8d34f7ec662b # v1.8.2
@@ -310,6 +325,8 @@ jobs:
         if: needs.changes.outputs.rust == 'true' && matrix.shard == 2
         working-directory: bench/zoo-rust/exec
         run: cargo test --locked --offline
+      - name: Compile the dependencies of the bench for the cache
+        run: make go-warm
       - name: Test cmd/rivus (one shard of the matrix)
         env:
           SHARD_INDEX: ${{ matrix.shard }}
@@ -321,15 +338,7 @@ jobs:
           RIVUS_REQUIRE_RUST: ${{ needs.changes.outputs.rust == 'true' && '1' || '' }}
           # a missing module cache of bench/gcp fails the Google Cloud gate, and does not skip it
           RIVUS_REQUIRE_GCP: "1"
-        run: |
-          names=$(bash scripts/shard.sh "$SHARD_INDEX" "$SHARD_TOTAL")
-          if [ -z "$names" ]; then
-            echo "shard $SHARD_INDEX/$SHARD_TOTAL has no test" >&2
-            exit 1
-          fi
-          echo "shard $SHARD_INDEX/$SHARD_TOTAL: $(echo "$names" | wc -l | tr -d ' ') tests"
-          regex="^($(echo "$names" | paste -sd'|' -))\$"
-          go test ${SHORT:+"$SHORT"} -timeout 30m -run "$regex" ./cmd/rivus
+        run: make test-shard I="$SHARD_INDEX" N="$SHARD_TOTAL"
 
   # bench/gcp run for real, against fakes (exec_test.go): the value of a vulnerable case reaches the SQL text, the
   # value of a fixed one only the parameters. The test refuses every connection that is not loopback.
@@ -348,6 +357,11 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+          # the key is the go.sum of the root and of every module of the bench that has one (bench/gcp): the cache that holds the compiled
+          # dependencies of the bench modules is not the one that was made without them
+          cache-dependency-path: |
+            go.sum
+            bench/*/go.sum
       - name: Test the cases by running them
         working-directory: bench/gcp
         run: go test -tags gcpexec -timeout 10m ./...
@@ -372,6 +386,11 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+          # the key is the go.sum of the root and of every module of the bench that has one (bench/gcp): the cache that holds the compiled
+          # dependencies of the bench modules is not the one that was made without them
+          cache-dependency-path: |
+            go.sum
+            bench/*/go.sum
       - name: Test the sandbox
         env:
           # the tests make harmless marks outside the sandbox when it does not hold (a name rivus-sbx-<id>, removed after), and say so
@@ -400,6 +419,11 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+          # the key is the go.sum of the root and of every module of the bench that has one (bench/gcp): the cache that holds the compiled
+          # dependencies of the bench modules is not the one that was made without them
+          cache-dependency-path: |
+            go.sum
+            bench/*/go.sum
       - uses: dart-lang/setup-dart@2286a0c042b44434fe26d292bbce8d34f7ec662b # v1.8.2
         with:
           sdk: 3.13.6
