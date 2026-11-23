@@ -215,17 +215,43 @@ jobs:
         with:
           fetch-depth: 0 # the zoo check below reads the history, against the merge base
           persist-credentials: false
+      # The caches of Go are kept by steps of our own, and the cache of setup-go is off: it saves only when the key (go.sum) has no entry, so the
+      # compiled packages of rivus itself were always stale or absent. A pull request only restores; a push to main (and the weekly run) saves.
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        id: go
         with:
           go-version-file: go.mod
-          # the key is the go.sum of the root and of every module of the bench that has one (bench/gcp): the cache that holds the compiled
-          # dependencies of the bench modules is not the one that was made without them
-          cache-dependency-path: |
-            go.sum
-            bench/*/go.sum
+          cache: false
+      - name: Date of the build cache
+        id: day
+        # the build cache is rotated by the day: `go` deletes the entries that were not used for 5 days when it starts, so a cache that is a week old is almost empty
+        run: echo "day=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+      # modules: the key is the go.sum of the root and of every module of the bench that has one (bench/gcp); saved only by `go-packages`
+      - name: Restore the module cache
+        id: gomod
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/go/pkg/mod
+          key: gomod-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.sum', 'bench/*/go.sum') }}
+      # compiled packages (GOCACHE): the key is the Go version and the day, the fallback is the latest one of the same Go version. The build cache is
+      # addressed by the content of the sources and of the flags, so a stale entry is never used for a changed file: it only costs the compile.
+      - name: Restore the build cache
+        id: gobuild
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/go-build
+          key: gobuild-pkgs-${{ runner.os }}-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-${{ steps.day.outputs.day }}
+          restore-keys: |
+            gobuild-pkgs-${{ runner.os }}-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-
+      - name: Save the module cache
+        if: ${{ !cancelled() && github.event_name != 'pull_request' && steps.gomod.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ steps.gomod.outputs.cache-primary-key }}
       # The tests read the modules of the bench with `go list -export`, which compiles their dependencies (about 14 s on a cold cache, 3 s on a warm
-      # one). The cache of setup-go is saved by the first job that finishes after a change of its key: the step below puts the compiled bench
-      # dependencies in it, in this job and in the shards of `test`, so whichever saves it, it is complete.
+      # one). The step below puts them in the build cache,
+      # which is saved after the tests.
       - name: Compile the dependencies of the bench for the cache
         run: make go-warm
       - name: Vet
@@ -255,6 +281,12 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: make zoo-loosened BASE="$BASE" HEAD="$HEAD_SHA"
+      - name: Save the build cache
+        if: ${{ !cancelled() && github.event_name != 'pull_request' && steps.gobuild.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/go-build
+          key: ${{ steps.gobuild.outputs.cache-primary-key }}
 
   # The tests of `cmd/rivus` are most of the time (the tests of a package run one after the other): they are divided into SHARDS shards
   # that run in parallel, and this is the only job that runs them: every test runs in exactly one shard, whatever it needs. The names are
@@ -282,14 +314,34 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # The caches of Go are kept by steps of our own, and the cache of setup-go is off: it saves only when the key (go.sum) has no entry, so the
+      # compiled packages of rivus itself were always stale or absent. A pull request only restores; a push to main (and the weekly run) saves.
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        id: go
         with:
           go-version-file: go.mod
-          # the key is the go.sum of the root and of every module of the bench that has one (bench/gcp): the cache that holds the compiled
-          # dependencies of the bench modules is not the one that was made without them
-          cache-dependency-path: |
-            go.sum
-            bench/*/go.sum
+          cache: false
+      - name: Date of the build cache
+        id: day
+        # the build cache is rotated by the day: `go` deletes the entries that were not used for 5 days when it starts, so a cache that is a week old is almost empty
+        run: echo "day=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+      # modules: the key is the go.sum of the root and of every module of the bench that has one (bench/gcp); saved only by `go-packages`
+      - name: Restore the module cache
+        id: gomod
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/go/pkg/mod
+          key: gomod-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.sum', 'bench/*/go.sum') }}
+      # compiled packages (GOCACHE): the key is the Go version and the day, the fallback is the latest one of the same Go version. The build cache is
+      # addressed by the content of the sources and of the flags, so a stale entry is never used for a changed file: it only costs the compile.
+      - name: Restore the build cache
+        id: gobuild
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/go-build
+          key: gobuild-test-${{ runner.os }}-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-${{ steps.day.outputs.day }}
+          restore-keys: |
+            gobuild-test-${{ runner.os }}-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-
       # The Dart extractor reads the code with package:analyzer; its tests (and the curated bench) need the Dart SDK and each sample
       # package's `dart pub get`. The tests compile the extractor once for the whole run of a shard (TestMain, `dart compile exe`, about 10 s).
       - uses: dart-lang/setup-dart@2286a0c042b44434fe26d292bbce8d34f7ec662b # v1.8.2
@@ -395,6 +447,12 @@ jobs:
           # where the compiled Dart extractor is looked for and kept (the cache above)
           RIVUS_DART_EXE_DIR: ${{ needs.changes.outputs.dart == 'true' && format('{0}/rivus-dart-exe', runner.temp) || '' }}
         run: make test-shard I="$SHARD_INDEX" N="$SHARD_TOTAL"
+      - name: Save the build cache
+        if: ${{ !cancelled() && github.event_name != 'pull_request' && steps.gobuild.outputs.cache-hit != 'true' && matrix.shard == 0 }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/go-build
+          key: ${{ steps.gobuild.outputs.cache-primary-key }}
       - name: Save the compiled Dart extractor
         if: ${{ !cancelled() && needs.changes.outputs.dart == 'true' && github.event_name != 'pull_request' && steps.dartexe.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
