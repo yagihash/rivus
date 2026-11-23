@@ -207,6 +207,9 @@ type state struct {
 	numbering map[*sg.Value]int
 	// numericStops: by source site, where its data stopped at a number or a bool here.
 	numericStops map[string]numericStop
+	// numericCount is how many times an element (a real one or a symbolic one of a parameter) was dropped here because
+	// its place is a number or a bool (summary.numeric_stops). A visit counts what it sees; the last complete one stays.
+	numericCount int
 	stores       []*sg.Instr // the stores of the function (aliasLocs looks for what a cell holds)
 	// ptrStores are the stores (store, field_store) of a pointer into a cell, and valStores the stores of
 	// a value that is not a pointer (a closure's environment copied into the variable that holds it):
@@ -418,6 +421,7 @@ func (s *state) targetOf(l Loc, e Elem, create bool) target {
 func (s *state) add(l Loc, e Elem, w *why) {
 	t := s.targetOf(l, e, true)
 	if t.numeric {
+		s.numericCount++
 		if e.Kind == Real {
 			s.noteNumericStop(e, w, l.Root.V)
 		}

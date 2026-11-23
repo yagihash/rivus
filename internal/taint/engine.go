@@ -536,6 +536,16 @@ type Result struct {
 	// FuncDropped is, of the same run, the calls with a model that were given a function value that the model does not
 	// say anything of (by symbol; not in the output).
 	FuncDropped []FuncDropped `json:"-"`
+	// NumericStops is, for each function where a value that would carry taint was dropped because it is a number or a
+	// bool, how many times (summary.numeric_stops). Not in the output of the engine: the report makes it.
+	NumericStops []NumericStopCount `json:"-"`
+}
+
+// NumericStopCount is the number of times the numeric and bool rule dropped taint in one function.
+type NumericStopCount struct {
+	Func       string
+	Dependency bool
+	Count      int
 }
 
 // Run analyses every function with a body, callees before callers, until the
@@ -1062,7 +1072,7 @@ func (e *Engine) commit(fn *sg.Func, r *fnResult, callers map[*sg.Func][]*sg.Fun
 	if prev := e.states[fn]; s.exceeded && prev != nil {
 		keepEarlier(s, prev)
 	}
-	e.states[fn] = &state{eng: e, fn: fn, findings: s.findings, suppressions: s.suppressions, uncertain: s.uncertain, numericStops: s.numericStops}
+	e.states[fn] = &state{eng: e, fn: fn, findings: s.findings, suppressions: s.suppressions, uncertain: s.uncertain, numericStops: s.numericStops, numericCount: s.numericCount}
 	return changed
 }
 
@@ -1343,6 +1353,12 @@ func (e *Engine) collect(st Stats) *Result {
 		u.Candidates = ids
 		res.Uncertainties = append(res.Uncertainties, u)
 	}
+	for fn, st := range e.states {
+		if st.numericCount > 0 {
+			res.NumericStops = append(res.NumericStops, NumericStopCount{Func: e.funcID(fn), Dependency: fn.Dep, Count: st.numericCount})
+		}
+	}
+	sort.Slice(res.NumericStops, func(i, j int) bool { return res.NumericStops[i].Func < res.NumericStops[j].Func })
 	// where the data of a source became a number or a bool: one record for each source site
 	if stops := e.numericStopRecords(); len(stops) > 0 {
 		res.Uncertainties = append(res.Uncertainties, stops...)
@@ -1748,6 +1764,9 @@ func sharedPlaceNames(ss []SharedState) []string {
 // shorter path with its guards, as when the functions' results are merged), the
 // suppressions, the uncertainties and the places where data stopped at a number.
 func keepEarlier(s, prev *state) {
+	if prev.numericCount > s.numericCount {
+		s.numericCount = prev.numericCount
+	}
 	if s.findings == nil {
 		s.findings = map[findingKey]*rawFinding{}
 	}

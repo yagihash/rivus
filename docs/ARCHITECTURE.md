@@ -470,6 +470,8 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 | `named_unresolved` | rivus | sink が `named:` で指定した引数の名前が、プログラムのその関数の呼び出しのどれにもない（綴りの誤りなど）。sink を呼び出し全体として扱った（`docs/MODELING.md` 4a-1 節） |
 | `global_holds_nothing` | rivus | 読み戻す人がいないとルールが宣言する変数（ADR-056）に、汚染を書いた関数を、変数ごとに 1 件記録する（`internal/taint/heldnothing.go`） |
 
+`summary.numeric_stops` は、数値と bool のルール(これらの型の値は汚染を持たない)が、汚染を捨てた回数を、関数ごとに数える。`numeric_stop` の注記が source ごとの 1 件で、関数の中の止まりも、サマリの中の止まりも記録しないのを補う。数えるのは、`add` が数値・bool の場所へ要素(実の source の要素も、引数の記号的な要素も)を入れようとして捨てたときと、`pure` や結果に届かない `flows` のモデルが、汚染のある引数から数値・bool の結果を作ったとき。数値のままの演算(汚染のない値の足し算)は数えない。サマリを作る解析(引数の記号的な要素)と、呼び出し先のサマリを呼び出し元に当てるときの分は、止まりが起きた関数に数える。要素の大きさは変えず、状態に整数 1 つを持つだけで、関数の最後の完全な解析の値を使う。出力は `total`、`functions`、回数の多い 10 関数(`function`、`scope`、`count`)で、常に出る(0 のときも)。読み方: 回数の多い関数は、文字を 1 つずつ扱っている(rune や byte の取り出しと組み立て: 字句解析や構文解析)か、数値への変換が多い。期待した sink が `-no-deps` では出るのに依存を読むと消えるときは、依存の中のそのような関数が上位にあるはずで、`-numeric-taint` で届くかを試す。Go、Dart、Rust は同じエンジンを通るので、同じ数え方になる。
+
 `mixed` は「言語機能由来で、かつ rivus の精度向上でも減らせる」もの。
 集計では `target` / `rivus` / `mixed` を**別々に**出し、`mixed` を `rivus` に含めない（投資で減らせる量を過大に見積もらないため）。
 `mixed` の割り当てが暫定だった時期の見直し予定は、[history/ARCHITECTURE-plans.md](history/ARCHITECTURE-plans.md) の 4.4 の移動分にある。
