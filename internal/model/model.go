@@ -919,6 +919,9 @@ func (rs *RuleSet) validate() error {
 		if len(s.Labels) == 0 {
 			return fmt.Errorf("%s: labels is required", what)
 		}
+		if err := checkLabelNames(s.Labels, what+": labels"); err != nil {
+			return err
+		}
 		// a field that the kind does not read is a rule that does not do what it says: refused, not ignored
 		if err := s.checkFields(what); err != nil {
 			return err
@@ -1049,6 +1052,12 @@ func (rs *RuleSet) validate() error {
 		}
 		if len(s.Drops) == 0 {
 			return fmt.Errorf("%s: drops is required", what)
+		}
+		if err := checkLabelNames(s.Drops, what+": drops"); err != nil {
+			return err
+		}
+		if err := checkLabelNames(s.Adds, what+": adds"); err != nil {
+			return err
 		}
 		if s.Neutralises != nil {
 			if len(s.Adds) == 0 {
@@ -1448,6 +1457,17 @@ type DerivedLabel struct {
 	// Neutralises are the categories of the sinks that do not accept it. Two rows that give the same label to
 	// different categories leave only those that both have (a claim that hides a flow needs both rows).
 	Neutralises []string
+}
+
+// checkLabelNames refuses a label name with `&`: it joins the labels of sanitizers that a value passed one after the other
+// (`a&b`, ADR-115), and a name that has one could not be told from such a label.
+func checkLabelNames(names []string, what string) error {
+	for _, n := range names {
+		if strings.Contains(n, "&") {
+			return fmt.Errorf("%s: the label %q has `&`, which joins the labels of stacked sanitizers", what, n)
+		}
+	}
+	return nil
 }
 
 func (r *Rules) addDerived(s Sanitizer) {

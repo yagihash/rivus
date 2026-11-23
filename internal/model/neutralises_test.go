@@ -54,3 +54,21 @@ func TestAcceptsLabel(t *testing.T) {
 		}
 	}
 }
+
+func TestLabelNamesHaveNoAmpersand(t *testing.T) {
+	for name, src := range map[string]string{
+		"adds":   "ruleset: t@1\nsanitizers:\n  - symbol: f\n    drops: [user_input]\n    adds: [a&b]\n    neutralises: []\n",
+		"drops":  "ruleset: t@1\nsanitizers:\n  - symbol: f\n    drops: [\"a&b\"]\n    adds: [c]\n",
+		"source": "ruleset: t@1\nsources:\n  - symbol: f\n    labels: [\"a&b\"]\n",
+	} {
+		if _, err := Parse(strings.NewReader(src), "t.yaml"); err == nil {
+			t.Errorf("%s: a label name with & must be refused", name)
+		}
+	}
+}
+
+func TestPlainLabelNamesAreAccepted(t *testing.T) {
+	if _, err := Parse(strings.NewReader("ruleset: t@1\nsources:\n  - symbol: f\n    labels: [a]\nsanitizers:\n  - symbol: g\n    drops: [a]\n    adds: [c]\n"), "t.yaml"); err != nil {
+		t.Fatal(err)
+	}
+}
