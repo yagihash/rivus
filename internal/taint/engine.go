@@ -1118,7 +1118,21 @@ func (e *Engine) compute(fn *sg.Func) *fnResult {
 			}
 		}
 	}
+	r.s = s.kept()
 	return r
+}
+
+// kept is what commit takes of a finished analysis: the findings, the suppressions, the
+// uncertainties and the counts, with what the budget check reads. The cells and the caches are the bulk
+// of the memory and nothing reads them after the result is made. The results of a large
+// component are all held until the round is committed, so the result holds this and not the whole state.
+func (s *state) kept() *state {
+	return &state{
+		eng: s.eng, fn: s.fn,
+		findings: s.findings, suppressions: s.suppressions, uncertain: s.uncertain,
+		numericStops: s.numericStops, numericCount: s.numericCount, charCount: s.charCount,
+		adds: s.adds, exceeded: s.exceeded, exceededBy: s.exceededBy,
+	}
 }
 
 // commit publishes the result of the analysis of a function, and reports
@@ -1164,7 +1178,7 @@ func (e *Engine) commit(fn *sg.Func, r *fnResult, callers map[*sg.Func][]*sg.Fun
 	if prev := e.states[fn]; s.exceeded && prev != nil {
 		keepEarlier(s, prev)
 	}
-	e.states[fn] = &state{eng: e, fn: fn, findings: s.findings, suppressions: s.suppressions, uncertain: s.uncertain, numericStops: s.numericStops, numericCount: s.numericCount, charCount: s.charCount}
+	e.states[fn] = s.kept()
 	return changed
 }
 
