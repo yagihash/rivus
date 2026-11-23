@@ -11,19 +11,19 @@ permissions: {}
 
 jobs:
   test:
-    name: ${{ matrix.name }} shard ${{ matrix.shard }}
-    runs-on: ${{ matrix.runner }}
+    name: ${{ matrix.cfg.name }} shard ${{ matrix.shard }}
+    runs-on: ${{ matrix.cfg.runner }}
     timeout-minutes: 60
     permissions:
       contents: read
     env:
       DART_SDK: 3.13.6
-      SHORT: ${{ matrix.short }}
+      SHORT: ${{ matrix.cfg.short }}
     strategy:
       fail-fast: false
       matrix:
         shard: [0, 1, 2, 3]
-        include:
+        cfg:
           - { name: arm-short, runner: ubuntu-24.04-arm, short: -short, dogfood: "" }
           - { name: arm-full, runner: ubuntu-24.04-arm, short: "", dogfood: "1" }
           - { name: x64-full, runner: ubuntu-latest, short: "", dogfood: "1" }
@@ -68,7 +68,7 @@ jobs:
         working-directory: extractor/rust
         run: rustup toolchain install
       - name: Save the pinned nightly
-        if: steps.rustup.outputs.cache-hit != 'true' && matrix.name != 'x64-full'
+        if: steps.rustup.outputs.cache-hit != 'true' && matrix.cfg.name != 'x64-full'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.rustup/toolchains
@@ -108,11 +108,11 @@ jobs:
           RIVUS_RUST: ${{ format('{0}/extractor/rust/target/debug/rivus-rust', github.workspace) }}
           RIVUS_REQUIRE_RUST: "1"
           RIVUS_REQUIRE_GCP: "1"
-          RIVUS_DOGFOOD: ${{ matrix.dogfood }}
+          RIVUS_DOGFOOD: ${{ matrix.cfg.dogfood }}
           RIVUS_DART_EXE_DIR: ${{ format('{0}/rivus-dart-exe', runner.temp) }}
         run: make test-shard I="$SHARD_INDEX" N=4
       - name: Save the compiled Dart extractor
-        if: ${{ !cancelled() && steps.dartexe.outputs.cache-hit != 'true' && matrix.name != 'x64-full' }}
+        if: ${{ !cancelled() && steps.dartexe.outputs.cache-hit != 'true' && matrix.cfg.name != 'x64-full' }}
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/rivus-dart-exe
