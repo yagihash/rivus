@@ -22,6 +22,16 @@ reported that are not labelled: 5 are the helpers of `io.dart` that the same flo
 (`cmd /c mklink` with the path as an argument, not through a shell), 2 are in tests of the project that the builtin rules
 match.
 
+## With the built-in models only (no `rules.yaml`)
+
+`TarEntry.name` is a built-in source (`internal/model/builtin/dart-tar.yaml`), but the sinks that the labels name are pub's own helpers
+(`createFileFromStream`, `ensureDir`, ...), which only `rules.yaml` knows. With `--no-deps`, the built-in models and no `-rules`, the
+default score is 0 of 9 (and 7 findings, all from `TarEntry.name`, in the helpers of `io.dart`, which are not labelled). The labels do
+not change. `bench/score.py <truth> <result> --through` also counts a labelled site when a finding of its category has a call step at
+the labelled line (the same flow, with the sink placed in the helper): 4 of 9 (5 of 9 if the category is ignored: `_chmod` is on the
+path of a `command_injection` finding). The four that are not seen (1202, 1226, 1242, 1243) reach sinks that are already reported
+through another call: a finding lists one path per (source, sink). The rules-based 9 of 9 above stays the reference.
+
 ## What it does not show
 
 - The labels are one reader's judgement, made from the fix (one change, so every use of `filePath` before it is a site

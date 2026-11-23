@@ -1,0 +1,8 @@
+[package]
+name = "zip"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+zoo-mark = { path = "../../../zoo-rust/zoo-mark" }

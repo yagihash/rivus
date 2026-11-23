@@ -5,8 +5,11 @@
 # cannot be known from analysis, so the names are treated as untrusted (label `user_input`, the label that the current sinks
 # accept); users who only handle trusted archives judge by the finding's source.
 #
-# The rows are `call_result` rows on the getters, with the symbols that the extractor writes (checked on the real crates:
-# bench/model-diff -lang rust, tar 0.4.46 and zip 9.8.1).
+# The rows are `call_result` rows on the getters, with the symbols that the extractor writes. Checked on the real crates (tar 0.4.46,
+# zip 9.8.1): `go run ./bench/model-diff -lang rust -pkg tar` finds the 4 rows of `Header` and can only say "resolves" for the 4 of
+# `Entry` (a generic type that the probe cannot name), and `-pkg zip` says "resolves" for the 4 rows (a generic reader); for those the
+# spellings were read from the IR of a crate that calls every getter (under the sandbox, with the crates fetched): the call symbols
+# are the ones in the rows (`zip::ZipArchive::file_names` is the public path; the others are `zip::read::ZipFile::...`).
 # * tar: `Entry::path`, `Entry::path_bytes`, `Entry::link_name`, `Entry::link_name_bytes`, and the same four on `Header` (a program
 #   reads `entry.header().path()` as well as `entry.path()`).
 # * zip: `ZipFile::name`, `ZipFile::name_raw`, `ZipFile::mangled_name` (the raw name, only with the characters of the platform
@@ -66,5 +69,5 @@ sources:
     symbol: zip::read::ZipFile::mangled_name
     labels: [user_input]
   - kind: call_result
-    symbol: zip::read::ZipArchive::file_names
+    symbol: zip::ZipArchive::file_names
     labels: [user_input]
