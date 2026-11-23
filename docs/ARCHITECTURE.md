@@ -500,7 +500,7 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 
 `Report` は、`findings` のほか、`sites`、`uncertainties`（全体）、`suppressions`、`load_errors`、`expansions`、`project_rules`、`stats`、`summary` を持つ（`internal/report/report.go`）。出力の読み方は [README.md](../README.md)。
 
-`summary.incomplete`(bool)と `summary.incomplete_reasons`(`timeout`、`not_converged`)は、いつも出る(ADR-120)。出力への項目の追加なので、`schema_version` は変えない。完全でない解析は、出力を全部出したあと、終了コード 4 で終わる。
+`summary.incomplete`(bool)と `summary.incomplete_reasons`(`timeout`、`not_converged`)は、いつも出る(ADR-120)。出力への項目の追加なので、`schema_version` は変えない。完全でない解析は、出力を全部出したあと、終了コード 4 で終わる。`query` と `resolve` の出力の最上位にも、同じ `incomplete` と `incomplete_reasons` が、いつも出る(`-index` のときも。ADR-120 の「問い合わせの出力」)。
 
 ### 4.6 サイトと指紋（fingerprint）
 

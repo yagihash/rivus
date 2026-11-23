@@ -177,7 +177,11 @@ type ResolveResult struct {
 	// Target is the code the bookmarks were resolved against.
 	Target  *vcs.Target   `json:"target,omitempty"`
 	Results []*Resolution `json:"results"`
-	Stats   taint.Stats   `json:"stats"`
+	// Incomplete and IncompleteReasons are those of the analysis of the current code (ADR-120): an "unresolved" or an
+	// "absent_now" of an analysis that did not finish may be "not looked for". Always in the output.
+	Incomplete        bool        `json:"incomplete"`
+	IncompleteReasons []string    `json:"incomplete_reasons"`
+	Stats             taint.Stats `json:"stats"`
 }
 
 // Resolve finds where the bookmarks are in the code this report describes.
@@ -188,7 +192,8 @@ type ResolveResult struct {
 // structural key alone, both snippets are returned so that a reader can see.
 func (r *Report) Resolve(bms []*Bookmark) *ResolveResult {
 	idx := newSiteIndex(r)
-	out := &ResolveResult{SchemaVersion: ResolveSchemaVersion, Target: r.Target, Stats: r.Stats, Results: []*Resolution{}}
+	inc, reasons := r.IncompleteState()
+	out := &ResolveResult{SchemaVersion: ResolveSchemaVersion, Target: r.Target, Stats: r.Stats, Incomplete: inc, IncompleteReasons: reasons, Results: []*Resolution{}}
 	for _, b := range bms {
 		res := r.resolveOne(idx, b)
 		res.FromRevision = b.Revision
