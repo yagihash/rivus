@@ -79,6 +79,30 @@ func zooMarksRows(bench string) ([]string, error) {
 					}
 					within += " " + zooMarksRoleRe.FindString(text)
 				}
+				// a mark written outside the cell files: the lines of the header of a Rust file (`//! @todo(...)`, e.g. the top of
+				// lib.rs of the Rust zoo, which is not a cell). One row for a line, the annotations are the whole line, so that a
+				// change of the text is a new row. A `@todo(...: PARITY: ...)` there is the kind "todo-parity" (a cell that another
+				// language has and this one has not: no approval, docs/ROADMAP.md); the rest (@na, @noisy, @manual, @miss, @fp, a @todo that is
+				// not PARITY) is the kind of the mark.
+				if z.lang == "rust" {
+					if h := strings.TrimSpace(text); strings.HasPrefix(h, "//!") {
+						body := strings.TrimSpace(strings.TrimPrefix(h, "//!"))
+						if strings.HasPrefix(body, "@") {
+							name := zooMarksTokenRe.FindString(body)
+							if j := strings.Index(name, "("); j >= 0 {
+								name = name[:j]
+							}
+							k, ok := zooMarksKinds[name]
+							if ok && k == "todo" && strings.Contains(body, "PARITY") {
+								k = "todo-parity"
+							}
+							if ok {
+								rows = append(rows, strings.Join([]string{z.lang, filepath.ToSlash(rel), k, body, "-"}, "\t"))
+							}
+						}
+						continue
+					}
+				}
 				i := strings.Index(text, "// ")
 				if i < 0 || !strings.Contains(text[i:], "@") {
 					continue
@@ -554,5 +578,113 @@ func TestZooLoosenedCheck(t *testing.T) {
 	run("commit", "-qm", "split and a row of an existing cell added")
 	if check(oldLayout) == nil {
 		t.Error("a row added to an existing cell in the commit that splits the file passed")
+	}
+}
+
+// The marks that a Rust file writes in its header (`//! @todo(...)` of lib.rs) are rows of the lock too: a `@todo(...: PARITY: ...)`
+// there needs no line (a cell that another language has and this one has not yet: the user, 2026-11-23); the rest needs it.
+func TestZooMarksRowsHeader(t *testing.T) {
+	bench := t.TempDir()
+	for _, d := range []string{"zoo-go/cells", "zoo-dart/cells/lib", "zoo-rust/cells/src"} {
+		if err := os.MkdirAll(filepath.Join(bench, d), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	src := "//! prose that names `@na` and `@todo` in the middle of a line is not a mark\n//! @todo(F/a/x: PARITY: one (two))\n//! @todo(F/a/y: later)\n//! @na(F/a/z: no)\n//! @noisy(F/a/w: no)\n"
+	if err := os.WriteFile(filepath.Join(bench, "zoo-rust/cells/src/lib.rs"), []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := zooMarksRows(bench)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(rows, "\n")
+	for _, w := range []string{"rust\tlib.rs\ttodo-parity\t@todo(F/a/x: PARITY: one (two))\t-", "rust\tlib.rs\ttodo\t@todo(F/a/y: later)\t-", "rust\tlib.rs\tna\t", "rust\tlib.rs\tnoisy\t"} {
+		if !strings.Contains(got, w) {
+			t.Errorf("no row %q in\n%s", w, got)
+		}
+	}
+	if len(rows) != 4 {
+		t.Errorf("%d rows, want 4:\n%s", len(rows), got)
+	}
+}
+
+// The check of the commits for the rows of lib.rs: PARITY passes, the rest fails without the line and passes with it, and a row that goes away passes.
+func TestZooLoosenedCheckHeader(t *testing.T) {
+	root := filepath.Join(zooRoot(t), "..", "..")
+	script, _ := filepath.Abs(filepath.Join(root, "scripts/zoo-loosened-check.sh"))
+	repo := t.TempDir()
+	run := func(args ...string) string {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = repo
+		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@e", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@e")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	write := func(rows ...string) {
+		p := filepath.Join(repo, "bench/zoo/marks.d/rust/lib.rs.lock")
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(strings.Join(rows, "\n")+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		run("add", "-A")
+	}
+	check := func(base string) error {
+		cmd := exec.Command("bash", script, base, "HEAD")
+		cmd.Dir = repo
+		out, err := cmd.CombinedOutput()
+		t.Logf("%s", out)
+		return err
+	}
+	const approved = "\n\nZoo-Loosened: test。ユーザーの承認: 2026-01-01"
+	parity := func(n string) string { return "rust\tlib.rs\ttodo-parity\t@todo(F/a/" + n + ": PARITY: x)\t-" }
+	other := "rust\tlib.rs\ttodo\t@todo(F/a/o: later)\t-"
+	na := "rust\tlib.rs\tna\t@na(F/a/n: no)\t-"
+	run("init", "-q", "-b", "main")
+	write(parity("p1"), na)
+	run("commit", "-qm", "base")
+	base := run("rev-parse", "HEAD")
+	reset := func() { run("reset", "-q", "--hard", base) }
+	write(parity("p1"), na, parity("p2"))
+	run("commit", "-qam", "a PARITY todo is added to lib.rs")
+	if err := check(base); err != nil {
+		t.Errorf("a PARITY @todo added to lib.rs failed: %v", err)
+	}
+	reset()
+	write(parity("p1"), na, other)
+	run("commit", "-qam", "a todo that is not PARITY")
+	if check(base) == nil {
+		t.Error("a @todo that is not PARITY, added to lib.rs, passed without Zoo-Loosened")
+	}
+	run("commit", "-q", "--amend", "-m", "a todo that is not PARITY"+approved)
+	if err := check(base); err != nil {
+		t.Errorf("a @todo that is not PARITY with Zoo-Loosened failed: %v", err)
+	}
+	reset()
+	write(parity("p1"), na, "rust\tlib.rs\tna\t@na(F/a/n2: no)\t-")
+	run("commit", "-qam", "an @na is added")
+	if check(base) == nil {
+		t.Error("an @na added to lib.rs passed without Zoo-Loosened")
+	}
+	run("commit", "-q", "--amend", "-m", "an @na is added"+approved)
+	if err := check(base); err != nil {
+		t.Errorf("an @na with Zoo-Loosened failed: %v", err)
+	}
+	reset()
+	write(parity("p1"), "rust\tlib.rs\tna\t@na(F/a/n: a changed text)\t-")
+	run("commit", "-qam", "the text of an @na is changed")
+	if check(base) == nil {
+		t.Error("a changed @na of lib.rs passed without Zoo-Loosened")
+	}
+	reset()
+	write(na)
+	run("commit", "-qam", "a PARITY todo goes away")
+	if err := check(base); err != nil {
+		t.Errorf("a PARITY @todo that goes away failed: %v", err)
 	}
 }
