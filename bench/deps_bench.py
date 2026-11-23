@@ -6,7 +6,7 @@ measurements, bench/heavy-ledger.tsv (bench/heavy_ledger.py: the columns, the wr
 heavy; not in CI): `make bench-deps`.
 
   bench/deps_bench.py [-timeout 600] [-rivus PATH] [-ledger FILE] [-no-ledger] [bench ...]
-  bench/deps_bench.py [-limit S] [-cap GB] [-ledger FILE] [-no-ledger] memos dart_services   (the pass line, below)
+  bench/deps_bench.py [-limit S] [-cap GB] [-ledger FILE] [-no-ledger] memos dart_services   (the pass line, below; dart_services is pass line D: 600 s, 8 GB, converge; takes 10 minutes, select it with TARGETS)
 
 The benches: go-s3 (bench/go-s3), gcp (bench/gcp), dart-gcp (bench/dart-gcp, run in a copy: `dart pub get
 --offline`; the packages are read, never run). There is no Rust bench with its dependencies ready, so none is run.

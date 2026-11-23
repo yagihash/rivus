@@ -188,8 +188,8 @@ findings and uncertainties. One line each: `same`, or `DIFFERENT` with how many 
 findings ([WORKFLOW.md](../docs/WORKFLOW.md)). The dump reads the fields of a summary, not how they are stored, so a change of the storage keeps it; a change of the
 fields must change `internal/taint/summarydump.go` with it. The checks of the tool itself: `go test ./bench/graphcheck ./internal/taint -run SummaryDump`, `python3 -m unittest bench.test_graph_check`.
 `go-std10` is the standard library: the 10 packages of `TestAcceptOrderStd` (`stdPatterns` of `internal/frontend/goir/accept_test.go`: keep the two lists the same), a source of shapes that the zoo and curated lack.
-The names of `deps-targets.json` (memos, memos-4gib, gitea) run under the heavy-work lock and the memory cap of the target; gitea stops at the cap for now (the load does not pass in 8 GB), so
-its graph cannot be compared yet.
+The names of `deps-targets.json` (memos, memos-4gib, gitea, dart_services) run under the heavy-work lock and the memory cap of the target; gitea is the pass line C (it passes now: see its newest `--kind passline` row of
+`bench/heavy-ledger.tsv`; the numbers are there), so its graph can be compared.
 
 ## One lock for the heavy runs
 
