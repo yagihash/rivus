@@ -19,7 +19,7 @@ o.Put(x)            // o を経由: 型 Web がたどれず、sink にならな�
 Out(Web{}).Put(x)   // 直接: sink になる
 ```
 
-型は、引数の局所変数の型と、そこに直接入る `convert` の元の型(最大 4 段)だけを見る(`internal/sites/enumerate.go` の `argTypeHolds`)。上の `o` は、`alloc` した変数を `load` したものなので、`convert` につながらない。
+型は、引数の局所変数の型と、そこに直接入る `convert` の元の型(最大 4 階層)だけを見る(`internal/sites/enumerate.go` の `argTypeHolds`)。上の `o` は、`alloc` した変数を `load` したものなので、`convert` につながらない。
 
 ## 影響
 

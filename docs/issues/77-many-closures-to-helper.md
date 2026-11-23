@@ -14,7 +14,7 @@
 
 **ADR-118 の見方の追加:** [ADR-118](../adr/118-scale-mechanisms-three-conditions.md) の 3 条件で、関数値の候補の上限(32)と、呼び出し元をたどる深さの上限(3)は、(i) と (iii) が足りない。
 - (i): 上限を超えた呼び出しは、候補を 1 つも付けず、コールバックの中の流れを落とす(過大近似の側ではない)。33 以上の形で、今、起きている。
-- (iii): 今、出力に出るのは、`depth_limit`(detail `candidate_limit:`、`caller_depth_limit:`)と `stats` の `candidate_limit_calls`。3 段で切れたとき、途中で 1〜8 個の候補が見つかっていても、何も報告しない(ADR-050 の限界)。
+- (iii): 今、出力に出るのは、`depth_limit`(detail `candidate_limit:`、`caller_depth_limit:`)と `stats` の `candidate_limit_calls`。3 階層で切れたとき、途中で 1〜8 個の候補が見つかっていても、何も報告しない(ADR-050 の限界)。
 - 直す向き: 上限を超えたとき、落とさず、粗い形(その呼び出しは、見える関数のどれでも呼びうる)にする。切れた所を、渡した側の関数にも出す。
 
 ## 本文(GitHub から移した写し)

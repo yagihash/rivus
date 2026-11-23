@@ -37,7 +37,7 @@
 - zoo 25 件: 返したクロージャ `clos/returned` 3、フィールドやリストに入れたクロージャ `clos/stored` 6、`clos/capture-write-by-ref` 1、`dart/closure-to-sdk` 1(#99)。**依存や骨組みのフレームワークが、渡されたコールバックを呼ぶ**もの: `shelf_router` の `Router.call` 3、`Navigator.pushNamed` 3、依存が返したクロージャ(`wrapFn`)の呼びと、その中からの呼び 8(`clos/wrapped-by-dependency`)。
 - curated 17 件: `relayCapture` / `relayBoth` 4、`compose` / `composed_*` 6、`Runner.go` 2、`field_function_*` 2、`table_lookup` 1、`dynamic_drop` 1、**`local_recursion`**(ローカル関数が自分を呼ぶ `go(x, n - 1)` が、値の呼び出し・候補 0 件になる。名前で直接呼んでいるので、本来は静的なエッジのはず。推測)1。
 
-形の違い(欠落ではない): メソッドの tear-off の呼び出しは、`m$bound` という中継のノードを通る(`呼び出し点 → Printer.run$bound → Printer.run`)。観測は `呼び出し元 → Printer.run` と見えるので、`no_edge` に出る(zoo 10、curated 3)。比べる側で、中継を 1 段たどって合わせるべき。
+形の違い(欠落ではない): メソッドの tear-off の呼び出しは、`m$bound` という中継のノードを通る(`呼び出し点 → Printer.run$bound → Printer.run`)。観測は `呼び出し元 → Printer.run` と見えるので、`no_edge` に出る(zoo 10、curated 3)。比べる側で、中継を 1 ステップたどって合わせるべき。
 
 観測の誤り(欠落ではない): `callee_unresolved` 13 件は、コンストラクタ(`new ServiceAccountCredentials`、`new RepositorySlug.fromJson`)の名前を、観測の側(`bench/zoo-dart/observed/compare.py`)が、グラフの `X.new` / `X.fromJson` に対応させていない。グラフには、呼び出し元からの静的なエッジがある(確認した)。
 
