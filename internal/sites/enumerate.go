@@ -13,8 +13,10 @@ import (
 )
 
 // IRRef is the place of a site in the IR.
+//
+// Func names the function, and does not hold its IR: the IR is asked of the Source when it is needed.
 type IRRef struct {
-	Func  *ir.Func
+	Func  ir.Ref
 	Block int
 	Instr int
 	// Param is the index of the parameter of a parameter source, else -1.
@@ -38,19 +40,16 @@ type IRParam struct {
 // Texts. Level L0 (rule matching on resolved symbols) plus the L1 literal
 // mark: it needs neither a call graph nor any data flow analysis, so it is
 // fast. Every site has a stable ID and a fingerprint (ADR-028).
-func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
-	valuecalls.Resolve(prog)
+func Enumerate(irsrc ir.Source, texts ir.Texts, rules *model.Rules) *Result {
+	prog := irsrc.Header()
+	valuecalls.Resolve(irsrc)
 	res := &Result{
 		ByIRInstr: map[IRInstr][]*Site{},
 		ByIRParam: map[IRParam][]*Site{},
 		ByID:      map[string]*Site{},
 	}
-	byID := make(map[ir.FuncID]*ir.Func, len(prog.Funcs))
-	for _, f := range prog.Funcs {
-		byID[f.ID] = f
-	}
 	canon := prog.CanonType()
-	known := namedKnown(prog, byID, rules)
+	known := namedKnown(irsrc, rules)
 	// the field rules by the type behind its aliases
 	fields := rules.Fields
 	if len(prog.TypeAliases) > 0 {
@@ -62,13 +61,19 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 			fields[k] = append(fields[k], v...)
 		}
 	}
-	callbacks := callbackTargets(prog, rules, res)
-	for _, fn := range prog.Funcs {
-		if fn.Dep {
+	callbacks := callbackTargets(irsrc, rules, res)
+	for seq, n := 0, irsrc.Len(); seq < n; seq++ {
+		head := irsrc.Head(seq)
+		if head.Gone {
+			continue
+		}
+		if head.Dep {
 			// ADR-099: sites are listed in the functions of the project only
 			res.DependencyFunctions++
 			continue
 		}
+		fnRef := ir.Ref{ID: head.ID, Seq: seq}
+		fn := ir.Must(irsrc, fnRef)
 		var raw []*Site
 		order := 0
 		add := func(s *Site) {
@@ -98,12 +103,12 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 				if fn.Recv {
 					off = 1
 					if src.Recv && declared > 0 {
-						add(&Site{Role: RoleSource, Kind: model.KindParam, Symbol: sym, Labels: src.Labels, Src: []model.Source{src}, irpos: paramPos(0), IR: &IRRef{Func: fn, Param: 0}})
+						add(&Site{Role: RoleSource, Kind: model.KindParam, Symbol: sym, Labels: src.Labels, Src: []model.Source{src}, irpos: paramPos(0), IR: &IRRef{Func: fnRef, Param: 0}})
 					}
 				}
 				for _, i := range src.Params {
 					if i >= 0 && i+off < declared {
-						add(&Site{Role: RoleSource, Kind: model.KindParam, Symbol: sym, Labels: src.Labels, Src: []model.Source{src}, irpos: paramPos(i + off), IR: &IRRef{Func: fn, Param: i + off}})
+						add(&Site{Role: RoleSource, Kind: model.KindParam, Symbol: sym, Labels: src.Labels, Src: []model.Source{src}, irpos: paramPos(i + off), IR: &IRRef{Func: fnRef, Param: i + off}})
 					}
 				}
 			}
@@ -113,7 +118,7 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 			for _, t := range ts {
 				from, to := t.span(len(idx))
 				for k := from; k <= to; k++ {
-					add(&Site{Role: RoleSource, Kind: model.KindCallbackParam, Symbol: t.symbol, Labels: t.src.Labels, Src: []model.Source{t.src.Source}, irpos: paramPos(idx[k]), IR: &IRRef{Func: fn, Param: idx[k]}})
+					add(&Site{Role: RoleSource, Kind: model.KindCallbackParam, Symbol: t.symbol, Labels: t.src.Labels, Src: []model.Source{t.src.Source}, irpos: paramPos(idx[k]), IR: &IRRef{Func: fnRef, Param: idx[k]}})
 				}
 			}
 		}
@@ -124,13 +129,13 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 			t := string(prm.Type)
 			for _, src := range rules.ParamTypes {
 				if src.Type == t || canon.Canon(src.Type) == canon.Canon(t) {
-					add(&Site{Role: RoleSource, Kind: model.KindParamType, Symbol: t, Labels: src.Labels, Src: []model.Source{src}, irpos: paramPos(i), IR: &IRRef{Func: fn, Param: i}})
+					add(&Site{Role: RoleSource, Kind: model.KindParamType, Symbol: t, Labels: src.Labels, Src: []model.Source{src}, irpos: paramPos(i), IR: &IRRef{Func: fnRef, Param: i}})
 				}
 			}
 		}
 		for bi, b := range fn.Blocks {
 			for ii, in := range b.Instrs {
-				at := &IRRef{Func: fn, Block: bi, Instr: ii, Param: -1}
+				at := &IRRef{Func: fnRef, Block: bi, Instr: ii, Param: -1}
 				switch in.Op {
 				case ir.OpCall:
 					if in.Callee.Kind == ir.CalleeValue {
@@ -171,8 +176,8 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 						// the method of a type of the standard library or a dependency.
 						for _, id := range in.Callee.Candidates {
 							csym := string(id)
-							if f := byID[id]; f != nil {
-								csym = f.Symbol
+							if h, ok := ir.HeadOf(irsrc, id); ok {
+								csym = h.Symbol
 							}
 							if csym == "" || csym == sym {
 								continue
@@ -328,7 +333,7 @@ func (res *Result) finishIR(fn *ir.Func, texts ir.Texts, raw []*Site) {
 // sink is a compile-time constant.
 func literalOnlyIR(form *irssa.Form, s *Site) bool {
 	at := s.IR
-	in := at.Func.Blocks[at.Block].Instrs[at.Instr]
+	in := form.Func.Blocks[at.Block].Instrs[at.Instr]
 	if in.Op != ir.OpCall {
 		return false
 	}
@@ -495,7 +500,7 @@ type namedNames map[string]map[string]bool
 // namedKnown collects the names of the calls to the symbols that a sink names by `named` (docs/MODELING.md): a name that
 // no call of the symbol has is a misspelling, and the sink says so instead of being quiet. It reads the program only
 // when a rule has `named`.
-func namedKnown(prog *ir.Program, byID map[ir.FuncID]*ir.Func, rules *model.Rules) namedNames {
+func namedKnown(irsrc ir.Source, rules *model.Rules) namedNames {
 	want := map[string]bool{}
 	for sym, sinks := range rules.Sinks {
 		for _, s := range sinks {
@@ -526,7 +531,7 @@ func namedKnown(prog *ir.Program, byID map[ir.FuncID]*ir.Func, rules *model.Rule
 			}
 		}
 	}
-	for _, fn := range prog.Funcs {
+	ir.Walk(irsrc, func(_ ir.Ref, fn *ir.Func) {
 		for _, b := range fn.Blocks {
 			for _, in := range b.Instrs {
 				if in.Op != ir.OpCall || in.Callee == nil || len(in.ArgNames) == 0 {
@@ -534,13 +539,13 @@ func namedKnown(prog *ir.Program, byID map[ir.FuncID]*ir.Func, rules *model.Rule
 				}
 				note(in.Callee.Symbol, in.ArgNames)
 				for _, id := range in.Callee.Candidates {
-					if f := byID[id]; f != nil {
-						note(f.Symbol, in.ArgNames)
+					if h, ok := ir.HeadOf(irsrc, id); ok {
+						note(h.Symbol, in.ArgNames)
 					}
 				}
 			}
 		}
-	}
+	})
 	return out
 }
 

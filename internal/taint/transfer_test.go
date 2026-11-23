@@ -23,7 +23,7 @@ func TestReservedCallOfTheWrongShapeIsRefused(t *testing.T) {
 		if err := prog.Validate(); err == nil {
 			t.Errorf("%s: a call with no arguments and results passes the validation", sym)
 		}
-		if _, err := sg.Build(prog); err == nil {
+		if _, err := sg.Build(ir.MemSource(prog)); err == nil {
 			t.Errorf("%s: the graph is built from it", sym)
 		}
 	}

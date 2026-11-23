@@ -13,7 +13,7 @@ func TestReachableOfALibraryWithInitializers(t *testing.T) {
 		return &ir.Func{ID: ir.FuncID(id), Exported: exported, Entry: entry, Init: init, Blocks: []ir.Block{{Term: ir.Term{Kind: ir.TermReturn}}}}
 	}
 	reached := func(fs ...*ir.Func) map[string]bool {
-		p, err := Build(&ir.Program{Funcs: fs})
+		p, err := Build(ir.MemSource(&ir.Program{Funcs: fs}))
 		if err != nil {
 			t.Fatal(err)
 		}

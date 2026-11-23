@@ -27,7 +27,7 @@ func TestSubtypeMethods(t *testing.T) {
 			{ID: "e", Symbol: "app#Impl.dep", Recv: true, Dep: true, Params: []Param{{Type: "app#Impl"}, {Type: "g#Call"}, {Type: "app#Req"}}},
 		},
 	}
-	got := p.SubtypeMethods("g#Service", "g#Call")
+	got := SubtypeMethods(MemSource(p), "g#Service", "g#Call")
 	want := []MarkedMethod{{Symbol: "app#Impl.run", Params: []int{1}}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %+v, want %+v", got, want)

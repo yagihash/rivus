@@ -7,6 +7,7 @@ import (
 	"github.com/yagihash/rivus/internal/fingerprint"
 	"github.com/yagihash/rivus/internal/frontend/goir"
 	"github.com/yagihash/rivus/internal/frontend/gossa"
+	"github.com/yagihash/rivus/internal/ir"
 	"github.com/yagihash/rivus/internal/model"
 	"github.com/yagihash/rivus/internal/testutil"
 )
@@ -27,7 +28,7 @@ func enumerateGo(t testing.TB, dir string, patterns []string, rules *model.Rules
 	if err != nil {
 		t.Fatal(err)
 	}
-	return Enumerate(prog, goir.NewTexts(p), rules)
+	return Enumerate(ir.MemSource(prog), goir.NewTexts(p), rules)
 }
 
 func find(res *Result, fn, role, symbol string, ordinal int) *Site {
@@ -156,7 +157,7 @@ func TestEnumerateCallsOfFunctionValues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	with := Enumerate(prog, goir.NewTexts(p), testutil.Rules(t))
+	with := Enumerate(ir.MemSource(prog), goir.NewTexts(p), testutil.Rules(t))
 	for _, fn := range []string{"funcsink.Alias", "funcsink.Phi", "funcsink.runRule"} {
 		a, b := find(res, fn, RoleSink, "example.com/cases/lib.Sink", 1), find(with, fn, RoleSink, "example.com/cases/lib.Sink", 1)
 		if a == nil || b == nil || a.ID != b.ID {

@@ -37,11 +37,9 @@ func TestZeroCandidateCalls(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", path, err)
 		}
-		Resolve(prog)
-		r := &resolver{prog: prog, byID: map[ir.FuncID]*ir.Func{}, forms: map[*ir.Func]*irssa.Form{}}
-		for _, fn := range prog.Funcs {
-			r.byID[fn.ID] = fn
-		}
+		src := ir.MemSource(prog)
+		Resolve(src)
+		r := &resolver{src: src, prog: prog, forms: map[*ir.Func]*irssa.Form{}}
 		counts := map[string]int{}
 		total, zero := 0, 0
 		for _, fn := range prog.Funcs {

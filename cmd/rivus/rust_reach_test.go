@@ -33,7 +33,7 @@ func TestRustReachesWhatTheFrameworkRuns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	g, err := sg.Build(prog)
+	g, err := sg.Build(ir.MemSource(prog))
 	if err != nil {
 		t.Fatal(err)
 	}

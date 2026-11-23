@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/yagihash/rivus/internal/ir"
 	"github.com/yagihash/rivus/internal/model"
 	"github.com/yagihash/rivus/internal/sites"
 )
@@ -51,7 +52,7 @@ func F(x string, n int) string {
 	rules.Sinks = map[string][]model.Sink{}
 	opts := DefaultOptions()
 	opts.Workers = 1
-	res := New(l.sg, l.texts, sites.Enumerate(l.ir, l.texts, rules), rules, opts).Run()
+	res := New(l.sg, l.texts, sites.Enumerate(ir.MemSource(l.ir), l.texts, rules), rules, opts).Run()
 	if len(res.Stats.NotConverged) == 0 {
 		t.Skip("the function converged: the test says nothing")
 	}

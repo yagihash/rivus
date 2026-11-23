@@ -25,19 +25,12 @@ type callbackTarget struct {
 // holds one of them, possibly through copies and conversions. What is not found (a φ of two functions, a field, a
 // parameter of the caller, a result) is not followed, and the call is recorded, so that the analysis says that the
 // parameters of the function it was given are not marked (unresolved_callee).
-func callbackTargets(prog *ir.Program, rules *model.Rules, res *Result) map[ir.FuncID][]callbackTarget {
+func callbackTargets(irsrc ir.Source, rules *model.Rules, res *Result) map[ir.FuncID][]callbackTarget {
 	if len(rules.CallbackParams) == 0 {
 		return nil
 	}
-	byID := make(map[ir.FuncID]*ir.Func, len(prog.Funcs))
-	for _, f := range prog.Funcs {
-		byID[f.ID] = f
-	}
 	out := map[ir.FuncID][]callbackTarget{}
-	for _, fn := range prog.Funcs {
-		if fn.Dep {
-			continue
-		}
+	ir.WalkProject(irsrc, func(_ ir.Ref, fn *ir.Func) bool {
 		var form *irssa.Form
 		for bi, b := range fn.Blocks {
 			for ii, in := range b.Instrs {
@@ -70,7 +63,7 @@ func callbackTargets(prog *ir.Program, rules *model.Rules, res *Result) map[ir.F
 						res.noteCallback(IRInstr{fn.ID, bi, ii}, in.Callee.Symbol, *src.Operand, why)
 						continue
 					}
-					if byID[id] == nil {
+					if _, ok := irsrc.Lookup(id); !ok {
 						res.noteCallback(IRInstr{fn.ID, bi, ii}, in.Callee.Symbol, *src.Operand, "a function that is not in the program")
 						continue
 					}
@@ -86,7 +79,8 @@ func callbackTargets(prog *ir.Program, rules *model.Rules, res *Result) map[ir.F
 				}
 			}
 		}
-	}
+		return true
+	})
 	return out
 }
 

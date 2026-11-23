@@ -23,7 +23,7 @@ func TestNoteNotBuiltin(t *testing.T) {
 	builtinOnly := model.Merge(b...)
 	note := func(p *ir.Program, r *model.Rules) string {
 		var sb strings.Builder
-		noteNotBuiltin(&sb, p, r)
+		noteNotBuiltin(&sb, ir.MemSource(p), r)
 		return sb.String()
 	}
 

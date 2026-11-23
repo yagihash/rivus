@@ -283,24 +283,24 @@ func readIR(path string) (*loaded, error) {
 
 // expandSubtypes makes the rules that speak of the subtypes of a class
 // (extends:) from the class hierarchy the extractor wrote, if there is one.
-func expandSubtypes(rules *model.Rules, prog *ir.Program) {
-	if prog == nil || len(prog.Types) == 0 {
+func expandSubtypes(rules *model.Rules, src ir.Source) {
+	if src == nil || len(src.Header().Types) == 0 {
 		return
 	}
-	rules.ExpandSubtypes(subtypeResolver{prog})
+	rules.ExpandSubtypes(subtypeResolver{src})
 }
 
-type subtypeResolver struct{ p *ir.Program }
+type subtypeResolver struct{ src ir.Source }
 
 func (r subtypeResolver) SubtypeMethods(super, with string) []model.MarkedMethod {
 	var out []model.MarkedMethod
-	for _, m := range r.p.SubtypeMethods(ir.TypeID(super), ir.TypeID(with)) {
+	for _, m := range ir.SubtypeMethods(r.src, ir.TypeID(super), ir.TypeID(with)) {
 		out = append(out, model.MarkedMethod{Symbol: m.Symbol, Params: m.Params})
 	}
 	return out
 }
 
-func (r subtypeResolver) CallsFunction(symbol string) bool { return r.p.CallsFunction(symbol) }
+func (r subtypeResolver) CallsFunction(symbol string) bool { return ir.CallsFunction(r.src, symbol) }
 
 // testsSkipped is what was left out because the build does not ship it (ADR-062): the _test.go files, and what an
 // extractor said it did not read. Nil when nothing was.
@@ -346,7 +346,7 @@ func (l *loaded) loadErrors() []ir.LoadError {
 // packages lists the units that were analysed: the import paths of the Go
 // packages, and the units (packages, crates) of the functions of an IR that
 // did not come from Go packages.
-func (l *loaded) packages() []string {
+func (l *loaded) packages(src ir.Source) []string {
 	seen := map[string]bool{}
 	var out []string
 	add := func(u string) {
@@ -361,8 +361,12 @@ func (l *loaded) packages() []string {
 		}
 	}
 	if l.ir != nil {
-		for i := range l.ir.Funcs {
-			id := string(l.ir.Funcs[i].ID)
+		for i, n := 0, src.Len(); i < n; i++ {
+			h := src.Head(i)
+			if h.Gone {
+				continue
+			}
+			id := string(h.ID)
 			// the Go functions of a program that has Go packages are listed by them
 			if l.gossa != nil && !report.ForeignID(id) {
 				continue

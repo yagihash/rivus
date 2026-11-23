@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/yagihash/rivus/internal/graphdb"
+	"github.com/yagihash/rivus/internal/ir"
 	"github.com/yagihash/rivus/internal/model"
 	"github.com/yagihash/rivus/internal/sg"
 	"github.com/yagihash/rivus/internal/sites"
@@ -20,15 +21,16 @@ import (
 
 // bodyHashes hashes the normalized body of each function (what "body@1" is made of), by the ID of the
 // function. A function whose text the extractor cannot give (a dependency without its syntax) has none.
-func bodyHashes(l *loaded) map[string]string {
-	out := make(map[string]string, len(l.ir.Funcs))
-	for _, f := range l.ir.Funcs {
-		if f == nil {
+func bodyHashes(l *loaded, src ir.Source) map[string]string {
+	out := make(map[string]string, src.Len())
+	for i, n := 0, src.Len(); i < n; i++ {
+		h := src.Head(i)
+		if h.Gone {
 			continue
 		}
-		if b := l.texts.Body(f.ID); b != "" {
+		if b := l.texts.Body(h.ID); b != "" {
 			sum := sha256.Sum256([]byte(b))
-			out[string(f.ID)] = hex.EncodeToString(sum[:16])
+			out[string(h.ID)] = hex.EncodeToString(sum[:16])
 		}
 	}
 	return out

@@ -226,18 +226,20 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 		// that only it imports). Nothing the project reaches is lost
 		l.ir.PruneDeps()
 	}
+	// the functions are final here: the readers get them from the source
+	src := ir.MemSource(l.ir)
 	// The graph drops the IR as it is built: what was analysed is listed first.
-	packages := l.packages()
-	noteNotBuiltin(os.Stderr, l.ir, rules)
+	packages := l.packages(src)
+	noteNotBuiltin(os.Stderr, src, rules)
 	// The sites read the IR, and the graph drops it as it is built.
-	expandSubtypes(rules, l.ir)
-	st := sites.Enumerate(l.ir, l.texts, rules)
+	expandSubtypes(rules, src)
+	st := sites.Enumerate(src, l.texts, rules)
 	phase("sites")
 	var bodies map[string]string
 	if o.afterRead != nil {
-		bodies = bodyHashes(l)
+		bodies = bodyHashes(l, src)
 	}
-	graph, err := sg.BuildConsuming(l.ir)
+	graph, err := sg.BuildConsuming(src)
 	if err != nil {
 		return nil, err
 	}

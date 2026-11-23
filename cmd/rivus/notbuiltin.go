@@ -26,12 +26,12 @@ var notBuiltinFrameworks = []notBuiltin{}
 // noteNotBuiltin writes one line for each framework that the code uses and that no rule names (a
 // framework with its model in the rules, given by -rules or the project, is not mentioned). The result is
 // not changed.
-func noteNotBuiltin(w io.Writer, prog *ir.Program, rules *model.Rules) {
-	if prog == nil || rules == nil {
+func noteNotBuiltin(w io.Writer, src ir.Source, rules *model.Rules) {
+	if src == nil || rules == nil {
 		return
 	}
 	for _, fw := range notBuiltinFrameworks {
-		if !rulesName(rules, fw.prefix) && usesPrefix(prog, fw.prefix) {
+		if !rulesName(rules, fw.prefix) && usesPrefix(src, fw.prefix) {
 			fmt.Fprintf(w, "rivus: this project uses %s, and its model is not built in: %s are not known. -rules %s gives them (README: ルールとモデル, ADR-063)\n", fw.name, fw.what, fw.file)
 		}
 	}
@@ -73,24 +73,25 @@ func rulesName(r *model.Rules, prefix string) bool {
 
 // usesPrefix: a function of the project (not of a dependency) calls a symbol that starts with prefix, or
 // takes a parameter of a type that does.
-func usesPrefix(p *ir.Program, prefix string) bool {
-	for _, f := range p.Funcs {
-		if f.Dep {
-			continue
-		}
+func usesPrefix(src ir.Source, prefix string) bool {
+	found := false
+	ir.WalkProject(src, func(_ ir.Ref, f *ir.Func) bool {
 		for _, pa := range f.Params {
 			if strings.Contains(string(pa.Type), prefix) || strings.Contains(pa.Display, prefix) {
-				return true
+				found = true
+				return false
 			}
 		}
 		for bi := range f.Blocks {
 			for ii := range f.Blocks[bi].Instrs {
 				in := &f.Blocks[bi].Instrs[ii]
 				if in.Op == ir.OpCall && in.Callee != nil && strings.HasPrefix(in.Callee.Symbol, prefix) {
-					return true
+					found = true
+					return false
 				}
 			}
 		}
-	}
-	return false
+		return true
+	})
+	return found
 }

@@ -45,12 +45,12 @@ func (p *Program) subtypes(super TypeID) map[TypeID]bool {
 // type with: the handlers a framework calls with what a client sent. The
 // parameters that are of the type with, and the receiver, are left out of
 // Params: what is left is the input. A method with nothing left is not listed.
-func (p *Program) SubtypeMethods(super, with TypeID) []MarkedMethod {
-	sub := p.subtypes(super)
+func SubtypeMethods(src Source, super, with TypeID) []MarkedMethod {
+	sub := src.Header().subtypes(super)
 	var out []MarkedMethod
-	for _, f := range p.Funcs {
+	Walk(src, func(_ Ref, f *Func) {
 		if f.Dep || !f.Recv || f.Symbol == "" || len(f.Params) == 0 || !sub[f.Params[0].Type] {
-			continue
+			return
 		}
 		hasWith := false
 		for _, prm := range f.Params[1:] {
@@ -59,7 +59,7 @@ func (p *Program) SubtypeMethods(super, with TypeID) []MarkedMethod {
 			}
 		}
 		if !hasWith {
-			continue
+			return
 		}
 		var params []int
 		for i, prm := range f.Params[1:] {
@@ -70,26 +70,26 @@ func (p *Program) SubtypeMethods(super, with TypeID) []MarkedMethod {
 		if len(params) > 0 {
 			out = append(out, MarkedMethod{Symbol: f.Symbol, Params: params})
 		}
-	}
+	})
 	sort.Slice(out, func(i, j int) bool { return out[i].Symbol < out[j].Symbol })
 	return out
 }
 
 // CallsFunction reports whether the code being analysed calls the function
 // with the symbol.
-func (p *Program) CallsFunction(symbol string) bool {
-	for _, f := range p.Funcs {
-		if f.Dep {
-			continue
-		}
+func CallsFunction(src Source, symbol string) bool {
+	found := false
+	WalkProject(src, func(_ Ref, f *Func) bool {
 		for bi := range f.Blocks {
 			for ii := range f.Blocks[bi].Instrs {
 				in := &f.Blocks[bi].Instrs[ii]
 				if in.Op == OpCall && in.Callee.Symbol == symbol {
-					return true
+					found = true
+					return false
 				}
 			}
 		}
-	}
-	return false
+		return true
+	})
+	return found
 }

@@ -24,7 +24,7 @@ func resolved(t *testing.T, file string) *ir.Program {
 	if err != nil {
 		t.Fatal(err)
 	}
-	Resolve(prog)
+	Resolve(ir.MemSource(prog))
 	return prog
 }
 
