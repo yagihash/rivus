@@ -53,6 +53,10 @@ Rust は、`char` と整数を数値と扱う(extractor の型の分類)ので�
 
 文字の汚染の本体(由来の bit)を実装するときは、`numeric_stops` の `isCharRead` を、流れの判断には使わない。`isCharRead` は、言語に固有の名前を決め打ちで持つ(`std::iter::Iterator::next`、`std::str::Bytes`、`String.codeUnits`、`::as_bytes`、`iter.next`、型の名前 `byte` / `rune` / `char`)。「文字列の要素の取り出し」は、extractor が IR に付ける(命令のマークか、値の種類)。そのとき、`isCharRead` も IR のマークを見る形に置き換える。コアは IR だけを見る、という分担に戻す。
 
-### CEL / antlr が上位 10 に出ない理由(調査中)
+### CEL / antlr が上位 10 に出ない理由(測定済み。memos 00fcd170、2 回、結果は同一)
 
-CEL と antlr が、`char_reads` の上位 10 に出ない理由は、調査中。推測: antlr の字句解析は、入力を `IntStream.LA()` のようなインターフェースのメソッドで 1 文字ずつ `int` として受け取り、表を引いて進む。そのため `isCharRead` に当たらず、`other` に入るか、数えられていない。確認の方法: 関数ごとの `char_reads` と `other` の件数を、パッケージ名に `antlr` と `cel` を含むものについて出す。結果が出たら、この節に足す。
+- 関数ごとの `char_reads` と `other` の件数を、使い捨ての出力で取った(844 関数。2 回の表は完全に一致。#329 のあとの main に、この PR を合流させたもの)。
+- **antlr のパッケージの関数は、`char_reads` にも `other` にも 0 関数**(1 件も数えられていない)。最初の推測(「`other` に入る」)は外れた。
+- cel-go は 33 関数、`char_reads` 102 件、`other` 0 件。最上位は `common.Error.ToDisplayString` と `ext.parseFormatString` などの 9 件(`char_reads` の順位は 112 位前後)。
+- まだ分かっていないこと: antlr の字句解析に、そもそも汚染が届いていないのか(source から遠い)、届いても、止める処理が `isCharRead` にも `other` にも当たらないのか。分けるには、antlr の関数の要約に入る source の有無を見る必要がある。
+- 限界(確認済みの範囲): `numeric_stops` が示すのは、記録された止まりだけ。antlr のように、数えられていない字句解析は、この数では指せない。YAML(`yaml.v3` 36 関数、1065 件)と Markdown(`goldmark` 102 関数、948 件)は、数えられている。
