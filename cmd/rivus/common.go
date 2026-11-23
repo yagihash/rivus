@@ -199,6 +199,9 @@ func (c *common) load(patterns []string, withGraph bool, rules *model.Rules) (*l
 		patterns = []string{"./..."}
 	}
 	opts := gossa.Options{Tests: c.tests, NaiveForm: true, WithLifted: withGraph, Deps: !c.noDeps && withGraph, DepDirs: c.depDirs}
+	if withGraph {
+		opts.OnLifted = goir.LiftedTable
+	}
 	if rules.HasDeclared() && !c.dropAfterRead {
 		// the extractor does not read what the models stand for (docs/DESIGN-package-models.md 2): the IR is the one
 		// that dropReplacedBodies would make

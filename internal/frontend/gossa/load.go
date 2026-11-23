@@ -40,6 +40,13 @@ type Options struct {
 	// graph: variable type analysis is more precise on the lifted form, and
 	// the call graph is the one thing that is taken from it.
 	WithLifted bool
+	// OnLifted, with WithLifted, is given the lifted program as soon as it is
+	// built, and its answer is kept in Program.LiftedResult; the lifted
+	// program is then let go of. The lifted program is built and read first,
+	// before the program of the naive form is built, so the two are never in
+	// memory together. Without it the lifted program is kept in
+	// Program.Lifted.
+	OnLifted func(*ssa.Program) any
 	// Deps also reads the source of the dependencies that are not in the
 	// standard library, so that their functions have bodies and the analysis
 	// follows data through them (a function without a body is a guess).
@@ -106,6 +113,8 @@ type Program struct {
 
 	// Lifted is the program built with lifting (Options.WithLifted).
 	Lifted *ssa.Program
+	// LiftedResult is what Options.OnLifted answered.
+	LiftedResult any
 
 	// BodiesNotRead is, per package whose body Options.ReplacedPackage said the models replace, how many functions
 	// and methods it declares that were left without a body.
@@ -339,7 +348,14 @@ func Load(dir string, patterns []string, opts Options) (*Program, error) {
 		}
 	}
 	progs := []*ssa.Program{prog}
-	if opts.WithLifted {
+	if opts.WithLifted && opts.OnLifted != nil {
+		// The lifted program is built and read before the program of the
+		// naive form is: what is taken from it is small, and it is gone
+		// before the other grows.
+		lifted, _ := mk(pkgs, ssa.InstantiateGenerics)
+		buildInOrder([]*ssa.Program{lifted}, skip, nil)
+		p.LiftedResult = opts.OnLifted(lifted)
+	} else if opts.WithLifted {
 		lifted, _ := mk(pkgs, ssa.InstantiateGenerics)
 		p.Lifted = lifted
 		progs = append(progs, lifted)
@@ -509,7 +525,7 @@ func (p *Program) File(pos token.Pos) *ast.File {
 // is left is what the text of the code and the output need: the syntax, the
 // positions, the loading errors.
 func (p *Program) ReleaseSSA() {
-	p.SSA, p.Lifted = nil, nil
+	p.SSA, p.Lifted, p.LiftedResult = nil, nil, nil
 	p.Funcs, p.Own, p.OwnPkgs = nil, nil, nil
 	// the loaded packages carry the types and the syntax of every dependency
 	p.Initial = nil
@@ -609,7 +625,9 @@ func buildInOrder(progs []*ssa.Program, skip map[string]bool, built func(path st
 				q.Build()
 			}
 		}
-		built(path)
+		if built != nil {
+			built(path)
+		}
 	}
 }
 
