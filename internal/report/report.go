@@ -131,6 +131,12 @@ type Summary struct {
 	// closures that flow to the receiver: how many, and the candidates they had before and after (summed).
 	// The numbers of DispatchCandidates are those after. Absent when none was narrowed.
 	DispatchNarrowed *DispatchNarrowed `json:"dispatch_narrowed,omitempty"`
+	// NumericStops is where taint was dropped because the value is a number or a bool (the default; -numeric-taint follows
+	// them): how many times in total, in how many functions, and the functions with the most. A high count in a function means
+	// text handled one character at a time (a rune or a byte read from a string) or many numeric conversions: look there when
+	// a sink you expect is missing. Always present (0 when nothing was dropped). It counts the stops while the summaries are
+	// built and applied too, in the function where each happens. Not the same as the numeric_stop notes (one per source).
+	NumericStops NumericStops `json:"numeric_stops"`
 	// TopSymbols lists the symbols behind the uncertainties rivus can
 	// reduce itself: library calls without a model, and interface methods
 	// without a known implementation. They show where a model helps most.
@@ -198,6 +204,76 @@ type Summary struct {
 	// the call is made: the parameters of that function are not treated as sources, with or without a finding. Where the call is made,
 	// not where the source would have been (which function that is, is not known). Sorted by place. Absent when none.
 	CallbackParamUnresolved *CallbackParamUnresolved `json:"callback_param_unresolved,omitempty"`
+}
+
+// maxNumericStopsTop is how many functions NumericStops.Top lists.
+const maxNumericStopsTop = 10
+
+// NumericStops is the count of the places where taint stopped at a number or a bool (Summary.NumericStops), by cause.
+// The counts are numbers of stops, not of places: a loop in a function counts the same place many times, so they are a
+// guide for comparing sizes (407 is not 407 places). In a run that timed out they can differ from run to run (a visit that
+// was cut off keeps the larger of its value and the previous one); in a run with no timeout they do not.
+type NumericStops struct {
+	// Total is CharReads.Total and Other.Total.
+	Total int `json:"total"`
+	// CharReads are the stops at a value read as one character of a text (s[i], range s, a rune, a code unit): text handled
+	// char by char. Misses come from here, so the functions are listed (top 10 by count).
+	CharReads NumericStopCharReads `json:"char_reads"`
+	// Other are the stops at lengths, indexes, counters, conversions to numbers, comparisons and the numbers a model makes: by
+	// design, so counts only.
+	Other NumericStopOther `json:"other"`
+}
+
+// NumericStopCharReads is the character reads of NumericStops.
+type NumericStopCharReads struct {
+	Total     int                `json:"total"`
+	Functions int                `json:"functions"`
+	Top       []NumericStopCount `json:"top"`
+}
+
+// NumericStopOther is the other stops of NumericStops.
+type NumericStopOther struct {
+	Total     int `json:"total"`
+	Functions int `json:"functions"`
+}
+
+// NumericStopCount is one function of NumericStopCharReads.Top. Scope is "project" or "dependency".
+type NumericStopCount struct {
+	Function string `json:"function"`
+	Scope    string `json:"scope"`
+	Count    int    `json:"count"`
+}
+
+// numericStopsOf makes the summary of the counts of the engine: the top by count, then by function id.
+func numericStopsOf(in []taint.NumericStopCount) NumericStops {
+	out := NumericStops{CharReads: NumericStopCharReads{Top: []NumericStopCount{}}}
+	for _, c := range in {
+		if c.Other > 0 {
+			out.Other.Total += c.Other
+			out.Other.Functions++
+		}
+		if c.Char > 0 {
+			out.CharReads.Total += c.Char
+			out.CharReads.Functions++
+			scope := "project"
+			if c.Dependency {
+				scope = "dependency"
+			}
+			out.CharReads.Top = append(out.CharReads.Top, NumericStopCount{Function: c.Func, Scope: scope, Count: c.Char})
+		}
+	}
+	out.Total = out.CharReads.Total + out.Other.Total
+	top := out.CharReads.Top
+	sort.Slice(top, func(i, j int) bool {
+		if top[i].Count != top[j].Count {
+			return top[i].Count > top[j].Count
+		}
+		return top[i].Function < top[j].Function
+	})
+	if len(top) > maxNumericStopsTop {
+		out.CharReads.Top = top[:maxNumericStopsTop]
+	}
+	return out
 }
 
 // CallbackParamUnresolved is the registrations whose handler was not found.
@@ -655,6 +731,7 @@ func Build(packages []string, loadErrors []ir.LoadError, st *sites.Result, res *
 	}
 	r.Summary = summarize(r)
 	r.Summary.CallbackParamUnresolved = callbackParamUnresolved(r.Uncertainties)
+	r.Summary.NumericStops = numericStopsOf(res.NumericStops)
 	if st.DependencyFunctions > 0 {
 		r.Summary.DependencySites = &DependencySites{DependencyFunctions: st.DependencyFunctions}
 	}

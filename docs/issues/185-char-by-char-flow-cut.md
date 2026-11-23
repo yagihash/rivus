@@ -35,7 +35,11 @@ Rust は、`char` と整数を数値と扱う(extractor の型の分類)ので�
 - 文字を表す型を、数値の既定の外に置くか、文字列から取り出した要素に由来を示すマークを持たせる。どちらにするかは、設計で決める。
 - 文字から作った数値(`n*10 + int(r-'0')` のような「数に解釈した値」)は、今までどおり止める。
 - 直したら、セルの `@miss` を外す(エンジンが直ったときだけ外せる)。
-- 直す前でも、`numeric_stop` を、サマリの経路でも記録して、出力に残す。
+- 直す前でも、止まった場所を出力に残す: `summary.numeric_stops` を足した(関数ごとに数える。サマリの経路の分も、止まった関数に数える)。
+
+## 出力での見つけ方
+
+`summary.numeric_stops.char_reads` は、文字の取り出し(`s[i]`、`range s`、rune、`codeUnitAt`)で汚染が止まった回数で、`top[]` に回数の多い 10 関数(`function`、`scope`、`count`)が出る。その関数は、文字を 1 つずつ扱っている。期待した sink が出ない(`-no-deps` では出る)ときは、まずその関数の周りを見る。`other`(長さ、カウンタ、変換、比較)は仕様どおりなので、数だけを見る。数える形は言語で違い、**数えない形は 0 のままで、止まっていないとは限らない**: Dart のコールバックに渡る要素(`runes.map((r) => ...)`、セル `char-replace`)と、Rust の `bytes()`・`chars()`・`as_bytes()[i]`・`char` 型以外の byte の取り出しは数えない(Rust の byte の取り出しは数えない形がある: #185)。セルでの確認は `TestZooCharReadsDart`、`TestZooCharReadsRust`。プロジェクトの関数に文字の取り出しがあれば、標準エラーに `N functions stopped a flow at per-character reads: summary.numeric_stops` が出る。
 
 ## 経緯
 
