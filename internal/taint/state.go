@@ -207,6 +207,7 @@ type state struct {
 	unresolved map[int]bool
 	// charStopped are the parameters whose data stopped here at a character read, and the function (Summary.CharStopped)
 	charStopped map[int]string
+	carries     int8 // carriesOut: 1 yes, -1 no, 0 not worked out
 
 	paramRoot map[Root]int // parameter and free variable roots -> index
 	numbering map[*sg.Value]int
@@ -479,6 +480,59 @@ func isTextSequence(v *sg.Value) bool {
 // charReadSymbols end the symbols of the calls that give one character (a code unit) of a text.
 var charReadSymbols = []string{".codeUnitAt"}
 
+// charStopDetail starts the detail of the note that a call is given when data of a source is passed to a function that reads it
+// one character at a time (Summary.CharStopped).
+const charStopDetail = "char_read_in_callee: "
+
+func isCharStopNote(u *Uncertainty) bool {
+	return u.Kind == KindNumericStop && strings.HasPrefix(u.Detail, charStopDetail)
+}
+
+// posBefore orders places: the file, the line, the column.
+func posBefore(a, b ir.Pos) bool {
+	if a.File != b.File {
+		return a.File < b.File
+	}
+	if a.Line != b.Line {
+		return a.Line < b.Line
+	}
+	if a.Col != b.Col {
+		return a.Col < b.Col
+	}
+	return a.Offset < b.Offset
+}
+
+// carriesOut reports whether the function has an output that can carry data out: a result, or a parameter that it can write
+// into (a pointer, a slice or a map, an interface, a struct), that is not a number or a bool. A function that gives nothing
+// but a number or a bool (a check of a name) loses nothing at a character read that -numeric-taint would keep: it is not
+// told to its callers. Decided by the types of the signature alone.
+func (s *state) carriesOut() bool {
+	if s.carries != 0 {
+		return s.carries > 0
+	}
+	s.carries = -1
+	for _, p := range s.fn.Params {
+		switch p.Class {
+		case ir.ClassNumber, ir.ClassBool, ir.ClassString, ir.ClassFunc:
+		default:
+			s.carries = 1
+		}
+	}
+	for _, b := range s.fn.Blocks {
+		for _, in := range b.Instrs {
+			if in.Op != sg.OpReturn {
+				continue
+			}
+			for _, a := range in.Args {
+				if a != nil && a.Class != ir.ClassNumber && a.Class != ir.ClassBool {
+					s.carries = 1
+				}
+			}
+		}
+	}
+	return s.carries > 0
+}
+
 // noteCharStopped records that the data of parameter p stopped at a character read in function f (the smallest id stays).
 func (s *state) noteCharStopped(p int, f string) {
 	if have, ok := s.charStopped[p]; ok && have <= f {
@@ -553,7 +607,7 @@ func (s *state) add(l Loc, e Elem, w *why) {
 		s.countNumericStop(l.Root.V, e)
 		if e.Kind == Real {
 			s.noteNumericStop(e, w, l.Root.V)
-		} else if e.Kind == Param && isCharRead(l.Root.V) {
+		} else if e.Kind == Param && isCharRead(l.Root.V) && s.carriesOut() {
 			// only a note for the callers (Summary.CharStopped), no flow: the judgment that counts char_reads may be used
 			s.noteCharStopped(int(e.Param), s.eng.funcID(s.fn))
 		}

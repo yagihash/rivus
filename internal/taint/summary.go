@@ -447,7 +447,7 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 			}
 		}
 		if real {
-			s.newNote(cc.in, KindNumericStop, "char_read_in_callee: "+cs.Func+": the data passed as "+paramPhrase(fn, cs.Param)+" of "+s.eng.funcID(fn)+" is read one character at a time there and becomes a number: it is not followed past that (-numeric-taint follows it)", cs.Func)
+			s.newNote(cc.in, KindNumericStop, charStopDetail+cs.Func+": the data passed as "+paramPhrase(fn, cs.Param)+" of "+s.eng.funcID(fn)+" is read one character at a time there and becomes a number: it is not followed past that (-numeric-taint follows it)", cs.Func)
 		}
 	}
 	for _, i := range sum.LimitedParams {

@@ -44,6 +44,16 @@ func Decode(s string) string {
 // Pass hands its argument to Range: the stop is passed on to the callers of Pass.
 func Pass(s string) string { return Range(s) }
 
+// Valid reads the characters and gives a bool only: nothing it could carry out is lost at the read.
+func Valid(s string) bool {
+	for _, r := range s {
+		if r < 'a' {
+			return false
+		}
+	}
+	return true
+}
+
 // Plain does not read characters.
 func Plain(s string) string { return s + "x" }
 `)
@@ -79,6 +89,20 @@ func constant(r *http.Request) {
 	exec.Command(third.Decode("ls")).Run()
 }
 
+func entryValid(r *http.Request) {
+	if third.Valid(r.URL.Query().Get("q")) {
+		exec.Command("ls").Run()
+	}
+}
+
+// the same function is called in three places: one note for the pair
+func entryTwice(r *http.Request) {
+	q := r.URL.Query().Get("q")
+	exec.Command(third.Range(q)).Run()
+	exec.Command(third.Range(q + "x")).Run()
+	exec.Command(third.Range("a" + q)).Run()
+}
+
 type holder struct{ Name string }
 
 // two layers of the project's own functions between the entry and the dependency: the stop is passed on from a field, from a
@@ -110,6 +134,8 @@ func main() {
 	http.HandleFunc("/e1", func(w http.ResponseWriter, r *http.Request) { entryField(r) })
 	http.HandleFunc("/e2", func(w http.ResponseWriter, r *http.Request) { entryTrim(r) })
 	http.HandleFunc("/e3", func(w http.ResponseWriter, r *http.Request) { entryLocal(r) })
+	http.HandleFunc("/v", func(w http.ResponseWriter, r *http.Request) { entryValid(r) })
+	http.HandleFunc("/t", func(w http.ResponseWriter, r *http.Request) { entryTwice(r) })
 	http.HandleFunc("/e4", func(w http.ResponseWriter, r *http.Request) { entryConst(r) })
 	http.HandleFunc("/r", func(w http.ResponseWriter, r *http.Request) { viaRange(r) })
 	http.HandleFunc("/d", func(w http.ResponseWriter, r *http.Request) { viaDecode(r) })
@@ -165,6 +191,7 @@ func TestCharReadInCalleeNote(t *testing.T) {
 		"entryField: example.com/third.Range", // through two functions of the project, from a field
 		"entryLocal: example.com/third.Range", // from a local that holds a value made of the parameter
 		"entryTrim: example.com/third.Range",  // from a value made of the parameter
+		"entryTwice: example.com/third.Range", // three calls, one note
 		"viaDecode: example.com/third.Decode",
 		"viaPass: example.com/third.Range", // passed on by Pass
 		"viaRange: example.com/third.Range",

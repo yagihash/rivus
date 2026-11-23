@@ -1346,6 +1346,7 @@ func (e *Engine) collect(st Stats) *Result {
 	sort.Slice(fnList, func(i, j int) bool { return fnList[i].ID < fnList[j].ID })
 
 	seenU := map[string]bool{}
+	charNotes := map[string]*Uncertainty{} // char_read_in_callee: one for each (caller, callee)
 	for _, fn := range fnList {
 		s := e.states[fn]
 		keys := make([]findingKey, 0, len(s.findings))
@@ -1387,6 +1388,18 @@ func (e *Engine) collect(st Stats) *Result {
 			res.Suppressions = append(res.Suppressions, sp)
 		}
 		for _, u := range s.uncertain {
+			if isCharStopNote(u) {
+				// one for each pair of the function that calls and the function that read the characters (not one for every
+				// call): the place is the smallest of the pair's, so that the order of the work does not matter
+				k := u.Func + "|" + u.Symbol
+				if have := charNotes[k]; have == nil {
+					cp := *u
+					charNotes[k] = &cp
+				} else if posBefore(u.pos, have.pos) {
+					have.pos = u.pos
+				}
+				continue
+			}
 			key := u.Kind + "|" + u.Symbol + "|" + u.Func + "|" + posKey(u.pos)
 			if seenU[key] {
 				continue
@@ -1395,6 +1408,16 @@ func (e *Engine) collect(st Stats) *Result {
 			e.fill(u)
 			res.Uncertainties = append(res.Uncertainties, u)
 		}
+	}
+	charKeys := make([]string, 0, len(charNotes))
+	for k := range charNotes {
+		charKeys = append(charKeys, k)
+	}
+	sort.Strings(charKeys)
+	for _, k := range charKeys {
+		u := charNotes[k]
+		e.fill(u)
+		res.Uncertainties = append(res.Uncertainties, u)
 	}
 	for _, pe := range e.loadErrors {
 		u := newUncertainty(KindMissingSource, pe.Message, pe.Package)
