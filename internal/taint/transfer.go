@@ -478,6 +478,8 @@ func (s *state) tableLookup(in *sg.Instr) {
 		}
 	}
 	if len(fs) > 0 {
-		s.put(Loc{own(in.Dsts[0]), ""}, fs, s.whyFn(in, "table lookup by a character"))
+		base := s.whyFn(in, "table lookup by a character")
+		// the step says so (char_transform), whatever the type of what was looked up (a byte, or a text from a map)
+		s.put(Loc{own(in.Dsts[0]), ""}, fs, func(f found) *why { return s.withCharNote(base(f)) })
 	}
 }
