@@ -205,6 +205,8 @@ type state struct {
 	// unresolved are the parameters that this function holds a function in that it calls with no candidate
 	// (Summary.UnresolvedParams)
 	unresolved map[int]bool
+	// charStopped are the parameters whose data stopped here at a character read, and the function (Summary.CharStopped)
+	charStopped map[int]string
 
 	paramRoot map[Root]int // parameter and free variable roots -> index
 	numbering map[*sg.Value]int
@@ -477,6 +479,17 @@ func isTextSequence(v *sg.Value) bool {
 // charReadSymbols end the symbols of the calls that give one character (a code unit) of a text.
 var charReadSymbols = []string{".codeUnitAt"}
 
+// noteCharStopped records that the data of parameter p stopped at a character read in function f (the smallest id stays).
+func (s *state) noteCharStopped(p int, f string) {
+	if have, ok := s.charStopped[p]; ok && have <= f {
+		return
+	}
+	if s.charStopped == nil {
+		s.charStopped = map[int]string{}
+	}
+	s.charStopped[p] = f
+}
+
 // numericRoot reports whether the root is a number or a bool that is not followed (what `add` stops at).
 func (s *state) numericRoot(r Root) bool {
 	v := r.V
@@ -540,6 +553,9 @@ func (s *state) add(l Loc, e Elem, w *why) {
 		s.countNumericStop(l.Root.V, e)
 		if e.Kind == Real {
 			s.noteNumericStop(e, w, l.Root.V)
+		} else if e.Kind == Param && isCharRead(l.Root.V) {
+			// only a note for the callers (Summary.CharStopped), no flow: the judgment that counts char_reads may be used
+			s.noteCharStopped(int(e.Param), s.eng.funcID(s.fn))
 		}
 		return
 	}
