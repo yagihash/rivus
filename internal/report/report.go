@@ -163,7 +163,9 @@ type Summary struct {
 	// UnverifiedVersions are the modules that a model has a verified_versions record for, and that the program uses at a
 	// version outside the records' ranges: the rows were applied to a version that was not checked (the rows are applied all
 	// the same). One entry for each module, sorted by package. Absent when there is none, and for a module that has no record.
-	// Go only for now (the version is the one go.mod says).
+	// The version is the one go.mod (Go), pubspec.lock (Dart: hosted packages) or Cargo.lock (Rust: registry crates) says; a
+	// project that was read without its directory (-ir, -index) has none. A lock file with several versions of a package lists the
+	// package once (all_used).
 	UnverifiedVersions []model.UnverifiedVersion `json:"unverified_versions,omitempty"`
 	// BodyReplacedIgnored is how many declarations -read-declared-bodies left out: the bodies were read. Absent when 0.
 	BodyReplacedIgnored int `json:"body_replaced_ignored,omitempty"`
