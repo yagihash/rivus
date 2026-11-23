@@ -418,14 +418,22 @@ sinks:
 - 接尾辞のない v0 / v1 の path には `/v*` は当たらない。v1 と v2 以降の両方を対象にするパッケージは、接尾辞のない行と `/v*` の行の両方が要る(一覧の 14 行で該当するものがあれば、そのパッケージの回で扱う)。
 - **しないこと(この節では)**: 解析した対象の major が `verified_versions` の範囲にないとき、`summary` に注記を出す(6.7 の 3。別の PR)。`body_replaced_packages` の `package` に `/v*` を書くこと。`-ir` で渡された Go の IR への展開(展開は、Go の解析の読み込みの中だけ)。
 
-### 6.10 確認していないバージョンへの適用の注記(`summary.unverified_versions`。Go から。6.7 の 3 の最初の実装)
+### 6.10 確認していないバージョンへの適用の注記(`summary.unverified_versions`。Go と Dart。6.7 の 3 の実装)
 
 解析した対象が使っている module のバージョンが、`verified_versions` の範囲の外のとき、**モデルの行は当てたまま**、`summary.unverified_versions` に 1 件ずつ出す(`[{package, used, verified: [範囲...], source: "go.mod"}]`。`package` は、使っている module の path(`/v*` の記録のときは、対象が持つ major の path)。`body_replaced_packages` と同じく、package でソートされ、決定論)。finding が 0 件でも出る。
 
 - **出す条件**: (1) `verified_versions` の記録があり、その `package`(`/v*` を含む)が、対象が使っている module の path に当たる。(2) 使っているバージョン(完全なバージョン。`go list` の `Module.Version`)が、その module に当たるどの記録の `versions` にも入らない。記録が複数あれば、どれかに入れば出さない。
 - **記録のない module には出さない**(組み込みのファイルの大半は、記録がない。全部の解析に注記が付くとうるさく、「確認していない」と言うにも、何を基準にするかがない)。記録を持つモデルが当たっていないとき(対象がその module を使っていない)は、出力は今までと同じ。記録を足すのは、手順書の 2 節の 3 段(新しいファイルは必須)で進む。
 - **バージョンが分からない module は出さない**: ディレクトリへの `replace`、別の module への `replace`(`go.mod` のバージョンは、実際に読むコードのバージョンではない)、主 module。バージョンの接尾辞(`-pre`、`+incompatible`)は読まない(疑似バージョンは、前のバージョンの番号とみなされる)。
-- **実装**: `gossa.Program.ModuleVersions`(読み込みのとき、`packages.Package.Module` から)、`model.Rules.UnverifiedVersions`、`report.Summary.UnverifiedVersions`。`-ir` で渡された IR と、`-index` の IR からの解析は、モジュール情報がないので出ない。Dart(`pubspec.lock`)と Rust(`Cargo.lock`)は未(課題 #162)。
+- **実装**: `gossa.Program.ModuleVersions`(読み込みのとき、`packages.Package.Module` から)、`model.Rules.UnverifiedVersions`、`report.Summary.UnverifiedVersions`。`-ir` で渡された IR と、`-index` の IR からの解析は、モジュール情報がないので出ない。Rust(`Cargo.lock`)は未(課題 #162)。
+
+**Dart(`pubspec.lock`)**: Dart の extractor は、IR にバージョンを出さないので、コアが、対象のディレクトリ(`-C`)の `pubspec.lock` を読む(IR は変えない。6.7 の 3 の最小の拡張案)。Dart の extractor が動いた解析だけが読む(`-ir` と `-index` からの解析は、ディレクトリを読まないので出ない)。`source` は `pubspec.lock`。
+- 読むのは `packages:` のうち `source: hosted` の `version`。`path` と `git` の依存は、比べるバージョンがないので出さない。`package` は、pub のパッケージ名そのまま(`dio`、`shelf_router`)。
+- `pubspec.lock` がない(`dart pub get` をしていない)ときは、注記も、エラーもない。読めない(YAML が壊れている)ときは、標準エラーに 1 行出して、注記は出さない。
+- **未対応**: 複数のパッケージの monorepo や pub のワークスペース(`pubspec.lock` が、`-C` のディレクトリでなく、親のディレクトリにある)。`-C` のディレクトリに `pubspec.lock` がなければ出さない(Dart の extractor も、1 つのパッケージを `-C` に指す前提。解析の警告にもそう書いてある)。
+- プレリリース(`6.0.0-beta.1`)は、Go と同じく、接尾辞を読まずに数字だけで比べる(`6.0.0` として、`<6.0.0` の範囲の外)。
+- 記録に言語の区別はない。別の言語のファイルの記録でも、`package` の名前が同じ依存(Dart の `http` と Rust の `http` など)には当たる。組み込みのファイルの `package` は、その言語の依存を指す。名前のぶつかりは、今は直さない(利用者のファイルで起きたら、記録に言語を足す案を考える)。
+- 複数のバージョンを持つ lock(Cargo.lock で起きる)のために、`model.UnverifiedVersion` に `all_used` を足した。バージョンが 1 つのときは出ない(Go の JSON は変わらない)。
 
 ### 6.11 モデル作成の手順のスクリプト化(設計案)
 
