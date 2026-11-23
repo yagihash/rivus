@@ -45,7 +45,7 @@ IR の呼び出し先の名前(`callee.symbol`、関数の名前)と、モデル
 | 行がない関数の一覧(`-coverage-gaps`) | 一部(標準ライブラリだけ) | ✗ | ✗ |
 | 行がない関数の一覧(`rivus models coverage`) | ✓ | ✓ | ✓ |
 | `kind: field` の source | ✓(`pkg.Type.Field`) | ✓(dart-github) | ✓(`::` 区切りの型名。#161、#230) |
-| `callback_param` の source(ADR-106) | ✓(単体テスト) | ✓(shelf_router) | 要確認(書式の検査だけ。extractor では未確認) |
+| `callback_param` の source(ADR-106) | ✓(単体テスト) | ✓(shelf_router) | 未確認(書式の検査だけ。extractor では未確認) |
 | `named:` の sink の選択 | 不要(名前つき引数がない) | ✓ | 不要(名前つき引数がない) |
 | `verified_versions`(読み込みと `rivus models versions`) | ✓ | ✓ | ✓ |
 | `summary.unverified_versions`(確認していないバージョンの注記) | ✓ | ✓(`pubspec.lock`。#162) | ✓(`Cargo.lock`。この PR) |
