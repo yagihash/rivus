@@ -25,13 +25,14 @@ env:
   # (The branch name is only compared in an expression here; it is never given to a shell.)
   SHORT: ${{ github.event_name == 'pull_request' && !startsWith(github.head_ref, 'tagpr-from-') && '-short' || '' }}
 
-# A pull request is checked per branch: a new push to it cancels the run in progress. A push to main does NOT cancel the run of the
-# commit before it (and is not cancelled): the tests that run only on main (`TestDeterministic*`, the ones that -short skips) would never
-# run to the end in an hour of merges that follow one another. To find which commit broke what, use the runs of each commit, `git bisect`
-# and a local reproduction. The weekly run has a group of its own, so that a push to main does not cancel it (it is the run that has
-# TestDogfood). (The group is the branch of a pull request, and the ref of a push.)
+# A pull request is checked per branch: a new push to it cancels the run in progress. Every other run has a group of its own, so that no
+# run replaces another: GitHub keeps one running and one pending run in a group, and a newer run that waits there replaces the pending
+# one (even without cancel-in-progress), so a push to main in a group of the branch would lose the run of the commit before it when
+# merges follow one another. The tests that run only on main (`TestDeterministic*`, the ones that -short skips) must run to the end for every commit.
+# To find which commit broke what, use the run of each commit. The weekly run has a group of its own (it is the run that has TestDogfood), and
+# so does every run by hand. (The group of a pull request is its branch; the others are made of the commit or the id of the run.)
 concurrency:
-  group: ci-${{ github.event_name == 'schedule' && 'schedule' || github.head_ref || github.ref }}
+  group: ci-${{ github.event_name == 'pull_request' && github.head_ref || github.event_name == 'schedule' && 'schedule' || github.event_name == 'push' && format('main-{0}', github.sha) || format('run-{0}', github.run_id) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -256,6 +257,14 @@ jobs:
         run: make go-warm
       - name: Vet
         run: go vet ./...
+      # The files for macOS of cmd/rivus (`*_darwin*.go`: the isolation) are built by no job on Linux: vet them for macOS (no cgo needed)
+      - name: Vet the code for macOS
+        if: ${{ !cancelled() }}
+        env:
+          GOOS: darwin
+          GOARCH: arm64
+          CGO_ENABLED: "0"
+        run: go vet ./cmd/rivus ./internal/sandbox
       - name: Test the packages other than cmd/rivus
         if: ${{ !cancelled() }}
         run: |
@@ -277,10 +286,21 @@ jobs:
       # user's approval); a new @miss or @fp row needs an @ref(#N) or @ref(model-<package>-<name>) whose file is in docs/issues. TestZooMarksLock (in the shards of the test job) holds the file to the sources.
       - name: Check the commits for a loosened zoo mark
         if: ${{ !cancelled() }}
+        # The check is about what a pull request or a push changes: pull_request compares with the base of the pull request, push (main) with the commit before
+        # the push (none on a new branch). The weekly run and a run by hand change nothing, so there is nothing to compare.
         env:
+          EVENT_NAME: ${{ github.event_name }}
           BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: make zoo-loosened BASE="$BASE" HEAD="$HEAD_SHA"
+        run: |
+          case "$EVENT_NAME" in
+            pull_request | push) ;;
+            *) echo "skipped: a $EVENT_NAME run changes nothing to compare with"; exit 0 ;;
+          esac
+          if [ -z "$BASE" ] || [ "$BASE" = 0000000000000000000000000000000000000000 ]; then
+            echo "skipped: no commit before this one to compare with"; exit 0
+          fi
+          make zoo-loosened BASE="$BASE" HEAD="$HEAD_SHA"
       - name: Save the build cache
         if: ${{ !cancelled() && github.event_name != 'pull_request' && steps.gobuild.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
