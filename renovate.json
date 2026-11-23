@@ -143,6 +143,13 @@
       "automerge": false
     },
     {
+      "description": "The pinned Rust nightly moves only through the custom manager rust-nightly, which moves rust-toolchain.toml, isolate.go and the README together. The built-in rust-toolchain manager moves rust-toolchain.toml alone (the constant in isolate.go would no longer match it), and the global automerge would merge it",
+      "matchManagers": [
+        "rust-toolchain"
+      ],
+      "enabled": false
+    },
+    {
       "description": "The pinned Rust nightly moves with the extractor (rustc_public is unstable): never automerge. The source gives only the newest date and no release time, so minimumReleaseAge would wait for ever",
       "matchDepNames": [
         "rust-nightly"
