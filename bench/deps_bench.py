@@ -19,7 +19,7 @@ the run was killed by us), functions (stats.functions), findings, uncertainties,
 The pass line (`make bench-passline`; targets in bench/deps-targets.json): one line per target,
   PASS|FAIL memos time=<s>/<limit> mem=<GB>/<cap> converged=<yes|no> detected=<yes|no|n/a>
 with the default flags of rivus. PASS needs all four: it ended by itself within the time limit, the memory of the
-child ended at or below the cap (the END-OF-RUN peak of /usr/bin/time, not the max of samples; a watchdog that samples the process group stops a run early and kills the group of this run only), it converged (with no function
+child ended at or below the cap (b: the maximum over fine samples of the SAME-TIME SUM of the RSS of the whole process tree, the burden the machine receives; a, the end-of-run peak of the main process, is printed beside it; the watchdog stops a run early and kills the group of this run only), it converged (with no function
 stopped on the clock: stats.load_dependent is not set), and the
 count of findings of the category of the target is higher on the pre-fix commit than on the fixed one (counts
 only; n/a when the target has no pair). A target with `detect.mode` "through" (a truth file, one public fixed
@@ -192,41 +192,58 @@ def detected_through(tp):
     return tp is not None and tp >= 1
 
 
-def record_peak(end_of_run_bytes, sampled_bytes, killed_for_memory, cap_bytes):
-    """RECORD (the number of the verdict), separate from the WATCHDOG (the sampler that stops a run early). The memory
-    of the verdict is the end-of-run peak of the child (`/usr/bin/time` max resident set; the kernel's ru_maxrss), never
-    the max of the samples (a sampler can miss a short peak). Only a run that the watchdog killed has no end-of-run
-    number (its timer was killed with it): then the sampled value, which is above the cap by the watchdog's rule.
-    Returns (bytes, how) with how "end-of-run" or "sampled"."""
-    if end_of_run_bytes is not None:
-        return end_of_run_bytes, "end-of-run"
-    if killed_for_memory:
-        return max(sampled_bytes, cap_bytes + 1), "sampled"
-    return sampled_bytes, "sampled"
-
-
-def process_group_rss(pgid):
-    """Sum of the RSS (bytes) of the processes of this group; ps only (nothing is signalled)."""
-    r = subprocess.run(["ps", "-A", "-o", "pgid=,rss="], capture_output=True, text=True)
-    tot = 0
+def tree_rows(root_pid, pgid):
+    """The processes of the tree of the run: the process, its descendants (by parent), and the members of its group.
+    Returns [(pid, rss_bytes, comm)]; ps only (nothing is signalled)."""
+    r = subprocess.run(["ps", "-A", "-o", "pid=,ppid=,pgid=,rss=,comm="], capture_output=True, text=True)
+    rows = {}
+    kids = {}
     for l in r.stdout.splitlines():
-        f = l.split()
-        if len(f) == 2 and f[0] == str(pgid) and f[1].isdigit():
-            tot += int(f[1]) * 1024
-    return tot
+        f = l.split(None, 4)
+        if len(f) == 5 and f[0].isdigit() and f[1].isdigit() and f[2].isdigit() and f[3].isdigit():
+            pid, ppid, pg = int(f[0]), int(f[1]), int(f[2])
+            rows[pid] = (pg, int(f[3]) * 1024, os.path.basename(f[4]))
+            kids.setdefault(ppid, []).append(pid)
+    seen, todo = set(), [root_pid]
+    while todo:
+        x = todo.pop()
+        if x in seen or x not in rows:
+            continue
+        seen.add(x)
+        todo.extend(kids.get(x, []))
+    seen |= {pid for pid, v in rows.items() if v[0] == pgid}
+    return [(pid, rows[pid][1], rows[pid][2]) for pid in sorted(seen)]
 
 
-def run_watched(cmd, cwd, env, limit_s, cap_bytes, errpath, outpath):
-    """Run cmd in its own session; kill that group (only) when the wall time goes over limit_s or the sum of the RSS
-    of the group over cap_bytes. Returns (returncode, why_killed or "", wall_s, peak_bytes)."""
+def maxrss_bytes(ru):
+    """ru_maxrss of a wait4 result: bytes on macOS, KB on Linux."""
+    return int(ru.ru_maxrss) * (1 if sys.platform == "darwin" else 1024)
+
+
+def run_watched(cmd, cwd, env, limit_s, cap_bytes, errpath, outpath, interval=0.25):
+    """Run cmd in its own session. Two records of memory, and a WATCHDOG that is not a record:
+      a = the end-of-run peak of the main process (ru_maxrss of wait4: the largest single process of its subtree);
+      b = the maximum over fine samples (every `interval` s) of the SAME-TIME SUM of the RSS of the whole process tree
+          (shared pages can be counted twice); `big` names the biggest process of the tree at that moment, and `at_s` when.
+    The watchdog kills the group (only) when the wall time is over limit_s or the sum b is over cap_bytes.
+    Returns a dict: rc, why ("" / "time" / "memory"), wall, cpu, a, b, big, big_rss, at_s."""
     with open(outpath, "wb") as out, open(errpath, "wb") as err:
         p = subprocess.Popen(cmd, cwd=cwd, env=env, stdout=out, stderr=err, start_new_session=True)
     t0 = time.time()
-    peak, why = 0, ""
     pgid = p.pid
-    while p.poll() is None:
-        peak = max(peak, process_group_rss(pgid))
-        if peak > cap_bytes:
+    b, big, big_rss, at_s, why = 0, "", 0, 0.0, ""
+    rc, ru = None, None
+    while True:
+        wp, status, ru_ = os.wait4(p.pid, os.WNOHANG)
+        if wp:
+            rc, ru = os.waitstatus_to_exitcode(status), ru_
+            break
+        rows = tree_rows(p.pid, pgid)
+        tot = sum(r[1] for r in rows)
+        if tot > b:
+            top = max(rows, key=lambda r: r[1])
+            b, big, big_rss, at_s = tot, top[2], top[1], time.time() - t0
+        if b > cap_bytes:
             why = "memory"
         elif time.time() - t0 > limit_s:
             why = "time"
@@ -234,10 +251,12 @@ def run_watched(cmd, cwd, env, limit_s, cap_bytes, errpath, outpath):
             if os.getpgid(p.pid) != p.pid or p.pid == os.getpgrp():
                 raise SystemExit("deps_bench: refusing to kill process group %d (not the run's own)" % pgid)
             os.killpg(pgid, signal.SIGKILL)
-            p.wait()
+            _, status, ru = os.wait4(p.pid, 0)
+            rc = os.waitstatus_to_exitcode(status)
             break
-        time.sleep(0.25)
-    return p.returncode, why, time.time() - t0, peak
+        time.sleep(interval)
+    return {"rc": rc, "why": why, "wall": time.time() - t0, "cpu": ru.ru_utime + ru.ru_stime,
+            "a": maxrss_bytes(ru), "b": b, "big": big, "big_rss": big_rss, "at_s": at_s}
 
 
 def git(*args, cwd=None):
@@ -334,13 +353,12 @@ def expand_args(args, src, subdir):
 
 
 def analyze_once(rivus, t, src, env, limit_s, cap_bytes, work, tag):
-    """One run with the default flags (t["args"]). Returns dict: wall, peak, converged, findings (report or None)."""
-    timer = ["/usr/bin/time", "-l"] if sys.platform == "darwin" else ["/usr/bin/time", "-v"]
-    cmd = timer + [rivus, "analyze", "-lang", t["lang"], "-C", src] + expand_args(t.get("args", []), src, t.get("subdir", ""))
+    """One run with the default flags (t["args"]). Returns dict: wall, cpu, peak (= b, the whole process tree: the
+    memory of the verdict), peak_a (the main process), peak_how, big, converged, why, report."""
+    cmd = [rivus, "analyze", "-lang", t["lang"], "-C", src] + expand_args(t.get("args", []), src, t.get("subdir", ""))
     outp, errp = os.path.join(work, tag + ".out.json"), os.path.join(work, tag + ".err")
-    rc, why, wall, peak = run_watched(cmd, ROOT, env, limit_s, cap_bytes, errp, outp)
-    rss = max_rss_mb_exact(open(errp, errors="replace").read())
-    peak, how = record_peak(rss, peak, why == "memory", cap_bytes)
+    m = run_watched(cmd, ROOT, env, limit_s, cap_bytes, errp, outp)
+    rc, why, wall, peak = m["rc"], m["why"], m["wall"], m["b"]
     rep, converged = None, False
     if not why and rc == 0:
         try:
@@ -351,7 +369,7 @@ def analyze_once(rivus, t, src, env, limit_s, cap_bytes, work, tag):
             converged = bool(st.get("converged", False)) and not st.get("timed_out", False) and not st.get("load_dependent", False)
         except (OSError, ValueError):
             rep = None
-    return {"wall": wall, "peak": peak, "converged": converged, "why": why, "report": rep, "peak_how": how}
+    return {"wall": wall, "peak": peak, "converged": converged, "why": why, "report": rep, "peak_how": "tree-sum", "peak_a": m["a"], "cpu": m["cpu"], "big": m["big"], "big_rss": m["big_rss"], "at_s": m["at_s"]}
 
 
 def passline(name, t, rivus, cache, outdir, limit_s, cap_gb):
