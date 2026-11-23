@@ -25,6 +25,14 @@ type loc struct {
 	n   int32 // the bytes of the whole record
 }
 
+// rec is what the store knows of one function it was given: where its record is (or the function itself, when it
+// could not be written).
+type rec struct {
+	id  ir.FuncID
+	loc loc
+	mem *ir.Func
+}
+
 // Stats is what a store did.
 type Stats struct {
 	Funcs    int    // the functions in the store
@@ -33,10 +41,12 @@ type Stats struct {
 	Fallback string // why (empty when every function was written)
 }
 
-// Store holds ir.Funcs in a file that has no name, and gives each back by its ID. A function that cannot be written
-// (the limit of the size, a failed write, no file) is held in memory: Put and Get do not tell the difference, and the
-// results are the same. A Get that fails (a record that does not read back) is an error that the caller must stop on:
-// the IR is the main input of the analysis.
+// Store holds ir.Funcs in a file that has no name. Add gives each function a number (the order it came in), and At
+// reads it back by that number: a number is a place, and two functions with one ID have two places (the IR can have
+// several functions with one ID). Put and Get are the same by ID, where a function with the ID of one that is in it
+// replaces it. A function that cannot be written (the limit of the size, a failed write, no file) is held in memory:
+// the callers do not see the difference, and the results are the same. A read that fails (a record that does not read
+// back) is an error that the caller must stop on: the IR is the main input of the analysis.
 //
 // The file is made in the temporary directory ($TMPDIR) with the mode 0600 and removed at once, so that nothing is
 // left when the process is killed, and nothing else can open it by its name. It is not mapped (a full disk would
@@ -47,10 +57,11 @@ type Store struct {
 	f       *os.File
 	max     int64
 	buf     []byte
+	pend    []int // the numbers of the records in buf, in order
 	flushed int64 // bytes in the file
-	index   map[ir.FuncID]loc
-	order   []ir.FuncID
-	mem     map[ir.FuncID]*ir.Func
+	recs    []rec
+	byID    map[ir.FuncID]int // the last number of each ID
+	nmem    int
 	why     string
 	broken  bool // a write failed: the buffer goes to memory
 	warn    io.Writer
@@ -63,7 +74,7 @@ func New(max int64, warn io.Writer) *Store { return NewIn(os.TempDir(), max, war
 
 // NewIn is New for a directory.
 func NewIn(dir string, max int64, warn io.Writer) *Store {
-	s := &Store{index: map[ir.FuncID]loc{}, mem: map[ir.FuncID]*ir.Func{}, warn: warn}
+	s := &Store{byID: map[ir.FuncID]int{}, warn: warn}
 	if max <= 0 {
 		max = DefaultMax
 	}
@@ -102,29 +113,55 @@ func (s *Store) giveUp(why string) {
 	}
 }
 
-// Put adds the function. A function with the ID of one that is in it replaces it.
+// Put adds the function. A function with the ID of one that is in it replaces it (in its place).
 func (s *Store) Put(f *ir.Func) {
 	rec := Encode(nil, f)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, ok := s.index[f.ID]; !ok {
-		if _, ok := s.mem[f.ID]; !ok {
-			s.order = append(s.order, f.ID)
-		}
+	if n, ok := s.byID[f.ID]; ok {
+		s.set(n, f, rec)
+		return
 	}
-	delete(s.index, f.ID)
-	delete(s.mem, f.ID)
+	s.add(f, rec)
+}
+
+// Add adds the function as a new one, whatever its ID, and says its number. The first number is 0.
+func (s *Store) Add(f *ir.Func) int {
+	rec := Encode(nil, f)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.add(f, rec)
+}
+
+func (s *Store) add(f *ir.Func, record []byte) int {
+	n := len(s.recs)
+	s.recs = append(s.recs, rec{id: f.ID})
+	s.byID[f.ID] = n
+	s.set(n, f, record)
+	return n
+}
+
+// set puts the record of f at the number n. The caller holds the lock.
+func (s *Store) set(n int, f *ir.Func, rec []byte) {
+	r := &s.recs[n]
+	if r.mem != nil {
+		s.nmem--
+	}
+	r.mem, r.loc = nil, loc{}
 	if s.f == nil || s.why != "" {
-		s.mem[f.ID] = f
+		r.mem = f
+		s.nmem++
 		return
 	}
 	if s.flushed+int64(len(s.buf))+int64(len(rec)) > s.max {
 		s.giveUp(fmt.Sprintf("the limit of %d bytes is reached", s.max))
-		s.mem[f.ID] = f
+		r.mem = f
+		s.nmem++
 		return
 	}
-	s.index[f.ID] = loc{off: s.flushed + int64(len(s.buf)), n: int32(len(rec))}
+	r.loc = loc{off: s.flushed + int64(len(s.buf)), n: int32(len(rec))}
 	s.buf = append(s.buf, rec...)
+	s.pend = append(s.pend, n)
 	if len(s.buf) >= flushAt {
 		s.flush()
 	}
@@ -139,7 +176,7 @@ func (s *Store) flush() {
 	if s.f != nil && !s.broken {
 		if _, err := s.f.WriteAt(s.buf, s.flushed); err == nil {
 			s.flushed += int64(len(s.buf))
-			s.buf = s.buf[:0]
+			s.buf, s.pend = s.buf[:0], s.pend[:0]
 			return
 		} else {
 			s.broken = true
@@ -147,36 +184,55 @@ func (s *Store) flush() {
 		}
 	}
 	// the records that wait go to memory
-	for off := 0; off < len(s.buf); {
-		fn, n, err := Decode(s.buf[off:])
+	off := 0
+	for _, n := range s.pend {
+		fn, k, err := Decode(s.buf[off:])
 		if err != nil {
 			// cannot happen: the buffer holds what Encode made
 			panic("irspill: " + err.Error())
 		}
-		delete(s.index, fn.ID)
-		s.mem[fn.ID] = fn
-		off += n
+		// a record that was replaced after it was put does not wait here any more: its place has the new one
+		if s.recs[n].loc.off == s.flushed+int64(off) && s.recs[n].mem == nil {
+			s.recs[n].mem, s.recs[n].loc = fn, loc{}
+			s.nmem++
+		}
+		off += k
 	}
-	s.buf = s.buf[:0]
+	s.buf, s.pend = s.buf[:0], s.pend[:0]
 }
 
 // Get reads the function back. Each call gives a new copy.
 func (s *Store) Get(id ir.FuncID) (*ir.Func, error) {
 	s.mu.Lock()
-	if f, ok := s.mem[id]; ok {
-		s.mu.Unlock()
-		return f, nil
-	}
-	l, ok := s.index[id]
+	n, ok := s.byID[id]
+	s.mu.Unlock()
 	if !ok {
+		return nil, ErrNotFound
+	}
+	return s.At(n, id)
+}
+
+// At reads the function that has the number n back (each call gives a new copy), and checks that it is the function
+// id. A number that was not given, and a record that is of another function, are errors.
+func (s *Store) At(n int, id ir.FuncID) (*ir.Func, error) {
+	s.mu.Lock()
+	if n < 0 || n >= len(s.recs) {
 		s.mu.Unlock()
 		return nil, ErrNotFound
 	}
-	if l.off+int64(l.n) > s.flushed {
+	r := s.recs[n]
+	if r.mem != nil {
+		s.mu.Unlock()
+		if r.mem.ID != id {
+			return nil, fmt.Errorf("irspill: %s: %w: the place holds %s", id, ErrCorrupt, r.mem.ID)
+		}
+		return r.mem, nil
+	}
+	if r.loc.off+int64(r.loc.n) > s.flushed {
 		s.flush()
-		if f, ok := s.mem[id]; ok {
+		if r = s.recs[n]; r.mem != nil {
 			s.mu.Unlock()
-			return f, nil
+			return r.mem, nil
 		}
 	}
 	file := s.f
@@ -184,11 +240,11 @@ func (s *Store) Get(id ir.FuncID) (*ir.Func, error) {
 	if file == nil {
 		return nil, fmt.Errorf("irspill: reading %s: the store is closed", id)
 	}
-	rec := make([]byte, l.n)
-	if _, err := file.ReadAt(rec, l.off); err != nil {
+	buf := make([]byte, r.loc.n)
+	if _, err := file.ReadAt(buf, r.loc.off); err != nil {
 		return nil, fmt.Errorf("irspill: reading %s: %w", id, err)
 	}
-	f, _, err := Decode(rec)
+	f, _, err := Decode(buf)
 	if err != nil {
 		return nil, fmt.Errorf("irspill: %s: %w", id, err)
 	}
@@ -202,22 +258,25 @@ func (s *Store) Get(id ir.FuncID) (*ir.Func, error) {
 func (s *Store) Has(id ir.FuncID) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	_, a := s.index[id]
-	_, b := s.mem[id]
-	return a || b
+	_, ok := s.byID[id]
+	return ok
 }
 
-// IDs are the IDs in the order they were put.
+// IDs are the IDs in the order they were put (one for each function: an ID that was added twice is twice here).
 func (s *Store) IDs() []ir.FuncID {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return append([]ir.FuncID(nil), s.order...)
+	ids := make([]ir.FuncID, len(s.recs))
+	for i := range s.recs {
+		ids[i] = s.recs[i].id
+	}
+	return ids
 }
 
 // Each reads the functions in the order they were put, one at a time.
 func (s *Store) Each(fn func(*ir.Func) error) error {
-	for _, id := range s.IDs() {
-		f, err := s.Get(id)
+	for n, id := range s.IDs() {
+		f, err := s.At(n, id)
 		if err != nil {
 			return err
 		}
@@ -232,7 +291,7 @@ func (s *Store) Each(fn func(*ir.Func) error) error {
 func (s *Store) Stats() Stats {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return Stats{Funcs: len(s.order), Bytes: s.flushed + int64(len(s.buf)), MemFuncs: len(s.mem), Fallback: s.why}
+	return Stats{Funcs: len(s.recs), Bytes: s.flushed + int64(len(s.buf)), MemFuncs: s.nmem, Fallback: s.why}
 }
 
 // Close closes the file (which goes away with it). Get does not work after it, for the functions in the file.
@@ -246,4 +305,14 @@ func (s *Store) Close() error {
 	s.f = nil
 	s.buf = nil
 	return err
+}
+
+// Size is the bytes of the record of the function that has the number n (0 when it is held in memory or not there).
+func (s *Store) Size(n int) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if n < 0 || n >= len(s.recs) {
+		return 0
+	}
+	return int(s.recs[n].loc.n)
 }

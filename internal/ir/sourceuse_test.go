@@ -2,7 +2,10 @@ package ir_test
 
 import (
 	"go/ast"
+	"go/parser"
+	"go/token"
 	"go/types"
+	"io/fs"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -17,11 +20,11 @@ import (
 // would keep working with the functions in memory, and break when they are not.
 var makesProgram = map[string]bool{
 	"cmd/rivus/lang.go":                     true, // joins the programs of the languages
-	"cmd/rivus/bodyreplaced.go":             true, // drops the functions that the rules stand for
 	"cmd/rivus/extract.go":                  true, // rivus debug extract: writes what the extractor made
 	"internal/frontend/goir/goir.go":        true, // makes the program from the Go packages
 	"internal/frontend/goir/streamtexts.go": true, // writes the texts of the functions into the program
 	"internal/frontend/accept/compare.go":   true, // compares the programs that two extractors made
+	"internal/irspill/source.go":            true, // takes the functions of a program into the file
 }
 
 func TestProgramFuncsIsReadThroughSource(t *testing.T) {
@@ -75,5 +78,43 @@ func TestProgramFuncsIsReadThroughSource(t *testing.T) {
 	sort.Strings(found)
 	for _, s := range found {
 		t.Errorf("reads ir.Program.Funcs, not an ir.Source: %s", s)
+	}
+}
+
+// The workers of the analysis (internal/taint) never ask a Source for a function. A function that cannot be read is a
+// panic with a *ReadError (ir.Must, ir.Walk), which the command catches (runCommand) when it comes from the goroutine
+// of the command; a panic in another goroutine is not caught and ends the process. The IR is read before the analysis
+// starts (the sites, the calls of function values, the build of the graph), and the graph holds what the analysis needs.
+// A reader in the packages that run in the workers would break that: it has to catch the panic itself and return it.
+func TestWorkersDoNotReadTheSource(t *testing.T) {
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reads := map[string]bool{"Must": true, "Get": true, "Walk": true, "WalkProject": true, "Source": true, "MemSource": true, "ConcatSource": true, "HeadOf": true}
+	for _, dir := range []string{"internal/taint", "internal/sg"} {
+		fset := token.NewFileSet()
+		pkgs, err := parser.ParseDir(fset, filepath.Join(root, dir), func(fi fs.FileInfo) bool { return !strings.HasSuffix(fi.Name(), "_test.go") }, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, p := range pkgs {
+			for name, f := range p.Files {
+				ast.Inspect(f, func(n ast.Node) bool {
+					sel, ok := n.(*ast.SelectorExpr)
+					if !ok || !reads[sel.Sel.Name] {
+						return true
+					}
+					if x, ok := sel.X.(*ast.Ident); ok && x.Name == "ir" {
+						// sg builds the graph from the Source, on the goroutine of the command (build.go): the one place
+						if dir == "internal/sg" && filepath.Base(name) == "build.go" {
+							return true
+						}
+						t.Errorf("%s reads the Source in a package that runs in the workers: ir.%s", fset.Position(sel.Pos()), sel.Sel.Name)
+					}
+					return true
+				})
+			}
+		}
 	}
 }

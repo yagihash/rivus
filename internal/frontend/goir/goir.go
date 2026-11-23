@@ -33,6 +33,10 @@ type Options struct {
 	// Implementations lists the interface methods (rule symbols) whose
 	// implementations go into the stream.
 	Implementations []string
+	// Emit, when it is set, is given each function as it is converted, and Extract does not keep it: the program it
+	// returns has no Funcs. The functions come in the order of the conversion, not sorted by ID (the caller that
+	// needs the order sorts what it keeps: irspill.Builder.SortByID).
+	Emit func(*ir.Func)
 }
 
 // MaxConstString is the longest string constant kept whole; a longer one is
@@ -121,7 +125,11 @@ func Extract(p *gossa.Program, opts Options) (*ir.Program, error) {
 		}
 		f := convertFunc(p, fn, graph, lifted[gossa.FuncID(fn)], globals)
 		releaseBody(fn)
-		out.Funcs = append(out.Funcs, f)
+		if opts.Emit != nil {
+			opts.Emit(f)
+		} else {
+			out.Funcs = append(out.Funcs, f)
+		}
 		if !opts.All {
 			continue
 		}

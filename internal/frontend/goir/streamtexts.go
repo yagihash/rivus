@@ -15,6 +15,22 @@ import (
 // instructions that follow a branch, the arguments of calls, and the body and
 // the source of every function.
 func AddTexts(t *Texts, prog *ir.Program) {
+	addTexts(t, prog, func(fn func(*ir.Func)) {
+		for _, f := range prog.Funcs {
+			fn(f)
+		}
+	})
+}
+
+// AddTextsOf is AddTexts for a program whose functions are in a Source (the program is its Header). It reads every
+// function once.
+func AddTextsOf(t *Texts, src ir.Source) {
+	addTexts(t, src.Header(), func(fn func(*ir.Func)) {
+		ir.Walk(src, func(_ ir.Ref, f *ir.Func) { fn(f) })
+	})
+}
+
+func addTexts(t *Texts, prog *ir.Program, funcs func(func(*ir.Func))) {
 	type key struct {
 		kind, file, text string
 	}
@@ -42,7 +58,7 @@ func AddTexts(t *Texts, prog *ir.Program) {
 	for _, g := range prog.Globals {
 		snippet(g.Pos)
 	}
-	for _, f := range prog.Funcs {
+	funcs(func(f *ir.Func) {
 		snippet(f.Pos)
 		prog.FuncTexts = append(prog.FuncTexts, ir.FuncText{Func: f.ID, Body: t.Body(f.ID), Source: t.FuncSource(f.ID, ir.SourceLines)})
 		for _, b := range f.Blocks {
@@ -78,7 +94,7 @@ func AddTexts(t *Texts, prog *ir.Program) {
 				}
 			}
 		}
-	}
+	})
 	keys := make([]key, 0, len(groups))
 	for k := range groups {
 		keys = append(keys, k)

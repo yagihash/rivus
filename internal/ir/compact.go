@@ -112,28 +112,57 @@ func (fn *Func) intern(in interner) {
 	}
 }
 
-// PruneDeps drops the functions of dependencies that nothing the project's own
-// functions do can reach (through calls, the candidates of calls through
-// interfaces and function values, and the functions named as values). A
-// dependency is read for what the project uses of it; the rest of it cannot
-// change the analysis.
-func (p *Program) PruneDeps() {
+// Targets calls visit with the ID of each function that the function reaches: the ones it names as values, the
+// initializers of the variables it reads (yagihash/rivus #60), the functions it calls and the candidates of the
+// calls. An ID may be given more than once.
+func Targets(f *Func, visit func(FuncID)) {
+	for bi := range f.Blocks {
+		for ii := range f.Blocks[bi].Instrs {
+			in := &f.Blocks[bi].Instrs[ii]
+			visit(in.Func)
+			// a variable that is read has its initializer run (yagihash/rivus #60)
+			if in.Global != "" {
+				visit(FuncID(in.Global + "$init"))
+			}
+			if c := in.Callee; c != nil {
+				visit(c.Func)
+				for _, id := range c.Candidates {
+					visit(id)
+				}
+			}
+		}
+	}
+}
+
+// Targeter is a Source that knows, without reading the function, the IDs of the functions that the one at seq
+// reaches (Targets). Its answer is the same as Targets gives on the function.
+type Targeter interface {
+	Targets(seq int) []FuncID
+}
+
+// kept says which of the n functions stay when the functions of dependencies that nothing the project's own
+// functions do can reach are dropped: the answer is by ID (all the functions that have a kept ID stay). head gives the
+// head of the function at i (Gone: not there), targets the IDs it reaches. It returns nil when no function is
+// a dependency's: nothing is dropped.
+func kept(n int, head func(i int) Head, targets func(i int) []FuncID, impls []Implementations) map[FuncID]bool {
 	any := false
-	for _, f := range p.Funcs {
-		if f.Dep {
+	for i := 0; i < n; i++ {
+		if h := head(i); !h.Gone && h.Dep {
 			any = true
 			break
 		}
 	}
 	if !any {
-		return
+		return nil
 	}
-	byID := make(map[FuncID][]*Func, len(p.Funcs))
-	for _, f := range p.Funcs {
-		byID[f.ID] = append(byID[f.ID], f)
+	byID := make(map[FuncID][]int, n)
+	for i := 0; i < n; i++ {
+		if h := head(i); !h.Gone {
+			byID[h.ID] = append(byID[h.ID], i)
+		}
 	}
 	keep := map[FuncID]bool{}
-	var work []*Func
+	var work []int
 	visit := func(id FuncID) {
 		if id == "" || keep[id] {
 			return
@@ -143,35 +172,44 @@ func (p *Program) PruneDeps() {
 			work = append(work, fs...)
 		}
 	}
-	for _, f := range p.Funcs {
-		if !f.Dep && !keep[f.ID] {
-			visit(f.ID)
+	for i := 0; i < n; i++ {
+		if h := head(i); !h.Gone && !h.Dep && !keep[h.ID] {
+			visit(h.ID)
 		}
 	}
-	for _, im := range p.Impls {
+	for _, im := range impls {
 		for _, id := range im.Impls {
 			visit(id)
 		}
 	}
 	for len(work) > 0 {
-		f := work[len(work)-1]
+		i := work[len(work)-1]
 		work = work[:len(work)-1]
-		for bi := range f.Blocks {
-			for ii := range f.Blocks[bi].Instrs {
-				in := &f.Blocks[bi].Instrs[ii]
-				visit(in.Func)
-				// a variable that is read has its initializer run (yagihash/rivus #60)
-				if in.Global != "" {
-					visit(FuncID(in.Global + "$init"))
-				}
-				if c := in.Callee; c != nil {
-					visit(c.Func)
-					for _, id := range c.Candidates {
-						visit(id)
-					}
-				}
-			}
+		for _, id := range targets(i) {
+			visit(id)
 		}
+	}
+	return keep
+}
+
+// PruneDeps drops the functions of dependencies that nothing the project's own
+// functions do can reach (through calls, the candidates of calls through
+// interfaces and function values, and the functions named as values). A
+// dependency is read for what the project uses of it; the rest of it cannot
+// change the analysis.
+func (p *Program) PruneDeps() {
+	head := func(i int) Head {
+		f := p.Funcs[i]
+		return Head{ID: f.ID, Dep: f.Dep}
+	}
+	targets := func(i int) []FuncID {
+		var ids []FuncID
+		Targets(p.Funcs[i], func(id FuncID) { ids = append(ids, id) })
+		return ids
+	}
+	keep := kept(len(p.Funcs), head, targets, p.Impls)
+	if keep == nil {
+		return
 	}
 	out := p.Funcs[:0]
 	for _, f := range p.Funcs {
@@ -183,4 +221,28 @@ func (p *Program) PruneDeps() {
 		p.Funcs[i] = nil
 	}
 	p.Funcs = out
+}
+
+// PruneDepsOf is PruneDeps for a Source: the functions that are dropped are dropped from it (Source.Drop). A Source
+// that is a Targeter is not read; for another, the functions that are reached are read, each once.
+func PruneDepsOf(src Source) {
+	n := src.Len()
+	targets := func(i int) []FuncID {
+		h := src.Head(i)
+		if t, ok := src.(Targeter); ok {
+			return t.Targets(i)
+		}
+		var ids []FuncID
+		Targets(Must(src, Ref{ID: h.ID, Seq: i}), func(id FuncID) { ids = append(ids, id) })
+		return ids
+	}
+	keep := kept(n, src.Head, targets, src.Header().Impls)
+	if keep == nil {
+		return
+	}
+	for i := 0; i < n; i++ {
+		if h := src.Head(i); !h.Gone && !keep[h.ID] {
+			src.Drop(Ref{ID: h.ID, Seq: i})
+		}
+	}
 }
