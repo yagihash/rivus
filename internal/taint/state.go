@@ -469,7 +469,7 @@ func isTextSequence(v *sg.Value) bool {
 }
 
 // charReadSymbols end the symbols of the calls that give one character (a code unit) of a text.
-var charReadSymbols = []string{".codeUnitAt", ".charCodeAt"}
+var charReadSymbols = []string{".codeUnitAt"}
 
 // numericRoot reports whether the root is a number or a bool that is not followed (what `add` stops at).
 func (s *state) numericRoot(r Root) bool {

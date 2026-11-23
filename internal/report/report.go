@@ -210,6 +210,9 @@ type Summary struct {
 const maxNumericStopsTop = 10
 
 // NumericStops is the count of the places where taint stopped at a number or a bool (Summary.NumericStops), by cause.
+// The counts are numbers of stops, not of places: a loop in a function counts the same place many times, so they are a
+// guide for comparing sizes (407 is not 407 places). In a run that timed out they can differ from run to run (a visit that
+// was cut off keeps the larger of its value and the previous one); in a run with no timeout they do not.
 type NumericStops struct {
 	// Total is CharReads.Total and Other.Total.
 	Total int `json:"total"`
