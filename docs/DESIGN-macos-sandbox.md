@@ -1,5 +1,7 @@
 # 設計: Rust の extractor の隔離を、Docker から macOS のサンドボックス(Seatbelt)に移す
 
+> 実装済み。正はコードと `docs/ARCHITECTURE.md`。以後は更新しない。
+
 > **状態: 実装済み(2026-11-23 に書き直した)。** ユーザーの決定(2026-11-22)の実行計画で、ADR-093 が ADR-064 を一部覆した。済んだもの: 抽出と取得の 2 段階のサンドボックス(`internal/sandbox/`、`cmd/rivus/isolate_sandbox_darwin.go`)、既定の切り替え、Docker の経路の削除(`docker/rust-extractor/`、`-container-*` と `-rust-image`、CI の `rust-isolation`)、CI の `sandbox` ジョブ(`ci.yml`)、Homebrew での配布(ツールチェインは keg の外の `$(brew --prefix)/var/rivus/rustup`)。**まだのものは、課題で持つ**: #110〜#122(後回しのハードニング)、#146(出力に target triple)、#147(ワークスペースの中の crate)、#148(Linux での Rust の扱い。8 節)。利用者向けの説明の正本は [rust-isolation.md](rust-isolation.md)、インストールは [DESIGN-install.md](DESIGN-install.md)。この文書は、設計の記録(1 〜 7 節)と、残る論点(8 節)。
 
 ## 0. ユーザーの決定と、前提

@@ -3,6 +3,7 @@
 優先順位と、次の作業。方向性は [PRINCIPLES.md](PRINCIPLES.md) と、`.claude/prompts/` の開発者・相談役の文書。
 
 - 状態は、2026-11-24、8d19a080 時点。直すのは、「今の主な作業」が変わったときと、節の終わりの条件を満たしたとき。
+- 今の状態と順を持つ文書は、この文書だけ。設計メモは、実装が済んだら、冒頭に「実装済み。正はコードと `docs/ARCHITECTURE.md`」と 1 行だけ書き、以後は更新しない。重い測定の数字は、台帳(`bench/heavy-ledger.tsv`)にだけ置き、ここには写さない。
 - 各項目は、目的、今の状態、次の作業、終わりの条件の順。課題は、[ISSUES.md](ISSUES.md) の番号(#N)で指す(GitHub の Issue は使わない)。
 - 仕切り直しの前の内部の番号(R-xx、F-x など)は、リポジトリの外の文書の番号なので、ここでは使わない。
 - 直していない rivus 自身の弱点の詳細は、ここにも課題の一覧(`docs/issues/`)にも書かない(公開リポジトリ)。直したあとに課題にする。
@@ -63,7 +64,7 @@
 
 - **目的**: 実際のプロダクトを、`-no-deps` なしで解析して、終わること。
 - **今の状態**: 本体を読むとコストが著しく大きい依存を、モデルで切る仕組みは、次のとおり。実装の多いインターフェースのメソッドを、委譲のクリーク全体のモデルで切る(ADR-098。`package:http` の `Client.send`。`dependency_body_unread` で示す)。依存の中では source と sink を探さない(ADR-099、`summary.dependency_sites`)。パッケージ単位で本体を読まない宣言(`body_replaced_packages`)は、3 言語にある(ADR-100、105、111。Rust は読み込みの時間は減らない)。**組み込みのモデルで宣言しているものは、まだない**(`go-github.yaml` にコメントがあるだけ)。差分テスト(`bench/model-diff`。本体とモデルの flows を、公開の API ごとに比べる)は、週 1 回と手動の実行だけで、**PR ではまだ動いていない。これから**(進行中の PR はない)。`make model` と `make model-diff` はある。エージェントが手順書を読んで 1 パッケージずつ作る流れは、停止した。
-- **測定(台帳 [bench/heavy-ledger.tsv](../bench/heavy-ledger.tsv) の 2026-11-24、`1f9078f8`。既定のフラグ、全体のプロセスの木の合計)**: go-s3 は 45.9 秒 / 3.72 GB で収束(2026-11-23 の `dac8bcb6` は 18.5 秒 / 4.08 GB)、gcp は 51.1 秒 / 3.07 GB で収束(finding 27 件。同 33.1 秒 / 3.58 GB)、dart-gcp は 20.0 秒 / 1.74 GB で収束(finding 19 件)。台帳の読み方は [bench/heavy-ledger.md](../bench/heavy-ledger.md)。
+- **測定**: 数字は台帳にだけ置く。ここには写さない。依存の重い対象(go-s3、gcp、dart-gcp)の既定の解析の結果は `python3 bench/heavy_ledger.py --kind deps`、合格基準の結果は `--kind passline`(読み方は [bench/heavy-ledger.md](../bench/heavy-ledger.md))。台帳の行は、日付とコミットで指す。
 - **次の作業(この順)**:
   1. 差分テストを PR で動かし、pure / sanitizer / source の行も比べる
   2. 今あるモデルに、宣言を入れる。1 パッケージずつ、既定の解析の前後の数字を付ける
@@ -73,17 +74,24 @@
   6. アクセスパスの深さを、場所ごとに決める(#189。memos の目標のあと)
 - **規模のための仕組みの条件**: [ADR-118](adr/118-scale-mechanisms-three-conditions.md) の表で 3 条件を満たさない行は、#186(出力の widening の記録)、#187(予算・反復・実時間の上限が流れを落とす。「予算で粗くする」安全網の、対象の一覧)、#188、#77(関数値の候補の上限)、#185 と PR #312(数値の停止)。
 - **利用から出た要望**: #166(`-max-memory`。メモリの上限で止める)、#167(taint の段階の進捗の表示)、#174(extractor の読み込みの進捗)、#175(Dart のモノレポの `-C`)、#176(Flutter のメンバーを含む workspace)。#127(`-timeout` の超過の残り)。
+- **依存込みのコストの、試したことと分かったこと**(2026-11-23 の調査の記録を、この節にまとめた。以前は `docs/DESIGN-deps-cost-status.md`。数字は台帳と ADR を見る):
+  - 重さは、自分のコードではなく、少数の依存の、生成されたコード(AWS SDK の S3、`grpc` の `xds` と `grpclb`)に集中する。go-s3 は、要約の要素の大半がパラメータのフィールドの下の経路で、深さ 3 以上と、条件(ガード)つきが多い。依存の中に source はない。
+  - **アクセスパスの深さが、コストを決める。** go-s3 は、`-k` を 3 から 2 にすると終わった。ただし、全体の `-k` を下げると gcp の finding の集合が変わる(精度が変わる)ので採らない。依存の関数だけ深さを下げる形にした(ADR-119、`-dep-k`)。
+  - **採用したもの**: join のあとの `widen` と `absorbWhole`(ADR-057)。型のキャッシュや `os.Stderr` のような、誰も読み戻さない合流をモデルで止める(ADR-055、056)。実装の多いインターフェースのメソッドを、委譲のクリーク全体のモデルで切る(ADR-098)。パッケージ単位の「本体を読まない」宣言(ADR-100、105。go-s3 で、宣言すると解析が打ち切られる。**組み込みのモデルには、まだ宣言を付けていない**ので、既定の実行は変わらない)。`-timeout` が巨大な SCC でも効く(#126。1 つの関数の中と extractor のフェーズの超過は残る、#127)。関数値の候補の上限と `depth_limit` の注記(#77)。Rust の `Fn*::call` の候補をレシーバで絞る(ADR-079、085)。
+  - **効かなかった・入れなかったもの**: コールアウトで最大の SCC を割る(効かなかった。ADR-055)。Rust の `Box<dyn Fn>` の候補の絞り込み(精度を犠牲にする。DESIGN-generics-dispatch)。Dart の extractor が、読まないパッケージだけが使う依存の `import` をたどらない形(ADR-105 の 5)。
+  - **まだ試していないもの**: 動的な呼び出しの候補を、依存の関数の中で切る案(Dart の IR での机上の見積もりだけ。[DESIGN-deps-cost.md](DESIGN-deps-cost.md) 10.5 節。切るなら、`dynamic_dispatch` の注記に切ったことを書く)。go-s3 では、候補が多い呼び出しが少なく、効きは見えない。
+  - **利用者に見える出力で足りないもの**(2026-11-23 の確認。以後、変わったものがあるかもしれない): `-pass-stats` なしでは、時間切れの結果に、何が重かったかが出ない。`packages_top` の行に、モデルや宣言があるかが付いていない。「このパッケージを宣言するとどれだけ減るか」の見積もりが出ない。extractor と読み込みのフェーズの時間が `stats` に出ない(#127)。時間切れが `-timeout` を超える(#127)。時間切れのとき、未解析の関数がパッケージ単位で分からない。解析がふくらむ原因(パスの深さ、ガード)が、出力にも AGENT-GUIDE にもない。
 - **Go のフロントエンドの方向(2026-11-24)**: Z の第 2 ステップ(`go/ssa` をやめる)は、**今は始めない**。始めるきっかけは、解析したい実際の対象が入らなくなったとき(測って、extractor の側が全体のピークを決めているとき)。受け入れ条件は「今の `goir` と同じ結果」だけで、違いの一覧は作らない。知らない構文は、何も報告せずに捨てず、実行時に不確実性として知らせる。Z の第 1 ステップ(extractor を別のプロセスに出す)は、今はやらない。要約のフェーズの強制 GC のあとのライブヒープへの効きが小さい(最大 0.36 GB)ため。
 - **扱える大きさの記録(公開のプロジェクトの数だけ)**:
 
   | 対象 | コミット | 関数 | 自分のコード / 依存 | パッケージ | 結果 |
   |---|---|---|---|---|---|
-  | memos | `00fcd170` | 40,830 | 6,944 / 33,886 | 1,570 | 台帳の行(下の合格基準) |
+  | memos | `00fcd170` | 40,830 | 6,944 / 33,886 | 1,570 | 合格基準の行(台帳) |
   | `github.com/octo-sts/app` | `db6a824c` | 32,510 | 464 / 32,046 | 1,207 | 既定のフラグで 1 回の解析: 収束、24.4 秒、ピーク(木の合計)3.73 GB、`live_heap_max_bytes` 2.22 GB |
   | Gitea | `v1.26.4` | 出ていない | - | - | 読み込みのフェーズの中で 8 GB を超え、31.7 秒で止められた |
 
   memos の要約のフェーズの、強制 GC のあとのライブヒープは、始まりが 1.58 GB、2 周目の終わりが 2.26 GB(測り方は ADR-121 と [bench/heavy-ledger.md](../bench/heavy-ledger.md))。
-- **終わりの条件**: 既定のフラグ(`-no-deps` なし、`-body-replaced` を手で書かない)で、memos(usememos/memos 26.11.2、`00fcd170281a75fc0e95ec4f2f54f43d32fe81bd`)について、`PASS memos time=<s>/180 mem=<GB>/8 converged=yes detected=yes quiet_after_fix=<yes|no|n/a>` の行が出ること。`PASS` は、この 2 つが両方 yes のとき。条件は 2 つで、別に判定する([bench/passline-baseline.md](../bench/passline-baseline.md))。(1) 終わること(`finish`): 180 秒以内に終わる、メモリが 8 GB 以内、収束する。(2) 検出すること(`detected`): 公開済みで修正済みの CVE-2025-65799(パストラバーサル)を、修正前のコミット `1d7efb158045924ab87f58d567bd79cd92edf6af` で、**位置で判定**して検出する(#387。既定のフラグ、組み込みのモデルだけ。source と sink が、正解のファイルのラベルを付けた位置にある `path_traversal` の finding が 1 件以上)。`quiet_after_fix`(修正後の `5f57f48673e2054f404b2c5b497a8eaa3690591d` で検出しない)は別の指標で、`PASS`/`FAIL` には入れない。「検証して早く return する」形の修正は、ガードの仕組み(#169)ができるまで、流れが消えたとは扱わないため。修正後のコミットは、修正前で検出したときだけ解析する(しないときは `n/a`)。`make bench-passline` で出す(`bench/deps_bench.py`、対象は `bench/deps-targets.json`)。今の結果は `PASS`(2026-11-24、`2d2b8904`。59.2 秒、ピーク(木の合計)5.94 GB、収束、`detected=yes`、`quiet_after_fix=no`(記録だけ)。台帳 `bench/heavy-ledger.tsv` の行。メモリの上限の既定(ADR-121)の 6 GB に対する余裕は小さく、0.05 GB)。前の結果は `FAIL`(2026-11-23。メモリの上限で止まった)。Dart の合格基準は、cocoon の `app_dart`(`ae9eb1beaf765d644cc85dde38def030c80b4b7d`。cwd は `app_dart`、`-allow-deps-under <cocoon>/packages`、`dart pub get` だけ、ルートの workspace の Flutter のメンバーはコピーで外す)。条件は memos と同じ(既定のフラグ、180 秒と 8 GB 以内、収束)。今の結果は `PASS cocoon time=101/180 mem=1.78/8 converged=yes detected=n/a`(2026-11-23。公開の脆弱性の助言がないので、検出は n/a)。**検出は、脆弱性の単位で数える**(memos と同じ。その脆弱性の、ラベルを付けた位置のどれか 1 つを通る finding が 1 つでもあれば `detected=yes`)。位置の単位の数は、同じ行に参考として `through_tp=<n>/<N>` で並べる(判定には入れない)。Dart の検出は、dart-lang/pub の zip slip(`bench/dart-pub`、公開の修正済みの脆弱性 1 つ、ラベル 9 か所)の的 `dart-pub` で見る。合格基準は未決で `INFO`。既定のフラグでは、収束しないので、今は `detected=no`。dart_services は、重い依存 `package:analyzer` の負荷の対象で、`INFO` のまま(深さの実験の対象でもある)。宣言したパッケージが、全部、差分テストを通っている。
+- **終わりの条件**: 既定のフラグ(`-no-deps` なし、`-body-replaced` を手で書かない)で、memos(usememos/memos 26.11.2、`00fcd170281a75fc0e95ec4f2f54f43d32fe81bd`)について、`PASS memos time=<s>/180 mem=<GB>/8 converged=yes detected=yes quiet_after_fix=<yes|no|n/a>` の行が出ること。`PASS` は、この 2 つが両方 yes のとき。条件は 2 つで、別に判定する([bench/passline-baseline.md](../bench/passline-baseline.md))。(1) 終わること(`finish`): 180 秒以内に終わる、メモリが 8 GB 以内、収束する。(2) 検出すること(`detected`): 公開済みで修正済みの CVE-2025-65799(パストラバーサル)を、修正前のコミット `1d7efb158045924ab87f58d567bd79cd92edf6af` で、**位置で判定**して検出する(#387。既定のフラグ、組み込みのモデルだけ。source と sink が、正解のファイルのラベルを付けた位置にある `path_traversal` の finding が 1 件以上)。`quiet_after_fix`(修正後の `5f57f48673e2054f404b2c5b497a8eaa3690591d` で検出しない)は別の指標で、`PASS`/`FAIL` には入れない。「検証して早く return する」形の修正は、ガードの仕組み(#169)ができるまで、流れが消えたとは扱わないため。修正後のコミットは、修正前で検出したときだけ解析する(しないときは `n/a`)。`make bench-passline` で出す(`bench/deps_bench.py`、対象は `bench/deps-targets.json`)。今の結果は、台帳の最新の memos の行(`python3 bench/heavy_ledger.py --target memos --last 1`。2026-11-24 の `2d2b8904` で PASS。数字は写さない)。その前(2026-11-23)は、メモリの上限で止まって FAIL だった。Dart の合格基準は、cocoon の `app_dart`(`ae9eb1beaf765d644cc85dde38def030c80b4b7d`。cwd は `app_dart`、`-allow-deps-under <cocoon>/packages`、`dart pub get` だけ、ルートの workspace の Flutter のメンバーはコピーで外す)。条件は memos と同じ(既定のフラグ、180 秒と 8 GB 以内、収束)。今の結果は `bench/passline-baseline.md` の「The cocoon line」(2026-11-23 の手元の測定。公開の脆弱性の助言がないので、検出は n/a)。**検出は、脆弱性の単位で数える**(memos と同じ。その脆弱性の、ラベルを付けた位置のどれか 1 つを通る finding が 1 つでもあれば `detected=yes`)。位置の単位の数は、同じ行に参考として `through_tp=<n>/<N>` で並べる(判定には入れない)。Dart の検出は、dart-lang/pub の zip slip(`bench/dart-pub`、公開の修正済みの脆弱性 1 つ、ラベル 9 か所)の的 `dart-pub` で見る。合格基準は未決で `INFO`。既定のフラグでは、収束しないので、今は `detected=no`。dart_services は、重い依存 `package:analyzer` の負荷の対象で、`INFO` のまま(深さの実験の対象でもある)。宣言したパッケージが、全部、差分テストを通っている。
 
 ## 4. 外から差し込むルール
 
