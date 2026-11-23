@@ -1,0 +1,2 @@
+dart	dart/googleapis_bigquery_table_update_view.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	dart/googleapis_bigquery_table_update_view.dart	sink-none	@sink(none) @nosink(dart-googleapis-bigquery-table-update-view-decoy)	Future<void> decoy() async { @decoy

@@ -1,0 +1,2 @@
+dart	dart/googleapis_bigquery_routine_insert_body.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	dart/googleapis_bigquery_routine_insert_body.dart	sink-none	@sink(none) @nosink(dart-googleapis-bigquery-routine-insert-body-decoy)	Future<void> decoy() async { @decoy
