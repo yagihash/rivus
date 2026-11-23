@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The ledger of the bench (bench/LEDGER.md): version x bench x metric.
 
-  bench/ledger.py -versions bench/ledger-versions.tsv -ref de627ce [-deps bench/deps-ledger.tsv] RESULTS_DIR... > bench/LEDGER.md
+  bench/ledger.py -versions bench/ledger-versions.tsv -ref de627ce [-deps bench/deps-ledger.tsv] [-passline bench/passline-baseline.md] RESULTS_DIR... > bench/LEDGER.md
 
 RESULTS_DIR is a directory that bench/compare.sh wrote (--out, or <work>/results/<pair>): its raw/ holds
 <bench>.<side>.json, .meta.json and .prov. A run is named by the engine that made it (the 4th field of the .prov
@@ -79,6 +79,8 @@ def main():
     ap.add_argument("-ref", default="")
     ap.add_argument("-header", default="", help="a file whose text is printed first (the unverified rows and the date they reached 0)")
     ap.add_argument("-deps", default="", help="bench/deps-ledger.tsv (bench/deps_bench.py, `make bench-deps`): printed last as its own section")
+    ap.add_argument("-passline", default="", help="bench/passline-baseline.md (printed as is) and, from -passline-ledger, the lines of `make bench-passline LINE_LEDGER=1`")
+    ap.add_argument("-passline-ledger", default="bench/passline-ledger.tsv")
     ap.add_argument("dirs", nargs="+")
     a = ap.parse_args()
     labels = load_versions(a.versions)
@@ -127,6 +129,8 @@ def main():
         print()
     if a.deps and os.path.exists(a.deps):
         print_deps(a.deps)
+    if a.passline and os.path.exists(a.passline):
+        print_passline(a.passline, a.passline_ledger)
 
 
 def print_deps(path):
@@ -138,6 +142,18 @@ def print_deps(path):
     for r in rows[1:]:
         print("| " + " | ".join(r) + " |")
     print()
+
+
+def print_passline(baseline, ledger):
+    print(open(baseline).read().rstrip("\n") + "\n")
+    if os.path.exists(ledger):
+        rows = [l.rstrip("\n").split("\t") for l in open(ledger) if l.strip()][1:]
+        if rows:
+            print("### Lines measured so far\n")
+            print("| date | rivus | line |\n|---|---|---|")
+            for r in rows:
+                print("| " + " | ".join(r) + " |")
+            print()
 
 
 if __name__ == "__main__":

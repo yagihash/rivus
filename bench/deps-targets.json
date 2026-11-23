@@ -1,0 +1,41 @@
+{
+  "_doc": "Targets of the pass line (bench/deps_bench.py, `make bench-passline`). Data only. repo + commit: fetched into $BENCH_CACHE (default ~/.cache/rivus-bench/), never into this tree; the code of a target is never run (git clone/checkout, `go mod download`, `dart pub get`). args: the flags of `rivus analyze` besides -lang and -C (none: the default flags). time_limit_s / mem_cap_gb: the pass line. decided: false = the line is printed as INFO (the limits are not decided yet). detect: the category whose finding count is compared on the pre-fix and the fixed commit (counts only).",
+  "memos": {
+    "lang": "go",
+    "repo": "https://github.com/usememos/memos",
+    "commit": "00fcd170281a75fc0e95ec4f2f54f43d32fe81bd",
+    "subdir": "",
+    "args": [],
+    "time_limit_s": 180,
+    "mem_cap_gb": 8,
+    "decided": true,
+    "detect": {
+      "id": "CVE-2025-65799",
+      "category": "path_traversal",
+      "prefix_commit": "1d7efb158045924ab87f58d567bd79cd92edf6af",
+      "fixed_commit": "5f57f48673e2054f404b2c5b497a8eaa3690591d"
+    }
+  },
+  "dart_services": {
+    "lang": "dart",
+    "repo": "https://github.com/dart-lang/dart-pad",
+    "commit": "ad668d137e631beeaef3e263054a45696e8d4499",
+    "subdir": "pkgs/dart_services",
+    "args": [],
+    "time_limit_s": 180,
+    "mem_cap_gb": 8,
+    "decided": false,
+    "dart_remove_flutter_workspace_members": true,
+    "detect": null
+  },
+  "smoke": {
+    "_doc": "a small local tree (bench/go-curated), to check that the script works end to end; not a target",
+    "lang": "go",
+    "local": "bench/go-curated",
+    "args": [],
+    "time_limit_s": 180,
+    "mem_cap_gb": 8,
+    "decided": false,
+    "detect": null
+  }
+}
