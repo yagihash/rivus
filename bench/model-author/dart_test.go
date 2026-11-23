@@ -216,3 +216,47 @@ func TestDartDeadRowsAndVerified(t *testing.T) {
 		t.Errorf("update = %q, %v", upd, err)
 	}
 }
+
+// A `type:` entry of rejected: covers the places that are in an argument of the type, counts the candidates it covers, and says when there are more
+// than its covers: says (a new API entering the rejection unseen).
+func TestRejectedByTypeCoverage(t *testing.T) {
+	const slug = "package:x/src/a.dart#Slug"
+	mk := func(sym, pos string) Item {
+		return Item{Symbol: sym, Kind: KindSink, Positions: []string{pos, "arg1"}, PosTypes: map[string]string{pos: slug}}
+	}
+	api := &API{Pkg: "package:x", Symbols: map[string]string{}, Items: []Item{
+		mk("package:x/src/a.dart#S.one", "arg0.owner"),
+		mk("package:x/src/a.dart#S.two", "arg0.owner"),
+		{Symbol: "package:x/src/a.dart#S.three", Kind: KindSink, Positions: []string{"arg0.owner"}, PosTypes: map[string]string{"arg0.owner": slug}},
+	}}
+	for _, it := range api.Items {
+		api.Symbols[it.Symbol] = ""
+	}
+	dir := t.TempDir()
+	model := filepath.Join(dir, "dart-x.yaml")
+	text := "ruleset: rivus/dart/x@1\nrejected:\n  - type: " + slug + "\n    kind: sink\n    covers: 2\n    why: \"the slug is seen where it is made\"\n" +
+		"  - symbol: package:x/src/a.dart#S.one\n    kind: sink\n    position: arg1\n    why: \"x\"\n" +
+		"  - symbol: package:x/src/a.dart#S.two\n    kind: sink\n    position: arg1\n    why: \"x\"\n"
+	if err := os.WriteFile(model, []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f, err := LoadFacts([]string{model}, "package:x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := Match(api, f)
+	if len(m.Undecided) != 0 || len(m.ByRejected) != 3 {
+		t.Errorf("undecided %v, rejected %d", m.Undecided, len(m.ByRejected))
+	}
+	if len(m.TypeCovers) != 1 || m.TypeCovers[0].Covered != 3 {
+		t.Fatalf("type covers = %+v", m.TypeCovers)
+	}
+	if txt := TypeCoverText(m); !strings.Contains(txt, "WARNING: 1 more") {
+		t.Errorf("no warning for 3 against covers: 2:\n%s", txt)
+	}
+	// only the type's place: a place of another argument stays undecided
+	api.Items[0].Positions = []string{"arg0.owner", "arg2"}
+	if m := Match(api, f); len(m.Undecided) != 1 {
+		t.Errorf("a place outside the type must stay undecided: %v", m.Undecided)
+	}
+}

@@ -145,9 +145,9 @@ func LoadFacts(files []string, pkg string) (*Facts, error) {
 			}
 		}
 		for _, r := range rs.Rejected {
-			wild := model.HasMajorWildcard(r.Symbol)
-			r.Symbol = conc(r.Symbol)
-			if inPackage(r.Symbol, pkg) {
+			wild := model.HasMajorWildcard(r.Symbol + r.Type)
+			r.Symbol, r.Type = conc(r.Symbol), conc(r.Type)
+			if inPackage(r.Symbol+r.Type, pkg) {
 				f.Rejected = append(f.Rejected, RejectedEntry{r, path, wild})
 				used[path] = true
 			}
@@ -232,27 +232,6 @@ func (f *Facts) rowFor(it Item) string {
 	return ""
 }
 
-// decidedBy says whether a list of entries (symbol, kind, position) decides the candidate: an entry of the symbol and kind with no
-// position, or entries that together name every position of the candidate. any says whether at least one entry matched.
-func decidedBy(it Item, n int, at func(i int) (sym, kind, pos string)) (all, any bool) {
-	left := map[string]bool{}
-	for _, p := range it.Positions {
-		left[p] = true
-	}
-	for i := 0; i < n; i++ {
-		sym, kind, pos := at(i)
-		if sym != it.Symbol || kind != it.Kind {
-			continue
-		}
-		any = true
-		if pos == "" {
-			return true, true
-		}
-		delete(left, pos)
-	}
-	return len(left) == 0 && any, any
-}
-
 // Matched is the result of the matching.
 type Matched struct {
 	ByRow, ByRejected, ByDeferred, Undecided []Item
@@ -262,41 +241,93 @@ type Matched struct {
 	StaleDeferred []DeferredEntry
 	// NoLongerCandidate are the `rejected:` entries whose symbol is in the API but is not a candidate of the rule table (any more): a note, not a warning.
 	NoLongerCandidate []RejectedEntry
+	// TypeCovers are the `type:` entries with how many candidates each covers now.
+	TypeCovers []TypeCover
+}
+
+// TypeCover is the count of a `type:` entry of `rejected:` at this run, against the `covers:` that the file records.
+type TypeCover struct {
+	Entry   RejectedEntry
+	Covered int
 }
 
 // Match sorts the candidates (layer 1) into the ones that have a row, the ones that `rejected:` and `deferred:` decide (together, place by
-// place; one that has any `deferred:` place is a deferred one), and the undecided ones.
+// place; one that has any `deferred:` place is a deferred one), and the undecided ones. A `type:` entry of `rejected:` covers the places of
+// its kind that are in an argument of that type.
 func Match(api *API, f *Facts) *Matched {
 	m := &Matched{}
+	for _, e := range f.Rejected {
+		if e.Type != "" {
+			m.TypeCovers = append(m.TypeCovers, TypeCover{Entry: e})
+		}
+	}
 	for _, it := range api.Items {
 		if f.rowFor(it) != "" {
 			m.ByRow = append(m.ByRow, it)
 			continue
 		}
-		var cov []model.Rejected
+		// the type entries count the candidates (the ones that have no row) that have a place of theirs, whether or not another entry decides the rest
+		for i := range m.TypeCovers {
+			e := m.TypeCovers[i].Entry
+			if e.Kind != it.Kind {
+				continue
+			}
+			for _, p := range it.Positions {
+				if it.PosTypes[p] == e.Type {
+					m.TypeCovers[i].Covered++
+					break
+				}
+			}
+		}
+		left := map[string]bool{}
+		for _, p := range it.Positions {
+			left[p] = true
+		}
+		anyDef := false
 		for _, r := range f.Rejected {
-			cov = append(cov, r.Rejected)
+			if r.Kind != it.Kind {
+				continue
+			}
+			switch {
+			case r.Type != "":
+				for _, p := range it.Positions {
+					if it.PosTypes[p] == r.Type {
+						delete(left, p)
+					}
+				}
+			case r.Symbol == it.Symbol && r.Position == "":
+				left = map[string]bool{}
+			case r.Symbol == it.Symbol:
+				delete(left, r.Position)
+			}
 		}
 		for _, d := range f.Deferred {
-			cov = append(cov, model.Rejected{Symbol: d.Symbol, Kind: d.Kind, Position: d.Position})
+			if d.Kind != it.Kind || d.Symbol != it.Symbol {
+				continue
+			}
+			if d.Position == "" {
+				left, anyDef = map[string]bool{}, true
+			} else if left[d.Position] {
+				delete(left, d.Position)
+				anyDef = true
+			} else {
+				anyDef = true
+			}
 		}
-		all, _ := decidedBy(it, len(cov), func(i int) (string, string, string) { return cov[i].Symbol, cov[i].Kind, cov[i].Position })
-		if !all {
+		switch {
+		case len(left) > 0:
 			m.Undecided = append(m.Undecided, it)
-			continue
-		}
-		_, anyDef := decidedBy(it, len(f.Deferred), func(i int) (string, string, string) {
-			return f.Deferred[i].Symbol, f.Deferred[i].Kind, f.Deferred[i].Position
-		})
-		if anyDef {
+		case anyDef:
 			m.ByDeferred = append(m.ByDeferred, it)
-		} else {
+		default:
 			m.ByRejected = append(m.ByRejected, it)
 		}
 	}
 	for _, r := range f.Rejected {
-		if _, ok := api.Symbols[r.Symbol]; !ok && !r.Wild {
-			m.Stale = append(m.Stale, r)
+		if r.Type == "" {
+			if _, ok := api.Symbols[r.Symbol]; !ok && !r.Wild {
+				m.Stale = append(m.Stale, r)
+			}
 		}
 	}
 	cand := map[string]bool{}
@@ -304,6 +335,9 @@ func Match(api *API, f *Facts) *Matched {
 		cand[it.Kind+"\x00"+it.Symbol] = true
 	}
 	for _, r := range f.Rejected {
+		if r.Type != "" {
+			continue
+		}
 		if _, ok := api.Symbols[r.Symbol]; ok && !cand[r.Kind+"\x00"+r.Symbol] {
 			m.NoLongerCandidate = append(m.NoLongerCandidate, r)
 		}
@@ -325,6 +359,9 @@ func UndecidedYAML(pkg string, undecided []Item) string {
 	b.WriteString("rejected:\n")
 	for _, it := range undecided {
 		fmt.Fprintf(&b, "  # %s (%s): %s\n", it.Rule, strings.Join(it.Positions, ", "), it.Sig)
+		if len(it.Detail) > 0 {
+			fmt.Fprintf(&b, "  # detail: %s\n", strings.Join(it.Detail, " "))
+		}
 		fmt.Fprintf(&b, "  - symbol: %s\n    kind: %s\n    why: \"\"\n", yamlScalar(it.Symbol), it.Kind)
 	}
 	return b.String()

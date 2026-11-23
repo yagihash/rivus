@@ -265,13 +265,32 @@ func dartSig(s dartSym) string {
 	return s.Name + "(" + all + ")" + ret
 }
 
+// fieldHit is a field (a path of field names) whose name a rule of the table knows.
+type fieldHit struct{ path, cat, word string }
+
+// sinkAcc collects the sink places of one member.
+type sinkAcc struct {
+	pos, cats, details []string
+	posTypes           map[string]string
+	seenCat            map[string]bool
+}
+
+func (a *sinkAcc) add(pos, cat, word, shape string) {
+	a.details = append(a.details, cat+":"+word+"/"+shape)
+	a.pos = append(a.pos, pos)
+	if !a.seenCat[cat] {
+		a.seenCat[cat] = true
+		a.cats = append(a.cats, cat)
+	}
+}
+
 type dartFieldList = []struct {
 	Name string
 	Type dartType
 }
 
-// walkFields calls f for each string field (and each one of the classes of the package that it holds, to three steps) whose name a rule of the table knows.
-func walkFields(fields map[string]dartFieldList, id, prefix string, depth int, seen map[string]bool, f func(path, cat, word string)) {
+// walkFields appends to hits each string field (and each one of the classes of the package that it holds, to three steps) whose name a rule of the table knows.
+func walkFields(fields map[string]dartFieldList, id, prefix string, depth int, seen map[string]bool, hits *[]fieldHit) {
 	if depth >= 3 || seen[id] {
 		return
 	}
@@ -281,10 +300,10 @@ func walkFields(fields map[string]dartFieldList, id, prefix string, depth int, s
 		switch {
 		case fl.Type.C == "string" || fl.Type.C == "uri":
 			if c, w := categoryWord(fl.Name); c != "" && c != "xss" {
-				f(prefix+fl.Name, c, w)
+				*hits = append(*hits, fieldHit{prefix + fl.Name, c, w})
 			}
 		case fl.Type.C == "own":
-			walkFields(fields, fl.Type.ID, prefix+fl.Name+".", depth+1, seen, f)
+			walkFields(fields, fl.Type.ID, prefix+fl.Name+".", depth+1, seen, hits)
 		}
 	}
 }
@@ -301,9 +320,15 @@ func hasNoun(name string) bool {
 	return false
 }
 
-func dartCarriesData(t *dartType) bool {
-	// a Map (the headers, the metadata, the parameters of a call) carries what somebody wrote as a string does
-	return t != nil && (t.C == "string" || t.C == "bytes" || t.C == "reader" || t.C == "map")
+// mapSourceWords: a Map carries what somebody wrote only when its name says so (the headers, the metadata, the form of a request); a Map in
+// general (`data`, `payload`, `files`) is too wide.
+var mapSourceWords = []string{"header", "headers", "metadata", "form"}
+
+func dartCarriesData(t *dartType, name string) bool {
+	if t != nil && t.C == "map" {
+		return hasWord(name, mapSourceWords)
+	}
+	return t != nil && (t.C == "string" || t.C == "bytes" || t.C == "reader")
 }
 
 // ScanDart applies the rule table of layer 1 to the API of a Dart package: the rules of Go, read for the signature of Dart.
@@ -359,21 +384,12 @@ func dartItems(s dartSym, sig string, fields map[string]dartFieldList, withCalls
 	// a field of a class: a source when it carries a body or content
 	if s.Kind == "field" {
 		// a constant (`static const contentTypeHeader`) is what the package says, not what somebody wrote
-		if !s.Static && s.Ret != nil && dartCarriesData(s.Ret) && hasWord(s.Name, sourceWords) && !hasWord(s.Name, notTextWords) {
+		if !s.Static && s.Ret != nil && dartCarriesData(s.Ret, s.Name) && hasWord(s.Name, sourceWords) && !hasWord(s.Name, notTextWords) {
 			out = append(out, Item{Symbol: s.Symbol, Kind: KindSource, Positions: []string{"field"}, Rule: "source: field that carries a body or content", Sig: "field " + s.Ret.T, Detail: []string{"source:" + firstWord(s.Name, sourceWords) + "/field-" + s.Ret.C}})
 		}
 		return out
 	}
-	var sinkPos, cats, details []string
-	seenCat := map[string]bool{}
-	addSink := func(pos, cat, word, shape string) {
-		details = append(details, cat+":"+word+"/"+shape)
-		sinkPos = append(sinkPos, pos)
-		if !seenCat[cat] {
-			seenCat[cat] = true
-			cats = append(cats, cat)
-		}
-	}
+	acc := &sinkAcc{posTypes: map[string]string{}, seenCat: map[string]bool{}}
 	// the noun of the member or of its class names the resource of a `name` / `id` argument (`Bucket.read(name)`, `Topic(name)`)
 	resourceish := hasNoun(s.Name) || hasNoun(s.Class)
 	fileish := hasWord(s.Name, fileVerbs)
@@ -383,34 +399,37 @@ func dartItems(s dartSym, sig string, fields map[string]dartFieldList, withCalls
 			switch {
 			case p.strLike():
 				if c, w := categoryWord(p.Name); c != "" {
-					addSink(pos, c, w, p.Type.C)
+					acc.add(pos, c, w, p.Type.C)
 				} else if (p.Name == "name" || p.Name == "id") && resourceish {
-					addSink(pos, "resource_name", p.Name+"+noun", p.Type.C)
+					acc.add(pos, "resource_name", p.Name+"+noun", p.Type.C)
 				} else if (p.Name == "name" || p.Name == "oldname" || p.Name == "newname") && fileish {
-					addSink(pos, "path_traversal", p.Name+"+verb", p.Type.C)
+					acc.add(pos, "path_traversal", p.Name+"+verb", p.Type.C)
 				}
 			case p.Type.C == "object":
 				// `dynamic` or `Object` says "one of several types" (dio's savePath is a path or a function that makes it): the name decides
 				if c, w := categoryWord(p.Name); c != "" && c != "xss" {
-					addSink(pos, c, w, "object")
+					acc.add(pos, c, w, "object")
 				}
 			case p.Type.C == "bytes":
 				if hasWord(p.Name, bytesSinkWords) {
-					addSink(pos, "xss", firstWord(p.Name, bytesSinkWords), "bytes")
+					acc.add(pos, "xss", firstWord(p.Name, bytesSinkWords), "bytes")
 				}
 			case p.Type.C == "own":
 				// a class of the package with a field that names something (a request with a path, a destination with an object),
 				// and the classes inside it (a request that holds a configuration that holds a query), up to three steps
-				walkFields(fields, p.Type.ID, "", 0, map[string]bool{}, func(path, cat, word string) {
-					addSink(pos+"."+path, cat, word, fmt.Sprintf("own/depth%d", strings.Count(path, ".")+1))
-				})
+				var hits []fieldHit
+				walkFields(fields, p.Type.ID, "", 0, map[string]bool{}, &hits)
+				for _, h := range hits {
+					acc.add(pos+"."+h.path, h.cat, h.word, fmt.Sprintf("own/depth%d", strings.Count(h.path, ".")+1))
+					acc.posTypes[pos+"."+h.path] = p.Type.ID
+				}
 			}
 		}
 	} else {
 		// a setter takes one value: the property is what is written (`options.baseUrl = x`)
 		if len(s.Params) == 1 && s.Params[0].strLike() {
 			if c, w := categoryWord(s.Name); c != "" {
-				addSink(s.Params[0].pos(), c, w, "setter/"+s.Params[0].Type.C)
+				acc.add(s.Params[0].pos(), c, w, "setter/"+s.Params[0].Type.C)
 			}
 		}
 	}
@@ -419,16 +438,16 @@ func dartItems(s dartSym, sig string, fields map[string]dartFieldList, withCalls
 		if p.strLike() && hasWord(p.Name, []string{"format"}) {
 			for _, q := range s.Params {
 				if q.Index > p.Index && !q.Named && (q.Type.C == "object" || q.Type.C == "strings") {
-					addSink(q.pos(), "xss", "format", q.Type.C)
+					acc.add(q.pos(), "xss", "format", q.Type.C)
 				}
 			}
 		}
 	}
-	if len(sinkPos) > 0 {
-		out = append(out, Item{Symbol: s.Symbol, Kind: KindSink, Positions: sinkPos, Rule: "sink: argument that names a " + strings.Join(cats, "/"), Sig: sig, Detail: details})
+	if len(acc.pos) > 0 {
+		out = append(out, Item{Symbol: s.Symbol, Kind: KindSink, Positions: acc.pos, Rule: "sink: argument that names a " + strings.Join(acc.cats, "/"), Sig: sig, Detail: acc.details, PosTypes: acc.posTypes})
 	}
 	// source: a result that carries a body or content (a function that is a sanitizer candidate is not one)
-	if s.Kind != "setter" && s.Kind != "constructor" && dartCarriesData(s.Ret) && hasWord(s.Name, sourceWords) && !hasWord(s.Name, sanitizerWords) {
+	if s.Kind != "setter" && s.Kind != "constructor" && dartCarriesData(s.Ret, s.Name) && hasWord(s.Name, sourceWords) && !hasWord(s.Name, sanitizerWords) {
 		out = append(out, Item{Symbol: s.Symbol, Kind: KindSource, Positions: []string{"result"}, Rule: "source: result of a function that carries a body or content", Sig: sig, Detail: []string{"source:" + firstWord(s.Name, sourceWords) + "/" + s.Kind + "-" + s.Ret.C}})
 	}
 	// sanitizer: string -> string
@@ -443,13 +462,17 @@ func dartItems(s dartSym, sig string, fields map[string]dartFieldList, withCalls
 	// calls: a function or an abstract class of the package that the caller gives
 	if withCalls && s.Kind != "setter" {
 		var callPos []string
+		callTypes := map[string]string{}
 		for _, p := range s.Params {
 			if p.Type.C == "func" || (p.Type.C == "own" && p.Type.Iface) {
 				callPos = append(callPos, p.pos())
+				if p.Type.C == "own" {
+					callTypes[p.pos()] = p.Type.ID
+				}
 			}
 		}
 		if len(callPos) > 0 {
-			out = append(out, Item{Symbol: s.Symbol, Kind: KindCalls, Positions: callPos, Rule: "calls: takes a function or an abstract class of the package", Sig: sig, Detail: []string{"calls:param/func-or-abstract"}})
+			out = append(out, Item{Symbol: s.Symbol, Kind: KindCalls, Positions: callPos, Rule: "calls: takes a function or an abstract class of the package", Sig: sig, Detail: []string{"calls:param/func-or-abstract"}, PosTypes: callTypes})
 		}
 	}
 	return out

@@ -182,12 +182,21 @@ func run(o *options, out io.Writer) error {
 		}
 		fmt.Fprintf(out, "  breakdown: %s\n", bf)
 	}
-	summary := RejectedSummary(repo, o.base, facts)
+	summary := RejectedSummary(repo, o.base, facts, m)
 	sf := filepath.Join(o.work, slug+"-rejected-summary.txt")
 	if err := os.WriteFile(sf, []byte(summary), 0o644); err != nil {
 		return err
 	}
 	fmt.Fprintf(out, "  rejected: and deferred: summary (for the pull request): %s\n", sf)
+	for _, c := range m.TypeCovers {
+		want := *c.Entry.Covers
+		switch {
+		case c.Covered > want:
+			fmt.Fprintf(out, "  warning: rejected by type %s (%s) covers %d candidates now, %d in covers: of %s: %d new one(s) entered the rejection unseen; look at them, then update covers:\n", c.Entry.Type, c.Entry.Kind, c.Covered, want, c.Entry.File, c.Covered-want)
+		default:
+			fmt.Fprintf(out, "  rejected by type %s (%s): covers %d candidates (covers: %d)\n", c.Entry.Type, c.Entry.Kind, c.Covered, want)
+		}
+	}
 	for _, it := range m.ByDeferred {
 		fmt.Fprintf(out, "  deferred: %s %s (%s)\n", it.Kind, it.Symbol, strings.Join(it.Positions, ", "))
 	}

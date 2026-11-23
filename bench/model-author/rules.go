@@ -34,6 +34,9 @@ type Item struct {
 	// Detail says which word of the rule table fired on which shape of type (`path_traversal:path/string`), one per place: the
 	// material of the breakdown (-breakdown). Dart only for now.
 	Detail []string `json:"detail,omitempty"`
+	// PosTypes is, for a place that is in an argument of a type of the package (`arg0.path`, or `arg0` of an interface), the full name of
+	// that type: what `type:` entries of `rejected:` match.
+	PosTypes map[string]string `json:"pos_types,omitempty"`
 }
 
 // word lists. A name is split into words at an upper-case letter, a digit and `_` (`bucketName` is bucket, name), and a rule fires when a
@@ -333,6 +336,7 @@ func funcItems(pkg *types.Package, f funcInfo, structs map[*types.TypeName]*type
 	sigText := f.name + sig.String()[len("func"):]
 	var sinkPos []string
 	var cats []string
+	posTypes := map[string]string{}
 	seenCat := map[string]bool{}
 	addSink := func(pos, cat string) {
 		sinkPos = append(sinkPos, pos)
@@ -377,6 +381,7 @@ func funcItems(pkg *types.Package, f funcInfo, structs map[*types.TypeName]*type
 						if fl.Exported() && isString(fl.Type()) {
 							if c := categoryOf(fl.Name()); c != "" && c != "xss" {
 								addSink(pos+"."+fl.Name(), c)
+								posTypes[pos+"."+fl.Name()] = n.Obj().Pkg().Path() + "." + n.Obj().Name()
 							}
 						}
 					}
@@ -398,7 +403,7 @@ func funcItems(pkg *types.Package, f funcInfo, structs map[*types.TypeName]*type
 		}
 	}
 	if len(sinkPos) > 0 {
-		out = append(out, Item{Symbol: f.symbol, Kind: KindSink, Positions: sinkPos, Rule: "sink: argument that names a " + strings.Join(cats, "/"), Sig: sigText})
+		out = append(out, Item{Symbol: f.symbol, Kind: KindSink, Positions: sinkPos, Rule: "sink: argument that names a " + strings.Join(cats, "/"), Sig: sigText, PosTypes: posTypes})
 	}
 	// source: a result that carries a body or content (a function that is a sanitizer candidate is not one: `EscapeText`)
 	res := sig.Results()
@@ -429,14 +434,18 @@ func funcItems(pkg *types.Package, f funcInfo, structs map[*types.TypeName]*type
 	}
 	// calls: a function or an interface of the package that the caller gives
 	var callPos []string
+	callTypes := map[string]string{}
 	for i := 0; i < sig.Params().Len(); i++ {
 		t := sig.Params().At(i).Type()
 		if isFuncOrOwnInterface(t, pkg) {
 			callPos = append(callPos, fmt.Sprintf("arg%d", i))
+			if n, ok := t.(*types.Named); ok {
+				callTypes[fmt.Sprintf("arg%d", i)] = n.Obj().Pkg().Path() + "." + n.Obj().Name()
+			}
 		}
 	}
 	if withCalls && len(callPos) > 0 {
-		out = append(out, Item{Symbol: f.symbol, Kind: KindCalls, Positions: callPos, Rule: "calls: takes a function or an interface of the package", Sig: sigText})
+		out = append(out, Item{Symbol: f.symbol, Kind: KindCalls, Positions: callPos, Rule: "calls: takes a function or an interface of the package", Sig: sigText, PosTypes: callTypes})
 	}
 	return out
 }

@@ -12,7 +12,7 @@ import (
 
 // RejectedSummary is what a review of the pull request looks at: how many `rejected:` entries of the package this change adds (against "+base+"),
 // and the reasons by group (the same `why` is one group), with the count of each; and the `deferred:` entries with their refs.
-func RejectedSummary(repo, base string, f *Facts) string {
+func RejectedSummary(repo, base string, f *Facts, m *Matched) string {
 	old := map[string]bool{}
 	for _, file := range f.Files {
 		rel, err := filepath.Rel(repo, file)
@@ -28,7 +28,7 @@ func RejectedSummary(repo, base string, f *Facts) string {
 			continue
 		}
 		for _, r := range rs.Rejected {
-			old[r.Symbol+"\x00"+r.Kind+"\x00"+r.Position] = true
+			old[r.Symbol+r.Type+"\x00"+r.Kind+"\x00"+r.Position] = true
 		}
 	}
 	type group struct {
@@ -46,7 +46,7 @@ func RejectedSummary(repo, base string, f *Facts) string {
 		}
 		g.total++
 		g.kinds[r.Kind]++
-		if !old[r.Symbol+"\x00"+r.Kind+"\x00"+r.Position] {
+		if !old[r.Symbol+r.Type+"\x00"+r.Kind+"\x00"+r.Position] {
 			g.add++
 			added++
 		}
@@ -71,6 +71,7 @@ func RejectedSummary(repo, base string, f *Facts) string {
 		sort.Strings(ks)
 		fmt.Fprintf(&b, "  %3d (added %d; %s): %s\n", g.total, g.add, strings.Join(ks, ", "), g.why)
 	}
+	b.WriteString(TypeCoverText(m))
 	fmt.Fprintf(&b, "deferred: %d entries\n", len(f.Deferred))
 	for _, d := range f.Deferred {
 		fmt.Fprintf(&b, "  %s %s %s ref %s: %s\n", d.Kind, d.Symbol, d.Position, d.Ref, d.Why)
@@ -170,6 +171,24 @@ func Breakdown(api *API, m *Matched) string {
 	for _, k := range keys {
 		c := rows[k]
 		fmt.Fprintf(&b, "  %6d %4d %8d %10d  %s\n", c.total, c.row, c.decided, c.undecided, k)
+	}
+	return b.String()
+}
+
+// TypeCoverText lists the `type:` entries of `rejected:` with the number of candidates each covers at this run and the `covers:` of the file, and
+// says WARNING for one that covers more than the file says: a new candidate entered the rejection.
+func TypeCoverText(m *Matched) string {
+	var b strings.Builder
+	for _, c := range m.TypeCovers {
+		e := c.Entry
+		st := "same"
+		switch want := *e.Covers; {
+		case c.Covered > want:
+			st = fmt.Sprintf("WARNING: %d more than the file says; look at the new candidates, then update covers:", c.Covered-want)
+		case c.Covered < want:
+			st = fmt.Sprintf("%d fewer than the file says (an API went away); update covers:", want-c.Covered)
+		}
+		fmt.Fprintf(&b, "rejected by type: %s (%s): covers %d now, covers: %d in the file: %s\n  why: %s\n", e.Type, e.Kind, c.Covered, *e.Covers, st, e.Why)
 	}
 	return b.String()
 }
