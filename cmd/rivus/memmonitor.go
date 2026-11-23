@@ -16,6 +16,8 @@ const (
 	metricMemReleased = "/memory/classes/heap/released:bytes"
 	metricGCCPU       = "/cpu/classes/gc/total:cpu-seconds"
 	metricTotalCPU    = "/cpu/classes/total:cpu-seconds"
+	// the heap that the last collection marked as live (Go 1.21 and later); 0 until the first collection has finished
+	metricLiveHeap = "/gc/heap/live:bytes"
 
 	memSampleEvery = 250 * time.Millisecond
 )
@@ -28,6 +30,7 @@ type memMonitor struct {
 
 	mu   sync.Mutex
 	peak int64
+	live int64
 
 	gc, cpu float64
 
@@ -43,11 +46,14 @@ type memReport struct {
 	PeakBytes int64
 	// GCCPUFraction is the share of the CPU time of the run (from the start of the monitor) that the collector used, in [0, 1].
 	GCCPUFraction float64
+	// LiveHeapMaxBytes is the most that the collector found live in the heap (the largest of the values of /gc/heap/live:bytes that
+	// were read): a guide to the lowest limit that a soft limit can keep. Below it the limit is not kept.
+	LiveHeapMaxBytes int64
 }
 
 func startMemMonitor() *memMonitor {
 	m := &memMonitor{
-		samples: []metrics.Sample{{Name: metricMemTotal}, {Name: metricMemReleased}, {Name: metricGCCPU}, {Name: metricTotalCPU}},
+		samples: []metrics.Sample{{Name: metricMemTotal}, {Name: metricMemReleased}, {Name: metricGCCPU}, {Name: metricTotalCPU}, {Name: metricLiveHeap}},
 		quit:    make(chan struct{}),
 		done:    make(chan struct{}),
 	}
@@ -94,7 +100,14 @@ func (m *memMonitor) read() (inUse int64, gcCPU, totalCPU float64) {
 
 func (m *memMonitor) sample() {
 	n, _, _ := m.read()
+	var live int64
+	if s := m.samples[4]; s.Value.Kind() == metrics.KindUint64 {
+		live = int64(s.Value.Uint64())
+	}
 	m.mu.Lock()
+	if live > m.live {
+		m.live = live
+	}
 	if n > m.peak {
 		m.peak = n
 	}
@@ -112,7 +125,7 @@ func (m *memMonitor) stop() memReport {
 	})
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	r := memReport{PeakBytes: m.peak}
+	r := memReport{PeakBytes: m.peak, LiveHeapMaxBytes: m.live}
 	if m.cpu > 0 {
 		r.GCCPUFraction = math.Round(math.Min(math.Max(m.gc/m.cpu, 0), 1)*1000) / 1000
 	}

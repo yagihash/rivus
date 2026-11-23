@@ -19,6 +19,7 @@ type memSummary struct {
 	Peak     int64    `json:"memory_peak_bytes"`
 	Exceeded *bool    `json:"memory_limit_exceeded"`
 	GCCPU    *float64 `json:"gc_cpu_fraction"`
+	LiveMax  int64    `json:"live_heap_max_bytes"`
 }
 
 // genTarget builds the synthetic target of bench/go-scale (it holds a few tens of MB while it is analysed).
@@ -66,6 +67,10 @@ func TestMemoryLimitExceededReport(t *testing.T) {
 		}
 		if s.Peak <= 0 {
 			t.Errorf("-max-memory %s: memory_peak_bytes = %d", lim, s.Peak)
+		}
+		// live_heap_max_bytes is always there (also without a limit), above 0 and not above the peak
+		if s.LiveMax <= 0 || s.LiveMax > s.Peak {
+			t.Errorf("-max-memory %s: live_heap_max_bytes = %d, memory_peak_bytes = %d", lim, s.LiveMax, s.Peak)
 		}
 	}
 	// (b) a small limit is passed
