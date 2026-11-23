@@ -43,6 +43,9 @@ import sys
 import tempfile
 import time
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from heavylock import heavy_lock  # one lock for the heavy runs of the whole machine (bench/heavylock.py)
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BENCHES = {
     "go-s3": ("bench/go-s3", "go"),
@@ -110,8 +113,9 @@ def measure(name, rivus, timeout, work):
     timer = ["/usr/bin/time", "-l"] if sys.platform == "darwin" else ["/usr/bin/time", "-v"]
     cmd = timer + [rivus, "analyze", "-lang", lang, "-C", src, "-timeout", "%ds" % timeout]
     outp, errp = os.path.join(work, name + ".out.json"), os.path.join(work, name + ".err")
-    t0 = time.time()
-    rc, killed = run_group(cmd, ROOT, env, timeout + GRACE, errp, outp)
+    with heavy_lock("deps_bench " + name):
+        t0 = time.time()
+        rc, killed = run_group(cmd, ROOT, env, timeout + GRACE, errp, outp)
     wall = time.time() - t0
     err = open(errp, errors="replace").read()
     row = {"bench": name, "lang": lang, "wall_s": "%.1f" % wall, "timeout_s": timeout, "functions": "-", "findings": "-", "uncertainties": "-"}
@@ -364,7 +368,8 @@ def analyze_once(rivus, t, src, env, limit_s, cap_bytes, work, tag):
     memory of the verdict), peak_a (the main process), peak_how, big, converged, why, report."""
     cmd = [rivus, "analyze", "-lang", t["lang"], "-C", src] + expand_args(t.get("args", []), src, t.get("subdir", ""))
     outp, errp = os.path.join(work, tag + ".out.json"), os.path.join(work, tag + ".err")
-    m = run_watched(cmd, ROOT, env, limit_s, cap_bytes, errp, outp)
+    with heavy_lock("deps_bench analyze " + tag):
+        m = run_watched(cmd, ROOT, env, limit_s, cap_bytes, errp, outp)
     rc, why, wall, peak = m["rc"], m["why"], m["wall"], m["b"]
     rep, converged = None, False
     if not why and rc == 0:

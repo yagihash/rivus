@@ -168,6 +168,16 @@ How to run each is in the README of the target where there is one (`dart-pub/`, 
 this file for the Go ones). "Not recorded" is a gap to be filled the next time someone has the
 checkout: write the commit here when it is known.
 
+## One lock for the heavy runs
+
+The tools that run an analysis of several GB (`make bench-passline`, `make bench-deps`, `bench/compare.sh --cost-check`,
+`bench/go-scale/measure.py`, `bench/go-synth/measure.py`) take **one lock for the whole machine** first (`bench/heavylock.py`,
+`fcntl.flock`: the OS releases it when the process ends). When another heavy run holds it, they print one line
+(the PID and the command of the holder) and wait, at most `RIVUS_HEAVY_LOCK_WAIT_S` seconds (default 1800); after that they
+fail (exit 75). The file is `$RIVUS_HEAVY_LOCK`, else `~/.cache/rivus/heavy-run.lock` (a fixed place per user, the same for every work tree).
+A tool started by a tool that holds the lock does not wait for itself (`RIVUS_HEAVY_LOCK_HELD=1`). There is no way to force the
+lock off: to run now, end the process that holds it. For a shell tool: `python3 bench/heavylock.py -- <command...>`.
+
 ## Benchmarks that are in this repository
 
 The flows of the ground truths here (Gitea's three CVEs, gin-vue-admin, Gogs, dart-pub, parseable) are

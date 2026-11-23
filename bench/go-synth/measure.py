@@ -22,6 +22,8 @@ import argparse, shlex, hashlib, json, os, resource, shutil, subprocess, sys, te
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
+sys.path.insert(0, os.path.join(HERE, ".."))
+from heavylock import heavy_lock  # one lock for the heavy runs of the whole machine (bench/heavylock.py)
 
 
 def generate(size, out, lang="go"):
@@ -48,6 +50,11 @@ def extract(lang, d, a):
 
 
 def one(rivus, d, extra):
+    with heavy_lock("go-synth measure"):
+        return _one(rivus, d, extra)
+
+
+def _one(rivus, d, extra):
     cmd = [rivus, "analyze", "-v", "-rules", os.path.join(d, "rules.yaml")] + extra
     if "-ir" not in extra:
         cmd.append("./...")
