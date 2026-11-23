@@ -47,3 +47,41 @@ func TestReplacedBodyNamesThePackageAndNoOtherUnlessSaid(t *testing.T) {
 		}
 	}
 }
+
+// A Rust crate is named with `-` (Cargo.lock, the package of a model) or `_` (rustc, the units of the IR): a declaration
+// in either spelling hits the crate, and Go and Dart names are not changed by it.
+func TestReplacedBodyOfARustCrateIsFoundWithEitherSpelling(t *testing.T) {
+	a, err := Parse(strings.NewReader("ruleset: a@1\nbody_replaced_packages:\n  - {package: actix-web, reason: r}\n  - {package: tokio_util, reason: r}\n  - {package: example.com/a-b, reason: r}\n"), "a.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := Merge(a)
+	for unit, want := range map[string]bool{
+		"actix_web":         true,
+		"actix-web":         true,
+		"actix_web_codegen": false,
+		"tokio_util":        true,
+		"tokio-util":        true,
+		"tokio":             false,
+		"example.com/a-b":   true,
+		"example.com/a_b":   false, // a Go path is as it is
+	} {
+		if got := r.ReplacedBody(unit); got != want {
+			t.Errorf("ReplacedBody(%q) = %v, want %v", unit, got, want)
+		}
+	}
+	for _, c := range []struct {
+		pkg, unit string
+		want      bool
+	}{
+		{"actix-web", "actix_web", true},
+		{"actix_web", "actix-web", true},
+		{"actix-web", "actix_web_codegen", false},
+		{"example.com/a-b", "example.com/a_b", false},
+		{"package:a-b", "package:a_b", false},
+	} {
+		if got := (BodyReplaced{Package: c.pkg}).Covers(c.unit); got != c.want {
+			t.Errorf("Covers(%q, %q) = %v, want %v", c.pkg, c.unit, got, c.want)
+		}
+	}
+}

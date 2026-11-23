@@ -275,3 +275,183 @@ sinks:
   - symbol: package:google_cloud_storage/src/bucket.dart#Bucket.object
     args: [0]
     category: resource_name
+
+# BigQuery names (the project, the dataset, the table) that `make model` lists as candidates of `resource_name` and that are not decided yet:
+# they are rows if the way to adopt a type at a time is decided. See docs/issues/model-dart-bigquery-names.md.
+deferred:
+  - symbol: package:googleapis/bigquery/v2.dart#CloneDefinition.new
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#DataSplitResult.new
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#DatasetAccessEntry.new
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#DatasetReference.new
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#DatasetsResource.delete
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#DatasetsResource.get
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#DatasetsResource.list
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#DatasetsResource.undelete
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#IndexPruningStats.new
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#IndexUnusedReason.new
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#JobConfigurationTableCopy.new
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#JobsResource.list
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#LinkedDatasetSource.new
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#MaterializedView.new
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#ModelReference.new
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#ModelsResource.delete
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#ModelsResource.get
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#ModelsResource.list
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#ProjectReference.new
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#ProjectsResource.getServiceAccount
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#PropertyGraphReference.new
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#RoutineReference.new
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#RoutinesResource.delete
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#RoutinesResource.get
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#RoutinesResource.list
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#RowAccessPoliciesResource.batchDelete
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#RowAccessPoliciesResource.delete
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#RowAccessPoliciesResource.get
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#RowAccessPoliciesResource.insert
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#RowAccessPoliciesResource.list
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#RowAccessPoliciesResource.update
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#RowAccessPolicy.new
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#RowAccessPolicyReference.new
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#SnapshotDefinition.new
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#SparkLoggingInfo.new
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#StoredColumnsUsage.new
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#TableChangeInsight.new
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#TableConstraintsForeignKeysReferencedTable.new
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#TableMetadataCacheUsage.new
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#TableReference.new
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#TabledataResource.insertAll
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#TablesResource.delete
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#TablesResource.get
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names
+  - symbol: package:googleapis/bigquery/v2.dart#TablesResource.list
+    kind: sink
+    why: "BigQuery のプロジェクト、データセット、テーブルの名前。まとめて採用する形が決まってから、行にするかを決める"
+    ref: model-dart-bigquery-names

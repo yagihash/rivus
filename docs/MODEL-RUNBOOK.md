@@ -127,6 +127,7 @@ zoo のゲート(`scripts/zoo-loosened-check.sh`、#167): 新しいセル(`bench
 ## 5. PR(完成)
 
 - 題: `feat(model): <言語> <パッケージ> の組み込みモデル`(1 節の題と同じ)。`/pr` のスキルで作る(1 節のドラフトを更新する)。
+- **本文の形は、`pr` スキルの形**(`## Summary` と `## Background / Motivation` の 2 つだけ。ほかの `##` の見出しは作らない)。下の必須の項目は、`## Summary` の下に、`###` の小見出しか箇条書きで書く。この節の「本文の最後」は、`## Summary` の最後の意味。理由と背景(なぜこのパッケージか、判断の理由)は、`## Background / Motivation` に書く。
 - 本文は、公開の事実だけ(パッケージ名とバージョン、公開の API)。**次の項目を、必ず、この順で書く**(ないものは「なし」、できなかったものは「未実施」と理由を書く。空にしない):
   1. **モデルの行の数と種類**: sink / source / sanitizer / flows / pure / calls の、それぞれの数。生成した行と手で書いた行の内訳(生成器が入ってから)。
   2. **差分テストの結果**: MISS / EXTRA / 意図した差(理由つき)。差分テストが main にないうちは、「未実施(差分テストは未実装)」と書く。
@@ -135,7 +136,7 @@ zoo のゲート(`scripts/zoo-loosened-check.sh`、#167): 新しいセル(`bench
   5. **公開のベンチでの前後の数字**: finding(件数と ID の集合が同じか)、`dynamic_dispatch` の注記の数、`summary_elems`、時間(`-pass-stats`)。中を読んだ場合(モデルなし)との照合と、違いの理由。公開のベンチに、そのパッケージを使うものがなければ、「該当するベンチなし」と書く。
   6. **確認したバージョン**: `verified_versions` に書いた、パッケージ、範囲、確認したバージョン。
   7. **手順のとおりにできなかった所**: 手順書が曖昧だった所、道具がなかった所、自分で判断した所。なければ「なし」。手順書の改善の入力になる。**`docs/MODEL-QUEUE.md` の案(境界の案)と違う判断をしたとき(source にしない、sink を足す・外すなど)は、ここに、理由を書く。**
-- **最初の 3 本(言語ごとに 1 本)は、相談役が、中身を確認する。** そのために、上の 7 に加えて、**手順の改善案**(次のセッションの手順書に足したいこと)を、本文の最後に書く。
+- **最初の 3 本(言語ごとに 1 本)は、相談役が、中身を確認する。** そのために、上の 7 に加えて、**手順の改善案**(次のセッションの手順書に足したいこと)を、`## Summary` の最後に書く。
 - 触るファイルは 4 節のとおり(広げる PR と、例からの昇格の PR の分も、4 節に書いてある)。それ以外(コード、ゲート、ワークフロー、共有の文書)は触らない。触る必要が出たら、完成にせず、ドラフトのまま、理由を本文に書いて終わる。
 - push のあと、コミットの署名(0 節)と、CI の結果を確認する。CI が失敗したら、直して push し直す(自分で `gh pr merge` はしない)。
 
@@ -203,7 +204,7 @@ go run ./bench/model-diff -pkg google.golang.org/grpc -model mine.yaml -version 
 - **取得と実行**: 依存の取得(`go get`、`dart pub get`)だけで、取得したコードは実行しない(Go は型検査と解析まで、Dart は analyzer まで)。ライブラリごとに分けるので、1 回は数秒〜十数秒、依存込みで 1 GB 前後。
 - **PR で動かす対象の求め方**: `go run ./bench/model-diff -changed origin/main` が、`internal/model/builtin/` の行(flows と sinks)が変わったパッケージだけを、`go <pkg>` / `dart <pkg>` の形で出す。CI の定期と手動の層に、`model-diff` のジョブがある(PR には入れていない。設計 6.3)。
 
-**コマンド(段階 1。Go だけ)**: `make model PKG=<Go のパッケージ> VERSION=<v>`(`bench/model-author`)は、公開 API の候補(第 1 層)を、モデルの行と `rejected:`(`docs/MODELING.md` の 4c-1 節)に照合する。どちらにもない候補があると、終了コード 70 で止まり、`.claude/work/model-author/` に一覧を書く(一覧の各項目に、行を足すか、理由(`why`)を付けて `rejected:` に足す)。`ARGS="-diff -write-verified"` を付けると、全部が決まったあとに、この節の差分テストを走らせ、通れば `verified_versions` を書く。`ARGS="-recall"` は、第 1 層の規則の再現率を出す。終了コードの表は、`bench/model-author/main.go`。取得だけで、取得したコードは実行しない。**対象は、上流が今もサポートしている major(公開の事実で決める。根拠は、モデルのファイルの冒頭か PR の本文に 1 行)。** 既定は最新。複数の major が並行してサポートされているパッケージは、それぞれが対象で、`VERSION` を替えて複数回実行する(`PKG` に `/v*` を書くときは、`VERSION` の major を調べる。`verified_versions` は、major ごとに具体的な module の path の記録を足す)。Dart と Rust はパスに major が入らないので行は共通で、並行サポートのバージョンがあれば、それぞれのバージョンで確認する。本体を読むパッケージ(`body_replaced_packages` にもなく、標準ライブラリでもない)では、`calls` の候補は出さない(解析が関数の値とインターフェースの呼び出しを解決する。`calls:` の行は、本体を読まない関数のため)。
+**コマンド(段階 1。Go と Dart)**: `make model PKG=<Go のパッケージ | Dart のパッケージ名> VERSION=<v> LANG=<go|dart>`(`bench/model-author`)は、公開 API の候補(第 1 層)を、モデルの行と `rejected:`(`docs/MODELING.md` の 4c-1 節)に照合する。どちらにもない候補があると、終了コード 70 で止まり、`.claude/work/model-author/` に一覧を書く(一覧の各項目に、行を足すか、理由(`why`)を付けて `rejected:` に足す)。`ARGS="-diff -write-verified"` を付けると、全部が決まったあとに、この節の差分テストを走らせ、通れば `verified_versions` を書く。`ARGS="-recall"` は、第 1 層の規則の再現率を出す。`ARGS="-breakdown"` は、候補を種類、規則、語、型の形で数えた表を出す。決められない候補は、モデルの `deferred:`(`ref` で課題のファイルを指す。`MODELING.md` の 4c-1 節)に置く。終了コードの表は、`bench/model-author/main.go`。取得だけで、取得したコードは実行しない(Dart は `dart pub get` と、analyzer による型の読み取りだけ。`hook/build.dart` を持つパッケージは、終了コード 10 で止める。Dart の注意は `DESIGN-package-models.md` 6.11 の「段階 1(Dart)の状態」)。**対象は、上流が今もサポートしている major(公開の事実で決める。根拠は、モデルのファイルの冒頭か PR の本文に 1 行)。** 既定は最新。複数の major が並行してサポートされているパッケージは、それぞれが対象で、`VERSION` を替えて複数回実行する(`PKG` に `/v*` を書くときは、`VERSION` の major を調べる。`verified_versions` は、major ごとに具体的な module の path の記録を足す)。Dart と Rust はパスに major が入らないので行は共通で、並行サポートのバージョンがあれば、それぞれのバージョンで確認する。本体を読むパッケージ(`body_replaced_packages` にもなく、標準ライブラリでもない)では、`calls` の候補は出さない(解析が関数の値とインターフェースの呼び出しを解決する。`calls:` の行は、本体を読まない関数のため)。
 
 ## 10. この手順書を「使える」と言う条件
 

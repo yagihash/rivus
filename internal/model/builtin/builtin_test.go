@@ -2,6 +2,7 @@ package builtin_test
 
 import (
 	"go/types"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -128,6 +129,22 @@ func TestBuiltinStdlibSymbolsExist(t *testing.T) {
 			}
 			if n, ok := rt.(*types.Named); ok && n.Obj() != tn && types.IsInterface(tn.Type()) {
 				t.Errorf("%s: %s is embedded from %s.%s: a call has that symbol", w.sym, w.name, n.Obj().Pkg().Path(), n.Obj().Name())
+			}
+		}
+	}
+}
+
+// A `deferred:` entry names an issue that exists (docs/issues): the question that keeps it open is written there.
+func TestDeferredRefsExist(t *testing.T) {
+	sets, err := builtin.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rs := range sets {
+		for _, d := range rs.Deferred {
+			pat := filepath.Join("..", "..", "..", "docs", "issues", model.DeferredRefFile(d.Ref))
+			if m, _ := filepath.Glob(pat); len(m) == 0 {
+				t.Errorf("%s: deferred %s: ref %s has no file (%s)", rs.Origin, d.Symbol, d.Ref, pat)
 			}
 		}
 	}

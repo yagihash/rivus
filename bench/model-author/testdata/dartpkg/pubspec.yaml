@@ -1,0 +1,5 @@
+name: fixpkg
+description: "A fake package for the tests of bench/model-author (never published)."
+publish_to: none
+environment:
+  sdk: ^3.8.0

@@ -1,7 +1,7 @@
 # The commands to build, check and test rivus. `make` or `make help` lists them.
 #
 #   make setup   on a new machine: Go, the Dart SDK and `dart pub get` (once; not Rust)
-#   make check   before a push (about a minute): build, gofmt, go vet and the short tests
+#   make check   before a push (about two minutes): build, gofmt, go vet and the short tests (TestDogfood included: rivus analyses its own code, and new code can break its capture_unbound ceiling)
 #   make test    every test, with the Dart and Rust extractors (what CI runs on main); a few minutes
 #
 # CI runs the same tests (a pull request with -short, main and the weekly run without): .github/workflows/ci.yml.
@@ -22,11 +22,11 @@ setup: ## install Go and Dart if they are missing, and run dart pub get (Linux; 
 build: ## build every package
 	go build ./...
 
-check: ## before a push (about a minute): build, gofmt, go vet, the short tests
+check: ## before a push (about two minutes): build, gofmt, go vet, the short tests (TestDogfood included)
 	go build ./...
 	@bad="$$(gofmt -l cmd internal bench)"; if [ -n "$$bad" ]; then echo "gofmt: not formatted:"; echo "$$bad"; exit 1; fi
 	go vet ./...
-	go test -short -count=1 -skip 'TestDogfood' ./...
+	go test -short -count=1 ./...
 
 test: ## every test, with the Dart and Rust extractors (what CI runs on main)
 	@command -v "$(firstword $(RIVUS_DART))" >/dev/null || { echo "make test: no dart ($(RIVUS_DART))"; exit 1; }
@@ -45,8 +45,8 @@ model-diff: ## the differential test of the model of a package: PKG=<Go import p
 	@[ -n "$(PKG)" ] || { echo "usage: make model-diff PKG=strings   (or PKG=package:http, MODEL=internal/model/builtin/dart-http.yaml)"; exit 1; }
 	go run ./bench/model-diff -pkg "$(PKG)" $(if $(MODEL),-model "$(MODEL)")
 
-model: ## the steps of making the model of a Go package: PKG=<import path> [VERSION=v1.2.3] [LANG=go] [ARGS="-diff -write-verified"] (bench/model-author, docs/MODEL-RUNBOOK.md); exit 70 = a candidate has no row and is not in rejected:; fetches the package, does not run it
-	@[ -n "$(PKG)" ] || { echo "usage: make model PKG=github.com/jmoiron/sqlx VERSION=v1.4.0 LANG=go   (ARGS=\"-recall\" for the recall of layer 1; ARGS=\"-gen-skeleton\" makes the skeleton and the cell template for the Go zoo)"; exit 1; }
+model: ## the steps of making the model of a Go or Dart package: PKG=<import path | dart package> [VERSION=v1.2.3] [LANG=go|dart] [ARGS="-diff -write-verified"] (bench/model-author, docs/MODEL-RUNBOOK.md); exit 70 = a candidate has no row and is not in rejected:; fetches the package, does not run it
+	@[ -n "$(PKG)" ] || { echo "usage: make model PKG=github.com/jmoiron/sqlx VERSION=v1.4.0 LANG=go   (or PKG=dio VERSION=5.11.1 LANG=dart; ARGS=\"-recall\" for the recall of layer 1; ARGS=\"-gen-skeleton\" makes the skeleton and the cell template for the Go zoo)"; exit 1; }
 	go run ./bench/model-author -pkg "$(PKG)" $(if $(VERSION),-version "$(VERSION)") -lang $(if $(filter command line,$(origin LANG)),$(LANG),go) $(ARGS)
 
 docs-gen: ## print the tables of the issues and the ADRs (from docs/issues/*.md, docs/adr/*.md); WHAT=issues or WHAT=adr for one; OUT=docs/TABLE.md writes it (ignored by git)

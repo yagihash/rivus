@@ -33,7 +33,7 @@ func TestRejectedIsReadAndNotUsed(t *testing.T) {
 
 func TestRejectedIsChecked(t *testing.T) {
 	for name, c := range map[string]struct{ body, want string }{
-		"no symbol":    {"  - kind: sink\n    why: x\n", "symbol is required"},
+		"no symbol":    {"  - kind: sink\n    why: x\n", "one of symbol and type"},
 		"no kind":      {"  - symbol: a.B\n    why: x\n", "kind is required"},
 		"unknown kind": {"  - symbol: a.B\n    kind: propagator\n    why: x\n", "unknown kind"},
 		"no why":       {"  - symbol: a.B\n    kind: sink\n", "why is required"},
@@ -51,5 +51,50 @@ func TestRejectedIsChecked(t *testing.T) {
 	}
 	if _, err := Parse(strings.NewReader("ruleset: t@1\nrejected: []\n"), "t.yaml"); err != nil {
 		t.Error(err)
+	}
+}
+
+func TestDeferred(t *testing.T) {
+	ok := "ruleset: t@1\ndeferred:\n  - symbol: a.F\n    kind: sink\n    why: w\n    ref: model-x-y\n  - symbol: a.G\n    kind: sink\n    why: w\n    ref: \"#12\"\n"
+	rs, err := Parse(strings.NewReader(ok), "t.yaml")
+	if err != nil || len(rs.Deferred) != 2 || len(Merge(rs).Symbols()) != 0 {
+		t.Fatalf("deferred = %v, %v", rs, err)
+	}
+	for name, body := range map[string]string{
+		"no ref":  "  - symbol: a.F\n    kind: sink\n    why: w\n",
+		"bad ref": "  - symbol: a.F\n    kind: sink\n    why: w\n    ref: later\n",
+		"no why":  "  - symbol: a.F\n    kind: sink\n    ref: \"#1\"\n",
+		"no kind": "  - symbol: a.F\n    why: w\n    ref: \"#1\"\n",
+		"twice":   "  - symbol: a.F\n    kind: sink\n    why: w\n    ref: \"#1\"\n  - symbol: a.F\n    kind: sink\n    why: w\n    ref: \"#1\"\n",
+	} {
+		if _, err := Parse(strings.NewReader("ruleset: t@1\ndeferred:\n"+body), "t.yaml"); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}
+
+func TestRejectedByType(t *testing.T) {
+	ok := "ruleset: t@1\nrejected:\n  - type: package:a/src/b.dart#Slug\n    kind: sink\n    why: w\n    covers: 3\n"
+	rs, err := Parse(strings.NewReader(ok), "t.yaml")
+	if err != nil || len(rs.Rejected) != 1 || rs.Rejected[0].Covers == nil || *rs.Rejected[0].Covers != 3 {
+		t.Fatalf("%v %v", rs, err)
+	}
+	for name, body := range map[string]string{
+		"no covers":     "  - type: a.T\n    kind: sink\n    why: w\n",
+		"symbol+type":   "  - symbol: a.F\n    type: a.T\n    kind: sink\n    why: w\n    covers: 1\n",
+		"neither":       "  - kind: sink\n    why: w\n",
+		"glob":          "  - type: a.*\n    kind: sink\n    why: w\n    covers: 1\n",
+		"list":          "  - type: a.T, a.U\n    kind: sink\n    why: w\n    covers: 1\n",
+		"no why":        "  - type: a.T\n    kind: sink\n    covers: 1\n",
+		"covers symbol": "  - symbol: a.F\n    kind: sink\n    why: w\n    covers: 1\n",
+		"position":      "  - type: a.T\n    kind: sink\n    why: w\n    covers: 1\n    position: arg0\n",
+		"twice":         "  - type: a.T\n    kind: sink\n    why: w\n    covers: 1\n  - type: a.T\n    kind: sink\n    why: w\n    covers: 2\n",
+	} {
+		if _, err := Parse(strings.NewReader("ruleset: t@1\nrejected:\n"+body), "t.yaml"); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+	if _, err := Parse(strings.NewReader("ruleset: t@1\nrejected:\n  - type: a.T\n    kind: calls\n    why: w\n    covers: 0\n"), "t.yaml"); err != nil {
+		t.Errorf("calls by type: %v", err)
 	}
 }
