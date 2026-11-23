@@ -1,0 +1,4 @@
+go	conv/char_hex/char_hex.go	miss	@source(conv-char-hex-decoy) @miss(silent) @ref(#185)	func decoy() { @decoy
+go	conv/char_hex/char_hex.go	miss	@source(conv-char-hex-vuln) @miss(silent) @ref(#185)	func vuln() { @vuln
+go	conv/char_hex/char_hex.go	sink-none	@sink(none)	func fixed() { @fixed
+go	conv/char_hex/char_hex.go	sink-none	@sink(none) @nosink(conv-char-hex-decoy)	func decoy() { @decoy

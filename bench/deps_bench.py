@@ -19,7 +19,8 @@ the run was killed by us), functions (stats.functions), findings, uncertainties,
 The pass line (`make bench-passline`; targets in bench/deps-targets.json): one line per target,
   PASS|FAIL memos time=<s>/<limit> mem=<GB>/<cap> converged=<yes|no> detected=<yes|no|n/a>
 with the default flags of rivus. PASS needs all four: it ended by itself within the time limit, the memory of the
-process group never went above the cap (a watchdog kills the group of this run only), it converged, and the
+process group never went above the cap (a watchdog kills the group of this run only), it converged (with no function
+stopped on the clock: stats.load_dependent is not set), and the
 count of findings of the category of the target is higher on the pre-fix commit than on the fixed one (counts
 only; n/a when the target has no pair). A target with `detect.mode` "through" (a truth file, one public fixed
 vulnerability) counts per vulnerability: detected when at least one finding passes through a labelled position;
@@ -319,7 +320,9 @@ def analyze_once(rivus, t, src, env, limit_s, cap_bytes, work, tag):
         try:
             rep = json.load(open(outp))
             st = rep.get("stats", {})
-            converged = bool(st.get("converged", False)) and not st.get("timed_out", False)
+            # a run that stopped a function on the clock (-func-timeout, -timeout) depends on the load of the machine:
+            # the same run on a quieter one may find more, so it does not count as converged (stats.load_dependent)
+            converged = bool(st.get("converged", False)) and not st.get("timed_out", False) and not st.get("load_dependent", False)
         except (OSError, ValueError):
             rep = None
     return {"wall": wall, "peak": peak, "converged": converged, "why": why, "report": rep}

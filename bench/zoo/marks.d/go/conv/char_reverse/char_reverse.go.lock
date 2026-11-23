@@ -1,0 +1,4 @@
+go	conv/char_reverse/char_reverse.go	miss	@source(conv-char-reverse-decoy) @miss(silent) @ref(#185)	func decoy() { @decoy
+go	conv/char_reverse/char_reverse.go	miss	@source(conv-char-reverse-vuln) @miss(silent) @ref(#185)	func vuln() { @vuln
+go	conv/char_reverse/char_reverse.go	sink-none	@sink(none)	func fixed() { @fixed
+go	conv/char_reverse/char_reverse.go	sink-none	@sink(none) @nosink(conv-char-reverse-decoy)	func decoy() { @decoy

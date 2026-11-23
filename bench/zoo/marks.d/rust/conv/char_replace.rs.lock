@@ -1,0 +1,2 @@
+rust	conv/char_replace.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	conv/char_replace.rs	sink-none	@sink(none) @nosink(conv-char-replace-decoy)	fn decoy() { @decoy
