@@ -227,7 +227,7 @@ type state struct {
 	branches        *[]*sg.Block
 	edgeGuardCache  map[[2]*sg.Block][]Guard
 	guardOverflow   bool
-	condCache       map[*sg.Block]*Guard
+	condCache       map[*sg.Block]*condBase
 	blockGuardCache map[*sg.Block][]Guard
 	rootVer         map[Root]int // number of elements added to each root: change detector
 	// addLog is, for each root, the path of each element added to it, in
