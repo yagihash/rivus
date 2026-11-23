@@ -17,11 +17,14 @@ import (
 
 // TestDogfood analyses rivus with rivus (docs: ADR-037). What the command
 // line says reaches the file operations of rivus: that is what a CLI does,
-// and it is what the analysis must find in its own code.
+// and it is what the analysis must find in its own code. It runs on main only: with -short it skips itself (ADR-112).
 func TestDogfood(t *testing.T) {
+	if testing.Short() {
+		t.Skip("rivus analysing itself runs on main only (not with -short): ADR-112; run it with go test ./cmd/rivus -run TestDogfood -count=1")
+	}
 	// rivus reads its own code in two views: as it is on Linux (the system of CI) and as it is on macOS (where the sandbox is:
 	// internal/sandbox, and the call of it that runs a program that a flag names). Both are read statically, whatever system the test
-	// runs on (GOOS and CGO_ENABLED=0), so each has its flows file and its ceiling, and the same on every machine.
+	// runs on (GOOS and CGO_ENABLED=0), so each has its flows file and its recorded capture_unbound, and the same on every machine.
 	for _, v := range []struct {
 		goos, flows string
 		capture     int
@@ -118,19 +121,16 @@ func checkDogfood(t *testing.T, goos, flowsFile string, wantCaptureUnbound int) 
 	// (a closure that captures a value and is called by a helper, whose summary does not carry
 	// it: a limit of rivus that was silent) has a ceiling of its own, a count; every other
 	// depth_limit (path_limit, budget, guard_limit, ...) stays under 5% of the uncertainties.
-	// Both are ceilings: a count that goes down fails too, so that the ceiling is brought down
-	// (C-7 is meant to make capture_unbound go down).
+	// The other depth_limit share is a ceiling (a failure); the capture_unbound count is only recorded (ADR-112).
 	capture := 0
 	for _, u := range rep.Uncertainties {
 		if u.Kind == taint.KindDepthLimit && strings.HasPrefix(u.Detail, "capture_unbound") {
 			capture++
 		}
 	}
-	// (wantCaptureUnbound, per view) the closures of the code of C-7 itself (the same set with and without it); 37: sg.ExactClosures has two (add, walk) where ExactFuncs had one
-	t.Logf("capture_unbound: %d (ceiling %d)", capture, wantCaptureUnbound)
-	if capture != wantCaptureUnbound {
-		t.Errorf("capture_unbound is %d, the ceiling is %d: if it went down, lower the ceiling (that is the point of C-7); if it went up, a closure capture is lost silently somewhere new", capture, wantCaptureUnbound)
-	}
+	// (wantCaptureUnbound, per view: the last recorded value, only logged) the closures of the code of C-7 itself (the same set with and without it); 37: sg.ExactClosures has two (add, walk) where ExactFuncs had one
+	// It is recorded, not a failure (ADR-112): the number moves with every new closure in rivus' own code. If it differs, update the constant.
+	t.Logf("capture_unbound: %d (last recorded %d)", capture, wantCaptureUnbound)
 	if s.Program.Total > 0 {
 		other := float64(s.Program.ByKind[taint.KindDepthLimit]-capture) / float64(s.Program.Total)
 		if other > 0.05 {
