@@ -97,3 +97,15 @@ func TestUnverifiedVersionsOfSeveral(t *testing.T) {
 		t.Errorf("one version has no all_used: %s", b)
 	}
 }
+
+// Rust writes - and _ in a crate name as the same: the record and the lock file may spell it either way.
+func TestSameCrate(t *testing.T) {
+	for _, c := range []struct {
+		a, b string
+		want bool
+	}{{"actix-web", "actix-web", true}, {"google-cloud-storage", "google_cloud_storage", true}, {"a_b", "a-b", true}, {"ab", "a-b", false}} {
+		if got := SameCrate(c.a, c.b); got != c.want {
+			t.Errorf("SameCrate(%q, %q) = %v", c.a, c.b, got)
+		}
+	}
+}

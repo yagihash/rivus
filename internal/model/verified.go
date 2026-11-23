@@ -252,7 +252,7 @@ func (r *Rules) UnverifiedVersions(used map[string]string, source string) []Unve
 
 // UnverifiedVersionsOf is UnverifiedVersions for a lock file: a package can be there at several versions, and it is listed when any
 // of them is outside every range of its records (once, with the versions). match says whether a record's package is the used one
-// (MatchMajor for Go; SamePackage, the name as it is, for Dart).
+// (MatchMajor for Go; SamePackage, the name as it is, for Dart; SameCrate for Rust).
 func (r *Rules) UnverifiedVersionsOf(used map[string][]string, source string, match func(pattern, name string) bool) []UnverifiedVersion {
 	var out []UnverifiedVersion
 	for pkg, vers := range used {
@@ -290,6 +290,11 @@ func (r *Rules) UnverifiedVersionsOf(used map[string][]string, source string, ma
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Package < out[j].Package })
 	return out
+}
+
+// SameCrate says whether a record's package is the crate: Cargo reads - and _ in a crate name as the same.
+func SameCrate(pattern, name string) bool {
+	return strings.ReplaceAll(pattern, "_", "-") == strings.ReplaceAll(name, "_", "-")
 }
 
 // SamePackage says whether a record's package is the package (the name as it is: Dart).

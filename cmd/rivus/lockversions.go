@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
+	"github.com/BurntSushi/toml"
 	"go.yaml.in/yaml/v3"
 
 	"github.com/yagihash/rivus/internal/model"
@@ -40,7 +42,35 @@ func dartLockVersions(dir string) (map[string][]string, error) {
 	return out, nil
 }
 
-// unverifiedFromLocks is summary.unverified_versions for the languages whose versions are in a lock file (Dart; Rust is next): the lock file
+// cargoLockVersions reads Cargo.lock in dir: the crates of a registry (a path crate has no source, a git crate has a git+ one).
+// A crate can be there at several versions, and all of them are read: the build uses each of them.
+func cargoLockVersions(dir string) (map[string][]string, error) {
+	b, err := os.ReadFile(filepath.Join(dir, "Cargo.lock"))
+	if os.IsNotExist(err) {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
+	var lock struct {
+		Package []struct {
+			Name    string `toml:"name"`
+			Version string `toml:"version"`
+			Source  string `toml:"source"`
+		} `toml:"package"`
+	}
+	if err := toml.Unmarshal(b, &lock); err != nil {
+		return nil, fmt.Errorf("Cargo.lock: %w", err)
+	}
+	out := map[string][]string{}
+	for _, p := range lock.Package {
+		if (strings.HasPrefix(p.Source, "registry+") || strings.HasPrefix(p.Source, "sparse+")) && p.Version != "" {
+			out[p.Name] = append(out[p.Name], p.Version)
+		}
+	}
+	return out, nil
+}
+
+// unverifiedFromLocks is summary.unverified_versions for the languages whose versions are in a lock file (Dart, Rust): the lock file
 // of -C, for each of them that was read. A lock file that cannot be read is said on the standard error, and gives no note.
 func (o *analyzeOpts) unverifiedFromLocks(rules *model.Rules) []model.UnverifiedVersion {
 	var out []model.UnverifiedVersion
@@ -53,6 +83,9 @@ func (o *analyzeOpts) unverifiedFromLocks(rules *model.Rules) []model.Unverified
 		case langDart:
 			used, err = dartLockVersions(o.dir)
 			source, match = "pubspec.lock", model.SamePackage
+		case langRust:
+			used, err = cargoLockVersions(o.dir)
+			source, match = "Cargo.lock", model.SameCrate
 		default:
 			continue
 		}
