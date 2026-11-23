@@ -64,6 +64,9 @@ go-warm: ## compile the dependencies of every module of the bench into the build
 zoo-dart-gen: ## write bench/zoo-dart/exec/lib/cases.dart and the two pubspec.yaml of the Dart zoo (generated, not committed) from the directories of the cells and of the skeleton packages
 	go test ./cmd/rivus -run '^TestZooDartGenerate$$' -count=1 -update
 
+bench-deps: ## local, heavy: `rivus analyze` (no flags) on the benches with heavy dependencies (go-s3, gcp, dart-gcp) with a timeout; appends a row each to bench/deps-ledger.tsv (TIMEOUT=600 BENCHES="go-s3 gcp"; bench/deps_bench.py)
+	python3 bench/deps_bench.py -timeout $(or $(TIMEOUT),600) $(BENCHES)
+
 model-diff: ## the differential test of the model of a package: PKG=<Go import path | package:name> [MODEL=<file>] (bench/model-diff, docs/MODEL-RUNBOOK.md); fetches the package, does not run it
 	@[ -n "$(PKG)" ] || { echo "usage: make model-diff PKG=strings   (or PKG=package:http, MODEL=internal/model/builtin/dart-http.yaml)"; exit 1; }
 	@# built once and run, not `go run`: `go run` turns the exit status of the program into 1 ("exit status N")
