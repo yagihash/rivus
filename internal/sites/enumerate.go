@@ -13,8 +13,10 @@ import (
 )
 
 // IRRef is the place of a site in the IR.
+//
+// Func names the function, and does not hold its IR: the IR is asked of the Source when it is needed.
 type IRRef struct {
-	Func  *ir.Func
+	Func  ir.Ref
 	Block int
 	Instr int
 	// Param is the index of the parameter of a parameter source, else -1.
@@ -101,12 +103,12 @@ func Enumerate(irsrc ir.Source, texts ir.Texts, rules *model.Rules) *Result {
 				if fn.Recv {
 					off = 1
 					if src.Recv && declared > 0 {
-						add(&Site{Role: RoleSource, Kind: model.KindParam, Symbol: sym, Labels: src.Labels, Src: []model.Source{src}, irpos: paramPos(0), IR: &IRRef{Func: fn, Param: 0}})
+						add(&Site{Role: RoleSource, Kind: model.KindParam, Symbol: sym, Labels: src.Labels, Src: []model.Source{src}, irpos: paramPos(0), IR: &IRRef{Func: fnRef, Param: 0}})
 					}
 				}
 				for _, i := range src.Params {
 					if i >= 0 && i+off < declared {
-						add(&Site{Role: RoleSource, Kind: model.KindParam, Symbol: sym, Labels: src.Labels, Src: []model.Source{src}, irpos: paramPos(i + off), IR: &IRRef{Func: fn, Param: i + off}})
+						add(&Site{Role: RoleSource, Kind: model.KindParam, Symbol: sym, Labels: src.Labels, Src: []model.Source{src}, irpos: paramPos(i + off), IR: &IRRef{Func: fnRef, Param: i + off}})
 					}
 				}
 			}
@@ -116,7 +118,7 @@ func Enumerate(irsrc ir.Source, texts ir.Texts, rules *model.Rules) *Result {
 			for _, t := range ts {
 				from, to := t.span(len(idx))
 				for k := from; k <= to; k++ {
-					add(&Site{Role: RoleSource, Kind: model.KindCallbackParam, Symbol: t.symbol, Labels: t.src.Labels, Src: []model.Source{t.src.Source}, irpos: paramPos(idx[k]), IR: &IRRef{Func: fn, Param: idx[k]}})
+					add(&Site{Role: RoleSource, Kind: model.KindCallbackParam, Symbol: t.symbol, Labels: t.src.Labels, Src: []model.Source{t.src.Source}, irpos: paramPos(idx[k]), IR: &IRRef{Func: fnRef, Param: idx[k]}})
 				}
 			}
 		}
@@ -127,13 +129,13 @@ func Enumerate(irsrc ir.Source, texts ir.Texts, rules *model.Rules) *Result {
 			t := string(prm.Type)
 			for _, src := range rules.ParamTypes {
 				if src.Type == t || canon.Canon(src.Type) == canon.Canon(t) {
-					add(&Site{Role: RoleSource, Kind: model.KindParamType, Symbol: t, Labels: src.Labels, Src: []model.Source{src}, irpos: paramPos(i), IR: &IRRef{Func: fn, Param: i}})
+					add(&Site{Role: RoleSource, Kind: model.KindParamType, Symbol: t, Labels: src.Labels, Src: []model.Source{src}, irpos: paramPos(i), IR: &IRRef{Func: fnRef, Param: i}})
 				}
 			}
 		}
 		for bi, b := range fn.Blocks {
 			for ii, in := range b.Instrs {
-				at := &IRRef{Func: fn, Block: bi, Instr: ii, Param: -1}
+				at := &IRRef{Func: fnRef, Block: bi, Instr: ii, Param: -1}
 				switch in.Op {
 				case ir.OpCall:
 					if in.Callee.Kind == ir.CalleeValue {
@@ -331,7 +333,7 @@ func (res *Result) finishIR(fn *ir.Func, texts ir.Texts, raw []*Site) {
 // sink is a compile-time constant.
 func literalOnlyIR(form *irssa.Form, s *Site) bool {
 	at := s.IR
-	in := at.Func.Blocks[at.Block].Instrs[at.Instr]
+	in := form.Func.Blocks[at.Block].Instrs[at.Instr]
 	if in.Op != ir.OpCall {
 		return false
 	}
