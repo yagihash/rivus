@@ -56,7 +56,7 @@ type common struct {
 	// dropAfterRead leaves the declared packages to the filter of the IR (dropReplacedBodies) alone: the extractors read
 	// them, as they did before the extractors were told not to (docs/DESIGN-package-models.md 2).
 	dropAfterRead bool
-	// extractorBodyReplaced are the packages the extractor of Dart is told not to read (loadLangs sets it).
+	// extractorBodyReplaced are the packages the extractors of Dart and Rust are told not to read (loadLangs sets it).
 	extractorBodyReplaced []string
 	// declIgnored is how many declarations readDeclared left out (loadRules sets it).
 	declIgnored int
