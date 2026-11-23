@@ -103,7 +103,6 @@ jobs:
       - name: Test cmd/rivus (one shard of the matrix)
         env:
           SHARD_INDEX: ${{ matrix.shard }}
-          SHARD_TOTAL: ${{ strategy.job-total }}
           RIVUS_DART: dart
           RIVUS_REQUIRE_DART: "1"
           RIVUS_RUST: ${{ format('{0}/extractor/rust/target/debug/rivus-rust', github.workspace) }}
