@@ -1,0 +1,8 @@
+name: tar
+description: "The skeleton of package:tar that the cells of the Dart zoo need (the real package is not in the zoo): TarEntry and TarHeader, so that the built-in rows of package:tar are the ones the cells hit."
+publish_to: none
+environment:
+  sdk: ^3.10.0
+dependencies:
+  zoo_mark:
+    path: ../zoo_mark

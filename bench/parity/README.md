@@ -60,6 +60,7 @@ IR の呼び出し先の名前(`callee.symbol`、関数の名前)と、モデル
 | `make model` の段 1(枠、候補、検証、差分テスト。設計 6.11) | PR #233(レビュー中) | ✓(`LANG=dart`。dio で実演。骨組みは段 2 で) | ✗ |
 | クラウドで作れる | ✓ | ✓ | ✗(extractor がサンドボックスを要る) |
 | ベンチの合格の線(`make bench-passline`、1 行の PASS/FAIL。`bench/deps_bench.py`) | ✓(memos。時間、メモリ、収束、CVE-2025-65799 の検出) | 未定(dart_services と cocoon の線は、あとで決める。今は INFO の行だけ) | ✗(まだない) |
+| アーカイブのエントリ名の source(信頼できないアーカイブの名前。zip slip の入口) | ✓(`archive/tar`、`archive/zip`。`go-archive.yaml`) | ✓(`package:tar`。`package:archive` は範囲の確認待ち) | ✗(`tar`、`zip` クレートは範囲の確認待ち) |
 
 **規則**: 新しい機能の PR は、この表の行を足すか直す。Go だけで入れるときは、ほかの言語の課題の番号を書く。
 

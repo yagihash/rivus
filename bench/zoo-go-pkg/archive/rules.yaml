@@ -1,0 +1,4 @@
+# Rules of the standard library packages archive/tar and archive/zip in the Go zoo (the cells of the names of the entries). The sources,
+# sinks and sanitizers of zoo/mark are in bench/zoo-go/rules.yaml (the tests give both files); the rows of archive/tar and archive/zip
+# are the built-in model, which is in force as always. The standard library has no skeleton: the cells call the real packages.
+ruleset: rivus/bench-zoo-go-pkg-archive@1
