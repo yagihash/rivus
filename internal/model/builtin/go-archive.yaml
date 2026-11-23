@@ -1,0 +1,31 @@
+# archive/tar and archive/zip: the names inside an archive are sources.
+#
+# The creator of the archive writes the name of each entry (and the target of a link in a tar), and the name is the entry point of
+# zip slip: `../../x` or an absolute path written into the archive reaches the path that the extractor creates. Archive origin
+# cannot be known from analysis, so the names are treated as untrusted (label `user_input`, the label that the current sinks
+# accept); users who only handle trusted archives judge by the finding's source.
+#
+# The rows are `kind: field` rows, which fire on the reads of the field in the code of the project (`h.Name` after
+# `(*tar.Reader).Next()`, `f.Name` on an element of `(*zip.Reader).File`; `File` embeds `FileHeader`, so one row covers both
+# spellings). Not sources, on purpose: the sizes, the modes, the times, the comment of a zip (`FileHeader.Comment`), the owner
+# names of a tar (`Uname`, `Gname`): they are not a path that a program creates. `Header.PAXRecords` and `Header.Xattrs`
+# are maps of free keys and are not modelled.
+#
+# No API of these packages returns a safe (normalized) name, so there is nothing to leave out as the Rust `zip` crate's
+# `enclosed_name` is. Checked: `(*zip.Reader).Open` and `fs.ValidPath` take a name and give an error for an invalid one (they
+# return no name); `(*zip.File).Open` does not look at the name; and with the GODEBUG settings `zipinsecurepath=0` and
+# `tarinsecurepath=0` (Go 1.20, opt in), `zip.NewReader` and `(*tar.Reader).Next` return `ErrInsecurePath` (an absolute path, `..`)
+# together with the reader or the header, and the name that the header holds is still the raw one. A program
+# that checks the error is a guard, which rivus does not read as a sanitizer, so the name stays a source.
+ruleset: rivus/go/archive@1
+
+sources:
+  - kind: field
+    field: archive/tar.Header.Name
+    labels: [user_input]
+  - kind: field
+    field: archive/tar.Header.Linkname
+    labels: [user_input]
+  - kind: field
+    field: archive/zip.FileHeader.Name
+    labels: [user_input]

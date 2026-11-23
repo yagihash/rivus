@@ -1,0 +1,17 @@
+# A package of the Rust zoo (docs/DESIGN-package-models.md, 6.8): the cells of the crate zip, with a skeleton of it in skel/. Nothing is fetched:
+# every dependency is a path (the tests copy zoo-mark next to the crate for the extractor).
+[package]
+name = "zoo-pkg-zip"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+path = "cells/src/lib.rs"
+
+[dependencies]
+zoo-mark = { path = "../../zoo-rust/zoo-mark" }
+zip = { path = "skel" }
+
+[workspace]
+exclude = ["skel"]

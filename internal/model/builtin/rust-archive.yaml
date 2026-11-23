@@ -1,0 +1,73 @@
+# tar and zip: the names inside an archive are sources.
+#
+# The creator of the archive writes the name of each entry (and the target of a link in a tar), and the name is the entry point of
+# zip slip: `../../x` or an absolute path written into the archive reaches the path that the extractor creates. Archive origin
+# cannot be known from analysis, so the names are treated as untrusted (label `user_input`, the label that the current sinks
+# accept); users who only handle trusted archives judge by the finding's source.
+#
+# The rows are `call_result` rows on the getters, with the symbols that the extractor writes. Checked on the real crates (tar 0.4.46,
+# zip 9.8.1): `go run ./bench/model-diff -lang rust -pkg tar` finds the 4 rows of `Header` and can only say "resolves" for the 4 of
+# `Entry` (a generic type that the probe cannot name), and `-pkg zip` says "resolves" for the 4 rows (a generic reader); for those the
+# spellings were read from the IR of a crate that calls every getter (under the sandbox, with the crates fetched): the call symbols
+# are the ones in the rows (`zip::ZipArchive::file_names` is the public path; the others are `zip::read::ZipFile::...`).
+# * tar: `Entry::path`, `Entry::path_bytes`, `Entry::link_name`, `Entry::link_name_bytes`, and the same four on `Header` (a program
+#   reads `entry.header().path()` as well as `entry.path()`).
+# * zip: `ZipFile::name`, `ZipFile::name_raw`, `ZipFile::mangled_name` (the raw name, only with the characters of the platform
+#   made safe: it is still a path that may contain `..` or be absolute) and `ZipArchive::file_names`.
+# * Not a source: `ZipFile::enclosed_name`. It returns `None` for a name that is absolute or that leaves the directory (`..`) and
+#   the normalized path otherwise: the crate's own sanitized variant of the name, which is the check that a zip slip fix makes. A
+#   program that uses it is not reported, which is the same as the fixed form; a program that uses `name()` or `mangled_name()`
+#   is. (`ZipFile::name` of a `ZipFile` that the program builds itself is read the same way: the price of a call_result row.)
+# * Not sources: the size, the mode, the times, the comment, the user and group names.
+ruleset: rivus/rust/archive@1
+
+# the positions count the receiver (arg0), also for a call through a trait (as rust-std.yaml)
+self_first: true
+
+verified_versions:
+  - package: tar
+    versions: ">=0.4.0 <0.5.0"
+    checked_with: 0.4.46
+    checked: 2026-11-23
+  - package: zip
+    versions: ">=9.0.0 <10.0.0"
+    checked_with: 9.8.1
+    checked: 2026-11-23
+
+sources:
+  - kind: call_result
+    symbol: tar::Entry::path
+    labels: [user_input]
+  - kind: call_result
+    symbol: tar::Entry::path_bytes
+    labels: [user_input]
+  - kind: call_result
+    symbol: tar::Entry::link_name
+    labels: [user_input]
+  - kind: call_result
+    symbol: tar::Entry::link_name_bytes
+    labels: [user_input]
+  - kind: call_result
+    symbol: tar::Header::path
+    labels: [user_input]
+  - kind: call_result
+    symbol: tar::Header::path_bytes
+    labels: [user_input]
+  - kind: call_result
+    symbol: tar::Header::link_name
+    labels: [user_input]
+  - kind: call_result
+    symbol: tar::Header::link_name_bytes
+    labels: [user_input]
+  - kind: call_result
+    symbol: zip::read::ZipFile::name
+    labels: [user_input]
+  - kind: call_result
+    symbol: zip::read::ZipFile::name_raw
+    labels: [user_input]
+  - kind: call_result
+    symbol: zip::read::ZipFile::mangled_name
+    labels: [user_input]
+  - kind: call_result
+    symbol: zip::ZipArchive::file_names
+    labels: [user_input]

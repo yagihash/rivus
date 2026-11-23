@@ -1,0 +1,5 @@
+dart	dart/tar_entry_name.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	dart/tar_entry_name.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	dart/tar_entry_name.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	dart/tar_entry_name.dart	sink-none	@sink(none) @nosink(dart-tar-entry-name-decoy)	Future<void> decoy() async { @decoy
+dart	dart/tar_entry_name.dart	sink-none	@sink(none) @nosink(dart-tar-entry-name-decoy)	Future<void> decoy() async { @decoy
