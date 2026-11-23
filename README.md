@@ -267,6 +267,8 @@ Go / Dart / Rust の extractor ──→ 中立の IR（CFG、JSON Lines）─�
 
 新しいマシン(Linux)では、先に `make setup` を 1 回実行します。go.mod の Go(1.27 系の最新のパッチを固定)と、CI と同じバージョンの Dart SDK がなければ、バージョンとチェックサムを固定して `~/.local/rivus-dev` に入れ(sudo は不要)、Dart の各パッケージの `dart pub get` を実行します。インストール先は環境変数 `RIVUS_DEV_TOOLS` で変えられます(未設定なら `~/.local/rivus-dev`)。入っていれば何もしないので、何度実行しても同じです。終わりに PATH の設定が表示されます。Rust の nightly と隔離の仕組みは入れません(`make test` に必要。`.github/workflows/ci.yml` の `rust` ジョブを参照)。
 
+`make setup` は、`git config core.hooksPath .githooks` も設定します(`make setup` を使わないときは、自分で実行します)。`.githooks/pre-push` は、PR がマージ済み(または閉じている)で、開いている PR がないブランチへの push を止めます(コミットが main に入らないため。`gh` がなければ警告だけで通します)。意図した push は `RIVUS_ALLOW_PUSH_TO_MERGED=1 git push` にします。`core.hooksPath` の相対パスは、各 worktree の最上位から読まれます。`.githooks/` がない古い worktree では、clone の設定に絶対パス(`git config core.hooksPath <main の checkout>/.githooks`)を入れます。
+
 ```sh
 make setup                                      # 新しいマシンで 1 回(Go、Dart SDK、dart pub get)。そのあと make check
 make check                                      # push の前(約 1 分): ビルド、gofmt、go vet、短いテスト(go test -short。TestDogfood は週 1 回の CI で、前回から差分があるときだけ回す。手元は `RIVUS_DOGFOOD=1`)
