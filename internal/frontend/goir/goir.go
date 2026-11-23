@@ -231,7 +231,12 @@ func convertFunc(p *gossa.Program, fn *ssa.Function, graph callgraph.Graph, lift
 		blk := &c.out.Blocks[bi]
 		blk.ID = ir.BlockID(bi)
 		if bi == 0 {
-			blk.Instrs = entry
+			blk.Instrs = append(make([]ir.Instr, 0, len(entry)+len(b.Instrs)), entry...)
+		} else {
+			// go/ssa's count is close to what the block becomes (a φ makes no
+			// instruction here, and one instruction can make several), so the
+			// block is not grown by doubling, which leaves about a quarter of it empty
+			blk.Instrs = make([]ir.Instr, 0, len(b.Instrs))
 		}
 		c.cur = &blk.Instrs
 		for _, in := range b.Instrs {
@@ -239,7 +244,22 @@ func convertFunc(p *gossa.Program, fn *ssa.Function, graph callgraph.Graph, lift
 		}
 	}
 	c.lowerPhis()
+	c.fitBlocks()
 	return c.out
+}
+
+// fitBlocks gives each block the size of its instructions and no more: what
+// append left over (the count of go/ssa is only close) is held for as long as
+// the IR is, which is most of the memory of the extraction.
+func (c *conv) fitBlocks() {
+	for i := range c.out.Blocks {
+		b := &c.out.Blocks[i]
+		if len(b.Instrs) == 0 {
+			b.Instrs = nil
+		} else if cap(b.Instrs) != len(b.Instrs) {
+			b.Instrs = append(make([]ir.Instr, 0, len(b.Instrs)), b.Instrs...)
+		}
+	}
 }
 
 // findFused marks the address computations whose only use is as the address
