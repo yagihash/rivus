@@ -7,6 +7,10 @@
 //! @na(F/clos/range-func: Go's range over a function (Go 1.23: `for v := range seq`, the iterator calls yield); Rust has no loop that calls a closure for the body: an iterator is driven by `next`, and a `for` over it is a call of `next`)
 //! @na(F/dyn/iface-assert-ptr-recv: Go's type assertion of `any` to an interface read through a pointer receiver; Rust has neither)
 //! @todo(F/dyn/iface-write-passed: PARITY: Go's pointer held in an `io.Writer` interface value that a function writes to (ADR-090); a Rust `&mut dyn Write` passed to a function and read back from the owner can be written)
+//! @todo(F/cont/ptr-commaok-assert: PARITY: Go's pointer taken out of an interface by a comma-ok assertion and written through; Rust can write through `&mut T` from `Any::downcast_mut::<T>()` on a `&mut dyn Any` and read the owner back; the cell is not written yet)
+//! @todo(F/cont/ptr-commaok-map: PARITY: Go's pointer taken out of a map by a comma-ok index and written through; Rust can write through the `&mut V` of `if let Some(p) = map.get_mut(..)` and read the map back; the cell is not written yet)
+//! @todo(F/cont/ptr-range-map: PARITY: Go's pointer that is the value of a range over a map and written through; Rust can write through the `&mut V` of `for p in map.values_mut()` and read the map back; the cell is not written yet)
+//! @todo(F/cont/ptr-type-switch: PARITY: Go's pointer bound by a type switch and written through; Rust can write through the `&mut T` bound by a `match` on a `&mut enum` and read the owner back; the cell is not written yet)
 pub mod call {
     pub mod depth3;
     pub mod direct;
