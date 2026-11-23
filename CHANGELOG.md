@@ -1,5 +1,30 @@
 # Changelog
 
+## [v0.0.13](https://github.com/yagihash/rivus/compare/v0.0.12...v0.0.13) - 2026-11-23
+
+### Features
+- 決定論のテストで収束を要求し、compare.py に完全でない実行の印を出す by @yagihash in https://github.com/yagihash/rivus/pull/361
+- 関数ごとの打ち切りも、完全でない解析(終了コード 4)として扱う by @yagihash in https://github.com/yagihash/rivus/pull/365
+- summary にメモリの最大と GC の割合を足す。models coverage に incomplete を出す by @yagihash in https://github.com/yagihash/rivus/pull/359
+- 重い測定の記録を 1 つの台帳(bench/heavy-ledger.tsv)にまとめる by @yagihash in https://github.com/yagihash/rivus/pull/366
+- sg: 同じ内容の InstrInfo を 1 つにまとめて、生きているヒープを減らす by @yagihash in https://github.com/yagihash/rivus/pull/367
+- taint: 経路の段の記録を小さくして、生きているヒープを減らす by @yagihash in https://github.com/yagihash/rivus/pull/371
+- 経路の段に、畳んだ出力から作った段の注記(out_widened)を付ける by @yagihash in https://github.com/yagihash/rivus/pull/370
+- summary に、生きているヒープの最大(live_heap_max_bytes)を足す by @yagihash in https://github.com/yagihash/rivus/pull/372
+- IR に char_read の属性を足し、isCharRead を属性と今の判定の 2 段にする by @yagihash in https://github.com/yagihash/rivus/pull/374
+- bench: 規模を変えたときの、段ごとの生きている量の伸びを測る道具 by @yagihash in https://github.com/yagihash/rivus/pull/380
+- bench: Go の zoo で、実行して観測したエッジと静的グラフを照合する(observed-edges) by @yagihash in https://github.com/yagihash/rivus/pull/381
+- stats に、関数ごとの作業量(adds)の分布を足す(動作は変えない) by @yagihash in https://github.com/yagihash/rivus/pull/382
+- goir: 読み込みの山を下げる(ブロックの配列をちょうどの大きさに、変換が済んだ関数の SSA を手放す) by @yagihash in https://github.com/yagihash/rivus/pull/383
+- 合格基準の「検出」を、場所で判定する(memos)。検出と終わることを別の条件に by @yagihash in https://github.com/yagihash/rivus/pull/387
+- goir: lifted な SSA を、変換の前に表へ直して手放す(読み込みのフェーズ) by @yagihash in https://github.com/yagihash/rivus/pull/391
+- 暫定の注記: 依存の中で文字を 1 文字ずつ読んで止まった流れを、呼び出しの側に注記として出す by @yagihash in https://github.com/yagihash/rivus/pull/388
+- フラグ -char-taint(既定 off): 文字として読んだ値を、文字列に戻る所まで運ぶ(Go) by @yagihash in https://github.com/yagihash/rivus/pull/389
+- irspill: IR の符号化と保存(名前のない一時ファイル)を足す。まだ繋がない by @yagihash in https://github.com/yagihash/rivus/pull/397
+### Bug Fixes
+- Dart: ローカル関数が自分の名前で自分を呼ぶ形を、自分を作り直して扱う(#196) by @yagihash in https://github.com/yagihash/rivus/pull/377
+- Dart: クロージャの中で、取り込んだ変数を呼ぶ形の候補を、クロージャを作った所からたどる(#99) by @yagihash in https://github.com/yagihash/rivus/pull/390
+
 ## [v0.0.12](https://github.com/yagihash/rivus/compare/v0.0.11...v0.0.12) - 2026-11-23
 
 ### Features
