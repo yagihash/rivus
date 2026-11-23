@@ -36,6 +36,27 @@ test_agent_return_and_progress_are_denied if {
 	}
 }
 
+test_red_and_green_for_a_test_result_are_denied if {
+	every text in [
+		"main が赤い", "main が十数回のマージの間、赤いままだった", "赤い間にマージした PR", "main を緑に戻す", "CI が緑になる",
+		"PR が赤くなる", "赤を確かめる", "緑にするために注釈は変えない", "単独では緑 / 赤", "切られたら赤", "赤", "緑",
+	] {
+		denied("paragraph", text)
+	}
+}
+
+test_red_and_green_as_colours_pass if {
+	every text in ["赤色で表示する", "緑色のバッジ", "赤字で書く", "赤外線"] {
+		not denied("paragraph", text)
+	}
+}
+
+test_red_and_green_message_names_the_replacement if {
+	some v in wording.deny with input as doc("paragraph", "main が赤いまま")
+	contains(v.message, "赤 / 緑")
+	contains(v.message, "失敗している")
+}
+
 test_ordinary_words_pass if {
 	every text in [
 		"ファイルを読み込む", "読み取りの権限", "値を読み取る", "読み出し側", "読み方を決める", "コードを読み、確認する", "コードの読み込み",
