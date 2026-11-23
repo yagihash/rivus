@@ -361,6 +361,7 @@ def prepare(name, t, tree, work, env):
         shutil.copytree(tree, copy, ignore=shutil.ignore_patterns(".git"))
     if t.get("dart_remove_flutter_workspace_members"):
         remove_flutter_members(copy)
+    pin_lock(t, copy)
     src = os.path.join(copy, t.get("subdir", ""))
     r = subprocess.run(["dart", "pub", "get"], cwd=src, capture_output=True, text=True)
     if r.returncode != 0:
@@ -369,6 +370,14 @@ def prepare(name, t, tree, work, env):
     env["RIVUS_DART"] = "dart"
     env["RIVUS_DART_EXTRACTOR"] = "dart run " + os.path.join(ROOT, "extractor/dart/bin/rivus_dart.dart")
     return src, env, None
+
+
+def pin_lock(t, root):
+    """In the COPY: put the pinned `pubspec.lock` of the target (the `lock` field, a path in this repository) at the root of the tree, so `dart pub get` keeps those versions. No `lock` field: nothing is written."""
+    lock = t.get("lock")
+    if not lock:
+        return
+    shutil.copyfile(os.path.join(ROOT, lock), os.path.join(root, "pubspec.lock"))
 
 
 def remove_flutter_members(root):
