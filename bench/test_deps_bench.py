@@ -54,19 +54,24 @@ class Detection(unittest.TestCase):
 class Peak(unittest.TestCase):
     GB = 1024 ** 3
 
-    def test_end_of_run_wins_over_samples(self):
-        # the sampler saw 6 GB, the process ended at 9 GB: the verdict uses 9 GB
-        b, how = d.record_peak(9 * self.GB, 6 * self.GB, False, 8 * self.GB)
-        self.assertEqual((b, how), (9 * self.GB, "end-of-run"))
-        self.assertFalse(d.judge(100, 180, b / self.GB, 8, True, None)[0])
+    def test_two_records_of_a_real_child(self):
+        with tempfile.TemporaryDirectory() as w:
+            m = d.run_watched([sys.executable, "-c", "x = bytearray(150 * 1024 * 1024); x[::4096] = b'a' * len(x[::4096]); import time; time.sleep(1.2)"],
+                              w, dict(os.environ), 30, 8 * self.GB, os.path.join(w, "e"), os.path.join(w, "o"), interval=0.1)
+        self.assertEqual((m["rc"], m["why"]), (0, ""))
+        self.assertGreater(m["a"], 150 * 1024 * 1024)
+        self.assertGreater(m["b"], 150 * 1024 * 1024)   # the tree is at least the main process
+        self.assertTrue(m["big"])
 
-    def test_killed_run_has_only_samples_and_is_over_the_cap(self):
-        b, how = d.record_peak(None, 7 * self.GB, True, 8 * self.GB)
-        self.assertEqual(how, "sampled")
-        self.assertGreater(b, 8 * self.GB)
+    def test_watchdog_kills_over_the_cap(self):
+        with tempfile.TemporaryDirectory() as w:
+            m = d.run_watched([sys.executable, "-c", "x = bytearray(200 * 1024 * 1024); x[::4096] = b'a' * len(x[::4096]); import time; time.sleep(20)"],
+                              w, dict(os.environ), 30, 100 * 1024 * 1024, os.path.join(w, "e"), os.path.join(w, "o"), interval=0.1)
+        self.assertEqual(m["why"], "memory")
+        self.assertGreater(m["b"], 100 * 1024 * 1024)
 
-    def test_no_timer_output_without_a_kill(self):
-        self.assertEqual(d.record_peak(None, 3, False, 8 * self.GB), (3, "sampled"))
+    def test_verdict_uses_the_tree_number(self):
+        self.assertFalse(d.judge(100, 180, 9.0, 8, True, None)[0])
 
     def test_timer_output_parsed(self):
         self.assertEqual(d.max_rss_bytes("  123456  maximum resident set size\n"), 123456)
