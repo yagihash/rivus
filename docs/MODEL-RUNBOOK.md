@@ -2,7 +2,7 @@
 
 読む人: 前の記憶のない、新しいセッション。**1 パッケージ = 1 つの新しいセッション = 1 つの PR。** 起動の指示文は数行で、「この手順書を読んで、その手順で 1 パッケージ分だけ作り、PR を 1 本立てて終わる」。ユーザーに承認を聞けない。別のセッションが、同じ時間に走っていることがある。上から順に、迷わず進める。
 
-必要なときだけ読むもの: 設計 [DESIGN-package-models.md](DESIGN-package-models.md)、モデルの書き方 [MODELING.md](MODELING.md)、候補の一覧 [DART-MODEL-CANDIDATES.md](DART-MODEL-CANDIDATES.md)(Dart。Go と Rust は、同じ種類の一覧があればそれ)。
+必要なときだけ読むもの: 設計 [DESIGN-package-models.md](DESIGN-package-models.md)(節の一覧。本文は [design-package-models/](design-package-models/) の節ごとのファイル。設計メモの足し方: 節のファイルに足す。新しい節は、新しいファイルと、一覧に 1 行)、モデルの書き方 [MODELING.md](MODELING.md)、候補の一覧 [DART-MODEL-CANDIDATES.md](DART-MODEL-CANDIDATES.md)(Dart。Go と Rust は、同じ種類の一覧があればそれ)。
 
 道具の状態: 差分テスト、生成器、宣言(`unread_packages`)は、段階が入るまで **(未実装)**。未実装の段は、ない道具の代わりに `rivus models coverage` と zoo のセルで進め、PR の本文に「その段は未実装のため省いた」と書く。
 
