@@ -196,7 +196,7 @@ func TestAdoptGenFileLoadsWithItsHandFile(t *testing.T) {
 	if len(r.Sinks["(*example.com/fake/v*.OrgService).Get"]) == 0 || len(r.Sinks["(*example.com/fake/v*.Client).Get"]) == 0 {
 		t.Fatalf("%v", r.Symbols())
 	}
-	if gen.Sinks[0].Origin != OriginGenerated || gen.Sinks[0].Decision != "owner-repo-of-services" {
+	if gen.Sinks[0].Origin != OriginGenerated || len(gen.Sinks[0].Decision) != 1 || gen.Sinks[0].Decision[0] != "owner-repo-of-services" {
 		t.Fatalf("%+v", gen.Sinks[0])
 	}
 	if !IsAdoptGen("builtin:go-fake.adopt.gen.yaml") || IsAdoptGen("go-fake.gen.yaml") || IsAdoptGen("go-fake.yaml") {
@@ -238,6 +238,29 @@ func TestAdoptGenFileIsChecked(t *testing.T) {
 		_, _, err := loadAdoptPair(t, c.edit)
 		if err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%s: got %v, want %q", name, err, c.want)
+		}
+	}
+}
+
+func TestDecisionList(t *testing.T) {
+	two := func(l string) func(h, g string) (string, string) {
+		return func(h, g string) (string, string) {
+			h = strings.Replace(h, "adopt_rules:\n", "adopt_rules:\n  - id: other\n    kind: sink\n    rule: sink.file-name\n    category: path_traversal\n    scope: {package: example.com/fake/v*, receiver_suffix: Service}\n    why: x\n    covers: 1\n", 1)
+			return h, strings.Replace(g, "decision: owner-repo-of-services\n  - symbol: (*example.com/fake/v*.OrgService).List", "decision: "+l+"\n  - symbol: (*example.com/fake/v*.OrgService).List", 1)
+		}
+	}
+	_, gen, err := loadAdoptPair(t, two("[other, owner-repo-of-services]"))
+	if err != nil || len(gen.Sinks[0].Decision) != 2 {
+		t.Fatalf("%v", err)
+	}
+	for l, want := range map[string]string{
+		"[owner-repo-of-services, other]": "dictionary order",
+		"[other, other]":                  "no duplicates",
+		"[nobody, other]":                 `"nobody" is not in adopt_rules`,
+		"[]":                              "needs decision",
+	} {
+		if _, _, err := loadAdoptPair(t, two(l)); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: %v, want %q", l, err, want)
 		}
 	}
 }

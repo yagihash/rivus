@@ -106,3 +106,16 @@ func TestClaimsAreOrderFree(t *testing.T) {
 		t.Fatalf("%+v\n%+v", m1, m2)
 	}
 }
+
+// A merged row names all the decisions, in dictionary order, whatever the order of the claims.
+func TestMergedRowNamesAllDecisionsSorted(t *testing.T) {
+	merged, warns, err := ResolveClaims([]Claim{
+		{"zeta", "a.F", "arg0", "x"}, {"alpha", "a.F", "arg0", "x"}, {"mid", "a.F", "arg0", "x"}, {"alpha", "a.F", "arg0", "x"},
+	})
+	if err != nil || len(merged) != 1 || !reflect.DeepEqual(merged[0].Decisions, []string{"alpha", "mid", "zeta"}) {
+		t.Fatalf("%v %+v", err, merged)
+	}
+	if len(warns) != 1 || !strings.Contains(warns[0], "alpha and mid and zeta") {
+		t.Fatalf("%v", warns)
+	}
+}
