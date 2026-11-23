@@ -446,7 +446,7 @@ rejected:
 
 ## 4c-2. Bulk adoption: `adopt_rules:`
 
-A model file can record a decision for a rule of layer 1 and a scope, once, instead of one row per candidate ([DESIGN-package-models.md](DESIGN-package-models.md), 6.12; ADR-113). Step 1 is the format and the loader. The command that expands a decision into rows is not there yet.
+A model file can record a decision for a rule of layer 1 and a scope, once, instead of one row per candidate ([DESIGN-package-models.md](DESIGN-package-models.md), 6.12; ADR-113). Step 1 is the format and the loader; step 2 (Go) is the command that expands a decision into rows (below).
 
 ```yaml
 adopt_rules:
@@ -470,6 +470,16 @@ adopt_rules:
 - A record, as `rejected:`: the analysis does not read it. The loader refuses a missing `why` or `covers`, an unknown rule id (or one of the other kind), a pattern in the scope, a key it does not know, and two decisions with the same id. The messages name the entry (`adopt_rules[1] (id) (line N)`). Whether a word is in the vocabulary of the rule is checked by the command, which has the table.
 - A row that the command generates says `origin: generated` and `decision: <id>`, and is in `<lang>-<package>.adopt.gen.yaml` next to the hand file. `decision` is one id or, for a row that decisions that overlap were merged into, a list of all their ids (dictionary order, no duplicates: `decision: [a, b]`). It is only for `origin: generated`, and a generated row must have it. When the files are loaded together (`builtin.Load`, `model.CheckAdoption`), every id of `decision` must be in `adopt_rules:` of the hand file of the same package, with the kind of the row; a generated row elsewhere, or `adopt_rules:` in the generated file, is refused.
 - Two decisions that claim the same place: the same category merges into one row with a warning (both decisions named; the row lists all of them in `decision:`); different categories stop the command (exit 70) for a human to decide. The detection is `ResolveClaims` in `bench/model-author`.
+
+**Expanding (step 2, Go): `make model PKG=<pkg> VERSION=<v> LANG=go ARGS="-expand"`.**
+
+- It reads the `adopt_rules:` of the hand file whose scope is the package, runs the rule of each decision (by its id, `words` or `arg_types`) over the fetched API (the candidates of `-recall`; each position carries the id of the rule that made it), keeps what the `scope` allows, and writes the rows to `internal/model/builtin/<hand file>.adopt.gen.yaml` (header: `generator`, `input`, `rules` = hash of the rule table, `decisions` = hash of what of the decisions changes the rows). Rows are sorted; the same input gives the same bytes. `-out <dir>` writes there instead (a trial; a work file with the lists is in `<work>/<package>-expansion.txt`). A fetch only: nothing of the package is run.
+- A hand row wins: a position that a hand row has, or that `rejected:` or `deferred:` decides, is not generated. The output says, per decision, how many symbols it claims, how many have a hand row, how many are decided by `rejected:`/`deferred:`, and how many hand rows no decision covers. The rows of an earlier expansion (`*.adopt.gen.yaml`) are never taken for hand rows.
+- `covers: N` is the number of symbols that the decision claims (before the hand rows and `rejected:` take their share, so adding a hand row does not change it). **More than `covers`: exit 70**, the new symbols are listed (a new API now matches: raise `covers` or narrow the decision or reject some), and the file is not written. Fewer: a warning. The number is written back to the model file only with `-write-covers` (it edits that one number; it never happens without the flag, and a growth that is accepted this way is read in the diff).
+- Two decisions on the same position: the same category merges into one row (`decision: [a, b]`) with a warning; different categories stop with exit 70 (`ResolveClaims`), and nothing is written.
+- Representatives: each decision names rows of its own in `representatives:`; one row per combination of positions (`arg1,arg2`, `arg0.Object`, `field`, `result`), the 3 combinations with most rows at most. A representative that is not a generated row of the decision stops with exit 70 (after the file is written); a combination with none is a warning that names a symbol to use. The zoo cell of a representative is a later change (the zoo test is not changed by this step), so a real `*.adopt.gen.yaml` is not committed yet: `TestBuiltinRowsAreHitByTheZoo` asks that every built-in row is hit.
+- The words of a decision must be in the vocabulary of its rule (exit 2 if not); `sink.arg-type` needs a type of the package (`pkg/v*.Type`, a pointer or a slice is read through) and a scope narrower than the package. `extra_ok` and `extra_covers` are only recorded.
+- Exit codes: 0 done; 2 usage or a decision that names a word outside the vocabulary; 10 fetch; 20 reading the package; 70 a conflict, a growth of `covers`, or a representative that is not a generated row. Dart and Rust are not expanded yet (exit 2).
 
 ## 4d. A source that is a parameter of a function that is given: `callback_param`
 

@@ -1,6 +1,6 @@
 ### 6.12 一括採用(規則の単位の決定から、行を生成する。設計案)
 
-**状態: 段階 1 は実装済み(ADR-113)。** `adopt_rules:` の書式とローダー、`origin: generated` と `decision:`、`*.adopt.gen.yaml` の読み込みと照合(`model.CheckAdoption`)、規則の id(`bench/model-author/rules.go`)、同じ位置を取る決めの検出(`ResolveClaims`)。展開(コマンド)と、zoo のテストの変更(2 節)は、まだ。
+**状態: 段階 1 と段階 2 は実装済み(ADR-113)。** 段階 1: `adopt_rules:` の書式とローダー、`origin: generated` と `decision:`、`*.adopt.gen.yaml` の読み込みと照合(`model.CheckAdoption`)、規則の id(`bench/model-author/rules.go`)、同じ位置を取る決めの検出(`ResolveClaims`)。段階 2(Go): 展開のコマンド(`make model ... ARGS="-expand"`。`bench/model-author/expand.go`)。位置ごとに規則の id と語を付け(`Item.Tags`。`-recall` の出力は変わらない)、`sink.arg-type` の走査、範囲、手の行と `rejected:` / `deferred:` の優先、`covers` の検査(増えたら終了コード 70。数字を書き戻すのは `-write-covers` だけ)、代表の確認、`-out` を実装した。実際の `*.adopt.gen.yaml` はまだ組み込みに入れない(`TestBuiltinRowsAreHitByTheZoo` の変更(2 節)は、別の承認のあと)。Dart と Rust の展開、source の型の単位の判断(4 節)の検査は、まだ。
 
 背景: 層 1 の候補は、採用した行より桁で多い。測定した数: go-github v93 は sink の行 57 に対して、未決の層 1 の候補が 1,321。Dart の `github` は、行 22 に対して未決 402(source の候補 74。その約 3 分の 1 は、利用者が書いた内容を持つフィールドで、ADR-108 の基準に入る。`RepositorySlug` 型だけで 147)。手のモデルは、同じ形の API の一部だけを採用していて(owner / repo を取るサービスのメソッドは 56 が sink で、同じ形の兄弟が数百、行なし)、残りは「判断して外した」のでなく、**手作業の都合で行がないだけの見逃し**。1 件ずつ `rejected:` に書くのは、判断の中身(同じ理由)の繰り返しで、1 件ずつ行を足すのは量が多すぎる。この節は、**判断を規則の単位で 1 回だけ書き、コマンドが行に展開する**形の設計案。実装はしない。事実は、`bench/model-author/rules.go`、`recall.go`、`internal/model/model.go`、`rejected.go`、`cmd/rivus/dead_rows_test.go`、ADR-108 で確認した。「`rejected:` の型単位のまとめの不採用」は、決めた案として扱うが、コードにはまだない(`rejected.go` は 1 件ずつ。**要確認**)。
 
@@ -44,7 +44,7 @@ adopt_rules:
 
 1. 層 1 の候補を、今と同じに作る(型だけを読む。シンボルの辞書順)。
 2. 決めごとに、候補のうち、`kind`、`rule` の id、`scope` を満たすものを選ぶ。位置は、候補の位置のうち、`words` の語を持つものだけ(空なら、その候補は対象外)。
-3. すでに手の行(sink なら同じ位置)がある候補、`rejected:` に(位置が合って)ある候補は外す。件数は、`covers` と別に `skipped_by_row` / `skipped_by_rejected` として出力に書く。
+3. すでに手の行(sink なら同じ位置)がある候補、`rejected:` に(位置が合って)ある候補は外す。**行のまとめ方と `covers` の単位**: 行は「(シンボル、カテゴリ、決定の組)」ごとに 1 行にまとめる(同じシンボルが、決定の組が違えば、複数の行に出ることがある)。`covers` は、決定が請求した、重ならない(distinct な)シンボルの個数で、手の行と `rejected:` を引く前の数(手の行を足しても `covers` は動かない)。件数は、`covers` と別に `skipped_by_row` / `skipped_by_rejected` として出力に書く。
 4. 残りを、手の行と同じ形の行にする(`symbol`、`args` または `field`、`category`、`origin: generated`、`decision: <id>`)。2 つの決めが同じ位置を取ったときは、先に書いた決めが勝ち、後の決めは警告(終了コード 70 と同じ扱いにするかは、**要確認**)。
 5. `<lang>-<package>.gen.yaml` に、決めの順、その中で symbol の辞書順で書く。先頭に `generator: model-author@<バージョン>`、`input: <パッケージ>@<バージョン>`、`rules: <規則の表のハッシュ>`、`decisions: <adopt_rules の内容のハッシュ>`。
 

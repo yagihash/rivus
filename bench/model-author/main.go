@@ -31,7 +31,7 @@ const (
 	ExitCells     = 40 // -gen-skeleton: the cell template could not be made, or does not build
 	ExitMiss      = 50 // the differential test failed (a MISS, or an EXTRA without a note)
 	ExitZoo       = 60 // (not used in stage 1)
-	ExitUndecided = 70 // a candidate of layer 1 has no row and is not in `rejected:`
+	ExitUndecided = 70 // a candidate of layer 1 has no row and is not in `rejected:`; with -expand: two decisions claim a position with different categories, a decision claims more than `covers:`, or a representative is not a generated row
 	ExitCannotRun = 80 // (not used in stage 1: Rust)
 )
 
@@ -45,8 +45,9 @@ func (e *exitError) Error() string { return e.err.Error() }
 func main() { os.Exit(realMain(os.Args[1:], os.Stdout, os.Stderr)) }
 
 type options struct {
-	pkg, version, lang, model, repo, work, dartLibs, base          string
+	pkg, version, lang, model, repo, work, dartLibs, base, out     string
 	breakdown, recall, diff, writeVerified, writeDead, genSkeleton bool
+	expand, writeCovers                                            bool
 }
 
 func realMain(args []string, stdout, stderr io.Writer) int {
@@ -67,6 +68,9 @@ func realMain(args []string, stdout, stderr io.Writer) int {
 	fs.BoolVar(&o.writeVerified, "write-verified", false, "with -diff, when it passes: write verified_versions of the model file")
 	fs.BoolVar(&o.writeDead, "write-dead-allow", false, "add the rows of the package that the zoo does not hit to the .dead-allow of the model file (reason: dependency), and stop")
 	fs.BoolVar(&o.genSkeleton, "gen-skeleton", false, "make the skeleton of the package for the Go zoo (bench/zoo-go-pkg/<name>/skel), the module files, and the template of the cells when the package has none; overwrites the generated files, never a cell")
+	fs.BoolVar(&o.expand, "expand", false, "expand the decisions of adopt_rules: of the package into rows (origin generated) in <out>/<hand file>.adopt.gen.yaml (Go only for now; exit 70: a conflict between decisions, a decision that claims more than covers:, or a representative that is not a generated row)")
+	fs.StringVar(&o.out, "out", "", "with -expand: the directory of the file of generated rows (default: internal/model/builtin of -repo)")
+	fs.BoolVar(&o.writeCovers, "write-covers", false, "with -expand: write the number of symbols that each decision claims now to its covers: in the model file (never done without this flag)")
 	if err := fs.Parse(args); err != nil {
 		return ExitUsage
 	}
@@ -76,6 +80,14 @@ func realMain(args []string, stdout, stderr io.Writer) int {
 	}
 	if o.lang != "go" && o.lang != "dart" {
 		fmt.Fprintf(stderr, "model-author: -lang is go or dart (got %s; Rust comes later)\n", o.lang)
+		return ExitUsage
+	}
+	if o.expand && o.lang != "go" {
+		fmt.Fprintln(stderr, "model-author: -expand is Go only for now")
+		return ExitUsage
+	}
+	if (o.out != "" || o.writeCovers) && !o.expand {
+		fmt.Fprintln(stderr, "model-author: -out and -write-covers are for -expand")
 		return ExitUsage
 	}
 	if o.lang == "dart" {
@@ -126,6 +138,16 @@ func run(o *options, out io.Writer) error {
 			return err
 		}
 	}
+	if o.expand {
+		// the rows of the last expansion are not hand rows: they are what this run makes again
+		var hand []string
+		for _, p := range files {
+			if !model.IsAdoptGen(filepath.Base(p)) {
+				hand = append(hand, p)
+			}
+		}
+		files = hand
+	}
 	facts, err := LoadFacts(files, o.pkg)
 	if err != nil {
 		return &exitError{ExitUsage, err}
@@ -140,6 +162,13 @@ func run(o *options, out io.Writer) error {
 			return err
 		}
 		return runGenSkeleton(out, o, repo, facts, l)
+	}
+	if o.expand {
+		l, err := FetchAndLoad(filepath.Join(o.work, "fetch-"+slug), o.pkg, o.version)
+		if err != nil {
+			return err
+		}
+		return runExpand(out, o, repo, facts, Scan(l.Types, !facts.BodiesRead(o.pkg)), l.Version)
 	}
 	if target == "" && !o.recall {
 		return &exitError{ExitUsage, fmt.Errorf("no row and no `rejected:` entry of %s in the built-in models: the file where the rows go is not known (use -model)", o.pkg)}
