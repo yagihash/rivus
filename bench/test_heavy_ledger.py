@@ -147,5 +147,21 @@ class PasslineRun(unittest.TestCase):
             self.assertEqual(len(open(p).read().splitlines()[1].split("\t")), len(h.COLUMNS))
 
 
+
+class Finished(unittest.TestCase):
+    T = {"memos": {"time_limit_s": 180, "mem_cap_gb": 8}}
+
+    def row(self, **kw):
+        r = {"target": "memos", "wall_s": "50.0", "peak_tree_gb": "6.0", "converged": "yes"}
+        r.update(kw)
+        return r
+
+    def test_finish_is_apart_from_the_detection(self):
+        self.assertEqual(h.finished(self.row(detected="no"), self.T), "yes")
+        self.assertEqual(h.finished(self.row(wall_s="181"), self.T), "no")
+        self.assertEqual(h.finished(self.row(peak_tree_gb="8.1"), self.T), "no")
+        self.assertEqual(h.finished(self.row(converged="no"), self.T), "no")
+        self.assertEqual(h.finished(self.row(target="other"), self.T), "-")
+
 if __name__ == "__main__":
     unittest.main()

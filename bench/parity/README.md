@@ -58,9 +58,9 @@ IR の呼び出し先の名前(`callee.symbol`、関数の名前)と、モデル
 | zoo の外部パッケージのセルの置き場 | `bench/zoo-go-pkg/<名前>/` | `bench/zoo-dart/cells/packages/<名前>/` | `bench/zoo-rust-pkg/<名前>/` |
 | `adopt_rules:` の書式とローダー(一括採用の段階 1。ADR-113)。言語を問わない書式 | ✓ | ✓ | ✓ |
 | ポインタ越しの書き込みの別名による近似(`ptrAlias`)と、それを通った finding の `pointer_alias` の注記 | ✗(まだ有効にしない) | ✗(同左) | ✓(`HasEnv` の言語。注記はこの PR) |
-| `make model` の段 1(枠、候補、検証、差分テスト。設計 6.11) | PR #233(レビュー中) | ✓(`LANG=dart`。dio で実演。骨組みは段 2 で) | ✗ |
+| `make model` のステップ 1(枠、候補、検証、差分テスト。設計 6.11) | PR #233(レビュー中) | ✓(`LANG=dart`。dio で実演。骨組みはステップ 2 で) | ✗ |
 | クラウドで作れる | ✓ | ✓ | ✗(extractor がサンドボックスを要る) |
-| ベンチの合格の線(`make bench-passline`、1 行の PASS/FAIL。`bench/deps_bench.py`) | ✓(memos。時間、メモリ、収束、CVE-2025-65799 の検出) | 未定(dart_services と cocoon の線は、あとで決める。今は INFO の行だけ) | ✗(まだない) |
+| ベンチの合格基準(`make bench-passline`、1 行の PASS/FAIL。`bench/deps_bench.py`) | ✓(memos。時間、メモリ、収束、CVE-2025-65799 の検出) | 未定(dart_services と cocoon の合格基準は、あとで決める。今は INFO の行だけ) | ✗(まだない) |
 | アーカイブのエントリ名の source(信頼できないアーカイブの名前。zip slip の入口) | ✓(`archive/tar`、`archive/zip`。`go-archive.yaml`) | ✓(`package:tar`、`package:archive`。`dart-tar.yaml`、`dart-archive.yaml`) | ✓(`tar`、`zip` クレート。`rust-archive.yaml`。`zip` の `enclosed_name` は source にしない) |
 
 **規則**: 新しい機能の PR は、この表の行を足すか直す。Go だけで入れるときは、ほかの言語の課題の番号を書く。
@@ -111,7 +111,7 @@ go run ./bench/parity report -work $WORK/out -table bench/parity/TABLE.md -dead 
 
 理由は 3 つ: `dependency`(標準でないライブラリで、zoo にその依存がない。行の確認は、実コードの IR(この `report`)か、そのモデルの専用のテストが持つ)、`debt`(標準ライブラリで、まだ呼ぶセルがない。**減る一方**で、新しい行には足さない)、`spelling`(extractor が書く名前のある別の綴り)。踏まれるようになった行の行、モデルにない行の行、別のモデルのファイルの行は、テストが失敗にする。実行で確かめられない API(サーバ、デバイス、ネットワークが要る)だけが、恒久に残ってよい(`docs/MODELING.md`)。
 
-**依存の深さの境界のセル(アクセスパス。ADR-119)**: Go(`cmd/rivus/depth_boundary_test.go`)と Dart(`depth_boundary_dart_test.go`)にある。依存の 3 段目の値と、同じ 2 段目の隣、同じ 1 段目の隣を、深さごとに表にしたもの。**Rust は、同じ形を次の PR で足す**(まだない)。**既知の違い: Dart は、同じ深さで、Go より 1 段粗い(参照の `*` が 1 段に数えられる。課題 #190)。Dart の隣のフィールドの区別は、深さによらず失われる(#191)。**
+**依存の深さの境界のセル(アクセスパス。ADR-119)**: Go(`cmd/rivus/depth_boundary_test.go`)と Dart(`depth_boundary_dart_test.go`)にある。依存の 3 階層目の値と、同じ 2 階層目の隣、同じ 1 階層目の隣を、深さごとに表にしたもの。**Rust は、同じ形を次の PR で足す**(まだない)。**既知の違い: Dart は、同じ深さで、Go より 1 階層粗い(参照の `*` が 1 階層に数えられる。課題 #190)。Dart の隣のフィールドの区別は、深さによらず失われる(#191)。**
 
 ## 限界(段階 1)
 

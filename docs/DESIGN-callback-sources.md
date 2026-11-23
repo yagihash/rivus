@@ -63,7 +63,7 @@ sources:
 
 - 層と規模:
   - model の読み込み: `Source` に `Operand`、`From`、`To`(`Symbol` は使う)。検証(`operand` と `from` が負でない、`symbol` が必須)。`Rules` に `CallbackParams map[string][]Source`。約 50 行。
-  - sites: 今の呼び出しの走査(`OpCall`)の前に、プロジェクトの関数の全呼び出しを見て、`CallbackParams[callee]` に当たる呼び出しの、`operand` の局所変数の定義(`make_closure` か関数の参照。単純なコピーを数段たどる)を引いて、関数 ID → ソースの表を作る。その表で、関数ごとのサイトを足す。約 80 行。
+  - sites: 今の呼び出しの走査(`OpCall`)の前に、プロジェクトの関数の全呼び出しを見て、`CallbackParams[callee]` に当たる呼び出しの、`operand` の局所変数の定義(`make_closure` か関数の参照。単純なコピーを数ステップたどる)を引いて、関数 ID → ソースの表を作る。その表で、関数ごとのサイトを足す。約 80 行。
   - taint: 変更なし。
   - 引けなかったとき(変数経由で複数の定義がある、引数のリストを通る、など)の注記: 約 30 行。注記の種類は、既存の `unresolved_callee` に詳細を付ける(新しい種類は足さない)。
   - extractor、IR: 変更なし(`make_closure` は IR にある。関数の参照が Dart と Rust でどの形かは、試作で確認する)。

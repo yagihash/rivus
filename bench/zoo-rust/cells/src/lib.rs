@@ -17,6 +17,8 @@
 //! @todo(F/cont/ptr-value-copy: PARITY: Go's copy of a value (not a pointer) taken by an assertion or a range is not an alias of the original; Rust can write to a `Copy` value that was copied out of a container and read the container back; the cell is not written yet)
 //! @todo(F/conv/char-decode-rune: PARITY: Go's buffer type that reads the text with `utf8.DecodeRuneInString` in a loop, appends `byte(r)` to a `[]byte` field and gives the text back by slicing; Rust can read `char_indices()` or `chars()`, push `c as u8` to a `Vec<u8>` field and slice it back; the cell is not written yet)
 //! @todo(F/conv/char-range-append: PARITY: Go's range loop over the text that appends `byte(r)` to a `[]byte` converted back whole; Rust can loop over `chars()` and push `c as u8` to a `Vec<u8>`, then `String::from_utf8`; the cell is not written yet)
+//! @todo(F/clos/local-recursion: PARITY: a function declared inside another that calls itself by its name, and the value reaches the sink only through the recursive call (the two arguments change places in each call); Rust can write it with an inner `fn` that names itself; the cell is not written yet)
+//! @todo(F/clos/local-fn-from-closure: PARITY: a function value made in a function and called from a closure (a callback) in the same function, and the value reaches the sink only through it; Rust can write it with a closure bound by `let` and called inside another closure; the cell is not written yet)
 pub mod call {
     pub mod depth3;
     pub mod direct;

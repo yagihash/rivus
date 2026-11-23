@@ -1,0 +1,42 @@
+{
+ "target": "https://github.com/usememos/memos at 1d7efb158045924ab87f58d567bd79cd92edf6af (the pre-fix commit of CVE-2025-65799, fixed in 0.25.3 by 5f57f48673e2054f404b2c5b497a8eaa3690591d)",
+ "how": "Read from the public fix (git diff of the two commits; one file, server/router/api/v1/attachment_service.go, 21 lines added). The fix adds validateFilename and calls it on request.Attachment.Filename in CreateAttachment (and UpdateAttachment); before it, that file name reaches the three calls that write the file in SaveAttachmentBlob (MkdirAll, Create, WriteFile). source: the request that CreateAttachment receives (the position of the parameter in the function line). sink: the three calls. `line` is the line at the pre-fix commit; `fixed_line` is the same place at the fixed commit (the lines of the sinks move by 6: the two checks that the fix adds before them). Position only, the same way as the truth of bench/dart-pub; used by detect.mode location of bench/deps_bench.py: detected when at least one finding of the category has its source at a source site AND its sink at a sink site (position of the finding: file, line).",
+ "sites": [
+  {
+   "role": "source",
+   "file": "server/router/api/v1/attachment_service.go",
+   "line": 51,
+   "fixed_line": 51,
+   "category": "path_traversal",
+   "func": "CreateAttachment",
+   "note": "the request of CreateAttachment (v1pb.CreateAttachmentRequest), which carries the file name that validateFilename checks in the fix"
+  },
+  {
+   "role": "sink",
+   "file": "server/router/api/v1/attachment_service.go",
+   "line": 416,
+   "fixed_line": 422,
+   "category": "path_traversal",
+   "call": "os.MkdirAll",
+   "note": "creates the directory of the path built from the file name"
+  },
+  {
+   "role": "sink",
+   "file": "server/router/api/v1/attachment_service.go",
+   "line": 419,
+   "fixed_line": 425,
+   "category": "path_traversal",
+   "call": "os.Create",
+   "note": "creates the file at the path built from the file name"
+  },
+  {
+   "role": "sink",
+   "file": "server/router/api/v1/attachment_service.go",
+   "line": 426,
+   "fixed_line": 432,
+   "category": "path_traversal",
+   "call": "os.WriteFile",
+   "note": "writes the file at the path built from the file name"
+  }
+ ]
+}

@@ -59,7 +59,7 @@ Rust は、`char` と整数を数値と扱う(extractor の型の分類)ので�
 
 ### IR の `CharRead` への置き換えの途中(結論。2026-11-24)
 
-IR の命令に目印 `CharRead`(`char_read`)を足し、Go の extractor が付ける(`s[i]` の文字列の添字と、`range s` の `iter.next_string`)。コアの `isCharRead` は 2 段で、目印があれば真、なければ今までの判定(型の名前と、言語に固有のシンボルの名前)。2 段の間、フラグが off の出力(`numeric_stops` を含む)は、3 言語とも同一。
+IR の命令に目印 `CharRead`(`char_read`)を足し、Go の extractor が付ける(`s[i]` の文字列の添字と、`range s` の `iter.next_string`)。コアの `isCharRead` は 2 ステップで、目印があれば真、なければ今までの判定(型の名前と、言語に固有のシンボルの名前)。2 ステップの間、フラグが off の出力(`numeric_stops` を含む)は、3 言語とも同一。
 
 残りの仕事(必ずやる):
 - Dart の PR と Rust の PR で、それぞれの extractor が `CharRead` を付け、コアの中の言語に固有の名前(`charReadSymbols`、`iter.next`、`std::iter::Iterator::next` とその型の名前、`isTextSequence` の名前)を消す。型の名前(`byte`、`rune`、`char`)で当たる値を、目印にするか、型の分類にするかは、その PR で決める。

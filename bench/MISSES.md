@@ -327,7 +327,7 @@ go test ./cmd/rivus -run Curated -v     # 注釈の検査(この表の元の数)
 
 ## BENCH-2: 経路に source の関数が出ない finding(`offSourcePath`)
 
-finding の `source.position` の関数(`source.func`)が、最初の経路(`paths[0]`)のステップのどれにも出ない finding。出ないのは、source が、別の関数が書き戻したオブジェクトから届いたとき(CORE-A / CORE-B。`TestParamSourceSharedObject`)。検査は `cmd/rivus/offsource_test.go` の `offSourcePath` で、`TestDogfood`、`TestCurated{Go,Dart,Rust}`、`TestParamSourceSharedObject`、`TestGlobalWriterIsOnThePath` が使う。数は上限(今の値)で、上がると失敗する。下がっても失敗する(上限を下げる)。CORE-A(ADR-048)と CORE-B(ADR-049。グローバルのストアに書いた側の段を持たせた)で、全部 0 になった。下の表は、2026-11-21(HEAD d85ee95 + CORE-A の前)の値で、記録として残す:
+finding の `source.position` の関数(`source.func`)が、最初の経路(`paths[0]`)のステップのどれにも出ない finding。出ないのは、source が、別の関数が書き戻したオブジェクトから届いたとき(CORE-A / CORE-B。`TestParamSourceSharedObject`)。検査は `cmd/rivus/offsource_test.go` の `offSourcePath` で、`TestDogfood`、`TestCurated{Go,Dart,Rust}`、`TestParamSourceSharedObject`、`TestGlobalWriterIsOnThePath` が使う。数は上限(今の値)で、上がると失敗する。下がっても失敗する(上限を下げる)。CORE-A(ADR-048)と CORE-B(ADR-049。グローバルのストアに書いた側のステップを持たせた)で、全部 0 になった。下の表は、2026-11-21(HEAD d85ee95 + CORE-A の前)の値で、記録として残す:
 
 | 場所 | 数 | 型 |
 | --- | --- | --- |

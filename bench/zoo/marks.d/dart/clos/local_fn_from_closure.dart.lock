@@ -1,0 +1,5 @@
+dart	clos/local_fn_from_closure.dart	miss	@source(clos-local-fn-from-closure-vuln2) @miss(unresolved_callee) @ref(#99,PARITY)	void vuln2() { @vuln
+dart	clos/local_fn_from_closure.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	clos/local_fn_from_closure.dart	sink-none	@sink(none)	void vuln2() { @vuln
+dart	clos/local_fn_from_closure.dart	sink-none	@sink(none) @nosink(clos-local-fn-from-closure-decoy)	void decoy() { @decoy
+dart	clos/local_fn_from_closure.dart	sink-none	@sink(none) @nosink(clos-local-fn-from-closure-vuln3)	void vuln3() { @vuln

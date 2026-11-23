@@ -152,6 +152,10 @@ type Engine struct {
 	degraded map[*sg.Func]uint8
 	// spent is the time each function has used so far.
 	spent map[*sg.Func]time.Duration
+	// addsTotal is the number of elements each function has put into its sets over all its analyses (the sum of
+	// state.adds); addsMaxRun is the largest of one analysis. They are only counted: nothing reads them to decide.
+	addsTotal  map[*sg.Func]int64
+	addsMaxRun int64
 	// guardLimit lists the functions with a flow that had more guards than
 	// maxGuards: the flow is kept without guards (ADR-006).
 	guardLimit map[*sg.Func]bool
@@ -257,6 +261,7 @@ func New(p *sg.Program, texts ir.Texts, st *sites.Result, rules *model.Rules, op
 		states:     map[*sg.Func]*state{},
 		degraded:   map[*sg.Func]uint8{},
 		spent:      map[*sg.Func]time.Duration{},
+		addsTotal:  map[*sg.Func]int64{},
 		guardLimit: map[*sg.Func]bool{},
 		coarsened:  map[*sg.Func]string{},
 		globals:    newGlobalStore(),
@@ -534,6 +539,51 @@ type Stats struct {
 	// there are (the out_limit record, #186).
 	OutWidenedFuncs   int `json:"out_widened_funcs,omitempty"`
 	OutWidenedOutputs int `json:"out_widened_outputs,omitempty"`
+	// The work of the analysis, counted in the elements put into the sets (the same count as Budget): always in the
+	// output, 0 too. AddsTotal is the sum over all functions and all their analyses (the re-analyses too);
+	// AddsMaxSingleRun is the largest of one analysis (what Budget is compared with); AddsMaxFunctionTotal is the
+	// largest sum of one function; AddsPerFunction spreads the functions by that sum. Numbers only, no function name.
+	// They do not depend on the order of the workers; a function that a clock stopped has the count up to the stop.
+	AddsTotal            int64        `json:"adds_total"`
+	AddsMaxSingleRun     int64        `json:"adds_max_single_run"`
+	AddsMaxFunctionTotal int64        `json:"adds_max_function_total"`
+	AddsPerFunction      []AddsBucket `json:"adds_per_function"`
+}
+
+// AddsBucket is one row of Stats.AddsPerFunction: the functions whose total adds are in [From, To) (To 0: no upper
+// bound), how many there are, and the sum of their adds.
+type AddsBucket struct {
+	From      int64 `json:"from"`
+	To        int64 `json:"to"`
+	Functions int   `json:"functions"`
+	Adds      int64 `json:"adds"`
+}
+
+// addsBounds are the upper bounds of the rows of AddsPerFunction (the last row has none).
+var addsBounds = []int64{1e3, 1e4, 1e5, 1e6}
+
+func (e *Engine) addsStats(st *Stats) {
+	rows := make([]AddsBucket, len(addsBounds)+1)
+	var lo int64
+	for i, b := range addsBounds {
+		rows[i].From, rows[i].To = lo, b
+		lo = b
+	}
+	rows[len(addsBounds)].From = lo
+	for _, a := range e.addsTotal {
+		i := 0
+		for i < len(addsBounds) && a >= addsBounds[i] {
+			i++
+		}
+		rows[i].Functions++
+		rows[i].Adds += a
+		st.AddsTotal += a
+		if a > st.AddsMaxFunctionTotal {
+			st.AddsMaxFunctionTotal = a
+		}
+	}
+	st.AddsMaxSingleRun = e.addsMaxRun
+	st.AddsPerFunction = rows
 }
 
 // Result is the outcome of a run.
@@ -782,6 +832,7 @@ func (e *Engine) Run() *Result {
 			ownSpent += d
 		}
 	}
+	e.addsStats(&st)
 	st.DepSpentMilli, st.OwnSpentMilli = depSpent.Milliseconds(), ownSpent.Milliseconds()
 	for _, d := range e.degraded {
 		switch {
@@ -1057,6 +1108,10 @@ func (e *Engine) commit(fn *sg.Func, r *fnResult, callers map[*sg.Func][]*sg.Fun
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.spent[fn] += r.took
+	e.addsTotal[fn] += int64(s.adds)
+	if a := int64(s.adds); a > e.addsMaxRun {
+		e.addsMaxRun = a
+	}
 	e.notePackage(fn, r.took)
 	if s.exceeded {
 		e.degraded[fn] |= s.exceededBy
