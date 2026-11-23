@@ -11,6 +11,20 @@ dart run bin/rivus_dart.dart path/to/package > package.jsonl
 rivus analyze -ir package.jsonl -rules rules.yaml -no-builtin-rules
 ```
 
+`dart run` compiles the analyzer again at every start (5 s or more). A compiled executable starts in a
+fraction of a second and writes the same IR (`TestDartExeSameIR` compares them byte for byte):
+
+```sh
+rivus setup dart -source extractor/dart     # dart pub get --enforce-lockfile, then dart compile exe (about 10 s)
+rivus analyze -v ./project                  # -v says that the compiled executable is used
+```
+
+It is kept under the config directory of rivus (`dart/<hash of lib, bin, pubspec.yaml, pubspec.lock>-<SDK version>-<os>-<arch>/rivus-dart`).
+`rivus analyze` uses it when none is named (`-dart-extractor`, `RIVUS_DART_EXTRACTOR`; it comes before `rivus-dart` on PATH), and only
+while the key still matches the source it was built from and the Dart SDK that is there; otherwise it says so and does not use it
+(run `rivus setup dart` again). The Go tests compile it themselves, once per run, so `RIVUS_DART=dart go test ./cmd/rivus` uses it;
+`RIVUS_DART_FROM_SOURCE=1` keeps `dart run`.
+
 The libraries the code imports (`package:` dependencies and what they import, not the SDK) are
 read too, and their functions are marked `dep`: `rivus analyze` keeps the ones that the code
 reaches, so that a flow is followed through a dependency instead of guessed at. `--no-deps`

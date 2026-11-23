@@ -32,11 +32,20 @@ func (b BodyReplaced) Root() string { return strings.TrimSuffix(b.Package, Subpa
 // Covers reports whether the declaration names the unit.
 func (b BodyReplaced) Covers(unit string) bool {
 	root := b.Root()
-	if unit == root {
+	if unit == root || (!b.Tree() && sameCrateName(root, unit)) {
 		return true
 	}
 	return b.Tree() && strings.HasPrefix(unit, root+"/")
 }
+
+// plainName reports whether the name has no separator of a path (`/`, `.`, `:`). A Go package outside the standard
+// library has a dot in its path, a Dart package `package:`; what is left is a Rust crate (and the standard packages
+// of Go, which have no `-` or `_`).
+func plainName(s string) bool { return s != "" && !strings.ContainsAny(s, "/.:") }
+
+// sameCrateName reports whether two names are the same Rust crate: Cargo reads `-` and `_` of a crate name as the same
+// (`actix-web` of Cargo.lock and of a model, `actix_web` of rustc, which is what the units of the IR say).
+func sameCrateName(a, b string) bool { return plainName(a) && plainName(b) && SameCrate(a, b) }
 
 // CheckPackage says what is wrong with the name of a package in a declaration (-body-replaced of the flag, or
 // body_replaced_packages of a rule file).
@@ -92,6 +101,9 @@ func indexDeclared(ds []Declaration) *declaredSet {
 	d := &declaredSet{exact: map[string]bool{}}
 	for _, x := range ds {
 		d.exact[x.Root()] = true
+		if !x.Tree() && plainName(x.Root()) {
+			d.exact[strings.ReplaceAll(x.Root(), "-", "_")] = true // the spelling of rustc
+		}
 		if x.Tree() {
 			d.trees = append(d.trees, x.Root())
 		}
@@ -107,7 +119,7 @@ func (r *Rules) ReplacedBody(unit string) bool {
 	if r == nil || r.declared == nil || unit == "" {
 		return false
 	}
-	if r.declared.exact[unit] {
+	if r.declared.exact[unit] || (plainName(unit) && r.declared.exact[strings.ReplaceAll(unit, "-", "_")]) {
 		return true
 	}
 	for _, t := range r.declared.trees {
