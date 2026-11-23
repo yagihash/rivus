@@ -142,7 +142,7 @@ var (
 		"open_redirect":     {"location", "redirect"},
 		"xss":               {"html", "markup", "template", "tmpl", "format"},
 		"resource_name": {"bucket", "object", "owner", "repo", "repository", "project", "topic", "subscription", "collection",
-			"table", "dataset", "queue", "prefix", "container", "blob", "organization", "org", "namespace", "ref", "branch", "sha"},
+			"table", "dataset", "queue", "prefix", "container", "blob", "organization", "org", "namespace", "ref", "branch", "sha", "base", "head", "tag"},
 	}
 	// bytesSinkWords are the words that make an argument of bytes (not of a string) a candidate: what is written as it is.
 	bytesSinkWords = []string{"html", "markup", "data", "content", "body"}
