@@ -5,6 +5,7 @@
 - 言語: Dart
 - ROADMAP の節: 1 / 2
 - 守るもの: zoo `F/clos/helper-overflow`(32 まで)、`F/clos/helper-overflow-many`(33 以上。`@miss(depth_limit)`)、`cmd/rivus/dart_limit_test.go`
+- 題: Dart: 同じヘルパーに渡すクロージャが 9 種類以上だと、呼び出しが未解決になり、コールバックの中の sink・throw・書き込み…
 - GitHub: #77(移行前の番号は同じ。2026-11-20 に開いた。移行時の状態: OPEN)
 
 ## 今の状態(2026-11-22 の見直し)

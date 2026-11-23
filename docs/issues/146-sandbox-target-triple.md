@@ -1,9 +1,12 @@
 # 146: Rust の出力に、読んだ構成(target triple)が出ない
 
 - 状態: **open**(ADR-093 の弱さの 1 つ。DESIGN-macos-sandbox.md の SBX-7)
-- 種類: 注記つきの限界(見逃しの向きの変化)
+- 種類: 注記つきの限界
 - 言語: Rust
 - ROADMAP の節: 0
+- 守るもの: -
+- 題: Rust の出力に、読んだ構成(target triple)が出ない(macOS のサンドボックスは macOS 向けの分岐を読む)
+- 補足(種類): 注記つきの限界(見逃しの向きの変化)
 
 ## 今の状態
 

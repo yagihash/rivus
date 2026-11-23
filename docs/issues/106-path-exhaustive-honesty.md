@@ -5,6 +5,7 @@
 - 言語: 全(graph)
 - ROADMAP の節: 1
 - 守るもの: `internal/graphq/exhaustive_test.go`
+- 題: graph: path の exhaustive
 
 ## 今の状態(2026-11-22 の見直し)
 

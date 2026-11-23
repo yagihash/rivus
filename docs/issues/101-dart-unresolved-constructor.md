@@ -5,6 +5,7 @@
 - 言語: Dart
 - ROADMAP の節: 1
 - 守るもの: `cmd/rivus/dart_syntax_test.go`(`TestDartUnresolvedConstructorKeepsTheFlow`)
+- 題: Dart: 解決できないコンストラクタ
 
 ## 今の状態(2026-11-22 の見直し)
 

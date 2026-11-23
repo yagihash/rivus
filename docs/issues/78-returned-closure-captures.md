@@ -5,6 +5,7 @@
 - 言語: Dart / Go
 - ROADMAP の節: 2
 - 守るもの: zoo `F/clos/returned`
+- 題: Dart / Go: 関数が返したクロージャを呼ぶと、キャプチャした値と中の source が落ちる(カリー化、ファクトリ、functiona…
 - GitHub: #78(移行前の番号は同じ。2026-11-20 に開いた。移行時の状態: OPEN)
 
 ## 本文(GitHub から移した写し)

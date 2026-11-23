@@ -5,6 +5,7 @@
 - 言語: Rust
 - ROADMAP の節: 5
 - 守るもの: zoo `F/conv/builtin-minmax`(Rust)
+- 題: Rust: std::cmp::min / max の pure
 
 ## 今の状態(2026-11-22 の見直し)
 
