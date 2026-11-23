@@ -335,6 +335,7 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `-func-timeout <時間>` | 1 つの関数の解析の上限(止めた所は `depth_limit` の `func_timeout`) | `30s` |
 | `-max-passes <n>` | 要約が変わるあいだ、プログラム全体を繰り返す回数の上限 | `12` |
 | `-k <n>` | アクセスパス(フィールドのたどり方)の深さの上限 | `3` |
+| `-dep-k <n>` | 実験。依存の関数だけ、アクセスパスの深さを `n` にする(0 は `-k` と同じ)。切った所より下はまるごと汚染として扱うので、finding は減らず、増えることがある(`access_path_truncated` の注記つき)。既定にするかは、数を見て決める(PR の表を見る) | `0` |
 | `-max-implementations <n>` | ルールの `match: implementations` を広げる実装の数の上限(`sites` にもある) | `300` |
 | `-ir <file>` | extractor が書いた IR のファイルを読む(`sites` にもある) | なし |
 | `-isolation-timeout <時間>`、`-isolation-max-output <bytes>` | Rust の抽出の、段階ごとの時間と、出力の大きさの上限 | `30m`、4 GiB |
@@ -391,6 +392,7 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `dependency_body_unread` | モデルのあるインターフェースの呼び出しの候補に、依存の本体があったが、読まなかった(Go) | 依存が、自分のコードの実装へ値を渡していないかを確認する |
 | `project_body_unread` | プロジェクトの関数の本体を、extractor が読めなかった(Rust の async closure など)。依存の関数なら `dependency_body_unread`。数は `summary.functions_skipped` | その関数の中を、自分で読む。`detail` に理由 |
 | `depth_limit` | 解析の上限で止めた。理由は `detail` の先頭の語: `budget`(作業量)、`func_timeout` / `run_timeout`(時計)、`candidate_limit`(関数値の候補が多すぎて、どれも追わなかった)、`path_limit`(アクセスパスを切った)など | その関数の要約は、流れを落としていることがある。その関数の周辺は、見逃しがある前提で、コードを読む |
+| `access_path_truncated` | この finding の経路の関数で、アクセスパスを深さの上限(`-k`、依存の関数は実験の `-dep-k`)で切った。切った所より下を、まるごと汚染として扱うので、別のフィールドへの流れを、流れとして出していることがある(多めに出る側。見逃しにはならない)。`-dep-k` を付けたときは、`summary.access_path_depth` にプロジェクトと依存の深さが出る | 経路の、フィールドを通る所で、実際にそのフィールドの値が流れるかを、コードで確かめる |
 | `recursion_approximation` | 互いに呼び合う関数のかたまりを、近似で閉じた | そのかたまりの中の流れは、粗い |
 | `missing_source` | コードが見えなかった(型エラーでビルドできないパッケージ、生成されていないコード) | そのパッケージの中は見ていない。`summary.unread` を見て、ビルドや生成を済ませてやり直す |
 | `container_element_imprecision` | コンテナ(スライス、マップ)の要素を区別していない | 汚染された要素と、sink に入る要素が同じかを、コードで確認する |

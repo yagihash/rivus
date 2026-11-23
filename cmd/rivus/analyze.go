@@ -304,6 +304,9 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	rep.Summary.CategoriesExcluded = excluded
 	rep.Summary.Isolation = o.rustIsolation
 	rep.Summary.BodyReplacedPackages = replaced
+	if o.depK > 0 && o.depK != o.k {
+		rep.Summary.AccessPathDepth = &report.AccessPathDepth{Project: o.k, Dependency: o.depK}
+	}
 	if fs := report.FunctionsSkippedOf(l.ir.FnSkipped); fs != nil {
 		rep.Summary.FunctionsSkipped = fs
 		fmt.Fprintf(os.Stderr, "rivus: %d functions could not be read by the extractor and were skipped (%d of the project, %d of dependencies): summary.functions_skipped\n", fs.Functions, fs.Project, fs.Dependencies)

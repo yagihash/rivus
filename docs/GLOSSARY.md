@@ -503,6 +503,7 @@ LLM に判定を委譲する設計では、由来そのものより「不確実�
 | `numeric_stop` | source のデータが数値や真偽値になり、そこから先は追わない（`-numeric-taint` で追える） |
 | `unsupported_construct` | extractor が表せなかった構文。その中の動作は解析に入っていない |
 | `assumed_call` | 呼び出し先が見えない所で呼ばれるクロージャを、作った場所で、呼ばれたものとして適用した（ADR-059） |
+| `access_path_truncated` | finding の経路の関数で、アクセスパスを深さの上限で切った。この流れは、切ったために出ているだけかもしれない |
 | `field_imprecision` | sink が引数のフィールドを指定するのに、汚染がそのフィールドにあると言えない（ADR-074） |
 | `field_unresolved` | sink が指定するフィールドが、プログラムに無い（綴りの誤りなど）。sink は値全体として扱う |
 | `global_holds_nothing` | `holds: nothing` のモデルが、グローバルへの流れを止めた（ADR-056） |

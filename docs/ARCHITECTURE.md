@@ -463,6 +463,7 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 | `unsupported_construct` | rivus | extractor が下げられなかった構文（IR の `unsupported`）。その場所で何が起きるかは、解析に入っていない。`missing_source` ではない（対象のコードが足りないのではなく、rivus が読めなかった） |
 | `container_element_imprecision` | rivus | 結論に影響した場合のみ記録（ノイズ防止） |
 | `depth_limit` | rivus | 打ち切り。detail が理由を示す（`guard_limit`、`candidate_limit`、`caller_depth_limit`、`func_timeout` など）。例外: detail が `path_steps_omitted:` のものは、**解析の打ち切りではなく、表示の省略**（流れは見た。200 段を超える経路の、真ん中の段を見せていない。省いたステップの不確実性・モデル・到達性は finding に入っている）。ただし、source までさかのぼる途中の打ち切り（`the path was followed back for ...`）は、その先の段を見ていない |
+| `access_path_truncated` | rivus | **finding の経路**にある関数の中で、アクセスパスを深さの上限(`-k`、依存の関数は `-dep-k`)で切った。切った所より下は「まるごと汚染」として扱うので、この流れは、切ったために出ているだけかもしれない(多めに出る側。見逃しにはならない)。`candidates` は、切った関数(10 件まで)。`summary.access_path_depth`(`{project, dependency}`)は、`-dep-k` でプロジェクトと依存の深さが違うときだけ出る。プログラム全体の記録は、`depth_limit` の `path_limit:`(関数の一覧つき) |
 | `recursion_approximation` | rivus | |
 | `field_imprecision` | rivus | フィールドを指定する sink に、そのフィールドにあるとは言えない汚染が届いた（14 節）。detail は `whole_value`、`path_limit`、`element`、`opaque_callee` |
 | `field_unresolved` | rivus | sink が指定したフィールドが、プログラムにない（綴りの誤りなど）。sink を全体として扱った（14 節） |
