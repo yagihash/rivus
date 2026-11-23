@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestIsEngineChange(t *testing.T) {
 	cases := []struct {
@@ -33,5 +37,30 @@ func TestClassifyBranches(t *testing.T) {
 	}
 	if renovate != 2 {
 		t.Errorf("renovate = %d, want 2", renovate)
+	}
+}
+
+func TestCountParityTodos(t *testing.T) {
+	bench := t.TempDir()
+	write := func(name, body string) {
+		p := filepath.Join(bench, name)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("zoo-rust/cells/src/lib.rs", "//! @todo(F/a/x: PARITY: one)\n//! @todo(F/a/y: PARITY: two)\n//! @todo(F/a/z: not a difference)\n//! @na(F/a/n: PARITY is in the text of an @na)\n")
+	write("zoo-rust/cells/src/a.rs", "// @todo(F/a/x: PARITY: again)\n")
+	write("zoo-dart/cells/lib/a.dart", "// @todo(F/b/q: PARITY: one)\n")
+	if got := countParityTodos(bench, "rust", ".rs"); got != 2 {
+		t.Errorf("rust = %d, want 2 (a cell that is on two lines is one; no PARITY, an @na)", got)
+	}
+	if got := countParityTodos(bench, "dart", ".dart"); got != 1 {
+		t.Errorf("dart = %d, want 1", got)
+	}
+	if got := countParityTodos(bench, "go", ".go"); got != 0 {
+		t.Errorf("go = %d, want 0", got)
 	}
 }

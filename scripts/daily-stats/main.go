@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -107,6 +109,31 @@ func orphanReport(ref string) {
 	fmt.Printf("renovate branches: %d\n", renovate)
 }
 
+// parityTodoRe finds a `@todo(<cell>: PARITY: ...)` on a line: the cell that another language has and this one has not yet.
+var parityTodoRe = regexp.MustCompile(`@todo\(([^:)]*)[^\n]*PARITY`)
+
+// countParityTodos counts the cells of the lines that have a `@todo(` with PARITY after it (the same cell on more than one
+// line is one), in the sources of the zoo of a language: bench/zoo-<lang>/ and the packages bench/zoo-<lang>-pkg/<package>/.
+func countParityTodos(bench, lang, ext string) int {
+	cells := map[string]bool{}
+	for _, dir := range []string{"zoo-" + lang, "zoo-" + lang + "-pkg"} {
+		_ = filepath.Walk(filepath.Join(bench, dir), func(path string, info os.FileInfo, err error) error {
+			if err != nil || info.IsDir() || !strings.HasSuffix(path, ext) {
+				return nil
+			}
+			b, rerr := os.ReadFile(path)
+			if rerr != nil {
+				return nil
+			}
+			for _, m := range parityTodoRe.FindAllStringSubmatch(string(b), -1) {
+				cells[strings.TrimSpace(m[1])] = true
+			}
+			return nil
+		})
+	}
+	return len(cells)
+}
+
 func main() {
 	since := flag.String("since", "", "count the merges since this date (git --since: 2026-11-20, \"3 days ago\")")
 	ref := flag.String("ref", "origin/main", "the branch to read")
@@ -134,5 +161,6 @@ func main() {
 		}
 	}
 	fmt.Printf("daily-stats since %s (%s): ENGINE/MODEL/EXTRACTOR %d, TOOLS/CI/DOCS %d\n", *since, *ref, engine, other)
+	fmt.Printf("zoo PARITY todo: rust %d, dart %d, go %d\n", countParityTodos("bench", "rust", ".rs"), countParityTodos("bench", "dart", ".dart"), countParityTodos("bench", "go", ".go"))
 	orphanReport(*ref)
 }
