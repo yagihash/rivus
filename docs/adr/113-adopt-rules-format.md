@@ -1,4 +1,4 @@
-# ADR-113: まとめての採用の書式 `adopt_rules:` と、生成した行の `origin: generated`(段階 1。2026-11-23)
+# ADR-113: 一括採用の書式 `adopt_rules:` と、生成した行の `origin: generated`(段階 1。2026-11-23)
 
 - 状態: 有効
 - 関連: DESIGN-package-models 6.12、MODELING 4c-2、ADR-108、ADR-110

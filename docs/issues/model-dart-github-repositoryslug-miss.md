@@ -15,7 +15,7 @@ sink の位置が、値が**使われる場所**(サービスのメソッド)で
 
 ## 直す方向
 
-スラッグを取るサービスのメソッドを、型で、まとめて採用する(`docs/DESIGN-package-models.md` 6.12。これは、まとめての採用の最初の Dart の例になる)。
+スラッグを取るサービスのメソッドを、型で一括採用する(`docs/DESIGN-package-models.md` 6.12。これは、一括採用の最初の Dart の例になる)。
 
 - sink の位置は、`RepositorySlug` 型の引数そのもの(引数の中の owner と name の値が、そのまま指定に入る)。
 - そのうえで、今の `RepositorySlug.new` と `RepositorySlug.full` の sink の行は、流れの行(引数 → 戻り値)に変える。そうしないと、同じ流れが、作る場所と使う場所の 2 回で報告される。
