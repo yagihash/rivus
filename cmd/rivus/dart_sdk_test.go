@@ -24,11 +24,16 @@ func TestDartExtractorCompiledToOneExecutable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	exe := filepath.Join(t.TempDir(), "rivus-dart")
-	build := exec.Command(words[0], append(append([]string{}, words[1:]...), "compile", "exe", filepath.Join(src, "bin", "rivus_dart.dart"), "-o", exe)...)
-	build.Dir = src
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("dart compile exe: %v\n%s", err, out)
+	// The executable TestMain compiled from this same source (dartExePath, kept outside the SDK and the extractor directory) is the
+	// one under test; it is compiled here only when TestMain did not (RIVUS_DART_FROM_SOURCE=1, or the compile failed there).
+	exe := dartExePath
+	if exe == "" {
+		exe = filepath.Join(t.TempDir(), "rivus-dart")
+		build := exec.Command(words[0], append(append([]string{}, words[1:]...), "compile", "exe", filepath.Join(src, "bin", "rivus_dart.dart"), "-o", exe)...)
+		build.Dir = src
+		if out, err := build.CombinedOutput(); err != nil {
+			t.Fatalf("dart compile exe: %v\n%s", err, out)
+		}
 	}
 	zooDartRoot(t) // writes the pubspec.yaml of bench/zoo-dart/cells (generated, not committed)
 	zoo, err := filepath.Abs("../../bench/zoo-dart/cells")
