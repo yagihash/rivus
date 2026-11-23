@@ -36,7 +36,7 @@ func adoptStoredFlags(fs *flag.FlagSet, stored map[string]string) {
 	given := map[string]bool{}
 	fs.Visit(func(f *flag.Flag) { given[f.Name] = true })
 	for name, v := range stored {
-		if name == "patterns" || name == "allow-deps-under" || given[name] {
+		if name == "patterns" || name == "allow-deps-under" || name == "dep-dir" || given[name] {
 			continue
 		}
 		if name == "rules" || name == "body-replaced" {

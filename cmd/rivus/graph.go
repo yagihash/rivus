@@ -206,6 +206,9 @@ func (o *analyzeOpts) flagValues(patterns []string) map[string]string {
 	if len(patterns) > 0 {
 		m["patterns"] = fmt.Sprint(patterns)
 	}
+	if len(o.depDirs) > 0 {
+		m["dep-dir"] = o.depDirs.String()
+	}
 	if len(o.allowDepsUnder) > 0 {
 		m["allow-deps-under"] = o.allowDepsUnder.String()
 	}

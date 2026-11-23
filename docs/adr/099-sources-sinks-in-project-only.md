@@ -1,6 +1,6 @@
 # ADR-099: source と sink は、プロジェクトの関数の中だけで探す。依存の本体を読んだ実行では、そのことを `summary.dependency_sites` が毎回言う(相談役の決定、2026-11-23)
 
-- 状態: 有効
+- 状態: 一部覆った(→ADR-114)
 - 関連: README、AGENT-GUIDE、ARCHITECTURE 5.5、MODELING
 - 状態の詳細: 相談役の決定(2026-11-23)。ADR-096、097 の根拠の 1 つ。課題 #144
 - 要旨: sink のモデルは、検出のためにも必要

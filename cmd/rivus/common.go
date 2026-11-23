@@ -48,6 +48,8 @@ type common struct {
 	deterministic bool
 	// allowDepsUnder: directories outside the project from which the Dart extractor may read dependencies.
 	allowDepsUnder multiFlag
+	// depDirs: directories whose Go packages are read as dependencies, although a replace or the module makes them the project (ADR-114).
+	depDirs multiFlag
 	// bodyReplaced are packages whose body the analysis does not read, besides the ones the rule files declare.
 	bodyReplaced multiFlag
 	// readDeclared reads the bodies of the packages that are declared (the declarations of the rule files and of
@@ -74,13 +76,14 @@ func (c *common) register(fs *flag.FlagSet) {
 	fs.BoolVar(&c.tests, "tests", false, "also read what the build does not ship: tests (Go: _test.go files; Dart: test/ and the dependencies declared for development only; Rust: tests, examples, benches and [dev-dependencies])")
 	fs.BoolVar(&c.noDeps, "no-deps", false, "do not read the source of the dependencies (which is done by default, except for the standard library, so that calls into them are followed instead of guessed): lighter (about a sixth of the memory), and every call into a dependency is a guess")
 	fs.Var(&c.allowDepsUnder, "allow-deps-under", "Dart: a directory outside the project whose packages may be read as dependencies (repeatable). The package_config.json of the project says where its dependencies are, and it is not trusted: only the project, the pub cache and the SDKs are read without being asked (a monorepo's sibling packages need this)")
+	fs.Var(&c.depDirs, "dep-dir", "Go: a directory (relative to -C, or absolute) whose packages are read as dependencies (repeatable): their sources and sinks are not listed. Without it, the packages of the main module, of go.work and of a module that a replace points to by a directory are the project (a third-party copy that is put in place by a replace is the case for it). It is in summary.dep_dirs")
 	fs.BoolVar(&c.deterministic, "deterministic-only", false, "ignore the rules decided by an LLM (origin: llm)")
 	fs.Var(&c.bodyReplaced, "body-replaced", "PACKAGE: do not read the body of this package of the dependencies; the models stand for it (a call of its functions is the model's row, or unmodeled_library_call when there is none). The import path of a Go package, package:name of a Dart package, a Rust crate; the package named and no other, `PATH/...` for it and what is under it. For a try: the rule files declare it with body_replaced_packages, with the reason (repeatable; docs/MODELING.md)")
 	fs.BoolVar(&c.dropAfterRead, "drop-after-read", false, "read the packages that are declared as the extractors do without the declaration, and leave their functions out of the program afterwards (the result is the same as when the extractor does not read them; it takes more time and memory; to compare the two) (development)")
 	fs.BoolVar(&c.readDeclared, "read-declared-bodies", false, "read the body of the packages that the rule files and -body-replaced declare, as if there were no declaration: to compare the result with the one that leaves them out (summary.body_replaced_ignored says how many were left out)")
-	usual(fs, "C", "rules", "no-builtin-rules", "no-project-rules", "tests", "no-deps", "allow-deps-under", "deterministic-only", "body-replaced", "read-declared-bodies")
+	usual(fs, "C", "rules", "no-builtin-rules", "no-project-rules", "tests", "no-deps", "allow-deps-under", "dep-dir", "deterministic-only", "body-replaced", "read-declared-bodies")
 	diagnostic(fs, "drop-after-read")
-	kind(fs, "dir", "C", "allow-deps-under")
+	kind(fs, "dir", "C", "allow-deps-under", "dep-dir")
 	kind(fs, "file", "rules")
 }
 
@@ -188,7 +191,7 @@ func (c *common) load(patterns []string, withGraph bool, rules *model.Rules) (*l
 	if len(patterns) == 0 {
 		patterns = []string{"./..."}
 	}
-	opts := gossa.Options{Tests: c.tests, NaiveForm: true, WithLifted: withGraph, Deps: !c.noDeps && withGraph}
+	opts := gossa.Options{Tests: c.tests, NaiveForm: true, WithLifted: withGraph, Deps: !c.noDeps && withGraph, DepDirs: c.depDirs}
 	if rules.HasDeclared() && !c.dropAfterRead {
 		// the extractor does not read what the models stand for (docs/DESIGN-package-models.md 2): the IR is the one
 		// that dropReplacedBodies would make
