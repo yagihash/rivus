@@ -249,6 +249,8 @@ type Program struct {
 	// as a pointer to the variable (ENV-PTR).
 	HasEnv bool
 
+	infos map[infoKey]*InstrInfo // the InstrInfo of the build, shared by the equal ones; nil after it
+
 	globalMu sync.Mutex // Global makes a value the first time it is asked for
 }
 
