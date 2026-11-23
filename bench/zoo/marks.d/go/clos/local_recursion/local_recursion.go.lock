@@ -1,0 +1,2 @@
+go	clos/local_recursion/local_recursion.go	sink-none	@sink(none)	func fixed() { @fixed
+go	clos/local_recursion/local_recursion.go	sink-none	@sink(none) @nosink(clos-local-recursion-decoy)	func decoy() { @decoy
