@@ -115,7 +115,7 @@ func (s *state) whyUnsure(cellPath string) string {
 	switch {
 	case hasElementSegment(cellPath):
 		return "element"
-	case strings.Count(cellPath, "/") >= s.eng.opts.K:
+	case strings.Count(cellPath, "/") >= s.k():
 		return "path_limit"
 	}
 	return "whole_value"

@@ -22,6 +22,10 @@ import (
 type Options struct {
 	// K is the maximum access path depth (ADR-014).
 	K int
+	// DepK is the access path depth of the functions of the dependencies (an experiment, -dep-k): the paths are cut
+	// at DepK steps there, and at K in the functions of the project. Zero is the same as K. A cut path stands for
+	// everything below it, so a smaller DepK only adds flows (docs/DESIGN-deps-cost-status.md).
+	DepK int
 	// MaxPasses bounds the number of times the whole program is revisited
 	// while summaries change.
 	MaxPasses int
@@ -231,6 +235,9 @@ func globalRoot(v *sg.Value) *sg.Value {
 func New(p *sg.Program, texts ir.Texts, st *sites.Result, rules *model.Rules, opts Options) *Engine {
 	if opts.K <= 0 {
 		opts.K = DefaultOptions().K
+	}
+	if opts.DepK < 0 {
+		opts.DepK = 0
 	}
 	if opts.MaxPasses <= 0 {
 		opts.MaxPasses = DefaultOptions().MaxPasses

@@ -52,6 +52,24 @@ type SummarySizes struct {
 	// ByPathDepth is the elements of a parameter by the depth of their path inside it ("0" is the parameter itself, "3+"
 	// is three or more: the depth that the analysis keeps is -k).
 	ByPathDepth map[string]int `json:"by_path_depth"`
+	// Distinct says what the elements are made of when the path and the guards are left out in turn: the cause of a
+	// large summary is the depth of the paths, the conditions, or both together. Dep is the same for the functions of
+	// the dependencies only.
+	Distinct    DistinctElems `json:"distinct"`
+	DistinctDep DistinctElems `json:"distinct_dep"`
+}
+
+// DistinctElems counts the elements of the outputs of the summaries, each output on its own, in four ways. All is the
+// elements (an element with other guards counts again, as in summary_elems; the same as the total when the elements
+// carry one set of guards each). IgnoringGuards counts the different (element, path) pairs. IgnoringPath counts the
+// different (element without its path, guards) pairs. IgnoringBoth counts the different elements without path and
+// guards: what is left is the parameters and the sanitizer operations. All / IgnoringBoth is how many times the paths
+// and the guards multiply what would be there without them.
+type DistinctElems struct {
+	All            int `json:"all"`
+	IgnoringGuards int `json:"ignoring_guards"`
+	IgnoringPath   int `json:"ignoring_path"`
+	IgnoringBoth   int `json:"ignoring_path_and_guards"`
 }
 
 // ReachSpread is how a count (the functions that a source site is carried in) is spread over a set of source sites.
@@ -73,6 +91,11 @@ func (e *Engine) summarySizes() *SummarySizes {
 		n := 0
 		seen := map[strID]struct{}{}
 		for _, o := range sum.Outputs {
+			d := distinctOf(o.Elems)
+			s.Distinct.add(d)
+			if fn.Dep {
+				s.DistinctDep.add(d)
+			}
 			n += len(o.Elems)
 			s.ByOutput[o.Kind] += len(o.Elems)
 			if o.Kind == OutGlobal && o.Global != nil {
@@ -178,4 +201,34 @@ func (e *Engine) summarySizes() *SummarySizes {
 		}
 	}
 	return s
+}
+
+func (d *DistinctElems) add(o DistinctElems) {
+	d.All += o.All
+	d.IgnoringGuards += o.IgnoringGuards
+	d.IgnoringPath += o.IgnoringPath
+	d.IgnoringBoth += o.IgnoringBoth
+}
+
+// distinctOf counts the elements of one output (see DistinctElems).
+func distinctOf(elems []OutElem) DistinctElems {
+	d := DistinctElems{All: len(elems)}
+	type withGuards struct {
+		e Elem
+		g string
+	}
+	byPath := map[Elem]struct{}{}
+	byGuards := map[withGuards]struct{}{}
+	both := map[Elem]struct{}{}
+	for _, oe := range elems {
+		byPath[oe.E] = struct{}{}
+		bare := oe.E
+		bare.path = 0
+		both[bare] = struct{}{}
+		byGuards[withGuards{bare, guardsKey(oe.Guards)}] = struct{}{}
+	}
+	d.IgnoringGuards = len(byPath)
+	d.IgnoringPath = len(byGuards)
+	d.IgnoringBoth = len(both)
+	return d
 }

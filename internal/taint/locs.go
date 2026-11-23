@@ -76,7 +76,7 @@ func (s *state) prepareLocs(limit time.Time) bool {
 			for _, l := range s.computeLocs(v) {
 				// a path that grows round a loop (a load of a load of ...)
 				// is cut where the cells are: the fixed point must exist
-				l.Path, _ = pathTrunc(l.Path, s.eng.opts.K)
+				l.Path, _ = pathTrunc(l.Path, s.k())
 				m := s.locSet[v]
 				if m == nil {
 					m = map[Loc]bool{}

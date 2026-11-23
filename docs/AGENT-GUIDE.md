@@ -335,6 +335,7 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `-func-timeout <時間>` | 1 つの関数の解析の上限(止めた所は `depth_limit` の `func_timeout`) | `30s` |
 | `-max-passes <n>` | 要約が変わるあいだ、プログラム全体を繰り返す回数の上限 | `12` |
 | `-k <n>` | アクセスパス(フィールドのたどり方)の深さの上限 | `3` |
+| `-dep-k <n>` | 実験。依存の関数だけ、アクセスパスの深さを `n` にする(0 は `-k` と同じ)。切った所より下はまるごと汚染として扱うので、finding は減らず、増えることがある。切ったことを finding に示す注記は、まだない。既定にするかは、数を見て決める | `0` |
 | `-max-implementations <n>` | ルールの `match: implementations` を広げる実装の数の上限(`sites` にもある) | `300` |
 | `-ir <file>` | extractor が書いた IR のファイルを読む(`sites` にもある) | なし |
 | `-isolation-timeout <時間>`、`-isolation-max-output <bytes>` | Rust の抽出の、段階ごとの時間と、出力の大きさの上限 | `30m`、4 GiB |
