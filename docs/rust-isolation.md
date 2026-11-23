@@ -25,7 +25,7 @@
 ## 要件(macOS)
 
 - `sandbox-exec`(macOS に入っています)。使えないとき(プロファイルが受け入れられないとき)は、**対象を動かす前に、rivus が確認し**、何も実行せずに止まります。
-- 固定の nightly(`nightly-2026-11-15`、`rustc-dev`、`llvm-tools`、`rust-src`)と、extractor(`rivus-rust`)。**`rivus setup rust -source <リポジトリの extractor/rust>`**(明示のコマンド)が、サンドボックスの外で、信頼できるソースから用意します: ツールチェインがなければ、rustup でダウンロードする前に断ります(約 1 GB)。extractor は、`~/Library/Application Support/rivus/rust/extractor` に作られ、指定も `PATH` もなければ、そこの `rivus-rust` が使われます。置き場所は、`RIVUS_RUST_TOOLCHAIN_DIR`(固定のツールチェインのディレクトリ)と `RIVUS_RUST_EXTRACTOR`(`rivus-rust` のパス)でも指せます(extractor は、ビルドに使ったツールチェインの `lib` を、実行時に探します: 同じ場所を指すこと)。実行時に rustup は使いません。
+- 固定の nightly(`extractor/rust/rust-toolchain.toml` の `channel`、`rustc-dev`、`llvm-tools`、`rust-src`)と、extractor(`rivus-rust`)。**`rivus setup rust -source <リポジトリの extractor/rust>`**(明示のコマンド)が、サンドボックスの外で、信頼できるソースから用意します: ツールチェインがなければ、rustup でダウンロードする前に断ります(約 1 GB)。extractor は、`~/Library/Application Support/rivus/rust/extractor` に作られ、指定も `PATH` もなければ、そこの `rivus-rust` が使われます。置き場所は、`RIVUS_RUST_TOOLCHAIN_DIR`(固定のツールチェインのディレクトリ)と `RIVUS_RUST_EXTRACTOR`(`rivus-rust` のパス)でも指せます(extractor は、ビルドに使ったツールチェインの `lib` を、実行時に探します: 同じ場所を指すこと)。実行時に rustup は使いません。
 - 対象に **`Cargo.lock`** があること(なければ、`cargo generate-lockfile`。これはコードを実行しません)。
 - 対象のソースが、そのディレクトリの中で閉じていること。**対象の上の(祖先の)ディレクトリに `.cargo/config.toml` があると、何も実行せずに、そのファイルの名前を示して止まります**(cargo は祖先の設定も読み、サンドボックスはそれを読ませません。`~/.cargo/config.toml` を持つ人は、ホームの下の対象を、サンドボックスの下で読めません。回避: そのファイルを一時的に退ける。信頼できるコードなら `-unsafe-host-exec`)。
 

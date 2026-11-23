@@ -167,7 +167,7 @@
     },
     {
       "customType": "regex",
-      "description": "The pinned Rust nightly (nightly-YYYY-MM-DD) in every file that states it as the current one: rust-toolchain.toml, the code, ci.yml and the documents. Not in docs/adr, docs/history, docs/issues (records of what was decided or seen then) and not in the tests (their dates are test data)",
+      "description": "The pinned Rust nightly (nightly-YYYY-MM-DD) in every file that has to carry it: rust-toolchain.toml, isolate.go, the install commands of extractor/rust/README.md. The prose of the documents points at rust-toolchain.toml and carries no date; if one is written, this manager moves it too. Not in docs/adr, docs/history, docs/issues (records of what was decided or seen then) and not in the tests (their dates are test data)",
       "managerFilePatterns": [
         "/^README\\.md$/",
         "/^docs\\/[^/]+\\.md$/",
@@ -175,7 +175,7 @@
         "/^extractor\\/rust\\/[^/]+\\.(toml|md|rs)$/",
         "/^extractor\\/rust\\/src\\/.+\\.rs$/",
         "/^\\.github\\/workflows\\/[^/]+\\.ya?ml$/",
-        "/^cmd\\/rivus\\/(isolate|lang)\\.go$/",
+        "/^cmd\\/rivus\\/isolate\\.go$/",
         "/^scripts\\/[^/]+\\.sh$/"
       ],
       "matchStrings": [

@@ -81,7 +81,7 @@
 
 ### 3.4 ツールチェインと extractor の用意
 
-固定の nightly(`nightly-2026-11-15`、`rustc-dev`、`llvm-tools`、`rust-src`)と extractor のビルドは、**サンドボックスの外で、信頼できるソース(rivus 自身)から**行う。対象のコードを使わない。用意の仕方は、**明示のコマンド `rivus setup rust -source <extractor/rust>`**(実装済み。解析のコマンドは、断りなくネットワークに出ない)。置き場所は、利用者のデータのディレクトリ(`~/Library/Application Support/rivus/rust/`)。Homebrew では、formula がインストールの中で同じものを作る(ツールチェインは keg の外の `$(brew --prefix)/var/rivus/rustup`、`rivus-rust` は keg の `libexec`。理由と手順は DESIGN-install.md の 6 節)。用意の段階のダウンロード(rustup、crates.io)は、rivus のソースの `Cargo.lock` で固定したもの。
+固定の nightly(`extractor/rust/rust-toolchain.toml` の `channel`、`rustc-dev`、`llvm-tools`、`rust-src`)と extractor のビルドは、**サンドボックスの外で、信頼できるソース(rivus 自身)から**行う。対象のコードを使わない。用意の仕方は、**明示のコマンド `rivus setup rust -source <extractor/rust>`**(実装済み。解析のコマンドは、断りなくネットワークに出ない)。置き場所は、利用者のデータのディレクトリ(`~/Library/Application Support/rivus/rust/`)。Homebrew では、formula がインストールの中で同じものを作る(ツールチェインは keg の外の `$(brew --prefix)/var/rivus/rustup`、`rivus-rust` は keg の `libexec`。理由と手順は DESIGN-install.md の 6 節)。用意の段階のダウンロード(rustup、crates.io)は、rivus のソースの `Cargo.lock` で固定したもの。
 
 ### 3.5 テスト(先に書く。隔離なしで抜け道が成功することを確かめる)
 

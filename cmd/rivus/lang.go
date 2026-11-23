@@ -262,7 +262,7 @@ func (o *analyzeOpts) extractorCommand(lang string) ([]string, error) {
 		how = "dart pub global activate --source path extractor/dart"
 	case langRust:
 		flagVal, env, name = o.rustExtractor, "RIVUS_RUST_EXTRACTOR", "rivus-rust"
-		how = "cargo +nightly-2026-11-15 install rivus (see extractor/rust/README.md)"
+		how = "cargo +" + pinnedToolchain + " install rivus (see extractor/rust/README.md)"
 	}
 	cmd := flagVal
 	if cmd == "" {
