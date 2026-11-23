@@ -87,7 +87,7 @@ void seen_and_passed() {
 // a captured function that the closure calls with a value of the caller: capture.dart has `relay-c-a` and
 // `relay-c-b` (the capture of a closure that is called by a helper, PARAM-CALL); the same in the callback
 void captured_fn() {
-  final a = source(); // @source(cap-fn) @miss(assumed_call)
+  final a = source(); // @source(cap-fn)
   void g(String s) => sink(s); // @sink(cap-fn)
   run(() => g(a));
 }

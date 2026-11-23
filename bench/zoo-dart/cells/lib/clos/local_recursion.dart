@@ -62,7 +62,7 @@ void nested() { // @vuln
     again();
   }
 
-  go(src('clos-local-recursion-nested'), 'constant', 1); // @source(clos-local-recursion-nested) @miss(silent) @ref(#196)
+  go(src('clos-local-recursion-nested'), 'constant', 1); // @source(clos-local-recursion-nested)
 }
 
 void mutual() { // @vuln

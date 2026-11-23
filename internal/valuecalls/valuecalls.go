@@ -57,6 +57,7 @@ func Resolve(prog *ir.Program) {
 	narrowCalls(r)
 	r.forms = nil
 	r.callers = nil
+	r.makers = nil
 }
 
 type callSite struct {
@@ -69,6 +70,9 @@ type resolver struct {
 	byID    map[ir.FuncID]*ir.Func
 	forms   map[*ir.Func]*irssa.Form
 	callers map[ir.FuncID][]callSite
+	// makers lists where each closure is made (the make_closure instructions that name it): what a captured variable holds is
+	// what the instruction was given
+	makers map[ir.FuncID][]callSite
 	// cut is set when a walk up the callers stopped at maxDepth
 	cut bool
 	// partial holds the reasons why a walk could not follow every caller's value (the functions it
@@ -209,6 +213,21 @@ func (r *resolver) indexCallers() {
 	}
 }
 
+// indexMakers lists the make_closure instructions of each closure.
+func (r *resolver) indexMakers() {
+	r.makers = map[ir.FuncID][]callSite{}
+	for _, f := range r.prog.Funcs {
+		for bi := range f.Blocks {
+			for ii := range f.Blocks[bi].Instrs {
+				in := &f.Blocks[bi].Instrs[ii]
+				if in.Op == ir.OpMakeClosure {
+					r.makers[in.Func] = append(r.makers[in.Func], callSite{f, bi, ii})
+				}
+			}
+		}
+	}
+}
+
 // directFunc is the function that a call of a function value calls, when the
 // value is a function (or a closure made right there), perhaps copied.
 func (r *resolver) directFunc(f *ir.Func, bi, ii int) ir.FuncID {
@@ -263,6 +282,7 @@ const (
 	refClosure
 	refParam
 	refFrom
+	refCaptured
 )
 
 func (r *resolver) classify(f *ir.Func, form *irssa.Form, ref irssa.Ref) (refKind, *ir.Instr, []irssa.Ref) {
@@ -282,6 +302,7 @@ func (r *resolver) classify(f *ir.Func, form *irssa.Form, ref irssa.Ref) (refKin
 			if in.Index < declared(f) {
 				return refParam, in, nil
 			}
+			return refCaptured, in, nil
 		case ir.OpCopy:
 			if !in.View && len(in.Args) == 1 {
 				return refFrom, nil, []irssa.Ref{form.Operand(ref.Block, ref.Index, 0)}
@@ -370,6 +391,26 @@ func (r *resolver) funcsOf(f *ir.Func, ref irssa.Ref, home *ir.Func, out map[ir.
 	case refFrom:
 		for _, a := range from {
 			r.funcsOf(f, a, home, out, seen, depth, via)
+		}
+	case refCaptured:
+		// a variable that the closure took from the function that made it: the value that the make_closure was given
+		if r.makers == nil {
+			r.indexMakers()
+		}
+		k := in.Index - declared(f)
+		for _, m := range r.makers[f.ID] {
+			min := &m.fn.Blocks[m.b].Instrs[m.i]
+			if len(min.Args) != len(f.Params)-declared(f) {
+				// the extractor left out a variable it did not find: the places do not tell which is which
+				r.notePartial(ir.ValueWhyArgs)
+				continue
+			}
+			mf := r.form(m.fn)
+			if mf == nil {
+				r.notePartial(ir.ValueWhyNoForm)
+				continue
+			}
+			r.funcsOf(m.fn, mf.Operand(m.b, m.i, k), home, out, seen, depth+1, via)
 		}
 	case refParam:
 		if depth == 0 && f == home {
