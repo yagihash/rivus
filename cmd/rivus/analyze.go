@@ -150,8 +150,8 @@ func (o *analyzeOpts) register(fs *flag.FlagSet) {
 	fs.BoolVar(&o.numeric, "numeric-taint", false, "follow taint through numbers and bools (by default it stops there: they cannot carry an injection)")
 	fs.BoolVar(&o.verbose, "v", false, "print the time of each phase to stderr")
 	fs.IntVar(&o.maxImpl, "max-implementations", model.DefaultMaxImplementations, "default limit of match: implementations")
-	fs.IntVar(&o.passes, "max-passes", taint.DefaultOptions().MaxPasses, "maximum number of passes over the program while summaries change")
-	fs.DurationVar(&o.timeout, "timeout", 0, "stop the analysis after this long and report what was found (0: no limit)")
+	fs.IntVar(&o.passes, "max-passes", taint.DefaultOptions().MaxPasses, "maximum number of passes over the program while summaries change (when it is reached, the result is written and the exit code is 4: summary.incomplete)")
+	fs.DurationVar(&o.timeout, "timeout", 0, "stop the analysis after this long and report what was found, then exit with code 4 (analysis incomplete; summary.incomplete) (0: no limit)")
 	fs.DurationVar(&o.funcTimeout, "func-timeout", taint.DefaultOptions().FuncTimeout, "stop the analysis of one function after this long (it is then recorded as depth_limit, func_timeout: a clock, so the result then depends on the load of the machine)")
 	fs.StringVar(&o.irFile, "ir", "", "analyse the neutral IR in this JSON Lines file (from an extractor of another language) instead of Go packages")
 	fs.BoolVar(&o.passStats, "pass-stats", false, "add to stats what changed in the summaries in each pass (pass_changes) and the functions without a model that tainted values reached the most (unmodeled_top); the findings are the same (development)")
@@ -513,7 +513,10 @@ func runAnalyze(args []string) error {
 	if err != nil {
 		return err
 	}
-	return writeJSON(os.Stdout, rep)
+	if err := writeJSON(os.Stdout, rep); err != nil {
+		return err
+	}
+	return incomplete(rep)
 }
 
 // indexCmd is "rivus index".
@@ -578,7 +581,7 @@ func runIndex(args []string) error {
 	fmt.Fprintf(os.Stderr, "rivus: wrote %s (%d sites, %d findings, %d uncertainties, %d ms)\n",
 		jpath, len(rep.Sites), len(rep.Findings), len(rep.Uncertainties), rep.Stats.DurationMilli)
 	fmt.Fprintln(os.Stderr, "rivus: the taint layer is in the JSON index, not in the graph file (it will move there)")
-	return nil
+	return incomplete(rep)
 }
 
 // queryCmd is "rivus query".
@@ -653,7 +656,13 @@ func runQuery(args []string) error {
 		}
 		res.Findings = d.Findings
 	}
-	return writeJSON(os.Stdout, res)
+	if err := writeJSON(os.Stdout, res); err != nil {
+		return err
+	}
+	if *index != "" {
+		return nil // a saved index was not analysed now
+	}
+	return incomplete(rep)
 }
 
 // adHocRules lets a one-sided query name a symbol that no rule mentions: a
@@ -711,7 +720,13 @@ func runResolve(args []string) error {
 	if err != nil {
 		return err
 	}
-	return writeJSON(os.Stdout, rep.Resolve(bms))
+	if err := writeJSON(os.Stdout, rep.Resolve(bms)); err != nil {
+		return err
+	}
+	if *index != "" {
+		return nil
+	}
+	return incomplete(rep)
 }
 
 // categoryFlags are -categories and -skip-categories of analyze.
