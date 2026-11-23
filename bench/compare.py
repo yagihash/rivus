@@ -421,10 +421,23 @@ def range_text(xs, fmt):
     return fmt % min(xs) if min(xs) == max(xs) else (fmt + "-" + fmt) % (min(xs), max(xs))
 
 
-def cost_cell(xb, xh, fmt):
-    """"b-range -> h-range (+12%, spread 3%)"; a single run on a side says "single run: no conclusion" and has no mark."""
+INCOMPLETE_EXIT = 4  # exit code of `rivus analyze` for an analysis that is not complete (timeout, not converged): see run_one
+INCOMPLETE_NOTE = "incomplete run: no point comparing"
+
+
+def incomplete_sides(runs_b, runs_h):
+    """The sides ("base", "head") that have a run with exit code 4: it stopped before it was done, so its time and memory are not those
+    of an analysis that finished, and a comparison with a complete run says nothing."""
+    return [w for w, ms in (("base", runs_b), ("head", runs_h)) if any(m.get("exit_code") == INCOMPLETE_EXIT for m in ms)]
+
+
+def cost_cell(xb, xh, fmt, incomplete=False):
+    """"b-range -> h-range (+12%, spread 3%)"; a single run on a side says "single run: no conclusion" and has no mark. With
+    incomplete (a run that did not finish is on a side) the numbers are shown and the change is not: "no point comparing"."""
     if not xb or not xh:
         return "n/a"
+    if incomplete:
+        return "%s -> %s (%s)" % (range_text(xb, fmt), range_text(xh, fmt), INCOMPLETE_NOTE)
     d, sp, _ = delta_of(xb, xh)
     tail = "single run: no conclusion" if sp is None else "%s, spread %.0f%%" % (pct(median(xb), median(xh)), 100 * sp)
     return "%s -> %s (%s)" % (range_text(xb, fmt), range_text(xh, fmt), tail)
@@ -446,10 +459,11 @@ def cost_row(name, runs_b, runs_h, sb, sh):
     cpu_b, cpu_h = runs_of(runs_b, "cpu_s"), runs_of(runs_h, "cpu_s")
     rss_b, rss_h = runs_of(runs_b, "max_rss_mb"), runs_of(runs_h, "max_rss_mb")
     n = "%d/%d" % (len(runs_b), len(runs_h))
-    return [name, n, cost_cell(cpu_b, cpu_h, "%.1f"), cost_cell(rss_b, rss_h, "%d"),
+    inc = incomplete_sides(runs_b, runs_h)
+    return [name, n, cost_cell(cpu_b, cpu_h, "%.1f", bool(inc)), cost_cell(rss_b, rss_h, "%d", bool(inc)),
             pair(st(sb, "summary_elems"), st(sh, "summary_elems")), pair(st(sb, "summary_steps"), st(sh, "summary_steps")),
-            "!!" if marked(cpu_b, cpu_h, rss_b, rss_h) else "",
-            cost_cell(runs_of(runs_b, "wall_s"), runs_of(runs_h, "wall_s"), "%.0f"),
+            "!! incomplete (%s)" % ", ".join(inc) if inc else ("!!" if marked(cpu_b, cpu_h, rss_b, rss_h) else ""),
+            cost_cell(runs_of(runs_b, "wall_s"), runs_of(runs_h, "wall_s"), "%.0f", bool(inc)),
             "base %s, head %s" % (load(runs_b), load(runs_h))]
 
 
@@ -463,7 +477,8 @@ def cost_table(rows):
         return []
     return ["", "Cost, before -> after, runs ALTERNATING base, head, base, head (CPU time is the main number, wall is load dependent). `!!` = CPU or peak memory "
             "+%d%% or more AND more than the spread between runs of the same version; one run on a side: \"single run: no conclusion\", no mark. "
-            "A cached base run is not a sample (another time, another load)." % round(COST_MARK * 100), ""] + COST_HEADER + \
+            "A cached base run is not a sample (another time, another load). `!! incomplete` = a run of that side stopped before it was done "
+            "(exit code 4: timeout or not converged): its time and memory are not those of a finished analysis, so they are not compared." % round(COST_MARK * 100), ""] + COST_HEADER + \
            ["| " + " | ".join(str(c) for c in r) + " |" for r in rows]
 
 
@@ -614,6 +629,10 @@ def report(a):
              "unstable (base / head): %s / %s" % (sb.get("unstable") or [], sh.get("unstable") or []), ""]
         for s in status:
             L += ["**%s**" % s, ""]
+        inc = [w for w, m in (("base", mb), ("head", mh)) if m.get("exit_code") == INCOMPLETE_EXIT]
+        if inc:
+            L += ["**!! incomplete (%s): the run stopped before it was done (exit code 4). Its time and memory (max RSS above) are not those of a finished "
+                  "analysis: do not compare them with the other side.**" % ", ".join(inc), ""]
 
         def section(title, items, render):
             L.extend(["## %s (%d)" % (title, len(items)), ""])
