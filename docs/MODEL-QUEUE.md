@@ -213,17 +213,17 @@
 | クレート | ファイル | 行数 | 範囲 |
 |---|---|---|---|
 | tonic | `rust-grpc.yaml` | 45 | サーバのハンドラの `Request<T>` が source |
-| axum | `rust-web.yaml` | 9 | extractor(`Query`、`Path`、`Json`、`Form` など) |
+| axum | `rust-axum.yaml` | 9 | extractor(`Query`、`Path`、`Json`、`Form` など) |
 | hyper | `rust-web.yaml` | 1 | `Request` |
 | rocket | `rust-web.yaml` | 2 | `Request` |
 | warp | `rust-web.yaml` | 1 | `Query` |
 | tide、rouille | `rust-web.yaml` | 1、2 | `Request` |
-| http、url | `rust-web.yaml` | 15、7 | `Request`、`Uri`、`Url` の流れ |
+| http、url | `rust-http.yaml` | 15、7 | `Request`、`Uri`、`Url` の流れ |
 | reqwest | `rust-std.yaml` | 6 | HTTP の呼び出し |
 | ureq | `rust-std.yaml` | 2 | HTTP の呼び出し |
 | sqlx | `rust-std.yaml` | 3 | `query`、`query_as`、`query_scalar` の sink |
 | tracing | `rust-misc.yaml` | 1 | `event` |
-| serde_json、serde | `rust-web.yaml`、`rust-misc.yaml` | 8 と 15、8 | 流れ |
+| serde_json、serde | `rust-serde_json.yaml`、`rust-misc.yaml` | 8 と 15、8 | 流れ |
 | tokio | `rust-grpc.yaml`、`rust-misc.yaml` | 7 と 26 | 非同期の流れ |
 
 actix-web は組み込みになく、`examples/rules/rust-actix-web.yaml`(58 行)にある。
