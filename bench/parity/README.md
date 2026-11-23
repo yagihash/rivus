@@ -110,7 +110,7 @@ go run ./bench/parity report -work $WORK/out -table bench/parity/TABLE.md -dead 
 
 理由は 3 つ: `dependency`(標準でないライブラリで、zoo にその依存がない。行の確認は、実コードの IR(この `report`)か、そのモデルの専用のテストが持つ)、`debt`(標準ライブラリで、まだ呼ぶセルがない。**減る一方**で、新しい行には足さない)、`spelling`(extractor が書く名前のある別の綴り)。踏まれるようになった行の行、モデルにない行の行、別のモデルのファイルの行は、テストが失敗にする。実行で確かめられない API(サーバ、デバイス、ネットワークが要る)だけが、恒久に残ってよい(`docs/MODELING.md`)。
 
-**依存の深さの境界のセル(アクセスパス。ADR-119)**: Go(`cmd/rivus/depth_boundary_test.go`)と Dart(`depth_boundary_dart_test.go`)にある。依存の 3 段目の値と、同じ 2 段目の隣、同じ 1 段目の隣を、深さごとに表にしたもの。**Rust は、同じ形を次の PR で足す**(まだない)。
+**依存の深さの境界のセル(アクセスパス。ADR-119)**: Go(`cmd/rivus/depth_boundary_test.go`)と Dart(`depth_boundary_dart_test.go`)にある。依存の 3 段目の値と、同じ 2 段目の隣、同じ 1 段目の隣を、深さごとに表にしたもの。**Rust は、同じ形を次の PR で足す**(まだない)。**既知の違い: Dart は、同じ深さで、Go より 1 段粗い(参照の `*` が 1 段に数えられる。課題 #190)。Dart の隣のフィールドの区別は、深さによらず失われる(#191)。**
 
 ## 限界(段階 1)
 
