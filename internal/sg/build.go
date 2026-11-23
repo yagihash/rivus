@@ -44,6 +44,7 @@ func build(p *ir.Program, consume bool) (*Program, error) {
 	if consume {
 		p.Funcs = nil
 	}
+	out.infos = nil
 	out.link()
 	out.linkEnvClosures()
 	out.resolveValueCalls()
@@ -370,7 +371,7 @@ func (b *builder) buildInstrs() {
 					continue
 				}
 			}
-			in := &Instr{Op: irin.Op, IR: infoOf(irin), IRBlock: bi, IRIndex: ii, Pos: irin.Pos, AddrPos: irin.AddrPos, Callee: irin.Callee}
+			in := &Instr{Op: irin.Op, IR: b.prog.infoOf(irin), IRBlock: bi, IRIndex: ii, Pos: irin.Pos, AddrPos: irin.AddrPos, Callee: irin.Callee}
 			for k := range irin.Dsts {
 				in.Dsts = append(in.Dsts, b.values[valueKey{bi, ii, k}])
 			}
@@ -587,11 +588,41 @@ func slimFunc(f *ir.Func) *ir.Func {
 	return &c
 }
 
-func infoOf(in *ir.Instr) *InstrInfo {
-	info := &InstrInfo{Operator: in.Operator, Field: in.Field, Global: in.Global, Path: in.Path, Func: in.Func,
-		View: in.View, Folded: in.Folded, Keyed: in.Keyed, Go: in.Go, Reason: in.Reason}
+// infoKey is what InstrInfo says, as a key that can be compared (the path as a string).
+type infoKey struct {
+	operator, field, global, path, env, reason string
+	fn                                         ir.FuncID
+	view, folded, keyed, goStmt                bool
+}
+
+// infoOf is the InstrInfo of an instruction. Most instructions say the same (a call says nothing, a field
+// load says its field), so the equal ones are one value: the analysis only reads it (nothing writes a field
+// of Instr.IR or an element of its Path), and the live heap of a large program is smaller by the copies.
+// The table is the one of a build; it is dropped when the build ends.
+func (p *Program) infoOf(in *ir.Instr) *InstrInfo {
+	k := infoKey{operator: in.Operator, field: in.Field, global: in.Global, reason: in.Reason, fn: in.Func,
+		view: in.View, folded: in.Folded, keyed: in.Keyed, goStmt: in.Go}
 	if in.Op == ir.OpAlloc && strings.HasPrefix(string(in.Type), "{closure@") {
-		info.Env = string(in.Type)
+		k.env = string(in.Type)
 	}
+	if len(in.Path) > 0 {
+		var sb strings.Builder
+		for _, st := range in.Path {
+			sb.WriteString(string(st.Kind))
+			sb.WriteByte(0)
+			sb.WriteString(st.Field)
+			sb.WriteByte(1)
+		}
+		k.path = sb.String()
+	}
+	if info, ok := p.infos[k]; ok {
+		return info
+	}
+	info := &InstrInfo{Operator: in.Operator, Field: in.Field, Global: in.Global, Path: in.Path, Func: in.Func,
+		View: in.View, Folded: in.Folded, Keyed: in.Keyed, Go: in.Go, Reason: in.Reason, Env: k.env}
+	if p.infos == nil {
+		p.infos = map[infoKey]*InstrInfo{}
+	}
+	p.infos[k] = info
 	return info
 }
