@@ -137,7 +137,9 @@ func (s *state) noModelCallbacks(cc *callCtx) {
 				for k := first; k < len(args); k++ {
 					args[k] = o
 				}
-				x := &callCtx{in: ci, args: args, roots: cc.roots, sym: cc.sym, rd: rd}
+				// a call without a result is applied as the closure is where it is made: no throw, no result, and the write-back
+				// of a variable that was read whole (`before := G; ...; G = before`, the cleanup of a mock) adds nothing (ADR-059)
+				x := &callCtx{in: ci, args: args, roots: cc.roots, sym: cc.sym, rd: rd, made: row.Ret == ""}
 				s.applySummary(x, fn, bindings, notes, nil)
 			}
 		}
