@@ -509,6 +509,7 @@ propagators:
     pure: true
   - symbol: (*net/http.Server).ListenAndServeTLS
     flows: [{from: recv, to: result0}, {from: arg0, to: result0}, {from: arg1, to: result0}]
+  # model-diff: miss-reviewed (*net/http.ServeMux).Handle@arg0 non-payload the pattern is routing information (a method, a host and a path that the mux matches against), not data that a later call reads back as a value; src=net/http/server.go:registerErr
   - symbol: (*net/http.ServeMux).Handle
     pure: true
   - symbol: net/http/fcgi.Serve
