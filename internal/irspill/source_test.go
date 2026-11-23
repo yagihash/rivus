@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -169,45 +170,80 @@ func TestIRSpillSourceSortByID(t *testing.T) {
 	}
 }
 
-// A function that a reader writes to (Pin) is held in memory: the next read gives it with what was written, as the
-// Source in memory does. A function that is not pinned is read again from the file, and the write is gone.
-func TestIRSpillSourcePinKeepsWrites(t *testing.T) {
-	r := rand.New(rand.NewSource(25))
-	funcs := []*ir.Func{randomFunc(r, "p.A"), randomFunc(r, "p.B")}
-	disk := diskOf(t, funcs, SourceOptions{Pin: func(f *ir.Func) bool { return f.ID == "p.A" }, Cache: -1})
+// What a reader writes to the candidates of a call (Update) is on the function when it is read again, also when the
+// function was let go and is decoded again; a function that a reader has is the same one for the next read; a function that
+// is dropped is not there, and what is kept for it goes. Marks, symbols and the sites are of the functions as they were
+// added.
+func TestIRSpillSourceUpdateKeepsWrites(t *testing.T) {
+	call := func(id ir.FuncID, sym string, kind ir.CalleeKind, cands ...ir.FuncID) *ir.Func {
+		return &ir.Func{ID: id, Symbol: string(id), Blocks: []ir.Block{{Instrs: []ir.Instr{
+			{Op: ir.OpCall, Args: []ir.LocalID{0}, Callee: &ir.Callee{Kind: kind, Symbol: sym, Func: "p.C", Candidates: cands}},
+		}}}}
+	}
+	funcs := []*ir.Func{call("p.B", "x.y", ir.CalleeValue, "p.C"), call("p.A", "x.z", ir.CalleeStatic), {ID: "p.C"}}
+	b := NewBuilder(NewIn(t.TempDir(), 0, nil), SourceOptions{Cache: -1})
+	for _, f := range funcs {
+		b.Add(f)
+	}
+	b.SortByID()
+	disk := b.Source(&ir.Program{})
 	defer disk.Release()
-	for _, c := range []struct {
-		ref    ir.Ref
-		stays  bool
-		marker string
-	}{{ir.Ref{ID: "p.A", Seq: 0}, true, "written"}, {ir.Ref{ID: "p.B", Seq: 1}, false, "written"}} {
-		f, err := disk.Func(c.ref)
-		if err != nil {
-			t.Fatal(err)
-		}
-		f.Symbol = c.marker
-		g, err := disk.Func(c.ref)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if (g.Symbol == c.marker) != c.stays {
-			t.Errorf("%s: the write stays: %v, want %v", c.ref.ID, g.Symbol == c.marker, c.stays)
+	// the order is by ID: p.A, p.B, p.C
+	if m := disk.Marks(1); m != ir.MarkValueCall {
+		t.Errorf("marks of p.B: %v", m)
+	}
+	if m := disk.Marks(0); m != 0 {
+		t.Errorf("marks of p.A: %v", m)
+	}
+	if s := disk.CallSymbols(0); len(s) != 1 || s[0] != "x.z" {
+		t.Errorf("symbols of p.A: %v", s)
+	}
+	if s := disk.CallSymbols(1); len(s) != 0 {
+		t.Errorf("a call of a function value has no symbol: %v", s)
+	}
+	if got := disk.CallersOf("p.C"); len(got) != 3 || got[0] != (ir.CallSite{Seq: 0}) || got[1] != (ir.CallSite{Seq: 1}) || got[2] != got[1] {
+		t.Errorf("callers of p.C: %v", got)
+	}
+	ref := ir.Ref{ID: "p.B", Seq: 1}
+	f, err := disk.Func(ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Blocks[0].Instrs[0].Callee.ValueCands = []ir.ValueCand{{ID: "p.C", Symbol: "p.C", Param: -1}}
+	disk.Update(ref, 0, 0, f.Blocks[0].Instrs[0].Callee)
+	g, _ := disk.Func(ref)
+	if g != f {
+		t.Error("a function that a reader has is not the same for the next read")
+	}
+	f, g = nil, nil
+	var h *ir.Func
+	for i := 0; i < 5 && h == nil; i++ {
+		runtime.GC()
+		disk.mu.Lock()
+		gone := disk.liveLocked(1) == nil
+		disk.mu.Unlock()
+		if gone {
+			h, _ = disk.Func(ref)
 		}
 	}
-	// Each gives the same function that Func gave
-	disk.Each(func(ref ir.Ref, f *ir.Func) error {
-		if ref.ID == "p.A" && f.Symbol != "written" {
-			t.Error("Each gave a copy of the function that was written to")
-		}
-		return nil
-	})
-	// a function that is dropped is not there, and what is held for it goes
-	disk.Drop(ir.Ref{ID: "p.A", Seq: 0})
-	if _, err := disk.Func(ir.Ref{ID: "p.A", Seq: 0}); err == nil {
+	if h == nil {
+		t.Skip("the function was not let go")
+	}
+	if c := h.Blocks[0].Instrs[0].Callee; len(c.ValueCands) != 1 || c.ValueCands[0].ID != "p.C" {
+		t.Errorf("what was written is gone: %+v", c)
+	}
+	if disk.Stats().Updates != 1 {
+		t.Errorf("updates: %d", disk.Stats().Updates)
+	}
+	disk.Drop(ref)
+	if _, err := disk.Func(ref); err == nil {
 		t.Error("a dropped function was read")
 	}
-	if _, ok := disk.Lookup("p.A"); ok || !disk.Head(0).Gone {
+	if _, ok := disk.Lookup("p.B"); ok || !disk.Head(1).Gone {
 		t.Error("a dropped function is still looked up")
+	}
+	if got := disk.CallersOf("p.C"); len(got) != 1 || got[0].Seq != 0 {
+		t.Errorf("the calls of a dropped function are listed: %v", got)
 	}
 }
 
@@ -237,11 +273,22 @@ func TestIRSpillSourceCache(t *testing.T) {
 	if disk.Stats().CacheHits == 0 {
 		t.Error("no read was answered by the cache")
 	}
-	// no cache: every read is a new copy
+	// no cache: a function that nobody has is read again (Each does not keep the function it gives)
 	none := diskOf(t, funcs[:3], SourceOptions{Cache: -1})
 	defer none.Release()
-	x, _ := none.Func(ir.Ref{ID: "p.F0", Seq: 0})
-	y, _ := none.Func(ir.Ref{ID: "p.F0", Seq: 0})
+	var x, y *ir.Func
+	none.Each(func(ref ir.Ref, f *ir.Func) error {
+		if ref.Seq == 0 {
+			x = f
+		}
+		return nil
+	})
+	none.Each(func(ref ir.Ref, f *ir.Func) error {
+		if ref.Seq == 0 {
+			y = f
+		}
+		return nil
+	})
 	if x == y {
 		t.Error("without a cache the same copy was given twice")
 	}
@@ -298,7 +345,7 @@ func TestIRSpillSourceReadFailures(t *testing.T) {
 	}
 	// the file is read after it was closed
 	disk.st.Close()
-	if _, err := disk.Func(ir.Ref{ID: "p.F1", Seq: 1}); err == nil {
+	if _, err := disk.Func(ir.Ref{ID: "p.F40", Seq: 40}); err == nil {
 		t.Error("a read from a closed store")
 	}
 	// a released source is not read
@@ -447,4 +494,41 @@ func TestIRSpillConcatSource(t *testing.T) {
 		t.Error("Drop")
 	}
 	c.Release()
+}
+
+// What the Source in the file knows without reading (the marks, the symbols of the calls, where the functions are called
+// and the closures made) is what the Source in memory finds by reading, for the functions in the order of the IDs too.
+func TestIRSpillSourceTablesAreTheMemorySource(t *testing.T) {
+	funcs := funcsWithDuplicates(rand.New(rand.NewSource(31)), 400)
+	sorted := append([]*ir.Func(nil), funcs...)
+	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].ID < sorted[j].ID })
+	mem := memOf(sorted)
+	b := NewBuilder(NewIn(t.TempDir(), 0, nil), SourceOptions{Cache: 1 << 20})
+	for _, f := range funcs {
+		b.Add(f)
+	}
+	b.SortByID()
+	disk := b.Source(&ir.Program{})
+	defer disk.Release()
+	ms := ir.SitedOf(mem)
+	for i := 0; i < mem.Len(); i++ {
+		f := ir.Must(mem, ir.Ref{ID: mem.Head(i).ID, Seq: i})
+		if got, want := disk.Marks(i), ir.MarksOf(f); got != want {
+			t.Fatalf("marks of %d: %v, want %v", i, got, want)
+		}
+		if f.Dep {
+			continue
+		}
+		if got, want := disk.CallSymbols(i), ir.CallSymbolsOf(f); strings.Join(got, ",") != strings.Join(want, ",") {
+			t.Fatalf("symbols of %d: %v, want %v", i, got, want)
+		}
+	}
+	for _, f := range funcs {
+		if got, want := fmt.Sprint(disk.CallersOf(f.ID)), fmt.Sprint(ms.CallersOf(f.ID)); got != want {
+			t.Fatalf("callers of %s: %s, want %s", f.ID, got, want)
+		}
+		if got, want := fmt.Sprint(disk.MakersOf(f.ID)), fmt.Sprint(ms.MakersOf(f.ID)); got != want {
+			t.Fatalf("makers of %s: %s, want %s", f.ID, got, want)
+		}
+	}
 }

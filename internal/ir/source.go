@@ -123,15 +123,49 @@ func WalkProject(src Source, fn func(ref Ref, f *Func) bool) {
 	}
 }
 
+// WalkProjectIf is WalkProject for the functions that want says yes to (by their number): the body of another one is
+// not asked for.
+func WalkProjectIf(src Source, want func(seq int) bool, fn func(ref Ref, f *Func) bool) {
+	for i, n := 0, src.Len(); i < n; i++ {
+		h := src.Head(i)
+		if h.Gone || h.Dep || !want(i) {
+			continue
+		}
+		ref := Ref{ID: h.ID, Seq: i}
+		if !fn(ref, Must(src, ref)) {
+			return
+		}
+	}
+}
+
 // MemSource is the Source of a program whose functions are in memory (Program.Funcs). The *Func it gives is the one
 // in the program: what a reader writes to it (the candidates of the calls of function values) stays.
 func MemSource(p *Program) Source { return &memSource{p: p} }
 
 type memSource struct {
-	p    *Program
-	once sync.Once
-	last map[FuncID]int
+	p     *Program
+	once  sync.Once
+	last  map[FuncID]int
+	sonce sync.Once
+	sites *SiteIndex
 }
+
+func (m *memSource) siteIndex() *SiteIndex {
+	m.sonce.Do(func() {
+		m.sites = NewSiteIndex()
+		for i, f := range m.p.Funcs {
+			if f != nil {
+				m.sites.Add(i, f, nil)
+			}
+		}
+	})
+	return m.sites
+}
+
+func (m *memSource) gone(seq int) bool { return m.p.Funcs[seq] == nil }
+
+func (m *memSource) CallersOf(id FuncID) []CallSite { return m.siteIndex().Callers(id, m.gone) }
+func (m *memSource) MakersOf(id FuncID) []CallSite  { return m.siteIndex().Makers(id, m.gone) }
 
 func (m *memSource) Header() *Program { return m.p }
 
@@ -193,6 +227,7 @@ func (m *memSource) Drop(ref Ref) {
 func (m *memSource) Release() {
 	m.p.Funcs = nil
 	m.last = nil
+	m.sites = nil
 }
 
 // ConcatSource is the Source of several Sources one after the other, in the order given (the functions of one
@@ -211,9 +246,10 @@ func ConcatSource(header *Program, srcs ...Source) Source {
 }
 
 type concatSource struct {
-	hdr  *Program
-	srcs []Source
-	base []int // base[i] is the number of the first function of srcs[i]
+	hdr   *Program
+	srcs  []Source
+	base  []int // base[i] is the number of the first function of srcs[i]
+	sited []Sited
 }
 
 // at is the Source that holds the number seq, and the number it has there.
@@ -285,3 +321,78 @@ func (c *concatSource) Targets(seq int) []FuncID {
 	Targets(Must(s, Ref{ID: h.ID, Seq: i}), func(id FuncID) { ids = append(ids, id) })
 	return ids
 }
+
+// Marks is the Marker answer of the Source that holds seq: its own when it has one, else from the function.
+func (c *concatSource) Marks(seq int) Marks {
+	s, i := c.at(seq)
+	if m, ok := s.(Marker); ok {
+		return m.Marks(i)
+	}
+	h := s.Head(i)
+	return MarksOf(Must(s, Ref{ID: h.ID, Seq: i}))
+}
+
+// CallSymbols is the CallSymbolser answer of the Source that holds seq.
+func (c *concatSource) CallSymbols(seq int) []string {
+	s, i := c.at(seq)
+	return CallSymbols(s, i)
+}
+
+// CallersOf are the calls that reach the function, the ones of each Source one after the other.
+func (c *concatSource) CallersOf(id FuncID) []CallSite {
+	return c.sites(id, func(s Sited) []CallSite { return s.CallersOf(id) })
+}
+
+// MakersOf are the make_closure instructions that name the function, the ones of each Source one after the other.
+func (c *concatSource) MakersOf(id FuncID) []CallSite {
+	return c.sites(id, func(s Sited) []CallSite { return s.MakersOf(id) })
+}
+
+func (c *concatSource) sites(id FuncID, of func(Sited) []CallSite) []CallSite {
+	if len(c.sited) == 0 {
+		c.sited = make([]Sited, len(c.srcs))
+		for i, s := range c.srcs {
+			c.sited[i] = SitedOf(s)
+		}
+	}
+	var out []CallSite
+	for i, s := range c.sited {
+		for _, x := range of(s) {
+			x.Seq += int32(c.base[i])
+			out = append(out, x)
+		}
+	}
+	return out
+}
+
+// Update tells the Source that holds the function.
+func (c *concatSource) Update(ref Ref, block, instr int, cal *Callee) {
+	s, i := c.at(ref.Seq)
+	if u, ok := s.(Updater); ok {
+		u.Update(Ref{ID: ref.ID, Seq: i}, block, instr, cal)
+	}
+}
+
+// SitedOf is the Source as a Sited: itself when it is one, else an index that is made by reading all its functions
+// once.
+func SitedOf(src Source) Sited {
+	if s, ok := src.(Sited); ok {
+		return s
+	}
+	x := NewSiteIndex()
+	for i, n := 0, src.Len(); i < n; i++ {
+		if h := src.Head(i); !h.Gone {
+			x.Add(i, Must(src, Ref{ID: h.ID, Seq: i}), nil)
+		}
+	}
+	return indexed{x, src}
+}
+
+type indexed struct {
+	x   *SiteIndex
+	src Source
+}
+
+func (i indexed) gone(seq int) bool              { return i.src.Head(seq).Gone }
+func (i indexed) CallersOf(id FuncID) []CallSite { return i.x.Callers(id, i.gone) }
+func (i indexed) MakersOf(id FuncID) []CallSite  { return i.x.Makers(id, i.gone) }

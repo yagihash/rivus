@@ -50,7 +50,7 @@ func isFnCall(c *ir.Callee) bool {
 }
 
 type narrowing struct {
-	in    *ir.Instr
+	site  callSite // the call that is narrowed (the function is read again to write to it)
 	keep  []ir.FuncID
 	basis string
 	from  string
@@ -83,7 +83,7 @@ type fieldInfo struct {
 }
 
 type stored struct {
-	fn   *ir.Func
+	ref  ir.Ref
 	b, i int
 }
 
@@ -91,6 +91,9 @@ type cellKey struct {
 	fn  *ir.Func
 	ref irssa.Ref
 }
+
+// maxCells is how many cells the table of what is stored to them holds (it keeps the functions that have them).
+const maxCells = 1 << 14
 
 type cellInfo struct {
 	values []irssa.Ref
@@ -192,9 +195,6 @@ func narrowCalls(r *resolver) {
 	if n.closed {
 		n.linked = linkedCrates(r.src)
 	}
-	if r.callers == nil {
-		r.indexCallers()
-	}
 	var calls []*callSite
 	ir.Walk(r.src, func(ref ir.Ref, f *ir.Func) {
 		for bi := range f.Blocks {
@@ -231,18 +231,21 @@ func narrowCalls(r *resolver) {
 		}
 	}
 	for _, d := range done {
+		fn := r.fn(d.site.ref)
+		in := &fn.Blocks[d.site.b].Instrs[d.site.i]
 		if d.same {
-			d.in.Callee.CandParam = d.param
-			continue
+			in.Callee.CandParam = d.param
+		} else {
+			n.stats.Narrowed++
+			n.stats.CandidatesOld += len(in.Callee.Candidates)
+			n.stats.CandidatesNew += len(d.keep)
+			in.Callee.NarrowedFrom = len(in.Callee.Candidates)
+			in.Callee.NarrowBasis = d.basis
+			in.Callee.NarrowFrom = d.from
+			in.Callee.CandParam = d.param
+			in.Callee.Candidates = d.keep
 		}
-		n.stats.Narrowed++
-		n.stats.CandidatesOld += len(d.in.Callee.Candidates)
-		n.stats.CandidatesNew += len(d.keep)
-		d.in.Callee.NarrowedFrom = len(d.in.Callee.Candidates)
-		d.in.Callee.NarrowBasis = d.basis
-		d.in.Callee.NarrowFrom = d.from
-		d.in.Callee.CandParam = d.param
-		d.in.Callee.Candidates = d.keep
+		ir.Update(r.src, d.site.ref, fn, d.site.b, d.site.i)
 	}
 	prog.Narrowing = &n.stats
 }
@@ -337,7 +340,7 @@ func (n *narrower) decide(c *callSite, in *ir.Instr) (*narrowing, string) {
 			param[id] = p
 		}
 	}
-	return &narrowing{in: in, keep: keep, basis: t.basis, from: from, param: param, same: len(keep) == len(in.Callee.Candidates)}, ""
+	return &narrowing{site: *c, keep: keep, basis: t.basis, from: from, param: param, same: len(keep) == len(in.Callee.Candidates)}, ""
 }
 
 func dedup(s []string) []string {
@@ -482,12 +485,13 @@ func (t *trace) field(name string, depth int) {
 		return
 	}
 	for _, s := range fi.stores {
-		form := t.n.r.form(s.fn)
+		sfn := t.n.r.fn(s.ref)
+		form := t.n.r.form(sfn)
 		if form == nil {
 			t.stop(notUnknown)
 			return
 		}
-		t.origins(s.fn, form.Operand(s.b, s.i, 1), depth) // a field of an environment is not a call up: the depth counts the callers that are followed
+		t.origins(sfn, form.Operand(s.b, s.i, 1), depth) // a field of an environment is not a call up: the depth counts the callers that are followed
 		if t.fail != "" {
 			return
 		}
@@ -509,7 +513,7 @@ func (n *narrower) indexFields() {
 		return
 	}
 	n.indexed = true
-	ir.Walk(n.r.src, func(_ ir.Ref, f *ir.Func) {
+	ir.Walk(n.r.src, func(ref ir.Ref, f *ir.Func) {
 		var form *irssa.Form
 		for bi := range f.Blocks {
 			for ii := range f.Blocks[bi].Instrs {
@@ -521,7 +525,7 @@ func (n *narrower) indexFields() {
 						fi = &fieldInfo{}
 						n.fields[in.Field] = fi
 					}
-					fi.stores = append(fi.stores, stored{f, bi, ii})
+					fi.stores = append(fi.stores, stored{ref, bi, ii})
 				case in.Op == ir.OpAddrOf && len(in.Path) >= 1 && in.Path[len(in.Path)-1].Kind == ir.StepField && isClosureField(in.Path[len(in.Path)-1].Field):
 					name := in.Path[len(in.Path)-1].Field
 					fi := n.fields[name]
@@ -673,6 +677,10 @@ func (t *trace) cell(f *ir.Func, form *irssa.Form, ref irssa.Ref, depth int) {
 	key := cellKey{f, ref}
 	ci := t.n.cells[key]
 	if ci == nil {
+		if len(t.n.cells) >= maxCells {
+			// what was worked out is worked out again when it is asked for: the table holds the functions it names
+			t.n.cells = map[cellKey]*cellInfo{}
+		}
 		ci = &cellInfo{}
 		vals, _, ok := t.n.aliasUses(f, form, ref, true)
 		ci.values, ci.ok = vals, ok && len(vals) > 0
@@ -704,7 +712,7 @@ func (t *trace) param(f *ir.Func, idx, depth int) {
 		t.stop(notOpen)
 		return
 	}
-	cs := n.r.callers[f.ID]
+	cs := n.r.callersOf(f.ID)
 	if len(cs) == 0 {
 		t.stop(notUnknown)
 		return

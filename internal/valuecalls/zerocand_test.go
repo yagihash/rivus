@@ -39,7 +39,7 @@ func TestZeroCandidateCalls(t *testing.T) {
 		}
 		src := ir.MemSource(prog)
 		Resolve(src)
-		r := &resolver{src: src, prog: prog, forms: map[*ir.Func]*irssa.Form{}}
+		r := &resolver{src: src, prog: prog, forms: newFormCache(FormCacheBytes)}
 		counts := map[string]int{}
 		total, zero := 0, 0
 		for _, fn := range prog.Funcs {

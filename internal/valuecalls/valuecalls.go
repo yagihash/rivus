@@ -19,6 +19,7 @@
 package valuecalls
 
 import (
+	"container/list"
 	"sort"
 	"strings"
 
@@ -33,7 +34,15 @@ const most = ir.ValueCandidateMost
 // maxDepth is how many calls up the arguments are followed.
 const maxDepth = 3
 
-// Resolve sets ValueCands of the calls of function values. It does it once.
+// FormCacheBytes is the most that the forms of the functions read lately may take in memory (an estimate: FormBytesPerInstr
+// for each instruction). A form that was let go is made again when the walk comes back to the function.
+const FormCacheBytes = 64 << 20
+
+// FormBytesPerInstr is what a form takes for each instruction of its function, as far as the cache counts.
+const FormBytesPerInstr = 200
+
+// Resolve sets ValueCands of the calls of function values. It does it once. What it sets is told to the Source
+// (ir.Update), which gives it back when the function is read again: the functions are not kept here.
 func Resolve(src ir.Source) {
 	if src == nil {
 		return
@@ -43,8 +52,8 @@ func Resolve(src ir.Source) {
 		return
 	}
 	prog.ValuesResolved = true
-	r := &resolver{src: src, prog: prog, forms: map[*ir.Func]*irssa.Form{}, held: map[int]*ir.Func{}}
-	ir.Walk(src, func(_ ir.Ref, f *ir.Func) {
+	r := &resolver{src: src, prog: prog, forms: newFormCache(FormCacheBytes)}
+	ir.WalkMarked(src, ir.MarkValueCall, func(ref ir.Ref, f *ir.Func) {
 		for bi := range f.Blocks {
 			for ii := range f.Blocks[bi].Instrs {
 				in := &f.Blocks[bi].Instrs[ii]
@@ -52,29 +61,15 @@ func Resolve(src ir.Source) {
 					continue
 				}
 				r.resolve(f, bi, ii, in)
+				if in.Callee.ValueCands != nil || in.Callee.ValueLimit != "" || in.Callee.ValueUnresolvedParams != nil {
+					ir.Update(src, ref, f, bi, ii)
+				}
 			}
 		}
 	})
 	narrowCalls(r)
 	r.forms = nil
-	r.callers = nil
-	r.makers = nil
-	r.held = nil
-}
-
-// Writes says whether Resolve may write to the function: the candidates of the calls of function values and the
-// narrowed candidates of the calls of closures are set on the function that holds the call. A Source that does not
-// keep its functions in memory holds such a function in memory (irspill.SourceOptions.Pin), so that what is written
-// is there for the next reader.
-func Writes(f *ir.Func) bool {
-	for bi := range f.Blocks {
-		for ii := range f.Blocks[bi].Instrs {
-			if c := f.Blocks[bi].Instrs[ii].Callee; c != nil && (c.Kind == ir.CalleeValue || isFnCall(c)) {
-				return true
-			}
-		}
-	}
-	return false
+	r.sited, r.extra = nil, nil
 }
 
 // callSite is a call (or a make_closure) in the function that ref names. The function is r.fn(ref): the index of the
@@ -84,26 +79,61 @@ type callSite struct {
 	b, i int
 }
 
-// fn is the function that ref names. The same pointer is given for the whole run of Resolve: a walk compares the
-// functions by it.
-func (r *resolver) fn(ref ir.Ref) *ir.Func {
-	if f, ok := r.held[ref.Seq]; ok {
-		return f
+// fn is the function that ref names. The Source gives the same pointer for as long as a reader has the function (the
+// walks compare the functions by it), and what was written to its calls is on it.
+func (r *resolver) fn(ref ir.Ref) *ir.Func { return ir.Must(r.src, ref) }
+
+// formCache holds the forms of the functions read lately, up to a limit of bytes (an estimate), the latest first.
+type formCache struct {
+	limit, used int
+	at          map[*ir.Func]*list.Element
+	lru         *list.List // of *formEntry
+}
+
+type formEntry struct {
+	f    *ir.Func
+	form *irssa.Form
+	w    int
+}
+
+func newFormCache(limit int) *formCache {
+	return &formCache{limit: limit, at: map[*ir.Func]*list.Element{}, lru: list.New()}
+}
+
+func (c *formCache) get(f *ir.Func) (*irssa.Form, bool) {
+	if el, ok := c.at[f]; ok {
+		c.lru.MoveToFront(el)
+		return el.Value.(*formEntry).form, true
 	}
-	f := ir.Must(r.src, ref)
-	r.held[ref.Seq] = f
-	return f
+	return nil, false
+}
+
+func (c *formCache) put(f *ir.Func, form *irssa.Form) {
+	n := 1
+	for bi := range f.Blocks {
+		n += len(f.Blocks[bi].Instrs)
+	}
+	w := n * FormBytesPerInstr
+	c.at[f] = c.lru.PushFront(&formEntry{f, form, w})
+	c.used += w
+	for c.used > c.limit && c.lru.Len() > 1 {
+		el := c.lru.Back()
+		e := el.Value.(*formEntry)
+		c.lru.Remove(el)
+		delete(c.at, e.f)
+		c.used -= e.w
+	}
 }
 
 type resolver struct {
-	src     ir.Source
-	prog    *ir.Program // the header of src: what is not a function
-	forms   map[*ir.Func]*irssa.Form
-	held    map[int]*ir.Func // the functions read by a call site, by the number in the Source
-	callers map[ir.FuncID][]callSite
-	// makers lists where each closure is made (the make_closure instructions that name it): what a captured variable holds is
-	// what the instruction was given
-	makers map[ir.FuncID][]callSite
+	src   ir.Source
+	prog  *ir.Program // the header of src: what is not a function
+	forms *formCache
+	// sited says where the functions are called and the closures made; extra are the calls that call a function that
+	// the value is (a function held in a variable and called), found by walking the functions that have a call of a
+	// function value
+	sited ir.Sited
+	extra map[ir.FuncID][]callSite
 	// cut is set when a walk up the callers stopped at maxDepth
 	cut bool
 	// partial holds the reasons why a walk could not follow every caller's value (the functions it
@@ -119,14 +149,14 @@ func (r *resolver) notePartial(why string) {
 }
 
 func (r *resolver) form(f *ir.Func) *irssa.Form {
-	if fm, ok := r.forms[f]; ok {
+	if fm, ok := r.forms.get(f); ok {
 		return fm
 	}
 	fm, err := irssa.Build(f)
 	if err != nil {
 		fm = nil
 	}
-	r.forms[f] = fm
+	r.forms.put(f, fm)
 	return fm
 }
 
@@ -163,9 +193,6 @@ func (r *resolver) resolve(fn *ir.Func, bi, ii int, in *ir.Instr) {
 			in.Callee.ValueCands = append(in.Callee.ValueCands, r.candOf(id, via))
 		}
 		return
-	}
-	if r.callers == nil {
-		r.indexCallers()
 	}
 	found := map[ir.FuncID]*found{}
 	r.cut = false
@@ -216,47 +243,75 @@ func (r *resolver) resolve(fn *ir.Func, bi, ii int, in *ir.Instr) {
 	}
 }
 
-// indexCallers lists the calls that reach each function: the static ones and
-// the candidates of the others.
+// callersOf lists the calls that reach the function with the ID, in the order of the program: the static ones and the
+// candidates of the others (the Source knows them), and the calls of a function held in a variable and called.
+func (r *resolver) callersOf(id ir.FuncID) []callSite {
+	if r.sited == nil {
+		r.indexCallers()
+	}
+	base := r.sited.CallersOf(id)
+	extra := r.extra[id]
+	out := make([]callSite, 0, len(base)+len(extra))
+	k := 0
+	for _, s := range base {
+		for k < len(extra) && before(extra[k].ref.Seq, extra[k].b, extra[k].i, s) {
+			out = append(out, extra[k])
+			k++
+		}
+		out = append(out, r.siteOf(s))
+	}
+	return append(out, extra[k:]...)
+}
+
+// before says whether the place (seq, b, i) is before the site (a site of the Source goes first when the places are the same).
+func before(seq, b, i int, s ir.CallSite) bool {
+	if int32(seq) != s.Seq {
+		return int32(seq) < s.Seq
+	}
+	if int32(b) != s.Block {
+		return int32(b) < s.Block
+	}
+	return int32(i) < s.Instr
+}
+
+func (r *resolver) siteOf(s ir.CallSite) callSite {
+	return callSite{ref: ir.Ref{ID: r.src.Head(int(s.Seq)).ID, Seq: int(s.Seq)}, b: int(s.Block), i: int(s.Instr)}
+}
+
+// indexCallers finds the calls of a function held in a variable and called: the functions that have a call of a function
+// value are the ones read.
 func (r *resolver) indexCallers() {
-	r.callers = map[ir.FuncID][]callSite{}
-	ir.Walk(r.src, func(ref ir.Ref, f *ir.Func) {
+	r.sited = ir.SitedOf(r.src)
+	r.extra = map[ir.FuncID][]callSite{}
+	ir.WalkMarked(r.src, ir.MarkValueCall, func(ref ir.Ref, f *ir.Func) {
 		for bi := range f.Blocks {
 			for ii := range f.Blocks[bi].Instrs {
 				in := &f.Blocks[bi].Instrs[ii]
 				if in.Op != ir.OpCall || in.Callee == nil {
 					continue
 				}
-				if in.Callee.Func != "" {
-					r.callers[in.Callee.Func] = append(r.callers[in.Callee.Func], callSite{ref, bi, ii})
-				}
 				if in.Callee.Kind == ir.CalleeValue && len(in.Callee.Candidates) == 0 && len(in.Args) > 0 {
 					// a function held in a variable and called: it is the callee
 					if id := r.directFunc(f, bi, ii); id != "" {
-						r.callers[id] = append(r.callers[id], callSite{ref, bi, ii})
+						r.extra[id] = append(r.extra[id], callSite{ref, bi, ii})
 					}
-				}
-				for _, c := range in.Callee.Candidates {
-					r.callers[c] = append(r.callers[c], callSite{ref, bi, ii})
 				}
 			}
 		}
 	})
 }
 
-// indexMakers lists the make_closure instructions of each closure.
-func (r *resolver) indexMakers() {
-	r.makers = map[ir.FuncID][]callSite{}
-	ir.Walk(r.src, func(ref ir.Ref, f *ir.Func) {
-		for bi := range f.Blocks {
-			for ii := range f.Blocks[bi].Instrs {
-				in := &f.Blocks[bi].Instrs[ii]
-				if in.Op == ir.OpMakeClosure {
-					r.makers[in.Func] = append(r.makers[in.Func], callSite{ref, bi, ii})
-				}
-			}
-		}
-	})
+// makersOf lists the make_closure instructions of each closure.
+func (r *resolver) makersOf(id ir.FuncID) []callSite {
+	if r.sited == nil {
+		r.indexCallers()
+	}
+	base := r.sited.MakersOf(id)
+	out := make([]callSite, len(base))
+	for i, s := range base {
+		out[i] = r.siteOf(s)
+	}
+	return out
 }
 
 // directFunc is the function that a call of a function value calls, when the
@@ -425,11 +480,8 @@ func (r *resolver) funcsOf(f *ir.Func, ref irssa.Ref, home *ir.Func, out map[ir.
 		}
 	case refCaptured:
 		// a variable that the closure took from the function that made it: the value that the make_closure was given
-		if r.makers == nil {
-			r.indexMakers()
-		}
 		k := in.Index - declared(f)
-		for _, m := range r.makers[f.ID] {
+		for _, m := range r.makersOf(f.ID) {
 			mfn := r.fn(m.ref)
 			min := &mfn.Blocks[m.b].Instrs[m.i]
 			if len(min.Args) != len(f.Params)-declared(f) {
@@ -448,7 +500,7 @@ func (r *resolver) funcsOf(f *ir.Func, ref irssa.Ref, home *ir.Func, out map[ir.
 		if depth == 0 && f == home {
 			via = in.Index
 		}
-		for _, c := range r.callers[f.ID] {
+		for _, c := range r.callersOf(f.ID) {
 			cfn := r.fn(c.ref)
 			cin := &cfn.Blocks[c.b].Instrs[c.i]
 			off := 0

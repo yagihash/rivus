@@ -9,7 +9,6 @@ import (
 
 	"github.com/yagihash/rivus/internal/ir"
 	"github.com/yagihash/rivus/internal/irspill"
-	"github.com/yagihash/rivus/internal/valuecalls"
 )
 
 // envIRSpill is the switch of the IR on disk (ADR-123): "1" keeps the functions of the Go code in a file, and the
@@ -22,7 +21,7 @@ const envIRSpill = "RIVUS_INTERNAL_IR_SPILL"
 const envIRSpillFault = "RIVUS_INTERNAL_IR_SPILL_FAULT"
 
 func spillOptions() irspill.SourceOptions {
-	o := irspill.SourceOptions{Pin: valuecalls.Writes}
+	var o irspill.SourceOptions
 	if n, err := strconv.Atoi(os.Getenv(envIRSpillFault)); err == nil && n > 0 {
 		o.Fault = func(read int) error {
 			if read >= n {
@@ -84,6 +83,6 @@ func noteSpill(w io.Writer, d *irspill.DiskSource) {
 		return
 	}
 	s := d.Stats()
-	fmt.Fprintf(w, "rivus: the IR on disk: %d functions, %d MB written (%d held in memory), %d held for the writes of valuecalls; put %v, %d reads (%d answered by the cache) %v\n",
-		s.Store.Funcs, s.Store.Bytes>>20, s.Store.MemFuncs, s.Pinned, s.PutTime.Round(time.Millisecond), s.Reads, s.CacheHits, s.ReadTime.Round(time.Millisecond))
+	fmt.Fprintf(w, "rivus: the IR on disk: %d functions, %d MB written (%d held in memory), %d calls with the candidates of valuecalls in the table; put %v, %d reads (%d answered by the cache) %v\n",
+		s.Store.Funcs, s.Store.Bytes>>20, s.Store.MemFuncs, s.Updates, s.PutTime.Round(time.Millisecond), s.Reads, s.CacheHits, s.ReadTime.Round(time.Millisecond))
 }

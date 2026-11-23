@@ -531,7 +531,8 @@ func namedKnown(irsrc ir.Source, rules *model.Rules) namedNames {
 			}
 		}
 	}
-	ir.Walk(irsrc, func(_ ir.Ref, fn *ir.Func) {
+	// only the functions that have a call with names are read
+	ir.WalkMarked(irsrc, ir.MarkArgNames, func(_ ir.Ref, fn *ir.Func) {
 		for _, b := range fn.Blocks {
 			for _, in := range b.Instrs {
 				if in.Op != ir.OpCall || in.Callee == nil || len(in.ArgNames) == 0 {
