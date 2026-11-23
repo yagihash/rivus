@@ -7,7 +7,7 @@
 # CI runs the same tests (a pull request with -short, main and the weekly run without): .github/workflows/ci.yml.
 
 .DEFAULT_GOAL := help
-.PHONY: help setup build check test test-docs merge zoo-loosened shard-check test-shard go-warm zoo-dart-gen model-diff model-diff-changed model docs-gen
+.PHONY: help setup build check test test-docs merge daily-stats zoo-loosened shard-check test-shard go-warm zoo-dart-gen model-diff model-diff-changed model docs-gen
 
 # the extractors that `make test` needs (a language whose extractor is not there FAILS, it is not skipped)
 RIVUS_DART ?= dart
@@ -86,6 +86,10 @@ model: ## the steps of making the model of a Go or Dart package: PKG=<import pat
 
 docs-gen: ## print the tables of the issues and the ADRs (from docs/issues/*.md, docs/adr/*.md); WHAT=issues or WHAT=adr for one; OUT=docs/TABLE.md writes it (ignored by git)
 	go run ./scripts/docs-gen $(if $(OUT),-o $(OUT)) $(WHAT)
+
+daily-stats: ## count the pull requests merged into main since a date, by what they change: ENGINE/MODEL/EXTRACTOR or TOOLS/CI/DOCS (SINCE=2026-11-20; scripts/daily-stats, docs/PRINCIPLES.md section 7)
+	@[ -n "$(SINCE)" ] || { echo "usage: make daily-stats SINCE=<date>"; exit 1; }
+	go run ./scripts/daily-stats -since "$(SINCE)"
 
 merge: ## merge a pull request with a merge commit, after checking the rules for what the developer may merge: PR=<number> (scripts/merge-pr.sh)
 	@[ -n "$(PR)" ] || { echo "usage: make merge PR=<pull request number>"; exit 1; }
