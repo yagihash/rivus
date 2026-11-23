@@ -39,6 +39,7 @@ func TestMain(m *testing.M) {
 	} else if out, err := exec.Command("go", "build", "-o", binary, ".").CombinedOutput(); err != nil {
 		panic(string(out))
 	}
+	useDartExe(dir)
 	code := m.Run()
 	os.RemoveAll(dir)
 	os.Exit(code)

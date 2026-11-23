@@ -71,6 +71,8 @@ func init() {
 			sub: []*command{
 				{name: "rust", summary: "the toolchain and the extractor that reading Rust needs (on purpose, outside the sandbox)",
 					flags: func(fs *flag.FlagSet) { setupRustFlags(fs) }, run: runSetupRust},
+				{name: "dart", summary: "compile the Dart extractor (a start in a fraction of a second, instead of 5 s or more with dart run)",
+					flags: func(fs *flag.FlagSet) { setupDartFlags(fs) }, run: runSetupDart},
 			}},
 		{name: "debug", summary: "commands for investigation and development; not for everyday use",
 			sub: []*command{
