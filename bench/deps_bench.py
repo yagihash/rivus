@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
 """The benches with heavy dependencies, run the way a user runs rivus: `rivus analyze` with no flag that
-changes the analysis (docs/DESIGN-deps-cost-status.md). One row per bench is appended to bench/deps-ledger.tsv
-and printed, so that two dates can be compared. Local only (it is heavy; not in CI): `make bench-deps`.
+changes the analysis (docs/DESIGN-deps-cost-status.md). Every run adds ONE row to the one ledger of the heavy
+measurements, bench/heavy-ledger.tsv (bench/heavy_ledger.py: the columns, the writer, the table), unless -no-ledger
+(make: NO_LEDGER=1; for a binary with a measurement patch, or a run that is not used as a number). Local only (it is
+heavy; not in CI): `make bench-deps`.
 
-  bench/deps_bench.py [-timeout 600] [-rivus PATH] [-out bench/deps-ledger.tsv] [bench ...]
-  bench/deps_bench.py [-limit S] [-cap GB] [-passline-ledger FILE] memos dart_services   (the pass line, below)
+  bench/deps_bench.py [-timeout 600] [-rivus PATH] [-ledger FILE] [-no-ledger] [bench ...]
+  bench/deps_bench.py [-limit S] [-cap GB] [-ledger FILE] [-no-ledger] memos dart_services   (the pass line, below)
 
 The benches: go-s3 (bench/go-s3), gcp (bench/gcp), dart-gcp (bench/dart-gcp, run in a copy: `dart pub get
 --offline`; the packages are read, never run). There is no Rust bench with its dependencies ready, so none is run.
 
-The run is stopped in two ways: `-timeout` of rivus (it reports what it found; stats.timed_out), and, if rivus
-does not stop 120 s after that, a kill of the process group of this run only (it is started in its own session;
-nothing outside it is signalled). `finished`: yes (stats.timed_out is false and the run converged), timeout,
-oom (the process was killed by the system or said it was out of memory), error (anything else).
-Columns: date, rivus commit, bench, lang, wall_s, max_rss_mb (/usr/bin/time -l on macOS, -v on Linux; "-" when
-the run was killed by us), functions (stats.functions), findings, uncertainties, finished, timeout_s.
+The dependency benches (kind `deps`) run under the same watchdog as the pass line (the sampled memory of the whole
+process tree; the cap is 20 GB, only to protect the machine, not a line), with `-timeout` of rivus (it reports what it
+found; stats.timed_out) and, if rivus does not stop 120 s after that, a kill of the process group of this run only
+(it is started in its own session; nothing outside it is signalled). `result`: `finished` (the run converged and was
+not timed out), `timeout` (stats.timed_out, or the group was killed on the clock), `stopped_memory` (the watchdog),
+`oom` (killed by the system or out of memory), `error`.
 
 The pass line (`make bench-passline`; targets in bench/deps-targets.json): one line per target,
   PASS|FAIL memos time=<s>/<limit> mem=<GB>/<cap> converged=<yes|no> detected=<yes|no|n/a> quiet_after_fix=<yes|no|n/a>
@@ -29,7 +31,8 @@ removing the flow until the guard mechanism (#169) exists. A target with `detect
 vulnerability) counts per vulnerability: detected when at least one finding passes through a labelled position;
 `through_tp=<n>/<N>` (the labelled positions passed through) is printed beside it as information. A target that is not decided yet is printed as INFO, not PASS/FAIL.
 Sources are fetched into $BENCH_CACHE (default ~/.cache/rivus-bench/), outside this tree; the output of the runs
-goes to $BENCH_OUT (default .claude/work/bench-out/, git-ignored). Nothing of a target is run.
+goes to $BENCH_OUT (default .claude/work/bench-out/, git-ignored; the ledger holds numbers only, the JSON stays there).
+Nothing of a target is run.
 """
 import argparse
 import datetime
@@ -45,6 +48,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from heavylock import heavy_lock  # one lock for the heavy runs of the whole machine (bench/heavylock.py)
+import heavy_ledger  # the one ledger of the heavy measurements (bench/heavy_ledger.py)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BENCHES = {
@@ -52,52 +56,12 @@ BENCHES = {
     "gcp": ("bench/gcp", "go"),
     "dart-gcp": ("bench/dart-gcp", "dart"),
 }
-COLUMNS = ["date", "rivus", "bench", "lang", "wall_s", "max_rss_mb", "functions", "findings", "uncertainties", "finished", "timeout_s"]
+DEPS_CAP_GB = 20  # the watchdog of the dependency benches: protects the machine; it is not a line
 GRACE = 120
 
 
-def run_group(cmd, cwd, env, limit, errpath, outpath):
-    """Run cmd in its own session; kill that group (only) after limit seconds. Returns (returncode, killed)."""
-    with open(outpath, "wb") as out, open(errpath, "wb") as err:
-        p = subprocess.Popen(cmd, cwd=cwd, env=env, stdout=out, stderr=err, start_new_session=True)
-    killed = False
-    try:
-        p.wait(timeout=limit)
-    except subprocess.TimeoutExpired:
-        pgid = os.getpgid(p.pid)
-        if pgid == os.getpgrp() or pgid != p.pid:
-            raise SystemExit("deps_bench: refusing to kill process group %d (not the run's own)" % pgid)
-        os.killpg(pgid, signal.SIGKILL)
-        p.wait()
-        killed = True
-    return p.returncode, killed
-
-
-def max_rss_mb(err):
-    m = re.search(r"^\s*(\d+)\s+maximum resident set size", err, re.M)  # macOS: bytes
-    if m:
-        return int(m.group(1)) // (1024 * 1024)
-    m = re.search(r"Maximum resident set size \(kbytes\): (\d+)", err)  # Linux: KB
-    if m:
-        return int(m.group(1)) // 1024
-    return None
-
-
-def max_rss_bytes(err):
-    """The end-of-run peak (bytes) from the output of /usr/bin/time (macOS -l: bytes; Linux -v: KB), or None."""
-    m = re.search(r"^\s*(\d+)\s+maximum resident set size", err, re.M)
-    if m:
-        return int(m.group(1))
-    m = re.search(r"Maximum resident set size \(kbytes\): (\d+)", err)
-    if m:
-        return int(m.group(1)) * 1024
-    return None
-
-
-max_rss_mb_exact = max_rss_bytes
-
-
 def measure(name, rivus, timeout, work):
+    """One dependency bench. Returns (row of the ledger without date and commit, None), or (None, why it was skipped)."""
     d, lang = BENCHES[name]
     src = os.path.join(ROOT, d)
     env = dict(os.environ)
@@ -110,39 +74,38 @@ def measure(name, rivus, timeout, work):
         src = copy
         env["RIVUS_DART"] = "dart"
         env["RIVUS_DART_EXTRACTOR"] = "dart run " + os.path.join(ROOT, "extractor/dart/bin/rivus_dart.dart")
-    timer = ["/usr/bin/time", "-l"] if sys.platform == "darwin" else ["/usr/bin/time", "-v"]
-    cmd = timer + [rivus, "analyze", "-lang", lang, "-C", src, "-timeout", "%ds" % timeout]
+    cmd = [rivus, "analyze", "-lang", lang, "-C", src, "-timeout", "%ds" % timeout]
     outp, errp = os.path.join(work, name + ".out.json"), os.path.join(work, name + ".err")
     with heavy_lock("deps_bench " + name):
-        t0 = time.time()
-        rc, killed = run_group(cmd, ROOT, env, timeout + GRACE, errp, outp)
-    wall = time.time() - t0
+        load = os.getloadavg()[0]
+        m = run_watched(cmd, ROOT, env, timeout + GRACE, int(DEPS_CAP_GB * GB), errp, outp)
     err = open(errp, errors="replace").read()
-    row = {"bench": name, "lang": lang, "wall_s": "%.1f" % wall, "timeout_s": timeout, "functions": "-", "findings": "-", "uncertainties": "-"}
-    rss = max_rss_mb(err)
-    row["max_rss_mb"] = rss if rss is not None else "-"
-    try:
-        rep = json.load(open(outp))
-        st = rep.get("stats", {})
-        row.update(functions=st.get("functions", "-"), findings=len(rep.get("findings", [])), uncertainties=len(rep.get("uncertainties", [])))
-        if st.get("timed_out") or killed:
-            row["finished"] = "timeout"
-        else:
-            row["finished"] = "yes" if st.get("converged", True) else "error"
-    except (OSError, ValueError):
-        if killed:
-            row["finished"] = "timeout"
-        elif rc in (-9, 137) or re.search(r"out of memory|cannot allocate memory", err, re.I):
-            row["finished"] = "oom"
-        else:
-            row["finished"] = "error"
+    rep = None
+    if not m["why"]:
+        try:
+            rep = json.load(open(outp))
+        except (OSError, ValueError):
+            rep = None
+    st = rep.get("stats", {}) if isinstance(rep, dict) else {}
+    converged = bool(st.get("converged", True)) if rep is not None else False
+    row = {"target": name, "target_commit": "in-tree", "kind": "deps", "settings": "default (-timeout %ds)" % timeout,
+           "wall_s": "%.1f" % m["wall"], "cpu_s": "%.1f" % m["cpu"], "peak_tree_gb": "%.2f" % (m["b"] / GB),
+           "converged": converged if rep is not None else None, "exit_code": m["rc"], "load_start": "%.2f" % load}
+    row.update({k: v for k, v in heavy_ledger.report_columns(rep).items() if v is not None})
+    if m["why"] == "memory":
+        row["result"] = "stopped_memory"
+    elif m["why"] == "time" or st.get("timed_out"):
+        row["result"] = "timeout"
+    elif rep is not None:
+        row["result"] = "finished" if converged else "error"
+    elif m["rc"] in (-9, 137) or re.search(r"out of memory|cannot allocate memory", err, re.I):
+        row["result"] = "oom"
+    else:
+        row["result"] = "error"
     return row, None
 
 
-
 TARGETS_FILE = os.path.join(ROOT, "bench/deps-targets.json")
-PASSLINE_LEDGER = os.path.join(ROOT, "bench/passline-ledger.tsv")
-PASSLINE_COLUMNS = ["date", "rivus", "line"]
 GB = 1024 ** 3
 EXIT_INCOMPLETE = 4  # rivus: the output is complete as far as it goes, the analysis is not (cmd/rivus exitIncomplete)
 
@@ -370,6 +333,7 @@ def analyze_once(rivus, t, src, env, limit_s, cap_bytes, work, tag):
     cmd = [rivus, "analyze", "-lang", t["lang"], "-C", src] + expand_args(t.get("args", []), src, t.get("subdir", ""))
     outp, errp = os.path.join(work, tag + ".out.json"), os.path.join(work, tag + ".err")
     with heavy_lock("deps_bench analyze " + tag):
+        load = os.getloadavg()[0]
         m = run_watched(cmd, ROOT, env, limit_s, cap_bytes, errp, outp)
     rc, why, wall, peak = m["rc"], m["why"], m["wall"], m["b"]
     rep, converged = None, False
@@ -382,7 +346,7 @@ def analyze_once(rivus, t, src, env, limit_s, cap_bytes, work, tag):
             converged = bool(st.get("converged", False)) and not st.get("timed_out", False) and not st.get("load_dependent", False)
         except (OSError, ValueError):
             rep = None
-    return {"wall": wall, "peak": peak, "converged": converged, "why": why, "report": rep, "peak_how": "tree-sum", "peak_a": m["a"], "cpu": m["cpu"], "big": m["big"], "big_rss": m["big_rss"], "at_s": m["at_s"]}
+    return {"wall": wall, "peak": peak, "converged": converged, "why": why, "report": rep, "peak_how": "tree-sum", "peak_a": m["a"], "cpu": m["cpu"], "big": m["big"], "big_rss": m["big_rss"], "at_s": m["at_s"], "rc": rc, "load": load}
 
 
 def passline(name, t, rivus, cache, outdir, limit_s, cap_gb):
@@ -421,13 +385,37 @@ def passline(name, t, rivus, cache, outdir, limit_s, cap_gb):
                 quiet = quiet_after_fix(fixed_n)
             print("deps_bench: %s %s findings of %s: pre-fix %s, fixed %s" % (name, d["id"], d["category"], cnt(pre), fixed_n), file=sys.stderr)
         passed, body = judge(main["wall"], limit_s, main["peak"] / GB, cap_gb, main["converged"], detected, through, quiet)
-        return format_line(name, t.get("decided", False), passed, body)
+        decided = t.get("decided", False)
+        if main["why"]:
+            result = "stopped_" + main["why"]
+        else:
+            result = ("PASS" if passed else "FAIL") if decided else "INFO"
+        extra = [a for a in t.get("args", [])] + (["-limit %g" % limit_s] if limit_s != t["time_limit_s"] else []) + (["-cap %g" % cap_gb] if cap_gb != t["mem_cap_gb"] else [])
+        extra += ["%s=%s" % (k, v) for k, v in sorted(env.items()) if k == "GOMEMLIMIT" or (k.startswith("RIVUS_") and k not in ("RIVUS_HEAVY_LOCK_HELD", "RIVUS_HEAVY_LOCK"))]
+        row = {"target": name, "target_commit": t.get("commit") or "in-tree", "kind": "passline", "settings": " ".join(extra) or "default",
+               "wall_s": "%.1f" % main["wall"], "cpu_s": "%.1f" % main["cpu"], "peak_tree_gb": "%.2f" % (main["peak"] / GB),
+               "converged": main["converged"], "detected": detected, "quiet_after_fix": quiet, "exit_code": main["rc"],
+               "load_start": "%.2f" % main["load"], "result": result}
+        row.update({k: v for k, v in heavy_ledger.report_columns(main["report"]).items() if v is not None})
+        return format_line(name, decided, passed, body), row
+
+
+def git_commit():
+    return subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+
+
+def add_to_ledger(row, a, commit):
+    """One row for a run, unless -no-ledger. date and rivus_commit are added here."""
+    if a.no_ledger:
+        return
+    row = dict(row, date=datetime.date.today().isoformat(), rivus_commit=commit)
+    heavy_ledger.append_row(row, a.ledger)
 
 
 def run_passline(names, a):
     targets = json.load(open(TARGETS_FILE))
     cache, outdir = cache_dir(), out_dir()
-    commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+    commit = git_commit()
     with tempfile.TemporaryDirectory(prefix="deps-bench-") as bw:
         rivus = a.rivus
         if not rivus:
@@ -435,24 +423,19 @@ def run_passline(names, a):
             subprocess.run(["go", "build", "-o", rivus, "./cmd/rivus"], cwd=ROOT, check=True)
         for name in names:
             t = targets[name]
-            line = passline(name, t, rivus, cache, outdir, a.limit or t["time_limit_s"], a.cap or t["mem_cap_gb"])
+            line, row = passline(name, t, rivus, cache, outdir, a.limit or t["time_limit_s"], a.cap or t["mem_cap_gb"])
             print(line, flush=True)
-            if a.passline_ledger:
-                new = not os.path.exists(a.passline_ledger)
-                with open(a.passline_ledger, "a") as f:
-                    if new:
-                        f.write("\t".join(PASSLINE_COLUMNS) + "\n")
-                    f.write("\t".join([datetime.date.today().isoformat(), commit, line]) + "\n")
+            add_to_ledger(row, a, commit)
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("-timeout", type=int, default=600, help="seconds (the -timeout of rivus; the group is killed GRACE s later)")
     ap.add_argument("-rivus", default="", help="the rivus binary (default: built from this tree)")
-    ap.add_argument("-out", default=os.path.join(ROOT, "bench/deps-ledger.tsv"))
+    ap.add_argument("-ledger", default=heavy_ledger.LEDGER, help="the ledger (bench/heavy-ledger.tsv)")
+    ap.add_argument("-no-ledger", action="store_true", help="do not add a row (a binary with a measurement patch; a run that is not used as a number)")
     ap.add_argument("-limit", type=float, default=0, help="pass line: the time limit in seconds (default: the one of the target)")
     ap.add_argument("-cap", type=float, default=0, help="pass line: the memory cap in GB (default: the one of the target)")
-    ap.add_argument("-passline-ledger", default="", help="append the pass line (date, rivus, line) to this file (bench/passline-ledger.tsv)")
     ap.add_argument("benches", nargs="*", default=list(BENCHES))
     a = ap.parse_args()
     targets = json.load(open(TARGETS_FILE))
@@ -460,26 +443,19 @@ def main():
         return run_passline(a.benches, a)
     if any(b in targets for b in a.benches):
         raise SystemExit("deps_bench: do not mix the benches of the ledger and the targets of the pass line")
-    commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+    commit = git_commit()
     with tempfile.TemporaryDirectory(prefix="deps-bench-") as work:
         rivus = a.rivus
         if not rivus:
             rivus = os.path.join(work, "rivus")
             subprocess.run(["go", "build", "-o", rivus, "./cmd/rivus"], cwd=ROOT, check=True)
-        new = not os.path.exists(a.out)
-        with open(a.out, "a") as f:
-            if new:
-                f.write("\t".join(COLUMNS) + "\n")
-            for name in a.benches:
-                row, why = measure(name, rivus, a.timeout, work)
-                if row is None:
-                    print("deps_bench: %s skipped: %s" % (name, why), file=sys.stderr)
-                    continue
-                row.update(date=datetime.date.today().isoformat(), rivus=commit)
-                line = "\t".join(str(row[c]) for c in COLUMNS)
-                f.write(line + "\n")
-                f.flush()
-                print(line, flush=True)
+        for name in a.benches:
+            row, why = measure(name, rivus, a.timeout, work)
+            if row is None:
+                print("deps_bench: %s skipped: %s" % (name, why), file=sys.stderr)
+                continue
+            add_to_ledger(row, a, commit)
+            print("%s %s wall=%ss tree=%sGB result=%s" % (name, row["kind"], row["wall_s"], row["peak_tree_gb"], row["result"]), flush=True)
 
 
 if __name__ == "__main__":
