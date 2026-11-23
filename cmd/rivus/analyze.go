@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"runtime"
 	"runtime/pprof"
+	"sort"
 	"strings"
 	"time"
 
@@ -37,6 +38,9 @@ type analyzeOpts struct {
 	// resolveFuncValues gives the calls of function values that have no candidate the functions that the analysis of the
 	// function values carries to them, before the taint analysis (docs/DESIGN-callouts.md, 5.6). Off by default.
 	resolveFuncValues bool
+	// lockLangs are the languages whose extractor ran in this run (Dart, Rust): their lock file, in -C, says the versions
+	// (unverifiedFromLocks). Set by loadLangs, so a run from -ir or -index has none.
+	lockLangs []string
 	// rustIsolation is how the Rust project was read (set when it was); it goes to the summary
 	rustIsolation *report.Isolation
 	timeout       time.Duration
@@ -296,6 +300,10 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	if l.gossa != nil {
 		rep.Summary.UnverifiedVersions = rules.UnverifiedVersions(l.gossa.ModuleVersions, "go.mod")
 	}
+	rep.Summary.UnverifiedVersions = append(rep.Summary.UnverifiedVersions, o.unverifiedFromLocks(rules)...)
+	sort.SliceStable(rep.Summary.UnverifiedVersions, func(i, j int) bool {
+		return rep.Summary.UnverifiedVersions[i].Package < rep.Summary.UnverifiedVersions[j].Package
+	})
 	if len(o.skipped) > 0 {
 		if rep.Summary.Unread == nil {
 			rep.Summary.Unread = &report.Unread{Top: []report.UnreadPackage{}}

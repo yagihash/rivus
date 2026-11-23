@@ -445,6 +445,9 @@ func (o *analyzeOpts) loadLangs(langs []string, patterns []string, rules *model.
 				continue
 			}
 		}
+		if lang != langGo {
+			o.lockLangs = append(o.lockLangs, lang)
+		}
 		merged.Funcs = append(merged.Funcs, p.Funcs...)
 		merged.Impls = append(merged.Impls, p.Impls...)
 		merged.Types = append(merged.Types, p.Types...)

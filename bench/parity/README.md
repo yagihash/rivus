@@ -48,7 +48,7 @@ IR の呼び出し先の名前(`callee.symbol`、関数の名前)と、モデル
 | `callback_param` の source(ADR-106) | ✓(単体テスト) | ✓(shelf_router) | 要確認(書式の検査だけ。extractor では未確認) |
 | `named:` の sink の選択 | 不要(名前つき引数がない) | ✓ | 不要(名前つき引数がない) |
 | `verified_versions`(読み込みと `rivus models versions`) | ✓ | ✓ | ✓ |
-| `summary.unverified_versions`(確認していないバージョンの注記) | ✓ | ✗(#162) | ✗(#162) |
+| `summary.unverified_versions`(確認していないバージョンの注記) | ✓ | ✓(`pubspec.lock`。この PR) | ✗(#162) |
 | path の major を `/v*` と書く(ADR-110) | ✓ | 不要(path に major がない) | 不要(path に major がない) |
 | zoo で骨組みを依存として読む | ✓(骨組みが独立の module) | ✓(依存として。#231) | ✓(`exclude = ["skel"]`) |
 | `checked_by: cell` の行(ADR-107) | 要確認(機構は共通。Go で使う行があるか未確認) | ✓ | 要確認(同左) |
