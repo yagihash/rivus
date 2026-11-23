@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -9,8 +10,14 @@ import (
 // "Rejected candidates"). It is a record: the analysis does not read it, and it changes no row. The command `make model` lists the
 // candidates of a package and matches each of them with a row or with an entry here; one that is neither is undecided.
 type Rejected struct {
-	// Symbol is the symbol of the function or method, written as in the rows.
+	// Symbol is the symbol of the function or method, written as in the rows. Exactly one of Symbol and Type is given.
 	Symbol string `yaml:"symbol" json:"symbol"`
+	// Type is the full name of a type (Go: `pkg/path.Type`; Dart: `package:x/src/a.dart#Type`). With Type, the entry rejects, for Kind, every
+	// place of every candidate that is in an argument of this type: one type, never a pattern or a list. Covers is then required.
+	Type string `yaml:"type" json:"type,omitempty"`
+	// Covers is how many candidates the entry covered when it was written (type entries only). `make model` counts them at every run and warns when
+	// there are more: a new API must not enter a rejection unseen. Whoever sees the warning updates it, after looking at the new candidates.
+	Covers *int `yaml:"covers" json:"covers,omitempty"`
 	// Kind is what the candidate would have been: sink, source, sanitizer or calls.
 	Kind string `yaml:"kind" json:"kind"`
 	// Why is the reason, in a few words.
@@ -26,11 +33,26 @@ func (rs *RuleSet) validateRejected() error {
 	seen := map[string]bool{}
 	for i, r := range rs.Rejected {
 		what := fmt.Sprintf("rejected[%d]", i)
-		if strings.TrimSpace(r.Symbol) == "" {
-			return fmt.Errorf("%s: symbol is required", what)
+		if (strings.TrimSpace(r.Symbol) == "") == (strings.TrimSpace(r.Type) == "") {
+			return fmt.Errorf("%s: exactly one of symbol and type is required", what)
 		}
-		if err := checkSymbol(r.Symbol, what); err != nil {
-			return err
+		if r.Type != "" {
+			if strings.ContainsAny(r.Type, "*? \t,") {
+				return fmt.Errorf("%s (%s): type is the full name of one type (no pattern, no list)", what, r.Type)
+			}
+			if r.Covers == nil || *r.Covers < 0 {
+				return fmt.Errorf("%s (%s): covers is required with type (how many candidates the entry covers now)", what, r.Type)
+			}
+			if r.Position != "" {
+				return fmt.Errorf("%s (%s): position is not for a type entry", what, r.Type)
+			}
+		} else {
+			if r.Covers != nil {
+				return fmt.Errorf("%s (%s): covers is for a type entry", what, r.Symbol)
+			}
+			if err := checkSymbol(r.Symbol, what); err != nil {
+				return err
+			}
 		}
 		ok := false
 		for _, k := range RejectedKinds {
@@ -45,9 +67,66 @@ func (rs *RuleSet) validateRejected() error {
 		if strings.TrimSpace(r.Why) == "" {
 			return fmt.Errorf("%s (%s): why is required", what, r.Symbol)
 		}
+		key := r.Symbol + "\x00" + r.Kind + "\x00" + r.Position + "\x00" + r.Type
+		if seen[key] {
+			return fmt.Errorf("%s (%s%s): the same symbol (or type), kind and position are rejected twice", what, r.Symbol, r.Type)
+		}
+		seen[key] = true
+	}
+	return nil
+}
+
+// Deferred is a candidate that could not be decided yet (docs/MODELING.md, "Rejected candidates"): not a row, not a rejection. `ref` names the issue that
+// holds the open question; it is required. The analysis does not read it.
+type Deferred struct {
+	Symbol string `yaml:"symbol" json:"symbol"`
+	Kind   string `yaml:"kind" json:"kind"`
+	Why    string `yaml:"why" json:"why"`
+	// Ref is `#N` (docs/issues/N-*.md) or `model-<package>-<name>` (docs/issues/model-<package>-<name>.md).
+	Ref string `yaml:"ref" json:"ref"`
+	// Position is as in Rejected.
+	Position string `yaml:"position" json:"position,omitempty"`
+}
+
+var deferredRefRe = regexp.MustCompile(`^(#[0-9]+|model-[a-z0-9._-]+)$`)
+
+// DeferredRefFile is the file of docs/issues that a ref names ("" if the ref is not of a valid form): `#12` is 12-*.md (a glob), `model-x` is model-x.md.
+func DeferredRefFile(ref string) string {
+	switch {
+	case !deferredRefRe.MatchString(ref):
+		return ""
+	case strings.HasPrefix(ref, "#"):
+		return strings.TrimPrefix(ref, "#") + "-*.md"
+	}
+	return ref + ".md"
+}
+
+func (rs *RuleSet) validateDeferred() error {
+	seen := map[string]bool{}
+	for i, r := range rs.Deferred {
+		what := fmt.Sprintf("deferred[%d]", i)
+		if strings.TrimSpace(r.Symbol) == "" {
+			return fmt.Errorf("%s: symbol is required", what)
+		}
+		if err := checkSymbol(r.Symbol, what); err != nil {
+			return err
+		}
+		ok := false
+		for _, k := range RejectedKinds {
+			ok = ok || r.Kind == k
+		}
+		if !ok {
+			return fmt.Errorf("%s (%s): kind is required and is one of %s (got %q)", what, r.Symbol, strings.Join(RejectedKinds, ", "), r.Kind)
+		}
+		if strings.TrimSpace(r.Why) == "" {
+			return fmt.Errorf("%s (%s): why is required", what, r.Symbol)
+		}
+		if DeferredRefFile(r.Ref) == "" {
+			return fmt.Errorf("%s (%s): ref is required: `#N` or `model-<package>-<name>` (got %q)", what, r.Symbol, r.Ref)
+		}
 		key := r.Symbol + "\x00" + r.Kind + "\x00" + r.Position
 		if seen[key] {
-			return fmt.Errorf("%s (%s): the same symbol, kind and position are rejected twice", what, r.Symbol)
+			return fmt.Errorf("%s (%s): the same symbol, kind and position are deferred twice", what, r.Symbol)
 		}
 		seen[key] = true
 	}
