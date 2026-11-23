@@ -66,14 +66,14 @@ type common struct {
 	declIgnored int
 	// extractor, if set, makes the IR of the Go code in place of goir.Extract (a test sets it: extractor.go). No flag.
 	extractor *accept.Extractor
-	// irSpill keeps the functions of the IR in a file and reads them when a reader asks for them (ADR-123), in place of
-	// holding them in memory. Set by RIVUS_INTERNAL_IR_SPILL=1 (and by a test). No flag: the result is the same.
+	// irSpill keeps the functions of the IR in a file and reads them when a reader asks for them (ADR-123). It is on:
+	// a test sets it off to compare with the IR in memory. No flag and no variable: the result is the same.
 	irSpill bool
 }
 
 func (c *common) register(fs *flag.FlagSet) {
 	c.dir = "."
-	c.irSpill = os.Getenv(envIRSpill) == "1"
+	c.irSpill = true
 	fs.Func("C", "directory to analyse from (default \".\")", func(v string) error {
 		c.dir, c.dirSet = v, true
 		return nil
