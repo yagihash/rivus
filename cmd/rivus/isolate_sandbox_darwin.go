@@ -23,7 +23,11 @@ import (
 // from a trusted source.
 
 // rustDataDir is where rivus keeps what it prepares for Rust (the dependencies that were fetched).
+// RIVUS_RUST_DATA_DIR names another directory for it (the tests of rivus use it so that they write nothing to the directory of the user).
 func rustDataDir() (string, error) {
+	if d := os.Getenv("RIVUS_RUST_DATA_DIR"); d != "" {
+		return d, nil
+	}
 	base, err := os.UserConfigDir() // ~/Library/Application Support
 	if err != nil {
 		return "", err

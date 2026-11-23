@@ -11,6 +11,9 @@ import (
 const pinnedToolchainNote = ""
 
 func rustDataDir() (string, error) {
+	if d := os.Getenv("RIVUS_RUST_DATA_DIR"); d != "" {
+		return d, nil
+	}
 	base, err := os.UserConfigDir()
 	if err != nil {
 		return "", err

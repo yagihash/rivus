@@ -69,3 +69,16 @@ func TestHostileProjectIsRefusedOnTheHost(t *testing.T) {
 		t.Errorf("not refused: %v", err)
 	}
 }
+
+// TestRustDataDirOfTheTestsIsNotTheUsers: the tests must not write the CARGO_HOME of the sandbox (rivus-cargo-*) to the directory of
+// the user (~/Library/Application Support/rivus); TestMain points RIVUS_RUST_DATA_DIR at a temporary directory.
+func TestRustDataDirOfTheTestsIsNotTheUsers(t *testing.T) {
+	got, err := rustDataDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	base, _ := os.UserConfigDir()
+	if base != "" && strings.HasPrefix(got, filepath.Join(base, "rivus")) {
+		t.Errorf("rustDataDir() = %s: the tests write to the directory of the user", got)
+	}
+}
