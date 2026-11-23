@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """The one ledger of the heavy measurements: bench/heavy-ledger.tsv. One row per run, for the pass line
-(`make bench-passline`) and for the dependency benches (`make bench-deps`). Only the tools write it (bench/deps_bench.py
+(`make bench-passline`) and for the dependency benches (`make bench-deps`), and for the one-off checks (`kind` = once: a size count, or a run that no tool makes; written with append_row, not by hand; the numbers that no column holds are in `result`). Only the tools write it (bench/deps_bench.py
 calls append_row); nobody edits it by hand, and the numbers are not copied to other files (point to the row: date and
 commit). The notes beside it are in bench/heavy-ledger.md. A line that starts with `#` is a comment (skipped).
 
 Read it (read only):
 
-  python3 bench/heavy_ledger.py [--kind passline|deps] [--target memos] [--last N] [--ledger FILE]
+  python3 bench/heavy_ledger.py [--kind passline|deps|once] [--target memos] [--last N] [--ledger FILE]
 
 The pass line is two separate conditions, both needed: it finishes (`finish`: time within the limit, memory within the cap,
 `conv` converged; computed from the limits of bench/deps-targets.json) and it detects (`det`: by place, see
@@ -171,7 +171,7 @@ def render(rows):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Print the heavy ledger with the margins (read only).")
-    ap.add_argument("--kind", choices=["passline", "deps"])
+    ap.add_argument("--kind", choices=["passline", "deps", "once"])
     ap.add_argument("--target")
     ap.add_argument("--last", type=int, default=0, help="only the last N rows after the other filters")
     ap.add_argument("--ledger", default=LEDGER)
