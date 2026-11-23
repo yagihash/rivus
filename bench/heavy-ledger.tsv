@@ -11,3 +11,4 @@ date	rivus_commit	target	target_commit	kind	settings	wall_s	cpu_s	peak_tree_gb	m
 2026-11-24	1f9078f8	go-s3	in-tree	deps	default (-timeout 600s)	45.9	162.0	3.72	6442450944	default	3988076264	2699777584	0.187	yes			1	0	0	0		13.66	finished
 2026-11-24	1f9078f8	gcp	in-tree	deps	default (-timeout 600s)	51.1	163.6	3.07	6442450944	default	3272883592	2142143376	0.214	yes			27	0	0	0		36.77	finished
 2026-11-24	1f9078f8	dart-gcp	in-tree	deps	default (-timeout 600s)	20.0	29.6	1.74	6442450944	default	474208632	377129568	0.004	yes			19	0	0	0		33.06	finished
+2026-11-24	2d2b8904	memos	00fcd170281a75fc0e95ec4f2f54f43d32fe81bd	passline	default	59.2	305.4	5.94	6442450944	default	6389882424	4749935480	0.239	yes	yes	no	174	0	0	0		13.86	PASS
