@@ -1,0 +1,4 @@
+dart	conv/char_lexer.dart	miss	@source(conv-char-lexer-decoy) @miss(silent) @ref(#185)	void decoy() { @decoy
+dart	conv/char_lexer.dart	miss	@source(conv-char-lexer-vuln) @miss(silent) @ref(#185)	void vuln() { @vuln
+dart	conv/char_lexer.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	conv/char_lexer.dart	sink-none	@sink(none) @nosink(conv-char-lexer-decoy)	void decoy() { @decoy

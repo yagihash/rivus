@@ -38,6 +38,16 @@ pub mod cont {
 pub mod conv {
     pub mod buffer_writestring;
     pub mod builtin_minmax;
+    pub mod char_append;
+    pub mod char_base64;
+    pub mod char_case;
+    pub mod char_hex;
+    pub mod char_index;
+    pub mod char_lexer;
+    pub mod char_range_write;
+    pub mod char_replace;
+    pub mod char_reverse;
+    pub mod char_rune_slice;
     pub mod unsafe_string;
     pub mod exec_output_echo;
     pub mod struct_field_boxed;

@@ -1,0 +1,4 @@
+rust	conv/char_range_write.rs	miss	@source(conv-char-range-write-decoy) @miss(unmodeled_library_call) @ref(#185)	fn decoy() { @decoy
+rust	conv/char_range_write.rs	miss	@source(conv-char-range-write-vuln) @miss(unmodeled_library_call) @ref(#185)	fn vuln() { @vuln
+rust	conv/char_range_write.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	conv/char_range_write.rs	sink-none	@sink(none) @nosink(conv-char-range-write-decoy)	fn decoy() { @decoy

@@ -1,0 +1,2 @@
+dart	conv/char_index.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	conv/char_index.dart	sink-none	@sink(none) @nosink(conv-char-index-decoy)	void decoy() { @decoy

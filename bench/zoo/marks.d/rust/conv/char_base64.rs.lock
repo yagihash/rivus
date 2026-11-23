@@ -1,0 +1,4 @@
+rust	conv/char_base64.rs	miss	@source(conv-char-base64-decoy) @miss(unmodeled_library_call) @ref(#185)	fn decoy() { @decoy
+rust	conv/char_base64.rs	miss	@source(conv-char-base64-vuln) @miss(unmodeled_library_call) @ref(#185)	fn vuln() { @vuln
+rust	conv/char_base64.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	conv/char_base64.rs	sink-none	@sink(none) @nosink(conv-char-base64-decoy)	fn decoy() { @decoy

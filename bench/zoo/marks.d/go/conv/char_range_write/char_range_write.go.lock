@@ -1,0 +1,4 @@
+go	conv/char_range_write/char_range_write.go	miss	@source(conv-char-range-write-decoy) @miss(silent) @ref(#185)	func decoy() { @decoy
+go	conv/char_range_write/char_range_write.go	miss	@source(conv-char-range-write-vuln) @miss(silent) @ref(#185)	func vuln() { @vuln
+go	conv/char_range_write/char_range_write.go	sink-none	@sink(none)	func fixed() { @fixed
+go	conv/char_range_write/char_range_write.go	sink-none	@sink(none) @nosink(conv-char-range-write-decoy)	func decoy() { @decoy

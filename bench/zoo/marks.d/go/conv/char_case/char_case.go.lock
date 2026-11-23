@@ -1,0 +1,4 @@
+go	conv/char_case/char_case.go	miss	@source(conv-char-case-decoy) @miss(silent) @ref(#185)	func decoy() { @decoy
+go	conv/char_case/char_case.go	miss	@source(conv-char-case-vuln) @miss(silent) @ref(#185)	func vuln() { @vuln
+go	conv/char_case/char_case.go	sink-none	@sink(none)	func fixed() { @fixed
+go	conv/char_case/char_case.go	sink-none	@sink(none) @nosink(conv-char-case-decoy)	func decoy() { @decoy

@@ -1,0 +1,2 @@
+rust	conv/char_rune_slice.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	conv/char_rune_slice.rs	sink-none	@sink(none) @nosink(conv-char-rune-slice-decoy)	fn decoy() { @decoy

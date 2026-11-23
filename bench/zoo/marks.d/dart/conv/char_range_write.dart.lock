@@ -1,0 +1,4 @@
+dart	conv/char_range_write.dart	miss	@source(conv-char-range-write-decoy) @miss(silent) @ref(#185)	void decoy() { @decoy
+dart	conv/char_range_write.dart	miss	@source(conv-char-range-write-vuln) @miss(silent) @ref(#185)	void vuln() { @vuln
+dart	conv/char_range_write.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	conv/char_range_write.dart	sink-none	@sink(none) @nosink(conv-char-range-write-decoy)	void decoy() { @decoy

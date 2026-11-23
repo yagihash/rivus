@@ -1,0 +1,4 @@
+rust	conv/char_case.rs	miss	@source(conv-char-case-decoy) @miss(unmodeled_library_call) @ref(#185)	fn decoy() { @decoy
+rust	conv/char_case.rs	miss	@source(conv-char-case-vuln) @miss(unmodeled_library_call) @ref(#185)	fn vuln() { @vuln
+rust	conv/char_case.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	conv/char_case.rs	sink-none	@sink(none) @nosink(conv-char-case-decoy)	fn decoy() { @decoy

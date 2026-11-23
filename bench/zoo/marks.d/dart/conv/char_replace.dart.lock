@@ -1,0 +1,4 @@
+dart	conv/char_replace.dart	miss	@source(conv-char-replace-decoy) @miss(silent) @ref(#185)	void decoy() { @decoy
+dart	conv/char_replace.dart	miss	@source(conv-char-replace-vuln) @miss(silent) @ref(#185)	void vuln() { @vuln
+dart	conv/char_replace.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	conv/char_replace.dart	sink-none	@sink(none) @nosink(conv-char-replace-decoy)	void decoy() { @decoy
