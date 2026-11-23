@@ -109,6 +109,8 @@ type Report struct {
 	Errors     []string       `json:"errors,omitempty"`
 	Runs       map[string]Run `json:"runs,omitempty"`
 	Rows       []RowState     `json:"rows,omitempty"` // every row of the package, judged or not (Judge)
+	// PreExisting are the findings (a MISS, an EXTRA, an error of a row) on rows that the pull request did not change (Restrict): shown, not failing.
+	PreExisting []string `json:"pre_existing,omitempty"`
 }
 
 // Run is the cost of one analysis.
@@ -262,6 +264,9 @@ func (r *Report) Print(w io.Writer) {
 	for _, e := range r.Errors {
 		fmt.Fprintf(w, "  ERROR: %s\n", e)
 	}
+	for _, e := range r.PreExisting {
+		fmt.Fprintf(w, "  pre-existing (a row that the change did not touch; not a failure): %s\n", e)
+	}
 	var ks []string
 	for k := range r.Counts {
 		ks = append(ks, k)
@@ -407,4 +412,34 @@ func reasonClass(s string) string {
 		}
 	}
 	return s
+}
+
+// Restrict keeps as failures only the findings on the rows in `only` (symbols, with the major written /v*): a MISS, an EXTRA or an error
+// on any other row is turned into a "pre-existing" notice, and counted in Counts["pre-existing"]. What a pull request has to fix is the
+// rows that it changed; the rest was there before it (a package whose declaration changed is not restricted).
+func (r *Report) Restrict(only map[string]bool) {
+	for i, x := range r.Results {
+		if (x.Status == "MISS" || x.Status == "EXTRA") && !only[normalMajor(x.Symbol)] {
+			r.PreExisting = append(r.PreExisting, fmt.Sprintf("%s %s %s %s", x.Status, probeRow(x.Probe), x.Symbol, x.Variant))
+			r.Counts[x.Status]--
+			r.Counts["pre-existing"]++
+			r.Results[i].Status = "pre-existing-" + x.Status
+		}
+	}
+	var keep []string
+	for _, e := range r.Errors {
+		sym, _, _ := strings.Cut(e, ": ")
+		if only[normalMajor(sym)] || !strings.Contains(e, ": ") {
+			keep = append(keep, e)
+			continue
+		}
+		r.PreExisting = append(r.PreExisting, "ERROR "+e)
+		r.Counts["pre-existing"]++
+	}
+	r.Errors = keep
+	for k, v := range r.Counts {
+		if v == 0 {
+			delete(r.Counts, k)
+		}
+	}
 }

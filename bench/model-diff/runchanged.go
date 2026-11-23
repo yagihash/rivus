@@ -1,9 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
@@ -16,10 +18,17 @@ import (
 // `langs` are run; a changed package of another language is listed as not run (never as passed). The exit status is 1 when one package
 // failed (a MISS, an EXTRA that no note allows, an error, a row whose symbol is not in the package), 2 when the tool could not run.
 func runChanged(repo, base, langs, out string, extra []string) int {
-	pkgs, err := changedPackages(repo, base)
+	detail, err := changedDetail(repo, base)
 	if err != nil {
 		return fail(err)
 	}
+	var pkgs []string
+	for k := range detail {
+		if !strings.HasSuffix(k, " ") {
+			pkgs = append(pkgs, k)
+		}
+	}
+	sort.Strings(pkgs)
 	reviewed, _ := addedReviewed(repo, base)
 	for _, l := range reviewed {
 		fmt.Println(l) // a notice for the pull request, never a failure
@@ -65,12 +74,29 @@ func runChanged(repo, base, langs, out string, extra []string) int {
 			table = append(table, line{entry, "nothing", "no row of the package is left (the rows were removed)"})
 			continue
 		}
+		// the rows that the pull request changed fail; the others are shown as pre-existing, unless the declaration of the package changed
+		if ch := detail[entry]; !ch.Declared {
+			var syms []string
+			for sym := range ch.Symbols {
+				syms = append(syms, sym)
+			}
+			sort.Strings(syms)
+			args = append(args, "-only", strings.Join(syms, ","))
+		}
 		fmt.Printf("== model-diff %s\n", entry)
 		switch code := realMain(append(args, extra...)); code {
 		case 0:
-			table = append(table, line{entry, "ok", ""})
+			note := ""
+			if n := preExisting(filepath.Join(out, fmt.Sprintf("report-%d.json", i))); n > 0 {
+				note = fmt.Sprintf("%d pre-existing finding(s) on rows that the change did not touch (shown above, not a failure)", n)
+			}
+			table = append(table, line{entry, "ok", note})
 		case 1:
-			table = append(table, line{entry, "FAIL", "see the table above"})
+			note := "see the table above"
+			if n := preExisting(filepath.Join(out, fmt.Sprintf("report-%d.json", i))); n > 0 {
+				note += fmt.Sprintf("; %d more pre-existing finding(s) on rows that the change did not touch", n)
+			}
+			table = append(table, line{entry, "FAIL", note})
 			failed = true
 		default:
 			table = append(table, line{entry, "ERROR", "the tool could not run (exit " + fmt.Sprint(code) + ")"})
@@ -117,4 +143,17 @@ func verifiedVersion(builtins []string, pkg string) string {
 		}
 	}
 	return ""
+}
+
+// preExisting is the number of findings that the report of a run put aside as pre-existing.
+func preExisting(report string) int {
+	data, err := os.ReadFile(report)
+	if err != nil {
+		return 0
+	}
+	var rep Report
+	if json.Unmarshal(data, &rep) != nil {
+		return 0
+	}
+	return len(rep.PreExisting)
 }

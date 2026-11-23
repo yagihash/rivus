@@ -31,6 +31,7 @@ func realMain(args []string) int {
 	runCh := fs.String("run-changed", "", "run the differential test of every package whose rows differ from the ones at this commit (what a pull request checks), one table at the end; exit 1 when one failed")
 	langs := fs.String("langs", "go", "with -run-changed: the languages that are run (go, dart); a changed package of another one is listed as not run")
 	deadAllow := fs.String("dead-allow", "", "count the rows of the .dead-allow files that a differential test judged, using the report*.json files under this directory (what -run-changed writes), and stop")
+	only := fs.String("only", "", "the symbols of the rows that the pull request changed, comma separated: a MISS, an EXTRA or an error on any other row is shown as pre-existing and does not fail (-run-changed gives it; empty: every row fails)")
 	reviewed := fs.String("changed-reviewed", "", "print the miss-reviewed notes added since this commit (one line each, `miss-reviewed-added <file> <symbol>@<position> <kind>`; a notice for the pull request, never a failure), and stop")
 	gaps := fs.Bool("coverage-gaps", false, "Go standard library: with -pkg, list the exported functions and methods that take a string, bytes or `any` and have no row in the built-in models (the probes start from rows: a function without a row is not found by them), and stop")
 	pkg := fs.String("pkg", "", "the package: a Go import path, or package:<name> for Dart")
@@ -265,6 +266,13 @@ func realMain(args []string) int {
 	}
 	rep := Compare(gen.Probes, gen.Skips, a, b, notes)
 	rep.Judge(rows, gen.States)
+	if *only != "" {
+		set := map[string]bool{}
+		for _, sym := range strings.Split(*only, ",") {
+			set[normalMajor(sym)] = true
+		}
+		rep.Restrict(set)
+	}
 	for _, st := range skipped {
 		rep.Rows = append(rep.Rows, st)
 		rep.Counts["rows_not_judged"]++

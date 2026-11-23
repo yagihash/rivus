@@ -311,6 +311,10 @@ func TestChangedPackages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	detail, _ := changedDetail(repo, "HEAD")
+	if d := detail["go os"]; d == nil || d.Declared || !d.Symbols["os.Getpid"] || detail["go encoding/json"] == nil || !detail["go encoding/json"].Declared {
+		t.Errorf("detail = %+v: os has the changed row, encoding/json the declaration", detail)
+	}
 	if strings.Join(got, ",") != "go encoding/json,go net/url,go os,go strings" {
 		t.Errorf("changed = %v, want the packages of the changed, the added row and the added declaration (not path, not dart)", got)
 	}
@@ -697,5 +701,41 @@ func TestDeadAllowCount(t *testing.T) {
 	data, _ := io.ReadAll(r)
 	if err != nil || !strings.Contains(string(data), "total") || !strings.Contains(string(data), "     4          2              0            1           1") {
 		t.Errorf("err %v:\n%s", err, data)
+	}
+}
+
+// A pull request answers for the rows that it changed: a MISS on a row that it did not touch is a notice (pre-existing), not a failure; a row
+// that it changed fails; a package whose declaration changed is not restricted (every finding fails).
+func TestOnlyTheChangedRowsFail(t *testing.T) {
+	run := func(only string) (int, *Report) {
+		t.Helper()
+		out := filepath.Join(t.TempDir(), "o")
+		args := []string{"-lang", "go", "-pkg", "example.com/synth", "-local", "testdata/synth", "-model", "testdata/pure-wrong.yaml", "-rivus", rivus(t), "-repo", "../..", "-out", out}
+		if only != "" {
+			args = append(args, "-only", only)
+		}
+		code := realMain(args)
+		data, err := os.ReadFile(filepath.Join(out, "report.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var rep Report
+		if err := json.Unmarshal(data, &rep); err != nil {
+			t.Fatal(err)
+		}
+		return code, &rep
+	}
+	// pure-wrong.yaml has three MISS (Upper, Walk, Box.Get)
+	code, rep := run("example.com/synth.Drop") // an unrelated row changed
+	if code != 0 || len(rep.PreExisting) != 3 || rep.Counts["MISS"] != 0 || rep.Counts["pre-existing"] != 3 {
+		t.Errorf("unchanged rows: exit %d, counts %v, pre-existing %v", code, rep.Counts, rep.PreExisting)
+	}
+	code, rep = run("example.com/synth.Walk")
+	if code != 1 || rep.Counts["MISS"] != 1 || len(rep.PreExisting) != 2 {
+		t.Errorf("a changed row: exit %d, counts %v, pre-existing %v", code, rep.Counts, rep.PreExisting)
+	}
+	code, rep = run("") // a changed declaration: every finding counts
+	if code != 1 || rep.Counts["MISS"] != 3 || len(rep.PreExisting) != 0 {
+		t.Errorf("a declaration: exit %d, counts %v", code, rep.Counts)
 	}
 }

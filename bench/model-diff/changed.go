@@ -17,13 +17,41 @@ import (
 // changedPackages lists the packages whose rows (flows, pure, sinks, sanitizers, sources) or whose `body_replaced_packages` declaration differ from the ones at the commit `base`, in the built-in model
 // files: what a pull request that changes a model has to check ("go <pkg>" / "dart <pkg>", one per line; Rust is not checked).
 func changedPackages(repo, base string) ([]string, error) {
+	ch, err := changedDetail(repo, base)
+	if err != nil {
+		return nil, err
+	}
+	var res []string
+	for k := range ch {
+		if !strings.HasSuffix(k, " ") {
+			res = append(res, k)
+		}
+	}
+	sort.Strings(res)
+	return res, nil
+}
+
+// Change is what differs in one package ("go <pkg>"): the symbols of the rows that differ, and whether the package has a changed
+// `body_replaced_packages` declaration (then every row of the package is the pull request's business).
+type Change struct {
+	Declared bool
+	Symbols  map[string]bool
+}
+
+func changedDetail(repo, base string) (map[string]*Change, error) {
 	c := exec.Command("git", "diff", "--name-only", base, "--", "internal/model/builtin")
 	c.Dir = repo
 	out, err := c.Output()
 	if err != nil {
 		return nil, fmt.Errorf("git diff: %v", err)
 	}
-	set := map[string]bool{}
+	set := map[string]*Change{}
+	get := func(k string) *Change {
+		if set[k] == nil {
+			set[k] = &Change{Symbols: map[string]bool{}}
+		}
+		return set[k]
+	}
 	for _, f := range strings.Fields(string(out)) {
 		if !strings.HasSuffix(f, ".yaml") {
 			continue
@@ -40,10 +68,10 @@ func changedPackages(repo, base string) ([]string, error) {
 		mark := func(k string) {
 			if strings.HasPrefix(k, "declared ") {
 				// a package that the file declares as one whose body the models replace: all of its rows are checked
-				set[lang+" "+strings.TrimSuffix(rowName(k), "/...")] = true
+				get(lang + " " + strings.TrimSuffix(rowName(k), "/...")).Declared = true
 				return
 			}
-			set[lang+" "+SymbolPackage(lang, rowName(k))] = true
+			get(lang + " " + SymbolPackage(lang, rowName(k))).Symbols[normalMajor(rowName(k))] = true
 		}
 		for k, v := range b {
 			if a[k] != v {
@@ -56,14 +84,7 @@ func changedPackages(repo, base string) ([]string, error) {
 			}
 		}
 	}
-	var res []string
-	for k := range set {
-		if !strings.HasSuffix(k, " ") {
-			res = append(res, k)
-		}
-	}
-	sort.Strings(res)
-	return res, nil
+	return set, nil
 }
 
 // rowName is the symbol (or field, or type) of a key of rowsOf: the last word.
