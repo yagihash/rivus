@@ -692,43 +692,59 @@ type Global struct {
 // source files an extractor read that left a trace in the IR. A function that
 // PruneDeps drops is listed too when this is called before it.
 func (p *Program) SourceFiles() []string {
-	set := map[string]bool{}
-	add := func(f string) {
-		if f != "" {
-			set[f] = true
-		}
-	}
+	set := fileSet{}
 	for _, f := range p.Funcs {
-		if f == nil {
-			continue
-		}
-		add(f.File)
-		add(f.Pos.File)
-		for bi := range f.Blocks {
-			b := &f.Blocks[bi]
-			for ii := range b.Instrs {
-				in := &b.Instrs[ii]
-				add(in.Pos.File)
-				add(in.AddrPos.File)
-				for _, a := range in.ArgPos {
-					add(a.File)
-				}
-			}
-			add(b.Term.Pos.File)
-			add(b.Term.CondPos.File)
+		if f != nil {
+			set.addFunc(f)
 		}
 	}
+	set.addProgram(p)
+	return set.list()
+}
+
+// fileSet collects the files that positions name.
+type fileSet map[string]bool
+
+func (s fileSet) add(f string) {
+	if f != "" {
+		s[f] = true
+	}
+}
+
+func (s fileSet) addFunc(f *Func) {
+	s.add(f.File)
+	s.add(f.Pos.File)
+	for bi := range f.Blocks {
+		b := &f.Blocks[bi]
+		for ii := range b.Instrs {
+			in := &b.Instrs[ii]
+			s.add(in.Pos.File)
+			s.add(in.AddrPos.File)
+			for _, a := range in.ArgPos {
+				s.add(a.File)
+			}
+		}
+		s.add(b.Term.Pos.File)
+		s.add(b.Term.CondPos.File)
+	}
+}
+
+// addProgram adds the files of what is not a function: the globals and the texts.
+func (s fileSet) addProgram(p *Program) {
 	for _, g := range p.Globals {
-		add(g.Pos.File)
+		s.add(g.Pos.File)
 	}
 	for _, t := range p.Texts {
-		add(t.File)
+		s.add(t.File)
 	}
 	for _, t := range p.CallTexts {
-		add(t.File)
+		s.add(t.File)
 	}
-	out := make([]string, 0, len(set))
-	for f := range set {
+}
+
+func (s fileSet) list() []string {
+	out := make([]string, 0, len(s))
+	for f := range s {
 		out = append(out, f)
 	}
 	sort.Strings(out)

@@ -101,6 +101,9 @@ func (b *Builder) SortByID() {
 	b.heads, b.pin, b.reach, b.slot = heads, pin, reach, order
 }
 
+// Discard lets go of what was written (the extractor failed: there is no Source).
+func (b *Builder) Discard() { b.st.Close() }
+
 // Len is the number of functions added.
 func (b *Builder) Len() int { return len(b.heads) }
 

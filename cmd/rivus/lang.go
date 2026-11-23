@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/yagihash/rivus/internal/report"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/yagihash/rivus/internal/frontend/goir"
 	"github.com/yagihash/rivus/internal/ir"
+	"github.com/yagihash/rivus/internal/irspill"
 	"github.com/yagihash/rivus/internal/model"
 )
 
@@ -319,11 +321,48 @@ func (o *analyzeOpts) runExtractor(lang string) (*ir.Program, error) {
 	return readExtracted(lang, out)
 }
 
+// runExtractorSpill is runExtractor for the IR on disk (ADR-123): the extractor writes to a pipe, the core decodes a line
+// at a time and puts each function into the file, and the whole output is never held in memory. What is returned is the
+// program without its functions, and the Source that has them. The extractor that failed is the error that is returned,
+// whatever the core had read of its output.
+func (o *analyzeOpts) runExtractorSpill(lang string) (*ir.Program, *irspill.DiskSource, error) {
+	pr, pw := io.Pipe()
+	type read struct {
+		prog *ir.Program
+		disk *irspill.DiskSource
+		err  error
+	}
+	done := make(chan read, 1)
+	go func() {
+		prog, disk, err := readSpill(pr)
+		io.Copy(io.Discard, pr) // the extractor is not left to block on a pipe that nobody reads
+		done <- read{prog, disk, err}
+	}()
+	_, runErr := o.extractInto(lang, pw)
+	pw.Close()
+	r := <-done
+	if runErr != nil {
+		if r.disk != nil {
+			r.disk.Release()
+		}
+		return nil, nil, runErr
+	}
+	if r.err != nil {
+		return nil, nil, fmt.Errorf("the %s extractor: %w", lang, r.err)
+	}
+	return r.prog, r.disk, nil
+}
+
 // extractRaw runs the extractor of a language (Rust: under the sandbox unless -unsafe-host-exec) and returns the stream of the IR as it wrote it.
 func (o *analyzeOpts) extractRaw(lang string) ([]byte, error) {
+	return o.extractInto(lang, nil)
+}
+
+// extractInto is extractRaw; with w, the stream goes to w as the extractor writes it and nothing is returned.
+func (o *analyzeOpts) extractInto(lang string, w io.Writer) ([]byte, error) {
 	if lang == langRust && !o.hostExec() {
 		o.rustIsolation = &report.Isolation{Mode: "sandbox", Detail: "the build scripts and the macros of the project ran under the sandbox of macOS: no network while it was built (the fetch stage has one, and runs no code of the project), no files but the project, its dependencies and a work directory"}
-		return o.rawRustIsolated()
+		return o.rawRustIsolated(w)
 	}
 	if lang == langRust {
 		o.rustIsolation = &report.Isolation{Mode: "host", Detail: "-unsafe-host-exec: the build scripts and the macros of the project ran on this machine, with your rights, without any isolation"}
@@ -364,7 +403,13 @@ func (o *analyzeOpts) extractRaw(lang string) ([]byte, error) {
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	fmt.Fprintf(os.Stderr, "rivus: extracting %s: %s\n", lang, strings.Join(append([]string{words[0]}, args...), " "))
-	out, err := cmd.Output()
+	var out []byte
+	if w != nil {
+		cmd.Stdout = w
+		err = cmd.Run()
+	} else {
+		out, err = cmd.Output()
+	}
 	if err != nil {
 		return nil, fmt.Errorf("the %s extractor failed: %v\n%s", lang, err, strings.TrimSpace(stderr.String()))
 	}
@@ -387,7 +432,7 @@ func (o *analyzeOpts) hostExec() bool {
 }
 
 // rawRustIsolated reads a Rust project under the sandbox of macOS (ADR-093); on another system nothing is run.
-func (o *analyzeOpts) rawRustIsolated() ([]byte, error) {
+func (o *analyzeOpts) rawRustIsolated(w io.Writer) ([]byte, error) {
 	dir, err := filepath.Abs(o.dir)
 	if err != nil {
 		return nil, err
@@ -406,7 +451,7 @@ func (o *analyzeOpts) rawRustIsolated() ([]byte, error) {
 	}
 	args = append(args, o.bodyReplacedArgs(langRust)...)
 	args = append(args, dir)
-	out, err := iso.extractRustSandboxed(context.Background(), dir, args)
+	out, err := iso.extractRustSandboxedTo(context.Background(), dir, args, w)
 	if o.rustIsolation != nil {
 		o.rustIsolation.DeveloperDir = iso.developerDir
 	}
@@ -451,9 +496,11 @@ func (o *analyzeOpts) loadLangs(langs []string, patterns []string, rules *model.
 	// A program with Go code and the IR on disk keeps the functions in Sources, not in merged.Funcs: the ones of Go are in
 	// the file, the ones of the other languages (read into memory) are a Source of their own.
 	var srcs []ir.Source
-	spill := o.irSpill && slices.Contains(langs, langGo)
+	spill := o.irSpill
+	var otherDisks []*irspill.DiskSource
 	for _, lang := range langs {
 		var p *ir.Program
+		var disk *irspill.DiskSource
 		if lang == langGo {
 			l, err := o.loadGo(patterns, rules, o.maxImpl)
 			if err != nil {
@@ -469,7 +516,12 @@ func (o *analyzeOpts) loadLangs(langs []string, patterns []string, rules *model.
 			goProg, p = l, l.ir
 		} else {
 			var err error
-			if p, err = o.runExtractor(lang); err != nil {
+			if spill {
+				p, disk, err = o.runExtractorSpill(lang)
+			} else {
+				p, err = o.runExtractor(lang)
+			}
+			if err != nil {
 				var missing *extractorMissingError
 				if (o.lang != "" && o.lang != langAuto) || !errors.As(err, &missing) {
 					return nil, err
@@ -490,7 +542,8 @@ func (o *analyzeOpts) loadLangs(langs []string, patterns []string, rules *model.
 			if lang == langGo {
 				srcs = append(srcs, goProg.source())
 			} else {
-				srcs = append(srcs, ir.MemSource(p))
+				otherDisks = append(otherDisks, disk)
+				srcs = append(srcs, disk)
 			}
 		} else {
 			merged.Funcs = append(merged.Funcs, p.Funcs...)
@@ -518,6 +571,10 @@ func (o *analyzeOpts) loadLangs(langs []string, patterns []string, rules *model.
 		if goProg != nil {
 			l.disk = goProg.disk
 		}
+		if l.disk == nil && len(otherDisks) > 0 {
+			l.disk, otherDisks = otherDisks[0], otherDisks[1:]
+		}
+		l.moreDisks = otherDisks
 	}
 	if goProg != nil && len(langs) == 1 {
 		return goProg, nil

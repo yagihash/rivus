@@ -54,6 +54,9 @@ type Spec struct {
 	Timeout time.Duration
 	// MaxOutput is the most bytes of standard output that are kept; over it, the program is stopped. 0: no limit.
 	MaxOutput int64
+	// Stdout, when it is set, gets the standard output as it is written (the limit MaxOutput counts it too), and
+	// Result.Stdout is nil: the caller that reads a long output does not have it all in memory.
+	Stdout io.Writer
 }
 
 // Result is what a run gave.
@@ -198,7 +201,11 @@ func Run(ctx context.Context, s Spec) (*Result, error) {
 	// a session of its own: no controlling terminal, and the group is the program and what it starts
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	var stdout, stderr bytes.Buffer
-	lw := &limitWriter{w: &stdout, left: s.MaxOutput, over: make(chan struct{})}
+	var out io.Writer = &stdout
+	if s.Stdout != nil {
+		out = s.Stdout
+	}
+	lw := &limitWriter{w: out, left: s.MaxOutput, over: make(chan struct{})}
 	cmd.Stdout = lw
 	cmd.Stderr = &capWriter{w: &stderr, left: 1 << 20}
 	if err := cmd.Start(); err != nil {
@@ -224,7 +231,10 @@ func Run(ctx context.Context, s Spec) (*Result, error) {
 	// is looked for outside it.)
 	syscall.Kill(-pgid, syscall.SIGKILL)
 	res.MayHaveLeftProcesses = true
-	res.Stdout, res.Stderr = stdout.Bytes(), stderr.Bytes()
+	res.Stderr = stderr.Bytes()
+	if s.Stdout == nil {
+		res.Stdout = stdout.Bytes()
+	}
 	if ee, ok := werr.(*exec.ExitError); ok {
 		res.ExitCode = ee.ExitCode()
 	} else if werr != nil {

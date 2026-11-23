@@ -130,6 +130,70 @@ func Write(w io.Writer, p *Program) error {
 
 // Read reads a stream and validates the program.
 func Read(r io.Reader) (*Program, error) {
+	shared := interner{}
+	p, err := decodeStream(r, func(f *Func) error {
+		f.intern(shared)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if err := p.Validate(); err != nil {
+		return nil, fmt.Errorf("ir: %w", err)
+	}
+	return p, nil
+}
+
+// ReadFuncs reads a stream a function at a time: fn gets each function, validated, in the order of the stream, and the
+// reader does not keep it. What is returned is the program without its functions (Funcs is nil; Files is the list that
+// SourceFiles gives for the program with them). The program is checked as Read checks it. A function that fn does not
+// keep is not held: the memory of the reader is the one line and the IDs of the functions.
+func ReadFuncs(r io.Reader, fn func(*Func) error) (*Program, error) {
+	seen := map[FuncID]bool{}
+	files := fileSet{}
+	p, err := decodeFuncs(r, func(f *Func) error {
+		if seen[f.ID] {
+			return fmt.Errorf("ir: function %s is defined twice", f.ID)
+		}
+		seen[f.ID] = true
+		if err := f.Validate(); err != nil {
+			return fmt.Errorf("ir: function %s: %w", f.ID, err)
+		}
+		files.addFunc(f)
+		return fn(f)
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, im := range p.Impls {
+		if im.Method == "" {
+			return nil, fmt.Errorf("ir: implementations without a method")
+		}
+	}
+	files.addProgram(p)
+	p.Files = files.list()
+	return p, nil
+}
+
+// decodeStream is decodeFuncs that keeps the functions in the program.
+func decodeStream(r io.Reader, each func(*Func) error) (*Program, error) {
+	var funcs []*Func
+	p, err := decodeFuncs(r, func(f *Func) error {
+		if err := each(f); err != nil {
+			return err
+		}
+		funcs = append(funcs, f)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	p.Funcs = funcs
+	return p, nil
+}
+
+// decodeFuncs decodes the records of a stream: the functions go to fn (each expanded), the others make the program.
+func decodeFuncs(r io.Reader, fn func(*Func) error) (*Program, error) {
 	sc := bufio.NewReaderSize(r, 1<<20)
 	dec := json.NewDecoder(sc)
 	dec.DisallowUnknownFields()
@@ -141,7 +205,6 @@ func Read(r io.Reader) (*Program, error) {
 		return nil, fmt.Errorf("ir: unsupported schema %q (want %q)", h.SchemaVersion, SchemaVersion)
 	}
 	p := &Program{}
-	shared := interner{}
 	for n := 2; ; n++ {
 		var rec record
 		err := dec.Decode(&rec)
@@ -154,8 +217,9 @@ func Read(r io.Reader) (*Program, error) {
 		switch {
 		case rec.Kind == recFunc && rec.Func != nil:
 			rec.Func.expand()
-			rec.Func.intern(shared)
-			p.Funcs = append(p.Funcs, rec.Func)
+			if err := fn(rec.Func); err != nil {
+				return nil, err
+			}
 		case rec.Kind == recImpls && rec.Impls != nil:
 			p.Impls = append(p.Impls, *rec.Impls)
 		case rec.Kind == recType && rec.Type != nil:
@@ -183,9 +247,6 @@ func Read(r io.Reader) (*Program, error) {
 		default:
 			return nil, fmt.Errorf("ir: record %d: unknown record %q", n, rec.Kind)
 		}
-	}
-	if err := p.Validate(); err != nil {
-		return nil, fmt.Errorf("ir: %w", err)
 	}
 	return p, nil
 }
