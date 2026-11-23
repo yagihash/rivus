@@ -337,7 +337,7 @@ propagators:
   - symbol: (*net/http.Request).UserAgent
     flows: [{from: recv, to: result}]
   - symbol: (*net/http.Request).WithContext
-    flows: [{from: recv, to: result}]
+    flows: [{from: recv, to: result}, {from: arg0, to: result}]
   - symbol: net.ParseIP
     flows: [{from: arg0, to: result}]
   - symbol: net.SplitHostPort
@@ -584,6 +584,7 @@ propagators:
     pure: true
   - symbol: path/filepath.Walk
     pure: true
+    calls: [{fn: arg1, with: [arg0]}]
   - symbol: (*go/ast.CallExpr).Pos
     pure: true
   - symbol: (*go/ast.CallExpr).End

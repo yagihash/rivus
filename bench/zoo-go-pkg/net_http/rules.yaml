@@ -1,0 +1,4 @@
+# Rules of the standard library package net/http in the Go zoo (the cells of (*http.Request).WithContext). The sources, sinks and sanitizers of zoo/mark are in
+# bench/zoo-go/rules.yaml (the tests give both files); the rows of net/http are the built-in model, which is in force as always. The standard library
+# has no skeleton: the cells call the real package, and the zoo records only the sinks of zoo/mark.
+ruleset: rivus/bench-zoo-go-pkg-net-http@1

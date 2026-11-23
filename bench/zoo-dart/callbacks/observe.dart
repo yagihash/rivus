@@ -99,6 +99,11 @@ Future<void> main() async {
   }
   {
     final r = Rec();
+    final res = await Stream<String>.value('RECV').asyncMap((x) async { r.see([x]); return 'Ж'; }).toList();
+    add('dart:async#Stream.asyncMap', recv, r, res);
+  }
+  {
+    final r = Rec();
     final res = await Stream<String>.value('RECV').where((x) { r.see([x]); return true; }).toList();
     add('dart:async#Stream.where', recv, r, res);
   }
