@@ -17,6 +17,7 @@ help: ## list the commands
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | sed -E 's/^([a-z-]+):.*## (.*)/  make \1\t\2/' | expand -t 24
 
 setup: ## install Go and Dart if they are missing, and run dart pub get (Linux; not Rust). Run `make check` after it
+	git config core.hooksPath .githooks
 	bash scripts/dev-setup.sh
 
 build: ## build every package

@@ -2,9 +2,12 @@
 
 The goal: rivus analyses a real product with the default flags, in a realistic time and memory, with a meaningful result. One line per target (bench/deps_bench.py; the targets, the pinned commits and the limits are data in bench/deps-targets.json):
 
-`PASS|FAIL memos time=<s>/<limit> mem=<GB>/<cap> converged=<yes|no> detected=<yes|no|n/a>`
+`PASS|FAIL memos time=<s>/<limit> mem=<GB>/<cap> converged=<yes|no> detected=<yes|no|n/a> quiet_after_fix=<yes|no|n/a>`
 
-PASS for memos (usememos/memos 26.11.2, `00fcd170281a75fc0e95ec4f2f54f43d32fe81bd`) needs all four with the default flags (no `-no-deps`, no `-body-replaced`): it ends by itself within 180 s; the peak memory of the whole process tree (the same-time sum, sampled every 0.25 s) stays within 8 GB (the watchdog stops a run above the cap); it converges; and CVE-2025-65799 (path traversal; fixed in 0.25.3) is detected: the count of `path_traversal` findings is higher on the pre-fix commit `1d7efb158045924ab87f58d567bd79cd92edf6af` than on the fixed commit `5f57f48673e2054f404b2c5b497a8eaa3690591d` (counts only). The Dart line is cocoon `app_dart` (below); dart_services (dart-pad `pkgs/dart_services`, `ad668d137e631beeaef3e263054a45696e8d4499`) is a load target, printed as `INFO`.
+PASS for memos (usememos/memos 26.11.2, `00fcd170281a75fc0e95ec4f2f54f43d32fe81bd`) needs all four with the default flags (no `-no-deps`, no `-body-replaced`): it ends by itself within 180 s; the peak memory of the whole process tree (the same-time sum, sampled every 0.25 s) stays within 8 GB (the watchdog stops a run above the cap); it converges; and CVE-2025-65799 (path traversal; fixed in 0.25.3) is detected at the pre-fix commit `1d7efb158045924ab87f58d567bd79cd92edf6af` (`detected=yes`: at least one `path_traversal` finding; the default flags and the builtin models only; counts only). PASS/FAIL is decided by these four only. `quiet_after_fix` (no `path_traversal` finding at the fixed commit `5f57f48673e2054f404b2c5b497a8eaa3690591d`) is a separate indicator and is not part of PASS/FAIL: rivus does not yet treat a fix of the kind "validate, then return early" as removing the flow (the guard mechanism, #169, does not exist). The fixed commit is analysed only when the pre-fix commit is detected; otherwise it is `n/a`. For a target with a truth file (`through_tp`), `detected` is per vulnerability as below and `quiet_after_fix` is `n/a`. The Dart line is cocoon `app_dart` (below); dart_services (dart-pad `pkgs/dart_services`, `ad668d137e631beeaef3e263054a45696e8d4499`) is a load target, printed as `INFO`.
+
+**The next form of the "after the fix" condition (decided 2026-11-23; not in force yet).** The condition above counts findings of the category, which says nothing about whether the finding went away for the right reason. Once the mechanism of issue #169 exists (a check is not deleted from the findings: the finding is kept and says which check function was passed on which branch), the detection condition becomes: before the fix, a finding appears and has no check note; after the fix, there is no finding, or there is a finding that carries a note pointing at the check function that the fix added. Until that mechanism exists, the line above is the condition, and a result of "no finding after the fix" (`quiet_after_fix`, where the runner has it) is only recorded, not part of PASS or FAIL.
+
 
 ### The starting point (2026-11-23, numbers only, a local measurement of the engine of that day)
 
@@ -18,7 +21,7 @@ PASS for memos (usememos/memos 26.11.2, `00fcd170281a75fc0e95ec4f2f54f43d32fe81b
 | memos CVE-2025-65799, pre-fix and fixed | 1d7efb15, 5f57f486 | default, cap 8 GB | cut by the cap at 49 s and 31 s | > 8 GB | no | - | - |
 | memos CVE-2025-65799, pre-fix and fixed | 1d7efb15, 5f57f486 | `-body-replaced` of the aws SDK (informational) | 30 s and 23 s | 3.7 GB and 3.6 GB | yes | - | 0 and 0 (`path_traversal`; not detected at the pre-fix commit) |
 
-So today's line for memos is `FAIL memos time=67/180 mem=>8/8 converged=no detected=no` (cut by the cap).
+So today's line for memos is `FAIL memos time=67/180 mem=>8/8 converged=no detected=no quiet_after_fix=n/a` (cut by the cap; not detected at the pre-fix commit with the default flags and the builtin models).
 
 ### The cocoon line (2026-11-23, numbers only; engine of that day)
 
