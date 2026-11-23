@@ -18,13 +18,20 @@ var dartReal, dartExePath string
 // time; the executable, in a fraction of a second, writes the same IR: TestDartExeSameIR), and puts a wrapper in the place of RIVUS_DART: the
 // tests run `<RIVUS_DART> run <extractor>/bin/rivus_dart.dart <args>`, and the wrapper runs the executable for that, and dart for anything
 // else (`pub get`, the other scripts). RIVUS_DART_FROM_SOURCE=1 keeps `dart run` from source (the other way of the comparison).
+// RIVUS_DART_EXE_DIR is a directory that outlives the run (CI keeps it in a cache): the executable is looked for there, by its key (the hash of
+// the source, the version of the SDK, the system: dartExeKey), and compiled there when it is not, so a stale one is never taken for the current one.
+// Without it, the executable is compiled into the temporary directory of the run, as before.
 func useDartExe(dir string) {
 	dartReal = os.Getenv("RIVUS_DART")
 	if dartReal == "" || os.Getenv("RIVUS_DART_FROM_SOURCE") == "1" {
 		return
 	}
 	src, _ := filepath.Abs("../../extractor/dart")
-	exe, _, err := dartExeFor(src, strings.Fields(dartReal)[0], filepath.Join(dir, "dart-exe"))
+	base := filepath.Join(dir, "dart-exe")
+	if d := os.Getenv("RIVUS_DART_EXE_DIR"); d != "" {
+		base = d
+	}
+	exe, _, err := dartExeFor(src, strings.Fields(dartReal)[0], base)
 	if err != nil {
 		if os.Getenv("RIVUS_REQUIRE_DART") != "" {
 			fmt.Fprintf(os.Stderr, "rivus tests: the Dart extractor could not be compiled (run `dart pub get` in extractor/dart): %v\n", err)
