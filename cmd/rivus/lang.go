@@ -390,6 +390,7 @@ func (o *analyzeOpts) rawRustIsolated() ([]byte, error) {
 		dir = d
 	}
 	iso := o.isolation()
+	iso.verbose = o.verbose
 	var args []string
 	if o.noDeps {
 		args = append(args, "--no-deps")
@@ -398,7 +399,11 @@ func (o *analyzeOpts) rawRustIsolated() ([]byte, error) {
 		args = append(args, "--include-tests")
 	}
 	args = append(args, dir)
-	return iso.extractRustSandboxed(context.Background(), dir, args)
+	out, err := iso.extractRustSandboxed(context.Background(), dir, args)
+	if o.rustIsolation != nil {
+		o.rustIsolation.DeveloperDir = iso.developerDir
+	}
+	return out, err
 }
 
 func (o *analyzeOpts) isolation() *isolationOpts {

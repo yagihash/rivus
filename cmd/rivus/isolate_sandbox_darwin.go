@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/yagihash/rivus/internal/report"
 	"github.com/yagihash/rivus/internal/sandbox"
 )
 
@@ -55,12 +56,40 @@ func pinnedToolchainDir() (string, error) {
 var sandboxPrograms = []string{"/bin/sh", "/bin/bash", "/usr/bin/cc", "/usr/bin/clang", "/usr/bin/ld", "/usr/bin/ar", "/usr/bin/xcrun", "/usr/bin/xcode-select"}
 
 // sdkRoot is the SDK that the linker uses, asked outside the sandbox (xcrun cannot run in it, and the linker would pick another one).
-func sdkRoot() string {
-	out, err := exec.Command("/usr/bin/xcrun", "--show-sdk-path").Output()
+func sdkRoot() string { return sdkRootIn("") }
+
+// sdkRootIn is sdkRoot with DEVELOPER_DIR set to dev when dev is not empty, so that the SDK is the one of the developer directory the build gets.
+func sdkRootIn(dev string) string {
+	cmd := exec.Command("/usr/bin/xcrun", "--show-sdk-path")
+	if dev != "" {
+		cmd.Env = append(os.Environ(), "DEVELOPER_DIR="+dev)
+	}
+	out, err := cmd.Output()
 	if err != nil {
 		return ""
 	}
 	return strings.TrimSpace(string(out))
+}
+
+// selectedDeveloperDir is what `xcode-select -p` says, asked outside the sandbox ("" when it cannot be asked).
+func selectedDeveloperDir() string {
+	out, err := exec.Command("/usr/bin/xcode-select", "-p").Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// developerDirFromHost collects the facts of this machine and decides (see decideDeveloperDir).
+func (o *isolationOpts) developerDirFromHost() (value, source string, err error) {
+	f := developerDirFacts{goos: runtime.GOOS, userEnv: o.env}
+	if st, err := os.Stat(cltDir); err == nil && st.IsDir() {
+		f.cltExists = true
+	}
+	if !f.cltExists {
+		f.selected = selectedDeveloperDir()
+	}
+	return decideDeveloperDir(f)
 }
 
 // extractRustSandboxed reads the project under the sandbox and returns the IR. It runs nothing on this machine outside the sandbox.
@@ -96,12 +125,26 @@ func (o *isolationOpts) extractRustSandboxed(ctx context.Context, dir string, ex
 		return nil, err
 	}
 	cargoHome := filepath.Join(data, volume)
-	sdk := sdkRoot()
+	devDir, devSource, err := o.developerDirFromHost()
+	if err != nil {
+		return nil, err
+	}
+	o.developerDir = nil
+	if devSource != "" {
+		o.developerDir = &report.DeveloperDir{Value: devDir, Source: devSource}
+		if o.verbose {
+			fmt.Fprintf(o.err(), "rivus: DEVELOPER_DIR=%s for the build (%s)\n", devDir, devSource)
+		}
+	}
+	sdk := sdkRootIn(devDir)
 	env := func(work string) []string {
 		e := []string{"PATH=" + filepath.Join(tc, "bin") + ":/usr/bin:/bin", "HOME=" + work, "TMPDIR=" + work, "CARGO_HOME=" + cargoHome,
 			"RIVUS_RUST_DIRECT=1", "RUSTUP_TOOLCHAIN=" + pinnedToolchain}
 		if sdk != "" {
 			e = append(e, "SDKROOT="+sdk)
+		}
+		if devSource == "default" {
+			e = append(e, "DEVELOPER_DIR="+devDir)
 		}
 		return append(e, o.env...)
 	}
