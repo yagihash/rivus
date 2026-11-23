@@ -176,8 +176,8 @@ func vuln() { // @vuln
 	{
 		c := github.NewClientFor("pkg-go-github-sources-vuln-field-content-blob")
 		blob, _, _ := c.Git.GetBlob(ctx, "o", "r", "sha")
-		x := *blob.Content // @source(pkg-go-github-sources-vuln-field-content-blob)
-		mark.SinkCmd(x)    // @sink(pkg-go-github-sources-vuln-field-content-blob)
+		x := blob.Content // @source(pkg-go-github-sources-vuln-field-content-blob)
+		mark.SinkCmd(x)   // @sink(pkg-go-github-sources-vuln-field-content-blob)
 	}
 }
 
