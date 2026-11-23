@@ -21,6 +21,7 @@ var makesProgram = map[string]bool{
 	"cmd/rivus/extract.go":                  true, // rivus debug extract: writes what the extractor made
 	"internal/frontend/goir/goir.go":        true, // makes the program from the Go packages
 	"internal/frontend/goir/streamtexts.go": true, // writes the texts of the functions into the program
+	"internal/frontend/accept/compare.go":   true, // compares the programs that two extractors made
 }
 
 func TestProgramFuncsIsReadThroughSource(t *testing.T) {
