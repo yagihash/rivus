@@ -19,10 +19,14 @@ const (
 	// KindProjectBodyUnread: a call of a function of the project whose body the extractor could not read (fn_skipped:
 	// the compiler's interface stopped on it). Not a library call that has no model: the code is the project's, and what
 	// it does with the value is not in the analysis (rivus' limit; the extractor says why in the detail).
-	KindProjectBodyUnread      = "project_body_unread"
-	KindUnresolvedCallee       = "unresolved_callee"
-	KindContainerImprecision   = "container_element_imprecision"
-	KindDepthLimit             = "depth_limit"
+	KindProjectBodyUnread    = "project_body_unread"
+	KindUnresolvedCallee     = "unresolved_callee"
+	KindContainerImprecision = "container_element_imprecision"
+	KindDepthLimit           = "depth_limit"
+	// KindAccessPathTruncated is on a hop where a value went through a path that was cut at the depth limit (-k, or
+	// -dep-k in the functions of the dependencies): what is below the cut is taken to be tainted as well, so the
+	// flow from there on may exist only because of the cut.
+	KindAccessPathTruncated    = "access_path_truncated"
 	KindRecursionApproximation = "recursion_approximation"
 	KindMissingSource          = "missing_source"
 	KindReflection             = "reflection"

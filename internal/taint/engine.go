@@ -1532,12 +1532,25 @@ func (e *Engine) buildFinding(rf *rawFinding) *Finding {
 	}
 	var allFuncs []string
 	seen := map[string]bool{}
+	cuts := 0
 	for i := range agg {
 		st := &agg[i]
 		allFuncs = append(allFuncs, st.Func)
 		for _, n := range st.Notes {
 			e.fill(n)
 			k := n.Kind + "|" + n.Symbol + "|" + posKey(n.pos)
+			if n.Kind == KindAccessPathTruncated {
+				// each cut is told on its own (where and how deep), up to a cap
+				k += "|" + n.Detail
+				if !seen[k] {
+					seen[k] = true
+					if cuts++; cuts > maxCutNotes {
+						continue
+					}
+					f.Uncertainties = append(f.Uncertainties, n)
+				}
+				continue
+			}
 			if !seen[k] {
 				seen[k] = true
 				f.Uncertainties = append(f.Uncertainties, n)
@@ -1549,6 +1562,10 @@ func (e *Engine) buildFinding(rf *rawFinding) *Finding {
 				}
 			}
 		}
+	}
+	if cuts > maxCutNotes {
+		f.Uncertainties = append(f.Uncertainties, newUncertainty(KindAccessPathTruncated, "access_path_truncated: "+itoa(cuts-maxCutNotes)+
+			" more cuts on the path are not listed (the first "+itoa(maxCutNotes)+" are)", ""))
 	}
 	f.Paths = []Path{{Steps: steps, OmittedSteps: omitted}}
 	f.PathSteps = len(steps)
@@ -1665,6 +1682,9 @@ type srcPlace struct {
 
 // maxOtherSources bounds the other sources a finding lists.
 const maxOtherSources = 5
+
+// maxCutNotes bounds the access_path_truncated notes a finding lists (each tells one cut).
+const maxCutNotes = 10
 
 // mergeParamSources merges the findings that differ only in the function the
 // source parameter is in: a parameter of a request type is a source in every
