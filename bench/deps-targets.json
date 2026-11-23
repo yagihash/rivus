@@ -1,5 +1,5 @@
 {
-  "_doc": "Targets of the pass line (bench/deps_bench.py, `make bench-passline`). Data only. repo + commit: fetched into $BENCH_CACHE (default ~/.cache/rivus-bench/), never into this tree; the code of a target is never run (git clone/checkout, `go mod download`, `dart pub get`). args: the flags of `rivus analyze` besides -lang and -C (none: the default flags). time_limit_s / mem_cap_gb: the pass line. decided: false = the line is printed as INFO (the limits are not decided yet). detect: the category whose finding count is compared on the pre-fix and the fixed commit (counts only).",
+  "_doc": "Targets of the pass line (bench/deps_bench.py, `make bench-passline`). Data only. repo + commit: fetched into $BENCH_CACHE (default ~/.cache/rivus-bench/), never into this tree; the code of a target is never run (git clone/checkout, `go mod download`, `dart pub get`). args: the flags of `rivus analyze` besides -lang and -C (the default flags; `{root}` is the root of the fetched tree, for -allow-deps-under). time_limit_s / mem_cap_gb: the pass line. decided: false = the line is printed as INFO (the limits are not decided yet). detect: the category whose finding count is compared on the pre-fix and the fixed commit (counts only).",
   "memos": {
     "lang": "go",
     "repo": "https://github.com/usememos/memos",
@@ -16,6 +16,22 @@
       "fixed_commit": "5f57f48673e2054f404b2c5b497a8eaa3690591d"
     }
   },
+  "cocoon": {
+    "_doc": "flutter/cocoon `app_dart` (the server that manages the CI of Flutter). Launch: -C app_dart, -allow-deps-under the packages of the repository, `dart pub get` only, and the Flutter member of the root workspace removed in the COPY. No public fixed vulnerability of the project is known (no security advisory), so detected is n/a.",
+    "lang": "dart",
+    "repo": "https://github.com/flutter/cocoon",
+    "commit": "ae9eb1beaf765d644cc85dde38def030c80b4b7d",
+    "subdir": "app_dart",
+    "args": [
+      "-allow-deps-under",
+      "{root}/packages"
+    ],
+    "time_limit_s": 180,
+    "mem_cap_gb": 8,
+    "decided": true,
+    "dart_remove_flutter_workspace_members": true,
+    "detect": null
+  },
   "dart_services": {
     "lang": "dart",
     "repo": "https://github.com/dart-lang/dart-pad",
@@ -26,7 +42,8 @@
     "mem_cap_gb": 8,
     "decided": false,
     "dart_remove_flutter_workspace_members": true,
-    "detect": null
+    "detect": null,
+    "_doc": "a LOAD target for the heavy dependency package:analyzer (printed as INFO; also a target of the depth experiments)"
   },
   "smoke": {
     "_doc": "a small local tree (bench/go-curated), to check that the script works end to end; not a target",

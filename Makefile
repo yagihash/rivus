@@ -67,8 +67,8 @@ zoo-dart-gen: ## write bench/zoo-dart/exec/lib/cases.dart and the two pubspec.ya
 bench-deps: ## local, heavy: `rivus analyze` (no flags) on the benches with heavy dependencies (go-s3, gcp, dart-gcp) with a timeout; appends a row each to bench/deps-ledger.tsv (TIMEOUT=600 BENCHES="go-s3 gcp"; bench/deps_bench.py)
 	python3 bench/deps_bench.py -timeout $(or $(TIMEOUT),600) $(BENCHES)
 
-bench-passline: ## local, heavy: the pass line (one PASS/FAIL line per target: time, memory, convergence, detection; default flags) of memos and dart_services; fetches the sources into $$BENCH_CACHE (bench/deps_bench.py, bench/deps-targets.json); LINE_LEDGER=1 appends to bench/passline-ledger.tsv
-	python3 bench/deps_bench.py $(if $(LINE_LEDGER),-passline-ledger bench/passline-ledger.tsv) $(or $(TARGETS),memos dart_services)
+bench-passline: ## local, heavy: the pass line (one PASS/FAIL line per target: time, memory, convergence, detection; default flags) of memos, cocoon and dart_services; fetches the sources into $$BENCH_CACHE (bench/deps_bench.py, bench/deps-targets.json); LINE_LEDGER=1 appends to bench/passline-ledger.tsv
+	python3 bench/deps_bench.py $(if $(LINE_LEDGER),-passline-ledger bench/passline-ledger.tsv) $(or $(TARGETS),memos cocoon dart_services)
 
 model-diff: ## the differential test of the model of a package: PKG=<Go import path | package:name> [MODEL=<file>] (bench/model-diff, docs/MODEL-RUNBOOK.md); fetches the package, does not run it
 	@[ -n "$(PKG)" ] || { echo "usage: make model-diff PKG=strings   (or PKG=package:http, MODEL=internal/model/builtin/dart-http.yaml)"; exit 1; }
