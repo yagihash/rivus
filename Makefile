@@ -1,7 +1,7 @@
 # The commands to build, check and test rivus. `make` or `make help` lists them.
 #
 #   make setup   on a new machine: Go, the Dart SDK and `dart pub get` (once; not Rust)
-#   make check   before a push (about two minutes): build, gofmt, go vet and the short tests (TestDogfood included: rivus analyses its own code, and new code can break its capture_unbound ceiling)
+#   make check   before a push (about a minute): build, gofmt, go vet and the short tests (TestDogfood skips itself unless RIVUS_DOGFOOD=1: rivus analysing itself runs in the weekly CI run when something changed, ADR-112)
 #   make test    every test, with the Dart and Rust extractors (what CI runs on main); a few minutes
 #
 # CI runs the same tests (a pull request with -short, main and the weekly run without): .github/workflows/ci.yml.
@@ -22,7 +22,7 @@ setup: ## install Go and Dart if they are missing, and run dart pub get (Linux; 
 build: ## build every package
 	go build ./...
 
-check: ## before a push (about two minutes): build, gofmt, go vet, the short tests (TestDogfood included)
+check: ## before a push (about a minute): build, gofmt, go vet, the short tests (TestDogfood is skipped without RIVUS_DOGFOOD=1)
 	go build ./...
 	@bad="$$(gofmt -l cmd internal bench)"; if [ -n "$$bad" ]; then echo "gofmt: not formatted:"; echo "$$bad"; exit 1; fi
 	go vet ./...
