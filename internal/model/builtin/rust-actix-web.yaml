@@ -23,7 +23,7 @@
 #    sink as a whole (a project's rule can name the `Location` case).
 #  * `actix_router::Path` (what `match_info()` returns, `get` of it) and `http::HeaderValue` of the crate `http` have no row of
 #    their own: they are other crates. The rows of the headers are here under the spelling that a project that uses actix-web
-#    has (`actix_web::http::header::HeaderMap`), as the examples of rust-web.yaml.dead-allow say.
+#    has (`actix_web::http::header::HeaderMap`), as the examples of rust-http.dead-allow say.
 ruleset: rivus/rust/actix-web@1
 verified_versions:
   - package: actix-web

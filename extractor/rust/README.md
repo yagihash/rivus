@@ -102,7 +102,7 @@ receiver apart from the arguments), and a sink's `args: [1]` is the first argume
 - The text of the arguments of a call (the stream has the call as written only), and the
   body in the token-normalized form.
 - Models: `internal/model/builtin/rust-*.yaml` cover the common part of `std`. Others
-  (`reqwest`, `sqlx`) have their sinks in `rust-std.yaml`, and `rust-web.yaml` has sources for
+  (`reqwest`, `sqlx`) have their sinks in `rust-std.yaml`, and `rust-axum.yaml` and `rust-web.yaml` have sources for
   `axum` and some other web frameworks (ADR-063 left the question of which frameworks are built in
   open; see `docs/PRINCIPLES.md`, section 3). actix-web is built in
   (`internal/model/builtin/rust-actix-web.yaml`).

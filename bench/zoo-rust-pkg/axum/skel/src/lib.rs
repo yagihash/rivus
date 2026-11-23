@@ -1,4 +1,4 @@
-//! A skeleton for the zoo: the public paths of the types of axum 0.8 that the model rows (internal/model/builtin/rust-web.yaml) name,
+//! A skeleton for the zoo: the public paths of the types of axum 0.8 that the model rows (internal/model/builtin/rust-axum.yaml) name,
 //! with bodies that only record (the signatures are the ones of axum 0.8.9; no code of axum is here). A value that stands for what a
 //! client wrote is made with `In::new` of zoo-mark (the tag of the case), as the harness of the zoo does for its own source type.
 
