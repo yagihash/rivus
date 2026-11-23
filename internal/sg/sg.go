@@ -201,6 +201,8 @@ type InstrInfo struct {
 	View     bool
 	Folded   bool
 	Keyed    bool
+	// CharRead is the attribute of the same name of the instruction (ir.Instr.CharRead).
+	CharRead bool
 	Go       bool
 	// Env is the type of an alloc of a closure's environment (Rust: "{closure@file:l:c: l:c}"),
 	// empty for every other instruction. A closure that captured values is made as this alloc, not

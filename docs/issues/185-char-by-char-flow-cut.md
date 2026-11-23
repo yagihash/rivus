@@ -57,6 +57,15 @@ Rust は、`char` と整数を数値と扱う(extractor の型の分類)ので�
 
 文字の汚染の本体(由来の bit)を実装するときは、`numeric_stops` の `isCharRead` を、流れの判断には使わない。`isCharRead` は、言語に固有の名前を決め打ちで持つ(`std::iter::Iterator::next`、`std::str::Bytes`、`String.codeUnits`、`::as_bytes`、`iter.next`、型の名前 `byte` / `rune` / `char`)。「文字列の要素の取り出し」は、extractor が IR に付ける(命令のマークか、値の種類)。そのとき、`isCharRead` も IR のマークを見る形に置き換える。コアは IR だけを見る、という分担に戻す。
 
+### IR の `CharRead` への置き換えの途中(結論。2026-11-24)
+
+IR の命令に目印 `CharRead`(`char_read`)を足し、Go の extractor が付ける(`s[i]` の文字列の添字と、`range s` の `iter.next_string`)。コアの `isCharRead` は 2 段で、目印があれば真、なければ今までの判定(型の名前と、言語に固有のシンボルの名前)。2 段の間、フラグが off の出力(`numeric_stops` を含む)は、3 言語とも同一。
+
+残りの仕事(必ずやる):
+- Dart の PR と Rust の PR で、それぞれの extractor が `CharRead` を付け、コアの中の言語に固有の名前(`charReadSymbols`、`iter.next`、`std::iter::Iterator::next` とその型の名前、`isTextSequence` の名前)を消す。型の名前(`byte`、`rune`、`char`)で当たる値を、目印にするか、型の分類にするかは、その PR で決める。
+- 流れの判断(`-char-taint` で運ぶかどうか)は、**目印だけ**を見る。今の判定は、数える用途(`numeric_stops`)にだけ残し、それも上の PR で消す。
+- 目印を付けない言語では、フラグを付けても文字の汚染は運ばれない。そのことを出力に出す(例: `summary` に、文字の汚染が有効な言語の一覧)。これは、フラグを足す PR で。
+
 ### CEL / antlr が上位 10 に出ない理由(測定済み。memos 00fcd170、2 回、結果は同一)
 
 - 関数ごとの `char_reads` と `other` の件数を、使い捨ての出力で取った(844 関数。2 回の表は完全に一致。#329 のあとの main に、この PR を合流させたもの)。

@@ -450,13 +450,13 @@ func (c *conv) instr(in ssa.Instruction, blk *ir.Block, b *ssa.BasicBlock) {
 			c.addr[in] = addrInfo{base: base, index: idx, isIdx: true, pos: pos}
 		}
 	case *ssa.Index:
-		c.emit(ir.Instr{Op: ir.OpIndexLoad, Dsts: c.dst(in), Args: []ir.LocalID{c.val(in.X), c.val(in.Index)}, Pos: pos})
+		c.emit(ir.Instr{Op: ir.OpIndexLoad, Dsts: c.dst(in), Args: []ir.LocalID{c.val(in.X), c.val(in.Index)}, CharRead: isStringType(in.X.Type()), Pos: pos})
 	case *ssa.Lookup:
 		dsts := c.dst(in)
 		if in.CommaOk {
 			dsts = c.tupleDsts(in, 2)
 		}
-		c.emit(ir.Instr{Op: ir.OpIndexLoad, Dsts: dsts, Args: []ir.LocalID{c.val(in.X), c.val(in.Index)}, Keyed: true, Pos: pos})
+		c.emit(ir.Instr{Op: ir.OpIndexLoad, Dsts: dsts, Args: []ir.LocalID{c.val(in.X), c.val(in.Index)}, Keyed: true, CharRead: isStringType(in.X.Type()), Pos: pos})
 	case *ssa.MapUpdate:
 		c.emit(ir.Instr{Op: ir.OpIndexStore, Args: []ir.LocalID{c.val(in.Map), c.val(in.Key), c.val(in.Value)}, Keyed: true, Pos: pos})
 	case *ssa.Store:
@@ -485,7 +485,7 @@ func (c *conv) instr(in ssa.Instruction, blk *ir.Block, b *ssa.BasicBlock) {
 		if in.IsString {
 			sym = "iter.next_string"
 		}
-		c.emit(ir.Instr{Op: ir.OpCall, Dsts: c.tupleDsts(in, 3), Args: []ir.LocalID{c.val(in.Iter)}, Callee: &ir.Callee{Kind: ir.CalleeStatic, Symbol: sym}, Pos: pos})
+		c.emit(ir.Instr{Op: ir.OpCall, Dsts: c.tupleDsts(in, 3), Args: []ir.LocalID{c.val(in.Iter)}, Callee: &ir.Callee{Kind: ir.CalleeStatic, Symbol: sym}, CharRead: in.IsString, Pos: pos})
 	case *ssa.Select:
 		// A select is its communications, one after the other: the sends
 		// and the receives. Which one happens is not data.
@@ -632,4 +632,10 @@ func typeAliases(p *gossa.Program) []ir.TypeAlias {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
+}
+
+// isStringType reports whether t is a string type: s[i] of it reads one byte of a text (a map is not).
+func isStringType(t types.Type) bool {
+	b, ok := t.Underlying().(*types.Basic)
+	return ok && b.Info()&types.IsString != 0
 }

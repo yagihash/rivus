@@ -142,3 +142,17 @@ func AppendsField(p *T) { p.a += "x" }
 func ValueField(t T) string { return t.a }
 
 func NestedField(w *W) string { return w.in.a }
+
+// CharReads reads one byte of a string, and one rune by a range over it.
+func CharReads(s string) (byte, rune) {
+	var r rune
+	for _, c := range s {
+		r = c
+	}
+	return s[1], r
+}
+
+// NotCharReads reads a map, a slice and a length: no element of a text.
+func NotCharReads(s string, m map[string]string, xs []string) (string, string, int) {
+	return m[s], xs[1], len(s)
+}

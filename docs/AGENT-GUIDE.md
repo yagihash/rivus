@@ -435,7 +435,7 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `summary.memory_limit_exceeded` | **メモリの上限が低すぎたか**。実行の間に、Go のランタイムが使っていたメモリ(`memory_peak_bytes`)が上限を **5% 以上超えた**ことがあれば `true`(`peak > limit × 1.05`。やわらかい上限が守れているときも、ピークは上限の近くに張りつくので、ちょうどを境目にしない)。`true` は、上限が、解析の生きている量より低く、守れず、GC が回り続けて、時間が増えた可能性が高いことを言う。**`-max-memory` を上げて、再実行する**。やわらかい上限なので、`true` でも結果は完全(`incomplete` とは別)。上限がないとき(`memory_limit_source: none`)は、この項目がない |
 | `summary.memory_peak_bytes` | 実行の間に、ランタイムが使っていたメモリの最大(バイト)。Go の数え方(ランタイムが持つメモリの合計から、OS に返したヒープを引いた量。`SetMemoryLimit` が見る量と同じ)で、プロセスの RSS とは同じでない。250ms ごとと終了時に読む(速く増えて減る山は、見えないことがある)。`memory_limit_exceeded` を決めた根拠 |
 | `summary.gc_cpu_fraction` | 実行全体の CPU 時間のうち、GC が使った割合(0 以上 1 以下、小数 3 桁)。上限がなくても、いつも出る。上限が効いていたかの目安(上限が低すぎると大きくなる) |
-| `summary.live_heap_max_bytes` | 実行の間に、GC が確かめた、生きているヒープの最大(バイト。`/gc/heap/live:bytes`、直近の GC が目印をつけた量の最大)。**上限の下限の目安**: やわらかい上限は、これより低いと守れない(`memory_limit_exceeded` が `true`、`gc_cpu_fraction` が上がる)。`memory_peak_bytes` と違い、やわらかい上限があっても上限に張りつかないので、上限との差が余裕を表す。上限がなくても、いつも出る。250ms ごとと終了時に読み、GC がまだ終わっていないとき(短い実行)は 0 で、項目がない |
+| `summary.live_heap_max_bytes` | 実行の間に、GC が目印を付けた、生きているヒープの最大(バイト。`/gc/heap/live:bytes`、直近の GC が目印を付けた量の最大)。GC がマークをしている間に確保された物も「生き」と数えるので、確保の速い段(要約の段)では、本当の生きている量より大きくなりうる。上限の目安として見るときは上側の値で、読み込みの段の山では本当の生きている量に近い。**これが上限より低いことは、上限が守れることの必要条件ではない**(守れるかは `memory_limit_exceeded` と `gc_cpu_fraction` を見る)。`memory_peak_bytes` と違い、やわらかい上限があっても上限に張りつかない。上限がなくても、いつも出る。250ms ごとと終了時に読み、GC がまだ終わっていないとき(短い実行)は 0 で、項目がない |
 | `summary.load_dependent` | `true` なら、時計の上限(`-timeout`、`-func-timeout`)で止めた所があり、結果がマシンの負荷で変わる |
 | `summary.dependency_sites` | 依存の本体を読んだ実行で毎回出る。`searched` は常に `false`、`dependency_functions` は読んだ依存の関数の数(同じ module のパッケージと、`-allow-deps-under` の下の path 依存は、プロジェクトなので入らない。ADR-114)。**source と sink は、プロジェクトの関数の中だけで探す**(依存の本体は、流れを追うために読む)。ライブラリの中で危険な処理に届く形は、プロジェクトがその API を呼ぶ所に sink のモデルがないと検出されないので、「finding なし」は、その形がないことの証拠ではない。`-no-deps` と、依存の関数が 0 のときは出ない |
 | `summary.categories_excluded` | `-categories` / `-skip-categories` で出力から外した finding の、カテゴリごとの件数(`category`、`findings`。カテゴリの順)。外した分は `summary.findings` と `findings` に入っていない。**外した件数だけを出す**ので、「この件数の finding が、読んでいない所にある」という意味。何も外さなかったとき(フラグなしを含む)は出ない |
@@ -444,6 +444,7 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `stats.converged` | `false` なら、解析が上限で止まっていて、**結果は途中のもの** |
 | `stats.timed_out` | `true` なら `-timeout` で止まった。フィールドがない(`jq` では `null`)のは、時間切れでないという意味 |
 | `stats.budget_exhausted`、`func_timeouts`、`run_timeouts` | 上限で止めた関数の数(理由ごと)。`budget_exhausted` と `func_timeouts` は 0 でもいつも出る(0 以外なら、終了コード 4 の理由になる) |
+| `stats.adds_total`、`adds_max_single_run`、`adds_max_function_total`、`adds_per_function` | 解析の作業量(集合に入った要素の数。`Budget` と同じ数え方)。`adds_total` は全関数の、再解析を含めた合計。`adds_max_single_run` は 1 回の解析の最大(`Budget` と比べる値)。`adds_max_function_total` は関数ごとの合計の最大。`adds_per_function` は、関数ごとの合計で分けた表(`from` 以上 `to` 未満。`to` が 0 は上限なし)で、各行に関数の数 `functions` と `adds` の合計。関数名は出ない。0 でもいつも出る。結果は変えず、上限の値を選ぶための測定の入口 |
 | `stats.tests_skipped` | 読まなかったテストの数(`-tests` で読む) |
 | `stats.functions`、`largest_scc`、`duration_ms` | 解析した関数の数、互いに呼び合う関数の最大のかたまりの大きさ、解析の時間 |
 | `stats.func_values` | `-resolve-func-values` が補った数 |

@@ -550,6 +550,12 @@ type Instr struct {
 	// Keyed marks an index access by key: a lookup in a map or a string, or
 	// a store into a map. The index is a key, not a position.
 	Keyed bool `json:"keyed,omitempty"`
+	// CharRead marks an instruction (an index_load, a field_load or a call)
+	// whose result is one element of a text: a byte or a rune of a string,
+	// or one element of the code units, the bytes or the runes of one. An
+	// extractor that does not set it says nothing: the instruction is then
+	// not taken as a character read by what this attribute carries.
+	CharRead bool `json:"char_read,omitempty"`
 
 	Callee *Callee `json:"callee,omitempty"`
 	// Go, Defer and Await are the flags of a call.
