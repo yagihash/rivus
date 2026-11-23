@@ -261,6 +261,15 @@ type state struct {
 	exceededBy uint8
 }
 
+// k is the access path depth of this function: Options.DepK in a function of a dependency (when it is set), Options.K in
+// the others.
+func (s *state) k() int {
+	if s.fn != nil && s.fn.Dep && s.eng.opts.DepK > 0 {
+		return s.eng.opts.DepK
+	}
+	return s.eng.opts.K
+}
+
 // maxCellElems is the number of elements a cell may hold before the symbolic
 // ones are widened to the whole parameter.
 const maxCellElems = 96
@@ -382,7 +391,7 @@ func (s *state) targetOf(l Loc, e Elem, create bool) target {
 		t.numeric = true
 		return t
 	}
-	t.loc.Path, t.trunc = pathTrunc(l.Path, s.eng.opts.K)
+	t.loc.Path, t.trunc = pathTrunc(l.Path, s.k())
 	if create {
 		cm := s.cellsOf(l.Root)
 		t.set = cm[t.loc.Path]
@@ -565,7 +574,7 @@ func (s *state) collectUncached(l Loc) []found {
 			if e.Kind == Param {
 				// Without the bound a recursive structure would extend
 				// the path in every pass, forever.
-				tp, _ := pathTrunc(e.Path()+rest, s.eng.opts.K)
+				tp, _ := pathTrunc(e.Path()+rest, s.k())
 				ext = ext.WithPath(tp)
 			}
 			out = append(out, found{E: ext, Cell: Loc{l.Root, p}, Orig: e})

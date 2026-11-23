@@ -25,6 +25,7 @@ import (
 type analyzeOpts struct {
 	common
 	k        int
+	depK     int
 	verbose  bool
 	cpuProf  string
 	lockProf string
@@ -113,6 +114,7 @@ func (o *analyzeOpts) register(fs *flag.FlagSet) {
 	o.common.register(fs)
 	o.registerLanguages(fs)
 	fs.IntVar(&o.k, "k", taint.DefaultOptions().K, "maximum access path depth")
+	fs.IntVar(&o.depK, "dep-k", 0, "maximum access path depth in the functions of the dependencies (an experiment; 0: the same as -k). A smaller depth makes the analysis of heavy dependencies cheaper and adds flows (a path that is cut stands for everything below it); the findings that need the cut carry the access_path_truncated uncertainty")
 	fs.IntVar(&o.workers, "workers", 0, "functions analysed at the same time (0: one per CPU; 1: one at a time). The result does not depend on it")
 	fs.BoolVar(&o.numeric, "numeric-taint", false, "follow taint through numbers and bools (by default it stops there: they cannot carry an injection)")
 	fs.BoolVar(&o.verbose, "v", false, "print the time of each phase to stderr")
@@ -131,7 +133,7 @@ func (o *analyzeOpts) register(fs *flag.FlagSet) {
 	fs.StringVar(&o.lockProf, "lockprofile", "", "write the mutex and block profiles of the taint phase to <this>.mutex and <this>.block (development)")
 	fs.StringVar(&o.cpuProf, "cpuprofile", "", "write a CPU profile of the taint phase to this file (development)")
 	usual(fs, "workers", "numeric-taint", "v", "timeout", "resolve-func-values")
-	diagnostic(fs, "k", "max-implementations", "max-passes", "func-timeout", "ir", "pass-stats", "pass-stats-top", "pass-stats-sort", "func-values", "trace-element", "memprofile", "lockprofile", "cpuprofile")
+	diagnostic(fs, "k", "dep-k", "max-implementations", "max-passes", "func-timeout", "ir", "pass-stats", "pass-stats-top", "pass-stats-sort", "func-values", "trace-element", "memprofile", "lockprofile", "cpuprofile")
 	kind(fs, "enum:pass-stats-sort", "pass-stats-sort")
 	kind(fs, "file", "ir", "func-values", "memprofile", "lockprofile", "cpuprofile")
 }
@@ -181,6 +183,7 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	phase("graph")
 	opts := taint.DefaultOptions()
 	opts.K = o.k
+	opts.DepK = o.depK
 	opts.Timeout = o.timeout
 	opts.FuncTimeout = o.funcTimeout
 	opts.MaxPasses = o.passes
