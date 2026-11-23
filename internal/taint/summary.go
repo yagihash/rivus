@@ -407,6 +407,7 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 	}
 	for _, o := range sum.Outputs {
 		var dsts []Loc
+		var mirrored map[Loc]int // destinations that are there only because of ptrAlias / copyOf
 		switch o.Kind {
 		case OutResult:
 			if cc.noResult {
@@ -438,7 +439,13 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 					dsts = append(dsts, Loc{l.Root, l.Path + o.Path})
 					// a pointer held in a field of what was passed (the environment of a closure that captured a
 					// variable by `&mut`): the write is to the variable it points to as well (ENV-PTR)
-					dsts = append(dsts, s.mirror(Loc{l.Root, l.Path + o.Path})...)
+					for _, m := range s.mirror(Loc{l.Root, l.Path + o.Path}) {
+						dsts = append(dsts, m)
+						if mirrored == nil {
+							mirrored = map[Loc]int{}
+						}
+						mirrored[m]++
+					}
 					if o.Index == 0 && s.recvBoxed {
 						dsts = append(dsts, Loc{l.Root, l.Path + "/*" + o.Path})
 					}
@@ -493,7 +500,15 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 				if len(oe.Guards) > 0 {
 					w.setCallee(oe.Guards, info)
 				}
+				var wa *why
 				for _, d := range dsts {
+					if mirrored[d] > 0 && !plainDst(dsts, mirrored, d) {
+						if wa == nil {
+							wa = s.withAliasNote(w, cc.in.Pos)
+						}
+						s.add(d, x.E, wa)
+						continue
+					}
 					s.add(d, x.E, w)
 				}
 			}
@@ -909,4 +924,16 @@ func paramPhrase(fn *sg.Func, i int) string {
 		return "the receiver"
 	}
 	return "argument " + itoa(i)
+}
+
+// plainDst reports whether d is also a destination that does not come from ptrAlias: then the write to it
+// is sure, whatever the alias says.
+func plainDst(dsts []Loc, mirrored map[Loc]int, d Loc) bool {
+	n := 0
+	for _, x := range dsts {
+		if x == d {
+			n++
+		}
+	}
+	return n > mirrored[d]
 }

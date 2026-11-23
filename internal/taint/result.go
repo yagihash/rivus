@@ -54,10 +54,13 @@ const (
 	// KindNamedUnresolved marks a sink that names a named parameter (`named:`) that no call of the symbol in
 	// the program has (a misspelling, or a parameter that was renamed): the sink was taken whole.
 	KindNamedUnresolved = "named_unresolved"
-	AttributableTarget  = "target"
-	AttributableRivus   = "rivus"
-	AttributableMixed   = "mixed"
-	maxPathSteps        = 200
+	// KindPointerAlias marks a hop that goes through a write (or a read) via a pointer that is held in a cell, which
+	// rivus approximates by aliasing (ptrAlias, ptrcells.go): the flow may not exist.
+	KindPointerAlias   = "pointer_alias"
+	AttributableTarget = "target"
+	AttributableRivus  = "rivus"
+	AttributableMixed  = "mixed"
+	maxPathSteps       = 200
 )
 
 // attributable gives the attributable_to value of each kind

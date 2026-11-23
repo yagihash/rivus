@@ -101,7 +101,11 @@ func (s *state) transfer(in *sg.Instr) {
 			return
 		}
 		src := s.loadAddr(in)
-		s.copyLocsNoted(src, []Loc{{own(dst), ""}}, "load", in, s.globalNote(src, in.Pos))
+		var al map[Loc]bool
+		if in.Op == ir.OpLoad {
+			al = s.ptrAliasLocs(in.Args[0])
+		}
+		s.copyLocsAlias(src, []Loc{{own(dst), ""}}, al, nil, "load", in, s.globalNote(src, in.Pos))
 
 	case ir.OpBinop:
 		if isComparison(in.IR.Operator) {
@@ -146,17 +150,18 @@ func (s *state) transfer(in *sg.Instr) {
 			return
 		}
 		src := suffix(base, field)
+		al := s.aliasSuffix(in.Args[0], field)
 		if in.IR.Folded {
-			s.copyLocsNoted(src, []Loc{{own(dst), ""}}, "load", in, s.globalNote(src, in.Pos))
+			s.copyLocsAlias(src, []Loc{{own(dst), ""}}, al, nil, "load", in, s.globalNote(src, in.Pos))
 		} else {
-			s.copyLocs(src, []Loc{{own(dst), ""}}, "read field", in)
+			s.copyLocsAlias(src, []Loc{{own(dst), ""}}, al, nil, "read field", in, nil)
 		}
 
 	case ir.OpFieldStore:
 		base := s.locs(in.Args[0])
 		field := in.IR.Field
 		s.fieldSources(in, base, field)
-		s.store(in, suffix(base, field), in.Args[1], "", nil)
+		s.storeAlias(in, suffix(base, field), in.Args[1], s.aliasSuffix(in.Args[0], field))
 
 	case ir.OpAddrOf:
 		if in.IR.Global != "" || len(in.IR.Path) == 0 || in.IR.Path[0].Kind != ir.StepField {
@@ -194,7 +199,7 @@ func (s *state) transfer(in *sg.Instr) {
 		s.store(in, suffix(base, "[]"), in.Args[2], "", nil)
 
 	case ir.OpStore:
-		s.store(in, s.locs(in.Args[0]), in.Args[1], "", nil)
+		s.storeAlias(in, s.locs(in.Args[0]), in.Args[1], s.ptrAliasLocs(in.Args[0]))
 	case ir.OpGlobalStore:
 		s.store(in, s.locs(s.eng.prog.Global(in.IR.Global)), in.Args[0], "", nil)
 
@@ -345,7 +350,30 @@ func (s *state) convert(in *sg.Instr) {
 
 // store writes val to the cells addr refers to (below the extra segment).
 func (s *state) store(in *sg.Instr, addr []Loc, val *sg.Value, seg string, note *Uncertainty) {
+	s.storeNoted(in, addr, val, seg, note, nil)
+}
+
+// storeAlias is store for a store whose address has locations that are there only because of ptrAlias.
+func (s *state) storeAlias(in *sg.Instr, addr []Loc, val *sg.Value, alias map[Loc]bool) {
+	s.storeNoted(in, addr, val, "", nil, alias)
+}
+
+// aliasSuffix is ptrAliasLocs(v) below a field.
+func (s *state) aliasSuffix(v *sg.Value, field string) map[Loc]bool {
+	al := s.ptrAliasLocs(v)
+	if al == nil {
+		return nil
+	}
+	out := make(map[Loc]bool, len(al))
+	for l := range al {
+		out[Loc{l.Root, pathJoin(l.Path, field)}] = true
+	}
+	return out
+}
+
+func (s *state) storeNoted(in *sg.Instr, addr []Loc, val *sg.Value, seg string, note *Uncertainty, alias map[Loc]bool) {
 	var dst []Loc
+	var dstAlias map[Loc]bool
 	for _, l := range addr {
 		p := l.Path
 		if seg != "" {
@@ -355,8 +383,14 @@ func (s *state) store(in *sg.Instr, addr []Loc, val *sg.Value, seg string, note 
 			p = pathJoin(p, "*")
 		}
 		dst = append(dst, Loc{l.Root, p})
+		if alias[l] {
+			if dstAlias == nil {
+				dstAlias = map[Loc]bool{}
+			}
+			dstAlias[Loc{l.Root, p}] = true
+		}
 	}
-	s.copyLocsNoted(s.locs(val), dst, "store", in, note)
+	s.copyLocsAlias(s.locs(val), dst, nil, dstAlias, "store", in, note)
 }
 
 // fieldSources applies field rules: reading a field that is declared a
