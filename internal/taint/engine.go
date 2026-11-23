@@ -167,6 +167,11 @@ type Engine struct {
 	// k, or the cell of a parameter was merged into the whole of it: the cells are
 	// coarser than the code (more than the truth, never less).
 	coarsened map[*sg.Func]string
+	// iterDumpDir is the directory for the dump of the summaries after each round of a large component
+	// (RIVUS_INTERNAL_SUMMARY_DUMP_EACH_ITER; empty: none). iterDumps are the large components, by their first
+	// function. Both are set before the run and not changed during it.
+	iterDumpDir string
+	iterDumps   map[*sg.Func]*iterDump
 	// writers lists, for each package variable, the functions that store to it.
 	// deadline is when the whole run has to stop (zero: no limit).
 	deadline time.Time
@@ -670,6 +675,7 @@ func (e *Engine) Run() *Result {
 			}
 		}
 	}
+	e.iterDumps = e.planIterDumps(levels)
 	e.writersOf(nil) // made now: the analyses read it together
 
 	e.dirty = map[*sg.Func]bool{}
@@ -736,16 +742,26 @@ func (e *Engine) Run() *Result {
 							results[i] = e.compute(todo[i])
 						})
 						progress := false
+						var roundChanged map[*sg.Func]bool
+						if e.iterDumps[scc[0]] != nil {
+							roundChanged = map[*sg.Func]bool{}
+						}
 						for i, fn := range todo {
 							if results[i] == nil {
 								continue
 							}
 							if e.commit(fn, results[i], callers) {
 								progress = true
+								if roundChanged != nil {
+									roundChanged[fn] = true
+								}
 								changedMu.Lock()
 								changedNow = append(changedNow, e.funcID(fn))
 								changedMu.Unlock()
 							}
+						}
+						if roundChanged != nil {
+							e.dumpRound(scc, pass+1, len(todo), roundChanged)
 						}
 						if !progress {
 							break

@@ -336,6 +336,10 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	resolveFV()
 	eng := taint.New(graph, l.texts, st, rules, opts)
 	eng.SetLoadErrors(l.loadErrors())
+	// Internal, for the measurement of a large component: its summaries after each round (no flag, not in -h)
+	if d := os.Getenv("RIVUS_INTERNAL_SUMMARY_DUMP_EACH_ITER"); d != "" {
+		eng.SetIterationDump(d)
+	}
 	res = eng.Run()
 	// Internal, for bench/compare.sh --graph-check: the summaries of every function, one line each (no flag, not in -h)
 	if p := os.Getenv("RIVUS_INTERNAL_SUMMARY_DUMP"); p != "" {
