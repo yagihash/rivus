@@ -299,7 +299,10 @@ jobs:
   test:
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-latest
+    # arm64 Linux runner (public repositories only, no extra cost): the same shard is 40-58 s faster than on ubuntu-latest once the caches are warm
+    # (experiments in PR #265 and #269; every test, extractor and expectation passed there). To go back to x64: `runs-on: ubuntu-latest`, one line.
+    # The caches of this job carry runner.arch in their keys, and main saves them with the same runner as the pull requests restore them with.
+    runs-on: ubuntu-24.04-arm
     # the job must outlast `go test -timeout 30m` (the dogfood and the curated tests on a loaded runner)
     timeout-minutes: 45
     permissions:
