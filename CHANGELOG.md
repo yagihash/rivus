@@ -1,5 +1,25 @@
 # Changelog
 
+## [v0.0.12](https://github.com/yagihash/rivus/compare/v0.0.11...v0.0.12) - 2026-11-23
+
+### Features
+- zoo のゲート: Rust の lib.rs のマークを見る。@todo(PARITY)は承認なしで通す by @yagihash in https://github.com/yagihash/rivus/pull/336
+- 完全でない解析(時間切れ、未収束)は、結果を出したうえで終了コード 4 で終わる by @yagihash in https://github.com/yagihash/rivus/pull/353
+- 問い合わせ(query、resolve)の出力の最上位に、incomplete と incomplete_reasons を出す by @yagihash in https://github.com/yagihash/rivus/pull/356
+- -max-memory を足し、指定がないときのメモリの上限を物理メモリの 1/4 にする by @yagihash in https://github.com/yagihash/rivus/pull/354
+### Dependencies
+- fix(deps): update dependency path to ^1.9.1 by @renovate[bot] in https://github.com/yagihash/rivus/pull/345
+- chore(deps): update actions/setup-go action to v7.1.0 by @renovate[bot] in https://github.com/yagihash/rivus/pull/347
+- fix(deps): update golang.org/x packages by @renovate[bot] in https://github.com/yagihash/rivus/pull/348
+- chore(deps): lock file maintenance by @renovate[bot] in https://github.com/yagihash/rivus/pull/351
+- renovate: minimumReleaseAge を 3 日から 7 日にする by @yagihash in https://github.com/yagihash/rivus/pull/352
+- fix(deps): update dependency yaml to ^3.1.4 by @renovate[bot] in https://github.com/yagihash/rivus/pull/346
+- renovate: Rust の nightly を Renovate で更新する。日付が必要でない記述は、日付を消す by @yagihash in https://github.com/yagihash/rivus/pull/355
+- renovate: 同じ値を 2 つのマネージャが見ている 2 か所(Rust の nightly、Dart の SDK)を、1 つにする by @yagihash in https://github.com/yagihash/rivus/pull/357
+- chore(deps): update dependency ubuntu to v26 by @renovate[bot] in https://github.com/yagihash/rivus/pull/349
+- chore(deps): pin go module directive to 1.27.4 by @renovate[bot] in https://github.com/yagihash/rivus/pull/343
+- fix(deps): update module go.yaml.in/yaml/v3 to v4 by @renovate[bot] in https://github.com/yagihash/rivus/pull/350
+
 ## [v0.0.11](https://github.com/yagihash/rivus/compare/v0.0.10...v0.0.11) - 2026-11-23
 
 ### Features
