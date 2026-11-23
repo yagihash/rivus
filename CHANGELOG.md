@@ -1,5 +1,27 @@
 # Changelog
 
+## [v0.0.9](https://github.com/yagihash/rivus/compare/v0.0.8...v0.0.9) - 2026-11-23
+
+### Features
+- feat: Rust でも summary.unverified_versions を出す(Cargo.lock から。#162 を閉じる) by @yagihash in https://github.com/yagihash/rivus/pull/237
+- feat(model): make model に -gen-skeleton を足す(Go の骨組みとセルのテンプレートを生成する。段階 2) by @yagihash in https://github.com/yagihash/rivus/pull/238
+- feat: Dart でも summary.unverified_versions を出す(pubspec.lock から。#162 の Dart の分) by @yagihash in https://github.com/yagihash/rivus/pull/236
+- feat(model): 骨組みの生成を、モデルの行が指すものだけに絞る by @yagihash in https://github.com/yagihash/rivus/pull/241
+- feat(model): モデルを作る手順のコマンド(段階 1。Go だけ)と rejected: の節 by @yagihash in https://github.com/yagihash/rivus/pull/233
+- feat(model): dio の MultipartFile.fromFile と fromFileSync を path_traversal の sink にする by @yagihash in https://github.com/yagihash/rivus/pull/245
+- ci: rust のジョブのテストを -v で実行する(テストごとの時間を測るため) by @yagihash in https://github.com/yagihash/rivus/pull/250
+- perf: Dart の extractor を、コンパイルした実行ファイルで動かす(テストと利用者の起動の時間を減らす) by @yagihash in https://github.com/yagihash/rivus/pull/252
+- feat(rust): 宣言のあるパッケージの本体を extractor が読まない(Rust の段階 4) by @yagihash in https://github.com/yagihash/rivus/pull/254
+- chore: make check に TestDogfood を足す(capture_unbound の上限を、push の前に知る) by @yagihash in https://github.com/yagihash/rivus/pull/253
+- feat(model): make model を Dart にも広げる(段階 1) by @yagihash in https://github.com/yagihash/rivus/pull/243
+- feat(model): dart の googleapis の BigQuery で、テーブルのビュー、マテリアライズドビュー、ルーチンの SQL を sql_injection の sink にする by @yagihash in https://github.com/yagihash/rivus/pull/257
+- feat: analyze にカテゴリで finding を含める・外すフラグを足す(外した件数は summary に出す) by @yagihash in https://github.com/yagihash/rivus/pull/259
+- test(model): dart github の RepositorySlug の見逃しを @miss のセルにする by @yagihash in https://github.com/yagihash/rivus/pull/258
+- ci: test、dart、rust のジョブを 1 種類のシャードにまとめ、どのテストも 1 回だけ実行する by @yagihash in https://github.com/yagihash/rivus/pull/260
+### Bug Fixes
+- fix: 確認していないバージョンの照合を、言語ごとの記録とだけ行う by @yagihash in https://github.com/yagihash/rivus/pull/240
+- fix: サンドボックスの下で Rust のビルドスクリプトが動くように、DEVELOPER_DIR をコマンドラインツールに向ける by @yagihash in https://github.com/yagihash/rivus/pull/256
+
 ## [v0.0.8](https://github.com/yagihash/rivus/compare/v0.0.7...v0.0.8) - 2026-11-23
 
 ### Features
