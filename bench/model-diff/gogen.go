@@ -44,6 +44,7 @@ type goGen struct {
 	cur     *Row // the row that the probes are made for
 	// fieldTaint: while the probes of a flows, pure or sanitizer row are made, a struct is given the source in its exported fields (structLit)
 	fieldTaint bool
+	partial    bool // the position that has the source was made by structLit in the probe being made (fields that the code could not set may carry data)
 }
 
 type goTarget struct {
@@ -213,6 +214,7 @@ func (g *goGen) structLit(t types.Type, s *types.Struct) string {
 	if len(fields) == 0 {
 		return ""
 	}
+	g.partial = true
 	return g.ts(t) + "{" + strings.Join(fields, ", ") + "}"
 }
 
@@ -755,6 +757,7 @@ func (g *goGen) nextID() int { return len(g.probes) }
 // emit writes the function fixN: the setup, the call and the sinks of the places that the call writes into.
 func (g *goGen) emit(sym, kind, variant string, t *goTarget, taintPos int, recvTaint bool, expect *bool, category string, partField string, outputs bool) {
 	id := g.nextID()
+	g.partial = false
 	base := "recv"
 	if taintPos >= 0 {
 		base = fmt.Sprintf("arg%d", taintPos)
@@ -828,7 +831,7 @@ func (g *goGen) emit(sym, kind, variant string, t *goTarget, taintPos int, recvT
 	}
 	sb.WriteString("}\n")
 	g.funcs = append(g.funcs, sb.String())
-	p := Probe{ID: id, Symbol: sym, Kind: kind, Variant: variant, Outputs: places, Expect: expect, Category: category}
+	p := Probe{ID: id, Symbol: sym, Kind: kind, Variant: variant, Outputs: places, Expect: expect, Category: category, Partial: g.partial}
 	if g.cur != nil {
 		p.Row = g.cur.Kind
 		if g.cur.Kind == RowSanitizer {

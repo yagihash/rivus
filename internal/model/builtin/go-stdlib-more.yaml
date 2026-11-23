@@ -554,7 +554,7 @@ propagators:
   - symbol: crypto/ed25519.GenerateKey
     pure: true
   - symbol: crypto/tls.Dial
-    flows: [{from: arg0, to: results}, {from: arg1, to: results}]
+    flows: [{from: arg0, to: results}, {from: arg1, to: results}, {from: arg2, to: result0}]
   - symbol: crypto/tls.Client
     flows: [{from: arg0, to: result}]
   # model-diff: miss-reviewed crypto/tls.LoadX509KeyPair@arg0 body-default #150 the path reaches the error (the row), not the certificate: `os.ReadFile` has no flows row, and the reading takes the call as "arguments to results"

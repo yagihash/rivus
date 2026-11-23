@@ -66,3 +66,6 @@ type Hidden struct{ v string }
 func (h *Hidden) Val() string { return h.v }
 
 func Use(h *Hidden, s string) string { return s }
+
+// Name does not read the field that the source is put into.
+func (r *Req) Name() string { return "req" }
