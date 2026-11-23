@@ -687,4 +687,33 @@ func TestZooLoosenedCheckHeader(t *testing.T) {
 	if err := check(base); err != nil {
 		t.Errorf("a PARITY @todo that goes away failed: %v", err)
 	}
+	// the lock is written for the first time for a lib.rs that has the marks already: not added; a new mark in the same commit is
+	reset()
+	run("rm", "-q", "-f", "bench/zoo/marks.d/rust/lib.rs.lock")
+	src := filepath.Join(repo, "bench/zoo-rust/cells/src/lib.rs")
+	if err := os.MkdirAll(filepath.Dir(src), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(src, []byte("//! @na(F/a/n: no)\n//! @na(F/a/m: no)\n//! @na(F/a/l: no)\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run("add", "-A")
+	run("commit", "-qm", "lib.rs without a lock")
+	base2 := run("rev-parse", "HEAD")
+	lock := func(rows ...string) {
+		write(rows...)
+		run("commit", "-qm", "the lock of lib.rs")
+	}
+	lock("rust\tlib.rs\tna\t@na(F/a/n: no)\t-", "rust\tlib.rs\tna\t@na(F/a/m: no)\t-", "rust\tlib.rs\tna\t@na(F/a/l: no)\t-")
+	if err := check(base2); err != nil {
+		t.Errorf("the first lock of a lib.rs that has the @na rows already failed: %v", err)
+	}
+	run("reset", "-q", "--hard", base2)
+	if err := os.WriteFile(src, []byte("//! @na(F/a/n: no)\n//! @na(F/a/m: no)\n//! @na(F/a/l: no)\n//! @na(F/a/new: no)\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	lock("rust\tlib.rs\tna\t@na(F/a/n: no)\t-", "rust\tlib.rs\tna\t@na(F/a/m: no)\t-", "rust\tlib.rs\tna\t@na(F/a/l: no)\t-", "rust\tlib.rs\tna\t@na(F/a/new: no)\t-")
+	if check(base2) == nil {
+		t.Error("a new @na in the commit that makes the first lock passed without Zoo-Loosened")
+	}
 }
