@@ -162,6 +162,7 @@ func TestGraphIndexIsFreshUntilSomethingChanges(t *testing.T) {
 		{name: "-body-replaced (a package whose body is not read)", args: []string{"-body-replaced", "example.com/dep"}},
 		{name: "-read-declared-bodies", args: []string{"-read-declared-bodies"}},
 		{name: "-k", args: []string{"-k", "2"}},
+		{name: "-dep-k (the depth the dependencies were read at)", args: []string{"-dep-k", "3"}},
 		{name: "-numeric-taint", args: []string{"-numeric-taint"}},
 		{name: "-max-implementations", args: []string{"-max-implementations", "7"}},
 		{name: "-lang (another language is read too)", args: []string{"-lang", "go,dart"}},
