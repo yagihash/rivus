@@ -17,10 +17,10 @@ import (
 
 // TestDogfood analyses rivus with rivus (docs: ADR-037). What the command
 // line says reaches the file operations of rivus: that is what a CLI does,
-// and it is what the analysis must find in its own code. It runs on main only: with -short it skips itself (ADR-112).
+// and it is what the analysis must find in its own code. It skips itself unless RIVUS_DOGFOOD is set: the weekly CI run sets it when something changed (ADR-112).
 func TestDogfood(t *testing.T) {
-	if testing.Short() {
-		t.Skip("rivus analysing itself runs on main only (not with -short): ADR-112; run it with go test ./cmd/rivus -run TestDogfood -count=1")
+	if os.Getenv("RIVUS_DOGFOOD") == "" {
+		t.Skip("rivus analysing itself runs in the weekly CI run (when something changed since the last one) and by hand with RIVUS_DOGFOOD=1: ADR-112; RIVUS_DOGFOOD=1 go test ./cmd/rivus -run TestDogfood -count=1")
 	}
 	// rivus reads its own code in two views: as it is on Linux (the system of CI) and as it is on macOS (where the sandbox is:
 	// internal/sandbox, and the call of it that runs a program that a flag names). Both are read statically, whatever system the test
@@ -139,7 +139,7 @@ func checkDogfood(t *testing.T, goos, flowsFile string, wantCaptureUnbound int) 
 	}
 }
 
-// updateDogfoodFlows (go test ./cmd/rivus -run 'TestDogfood$' -update) rewrites testdata/dogfood-flows.txt from the findings of
+// updateDogfoodFlows (go test ./cmd/rivus -run 'TestDogfood$' -update, with RIVUS_DOGFOOD=1) rewrites testdata/dogfood-flows.txt from the findings of
 // today. Without the flag the test is read-only.
 var updateDogfoodFlows = flag.Bool("update", false, "rewrite cmd/rivus/testdata/dogfood-flows.txt from the findings of this run")
 

@@ -6,6 +6,10 @@ name: CI
 # cancelled does not. So the number of shards can change without the ruleset. A push to main runs everything.
 # The runner of macOS (the sandbox, docs/DESIGN-macos-sandbox.md) runs when what the isolation is made of changes, and once a week.
 # A pull request runs the tests with -short; a push to main, the weekly run and a run by hand run all of them.
+# One test is the exception: TestDogfood (rivus analysing itself, 160-230 s) runs only in the weekly run, and only when the code or the models changed since
+# the last successful weekly run (the step `dogfood` of `changes`), and in a run by hand. Never in a pull request or a push to main (ADR-112).
+# One test is the exception: TestDogfood (rivus analysing itself, 160-230 s) runs only in the weekly run, and only when the code or the models changed since
+# the last successful weekly run (the step `dogfood` of `changes`), and in a run by hand. Never in a pull request or a push to main (ADR-112).
 on:
   push:
     branches: [main]
@@ -24,9 +28,10 @@ env:
   SHORT: ${{ github.event_name == 'pull_request' && !startsWith(github.head_ref, 'tagpr-from-') && '-short' || '' }}
 
 # A push to main that lands on a run in progress cancels it: only the newest commit is checked (to find which commit
-# broke what, use `git bisect` and a local reproduction). A pull request is checked per branch.
+# broke what, use `git bisect` and a local reproduction). A pull request is checked per branch. The weekly run has a group of its own,
+# so that a push to main does not cancel it (it is the run that has TestDogfood).
 concurrency:
-  group: ci-${{ github.head_ref || github.ref }}
+  group: ci-${{ github.event_name == 'schedule' && 'schedule' || github.head_ref || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -44,7 +49,9 @@ jobs:
     permissions:
       contents: read
       pull-requests: read # dorny/paths-filter asks the API for the files of a pull request
+      actions: read # `gh run list`: the last successful weekly run (the step `dogfood`)
     outputs:
+      dogfood: ${{ steps.dogfood.outputs.dogfood }}
       code: ${{ steps.decide.outputs.code }}
       isolation: ${{ steps.decide.outputs.isolation }}
       dart: ${{ steps.decide.outputs.dart }}
@@ -169,6 +176,30 @@ jobs:
             echo "dart=$dart"
             echo "rust=$rust"
           } >> "$GITHUB_OUTPUT"
+      # TestDogfood (RIVUS_DOGFOOD=1 in the job `test`): a run by hand always; the weekly run when the code or the models changed since the head of the last
+      # successful weekly run (the first run, a head that is gone, and an answer that cannot be read: it runs). The paths are those of the filter `code`
+      # (without the workflow, which only changes how it runs). Nothing else runs it.
+      - id: dogfood
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          run=false
+          case "$EVENT_NAME" in
+            workflow_dispatch) run=true ;;
+            schedule)
+              last=$(gh run list --repo "$REPO" --workflow ci.yml --event schedule --status success --limit 1 --json headSha --jq '.[0].headSha // empty')
+              if [ -z "$last" ] || ! git cat-file -e "$last^{commit}" 2>/dev/null; then
+                run=true; echo "TestDogfood runs: no earlier successful weekly run ('$last')"
+              elif git diff --quiet "$last" HEAD -- go.mod go.sum cmd internal testdata dogfood extractor bench examples scripts Makefile \
+                ':(exclude,glob)extractor/*/README.md' ':(exclude,glob)bench/**/README.md' ':(exclude)bench/MISSES.md' ':(exclude)bench/gitea-cve-paths.md' ':(exclude,glob)examples/**/*.md'; then
+                echo "TestDogfood skipped: nothing that it reads changed since the last successful weekly run ($last)"
+              else
+                run=true; echo "TestDogfood runs: the code or the models changed since $last"
+              fi ;;
+          esac
+          echo "dogfood=$run" >> "$GITHUB_OUTPUT"
 
   # `go vet` and the tests of the packages other than cmd/rivus.
   go-packages:
@@ -225,6 +256,8 @@ jobs:
           HEAVY: &heavy TestDeterministicDogfood TestDeterministicParamshare TestGCPRows TestDogfood TestDeterministicPassStats TestDeterministicCuratedGo TestScaleSynth
           # a missing module cache of bench/gcp fails the Google Cloud gate, and does not skip it
           RIVUS_REQUIRE_GCP: "1"
+          # TestDogfood skips itself without this (ADR-112): the weekly run when something changed, and a run by hand
+          RIVUS_DOGFOOD: ${{ needs.changes.outputs.dogfood == 'true' && '1' || '' }}
         run: &shard |
           all=$(go test -list '.' ./cmd/rivus | grep -E '^(Test|Example)' | LC_ALL=C sort)
           names=$(echo "$all" | awk -v i="$SHARD_INDEX" -v n="$SHARD_TOTAL" -v heavy="$HEAVY" -v only="${ONLY:-}" '
