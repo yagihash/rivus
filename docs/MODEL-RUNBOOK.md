@@ -20,6 +20,8 @@
 | クラウドのセッションでの Rust の extractor の実行 | 認められていない | 隔離(macOS のサンドボックス)がない。Rust のモデルは、当面ローカルで作る。クラウドでは、モデルは書き、extractor を使う確認は、CI かローカルに任せる |
 | 一覧にないパッケージの取得、サンドボックスの外での実行、実在のプロジェクトをまるごと解析する長い実行 | 先にユーザーに確認 | 確認が取れるまで、始めない |
 
+**`rivus setup rust` を実行しない。共有の場所(`~/Library/Application Support/rivus/` など、ユーザーの環境)に書かない。extractor を試すときは、作業ツリーの中でビルドして、`RIVUS_RUST` でそのパスを指す。** 理由: 共有の extractor を入れ替えると、インストール済みの rivus を使うほかのセッションの挙動も変わる。
+
 - ブランチは `claude/` で始まる名前になる(セッションごとに決まる)。名前は変えない。
 - 新しいセッションは、その時点の `main` から始まる。
 - コミットには、GitHub の上で署名が付く。手元の `gpgsig` の確認は要らない。push のあと、API(`gh api repos/<owner>/<repo>/commits/<sha> --jq .commit.verification.verified`)で `true` を確認する。
