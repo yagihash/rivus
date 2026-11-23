@@ -1,6 +1,7 @@
 package ir
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 )
@@ -98,6 +99,10 @@ func Walk(src Source, fn func(ref Ref, f *Func)) {
 		return nil
 	})
 	if err != nil {
+		var re *ReadError
+		if errors.As(err, &re) {
+			panic(re) // the Source says which function
+		}
 		panic(&ReadError{Err: err})
 	}
 }
@@ -188,4 +193,95 @@ func (m *memSource) Drop(ref Ref) {
 func (m *memSource) Release() {
 	m.p.Funcs = nil
 	m.last = nil
+}
+
+// ConcatSource is the Source of several Sources one after the other, in the order given (the functions of one
+// language, then the next). header is its Header: the part of the program that is not a function, which the caller made
+// from the headers of the Sources. A function has the number it has in its Source plus the number of the functions of
+// the Sources before it. When an ID is in several, Lookup is the last one.
+func ConcatSource(header *Program, srcs ...Source) Source {
+	if len(srcs) == 1 && header == srcs[0].Header() {
+		return srcs[0]
+	}
+	c := &concatSource{hdr: header, srcs: srcs, base: make([]int, len(srcs)+1)}
+	for i, s := range srcs {
+		c.base[i+1] = c.base[i] + s.Len()
+	}
+	return c
+}
+
+type concatSource struct {
+	hdr  *Program
+	srcs []Source
+	base []int // base[i] is the number of the first function of srcs[i]
+}
+
+// at is the Source that holds the number seq, and the number it has there.
+func (c *concatSource) at(seq int) (Source, int) {
+	for i := len(c.srcs) - 1; i >= 0; i-- {
+		if seq >= c.base[i] {
+			return c.srcs[i], seq - c.base[i]
+		}
+	}
+	return c.srcs[0], seq
+}
+
+func (c *concatSource) Header() *Program { return c.hdr }
+func (c *concatSource) Len() int         { return c.base[len(c.srcs)] }
+
+func (c *concatSource) Head(seq int) Head {
+	s, i := c.at(seq)
+	return s.Head(i)
+}
+
+func (c *concatSource) Func(ref Ref) (*Func, error) {
+	s, i := c.at(ref.Seq)
+	return s.Func(Ref{ID: ref.ID, Seq: i})
+}
+
+func (c *concatSource) Lookup(id FuncID) (Ref, bool) {
+	for i := len(c.srcs) - 1; i >= 0; i-- {
+		if r, ok := c.srcs[i].Lookup(id); ok {
+			r.Seq += c.base[i]
+			return r, true
+		}
+	}
+	return Ref{}, false
+}
+
+func (c *concatSource) Each(fn func(ref Ref, f *Func) error) error {
+	for i, s := range c.srcs {
+		base := c.base[i]
+		err := s.Each(func(ref Ref, f *Func) error {
+			ref.Seq += base
+			return fn(ref, f)
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *concatSource) Drop(ref Ref) {
+	s, i := c.at(ref.Seq)
+	s.Drop(Ref{ID: ref.ID, Seq: i})
+}
+
+func (c *concatSource) Release() {
+	for _, s := range c.srcs {
+		s.Release()
+	}
+}
+
+// Targets is the Targeter answer of the Source that holds seq: its own when it has one, else from the function.
+func (c *concatSource) Targets(seq int) []FuncID {
+	s, i := c.at(seq)
+	if t, ok := s.(Targeter); ok {
+		return t.Targets(i)
+	}
+	var ids []FuncID
+	h := s.Head(i)
+	Targets(Must(s, Ref{ID: h.ID, Seq: i}), func(id FuncID) { ids = append(ids, id) })
+	return ids
 }

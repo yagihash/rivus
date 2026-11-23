@@ -361,7 +361,7 @@ func TestIRSpillReadFailureIsAnError(t *testing.T) {
 	want := put(t, s, rand.New(rand.NewSource(11)), 2000)
 	// one record is changed in the file
 	s.mu.Lock()
-	l := s.index[want[0].ID]
+	l := s.recs[s.byID[want[0].ID]].loc
 	s.mu.Unlock()
 	if _, err := s.f.WriteAt([]byte{0xff, 0xff}, l.off+headerLen); err != nil {
 		t.Fatal(err)

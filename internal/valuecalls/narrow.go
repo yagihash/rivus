@@ -196,7 +196,7 @@ func narrowCalls(r *resolver) {
 		r.indexCallers()
 	}
 	var calls []*callSite
-	ir.Walk(r.src, func(_ ir.Ref, f *ir.Func) {
+	ir.Walk(r.src, func(ref ir.Ref, f *ir.Func) {
 		for bi := range f.Blocks {
 			for ii := range f.Blocks[bi].Instrs {
 				in := &f.Blocks[bi].Instrs[ii]
@@ -209,14 +209,14 @@ func narrowCalls(r *resolver) {
 					}
 				}
 				if in.Op == ir.OpCall && isFnCall(in.Callee) && len(in.Args) > 0 && len(in.Callee.Candidates) > 1 {
-					calls = append(calls, &callSite{f, bi, ii})
+					calls = append(calls, &callSite{ref, bi, ii})
 				}
 			}
 		}
 	})
 	var done []narrowing
 	for _, c := range calls {
-		in := &c.fn.Blocks[c.b].Instrs[c.i]
+		in := &r.fn(c.ref).Blocks[c.b].Instrs[c.i]
 		if nr, why := n.decide(c, in); why != "" {
 			switch why {
 			case notOpen:
@@ -286,12 +286,13 @@ func (t *trace) stop(why string) {
 }
 
 func (n *narrower) decide(c *callSite, in *ir.Instr) (*narrowing, string) {
-	form := n.r.form(c.fn)
+	cfn := n.r.fn(c.ref)
+	form := n.r.form(cfn)
 	if form == nil {
 		return nil, notUnknown
 	}
-	t := &trace{n: n, found: map[ir.FuncID]bool{}, seen: map[narrowSeen]bool{}, home: c.fn, cur: -1, via: map[ir.FuncID]int{}}
-	t.origins(c.fn, form.Operand(c.b, c.i, 0), 0)
+	t := &trace{n: n, found: map[ir.FuncID]bool{}, seen: map[narrowSeen]bool{}, home: cfn, cur: -1, via: map[ir.FuncID]int{}}
+	t.origins(cfn, form.Operand(c.b, c.i, 0), 0)
 	if t.fail != "" {
 		return nil, t.fail
 	}
@@ -722,7 +723,8 @@ func (t *trace) param(f *ir.Func, idx, depth int) {
 		defer func() { t.cur = old }()
 	}
 	for _, c := range cs {
-		cin := &c.fn.Blocks[c.b].Instrs[c.i]
+		cfn := n.r.fn(c.ref)
+		cin := &cfn.Blocks[c.b].Instrs[c.i]
 		off := 0
 		if cin.Callee.Kind == ir.CalleeValue {
 			off = 1
@@ -732,12 +734,12 @@ func (t *trace) param(f *ir.Func, idx, depth int) {
 			t.stop(notUnknown)
 			return
 		}
-		cf := n.r.form(c.fn)
+		cf := n.r.form(cfn)
 		if cf == nil {
 			t.stop(notUnknown)
 			return
 		}
-		t.origins(c.fn, cf.Operand(c.b, c.i, k), depth+1)
+		t.origins(cfn, cf.Operand(c.b, c.i, k), depth+1)
 		if t.fail != "" {
 			return
 		}

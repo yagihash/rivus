@@ -43,7 +43,7 @@ func Resolve(src ir.Source) {
 		return
 	}
 	prog.ValuesResolved = true
-	r := &resolver{src: src, prog: prog, forms: map[*ir.Func]*irssa.Form{}}
+	r := &resolver{src: src, prog: prog, forms: map[*ir.Func]*irssa.Form{}, held: map[int]*ir.Func{}}
 	ir.Walk(src, func(_ ir.Ref, f *ir.Func) {
 		for bi := range f.Blocks {
 			for ii := range f.Blocks[bi].Instrs {
@@ -59,17 +59,47 @@ func Resolve(src ir.Source) {
 	r.forms = nil
 	r.callers = nil
 	r.makers = nil
+	r.held = nil
 }
 
+// Writes says whether Resolve may write to the function: the candidates of the calls of function values and the
+// narrowed candidates of the calls of closures are set on the function that holds the call. A Source that does not
+// keep its functions in memory holds such a function in memory (irspill.SourceOptions.Pin), so that what is written
+// is there for the next reader.
+func Writes(f *ir.Func) bool {
+	for bi := range f.Blocks {
+		for ii := range f.Blocks[bi].Instrs {
+			if c := f.Blocks[bi].Instrs[ii].Callee; c != nil && (c.Kind == ir.CalleeValue || isFnCall(c)) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// callSite is a call (or a make_closure) in the function that ref names. The function is r.fn(ref): the index of the
+// callers does not hold the functions of a Source that keeps them out of memory.
 type callSite struct {
-	fn   *ir.Func
+	ref  ir.Ref
 	b, i int
+}
+
+// fn is the function that ref names. The same pointer is given for the whole run of Resolve: a walk compares the
+// functions by it.
+func (r *resolver) fn(ref ir.Ref) *ir.Func {
+	if f, ok := r.held[ref.Seq]; ok {
+		return f
+	}
+	f := ir.Must(r.src, ref)
+	r.held[ref.Seq] = f
+	return f
 }
 
 type resolver struct {
 	src     ir.Source
 	prog    *ir.Program // the header of src: what is not a function
 	forms   map[*ir.Func]*irssa.Form
+	held    map[int]*ir.Func // the functions read by a call site, by the number in the Source
 	callers map[ir.FuncID][]callSite
 	// makers lists where each closure is made (the make_closure instructions that name it): what a captured variable holds is
 	// what the instruction was given
@@ -190,7 +220,7 @@ func (r *resolver) resolve(fn *ir.Func, bi, ii int, in *ir.Instr) {
 // the candidates of the others.
 func (r *resolver) indexCallers() {
 	r.callers = map[ir.FuncID][]callSite{}
-	ir.Walk(r.src, func(_ ir.Ref, f *ir.Func) {
+	ir.Walk(r.src, func(ref ir.Ref, f *ir.Func) {
 		for bi := range f.Blocks {
 			for ii := range f.Blocks[bi].Instrs {
 				in := &f.Blocks[bi].Instrs[ii]
@@ -198,16 +228,16 @@ func (r *resolver) indexCallers() {
 					continue
 				}
 				if in.Callee.Func != "" {
-					r.callers[in.Callee.Func] = append(r.callers[in.Callee.Func], callSite{f, bi, ii})
+					r.callers[in.Callee.Func] = append(r.callers[in.Callee.Func], callSite{ref, bi, ii})
 				}
 				if in.Callee.Kind == ir.CalleeValue && len(in.Callee.Candidates) == 0 && len(in.Args) > 0 {
 					// a function held in a variable and called: it is the callee
 					if id := r.directFunc(f, bi, ii); id != "" {
-						r.callers[id] = append(r.callers[id], callSite{f, bi, ii})
+						r.callers[id] = append(r.callers[id], callSite{ref, bi, ii})
 					}
 				}
 				for _, c := range in.Callee.Candidates {
-					r.callers[c] = append(r.callers[c], callSite{f, bi, ii})
+					r.callers[c] = append(r.callers[c], callSite{ref, bi, ii})
 				}
 			}
 		}
@@ -217,12 +247,12 @@ func (r *resolver) indexCallers() {
 // indexMakers lists the make_closure instructions of each closure.
 func (r *resolver) indexMakers() {
 	r.makers = map[ir.FuncID][]callSite{}
-	ir.Walk(r.src, func(_ ir.Ref, f *ir.Func) {
+	ir.Walk(r.src, func(ref ir.Ref, f *ir.Func) {
 		for bi := range f.Blocks {
 			for ii := range f.Blocks[bi].Instrs {
 				in := &f.Blocks[bi].Instrs[ii]
 				if in.Op == ir.OpMakeClosure {
-					r.makers[in.Func] = append(r.makers[in.Func], callSite{f, bi, ii})
+					r.makers[in.Func] = append(r.makers[in.Func], callSite{ref, bi, ii})
 				}
 			}
 		}
@@ -400,25 +430,27 @@ func (r *resolver) funcsOf(f *ir.Func, ref irssa.Ref, home *ir.Func, out map[ir.
 		}
 		k := in.Index - declared(f)
 		for _, m := range r.makers[f.ID] {
-			min := &m.fn.Blocks[m.b].Instrs[m.i]
+			mfn := r.fn(m.ref)
+			min := &mfn.Blocks[m.b].Instrs[m.i]
 			if len(min.Args) != len(f.Params)-declared(f) {
 				// the extractor left out a variable it did not find: the places do not tell which is which
 				r.notePartial(ir.ValueWhyArgs)
 				continue
 			}
-			mf := r.form(m.fn)
+			mf := r.form(mfn)
 			if mf == nil {
 				r.notePartial(ir.ValueWhyNoForm)
 				continue
 			}
-			r.funcsOf(m.fn, mf.Operand(m.b, m.i, k), home, out, seen, depth+1, via)
+			r.funcsOf(mfn, mf.Operand(m.b, m.i, k), home, out, seen, depth+1, via)
 		}
 	case refParam:
 		if depth == 0 && f == home {
 			via = in.Index
 		}
 		for _, c := range r.callers[f.ID] {
-			cin := &c.fn.Blocks[c.b].Instrs[c.i]
+			cfn := r.fn(c.ref)
+			cin := &cfn.Blocks[c.b].Instrs[c.i]
 			off := 0
 			if cin.Callee.Kind == ir.CalleeValue {
 				off = 1
@@ -428,12 +460,12 @@ func (r *resolver) funcsOf(f *ir.Func, ref irssa.Ref, home *ir.Func, out map[ir.
 				r.notePartial(ir.ValueWhyArgs)
 				continue
 			}
-			cf := r.form(c.fn)
+			cf := r.form(cfn)
 			if cf == nil {
 				r.notePartial(ir.ValueWhyNoForm)
 				continue
 			}
-			r.funcsOf(c.fn, cf.Operand(c.b, c.i, k), home, out, seen, depth+1, via)
+			r.funcsOf(cfn, cf.Operand(c.b, c.i, k), home, out, seen, depth+1, via)
 		}
 	}
 }
