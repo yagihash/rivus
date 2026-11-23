@@ -5,6 +5,7 @@
 - 言語: Dart
 - ROADMAP の節: 1
 - 守るもの: zoo `F/dart/closure-to-sdk`(`Timer.run`、`scheduleMicrotask`、`Future.microtask`、`Future.delayed`、`Button(onPressed:)`)
+- 題: Dart: 渡しただけのクロージャ(Timer.run、scheduleMicrotask、Future.delayed、Button(…
 - GitHub: #88(移行前の番号は同じ。2026-11-21 に開いた。移行時の状態: CLOSED)
 
 ## 今の状態(2026-11-22 の見直し)

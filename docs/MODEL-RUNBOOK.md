@@ -55,8 +55,8 @@
 `examples/rules/*.yaml` と `bench/*/rules.yaml` の例を、組み込みに昇格する作業(一覧の「例から昇格」の行)。
 
 - 例のまま移さない。ほかのモデルと同じ確認を通す: 差分テスト(入っていれば)、`result` / `results` の点検、zoo のセル、すでに組み込みにある行との重複の確認。
-- 昇格したら、**例のファイルは、リポジトリの中に、ファイルを名指しで使う参照が残る場合は、中身が空のルール(「組み込みになった。`internal/model/builtin/<ファイル>`」のコメントだけ)として残し、参照がなければ消す**([ADR-102](DECISIONS.md))。決め方: `grep -rn` で、ファイル名と `examples/rules` を、リポジトリ全体(`bench/`、`cmd/`、`internal/`、`extractor/`、`docs/`、`.github/`、`Makefile`)で探し、結果を PR の本文に書く。参照の側を直す必要があるとき(例: `cmd/rivus/notbuiltin.go` とそのテスト)は、その PR でさわってよい。`examples/rules/README.md` の、そのファイルの行は、「組み込みになった(`internal/model/builtin/<ファイル>`)」の 1 行にする(ファイル名で探す利用者のため)。`bench/*/rules.yaml` の例も同じ。リポジトリの直下の README は、昇格の PR ではさわらない(例の一覧は `examples/rules/README.md` を見る、という形にしてある。README に、昇格するファイルを名指しした記述が残っていたら、書き直さず、PR の本文の「手順のとおりにできなかった所」に書く)。
-- 例の位置づけ(ADR-063)の上書きは、**[ADR-101](DECISIONS.md) で済んでいる**。昇格の PR は ADR を書かない(ADR-101 を参照するだけ)。
+- 昇格したら、**例のファイルは、リポジトリの中に、ファイルを名指しで使う参照が残る場合は、中身が空のルール(「組み込みになった。`internal/model/builtin/<ファイル>`」のコメントだけ)として残し、参照がなければ消す**([ADR-102](adr/102-promoted-example-empty-rules.md))。決め方: `grep -rn` で、ファイル名と `examples/rules` を、リポジトリ全体(`bench/`、`cmd/`、`internal/`、`extractor/`、`docs/`、`.github/`、`Makefile`)で探し、結果を PR の本文に書く。参照の側を直す必要があるとき(例: `cmd/rivus/notbuiltin.go` とそのテスト)は、その PR でさわってよい。`examples/rules/README.md` の、そのファイルの行は、「組み込みになった(`internal/model/builtin/<ファイル>`)」の 1 行にする(ファイル名で探す利用者のため)。`bench/*/rules.yaml` の例も同じ。リポジトリの直下の README は、昇格の PR ではさわらない(例の一覧は `examples/rules/README.md` を見る、という形にしてある。README に、昇格するファイルを名指しした記述が残っていたら、書き直さず、PR の本文の「手順のとおりにできなかった所」に書く)。
+- 例の位置づけ(ADR-063)の上書きは、**[ADR-101](adr/101-promote-example-rules-to-builtin.md) で済んでいる**。昇格の PR は ADR を書かない(ADR-101 を参照するだけ)。
 - PR の題は `feat(model): <言語> <パッケージ> の組み込みモデル(例から昇格)`。判定は、この題の形で行う(1 節)。昇格のあと、例のファイルは無いか短くなるので、`ls internal/model/builtin/` の判定は、`<言語>-<パッケージ>*.yaml` で使える。
 
 作業の種類は、一覧の「新規 / 広げる / 例から昇格」の列ではなく、**main にそのパッケージのモデルのファイルがあるか**(`ls internal/model/builtin/<言語>-<パッケージ>*.yaml`)で決める。ファイルがなければ、一覧が「広げる」でも新規として扱う(標準ライブラリの行に乗る薄いラッパーなど)。
@@ -69,7 +69,7 @@
 4. **追加**: `<lang>-<package>.yaml`(手の部分)に、sink、source、sanitizer、`calls:`(利用者のコードを呼び返す API: コールバック、利用者が実装するインターフェース。パッケージの行には各行に `checked_by: cell` を書く。実行の確認の道具は標準ライブラリだけを呼ぶ。代わりに、その API を呼び、`@sink` か `@miss` のマークがあるセルが要る。[MODELING.md](MODELING.md) 3 節、ADR-107)を足す。パッケージの行を足したら、**その行を空にして(または消して)セルが落ちること**を確認する。セルが行を使っていることの確認で、実行の確認より弱いのを補う)。`origin: human` か `llm`。zoo に、肯定と否定のセルを足す。`rivus models coverage` で、未モデルの呼び出しを確認する。
 5. **宣言(未実装)**: [DESIGN-package-models.md](DESIGN-package-models.md) 2 節 5 の条件(差分テストで照合済み、`calls:` が書いてある、ほかのパッケージから呼ばれる扱いが決まっている)を満たしたときだけ。満たさなければ、宣言なしで PR を出す。
 
-**source の選び方**: サービスのクライアントは、「その値を誰が書いたか」で選ぶ([ADR-108](DECISIONS.md))。迷う値は入れず、モデルのファイルのコメントに、入れなかった理由を書く。
+**source の選び方**: サービスのクライアントは、「その値を誰が書いたか」で選ぶ([ADR-108](adr/108-service-client-source-criterion.md))。迷う値は入れず、モデルのファイルのコメントに、入れなかった理由を書く。
 
 **骨組みは、公開のシグネチャと、記録するだけの本体にする**: rivus は、骨組みの本体も読む(依存として)。interceptor を呼ぶ、検査をするなど、凝った本体にすると、本物と違う流れになり、モデルの確認が、骨組みの形に引きずられる(実例: Dart の `dio` の最初の骨組み)。本体は、引数を記録する(`zoo_mark` の `recordAny` など)か、空にする。骨組みの公開のコンストラクタは、互いを `this(...)` で呼ばない。非公開の 1 つを通す(互いを呼ぶと、その呼び出しが sink 行のサイトになり、zoo に想定外の流れが出る。実例: shelf の `Response`)。
 
@@ -98,7 +98,7 @@ PR の本文は、マージのあと誰も見ない。**見逃し(`@miss`)と誤
 2. 課題を、**番号を取らないファイル名** `docs/issues/model-<パッケージ>-<名前>.md` で作る(GitHub の Issue は作らない)。
 3. セルから `@ref(model-<パッケージ>-<名前>)` で結ぶ(新しい `@miss` / `@fp` には `@ref` が必須。ゲートが確認する)。
 4. 課題のファイルは、決まったテンプレート(何が見逃されるか / 誤検出されるか、原因、再現するセル)を満たす。テンプレートは `docs/issues/` の README を見る(ゲートが確認する)。段階 0 の PR が入ったあとに、この節に具体的な手順を書く(いまは、README がなければ、既存の `docs/issues/*.md` の 1 つを、形の見本にする)。
-5. `docs/ISSUES.md` の一覧への反映は、モデルの PR では要らない。
+5. 課題の一覧(`make docs-gen`)は課題のファイルから作るので、表への反映は要らない。
 
 zoo のゲート(`scripts/zoo-loosened-check.sh`、#167): 新しいセル(`bench/zoo/marks.lock` にまだないファイル)の `@sink(none)`、`@miss`、`@fp` の行の追加は、承認を求めない。`@noisy`、`@na`、`@todo`、`@manual` の新しいセルと、既存のセルへの行の追加は、承認の行が要る。**モデルの PR では作らない。**
 
@@ -111,7 +111,7 @@ zoo のゲート(`scripts/zoo-loosened-check.sh`、#167): 新しいセル(`bench
 - **例からの昇格の PR**(1 節): 昇格する `examples/rules/<その 1 つ>`(消すか、空のルールにする。1 節)と、参照の側(洗い出して必要なものだけ)、`examples/rules/README.md` のその行(「組み込みになった」の 1 行に)、`bench/*/rules.yaml` の例(あれば)。
 - **例からの昇格の、さわってよい範囲の事実(洗い出し)**: 例のファイルを使っているのは、`bench/compare.sh`(gin: 145、147 行。`gin-vue-admin` と `go-test-bench` のルール)、`bench/parity/collect.sh`(103 行。gin)、`bench/README.md`(gin: 8、158〜160、258 行)、`cmd/rivus/notbuiltin.go` と `notbuiltin_test.go`(actix-web のファイルを名指し。テストが読む)、`bench/parseable/rules.yaml` と `bench/parseable/README.md`(actix-web の写し)、`internal/model/builtin/rust-web.yaml` の 3 行目のコメント、`extractor/rust/README.md` の 108 行。ファイルを消すと、`compare.sh` の gin の 2 つのベンチは、ルールのファイルがなく飛ばされる。**gin は、例のファイルを消さず、中身を空のルール(「組み込みになった」のコメントつき)にして残す案が、使っている所を壊さない**(`compare.sh` は、比べる 2 つのバージョンが、それぞれの木のファイルを読むので、古いバージョンは昔の gin のルール、新しいバージョンは組み込み、になり、昇格の前後の比較の意味が保たれる)。**actix-web は、`notbuiltin.go` の表の行と、そのテストを直す必要がある**(昇格すると、`actix_web::` が組み込みのルールにあるので、知らせは出ない)。この 2 ファイルは、actix-web の昇格の PR で、さわってよい。決める(相談役。ADR-101 の「消す」との関係)まで、gin は、消さずに残す。
 
-- ほかのファイル(`docs/DECISIONS.md`、`docs/ISSUES.md`、直下の README、コード、ゲート、ワークフロー)は、さわらない。conflict が出たら、main 側の行を残して、自分の行を足し直す。
+- ほかのファイル(`docs/DECISIONS.md`、`docs/ADR-INDEX.md`、`docs/ISSUES.md`、直下の README、コード、ゲート、ワークフロー)は、さわらない。conflict が出たら、main 側の行を残して、自分の行を足し直す。
 - **module の path に major が入る Go のパッケージ**(`/v2` 以上。`pgx/v5`、`go-redis/v9`、`go-github/v93` など): major ごとにファイルや行を写さない。シンボル、`field`、`type`、`verified_versions` の `package` に、major の要素を `/v*` と書く(`(*github.com/google/go-github/v*/github.Client).Do`、`package: github.com/google/go-github/v*`。ADR-110、設計 6.9)。`/v*` は `/v` と数字の 1 要素だけに当たる(`/vendor` などには当たらない)。`verified_versions` の `versions` は、**実際に差分テストを通した範囲だけ**を書く(`make model-diff PKG=github.com/google/go-github/v93/github` に `-version v93.0.0`: `/v*` の行は、`-version` の major の package として照合される)。zoo のセルの骨組みは、読んだ major 1 つ分のモジュールで足りる(`replace github.com/google/go-github/v93 => ./skel`)。確認する対象は、上流が今もサポートしている major(既定は最新。複数をサポートしていれば、それぞれで差分テストを通し、`verified_versions` に並べる。その major にしかない API の行も書く)。「サポートしている」は、上流の公開の事実(サポートの方針、README、リリースのブランチ、直近のリリース)で決め、根拠をモデルのファイルの冒頭か PR の本文に 1 行で書く(分からないときは最新だけにして、そう書く)。サポートを終えた major は対象にしない(行は当たり、確認していないことが `summary.unverified_versions` に出る)。`aws-sdk-go-v2` のように、`/vN` の要素でない名前は対象外(そのままの path で書く)。接尾辞のない v0 / v1 の path には `/v*` は当たらない: v1 と v2 以降の両方を対象にするパッケージは、接尾辞のない行と `/v*` の行の両方が要る。
 
 ### Rust の zoo のセルを足すとき(確認と骨組みの注意)
@@ -146,7 +146,7 @@ zoo のゲート(`scripts/zoo-loosened-check.sh`、#167): 新しいセル(`bench
 - 自分でマージしない(CI が通れば自動で入る)。履歴は書き換えない。
 - 既存のセルのマークを緩めない(既存の行の変更・削除は、ユーザーの承認が要るので、しない)。
 - 言い回しは `.regomark/policy/wording.rego` に従う(`regomark check --no-judge` が 0)。
-- ADR を書かない(昇格は、[ADR-101](DECISIONS.md) で済んでいる)。方針の変更が要ると思ったら、PR の本文に書く。
+- ADR を書かない(昇格は、[ADR-101](adr/101-promote-example-rules-to-builtin.md) で済んでいる)。方針の変更が要ると思ったら、PR の本文に書く。
 - 1 つの PR で、1 パッケージだけ。終わったら、次のパッケージには進まず、終わる。
 - `.dead-allow` の書式: 1 行 1 シンボルで、`symbol | 理由`(`readDeadAllow`)。既存のファイルは `symbol | 種類 | 理由` の 3 列だが、テストは `|` の最初の区切りだけで分けるので、「種類 | 理由」の全体が理由の文字列として読まれる(2 列でも 3 列でも読める。種類は検査されない)。種類の意味は `bench/parity/README.md`: `dependency`(標準でないライブラリで、zoo にその依存がない)、`debt`(標準ライブラリで、まだ呼ぶセルがない。**減る一方で、新しい行には足さない**)、`spelling`(extractor が書く別の綴り)。新しいパッケージの行は、`symbol | dependency | 理由` か、`symbol | 理由` の形で足す(`debt` は、標準ライブラリのモデルの、いまある行だけ)。
 

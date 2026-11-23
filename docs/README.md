@@ -13,7 +13,7 @@
 | 使い手 | 何が出るか、何を報告しないか、使い方、出力の読み方 | [../README.md](../README.md)、[rust-isolation.md](rust-isolation.md)(信頼できない Rust)、[GLOSSARY.md](GLOSSARY.md) |
 | ルールを書く人 | ルールの書式、何が書けるか、確認方法 | [MODELING.md](MODELING.md)、[../examples/rules/README.md](../examples/rules/README.md)、[GCP-MODELS.md](GCP-MODELS.md) |
 | rivus を使う AI エージェント | どのコマンドを、どのフラグで実行し、出力のどこを読むか。`rivus index` と `rivus graph`、答えの読み方 | [AGENT-GUIDE.md](AGENT-GUIDE.md)、[GRAPH.md](GRAPH.md)、[../README.md](../README.md) |
-| 開発者 | 設計思想、今の構成、経緯、テストと測定 | [PRINCIPLES.md](PRINCIPLES.md)、[ROADMAP.md](ROADMAP.md)、[ISSUES.md](ISSUES.md)(課題の一覧)、[ARCHITECTURE.md](ARCHITECTURE.md)、[DECISIONS.md](DECISIONS.md)、[ADR-INDEX.md](ADR-INDEX.md)、`DESIGN-*.md`、[../bench/README.md](../bench/README.md) |
+| 開発者 | 設計思想、今の構成、経緯、テストと測定 | [PRINCIPLES.md](PRINCIPLES.md)、[ROADMAP.md](ROADMAP.md)、[ISSUES.md](ISSUES.md)(課題の扱い。一覧は `make docs-gen`)、[ARCHITECTURE.md](ARCHITECTURE.md)、[adr/](adr/README.md)(ADR。一覧は `make docs-gen`)、`DESIGN-*.md`、[../bench/README.md](../bench/README.md) |
 | レビューする人 | 不変条件、失敗の重さ、受け入れ済みの制約 | [PRINCIPLES.md](PRINCIPLES.md)、[../bench/MISSES.md](../bench/MISSES.md) |
 
 ## 文書の一覧
@@ -31,8 +31,8 @@
 
 | 文書 | 内容 |
 |---|---|
-| [DECISIONS.md](DECISIONS.md) | 設計判断の記録(ADR-001〜091)。決めた時点の記録で、書き換えない |
-| [ADR-INDEX.md](ADR-INDEX.md) | ADR の一覧。番号、題、状態(有効 / 一部覆った)、覆した先、関連する文書 |
+| [adr/](adr/README.md) | 設計判断の記録(ADR)。1 件 1 ファイル。決めた時点の記録で、書き換えない。一覧は `make docs-gen WHAT=adr` |
+| [DECISIONS.md](DECISIONS.md)、[ADR-INDEX.md](ADR-INDEX.md) | ADR の案内(書き方、状態の意味、注記)。ADR を足すときは触らない |
 
 ### 使い方と、書き方
 

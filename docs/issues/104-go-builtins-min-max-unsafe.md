@@ -5,6 +5,7 @@
 - 言語: Go
 - ROADMAP の節: 1
 - 守るもの: zoo `F/conv/builtin-minmax`、`F/conv/unsafe-string`、`cmd/rivus/go_builtin_test.go`
+- 題: Go: 組み込み関数 min / max / unsafe
 
 ## 今の状態(2026-11-22 の見直し)
 

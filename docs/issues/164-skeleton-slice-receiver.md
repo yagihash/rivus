@@ -3,6 +3,8 @@
 - 状態: **open**
 - 種類: 道具(モデル作成の骨組みの生成。生成器の制限)
 - 言語: Go
+- ROADMAP の節: 3
+- 守るもの: -
 - 見つけた経緯: `make model ... ARGS="-gen-skeleton"`(`docs/DESIGN-package-models.md` 6.11 の段階 2)で `gin` の骨組みを作り直したとき。
 
 ## 問題

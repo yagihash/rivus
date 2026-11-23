@@ -214,7 +214,7 @@ extractor が読む量(ファイル数)は、`docs/DESIGN-deps-cost.md` の 10 �
 | 共有のファイル | なぜ共有か | 分ける案 | 規模 |
 | --- | --- | --- | --- |
 | `docs/ISSUES.md` | 課題の索引の 1 つの表。各 PR が行を足す | モデルの PR は、課題を作らない。既知の見逃しは、zoo のセルの `@miss` の記述(と、モデルのファイルの冒頭のコメント)だけに書く。索引は、`docs/issues/*.md` の先頭の項目から生成する(`ISSUES.md` は生成物。CI が一致を確認) | 小(生成スクリプト 1 つ + CI の確認)。課題を作る PR(モデル以外)の conflict は、生成で消える |
-| `docs/DECISIONS.md`、`docs/ADR-INDEX.md` | ADR は 1 つのファイルに追記。番号の取り合い | モデルの PR は、ADR を書かない(モデルの方針は、既存の ADR で決まっている)。測定と判断は、PR の本文と、モデルのファイルの冒頭のコメントに書く。新しい方針が要るときは、相談役に依頼する | なし(運用の決まり) |
+| `docs/adr/` | ADR は 1 件 1 ファイル(以前は `docs/DECISIONS.md` に追記で、番号の取り合いで conflict した)。番号の重なりは `TestAdrFiles` が止める | モデルの PR は、ADR を書かない(モデルの方針は、既存の ADR で決まっている)。測定と判断は、PR の本文と、モデルのファイルの冒頭のコメントに書く。新しい方針が要るときは、相談役に依頼する | なし(運用の決まり) |
 | `docs/DESIGN-deps-cost.md`(11、12 節が、モデルごとの測定の追記先になった) | モデルごとに追記した | 追記しない。測定は、PR の本文と、モデルのファイルの冒頭のコメント。まとめは、相談役が、あとで文書にする | なし(運用の決まり) |
 | `bench/zoo/marks.lock`(574 行、5 列) | 全セルの「緩いマーク」を、1 つのソート済みのファイルに持つ(ADR の zoo の保証) | セルのディレクトリごと(または、言語とセルごと)のファイルに分ける(`bench/zoo/marks.d/<lang>/<cell>.lock`)。テストと `scripts/zoo-loosened-check.sh` は、ディレクトリから集める。新しいセルは、新しいファイルを足すだけで、他の PR とぶつからない | 中(分割の 1 回の変更 + テストとゲートの読み込み。ゲートの意味は変えない) |
 | `bench/parity/dead-allow.txt`(1,306 行) | 「zoo の行が当たらない」組み込みの行の許可。全モデル共有の 1 つ | モデルのファイルごと(`bench/parity/dead-allow.d/<model>.txt`)にする。または、`TestBuiltinRowsAreHitByTheZoo` を、モデルのファイルの冒頭のコメント(`# dead-allow: <symbol> | <理由>`)から読む。新しいモデルは、当たらない行がなければ、何も足さない | 小〜中(テストの読み込みの変更) |
@@ -432,7 +432,7 @@ sinks:
 - `pubspec.lock` がない(`dart pub get` をしていない)ときは、注記も、エラーもない。読めない(YAML が壊れている)ときは、標準エラーに 1 行出して、注記は出さない。
 - **未対応**: 複数のパッケージの monorepo や pub のワークスペース(`pubspec.lock` が、`-C` のディレクトリでなく、親のディレクトリにある)。`-C` のディレクトリに `pubspec.lock` がなければ出さない(Dart の extractor も、1 つのパッケージを `-C` に指す前提。解析の警告にもそう書いてある)。
 - プレリリース(`6.0.0-beta.1`)は、Go と同じく、接尾辞を読まずに数字だけで比べる(`6.0.0` として、`<6.0.0` の範囲の外)。
-- 記録に言語の区別はない。別の言語のファイルの記録でも、`package` の名前が同じ依存(Dart の `http` と Rust の `http` など)には当たる。組み込みのファイルの `package` は、その言語の依存を指す。名前のぶつかりは、今は直さない(利用者のファイルで起きたら、記録に言語を足す案を考える)。
+- **記録は、言語ごとに照合する**。記録は、どの言語のファイルにあるかを持つ(`model.RuleSetLanguage`。組み込みのファイル名 `dart-*.yaml`、`rust-*.yaml`、`go-*.yaml`、またはルールセット名 `rivus/<言語>/...`)。Go の `go.mod` は Go の記録と、`pubspec.lock` は Dart の記録と、`Cargo.lock` は Rust の記録とだけ照合する。名前が同じで言語が違う記録(Dart の `http` と Rust の `http`)は、別々に扱う。言語が分からないファイル(プロジェクトの `.rivus/rules` や `-rules` で渡したファイル。名前に言語を示すものがない)の記録は、今までどおり、どの言語の依存にも当たる。`rivus models versions` の JSON は変えない。
 
 **Rust(`Cargo.lock`)**: Rust の extractor が動いた解析だけが、`-C` の `Cargo.lock` を読む(IR は変えない。extractor も変えない)。`source` は `Cargo.lock`。
 - 読むのは `[[package]]` のうち、`source` が registry(`registry+`、`sparse+`)のもの。path の crate(`source` なし。対象自身を含む)と git の crate は、比べるバージョンがないので出さない。`package` は、lock の綴り(`actix-web`)で出す。照合は `-` と `_` を同じとみなす(`model.SameCrate`。モデルが `google_cloud_storage` と書いても、lock の `google-cloud-storage` に当たる)。

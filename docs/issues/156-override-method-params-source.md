@@ -1,8 +1,13 @@
 # 156: 利用者がオーバーライドするメソッドを、ライブラリが呼ぶ形のモデルの書式がない
 
 - 状態: **open**
-- 種類: サイレントな見逃し(書式の不足。モデルを足しても検出されない行が増える)
-- 言語: 全(Dart の `dio` の `Interceptor.onRequest` で分かった。同じ形が、gRPC のインターセプタ、HTTP のミドルウェア、ORM のフックなどに多い)
+- 種類: サイレントな見逃し(書式の不足)
+- 言語: 全
+- ROADMAP の節: 2 / 3
+- 守るもの: -
+- 題: 利用者がオーバーライドするメソッド(`Interceptor.onRequest` など)を、ライブラリが呼ぶ形のモデルの書式がない
+- 補足(種類): サイレントな見逃し(書式の不足。モデルを足しても検出されない行が増える)
+- 補足(言語): 全(Dart の `dio` の `Interceptor.onRequest` で分かった。同じ形が、gRPC のインターセプタ、HTTP のミドルウェア、ORM のフックなどに多い)
 - 優先: 中の上。実装は、Go と Rust の検証が通ってから
 - 設計: [../DESIGN-callback-sources.md](../DESIGN-callback-sources.md)(`callback_param` の続き)
 

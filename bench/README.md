@@ -13,7 +13,7 @@ A finding is matched with a labelled sink site by (file, line, category). The la
 reading the code (the targets have no answer key), and the judgement calls are in each entry's
 `note`: the truth file is a claim, and anyone can read and dispute it.
 
-Results are recorded in `docs/DECISIONS.md` (ADR-043).
+Results are recorded in `docs/adr/043-accuracy-benchmark-go-test-bench.md` (ADR-043).
 
 **Where things are.** This file has: the procedure for a change of the core and `compare.sh` (below), the targets and where to fetch them,
 the table of the directories ("Benchmarks that are in this repository"), the share of silent misses, and the scale profiles
@@ -138,7 +138,7 @@ kind (`source-only entries: N of M`). The two gogs truth files are all of that k
    positive that came, or a flow that was lost. **A single flow that was lost (a miss that the
    before-binary did not have) means: do not push.** Fix the change, or change what it does, and run
    again. A false positive that goes away is a gain only after it has been read as one.
-6. Put the numbers and the classification in the commit message or the ADR (`docs/DECISIONS.md`:
+6. Put the numbers and the classification in the commit message or the ADR (`docs/adr/`:
    ADR-048 has the form), including what was not run and why.
 
 ### How to make the copies
@@ -204,7 +204,7 @@ When the core of the engine (`internal/sg`, `internal/sites`, `internal/taint`) 
 `rust-curated` too), then the S and M of `go-synth`, `dart-synth` and `rust-synth` before and after with the
 same binary built from each state, and check that the result is identical (or that every changed
 finding is understood). The gate is the light tier of `bench/compare.sh` (about 10 minutes); a big real
-codebase is for the periodic and occasional runs of `bench/explore/README.md`, never a step of a change. See `go-synth/README.md` for how, and `docs/DECISIONS.md` (ADR-046) for why.
+codebase is for the periodic and occasional runs of `bench/explore/README.md`, never a step of a change. See `go-synth/README.md` for how, and `docs/adr/046-own-bench-curated-synth.md` (ADR-046) for why.
 
 Two more things are held by the three curated tests. Each `@miss` says whether the engine left a
 trace of the flow it lost: `@miss(silent)` (nothing in the functions of the source and the sink; 51 of the

@@ -3,6 +3,9 @@
 - 状態: **closed**
 - 種類: 文書または道具(重さ: 中)
 - 言語: 全
+- ROADMAP の節: 0
+- 守るもの: `TestGraphUsesTheRecordedRulesFile`
+- 題: docs/GRAPH.md の「index に渡したフラグは、与えなければ DB に記録されたものを使う」が `-rules` に当てはまらない
 - 見つけた経緯: 利用ガイド(docs/AGENT-GUIDE.md)を書くときに、help とコードを読んで見つかった食い違い。v0.0.4 には入れない。
 
 `graph … -C` に `-rules` を付けないと `fresh: false` になる(`-rules` は記録から使われない)。文書を直すか、`-rules` も記録から使うようにするか。後者は、索引のキーの設計(ルールの内容の扱い)に関わるので、相談役が決める。

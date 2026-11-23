@@ -5,12 +5,13 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
-	"strings"
 	"testing"
+
+	"github.com/yagihash/rivus/internal/docsgen"
 )
 
-// docs/issues and the tables of docs/ISSUES.md. A file is `<number>-<name>.md` (the number is unique, and the table has a
-// row for it with a link to that file) or `model-<package>-<name>.md` (no number; a pull request that adds a model names
+// docs/issues. A file is `<number>-<name>.md` (the number is unique; the header has the five keys, and `make docs-gen`
+// makes a row of the table from it) or `model-<package>-<name>.md` (no number; a pull request that adds a model names
 // it from a zoo mark by @ref(model-...) and does not touch the tables; it has the sections of docs/issues/README.md).
 // The next number is the largest in docs/issues plus one: no line of ISSUES.md holds it, so that pull requests do not
 // conflict on it.
@@ -54,30 +55,55 @@ func TestIssuesFiles(t *testing.T) {
 			}
 		}
 	}
+	issues, errs := docsgen.Load(dir)
+	for _, e := range errs {
+		t.Error(e)
+	}
+	if len(issues) != len(numbered) {
+		t.Errorf("docsgen read %d numbered files, the directory has %d", len(issues), len(numbered))
+	}
+	valid := map[string]bool{}
+	for _, st := range docsgen.States {
+		valid[st] = true
+	}
+	for _, is := range issues {
+		for _, k := range docsgen.Keys[:5] { // 題 is optional
+			if _, ok := is.Fields[k]; !ok {
+				t.Errorf("%s: the header has no %q line (docs/issues/README.md)", is.File, k)
+			}
+		}
+		if !valid[is.State] {
+			t.Errorf("%s: 状態 is %q; the first word must be one of %v", is.File, is.Fields["状態"], docsgen.States)
+		}
+		if is.Title == "" {
+			t.Errorf("%s: no title", is.File)
+		}
+	}
+	// the generated table has one row for every numbered file, and no other
+	rowRe := regexp.MustCompile(`(?m)^\| \[#([0-9]+)\]\(issues/([^)]+)\) \|`)
+	rows := map[int]string{}
+	for _, m := range rowRe.FindAllStringSubmatch(docsgen.Table(issues), -1) {
+		num, _ := strconv.Atoi(m[1])
+		if _, dup := rows[num]; dup {
+			t.Errorf("the table lists #%d twice", num)
+		}
+		rows[num] = m[2]
+	}
+	for num, n := range numbered {
+		if rows[num] != n {
+			t.Errorf("docs/issues/%s: the generated table has the row %q", n, rows[num])
+		}
+	}
+	if len(rows) != len(numbered) {
+		t.Errorf("the table has %d rows, the directory has %d numbered files", len(rows), len(numbered))
+	}
+	// ISSUES.md is a guide: it holds no table and no next number (a line that every pull request edits conflicts)
 	tab, err := os.ReadFile(filepath.Join("..", "..", "docs", "ISSUES.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	rowRe := regexp.MustCompile(`^\| \[#([0-9]+)\]\(issues/([^)]+)\)`)
-	listed := map[int]bool{}
-	for _, l := range strings.Split(string(tab), "\n") {
-		m := rowRe.FindStringSubmatch(l)
-		if m == nil {
-			continue
-		}
-		num, _ := strconv.Atoi(m[1])
-		if listed[num] {
-			t.Errorf("ISSUES.md lists #%d twice", num)
-		}
-		listed[num] = true
-		if numbered[num] != m[2] {
-			t.Errorf("ISSUES.md row #%d links to %s, and the file of the number is %q", num, m[2], numbered[num])
-		}
-	}
-	for num, n := range numbered {
-		if !listed[num] {
-			t.Errorf("docs/issues/%s has no row in the tables of ISSUES.md", n)
-		}
+	if regexp.MustCompile(`(?m)^\| \[#[0-9]+\]`).Match(tab) {
+		t.Error("ISSUES.md has a row of the table: the table is made by `make docs-gen` from docs/issues (add a file, not a row)")
 	}
 	if regexp.MustCompile(`新しい課題は [0-9]+ から`).Match(tab) {
 		t.Error("ISSUES.md holds the next number: it is the largest number in docs/issues plus one (a line with a number conflicts between pull requests)")

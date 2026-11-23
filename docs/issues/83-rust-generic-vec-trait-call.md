@@ -5,6 +5,7 @@
 - 言語: Rust
 - ROADMAP の節: 2
 - 守るもの: -
+- 題: Rust: ジェネリックな T の Vec を for で回すと、trait 呼び出しが dynamic になり、モデルが receiv…
 - GitHub: #83(移行前の番号は同じ。2026-11-20 に開いた。移行時の状態: OPEN)
 
 ## 本文(GitHub から移した写し)
