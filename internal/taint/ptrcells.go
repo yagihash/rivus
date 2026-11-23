@@ -260,3 +260,129 @@ func throughPointer(p string) bool {
 	}
 	return false
 }
+
+// pointerAliasDetail is the text of the note on a hop that went through the approximation of a write via a
+// pointer (ptrAlias, copyOf).
+const pointerAliasDetail = "this step goes through a write or a read via a pointer that rivus approximates by aliasing: the " +
+	"pointer held in a cell is taken to point to the places it was stored from, whichever of them it points to at run time. " +
+	"The flow may not exist; read the step and check that the pointer really points to that variable here"
+
+func (s *state) aliasNote(pos ir.Pos) *Uncertainty {
+	return s.pathNote(KindPointerAlias, pointerAliasDetail, pos)
+}
+
+// ptrAliasLocs are the locations of the pointer v that are there only because of ptrAlias (the pointee of a
+// pointer loaded from a cell): the ones that a pointer the cell does not have would not reach. Nothing when
+// the function has no ptrAlias.
+func (s *state) ptrAliasLocs(v *sg.Value) map[Loc]bool {
+	if len(s.ptrAlias) == 0 || v == nil {
+		return nil
+	}
+	alias, direct := map[Loc]bool{}, map[Loc]bool{}
+	s.splitAlias(v, alias, direct, map[*sg.Value]bool{})
+	for l := range direct {
+		delete(alias, l)
+	}
+	if len(alias) == 0 {
+		return nil
+	}
+	return alias
+}
+
+func (s *state) splitAlias(v *sg.Value, alias, direct map[Loc]bool, seen map[*sg.Value]bool) {
+	add := func(m map[Loc]bool, ls []Loc) {
+		for _, l := range ls {
+			l.Path, _ = pathTrunc(l.Path, s.eng.opts.K)
+			m[l] = true
+		}
+	}
+	in := v.Instr
+	if in == nil || seen[v] || len(in.Dsts) == 0 || in.Dsts[0] != v {
+		add(direct, s.locs(v))
+		return
+	}
+	seen[v] = true
+	switch {
+	case in.Op == sg.OpPhi && pointerLike(v):
+		for _, e := range in.Args {
+			s.splitAlias(e, alias, direct, seen)
+		}
+	case in.Op == ir.OpFieldLoad && pointerLike(v):
+		slots := suffix(s.locs(in.Args[0]), in.IR.Field)
+		add(direct, suffix(slots, "*"))
+		add(alias, s.pointees(slots))
+	case (in.Op == ir.OpLoad || in.Op == ir.OpGlobalLoad) && pointerLike(v):
+		slots := s.loadAddr(in)
+		add(direct, suffix(slots, "*"))
+		add(alias, s.pointees(slots))
+	case in.Op == ir.OpCopy && pointerLike(v) && pointerLike(in.Args[0]):
+		s.splitAlias(in.Args[0], alias, direct, seen)
+	case in.Op == ir.OpConvert && pointerLike(v) && pointerLike(in.Args[0]) &&
+		in.IR.Operator != "change_interface" && in.IR.Operator != "make_interface":
+		s.splitAlias(in.Args[0], alias, direct, seen)
+	default:
+		add(direct, s.locs(v))
+	}
+}
+
+// markAliased returns the locations of ls that are in the set, and the ones that are not.
+func markAliased(ls []Loc, set map[Loc]bool) (via, plain []Loc) {
+	for _, l := range ls {
+		if set[l] {
+			via = append(via, l)
+		} else {
+			plain = append(plain, l)
+		}
+	}
+	return via, plain
+}
+
+// copyLocsAlias is copyLocsNoted for a copy where some of the source or of the destination locations are
+// there only because of ptrAlias (srcAlias, dstAlias): the hops that read or write them carry the
+// pointer_alias note.
+func (s *state) copyLocsAlias(src, dst []Loc, srcAlias, dstAlias map[Loc]bool, kind string, in *sg.Instr, note *Uncertainty) {
+	if len(srcAlias) == 0 && len(dstAlias) == 0 {
+		s.copyLocsNoted(src, dst, kind, in, note)
+		return
+	}
+	srcVia, srcPlain := markAliased(src, srcAlias)
+	dstVia, dstPlain := markAliased(dst, dstAlias)
+	s.copyLocsNoted(srcPlain, dstPlain, kind, in, note)
+	an := s.aliasNote(in.Pos)
+	if note == nil {
+		s.copyLocsNoted(srcVia, dstPlain, kind, in, an)
+		s.copyLocsNoted(srcPlain, dstVia, kind, in, an)
+		s.copyLocsNoted(srcVia, dstVia, kind, in, an)
+		return
+	}
+	for _, p := range [][2][]Loc{{srcVia, dstPlain}, {srcPlain, dstVia}, {srcVia, dstVia}} {
+		if len(p[0]) == 0 || len(p[1]) == 0 {
+			continue
+		}
+		if len(s.opaque) > 0 {
+			s.carryOpaque(p[0], p[1])
+		}
+		base := s.whyFn(in, kind)
+		for _, d := range p[1] {
+			for _, sl := range p[0] {
+				s.copyLoc(sl, d, func(f found) *why {
+					w := base(f)
+					w.setNotes(appendNote(appendNote(w.notes(), note), an))
+					return w
+				})
+			}
+		}
+	}
+}
+
+// withAliasNote is the hop with the pointer_alias note added (a copy: the hop is shared with the other
+// destinations of the write).
+func (s *state) withAliasNote(w *why, pos ir.Pos) *why {
+	c := *w
+	if w.rare != nil {
+		r := *w.rare
+		c.rare = &r
+	}
+	c.setNotes(appendNote(c.notes(), s.aliasNote(pos)))
+	return &c
+}
