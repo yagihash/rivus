@@ -48,6 +48,7 @@ func TestZooFieldSinkRowsAreHit(t *testing.T) {
 	cmd := exec.Command(binary, "analyze", "-sites", "-rules", "rules.yaml", "./cells/...")
 	cmd.Dir = dir
 	out, err := cmd.Output()
+	err = notFailed(err) // exit code 4: the zoo has cells that stop by the pass limit on purpose (F/state/global-chain); TestZoo* hold that the others converge
 	if err != nil {
 		t.Fatalf("analyze: %v", err)
 	}

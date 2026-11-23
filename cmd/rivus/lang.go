@@ -120,7 +120,7 @@ type declinedError struct{ msg string }
 func (e *declinedError) Error() string { return e.msg }
 
 // exitDeclined is the exit code of a run that read nothing because the user declined to read the Rust project (the others
-// in use: 0 ok, 1 error, 2 usage or a bad flag, 130 interrupted).
+// in use: 0 ok, 1 error, 2 usage or a bad flag, 4 incomplete (exitIncomplete), 130 interrupted).
 const exitDeclined = 3
 
 func (o *analyzeOpts) skippedLang(lang string) bool {

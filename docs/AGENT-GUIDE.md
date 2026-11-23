@@ -60,7 +60,7 @@ rivus graph callers -C <dir> <関数>                  # finding の周辺を調
 
 ## 3. コマンド
 
-終了コードは、0 = 成功、1 = エラー、2 = 使い方の誤り(知らないコマンドやフラグ)、3 = Rust だけの対象で、読むことを断った、130 = 中断です。finding があっても 0 です。`-h` は、どのコマンドでも 0 で、使い方だけを出します(サブコマンドが必要なコマンドを引数なしで呼ぶと、使い方を出して 2 です)。
+終了コードは、0 = 成功、1 = エラー、2 = 使い方の誤り(知らないコマンドやフラグ)、3 = Rust だけの対象で、読むことを断った、4 = 完全でない解析(時間切れ、未収束。結果は出ている。`summary.incomplete` が true で、`summary.incomplete_reasons` に `timeout`、`not_converged`)、130 = 中断です。`analyze`、`index -taint`、`query`、`resolve`、`models coverage` が 4 を返します(保存した index を読むだけのときは 0)。finding があっても、完全なら 0 です。`-h` は、どのコマンドでも 0 で、使い方だけを出します(サブコマンドが必要なコマンドを引数なしで呼ぶと、使い方を出して 2 です)。
 
 ### `rivus sites`
 
@@ -93,7 +93,7 @@ source から sink への経路を、全部探します。主な作業のコマ�
 - **主なフラグ**: `-timeout`(必ず付ける)、`-C`、`-rules`、`-lang`、`-detail summary`(経路とコードを省いた一覧。件数が多いときの最初の 1 回に)、`-sites`(サイトの一覧も出す。`-detail summary` とは併用できない)、`-no-project-rules`(信頼できない対象)、`-tests`、`-no-deps`、`-v`(各段階の時間を標準エラーに出す)。
 - **読む場所**: 5 章。まず `summary` と `stats`、次に `findings[]`。
 - **落とし穴**:
-  - `-timeout` がないと、大きい対象で終わらないことがあります。時間切れでも、そこまでに見つけた分を出して、終了コード 0 で終わります。`stats.timed_out` を必ず見ます。
+  - `-timeout` がないと、大きい対象で終わらないことがあります。時間切れでも、そこまでに見つけた分を出して、終了コード 4(完全でない解析)で終わります。`summary.incomplete_reasons` と `stats.timed_out` を必ず見ます。
   - `-detail summary` の finding には `paths` がありません(`null`)。判定には、既定の `snippet` の出力が必要です。
   - 1 つの sink に、同じ種類の source が複数届くとき、finding は 1 件にまとまり、ほかの source は `other_sources`(最大 5 件)と `other_sources_count` に出ます。
 

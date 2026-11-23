@@ -558,6 +558,9 @@ rivus の「sink だけ指定して到達し得る source を列挙する」ク�
 seed となる source を与えずに投げる形なので、全関数のサマリを先に作る
 functional approach の方が素直に実現できる。
 
+**完全でない解析（incomplete analysis）**
+全体の時間切れ(`-timeout`)か、未収束(`-max-passes` の上限)で終わった解析。見つけた分の結果は全部出したうえで、終了コード 4 で終わる。`summary.incomplete`(bool)と `summary.incomplete_reasons`(`timeout`、`not_converged`)に出る。関数ごとの打ち切り(`stats.func_timeouts`)は、まだ数えない(ADR-120)。
+
 **エントリポイント（entry point）**
 コールグラフの根。ライブラリには `main` がないため、
 「どこから先が外部入力か」を言語・用途ごとに既定と追加指定で決める。

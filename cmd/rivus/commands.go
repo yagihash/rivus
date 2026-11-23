@@ -131,6 +131,7 @@ func usageText() string {
 		list(other)
 	}
 	b.WriteString("\nRun \"rivus <command> -h\" for the flags of a command (the flags for diagnosis and tuning: -help-all).\n")
+	b.WriteString("\nExit codes: 0 ok (a finding is not an error), 1 error, 2 usage, 3 Rust declined, 4 analysis incomplete (the time limit -timeout or the pass limit was reached: the result is written, and summary.incomplete says why), 130 interrupted.\n")
 	return b.String()
 }
 

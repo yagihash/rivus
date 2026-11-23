@@ -112,6 +112,12 @@ type AccessPathDepth struct {
 // share of depth_limit is the number that should go down.
 type Summary struct {
 	Findings int `json:"findings"`
+	// Incomplete is true when the analysis did not finish (ADR-120): the whole-run time limit was reached, or the
+	// summaries did not converge. The findings are then a part of what a complete run would give, and rivus ends with
+	// the exit code of an incomplete analysis. IncompleteReasons says which ("timeout", "not_converged"; the stop of
+	// -max-memory will add one). Both are always in the output.
+	Incomplete        bool     `json:"incomplete"`
+	IncompleteReasons []string `json:"incomplete_reasons"`
 	// Program counts the uncertainties of the program, by kind and by
 	// attributable_to.
 	Program Counts `json:"program"`
@@ -679,6 +685,27 @@ func summarize(r *Report) Summary {
 	return s
 }
 
+// The reasons of summary.incomplete_reasons.
+const (
+	ReasonTimeout      = "timeout"       // the time limit of the whole run (-timeout) was reached
+	ReasonNotConverged = "not_converged" // the summaries still changed after the last pass (-max-passes)
+)
+
+// IncompleteReasons says why the analysis of st did not finish (nil when it did). Only a limit of the whole run counts: a
+// function that was cut by its own limit (-func-timeout, the budget of a function) while the run converged is in
+// stats.func_timeouts and stats.budget_exhausted, and does not make the run incomplete (ADR-120). A new stop of the whole run
+// (the memory limit) is added here.
+func IncompleteReasons(st *taint.Stats) []string {
+	reasons := []string{}
+	if st.TimedOut || st.RunTimeouts > 0 || st.FuncValues != nil && st.FuncValues.TimedOut {
+		reasons = append(reasons, ReasonTimeout)
+	}
+	if !st.Converged && !st.TimedOut {
+		reasons = append(reasons, ReasonNotConverged)
+	}
+	return reasons
+}
+
 // Build assembles a report.
 func Build(packages []string, loadErrors []ir.LoadError, st *sites.Result, res *taint.Result, rules *model.Rules) *Report {
 	r := &Report{
@@ -730,6 +757,8 @@ func Build(packages []string, loadErrors []ir.LoadError, st *sites.Result, res *
 		r.Rules = []string{}
 	}
 	r.Summary = summarize(r)
+	r.Summary.IncompleteReasons = IncompleteReasons(&r.Stats)
+	r.Summary.Incomplete = len(r.Summary.IncompleteReasons) > 0
 	r.Summary.CallbackParamUnresolved = callbackParamUnresolved(r.Uncertainties)
 	r.Summary.NumericStops = numericStopsOf(res.NumericStops)
 	if st.DependencyFunctions > 0 {

@@ -46,14 +46,24 @@ func runModelsCoverage(args []string) error {
 		return err
 	}
 	cov := rep.Coverage()
+	// the coverage of an analysis that did not finish is a part of the coverage: the code of the run says so
+	var inc error
+	if *index == "" {
+		inc = incomplete(rep)
+	}
 	if *yaml {
-		_, err := fmt.Fprint(os.Stdout, cov.YAML(*top))
-		return err
+		if _, err := fmt.Fprint(os.Stdout, cov.YAML(*top)); err != nil {
+			return err
+		}
+		return inc
 	}
 	if *top > 0 && len(cov.Symbols) > *top {
 		cov.Symbols = cov.Symbols[:*top]
 	}
-	return writeJSON(os.Stdout, cov)
+	if err := writeJSON(os.Stdout, cov); err != nil {
+		return err
+	}
+	return inc
 }
 
 // versionsCmd is "rivus models versions": the verified_versions records of the models.

@@ -144,6 +144,7 @@ TARGETS_FILE = os.path.join(ROOT, "bench/deps-targets.json")
 PASSLINE_LEDGER = os.path.join(ROOT, "bench/passline-ledger.tsv")
 PASSLINE_COLUMNS = ["date", "rivus", "line"]
 GB = 1024 ** 3
+EXIT_INCOMPLETE = 4  # rivus: the output is complete as far as it goes, the analysis is not (cmd/rivus exitIncomplete)
 
 
 def judge(time_s, limit_s, mem_gb, cap_gb, converged, detected, through=None, quiet_after_fix=None):
@@ -372,7 +373,7 @@ def analyze_once(rivus, t, src, env, limit_s, cap_bytes, work, tag):
         m = run_watched(cmd, ROOT, env, limit_s, cap_bytes, errp, outp)
     rc, why, wall, peak = m["rc"], m["why"], m["wall"], m["b"]
     rep, converged = None, False
-    if not why and rc == 0:
+    if not why and rc in (0, EXIT_INCOMPLETE):  # 4: the report is written, but the analysis is not complete (timeout, not converged); converged below says it
         try:
             rep = json.load(open(outp))
             st = rep.get("stats", {})

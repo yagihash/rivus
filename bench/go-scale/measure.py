@@ -59,7 +59,9 @@ def main():
             t0 = time.time()
             p = subprocess.run([os.path.abspath(a.rivus), "analyze", "-sites", "-workers", str(a.workers), "-timeout", a.timeout, "-rules", "rules.yaml", "./..."], cwd=d, capture_output=True, text=True)
         wall = time.time() - t0
-        if p.returncode != 0:
+        if p.returncode == 4:  # exitIncomplete: the output is written; the key check below judges it
+            print("go-scale: the analysis is not complete (exit code 4)", file=sys.stderr)
+        elif p.returncode != 0:
             sys.exit("rivus failed: %s\n%s" % (p.returncode, p.stderr[-1500:]))
         rep = json.loads(p.stdout)
         want, none, nos = key(d)

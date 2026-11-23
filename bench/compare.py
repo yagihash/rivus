@@ -164,13 +164,17 @@ def run(a):
     p.returncode = os.waitstatus_to_exitcode(status)
     wall = time.time() - t0
     rss = ru.ru_maxrss / (1048576 if sys.platform == "darwin" else 1024)  # bytes on macOS, KB on Linux
-    meta = {"rc": p.returncode, "wall_s": round(wall, 1), "max_rss_mb": round(rss), "cmd": cmd, "gomemlimit": a.gomemlimit,
+    # exit code 4 (exitIncomplete): the output is written, the analysis is not complete (timeout, not converged). Downstream it is
+    # a result with stats.timed_out / converged to read (as a timed-out run was before the code existed), so rc is kept 0 and the
+    # code is recorded in exit_code; an incomplete run is not stored in the cache.
+    incomplete = p.returncode == 4
+    meta = {"rc": 0 if incomplete else p.returncode, "exit_code": p.returncode, "wall_s": round(wall, 1), "max_rss_mb": round(rss), "cmd": cmd, "gomemlimit": a.gomemlimit,
             "cpu_s": round(ru.ru_utime + ru.ru_stime, 1), "load_start": load_start, "load_end": load_now(), "peak_how": "main process (ru_maxrss)"}
     json.dump(meta, open(meta_path, "w"), indent=1)
     print("compare: %s rc=%d %.0fs %d MB" % (os.path.basename(a.out), p.returncode, wall, rss), file=sys.stderr)
-    if cdir and p.returncode == 0:
+    if cdir and p.returncode == 0 and not incomplete:
         store_cache(a, cdir, material, meta)
-    return 0 if p.returncode == 0 else 3
+    return 0 if p.returncode in (0, 4) else 3
 
 
 def sha256_file(path):

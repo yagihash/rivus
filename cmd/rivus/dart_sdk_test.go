@@ -46,7 +46,8 @@ func TestDartExtractorCompiledToOneExecutable(t *testing.T) {
 		cmd.Env = append(os.Environ(), "RIVUS_DART_EXTRACTOR="+extractor)
 		var out bytes.Buffer
 		cmd.Stdout = &out
-		if err := cmd.Run(); err != nil {
+		// exit code 4 (not complete): the zoo has the chains that stop by the pass limit on purpose (F/state/global-chain); the test compares findings
+		if err := notFailed(cmd.Run()); err != nil {
 			t.Fatalf("%s: %v", extractor, err)
 		}
 		var j struct {

@@ -9,6 +9,8 @@ import (
 	"os"
 	"runtime/debug"
 	"strings"
+
+	"github.com/yagihash/rivus/internal/report"
 )
 
 func main() {
@@ -69,11 +71,38 @@ func checkSubcommand(command string, args []string, usage string, known ...strin
 	return true
 }
 
-// exitCode is the exit code of a run that ended with err: 1, and exitDeclined for a Rust project that was declined and was all there was.
+// exitIncomplete is the exit code of an analysis that did not finish (summary.incomplete): the whole-run time limit
+// (-timeout) was reached, or the summaries did not converge (ADR-120). The output is written in full before it: findings,
+// summary and stats are there, and they are a part of what a complete run would give. The other codes in use: 0 ok, 1 error,
+// 2 usage or a bad flag, 3 declined (exitDeclined), 130 interrupted. A new stop of the whole run (-max-memory) is another reason of
+// the same code (report.IncompleteReasons), not another code.
+const exitIncomplete = 4
+
+// incompleteError is what a command returns after it has written its output of an analysis that is not complete.
+type incompleteError struct{ reasons []string }
+
+func (e *incompleteError) Error() string {
+	return "the analysis is incomplete (" + strings.Join(e.reasons, ", ") + "): the result is a part of what a complete run would give; see summary.incomplete_reasons and stats"
+}
+
+// incomplete is nil for a report of an analysis that finished, and an incompleteError for one that did not.
+func incomplete(rep *report.Report) error {
+	if rep == nil || !rep.Summary.Incomplete {
+		return nil
+	}
+	return &incompleteError{reasons: rep.Summary.IncompleteReasons}
+}
+
+// exitCode is the exit code of a run that ended with err: exitIncomplete for an analysis that did not finish, exitDeclined for a Rust
+// project that was declined and was all there was, and 1 otherwise.
 func exitCode(err error) int {
 	var d *declinedError
 	if errors.As(err, &d) {
 		return exitDeclined
+	}
+	var inc *incompleteError
+	if errors.As(err, &inc) {
+		return exitIncomplete
 	}
 	return 1
 }

@@ -67,7 +67,9 @@ def _one(rivus, d, extra):
     wall = time.time() - t0
     ru = resource.getrusage(resource.RUSAGE_CHILDREN)
     rss = ru.ru_maxrss / (1 if sys.platform == "darwin" else 1024)  # bytes on macOS, KB on Linux
-    if p.returncode != 0:
+    if p.returncode == 4:  # exitIncomplete: the output is written
+        print("go-synth: the analysis is not complete (exit code 4)", file=sys.stderr)
+    elif p.returncode != 0:
         sys.exit("rivus failed: %s\n%s" % (p.returncode, err.decode()[-2000:]))
     rep = json.loads(out)
     phases = {}

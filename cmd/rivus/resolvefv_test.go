@@ -140,7 +140,7 @@ func fvRun(t *testing.T, dir string, args ...string) []byte {
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
-	if err != nil {
+	if err = notFailed(err); err != nil {
 		t.Fatalf("analyze %v in %s: %v\n%s", args, dir, err, stderr.String())
 	}
 	return out
@@ -472,7 +472,7 @@ func TestResolveFuncValuesDart(t *testing.T) {
 				cmd.Env = append(os.Environ(), "RIVUS_DART_EXTRACTOR="+dart+" run "+extractor)
 				var out bytes.Buffer
 				cmd.Stdout = &out
-				if err := cmd.Run(); err != nil {
+				if err := notFailed(cmd.Run()); err != nil {
 					t.Fatalf("%s: %v", dir, err)
 				}
 				return out.Bytes()
