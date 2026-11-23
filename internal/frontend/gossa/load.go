@@ -248,10 +248,11 @@ func Load(dir string, patterns []string, opts Options) (*Program, error) {
 	if opts.Deps {
 		cfg.Mode |= packages.NeedDeps
 	}
-	pkgs, err := packages.Load(cfg, patterns...)
+	pkgs, err := packages.Load(cfg, shakeOrder(cfg, patterns)...)
 	if err != nil {
 		return nil, fmt.Errorf("load packages: %w", err)
 	}
+	shakePackages(pkgs)
 
 	p := &Program{
 		Dir:     absDir,
@@ -446,8 +447,12 @@ func Load(dir string, patterns []string, opts Options) (*Program, error) {
 		if ai != bi {
 			return ai > bi
 		}
-		if a.Pos() != b.Pos() {
-			return a.Pos() < b.Pos()
+		// by the place in the file, not by token.Pos (which depends on the order the files were read into the file set)
+		if pa, pb := p.Position(a.Pos()), p.Position(b.Pos()); pa != pb {
+			if pa.File != pb.File {
+				return pa.File < pb.File
+			}
+			return pa.Offset < pb.Offset
 		}
 		// an instance of a generic function after the function itself, then
 		// by what each is made of

@@ -23,7 +23,7 @@
 | Go: 実プロジェクト(AWS SDK に依存) | 8 GB で止められる(終わらない) | 終わる。153 件 | 終わる。153 件(同じ sink 28 個。代表の source が 1 組入れ替わるだけ) |
 | Dart: `package:analyzer` に依存する 2 つ | 終わらない | 終わらない | 終わらない |
 
-- 軽い層(`bench/compare.sh --light`。深さ 3 と 2 の比べ): go-curated、dart-curated、rust-curated、go-synth-S、go-scale、zoo 3 言語、gogs 2 つ、gin-vue-admin、go-test-bench、dart-pub、gophish、casdoor で、finding の増減は 0。経路が変わった finding(代表の経路の長さのみ): gogs 11(2 つとも)、gin-vue-admin 80、casdoor 1。`other_sources` の変化は gophish の 1。parseable は、Rust の extractor がサンドボックスで失敗し、**取れていない**(自分のコードのベンチ rust-curated、zoo-rust は、ID の集合が同じ)。
+- 軽い層(`bench/compare.sh --light`。深さ 3 と 2 の比較): go-curated、dart-curated、rust-curated、go-synth-S、go-scale、zoo 3 言語、gogs 2 つ、gin-vue-admin、go-test-bench、dart-pub、gophish、casdoor で、finding の増減は 0。経路が変わった finding(代表の経路の長さのみ): gogs 11(2 つとも)、gin-vue-admin 80、casdoor 1。`other_sources` の変化は gophish の 1。parseable は、Rust の extractor がサンドボックスで失敗し、**取れていない**(自分のコードのベンチ rust-curated、zoo-rust は、ID の集合が同じ)。
 - 境界のテスト(`cmd/rivus/depth_boundary_test.go`): 依存の構造体の 3 段目の値 C と、同じ 2 段目の隣 D、同じ 1 段目の隣 X。深さ 3(前の既定)は、C だけ、深さ 2 は、C と D(精度が落ちる所。注記が付く)、深さ 1 は、C と D と X。**流れ(C)は、どの深さでも見つかる**。深さ 2 で D が出るのは、**この既定の変更で精度が落ちる形**(`@fp` 相当。数は課題 #189 で扱う)。
 - 深いほど良いとは限らない: 深さ 3 で、AWS SDK 系の対象は終わらず、結果が出ない。深さ 2 で終わり、finding の集合は変わらない。測った範囲で、深さ 3 のほうが良い finding を出した対象は、なかった。ただし、**境界の形を持つ対象は測っていない**(境界のテストが、その形が実際にあることを示す)。
 - 深さでは終わらない対象: Dart の `package:analyzer`(巨大な再帰のかたまり、SCC 1 万 2 千関数。深さ 1 でも終わらず、要素はむしろ増える)。Go の gcp は、要素の 79% が source のラベルで、深さの効きが小さい。
