@@ -31,7 +31,12 @@ such findings; n/a when the target has no pair).
 printed beside it and is NOT part of PASS/FAIL: a fix of the kind "validate, then return early" is not treated as
 removing the flow until the guard mechanism (#169) exists. A target with `detect.mode` "through" (a truth file, one public fixed
 vulnerability) counts per vulnerability: detected when at least one finding passes through a labelled position;
-`through_tp=<n>/<N>` (the labelled positions passed through) is printed beside it as information. A target that is not decided yet is printed as INFO, not PASS/FAIL.
+`through_tp=<n>/<N>` (the labelled positions passed through) is printed beside it as information. A target with `detect.mode` "score" (Gitea) counts per published vulnerability of its truth file (the form of bench/score.py: source
+function, sink position, functions on the path; the field `vuln` groups the entries) and prints `detected=<n>/<N>` only: the count is not
+part of PASS/FAIL while `detect.in_verdict` is false, and neither the line nor the ledger row carries a count of findings, a list, a path or a place.
+A target that is not decided yet is printed as INFO, not PASS/FAIL.
+The time limit is kept by the watchdog (a kill of the group of this run at the limit: `stopped_time`); `rivus analyze` is not given `-timeout`
+(its default is 0, no limit; a rivus that stopped itself at the limit would look like a run that did not converge), unless the `args` of the target say so.
 Sources are fetched into $BENCH_CACHE (default ~/.cache/rivus-bench/), outside this tree; the output of the runs
 goes to $BENCH_OUT (default .claude/work/bench-out/, git-ignored; the ledger holds numbers only, the JSON stays there).
 Nothing of a target is run.
@@ -112,13 +117,16 @@ GB = 1024 ** 3
 EXIT_INCOMPLETE = 4  # rivus: the output is complete as far as it goes, the analysis is not (cmd/rivus exitIncomplete)
 
 
-def judge(time_s, limit_s, mem_gb, cap_gb, converged, detected, through=None, quiet_after_fix=None, located=None):
+def judge(time_s, limit_s, mem_gb, cap_gb, converged, detected, through=None, quiet_after_fix=None, located=None, score=None, in_verdict=True):
     """The pass line, pure: two separate conditions, both needed. FINISH (time within the limit, memory within the cap,
     converged) and DETECT (`detected`). located: None or the count of findings at the labelled places (information). detected: True / False / None (no pair for this target). through: None or (tp, n), the
     position-level count, printed as information only (it does not decide PASS). quiet_after_fix: True / False /
-    None (n/a); printed, and NOT part of PASS/FAIL. Returns (passed, line_body)."""
+    None (n/a); printed, and NOT part of PASS/FAIL. score: None or (n, N), the vulnerabilities detected by place (detect.mode
+    score), printed as `detected=<n>/<N>` only; in_verdict false (the field of the target) keeps it out of PASS/FAIL. Returns (passed, line_body)."""
     ok_time = time_s is not None and time_s <= limit_s
     ok_mem = mem_gb is not None and mem_gb <= cap_gb
+    if score is not None:
+        detected = score[0] >= 1 if (in_verdict and score[0] is not None) else None  # in_verdict false: not part of the verdict
     ok_det = detected is not False  # None (n/a) does not count against
     finish = bool(ok_time and ok_mem and converged)
     passed = bool(finish and ok_det)
@@ -126,7 +134,7 @@ def judge(time_s, limit_s, mem_gb, cap_gb, converged, detected, through=None, qu
     body = "time=%s/%s mem=%s/%s converged=%s finish=%s detected=%s quiet_after_fix=%s" % (
         "%.0f" % time_s if time_s is not None else "-", "%g" % limit_s,
         "%.2f" % mem_gb if mem_gb is not None else "-", "%g" % cap_gb,
-        "yes" if converged else "no", yn(finish), yn(detected), yn(quiet_after_fix))
+        "yes" if converged else "no", yn(finish), yn(detected) if score is None else "%s/%d" % ("-" if score[0] is None else score[0], score[1]), yn(quiet_after_fix))
     if located is not None:
         body += " located=%d" % located
     if through is not None:
@@ -195,6 +203,40 @@ def through_counts(truth, rep):
 def detected_through(tp):
     """Per vulnerability: detected when at least one finding passes through a labelled position of its truth."""
     return tp is not None and tp >= 1
+
+
+def score_counts(truth, rep):
+    """Detection by place for detect.mode score (the form of bench/score.py: source function, sink file and line, `via`: the
+    functions on one path). The truth is the list `sites` of bench/gitea-cve-truth.json; the field `vuln` groups the entries of
+    one published vulnerability, which counts as detected when one of its "vuln" entries is hit. Returns (detected, N).
+    Counts only: nothing of a finding is kept or returned."""
+    pair = {}  # (source func, sink file, sink line, category) -> [set of the functions of each path, with the callees]
+    for f in (rep or {}).get("findings", []):
+        p = (f.get("sink") or {}).get("position") or {}
+        fs_all = pair.setdefault(((f.get("source") or {}).get("func", ""), p.get("file"), p.get("line"), f.get("category")), [])
+        for pa in f.get("paths") or []:
+            fs = set()
+            for st in pa.get("steps", []):
+                fs.add(st.get("func", ""))
+                dsc = st.get("desc", "")
+                if dsc.startswith("call "):
+                    fs.add(dsc[5:])
+            fs_all.append(fs)
+
+    def hit(s):
+        for (fn, sf, sl, cat), paths in pair.items():
+            if not (fn.endswith(s["source_func"]) and (sf, sl) == (s["sink_file"], s["sink_line"]) and cat == s["category"]):
+                continue
+            via = s.get("via") or []
+            if not via or any(all(any(x.endswith(v) for x in fs) for v in via) for fs in paths):
+                return True
+        return False
+
+    groups = {}
+    for s in truth:
+        if s.get("label") == "vuln":
+            groups[s["vuln"]] = groups.get(s["vuln"], False) or hit(s)
+    return sum(groups.values()), len(groups)
 
 
 def tree_rows(root_pid, pgid):
@@ -380,8 +422,6 @@ def analyze_once(rivus, t, src, env, limit_s, cap_bytes, work, tag):
 
 
 def passline(name, t, rivus, cache, outdir, limit_s, cap_gb):
-    if (t.get("detect") or {}).get("mode") == "score":
-        raise SystemExit("deps_bench: %s: detect.mode score (Gitea: detected=<n>/3 by bench/score.py) is not supported by this runner yet" % name)
     with tempfile.TemporaryDirectory(prefix="passline-") as work:
         env = dict(os.environ)
         cap = int(cap_gb * GB)
@@ -402,8 +442,12 @@ def passline(name, t, rivus, cache, outdir, limit_s, cap_gb):
             return r
 
         main = run(t.get("commit", ""), "pin")
-        detected, quiet, d, through, located = None, None, t.get("detect"), None, None
-        if d and d.get("mode") == "through":  # per vulnerability; the position count beside it (information)
+        detected, quiet, d, through, located, score = None, None, t.get("detect"), None, None, None
+        if d and d.get("mode") == "score":  # per published vulnerability, by place; the count n/N only (no finding count, list, path or place anywhere)
+            truth = json.load(open(os.path.join(ROOT, d["truth"])))["sites"]
+            total = len({x["vuln"] for x in truth if x.get("label") == "vuln"})
+            score = score_counts(truth, main["report"]) if main["converged"] else (None, total)
+        elif d and d.get("mode") == "through":  # per vulnerability; the position count beside it (information)
             truth = json.load(open(os.path.join(ROOT, d["truth"])))["sites"]
             tp, n = through_counts(truth, main["report"]) if main["converged"] else (None, len([x for x in truth if "file" in x and x.get("label") == "vuln"]))
             detected, through = detected_through(tp), (tp, n)
@@ -430,7 +474,7 @@ def passline(name, t, rivus, cache, outdir, limit_s, cap_gb):
                 fixed_n = cnt(run(d["fixed_commit"], "fixed"))
                 quiet = quiet_after_fix(fixed_n)
             print("deps_bench: %s %s findings of %s: pre-fix %s, fixed %s" % (name, d["id"], d["category"], cnt(pre), fixed_n), file=sys.stderr)
-        passed, body = judge(main["wall"], limit_s, main["peak"] / GB, cap_gb, main["converged"], detected, through, quiet, located)
+        passed, body = judge(main["wall"], limit_s, main["peak"] / GB, cap_gb, main["converged"], detected, through, quiet, located, score, (d or {}).get("in_verdict", True))
         decided = t.get("decided", False)
         if main["why"]:
             result = "stopped_" + main["why"]
@@ -440,9 +484,11 @@ def passline(name, t, rivus, cache, outdir, limit_s, cap_gb):
         extra += ["%s=%s" % (k, v) for k, v in sorted(env.items()) if k == "GOMEMLIMIT" or (k.startswith("RIVUS_") and k not in ("RIVUS_HEAVY_LOCK_HELD", "RIVUS_HEAVY_LOCK"))]
         row = {"target": name, "target_commit": t.get("commit") or "in-tree", "kind": "passline", "settings": " ".join(extra) or "default",
                "wall_s": "%.1f" % main["wall"], "cpu_s": "%.1f" % main["cpu"], "peak_tree_gb": "%.2f" % (main["peak"] / GB),
-               "converged": main["converged"], "detected": detected, "quiet_after_fix": quiet, "exit_code": main["rc"],
+               "converged": main["converged"], "detected": detected if score is None else "%s/%d" % ("-" if score[0] is None else score[0], score[1]), "quiet_after_fix": quiet, "exit_code": main["rc"],
                "load_start": "%.2f" % main["load"], "result": result}
         row.update({k: v for k, v in heavy_ledger.report_columns(main["report"]).items() if v is not None})
+        if score is not None:
+            row.pop("findings", None)  # the count of findings of this target is not written
         return format_line(name, decided, passed, body), row
 
 

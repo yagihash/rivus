@@ -160,7 +160,73 @@ class Location(unittest.TestCase):
         self.assertEqual([x["line"] for x in sites if x["role"] == "source"], [51])
 
 
+def finding(src, sink_file, sink_line, cat, funcs):
+    return {"category": cat, "source": {"func": src}, "sink": {"position": {"file": sink_file, "line": sink_line}},
+            "paths": [{"steps": [{"func": f, "desc": "x"} for f in funcs]}]}
+
+
+class Score(unittest.TestCase):
+    """detect.mode score (Gitea): per published vulnerability, by place; the count n/N only."""
+    TRUTH = [
+        {"source_func": "a.A", "via": ["b.B"], "sink_file": "s.go", "sink_line": 1, "label": "vuln", "category": "ssrf", "vuln": 1},
+        {"source_func": "a.C", "sink_file": "t.go", "sink_line": 2, "label": "vuln", "category": "path_traversal", "vuln": 2},
+        {"source_func": "a.D", "sink_file": "u.go", "sink_line": 3, "label": "vuln", "category": "ssrf", "vuln": 3},
+        {"source_func": "a.E", "sink_file": "u.go", "sink_line": 3, "label": "vuln", "category": "ssrf", "vuln": 3},
+        {"source_func": "a.F", "sink_file": "v.go", "sink_line": 4, "label": "safe", "category": "ssrf", "vuln": 9},
+    ]
+
+    def test_counts_per_vulnerability(self):
+        rep = {"findings": [finding("x/a.A", "s.go", 1, "ssrf", ["b.B"]), finding("a.E", "u.go", 3, "ssrf", [])]}
+        self.assertEqual(d.score_counts(self.TRUTH, rep), (2, 3))  # vuln 3 is hit by one of its two entries; the safe entry is not counted
+
+    def test_via_must_be_on_a_path(self):
+        rep = {"findings": [finding("a.A", "s.go", 1, "ssrf", ["other"])]}
+        self.assertEqual(d.score_counts(self.TRUTH, rep), (0, 3))
+
+    def test_category_and_sink_must_match(self):
+        rep = {"findings": [finding("a.C", "t.go", 2, "ssrf", []), finding("a.D", "u.go", 99, "ssrf", [])]}
+        self.assertEqual(d.score_counts(self.TRUTH, rep), (0, 3))
+
+    def test_the_line_carries_n_over_N_only(self):
+        ok, body = d.judge(500, 600, 6, 8, True, None, score=(0, 3), in_verdict=False)
+        self.assertTrue(ok)  # not in the verdict
+        self.assertEqual(body, "time=500/600 mem=6.00/8 converged=yes finish=yes detected=0/3 quiet_after_fix=n/a")
+        self.assertFalse(d.judge(601, 600, 6, 8, True, None, score=(3, 3), in_verdict=False)[0])
+        self.assertIn("detected=-/3", d.judge(500, 600, 6, 8, False, None, score=(None, 3), in_verdict=False)[1])
+
+    def test_in_verdict_true_would_need_one(self):
+        self.assertFalse(d.judge(500, 600, 6, 8, True, None, score=(0, 3), in_verdict=True)[0])
+        self.assertTrue(d.judge(500, 600, 6, 8, True, None, score=(1, 3), in_verdict=True)[0])
+
+    def test_gitea_truth_file_has_three_vulnerabilities(self):
+        truth = json.load(open(os.path.join(d.ROOT, "bench/gitea-cve-truth.json")))["sites"]
+        self.assertEqual(d.score_counts(truth, {"findings": []}), (0, 3))
+
+
 class Targets(unittest.TestCase):
+    def test_pass_line_a_and_c(self):
+        t = json.load(open(d.TARGETS_FILE))
+        a, c = t["memos-4gib"], t["gitea"]
+        self.assertEqual((a["args"], a["time_limit_s"], a["mem_cap_gb"], a["detect"]["mode"]), (["-max-memory", "4GiB"], 180, 4, "location"))
+        self.assertEqual((c["args"], c["time_limit_s"], c["mem_cap_gb"], c["detect"]["mode"], c["detect"]["in_verdict"]), (["-no-project-rules"], 600, 8, "score", False))
+        self.assertEqual(c["commit"], "95ba37d9af58db7d9163f9e92e07b5eb4f792bbc")
+        truth = json.load(open(os.path.join(d.ROOT, c["detect"]["truth"])))["sites"]
+        self.assertTrue(all("vuln" in x for x in truth if x["label"] == "vuln"))
+
+    def test_makefile_default_targets_and_gitea_by_choice(self):
+        mk = open(os.path.join(d.ROOT, "Makefile")).read()
+        line = [l for l in mk.splitlines() if l.startswith("\tpython3 bench/deps_bench.py") and "TARGETS" in l][0]
+        self.assertIn("memos memos-4gib", line)
+        self.assertNotIn("gitea", line)
+
+    def test_rivus_is_not_given_a_timeout(self):
+        # the time limit is the watchdog's; a rivus that stopped itself at the limit would look like "not converged"
+        t = json.load(open(d.TARGETS_FILE))
+        for name in ("memos", "memos-4gib", "gitea"):
+            self.assertNotIn("-timeout", t[name]["args"])
+        src = open(os.path.join(HERE, "deps_bench.py")).read()
+        self.assertNotIn('"-timeout", "%ds"', src.split("def analyze_once")[1].split("def passline")[0])
+
     def test_pins_and_limits(self):
         t = json.load(open(d.TARGETS_FILE))
         self.assertEqual(t["memos"]["commit"], "00fcd170281a75fc0e95ec4f2f54f43d32fe81bd")
