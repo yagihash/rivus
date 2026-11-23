@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/yagihash/rivus/internal/model"
 )
 
 // The differential test (bench/model-diff) is run as it is: this file starts it and reads its report; the comparison is not done here.
@@ -27,9 +29,9 @@ type diffReport struct {
 	Errors []string `json:"errors"`
 }
 
-func runDiff(out io.Writer, o *options, repo, target, slug string, l *loaded, api *API, m *Matched) error {
+func runDiff(out io.Writer, o *options, repo, target, slug string, l *loaded, api *API, m *Matched, summary string) error {
 	reportPath := filepath.Join(o.work, slug+"-model-diff.json")
-	args := []string{"run", "./bench/model-diff", "-pkg", o.pkg, "-repo", repo, "-json", reportPath, "-out", filepath.Join(o.work, "diff-"+slug)}
+	args := []string{"run", "./bench/model-diff", "-pkg", o.pkg, "-lang", o.lang, "-repo", repo, "-json", reportPath, "-out", filepath.Join(o.work, "diff-"+slug)}
 	if l.Version != "" {
 		args = append(args, "-version", l.Version)
 	}
@@ -52,7 +54,7 @@ func runDiff(out io.Writer, o *options, repo, target, slug string, l *loaded, ap
 		_ = json.Unmarshal(data, &rep)
 	}
 	material := filepath.Join(o.work, slug+"-pr-material.md")
-	if werr := os.WriteFile(material, []byte(Material(o.pkg, l, api, m, &rep, code, buf.String())), 0o644); werr != nil {
+	if werr := os.WriteFile(material, []byte(Material(o.pkg, l, api, m, &rep, code, buf.String(), summary)), 0o644); werr != nil {
 		return werr
 	}
 	fmt.Fprintf(out, "  material for the pull request: %s\n", material)
@@ -87,10 +89,11 @@ func runDiff(out io.Writer, o *options, repo, target, slug string, l *loaded, ap
 }
 
 // Material is the text that the pull request takes its numbers from (a work file: it is not committed).
-func Material(pkg string, l *loaded, api *API, m *Matched, rep *diffReport, code int, log string) string {
+func Material(pkg string, l *loaded, api *API, m *Matched, rep *diffReport, code int, log string, summary string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# model-author: %s %s\n\n", pkg, l.Version)
-	fmt.Fprintf(&b, "- layer 1: %d candidates (%d with a row, %d in rejected:, %d undecided)\n", len(api.Items), len(m.ByRow), len(m.ByRejected), len(m.Undecided))
+	fmt.Fprintf(&b, "- layer 1: %d candidates (%d with a row, %d in rejected:, %d deferred:, %d undecided)\n", len(api.Items), len(m.ByRow), len(m.ByRejected), len(m.ByDeferred), len(m.Undecided))
+	b.WriteString("\n## rejected: and deferred: (for the review)\n\n```\n" + strings.TrimSpace(summary) + "\n```\n\n")
 	fmt.Fprintf(&b, "- layer 2: %d functions (list only)\n", len(api.Layer2))
 	fmt.Fprintf(&b, "- stale rejected: entries: %d\n", len(m.Stale))
 	fmt.Fprintf(&b, "- model-diff: exit %d; ", code)
@@ -169,6 +172,15 @@ func UpdateVerified(text, module, version, day string) (string, error) {
 				j++
 			}
 			if strings.TrimSpace(strings.TrimPrefix(lines[i], "  - package: ")) == module {
+				// a version that the record already covers changes nothing (the file is not touched: no new range, no new day)
+				for _, l := range lines[i+1 : j] {
+					if v, ok := strings.CutPrefix(strings.TrimSpace(l), "versions:"); ok {
+						rng := strings.Trim(strings.TrimSpace(v), "\"'")
+						if (model.VerifiedVersion{Package: module, Versions: rng}).Holds(version) {
+							return text, nil
+						}
+					}
+				}
 				return strings.Join(append(append(append([]string{}, lines[:i]...), block...), lines[j:]...), "\n"), nil
 			}
 			i = j
@@ -179,9 +191,9 @@ func UpdateVerified(text, module, version, day string) (string, error) {
 	return strings.Join(append(append(append([]string{}, lines[:end]...), block...), lines[end:]...), "\n"), nil
 }
 
-var deadRe = regexp.MustCompile(`(?m)^\s+go (\S+) \| *$`)
+var deadRe = regexp.MustCompile(`(?m)^\s+(?:go|dart) (\S+) \| *$`)
 
-// ParseDeadRows reads the symbols that the test lists as not hit (RIVUS_DEAD_ROWS_PRINT=1) for Go.
+// ParseDeadRows reads the symbols that the test lists as not hit (RIVUS_DEAD_ROWS_PRINT=1) for Go or Dart.
 func ParseDeadRows(log string) []string {
 	var out []string
 	for _, m := range deadRe.FindAllStringSubmatch(log, -1) {
@@ -208,16 +220,19 @@ func DeadAllowLines(dead []string, pkg, existing string) []string {
 	return out
 }
 
-func writeDeadAllow(out io.Writer, repo, target, pkg string, f *Facts) error {
+func writeDeadAllow(out io.Writer, repo, target, pkg, lang string, f *Facts) error {
 	if target == "" {
 		return &exitError{ExitUsage, fmt.Errorf("-write-dead-allow needs the model file (-model)")}
 	}
-	c := exec.Command("go", "test", "./cmd/rivus", "-run", "^TestBuiltinRowsAreHitByTheZoo$/go$", "-count=1", "-v")
+	if lang == "dart" && os.Getenv("RIVUS_DART") == "" {
+		return &exitError{ExitLoad, fmt.Errorf("-write-dead-allow for Dart runs the zoo test, which reads Dart with the extractor: set RIVUS_DART to the dart command (RIVUS_DART=dart), and run `dart pub get` in extractor/dart")}
+	}
+	c := exec.Command("go", "test", "./cmd/rivus", "-run", "^TestBuiltinRowsAreHitByTheZoo$/"+lang+"$", "-count=1", "-v")
 	c.Dir = repo
 	c.Env = append(os.Environ(), "RIVUS_DEAD_ROWS_PRINT=1")
 	log, _ := c.CombinedOutput() // the test fails while a row is not allowed: that is what is read
 	dead := ParseDeadRows(string(log))
-	if len(dead) == 0 && !bytes.Contains(log, []byte("rows of go are not hit")) {
+	if len(dead) == 0 && !bytes.Contains(log, []byte("rows of "+lang+" are not hit")) {
 		return &exitError{ExitLoad, fmt.Errorf("the test did not list the rows that are not hit:\n%s", log)}
 	}
 	path := strings.TrimSuffix(target, ".yaml") + ".dead-allow"
