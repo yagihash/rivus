@@ -628,6 +628,35 @@ func TestCallbackRowsApplyTheFunctionThatWasGiven(t *testing.T) {
 	}
 }
 
+// A function without a body and without a model, given a closure, is taken to call it: what it returns reaches
+// the result, and the finding through it says assumed_call, naming the function (ADR-116).
+func TestUnmodeledCallAssumesTheResultOfTheFunctionGiven(t *testing.T) {
+	checkCase(t, "nomodelcb")
+	res, _ := runCase(t, "nomodelcb")
+	if len(res.Findings) != 2 {
+		t.Fatalf("%d findings, want 2", len(res.Findings))
+	}
+	for _, f := range res.Findings {
+		// no row of a model decided a step: it reads as "no row, assumed by default" (the note), not as a model
+		for _, p := range f.Paths {
+			for _, st := range p.Steps {
+				if st.Model != nil {
+					t.Errorf("line %d: the step %q refers to a model row (%+v), and there is none", f.Source.Position.Line, st.Desc, st.Model)
+				}
+			}
+		}
+		named := false
+		for _, u := range f.Uncertainties {
+			if u.Kind == KindAssumedCall && strings.Contains(u.Detail, "lib.") && strings.Contains(u.Detail, "has no body and no model") {
+				named = true
+			}
+		}
+		if !named {
+			t.Errorf("line %d: no assumed_call that names the function and says that it has no row: %+v", f.Source.Position.Line, f.Uncertainties)
+		}
+	}
+}
+
 // A call through an interface is a call to every implementation, unless the
 // caller made the interface value right there: then only the implementation of
 // its type is called.

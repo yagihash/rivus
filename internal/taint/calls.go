@@ -316,6 +316,7 @@ func (s *state) callBody(cc *callCtx) {
 		// the rule is the model
 	case len(fns) == 0 && invoke:
 		s.unmodeled(cc, dispatch)
+		s.noModelCallbacks(cc)
 	case len(fns) == 0 && ci.Callee != nil && ci.Callee.ValueLimit != "":
 		// the functions are known and rivus left them out: its limit, not the code's
 		s.unmodeled(cc, s.newNote(ci, KindDepthLimit, ci.Callee.ValueLimitDetail(), cc.sym))
@@ -360,6 +361,8 @@ func (s *state) callBody(cc *callCtx) {
 			detail = "the body of the package " + u + " is not read (a rule file declares that its models stand for it) and the model has no row for the function"
 		}
 		s.unmodeled(cc, s.newNote(ci, kind, detail, cc.sym))
+		// a function value that is given is taken to be called, and its result to reach the result (unmodeledcb.go)
+		s.noModelCallbacks(cc)
 	}
 }
 
