@@ -42,6 +42,10 @@ options:
   --gomemlimit N=V  GOMEMLIMIT for benchmark N (repeatable; defaults: gogs-* 5GiB, a --big target 10GiB)
   --fixed-inputs    the backtest (bench/BACKTEST.md): both sides are analysed with the inputs of THIS tree (fixtures, rules, generator,
                     extractor), only the engine is the one of <base> / <head>, so that an old engine can be judged on today's inputs
+  --cost-check NAME one more run of NAME (only `memos`) of bench/deps-targets.json, ONE run on each side with the default flags, cost numbers
+                    only (CPU time, peak memory of the process tree, summary elements and steps, load average; no finding comparison). The
+                    tree comes from the bench cache ($BENCH_CACHE, fetch only, never run); the run has its own process group and the 8 GB
+                    watchdog of bench/deps_bench.py. It takes minutes: for engine pull requests only; off by default
   --dry-run         print what would be done and exit (nothing is created)
   --no-guard        do not wait for a quiet machine (for testing this script on the small benchmarks only)
   -h, --help
@@ -66,7 +70,7 @@ EOF
 }
 
 WORK="${COMPARE_WORK:-${TMPDIR:-/tmp}/rivus-compare}"
-OUT=""; RESUME=0; ONLY=""; SKIP=""; BIGS=""; SEL_LIGHT=0; SEL_HEAVY=0; NOCACHE=0; FIXED=0; CACHE_DIR=""; WAIT=6; TIMEOUT=1800s; DRY=0; NOGUARD=0
+OUT=""; RESUME=0; ONLY=""; SKIP=""; BIGS=""; SEL_LIGHT=0; SEL_HEAVY=0; NOCACHE=0; FIXED=0; COSTCHECK=""; CACHE_DIR=""; WAIT=6; TIMEOUT=1800s; DRY=0; NOGUARD=0
 MEMLIMITS="gogs-9a9388ac=5GiB gogs-48946299=5GiB gitea-cut=4GiB"
 POS=()
 while [ $# -gt 0 ]; do
@@ -88,6 +92,7 @@ while [ $# -gt 0 ]; do
     --timeout) TIMEOUT="$2"; shift ;;
     --gomemlimit) MEMLIMITS="$MEMLIMITS $2"; shift ;;
     --fixed-inputs) FIXED=1 ;;
+    --cost-check) COSTCHECK="$2"; shift ;;
     --dry-run) DRY=1 ;;
     --no-guard) NOGUARD=1 ;;
     -*) echo "unknown option $1" >&2; usage >&2; exit 64 ;;
@@ -95,6 +100,7 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+case "$COSTCHECK" in ""|memos) ;; *) echo "--cost-check: only memos" >&2; exit 64 ;; esac
 if [ "${#POS[@]}" -ne 2 ]; then usage >&2; exit 64; fi
 BASE_REF="${POS[0]}"; HEAD_REF="${POS[1]}"
 
@@ -504,6 +510,12 @@ for b in $BENCHES; do
   ALL="$ALL,$b"
   run_bench "$b"
 done
+
+# --- 3b. the cost check: one run of memos on each side, cost only (no wait for the other runs: it is one at a time here) ---
+if [ -n "$COSTCHECK" ]; then
+  say "cost check $COSTCHECK: one run each side (minutes)"
+  python3 "$PY" costcheck -results "$RES" -target "$COSTCHECK" -base-bin "$BIN/rivus-base" -head-bin "$BIN/rivus-head" || say "the cost check did not run (see above)"
+fi
 
 # --- 4. the table ---
 python3 "$PY" report -results "$RES" -base "$([ "$BASE_REF" = "$B7" ] && echo "$B7" || echo "$BASE_REF ($B7)")" -head "$([ "$HEAD_REF" = "$H7" ] && echo "$H7" || echo "$HEAD_REF ($H7)")" -out "$OUT" -benches "${ALL#,}" -skipped "$SKIPPED"

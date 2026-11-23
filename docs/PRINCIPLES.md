@@ -191,6 +191,8 @@ rivus の設計の判断は、ここに書いた原則に沿う。ほかの文�
 - 解析(`internal/taint`、`sg`、`irssa`、`sites`、`callgraph`、`frontend`、`model`、`extractor/`、`cmd/rivus` のテスト以外)とモデルの PR は、本文に 2 つを書く。
   - 作業の前: どの数字が動くはずか。
   - マージの前: 既定の動作で測った数字。合格線の行、zoo の合格数、サイレントな見逃しのセルの数のうち、当てはまるもの。予想が外れたら、そう書く。
+  - マージの前の数字には、前と後の **時間とメモリ** を入れる(memos を含む): CPU 時間(user+sys)、ピークのメモリ、要約の要素の数と段の数、実行したときのロードアベレージ。`bench/compare.sh` の表が出す(memos は `--cost-check memos`。解析の PR だけで使う。数分かかる)。CPU 時間かピークのメモリが 10% 以上増えたら、表に `!!` が付く。理由を本文に書く。finding の比較だけでは、時間とメモリの悪化に気づけない。
+- 実行のたびに何度も通る関数(`add`、`applySummary`、`copyLoc` など)を触る PR は、本文に 1 行、そう書く。レビューする人が、割り当てを見る。
 - 1 日の報告の最後に、`make daily-stats SINCE=<日付>` の 1 行(解析・モデル・extractor の PR の数と、それ以外の数)を付ける。
 - マージ済み(または閉じた)PR のブランチへの push は、`.githooks/pre-push` が止める(有効にするのは `make setup`、または `git config core.hooksPath .githooks`。意図した push は `RIVUS_ALLOW_PUSH_TO_MERGED=1`)。日報の `make daily-stats` の行に、`orphan remote branches: N`(main にないコミットがあって、開いている PR がないブランチ。renovate/ は別の行)が出る。0 でなければ、取り込むか消す。
 - 既定で off の機能の一覧と、足すときの規則は [FLAGS-OFF-BY-DEFAULT.md](FLAGS-OFF-BY-DEFAULT.md)。

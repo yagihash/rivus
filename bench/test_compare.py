@@ -190,5 +190,58 @@ class FixedInputsKey(unittest.TestCase):
             self.assertNotEqual(self.tree(root, "1", "bench/x"), fixed_two)
 
 
+class Cost(unittest.TestCase):
+    """The cost table: the changes in percent, the 10% mark, the load average, and the cost-check file."""
+
+    @classmethod
+    def setUpClass(cls):
+        sys.path.insert(0, HERE)
+        import compare
+        cls.c = compare
+
+    def test_pct(self):
+        self.assertEqual(self.c.pct(100, 112), "+12%")
+        self.assertEqual(self.c.pct(100, 90), "-10%")
+        self.assertEqual(self.c.pct(0, 5), "n/a")
+        self.assertEqual(self.c.pct(None, 5), "n/a")
+
+    def test_mark_at_ten_percent(self):
+        self.assertTrue(self.c.marked(100, 110, 1000, 1000))     # CPU +10%
+        self.assertTrue(self.c.marked(100, 100, 1000, 1100))     # peak memory +10%
+        self.assertFalse(self.c.marked(100, 109, 1000, 1099))    # just below
+        self.assertFalse(self.c.marked(100, 50, 1000, 500))      # better
+        self.assertFalse(self.c.marked(None, 110, None, 1100))   # nothing to compare with
+
+    def test_row(self):
+        mb = {"cpu_s": 100, "max_rss_mb": 1000, "wall_s": 50, "load_start": 1.5, "load_end": 2.0}
+        mh = {"cpu_s": 120, "max_rss_mb": 1000, "wall_s": 60, "load_start": 3.0, "load_end": None}
+        row = self.c.cost_row("x", mb, mh, {"summary_elems": 10, "summary_steps": 20}, {"summary_elems": 11, "summary_steps": 20})
+        self.assertEqual(row[1], "100.0 -> 120.0 (+20%)")
+        self.assertEqual(row[3], "10 -> 11 (+10%)")
+        self.assertEqual(row[5], "!!")
+        self.assertEqual(row[7], "base 1.5/2.0, head 3.0/n/a")
+
+    def test_row_of_an_old_cached_result_has_no_numbers(self):
+        row = self.c.cost_row("x", {"rc": 0}, {"rc": 0}, {}, {})
+        self.assertEqual(row[1], "n/a")
+        self.assertEqual(row[5], "")
+
+    def test_report_has_the_cost_table_and_a_cost_check(self):
+        with tempfile.TemporaryDirectory() as d:
+            write(d, "b", "base", 5)
+            write(d, "b", "head", 5, summary_elems=50)
+            json.dump({"rc": 0, "wall_s": 1, "max_rss_mb": 100, "cpu_s": 10, "load_start": 1.0, "load_end": 1.0}, open(d + "/b.base.meta.json", "w"))
+            json.dump({"rc": 0, "wall_s": 1, "max_rss_mb": 100, "cpu_s": 12, "load_start": 1.0, "load_end": 1.0}, open(d + "/b.head.meta.json", "w"))
+            side = {"cpu_s": 10, "max_rss_mb": 100, "wall_s": 1, "load_start": 1, "load_end": 1, "why": "", "stats": {"summary_elems": 1, "summary_steps": 1}}
+            json.dump({"base": side, "head": side}, open(d + "/cost-memos.json", "w"))
+            r = subprocess.run([sys.executable, os.path.join(HERE, "compare.py"), "report", "-results", d, "-base", "A", "-head", "B",
+                                "-out", d + "/out", "-benches", "b"], capture_output=True, text=True)
+            text = open(d + "/out/summary.md").read()
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("| b | 10.0 -> 12.0 (+20%)", text)
+        self.assertIn("!!", text.split("Cost, before -> after")[1])
+        self.assertIn("memos (cost check, one run each side)", text)
+
+
 if __name__ == "__main__":
     unittest.main()
