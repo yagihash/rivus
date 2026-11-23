@@ -126,6 +126,7 @@ def judge(time_s, limit_s, mem_gb, cap_gb, converged, detected, through=None, qu
     ok_time = time_s is not None and time_s <= limit_s
     ok_mem = mem_gb is not None and mem_gb <= cap_gb
     if score is not None:
+        # When in_verdict becomes true, decide how many of the N must be found first: "one or more" below is a placeholder.
         detected = score[0] >= 1 if (in_verdict and score[0] is not None) else None  # in_verdict false: not part of the verdict
     ok_det = detected is not False  # None (n/a) does not count against
     finish = bool(ok_time and ok_mem and converged)
