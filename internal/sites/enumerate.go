@@ -38,19 +38,16 @@ type IRParam struct {
 // Texts. Level L0 (rule matching on resolved symbols) plus the L1 literal
 // mark: it needs neither a call graph nor any data flow analysis, so it is
 // fast. Every site has a stable ID and a fingerprint (ADR-028).
-func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
-	valuecalls.Resolve(prog)
+func Enumerate(irsrc ir.Source, texts ir.Texts, rules *model.Rules) *Result {
+	prog := irsrc.Header()
+	valuecalls.Resolve(irsrc)
 	res := &Result{
 		ByIRInstr: map[IRInstr][]*Site{},
 		ByIRParam: map[IRParam][]*Site{},
 		ByID:      map[string]*Site{},
 	}
-	byID := make(map[ir.FuncID]*ir.Func, len(prog.Funcs))
-	for _, f := range prog.Funcs {
-		byID[f.ID] = f
-	}
 	canon := prog.CanonType()
-	known := namedKnown(prog, byID, rules)
+	known := namedKnown(irsrc, rules)
 	// the field rules by the type behind its aliases
 	fields := rules.Fields
 	if len(prog.TypeAliases) > 0 {
@@ -62,13 +59,19 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 			fields[k] = append(fields[k], v...)
 		}
 	}
-	callbacks := callbackTargets(prog, rules, res)
-	for _, fn := range prog.Funcs {
-		if fn.Dep {
+	callbacks := callbackTargets(irsrc, rules, res)
+	for seq, n := 0, irsrc.Len(); seq < n; seq++ {
+		head := irsrc.Head(seq)
+		if head.Gone {
+			continue
+		}
+		if head.Dep {
 			// ADR-099: sites are listed in the functions of the project only
 			res.DependencyFunctions++
 			continue
 		}
+		fnRef := ir.Ref{ID: head.ID, Seq: seq}
+		fn := ir.Must(irsrc, fnRef)
 		var raw []*Site
 		order := 0
 		add := func(s *Site) {
@@ -171,8 +174,8 @@ func Enumerate(prog *ir.Program, texts ir.Texts, rules *model.Rules) *Result {
 						// the method of a type of the standard library or a dependency.
 						for _, id := range in.Callee.Candidates {
 							csym := string(id)
-							if f := byID[id]; f != nil {
-								csym = f.Symbol
+							if h, ok := ir.HeadOf(irsrc, id); ok {
+								csym = h.Symbol
 							}
 							if csym == "" || csym == sym {
 								continue
@@ -495,7 +498,7 @@ type namedNames map[string]map[string]bool
 // namedKnown collects the names of the calls to the symbols that a sink names by `named` (docs/MODELING.md): a name that
 // no call of the symbol has is a misspelling, and the sink says so instead of being quiet. It reads the program only
 // when a rule has `named`.
-func namedKnown(prog *ir.Program, byID map[ir.FuncID]*ir.Func, rules *model.Rules) namedNames {
+func namedKnown(irsrc ir.Source, rules *model.Rules) namedNames {
 	want := map[string]bool{}
 	for sym, sinks := range rules.Sinks {
 		for _, s := range sinks {
@@ -526,7 +529,7 @@ func namedKnown(prog *ir.Program, byID map[ir.FuncID]*ir.Func, rules *model.Rule
 			}
 		}
 	}
-	for _, fn := range prog.Funcs {
+	ir.Walk(irsrc, func(_ ir.Ref, fn *ir.Func) {
 		for _, b := range fn.Blocks {
 			for _, in := range b.Instrs {
 				if in.Op != ir.OpCall || in.Callee == nil || len(in.ArgNames) == 0 {
@@ -534,13 +537,13 @@ func namedKnown(prog *ir.Program, byID map[ir.FuncID]*ir.Func, rules *model.Rule
 				}
 				note(in.Callee.Symbol, in.ArgNames)
 				for _, id := range in.Callee.Candidates {
-					if f := byID[id]; f != nil {
-						note(f.Symbol, in.ArgNames)
+					if h, ok := ir.HeadOf(irsrc, id); ok {
+						note(h.Symbol, in.ArgNames)
 					}
 				}
 			}
 		}
-	}
+	})
 	return out
 }
 

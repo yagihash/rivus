@@ -204,6 +204,8 @@ JSON Lines。**先頭行は必ず `{"schema_version": "rivus.ir/0"}`**。以降�
 `-lang rust` は、Rust の extractor が出すストリームをそのまま出す（macOS では既定で OS のサンドボックスの下で動かす。15 節）。`-lang` は `go` か `rust` で、Dart の extractor は `rivus debug extract` からは呼べない（`rivus-dart` を直接動かす）。
 人間が読んで検証できることを一級の要件とする。
 
+関数の IR を読む側（サイトの列挙、関数値の呼び出しの解決、`sg` の構築、`cmd/rivus` の一覧）は、`Program.Funcs` を直接読まず、`ir.Source`（関数を ID と通し番号の `ir.Ref` で引く口。`internal/ir/source.go`）を通す。今の実装はメモリの `ir.MemSource` だけで、結果は変わらない。`Program.Funcs` を触ってよいのは、プログラムを作る側と書き出す側（`internal/ir` の中、各言語の extractor の取り込み、`cmd/rivus` の `lang.go`、`bodyreplaced.go`、`extract.go`）だけで、`internal/ir/sourceuse_test.go` が守る。
+
 ### 2.7 IR の具体化（エンジンの要求と、extractor の契約）
 
 2.1〜2.6 の方針を、実装が決めた形に具体化したもの（ADR-039、ADR-040）。ここに書くのは今の契約。

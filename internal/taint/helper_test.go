@@ -36,7 +36,7 @@ func loadIR(t testing.TB, dir string, patterns ...string) *loaded {
 	if err != nil {
 		t.Fatal(err)
 	}
-	g, err := sg.Build(prog)
+	g, err := sg.Build(ir.MemSource(prog))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func loadIR(t testing.TB, dir string, patterns ...string) *loaded {
 }
 
 func (l *loaded) sites(rules *model.Rules) *sites.Result {
-	return sites.Enumerate(l.ir, l.texts, rules)
+	return sites.Enumerate(ir.MemSource(l.ir), l.texts, rules)
 }
 
 func (l *loaded) engine(st *sites.Result, rules *model.Rules, opts Options) *Engine {
@@ -71,7 +71,7 @@ func TestTheStreamGivesTheSameResultAsTheDirectIR(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			g, err := sg.Build(back)
+			g, err := sg.Build(ir.MemSource(back))
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -13,14 +13,14 @@ func TestFrameworkCallbacks(t *testing.T) {
 	fn := func(id string, entry, dep bool, overrides ...string) *ir.Func {
 		return &ir.Func{ID: ir.FuncID(id), Symbol: id, Entry: entry, Dep: dep, Overrides: overrides, Exported: true, Blocks: []ir.Block{{Term: ir.Term{Kind: ir.TermReturn}}}}
 	}
-	p, err := Build(&ir.Program{Funcs: []*ir.Func{
+	p, err := Build(ir.MemSource(&ir.Program{Funcs: []*ir.Func{
 		fn("a.main", true, false),
 		fn("a.Page.build", false, false, "flutter.State.build"),
 		fn("a.Child.run", false, false, "a.Base.run"),
 		fn("a.Base.run", false, false),
 		fn("flutter.State.build", false, true), // the dependency's own method, read
 		fn("flutter.Other.x", false, true, "flutter.Super.x"),
-	}})
+	}}))
 	if err != nil {
 		t.Fatal(err)
 	}

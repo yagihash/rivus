@@ -64,8 +64,9 @@ func runSites(args []string) error {
 	if err != nil {
 		return err
 	}
-	expandSubtypes(rules, l.ir)
-	res := sites.Enumerate(l.ir, l.texts, rules)
+	src := ir.MemSource(l.ir)
+	expandSubtypes(rules, src)
+	res := sites.Enumerate(src, l.texts, rules)
 	out := sitesOutput{SchemaVersion: "rivus.sites/1", Target: o.target(*irFile != ""), LoadErrors: l.loadErrors(), Sites: []*sites.Site{}, SkippedLanguages: o.skipped}
 	for _, s := range res.Sites {
 		if *role == "" || s.Role == *role {

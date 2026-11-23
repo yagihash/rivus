@@ -55,13 +55,13 @@ func runWalk(t *testing.T, s int, opts Options) (*Result, time.Duration) {
 	if err := prog.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	g, err := sg.Build(prog)
+	g, err := sg.Build(ir.MemSource(prog))
 	if err != nil {
 		t.Fatal(err)
 	}
 	rules := &model.Rules{}
 	rules.Sinks = map[string][]model.Sink{}
-	st := sites.Enumerate(prog, ir.NewStreamTexts(prog), rules)
+	st := sites.Enumerate(ir.MemSource(prog), ir.NewStreamTexts(prog), rules)
 	start := time.Now()
 	res := New(g, ir.NewStreamTexts(prog), st, rules, opts).Run()
 	return res, time.Since(start)

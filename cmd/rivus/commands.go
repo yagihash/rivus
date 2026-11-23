@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/yagihash/rivus/internal/ir"
 )
 
 // A command is a line of the table of commands. The table is the one place that says what commands rivus has: the dispatch of main, "rivus help", the
@@ -170,6 +172,17 @@ func runGroup(c *command, args []string) error {
 
 // runCommand runs the command of the table that name says, with the arguments after it; unknown is false when the table has none.
 func runCommand(name string, args []string) (known bool, err error) {
+	// A function of the IR that cannot be read stops the run with an internal error (exit code 1): the reader that met it
+	// could not return the error, and panicked with it (ir.ReadError).
+	defer func() {
+		if r := recover(); r != nil {
+			re, ok := r.(*ir.ReadError)
+			if !ok {
+				panic(r)
+			}
+			known, err = true, fmt.Errorf("internal error: %w", re)
+		}
+	}()
 	c := find(commands, name)
 	if c == nil {
 		return false, nil

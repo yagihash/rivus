@@ -67,6 +67,25 @@ func NewClosureIndex(funcs []*Func) *ClosureIndex {
 	return ix
 }
 
+// NewClosureIndexOf is NewClosureIndex over the functions of a Source: only the closures are read.
+func NewClosureIndexOf(src Source) *ClosureIndex {
+	ix := &ClosureIndex{at: map[closureAt][]*Func{}}
+	for i, n := 0, src.Len(); i < n; i++ {
+		h := src.Head(i)
+		if h.Gone || !IsClosureID(string(h.ID)) {
+			continue
+		}
+		f := Must(src, Ref{ID: h.ID, Seq: i})
+		file := f.Pos.File
+		if file == "" {
+			file = f.File
+		}
+		k := closureAt{file, f.Pos.Line, f.Pos.Col}
+		ix.at[k] = append(ix.at[k], f)
+	}
+	return ix
+}
+
 // Lookup is the function of the closure whose environment has this type: exactly one function at the
 // place (a macro that writes the closure in many places is not matched). nil if there is none or many.
 func (ix *ClosureIndex) Lookup(env string) *Func {
