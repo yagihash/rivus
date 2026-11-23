@@ -49,5 +49,5 @@ model: ## the steps of making the model of a Go package: PKG=<import path> [VERS
 	@[ -n "$(PKG)" ] || { echo "usage: make model PKG=github.com/jmoiron/sqlx VERSION=v1.4.0 LANG=go   (ARGS=\"-recall\" for the recall of layer 1; ARGS=\"-gen-skeleton\" makes the skeleton and the cell template for the Go zoo)"; exit 1; }
 	go run ./bench/model-author -pkg "$(PKG)" $(if $(VERSION),-version "$(VERSION)") -lang $(if $(filter command line,$(origin LANG)),$(LANG),go) $(ARGS)
 
-docs-gen: ## print the table of the issues (from docs/issues/*.md); `make docs-gen OUT=docs/ISSUES-TABLE.md` writes it (not committed)
-	go run ./scripts/docs-gen $(if $(OUT),-o $(OUT))
+docs-gen: ## print the tables of the issues and the ADRs (from docs/issues/*.md, docs/adr/*.md); WHAT=issues or WHAT=adr for one; OUT=docs/TABLE.md writes it (ignored by git)
+	go run ./scripts/docs-gen $(if $(OUT),-o $(OUT)) $(WHAT)

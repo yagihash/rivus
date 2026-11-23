@@ -20,7 +20,7 @@ the extraction takes 174 s and the findings are the same, 24 against 24 at the t
 `rules.yaml`, the default of `rivus analyze`. actix-web is built in now (`internal/model/builtin/rust-actix-web.yaml`);
 `rules.yaml` still holds its sources and getters, as they were when the results were measured (the rows are the same).
 
-Results are in `docs/DECISIONS.md`.
+Results are in `docs/adr/` (see `make docs-gen WHAT=adr`).
 
 ## Precision
 

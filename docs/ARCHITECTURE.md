@@ -3,7 +3,7 @@
 状態: 今のアーキテクチャの説明（確認: 2026-11-22、`aa79d0e`）。コードと照合して書いた。古くなる前提で読むこと。
 
 - 設計思想: [PRINCIPLES.md](PRINCIPLES.md)
-- 経緯と理由: [DECISIONS.md](DECISIONS.md)。各 ADR の今の状態: [ADR-INDEX.md](ADR-INDEX.md)
+- 経緯と理由: [adr/](adr/README.md)(1 件 1 ファイル。各 ADR の今の状態は、ファイルのヘッダ。一覧は `make docs-gen WHAT=adr`)
 - 個別の設計: `DESIGN-*.md`（[DESIGN-graph.md](DESIGN-graph.md)、[DESIGN-memory.md](DESIGN-memory.md)、[DESIGN-capture.md](DESIGN-capture.md)、[DESIGN-field-sinks.md](DESIGN-field-sinks.md) など）
 - 歴史・計画: [history/](history/)。この文書から移した Phase の計画と実測は [history/ARCHITECTURE-plans.md](history/ARCHITECTURE-plans.md)
 - 用語: [GLOSSARY.md](GLOSSARY.md)
@@ -438,7 +438,7 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 型は `internal/taint/result.go`（`Uncertainty`）。`kind` の定数と `attributable_to` の割り当て（`attributable()`）も、そこにある。
 `Uncertainty` の主なフィールド: `kind`、`attributable_to`、`detail`、`symbol`、`candidates`（`dynamic_dispatch` の候補）、`narrowed_from` と `basis`（13 節）、`func`、`position`、`snippet`。
 
-`kind` は、`rivus.result/1` のまま足されてきた（ADR-008 の「閉じた集合。追加はバージョンを上げる」は運用で逆。ADR-043 の追記、ADR-INDEX を参照）。この表が、コードの定数と合う一覧。
+`kind` は、`rivus.result/1` のまま足されてきた（ADR-008 の「閉じた集合。追加はバージョンを上げる」は運用で逆。ADR-043 の追記、[ADR-008](adr/008-uncertainty-closed-kinds.md) のヘッダを参照）。この表が、コードの定数と合う一覧。
 
 #### kind ごとの `attributable_to`
 
@@ -737,7 +737,7 @@ rivus models coverage ./...
 
 ## 11. レビューで確認したい点
 
-履歴・計画は [history/ARCHITECTURE-plans.md](history/ARCHITECTURE-plans.md) の 11 節にある。全項目が決定済みで、決めた内容は ADR（ADR-INDEX.md）にある。
+履歴・計画は [history/ARCHITECTURE-plans.md](history/ARCHITECTURE-plans.md) の 11 節にある。全項目が決定済みで、決めた内容は ADR（`docs/adr/`）にある。
 
 ---
 

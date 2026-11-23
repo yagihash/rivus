@@ -110,7 +110,7 @@ arguments), do not cut it and do not write it as a plain flow: write it with a r
 
 The flow is kept. A finding whose path goes through it gets one uncertainty of kind `model_approximation`
 (`attributable_to: rivus`, `detail` is the reason), so its confidence is never `no_uncertainty_on_path`
-([ADR-067](DECISIONS.md)).
+([ADR-067](adr/067-model-approximate-flag.md)).
 
 ## 3. A function that calls a function it is given: `calls`
 
