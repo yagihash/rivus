@@ -34,8 +34,13 @@ type SymbolCoverage struct {
 // Coverage lists the library functions and interface methods without a
 // model, most useful first (ADR-015).
 type Coverage struct {
-	SchemaVersion string           `json:"schema_version"`
-	Symbols       []SymbolCoverage `json:"symbols"`
+	SchemaVersion string `json:"schema_version"`
+	// Incomplete and IncompleteReasons are those of the analysis that the list comes from (summary.* of "analyze", ADR-120):
+	// when it is true, the list holds only what was reached before the run stopped, not all that lacks a model. Always in
+	// the output, also for a saved index (the exit code of a saved index stays 0); the reasons are an array, never null.
+	Incomplete        bool             `json:"incomplete"`
+	IncompleteReasons []string         `json:"incomplete_reasons"`
+	Symbols           []SymbolCoverage `json:"symbols"`
 	// NoSymbol counts uncertain calls that have no symbol, such as calls of
 	// function values: no model can be written for them.
 	NoSymbol int `json:"no_symbol"`
@@ -66,7 +71,8 @@ func (r *Report) Coverage() *Coverage {
 		shape shape
 	}
 	by := map[key]*acc{}
-	out := &Coverage{SchemaVersion: CoverageSchemaVersion, Symbols: []SymbolCoverage{}}
+	inc, reasons := r.IncompleteState()
+	out := &Coverage{SchemaVersion: CoverageSchemaVersion, Incomplete: inc, IncompleteReasons: reasons, Symbols: []SymbolCoverage{}}
 	for _, u := range r.Uncertainties {
 		if !modelable(u) {
 			continue

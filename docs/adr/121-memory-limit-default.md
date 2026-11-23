@@ -41,3 +41,25 @@
 **出力が計算機で違う件:** `summary.memory_limit_bytes` は、物理メモリで決まるので、同じ入力でも、計算機が違うと、出力の JSON が 1 か所違う(finding と統計は同じ)。確認したところ、出力を丸ごと比べる所は、同じ計算機の中の実行どうし(決定論のテスト: 上限の値は同じ)で、`bench/compare.py` は `findings` と `stats` だけを読み(`summary` は読まない)、文書と `testdata` に `summary` の見本の出力はない(`make test-docs` は出力を比べない)。計算機をまたいで出力を丸ごと比べる道具やテストを足すときは、`summary.memory_limit_*` を比べる対象から外す(上限は、結果ではなく、実行の設定のため)。
 
 **ADR-118 の 3 条件との関係:** 上限は精度を落とす仕組みではなく、結果を変えない(測定で ID が一致)。(i) 過大近似の向きだけ、(iii) 落とした所を出力が言う、は、落とすものがないので、該当しない。(ii) 順序とマシンに依らない: 結果は、上限によらず同一。変わるのは、GC の動きと、時間・メモリだけ。上限は `summary` に出る。
+
+## 追記: 実行の終わりの報告(2026-11-23)
+
+上の本文は書き換えない。上の「まだ届かないもの」の最初(上限が生きている量より低いと守れず、時間だけが増える。何も言われない)を、出力から分かるようにする。止める、上限を上げる、は、別の PR。
+
+1. `summary` に 3 項目を足す。結果(finding、要約、ID)は変えない。スキーマのバージョンは上げない(項目の追加のみ。ADR-008)。
+   - `memory_peak_bytes`: 実行の間に、Go のランタイムが使っていたメモリの最大。`runtime/metrics` の `/memory/classes/total:bytes` から `/memory/classes/heap/released:bytes` を引いた量で、`debug.SetMemoryLimit` が見る量と同じ。終わりの 1 回ではなく、最大で見る(超えたかどうかは、ピークで決まる)。
+   - `memory_limit_exceeded`: `memory_peak_bytes > memory_limit_bytes × 1.05`(上限を 5% 以上超えた)。上限ちょうどを境目にしない理由: やわらかい上限は、生きている量が上限より低いとき、ピークが上限に張りつく(memos の既定の実行: ピーク 6,408,576,568、上限 6,442,450,944。0.5% 手前、33 MB)。ちょうどを境目にすると、正常な実行が、サンプルの揺れで `true` になりうる。上限が生きている量より低いと、ピークは明確に上限を超える(memos、上限 4 GiB: ピーク 6,300,634,664、1.47 倍)。5% は、この 2 つの実行から選んだ値(選んだ対象)。`true` は、上限が、解析の生きている量より低く、守れず、GC が回り続け、時間が増えた可能性が高いこと。`-max-memory` を上げて、再実行する。やわらかい上限なので、`true` でも結果は完全(`incomplete` とは別)。上限がないとき(`memory_limit_source: none`)は、項目を出さない。
+   - `gc_cpu_fraction`: 実行全体の CPU 時間のうち、GC が使った割合(`/cpu/classes/gc/total:cpu-seconds` ÷ `/cpu/classes/total:cpu-seconds`、実行の開始との差分。0〜1、小数 3 桁)。上限がなくても、いつも出る。
+2. 計測は、解析の間、軽い goroutine が 250ms ごとと終了時に `runtime/metrics.Read` で読むだけ(stop-the-world の `runtime.ReadMemStats` は使わない)。解析の結果には触れない。解析が終わると止める(`defer` でも止める。残さない)。250ms の間の短い山は見えないことがあるので、ピークは、実際より小さく出ることがある(超えたのに `false` になる向きの誤差。`memory_peak_bytes` で根拠が見える。`memory_peak_bytes` は、上限と比べずに、そのまま出す)。
+3. 値は、この実行の、この計算機のもの(ピークと GC の割合は、負荷とスケジューリングで揺れる)。上の「出力が計算機で違う件」と同じ扱いで、出力を丸ごと比べる所では、`summary.memory_limit_*`、`memory_peak_bytes`、`gc_cpu_fraction` を対象から外す。
+4. 同じ PR で、`models coverage` の出力の最上位に `incomplete` と `incomplete_reasons` を出す(ADR-120 の追記「問い合わせの出力」と同じ形。完全なら `false` と `[]`)。今の解析から出す場合と、`-index` の場合の両方。`-index` の終了コードは 0 のまま。時間切れの index から作った一覧は、一部だけなので、読む人が分かるようにするため。
+
+### 5% の確認(選んだ対象 memos とは別の 2 つ。macOS、負荷 8〜9、各 1 回。比は決定的ではない)
+
+| 対象 | `-max-memory` | `memory_peak_bytes` | 上限 | 比 | `gc_cpu_fraction` | `memory_limit_exceeded` |
+| --- | --- | --- | --- | --- | --- | --- |
+| rivus 自身(dogfood、`-rules dogfood/rules.yaml`、収束、12 秒) | 64GiB | 2,662,747,272 | 68,719,476,736 | 0.039 | 0.159 | false |
+| 合成の対象(`bench/go-scale/gen -shapes all`、`-workers 1`) | 16MiB | 282,126,664 | 16,777,216 | 16.8 | 0.431 | true |
+| 同上 | 64GiB | 243,988,792 | 68,719,476,736 | 0.004 | 0.085 | false |
+
+期待どおり: 上限が十分高いと `false`、生きている量より明らかに低いと `true`。確かめていないこと: 上限が生きている量の 1.0〜1.05 倍のとき(境目の近く)と、Linux。境目の判定は、単体のテスト(比 1.04 で `false`、1.06 で `true`)で確かめた。
