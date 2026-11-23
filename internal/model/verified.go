@@ -220,17 +220,22 @@ func (e VerifiedVersion) Holds(version string) bool {
 	return true
 }
 
-// UnverifiedVersion is a module of the program that a model has a verified_versions record for (the record names the module,
+// UnverifiedVersion is a package of the program that a model has a verified_versions record for (the record names the package,
 // or names it by /v*), used at a version that no record covers: the rows were applied to a version that nobody checked them
 // against.
 type UnverifiedVersion struct {
-	// Package is the module path that the program uses (with the major that it has, when the record says /v*).
+	// Package is the module path (Go; with the major that the program has, when the record says /v*), the pub package (Dart)
+	// or the crate (Rust) that the program uses.
 	Package string `json:"package"`
-	// Used is the version the program is built with.
+	// Used is the version the program is built with. When the lock file has several versions of the package (Cargo.lock can),
+	// it is the first one (in the order of the file) that is outside the ranges.
 	Used string `json:"used"`
-	// Verified are the ranges of the records of the module (all of them, sorted).
+	// AllUsed are all the versions of the package that the program uses, when there are several (sorted as the lock file has
+	// them). Empty for one version: the JSON of Go has no such key.
+	AllUsed []string `json:"all_used,omitempty"`
+	// Verified are the ranges of the records of the package (all of them, sorted).
 	Verified []string `json:"verified"`
-	// Source says where Used comes from.
+	// Source says where Used comes from (go.mod, pubspec.lock, Cargo.lock).
 	Source string `json:"source"`
 }
 
@@ -238,25 +243,59 @@ type UnverifiedVersion struct {
 // outside every range of their records. A module with no record is not listed: most built-in files have none, and a note on
 // every run for them would say nothing. Sorted by package. Nil when there is none.
 func (r *Rules) UnverifiedVersions(used map[string]string, source string) []UnverifiedVersion {
-	var out []UnverifiedVersion
+	many := make(map[string][]string, len(used))
 	for mod, ver := range used {
+		many[mod] = []string{ver}
+	}
+	return r.UnverifiedVersionsOf(many, source, MatchMajor)
+}
+
+// UnverifiedVersionsOf is UnverifiedVersions for a lock file: a package can be there at several versions, and it is listed when any
+// of them is outside every range of its records (once, with the versions). match says whether a record's package is the used one
+// (MatchMajor for Go; SamePackage, the name as it is, for Dart; SameCrate for Rust).
+func (r *Rules) UnverifiedVersionsOf(used map[string][]string, source string, match func(pattern, name string) bool) []UnverifiedVersion {
+	var out []UnverifiedVersion
+	for pkg, vers := range used {
 		var ranges []string
-		covered := false
+		var outside []string
 		for _, rec := range r.Verified {
-			if !MatchMajor(rec.Package, mod) {
-				continue
-			}
-			ranges = append(ranges, rec.Versions)
-			if rec.Holds(ver) {
-				covered = true
+			if match(rec.Package, pkg) {
+				ranges = append(ranges, rec.Versions)
 			}
 		}
-		if len(ranges) == 0 || covered {
+		if len(ranges) == 0 {
+			continue
+		}
+		for _, ver := range vers {
+			covered := false
+			for _, rec := range r.Verified {
+				if match(rec.Package, pkg) && rec.Holds(ver) {
+					covered = true
+					break
+				}
+			}
+			if !covered {
+				outside = append(outside, ver)
+			}
+		}
+		if len(outside) == 0 {
 			continue
 		}
 		sort.Strings(ranges)
-		out = append(out, UnverifiedVersion{Package: mod, Used: ver, Verified: ranges, Source: source})
+		u := UnverifiedVersion{Package: pkg, Used: outside[0], Verified: ranges, Source: source}
+		if len(vers) > 1 {
+			u.AllUsed = vers
+		}
+		out = append(out, u)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Package < out[j].Package })
 	return out
 }
+
+// SameCrate says whether a record's package is the crate: Cargo reads - and _ in a crate name as the same.
+func SameCrate(pattern, name string) bool {
+	return strings.ReplaceAll(pattern, "_", "-") == strings.ReplaceAll(name, "_", "-")
+}
+
+// SamePackage says whether a record's package is the package (the name as it is: Dart).
+func SamePackage(pattern, name string) bool { return pattern == name }

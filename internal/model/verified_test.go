@@ -1,6 +1,8 @@
 package model
 
 import (
+	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -68,5 +70,42 @@ func TestVerifiedVersionsAreChecked(t *testing.T) {
 	}
 	if _, err := parseVerified(t, "  - package: no_row_names_this\n    versions: 1.0.0\n    checked: 2026-11-01\n"); err != nil {
 		t.Error(err)
+	}
+}
+
+// A package at several versions is one entry when any of them is outside the ranges: Used is the first one outside, AllUsed lists
+// them; a package at one version has no all_used (the JSON of Go is what it was).
+func TestUnverifiedVersionsOfSeveral(t *testing.T) {
+	rs, err := Parse(strings.NewReader("ruleset: t@1\nverified_versions:\n  - package: ab\n    versions: \">=1.0.0 <2.0.0\"\n    checked: 2026-11-23\n"), "t.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := Merge(rs)
+	got := r.UnverifiedVersionsOf(map[string][]string{"ab": {"1.2.0", "0.9.0", "0.8.0"}}, "lock", SamePackage)
+	want := []UnverifiedVersion{{Package: "ab", Used: "0.9.0", AllUsed: []string{"1.2.0", "0.9.0", "0.8.0"}, Verified: []string{">=1.0.0 <2.0.0"}, Source: "lock"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("several: %v, want %v", got, want)
+	}
+	if got := r.UnverifiedVersionsOf(map[string][]string{"ab": {"1.2.0", "1.9.9"}}, "lock", SamePackage); len(got) != 0 {
+		t.Errorf("all in the range: %v", got)
+	}
+	if got := r.UnverifiedVersionsOf(map[string][]string{"a_b": {"3.0.0"}}, "lock", SamePackage); len(got) != 0 {
+		t.Errorf("names are as written: %v", got)
+	}
+	b, _ := json.Marshal(r.UnverifiedVersions(map[string]string{"ab": "3.0.0"}, "go.mod"))
+	if strings.Contains(string(b), "all_used") {
+		t.Errorf("one version has no all_used: %s", b)
+	}
+}
+
+// Rust writes - and _ in a crate name as the same: the record and the lock file may spell it either way.
+func TestSameCrate(t *testing.T) {
+	for _, c := range []struct {
+		a, b string
+		want bool
+	}{{"actix-web", "actix-web", true}, {"google-cloud-storage", "google_cloud_storage", true}, {"a_b", "a-b", true}, {"ab", "a-b", false}} {
+		if got := SameCrate(c.a, c.b); got != c.want {
+			t.Errorf("SameCrate(%q, %q) = %v", c.a, c.b, got)
+		}
 	}
 }
