@@ -1,5 +1,44 @@
 # Changelog
 
+## [v0.0.8](https://github.com/yagihash/rivus/compare/v0.0.7...v0.0.8) - 2026-11-23
+
+### Features
+- feat: 差分テスト(段階 1)。bench/model-diff と make model-diff(Go と Dart) by @yagihash in https://github.com/yagihash/rivus/pull/186
+- feat: 宣言のあるパッケージの本体を、extractor が読まない(Go と Dart。段階 4、ADR-105) by @yagihash in https://github.com/yagihash/rivus/pull/191
+- fix: body_replaced_packages の functions の意味を段階で変えない(functions_declared を分ける)。ADR-105 と設計の実測を直す by @yagihash in https://github.com/yagihash/rivus/pull/193
+- feat: モデルのファイルの verified_versions を、ローダーのフィールドにする(rivus models versions) by @yagihash in https://github.com/yagihash/rivus/pull/192
+- feat: source の新しい種類 callback_param(渡された関数の引数が source。段階 1、ADR-106) by @yagihash in https://github.com/yagihash/rivus/pull/197
+- feat(zoo): 外部のパッケージのセルを、ディレクトリから列挙する(Go と Rust)。Dart の pubspec を生成物にする by @yagihash in https://github.com/yagihash/rivus/pull/198
+- shelf_router: ハンドラの追加の引数を callback_param の source にする(#181 の @miss を解消) by @yagihash in https://github.com/yagihash/rivus/pull/199
+- feat: callback_param が引けなかった登録を summary に出す(callback_param_unresolved) by @yagihash in https://github.com/yagihash/rivus/pull/200
+- feat(model): dart dio の組み込みモデル by @yagihash in https://github.com/yagihash/rivus/pull/202
+- feat(model): go gin の組み込みモデル(例から昇格) by @yagihash in https://github.com/yagihash/rivus/pull/208
+- feat(zoo): 外部のパッケージの骨組みが zoo-mark で記録する(Go と Rust) by @yagihash in https://github.com/yagihash/rivus/pull/209
+- feat(model): dart shelf のモデルを広げる by @yagihash in https://github.com/yagihash/rivus/pull/207
+- feat: パッケージの calls: の行を、実行でなく zoo のセルで確認する(checked_by: cell) by @yagihash in https://github.com/yagihash/rivus/pull/206
+- feat(model): dart github の組み込みモデル by @yagihash in https://github.com/yagihash/rivus/pull/212
+- feat(model): rust actix-web の組み込みモデル(例から昇格) by @yagihash in https://github.com/yagihash/rivus/pull/204
+- feat(model): rust axum のモデルを広げる by @yagihash in https://github.com/yagihash/rivus/pull/213
+- feat(model): go cloud.google.com/go/storage の組み込みモデル by @yagihash in https://github.com/yagihash/rivus/pull/214
+- feat(model): go jmoiron/sqlx のモデルを広げる by @yagihash in https://github.com/yagihash/rivus/pull/216
+- feat(model): rust google-cloud-storage の組み込みモデル by @yagihash in https://github.com/yagihash/rivus/pull/217
+- feat(model): dart googleapis_auth の組み込みモデル by @yagihash in https://github.com/yagihash/rivus/pull/222
+- feat(model): rust octocrab の組み込みモデル by @yagihash in https://github.com/yagihash/rivus/pull/224
+- fix(sites): Rust の型名(`::` 区切り)で `kind: field` の source のキーを作る(#161) by @yagihash in https://github.com/yagihash/rivus/pull/230
+- feat(zoo): Dart の骨組みを依存として読む(--dep-dir)。dart-github の kind: field の source を検出にする by @yagihash in https://github.com/yagihash/rivus/pull/231
+- feat(rust): extractor が変換で落ちた関数を飛ばして続ける(fn_skipped、summary.functions_skipped、ADR-109。課題 #160 の (b)) by @yagihash in https://github.com/yagihash/rivus/pull/226
+- feat(model): Go のモデルの行に、module の path の major を `/v*` と書けるようにする by @yagihash in https://github.com/yagihash/rivus/pull/228
+- feat: 確認していない major / バージョンに当てたとき、summary.unverified_versions に出す(Go。#228 のあと) by @yagihash in https://github.com/yagihash/rivus/pull/229
+- feat(model): go google/go-github の組み込みモデル by @yagihash in https://github.com/yagihash/rivus/pull/225
+- # chore: rust-web.yaml をパッケージごとのファイルに分ける by @yagihash in https://github.com/yagihash/rivus/pull/235
+### Bug Fixes
+- test: dead-allow の「一致した」指摘を、通常は記録だけにする(モデルの PR が共有の .dead-allow を直さなくてよい) by @yagihash in https://github.com/yagihash/rivus/pull/187
+- fix(model): 差分テストで見つかった標準ライブラリのモデルの MISS を直す(json、url、flag、template ほか)。miss-reviewed の注釈 by @yagihash in https://github.com/yagihash/rivus/pull/195
+- fix(model): 差分テストの続き。miss-reviewed を種類つきに絞る、写しのビルド(wasm)の修正、標準ライブラリのモデルの追加の修正(課題 #150〜#155) by @yagihash in https://github.com/yagihash/rivus/pull/201
+- fix(model): database/sql の Conn と Tx.Prepare の SQL 文字列を sink にする by @yagihash in https://github.com/yagihash/rivus/pull/219
+- fix(rust): 依存のクレートのコンパイルで落ちたとき、クレート名とバージョン、依存の側で落ちたこと、-no-deps を出す(課題 #160 の (a)) by @yagihash in https://github.com/yagihash/rivus/pull/220
+- feat(model): 標準ライブラリ os の、行がない関数に行を足す by @yagihash in https://github.com/yagihash/rivus/pull/223
+
 ## [v0.0.7](https://github.com/yagihash/rivus/compare/v0.0.6...v0.0.7) - 2026-11-22
 
 ### Features
