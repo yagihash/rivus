@@ -1,0 +1,4 @@
+dart	dart/dio_multipartfile_path.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	dart/dio_multipartfile_path.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	dart/dio_multipartfile_path.dart	sink-none	@sink(none) @nosink(dart-dio-multipartfile-path-decoy)	Future<void> decoy() async { @decoy
+dart	dart/dio_multipartfile_path.dart	sink-none	@sink(none) @nosink(dart-dio-multipartfile-path-decoy)	Future<void> decoy() async { @decoy

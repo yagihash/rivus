@@ -21,6 +21,8 @@
 # calls the core library only, so a row for a package would fail it; and `Interceptor.onRequest` is a method that the
 # project overrides, which `calls:` (`fn: argN`) cannot name. Whether the value that dio hands to an interceptor of the
 # project is followed by reading the body of dio was not checked (no cell: the zoo has only a skeleton of Dio).
+# `MultipartFile.fromFile` and `fromFileSync` read the file at the path they take, to send it: a value that decides the path
+# is a path traversal sink (a file that the program can read goes out in the request).
 # `BaseOptions(baseUrl: ...)` is not a sink: the base of a client is a configuration, rarely user input.
 ruleset: rivus/dart/dio@1
 verified_versions:
@@ -208,6 +210,15 @@ sinks:
     args: [1]
     category: path_traversal
     accepts: [user_input]
+  # MultipartFile (static methods that read the file at the path and make a part of a request body from it)
+  - symbol: package:dio/src/multipart_file.dart#MultipartFile.fromFile
+    args: [0]
+    category: path_traversal
+    accepts: [user_input]
+  - symbol: package:dio/src/multipart_file.dart#MultipartFile.fromFileSync
+    args: [0]
+    category: path_traversal
+    accepts: [user_input]
 
 rejected:
   # make model PKG=dio LANG=dart (bench/model-author) lists the candidates of layer 1 that no row decides; these were looked at and left out (dio 5.11.1).
@@ -311,15 +322,3 @@ rejected:
     covers: 3
     why: "CancelToken の値は、作られた RequestOptions を持つだけ(requestOptions.path)。path は Dio.get などの引数と Dio.fetch の行で見ている"
 
-# The path of the file that is read and sent: to be a sink (a separate pull request). Until it is in, the candidate is kept here.
-deferred:
-  - symbol: package:dio/src/multipart_file.dart#MultipartFile.fromFile
-    kind: sink
-    position: arg0
-    why: "読んで送るファイルの path。sink にする方針で、行は別の PR で足す"
-    ref: model-dart-dio-multipartfile
-  - symbol: package:dio/src/multipart_file.dart#MultipartFile.fromFileSync
-    kind: sink
-    position: arg0
-    why: "同じ(同期版)"
-    ref: model-dart-dio-multipartfile
