@@ -29,6 +29,7 @@ python3 bench/zoo-dart/observed/vs_miss.py $T/zoo-A.json bench/zoo-dart/cells/li
 # 3. 方法 B: cells と exec をコピーして、コピーの関数の先頭に印を差し、全部の呼び出しの stack を取る
 mkdir $T/zoo2 && cp -R bench/zoo-dart/cells bench/zoo-dart/exec $T/zoo2/
 dart --packages=extractor/dart/.dart_tool/package_config.json bench/zoo-dart/observed/instrument.dart $T/zoo2/cells/lib
+# 骨組みのパッケージの中の関数も取るには、zoo_mark に依存するパッケージの lib も、同じように 1 つずつ渡す(例: $T/zoo2/cells/packages/googleapis_auth/lib)
 (cd $T/zoo2/exec && dart pub get && ZOO_STACKS=1 ZOO_STACKS_OUT=$T/stacks-enter.json dart test test/zoo_test.dart)
 python3 bench/zoo-dart/observed/compare.py $T/stacks-enter.json $T/zoo-dart.db --line-only --json $T/zoo-B.json
 python3 bench/zoo-dart/observed/vs_miss.py $T/zoo-B.json bench/zoo-dart/cells/lib package:zoo_cells/ --others

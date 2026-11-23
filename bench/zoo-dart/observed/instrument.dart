@@ -72,7 +72,7 @@ void main(List<String> args) {
       if (r.unit.directives.any((d) => d is PartOfDirective)) continue;
       final v = _V(r.lineInfo);
       r.unit.accept(v);
-      final edits = v.edits..sort((a, b) => b.$1.compareTo(a.$1));
+      final edits = v.edits..sort((a, b) => b.$1 != a.$1 ? b.$1.compareTo(a.$1) : b.$2.compareTo(a.$2)); // the longer edit first at one offset (`=> () => e;`)
       var out = src;
       for (final (a, b, t) in edits) {
         out = out.replaceRange(a, b, t);
