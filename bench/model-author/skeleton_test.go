@@ -65,6 +65,14 @@ func (db *DB) Move(d Dest)                                                  {}
 func (db *DB) Wrap(o opt.Option)                                            {}
 
 type Dest struct{ Object string }
+
+type Params []string
+
+func (p Params) Get(k string) string { return "" }
+
+func Unrelated(s string) string { return s }
+
+func (db *DB) Unrelated2() {}
 `
 
 type synthLoaded struct {
@@ -101,9 +109,11 @@ func loadSynth(t *testing.T) synthLoaded {
 			{Symbol: "(*m.example/syn.DB).Run", Args: []int{0}, Category: "sql_injection"},
 			{Symbol: "(*m.example/syn.DB).Query2", Args: []int{1}, Category: "sql_injection"},
 			{Symbol: "(*m.example/syn.DB).Move", Parts: []model.SinkPart{{Arg: &zero, Field: "Object"}}, Category: "resource_name"},
-			{Symbol: "m.example/syn.Gone", Args: []int{0}, Category: "sql_injection"},
 		},
-		FlowRows: []model.Propagator{{Symbol: "(*m.example/syn.DB).Get", Flows: []model.Flow{{From: "recv", To: "result0"}}}},
+		FlowRows: []model.Propagator{
+			{Symbol: "(*m.example/syn.DB).Get", Flows: []model.Flow{{From: "recv", To: "result0"}}},
+			{Symbol: "(m.example/syn.Params).Get", Flows: []model.Flow{{From: "recv", To: "result"}}},
+		},
 	}
 	return synthLoaded{
 		l:     &loaded{Types: pkg, Module: "m.example/syn", Version: "v1.0.0", ModOf: map[string]string{"m.example/syn": "m.example/syn", "foreign.example/opt": "foreign.example"}},
@@ -115,10 +125,13 @@ type importerFunc func(string) (*types.Package, error)
 
 func (f importerFunc) Import(p string) (*types.Package, error) { return f(p) }
 
+// what the cells of the synthetic package use
+var synthUsed = map[string]bool{"Open": true, "Alias": true, "Mode": true, "ErrX": true, "Use": true, "Foreign": true, "Wrap": true, "Opt": true}
+
 func genSynth(t *testing.T) (*skelResult, synthLoaded) {
 	t.Helper()
 	s := loadSynth(t)
-	res, err := GenerateSkeleton(&skelInput{Root: s.l.Types, Module: s.l.Module, Version: s.l.Version, ModOf: s.l.ModOf, Facts: s.facts})
+	res, err := GenerateSkeleton(&skelInput{Root: s.l.Types, Module: s.l.Module, Version: s.l.Version, ModOf: s.l.ModOf, Facts: s.facts, UsedNames: synthUsed})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,8 +188,41 @@ func TestSkeletonShape(t *testing.T) {
 			t.Errorf("not listed as left out: %s\n%s", w, om)
 		}
 	}
-	if strings.Join(res.RowsNotReproduced, ",") != "m.example/syn.Gone" {
-		t.Errorf("rows not reproduced: %v", res.RowsNotReproduced)
+	if len(res.RowsMissing) != 0 {
+		t.Errorf("rows missing: %v", res.RowsMissing)
+	}
+	// only what the rows, the cells and the interfaces need: not the rest of the API
+	if strings.Contains(src, "Unrelated") || strings.Contains(src, "func Read") {
+		t.Errorf("a member that no row and no cell points at is written:\n%s", src)
+	}
+	// a flow from a slice receiver cannot be carried: a warning (not a failure)
+	w := strings.Join(res.Warnings, "\n")
+	if !strings.Contains(w, "(m.example/syn.Params).Get: the flow from the receiver is not reproduced") {
+		t.Errorf("no warning for the slice receiver: %v", res.Warnings)
+	}
+}
+
+func TestSkeletonFailsOnARowThatHasNoPlace(t *testing.T) {
+	s := loadSynth(t)
+	s.facts.SinkRows = append(s.facts.SinkRows,
+		model.Sink{Symbol: "m.example/syn.Gone", Args: []int{0}, Category: "sql_injection"},
+		model.Sink{Symbol: "(*m.example/syn.DB).Wrap", Args: []int{0}, Category: "sql_injection"}) // a parameter of another module
+	res, err := GenerateSkeleton(&skelInput{Root: s.l.Types, Module: s.l.Module, Version: s.l.Version, ModOf: s.l.ModOf, Facts: s.facts, UsedNames: synthUsed})
+	if err != nil || strings.Join(res.RowsMissing, ",") != "(*m.example/syn.DB).Wrap,m.example/syn.Gone" {
+		t.Fatalf("%v %v", err, res)
+	}
+	// the command stops with exit 30 and writes nothing
+	repo := fakeRepo(t)
+	var out bytes.Buffer
+	err = runGenSkeleton(&out, &options{pkg: "m.example/syn", work: t.TempDir()}, repo, s.facts, s.l)
+	if ee, ok := err.(*exitError); !ok || ee.code != ExitSkeleton {
+		t.Fatalf("%v, want exit %d", err, ExitSkeleton)
+	}
+	if _, err := os.Stat(filepath.Join(repo, "bench", "zoo-go-pkg", "syn", "skel")); err == nil {
+		t.Error("files were written for a failed run")
+	}
+	if !strings.Contains(out.String(), "row without a place in the skeleton: m.example/syn.Gone") {
+		t.Errorf("the rows are not listed:\n%s", out.String())
 	}
 }
 

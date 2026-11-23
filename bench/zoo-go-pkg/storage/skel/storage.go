@@ -9,269 +9,17 @@ package storage
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"io"
 	"net/url"
 	"time"
 	"zoo/mark"
 )
 
-const AbortIncompleteMPUAction = "AbortIncompleteMultipartUpload"
-
-const Active HMACState = "ACTIVE"
-
-const AllAuthenticatedUsers ACLEntity = "allAuthenticatedUsers"
-
-const AllUsers ACLEntity = "allUsers"
-
-const Archived Liveness = 2
-
-const DeleteAction = "Delete"
-
-const Deleted HMACState = "DELETED"
-
-const FullyRestricted RestrictionMode = "FullyRestricted"
-
-const Inactive HMACState = "INACTIVE"
-
-const JSONPayload = "JSON_API_V1"
-
-const Live Liveness = 1
-
-const LiveAndArchived Liveness = 0
-
-const NoPayload = "NONE"
-
-const NotRestricted RestrictionMode = "NotRestricted"
-
-const ObjectArchiveEvent = "OBJECT_ARCHIVE"
-
-const ObjectDeleteEvent = "OBJECT_DELETE"
-
-const ObjectFinalizeEvent = "OBJECT_FINALIZE"
-
-const ObjectMetadataUpdateEvent = "OBJECT_METADATA_UPDATE"
-
-const ProjectionDefault Projection = 0
-
-const ProjectionFull Projection = 1
-
-const ProjectionNoACL Projection = 2
-
-const PublicAccessPreventionEnforced PublicAccessPrevention = 2
-
-const PublicAccessPreventionInherited PublicAccessPrevention = 3
-
-const PublicAccessPreventionUnknown PublicAccessPrevention = 0
-
-const PublicAccessPreventionUnspecified PublicAccessPrevention = 1
-
-const RPOAsyncTurbo RPO = 2
-
-const RPODefault RPO = 1
-
-const RPOUnknown RPO = 0
-
-const RetryAlways RetryPolicy = 1
-
-const RetryIdempotent RetryPolicy = 0
-
-const RetryNever RetryPolicy = 2
-
-const RoleOwner ACLRole = "OWNER"
-
-const RoleReader ACLRole = "READER"
-
-const RoleWriter ACLRole = "WRITER"
-
-const ScopeFullControl = "https://www.googleapis.com/auth/devstorage.full_control"
-
-const ScopeReadOnly = "https://www.googleapis.com/auth/devstorage.read_only"
-
-const ScopeReadWrite = "https://www.googleapis.com/auth/devstorage.read_write"
-
-const SetStorageClassAction = "SetStorageClass"
-
-const SigningSchemeDefault SigningScheme = 0
-
-const SigningSchemeV2 SigningScheme = 1
-
-const SigningSchemeV4 SigningScheme = 2
-
-var ErrBucketNotExist = errors.New("ErrBucketNotExist")
-
-var ErrObjectNotExist = errors.New("ErrObjectNotExist")
-
-type ACLEntity string
-
-type ACLHandle struct {
-}
-
-func (a *ACLHandle) Delete(ctx context.Context, entity ACLEntity) error {
-	return nil
-}
-
-func (a *ACLHandle) List(ctx context.Context) ([]ACLRule, error) {
-	return nil, nil
-}
-
-func (a *ACLHandle) Set(ctx context.Context, entity ACLEntity, role ACLRole) error {
-	return nil
-}
-
-type ACLRole string
-
-type ACLRule struct {
-	Entity      ACLEntity
-	EntityID    string
-	Role        ACLRole
-	Domain      string
-	Email       string
-	ProjectTeam *ProjectTeam
-}
-
-type AppendableWriterOpts struct {
-	ChunkSize           int
-	ChunkRetryDeadline  time.Duration
-	ProgressFunc        func(int64)
-	FinalizeOnClose     bool
-	DisableAutoChecksum bool
-	SendCRC32C          bool
-	CRC32C              uint32
-}
-
-type Autoclass struct {
-	Enabled                        bool
-	ToggleTime                     time.Time
-	TerminalStorageClass           string
-	TerminalStorageClassUpdateTime time.Time
-}
-
-type BucketAttrs struct {
-	Name                                        string
-	ACL                                         []ACLRule
-	BucketPolicyOnly                            BucketPolicyOnly
-	UniformBucketLevelAccess                    UniformBucketLevelAccess
-	PublicAccessPrevention                      PublicAccessPrevention
-	DefaultObjectACL                            []ACLRule
-	DefaultEventBasedHold                       bool
-	PredefinedACL                               string
-	PredefinedDefaultObjectACL                  string
-	Location                                    string
-	CustomPlacementConfig                       *CustomPlacementConfig
-	MetaGeneration                              int64
-	StorageClass                                string
-	Created                                     time.Time
-	Updated                                     time.Time
-	VersioningEnabled                           bool
-	Labels                                      map[string]string
-	RequesterPays                               bool
-	Lifecycle                                   Lifecycle
-	RetentionPolicy                             *RetentionPolicy
-	CORS                                        []CORS
-	Encryption                                  *BucketEncryption
-	GoogleManagedEncryptionEnforcementConfig    *EncryptionEnforcementConfig
-	CustomerManagedEncryptionEnforcementConfig  *EncryptionEnforcementConfig
-	CustomerSuppliedEncryptionEnforcementConfig *EncryptionEnforcementConfig
-	Logging                                     *BucketLogging
-	Website                                     *BucketWebsite
-	Etag                                        string
-	LocationType                                string
-	ProjectNumber                               uint64
-	RPO                                         RPO
-	Autoclass                                   *Autoclass
-	ObjectRetentionMode                         string
-	SoftDeletePolicy                            *SoftDeletePolicy
-	HierarchicalNamespace                       *HierarchicalNamespace
-	OwnerEntity                                 string
-}
-
-type BucketAttrsToUpdate struct {
-	BucketPolicyOnly                            *BucketPolicyOnly
-	UniformBucketLevelAccess                    *UniformBucketLevelAccess
-	PublicAccessPrevention                      PublicAccessPrevention
-	StorageClass                                string
-	RetentionPolicy                             *RetentionPolicy
-	CORS                                        []CORS
-	Encryption                                  *BucketEncryption
-	GoogleManagedEncryptionEnforcementConfig    *EncryptionEnforcementConfig
-	CustomerManagedEncryptionEnforcementConfig  *EncryptionEnforcementConfig
-	CustomerSuppliedEncryptionEnforcementConfig *EncryptionEnforcementConfig
-	Lifecycle                                   *Lifecycle
-	Logging                                     *BucketLogging
-	Website                                     *BucketWebsite
-	PredefinedACL                               string
-	PredefinedDefaultObjectACL                  string
-	RPO                                         RPO
-	Autoclass                                   *Autoclass
-	SoftDeletePolicy                            *SoftDeletePolicy
-}
-
-func (ua *BucketAttrsToUpdate) DeleteLabel(name string) {
-}
-
-func (ua *BucketAttrsToUpdate) SetLabel(name string, value string) {
-}
-
-type BucketConditions struct {
-	MetagenerationMatch    int64
-	MetagenerationNotMatch int64
-}
-
-type BucketEncryption struct {
-	DefaultKMSKeyName string
-}
-
 type BucketHandle struct {
-}
-
-func (b *BucketHandle) ACL() *ACLHandle {
-	return &ACLHandle{}
-}
-
-func (b *BucketHandle) AddNotification(ctx context.Context, n *Notification) (*Notification, error) {
-	return &Notification{}, nil
-}
-
-func (b *BucketHandle) Attrs(ctx context.Context) (*BucketAttrs, error) {
-	return &BucketAttrs{}, nil
-}
-
-func (b *BucketHandle) BucketName() string {
-	return ""
-}
-
-func (b *BucketHandle) Create(ctx context.Context, projectID string, attrs *BucketAttrs) error {
-	return nil
-}
-
-func (b *BucketHandle) DefaultObjectACL() *ACLHandle {
-	return &ACLHandle{}
-}
-
-func (b *BucketHandle) Delete(ctx context.Context) error {
-	return nil
-}
-
-func (b *BucketHandle) DeleteNotification(ctx context.Context, id string) error {
-	return nil
 }
 
 func (b *BucketHandle) GenerateSignedPostPolicyV4(object string, opts *PostPolicyV4Options) (*PostPolicyV4, error) {
 	mark.SinkCmd(object)
 	return &PostPolicyV4{}, nil
-}
-
-func (b *BucketHandle) If(conds BucketConditions) *BucketHandle {
-	return &BucketHandle{}
-}
-
-func (b *BucketHandle) LockRetentionPolicy(ctx context.Context) error {
-	return nil
-}
-
-func (b *BucketHandle) Notifications(ctx context.Context) (map[string]*Notification, error) {
-	return nil, nil
 }
 
 func (b *BucketHandle) Object(name string) *ObjectHandle {
@@ -286,60 +34,9 @@ func (b *BucketHandle) Objects(ctx context.Context, q *Query) *ObjectIterator {
 	return &ObjectIterator{}
 }
 
-func (b *BucketHandle) Retryer(opts ...RetryOption) *BucketHandle {
-	return &BucketHandle{}
-}
-
-func (b *BucketHandle) SetObjectRetention(enable bool) *BucketHandle {
-	return &BucketHandle{}
-}
-
 func (b *BucketHandle) SignedURL(object string, opts *SignedURLOptions) (string, error) {
 	mark.SinkCmd(object)
 	return "", nil
-}
-
-func (b *BucketHandle) Update(ctx context.Context, uattrs BucketAttrsToUpdate) (*BucketAttrs, error) {
-	return &BucketAttrs{}, nil
-}
-
-func (b *BucketHandle) UserProject(projectID string) *BucketHandle {
-	return &BucketHandle{}
-}
-
-type BucketIterator struct {
-	Prefix               string
-	ReturnPartialSuccess bool
-}
-
-func (it *BucketIterator) Next() (*BucketAttrs, error) {
-	return &BucketAttrs{}, nil
-}
-
-func (it *BucketIterator) Unreachable() []string {
-	return nil
-}
-
-type BucketLogging struct {
-	LogBucket       string
-	LogObjectPrefix string
-}
-
-type BucketPolicyOnly struct {
-	Enabled    bool
-	LockedTime time.Time
-}
-
-type BucketWebsite struct {
-	MainPageSuffix string
-	NotFoundPage   string
-}
-
-type CORS struct {
-	MaxAge          time.Duration
-	Methods         []string
-	Origins         []string
-	ResponseHeaders []string
 }
 
 type Client struct {
@@ -350,43 +47,6 @@ func (c *Client) Bucket(name string) *BucketHandle {
 	return &BucketHandle{}
 }
 
-func (c *Client) Buckets(ctx context.Context, projectID string) *BucketIterator {
-	return &BucketIterator{}
-}
-
-func (c *Client) Close() error {
-	return nil
-}
-
-func (c *Client) CreateHMACKey(ctx context.Context, projectID string, serviceAccountEmail string, opts ...HMACKeyOption) (*HMACKey, error) {
-	return &HMACKey{}, nil
-}
-
-func (c *Client) HMACKeyHandle(projectID string, accessID string) *HMACKeyHandle {
-	return &HMACKeyHandle{}
-}
-
-func (c *Client) ListHMACKeys(ctx context.Context, projectID string, opts ...HMACKeyOption) *HMACKeysIterator {
-	return &HMACKeysIterator{}
-}
-
-func (c *Client) ServiceAccount(ctx context.Context, projectID string) (string, error) {
-	return "", nil
-}
-
-func (c *Client) SetRetry(opts ...RetryOption) {
-}
-
-type Composer struct {
-	ObjectAttrs
-	SendCRC32C          bool
-	DeleteSourceObjects bool
-}
-
-func (c *Composer) Run(ctx context.Context) (*ObjectAttrs, error) {
-	return &ObjectAttrs{}, nil
-}
-
 type Conditions struct {
 	GenerationMatch        int64
 	GenerationNotMatch     int64
@@ -395,143 +55,9 @@ type Conditions struct {
 	MetagenerationNotMatch int64
 }
 
-type Copier struct {
-	ObjectAttrs
-	RewriteToken          string
-	ProgressFunc          func(copiedBytes uint64, totalBytes uint64)
-	DestinationKMSKeyName string
-}
-
-func (c *Copier) Run(ctx context.Context) (*ObjectAttrs, error) {
-	return &ObjectAttrs{}, nil
-}
-
-type CustomPlacementConfig struct {
-	DataLocations []string
-}
-
-type EncryptionEnforcementConfig struct {
-	RestrictionMode RestrictionMode
-	EffectiveTime   time.Time
-}
-
-type HMACKey struct {
-	Secret              string
-	AccessID            string
-	Etag                string
-	ID                  string
-	ProjectID           string
-	ServiceAccountEmail string
-	CreatedTime         time.Time
-	UpdatedTime         time.Time
-	State               HMACState
-}
-
-type HMACKeyAttrsToUpdate struct {
-	State HMACState
-	Etag  string
-}
-
-type HMACKeyHandle struct {
-}
-
-func (hkh *HMACKeyHandle) Delete(ctx context.Context, opts ...HMACKeyOption) error {
-	return nil
-}
-
-func (hkh *HMACKeyHandle) Get(ctx context.Context, opts ...HMACKeyOption) (*HMACKey, error) {
-	return &HMACKey{}, nil
-}
-
-func (h *HMACKeyHandle) Update(ctx context.Context, au HMACKeyAttrsToUpdate, opts ...HMACKeyOption) (*HMACKey, error) {
-	return &HMACKey{}, nil
-}
-
-type HMACKeyOption interface {
-}
-
-type HMACKeysIterator struct {
-}
-
-func (it *HMACKeysIterator) Next() (*HMACKey, error) {
-	return &HMACKey{}, nil
-}
-
-type HMACState string
-
-type HierarchicalNamespace struct {
-	Enabled bool
-}
-
-type Lifecycle struct {
-	Rules []LifecycleRule
-}
-
-type LifecycleAction struct {
-	Type         string
-	StorageClass string
-}
-
-type LifecycleCondition struct {
-	AllObjects              bool
-	AgeInDays               int64
-	CreatedBefore           time.Time
-	CustomTimeBefore        time.Time
-	DaysSinceCustomTime     int64
-	DaysSinceNoncurrentTime int64
-	Liveness                Liveness
-	MatchesPrefix           []string
-	MatchesStorageClasses   []string
-	MatchesSuffix           []string
-	NoncurrentTimeBefore    time.Time
-	NumNewerVersions        int64
-}
-
-type LifecycleRule struct {
-	Action    LifecycleAction
-	Condition LifecycleCondition
-}
-
-type Liveness int
-
-type MRDOption interface {
-}
-
 type MoveObjectDestination struct {
 	Object     string
 	Conditions *Conditions
-}
-
-type MultiRangeDownloader struct {
-	Attrs ReaderObjectAttrs
-}
-
-func (mrd *MultiRangeDownloader) Add(output io.Writer, offset int64, length int64, callback func(int64, int64, error)) {
-}
-
-func (mrd *MultiRangeDownloader) Close() error {
-	return nil
-}
-
-func (mrd *MultiRangeDownloader) Error() error {
-	return nil
-}
-
-func (mrd *MultiRangeDownloader) GetHandle() []byte {
-	return nil
-}
-
-func (mrd *MultiRangeDownloader) Wait() {
-}
-
-type Notification struct {
-	ID               string
-	TopicID          string
-	TopicProjectID   string
-	EventTypes       []string
-	ObjectNamePrefix string
-	CustomAttributes map[string]string
-	PayloadFormat    string
 }
 
 type ObjectAttrs struct {
@@ -543,7 +69,6 @@ type ObjectAttrs struct {
 	EventBasedHold          bool
 	TemporaryHold           bool
 	RetentionExpirationTime time.Time
-	ACL                     []ACLRule
 	PredefinedACL           string
 	Owner                   string
 	Size                    int64
@@ -566,69 +91,11 @@ type ObjectAttrs struct {
 	Etag                    string
 	CustomTime              time.Time
 	ComponentCount          int64
-	Retention               *ObjectRetention
 	SoftDeleteTime          time.Time
 	HardDeleteTime          time.Time
-	Contexts                *ObjectContexts
-}
-
-type ObjectAttrsToUpdate struct {
-	CustomTime    time.Time
-	Metadata      map[string]string
-	ACL           []ACLRule
-	PredefinedACL string
-	Retention     *ObjectRetention
-	Contexts      *ObjectContexts
-}
-
-type ObjectContexts struct {
-	Custom map[string]ObjectCustomContextPayload
-}
-
-type ObjectCustomContextPayload struct {
-	Value      string
-	Delete     bool
-	CreateTime time.Time
-	UpdateTime time.Time
 }
 
 type ObjectHandle struct {
-}
-
-func (o *ObjectHandle) ACL() *ACLHandle {
-	return &ACLHandle{}
-}
-
-func (o *ObjectHandle) Attrs(ctx context.Context) (*ObjectAttrs, error) {
-	return &ObjectAttrs{}, nil
-}
-
-func (o *ObjectHandle) BucketName() string {
-	return ""
-}
-
-func (dst *ObjectHandle) ComposerFrom(srcs ...*ObjectHandle) *Composer {
-	return &Composer{}
-}
-
-func (dst *ObjectHandle) CopierFrom(src *ObjectHandle) *Copier {
-	return &Copier{}
-}
-
-func (o *ObjectHandle) Delete(ctx context.Context) error {
-	return nil
-}
-
-func (o *ObjectHandle) Generation(gen int64) *ObjectHandle {
-	return &ObjectHandle{}
-}
-
-func (o *ObjectHandle) If(conds Conditions) *ObjectHandle {
-	return &ObjectHandle{}
-}
-
-func (o *ObjectHandle) Key(encryptionKey []byte) *ObjectHandle {
-	return &ObjectHandle{}
 }
 
 func (o *ObjectHandle) Move(ctx context.Context, destination MoveObjectDestination) (*ObjectAttrs, error) {
@@ -636,84 +103,7 @@ func (o *ObjectHandle) Move(ctx context.Context, destination MoveObjectDestinati
 	return &ObjectAttrs{}, nil
 }
 
-func (o *ObjectHandle) NewMultiRangeDownloader(ctx context.Context, opts ...MRDOption) (*MultiRangeDownloader, error) {
-	return &MultiRangeDownloader{}, nil
-}
-
-func (o *ObjectHandle) NewRangeReader(ctx context.Context, offset int64, length int64, opts ...ReaderOption) (*Reader, error) {
-	return &Reader{}, nil
-}
-
-func (o *ObjectHandle) NewReader(ctx context.Context, opts ...ReaderOption) (*Reader, error) {
-	return &Reader{}, nil
-}
-
-func (o *ObjectHandle) NewWriter(ctx context.Context) *Writer {
-	return &Writer{}
-}
-
-func (o *ObjectHandle) NewWriterFromAppendableObject(ctx context.Context, opts *AppendableWriterOpts) (*Writer, int64, error) {
-	return &Writer{}, 0, nil
-}
-
-func (o *ObjectHandle) ObjectName() string {
-	return ""
-}
-
-func (o *ObjectHandle) OverrideUnlockedRetention(override bool) *ObjectHandle {
-	return &ObjectHandle{}
-}
-
-func (o *ObjectHandle) ReadCompressed(compressed bool) *ObjectHandle {
-	return &ObjectHandle{}
-}
-
-func (o *ObjectHandle) ReadHandle(r ReadHandle) *ObjectHandle {
-	return &ObjectHandle{}
-}
-
-func (o *ObjectHandle) Restore(ctx context.Context, opts *RestoreOptions) (*ObjectAttrs, error) {
-	return &ObjectAttrs{}, nil
-}
-
-func (o *ObjectHandle) Retryer(opts ...RetryOption) *ObjectHandle {
-	return &ObjectHandle{}
-}
-
-func (o *ObjectHandle) SoftDeleted() *ObjectHandle {
-	return &ObjectHandle{}
-}
-
-func (o *ObjectHandle) Update(ctx context.Context, uattrs ObjectAttrsToUpdate) (*ObjectAttrs, error) {
-	return &ObjectAttrs{}, nil
-}
-
 type ObjectIterator struct {
-}
-
-func (it *ObjectIterator) Next() (*ObjectAttrs, error) {
-	return &ObjectAttrs{}, nil
-}
-
-type ObjectRetention struct {
-	Mode        string
-	RetainUntil time.Time
-}
-
-type ParallelUploadConfig struct {
-	PartSize       int
-	MaxConcurrency int
-}
-
-type PolicyV4Fields struct {
-	ACL                    string
-	CacheControl           string
-	ContentType            string
-	ContentDisposition     string
-	ContentEncoding        string
-	Metadata               map[string]string
-	StatusCodeOnSuccess    int
-	RedirectToURLOnSuccess string
 }
 
 type PostPolicyV4 struct {
@@ -731,28 +121,9 @@ type PostPolicyV4Options struct {
 	SignBytes      func(hashBytes []byte) (signature []byte, err error)
 	SignRawBytes   func(bytes []byte) (signature []byte, err error)
 	Expires        time.Time
-	Style          URLStyle
 	Insecure       bool
-	Fields         *PolicyV4Fields
 	Conditions     []PostPolicyV4Condition
 	Hostname       string
-}
-
-type ProjectTeam struct {
-	ProjectNumber string
-	Team          string
-}
-
-type Projection int
-
-func (p Projection) String() string {
-	return ""
-}
-
-type PublicAccessPrevention int
-
-func (p PublicAccessPrevention) String() string {
-	return ""
 }
 
 type Query struct {
@@ -761,115 +132,12 @@ type Query struct {
 	Versions                 bool
 	StartOffset              string
 	EndOffset                string
-	Projection               Projection
 	IncludeTrailingDelimiter bool
 	MatchGlob                string
 	IncludeFoldersAsPrefixes bool
 	SoftDeleted              bool
 	Filter                   string
 }
-
-func (q *Query) SetAttrSelection(attrs []string) error {
-	return nil
-}
-
-type RPO int
-
-func (rpo RPO) String() string {
-	return ""
-}
-
-type ReadHandle []byte
-
-type Reader struct {
-	Attrs ReaderObjectAttrs
-}
-
-func (r *Reader) CacheControl() string {
-	return ""
-}
-
-func (r *Reader) Close() error {
-	return nil
-}
-
-func (r *Reader) ContentEncoding() string {
-	return ""
-}
-
-func (r *Reader) ContentType() string {
-	return ""
-}
-
-func (r *Reader) LastModified() (time.Time, error) {
-	return time.Time{}, nil
-}
-
-func (r *Reader) Metadata() map[string]string {
-	return nil
-}
-
-func (r *Reader) Read(p []byte) (int, error) {
-	return 0, nil
-}
-
-func (r *Reader) ReadHandle() ReadHandle {
-	return nil
-}
-
-func (r *Reader) Remain() int64 {
-	return 0
-}
-
-func (r *Reader) Size() int64 {
-	return 0
-}
-
-func (r *Reader) WriteTo(w io.Writer) (int64, error) {
-	return 0, nil
-}
-
-type ReaderObjectAttrs struct {
-	Size            int64
-	StartOffset     int64
-	ContentType     string
-	ContentEncoding string
-	CacheControl    string
-	LastModified    time.Time
-	Generation      int64
-	Metageneration  int64
-	CRC32C          uint32
-	Decompressed    bool
-	Unfinalized     bool
-}
-
-type ReaderOption interface {
-}
-
-type RestoreOptions struct {
-	CopySourceACL bool
-}
-
-type RestrictionMode string
-
-type RetentionPolicy struct {
-	RetentionPeriod time.Duration
-	EffectiveTime   time.Time
-	IsLocked        bool
-}
-
-type RetryContext struct {
-	Attempt      int
-	InvocationID string
-	Operation    string
-	Bucket       string
-	Object       string
-}
-
-type RetryOption interface {
-}
-
-type RetryPolicy int
 
 type SignedURLOptions struct {
 	GoogleAccessID  string
@@ -881,86 +149,8 @@ type SignedURLOptions struct {
 	Headers         []string
 	QueryParameters url.Values
 	MD5             string
-	Style           URLStyle
 	Insecure        bool
-	Scheme          SigningScheme
 	Hostname        string
-}
-
-type SigningScheme int
-
-type SoftDeletePolicy struct {
-	EffectiveTime     time.Time
-	RetentionDuration time.Duration
-}
-
-type URLStyle interface {
-}
-
-type UniformBucketLevelAccess struct {
-	Enabled    bool
-	LockedTime time.Time
-}
-
-type Writer struct {
-	ObjectAttrs
-	SendCRC32C            bool
-	DisableAutoChecksum   bool
-	ChunkSize             int
-	ChunkRetryDeadline    time.Duration
-	ChunkTransferTimeout  time.Duration
-	ForceEmptyContentType bool
-	Append                bool
-	FinalizeOnClose       bool
-	ProgressFunc          func(int64)
-	EnableParallelUpload  bool
-	ParallelUploadConfig  ParallelUploadConfig
-	SendAppendFinalCRC32C bool
-	AppendFinalCRC32C     uint32
-}
-
-func (w *Writer) Abort() error {
-	return nil
-}
-
-func (w *Writer) Attrs() *ObjectAttrs {
-	return &ObjectAttrs{}
-}
-
-func (w *Writer) Close() error {
-	return nil
-}
-
-func (w *Writer) CloseWithError(err error) error {
-	return nil
-}
-
-func (w *Writer) Flush() (int64, error) {
-	return 0, nil
-}
-
-func (w *Writer) Write(p []byte) (int, error) {
-	return 0, nil
-}
-
-func BucketBoundHostname(hostname string) URLStyle {
-	return nil
-}
-
-func CheckDirectConnectivitySupported(ctx context.Context, bucket string) error {
-	return nil
-}
-
-func ConditionContentLengthRange(start uint64, end uint64) PostPolicyV4Condition {
-	return nil
-}
-
-func ConditionStartsWith(key string, value string) PostPolicyV4Condition {
-	return nil
-}
-
-func ForHMACKeyServiceAccountEmail(serviceAccountEmail string) HMACKeyOption {
-	return nil
 }
 
 func GenerateSignedPostPolicyV4(bucket string, object string, opts *PostPolicyV4Options) (*PostPolicyV4, error) {
@@ -971,76 +161,8 @@ func NewClient(ctx context.Context) (*Client, error) {
 	return &Client{}, nil
 }
 
-func NewGRPCClient(ctx context.Context) (*Client, error) {
-	return &Client{}, nil
-}
-
-func PathStyle() URLStyle {
-	return nil
-}
-
-func ShouldRetry(err error) bool {
-	return false
-}
-
-func ShowDeletedHMACKeys() HMACKeyOption {
-	return nil
-}
-
 func SignedURL(bucket string, object string, opts *SignedURLOptions) (string, error) {
 	mark.SinkCmd(bucket)
 	mark.SinkCmd(object)
 	return "", nil
-}
-
-func UserProjectForHMACKeys(userProjectID string) HMACKeyOption {
-	return nil
-}
-
-func VirtualHostedStyle() URLStyle {
-	return nil
-}
-
-func WithDisableMRDReadChecksum() MRDOption {
-	return nil
-}
-
-func WithDisableReaderChecksum() ReaderOption {
-	return nil
-}
-
-func WithErrorFunc(shouldRetry func(err error) bool) RetryOption {
-	return nil
-}
-
-func WithErrorFuncWithContext(shouldRetry func(err error, retryCtx *RetryContext) bool) RetryOption {
-	return nil
-}
-
-func WithMaxAttempts(maxAttempts int) RetryOption {
-	return nil
-}
-
-func WithMaxConnections(c int) MRDOption {
-	return nil
-}
-
-func WithMaxRetryDuration(maxRetryDuration time.Duration) RetryOption {
-	return nil
-}
-
-func WithMinConnections(c int) MRDOption {
-	return nil
-}
-
-func WithPolicy(policy RetryPolicy) RetryOption {
-	return nil
-}
-
-func WithTargetPendingBytes(c int) MRDOption {
-	return nil
-}
-
-func WithTargetPendingRanges(c int) MRDOption {
-	return nil
 }

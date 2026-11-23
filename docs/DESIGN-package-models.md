@@ -419,14 +419,27 @@ sinks:
 - **確認する major**: 上流が今もサポートしている major が対象(既定は最新。複数をサポートしていれば、それぞれで差分テストを通し、`verified_versions` に並べ、その major にしかない API の行も書く)。「サポートしている」は上流の公開の事実(サポートの方針、README、リリースのブランチ、直近のリリース)で決め、根拠を 1 行で書く。分からないときは最新だけにする。サポートを終えた major は対象にしない(行は当たり、6.10 の注記が出る)。
 - **しないこと(この節では)**: 解析した対象の major が `verified_versions` の範囲にないとき、`summary` に注記を出す(6.7 の 3。別の PR)。`body_replaced_packages` の `package` に `/v*` を書くこと。`-ir` で渡された Go の IR への展開(展開は、Go の解析の読み込みの中だけ)。
 
-### 6.10 確認していないバージョンへの適用の注記(`summary.unverified_versions`。Go から。6.7 の 3 の最初の実装)
+### 6.10 確認していないバージョンへの適用の注記(`summary.unverified_versions`。Go、Dart、Rust。6.7 の 3 の実装)
 
 解析した対象が使っている module のバージョンが、`verified_versions` の範囲の外のとき、**モデルの行は当てたまま**、`summary.unverified_versions` に 1 件ずつ出す(`[{package, used, verified: [範囲...], source: "go.mod"}]`。`package` は、使っている module の path(`/v*` の記録のときは、対象が持つ major の path)。`body_replaced_packages` と同じく、package でソートされ、決定論)。finding が 0 件でも出る。
 
 - **出す条件**: (1) `verified_versions` の記録があり、その `package`(`/v*` を含む)が、対象が使っている module の path に当たる。(2) 使っているバージョン(完全なバージョン。`go list` の `Module.Version`)が、その module に当たるどの記録の `versions` にも入らない。記録が複数あれば、どれかに入れば出さない。
 - **記録のない module には出さない**(組み込みのファイルの大半は、記録がない。全部の解析に注記が付くとうるさく、「確認していない」と言うにも、何を基準にするかがない)。記録を持つモデルが当たっていないとき(対象がその module を使っていない)は、出力は今までと同じ。記録を足すのは、手順書の 2 節の 3 段(新しいファイルは必須)で進む。
 - **バージョンが分からない module は出さない**: ディレクトリへの `replace`、別の module への `replace`(`go.mod` のバージョンは、実際に読むコードのバージョンではない)、主 module。バージョンの接尾辞(`-pre`、`+incompatible`)は読まない(疑似バージョンは、前のバージョンの番号とみなされる)。
-- **実装**: `gossa.Program.ModuleVersions`(読み込みのとき、`packages.Package.Module` から)、`model.Rules.UnverifiedVersions`、`report.Summary.UnverifiedVersions`。`-ir` で渡された IR と、`-index` の IR からの解析は、モジュール情報がないので出ない。Dart(`pubspec.lock`)と Rust(`Cargo.lock`)は未(課題 #162)。
+- **実装**: `gossa.Program.ModuleVersions`(読み込みのとき、`packages.Package.Module` から)、`model.Rules.UnverifiedVersions`、`report.Summary.UnverifiedVersions`。`-ir` で渡された IR と、`-index` の IR からの解析は、モジュール情報がないので出ない。
+**Dart(`pubspec.lock`)**: Dart の extractor は、IR にバージョンを出さないので、コアが、対象のディレクトリ(`-C`)の `pubspec.lock` を読む(IR は変えない。6.7 の 3 の最小の拡張案)。Dart の extractor が動いた解析だけが読む(`-ir` と `-index` からの解析は、ディレクトリを読まないので出ない)。`source` は `pubspec.lock`。
+- 読むのは `packages:` のうち `source: hosted` の `version`。`path` と `git` の依存は、比べるバージョンがないので出さない。`package` は、pub のパッケージ名そのまま(`dio`、`shelf_router`)。
+- `pubspec.lock` がない(`dart pub get` をしていない)ときは、注記も、エラーもない。読めない(YAML が壊れている)ときは、標準エラーに 1 行出して、注記は出さない。
+- **未対応**: 複数のパッケージの monorepo や pub のワークスペース(`pubspec.lock` が、`-C` のディレクトリでなく、親のディレクトリにある)。`-C` のディレクトリに `pubspec.lock` がなければ出さない(Dart の extractor も、1 つのパッケージを `-C` に指す前提。解析の警告にもそう書いてある)。
+- プレリリース(`6.0.0-beta.1`)は、Go と同じく、接尾辞を読まずに数字だけで比べる(`6.0.0` として、`<6.0.0` の範囲の外)。
+- 記録に言語の区別はない。別の言語のファイルの記録でも、`package` の名前が同じ依存(Dart の `http` と Rust の `http` など)には当たる。組み込みのファイルの `package` は、その言語の依存を指す。名前のぶつかりは、今は直さない(利用者のファイルで起きたら、記録に言語を足す案を考える)。
+
+**Rust(`Cargo.lock`)**: Rust の extractor が動いた解析だけが、`-C` の `Cargo.lock` を読む(IR は変えない。extractor も変えない)。`source` は `Cargo.lock`。
+- 読むのは `[[package]]` のうち、`source` が registry(`registry+`、`sparse+`)のもの。path の crate(`source` なし。対象自身を含む)と git の crate は、比べるバージョンがないので出さない。`package` は、lock の綴り(`actix-web`)で出す。照合は `-` と `_` を同じとみなす(`model.SameCrate`。モデルが `google_cloud_storage` と書いても、lock の `google-cloud-storage` に当たる)。
+- 1 つの crate が lock に複数のバージョンで入ることがある(`[[package]]` が 2 つ)。全部を見て、**どれかが範囲の外なら** 1 件にする(crate ごとに 1 件)。`used` は、lock の順で最初の外のバージョン、`all_used` が全部(順は lock のまま)。
+- `Cargo.lock` がなければ、注記もエラーもない(`--locked` なしで取得した対象)。ワークスペースの子の crate を `-C` に指したとき、`Cargo.lock` がワークスペースの根にあれば読まない(出ない)。未対応。
+- プレリリース(`1.0.0-rc.1`)は、Go、Dart と同じ扱い(接尾辞を読まない)。
+- 複数のバージョンを持つ lock(Cargo.lock で起きる)のために、`model.UnverifiedVersion` に `all_used` を足した。バージョンが 1 つのときは出ない(Go の JSON は変わらない)。
 
 ### 6.11 モデル作成の手順のスクリプト化(設計案)
 
@@ -548,8 +561,8 @@ Rust は、extractor を動かす段(型の取得、セルの解析の確認、�
 **段階 1(Dart)の状態(2026-11-23): 実装済み(`make model PKG=<パッケージ名> VERSION=<v> LANG=dart`。`bench/model-author/dart*.go`。骨組みの生成は含めない)。** 取得は、空のプロジェクトで `dart pub get` するだけ(`hook/build.dart` か `hook/link.dart` を持つパッケージが 1 つでもあれば、終了コード 10 で止める)。公開 API は、`bench/model-author/dartapi`(Dart の analyzer。型を読むだけで、パッケージのコードは実行しない)が、`lib/` の `src/` の外の各ライブラリの export から読む。シンボルは、extractor と同じ形(宣言したライブラリの `package:x/src/a.dart#Class.member`)なので、行とそのまま照合する。規則の表は Go と同じ(同じ語、同じ形)で、Dart の署名の形に読み替える: 位置は、位置引数が `arg<i>`、名前つき引数が `named:<名前>`、クラスの引数のフィールドは `arg0.owner`(3 段まで)。`dynamic` と `Object` の引数は、名前が決める(dio の `savePath`)。`Map` を返すもの(ヘッダー、メタデータ)は、本文と同じに source の候補。`static` の定数は source の候補にしない。`calls` の候補は、`body_replaced_packages` にあるパッケージだけ(Go と同じ決め。Dart の組み込みのモデルには、今ない)。終了コードは Go と同じ(10: `dart pub get` の失敗かフック、20: API を読めない、差分テストが動かない、50、70)。`-write-dead-allow` は、zoo のテストが Dart の extractor を使うので `RIVUS_DART` が要る(未設定なら 20)。再現率は、`bench/model-author` の `-recall`(`-dart-libs storage/,pubsub/` で、`googleapis` のように大きいパッケージを一部のライブラリに絞れる)。
 
 **段階 2 の状態(2026-11-23): Go の骨組みの生成とセルのテンプレートを実装した(`make model PKG=<パッケージ> VERSION=<v> ARGS="-gen-skeleton"`。`bench/model-author`)。** 入力は、取得した本物のパッケージの公開 API(`go/packages` で型だけ読む。実行しない)と、モデルのファイルの行。出力は、次のとおり(同じ入力なら同じ結果。毎回上書きする)。
-- **置き場所(コマンドが決める)**: 第三者のパッケージは `bench/zoo-go-pkg/<モジュールの名前>/`(モジュールの path の最後の要素。major は除く。`go-github/v93` は `go_github`)に、依存の形(独立したモジュール。`skel/` を `replace` で読む)で置く。標準ライブラリは `bench/zoo-go-pkg/<名前(`/` は `_`)>/` に、骨組みなしで置く(`os`、`database_sql` の形)。`bench/zoo-go` に置く判断(Rust と Dart の対のセルが要る)は、まだしない。
-- **骨組み(`skel/**/<パッケージ名>.go`。先頭の行は `// Code generated by make model; DO NOT EDIT.`)**: 本物の公開の型(フィールド、埋め込み、メソッド)、関数、定数、変数を、本物の署名のまま書く。`sqlx.DB` が `*sql.DB` を埋め込む形、インターフェースを満たす関係、型の別名、型パラメータは、本物と同じになる。本体は、sink の行(カテゴリから `mark.SinkSQL`、`SinkCmd`、`SinkHTML`、`SinkPath`、それ以外は `SinkAny`)の危険な引数を記録するだけで、ほかはゼロ値を返す(構造体へのポインタは nil にせず、埋め込みのポインタも入れる)。レシーバから結果への流れの行(`gin.Context` の getter)は、レシーバの `v` に入れたマーカーを返し、レシーバから引数への流れ(`Bind*`)は、引数の文字列のフィールドにマーカーを入れる。`call_result` の source は、ケースのマーカー(`zooV`)を返し、`field` の source が指定するフィールドは、その型を返す関数が、マーカーを入れて作る。本物の module の外の型(第三者の依存)は書けないので、それを使うメンバーは省いて一覧にし(`.claude/work/model-author/<パッケージ>-skeleton-omitted.txt`)、その型の可変長の引数は外す。同じ module の別のパッケージ(`gin/binding`、`sqlx/reflectx`)の型は、同じ規則で `skel/` の下に書く。
+- **置き場所(コマンドが決める)**: 第三者のパッケージは `bench/zoo-go-pkg/<モジュールの名前>/`(モジュールの path の最後の要素。major は除く。`go-github/v93` は `go_github`)に、依存の形(独立したモジュール。`skel/` を `replace` で読む)で置く。標準ライブラリは、常に `bench/zoo-go-pkg/<名前(`/` は `_`)>/` に、骨組みなしで置く(`os`、`database_sql` の形)。
+- **骨組み(`skel/**/<パッケージ名>.go`。先頭の行は `// Code generated by make model; DO NOT EDIT.`)**: 本物の公開の型(フィールド、埋め込み、メソッド)、関数、定数、変数のうち、**モデルの行が指すもの、その署名に出る型、埋め込みとインターフェースの実装の関係(インターフェースのメソッドと同じ名前のメソッド)、セルと手で書いたファイルが使う名前**だけを、本物の署名のまま書く(パッケージ全体は書かない。go-github で 43,000 行になったため)。型のフィールドは、埋め込み、行とセルが指すもの、ほかの型を引かないものを書く。モデルの行が指すものが骨組みに作れないとき(別の module の型を使う、名前がない)は、警告でなく失敗(終了コード 30)にして、何も書かない。行が指すが流れを再現できないもの(スライスのレシーバ。#164)は、警告に出す。`sqlx.DB` が `*sql.DB` を埋め込む形、インターフェースを満たす関係、型の別名、型パラメータは、本物と同じになる。本体は、sink の行(カテゴリから `mark.SinkSQL`、`SinkCmd`、`SinkHTML`、`SinkPath`、それ以外は `SinkAny`)の危険な引数を記録するだけで、ほかはゼロ値を返す(構造体へのポインタは nil にせず、埋め込みのポインタも入れる)。レシーバから結果への流れの行(`gin.Context` の getter)は、レシーバの `v` に入れたマーカーを返し、レシーバから引数への流れ(`Bind*`)は、引数の文字列のフィールドにマーカーを入れる。`call_result` の source は、ケースのマーカー(`zooV`)を返し、`field` の source が指定するフィールドは、その型を返す関数が、マーカーを入れて作る。本物の module の外の型(第三者の依存)は書けないので、それを使うメンバーは省いて一覧にし(`.claude/work/model-author/<パッケージ>-skeleton-omitted.txt`)、その型の可変長の引数は外す。同じ module の別のパッケージ(`gin/binding`、`sqlx/reflectx`)の型は、同じ規則で `skel/` の下に書く。
 - **手で書く部分**: 骨組みの `skel/` に、生成するファイルと違う名前のファイル(`zoo_extra.go`)を置くと、コマンドは触らない。zoo のためだけの関数(`gin.NewContext(tag)`、`github.NewClientFor(tag)`)は、そこに書く。
 - **モジュールのファイル**: `go.mod`(セルのモジュール)と `skel/go.mod` は生成する(先頭に同じ行。手で別の内容にしたものは、上書きせず、終了コード 30 で止める)。`rules.yaml` と `cells/` は、なければ作り、あれば触らない。
 - **セルのテンプレート**: `cells/` に Go のファイルが 1 つもないときだけ、sink の行のカテゴリごとに `cells/<カテゴリ>/<カテゴリ>.go`(vuln / fixed / decoy。`@source`、`@sink`、`@nosink` のマーク付き)を作る。作ったあと、マークの固定(`ZOO_MARKS_UPDATE=1 go test ./cmd/rivus -run '^TestZooMarksLock$'`)が要る。セルがあれば、一切触らない。

@@ -9,35 +9,11 @@ package sqlx
 import (
 	"context"
 	"database/sql"
-	"github.com/jmoiron/sqlx/reflectx"
 	"zoo/mark"
 )
 
-const AT = 4
-
-const DOLLAR = 2
-
-const NAMED = 3
-
-const QUESTION = 1
-
-const UNKNOWN = 0
-
-var NameMapper func(s string) string
-
-type ColScanner interface {
-	Columns() ([]string, error)
-	Err() error
-	Scan(...interface{}) error
-}
-
 type Conn struct {
 	*sql.Conn
-	Mapper *reflectx.Mapper
-}
-
-func (c *Conn) BeginTxx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) {
-	return &Tx{Tx: &sql.Tx{}}, nil
 }
 
 func (c *Conn) GetContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error {
@@ -71,11 +47,6 @@ func (c *Conn) SelectContext(ctx context.Context, dest interface{}, query string
 
 type DB struct {
 	*sql.DB
-	Mapper *reflectx.Mapper
-}
-
-func (db *DB) BeginTxx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) {
-	return &Tx{Tx: &sql.Tx{}}, nil
 }
 
 func (db *DB) Beginx() (*Tx, error) {
@@ -84,10 +55,6 @@ func (db *DB) Beginx() (*Tx, error) {
 
 func (db *DB) BindNamed(query string, arg interface{}) (string, []interface{}, error) {
 	return "", nil, nil
-}
-
-func (db *DB) Connx(ctx context.Context) (*Conn, error) {
-	return &Conn{Conn: &sql.Conn{}}, nil
 }
 
 func (db *DB) DriverName() string {
@@ -102,17 +69,6 @@ func (db *DB) Get(dest interface{}, query string, args ...interface{}) error {
 func (db *DB) GetContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error {
 	mark.SinkSQL(query)
 	return nil
-}
-
-func (db *DB) MapperFunc(mf func(string) string) {
-}
-
-func (db *DB) MustBegin() *Tx {
-	return &Tx{Tx: &sql.Tx{}}
-}
-
-func (db *DB) MustBeginTx(ctx context.Context, opts *sql.TxOptions) *Tx {
-	return &Tx{Tx: &sql.Tx{}}
 }
 
 func (db *DB) MustExec(query string, args ...interface{}) sql.Result {
@@ -199,10 +155,6 @@ func (db *DB) SelectContext(ctx context.Context, dest interface{}, query string,
 	return nil
 }
 
-func (db *DB) Unsafe() *DB {
-	return &DB{DB: &sql.DB{}}
-}
-
 type Execer interface {
 	Exec(string, ...interface{}) (sql.Result, error)
 }
@@ -226,11 +178,6 @@ type ExtContext interface {
 type NamedStmt struct {
 	Params      []string
 	QueryString string
-	Stmt        *Stmt
-}
-
-func (n *NamedStmt) Close() error {
-	return nil
 }
 
 func (n *NamedStmt) Exec(arg interface{}) (sql.Result, error) {
@@ -249,10 +196,6 @@ func (n *NamedStmt) GetContext(ctx context.Context, dest interface{}, arg interf
 	return nil
 }
 
-func (n *NamedStmt) MustExec(arg interface{}) sql.Result {
-	return nil
-}
-
 func (n *NamedStmt) MustExecContext(ctx context.Context, arg interface{}) sql.Result {
 	return nil
 }
@@ -263,14 +206,6 @@ func (n *NamedStmt) Query(arg interface{}) (*sql.Rows, error) {
 
 func (n *NamedStmt) QueryContext(ctx context.Context, arg interface{}) (*sql.Rows, error) {
 	return &sql.Rows{}, nil
-}
-
-func (n *NamedStmt) QueryRow(arg interface{}) *Row {
-	return &Row{}
-}
-
-func (n *NamedStmt) QueryRowContext(ctx context.Context, arg interface{}) *Row {
-	return &Row{}
 }
 
 func (n *NamedStmt) QueryRowx(arg interface{}) *Row {
@@ -291,14 +226,6 @@ func (n *NamedStmt) QueryxContext(ctx context.Context, arg interface{}) (*Rows, 
 
 func (n *NamedStmt) Select(dest interface{}, arg interface{}) error {
 	return nil
-}
-
-func (n *NamedStmt) SelectContext(ctx context.Context, dest interface{}, arg interface{}) error {
-	return nil
-}
-
-func (n *NamedStmt) Unsafe() *NamedStmt {
-	return &NamedStmt{}
 }
 
 type Preparer interface {
@@ -322,57 +249,18 @@ type QueryerContext interface {
 }
 
 type Row struct {
-	Mapper *reflectx.Mapper
-}
-
-func (r *Row) ColumnTypes() ([]*sql.ColumnType, error) {
-	return nil, nil
-}
-
-func (r *Row) Columns() ([]string, error) {
-	return nil, nil
 }
 
 func (r *Row) Err() error {
 	return nil
 }
 
-func (r *Row) MapScan(dest map[string]interface{}) error {
-	return nil
-}
-
-func (r *Row) Scan(dest ...interface{}) error {
-	return nil
-}
-
-func (r *Row) SliceScan() ([]interface{}, error) {
-	return nil, nil
-}
-
-func (r *Row) StructScan(dest interface{}) error {
-	return nil
-}
-
 type Rows struct {
 	*sql.Rows
-	Mapper *reflectx.Mapper
-}
-
-func (r *Rows) MapScan(dest map[string]interface{}) error {
-	return nil
-}
-
-func (r *Rows) SliceScan() ([]interface{}, error) {
-	return nil, nil
-}
-
-func (r *Rows) StructScan(dest interface{}) error {
-	return nil
 }
 
 type Stmt struct {
 	*sql.Stmt
-	Mapper *reflectx.Mapper
 }
 
 func (s *Stmt) Get(dest interface{}, args ...interface{}) error {
@@ -380,10 +268,6 @@ func (s *Stmt) Get(dest interface{}, args ...interface{}) error {
 }
 
 func (s *Stmt) GetContext(ctx context.Context, dest interface{}, args ...interface{}) error {
-	return nil
-}
-
-func (s *Stmt) MustExec(args ...interface{}) sql.Result {
 	return nil
 }
 
@@ -411,17 +295,8 @@ func (s *Stmt) Select(dest interface{}, args ...interface{}) error {
 	return nil
 }
 
-func (s *Stmt) SelectContext(ctx context.Context, dest interface{}, args ...interface{}) error {
-	return nil
-}
-
-func (s *Stmt) Unsafe() *Stmt {
-	return &Stmt{Stmt: &sql.Stmt{}}
-}
-
 type Tx struct {
 	*sql.Tx
-	Mapper *reflectx.Mapper
 }
 
 func (tx *Tx) BindNamed(query string, arg interface{}) (string, []interface{}, error) {
@@ -465,14 +340,6 @@ func (tx *Tx) NamedExecContext(ctx context.Context, query string, arg interface{
 func (tx *Tx) NamedQuery(query string, arg interface{}) (*Rows, error) {
 	mark.SinkSQL(query)
 	return &Rows{Rows: &sql.Rows{}}, nil
-}
-
-func (tx *Tx) NamedStmt(stmt *NamedStmt) *NamedStmt {
-	return &NamedStmt{}
-}
-
-func (tx *Tx) NamedStmtContext(ctx context.Context, stmt *NamedStmt) *NamedStmt {
-	return &NamedStmt{}
 }
 
 func (tx *Tx) PrepareNamed(query string) (*NamedStmt, error) {
@@ -529,49 +396,10 @@ func (tx *Tx) SelectContext(ctx context.Context, dest interface{}, query string,
 	return nil
 }
 
-func (tx *Tx) Stmtx(stmt interface{}) *Stmt {
-	return &Stmt{Stmt: &sql.Stmt{}}
-}
-
-func (tx *Tx) StmtxContext(ctx context.Context, stmt interface{}) *Stmt {
-	return &Stmt{Stmt: &sql.Stmt{}}
-}
-
-func (tx *Tx) Unsafe() *Tx {
-	return &Tx{Tx: &sql.Tx{}}
-}
-
 type binder interface {
 	BindNamed(string, interface{}) (string, []interface{}, error)
 	DriverName() string
 	Rebind(string) string
-}
-
-type rowsi interface {
-	Close() error
-	Columns() ([]string, error)
-	Err() error
-	Next() bool
-	Scan(...interface{}) error
-}
-
-func BindDriver(driverName string, bindType int) {
-}
-
-func BindNamed(bindType int, query string, arg interface{}) (string, []interface{}, error) {
-	return "", nil, nil
-}
-
-func BindType(driverName string) int {
-	return 0
-}
-
-func Connect(driverName string, dataSourceName string) (*DB, error) {
-	return &DB{DB: &sql.DB{}}, nil
-}
-
-func ConnectContext(ctx context.Context, driverName string, dataSourceName string) (*DB, error) {
-	return &DB{DB: &sql.DB{}}, nil
 }
 
 func Get(q Queryer, dest interface{}, query string, args ...interface{}) error {
@@ -584,26 +412,6 @@ func GetContext(ctx context.Context, q QueryerContext, dest interface{}, query s
 	return nil
 }
 
-func In(query string, args ...interface{}) (string, []interface{}, error) {
-	return "", nil, nil
-}
-
-func LoadFile(e Execer, path string) (*sql.Result, error) {
-	return nil, nil
-}
-
-func LoadFileContext(ctx context.Context, e ExecerContext, path string) (*sql.Result, error) {
-	return nil, nil
-}
-
-func MapScan(r ColScanner, dest map[string]interface{}) error {
-	return nil
-}
-
-func MustConnect(driverName string, dataSourceName string) *DB {
-	return &DB{DB: &sql.DB{}}
-}
-
 func MustExec(e Execer, query string, args ...interface{}) sql.Result {
 	mark.SinkSQL(query)
 	return nil
@@ -612,14 +420,6 @@ func MustExec(e Execer, query string, args ...interface{}) sql.Result {
 func MustExecContext(ctx context.Context, e ExecerContext, query string, args ...interface{}) sql.Result {
 	mark.SinkSQL(query)
 	return nil
-}
-
-func MustOpen(driverName string, dataSourceName string) *DB {
-	return &DB{DB: &sql.DB{}}
-}
-
-func Named(query string, arg interface{}) (string, []interface{}, error) {
-	return "", nil, nil
 }
 
 func NamedExec(e Ext, query string, arg interface{}) (sql.Result, error) {
@@ -642,10 +442,6 @@ func NamedQueryContext(ctx context.Context, e ExtContext, query string, arg inte
 	return &Rows{Rows: &sql.Rows{}}, nil
 }
 
-func NewDb(db *sql.DB, driverName string) *DB {
-	return &DB{DB: &sql.DB{}}
-}
-
 func Open(driverName string, dataSourceName string) (*DB, error) {
 	return &DB{DB: &sql.DB{}}, nil
 }
@@ -660,10 +456,6 @@ func PreparexContext(ctx context.Context, p PreparerContext, query string) (*Stm
 	return &Stmt{Stmt: &sql.Stmt{}}, nil
 }
 
-func Rebind(bindType int, query string) string {
-	return ""
-}
-
 func Select(q Queryer, dest interface{}, query string, args ...interface{}) error {
 	mark.SinkSQL(query)
 	return nil
@@ -671,13 +463,5 @@ func Select(q Queryer, dest interface{}, query string, args ...interface{}) erro
 
 func SelectContext(ctx context.Context, q QueryerContext, dest interface{}, query string, args ...interface{}) error {
 	mark.SinkSQL(query)
-	return nil
-}
-
-func SliceScan(r ColScanner) ([]interface{}, error) {
-	return nil, nil
-}
-
-func StructScan(rows rowsi, dest interface{}) error {
 	return nil
 }
