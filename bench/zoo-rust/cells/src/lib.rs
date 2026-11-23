@@ -94,6 +94,9 @@ pub mod rust {
     pub mod ownership_move;
     pub mod static_lazylock;
 }
+pub mod san {
+    pub mod other_kind;
+}
 pub mod state {
     pub mod global_chain;
     pub mod global_direct;

@@ -623,6 +623,23 @@ func (s *state) checkSink(cc *callCtx, site *sites.Site) {
 	}
 }
 
+// acceptedAt says whether the sink site reacts to a value of the label: the labels the rules of the sink accept, and for a label
+// that a sanitizer gave with `neutralises`, the category of the site (ADR-115).
+func (s *state) acceptedAt(accepts []string, label, siteID string) bool {
+	if len(s.eng.rules.Derived) == 0 {
+		return accepted(accepts, label)
+	}
+	var cats []string
+	if site := s.eng.sites.ByID[siteID]; site != nil {
+		if len(site.Categories) > 0 {
+			cats = site.Categories
+		} else if site.Category != "" {
+			cats = []string{site.Category}
+		}
+	}
+	return s.eng.rules.AcceptsLabel(accepts, label, cats)
+}
+
 func accepted(accepts []string, label string) bool {
 	if len(accepts) == 0 {
 		return true
@@ -651,7 +668,7 @@ func (s *state) reach(site *sites.Site, f found, in *sg.Instr, note *Uncertainty
 	}
 	switch f.E.Kind {
 	case Real:
-		if !accepted(site.Labels, f.E.Label()) {
+		if !s.acceptedAt(site.Labels, f.E.Label(), site.ID) {
 			return
 		}
 		s.recordFinding(f.E.Origin(), site, f.E.Label(), steps, gs, note != nil)
@@ -817,8 +834,12 @@ func (s *state) applyModel(cc *callCtx) {
 		flows := san.Flows
 		if len(flows) == 0 {
 			flows = []model.Flow{{From: "args", To: "result"}}
+			if cc.recv != nil {
+				// a method: what it is called on is data too (`text.Clean()`), and what the sanitizer does not drop goes on
+				flows = append(flows, model.Flow{From: "recv", To: "result"})
+			}
 		}
-		o := op{drops: san.Drops, adds: san.Adds}
+		o := op{drops: san.Drops, adds: san.Adds, scoped: san.Neutralises != nil}
 		s.applyFlows(cc, flows, &o, "sanitized by "+cc.sym, modelRef(cc.sym, "sanitizer", san.Provenance))
 	}
 	for _, p := range rules.Propagators[cc.sym] {
@@ -1044,7 +1065,7 @@ func (s *state) applyFlows(cc *callCtx, flows []model.Flow, o *op, desc string, 
 				elems := []Elem{f.E}
 				kind := "propagated by " + cc.sym
 				if o != nil {
-					elems = sanitize(elems, *o)
+					elems = sanitize(elems, *o, s.eng.rules)
 					kind = desc
 					if mref != nil && mref.Origin == model.OriginLLM && f.E.Kind == Real && o.drops1(f.E.Label()) {
 						s.suppressed(cc, mref, f.E)

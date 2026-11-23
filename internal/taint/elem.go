@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/yagihash/rivus/internal/model"
 )
 
 // ElemKind distinguishes concrete labels from symbolic parameter taint.
@@ -118,6 +120,9 @@ func (e Elem) String() string {
 type op struct {
 	drops []string
 	adds  []string
+	// scoped: the sanitizer has neutralises (ADR-115). A value that went through another scoped sanitizer before has the
+	// label that one gave, and this one adds its own to it (chained sanitizers: each neutralises its own categories).
+	scoped bool
 }
 
 func (o op) drops1(label string) bool {
@@ -130,7 +135,11 @@ func (o op) drops1(label string) bool {
 }
 
 func encodeOp(o op) string {
-	return strings.Join(o.drops, ",") + "+" + strings.Join(o.adds, ",")
+	e := strings.Join(o.drops, ",") + "+" + strings.Join(o.adds, ",")
+	if o.scoped {
+		e += "+s"
+	}
+	return e
 }
 
 func decodeOps(mods string) []op {
@@ -139,8 +148,10 @@ func decodeOps(mods string) []op {
 	}
 	var out []op
 	for _, part := range strings.Split(mods, ";") {
-		d, a, _ := strings.Cut(part, "+")
+		d, rest, _ := strings.Cut(part, "+")
+		a, flag, _ := strings.Cut(rest, "+")
 		var o op
+		o.scoped = flag == "s"
 		if d != "" {
 			o.drops = strings.Split(d, ",")
 		}
@@ -188,7 +199,7 @@ func capMods(m string) string {
 // sanitize applies a sanitizer to the elements: concrete labels are dropped
 // (and replaced by the added ones), symbolic ones remember the operation so
 // that it can be applied once the caller's actual labels are known.
-func sanitize(in []Elem, o op) []Elem {
+func sanitize(in []Elem, o op, rules *model.Rules) []Elem {
 	var out []Elem
 	for _, e := range in {
 		if e.Kind == Param {
@@ -197,6 +208,12 @@ func sanitize(in []Elem, o op) []Elem {
 			continue
 		}
 		if !o.drops1(e.Label()) {
+			if o.scoped && rules.ChainsOnto(e.Label(), o.drops) {
+				for _, a := range o.adds {
+					out = append(out, RealElem(rules.ChainLabel(e.Label(), a), e.Origin()))
+				}
+				continue
+			}
 			out = append(out, e)
 			continue
 		}
@@ -209,10 +226,10 @@ func sanitize(in []Elem, o op) []Elem {
 
 // applyMods applies the recorded operations of a symbolic element to a
 // concrete element of the caller.
-func applyMods(actual Elem, mods string) []Elem {
+func applyMods(actual Elem, mods string, rules *model.Rules) []Elem {
 	cur := []Elem{actual}
 	for _, o := range decodeOps(mods) {
-		cur = sanitize(cur, o)
+		cur = sanitize(cur, o, rules)
 	}
 	return cur
 }

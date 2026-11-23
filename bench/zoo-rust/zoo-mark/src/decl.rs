@@ -65,6 +65,14 @@ pub fn clean_html(_s: &str) -> String {
 pub fn clean_path(_s: &str) -> String {
     String::new()
 }
+/// For a URL that a request goes to or a redirect (ssrf, open_redirect): the zoo has no judgement of its own for it.
+pub fn clean_url(_s: &str) -> String {
+    String::new()
+}
+/// For the name of a resource (a bucket, an object, a repository): the zoo has no judgement of its own for it.
+pub fn clean_resource(_s: &str) -> String {
+    String::new()
+}
 
 /// Registers a case of the zoo (the harness runs it).
 pub fn case(_id: &'static str, _f: fn()) {}

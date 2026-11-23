@@ -1,0 +1,3 @@
+dart	san/other_kind.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	san/other_kind.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	san/other_kind.dart	sink-none	@sink(none) @nosink(san-other-kind-decoy)	void decoy() { @decoy

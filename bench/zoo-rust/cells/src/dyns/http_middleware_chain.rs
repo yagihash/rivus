@@ -58,7 +58,7 @@ impl Handler for InnerFixed {
 }
 
 fn fixed() { // @fixed
-    let h = LoggingFixed { next: Box::new(InnerFixed { v: m::clean_cmd(&m::src("dyn-http-middleware-chain-fixed")) }) };
+    let h = LoggingFixed { next: Box::new(InnerFixed { v: m::clean_sql(&m::clean_cmd(&m::src("dyn-http-middleware-chain-fixed"))) }) };
     h.serve();
 }
 

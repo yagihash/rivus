@@ -15,7 +15,7 @@ fn vuln() { // @vuln
 }
 
 fn fixed() { // @fixed
-    let v = m::clean_path(&m::clean_html(&m::clean_sql(&m::clean_cmd(&m::src("pkg-gcs-signed-url-for-bucket-fixed")))));
+    let v = m::clean_resource(&m::clean_path(&m::clean_html(&m::clean_sql(&m::clean_cmd(&m::src("pkg-gcs-signed-url-for-bucket-fixed"))))));
     SignedUrlBuilder::for_bucket(&v); // @sink(none)
 }
 

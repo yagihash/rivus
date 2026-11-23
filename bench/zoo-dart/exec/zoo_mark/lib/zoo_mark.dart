@@ -222,6 +222,8 @@ String _clean(String c, String s) {
 }
 
 String cleanCmd(String s) => _clean(classCmd, s);
+String cleanUrl(String s) => _clean(classCmd, s);
+String cleanResource(String s) => _clean(classCmd, s);
 String cleanSql(String s) => _clean(classSql, s);
 String cleanHtml(String s) => _clean(classHtml, s);
 String cleanPath(String s) => _clean(classPath, s);

@@ -1,0 +1,3 @@
+go	san/other_kind/other_kind.go	sink-none	@sink(none)	func fixed() { @fixed
+go	san/other_kind/other_kind.go	sink-none	@sink(none)	func fixed() { @fixed
+go	san/other_kind/other_kind.go	sink-none	@sink(none) @nosink(san-other-kind-decoy)	func decoy() { @decoy

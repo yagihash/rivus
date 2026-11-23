@@ -17,7 +17,7 @@ Future<void> vuln() async { // @vuln
 
 Future<void> fixed() async { // @fixed
   final bucket = gcs.Storage(Object(), 'p').bucket('data');
-  final v = cleanPath(cleanHtml(cleanSql(cleanCmd(src('dart-gcloud-storage-read-fixed')))));
+  final v = cleanResource(cleanPath(cleanHtml(cleanSql(cleanCmd(src('dart-gcloud-storage-read-fixed'))))));
   await bucket.read(v).drain<void>(); // @sink(none)
 }
 

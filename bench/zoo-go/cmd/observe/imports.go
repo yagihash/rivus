@@ -61,6 +61,7 @@ import (
 	_ "zoo/cells/dyn/xtalk_n_by_m"
 	_ "zoo/cells/guard/one_branch"
 	_ "zoo/cells/guard/sanitize_before"
+	_ "zoo/cells/san/other_kind"
 	_ "zoo/cells/state/global_chain"
 	_ "zoo/cells/state/global_direct"
 	_ "zoo/cells/state/global_field"

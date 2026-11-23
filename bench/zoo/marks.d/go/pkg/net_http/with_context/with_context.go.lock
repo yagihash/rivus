@@ -1,0 +1,2 @@
+go	pkg/net_http/with_context/with_context.go	sink-none	@sink(none)	func fixed() { @fixed
+go	pkg/net_http/with_context/with_context.go	sink-none	@sink(none) @nosink(pkg-net-http-with-context-decoy)	func decoy() { @decoy

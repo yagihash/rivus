@@ -89,6 +89,7 @@ propagators:
     calls: [{fn: arg0, with: [recv], ret: result0}]
   - symbol: dart:async#Stream.asyncMap
     flows: [{from: recv, to: result}, {from: args, to: result}]
+    calls: [{fn: arg0, with: [recv], ret: result0}]
   - symbol: dart:async#Stream.asyncExpand
     flows: [{from: recv, to: result}, {from: args, to: result}]
   - symbol: dart:async#Future.then
