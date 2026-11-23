@@ -161,6 +161,11 @@ type Summary struct {
 	MemoryPeakBytes     int64    `json:"memory_peak_bytes,omitempty"`
 	MemoryLimitExceeded *bool    `json:"memory_limit_exceeded,omitempty"`
 	GCCPUFraction       *float64 `json:"gc_cpu_fraction,omitempty"`
+	// LiveHeapMaxBytes is the most that the collector found live in the heap during the run (/gc/heap/live:bytes, read with the
+	// peak). A guide to the lowest limit that a soft limit can keep: below it the limit is not kept (memory_limit_exceeded,
+	// gc_cpu_fraction go up). Always there (also without a limit). Not the peak: with a soft limit the peak stays near the limit
+	// whatever is live. About this run on this machine.
+	LiveHeapMaxBytes int64 `json:"live_heap_max_bytes,omitempty"`
 	// TopSymbols lists the symbols behind the uncertainties rivus can
 	// reduce itself: library calls without a model, and interface methods
 	// without a known implementation. They show where a model helps most.

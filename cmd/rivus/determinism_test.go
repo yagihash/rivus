@@ -25,7 +25,7 @@ import (
 // resolve` reads as "the path changed").
 //
 // What does not need to be the same is the time: duration_ms, dep_spent_ms, own_spent_ms, and the memory the run used
-// (summary.memory_peak_bytes, memory_limit_exceeded, gc_cpu_fraction).
+// (summary.memory_peak_bytes, memory_limit_exceeded, gc_cpu_fraction, live_heap_max_bytes).
 
 // stable returns the report without the fields that are a clock.
 func stable(t *testing.T, out []byte) []byte {
@@ -49,7 +49,7 @@ func stable(t *testing.T, out []byte) []byte {
 	}
 	// what this run did with the memory (ADR-121): the peak and the share of the collector move with the load, like a clock
 	if sm, ok := rep["summary"].(map[string]any); ok {
-		for _, k := range []string{"memory_peak_bytes", "memory_limit_exceeded", "gc_cpu_fraction"} {
+		for _, k := range []string{"memory_peak_bytes", "memory_limit_exceeded", "gc_cpu_fraction", "live_heap_max_bytes"} {
 			delete(sm, k)
 		}
 	}

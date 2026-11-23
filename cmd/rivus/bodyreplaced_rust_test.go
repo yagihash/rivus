@@ -110,7 +110,7 @@ func TestBodyReplacedOfARustCrateIsTheSameAsTheFilter(t *testing.T) {
 		for k, v := range r["summary"].(map[string]any) {
 			// the memory figures and the GC share are of the machine and its load, like the times (#359)
 			if k != "body_replaced_packages" && k != "body_replaced_ignored" &&
-				k != "memory_peak_bytes" && k != "memory_limit_exceeded" && k != "gc_cpu_fraction" {
+				k != "memory_peak_bytes" && k != "memory_limit_exceeded" && k != "gc_cpu_fraction" && k != "live_heap_max_bytes" {
 				sum[k] = v
 			}
 		}

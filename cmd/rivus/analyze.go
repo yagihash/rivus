@@ -357,6 +357,7 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	rep.Summary.MemoryLimitNote = o.memLimit.Note
 	mr := mon.stop()
 	rep.Summary.MemoryPeakBytes = mr.PeakBytes
+	rep.Summary.LiveHeapMaxBytes = mr.LiveHeapMaxBytes
 	if o.memLimit.Bytes > 0 {
 		exceeded := memoryExceeded(mr.PeakBytes, o.memLimit.Bytes)
 		rep.Summary.MemoryLimitExceeded = &exceeded
