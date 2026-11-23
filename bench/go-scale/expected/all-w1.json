@@ -57,7 +57,7 @@
   ],
   "uncertainty_kinds": {
     "assumed_call": 9,
-    "depth_limit": 62,
+    "depth_limit": 63,
     "dynamic_dispatch": 93,
     "global_holds_nothing": 1,
     "reflection": 3,
