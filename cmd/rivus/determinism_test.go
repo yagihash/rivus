@@ -53,8 +53,23 @@ func stable(t *testing.T, out []byte) []byte {
 	return b
 }
 
-// analyzeWith runs `rivus analyze args...` in dir with GOMAXPROCS=procs ("": the default).
+// analyzeWith runs `rivus analyze args...` in dir with GOMAXPROCS=procs ("": the default). The input is one that
+// converges: exit code 4 (the analysis is not complete, ADR-120) fails the test. Before the exit code existed a run
+// that did not converge was 0, and a test that accepts 4 would pass when every run stops by the pass limit (the runs
+// are the same as each other, so a determinism test does not see it).
 func analyzeWith(t *testing.T, dir, procs string, args ...string) []byte {
+	t.Helper()
+	return analyzeRun(t, dir, procs, false, args...)
+}
+
+// analyzeMayStop is analyzeWith for a run that may stop before it is complete: the clock (-timeout on a loaded machine,
+// TestDeterministicDogfood, which checks stats.converged itself) or a pass limit that is the point of the input.
+func analyzeMayStop(t *testing.T, dir, procs string, args ...string) []byte {
+	t.Helper()
+	return analyzeRun(t, dir, procs, true, args...)
+}
+
+func analyzeRun(t *testing.T, dir, procs string, mayStop bool, args ...string) []byte {
 	t.Helper()
 	cmd := exec.Command(binary, append([]string{"analyze"}, args...)...)
 	cmd.Dir = dir
@@ -63,7 +78,7 @@ func analyzeWith(t *testing.T, dir, procs string, args ...string) []byte {
 		cmd.Env = append(cmd.Env, "GOMAXPROCS="+procs)
 	}
 	out, err := cmd.Output()
-	if err = notFailed(err); err != nil {
+	if err = notFailedIf(err, mayStop); err != nil {
 		var stderr []byte
 		if ee, ok := err.(*exec.ExitError); ok {
 			stderr = ee.Stderr
@@ -293,7 +308,7 @@ func TestDeterministicDogfood(t *testing.T) {
 	finished := 0
 	for _, procs := range []string{"1", "4", ""} {
 		for i := 0; i < 1; i++ {
-			out := analyzeWith(t, root, procs, "-rules", "dogfood/rules.yaml", "-timeout", "120s", "./...")
+			out := analyzeMayStop(t, root, procs, "-rules", "dogfood/rules.yaml", "-timeout", "120s", "./...")
 			var rep struct {
 				Findings json.RawMessage `json:"findings"`
 				Stats    struct {
