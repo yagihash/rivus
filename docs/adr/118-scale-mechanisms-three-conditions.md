@@ -58,6 +58,7 @@
 
 - **付ける所**: 要約を適用する段で、畳んだ出力(`Output.Widened`)の、パラメータ全体になった要素(`Param` で、パスが空)から作る段。段の注記として付く。種類は `depth_limit`、detail は `out_widened:` で始まる(`out_limit:` の記録と同じ種類に合わせた。ADR-117 の `access_path_truncated` のような、専用の種類は足さない)。経路の `steps[].notes` に出る。
 - **要素の同一性、合成、署名には触れない**: `OutElem`、`Elem`、署名、`joinSummaries` は変えない。#332 で足した `Output.Widened` を読むだけ。畳んだ関数を呼ぶ関数の要約には、`Widened` を伝えない(段の注記は `Steps` と一緒に呼び出し元へ届く)。
-- **`confidence` は変えない**: 注記は段にだけ残し、finding の `uncertainties` には入れない(`no_uncertainty_on_path` の finding は、そのままである)。理由: ADR-117 の経緯と同じで、finding が多くの経路で畳まれた出力を通る実プロジェクトでは、この注記が `requires_review` を決めてしまい、区別が消えうる。出力が言う(ADR-118 の (iii))ことは、段の注記で満たす。入れる案は、手元の対象(go-curated、scale 合成、rivus 自身)では `confidence` の変わる finding は 0 件だった。
+- **`confidence` は変わる**: 注記は段に付き、その段を通る finding の `uncertainties` にも入る(`access_path_truncated` と同じ扱い。違いは、`access_path_truncated` が 1 つの finding に 10 件までで打ち切るのに対し、こちらは位置ごとに 1 件で、打ち切らないこと)。このため、`no_uncertainty_on_path` だった finding が `requires_review` になることがある。段に注記があるのに `no_uncertainty_on_path` のまま、という矛盾を避けるため。ADR-117 の失敗(ほぼ全部に付く)は、起こりにくい: memos の一時の測定で、174 件中 12 件(約 7%)。手元の対象(go-curated、rivus 自身、合成の `all`、`middleware -stages 18`、`widen`、`types`)では、finding の ID と `stats` は変わらず、`confidence` が変わるのは、畳んだ出力を通るだけの小さい例 1 件(他に不確実性がない finding)だった。
+- **要約の大きさ**: 1 回の呼び出しで、注記を 1 つだけ作り、その呼び出しの段が共有する。合成の `all` の、解析の終わりの生きているヒープと割り当ての数は、前後で 0.1% 以内(実行ごとのゆれの範囲)。
 - **精度**: もとからパラメータ全体だった要素(畳んでいない)にも、畳んだ出力の中なら付く(過大に付く)。畳んだ要素だけに付けるには、`OutElem` にマークを持たせる必要がある(要素の同一性に近い所に触れるので、していない)。
 - **順序に依らないこと(ii)**: 付く段と付かない段の集合が、宣言の順、ファイルの順、`-workers` に依らないことを、テスト(`TestWidenedOutputStepNoteOrder`)で確かめた。

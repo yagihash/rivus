@@ -41,6 +41,6 @@
 
 ## 済んだこと(2026-11-23、段の単位の注記)
 
-段の単位の注記を入れた(ADR-118 の追記)。要約を適用する段で、畳んだ出力の、パラメータ全体になった要素から作る段に、`depth_limit` の注記(detail は `out_widened:`)が付く。`confidence` と finding の `uncertainties` は変えない。順序(宣言、ファイル、`-workers`)を入れ替えても、付く段の集合は同じ(テストあり)。
+段の単位の注記を入れた(ADR-118 の追記)。要約を適用する段で、畳んだ出力の、パラメータ全体になった要素から作る段に、`depth_limit` の注記(detail は `out_widened:`)が付く。その段を通る finding の `uncertainties` にも入り、`confidence` は `requires_review` になる(`no_uncertainty_on_path` だった finding が変わることがある。ID と `stats` は変わらない)。順序(宣言、ファイル、`-workers`)を入れ替えても、付く段の集合は同じ(テストあり)。
 
 残り: (1) 畳んだ要素だけに付ける(今は、もとから全体だった要素にも、畳んだ出力の中なら付く)。`OutElem` にマークが要る。(2) セルの widening(96 要素)と `guard_limit` の、順序に依らないことの確認(すること 2 のうち、出力の widening 以外)。(3) `out_limit` の記録の、`candidates` の一覧が、順序に依らないかの確認。

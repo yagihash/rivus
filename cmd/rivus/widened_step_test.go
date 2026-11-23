@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/yagihash/rivus/internal/report"
+	"github.com/yagihash/rivus/internal/taint"
 )
 
 // 段の単位の注記(#186、ADR-118 の追記): 畳まれた出力(24 要素を超えて、パラメータの部分を全体にまとめた出力)の、
@@ -115,14 +116,18 @@ func TestWidenedOutputStepNote(t *testing.T) {
 		t.Errorf("a widened output, but no hop has the out_widened note:\n%s", strings.Join(lines, "\n"))
 	}
 	for _, f := range rep.Findings {
-		// the note is on the hop only: the finding's uncertainties and confidence are what they were without it
+		// the note is on a hop of the path, so it is in the uncertainties of the finding too, and the finding is to be reviewed
+		found := false
 		for _, u := range f.Uncertainties {
-			if strings.HasPrefix(u.Detail, "out_widened:") {
-				t.Errorf("finding %s: the note is in the uncertainties of the finding", f.ID)
+			if u.Kind == "depth_limit" && strings.HasPrefix(u.Detail, "out_widened:") {
+				found = true
 			}
 		}
-		if len(f.Uncertainties) == 0 && f.Confidence != "no_uncertainty_on_path" {
-			t.Errorf("finding %s: no uncertainty, but confidence %q", f.ID, f.Confidence)
+		if !found {
+			t.Errorf("finding %s: the out_widened note is not in its uncertainties", f.ID)
+		}
+		if f.Confidence != "requires_review" {
+			t.Errorf("finding %s: confidence %q", f.ID, f.Confidence)
 		}
 	}
 
@@ -163,5 +168,54 @@ func TestWidenedOutputStepNoteOrder(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// A finding that had no uncertainty before is to be reviewed once its path goes through the widened output: the hop has
+// the note, the finding has it in its uncertainties, and confidence is requires_review (the same as access_path_truncated).
+// With fewer fields (nothing widened) it is no_uncertainty_on_path.
+func TestWidenedOutputConfidence(t *testing.T) {
+	run := func(n int) *taint.Finding {
+		dir := t.TempDir()
+		var fields strings.Builder
+		var cat []string
+		for i := 0; i < n; i++ {
+			fmt.Fprintf(&fields, "\tF%d string\n", i)
+			cat = append(cat, fmt.Sprintf("p.F%d", i))
+		}
+		src := "package main\n\nimport \"os\"\n\ntype T struct {\n" + fields.String() + "}\n\nfunc Src() string { return \"x\" }\n\n" +
+			"func Cat(p *T) string { return " + strings.Join(cat, " + ") + " }\n\nfunc Wrap(p *T) string { return Cat(p) }\n\n" +
+			"func main() {\n\tt := &T{F0: Src()}\n\tos.Open(Wrap(t))\n}\n"
+		for name, body := range map[string]string{
+			"main.go":    src,
+			"go.mod":     "module w\n\ngo 1.22\n",
+			"rules.yaml": "ruleset: w@1\nsources:\n  - symbol: w.Src\n    labels: [user_input]\nsinks:\n  - symbol: os.Open\n    args: [0]\n    category: path_traversal\n",
+		} {
+			if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		_, rep := stepNotes(t, analyzeModule(t, dir, "1"))
+		if len(rep.Findings) != 1 {
+			t.Fatalf("%d fields: %d findings", n, len(rep.Findings))
+		}
+		return rep.Findings[0]
+	}
+	small, big := run(10), run(30)
+	if small.Confidence != "no_uncertainty_on_path" || len(small.Uncertainties) != 0 {
+		t.Errorf("10 fields: confidence %q, %d uncertainties; want no_uncertainty_on_path, none", small.Confidence, len(small.Uncertainties))
+	}
+	if big.Confidence != "requires_review" {
+		t.Errorf("30 fields: confidence %q, want requires_review", big.Confidence)
+	}
+	found := false
+	for _, u := range big.Uncertainties {
+		found = found || (u.Kind == "depth_limit" && strings.HasPrefix(u.Detail, "out_widened:"))
+	}
+	if !found {
+		t.Errorf("30 fields: no out_widened in the uncertainties: %+v", big.Uncertainties)
+	}
+	if small.ID != big.ID {
+		t.Logf("ids: %s %s", small.ID, big.ID)
 	}
 }

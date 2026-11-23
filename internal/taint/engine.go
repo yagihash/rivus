@@ -1575,10 +1575,6 @@ func (e *Engine) buildFinding(rf *rawFinding) *Finding {
 		allFuncs = append(allFuncs, st.Func)
 		for _, n := range st.Notes {
 			e.fill(n)
-			if isOutWidenedNote(n) {
-				// told on the hop only: the finding's confidence is not changed by it (ADR-118)
-				continue
-			}
 			k := n.Kind + "|" + n.Symbol + "|" + posKey(n.pos)
 			if n.Kind == KindAccessPathTruncated {
 				// each cut is told on its own (where and how deep), up to a cap
