@@ -3,8 +3,12 @@ package gossa
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
+
+	"golang.org/x/tools/go/ssa"
+	"golang.org/x/tools/go/ssa/ssautil"
 )
 
 const testdata = "../../../testdata/go"
@@ -127,6 +131,109 @@ func TestLoadOutsideModuleWithDeps(t *testing.T) {
 		}
 		if own < 3 {
 			t.Errorf("deps=%v: %d own functions with a body, want at least 3 (load errors: %v)", deps, own, p.LoadErrors)
+		}
+	}
+}
+
+// closedFuncSrc uses generic functions of the standard library that have
+// anonymous functions inside (their instances make the body of the generic
+// function only when Origin is asked), and types whose methods those bodies use.
+const closedFuncSrc = `package main
+
+import (
+	"sync"
+	"sync/atomic"
+)
+
+type T struct{ n int }
+
+var p atomic.Pointer[T]
+var pool sync.Pool
+
+func main() {
+	f := sync.OnceValues(func() (string, error) { return "x", nil })
+	g := sync.OnceValue(func() int { return 1 })
+	a, _ := f()
+	_ = a
+	_ = g()
+	pool.Put(&T{})
+	p.Store(&T{})
+	var mu sync.RWMutex
+	mu.RLock()
+	mu.RUnlock()
+}
+`
+
+func loadClosedFuncSrc(t *testing.T) *Program {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(closedFuncSrc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p, err := Load(dir, []string{"main.go"}, Options{Deps: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func bodiedFuncs(prog *ssa.Program) map[*ssa.Function]bool {
+	m := map[*ssa.Function]bool{}
+	for fn := range ssautil.AllFunctions(prog) {
+		if len(fn.Blocks) > 0 {
+			m[fn] = true
+		}
+	}
+	return m
+}
+
+// The set of functions that have a body is closed: asking Origin of each
+// function (which makes the body of a generic function when it is asked)
+// does not add one. If it did, the set that Load gives would depend on the
+// order the loop sees the functions in (ADR-118, (ii)).
+func TestLoadFunctionSetIsClosed(t *testing.T) {
+	p := loadClosedFuncSrc(t)
+	before := bodiedFuncs(p.SSA)
+	for fn := range ssautil.AllFunctions(p.SSA) {
+		fn.Origin()
+	}
+	after := bodiedFuncs(p.SSA)
+	if len(after) != len(before) {
+		var added []string
+		for fn := range after {
+			if !before[fn] {
+				added = append(added, FuncID(fn))
+			}
+		}
+		sort.Strings(added)
+		if len(added) > 5 {
+			added = added[:5]
+		}
+		t.Errorf("functions with a body: %d before Origin, %d after (for example %v)", len(before), len(after), added)
+	}
+}
+
+// The same input loaded three times in one process gives the same functions.
+func TestLoadFunctionSetIsStable(t *testing.T) {
+	var first []string
+	for i := 0; i < 3; i++ {
+		p := loadClosedFuncSrc(t)
+		ids := make([]string, 0, len(p.Funcs))
+		for _, fn := range p.Funcs {
+			ids = append(ids, string(FuncID(fn)))
+		}
+		sort.Strings(ids)
+		if i == 0 {
+			first = ids
+			continue
+		}
+		if len(ids) != len(first) {
+			t.Fatalf("load %d: %d functions, load 0: %d", i, len(ids), len(first))
+		}
+		for j := range ids {
+			if ids[j] != first[j] {
+				t.Fatalf("load %d: function %d is %s, in load 0 %s", i, j, ids[j], first[j])
+			}
 		}
 	}
 }
