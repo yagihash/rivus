@@ -1,5 +1,12 @@
 # 123: graph callers / callees / dispatchers の答えが、読まなかった言語を示さない
 
+- 状態: **open**
+- 種類: サイレントな見逃し
+- 言語: 全(graph)
+- ROADMAP の節: 0
+- 守るもの: -
+- 題: graph callers / callees / dispatchers の答えが、読まなかった言語を示さない
+
 `rivus graph path` の「経路なし」は、index に `skipped_languages`(読まなかった言語。Rust を断った、など)があると `exhaustive: false` で、理由が `not_exhaustive_because.skipped_languages` に出る。
 
 `callers` / `callees` / `dispatchers` の答えには、「これで全部」を示すフィールド(`exhaustive` や `complete`)がそもそも無く、index が読まなかった言語を持つことも、答えに出ない。読まなかった言語の呼び出し元は、結果に出ないのに、答えは全部に見える。

@@ -3,6 +3,9 @@
 - 状態: **closed**
 - 種類: サイレントな見逃し(重さ: 高)
 - 言語: 全
+- ROADMAP の節: 0
+- 守るもの: `cmd/rivus/dart_tests_default_test.go`(`TestSitesReadsTheLanguagesOfTheDirectory`)
+- 題: `rivus sites` が Go だけを読む: Dart と Rust のディレクトリで、エラーなしの空の結果になる
 - 見つけた経緯: 利用ガイド(docs/AGENT-GUIDE.md)を書くときに、help とコードを読んで見つかった食い違い。v0.0.4 には入れない。
 
 `rivus sites` には `-lang` がなく、Go のローダだけで読む。Dart や Rust だけのディレクトリを指すと、エラーにならず `"sites": []`、終了コード 0 で終わる。利用者は「ルールが足りない」と読み違える(読まなかった言語の報告もない)。

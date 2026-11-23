@@ -4,7 +4,8 @@
 - 種類: サイレントな見逃し(直した)
 - 言語: Dart
 - ROADMAP の節: 1
-- 守るもの: `cmd/rivus/dart_depcontext_test.go`(フィクスチャは `extractor/dart/test/monorepo`、`extractor/dart/test/versions`)
+- 守るもの: `cmd/rivus/dart_depcontext_test.go`
+- 補足(守るもの): `cmd/rivus/dart_depcontext_test.go`(フィクスチャは `extractor/dart/test/monorepo`、`extractor/dart/test/versions`)
 
 ## 今の状態(2026-11-22)
 

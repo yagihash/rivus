@@ -110,7 +110,7 @@ arguments), do not cut it and do not write it as a plain flow: write it with a r
 
 The flow is kept. A finding whose path goes through it gets one uncertainty of kind `model_approximation`
 (`attributable_to: rivus`, `detail` is the reason), so its confidence is never `no_uncertainty_on_path`
-([ADR-067](DECISIONS.md)).
+([ADR-067](adr/067-model-approximate-flag.md)).
 
 ## 3. A function that calls a function it is given: `calls`
 
@@ -420,6 +420,25 @@ verified_versions:
 - A record changes no row and no result. **For Go, the analysis compares it with the versions that the program uses** (`go.mod`, as `go list` says): a module that has a record, used at a version outside every range of its records, is one entry of `summary.unverified_versions` (`package`, `used`, `verified[]`, `source`), sorted by package, also when there is no finding. The rows are applied all the same. A module with no record is not listed (most built-in files have none, and a note on every run would say nothing); neither is one that a directory replaces (no version). A pre-release or `+incompatible` suffix of the used version is not read. **Dart** is compared the same way, with `pubspec.lock` in `-C` (the hosted packages; a path or git dependency has no version and is not listed; `source` is `pubspec.lock`; a pre-release is read by its numbers; a monorepo or workspace whose lock file is not in `-C` is not supported). **Rust** the same, with `Cargo.lock` in `-C` (crates of a registry; a path or git crate is not listed; `-` and `_` in a crate name are the same; a crate that the lock has at several versions is one entry when any of them is outside the ranges, `used` is the first one outside and `all_used` lists them; `source` is `Cargo.lock`; a lock file in a workspace root above `-C` is not read). A record is compared with the dependencies of its own language only: the built-in files `go-*`, `dart-*` and `rust-*` (or a rule set named `rivus/<language>/...`) say it, so a Dart record of `http` is not compared with the crate `http`. A rule file with no such name (your own) is compared with the dependencies of every language, so name a package that exists in one language only, or use a name that the others do not use.
 - The file is refused when `package` is empty or a pattern (`/...`), `versions` is empty or not a version or a comparator, `checked` is missing or not a day, `checked_with` is not one version or is outside `versions`, a key is unknown, or a package is recorded twice in the file. The same package in two files is kept as two records. It is not checked that a row names the package.
 - `rivus models versions [-rules FILE] [-no-builtin-rules]` lists the records (JSON: `package`, `versions`, `checked_with`, `checked`, `source`).
+
+## 4c-1. Candidates that were looked at and not adopted: `rejected:`
+
+A model file records the candidates that were looked at and left out, in the same file as the rows ([DESIGN-package-models.md](DESIGN-package-models.md), 6.11):
+
+```yaml
+rejected:
+  - symbol: github.com/jmoiron/sqlx.LoadFile   # as in the rows
+    kind: sink                                  # sink | source | sanitizer | calls
+    position: arg1                              # optional: the place that was looked at (arg0, recv, result, field, arg1.Field)
+    why: "the argument is the path of a file, not a query"
+```
+
+- A record, nothing more: the analysis does not read it, and it changes no row. It replaces the comment "not modelled, on purpose" at the top of a file, as data.
+- The file is refused when `symbol`, `kind` or `why` is missing (or blank), `kind` is not one of the four, a key is unknown, or the same symbol, kind and position are written twice. `rivus models` and every other reader of a rule file take the key.
+- `make model PKG=<Go package> VERSION=<v>` (`bench/model-author`) lists the candidates of layer 1 of a package (the rule table is `bench/model-author/rules.go`) and matches each with a row or with an entry here. A candidate with neither is undecided: the command exits with 70 and writes the list in `.claude/work/model-author/` (a work file, not committed). An entry whose symbol is not in the package any more is a warning.
+- A package whose bodies are read (not the standard library, and not in `body_replaced_packages`) has no `calls` candidates: the analysis resolves the call of a function value or an interface, and a row of `calls:` is for a body that is not read. The methods of exported interfaces are candidates like the others.
+- What is checked is the majors that upstream still supports (decided by public facts; one line of the evidence at the top of the model file or in the pull request). Run the command once per major with `VERSION`; a row or an entry written with `/v*` is read for the major that is run. `verified_versions` keeps one record per major with the concrete module path (`x/v2`, `x/v3`): the loader refuses the same `package` twice.
+- An entry with no `position` covers every place of the candidate; with `position`, only that place.
 
 ## 4d. A source that is a parameter of a function that is given: `callback_param`
 

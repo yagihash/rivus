@@ -5,6 +5,7 @@
 - 言語: 全
 - ROADMAP の節: 1
 - 守るもの: zoo のテスト(`cmd/rivus/zoo_*_test.go`)
+- 題: zoo: recursion_approximation の判定
 
 ## 今の状態(2026-11-22 の見直し)
 

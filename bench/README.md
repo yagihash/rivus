@@ -13,7 +13,7 @@ A finding is matched with a labelled sink site by (file, line, category). The la
 reading the code (the targets have no answer key), and the judgement calls are in each entry's
 `note`: the truth file is a claim, and anyone can read and dispute it.
 
-Results are recorded in `docs/DECISIONS.md` (ADR-043).
+Results are recorded in `docs/adr/043-accuracy-benchmark-go-test-bench.md` (ADR-043).
 
 **Where things are.** This file has: the procedure for a change of the core and `compare.sh` (below), the targets and where to fetch them,
 the table of the directories ("Benchmarks that are in this repository"), the share of silent misses, and the scale profiles
@@ -138,7 +138,7 @@ kind (`source-only entries: N of M`). The two gogs truth files are all of that k
    positive that came, or a flow that was lost. **A single flow that was lost (a miss that the
    before-binary did not have) means: do not push.** Fix the change, or change what it does, and run
    again. A false positive that goes away is a gain only after it has been read as one.
-6. Put the numbers and the classification in the commit message or the ADR (`docs/DECISIONS.md`:
+6. Put the numbers and the classification in the commit message or the ADR (`docs/adr/`:
    ADR-048 has the form), including what was not run and why.
 
 ### How to make the copies
@@ -196,6 +196,7 @@ for each language (Go, Dart, Rust):
 | `gogs/`, `gin-vue-admin/`, `go-test-bench/`, `dart-pub/`, `parseable/`, `dart-corpus/` | the truth files and rules of the targets above (a directory has what the table says; the targets themselves are not here); `dart-corpus` is the regression of the Dart extractor on 54 packages | see the table of targets | |
 | `LEDGER.md`, `BACKTEST.md`, `parity/` | the ledger of versions, the backtest of the light benches against the regressions that only the heavy projects showed, and the parity tables | see each file | |
 | `dart-synth/`, `rust-synth/` | generators of a Dart package / a Rust crate (depth, SCCs, closures given to shared helpers, relays, closures in fields, captures); the plan is `synthplan/`; `go-synth/measure.py -lang dart` or `-lang rust` runs the extractor once and measures `rivus analyze -ir` | the same | S under a second, M and L seconds |
+| `model-author/` | a tool (Go; `make model PKG=<…> VERSION=<…>`): the steps of making the model of a Go package that a script can do (stage 1 of `docs/DESIGN-package-models.md` 6.11). It fetches the source (fetch only, nothing of it is run), lists the candidates of layer 1 by a table of rules about signatures (`rules.go`), matches each with a row or an entry of `rejected:` in the model file, and stops with exit code 70 when one is neither; `-recall` reports how many adopted sink and source rows the table finds; `-diff` runs `model-diff` and writes the material for the pull request; `-write-verified`, `-write-dead-allow` write the mechanical parts of the file | exit codes (0, 2 usage or a file the loader refuses, 10 fetch, 20 reading the package or the differential test, 50 the differential test failed, 70 undecided candidates; 30, 40, 60, 80 are kept for later stages), the list of undecided candidates, the count of layer 2 | seconds per package. By hand (not in CI) |
 | `model-diff/` | a tool (Go; `make model-diff PKG=<…>`): the model of one package against its body. It calls each function of the model's rows with a source in each position, one sink per function and place, and runs the same code with the bodies read (the rows of the package left out) and with the models; a `sinks` row is checked against its declaration (the source in one position at a time, and a control with constants). Go and Dart; Rust is not checked (the build of a crate needs the isolation) | MISS (the model lost a flow), EXTRA (the model is wider than the body; allowed by a `# model-diff: extra` note in the model file with a reason; a MISS that was checked against the body and is not a flow of data is recorded by a `# model-diff: miss-reviewed` note of one of three kinds, `type-only`, `non-payload`, `body-default`: the table is in `docs/MODEL-RUNBOOK.md` section 9), and what could not be checked (generics, callbacks, types it cannot build: listed as unverified) | seconds per package, about 1 GB with a Dart package. Weekly and by hand in CI, not in a pull request. How to use it: `docs/MODEL-RUNBOOK.md` section 9 |
 
 When the core of the engine (`internal/sg`, `internal/sites`, `internal/taint`) is touched: run
@@ -203,7 +204,7 @@ When the core of the engine (`internal/sg`, `internal/sites`, `internal/taint`) 
 `rust-curated` too), then the S and M of `go-synth`, `dart-synth` and `rust-synth` before and after with the
 same binary built from each state, and check that the result is identical (or that every changed
 finding is understood). The gate is the light tier of `bench/compare.sh` (about 10 minutes); a big real
-codebase is for the periodic and occasional runs of `bench/explore/README.md`, never a step of a change. See `go-synth/README.md` for how, and `docs/DECISIONS.md` (ADR-046) for why.
+codebase is for the periodic and occasional runs of `bench/explore/README.md`, never a step of a change. See `go-synth/README.md` for how, and `docs/adr/046-own-bench-curated-synth.md` (ADR-046) for why.
 
 Two more things are held by the three curated tests. Each `@miss` says whether the engine left a
 trace of the flow it lost: `@miss(silent)` (nothing in the functions of the source and the sink; 51 of the

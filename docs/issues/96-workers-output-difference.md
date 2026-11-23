@@ -1,10 +1,13 @@
 # #96 -workers 1 と 2 以上で、8 関数以上の SCC を含む入力の出力(代表の経路、stats)が違う(R-43)
 
 - 状態: **closed**(決まった形の差は直した。まれな失敗は再現せず)
-- 種類: 道具・ベンチ
+- 種類: 道具・ベンチ(直した)
 - 言語: 全
 - ROADMAP の節: 2(経路の欠け・揺れ)
-- 守るもの: `cmd/rivus/determinism_test.go` の `TestDeterministicLargeSCC`(`-workers` 1・2・16・既定の出力の完全一致。Skip はなし)、`sameEveryTime` の `-workers 1`(例外なし)
+- 守るもの: `cmd/rivus/determinism_test.go`(`TestDeterministicLargeSCC`)
+- 題: -workers 1 と 2 以上で、8 関数以上の SCC を含む入力の出力(代表の経路、stats)が違う(R-43。直した)
+- 補足(種類): 道具・ベンチ
+- 補足(守るもの): `cmd/rivus/determinism_test.go` の `TestDeterministicLargeSCC`(`-workers` 1・2・16・既定の出力の完全一致。Skip はなし)、`sameEveryTime` の `-workers 1`(例外なし)
 - GitHub: #96(移行前の番号は同じ。2026-11-21 に開いた。移行時の状態: OPEN)
 
 ## 今の状態(2026-11-22 の見直し)
