@@ -68,7 +68,7 @@
 1. **候補と生成(Go と Dart。`make model`)**: `make model PKG=<パッケージ> VERSION=<v> LANG=<go|dart>` が、公開 API の候補(第 1 層)を、モデルの行、`rejected:`、`deferred:` に照合する(9 節の最後。`MODELING.md` の 4c-1 節)。どれにもない候補があると、終了コード 70 で止まり、`.claude/work/model-author/` に一覧を書く。一覧の項目ごとに、行を足すか、理由(`why`)つきで `rejected:` に足すか、決められないものを `deferred:`(`ref` で課題のファイルを指す)に置く。同じ形の候補が多いときは、`adopt_rules:`(一括採用の決め。`MODELING.md` の 4c-2 節)を書き、`ARGS="-expand"`(Go だけ)で行に展開して `*.adopt.gen.yaml`(コミットする。`origin: generated`)に書く。`ARGS="-recall"` は第 1 層の規則の再現率、`-breakdown` は候補の内訳を出す。**型から flows の行を作る段(段階 3)は、まだない**: flows と `calls:` の行は手で書く(8 節)。手で行う場合(Rust は `make model` がない): `rivus models coverage` で未モデルの呼び出しを見て、手で書く。
 2. **差分テスト(Go と Dart)**: モデルの行を本体と照合する。MISS は 0。EXTRA は、意図した差だけ、手の部分のファイルの冒頭のコメントに、理由つきで書く(9 節)。`make model ... ARGS="-diff"`(全部の候補が決まったあとに走る)か、`make model-diff PKG=...`。Rust は、隔離が入るまで「未実施」と書く。
 3. **確認したバージョンを書く**: モデルのファイルの冒頭に `verified_versions`(形式と検証: [DESIGN-package-models.md](DESIGN-package-models.md) 6.7)。パッケージ(Go: モジュールのパス、Dart: パッケージ名、Rust: クレート名)、確認したバージョンの範囲、実際に確認したバージョン(`checked_with`)、日付(`checked`)。**Go と Dart は、差分テストが通ったとき `ARGS="-diff -write-verified"` が書く**。Rust と、手で書いた行だけのファイルは、手で書く。生成物があれば、先頭の入力のバージョンと同じにする。解析した対象のバージョンが範囲の外のときは、`summary.unverified_versions` に注記が出る(Go は `go.mod`、Dart は `pubspec.lock`、Rust は `Cargo.lock` から。6.10)。
-4. **追加**: `<lang>-<package>.yaml`(手の部分)に、sink、source、sanitizer、`calls:`(利用者のコードを呼び返す API: コールバック、利用者が実装するインターフェース。パッケージの行には各行に `checked_by: cell` を書く。実行の確認の道具は標準ライブラリだけを呼ぶ。代わりに、その API を呼び、`@sink` か `@miss` のマークがあるセルが要る。[MODELING.md](MODELING.md) 3 節、ADR-107)を足す。パッケージの行を足したら、**その行を空にして(または消して)セルが落ちること**を確認する。セルが行を使っていることの確認で、実行の確認より弱いのを補う)。`origin: human` か `llm`。zoo に、肯定と否定のセルを足す(Go は、骨組みとセルのテンプレートを `-gen-skeleton` で作れる。下)。`rivus models coverage` で、未モデルの呼び出しを確認する。zoo のセルが当たらないパッケージの行は、`ARGS="-write-dead-allow"` が、モデルのファイルの `.dead-allow` に、理由(`dependency`)つきで足す(4 節の範囲で)。
+4. **追加**: `<lang>-<package>.yaml`(手の部分)に、sink、source、sanitizer、`calls:`(利用者のコードを呼び返す API: コールバック、利用者が実装するインターフェース。パッケージの行には各行に `checked_by: cell` を書く。実行の確認の道具は標準ライブラリだけを呼ぶ。代わりに、その API を呼び、`@sink` か `@miss` のマークがあるセルが要る。[MODELING.md](MODELING.md) 3 節、ADR-107)を足す。パッケージの行を足したら、**その行を空にして(または消して)セルが落ちること**を確認する。セルが行を使っていることの確認で、実行の確認より弱いのを補う)。**`origin` は、組み込みのファイルの行(propagator、source、sink)には書かない**: 書かなければ、組み込みの行は `builtin` になる(`internal/model/model.go` の `fillOrigins`)。`origin` は「誰がその行を正しいと決めたか」で、`--deterministic-only` が `origin: llm` の行を無視すること、finding の `models` に `origin` が載ること、`llm` の行が経路にあれば `llm_influenced` が立つこと(`internal/taint/engine.go`)にだけ使う。**書くのは、LLM が決めた行だけ**: `origin: llm` に、`decided_at`、`rationale`、`model_version` を付ける(足りないと、ファイルが読めない)。組み込みのファイルに `origin: human` を書くことはできるが、書かなくてよい。zoo に、肯定と否定のセルを足す(Go は、骨組みとセルのテンプレートを `-gen-skeleton` で作れる。下)。`rivus models coverage` で、未モデルの呼び出しを確認する。zoo のセルが当たらないパッケージの行は、`ARGS="-write-dead-allow"` が、モデルのファイルの `.dead-allow` に、理由(`dependency`)つきで足す(4 節の範囲で)。
 5. **宣言(`body_replaced_packages`)**: パッケージの本体を読まない宣言は、書式と解析の側は**実装済み**(ADR-100、105。Go、Dart、Rust の段階 2 と 4)だが、**組み込みのモデルには、まだ 1 つも書いていない**。**この手順書は、新しいモデルに宣言を求めない。宣言なしで PR を出す。** 宣言は、次の条件がすべて成り立ったパッケージに、あとから、別の作業として足す([DESIGN-package-models.md](DESIGN-package-models.md) 2 節 5): (i) 差分テストの MISS が 0(EXTRA は意図した差だけ)、(ii) `calls:` の行が、利用者のコードを呼び返す形をすべて表している(または、ないと確認した)、(iii) 照合できなかった行(`unverified`)が少なく、公開の API の範囲が揃っている、(iv) ほかのパッケージから呼ばれる扱いが決まっている。**最初の宣言は、別に計画している**。モデルの PR のチェックリストには、「宣言は、上の条件が揃うまで書かない」を入れる(5 節)。
 
 **source の選び方**: サービスのクライアントは、「その値を誰が書いたか」で選ぶ([ADR-108](adr/108-service-client-source-criterion.md))。迷う値は入れず、モデルのファイルのコメントに、入れなかった理由を書く。
@@ -90,7 +90,24 @@ sink の行は、パッケージの `rules.yaml` の `sinks:` に、骨組みの
 
 **Rust のモデルの標準の確認: 本物のクレートでの記号の綴り(macOS のサンドボックスの下だけ)**: 骨組みは本物と綴りが違いうる(定義の経路と公開の経路、別のクレートの型の再エクスポート)ので、行を書いたら、本物のクレートで extractor が書く名前と照合する。**コマンド**: 先に、このリポジトリの extractor を別の場所にビルドする(`cd extractor/rust && CARGO_TARGET_DIR=<場所> cargo build`。共有の extractor と `rivus setup rust` は使わない)。そして `go run ./bench/model-diff -lang rust -pkg <crate> [-version <v>] [-features a,b] [-no-default-features] -rust-extractor <場所>/debug/rivus-rust`(`-version` の既定は、モデルの `checked_with`。`-model <ファイル>` で行のファイルを絞れる。`-out` に一時のディレクトリ)。クレートは、版を固定して取得だけし(`docs/MODEL-QUEUE.md` にあるクレートだけ)、行ごとのプローブを extractor に読ませて、行の 1 つずつを found、spelled-differently(extractor は別の綴りを書く)、resolves(コンパイラは経路を知るが、プローブでは名指しできない)、not-found に分ける。終了コード: 0 全部 found、1 spelled-differently か not-found がある、2 失敗、3 実行しなかった(macOS でない、extractor か cargo がない)、4 resolves だけがある(その行は、手で確認する)。`field` の行は、まだ確認しない。**手で確認するときの代わり(この道具が使えないとき)**: 一時の crate で本物のクレートを `=<版>` で使い、モデルの各行を 1 回ずつ通る関数を書き、`cargo generate-lockfile` のあと `rivus debug extract -lang rust -C <dir>`(サンドボックスの下。`-unsafe-host-exec` は使わない)の IR の `callee.symbol` と型を行と照合する。クラウドの実行には隔離がないので、**Rust のモデルは、当面ローカルで作る**。実例と、骨組みと本物の違い(定義の `id` は、別のクレートの型だと本物は `actix_http::...`、`http::...` になる。呼び出しの `symbol` は、公開の経路で同じ): PR #204(actix-web)。
 
-テスト: `go test ./internal/model/... ./cmd/rivus/ -run 'Builtin|Zoo'`、`regomark check --no-judge`(0)。Dart のセルは、Dart のテスト(`dart analyze` を含む)も通す。
+テスト: `go test ./internal/model/... ./cmd/rivus/ -run 'Builtin|Zoo'`、`regomark check --no-judge`(0)。Dart のセルは、Dart のテスト(`dart analyze` を含む)も通す。手元で実行する最小の組は、次の節。
+
+### 実行するテスト(最小の組。全部のテストは CI に任せる)
+
+**`go test ./cmd/rivus`(全部)は、手元で実行しない。** 全部で 10 分を超える(`TestDogfood` などの重いもの、シャードに分けて CI が実行する)。モデルの YAML、zoo のセル、`.dead-allow`、`@ref` の課題のファイルを足す PR が、手元で通すのは、次の組だけ(`-short` は、PR の CI と同じ)。秒数は、**2026-11-23 の測定**(macOS、同時の重い処理なし)で、測り直していない。CI のランナーでは、これより遅いことがある。
+
+| 確認すること | コマンド | 時間(2026-11-23 の測定) |
+|---|---|---|
+| モデルの YAML の読み込み、行の整合(`calls:`、標準ライブラリの記号の存在) | `go test -count=1 ./internal/model/...` | 約 2 秒 |
+| 行が zoo の一致で使われているか(`.dead-allow` の確認を含む)、マークのファイルと元の一致、承認の行の検査、課題のファイルの形、`models coverage` | `go test -short -count=1 -run 'TestBuiltinRowsAreHitByTheZoo\|TestZooMarksLock\|TestZooLoosenedCheck\|TestIssuesFiles\|TestModels' ./cmd/rivus` | 約 13 秒(`TestZooLoosenedCheck` が 9 秒) |
+| Dart のセル(真偽の確認、セルの解析、生成物) | `RIVUS_DART=dart go test -short -count=1 -run 'TestZooTruthDart\|TestZooDart' ./cmd/rivus`(先に `make zoo-dart-gen`) | 約 22 秒 |
+| Go のセル | `go test -short -count=1 -run 'TestZooTruthGo\|TestZooGo\|TestZooPureGo' ./cmd/rivus` | 約 5 秒 |
+| 差分テスト(行が変わったパッケージ) | `go run ./bench/model-diff -changed origin/main` が出す `<lang> <pkg>` ごとに `go run ./bench/model-diff -lang <lang> -pkg <pkg>`(Dart は `RIVUS_DART=dart`) | Go の標準ライブラリで 1〜2 秒、`package:http` で約 30 秒 |
+| 言い回し | `regomark check --no-judge`(0) | 数秒 |
+| マークのゲート | `git fetch origin` のあと `scripts/zoo-loosened-check.sh origin/main HEAD`(`make zoo-loosened BASE=origin/main HEAD=HEAD` でも同じ) | 約 7 秒 |
+
+- **重い実行(数 GB の解析。`bench/` の測定の道具)は、`bench/heavylock.py` のロックの下で 1 本ずつ**(同時に 2 つ走らせない)。道具は自分でロックを取る。シェルのコマンドは `python3 bench/heavylock.py -- <command...>`(`bench/README.md` の「One lock for the heavy runs」)。上の組は、重くないので、ロックは要らない。
+- 同じ組を、CI も実行する(全部のテストの中で)。手元で通っても、CI が見つける問題(別のテストの `-short` でない側、重いテスト)がある。**push のあと、CI の結果を読んで修正する**(5 節)。
 
 ## 3. 既知の見逃しと誤検出は、セルと課題のファイルで残す
 
@@ -167,7 +184,7 @@ zoo のゲート(`scripts/zoo-loosened-check.sh`、#167): 新しいセル(`bench
 - コールバックを取る関数(`calls:` の行は、手で書く)。
 - ジェネリクスの関数(差分テストのコードを機械的に作れない。「未検証」と書く)。
 - 差分テストで照合できなかった生成の行(複雑な型の引数など)は、行に `unverified: true` を付けたまま残す(消さない。PR の本文の「差分テストの結果」に、照合済みの行の割合を書く。設計 4.3a の e)。
-- 生成した行の `origin` は `generated`(生成器のバージョンつき)。手で書いた行は `human` か `llm`(設計 4.3a の f)。
+- 生成した行の `origin` は `generated`(生成器のバージョンつき)。手で書いた行は、`origin` を書かない(LLM が決めた行だけ `llm`。2 節の 4)。設計 4.3a の f。
 
 
 ## 9. 差分テスト(`bench/model-diff`。実装済み。2 節の 2 の道具)
