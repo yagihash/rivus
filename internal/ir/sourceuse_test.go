@@ -20,6 +20,7 @@ import (
 // would keep working with the functions in memory, and break when they are not.
 var makesProgram = map[string]bool{
 	"cmd/rivus/lang.go":                     true, // joins the programs of the languages
+	"cmd/rivus/bodyreplaced.go":             true, // drops the functions that the rules stand for
 	"cmd/rivus/extract.go":                  true, // rivus debug extract: writes what the extractor made
 	"internal/frontend/goir/goir.go":        true, // makes the program from the Go packages
 	"internal/frontend/goir/streamtexts.go": true, // writes the texts of the functions into the program
