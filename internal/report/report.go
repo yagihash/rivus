@@ -151,6 +151,16 @@ type Summary struct {
 	MemoryLimitBytes  int64  `json:"memory_limit_bytes,omitempty"`
 	MemoryLimitSource string `json:"memory_limit_source,omitempty"`
 	MemoryLimitNote   string `json:"memory_limit_note,omitempty"`
+	// MemoryPeakBytes is the most memory the Go runtime counted in use during the run (total minus what it gave back: what the
+	// soft limit looks at), read every 250 ms and at the end. MemoryLimitExceeded is whether it was above the limit at any time
+	// (peak > limit); absent when there was no limit. true: the limit was lower than what the analysis holds live, it was not
+	// kept, the collector ran on and the run took longer; raise it (-max-memory) and run again. The result is complete all the
+	// same (not incomplete). GCCPUFraction is the share of the CPU time of the run that the collector used, in [0, 1], 3
+	// decimals; always there (also without a limit). A guide to how hard the limit worked (ADR-121). They tell about this
+	// run on this machine, not about the code.
+	MemoryPeakBytes     int64    `json:"memory_peak_bytes,omitempty"`
+	MemoryLimitExceeded *bool    `json:"memory_limit_exceeded,omitempty"`
+	GCCPUFraction       *float64 `json:"gc_cpu_fraction,omitempty"`
 	// TopSymbols lists the symbols behind the uncertainties rivus can
 	// reduce itself: library calls without a model, and interface methods
 	// without a known implementation. They show where a model helps most.

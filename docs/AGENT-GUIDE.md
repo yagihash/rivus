@@ -225,10 +225,11 @@ source から sink への経路を、全部探します。主な作業のコマ�
   - 依存のライブラリのモデルを書く前に、書く対象の一覧とテンプレートを得る(`-yaml`)。
   - 解析をやり直さずに、保存した index から一覧を得る(`-index`)。
 - **主なフラグ**: `-top <n>`、`-yaml`(埋めるためのルールファイルを出す)、`-index <file>`、ほかは `analyze` と同じ。
-- **読む場所**: `symbols[]` の `symbol`、`kind`、`calls`(呼び出しの数)、`functions`、**`findings`(その呼び出しを通る finding の数。並びの基準)**、`stub`。`no_symbol` は、シンボルがなく、モデルを書けない呼び出しの数です。
+- **読む場所**: `symbols[]` の `symbol`、`kind`、`calls`(呼び出しの数)、`functions`、**`findings`(その呼び出しを通る finding の数。並びの基準)**、`stub`。`no_symbol` は、シンボルがなく、モデルを書けない呼び出しの数です。最上位の `incomplete` と `incomplete_reasons` は、一覧のもとの解析が完全だったかです(`query`、`resolve` と同じ。完全なら `false` と `[]`)。`true` のときの一覧は、時間切れなどで止まるまでに分かった分だけで、「モデルが足りない所の全部」ではありません(`-yaml` の出力には出ません)。
 
   ```jsonc
   { "schema_version": "rivus.coverage/0",
+    "incomplete": false, "incomplete_reasons": [],
     "symbols": [ { "symbol": "(reflect.Value).Interface", "kind": "reflection", "attributable_to": "target",
                    "calls": 1, "functions": 1, "findings": 1, "stub": "  - symbol: ..." }, ... ],
     "no_symbol": 14, "total": 24 }
@@ -431,6 +432,9 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `summary.numeric_stops` | 数値や bool の型の値に汚染を載せなかった(既定。`-numeric-taint` で追う)回数を、原因で 2 つに分けたもの。`char_reads`: 文字列・byte 列・rune 列の 1 要素として読んだ値(Go の `s[i]`、`range s`、rune、Dart の `codeUnitAt`)で止まった数(`total`、`functions`、回数の多い 10 関数 `top[]` の `function`・`scope`(`project` か `dependency`)・`count`)。定数の添字の `s[0]` は数えない。**数える形は言語で違い、数えない形は 0 のままで、止まっていないとは限らない**: Go は byte・rune の型と、定数でない添字の文字列の添字。Dart は `codeUnitAt`、`codeUnits`・`runes` の繰り返しと添字(`runes.map((r) => ...)` のコールバックに渡る要素は数えない)。Rust は `bytes()`・`chars()`・`char_indices()` の繰り返し、`as_bytes()[i]`、`char` 型(それ以外の Rust の byte の取り出しは数えない。#185)。`other`: 長さ、添字、カウンタ、数値への変換、比較、モデルが作る数で止まった数(`total`、`functions`。仕様どおりなので、数だけ)。`total` は両方の合計。呼び出し先の要約を作る間と使う間の分も、止まった関数に数える。**常に出る**(0 のときも)。**`char_reads` の関数は、文字を 1 つずつ扱っている(字句解析、1 文字ずつの置換・符号化)ので、期待した sink が出ないときは、まずそこを見る**(流れがそこで切れている可能性がある。課題 #185)。**数は、場所の数ではなく、止めた回数で、関数の中の反復で、同じ場所が複数回入ることがある。大小の比較に使う目安であり、たとえば 407 は 407 か所ではない。時間切れが起きた実行では、数が実行ごとに変わりうる(打ち切られた訪問では、前の値との大きいほうを残す。時間切れが 0 の実行では変わらない)。**`project` の関数があると、標準エラーに `N functions stopped a flow at per-character reads: summary.numeric_stops` が 1 行出る。`numeric_stop` の注記(source ごとに 1 件)とは別の数 |
 | `summary.skipped_dirs`、`outside_configuration` | 読まなかったディレクトリ、ビルドの条件で外れたファイル |
 | `summary.memory_limit_bytes` / `memory_limit_source` / `memory_limit_note` | その実行のメモリの上限(上限なしのときは `memory_limit_bytes` がない)。出所は `flag`、`env`、`default`、`none`。`note` は、上限がない理由、または `-max-memory` が `GOMEMLIMIT` を上書きしたこと。結果には影響しない |
+| `summary.memory_limit_exceeded` | **メモリの上限が低すぎたか**。実行の間に、Go のランタイムが使っていたメモリ(`memory_peak_bytes`)が上限を超えたことがあれば `true`(`peak > limit`)。`true` は、上限が、解析の生きている量より低く、守れず、GC が回り続けて、時間が増えた可能性が高いことを言う。**`-max-memory` を上げて、再実行する**。やわらかい上限なので、`true` でも結果は完全(`incomplete` とは別)。上限がないとき(`memory_limit_source: none`)は、この項目がない |
+| `summary.memory_peak_bytes` | 実行の間に、ランタイムが使っていたメモリの最大(バイト)。Go の数え方(ランタイムが持つメモリの合計から、OS に返したヒープを引いた量。`SetMemoryLimit` が見る量と同じ)で、プロセスの RSS とは同じでない。250ms ごとと終了時に読む(速く増えて減る山は、見えないことがある)。`memory_limit_exceeded` を決めた根拠 |
+| `summary.gc_cpu_fraction` | 実行全体の CPU 時間のうち、GC が使った割合(0 以上 1 以下、小数 3 桁)。上限がなくても、いつも出る。上限が効いていたかの目安(上限が低すぎると大きくなる) |
 | `summary.load_dependent` | `true` なら、時計の上限(`-timeout`、`-func-timeout`)で止めた所があり、結果がマシンの負荷で変わる |
 | `summary.dependency_sites` | 依存の本体を読んだ実行で毎回出る。`searched` は常に `false`、`dependency_functions` は読んだ依存の関数の数(同じ module のパッケージと、`-allow-deps-under` の下の path 依存は、プロジェクトなので入らない。ADR-114)。**source と sink は、プロジェクトの関数の中だけで探す**(依存の本体は、流れを追うために読む)。ライブラリの中で危険な処理に届く形は、プロジェクトがその API を呼ぶ所に sink のモデルがないと検出されないので、「finding なし」は、その形がないことの証拠ではない。`-no-deps` と、依存の関数が 0 のときは出ない |
 | `summary.categories_excluded` | `-categories` / `-skip-categories` で出力から外した finding の、カテゴリごとの件数(`category`、`findings`。カテゴリの順)。外した分は `summary.findings` と `findings` に入っていない。**外した件数だけを出す**ので、「この件数の finding が、読んでいない所にある」という意味。何も外さなかったとき(フラグなしを含む)は出ない |

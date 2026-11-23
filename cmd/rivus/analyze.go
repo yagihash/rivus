@@ -190,6 +190,8 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 		return nil, err
 	}
 	o.memLimit = ml
+	mon := startMemMonitor()
+	defer mon.stop()
 	phase := o.phaseTimer()
 	rules, err := o.loadRules(extra...)
 	if err != nil {
@@ -353,6 +355,13 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	rep.Summary.MemoryLimitBytes = o.memLimit.Bytes
 	rep.Summary.MemoryLimitSource = o.memLimit.Source
 	rep.Summary.MemoryLimitNote = o.memLimit.Note
+	mr := mon.stop()
+	rep.Summary.MemoryPeakBytes = mr.PeakBytes
+	if o.memLimit.Bytes > 0 {
+		exceeded := mr.PeakBytes > o.memLimit.Bytes
+		rep.Summary.MemoryLimitExceeded = &exceeded
+	}
+	rep.Summary.GCCPUFraction = &mr.GCCPUFraction
 	rep.Summary.BodyReplacedPackages = replaced
 	rep.Summary.AccessPathDepth = &report.AccessPathDepth{Project: o.k, Dependency: o.depDepth()}
 	if fs := report.FunctionsSkippedOf(l.ir.FnSkipped); fs != nil {
