@@ -403,6 +403,8 @@ A sink has a `category`: what kind of harm the value does there. It is a free st
 | `open_redirect` | the address of a redirect |
 | `resource_name` | the name of a resource of a service that the user decides: a bucket, an object, a topic, a subscription, the kind of a datastore key. It can point to another resource of the project, or of another project. It is not a path of the file system (`dart-gcp.yaml`, `docs/GCP-MODELS.md` section 8) |
 
+`rivus analyze -categories a,b` reports the findings of these categories only, and `-skip-categories a,b` all but these (not both; a name that no loaded rule uses is an error that lists the valid names). The analysis is the same; the findings that were left out are counted in `summary.categories_excluded` (`category`, `findings`), which is absent when nothing was left out. A finding with several `categories` stays when one of them is reported, and is left out when all of them are. `index` and `graph` do not take the flags.
+
 A new category is made when no other one fits (not for a new library). It is added to this table, and to the decision of the product (`docs/GCP-MODELS.md`, judgement E, for `resource_name`). One symbol has one category (#140).
 
 ## 4c. Which versions the rows were checked against: `verified_versions`
