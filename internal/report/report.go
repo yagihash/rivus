@@ -178,6 +178,8 @@ type Summary struct {
 	CategoriesExcluded []CategoryExcluded `json:"categories_excluded,omitempty"`
 	// BodyReplacedIgnored is how many declarations -read-declared-bodies left out: the bodies were read. Absent when 0.
 	BodyReplacedIgnored int `json:"body_replaced_ignored,omitempty"`
+	// DepDirs are the directories that -dep-dir named: the Go packages under them were read as dependencies (ADR-114). Absent when none.
+	DepDirs []string `json:"dep_dirs,omitempty"`
 	// DependencySites says that the sources and the sinks were listed in the functions of the project only, not in those of the
 	// dependencies (ADR-099): a flow from the input of the user to a dangerous call inside a library is not found unless a
 	// sink model says so at the call of the library's API. Present when the run read the body of any dependency function.

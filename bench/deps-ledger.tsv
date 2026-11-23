@@ -1,0 +1,4 @@
+date	rivus	bench	lang	wall_s	max_rss_mb	functions	findings	uncertainties	finished	timeout_s
+2026-11-23	6bee840	go-s3	go	686.6	12449	5845	1	47	timeout	600
+2026-11-23	6bee840	gcp	go	70.7	4012	20810	27	143	yes	600
+2026-11-23	6bee840	dart-gcp	dart	44.4	1530	4593	19	738	yes	600

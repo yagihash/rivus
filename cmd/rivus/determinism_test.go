@@ -373,3 +373,10 @@ func TestPassStatsChangeNothing(t *testing.T) {
 		t.Fatalf("-pass-stats changed the report\n%s", firstDifference(a, b))
 	}
 }
+
+// A run that is narrowed to one command also lists the sites of the other packages of the module (ADR-114): the output is
+// the same every time, whatever -workers and GOMAXPROCS are.
+func TestNarrowedRunIsTheSameEveryTime(t *testing.T) {
+	t.Parallel()
+	sameEveryTime(t, writeProjectModule(t), 2, "./cmd/...")
+}

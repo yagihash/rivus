@@ -130,6 +130,7 @@ type annotOpts struct {
 	allowUnconverged bool
 	programWide      bool
 	ignoreSinkUnder  string   // a flow whose sink is in a file under this path is not held to the annotations: the sink call of a skeleton that records (zoo_pkg_test.go)
+	depDirs          []string // directories that are read as dependencies (-dep-dir): the skeletons of the zoo stand for libraries
 	extraRules       []string // more rules files (absolute), after the rules.yaml of the directory: a package of the zoo adds the rules of zoo/mark
 }
 
@@ -139,6 +140,9 @@ func checkAnnotated(t *testing.T, dir string, o annotOpts) curatedCounts {
 	args := []string{"analyze", "-sites", "-rules", "rules.yaml"}
 	for _, r := range o.extraRules {
 		args = append(args, "-rules", r)
+	}
+	for _, d := range o.depDirs {
+		args = append(args, "-dep-dir", d)
 	}
 	cmd := exec.Command(binary, append(args, o.pattern)...)
 	cmd.Dir = dir

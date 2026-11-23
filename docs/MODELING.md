@@ -350,7 +350,7 @@ A row with a sanitizer or a propagator makes `HasModel` true for the symbol (`in
 - The summary of the body is still computed: the function is in the IR and is analysed like any other. Nothing about the model makes the analysis skip it.
 - A row that is only a source or only a sink is not a model: `HasModel` is false and the body is used.
 - A function of the same package without a row is read as before. A package is not cut because one function of it has a model.
-- Sites (sources and sinks) are listed only in the functions of the project, never inside a dependency (ADR-099; `summary.dependency_sites` says so whenever a body of a dependency was read). A dangerous operation that the library does inside itself is found only when the call into the library has a sink row. So a model is needed for detection as well as for cost.
+- Sites (sources and sinks) are listed only in the functions of the project, never inside a dependency (ADR-099; the project is the packages of the same module and the path packages under `-allow-deps-under`, ADR-114; `summary.dependency_sites` says so whenever a body of a dependency was read). A dangerous operation that the library does inside itself is found only when the call into the library has a sink row. So a model is needed for detection as well as for cost.
 
 ### When a flow model may stand in for a body
 

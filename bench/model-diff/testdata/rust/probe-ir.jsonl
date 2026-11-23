@@ -1,0 +1,10 @@
+{"schema_version":"rivus.ir/0"}
+{"func":{"blocks":[{"id":0,"instrs":[{"op":"param"}]}],"dep":true,"id":"actix_web::request::HttpRequest::path","params":[{"name":"self","type":"&actix_web::request::HttpRequest"}]},"kind":"func"}
+{"func":{"blocks":[{"id":0,"instrs":[{"op":"param"}]}],"dep":true,"id":"actix_web::request::HttpRequest::uri","params":[{"name":"self","type":"&actix_web::request::HttpRequest"}]},"kind":"func"}
+{"func":{"blocks":[{"id":0,"instrs":[{"op":"param"}]}],"dep":true,"id":"actix_web::request::HttpRequest::query_string","params":[]},"kind":"func"}
+{"func":{"blocks":[{"id":0,"instrs":[{"func":"actix_web::HttpRequest::path","op":"make_closure"},{"args":[2],"callee":{"func":"std::hint::black_box::<fn>","kind":"static","symbol":"std::hint::black_box"},"op":"call"}]}],"id":"rivus_spelling_probe::p0","params":[]},"kind":"func"}
+{"func":{"blocks":[{"id":0,"instrs":[{"func":"actix_web::request::HttpRequest::uri","op":"make_closure"},{"args":[2],"callee":{"func":"std::hint::black_box::<fn>","kind":"static","symbol":"std::hint::black_box"},"op":"call"}]}],"id":"rivus_spelling_probe::p1","params":[]},"kind":"func"}
+{"func":{"blocks":[{"id":0,"instrs":[{"func":"actix_web::web::Query::<A>::into_inner","op":"make_closure"}]}],"id":"rivus_spelling_probe::p2","params":[]},"kind":"func"}
+{"func":{"blocks":[{"id":0,"instrs":[{"op":"param"}]}],"id":"rivus_spelling_probe::t3","params":[{"name":"_x","type":"&actix_web::HttpRequest"}]},"kind":"func"}
+{"func":{"blocks":[{"id":0,"instrs":[{"op":"param"}]}],"id":"rivus_spelling_probe::t4","params":[{"name":"_x","type":"actix_web::web::Query<A>"}]},"kind":"func"}
+{"func":{"blocks":[{"id":0,"instrs":[{"op":"param"}]}],"id":"rivus_spelling_probe::t5","params":[{"name":"_x","type":"actix_web::web::types::json::Json<A>"}]},"kind":"func"}

@@ -41,7 +41,7 @@ IR の呼び出し先の名前(`callee.symbol`、関数の名前)と、モデル
 | --- | --- | --- | --- |
 | パッケージ単位の宣言(`body_replaced_packages`。ADR-100) | ✓ | ✓ | ✓ |
 | extractor が宣言のある本体を読まない(段階 4。ADR-105) | ✓ | ✓ | ✓(`cargo check` はそのクレートも読むので、減るのは IR の大きさだけ。設計 7a 節) |
-| 差分テスト(`bench/model-diff`) | ✓ | ✓ | ✗(隔離が要る。`-lang rust` は止まる) |
+| 差分テスト(`bench/model-diff`) | ✓ | ✓ | 一部(綴りの確認のみ。ローカル。`-lang rust`。解析 2 回の比較は ✗) |
 | 行がない関数の一覧(`-coverage-gaps`) | 一部(標準ライブラリだけ) | ✗ | ✗ |
 | 行がない関数の一覧(`rivus models coverage`) | ✓ | ✓ | ✓ |
 | `kind: field` の source | ✓(`pkg.Type.Field`) | ✓(dart-github) | ✓(`::` 区切りの型名。#161、#230) |

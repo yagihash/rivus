@@ -168,3 +168,12 @@ The difference is against the reference engine `de627ce` on the same inputs: `+a
 | c9aa412 | only the seeds are not written back | head | 8 | +1 -1 | yes | 3 | 3396 | 40991 | 1017 | 7.0 | 1570 | unmodeled_library_call 76, dynamic_dispatch 28, depth_limit 23 |
 | de627ce | main (the engine the differences are against) | head | 8 | ref | yes | 2 | 2941 | 31176 | 936 | 10.1 | 1502 | unmodeled_library_call 92, dynamic_dispatch 32, depth_limit 26 |
 
+## Benches with heavy dependencies (`make bench-deps`)
+
+`rivus analyze` with no flag that changes the analysis, on a local run (bench/deps_bench.py; the columns are described there). One row per run; compare the same bench between dates. `finished`: yes / timeout / oom / error. `-` is not measured (max RSS of a run that we killed). The engine is the commit the binary was built from.
+
+| date | rivus | bench | lang | wall_s | max_rss_mb | functions | findings | uncertainties | finished | timeout_s |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 2026-11-23 | 6bee840 | go-s3 | go | 686.6 | 12449 | 5845 | 1 | 47 | timeout | 600 |
+| 2026-11-23 | 6bee840 | gcp | go | 70.7 | 4012 | 20810 | 27 | 143 | yes | 600 |
+| 2026-11-23 | 6bee840 | dart-gcp | dart | 44.4 | 1530 | 4593 | 19 | 738 | yes | 600 |

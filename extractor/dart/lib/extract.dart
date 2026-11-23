@@ -208,7 +208,10 @@ Future<void> extract(String root, StringSink sink,
           }
         }
       }
-      units.add(UnitInfo(prog, p.isWithin(root, path) ? p.relative(path, from: root) : path, r.unit, r.content, r.lineInfo, dep: true));
+      // ADR-114: a package of the project that lies outside -C (a path: dependency, a member of a workspace) is
+      // project code when its directory is under -allow-deps-under: its sites are listed.
+      final project = !p.isWithin(root, path) && _isAllowedProjectPath(path, allowDepsUnder);
+      units.add(UnitInfo(prog, p.isWithin(root, path) ? p.relative(path, from: root) : path, r.unit, r.content, r.lineInfo, dep: !project));
     }
   }
   for (final n in notRead.entries.toList()..sort((a, b) => a.key.compareTo(b.key))) {
@@ -276,6 +279,17 @@ int _declaredFunctions(LibraryElement lib) {
     n += e.methods.length + e.getters.length + e.setters.length;
   }
   return n;
+}
+
+/// Whether a file is under a directory that was given with --allow-deps-under, and is not in the pub cache, the SDK
+/// or Flutter (an allowed directory that holds the cache, such as the home directory, does not make the hosted
+/// packages the project's): the project's own packages outside -C (ADR-114).
+bool _isAllowedProjectPath(String path, List<String> allow) {
+  if (allow.isEmpty) return false;
+  final base = _trustedDependencyRoots(const []);
+  bool under(String r) => p.equals(r, path) || p.isWithin(r, path);
+  if (base.any(under)) return false;
+  return allow.map((d) => p.normalize(p.absolute(d))).any(under);
 }
 
 /// The directories that a dependency may be read from, besides the project itself: the pub cache, the
