@@ -70,7 +70,19 @@ type Summary struct {
 	// UnresolvedParams are the parameters that this function (or a function it passes the parameter to) holds a function in
 	// that it calls, with no candidate: which function it is, is not known. A caller that passes something there is told.
 	UnresolvedParams []int
-	Sig              string
+	// CharStopped are the parameters whose data stopped at a character read (s[i], range s: the IR attribute char_read) in
+	// this function or in one it passes the parameter to, with the function where it stopped (the smallest id, so that the
+	// order of the work does not matter). A caller that passes data of a source there is told (numeric_stop,
+	// char_read_in_callee). Internal, like LimitedParams: in signature(), not in the result or the index. Empty with
+	// -numeric-taint (nothing stops).
+	CharStopped []CharStop
+	Sig         string
+}
+
+// CharStop is one entry of Summary.CharStopped.
+type CharStop struct {
+	Param int
+	Func  string
 }
 
 // summarize turns the final state of the analysis into a summary.
@@ -176,6 +188,10 @@ func (s *state) summarize() *Summary {
 		sum.UnresolvedParams = append(sum.UnresolvedParams, p)
 	}
 	sort.Ints(sum.UnresolvedParams)
+	for p, f := range s.charStopped {
+		sum.CharStopped = append(sum.CharStopped, CharStop{p, f})
+	}
+	sort.Slice(sum.CharStopped, func(i, j int) bool { return sum.CharStopped[i].Param < sum.CharStopped[j].Param })
 	sum.Sig = sum.signature()
 	return sum
 }
@@ -265,6 +281,9 @@ func (sum *Summary) signature() string {
 	}
 	for _, i := range sum.UnresolvedParams {
 		parts = append(parts, "unresolved", strconv.Itoa(i))
+	}
+	for _, c := range sum.CharStopped {
+		parts = append(parts, "charstop", strconv.Itoa(c.Param), c.Func)
 	}
 	return fingerprint.Hash(parts...)
 }
@@ -409,6 +428,26 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 				s.unresolved = map[int]bool{}
 			}
 			s.unresolved[a.Param] = true
+		}
+	}
+	for _, cs := range sum.CharStopped {
+		if cs.Param >= len(argv) {
+			continue
+		}
+		// what is passed there is what the elements say, whatever the form of the value (the parameter itself, a field of it, a
+		// value made of it, a local that holds it): data of a source makes a note on this call, and the symbolic element of a
+		// parameter of this function passes the stop on to its callers (the smallest function id stays)
+		real := false
+		for _, x := range s.expandElem(ParamElem(cs.Param, ""), argv) {
+			switch x.E.Kind {
+			case Real:
+				real = true
+			case Param:
+				s.noteCharStopped(int(x.E.Param), cs.Func)
+			}
+		}
+		if real {
+			s.newNote(cc.in, KindNumericStop, charStopDetail+cs.Func+": the data passed as "+paramPhrase(fn, cs.Param)+" of "+s.eng.funcID(fn)+" is read one character at a time there and becomes a number: it is not followed past that (-numeric-taint follows it)", cs.Func)
 		}
 	}
 	for _, i := range sum.LimitedParams {
@@ -773,6 +812,18 @@ func joinSummaries(old, cur *Summary) *Summary {
 		}
 	}
 	sort.Ints(out.UnresolvedParams)
+	stopped := map[int]string{}
+	for _, sum := range []*Summary{old, cur} {
+		for _, c := range sum.CharStopped {
+			if f, ok := stopped[c.Param]; !ok || c.Func < f {
+				stopped[c.Param] = c.Func
+			}
+		}
+	}
+	for p, f := range stopped {
+		out.CharStopped = append(out.CharStopped, CharStop{p, f})
+	}
+	sort.Slice(out.CharStopped, func(i, j int) bool { return out.CharStopped[i].Param < out.CharStopped[j].Param })
 	out.Sig = out.signature()
 	return out
 }

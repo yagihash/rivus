@@ -409,7 +409,7 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `reflection` | リフレクションや DI で、実行時に決まる | 追えていない。コードを読む |
 | `concurrency` | チャネルやゴルーチンの境界を通った | 送る側と受ける側の対応を、コードで確認する |
 | `ffi_boundary` | cgo、`dart:ffi`、Rust の `extern` を通った | 境界の先は見ていない |
-| `numeric_stop` | 値が数値や真偽値になったので、追うのをやめた | 数値で起きる問題を見たいときは `-numeric-taint` |
+| `numeric_stop` | 値が数値や真偽値になったので、追うのをやめた。`detail` が `char_read_in_callee: <関数名>` のものは、別の種類: その呼び出しで渡した source のデータが、呼び出し先(依存を含む)の中の `<関数名>` で、1 文字ずつ読まれて数値になり、そこから先は追っていない(流れは運ばず、finding の ID と `confidence` は変わらない。この注記のない見逃しが、注記つきの見逃しになる)。汚染のない値を渡した呼び出しには出ない。呼び出し元と呼び出し先の組ごとに 1 件(場所は組の中で最小のもの)。呼び出し先が数値と bool しか外に出さない関数(名前の検査など)のときは、出ない。全体の `uncertainties` に出て、finding の段には付かない | 数値で起きる問題を見たいときは `-numeric-taint`(この注記も出なくなる)。期待した sink が出ないときは、`<関数名>` の文字の読み出しを見る |
 | `unsupported_construct` | extractor が表せなかった構文。その中の動作は解析に入っていない | その箇所のコードを読む |
 | `model_approximation` | モデルが「近似」と書いた流れを通った | モデルの `approximate` の理由(`detail`)を読んで、この場合に当てはまるかを判断する |
 | `field_imprecision` | sink が引数のフィールドを指定しているが、汚染がそのフィールドにあるとは言えない | 汚染された値が、そのフィールドに入るかをコードで確認する |
@@ -433,9 +433,9 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `summary.skipped_dirs`、`outside_configuration` | 読まなかったディレクトリ、ビルドの条件で外れたファイル |
 | `summary.memory_limit_bytes` / `memory_limit_source` / `memory_limit_note` | その実行のメモリの上限(上限なしのときは `memory_limit_bytes` がない)。出所は `flag`、`env`、`default`、`none`。`note` は、上限がない理由、または `-max-memory` が `GOMEMLIMIT` を上書きしたこと。結果には影響しない |
 | `summary.memory_limit_exceeded` | **メモリの上限が低すぎたか**。実行の間に、Go のランタイムが使っていたメモリ(`memory_peak_bytes`)が上限を **5% 以上超えた**ことがあれば `true`(`peak > limit × 1.05`。やわらかい上限が守れているときも、ピークは上限の近くに張りつくので、ちょうどを境目にしない)。`true` は、上限が、解析のライブヒープ(強制 GC のあとの量)より低く、守れず、GC が回り続けて、時間が増えた可能性が高いことを言う。**`-max-memory` を上げて、再実行する**。やわらかい上限なので、`true` でも結果は完全(`incomplete` とは別)。上限がないとき(`memory_limit_source: none`)は、この項目がない |
-| `summary.memory_peak_bytes` | 実行の間に、ランタイムが使っていたメモリの最大(バイト)。Go の数え方(ランタイムが持つメモリの合計から、OS に返したヒープを引いた量。`SetMemoryLimit` が見る量と同じ)で、プロセスの RSS とは同じでない。250ms ごとと終了時に読む(速く増えて減る山は、見えないことがある)。`memory_limit_exceeded` を決めた根拠 |
+| `summary.memory_peak_bytes` | 実行の間に、ランタイムが使っていたメモリの最大(バイト)。Go の数え方(ランタイムが持つメモリの合計から、OS に返したヒープを引いた量。`SetMemoryLimit` が見る量と同じ)で、プロセスの RSS とは同じでない。250ms ごとと終了時に読む(速く増えて減るピークは、見えないことがある)。`memory_limit_exceeded` を決めた根拠 |
 | `summary.gc_cpu_fraction` | 実行全体の CPU 時間のうち、GC が使った割合(0 以上 1 以下、小数 3 桁)。上限がなくても、いつも出る。上限が効いていたかの目安(上限が低すぎると大きくなる) |
-| `summary.live_heap_max_bytes` | 実行の間に、GC のマーク時点のライブヒープの最大(バイト。`/gc/heap/live:bytes`、直近の GC が目印を付けた量の最大)。GC がマークをしている間に確保された物も「ライブ」と数えるので、確保の速いフェーズ(要約のフェーズ)では、強制 GC のあとのライブヒープより大きくなりうる。上限の目安として見るときは上側の値で、読み込みのフェーズの山では強制 GC のあとのライブヒープに近い。**これが上限より低いことは、上限が守れることの必要条件ではない**(守れるかは `memory_limit_exceeded` と `gc_cpu_fraction` を見る)。`memory_peak_bytes` と違い、やわらかい上限があっても上限に張りつかない。上限がなくても、いつも出る。250ms ごとと終了時に読み、GC がまだ終わっていないとき(短い実行)は 0 で、項目がない |
+| `summary.live_heap_max_bytes` | 実行の間に、GC のマーク時点のライブヒープの最大(バイト。`/gc/heap/live:bytes`、直近の GC が目印を付けた量の最大)。GC がマークをしている間に確保された物も「ライブ」と数えるので、確保の速いフェーズ(要約のフェーズ)では、強制 GC のあとのライブヒープより大きくなりうる。上限の目安として見るときは上側の値で、読み込みのフェーズのピークでは強制 GC のあとのライブヒープに近い。**これが上限より低いことは、上限が守れることの必要条件ではない**(守れるかは `memory_limit_exceeded` と `gc_cpu_fraction` を見る)。`memory_peak_bytes` と違い、やわらかい上限があっても上限に張りつかない。上限がなくても、いつも出る。250ms ごとと終了時に読み、GC がまだ終わっていないとき(短い実行)は 0 で、項目がない |
 | `summary.load_dependent` | `true` なら、時計の上限(`-timeout`、`-func-timeout`)で止めた所があり、結果がマシンの負荷で変わる |
 | `summary.dependency_sites` | 依存の本体を読んだ実行で毎回出る。`searched` は常に `false`、`dependency_functions` は読んだ依存の関数の数(同じ module のパッケージと、`-allow-deps-under` の下の path 依存は、プロジェクトなので入らない。ADR-114)。**source と sink は、プロジェクトの関数の中だけで探す**(依存の本体は、流れを追うために読む)。ライブラリの中で危険な処理に届く形は、プロジェクトがその API を呼ぶ所に sink のモデルがないと検出されないので、「finding なし」は、その形がないことの証拠ではない。`-no-deps` と、依存の関数が 0 のときは出ない |
 | `summary.categories_excluded` | `-categories` / `-skip-categories` で出力から外した finding の、カテゴリごとの件数(`category`、`findings`。カテゴリの順)。外した分は `summary.findings` と `findings` に入っていない。**外した件数だけを出す**ので、「この件数の finding が、読んでいない所にある」という意味。何も外さなかったとき(フラグなしを含む)は出ない |
