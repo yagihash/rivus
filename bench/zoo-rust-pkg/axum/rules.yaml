@@ -1,4 +1,4 @@
 # Rules of the package axum of the Rust zoo. The sources of the types (param_type) and the sinks of Redirect are the rows of the
-# built-in model (internal/model/builtin/rust-web.yaml): nothing is repeated here, except that the zoo-mark rules are given by the
+# built-in model (internal/model/builtin/rust-axum.yaml): nothing is repeated here, except that the zoo-mark rules are given by the
 # test. The skeleton records the call of `Redirect::to` with zoo-mark, so that the run of a cell checks the row.
 ruleset: rivus/bench-zoo-rust-pkg-axum@1

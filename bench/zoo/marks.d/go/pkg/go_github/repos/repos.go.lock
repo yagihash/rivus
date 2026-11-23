@@ -1,0 +1,5 @@
+go	pkg/go_github/repos/repos.go	sink-none	@sink(none)	func fixed() { @fixed
+go	pkg/go_github/repos/repos.go	sink-none	@sink(none)	func fixed() { @fixed
+go	pkg/go_github/repos/repos.go	sink-none	@sink(none)	func fixed() { @fixed
+go	pkg/go_github/repos/repos.go	sink-none	@sink(none) @nosink(pkg-go-github-repos-decoy)	func decoy() { @decoy
+go	pkg/go_github/repos/repos.go	sink-none	@sink(none) @nosink(pkg-go-github-repos-decoy)	func decoy() { @decoy
