@@ -83,7 +83,10 @@ type analyzeOpts struct {
 	// and before the analysis (what the structure layer of the graph file is made from).
 	// structureOnly stops after afterRead: analyze returns no report.
 	structureOnly bool
-	afterRead     func(l *loaded, rules *model.Rules, st *sites.Result, g *sg.Program, bodies map[string]string) error
+	// categories is what `analyze` reports, by category (nil: everything, as before). It cuts the list of findings once the analysis
+	// is done; the graph, the index and the analysis itself do not see it.
+	categories *categoryFlags
+	afterRead  func(l *loaded, rules *model.Rules, st *sites.Result, g *sg.Program, bodies map[string]string) error
 }
 
 // registerLanguages adds the flags that say which languages are read and how (the Rust extractor runs under a sandbox). The commands that
@@ -142,6 +145,9 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	phase := o.phaseTimer()
 	rules, err := o.loadRules(extra...)
 	if err != nil {
+		return nil, err
+	}
+	if err := o.categories.check(rules); err != nil {
 		return nil, err
 	}
 	l, err := o.read(patterns, rules, phase)
@@ -289,7 +295,10 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 			f.Close()
 		}
 	}
+	var excluded []report.CategoryExcluded
+	res.Findings, excluded = o.categories.filter().Apply(res.Findings)
 	rep := report.Build(packages, l.loadErrors(), st, res, rules)
+	rep.Summary.CategoriesExcluded = excluded
 	rep.Summary.Isolation = o.rustIsolation
 	rep.Summary.BodyReplacedPackages = replaced
 	if fs := report.FunctionsSkippedOf(l.ir.FnSkipped); fs != nil {
@@ -422,6 +431,7 @@ type analyzeCmd struct {
 	o         analyzeOpts
 	detail    *string
 	withSites *bool
+	cats      *categoryFlags
 }
 
 func analyzeFlags(fs *flag.FlagSet) *analyzeCmd {
@@ -429,7 +439,10 @@ func analyzeFlags(fs *flag.FlagSet) *analyzeCmd {
 	c.o.register(fs)
 	c.detail = fs.String("detail", report.DetailSnippet, "level of detail: "+orList(report.DetailLevels, false))
 	c.withSites = fs.Bool("sites", false, "also list the sites")
-	usual(fs, "detail", "sites")
+	c.cats = &categoryFlags{}
+	fs.StringVar(&c.cats.include, "categories", "", "report only the findings of these categories (names separated by commas, as the `category` of a finding; an unknown name is an error that lists the valid ones). The analysis is the same; summary.categories_excluded counts the findings that were left out")
+	fs.StringVar(&c.cats.skip, "skip-categories", "", "report all the findings except those of these categories (names separated by commas; not with -categories). summary.categories_excluded counts the findings that were left out")
+	usual(fs, "detail", "sites", "categories", "skip-categories")
 	kind(fs, "enum:detail", "detail")
 	return c
 }
@@ -441,6 +454,10 @@ func runAnalyze(args []string) error {
 	fs.Parse(args)
 	o, detail, withSites := &c.o, c.detail, c.withSites
 	// What can be checked is checked before the analysis, which can take minutes.
+	if err := c.cats.parse(); err != nil {
+		return err
+	}
+	o.categories = c.cats
 	if err := report.ValidDetail(*detail); err != nil {
 		return err
 	}
@@ -658,4 +675,75 @@ func runResolve(args []string) error {
 		return err
 	}
 	return writeJSON(os.Stdout, rep.Resolve(bms))
+}
+
+// categoryFlags are -categories and -skip-categories of analyze.
+type categoryFlags struct {
+	include, skip string
+	// the names, once parse has split them
+	inc, exc []string
+}
+
+// splitCategories splits a list of names separated by commas (spaces around a name are left out).
+func splitCategories(flagName, v string) ([]string, error) {
+	if v == "" {
+		return nil, nil
+	}
+	var out []string
+	for _, n := range strings.Split(v, ",") {
+		n = strings.TrimSpace(n)
+		if n == "" {
+			return nil, fmt.Errorf("-%s: an empty category name in %q", flagName, v)
+		}
+		out = append(out, n)
+	}
+	return out, nil
+}
+
+// parse reads the flags (what is wrong with their form is said before the analysis is started).
+func (c *categoryFlags) parse() error {
+	if c.include != "" && c.skip != "" {
+		return fmt.Errorf("-categories and -skip-categories cannot be combined: use one of them")
+	}
+	var err error
+	if c.inc, err = splitCategories("categories", c.include); err != nil {
+		return err
+	}
+	if c.exc, err = splitCategories("skip-categories", c.skip); err != nil {
+		return err
+	}
+	return nil
+}
+
+// check says an unknown name, with the valid ones: the categories of the sinks of the rules that were loaded. It is called after the
+// rules are loaded, before the code is read.
+func (c *categoryFlags) check(rules *model.Rules) error {
+	if c == nil {
+		return nil
+	}
+	known := map[string]bool{}
+	for _, sinks := range rules.Sinks {
+		for _, s := range sinks {
+			known[s.Category] = true
+		}
+	}
+	valid := make([]string, 0, len(known))
+	for k := range known {
+		valid = append(valid, k)
+	}
+	sort.Strings(valid)
+	for _, n := range append(append([]string(nil), c.inc...), c.exc...) {
+		if !known[n] {
+			return fmt.Errorf("unknown category %q: the rules that were loaded have sinks of %s", n, strings.Join(valid, ", "))
+		}
+	}
+	return nil
+}
+
+// filter is the filter of the report (nil: nothing is left out).
+func (c *categoryFlags) filter() *report.CategoryFilter {
+	if c == nil {
+		return nil
+	}
+	return &report.CategoryFilter{Include: c.inc, Exclude: c.exc}
 }
