@@ -81,15 +81,15 @@ func TestUnverifiedVersionsOfSeveral(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := Merge(rs)
-	got := r.UnverifiedVersionsOf(map[string][]string{"ab": {"1.2.0", "0.9.0", "0.8.0"}}, "lock", SamePackage)
+	got := r.UnverifiedVersionsOf(map[string][]string{"ab": {"1.2.0", "0.9.0", "0.8.0"}}, "dart", "lock", SamePackage)
 	want := []UnverifiedVersion{{Package: "ab", Used: "0.9.0", AllUsed: []string{"1.2.0", "0.9.0", "0.8.0"}, Verified: []string{">=1.0.0 <2.0.0"}, Source: "lock"}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("several: %v, want %v", got, want)
 	}
-	if got := r.UnverifiedVersionsOf(map[string][]string{"ab": {"1.2.0", "1.9.9"}}, "lock", SamePackage); len(got) != 0 {
+	if got := r.UnverifiedVersionsOf(map[string][]string{"ab": {"1.2.0", "1.9.9"}}, "dart", "lock", SamePackage); len(got) != 0 {
 		t.Errorf("all in the range: %v", got)
 	}
-	if got := r.UnverifiedVersionsOf(map[string][]string{"a_b": {"3.0.0"}}, "lock", SamePackage); len(got) != 0 {
+	if got := r.UnverifiedVersionsOf(map[string][]string{"a_b": {"3.0.0"}}, "dart", "lock", SamePackage); len(got) != 0 {
 		t.Errorf("names are as written: %v", got)
 	}
 	b, _ := json.Marshal(r.UnverifiedVersions(map[string]string{"ab": "3.0.0"}, "go.mod"))

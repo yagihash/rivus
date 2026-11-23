@@ -183,13 +183,28 @@ type Verified struct {
 	VerifiedVersion
 	// Source is the rule set (file or "builtin:...") that has the record.
 	Source string `json:"source"`
+	// Lang is the language of the rule set ("go", "dart", "rust"; see RuleSetLanguage), "" when the file does not say. Not in the JSON
+	// of `rivus models versions`.
+	Lang string `json:"-"`
+}
+
+// RuleSetLanguage is the language that a rule set is for, from the name of a built-in file (`builtin:dart-dio.yaml`) or the name of
+// the rule set (`rivus/dart/dio@1`). "" for any other file (a rule file of a project has no marker of the language): its records are
+// compared with the dependencies of every language.
+func RuleSetLanguage(rs *RuleSet) string {
+	for _, lang := range []string{"go", "dart", "rust"} {
+		if strings.HasPrefix(rs.Origin, "builtin:"+lang+"-") || strings.HasPrefix(rs.Name, "rivus/"+lang+"/") {
+			return lang
+		}
+	}
+	return ""
 }
 
 func mergeVerified(sets []*RuleSet) []Verified {
 	var out []Verified
 	for _, rs := range sets {
 		for _, e := range rs.VerifiedVersions {
-			out = append(out, Verified{e, rs.Origin})
+			out = append(out, Verified{e, rs.Origin, RuleSetLanguage(rs)})
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool {
@@ -247,18 +262,25 @@ func (r *Rules) UnverifiedVersions(used map[string]string, source string) []Unve
 	for mod, ver := range used {
 		many[mod] = []string{ver}
 	}
-	return r.UnverifiedVersionsOf(many, source, MatchMajor)
+	return r.UnverifiedVersionsOf(many, "go", source, MatchMajor)
 }
 
 // UnverifiedVersionsOf is UnverifiedVersions for a lock file: a package can be there at several versions, and it is listed when any
 // of them is outside every range of its records (once, with the versions). match says whether a record's package is the used one
-// (MatchMajor for Go; SamePackage, the name as it is, for Dart; SameCrate for Rust).
-func (r *Rules) UnverifiedVersionsOf(used map[string][]string, source string, match func(pattern, name string) bool) []UnverifiedVersion {
+// (lang is the language of the lock file: the records of another language are not compared. MatchMajor for Go; SamePackage, the name as it is, for Dart; SameCrate for Rust).
+func (r *Rules) UnverifiedVersionsOf(used map[string][]string, lang, source string, match func(pattern, name string) bool) []UnverifiedVersion {
 	var out []UnverifiedVersion
+	// only the records of the language of the lock file (and the ones that do not say a language)
+	var recs []Verified
+	for _, rec := range r.Verified {
+		if rec.Lang == "" || rec.Lang == lang {
+			recs = append(recs, rec)
+		}
+	}
 	for pkg, vers := range used {
 		var ranges []string
 		var outside []string
-		for _, rec := range r.Verified {
+		for _, rec := range recs {
 			if match(rec.Package, pkg) {
 				ranges = append(ranges, rec.Versions)
 			}
@@ -268,7 +290,7 @@ func (r *Rules) UnverifiedVersionsOf(used map[string][]string, source string, ma
 		}
 		for _, ver := range vers {
 			covered := false
-			for _, rec := range r.Verified {
+			for _, rec := range recs {
 				if match(rec.Package, pkg) && rec.Holds(ver) {
 					covered = true
 					break

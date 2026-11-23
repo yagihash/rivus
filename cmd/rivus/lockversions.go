@@ -93,7 +93,7 @@ func (o *analyzeOpts) unverifiedFromLocks(rules *model.Rules) []model.Unverified
 			fmt.Fprintf(os.Stderr, "rivus: the versions of the %s dependencies are not compared with verified_versions: %v\n", lang, err)
 			continue
 		}
-		out = append(out, rules.UnverifiedVersionsOf(used, source, match)...)
+		out = append(out, rules.UnverifiedVersionsOf(used, lang, source, match)...)
 	}
 	return out
 }
