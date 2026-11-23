@@ -19,12 +19,14 @@ not timed out), `timeout` (stats.timed_out, or the group was killed on the clock
 `oom` (killed by the system or out of memory), `error`.
 
 The pass line (`make bench-passline`; targets in bench/deps-targets.json): one line per target,
-  PASS|FAIL memos time=<s>/<limit> mem=<GB>/<cap> converged=<yes|no> detected=<yes|no|n/a> quiet_after_fix=<yes|no|n/a>
-with the default flags of rivus. PASS needs all four: it ended by itself within the time limit, the memory of the
-child ended at or below the cap (b: the maximum over fine samples of the SAME-TIME SUM of the RSS of the whole process tree, the burden the machine receives; a, the end-of-run peak of the main process, is printed beside it; the watchdog stops a run early and kills the group of this run only), it converged (with no function
-stopped on the clock: stats.load_dependent is not set), and the
-public, already-fixed vulnerability is detected at the PRE-FIX commit (`detected`: at least one finding of the
-category of the target; builtin models only; counts only; n/a when the target has no pair).
+  PASS|FAIL memos time=<s>/<limit> mem=<GB>/<cap> converged=<yes|no> finish=<yes|no> detected=<yes|no|n/a> quiet_after_fix=<yes|no|n/a> [located=<n>]
+with the default flags of rivus. PASS needs two separate conditions: FINISH (`finish`: it ended by itself within the time limit, the
+memory of the child ended at or below the cap (b: the maximum over fine samples of the SAME-TIME SUM of the RSS of the whole process
+tree, the burden the machine receives; a, the end-of-run peak of the main process, is printed beside it; the watchdog stops a run
+early and kills the group of this run only), it converged, with no function stopped on the clock: stats.load_dependent is not set)
+and DETECT (`detected`, by place: at the PRE-FIX commit at least one finding of the category has its source and its sink at the
+labelled places of the truth file, bench/memos/truth-*.json, `detect.mode` "location"; builtin models; `located=<n>` is the count of
+such findings; n/a when the target has no pair).
 `quiet_after_fix` (no finding of that category at the fixed commit; read only when detected, n/a otherwise) is
 printed beside it and is NOT part of PASS/FAIL: a fix of the kind "validate, then return early" is not treated as
 removing the flow until the guard mechanism (#169) exists. A target with `detect.mode` "through" (a truth file, one public fixed
@@ -110,19 +112,23 @@ GB = 1024 ** 3
 EXIT_INCOMPLETE = 4  # rivus: the output is complete as far as it goes, the analysis is not (cmd/rivus exitIncomplete)
 
 
-def judge(time_s, limit_s, mem_gb, cap_gb, converged, detected, through=None, quiet_after_fix=None):
-    """The pass line, pure. detected: True / False / None (no pair for this target). through: None or (tp, n), the
+def judge(time_s, limit_s, mem_gb, cap_gb, converged, detected, through=None, quiet_after_fix=None, located=None):
+    """The pass line, pure: two separate conditions, both needed. FINISH (time within the limit, memory within the cap,
+    converged) and DETECT (`detected`). located: None or the count of findings at the labelled places (information). detected: True / False / None (no pair for this target). through: None or (tp, n), the
     position-level count, printed as information only (it does not decide PASS). quiet_after_fix: True / False /
     None (n/a); printed, and NOT part of PASS/FAIL. Returns (passed, line_body)."""
     ok_time = time_s is not None and time_s <= limit_s
     ok_mem = mem_gb is not None and mem_gb <= cap_gb
     ok_det = detected is not False  # None (n/a) does not count against
-    passed = bool(ok_time and ok_mem and converged and ok_det)
+    finish = bool(ok_time and ok_mem and converged)
+    passed = bool(finish and ok_det)
     yn = lambda v: "n/a" if v is None else ("yes" if v else "no")
-    body = "time=%s/%s mem=%s/%s converged=%s detected=%s quiet_after_fix=%s" % (
+    body = "time=%s/%s mem=%s/%s converged=%s finish=%s detected=%s quiet_after_fix=%s" % (
         "%.0f" % time_s if time_s is not None else "-", "%g" % limit_s,
         "%.2f" % mem_gb if mem_gb is not None else "-", "%g" % cap_gb,
-        "yes" if converged else "no", yn(detected), yn(quiet_after_fix))
+        "yes" if converged else "no", yn(finish), yn(detected), yn(quiet_after_fix))
+    if located is not None:
+        body += " located=%d" % located
     if through is not None:
         body += " through_tp=%s/%d" % ("-" if through[0] is None else through[0], through[1])
     return passed, body
@@ -144,6 +150,30 @@ def detection(pre_count):
 def quiet_after_fix(fixed_count):
     """The fixed commit has no finding of the category (None: the run did not converge, so not quiet)."""
     return fixed_count is not None and fixed_count == 0
+
+
+def location_counts(truth, rep, category, side="prefix"):
+    """Detection by place (detect.mode location; the truth is the list `sites` of bench/memos/truth-*.json: role source /
+    sink, file, line = the line at the pre-fix commit, fixed_line = the line at the fixed commit). A finding counts when it is of
+    the category AND its source is at a source site AND its sink is at a sink site (file, line of the position of the
+    finding). Returns (findings at the places, source sites, sink sites). Counts only; the finding itself is not kept."""
+    key = "line" if side == "prefix" else "fixed_line"
+    at = lambda role: {(x["file"], x[key]) for x in truth if x.get("role") == role and x.get("category") == category}
+    src, snk = at("source"), at("sink")
+    pos = lambda e: ((e or {}).get("position") or {})
+    n = 0
+    for f in (rep or {}).get("findings", []):
+        if f.get("category") != category:
+            continue
+        a, b = pos(f.get("source")), pos(f.get("sink"))
+        if (a.get("file"), a.get("line")) in src and (b.get("file"), b.get("line")) in snk:
+            n += 1
+    return n, len(src), len(snk)
+
+
+def detected_located(n):
+    """Per vulnerability: detected when at least one finding is at the labelled places (None: the run did not converge)."""
+    return n is not None and n >= 1
 
 
 def through_counts(truth, rep):
@@ -370,11 +400,25 @@ def passline(name, t, rivus, cache, outdir, limit_s, cap_gb):
             return r
 
         main = run(t.get("commit", ""), "pin")
-        detected, quiet, d, through = None, None, t.get("detect"), None
+        detected, quiet, d, through, located = None, None, t.get("detect"), None, None
         if d and d.get("mode") == "through":  # per vulnerability; the position count beside it (information)
             truth = json.load(open(os.path.join(ROOT, d["truth"])))["sites"]
             tp, n = through_counts(truth, main["report"]) if main["converged"] else (None, len([x for x in truth if "file" in x and x.get("label") == "vuln"]))
             detected, through = detected_through(tp), (tp, n)
+        elif d and d.get("mode") == "location":  # per vulnerability, by the places of the truth (the pre-fix commit)
+            truth = json.load(open(os.path.join(ROOT, d["truth"])))["sites"]
+            cat = d["category"]
+            cnt = lambda r: count_category(r["report"], cat) if r["converged"] else None
+            loc = lambda r, side: location_counts(truth, r["report"], cat, side)[0] if r["converged"] else None
+            pre = run(d["prefix_commit"], "prefix")
+            located = loc(pre, "prefix")
+            detected = detected_located(located)
+            fixed_n = fixed_loc = None
+            if detected:  # the fixed commit is read only to record quiet_after_fix (not part of PASS/FAIL)
+                fx = run(d["fixed_commit"], "fixed")
+                fixed_n, fixed_loc = cnt(fx), loc(fx, "fixed")
+                quiet = quiet_after_fix(fixed_n)
+            print("deps_bench: %s %s findings of %s: pre-fix %s (at the labelled places %s), fixed %s (at the places of the fixed commit %s)" % (name, d["id"], cat, cnt(pre), located, fixed_n, fixed_loc), file=sys.stderr)
         elif d:
             cnt = lambda r: count_category(r["report"], d["category"]) if r["converged"] else None
             pre = run(d["prefix_commit"], "prefix")
@@ -384,7 +428,7 @@ def passline(name, t, rivus, cache, outdir, limit_s, cap_gb):
                 fixed_n = cnt(run(d["fixed_commit"], "fixed"))
                 quiet = quiet_after_fix(fixed_n)
             print("deps_bench: %s %s findings of %s: pre-fix %s, fixed %s" % (name, d["id"], d["category"], cnt(pre), fixed_n), file=sys.stderr)
-        passed, body = judge(main["wall"], limit_s, main["peak"] / GB, cap_gb, main["converged"], detected, through, quiet)
+        passed, body = judge(main["wall"], limit_s, main["peak"] / GB, cap_gb, main["converged"], detected, through, quiet, located)
         decided = t.get("decided", False)
         if main["why"]:
             result = "stopped_" + main["why"]

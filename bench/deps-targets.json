@@ -1,5 +1,5 @@
 {
-  "_doc": "Targets of the pass line (bench/deps_bench.py, `make bench-passline`). Data only. repo + commit: fetched into $BENCH_CACHE (default ~/.cache/rivus-bench/), never into this tree; the code of a target is never run (git clone/checkout, `go mod download`, `dart pub get`). args: the flags of `rivus analyze` besides -lang and -C (the default flags; `{root}` is the root of the fetched tree, for -allow-deps-under). time_limit_s / mem_cap_gb: the pass line. decided: false = the line is printed as INFO (the limits are not decided yet). detect: the category whose finding count is compared on the pre-fix and the fixed commit (counts only).",
+  "_doc": "Targets of the pass line (bench/deps_bench.py, `make bench-passline`). Data only. repo + commit: fetched into $BENCH_CACHE (default ~/.cache/rivus-bench/), never into this tree; the code of a target is never run (git clone/checkout, `go mod download`, `dart pub get`). args: the flags of `rivus analyze` besides -lang and -C (the default flags; `{root}` is the root of the fetched tree, for -allow-deps-under). time_limit_s / mem_cap_gb: the pass line. decided: false = the line is printed as INFO (the limits are not decided yet). detect: per vulnerability. mode location (memos): detected when a finding of the category has its source and its sink at the labelled positions of the truth file (bench/memos), at the pre-fix commit; quiet_after_fix is the count of the category at the fixed commit. mode through: see dart-pub.",
   "memos": {
     "lang": "go",
     "repo": "https://github.com/usememos/memos",
@@ -11,6 +11,8 @@
     "decided": true,
     "detect": {
       "id": "CVE-2025-65799",
+      "mode": "location",
+      "truth": "bench/memos/truth-1d7efb15.json",
       "category": "path_traversal",
       "prefix_commit": "1d7efb158045924ab87f58d567bd79cd92edf6af",
       "fixed_commit": "5f57f48673e2054f404b2c5b497a8eaa3690591d"
