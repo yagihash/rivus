@@ -51,6 +51,38 @@ class Detection(unittest.TestCase):
         self.assertEqual(d.count_category({}, "path_traversal"), 0)
 
 
+class Through(unittest.TestCase):
+    truth = [{"file": "a.dart", "line": 1, "label": "vuln", "category": "path_traversal"},
+             {"file": "a.dart", "line": 2, "label": "vuln", "category": "path_traversal"},
+             {"file": "a.dart", "line": 3, "label": "safe", "category": "path_traversal"}]
+
+    def rep(self, cat, line):
+        return {"findings": [{"category": cat, "paths": [{"steps": [{"desc": "call f", "position": {"file": "a.dart", "line": line}}]}]}]}
+
+    def test_counts_labelled_positions(self):
+        self.assertEqual(d.through_counts(self.truth, self.rep("path_traversal", 2)), (1, 2))
+        self.assertEqual(d.through_counts(self.truth, {}), (0, 2))
+
+    def test_kind_mismatch_not_counted(self):
+        self.assertEqual(d.through_counts(self.truth, self.rep("ssrf", 1)), (0, 2))
+
+    def test_non_call_step_not_counted(self):
+        r = self.rep("path_traversal", 1)
+        r["findings"][0]["paths"][0]["steps"][0]["desc"] = "assign"
+        self.assertEqual(d.through_counts(self.truth, r)[0], 0)
+
+    def test_per_vulnerability(self):
+        self.assertTrue(d.detected_through(1))
+        self.assertFalse(d.detected_through(0))
+        self.assertFalse(d.detected_through(None))
+
+    def test_line_has_both_numbers(self):
+        ok, body = d.judge(100, 180, 5, 8, True, True, (4, 9))
+        self.assertTrue(ok)
+        self.assertTrue(body.endswith("detected=yes through_tp=4/9"))
+        self.assertTrue(d.judge(100, 180, 5, 8, False, False, (None, 9))[1].endswith("detected=no through_tp=-/9"))
+
+
 class Targets(unittest.TestCase):
     def test_pins_and_limits(self):
         t = json.load(open(d.TARGETS_FILE))

@@ -32,6 +32,22 @@
     "dart_remove_flutter_workspace_members": true,
     "detect": null
   },
+  "dart-pub": {
+    "_doc": "dart-lang/pub at the parent of the fix of GHSA-q739-79rh-vmvp / CVE-2026-27704 (zip slip in extractTarGz; bench/dart-pub). detect.mode through: per vulnerability, detected when a finding passes through a labelled position of the truth file (bench/score.py --through); through_tp is the position count, information. INFO until its line is decided; the default-flags run does not converge today, so detected is no.",
+    "lang": "dart",
+    "repo": "https://github.com/dart-lang/pub",
+    "commit": "5e24336e71a05a96b558d496953ebed223f6e40a",
+    "subdir": "",
+    "args": [],
+    "time_limit_s": 180,
+    "mem_cap_gb": 8,
+    "decided": false,
+    "detect": {
+      "id": "CVE-2026-27704",
+      "mode": "through",
+      "truth": "bench/dart-pub/truth-5e24336e.json"
+    }
+  },
   "dart_services": {
     "lang": "dart",
     "repo": "https://github.com/dart-lang/dart-pad",
