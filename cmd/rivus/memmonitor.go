@@ -118,3 +118,15 @@ func (m *memMonitor) stop() memReport {
 	}
 	return r
 }
+
+// exceedTolerance is how far above the limit the peak has to be before the limit counts as exceeded: 5%. The limit is soft, and when
+// what the analysis holds live is lower than the limit, the peak stays close to the limit, a little under or over it (0.5% under, in a
+// run of a large target with the default limit); only a limit that is lower than the live memory gives a clearly higher peak (1.47
+// times, with a limit that is two thirds of it). A line at the limit itself would give true to a run that is fine, by the jitter of
+// the samples.
+const exceedTolerance = 0.05
+
+// memoryExceeded says whether the peak is more than 5% above the limit. limit 0 is no limit: never.
+func memoryExceeded(peak, limit int64) bool {
+	return limit > 0 && float64(peak) > float64(limit)*(1+exceedTolerance)
+}

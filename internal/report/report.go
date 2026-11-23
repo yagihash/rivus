@@ -152,8 +152,8 @@ type Summary struct {
 	MemoryLimitSource string `json:"memory_limit_source,omitempty"`
 	MemoryLimitNote   string `json:"memory_limit_note,omitempty"`
 	// MemoryPeakBytes is the most memory the Go runtime counted in use during the run (total minus what it gave back: what the
-	// soft limit looks at), read every 250 ms and at the end. MemoryLimitExceeded is whether it was above the limit at any time
-	// (peak > limit); absent when there was no limit. true: the limit was lower than what the analysis holds live, it was not
+	// soft limit looks at), read every 250 ms and at the end. MemoryLimitExceeded is whether it was more than 5% above the limit at any
+	// time (peak > limit x 1.05: a soft limit that holds stays near the limit, a little under or over it); absent when there was no limit. true: the limit was lower than what the analysis holds live, it was not
 	// kept, the collector ran on and the run took longer; raise it (-max-memory) and run again. The result is complete all the
 	// same (not incomplete). GCCPUFraction is the share of the CPU time of the run that the collector used, in [0, 1], 3
 	// decimals; always there (also without a limit). A guide to how hard the limit worked (ADR-121). They tell about this

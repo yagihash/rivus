@@ -70,12 +70,12 @@ func TestMemoryLimitExceededReport(t *testing.T) {
 	}
 	// (b) a small limit is passed
 	s := analyzeSummary(t, dir, "-max-memory", "16MiB")
-	if s.Exceeded == nil || !*s.Exceeded || s.Peak <= s.Limit {
+	if s.Exceeded == nil || !*s.Exceeded || !memoryExceeded(s.Peak, s.Limit) {
 		t.Errorf("16MiB: exceeded %v, peak %d, limit %d", s.Exceeded, s.Peak, s.Limit)
 	}
 	// (c) a large one is not
 	s = analyzeSummary(t, dir, "-max-memory", "64GiB")
-	if s.Exceeded == nil || *s.Exceeded || s.Peak > s.Limit {
+	if s.Exceeded == nil || *s.Exceeded || memoryExceeded(s.Peak, s.Limit) {
 		t.Errorf("64GiB: exceeded %v, peak %d, limit %d", s.Exceeded, s.Peak, s.Limit)
 	}
 	// (d) no limit: the item is not there
@@ -155,4 +155,24 @@ func TestModelsCoverageSaysIncomplete(t *testing.T) {
 		t.Errorf("index, timeout: a saved index ends with 0 (ADR-120), got %d", code)
 	}
 	wantState(t, w.top(out), true, []string{report.ReasonTimeout})
+}
+
+// The line is 5% above the limit (a soft limit that holds stays near it): 1.04 times is fine, 1.06 times is exceeded.
+func TestMemoryExceededLine(t *testing.T) {
+	t.Parallel()
+	const limit = int64(1_000_000_000)
+	for _, c := range []struct {
+		peak int64
+		want bool
+	}{
+		{limit / 2, false}, {limit, false}, {limit + limit/200, false}, {limit * 104 / 100, false},
+		{limit * 106 / 100, true}, {limit * 147 / 100, true},
+	} {
+		if got := memoryExceeded(c.peak, limit); got != c.want {
+			t.Errorf("peak %d (%.3f x limit): %v, want %v", c.peak, float64(c.peak)/float64(limit), got, c.want)
+		}
+	}
+	if memoryExceeded(1<<40, 0) {
+		t.Error("no limit: never exceeded")
+	}
 }

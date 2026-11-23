@@ -358,7 +358,7 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	mr := mon.stop()
 	rep.Summary.MemoryPeakBytes = mr.PeakBytes
 	if o.memLimit.Bytes > 0 {
-		exceeded := mr.PeakBytes > o.memLimit.Bytes
+		exceeded := memoryExceeded(mr.PeakBytes, o.memLimit.Bytes)
 		rep.Summary.MemoryLimitExceeded = &exceeded
 	}
 	rep.Summary.GCCPUFraction = &mr.GCCPUFraction
