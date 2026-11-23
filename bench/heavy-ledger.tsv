@@ -2,3 +2,9 @@ date	rivus_commit	target	target_commit	kind	settings	wall_s	cpu_s	peak_tree_gb	m
 2026-11-23	6bee840	go-s3	in-tree	deps	default (-timeout 600s); old measure: peak of the main process only, see heavy-ledger.md	686.6								no			1						timeout
 2026-11-23	6bee840	gcp	in-tree	deps	default (-timeout 600s); old measure: peak of the main process only, see heavy-ledger.md	70.7								yes			27						finished
 2026-11-23	6bee840	dart-gcp	in-tree	deps	default (-timeout 600s); old measure: peak of the main process only, see heavy-ledger.md	44.4								yes			19						finished
+2026-11-23	dac8bcb6	memos	00fcd170281a75fc0e95ec4f2f54f43d32fe81bd	passline	default	49.5	359.4	6.03	6442450944	default	6395838008		0.263	yes	yes	no	174	0	0	0		3.29	PASS
+2026-11-23	dac8bcb6	memos	00fcd170281a75fc0e95ec4f2f54f43d32fe81bd	passline	default	63.3	348.2	6.26	6442450944	default	6432665160		0.258	yes	yes	no	174	0	0	0		10.31	PASS
+2026-11-23	dac8bcb6	memos	00fcd170281a75fc0e95ec4f2f54f43d32fe81bd	passline	default	50.6	367.3	6.05	6442450944	default	6430559816		0.268	yes	yes	no	174	0	0	0		35.18	PASS
+2026-11-23	dac8bcb6	go-s3	in-tree	deps	default (-timeout 600s)	18.5	174.3	4.08	6442450944	default	4364756792		0.22	yes			1	0	0	0		10.56	finished
+2026-11-23	dac8bcb6	gcp	in-tree	deps	default (-timeout 600s)	33.1	170.4	3.58	6442450944	default	3855488712		0.211	yes			27	0	0	0		10.75	finished
+2026-11-23	dac8bcb6	dart-gcp	in-tree	deps	default (-timeout 600s)	15.7	25.7	1.79	6442450944	default	492083576		0.004	yes			19	0	0	0		10.69	finished
