@@ -2,7 +2,7 @@
 
 `rivus analyze -lang rust` は、Rust のプロジェクトを**ビルドします**(`cargo check`)。ビルドは、対象の `build.rs`、proc macro、`[build-dependencies]` を実行します。採用前のライブラリや、怪しいリポジトリを読むときは、それが、あなたのマシンで、あなたの権限(ホームの鍵、トークン、ネットワーク)で動くことになります。そこで、**macOS では既定で、OS のサンドボックス(Seatbelt、`sandbox-exec`)の下で、隔離して動かします**([ADR-093](adr/093-rust-isolation-macos-sandbox.md)。以前は Docker のコンテナ: ADR-064)。**Linux には隔離の手段がないので、既定では何も実行せずに止まります**。信頼できるコードは、`-unsafe-host-exec` で、このマシンの上で、隔離なしに読みます。
 
-どちらで読んだかは、出力の `summary.isolation`(`mode`: `sandbox` / `host`)に出ます(Rust の抽出をしたときだけ)。
+どちらで読んだかは、出力の `summary.isolation`(`mode`: `sandbox` / `host`。サンドボックスで `DEVELOPER_DIR` を渡したときは `developer_dir`: `{value, source}`、`source` は `default` か `user`)に出ます(Rust の抽出をしたときだけ)。
 
 ## `-lang` なし(auto)の動き
 
@@ -53,6 +53,8 @@
 | 時間 | 各段階で `-isolation-timeout`(既定 30 分)。超えたら、プロセスグループごと kill |
 | 出力の大きさ | `-isolation-max-output`(既定 4 GiB)。超えたら kill |
 | ツールチェイン | 固定の nightly だけ。対象の `rust-toolchain(.toml)` が別のものを求めても、取得しない(警告を出す)。rustup は使わない |
+
+**`DEVELOPER_DIR`**: ビルドスクリプトのリンクは `xcrun` を動かし、サンドボックスは Xcode.app を読ませません。そこで、`-isolation-env` に `DEVELOPER_DIR` がなく、`/Library/Developer/CommandLineTools` があるときは、`DEVELOPER_DIR` をそこに向けます(`-v` で出し、`summary.isolation.developer_dir` に残る。サンドボックスの読めるパスは広げない)。`-isolation-env DEVELOPER_DIR=...` を渡したときは、そのまま使います。コマンドラインツールがなく、`xcode-select -p` が Xcode.app のときは、実行の前に、原因と修正の方法(`xcode-select --install`、または読めるパスの `DEVELOPER_DIR`)を言って止まります。
 
 **ビルドに設定を足す**(parseable の `build.rs` は、UI をネットワークから取るので、隔離では失敗します): `-isolation-env NAME=VALUE`(ビルドに渡す環境変数。ホストのものは引き継がない)と、`-isolation-read PATH`(ビルドが読める追加のパス)。
 

@@ -174,7 +174,7 @@ sinks:
     parts:
       - {arg: 0, field: subscription.pushConfig.pushEndpoint}
 
-  # package:googleapis, bigquery/v2: the text of a query. The parameters (queryParameters) and the labels are bound or plain data.
+  # package:googleapis, bigquery/v2: the text of a query, of a view or a materialized view of a table, and the body of a routine (SQL). The parameters (queryParameters) and the labels are bound or plain data.
   - symbol: package:googleapis/bigquery/v2.dart#JobsResource.query
     category: sql_injection
     parts:
@@ -183,6 +183,29 @@ sinks:
     category: sql_injection
     parts:
       - {arg: 0, field: configuration.query.query}
+  - symbol: package:googleapis/bigquery/v2.dart#TablesResource.insert
+    category: sql_injection
+    parts:
+      - {arg: 0, field: view.query}
+      - {arg: 0, field: materializedView.query}
+  - symbol: package:googleapis/bigquery/v2.dart#TablesResource.patch
+    category: sql_injection
+    parts:
+      - {arg: 0, field: view.query}
+      - {arg: 0, field: materializedView.query}
+  - symbol: package:googleapis/bigquery/v2.dart#TablesResource.update
+    category: sql_injection
+    parts:
+      - {arg: 0, field: view.query}
+      - {arg: 0, field: materializedView.query}
+  - symbol: package:googleapis/bigquery/v2.dart#RoutinesResource.insert
+    category: sql_injection
+    parts:
+      - {arg: 0, field: definitionBody}
+  - symbol: package:googleapis/bigquery/v2.dart#RoutinesResource.update
+    category: sql_injection
+    parts:
+      - {arg: 0, field: definitionBody}
   - symbol: package:googleapis/bigquery/v2.dart#JobsResource.get
     args: [1]
     category: resource_name
