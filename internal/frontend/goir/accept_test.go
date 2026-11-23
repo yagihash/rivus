@@ -14,6 +14,8 @@ import (
 
 // The extractor in use, read twice, gives the same result: the same functions, the same IR and candidates of each.
 // A new extractor is put in as the second one.
+var stdPatterns = []string{"bytes", "strings", "sort", "sync", "net/http", "encoding/json", "go/types", "text/template", "regexp", "bufio"}
+
 func repoRoot() string { return filepath.Dir(filepath.Dir(testutil.Testdata())) }
 
 func runBoth(t *testing.T, a, b accept.Extractor, dir string, patterns ...string) (*ir.Program, *ir.Program) {
@@ -27,6 +29,43 @@ func runBoth(t *testing.T, a, b accept.Extractor, dir string, patterns ...string
 		t.Fatalf("%s: %v", b.Name, err)
 	}
 	return pa, pb
+}
+
+// acceptOrder reads the code in the order it is by itself, and again in other orders of the load (the packages in the
+// reverse order, the files into the file set in other orders: see gossa.loadOrderEnv). The results must be the same.
+func acceptOrder(t *testing.T, dir string, patterns ...string) {
+	t.Helper()
+	base, err := accept.Current.Run(dir, patterns, accept.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, seed := range []string{"a", "b", "c"} {
+		t.Setenv("RIVUS_INTERNAL_LOAD_ORDER", seed)
+		q, err := accept.Current.Run(dir, patterns, accept.Options{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if r := accept.Compare(base, q); !r.Empty() {
+			t.Fatalf("the order of the load (seed %q) changes the result:\n%s", seed, r.Summary(20))
+		}
+	}
+}
+
+func TestAcceptOrderTestdata(t *testing.T) { acceptOrder(t, testutil.Testdata(), "./...") }
+
+func TestAcceptOrderCurated(t *testing.T) {
+	acceptOrder(t, filepath.Join(repoRoot(), "bench", "go-curated"), "./...")
+}
+
+func TestAcceptOrderZoo(t *testing.T) {
+	acceptOrder(t, filepath.Join(repoRoot(), "bench", "zoo-go"), "./...")
+}
+
+func TestAcceptOrderStd(t *testing.T) {
+	if testing.Short() {
+		t.Skip("reads the standard library")
+	}
+	acceptOrder(t, filepath.Join(runtime.GOROOT(), "src"), stdPatterns...)
 }
 
 func acceptSame(t *testing.T, dir string, patterns ...string) {
@@ -59,7 +98,7 @@ func TestAcceptStd(t *testing.T) {
 	if testing.Short() {
 		t.Skip("reads the standard library")
 	}
-	acceptSame(t, filepath.Join(runtime.GOROOT(), "src"), "bytes", "strings", "sort", "sync", "net/http", "encoding/json", "go/types", "text/template", "regexp", "bufio")
+	acceptSame(t, filepath.Join(runtime.GOROOT(), "src"), stdPatterns...)
 }
 
 // The test must see a difference: a check that finds none when one is put in sees nothing.

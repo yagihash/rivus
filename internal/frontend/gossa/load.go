@@ -248,10 +248,11 @@ func Load(dir string, patterns []string, opts Options) (*Program, error) {
 	if opts.Deps {
 		cfg.Mode |= packages.NeedDeps
 	}
-	pkgs, err := packages.Load(cfg, patterns...)
+	pkgs, err := packages.Load(cfg, shakeOrder(cfg, patterns)...)
 	if err != nil {
 		return nil, fmt.Errorf("load packages: %w", err)
 	}
+	shakePackages(pkgs)
 
 	p := &Program{
 		Dir:     absDir,
