@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"sort"
 	"strings"
@@ -689,6 +690,7 @@ func summarize(r *Report) Summary {
 const (
 	ReasonTimeout      = "timeout"       // the time limit of the whole run (-timeout) was reached
 	ReasonNotConverged = "not_converged" // the summaries still changed after the last pass (-max-passes)
+	ReasonUnknown      = "unknown"       // an index of an older form that holds neither summary.incomplete nor stats: not known
 )
 
 // IncompleteReasons says why the analysis of st did not finish (nil when it did). Only a limit of the whole run counts: a
@@ -704,6 +706,25 @@ func IncompleteReasons(st *taint.Stats) []string {
 		reasons = append(reasons, ReasonNotConverged)
 	}
 	return reasons
+}
+
+// IncompleteState says whether the analysis that this report holds finished, and why not. A query of a saved index
+// carries it to its output: the index holds no new run, and "nothing reaches the sink" read from an index of a run that
+// timed out is "not looked for" (ADR-120, #195). The index of the form that has summary.incomplete says it as it was
+// written; an older one has it made from its stats; one that has neither is incomplete with the reason "unknown" (not
+// "complete": it is not known). The reasons are an array (empty when complete), never null.
+func (r *Report) IncompleteState() (bool, []string) {
+	if r.Summary.IncompleteReasons != nil {
+		return len(r.Summary.IncompleteReasons) > 0 || r.Summary.Incomplete, r.Summary.IncompleteReasons
+	}
+	if r.Summary.Incomplete {
+		return true, []string{ReasonUnknown}
+	}
+	if reflect.DeepEqual(r.Stats, taint.Stats{}) {
+		return true, []string{ReasonUnknown}
+	}
+	reasons := IncompleteReasons(&r.Stats)
+	return len(reasons) > 0, reasons
 }
 
 // Build assembles a report.
