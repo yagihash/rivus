@@ -150,8 +150,19 @@ func zooParseFindings(t *testing.T, out []byte) []string {
 // are the same. GOFLAGS=-tags=zooexec makes the loader read mark_exec.go and the harness of the cases too.
 func TestZooMarkIndependent(t *testing.T) {
 	dir := zooRoot(t)
-	plain := zooFindings(t, dir)
-	exec := zooFindings(t, dir, "GOFLAGS=-tags=zooexec")
+	// mark is a package of the zoo's module, so its real implementation is project code when it is read (ADR-114): the
+	// flows that it has of its own are not the cells'. The promise is about the findings of the cells.
+	ofCells := func(fs []string) []string {
+		var out []string
+		for _, f := range fs {
+			if strings.HasPrefix(f, "cells/") && strings.Contains(f, " -> cells/") {
+				out = append(out, f)
+			}
+		}
+		return out
+	}
+	plain := ofCells(zooFindings(t, dir))
+	exec := ofCells(zooFindings(t, dir, "GOFLAGS=-tags=zooexec"))
 	if strings.Join(plain, "\n") != strings.Join(exec, "\n") {
 		t.Errorf("the findings change with the implementation of mark:\n plain: %v\n zooexec: %v", plain, exec)
 	}

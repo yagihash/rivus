@@ -72,7 +72,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 - 解析が上限で止まった所は `depth_limit` として記録され、理由が付きます: `budget`（作業量。どのマシンでも同じ所で止まる）、`func_timeout` / `run_timeout`（時計。マシンの負荷で止まる所が変わる）。時計で止まったものがあれば、`summary.load_dependent` が `true` になります。
 - Go で、型エラーのあるパッケージと、それを import するパッケージは、SSA が作られず、解析から落ちます(`packages` には載ったままです)。読んだが作れなかったパッケージの数、落ちた関数の数、上位 10 のパッケージ(と理由)は、`summary.unread` に出ます(1 つもなければ、フィールドはありません)。パッケージごとに `missing_source` の不確実性も出て、stderr に 1 行出ます。終了コードと finding は変わりません。
-- **依存の本体を読むのは、流れを追うためです。source と sink は、プロジェクトのコードの中にだけ付きます**(依存の関数の中では探しません。ADR-099)。依存を読んだ実行では、`summary.dependency_sites`(`searched: false`、`dependency_functions`: 読んだ依存の関数の数)が、毎回そのことを言います(`-no-deps` や、依存の関数が 0 のときは出ません)。**利用者の入力が、ライブラリの中で危険な処理(ファイルを開く、コマンドを実行する、など)に届く形は、プロジェクトのコードがそのライブラリの API を呼ぶ所に sink のモデルがない限り、検出されません。** sink のモデルは、解析のコストを減らすためだけでなく、検出のためにも必要です(`rivus models coverage` で、モデルのない呼び出しを多い順に見られます)。
+- **依存の本体を読むのは、流れを追うためです。source と sink は、プロジェクトのコードの中にだけ付きます**(依存の関数の中では探しません。ADR-099。プロジェクトの範囲は ADR-114)。依存を読んだ実行では、`summary.dependency_sites`(`searched: false`、`dependency_functions`: 読んだ依存の関数の数)が、毎回そのことを言います(`-no-deps` や、依存の関数が 0 のときは出ません)。**利用者の入力が、ライブラリの中で危険な処理(ファイルを開く、コマンドを実行する、など)に届く形は、プロジェクトのコードがそのライブラリの API を呼ぶ所に sink のモデルがない限り、検出されません。** sink のモデルは、解析のコストを減らすためだけでなく、検出のためにも必要です(`rivus models coverage` で、モデルのない呼び出しを多い順に見られます)。
 - 数値と真偽値になった値は、既定では追いません（`numeric_stop` として記録。`-numeric-taint` で追う）。
 - `rivus resolve` の答えは、`unchanged` / `changed` / `rematched` / `ambiguous` / `unresolved` と、finding については今も届くか（`flow`）です。
 
@@ -242,7 +242,8 @@ LLM にモデルを書かせ、人や別の手段で確かめる、という使�
 - **対象のディレクトリに付いてくるルール（`.rivus/rules/*.yaml`）は、フラグなしで読まれます。** 対象を書いた人は、そこで finding を消せます。読んだファイルと、消せるものの数は、出力の `project_rules` に出ます。**信頼できないコードでは `-no-project-rules` を付けてください。**
 - Dart の依存は、プロジェクト、pub のキャッシュ、SDK の下のものだけ読みます（`package_config.json` は対象の一部で、どこでも指せるため）。ほかの場所は `-allow-deps-under DIR` で足します。
   - 許可の外の依存は読まず、**読まなかったことを `summary.unread`(理由は `dependency_not_allowed`)と標準エラーに出します**(結果が、その依存を読んだものに見えないように)。
-  - 複数のパッケージを 1 つのリポジトリに置いている(モノレポ)とき、アプリの依存が、同じリポジトリの別のパッケージを `path:` で指していることがあります。そのときは、アプリを `-C` に、リポジトリのルートを `-allow-deps-under` に指します: `rivus analyze -lang dart -C <リポジトリ>/app -allow-deps-under <リポジトリ>`。
+  - 複数のパッケージを 1 つのリポジトリに置いている(モノレポ)とき、アプリの依存が、同じリポジトリの別のパッケージを `path:` で指していることがあります。そのときは、アプリを `-C` に、リポジトリのルートを `-allow-deps-under` に指します: `rivus analyze -lang dart -C <リポジトリ>/app -allow-deps-under <リポジトリ>`。`-allow-deps-under` の下のパッケージ(`path:` の依存、`workspace:` のメンバー)は、読むだけでなく、プロジェクトとして扱います(source と sink を探します)。pub のキャッシュと SDK の下は、含まれていても依存のままです(ADR-114)。
+  - Go でプロジェクトの範囲を狭めるには、パターンか `-C` を使います: `rivus analyze -C <module> ./cmd/...`、または `-C <module>/cmd/app`。**プロジェクトは、パターンで挙げたパッケージだけではなく、同じ module のパッケージの全部**です(`go.work` に並ぶ module も)。パターンが決めるのは入口と、頼んだ範囲で、狭めた先のコードが届く、同じ module の他のパッケージの source と sink も探します。module キャッシュの module と、`replace` が指す module(ディレクトリを指す場合も)は依存です。モノレポで module どうしを `replace` でつないでいるときは、`go.work` に並べると、プロジェクトとして扱います(ADR-114)。
   - 複数のパッケージの親を `-C` に指しても読めます(依存は `package:` の ID で解決されます)。同じ依存の別のバージョンを 2 つのパッケージが使うときは、1 つしか読めず、もう 1 つは `summary.unread`(`dependency_not_linked`)に出ます。
 
 Rust 以外の信頼できないリポジトリは、使い捨ての環境（VM など）で解析してください。依存を先に取得してから、ネットワークを切り、ソースを読み取り専用で渡す形です。

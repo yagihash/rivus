@@ -163,6 +163,25 @@ func collectInputs(pkgs []*packages.Package) Inputs {
 	return Inputs{Files: keys(files), GoMods: keys(mods), ModuleDirs: keys(dirs)}
 }
 
+// projectPackages returns the import paths of the loaded packages (the packages asked for and everything they import)
+// that belong to the project (ADR-114): the packages asked for, and the packages of the main module(s) of the program
+// (go list marks a module as main when it is the module of the directory, and every module that a go.work lists). A
+// module of the module cache and a module that a replace directive points to (also by a directory: a skeleton, a
+// vendored copy) are dependencies, as are the modules nested in the main module with a go.mod of their own that go.work
+// does not list.
+func projectPackages(pkgs []*packages.Package) map[string]bool {
+	out := map[string]bool{}
+	for _, pkg := range pkgs {
+		out[pkg.PkgPath] = true
+	}
+	packages.Visit(pkgs, nil, func(pkg *packages.Package) {
+		if m := pkg.Module; m != nil && m.Main {
+			out[pkg.PkgPath] = true
+		}
+	})
+	return out
+}
+
 // Rel names a file as the output does: relative to the load directory when it is inside it.
 func (p *Program) Rel(name string) string { return p.rel(name) }
 
@@ -253,6 +272,8 @@ func Load(dir string, patterns []string, opts Options) (*Program, error) {
 	if opts.NaiveForm {
 		mode |= ssa.NaiveForm
 	}
+	// ADR-114: the project is the packages asked for and every package of the same main module(s)
+	projectPkgs := projectPackages(pkgs)
 	mk := ssautil.Packages
 	if opts.Deps {
 		mk = ssautil.AllPackages
@@ -313,6 +334,13 @@ func Load(dir string, patterns []string, opts Options) (*Program, error) {
 	own := map[*ssa.Package]bool{}
 	for _, sp := range ssaPkgs {
 		if sp != nil {
+			own[sp] = true
+			p.OwnPkgs = append(p.OwnPkgs, sp)
+		}
+	}
+	// the other packages of the project that were loaded (the pattern only narrows what is asked for)
+	for _, sp := range prog.AllPackages() {
+		if sp != nil && !own[sp] && projectPkgs[sp.Pkg.Path()] {
 			own[sp] = true
 			p.OwnPkgs = append(p.OwnPkgs, sp)
 		}
