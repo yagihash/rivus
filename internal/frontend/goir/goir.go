@@ -48,18 +48,15 @@ func Extract(p *gossa.Program, opts Options) (*ir.Program, error) {
 	globals := map[string]ir.Global{}
 	seen := map[ir.FuncID]bool{}
 	var graph callgraph.Graph
-	var lifted map[string][]*ssa.Function
+	var lifted map[string][][]liftedCall
 	if !opts.NoCandidates {
 		if p.Lifted != nil {
-			graph = callgraph.BuildGoOn(p.Lifted)
-			lifted = map[string][]*ssa.Function{}
-			for fn := range ssautil.AllFunctions(p.Lifted) {
-				// Several functions can have one name (the closure that binds a
-				// method, made once for each place that takes it): they are one
-				// function in the IR, and what the call graph says of each of
-				// them is joined (which one a map gave last is not an answer).
-				lifted[gossa.FuncID(fn)] = append(lifted[gossa.FuncID(fn)], fn)
-			}
+			lifted = liftedTable(p.Lifted)
+			// The call graph and the lifted build are of no use now: what the
+			// conversion asks of them is in the table. Letting go of them here
+			// (not at the end) keeps the lifted go/ssa program out of the
+			// conversion's peak.
+			p.Lifted = nil
 		} else {
 			graph = callgraph.BuildGo(p)
 		}
@@ -172,6 +169,73 @@ func releaseBody(fn *ssa.Function) {
 	}
 }
 
+// callKey is what pairs a call of a function with the same call of the same
+// function in the lifted build.
+type callKey struct {
+	pos    token.Pos
+	invoke bool
+	name   string
+}
+
+// liftedCall is a call of the lifted build that goes through an interface or
+// a function value, with the functions the call graph says it may reach.
+type liftedCall struct {
+	key   callKey
+	cands []ir.FuncID
+}
+
+// liftedTable asks the call graph of the lifted build what each of its calls
+// through an interface or a function value may reach, and keeps the answer
+// (in the order of the calls) by function. The lifted build is not read after
+// this.
+func liftedTable(prog *ssa.Program) map[string][][]liftedCall {
+	graph := callgraph.BuildGoOn(prog)
+	table := map[string][][]liftedCall{}
+	for fn := range ssautil.AllFunctions(prog) {
+		var calls []liftedCall
+		for _, b := range fn.Blocks {
+			for _, in := range b.Instrs {
+				ci, ok := in.(ssa.CallInstruction)
+				if !ok {
+					continue
+				}
+				k, ok := keyOf(ci)
+				if !ok {
+					continue
+				}
+				var ids []ir.FuncID
+				for _, callee := range graph.Callees(ci) {
+					ids = append(ids, ir.FuncID(gossa.FuncID(callee)))
+				}
+				calls = append(calls, liftedCall{k, ids})
+			}
+		}
+		// Several functions can have one name (the closure that binds a
+		// method, made once for each place that takes it): they are one
+		// function in the IR, and what the call graph says of each of them is
+		// joined (which one a map gave last is not an answer).
+		if len(calls) > 0 {
+			id := gossa.FuncID(fn)
+			table[id] = append(table[id], calls)
+		}
+	}
+	return table
+}
+
+func keyOf(ci ssa.CallInstruction) (callKey, bool) {
+	cc := ci.Common()
+	switch {
+	case cc.IsInvoke():
+		return callKey{ci.Pos(), true, cc.Method.FullName()}, true
+	case cc.StaticCallee() != nil:
+		return callKey{}, false
+	}
+	if _, ok := cc.Value.(*ssa.Builtin); ok {
+		return callKey{}, false
+	}
+	return callKey{ci.Pos(), false, ""}, true
+}
+
 // Func converts one function.
 func Func(p *gossa.Program, fn *ssa.Function) *ir.Func {
 	return convertFunc(p, fn, nil, nil, map[string]ir.Global{})
@@ -186,9 +250,10 @@ type conv struct {
 	fused  map[ssa.Value]bool // address instructions folded into a load or a store
 	addr   map[ssa.Value]addrInfo
 	graph  callgraph.Graph
-	// liftedCall maps a call of this function to the same call in the
-	// lifted build, which the call graph is about.
-	liftedCall map[ssa.CallInstruction][]ssa.CallInstruction
+	// liftedCall maps a call of this function to what the call graph says of
+	// the same call in the lifted build (one answer for each lifted function
+	// of the name).
+	liftedCall map[ssa.CallInstruction][][]ir.FuncID
 	global     map[string]ir.Global
 	cur        *[]ir.Instr
 }
@@ -203,7 +268,7 @@ type addrInfo struct {
 	pos   ir.Pos
 }
 
-func convertFunc(p *gossa.Program, fn *ssa.Function, graph callgraph.Graph, liftedFns []*ssa.Function, globals map[string]ir.Global) *ir.Func {
+func convertFunc(p *gossa.Program, fn *ssa.Function, graph callgraph.Graph, liftedFns [][]liftedCall, globals map[string]ir.Global) *ir.Func {
 	c := &conv{
 		p:      p,
 		fn:     fn,
@@ -576,43 +641,19 @@ func (c *conv) noteGlobal(g *ssa.Global) {
 // call graph is about. Lifting does not move or drop them, but it does drop
 // bookkeeping calls, so they are paired by where they are and what they are
 // (in order, when several are at the same place).
-func (c *conv) matchCalls(liftedFns []*ssa.Function) {
+func (c *conv) matchCalls(liftedFns [][]liftedCall) {
 	if len(liftedFns) == 0 {
 		return
 	}
-	type key struct {
-		pos    token.Pos
-		invoke bool
-		name   string
-	}
-	keyOf := func(ci ssa.CallInstruction) (key, bool) {
-		cc := ci.Common()
-		switch {
-		case cc.IsInvoke():
-			return key{ci.Pos(), true, cc.Method.FullName()}, true
-		case cc.StaticCallee() != nil:
-			return key{}, false
-		}
-		if _, ok := cc.Value.(*ssa.Builtin); ok {
-			return key{}, false
-		}
-		return key{ci.Pos(), false, ""}, true
-	}
-	pools := make([]map[key][]ssa.CallInstruction, len(liftedFns))
-	for i, lifted := range liftedFns {
-		pool := map[key][]ssa.CallInstruction{}
-		for _, b := range lifted.Blocks {
-			for _, in := range b.Instrs {
-				if ci, ok := in.(ssa.CallInstruction); ok {
-					if k, ok := keyOf(ci); ok {
-						pool[k] = append(pool[k], ci)
-					}
-				}
-			}
+	pools := make([]map[callKey][][]ir.FuncID, len(liftedFns))
+	for i, calls := range liftedFns {
+		pool := map[callKey][][]ir.FuncID{}
+		for _, lc := range calls {
+			pool[lc.key] = append(pool[lc.key], lc.cands)
 		}
 		pools[i] = pool
 	}
-	c.liftedCall = map[ssa.CallInstruction][]ssa.CallInstruction{}
+	c.liftedCall = map[ssa.CallInstruction][][]ir.FuncID{}
 	for _, b := range c.fn.Blocks {
 		for _, in := range b.Instrs {
 			ci, ok := in.(ssa.CallInstruction)
