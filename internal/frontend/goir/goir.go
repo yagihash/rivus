@@ -39,7 +39,9 @@ type Options struct {
 // cut and marked truncated.
 const MaxConstString = 1 << 16
 
-// Extract converts the program. The program must have been loaded with
+// Extract converts the program. It takes the bodies of the go/ssa functions
+// it converts (releaseBody), so a program is converted once. The program must
+// have been loaded with
 // gossa.Options{NaiveForm: true}.
 func Extract(p *gossa.Program, opts Options) (*ir.Program, error) {
 	out := &ir.Program{}
@@ -117,6 +119,7 @@ func Extract(p *gossa.Program, opts Options) (*ir.Program, error) {
 			continue
 		}
 		f := convertFunc(p, fn, graph, lifted[gossa.FuncID(fn)], globals)
+		releaseBody(fn)
 		out.Funcs = append(out.Funcs, f)
 		if !opts.All {
 			continue
@@ -147,6 +150,26 @@ func Extract(p *gossa.Program, opts Options) (*ir.Program, error) {
 	out.Impls = impls
 	out.TypeAliases = typeAliases(p)
 	return out, nil
+}
+
+// releaseBody lets go of the body of a function that has been converted: its
+// blocks and instructions, parameters, free variables and locals. The
+// conversion of another function reads the signature, the name and the
+// position of what it calls, never its body, and the lifted build (which the
+// call graph is about) is another set of functions. The go/ssa program holds
+// the bodies, with the functions that have not been converted yet, until the
+// extraction ends.
+//
+// Two things stay, because go/ssa reads them for the name (fn.String, which
+// is the FuncID of a function that another function calls or makes a closure
+// of): the AnonFuncs of a function (the number of an anonymous function is its
+// place in them), and the one free variable of a "$bound" method value (the
+// receiver type is its type).
+func releaseBody(fn *ssa.Function) {
+	fn.Blocks, fn.Params, fn.Locals, fn.Recover = nil, nil, nil, nil
+	if !(len(fn.FreeVars) == 1 && strings.HasSuffix(fn.Name(), "$bound")) {
+		fn.FreeVars = nil
+	}
 }
 
 // Func converts one function.
