@@ -27,3 +27,21 @@ sink の位置が、値が**使われる場所**(サービスのメソッド)で
 - `bench/zoo-dart/cells/lib/dart/github_slug_assign.dart`(`F/dart/github-slug-assign`): vuln に `@miss(unmodeled_library_call) @ref(model-dart-github-repositoryslug-miss)`。
 
 直ったら、2 つのセルの `@miss` を外す(同じコミットで)。比べるセルは、`F/dart/github-slug-owner`(`RepositorySlug(v, 'r')` で作る形。今も見つかる)。
+
+## 調べた結果(2026-11-23)
+### trace の有無の違い
+
+`make model`(Dart)の実行では、サイレントな見逃し(trace なし)だった。zoo のセルが `@miss(unmodeled_library_call)` なのは、流れが途中で失われた印ではなく、同じ関数にある別の呼び出し(骨組みの `GitHub()`。本体を読めず、モデルもない)の不確かさが、trace の数え方(`missTraces`: source と sink の関数にある不確かさを数える)に入るため。実物のパッケージでは `GitHub()` は本体があり、その不確かさがないので、同じ流れが無印になる。
+
+### 流れは失われていない
+
+エンジンは、この流れを失っていない。`RepositorySlug.fromJson`(生成された `repos.g.dart` の `_$RepositorySlugFromJson`)の本体も、`slug.owner = x` の代入(フィールドへの書き込み)も追われ、スラッグを取るメソッドの引数 0 に sink の行を足すと、実物の `github` 9.26.0 に対して、3 つの作り方(コンストラクタ、`fromJson`、代入)のどれも、`getReadme` で見つかる。見逃しの原因は 2 つだけ:
+
+1. スラッグを取るメソッドの引数に、sink の行がない(上の「原因」のとおり)。
+2. `getReadme` の本体の中の `GitHub.getJSON`(path の sink)は、依存の中なので、サイトとして探されない(ADR-099、課題 #144)。値は本体の中の sink に届くが、出力は `summary.dependency_sites.searched: false` と言うだけで、その流れの印はない。`dart-github.yaml` の冒頭にある「本体を読むので `GitHub.request` に届く」は、プロジェクトのコードが `request` などを直接呼ぶときだけの話。
+
+したがって、新しいエンジンの課題ではない(#144 の形)。直し方は上の「直す方向」のままで、スラッグを取るメソッドの引数に sink を置けば、3 つの作り方が全部見つかる。
+
+### セルの注意
+
+2 つのセルの `@miss(unmodeled_library_call)` の trace は、骨組みの `GitHub()`(`bench/zoo-dart/cells/packages/github/lib/src/common/github.dart`)の本体を読めないことによる。この骨組みを変えると trace が消え、`@miss(silent)` に直す必要が出る。直った(sink の行が入った)ときは、どちらにしても `@miss` を外す。
