@@ -329,22 +329,19 @@ func displayString(t types.Type) string {
 
 // candidates are the functions the call graph says a call may reach.
 func (c *conv) candidates(ci ssa.CallInstruction) []ir.FuncID {
-	if c.graph == nil {
-		return nil
-	}
-	sites := []ssa.CallInstruction{ci}
-	if c.liftedCall != nil {
-		if l, ok := c.liftedCall[ci]; ok {
-			sites = l
-		}
-	}
 	var out []ir.FuncID
-	for _, site := range sites {
-		for _, fn := range c.graph.Callees(site) {
+	n := 1
+	if l, ok := c.liftedCall[ci]; ok {
+		n = len(l)
+		for _, ids := range l {
+			out = append(out, ids...)
+		}
+	} else if c.graph != nil {
+		for _, fn := range c.graph.Callees(ci) {
 			out = append(out, ir.FuncID(gossa.FuncID(fn)))
 		}
 	}
-	if len(sites) > 1 {
+	if n > 1 {
 		// the callees of each are in order: the join is too
 		sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
 		w := 0
