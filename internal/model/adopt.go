@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"go.yaml.in/yaml/v3"
+	"go.yaml.in/yaml/v4"
 )
 
 // AdoptRule is one decision of "bulk adoption" (docs/DESIGN-package-models.md, 6.12; docs/MODELING.md, "Bulk adoption: adopt_rules:"): a human
