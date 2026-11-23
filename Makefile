@@ -7,7 +7,7 @@
 # CI runs the same tests (a pull request with -short, main and the weekly run without): .github/workflows/ci.yml.
 
 .DEFAULT_GOAL := help
-.PHONY: help setup build check test zoo-loosened zoo-dart-gen model-diff model docs-gen
+.PHONY: help setup build check test zoo-loosened shard-check test-shard go-warm zoo-dart-gen model-diff model docs-gen
 
 # the extractors that `make test` needs (a language whose extractor is not there FAILS, it is not skipped)
 RIVUS_DART ?= dart
@@ -37,6 +37,26 @@ test: ## every test, with the Dart and Rust extractors (what CI runs on main)
 zoo-loosened: ## check that what the commits change in the zoo marks (bench/zoo/marks.d, against the merge base) is not a loosening without a "Zoo-Loosened:" line (BASE=<commit> HEAD=<commit>)
 	@[ -n "$(BASE)" ] && [ -n "$(HEAD)" ] || { echo "usage: make zoo-loosened BASE=<commit> HEAD=<commit>"; exit 1; }
 	bash scripts/zoo-loosened-check.sh "$(BASE)" "$(HEAD)"
+
+shard-check: ## check that the shards of the tests of cmd/rivus (scripts/shard.sh) run every test exactly once (N=<number of shards>, 4 as in CI)
+	@set -e; n=$(or $(N),4); \
+	list=$$(go test -list '.' ./cmd/rivus | grep -E '^(Test|Example)' | LC_ALL=C sort); \
+	got=$$(for i in $$(seq 0 $$((n - 1))); do c=$$(ALL="$$list" bash scripts/shard.sh $$i $$n); \
+	  [ -n "$$c" ] || { echo "shard $$i has no test" >&2; exit 1; }; echo "shard $$i/$$n: $$(echo "$$c" | wc -l | tr -d ' ') tests" >&2; echo "$$c"; done); \
+	dup=$$(echo "$$got" | LC_ALL=C sort | uniq -d); [ -z "$$dup" ] || { echo "run more than once:"; echo "$$dup"; exit 1; }; \
+	[ "$$(echo "$$got" | LC_ALL=C sort)" = "$$list" ] || { echo "the union of the shards is not the list of the tests"; exit 1; }; \
+	echo "ok: $$(echo "$$list" | wc -l | tr -d ' ') tests, each in exactly one of $$n shards"
+
+test-shard: ## run one shard of the tests of cmd/rivus, as CI does: I=<index> N=<number of shards> (SHORT=-short, RIVUS_DART, RIVUS_RUST, RIVUS_REQUIRE_* from the environment)
+	@set -e; [ -n "$(I)" ] && [ -n "$(N)" ] || { echo "usage: make test-shard I=0 N=4"; exit 1; }; \
+	names=$$(bash scripts/shard.sh "$(I)" "$(N)"); \
+	[ -n "$$names" ] || { echo "shard $(I)/$(N) has no test" >&2; exit 1; }; \
+	echo "shard $(I)/$(N): $$(echo "$$names" | wc -l | tr -d ' ') tests"; \
+	regex="^($$(echo "$$names" | paste -sd'|' -))\$$"; \
+	go test $${SHORT:+"$$SHORT"} -timeout 30m -run "$$regex" ./cmd/rivus
+
+go-warm: ## compile the dependencies of every module of the bench into the build cache (the tests read them with `go list -export`: 14 s on a cold cache, 3 s on a warm one)
+	@set -e; for gm in $$(find bench -name go.mod | sort); do (cd "$$(dirname "$$gm")" && go list -export -deps ./... > /dev/null); done
 
 zoo-dart-gen: ## write bench/zoo-dart/exec/lib/cases.dart and the two pubspec.yaml of the Dart zoo (generated, not committed) from the directories of the cells and of the skeleton packages
 	go test ./cmd/rivus -run '^TestZooDartGenerate$$' -count=1 -update

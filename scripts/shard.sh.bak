@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Usage: shard.sh <index> <total>
+# Prints the names of the tests (and examples) of cmd/rivus that shard <index> of <total> runs, one on each line.
+# Every name goes to exactly one shard (the awk below gives each one a single value of s in 0..total-1), and a test that is added later
+# is in some shard whatever its name: nothing is chosen by what a test needs. `make shard-check` runs it for every index and compares
+# the union with `go test -list`. The heavy ones (HEAVY, the heaviest first) are spread by their rank, and the first one is alone
+# in shard 0 when there is more than one shard; the others by their places in the sorted list.
+# LIST=<file> reads the names from a file (for the check) and does not call `go test -list`.
+set -euo pipefail
+i=${1:?index}
+n=${2:?total}
+HEAVY=${HEAVY:-"TestDeterministicDogfood TestDeterministicParamshare TestGCPRows TestDogfood TestDeterministicPassStats TestDeterministicCuratedGo TestScaleSynth"}
+if [ -n "${LIST:-}" ]; then
+  all=$(cat "$LIST")
+else
+  all=$(go test -list '.' ./cmd/rivus | grep -E '^(Test|Example)' | LC_ALL=C sort)
+fi
+echo "$all" | awk -v i="$i" -v n="$n" -v heavy="$HEAVY" '
+  BEGIN { split(heavy, h, " "); for (k = 1; k in h; k++) rank[h[k]] = k - 1; lone = (n > 1) }
+  $0 in rank {
+    s = (!lone) ? rank[$0] % n : (rank[$0] == 0 ? 0 : 1 + (rank[$0] - 1) % (n - 1))
+    if (s == i) print
+    next
+  }
+  { s = lone ? 1 + (r++ % (n - 1)) : (r++ % n); if (s == i) print }'
