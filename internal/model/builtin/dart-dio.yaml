@@ -21,6 +21,8 @@
 # calls the core library only, so a row for a package would fail it; and `Interceptor.onRequest` is a method that the
 # project overrides, which `calls:` (`fn: argN`) cannot name. Whether the value that dio hands to an interceptor of the
 # project is followed by reading the body of dio was not checked (no cell: the zoo has only a skeleton of Dio).
+# `MultipartFile.fromFile` and `fromFileSync` read the file at the path they take, to send it: a value that decides the path
+# is a path traversal sink (a file that the program can read goes out in the request).
 # `BaseOptions(baseUrl: ...)` is not a sink: the base of a client is a configuration, rarely user input.
 ruleset: rivus/dart/dio@1
 verified_versions:
@@ -206,5 +208,14 @@ sinks:
     accepts: [user_input]
   - symbol: package:dio/src/dio/dio_for_native.dart#DioForNative.download
     args: [1]
+    category: path_traversal
+    accepts: [user_input]
+  # MultipartFile (static methods that read the file at the path and make a part of a request body from it)
+  - symbol: package:dio/src/multipart_file.dart#MultipartFile.fromFile
+    args: [0]
+    category: path_traversal
+    accepts: [user_input]
+  - symbol: package:dio/src/multipart_file.dart#MultipartFile.fromFileSync
+    args: [0]
     category: path_traversal
     accepts: [user_input]
