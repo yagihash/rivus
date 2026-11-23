@@ -46,10 +46,10 @@ options:
                     time, not cached (default 2: every benchmark runs 4 times in all, 2 per side; 1 = single runs: the table then says "single run:
                     no conclusion" and marks nothing). The `!!` mark needs a change of 10% or more that is larger than the spread between the runs
                     of the same side. Also the number of rounds of --cost-check
-  --cost-check NAME one more target NAME (only `memos`) of bench/deps-targets.json, --cost-rounds alternating rounds (2: about 10 minutes or more) with the default flags, cost numbers
+  --cost-check NAME one more target NAME (`memos`, or `memos-4gib`, the line A: `-max-memory 4GiB`, watchdog 4 GB) of bench/deps-targets.json, --cost-rounds alternating rounds (2: about 10 minutes or more) with the default flags, cost numbers
                     only (CPU time, peak memory of the process tree, summary elements and steps, load average; no finding comparison). The
-                    tree comes from the bench cache ($BENCH_CACHE, fetch only, never run); the run has its own process group and the 8 GB
-                    watchdog of bench/deps_bench.py. It takes minutes: for engine pull requests only; off by default
+                    tree comes from the bench cache ($BENCH_CACHE, fetch only, never run); the run has its own process group and the memory
+                    cap of the target (8 GB; 4 GB for memos-4gib) as the watchdog of bench/deps_bench.py. It takes minutes: for engine pull requests only; off by default
   --dry-run         print what would be done and exit (nothing is created)
   --no-guard        do not wait for a quiet machine (for testing this script on the small benchmarks only)
   -h, --help
@@ -106,7 +106,7 @@ while [ $# -gt 0 ]; do
   shift
 done
 case "$ROUNDS" in ''|*[!0-9]*|0) echo "--cost-rounds: a number of 1 or more" >&2; exit 64 ;; esac
-case "$COSTCHECK" in ""|memos) ;; *) echo "--cost-check: only memos" >&2; exit 64 ;; esac
+case "$COSTCHECK" in ""|memos|memos-4gib) ;; *) echo "--cost-check: only memos or memos-4gib" >&2; exit 64 ;; esac
 if [ "${#POS[@]}" -ne 2 ]; then usage >&2; exit 64; fi
 BASE_REF="${POS[0]}"; HEAD_REF="${POS[1]}"
 
