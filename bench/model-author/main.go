@@ -3,7 +3,8 @@
 //	fetch the source of the package (fetch only: nothing of it is run), list the candidates by the rule table of layer 1 (rules.go),
 //	match each candidate with a row or with an entry of `rejected:`, and stop with exit code 70 when one is neither.
 //
-// What it does not do (later stages): flows from the types, skeletons, cells, Dart, Rust. The decisions (sink, source, sanitizer) are the
+// With -gen-skeleton (stage 2) it makes the skeleton of the package for the Go zoo and the template of its cells (genskel.go, skeleton.go).
+// What it does not do (later stages): flows from the types, Dart, Rust. The decisions (sink, source, sanitizer) are the
 // person's or the model's: they are rows of the model file, or entries of `rejected:` in the same file.
 package main
 
@@ -26,8 +27,8 @@ const (
 	ExitUsage     = 2  // the arguments, or a model file that the loader refuses
 	ExitFetch     = 10 // the fetch of the package
 	ExitLoad      = 20 // reading the package, or the differential test could not run
-	ExitSkeleton  = 30 // (not used in stage 1)
-	ExitCells     = 40 // (not used in stage 1)
+	ExitSkeleton  = 30 // -gen-skeleton: the skeleton or the module files could not be made, or the skeleton does not build
+	ExitCells     = 40 // -gen-skeleton: the cell template could not be made, or does not build
 	ExitMiss      = 50 // the differential test failed (a MISS, or an EXTRA without a note)
 	ExitZoo       = 60 // (not used in stage 1)
 	ExitUndecided = 70 // a candidate of layer 1 has no row and is not in `rejected:`
@@ -44,8 +45,8 @@ func (e *exitError) Error() string { return e.err.Error() }
 func main() { os.Exit(realMain(os.Args[1:], os.Stdout, os.Stderr)) }
 
 type options struct {
-	pkg, version, lang, model, repo, work  string
-	recall, diff, writeVerified, writeDead bool
+	pkg, version, lang, model, repo, work               string
+	recall, diff, writeVerified, writeDead, genSkeleton bool
 }
 
 func realMain(args []string, stdout, stderr io.Writer) int {
@@ -62,6 +63,7 @@ func realMain(args []string, stdout, stderr io.Writer) int {
 	fs.BoolVar(&o.diff, "diff", false, "when every candidate is decided, run bench/model-diff for the package and write the material for the pull request")
 	fs.BoolVar(&o.writeVerified, "write-verified", false, "with -diff, when it passes: write verified_versions of the model file")
 	fs.BoolVar(&o.writeDead, "write-dead-allow", false, "add the rows of the package that the zoo does not hit to the .dead-allow of the model file (reason: dependency), and stop")
+	fs.BoolVar(&o.genSkeleton, "gen-skeleton", false, "make the skeleton of the package for the Go zoo (bench/zoo-go-pkg/<name>/skel), the module files, and the template of the cells when the package has none; overwrites the generated files, never a cell")
 	if err := fs.Parse(args); err != nil {
 		return ExitUsage
 	}
@@ -120,6 +122,13 @@ func run(o *options, out io.Writer) error {
 	target := o.model
 	if target == "" && len(facts.Files) > 0 {
 		target = facts.Files[0]
+	}
+	if o.genSkeleton {
+		l, err := FetchAndLoad(filepath.Join(o.work, "fetch-"+slug), o.pkg, o.version)
+		if err != nil {
+			return err
+		}
+		return runGenSkeleton(out, o, repo, facts, l)
 	}
 	if target == "" && !o.recall {
 		return &exitError{ExitUsage, fmt.Errorf("no row and no `rejected:` entry of %s in the built-in models: the file where the rows go is not known (use -model)", o.pkg)}
