@@ -712,8 +712,8 @@ func mergeSinkReach(old, nw *SinkReach) *SinkReach {
 	return &c
 }
 
-func (s *state) sinkStep(site *sites.Site, in *sg.Instr, note *Uncertainty) Step {
-	return Step{Func: s.eng.funcID(s.fn), Desc: "sink: " + site.Symbol, pos: in.Pos, Notes: appendNote(s.sinkNotes, note)}
+func (s *state) sinkStep(site *sites.Site, in *sg.Instr, note *Uncertainty) stepRec {
+	return newRec(s.eng.funcID(s.fn), "sink: "+site.Symbol, packPos(in.Pos), nil, appendNote(s.sinkNotes, note))
 }
 
 // guardsAtSink are the conditions under which the flow reaches the sink: those

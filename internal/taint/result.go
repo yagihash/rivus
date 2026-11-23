@@ -162,8 +162,6 @@ type Step struct {
 	// Model is set when a model decided this hop.
 	Model *ModelRef `json:"model,omitempty"`
 
-	guards []Guard
-
 	pos ir.Pos
 }
 

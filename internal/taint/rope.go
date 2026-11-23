@@ -5,13 +5,61 @@ package taint
 // grow with the square of the call depth. A rope shares the common parts.
 type rope struct {
 	l, r *rope
-	s    *Step
+	s    *stepRec
 	n    int
+}
+
+// stepRec is what a leaf of a rope keeps of a Step: 72 bytes. A Step also has
+// a position and a snippet (empty in a rope: they are made when a finding is
+// made), a copy of the guards of the hop (read nowhere) and the position in
+// 48 bytes. The notes are rare, so they are kept apart.
+type stepRec struct {
+	Func  string
+	Desc  string
+	pos   cpos
+	Model *ModelRef
+	rare  *stepRare
+}
+
+type stepRare struct {
+	notes []*Uncertainty
+}
+
+// newRec makes a record; notes may be nil or empty.
+func newRec(fn, desc string, pos cpos, model *ModelRef, notes []*Uncertainty) stepRec {
+	rec := stepRec{Func: fn, Desc: desc, pos: pos, Model: model}
+	if len(notes) > 0 {
+		rec.rare = &stepRare{notes: notes}
+	}
+	return rec
+}
+
+func (rec *stepRec) notes() []*Uncertainty {
+	if rec.rare == nil {
+		return nil
+	}
+	return rec.rare.notes
+}
+
+// step is the Step that the record stands for.
+func (rec *stepRec) step() Step {
+	return Step{Func: rec.Func, Desc: rec.Desc, pos: rec.pos.pos(), Model: rec.Model, Notes: rec.notes()}
+}
+
+// leafNode is a leaf and its record in one allocation.
+type leafNode struct {
+	rope
+	rec stepRec
 }
 
 const maxRopeLen = 1 << 30
 
-func leaf(st Step) *rope { return &rope{s: &st, n: 1} }
+func leaf(rec stepRec) *rope {
+	ln := &leafNode{rec: rec}
+	ln.n = 1
+	ln.s = &ln.rec
+	return &ln.rope
+}
 
 func (r *rope) len() int {
 	if r == nil {
@@ -36,6 +84,11 @@ func cat(a, b *rope) *rope {
 
 // each calls f on the steps in order until f returns false.
 func (r *rope) each(f func(Step) bool) {
+	r.eachRec(func(rec *stepRec) bool { return f(rec.step()) })
+}
+
+// eachRec is each on the records.
+func (r *rope) eachRec(f func(*stepRec) bool) {
 	if r == nil {
 		return
 	}
@@ -44,7 +97,7 @@ func (r *rope) each(f func(Step) bool) {
 		x := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
 		if x.s != nil {
-			if !f(*x.s) {
+			if !f(x.s) {
 				return
 			}
 			continue
@@ -55,6 +108,10 @@ func (r *rope) each(f func(Step) bool) {
 
 // eachReverse calls f on the steps from the last to the first.
 func (r *rope) eachReverse(f func(Step) bool) {
+	r.eachRecReverse(func(rec *stepRec) bool { return f(rec.step()) })
+}
+
+func (r *rope) eachRecReverse(f func(*stepRec) bool) {
 	if r == nil {
 		return
 	}
@@ -63,7 +120,7 @@ func (r *rope) eachReverse(f func(Step) bool) {
 		x := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
 		if x.s != nil {
-			if !f(*x.s) {
+			if !f(x.s) {
 				return
 			}
 			continue

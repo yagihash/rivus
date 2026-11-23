@@ -592,8 +592,7 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 					continue
 				}
 			}
-			call := Step{Func: s.eng.funcID(s.fn), Desc: desc, pos: cc.in.Pos}
-			call.Notes = appendNote(notes, fnote)
+			call := newRec(s.eng.funcID(s.fn), desc, packPos(cc.in.Pos), nil, appendNote(notes, fnote))
 			steps = cat(cat(steps, leaf(call)), sr.Steps)
 			var chain []Guard
 			var over bool
