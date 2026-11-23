@@ -50,6 +50,15 @@ options:
                     only (CPU time, peak memory of the process tree, summary elements and steps, load average; no finding comparison). The
                     tree comes from the bench cache ($BENCH_CACHE, fetch only, never run); the run has its own process group and the memory
                     cap of the target (8 GB; 4 GB for memos-4gib) as the watchdog of bench/deps_bench.py. It takes minutes: for engine pull requests only; off by default
+  --graph-check LIST  the graph check, ALONE (the benchmarks above are not run): LIST is the names, separated by commas, of Go benchmarks (go-curated, zoo-go,
+                    go-synth-S, go-scale, gogs-*, ... any of the names of --only) and of the targets of bench/deps-targets.json (memos, memos-4gib,
+                    gitea: fetched from the bench cache, never run; their process tree is watched against the memory cap of the target, and the heavy-work
+                    lock is held for each run). For each name, base and head are run on the SAME code, and what they build is compared: the IR
+                    (`rivus debug extract -all`), the edges of the call graph with their candidates (`rivus index`), the summary of every function
+                    (RIVUS_INTERNAL_SUMMARY_DUMP, an internal dump with no flag: the hash of each whole summary), and then the findings and the
+                    uncertainties. One line each: same, or DIFFERENT with how many and the first function IDs (bench/graph_check.py). A change for
+                    memory or cost has to show "same" (docs/WORKFLOW.md); a difference is a change of the accuracy. A version from before the dump
+                    leaves "summaries" as NOT COMPARED (exit 3). Exit status: 0 all the same, 1 a difference, 2 a run failed, 3 same but not all compared
   --dry-run         print what would be done and exit (nothing is created)
   --no-guard        do not wait for a quiet machine (for testing this script on the small benchmarks only)
   -h, --help
@@ -74,7 +83,7 @@ EOF
 }
 
 WORK="${COMPARE_WORK:-${TMPDIR:-/tmp}/rivus-compare}"
-OUT=""; RESUME=0; ONLY=""; SKIP=""; BIGS=""; SEL_LIGHT=0; SEL_HEAVY=0; NOCACHE=0; FIXED=0; COSTCHECK=""; ROUNDS=2; CACHE_DIR=""; WAIT=6; TIMEOUT=1800s; DRY=0; NOGUARD=0
+OUT=""; RESUME=0; ONLY=""; SKIP=""; BIGS=""; SEL_LIGHT=0; SEL_HEAVY=0; NOCACHE=0; FIXED=0; COSTCHECK=""; GRAPHCHECK=""; ROUNDS=2; CACHE_DIR=""; WAIT=6; TIMEOUT=1800s; DRY=0; NOGUARD=0
 MEMLIMITS="gogs-9a9388ac=5GiB gogs-48946299=5GiB gitea-cut=4GiB"
 POS=()
 while [ $# -gt 0 ]; do
@@ -98,6 +107,7 @@ while [ $# -gt 0 ]; do
     --fixed-inputs) FIXED=1 ;;
     --cost-rounds) ROUNDS="$2"; shift ;;
     --cost-check) COSTCHECK="$2"; shift ;;
+    --graph-check) GRAPHCHECK="$2"; shift ;;
     --dry-run) DRY=1 ;;
     --no-guard) NOGUARD=1 ;;
     -*) echo "unknown option $1" >&2; usage >&2; exit 64 ;;
@@ -106,6 +116,7 @@ while [ $# -gt 0 ]; do
   shift
 done
 case "$ROUNDS" in ''|*[!0-9]*|0) echo "--cost-rounds: a number of 1 or more" >&2; exit 64 ;; esac
+case "$GRAPHCHECK" in *[!A-Za-z0-9_.,-]*) echo "--graph-check: names separated by commas" >&2; exit 64 ;; esac
 case "$COSTCHECK" in ""|memos|memos-4gib) ;; *) echo "--cost-check: only memos or memos-4gib" >&2; exit 64 ;; esac
 if [ "${#POS[@]}" -ne 2 ]; then usage >&2; exit 64; fi
 BASE_REF="${POS[0]}"; HEAD_REF="${POS[1]}"
@@ -132,6 +143,7 @@ if [ "$SEL_HEAVY" = 1 ] && [ "$SEL_LIGHT" = 0 ]; then BENCHES=""; fi
 [ "$SEL_HEAVY" = 1 ] && [ -z "$BIGS" ] && { echo "--heavy needs --big NAME=URL@COMMIT" >&2; exit 64; }
 BENCHES="$BENCHES $(big_names)"
 if [ -n "$ONLY" ]; then BENCHES="$(echo "$ONLY" | tr ',' ' ')"; fi
+[ -n "$GRAPHCHECK" ] && BENCHES=""   # the graph check is alone
 if [ -n "$SKIP" ]; then
   keep=""
   for b in $BENCHES; do case ",$SKIP," in *",$b,"*) ;; *) keep="$keep $b" ;; esac; done
@@ -525,6 +537,30 @@ for b in $BENCHES; do
   ALL="$ALL,$b"
   run_bench "$b"
 done
+
+# --- 3a. the graph check: what base and head build from the same code (IR, edges, summaries), compared (bench/graph_check.py) ---
+if [ -n "$GRAPHCHECK" ]; then
+  (cd "$ROOT" && go build -o "$BIN/graphcheck" ./bench/graphcheck) >&2 || { say "go build of bench/graphcheck failed"; exit 2; }
+  GC_STATUS=0
+  for b in $(echo "$GRAPHCHECK" | tr ',' ' '); do
+    say "graph check $b"
+    case "$b" in
+      memos|memos-4gib|gitea)
+        python3 "$ROOT/bench/graph_check.py" -name "$b" -target "$b" -base-bin "$BIN/rivus-base" -head-bin "$BIN/rivus-head" -graphcheck-bin "$BIN/graphcheck" -out "$OUT" ;;
+      *)
+        spec "$b" >/dev/null 2>&1 && [ "$KIND" != dart ] && [ "$KIND" != rust ] || { say "graph check $b: not a Go benchmark (or an unknown name)"; GC_STATUS=2; continue; }
+        setup "$b" head || { GC_STATUS=2; continue; }   # the code of the head version (the same for both: the tree is the engine's input)
+        gargs=(-name "$b" -base-bin "$BIN/rivus-base" -head-bin "$BIN/rivus-head" -graphcheck-bin "$BIN/graphcheck" -out "$OUT" -dir "$DIR")
+        [ -n "$RULES" ] && gargs+=(-rules "$RULES")
+        [ -n "$(flags_of "$b")" ] && gargs+=(-flags "$(flags_of "$b")")
+        python3 "$ROOT/bench/graph_check.py" "${gargs[@]}" ;;
+    esac
+    rc=$?
+    case "$rc" in 0) ;; 1) GC_STATUS=1 ;; 3) [ "$GC_STATUS" = 0 ] && GC_STATUS=3 ;; *) GC_STATUS=2 ;; esac
+  done
+  say "graph check done (exit $GC_STATUS: 0 same, 1 a difference, 2 a run failed, 3 same but not all compared); the lines are in $OUT/graphcheck-<name>.txt"
+  exit $GC_STATUS
+fi
 
 # --- 3b. the cost check: one run of memos on each side, cost only (no wait for the other runs: it is one at a time here) ---
 if [ -n "$COSTCHECK" ]; then
