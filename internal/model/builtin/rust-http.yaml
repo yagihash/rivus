@@ -1,0 +1,61 @@
+# The crates of the HTTP types and URLs that a handler reads the request through (`http`, `url`, `serde_urlencoded`,
+# `urlencoding`): what their getters return comes from the value they are called on. The types are the paths of the structs
+# (without type arguments), `&` kept. It was a part of rust-web.yaml.
+ruleset: rivus/rust/http@1
+
+sources:
+  - kind: param_type
+    type: "http::request::Request"
+    labels: [user_input]
+  - kind: param_type
+    type: "&http::request::Request"
+    labels: [user_input]
+  - kind: param_type
+    type: "http::Uri"
+    labels: [user_input]
+
+propagators:
+  - symbol: http::request::Request::uri
+    flows: [{from: args, to: result}]
+  - symbol: http::request::Request::headers
+    flows: [{from: args, to: result}]
+  - symbol: http::request::Request::body
+    flows: [{from: args, to: result}]
+  - symbol: http::request::Request::into_body
+    flows: [{from: args, to: result}]
+  - symbol: http::request::Request::into_parts
+    flows: [{from: args, to: result}]
+  - symbol: http::Uri::path
+    flows: [{from: args, to: result}]
+  - symbol: http::Uri::query
+    flows: [{from: args, to: result}]
+  - symbol: http::Uri::host
+    flows: [{from: args, to: result}]
+  - symbol: http::Uri::to_string
+    flows: [{from: args, to: result}]
+  - symbol: http::HeaderMap::get
+    flows: [{from: args, to: result}]
+  - symbol: http::HeaderValue::to_str
+    flows: [{from: args, to: result}]
+  - symbol: http::HeaderValue::as_bytes
+    flows: [{from: args, to: result}]
+  - symbol: url::Url::parse
+    flows: [{from: args, to: result}]
+  - symbol: url::Url::path
+    flows: [{from: args, to: result}]
+  - symbol: url::Url::query
+    flows: [{from: args, to: result}]
+  - symbol: url::Url::query_pairs
+    flows: [{from: args, to: result}]
+  - symbol: url::Url::host_str
+    flows: [{from: args, to: result}]
+  - symbol: url::Url::as_str
+    flows: [{from: args, to: result}]
+  - symbol: url::Url::join
+    flows: [{from: args, to: result}]
+  - symbol: serde_urlencoded::from_str
+    flows: [{from: args, to: result}]
+  - symbol: serde_urlencoded::to_string
+    flows: [{from: args, to: result}]
+  - symbol: urlencoding::decode
+    flows: [{from: args, to: result}]

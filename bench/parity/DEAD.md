@@ -496,9 +496,9 @@
 - `std::fs::copy` (rust-std.yaml, sink, iv) -> `tokio::fs::copy`
 - `reqwest::blocking::Client::get` (rust-std.yaml, sink, iv) -> `curated::parseable::http::Client::get`, `reqwest::Client::get`
 - `reqwest::blocking::Client::post` (rust-std.yaml, sink, iv) -> `curated::parseable::http::Client::post`, `reqwest::Client::post`
-- `http::HeaderMap::get` (rust-web.yaml, propagator, i) -> `actix_web::http::header::HeaderMap::get`, `object_store::HeaderMap::get`
-- `http::HeaderValue::to_str` (rust-web.yaml, propagator, i) -> `actix_web::http::header::HeaderValue::to_str`, `object_store::HeaderValue::to_str`
-- `http::HeaderValue::as_bytes` (rust-web.yaml, propagator, i) -> `actix_web::http::header::HeaderValue::as_bytes`, `object_store::HeaderValue::as_bytes`
+- `http::HeaderMap::get` (rust-http.yaml, propagator, i) -> `actix_web::http::header::HeaderMap::get`, `object_store::HeaderMap::get`
+- `http::HeaderValue::to_str` (rust-http.yaml, propagator, i) -> `actix_web::http::header::HeaderValue::to_str`, `object_store::HeaderValue::to_str`
+- `http::HeaderValue::as_bytes` (rust-http.yaml, propagator, i) -> `actix_web::http::header::HeaderValue::as_bytes`, `object_store::HeaderValue::as_bytes`
 
 ### 別の型の同名メンバ: 33
 
@@ -672,19 +672,19 @@
 - `std::pin::Pin::new` (rust-std.yaml, propagator, i)
 - `std::pin::Pin::get_unchecked_mut` (rust-std.yaml, propagator, i)
 - `std::task::Poll::map` (rust-std.yaml, propagator, iii)
-- `http::request::Request::uri` (rust-web.yaml, propagator, i)
-- `http::request::Request::headers` (rust-web.yaml, propagator, i)
-- `http::request::Request::body` (rust-web.yaml, propagator, i)
-- `http::request::Request::into_body` (rust-web.yaml, propagator, i)
-- `http::request::Request::into_parts` (rust-web.yaml, propagator, i)
-- `http::Uri::path` (rust-web.yaml, propagator, i)
-- `http::Uri::query` (rust-web.yaml, propagator, i)
-- `http::Uri::host` (rust-web.yaml, propagator, i)
-- `http::Uri::to_string` (rust-web.yaml, propagator, i)
-- `url::Url::path` (rust-web.yaml, propagator, i)
-- `url::Url::query` (rust-web.yaml, propagator, i)
-- `url::Url::query_pairs` (rust-web.yaml, propagator, i)
-- `serde_urlencoded::from_str` (rust-web.yaml, propagator, i)
-- `serde_urlencoded::to_string` (rust-web.yaml, propagator, i)
-- `urlencoding::decode` (rust-web.yaml, propagator, i)
+- `http::request::Request::uri` (rust-http.yaml, propagator, i)
+- `http::request::Request::headers` (rust-http.yaml, propagator, i)
+- `http::request::Request::body` (rust-http.yaml, propagator, i)
+- `http::request::Request::into_body` (rust-http.yaml, propagator, i)
+- `http::request::Request::into_parts` (rust-http.yaml, propagator, i)
+- `http::Uri::path` (rust-http.yaml, propagator, i)
+- `http::Uri::query` (rust-http.yaml, propagator, i)
+- `http::Uri::host` (rust-http.yaml, propagator, i)
+- `http::Uri::to_string` (rust-http.yaml, propagator, i)
+- `url::Url::path` (rust-http.yaml, propagator, i)
+- `url::Url::query` (rust-http.yaml, propagator, i)
+- `url::Url::query_pairs` (rust-http.yaml, propagator, i)
+- `serde_urlencoded::from_str` (rust-http.yaml, propagator, i)
+- `serde_urlencoded::to_string` (rust-http.yaml, propagator, i)
+- `urlencoding::decode` (rust-http.yaml, propagator, i)
 

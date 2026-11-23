@@ -1,0 +1,20 @@
+# serde_json: what parsing and reading a JSON value returns comes from its input. It was a part of rust-web.yaml.
+ruleset: rivus/rust/serde_json@1
+
+propagators:
+  - symbol: serde_json::from_str
+    flows: [{from: args, to: result}]
+  - symbol: serde_json::from_slice
+    flows: [{from: args, to: result}]
+  - symbol: serde_json::from_value
+    flows: [{from: args, to: result}]
+  - symbol: serde_json::to_string
+    flows: [{from: args, to: result}]
+  - symbol: serde_json::to_vec
+    flows: [{from: args, to: result}]
+  - symbol: serde_json::Value::as_str
+    flows: [{from: args, to: result}]
+  - symbol: serde_json::Value::get
+    flows: [{from: args, to: result}]
+  - symbol: serde_json::Map::get
+    flows: [{from: args, to: result}]
