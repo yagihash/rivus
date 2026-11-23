@@ -1,0 +1,71 @@
+name: Experiment runner
+
+# EXPERIMENT, never merged: the same shards of `test` (ci.yml) on x64 and on arm64 runners.
+on:
+  pull_request:
+    paths:
+      - .github/workflows/exp-runner.yml
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  test:
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
+        shard: [1, 3]
+        rep: [1, 2]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            bench/*/go.sum
+      - uses: dart-lang/setup-dart@2286a0c042b44434fe26d292bbce8d34f7ec662b # v1.8.2
+        with:
+          sdk: 3.13.6
+      - name: Write the generated files of the Dart zoo
+        run: make zoo-dart-gen
+      - name: Resolve the packages of the extractor and the samples
+        run: |
+          for d in extractor/dart extractor/dart/test/sample extractor/dart/test/monorepo/app extractor/dart/test/monorepo/shared extractor/dart/test/versions/a extractor/dart/test/versions/b bench/dart-curated; do
+            if [ -f "$d/pubspec.yaml" ]; then
+              (cd "$d" && dart pub get --enforce-lockfile)
+            fi
+          done
+          for d in bench/zoo-dart/cells bench/zoo-dart/exec; do
+            (cd "$d" && dart pub get)
+          done
+      - name: Cache the pinned nightly
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.rustup/toolchains
+          key: rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('extractor/rust/rust-toolchain.toml') }}
+      - name: Install the pinned nightly
+        working-directory: extractor/rust
+        run: rustup toolchain install
+      - name: Build the Rust extractor
+        working-directory: extractor/rust
+        run: cargo build --locked
+      - name: Compile the dependencies of the bench for the cache
+        run: make go-warm
+      - name: Test cmd/rivus (one shard of the matrix)
+        env:
+          SHORT: -short
+          SHARD_INDEX: ${{ matrix.shard }}
+          RIVUS_DART: dart
+          RIVUS_REQUIRE_DART: "1"
+          RIVUS_RUST: ${{ github.workspace }}/extractor/rust/target/debug/rivus-rust
+          RIVUS_REQUIRE_RUST: "1"
+          RIVUS_REQUIRE_GCP: "1"
+        run: make test-shard I="$SHARD_INDEX" N=4
