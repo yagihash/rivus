@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -504,5 +505,191 @@ func TestVerifiedVersion(t *testing.T) {
 	}
 	if got := verifiedVersion([]string{f}, "example.com/other"); got != "" {
 		t.Errorf("version = %q for a package that has no entry", got)
+	}
+}
+
+func hasError(rep *Report, sub string) bool {
+	for _, e := range rep.Errors {
+		if strings.Contains(e, sub) {
+			return true
+		}
+	}
+	return false
+}
+
+func rowState(rep *Report, sym string) *RowState {
+	for i := range rep.Rows {
+		if rep.Rows[i].Symbol == sym {
+			return &rep.Rows[i]
+		}
+	}
+	return nil
+}
+
+// A pure row has to be right about the body: a flow that the body has (to the result, to a callback, from the receiver) and the row
+// loses is a MISS.
+func TestPureRows(t *testing.T) {
+	t.Run("right", func(t *testing.T) {
+		code, rep := runSynth(t, "pure-good.yaml")
+		if code != 0 || rep.Counts["MISS"] != 0 || rep.Counts["rows_judged"] != 1 {
+			t.Errorf("exit %d, counts %v", code, rep.Counts)
+		}
+	})
+	t.Run("wrong", func(t *testing.T) {
+		code, rep := runSynth(t, "pure-wrong.yaml")
+		if code != 1 || rep.Counts["MISS"] != 3 {
+			t.Fatalf("exit %d, counts %v: the argument, the callback and the receiver must be found", code, rep.Counts)
+		}
+		got := map[string]string{}
+		for _, r := range rep.Results {
+			if r.Status == "MISS" {
+				got[r.Symbol] = r.Variant + " " + strings.Join(r.Miss, ",")
+			}
+		}
+		if got["example.com/synth.Walk"] != "arg0 cb1_0" || got["example.com/synth.Upper"] != "arg0 result0" {
+			t.Errorf("MISS = %v", got)
+		}
+	})
+}
+
+// A row whose symbol is not in the package fails, whatever the kind of the row, and the row is listed as not judged.
+func TestRowOfASymbolThatIsNotThere(t *testing.T) {
+	code, rep := runSynth(t, "pure-missing.yaml")
+	if code != 1 || len(rep.Errors) != 4 {
+		t.Fatalf("exit %d, errors %v", code, rep.Errors)
+	}
+	for _, sym := range []string{"example.com/synth.Gone", "(*example.com/synth.Box).Nope", "(*example.com/synth.Nothing).Get", "example.com/synth.GoneToo"} {
+		if !hasError(rep, sym) {
+			t.Errorf("no error for %s: %v", sym, rep.Errors)
+		}
+		if st := rowState(rep, sym); st == nil || st.Judged {
+			t.Errorf("%s must be listed as not judged: %+v", sym, st)
+		}
+	}
+	if st := rowState(rep, "example.com/synth.Drop"); st == nil || !st.Judged {
+		t.Errorf("the row that is there is judged: %+v", st)
+	}
+}
+
+// A sanitizer row is read against the body: the value has to reach the result, the flows of the row are the body's, and a body that
+// carries nothing is "not judged" (never agreed).
+func TestSanitizerRows(t *testing.T) {
+	t.Run("right", func(t *testing.T) {
+		code, rep := runSynth(t, "sanitizer-good.yaml")
+		if code != 0 || rep.Counts["MISS"] != 0 || rep.Counts["EXTRA"] != 0 {
+			t.Fatalf("exit %d, counts %v", code, rep.Counts)
+		}
+		if st := rowState(rep, "example.com/synth.Esc"); st == nil || !st.Judged {
+			t.Errorf("Esc: %+v", st)
+		}
+		if st := rowState(rep, "example.com/synth.Drop"); st == nil || st.Judged || rep.Counts["rows_not_judged"] != 1 {
+			t.Errorf("Drop carries nothing and must be not judged: %+v, counts %v", st, rep.Counts)
+		}
+	})
+	t.Run("wrong", func(t *testing.T) {
+		code, rep := runSynth(t, "sanitizer-wrong.yaml")
+		if code != 1 || rep.Counts["MISS"] != 1 || rep.Counts["EXTRA"] != 1 || !hasError(rep, "arg3") {
+			t.Fatalf("exit %d, counts %v, errors %v: Pair omits arg1 (MISS), Drop's flow is not in the body (EXTRA), Esc names arg3", code, rep.Counts, rep.Errors)
+		}
+		for _, r := range rep.Results {
+			if r.Status == "MISS" && (r.Symbol != "example.com/synth.Pair" || r.Variant != "arg1") {
+				t.Errorf("MISS at %s %s", r.Symbol, r.Variant)
+			}
+		}
+	})
+}
+
+// A source row is looked up in the package (the symbol, the field, the type, the positions); one that cannot be seen in a probe is not judged.
+func TestSourceRows(t *testing.T) {
+	t.Run("right", func(t *testing.T) {
+		code, rep := runSynth(t, "source-rows.yaml")
+		if code != 0 || rep.Counts["rows_judged"] != 3 || rep.Counts["rows_not_judged"] != 1 {
+			t.Errorf("exit %d, counts %v", code, rep.Counts)
+		}
+		if st := rowState(rep, "example.com/synth.Copy"); st == nil || st.Judged {
+			t.Errorf("a source whose result is a number: %+v", st)
+		}
+	})
+	t.Run("wrong", func(t *testing.T) {
+		code, rep := runSynth(t, "source-wrong.yaml")
+		if code != 1 || len(rep.Errors) != 4 {
+			t.Fatalf("exit %d, errors %v", code, rep.Errors)
+		}
+		for _, sub := range []string{"synth.Nope", "Opts.Nope", "arg4", "arg1, whose type string cannot be written into"} {
+			if !hasError(rep, sub) {
+				t.Errorf("no error that has %q: %v", sub, rep.Errors)
+			}
+		}
+		if rep.Counts["rows_judged"] != 0 {
+			t.Errorf("a wrong row is not judged: %v", rep.Counts)
+		}
+	})
+}
+
+// A position whose type the source cannot be put into (a struct pointer) is listed as unverified, not skipped without a word, and the row
+// is still judged by the positions that can be probed.
+func TestArgumentThatCannotHoldTheSource(t *testing.T) {
+	code, rep := runSynth(t, "arg-struct.yaml")
+	if code != 0 || len(rep.Unverified) != 1 || rep.Unverified[0].Variant != "arg0" || !strings.Contains(rep.Unverified[0].Reason, "cannot be put into: *example.com/synth.Opts") {
+		t.Errorf("exit %d, unverified %+v", code, rep.Unverified)
+	}
+	if rep.Counts["rows_judged"] != 1 {
+		t.Errorf("counts %v", rep.Counts)
+	}
+}
+
+// The counts of the rows say what the test really checked: a flows row whose probes show no flow in either run is not judged.
+func TestJudgeCountsOnlyWhatWasShown(t *testing.T) {
+	rows := []Row{{Kind: RowFlow, Symbol: "p.Seen"}, {Kind: RowFlow, Symbol: "p.Silent"}, {Kind: RowFlow, Symbol: "p.Generic"}, {Kind: RowSink, Symbol: "p.Sink"}}
+	probes := []Probe{
+		{ID: 0, Symbol: "p.Seen", Kind: "flow", Variant: "arg0", Outputs: []string{"result0"}},
+		{ID: 1, Symbol: "p.Silent", Kind: "flow", Variant: "arg0", Outputs: []string{"result0"}},
+		{ID: 2, Symbol: "p.Sink", Kind: "sink", Variant: "arg0", Category: "c", Expect: yes()},
+	}
+	hits := Hits{key(0, "result0"): true, key(2, "cat:c"): true}
+	rep := Compare(probes, []Skip{{Symbol: "p.Generic", Reason: "generic function (not checked)"}}, hits, hits, nil)
+	rep.Judge(rows, nil)
+	if rep.Counts["rows_judged"] != 2 || rep.Counts["rows_not_judged"] != 2 {
+		t.Fatalf("counts %v", rep.Counts)
+	}
+	if st := rowState(rep, "p.Silent"); st == nil || st.Judged || !strings.Contains(st.Reason, "no flow") {
+		t.Errorf("Silent: %+v", st)
+	}
+	if st := rowState(rep, "p.Generic"); st == nil || st.Judged || !strings.Contains(st.Reason, "generic") {
+		t.Errorf("Generic: %+v", st)
+	}
+	if line := rep.RowSummary(); !strings.Contains(line, "2 judged / 2 not judged") || !strings.Contains(line, "flow 1/2") {
+		t.Errorf("summary: %s", line)
+	}
+}
+
+// The count of the .dead-allow rows: judged by a report, in a package that was run and not judged, and in a package that has no report.
+func TestDeadAllowCount(t *testing.T) {
+	repo, reports := t.TempDir(), t.TempDir()
+	dir := filepath.Join(repo, "internal", "model", "builtin")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dead := "# comment\nstrings.Join | debt | x\nstrings.Cut | debt | x\nexample.com/m/v*/p.F | not called\nnet/url.Parse | debt | x\n"
+	if err := os.WriteFile(filepath.Join(dir, "go-a.dead-allow"), []byte(dead), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rep := Report{Package: "strings", Rows: []RowState{{Symbol: "strings.Join", Row: "flow", Judged: true}, {Symbol: "strings.Cut", Row: "flow", Reason: "x"}}}
+	rep2 := Report{Package: "example.com/m/v3/p", Rows: []RowState{{Symbol: "example.com/m/v3/p.F", Row: "sink", Judged: true}}}
+	for i, r := range []Report{rep, rep2} {
+		data, _ := json.Marshal(r)
+		if err := os.WriteFile(filepath.Join(reports, fmt.Sprintf("report-%d.json", i)), data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r, w, _ := os.Pipe()
+	old := os.Stdout
+	os.Stdout = w
+	err := deadAllowCount(repo, reports)
+	os.Stdout = old
+	w.Close()
+	data, _ := io.ReadAll(r)
+	if err != nil || !strings.Contains(string(data), "total") || !strings.Contains(string(data), "     4        2            1           1") {
+		t.Errorf("err %v:\n%s", err, data)
 	}
 }

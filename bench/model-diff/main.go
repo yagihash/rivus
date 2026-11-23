@@ -30,6 +30,7 @@ func realMain(args []string) int {
 	changed := fs.String("changed", "", "print the packages whose rows differ from the ones at this commit (what a pull request checks), and stop")
 	runCh := fs.String("run-changed", "", "run the differential test of every package whose rows differ from the ones at this commit (what a pull request checks), one table at the end; exit 1 when one failed")
 	langs := fs.String("langs", "go", "with -run-changed: the languages that are run (go, dart); a changed package of another one is listed as not run")
+	deadAllow := fs.String("dead-allow", "", "count the rows of the .dead-allow files that a differential test judged, using the report*.json files under this directory (what -run-changed writes), and stop")
 	reviewed := fs.String("changed-reviewed", "", "print the miss-reviewed notes added since this commit (one line each, `miss-reviewed-added <file> <symbol>@<position> <kind>`; a notice for the pull request, never a failure), and stop")
 	gaps := fs.Bool("coverage-gaps", false, "Go standard library: with -pkg, list the exported functions and methods that take a string, bytes or `any` and have no row in the built-in models (the probes start from rows: a function without a row is not found by them), and stop")
 	pkg := fs.String("pkg", "", "the package: a Go import path, or package:<name> for Dart")
@@ -43,6 +44,13 @@ func realMain(args []string) int {
 	timeout := fs.String("timeout", "600s", "limit of each analysis")
 	if err := fs.Parse(args); err != nil {
 		return 2
+	}
+	if *deadAllow != "" {
+		abs, _ := filepath.Abs(*repo)
+		if err := deadAllowCount(abs, *deadAllow); err != nil {
+			return fail(err)
+		}
+		return 0
 	}
 	if *runCh != "" {
 		abs, _ := filepath.Abs(*repo)
@@ -176,6 +184,19 @@ func realMain(args []string) int {
 			errs = append(errs, e...)
 		}
 	}
+	// Dart: only the flows rows and the sinks are checked; the other rows are listed as not judged (never as agreeing)
+	var skipped []RowState
+	if *lang == "dart" {
+		var keep []Row
+		for _, r := range rows {
+			if r.Kind == RowPure {
+				skipped = append(skipped, RowState{Symbol: r.Symbol, Row: r.Kind, Reason: "a pure row is not checked for Dart"})
+				continue
+			}
+			keep = append(keep, r)
+		}
+		rows = keep
+	}
 	if len(rows) == 0 {
 		fmt.Fprintf(os.Stderr, "model-diff: no row of %s in %s\n", *pkg, strings.Join(files, ", "))
 		return 2
@@ -224,6 +245,11 @@ func realMain(args []string) int {
 		return fail(err)
 	}
 	rep := Compare(gen.Probes, gen.Skips, a, b, notes)
+	rep.Judge(rows, gen.States)
+	for _, st := range skipped {
+		rep.Rows = append(rep.Rows, st)
+		rep.Counts["rows_not_judged"]++
+	}
 	rep.Language, rep.Package, rep.Models, rep.Runs = *lang, *pkg, used, runs
 	rep.Errors = append(append(rep.Errors, errs...), gen.Errors...)
 	rep.Print(os.Stdout)

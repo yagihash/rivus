@@ -1,0 +1,14 @@
+ruleset: test/synth@1
+propagators:
+  - symbol: example.com/synth.Drop
+    pure: true
+  - symbol: example.com/synth.Gone
+    pure: true
+  - symbol: (*example.com/synth.Box).Nope
+    pure: true
+  - symbol: (*example.com/synth.Nothing).Get
+    flows: [{from: recv, to: result}]
+sinks:
+  - symbol: example.com/synth.GoneToo
+    args: [0]
+    category: command_injection

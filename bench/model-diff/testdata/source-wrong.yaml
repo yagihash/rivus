@@ -1,0 +1,13 @@
+ruleset: test/synth@1
+sources:
+  - symbol: example.com/synth.Nope
+    kind: call_result
+    labels: [user_input]
+  - kind: field
+    field: example.com/synth.Opts.Nope
+    labels: [user_input]
+  # fills arg1 (an int) and an argument that is not there
+  - symbol: example.com/synth.Copy
+    kind: call_result
+    out: [1, 4]
+    labels: [user_input]
