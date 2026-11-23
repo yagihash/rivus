@@ -107,3 +107,5 @@
 | [#153](issues/153-model-diff-blind-any-switch.md) | 差分テスト(標準ライブラリ): 本体を読む側は、`any` の型 switch を通る入力を追えず、結果に届く流れを落とす | 道具・ベンチ(本体の分析の盲点) | Go | 後回し | open | `bench/model-diff` の注釈 |
 | [#154](issues/154-model-diff-blind-map-conversion.md) | 差分テスト(標準ライブラリ): 本体を読む側は、マップ型の変換(`textproto.MIMEHeader(h)`)を通る書き込みを、元のマップに結ばない | 道具・ベンチ(本体の分析の盲点) | Go | 後回し | open | `bench/model-diff` の注釈 |
 | [#155](issues/155-body-default-map-lookup-key.md) | 差分テスト(標準ライブラリ): 本体を読む側は、マップの検索のキーが、見つけた値に流れると近似する(Header.Get / Values) | 道具・ベンチ(差分テストの A 側の近似) | Go | 後回し | open | `bench/model-diff` の注釈 |
+| [#163](issues/163-library-as-project-candidates.md) | ライブラリそのものを解析の対象にして、sink と source のモデルの候補を、根拠つきで出す(案) | 道具(モデル作成の候補の元) | Go が先 | 後回し | open | `docs/DESIGN-package-models.md` 6.11 |
+| [#164](issues/164-skeleton-slice-receiver.md) | 骨組みの生成器が、スライスやマップのレシーバのメソッドの流れを再現できない(警告で出す) | 道具(モデル作成の骨組みの生成) | Go | 後回し | open | `docs/DESIGN-package-models.md` 6.11 |
