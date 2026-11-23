@@ -94,6 +94,7 @@ type RowState struct {
 	Row    string `json:"row"`
 	Judged bool   `json:"judged"`
 	Reason string `json:"reason,omitempty"` // for a row that is not judged
+	Failed bool   `json:"failed,omitempty"` // a judged row that has a MISS or an EXTRA that no note allows
 }
 
 type Report struct {
@@ -246,7 +247,7 @@ func (r *Report) Print(w io.Writer) {
 		if x.Reason != "" {
 			detail += "  (" + x.Reason + ")"
 		}
-		fmt.Fprintf(w, "  %-15s %-8s %-52s %-10s %s\n", x.Status, x.Kind, x.Symbol, x.Variant, detail)
+		fmt.Fprintf(w, "  %-15s %-9s %-52s %-10s %s\n", x.Status, probeRow(x.Probe), x.Symbol, x.Variant, detail)
 	}
 	for _, u := range r.Unverified {
 		fmt.Fprintf(w, "  %-15s %-8s %-52s %-10s %s\n", "unverified", "", u.Symbol, u.Variant, u.Reason)
@@ -299,12 +300,16 @@ func probeRow(p Probe) string {
 // counts are in Counts as `rows_judged` and `rows_not_judged`, the rows themselves in Rows.
 func (r *Report) Judge(rows []Row, states []RowState) {
 	informative := map[string]bool{}
+	failed := map[string]bool{}
 	seen := map[string]bool{}
 	for _, x := range r.Results {
 		k := probeRow(x.Probe) + " " + x.Symbol
 		seen[k] = true
 		if x.Informative {
 			informative[k] = true
+		}
+		if x.Status == "MISS" || x.Status == "EXTRA" {
+			failed[k] = true
 		}
 	}
 	reasons := map[string]string{}
@@ -332,7 +337,7 @@ func (r *Report) Judge(rows []Row, states []RowState) {
 		case ok:
 			st = e
 		case informative[k]:
-			st.Judged = true
+			st.Judged, st.Failed = true, failed[k]
 		case seen[k]:
 			st.Reason = "no flow in either run at any position that was tried"
 			if why, ok := reasons[row.Symbol]; ok {

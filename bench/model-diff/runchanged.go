@@ -48,19 +48,22 @@ func runChanged(repo, base, langs, out string, extra []string) int {
 			table = append(table, line{entry, "not run", "the language is not in -langs (" + langs + "): not checked"})
 			continue
 		}
-		if !hasRows(builtins, lang, pkg) {
-			table = append(table, line{entry, "nothing", "no row of the package is left (the rows were removed)"})
-			continue
-		}
 		args := []string{"-lang", lang, "-pkg", pkg, "-repo", repo, "-out", filepath.Join(out, fmt.Sprint(i)), "-json", filepath.Join(out, fmt.Sprintf("report-%d.json", i))}
+		concrete := pkg
 		if model.HasMajorWildcard(pkg) {
 			v := verifiedVersion(builtins, pkg)
-			if v == "" {
+			major, ok := majorOfVersion(v)
+			if !ok {
 				table = append(table, line{entry, "FAIL", "the package has /v* and no verified_versions entry with checked_with gives the major to check"})
 				failed = true
 				continue
 			}
 			args = append(args, "-version", v)
+			concrete = model.ConcreteMajor(pkg, major)
+		}
+		if !hasRows(builtins, lang, concrete) {
+			table = append(table, line{entry, "nothing", "no row of the package is left (the rows were removed)"})
+			continue
 		}
 		fmt.Printf("== model-diff %s\n", entry)
 		switch code := realMain(append(args, extra...)); code {

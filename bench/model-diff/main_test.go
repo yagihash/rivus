@@ -496,9 +496,12 @@ func TestRunChangedListsWhatItDoesNotRun(t *testing.T) {
 
 func TestVerifiedVersion(t *testing.T) {
 	f := filepath.Join(t.TempDir(), "go-x.yaml")
-	text := "ruleset: x@1\nverified_versions:\n  - package: example.com/m/v*/p\n    versions: \">=3.0.0 <4.0.0\"\n    checked_with: v3.1.0\n    checked: 2026-11-23\n"
+	text := "ruleset: x@1\nsinks:\n  - symbol: example.com/m/v*/p.F\n    args: [0]\n    category: c\nverified_versions:\n  - package: example.com/m/v*/p\n    versions: \">=3.0.0 <4.0.0\"\n    checked_with: v3.1.0\n    checked: 2026-11-23\n"
 	if err := os.WriteFile(f, []byte(text), 0o644); err != nil {
 		t.Fatal(err)
+	}
+	if !hasRows([]string{f}, "go", "example.com/m/v3/p") || hasRows([]string{f}, "go", "example.com/m/v3/q") {
+		t.Error("the row with /v* is a row of the package of the major that is checked, and of no other package")
 	}
 	if got := verifiedVersion([]string{f}, "example.com/m/v*/p"); got != "v3.1.0" {
 		t.Errorf("version = %q", got)
@@ -692,7 +695,7 @@ func TestDeadAllowCount(t *testing.T) {
 	os.Stdout = old
 	w.Close()
 	data, _ := io.ReadAll(r)
-	if err != nil || !strings.Contains(string(data), "total") || !strings.Contains(string(data), "     4        2            1           1") {
+	if err != nil || !strings.Contains(string(data), "total") || !strings.Contains(string(data), "     4          2              0            1           1") {
 		t.Errorf("err %v:\n%s", err, data)
 	}
 }
