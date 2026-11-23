@@ -621,7 +621,7 @@ func (s *state) checkSink(cc *callCtx, site *sites.Site) {
 }
 
 // acceptedAt says whether the sink site reacts to a value of the label: the labels the rules of the sink accept, and for a label
-// that a sanitizer gave with `neutralises`, the category of the site (ADR-114).
+// that a sanitizer gave with `neutralises`, the category of the site (ADR-115).
 func (s *state) acceptedAt(accepts []string, label, siteID string) bool {
 	if len(s.eng.rules.Derived) == 0 {
 		return accepted(accepts, label)

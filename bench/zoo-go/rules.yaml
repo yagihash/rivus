@@ -47,7 +47,7 @@ sinks:
     category: command_injection
 
 # A mark sanitizer replaces every character of the set of its own class and does nothing else (bench/zoo/spec.json): it neutralises the
-# sinks of that class and no others (ADR-114).
+# sinks of that class and no others (ADR-115).
 sanitizers:
   - symbol: zoo/mark.CleanCmd
     drops: [user_input]

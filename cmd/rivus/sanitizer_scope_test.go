@@ -12,7 +12,7 @@ import (
 )
 
 // A sanitizer hides the value from the sinks of the categories in `neutralises` and from no others, and the value that goes on keeps
-// the label that `adds` gives, with the sanitizer on its path (ADR-114). A method sanitizer takes what it is called on as data.
+// the label that `adds` gives, with the sanitizer on its path (ADR-115). A method sanitizer takes what it is called on as data.
 const scopeLib = `package lib
 
 func Source() string { return "" }
@@ -105,7 +105,7 @@ func TestSanitizerHidesTheValueFromItsOwnCategoryOnly(t *testing.T) {
 	}
 }
 
-// The sanitizers of the built-in model say which kind of sink they are safe for (ADR-114): an HTML escape of Go and of Dart is safe for
+// The sanitizers of the built-in model say which kind of sink they are safe for (ADR-115): an HTML escape of Go and of Dart is safe for
 // xss and for no other, percent encoding is safe for none (and the value says that it was encoded), and Uri.encodeFull is no sanitizer.
 func TestBuiltinSanitizersAreScopedGo(t *testing.T) {
 	t.Parallel()

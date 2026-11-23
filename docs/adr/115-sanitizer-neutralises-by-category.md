@@ -1,4 +1,4 @@
-# ADR-114: sanitizer は、安全にできる sink の種類(カテゴリ)だけ値を隠す(`neutralises`。2026-11-23)
+# ADR-115: sanitizer は、安全にできる sink の種類(カテゴリ)だけ値を隠す(`neutralises`。2026-11-23)
 
 - 状態: 有効
 - 関連: ADR-031(`drops` と `adds`)、ADR-086(インターフェースのメソッドの sanitizer)、MODELING 4b-1、docs/MODELING.md 4b

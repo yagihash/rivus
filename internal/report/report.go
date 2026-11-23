@@ -67,7 +67,7 @@ type ProjectRules struct {
 	PureModels int `json:"pure_models"`
 	// DropAll are the sanitizers that remove every label ("*").
 	DropAll int `json:"drop_all_sanitizers"`
-	// Unscoped are the sanitizers without `neutralises`: each hides the value from the sinks of every category (ADR-114).
+	// Unscoped are the sanitizers without `neutralises`: each hides the value from the sinks of every category (ADR-115).
 	Unscoped int `json:"sanitizers_without_neutralises,omitempty"`
 }
 

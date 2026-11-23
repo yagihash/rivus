@@ -13,7 +13,7 @@ void path(HttpRequest req) { // @source(web-path)
   File('/data/' + name).readAsStringSync(); // @sink(web-path)
 }
 
-// A percent-encoded value is not hidden from any sink (Uri.encodeComponent neutralises no category: where it lands decides, ADR-114), so the flow is reported with the label url_encoded.
+// A percent-encoded value is not hidden from any sink (Uri.encodeComponent neutralises no category: where it lands decides, ADR-115), so the flow is reported with the label url_encoded.
 void encoded(HttpRequest req) { // @source(web-encoded)
   final q = Uri.encodeComponent(req.uri.path);
   HttpClient().getUrl(Uri.parse('http://example.com/' + q)); // @sink(web-encoded)

@@ -751,7 +751,7 @@ func (c *categoryFlags) filter() *report.CategoryFilter {
 }
 
 // noteUnscopedSanitizers says once, for the rule files of the project, that a sanitizer without `neutralises` hides the value from
-// the sinks of every kind (ADR-114). It is the behaviour of before, kept so that the rules that were written for it go on working.
+// the sinks of every kind (ADR-115). It is the behaviour of before, kept so that the rules that were written for it go on working.
 func noteUnscopedSanitizers(w io.Writer, rules *model.Rules) {
 	n := 0
 	var first string

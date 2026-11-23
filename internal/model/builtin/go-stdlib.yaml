@@ -4,7 +4,7 @@ ruleset: rivus/go/stdlib@1
 
 sanitizers:
   # What a sanitizer neutralises is the categories of `neutralises`; to every other sink the value still goes, with the label that `adds`
-  # gives (ADR-114). An HTML escape makes the value safe in HTML text and in a quoted attribute, and in no other place.
+  # gives (ADR-115). An HTML escape makes the value safe in HTML text and in a quoted attribute, and in no other place.
   - symbol: html.EscapeString
     drops: [user_input]
     adds: [html_escaped]

@@ -331,7 +331,7 @@ type Sanitizer struct {
 	// Neutralises lists the categories of sinks that the sanitizer really makes the value safe for (xss for an HTML
 	// escape). The value that comes out has the labels of Adds, and a sink accepts such a label unless its category
 	// is in this list: the sanitizer hides the value from the sinks of these categories and from no others
-	// (ADR-114). An empty list says that no category is neutralised (the value is only marked as having passed the
+	// (ADR-115). An empty list says that no category is neutralised (the value is only marked as having passed the
 	// sanitizer). Absent (nil) is the old meaning: every sink of the dropped label is hidden from the value; a builtin
 	// row must write it (TestSanitizersAreReviewed), and Adds is required with it.
 	Neutralises *[]string `yaml:"neutralises"`
@@ -1315,7 +1315,7 @@ type Rules struct {
 	Fields         map[string][]Source // by "pkg.Type.Field"
 	Sinks          map[string][]Sink
 	Sanitizers     map[string][]Sanitizer
-	// Derived are the labels that a sanitizer with neutralises gives to what it lets through, by name (ADR-114).
+	// Derived are the labels that a sanitizer with neutralises gives to what it lets through, by name (ADR-115).
 	Derived     map[string]*DerivedLabel
 	Propagators map[string][]Propagator
 	// Calls are the symbols that have a row of calls in a propagator.

@@ -70,7 +70,7 @@ func TestSanitizersAreReviewed(t *testing.T) {
 		if _, ok := listed[sym]; !ok {
 			t.Errorf("the sanitizer %s is not in testdata/sanitizers-reviewed.txt: read what kind of symbol it is (a function, a static method, a method a subclass may override, a method of an interface or a trait) and list it", sym)
 		}
-		// What a sanitizer neutralises is written in every builtin row (ADR-114): a row without it hides the value from the sinks of
+		// What a sanitizer neutralises is written in every builtin row (ADR-115): a row without it hides the value from the sinks of
 		// every category, and a row with an empty list says why in the comment of the reviewed file.
 		for _, row := range rules.Sanitizers[sym] {
 			switch {
