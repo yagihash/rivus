@@ -704,6 +704,25 @@ adopt_rules:
 - **`origin:` の追跡**: 行の `origin: generated` は共通で、生成器の区別はファイル名の先頭と、行の `decision:` で付く。flows の行には `decision:` がない。`builtin.Load` は名前順に読み、2 つのファイルが同じ symbol に行を出すと、行は足し合わされる(MODELING 4a-1)。そこで、**2 つの生成の間の重なりは、テストで拒否する**(型の flows が出す symbol には、まとめての採用は行を出さない)。
 - 代償は、ファイルが増えること。1 つのパッケージで最大 3 つ(手、flows、採用)。
 
+#### 5a. 使う場所への sink の移し替え(Dart の `github` の `RepositorySlug` で確認)
+
+問い: 「値を作る場所(`RepositorySlug.new`、`.full`)の sink を、使う場所(スラッグを取るサービスのメソッド。型の単位の採用で、位置は、スラッグの引数そのもの)へ移し、古い行を流れの行(引数 → 戻り値)に変えて、同じ流れを 2 回報告しない」を、この節の形で書けるか。答え: **古い行の変更は、今の形で書ける。新しい sink の採用は、書けない(規則が足りない)**。(1) 古い行: 手のファイルの `sinks:` の 2 行を消し、`propagators:` に `- symbol: package:github/src/common/model/repos.dart#RepositorySlug.new` / `flows: [{from: arg0, to: result}, {from: arg1, to: result}]`、`RepositorySlug.full` は `flows: [{from: arg0, to: result}]` と書く(`propagators` の書式は `dart-http.yaml` と同じ)。これは手の行の編集で、`adopt_rules` は要らない(手の行は、生成の行に勝つ)。(2) 新しい sink: `sink.arg-word` は、引数の**名前の語**で選ぶ(`words` は規則の語彙の中だけ)ので、`slug` という名前の引数、または `RepositorySlug` 型の引数は選べない。足りないものは、**引数の型で位置を選ぶ規則**。次のように書けるとよい(案)。
+
+```yaml
+adopt_rules:
+  - id: slug-argument-of-services
+    kind: sink
+    rule: sink.arg-type               # 新しい規則。位置は、引数の型が types の中にあるすべての引数
+    types: [package:github/src/common/model/repos.dart#RepositorySlug]
+    category: resource_name
+    scope:
+      package: package:github/*       # Dart の package の書き方は要確認
+      receiver_suffix: Service
+    why: "スラッグの owner と name は、リクエストのパス /repos/<owner>/<name>/ に入る。別のリポジトリを指せる"
+```
+
+そのほか足りないもの: (a) 4 節の「判断の単位は型」と同じ作りだが、あちらは source の側(`types:` は、型の中の項目を選ぶ)。ここでは、**引数の型**を選ぶので、`types:` の意味が違う(別のキー名がよい。例: `arg_types:`)。(b) 重なりの処理: 手の `sinks:` にある `getBranch` などの行(位置が別の引数)と、新しい規則が選ぶ引数 0 は位置が別なので、3 節のとおり「同じ位置の手の行は外す」だけで足りる。(c) 古い行を流れの行に変える**順序**の保証: 古い sink の行を残したまま新しい規則を入れると、同じ流れが 2 回出る。ゲートは、「`adopt_rules` の `arg_types` の型を作る関数(戻り値がその型)に、手の `sinks:` の行が残っていれば警告」と書けるが、今の設計にはない(要確認)。(d) フィールドへの代入(`slug.owner = v`)と `fromJson` は、新しい行がなくても、スラッグの引数の sink で流れが見つかるはず(値は、スラッグ(オブジェクト)に載って運ばれ、使う場所で出る)。**これは、解析が、フィールドへの代入と `fromJson` でオブジェクトに値を運べることに頼る**。zoo では、今はこの 2 つの形に不確かさ(trace)つきの見逃しが出るので(`F/dart/github-slug-fromjson`、`F/dart/github-slug-assign`)、行を直しても、解析の側で見つからないことが残る可能性がある(課題 `model-dart-github-repositoryslug-miss`)。
+
 #### 6. 実装の順と、残る確認
 
 **最初の小さい段(段階 1b)**: Go だけ。(1) 規則の表に id を付ける(`rules.go`。挙動は変えない。`-recall` の結果が変わらないことを確認)。(2) `adopt_rules:` のローダーの検証と、`origin: generated` と `decision:` の追加(`internal/model`)。(3) `bench/model-author` に、展開と `covers` の検査と `.adopt.gen.yaml` の書き出しを足す。(4) 試す対象は、go-github の `owner-repo-of-services` の 1 件(sink の側)だけ。56 の行が出ることと、手の行の symbol が重ならないことを、差分(手の行の `args` と比べる)で確認する。(5) 差分テストを通す。代表のセルと、2 節のテストの変更は、(4)(5)のあと(ユーザーの承認が要る)。source の側、Dart、Rust は、そのあと。
