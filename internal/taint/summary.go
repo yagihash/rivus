@@ -434,16 +434,16 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 		if cs.Param >= len(argv) {
 			continue
 		}
-		// a function that passes its own parameter on passes the stop on to its callers (the smallest function id stays)
-		if a := argv[cs.Param]; a != nil && a.Kind == sg.KParam && a.Func == s.fn {
-			s.noteCharStopped(a.Param, cs.Func)
-		}
-		// data of a source that is passed there stopped at a character read in the callee: said once on the call, no flow is carried
+		// what is passed there is what the elements say, whatever the form of the value (the parameter itself, a field of it, a
+		// value made of it, a local that holds it): data of a source makes a note on this call, and the symbolic element of a
+		// parameter of this function passes the stop on to its callers (the smallest function id stays)
 		real := false
 		for _, x := range s.expandElem(ParamElem(cs.Param, ""), argv) {
-			if x.E.Kind == Real {
+			switch x.E.Kind {
+			case Real:
 				real = true
-				break
+			case Param:
+				s.noteCharStopped(int(x.E.Param), cs.Func)
 			}
 		}
 		if real {

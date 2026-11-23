@@ -53,6 +53,7 @@ func Plain(s string) string { return s + "x" }
 import (
 	"net/http"
 	"os/exec"
+	"strings"
 
 	"example.com/third"
 )
@@ -78,7 +79,38 @@ func constant(r *http.Request) {
 	exec.Command(third.Decode("ls")).Run()
 }
 
+type holder struct{ Name string }
+
+// two layers of the project's own functions between the entry and the dependency: the stop is passed on from a field, from a
+// value made of a parameter, from a local that holds it
+func f1(h *holder) string { return third.Range(h.Name) }
+func g1(h *holder) string { return f1(h) }
+
+func f2(s string) string { return third.Range(strings.TrimSpace(s)) }
+func g2(s string) string { return f2(strings.ToLower(s)) }
+
+func f3(s string) string { t := s + "x"; return third.Range(t) }
+func g3(s string) string { u := s[1:]; return f3(u) }
+
+func entryField(r *http.Request) {
+	exec.Command(g1(&holder{Name: r.URL.Query().Get("q")})).Run()
+}
+
+func entryTrim(r *http.Request) { exec.Command(g2(r.URL.Query().Get("q"))).Run() }
+
+func entryLocal(r *http.Request) { exec.Command(g3(r.URL.Query().Get("q"))).Run() }
+
+func entryConst(r *http.Request) {
+	exec.Command(g1(&holder{Name: "ls"})).Run()
+	exec.Command(g2("ls")).Run()
+	exec.Command(g3("ls")).Run()
+}
+
 func main() {
+	http.HandleFunc("/e1", func(w http.ResponseWriter, r *http.Request) { entryField(r) })
+	http.HandleFunc("/e2", func(w http.ResponseWriter, r *http.Request) { entryTrim(r) })
+	http.HandleFunc("/e3", func(w http.ResponseWriter, r *http.Request) { entryLocal(r) })
+	http.HandleFunc("/e4", func(w http.ResponseWriter, r *http.Request) { entryConst(r) })
 	http.HandleFunc("/r", func(w http.ResponseWriter, r *http.Request) { viaRange(r) })
 	http.HandleFunc("/d", func(w http.ResponseWriter, r *http.Request) { viaDecode(r) })
 	http.HandleFunc("/p", func(w http.ResponseWriter, r *http.Request) { viaPass(r) })
@@ -106,6 +138,9 @@ type charBridgeReport struct {
 func (r charBridgeReport) notes() []string {
 	var out []string
 	for _, u := range r.Uncertainties {
+		if strings.Contains(u.Func, "$") {
+			continue // the handlers of the fixture: they pass the request itself, which is a source by its type
+		}
 		if u.Kind == "numeric_stop" && strings.HasPrefix(u.Detail, "char_read_in_callee: ") {
 			d := strings.TrimPrefix(u.Detail, "char_read_in_callee: ")
 			out = append(out, u.Func[strings.LastIndex(u.Func, ".")+1:]+": "+d[:strings.Index(d, ":")])
@@ -127,6 +162,9 @@ func TestCharReadInCalleeNote(t *testing.T) {
 		return r
 	}
 	want := []string{
+		"entryField: example.com/third.Range", // through two functions of the project, from a field
+		"entryLocal: example.com/third.Range", // from a local that holds a value made of the parameter
+		"entryTrim: example.com/third.Range",  // from a value made of the parameter
 		"viaDecode: example.com/third.Decode",
 		"viaPass: example.com/third.Range", // passed on by Pass
 		"viaRange: example.com/third.Range",
