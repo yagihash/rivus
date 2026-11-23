@@ -306,13 +306,13 @@ func TestChangedPackages(t *testing.T) {
 	git("init", "-q")
 	git("add", ".")
 	git("commit", "-q", "-m", "base")
-	write("go-a.yaml", "ruleset: a@1\n# a comment is not a change\npropagators:\n  - symbol: strings.Join\n    flows: [{from: arg0, to: result}]\n  - symbol: path.Base\n    flows: [{from: arg0, to: result}]\n  - symbol: net/url.Parse\n    flows: [{from: arg0, to: result0}]\n")
+	write("go-a.yaml", "ruleset: a@1\n# a comment is not a change\npropagators:\n  - symbol: strings.Join\n    flows: [{from: arg0, to: result}]\n  - symbol: path.Base\n    flows: [{from: arg0, to: result}]\n  - symbol: net/url.Parse\n    flows: [{from: arg0, to: result0}]\n  - symbol: os.Getpid\n    pure: true\nbody_replaced_packages:\n  - {package: encoding/json, reason: x}\n")
 	got, err := changedPackages(repo, "HEAD")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(got, ",") != "go net/url,go strings" {
-		t.Errorf("changed = %v, want the packages of the changed and the added row (not path, not dart)", got)
+	if strings.Join(got, ",") != "go encoding/json,go net/url,go os,go strings" {
+		t.Errorf("changed = %v, want the packages of the changed, the added row and the added declaration (not path, not dart)", got)
 	}
 }
 
