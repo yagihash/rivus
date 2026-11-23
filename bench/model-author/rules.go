@@ -39,6 +39,40 @@ type Item struct {
 	PosTypes map[string]string `json:"pos_types,omitempty"`
 }
 
+// RuleDef is a rule of the table with its stable id (docs/DESIGN-package-models.md, 6.12): the id is what `adopt_rules:` names, so it is never
+// renamed (TestRuleIDsAreStable). The text is what `Item.Rule` says of the rule; the output of `-recall` and of the candidates does not carry the id.
+type RuleDef struct {
+	ID   string
+	Kind string
+	// Text is a short description of the shape that the rule finds.
+	Text string
+}
+
+// ruleTable is the rule table with the ids. `sink.arg-type` is the rule of 6.12 (5a) that the scan does not apply yet: it selects the places by the
+// type of the argument, for a decision that names the types; the expansion applies it.
+var ruleTable = []RuleDef{
+	{"sink.arg-word", KindSink, "a string argument whose name has a word of sinkWords (categoryOf)"},
+	{"sink.name-of-resource", KindSink, "a `name` or `id` argument of a function whose name has a resource noun (resourceNouns)"},
+	{"sink.file-name", KindSink, "a `name` argument of a function whose name has a file verb (fileVerbs)"},
+	{"sink.bytes-word", KindSink, "a bytes argument whose name has a word of bytesSinkWords"},
+	{"sink.struct-field", KindSink, "an argument of a struct of the package, with a string field whose name has a word of sinkWords (arg0.Field)"},
+	{"sink.format-values", KindSink, "the variadic values after a format string"},
+	{"sink.arg-type", KindSink, "an argument of one of the types that the decision names (not applied by the scan)"},
+	{"source.field-word", KindSource, "a field that carries a body or content (sourceWords)"},
+	{"source.result-word", KindSource, "the result of a function that carries a body or content (sourceWords)"},
+	{"sanitizer.name", KindSanitizer, "string to string, named escape/quote/sanitize/clean (sanitizerWords)"},
+	{"calls.func-param", KindCalls, "takes a function or an interface of the package"},
+}
+
+// RuleIDs are the ids of the rule table, in its order.
+func RuleIDs() []string {
+	out := make([]string, len(ruleTable))
+	for i, r := range ruleTable {
+		out[i] = r.ID
+	}
+	return out
+}
+
 // word lists. A name is split into words at an upper-case letter, a digit and `_` (`bucketName` is bucket, name), and a rule fires when a
 // word is in the list. The lists are the whole of the vocabulary of the table.
 var (

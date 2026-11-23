@@ -49,6 +49,8 @@ const (
 	OriginBuiltin = "builtin"
 	OriginHuman   = "human"
 	OriginLLM     = "llm"
+	// OriginGenerated is a row that `make model` expanded from a decision of `adopt_rules:` (adopt.go). It names the decision in `decision:`.
+	OriginGenerated = "generated"
 )
 
 // Provenance says where a rule comes from. A rule decided by an LLM must say
@@ -59,6 +61,8 @@ type Provenance struct {
 	DecidedAt    string `yaml:"decided_at" json:"decided_at,omitempty"`
 	Rationale    string `yaml:"rationale" json:"rationale,omitempty"`
 	ModelVersion string `yaml:"model_version" json:"model_version,omitempty"`
+	// Decision is the id of the decision of `adopt_rules:` that a generated row comes from (origin generated, and only then).
+	Decision string `yaml:"decision" json:"decision,omitempty"`
 }
 
 // RuleSet is one parsed rule file.
@@ -101,6 +105,14 @@ type RuleSet struct {
 	// Deferred are the candidates that could not be decided yet, each with an issue (`ref`) that says why and what is open
 	// (rejected.go). A record only: the analysis does not read it; `make model` does not count them as undecided.
 	Deferred []Deferred `yaml:"deferred"`
+	// AdoptRules are the decisions of bulk adoption (adopt.go). A record only, as Rejected: the analysis does not read it; `make model` expands it.
+	AdoptRules []AdoptRule `yaml:"adopt_rules"`
+	// Generator, Input, Rules and Decisions are the header of a file of generated rows (the version of the generator, the package and its version, the
+	// hash of the rule table and of the decisions it was made from). Records only.
+	Generator string `yaml:"generator"`
+	Input     string `yaml:"input"`
+	Rules     string `yaml:"rules"`
+	Decisions string `yaml:"decisions"`
 
 	// Origin is where the rule set came from (file name or "builtin:...").
 	Origin string `yaml:"-"`
@@ -628,6 +640,7 @@ func Parse(r io.Reader, origin string) (*RuleSet, error) {
 		}
 	}
 	rs.Origin = origin
+	setAdoptLines(data, rs.AdoptRules)
 	// `builtin` says that rivus itself embeds the rule: a file that comes from outside cannot say it (it would
 	// make its own rules look vetted, and the filters of origin would take it for one of rivus')
 	if !strings.HasPrefix(origin, "builtin:") {
@@ -728,8 +741,16 @@ func (rs *RuleSet) fillOrigins() {
 }
 
 func (p Provenance) validate(what string) error {
+	if p.Decision != "" && p.Origin != OriginGenerated {
+		return fmt.Errorf("%s: decision is for the rows of origin generated (got origin %q)", what, p.Origin)
+	}
 	switch p.Origin {
 	case OriginBuiltin, OriginHuman:
+		return nil
+	case OriginGenerated:
+		if !adoptIDRe.MatchString(p.Decision) {
+			return fmt.Errorf("%s: a generated row needs decision: the id of its decision in adopt_rules (got %q)", what, p.Decision)
+		}
 		return nil
 	case OriginLLM:
 		var missing []string
@@ -747,7 +768,7 @@ func (p Provenance) validate(what string) error {
 		}
 		return nil
 	}
-	return fmt.Errorf("%s: unknown origin %q (want %s, %s or %s)", what, p.Origin, OriginBuiltin, OriginHuman, OriginLLM)
+	return fmt.Errorf("%s: unknown origin %q (want %s, %s, %s or %s)", what, p.Origin, OriginBuiltin, OriginHuman, OriginLLM, OriginGenerated)
 }
 
 // WithoutOrigin returns a copy of the rule set without the rules of the
@@ -861,6 +882,9 @@ func (rs *RuleSet) validate() error {
 		return err
 	}
 	if err := rs.validateDeferred(); err != nil {
+		return err
+	}
+	if err := rs.validateAdoptRules(); err != nil {
 		return err
 	}
 	checkMatch := func(m, what string) error {

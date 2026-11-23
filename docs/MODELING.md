@@ -444,6 +444,33 @@ rejected:
 - A **type entry** rejects, in one entry, the places of a kind that are in an argument of one type: `type:` (the full name of one type: Go `pkg/path.Type`, Dart `package:x/src/a.dart#Type`; no pattern, no list; one of `symbol` and `type`), `kind`, `why` (say where the value of that type is checked, as a fact), and `covers: N` (required). `make model` counts at every run how many candidates (the ones with no row) each type entry covers, writes the counts in the summary of the pull request, and **warns when the count is more than `covers:`**: a new API entered the rejection unseen. Whoever sees the warning looks at the new candidates, then updates `covers:`. The places are the ones of the rule table that are fields of an argument of the type (`arg0.owner`) or an argument that is an interface of the package (`calls`). It needs no `position`.
 - `deferred:` is for a candidate that could not be decided yet: `symbol`, `kind`, `why`, `position` (optional) and `ref`, which is required: `#N` (`docs/issues/N-*.md`) or `model-<package>-<name>` (`docs/issues/model-<package>-<name>.md`). The loader checks the form, a test (`TestDeferredRefsExist`) and `make model` check that the file exists. A record only, as `rejected:`. `make model` does not count it as undecided, and lists the entries (count and list) in the work file for the pull request. A place can be covered by `rejected:` and another place of the same candidate by `deferred:`. The summary of `rejected:` (how many entries this change adds, and the reasons by group) is written to `.claude/work/model-author/<package>-rejected-summary.txt`; `-breakdown` writes the candidates by kind, rule, word and type shape.
 
+## 4c-2. Bulk adoption: `adopt_rules:`
+
+A model file can record a decision for a rule of layer 1 and a scope, once, instead of one row per candidate ([DESIGN-package-models.md](DESIGN-package-models.md), 6.12; ADR-113). Step 1 is the format and the loader. The command that expands a decision into rows is not there yet.
+
+```yaml
+adopt_rules:
+  - id: owner-repo-of-services            # unique in the file; a generated row names it in `decision:`
+    kind: sink                            # sink | source
+    rule: sink.arg-word                   # the id of a rule of layer 1 (`bench/model-author/rules.go`; never renamed)
+    words: [owner, repo]                  # the words of the vocabulary of the rule that the decision takes
+    category: resource_name               # sink only (a source has `labels: [user_input]`)
+    scope:                                # no pattern over symbols
+      package: github.com/google/go-github/v*/github   # exact (`/v*` is the major)
+      receiver_suffix: Service            # or receiver_prefix, or receiver_types: [exact names]; functions: [exact names]
+    why: "owner and repo are in the path of the request"
+    covers: 56                            # how many rows it expands into now (required)
+    representatives: ["(*github.com/google/go-github/v*/github.RepositoriesService).Get"]
+    diff_checked: {version: v93.0.0, count: 56}   # optional until verified
+    extra_ok: "the same shape as the hand rows"   # one reason for the EXTRA of the diff test
+    extra_covers: 3                        # how many EXTRA it covered (required with extra_ok); the command warns when there are more
+```
+
+- `rule: sink.arg-type` selects the places by the type of the argument: `arg_types: [<full type names>]` (one type each) and a scope narrower than a package (`receiver_suffix`, ...). The other rules that take words say `words`; the rest have a fixed vocabulary and no `words`.
+- A record, as `rejected:`: the analysis does not read it. The loader refuses a missing `why` or `covers`, an unknown rule id (or one of the other kind), a pattern in the scope, a key it does not know, and two decisions with the same id. The messages name the entry (`adopt_rules[1] (id) (line N)`). Whether a word is in the vocabulary of the rule is checked by the command, which has the table.
+- A row that the command generates says `origin: generated` and `decision: <id>`, and is in `<lang>-<package>.adopt.gen.yaml` next to the hand file. `decision` is only for `origin: generated`, and a generated row must have it. When the files are loaded together (`builtin.Load`, `model.CheckAdoption`), every decision must be in `adopt_rules:` of the hand file of the same package, with the kind of the row; a generated row elsewhere, or `adopt_rules:` in the generated file, is refused.
+- Two decisions that claim the same place: the same category merges into one row with a warning (both decisions named); different categories stop the command (exit 70) for a human to decide. The detection is `ResolveClaims` in `bench/model-author`.
+
 ## 4d. A source that is a parameter of a function that is given: `callback_param`
 
 A router calls the handler that it is given with what it took from the request: `router.get('/item/<id>', (Request r, String id) => ...)`

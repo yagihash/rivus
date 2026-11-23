@@ -1,0 +1,16 @@
+ruleset: rivus/go/fake-adopt@1
+generator: model-author@test
+input: example.com/fake@v1.0.0
+rules: "0000"
+decisions: "0000"
+sinks:
+  - symbol: (*example.com/fake/v*.OrgService).Get
+    args: [0, 1]
+    category: resource_name
+    origin: generated
+    decision: owner-repo-of-services
+  - symbol: (*example.com/fake/v*.OrgService).List
+    args: [0]
+    category: resource_name
+    origin: generated
+    decision: owner-repo-of-services

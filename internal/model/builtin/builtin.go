@@ -39,6 +39,10 @@ func Load() ([]*model.RuleSet, error) {
 		}
 		out = append(out, rs)
 	}
+	// the files of generated rows (`<name>.adopt.gen.yaml`; `*.yaml` embeds them) are checked with the hand file of their package
+	if err := model.CheckAdoption(out...); err != nil {
+		return nil, fmt.Errorf("built-in rules are invalid: %w", err)
+	}
 	return out, nil
 }
 
