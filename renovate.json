@@ -143,6 +143,23 @@
       "automerge": false
     },
     {
+      "description": "The pinned Rust nightly moves only through the custom manager rust-nightly, which moves rust-toolchain.toml, isolate.go and the README together. The built-in rust-toolchain manager moves rust-toolchain.toml alone (the constant in isolate.go would no longer match it), and the global automerge would merge it",
+      "matchManagers": [
+        "rust-toolchain"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "The Dart SDK of ci.yml (sdk: of setup-dart) moves through the custom manager only. The built-in github-actions manager finds the same value, which made two branches for one update (renovate/github-actions and renovate/dart-3.x) and put dart into the automerge group of GitHub Actions",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchDepNames": [
+        "dart"
+      ],
+      "enabled": false
+    },
+    {
       "description": "The pinned Rust nightly moves with the extractor (rustc_public is unstable): never automerge. The source gives only the newest date and no release time, so minimumReleaseAge would wait for ever",
       "matchDepNames": [
         "rust-nightly"
