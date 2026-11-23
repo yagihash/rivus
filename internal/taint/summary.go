@@ -188,6 +188,16 @@ func (s *state) summarize() *Summary {
 // number of fields (ADR-014, ADR-031).
 const maxOutElems = 24
 
+// outWidenedDetail is the note on a hop that applied an element of a widened output (Output.Widened) that stands for
+// the whole parameter: the caller's value went through a merge of parts that the code tells apart (more flows than
+// there are, never fewer). The note belongs to the hop (the hop of the call), like access_path_truncated; it is not in
+// the elements, the signature or the summary, and the finding's uncertainties and confidence do not take it.
+const outWidenedDetail = "out_widened: the value was taken from an output of the callee that was widened (too many elements; see out_limit), where the parts of a parameter were merged into the whole of it: the flow from here may exist only because of the merge (more flows than there are, never fewer)"
+
+func isOutWidenedNote(n *Uncertainty) bool {
+	return n.Kind == KindDepthLimit && strings.HasPrefix(n.Detail, "out_widened:")
+}
+
 // widen returns the elements, and whether it merged any: false when there are maxOutElems or fewer, or when no two
 // elements stood for parts of the same parameter.
 func widen(elems []OutElem) ([]OutElem, bool) {
@@ -512,6 +522,9 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 				}
 				if len(oe.Guards) > 0 {
 					w.setCallee(oe.Guards, info)
+				}
+				if o.Widened && oe.E.Kind == Param && oe.E.Path() == "" {
+					w.setNotes(appendNote(w.notes(), s.pathNote(KindDepthLimit, outWidenedDetail, cc.in.Pos)))
 				}
 				var wa *why
 				for _, d := range dsts {
