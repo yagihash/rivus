@@ -15,7 +15,7 @@ fn vuln() { // @vuln
 }
 
 fn fixed() { // @fixed
-    let v = m::clean_path(&m::clean_html(&m::clean_sql(&m::clean_cmd(&m::src("pkg-gcs-control-move-object-fixed")))));
+    let v = m::clean_resource(&m::clean_path(&m::clean_html(&m::clean_sql(&m::clean_cmd(&m::src("pkg-gcs-control-move-object-fixed"))))));
     StorageControl.move_object().set_bucket("bucket").set_source_object("a").set_destination_object(&v).send(); // @sink(none)
 }
 

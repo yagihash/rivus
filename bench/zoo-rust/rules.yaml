@@ -64,6 +64,14 @@ sanitizers:
     drops: [user_input]
     adds: [cleaned_html]
     neutralises: [xss]
+  - symbol: zoo_mark::clean_url
+    drops: [user_input]
+    adds: [cleaned_url]
+    neutralises: [ssrf, open_redirect]
+  - symbol: zoo_mark::clean_resource
+    drops: [user_input]
+    adds: [cleaned_resource]
+    neutralises: [resource_name]
   - symbol: zoo_mark::clean_path
     drops: [user_input]
     adds: [cleaned_path]

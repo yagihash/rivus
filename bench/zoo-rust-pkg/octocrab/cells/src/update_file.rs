@@ -19,7 +19,7 @@ fn vuln() { // @vuln
 fn fixed() { // @fixed
     let o = Octocrab::default();
     let h = o.repos("owner", "repo");
-    let v = m::clean_cmd(&m::src("pkg-octocrab-update-file-fixed"));
+    let v = m::clean_resource(&m::clean_cmd(&m::src("pkg-octocrab-update-file-fixed")));
     let _b = h.create_file("docs/a.md", "message", "text").branch(v); // @sink(none)
 }
 
