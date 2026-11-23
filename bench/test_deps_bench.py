@@ -11,7 +11,7 @@ class Judge(unittest.TestCase):
     def test_all_four_met(self):
         ok, body = d.judge(120, 180, 5.2, 8, True, True)
         self.assertTrue(ok)
-        self.assertEqual(body, "time=120/180 mem=5.20/8 converged=yes detected=yes")
+        self.assertEqual(body, "time=120/180 mem=5.20/8 converged=yes detected=yes quiet_after_fix=n/a")
 
     def test_each_criterion_alone_fails(self):
         self.assertFalse(d.judge(181, 180, 5, 8, True, True)[0])   # time
