@@ -154,6 +154,10 @@
 | 126 | Go | aws-sdk-go-v2 の service/dynamodb | 新規 | sink: `Query/Scan/PutItem` の式と Key。source: 戻り値の `Items` | imported by 1.9k モジュール / 2.3k パッケージ。v1.74.1(2026-11-17) | クラウド / DB | AWS の次の候補(S3 の次に imported by が多い) |
 | 127 | Go | aws-sdk-go-v2 の service/sqs | 新規 | sink: `SendMessage` の本文。source: `ReceiveMessage` の `Messages` | imported by 1.2k モジュール / 1.7k パッケージ。v1.53.0(2026-11-10) | クラウド / メッセージング | AWS の次の候補 |
 | 128 | Go | aws-sdk-go-v2 の service/secretsmanager | 新規 | source: `GetSecretValue` の `SecretString`(秘密)。sink: `PutSecretValue` | imported by 1.2k モジュール / 1.1k パッケージ。v1.51.0(2026-11-12) | クラウド | AWS の次の候補 |
+| 129 | Dart | tar(package:tar) | 新規 | source: `TarEntry.name`、`TarHeader.name`、`TarHeader.linkName`(アーカイブのエントリ名と、リンク先の名前) | 未取得(指標は取得していない) | アーカイブ | 広く使われるアーカイブのライブラリ。エントリ名は zip slip の入口 |
+| 130 | Dart | archive(package:archive) | 新規 | source: `ArchiveFile.name`(アーカイブのエントリ名) | 未取得(指標は取得していない) | アーカイブ | 広く使われるアーカイブのライブラリ。エントリ名は zip slip の入口 |
+| 131 | Rust | tar | 新規 | source: `Entry::path`、`Entry::header().path()`、`link_name`(エントリ名と、リンク先の名前) | 未取得(指標は取得していない) | アーカイブ | 広く使われるアーカイブのクレート。エントリ名は zip slip の入口 |
+| 132 | Rust | zip | 新規 | source: `ZipFile::name`、`mangled_name`(元のままの名前)。`enclosed_name` は安全な形に直した名前なので source にしない | 未取得(指標は取得していない) | アーカイブ | 広く使われるアーカイブのクレート。エントリ名は zip slip の入口 |
 
 ## 2. 指標で確認してから入れたもの、入れないもの
 
