@@ -33,7 +33,7 @@ removing the flow until the guard mechanism (#169) exists. A target with `detect
 vulnerability) counts per vulnerability: detected when at least one finding passes through a labelled position;
 `through_tp=<n>/<N>` (the labelled positions passed through) is printed beside it as information. A target with `detect.mode` "score" (Gitea) counts per published vulnerability of its truth file (the form of bench/score.py: source
 function, sink position, functions on the path; the field `vuln` groups the entries) and prints `detected=<n>/<N>` only: the count is not
-part of PASS/FAIL while `detect.in_verdict` is false, and neither the line nor the ledger row carries a count of findings, a list, a path or a place.
+part of PASS/FAIL (reference only), and neither the line nor the ledger row carries a count of findings, a list, a path or a place.
 A target that is not decided yet is printed as INFO, not PASS/FAIL.
 The time limit is kept by the watchdog (a kill of the group of this run at the limit: `stopped_time`); `rivus analyze` is not given `-timeout`
 (its default is 0, no limit; a rivus that stopped itself at the limit would look like a run that did not converge), unless the `args` of the target say so.
@@ -117,17 +117,16 @@ GB = 1024 ** 3
 EXIT_INCOMPLETE = 4  # rivus: the output is complete as far as it goes, the analysis is not (cmd/rivus exitIncomplete)
 
 
-def judge(time_s, limit_s, mem_gb, cap_gb, converged, detected, through=None, quiet_after_fix=None, located=None, score=None, in_verdict=True):
+def judge(time_s, limit_s, mem_gb, cap_gb, converged, detected, through=None, quiet_after_fix=None, located=None, score=None):
     """The pass line, pure: two separate conditions, both needed. FINISH (time within the limit, memory within the cap,
     converged) and DETECT (`detected`). located: None or the count of findings at the labelled places (information). detected: True / False / None (no pair for this target). through: None or (tp, n), the
     position-level count, printed as information only (it does not decide PASS). quiet_after_fix: True / False /
     None (n/a); printed, and NOT part of PASS/FAIL. score: None or (n, N), the vulnerabilities detected by place (detect.mode
-    score), printed as `detected=<n>/<N>` only; in_verdict false (the field of the target) keeps it out of PASS/FAIL. Returns (passed, line_body)."""
+    score), printed as `detected=<n>/<N>` only, never part of PASS/FAIL. Returns (passed, line_body)."""
     ok_time = time_s is not None and time_s <= limit_s
     ok_mem = mem_gb is not None and mem_gb <= cap_gb
     if score is not None:
-        # When in_verdict becomes true, decide how many of the N must be found first: "one or more" below is a placeholder.
-        detected = score[0] >= 1 if (in_verdict and score[0] is not None) else None  # in_verdict false: not part of the verdict
+        detected = None  # the count is printed (below) but is not part of the verdict
     ok_det = detected is not False  # None (n/a) does not count against
     finish = bool(ok_time and ok_mem and converged)
     passed = bool(finish and ok_det)
@@ -475,7 +474,7 @@ def passline(name, t, rivus, cache, outdir, limit_s, cap_gb):
                 fixed_n = cnt(run(d["fixed_commit"], "fixed"))
                 quiet = quiet_after_fix(fixed_n)
             print("deps_bench: %s %s findings of %s: pre-fix %s, fixed %s" % (name, d["id"], d["category"], cnt(pre), fixed_n), file=sys.stderr)
-        passed, body = judge(main["wall"], limit_s, main["peak"] / GB, cap_gb, main["converged"], detected, through, quiet, located, score, (d or {}).get("in_verdict", True))
+        passed, body = judge(main["wall"], limit_s, main["peak"] / GB, cap_gb, main["converged"], detected, through, quiet, located, score)
         decided = t.get("decided", False)
         if main["why"]:
             result = "stopped_" + main["why"]

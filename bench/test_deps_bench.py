@@ -188,15 +188,11 @@ class Score(unittest.TestCase):
         self.assertEqual(d.score_counts(self.TRUTH, rep), (0, 3))
 
     def test_the_line_carries_n_over_N_only(self):
-        ok, body = d.judge(500, 600, 6, 8, True, None, score=(0, 3), in_verdict=False)
+        ok, body = d.judge(500, 600, 6, 8, True, None, score=(0, 3))
         self.assertTrue(ok)  # not in the verdict
         self.assertEqual(body, "time=500/600 mem=6.00/8 converged=yes finish=yes detected=0/3 quiet_after_fix=n/a")
-        self.assertFalse(d.judge(601, 600, 6, 8, True, None, score=(3, 3), in_verdict=False)[0])
-        self.assertIn("detected=-/3", d.judge(500, 600, 6, 8, False, None, score=(None, 3), in_verdict=False)[1])
-
-    def test_in_verdict_true_would_need_one(self):
-        self.assertFalse(d.judge(500, 600, 6, 8, True, None, score=(0, 3), in_verdict=True)[0])
-        self.assertTrue(d.judge(500, 600, 6, 8, True, None, score=(1, 3), in_verdict=True)[0])
+        self.assertFalse(d.judge(601, 600, 6, 8, True, None, score=(3, 3))[0])
+        self.assertIn("detected=-/3", d.judge(500, 600, 6, 8, False, None, score=(None, 3))[1])
 
     def test_gitea_truth_file_has_three_vulnerabilities(self):
         truth = json.load(open(os.path.join(d.ROOT, "bench/gitea-cve-truth.json")))["sites"]
@@ -208,7 +204,7 @@ class Targets(unittest.TestCase):
         t = json.load(open(d.TARGETS_FILE))
         a, c = t["memos-4gib"], t["gitea"]
         self.assertEqual((a["args"], a["time_limit_s"], a["mem_cap_gb"], a["detect"]["mode"]), (["-max-memory", "4GiB"], 180, 4, "location"))
-        self.assertEqual((c["args"], c["time_limit_s"], c["mem_cap_gb"], c["detect"]["mode"], c["detect"]["in_verdict"]), (["-no-project-rules"], 600, 8, "score", False))
+        self.assertEqual((c["args"], c["time_limit_s"], c["mem_cap_gb"], c["detect"]["mode"]), (["-no-project-rules"], 600, 8, "score"))
         self.assertEqual(c["commit"], "95ba37d9af58db7d9163f9e92e07b5eb4f792bbc")
         truth = json.load(open(os.path.join(d.ROOT, c["detect"]["truth"])))["sites"]
         self.assertTrue(all("vuln" in x for x in truth if x["label"] == "vuln"))

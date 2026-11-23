@@ -163,7 +163,7 @@ class PasslineRun(unittest.TestCase):
             outdir = d.out_dir()
             d.ROOT = w
             t = {"lang": "go", "local": "bench", "args": ["-no-project-rules"], "time_limit_s": 600, "mem_cap_gb": 8, "decided": True,
-                 "commit": "c0ffee", "detect": {"id": "x", "mode": "score", "truth": "truth.json", "in_verdict": False}}
+                 "commit": "c0ffee", "detect": {"id": "x", "mode": "score", "truth": "truth.json"}}
             try:
                 line, row = d.passline("fakegitea", t, fake, w, outdir, 600, 8)
             finally:
