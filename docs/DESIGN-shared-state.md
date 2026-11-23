@@ -35,9 +35,9 @@
 | `cont/slice`(デコイは別の添字) | 1/1、**FP** | 1/1、**FP** | 1/1、**FP** |
 | `state/handler-then-reader` | 1/1、検出されない | 1/1、検出されない | 1/1、検出されない |
 | `state/receiver-field-across-entries` | 1/1、検出されない | 2/2、検出されない | **0/1**(不確実性の注記 `unmodeled_library_call`)、デコイの流れも失われる |
-| `state/global-chain`(3、13、30 段) | 1/3(13、30 は、パスの上限で止まる) | 1/3(同じ) | 1/3(同じ) |
+| `state/global-chain`(3、13、30 ステップ) | 1/3(13、30 は、パスの上限で止まる) | 1/3(同じ) | 1/3(同じ) |
 
-読み方: (1) 構造体のフィールドを分けることは、Go と Dart は今できている(`global-field`、`global-struct-copy`、`save-restore`)。**Rust は、`Mutex<Struct>` の `static` で、フィールドが混ざる**(3 セルの FP。原因は調べていない: `lock()` の結果の別名の扱いか、`Mutex` の中身の 1 つの場所か。段階 2 の最初の作業)。(2) 定数のキー・添字を分けることは、**3 言語とも、今できていない**(6 セルの FP)。このうち**マップの 3 セルだけ**を、4.2 b で直す。スライス / List / Vec の 3 セル(`cont/slice`)は、添字がずれる操作があるので、**直さない**(注記つきの過大近似として受け入れる)。(3) 連鎖の 13、30 段は、**3 言語とも、`MaxPasses`(12)で止まる**(止まったことは `recursion_approximation` で示す。見逃しをサイレントにしない)。(4) `receiver-field-across-entries` は、Go と Dart では、**同じ関数が 2 つの入口を呼ぶ**ので、レシーバが同じになって出る。実コードでは、入口は、フレームワークが別々に呼ぶ。このセルは、そのままでは、設計の受け入れにならない(段階 6 で、入口が別々に呼ばれる形を足す)。
+読み方: (1) 構造体のフィールドを分けることは、Go と Dart は今できている(`global-field`、`global-struct-copy`、`save-restore`)。**Rust は、`Mutex<Struct>` の `static` で、フィールドが混ざる**(3 セルの FP。原因は調べていない: `lock()` の結果の別名の扱いか、`Mutex` の中身の 1 つの場所か。段階 2 の最初の作業)。(2) 定数のキー・添字を分けることは、**3 言語とも、今できていない**(6 セルの FP)。このうち**マップの 3 セルだけ**を、4.2 b で直す。スライス / List / Vec の 3 セル(`cont/slice`)は、添字がずれる操作があるので、**直さない**(注記つきの過大近似として受け入れる)。(3) 連鎖の 13、30 ステップは、**3 言語とも、`MaxPasses`(12)で止まる**(止まったことは `recursion_approximation` で示す。見逃しをサイレントにしない)。(4) `receiver-field-across-entries` は、Go と Dart では、**同じ関数が 2 つの入口を呼ぶ**ので、レシーバが同じになって出る。実コードでは、入口は、フレームワークが別々に呼ぶ。このセルは、そのままでは、設計の受け入れにならない(段階 6 で、入口が別々に呼ばれる形を足す)。
 
 ### 実コード
 
@@ -61,14 +61,14 @@
 
 | 場所 | 今 |
 | --- | --- |
-| `internal/taint/engine.go` `globalStore` | `cells[G][path][Elem]`(セル)、`writers[G][path][Elem]`(**最初に書いた関数の段**だけ。ADR-049)、`readers_[G]`(読む関数) |
+| `internal/taint/engine.go` `globalStore` | `cells[G][path][Elem]`(セル)、`writers[G][path][Elem]`(**最初に書いた関数のステップ**だけ。ADR-049)、`readers_[G]`(読む関数) |
 | `engine.go` `commitGlobals` | レベルの終わりに、書き込みを(セル、パス、要素、書いた関数)の順に整列して `merge`。新しい要素が入ると、読み出し側を dirty に |
 | `summary.go` `summarize` | グローバルのルートは `OutGlobal`(`Output.Global`)。`holds: nothing`(ADR-056)は出さない |
 | `state.go` `collect` / `collectUncached` | `Loc` の下に保存されたもの全部を `found{E, Cell, Orig, Rel}` で返す |
 | `summary.go` `expandParam` | `found.Rel` を**捨てて**、要素を `Loc` の根に置く(= 持ち上げ)。パス `""` の Param 要素(「この引数の全部」)で起きる |
 | `calls.go` `applySummary` の `identityOfGlobal` | 「読んだ値を、そのまま G に書き戻す」クロージャの要素を適用しない(案 D。持ち上げの症状の止血) |
 | `engine.go` `writersOf` | G に直接書く関数(`global_store`、`store` / `field_store` / `index_store` で根が G)の全部。経路の `global_var` の注記の `candidates` |
-| `Options.MaxPasses`(12) | パスの上限。連鎖の段数が、順序に依って、パスの数になる |
+| `Options.MaxPasses`(12) | パスの上限。連鎖のステップ数が、順序に依って、パスの数になる |
 
 ## 4. 設計
 
@@ -145,7 +145,7 @@ LLM の判定(`resolve`)は、finding ごとに、このフィールドを読む
 
 ### 4.5 途中で止めない
 
-`MaxPasses`(12)は、**パスの数**で止める。連鎖の段数(`state/global-chain` の 13、30)は、1 段が 1 パスを要するので、順序に依って、パスの上限に達する(3 言語とも、`@miss(recursion_approximation)`)。**パスの上限を、作業量の上限に置き換える**:
+`MaxPasses`(12)は、**パスの数**で止める。連鎖のステップ数(`state/global-chain` の 13、30)は、1 ステップが 1 パスを要するので、順序に依って、パスの上限に達する(3 言語とも、`@miss(recursion_approximation)`)。**パスの上限を、作業量の上限に置き換える**:
 
 - 収束するまで続ける。止める条件は、**追加された要素の総数**(`Options.Budget` の全体版: `RunBudget`)と、実時間(`-timeout`)。パスの数では止めない。
 - パスの内の順序: 関数の順序(`levelsOf`)に、**グローバルのエッジ**(書き込み側 → 読み出し側)を足して、書き込み側が先、にする(循環は SCC)。連鎖が、1 パスで流れる。**finding の集合は、順序に依らない**(今も、不動点)。ただし、**代表の経路と指紋は、順序に依る**(`-workers` や、回す順で、代表の経路と、それから決まる指紋が変わる。issue #96)。順序にグローバルのエッジを足すと、**finding の `path@1`(代表の経路)が動きうる**。足すのは速さのためだが、代表の経路を変えるなら、受け入れで見る(下)。
@@ -172,7 +172,7 @@ LLM の判定(`resolve`)は、finding ごとに、このフィールドを読む
 | `holds: nothing`(ADR-056) | 残る。モデルで示す「読み戻されない」場所 |
 | `absorbWhole`(ADR-057)、`widen`(24 要素) | 残る。4.2 a のあと、`Rel` を持つ要素の合流を確かめる |
 | 案 D(`identityOfGlobal`、ADR-059) | 4.2 a のあとで、不要になるかを測る(`identity_global_stores`)。不要なら外す |
-| 書き込み側のステップ(ADR-049) | 残る。`writers.flow` の、最初の 1 つの段 |
+| 書き込み側のステップ(ADR-049) | 残る。`writers.flow` の、最初の 1 つのステップ |
 | 経路の `global_var` の注記 | 残る。`shared_state` に、同じ情報を構造で出す |
 
 ## 5. 段階と、各段階の受け入れ
@@ -186,7 +186,7 @@ LLM の判定(`resolve`)は、finding ごとに、このフィールドを読む
 | **2. 持ち上げ** | 4.2 a | finding が**減りうる** | zoo の Rust 3 セル(`global-field`、`global-struct-copy`、`save-restore`)の FP が 0 になる(Rust の原因の調査が最初)。gogs: 案 D を外しても +2 のまま。go-curated の `restore` が落ちない。消えた finding を 1 件ずつ分類(経路の、`global_var` と `Rel` の持ち上げ) |
 | **3. キー(マップだけ)** | 4.2 b | finding が**減りうる** | zoo の `map-key-vs-value` × 3 言語の FP が 0。**`cont/slice` × 3 言語の FP は残り、`@fp` + `container_element_imprecision` の注記つきで受け入れる**(不確実性の注記が付いていることを検査する)。**スライスの添字がずれる形**(`xs[1] = src; sort.Strings(xs); sink(xs[0])`、`append(xs[:i], …)`)を、セルに足して、見つかること(見逃さないこと)を確かめる。マップを、モデルのない関数に渡す形、型が違うキー(`1` と `"1"`)、キーが N 個を超える形も、セルに足す。go-curated・dart-curated・rust-curated の `@fp` / `@noisy` の数。`container_element_imprecision` の数の変化を記録。消えた finding を分類(マップの定数のキー以外で消えたものがあれば、バグ)。**go-scale の `registry`(N = 40)で、`other_sources_count` が 0 になり、finding が同じ**(期待値のファイルの更新が、コミットに出る。段階 2 から移した受け入れ) |
 | **4. 合流点** | 4.3(1 つずつ) | 型ごとに | 型ごとのセル(`sync.Pool` のセルを zoo に足す)。Gitea の `summary_elems` と収束 |
-| **5. 止まらない** | 4.5 | パスの数、収束 | zoo の `global-chain` が 3 言語で出る。go-scale の `chain`(3、13、30 段)で、パスの数が段数に依らなくなる。Gitea・gogs・go-scale で、**finding と `path@1` が同一**(速さは見ない。違えば分類。または、issue #96 を先に直す) |
+| **5. 止まらない** | 4.5 | パスの数、収束 | zoo の `global-chain` が 3 言語で出る。go-scale の `chain`(3、13、30 ステップ)で、パスの数がステップ数に依らなくなる。Gitea・gogs・go-scale で、**finding と `path@1` が同一**(速さは見ない。違えば分類。または、issue #96 を先に直す) |
 | **6. 入口のレシーバ** | 4.6 | Rust で増える(Dart は、入口の整備のあと) | zoo の `receiver-field-across-entries` の Rust が出る。**セルを足す**: 2 つの入口が別々に呼ばれ(同じ関数が 2 つを呼ぶ形でない)、レシーバを共有するもの。**通った finding に、前提の不確実性が付き、確信度が `no_uncertainty_on_path` にならない**ことの検査。入口の定義(フレームワークが呼ぶメソッドと、呼び出し元のないメソッド)のテスト。parseable の finding の追加を分類 |
 
 **段階 2 の測定と再現(go-scale の `registry`)**: `bench/gcp` で、本物の finding に付く誤った `other_sources`(Spanner の読み出しの 2 件が、他の 64 ハンドラの入力を並べる)は、依存の中のパッケージ変数のレジストリ(`map`)に、全ハンドラが自分の入力を書き、読み出しが、別の定数のキーで読む形から来る(`bench/explore/LOG.md` の測定 3)。この形の小さい再現が、`bench/go-scale` の `registry`(`-shapes registry -ops N`。期待値 `expected/registry-w1.json`、N = 40)。N 個のハンドラが、自分のリクエストをレジストリに書き、ハンドラ 0 だけが、デコーダを通して sink に出す。実測(今の挙動): finding は 1 件(本物)のまま、**`other_sources_count` は N-1 ちょうど**(N = 10 / 40 / 160 / 320 で 9 / 39 / 159 / 319。レポートに並ぶのは 5 件まで)、`summary_elems` は N に線形(約 440 / ハンドラ。N = 1 / 40 / 320 で 5,523 / 22,173 / 144,533)。**この `registry` の受け入れ(`other_sources_count` が 0 になり、finding が同じ)は、段階 2 でなく段階 3(定数のキー)の受け入れとする**(段階 2 は、`registry` の中身を読む形に効かない: 同じセルの中身を読むので、持ち上げは関係ない。試作でも変化なし)。**`registry` を「bench/gcp の再現」と名乗らない**: 下の測定のとおり、`bench/gcp` の広がりは、この形(定数のキーのレジストリ)から来ていない。

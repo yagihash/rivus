@@ -11,13 +11,20 @@ class Judge(unittest.TestCase):
     def test_all_four_met(self):
         ok, body = d.judge(120, 180, 5.2, 8, True, True)
         self.assertTrue(ok)
-        self.assertEqual(body, "time=120/180 mem=5.20/8 converged=yes detected=yes quiet_after_fix=n/a")
+        self.assertEqual(body, "time=120/180 mem=5.20/8 converged=yes finish=yes detected=yes quiet_after_fix=n/a")
 
     def test_each_criterion_alone_fails(self):
         self.assertFalse(d.judge(181, 180, 5, 8, True, True)[0])   # time
         self.assertFalse(d.judge(100, 180, 8.1, 8, True, True)[0])  # memory
         self.assertFalse(d.judge(100, 180, 5, 8, False, True)[0])  # convergence
         self.assertFalse(d.judge(100, 180, 5, 8, True, False)[0])  # detection
+
+    def test_finish_and_detect_are_separate(self):
+        body = d.judge(100, 180, 5, 8, True, False)[1]   # finished, not detected
+        self.assertIn("finish=yes detected=no", body)
+        body = d.judge(100, 180, 5, 8, False, True)[1]   # detected, did not finish
+        self.assertIn("finish=no detected=yes", body)
+        self.assertFalse(d.judge(100, 180, 5, 8, False, True)[0])
 
     def test_limits_are_inclusive(self):
         self.assertTrue(d.judge(180, 180, 8, 8, True, True)[0])
@@ -33,7 +40,7 @@ class Judge(unittest.TestCase):
 
     def test_line(self):
         ok, body = d.judge(67, 180, 8.8, 8, False, False)
-        self.assertEqual(d.format_line("memos", True, ok, body), "FAIL memos time=67/180 mem=8.80/8 converged=no detected=no quiet_after_fix=n/a")
+        self.assertEqual(d.format_line("memos", True, ok, body), "FAIL memos time=67/180 mem=8.80/8 converged=no finish=no detected=no quiet_after_fix=n/a")
         self.assertTrue(d.format_line("dart_services", False, ok, body).startswith("INFO dart_services "))
 
 
@@ -112,6 +119,45 @@ class Through(unittest.TestCase):
         self.assertTrue(ok)
         self.assertTrue(body.endswith("detected=yes quiet_after_fix=n/a through_tp=4/9"))
         self.assertTrue(d.judge(100, 180, 5, 8, False, False, (None, 9))[1].endswith("detected=no quiet_after_fix=n/a through_tp=-/9"))
+
+
+class Location(unittest.TestCase):
+    F = "server/a.go"
+    truth = [{"role": "source", "file": F, "line": 51, "fixed_line": 51, "category": "path_traversal"},
+             {"role": "sink", "file": F, "line": 416, "fixed_line": 422, "category": "path_traversal"},
+             {"role": "sink", "file": F, "line": 419, "fixed_line": 425, "category": "path_traversal"}]
+
+    def rep(self, cat="path_traversal", src=51, snk=416, sfile=F):
+        return {"findings": [{"category": cat, "source": {"position": {"file": sfile, "line": src}},
+                              "sink": {"position": {"file": sfile, "line": snk}}}]}
+
+    def test_finding_at_the_places_is_detected(self):
+        n = d.location_counts(self.truth, self.rep(), "path_traversal")
+        self.assertEqual(n, (1, 1, 2))
+        self.assertTrue(d.detected_located(n[0]))
+
+    def test_same_kind_at_other_places_is_not_detected(self):
+        for r in (self.rep(snk=417), self.rep(src=52), self.rep(sfile="other.go")):
+            self.assertFalse(d.detected_located(d.location_counts(self.truth, r, "path_traversal")[0]))
+
+    def test_other_kind_at_the_places_is_not_detected(self):
+        self.assertEqual(d.location_counts(self.truth, self.rep("ssrf"), "path_traversal")[0], 0)
+
+    def test_fixed_side_table(self):
+        self.assertEqual(d.location_counts(self.truth, self.rep(snk=422), "path_traversal", "fixed")[0], 1)
+        self.assertEqual(d.location_counts(self.truth, self.rep(snk=422), "path_traversal", "prefix")[0], 0)
+
+    def test_not_converged_is_not_detected(self):
+        self.assertFalse(d.detected_located(None))
+        self.assertFalse(d.detected_located(0))
+
+    def test_memos_truth_file(self):
+        t = json.load(open(d.TARGETS_FILE))["memos"]["detect"]
+        self.assertEqual(t["mode"], "location")
+        sites = json.load(open(os.path.join(d.ROOT, t["truth"])))["sites"]
+        self.assertEqual(sorted(x["line"] for x in sites if x["role"] == "sink"), [416, 419, 426])
+        self.assertEqual(sorted(x["fixed_line"] for x in sites if x["role"] == "sink"), [422, 425, 432])
+        self.assertEqual([x["line"] for x in sites if x["role"] == "source"], [51])
 
 
 class Targets(unittest.TestCase):

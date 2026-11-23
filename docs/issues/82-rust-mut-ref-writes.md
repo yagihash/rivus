@@ -58,7 +58,7 @@ pub fn q2() {
 **結果(`main` の 1caf62b 比):**
 - zoo(Rust): 見つかる 59 → 65 / 89。`clos/capture-write-by-ref` の `vuln2`、`vuln6`、`vuln7`(`calls:` の `Once::call_once` と合わせて)、`rust/closure-fnmut` の `vuln`、`vuln2`、`decoy`、`rust/iterator-chain` の `vuln2`。`@miss` 30 → 24、修正済みのケースの誤検出 11 → 4、デコイの誤検出 16 → 9。`@noisy` の注釈 17 か所と、`@fp` の注釈 15 か所を外した。
 - `rust-curated`: `write-a`、`write-b`、`write-param`、`push-list`、`late`、`for-each-cap` が見つかる(`@miss` 15 → 9)。`@noisy` の流れ 194 → 152。クロージャのない `&mut` のフィールド(`struct_mut_field`、`struct_mut_field_helper`)のフィクスチャを足した(直す前は失敗する)。
-- `compare.sh`: parseable は finding 159 → 159、追加 0、削除 0(経路の長さが 31 件で 1 段短くなる)。rust-curated と zoo-rust の削除は、すべて、別のセルのクロージャの sink に届いていた過検出(source と sink が別の関数)。本物の流れの削除は 0。
+- `compare.sh`: parseable は finding 159 → 159、追加 0、削除 0(経路の長さが 31 件で 1 ステップ短くなる)。rust-curated と zoo-rust の削除は、すべて、別のセルのクロージャの sink に届いていた過検出(source と sink が別の関数)。本物の流れの削除は 0。
 
 **残り:** `rust-curated` の `across-cap`(`shared::each(vec![1], |_i| ...)`。`for i in items { f(i) }` の `IntoIterator` / `next` の候補が 0。GEN-DYN と同じ根に見える。未確認)。zoo の `vuln3`(ループの変数を `move` で環境に入れる)と `vuln5`(`Once::call_once` が、あとで書かれた変数を読む)。
 

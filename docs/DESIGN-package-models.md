@@ -16,7 +16,7 @@
 | 1. 今の動作(コードの調査) | [design-package-models/01-current-behavior.md](design-package-models/01-current-behavior.md) |
 | 2. 案 | [design-package-models/02-proposal.md](design-package-models/02-proposal.md) |
 | 3. 測定(3.1 Go、3.2 Dart、3.3 見積もり) | [design-package-models/03-measurements.md](design-package-models/03-measurements.md) |
-| 4. 「モデルを書く」標準の流れ(4 段)と、型からの生成(4.1〜4.4) | [design-package-models/04-standard-flow.md](design-package-models/04-standard-flow.md) |
+| 4. 「モデルを書く」標準の流れ(4 ステップ)と、型からの生成(4.1〜4.4) | [design-package-models/04-standard-flow.md](design-package-models/04-standard-flow.md) |
 | 5. リスク | [design-package-models/05-risks.md](design-package-models/05-risks.md) |
 | 6. モデル作成のセッションを並べて走らせる準備(概要) | [design-package-models/06-00-session-prep-overview.md](design-package-models/06-00-session-prep-overview.md) |
 | 6.1 conflict しない置き方 | [design-package-models/06-01-no-conflict-layout.md](design-package-models/06-01-no-conflict-layout.md) |
