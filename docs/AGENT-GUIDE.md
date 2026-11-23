@@ -444,6 +444,7 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `stats.converged` | `false` なら、解析が上限で止まっていて、**結果は途中のもの** |
 | `stats.timed_out` | `true` なら `-timeout` で止まった。フィールドがない(`jq` では `null`)のは、時間切れでないという意味 |
 | `stats.budget_exhausted`、`func_timeouts`、`run_timeouts` | 上限で止めた関数の数(理由ごと)。`budget_exhausted` と `func_timeouts` は 0 でもいつも出る(0 以外なら、終了コード 4 の理由になる) |
+| `stats.adds_total`、`adds_max_single_run`、`adds_max_function_total`、`adds_per_function` | 解析の作業量(集合に入った要素の数。`Budget` と同じ数え方)。`adds_total` は全関数の、再解析を含めた合計。`adds_max_single_run` は 1 回の解析の最大(`Budget` と比べる値)。`adds_max_function_total` は関数ごとの合計の最大。`adds_per_function` は、関数ごとの合計で分けた表(`from` 以上 `to` 未満。`to` が 0 は上限なし)で、各行に関数の数 `functions` と `adds` の合計。関数名は出ない。0 でもいつも出る。結果は変えず、上限の値を選ぶための測定の入口 |
 | `stats.tests_skipped` | 読まなかったテストの数(`-tests` で読む) |
 | `stats.functions`、`largest_scc`、`duration_ms` | 解析した関数の数、互いに呼び合う関数の最大のかたまりの大きさ、解析の時間 |
 | `stats.func_values` | `-resolve-func-values` が補った数 |
