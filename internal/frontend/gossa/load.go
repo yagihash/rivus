@@ -717,8 +717,8 @@ func moduleVersions(pkgs []*packages.Package) map[string]string {
 // before, and with one when it came after: the functions given to the
 // engine changed from run to run (40781 to 40791 for memos), by about 150 to
 // 200 functions of the standard library. This asks Origin of all functions
-// and takes the set again, until the number of functions that have a body
-// does not change (ADR-118, (ii): the same set whatever the order and the
+// and takes the set again, until the number of functions that have a body and
+// the number of all the functions do not change (ADR-118, (ii): the same set whatever the order and the
 // machine).
 //
 // The standard library is in skip, "its bodies are not read", but this is
@@ -736,16 +736,18 @@ func allFunctions(prog *ssa.Program) map[*ssa.Function]bool {
 		return n
 	}
 	fns := ssautil.AllFunctions(prog)
-	n := count(fns)
+	n, total := count(fns), len(fns)
 	for {
 		for fn := range fns {
 			fn.Origin()
 		}
 		fns = ssautil.AllFunctions(prog)
-		m := count(fns)
-		if m == n {
+		// both the functions with a body and all the functions must stop growing: a new function
+		// without a body has not had Origin asked yet, and the loop of Load would be the first to ask
+		m, t := count(fns), len(fns)
+		if m == n && t == total {
 			return fns
 		}
-		n = m
+		n, total = m, t
 	}
 }
