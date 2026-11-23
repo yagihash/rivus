@@ -205,42 +205,61 @@ class Cost(unittest.TestCase):
         self.assertEqual(self.c.pct(0, 5), "n/a")
         self.assertEqual(self.c.pct(None, 5), "n/a")
 
-    def test_mark_at_ten_percent(self):
-        self.assertTrue(self.c.marked(100, 110, 1000, 1000))     # CPU +10%
-        self.assertTrue(self.c.marked(100, 100, 1000, 1100))     # peak memory +10%
-        self.assertFalse(self.c.marked(100, 109, 1000, 1099))    # just below
-        self.assertFalse(self.c.marked(100, 50, 1000, 500))      # better
-        self.assertFalse(self.c.marked(None, 110, None, 1100))   # nothing to compare with
+    def test_mark_needs_ten_percent_and_more_than_the_spread(self):
+        m = self.c.marked
+        self.assertTrue(m([100, 100], [120, 120], [1000, 1000], [1000, 1000]))      # CPU +20%, no spread
+        self.assertTrue(m([100, 100], [100, 100], [1000, 1000], [1100, 1100]))      # peak +10%
+        self.assertFalse(m([100, 100], [109, 109], [1000, 1000], [1099, 1099]))     # just below 10%
+        self.assertFalse(m([100, 140], [130, 130], [1000, 1000], [1000, 1000]))     # +8% of medians, spread 33%
+        self.assertFalse(m([100, 130], [135, 150], [1000], [1000]))                 # delta +24% but spread 26%: not a conclusion
+        self.assertFalse(m([100, 100], [50, 50], [1000, 1000], [500, 500]))         # better
+        self.assertFalse(m([100], [150], [1000], [1500]))                           # a single run: never marked
+        self.assertFalse(m([], [110], [], [1100]))                                  # nothing to compare with
 
-    def test_row(self):
-        mb = {"cpu_s": 100, "max_rss_mb": 1000, "wall_s": 50, "load_start": 1.5, "load_end": 2.0}
-        mh = {"cpu_s": 120, "max_rss_mb": 1000, "wall_s": 60, "load_start": 3.0, "load_end": None}
+    def test_single_run_says_no_conclusion(self):
+        row = self.c.cost_row("x", [{"cpu_s": 100, "max_rss_mb": 1000}], [{"cpu_s": 150, "max_rss_mb": 1500}], {}, {})
+        self.assertIn("single run: no conclusion", row[2])
+        self.assertEqual(row[6], "")
+
+    def test_row_with_two_rounds(self):
+        mb = [{"cpu_s": 100, "max_rss_mb": 1000, "wall_s": 50, "load_start": 1.5, "load_end": 2.0},
+              {"cpu_s": 104, "max_rss_mb": 1010, "wall_s": 52, "load_start": 2.0, "load_end": 2.5}]
+        mh = [{"cpu_s": 118, "max_rss_mb": 1000, "wall_s": 60, "load_start": 3.0, "load_end": 3.1},
+              {"cpu_s": 122, "max_rss_mb": 1005, "wall_s": 61, "load_start": 3.1, "load_end": 3.4}]
         row = self.c.cost_row("x", mb, mh, {"summary_elems": 10, "summary_steps": 20}, {"summary_elems": 11, "summary_steps": 20})
-        self.assertEqual(row[1], "100.0 -> 120.0 (+20%)")
-        self.assertEqual(row[3], "10 -> 11 (+10%)")
-        self.assertEqual(row[5], "!!")
-        self.assertEqual(row[7], "base 1.5/2.0, head 3.0/n/a")
+        self.assertEqual(row[1], "2/2")
+        self.assertEqual(row[2], "100.0-104.0 -> 118.0-122.0 (+18%, spread 4%)")
+        self.assertEqual(row[4], "10 -> 11 (+10%)")
+        self.assertEqual(row[6], "!!")
+        self.assertEqual(row[8], "base 1.5/2.5, head 3.0/3.4")
 
     def test_row_of_an_old_cached_result_has_no_numbers(self):
-        row = self.c.cost_row("x", {"rc": 0}, {"rc": 0}, {}, {})
-        self.assertEqual(row[1], "n/a")
-        self.assertEqual(row[5], "")
+        row = self.c.cost_row("x", [], [], {}, {})
+        self.assertEqual(row[2], "n/a")
+        self.assertEqual(row[6], "")
 
-    def test_report_has_the_cost_table_and_a_cost_check(self):
+    def test_report_has_the_cost_table_with_rounds_and_a_cost_check(self):
         with tempfile.TemporaryDirectory() as d:
             write(d, "b", "base", 5)
             write(d, "b", "head", 5, summary_elems=50)
-            json.dump({"rc": 0, "wall_s": 1, "max_rss_mb": 100, "cpu_s": 10, "load_start": 1.0, "load_end": 1.0}, open(d + "/b.base.meta.json", "w"))
-            json.dump({"rc": 0, "wall_s": 1, "max_rss_mb": 100, "cpu_s": 12, "load_start": 1.0, "load_end": 1.0}, open(d + "/b.head.meta.json", "w"))
-            side = {"cpu_s": 10, "max_rss_mb": 100, "wall_s": 1, "load_start": 1, "load_end": 1, "why": "", "stats": {"summary_elems": 1, "summary_steps": 1}}
-            json.dump({"base": side, "head": side}, open(d + "/cost-memos.json", "w"))
+            def meta(name, cpu):
+                with open(d + "/" + name, "w") as f:
+                    json.dump({"rc": 0, "wall_s": 1, "max_rss_mb": 100, "cpu_s": cpu, "load_start": 1.0, "load_end": 1.0}, f)
+            meta("b.base.meta.json", 10); meta("b.head.meta.json", 12)
+            meta("b.base.r2.meta.json", 10.2); meta("b.head.r2.meta.json", 12.1)
+            run = {"cpu_s": 10, "max_rss_mb": 100, "wall_s": 1, "load_start": 1, "load_end": 1, "why": ""}
+            side = {"runs": [run, run], "stats": {"summary_elems": 1, "summary_steps": 1}}
+            with open(d + "/cost-memos.json", "w") as f:
+                json.dump({"base": side, "head": side}, f)
             r = subprocess.run([sys.executable, os.path.join(HERE, "compare.py"), "report", "-results", d, "-base", "A", "-head", "B",
                                 "-out", d + "/out", "-benches", "b"], capture_output=True, text=True)
-            text = open(d + "/out/summary.md").read()
+            with open(d + "/out/summary.md") as f:
+                text = f.read()
         self.assertEqual(r.returncode, 0)
-        self.assertIn("| b | 10.0 -> 12.0 (+20%)", text)
-        self.assertIn("!!", text.split("Cost, before -> after")[1])
-        self.assertIn("memos (cost check, one run each side)", text)
+        cost = text.split("Cost, before -> after")[1]
+        self.assertIn("| b | 2/2 | 10.0-10.2 -> 12.0-12.1 (+19%, spread 2%)", cost)
+        self.assertIn("!!", cost)
+        self.assertIn("memos (cost check; peak = process-tree sum)", cost)
 
 
 if __name__ == "__main__":

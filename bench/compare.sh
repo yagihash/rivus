@@ -42,7 +42,11 @@ options:
   --gomemlimit N=V  GOMEMLIMIT for benchmark N (repeatable; defaults: gogs-* 5GiB, a --big target 10GiB)
   --fixed-inputs    the backtest (bench/BACKTEST.md): both sides are analysed with the inputs of THIS tree (fixtures, rules, generator,
                     extractor), only the engine is the one of <base> / <head>, so that an old engine can be judged on today's inputs
-  --cost-check NAME one more run of NAME (only `memos`) of bench/deps-targets.json, ONE run on each side with the default flags, cost numbers
+  --cost-rounds N   the cost table needs repeats: after the first run of each side, N-1 more rounds run ALTERNATING (base, head, base, head ...), one at a
+                    time, not cached (default 2: every benchmark runs 4 times in all, 2 per side; 1 = single runs: the table then says "single run:
+                    no conclusion" and marks nothing). The `!!` mark needs a change of 10% or more that is larger than the spread between the runs
+                    of the same side. Also the number of rounds of --cost-check
+  --cost-check NAME one more target NAME (only `memos`) of bench/deps-targets.json, --cost-rounds alternating rounds (2: about 10 minutes or more) with the default flags, cost numbers
                     only (CPU time, peak memory of the process tree, summary elements and steps, load average; no finding comparison). The
                     tree comes from the bench cache ($BENCH_CACHE, fetch only, never run); the run has its own process group and the 8 GB
                     watchdog of bench/deps_bench.py. It takes minutes: for engine pull requests only; off by default
@@ -70,7 +74,7 @@ EOF
 }
 
 WORK="${COMPARE_WORK:-${TMPDIR:-/tmp}/rivus-compare}"
-OUT=""; RESUME=0; ONLY=""; SKIP=""; BIGS=""; SEL_LIGHT=0; SEL_HEAVY=0; NOCACHE=0; FIXED=0; COSTCHECK=""; CACHE_DIR=""; WAIT=6; TIMEOUT=1800s; DRY=0; NOGUARD=0
+OUT=""; RESUME=0; ONLY=""; SKIP=""; BIGS=""; SEL_LIGHT=0; SEL_HEAVY=0; NOCACHE=0; FIXED=0; COSTCHECK=""; ROUNDS=2; CACHE_DIR=""; WAIT=6; TIMEOUT=1800s; DRY=0; NOGUARD=0
 MEMLIMITS="gogs-9a9388ac=5GiB gogs-48946299=5GiB gitea-cut=4GiB"
 POS=()
 while [ $# -gt 0 ]; do
@@ -92,6 +96,7 @@ while [ $# -gt 0 ]; do
     --timeout) TIMEOUT="$2"; shift ;;
     --gomemlimit) MEMLIMITS="$MEMLIMITS $2"; shift ;;
     --fixed-inputs) FIXED=1 ;;
+    --cost-rounds) ROUNDS="$2"; shift ;;
     --cost-check) COSTCHECK="$2"; shift ;;
     --dry-run) DRY=1 ;;
     --no-guard) NOGUARD=1 ;;
@@ -100,6 +105,7 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+case "$ROUNDS" in ''|*[!0-9]*|0) echo "--cost-rounds: a number of 1 or more" >&2; exit 64 ;; esac
 case "$COSTCHECK" in ""|memos) ;; *) echo "--cost-check: only memos" >&2; exit 64 ;; esac
 if [ "${#POS[@]}" -ne 2 ]; then usage >&2; exit 64; fi
 BASE_REF="${POS[0]}"; HEAD_REF="${POS[1]}"
@@ -455,17 +461,18 @@ cache_tree() { # bench: uses DIR, KIND, PROV_INPUT of the last setup; prints JSO
     "$(cut -f1 "$RES/$b.base.prov")" "$irsha" "$dirty" "$gosum" "$gov" "$genv"
 }
 
-run_side() { # bench side tier: runs one analysis of one side with the variables DIR_<side>, IR_<side>, RULES_<side>
-  local b="$1" w="$2" tier="$3" DIR IR RULES args tree
+run_side() { # bench side tier [round]: runs one analysis of one side with the variables DIR_<side>, IR_<side>, RULES_<side>; round >= 2: a repeat for the cost (<bench>.<side>.r<round>, no cache)
+  local b="$1" w="$2" tier="$3" rnd="${4:-}" DIR IR RULES args tree sfx=""
+  [ -n "$rnd" ] && sfx=".r$rnd"
   eval "DIR=\$DIR_$w; IR=\$IR_$w; RULES=\$RULES_$w"
-  say "$b: $w"
-  args=(run -rivus "$BIN/rivus-$w" -dir "$DIR" -out "$RES/$b.$w" -timeout "$TIMEOUT" -wait "$WAIT" -gomemlimit "$ML")
+  say "$b: $w${sfx:+ (round $rnd)}"
+  args=(run -rivus "$BIN/rivus-$w" -dir "$DIR" -out "$RES/$b.$w$sfx" -timeout "$TIMEOUT" -wait "$WAIT" -gomemlimit "$ML")
   [ -n "$RULES" ] && args+=(-rules "$RULES")
   [ -n "$IR" ] && args+=(-ir "$IR")
   [ -n "$(flags_of "$b")" ] && args+=(-flags "$(flags_of "$b")")
   [ "$NOGUARD" = 1 ] && args+=(-no-guard)
   [ "$tier" = light ] && args+=(-light)
-  if [ "$tier" = light ] && [ "$w" = base ] && [ "$NOCACHE" = 0 ]; then args+=(-cache-dir "$CACHE_DIR" -cache-tree "$CACHE_TREE"); fi
+  if [ -z "$rnd" ] && [ "$tier" = light ] && [ "$w" = base ] && [ "$NOCACHE" = 0 ]; then args+=(-cache-dir "$CACHE_DIR" -cache-tree "$CACHE_TREE"); fi
   python3 "$PY" "${args[@]}" ${rf[@]+"${rf[@]}"} || true
 }
 
@@ -492,6 +499,14 @@ run_bench() { # bench
     run_side "$b" base heavy
     run_side "$b" head heavy
   fi
+  # the repeats of the cost: alternating, one at a time, after the first runs (base, head, base, head ...)
+  # a cached base run is not a sample (measured at another time): then base gets one round more, so that both sides have ROUNDS fresh runs
+  local r last="$ROUNDS"
+  grep -q '"cached"' "$RES/$b.base.meta.json" 2>/dev/null && last=$((ROUNDS + 1))
+  for ((r = 2; r <= last; r++)); do
+    run_side "$b" base "$tier" "$r"
+    [ "$r" -le "$ROUNDS" ] && run_side "$b" head "$tier" "$r"
+  done
   spec "$b"   # the truth is the one of this script's tree
   if [ -n "$TRUTH" ]; then
     for w in base head; do
@@ -513,8 +528,8 @@ done
 
 # --- 3b. the cost check: one run of memos on each side, cost only (no wait for the other runs: it is one at a time here) ---
 if [ -n "$COSTCHECK" ]; then
-  say "cost check $COSTCHECK: one run each side (minutes)"
-  python3 "$PY" costcheck -results "$RES" -target "$COSTCHECK" -base-bin "$BIN/rivus-base" -head-bin "$BIN/rivus-head" || say "the cost check did not run (see above)"
+  say "cost check $COSTCHECK: $ROUNDS alternating round(s) of each side (each run takes minutes; with 2 rounds about 10 minutes or more)"
+  python3 "$PY" costcheck -results "$RES" -target "$COSTCHECK" -rounds "$ROUNDS" -base-bin "$BIN/rivus-base" -head-bin "$BIN/rivus-head" || say "the cost check did not run (see above)"
 fi
 
 # --- 4. the table ---
