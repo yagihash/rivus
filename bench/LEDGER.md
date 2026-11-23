@@ -206,7 +206,7 @@ The goal: rivus analyses a real product with the default flags, in a realistic t
 
 `PASS|FAIL memos time=<s>/<limit> mem=<GB>/<cap> converged=<yes|no> detected=<yes|no|n/a>`
 
-PASS for memos (usememos/memos 26.11.2, `00fcd170281a75fc0e95ec4f2f54f43d32fe81bd`) needs all four with the default flags (no `-no-deps`, no `-body-replaced`): it ends by itself within 180 s; the end-of-run peak memory stays within 8 GB (a watchdog that samples the process group stops a run above the cap); it converges; and CVE-2025-65799 (path traversal; fixed in 0.25.3) is detected: the count of `path_traversal` findings is higher on the pre-fix commit `1d7efb158045924ab87f58d567bd79cd92edf6af` than on the fixed commit `5f57f48673e2054f404b2c5b497a8eaa3690591d` (counts only). The Dart line is cocoon `app_dart` (below); dart_services (dart-pad `pkgs/dart_services`, `ad668d137e631beeaef3e263054a45696e8d4499`) is a load target, printed as `INFO`.
+PASS for memos (usememos/memos 26.11.2, `00fcd170281a75fc0e95ec4f2f54f43d32fe81bd`) needs all four with the default flags (no `-no-deps`, no `-body-replaced`): it ends by itself within 180 s; the peak memory of the whole process tree (the same-time sum, sampled every 0.25 s) stays within 8 GB (the watchdog stops a run above the cap); it converges; and CVE-2025-65799 (path traversal; fixed in 0.25.3) is detected: the count of `path_traversal` findings is higher on the pre-fix commit `1d7efb158045924ab87f58d567bd79cd92edf6af` than on the fixed commit `5f57f48673e2054f404b2c5b497a8eaa3690591d` (counts only). The Dart line is cocoon `app_dart` (below); dart_services (dart-pad `pkgs/dart_services`, `ad668d137e631beeaef3e263054a45696e8d4499`) is a load target, printed as `INFO`.
 
 ### The starting point (2026-11-23, numbers only, a local measurement of the engine of that day)
 
@@ -241,7 +241,7 @@ The second Dart target is `dart-archive` (brendan-duncan/archive `6fc3b89fcdb89b
 
 ### Peak memory: what was measured how (numbers only)
 
-The memory of the verdict is the END-OF-RUN PEAK of the child (`/usr/bin/time` max resident set; macOS reports bytes). The watchdog (a sample of the summed RSS of the process group, which kills the group of the run above the cap) only stops a run early; its samples are never the number of the verdict (a sampler can miss a short peak: a run was seen above 8 GB that the sampler did not see). A run that the watchdog killed has no end-of-run number and is recorded as "above the cap".
+The memory has two records (`bench/deps_bench.py`). (a) the end-of-run peak of the main process (`ru_maxrss` of the child from `wait4`: the largest single process of its subtree; bytes on macOS). (b) the whole PROCESS TREE: the maximum over fine samples (every 0.25 s) of the SAME-TIME SUM of the RSS of all its processes (shared pages can be counted twice); the biggest process of the tree at that moment and when are kept, so that a large (a)/(b) difference can be explained. The verdict (PASS/FAIL) uses (b): the burden the machine really receives. The watchdog (the same samples; it kills the group of the run only, above the cap or the time limit) only stops a run early. The rows below marked end-of-run were measured with the earlier method (`/usr/bin/time`, the largest single process, = (a) in the new naming); the quiet 3-run measurement with both records is not made yet.
 
 | commit | setting | peak memory | how measured |
 |---|---|---|---|
