@@ -416,7 +416,7 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 
 - 汚染の単位は `Elem`（小さく、比較できる）。`Real`（source のサイトから来た具体的なラベル。ラベル名と、元の source サイトの ID を持つ）と、`Param`（「呼び出し側が引数 i に渡すもの、のこの経路の下」という記号的な汚染。サマリになる）の 2 種
 - 汚染の状態は、**セル**（`Root` ＋ アクセスパス）から `Elem` の集合への写像。`Root` は、SSA の値、複数の戻り値のうちの 1 つ、または解析中の関数の戻り値
-- アクセスパスの深さは k（既定 3。`-k`）で打ち切る。打ち切りは記録する
+- アクセスパスの深さは k（既定 3。`-k`）で打ち切る。**依存の関数だけ、別の深さ**（既定 2。`-dep-k`。0 は `-k` と同じ、`-dep-k 3` が前の動作。ADR-119）。打ち切りは記録する（全体の `path_limit` と、値が切ったパスを通った段の `access_path_truncated`。ADR-117）。使った深さは `summary.access_path_depth`
 - コンテナ要素は区別しない
 
 ### 4.3 関数サマリ
@@ -463,7 +463,7 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 | `numeric_stop` | rivus | source のデータが数値や bool になり、それ以降は追わない（既定。`-numeric-taint` で追う）。source の種類（シンボルとラベル）ごとに 1 件で、最初の場所と、起きた関数の一覧（10 件まで）を持つ。サマリを通って止まる分（呼び出し先の中の、引数の記号的なデータの止まり）は、記録されない |
 | `unsupported_construct` | rivus | extractor が下げられなかった構文（IR の `unsupported`）。その場所で何が起きるかは、解析に入っていない。`missing_source` ではない（対象のコードが足りないのではなく、rivus が読めなかった） |
 | `container_element_imprecision` | rivus | 結論に影響した場合のみ記録（ノイズ防止） |
-| `depth_limit` | rivus | 打ち切り。detail が理由を示す（`guard_limit`、`candidate_limit`、`caller_depth_limit`、`func_timeout` など）。例外: detail が `path_steps_omitted:` のものは、**解析の打ち切りではなく、表示の省略**（流れは見た。200 段を超える経路の、真ん中の段を見せていない。省いたステップの不確実性・モデル・到達性は finding に入っている）。ただし、source までさかのぼる途中の打ち切り（`the path was followed back for ...`）は、その先の段を見ていない |
+| `depth_limit` | rivus | 打ち切り。detail が理由を示す（`guard_limit`、`candidate_limit`、`caller_depth_limit`、`func_timeout`、`path_limit`、`out_limit` など）。例外: detail が `path_steps_omitted:` のものは、**解析の打ち切りではなく、表示の省略**（流れは見た。200 段を超える経路の、真ん中の段を見せていない。省いたステップの不確実性・モデル・到達性は finding に入っている）。ただし、source までさかのぼる途中の打ち切り（`the path was followed back for ...`）は、その先の段を見ていない |
 | `access_path_truncated` | rivus | 経路の**この段**で、値が深さの上限(`-k`。依存の関数は `-dep-k`)で切ったアクセスパスを通った(切ったセルに入れた段、切ったパスで読んだ段)。切った所より下は「まるごと汚染」として扱うので、ここから先の流れは、切ったために出ているだけかもしれない(多めに出る側。見逃しにはならない)。要素の同一性には入れず、段(why)に付ける(`pointer_alias` と同じ形)。使った深さは `summary.access_path_depth`(`{project, dependency}`、いつも出る)。切ったが値がそこを通らない finding には付かない。付かない場合: ポインタの位置のパスを切る所(`locs.go`。ループで伸びるパスの打ち切り)は注記を付けない。プログラム全体の記録は、`depth_limit` の `path_limit:` |
 | `recursion_approximation` | rivus | |
 | `field_imprecision` | rivus | フィールドを指定する sink に、そのフィールドにあるとは言えない汚染が届いた（14 節）。detail は `whole_value`、`path_limit`、`element`、`opaque_callee` |
@@ -582,7 +582,7 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 
 ### 5.3 ヒープの扱い
 
-- **フィールド感度あり（フィールド名ベース）、アクセスパス深さ k=3**。k は設定で変更可能
+- **フィールド感度あり（フィールド名ベース）、アクセスパス深さ k=3（プロジェクトの関数）、依存の関数は 2**。`-k`、`-dep-k` で変更可能
 - アロケーションサイトによるオブジェクト感度は入れない
 - コンテナ（配列・map など）は要素を区別しない。`container_element_imprecision` は、**結論に影響した場合にだけ**記録する
 - エイリアス解析は作らない。`b := a; b.Name = tainted` のような必要箇所は、列挙して出力に残す範囲に留める

@@ -3,6 +3,7 @@
     "truth/wide.go:12 -\u003e truth/wide.go:13"
   ],
   "uncertainty_kinds": {
+    "depth_limit": 1,
     "unmodeled_library_call": 1
   },
   "converged": true,

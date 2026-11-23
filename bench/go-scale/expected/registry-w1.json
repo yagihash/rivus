@@ -2,7 +2,9 @@
   "findings": [
     "reg/reg.go:17 -\u003e reg/reg.go:19"
   ],
-  "uncertainty_kinds": {},
+  "uncertainty_kinds": {
+    "depth_limit": 1
+  },
   "converged": true,
   "passes": 2,
   "reanalyses": 3263,

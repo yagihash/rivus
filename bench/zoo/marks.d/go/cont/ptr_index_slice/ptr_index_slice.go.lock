@@ -1,0 +1,2 @@
+go	cont/ptr_index_slice/ptr_index_slice.go	sink-none	@sink(none)	func decoy() { @decoy
+go	cont/ptr_index_slice/ptr_index_slice.go	sink-none	@sink(none)	func fixed() { @fixed

@@ -5,12 +5,12 @@
   ],
   "uncertainty_kinds": {
     "assumed_call": 9,
-    "depth_limit": 10,
+    "depth_limit": 11,
     "dynamic_dispatch": 52
   },
   "converged": true,
   "passes": 1,
-  "reanalyses": 2214,
-  "summary_elems": 5319,
-  "largest_summary_elems": 6
+  "reanalyses": 2215,
+  "summary_elems": 14637,
+  "largest_summary_elems": 220
 }

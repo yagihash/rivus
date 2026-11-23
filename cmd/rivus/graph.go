@@ -176,6 +176,7 @@ func (o *analyzeOpts) flagValues(patterns []string) map[string]string {
 		"tests":               fmt.Sprint(o.tests),
 		"no-deps":             fmt.Sprint(o.noDeps),
 		"k":                   fmt.Sprint(o.k),
+		"dep-k":               fmt.Sprint(o.depDepth()),
 		"numeric-taint":       fmt.Sprint(o.numeric),
 		"max-implementations": fmt.Sprint(o.maxImpl),
 		"no-builtin-rules":    fmt.Sprint(o.noBuiltin),

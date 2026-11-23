@@ -1,0 +1,3 @@
+go	cont/ptr_value_copy/ptr_value_copy.go	sink-none	@sink(none)	func decoy() { @decoy
+go	cont/ptr_value_copy/ptr_value_copy.go	sink-none	@sink(none)	func decoy() { @decoy
+go	cont/ptr_value_copy/ptr_value_copy.go	sink-none	@sink(none)	func fixed() { @fixed

@@ -447,6 +447,7 @@ func (s *state) valueGuards(ci *sg.Instr) map[string][]Guard {
 			fn:       s.fn,
 			pos:      ci.Pos,
 		}}
+		out[string(c.ID)][0].k = out[string(c.ID)][0].computeKey() // the key is asked for at every comparison of guards
 	}
 	s.eng.valueGuards.Store(ci, out)
 	return out
@@ -494,6 +495,7 @@ func (s *state) makeDispatchGuards(cc *callCtx, fns []*sg.Func) map[*sg.Func][]G
 			fn:       s.fn,
 			pos:      cc.in.Pos,
 		}}
+		out[fn][0].k = out[fn][0].computeKey()
 	}
 	return out
 }
@@ -1371,6 +1373,7 @@ func (s *state) paramGuards(cc *callCtx, fns []*sg.Func) map[*sg.Func][]Guard {
 			fn:       s.fn,
 			pos:      cc.in.Pos,
 		}}
+		out[fn][0].k = out[fn][0].computeKey()
 	}
 	s.eng.dispatch.Store(cc.in, out)
 	return out

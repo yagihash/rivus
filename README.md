@@ -136,6 +136,10 @@ rivus query -site <ID> ./...           # sites の 1 件から始める
 
 `index` と `graph` の詳しい使い方は [docs/GRAPH.md](docs/GRAPH.md) にあります。AI エージェントに rivus を使わせるときの手引き(どのコマンドを、どのフラグで実行し、出力のどこを読むか)は [docs/AGENT-GUIDE.md](docs/AGENT-GUIDE.md) にあります。
 
+### 依存を浅く読む
+
+依存の関数の中のフィールドのたどり方(アクセスパス)は、既定で、深さ 2 で切ります(自分のコードは 3、`-k`)。リクエストの構造体が深い依存(AWS SDK など)を含む解析が、終わるようになります。切った所より下は、まるごと汚染として扱うので、依存の中の隣のフィールドへの流れが、多めに出ることがあります(見逃しにはなりません。その流れには `access_path_truncated` の注記が付き、使った深さは `summary.access_path_depth` に出ます)。前の動作(依存も深さ 3)に戻すには、`-dep-k 3` を付けます。
+
 ### 自分のプロジェクトで、どの依存が重いかの表を得る
 
 依存を含む大きいプロジェクトで、`analyze` が時間切れや収束しないで終わるとき、どの依存が重いかを、パッケージ名と数字だけの表で出せます。
@@ -266,6 +270,8 @@ Go / Dart / Rust の extractor ──→ 中立の IR（CFG、JSON Lines）─�
 ## 開発
 
 新しいマシン(Linux)では、先に `make setup` を 1 回実行します。go.mod の Go(1.27 系の最新のパッチを固定)と、CI と同じバージョンの Dart SDK がなければ、バージョンとチェックサムを固定して `~/.local/rivus-dev` に入れ(sudo は不要)、Dart の各パッケージの `dart pub get` を実行します。インストール先は環境変数 `RIVUS_DEV_TOOLS` で変えられます(未設定なら `~/.local/rivus-dev`)。入っていれば何もしないので、何度実行しても同じです。終わりに PATH の設定が表示されます。Rust の nightly と隔離の仕組みは入れません(`make test` に必要。`.github/workflows/ci.yml` の `rust` ジョブを参照)。
+
+`make setup` は、`git config core.hooksPath .githooks` も設定します(`make setup` を使わないときは、自分で実行します)。`.githooks/pre-push` は、PR がマージ済み(または閉じている)で、開いている PR がないブランチへの push を止めます(コミットが main に入らないため。`gh` がなければ警告だけで通します)。意図した push は `RIVUS_ALLOW_PUSH_TO_MERGED=1 git push` にします。`core.hooksPath` の相対パスは、各 worktree の最上位から読まれます。`.githooks/` がない古い worktree では、clone の設定に絶対パス(`git config core.hooksPath <main の checkout>/.githooks`)を入れます。
 
 ```sh
 make setup                                      # 新しいマシンで 1 回(Go、Dart SDK、dart pub get)。そのあと make check

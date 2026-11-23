@@ -11,7 +11,7 @@ class Judge(unittest.TestCase):
     def test_all_four_met(self):
         ok, body = d.judge(120, 180, 5.2, 8, True, True)
         self.assertTrue(ok)
-        self.assertEqual(body, "time=120/180 mem=5.20/8 converged=yes detected=yes")
+        self.assertEqual(body, "time=120/180 mem=5.20/8 converged=yes detected=yes quiet_after_fix=n/a")
 
     def test_each_criterion_alone_fails(self):
         self.assertFalse(d.judge(181, 180, 5, 8, True, True)[0])   # time
@@ -25,7 +25,7 @@ class Judge(unittest.TestCase):
     def test_no_detection_is_not_a_failure(self):
         ok, body = d.judge(100, 180, 5, 8, True, None)
         self.assertTrue(ok)
-        self.assertTrue(body.endswith("detected=n/a"))
+        self.assertTrue(body.endswith("detected=n/a quiet_after_fix=n/a"))
 
     def test_missing_numbers_fail(self):
         self.assertFalse(d.judge(None, 180, 5, 8, True, True)[0])
@@ -33,22 +33,58 @@ class Judge(unittest.TestCase):
 
     def test_line(self):
         ok, body = d.judge(67, 180, 8.8, 8, False, False)
-        self.assertEqual(d.format_line("memos", True, ok, body), "FAIL memos time=67/180 mem=8.80/8 converged=no detected=no")
+        self.assertEqual(d.format_line("memos", True, ok, body), "FAIL memos time=67/180 mem=8.80/8 converged=no detected=no quiet_after_fix=n/a")
         self.assertTrue(d.format_line("dart_services", False, ok, body).startswith("INFO dart_services "))
 
 
 class Detection(unittest.TestCase):
-    def test_more_before_than_after(self):
-        self.assertTrue(d.detection(2, 0))
-        self.assertFalse(d.detection(0, 0))
-        self.assertFalse(d.detection(1, 1))
-        self.assertFalse(d.detection(None, 0))   # a run that did not converge
-        self.assertFalse(d.detection(3, None))
+    def test_detected_at_prefix_only(self):
+        self.assertTrue(d.detection(2))
+        self.assertFalse(d.detection(0))
+        self.assertFalse(d.detection(None))   # a run that did not converge
+
+    def test_quiet_after_fix(self):
+        self.assertTrue(d.quiet_after_fix(0))
+        self.assertFalse(d.quiet_after_fix(1))
+        self.assertFalse(d.quiet_after_fix(None))
+
+    def test_quiet_after_fix_is_not_part_of_pass(self):
+        self.assertTrue(d.judge(100, 180, 5, 8, True, True, None, False)[0])
+        self.assertTrue(d.judge(100, 180, 5, 8, True, True, None, True)[0])
+        self.assertTrue(d.judge(100, 180, 5, 8, True, True, None, False)[1].endswith("quiet_after_fix=no"))
 
     def test_count_category_counts_only(self):
         rep = {"findings": [{"category": "path_traversal"}, {"category": "xss"}, {"category": "path_traversal"}]}
         self.assertEqual(d.count_category(rep, "path_traversal"), 2)
         self.assertEqual(d.count_category({}, "path_traversal"), 0)
+
+
+class Peak(unittest.TestCase):
+    GB = 1024 ** 3
+
+    def test_two_records_of_a_real_child(self):
+        with tempfile.TemporaryDirectory() as w:
+            m = d.run_watched([sys.executable, "-c", "x = bytearray(150 * 1024 * 1024); x[::4096] = b'a' * len(x[::4096]); import time; time.sleep(1.2)"],
+                              w, dict(os.environ), 30, 8 * self.GB, os.path.join(w, "e"), os.path.join(w, "o"), interval=0.1)
+        self.assertEqual((m["rc"], m["why"]), (0, ""))
+        self.assertGreater(m["a"], 150 * 1024 * 1024)
+        self.assertGreater(m["b"], 150 * 1024 * 1024)   # the tree is at least the main process
+        self.assertTrue(m["big"])
+
+    def test_watchdog_kills_over_the_cap(self):
+        with tempfile.TemporaryDirectory() as w:
+            m = d.run_watched([sys.executable, "-c", "x = bytearray(200 * 1024 * 1024); x[::4096] = b'a' * len(x[::4096]); import time; time.sleep(20)"],
+                              w, dict(os.environ), 30, 100 * 1024 * 1024, os.path.join(w, "e"), os.path.join(w, "o"), interval=0.1)
+        self.assertEqual(m["why"], "memory")
+        self.assertGreater(m["b"], 100 * 1024 * 1024)
+
+    def test_verdict_uses_the_tree_number(self):
+        self.assertFalse(d.judge(100, 180, 9.0, 8, True, None)[0])
+
+    def test_timer_output_parsed(self):
+        self.assertEqual(d.max_rss_bytes("  123456  maximum resident set size\n"), 123456)
+        self.assertEqual(d.max_rss_bytes("Maximum resident set size (kbytes): 10\n"), 10240)
+        self.assertIsNone(d.max_rss_bytes("nothing"))
 
 
 class Through(unittest.TestCase):
@@ -79,8 +115,8 @@ class Through(unittest.TestCase):
     def test_line_has_both_numbers(self):
         ok, body = d.judge(100, 180, 5, 8, True, True, (4, 9))
         self.assertTrue(ok)
-        self.assertTrue(body.endswith("detected=yes through_tp=4/9"))
-        self.assertTrue(d.judge(100, 180, 5, 8, False, False, (None, 9))[1].endswith("detected=no through_tp=-/9"))
+        self.assertTrue(body.endswith("detected=yes quiet_after_fix=n/a through_tp=4/9"))
+        self.assertTrue(d.judge(100, 180, 5, 8, False, False, (None, 9))[1].endswith("detected=no quiet_after_fix=n/a through_tp=-/9"))
 
 
 class Targets(unittest.TestCase):
