@@ -1,0 +1,4 @@
+dart	clos/local_recursion.dart	miss	@source(clos-local-recursion-mutual) @miss(unresolved_callee) @ref(#196)	void mutual() { @vuln
+dart	clos/local_recursion.dart	miss	@source(clos-local-recursion-nested) @miss(silent) @ref(#196)	void nested() { @vuln
+dart	clos/local_recursion.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	clos/local_recursion.dart	sink-none	@sink(none) @nosink(clos-local-recursion-decoy)	void decoy() { @decoy
