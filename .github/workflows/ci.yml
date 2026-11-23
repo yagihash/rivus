@@ -272,6 +272,8 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: read
+    env:
+      DART_SDK: 3.13.6 # the SDK of setup-dart below, and a part of the key of the cache of the compiled extractor
     strategy:
       fail-fast: false
       matrix:
@@ -293,7 +295,18 @@ jobs:
       - uses: dart-lang/setup-dart@2286a0c042b44434fe26d292bbce8d34f7ec662b # v1.8.2
         if: needs.changes.outputs.dart == 'true'
         with:
-          sdk: 3.13.6
+          sdk: ${{ env.DART_SDK }}
+      # The tests compile the Dart extractor to an executable (TestMain, about 10 s), the same one in every shard. It is kept in a cache: the key is what the
+      # extractor is made of (lib, bin, pubspec.yaml, pubspec.lock; what dartSourceHash reads) and the SDK; the test looks for the executable in the
+      # directory by its own, exact key too (RIVUS_DART_EXE_DIR), so a hit that is stale only costs the compile, and never judges an old executable.
+      # A pull request only restores it; a push to main (and the weekly run) saves it, after the tests, when there was no hit.
+      - name: Restore the compiled Dart extractor
+        id: dartexe
+        if: needs.changes.outputs.dart == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/rivus-dart-exe
+          key: dartexe-${{ runner.os }}-${{ runner.arch }}-${{ env.DART_SDK }}-${{ hashFiles('extractor/dart/lib/**', 'extractor/dart/bin/**', 'extractor/dart/pubspec.yaml', 'extractor/dart/pubspec.lock') }}
       - name: Write the generated files of the Dart zoo
         if: needs.changes.outputs.dart == 'true'
         # the two pubspec.yaml of the zoo (cells, exec) and exec/lib/cases.dart are made from the directories of the cells and of the skeleton packages:
@@ -316,9 +329,11 @@ jobs:
       # extractor/rust/rust-toolchain.toml. The cache holds the toolchains of rustup and nothing else; its key is that file (the channel, the
       # components): a new pin is a new key. The install below runs on a hit too (it finds the toolchain and has nothing to do), so a cache
       # that is incomplete costs time, not a wrong toolchain.
+      # A pull request only restores it (the post step of a plain `actions/cache` saves on a miss, which took 58 s); a push to main saves it, after the install.
       - name: Cache the pinned nightly
+        id: rustup
         if: needs.changes.outputs.rust == 'true'
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.rustup/toolchains
           key: rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('extractor/rust/rust-toolchain.toml') }}
@@ -326,6 +341,12 @@ jobs:
         if: needs.changes.outputs.rust == 'true'
         working-directory: extractor/rust
         run: rustup toolchain install
+      - name: Save the pinned nightly
+        if: needs.changes.outputs.rust == 'true' && github.event_name != 'pull_request' && steps.rustup.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.rustup/toolchains
+          key: ${{ steps.rustup.outputs.cache-primary-key }}
       - name: Build the Rust extractor
         if: needs.changes.outputs.rust == 'true'
         working-directory: extractor/rust
@@ -371,7 +392,15 @@ jobs:
           RIVUS_REQUIRE_GCP: "1"
           # TestDogfood skips itself without this (ADR-112): the weekly run when something changed, and a run by hand
           RIVUS_DOGFOOD: ${{ needs.changes.outputs.dogfood == 'true' && '1' || '' }}
+          # where the compiled Dart extractor is looked for and kept (the cache above)
+          RIVUS_DART_EXE_DIR: ${{ needs.changes.outputs.dart == 'true' && format('{0}/rivus-dart-exe', runner.temp) || '' }}
         run: make test-shard I="$SHARD_INDEX" N="$SHARD_TOTAL"
+      - name: Save the compiled Dart extractor
+        if: ${{ !cancelled() && needs.changes.outputs.dart == 'true' && github.event_name != 'pull_request' && steps.dartexe.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/rivus-dart-exe
+          key: ${{ steps.dartexe.outputs.cache-primary-key }}
 
   # bench/gcp run for real, against fakes (exec_test.go): the value of a vulnerable case reaches the SQL text, the
   # value of a fixed one only the parameters. The test refuses every connection that is not loopback.
