@@ -2,11 +2,11 @@
 
 背景: クラウドで 1 パッケージ分のモデルを作る作業(手順書 [MODEL-RUNBOOK.md](../MODEL-RUNBOOK.md))は、Dart(dio、github、shelf、googleapis_auth)、Go(gin、storage、sqlx、go-github、`os` と `database/sql` の行)、Rust(actix-web、axum、google-cloud-storage、octocrab)の 10 本あまりで、ほぼ毎回、手順書への追記が要った。クラウドで確実に回すには、手順を全部スクリプトにして、人や LLM の判断を「sink、source、sanitizer をどれにするか」だけに絞る必要がある。最初の要件(決まった手順はスクリプト、LLM は sink / source / sanitizer の選択だけ)に戻る。この節は設計案で、実装はしない。事実は、手順書の履歴(`git log --follow docs/MODEL-RUNBOOK.md`)と、リポジトリのファイルで確認した。
 
-#### 1. 手でやっている段と、スクリプトにできるか
+#### 1. 手でやっているステップと、スクリプトにできるか
 
 追記の原因が「スクリプトがなかった」ものか、「本当に判断が要る」ものかを分ける。
 
-| 順 | 段 | 手順書の追記(根拠) | 分類 | 理由 |
+| 順 | ステップ | 手順書の追記(根拠) | 分類 | 理由 |
 | --- | --- | --- | --- | --- |
 | 1 | 取得(`go mod download`、`dart pub get`、`cargo fetch`。取得だけ) | 0 節の「取得と実行の範囲」の表 | スクリプトにできる | 一覧(MODEL-QUEUE.md)の行から決まる |
 | 2 | 公開の API の列挙と、粗い flows の生成(型から) | 2 節の 1 は「未実装」のまま。`rivus models coverage -yaml` で代用している | スクリプトにできる(新規。4.3a の規則 a〜f) | 型だけで決まる。判断は要らない |
@@ -38,7 +38,7 @@
 make model PKG=<パッケージ> VERSION=<バージョン> LANG=<go|dart|rust>   # 案。名前は未定
 ```
 
-終了コードで、失敗した段を言う(0: 成功、10: 取得、20: 生成、30: 骨組みのビルド、40: セル、50: 差分テストの MISS、60: zoo のゲート、70: 未決の候補がある(`-expand` では、決めの衝突、`covers` を超える増加、代表が生成した行でない)、80: 実行できない段(Rust の extractor)で止まった)。数字は例で、決めるのは実装のとき。
+終了コードで、失敗したステップを言う(0: 成功、10: 取得、20: 生成、30: 骨組みのビルド、40: セル、50: 差分テストの MISS、60: zoo のゲート、70: 未決の候補がある(`-expand` では、決めの衝突、`covers` を超える増加、代表が生成した行でない)、80: 実行できないステップ(Rust の extractor)で止まった)。数字は例で、決めるのは実装のとき。
 
 | 順 | やること | 出力(コミットするか) | 使う既存の部分 |
 | --- | --- | --- | --- |
@@ -48,7 +48,7 @@ make model PKG=<パッケージ> VERSION=<バージョン> LANG=<go|dart|rust>  
 | 4 | 候補を出し、モデルのファイルと照合る(下) | 未決があれば、作業ファイルに一覧(コミットしない)。終了コード 70 | 新規(候補の一覧)。`rivus models coverage`、`-coverage-gaps` |
 | 5 | zoo のセルのテンプレート、`rules.yaml`、`pubspec.yaml` の設定 | `bench/zoo-<lang>-pkg/<パッケージ>/cells/`(テンプレートはコミットする。中身は人か LLM が足す) | 新規(テンプレート)。`make zoo-dart-gen` |
 | 6 | マークの固定、`.dead-allow`、`verified_versions` | `bench/zoo/marks.d/`、`*.dead-allow`、モデルの先頭(コミットする) | `TestZooMarksLock`、`readDeadAllow` |
-| 7 | 差分テスト(MISS が 0。EXTRA は理由を注釈にする)。PR のジョブにも入れる(段 1 と同時) | なし(結果は PR の本文へ) | `bench/model-diff` |
+| 7 | 差分テスト(MISS が 0。EXTRA は理由を注釈にする)。PR のジョブにも入れる(ステップ 1 と同時) | なし(結果は PR の本文へ) | `bench/model-diff` |
 | 8 | 行がない関数の一覧 | なし(PR の本文へ) | `-coverage-gaps`(第三者のパッケージへの拡張は新規) |
 | 9 | zoo のゲート、`regomark check --no-judge` | なし | `scripts/zoo-loosened-check.sh`(`make zoo-loosened`)、`regomark` |
 | 10 | PR の題と本文の材料 | `.claude/work/` などの一時の場所(コミットしない) | 新規(数字の集計) |
@@ -90,28 +90,28 @@ rejected:
 | | Go | Dart | Rust |
 | --- | --- | --- | --- |
 | 型の取り方(4.2) | `go/packages`(`NeedTypes`) | analyzer の `LibraryElement` | extractor を使う(段階 5) |
-| 実行する場所 | クラウドで全段が可能(取得だけ。実行しない) | クラウドで全段が可能 | ローカルのサンドボックスの下。クラウドは Rust を扱わない |
+| 実行する場所 | クラウドで全ステップが可能(取得だけ。実行しない) | クラウドで全ステップが可能 | ローカルのサンドボックスの下。クラウドは Rust を扱わない |
 | 骨組みの形 | `skel/`、`zoo/mark` | `cells/packages/<名前>`(`zoo_exec_override`、`--dep-dir`) | `skel/`、`zoo-mark`、`#[track_caller]` |
 | 差分テスト | あり | あり | 段階 5 で(extractor を動かす。サンドボックスの下) |
 
-Rust は、extractor を動かす段(型の取得、セルの解析の確認、本物のクレートでの記号の綴りの照合、差分テスト)が、macOS のサンドボックスの下でしか許されていない(手順書 0 節、6.5)。クラウドには隔離がなく、クラウドは Rust を扱わない。**構文だけで署名を読む道具は作らない**(再エクスポートや型の別名を解けず、精度が下がるため)。Rust は、同じコマンドを、サンドボックスの下でローカルに走らせる(段階 5)。
+Rust は、extractor を動かすステップ(型の取得、セルの解析の確認、本物のクレートでの記号の綴りの照合、差分テスト)が、macOS のサンドボックスの下でしか許されていない(手順書 0 節、6.5)。クラウドには隔離がなく、クラウドは Rust を扱わない。**構文だけで署名を読む道具は作らない**(再エクスポートや型の別名を解けず、精度が下がるため)。Rust は、同じコマンドを、サンドボックスの下でローカルに走らせる(段階 5)。
 
 **骨組みの共通の決め**: `--dep-dir` と Rust の `exclude = ["skel"]` は、条件付きにしない。骨組みには常に足す(3 つの言語とも、骨組みを依存として扱うため)。
 
 **セルの置き場所の決め**: 第三者のパッケージは `zoo-<lang>-pkg`。標準ライブラリは、対のセル(parity)の確認を満たせるなら `zoo-<lang>`、満たせないなら `zoo-<lang>-pkg/<標準ライブラリの名前>`(#219、#223 の形)。コマンドが決める(選択は残さない)。
 
-**言語を横断する順**(2026-11-23。言語の間の機能の差を大きくしない。[bench/parity/README.md](../../bench/parity/README.md) の機能の差の表で見る): 言語ごとに段 1〜3 を終えるのでなく、段ごとに 3 言語を回す。段 1(枠、候補、検証、差分テスト)は Go → Dart → Rust(Rust はローカルで、サンドボックスの下)。次に段 2(骨組みの生成)を Go → Dart → Rust。段 3(型からの flows の生成)も同じ。Rust を急ぐ必要はないが、段の途中で差が開いたままにしない。Rust の段 1 の前提は、次の 4 つ(見積もりは、あとで足す): (a) Rust の extractor が宣言のある本体を読まない(宣言の段階 4。ADR-105 の続き。7a 節)。(b) Rust の差分テスト。(c) `rust-web.yaml` をパッケージごとのファイルに分ける。(d) `summary.unverified_versions` を Dart と Rust に出す(課題 #162)。
+**言語を横断する順**(2026-11-23。言語の間の機能の差を大きくしない。[bench/parity/README.md](../../bench/parity/README.md) の機能の差の表で見る): 言語ごとにステップ 1〜3 を終えるのでなく、ステップごとに 3 言語を回す。ステップ 1(枠、候補、検証、差分テスト)は Go → Dart → Rust(Rust はローカルで、サンドボックスの下)。次にステップ 2(骨組みの生成)を Go → Dart → Rust。ステップ 3(型からの flows の生成)も同じ。Rust を急ぐ必要はないが、ステップの途中で差が開いたままにしない。Rust のステップ 1 の前提は、次の 4 つ(見積もりは、あとで足す): (a) Rust の extractor が宣言のある本体を読まない(宣言の段階 4。ADR-105 の続き。7a 節)。(b) Rust の差分テスト。(c) `rust-web.yaml` をパッケージごとのファイルに分ける。(d) `summary.unverified_versions` を Dart と Rust に出す(課題 #162)。
 
-#### 4. 実装の順と、最初の段の範囲
+#### 4. 実装の順と、最初のステップの範囲
 
-| 段 | 内容 | 規模(見積もり) |
+| ステップ | 内容 | 規模(見積もり) |
 | --- | --- | --- |
 | 1(最初) | **Go だけ。`make model` の枠、候補の一覧(層 1 と層 2)、`rejected:` の読み込みと検証、照合と終了コード 70、`.dead-allow` と `verified_versions`、差分テスト(PR のジョブにも入れる)、PR の本文の材料**。最初の作業は、層 1 の規則の評価(2 節)。型からの flows の生成と、骨組みの生成は含めない(今の `rivus models coverage -yaml` と、手で書いた骨組みを使う) | 中。コマンド 1 つ(Go の小さいプログラム。`bench/model-diff` と同じ形)と、ローダーの検証と、テスト |
 | 2 | Go の骨組みの生成(署名、埋め込み、`zoo/mark` の記録)と、セルのテンプレート。**既存の骨組みに `--dep-dir` と `exclude` を足して揃える作業を、1 つの PR で行う** | 中 |
 | 3 | Go の型からの flows の生成(4.3a の規則 a〜f。段階 3 の生成器) | 中。`-coverage-gaps` の拡張(第三者のパッケージ)を含む |
 | 3 のあと | 課題 #163(ライブラリをプロジェクトとして解析する候補。Go が先) | 中 |
-| 4 | 段 1〜3 の Dart 版(下の「言語を横断する順」。骨組み、`zoo_exec_override`、`--dep-dir`、型の取得) | 中〜大 |
-| 5 | 段 1〜3 の Rust 版(クラウドでできる段だけ。3 の表。ローカルはサンドボックスの下) | 大(構文だけの署名の取得) |
+| 4 | ステップ 1〜3 の Dart 版(下の「言語を横断する順」。骨組み、`zoo_exec_override`、`--dep-dir`、型の取得) | 中〜大 |
+| 5 | ステップ 1〜3 の Rust 版(クラウドでできるステップだけ。3 の表。ローカルはサンドボックスの下) | 大(構文だけの署名の取得) |
 
 **段階 1 の状態(2026-11-23): 差分テストは、構造体の引数とレシーバに、文字を持てるフィールドすべてへ source を入れて確認する(手順書 9 節。確認していない行は、標準ライブラリで 44.6% から 43.6%。数と理由別の内訳は `bench/model-ledger.md`)。実装済み(`bench/model-author`、`make model`。Go だけ)。型からの flows の生成、骨組みとセルの生成、Dart、Rust は含めない。差分テストを PR のジョブに入れる部分は、入れた(2026-11-23。`model-diff-changed`。06-03)。CI の `model-diff` は、定期の実行と手動のまま。**
 
@@ -130,7 +130,7 @@ Rust は、extractor を動かす段(型の取得、セルの解析の確認、�
 
 **モデルを確認する対象(ユーザーの方針。2026-11-23)**: 上流が今もサポートしている major(公開の事実で決める。根拠をモデルのファイルの冒頭か PR の本文に 1 行)。既定は最新で、並行してサポートされている major は、`make model` を `VERSION` を替えて複数回実行する。Go の `/v*` の行は、実行した major の具体的なシンボルに直して照合し、片方の major にしかない候補は、もう片方の実行で「消えた候補」の警告にならない(`/v*` で書いた `rejected:` の項目は、警告しない)。`verified_versions` は、ローダーが同じ `package` の重複を拒むので、major ごとに具体的な module の path(`x/v2`、`x/v3`)の記録を並べる。Dart と Rust は、パスに major が入らないので行は共通で、並行サポートのバージョンがあれば、それぞれのバージョンで確認する。
 
-**最初の段の範囲(正確に)**:
+**最初のステップの範囲(正確に)**:
 
 - 入るもの: (i) `make model PKG=<Go のモジュール> VERSION=<v> LANG=go`。(ii) `rejected:` の書式の確定と、ローダーでの読み込み、検証(`symbol`、`kind`、`why` の有無、解析には使わない)。(iii) 候補の一覧(層 1 は規則の表から、層 2 は件数と一覧だけ)と、行と `rejected:` との照合。未決があれば、終了コード 70 と、作業ファイルへの一覧。消えた候補の警告。(iv) 層 1 の規則の評価(再現率)。(v) `verified_versions`、`.dead-allow` の書き出し。(vi) 差分テストの実行(`bench/model-diff`)と、PR のジョブへの組み込み。結果を、PR の本文の材料にまとめる。(vii) 終了コードの表。
 - 入らないもの: 型からの flows の生成、骨組みの生成、セルの生成、Dart と Rust、マークの固定の自動実行(まず、手順書に 1 行で書く)、既存のモデルの移行。
@@ -141,16 +141,16 @@ Rust は、extractor を動かす段(型の取得、セルの解析の確認、�
 | 部分 | 状態 | 使い方 |
 | --- | --- | --- |
 | `rivus models coverage`(`-yaml`、`-index`) | 足りる | 候補の一覧の、source と呼び出しの候補の元。スタブの形 |
-| `bench/model-diff`(`make model-diff`) | 足りる | 段 7。`-changed`、`-changed-reviewed` も |
+| `bench/model-diff`(`make model-diff`) | 足りる | ステップ 7。`-changed`、`-changed-reviewed` も |
 | `-coverage-gaps` | 一部(Go の標準ライブラリだけ) | 第三者のパッケージと、Dart、Rust への拡張が新規 |
 | `zoo_exec_override`、`make zoo-dart-gen` | 足りる(Dart) | 骨組みの `pubspec.yaml` に 1 行。生成した骨組みに入れる |
-| `scripts/zoo-loosened-check.sh`(`make zoo-loosened`) | 足りる | 段 9 |
-| `TestZooMarksLock`(`ZOO_MARKS_UPDATE=1`) | 足りる | 段 6 |
-| `regomark check --no-judge` | 足りる | 段 9 |
+| `scripts/zoo-loosened-check.sh`(`make zoo-loosened`) | 足りる | ステップ 9 |
+| `TestZooMarksLock`(`ZOO_MARKS_UPDATE=1`) | 足りる | ステップ 6 |
+| `regomark check --no-judge` | 足りる | ステップ 9 |
 | 骨組みの生成器 | **新規** | 公開の署名、埋め込み、実装、記録、`#[track_caller]` |
 | 型からの生成器(4.3a) | **新規** | 4.2 の足場の上 |
 | 候補の一覧(規則の表) | **新規** | 上の層 1、層 2 |
-| オーケストレータ(`make model`) | **新規** | 段の順と終了コード |
+| オーケストレータ(`make model`) | **新規** | ステップの順と終了コード |
 | `rejected:` のローダー | **新規** | 読み込みと検証だけ |
 
 **相談役の判断で決まったこと**: 判断はモデルのファイルの中に置く。`models-src/` は作らない。候補は 2 層。段階 1 の候補の元は、ライブラリ単体の型の規則だけ。Rust はクラウドで扱わない。セルの置き場所、`--dep-dir` と `exclude` の扱い、差分テストを PR のジョブに入れる時期は、上のとおり。

@@ -40,7 +40,7 @@ adopt_rules:
 
 **範囲(`scope`)は、決定的に選べるものだけ**: `package`(完全一致。Go は `/v*`)、`receiver_types`(完全一致の一覧)、`receiver_suffix` と `receiver_prefix`(型の名前に対して、各 1 つ。`rejected:` の型単位のまとめと同じ制限)、`functions`(関数の名前の完全一致の一覧)。**シンボルへの自由な glob と正規表現は書けない**。1 つの決めに複数の範囲を書いたときは、すべてを満たすもの(AND)。例外は、`rejected:` の 1 件(今の書式。展開から外れる)か、手の行(手の行が勝つ)。
 
-**展開のアルゴリズム**(`make model` の新しい段。取得した公開 API だけを読む):
+**展開のアルゴリズム**(`make model` の新しいステップ。取得した公開 API だけを読む):
 
 1. 層 1 の候補を、今と同じに作る(型だけを読む。シンボルの辞書順)。
 2. 決めごとに、候補のうち、`kind`、`rule` の id、`scope` を満たすものを選ぶ。位置は、候補の位置のうち、`words` の語を持つものだけ(空なら、その候補は対象外)。
@@ -129,7 +129,7 @@ adopt_rules:
 
 #### 6. 実装の順と、残る確認
 
-**最初の小さい段(段階 1b)**: Go だけ。(1) 規則の表に id を付ける(`rules.go`。挙動は変えない。`-recall` の結果が変わらないことを確認)。(2) `adopt_rules:` のローダーの検証と、`origin: generated` と `decision:` の追加(`internal/model`)。(3) `bench/model-author` に、展開と `covers` の検査と `.adopt.gen.yaml` の書き出しを足す。(4) 試す対象は、go-github の `owner-repo-of-services` の 1 件(sink の側)だけ。56 の行が出ることと、手の行の symbol が重ならないことを、差分(手の行の `args` と比べる)で確認する。(5) 差分テストを通す。代表のセルと、2 節のテストの変更は、(4)(5)のあと(ユーザーの承認が要る)。source の側、Dart、Rust は、そのあと。
+**最初の小さいステップ(段階 1b)**: Go だけ。(1) 規則の表に id を付ける(`rules.go`。挙動は変えない。`-recall` の結果が変わらないことを確認)。(2) `adopt_rules:` のローダーの検証と、`origin: generated` と `decision:` の追加(`internal/model`)。(3) `bench/model-author` に、展開と `covers` の検査と `.adopt.gen.yaml` の書き出しを足す。(4) 試す対象は、go-github の `owner-repo-of-services` の 1 件(sink の側)だけ。56 の行が出ることと、手の行の symbol が重ならないことを、差分(手の行の `args` と比べる)で確認する。(5) 差分テストを通す。代表のセルと、2 節のテストの変更は、(4)(5)のあと(ユーザーの承認が要る)。source の側、Dart、Rust は、そのあと。
 
 **今あるもので足りる部分**: 候補の一覧(`rules.go`、`Scan`)、手の行と `rejected:` との照合(`match.go`)、`-recall`(展開が手の行をどれだけ再現するかの検査に、そのまま使える。展開した結果が、手の 56 行の `args` と一致するかを見る)、差分テスト、`-gen-skeleton`、`readDeadAllow`、`builtin.Load`(別ファイルの読み込み)。**新しく要る**: 規則の id、`adopt_rules` の型とローダー、展開、`covers` の検査、`generated` の origin、テストの変更。
 

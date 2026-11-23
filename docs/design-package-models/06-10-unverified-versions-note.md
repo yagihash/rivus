@@ -3,7 +3,7 @@
 解析した対象が使っている module のバージョンが、`verified_versions` の範囲の外のとき、**モデルの行は当てたまま**、`summary.unverified_versions` に 1 件ずつ出す(`[{package, used, verified: [範囲...], source: "go.mod"}]`。`package` は、使っている module の path(`/v*` の記録のときは、対象が持つ major の path)。`body_replaced_packages` と同じく、package でソートされ、決定論)。finding が 0 件でも出る。
 
 - **出す条件**: (1) `verified_versions` の記録があり、その `package`(`/v*` を含む)が、対象が使っている module の path に当たる。(2) 使っているバージョン(完全なバージョン。`go list` の `Module.Version`)が、その module に当たるどの記録の `versions` にも入らない。記録が複数あれば、どれかに入れば出さない。
-- **記録のない module には出さない**(組み込みのファイルの大半は、記録がない。全部の解析に注記が付くとうるさく、「確認していない」と言うにも、何を基準にするかがない)。記録を持つモデルが当たっていないとき(対象がその module を使っていない)は、出力は今までと同じ。記録を足すのは、手順書の 2 節の 3 段(新しいファイルは必須)で進む。
+- **記録のない module には出さない**(組み込みのファイルの大半は、記録がない。全部の解析に注記が付くとうるさく、「確認していない」と言うにも、何を基準にするかがない)。記録を持つモデルが当たっていないとき(対象がその module を使っていない)は、出力は今までと同じ。記録を足すのは、手順書の 2 節の 3 ステップ(新しいファイルは必須)で進む。
 - **バージョンが分からない module は出さない**: ディレクトリへの `replace`、別の module への `replace`(`go.mod` のバージョンは、実際に読むコードのバージョンではない)、主 module。バージョンの接尾辞(`-pre`、`+incompatible`)は読まない(疑似バージョンは、前のバージョンの番号とみなされる)。
 - **実装**: `gossa.Program.ModuleVersions`(読み込みのとき、`packages.Package.Module` から)、`model.Rules.UnverifiedVersions`、`report.Summary.UnverifiedVersions`。`-ir` で渡された IR と、`-index` の IR からの解析は、モジュール情報がないので出ない。
 **Dart(`pubspec.lock`)**: Dart の extractor は、IR にバージョンを出さないので、コアが、対象のディレクトリ(`-C`)の `pubspec.lock` を読む(IR は変えない。6.7 の 3 の最小の拡張案)。Dart の extractor が動いた解析だけが読む(`-ir` と `-index` からの解析は、ディレクトリを読まないので出ない)。`source` は `pubspec.lock`。
