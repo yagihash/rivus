@@ -529,7 +529,7 @@ done
 # --- 3b. the cost check: one run of memos on each side, cost only (no wait for the other runs: it is one at a time here) ---
 if [ -n "$COSTCHECK" ]; then
   say "cost check $COSTCHECK: $ROUNDS alternating round(s) of each side (each run takes minutes; with 2 rounds about 10 minutes or more)"
-  python3 "$PY" costcheck -results "$RES" -target "$COSTCHECK" -rounds "$ROUNDS" -base-bin "$BIN/rivus-base" -head-bin "$BIN/rivus-head" || say "the cost check did not run (see above)"
+  python3 "$ROOT/bench/heavylock.py" --reason "compare.sh cost-check" -- python3 "$PY" costcheck -results "$RES" -target "$COSTCHECK" -rounds "$ROUNDS" -base-bin "$BIN/rivus-base" -head-bin "$BIN/rivus-head" || say "the cost check did not run (see above)"
 fi
 
 # --- 4. the table ---
