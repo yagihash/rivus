@@ -46,6 +46,7 @@ IR の呼び出し先の名前(`callee.symbol`、関数の名前)と、モデル
 | 行がない関数の一覧(`rivus models coverage`) | ✓ | ✓ | ✓ |
 | `kind: field` の source | ✓(`pkg.Type.Field`) | ✓(dart-github) | ✓(`::` 区切りの型名。#161、#230) |
 | `callback_param` の source(ADR-106) | ✓(単体テスト) | ✓(shelf_router) | 未確認(書式の検査だけ。extractor では未確認) |
+| `summary.numeric_stops.char_reads`(文字の取り出しで止まった数。#185) | ✓(byte・rune の型、定数でない添字の文字列の添字) | ✓(`codeUnitAt`、`codeUnits`・`runes` の繰り返しと添字。**コールバックに渡る要素(`runes.map((r) => ...)`)は数えない**) | 一部(`bytes()`・`chars()`・`char_indices()` の繰り返し、`as_bytes()[i]`、`char` 型。**それ以外の Rust の byte の取り出し(取り出した `Vec<u8>` の添字、関数に渡った `u8` など)は数えない(#185)**) |
 | `named:` の sink の選択 | 不要(名前つき引数がない) | ✓ | 不要(名前つき引数がない) |
 | `verified_versions`(読み込みと `rivus models versions`) | ✓ | ✓ | ✓ |
 | `summary.unverified_versions`(確認していないバージョンの注記) | ✓ | ✓(`pubspec.lock`。#162) | ✓(`Cargo.lock`。この PR) |

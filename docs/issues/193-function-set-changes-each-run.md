@@ -31,7 +31,7 @@ ADR-118。
 
 ## 残り
 
-- コールグラフ(`internal/callgraph/callgraph.go` の `AllFunctions(prog)`)は、`Load` のあとに呼ばれるので、閉じた集合を見るはず。ただし、コールグラフの構築(CHA / VTA)が、そのあとで新しい関数(メソッドのラッパー、bound、thunk)を作るか、作るなら、それが `p.Funcs` にない関数への辺になるか、は未確認。`p.Lifted` の側(`goir.go` の `AllFunctions(p.Lifted)`)が、`p.Funcs` と同じ関数 ID の一覧になっているかも、1 回比べる(一致しないなら別の課題)。
+- コールグラフ(`internal/callgraph/callgraph.go` の `AllFunctions(prog)`)は、`Load` のあとに呼ばれるので、閉じた集合を見るはず。ただし、コールグラフの構築(CHA / VTA)が、そのあとで新しい関数(メソッドのラッパー、bound、thunk)を作るか、作るなら、それが `p.Funcs` にない関数へのエッジになるか、は未確認。`p.Lifted` の側(`goir.go` の `AllFunctions(p.Lifted)`)が、`p.Funcs` と同じ関数 ID の一覧になっているかも、1 回比べる(一致しないなら別の課題)。
 - memos の一致の確認は 2 回(`functions`、`summary_elems`、`reanalyses`、widening の数、finding の ID が一致)。ほかの測定のついでに、回数が増えたら、そのつど記録する。一致しない回が出たら、すぐ報告する。
 - `TestDeterministic*`(main でだけ実行される)は、今回の非決定性を検出できなかった。推測: 対象が小さく、標準ライブラリのジェネリックの無名関数を通らないため。`TestLoadFunctionSetIsStable` が、その抜けを埋める(未確認の部分: 対象が小さいため、修正なしで失敗するのは、関数の数が変わる場合に限る。上の 3 回の読み込みで確認済み)。
 - 「標準ライブラリは本体を読まない」という説明と実際の動作のずれを、`summary` に出すかは、あとで判断する。
