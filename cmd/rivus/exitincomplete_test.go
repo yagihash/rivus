@@ -96,12 +96,57 @@ func TestExitCodeOfIncompleteError(t *testing.T) {
 	}
 }
 
-// A function that was cut by its own limit while the run converged does not make the run incomplete (ADR-120).
+// A function that was cut by its own limit makes the run incomplete even when the run converged: the summary of that
+// function may miss flows (ADR-120, the section of the cut of a function). The two reasons are told apart.
 func TestIncompleteReasonsOfFunctionLimits(t *testing.T) {
 	t.Parallel()
-	st := &report.Report{}
-	st.Stats.Converged, st.Stats.FuncTimeouts, st.Stats.BudgetExhausted = true, 3, 2
-	if got := report.IncompleteReasons(&st.Stats); len(got) != 0 {
-		t.Errorf("reasons %v", got)
+	for _, c := range []struct {
+		name            string
+		timeouts, spent int
+		want            []string
+	}{
+		{"none", 0, 0, []string{}},
+		{"clock", 3, 0, []string{report.ReasonFuncTimeout}},
+		{"work", 0, 2, []string{report.ReasonBudget}},
+		{"both", 3, 2, []string{report.ReasonFuncTimeout, report.ReasonBudget}},
+	} {
+		st := &report.Report{}
+		st.Stats.Converged, st.Stats.FuncTimeouts, st.Stats.BudgetExhausted = true, c.timeouts, c.spent
+		if got := report.IncompleteReasons(&st.Stats); !reflect.DeepEqual(got, c.want) {
+			t.Errorf("%s: reasons %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// The time limit of one function: the run converges, the output is written, the exit code is exitIncomplete, and the reason
+// is func_timeout (not timeout: the run itself did not run out of time).
+func TestExitCodeOfAFunctionTimeout(t *testing.T) {
+	t.Parallel()
+	code, s := analyzeExit(t, "-func-timeout", "1ns")
+	if code != exitIncomplete || !s.Incomplete || !reflect.DeepEqual(s.IncompleteReasons, []string{report.ReasonFuncTimeout}) {
+		t.Errorf("exit code %d, incomplete %v %v", code, s.Incomplete, s.IncompleteReasons)
+	}
+}
+
+// stats.func_timeouts and stats.budget_exhausted are always in the output, 0 too: a reader (and the ledgers of bench/) tells
+// "none" from "not written".
+func TestStatsAlwaysHaveTheFunctionLimitCounts(t *testing.T) {
+	t.Parallel()
+	cmd := exec.Command(binary, "analyze", "-rules", "rules.yaml", "-detail", "summary", "./...")
+	cmd.Dir = filepath.Join(testutil.Testdata(), "..", "scc")
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var r struct {
+		Stats map[string]any `json:"stats"`
+	}
+	if err := json.Unmarshal(out, &r); err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range []string{"func_timeouts", "budget_exhausted"} {
+		if v, ok := r.Stats[k]; !ok || v != float64(0) {
+			t.Errorf("stats.%s = %v (present %v), want 0 and present", k, v, ok)
+		}
 	}
 }

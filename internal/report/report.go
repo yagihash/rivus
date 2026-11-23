@@ -115,7 +115,7 @@ type Summary struct {
 	Findings int `json:"findings"`
 	// Incomplete is true when the analysis did not finish (ADR-120): the whole-run time limit was reached, or the
 	// summaries did not converge. The findings are then a part of what a complete run would give, and rivus ends with
-	// the exit code of an incomplete analysis. IncompleteReasons says which ("timeout", "not_converged"; the stop of
+	// the exit code of an incomplete analysis. IncompleteReasons says which ("timeout", "not_converged", "func_timeout", "budget"; the stop of
 	// -max-memory will add one). Both are always in the output.
 	Incomplete        bool     `json:"incomplete"`
 	IncompleteReasons []string `json:"incomplete_reasons"`
@@ -697,13 +697,17 @@ func summarize(r *Report) Summary {
 const (
 	ReasonTimeout      = "timeout"       // the time limit of the whole run (-timeout) was reached
 	ReasonNotConverged = "not_converged" // the summaries still changed after the last pass (-max-passes)
+	ReasonFuncTimeout  = "func_timeout"  // a function was stopped by its own time limit (-func-timeout): its summary may miss flows
+	ReasonBudget       = "budget"        // a function was stopped by the work limit (the budget): its summary may miss flows
 	ReasonUnknown      = "unknown"       // an index of an older form that holds neither summary.incomplete nor stats: not known
 )
 
-// IncompleteReasons says why the analysis of st did not finish (nil when it did). Only a limit of the whole run counts: a
-// function that was cut by its own limit (-func-timeout, the budget of a function) while the run converged is in
-// stats.func_timeouts and stats.budget_exhausted, and does not make the run incomplete (ADR-120). A new stop of the whole run
-// (the memory limit) is added here.
+// IncompleteReasons says why the analysis of st did not finish (nil when it did). A limit of the whole run counts, and so does
+// a function that was cut by its own limit (-func-timeout: stats.func_timeouts; the work limit: stats.budget_exhausted)
+// even when the run converged: the summary of that function may miss flows, and "no source reaches it" is then not an answer
+// that looked everywhere (ADR-120, the section of the cut of a function; the same kind as #195). They are told apart, and
+// the exit code is one. Which functions were cut is in the depth_limit notes (func_timeout:, budget:) of the findings and
+// the uncertainties. A new stop of the whole run (the memory limit) is added here.
 func IncompleteReasons(st *taint.Stats) []string {
 	reasons := []string{}
 	if st.TimedOut || st.RunTimeouts > 0 || st.FuncValues != nil && st.FuncValues.TimedOut {
@@ -711,6 +715,12 @@ func IncompleteReasons(st *taint.Stats) []string {
 	}
 	if !st.Converged && !st.TimedOut {
 		reasons = append(reasons, ReasonNotConverged)
+	}
+	if st.FuncTimeouts > 0 {
+		reasons = append(reasons, ReasonFuncTimeout)
+	}
+	if st.BudgetExhausted > 0 {
+		reasons = append(reasons, ReasonBudget)
 	}
 	return reasons
 }

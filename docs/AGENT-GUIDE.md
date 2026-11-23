@@ -60,7 +60,7 @@ rivus graph callers -C <dir> <関数>                  # finding の周辺を調
 
 ## 3. コマンド
 
-終了コードは、0 = 成功、1 = エラー、2 = 使い方の誤り(知らないコマンドやフラグ)、3 = Rust だけの対象で、読むことを断った、4 = 完全でない解析(時間切れ、未収束。結果は出ている。`summary.incomplete` が true で、`summary.incomplete_reasons` に `timeout`、`not_converged`)、130 = 中断です。`analyze`、`index -taint`、`query`、`resolve`、`models coverage` が 4 を返します(保存した index を読むだけのときは 0)。finding があっても、完全なら 0 です。`-h` は、どのコマンドでも 0 で、使い方だけを出します(サブコマンドが必要なコマンドを引数なしで呼ぶと、使い方を出して 2 です)。
+終了コードは、0 = 成功、1 = エラー、2 = 使い方の誤り(知らないコマンドやフラグ)、3 = Rust だけの対象で、読むことを断った、4 = 完全でない解析(全体の時間切れ、未収束、関数ごとの打ち切り。結果は出ている。`summary.incomplete` が true で、`summary.incomplete_reasons` に `timeout`、`not_converged`、`func_timeout`、`budget`)、130 = 中断です。`analyze`、`index -taint`、`query`、`resolve`、`models coverage` が 4 を返します(保存した index を読むだけのときは 0)。finding があっても、完全なら 0 です。`func_timeout` と `budget` は、その関数の要約が流れを欠くことがある、という意味です。**どの関数かは、トップレベルの `uncertainties` と、その関数を通る finding の `uncertainties` にある `depth_limit` の注記**(`func` に関数、`detail` が `func_timeout:` か `budget:` で始まる。関数ごとに 1 件)を見ます(`out_limit` と `path_limit` は、`candidates` に関数の一覧がある別の注記です)。`stats.func_timeouts` と `stats.budget_exhausted` は件数です。`-h` は、どのコマンドでも 0 で、使い方だけを出します(サブコマンドが必要なコマンドを引数なしで呼ぶと、使い方を出して 2 です)。
 
 ### `rivus sites`
 
@@ -438,7 +438,7 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `summary.isolation` | Rust をどう読んだか: `mode` が `sandbox` か `host`。macOS のサンドボックスで `DEVELOPER_DIR` を渡したときだけ、`developer_dir`(`value` と、`source` が `default`(コマンドラインツール)か `user`(`-isolation-env`))が付く |
 | `stats.converged` | `false` なら、解析が上限で止まっていて、**結果は途中のもの** |
 | `stats.timed_out` | `true` なら `-timeout` で止まった。フィールドがない(`jq` では `null`)のは、時間切れでないという意味 |
-| `stats.budget_exhausted`、`func_timeouts`、`run_timeouts` | 上限で止めた関数の数(理由ごと) |
+| `stats.budget_exhausted`、`func_timeouts`、`run_timeouts` | 上限で止めた関数の数(理由ごと)。`budget_exhausted` と `func_timeouts` は 0 でもいつも出る(0 以外なら、終了コード 4 の理由になる) |
 | `stats.tests_skipped` | 読まなかったテストの数(`-tests` で読む) |
 | `stats.functions`、`largest_scc`、`duration_ms` | 解析した関数の数、互いに呼び合う関数の最大のかたまりの大きさ、解析の時間 |
 | `stats.func_values` | `-resolve-func-values` が補った数 |

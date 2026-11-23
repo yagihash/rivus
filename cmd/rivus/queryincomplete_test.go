@@ -208,3 +208,35 @@ func mustBookmarks(t *testing.T, w *workspace) string {
 	p, _ := w.bookmarks()
 	return p
 }
+
+// (f) A function that was cut by its own limit is in the answer of query and resolve too: by the clock (a run now) and by the
+// work limit (an index whose stats say so; the work limit has no flag).
+func TestQueryAndResolveSayFunctionLimits(t *testing.T) {
+	t.Parallel()
+	w := newWorkspace(t)
+	out, code := w.runCode("query", "-rules", "rules.yaml", "-func-timeout", "1ns", "-sink", sinkSym, "./main")
+	if code != exitIncomplete {
+		t.Errorf("exit code %d, want %d", code, exitIncomplete)
+	}
+	wantState(t, w.top(out), true, []string{report.ReasonFuncTimeout})
+
+	idx, _ := w.index("idx")
+	data, err := os.ReadFile(filepath.Join(w.dir, idx))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatal(err)
+	}
+	// an index of the older form (no summary.incomplete) with the work limit in its stats
+	delete(m["summary"].(map[string]any), "incomplete")
+	delete(m["summary"].(map[string]any), "incomplete_reasons")
+	m["stats"].(map[string]any)["budget_exhausted"] = 2
+	b, _ := json.Marshal(m)
+	if err := os.WriteFile(filepath.Join(w.dir, "budget.json"), b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	wantState(t, w.top(first(w.runCode("query", "-index", "budget.json", "-sink", sinkSym))), true, []string{report.ReasonBudget})
+	wantState(t, w.top(first(w.runCode("resolve", "-bookmarks", mustBookmarks(t, w), "-index", "budget.json"))), true, []string{report.ReasonBudget})
+}

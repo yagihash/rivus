@@ -559,7 +559,7 @@ seed となる source を与えずに投げる形なので、全関数のサマ�
 functional approach の方が素直に実現できる。
 
 **完全でない解析（incomplete analysis）**
-全体の時間切れ(`-timeout`)か、未収束(`-max-passes` の上限)で終わった解析。見つけた分の結果は全部出したうえで、終了コード 4 で終わる。`summary.incomplete`(bool)と `summary.incomplete_reasons`(`timeout`、`not_converged`)に出る。関数ごとの打ち切り(`stats.func_timeouts`)は、まだ数えない(ADR-120)。
+全体の時間切れ(`-timeout`)、未収束(`-max-passes` の上限)、関数ごとの打ち切り(1 関数の時計 `-func-timeout`、作業量の上限)のどれかで終わった解析。見つけた分の結果は全部出したうえで、終了コード 4 で終わる。`summary.incomplete`(bool)と `summary.incomplete_reasons`(`timeout`、`not_converged`、`func_timeout`、`budget`)に出る。関数ごとの打ち切りを数えるのは、基準が「流れを落としたか」だからで、その関数の要約は流れを欠くことがある(ADR-120 の追記)。打ち切った関数は、`depth_limit` の注記(`func`、`detail` の先頭が `func_timeout:` か `budget:`)に、関数ごとに出る。
 
 **エントリポイント（entry point）**
 コールグラフの根。ライブラリには `main` がないため、
