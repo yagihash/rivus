@@ -18,8 +18,9 @@ fell or grew by 50% or more, or both runs have no finding at all. A change of 10
 functions is a warning. Each condition is one line at the top of summary.md.
 Standard library only.
 """
-import argparse, collections, hashlib, json, os, re, resource, shlex, shutil, subprocess, sys, time
+import argparse, collections, glob, hashlib, json, os, re, resource, shlex, shutil, subprocess, sys, tempfile, time
 
+HERE = os.path.dirname(os.path.abspath(__file__))
 SWAP_LIMIT = 0.50
 FREE_LIMIT = 0.40  # macOS: busy below this free-memory fraction (memory_pressure)
 OTHER = re.compile(r"^(rivus|rv-.*|rivus-.*)$")
@@ -149,6 +150,7 @@ def run(a):
     if a.gomemlimit:
         env["GOMEMLIMIT"] = a.gomemlimit
     hard = parse_seconds(a.timeout) * 1.5 + 600
+    load_start = load_now()
     t0 = time.time()
     with open(a.out + ".json", "wb") as so, open(a.out + ".err", "wb") as se:
         p = subprocess.Popen(cmd, cwd=a.dir, stdout=so, stderr=se, env=env)
@@ -162,7 +164,8 @@ def run(a):
     p.returncode = os.waitstatus_to_exitcode(status)
     wall = time.time() - t0
     rss = ru.ru_maxrss / (1048576 if sys.platform == "darwin" else 1024)  # bytes on macOS, KB on Linux
-    meta = {"rc": p.returncode, "wall_s": round(wall, 1), "max_rss_mb": round(rss), "cmd": cmd, "gomemlimit": a.gomemlimit}
+    meta = {"rc": p.returncode, "wall_s": round(wall, 1), "max_rss_mb": round(rss), "cmd": cmd, "gomemlimit": a.gomemlimit,
+            "cpu_s": round(ru.ru_utime + ru.ru_stime, 1), "load_start": load_start, "load_end": load_now(), "peak_how": "main process (ru_maxrss)"}
     json.dump(meta, open(meta_path, "w"), indent=1)
     print("compare: %s rc=%d %.0fs %d MB" % (os.path.basename(a.out), p.returncode, wall, rss), file=sys.stderr)
     if cdir and p.returncode == 0:
@@ -354,6 +357,163 @@ def check_validity(bench, sb, sh, nb, nh):
     return bad, warn
 
 
+COST_MARK = 0.10  # CPU time or peak memory up by this much or more is marked "!!"
+
+
+def load_now():
+    """The 1-minute load average (the time of a run depends on it); None where it cannot be read."""
+    try:
+        return round(os.getloadavg()[0], 2)
+    except (OSError, AttributeError):
+        return None
+
+
+def pct(b, h):
+    """The change from b to h in percent, as a string with a sign ("+12%"); "n/a" when either is missing or b is 0."""
+    if b is None or h is None or not b:
+        return "n/a"
+    return "%+.0f%%" % (100.0 * (h - b) / b)
+
+
+def median(xs):
+    xs = sorted(xs)
+    n = len(xs)
+    return None if not n else (xs[n // 2] if n % 2 else (xs[n // 2 - 1] + xs[n // 2]) / 2.0)
+
+
+def spread(xs):
+    """The spread between runs of the SAME version, relative to their median: (max - min) / median; None for fewer than 2 runs."""
+    if len(xs) < 2 or not median(xs):
+        return None
+    return (max(xs) - min(xs)) / median(xs)
+
+
+def delta_of(xb, xh):
+    """(delta, spread, conclusion): delta = change of the medians; spread = the larger spread of the two sides; the change is a
+    conclusion only when both sides have at least 2 runs. marked = delta >= COST_MARK and delta > spread."""
+    if not xb or not xh or not median(xb):
+        return None, None, False
+    d = (median(xh) - median(xb)) / median(xb)
+    sp = [x for x in (spread(xb), spread(xh)) if x is not None]
+    if len(xb) < 2 or len(xh) < 2:
+        return d, None, False
+    s_ = max(sp)
+    return d, s_, d >= COST_MARK - 1e-9 and d > s_
+
+
+def marked(xb_cpu, xh_cpu, xb_rss, xh_rss):
+    """True when CPU time or peak memory went up by COST_MARK (10%) or more AND by more than the spread between runs of the same
+    version (lists of runs; fewer than 2 runs on a side: never marked)."""
+    return delta_of(xb_cpu, xh_cpu)[2] or delta_of(xb_rss, xh_rss)[2]
+
+
+def runs_of(metas, key):
+    return [m[key] for m in metas if m.get(key) is not None]
+
+
+def range_text(xs, fmt):
+    if not xs:
+        return "n/a"
+    return fmt % min(xs) if min(xs) == max(xs) else (fmt + "-" + fmt) % (min(xs), max(xs))
+
+
+def cost_cell(xb, xh, fmt):
+    """"b-range -> h-range (+12%, spread 3%)"; a single run on a side says "single run: no conclusion" and has no mark."""
+    if not xb or not xh:
+        return "n/a"
+    d, sp, _ = delta_of(xb, xh)
+    tail = "single run: no conclusion" if sp is None else "%s, spread %.0f%%" % (pct(median(xb), median(xh)), 100 * sp)
+    return "%s -> %s (%s)" % (range_text(xb, fmt), range_text(xh, fmt), tail)
+
+
+def cost_row(name, runs_b, runs_h, sb, sh):
+    """One row of the cost table. runs_b / runs_h: the meta of each run of the side (cpu_s, max_rss_mb, wall_s, load_start, load_end),
+    in the order they were run; sb / sh: the stats (deterministic: the elements and the steps are the same in every run).
+    Columns: bench, runs, CPU s, peak MB, summary elements, summary steps, mark, wall, load average (first start / last end)."""
+    st = lambda d, k: (d or {}).get(k)
+
+    def pair(b, h):
+        return "n/a" if b is None and h is None else "%s -> %s (%s)" % ("n/a" if b is None else b, "n/a" if h is None else h, pct(b, h))
+
+    def load(ms):
+        a = ms[0].get("load_start") if ms else None
+        z = ms[-1].get("load_end") if ms else None
+        return "%s/%s" % ("n/a" if a is None else a, "n/a" if z is None else z)
+    cpu_b, cpu_h = runs_of(runs_b, "cpu_s"), runs_of(runs_h, "cpu_s")
+    rss_b, rss_h = runs_of(runs_b, "max_rss_mb"), runs_of(runs_h, "max_rss_mb")
+    n = "%d/%d" % (len(runs_b), len(runs_h))
+    return [name, n, cost_cell(cpu_b, cpu_h, "%.1f"), cost_cell(rss_b, rss_h, "%d"),
+            pair(st(sb, "summary_elems"), st(sh, "summary_elems")), pair(st(sb, "summary_steps"), st(sh, "summary_steps")),
+            "!!" if marked(cpu_b, cpu_h, rss_b, rss_h) else "",
+            cost_cell(runs_of(runs_b, "wall_s"), runs_of(runs_h, "wall_s"), "%.0f"),
+            "base %s, head %s" % (load(runs_b), load(runs_h))]
+
+
+COST_HEADER = ["| bench | runs b/h | CPU s (user+sys; min-max) | peak MB | summary elements | summary steps | !! | wall s | load average (first start/last end) |",
+               "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
+
+
+def cost_table(rows):
+    """The cost table as lines; empty when there are no rows."""
+    if not rows:
+        return []
+    return ["", "Cost, before -> after, runs ALTERNATING base, head, base, head (CPU time is the main number, wall is load dependent). `!!` = CPU or peak memory "
+            "+%d%% or more AND more than the spread between runs of the same version; one run on a side: \"single run: no conclusion\", no mark. "
+            "A cached base run is not a sample (another time, another load)." % round(COST_MARK * 100), ""] + COST_HEADER + \
+           ["| " + " | ".join(str(c) for c in r) + " |" for r in rows]
+
+
+def costcheck(a):
+    """One run of a target of bench/deps-targets.json on each side with the default flags: cost numbers only (no finding comparison).
+    Written to <results>/cost-<target>.json. The tree is fetched (never run), the run has the watchdog of bench/deps_bench.py:
+    its own process group, killed above the memory cap."""
+    sys.path.insert(0, HERE)
+    import deps_bench as db
+    targets = json.load(open(db.TARGETS_FILE))
+    t = targets[a.target]
+    cache = db.cache_dir()
+    limit = a.limit or t["time_limit_s"] * 10
+    cap = int((a.cap or t["mem_cap_gb"]) * db.GB)
+    with tempfile.TemporaryDirectory(prefix="costcheck-") as work:
+        env = dict(os.environ)
+        tree = db.fetch(a.target, t, t["commit"], cache)
+        src, env, err = db.prepare(a.target, t, tree, work, env)
+        if err:
+            print("compare: costcheck %s: %s" % (a.target, err), file=sys.stderr)
+            return 2
+        out = {"base": {"runs": [], "stats": {}}, "head": {"runs": [], "stats": {}}}
+        for rnd in range(a.rounds):   # ALTERNATING: base, head, base, head
+            for side, binary in (("base", a.base_bin), ("head", a.head_bin)):
+                load0 = load_now()
+                r = db.analyze_once(os.path.abspath(binary), t, src, env, limit, cap, work, "%s%d" % (side, rnd))
+                st = (r["report"] or {}).get("stats", {})
+                out[side]["runs"].append({"cpu_s": round(r["cpu"], 1), "max_rss_mb": round(r["peak"] / (1 << 20)), "wall_s": round(r["wall"], 1),
+                                          "load_start": load0, "load_end": load_now(), "why": r["why"], "converged": r["converged"]})
+                out[side]["stats"] = {"summary_elems": st.get("summary_elems"), "summary_steps": st.get("summary_steps")}
+                print("compare: costcheck %s %s round %d: cpu %.0fs, peak %d MB (process-tree sum), wall %.0fs%s" % (
+                    a.target, side, rnd + 1, r["cpu"], r["peak"] >> 20, r["wall"], " (stopped: %s)" % r["why"] if r["why"] else ""), file=sys.stderr)
+    json.dump(out, open(os.path.join(a.results, "cost-%s.json" % a.target), "w"), indent=1)
+    return 0
+
+
+def cost_runs(results, bench, which, main_meta):
+    """The runs of one side that are samples of its cost: the main run (not a cached one: that was measured at another time) and the extra
+    rounds <bench>.<which>.r<N>.meta.json (rc 0), in the order of the rounds."""
+    runs = []
+    if main_meta and main_meta.get("rc") == 0 and not main_meta.get("cached"):
+        runs.append(main_meta)
+    extra = []
+    for f in glob.glob(os.path.join(results, "%s.%s.r*.meta.json" % (bench, which))):
+        m = re.search(r"\.r(\d+)\.meta\.json$", f)
+        try:
+            meta = json.load(open(f))
+        except (OSError, ValueError):
+            continue
+        if m and meta.get("rc") == 0:
+            extra.append((int(m.group(1)), meta))
+    return runs + [m for _, m in sorted(extra, key=lambda x: x[0])]
+
+
 def fmt_delta(b, h):
     return str(b) if b == h else "%s -> %s" % (b, h)
 
@@ -368,6 +528,7 @@ def report(a):
                 skipped[n] = why
     os.makedirs(os.path.join(a.out, "details"), exist_ok=True)
     rows, alarms, notes, detail_files = [], [], [], []
+    cost_rows = []
     alarms_invalid, warnings, cached, alarms_noise = [], [], [], []
     not_run = 0
     removed_total = 0
@@ -438,6 +599,7 @@ def report(a):
             "%s -> %s" % (sb.get("reanalyses"), sh.get("reanalyses")),
             "%s%s" % (("%.0f -> %.0f s" % (mb["wall_s"], mh["wall_s"])), "; %s -> %s MB" % (mb["max_rss_mb"], mh["max_rss_mb"])),
         ])
+        cost_rows.append(cost_row(bench, cost_runs(a.results, bench, "base", mb), cost_runs(a.results, bench, "head", mh), sb, sh))
         if status:
             rows[-1][1] += " | " + "; ".join("NOT CONVERGED" if "CONVERGED" in s else s for s in status)
         # details
@@ -494,6 +656,18 @@ def report(a):
     for r in rows:
         r = r + [""] * (12 - len(r))
         out.append("| " + " | ".join(str(c) for c in r) + " |")
+    for cf in sorted(glob.glob(os.path.join(a.results, "cost-*.json"))):
+        try:
+            c = json.load(open(cf))
+            name = os.path.basename(cf)[len("cost-"):-len(".json")] + " (cost check; peak = process-tree sum)"
+            cost_rows.append(cost_row(name, c["base"]["runs"], c["head"]["runs"], c["base"].get("stats"), c["head"].get("stats")))
+            for w in ("base", "head"):
+                for r_ in c[w]["runs"]:
+                    if r_.get("why"):
+                        out.append("warning: cost check %s %s was stopped (%s): its numbers are partial" % (name, w, r_["why"]))
+        except (OSError, ValueError, KeyError):
+            continue
+    out += cost_table(cost_rows)
     prov = []
     for bench in benches:
         pb, ph = load_prov(a.results, bench, "base"), load_prov(a.results, bench, "head")
@@ -545,6 +719,14 @@ def main():
     p.add_argument("-out", required=True)
     p.add_argument("-benches", required=True)
     p.add_argument("-skipped", help="file of <bench><TAB><reason> for benchmarks that could not be set up")
+    c = sub.add_parser("costcheck")
+    c.add_argument("-results", required=True)
+    c.add_argument("-target", default="memos", help="a target of bench/deps-targets.json")
+    c.add_argument("-base-bin", required=True)
+    c.add_argument("-head-bin", required=True)
+    c.add_argument("-rounds", type=int, default=2, help="alternating rounds (base, head, base, head ...); each run takes minutes")
+    c.add_argument("-limit", type=float, default=0, help="seconds (default: 10 times the time limit of the pass line)")
+    c.add_argument("-cap", type=float, default=0, help="GB (default: the cap of the pass line, 8)")
     a = ap.parse_args()
     if a.cmd == "freemem":
         f = free_memory_fraction()
@@ -553,7 +735,7 @@ def main():
     if a.cmd == "irsum":
         print(irsum(a.file, a.root))
         return
-    sys.exit({"run": run, "report": report}[a.cmd](a))
+    sys.exit({"run": run, "report": report, "costcheck": costcheck}[a.cmd](a))
 
 
 if __name__ == "__main__":
