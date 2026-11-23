@@ -223,3 +223,27 @@ func TestReservedCallsNeedTheirShape(t *testing.T) {
 		}
 	}
 }
+
+// TestCharReadIsAnOptionalField: a stream without char_read reads as before (char_read false), and char_read round-trips.
+func TestCharReadIsAnOptionalField(t *testing.T) {
+	hdr := `{"schema_version":"` + SchemaVersion + `"}` + "\n"
+	fn := func(extra string) string {
+		return hdr + `{"kind":"func","func":{"id":"f","locals":[{"type":"byte"},{"type":"string"},{"type":"int"}],"blocks":[{"id":0,"instrs":[{"op":"index_load","dsts":[0],"args":[1,2]` + extra + `}],"term":{"kind":"return"}}]}}` + "\n"
+	}
+	for extra, want := range map[string]bool{"": false, `,"char_read":true`: true} {
+		p, err := Read(strings.NewReader(fn(extra)))
+		if err != nil {
+			t.Fatalf("%q: %v", extra, err)
+		}
+		if got := p.Funcs[0].Blocks[0].Instrs[0].CharRead; got != want {
+			t.Errorf("%q: CharRead = %v, want %v", extra, got, want)
+		}
+		var buf bytes.Buffer
+		if err := Write(&buf, p); err != nil {
+			t.Fatal(err)
+		}
+		if has := strings.Contains(buf.String(), `"char_read":true`); has != want {
+			t.Errorf("%q: written stream has char_read = %v", extra, has)
+		}
+	}
+}

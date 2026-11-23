@@ -404,7 +404,7 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 - `Program`: `Funcs`、`Impls`、`Types`（上位の型）、`Globals`、`TypeAliases`、テキスト（`Texts`、`CallTexts`、`FuncTexts`）、`LoadErrors`、`CallerMarks`、`TestsSkipped`
 - `Func`: `ID`、`Params`（`Class`、`Captured`）、`Results`、`Locals`、`Blocks`（先頭が entry）、`Roots`、`Pos`、`File`。マークとして `Exported`、`Entry`、`Init`、`Symbol`、`Recv`、`Dep`、`Private`、`ExternalEntry`、`Overrides`
 - `Block`: `Instrs`、`Term`（`Kind`、`Cond`、`CondPos`、`Values`）、`Succs`（種別つきのエッジ）
-- `Instr`: `Op`、`Dsts`（呼び出しは戻り値の数だけ）、`Args`、`Const`、`Operator`、`Field`、`Path`、`Global`、`Func`、`View`、`Folded`、`Keyed`、`Callee`、`Go` / `Defer` / `Await`、`Reason`、`Pos`、`AddrPos`、`ArgPos`、`ArgNames`（名前つき引数の名前。`Args` と並ぶ。Dart だけが付ける。足しただけで、`schema_version` は `rivus.ir/0` のまま。読む側は、ないものとして扱う。`named:` の sink が使う）
+- `Instr`: `Op`、`Dsts`（呼び出しは戻り値の数だけ）、`Args`、`Const`、`Operator`、`Field`、`Path`、`Global`、`Func`、`View`、`Folded`、`Keyed`、`CharRead`（結果が文字列の 1 要素 = byte、rune、コードユニット、char の 1 つである命令の目印。`index_load`、`field_load`、`call` に付く。JSON は `char_read`。足しただけで、`schema_version` は `rivus.ir/0` のまま。付けない extractor の出力は、そのまま読める。付いていない命令は、この目印では何も言わない）、`Callee`、`Go` / `Defer` / `Await`、`Reason`、`Pos`、`AddrPos`、`ArgPos`、`ArgNames`（名前つき引数の名前。`Args` と並ぶ。Dart だけが付ける。足しただけで、`schema_version` は `rivus.ir/0` のまま。読む側は、ないものとして扱う。`named:` の sink が使う）
 - `Callee`: `Kind`（`static` / `dynamic` / `value`）、`Func`、`Symbol`、`Recv`、`Candidates`、`FFI`。ストリームには載らず、コアが埋めるもの: `ValueCands`、`ValueLimit` など（13 節）
 - `Pos` は `File`、`Offset`、`Length`、`Line`、`Col`
 
