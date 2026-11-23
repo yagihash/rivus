@@ -8,8 +8,27 @@ PASS for memos (usememos/memos 26.11.2, `00fcd170281a75fc0e95ec4f2f54f43d32fe81b
 
 **The next form of the "after the fix" condition (decided 2026-11-23; not in force yet).** The condition above counts findings of the category, which says nothing about whether the finding went away for the right reason. Once the mechanism of issue #169 exists (a check is not deleted from the findings: the finding is kept and says which check function was passed on which branch), the detection condition becomes: before the fix, a finding appears and has no check note; after the fix, there is no finding, or there is a finding that carries a note pointing at the check function that the fix added. Until that mechanism exists, the line above is the condition, and a result of "no finding after the fix" (`quiet_after_fix`, where the runner has it) is only recorded, not part of PASS or FAIL.
 
+### The cocoon target
 
-### The starting point (2026-11-23, numbers only, a local measurement of the engine of that day)
+The Dart target of the pass line is flutter/cocoon `app_dart` (`ae9eb1beaf765d644cc85dde38def030c80b4b7d`). Launch: cwd = `app_dart`, `-allow-deps-under <cocoon>/packages`, `dart pub get` only, the Flutter member of the root workspace removed in the copy (all in `bench/deps_bench.py`; data in `bench/deps-targets.json`). The line is the same as for memos (default flags, within 180 s and 8 GB, converged). `detected=n/a`: the project has no public security advisory, so no pre-fix / fixed pair. dart_services stays a load target for the heavy dependency `package:analyzer` (printed as `INFO`, numbers kept; also a target of the depth experiments).
+
+### Detection: the line is per vulnerability, the detail is per position
+
+`detected` counts per vulnerability, as for memos: `yes` when at least one finding passes through a labelled position of that vulnerability's truth (builtin models, default flags). The position-level count is printed beside it as information: `through_tp=<n>/<N>`. The Dart target `dart-pub` (dart-lang/pub `5e24336e71a05a96b558d496953ebed223f6e40a`; one public fixed vulnerability, the zip slip of `extractTarGz`, 9 labelled call sites; `bench/dart-pub`) is printed as INFO (its line is not decided). `bench/score.py --through` gives the same position count from a saved result.
+
+### Peak memory: what is measured how
+
+The memory has two records (`bench/deps_bench.py`). (a) the end-of-run peak of the main process (`ru_maxrss` of the child from `wait4`: the largest single process of its subtree; bytes on macOS). (b) the whole PROCESS TREE: the maximum over fine samples (every 0.25 s) of the SAME-TIME SUM of the RSS of all its processes (shared pages can be counted twice); the biggest process of the tree at that moment and when are kept, so that a large (a)/(b) difference can be explained. The verdict (PASS/FAIL) uses (b): the burden the machine really receives. The watchdog (the same samples; it kills the group of the run only, above the cap or the time limit) only stops a run early.
+
+### Where the numbers are
+
+Every run of `make bench-passline` and `make bench-deps` adds one row to [heavy-ledger.tsv](heavy-ledger.tsv) (the columns, the notes: [heavy-ledger.md](heavy-ledger.md); `python3 bench/heavy_ledger.py` prints it with the margins). A number in a PR or an ADR points to a row (date and commit); it is not copied. `NO_LEDGER=1` adds no row (a binary with a measurement patch, or a run that is not used as a number). `BENCH_OUT` (default `.claude/work/bench-out/`, git-ignored) holds the JSON of the results; the ledger holds numbers only.
+
+## Records before 2026-11-23 (not in the ledger)
+
+These rows were measured before the ledger existed (by hand, with the engine of that day; the commit of rivus is not recorded, and the way of measuring differs from the ledger's). They are kept as they are, numbers only. None was moved to the ledger.
+
+### The starting point (numbers only, a local measurement of the engine of that day)
 
 | target | commit | flags | wall | max memory | converged | functions | findings |
 |---|---|---|---|---|---|---|---|
@@ -23,9 +42,7 @@ PASS for memos (usememos/memos 26.11.2, `00fcd170281a75fc0e95ec4f2f54f43d32fe81b
 
 So today's line for memos is `FAIL memos time=67/180 mem=>8/8 converged=no detected=no quiet_after_fix=n/a` (cut by the cap; not detected at the pre-fix commit with the default flags and the builtin models).
 
-### The cocoon line (2026-11-23, numbers only; engine of that day)
-
-The Dart target of the pass line is flutter/cocoon `app_dart` (`ae9eb1beaf765d644cc85dde38def030c80b4b7d`). Launch: cwd = `app_dart`, `-allow-deps-under <cocoon>/packages`, `dart pub get` only, the Flutter member of the root workspace removed in the copy (all in `bench/deps_bench.py`; data in `bench/deps-targets.json`). The line is the same as for memos (default flags, within 180 s and 8 GB, converged): PASS for time, memory and convergence. `detected=n/a`: the project has no public security advisory, so no pre-fix / fixed pair. dart_services stays a load target for the heavy dependency `package:analyzer` (printed as `INFO`, numbers kept; also a target of the depth experiments).
+### The cocoon line (numbers only; engine of that day)
 
 | target | commit | flags | wall | max memory | CPU | converged | functions | findings |
 |---|---|---|---|---|---|---|---|---|
@@ -33,14 +50,9 @@ The Dart target of the pass line is flutter/cocoon `app_dart` (`ae9eb1beaf765d64
 
 Today's line for cocoon: `PASS cocoon time=101/180 mem=1.78/8 converged=yes detected=n/a`.
 
-### Detection: the line is per vulnerability, the detail is per position
+### Peak memory (numbers only)
 
-`detected` counts per vulnerability, as for memos: `yes` when at least one finding passes through a labelled position of that vulnerability's truth (builtin models, default flags). The position-level count is printed beside it as information: `through_tp=<n>/<N>`. For the Dart target `dart-pub` (dart-lang/pub `5e24336e71a05a96b558d496953ebed223f6e40a`; one public fixed vulnerability, the zip slip of `extractTarGz`, 9 labelled call sites; `bench/dart-pub`), the position count is 4/9 with `-no-deps` and the builtin models (an earlier local measurement). With the default flags the run does not converge today, so the line is `detected=no` (INFO; the line is not decided). `bench/score.py --through` gives the same position count from a saved result.
-
-
-### Peak memory: what was measured how (numbers only)
-
-The memory has two records (`bench/deps_bench.py`). (a) the end-of-run peak of the main process (`ru_maxrss` of the child from `wait4`: the largest single process of its subtree; bytes on macOS). (b) the whole PROCESS TREE: the maximum over fine samples (every 0.25 s) of the SAME-TIME SUM of the RSS of all its processes (shared pages can be counted twice); the biggest process of the tree at that moment and when are kept, so that a large (a)/(b) difference can be explained. The verdict (PASS/FAIL) uses (b): the burden the machine really receives. The watchdog (the same samples; it kills the group of the run only, above the cap or the time limit) only stops a run early. The rows below marked end-of-run were measured with the earlier method (`/usr/bin/time`, the largest single process, = (a) in the new naming); the quiet 3-run measurement with both records is not made yet.
+The rows marked end-of-run were measured with the earlier method (`/usr/bin/time`, the largest single process, = (a) in the naming above). The earlier rows were sampled, on an older engine and a loaded machine.
 
 | commit | setting | peak memory | how measured |
 |---|---|---|---|
@@ -52,4 +64,8 @@ The memory has two records (`bench/deps_bench.py`). (a) the end-of-run peak of t
 | memos 00fcd170 | `-dep-k 2` | 6.35 GB (163 s, converged) | end-of-run peak, 8 GB watchdog, limit 10 min (2026-11-23, engine fb492ef7) |
 | memos 00fcd170 | `-dep-k 1` | 5.49 GB (575 s, converged) | end-of-run peak, 8 GB watchdog, limit 10 min (2026-11-23, engine fb492ef7) |
 
-The 5.9 GB figure belongs to a different commit than the target; do not compare it with the 00fcd170 rows. The earlier rows were sampled, on an older engine and a loaded machine; the two last rows are the first end-of-run peaks of the target (the wall time of the second one was long: a loaded machine, not measured separately).
+The 5.9 GB figure belongs to a different commit than the target; do not compare it with the 00fcd170 rows. The two last rows are the first end-of-run peaks of the target (the wall time of the second one was long: a loaded machine, not measured separately).
+
+### The position count of dart-pub
+
+4/9 with `-no-deps` and the builtin models (an earlier local measurement). With the default flags the run did not converge then, so the line was `detected=no` (INFO).
