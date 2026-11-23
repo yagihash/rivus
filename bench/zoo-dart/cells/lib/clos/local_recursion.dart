@@ -1,6 +1,5 @@
 // @cell(F/clos/local-recursion)
 // @shape: a local function calls itself by its name, and the value reaches the sink only through the recursive call
-// @na(go: a Go function declared inside another cannot name itself; the nearest form, a var that holds a closure that calls itself, is a call of a value)
 import 'package:zoo_mark/zoo_mark.dart';
 
 void register() {
