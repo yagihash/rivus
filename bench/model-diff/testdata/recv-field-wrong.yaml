@@ -1,0 +1,4 @@
+ruleset: test/synth@1
+propagators:
+  - symbol: (*example.com/synth.Req).Clean
+    pure: true

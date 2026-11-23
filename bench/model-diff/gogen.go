@@ -28,6 +28,7 @@ type Gen struct {
 	DirA     string // the code that has the bodies (A; the same as Dir unless the package is of the standard library)
 	HasFlows bool
 	Errors   []string
+	States   []RowState // rows judged without a probe (a source row whose symbol and positions were looked up)
 }
 
 type goGen struct {
@@ -39,6 +40,11 @@ type goGen struct {
 	probes  []Probe
 	skips   []Skip
 	errs    []string
+	states  []RowState
+	cur     *Row // the row that the probes are made for
+	// fieldTaint: while the probes of a flows, pure or sanitizer row are made, a struct is given the source in its exported fields (structLit)
+	fieldTaint bool
+	partial    bool // the position that has the source was made by structLit in the probe being made (fields that the code could not set may carry data)
 }
 
 type goTarget struct {
@@ -106,9 +112,9 @@ func GenGo(o GoOptions) (*Gen, error) {
 	g := &goGen{pkg: pkgs[0].Types, rows: o.Rows, imports: map[string]string{}}
 	g.imports[o.Pkg] = "tp"
 	g.build()
-	gen := &Gen{Probes: g.probes, Skips: g.skips, Dir: dir, DirA: dir, Errors: g.errs}
+	gen := &Gen{Probes: g.probes, Skips: g.skips, Dir: dir, DirA: dir, Errors: g.errs, States: g.states}
 	for _, p := range g.probes {
-		if p.Kind == "flow" {
+		if readsBody(p) {
 			gen.HasFlows = true
 		}
 	}
@@ -122,7 +128,7 @@ func GenGo(o GoOptions) (*Gen, error) {
 			var keep []Probe
 			seen := map[string]bool{}
 			for _, p := range gen.Probes {
-				if p.Kind == "flow" {
+				if readsBody(p) {
 					if !seen[p.Symbol] {
 						seen[p.Symbol] = true
 						gen.Skips = append(gen.Skips, Skip{Symbol: p.Symbol, Reason: "the body of the standard library cannot be copied here: " + err.Error()})
@@ -141,6 +147,9 @@ func GenGo(o GoOptions) (*Gen, error) {
 	}
 	return gen, nil
 }
+
+// readsBody: the probe is judged against the body of the function (the flows rows, the pure rows and the sanitizers), not against a declaration.
+func readsBody(p Probe) bool { return p.Kind == "flow" || p.Kind == "sanitizer" }
 
 // qual names the packages of the types: the package under test is `tp`, the others get an alias.
 func (g *goGen) qual(p *types.Package) string {
@@ -180,6 +189,33 @@ func nameable(t types.Type) bool {
 		return t.NumMethods() == 0
 	}
 	return false
+}
+
+// structLit is a value of a struct type whose exported fields hold the source: every field that can hold text (a string, bytes, a
+// list or a map of strings, an `any`, an error, a reader) is given it. The model takes a value as one thing (what is in it reaches what
+// comes out), and the source is put into all of its fields at once, so that a flow is found whichever field the body reads. "" when the
+// struct has no such field (a lock, a time, a handle with unexported fields: the source cannot be put into it).
+func (g *goGen) structLit(t types.Type, s *types.Struct) string {
+	var fields []string
+	for i := 0; i < s.NumFields(); i++ {
+		f := s.Field(i)
+		if !f.Exported() || f.Embedded() || !nameable(f.Type()) {
+			continue
+		}
+		// one level only: a field that is itself a struct or a pointer is not followed (a type can refer to itself)
+		switch f.Type().Underlying().(type) {
+		case *types.Struct, *types.Pointer:
+			continue
+		}
+		if e, ok := g.val(f.Type(), true); ok && e != "" {
+			fields = append(fields, f.Name()+": "+e)
+		}
+	}
+	if len(fields) == 0 {
+		return ""
+	}
+	g.partial = true
+	return g.ts(t) + "{" + strings.Join(fields, ", ") + "}"
 }
 
 func isBasic(t types.Type, info types.BasicInfo) bool {
@@ -246,7 +282,7 @@ func (g *goGen) val(t types.Type, taint bool) (string, bool) {
 		if !taint {
 			return "nil", true
 		}
-		if isBasic(u.Key(), types.IsString) && isBasic(u.Elem(), types.IsString) {
+		if isBasic(u.Key(), types.IsString) && (isBasic(u.Elem(), types.IsString) || g.fieldTaint && u.Elem().String() == "any") {
 			k, _ := g.val(u.Key(), false)
 			e, _ := g.val(u.Elem(), true)
 			return ty + "{" + k + ": " + e + "}", true
@@ -255,9 +291,21 @@ func (g *goGen) val(t types.Type, taint bool) (string, bool) {
 		if !taint && nameable(u.Elem()) {
 			return "new(" + g.ts(u.Elem()) + ")", true
 		}
+		if taint && g.fieldTaint && nameable(u.Elem()) {
+			if s, ok := u.Elem().Underlying().(*types.Struct); ok {
+				if lit := g.structLit(u.Elem(), s); lit != "" {
+					return "&" + lit, true
+				}
+			}
+		}
 	case *types.Struct:
 		if !taint {
 			return ty + "{}", true
+		}
+		if g.fieldTaint {
+			if lit := g.structLit(t, u); lit != "" {
+				return lit, true
+			}
 		}
 	case *types.Interface:
 		if !taint {
@@ -271,20 +319,36 @@ func (g *goGen) build() {
 	seen := map[string]bool{}
 	var rows []Row
 	for _, r := range g.rows {
-		if !seen[r.Symbol+fmt.Sprint(r.Sink != nil)] {
-			seen[r.Symbol+fmt.Sprint(r.Sink != nil)] = true
+		if !seen[r.Symbol+" "+r.Kind] {
+			seen[r.Symbol+" "+r.Kind] = true
 			rows = append(rows, r)
 		}
 	}
-	for _, r := range rows {
-		t, why := g.resolve(r.Symbol)
+	for i := range rows {
+		r := rows[i]
+		g.cur = &r
+		if r.Kind == RowSource {
+			g.sourceRow(r)
+			continue
+		}
+		t, why, missing := g.resolve(r.Symbol, r.Kind == RowPure)
+		if missing {
+			g.errs = append(g.errs, fmt.Sprintf("%s: the symbol of the %s row is not in the package (%s)", r.Symbol, r.Kind, why))
+		}
 		if t == nil {
 			g.skip(r.Symbol, "", why)
 			continue
 		}
-		if r.Sink != nil {
+		switch r.Kind {
+		case RowSink:
 			g.sinkProbes(r, t)
-		} else {
+		case RowSanitizer:
+			if g.checkFlows(r.Symbol, r.San.Flows, t) {
+				g.flowProbes(r, t)
+			} else {
+				g.skip(r.Symbol, "", "the flows of the row name a position that the function does not have")
+			}
+		default:
 			g.flowProbes(r, t)
 		}
 	}
@@ -296,37 +360,61 @@ func (g *goGen) skip(sym, variant, why string) {
 
 var methodRe = regexp.MustCompile(`^\((\*?)(.+)\)\.(\w+)$`)
 
-// resolve finds the function of a symbol of the model in the package.
-func (g *goGen) resolve(sym string) (*goTarget, string) {
+// lookup finds the function of a symbol of the model in the package. missing says that the package has no such function (the row is
+// wrong, or it is for another version); a function that is found but cannot be called by the test is returned with why = "".
+func (g *goGen) lookup(sym string) (fn *types.Func, recv *types.Named, ptr bool, why string, missing bool) {
 	pkgPath := g.pkg.Path()
 	if m := methodRe.FindStringSubmatch(sym); m != nil {
 		tn := strings.TrimPrefix(m[2], pkgPath+".")
 		obj, _ := g.pkg.Scope().Lookup(tn).(*types.TypeName)
 		if obj == nil {
-			return nil, "type not found in the package"
+			return nil, nil, false, "type not found in the package", true
 		}
 		named, ok := types.Unalias(obj.Type()).(*types.Named)
-		if !ok || named.TypeParams().Len() > 0 {
-			return nil, "generic type"
+		if !ok {
+			return nil, nil, false, "type not found in the package", true
 		}
+		var sel types.Object
 		if _, isIface := named.Underlying().(*types.Interface); isIface {
-			return nil, "method of an interface: no implementation to call (unverified)"
+			sel, _, _ = types.LookupFieldOrMethod(named, true, g.pkg, m[3])
+		} else {
+			sel, _, _ = types.LookupFieldOrMethod(types.NewPointer(named), true, g.pkg, m[3])
 		}
-		sel, _, _ := types.LookupFieldOrMethod(types.NewPointer(named), true, g.pkg, m[3])
-		fn, _ := sel.(*types.Func)
+		fn, _ = sel.(*types.Func)
 		if fn == nil {
-			return nil, "method not found"
+			return nil, nil, false, "method not found in the type", true
 		}
-		return g.target(fn, named, m[1] == "*")
+		return fn, named, m[1] == "*", "", false
 	}
-	fn, _ := g.pkg.Scope().Lookup(strings.TrimPrefix(sym, pkgPath+".")).(*types.Func)
+	fn, _ = g.pkg.Scope().Lookup(strings.TrimPrefix(sym, pkgPath+".")).(*types.Func)
 	if fn == nil {
-		return nil, "function not found in the package"
+		return nil, nil, false, "function not found in the package", true
 	}
-	return g.target(fn, nil, false)
+	return fn, nil, false, "", false
 }
 
-func (g *goGen) target(fn *types.Func, recv *types.Named, ptr bool) (*goTarget, string) {
+// resolve finds the function of a symbol of the model in the package and says whether the test can call it. A callback is accepted when
+// allowCb is set (a pure row).
+func (g *goGen) resolve(sym string, allowCb bool) (*goTarget, string, bool) {
+	fn, recv, ptr, why, missing := g.lookup(sym)
+	if fn == nil {
+		return nil, why, missing
+	}
+	if recv != nil {
+		if named, ok := types.Unalias(recv).(*types.Named); ok {
+			if named.TypeParams().Len() > 0 {
+				return nil, "generic type", false
+			}
+			if _, isIface := named.Underlying().(*types.Interface); isIface {
+				return nil, "method of an interface: no implementation to call (unverified)", false
+			}
+		}
+	}
+	t, why := g.target(fn, recv, ptr, allowCb)
+	return t, why, false
+}
+
+func (g *goGen) target(fn *types.Func, recv *types.Named, ptr bool, allowCb bool) (*goTarget, string) {
 	sig := fn.Type().(*types.Signature)
 	if sig.TypeParams().Len() > 0 {
 		return nil, "generic function (not checked)"
@@ -342,14 +430,257 @@ func (g *goGen) target(fn *types.Func, recv *types.Named, ptr bool) (*goTarget, 
 		if sig.Variadic() && i == sig.Params().Len()-1 {
 			t = t.(*types.Slice).Elem()
 		}
-		if _, ok := t.Underlying().(*types.Signature); ok {
-			return nil, "takes a callback (not checked)"
+		if cb, ok := t.Underlying().(*types.Signature); ok {
+			if !allowCb {
+				return nil, "takes a callback (not checked)"
+			}
+			if !g.callbackOK(cb) {
+				return nil, "takes a callback whose types the code cannot name (not checked)"
+			}
+			continue
 		}
 		if _, ok := g.val(t, false); !ok {
 			return nil, "argument type that the code cannot build: " + t.String()
 		}
 	}
 	return &goTarget{fn: fn, sig: sig, recv: recv, ptrRecv: ptr}, ""
+}
+
+// callbackOK: the code can write a function literal of the type (every parameter and result can be named).
+func (g *goGen) callbackOK(sig *types.Signature) bool {
+	if sig.Variadic() || sig.TypeParams().Len() > 0 {
+		return false
+	}
+	for i := 0; i < sig.Params().Len(); i++ {
+		if !nameable(sig.Params().At(i).Type()) {
+			return false
+		}
+	}
+	for i := 0; i < sig.Results().Len(); i++ {
+		if !nameable(sig.Results().At(i).Type()) {
+			return false
+		}
+	}
+	return true
+}
+
+// callbackLiteral is a function literal of the type that passes each parameter that can hold data to a sink of its own
+// (`sink<id>_cb<position>_<parameter>`): what the function under test hands to the callback is then a place that the probe watches.
+func (g *goGen) callbackLiteral(id, pos int, sig *types.Signature) (string, []string) {
+	var params, body, places []string
+	for i := 0; i < sig.Params().Len(); i++ {
+		pt := sig.Params().At(i).Type()
+		params = append(params, fmt.Sprintf("p%d %s", i, g.ts(pt)))
+		if !isBasic(pt, types.IsNumeric|types.IsBoolean) {
+			place := fmt.Sprintf("cb%d_%d", pos, i)
+			body = append(body, fmt.Sprintf("sink%d_%s(p%d)", id, place, i))
+			g.sinks = append(g.sinks, fmt.Sprintf("sink%d_%s", id, place))
+			places = append(places, place)
+		}
+	}
+	var results []string
+	for i := 0; i < sig.Results().Len(); i++ {
+		results = append(results, fmt.Sprintf("r%d %s", i, g.ts(sig.Results().At(i).Type())))
+	}
+	res := ""
+	if len(results) > 0 {
+		res = " (" + strings.Join(results, ", ") + ")"
+	}
+	return "func(" + strings.Join(params, ", ") + ")" + res + " { " + strings.Join(body, "; ") + "; return }", places
+}
+
+// coveredBy: the places that the flows of a row give from the position `base` (recv, arg<N>) of a function with `nres` results.
+func coveredBy(flows []model.Flow, base string, nres int) []string {
+	var res []string
+	for _, f := range flows {
+		from, err := model.ParseSelector(f.From)
+		if err != nil {
+			continue
+		}
+		match := false
+		switch from.Kind {
+		case model.SelRecv:
+			match = base == "recv"
+		case model.SelArg:
+			match = base != "recv" && (from.All || base == fmt.Sprintf("arg%d", from.Index))
+		}
+		if !match {
+			continue
+		}
+		to, err := model.ParseDest(f.To)
+		if err != nil {
+			continue
+		}
+		switch to.Kind {
+		case model.SelRecv:
+			res = append(res, "recv")
+		case model.SelArg:
+			res = append(res, fmt.Sprintf("arg%d", to.Index))
+		case model.SelResult:
+			if to.All {
+				for i := 0; i < nres; i++ {
+					res = append(res, fmt.Sprintf("result%d", i))
+				}
+			} else {
+				res = append(res, fmt.Sprintf("result%d", to.Index))
+			}
+		}
+	}
+	return res
+}
+
+// checkFlows: every position that the flows of a row name exists in the function. A flow of a position that the function does not have
+// is an error of the row; the return value says whether the row can be probed.
+func (g *goGen) checkFlows(sym string, flows []model.Flow, t *goTarget) bool {
+	np, nr := t.sig.Params().Len(), t.sig.Results().Len()
+	ok := true
+	check := func(s string, dest bool) {
+		var sel model.Selector
+		var err error
+		if dest {
+			sel, err = model.ParseDest(s)
+		} else {
+			sel, err = model.ParseSelector(s)
+		}
+		if err != nil {
+			g.errs = append(g.errs, fmt.Sprintf("%s: %v", sym, err))
+			ok = false
+			return
+		}
+		switch {
+		case sel.All:
+		case sel.Kind == model.SelRecv && t.recv == nil:
+			g.errs = append(g.errs, fmt.Sprintf("%s: the row names the receiver, and the function has none", sym))
+			ok = false
+		case sel.Kind == model.SelArg && sel.Index >= np && !(t.sig.Variadic() && np > 0):
+			g.errs = append(g.errs, fmt.Sprintf("%s: the row names %s, which the function does not have (%d parameters)", sym, s, np))
+			ok = false
+		case sel.Kind == model.SelResult && sel.Index >= max(nr, 1):
+			g.errs = append(g.errs, fmt.Sprintf("%s: the row names %s, which the function does not have (%d results)", sym, s, nr))
+			ok = false
+		}
+	}
+	for _, f := range flows {
+		check(f.From, false)
+		check(f.To, true)
+	}
+	return ok
+}
+
+// sourceRow checks a source row without a probe: the symbol, the field or the type is in the package, the positions that it names exist, and
+// the arguments that it fills can be written into. A source row that passes is judged (the generated code does not call a source: it
+// is the start of a flow); one that the test cannot look at (a kind that it does not read) is not judged, and says so.
+func (g *goGen) sourceRow(r Row) {
+	s := r.Src
+	bad := func(format string, a ...any) {
+		g.errs = append(g.errs, fmt.Sprintf("%s: the source row "+format, append([]any{r.Symbol}, a...)...))
+	}
+	notJudged := func(why string) {
+		g.states = append(g.states, RowState{Symbol: r.Symbol, Row: RowSource, Reason: why})
+	}
+	judged := func() { g.states = append(g.states, RowState{Symbol: r.Symbol, Row: RowSource, Judged: true}) }
+	pkgPath := g.pkg.Path()
+	switch s.Kind {
+	case "", model.KindCallResult, model.KindParam, model.KindCallbackParam:
+		fn, recv, _, why, missing := g.lookup(s.Symbol)
+		if fn == nil {
+			if missing {
+				bad("is not in the package (%s)", why)
+			}
+			notJudged(why)
+			return
+		}
+		sig := fn.Type().(*types.Signature)
+		np := sig.Params().Len()
+		fine := true
+		if s.Recv && recv == nil {
+			bad("names the receiver, and the function has none")
+			fine = false
+		}
+		for _, p := range append(append([]int{}, s.Params...), s.Out...) {
+			if p < 0 || p >= np && !(sig.Variadic() && np > 0) {
+				bad("names arg%d, which the function does not have (%d parameters)", p, np)
+				fine = false
+			}
+		}
+		for _, o := range s.Out {
+			if o >= 0 && o < np && !g.carries(paramType(sig, o)) && !isEmptyIface(paramType(sig, o)) {
+				bad("fills arg%d, whose type %s cannot be written into", o, paramType(sig, o))
+				fine = false
+			}
+		}
+		if s.Operand != nil && (*s.Operand < 0 || *s.Operand >= np) {
+			bad("names the operand %d, which the function does not have (%d parameters)", *s.Operand, np)
+			fine = false
+		}
+		if fine && (s.Kind == "" || s.Kind == model.KindCallResult) && len(s.Out) == 0 && !s.Recv {
+			holds := false
+			for i := 0; i < sig.Results().Len(); i++ {
+				if !isBasic(sig.Results().At(i).Type(), types.IsNumeric|types.IsBoolean) {
+					holds = true
+				}
+			}
+			if !holds {
+				notJudged("the result of the function is a number or a bool, or there is none: it cannot hold the data of a source")
+				return
+			}
+		}
+		if fine {
+			judged()
+		} else {
+			notJudged("the row names a position that the function does not have, or one that cannot be written into")
+		}
+	case model.KindField:
+		rest, ok := strings.CutPrefix(s.Field, pkgPath+".")
+		tn, field, ok2 := strings.Cut(rest, ".")
+		if !ok || !ok2 {
+			notJudged("a field that this test cannot read")
+			return
+		}
+		obj, _ := g.pkg.Scope().Lookup(tn).(*types.TypeName)
+		if obj == nil {
+			bad("is of a type that is not in the package (%s)", tn)
+			notJudged("type not found in the package")
+			return
+		}
+		st, isStruct := obj.Type().Underlying().(*types.Struct)
+		if !isStruct {
+			bad("is of a type that is not a struct (%s)", tn)
+			notJudged("not a struct")
+			return
+		}
+		if field != "*" {
+			found := false
+			for i := 0; i < st.NumFields(); i++ {
+				found = found || st.Field(i).Name() == field
+			}
+			if !found {
+				// a promoted field of an embedded struct
+				o, _, _ := types.LookupFieldOrMethod(obj.Type(), true, g.pkg, field)
+				if _, isVar := o.(*types.Var); !isVar {
+					bad("names the field %s, which %s does not have", field, tn)
+					notJudged("field not found in the type")
+					return
+				}
+			}
+		}
+		judged()
+	case model.KindParamType:
+		tn := strings.TrimPrefix(strings.TrimPrefix(strings.TrimPrefix(s.Type, "*"), "[]"), pkgPath+".")
+		if obj, _ := g.pkg.Scope().Lookup(tn).(*types.TypeName); obj == nil {
+			bad("is of a type that is not in the package (%s)", s.Type)
+			notJudged("type not found in the package")
+			return
+		}
+		judged()
+	default:
+		notJudged("a kind of source that this test does not read (" + s.Kind + ")")
+	}
+}
+
+func isEmptyIface(t types.Type) bool {
+	i, ok := t.Underlying().(*types.Interface)
+	return ok && i.NumMethods() == 0
 }
 
 func paramType(sig *types.Signature, i int) types.Type {
@@ -426,6 +757,12 @@ func (g *goGen) nextID() int { return len(g.probes) }
 // emit writes the function fixN: the setup, the call and the sinks of the places that the call writes into.
 func (g *goGen) emit(sym, kind, variant string, t *goTarget, taintPos int, recvTaint bool, expect *bool, category string, partField string, outputs bool) {
 	id := g.nextID()
+	g.partial = false
+	base := "recv"
+	if taintPos >= 0 {
+		base = fmt.Sprintf("arg%d", taintPos)
+	}
+	var cbPlaces []string
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "func fix%d() { // %s %s\n\ts := src()\n\t_ = s\n", id, sym, variant)
 	recvName := ""
@@ -442,7 +779,11 @@ func (g *goGen) emit(sym, kind, variant string, t *goTarget, taintPos int, recvT
 	for i := 0; i < t.sig.Params().Len(); i++ {
 		pt := paramType(t.sig, i)
 		var e string
-		if i == taintPos && partField != "" {
+		if cb, ok := pt.Underlying().(*types.Signature); ok {
+			var places []string
+			e, places = g.callbackLiteral(id, i, cb)
+			cbPlaces = append(cbPlaces, places...)
+		} else if i == taintPos && partField != "" {
 			e = g.fieldValue(pt, partField)
 		} else {
 			e, _ = g.val(pt, i == taintPos)
@@ -484,12 +825,21 @@ func (g *goGen) emit(sym, kind, variant string, t *goTarget, taintPos int, recvT
 			g.sinks = append(g.sinks, fmt.Sprintf("sink%d_%s", id, p[0]))
 			places = append(places, p[0])
 		}
+		places = append(places, cbPlaces...)
 	} else {
 		sb.WriteString("\t" + call + "\n")
 	}
 	sb.WriteString("}\n")
 	g.funcs = append(g.funcs, sb.String())
-	g.probes = append(g.probes, Probe{ID: id, Symbol: sym, Kind: kind, Variant: variant, Outputs: places, Expect: expect, Category: category})
+	p := Probe{ID: id, Symbol: sym, Kind: kind, Variant: variant, Outputs: places, Expect: expect, Category: category, Partial: g.partial}
+	if g.cur != nil {
+		p.Row = g.cur.Kind
+		if g.cur.Kind == RowSanitizer {
+			p.Explicit = len(g.cur.San.Flows) > 0
+			p.Covered = coveredBy(g.cur.San.Flows, base, t.sig.Results().Len())
+		}
+	}
+	g.probes = append(g.probes, p)
 }
 
 // carries: a value that a call can write into (a pointer, a slice, a map, a writer).
@@ -512,25 +862,48 @@ func (g *goGen) fieldValue(t types.Type, field string) string {
 }
 
 func (g *goGen) flowProbes(r Row, t *goTarget) {
+	g.fieldTaint = true // a struct can be given the source in its exported fields (only for the flows: a sink row keeps its positions)
+	defer func() { g.fieldTaint = false }()
+	kind := "flow"
+	if r.Kind == RowSanitizer {
+		kind = "sanitizer"
+	}
 	n := 0
 	if t.recv != nil {
 		if _, _, ok := g.recvSetup(t, true); ok {
-			g.emit(r.Symbol, "flow", "recv", t, -1, true, nil, "", "", true)
+			g.emit(r.Symbol, kind, "recv", t, -1, true, nil, "", "", true)
 			n++
 		} else {
 			g.skip(r.Symbol, "recv", "the source cannot be put into the receiver (no conversion, no constructor New... that takes it)")
 		}
 	}
 	for i := 0; i < t.sig.Params().Len(); i++ {
-		if _, ok := g.val(paramType(t.sig, i), true); !ok {
+		pt := paramType(t.sig, i)
+		if _, ok := g.val(pt, true); !ok {
+			if why := cannotHold(pt); why != "" {
+				g.skip(r.Symbol, fmt.Sprintf("arg%d", i), why)
+			}
 			continue
 		}
-		g.emit(r.Symbol, "flow", fmt.Sprintf("arg%d", i), t, i, false, nil, "", "", true)
+		g.emit(r.Symbol, kind, fmt.Sprintf("arg%d", i), t, i, false, nil, "", "", true)
 		n++
 	}
 	if n == 0 && t.recv == nil {
 		g.skip(r.Symbol, "", "no position that the source can be put into")
 	}
+}
+
+// cannotHold says why a position that the source cannot be put into is reported: its type could hold data (a struct, a pointer, an
+// interface, a context), and the test cannot make one. A number, a bool, a function (a callback is the function's own business) and a
+// writer (a place that is written into, which the probe watches) are not reported.
+func cannotHold(t types.Type) string {
+	if isBasic(t, types.IsNumeric|types.IsBoolean) || t.String() == "io.Writer" {
+		return ""
+	}
+	if _, ok := t.Underlying().(*types.Signature); ok {
+		return ""
+	}
+	return "type that the source cannot be put into: " + t.String()
 }
 
 func (g *goGen) sinkProbes(r Row, t *goTarget) {

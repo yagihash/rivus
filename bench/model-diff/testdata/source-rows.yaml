@@ -1,0 +1,15 @@
+ruleset: test/synth@1
+sources:
+  - symbol: example.com/synth.Read
+    kind: call_result
+    labels: [user_input]
+  - kind: field
+    field: example.com/synth.Opts.URL
+    labels: [user_input]
+  - kind: param_type
+    type: "*example.com/synth.Opts"
+    labels: [user_input]
+  # a number: the source cannot be seen in a probe
+  - symbol: example.com/synth.Copy
+    kind: call_result
+    labels: [user_input]

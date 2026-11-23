@@ -169,7 +169,11 @@ def docs(args):
     want = {bt_path: splice(open(bt_path).read(), rows_table(rows)), hdr_path: ledger_header(rows)}
     led = open(ledger_path).read()
     i = led.find("# Ledger: version")
-    want[ledger_path] = ledger_header(rows).rstrip("\n") + "\n\n" + (led[i:] if i >= 0 else "")
+    # bench/model-ledger.md: the counts of the rows of the models that the differential test judged (written by hand from the output of
+    # `go run ./bench/model-diff -dead-allow <dir>`, with the day); it goes between the head and the table of versions
+    extra_path = os.path.join(os.path.dirname(os.path.abspath(hdr_path)), "model-ledger.md")
+    extra = open(extra_path).read().strip("\n") if os.path.exists(extra_path) else ""
+    want[ledger_path] = ledger_header(rows).rstrip("\n") + "\n\n" + (extra + "\n\n" if extra else "") + (led[i:] if i >= 0 else "")
     bad = []
     for path, text in want.items():
         if open(path).read() != text:

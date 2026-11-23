@@ -11,6 +11,29 @@ Rows 9 (the traces; optional) and 11 (a recorded miss, not a condition) are not 
 
 Holes: only the pairs of rows 6, 7 (layer C) have compare runs so far, and row 8 and 10 are judged by `TestCuratedGo`; the rows of A (go-scale) are in BACKTEST.md. Wall times were taken while the machine was shared (read them as a guide; the counts are exact).
 
+## Rows of the models that the differential test judged (2026-11-23)
+
+`bench/model-diff` counts, per package, the rows of the models that it really checked ("judged") and the ones that it could not ("not judged", with the reason; a row that it cannot judge is never counted as agreeing). A row is judged when a probe showed something about it: a flows row, when one of the two runs (the bodies read, the models) had a flow at a position; a `pure` row, when the body was read at a place that it could write into; a sink row, when its declaration was compared; a source row, when the symbol, the field or the type and the positions that it names are in the package (this is a lookup, not a check of the data). Made by `go run ./bench/model-diff -run-changed 4b825dc642cb6eb9a060e54bf8d69288fbee4904 -out <dir>` (the empty tree as the base: every Go package that has rows) and `go run ./bench/model-diff -dead-allow <dir>`, on the models of main at `6bee840` plus the checks of this change. Go only: Dart (flows and sinks) was not run here, Rust is not checked at all.
+
+Before and after the change that read the `pure` rows against their bodies and gave a struct the source in its exported fields (2026-11-23, on the models of `feat/model-diff-flow-rows` and of this change):
+
+| group | packages | rows | judged before | judged after | not judged before | not judged after | MISS before | MISS after | EXTRA |
+|---|---|---|---|---|---|---|---|---|---|
+| Go standard library (go-stdlib, go-stdlib-more, go-pure, go-net-http, go-config) | 77 | 617 | 342 (55%) | 348 (56%) | 275 (44.6%) | 269 (43.6%) | 39 | 12 | 0 |
+| go-github (`github.com/google/go-github/v*/github`, v93.0.0) | 1 | 79 | 76 (96%) | 76 | 3 | 3 | 0 | 0 | 0 |
+| gin, sqlx, grpc, Google Cloud (spanner, storage, bigquery) | 7 | 144 | 117 | 117 | 27 | 27 | 9 | 0 | 0 |
+
+The 39 MISS of the standard library before were all `pure` rows (14 packages: `crypto/*`, `log/slog`, `net`, `net/http`, `net/smtp`, `os`, `path/filepath`, `go/printer`), the first time that a `pure` row was read against its body; the 9 MISS of spanner were flows rows (`Row.Columns`, `ColumnByName`, `ToStruct`, `ToStructLenient`). After: the `pure` rows of the real flows are `flows:` rows, the ones that carry no data are `miss-reviewed` (14 positions in the standard library and 4 in spanner, listed in the pull request), spanner has no MISS. The 12 MISS that are left: `ServeMux.Handle` (pattern into the mux, a candidate that is not changed here) and `filepath.Walk` (the branch `fix/model-sanitizer-callbacks`) were there before; the other 10 are new findings on rows that this change did not touch, shown only because a struct can now be given the source (`Client.Do` arg0 to the error, `URL.Port`, `tls.Client` arg1, `x509.CreateCertificate` arg1 and arg2, `x509.DecryptPEMBlock`, `httputil.DumpRequest`, `zip.Writer.CreateHeader`, `Record.AddAttrs`, `Cmd.CombinedOutput`; not triaged). Not judged in the standard library, before and after (verified on both runs; the sum is 275 and 269 rows): the source cannot be put into the receiver 98 and 82, no position that the source can be put into 50 and 50, method of an interface 40 and 40, no flow in either run 39 and 55 (counted as not judged: a probe where neither run has a flow tells nothing about the row, because the same result comes from a row that is right and from one that is wrong; a `pure` row is judged when it has a place to look at, even without a flow; some of the 16 more are rows that were receiver or type reasons before: the struct was now given the source, and only the row has a flow, which shows nothing about the row), a type that the source cannot be put into 32 and 25, other 16 and 17. The target of 40% for the standard library was not reached (43.6%): what is left of the first reason is the receivers that have no exported field that holds text (locks, times, handles of a database or a connection, `reflect.Value`), and the next two (no position, a method of an interface) are rows that have nothing to put the source into or no body to read. go-github: 49 of 52 sink rows and 27 of 27 source rows; the 3 others take a callback.
+
+The rows that the zoo does not hit (`internal/model/builtin/*.dead-allow`), and whether a differential test confirmed them (judged, and no MISS or EXTRA on the row):
+
+| language | `.dead-allow` rows | confirmed | judged, but the row is wrong (MISS) | not judged | no differential test |
+|---|---|---|---|---|---|
+| Go, before | 594 | 330 (56%) | 31 | 233 | 0 |
+| Go, after | 594 | 353 (59%) | 9 | 232 | 0 |
+| Dart | 451 | 0 | 0 | 0 | 451 (not run for this count) |
+| Rust | 428 | 0 | 0 | 0 | 428 (not checked: needs the isolation) |
+
 # Ledger: version x bench x metric
 
 Made by `bench/ledger.py` from the runs of `bench/compare.sh` (see the header of that script). Inputs `head`: the engine of the row was run on the inputs of the reference tree (`compare.sh --fixed-inputs`, bench/BACKTEST.md); `own`: on the inputs of its own version.
@@ -168,3 +191,47 @@ The difference is against the reference engine `de627ce` on the same inputs: `+a
 | c9aa412 | only the seeds are not written back | head | 8 | +1 -1 | yes | 3 | 3396 | 40991 | 1017 | 7.0 | 1570 | unmodeled_library_call 76, dynamic_dispatch 28, depth_limit 23 |
 | de627ce | main (the engine the differences are against) | head | 8 | ref | yes | 2 | 2941 | 31176 | 936 | 10.1 | 1502 | unmodeled_library_call 92, dynamic_dispatch 32, depth_limit 26 |
 
+## Benches with heavy dependencies (`make bench-deps`)
+
+`rivus analyze` with no flag that changes the analysis, on a local run (bench/deps_bench.py; the columns are described there). One row per run; compare the same bench between dates. `finished`: yes / timeout / oom / error. `-` is not measured (max RSS of a run that we killed). The engine is the commit the binary was built from.
+
+| date | rivus | bench | lang | wall_s | max_rss_mb | functions | findings | uncertainties | finished | timeout_s |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 2026-11-23 | 6bee840 | go-s3 | go | 686.6 | 12449 | 5845 | 1 | 47 | timeout | 600 |
+| 2026-11-23 | 6bee840 | gcp | go | 70.7 | 4012 | 20810 | 27 | 143 | yes | 600 |
+| 2026-11-23 | 6bee840 | dart-gcp | dart | 44.4 | 1530 | 4593 | 19 | 738 | yes | 600 |
+## The pass line (`make bench-passline`)
+
+The goal: rivus analyses a real product with the default flags, in a realistic time and memory, with a meaningful result. One line per target (bench/deps_bench.py; the targets, the pinned commits and the limits are data in bench/deps-targets.json):
+
+`PASS|FAIL memos time=<s>/<limit> mem=<GB>/<cap> converged=<yes|no> detected=<yes|no|n/a>`
+
+PASS for memos (usememos/memos 26.11.2, `00fcd170281a75fc0e95ec4f2f54f43d32fe81bd`) needs all four with the default flags (no `-no-deps`, no `-body-replaced`): it ends by itself within 180 s; the memory of the process group stays within 8 GB (a watchdog kills the group of the run above the cap); it converges; and CVE-2025-65799 (path traversal; fixed in 0.25.3) is detected: the count of `path_traversal` findings is higher on the pre-fix commit `1d7efb158045924ab87f58d567bd79cd92edf6af` than on the fixed commit `5f57f48673e2054f404b2c5b497a8eaa3690591d` (counts only). The Dart line is cocoon `app_dart` (below); dart_services (dart-pad `pkgs/dart_services`, `ad668d137e631beeaef3e263054a45696e8d4499`) is a load target, printed as `INFO`.
+
+### The starting point (2026-11-23, numbers only, a local measurement of the engine of that day)
+
+| target | commit | flags | wall | max memory | converged | functions | findings |
+|---|---|---|---|---|---|---|---|
+| memos | 00fcd170 | default, cap 8 GB | cut by the cap at 67 s | > 8 GB | no | - | - |
+| memos | 00fcd170 | `-timeout 50s` (partial) | 99.5 s (CPU 178 s) | 6.75 GB | no | 40.8k | not meaningful (partial) |
+| memos | 00fcd170 | `-body-replaced` of the aws SDK (NOT the default flags; informational) | 45 s | 6.08 GB | yes | 34.7k | - |
+| dart_services | ad668d13 | default, cap 8 GB | cut by the cap at 189 s | > 8 GB | no | - | - |
+| dart_services | ad668d13 | `-timeout 50s` (partial) | 138 s | 7.98 GB | no | 28.1k | 0 |
+| memos CVE-2025-65799, pre-fix and fixed | 1d7efb15, 5f57f486 | default, cap 8 GB | cut by the cap at 49 s and 31 s | > 8 GB | no | - | - |
+| memos CVE-2025-65799, pre-fix and fixed | 1d7efb15, 5f57f486 | `-body-replaced` of the aws SDK (informational) | 30 s and 23 s | 3.7 GB and 3.6 GB | yes | - | 0 and 0 (`path_traversal`; not detected at the pre-fix commit) |
+
+So today's line for memos is `FAIL memos time=67/180 mem=>8/8 converged=no detected=no` (cut by the cap).
+
+### The cocoon line (2026-11-23, numbers only; engine of that day)
+
+The Dart target of the pass line is flutter/cocoon `app_dart` (`ae9eb1beaf765d644cc85dde38def030c80b4b7d`). Launch: cwd = `app_dart`, `-allow-deps-under <cocoon>/packages`, `dart pub get` only, the Flutter member of the root workspace removed in the copy (all in `bench/deps_bench.py`; data in `bench/deps-targets.json`). The line is the same as for memos (default flags, within 180 s and 8 GB, converged): PASS for time, memory and convergence. `detected=n/a`: the project has no public security advisory, so no pre-fix / fixed pair. dart_services stays a load target for the heavy dependency `package:analyzer` (printed as `INFO`, numbers kept; also a target of the depth experiments).
+
+| target | commit | flags | wall | max memory | CPU | converged | functions | findings |
+|---|---|---|---|---|---|---|---|---|
+| cocoon app_dart | ae9eb1be | default, 10m | 101 s | 1.78 GB | 128 s CPU | converged (4 passes) | 16.5k functions (14.3k deps) | 14 findings (ssrf 9, resource_name 4, sql_injection 1) |
+
+Today's line for cocoon: `PASS cocoon time=101/180 mem=1.78/8 converged=yes detected=n/a`.
+
+### Detection: the line is per vulnerability, the detail is per position
+
+`detected` counts per vulnerability, as for memos: `yes` when at least one finding passes through a labelled position of that vulnerability's truth (builtin models, default flags). The position-level count is printed beside it as information: `through_tp=<n>/<N>`. For the Dart target `dart-pub` (dart-lang/pub `5e24336e71a05a96b558d496953ebed223f6e40a`; one public fixed vulnerability, the zip slip of `extractTarGz`, 9 labelled call sites; `bench/dart-pub`), the position count is 4/9 with `-no-deps` and the builtin models (an earlier local measurement). With the default flags the run does not converge today, so the line is `detected=no` (INFO; the line is not decided). `bench/score.py --through` gives the same position count from a saved result.

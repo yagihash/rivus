@@ -60,7 +60,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 読み方:
 
 - **`paths`**: source から sink までのステップ。各ステップに、関数、位置、その行のコード（`snippet`）、何が起きたか（`desc`）、使ったモデルがあります。
-- **`uncertainties`**: その経路で、rivus が確かめられなかったこと。種類（`kind`）と、原因が対象のコードにあるか rivus の側にあるか（`attributable_to`: `target` / `rivus` / `mixed`。`mixed` は、言語の機能に由来するが、rivus の精度向上でも減らせるもの）を示します。種類は、`dynamic_dispatch`（呼び出し先が実行時に決まる）、`unmodeled_library_call`（中身もモデルもない関数を通った）、`dependency_body_unread`（モデルのあるインターフェースの呼び出しの候補に、依存の本体があったが、読まなかった: 依存が包んだ先の自前の実装へは進んでいない。Go）、`depth_limit`（解析の上限で止めた）、`assumed_call`（渡したクロージャが呼ばれると仮定した）、`container_element_imprecision`、`reflection`、`config_read`、`global_var` などです。
+- **`uncertainties`**: その経路で、rivus が確かめられなかったこと。種類（`kind`）と、原因が対象のコードにあるか rivus の側にあるか（`attributable_to`: `target` / `rivus` / `mixed`。`mixed` は、言語の機能に由来するが、rivus の精度向上でも減らせるもの）を示します。種類は、`dynamic_dispatch`（呼び出し先が実行時に決まる）、`unmodeled_library_call`（中身もモデルもない関数を通った）、`dependency_body_unread`（モデルのあるインターフェースの呼び出しの候補に、依存の本体があったが、読まなかった: 依存が包んだ先の自前の実装へは進んでいない。Go）、`depth_limit`（解析の上限で止めた）、`assumed_call`（渡したクロージャが呼ばれると仮定した）、`container_element_imprecision`、`pointer_alias`（ポインタ越しの書き込みを別名で近似した所を通った。Rust）、`reflection`、`config_read`、`global_var` などです。
 - **`confidence`**: 経路に不確実性が 1 つもなければ `no_uncertainty_on_path`、あれば `requires_review`。**本物かどうかの判定ではありません。**
 - **`reachability`**: 経路の関数が、プログラムの起点（`main` など）から届くか（`from_entry` / `from_framework_callback` / `not_from_entry`）。`from_framework_callback` は、起点からは届かないが、依存の型が宣言するメソッドを上書きしている関数（Flutter の `build`、`initState` など。フレームワークが呼ぶ）から届く、という意味です（Dart）。`not_from_entry` は「死んだコード」の意味ではありません（フレームワークに値として登録されたハンドラは、起点からたどれないことがあります）。
 - **`conditional_nodes`**（上の例にはありません）: 引数の値でサニタイズするかが変わる関数（`render(s, escape bool)` のような形）を通ったとき、条件、条件ごとの結果、呼び出し元が渡した値の出所（定数、設定の読み出し、など）を書き出します。どちらが起きるかは、判定しません。
@@ -72,7 +72,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 - 解析が上限で止まった所は `depth_limit` として記録され、理由が付きます: `budget`（作業量。どのマシンでも同じ所で止まる）、`func_timeout` / `run_timeout`（時計。マシンの負荷で止まる所が変わる）。時計で止まったものがあれば、`summary.load_dependent` が `true` になります。
 - Go で、型エラーのあるパッケージと、それを import するパッケージは、SSA が作られず、解析から落ちます(`packages` には載ったままです)。読んだが作れなかったパッケージの数、落ちた関数の数、上位 10 のパッケージ(と理由)は、`summary.unread` に出ます(1 つもなければ、フィールドはありません)。パッケージごとに `missing_source` の不確実性も出て、stderr に 1 行出ます。終了コードと finding は変わりません。
-- **依存の本体を読むのは、流れを追うためです。source と sink は、プロジェクトのコードの中にだけ付きます**(依存の関数の中では探しません。ADR-099)。依存を読んだ実行では、`summary.dependency_sites`(`searched: false`、`dependency_functions`: 読んだ依存の関数の数)が、毎回そのことを言います(`-no-deps` や、依存の関数が 0 のときは出ません)。**利用者の入力が、ライブラリの中で危険な処理(ファイルを開く、コマンドを実行する、など)に届く形は、プロジェクトのコードがそのライブラリの API を呼ぶ所に sink のモデルがない限り、検出されません。** sink のモデルは、解析のコストを減らすためだけでなく、検出のためにも必要です(`rivus models coverage` で、モデルのない呼び出しを多い順に見られます)。
+- **依存の本体を読むのは、流れを追うためです。source と sink は、プロジェクトのコードの中にだけ付きます**(依存の関数の中では探しません。ADR-099。プロジェクトの範囲は ADR-114)。依存を読んだ実行では、`summary.dependency_sites`(`searched: false`、`dependency_functions`: 読んだ依存の関数の数)が、毎回そのことを言います(`-no-deps` や、依存の関数が 0 のときは出ません)。**利用者の入力が、ライブラリの中で危険な処理(ファイルを開く、コマンドを実行する、など)に届く形は、プロジェクトのコードがそのライブラリの API を呼ぶ所に sink のモデルがない限り、検出されません。** sink のモデルは、解析のコストを減らすためだけでなく、検出のためにも必要です(`rivus models coverage` で、モデルのない呼び出しを多い順に見られます)。
 - 数値と真偽値になった値は、既定では追いません（`numeric_stop` として記録。`-numeric-taint` で追う）。
 - `rivus resolve` の答えは、`unchanged` / `changed` / `rematched` / `ambiguous` / `unresolved` と、finding については今も届くか（`flow`）です。
 
@@ -242,8 +242,11 @@ LLM にモデルを書かせ、人や別の手段で確かめる、という使�
 - **対象のディレクトリに付いてくるルール（`.rivus/rules/*.yaml`）は、フラグなしで読まれます。** 対象を書いた人は、そこで finding を消せます。読んだファイルと、消せるものの数は、出力の `project_rules` に出ます。**信頼できないコードでは `-no-project-rules` を付けてください。**
 - Dart の依存は、プロジェクト、pub のキャッシュ、SDK の下のものだけ読みます（`package_config.json` は対象の一部で、どこでも指せるため）。ほかの場所は `-allow-deps-under DIR` で足します。
   - 許可の外の依存は読まず、**読まなかったことを `summary.unread`(理由は `dependency_not_allowed`)と標準エラーに出します**(結果が、その依存を読んだものに見えないように)。
-  - 複数のパッケージを 1 つのリポジトリに置いている(モノレポ)とき、アプリの依存が、同じリポジトリの別のパッケージを `path:` で指していることがあります。そのときは、アプリを `-C` に、リポジトリのルートを `-allow-deps-under` に指します: `rivus analyze -lang dart -C <リポジトリ>/app -allow-deps-under <リポジトリ>`。
-  - 複数のパッケージの親を `-C` に指しても読めます(依存は `package:` の ID で解決されます)。同じ依存の別のバージョンを 2 つのパッケージが使うときは、1 つしか読めず、もう 1 つは `summary.unread`(`dependency_not_linked`)に出ます。
+  - 複数のパッケージを 1 つのリポジトリに置いている(モノレポ)とき、`-C` は**解析の始まり**です。解析したいアプリ(サーバ)のディレクトリを指します: `rivus analyze -lang dart -C <リポジトリ>/app -allow-deps-under <リポジトリ>/packages`。アプリの依存が、同じリポジトリの別のパッケージ(兄弟)を `path:` で指しているとき、その兄弟は `-allow-deps-under` で足さないと読まれません(読まなかったことは `summary.unread` に出ます)。`-allow-deps-under` の下のパッケージ(`path:` の依存、`workspace:` のメンバー)は、読むだけでなく、プロジェクトとして扱います(source と sink を探します)。pub のキャッシュと SDK の下は、含まれていても依存のままです(ADR-114)。
+  - `-C` に何を指すかで、解析するものが変わります。リポジトリのルートを指すと、`workspace:` のメンバーの全部が始まりになり、読む範囲が広くなって、解析が終わらないことがあります。`packages` のような、パッケージを束ねたディレクトリを指すと、そこに並ぶ別のプロジェクトが対象になり、アプリではなくなります。サーバのアプリを読みたいときは、そのアプリのディレクトリを指してください。読み込みが長いときに、何を読んでいるかはまだ出ません([#174](docs/issues/174-extraction-progress.md))。
+  - `workspace:` に Flutter のメンバーがあると、Dart SDK だけの `dart pub get` が通りません。読みたいのがサーバ側のパッケージだけのときは、`pub get` の前に、Flutter のメンバーをルートの `pubspec.yaml` の `workspace:` から外してください(解析する側のコピーで。[#176](docs/issues/176-dart-flutter-workspace-members.md))。
+  - Go でプロジェクトの範囲を狭めるには、パターンか `-C` を使います: `rivus analyze -C <module> ./cmd/...`、または `-C <module>/cmd/app`。**プロジェクトは、パターンで挙げたパッケージだけではなく、同じ module のパッケージの全部**です(`go.work` に並ぶ module と、`replace` がディレクトリを指す module も)。パターンが決めるのは入口と、頼んだ範囲で、狭めた先のコードが届く、同じ module の他のパッケージの source と sink も探します。module キャッシュの module と、`replace` がバージョンを指す module は依存です。取り込んだ第三者のコピーを `replace` で置いているときは、`-dep-dir <ディレクトリ>` で依存として読ませます(指定は `summary.dep_dirs` に出ます)。狭めた指定に `-no-deps` を付けると、挙げなかった同じ module のパッケージは読まれず、そのことは出力に出ません(ADR-114)。
+  - 依存は `package:` の ID で解決されます。同じ依存の別のバージョンを 2 つのパッケージが使うときは、1 つしか読めず、もう 1 つは `summary.unread`(`dependency_not_linked`)に出ます。
 
 Rust 以外の信頼できないリポジトリは、使い捨ての環境（VM など）で解析してください。依存を先に取得してから、ネットワークを切り、ソースを読み取り専用で渡す形です。
 

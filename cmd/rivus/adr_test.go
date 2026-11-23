@@ -197,6 +197,13 @@ func adrSelect(rels []string) []string {
 // adrScanFiles: the text files that the check reads. In a git work tree only the tracked files (an untracked file, such as a
 // note of a session under .claude, is not part of the repository); without git, a walk that skips the directories above.
 func adrScanFiles(root string) ([]string, error) {
+	rels, err := repoFiles(root, adrScanSkipped)
+	return adrSelect(rels), err
+}
+
+// repoFiles: the paths (slash, from the root) of the files of the repository. In a git work tree the tracked files (all of them,
+// skip is not used); without git, a walk that does not enter the directories for which skip is true.
+func repoFiles(root string, skip func(rel string) bool) ([]string, error) {
 	cmd := exec.Command("git", "ls-files", "-z")
 	cmd.Dir = root
 	if out, err := cmd.Output(); err == nil {
@@ -206,7 +213,7 @@ func adrScanFiles(root string) ([]string, error) {
 				rels = append(rels, p)
 			}
 		}
-		return adrSelect(rels), nil
+		return rels, nil
 	}
 	var rels []string
 	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
@@ -216,7 +223,7 @@ func adrScanFiles(root string) ([]string, error) {
 		rel, _ := filepath.Rel(root, p)
 		rel = filepath.ToSlash(rel)
 		if d.IsDir() {
-			if rel != "." && adrScanSkipped(rel) {
+			if rel != "." && skip(rel) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -224,7 +231,7 @@ func adrScanFiles(root string) ([]string, error) {
 		rels = append(rels, rel)
 		return nil
 	})
-	return adrSelect(rels), err
+	return rels, err
 }
 
 func TestAdrSelect(t *testing.T) {

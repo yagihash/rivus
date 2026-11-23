@@ -453,6 +453,7 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 | `missing_source` | target | ワークフロー前提（`go generate` / `build_runner` 未実行）に由来 |
 | `dynamic_dispatch` | 候補 1 件以上: mixed／候補 0 件: rivus | 言語機能として呼び出し先が決まらないが、候補の絞り込み精度（VTA など）は rivus の改善余地がある。候補が 0 件なのは、実装が読み込んだコードの外にあるときで、モデルを書けば減る（rivus）。detail が `expansion_limit` のものは、`match: implementations` の展開を上限で止めた記録（5.4） |
 | `assumed_call` | mixed | 呼ばれるところが見えないクロージャ（渡す、保存する、返す）を、作った場所で、呼ばれるものとして適用した（キャプチャした値を、クロージャの要約に適用する。ADR-059）。付くのは、要約がキャプチャした値に依る効果を持つクロージャだけ。throw と結果は適用せず、そのとき detail に書く。1 度も呼ばれないクロージャの流れも、finding になりうる（過検出） |
+| `pointer_alias` | rivus | 経路が、ポインタ越しの書き込み(読み出し)を、別名(`ptrAlias`、`copyOf`。`internal/taint/ptrcells.go`)で近似した所を通る。別名は、実行時にポインタが指す先より広いことがあり、流れが実在しないことがある。付くのは、別名が作った書き込み・読み出しのステップ(ホップ)を通った finding だけ。今は Rust だけ(`HasEnv`) |
 | `unresolved_callee` | mixed | 関数値は実行時に決まるが、生成箇所を追う型フロー解析で候補を絞れる |
 | `concurrency` | mixed | 実行順序に依存するが、channel を単純なキューとしてモデル化すれば追える範囲が広がる |
 | `unmodeled_library_call` | rivus | モデルを書けば減る |
@@ -653,7 +654,7 @@ rivus models coverage ./...
 
 - **依存の本体は、既定で読む。** 標準ライブラリは読まず、モデルで扱う。依存のソースを読むと、依存の中への呼び出しを推測でなく追えるので、メモリは増える。`-no-deps` で読まなくなり、そのとき依存への呼び出しは、すべてモデルか `unmodeled_library_call` になる（`cmd/rivus/common.go` のフラグの説明。メモリの数字は 16 節）
 - Dart は、プロジェクトの外の依存を、頼まれたものだけ読む（`-allow-deps-under`。`package_config.json` は信用しない）。Rust の依存の取得は、macOS では既定でサンドボックスの下（15 節）
-- **依存の関数の中では、source と sink を探さない**(`internal/sites/enumerate.go`。ADR-099)。依存の本体は、流れを追うために読む。結果、ライブラリの中で危険な処理に届く形は、プロジェクトがその API を呼ぶ所に sink のモデルがないと検出されない。依存の関数が 1 つでもあれば、`summary.dependency_sites` がそのことを毎回言う
+- **依存の関数の中では、source と sink を探さない**(`internal/sites/enumerate.go`。ADR-099)。プロジェクトは、パターンで挙げたパッケージだけでなく、同じ main module(`go.work` の module を含む)、ディレクトリを指す `replace` の module(`-dep-dir` で外せる)、Dart の `-C` と `-allow-deps-under` の下のパッケージ。Go の判定は `gossa.projectPackages`、Dart は `extract.dart` の `_isAllowedProjectPath`(ADR-114。Rust のワークスペースは、決めだけ)。依存の本体は、流れを追うために読む。結果、ライブラリの中で危険な処理に届く形は、プロジェクトがその API を呼ぶ所に sink のモデルがないと検出されない。依存の関数が 1 つでもあれば、`summary.dependency_sites` がそのことを毎回言う
 - モデルのあるインタフェースのメソッドの動的な呼び出しで、候補に本体のある依存の関数があるとき、本体は読まず、`dependency_body_unread` で示す（ADR-075）。実装の多いインターフェースのメソッドで、実装どうしが同じメソッドに委譲する形（委譲のクリーク）は、そのメソッドの行を `flows` のモデルにして、実装全体の本体を読まない（ADR-098。照合した対象と、注記の条件は `docs/MODELING.md` 4a 節）
 - **モデルが何を省くか**（`internal/taint/calls.go`、`internal/model/model.go` の `HasModel`）: シンボルに sanitizer か propagator の行があると、呼び出しの所ではモデルが使われ、その関数の本体の要約は使われない。省かれないものもある。(1) 本体の要約の計算（その関数は、IR にあるかぎり、ほかの関数と同じく解析される）。(2) source だけ、sink だけの行は `HasModel` にならないので、本体が使われる。(3) 同じパッケージで、モデルのない関数は、本体が読まれる。(4) パッケージ単位で本体を読まない宣言は、解析の側だけ実装済み（下の項目、ADR-100）。extractor に本体を出さない指定は、Go と Dart が実装済み（下の項目、ADR-105）、Rust は未実装（設計: `docs/DESIGN-package-models.md`）
 - **確認したバージョンの記録**（`internal/model/verified.go`。DESIGN-package-models.md 6.7）: モデルのファイルのトップレベルの `verified_versions`（`package`、`versions`、`checked_with`、`checked`）。`Parse` が書式を検証し（範囲の形、`checked_with` が範囲の内、日付、重複、未知のキーは失敗）、`Merge` が `Rules.Verified` に集める。解析は読まない（記録だけ）。`rivus models versions` が JSON で出す。lock ファイルのバージョンとの照合は未実装。

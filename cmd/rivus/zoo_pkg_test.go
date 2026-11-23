@@ -149,7 +149,7 @@ func TestZooPkgGo(t *testing.T) {
 				}
 			}
 			zooHoldLines(t, lines, cells, obs)
-			c := checkAnnotated(t, dir, annotOpts{pattern: "./cells/...", extraRules: []string{rules}})
+			c := checkAnnotated(t, dir, annotOpts{pattern: "./cells/...", extraRules: []string{rules}, depDirs: zooPkgDepDirs(t)})
 			zooHeadline(t, "zoo-go-pkg/"+filepath.Base(dir), lines, cells, obs, c)
 		})
 	}
@@ -342,4 +342,10 @@ func TestZooPkgRust(t *testing.T) {
 			zooHeadline(t, "zoo-rust-pkg/"+filepath.Base(dir), lines, cells, obs, c)
 		})
 	}
+}
+
+// zooPkgDepDirs: the skeleton of the library (put in place by a replace), and the zoo's own module, are read as dependencies.
+func zooPkgDepDirs(t *testing.T) []string {
+	t.Helper()
+	return []string{"skel", zooRoot(t)}
 }

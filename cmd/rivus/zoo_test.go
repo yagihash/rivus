@@ -643,10 +643,10 @@ func TestZooGo(t *testing.T) {
 	lines, cells := zooScan(t, dir)
 	// the cells that stop by the pass limit on purpose are a program of their own (zooSplit): the others must converge
 	rest, recCells := zooSplit(lines, cells)
-	c := checkAnnotated(t, zooCopy(t, dir, zooCellDirs(rest)), annotOpts{pattern: "./cells/..."})
+	c := checkAnnotated(t, zooCopy(t, dir, zooCellDirs(rest)), annotOpts{pattern: "./cells/...", depDirs: zooGoDepDirs})
 	if len(recCells) > 0 {
 		zooCheckRecNames(t, recCells)
-		c.add(checkAnnotated(t, zooCopy(t, dir, zooCellDirs(recCells)), annotOpts{pattern: "./cells/...", allowUnconverged: true, programWide: true}))
+		c.add(checkAnnotated(t, zooCopy(t, dir, zooCellDirs(recCells)), annotOpts{pattern: "./cells/...", allowUnconverged: true, programWide: true, depDirs: zooGoDepDirs}))
 	}
 	if t.Failed() || os.Getenv("ZOO_ALONE") == "1" { // ZOO_ALONE=1 asks for it
 		// the cells are analysed one by one: green alone and red in the whole is a mix with the others

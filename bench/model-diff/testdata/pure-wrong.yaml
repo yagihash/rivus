@@ -1,0 +1,11 @@
+ruleset: test/synth@1
+propagators:
+  # the body carries the argument to the result
+  - symbol: example.com/synth.Upper
+    pure: true
+  # the body hands root to the callback
+  - symbol: example.com/synth.Walk
+    pure: true
+  # a method of the Box that holds what Set was given
+  - symbol: (*example.com/synth.Box).Get
+    pure: true

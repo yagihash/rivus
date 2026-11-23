@@ -206,6 +206,67 @@ func TestDartDependenciesOutsideTheProjectAreNotReadUnlessAsked(t *testing.T) {
 	}
 	if allowed := extract("--allow-deps-under", outside); !has(allowed, "secret.dart#leak") {
 		t.Error("a dependency under a directory that was asked for is not read")
+	} else {
+		// a package under a directory that was asked for is the project's own (ADR-114)
+		for _, f := range allowed.Funcs {
+			if strings.HasSuffix(string(f.ID), "secret.dart#leak") && f.Dep {
+				t.Error("a function of a package under -allow-deps-under is a dependency function")
+			}
+		}
+	}
+}
+
+// The packages of a repository that the app points to by `path:` are the project when the directory of the repository is
+// given with -allow-deps-under (ADR-114): the sinks in them are listed, and the output does not count them as
+// dependencies.
+func TestDartPathPackagesUnderAllowedDirectoryAreTheProject(t *testing.T) {
+	t.Parallel()
+	dart := os.Getenv("RIVUS_DART")
+	if dart == "" {
+		skipOrFail(t, "RIVUS_DART")
+	}
+	extractor, err := filepath.Abs("../../extractor/dart")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mono := t.TempDir()
+	for name, text := range map[string]string{
+		"core/pubspec.yaml":                  "name: core\nenvironment:\n  sdk: ^3.8.0\n",
+		"core/lib/core.dart":                 "import 'dart:io';\nvoid runIt(String v) { Process.runSync(v, []); }\n",
+		"app/pubspec.yaml":                   "name: app\nenvironment:\n  sdk: ^3.8.0\ndependencies:\n  core:\n    path: ../core\n",
+		"app/lib/app.dart":                   "import 'dart:io';\nimport 'package:core/core.dart';\nvoid handle(HttpRequest r) { var v = r.uri.queryParameters['x']!; runIt(v); }\n",
+		"app/.dart_tool/package_config.json": `{"configVersion":2,"packages":[{"name":"core","rootUri":"../../core","packageUri":"lib/"},{"name":"app","rootUri":"../","packageUri":"lib/"}]}`,
+	} {
+		path := filepath.Join(mono, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cmd := exec.Command(binary, "analyze", "-lang", "dart", "-C", filepath.Join(mono, "app"), "-allow-deps-under", mono)
+	cmd.Env = append(os.Environ(), "RIVUS_DART_EXTRACTOR="+dart+" run "+filepath.Join(extractor, "bin", "rivus_dart.dart"))
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("analyze: %v", err)
+	}
+	var r struct {
+		Findings []struct {
+			Sink struct{ Func string }
+		} `json:"findings"`
+		Summary struct {
+			DependencySites *json.RawMessage `json:"dependency_sites"`
+		} `json:"summary"`
+	}
+	if err := json.Unmarshal(out, &r); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Findings) != 1 || !strings.HasSuffix(r.Findings[0].Sink.Func, "runIt") {
+		t.Errorf("the sink in the package of the repository: %+v", r.Findings)
+	}
+	if r.Summary.DependencySites != nil {
+		t.Errorf("the package of the repository is counted as a dependency: %s", *r.Summary.DependencySites)
 	}
 }
 

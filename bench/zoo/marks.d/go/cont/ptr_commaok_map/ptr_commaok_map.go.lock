@@ -1,0 +1,2 @@
+go	cont/ptr_commaok_map/ptr_commaok_map.go	sink-none	@sink(none)	func decoy() { @decoy
+go	cont/ptr_commaok_map/ptr_commaok_map.go	sink-none	@sink(none)	func fixed() { @fixed

@@ -137,6 +137,9 @@ func (k *keyCtx) compute() (*keyResult, error) {
 	if o.readDeclared {
 		cfg["flags.read-declared-bodies"] = "true"
 	}
+	if len(o.depDirs) > 0 {
+		cfg["flags.dep-dir"] = strings.Join(sortedUnique(o.depDirs), "\n")
+	}
 	allow := append([]string(nil), o.allowDepsUnder...)
 	sort.Strings(allow)
 	cfg["flags.allow-deps-under"] = strings.Join(allow, "\n")

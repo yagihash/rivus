@@ -36,3 +36,36 @@ func Query(q, param string) string { return q }
 type Opts struct{ URL, Name string }
 
 func Open(o *Opts) {}
+
+// Walk calls fn with root, as filepath.Walk does.
+func Walk(root string, fn func(path string) error) error { return fn(root) }
+
+// Esc and Pair are what a sanitizer row is read against: Esc carries its argument to the result, Pair carries both.
+func Esc(s string) string { return s + "&amp;" }
+
+func Pair(a, b string) string { return a + b }
+
+// Read returns data; Fetch takes a struct that the source cannot be put into.
+func Read() string { return "data" }
+
+func Fetch(o *Opts, s string) string { return s }
+
+// Req holds text in an exported field, and Hidden only in an unexported one: the source can be put into a Req (the field Path), not
+// into a Hidden.
+type Req struct {
+	Path string
+	N    int
+}
+
+func (r *Req) Clean() string { return r.Path }
+
+func Clone(r *Req) string { return r.Path }
+
+type Hidden struct{ v string }
+
+func (h *Hidden) Val() string { return h.v }
+
+func Use(h *Hidden, s string) string { return s }
+
+// Name does not read the field that the source is put into.
+func (r *Req) Name() string { return "req" }
