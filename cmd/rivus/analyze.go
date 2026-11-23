@@ -112,6 +112,8 @@ func (o *analyzeOpts) registerLanguages(fs *flag.FlagSet) {
 	fs.Var(&o.allowFetchHosts, "allow-fetch-host", "HOST: let the fetch stage of the Rust project (under the sandbox, with a network) get from this host, which Cargo.lock names (git dependencies on any host, other registries; by default only crates.io is allowed). The repository can send the fetch on to other places (its submodules, redirects); that is not prevented until the network of the fetch stage is narrowed (repeatable)")
 	usual(fs, "lang", "yes", "dart-extractor", "rust-extractor", "unsafe-host-exec", "isolation-env", "isolation-read")
 	diagnostic(fs, "isolation-timeout", "no-fetch", "isolation-max-output", "allow-fetch-host")
+	describe(fs, "yes", flagInfo{Not: "an answer to a question"})
+	describe(fs, "unsafe-host-exec", flagInfo{Not: "takes the isolation off (ADR-064); never a default (docs/rust-isolation.md)"})
 	kind(fs, "enum:lang", "lang")
 	kind(fs, "file", "dart-extractor", "rust-extractor", "isolation-read")
 }
@@ -152,7 +154,7 @@ func (o *analyzeOpts) register(fs *flag.FlagSet) {
 	fs.Var((*depKValue)(o), "dep-k", "`n` maximum access path depth in the functions of the dependencies (default 2, but not deeper than -k when -dep-k is not given; 0: the same as -k; -dep-k 3 is the depth before the default was 2). A smaller depth makes the analysis of heavy dependencies cheaper and adds flows (a path that is cut stands for everything below it: access_path_truncated)")
 	fs.IntVar(&o.workers, "workers", 0, "functions analysed at the same time (0: one per CPU; 1: one at a time). The result does not depend on it")
 	fs.BoolVar(&o.numeric, "numeric-taint", false, "follow taint through numbers and bools (by default it stops there: they cannot carry an injection)")
-	fs.BoolVar(&o.charTaint, "char-taint", false, "follow taint through one character read out of a text (a byte, a rune, a code unit), the arithmetic of it with a constant, and back into a text; a length, an index, a comparison and a number made of the character still stop. Findings that go through it carry the char_transform note. Does nothing with -numeric-taint. Off by default (docs/FLAGS-OFF-BY-DEFAULT.md)")
+	fs.BoolVar(&o.charTaint, "char-taint", false, "follow taint through one character read out of a text (a byte, a rune, a code unit), the arithmetic of it with a constant, and back into a text; a length, an index, a comparison and a number made of the character still stop. Findings that go through it carry the char_transform note. Does nothing with -numeric-taint. Off by default")
 	fs.BoolVar(&o.verbose, "v", false, "print the time of each phase to stderr")
 	fs.IntVar(&o.maxImpl, "max-implementations", model.DefaultMaxImplementations, "default limit of match: implementations")
 	fs.Func("max-memory", "`size` of the soft memory limit of the Go runtime: when the memory of the process nears it, the collector works harder (6GiB, 6GB, 512MiB, bytes; off: no limit, the default one too). Default: GOMEMLIMIT when it is set, else a quarter of the memory of the machine (of the cgroup if smaller), at least min(4GiB, half of it). Soft: below what the analysis holds live it is not kept and the collector runs all the time. The result does not depend on it (summary.memory_limit_*; ADR-121)", func(v string) error {
@@ -176,6 +178,14 @@ func (o *analyzeOpts) register(fs *flag.FlagSet) {
 	fs.StringVar(&o.lockProf, "lockprofile", "", "write the mutex and block profiles of the taint phase to <this>.mutex and <this>.block (development)")
 	fs.StringVar(&o.cpuProf, "cpuprofile", "", "write a CPU profile of the taint phase to this file (development)")
 	usual(fs, "workers", "numeric-taint", "char-taint", "v", "timeout", "resolve-func-values", "max-memory")
+	describe(fs, "dep-k", flagInfo{Not: "tuning; the default is 2 (ADR-119)"})
+	describe(fs, "v", flagInfo{Not: "output"})
+	describe(fs, "numeric-taint", flagInfo{ChangesResult: true, Added: "2026-11-18", AddedBy: "a7cd15f8 (numbers and bools stop by default; this follows them)",
+		KeepOff: "off is the design: a number or a bool cannot carry an injection, and following them costs time and findings; the flag is for a check, not a step to a default"})
+	describe(fs, "char-taint", flagInfo{ChangesResult: true, Added: "2026-11-24", AddedBy: "#389",
+		Condition: "the bench cells for the missed findings pass in each language; the arithmetic of a character with a constant is carried; the pass line holds with the flags as they will be the default; every finding that grows has char_transform on the step that causes it; time, peak and findings are measured on memos and the three dependency benches (memory room alone does not decide). The bench cells (the run with the flag, and the negative cells) must be in before the user is asked. Who decides: the user"})
+	describe(fs, "resolve-func-values", flagInfo{ChangesResult: true, Added: "2026-11-22", AddedBy: "05beae8d",
+		Deadline: "when the work on matching with the calls observed in a run ends (the work that lowers the calls with no candidate; docs/DESIGN-observed-calls.md). Then decide: make it the default, or remove it"})
 	diagnostic(fs, "k", "dep-k", "max-implementations", "max-passes", "func-timeout", "ir", "pass-stats", "pass-stats-top", "pass-stats-sort", "func-values", "trace-element", "memprofile", "lockprofile", "cpuprofile")
 	kind(fs, "enum:pass-stats-sort", "pass-stats-sort")
 	kind(fs, "file", "ir", "func-values", "memprofile", "lockprofile", "cpuprofile")
@@ -517,6 +527,7 @@ func analyzeFlags(fs *flag.FlagSet) *analyzeCmd {
 	c.cats = &categoryFlags{}
 	fs.StringVar(&c.cats.include, "categories", "", "report only the findings of these categories (names separated by commas, as the `category` of a finding; an unknown name is an error that lists the valid ones). The analysis is the same; summary.categories_excluded counts the findings that were left out")
 	fs.StringVar(&c.cats.skip, "skip-categories", "", "report all the findings except those of these categories (names separated by commas; not with -categories). summary.categories_excluded counts the findings that were left out")
+	describe(fs, "sites", flagInfo{Not: "output"})
 	usual(fs, "detail", "sites", "categories", "skip-categories")
 	kind(fs, "enum:detail", "detail")
 	return c
@@ -570,6 +581,7 @@ func indexFlags(fs *flag.FlagSet) *indexCmd {
 	c.out = fs.String("o", "", "with -taint: the JSON index to write (default: index.json beside the default graph file, in the user's cache by the absolute path of -C; never in the analysed directory)")
 	c.graph = fs.String("graph", "", "the graph file to write (default: in the user's cache, by the absolute path of -C)")
 	c.taintFlag = fs.Bool("taint", false, "also run the taint analysis (slow) and write its result as the JSON index that query -index and resolve -index read (-o implies it)")
+	describe(fs, "taint", flagInfo{Not: "what to write: also the result of the taint analysis"})
 	usual(fs, "o", "graph", "taint")
 	kind(fs, "file", "o", "graph")
 	return c

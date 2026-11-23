@@ -146,7 +146,12 @@ func (p *Program) BodyTextOf(n ast.Node) string {
 	if n == nil {
 		return ""
 	}
-	return p.normalize(n.Pos(), n.End())
+	return p.BodyTextRange(n.Pos(), n.End())
+}
+
+// BodyTextRange is BodyTextOf for the span of a function in the source.
+func (p *Program) BodyTextRange(start, end token.Pos) string {
+	return p.normalize(start, end)
 }
 
 // normalize returns the tokens of [start,end) joined by single spaces,
@@ -259,7 +264,12 @@ func (p *Program) FuncSourceOf(n ast.Node, maxLines int) string {
 	if n == nil {
 		return ""
 	}
-	s := p.rawText(n.Pos(), n.End())
+	return p.FuncSourceRange(n.Pos(), n.End(), maxLines)
+}
+
+// FuncSourceRange is FuncSourceOf for the span of a function in the source.
+func (p *Program) FuncSourceRange(start, end token.Pos, maxLines int) string {
+	s := p.rawText(start, end)
 	lines := strings.Split(s, "\n")
 	if len(lines) > maxLines {
 		lines = append(lines[:maxLines], "// ... (cut)")

@@ -83,6 +83,13 @@ func (c *common) register(fs *flag.FlagSet) {
 	fs.BoolVar(&c.readDeclared, "read-declared-bodies", false, "read the body of the packages that the rule files and -body-replaced declare, as if there were no declaration: to compare the result with the one that leaves them out (summary.body_replaced_ignored says how many were left out)")
 	usual(fs, "C", "rules", "no-builtin-rules", "no-project-rules", "tests", "no-deps", "allow-deps-under", "dep-dir", "deterministic-only", "body-replaced", "read-declared-bodies")
 	diagnostic(fs, "drop-after-read")
+	stop := "stops a function that is on by default"
+	for _, n := range []string{"no-builtin-rules", "no-project-rules", "no-deps", "deterministic-only"} {
+		describe(fs, n, flagInfo{Not: stop})
+	}
+	describe(fs, "tests", flagInfo{Not: "the range of the analysis"})
+	describe(fs, "body-replaced", flagInfo{Not: "a way to try: the declaration is decided by package in the rule files"})
+	describe(fs, "read-declared-bodies", flagInfo{Not: "a way to try: reads what the declaration leaves out, to compare"})
 	kind(fs, "dir", "C", "allow-deps-under", "dep-dir")
 	kind(fs, "file", "rules")
 }
@@ -192,6 +199,9 @@ func (c *common) load(patterns []string, withGraph bool, rules *model.Rules) (*l
 		patterns = []string{"./..."}
 	}
 	opts := gossa.Options{Tests: c.tests, NaiveForm: true, WithLifted: withGraph, Deps: !c.noDeps && withGraph, DepDirs: c.depDirs}
+	if withGraph {
+		opts.OnLifted = goir.LiftedTable
+	}
 	if rules.HasDeclared() && !c.dropAfterRead {
 		// the extractor does not read what the models stand for (docs/DESIGN-package-models.md 2): the IR is the one
 		// that dropReplacedBodies would make

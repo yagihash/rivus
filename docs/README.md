@@ -38,7 +38,6 @@
 
 | 文書 | 内容 |
 |---|---|
-| [FLAGS-OFF-BY-DEFAULT.md](FLAGS-OFF-BY-DEFAULT.md) | 既定で off の機能の一覧。足した日、既定にする条件、消す条件 |
 | [AGENT-GUIDE.md](AGENT-GUIDE.md) | AI エージェント向けの利用ガイド(コマンド、フラグ、出力の読み方、ユースケース別の手順) |
 | [GRAPH.md](GRAPH.md) | `rivus index` と `rivus graph` |
 | [MODELING.md](MODELING.md) | ルールとモデルの書式(英語) |

@@ -50,7 +50,11 @@ func Extract(p *gossa.Program, opts Options) (*ir.Program, error) {
 	var graph callgraph.Graph
 	var lifted map[string][][]liftedCall
 	if !opts.NoCandidates {
-		if p.Lifted != nil {
+		if t, ok := p.LiftedResult.(map[string][][]liftedCall); ok {
+			// made while loading (gossa.Options.OnLifted = LiftedTable)
+			lifted = t
+			p.LiftedResult = nil
+		} else if p.Lifted != nil {
 			lifted = liftedTable(p.Lifted)
 			// The call graph and the lifted SSA are of no use now: what the
 			// conversion asks of them is in the table. Letting go of them here
@@ -183,6 +187,11 @@ type liftedCall struct {
 	key   callKey
 	cands []ir.FuncID
 }
+
+// LiftedTable is gossa.Options.OnLifted for the extraction: it makes the table
+// of liftedTable while the program is loaded, so that the lifted program is
+// let go of before the program of the naive form is built.
+func LiftedTable(prog *ssa.Program) any { return liftedTable(prog) }
 
 // liftedTable asks the call graph of the lifted SSA what each of its calls
 // through an interface or a function value may reach, and keeps the answer

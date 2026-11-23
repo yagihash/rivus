@@ -1,7 +1,6 @@
 package goir
 
 import (
-	"go/ast"
 	"go/token"
 
 	"github.com/yagihash/rivus/internal/frontend/gossa"
@@ -12,17 +11,20 @@ import (
 // that the program was loaded with.
 type Texts struct {
 	p *gossa.Program
-	// syntax is the syntax of each function. Only that is kept of the go/ssa
-	// program, so that the program itself can be let go.
-	syntax map[ir.FuncID]ast.Node
+	// spans is where each function is in the source. Only that is kept of the
+	// go/ssa program, so that the program, and the syntax trees of the
+	// functions of the dependencies, can be let go.
+	spans map[ir.FuncID]span
 }
+
+type span struct{ start, end token.Pos }
 
 // NewTexts returns the text source of a loaded program.
 func NewTexts(p *gossa.Program) *Texts {
-	t := &Texts{p: p, syntax: map[ir.FuncID]ast.Node{}}
+	t := &Texts{p: p, spans: map[ir.FuncID]span{}}
 	for _, fn := range p.Funcs {
 		if n := fn.Syntax(); n != nil {
-			t.syntax[ir.FuncID(gossa.FuncID(fn))] = n
+			t.spans[ir.FuncID(gossa.FuncID(fn))] = span{n.Pos(), n.End()}
 		}
 	}
 	return t
@@ -39,7 +41,9 @@ func (t *Texts) Snippet(p ir.Pos) string { return t.p.Snippet(t.tok(p)) }
 func (t *Texts) Expr(p ir.Pos) string { return t.p.ExprText(t.tok(p)) }
 
 // Body implements ir.Texts.
-func (t *Texts) Body(id ir.FuncID) string { return t.p.BodyTextOf(t.syntax[id]) }
+func (t *Texts) Body(id ir.FuncID) string {
+	return t.p.BodyTextRange(t.spans[id].start, t.spans[id].end)
+}
 
 // Cond implements ir.Texts.
 func (t *Texts) Cond(p ir.Pos) string { return t.p.CondText(t.tok(p)) }
@@ -49,5 +53,5 @@ func (t *Texts) CallArg(p ir.Pos, i int) (string, string) { return t.p.CallArgTe
 
 // FuncSource implements ir.Texts.
 func (t *Texts) FuncSource(id ir.FuncID, maxLines int) string {
-	return t.p.FuncSourceOf(t.syntax[id], maxLines)
+	return t.p.FuncSourceRange(t.spans[id].start, t.spans[id].end, maxLines)
 }
