@@ -311,7 +311,7 @@ Go の extractor は、コアと同じプロセスで、`ir.Program` と `ir.Tex
 | 読み込みの失敗 | `LoadError` | `load_error` レコード（パッケージ名とメッセージ） |
 
 **起動:** コアは extractor を `<command> [--no-deps] [--include-tests] [--allow-deps-under DIR]... <絶対パス>` で起動し、標準出力の JSON Lines を読む（`cmd/rivus/lang.go` の `extractRaw`）。`--allow-deps-under` は Dart だけ。`--include-tests` は、`-tests` のとき。
-コマンドは、フラグ（`-dart-extractor`、`-rust-extractor`）、環境変数（`RIVUS_DART_EXTRACTOR`、`RIVUS_RUST_EXTRACTOR`）、既定の名前（`rivus-dart`、`rivus-rust`）の順で決める。見つからなければ、入れ方を添えて止める（`extractorCommand`）。差し替えのためのインタフェースは置いていない。
+コマンドは、フラグ（`-dart-extractor`、`-rust-extractor`）、環境変数（`RIVUS_DART_EXTRACTOR`、`RIVUS_RUST_EXTRACTOR`）、既定の名前（`rivus-dart`、`rivus-rust`）の順で決める。見つからなければ、入れ方を添えて止める（`extractorCommand`）。Dart は、`rivus setup dart` がコンパイルした実行ファイルがあり、鍵（extractor のソースの hash、Dart SDK のバージョン、OS / アーキテクチャ）が今と合っていれば、フラグも環境変数も指していないときに、PATH の `rivus-dart` より先にそれを使う（合わなければ使わず、そう言う）。差し替えのためのインタフェースは置いていない。
 
 **テキスト:** 別プロセスでは、`Texts` を呼び返せない。そこで extractor は、**必要なテキストを、あらかじめストリームに載せる**。コアが必要なのは、(a) 命令の位置ごとのスニペット（検出の経路の 1 歩は、どの命令でもありうる）、(b) サイトの位置の、正規化した式、(c) 分岐の後の命令の位置ごとの、条件のテキスト、(d) 呼び出しごとの、全体と引数のテキスト、(e) 関数ごとの、正規化した本体と、表示用のソース（80 行まで）、(f) グローバル変数の宣言位置のスニペット。
 - 形式: `text`（種類、ファイル、テキスト、**その位置のオフセットの一覧**）、`call_text`、`func_text`、`load_error` のレコード。同じ文に属する位置は多いので、テキストを 1 回だけ書き、オフセットを並べる

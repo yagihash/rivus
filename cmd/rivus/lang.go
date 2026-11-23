@@ -281,6 +281,17 @@ func (o *analyzeOpts) extractorCommand(lang string) ([]string, error) {
 			}
 		}
 	}
+	if lang == langDart && flagVal == "" && os.Getenv(env) == "" {
+		// the extractor that `rivus setup dart` compiled, when it is current (a stale one is said and not used)
+		if exe, why := installedDartExe(); exe != "" {
+			if o.verbose {
+				fmt.Fprintf(os.Stderr, "rivus: the Dart extractor: the compiled executable %s\n", exe)
+			}
+			return []string{exe}, nil
+		} else if why != "" {
+			fmt.Fprintf(os.Stderr, "rivus: %s\n", why)
+		}
+	}
 	words := strings.Fields(cmd)
 	if len(words) == 0 {
 		return nil, fmt.Errorf("the %s extractor is named by a blank command (-%s-extractor or %s): name the command, or leave it unset", lang, lang, env)
