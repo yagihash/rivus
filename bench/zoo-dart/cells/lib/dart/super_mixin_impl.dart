@@ -54,7 +54,7 @@ class DiskStoreFixed extends Object with SaverFixed implements StoreFixed {}
 
 void fixed() { // @fixed
   final StoreFixed store = DiskStoreFixed();
-  store.put(cleanCmd(src('dart-super-mixin-impl-fixed')));
+  store.put(cleanAll(src('dart-super-mixin-impl-fixed')));
 }
 
 abstract class StoreDecoy {

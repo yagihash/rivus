@@ -3,6 +3,9 @@
 ruleset: rivus/dart/core@1
 
 propagators:
+  # keeps `: / ? # @ & = + $ ,` and `..`: nothing is neutralised, the value goes on as it is
+  - symbol: dart:core#Uri.encodeFull
+    flows: [{from: arg0, to: result}]
   # functions that call a function they are given: forEach and listen deliver what the receiver holds
   - symbol: dart:core#Iterable.forEach
     pure: true
@@ -321,17 +324,20 @@ propagators:
     flows: [{from: arg0, to: recv}]
 
 sanitizers:
-  # percent encoding makes a value safe in a URL
+  # What a sanitizer neutralises is the categories of `neutralises`; to every other sink the value still goes, with the label that `adds`
+  # gives (ADR-114). Percent encoding keeps `'`, `..` and `$()`, and whether it is enough for a URL depends on where the value lands
+  # (the host position, the path, the query): that is not written, so neutralises is empty and the value goes on to every sink as
+  # `url_encoded`. (Uri.encodeFull keeps `: / ? # @` as well: it is a plain flow, in propagators.)
   - symbol: dart:core#Uri.encodeComponent
     drops: [user_input]
     adds: [url_encoded]
-  - symbol: dart:core#Uri.encodeFull
-    drops: [user_input]
-    adds: [url_encoded]
+    neutralises: []
   - symbol: dart:core#Uri.encodeQueryComponent
     drops: [user_input]
     adds: [url_encoded]
-  # HTML escaping
+    neutralises: []
+  # HTML escaping: HTML text and a quoted attribute (the default HtmlEscape escapes ' " < > & /)
   - symbol: dart:convert#HtmlEscape.convert
     drops: [user_input]
     adds: [html_escaped]
+    neutralises: [xss]

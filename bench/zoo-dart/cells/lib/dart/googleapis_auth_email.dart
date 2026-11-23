@@ -15,7 +15,7 @@ Future<void> vuln() async { // @vuln
 }
 
 Future<void> fixed() async { // @fixed
-  final v = cleanPath(cleanHtml(cleanSql(cleanCmd(src('dart-googleapis-auth-email-fixed')))));
+  final v = cleanPath(cleanHtml(cleanSql(cleanAll(src('dart-googleapis-auth-email-fixed')))));
   await Future.value(ServiceAccountCredentials(v, ClientId('i'), 'k')); // @sink(none)
 }
 

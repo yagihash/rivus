@@ -25,7 +25,7 @@ Future<void> vuln() async { // @vuln
 Future<void> fixed() async { // @fixed
   final router = ZooRouter();
   mount(router, (ZooRequest request, String id) async {
-    sinkCmd(cleanCmd(id)); // @sink(none)
+    sinkCmd(cleanAll(id)); // @sink(none)
     return null;
   });
   await router.serve('/item/<id>', const ZooRequest('/item/x'), typed('dart-callback-param-helper-fixed'));

@@ -67,7 +67,7 @@ void vuln5() { // @vuln
 }
 
 Future<void> fixed() async { // @fixed
-  final t = cleanCmd(src('dart-closure-to-sdk-fixed'));
+  final t = cleanAll(src('dart-closure-to-sdk-fixed'));
   final done = Completer<void>();
   Timer.run(() {
     sinkCmd(t); // @sink(none)

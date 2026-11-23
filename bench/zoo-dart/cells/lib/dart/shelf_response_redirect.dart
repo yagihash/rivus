@@ -23,7 +23,7 @@ Future<void> vuln() async { // @vuln
 Future<void> fixed() async { // @fixed
   Future<Response> handler(Request request) async {
     final next = request.requestedUri.queryParameters['next']!;
-    recordAny(Response.found('/go/' + cleanPath(cleanHtml(cleanSql(cleanCmd(next))))).headers['location']); // @sink(none)
+    recordAny(Response.found('/go/' + cleanPath(cleanHtml(cleanSql(cleanAll(next))))).headers['location']); // @sink(none)
     return Response.ok('');
   }
   await handler(_request('dart-shelf-response-redirect-fixed'));

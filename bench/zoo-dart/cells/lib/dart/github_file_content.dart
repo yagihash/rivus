@@ -16,7 +16,7 @@ Future<void> vuln() async { // @vuln
 
 Future<void> fixed() async { // @fixed
   final file = GitHubFile(content: typed('dart-github-file-content-fixed'));
-  sinkCmd(cleanCmd(file.content!)); // @sink(none)
+  sinkCmd(cleanAll(file.content!)); // @sink(none)
 }
 
 Future<void> decoy() async { // @decoy

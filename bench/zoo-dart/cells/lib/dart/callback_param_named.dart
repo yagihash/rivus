@@ -21,7 +21,7 @@ Future<void> vuln() async { // @vuln
 }
 
 Future<Object?> showItemFixed(ZooRequest request, String id) async {
-  sinkCmd(cleanCmd(id)); // @sink(none)
+  sinkCmd(cleanAll(id)); // @sink(none)
   return null;
 }
 

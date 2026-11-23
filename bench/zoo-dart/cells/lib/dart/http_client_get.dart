@@ -17,7 +17,7 @@ Future<void> vuln() async { // @vuln
 
 Future<void> fixed() async { // @fixed
   final client = http.Client();
-  final v = cleanPath(cleanHtml(cleanSql(cleanCmd(src('dart-http-client-get-fixed')))));
+  final v = cleanPath(cleanHtml(cleanSql(cleanAll(src('dart-http-client-get-fixed')))));
   await client.get(Uri.parse('http://example.invalid/?q=$v')); // @sink(none)
 }
 

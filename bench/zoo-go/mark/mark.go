@@ -30,6 +30,14 @@ func CleanSQL(s string) string  { return "" }
 func CleanHTML(s string) string { return "" }
 func CleanPath(s string) string { return "" }
 
+// CleanAll is the sanitizer of a value that goes to a sink that the case does not tell (a function value that may be any sink of the
+// package): it cleans every class.
+func CleanAll(s string) string { return "" }
+
+// CleanResource is the sanitizer for the name of a cloud resource (a bucket, an object): the zoo has no judgement for that kind of sink, so
+// it does what CleanCmd does when it runs, and the rules say that it neutralises resource_name.
+func CleanResource(s string) string { return "" }
+
 // Case registers a case of the zoo (the harness runs it).
 func Case(id string, fn func()) {}
 

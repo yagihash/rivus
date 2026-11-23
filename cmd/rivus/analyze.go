@@ -147,6 +147,7 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	if err != nil {
 		return nil, err
 	}
+	noteUnscopedSanitizers(os.Stderr, rules)
 	if err := o.categories.check(rules); err != nil {
 		return nil, err
 	}
@@ -746,4 +747,27 @@ func (c *categoryFlags) filter() *report.CategoryFilter {
 		return nil
 	}
 	return &report.CategoryFilter{Include: c.inc, Exclude: c.exc}
+}
+
+// noteUnscopedSanitizers says once, for the rule files of the project, that a sanitizer without `neutralises` hides the value from
+// the sinks of every kind (ADR-114). It is the behaviour of before, kept so that the rules that were written for it go on working.
+func noteUnscopedSanitizers(w io.Writer, rules *model.Rules) {
+	n := 0
+	var first string
+	for _, rs := range rules.Sets {
+		if !rs.Project {
+			continue
+		}
+		for _, s := range rs.Sanitizers {
+			if s.Neutralises == nil {
+				if n == 0 {
+					first = s.Symbol
+				}
+				n++
+			}
+		}
+	}
+	if n > 0 {
+		fmt.Fprintf(w, "rivus: %d sanitizer(s) of the project rules (%s ...) have no `neutralises`: each hides the value from the sinks of every kind, not only the kind it is safe for; write `neutralises: [<categories>]` (docs/MODELING.md)\n", n, first)
+	}
 }

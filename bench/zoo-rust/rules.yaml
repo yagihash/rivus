@@ -49,15 +49,25 @@ sinks:
     field: task.message_type.http_request.0.url
     category: command_injection
 
+# A mark sanitizer replaces every character of the set of its own class and does nothing else (bench/zoo/spec.json): it neutralises the
+# sinks of that class and no others (ADR-114).
 sanitizers:
   - symbol: zoo_mark::clean_cmd
     drops: [user_input]
+    adds: [cleaned_cmd]
+    neutralises: [command_injection]
   - symbol: zoo_mark::clean_sql
     drops: [user_input]
+    adds: [cleaned_sql]
+    neutralises: [sql_injection]
   - symbol: zoo_mark::clean_html
     drops: [user_input]
+    adds: [cleaned_html]
+    neutralises: [xss]
   - symbol: zoo_mark::clean_path
     drops: [user_input]
+    adds: [cleaned_path]
+    neutralises: [path_traversal]
   # a trait method of a cell that says its result is clean (cells/dyns/sanitizer_own_impl)
   - symbol: zoo_cells::dyns::sanitizer_own_impl::Cleaner::clean
     drops: [user_input]

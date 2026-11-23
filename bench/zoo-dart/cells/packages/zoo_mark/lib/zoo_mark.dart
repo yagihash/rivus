@@ -90,6 +90,8 @@ void recordAny(Object? v) {}
 
 /// The sanitizers: each replaces the dangerous characters of its class by '_'.
 String cleanCmd(String s) => '';
+// every class: for a value that goes to a sink that is none of the four classes (a name of a resource, a URL), where the zoo has no judgement
+String cleanAll(String s) => '';
 String cleanSql(String s) => '';
 String cleanHtml(String s) => '';
 String cleanPath(String s) => '';

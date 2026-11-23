@@ -3,15 +3,22 @@
 ruleset: rivus/go/stdlib@1
 
 sanitizers:
+  # What a sanitizer neutralises is the categories of `neutralises`; to every other sink the value still goes, with the label that `adds`
+  # gives (ADR-114). An HTML escape makes the value safe in HTML text and in a quoted attribute, and in no other place.
   - symbol: html.EscapeString
     drops: [user_input]
     adds: [html_escaped]
+    neutralises: [xss]
   - symbol: html/template.HTMLEscapeString
     drops: [user_input]
     adds: [html_escaped]
+    neutralises: [xss]
+  # JSEscapeString is for the inside of a JavaScript string. In an HTML attribute or a URL it is not enough: the row says xss anyway,
+  # a known over-claim (it hides a flow that is there when the value goes to such a place).
   - symbol: html/template.JSEscapeString
     drops: [user_input]
     adds: [js_escaped]
+    neutralises: [xss]
 
 propagators:
   # strings

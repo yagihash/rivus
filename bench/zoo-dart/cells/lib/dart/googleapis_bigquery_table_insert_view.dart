@@ -17,7 +17,7 @@ Future<void> vuln() async { // @vuln
 
 Future<void> fixed() async { // @fixed
   final api = bq.BigqueryApi(Object());
-  final v = cleanPath(cleanHtml(cleanSql(cleanCmd(src('dart-googleapis-bigquery-table-insert-view-fixed')))));
+  final v = cleanPath(cleanHtml(cleanSql(cleanAll(src('dart-googleapis-bigquery-table-insert-view-fixed')))));
   await api.tables.insert(bq.Table(view: bq.ViewDefinition(query: 'SELECT * FROM t WHERE a = $v')), 'p', 'd'); // @sink(none)
 }
 

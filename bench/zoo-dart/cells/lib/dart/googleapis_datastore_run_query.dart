@@ -17,7 +17,7 @@ Future<void> vuln() async { // @vuln
 
 Future<void> fixed() async { // @fixed
   final api = ds.DatastoreApi(Object());
-  final v = cleanPath(cleanHtml(cleanSql(cleanCmd(src('dart-googleapis-datastore-run-query-fixed')))));
+  final v = cleanPath(cleanHtml(cleanSql(cleanAll(src('dart-googleapis-datastore-run-query-fixed')))));
   await api.projects.runQuery(ds.RunQueryRequest(gqlQuery: ds.GqlQuery(queryString: 'SELECT * FROM T WHERE a = $v')), 'p'); // @sink(none)
 }
 

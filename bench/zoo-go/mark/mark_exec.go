@@ -216,6 +216,12 @@ func CleanSQL(s string) string  { return clean(SQL, s) }
 func CleanHTML(s string) string { return clean(HTML, s) }
 func CleanPath(s string) string { return clean(Path, s) }
 
+// CleanAll: see mark.go.
+func CleanAll(s string) string { return clean(Cmd, clean(SQL, clean(HTML, clean(Path, s)))) }
+
+// CleanResource: see mark.go.
+func CleanResource(s string) string { return clean(Cmd, s) }
+
 func record(class Class, base string, strs []string) {
 	_, file, line, _ := runtime.Caller(2)
 	// a skeleton of an external package (bench/zoo-go-pkg/<package>/skel) calls the sink for its function: the place is the

@@ -328,6 +328,13 @@ type Sanitizer struct {
 	// Adds lists labels attached to values that had a dropped label, e.g.
 	// "html_escaped": still dangerous for other sinks.
 	Adds []string `yaml:"adds"`
+	// Neutralises lists the categories of sinks that the sanitizer really makes the value safe for (xss for an HTML
+	// escape). The value that comes out has the labels of Adds, and a sink accepts such a label unless its category
+	// is in this list: the sanitizer hides the value from the sinks of these categories and from no others
+	// (ADR-114). An empty list says that no category is neutralised (the value is only marked as having passed the
+	// sanitizer). Absent (nil) is the old meaning: every sink of the dropped label is hidden from the value; a builtin
+	// row must write it (TestSanitizersAreReviewed), and Adds is required with it.
+	Neutralises *[]string `yaml:"neutralises"`
 	// Flows overrides the default "all arguments flow to result0".
 	Flows []Flow `yaml:"flows"`
 	Match string `yaml:"match"`
@@ -1043,6 +1050,21 @@ func (rs *RuleSet) validate() error {
 		if len(s.Drops) == 0 {
 			return fmt.Errorf("%s: drops is required", what)
 		}
+		if s.Neutralises != nil {
+			if len(s.Adds) == 0 {
+				return fmt.Errorf("%s: neutralises needs adds (the label that the value has after the sanitizer, which a sink of another category accepts)", what)
+			}
+			for _, d := range s.Drops {
+				if d == "*" {
+					return fmt.Errorf("%s: neutralises cannot be written with drops: [\"*\"] (name the labels that are dropped)", what)
+				}
+			}
+			for _, c := range *s.Neutralises {
+				if c == "" {
+					return fmt.Errorf("%s: neutralises has an empty category", what)
+				}
+			}
+		}
 		if err := checkMatch(s.Match, what); err != nil {
 			return err
 		}
@@ -1293,7 +1315,9 @@ type Rules struct {
 	Fields         map[string][]Source // by "pkg.Type.Field"
 	Sinks          map[string][]Sink
 	Sanitizers     map[string][]Sanitizer
-	Propagators    map[string][]Propagator
+	// Derived are the labels that a sanitizer with neutralises gives to what it lets through, by name (ADR-114).
+	Derived     map[string]*DerivedLabel
+	Propagators map[string][]Propagator
 	// Calls are the symbols that have a row of calls in a propagator.
 	Calls map[string]bool
 	// ReadImpls are the symbols of the propagators of a set with read_impls.
@@ -1350,6 +1374,7 @@ func Merge(sets ...*RuleSet) *Rules {
 		CallbackParams: map[string][]CallbackParam{},
 		Sinks:          map[string][]Sink{},
 		Sanitizers:     map[string][]Sanitizer{},
+		Derived:        map[string]*DerivedLabel{},
 		Propagators:    map[string][]Propagator{},
 		Calls:          map[string]bool{},
 		ReadImpls:      map[string]bool{},
@@ -1389,6 +1414,7 @@ func Merge(sets ...*RuleSet) *Rules {
 		}
 		for _, s := range rs.Sanitizers {
 			r.Sanitizers[s.Symbol] = append(r.Sanitizers[s.Symbol], s)
+			r.addDerived(s)
 		}
 		for _, p := range rs.Propagators {
 			r.Propagators[p.Symbol] = append(r.Propagators[p.Symbol], p)
@@ -1413,6 +1439,83 @@ func Merge(sets ...*RuleSet) *Rules {
 	r.Declared = mergeDeclarations(sets)
 	r.declared = indexDeclared(r.Declared)
 	return r
+}
+
+// DerivedLabel is the label that a sanitizer with `neutralises` gives to the value that it lets through.
+type DerivedLabel struct {
+	// From are the labels that the sanitizers that give it drop: a sink accepts the derived label only if it accepts one of them.
+	From []string
+	// Neutralises are the categories of the sinks that do not accept it. Two rows that give the same label to
+	// different categories leave only those that both have (a claim that hides a flow needs both rows).
+	Neutralises []string
+}
+
+func (r *Rules) addDerived(s Sanitizer) {
+	if s.Neutralises == nil {
+		return
+	}
+	for _, a := range s.Adds {
+		d := r.Derived[a]
+		if d == nil {
+			r.Derived[a] = &DerivedLabel{From: append([]string(nil), s.Drops...), Neutralises: append([]string(nil), *s.Neutralises...)}
+			continue
+		}
+		for _, f := range s.Drops {
+			if !contains(d.From, f) {
+				d.From = append(d.From, f)
+			}
+		}
+		var keep []string
+		for _, c := range d.Neutralises {
+			if contains(*s.Neutralises, c) {
+				keep = append(keep, c)
+			}
+		}
+		d.Neutralises = keep
+	}
+}
+
+// AcceptsLabel says whether a sink of the categories (the first of them is the category of the site; none: unknown), whose rules accept
+// the labels `accepts` (none: any), reacts to a value that has the label. A label that a sanitizer gave with `neutralises` is
+// accepted unless the sink is of a category that the sanitizer neutralises (all the categories of the site must be neutralised
+// to hide it), or unless it would not have accepted the label that was dropped.
+func (r *Rules) AcceptsLabel(accepts []string, label string, categories []string) bool {
+	if len(accepts) > 0 && contains(accepts, label) {
+		return true
+	}
+	d := r.Derived[label]
+	if d == nil {
+		return len(accepts) == 0
+	}
+	if len(accepts) > 0 {
+		ok := false
+		for _, f := range d.From {
+			if contains(accepts, f) {
+				ok = true
+			}
+		}
+		if !ok {
+			return false
+		}
+	}
+	if len(categories) == 0 {
+		return true
+	}
+	for _, c := range categories {
+		if !contains(d.Neutralises, c) {
+			return true
+		}
+	}
+	return false
+}
+
+func contains(xs []string, x string) bool {
+	for _, y := range xs {
+		if y == x {
+			return true
+		}
+	}
+	return false
 }
 
 // HoldsNothing reports whether the package variable holds nothing for the code that reads it.

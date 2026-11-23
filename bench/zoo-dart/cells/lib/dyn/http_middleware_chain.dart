@@ -61,7 +61,7 @@ class InnerFixed implements Handler {
 }
 
 void fixed() { // @fixed
-  serve(LoggingFixed(InnerFixed(cleanCmd(src('dyn-http-middleware-chain-fixed')))));
+  serve(LoggingFixed(InnerFixed(cleanAll(src('dyn-http-middleware-chain-fixed')))));
 }
 
 class LoggingDecoy implements Handler {

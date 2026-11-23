@@ -550,7 +550,7 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 			// only its label counts.
 			switch x.E.Kind {
 			case Real:
-				if !accepted(sr.Accepts, x.E.Label()) {
+				if !s.acceptedAt(sr.Accepts, x.E.Label(), sr.Site) {
 					continue
 				}
 				// A flow that is not shorter is dropped, unless the guards of
@@ -586,7 +586,7 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 			}
 			switch x.E.Kind {
 			case Real:
-				if accepted(sr.Accepts, x.E.Label()) {
+				if s.acceptedAt(sr.Accepts, x.E.Label(), sr.Site) {
 					s.recordFinding(x.E.Origin(), s.eng.sites.ByID[sr.Site], x.E.Label(), steps, gs, unsure)
 				}
 			case Param:

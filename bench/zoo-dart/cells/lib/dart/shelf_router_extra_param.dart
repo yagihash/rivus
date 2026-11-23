@@ -22,7 +22,7 @@ Future<void> vuln() async { // @vuln
 Future<void> fixed() async { // @fixed
   final router = Router();
   router.get('/item/<id>', (Request request, String id) async {
-    sinkCmd(cleanCmd(id)); // @sink(none)
+    sinkCmd(cleanAll(id)); // @sink(none)
     return Response.ok('');
   });
   await router(Request('GET', Uri.parse('http://localhost/item/' + Uri.encodeComponent(typed('dart-shelf-router-extra-param-fixed')))));

@@ -74,7 +74,7 @@ void vuln7() { // @vuln
 }
 
 void fixed() { // @fixed
-  final record = (cleanCmd(src('dart-patterns-record-fixed')), 'constant');
+  final record = (cleanAll(src('dart-patterns-record-fixed')), 'constant');
   final (a, _) = record;
   sinkCmd(a); // @sink(none)
 }

@@ -17,7 +17,7 @@ Future<void> vuln() async { // @vuln
 
 Future<void> fixed() async { // @fixed
   final repos = RepositoriesService(GitHub());
-  final v = cleanPath(cleanHtml(cleanSql(cleanCmd(src('dart-github-slug-owner-fixed')))));
+  final v = cleanPath(cleanHtml(cleanSql(cleanAll(src('dart-github-slug-owner-fixed')))));
   await repos.getReadme(RepositorySlug(v, 'r')); // @sink(none)
 }
 

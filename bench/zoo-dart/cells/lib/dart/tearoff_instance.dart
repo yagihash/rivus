@@ -69,7 +69,7 @@ class PrinterFixed {
 
 void fixed() { // @fixed
   final f = PrinterFixed('constant').run;
-  f(cleanCmd(src('dart-tearoff-instance-fixed')));
+  f(cleanAll(src('dart-tearoff-instance-fixed')));
 }
 
 class PrinterDecoy {

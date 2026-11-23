@@ -9,10 +9,9 @@
 # A sanitizer says only that its result is clean. The implementations of the project that a call
 # through such a symbol may reach are read, with their result dropped (ADR-086): a `class-method` or an
 # `interface` row is therefore safe, and listed because it is where that rule is used.
-html.EscapeString function sha256:c45f2e213e22314f
-html/template.HTMLEscapeString function sha256:3f49a819f5acd855
-html/template.JSEscapeString function sha256:5423c01242b8a58e
-dart:core#Uri.encodeComponent static sha256:ba64ec4b4aa84ae6
-dart:core#Uri.encodeFull static sha256:32318e9031cc65c8
-dart:core#Uri.encodeQueryComponent static sha256:1956f2302d269dd1
-dart:convert#HtmlEscape.convert class-method sha256:da3fe41498732874 # a subclass of HtmlEscape may override convert
+html.EscapeString function sha256:f182ff4ae56e1fc4 # xss
+html/template.HTMLEscapeString function sha256:9b041875f10ad776 # xss
+html/template.JSEscapeString function sha256:ac62a93ced380006 # xss: a known over-claim, it is for a JavaScript string only (an attribute or a URL needs more)
+dart:core#Uri.encodeComponent static sha256:9897afd4b6236737 # neutralises nothing: it keeps ' .. and $(), and where the value lands (host, path, query) decides, so no category is claimed
+dart:core#Uri.encodeQueryComponent static sha256:98e1acaaed0f487d # neutralises nothing: same as encodeComponent
+dart:convert#HtmlEscape.convert class-method sha256:2d365b8340697c06 # xss; a subclass of HtmlEscape may override convert

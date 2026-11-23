@@ -407,6 +407,26 @@ A sink has a `category`: what kind of harm the value does there. It is a free st
 
 A new category is made when no other one fits (not for a new library). It is added to this table, and to the decision of the product (`docs/GCP-MODELS.md`, judgement E, for `resource_name`). One symbol has one category (#140).
 
+## 4b-1. A sanitizer says which kind of sink it is safe for: `neutralises`
+
+A sanitizer row drops a label (`drops`) and gives the value another (`adds`). A sanitizer is safe for **one kind of sink**, not for all: an HTML escape makes a value safe in HTML, and the same value is still a command, a path or a query for the sink that is one. `neutralises` names the categories (section 4b) of the sinks that the value is safe for. A sink of another category still reacts to the value, which now has the label of `adds`:
+
+```yaml
+sanitizers:
+  - symbol: html.EscapeString
+    drops: [user_input]
+    adds: [html_escaped]
+    neutralises: [xss]          # SQL, a path, a command and a URL still see the value
+```
+
+- A sink accepts a label that a sanitizer gave unless its category is in `neutralises` (a symbol with several categories: unless all are), and only if it would have accepted the label that was dropped. The finding shows the label (`html_escaped`) and the sanitizer is a step of its path (`sanitized by ...`).
+- `neutralises: []` is the claim "none": the value is only marked as having passed the sanitizer, and it reaches every sink. Write it when it depends on where the value lands (a percent-encoded value is no host, and still a path that can climb). A claim that hides a flow is made only where it holds in every place the sink can read the value; a claim that is only sometimes true is a missed flow.
+- `adds` is required with `neutralises`, and `drops: ["*"]` cannot have it (name the labels).
+- A builtin row has to write `neutralises` (`TestSanitizersAreReviewed`), and an empty one has its reason in `testdata/sanitizers-reviewed.txt`.
+- **A sanitizer without `neutralises` keeps the old meaning: the value is hidden from the sinks of every category** (the rules of a project written before this one go on working). rivus says so once on stderr (and `summary.project_rules[].sanitizers_without_neutralises` counts them).
+- A sanitizer that is a method takes what it is called on as data as well as its arguments (what the row does not drop goes on to the result).
+- Known limits: a value that passed two sanitizers keeps the label of the first (an HTML escape of a `url_encoded` value is still `url_encoded`, so it is reported at an xss sink: a false report, not a missed flow). The label that `adds` names is one label for all the rows that give it; two rows with different `neutralises` for the same label keep only the categories that both have.
+
 ## 4c. Which versions the rows were checked against: `verified_versions`
 
 A rule file (a built-in one, or yours) records the versions of the packages that its rows were checked against ([DESIGN-package-models.md](DESIGN-package-models.md), 6.7):

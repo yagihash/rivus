@@ -17,7 +17,7 @@ Future<void> vuln() async { // @vuln
 
 Future<void> fixed() async { // @fixed
   final store = ds.Datastore(Object(), 'p');
-  final v = cleanPath(cleanHtml(cleanSql(cleanCmd(src('dart-gcloud-datastore-query-kind-fixed')))));
+  final v = cleanPath(cleanHtml(cleanSql(cleanAll(src('dart-gcloud-datastore-query-kind-fixed')))));
   await store.query(ds.Query(kind: v)); // @sink(none)
 }
 
