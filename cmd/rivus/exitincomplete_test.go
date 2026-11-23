@@ -23,6 +23,15 @@ func notFailed(err error) error {
 	return err
 }
 
+// notFailedIf is notFailed when allowed, and err as it is when not: a run that must converge (and is not one of the
+// zoo's chains that stop by the pass limit on purpose) fails the test on exit code 4, as it does on any other code.
+func notFailedIf(err error, allowed bool) error {
+	if allowed {
+		return notFailed(err)
+	}
+	return err
+}
+
 // analyzeExit runs "rivus analyze" on the scc test module and gives the exit code and the summary of what it wrote.
 func analyzeExit(t *testing.T, args ...string) (int, report.Summary) {
 	t.Helper()
