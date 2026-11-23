@@ -1,6 +1,6 @@
 # 確認していないバージョンへの適用の注記(`summary.unverified_versions`)が、Dart と Rust に出ない
 
-進み具合: Dart は直した(`pubspec.lock` を読む。`cmd/rivus/lockversions_test.go`)。Rust は未。
+- 状態: **closed**(Dart と Rust を直した。`pubspec.lock` と `Cargo.lock` を、コア側で読む。守るもの: `cmd/rivus/lockversions_test.go`)
 
 優先度: 低め(Go は出る。Dart と Rust のモデルの `verified_versions` は、Go より少ない)。
 
