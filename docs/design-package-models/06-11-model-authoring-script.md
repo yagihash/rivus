@@ -113,7 +113,7 @@ Rust は、extractor を動かす段(型の取得、セルの解析の確認、�
 | 4 | 段 1〜3 の Dart 版(下の「言語を横断する順」。骨組み、`zoo_exec_override`、`--dep-dir`、型の取得) | 中〜大 |
 | 5 | 段 1〜3 の Rust 版(クラウドでできる段だけ。3 の表。ローカルはサンドボックスの下) | 大(構文だけの署名の取得) |
 
-**段階 1 の状態(2026-11-23): 実装済み(`bench/model-author`、`make model`。Go だけ)。型からの flows の生成、骨組みとセルの生成、Dart、Rust は含めない。差分テストを PR のジョブに入れる部分は、まだ(CI の `model-diff` は、定期の実行と手動のまま)。**
+**段階 1 の状態(2026-11-23): 実装済み(`bench/model-author`、`make model`。Go だけ)。型からの flows の生成、骨組みとセルの生成、Dart、Rust は含めない。差分テストを PR のジョブに入れる部分は、入れた(2026-11-23。`model-diff-changed`。06-03)。CI の `model-diff` は、定期の実行と手動のまま。**
 
 **段階 1(Dart)の状態(2026-11-23): 実装済み(`make model PKG=<パッケージ名> VERSION=<v> LANG=dart`。`bench/model-author/dart*.go`。骨組みの生成は含めない)。** 取得は、空のプロジェクトで `dart pub get` するだけ(`hook/build.dart` か `hook/link.dart` を持つパッケージが 1 つでもあれば、終了コード 10 で止める)。公開 API は、`bench/model-author/dartapi`(Dart の analyzer。型を読むだけで、パッケージのコードは実行しない)が、`lib/` の `src/` の外の各ライブラリの export から読む。シンボルは、extractor と同じ形(宣言したライブラリの `package:x/src/a.dart#Class.member`)なので、行とそのまま照合する。規則の表は Go と同じ(同じ語、同じ形)で、Dart の署名の形に読み替える: 位置は、位置引数が `arg<i>`、名前つき引数が `named:<名前>`、クラスの引数のフィールドは `arg0.owner`(3 段まで)。`dynamic` と `Object` の引数は、名前が決める(dio の `savePath`)。`Map` を返すもの(ヘッダー、メタデータ)は、本文と同じに source の候補。`static` の定数は source の候補にしない。`calls` の候補は、`body_replaced_packages` にあるパッケージだけ(Go と同じ決め。Dart の組み込みのモデルには、今ない)。終了コードは Go と同じ(10: `dart pub get` の失敗かフック、20: API を読めない、差分テストが動かない、50、70)。`-write-dead-allow` は、zoo のテストが Dart の extractor を使うので `RIVUS_DART` が要る(未設定なら 20)。再現率は、`bench/model-author` の `-recall`(`-dart-libs storage/,pubsub/` で、`googleapis` のように大きいパッケージを一部のライブラリに絞れる)。
 
