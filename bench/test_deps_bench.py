@@ -230,7 +230,9 @@ class Targets(unittest.TestCase):
         self.assertEqual(t["memos"]["detect"]["fixed_commit"], "5f57f48673e2054f404b2c5b497a8eaa3690591d")
         self.assertEqual((t["memos"]["time_limit_s"], t["memos"]["mem_cap_gb"], t["memos"]["args"]), (180, 8, []))
         self.assertEqual(t["dart_services"]["commit"], "ad668d137e631beeaef3e263054a45696e8d4499")
-        self.assertFalse(t["dart_services"]["decided"])
+        ds = t["dart_services"]
+        self.assertEqual((ds["decided"], ds["detect"], ds["time_limit_s"], ds["mem_cap_gb"], ds["args"]), (True, None, 600, 8, []))
+        self.assertTrue(d.format_line("dart_services", ds["decided"], False, "x").startswith("FAIL dart_services "))
 
     def test_cocoon_target(self):
         t = json.load(open(d.TARGETS_FILE))["cocoon"]
