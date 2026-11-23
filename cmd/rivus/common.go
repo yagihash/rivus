@@ -15,6 +15,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/yagihash/rivus/internal/frontend/accept"
 	"github.com/yagihash/rivus/internal/frontend/goir"
 	"github.com/yagihash/rivus/internal/frontend/gossa"
 	"github.com/yagihash/rivus/internal/ir"
@@ -62,6 +63,8 @@ type common struct {
 	extractorBodyReplaced []string
 	// declIgnored is how many declarations readDeclared left out (loadRules sets it).
 	declIgnored int
+	// extractor, if set, makes the IR of the Go code in place of goir.Extract (a test sets it: extractor.go). No flag.
+	extractor *accept.Extractor
 }
 
 func (c *common) register(fs *flag.FlagSet) {
@@ -235,7 +238,7 @@ func (c *common) loadGo(patterns []string, rules *model.Rules, maxImpl int) (*lo
 	if err := rules.Validate(); err != nil {
 		return nil, err
 	}
-	if err := l.extract(true); err != nil {
+	if err := c.extractGo(l, patterns, rules); err != nil {
 		return nil, err
 	}
 	// what the extractor was told not to read is counted for the report (dropReplacedBodies)

@@ -49,7 +49,7 @@ func stable(t *testing.T, out []byte) []byte {
 	}
 	// what this run did with the memory (ADR-121): the peak and the share of the collector move with the load, like a clock
 	if sm, ok := rep["summary"].(map[string]any); ok {
-		for _, k := range []string{"memory_peak_bytes", "memory_limit_exceeded", "gc_cpu_fraction", "live_heap_max_bytes"} {
+		for _, k := range machineSummaryKeys {
 			delete(sm, k)
 		}
 	}
