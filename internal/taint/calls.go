@@ -1050,9 +1050,12 @@ func (s *state) applyFlows(cc *callCtx, flows []model.Flow, o *op, desc string, 
 				for _, e := range elems {
 					wm := newWhyFrom(s.fn, kind, f.Cell, f.Orig)
 					wm.pos = packPos(cc.in.Pos)
+					if f.Cut {
+						wm = s.withCutNote(wm, f.Cell.Root, f.E.Path(), -1, "read")
+					}
 					wm.setModel(mref)
 					if approx != nil {
-						wm.setNotes(approx)
+						wm.setNotes(append(append([]*Uncertainty(nil), wm.notes()...), approx...))
 					}
 					s.add(d, e, wm)
 				}

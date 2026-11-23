@@ -182,6 +182,9 @@ type found struct {
 	Cell Loc  // where it was found
 	Orig Elem // as stored there
 	Rel  string
+	// Cut: the path of E was cut at the depth limit when it was extended to the read path (a read below a cell that
+	// holds the element): the hop that carries it carries access_path_truncated. It is not part of what the element is.
+	Cut bool
 }
 
 // state is the analysis state of one function.
@@ -425,6 +428,8 @@ func (s *state) add(l Loc, e Elem, w *why) {
 	}
 	if t.trunc {
 		s.truncated = true
+		// the hop that put the element into the cell below the cut: the cell stands for everything under it
+		w = s.withCutNote(w, l.Root, t.loc.Path, pathDepth(l.Path), "stored")
 	}
 	if t.widened {
 		s.widened = true
@@ -571,13 +576,15 @@ func (s *state) collectUncached(l Loc) []found {
 		rest := l.Path[len(p):]
 		for _, e := range s.elemsOf(l.Root, p, set) {
 			ext := e
+			isCut := false
 			if e.Kind == Param {
 				// Without the bound a recursive structure would extend
 				// the path in every pass, forever.
-				tp, _ := pathTrunc(e.Path()+rest, s.k())
+				tp, cut := pathTrunc(e.Path()+rest, s.k())
 				ext = ext.WithPath(tp)
+				isCut = cut
 			}
-			out = append(out, found{E: ext, Cell: Loc{l.Root, p}, Orig: e})
+			out = append(out, found{E: ext, Cell: Loc{l.Root, p}, Orig: e, Cut: isCut})
 		}
 	}
 	if l.Path != "" {
@@ -612,6 +619,45 @@ func (s *state) copyLoc(src, dst Loc, w func(f found) *why) {
 		}
 		s.add(dl, f.E, s.withContainerNote(w(f), f.Cell.Path, dl.Path))
 	}
+}
+
+// withCutNote is the hop with the access_path_truncated note added (a copy: the hop may be shared with the other
+// destinations of a write). Only the hop that goes through a cut path has it: the part below the cut is taken to be
+// tainted as well, so a flow that goes on from here may be there only because of the cut. The note says where (the
+// function, the root, the path kept: the first levels before the cut), at which depth, and how deep the path was.
+// verb is "stored" (the element was put into the cell at the cut path) or "read" (the element was read below it).
+func (s *state) withCutNote(w *why, root Root, kept string, fullDepth int, verb string) *why {
+	if w == nil || s.fn == nil || hasKind(w.notes(), KindAccessPathTruncated) {
+		return w
+	}
+	c := *w
+	if w.rare != nil {
+		r := *w.rare
+		c.rare = &r
+	}
+	scope := "project"
+	if s.fn.Dep {
+		scope = "dependency"
+	}
+	rn := "?"
+	if root.V != nil {
+		rn = root.V.Name
+	}
+	if len(kept) > 80 {
+		kept = kept[:80] + "..."
+	}
+	c.setNotes(appendNote(c.notes(), s.pathNote(KindAccessPathTruncated,
+		"an access path was cut at depth "+itoa(s.k())+" ("+scope+" function "+s.eng.funcID(s.fn)+"): the value was "+verb+" at "+rn+kept+
+			" from "+deepText(fullDepth)+"; what is below the cut is taken to be tainted as well, so the flow from here "+
+			"may exist only because of the cut (more flows than there are, never fewer)", w.pos.pos())))
+	return &c
+}
+
+func deepText(n int) string {
+	if n > 0 {
+		return "a path " + itoa(n) + " levels deep"
+	}
+	return "a longer path"
 }
 
 // pathNote is an uncertainty that belongs to one hop of a path. It is shown
@@ -756,6 +802,9 @@ func (s *state) whyFn(in *sg.Instr, kind string) func(f found) *why {
 		w := newWhyFrom(s.fn, kind, f.Cell, f.Orig)
 		if in != nil {
 			w.pos = packPos(in.Pos)
+		}
+		if f.Cut {
+			w = s.withCutNote(w, f.Cell.Root, f.E.Path(), -1, "read")
 		}
 		return w
 	}
