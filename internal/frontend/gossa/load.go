@@ -382,7 +382,7 @@ func Load(dir string, patterns []string, opts Options) (*Program, error) {
 			p.OwnPkgs = append(p.OwnPkgs, sp)
 		}
 	}
-	for fn := range ssautil.AllFunctions(prog) {
+	for fn := range allFunctions(prog) {
 		if len(fn.Blocks) == 0 {
 			// a declared function of a package that was not read: the count that the report says
 			if opts.Deps && opts.ReplacedFunc != nil && fn.Object() != nil && (fn.Synthetic == "" || fn.Synthetic == noSyntax || fn.Synthetic == noSyntaxOld) && fn.Origin() == nil {
@@ -704,4 +704,48 @@ func moduleVersions(pkgs []*packages.Package) map[string]string {
 		}
 	})
 	return out
+}
+
+// allFunctions is ssautil.AllFunctions, closed: the functions that have a
+// body are the same whatever order they are looked at in.
+//
+// Asking Origin of a function inside an instance of a generic function (for
+// example sync.OnceValues[string, error]$1$1) makes, late, the body of the
+// generic function, and that makes the bodies of the methods it calls (the
+// methods of sync.Pool, RWMutex). So a loop over a map of functions that
+// calls Origin (ownerPkg does) saw a function without a body when it came
+// before, and with one when it came after: the functions given to the
+// engine changed from run to run (40781 to 40791 for memos), by about 150 to
+// 200 functions of the standard library. This asks Origin of all functions
+// and takes the set again, until the number of functions that have a body
+// does not change (ADR-118, (ii): the same set whatever the order and the
+// machine).
+//
+// The standard library is in skip, "its bodies are not read", but this is
+// what happens in fact: go/ssa makes late the bodies of generic instances and
+// of the methods of types, so some functions of the standard library are
+// analyzed. Whether summary should show it is to be decided later.
+func allFunctions(prog *ssa.Program) map[*ssa.Function]bool {
+	count := func(m map[*ssa.Function]bool) int {
+		n := 0
+		for fn := range m {
+			if len(fn.Blocks) > 0 {
+				n++
+			}
+		}
+		return n
+	}
+	fns := ssautil.AllFunctions(prog)
+	n := count(fns)
+	for {
+		for fn := range fns {
+			fn.Origin()
+		}
+		fns = ssautil.AllFunctions(prog)
+		m := count(fns)
+		if m == n {
+			return fns
+		}
+		n = m
+	}
 }
