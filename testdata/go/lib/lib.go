@@ -71,6 +71,12 @@ func Apply(s string, f func(string) string) string { return f(s) }
 // read, as the body of a function of the standard library is not.
 func Thunk(f func() string) string { return f() }
 
+// Visit hands what it is given to f and returns nothing (no row for it, and its body is not read).
+func Visit(prefix string, items []string, f func(string)) {}
+
+// VisitN is Visit for a function that takes a number.
+func VisitN(items []string, f func(int)) {}
+
 // Each calls f with every element of xs (the model has calls, and nothing flows).
 func Each(xs []string, f func(string)) {
 	for _, x := range xs {

@@ -48,26 +48,19 @@ func (e *Engine) noModelCallee(ci *sg.Instr) bool {
 }
 
 // noModelRows are the rows of calls that stand for the function values given to a function that has no body and no
-// model: each is called with the other arguments (then the receiver), and what it returns is the result.
+// model: each is called, and what it returns is the result (when the call has one). The rows name the function
+// (callbackFuncs, callBindings and givenToModel read them); what the function is called with is not by position, see
+// noModelCallbacks.
 func (e *Engine) noModelRows(ci *sg.Instr) []callRowRef {
-	if len(ci.Dsts) == 0 || !e.noModelCallee(ci) {
+	if !e.noModelCallee(ci) {
 		return nil
 	}
-	recv, args := ci.Recv(), ci.CallArgs()
+	args := ci.CallArgs()
 	var out []callRowRef
 	for i, a := range args {
 		cs, ok := e.callbacksOf(a)
 		if !ok {
 			continue // not told which function it is: what goes in comes out already (the default of the call)
-		}
-		var with []string
-		for j := range args {
-			if j != i {
-				with = append(with, fmt.Sprintf("arg%d", j))
-			}
-		}
-		if recv != nil {
-			with = append(with, "recv")
 		}
 		ids := make([]string, len(cs))
 		for k, c := range cs {
@@ -75,20 +68,78 @@ func (e *Engine) noModelRows(ci *sg.Instr) []callRowRef {
 		}
 		sort.Strings(ids)
 		row := model.CallRow{
-			Fn:   fmt.Sprintf("arg%d", i),
-			With: with,
-			Ret:  "result",
+			Fn: fmt.Sprintf("arg%d", i),
 			Assumed: "assumed_call: " + ci.Callee.Symbol + " has no body and no model (or no implementation is known), and is given the function " + strings.Join(ids, " or ") +
-				" as its argument " + fmt.Sprint(i) + ": it is taken to be called by it, with what the other operands hold, and what it returns is taken to reach the result of the call",
+				" as its argument " + fmt.Sprint(i) + ": it is taken to be called by it, with what any of the other operands holds in any of its parameters",
+		}
+		if len(ci.Dsts) > 0 {
+			row.Ret = "result"
+			row.Assumed += ", and what it returns is taken to reach the result of the call"
 		}
 		out = append(out, callRowRef{&model.Propagator{Symbol: ci.Callee.Symbol, Calls: []model.CallRow{row}}, 0})
 	}
 	return out
 }
 
-// noModelCallbacks applies the rows of noModelRows at the call.
+// noModelCallbacks applies the function values given to a call that has no body and no model. What the library
+// hands them is not known, so each of the other operands (the arguments, then the receiver) may reach every
+// parameter (the union: each operand in turn is bound to all of the parameters; a number or a bool carries nothing
+// into the body, as everywhere). The result of the function is the result of the call, when there is one.
 func (s *state) noModelCallbacks(cc *callCtx) {
-	for _, r := range s.eng.noModelRows(cc.in) {
-		s.applyCallRow(cc, r.p, 0, modelRef(cc.sym, "propagator", model.Provenance{Origin: model.OriginBuiltin}))
+	ci := cc.in
+	for _, r := range s.eng.noModelRows(ci) {
+		row := r.row()
+		sel, err := model.ParseSelector(row.Fn)
+		if err != nil {
+			continue
+		}
+		cs, ok := s.eng.callbacksOf(pick(cc.recv, cc.args, sel))
+		if !ok {
+			continue
+		}
+		var ops []*sg.Value
+		for j, a := range cc.args {
+			if j != sel.Index && a != nil {
+				ops = append(ops, a)
+			}
+		}
+		if cc.recv != nil {
+			ops = append(ops, cc.recv)
+		}
+		if len(ops) == 0 {
+			ops = []*sg.Value{{Kind: sg.KUndef}}
+		}
+		rd := &redirect{}
+		if row.Ret != "" && len(cc.roots) > 0 {
+			rd.ret = []Loc{{cc.roots[0], ""}}
+		}
+		notes := []*Uncertainty{s.newNote(ci, KindAssumedCall, row.Assumed, cc.sym)}
+		if len(cs) > 1 {
+			d := s.newNote(ci, KindDynamicDispatch, "the function given to "+cc.sym+" is one of several", cc.sym)
+			for _, c := range cs {
+				d.Candidates = append(d.Candidates, c.ID)
+			}
+			sort.Strings(d.Candidates)
+			notes = append(notes, d)
+		}
+		for _, c := range cs {
+			fn := s.eng.prog.ByID[c.ID]
+			var bindings []*sg.Value
+			if c.Make != nil {
+				bindings = c.Make.Args
+			}
+			for _, o := range ops {
+				args := make([]*sg.Value, len(fn.Params))
+				first := 0
+				if c.Env != nil {
+					args[0], first = c.Env, 1 // a closure of Rust takes its environment first
+				}
+				for k := first; k < len(args); k++ {
+					args[k] = o
+				}
+				x := &callCtx{in: ci, args: args, roots: cc.roots, sym: cc.sym, rd: rd}
+				s.applySummary(x, fn, bindings, notes, nil)
+			}
+		}
 	}
 }

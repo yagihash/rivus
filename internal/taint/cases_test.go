@@ -633,17 +633,27 @@ func TestCallbackRowsApplyTheFunctionThatWasGiven(t *testing.T) {
 func TestUnmodeledCallAssumesTheResultOfTheFunctionGiven(t *testing.T) {
 	checkCase(t, "nomodelcb")
 	res, _ := runCase(t, "nomodelcb")
-	if len(res.Findings) != 1 {
-		t.Fatalf("%d findings, want 1", len(res.Findings))
+	if len(res.Findings) != 2 {
+		t.Fatalf("%d findings, want 2", len(res.Findings))
 	}
-	named := false
-	for _, u := range res.Findings[0].Uncertainties {
-		if u.Kind == KindAssumedCall && strings.Contains(u.Detail, "lib.Thunk") && strings.Contains(u.Detail, "Captured$1") {
-			named = true
+	for _, f := range res.Findings {
+		// no row of a model decided a step: it reads as "no row, assumed by default" (the note), not as a model
+		for _, p := range f.Paths {
+			for _, st := range p.Steps {
+				if st.Model != nil {
+					t.Errorf("line %d: the step %q refers to a model row (%+v), and there is none", f.Source.Position.Line, st.Desc, st.Model)
+				}
+			}
 		}
-	}
-	if !named {
-		t.Errorf("the finding has no assumed_call that names lib.Thunk and the closure: %+v", res.Findings[0].Uncertainties)
+		named := false
+		for _, u := range f.Uncertainties {
+			if u.Kind == KindAssumedCall && strings.Contains(u.Detail, "lib.") && strings.Contains(u.Detail, "has no body and no model") {
+				named = true
+			}
+		}
+		if !named {
+			t.Errorf("line %d: no assumed_call that names the function and says that it has no row: %+v", f.Source.Position.Line, f.Uncertainties)
+		}
 	}
 }
 
