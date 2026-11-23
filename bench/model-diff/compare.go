@@ -13,9 +13,12 @@ import (
 type Probe struct {
 	ID       int      `json:"id"`
 	Symbol   string   `json:"symbol"`
-	Kind     string   `json:"kind"`              // flow: compared with the body; sink: compared with the declaration
-	Variant  string   `json:"variant"`           // the position that has the source (recv, arg0, ...) or "const"
-	Outputs  []string `json:"outputs,omitempty"` // flow: the places that have a sink of their own (result0, arg1, recv, ...)
+	Kind     string   `json:"kind"`               // flow: compared with the body; sanitizer: the body against the flows of the row; sink: compared with the declaration
+	Row      string   `json:"row,omitempty"`      // the kind of the row that the probe is of (flow, pure, sanitizer, sink); empty: the Kind
+	Explicit bool     `json:"explicit,omitempty"` // sanitizer: the row has flows of its own (the places that they say are in Covered)
+	Covered  []string `json:"covered,omitempty"`  // sanitizer: the places that the flows of the row give from this position
+	Variant  string   `json:"variant"`            // the position that has the source (recv, arg0, ...) or "const"
+	Outputs  []string `json:"outputs,omitempty"`  // flow: the places that have a sink of their own (result0, arg1, recv, ...)
 	Category string   `json:"category,omitempty"`
 	Expect   *bool    `json:"expect,omitempty"` // sink: whether a finding is declared
 }
@@ -79,6 +82,19 @@ type Result struct {
 	Miss   []string `json:"miss,omitempty"`
 	Extra  []string `json:"extra,omitempty"`
 	Reason string   `json:"reason,omitempty"` // the reason of the note that allows the EXTRA or the reviewed MISS
+	// Informative: the probe shows something about the row. A probe where neither run has a flow shows nothing about a flows row; for
+	// a pure row (that has a place to watch) it shows that the body has no flow, and a sink probe always shows the declaration.
+	Informative bool `json:"informative"`
+}
+
+// RowState says whether a row of the model was judged by the test, and if not, why. A row that the tool cannot judge is "not judged",
+// never "agree".
+type RowState struct {
+	Symbol string `json:"symbol"`
+	Row    string `json:"row"`
+	Judged bool   `json:"judged"`
+	Reason string `json:"reason,omitempty"` // for a row that is not judged
+	Failed bool   `json:"failed,omitempty"` // a judged row that has a MISS or an EXTRA that no note allows
 }
 
 type Report struct {
@@ -92,6 +108,9 @@ type Report struct {
 	Reviewed   []string       `json:"miss_reviewed,omitempty"` // every miss-reviewed note used: <symbol>@<position> <kind> <explanation>
 	Errors     []string       `json:"errors,omitempty"`
 	Runs       map[string]Run `json:"runs,omitempty"`
+	Rows       []RowState     `json:"rows,omitempty"` // every row of the package, judged or not (Judge)
+	// PreExisting are the findings (a MISS, an EXTRA, an error of a row) on rows that the pull request did not change (Restrict): shown, not failing.
+	PreExisting []string `json:"pre_existing,omitempty"`
 }
 
 // Run is the cost of one analysis.
@@ -122,7 +141,8 @@ func Compare(probes []Probe, skips []Skip, a, b Hits, notes []Note) *Report {
 	}
 	for _, p := range probes {
 		r := Result{Probe: p, Status: "agree"}
-		if p.Kind == "flow" {
+		switch p.Kind {
+		case "flow":
 			for _, o := range p.Outputs {
 				inA, inB := a[key(p.ID, o)], b[key(p.ID, o)]
 				if inA && !inB {
@@ -131,13 +151,37 @@ func Compare(probes []Probe, skips []Skip, a, b Hits, notes []Note) *Report {
 					r.Extra = append(r.Extra, o)
 				}
 			}
-		} else {
+			r.Informative = p.Row == RowPure && len(p.Outputs) > 0 || anyHit(a, b, p)
+		case "sanitizer":
+			// The body is read (A); the model drops the label, so B says nothing. The value must go where the row says (Covered; the
+			// default of a row without flows is result0), and where the row's own flows say it goes, the body must have it too.
+			covered := map[string]bool{}
+			for _, o := range p.Covered {
+				covered[o] = true
+			}
+			if !p.Explicit {
+				covered = map[string]bool{"result0": true}
+			}
+			hitCovered := false
+			for _, o := range p.Outputs {
+				inA := a[key(p.ID, o)]
+				switch {
+				case inA && !covered[o] && p.Explicit:
+					r.Miss = append(r.Miss, o)
+				case !inA && covered[o] && p.Explicit:
+					r.Extra = append(r.Extra, o)
+				}
+				hitCovered = hitCovered || inA && covered[o]
+			}
+			r.Informative = hitCovered || len(r.Miss) > 0 || len(r.Extra) > 0
+		default:
 			got := b[key(p.ID, "cat:"+p.Category)]
 			if p.Expect != nil && *p.Expect && !got {
 				r.Miss = []string{"no finding at " + p.Variant}
 			} else if (p.Expect == nil || !*p.Expect) && got {
 				r.Extra = []string{"finding at " + p.Variant}
 			}
+			r.Informative = true
 		}
 		switch {
 		case len(r.Miss) > 0:
@@ -163,7 +207,7 @@ func Compare(probes []Probe, skips []Skip, a, b Hits, notes []Note) *Report {
 			}
 		}
 		rep.Counts[r.Status]++
-		if p.Kind == "flow" && r.Status == "agree" && !anyHit(a, b, p) {
+		if p.Kind == "flow" && p.Row != RowPure && r.Status == "agree" && !anyHit(a, b, p) {
 			rep.Counts["agree_no_flow"]++ // neither run has a flow here: the probe shows nothing about this position
 		}
 		rep.Results = append(rep.Results, r)
@@ -205,7 +249,7 @@ func (r *Report) Print(w io.Writer) {
 		if x.Reason != "" {
 			detail += "  (" + x.Reason + ")"
 		}
-		fmt.Fprintf(w, "  %-15s %-8s %-52s %-10s %s\n", x.Status, x.Kind, x.Symbol, x.Variant, detail)
+		fmt.Fprintf(w, "  %-15s %-9s %-52s %-10s %s\n", x.Status, probeRow(x.Probe), x.Symbol, x.Variant, detail)
 	}
 	for _, u := range r.Unverified {
 		fmt.Fprintf(w, "  %-15s %-8s %-52s %-10s %s\n", "unverified", "", u.Symbol, u.Variant, u.Reason)
@@ -220,6 +264,9 @@ func (r *Report) Print(w io.Writer) {
 	for _, e := range r.Errors {
 		fmt.Fprintf(w, "  ERROR: %s\n", e)
 	}
+	for _, e := range r.PreExisting {
+		fmt.Fprintf(w, "  pre-existing (a row that the change did not touch; not a failure): %s\n", e)
+	}
 	var ks []string
 	for k := range r.Counts {
 		ks = append(ks, k)
@@ -229,10 +276,170 @@ func (r *Report) Print(w io.Writer) {
 	for _, k := range ks {
 		parts = append(parts, fmt.Sprintf("%s=%d", k, r.Counts[k]))
 	}
+	if line := r.RowSummary(); line != "" {
+		fmt.Fprintf(w, "  %s\n", line)
+		for _, st := range r.Rows {
+			if !st.Judged {
+				fmt.Fprintf(w, "  %-15s %-9s %-52s %s\n", "not judged", st.Row, st.Symbol, st.Reason)
+			}
+		}
+	}
 	fmt.Fprintf(w, "  total: %d probes: %s\n", len(r.Results), strings.Join(parts, " "))
 	for _, k := range []string{"A", "B"} {
 		if x, ok := r.Runs[k]; ok {
 			fmt.Fprintf(w, "  run %s: %.1f s, %d MB\n", k, x.Seconds, x.MaxRSS)
+		}
+	}
+}
+
+func probeRow(p Probe) string {
+	if p.Row != "" {
+		return p.Row
+	}
+	return p.Kind
+}
+
+// Judge says for each row whether the test judged it: the row has a probe that shows something about it (Result.Informative), or the
+// generator checked it without a probe (`states`: a source row whose symbol and positions exist). A row with no such probe is "not
+// judged", with the reason of its first unverified entry (or that no run had a flow there); it is never counted as agreeing. The
+// counts are in Counts as `rows_judged` and `rows_not_judged`, the rows themselves in Rows.
+func (r *Report) Judge(rows []Row, states []RowState) {
+	informative := map[string]bool{}
+	failed := map[string]bool{}
+	seen := map[string]bool{}
+	for _, x := range r.Results {
+		k := probeRow(x.Probe) + " " + x.Symbol
+		seen[k] = true
+		if x.Informative {
+			informative[k] = true
+		}
+		if x.Status == "MISS" || x.Status == "EXTRA" {
+			failed[k] = true
+		}
+	}
+	reasons := map[string]string{}
+	for _, u := range r.Unverified {
+		if _, ok := reasons[u.Symbol]; !ok {
+			reasons[u.Symbol] = u.Reason
+			if u.Variant != "" {
+				reasons[u.Symbol] = u.Variant + ": " + u.Reason
+			}
+		}
+	}
+	explicit := map[string]RowState{}
+	for _, st := range states {
+		explicit[st.Row+" "+st.Symbol] = st
+	}
+	done := map[string]bool{}
+	for _, row := range rows {
+		k := row.Kind + " " + row.Symbol
+		if done[k] {
+			continue
+		}
+		done[k] = true
+		st := RowState{Symbol: row.Symbol, Row: row.Kind}
+		switch e, ok := explicit[k]; {
+		case ok:
+			st = e
+		case informative[k]:
+			st.Judged, st.Failed = true, failed[k]
+		case seen[k]:
+			st.Reason = "no flow in either run at any position that was tried"
+			if why, ok := reasons[row.Symbol]; ok {
+				st.Reason = why + " (and no flow in either run elsewhere)"
+			}
+		default:
+			st.Reason = "no probe was made"
+			if why, ok := reasons[row.Symbol]; ok {
+				st.Reason = why
+			}
+		}
+		r.Rows = append(r.Rows, st)
+		if st.Judged {
+			r.Counts["rows_judged"]++
+		} else {
+			r.Counts["rows_not_judged"]++
+		}
+	}
+}
+
+// RowSummary is the line of the counts of the rows: the share that was really checked, per kind of row, and why the others were not.
+func (r *Report) RowSummary() string {
+	if len(r.Rows) == 0 {
+		return ""
+	}
+	type jn struct{ j, n int }
+	per := map[string]*jn{}
+	why := map[string]int{}
+	for _, st := range r.Rows {
+		c := per[st.Row]
+		if c == nil {
+			c = &jn{}
+			per[st.Row] = c
+		}
+		if st.Judged {
+			c.j++
+		} else {
+			c.n++
+			why[reasonClass(st.Reason)]++
+		}
+	}
+	var kinds, reasons []string
+	for k, c := range per {
+		kinds = append(kinds, fmt.Sprintf("%s %d/%d", k, c.j, c.n))
+	}
+	sort.Strings(kinds)
+	for k, n := range why {
+		reasons = append(reasons, fmt.Sprintf("%s: %d", k, n))
+	}
+	sort.Strings(reasons)
+	out := fmt.Sprintf("rows: %d judged / %d not judged (%s)", r.Counts["rows_judged"], r.Counts["rows_not_judged"], strings.Join(kinds, ", "))
+	if len(reasons) > 0 {
+		out += "; not judged because: " + strings.Join(reasons, "; ")
+	}
+	return out
+}
+
+// reasonClass shortens a reason to its first part, so that the reasons can be counted: the position in front ("arg1: ") and the detail
+// after "(" or ":" are cut.
+func reasonClass(s string) string {
+	if i := strings.Index(s, ": "); i > 0 && i <= 5 {
+		s = s[i+2:]
+	}
+	for _, cut := range []string{" (", ": "} {
+		if i := strings.Index(s, cut); i > 0 {
+			s = s[:i]
+		}
+	}
+	return s
+}
+
+// Restrict keeps as failures only the findings on the rows in `only` (symbols, with the major written /v*): a MISS, an EXTRA or an error
+// on any other row is turned into a "pre-existing" notice, and counted in Counts["pre-existing"]. What a pull request has to fix is the
+// rows that it changed; the rest was there before it (a package whose declaration changed is not restricted).
+func (r *Report) Restrict(only map[string]bool) {
+	for i, x := range r.Results {
+		if (x.Status == "MISS" || x.Status == "EXTRA") && !only[normalMajor(x.Symbol)] {
+			r.PreExisting = append(r.PreExisting, fmt.Sprintf("%s %s %s %s", x.Status, probeRow(x.Probe), x.Symbol, x.Variant))
+			r.Counts[x.Status]--
+			r.Counts["pre-existing"]++
+			r.Results[i].Status = "pre-existing-" + x.Status
+		}
+	}
+	var keep []string
+	for _, e := range r.Errors {
+		sym, _, _ := strings.Cut(e, ": ")
+		if only[normalMajor(sym)] || !strings.Contains(e, ": ") {
+			keep = append(keep, e)
+			continue
+		}
+		r.PreExisting = append(r.PreExisting, "ERROR "+e)
+		r.Counts["pre-existing"]++
+	}
+	r.Errors = keep
+	for k, v := range r.Counts {
+		if v == 0 {
+			delete(r.Counts, k)
 		}
 	}
 }

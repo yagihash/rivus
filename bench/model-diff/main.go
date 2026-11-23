@@ -28,6 +28,10 @@ func realMain(args []string) int {
 	fs := flag.NewFlagSet("model-diff", flag.ContinueOnError)
 	lang := fs.String("lang", "auto", "go, dart or rust (auto: dart for package:<name>, else go). rust: only the spelling of the rows (local, macOS sandbox; exit 0 all found, 1 a row missing or spelled otherwise, 2 failed, 3 skipped, 4 rows that only resolve)")
 	changed := fs.String("changed", "", "print the packages whose rows differ from the ones at this commit (what a pull request checks), and stop")
+	runCh := fs.String("run-changed", "", "run the differential test of every package whose rows differ from the ones at this commit (what a pull request checks), one table at the end; exit 1 when one failed")
+	langs := fs.String("langs", "go", "with -run-changed: the languages that are run (go, dart); a changed package of another one is listed as not run")
+	deadAllow := fs.String("dead-allow", "", "count the rows of the .dead-allow files that a differential test judged, using the report*.json files under this directory (what -run-changed writes), and stop")
+	only := fs.String("only", "", "the symbols of the rows that the pull request changed, comma separated: a MISS, an EXTRA or an error on any other row is shown as pre-existing and does not fail (-run-changed gives it; empty: every row fails)")
 	reviewed := fs.String("changed-reviewed", "", "print the miss-reviewed notes added since this commit (one line each, `miss-reviewed-added <file> <symbol>@<position> <kind>`; a notice for the pull request, never a failure), and stop")
 	gaps := fs.Bool("coverage-gaps", false, "Go standard library: with -pkg, list the exported functions and methods that take a string, bytes or `any` and have no row in the built-in models (the probes start from rows: a function without a row is not found by them), and stop")
 	pkg := fs.String("pkg", "", "the package: a Go import path, or package:<name> for Dart")
@@ -44,6 +48,25 @@ func realMain(args []string) int {
 	noDefault := fs.Bool("no-default-features", false, "Rust: the probe crate asks for default-features = false")
 	if err := fs.Parse(args); err != nil {
 		return 2
+	}
+	if *deadAllow != "" {
+		abs, _ := filepath.Abs(*repo)
+		if err := deadAllowCount(abs, *deadAllow); err != nil {
+			return fail(err)
+		}
+		return 0
+	}
+	if *runCh != "" {
+		abs, _ := filepath.Abs(*repo)
+		var extra []string
+		if *rivus != "" {
+			extra = append(extra, "-rivus", *rivus)
+		}
+		if *version != "" || *local != "" {
+			fmt.Fprintln(os.Stderr, "model-diff: -run-changed does not take -version or -local (each package has its own)")
+			return 2
+		}
+		return runChanged(abs, *runCh, *langs, *out, append(extra, "-timeout", *timeout))
 	}
 	if *reviewed != "" {
 		abs, _ := filepath.Abs(*repo)
@@ -181,6 +204,19 @@ func realMain(args []string) int {
 			errs = append(errs, e...)
 		}
 	}
+	// Dart: only the flows rows and the sinks are checked; the other rows are listed as not judged (never as agreeing)
+	var skipped []RowState
+	if *lang == "dart" {
+		var keep []Row
+		for _, r := range rows {
+			if r.Kind == RowPure {
+				skipped = append(skipped, RowState{Symbol: r.Symbol, Row: r.Kind, Reason: "a pure row is not checked for Dart"})
+				continue
+			}
+			keep = append(keep, r)
+		}
+		rows = keep
+	}
 	if len(rows) == 0 {
 		fmt.Fprintf(os.Stderr, "model-diff: no row of %s in %s\n", *pkg, strings.Join(files, ", "))
 		return 2
@@ -229,6 +265,18 @@ func realMain(args []string) int {
 		return fail(err)
 	}
 	rep := Compare(gen.Probes, gen.Skips, a, b, notes)
+	rep.Judge(rows, gen.States)
+	if *only != "" {
+		set := map[string]bool{}
+		for _, sym := range strings.Split(*only, ",") {
+			set[normalMajor(sym)] = true
+		}
+		rep.Restrict(set)
+	}
+	for _, st := range skipped {
+		rep.Rows = append(rep.Rows, st)
+		rep.Counts["rows_not_judged"]++
+	}
 	rep.Language, rep.Package, rep.Models, rep.Runs = *lang, *pkg, used, runs
 	rep.Errors = append(append(rep.Errors, errs...), gen.Errors...)
 	rep.Print(os.Stdout)

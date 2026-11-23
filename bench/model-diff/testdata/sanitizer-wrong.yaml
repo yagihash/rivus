@@ -1,0 +1,14 @@
+ruleset: test/synth@1
+sanitizers:
+  # the body carries arg1 as well
+  - symbol: example.com/synth.Pair
+    drops: [user_input]
+    flows: [{from: arg0, to: result}]
+  # the body ignores arg0
+  - symbol: example.com/synth.Drop
+    drops: [user_input]
+    flows: [{from: arg0, to: result}]
+  # a position that the function does not have
+  - symbol: example.com/synth.Esc
+    drops: [user_input]
+    flows: [{from: arg3, to: result}]

@@ -16,11 +16,23 @@ import (
 // A model file as the tool needs it: the rows of one package (flows and sinks), the notes in the comments next to the rows,
 // and the text of the file without the rows of the package (the run that reads the bodies).
 
+// The kinds of the rows that the test reads.
+const (
+	RowFlow      = "flow"      // a propagators row with flows: compared with the body
+	RowPure      = "pure"      // a propagators row with `pure: true`: the body must have no flow that the row loses
+	RowSink      = "sink"      // a sinks row: compared with its declaration
+	RowSanitizer = "sanitizer" // a sanitizers row: the body must carry the value that the row says it cleans, and the row's flows must be the body's
+	RowSource    = "source"    // a sources row: the symbol, the field or the type must be in the package, and the positions must exist
+)
+
 // Row is one row of a model file that is checked.
 type Row struct {
-	Symbol string
+	Kind   string
+	Symbol string            // for a source of the kind field or param_type: the field or the type
 	Sink   *model.Sink       // a sinks row
-	Prop   *model.Propagator // a propagators row
+	Prop   *model.Propagator // a propagators row (flow, pure)
+	San    *model.Sanitizer
+	Src    *model.Source
 }
 
 // Note is a `# model-diff: <kind> <symbol> <text>` comment.
@@ -119,7 +131,8 @@ func checkReviewed(n Note) string {
 	return ""
 }
 
-// LoadRows reads a model file and returns its flows rows and sinks rows whose symbol is of the package.
+// LoadRows reads a model file and returns its rows of the package: flows rows, pure rows, sinks, sanitizers and sources (Dart: the
+// flows rows and the sinks only: the other kinds are not checked there, and the caller says so).
 func LoadRows(path, lang, pkg string) ([]Row, string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -132,16 +145,48 @@ func LoadRows(path, lang, pkg string) ([]Row, string, error) {
 	var rows []Row
 	for i := range rs.Propagators {
 		p := &rs.Propagators[i]
-		if model.MatchMajor(SymbolPackage(lang, p.Symbol), pkg) && len(p.Flows) > 0 {
+		if !model.MatchMajor(SymbolPackage(lang, p.Symbol), pkg) {
+			continue
+		}
+		switch {
+		case len(p.Flows) > 0:
 			p.Symbol = concreteIn(p.Symbol, pkg)
-			rows = append(rows, Row{Symbol: p.Symbol, Prop: p})
+			rows = append(rows, Row{Kind: RowFlow, Symbol: p.Symbol, Prop: p})
+		case p.Pure:
+			p.Symbol = concreteIn(p.Symbol, pkg)
+			rows = append(rows, Row{Kind: RowPure, Symbol: p.Symbol, Prop: p})
 		}
 	}
 	for i := range rs.Sinks {
 		s := &rs.Sinks[i]
 		if model.MatchMajor(SymbolPackage(lang, s.Symbol), pkg) {
 			s.Symbol = concreteIn(s.Symbol, pkg)
-			rows = append(rows, Row{Symbol: s.Symbol, Sink: s})
+			rows = append(rows, Row{Kind: RowSink, Symbol: s.Symbol, Sink: s})
+		}
+	}
+	if lang == "go" {
+		for i := range rs.Sanitizers {
+			s := &rs.Sanitizers[i]
+			if model.MatchMajor(SymbolPackage(lang, s.Symbol), pkg) {
+				s.Symbol = concreteIn(s.Symbol, pkg)
+				rows = append(rows, Row{Kind: RowSanitizer, Symbol: s.Symbol, San: s})
+			}
+		}
+		for i := range rs.Sources {
+			s := &rs.Sources[i]
+			name := s.Symbol
+			switch s.Kind {
+			case model.KindField:
+				name = s.Field
+			case model.KindParamType:
+				name = strings.TrimPrefix(s.Type, "*")
+			}
+			if name == "" || !model.MatchMajor(SymbolPackage(lang, name), pkg) {
+				continue
+			}
+			name = concreteIn(name, pkg)
+			s.Symbol, s.Field, s.Type = concreteIn(s.Symbol, pkg), concreteIn(s.Field, pkg), concreteIn(s.Type, pkg)
+			rows = append(rows, Row{Kind: RowSource, Symbol: name, Src: s})
 		}
 	}
 	return rows, string(data), nil
