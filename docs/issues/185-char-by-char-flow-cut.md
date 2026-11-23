@@ -73,3 +73,9 @@ IR の命令に目印 `CharRead`(`char_read`)を足し、Go の extractor が付
 - cel-go は 33 関数、`char_reads` 102 件、`other` 0 件。最上位は `common.Error.ToDisplayString` と `ext.parseFormatString` などの 9 件(`char_reads` の順位は 112 位前後)。
 - まだ分かっていないこと: antlr の字句解析に、そもそも汚染が届いていないのか(source から遠い)、届いても、止める処理が `isCharRead` にも `other` にも当たらないのか。分けるには、antlr の関数の要約に入る source の有無を見る必要がある。
 - 限界(確認済みの範囲): `numeric_stops` が示すのは、記録された止まりだけ。antlr のように、数えられていない字句解析は、この数では指せない。YAML(`yaml.v3` 36 関数、1065 件)と Markdown(`goldmark` 102 関数、948 件)は、数えられている。
+
+### `-char-taint` の Go の実装で、通らない形(結論。2026-11-24)
+
+Go の zoo の 8 形のうち、`-char-taint` を付けると 7 形(append、case、hex、lexer、range-write、replace、reverse)が通る。**base64 は通らない**。原因は 2 つで、どちらも設計どおりの止め: (1) `uint32(s[i+j])` は、別の数の型への変換なので、文字のマークを落とす(`byte`・`rune` への変換は保つ)。(2) 復号の `strings.IndexByte(alphabet, c)` は、モデルが文字列から作る数で、マークを落とす。符号化の `alphabet[n>>18&63]` は、`n` が `uint32` を通ったあとなので、マークがない。hex が通るのは、`c>>4` で `byte` のまま表を引くため(表を文字で引く形は、引いた値に文字のマークを付ける)。
+
+base64 のセルは、`@miss(silent) @ref(#185)` のままにする(フラグを付けても外れない。`@flag` は付けない)。通すには、数の型への変換でマークを保つ規則が要る。それは、`int(c)` で数になった値(`int(c - '0')`、長さではなく数として使う値)まで運ぶことになり、設計の「数への変換では止める」と両立しない。Dart と Rust でも、同じ形(`codeUnitAt` を `int` で受けて表を引く、`as u32`)は、同じ理由で通らない見込み。

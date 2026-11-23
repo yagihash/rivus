@@ -32,16 +32,16 @@ const (
 // millions of elements, and as a struct of strings each of them was 80 bytes.
 // The numbers say nothing about order: elements are sorted by their strings.
 type Elem struct {
-	Kind   ElemKind
+	Kind ElemKind
+	// char: the data was read as one character of a text (a byte, a rune, a code unit: -char-taint). Only an element
+	// that has it enters a number (numericRoot); a length, an index, a comparison and a conversion to another number
+	// do not give it. Always false without the flag.
+	char   bool  // placed beside Kind: it takes the padding, and the size of an Elem stays what it was
 	Param  int32 // Param: parameter index (receiver first, then free variables)
 	label  strID // Real: the label name
 	origin strID // Real: ID of the source site that introduced it
 	path   strID // Param: access path inside the parameter object
 	mods   strID // Param: sanitizer operations applied since (see applyMods)
-	// char: the data was read as one character of a text (a byte, a rune, a code unit: -char-taint). Only an element
-	// that has it enters a number (numericRoot); a length, an index, a comparison and a conversion to another number
-	// do not give it. Always false without the flag.
-	char bool
 }
 
 // Label is, for a Real element, the label name.

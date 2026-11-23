@@ -114,6 +114,18 @@ func fEscape(w http.ResponseWriter, r *http.Request) {
 	exec.Command("sh", "-c", escape(r.FormValue("x"))).Run()
 }
 
+const digits = "0123456789abcdef"
+
+// a table looked up by a character: the value is made of it (hex)
+func fTable(w http.ResponseWriter, r *http.Request) {
+	s := r.FormValue("x")
+	var out []byte
+	for i := 0; i < len(s); i++ {
+		out = append(out, digits[s[i]>>4])
+	}
+	exec.Command("sh", "-c", string(out)).Run()
+}
+
 // --- it does not
 
 func nLen(w http.ResponseWriter, r *http.Request) {
@@ -133,6 +145,24 @@ func nCompare(w http.ResponseWriter, r *http.Request) {
 	s := r.FormValue("x")
 	ok := s[0] == '/'
 	exec.Command("sh", "-c", strconv.FormatBool(ok)).Run()
+}
+
+// the length of what was made of characters: the characters are in the string, the length is not
+func nLenOfChars(w http.ResponseWriter, r *http.Request) {
+	s := r.FormValue("x")
+	var out []byte
+	for i := 0; i < len(s); i++ {
+		out = append(out, s[i])
+	}
+	exec.Command("sh", "-c", strconv.Itoa(len(string(out)))).Run()
+}
+
+// arithmetic on a number that was made of a character by a conversion to another number type: not a character any more
+func nIntArith(w http.ResponseWriter, r *http.Request) {
+	s := r.FormValue("x")
+	n := int(s[0]) + 1
+	m := n * 2
+	exec.Command("sh", "-c", strconv.Itoa(m)).Run()
 }
 
 func nNumber(w http.ResponseWriter, r *http.Request) {
@@ -188,8 +218,8 @@ func TestCharTaint(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(charTaintSrc), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	flows := []string{"fIndex", "fRange", "fUpper", "fPlusOne", "fField", "fHelper", "fEscape"}
-	stops := []string{"nLen", "nIndex", "nCompare", "nNumber"}
+	flows := []string{"fIndex", "fRange", "fUpper", "fPlusOne", "fField", "fHelper", "fEscape", "fTable"}
+	stops := []string{"nLen", "nIndex", "nCompare", "nNumber", "nLenOfChars", "nIntArith"}
 
 	off, _ := charTaintRun(t, dir)
 	for _, n := range append(append([]string{}, flows...), stops...) {
