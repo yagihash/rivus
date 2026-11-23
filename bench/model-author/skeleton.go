@@ -510,6 +510,23 @@ func (g *skelGen) emitMethods(obj *types.TypeName) bool {
 	return len(ms) > 0
 }
 
+// noteType records the type that a row points at (a method or a field is cut off from its name). It is a method, not a closure
+// that is handed around: rivus reads its own code (TestDogfood) and does not follow a captured value into a helper.
+func (g *skelGen) noteType(name string) {
+	if i := strings.IndexAny(name, "."); i > 0 {
+		name = name[:i]
+	}
+	g.rowTypes[name] = true
+}
+
+// noteSym records the symbol of a row, and the type of its receiver when that type is in the package.
+func (g *skelGen) noteSym(prefix, s string) {
+	g.rowSyms[s] = true
+	if rt := receiverType(s); strings.HasPrefix(rt, prefix) {
+		g.noteType(strings.TrimPrefix(rt, prefix))
+	}
+}
+
 // collectRows reads what the rows of the package point at.
 func (g *skelGen) collectRows() {
 	f := g.in.Facts
@@ -517,20 +534,8 @@ func (g *skelGen) collectRows() {
 		return
 	}
 	prefix := g.in.Root.Path() + "."
-	typ := func(name string) {
-		if i := strings.IndexAny(name, "."); i > 0 {
-			name = name[:i]
-		}
-		g.rowTypes[name] = true
-	}
-	sym := func(s string) {
-		g.rowSyms[s] = true
-		if rt := receiverType(s); strings.HasPrefix(rt, prefix) {
-			typ(strings.TrimPrefix(rt, prefix))
-		}
-	}
 	for _, r := range f.SinkRows {
-		sym(r.Symbol)
+		g.noteSym(prefix, r.Symbol)
 		for _, p := range r.PartList() {
 			if p.Field != "" {
 				g.rowFields[strings.Split(p.Field, ".")[0]] = true
@@ -538,21 +543,21 @@ func (g *skelGen) collectRows() {
 		}
 	}
 	for _, r := range f.FlowRows {
-		sym(r.Symbol)
+		g.noteSym(prefix, r.Symbol)
 	}
 	for _, r := range f.SourceRows {
 		switch {
 		case r.Symbol != "":
-			sym(r.Symbol)
+			g.noteSym(prefix, r.Symbol)
 		case r.Field != "" && strings.HasPrefix(r.Field, prefix):
 			rest := strings.TrimPrefix(r.Field, prefix)
-			typ(rest)
+			g.noteType(rest)
 			if _, fld, ok := strings.Cut(rest, "."); ok {
 				g.rowFields[fld] = true
 			}
 		case r.Type != "":
 			if t := strings.TrimPrefix(r.Type, "*"); strings.HasPrefix(t, prefix) {
-				typ(strings.TrimPrefix(t, prefix))
+				g.noteType(strings.TrimPrefix(t, prefix))
 			}
 		}
 	}
