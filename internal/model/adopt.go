@@ -355,12 +355,14 @@ func CheckAdoption(sets ...*RuleSet) error {
 			if r.p.Origin != OriginGenerated {
 				return fmt.Errorf("%s: %s: a row of this file is origin generated (got %q)", rs.Origin, r.where, r.p.Origin)
 			}
-			a, ok := decisions[r.p.Decision]
-			if !ok {
-				return fmt.Errorf("%s: %s: decision %q is not in adopt_rules of %s.yaml", rs.Origin, r.where, r.p.Decision, stem)
-			}
-			if a.Kind != r.kind {
-				return fmt.Errorf("%s: %s: the row is a %s, decision %q is a %s", rs.Origin, r.where, r.kind, a.ID, a.Kind)
+			for _, id := range r.p.Decision {
+				a, ok := decisions[id]
+				if !ok {
+					return fmt.Errorf("%s: %s: decision %q is not in adopt_rules of %s.yaml", rs.Origin, r.where, id, stem)
+				}
+				if a.Kind != r.kind {
+					return fmt.Errorf("%s: %s: the row is a %s, decision %q is a %s", rs.Origin, r.where, r.kind, a.ID, a.Kind)
+				}
 			}
 		}
 	}
@@ -386,4 +388,52 @@ func setAdoptLines(data []byte, rules []AdoptRule) {
 			}
 		}
 	}
+}
+
+// DecisionIDs is the `decision:` of a generated row: one id (`decision: a`) or a list (`decision: [a, b]`) for a row that decisions that overlap
+// were merged into. A list is sorted and has no duplicates; a single id is the same as a list of one.
+type DecisionIDs []string
+
+// UnmarshalYAML reads a string or a list of strings.
+func (d *DecisionIDs) UnmarshalYAML(n *yaml.Node) error {
+	switch n.Kind {
+	case yaml.ScalarNode:
+		var s string
+		if err := n.Decode(&s); err != nil {
+			return err
+		}
+		*d = DecisionIDs{s}
+	case yaml.SequenceNode:
+		var l []string
+		if err := n.Decode(&l); err != nil {
+			return err
+		}
+		*d = DecisionIDs(l)
+	default:
+		return fmt.Errorf("line %d: decision is an id or a list of ids", n.Line)
+	}
+	return nil
+}
+
+// MarshalYAML writes one id as a string and several as a list.
+func (d DecisionIDs) MarshalYAML() (any, error) {
+	if len(d) == 1 {
+		return d[0], nil
+	}
+	return []string(d), nil
+}
+
+func (d DecisionIDs) validate(what string) error {
+	if len(d) == 0 {
+		return fmt.Errorf("%s: a generated row needs decision: the id of its decision in adopt_rules (or a list of ids)", what)
+	}
+	for i, id := range d {
+		if !adoptIDRe.MatchString(id) {
+			return fmt.Errorf("%s: decision %q is not an id of adopt_rules", what, id)
+		}
+		if i > 0 && d[i-1] >= id {
+			return fmt.Errorf("%s: decision is a list of ids in dictionary order, with no duplicates (%q is after %q)", what, id, d[i-1])
+		}
+	}
+	return nil
 }

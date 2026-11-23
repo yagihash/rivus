@@ -20,7 +20,8 @@ type Claim struct {
 	Category string // sink only; "" for a source
 }
 
-// Merged is a position with its claims joined: one row. Decisions are in the order of the first claim of each (the order in the file).
+// Merged is a position with its claims joined: one row. Decisions are all the ids, in dictionary order without duplicates: the row writes them
+// all in `decision:` (a list when there are several).
 type Merged struct {
 	Symbol    string
 	Position  string
@@ -80,6 +81,7 @@ func ResolveClaims(claims []Claim) (merged []Merged, warnings []string, err erro
 			decisions = appendOnce(decisions, c.Decision)
 			cats = appendOnce(cats, c.Category)
 		}
+		sort.Strings(decisions)
 		if len(cats) > 1 {
 			sort.Strings(cats)
 			conflicts = append(conflicts, Conflict{Symbol: k.sym, Position: k.pos, Decisions: decisions, Categories: cats})

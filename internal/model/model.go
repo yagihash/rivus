@@ -61,8 +61,9 @@ type Provenance struct {
 	DecidedAt    string `yaml:"decided_at" json:"decided_at,omitempty"`
 	Rationale    string `yaml:"rationale" json:"rationale,omitempty"`
 	ModelVersion string `yaml:"model_version" json:"model_version,omitempty"`
-	// Decision is the id of the decision of `adopt_rules:` that a generated row comes from (origin generated, and only then).
-	Decision string `yaml:"decision" json:"decision,omitempty"`
+	// Decision is the id of the decision of `adopt_rules:` that a generated row comes from (origin generated, and only then): one id, or a list of
+	// ids when decisions that overlap were merged into the row (sorted, no duplicates).
+	Decision DecisionIDs `yaml:"decision,omitempty" json:"decision,omitempty"`
 }
 
 // RuleSet is one parsed rule file.
@@ -741,15 +742,15 @@ func (rs *RuleSet) fillOrigins() {
 }
 
 func (p Provenance) validate(what string) error {
-	if p.Decision != "" && p.Origin != OriginGenerated {
+	if len(p.Decision) > 0 && p.Origin != OriginGenerated {
 		return fmt.Errorf("%s: decision is for the rows of origin generated (got origin %q)", what, p.Origin)
 	}
 	switch p.Origin {
 	case OriginBuiltin, OriginHuman:
 		return nil
 	case OriginGenerated:
-		if !adoptIDRe.MatchString(p.Decision) {
-			return fmt.Errorf("%s: a generated row needs decision: the id of its decision in adopt_rules (got %q)", what, p.Decision)
+		if err := p.Decision.validate(what); err != nil {
+			return err
 		}
 		return nil
 	case OriginLLM:
