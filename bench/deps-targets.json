@@ -95,6 +95,7 @@
     "mem_cap_gb": 8,
     "decided": true,
     "dart_remove_flutter_workspace_members": true,
+    "lock": "bench/dart-services/pubspec.lock",
     "detect": null,
     "_doc": "pass line D (user decision, 2026-11-24): converge within 600 s and 8 GB, default flags; detection is n/a (no public vulnerability). The limit of 600 s is for the same reason as Gitea (C): 180 s has no ground. Also a target of the depth experiments"
   },
