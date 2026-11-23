@@ -1,7 +1,7 @@
 # ADR-105: 宣言のあるパッケージの本体を、extractor が読まない(Go と Dart。ADR-100 の続き。2026-11-23)
 
 - 状態: 有効
-- 関連: -
+- 関連: ADR-100、DESIGN-package-models(2 節、7a 節)
 
 **背景:** ADR-100 は、宣言のあるパッケージの関数を、IR を読んだあと、解析の前に落とした。extractor は全部読むので、読み込みの時間とメモリは減らなかった(Dart は、extractor が時間の 9 割)。設計は `docs/DESIGN-package-models.md` の 2 節と 7a 節。
 

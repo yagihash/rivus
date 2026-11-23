@@ -1,7 +1,7 @@
 # ADR-106: source の新しい種類 `callback_param`(呼び出しに渡された関数の引数を source にする。課題 #149。2026-11-23)
 
 - 状態: 有効
-- 関連: -
+- 関連: DESIGN-callback-sources、課題 #149
 
 **背景:** shelf_router の `router.get('/item/<id>', (Request r, String id) => ...)` の `id` は利用者の入力だが、型が `String` で `param_type` で指せず、`calls:` の行にも source を書く場所がない(サイレントな見逃し)。比較は [DESIGN-callback-sources.md](../DESIGN-callback-sources.md)(`calls:` の拡張、`callback_param`、型で決める案、入口の宣言、関数名の `param`)。
 

@@ -1,7 +1,7 @@
 # ADR-109: Rust の extractor は、変換できない関数を飛ばして、ほかを読み続ける(`fn_skipped`。2026-11-23)
 
 - 状態: 有効
-- 関連: -
+- 関連: DESIGN-rust-extractor-panic、課題 #160
 
 **背景:** `rustc_public` は、async closure の型を stable MIR に変換できず、`unimplemented!`(`FIXME(async_closures)`)でパニックする(固定の nightly でも、`rust-lang/rust` の master でも同じ)。パニックは、extractor 自身が呼ぶ変換の中で起き、1 つの関数で、そのクレートの抽出が止まり、cargo が止まり、解析全体が止まった。`google-cloud-auth` を通る依存(Google Cloud の Rust のクライアント全部)は、依存込みでは解析できなかった([課題 #160](../issues/160-rust-async-closure-extractor.md)、[DESIGN-rust-extractor-panic.md](../DESIGN-rust-extractor-panic.md))。
 

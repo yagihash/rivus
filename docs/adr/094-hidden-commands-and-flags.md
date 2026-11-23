@@ -1,7 +1,7 @@
 # ADR-094: 普段使わないコマンドとフラグを分ける。`extract` は `debug extract` に移し、`-h` は普段使うフラグだけを出す(ユーザーの依頼、2026-11-22)
 
 - 状態: 有効
-- 関連: -
+- 関連: README、AGENT-GUIDE、ADR-093
 
 **決めたこと:**
 1. `rivus extract` は `rivus debug extract` に移した。`rivus help` の一覧から `extract` を外し、`debug`(調査と開発のためのコマンド)を足した。`rivus debug` と `rivus debug -h` は、その下のコマンドを出す。動作、フラグ、出力は、今までの `extract` と同じ。古い `rivus extract` は、別名にせず、新しい名前を案内して終了コード 2 で止まる(`-container-*` のフラグの改名と同じ扱い。ADR-093)。
