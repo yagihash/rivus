@@ -1,0 +1,4 @@
+go	conv/char_decode_rune/char_decode_rune.go	miss	@source(conv-char-decode-rune-decoy) @miss(silent) @ref(#198)	func decoy() { @decoy
+go	conv/char_decode_rune/char_decode_rune.go	miss	@source(conv-char-decode-rune-vuln) @miss(silent) @ref(#198)	func vuln() { @vuln
+go	conv/char_decode_rune/char_decode_rune.go	sink-none	@sink(none)	func fixed() { @fixed
+go	conv/char_decode_rune/char_decode_rune.go	sink-none	@sink(none) @nosink(conv-char-decode-rune-decoy)	func decoy() { @decoy
