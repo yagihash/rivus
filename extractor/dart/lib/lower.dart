@@ -285,6 +285,12 @@ class FnLower {
   /// function around when it is not ours.
   int? _lookup(Object key, DartType? t, {required bool wantCell}) {
     if (vars.containsKey(key) && !wantCell) return vars[key];
+    if (selfKey != null && key == selfKey && !wantCell && !vars.containsKey(key)) {
+      // a closure inside the local function takes the function itself (the call of its own name from a closure in its body)
+      final d = tmp(t);
+      _selfMakes.add(emit('make_closure', dsts: [d], more: {'func': selfFunc}));
+      return d;
+    }
     if (cellVars.containsKey(key)) return cellVars[key];
     if (vars.containsKey(key)) return vars[key];
     final p = parent;

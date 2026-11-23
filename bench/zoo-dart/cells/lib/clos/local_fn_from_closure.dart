@@ -6,6 +6,8 @@ void register() {
   zooCase('F/clos/local-fn-from-closure/vuln', vuln);
   zooCase('F/clos/local-fn-from-closure/fixed', fixed);
   zooCase('F/clos/local-fn-from-closure/decoy', decoy);
+  zooCase('F/clos/local-fn-from-closure/vuln3', vuln3);
+  zooCase('F/clos/local-fn-from-closure/vuln2', vuln2);
 }
 
 void vuln() { // @vuln
@@ -13,7 +15,7 @@ void vuln() { // @vuln
     sinkCmd(s); // @sink(clos-local-fn-from-closure-vuln)
   }
 
-  final v = src('clos-local-fn-from-closure-vuln'); // @source(clos-local-fn-from-closure-vuln) @miss(silent) @ref(#99)
+  final v = src('clos-local-fn-from-closure-vuln'); // @source(clos-local-fn-from-closure-vuln)
   [1].forEach((_) {
     emit(v);
   });
@@ -36,8 +38,46 @@ void decoy() { // @decoy
     sinkSql(a); // @sink(clos-local-fn-from-closure-decoy)
   }
 
-  final v = src('clos-local-fn-from-closure-decoy'); // @source(clos-local-fn-from-closure-decoy) @miss(silent) @ref(#99)
+  final v = src('clos-local-fn-from-closure-decoy'); // @source(clos-local-fn-from-closure-decoy)
   [1].forEach((_) {
     emit(v, 'constant');
+  });
+}
+
+void vuln3() { // @vuln
+  // two local functions: the closure calls only one of them with the source; the other one is called with a constant
+  void keep(String s) {
+    sinkCmd(s); // @sink(none) @nosink(clos-local-fn-from-closure-vuln3)
+  }
+
+  void use(String s) {
+    sinkSql(s); // @sink(clos-local-fn-from-closure-vuln3)
+  }
+
+  final v = src('clos-local-fn-from-closure-vuln3'); // @source(clos-local-fn-from-closure-vuln3)
+  [1].forEach((_) {
+    use(v);
+  });
+  [1].forEach((_) {
+    keep('constant');
+  });
+}
+
+void vuln2() { // @vuln
+  // a variable that holds one local function and later another: the closure may call either
+  void first(String s) {
+    sinkSql(s); // @sink(none)
+  }
+
+  void second(String s) {
+    sinkCmd(s); // @sink(clos-local-fn-from-closure-vuln2)
+  }
+
+  var f = first;
+  f('constant');
+  f = second;
+  final v = src('clos-local-fn-from-closure-vuln2'); // @source(clos-local-fn-from-closure-vuln2) @miss(unresolved_callee) @ref(#99,PARITY)
+  [1].forEach((_) {
+    f(v);
   });
 }

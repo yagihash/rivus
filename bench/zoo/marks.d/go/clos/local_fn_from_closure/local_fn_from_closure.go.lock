@@ -1,0 +1,2 @@
+go	clos/local_fn_from_closure/local_fn_from_closure.go	sink-none	@sink(none)	func fixed() { @fixed
+go	clos/local_fn_from_closure/local_fn_from_closure.go	sink-none	@sink(none) @nosink(clos-local-fn-from-closure-decoy)	func decoy() { @decoy
