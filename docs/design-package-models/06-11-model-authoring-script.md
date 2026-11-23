@@ -15,7 +15,7 @@
 | 3b | Rust の `[workspace] exclude = ["skel"]`(`kind: field` の source を使うとき) | 4 節の Rust の注意(octocrab) | スクリプトにできる | 条件を付けず、骨組みに常に足す(3 つの言語とも、骨組みを依存として扱う) |
 | 3c | 埋め込み型・インターフェースの骨組みの形(sqlx の `DB` が `*sql.DB` を埋め込む) | 4 節の補足と 6.8 の生成器の要件 | スクリプトにできる(型の情報から) | 型の埋め込みは `go/types` などで読める |
 | 4 | セルの置き場所(Go は `bench/zoo-go` か `bench/zoo-go-pkg/<名前>/`。パッケージの設定、`go.mod`、`rules.yaml`) | 4 節の「さわってよいファイル」。標準ライブラリの行を、`zoo-go-pkg` のセルで確認するか `zoo-go` のセルでするか、の迷い(`os`、`database/sql`) | スクリプトにできる(規則を決めれば) | 規則: 第三者のパッケージは `zoo-<lang>-pkg`。標準ライブラリは、対のセルの確認を満たせれば `zoo-<lang>`、満たせなければ `zoo-<lang>-pkg/<標準ライブラリの名前>`(#219、#223 の形)。コマンドが決める |
-| 5 | セルの本体(vuln / fixed / decoy の呼び出し) | 2 節の 4 | 骨組み(テンプレート)はスクリプトにできる。中身は判断が要る | 行ごとに「届く / 届かない」のセルが要る。テンプレートは、行から作れる。`fixed` は Rust で 4 つの `clean_*` を通す決まり(4 節)なので、テンプレートに入れる |
+| 5 | セルの本体(vuln / fixed / decoy の呼び出し) | 2 節の 4 | 骨組み(テンプレート)はスクリプトにできる。中身は判断が要る | 行ごとに「届く / 届かない」のセルが要る。テンプレートは、行から作れる。`fixed` は Rust で 4 つの `clean_*` を通すルール(4 節)なので、テンプレートに入れる |
 | 6 | マークの固定(`ZOO_MARKS_UPDATE=1 go test ./cmd/rivus -run '^TestZooMarksLock$'`) | 4 節の補足 | スクリプトにできる | コマンドが決まっている。新しいセルだけが増えたことを確認する |
 | 7 | Dart の依存の解決(`--dep-dir`、`pubspec.yaml` の `dependency_overrides`、`zoo_exec_override`、`make zoo-dart-gen`) | 4 節、6.8(shelf と `test` の名前のぶつかり。github の `field` の source を `--dep-dir` で読む) | スクリプトにできる | `zoo_exec_override` の行は、`cmd/rivus/zoo_dart_gen_test.go` が読む。骨組みの `pubspec.yaml` に書くだけ。`--dep-dir` は条件を付けず、骨組みに常に足す |
 | 8 | Go の major バージョンの接尾辞(`/v2` など)を、シンボルでどう書くか(ワイルドカード) | 手順書の追記の履歴(go-github)。手順書の本文には、いまは規則がない(**要確認**) | スクリプトにできる(モジュールのパスから) | モジュールのパスの `/vN` は、`go list -m` で決まる |
