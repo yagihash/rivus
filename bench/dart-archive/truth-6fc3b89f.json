@@ -1,0 +1,20 @@
+{
+ "target": "https://github.com/brendan-duncan/archive at 6fc3b89fcdb89b593402e0dabc13a7d7fd3f762d (3.3.7, the last affected version of GHSA-9v85-q87q-g4vg / CVE-2023-39139; fixed in 3.3.8, 01110f00e0d0b9b2bc524dd074b896c5409e54db, by edb0d480733a44d28ff3d5e4e2779153ba645ce7 and 6de492385d72af044231c4163dff13a43d991c83)",
+ "how": "The vulnerability: extractArchiveToDisk creates a symbolic link whose target is the name stored in the archive entry (file.nameOfLinkedFile) with no check that the target stays inside the output directory; the fix adds a check of the target (_isValidSymLink). The labelled sites are the two calls that create the link with that target (the asynchronous and the synchronous form). Found by reading the code at this commit. A site counts when a finding of the category has a call step at that line (bench/score.py --through, bench/deps_bench.py).",
+ "sites": [
+  {
+   "file": "lib/src/io/extract_archive_to_disk.dart",
+   "line": 37,
+   "label": "vuln",
+   "category": "path_traversal",
+   "note": "link.create(p.normalize(file.nameOfLinkedFile), recursive: true): the target of the link is the stored name"
+  },
+  {
+   "file": "lib/src/io/extract_archive_to_disk.dart",
+   "line": 53,
+   "label": "vuln",
+   "category": "path_traversal",
+   "note": "link.createSync(p.normalize(file.nameOfLinkedFile), recursive: true): the same, synchronous"
+  }
+ ]
+}

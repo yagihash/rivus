@@ -70,5 +70,21 @@
     "mem_cap_gb": 8,
     "decided": false,
     "detect": null
+  },
+  "dart-archive": {
+    "_doc": "brendan-duncan/archive (package:archive) at 3.3.7, the last affected version of CVE-2023-39139 / GHSA-9v85-q87q-g4vg (extractArchiveToDisk creates a symlink whose target is the stored name, with no check); 3.3.8 is the fixed version. Dart DETECTION target: detected per vulnerability (detect.mode through, truth bench/dart-archive/truth-6fc3b89f.json), builtin models (the entry-name sources of package:archive), default flags, `dart pub get` only; the code is never run. INFO until its line is decided. Quiet-after-fix is recorded (bench/dart-archive/README.md), not part of the line.",
+    "lang": "dart",
+    "repo": "https://github.com/brendan-duncan/archive",
+    "commit": "6fc3b89fcdb89b593402e0dabc13a7d7fd3f762d",
+    "subdir": "",
+    "args": [],
+    "time_limit_s": 180,
+    "mem_cap_gb": 8,
+    "decided": false,
+    "detect": {
+      "id": "CVE-2023-39139",
+      "mode": "through",
+      "truth": "bench/dart-archive/truth-6fc3b89f.json"
+    }
   }
 }
