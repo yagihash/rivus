@@ -26,7 +26,7 @@ func main() { os.Exit(realMain(os.Args[1:])) }
 
 func realMain(args []string) int {
 	fs := flag.NewFlagSet("model-diff", flag.ContinueOnError)
-	lang := fs.String("lang", "auto", "go, dart or rust (auto: dart for package:<name>, else go). rust: only the spelling of the rows (local, macOS sandbox; exit 0 all found, 1 a row missing or spelled otherwise, 2 failed, 3 skipped, 4 rows that only resolve)")
+	lang := fs.String("lang", "auto", "go or dart (auto: dart for package:<name>, else go). Rust: not checked, there is no isolation for the build of a crate")
 	changed := fs.String("changed", "", "print the packages whose rows differ from the ones at this commit (what a pull request checks), and stop")
 	reviewed := fs.String("changed-reviewed", "", "print the miss-reviewed notes added since this commit (one line each, `miss-reviewed-added <file> <symbol>@<position> <kind>`; a notice for the pull request, never a failure), and stop")
 	gaps := fs.Bool("coverage-gaps", false, "Go standard library: with -pkg, list the exported functions and methods that take a string, bytes or `any` and have no row in the built-in models (the probes start from rows: a function without a row is not found by them), and stop")
@@ -39,9 +39,6 @@ func realMain(args []string) int {
 	version := fs.String("version", "", "the version of the package (default: the one that go.mod / pubspec.lock of the checkout has if any, else the latest)")
 	local := fs.String("local", "", "Go: a module on this machine in place of a fetched one (the tests)")
 	timeout := fs.String("timeout", "600s", "limit of each analysis")
-	rustExtractor := fs.String("rust-extractor", os.Getenv("RIVUS_RUST_EXTRACTOR"), "Rust: the extractor (built from extractor/rust; default RIVUS_RUST_EXTRACTOR)")
-	features := fs.String("features", "", "Rust: features of the crate that the probe crate asks for (comma separated)")
-	noDefault := fs.Bool("no-default-features", false, "Rust: the probe crate asks for default-features = false")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -105,24 +102,8 @@ func realMain(args []string) int {
 		*pkg = model.ConcreteMajor(*pkg, major)
 	}
 	if *lang == "rust" {
-		absRepo, _ := filepath.Abs(*repo)
-		if *out == "" {
-			d, err := os.MkdirTemp("", "model-diff-rust-")
-			if err != nil {
-				return fail(err)
-			}
-			*out = d
-		}
-		*out, _ = filepath.Abs(*out)
-		files := []string{*modelFile}
-		if *modelFile == "" {
-			var err error
-			if files, err = BuiltinFiles(absRepo); err != nil {
-				return fail(err)
-			}
-		}
-		return realRustMain(RustOptions{Pkg: *pkg, Version: strings.TrimPrefix(*version, "v"), Features: *features, NoDefaultFeatures: *noDefault,
-			Files: files, Repo: absRepo, Out: *out, Rivus: *rivus, Extractor: *rustExtractor, Timeout: *timeout})
+		fmt.Fprintln(os.Stderr, "model-diff: Rust is not checked: the build of a crate runs its build scripts and needs the isolation (docs/rust-isolation.md)")
+		return 2
 	}
 	if *lang != "go" && *lang != "dart" {
 		fmt.Fprintln(os.Stderr, "model-diff: -lang is go or dart")

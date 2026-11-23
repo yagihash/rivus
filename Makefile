@@ -7,7 +7,7 @@
 # CI runs the same tests (a pull request with -short, main and the weekly run without): .github/workflows/ci.yml.
 
 .DEFAULT_GOAL := help
-.PHONY: help setup build check test test-docs merge zoo-loosened shard-check test-shard go-warm zoo-dart-gen model-diff model docs-gen
+.PHONY: help setup build check test merge zoo-loosened shard-check test-shard go-warm zoo-dart-gen model-diff model docs-gen
 
 # the extractors that `make test` needs (a language whose extractor is not there FAILS, it is not skipped)
 RIVUS_DART ?= dart
@@ -33,9 +33,6 @@ test: ## every test, with the Dart and Rust extractors (what CI runs on main)
 	@[ -x "$(RIVUS_RUST)" ] || { echo "make test: no Rust extractor at $(RIVUS_RUST) (cd extractor/rust && cargo build)"; exit 1; }
 	go vet ./...
 	RIVUS_DART="$(RIVUS_DART)" RIVUS_RUST="$(RIVUS_RUST)" RIVUS_REQUIRE_DART=1 RIVUS_REQUIRE_RUST=1 go test -count=1 -timeout 40m ./...
-
-test-docs: ## only the tests that read the documents (links, docs/issues, docs/adr, the ADR references); CI runs it for a change of documents only
-	go test ./cmd/rivus -run '^(TestDocLinks|TestIssuesFiles|TestAdrFiles|TestAdrReferences)$$' -count=1
 
 zoo-loosened: ## check that what the commits change in the zoo marks (bench/zoo/marks.d, against the merge base) is not a loosening without a "Zoo-Loosened:" line (BASE=<commit> HEAD=<commit>)
 	@[ -n "$(BASE)" ] && [ -n "$(HEAD)" ] || { echo "usage: make zoo-loosened BASE=<commit> HEAD=<commit>"; exit 1; }
@@ -64,15 +61,16 @@ go-warm: ## compile the dependencies of every module of the bench into the build
 zoo-dart-gen: ## write bench/zoo-dart/exec/lib/cases.dart and the two pubspec.yaml of the Dart zoo (generated, not committed) from the directories of the cells and of the skeleton packages
 	go test ./cmd/rivus -run '^TestZooDartGenerate$$' -count=1 -update
 
+bench-deps: ## local, heavy: `rivus analyze` (no flags) on the benches with heavy dependencies (go-s3, gcp, dart-gcp) with a timeout; appends a row each to bench/deps-ledger.tsv (TIMEOUT=600 BENCHES="go-s3 gcp"; bench/deps_bench.py)
+	python3 bench/deps_bench.py -timeout $(or $(TIMEOUT),600) $(BENCHES)
+
 model-diff: ## the differential test of the model of a package: PKG=<Go import path | package:name> [MODEL=<file>] (bench/model-diff, docs/MODEL-RUNBOOK.md); fetches the package, does not run it
 	@[ -n "$(PKG)" ] || { echo "usage: make model-diff PKG=strings   (or PKG=package:http, MODEL=internal/model/builtin/dart-http.yaml)"; exit 1; }
-	@# built once and run, not `go run`: `go run` turns the exit status of the program into 1 ("exit status N")
-	@d=$$(mktemp -d) && go build -o "$$d/model-diff" ./bench/model-diff && "$$d/model-diff" -pkg "$(PKG)" $(if $(MODEL),-model "$(MODEL)"); rc=$$?; rm -rf "$$d"; exit $$rc
+	go run ./bench/model-diff -pkg "$(PKG)" $(if $(MODEL),-model "$(MODEL)")
 
 model: ## the steps of making the model of a Go or Dart package: PKG=<import path | dart package> [VERSION=v1.2.3] [LANG=go|dart] [ARGS="-diff -write-verified"] (bench/model-author, docs/MODEL-RUNBOOK.md); exit 70 = a candidate has no row and is not in rejected:; fetches the package, does not run it
 	@[ -n "$(PKG)" ] || { echo "usage: make model PKG=github.com/jmoiron/sqlx VERSION=v1.4.0 LANG=go   (or PKG=dio VERSION=5.11.1 LANG=dart; ARGS=\"-recall\" for the recall of layer 1; ARGS=\"-gen-skeleton\" makes the skeleton and the cell template for the Go zoo)"; exit 1; }
-	@# built once and run, not `go run`: `go run` turns the exit status of the program (70, 2) into 1 ("exit status N")
-	@d=$$(mktemp -d) && go build -o "$$d/model-author" ./bench/model-author && "$$d/model-author" -pkg "$(PKG)" $(if $(VERSION),-version "$(VERSION)") -lang $(if $(filter command line,$(origin LANG)),$(LANG),go) $(ARGS); rc=$$?; rm -rf "$$d"; exit $$rc
+	go run ./bench/model-author -pkg "$(PKG)" $(if $(VERSION),-version "$(VERSION)") -lang $(if $(filter command line,$(origin LANG)),$(LANG),go) $(ARGS)
 
 docs-gen: ## print the tables of the issues and the ADRs (from docs/issues/*.md, docs/adr/*.md); WHAT=issues or WHAT=adr for one; OUT=docs/TABLE.md writes it (ignored by git)
 	go run ./scripts/docs-gen $(if $(OUT),-o $(OUT)) $(WHAT)
