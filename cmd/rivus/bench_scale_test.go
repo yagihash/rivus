@@ -27,9 +27,8 @@ import (
 // what a commit shows). -workers is fixed: R-43 (issue #96) makes summary_elems depend on it, and the ring
 // profile keeps both numbers, so that the day it is fixed the two files become one.
 func TestScaleSynth(t *testing.T) {
-	if testing.Short() {
-		t.Skip("the scale profiles take a minute (-short skips them)")
-	}
+	// It runs under -short too (about 13 seconds): a change to the engine that blows up a summary has to be seen
+	// in the pull request, not on main after the merge (#290 was found that way).
 	root, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatal(err)

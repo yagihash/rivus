@@ -10,7 +10,7 @@
   },
   "converged": true,
   "passes": 1,
-  "reanalyses": 2214,
-  "summary_elems": 5319,
-  "largest_summary_elems": 6
+  "reanalyses": 2215,
+  "summary_elems": 14637,
+  "largest_summary_elems": 220
 }
