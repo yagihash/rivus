@@ -9,7 +9,9 @@ Read it (read only):
   python3 bench/heavy_ledger.py [--kind passline|deps] [--target memos] [--last N] [--ledger FILE]
 
 The margin is not a column. The table computes it: memory_limit_bytes - memory_peak_bytes, and, when the run recorded
-it, memory_limit_bytes - live_heap_max_bytes. A run of an older binary has no summary.memory_* and no gc_cpu_fraction;
+it, memory_limit_bytes - live_heap_max_bytes (live_margin_gb). live_heap_max_bytes is the largest amount that the GC marked
+live: a guide on the upper side (in the summary phase it is larger than what is really live), not the real live size, so
+live_margin_gb is on the low side. A run of an older binary has no summary.memory_* and no gc_cpu_fraction;
 those cells are empty and nothing stops.
 """
 import argparse
@@ -107,7 +109,9 @@ def read_rows(path=LEDGER):
 
 
 def margins(row):
-    """(limit - memory_peak_bytes, limit - live_heap_max_bytes) in bytes; None where a number is missing."""
+    """(limit - memory_peak_bytes, limit - live_heap_max_bytes) in bytes; None where a number is missing.
+    live_heap_max_bytes is what the GC marked live (it is larger than the real live size in a fast-allocating phase),
+    so the second value is a low-side margin, not the real one."""
     def num(k):
         try:
             return int(float(row.get(k, "")))
