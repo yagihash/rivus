@@ -65,7 +65,7 @@ func (e *Engine) outcomesOf(g Guard) map[bool]map[string]bool {
 // describe says in a few words what an output element stands for.
 func describe(oe OutElem) string {
 	var by string
-	oe.Steps.each(func(st Step) bool {
+	oe.Steps.eachRec(func(st *stepRec) bool {
 		if st.Model != nil && st.Model.Role == "sanitizer" {
 			by = st.Model.Symbol
 			return false

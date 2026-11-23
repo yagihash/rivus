@@ -1011,7 +1011,7 @@ func (s *state) traceUncached(l Loc, e Elem) *rope {
 	if cut {
 		n := newUncertainty(KindDepthLimit, "path_steps_omitted: the path was followed back for "+itoa(maxPathSteps)+
 			" reasons and no further; the steps before this one (up to the source) were left out", "")
-		out = leaf(Step{Desc: "the steps before this one were left out", Notes: []*Uncertainty{n}})
+		out = leaf(newRec("", "the steps before this one were left out", cpos{}, nil, []*Uncertainty{n}))
 	}
 	for i := len(chunks) - 1; i >= 0; i-- {
 		out = cat(out, chunks[i])
@@ -1022,11 +1022,9 @@ func (s *state) traceUncached(l Loc, e Elem) *rope {
 func (s *state) stepsOf(w *why) *rope {
 	var out *rope
 	if w.desc != "" && !skipStep(w.desc) {
-		st := Step{Func: s.eng.funcID(w.fn), Desc: w.desc, pos: w.pos.pos(), Model: w.model(), guards: w.guards()}
-		st.Notes = w.notes()
-		out = leaf(st)
+		out = leaf(newRec(s.eng.funcID(w.fn), w.desc, w.pos, w.model(), w.notes()))
 	} else if len(w.notes()) > 0 {
-		out = leaf(Step{Func: s.eng.funcID(w.fn), Desc: w.desc, pos: w.pos.pos(), Notes: w.notes()})
+		out = leaf(newRec(s.eng.funcID(w.fn), w.desc, w.pos, nil, w.notes()))
 	}
 	return cat(out, w.steps)
 }

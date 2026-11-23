@@ -1,11 +1,17 @@
 package taint
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+	"unsafe"
+
+	"github.com/yagihash/rivus/internal/ir"
+)
 
 func steps(n int) *rope {
 	var r *rope
 	for i := 0; i < n; i++ {
-		r = cat(r, leaf(Step{Desc: string(rune('a' + i%26)), Func: itoa(i)}))
+		r = cat(r, leaf(stepRec{Desc: string(rune('a' + i%26)), Func: itoa(i)}))
 	}
 	return r
 }
@@ -61,5 +67,37 @@ func TestNilRope(t *testing.T) {
 	var r *rope
 	if r.len() != 0 || r.flatten(5) != nil || cat(nil, nil) != nil {
 		t.Error("nil rope misbehaves")
+	}
+}
+
+// A record turns back into the Step it was made from: the notes (none, an
+// empty list or some), the model and the position are the same, and the JSON
+// is the same (a Step has no notes and no model in the output when it has none).
+func TestStepRecRoundTrip(t *testing.T) {
+	u := newUncertainty(KindDepthLimit, "x", "")
+	m := &ModelRef{Role: "sanitizer", Symbol: "s"}
+	pos := packPos(ir.Pos{File: "a.go", Offset: 5, Length: 2, Line: 3, Col: 4})
+	for _, notes := range [][]*Uncertainty{nil, {}, {u}} {
+		for _, model := range []*ModelRef{nil, m} {
+			want := Step{Func: "f", Desc: "d", pos: pos.pos(), Model: model}
+			if len(notes) > 0 {
+				want.Notes = notes
+			}
+			got := leaf(newRec("f", "d", pos, model, notes)).flatten(10)
+			if len(got) != 1 {
+				t.Fatalf("len = %d", len(got))
+			}
+			a, _ := json.Marshal(want)
+			b, _ := json.Marshal(got[0])
+			if string(a) != string(b) || got[0].pos != want.pos || got[0].Model != want.Model {
+				t.Errorf("notes %v model %v: got %s, want %s", notes, model, b, a)
+			}
+		}
+	}
+	if leaf(newRec("", "", cpos{}, nil, nil)).flatten(1)[0].pos.File != "" {
+		t.Error("an empty position changed")
+	}
+	if got := unsafe.Sizeof(stepRec{}); got != 72 {
+		t.Errorf("stepRec is %d bytes, want 72", got)
 	}
 }
