@@ -238,6 +238,37 @@ class Cost(unittest.TestCase):
         self.assertEqual(row[2], "n/a")
         self.assertEqual(row[6], "")
 
+    def test_incomplete_run_is_marked_and_its_cost_is_not_compared(self):
+        done = {"cpu_s": 100, "max_rss_mb": 1000, "wall_s": 50}
+        stopped = {"cpu_s": 300, "max_rss_mb": 4000, "wall_s": 160, "exit_code": 4}
+        row = self.c.cost_row("x", [done, done], [stopped, stopped], {}, {})
+        self.assertEqual(row[6], "!! incomplete (head)")
+        for i in (2, 3, 7):
+            self.assertIn("incomplete run: no point comparing", row[i])
+        self.assertNotIn("%", row[2])
+        self.assertEqual(self.c.cost_row("x", [stopped], [done], {}, {})[6], "!! incomplete (base)")
+        self.assertEqual(self.c.cost_row("x", [stopped], [stopped], {}, {})[6], "!! incomplete (base, head)")
+        # a complete run on both sides (exit_code 0, or an old meta without it) is compared as before
+        self.assertEqual(self.c.cost_row("x", [dict(done, exit_code=0)] * 2, [dict(done, cpu_s=130)] * 2, {}, {})[6], "!!")
+
+    def test_report_marks_an_incomplete_run_in_the_summary_and_the_details(self):
+        with tempfile.TemporaryDirectory() as d:
+            write(d, "b", "base", 5)
+            write(d, "b", "head", 5)
+            def meta(name, **kw):
+                with open(d + "/" + name, "w") as f:
+                    json.dump(dict({"rc": 0, "wall_s": 1, "max_rss_mb": 100, "cpu_s": 10, "load_start": 1.0, "load_end": 1.0}, **kw), f)
+            meta("b.base.meta.json"); meta("b.head.meta.json", exit_code=4, cpu_s=40)
+            subprocess.run([sys.executable, os.path.join(HERE, "compare.py"), "report", "-results", d, "-base", "A", "-head", "B",
+                            "-out", d + "/out", "-benches", "b"], capture_output=True, text=True)
+            with open(d + "/out/summary.md") as f:
+                text = f.read()
+            with open(d + "/out/details/b.md") as f:
+                details = f.read()
+        self.assertIn("!! incomplete (head)", text.split("Cost, before -> after")[1])
+        self.assertIn("incomplete run: no point comparing", text)
+        self.assertIn("!! incomplete (head)", details)
+
     def test_report_has_the_cost_table_with_rounds_and_a_cost_check(self):
         with tempfile.TemporaryDirectory() as d:
             write(d, "b", "base", 5)
