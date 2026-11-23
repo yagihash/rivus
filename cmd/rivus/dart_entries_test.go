@@ -19,6 +19,7 @@ import (
 // class, and a function that nothing calls, stay not_from_entry (ADR-073). The comment of each sink in
 // the app says what its finding must have.
 func TestDartFrameworkCallbacks(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("RIVUS_DART") == "" {
 		skipOrFail(t, "RIVUS_DART")
 	}

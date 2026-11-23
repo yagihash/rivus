@@ -8,6 +8,7 @@ import (
 )
 
 func TestMountable(t *testing.T) {
+	t.Parallel()
 	if home, err := os.UserHomeDir(); err == nil {
 		if err := mountable(home); err == nil {
 			t.Error("the home directory is mounted")
@@ -22,6 +23,7 @@ func TestMountable(t *testing.T) {
 }
 
 func TestProjectToolchain(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if projectToolchain(dir) != "" {
 		t.Error("no file")
@@ -38,6 +40,7 @@ func TestProjectToolchain(t *testing.T) {
 }
 
 func TestCargoVolumeNeedsALockFile(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if _, err := cargoVolume(dir); err == nil || !strings.Contains(err.Error(), "Cargo.lock") {
 		t.Errorf("no lock file: %v", err)
@@ -55,6 +58,7 @@ func TestCargoVolumeNeedsALockFile(t *testing.T) {
 
 // The project that is hostile on purpose is not run on this machine, whatever the flags are.
 func TestHostileProjectIsRefusedOnTheHost(t *testing.T) {
+	t.Parallel()
 	o := analyzeOpts{}
 	o.dir = "../../extractor/rust/test/hostile_sandbox"
 	o.lang = "rust"

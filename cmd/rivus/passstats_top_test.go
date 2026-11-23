@@ -72,6 +72,7 @@ func bigSCC(t *testing.T, n int) string {
 // and largest_scc_packages, which is made from the call graph before the analysis (so it is there even when the
 // limit is gone before the first function).
 func TestPassStatsOfATimedOutRun(t *testing.T) {
+	t.Parallel()
 	dir := filepath.Join(testutil.Testdata(), "..", "scc")
 	r := runPassStats(t, dir, "-timeout", "1ns")
 	if !r.Stats.TimedOut {
@@ -88,6 +89,7 @@ func TestPassStatsOfATimedOutRun(t *testing.T) {
 // The limit is looked at inside the rounds of a large component too (it used to be looked at between the
 // components and the functions of the small ones only): the run stops soon after the limit, and says what it did.
 func TestTimeoutInsideALargeSCC(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("a synthetic component of 60 functions, a few seconds")
 	}
@@ -109,6 +111,7 @@ func TestTimeoutInsideALargeSCC(t *testing.T) {
 }
 
 func TestPassStatsTopAndSort(t *testing.T) {
+	t.Parallel()
 	dir := filepath.Join(testutil.Testdata(), "..", "scc")
 	all := runPassStats(t, dir, "-pass-stats-top", "0")
 	one := runPassStats(t, dir, "-pass-stats-top", "1", "-pass-stats-sort", "functions")
@@ -126,6 +129,7 @@ func TestPassStatsTopAndSort(t *testing.T) {
 // made of, in numbers only: the parts add up to summary_elems, the quantiles are in order, and nothing is there without
 // the flag.
 func TestPassStatsSummarySizes(t *testing.T) {
+	t.Parallel()
 	type sizes struct {
 		Functions, Empty, Median, P90, P99, Max int
 		Over100, Over1000, Over10000            int
@@ -200,6 +204,7 @@ func TestPassStatsSummarySizes(t *testing.T) {
 // summary_sizes also says how many source sites the Real elements come from and in how many functions each is carried, and
 // how many elements the summaries put into the globals (numbers only).
 func TestPassStatsSummarySizesOriginsAndGlobals(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	src := `package main
 
@@ -272,6 +277,7 @@ func main()  { set(); other(); relay() }
 // the most notes and in how many findings) and how many candidates the calls through an interface have
 // (on_findings_dispatch_candidates). Without the flag the summary is as it was.
 func TestPassStatsNotesOnFindings(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	src := `package main
 

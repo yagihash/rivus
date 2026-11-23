@@ -7,6 +7,7 @@ import (
 
 // The flags of the container are gone; a command that is given one stops and says what it is now (nothing is run, and nothing is ignored).
 func TestOldIsolationFlagsAreRefused(t *testing.T) {
+	t.Parallel()
 	for old, now := range map[string]string{
 		"-container-timeout": "-isolation-timeout", "--container-max-output=1": "-isolation-max-output", "-container-env": "-isolation-env",
 		"-container-ro-mount": "-isolation-read", "-container-memory": "gone", "-container-cpus": "gone", "-container-pids": "gone", "-rust-image": "gone",

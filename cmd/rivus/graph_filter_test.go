@@ -51,6 +51,7 @@ func graphStage3(t *testing.T, dir string, args ...string) stage3Out {
 }
 
 func TestGraphFiltersEntryAndShortNamesOfGoCode(t *testing.T) {
+	t.Parallel()
 	app, _ := graphProject(t)
 	db := filepath.Join(t.TempDir(), "g.db")
 	runIn(t, binary, app, nil, "index", "-graph", db, "./...")

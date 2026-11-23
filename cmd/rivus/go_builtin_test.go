@@ -106,6 +106,7 @@ func goBuiltinProject(t *testing.T) string {
 }
 
 func TestBuiltinResultIsMadeOfItsArguments(t *testing.T) {
+	t.Parallel()
 	dir := goBuiltinProject(t)
 	cmd := exec.Command(binary, "analyze", "./...")
 	cmd.Dir = dir
@@ -144,6 +145,7 @@ func TestBuiltinResultIsMadeOfItsArguments(t *testing.T) {
 
 // A builtin that this version does not know: its result comes from its arguments, and it is said on the way.
 func TestUnknownBuiltinKeepsTheFlowAndSaysSo(t *testing.T) {
+	t.Parallel()
 	dir := goBuiltinProject(t)
 	ex := exec.Command(binary, "debug", "extract", "./...")
 	ex.Dir = dir

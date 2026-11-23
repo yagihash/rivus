@@ -16,6 +16,7 @@ import (
 // the pubspec.yaml has since gained is not in it) is said too, with another reason; and the import that does not resolve is a
 // missing_source as well.
 func TestDartPackageWithoutPackageConfigIsSaid(t *testing.T) {
+	t.Parallel()
 	dart := os.Getenv("RIVUS_DART")
 	if dart == "" {
 		skipOrFail(t, "RIVUS_DART")

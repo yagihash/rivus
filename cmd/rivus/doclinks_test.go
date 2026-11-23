@@ -12,6 +12,7 @@ import (
 // or a rename of a document must change the links). A link with a `#anchor` is checked for the file only. Links in code
 // blocks and inline code are not links.
 func TestDocLinks(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join("..", "..")
 	var files []string
 	files = append(files, filepath.Join(root, "README.md"))

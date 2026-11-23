@@ -17,6 +17,7 @@ import (
 // from it. The next number is the largest on main plus one: no line of DECISIONS.md or ADR-INDEX.md holds it, so that
 // pull requests do not conflict on it (a collision of numbers fails here, and the later pull request renumbers).
 func TestAdrFiles(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join("..", "..")
 	dir := filepath.Join(root, "docs", "adr")
 	ents, err := os.ReadDir(dir)
@@ -113,6 +114,7 @@ func TestAdrFiles(t *testing.T) {
 // TestAdrReferences: every `ADR-NNN` written in the repository (documents, code, tests, scripts) has a file in docs/adr.
 // Ranges and examples (`ADR-NNN`, `ADR-001〜100`) have no number after `ADR-` or are skipped by the allow list.
 func TestAdrReferences(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join("..", "..")
 	have := map[int]bool{}
 	ents, err := os.ReadDir(filepath.Join(root, "docs", "adr"))

@@ -42,6 +42,7 @@ func autoOpts(dir string, terminal bool, in string, yes bool) (*analyzeOpts, *in
 }
 
 func TestAutoRustAnswers(t *testing.T) {
+	t.Parallel()
 	dir, ran := autoProject(t, true)
 	for _, c := range []struct {
 		name      string
@@ -83,6 +84,7 @@ func TestAutoRustAnswers(t *testing.T) {
 
 // The answer is decided once: the commands call languages() more than once.
 func TestAutoRustIsAskedOnce(t *testing.T) {
+	t.Parallel()
 	dir, _ := autoProject(t, true)
 	o, asks := autoOpts(dir, true, "n\n", false)
 	first, _ := o.languages()
@@ -93,6 +95,7 @@ func TestAutoRustIsAskedOnce(t *testing.T) {
 }
 
 func TestAutoRustAlone(t *testing.T) {
+	t.Parallel()
 	dir, _ := autoProject(t, false)
 	// no: nothing is read, and the run ends with its own code
 	o, _ := autoOpts(dir, true, "n\n", false)
@@ -127,6 +130,7 @@ func TestAutoRustAlone(t *testing.T) {
 }
 
 func TestAutoRustNotAskedWhenItCannotBeRead(t *testing.T) {
+	t.Parallel()
 	dir, _ := autoProject(t, true)
 	// no sandbox: not asked, not read, even with -yes and -unsafe-host-exec
 	o, asks := autoOpts(dir, true, "y\n", true)
@@ -168,6 +172,7 @@ func TestAutoRustNotAskedWhenItCannotBeRead(t *testing.T) {
 // The Rust project that was not read is in the result and in the index, and not among the packages that failed;
 // no Rust code ran.
 func TestSkippedLanguagesAreInTheResult(t *testing.T) {
+	t.Parallel()
 	dir, ran := autoProject(t, true)
 	o, _ := autoOpts(dir, true, "n\n", false)
 	o.noBuiltin, o.noProject = true, true
@@ -198,6 +203,7 @@ func TestSkippedLanguagesAreInTheResult(t *testing.T) {
 
 // Through the binary (the input is not a terminal): the index says it, "no path" is not exhaustive, and the build script did not run.
 func TestIndexWithoutRustIsNotExhaustive(t *testing.T) {
+	t.Parallel()
 	dir, ran := autoProject(t, true)
 	db := filepath.Join(t.TempDir(), "g.db")
 	runIn(t, binary, dir, nil, "index", "-graph", db, "./...")
@@ -243,6 +249,7 @@ func TestIndexWithoutRustIsNotExhaustive(t *testing.T) {
 
 // With -yes the index holds what the answer was; an index made with Rust is not the index made without it, and the key says so.
 func TestIndexWithAndWithoutRustDiffer(t *testing.T) {
+	t.Parallel()
 	dir, _ := autoProject(t, true)
 	stream := filepath.Join(t.TempDir(), "empty.jsonl")
 	script := filepath.Join(t.TempDir(), "extractor.sh")

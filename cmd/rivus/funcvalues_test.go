@@ -16,6 +16,7 @@ import (
 // valuecalls or the extractor has for a call of a function value is among those that the elements carry, and the calls
 // that had no candidate get some (the zoo and the curated target of Dart: the numbers of 5.4).
 func TestFuncValuesDart(t *testing.T) {
+	t.Parallel()
 	dart := os.Getenv("RIVUS_DART")
 	if dart == "" {
 		skipOrFail(t, "RIVUS_DART")

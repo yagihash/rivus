@@ -6,6 +6,7 @@ import (
 )
 
 func TestSandboxDeveloperDirDecision(t *testing.T) {
+	t.Parallel()
 	xcode := "/Applications/Xcode.app/Contents/Developer"
 	cases := []struct {
 		name       string

@@ -35,6 +35,7 @@ func zshBody(t *testing.T, script, fn string) string {
 
 // The script has every command and subcommand of the table, and every flag of every FlagSet (listed on an empty flag set, as the generator lists them).
 func TestZshCompletionHasTheTable(t *testing.T) {
+	t.Parallel()
 	script := zshScript(t)
 	if !strings.HasPrefix(script, "#compdef rivus\n") || !strings.Contains(script, "\ncompdef _rivus rivus\n") {
 		t.Errorf("the script does not start with #compdef rivus and end with compdef _rivus rivus")
@@ -75,6 +76,7 @@ func TestZshCompletionHasTheTable(t *testing.T) {
 // The values of a flag of fixed values are the ones of the list that the check reads; the flags for diagnosis say so; a directory and a file are
 // completed as such.
 func TestZshCompletionValues(t *testing.T) {
+	t.Parallel()
 	script := zshScript(t)
 	analyze := zshBody(t, script, "_rivus_analyze")
 	for _, want := range []string{
@@ -98,6 +100,7 @@ func TestZshCompletionValues(t *testing.T) {
 }
 
 func TestZshDescriptionEscapes(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ in, want string }{
 		{"a: b [c] d", `a\: b \[c\] d`},
 		{`it's`, `it's`},
@@ -119,6 +122,7 @@ func TestZshDescriptionEscapes(t *testing.T) {
 
 // The script is valid zsh, and compinit can load it (the functions are defined).
 func TestZshCompletionSyntax(t *testing.T) {
+	t.Parallel()
 	zsh, err := exec.LookPath("zsh")
 	if err != nil {
 		skipOrFail(t, "zsh")
@@ -142,6 +146,7 @@ func TestZshCompletionSyntax(t *testing.T) {
 // What the script holds comes from the build, not from where it was built or where it runs (the script is made while a formula builds rivus): the
 // directory, the home directory and the path of the program are not in it.
 func TestZshCompletionHasNoLocalPaths(t *testing.T) {
+	t.Parallel()
 	cwd := t.TempDir()
 	home := filepath.Join(t.TempDir(), "a-home-directory")
 	cmd := exec.Command(binary, "completion", "zsh")
@@ -167,6 +172,7 @@ func TestZshCompletionHasNoLocalPaths(t *testing.T) {
 
 // It is quick and needs nothing: no extractor, no network, no directory to read (a PATH with nothing in it).
 func TestZshCompletionIsQuick(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, binary, "completion", "zsh")
@@ -181,6 +187,7 @@ func TestZshCompletionIsQuick(t *testing.T) {
 
 // "rivus completion" says which shells it has and ends with 2; -h ends with 0; a shell that is not there, or an argument, is an error.
 func TestCompletionCommand(t *testing.T) {
+	t.Parallel()
 	var stderr bytes.Buffer
 	cmd := exec.Command(binary, "completion")
 	cmd.Stderr = &stderr

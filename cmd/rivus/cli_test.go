@@ -61,6 +61,7 @@ func rivus(t *testing.T, args ...string) []byte {
 }
 
 func TestSitesCommand(t *testing.T) {
+	t.Parallel()
 	var out struct {
 		SchemaVersion string `json:"schema_version"`
 		Sites         []struct {
@@ -77,6 +78,7 @@ func TestSitesCommand(t *testing.T) {
 }
 
 func TestAnalyzeCommand(t *testing.T) {
+	t.Parallel()
 	var rep report.Report
 	if err := json.Unmarshal(rivus(t, "analyze", "-rules", "rules.yaml", "./cases/hello"), &rep); err != nil {
 		t.Fatal(err)
@@ -101,6 +103,7 @@ func TestAnalyzeCommand(t *testing.T) {
 }
 
 func TestSummaryDetailDropsPathsAndSnippets(t *testing.T) {
+	t.Parallel()
 	var rep report.Report
 	if err := json.Unmarshal(rivus(t, "analyze", "-rules", "rules.yaml", "-detail", "summary", "./cases/hello"), &rep); err != nil {
 		t.Fatal(err)
@@ -112,6 +115,7 @@ func TestSummaryDetailDropsPathsAndSnippets(t *testing.T) {
 }
 
 func TestIndexAndQueryWithoutSource(t *testing.T) {
+	t.Parallel()
 	idx := filepath.Join(t.TempDir(), "index.json")
 	rivus(t, "index", "-rules", "rules.yaml", "-o", idx, "./cases/inter/...")
 
@@ -147,6 +151,7 @@ func TestIndexAndQueryWithoutSource(t *testing.T) {
 }
 
 func TestOneSidedQueryWithAdHocSymbol(t *testing.T) {
+	t.Parallel()
 	// "os.ReadFile" is not in the test rules but is a built-in sink; and the
 	// query can also name a symbol no rule mentions.
 	var res report.QueryResult
@@ -162,6 +167,7 @@ func TestOneSidedQueryWithAdHocSymbol(t *testing.T) {
 }
 
 func TestQueryNeedsExactlyOneQuestion(t *testing.T) {
+	t.Parallel()
 	cmd := exec.Command(binary, "query", "-rules", "rules.yaml", "./cases/hello")
 	cmd.Dir = testutil.Testdata()
 	if err := cmd.Run(); err == nil {
@@ -177,6 +183,7 @@ func rivusJSON(t *testing.T, v any, args ...string) {
 }
 
 func TestImplementationLimitIsReported(t *testing.T) {
+	t.Parallel()
 	var rep report.Report
 	rivusJSON(t, &rep, "analyze", "-rules", "rules.yaml", "-max-implementations", "1", "./cases/impl")
 	var limited bool
@@ -206,6 +213,7 @@ func TestImplementationLimitIsReported(t *testing.T) {
 }
 
 func TestSummaryCountsUncertainties(t *testing.T) {
+	t.Parallel()
 	var rep report.Report
 	rivusJSON(t, &rep, "analyze", "-rules", "rules.yaml", "./cases/uncertain")
 	if rep.Summary.Findings != len(rep.Findings) || rep.Summary.OnFindings["concurrency"] == 0 {
@@ -217,6 +225,7 @@ func TestSummaryCountsUncertainties(t *testing.T) {
 }
 
 func TestSummaryShowsDispatchCandidatesAndTopSymbols(t *testing.T) {
+	t.Parallel()
 	var rep report.Report
 	rivusJSON(t, &rep, "analyze", "-rules", "rules.yaml", "./cases/uncertain")
 	if rep.Summary.DispatchCandidates["0"] == 0 {
@@ -228,6 +237,7 @@ func TestSummaryShowsDispatchCandidatesAndTopSymbols(t *testing.T) {
 }
 
 func TestModelsCoverageRanksByFindings(t *testing.T) {
+	t.Parallel()
 	var cov report.Coverage
 	rivusJSON(t, &cov, "models", "coverage", "-rules", "rules.yaml", "./cases/heap")
 	if len(cov.Symbols) == 0 {
@@ -251,6 +261,7 @@ func TestModelsCoverageRanksByFindings(t *testing.T) {
 }
 
 func TestModelsCoverageYAMLIsAValidRuleFile(t *testing.T) {
+	t.Parallel()
 	out := rivus(t, "models", "coverage", "-rules", "rules.yaml", "-yaml", "-top", "5", "./cases/heap")
 	rs, err := model.Parse(strings.NewReader(string(out)), "generated")
 	if err != nil {
@@ -265,6 +276,7 @@ func TestModelsCoverageYAMLIsAValidRuleFile(t *testing.T) {
 }
 
 func TestModelsCoverageFromAnIndex(t *testing.T) {
+	t.Parallel()
 	idx := filepath.Join(t.TempDir(), "index.json")
 	rivus(t, "index", "-rules", "rules.yaml", "-o", idx, "./cases/heap")
 	var cov report.Coverage
@@ -280,6 +292,7 @@ func TestModelsCoverageFromAnIndex(t *testing.T) {
 // rules that name an interface method (match: implementations), so the
 // implementations are sites in both.
 func TestSitesCommandAgreesWithAnalyze(t *testing.T) {
+	t.Parallel()
 	ids := func(sites []struct {
 		ID string `json:"id"`
 	}) map[string]bool {
@@ -321,6 +334,7 @@ func TestSitesCommandAgreesWithAnalyze(t *testing.T) {
 // from an IR stream (-ir), which has no Go packages to list (#8). The packages
 // analysed are then the units the functions of the stream belong to.
 func TestResolveFromAnIRIndexTellsGoneFromNotAnalysed(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	irFile := filepath.Join(dir, "g.jsonl")
 	if err := os.WriteFile(irFile, rivus(t, "debug", "extract", "-texts", "./cases/grpcsrv"), 0o644); err != nil {
@@ -358,6 +372,7 @@ func TestResolveFromAnIRIndexTellsGoneFromNotAnalysed(t *testing.T) {
 // The IR of -ir is not the code of the directory the command runs in, so
 // without an explicit -C the output names no revision; with -C it does (#12).
 func TestIRInputHasNoTargetUnlessDirIsGiven(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	irFile := filepath.Join(dir, "g.jsonl")
 	if err := os.WriteFile(irFile, rivus(t, "debug", "extract", "-texts", "./cases/grpcsrv"), 0o644); err != nil {
@@ -404,6 +419,7 @@ func rivusFails(t *testing.T, env []string, args ...string) string {
 // Flags that are wrong or do not go together are an error, before the analysis
 // starts (#16).
 func TestFlagValidation(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	idx := filepath.Join(dir, "idx.json")
 	rivus(t, "index", "-rules", "rules.yaml", "-o", idx, "./cases/hello")
@@ -435,6 +451,7 @@ func TestFlagValidation(t *testing.T) {
 // A query on an index about a symbol that the index holds no site of says so:
 // it is not the same as "nothing reaches it" (#16).
 func TestIndexQueryAboutUnknownSymbolSaysSo(t *testing.T) {
+	t.Parallel()
 	idx := filepath.Join(t.TempDir(), "idx.json")
 	rivus(t, "index", "-rules", "rules.yaml", "-o", idx, "./cases/hello")
 	var res report.QueryResult

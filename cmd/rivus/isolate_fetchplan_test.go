@@ -8,6 +8,7 @@ import (
 )
 
 func TestScanCargoConfig(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, text      string
 		vendored, needs bool
@@ -30,6 +31,7 @@ func TestScanCargoConfig(t *testing.T) {
 
 // A project whose configuration names a registry is stopped with the reason, before anything with a network runs.
 func TestFetchStopsForAProjectThatNeedsItsConfiguration(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, ".cargo"), 0o755); err != nil {
 		t.Fatal(err)

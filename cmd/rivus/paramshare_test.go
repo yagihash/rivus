@@ -20,6 +20,7 @@ import (
 // A row with wrong set says what is still wrong; when it is fixed the row
 // fails, and the row (and the wrong note) is to be corrected.
 func TestParamSourceSharedObject(t *testing.T) {
+	t.Parallel()
 	type row struct {
 		pkg string
 		// sources of the findings (function name), and for each whether the
@@ -120,6 +121,7 @@ func keys(m map[string]bool) []string {
 // from: W: source > W: store > R: load > R: sink (CORE-B, ADR-049). Before, the
 // path started at the load in R, and W was only a candidate in the global_var note.
 func TestGlobalWriterIsOnThePath(t *testing.T) {
+	t.Parallel()
 	var rep report.Report
 	if err := json.Unmarshal(rivus(t, "analyze", "-rules", "rules.yaml", "./cases/paramshare/globalw"), &rep); err != nil {
 		t.Fatal(err)
@@ -146,6 +148,7 @@ func TestGlobalWriterIsOnThePath(t *testing.T) {
 // os.Create in Main" is not made, because a param source is a statement about
 // the value the function received and is not written back to the caller.
 func TestParamSourceNotWrittenBackIsLost(t *testing.T) {
+	t.Parallel()
 	var rep report.Report
 	if err := json.Unmarshal(rivus(t, "analyze", "-rules", "rules.yaml", "./cases/paramshare/lost"), &rep); err != nil {
 		t.Fatal(err)
@@ -164,6 +167,7 @@ func TestParamSourceNotWrittenBackIsLost(t *testing.T) {
 // in reader is an unmodeled_library_call, which is a trace (in the curated project the same shape
 // stays silent: go-curated/api/alias.go). The trace is checked here.
 func TestParamSourceReachedThroughAnotherPointerIsLost(t *testing.T) {
+	t.Parallel()
 	var rep report.Report
 	if err := json.Unmarshal(rivus(t, "analyze", "-rules", "rules.yaml", "./cases/paramshare/ctxptr"), &rep); err != nil {
 		t.Fatal(err)

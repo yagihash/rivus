@@ -13,6 +13,7 @@ import (
 // several categories (#139, #140). The calls below pass a source to each form; the analysis has to find the ones that
 // reach the named parameter, and say so for a name that no call has.
 func TestDartNamedArgumentSinks(t *testing.T) {
+	t.Parallel()
 	dart := os.Getenv("RIVUS_DART")
 	if dart == "" {
 		skipOrFail(t, "RIVUS_DART")

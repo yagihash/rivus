@@ -135,6 +135,7 @@ func (w *workspace) ids(rep report.Report) (finding, sink, source string) {
 }
 
 func TestResolveUnchanged(t *testing.T) {
+	t.Parallel()
 	w := newWorkspace(t)
 	bm, rep := w.bookmarks()
 	finding, sink, _ := w.ids(rep)
@@ -149,6 +150,7 @@ func TestResolveUnchanged(t *testing.T) {
 }
 
 func TestResolveSurvivesLineShifts(t *testing.T) {
+	t.Parallel()
 	w := newWorkspace(t)
 	bm, rep := w.bookmarks()
 	finding, sink, _ := w.ids(rep)
@@ -165,6 +167,7 @@ func TestResolveSurvivesLineShifts(t *testing.T) {
 }
 
 func TestResolveNoticesAChangedFunctionBody(t *testing.T) {
+	t.Parallel()
 	w := newWorkspace(t)
 	bm, rep := w.bookmarks()
 	finding, sink, _ := w.ids(rep)
@@ -181,6 +184,7 @@ func TestResolveNoticesAChangedFunctionBody(t *testing.T) {
 }
 
 func TestResolveEditedArgumentIsRematchedByStructure(t *testing.T) {
+	t.Parallel()
 	w := newWorkspace(t)
 	bm, rep := w.bookmarks()
 	finding, sink, _ := w.ids(rep)
@@ -203,6 +207,7 @@ func TestResolveEditedArgumentIsRematchedByStructure(t *testing.T) {
 }
 
 func TestResolveInsertedCallIsFollowedByContent(t *testing.T) {
+	t.Parallel()
 	w := newWorkspace(t)
 	bm, rep := w.bookmarks()
 	finding, sink, _ := w.ids(rep)
@@ -228,6 +233,7 @@ func TestResolveInsertedCallIsFollowedByContent(t *testing.T) {
 }
 
 func TestResolveSanitizerMakesTheFlowAbsent(t *testing.T) {
+	t.Parallel()
 	w := newWorkspace(t)
 	bm, rep := w.bookmarks()
 	finding, _, _ := w.ids(rep)
@@ -244,6 +250,7 @@ func TestResolveSanitizerMakesTheFlowAbsent(t *testing.T) {
 }
 
 func TestResolveDeletedFunction(t *testing.T) {
+	t.Parallel()
 	w := newWorkspace(t)
 	bm, rep := w.bookmarks()
 	finding, sink, _ := w.ids(rep)
@@ -260,6 +267,7 @@ func TestResolveDeletedFunction(t *testing.T) {
 }
 
 func TestResolveDistinguishesNotAnalysedFromGone(t *testing.T) {
+	t.Parallel()
 	w := newWorkspace(t)
 	bm, rep := w.bookmarks()
 	_, sink, _ := w.ids(rep)
@@ -280,6 +288,7 @@ func TestResolveDistinguishesNotAnalysedFromGone(t *testing.T) {
 }
 
 func TestResolveFromAnIndex(t *testing.T) {
+	t.Parallel()
 	w := newWorkspace(t)
 	bm, rep := w.bookmarks()
 	finding, _, _ := w.ids(rep)
@@ -297,6 +306,7 @@ func TestResolveFromAnIndex(t *testing.T) {
 }
 
 func TestResolveRejectsBookmarksWithoutFingerprints(t *testing.T) {
+	t.Parallel()
 	w := newWorkspace(t)
 	w.write("bm.json", `[{"id": "s1:abc"}]`)
 	cmd := exec.Command(binary, "resolve", "-rules", "rules.yaml", "-bookmarks", "bm.json", "./main")
@@ -326,6 +336,7 @@ func F() {
 `
 
 func TestLLMModelSuppressesAndIsRecorded(t *testing.T) {
+	t.Parallel()
 	w := newWorkspace(t)
 	w.write("lib/lib.go", wsLib+"\nfunc Clean(s string) string { return s }\n")
 	w.write("rules.yaml", wsLLMRules)
@@ -404,6 +415,7 @@ func checkCut(t *testing.T, rep, det report.Report) {
 }
 
 func TestLLMPureModelSuppressionIsRecorded(t *testing.T) {
+	t.Parallel()
 	rep, det := runCut(t, "\nfunc Cut(s, t string) string { return s }\n", `
 propagators:
   - symbol: example.com/tmp/lib.Cut
@@ -417,6 +429,7 @@ propagators:
 }
 
 func TestLLMFlowsModelSuppressionIsRecorded(t *testing.T) {
+	t.Parallel()
 	rep, det := runCut(t, "\nfunc Cut(s, t string) string { return s + t }\n", `
 propagators:
   - symbol: example.com/tmp/lib.Cut
@@ -430,6 +443,7 @@ propagators:
 }
 
 func TestLLMModelThatLetsTheOperandThroughRecordsNoCut(t *testing.T) {
+	t.Parallel()
 	// a model that lets the operand through records nothing
 	rep, _ := runCut(t, "\nfunc Cut(s, t string) string { return s }\n", `
 propagators:
@@ -446,6 +460,7 @@ propagators:
 }
 
 func TestFindingIsInfluencedByModelThatCutAnotherWay(t *testing.T) {
+	t.Parallel()
 	rep, _ := runCut(t, "\nfunc Cut(s, t string) string { return s }\n", `
 propagators:
   - symbol: example.com/tmp/lib.Cut
@@ -474,6 +489,7 @@ func F() {
 }
 
 func TestFindingNamesTheModelsOnItsPath(t *testing.T) {
+	t.Parallel()
 	w := newWorkspace(t)
 	w.write("lib/lib.go", wsLib+"\nfunc Wrap(s string) string { return s }\n")
 	w.write("rules.yaml", wsRules+`
@@ -537,6 +553,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 `
 
 func TestConditionalNodeInTheBriefsExample(t *testing.T) {
+	t.Parallel()
 	w := newWorkspace(t)
 	w.write("main/main.go", wsRender)
 	w.write("rules.yaml", "ruleset: empty\n")
@@ -593,6 +610,7 @@ func (w *workspace) git(args ...string) {
 // carries the revision it was taken from: the "target" of the output it was
 // copied from.
 func TestResolveRecordsTheRevision(t *testing.T) {
+	t.Parallel()
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is not available")
 	}
@@ -654,6 +672,7 @@ func TestResolveRecordsTheRevision(t *testing.T) {
 // The rules of a project live in <dir>/.rivus/rules and are read without a
 // flag; -no-project-rules leaves them out.
 func TestProjectRulesArePluggedIn(t *testing.T) {
+	t.Parallel()
 	w := newWorkspace(t)
 	count := func(args ...string) int {
 		var rep report.Report

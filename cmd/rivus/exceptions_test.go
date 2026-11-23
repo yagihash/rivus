@@ -13,6 +13,7 @@ import (
 // what the Dart extractor writes for testdata's cases (extractor/dart/test/sample/lib/review_try.dart:
 // catchTyped, catchDynamic, catchTypedCallee), so that this runs without the Dart SDK.
 func TestThrownObjectFieldsReachTheHandler(t *testing.T) {
+	t.Parallel()
 	out, err := exec.Command(binary, "analyze", "-ir", "../../testdata/ir/dart_exceptions.jsonl", "-rules", "../../testdata/ir/dart_exceptions_rules.yaml").Output()
 	if err != nil {
 		t.Fatalf("analyze: %v", err)

@@ -57,6 +57,7 @@ sdks:
 `
 
 func TestUnverifiedVersionsDartLock(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "pubspec.lock"), pubspecLock)
 	// in the range: nothing
@@ -132,6 +133,7 @@ dependencies = ["actix-web"]
 `
 
 func TestUnverifiedVersionsCargoLock(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "Cargo.lock"), cargoLock)
 	// in the range: nothing

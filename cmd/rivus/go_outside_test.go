@@ -12,6 +12,7 @@ import (
 // The files that the build constraints leave out of the configuration (`//go:build ignore`, a `_windows.go` on another
 // system) are counted in summary.outside_configuration (not in the tests); a project with none has no such field.
 func TestFilesOutsideTheBuildConfigurationAreSaid(t *testing.T) {
+	t.Parallel()
 	run := func(files map[string]string, extra ...string) (oc *struct {
 		Files    int      `json:"files"`
 		Examples []string `json:"examples"`

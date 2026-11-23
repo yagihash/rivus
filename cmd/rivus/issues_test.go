@@ -16,6 +16,7 @@ import (
 // The next number is the largest in docs/issues plus one: no line of ISSUES.md holds it, so that pull requests do not
 // conflict on it.
 func TestIssuesFiles(t *testing.T) {
+	t.Parallel()
 	dir := filepath.Join("..", "..", "docs", "issues")
 	ents, err := os.ReadDir(dir)
 	if err != nil {

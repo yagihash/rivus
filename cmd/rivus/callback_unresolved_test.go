@@ -23,6 +23,7 @@ sources:
 // The registrations whose handler was not found are in summary.callback_param_unresolved (count and places), sorted, and there is
 // none without a callback_param row (Go).
 func TestCallbackParamUnresolvedInSummaryGo(t *testing.T) {
+	t.Parallel()
 	rules := filepath.Join(t.TempDir(), "cb.yaml")
 	if err := os.WriteFile(rules, []byte(cbUnresolvedRules), 0o644); err != nil {
 		t.Fatal(err)
@@ -59,6 +60,7 @@ func TestCallbackParamUnresolvedInSummaryGo(t *testing.T) {
 
 // The same for Dart: the helper that registers what it is given is counted; a function written at the call is not.
 func TestCallbackParamUnresolvedInSummaryDart(t *testing.T) {
+	t.Parallel()
 	dart := os.Getenv("RIVUS_DART")
 	if dart == "" {
 		skipOrFail(t, "RIVUS_DART")

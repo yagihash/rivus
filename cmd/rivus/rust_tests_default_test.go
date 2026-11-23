@@ -13,6 +13,7 @@ import (
 // The tests, examples and benchmarks of a crate are not built unless --include-tests asks, and the stream
 // says how many targets were left out and which dependencies are declared for development only (ADR-062).
 func TestRustExtractorSaysWhatItDidNotBuild(t *testing.T) {
+	t.Parallel()
 	bin := os.Getenv("RIVUS_RUST")
 	if bin == "" {
 		skipOrFail(t, "RIVUS_RUST")

@@ -9,6 +9,7 @@ import (
 // A row written with /v* (any major of a module, model.MajorWildcard) is for the module of each major that the program has:
 // the same row meets lib/v2 and lib/v3, and not lib/vault (a path that is not a v and digits) or lib (no major in its path).
 func TestMajorWildcardRowMeetsEveryMajor(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	mods := map[string]string{"v2": "example.invalid/lib/v2", "v3": "example.invalid/lib/v3", "vault": "example.invalid/lib/vault", "plain": "example.invalid/lib"}
 	for dir, path := range mods {

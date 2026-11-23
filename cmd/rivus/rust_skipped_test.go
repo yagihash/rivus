@@ -18,6 +18,7 @@ import (
 // summary.functions_skipped, in a note at a call of a skipped function of the project (project_body_unread), and in a last
 // line on the standard error (docs/DESIGN-rust-extractor-panic.md). extractor/rust/test/skipped is the crate (std only).
 func TestRustSkipsTheFunctionsItCannotRead(t *testing.T) {
+	t.Parallel()
 	bin := os.Getenv("RIVUS_RUST")
 	if bin == "" {
 		skipOrFail(t, "RIVUS_RUST")

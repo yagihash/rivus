@@ -15,6 +15,7 @@ import (
 // The graph file is made from the neutral IR, so it is the same for every language: the IR that the Dart and
 // the Rust extractors write for their samples gives a file whose numbers are those of the IR.
 func TestGraphFromTheIROfOtherLanguages(t *testing.T) {
+	t.Parallel()
 	type sample struct {
 		name, lang string
 		stream     func(t *testing.T) []byte
@@ -224,6 +225,7 @@ func TestGraphFromTheIROfOtherLanguages(t *testing.T) {
 // (without the places tools put what they make), with the lock files, the files the IR names outside the
 // tree, and the versions of the tools.
 func TestGraphKeyOfLanguagesWhoseExtractorDoesNotSayWhatItRead(t *testing.T) {
+	t.Parallel()
 	outside := t.TempDir() // a package cache
 	for _, c := range []struct {
 		lang, marker string

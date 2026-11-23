@@ -15,6 +15,7 @@ import (
 // made up): the result says so. The file is in summary.unread; a finding that goes through a function of the file
 // has a missing_source note, so it is not a clear one. A project with no syntax error is as it was.
 func TestDartSyntaxErrorIsReported(t *testing.T) {
+	t.Parallel()
 	dart := os.Getenv("RIVUS_DART")
 	if dart == "" {
 		skipOrFail(t, "RIVUS_DART")
@@ -121,6 +122,7 @@ func TestDartSyntaxErrorIsReported(t *testing.T) {
 // construct is said (unsupported_construct). It used to return a constant with no taint, and the flow went out of
 // the result without a trace.
 func TestDartUnresolvedConstructorKeepsTheFlow(t *testing.T) {
+	t.Parallel()
 	dart := os.Getenv("RIVUS_DART")
 	if dart == "" {
 		skipOrFail(t, "RIVUS_DART")
@@ -171,6 +173,7 @@ func TestDartUnresolvedConstructorKeepsTheFlow(t *testing.T) {
 // A compile error in a function: a finding that goes through the function carries it (missing_source), also when the
 // flow is found by another way; a finding through a function of the same file with no error is a clear one.
 func TestDartCompileErrorIsOnTheFindingsOfItsFunction(t *testing.T) {
+	t.Parallel()
 	dart := os.Getenv("RIVUS_DART")
 	if dart == "" {
 		skipOrFail(t, "RIVUS_DART")
@@ -250,6 +253,7 @@ func TestDartCompileErrorIsOnTheFindingsOfItsFunction(t *testing.T) {
 // The directories of the project that are not read because of where they are (a hidden directory, `build` at the top)
 // are counted in summary.skipped_dirs (not in the tests); a project with none has no such field.
 func TestDartSkippedDirectoriesAreSaid(t *testing.T) {
+	t.Parallel()
 	dart := os.Getenv("RIVUS_DART")
 	if dart == "" {
 		skipOrFail(t, "RIVUS_DART")
@@ -317,6 +321,7 @@ func TestDartSkippedDirectoriesAreSaid(t *testing.T) {
 // A function whose name has a "$" of its own (a generated `_$FromJson`, `mid$dle`) and a closure in it: a compile error in
 // it is on the findings that go through it. The ID is not cut at the first "$" (ir.ParentFuncIDs).
 func TestDartCompileErrorInAFunctionWithADollarInItsName(t *testing.T) {
+	t.Parallel()
 	dart := os.Getenv("RIVUS_DART")
 	if dart == "" {
 		skipOrFail(t, "RIVUS_DART")
@@ -393,6 +398,7 @@ func TestDartCompileErrorInAFunctionWithADollarInItsName(t *testing.T) {
 // A compile error inside each kind of declaration that holds code: the finding that goes through it has the note. The
 // extractor names the function that holds the error (_enclosingFunction), and it has to be the ID that the IR gives it.
 func TestDartCompileErrorInEveryKindOfDeclaration(t *testing.T) {
+	t.Parallel()
 	dart := os.Getenv("RIVUS_DART")
 	if dart == "" {
 		skipOrFail(t, "RIVUS_DART")

@@ -30,6 +30,7 @@ func leaves(cs []*command, prefix []string) (out []struct {
 
 // A name that the table does not have is an unknown command: the table is the only way to add one.
 func TestUnknownCommand(t *testing.T) {
+	t.Parallel()
 	for _, args := range [][]string{{"nosuch"}, {"completions"}, {"Analyze"}} {
 		out, err := exec.Command(binary, args...).CombinedOutput()
 		ee, ok := err.(*exec.ExitError)
@@ -41,6 +42,7 @@ func TestUnknownCommand(t *testing.T) {
 
 // "rivus help" lists the commands of the table, and only those.
 func TestHelpListsTheTable(t *testing.T) {
+	t.Parallel()
 	out, err := exec.Command(binary, "help").Output()
 	if err != nil {
 		t.Fatal(err)
@@ -65,6 +67,7 @@ func TestHelpListsTheTable(t *testing.T) {
 // The commands that the tests of the flags go through (flagCommands) are the commands of the table that have flags: a command added to the table with
 // flags is in them, and the other way round.
 func TestFlagCommandsAreTheTable(t *testing.T) {
+	t.Parallel()
 	var got [][]string
 	for _, l := range leaves(commands, nil) {
 		if l.c.flags != nil {
@@ -83,6 +86,7 @@ func TestFlagCommandsAreTheTable(t *testing.T) {
 // Every flag of every command has a side, and a kind of value that names a flag that exists and a set of values that exists. The flags are listed the
 // way the completion lists them: on an empty flag set, without running anything.
 func TestFlagsOfTheTable(t *testing.T) {
+	t.Parallel()
 	for _, l := range leaves(commands, nil) {
 		if l.c.flags == nil {
 			continue
@@ -112,6 +116,7 @@ func TestFlagsOfTheTable(t *testing.T) {
 
 // The values of a flag of fixed values are the ones that its check accepts: the list that the help and the completion print is the list of the check.
 func TestEnumValuesAreTheChecked(t *testing.T) {
+	t.Parallel()
 	for name, e := range enumFlags {
 		if len(e.values) == 0 {
 			t.Errorf("%s: no values", name)

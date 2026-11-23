@@ -16,6 +16,7 @@ import (
 // its main, and a dependency declared for development only. By default the flow is not a finding and the output
 // says how much was left out; with -tests it is read.
 func TestDartTestsAreNotReadUnlessAsked(t *testing.T) {
+	t.Parallel()
 	dart := os.Getenv("RIVUS_DART")
 	if dart == "" {
 		skipOrFail(t, "RIVUS_DART")
@@ -93,6 +94,7 @@ func TestDartTestsAreNotReadUnlessAsked(t *testing.T) {
 // no site, with no error and no word about the language that was not read (a list of sites that was taken for "the
 // rules have nothing to say").
 func TestSitesReadsTheLanguagesOfTheDirectory(t *testing.T) {
+	t.Parallel()
 	dart := os.Getenv("RIVUS_DART")
 	if dart == "" {
 		skipOrFail(t, "RIVUS_DART")

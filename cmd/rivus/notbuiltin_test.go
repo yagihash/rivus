@@ -10,6 +10,7 @@ import (
 )
 
 func TestNoteNotBuiltin(t *testing.T) {
+	t.Parallel()
 	call := func(sym string, dep bool) *ir.Program {
 		return &ir.Program{Funcs: []*ir.Func{{Dep: dep, Blocks: []ir.Block{{Instrs: []ir.Instr{
 			{Op: ir.OpCall, Callee: &ir.Callee{Kind: ir.CalleeStatic, Symbol: sym}},
