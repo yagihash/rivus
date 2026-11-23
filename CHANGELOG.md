@@ -1,5 +1,20 @@
 # Changelog
 
+## [v0.0.14](https://github.com/yagihash/rivus/compare/v0.0.13...v0.0.14) - 2026-11-23
+
+### Features
+- perf: Texts が依存の構文木を持たず、位置だけを持つ by @yagihash in https://github.com/yagihash/rivus/pull/401
+- flags: 既定で off の機能の一覧を、コードとテストで持つ by @yagihash in https://github.com/yagihash/rivus/pull/400
+- perf: lifted を NaiveForm より先に作って手放す(B の土台) by @yagihash in https://github.com/yagihash/rivus/pull/402
+- accept: Go の extractor の受け入れ条件のテストの部品を足す by @yagihash in https://github.com/yagihash/rivus/pull/404
+- accept: 読み込みの順を変えて、結果が同じことを確かめるテスト by @yagihash in https://github.com/yagihash/rivus/pull/409
+- ir: Source を入れ、IR を読む側をその口に通す(B0。結果は同一) by @yagihash in https://github.com/yagihash/rivus/pull/410
+- sites: IRRef.Func を関数の参照(ID と通し番号)に替える(B0) by @yagihash in https://github.com/yagihash/rivus/pull/411
+- accept: 解析の finding、uncertainty、呼び出しのエッジを比較するテスト by @yagihash in https://github.com/yagihash/rivus/pull/412
+### Bug Fixes
+- goir: 同名の型の印を、読み込みの順に依らない形にする by @yagihash in https://github.com/yagihash/rivus/pull/403
+- gossa: 関数の並べ替えの決め手を、Pos の数でなく位置にする by @yagihash in https://github.com/yagihash/rivus/pull/408
+
 ## [v0.0.13](https://github.com/yagihash/rivus/compare/v0.0.12...v0.0.13) - 2026-11-23
 
 ### Features
