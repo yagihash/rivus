@@ -39,7 +39,7 @@ Rust は、`char` と整数を数値と扱う(extractor の型の分類)ので�
 
 ## 出力での見つけ方
 
-`summary.numeric_stops.char_reads` は、文字の読み(`s[i]`、`range s`、rune、`codeUnitAt`)で汚染が止まった回数で、`top[]` に回数の多い 10 関数(`function`、`scope`、`count`)が出る。その関数は、文字を 1 つずつ扱っている。期待した sink が出ない(`-no-deps` では出る)ときは、まずその関数の周りを見る。`other`(長さ、カウンタ、変換、比較)は仕様どおりなので、数だけを見る。プロジェクトの関数に文字の読みがあれば、標準エラーに `N functions stopped a flow at per-character reads: summary.numeric_stops` が出る。
+`summary.numeric_stops.char_reads` は、文字の取り出し(`s[i]`、`range s`、rune、`codeUnitAt`)で汚染が止まった回数で、`top[]` に回数の多い 10 関数(`function`、`scope`、`count`)が出る。その関数は、文字を 1 つずつ扱っている。期待した sink が出ない(`-no-deps` では出る)ときは、まずその関数の周りを見る。`other`(長さ、カウンタ、変換、比較)は仕様どおりなので、数だけを見る。プロジェクトの関数に文字の取り出しがあれば、標準エラーに `N functions stopped a flow at per-character reads: summary.numeric_stops` が出る。
 
 ## 経緯
 
