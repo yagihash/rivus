@@ -1,6 +1,6 @@
 # 信頼しない Rust を、隔離して読む
 
-`rivus analyze -lang rust` は、Rust のプロジェクトを**ビルドします**(`cargo check`)。ビルドは、対象の `build.rs`、proc macro、`[build-dependencies]` を実行します。採用前のライブラリや、怪しいリポジトリを読むときは、それが、あなたのマシンで、あなたの権限(ホームの鍵、トークン、ネットワーク)で動くことになります。そこで、**macOS では既定で、OS のサンドボックス(Seatbelt、`sandbox-exec`)の下で、隔離して動かします**([ADR-093](DECISIONS.md)。以前は Docker のコンテナ: ADR-064)。**Linux には隔離の手段がないので、既定では何も実行せずに止まります**。信頼できるコードは、`-unsafe-host-exec` で、このマシンの上で、隔離なしに読みます。
+`rivus analyze -lang rust` は、Rust のプロジェクトを**ビルドします**(`cargo check`)。ビルドは、対象の `build.rs`、proc macro、`[build-dependencies]` を実行します。採用前のライブラリや、怪しいリポジトリを読むときは、それが、あなたのマシンで、あなたの権限(ホームの鍵、トークン、ネットワーク)で動くことになります。そこで、**macOS では既定で、OS のサンドボックス(Seatbelt、`sandbox-exec`)の下で、隔離して動かします**([ADR-093](adr/093-rust-isolation-macos-sandbox.md)。以前は Docker のコンテナ: ADR-064)。**Linux には隔離の手段がないので、既定では何も実行せずに止まります**。信頼できるコードは、`-unsafe-host-exec` で、このマシンの上で、隔離なしに読みます。
 
 どちらで読んだかは、出力の `summary.isolation`(`mode`: `sandbox` / `host`)に出ます(Rust の抽出をしたときだけ)。
 

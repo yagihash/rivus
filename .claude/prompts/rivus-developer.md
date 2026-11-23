@@ -8,7 +8,7 @@
 
 ## 1. 読むもの
 
-**最初に全部を読まないでください。** 文書は大きく（`docs/DECISIONS.md` だけで約 2,000 行）、読んだものはすべて、このセッションのコンテキストに残り続けます（7 節）。始めるとき、または再開するときに読むのは、次の 2 つだけです。
+**最初に全部を読まないでください。** 文書は大きく（ADR は `docs/adr/` に 108 件、約 2,000 行）、読んだものはすべて、このセッションのコンテキストに残り続けます（7 節）。始めるとき、または再開するときに読むのは、次の 2 つだけです。
 
 1. 作業の状態のメモ: `.claude/work/STATE.md`（7.2）
 2. 優先順位と次の作業: `docs/ROADMAP.md`
@@ -20,7 +20,7 @@
 | 文書の一覧 | `docs/README.md`（目次） | |
 | 設計思想 | `docs/PRINCIPLES.md` | 関係する原則の節だけ |
 | 今の姿 | `docs/ARCHITECTURE.md` | 見出しを grep して、その節だけ |
-| 判断の経緯 | `docs/DECISIONS.md` | 先に `docs/ADR-INDEX.md` で番号を探し、その ADR だけを grep で読む |
+| 判断の経緯 | `docs/adr/`（1 件 1 ファイル） | `ls docs/adr` か `make docs-gen WHAT=adr` で番号を探し、その ADR のファイルだけを読む |
 | 用語 | `docs/GLOSSARY.md` | 用語を grep |
 | 課題 | `docs/issues/`（1 件 1 ファイル。一覧は `make docs-gen`） | 一覧から番号を探し、その課題のファイルだけ |
 | 相談役のレビュー | `.claude/reviews/REVIEW-*.md`（`.gitignore` で、git が追跡しない） | 今やる指摘の節だけ |
@@ -164,7 +164,7 @@
 - **3 言語のテストを CI で走らせる。** 環境変数がないときに、何も報告せずに Skip しない
 - **解析の対象は、攻撃者が制御しうる入力。** 対象のコードやデータが rivus に何をさせうるかを考える。セキュリティの制御を外す設定は、外したことが分かる形にする
 - **リポジトリは公開。** 直していない脆弱性の詳細（再現の手順など）を、課題の一覧（`docs/issues/`）、コミットメッセージ、リポジトリの中の文書に書かない。直してから記録する
-- **ドキュメントとコードを合わせる。** 変更したら、関係する文書を直す。とくに、`docs/PRINCIPLES.md` の「現状と、まだ届いていない所」、`docs/ARCHITECTURE.md`、`docs/ADR-INDEX.md`（ADR を足したとき）、`docs/DESIGN-*.md` の「状態」、`docs/ROADMAP.md`。ADR の本文は書き換えず、訂正や追記の節で足す
+- **ドキュメントとコードを合わせる。** 変更したら、関係する文書を直す。とくに、`docs/PRINCIPLES.md` の「現状と、まだ届いていない所」、`docs/ARCHITECTURE.md`、`docs/adr/`（ADR を足したときは、ファイルを足すだけ。`DECISIONS.md` と `ADR-INDEX.md` は触らない）、`docs/DESIGN-*.md` の「状態」、`docs/ROADMAP.md`。ADR の本文は書き換えず、訂正や追記の節で足す（覆したときは、古い ADR の `状態` の行だけ直す）
 - **1 つの指摘・1 つのまとまった変更ごとにコミット**し、メッセージに課題の番号やレビューの ID を入れる
 - **push の前は `make check`(約 1 分: ビルド、gofmt、go vet、`go test -short`)。** 全部の確認は CI の仕事(PR は `-short`、main は全部)。手元で全部を見たいときは `make test`(Dart と Rust の extractor つき。数分)。`make` だけで一覧が出る
 - **PR は `/pr` スキルで立てる。マージはマージコミット(squash しない)。必須のチェックは `ci-ok`。** PR の CI は `-short` で、重いテスト(決定性、規模、モデルの行)は main への push、週 1 回、tagpr のリリース PR だけで走る。**main の全部の実行が失敗したら、次の作業より先に、修正するか、原因の PR を戻す**(PR で見ていない分を、main で検出する)

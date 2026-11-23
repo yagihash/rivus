@@ -84,7 +84,7 @@ to `model.With`. Every function has the shape `func F(r *model.Rec, s string) st
 The size of the SCCs is what costs the most in the engine, and it is a parameter on its own: the
 rings (`-sccs`), the closures given to a shared helper (`-with`), and the interface callbacks
 (`-back`) are the three ways that Gitea's big SCCs are made, and each is set apart so that one can be
-turned up alone. The sizes S, M and L are well below Gitea (see ADR-046 in `docs/DECISIONS.md` for the
+turned up alone. The sizes S, M and L are well below Gitea (see `docs/adr/046-own-bench-curated-synth.md` for the
 measurements of Gitea this is taken from): the cost per function of the engine on this shape is high,
 so the smaller code already takes what a real program of ten times the size does.
 
