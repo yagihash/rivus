@@ -71,6 +71,7 @@ func TestParamSourceSharedObject(t *testing.T) {
 	}
 	for _, r := range rows {
 		t.Run(r.pkg, func(t *testing.T) {
+			t.Parallel()
 			var rep report.Report
 			if err := json.Unmarshal(rivus(t, "analyze", "-rules", "rules.yaml", "./cases/paramshare/"+r.pkg), &rep); err != nil {
 				t.Fatal(err)
