@@ -24,7 +24,7 @@ type Options struct {
 	K int
 	// DepK is the access path depth of the functions of the dependencies (-dep-k): the paths are cut at DepK steps there,
 	// and at K in the functions of the project. Zero is the same as K (-dep-k 3 with the default K is the depth before
-	// the default was changed to 2). A cut path stands for everything below it, so a smaller DepK only adds flows (ADR-118).
+	// the default was changed to 2). A cut path stands for everything below it, so a smaller DepK only adds flows (ADR-119).
 	DepK int
 	// MaxPasses bounds the number of times the whole program is revisited
 	// while summaries change.
