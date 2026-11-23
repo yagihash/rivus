@@ -236,3 +236,84 @@ void fullToCmd() { sinkCmd(Uri.encodeFull(source())); }
 		}
 	}
 }
+
+// Sanitizers that are stacked: the value has the labels of both (`cleaned_cmd&html_escaped`, the names sorted, so the order does not
+// matter), it is hidden from the sinks of the categories of both and from no others, and it is the same when a sanitizer is
+// in another function (the summary of the function says that the sanitizer was applied).
+func TestStackedSanitizersCombineTheirCategories(t *testing.T) {
+	t.Parallel()
+	w := newWorkspace(t)
+	w.write("lib/lib.go", `package lib
+
+func Source() string { return "" }
+func SinkHTML(s string)  {}
+func SinkCmd(s string)   {}
+func SinkSQL(s string)   {}
+func Escape(s string) string { return s }
+func CleanCmd(s string) string { return s }
+`)
+	w.write("rules.yaml", `
+sources:
+  - symbol: example.com/tmp/lib.Source
+    labels: [user_input]
+sinks:
+  - symbol: example.com/tmp/lib.SinkHTML
+    category: xss
+  - symbol: example.com/tmp/lib.SinkCmd
+    category: command_injection
+  - symbol: example.com/tmp/lib.SinkSQL
+    category: sql_injection
+sanitizers:
+  - symbol: example.com/tmp/lib.Escape
+    drops: [user_input]
+    adds: [html_escaped]
+    neutralises: [xss]
+  - symbol: example.com/tmp/lib.CleanCmd
+    drops: [user_input]
+    adds: [cleaned_cmd]
+    neutralises: [command_injection]
+`)
+	w.write("main/main.go", `package main
+
+import "example.com/tmp/lib"
+
+func cmdFirst(s string) string  { return lib.Escape(lib.CleanCmd(s)) }
+func htmlFirst(s string) string { return lib.CleanCmd(lib.Escape(s)) }
+func onlyCmd(s string) string   { return lib.CleanCmd(s) }
+
+func CmdFirstToSQL()  { lib.SinkSQL(lib.Escape(lib.CleanCmd(lib.Source()))) }
+func HTMLFirstToSQL() { lib.SinkSQL(lib.CleanCmd(lib.Escape(lib.Source()))) }
+func CmdFirstToHTML() { lib.SinkHTML(lib.Escape(lib.CleanCmd(lib.Source()))) }
+func HTMLFirstToCmd() { lib.SinkCmd(lib.CleanCmd(lib.Escape(lib.Source()))) }
+
+func InFunctionsToSQL1()  { lib.SinkSQL(cmdFirst(lib.Source())) }
+func InFunctionsToSQL2()  { lib.SinkSQL(htmlFirst(lib.Source())) }
+func InFunctionsToHTML()  { lib.SinkHTML(cmdFirst(lib.Source())) }
+func InFunctionsToCmd()   { lib.SinkCmd(htmlFirst(lib.Source())) }
+func SplitToHTML()        { lib.SinkHTML(lib.Escape(onlyCmd(lib.Source()))) }
+func SplitToSQL()         { lib.SinkSQL(lib.Escape(onlyCmd(lib.Source()))) }
+func OnlyOneToHTML()      { lib.SinkHTML(onlyCmd(lib.Source())) }
+`)
+	var rep report.Report
+	if err := json.Unmarshal(w.run("analyze", "-rules", "rules.yaml", "./main"), &rep); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, f := range rep.Findings {
+		fn := f.Sink.Func
+		got[fn[strings.LastIndex(fn, ".")+1:]] = strings.Join(f.Labels, ",")
+	}
+	const both = "cleaned_cmd&html_escaped"
+	want := map[string]string{
+		"CmdFirstToSQL": both, "HTMLFirstToSQL": both, "InFunctionsToSQL1": both, "InFunctionsToSQL2": both, "SplitToSQL": both,
+		"OnlyOneToHTML": "cleaned_cmd", // one sanitizer: it is not safe for xss
+	}
+	if len(got) != len(want) {
+		t.Errorf("findings %v, want %v", got, want)
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("%s: labels %q, want %q (%v)", k, got[k], v, got)
+		}
+	}
+}

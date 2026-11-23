@@ -425,7 +425,7 @@ sanitizers:
 - A builtin row has to write `neutralises` (`TestSanitizersAreReviewed`), and an empty one has its reason in `testdata/sanitizers-reviewed.txt`.
 - **A sanitizer without `neutralises` keeps the old meaning: the value is hidden from the sinks of every category** (the rules of a project written before this one go on working). rivus says so once on stderr (and `summary.project_rules[].sanitizers_without_neutralises` counts them).
 - A sanitizer that is a method takes what it is called on as data as well as its arguments (what the row does not drop goes on to the result).
-- Known limits: a value that passed two sanitizers keeps the label of the first (an HTML escape of a `url_encoded` value is still `url_encoded`, so it is reported at an xss sink: a false report, not a missed flow). The label that `adds` names is one label for all the rows that give it; two rows with different `neutralises` for the same label keep only the categories that both have.
+- A value that passed two scoped sanitizers has both labels (`url_encoded&html_escaped`) and is hidden from the union of their categories. Known limit: a sanitizer without `neutralises` in the chain keeps the old meaning for the value it receives. The label that `adds` names is one label for all the rows that give it; two rows with different `neutralises` for the same label keep only the categories that both have.
 
 ## 4c. Which versions the rows were checked against: `verified_versions`
 

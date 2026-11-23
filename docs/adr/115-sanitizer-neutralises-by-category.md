@@ -13,6 +13,13 @@
 5. 行の内容: `html.EscapeString`、`html/template.HTMLEscapeString`、`html/template.JSEscapeString`、Dart の `HtmlEscape.convert` は `[xss]`(JSEscapeString は JavaScript の文字列の中だけで、属性や URL では足りない。分かっている言いすぎ)。Dart の `Uri.encodeComponent` と `encodeQueryComponent` は `[]`(値が来る位置で決まり、`'`、`..`、`$()` は変わらない)。`Uri.encodeFull` は sanitizer をやめ、そのまま流す行にする(`: / ? # @` も変えない)。
 6. 同じ変更で、メソッドの sanitizer の既定の流れに、レシーバを足す(`text.Clean()` で、データがレシーバにあるとき、`drops` に書かないラベルまで消えていた)。
 
-**効果と限り:** sanitizer を 1 回通しても、種類の違う sink には届き続けるので、報告は増える向きに変わる。2 つの sanitizer を通った値は、最初のラベルのままなので、`url_encoded` の値を HTML のエスケープに通して xss の sink に渡すと、報告される(誤報の向き。見逃しではない)。
+**続けて通した sanitizer(2026-11-23 の追記):** `neutralises` のある sanitizer を続けて通した値は、ラベルを `a&b` のようにまとめる(名前を辞書順に並べ、各 1 回)。
+1. finding のラベルに、まとめた名前がそのまま出る(例 `cleaned_cmd&html_escaped`)。sink の `accepts` にこの名前を書くと、その名前だけに一致する(完全一致が先)。ふつうの sink(`accepts: [user_input]` か空)は、次の規則で受ける: 落としたラベルのどれかを受けるはずで、かつ、まとめた名前の各ラベルの `neutralises` の和に、sink のカテゴリがない。
+2. 順序に依らない: `cleanSql(cleanCmd(x))` と `cleanCmd(cleanSql(x))` は同じ名前になる。HTML のエスケープのあとに URL のエンコード(`html_escaped&url_encoded`)も、その逆も、xss の sink には隠れ、ほかのカテゴリの sink には届く。
+3. sanitizer が別の関数の中にあっても同じ(要約は、通した sanitizer の操作を覚え、呼び出し元の実際のラベルに当てる)。`maxOps`(4)を超えた操作は覚えず、その分は隠さず、報告が増える向きに働く。
+4. 数の上限: まとめる名前は、sanitizer の `adds` の名前の部分集合なので、組み込みのラベル 3 種(`html_escaped`、`js_escaped`、`url_encoded`)では高々 7、k 種なら高々 `2^k - 1`。1 つの値は元のまま 1 つの要素で、要素は増えない(まとめる前の要素は、置き換わる)。実際のプロジェクトでの要素の数は PR の本文に測った値を書く。
+5. `neutralises` のない sanitizer が連なりにあるときは、それが受ける値(ラベルが `user_input` でないもの)を落とさず、そのまま通す(これまでと同じ)。
+
+**効果と限り:** sanitizer を 1 回通しても、種類の違う sink には届き続けるので、報告は増える向きに変わる。
 
 **しないこと:** 組み込みの sink の `accepts` の変更、project のルールの `neutralises` の強制、Rust の sanitizer 行(まだない。zoo のしくみの確認は、zoo のルールの `neutralises` で行う)。
