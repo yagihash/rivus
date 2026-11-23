@@ -292,6 +292,9 @@ jobs:
       - name: Test the backtest and the ledger tools
         if: ${{ !cancelled() }}
         run: python3 bench/test_backtest.py
+      - name: Test the scale-growth tool
+        if: ${{ !cancelled() }}
+        run: python3 bench/scale-growth/test_scale_growth.py
       # A mark that loosens the truth of the zoo (a row added to a cell that bench/zoo/marks.d already has a file of, or a row of a new cell of
       # a kind other than @sink(none), @miss and @fp; against the merge base) needs a "Zoo-Loosened:" line in a commit message (the
       # user's approval); a new @miss or @fp row needs an @ref(#N) or @ref(model-<package>-<name>) whose file is in docs/issues. TestZooMarksLock (in the shards of the test job) holds the file to the sources.
