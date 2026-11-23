@@ -1,6 +1,7 @@
 # 文書の用語と言い回しのチェック（regomark）。CI では実行しない。
-# Claude Code の hook（.claude/settings.json）が、.md を編集した直後に実行する。
-# 手元で実行するとき: regomark check
+# Claude Code の hook（.claude/settings.json、.claude/hooks/check-wording.sh）が、.md を書いた直後に、そのファイルを
+# この policy でチェックする。hook が見るのは、Claude が書いた .md のすべて（下の documents に無いもの、
+# リポジトリの外の相談や引き継ぎの文書も）。documents は、手元で `regomark check` を実行するときの対象。
 documents:
   - "README.md"
   - "docs/**/*.md"

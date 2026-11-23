@@ -3,6 +3,7 @@
     "ll/ll.go:35 -\u003e ll/ll.go:26"
   ],
   "uncertainty_kinds": {
+    "depth_limit": 1,
     "unmodeled_library_call": 1
   },
   "converged": true,

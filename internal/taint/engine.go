@@ -529,6 +529,11 @@ type Stats struct {
 	SummarySteps   int    `json:"summary_steps"`
 	LargestSummary string `json:"largest_summary,omitempty"`
 	LargestElems   int    `json:"largest_summary_elems,omitempty"`
+	// OutWidenedFuncs and OutWidenedOutputs: the functions whose final summary has an output that was widened
+	// (more than 24 elements, the parts of a parameter merged into the whole of it), and how many such outputs
+	// there are (the out_limit record, #186).
+	OutWidenedFuncs   int `json:"out_widened_funcs,omitempty"`
+	OutWidenedOutputs int `json:"out_widened_outputs,omitempty"`
 }
 
 // Result is the outcome of a run.
@@ -544,6 +549,17 @@ type Result struct {
 	// FuncDropped is, of the same run, the calls with a model that were given a function value that the model does not
 	// say anything of (by symbol; not in the output).
 	FuncDropped []FuncDropped `json:"-"`
+	// NumericStops is, for each function where a value that would carry taint was dropped because it is a number or a
+	// bool, how many times (summary.numeric_stops). Not in the output of the engine: the report makes it.
+	NumericStops []NumericStopCount `json:"-"`
+}
+
+// NumericStopCount is the number of times the numeric and bool rule dropped taint in one function.
+type NumericStopCount struct {
+	Func       string
+	Dependency bool
+	Char       int // values read as one character of a text (a byte, a rune)
+	Other      int // lengths, counters, conversions, comparisons, numbers a model makes
 }
 
 // Run analyses every function with a body, callees before callers, until the
@@ -754,6 +770,9 @@ func (e *Engine) Run() *Result {
 		if n > st.LargestElems || (n == st.LargestElems && n > 0 && sum.Func < st.LargestSummary) {
 			st.LargestElems, st.LargestSummary = n, sum.Func
 		}
+	}
+	if u, funcs, outputs := e.outLimitRecord(); u != nil {
+		st.OutWidenedFuncs, st.OutWidenedOutputs = funcs, outputs
 	}
 	var depSpent, ownSpent time.Duration
 	for fn, d := range e.spent {
@@ -1070,7 +1089,7 @@ func (e *Engine) commit(fn *sg.Func, r *fnResult, callers map[*sg.Func][]*sg.Fun
 	if prev := e.states[fn]; s.exceeded && prev != nil {
 		keepEarlier(s, prev)
 	}
-	e.states[fn] = &state{eng: e, fn: fn, findings: s.findings, suppressions: s.suppressions, uncertain: s.uncertain, numericStops: s.numericStops}
+	e.states[fn] = &state{eng: e, fn: fn, findings: s.findings, suppressions: s.suppressions, uncertain: s.uncertain, numericStops: s.numericStops, numericCount: s.numericCount, charCount: s.charCount}
 	return changed
 }
 
@@ -1349,6 +1368,16 @@ func (e *Engine) collect(st Stats) *Result {
 		u := newUncertainty(KindDepthLimit, "path_limit: in "+itoa(len(ids))+" functions the access paths were cut at depth "+itoa(e.opts.K)+" (in the functions of the dependencies: "+itoa(e.depK())+")"+
 			", or the cells of a parameter were merged into the whole of it: what is told apart in the code is not told apart here (more flows than there are, never fewer)", "")
 		u.Candidates = ids
+		res.Uncertainties = append(res.Uncertainties, u)
+	}
+	for fn, st := range e.states {
+		if st.numericCount > 0 || st.charCount > 0 {
+			res.NumericStops = append(res.NumericStops, NumericStopCount{Func: e.funcID(fn), Dependency: fn.Dep, Other: st.numericCount, Char: st.charCount})
+		}
+	}
+	sort.Slice(res.NumericStops, func(i, j int) bool { return res.NumericStops[i].Func < res.NumericStops[j].Func })
+	// the functions whose summary has an output that was widened: one record, with the list
+	if u, _, _ := e.outLimitRecord(); u != nil {
 		res.Uncertainties = append(res.Uncertainties, u)
 	}
 	// where the data of a source became a number or a bool: one record for each source site
@@ -1776,6 +1805,12 @@ func sharedPlaceNames(ss []SharedState) []string {
 // shorter path with its guards, as when the functions' results are merged), the
 // suppressions, the uncertainties and the places where data stopped at a number.
 func keepEarlier(s, prev *state) {
+	if prev.numericCount > s.numericCount {
+		s.numericCount = prev.numericCount
+	}
+	if prev.charCount > s.charCount {
+		s.charCount = prev.charCount
+	}
 	if s.findings == nil {
 		s.findings = map[findingKey]*rawFinding{}
 	}
@@ -1906,4 +1941,26 @@ func inTestFile(file string) bool {
 	f := filepath.ToSlash(file)
 	return strings.HasSuffix(f, "_test.go") || strings.HasSuffix(f, "_test.dart") ||
 		strings.Contains(f, "/test/") || strings.HasPrefix(f, "test/") || strings.Contains(f, "/tests/") || strings.HasPrefix(f, "tests/")
+}
+
+// outLimitRecord is the record of the outputs of summaries that were widened (widen: more than maxOutElems
+// elements, the parts of a parameter merged into the whole of it), with the number of functions and of outputs; nil
+// when there is none. It reads the final summaries, so the list does not depend on the order or the time of the run.
+func (e *Engine) outLimitRecord() (*Uncertainty, int, int) {
+	var ids []string
+	outputs := 0
+	for fn, sum := range e.summaries {
+		if sum != nil && sum.WidenedOutputs > 0 {
+			ids = append(ids, e.funcID(fn))
+			outputs += sum.WidenedOutputs
+		}
+	}
+	if len(ids) == 0 {
+		return nil, 0, 0
+	}
+	sort.Strings(ids)
+	u := newUncertainty(KindDepthLimit, "out_limit: in "+itoa(len(ids))+" functions an output of the summary had more than "+itoa(maxOutElems)+
+		" elements, and the parts of a parameter were merged into the whole of it: what is told apart in the code is not told apart here (more flows than there are, never fewer)", "")
+	u.Candidates = ids
+	return u, len(ids), outputs
 }

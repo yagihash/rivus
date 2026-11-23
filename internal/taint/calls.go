@@ -447,6 +447,7 @@ func (s *state) valueGuards(ci *sg.Instr) map[string][]Guard {
 			fn:       s.fn,
 			pos:      ci.Pos,
 		}}
+		out[string(c.ID)][0].k = out[string(c.ID)][0].computeKey() // the key is asked for at every comparison of guards
 	}
 	s.eng.valueGuards.Store(ci, out)
 	return out
@@ -494,6 +495,7 @@ func (s *state) makeDispatchGuards(cc *callCtx, fns []*sg.Func) map[*sg.Func][]G
 			fn:       s.fn,
 			pos:      cc.in.Pos,
 		}}
+		out[fn][0].k = out[fn][0].computeKey()
 	}
 	return out
 }
@@ -897,6 +899,7 @@ func (s *state) noteNumericStopOfUncovered(cc *callCtx, flows []model.Flow) {
 		return
 	}
 	for _, f := range s.flatten(valuesLocs(s, cc.argv())) {
+		s.countNumericStop(numeric, f.E)
 		if f.E.Kind == Real {
 			s.noteNumericStop(f.E, nil, numeric)
 		}
@@ -917,6 +920,7 @@ func (s *state) noteNumericStopOfPure(cc *callCtx) {
 		return
 	}
 	for _, f := range s.flatten(valuesLocs(s, cc.argv())) {
+		s.countNumericStop(numeric, f.E)
 		if f.E.Kind == Real {
 			s.noteNumericStop(f.E, nil, numeric)
 		}
@@ -1369,6 +1373,7 @@ func (s *state) paramGuards(cc *callCtx, fns []*sg.Func) map[*sg.Func][]Guard {
 			fn:       s.fn,
 			pos:      cc.in.Pos,
 		}}
+		out[fn][0].k = out[fn][0].computeKey()
 	}
 	s.eng.dispatch.Store(cc.in, out)
 	return out

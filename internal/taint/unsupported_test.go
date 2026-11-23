@@ -151,3 +151,32 @@ func TestCommaOkSourceLeavesNoNumericStop(t *testing.T) {
 		}
 	}
 }
+
+// A string read rune by rune stops at the numeric rule inside the function that does it, and the
+// count says where (summary.numeric_stops); a program that reads nothing as a number has no count.
+func TestNumericStopsCountedPerFunction(t *testing.T) {
+	counts := func(pat string) map[string]int {
+		prog := loadIR(t, testutil.Testdata(), pat)
+		rules := testutil.Rules(t)
+		rules.Expand(prog.gossa, 0)
+		st := prog.sites(rules)
+		m := map[string]int{}
+		for _, c := range prog.engine(st, rules, DefaultOptions()).Run().NumericStops {
+			m[c.Func] = c.Char
+		}
+		return m
+	}
+	got := counts("./cases/numrune/...")
+	n := 0
+	for f, c := range got {
+		if strings.HasSuffix(f, "PerRune") {
+			n = c
+		}
+	}
+	if n == 0 {
+		t.Errorf("no numeric stop counted in PerRune: %v", got)
+	}
+	for f, c := range counts("./cases/numnone/...") {
+		t.Errorf("numeric stop counted where nothing is read as a number: %s %d", f, c)
+	}
+}

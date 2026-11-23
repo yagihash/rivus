@@ -276,7 +276,7 @@ func (s *state) branchGuard(d *sg.Block, side bool) (Guard, bool) {
 		return Guard{}, false
 	}
 	if s.condCache == nil {
-		s.condCache = map[*sg.Block]*Guard{}
+		s.condCache = map[*sg.Block]*condBase{}
 	}
 	base, cached := s.condCache[d]
 	if !cached {
@@ -286,17 +286,34 @@ func (s *state) branchGuard(d *sg.Block, side bool) (Guard, bool) {
 		} else {
 			g := &Guard{Func: s.eng.funcID(s.fn), Params: params, fn: s.fn, block: d.Index, cond: ifi.Args[0]}
 			g.pos, g.Cond = s.condSource(d)
-			s.condCache[d] = g
+			// the key of each side is built once, with the condition (it was built at every use)
+			cb := &condBase{g: g}
+			for i, pol := range [2]bool{false, true} {
+				x := *g
+				x.Polarity = pol
+				cb.k[i] = x.computeKey()
+			}
+			s.condCache[d] = cb
 		}
 		base = s.condCache[d]
 	}
 	if base == nil {
 		return Guard{}, false
 	}
-	g := *base
+	g := *base.g
 	g.Polarity = side
-	g.k = g.computeKey()
+	if side {
+		g.k = base.k[1]
+	} else {
+		g.k = base.k[0]
+	}
 	return g, true
+}
+
+// condBase is the guard of a branch, with the key of each of its two sides.
+type condBase struct {
+	g *Guard
+	k [2]string // the key of the false side, of the true side
 }
 
 // condSource finds the source text of the condition of the branch ending d,
@@ -539,10 +556,12 @@ func (s *state) instantiate(ci *callInfo, gs []Guard) []Guard {
 	}
 	out := make([]Guard, len(gs))
 	var call *GuardCall
+	var callKey string // "|" and the position of the call: the end of the key of every guard given the call
 	for i, g := range gs {
 		if g.Call == nil {
 			if call == nil {
 				call = &GuardCall{Caller: s.eng.funcID(ci.fn), fn: ci.fn, instr: ci.instr, pos: ci.pos}
+				callKey = "|" + posKey(ci.pos)
 			}
 			c := *call
 			for _, p := range g.Params {
@@ -554,8 +573,9 @@ func (s *state) instantiate(ci *callInfo, gs []Guard) []Guard {
 					c.Args = append(c.Args, GuardArg{Param: p, ArgIndex: idx, value: ci.argv[p]})
 				}
 			}
+			// the key of a guard with no call, and then the position of the call (computeKey says the same)
+			g.k = g.key() + callKey
 			g.Call = &c
-			g.k = g.computeKey()
 		}
 		out[i] = g
 	}

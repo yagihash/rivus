@@ -1,5 +1,48 @@
 # Changelog
 
+## [v0.0.11](https://github.com/yagihash/rivus/compare/v0.0.10...v0.0.11) - 2026-11-23
+
+### Features
+- feat(model): 一括採用の展開(段階 2)。決定から行を決まった形で生成する by @yagihash in https://github.com/yagihash/rivus/pull/278
+- feat(model): 層 1 の resource_name の語に base、head、tag を足す by @yagihash in https://github.com/yagihash/rivus/pull/279
+- feat: make merge で、開発者がマージしてよい PR だけをマージする by @yagihash in https://github.com/yagihash/rivus/pull/280
+- ci: main の実行の取り消し、zoo-loosened、darwin の vet、文書のテストの穴を直す by @yagihash in https://github.com/yagihash/rivus/pull/283
+- feat(model-diff): Rust のモデルの行の綴りを、extractor の綴りと照合する(ローカル) by @yagihash in https://github.com/yagihash/rivus/pull/284
+- test: 追跡されたファイルに実行ファイルと 1 MB を超えるものがないことを確かめる by @yagihash in https://github.com/yagihash/rivus/pull/289
+- bench: 依存の重い対象のベンチと LEDGER を足し、エンジン側のコストの状況をまとめる by @yagihash in https://github.com/yagihash/rivus/pull/292
+- bench: memos と dart_services を対象に足し、合格の線を 1 行で出す by @yagihash in https://github.com/yagihash/rivus/pull/293
+- bench: Dart の的を cocoon app_dart にして、合格の線と起動の案内を足す by @yagihash in https://github.com/yagihash/rivus/pull/296
+- feat: ポインタの別名で近似した経路の finding に、不確実性の注記を付ける by @yagihash in https://github.com/yagihash/rivus/pull/295
+- test: 変更したモデルのパッケージに差分テストを PR で回し、pure・sanitizer・source の行も比べる by @yagihash in https://github.com/yagihash/rivus/pull/291
+- bench: 合格の線の検出を脆弱性の単位にし、位置の単位の数を並べて出す by @yagihash in https://github.com/yagihash/rivus/pull/301
+- feat: 依存の関数だけアクセスパスの深さを下げる実験(フラグ、既定は変えない)と、診断を足す by @yagihash in https://github.com/yagihash/rivus/pull/302
+- feat(model): アーカイブのエントリ名を source にする(Go の標準ライブラリと Dart の tar) by @yagihash in https://github.com/yagihash/rivus/pull/303
+- feat(model): package:archive の 3.x の配置の行を足す by @yagihash in https://github.com/yagihash/rivus/pull/304
+- bench: Dart の検出の的に archive(CVE-2023-39139)を足す by @yagihash in https://github.com/yagihash/rivus/pull/306
+- bench: 時計で止めた関数がある実行を、合格の線の収束に数えない by @yagihash in https://github.com/yagihash/rivus/pull/310
+- feat: 値がアクセスパスの切れた所を通ったとき、その段に注記(access_path_truncated)を付ける by @yagihash in https://github.com/yagihash/rivus/pull/309
+- bench: 合格の線のメモリを終了時のピークにし、見張りと記録を分ける by @yagihash in https://github.com/yagihash/rivus/pull/313
+- bench: 合格のメモリをプロセスの木の合計にし、本体のピークと並べて記録する by @yagihash in https://github.com/yagihash/rivus/pull/315
+- bench: 検出の条件を detected と quiet_after_fix に分ける(#293 のマージのあとに push して入らなかった分の作り直し) by @yagihash in https://github.com/yagihash/rivus/pull/319
+- tooling: マージ済みの PR のブランチへの push を、pre-push のフックで止める by @yagihash in https://github.com/yagihash/rivus/pull/320
+- feat: 依存の関数のアクセスパスの深さの既定を 2 にする(自分のコードは 3 のまま。`-dep-k 3` で前の動作) by @yagihash in https://github.com/yagihash/rivus/pull/316
+- tooling: compare.sh に時間とメモリの前後を足し、エンジンの PR の決まりに入れる by @yagihash in https://github.com/yagihash/rivus/pull/322
+- マージの道具は、main の最新の CI が失敗しているとマージしない by @yagihash in https://github.com/yagihash/rivus/pull/326
+- 重い実行の道具は、マシン全体で 1 つのロックを取る by @yagihash in https://github.com/yagihash/rivus/pull/327
+- zoo: #290 の近くの形(添字のスライス、range のスライス、値のコピー)のセルを足す by @yagihash in https://github.com/yagihash/rivus/pull/330
+- perf: 解析の割り当てを減らす(結果は変えない) by @yagihash in https://github.com/yagihash/rivus/pull/321
+- 出力の widening を、不確実性 out_limit: と stats に記録する(#186 の 1) by @yagihash in https://github.com/yagihash/rivus/pull/332
+- feat: 数値の型で汚染を止めた場所を、関数ごとに summary に出す by @yagihash in https://github.com/yagihash/rivus/pull/312
+### Bug Fixes
+- fix: 同じ module と path 依存のパッケージを、プロジェクトとして扱う by @yagihash in https://github.com/yagihash/rivus/pull/287
+- fix: 結果が 2 つ以上ある命令で得たポインタ経由の書き込みを追う by @yagihash in https://github.com/yagihash/rivus/pull/290
+- fix(model): pure の行の流れを本体に合わせ、確認できない行を減らす by @yagihash in https://github.com/yagihash/rivus/pull/298
+- fix: 関数値を渡した、モデルのない呼び出しで、返り値が結果に届くと見なす by @yagihash in https://github.com/yagihash/rivus/pull/297
+- fix(model): sanitizer の効く範囲を種類ごとに分け、コールバックを持つ pure の行を直す by @yagihash in https://github.com/yagihash/rivus/pull/294
+- test: 1 文字ずつ読み書きするコードの流れの見逃しを、zoo のセルと課題に固定する by @yagihash in https://github.com/yagihash/rivus/pull/311
+- main の CI を直す: TestScaleSynth の期待値を直し、PR でも実行する by @yagihash in https://github.com/yagihash/rivus/pull/324
+- 解析する関数の集合を閉じる: 実行ごとに変わっていた標準ライブラリの関数をそろえる by @yagihash in https://github.com/yagihash/rivus/pull/329
+
 ## [v0.0.10](https://github.com/yagihash/rivus/compare/v0.0.9...v0.0.10) - 2026-11-23
 
 ### Features

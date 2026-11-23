@@ -6,7 +6,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/yagihash/rivus/internal/report"
@@ -27,9 +29,8 @@ import (
 // what a commit shows). -workers is fixed: R-43 (issue #96) makes summary_elems depend on it, and the ring
 // profile keeps both numbers, so that the day it is fixed the two files become one.
 func TestScaleSynth(t *testing.T) {
-	if testing.Short() {
-		t.Skip("the scale profiles take a minute (-short skips them)")
-	}
+	// It runs under -short too (about 13 seconds): a change to the engine that blows up a summary has to be seen
+	// in the pull request, not on main after the merge (#290 was found that way).
 	root, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatal(err)
@@ -64,6 +65,9 @@ func TestScaleSynth(t *testing.T) {
 		{"selfcopy", "selfcopy", nil, []int{1}, false},
 		// the shape of smithy-go's stack of steps: 40 operations put 9 stages into a stack of their own and call it
 		{"middleware", "middleware", nil, []int{1}, false},
+		// 18 stages: the output of (*mw.Step).HandleMiddleware has more than 24 elements and is widened (#186): the
+		// depth_limit of the expected file includes the out_limit record
+		{"middleware18", "middleware", []string{"-stages", "18"}, []int{1, 4}, false},
 		// the same shape with a stage type and an output type of its own for every operation (memos' form): the
 		// elements grow with ops x fields in every member of the one SCC (bench/go-scale/README.md)
 		// N handlers write their requests into a registry (a map in a package variable), a decoder reads it under another key:
@@ -78,6 +82,7 @@ func TestScaleSynth(t *testing.T) {
 		// without the three fixes of 2026-11-21 it swells 5.5 times and does not converge (bench/BACKTEST.md, the overlap row)
 		{"all", "all", nil, []int{1}, false},
 	}
+	var outLimit18 []string
 	for _, pr := range profiles {
 		pr := pr
 		t.Run(pr.name, func(t *testing.T) {
@@ -108,6 +113,26 @@ func TestScaleSynth(t *testing.T) {
 							}
 						}
 					}
+				}
+				if pr.name == "middleware18" {
+					// the widened output is listed, the same list at any number of workers (#186, ADR-118 (ii))
+					var cands []string
+					for _, u := range rep.Uncertainties {
+						if strings.HasPrefix(u.Detail, "out_limit:") {
+							cands = append(cands, u.Candidates...)
+						}
+					}
+					has := false
+					for _, c := range cands {
+						has = has || c == "(*scale/mw.Step).HandleMiddleware"
+					}
+					if !has {
+						t.Errorf("out_limit candidates = %v, want (*scale/mw.Step).HandleMiddleware among them", cands)
+					}
+					if outLimit18 != nil && !reflect.DeepEqual(outLimit18, cands) {
+						t.Errorf("out_limit candidates differ by workers: %v and %v", outLimit18, cands)
+					}
+					outLimit18 = cands
 				}
 				curatedAllowUnconverged = pr.noconv
 				// the registry code has no answer key: its expected file is the check, with other_sources_count 39 (a false

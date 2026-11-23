@@ -8,6 +8,13 @@
 # What needs "Zoo-Loosened: <reason>。ユーザーの承認: YYYY-MM-DD" in the message of a commit of the range:
 #   - a row added to a cell that the lock already has (a mark added to an existing cell, or a mark of it changed),
 #   - a row of a new cell of a kind other than @sink(none), @miss and @fp (@noisy, @na, @todo, @manual).
+#   - the marks that a Rust file writes outside its cells (`//! @na(...)` at the top of bench/zoo-rust/cells/src/lib.rs, lock
+#     rust/lib.rs.lock) are rows too, so that they are in the same two cases.
+# A row of a new lock file whose text is already in the source file of the merge base (the lock is written for the first time
+# for a mark that was there) is not added.
+# What does not, in any cell: a row of the kind todo-parity (`//! @todo(F/<cell>: PARITY: ...)` in the header of a Rust file:
+# the cell that another language has and this one has not yet; the user decided it, 2026-11-23). A @todo that is not PARITY,
+# and @na, @noisy, @manual there, need the line.
 # What does not: the rows of a new cell (a lock file the merge base does not have yet) of @sink(none), @miss and @fp. A new
 # @miss or @fp row must name an issue by @ref(#N) (the file docs/issues/N-*.md is there) or by @ref(model-<package>-<name>) (the
 # file docs/issues/model-<package>-<name>.md is there, with the sections that docs/issues/README.md lists): that is checked
@@ -141,9 +148,27 @@ ref_check() {
   fi
   [ "$bad" = 0 ]
 }
+# srcpath <lang> <file>: the source file of a cell file (the three zoos; the packages have no mapping here)
+srcpath() {
+  case "$1" in
+    rust) echo "bench/zoo-rust/cells/src/$2" ;;
+    go) echo "bench/zoo-go/cells/$2" ;;
+    dart) echo "bench/zoo-dart/cells/lib/$2" ;;
+  esac
+}
+# in_old_source <lang> <file> <annotations>: the merge base has the source file of the cell, and the text of the row is in it
+# (a lock that is written for the first time for a source that already has the mark: the mark is not new)
+in_old_source() {
+  local p
+  p=$(srcpath "$1" "$2")
+  [ -n "$p" ] && git cat-file -e "$mb:$p" 2>/dev/null && git show "$mb:$p" | grep -Fq -- "$3"
+}
 loosened=0
 while IFS=$'\t' read -r lang file kind ann _; do
   [ -z "${lang}${file}${kind}" ] && continue
+  if [ "$kind" = "todo-parity" ]; then
+    continue
+  fi
   if grep -Fxq -- "$lang"$'\t'"$file" <<<"$cells"; then
     echo "row of an existing cell ($lang $file, $kind): a loosened mark"
     loosened=$((loosened + 1))
@@ -151,6 +176,13 @@ while IFS=$'\t' read -r lang file kind ann _; do
   fi
   case "$kind" in
     sink-none) ;;
+    noisy | na | todo | manual)
+      if in_old_source "$lang" "$file" "$ann"; then
+        continue
+      fi
+      echo "row of a new cell ($lang $file, $kind): a loosened mark"
+      loosened=$((loosened + 1))
+      ;;
     miss | fp)
       ref_check "$lang" "$file" "$kind" "$ann" || fail=1
       ;;

@@ -341,6 +341,10 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 		rep.Summary.FunctionsSkipped = fs
 		fmt.Fprintf(os.Stderr, "rivus: %d functions could not be read by the extractor and were skipped (%d of the project, %d of dependencies): summary.functions_skipped\n", fs.Functions, fs.Project, fs.Dependencies)
 	}
+	// text handled char by char in the code of the project: a flow may have stopped there (the line is stable: scripts read it)
+	if n := projectCharReadFunctions(res.NumericStops); n > 0 {
+		fmt.Fprintf(os.Stderr, "rivus: %d functions stopped a flow at per-character reads: summary.numeric_stops\n", n)
+	}
 	rep.Summary.BodyReplacedIgnored = o.declIgnored
 	rep.Summary.DepDirs = sortedUnique(o.depDirs)
 	if l.gossa != nil {
@@ -821,4 +825,15 @@ func noteUnscopedSanitizers(w io.Writer, rules *model.Rules) {
 	if n > 0 {
 		fmt.Fprintf(w, "rivus: %d sanitizer(s) of the project rules (%s ...) have no `neutralises`: each hides the value from the sinks of every kind, not only the kind it is safe for; write `neutralises: [<categories>]` (docs/MODELING.md)\n", n, first)
 	}
+}
+
+// projectCharReadFunctions is how many functions of the project had a value read as one character of a text stop taint.
+func projectCharReadFunctions(all []taint.NumericStopCount) int {
+	n := 0
+	for _, c := range all {
+		if c.Char > 0 && !c.Dependency {
+			n++
+		}
+	}
+	return n
 }

@@ -13,6 +13,9 @@ builds on the same profile (bench/README.md, "The scale profiles"); the test Tes
 """
 import argparse, json, os, re, subprocess, sys, tempfile, time, shutil
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+from heavylock import heavy_lock  # one lock for the heavy runs of the whole machine (bench/heavylock.py)
+
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 ANNOT = re.compile(r"@(source|sink|nosink)\(([A-Za-z0-9_-]+)\)")
 
@@ -52,8 +55,9 @@ def main():
     try:
         d = os.path.join(tmp, "m")
         subprocess.run(["go", "run", "./bench/go-scale/gen", "-shapes", a.shapes, "-out", d] + a.gen.split(), cwd=ROOT, check=True)
-        t0 = time.time()
-        p = subprocess.run([os.path.abspath(a.rivus), "analyze", "-sites", "-workers", str(a.workers), "-timeout", a.timeout, "-rules", "rules.yaml", "./..."], cwd=d, capture_output=True, text=True)
+        with heavy_lock("go-scale measure"):
+            t0 = time.time()
+            p = subprocess.run([os.path.abspath(a.rivus), "analyze", "-sites", "-workers", str(a.workers), "-timeout", a.timeout, "-rules", "rules.yaml", "./..."], cwd=d, capture_output=True, text=True)
         wall = time.time() - t0
         if p.returncode != 0:
             sys.exit("rivus failed: %s\n%s" % (p.returncode, p.stderr[-1500:]))
