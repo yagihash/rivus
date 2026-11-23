@@ -17,6 +17,7 @@ import (
 // that captured a value (the alloc of its environment, not a make_closure). sg.Program.Reachable and the
 // graph (--from-entry) say the same (ADR-051, ADR-055).
 func TestRustReachesWhatTheFrameworkRuns(t *testing.T) {
+	t.Parallel()
 	bin := os.Getenv("RIVUS_RUST")
 	if bin == "" {
 		skipOrFail(t, "RIVUS_RUST")

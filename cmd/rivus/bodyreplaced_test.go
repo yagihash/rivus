@@ -151,6 +151,7 @@ body_replaced_packages:
 // a row is unmodeled_library_call (a finding that the body, which returns a constant, would not have). With the rows that say
 // what the body does, the findings are those of the run that reads the body.
 func TestBodyReplacedCallsAreTheRowOrUnmodeled(t *testing.T) {
+	t.Parallel()
 	app := bodyReplacedProject(t)
 	read := brAnalyze(t, app)
 	if len(read.Summary.Replaced) != 0 || read.Summary.Ignored != 0 {
@@ -212,6 +213,7 @@ propagators:
 // called (with the other operands; its result is the result of the call), and so are the methods of a value of a type of
 // the project given as an interface, each with an assumed_call. A row of calls in the model says it, and no note is made.
 func TestBodyReplacedCallbacksAreTakenToBeCalled(t *testing.T) {
+	t.Parallel()
 	app := bodyReplacedProject(t)
 	read := brAnalyze(t, app)
 	rules := brRules(t, app, "decl.yaml", `ruleset: t@1`+brDeclare)
@@ -257,6 +259,7 @@ propagators:
 // A declaration is for the package it names and no other: example.com/third does not take example.com/third/sub. The
 // ending /... names the package and what is under it.
 func TestBodyReplacedNamesThePackageAndNoOtherUnlessSaid(t *testing.T) {
+	t.Parallel()
 	app := bodyReplacedProject(t)
 	one := brAnalyze(t, app, "-body-replaced", "example.com/third")
 	if len(one.Summary.Replaced) != 1 || one.Summary.Replaced[0].Declared != 5 || one.Summary.Replaced[0].DeclaredIn != "-body-replaced" {
@@ -291,6 +294,7 @@ func TestBodyReplacedNamesThePackageAndNoOtherUnlessSaid(t *testing.T) {
 // -read-declared-bodies reads the body of what is declared: the result is the one of a run without the declaration, and
 // the summary says how many declarations were left out.
 func TestReadDeclaredBodiesIsTheRunWithoutTheDeclaration(t *testing.T) {
+	t.Parallel()
 	app := bodyReplacedProject(t)
 	read := brAnalyze(t, app)
 	rules := brRules(t, app, "decl.yaml", `ruleset: t@1`+brDeclare)
@@ -308,6 +312,7 @@ func TestReadDeclaredBodiesIsTheRunWithoutTheDeclaration(t *testing.T) {
 
 // The report does not depend on the order the declarations were given in (flags, or the entries of a file).
 func TestBodyReplacedIsDeterministic(t *testing.T) {
+	t.Parallel()
 	app := bodyReplacedProject(t)
 	a := brRules(t, app, "a.yaml", "ruleset: a@1\nbody_replaced_packages:\n  - {package: example.com/third/sub, reason: r1}\n  - {package: example.com/third/other, reason: r2}\n")
 	b := brRules(t, app, "b.yaml", "ruleset: b@1\nbody_replaced_packages:\n  - {package: example.com/third/other, reason: r2}\n  - {package: example.com/third/sub, reason: r1}\n")
@@ -335,6 +340,7 @@ func TestBodyReplacedIsDeterministic(t *testing.T) {
 
 // A rule file of the project (<dir>/.rivus/rules) declares like any other.
 func TestBodyReplacedOfAProjectRuleFile(t *testing.T) {
+	t.Parallel()
 	app := bodyReplacedProject(t)
 	write(t, filepath.Join(app, ".rivus", "rules", "third.yaml"), "ruleset: third@1"+brDeclare)
 	got := brAnalyze(t, app)
@@ -347,6 +353,7 @@ func TestBodyReplacedOfAProjectRuleFile(t *testing.T) {
 }
 
 func TestBodyReplacedIsChecked(t *testing.T) {
+	t.Parallel()
 	app := bodyReplacedProject(t)
 	for name, c := range map[string]struct{ rules, want string }{
 		"no reason":   {"ruleset: t@1\nbody_replaced_packages:\n  - package: example.com/third\n", "reason is required"},
@@ -377,6 +384,7 @@ func TestBodyReplacedIsChecked(t *testing.T) {
 // Dart: the package is named package:<name>. Its functions are left out of the analysis, the findings are those of the run
 // that reads them.
 func TestBodyReplacedOfADartPackage(t *testing.T) {
+	t.Parallel()
 	dart := os.Getenv("RIVUS_DART")
 	if dart == "" {
 		skipOrFail(t, "RIVUS_DART")
@@ -432,6 +440,7 @@ func TestBodyReplacedOfADartPackage(t *testing.T) {
 // A declaration in a rule file is in the key of an index with the file: another declaration is another index. And the
 // packages of -body-replaced are in it too, whatever the order they were named in.
 func TestBodyReplacedIsInTheIndexKey(t *testing.T) {
+	t.Parallel()
 	app, _ := graphProject(t)
 	db := filepath.Join(t.TempDir(), "g.db")
 	runIn(t, binary, app, nil, "index", "-graph", db, "-body-replaced", "example.com/dep", "-body-replaced", "example.com/other", "./...")
@@ -473,6 +482,7 @@ func TestBodyReplacedIsInTheIndexKey(t *testing.T) {
 // report says was left out is counted by what each saw (the filter: the functions that were read; the extractor: the
 // functions the package declares).
 func TestBodyReplacedInTheExtractorIsTheSameAsTheFilter(t *testing.T) {
+	t.Parallel()
 	app := bodyReplacedProject(t)
 	rules := brRules(t, app, "decl.yaml", `ruleset: t@1`+brDeclare+`
 propagators:
@@ -508,6 +518,7 @@ propagators:
 // A generic function and a generic type of a package that is not read: go/ssa has no body to instantiate, and the
 // program is the one the filter makes.
 func TestBodyReplacedGenericsInTheExtractor(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	app, third := filepath.Join(root, "app"), filepath.Join(root, "third")
 	write(t, filepath.Join(third, "go.mod"), "module example.com/third\n\ngo 1.21\n")
@@ -562,6 +573,7 @@ func main() {
 // says how many functions it declares, and writes the rest as it does without the flag (the functions of the other
 // packages, and of the project, are the same).
 func TestDartExtractorBodyReplaced(t *testing.T) {
+	t.Parallel()
 	dart := os.Getenv("RIVUS_DART")
 	if dart == "" {
 		skipOrFail(t, "RIVUS_DART")

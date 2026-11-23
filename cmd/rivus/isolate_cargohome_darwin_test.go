@@ -12,6 +12,7 @@ import (
 // A configuration or credentials that an earlier run left in the CARGO_HOME of rivus are removed before the stage that has a network (cargo
 // reads $CARGO_HOME/config.toml); the sources that were fetched are not.
 func TestFetchDropsAConfigurationOfTheCargoHome(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	for _, f := range []string{"config.toml", "config", "credentials.toml", "registry/src/keep"} {
 		p := filepath.Join(home, f)

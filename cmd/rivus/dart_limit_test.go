@@ -15,6 +15,7 @@ import (
 // caller has a depth_limit (candidate_limit) note whatever the argument looks like (a closure made there, a variable),
 // also two helpers up. A helper under the limit, and the parameter that is not called, have none.
 func TestCandidateLimitIsSaidWhereTheFunctionIsPassed(t *testing.T) {
+	t.Parallel()
 	dart := os.Getenv("RIVUS_DART")
 	if dart == "" {
 		skipOrFail(t, "RIVUS_DART")
@@ -117,6 +118,7 @@ func TestCandidateLimitIsSaidWhereTheFunctionIsPassed(t *testing.T) {
 // limit; also two helpers up. A helper whose callers pass functions that are found (callIt), and the parameter that is not
 // called, have no such note.
 func TestUnresolvedCallIsSaidWhereTheFunctionIsPassed(t *testing.T) {
+	t.Parallel()
 	dart := os.Getenv("RIVUS_DART")
 	if dart == "" {
 		skipOrFail(t, "RIVUS_DART")

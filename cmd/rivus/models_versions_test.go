@@ -6,6 +6,7 @@ import (
 )
 
 func TestModelsVersionsListsTheRecords(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	f := filepath.Join(dir, "r.yaml")
 	write(t, f, "ruleset: t@1\nverified_versions:\n  - package: shelf_router\n    versions: \">=1.1.0 <2.0.0\"\n    checked_with: 1.1.5\n    checked: 2026-11-22\n")

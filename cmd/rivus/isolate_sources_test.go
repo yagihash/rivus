@@ -20,6 +20,7 @@ func lockWith(sources ...string) string {
 }
 
 func TestCheckFetchSources(t *testing.T) {
+	t.Parallel()
 	ok := []string{
 		"", // a crate of the project itself has no source
 		"registry+https://github.com/rust-lang/crates.io-index",
@@ -69,6 +70,7 @@ func TestCheckFetchSources(t *testing.T) {
 // The manifests name places too, and cargo asks them before it finds that Cargo.lock does not match (--locked): a manifest that
 // names a git repository which Cargo.lock lacks sends the fetch there. The check reads the manifests.
 func TestCheckManifestSources(t *testing.T) {
+	t.Parallel()
 	const pkg = "[package]\nname = \"t\"\nversion = \"0.1.0\"\nedition = \"2021\"\n"
 	cases := []struct {
 		name  string

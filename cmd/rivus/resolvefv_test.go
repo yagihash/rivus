@@ -185,6 +185,7 @@ func fvLines(r fvReport) map[[2]int]bool {
 // function value reaches gets none, a closure of the same type that does not reach it is not a candidate (the decoy), and
 // a closure made in a function of a dependency is not a seed; (c) the differences are the findings through such calls.
 func TestResolveFuncValuesFixture(t *testing.T) {
+	t.Parallel()
 	tags := fvTagLines(t)
 	off := fvParse(t, fvRun(t, ".", "-ir", fvIR, "-rules", fvRules))
 	on := fvParse(t, fvRun(t, ".", "-ir", fvIR, "-rules", fvRules, "-resolve-func-values"))
@@ -250,6 +251,7 @@ func TestResolveFuncValuesFixture(t *testing.T) {
 // TestResolveFuncValuesSkipped: with no call of a function value that has no candidate, nothing is run, and the result
 // is the same.
 func TestResolveFuncValuesSkipped(t *testing.T) {
+	t.Parallel()
 	ir, rules := "../../testdata/ir/dart_exceptions.jsonl", "../../testdata/ir/dart_exceptions_rules.yaml"
 	off := fvParse(t, fvRun(t, ".", "-ir", ir, "-rules", rules))
 	on := fvParse(t, fvRun(t, ".", "-ir", ir, "-rules", rules, "-resolve-func-values"))
@@ -265,6 +267,7 @@ func TestResolveFuncValuesSkipped(t *testing.T) {
 // TestResolveFuncValuesOffIsTheSame: with the flag off the output is the same with -func-values (a diagnostic that runs
 // the analysis once more) as without, and whatever -workers is; with the flag on it does not depend on -workers either.
 func TestResolveFuncValuesOffIsTheSame(t *testing.T) {
+	t.Parallel()
 	table := filepath.Join(t.TempDir(), "fv.jsonl")
 	base := []string{"-ir", fvIR, "-rules", fvRules}
 	plain := stable(t, fvRun(t, ".", base...))
@@ -287,6 +290,7 @@ func TestResolveFuncValuesOffIsTheSame(t *testing.T) {
 // TestFuncValuesTableDeterministic: the table of -func-values is the same for the same input, whatever -workers is, and
 // says where a model drops a function value (the column dropped_at_model, and the symbols on stderr).
 func TestFuncValuesTableDeterministic(t *testing.T) {
+	t.Parallel()
 	var first []byte
 	for _, w := range []string{"", "1", "2", "16", "16"} {
 		path := filepath.Join(t.TempDir(), "fv.jsonl")
@@ -331,6 +335,7 @@ func TestFuncValuesTableDeterministic(t *testing.T) {
 // TestFuncValuesMonotone: the candidates of a call only grow from one round to the next; a round that loses one is a
 // defect, and the check says so.
 func TestFuncValuesMonotone(t *testing.T) {
+	t.Parallel()
 	prev := map[string][]string{"a": {"f", "g"}, "b": {"h"}, "c": nil}
 	if bad := taint.CheckMonotone(prev, map[string][]string{"a": {"f", "g", "i"}, "b": {"h"}, "c": {"j"}}); len(bad) != 0 {
 		t.Errorf("growing candidates are reported as a defect: %v", bad)
@@ -379,6 +384,7 @@ func fvLoad(t *testing.T, irFile, rules string) *fvAnalysis {
 // TestFuncValuesFindingsAreNotReported: a closure given to a real sink is a finding of the run of the function values
 // (the label FUNC reaches it); it is not reported there, and not in the result either (FV-1 of the review).
 func TestFuncValuesFindingsAreNotReported(t *testing.T) {
+	t.Parallel()
 	a := fvLoad(t, fvIR, fvRules)
 	res, calls := runFuncValues(a.graph, a.l, a.st, a.rules, taint.DefaultOptions())
 	if len(calls) == 0 {
@@ -411,6 +417,7 @@ func TestFuncValuesFindingsAreNotReported(t *testing.T) {
 // the flag to do: the cases and the targets of the benchmarks are the same with it and without it (the calls that it
 // would resolve are tested on the IR above).
 func TestResolveFuncValuesGo(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		dir  string
 		args []string
@@ -446,6 +453,7 @@ func TestResolveFuncValuesGo(t *testing.T) {
 // and the findings that differ with the flag on are the ones through a call that got candidates. It needs the extractor
 // (RIVUS_DART).
 func TestResolveFuncValuesDart(t *testing.T) {
+	t.Parallel()
 	dart := os.Getenv("RIVUS_DART")
 	if dart == "" {
 		skipOrFail(t, "RIVUS_DART")
@@ -490,6 +498,7 @@ func TestResolveFuncValuesDart(t *testing.T) {
 
 // TestResolveFuncValuesRust: the curated target of Rust (RIVUS_RUST).
 func TestResolveFuncValuesRust(t *testing.T) {
+	t.Parallel()
 	stream, dir := rustCuratedStream(t)
 	irFile := filepath.Join(t.TempDir(), "rust.jsonl")
 	if err := os.WriteFile(irFile, stream, 0o644); err != nil {
@@ -564,6 +573,7 @@ func fvGraphPath(t *testing.T, db, from, to string) fvPath {
 // candidates before the file is written, so they are edges of it, and the answers say which edges they are
 // ("supplemented"). The file without the flag has no such edge, and the two files are not of the same key.
 func TestIndexHoldsTheEdgesThatGotCandidates(t *testing.T) {
+	t.Parallel()
 	for _, taintFlag := range []bool{false, true} {
 		on, off := fvIndex(t, true, taintFlag), fvIndex(t, false, taintFlag)
 
@@ -649,6 +659,7 @@ func TestIndexHoldsTheEdgesThatGotCandidates(t *testing.T) {
 // TestIndexKeyDiffersByFlag: a question about an index made with the flag, asked without it (or the other way round),
 // says that the file is stale (the key differs), as for any other flag of the analysis.
 func TestIndexKeyDiffersByFlag(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "go.mod"), "module m\n\ngo 1.22\n")
 	write(t, filepath.Join(dir, "a.go"), "package m\n\nfunc F() {}\n")
@@ -679,6 +690,7 @@ func TestIndexKeyDiffersByFlag(t *testing.T) {
 // the taint analysis together. A round that the limit stopped is not used (its candidates would be some of the
 // candidates only), and stats.func_values says so (timed_out).
 func TestResolveFuncValuesTimeout(t *testing.T) {
+	t.Parallel()
 	on := fvParse(t, fvRun(t, ".", "-ir", fvIR, "-rules", fvRules, "-resolve-func-values", "-timeout", "1ns"))
 	fs := on.funcValues(t)
 	if fs == nil || !fs.TimedOut || fs.Supplemented != 0 || fs.ZeroAfter != fs.ZeroBefore {
@@ -705,6 +717,7 @@ func TestResolveFuncValuesTimeout(t *testing.T) {
 // TestResolveFuncValuesRoundsShareTheLimit: the library call. A round gets what is left of Options.Timeout, and one that is
 // stopped by it leaves the graph as it was.
 func TestResolveFuncValuesRoundsShareTheLimit(t *testing.T) {
+	t.Parallel()
 	a := fvLoad(t, fvIR, fvRules)
 	opts := taint.DefaultOptions()
 	opts.Timeout = time.Nanosecond
@@ -724,6 +737,7 @@ func TestResolveFuncValuesRoundsShareTheLimit(t *testing.T) {
 // first round always adds candidates, and a second is needed to see that nothing more comes), that call, and only that one, says so (depth_limit, func_values_rounds); it is not
 // a note of the whole result.
 func TestResolveFuncValuesRoundsLimit(t *testing.T) {
+	t.Parallel()
 	a := fvLoad(t, fvIR, fvRules)
 	fs := taint.ResolveFuncValuesRounds(a.graph, a.l.texts, a.st, a.rules, taint.DefaultOptions(), a.l.loadErrors(), 1)
 	if fs.Rounds != 1 || fs.RoundsCut == 0 || fs.RoundsCut > fs.Supplemented {
@@ -752,6 +766,7 @@ func TestResolveFuncValuesRoundsLimit(t *testing.T) {
 // run with the flag off, and the run is not stopped by the limit. (Without this, a target that finishes with the flag off
 // would end with almost nothing with the flag on, because the rounds had taken the whole limit.)
 func TestResolveFuncValuesBudgetKeepsTheTimeOfTheTaintAnalysis(t *testing.T) {
+	t.Parallel()
 	defer func(v float64) { taint.FuncValuesBudget = v }(taint.FuncValuesBudget)
 	const limit = 10 * time.Minute
 	base := fvLoad(t, fvIR, fvRules)

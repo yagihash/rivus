@@ -83,6 +83,7 @@ func depPackages(ids []string) []string {
 // otherwise its functions are named by file: URIs, the calls to them (package: URIs) do not reach them, and they are
 // not analysed, with nothing said.
 func TestDartDependenciesOfAParentOfPackagesAreNamedByPackageURIs(t *testing.T) {
+	t.Parallel()
 	dart := os.Getenv("RIVUS_DART")
 	if dart == "" {
 		skipOrFail(t, "RIVUS_DART")
@@ -144,6 +145,7 @@ func TestDartDependenciesOfAParentOfPackagesAreNamedByPackageURIs(t *testing.T) 
 // Two packages of the tree that read different versions of one dependency give the functions the same IDs: only one
 // version can be read. The other is said (summary.unread, and a line on the standard error), not dropped silently.
 func TestDartTwoVersionsOfADependencyInOneTreeAreSaid(t *testing.T) {
+	t.Parallel()
 	dart := os.Getenv("RIVUS_DART")
 	if dart == "" {
 		skipOrFail(t, "RIVUS_DART")

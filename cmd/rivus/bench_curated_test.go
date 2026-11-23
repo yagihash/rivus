@@ -492,6 +492,7 @@ func checkAssumedCall(t *testing.T, c curatedCounts, pkg string, given, seen []s
 // TestCuratedGo is the accuracy benchmark for Go (bench/go-curated): it runs with
 // every "go test" and takes seconds.
 func TestCuratedGo(t *testing.T) {
+	t.Parallel()
 	dir, err := filepath.Abs(filepath.Join("..", "..", "bench", "go-curated"))
 	if err != nil {
 		t.Fatal(err)
@@ -547,6 +548,7 @@ func dartCuratedStream(t *testing.T) ([]byte, string) {
 // the Dart SDK: RIVUS_DART names the command that runs it, for example "dart" or
 // "mise exec dart@3.13.6 -- dart".
 func TestCuratedDart(t *testing.T) {
+	t.Parallel()
 	stream, dir := dartCuratedStream(t)
 	c := checkCuratedIR(t, dir, stream, ".dart")
 	// limits.dart: nine closures to one helper. The functions are known and rivus leaves them out
@@ -593,6 +595,7 @@ func rustCuratedStream(t *testing.T) ([]byte, string) {
 // TestCuratedRust is the accuracy benchmark for Rust (bench/rust-curated). It needs
 // the extractor binary: RIVUS_RUST (extractor/rust: cargo build).
 func TestCuratedRust(t *testing.T) {
+	t.Parallel()
 	stream, dir := rustCuratedStream(t)
 	c := checkCuratedIR(t, dir, stream, ".rs")
 	t.Logf("rust-curated: %d flows to find, %d sinks to keep quiet, %d flows not found yet (@miss: %d silent, %d with a trace), %d reported wrongly (@fp), %d flows of other sources into noisy sinks (@noisy)", c.detect, c.quiet, c.miss, c.missSilent, c.missTrace, c.fp, c.noisy)
@@ -608,6 +611,7 @@ func TestCuratedRust(t *testing.T) {
 // program with a function that another program can call by its symbol): the `pub` helper keeps every candidate (its
 // `@fp` stays), and the helper that is private to the crate, which only this crate calls, is narrowed (quiet).
 func TestCuratedRustOpen(t *testing.T) {
+	t.Parallel()
 	bin := os.Getenv("RIVUS_RUST")
 	if bin == "" {
 		skipOrFail(t, "RIVUS_RUST")

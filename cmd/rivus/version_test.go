@@ -7,6 +7,7 @@ import (
 
 // `rivus version` is one line that a script (and the test of a formula) can read: "rivus <version> ... <os>/<arch> <go>".
 func TestVersionIsOneLine(t *testing.T) {
+	t.Parallel()
 	for _, arg := range []string{"version", "--version"} {
 		out := strings.TrimSpace(string(rivus(t, arg)))
 		if strings.Contains(out, "\n") || !strings.HasPrefix(out, "rivus ") || !strings.Contains(out, "/") {
@@ -23,6 +24,7 @@ func TestVersionIsOneLine(t *testing.T) {
 
 // A formula tests the install with `rivus help`: it exits 0 and lists the commands.
 func TestHelpExitsZeroAndListsTheCommands(t *testing.T) {
+	t.Parallel()
 	out := string(rivus(t, "help"))
 	for _, c := range []string{"analyze", "index", "graph", "version"} {
 		if !strings.Contains(out, c) {

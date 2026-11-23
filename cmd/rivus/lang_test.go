@@ -13,6 +13,7 @@ import (
 )
 
 func TestDetectLangs(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if got := detectLangs(dir); len(got) != 0 {
 		t.Errorf("empty directory: %v", got)
@@ -28,6 +29,7 @@ func TestDetectLangs(t *testing.T) {
 }
 
 func TestLanguagesFlag(t *testing.T) {
+	t.Parallel()
 	o := analyzeOpts{}
 	o.dir = t.TempDir()
 	o.lang = "dart, rust"
@@ -47,6 +49,7 @@ func TestLanguagesFlag(t *testing.T) {
 
 // A Cargo.toml in the directory is not a request to build the project (yagihash/rivus #57): Rust is read when it is asked for.
 func TestRustIsNotReadUnlessAsked(t *testing.T) {
+	t.Parallel()
 	write := func(dir string, files ...string) {
 		for _, f := range files {
 			if err := os.WriteFile(filepath.Join(dir, f), nil, 0o644); err != nil {
@@ -83,6 +86,7 @@ func TestRustIsNotReadUnlessAsked(t *testing.T) {
 }
 
 func TestMissingExtractorIsAnErrorWhenAsked(t *testing.T) {
+	t.Parallel()
 	o := analyzeOpts{}
 	o.dir = t.TempDir()
 	o.lang = "rust"
@@ -95,6 +99,7 @@ func TestMissingExtractorIsAnErrorWhenAsked(t *testing.T) {
 // A rule file that the analysed directory brings is not read through a link, and the message of an error in it
 // does not show what it holds (yagihash/rivus #57).
 func TestProjectRuleFileThatIsALinkIsNotRead(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	rules := filepath.Join(dir, ".rivus", "rules")
 	if err := os.MkdirAll(rules, 0o755); err != nil {
@@ -136,6 +141,7 @@ func TestProjectRuleFileThatIsALinkIsNotRead(t *testing.T) {
 // installed, and the result says so; an extractor that ran and failed is an
 // error, not a silent skip (#9).
 func TestAutoDetectedExtractorFailure(t *testing.T) {
+	t.Parallel()
 	o := analyzeOpts{}
 	o.dir = testutil.Testdata()
 	o.lang = "auto"
@@ -168,6 +174,7 @@ func TestAutoDetectedExtractorFailure(t *testing.T) {
 // The load errors of the Go packages are counted once when Go is read together
 // with another language (#13).
 func TestMultiLanguageLoadErrorsAreNotDoubled(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	files := map[string]string{
 		"go.mod":  "module example.com/brk\n\ngo 1.21\n",
@@ -221,6 +228,7 @@ func TestMultiLanguageLoadErrorsAreNotDoubled(t *testing.T) {
 // The project rules are found whatever the directory is called: a name with
 // the characters of a glob (p[1], q[) is not a pattern (#14).
 func TestProjectRulesInADirectoryNamedLikeAGlob(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"p[1]", "q[", "a*b", "p?"} {
 		dir := filepath.Join(t.TempDir(), name)
 		rules := filepath.Join(dir, ".rivus", "rules")
@@ -241,6 +249,7 @@ func TestProjectRulesInADirectoryNamedLikeAGlob(t *testing.T) {
 // The directory of the rules that the analysed code brings is not read through a link either, and an error
 // in a rule file does not show the keys of the file (yagihash/rivus #69).
 func TestProjectRulesDirectoryThatIsALinkIsNotRead(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	outside := t.TempDir()
 	if err := os.WriteFile(filepath.Join(outside, "a.yaml"), []byte("SECRETKEY_abc123: 1\n"), 0o644); err != nil {

@@ -85,6 +85,7 @@ func unverifiedOf(t *testing.T, app string, env []string, rules string) []map[st
 // A module that a model has a verified_versions record for, used at a version outside the records, is said in summary.unverified_versions
 // (also when there is no finding). In the range, with no record, or with a record of another module: nothing is said.
 func TestUnverifiedVersionsInSummary(t *testing.T) {
+	t.Parallel()
 	app, env := unverifiedApp(t)
 	rows := "sinks:\n  - symbol: example.invalid/lib/v*/pkg.F\n    args: [0]\n    category: command_injection\n"
 	rec := func(pkg, versions string) string {

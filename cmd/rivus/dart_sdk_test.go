@@ -14,6 +14,7 @@ import (
 // SDK (the `dart:*` libraries that the analysis reads) from RIVUS_DART_SDK or from the `dart` that PATH finds, not only
 // from where its own executable is. The zoo gives the same findings as with `dart run`.
 func TestDartExtractorCompiledToOneExecutable(t *testing.T) {
+	t.Parallel()
 	dart := os.Getenv("RIVUS_DART")
 	if dart == "" {
 		skipOrFail(t, "RIVUS_DART")

@@ -47,6 +47,7 @@ func useDartExe(dir string) {
 // path dependency). A difference between a compiled program and the same one run from source (what Platform says, the paths of
 // resources) shows here.
 func TestDartExeSameIR(t *testing.T) {
+	t.Parallel()
 	if dartReal == "" {
 		skipOrFail(t, "RIVUS_DART")
 	}

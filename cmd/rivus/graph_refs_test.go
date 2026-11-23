@@ -86,6 +86,7 @@ func refsQuery(t *testing.T, dir string, args ...string) refsOut {
 }
 
 func TestGraphPathThroughAReference(t *testing.T) {
+	t.Parallel()
 	app := refsProject(t)
 	db := filepath.Join(t.TempDir(), "g.db")
 	runIn(t, binary, app, nil, "index", "-graph", db, "./...")
@@ -157,6 +158,7 @@ func TestGraphPathThroughAReference(t *testing.T) {
 
 // A file of the first schema is refused, and the message says to make it again.
 func TestGraphRefusesTheFirstSchema(t *testing.T) {
+	t.Parallel()
 	app := refsProject(t)
 	db := filepath.Join(t.TempDir(), "g.db")
 	runIn(t, binary, app, nil, "index", "-graph", db, "./...")

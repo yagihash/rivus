@@ -8,6 +8,7 @@ import (
 
 // Go: the _test.go files are not read unless -tests asks, and the output says how many were left out (ADR-062).
 func TestGoTestFilesAreCountedWhenNotRead(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "go.mod"), "module skipped\n\ngo 1.21\n")
 	write(t, filepath.Join(dir, "a.go"), "package skipped\n\nfunc A() {}\n")

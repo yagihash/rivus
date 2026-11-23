@@ -46,6 +46,7 @@ func countByCategory(rep *report.Report) map[string]int {
 // -categories and -skip-categories cut the findings of the output; the default reports everything, with no categories_excluded;
 // what is left out is counted in summary.categories_excluded.
 func TestAnalyzeCategoryFilter(t *testing.T) {
+	t.Parallel()
 	rules := catRulesFile(t)
 	var all report.Report
 	rivusJSON(t, &all, "analyze", "-rules", rules, "./cases/intra")
@@ -116,6 +117,7 @@ func TestAnalyzeCategoryFilter(t *testing.T) {
 
 // The default output does not change with a flag that keeps everything.
 func TestAnalyzeCategoryFilterKeepsAll(t *testing.T) {
+	t.Parallel()
 	rules := catRulesFile(t)
 	a := rivus(t, "analyze", "-rules", rules, "./cases/intra")
 	cats := []string{"alpha", "beta", "gamma"}
@@ -143,6 +145,7 @@ func TestAnalyzeCategoryFilterKeepsAll(t *testing.T) {
 }
 
 func TestAnalyzeCategoryErrors(t *testing.T) {
+	t.Parallel()
 	rules := catRulesFile(t)
 	for _, c := range []struct {
 		args []string
@@ -165,6 +168,7 @@ func TestAnalyzeCategoryErrors(t *testing.T) {
 
 // index does not take the flags: the graph and the index are made of the whole analysis.
 func TestIndexHasNoCategoryFlags(t *testing.T) {
+	t.Parallel()
 	cmd := exec.Command(binary, "index", "-categories", "alpha", "./cases/hello")
 	cmd.Dir = testutil.Testdata()
 	if err := cmd.Run(); err == nil {

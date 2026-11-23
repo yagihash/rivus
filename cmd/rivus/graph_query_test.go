@@ -75,6 +75,7 @@ func graphQuery(t *testing.T, dir string, args ...string) queryOut {
 }
 
 func TestGraphCallersCalleesPathOfGoCode(t *testing.T) {
+	t.Parallel()
 	app, _ := graphProject(t)
 	db := filepath.Join(t.TempDir(), "g.db")
 	runIn(t, binary, app, nil, "index", "-graph", db, "./...")
@@ -163,6 +164,7 @@ func runFail(t *testing.T, dir string, args ...string) string {
 
 // With -C the file is held against the source, and a stale one is said so in the answer.
 func TestGraphQueryWarnsWhenTheFileIsStale(t *testing.T) {
+	t.Parallel()
 	app, _ := graphProject(t)
 	run := func(args ...string) []byte { return runIn(t, binary, app, nil, args...) }
 	run("index", "./...")
@@ -188,6 +190,7 @@ func TestGraphQueryWarnsWhenTheFileIsStale(t *testing.T) {
 
 // For a Go sample of the tests: every command works on the sample of the repository.
 func TestGraphQueryOnTheSampleOfTheRepository(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	db := filepath.Join(dir, "g.db")
 	sample := testdataGo(t)

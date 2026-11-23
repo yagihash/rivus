@@ -83,6 +83,7 @@ func graphDispatch(t *testing.T, dir string, args ...string) *dispatchersOut {
 
 // impls and dispatchers on a Go sample: an interface with two implementations, and the way back.
 func TestGraphImplsAndDispatchersOfGoCode(t *testing.T) {
+	t.Parallel()
 	sample := testdataGo(t)
 	db := filepath.Join(t.TempDir(), "g.db")
 	runIn(t, binary, sample, nil, "index", "-graph", db, "./...")

@@ -14,6 +14,7 @@ import (
 // lose no finding (it may add some: it is broader than the default on purpose). The first versions did: they left the
 // receiver out, then the writes into the arguments, and 3 and 2 of the 27 findings of bench/gcp went.
 func TestModelsCoverageStubsLoseNoFinding(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		dir  string
 		args []string

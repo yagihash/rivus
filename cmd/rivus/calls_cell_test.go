@@ -106,6 +106,7 @@ func irCallers(callers map[string][]string, dir string, p *ir.Program) {
 }
 
 func TestCallsRowsAreHeldByCells(t *testing.T) {
+	t.Parallel()
 	sets, err := builtin.Load()
 	if err != nil {
 		t.Fatal(err)
@@ -157,6 +158,7 @@ func TestCallsRowsAreHeldByCells(t *testing.T) {
 }
 
 func TestCellRowProblems(t *testing.T) {
+	t.Parallel()
 	declared := map[string]string{"example.com/lib.Subscribe": "go-lib.yaml"}
 	held := func(f string) bool { return f == "/z/cells/a.go" }
 	if got := cellRowProblems(declared, map[string][]string{"example.com/lib.Subscribe": {"/z/cells/a.go"}}, held); len(got) != 0 {
@@ -171,6 +173,7 @@ func TestCellRowProblems(t *testing.T) {
 }
 
 func TestHasCellMarkAndStdlib(t *testing.T) {
+	t.Parallel()
 	for text, want := range map[string]bool{
 		"x() // @sink(a-vuln)":                    true,
 		"x() // @sink(none) @nosink(b)":           false,

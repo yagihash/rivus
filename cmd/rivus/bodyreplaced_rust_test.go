@@ -42,6 +42,7 @@ func copyTree(t *testing.T, from, to string) {
 // What differs is the summary of the declared packages (functions_declared against functions), and the count of the functions
 // that the extractor could not read (fn_skipped: a crate that is not read has none).
 func TestBodyReplacedOfARustCrateIsTheSameAsTheFilter(t *testing.T) {
+	t.Parallel()
 	bin := os.Getenv("RIVUS_RUST")
 	if bin == "" {
 		skipOrFail(t, "RIVUS_RUST")

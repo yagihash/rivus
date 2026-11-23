@@ -18,6 +18,7 @@ import (
 // (extractor/rust: cargo build), for example extractor/rust/target/debug/rivus-rust.
 // On a Mac whose newest SDK the linker cannot read, set SDKROOT to an older one.
 func TestRustExtractor(t *testing.T) {
+	t.Parallel()
 	bin := os.Getenv("RIVUS_RUST")
 	if bin == "" {
 		skipOrFail(t, "RIVUS_RUST")
@@ -75,6 +76,7 @@ func TestRustExtractor(t *testing.T) {
 // A toolchain that is not there is said as that, not as code that does not compile
 // (yagihash/rivus #49): a rustc that fails stands for the missing nightly.
 func TestRustExtractorMissingToolchain(t *testing.T) {
+	t.Parallel()
 	bin := os.Getenv("RIVUS_RUST")
 	if bin == "" {
 		skipOrFail(t, "RIVUS_RUST")
@@ -106,6 +108,7 @@ func TestRustExtractorMissingToolchain(t *testing.T) {
 // The nightly is written in one place, rust-toolchain.toml: the extractor reads it when it is built, and
 // the install hint of the command must name the same one.
 func TestRustToolchainHintMatches(t *testing.T) {
+	t.Parallel()
 	b, err := os.ReadFile("../../extractor/rust/rust-toolchain.toml")
 	if err != nil {
 		t.Fatal(err)
@@ -125,6 +128,7 @@ func TestRustToolchainHintMatches(t *testing.T) {
 // crate, not two versions of it, and a function that the tests change (the closures and impls that
 // its calls may reach) is not a conflict (yagihash/rivus #68).
 func TestRustExtractorIncludeTestsIsNotAConflict(t *testing.T) {
+	t.Parallel()
 	bin := os.Getenv("RIVUS_RUST")
 	if bin == "" {
 		skipOrFail(t, "RIVUS_RUST")

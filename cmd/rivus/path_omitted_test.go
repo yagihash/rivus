@@ -13,6 +13,7 @@ import (
 // output says how many (paths[].omitted_steps, and a depth_limit note "path_steps_omitted:" on the finding),
 // so that the finding is not a clear one (PRINCIPLES.md, section 2). A path of 200 steps or less has neither.
 func TestLongPathSaysWhatItOmitted(t *testing.T) {
+	t.Parallel()
 	chain := func(n int) string {
 		dir := t.TempDir()
 		var b strings.Builder

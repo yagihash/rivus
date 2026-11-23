@@ -12,6 +12,7 @@ import (
 // An instance of a class that has a `call` method is called like a function: r(x) is r.call(x), a method that the extractor
 // can name from the static type (#97). Each form below has a source passed to such a call and the sink in the method.
 func TestDartCallableObjectIsCalledAsItsCallMethod(t *testing.T) {
+	t.Parallel()
 	dart := os.Getenv("RIVUS_DART")
 	if dart == "" {
 		skipOrFail(t, "RIVUS_DART")

@@ -20,6 +20,7 @@ import (
 // the sandbox, the way a project is. What the probe says goes into the IR (the report of the build script): every check must say BLOCKED.
 // It touches the environment of the user in the harmless way of the design (a unique name, removed after), so it needs RIVUS_SBX_RED=1.
 func TestSandboxedBuildScriptCannotEscape(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("RIVUS_SBX_RED") != "1" {
 		t.Skip("set RIVUS_SBX_RED=1 (it runs the probe, which makes harmless marks outside the sandbox if it gets out)")
 	}
@@ -73,6 +74,7 @@ func TestSandboxedBuildScriptCannotEscape(t *testing.T) {
 // configuration that makes every request fail if cargo reads it (a proxy that nothing listens on), and so has the CARGO_HOME that an
 // earlier run could have left; the dependency is fetched all the same (it needs crates.io: RIVUS_SBX_NET=1).
 func TestSandboxFetchReadsNoConfigOfTheProject(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("RIVUS_SBX_NET") != "1" {
 		t.Skip("set RIVUS_SBX_NET=1 (it downloads one small crate from crates.io under the sandbox)")
 	}
@@ -121,6 +123,7 @@ func TestSandboxFetchReadsNoConfigOfTheProject(t *testing.T) {
 // outside the project could change the build (a rustc-wrapper is a program that cargo runs instead of rustc). Under the sandbox the
 // directories above the project are not readable, and cargo stops ("Operation not permitted") when it finds a configuration it may not read: rivus looks first, and stops with the name, before anything runs. The wrapper must not run.
 func TestSandboxAncestorCargoConfig(t *testing.T) {
+	t.Parallel()
 	rust := os.Getenv("RIVUS_RUST")
 	if rust == "" {
 		skipOrFail(t, "RIVUS_RUST")
@@ -163,6 +166,7 @@ func TestSandboxAncestorCargoConfig(t *testing.T) {
 // dependency (and a metabuild) does not run. (The -Z flags and [unstable] come from the command line, the environment and the cargo
 // configuration: the stage passes no environment of the host and does not read the configuration of the project: TestSandboxFetchReadsNoConfigOfTheProject.)
 func TestSandboxFetchRunsNoCodeAndAcceptsUnstableManifestFeatures(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("RIVUS_RUST") == "" {
 		skipOrFail(t, "RIVUS_RUST")
 	}

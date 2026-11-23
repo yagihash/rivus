@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/yagihash/rivus/internal/ir"
@@ -17,8 +18,12 @@ import (
 // .dart_tool/package_config.json is not there (a fresh checkout or worktree): without it the
 // extractor cannot resolve the sample's packages ("a name that does not resolve: Server"). CI runs
 // `dart pub get` first; the sample's dependencies are in the pub cache, so no network is needed.
+var dartPubMu sync.Mutex // the tests run in parallel: one `dart pub get` at a time
+
 func ensureDartSamplePub(t *testing.T, dart string) {
 	t.Helper()
+	dartPubMu.Lock()
+	defer dartPubMu.Unlock()
 	sample, err := filepath.Abs("../../extractor/dart/test/sample")
 	if err != nil {
 		t.Fatal(err)
@@ -39,6 +44,7 @@ func ensureDartSamplePub(t *testing.T, dart string) {
 // no other. It needs the Dart SDK: RIVUS_DART names the command that runs it,
 // for example "dart" or "mise exec dart@3.13.6 -- dart".
 func TestDartExtractor(t *testing.T) {
+	t.Parallel()
 	dart := os.Getenv("RIVUS_DART")
 	if dart == "" {
 		skipOrFail(t, "RIVUS_DART")
@@ -86,6 +92,7 @@ func TestDartExtractor(t *testing.T) {
 // not trusted: it can point at any directory. What is outside the project, the pub cache and the SDKs is
 // not read unless it is asked for (yagihash/rivus #39), and the stream says that it was left out.
 func TestDartDependenciesOutsideTheProjectAreNotReadUnlessAsked(t *testing.T) {
+	t.Parallel()
 	dart := os.Getenv("RIVUS_DART")
 	if dart == "" {
 		skipOrFail(t, "RIVUS_DART")
@@ -206,6 +213,7 @@ func TestDartDependenciesOutsideTheProjectAreNotReadUnlessAsked(t *testing.T) {
 // (a load_error), and the rest is written (yagihash/rivus #37). RIVUS_DART_FAIL_IN makes one fail, as
 // an input that the extractor does not expect would.
 func TestDartExtractorLeavesOutAFunctionThatFails(t *testing.T) {
+	t.Parallel()
 	dart := os.Getenv("RIVUS_DART")
 	if dart == "" {
 		skipOrFail(t, "RIVUS_DART")
@@ -250,6 +258,7 @@ func TestDartExtractorLeavesOutAFunctionThatFails(t *testing.T) {
 // The shapes of control flow that the spike's tests checked (yagihash/rivus #38): the finally block is
 // copied for every way out of the try, and && || ?: are branches, not operators.
 func TestDartExtractorControlFlowShapes(t *testing.T) {
+	t.Parallel()
 	dart := os.Getenv("RIVUS_DART")
 	if dart == "" {
 		skipOrFail(t, "RIVUS_DART")

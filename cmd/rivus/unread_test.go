@@ -12,6 +12,7 @@ import (
 // not built and how many functions that is, in summary.unread and as a missing_source uncertainty for
 // each; the findings and the exit status do not change (testdata/go/cases/illtyped).
 func TestUnreadPackagesAreTold(t *testing.T) {
+	t.Parallel()
 	var rep report.Report
 	rivusJSON(t, &rep, "analyze", "-C", "cases/illtyped", "-rules", "cases/illtyped/rules.yaml", "./...")
 
@@ -69,6 +70,7 @@ func TestUnreadPackagesAreTold(t *testing.T) {
 
 // A run in which every package builds has no summary.unread.
 func TestUnreadIsAbsentWhenEverythingBuilt(t *testing.T) {
+	t.Parallel()
 	var rep report.Report
 	rivusJSON(t, &rep, "analyze", "-rules", "rules.yaml", "./cases/hello")
 	if rep.Summary.Unread != nil {

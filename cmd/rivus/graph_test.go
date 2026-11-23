@@ -115,6 +115,7 @@ func graphInfoOf(t *testing.T, bin, dir string, env []string, args ...string) in
 }
 
 func TestGraphIndexIsFreshUntilSomethingChanges(t *testing.T) {
+	t.Parallel()
 	app, dep := graphProject(t)
 	db := filepath.Join(t.TempDir(), "g.db")
 	run := func(args ...string) []byte { return runIn(t, binary, app, nil, args...) }
@@ -224,6 +225,7 @@ func create(t *testing.T, path, content string) func() (undo func()) {
 
 // What is not read is not a change: a test file that -tests did not ask for.
 func TestGraphIgnoresWhatWasNotRead(t *testing.T) {
+	t.Parallel()
 	app, _ := graphProject(t)
 	db := filepath.Join(t.TempDir(), "g.db")
 	runIn(t, binary, app, nil, "index", "-graph", db, "./...")
@@ -240,6 +242,7 @@ func TestGraphIgnoresWhatWasNotRead(t *testing.T) {
 }
 
 func TestGraphIsStaleForAnotherRivus(t *testing.T) {
+	t.Parallel()
 	app, _ := graphProject(t)
 	db := filepath.Join(t.TempDir(), "g.db")
 	runIn(t, binary, app, nil, "index", "-graph", db, "./...")
@@ -261,6 +264,7 @@ func TestGraphIsStaleForAnotherRivus(t *testing.T) {
 }
 
 func TestGraphDefaultsToTheUserCache(t *testing.T) {
+	t.Parallel()
 	app, _ := graphProject(t)
 	cache := t.TempDir()
 	env := []string{"RIVUS_CACHE_DIR=" + cache}
@@ -284,6 +288,7 @@ func TestGraphDefaultsToTheUserCache(t *testing.T) {
 }
 
 func TestGraphRefusesAnotherSchemaAndForeignFiles(t *testing.T) {
+	t.Parallel()
 	app, _ := graphProject(t)
 	db := filepath.Join(t.TempDir(), "g.db")
 	runIn(t, binary, app, nil, "index", "-graph", db, "./...")
@@ -316,6 +321,7 @@ func TestGraphRefusesAnotherSchemaAndForeignFiles(t *testing.T) {
 // What the file holds is what extract and the graph of the analysis have: the numbers of functions, calls and
 // edges, counted from them.
 func TestGraphCountsAgreeWithTheProgram(t *testing.T) {
+	t.Parallel()
 	app, _ := graphProject(t)
 	db := filepath.Join(t.TempDir(), "g.db")
 	runIn(t, binary, app, nil, "index", "-no-deps", "-graph", db, "./...")
@@ -400,6 +406,7 @@ func TestGraphCountsAgreeWithTheProgram(t *testing.T) {
 // Every call site of a file has one position; the sites of the file are the sites that "rivus sites" lists, with the same IDs
 // and positions, and a site of a call is tied to its call site.
 func TestGraphSitesAreTheSitesOfTheSitesCommand(t *testing.T) {
+	t.Parallel()
 	dir := testutil.Testdata()
 	db := filepath.Join(t.TempDir(), "g.db")
 	runIn(t, binary, dir, nil, "index", "-no-project-rules", "-rules", "rules.yaml", "-graph", db, "./cases/...")
@@ -468,6 +475,7 @@ func lineOf(t *testing.T, dir, text string) int {
 
 // The key does not depend on how the directory is named: index from inside it, check with -C, with a rule file in it.
 func TestGraphKeyIsTheSameWhereverItIsMade(t *testing.T) {
+	t.Parallel()
 	app, _ := graphProject(t)
 	write(t, filepath.Join(app, ".rivus", "rules", "r.yaml"), "ruleset: t@1\nsinks:\n  - symbol: os/exec.Command\n    category: x\n")
 	db := filepath.Join(t.TempDir(), "g.db")
@@ -494,6 +502,7 @@ func otherGOOS() string {
 // index -taint without -o writes the JSON index in the user's cache, beside the graph file, and never in the
 // analysed directory (what is there is not read by default, and is not written by rivus).
 func TestIndexTaintDefaultsToTheUserCache(t *testing.T) {
+	t.Parallel()
 	app, _ := graphProject(t)
 	cache := t.TempDir()
 	env := []string{"RIVUS_CACHE_DIR=" + cache}
@@ -540,6 +549,7 @@ func mustGlob(t *testing.T, pattern string) string {
 // -rules given to index is recorded: graph -C uses the record when -rules is left out, and says so
 // when the file has changed or is gone. An explicit -rules wins over the record.
 func TestGraphUsesTheRecordedRulesFile(t *testing.T) {
+	t.Parallel()
 	app, _ := graphProject(t)
 	rules := filepath.Join(t.TempDir(), "extra.yaml")
 	write(t, rules, "ruleset: t@1\nsinks:\n  - symbol: os/exec.Command\n    category: x\n")
