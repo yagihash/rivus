@@ -178,6 +178,18 @@ python3 bench/heavy_ledger.py [--kind passline|deps] [--target memos] [--last N]
 
 How to measure and what a line means: [`passline-baseline.md`](passline-baseline.md). The light benches: [`LEDGER.md`](LEDGER.md) (unchanged).
 
+## The graph check (a change for memory or cost)
+
+`bench/compare.sh --graph-check go-curated,zoo-go,go-synth-S,memos <base> <head>` builds both versions, runs each on the same code, and compares what they
+build: the IR (`rivus debug extract -all`; `accept.Compare`, the comparison of the acceptance test, which compares two extractors; this one compares two
+commits), the edges of the call graph with their candidates (`rivus index`), the summary of every function (the internal dump `RIVUS_INTERNAL_SUMMARY_DUMP`, written
+by `Engine.WriteSummaryDump`: one line for each function with the hash of the whole summary, outputs and steps and sinks and guards; no flag, not in `-h`), and the
+findings and uncertainties. One line each: `same`, or `DIFFERENT` with how many and the first function IDs. The memory work shows "same" here instead of a count of
+findings ([WORKFLOW.md](../docs/WORKFLOW.md)). The dump reads the fields of a summary, not how they are stored, so a change of the storage keeps it; a change of the
+fields must change `internal/taint/summarydump.go` with it. The checks of the tool itself: `go test ./bench/graphcheck ./internal/taint -run SummaryDump`, `python3 -m unittest bench.test_graph_check`.
+The names of `deps-targets.json` (memos, memos-4gib, gitea) run under the heavy-work lock and the memory cap of the target; gitea stops at the cap for now (the load does not pass in 8 GB), so
+its graph cannot be compared yet.
+
 ## One lock for the heavy runs
 
 The tools that run an analysis of several GB (`make bench-passline`, `make bench-deps`, `bench/compare.sh --cost-check`,
