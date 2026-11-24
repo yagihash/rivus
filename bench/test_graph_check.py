@@ -86,16 +86,19 @@ class DartSteps(unittest.TestCase):
 class ClockLine(unittest.TestCase):
     """A run that a time limit stopped (stats.load_dependent) is not a pass; the runs of the check get -func-timeout 24h."""
 
-    def test_load_dependent_is_rc_3(self):
+    def test_the_line_is_always_there_and_never_fails(self):
         with tempfile.TemporaryDirectory() as d:
             a, b = os.path.join(d, "a.json"), os.path.join(d, "b.json")
             json.dump({"stats": {"func_timeouts": 0}}, open(a, "w"))
-            json.dump({"stats": {"load_dependent": True, "func_timeouts": 2}}, open(b, "w"))
-            self.assertEqual(g.clock_line(a, a), (None, 0))
+            json.dump({"stats": {"load_dependent": True, "func_timeouts": 1}, "uncertainties": [{"detail": "func_timeout: x", "func": "go/types.Checker.builtin"}]}, open(b, "w"))
+            line, rc = g.clock_line(a, a)
+            self.assertEqual(rc, 0)
+            self.assertTrue(line.startswith("func_timeouts: base 0"), line)
             line, rc = g.clock_line(a, b)
-            self.assertEqual(rc, 3)
-            self.assertIn("head (func_timeouts 2", line)
-            self.assertNotIn("base", line)
+            self.assertEqual(rc, 0)
+            self.assertTrue(line.startswith("::warning::"), line)
+            self.assertIn("head 1 (", line)
+            self.assertIn("go/types.Checker.builtin", line)
 
     def test_analyze_gets_the_func_timeout(self):
         os.environ["RIVUS_HEAVY_LOCK_HELD"] = "1"

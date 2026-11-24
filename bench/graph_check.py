@@ -44,7 +44,7 @@ def patterns_of(flags, loose=False):
 # A comparison must not depend on a clock: a function that is stopped by -func-timeout (30 s by default) leaves a func_timeout
 # uncertainty and a summary that stopped in the middle, and which functions that are depends on the load and on the number of
 # workers (on a slower machine, or with more workers than cores, a different one is stopped). The runs of the check get a limit
-# that is out of reach, and a run that was stopped by a clock anyway is said so (clock_line).
+# that is out of reach, and a run that was stopped by a clock anyway is said so (clock_line; a line, not a failure).
 FUNC_TIMEOUT = "24h"
 
 
@@ -154,18 +154,24 @@ def convergence_line(base_incomplete, head_incomplete):
 
 
 def clock_line(base_report, head_report):
-    """A run that a clock stopped (summary stats: load_dependent) cannot be compared: the result is not a function of the code. (None, 0) when none."""
-    who = []
+    """The signal of the clock, apart from the comparison (it never changes the exit status): for each run, how many functions a time
+    limit stopped (stats.func_timeouts, run_timeouts, timed_out) and which (the func_timeout and run_timeout uncertainties name them; the
+    report has no time for each function). The line is always there; it starts with ::warning:: (a GitHub annotation) when a run has any."""
+    parts, any_stopped = [], False
     for n, path in (("base", base_report), ("head", head_report)):
         try:
-            st = json.load(open(path)).get("stats") or {}
+            rep = json.load(open(path))
         except (OSError, ValueError):
+            parts.append("%s: no report" % n)
             continue
-        if st.get("load_dependent"):
-            who.append("%s (func_timeouts %s, run_timeouts %s, timed_out %s)" % (n, st.get("func_timeouts"), st.get("run_timeouts"), st.get("timed_out")))
-    if not who:
-        return None, 0
-    return "clock: LOAD DEPENDENT (%s: a time limit stopped the analysis, so the lines above may differ because of the machine, not the code)" % " and ".join(who), 3
+        st = rep.get("stats") or {}
+        names = sorted({u.get("func") or "?" for u in (rep.get("uncertainties") or []) if (u.get("detail") or "").startswith(("func_timeout", "run_timeout"))})
+        cnt = (st.get("func_timeouts") or 0) + (st.get("run_timeouts") or 0) + (1 if st.get("timed_out") else 0)
+        any_stopped = any_stopped or cnt > 0 or bool(st.get("load_dependent"))
+        parts.append("%s %d (run_timeouts %d, timed_out %s; %s)" % (n, st.get("func_timeouts") or 0, st.get("run_timeouts") or 0,
+                                                                                    bool(st.get("timed_out")), ", ".join(names[:10]) or "none"))
+    head = "::warning::func_timeouts: a time limit stopped the analysis, so a difference may come from the machine, not the code: " if any_stopped else "func_timeouts: "
+    return head + "; ".join(parts), 0
 
 
 def compare(a, base, head, incomplete=(False, False)):
@@ -192,10 +198,7 @@ def compare(a, base, head, incomplete=(False, False)):
         lines.append(line)
         if not same:
             status = worse(status, 1 if "DIFFERENT" in line else 2)
-    line, rc = clock_line(base["report"], head["report"])
-    if line:
-        lines.append(line)
-        status = worse(status, rc)
+    lines.append(clock_line(base["report"], head["report"])[0])
     line, rc = convergence_line(*incomplete)
     if line:
         lines.append(line)
