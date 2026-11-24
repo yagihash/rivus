@@ -100,6 +100,8 @@ type Engine struct {
 	dispatch sync.Map // *sg.Instr -> map[*sg.Func][]Guard
 	// valueGuards is the same for the calls of function values (valueGuards).
 	valueGuards sync.Map // *sg.Instr -> map[string][]Guard
+	// cellCalls is, for the calls of function values that read functions from a cell (funccells.go), the functions: *sg.Instr -> *cellCands
+	cellCalls sync.Map
 
 	// implsIndex are the implementations of the trait methods that the program has, by the last name of the
 	// trait and the method (callrows.go, methodImpls)
@@ -629,7 +631,7 @@ func (e *Engine) Run() *Result {
 	e.reach = e.prog.Reachable()
 	e.reachCB = e.prog.ReachableWithCallbacks()
 	fns := e.prog.Funcs
-	callees := func(ci *sg.Instr) []*sg.Func {
+	base := func(ci *sg.Instr) []*sg.Func {
 		if ci.Op == ir.OpMakeClosure {
 			// a closure that is not only called where it is made has its summary applied at the
 			// place it is made (C-7): the function that makes it depends on it
@@ -659,6 +661,19 @@ func (e *Engine) Run() *Result {
 			return cb
 		}
 		return append(append([]*sg.Func(nil), ci.CandidateFns...), cb...)
+	}
+	// the functions that the function values of the code of the project name (funccells.go): the call that reads them
+	// from a cell needs their summaries, so the function that makes them is analysed after them
+	refs := funcRefs(fns)
+	callees := func(ci *sg.Instr) []*sg.Func {
+		if ci.Op != ir.OpCall && ci.Op != ir.OpMakeClosure {
+			return refs[ci]
+		}
+		out := base(ci)
+		if r := refs[ci]; len(r) > 0 {
+			out = append(out[:len(out):len(out)], r...)
+		}
+		return out
 	}
 	sccs, callers := order(fns, callees)
 	levels := levelsOf(sccs, callees)
@@ -938,9 +953,6 @@ func levelsOf(sccs [][]*sg.Func, callees func(*sg.Instr) []*sg.Func) [][][]*sg.F
 		for _, fn := range scc {
 			for _, b := range fn.Blocks {
 				for _, in := range b.Instrs {
-					if in.Op != ir.OpCall && in.Op != ir.OpMakeClosure {
-						continue
-					}
 					for _, c := range callees(in) {
 						if j, ok := of[c]; ok && j != i && level[j]+1 > level[i] {
 							level[i] = level[j] + 1
@@ -1201,9 +1213,6 @@ func order(fns []*sg.Func, callees func(*sg.Instr) []*sg.Func) ([][]*sg.Func, ma
 		seen := map[*sg.Func]bool{}
 		for _, b := range fn.Blocks {
 			for _, in := range b.Instrs {
-				if in.Op != ir.OpCall && in.Op != ir.OpMakeClosure {
-					continue
-				}
 				for _, c := range callees(in) {
 					if inSet[c] && !seen[c] {
 						seen[c] = true
@@ -1387,6 +1396,7 @@ func (e *Engine) collect(st Stats) *Result {
 
 	seenU := map[string]bool{}
 	charNotes := map[string]*Uncertainty{} // char_read_in_callee: one for each (caller, callee)
+	fvNotes := map[string]*fvNote{}        // func_value_into_dependency: one for each callee (funccells.go)
 	for _, fn := range fnList {
 		s := e.states[fn]
 		keys := make([]findingKey, 0, len(s.findings))
@@ -1441,6 +1451,29 @@ func (e *Engine) collect(st Stats) *Result {
 				continue
 			}
 			key := u.Kind + "|" + u.Symbol + "|" + u.Func + "|" + posKey(u.pos)
+			if u.Kind == KindFuncValueIntoDependency {
+				// one for each function of the dependency (the places are many: a generated message registers its fields with
+				// the same few functions): the first place is the note, and the detail says how many there are. The note
+				// of each place stays on the findings that go through it (the hops).
+				k := u.Symbol
+				if k == "" {
+					k = "|" + u.Func
+				}
+				n := fvNotes[k]
+				if n == nil {
+					cp := *u
+					n = &fvNote{note: &cp, funcs: map[string]bool{}, sites: map[string]bool{}}
+					fvNotes[k] = n
+				}
+				if !n.sites[key] {
+					n.sites[key] = true
+					n.funcs[u.Func] = true
+					if posBefore(u.pos, n.note.pos) {
+						n.note.pos, n.note.Func = u.pos, u.Func
+					}
+				}
+				continue
+			}
 			if seenU[key] {
 				continue
 			}
@@ -1448,6 +1481,17 @@ func (e *Engine) collect(st Stats) *Result {
 			e.fill(u)
 			res.Uncertainties = append(res.Uncertainties, u)
 		}
+	}
+	fvKeys := make([]string, 0, len(fvNotes))
+	for k := range fvNotes {
+		fvKeys = append(fvKeys, k)
+	}
+	sort.Strings(fvKeys)
+	for _, k := range fvKeys {
+		n := fvNotes[k]
+		n.note.Detail += " [" + itoa(len(n.sites)) + " places in " + itoa(len(n.funcs)) + " functions of the project; the place here is the first]"
+		e.fill(n.note)
+		res.Uncertainties = append(res.Uncertainties, n.note)
 	}
 	charKeys := make([]string, 0, len(charNotes))
 	for k := range charNotes {
