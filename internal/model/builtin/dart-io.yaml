@@ -75,6 +75,8 @@ propagators:
     flows: [{from: recv, to: result}, {from: args, to: result}]
   - symbol: dart:io#Directory.path
     flows: [{from: recv, to: result}, {from: args, to: result}]
+  - symbol: dart:io#FileSystemEntity.path
+    flows: [{from: recv, to: result}, {from: args, to: result}]
   - symbol: dart:io#File.uri
     flows: [{from: recv, to: result}, {from: args, to: result}]
   - symbol: dart:io#FileSystemEntity.resolveSymbolicLinksSync
