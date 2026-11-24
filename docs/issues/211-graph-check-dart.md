@@ -42,7 +42,7 @@ Go と同じ 5 行 + 順序の 2 行が、同じ形で出せる。
 
 - `python3 -m unittest bench.test_graph_check`(収束の行、Dart のコマンドの組み立てと終了コード 4)。
 - `bench/compare.sh --graph-check dart-curated <同じコミット> <同じコミット>` が全行 `same`(終了コード 0)。
-- `zoo-dart` は同じ入力で、7 行が `same` で `convergence` の行が出て、終了コード 3。
+- `zoo-dart` は同じ入力で、7 行が `same` で `convergence` の行が出て、終了コード 3 になる見込み(**未確認**: 実行がロックの待ちに当たった。確認したら、ここを書き換える)。
 
 ## 5. 残り
 
