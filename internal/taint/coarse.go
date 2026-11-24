@@ -67,9 +67,23 @@ func (e *Engine) coarsenBySize(sccs [][]*sg.Func) {
 	}
 }
 
+// sccCoarsenFlagOff is how the wording tells a reader to solve without this: the one place that has the name of the
+// flag (the flag itself comes with the change that turns this on by default; then only this line changes).
+const sccCoarsenFlagOff = "-scc-coarsen 0"
+
+// sccCoarsenedMeaning is what depth 0 means, for the reader of a finding.
+const sccCoarsenedMeaning = "the dependency functions of this group were solved with access paths cut at depth 0, " +
+	"that is, what is told apart below the first step of a parameter (another field of the same value) is not told apart, " +
+	"so a flow of another field can be mixed in (more flows than there are, never fewer)"
+
 // sccCoarsenedDetail is the note on a hop that applied the summary of a dependency function of a component that is
-// solved at depth 0: the flow from here on may exist only because of that (more flows than there are, never fewer).
-const sccCoarsenedDetail = "scc_coarsened: the value went through a function of a dependency in a large group of functions that call each other, which was solved with the access paths of the dependency functions cut at depth 0 to keep the analysis finite: the flow from here may exist only because of that (more flows than there are, never fewer)"
+// solved at depth 0: it names the function and its package (what the step went through), says what depth 0 means, and
+// how to check whether the flow is real.
+func sccCoarsenedDetail(funcID string) string {
+	return "scc_coarsened: this step went through " + funcID + " (package " + UnitOf(funcID) + "), a function of a dependency in a large group of functions that call each other; " +
+		sccCoarsenedMeaning + ". To check: read " + funcID + " in " + UnitOf(funcID) +
+		" and see whether its input reaches its output, or solve with " + sccCoarsenFlagOff + " and see whether this finding remains"
+}
 
 // coarseRecords are the records of the components that are solved at depth 0, one each, in the order of the first
 // function: where (the functions, the packages) and how large.
@@ -85,8 +99,8 @@ func (e *Engine) coarseRecords() []*Uncertainty {
 		sort.Strings(ids)
 		d := "scc_coarsened: a group of " + strconv.Itoa(c.size) + " functions that call each other (" + strconv.Itoa(len(c.funcs)) +
 			" of the dependencies, in " + strconv.Itoa(len(c.packages)) + " packages) is large (" + strconv.Itoa(c.n) +
-			" " + c.counted + " or more), so the access paths of its dependency functions were cut at depth 0 from the start: " +
-			"what is told apart below the first step of a parameter is not told apart there (more flows than there are, never fewer)"
+			" " + c.counted + " or more), so " + sccCoarsenedMeaning + ". The dependency functions are in candidates. To check a finding that went through one: " +
+			"read that function in its package, or solve with " + sccCoarsenFlagOff + " and see whether the finding remains"
 		u := newUncertainty(KindDepthLimit, d, "")
 		u.Candidates = ids
 		out = append(out, u)
