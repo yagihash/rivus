@@ -1,0 +1,6 @@
+dart	dart/super_operator_static.dart	na	@na(go: no operator methods or super)	-
+dart	dart/super_operator_static.dart	sink-none	@sink(none)	void vuln6() { @vuln
+dart	dart/super_operator_static.dart	sink-none	@sink(none) @nosink(dart-super-operator-static-decoy)	void fixed() { @fixed
+dart	dart/super_operator_static.dart	sink-none	@sink(none) @nosink(dart-super-operator-static-decoy)	void fixed() { @fixed
+dart	dart/super_operator_static.dart	sink-none	@sink(none) @nosink(dart-super-operator-static-decoy)	void fixed() { @fixed
+dart	dart/super_operator_static.dart	sink-none	@sink(none) @nosink(dart-super-operator-static-decoy)	void fixed() { @fixed
