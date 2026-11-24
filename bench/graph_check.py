@@ -41,6 +41,13 @@ def patterns_of(flags, loose=False):
     return [f for f in flags if (not f.startswith("-") if loose else f.startswith("./"))]
 
 
+# A comparison must not depend on a clock: a function that is stopped by -func-timeout (30 s by default) leaves a func_timeout
+# uncertainty and a summary that stopped in the middle, and which functions that are depends on the load and on the number of
+# workers (on a slower machine, or with more workers than cores, a different one is stopped). The runs of the check get a limit
+# that is out of reach, and a run that was stopped by a clock anyway is said so (clock_line).
+FUNC_TIMEOUT = "24h"
+
+
 def run_side(side, binary, src, rules, flags, env_base, work, limit_s, cap, lock_reason, loose=False, workers="", extractor=""):
     """Runs extract, index and analyze of one version. Returns (files, error, incomplete): incomplete is True when analyze ended with exit code 4.
     extractor: the command of the Dart extractor of this version (empty: Go)."""
@@ -54,13 +61,13 @@ def run_side(side, binary, src, rules, flags, env_base, work, limit_s, cap, lock
         steps = [
             ("extract", shlex.split(extractor) + [src], files["ir"], {}),
             ("index", [binary, "index", "-lang", "dart", "-C", src, "-graph", files["db"]] + rules_args + flags, os.path.join(work, side + ".index.out"), {"RIVUS_DART_EXTRACTOR": extractor}),
-            ("analyze", [binary, "analyze", "-lang", "dart", "-C", src] + rules_args + flags, files["report"], {DUMP_ENV: files["dump"], "RIVUS_DART_EXTRACTOR": extractor}),
+            ("analyze", [binary, "analyze", "-lang", "dart", "-C", src, "-func-timeout", FUNC_TIMEOUT] + rules_args + flags, files["report"], {DUMP_ENV: files["dump"], "RIVUS_DART_EXTRACTOR": extractor}),
         ]
     else:
         steps = [
             ("extract", [binary, "debug", "extract", "-all", "-C", src] + pats, files["ir"], {}),
             ("index", [binary, "index", "-C", src, "-graph", files["db"]] + rules_args + flags, os.path.join(work, side + ".index.out"), {}),
-            ("analyze", [binary, "analyze", "-C", src] + rules_args + flags, files["report"], {DUMP_ENV: files["dump"]}),
+            ("analyze", [binary, "analyze", "-C", src, "-func-timeout", FUNC_TIMEOUT] + rules_args + flags, files["report"], {DUMP_ENV: files["dump"]}),
         ]
     incomplete = False
     for name, cmd, out, extra in steps:
@@ -146,6 +153,21 @@ def convergence_line(base_incomplete, head_incomplete):
     return "convergence: NOT CONVERGED (analyze of %s ended with exit code 4: the analysis is not complete; the lines above compare what it had when it stopped)" % who, 3
 
 
+def clock_line(base_report, head_report):
+    """A run that a clock stopped (summary stats: load_dependent) cannot be compared: the result is not a function of the code. (None, 0) when none."""
+    who = []
+    for n, path in (("base", base_report), ("head", head_report)):
+        try:
+            st = json.load(open(path)).get("stats") or {}
+        except (OSError, ValueError):
+            continue
+        if st.get("load_dependent"):
+            who.append("%s (func_timeouts %s, run_timeouts %s, timed_out %s)" % (n, st.get("func_timeouts"), st.get("run_timeouts"), st.get("timed_out")))
+    if not who:
+        return None, 0
+    return "clock: LOAD DEPENDENT (%s: a time limit stopped the analysis, so the lines above may differ because of the machine, not the code)" % " and ".join(who), 3
+
+
 def compare(a, base, head, incomplete=(False, False)):
     lines, status = [], 0  # status: 0 same, 1 different, 2 failed, 3 not all compared
     for kind, key in (("ir", "ir"), ("edges", "db")):
@@ -170,6 +192,10 @@ def compare(a, base, head, incomplete=(False, False)):
         lines.append(line)
         if not same:
             status = worse(status, 1 if "DIFFERENT" in line else 2)
+    line, rc = clock_line(base["report"], head["report"])
+    if line:
+        lines.append(line)
+        status = worse(status, rc)
     line, rc = convergence_line(*incomplete)
     if line:
         lines.append(line)
