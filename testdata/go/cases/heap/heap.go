@@ -261,3 +261,20 @@ func ExpAppendLoopSinkInside() {
 		lib.Sink(out[0]) // @sink(exp4)
 	}
 }
+
+type held struct{ out, other string }
+
+// set writes through its receiver, and a closure captures the receiver: the variable is then kept in a cell, and the write
+// must still be a write to the receiver of the caller.
+func (h *held) set(s string) {
+	h.out = s
+	f := func() { _ = h.other }
+	f()
+}
+
+func WriteThroughCapturedReceiver() {
+	s := lib.Source() // @source(capturedrecv)
+	h := &held{}
+	h.set(s)
+	lib.Sink(h.out) // @sink(capturedrecv)
+}
