@@ -33,17 +33,21 @@ import (
 // environment.
 func (s *state) collectPtrStores() {
 	s.ptrStores, s.valStores, s.ptrAlias, s.copyOf = s.ptrStores[:0], s.valStores[:0], nil, nil
-	if !s.eng.prog.HasEnv {
-		return
-	}
+	hasEnv := s.eng.prog.HasEnv
 	for _, b := range s.fn.Blocks {
 		for _, in := range b.Instrs {
 			var val *sg.Value
 			switch in.Op {
 			case ir.OpStore:
 				val = in.Args[1]
+				if !hasEnv && !(pointerLike(val) && isLocalCell(in.Args[0])) {
+					continue
+				}
 			case ir.OpFieldStore:
 				val = in.Args[1]
+				if !hasEnv {
+					continue
+				}
 			default:
 				continue
 			}
@@ -54,6 +58,15 @@ func (s *state) collectPtrStores() {
 			}
 		}
 	}
+}
+
+// isLocalCell reports whether the address is a variable of the function that the closures capture (an Alloc). Go has no
+// closure environment (HasEnv is false), but it keeps a variable that a closure captures in such a cell, and a parameter
+// that is captured is stored into one (`o` of `func (o *T) f()`): without this, what is written through the pointer that
+// is loaded from the cell is written to the copy in the cell, and the summary does not say that the parameter was written
+// (no finding, and no uncertainty).
+func isLocalCell(addr *sg.Value) bool {
+	return addr != nil && addr.Kind == sg.KResult && addr.Instr != nil && addr.Instr.Op == ir.OpAlloc
 }
 
 // holdsPointers reports whether a value that is not a pointer can hold one: a struct, a closure's

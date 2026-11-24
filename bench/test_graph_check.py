@@ -83,6 +83,39 @@ class DartSteps(unittest.TestCase):
             self.assertIn("extract could not start", err)
 
 
+class ClockLine(unittest.TestCase):
+    """A run that a time limit stopped (stats.load_dependent) is not a pass; the runs of the check get -func-timeout 24h."""
+
+    def test_the_line_is_always_there_and_never_fails(self):
+        with tempfile.TemporaryDirectory() as d:
+            a, b = os.path.join(d, "a.json"), os.path.join(d, "b.json")
+            json.dump({"stats": {"func_timeouts": 0}}, open(a, "w"))
+            json.dump({"stats": {"load_dependent": True, "func_timeouts": 1}, "uncertainties": [{"detail": "func_timeout: x", "func": "go/types.Checker.builtin"}]}, open(b, "w"))
+            line, rc = g.clock_line(a, a)
+            self.assertEqual(rc, 0)
+            self.assertTrue(line.startswith("func_timeouts: base 0"), line)
+            line, rc = g.clock_line(a, b)
+            self.assertEqual(rc, 0)
+            self.assertTrue(line.startswith("::warning::"), line)
+            self.assertIn("head 1 (", line)
+            self.assertIn("go/types.Checker.builtin", line)
+
+    def test_analyze_gets_the_func_timeout(self):
+        os.environ["RIVUS_HEAVY_LOCK_HELD"] = "1"
+        with tempfile.TemporaryDirectory() as d:
+            fake = os.path.join(d, "rivus")
+            log = os.path.join(d, "log")
+            open(fake, "w").write("#!/bin/sh\necho \"$@\" >> %s\nif [ \"$1\" = analyze ]; then echo '{}'; : > \"$RIVUS_INTERNAL_SUMMARY_DUMP\"; fi\n" % log)
+            os.chmod(fake, 0o755)
+            src = os.path.join(d, "src")
+            os.mkdir(src)
+            files, err, inc = g.run_side("base", fake, src, "", ["./..."], dict(os.environ), d, 60, 1 << 33, "t")
+            self.assertIsNone(err)
+            an = [l for l in open(log).read().splitlines() if l.startswith("analyze")]
+            self.assertEqual(len(an), 1)
+            self.assertIn("-func-timeout " + g.FUNC_TIMEOUT, an[0])
+
+
 class LockTimeout(unittest.TestCase):
     def test_busy_machine_is_not_run(self):
         import contextlib
