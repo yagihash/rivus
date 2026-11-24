@@ -77,5 +77,5 @@ void mutual() { // @vuln
   }
 
   odd = (String x, String y, int n) => even(x, y, n);
-  even(src('clos-local-recursion-mutual'), 'constant', 1); // @source(clos-local-recursion-mutual) @miss(unresolved_callee) @ref(#196)
+  even(src('clos-local-recursion-mutual'), 'constant', 1); // @source(clos-local-recursion-mutual)
 }
