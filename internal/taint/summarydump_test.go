@@ -116,6 +116,9 @@ func TestSummaryDumpEachIteration(t *testing.T) {
 			t.Errorf("%s: second line %q", name, lines[1])
 		}
 		for _, l := range lines[2:] {
+			if strings.HasPrefix(l, "# outpath ") {
+				continue
+			}
 			f := strings.Split(l, "\t")
 			if len(f) != 18 || !strings.HasPrefix(f[13], "outdepth=") || !strings.HasPrefix(f[14], "outidx=") || !strings.HasPrefix(f[15], "maxout=") || !strings.HasPrefix(f[1], "elems=") || !strings.HasPrefix(f[2], "steps=") || len(f[3]) != 64 ||
 				!strings.HasPrefix(f[4], "outs=") || !strings.HasPrefix(f[11], "depth=") || !strings.HasPrefix(f[16], "chg=") {
