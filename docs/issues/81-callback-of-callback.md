@@ -42,3 +42,14 @@ void b() {
 
 再開後の確認(2026-11-22): **残っているのは `g(a)` の形**(クロージャが、自分のパラメータで受けた関数を呼ぶ。zoo の `F/clos/callback-of-callback`、`@miss(depth_limit) @ref(#81)`)。**relay の形(`run(() => f())` キャプチャした関数を呼ぶ)は、今は見つかる**(zoo の `F/clos/relay`)。uncertainty の kind は assumed_call / depth_limit / recursion_approximation で、「再帰のない形で recursion_approximation が出る」疑いは #77 と同じ目で追う。
 
+## 追記(2026-11-24。根 G。`-resolve-func-values` を消した)
+
+`-resolve-func-values`([DESIGN-callouts.md](../DESIGN-callouts.md) 5.6)は、コストのために消した。それが補っていた `g(a)` の形の、グラフのエッジの欠落は、観測した呼び出しとの照合(方法 B)で `no_edge` として見えていた。**#466 で直った**(`valuecalls` が 2 階層でたどる。zoo-dart の `no_edge` 76 から 72)。以下は、直す前の分析として残す。
+
+- 件数: zoo-dart の `no_edge` 4 件(`clos/callback-of-callback`)。curated の `viaInner` 2 件。
+- 直す所: `internal/valuecalls`(`param`、`onlyParam`。2 つの段階のパラメータ)。#99 の修正の延長。
+- 大きさ: 中。
+- **偽の edge**: 足さない見込み(呼び出しごとの引数をたどる)。
+- 流れの見逃しは、セルの `@miss(depth_limit)` で追う。uncertainty のない見逃しにはならない。
+
+関連: 型が合う関数値を候補に補う案(今は入れない)は #207。

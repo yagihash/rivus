@@ -59,3 +59,5 @@ ADR-047(案 2)で直る見込み(ヘルパーが候補を持たず、呼び出�
 
 再開後の追跡(2026-11-22): zoo の `F/clos/helper-overflow` の `@miss` の uncertainty が `recursion_approximation` になっていた理由は、**zoo 全体の解析が収束していない(`stats.converged: false`、12 パス、`state/global_chain` の 2 関数が不安定)ことで出る、全体の `recursion_approximation`** を、uncertainty の判定が拾っていたため。そのセルだけを解析すると、`converged: true` で、不確実性は `depth_limit`(`candidate_limit: the function value may be any of 12 functions, more than the 8 ...`)、`unresolved_callee`、`dynamic_dispatch`。**本当の理由は `depth_limit(candidate_limit)`**で、この Issue の推定(候補が 8 を超えると捨てる)と合う。zoo の注釈の kind の付け替えは、別に扱う。
 
+
+関連: 型が合う関数値を候補に補う案(今は入れない)は #207。

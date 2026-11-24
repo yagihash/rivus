@@ -667,7 +667,10 @@ GC のあとにも残る、参照されているメモリ。測り方が 2 つ�
 処理の区切り。読み込みのフェーズ、IR への変換、要約のフェーズ、結果の組み立て。メモリや時間の数字は、フェーズごとに分けて書く。
 
 **ステップ(step)**
-経路の 1 つ。出力の `path_steps` の 1 件。uncertainty は、ステップの単位で付ける。処理の区切り(フェーズ)とは別の語。
+経路の 1 つ。出力の `path_steps` の 1 件。ステップに付くものは「ステップの uncertainty」と書く。処理の区切り(フェーズ)とは別の語。
+
+**uncertainty(不確実性)**
+rivus の結果に付く、「ここは確実でない」というマーク。出力の `uncertainties`(finding と `summary`)に出て、`kind`(`depth_limit`、`out_widened`、`numeric_stop` など)で種類を分ける。経路のステップに付くものは「ステップの uncertainty」(`path_steps[].notes`)、暫定のもの(`char_read_in_callee`)は「`numeric_stop` の uncertainty」と書く。日本語では「不確実性」と書いてもよい。出力の名前に合わせた語で、別の名前(注釈、脚注、補足など、普通の意味の語は別)をつけない。
 
 **合格基準(acceptance criteria)**
 合格の対象(memos)について、時間、メモリ、収束、検出の条件。基準を決めて、数字がそれを満たすかを見る。次の 2 つは別のことで、分けて書く。

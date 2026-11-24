@@ -70,7 +70,7 @@ func TestOffByDefaultFlags(t *testing.T) {
 	// The features named in the docs of the project are in the code.
 	fs := flag.NewFlagSet("analyze", flag.ContinueOnError)
 	analyzeFlags(fs)
-	for _, name := range []string{"char-taint", "numeric-taint", "resolve-func-values"} {
+	for _, name := range []string{"char-taint", "numeric-taint"} {
 		if !sidesOf(fs).info[name].ChangesResult {
 			t.Errorf("analyze: -%s is a feature and must be described as one", name)
 		}

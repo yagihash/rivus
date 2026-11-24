@@ -479,6 +479,11 @@ jobs:
         if: needs.changes.outputs.dart == 'true' && matrix.shard == 2
         working-directory: extractor/dart
         run: dart analyze lib bin
+      - name: Test the Dart extractor
+        if: needs.changes.outputs.dart == 'true' && matrix.shard == 2
+        # `dart test` of the extractor package alone (dart_test.yaml lists the tests: the samples under test/ are other packages and are not run); about 10 s
+        working-directory: extractor/dart
+        run: dart test
       - name: Analyze the Dart zoo
         if: needs.changes.outputs.dart == 'true' && matrix.shard == 2
         run: |

@@ -69,10 +69,6 @@ type Options struct {
 	// ordered by: "reanalyses" (the default), "time", "functions" or "elems"; equal values go by name.
 	PassStatsTop  int
 	PassStatsSort string
-	// FuncValues is the diagnostic of the function values (funcvalues.go): the places that make a function value are
-	// synthetic sources, the calls of a function value are synthetic sinks (the sites must be those of
-	// FuncValueSites), and Result.FuncCandidates says what each call may call. The findings are not reported.
-	FuncValues    bool
 	SlowFunc      func(fn string, d, cpu time.Duration, outputs, roots int)
 	SlowThreshold time.Duration
 }
@@ -98,8 +94,6 @@ type Engine struct {
 	dispatch sync.Map // *sg.Instr -> map[*sg.Func][]Guard
 	// valueGuards is the same for the calls of function values (valueGuards).
 	valueGuards sync.Map // *sg.Instr -> map[string][]Guard
-	// fvDropped is the calls (symbol, then the call) where a model dropped a function value (Options.FuncValues).
-	fvDropped sync.Map // string -> *sync.Map of *sg.Instr
 
 	// implsIndex are the implementations of the trait methods that the program has, by the last name of the
 	// trait and the method (callrows.go, methodImpls)
@@ -532,8 +526,6 @@ type Stats struct {
 	BudgetExhausted int `json:"budget_exhausted"`
 	FuncTimeouts    int `json:"func_timeouts"`
 	RunTimeouts     int `json:"run_timeouts,omitempty"`
-	// FuncValues is what -resolve-func-values did (docs/DESIGN-callouts.md, 5.6); absent when the flag is off.
-	FuncValues *FuncValuesStats `json:"func_values,omitempty"`
 	// LoadDependent is true when the result depends on the load of the machine: a function was
 	// stopped by a clock, or the run was.
 	LoadDependent bool `json:"load_dependent,omitempty"`
@@ -603,11 +595,6 @@ type Result struct {
 	// taint.
 	Suppressions []*Suppression `json:"suppressions,omitempty"`
 	Stats        Stats          `json:"stats"`
-	// FuncCandidates is the result of the diagnostic Options.FuncValues (not in the output).
-	FuncCandidates []FuncCandidates `json:"-"`
-	// FuncDropped is, of the same run, the calls with a model that were given a function value that the model does not
-	// say anything of (by symbol; not in the output).
-	FuncDropped []FuncDropped `json:"-"`
 	// NumericStops is, for each function where a value that would carry taint was dropped because it is a number or a
 	// bool, how many times (summary.numeric_stops). Not in the output of the engine: the report makes it.
 	NumericStops []NumericStopCount `json:"-"`
@@ -1540,10 +1527,6 @@ func (e *Engine) collect(st Stats) *Result {
 		return a.Kind < b.Kind
 	})
 
-	if e.opts.FuncValues {
-		res.FuncCandidates = e.collectFuncCandidates(merged)
-		res.FuncDropped = e.droppedAtModel()
-	}
 	e.suppressions = res.Suppressions
 	keys := make([]findingKey, 0, len(merged))
 	for k := range merged {

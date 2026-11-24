@@ -180,13 +180,14 @@ How to measure and what a line means: [`passline-baseline.md`](passline-baseline
 
 ## The graph check (a change for memory or cost)
 
-`bench/compare.sh --graph-check go-curated,zoo-go,go-synth-S,memos <base> <head>` builds both versions, runs each on the same code, and compares what they
-build: the IR (`rivus debug extract -all`; `accept.Compare`, the comparison of the acceptance test, which compares two extractors; this one compares two
+`bench/compare.sh --graph-check go-curated,zoo-go,go-synth-S,memos,dart-curated,zoo-dart <base> <head>` builds both versions, runs each on the same code, and compares what they
+build: the IR (`rivus debug extract -all`; for Dart, the output of the extractor of that version, which `rivus index` and `rivus analyze` run too; `accept.Compare`, the comparison of the acceptance test, which compares two extractors; this one compares two
 commits), the edges of the call graph with their candidates (`rivus index`), the summary of every function (the internal dump `RIVUS_INTERNAL_SUMMARY_DUMP`, written
 by `Engine.WriteSummaryDump`: one line for each function with the hash of the whole summary, outputs and steps and sinks and guards; no flag, not in `-h`), and the
-findings and uncertainties. One line each: `same`, or `DIFFERENT` with how many and the first function IDs. The memory work shows "same" here instead of a count of
+findings and uncertainties (as sets), and the same two arrays in the order of the output (`findings-order`, `uncertainties-order`: SHA-256 of the array with the order kept and only the keys of each object sorted; a change of the order is a change for the user). One line each: `same`, or `DIFFERENT` with how many and the first function IDs. The memory work shows "same" here instead of a count of
 findings ([WORKFLOW.md](../docs/WORKFLOW.md)). The dump reads the fields of a summary, not how they are stored, so a change of the storage keeps it; a change of the
 fields must change `internal/taint/summarydump.go` with it. The checks of the tool itself: `go test ./bench/graphcheck ./internal/taint -run SummaryDump`, `python3 -m unittest bench.test_graph_check`.
+Dart (`dart-curated`, `zoo-dart`; [issue #211](../docs/issues/211-graph-check-dart.md)): each side runs the extractor of its own tree on the code of head (`RIVUS_DART` names the `dart` command), so the IR line also shows a change of the extractor. An analysis that stops (exit code 4: `zoo-dart` has cells that stop by the pass limit on purpose) is compared as far as it goes, and the line `convergence: NOT CONVERGED` makes the exit status 3, never 0; the same line holds for a Go run that stopped by the timeout. Rust is not covered.
 `go-std10` is the standard library: the 10 packages of `TestAcceptOrderStd` (`stdPatterns` of `internal/frontend/goir/accept_test.go`: keep the two lists the same), a source of shapes that the zoo and curated lack.
 The names of `deps-targets.json` (memos, memos-4gib, gitea, dart_services) run under the heavy-work lock and the memory cap of the target; gitea is the pass line C (it passes now: see its newest `--kind passline` row of
 `bench/heavy-ledger.tsv`; the numbers are there), so its graph can be compared.

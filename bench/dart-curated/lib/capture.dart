@@ -99,13 +99,13 @@ void relay_both_b() {
 
 // a closure returned by a function holds a captured value
 void holder_a() {
-  final a = source(); // @source(holder-a) @miss(unresolved_callee)
+  final a = source(); // @source(holder-a) @miss(depth_limit)
   final get = holder(a);
   sink(get()); // @sink(holder-a) @nosink(holder-b)
 }
 
 void holder_b() {
-  final b = source(); // @source(holder-b) @miss(unresolved_callee)
+  final b = source(); // @source(holder-b) @miss(depth_limit)
   final get = holder(b);
   sink(get()); // @sink(holder-b) @nosink(holder-a)
 }
