@@ -560,7 +560,7 @@ seed となる source を与えずに投げる形なので、全関数のサマ�
 functional approach の方が素直に実現できる。
 
 **完全でない解析（incomplete analysis）**
-全体の時間切れ(`-timeout`)、未収束(`-max-passes` の上限)、関数ごとの打ち切り(1 関数の時計 `-func-timeout`、作業量の上限)のどれかで終わった解析。見つけた分の結果は全部出したうえで、終了コード 4 で終わる。`summary.incomplete`(bool)と `summary.incomplete_reasons`(`timeout`、`not_converged`、`func_timeout`、`budget`)に出る。関数ごとの打ち切りを数えるのは、基準が「流れを落としたか」だからで、その関数の要約は流れを欠くことがある(ADR-120 の追記)。打ち切った関数は、`depth_limit` の注記(`func`、`detail` の先頭が `func_timeout:` か `budget:`)に、関数ごとに出る。
+全体の時間切れ(`-timeout`)、未収束(`-max-passes` の上限)、関数ごとの打ち切り(1 関数の時計 `-func-timeout`、作業量の上限)のどれかで終わった解析。見つけた分の結果は全部出したうえで、終了コード 4 で終わる。`summary.incomplete`(bool)と `summary.incomplete_reasons`(`timeout`、`not_converged`、`func_timeout`、`budget`)に出る。関数ごとの打ち切りを数えるのは、基準が「流れを落としたか」だからで、その関数の要約は流れを欠くことがある(ADR-120 の追記)。打ち切った関数は、`depth_limit` の uncertainty(`func`、`detail` の先頭が `func_timeout:` か `budget:`)に、関数ごとに出る。
 
 **エントリポイント（entry point）**
 コールグラフの根。ライブラリには `main` がないため、
@@ -667,7 +667,10 @@ GC のあとにも残る、参照されているメモリ。測り方が 2 つ�
 処理の区切り。読み込みのフェーズ、IR への変換、要約のフェーズ、結果の組み立て。メモリや時間の数字は、フェーズごとに分けて書く。
 
 **ステップ(step)**
-経路の 1 つ。出力の `path_steps` の 1 件。注記は、ステップの単位で付ける。処理の区切り(フェーズ)とは別の語。
+経路の 1 つ。出力の `path_steps` の 1 件。ステップに付く印は「ステップの uncertainty」と書く。処理の区切り(フェーズ)とは別の語。
+
+**uncertainty(不確実性)**
+rivus の結果に付く、「ここは確実でない」という印。出力の `uncertainties`(finding と `summary`)に出て、`kind`(`depth_limit`、`out_widened`、`numeric_stop` など)で種類を分ける。経路のステップに付くものは「ステップの uncertainty」(`path_steps[].notes`)、暫定のもの(`char_read_in_callee`)は「`numeric_stop` の uncertainty」と書く。日本語では「不確実性」と書いてもよい。出力の名前に合わせた語で、別の名前(注釈、脚注、補足など、普通の意味の語は別)をつけない。
 
 **合格基準(acceptance criteria)**
 合格の対象(memos)について、時間、メモリ、収束、検出の条件。基準を決めて、数字がそれを満たすかを見る。次の 2 つは別のことで、分けて書く。
