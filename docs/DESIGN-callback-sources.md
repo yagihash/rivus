@@ -130,7 +130,7 @@ gin について。ハンドラは `func(*gin.Context)` で、入力はレシー
 
 - `models coverage`: 関数の型のパラメータを持つ関数(コールバックを取る)は、今 `calls:` の候補として出る。`callback_param` の候補(「ハンドラを登録する関数」)は、同じ列を使い、行のテンプレートに `callback_param` の例をコメントで足す。判定は人が決める(ハンドラの引数が入力かは、型から分からない)。約 30 行。
 - `models doctor`: この時点のコードに `models doctor` はない(`cmd/rivus/commands.go` の `models` は `coverage` ほか)。できたら、`operand` が関数型のパラメータを指すか、`from` が、その関数型の引数の数以下かを検査する。
-- 差分テスト(`bench/model-diff`。`origin/feat/model-diff` にある。main にはない): コールバックを取る関数は「未検証」。`callback_param` も、本体との照合で決まる行ではない(source は、本体に書かれていない、フレームワークの約束)ので、`unverified: true` のままにして、**zoo の実際の走り**で確認する(セルは、実物の shelf_router を走らせ、`typed()` の値が引数に届くことを見る。`F/dart/shelf-router-extra-param`)。
+- 差分テスト(`bench/model-diff`。`origin/feat/model-diff` にある。main にはない): コールバックを取る関数は「未検証」。`callback_param` も、本体との照合で決まる行ではない(source は、本体に書かれていない、フレームワークの約束)ので、`unverified: true` のままにして、**zoo の実際の実行**で確認する(セルは、実物の shelf_router を実行し、`typed()` の値が引数に届くことを見る。`F/dart/shelf-router-extra-param`)。
 
 ### zoo
 

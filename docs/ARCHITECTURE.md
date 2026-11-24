@@ -339,7 +339,7 @@ cmd/rivus/                CLI（sites / analyze / query / index / graph / resolv
 internal/
   ir/                     IR の型定義、JSON Lines の読み書き、検証、ダンプ、ir.Texts
   irssa/                  IR の SSA 形（ssabuild をつなぐ。昇格、φ、到達定義）
-  sg/                     SSA グラフ（値・命令・ブロック・支配木）。エンジンが走る面
+  sg/                     SSA グラフ（値・命令・ブロック・支配木）。エンジンが実行される面
   ssabuild/               CFG → SSA（dominator tree、dominance frontier、φ 挿入）。言語非依存
   ssacheck/               ssabuild の検証（go/ssa の lifting、独立な到達定義との比較）。テストのみ
   frontend/gossa/         go/packages → go/ssa。go/ssa に触れるコードはここと goir だけ
