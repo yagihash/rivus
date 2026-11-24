@@ -294,12 +294,78 @@ func (o *analyzeOpts) extractorCommand(lang string) ([]string, error) {
 			fmt.Fprintf(os.Stderr, "rivus: %s\n", why)
 		}
 	}
-	words := strings.Fields(cmd)
+	words, err := splitCommand(cmd)
+	if err != nil {
+		return nil, fmt.Errorf("the %s extractor command (-%s-extractor or %s) is not read: %w", lang, lang, env, err)
+	}
 	if len(words) == 0 {
 		return nil, fmt.Errorf("the %s extractor is named by a blank command (-%s-extractor or %s): name the command, or leave it unset", lang, lang, env)
 	}
 	if _, err := exec.LookPath(words[0]); err != nil {
 		return nil, &extractorMissingError{fmt.Errorf("the %s extractor %q is not found: install it (%s), or name it with -%s-extractor or %s", lang, words[0], how, lang, env)}
+	}
+	return words, nil
+}
+
+// splitCommand splits the value of an extractor command into words (the first is the executable). A value that names an
+// existing file as it is (a path with spaces in it, such as one under "Application Support") is one word. Otherwise the
+// words are split at spaces, the way a shell does for quotes: 'a b' keeps everything inside, "a b" keeps the spaces and
+// reads \" and \\ as the character, and a backslash before a space, a quote or a backslash makes it a part of the word.
+// A value without quotes and backslashes is split at white space, as it always was.
+func splitCommand(cmd string) ([]string, error) {
+	if t := strings.TrimSpace(cmd); strings.ContainsAny(t, " \t") {
+		if st, err := os.Stat(t); err == nil && !st.IsDir() {
+			return []string{t}, nil
+		}
+	}
+	var words []string
+	var cur strings.Builder
+	inWord := false
+	rs := []rune(cmd)
+	for i := 0; i < len(rs); i++ {
+		c := rs[i]
+		switch {
+		case c == ' ' || c == '\t' || c == '\n' || c == '\r':
+			if inWord {
+				words = append(words, cur.String())
+				cur.Reset()
+				inWord = false
+			}
+		case c == '\'':
+			j := i + 1
+			for j < len(rs) && rs[j] != '\'' {
+				j++
+			}
+			if j == len(rs) {
+				return nil, fmt.Errorf("a single quote is not closed")
+			}
+			cur.WriteString(string(rs[i+1 : j]))
+			inWord = true
+			i = j
+		case c == '"':
+			j := i + 1
+			for ; j < len(rs) && rs[j] != '"'; j++ {
+				if rs[j] == '\\' && j+1 < len(rs) && (rs[j+1] == '"' || rs[j+1] == '\\') {
+					j++
+				}
+				cur.WriteRune(rs[j])
+			}
+			if j == len(rs) {
+				return nil, fmt.Errorf("a double quote is not closed")
+			}
+			inWord = true
+			i = j
+		case c == '\\' && i+1 < len(rs) && strings.ContainsRune(" \t'\"\\", rs[i+1]):
+			cur.WriteRune(rs[i+1])
+			inWord = true
+			i++
+		default:
+			cur.WriteRune(c)
+			inWord = true
+		}
+	}
+	if inWord {
+		words = append(words, cur.String())
 	}
 	return words, nil
 }
