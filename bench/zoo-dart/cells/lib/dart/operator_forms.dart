@@ -20,7 +20,6 @@ void register() {
 
 class Cls0 {
   String data = '';
-  String _v = '';
 
   bool operator ==(Object o) {
     sinkCmd(data); // @sink(dart-operator-forms-vuln)
@@ -53,11 +52,10 @@ void vuln2() { // @vuln
 
 class Cls2 {
   String data = '';
-  String _v = '';
 
   void operator []=(int i, String s) {
     sinkCmd(data); // @sink(dart-operator-forms-vuln3)
-    _v = s;
+    s.length;
   }
 }
 
@@ -107,7 +105,6 @@ void vuln5() { // @vuln
 
 class Cls5 {
   String data = '';
-  String _v = '';
 
   bool operator <(Cls5 o) {
     sinkCmd(data); // @sink(dart-operator-forms-vuln6)
@@ -123,7 +120,6 @@ void vuln6() { // @vuln
 
 class Cls6 {
   String data = '';
-  String _v = '';
 
   bool operator <=(Cls6 o) {
     sinkCmd(data); // @sink(dart-operator-forms-vuln7)
@@ -139,7 +135,6 @@ void vuln7() { // @vuln
 
 class Cls7 {
   String data = '';
-  String _v = '';
 
   bool operator >(Cls7 o) {
     sinkCmd(data); // @sink(dart-operator-forms-vuln8)
@@ -155,7 +150,6 @@ void vuln8() { // @vuln
 
 class Cls8 {
   String data = '';
-  String _v = '';
 
   bool operator >=(Cls8 o) {
     sinkCmd(data); // @sink(dart-operator-forms-vuln9)
@@ -171,7 +165,6 @@ void vuln9() { // @vuln
 
 class Cls20 {
   String data = '';
-  String _v = '';
 
   bool operator <(Cls20 o) {
     sinkCmd(data); // @sink(none)
@@ -187,7 +180,6 @@ void fixed() { // @fixed
 
 class Cls21 {
   String data = '';
-  String _v = '';
 
   bool operator <(Cls21 o) {
     sinkCmd(data); // @sink(none) @nosink(dart-operator-forms-decoy)
