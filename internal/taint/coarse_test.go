@@ -199,7 +199,9 @@ func TestCoarseAnyRoundGivesTheSameSummaries(t *testing.T) {
 
 // A hop of a call of a coarse summary has the note, so the flow through it is told to be coarser than the code.
 func TestCoarseNoteOnHops(t *testing.T) {
-	e, _ := runCoarse(t, func(id string) bool { return isF(id) && !strings.HasSuffix(id, ".f00") && !strings.HasSuffix(id, ".f01") },
+	e, _ := runCoarse(t, func(id string) bool {
+		return isF(id) && !strings.HasSuffix(id, ".f00") && !strings.HasSuffix(id, ".f01")
+	},
 		func(o *Options) { o.SCCCoarsenAtRound = -1 })
 	found := false
 	for _, sum := range byID(e) {

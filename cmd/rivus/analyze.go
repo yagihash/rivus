@@ -268,7 +268,7 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	opts.TraceElement = o.traceElement
 	// Internal, for the budget of a large component (ADR-124; no flag, not in -h): "a,b" are the budgets of the keys
 	// of the param outputs deeper than one step and of the global outputs (0: none), RIVUS_INTERNAL_SCC_COARSEN_AT_ROUND
-	// is the round from which the tests move a component whatever the counts are. Both off: the analysis is as it was.
+	// (the build tag coarseforce only: the binary that is shipped does not read it) is the round from which the tests move a component whatever the counts are. Both off: the analysis is as it was.
 	if v := os.Getenv("RIVUS_INTERNAL_SCC_COARSEN_BUDGET"); v != "" {
 		a, b, ok := strings.Cut(v, ",")
 		da, e1 := strconv.Atoi(strings.TrimSpace(a))
@@ -278,13 +278,11 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 		}
 		opts.SCCCoarsen = taint.SCCCoarsenBudget{DeepParamKeys: da, GlobalKeys: gb}
 	}
-	if v := os.Getenv("RIVUS_INTERNAL_SCC_COARSEN_AT_ROUND"); v != "" {
-		n, err := strconv.Atoi(v)
-		if err != nil || n < 0 {
-			return nil, fmt.Errorf("RIVUS_INTERNAL_SCC_COARSEN_AT_ROUND: want a number (got %q)", v)
-		}
-		opts.SCCCoarsenAtRound = n
+	n, err := forcedCoarseRound()
+	if err != nil {
+		return nil, err
 	}
+	opts.SCCCoarsenAtRound = n
 	if o.verbose {
 		opts.SlowThreshold = 300 * time.Millisecond
 		opts.SlowFunc = func(fn string, d, cpu time.Duration, outputs, roots int) {

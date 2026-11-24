@@ -13,7 +13,7 @@
 3. **判定**: (a) か (b) のどちらか 1 つが予算を超えたら、その SCC を粗くする。次元ごとに別々に判定しない。**1 回だけ**。戻さない。以後は、ラウンドの終わりごとに、今の要約に折りたたみ(fold)をかけ直すだけ(SCC が書く G が増えたとき)。
 4. **fold(`foldSummary`)**: 依存の関数だけ。(i) 全出力のパスを "" にし、param の要素のパスも "" にする(深さ 0。`-dep-k 0` と同じ向き)。自分自身の param が自分に入る要素は、`summarize` と同じく落とす(流れではない)。(ii) global は、その関数が書く全部の global の要素の和を、SCC の依存の関数が書く全部の G に、関数ごとに付ける(他の関数の param 要素は混ぜない。その関数の引数のことではないため)。(iii) 条件(ガード)は外す(「どの条件でも起こりうる」。理由は下)。(iv) sink の要素のパスも切る。以後、その関数の解析の結果にも fold をかけ、関数の本体は深さ 0 で解く(`state.k()`)。
 5. **記録**: SCC ごとに `depth_limit`、detail `scc_coarsened:` の uncertainty を 1 件(`attributable_to: rivus`、`candidates` に依存の関数の一覧。詳細に、関数の数、依存の関数の数、パッケージの数、超えた量と件数、予算、ラウンドとパス)。粗くした要約を適用した経路のステップにも、同じ種類のステップの uncertainty(`out_widened` と同じ作り)。`stats.scc_coarsened` に SCC の数。
-6. **値**: `Options.SCCCoarsen`(0 = その量の予算なし。**既定は両方 0 = 粗くしない**。出力は今と同じ)と、テスト用の `SCCCoarsenAtRound`(0: 使わない、n: その SCC の n ラウンド目から、負: 最初の前から、量に関係なく粗くする)。実行から使うには、環境変数 `RIVUS_INTERNAL_SCC_COARSEN_BUDGET=a,b`(a が (a)、b が (b))と `RIVUS_INTERNAL_SCC_COARSEN_AT_ROUND=n`(`-h` に出さない。ADR-121 と PRINCIPLES の「内部の切り替え」の流儀)。
+6. **値**: `Options.SCCCoarsen`(0 = その量の予算なし。**既定は両方 0 = 粗くしない**。出力は今と同じ)と、テスト用の `SCCCoarsenAtRound`(0: 使わない、n: その SCC の n ラウンド目から、負: 最初の前から、量に関係なく粗くする)。実行から使うには、環境変数 `RIVUS_INTERNAL_SCC_COARSEN_BUDGET=a,b`(a が (a)、b が (b))と `RIVUS_INTERNAL_SCC_COARSEN_AT_ROUND=n`(ビルドタグ `coarseforce` のバイナリだけが読む。配布するバイナリは読まない。ADR-121 と PRINCIPLES の「内部の切り替え」の流儀)。
 
 ## uncertainty の種類: 新しく足さず、既存の `depth_limit` の detail で言う
 
