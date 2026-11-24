@@ -18,15 +18,21 @@ func runMerge(t *testing.T, runs string, runsCode int, env ...string) (string, e
 
 // runMergeChecks is runMerge with the JSON that `gh pr checks` prints (it exits 8 or 1 when something is pending or failed).
 func runMergeChecks(t *testing.T, checks, runs string, runsCode int, env ...string) (string, error, bool) {
+	return runMergePR(t, `"commits":[]`, 0, checks, runs, runsCode, env...)
+}
+
+// runMergePR is runMergeChecks with the "commits" member of the PR JSON and the exit code of a fake zoo-loosened-check.sh
+// (the script is copied to a temporary folder together with it; `git` is a fake that succeeds).
+func runMergePR(t *testing.T, commits string, zooCode int, checks, runs string, runsCode int, env ...string) (string, error, bool) {
 	t.Helper()
 	bin := t.TempDir()
-	for _, tool := range []string{"bash", "python3", "cat", "cut", "touch", "env"} {
+	for _, tool := range []string{"bash", "python3", "cat", "cut", "touch", "env", "sed"} {
 		if p, err := exec.LookPath(tool); err == nil {
 			os.Symlink(p, filepath.Join(bin, tool))
 		}
 	}
 	marker := filepath.Join(bin, "merged")
-	pr := `{"state":"OPEN","isDraft":false,"baseRefName":"main","headRefName":"feat","mergeStateStatus":"CLEAN","body":"","files":[{"path":"a.go"}],"commits":[]}`
+	pr := `{"state":"OPEN","isDraft":false,"baseRefName":"main","headRefName":"feat","mergeStateStatus":"CLEAN","body":"","headRefOid":"abc","files":[{"path":"a.go"}],` + commits + `}`
 	script := `#!/bin/bash
 case "$1 $2" in
 "repo view") echo o/r;;
@@ -50,7 +56,17 @@ esac
 	if err := os.WriteFile(filepath.Join(bin, "gh"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	sh, _ := filepath.Abs("merge-pr.sh")
+	if err := os.WriteFile(filepath.Join(bin, "git"), []byte("#!/bin/bash\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	src, err := os.ReadFile("merge-pr.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sdir := t.TempDir()
+	sh := filepath.Join(sdir, "merge-pr.sh")
+	os.WriteFile(sh, src, 0o755)
+	os.WriteFile(filepath.Join(sdir, "zoo-loosened-check.sh"), []byte("#!/bin/bash\necho zoo check says no\nexit "+string(rune('0'+zooCode))+"\n"), 0o755)
 	cmd := exec.Command("bash", sh, "7")
 	cmd.Env = append([]string{"PATH=" + bin}, env...)
 	out, err := cmd.CombinedOutput()
@@ -116,6 +132,39 @@ func TestMergeGuardChecks(t *testing.T) {
 	}
 	for _, c := range cases {
 		out, err, merged := runMergeChecks(t, c.checks, ok, 0)
+		if merged != c.merged || (err == nil) != c.merged {
+			t.Errorf("%s: err = %v, merged = %v, want merged=%v\n%s", c.name, err, merged, c.merged, out)
+		}
+		if !strings.Contains(out, c.want) {
+			t.Errorf("%s: output lacks %q:\n%s", c.name, c.want, out)
+		}
+	}
+}
+
+func TestMergeGuardZooLoosened(t *testing.T) {
+	ok := "[" + run("completed", "success", "aaa", "https://x/ok") + "]"
+	good := "Zoo-Loosened: 理由。ユーザーの承認: 2026-11-24"
+	commit := func(body string) string { return `{"messageHeadline":"h","messageBody":"` + body + `"}` }
+	cases := []struct {
+		name    string
+		commits []string
+		zooCode int
+		merged  bool
+		want    string
+	}{
+		{"one approved line", []string{commit("x\\n" + good)}, 0, true, "merging"},
+		{"no line", []string{commit("x")}, 1, true, "merging"},
+		{"mada", []string{commit("Zoo-Loosened: 理由。ユーザーの承認: まだ")}, 0, false, "valid approval date"},
+		{"no date", []string{commit("Zoo-Loosened: 理由")}, 0, false, "valid approval date"},
+		{"bad date", []string{commit("Zoo-Loosened: 理由。ユーザーの承認: 2026-13-45")}, 0, false, "valid approval date"},
+		{"future date", []string{commit("Zoo-Loosened: 理由。ユーザーの承認: 2999-01-01")}, 0, false, "valid approval date"},
+		{"one of two", []string{commit(good), commit("Zoo-Loosened: 理由。ユーザーの承認: まだ")}, 0, false, "valid approval date"},
+		{"two approved", []string{commit(good), commit(good)}, 0, true, "merging"},
+		{"check fails", []string{commit(good)}, 1, false, "zoo-loosened-check.sh does not pass"},
+	}
+	for _, c := range cases {
+		commits := `"commits":[` + strings.Join(c.commits, ",") + `]`
+		out, err, merged := runMergePR(t, commits, c.zooCode, okChecks, ok, 0)
 		if merged != c.merged || (err == nil) != c.merged {
 			t.Errorf("%s: err = %v, merged = %v, want merged=%v\n%s", c.name, err, merged, c.merged, out)
 		}
