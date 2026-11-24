@@ -112,10 +112,13 @@ func TestSummaryDumpEachIteration(t *testing.T) {
 			t.Errorf("%s: first line %q", name, lines[0])
 		}
 		prev := ""
-		for _, l := range lines[1:] {
+		if !strings.HasPrefix(lines[1], "# outkeys ") {
+			t.Errorf("%s: second line %q", name, lines[1])
+		}
+		for _, l := range lines[2:] {
 			f := strings.Split(l, "\t")
-			if len(f) != 15 || !strings.HasPrefix(f[1], "elems=") || !strings.HasPrefix(f[2], "steps=") || len(f[3]) != 64 ||
-				!strings.HasPrefix(f[4], "outs=") || !strings.HasPrefix(f[11], "depth=") || !strings.HasPrefix(f[13], "chg=") {
+			if len(f) != 18 || !strings.HasPrefix(f[13], "outdepth=") || !strings.HasPrefix(f[14], "outidx=") || !strings.HasPrefix(f[15], "maxout=") || !strings.HasPrefix(f[1], "elems=") || !strings.HasPrefix(f[2], "steps=") || len(f[3]) != 64 ||
+				!strings.HasPrefix(f[4], "outs=") || !strings.HasPrefix(f[11], "depth=") || !strings.HasPrefix(f[16], "chg=") {
 				t.Errorf("%s: a line of the wrong form (%d fields): %q", name, len(f), l)
 			}
 			if prev >= f[0] {

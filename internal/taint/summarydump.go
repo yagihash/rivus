@@ -188,6 +188,11 @@ func (e *Engine) dumpRound(scc []*sg.Func, pass, analysed int, changed map[*sg.F
 	sort.Slice(rows, func(i, j int) bool { return rows[i][0] < rows[j][0] })
 	var b strings.Builder
 	fmt.Fprintf(&b, "# pass=%d analysed=%d changed=%d funcs=%d\n", pass, analysed, len(changed), len(scc))
+	sums := make([]*Summary, len(snaps))
+	for i, s := range snaps {
+		sums[i] = s.sum
+	}
+	fmt.Fprintf(&b, "# outkeys %s\n", topOutputTails(sums, 20))
 	for _, r := range rows {
 		b.WriteString(r[1])
 		b.WriteByte('\n')
@@ -197,6 +202,40 @@ func (e *Engine) dumpRound(scc []*sg.Func, pass, analysed int, changed map[*sg.F
 		d.warned = true
 		fmt.Fprintf(os.Stderr, "rivus: RIVUS_INTERNAL_SUMMARY_DUMP_EACH_ITER: %v\n", err)
 	}
+}
+
+// topOutputTails counts the outputs of the summaries by their kind and the last step of their path (the field the
+// output points into, see the access paths in elem.go; no step: "-"), and returns the n most frequent as
+// "kind:tail*count", the most frequent first (ties by name).
+func topOutputTails(sums []*Summary, n int) string {
+	counts := map[string]int{}
+	for _, sum := range sums {
+		for _, o := range sum.Outputs {
+			tail := "-"
+			if i := strings.LastIndex(o.Path, "/"); i >= 0 {
+				tail = o.Path[i+1:]
+			}
+			counts[o.Kind+":"+tail]++
+		}
+	}
+	keys := make([]string, 0, len(counts))
+	for k := range counts {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if counts[keys[i]] != counts[keys[j]] {
+			return counts[keys[i]] > counts[keys[j]]
+		}
+		return keys[i] < keys[j]
+	})
+	if len(keys) > n {
+		keys = keys[:n]
+	}
+	parts := make([]string, len(keys))
+	for i, k := range keys {
+		parts[i] = k + "*" + strconv.Itoa(counts[k])
+	}
+	return strings.Join(parts, " ")
 }
 
 // summaryBreakdown is what the elements of a summary are made of, as fields of one line, each sorted by its key so
@@ -209,9 +248,17 @@ func summaryBreakdown(sum *Summary) string {
 	kinds := map[string]int{}
 	depth := map[int]int{}
 	byParam := map[int]int{}
+	outDepth := map[int]int{}
+	outIdx := map[string]int{}
+	maxOut := 0
 	for _, o := range sum.Outputs {
 		if o.Widened {
 			widened++
+		}
+		outDepth[pathDepth(o.Path)]++
+		outIdx[o.Kind+"@"+strconv.Itoa(o.Index)]++
+		if len(o.Elems) > maxOut {
+			maxOut = len(o.Elems)
 		}
 		kinds[o.Kind] += len(o.Elems)
 		for _, oe := range o.Elems {
@@ -248,6 +295,15 @@ func summaryBreakdown(sum *Summary) string {
 		}
 		return strings.Join(parts, ",")
 	}
-	return fmt.Sprintf("outs=%d\tsinks=%d\treal=%d\tparam=%d\tguarded=%d\twidened=%d/%d\tkinds=%s\tdepth=%s\tbyparam=%s",
-		len(sum.Outputs), len(sum.Sinks), real, param, guarded, widened, sum.WidenedOutputs, strings.Join(ks, ","), ints(depth), ints(byParam))
+	idxNames := make([]string, 0, len(outIdx))
+	for k := range outIdx {
+		idxNames = append(idxNames, k)
+	}
+	sort.Strings(idxNames)
+	is := make([]string, len(idxNames))
+	for i, k := range idxNames {
+		is[i] = k + ":" + strconv.Itoa(outIdx[k])
+	}
+	return fmt.Sprintf("outs=%d\tsinks=%d\treal=%d\tparam=%d\tguarded=%d\twidened=%d/%d\tkinds=%s\tdepth=%s\tbyparam=%s\toutdepth=%s\toutidx=%s\tmaxout=%d",
+		len(sum.Outputs), len(sum.Sinks), real, param, guarded, widened, sum.WidenedOutputs, strings.Join(ks, ","), ints(depth), ints(byParam), ints(outDepth), strings.Join(is, ","), maxOut)
 }
