@@ -19,6 +19,17 @@ class Judge(unittest.TestCase):
         self.assertFalse(d.judge(100, 180, 5, 8, False, True)[0])  # convergence
         self.assertFalse(d.judge(100, 180, 5, 8, True, False)[0])  # detection
 
+    def test_coarsened_components_must_be_the_expected_number(self):
+        # a target that is not meant to be hit has 0; a target that is hit without being said fails the line
+        ok, body = d.judge(100, 180, 5, 8, True, True, coarsened=0)
+        self.assertTrue(ok)
+        self.assertTrue(body.endswith("coarsened=0/0"), body)
+        self.assertFalse(d.judge(100, 180, 5, 8, True, True, coarsened=1)[0])
+        self.assertTrue(d.judge(100, 180, 5, 8, True, True, coarsened=1, expect_coarsened=1)[0])
+        self.assertFalse(d.judge(100, 180, 5, 8, True, True, coarsened=0, expect_coarsened=1)[0])
+        # without the number (an older binary, or no report) it is not part of the verdict
+        self.assertTrue(d.judge(100, 180, 5, 8, True, True)[0])
+
     def test_finish_and_detect_are_separate(self):
         body = d.judge(100, 180, 5, 8, True, False)[1]   # finished, not detected
         self.assertIn("finish=yes detected=no", body)

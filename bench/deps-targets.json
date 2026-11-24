@@ -1,5 +1,5 @@
 {
-  "_doc": "Targets of the pass line (bench/deps_bench.py, `make bench-passline`). Data only. repo + commit: fetched into $BENCH_CACHE (default ~/.cache/rivus-bench/), never into this tree; the code of a target is never run (git clone/checkout, `go mod download`, `dart pub get`). args: the flags of `rivus analyze` besides -lang and -C (the default flags; `{root}` is the root of the fetched tree, for -allow-deps-under). time_limit_s / mem_cap_gb: the pass line. decided: false = the line is printed as INFO (the limits are not decided yet). detect: per vulnerability. mode location (memos): detected when a finding of the category has its source and its sink at the labelled positions of the truth file (bench/memos), at the pre-fix commit; quiet_after_fix is the count of the category at the fixed commit. mode through: see dart-pub.",
+  "_doc": "Targets of the pass line (bench/deps_bench.py, `make bench-passline`). Data only. expect_coarsened (default 0): how many components stats.scc_coarsened must be (ADR-124, -scc-coarsen: from 5500 dependency functions in one component). A target that is not meant to be hit (memos, gitea, cocoon) must have 0, and the pass line fails when it is hit; dart-pub and dart_services have the largest components (7,550 and 13,895) and are hit, so they have 1. repo + commit: fetched into $BENCH_CACHE (default ~/.cache/rivus-bench/), never into this tree; the code of a target is never run (git clone/checkout, `go mod download`, `dart pub get`). args: the flags of `rivus analyze` besides -lang and -C (the default flags; `{root}` is the root of the fetched tree, for -allow-deps-under). time_limit_s / mem_cap_gb: the pass line. decided: false = the line is printed as INFO (the limits are not decided yet). detect: per vulnerability. mode location (memos): detected when a finding of the category has its source and its sink at the labelled positions of the truth file (bench/memos), at the pre-fix commit; quiet_after_fix is the count of the category at the fixed commit. mode through: see dart-pub.",
   "memos": {
     "lang": "go",
     "repo": "https://github.com/usememos/memos",
@@ -70,6 +70,7 @@
     "detect": null
   },
   "dart-pub": {
+    "expect_coarsened": 1,
     "_doc": "dart-lang/pub at the parent of the fix of GHSA-q739-79rh-vmvp / CVE-2026-27704 (zip slip in extractTarGz; bench/dart-pub). detect.mode through: per vulnerability, detected when a finding passes through a labelled position of the truth file (bench/score.py --through); through_tp is the position count, information. INFO until its line is decided; the default-flags run does not converge today, so detected is no.",
     "lang": "dart",
     "repo": "https://github.com/dart-lang/pub",
@@ -86,6 +87,7 @@
     }
   },
   "dart_services": {
+    "expect_coarsened": 1,
     "lang": "dart",
     "repo": "https://github.com/dart-lang/dart-pad",
     "commit": "ad668d137e631beeaef3e263054a45696e8d4499",

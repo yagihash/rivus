@@ -119,7 +119,21 @@ class WorkersSelfCheck(unittest.TestCase):
                                 "-base-bin", os.path.join(d, "rivus"), "-head-bin", os.path.join(d, "rivus"), "-graphcheck-bin", os.path.join(d, "graphcheck"),
                                 "-base-workers", "1", "-head-workers", "8", "-out", d], capture_output=True, text=True)
             self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
-            self.assertEqual(p.stdout.count(": same"), 7, p.stdout)
+            self.assertEqual(p.stdout.count(": same"), 8, p.stdout)
+
+
+class CoarsenLine(unittest.TestCase):
+    """The line for stats.scc_coarsened (-scc-coarsen, ADR-124): 0 on both sides is same; a target that is hit differs."""
+
+    def test_lines(self):
+        import graph_check as g
+        self.assertEqual(g.coarsen_line(0, 0)[1], 0)
+        self.assertIn("same (0", g.coarsen_line(0, 0)[0])
+        self.assertEqual(g.coarsen_line(1, 1)[1], 0)
+        line, rc = g.coarsen_line(0, 1)
+        self.assertEqual(rc, 1)
+        self.assertIn("DIFFERENT", line)
+        self.assertEqual(g.coarsen_line(None, 0)[1], 3)
 
 
 if __name__ == "__main__":

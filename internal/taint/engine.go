@@ -71,17 +71,18 @@ type Options struct {
 	PassStatsSort string
 	SlowFunc      func(fn string, d, cpu time.Duration, outputs, roots int)
 	SlowThreshold time.Duration
-	// SCCCoarsenN: a strongly connected component of N functions or more that has functions of the dependencies is solved
-	// with those at access path depth 0 from the start (ADR-124). Zero (the default): none. SCCCoarsenDeps: N counts the
-	// functions of the dependencies in the component, not all of its functions. Internal: no flag
-	// (RIVUS_INTERNAL_SCC_COARSEN_N in cmd/rivus).
-	SCCCoarsenN    int
-	SCCCoarsenDeps bool
+	// SCCCoarsenN (-scc-coarsen): a strongly connected component with N functions of the dependencies or more has them
+	// solved at access path depth 0 from the start (ADR-124). Zero: none.
+	SCCCoarsenN int
 }
+
+// DefaultSCCCoarsen is the default of -scc-coarsen: the number of dependency functions in one component from which they are
+// solved at depth 0 (ADR-124: above what converges at depth 2, below what does not).
+const DefaultSCCCoarsen = 5500
 
 // DefaultOptions are the defaults.
 func DefaultOptions() Options {
-	return Options{K: 3, DepK: 2, MaxPasses: 12, Budget: 400000, FuncTimeout: 30 * time.Second, PassStatsTop: 20}
+	return Options{K: 3, DepK: 2, SCCCoarsenN: DefaultSCCCoarsen, MaxPasses: 12, Budget: 400000, FuncTimeout: 30 * time.Second, PassStatsTop: 20}
 }
 
 // Engine runs the whole-program analysis.
@@ -493,13 +494,15 @@ type Stats struct {
 	// The shape of the call graph: the levels of components, the size of the
 	// largest component (functions that call each other, analysed one after the
 	// other) and the most components in one level.
-	Levels        int      `json:"levels,omitempty"`
-	LargestSCC    int      `json:"largest_scc,omitempty"`
-	WidestLevel   int      `json:"widest_level,omitempty"`
-	DepSpentMilli int64    `json:"dep_spent_ms,omitempty"`
-	OwnSpentMilli int64    `json:"own_spent_ms,omitempty"`
-	NotConverged  []string `json:"not_converged,omitempty"`
-	TimedOut      bool     `json:"timed_out,omitempty"`
+	Levels     int `json:"levels,omitempty"`
+	LargestSCC int `json:"largest_scc,omitempty"`
+	// LargestSCCDeps is the most functions of the dependencies that one component has (what -scc-coarsen is compared with).
+	LargestSCCDeps int      `json:"largest_scc_deps,omitempty"`
+	WidestLevel    int      `json:"widest_level,omitempty"`
+	DepSpentMilli  int64    `json:"dep_spent_ms,omitempty"`
+	OwnSpentMilli  int64    `json:"own_spent_ms,omitempty"`
+	NotConverged   []string `json:"not_converged,omitempty"`
+	TimedOut       bool     `json:"timed_out,omitempty"`
 	// TestsSkipped is what was not read because the build does not ship it (ADR-062); absent when nothing was left out.
 	TestsSkipped *ir.TestsSkipped `json:"tests_skipped,omitempty"`
 	// DroppedGlobals are the package variables that a rule says hold nothing (ADR-056), and the number of functions
@@ -662,8 +665,7 @@ func (e *Engine) Run() *Result {
 	}
 	sccs, callers := order(fns, callees)
 	levels := levelsOf(sccs, callees)
-	e.coarsenBySize(sccs)
-	st0 := Stats{Levels: len(levels)}
+	st0 := Stats{Levels: len(levels), LargestSCCDeps: e.coarsenBySize(sccs)}
 	for _, lv := range levels {
 		if len(lv) > st0.WidestLevel {
 			st0.WidestLevel = len(lv)

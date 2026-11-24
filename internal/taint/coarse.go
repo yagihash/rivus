@@ -10,11 +10,11 @@ import (
 // A large strongly connected component is solved with its dependency functions at access path depth 0 (ADR-124, #187).
 //
 // Before the run, after the components are made (references included: the components that the engine solves), every
-// component that has functions of the dependencies, and has N functions or more (Options.SCCCoarsenN; or N functions of
-// the dependencies, with SCCCoarsenDeps), has its dependency functions at depth 0 from the start: the same as -dep-k 0
-// for them, and the functions of the project in it keep their depth. The decision reads the call graph only, so it does
-// not depend on the order of the work, the machine, the load or a time limit; nothing is thrown away, as nothing is
-// decided during the solving. The answer is the one of a run that has those dependency functions at depth 0.
+// component that has Options.SCCCoarsenN functions of the dependencies or more (-scc-coarsen) has them at depth 0 from
+// the start: the same as -dep-k 0 for them, and the functions of the project in it keep their depth. The decision
+// reads the call graph only, so it does not depend on the order of the work, the machine, the load or a time limit;
+// nothing is thrown away, as nothing is decided during the solving. The answer is the one of a run that has those
+// dependency functions at depth 0.
 
 // coarseSCC is a component whose dependency functions are solved at depth 0.
 type coarseSCC struct {
@@ -23,19 +23,12 @@ type coarseSCC struct {
 	funcs    []*sg.Func
 	packages []string
 	n        int
-	counted  string // "functions" or "dependency_functions"
 }
 
-// coarsenBySize marks the dependency functions of the large components. It runs once, before the analysis.
-func (e *Engine) coarsenBySize(sccs [][]*sg.Func) {
-	n := e.opts.SCCCoarsenN
-	if n <= 0 {
-		return
-	}
-	counted := "functions"
-	if e.opts.SCCCoarsenDeps {
-		counted = "dependency_functions"
-	}
+// coarsenBySize marks the dependency functions of the large components, and returns the most dependency functions that
+// one component has. It runs once, before the analysis.
+func (e *Engine) coarsenBySize(sccs [][]*sg.Func) int {
+	most := 0
 	for _, scc := range sccs {
 		var deps []*sg.Func
 		for _, fn := range scc {
@@ -43,11 +36,11 @@ func (e *Engine) coarsenBySize(sccs [][]*sg.Func) {
 				deps = append(deps, fn)
 			}
 		}
-		count := len(scc)
-		if e.opts.SCCCoarsenDeps {
-			count = len(deps)
+		if len(deps) > most {
+			most = len(deps)
 		}
-		if len(deps) == 0 || count < n {
+		n := e.opts.SCCCoarsenN
+		if n <= 0 || len(deps) < n {
 			continue
 		}
 		pk := map[string]bool{}
@@ -59,12 +52,13 @@ func (e *Engine) coarsenBySize(sccs [][]*sg.Func) {
 			pkgs = append(pkgs, p)
 		}
 		sort.Strings(pkgs)
-		c := &coarseSCC{id: e.funcID(scc[0]), size: len(scc), funcs: deps, packages: pkgs, n: n, counted: counted}
+		c := &coarseSCC{id: e.funcID(scc[0]), size: len(scc), funcs: deps, packages: pkgs, n: n}
 		for _, fn := range deps {
 			e.coarse[fn] = c
 		}
 		e.coarseList = append(e.coarseList, c)
 	}
+	return most
 }
 
 // sccCoarsenedDetail is the note on a hop that applied the summary of a dependency function of a component that is
@@ -85,7 +79,7 @@ func (e *Engine) coarseRecords() []*Uncertainty {
 		sort.Strings(ids)
 		d := "scc_coarsened: a group of " + strconv.Itoa(c.size) + " functions that call each other (" + strconv.Itoa(len(c.funcs)) +
 			" of the dependencies, in " + strconv.Itoa(len(c.packages)) + " packages) is large (" + strconv.Itoa(c.n) +
-			" " + c.counted + " or more), so the access paths of its dependency functions were cut at depth 0 from the start: " +
+			" dependency functions or more), so the access paths of its dependency functions were cut at depth 0 from the start: " +
 			"what is told apart below the first step of a parameter is not told apart there (more flows than there are, never fewer)"
 		u := newUncertainty(KindDepthLimit, d, "")
 		u.Candidates = ids
