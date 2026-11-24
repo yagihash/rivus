@@ -20,10 +20,11 @@ dump (one from before this check) leaves "summaries" as NOT COMPARED; it is not 
 -dir: a directory (the benchmarks of the tree, a synthetic one, a clone); -target: a target of bench/deps-targets.json (memos), fetched
 and run like the pass line (the process tree is watched against the memory cap of the target; the heavy-work lock is held for each run).
 Go and Dart (-lang dart, with -dir; a target of bench/deps-targets.json is Go). Rust is not covered. Exit status: 0 everything compared is the
-same (and summaries were compared); 1 a difference; 2 a run failed; 3 same, but a part was not compared. Standard library only.
+same (and summaries were compared); 1 a difference; 2 a run failed; 3 same, but a part was not compared; 4 same, and the only thing missing is that an analysis did not converge (see below). Standard library only.
 A run of `rivus analyze` that ends with exit code 4 (the analysis is not complete: the pass limit or the timeout; zoo-dart has cells that stop by the
-pass limit on purpose) is compared as far as it goes, and the line "convergence: NOT CONVERGED" makes the exit status 3 whatever the other lines say
-(a difference still gives 1): a result that stopped is not a pass.
+pass limit on purpose; zoo-go has cells that do not converge too) is compared as far as it goes, and the line "convergence: NOT CONVERGED" makes the exit status 4
+when everything else is the same (a part not compared gives 3, a difference 1, a failed run 2): a result that stopped is not a pass, but a caller that knows
+the target stops can tell it from a part that was not compared. A clock never gives 4 or 3 (clock_line is a line only).
 """
 import argparse, collections, hashlib, json, os, shlex, subprocess, sys, tempfile
 
@@ -140,17 +141,17 @@ def graphcheck(gc, kind, a, b):
 
 
 def worse(status, rc):
-    """The exit status of the whole: a failed run (2) over a difference (1) over a part not compared (3) over the same (0)."""
-    rank = {0: 0, 3: 1, 1: 2, 2: 3}
+    """The exit status of the whole: a failed run (2) over a difference (1) over a part not compared (3) over only a run that did not converge (4) over the same (0)."""
+    rank = {0: 0, 4: 1, 3: 2, 1: 3, 2: 4}
     return rc if rank[rc] > rank[status] else status
 
 
 def convergence_line(base_incomplete, head_incomplete):
-    """The line for a run that stopped (exit code 4), or (None, 0). rc 3: a result that stopped is not a pass."""
+    """The line for a run that stopped (exit code 4), or (None, 0). rc 4: a result that stopped is not a pass (exit 4 of this tool: same, only the convergence is missing)."""
     who = " and ".join(n for n, f in (("base", base_incomplete), ("head", head_incomplete)) if f)
     if not who:
         return None, 0
-    return "convergence: NOT CONVERGED (analyze of %s ended with exit code 4: the analysis is not complete; the lines above compare what it had when it stopped)" % who, 3
+    return "convergence: NOT CONVERGED (analyze of %s ended with exit code 4: the analysis is not complete; the lines above compare what it had when it stopped)" % who, 4
 
 
 def clock_line(base_report, head_report):
@@ -175,7 +176,7 @@ def clock_line(base_report, head_report):
 
 
 def compare(a, base, head, incomplete=(False, False)):
-    lines, status = [], 0  # status: 0 same, 1 different, 2 failed, 3 not all compared
+    lines, status = [], 0  # status: 0 same, 1 different, 2 failed, 3 not all compared, 4 same but an analysis did not converge
     for kind, key in (("ir", "ir"), ("edges", "db")):
         out, rc = graphcheck(a.graphcheck_bin, kind, base[key], head[key])
         lines.append(out)

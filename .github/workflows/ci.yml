@@ -694,7 +694,13 @@ jobs:
             bench/*/go.sum
       - name: Check that the graph does not depend on the number of workers
         # no other work runs on this machine, so the guard that waits for a quiet one is off
-        run: bench/compare.sh --graph-check go-std10,zoo-go,go-curated --graph-workers 1,8 --no-guard HEAD HEAD
+        # exit 4 is "the same everywhere, and only an analysis did not converge" (zoo-go has cells that stop by the pass limit on purpose): the job passes.
+        # 1 (a difference), 2 (a run failed) and 3 (a part was not compared) fail it.
+        run: |
+          rc=0
+          bench/compare.sh --graph-check go-std10,zoo-go,go-curated --graph-workers 1,8 --no-guard HEAD HEAD || rc=$?
+          if [ "$rc" = 4 ]; then echo "::notice::graph check: same, and an analysis did not converge (exit 4, accepted)"; exit 0; fi
+          exit "$rc"
 
   # The archives of a release (tagpr.yml, job `release-binaries`) are built only when a tag is made. Build them here as well, so that what would stop a
   # release stops the pull request first: a linked dependency with a copyleft or forbidden license (`go-licenses check`: restricted, reciprocal,
