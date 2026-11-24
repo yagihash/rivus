@@ -258,7 +258,7 @@ func TestDeterministicGlobalWriters(t *testing.T) {
 // TestDeterministicParamshare: the four global cases of paramshare.
 func TestDeterministicParamshare(t *testing.T) {
 	if testing.Short() {
-		t.Skip("many runs of the analysis of every case: main と週 1 回の CI で走る(PR は -short)")
+		t.Skip("many runs of the analysis of every case: main と週 1 回の CI で実行される(PR は -short)")
 	}
 	for _, p := range []string{"globalw", "gwrite", "gwritehelper", "gqueue"} {
 		t.Run(p, func(t *testing.T) {
@@ -270,7 +270,7 @@ func TestDeterministicParamshare(t *testing.T) {
 // TestDeterministicCuratedGo: bench/go-curated.
 func TestDeterministicCuratedGo(t *testing.T) {
 	if testing.Short() {
-		t.Skip("many runs of the analysis of bench/go-curated: main と週 1 回の CI で走る(PR は -short)")
+		t.Skip("many runs of the analysis of bench/go-curated: main と週 1 回の CI で実行される(PR は -short)")
 	}
 	dir, err := filepath.Abs(filepath.Join("..", "..", "bench", "go-curated"))
 	if err != nil {
@@ -307,7 +307,7 @@ func sameEveryTimeIR(t *testing.T, dir string, stream []byte) {
 // machine) is a different analysis, so it is not compared.
 func TestDeterministicDogfood(t *testing.T) {
 	if testing.Short() {
-		t.Skip("rivus analysed by rivus, many runs: main と週 1 回の CI で走る(PR は -short)")
+		t.Skip("rivus analysed by rivus, many runs: main と週 1 回の CI で実行される(PR は -short)")
 	}
 	_, file, _, _ := runtime.Caller(0)
 	root := filepath.Join(filepath.Dir(file), "..", "..")
@@ -349,7 +349,7 @@ func TestDeterministicDogfood(t *testing.T) {
 // run and under every number of workers (ADR-061).
 func TestDeterministicPassStats(t *testing.T) {
 	if testing.Short() {
-		t.Skip("many runs of the analysis of bench/go-curated with -pass-stats: main と週 1 回の CI で走る(PR は -short)")
+		t.Skip("many runs of the analysis of bench/go-curated with -pass-stats: main と週 1 回の CI で実行される(PR は -short)")
 	}
 	dir, err := filepath.Abs(filepath.Join("..", "..", "bench", "go-curated"))
 	if err != nil {

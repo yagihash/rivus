@@ -166,3 +166,23 @@ test_chuuki_replacements_pass if {
 		not denied("paragraph", text)
 	}
 }
+
+test_hashiru_is_denied if {
+	denied("paragraph", "テストが CI で走る")
+	denied("paragraph", "別の走りで確認する")
+	denied("paragraph", "パスを走らせる")
+	denied("paragraph", "別のセッションが走っている")
+	denied("list", "ビルドが走り、テストが始まる")
+	denied("table", "同時に走れない")
+}
+
+test_hashiru_message_names_the_replacement if {
+	some m in wording.deny with input as doc("paragraph", "テストが走る")
+	contains(m.message, "実行")
+}
+
+test_hashiru_replacements_and_other_words_pass if {
+	every text in ["テストが CI で実行される", "解析を実行する", "走り書きのメモ", "全関数を走査する", "自走で進める", "`走る` の例", "ランナーの話"] {
+		not denied("paragraph", text)
+	}
+}
