@@ -42,3 +42,5 @@ void b() {
 
 再開後の確認(2026-11-22): **残っているのは `g(a)` の形**(クロージャが、自分のパラメータで受けた関数を呼ぶ。zoo の `F/clos/callback-of-callback`、`@miss(depth_limit) @ref(#81)`)。**relay の形(`run(() => f())` キャプチャした関数を呼ぶ)は、今は見つかる**(zoo の `F/clos/relay`)。uncertainty の kind は assumed_call / depth_limit / recursion_approximation で、「再帰のない形で recursion_approximation が出る」疑いは #77 と同じ目で追う。
 
+
+関連: 型が合う関数値を候補に補う案(今は入れない)は #207。
