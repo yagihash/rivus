@@ -9,12 +9,14 @@ import 'package:analyzer/source/line_info.dart';
 import 'irjson.dart';
 import 'names.dart';
 
-/// The key of the table of methods: the name of the member without any "=", and "=" again for a setter. A getter
-/// and a setter have the same name (the rules speak of the field), but they are two functions: a call of the
-/// getter (`a.x`) must not reach the body of the setter (`a.x = v`), nor the other way round.
+/// The key of the table of methods: the name of the member. A getter and a setter have the same name (the rules speak
+/// of the field), but they are two functions: a call of the getter (`a.x`) must not reach the body of the setter
+/// (`a.x = v`), nor the other way round, so the setter's key has an "=" after the name. The name of an operator is
+/// kept as it is: `==`, `<=`, `>=` and `[]=` are not `<`, `>` or `[]` with an "=" taken off.
 String memberKey(Element base) {
-  final name = (base.name ?? '').replaceAll('=', '');
-  return base is SetterElement ? '$name=' : name;
+  final name = base.name ?? '';
+  if (base is SetterElement) return '${name.endsWith('=') ? name.substring(0, name.length - 1) : name}=';
+  return name;
 }
 
 class MethodImpl {

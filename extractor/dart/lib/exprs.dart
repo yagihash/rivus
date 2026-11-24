@@ -865,8 +865,10 @@ int _index(FnLower f, IndexExpression e) {
   final t = e.target;
   final base = t == null ? f.cascade! : lowerExpr(f, t);
   final idx = lowerExpr(f, e.index);
-  // an index operator that the code defines is a call of its body
-  final m = e.element;
+  // an index operator that the code defines is a call of its body (`a[i] += v` reads with `[]`: the element of the
+  // index expression itself is the `[]=` that writes)
+  final re = _readElementOf(e);
+  final m = re is ExecutableElement ? re : e.element;
   if (m != null && _hasBodyHere(f, m)) return _call(f, m, base, [idx], e.staticType, e, f.pos(e));
   final d = f.tmp(e.staticType);
   final isMap = _isMap(t?.staticType);
