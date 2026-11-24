@@ -184,7 +184,7 @@ How to measure and what a line means: [`passline-baseline.md`](passline-baseline
 build: the IR (`rivus debug extract -all`; `accept.Compare`, the comparison of the acceptance test, which compares two extractors; this one compares two
 commits), the edges of the call graph with their candidates (`rivus index`), the summary of every function (the internal dump `RIVUS_INTERNAL_SUMMARY_DUMP`, written
 by `Engine.WriteSummaryDump`: one line for each function with the hash of the whole summary, outputs and steps and sinks and guards; no flag, not in `-h`), and the
-findings and uncertainties. One line each: `same`, or `DIFFERENT` with how many and the first function IDs. The memory work shows "same" here instead of a count of
+findings and uncertainties (as sets), and the same two arrays in the order of the output (`findings-order`, `uncertainties-order`: SHA-256 of the array with the order kept and only the keys of each object sorted; a change of the order is a change for the user). One line each: `same`, or `DIFFERENT` with how many and the first function IDs. The memory work shows "same" here instead of a count of
 findings ([WORKFLOW.md](../docs/WORKFLOW.md)). The dump reads the fields of a summary, not how they are stored, so a change of the storage keeps it; a change of the
 fields must change `internal/taint/summarydump.go` with it. The checks of the tool itself: `go test ./bench/graphcheck ./internal/taint -run SummaryDump`, `python3 -m unittest bench.test_graph_check`.
 `go-std10` is the standard library: the 10 packages of `TestAcceptOrderStd` (`stdPatterns` of `internal/frontend/goir/accept_test.go`: keep the two lists the same), a source of shapes that the zoo and curated lack.

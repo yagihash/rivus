@@ -44,7 +44,7 @@
 ## すること
 
 1. **`local_recursion` の形**: 調べて、直した(下の「追記」)。
-2. **依存・フレームワークが呼ぶコールバック**のエッジ(`Router.call`、`Navigator.pushNamed`、依存が返すクロージャ)は、#99 の根(関数値の第 2 歩)で閉じるかを、第 2 歩のあとに、観測の再実行で確認する。
+2. (調査と設計は #209。#99 の根 D の実装で閉じる。) **依存・フレームワークが呼ぶコールバック**のエッジ(`Router.call`、`Navigator.pushNamed`、依存が返すクロージャ)は、#99 の根(関数値の第 2 歩)で閉じるかを、第 2 歩のあとに、観測の再実行で確認する。
 3. `compare.py` を、`$bound` の中継とコンストラクタの名前に対応させる(DESIGN-observed-calls.md の 6 節の 2 の一般化で行う)。
 4. 33 以上の候補が上限で切られる(#77)ときは、エッジが欠けることが、uncertainty に出ているかを見る(今は、流れの `depth_limit` の uncertainty だけ。グラフのエッジの側には出ない)。
 
@@ -54,7 +54,7 @@
 
 ## 追記(2026-11-24。結論)
 
-**1. `local_recursion` の原因と修正。** ローカル関数が、自分の名前で自分を呼ぶとき、extractor は、その名前を「知らない変数」(`a variable that the extractor does not know`、`unsupported`)として読み、候補 0 件の値の呼び出しにしていた。クロージャを作る時点では、関数の名前はまだ宣言されていないので、キャプチャに入らないため。**流れの見逃しにもなる**: 引数を入れ替えて再帰する形(`go(y, x, n - 1)`)で、再帰を通ってだけ sink に届く流れが、見つからなかった(zoo の新しいセル `F/clos/local-recursion` の `vuln` と `decoy` で確認。見逃しの理由は `unresolved_callee,unsupported_construct`)。修正: ローカル関数の本体の中で、その名前を読むときは、関数自身を作り直す(`make_closure`。引数は、自分がキャプチャしたもの)。修正後は、セルの流れが見つかる。修正は `fix/dart-local-recursion`(`extractor/dart/lib/lower.dart`、`exprs.dart`)。限界(セルを書いて確認した。zoo の `F/clos/local-recursion` の `vuln2`、`vuln3`): 入れ子のクロージャの中から外のローカル関数を呼ぶ形(`vuln2`)は、#99 の修正(キャプチャした変数を呼ぶ形の候補を、そのクロージャを作った所からたどる)と、extractor で外のローカル関数の名前を入れ子のクロージャに渡す変更で、直った(`fix/dart-captured-var-calls`)。2 つのローカル関数が互いを呼ぶ形(`vuln3`。`late` の変数に入れた関数を経由)は、まだ見つからない(`@miss(unresolved_callee)`)。Go は、`var f func(...)` に代入する書き方で書いた同じ形(`F/clos/local-recursion`)が、検出される(マークなし)。Rust の同じセルは、まだ書いていない(`@todo(PARITY)`)。
+**1. `local_recursion` の原因と修正。** ローカル関数が、自分の名前で自分を呼ぶとき、extractor は、その名前を「知らない変数」(`a variable that the extractor does not know`、`unsupported`)として読み、候補 0 件の値の呼び出しにしていた。クロージャを作る時点では、関数の名前はまだ宣言されていないので、キャプチャに入らないため。**流れの見逃しにもなる**: 引数を入れ替えて再帰する形(`go(y, x, n - 1)`)で、再帰を通ってだけ sink に届く流れが、見つからなかった(zoo の新しいセル `F/clos/local-recursion` の `vuln` と `decoy` で確認。見逃しの理由は `unresolved_callee,unsupported_construct`)。修正: ローカル関数の本体の中で、その名前を読むときは、関数自身を作り直す(`make_closure`。引数は、自分がキャプチャしたもの)。修正後は、セルの流れが見つかる。修正は `fix/dart-local-recursion`(`extractor/dart/lib/lower.dart`、`exprs.dart`)。限界(セルを書いて確認した。zoo の `F/clos/local-recursion` の `vuln2`、`vuln3`): 入れ子のクロージャの中から外のローカル関数を呼ぶ形(`vuln2`)は、#99 の修正(キャプチャした変数を呼ぶ形の候補を、そのクロージャを作った所からたどる)と、extractor で外のローカル関数の名前を入れ子のクロージャに渡す変更で、直った(`fix/dart-captured-var-calls`)。2 つのローカル関数が互いを呼ぶ形(`vuln3`。`late` の変数に入れた関数を経由)は、`fix/dart-local-fn-closure` で見つかるようになった(#99 の 2026-11-24 の追記。セルに入る変数)。Go は、`var f func(...)` に代入する書き方で書いた同じ形(`F/clos/local-recursion`)が、検出される(マークなし)。Rust の同じセルは、まだ書いていない(`@todo(PARITY)`)。
 
 **2. `rivus graph path` の `exhaustive`(zoo の Dart のグラフで実行して確認)。** エッジだけの欠落の 4 つの形で、欠けたエッジを通るはずの問い合わせをした。**経路なしで `exhaustive: true` と答えたものはない**(重い失敗はなし)。経路なしのとき、`exhaustive` は常に `false` で、`exhaustive_of` に「関数が値として持たれたもの、リフレクション、フレームワークからの呼び出しは含まない」と出る(DESIGN-graph.md G-15)。
 
