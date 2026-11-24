@@ -9,6 +9,14 @@ import 'package:analyzer/source/line_info.dart';
 import 'irjson.dart';
 import 'names.dart';
 
+/// The key of the table of methods: the name of the member without any "=", and "=" again for a setter. A getter
+/// and a setter have the same name (the rules speak of the field), but they are two functions: a call of the
+/// getter (`a.x`) must not reach the body of the setter (`a.x = v`), nor the other way round.
+String memberKey(Element base) {
+  final name = (base.name ?? '').replaceAll('=', '');
+  return base is SetterElement ? '$name=' : name;
+}
+
 class MethodImpl {
   MethodImpl(this.cls, this.id);
   final InterfaceElement cls;
@@ -95,7 +103,7 @@ class Program {
     final out = <String>{};
     final self = funcId(base);
     if (bodies.contains(self)) out.add(self);
-    final name = (base.name ?? '').replaceAll('=', '');
+    final name = memberKey(base);
     for (final impl in methods[name] ?? const <MethodImpl>[]) {
       final start = receiver ?? base.enclosingElement;
       if (start is! InterfaceElement) continue;

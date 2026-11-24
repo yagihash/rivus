@@ -416,7 +416,7 @@ class _Index extends RecursiveAstVisitor<void> {
     prog.bodies.add(id);
     final cls = base.enclosingElement;
     if (cls is InterfaceElement && base is! ConstructorElement) {
-      (prog.methods[(base.name ?? '').replaceAll('=', '')] ??= []).add(MethodImpl(cls, id));
+      (prog.methods[memberKey(base)] ??= []).add(MethodImpl(cls, id));
     }
   }
 
