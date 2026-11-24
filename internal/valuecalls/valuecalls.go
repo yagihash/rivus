@@ -452,6 +452,7 @@ const (
 	refFrom
 	refCaptured
 	refCall // the result of a call: what the called function returns
+	refCell // a load of a variable that the closure took from the function that made it, held in a cell
 )
 
 func (r *resolver) classify(f *ir.Func, form *irssa.Form, ref irssa.Ref) (refKind, *ir.Instr, []irssa.Ref) {
@@ -474,6 +475,10 @@ func (r *resolver) classify(f *ir.Func, form *irssa.Form, ref irssa.Ref) (refKin
 				return refParam, in, nil
 			}
 			return refCaptured, in, nil
+		case ir.OpLoad:
+			if len(in.Args) == 1 && !form.IsPromotedAccess(*in) {
+				return refCell, in, []irssa.Ref{form.Operand(ref.Block, ref.Index, 0)}
+			}
 		case ir.OpCopy:
 			if !in.View && len(in.Args) == 1 {
 				return refFrom, nil, []irssa.Ref{form.Operand(ref.Block, ref.Index, 0)}
@@ -603,6 +608,8 @@ func (r *resolver) funcsOf(f *ir.Func, ref irssa.Ref, home *ir.Func, out map[ir.
 		}
 	case refCall:
 		r.funcsOfCall(f, ref, in, home, out, seen, depth, via, entered)
+	case refCell:
+		r.funcsOfCell(f, form, ref, from[0], home, out, seen, depth, via)
 	case refParam:
 		if depth == 0 && f == home {
 			via = in.Index
@@ -635,6 +642,57 @@ func (r *resolver) funcsOf(f *ir.Func, ref irssa.Ref, home *ir.Func, out map[ir.
 			r.funcsOf(cfn, cf.Operand(c.b, c.i, k), home, out, seen, depth+1, via, entered)
 		}
 	}
+}
+
+// funcsOfCell follows a load of a variable that the closure f took from the function that made it and that is held in a
+// cell (cellValues): the values that the cell may hold where the closure was made.
+func (r *resolver) funcsOfCell(f *ir.Func, form *irssa.Form, load, addr irssa.Ref, home *ir.Func, out map[ir.FuncID]*found, seen map[funcsKey]bool, depth, via int) {
+	if isAlloc(f, form, addr) {
+		// the cell is the variable of this function (a call of the function that it holds, in the function that made the
+		// closures that share it): what was stored to it before the load
+		values, ok := r.cellValues(f, form, addr, load.Block, load.Index, false)
+		if !ok {
+			r.notePartial(ir.ValueWhyUntraced)
+		}
+		for _, v := range values {
+			r.funcsOf(f, v, home, out, seen, depth, via, nil)
+		}
+		return
+	}
+	for n := 0; n < 8; n++ {
+		k, in, from := r.classify(f, form, addr)
+		if k == refFrom && len(from) == 1 {
+			addr = from[0]
+			continue
+		}
+		if k != refCaptured {
+			r.notePartial(ir.ValueWhyUntraced)
+			return
+		}
+		c := in.Index - declared(f)
+		for _, m := range r.makersOf(f.ID) {
+			mfn := r.fn(m.ref)
+			min := &mfn.Blocks[m.b].Instrs[m.i]
+			if len(min.Args) != len(f.Params)-declared(f) {
+				r.notePartial(ir.ValueWhyArgs)
+				continue
+			}
+			mf := r.form(mfn)
+			if mf == nil {
+				r.notePartial(ir.ValueWhyNoForm)
+				continue
+			}
+			values, ok := r.cellValues(mfn, mf, mf.Operand(m.b, m.i, c), m.b, m.i, true)
+			if !ok {
+				r.notePartial(ir.ValueWhyUntraced)
+			}
+			for _, v := range values {
+				r.funcsOf(mfn, v, home, out, seen, depth+1, via, nil)
+			}
+		}
+		return
+	}
+	r.notePartial(ir.ValueWhyUntraced)
 }
 
 // funcsOfCall follows the result of the call in (made in f) into the functions it calls, to what they return. The

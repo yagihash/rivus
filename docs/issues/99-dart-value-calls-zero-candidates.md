@@ -13,7 +13,11 @@
 
 ## 追記(2026-11-24)
 
-**キャプチャした変数を呼ぶ形**(関数の中で宣言したローカル関数を、同じ関数のクロージャから呼ぶ。Dart で最も普通の書き方の 1 つ)は、これまで候補 0 件で、ローカル関数の中の sink に流れが届かなかった(uncertainty のない見逃し。zoo のセル `F/clos/local-fn-from-closure`)。直した(`fix/dart-captured-var-calls`): `internal/valuecalls` が、取り込んだ変数の値を、クロージャを作った `make_closure` の引数からたどる。候補 0 件は、zoo-dart で 49 から 41、curated で 20 から 15。あとで別の関数を代入した変数(セルに入るもの)は、まだ候補が付かない(`vuln2` の `@miss`)。
+**キャプチャした変数を呼ぶ形**(関数の中で宣言したローカル関数を、同じ関数のクロージャから呼ぶ。Dart で最も普通の書き方の 1 つ)は、これまで候補 0 件で、ローカル関数の中の sink に流れが届かなかった(uncertainty のない見逃し。zoo のセル `F/clos/local-fn-from-closure`)。直した(`fix/dart-captured-var-calls`): `internal/valuecalls` が、取り込んだ変数の値を、クロージャを作った `make_closure` の引数からたどる。候補 0 件は、zoo-dart で 49 から 41、curated で 20 から 15。あとで別の関数を代入した変数(セルに入るもの)は、次の追記で直した。
+
+## 追記(2026-11-24。セルに入る変数)
+
+あとで別の値を代入した変数、`late` の変数をクロージャを作ったあとで代入する形は、クロージャがセルのアドレスを受け取り、`load` で読む。`internal/valuecalls`(`cellstore.go`)が、そのセルへの `store` のうち、クロージャを作る点に届くもの(間に別の `store` がないもの)と、そのあとに実行されるものを候補にする(`var f = first; f(a); f = second; use(() => f(b))` のクロージャの候補は `second` だけ)。セルを作った関数の中での呼び出しは、その `load` に届く `store` だけ。セルが別の呼び出しに渡される、別のクロージャが書く、別の関数が作ったセルである、のどれかなら、見つけた候補は残し、候補が全部ではない uncertainty(`partial`)を付ける。zoo の `vuln2` と `local-recursion` の `mutual` の `@miss` を外した。観測した呼び出しとの照合は、`no_edge` 65 から 62、足されたエッジは 3 本で、どれも観測した呼び出し先と一致した。
 
 ## 本文(GitHub から移した写し)
 

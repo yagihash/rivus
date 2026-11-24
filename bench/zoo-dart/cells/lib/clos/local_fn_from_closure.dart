@@ -76,7 +76,7 @@ void vuln2() { // @vuln
   var f = first;
   f('constant');
   f = second;
-  final v = src('clos-local-fn-from-closure-vuln2'); // @source(clos-local-fn-from-closure-vuln2) @miss(unresolved_callee) @ref(#99,PARITY)
+  final v = src('clos-local-fn-from-closure-vuln2'); // @source(clos-local-fn-from-closure-vuln2)
   [1].forEach((_) {
     f(v);
   });
