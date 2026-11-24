@@ -363,9 +363,12 @@ int _call(FnLower f, ExecutableElement callee, int? base, List<int> args, DartTy
   final all = [if (recv != null) recv, ...args];
   final callee_ = <String, Object?>{};
   // super calls and the like are static; the others go through the receiver
-  // `super.m()`, `super.x` and `super.x = v` run the member of the direct superclass: not the ones that a subclass (this
+  // `super.m()`, `super.x`, `super.x = v`, `super + o`, `super[i]` and `super[i] = v` run the member of the direct superclass: not the ones that a subclass (this
   // one, for example) overrides it with, which is what a dynamic call would also reach
-  final isSuper = (n is MethodInvocation && n.target is SuperExpression) || (n is PropertyAccess && n.target is SuperExpression);
+  final isSuper = (n is MethodInvocation && n.target is SuperExpression) ||
+      (n is PropertyAccess && n.target is SuperExpression) ||
+      (n is BinaryExpression && n.leftOperand is SuperExpression) ||
+      (n is IndexExpression && n.target is SuperExpression);
   if (isMethod && !isSuper) {
     final cls = el.enclosingElement as InterfaceElement;
     callee_
