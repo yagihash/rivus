@@ -53,6 +53,7 @@ func Resolve(src ir.Source) {
 	}
 	prog.ValuesResolved = true
 	r := &resolver{src: src, prog: prog, forms: newFormCache(FormCacheBytes)}
+	var retry []valueCall
 	ir.WalkMarked(src, ir.MarkValueCall, func(ref ir.Ref, f *ir.Func) {
 		for bi := range f.Blocks {
 			for ii := range f.Blocks[bi].Instrs {
@@ -64,12 +65,91 @@ func Resolve(src ir.Source) {
 				if in.Callee.ValueCands != nil || in.Callee.ValueLimit != "" || in.Callee.ValueUnresolvedParams != nil {
 					ir.Update(src, ref, f, bi, ii)
 				}
+				if len(in.Callee.Candidates) == 0 {
+					retry = append(retry, valueCall{callSite{ref, bi, ii}})
+				}
 			}
 		}
 	})
+	r.resolveAgain(retry)
 	narrowCalls(r)
 	r.forms = nil
 	r.sited, r.extra = nil, nil
+}
+
+// valueCall is a call of a function value that the extractor gave no candidate.
+type valueCall struct{ at callSite }
+
+// maxRounds is how many more times the calls with no candidate are tried after the first walk.
+const maxRounds = 2
+
+// resolveAgain tries the calls that have no candidate again, now that the functions that the other calls reach are
+// known. A closure that is given to a call of a function value (`outer((x) => ...)`, where `outer` is a parameter) is
+// called there, so the callers of the closure include that call: the closure that calls its own parameter (`(g) => g(a)`)
+// finds what it is given. A call is a caller only for the functions it has as candidates, so nothing is added that the
+// call does not reach.
+func (r *resolver) resolveAgain(retry []valueCall) {
+	for round := 0; round < maxRounds; round++ {
+		if r.sited == nil {
+			r.indexCallers()
+		}
+		added := false
+		var left []valueCall
+		touched := map[ir.FuncID]bool{}
+		for _, c := range retry {
+			f := r.fn(c.at.ref)
+			in := &f.Blocks[c.at.b].Instrs[c.at.i]
+			if len(in.Callee.ValueCands) == 0 {
+				left = append(left, c)
+				continue
+			}
+			for _, vc := range in.Callee.ValueCands {
+				if r.hasExtra(vc.ID, c.at) {
+					continue
+				}
+				r.extra[vc.ID] = append(r.extra[vc.ID], c.at)
+				touched[vc.ID] = true
+				added = true
+			}
+		}
+		if !added {
+			return
+		}
+		for id := range touched {
+			e := r.extra[id]
+			sort.SliceStable(e, func(a, b int) bool {
+				x, y := e[a], e[b]
+				if x.ref.Seq != y.ref.Seq {
+					return x.ref.Seq < y.ref.Seq
+				}
+				if x.b != y.b {
+					return x.b < y.b
+				}
+				return x.i < y.i
+			})
+		}
+		retry = nil
+		for _, c := range left {
+			f := r.fn(c.at.ref)
+			in := &f.Blocks[c.at.b].Instrs[c.at.i]
+			cal := in.Callee
+			cal.ValueCands, cal.ValueLimit, cal.ValueFound, cal.ValueLimitParams, cal.ValueUnresolvedParams, cal.ValueWhy = nil, "", 0, nil, nil, nil
+			r.resolve(f, c.at.b, c.at.i, in)
+			if cal.ValueCands != nil || cal.ValueLimit != "" || cal.ValueUnresolvedParams != nil {
+				ir.Update(r.src, c.at.ref, f, c.at.b, c.at.i)
+			}
+			retry = append(retry, c)
+		}
+	}
+}
+
+func (r *resolver) hasExtra(id ir.FuncID, at callSite) bool {
+	for _, c := range r.extra[id] {
+		if c == at {
+			return true
+		}
+	}
+	return false
 }
 
 // callSite is a call (or a make_closure) in the function that ref names. The function is r.fn(ref): the index of the
