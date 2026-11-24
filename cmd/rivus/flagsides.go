@@ -6,6 +6,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 )
 
 // The flags of a command are of two kinds. "rivus <command> -h" lists the ones that are used every day; the flags for diagnosis and tuning (profiles,
@@ -31,9 +32,15 @@ type flagSides struct {
 	header string
 }
 
-var flagSideOf = map[*flag.FlagSet]*flagSides{}
+// flagSideOf is written by every flag set that is made, and tests make them in parallel: flagSideMu guards it.
+var (
+	flagSideMu sync.Mutex
+	flagSideOf = map[*flag.FlagSet]*flagSides{}
+)
 
 func sidesOf(fs *flag.FlagSet) *flagSides {
+	flagSideMu.Lock()
+	defer flagSideMu.Unlock()
 	s := flagSideOf[fs]
 	if s == nil {
 		s = &flagSides{usual: map[string]bool{}, diag: map[string]bool{}, kinds: map[string]string{}, info: map[string]flagInfo{}}
