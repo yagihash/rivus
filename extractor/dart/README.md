@@ -50,6 +50,8 @@ Test: `RIVUS_DART="dart" go test -run TestDartExtractor ./cmd/rivus` (or
 `RIVUS_DART="mise exec dart@3.13.6 -- dart"`). The sample is `test/sample`: every
 flow the annotations (`@source(tag)`, `@sink(tag)`) declare is found, and no sink
 marked `@sink(none)` is reached.
+`cd extractor/dart && dart test` runs `test/smoke_test.dart` (the extractor runs on the sample and writes JSON Lines);
+the sample needs `dart pub get` first. `dart_test.yaml` lists the file, because the other packages under `test/` are inputs, not tests.
 
 ## Symbols
 

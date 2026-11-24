@@ -10,7 +10,7 @@
 **決めたこと:**
 1. `make_closure`(キャプチャする値がある)の命令で、クロージャの要約を、キャプチャの値で適用する(`captured`、`applyMade`)。Params は `KUndef`。**適用するもの**: sink への到達、キャプチャした変数への書き込み、グローバルへの書き込み。**適用しないもの**: throw と結果(呼ぶところのもの)。これらがキャプチャした値に依るときは、`assumed_call` の detail に書く。
 2. **飛ばす条件は、使われ方**(`sg.Instr.Escapes`): クロージャの値の使われ方が、作った関数の中での直接の呼び出し(callee の位置。`go`、`defer` を含む)だけなら適用しない(その呼び出しが、値を持っている)。引数、`store`、`return`、別のクロージャのキャプチャなどが 1 つでもあれば適用する。コピーと φ はたどる。使用が 0 件のクロージャは、適用しない(呼ばれない。`capNever` は検出されないまま)。候補の解決のされ方には依らない。
-3. **不確実性の注記**: 新しい kind `assumed_call`(`attributable_to: mixed`、ADR-008 の追記)。クロージャの要約が、キャプチャした値に依る効果を持つときだけ。`symbol` はクロージャの関数 ID、場所は `make_closure`。finding の経路に載り、`confidence` は `no_uncertainty_on_path` にならない(全 finding に効く検査を、curated に足した)。
+3. **uncertainty**: 新しい kind `assumed_call`(`attributable_to: mixed`、ADR-008 の追記)。クロージャの要約が、キャプチャした値に依る効果を持つときだけ。`symbol` はクロージャの関数 ID、場所は `make_closure`。finding の経路に載り、`confidence` は `no_uncertainty_on_path` にならない(全 finding に効く検査を、curated に足した)。
 4. エンジン: `make_closure` → クロージャのエッジを、`order` と `levelsOf` に足した(クロージャの要約が変わると、作った関数が再解析される)。
 5. **書き戻しだけの書き込みは適用しない(案 D)**: クロージャが、グローバル G に、作った場所で G から全体を読んだ値(`before := G` の、コピーと φ だけを通ったもの。参照でキャプチャしたセルのときは、そのセルが、その読み出しの 1 回だけ書かれ、ほかの使われ方がない)を、そのまま G の全体へ書き戻す(モックの後始末)ときは、その要素を適用しない。**根拠**: 流れに依らない解析では、G は読まれた値を持つので、`G = G` の書き込みは G に何も足さない。足すのは、構造体のコピーの誤差だけ(`expandParam` が構造体全体の要素を読むとき、フィールドの指す先の要素を根へ持ち上げる。バックログ B)。`before + src`、φ で別の値と合流、フィールドを書き換えてから戻す、別の path への書き込み、別のグローバルへの書き込みは、判定が「そのまま」と言えないので、適用する。判定がたどれなければ、適用する。数は `stats.identity_global_stores`(飛ばしたクロージャの数)。固定: `go-curated/api/restore.go`。
 6. Rust は、キャプチャのあるクロージャが `make_closure` でなく環境の `alloc` なので、次の段階(`docs/DESIGN-capture.md` の「Rust の節」)。

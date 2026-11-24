@@ -120,7 +120,7 @@ test_a_sentence_without_conflict_word_passes if {
 test_terminology_rules_are_denied if {
 	every text in [
 		"生きている量が上限に近い", "生きているヒープの最大", "読み込みの段の山", "要約の段で増える", "解析の段", "確保の速い段", "要約を適用する段",
-		"経路の段に注記が付く", "段の単位の注記", "段ごとに数える", "原因の段", "名前でない段を飛ばす",
+		"経路の段に注記が付く", "不確実性の注記を出す", "注記つきの見逃し", "つなぎの注記", "注記が付く", "段の単位の注記", "段ごとに数える", "原因の段", "名前でない段を飛ばす",
 		"合否の線を決める", "合格の線を上げる", "合格線", "線を越えた", "線の中に収まる", "線が上がる",
 		"この決まりを守る", "決まりが増える", "決まりは変えない", "守る決まりを", "決まりごと",
 	] {
@@ -149,8 +149,20 @@ test_bridge_lift_peak_depth_are_denied if {
 
 test_bridge_lift_peak_depth_pass_other_words if {
 	every text in [
-		"山を越える", "山道を歩く", "山田さん", "2 段階に分ける", "1 段目の隣", "2 段構えで使う", "段階 4", "3 段の探索", "200 段を超える経路", "持ち上げる", "暫定の注記", "ピークが高い", "3 階層まで",
+		"山を越える", "山道を歩く", "山田さん", "2 段階に分ける", "1 段目の隣", "2 段構えで使う", "段階 4", "3 段の探索", "200 段を超える経路", "持ち上げる", "暫定の uncertainty", "ピークが高い", "3 階層まで",
 	] {
+		not denied("paragraph", text)
+	}
+}
+
+test_chuuki_is_denied if {
+	denied("paragraph", "不確実性の注記を出す")
+	denied("paragraph", "ステップに注記が付く")
+	denied("table", "注記つきの見逃し")
+}
+
+test_chuuki_replacements_pass if {
+	every text in ["uncertainty を出す", "不確実性を出す", "ステップの uncertainty が付く", "脚注を付ける", "注釈を足す", "補足を書く", "`注記` の行"] {
 		not denied("paragraph", text)
 	}
 }

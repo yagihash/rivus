@@ -1,0 +1,4 @@
+# The tests of this package are the files listed here. test/ also holds packages that are inputs of the extractor (sample, monorepo, versions),
+# and `dart test` without a list picks up the test in test/sample, which this package cannot resolve (#204).
+paths:
+  - test/smoke_test.dart

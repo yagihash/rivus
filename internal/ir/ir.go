@@ -441,6 +441,9 @@ type ValueCand struct {
 	// decide which of the candidates is called (a guard follows the flow).
 	// -1 when the function is chosen in the function itself.
 	Param int
+	// Returned is set when the closure reached the call as the value that a called function returned (valuecalls): it
+	// was made in that function, and the values it captured are not at hand where it is called.
+	Returned bool
 	// Bind is the instruction that made the closure, when it was made in the
 	// function that holds the call and captured values (they are values of that
 	// function): the candidate is called with them.

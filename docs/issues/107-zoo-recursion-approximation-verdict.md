@@ -1,4 +1,4 @@
-# #107 zoo: recursion_approximation の判定が、無関係な不確実性の注記を数える
+# #107 zoo: recursion_approximation の判定が、無関係な uncertainty を数える
 
 - 状態: **closed**
 - 種類: 道具・ベンチ(直した)
@@ -9,7 +9,7 @@
 
 ## 今の状態(2026-11-22 の見直し)
 
-直した: zoo の `@miss` の不確実性の注記の判定を、大域の `recursion_approximation` では数えず、注釈が指定するときだけ数える形にした(`missTraces`)。
+直した: zoo の `@miss` の uncertainty の判定を、大域の `recursion_approximation` では数えず、注釈が指定するときだけ数える形にした(`missTraces`)。
 
 ## 経緯
 

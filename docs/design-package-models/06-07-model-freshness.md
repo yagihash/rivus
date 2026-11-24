@@ -1,6 +1,6 @@
 ### 6.7 モデルの鮮度: 確認したバージョン、定期的な照合、利用者の実行のときのずれ(設計案)
 
-問題: 外部のライブラリが更新されると、モデルが古くなる。「本体を読まない」宣言を付けたパッケージは、古いモデルが、**サイレントな見逃し**になる(新しい API はモデルになく `unmodeled_library_call` になるが、変わった動作や、増えたコールバックは、注記なしに落ちる)。
+問題: 外部のライブラリが更新されると、モデルが古くなる。「本体を読まない」宣言を付けたパッケージは、古いモデルが、**サイレントな見逃し**になる(新しい API はモデルになく `unmodeled_library_call` になるが、変わった動作や、増えたコールバックは、uncertainty なしに落ちる)。
 
 **今ある仕組みで検知できる範囲(事実)**:
 - 検知できる: 組み込みの行が、zoo の呼び出しに一致すること(`TestBuiltinRowsAreHitByTheZoo`、`cmd/rivus/dead_rows_test.go`。行のシンボルが、zoo の IR に出ること)。ただし、zoo は、実物でなく骨組みを使うセルがある(`bench/zoo-dart/cells/packages/http` は、「本物のパッケージはない。`Client` API の形」と自分で書いている。Go の `bench/zoo-go/dep` も自前のコード)。**骨組みは、実物の変更を検知できない**(骨組みに行が一致することを見ているだけ)。
@@ -24,7 +24,7 @@ verified_versions:
 
 | | 別の場所(推奨) | 宣言と同じ場所 |
 | --- | --- | --- |
-| 宣言のないモデル(手で書いた行だけのファイル、`-no-deps` でも使うモデル)にも書ける | はい(利用者のずれの注記(3)に要る) | いいえ(宣言のあるパッケージだけ) |
+| 宣言のないモデル(手で書いた行だけのファイル、`-no-deps` でも使うモデル)にも書ける | はい(利用者のずれの uncertainty(3)に要る) | いいえ(宣言のあるパッケージだけ) |
 | 宣言との整合 | 検証で結ぶ(宣言したパッケージは、`verified_versions` に必須) | 1 つの項目なので、ずれない |
 | 生成物の先頭の「入力のバージョン」 | 同じ情報(生成器が書く `input:` から `verified_versions` の `checked_with` を作れる) | 同じ |
 | 1 つのファイルに複数のパッケージ(`dart-gcp.yaml`) | 項目を並べる | 宣言と同じ数 |
@@ -45,7 +45,7 @@ verified_versions:
 
 #### 3. 利用者の実行のときのずれ(案)
 
-利用者のプロジェクトが使っているバージョンが、モデルの確認した範囲(`versions`)の外のとき、出力に注記を出す。**既定は、注記を出してモデルを使う**(止めない)。注記の場所: (a) `summary` に、範囲の外のパッケージの一覧(パッケージ、使っているバージョン、確認した範囲)、(b) そのパッケージのモデルが関わった finding の注記(`model_version_outside_verified`。種類は新設)。**フラグで、「範囲の外のパッケージは、宣言を無効にして本体を読む」を選べる**(宣言なしのパッケージは、モデルが使われたまま注記だけ)。
+利用者のプロジェクトが使っているバージョンが、モデルの確認した範囲(`versions`)の外のとき、出力に uncertainty を出す。**既定は、uncertainty を出してモデルを使う**(止めない)。uncertainty の場所: (a) `summary` に、範囲の外のパッケージの一覧(パッケージ、使っているバージョン、確認した範囲)、(b) そのパッケージのモデルが関わった finding の uncertainty(`model_version_outside_verified`。種類は新設)。**フラグで、「範囲の外のパッケージは、宣言を無効にして本体を読む」を選べる**(宣言なしのパッケージは、モデルが使われたまま uncertainty だけ)。
 
 **extractor がバージョンを出せるか(事実)**:
 
@@ -55,7 +55,7 @@ verified_versions:
 | Dart | 出していない | `package_config.json` の `rootUri` はバージョンを直接持たない。取り方は 2 つ: (a) `pubspec.lock` の `version:`(核の側でも、extractor でも読める。hosted のパッケージ。path / git の依存はバージョンがない)、(b) pub のキャッシュのパス `hosted/pub.dev/<名前>-<バージョン>`(extractor の `_packageDir` が、そのディレクトリを持っている。ただし、git の依存は `<名前>-<ハッシュ>`)。(a) を推奨 |
 | Rust | 出していない | `Cargo.lock`(`version`)。またはドライバの中で、cargo が `rustc` の呼び出しに付ける環境変数 `CARGO_PKG_NAME` / `CARGO_PKG_VERSION`(cargo の仕様から。この環境では未確認)。`extractor/rust/src/main.rs` は、`cargo metadata --no-deps` を既に使っている |
 
-**最小の拡張案**: コア側で、利用者の対象の `go.mod` / `go.sum`(Go は `go/packages` の `Module.Version`)、`pubspec.lock`、`Cargo.lock` を読む(**IR は変えない**)。`-ir` のファイルだけを渡された場合は、バージョンが分からないので、注記は出さない(「バージョンは不明」と `summary` に 1 行)。次の段階で、IR のヘッダに `packages: [{name, version}]` を足す(extractor が出す)と、`-ir` でも注記が出せる。index の鍵に、バージョンの一覧を入れる(バージョンが変わったら、別の index)。
+**最小の拡張案**: コア側で、利用者の対象の `go.mod` / `go.sum`(Go は `go/packages` の `Module.Version`)、`pubspec.lock`、`Cargo.lock` を読む(**IR は変えない**)。`-ir` のファイルだけを渡された場合は、バージョンが分からないので、uncertainty は出さない(「バージョンは不明」と `summary` に 1 行)。次の段階で、IR のヘッダに `packages: [{name, version}]` を足す(extractor が出す)と、`-ir` でも uncertainty が出せる。index の鍵に、バージョンの一覧を入れる(バージョンが変わったら、別の index)。
 
 #### 4. 生成器と差分テストの「対象外として明示する範囲」
 

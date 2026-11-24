@@ -26,7 +26,7 @@ pub fn e() {
 `fn each<T>(items: Vec<T>, mut f: impl FnMut(T)) { for i in items { f(i); } }` に `|x| sink(&x)` を渡す形も落ちる(`across-each`)。`Fn` の `each3(items: Vec<String>, f)` は見つかる。
 
 ## `@miss`
-`bench/rust-curated`: `across-each`(弱い注記: 無関係な `numeric_stop`)。`bench/MISSES.md` の型 `GEN-DYN`。
+`bench/rust-curated`: `across-each`(弱い uncertainty: 無関係な `numeric_stop`)。`bench/MISSES.md` の型 `GEN-DYN`。
 
 ## 落ちる場所の推定(確かめた)
 `T` に対する `IntoIterator::into_iter` / `Iterator::next` は、IR で `call dynamic`(具体的な型では `call static`)。dynamic では receiver が `Args[0]` で、`CallArgs()`(`internal/sg/sg.go:139`)は `Args[1:]`。モデル(`internal/model/builtin/rust-std.yaml`: `from: args`)は `selectVals`(`internal/taint/calls.go`)で `cc.args`(receiver を含まない)になるので、イテレータ(receiver)の中身が結果に流れない。

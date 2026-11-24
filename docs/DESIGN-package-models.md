@@ -28,7 +28,7 @@
 | 6.7 モデルの鮮度(確認したバージョン、定期的な照合、実行のときのずれ) | [design-package-models/06-07-model-freshness.md](design-package-models/06-07-model-freshness.md) |
 | 6.8 zoo のセルの依存(骨組みか、本物のパッケージか) | [design-package-models/06-08-zoo-cell-dependencies.md](design-package-models/06-08-zoo-cell-dependencies.md) |
 | 6.9 module の path に major を持つ Go のパッケージ(`/v*`) | [design-package-models/06-09-go-module-major.md](design-package-models/06-09-go-module-major.md) |
-| 6.10 確認していないバージョンへの適用の注記 | [design-package-models/06-10-unverified-versions-note.md](design-package-models/06-10-unverified-versions-note.md) |
+| 6.10 確認していないバージョンへの適用の uncertainty | [design-package-models/06-10-unverified-versions-note.md](design-package-models/06-10-unverified-versions-note.md) |
 | 6.11 モデル作成の手順のスクリプト化 | [design-package-models/06-11-model-authoring-script.md](design-package-models/06-11-model-authoring-script.md) |
 | 6.12 一括採用(規則の単位の決定から、行を生成する) | [design-package-models/06-12-bulk-adoption.md](design-package-models/06-12-bulk-adoption.md) |
 | 7. 実装の段階と規模 | [design-package-models/07-stages-and-scale.md](design-package-models/07-stages-and-scale.md) |

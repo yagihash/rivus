@@ -12,7 +12,7 @@
 |---|---|
 | macOS、サンドボックスが使える、extractor とツールチェインがある、標準入力が端末 | 標準エラーに警告を出して `[Y/n]`(Enter は Yes) |
 | 同じで `-yes` あり | 聞かずに読む |
-| 標準入力が端末でない(`claude -p`、CI、パイプ)、`-yes` なし | 聞けない。何も報告せずに Yes にすることはしない。混在なら Rust を読まずに注記し、Rust だけの対象はエラー(`-lang rust か -yes を`。終了コード 1) |
+| 標準入力が端末でない(`claude -p`、CI、パイプ)、`-yes` なし | 聞けない。何も報告せずに Yes にすることはしない。混在なら Rust を読まずにその旨を出し、Rust だけの対象はエラー(`-lang rust か -yes を`。終了コード 1) |
 | extractor かツールチェインがない | 聞かずに、Rust は読まなかったと報告する(`rivus setup rust` か Homebrew で入る)。Rust だけの対象はエラー |
 | サンドボックスがない(Linux など) | 聞かない、読まない。`-unsafe-host-exec` があっても auto では Yes にしない(隔離なしは、`-lang rust` と `-unsafe-host-exec` の両方を書いたときだけ)。macOS でも、`-unsafe-host-exec` があれば、聞く文(サンドボックスの下で動く)と合わないので、auto では聞かず、読まない(`no-sandbox`) |
 
