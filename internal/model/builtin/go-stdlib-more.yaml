@@ -279,6 +279,7 @@ propagators:
     pure: true
   - symbol: (net/url.Values).Del
     pure: true
+  # model-diff: miss-reviewed (*net/url.URL).Port@recv non-payload the port is digits only (the result is the part of Host after the last colon, checked to be a number by validOptionalPort); src=net/url/url.go:Port
   - symbol: (*net/url.URL).Port
     pure: true
   - symbol: flag.Parse
