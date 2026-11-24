@@ -349,7 +349,7 @@ func displayString(t types.Type) string {
 	return types.TypeString(t, func(p *types.Package) string { return p.Name() })
 }
 
-// candidates are the functions the call graph says a call may reach.
+// candidates are the functions the call graph of the lifted SSA says a call may reach.
 func (c *conv) candidates(ci ssa.CallInstruction) []ir.FuncID {
 	var out []ir.FuncID
 	n := 1
@@ -357,10 +357,6 @@ func (c *conv) candidates(ci ssa.CallInstruction) []ir.FuncID {
 		n = len(l)
 		for _, ids := range l {
 			out = append(out, ids...)
-		}
-	} else if c.graph != nil {
-		for _, fn := range c.graph.Callees(ci) {
-			out = append(out, ir.FuncID(gossa.FuncID(fn)))
 		}
 	}
 	if n > 1 {

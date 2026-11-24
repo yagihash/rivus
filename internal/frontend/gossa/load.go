@@ -9,6 +9,7 @@
 package gossa
 
 import (
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/token"
@@ -40,12 +41,11 @@ type Options struct {
 	// graph: variable type analysis is more precise on the lifted form, and
 	// the call graph is the one thing that is taken from it.
 	WithLifted bool
-	// OnLifted, with WithLifted, is given the lifted program as soon as it is
+	// OnLifted, with WithLifted (which needs it), is given the lifted program as soon as it is
 	// built, and its answer is kept in Program.LiftedResult; the lifted
 	// program is then let go of. The lifted program is built and read first,
 	// before the program of the naive form is built, so the two are never in
-	// memory together. Without it the lifted program is kept in
-	// Program.Lifted.
+	// memory together.
 	OnLifted func(*ssa.Program) any
 	// Deps also reads the source of the dependencies that are not in the
 	// standard library, so that their functions have bodies and the analysis
@@ -111,8 +111,6 @@ type Program struct {
 	// their dependencies.
 	OwnPkgs []*ssa.Package
 
-	// Lifted is the program built with lifting (Options.WithLifted).
-	Lifted *ssa.Program
 	// LiftedResult is what Options.OnLifted answered.
 	LiftedResult any
 
@@ -234,6 +232,9 @@ func (p *Program) Rel(name string) string { return p.rel(name) }
 // remaining packages are analysed and the problems are recorded in
 // Program.LoadErrors.
 func Load(dir string, patterns []string, opts Options) (*Program, error) {
+	if opts.WithLifted && opts.OnLifted == nil {
+		return nil, errors.New("gossa: WithLifted needs OnLifted")
+	}
 	absDir, err := filepath.Abs(dir)
 	if err != nil {
 		return nil, err
@@ -356,10 +357,6 @@ func Load(dir string, patterns []string, opts Options) (*Program, error) {
 		lifted, _ := mk(pkgs, ssa.InstantiateGenerics)
 		buildInOrder([]*ssa.Program{lifted}, skip, nil)
 		p.LiftedResult = opts.OnLifted(lifted)
-	} else if opts.WithLifted {
-		lifted, _ := mk(pkgs, ssa.InstantiateGenerics)
-		p.Lifted = lifted
-		progs = append(progs, lifted)
 	}
 	// The syntax and the type information of a dependency are of no use once
 	// its package is built (go/ssa keeps what it needs): letting go of them
@@ -530,7 +527,7 @@ func (p *Program) File(pos token.Pos) *ast.File {
 // is left is what the text of the code and the output need: the syntax, the
 // positions, the loading errors.
 func (p *Program) ReleaseSSA() {
-	p.SSA, p.Lifted, p.LiftedResult = nil, nil, nil
+	p.SSA, p.LiftedResult = nil, nil
 	p.Funcs, p.Own, p.OwnPkgs = nil, nil, nil
 	// the loaded packages carry the types and the syntax of every dependency
 	p.Initial = nil

@@ -15,7 +15,7 @@ import (
 // irspillExtract is what "rivus debug extract -all" reads: the IR of the code and of its dependencies.
 func irspillExtract(t testing.TB, dir string, patterns ...string) *ir.Program {
 	t.Helper()
-	prog, err := gossa.Load(dir, patterns, gossa.Options{NaiveForm: true})
+	prog, err := goir.Load(dir, patterns, gossa.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}

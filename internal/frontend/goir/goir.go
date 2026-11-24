@@ -43,31 +43,32 @@ type Options struct {
 // cut and marked truncated.
 const MaxConstString = 1 << 16
 
+// Load reads the code the way the analysis does: the program of the naive form, and the table of the lifted call graph made while
+// loading (Extract needs it for the candidates of a call). o.NaiveForm, o.WithLifted and o.OnLifted are set here.
+func Load(dir string, patterns []string, o gossa.Options) (*gossa.Program, error) {
+	o.NaiveForm, o.WithLifted, o.OnLifted = true, true, LiftedTable
+	return gossa.Load(dir, patterns, o)
+}
+
 // Extract converts the program. It takes the bodies of the go/ssa functions
 // it converts (releaseBody), so a program is converted once. The program must
-// have been loaded with
-// gossa.Options{NaiveForm: true}.
+// have been loaded by Load (or with gossa.Options{NaiveForm: true, WithLifted: true, OnLifted: LiftedTable}), except with NoCandidates.
 func Extract(p *gossa.Program, opts Options) (*ir.Program, error) {
 	out := &ir.Program{}
 	globals := map[string]ir.Global{}
 	seen := map[ir.FuncID]bool{}
-	var graph callgraph.Graph
 	var lifted map[string][][]liftedCall
 	if !opts.NoCandidates {
-		if t, ok := p.LiftedResult.(map[string][][]liftedCall); ok {
-			// made while loading (gossa.Options.OnLifted = LiftedTable)
-			lifted = t
-			p.LiftedResult = nil
-		} else if p.Lifted != nil {
-			lifted = liftedTable(p.Lifted)
-			// The call graph and the lifted SSA are of no use now: what the
-			// conversion asks of them is in the table. Letting go of them here
-			// (not at the end) keeps the lifted SSA out of the
-			// conversion's peak.
-			p.Lifted = nil
-		} else {
-			graph = callgraph.BuildGo(p)
+		// The candidates come from one place only: the table made while
+		// loading (gossa.Options.OnLifted = LiftedTable, see Load). A call graph
+		// made on the program of the naive form would say something else of the
+		// closures that bind one method.
+		t, ok := p.LiftedResult.(map[string][][]liftedCall)
+		if !ok {
+			return nil, fmt.Errorf("goir: the program was loaded without the table of the lifted call graph (use goir.Load, or gossa.Options.OnLifted = goir.LiftedTable)")
 		}
+		lifted = t
+		p.LiftedResult = nil
 	}
 	// With All, a function of a dependency is converted only when something
 	// the project does can reach it (a call, a candidate of a call through an
@@ -123,7 +124,7 @@ func Extract(p *gossa.Program, opts Options) (*ir.Program, error) {
 		if !opts.All && !p.Own[fn] {
 			continue
 		}
-		f := convertFunc(p, fn, graph, lifted[gossa.FuncID(fn)], globals)
+		f := convertFunc(p, fn, lifted[gossa.FuncID(fn)], globals)
 		releaseBody(fn)
 		if opts.Emit != nil {
 			opts.Emit(f)
@@ -255,7 +256,7 @@ func keyOf(ci ssa.CallInstruction) (callKey, bool) {
 
 // Func converts one function.
 func Func(p *gossa.Program, fn *ssa.Function) *ir.Func {
-	return convertFunc(p, fn, nil, nil, map[string]ir.Global{})
+	return convertFunc(p, fn, nil, map[string]ir.Global{})
 }
 
 type conv struct {
@@ -266,7 +267,6 @@ type conv struct {
 	tuples map[ssa.Value][]ir.LocalID
 	fused  map[ssa.Value]bool // address instructions folded into a load or a store
 	addr   map[ssa.Value]addrInfo
-	graph  callgraph.Graph
 	// liftedCall maps a call of this function to what the call graph says of
 	// the same call in the lifted SSA (one answer for each lifted function
 	// of the name).
@@ -285,7 +285,7 @@ type addrInfo struct {
 	pos   ir.Pos
 }
 
-func convertFunc(p *gossa.Program, fn *ssa.Function, graph callgraph.Graph, liftedFns [][]liftedCall, globals map[string]ir.Global) *ir.Func {
+func convertFunc(p *gossa.Program, fn *ssa.Function, liftedFns [][]liftedCall, globals map[string]ir.Global) *ir.Func {
 	c := &conv{
 		p:      p,
 		fn:     fn,
@@ -293,7 +293,6 @@ func convertFunc(p *gossa.Program, fn *ssa.Function, graph callgraph.Graph, lift
 		tuples: map[ssa.Value][]ir.LocalID{},
 		fused:  map[ssa.Value]bool{},
 		addr:   map[ssa.Value]addrInfo{},
-		graph:  graph,
 		global: globals,
 	}
 	c.out = &ir.Func{
