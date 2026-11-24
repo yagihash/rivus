@@ -37,6 +37,11 @@ func isDartFunc(id string) bool {
 	return strings.HasPrefix(id, "package:") || strings.HasPrefix(id, "file:") || strings.HasPrefix(id, "dart:")
 }
 
+// isFuncElem says whether the element is a function value (funcLabel), not taint.
+func isFuncElem(e Elem) bool {
+	return e.Kind == Real && e.label == funcLabelID
+}
+
 // funcCellsOn says whether the function values made in this function are carried.
 func (s *state) funcCellsOn() bool {
 	return !s.fn.Dep && isDartFunc(s.fn.ID)
@@ -200,4 +205,42 @@ func (e *Engine) FuncCellCandidates() map[*sg.Instr][]string {
 		return true
 	})
 	return out
+}
+
+// funcIntoDependency is the note of a call, in the code of the project, of a function of a dependency that has no `calls:`
+// model (a body that is read), when an argument holds function values: the summary of a dependency does not carry
+// function values out (summarize), so a call of the value that happens inside the dependency is not followed. The
+// models of `calls:` say what a function calls back, and where they say it the call is not noted (the model is applied,
+// and the functions of a model are not in withBody). A package whose body is not read has no body here: its callbacks
+// are applied as called (replacedCallbacks, assumed_call), and no note is made.
+func (s *state) funcIntoDependency(cc *callCtx, withBody []*sg.Func, modelled bool) *Uncertainty {
+	if modelled || !s.funcCellsOn() {
+		return nil
+	}
+	var dep *sg.Func
+	for _, fn := range withBody {
+		if fn.Dep {
+			dep = fn
+			break
+		}
+	}
+	if dep == nil {
+		return nil
+	}
+	held := false
+	for _, a := range cc.in.Args {
+		for _, f := range s.flatten(s.locs(a)) {
+			if isFuncElem(f.E) {
+				held = true
+				break
+			}
+		}
+		if held {
+			break
+		}
+	}
+	if !held {
+		return nil
+	}
+	return s.newNote(cc.in, KindFuncValueIntoDependency, "func_value_into_dependency: a function of the project is passed to a function of a dependency that has no `calls:` model; where the dependency calls it is not followed (the summary of a dependency does not carry function values out). A `calls:` row for the function says what it calls back", cc.sym)
 }

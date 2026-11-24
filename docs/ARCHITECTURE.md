@@ -456,6 +456,7 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 | `dynamic_dispatch` | 候補 1 件以上: mixed／候補 0 件: rivus | 言語機能として呼び出し先が決まらないが、候補の絞り込み精度（VTA など）は rivus の改善余地がある。候補が 0 件なのは、実装が読み込んだコードの外にあるときで、モデルを書けば減る（rivus）。detail が `expansion_limit` のものは、`match: implementations` の展開を上限で止めた記録（5.4） |
 | `assumed_call` | mixed | 呼ばれるところが見えないクロージャ（渡す、保存する、返す）を、作った場所で、呼ばれるものとして適用した（キャプチャした値を、クロージャの要約に適用する。ADR-059）。付くのは、要約がキャプチャした値に依る効果を持つクロージャだけ。throw と結果は適用せず、そのとき detail に書く。1 度も呼ばれないクロージャの流れも、finding になりうる（過検出） |
 | `pointer_alias` | rivus | 経路が、ポインタ越しの書き込み(読み出し)を、別名(`ptrAlias`、`copyOf`。`internal/taint/ptrcells.go`)で近似した所を通る。別名は、実行時にポインタが指す先より広いことがあり、流れが実在しないことがある。付くのは、別名が作った書き込み・読み出しのステップ(ホップ)を通った finding だけ。今は Rust だけ(`HasEnv`) |
+| `func_value_into_dependency` | rivus | 自分のコードの呼び出しが、`calls:` のモデルのない依存の関数(本体を読む)へ、自分のコードの関数値を渡した。依存の関数の要約は、関数値(`FUNC` の要素。`internal/taint/funccells.go`)を出力に運ばないので、依存の中でそれが呼ばれる流れは追わない(運ぶと、実プロジェクトの測定で要約の要素が 47 倍になった)。`calls:` の行を書けば減る(`unmodeled_library_call` と同じ)。付くのは、その呼び出しの要約を適用した経路を通る finding。本体を読まない宣言のパッケージ(ADR-100)の呼び出しには付かない(呼ばれるものとして扱う: `assumed_call`)。今は Dart だけ |
 | `unresolved_callee` | mixed | 関数値は実行時に決まるが、生成箇所を追う型フロー解析で候補を絞れる |
 | `concurrency` | mixed | 実行順序に依存するが、channel を単純なキューとしてモデル化すれば追える範囲が広がる |
 | `unmodeled_library_call` | rivus | モデルを書けば減る |

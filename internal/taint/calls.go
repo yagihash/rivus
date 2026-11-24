@@ -307,6 +307,9 @@ func (s *state) callBody(cc *callCtx) {
 		notes = append(notes, s.pathNote(KindConcurrency, "the callee runs in another goroutine; the order of effects is not modelled", ci.Pos))
 	}
 	which := s.dispatchGuards(cc, withBody)
+	if n := s.funcIntoDependency(cc, withBody, modelled); n != nil {
+		notes = append(notes[:len(notes):len(notes)], n)
+	}
 	for _, fn := range withBody {
 		b := bindings
 		if cb, ok := ci.CandidateBindings[fn]; ok {
