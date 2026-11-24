@@ -41,6 +41,13 @@ def patterns_of(flags, loose=False):
     return [f for f in flags if (not f.startswith("-") if loose else f.startswith("./"))]
 
 
+# A comparison must not depend on a clock: a function that is stopped by -func-timeout (30 s by default) leaves a func_timeout
+# uncertainty and a summary that stopped in the middle, and which functions that are depends on the load and on the number of
+# workers (on a slower machine, or with more workers than cores, a different one is stopped). The runs of the check get a limit
+# that is out of reach, and a run that was stopped by a clock anyway is said so (clock_line; a line, not a failure).
+FUNC_TIMEOUT = "24h"
+
+
 def run_side(side, binary, src, rules, flags, env_base, work, limit_s, cap, lock_reason, loose=False, workers="", extractor=""):
     """Runs extract, index and analyze of one version. Returns (files, error, incomplete): incomplete is True when analyze ended with exit code 4.
     extractor: the command of the Dart extractor of this version (empty: Go)."""
@@ -54,13 +61,13 @@ def run_side(side, binary, src, rules, flags, env_base, work, limit_s, cap, lock
         steps = [
             ("extract", shlex.split(extractor) + [src], files["ir"], {}),
             ("index", [binary, "index", "-lang", "dart", "-C", src, "-graph", files["db"]] + rules_args + flags, os.path.join(work, side + ".index.out"), {"RIVUS_DART_EXTRACTOR": extractor}),
-            ("analyze", [binary, "analyze", "-lang", "dart", "-C", src] + rules_args + flags, files["report"], {DUMP_ENV: files["dump"], "RIVUS_DART_EXTRACTOR": extractor}),
+            ("analyze", [binary, "analyze", "-lang", "dart", "-C", src, "-func-timeout", FUNC_TIMEOUT] + rules_args + flags, files["report"], {DUMP_ENV: files["dump"], "RIVUS_DART_EXTRACTOR": extractor}),
         ]
     else:
         steps = [
             ("extract", [binary, "debug", "extract", "-all", "-C", src] + pats, files["ir"], {}),
             ("index", [binary, "index", "-C", src, "-graph", files["db"]] + rules_args + flags, os.path.join(work, side + ".index.out"), {}),
-            ("analyze", [binary, "analyze", "-C", src] + rules_args + flags, files["report"], {DUMP_ENV: files["dump"]}),
+            ("analyze", [binary, "analyze", "-C", src, "-func-timeout", FUNC_TIMEOUT] + rules_args + flags, files["report"], {DUMP_ENV: files["dump"]}),
         ]
     incomplete = False
     for name, cmd, out, extra in steps:
@@ -146,6 +153,27 @@ def convergence_line(base_incomplete, head_incomplete):
     return "convergence: NOT CONVERGED (analyze of %s ended with exit code 4: the analysis is not complete; the lines above compare what it had when it stopped)" % who, 3
 
 
+def clock_line(base_report, head_report):
+    """The signal of the clock, apart from the comparison (it never changes the exit status): for each run, how many functions a time
+    limit stopped (stats.func_timeouts, run_timeouts, timed_out) and which (the func_timeout and run_timeout uncertainties name them; the
+    report has no time for each function). The line is always there; it starts with ::warning:: (a GitHub annotation) when a run has any."""
+    parts, any_stopped = [], False
+    for n, path in (("base", base_report), ("head", head_report)):
+        try:
+            rep = json.load(open(path))
+        except (OSError, ValueError):
+            parts.append("%s: no report" % n)
+            continue
+        st = rep.get("stats") or {}
+        names = sorted({u.get("func") or "?" for u in (rep.get("uncertainties") or []) if (u.get("detail") or "").startswith(("func_timeout", "run_timeout"))})
+        cnt = (st.get("func_timeouts") or 0) + (st.get("run_timeouts") or 0) + (1 if st.get("timed_out") else 0)
+        any_stopped = any_stopped or cnt > 0 or bool(st.get("load_dependent"))
+        parts.append("%s %d (run_timeouts %d, timed_out %s; %s)" % (n, st.get("func_timeouts") or 0, st.get("run_timeouts") or 0,
+                                                                                    bool(st.get("timed_out")), ", ".join(names[:10]) or "none"))
+    head = "::warning::func_timeouts: a time limit stopped the analysis, so a difference may come from the machine, not the code: " if any_stopped else "func_timeouts: "
+    return head + "; ".join(parts), 0
+
+
 def compare(a, base, head, incomplete=(False, False)):
     lines, status = [], 0  # status: 0 same, 1 different, 2 failed, 3 not all compared
     for kind, key in (("ir", "ir"), ("edges", "db")):
@@ -170,6 +198,7 @@ def compare(a, base, head, incomplete=(False, False)):
         lines.append(line)
         if not same:
             status = worse(status, 1 if "DIFFERENT" in line else 2)
+    lines.append(clock_line(base["report"], head["report"])[0])
     line, rc = convergence_line(*incomplete)
     if line:
         lines.append(line)

@@ -261,3 +261,217 @@ func ExpAppendLoopSinkInside() {
 		lib.Sink(out[0]) // @sink(exp4)
 	}
 }
+
+type held struct{ out, other string }
+
+// set writes through its receiver, and a closure captures the receiver: the variable is then kept in a cell, and the write
+// must still be a write to the receiver of the caller.
+func (h *held) set(s string) {
+	h.out = s
+	f := func() { _ = h.other }
+	f()
+}
+
+func WriteThroughCapturedReceiver() {
+	s := lib.Source() // @source(capturedrecv)
+	h := &held{}
+	h.set(s)
+	lib.Sink(h.out) // @sink(capturedrecv)
+}
+
+// The forms near WriteThroughCapturedReceiver: a closure captures the receiver (or a parameter), so the variable is kept
+// in a cell, and a write through it must still be a write to what the caller passed.
+
+type inner struct{ b string }
+type outer struct {
+	a     inner
+	other string
+}
+
+// value receiver: a copy of the struct is written, the caller does not see it; the pointer receiver is the case above
+type vheld struct{ out string }
+
+func (h vheld) setCopy(s string) {
+	h.out = s
+	f := func() { _ = h.out }
+	f()
+}
+
+func ValueReceiverIsACopy() {
+	s := lib.Source() // @source(capvalue)
+	h := vheld{}
+	h.setCopy(s)
+	lib.Sink(h.out) // @sink(none)
+}
+
+// the closure reads only
+func (h *held) setRead(s string) {
+	h.out = s
+	f := func() string { return h.other }
+	_ = f()
+}
+
+func CapturedReadOnly() {
+	s := lib.Source() // @source(capread)
+	h := &held{}
+	h.setRead(s)
+	lib.Sink(h.out) // @sink(capread)
+}
+
+// the closure writes
+func (h *held) setInClosure(s string) {
+	f := func() { h.out = s }
+	f()
+}
+
+func CapturedWrittenInClosure() {
+	s := lib.Source() // @source(capwrite)
+	h := &held{}
+	h.setInClosure(s)
+	lib.Sink(h.out) // @sink(capwrite)
+}
+
+// two levels of closures
+func (h *held) setNested(s string) {
+	h.out = s
+	f := func() {
+		g := func() { _ = h.other }
+		g()
+	}
+	f()
+}
+
+func CapturedByNestedClosure() {
+	s := lib.Source() // @source(capnested)
+	h := &held{}
+	h.setNested(s)
+	lib.Sink(h.out) // @sink(capnested)
+}
+
+// defer and go
+func (h *held) setDefer(s string) {
+	defer func() { _ = h.other }()
+	h.out = s
+}
+
+func CapturedByDefer() {
+	s := lib.Source() // @source(capdefer)
+	h := &held{}
+	h.setDefer(s)
+	lib.Sink(h.out) // @sink(capdefer)
+}
+
+func (h *held) setGo(s string) {
+	done := make(chan struct{})
+	go func() { _ = h.other; close(done) }()
+	h.out = s
+	<-done
+}
+
+func CapturedByGo() {
+	s := lib.Source() // @source(capgo)
+	h := &held{}
+	h.setGo(s)
+	lib.Sink(h.out) // @sink(capgo)
+}
+
+// a method value of the receiver passed as a function value
+func (h *held) touch() { _ = h.other }
+
+func (h *held) setMethodValue(s string) {
+	f := h.touch
+	f()
+	h.out = s
+}
+
+func CapturedByMethodValue() {
+	s := lib.Source() // @source(capmethval)
+	h := &held{}
+	h.setMethodValue(s)
+	lib.Sink(h.out) // @sink(capmethval)
+}
+
+// two parameters, one is captured and the other written
+func setTwo(a, b *held, s string) {
+	f := func() { _ = a.other }
+	f()
+	b.out = s
+}
+
+func TwoParametersOneWritten() {
+	s := lib.Source() // @source(captwo)
+	a, b := &held{}, &held{}
+	setTwo(a, b, s)
+	lib.Sink(b.out) // @sink(captwo)
+	lib.Sink(a.out) // @sink(none)
+}
+
+// a field of a field
+func (o *outer) setDeep(s string) {
+	o.a.b = s
+	f := func() { _ = o.other }
+	f()
+}
+
+func CapturedFieldOfField() {
+	s := lib.Source() // @source(capdeep)
+	o := &outer{}
+	o.setDeep(s)
+	lib.Sink(o.a.b)   // @sink(capdeep)
+	lib.Sink(o.other) // @sink(none)
+}
+
+// the captured parameter is given to another function that writes it
+func fill(h *held, s string) { h.out = s }
+
+func (h *held) setViaHelper(s string) {
+	f := func() { fill(h, s) }
+	f()
+}
+
+func CapturedPassedToHelper() {
+	s := lib.Source() // @source(capcall)
+	h := &held{}
+	h.setViaHelper(s)
+	lib.Sink(h.out) // @sink(capcall)
+}
+
+// not written: a closure that only reads does not move the value to a field, or to another receiver
+func (h *held) setOther(s string) {
+	f := func() { _ = h.other }
+	f()
+	h.out = "c"
+	_ = s
+}
+
+func CapturedNoFlowToField() {
+	s := lib.Source() // @source(capnone)
+	h := &held{}
+	h.setOther(s)
+	lib.Sink(h.out)   // @sink(none)
+	lib.Sink(h.other) // @sink(none)
+}
+
+func CapturedOtherReceiver() {
+	s := lib.Source() // @source(capother)
+	h, k := &held{}, &held{}
+	h.set(s)
+	lib.Sink(k.out) // @sink(none)
+}
+
+// the variable that holds the receiver is assigned again. The cell holds both pointers and the analysis does not follow the order
+// (as for every variable that is kept in a cell): the write goes to both, so h.out of the first one is a flow that the code does not
+// have (a known false positive of this form: docs/issues). It is not a cell of this test; r.out is the flow that must be found.
+func (h *held) setThenReplace(s string, r *held) {
+	f := func() { _ = h.other }
+	f()
+	h = r
+	h.out = s
+}
+
+func CapturedReassigned() {
+	s := lib.Source() // @source(capreassign)
+	h, r := &held{}, &held{}
+	h.setThenReplace(s, r)
+	lib.Sink(r.out) // @sink(capreassign)
+}
