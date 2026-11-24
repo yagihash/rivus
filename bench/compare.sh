@@ -56,7 +56,7 @@ options:
                     lock is held for each run). For each name, base and head are run on the SAME code, and what they build is compared: the IR
                     (`rivus debug extract -all`), the edges of the call graph with their candidates (`rivus index`), the summary of every function
                     (RIVUS_INTERNAL_SUMMARY_DUMP, an internal dump with no flag: the hash of each whole summary), and then the findings and the
-                    uncertainties. One line each: same, or DIFFERENT with how many and the first function IDs (bench/graph_check.py). A change for
+                    uncertainties (as sets, and in the order of the output). One line each: same, or DIFFERENT with how many and the first function IDs (bench/graph_check.py). A change for
                     memory or cost has to show "same" (docs/WORKFLOW.md); a difference is a change of the accuracy. A version from before the dump
                     leaves "summaries" as NOT COMPARED (exit 3). Exit status: 0 all the same, 1 a difference, 2 a run failed, 3 same but not all compared
   --graph-workers B,H  with --graph-check: run base with -workers B and head with -workers H (the self-check: with the same commit twice and "1,8", the
