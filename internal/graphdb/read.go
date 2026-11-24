@@ -15,8 +15,6 @@ type DB struct {
 	db   *sql.DB
 	Path string
 	meta map[string]string
-	// supplemented are the call sites that -resolve-func-values gave candidates (meta MetaFuncValues).
-	supplemented map[int64]bool
 }
 
 // ErrSchema is the error of a file that is not of the schema this code reads.
@@ -97,16 +95,6 @@ func (d *DB) init() error {
 	}
 	if d.meta["schema_version"] != strconv.Itoa(SchemaVersion) {
 		return &ErrSchema{Path: d.Path, Want: SchemaVersion}
-	}
-	if raw := d.meta[MetaFuncValues]; raw != "" {
-		var ids []int64
-		if err := json.Unmarshal([]byte(raw), &ids); err != nil {
-			return fmt.Errorf("%s: the meta %q is not valid: %w", d.Path, MetaFuncValues, err)
-		}
-		d.supplemented = make(map[int64]bool, len(ids))
-		for _, id := range ids {
-			d.supplemented[id] = true
-		}
 	}
 	return nil
 }

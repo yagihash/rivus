@@ -726,7 +726,7 @@ const (
 // the uncertainties. A new stop of the whole run (the memory limit) is added here.
 func IncompleteReasons(st *taint.Stats) []string {
 	reasons := []string{}
-	if st.TimedOut || st.RunTimeouts > 0 || st.FuncValues != nil && st.FuncValues.TimedOut {
+	if st.TimedOut || st.RunTimeouts > 0 {
 		reasons = append(reasons, ReasonTimeout)
 	}
 	if !st.Converged && !st.TimedOut {

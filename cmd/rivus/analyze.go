@@ -37,10 +37,6 @@ type analyzeOpts struct {
 	passStatsTop  int
 	passStatsSort string
 	traceElement  string
-	funcValues    string
-	// resolveFuncValues gives the calls of function values that have no candidate the functions that the analysis of the
-	// function values carries to them, before the taint analysis (docs/DESIGN-callouts.md, 5.6). Off by default.
-	resolveFuncValues bool
 	// lockLangs are the languages whose extractor ran in this run (Dart, Rust): their lock file, in -C, says the versions
 	// (unverifiedFromLocks). Set by loadLangs, so a run from -ir or -index has none.
 	lockLangs []string
@@ -171,24 +167,20 @@ func (o *analyzeOpts) register(fs *flag.FlagSet) {
 	fs.BoolVar(&o.passStats, "pass-stats", false, "add to stats what changed in the summaries in each pass (pass_changes) and the functions without a model that tainted values reached the most (unmodeled_top); the findings are the same (development)")
 	fs.IntVar(&o.passStatsTop, "pass-stats-top", taint.DefaultOptions().PassStatsTop, "with -pass-stats: how many packages packages_top lists (0: all of them) (development)")
 	fs.StringVar(&o.passStatsSort, "pass-stats-sort", "reanalyses", "with -pass-stats: what packages_top is ordered by: "+orList(passStatsSorts, false)+" (equal values go by name; time is a clock, so it differs from run to run) (development)")
-	fs.StringVar(&o.funcValues, "func-values", "", "write to this file (JSON Lines) the diagnostic of the function values: for each call of a function value, the functions that the elements carried by the analysis say it may call, beside the candidates it has otherwise (the analysis is run once more, about twice the time; the findings and the output are the same) (development, docs/DESIGN-callouts.md 5)")
-	fs.BoolVar(&o.resolveFuncValues, "resolve-func-values", false, "give the calls of function values that have no candidate the functions that the analysis of the function values carries to them (functions made in the code of the project), then run the taint analysis; the calls keep their unresolved_callee uncertainty. It runs the analysis of the function values up to 4 times more (nothing runs when no such call exists), and stats.func_values says what it did (docs/DESIGN-callouts.md 5.6)")
 	fs.StringVar(&o.traceElement, "trace-element", "", "print to stderr where the taint of this source (a site ID) first leaves its function and enters a package variable; the findings are the same (development)")
 	fs.StringVar(&o.memProf, "memprofile", "", "write a heap profile (allocations) to this file after the taint phase (development)")
 	fs.StringVar(&o.lockProf, "lockprofile", "", "write the mutex and block profiles of the taint phase to <this>.mutex and <this>.block (development)")
 	fs.StringVar(&o.cpuProf, "cpuprofile", "", "write a CPU profile of the taint phase to this file (development)")
-	usual(fs, "workers", "numeric-taint", "char-taint", "v", "timeout", "resolve-func-values", "max-memory")
+	usual(fs, "workers", "numeric-taint", "char-taint", "v", "timeout", "max-memory")
 	describe(fs, "dep-k", flagInfo{Not: "tuning; the default is 2 (ADR-119)"})
 	describe(fs, "v", flagInfo{Not: "output"})
 	describe(fs, "numeric-taint", flagInfo{ChangesResult: true, Added: "2026-11-18", AddedBy: "a7cd15f8 (numbers and bools stop by default; this follows them)",
 		KeepOff: "off is the design: a number or a bool cannot carry an injection, and following them costs time and findings; the flag is for a check, not a step to a default"})
 	describe(fs, "char-taint", flagInfo{ChangesResult: true, Added: "2026-11-24", AddedBy: "#389",
 		Condition: "the bench cells for the missed findings pass in each language; the arithmetic of a character with a constant is carried; every pass line (the 8 GB memos row, A, C and D) passes with the flags as they will be the default, so the flag cannot become the default until D passes, and D is FAIL now; every finding that grows has char_transform on the step that causes it; time, peak and findings are measured on memos and the three dependency benches (memory room alone does not decide). The bench cells (the run with the flag, and the negative cells) must be in before the user is asked. Who decides: the user"})
-	describe(fs, "resolve-func-values", flagInfo{ChangesResult: true, Added: "2026-11-22", AddedBy: "05beae8d",
-		Deadline: "when the work on matching with the calls observed in a run ends (the work that lowers the calls with no candidate; docs/DESIGN-observed-calls.md). Then decide: make it the default, or remove it"})
-	diagnostic(fs, "k", "dep-k", "max-implementations", "max-passes", "func-timeout", "ir", "pass-stats", "pass-stats-top", "pass-stats-sort", "func-values", "trace-element", "memprofile", "lockprofile", "cpuprofile")
+	diagnostic(fs, "k", "dep-k", "max-implementations", "max-passes", "func-timeout", "ir", "pass-stats", "pass-stats-top", "pass-stats-sort", "trace-element", "memprofile", "lockprofile", "cpuprofile")
 	kind(fs, "enum:pass-stats-sort", "pass-stats-sort")
-	kind(fs, "file", "ir", "func-values", "memprofile", "lockprofile", "cpuprofile")
+	kind(fs, "file", "ir", "memprofile", "lockprofile", "cpuprofile")
 }
 
 // analyze runs the whole pipeline. extra rule sets are added to the ones
@@ -273,35 +265,6 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 			fmt.Fprintf(os.Stderr, "rivus: slow function %s: %v (cpu %v, %d outputs, %d roots)\n", fn, d.Round(time.Millisecond), cpu.Round(time.Millisecond), outputs, roots)
 		}
 	}
-	// -func-values and -resolve-func-values come before the structure layer is written when the flag is on (the calls that
-	// get candidates are edges of the file), and after it otherwise (as they always did). They run once.
-	var fvStats *taint.FuncValuesStats
-	fvDone := false
-	resolveFV := func() {
-		if fvDone {
-			return
-		}
-		fvDone = true
-		if o.funcValues != "" {
-			// before the candidates are given (-resolve-func-values): the table says what the rest of the analysis has
-			if err := writeFuncValues(o.funcValues, graph, l, st, rules, opts); err != nil {
-				fmt.Fprintf(os.Stderr, "rivus: -func-values: %v\n", err)
-			}
-		}
-		if o.resolveFuncValues {
-			begun := time.Now()
-			fvStats = taint.ResolveFuncValues(graph, l.texts, st, rules, opts, l.loadErrors())
-			phase("func-values")
-			if o.timeout > 0 {
-				// -timeout is the limit of the rounds and of the analysis after them together; the rounds use at most
-				// taint.FuncValuesBudget of it, so what is left here is at least the rest
-				opts.Timeout = max(o.timeout-time.Since(begun), time.Nanosecond)
-			}
-		}
-	}
-	if o.afterRead != nil && o.resolveFuncValues {
-		resolveFV()
-	}
 	if o.afterRead != nil {
 		if err := o.afterRead(l, rules, st, graph, bodies); err != nil {
 			return nil, err
@@ -333,7 +296,6 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 		runtime.SetMutexProfileFraction(5)
 		runtime.SetBlockProfileRate(1000)
 	}
-	resolveFV()
 	eng := taint.New(graph, l.texts, st, rules, opts)
 	eng.SetLoadErrors(l.loadErrors())
 	// Internal, for the measurement of a large component: its summaries after each round (no flag, not in -h)
@@ -352,7 +314,6 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 			f.Close()
 		}
 	}
-	res.Stats.FuncValues = fvStats
 	if ts := l.testsSkipped(); ts != nil {
 		// the directories that were not read are not tests: they are in summary.skipped_dirs, not here
 		stats := *ts

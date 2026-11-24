@@ -45,9 +45,6 @@ type Edge struct {
 	Ref     int64
 	RefKind string
 	Via     string
-	// Supplemented: the candidates of the call site were given by the analysis of the function values
-	// (-resolve-func-values), not found by the extractor or the call analysis.
-	Supplemented bool
 }
 
 // Static reports whether the callee is named in the call.
@@ -97,14 +94,10 @@ func (d *DB) edges(q string, args ...any) ([]Edge, error) {
 		if err := rows.Scan(&e.CallSite, &e.From, &e.To, &e.Kind, &e.NCand, &e.File, &e.Line, &e.Col); err != nil {
 			return nil, err
 		}
-		e.Supplemented = d.supplemented[e.CallSite]
 		out = append(out, e)
 	}
 	return out, rows.Err()
 }
-
-// IsSupplemented says whether the call site got its candidates from the analysis of the function values.
-func (d *DB) IsSupplemented(callSite int64) bool { return d.supplemented[callSite] }
 
 // OutEdges are the calls a function makes (forward).
 func (d *DB) OutEdges(from int64, f EdgeFilter) ([]Edge, error) {
@@ -251,8 +244,6 @@ type CallRow struct {
 	File   string
 	Line   int
 	Col    int
-	// Supplemented: the call got its candidates from the analysis of the function values.
-	Supplemented bool
 }
 
 func (d *DB) callRows(q string, args ...any) ([]CallRow, error) {
@@ -269,7 +260,6 @@ func (d *DB) callRows(q string, args ...any) ([]CallRow, error) {
 			return nil, err
 		}
 		c.Callee = callee.String
-		c.Supplemented = d.supplemented[c.ID]
 		out = append(out, c)
 	}
 	return out, rows.Err()
@@ -760,7 +750,6 @@ func (d *DB) DynamicInEdges(to int64) ([]DynEdge, error) {
 		if err := rows.Scan(&e.CallSite, &e.From, &e.To, &e.Kind, &e.NCand, &e.File, &e.Line, &e.Col, &e.Callee); err != nil {
 			return nil, err
 		}
-		e.Supplemented = d.supplemented[e.CallSite]
 		out = append(out, e)
 	}
 	return out, rows.Err()
@@ -856,36 +845,6 @@ func (d *DB) UnresolvedCallsIn(ids []int64, max int) (int, []CallRow, error) {
 		for _, r := range rows {
 			if len(out) < max {
 				out = append(out, r)
-			}
-		}
-	}
-	// A call that the analysis of the function values gave candidates is not "with none", but its candidates are
-	// those that analysis found, not all that there are: a "no path" through it is as little proved as through a call
-	// with none (-resolve-func-values does not loosen the judgement).
-	if len(d.supplemented) > 0 {
-		in := make(map[int64]bool, len(ids))
-		for _, id := range ids {
-			in[id] = true
-		}
-		sup := make([]int64, 0, len(d.supplemented))
-		for id := range d.supplemented {
-			sup = append(sup, id)
-		}
-		sort.Slice(sup, func(i, j int) bool { return sup[i] < sup[j] })
-		for i := 0; i < len(sup); i += inChunk {
-			chunk := sup[i:min(i+inChunk, len(sup))]
-			rows, err := d.callRows(`SELECT `+callCols+` `+callJoin+` WHERE c.id IN (`+placeholders(len(chunk))+`) ORDER BY c.func_id, c.line, c.col, c.id`, idArgs(chunk)...)
-			if err != nil {
-				return 0, nil, err
-			}
-			for _, r := range rows {
-				if !in[r.Func] {
-					continue
-				}
-				total++
-				if len(out) < max {
-					out = append(out, r)
-				}
 			}
 		}
 	}
