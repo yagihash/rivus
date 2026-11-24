@@ -89,7 +89,7 @@ func sccCoarsenedDetail(funcID string) string {
 	return "scc_coarsened: this step went through " + funcID + " (package " + UnitOf(funcID) + "), a function of a dependency in a large group of functions that call each other; " +
 		sccCoarsenedMeaning + ". To check: read the body of " + funcID + " in " + UnitOf(funcID) +
 		" to see which fields it tells apart, and whether its input reaches its output. What to look at: " + sccCoarsenedLook +
-		". Or or solve with " + sccCoarsenFlagOff + " and see whether this finding remains"
+		". Or solve with " + sccCoarsenFlagOff + " and see whether this finding remains"
 }
 
 // coarseRecords are the records of the components that are solved at depth 0, one each, in the order of the first
