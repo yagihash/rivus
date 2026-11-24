@@ -38,7 +38,7 @@
 
 **追記(2026-11-22、ユーザーの決定: 「既定で Rust も解析、必要な警告と [Y/n] の確認だけ」): `-lang` なし(auto)でも、聞いたうえで Rust を読む。**
 1. macOS でサンドボックスが使え、標準入力が端末のとき、警告(ビルドが要り build script と proc macro が動く、サンドボックスの下で動く、依存を crates.io から取る、`-lang rust` / `-yes` / `-lang go,dart` の名指し、答えによって別の index)を出して `[Y/n]` を聞く。Enter は Yes。`-yes` で聞かない。`-lang rust` は聞かない(今までどおり)。
-2. 聞けないとき(端末でない)は、何も報告せずに Yes にすることはしない。`-yes` がなければ、混在は Rust を読まずに注記、Rust だけはエラー。サンドボックスがない環境は、auto では聞かず、読まない(`-unsafe-host-exec` があっても Yes 既定にしない)。extractor かツールチェインがなければ、聞く前に分かって、聞かずに読まない。
+2. 聞けないとき(端末でない)は、何も報告せずに Yes にすることはしない。`-yes` がなければ、混在は Rust を読まずにその旨を出す、Rust だけはエラー。サンドボックスがない環境は、auto では聞かず、読まない(`-unsafe-host-exec` があっても Yes 既定にしない)。extractor かツールチェインがなければ、聞く前に分かって、聞かずに読まない。
 3. 読まなかった言語は、`summary.unread.skipped_languages` と `meta.unread.skipped_languages`(`why`: `declined` / `no-terminal` / `not-installed` / `no-sandbox`)に残る。`failed_packages` には数えない。そういう index の `path` の「経路なし」は `exhaustive: false`。Rust だけで断ると何も読まず、終了コード 3。
 4. 答えは 1 回の実行で 1 度だけ決める。index は、答えを `lang` に記録する(あとの `graph -C` は聞かない)。
 

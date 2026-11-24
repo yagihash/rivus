@@ -18,11 +18,11 @@
 
 **理由（実測）:**
 - rivus 自身（dogfood のルール）: finding 88 → 39（`OutGlobal` を外さない規則でも同じ 39 件。書き戻しの偽の組み合わせは、`OutParam` のシードで起きていた）（8 つの入口 × 11 の sink の組み合わせのうち、source の関数に呼び出しで届かない、偽の組み合わせ 43 件（キーで数えて）が消えた。残りの 39 件は、すべて経路に source の関数を含む）。経路に source の関数が出ない finding は 77 → 0。`runExtract` は、規則の sink のどれにも届かない（11 件がすべて偽だった）。再解析は、シードだけを外す規則では 10,151 回（変更前 10,155。`OutGlobal` まで外した 623b620 の 8,168 は、グローバルへの書き込みを止めた効果で、書き込みの消失を含んでいた）。
-- `other_sources` の誤った注記: `param_type` で、同じリクエスト型を受け取るハンドラ 2 つ + 共通の補助関数に sink（`ptype`）で、届かないハンドラが、届くハンドラの finding の `other_sources` に入っていた。finding ごとに判定する LLM は `other_sources_count` を見て「ほかの入口からも届く」と読むので、誤った注記だった。直った（`other_sources_count` が 0）。
+- `other_sources` の誤った uncertainty: `param_type` で、同じリクエスト型を受け取るハンドラ 2 つ + 共通の補助関数に sink（`ptype`）で、届かないハンドラが、届くハンドラの finding の `other_sources` に入っていた。finding ごとに判定する LLM は `other_sources_count` を見て「ほかの入口からも届く」と読むので、誤った uncertainty だった。直った（`other_sources_count` が 0）。
 - go-synth S / M、Dart・Rust のサンプル、Dart の pub と serverpod、3 つの curated（`@miss` / `@fp` / `@noisy` の数）は、finding が同一。Rust の parseable は 94 件のまま、1 件の source が入れ替わった（書き戻しの偽の経由先だった `get_user_from_request` から、実際に tenant を読む `get_tenant_id_from_request` へ）。
 - Gitea（`./...`、実験のとき。再実行していない）: 収束（7 パス）、**最大の SCC は 3370 のまま**（書き戻しは SCC を作っていない。案 2 の領分）。finding は 37 → 41（off にだけある 8 件はすべて、経路が source の関数から始まらない。on にだけある 12 件のうち 5 件は、経路が source の関数から始まる）。書き戻しは、収束の問題としては部分的で、精度の問題が主。
 
-**失うもの:** `func runB(r *Req){ _ = r }` が source で、呼び出し元が `runB(r); os.Create(r.Path)` と書くとき、「runB が受け取った値が、呼び出し元の sink に届く」流れは、**出なくなる**（`testdata/go/cases/paramshare/lost`、`TestParamSourceNotWrittenBackIsLost`。既知の見逃し。不確実性の注記もない）。source が受け取った値は、その関数の中で使われたときだけ追う。呼び出し元の側でも追いたいなら、呼び出し元を入口にする（`main` や、リクエストを作る関数に、`kind: param` や `call_result` の source を宣言する）。
+**失うもの:** `func runB(r *Req){ _ = r }` が source で、呼び出し元が `runB(r); os.Create(r.Path)` と書くとき、「runB が受け取った値が、呼び出し元の sink に届く」流れは、**出なくなる**（`testdata/go/cases/paramshare/lost`、`TestParamSourceNotWrittenBackIsLost`。既知の見逃し。uncertainty もない）。source が受け取った値は、その関数の中で使われたときだけ追う。呼び出し元の側でも追いたいなら、呼び出し元を入口にする（`main` や、リクエストを作る関数に、`kind: param` や `call_result` の source を宣言する）。
 
 **限界:**
 - 別のオブジェクト経由の書き戻し（source のパラメータが指す値が、ほかのパラメータやグローバルが指すオブジェクトに入れられて、それが書き戻る）は、止めていない。止めるのは、param source のサイトが起点の要素が、そのパラメータ自身（`OutParam`）と `OutGlobal` に出る場合だけ。
