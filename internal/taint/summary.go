@@ -875,6 +875,16 @@ func (s *state) noteUnboundCapture(cc *callCtx, fn *sg.Func) {
 		u.Func, u.pos = s.eng.funcID(mk.fn), mk.pos
 	}
 	s.uncertain = append(s.uncertain, u)
+	if cc.in.Callee != nil {
+		for _, c := range cc.in.Callee.ValueCands {
+			if c.Returned && string(c.ID) == fn.ID {
+				// the closure came back from a called function: the call is where a reader of a lost flow looks
+				s.newNote(cc.in, KindDepthLimit, "capture_unbound: the closure that this call got back from a function captured "+itoa(len(fn.FreeVars))+
+					" value(s), and they are known only where it was made: the call is followed, the flows that go through them are not", id)
+				break
+			}
+		}
+	}
 }
 
 // usesCaptures reports whether what the summary says depends on the values the function captured

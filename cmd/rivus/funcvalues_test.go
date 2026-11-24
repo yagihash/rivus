@@ -32,8 +32,8 @@ func TestFuncValuesDart(t *testing.T) {
 		zeroCalls   int
 		minWithCand int
 	}{
-		{"../../bench/zoo-dart/cells", 41, 41, 78}, // 49 with the new cells of clos/local-fn-from-closure and local-recursion, before a call of a captured variable was followed to the closure that made it (#99, #196); 41 after
-		{"../../bench/dart-curated", 15, 15, 57},   // 20 before a call of a captured variable was followed to the closure that made it
+		{"../../bench/zoo-dart/cells", 34, 34, 85}, // 41 before the value that a called function returns was followed (#78); 49 with the new cells of clos/local-fn-from-closure and local-recursion, before a call of a captured variable was followed to the closure that made it (#99, #196); 41 after
+		{"../../bench/dart-curated", 10, 10, 62},   // 15 before the value that a called function returns was followed (#78); 20 before a call of a captured variable was followed to the closure that made it
 	} {
 		run := func(args ...string) []byte {
 			cmd := exec.Command(binary, append([]string{"analyze"}, args...)...)

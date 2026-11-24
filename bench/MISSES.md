@@ -70,7 +70,7 @@
 
 **C-7 のフィクスチャを足したあと(`docs/DESIGN-capture.md`、今の数。テストが数える): `@miss` 75 = Dart 45(silent 35、uncertainty あり 10)、Rust 16(silent 15、uncertainty あり 1)、Go 14(silent 13、uncertainty あり 1)。silent 63 / 75 = 84%。** 足した分(Dart `callbacks.dart` 11、Go `api/capture.go` 11、Rust `callbacks.rs` 3)は、キャプチャした値が、ヘルパーが呼ぶクロージャの中で落ちる形(`CAP` ほか)で、**エンジンが悪化したのではなく、見えていなかった見逃しを記録した結果**。Rust の 3 件(`thread::spawn` = `unmodeled_library_call`、`Box<dyn Fn>` をフィールドに入れて別の関数が呼ぶ、`Vec::retain`)は、渡すだけの形で、今、**見つからない**(Rust もサイレントな見逃し。C-7 の最初のバージョンの対象外とした前提の、「読む側は今でも見つかる」は、呼ぶ側が見える形だけで成り立つ)。
 
-`@miss(<kind>)` の 7 件(その後、根 F の修正で `holder-a`、`holder-b` は `silent` に、`getter-fn` は見つかった。この段落の数は修正の前): Dart の `holder-a`、`holder-b`、`curry`(`unresolved_callee`)、`getter-fn`(`unmodeled_library_call,unresolved_callee`)、`map-entries`(`dynamic_dispatch`、候補なし)、`dyn-arg`、`dyn-body`(`unmodeled_library_call`、上の限界)。残りの 40 件は、source と sink の関数に、uncertainty が無い(`silent`)。前のバージョンの「サイレント 30、弱い uncertainty 7、uncertainty あり 7」(44 件。Dart 32、Rust 11)に、RUST-13/14・DART-12 のフィクスチャの 3 件(`dyn-arg`、`dyn-body`、`model-body`)を足した 47 件を、定義に当てはめ直した: サイレント 30 + 弱い 7 + `takes-a/b` 2 + `model-body` 1 = 40(`silent`)、uncertainty あり 7 - 2 + `dyn-*` 2 = 7。
+`@miss(<kind>)` の 7 件(その後、根 F の修正で `holder-a`、`holder-b` は `depth_limit` に、`getter-fn` は見つかった。この段落の数は修正の前): Dart の `holder-a`、`holder-b`、`curry`(`unresolved_callee`)、`getter-fn`(`unmodeled_library_call,unresolved_callee`)、`map-entries`(`dynamic_dispatch`、候補なし)、`dyn-arg`、`dyn-body`(`unmodeled_library_call`、上の限界)。残りの 40 件は、source と sink の関数に、uncertainty が無い(`silent`)。前のバージョンの「サイレント 30、弱い uncertainty 7、uncertainty あり 7」(44 件。Dart 32、Rust 11)に、RUST-13/14・DART-12 のフィクスチャの 3 件(`dyn-arg`、`dyn-body`、`model-body`)を足した 47 件を、定義に当てはめ直した: サイレント 30 + 弱い 7 + `takes-a/b` 2 + `model-body` 1 = 40(`silent`)、uncertainty あり 7 - 2 + `dyn-*` 2 = 7。
 
 原因の型ごとの件数(`@miss`):
 
@@ -170,8 +170,8 @@ Rust の `@noisy` は README に「17 か所」とあるが、ソースの注釈
 | `add-list` | lib/capture.dart:48 → 52 | `silent` | `CAP` | 直る | `run(() { items.add(t); })` |
 | `relay-c-a` | lib/capture.dart:76 → 77 | `silent`(ヘルパー側: capture.dart:72 に unresolved_callee) | `PARAM-CALL` | 不明 | `relayCapture(f) => run(() => f())`: 内側のクロージャがキャプチャした関数 `f()` を呼ぶ。draft 条件 3(中継)に該当する |
 | `relay-c-b` | lib/capture.dart:81 → 82 | `silent`(同上) | `PARAM-CALL` | 不明 |  |
-| `holder-a` | lib/capture.dart:102 → 104 | `silent`(呼び出しのエッジは足した(根 F)。uncertainty はクロージャを作る側 helpers.dart:34 の capture_unbound) | `RET-CLOSURE` | 直らない | `holder(a)` が `() => s` を返し、`get()` で呼ぶ |
-| `holder-b` | lib/capture.dart:108 → 110 | `silent`(同上) | `RET-CLOSURE` | 直らない |  |
+| `holder-a` | lib/capture.dart:102 → 104 | `@miss(depth_limit)`: 呼び出しのエッジは足した(根 F)。capture_unbound が呼び出し点 capture.dart:104 と、クロージャを作る側 helpers.dart:34 にある | `RET-CLOSURE` | 直らない | `holder(a)` が `() => s` を返し、`get()` で呼ぶ |
+| `holder-b` | lib/capture.dart:108 → 110 | `@miss(depth_limit)`(同上。呼び出し点 capture.dart:110) | `RET-CLOSURE` | 直らない |  |
 | `emit` | lib/classes.dart:19 → 18 | `silent`(候補 1 の dynamic_dispatch だけ): dynamic_dispatch(mixed、候補 1)が classes.dart:18,19。ヘルパー classes.dart:11 に unresolved_callee | `STORE` | 直らない | Emitter の `_subs` に入れて emit で呼ぶ |
 | `emit-two` | lib/classes.dart:28 → 26 | `silent`(同上) | `STORE` | 直らない |  |
 | `lazy` | lib/classes.dart:40 → 42 | `silent`(候補 1 の dynamic_dispatch だけ): dynamic_dispatch(classes.dart:42)。ヘルパー classes.dart:36 に unresolved_callee | `STORE` | 直らない | `Lazy(this._make)` がフィールドに持ち、getter で呼ぶ |

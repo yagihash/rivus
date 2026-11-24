@@ -239,6 +239,7 @@ func (r *resolver) resolve(fn *ir.Func, bi, ii int, in *ir.Instr) {
 		f := found[ir.FuncID(id)]
 		c := r.candOf(ir.FuncID(id), f.via)
 		c.Bind = f.bind
+		c.Returned = f.returned && f.bind == nil
 		in.Callee.ValueCands = append(in.Callee.ValueCands, c)
 	}
 }
@@ -337,8 +338,9 @@ func (r *resolver) directFunc(f *ir.Func, bi, ii int) ir.FuncID {
 }
 
 type found struct {
-	via  int
-	bind *ir.Binding
+	via      int
+	returned bool // reached as the value that a called function returned
+	bind     *ir.Binding
 }
 
 type seenKey struct {
@@ -491,6 +493,9 @@ func (r *resolver) funcsOf(f *ir.Func, ref irssa.Ref, home *ir.Func, out map[ir.
 		// The values it captured go with it when the closure is made in the
 		// function that calls it (they are values of that function); from
 		// another function they are not at hand.
+		if len(entered) > 0 {
+			cur.returned = true
+		}
 		if f == home && len(in.Args) > 0 && cur.bind == nil {
 			cur.bind = &ir.Binding{Block: ref.Block, Instr: ref.Index}
 		}
