@@ -60,6 +60,7 @@ jobs:
       docs: ${{ steps.decide.outputs.docs }}
       models: ${{ steps.decide.outputs.models }}
       release: ${{ steps.decide.outputs.release }}
+      workflows: ${{ steps.decide.outputs.workflows }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -154,6 +155,9 @@ jobs:
               - 'LICENSE'
               - '.github/workflows/ci.yml'
               - '.github/workflows/tagpr.yml'
+            workflows:
+              - '.github/workflows/**'
+              - '.github/actions/**'
             isolation:
               - 'internal/sandbox/**'
               - 'cmd/rivus/isolate*.go'
@@ -173,21 +177,22 @@ jobs:
           FILTER_DOCS: ${{ steps.paths.outputs.docs }}
           FILTER_MODELS: ${{ steps.paths.outputs.models }}
           FILTER_RELEASE: ${{ steps.paths.outputs.release }}
+          FILTER_WORKFLOWS: ${{ steps.paths.outputs.workflows }}
         run: |
           case "$EVENT_NAME" in
             pull_request)
               if [ "$RELEASE_PR" = true ]; then
-                code=true isolation=true dart=true rust=true docs=true models=false release=true
+                code=true isolation=true dart=true rust=true docs=true models=false release=true workflows=true
               else
-                for v in "$FILTER_CODE" "$FILTER_ISOLATION" "$FILTER_DART" "$FILTER_RUST" "$FILTER_DOCS" "$FILTER_MODELS" "$FILTER_RELEASE"; do
+                for v in "$FILTER_CODE" "$FILTER_ISOLATION" "$FILTER_DART" "$FILTER_RUST" "$FILTER_DOCS" "$FILTER_MODELS" "$FILTER_RELEASE" "$FILTER_WORKFLOWS"; do
                   case "$v" in
                     true | false) ;;
                     *) echo "the filter of the paths gave '$v', not true or false: nothing is skipped on a guess" >&2; exit 1 ;;
                   esac
                 done
-                code=$FILTER_CODE isolation=$FILTER_ISOLATION dart=$FILTER_DART rust=$FILTER_RUST docs=$FILTER_DOCS models=$FILTER_MODELS release=$FILTER_RELEASE
+                code=$FILTER_CODE isolation=$FILTER_ISOLATION dart=$FILTER_DART rust=$FILTER_RUST docs=$FILTER_DOCS models=$FILTER_MODELS release=$FILTER_RELEASE workflows=$FILTER_WORKFLOWS
               fi ;;
-            *) code=true isolation=true dart=true rust=true docs=true models=false release=true ;; # push, schedule, workflow_dispatch (the job `model-diff` below runs the weekly and the manual one)
+            *) code=true isolation=true dart=true rust=true docs=true models=false release=true workflows=true ;; # push, schedule, workflow_dispatch (the job `model-diff` below runs the weekly and the manual one)
           esac
           {
             echo "code=$code"
@@ -197,6 +202,7 @@ jobs:
             echo "docs=$docs"
             echo "models=$models"
             echo "release=$release"
+            echo "workflows=$workflows"
           } >> "$GITHUB_OUTPUT"
       # TestDogfood (RIVUS_DOGFOOD=1 in the job `test`): a run by hand always; the weekly run when the code or the models changed since the head of the last
       # successful weekly run (the first run, a head that is gone, and an answer that cannot be read: it runs). The paths are those of the filter `code`
@@ -712,11 +718,81 @@ jobs:
           cache: false
       - run: scripts/build-release-archives.sh 0.0.0-check
 
+  # The lint of the workflows (it was the workflow ghalint.yml). Two jobs, named `ghalint` and `actionlint` as the checks that the ruleset
+  # required before, so that the ruleset is met with or without them in its list; `ci-ok` has both in `needs`. They run when a workflow or a
+  # local action changed (the filter `workflows`), and on a push to main, the weekly run and a run by hand; a skipped job passes in `ci-ok`.
+  # Both tools are downloaded from the release and checked with their attestation.
+  ghalint:
+    needs: changes
+    if: needs.changes.outputs.workflows == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      attestations: read # `gh attestation verify`
+    steps:
+      - uses: cicd-sensor/cicd-sensor-action@6511eb44c91d71b2b93d71193b1bf2cb18352f66 # v0.0.38
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install ghalint
+        run: |
+          # renovate: datasource=github-releases depName=suzuki-shunsuke/ghalint
+          version=v1.5.6
+          gh release download -R suzuki-shunsuke/ghalint "${version}" -p "ghalint_${version#v}_linux_amd64.tar.gz"
+          gh attestation verify "ghalint_${version#v}_linux_amd64.tar.gz" \
+            -R suzuki-shunsuke/ghalint \
+            --signer-workflow suzuki-shunsuke/go-release-workflow/.github/workflows/release.yaml
+          tar xzf "ghalint_${version#v}_linux_amd64.tar.gz" ghalint
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Run ghalint run
+        run: ./ghalint run
+
+      - name: Run ghalint act
+        if: ${{ !cancelled() }}
+        run: ./ghalint act
+
+
+  actionlint:
+    needs: changes
+    if: needs.changes.outputs.workflows == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      attestations: read # `gh attestation verify`
+    steps:
+      - uses: cicd-sensor/cicd-sensor-action@6511eb44c91d71b2b93d71193b1bf2cb18352f66 # v0.0.38
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install actionlint
+        run: |
+          # renovate: datasource=github-releases depName=rhysd/actionlint
+          version=v1.7.12
+          gh release download -R rhysd/actionlint "${version}" -p "actionlint_${version#v}_linux_amd64.tar.gz"
+          gh attestation verify "actionlint_${version#v}_linux_amd64.tar.gz" --repo rhysd/actionlint
+          tar xzf "actionlint_${version#v}_linux_amd64.tar.gz" actionlint
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Run actionlint
+        run: |
+          ./actionlint \
+            -ignore 'label "ubuntu-26.04-arm" is unknown'
+
+
   # The one check that a ruleset requires. Every job above is in `needs`: it fails when one of them failed or was cancelled, and passes
   # when they passed or were skipped (nothing that a test reads changed). A job added above has to be added here.
   ci-ok:
     if: always()
-    needs: [changes, go-packages, docs-tests, test, gcp-exec, sandbox, model-diff, model-diff-changed, graph-check, release-build]
+    needs: [changes, go-packages, docs-tests, test, gcp-exec, sandbox, model-diff, model-diff-changed, graph-check, release-build, ghalint, actionlint]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
@@ -727,5 +803,5 @@ jobs:
         run: |
           echo "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
           # `changes` has to have answered: a skipped heavy job is only a pass when it was skipped on an answer
-          echo "$NEEDS" | jq -e '.changes.result == "success" and (.changes.outputs.code | IN("true", "false")) and (.changes.outputs.isolation | IN("true", "false")) and (.changes.outputs.dart | IN("true", "false")) and (.changes.outputs.rust | IN("true", "false")) and (.changes.outputs.docs | IN("true", "false")) and (.changes.outputs.models | IN("true", "false")) and (.changes.outputs.release | IN("true", "false"))' > /dev/null
+          echo "$NEEDS" | jq -e '.changes.result == "success" and (.changes.outputs.code | IN("true", "false")) and (.changes.outputs.isolation | IN("true", "false")) and (.changes.outputs.dart | IN("true", "false")) and (.changes.outputs.rust | IN("true", "false")) and (.changes.outputs.docs | IN("true", "false")) and (.changes.outputs.models | IN("true", "false")) and (.changes.outputs.release | IN("true", "false")) and (.changes.outputs.workflows | IN("true", "false"))' > /dev/null
           echo "$NEEDS" | jq -e 'all(.[]; .result != "failure" and .result != "cancelled")' > /dev/null
