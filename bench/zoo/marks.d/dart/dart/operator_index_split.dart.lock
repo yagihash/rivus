@@ -1,0 +1,3 @@
+dart	dart/operator_index_split.dart	na	@na(go: no operator methods; an index is the builtin one)	-
+dart	dart/operator_index_split.dart	sink-none	@sink(none)	void vuln() { @vuln
+dart	dart/operator_index_split.dart	sink-none	@sink(none) @nosink(dart-operator-index-split-decoy)	void fixed() { @fixed
