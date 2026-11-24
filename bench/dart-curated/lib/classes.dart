@@ -80,7 +80,7 @@ String withNamed(String s, {required String Function(String) map}) => map(s);
 
 // a getter that returns a function
 class Source {
-  String Function() get maker => () => source(); // @source(getter-fn) @miss(unmodeled_library_call,unresolved_callee)
+  String Function() get maker => () => source(); // @source(getter-fn)
 }
 
 void getter_function() {
