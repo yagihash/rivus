@@ -5,3 +5,5 @@ environment:
 dependencies:
   shared:
     path: packages/shared
+  file:
+    path: packages/file
