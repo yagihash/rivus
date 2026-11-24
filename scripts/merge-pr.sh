@@ -5,6 +5,9 @@
 # and none of the exceptions the user keeps for themself holds: a release PR (`tagpr-from-*`), a PR whose body says the user merges,
 # a PR that changes .claude/settings*, .claude/prompts/, .github/ghmint/, a ruleset file, or this script
 # (the guard itself), or a PR with a `Zoo-Loosened:` line. Anything else is refused with the reason, and nothing is merged.
+# Also: every check of the PR must be finished and not failed (`gh pr checks --json name,bucket`: each bucket is pass or skipping;
+# pending, fail, cancel stop it), because CLEAN alone let a PR through while `ci-ok` was still pending (#435). The check `ci-ok` must be
+# there and pass: with no `ci-ok` (or no check at all, or gh cannot be asked) nothing shows that CI ran, so that refuses too.
 # Also: the latest finished `ci.yml` run on main (event push) must not have failed (PRs run -short, so the heavy tests run only on main).
 # A run still in progress is skipped (the latest finished one counts). If gh cannot be asked, that refuses too.
 # A PR that fixes main's CI is let through with RIVUS_MERGE_FIXES_MAIN=1; the output then says so, with the run URL.
@@ -32,6 +35,19 @@ for c in d.get("commits",[]):
 print("; ".join(bad))
 ')
 if [ -n "$bad" ]; then echo "merge: PR #$n is not merged by the developer: $bad" >&2; exit 1; fi
+checks=$(gh pr checks "$n" --repo "$repo" --json name,bucket 2>/dev/null) || true  # exits non-zero for pending / failed checks; the JSON on stdout is what counts
+badchecks=$(printf '%s' "$checks" | python3 -c '
+import sys,json
+try:
+    cs=json.load(sys.stdin)
+    assert isinstance(cs,list)
+except Exception:
+    print("cannot read the checks of the PR"); sys.exit()
+notdone=["%s (%s)"%(c.get("name"),c.get("bucket")) for c in cs if c.get("bucket") not in ("pass","skipping")]
+if notdone: print("checks not finished or failed: "+", ".join(notdone)); sys.exit()
+if not any(c.get("name")=="ci-ok" and c.get("bucket")=="pass" for c in cs): print("no passing ci-ok check")
+' 2>/dev/null) || badchecks="cannot read the checks of the PR"
+if [ -n "$badchecks" ]; then echo "merge: PR #$n is not merged by the developer: $badchecks. Nothing is merged." >&2; exit 1; fi
 fixes="${RIVUS_MERGE_FIXES_MAIN:-}"
 runs=$(gh run list --repo "$repo" --workflow ci.yml --branch main --event push --limit 20 --json status,conclusion,headSha,url 2>/dev/null) || runs=""
 ci=$(printf '%s' "$runs" | python3 -c '
@@ -68,5 +84,5 @@ FAIL)
     echo "merge: cannot check main's CI ($ci_rest). Nothing is merged." >&2; exit 1
   fi;;
 esac
-echo "merge: PR #$n of $repo: open, not draft, CLEAN, into main, no exception: merging with a merge commit"
+echo "merge: PR #$n of $repo: open, not draft, CLEAN, all checks finished, into main, no exception: merging with a merge commit"
 gh pr merge "$n" --repo "$repo" --merge

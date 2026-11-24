@@ -10,7 +10,14 @@ import (
 
 // runMerge runs scripts/merge-pr.sh 7 with a fake `gh`: `pr view` gives a clean PR, `run list` prints runs (exit runsCode),
 // and `pr merge` leaves a marker file. It returns the output, the error, and whether the merge was called.
+const okChecks = `[{"name":"build","bucket":"pass"},{"name":"ci-ok","bucket":"pass"}]`
+
 func runMerge(t *testing.T, runs string, runsCode int, env ...string) (string, error, bool) {
+	return runMergeChecks(t, okChecks, runs, runsCode, env...)
+}
+
+// runMergeChecks is runMerge with the JSON that `gh pr checks` prints (it exits 8 or 1 when something is pending or failed).
+func runMergeChecks(t *testing.T, checks, runs string, runsCode int, env ...string) (string, error, bool) {
 	t.Helper()
 	bin := t.TempDir()
 	for _, tool := range []string{"bash", "python3", "cat", "cut", "touch", "env"} {
@@ -31,6 +38,11 @@ EOF2
 ` + runs + `
 EOF2
 exit ` + string(rune('0'+runsCode)) + `
+;;
+"pr checks") cat <<'EOF2'
+` + checks + `
+EOF2
+exit 8
 ;;
 "pr merge") touch ` + marker + `;;
 esac
@@ -80,6 +92,35 @@ func TestMergeGuardMainCI(t *testing.T) {
 			if !strings.Contains(out, w) {
 				t.Errorf("%s: output lacks %q:\n%s", c.name, w, out)
 			}
+		}
+	}
+}
+
+func TestMergeGuardChecks(t *testing.T) {
+	ok := "[" + run("completed", "success", "aaa", "https://x/ok") + "]"
+	cases := []struct {
+		name   string
+		checks string
+		merged bool
+		want   string
+	}{
+		{"pass and skipping", `[{"name":"a","bucket":"pass"},{"name":"b","bucket":"skipping"},{"name":"ci-ok","bucket":"pass"}]`, true, "merging"},
+		{"one pending", `[{"name":"a","bucket":"pending"},{"name":"ci-ok","bucket":"pass"}]`, false, "a (pending)"},
+		{"one fail", `[{"name":"a","bucket":"fail"},{"name":"ci-ok","bucket":"pass"}]`, false, "a (fail)"},
+		{"one cancel", `[{"name":"a","bucket":"cancel"},{"name":"ci-ok","bucket":"pass"}]`, false, "a (cancel)"},
+		{"ci-ok pending", `[{"name":"a","bucket":"pass"},{"name":"ci-ok","bucket":"pending"}]`, false, "ci-ok (pending)"},
+		{"no ci-ok", `[{"name":"a","bucket":"pass"}]`, false, "no passing ci-ok"},
+		{"ci-ok skipping", `[{"name":"ci-ok","bucket":"skipping"}]`, false, "no passing ci-ok"},
+		{"no checks", `[]`, false, "no passing ci-ok"},
+		{"unreadable", ``, false, "cannot read the checks"},
+	}
+	for _, c := range cases {
+		out, err, merged := runMergeChecks(t, c.checks, ok, 0)
+		if merged != c.merged || (err == nil) != c.merged {
+			t.Errorf("%s: err = %v, merged = %v, want merged=%v\n%s", c.name, err, merged, c.merged, out)
+		}
+		if !strings.Contains(out, c.want) {
+			t.Errorf("%s: output lacks %q:\n%s", c.name, c.want, out)
 		}
 	}
 }
