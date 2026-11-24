@@ -48,9 +48,6 @@ func newestFirst(runs []Run) []Run {
 	return out
 }
 
-// isPush reports whether a run is a push to main. A run of another branch is not main's.
-func isPush(r Run) bool { return r.Event == "push" && r.Branch == "main" }
-
 // isPeriodic reports whether a run is a scheduled or by-hand run on main.
 func isPeriodic(r Run) bool {
 	return (r.Event == "schedule" || r.Event == "workflow_dispatch") && r.Branch == "main"
@@ -59,10 +56,11 @@ func isPeriodic(r Run) bool {
 // ignored reports whether a completed run says nothing about the health of main (cancelled or skipped).
 func ignored(r Run) bool { return r.Conclusion == "cancelled" || r.Conclusion == "skipped" }
 
-// latestPush gives the newest push run to main that is not cancelled. Concurrent pushes each have a group of their own, so a cancelled one is rare.
-func latestPush(runs []Run) (Run, bool) {
-	for _, r := range newestFirst(runs) {
-		if isPush(r) && !(r.done() && ignored(r)) {
+// newestHeadRun gives the newest push run of ci.yml for the head commit of main. The caller passes only the runs of that commit
+// (`head_sha=<head>`); a re-run keeps its run id and replaces the result, so the newest run is the current state of the commit.
+func newestHeadRun(headRuns []Run) (Run, bool) {
+	for _, r := range newestFirst(headRuns) {
+		if r.Event == "push" && r.Branch == "main" {
 			return r, true
 		}
 	}
@@ -88,39 +86,48 @@ func periodicFailure(runs []Run) (since time.Time, newest Run, ok bool) {
 	return since, newest, ok
 }
 
-// Decide gives the status of `main-ci` for one pull request.
+// Decide gives the status of `main-ci` for one pull request. It is a pure function of what the API says now (the caller reads it
+// again before each write), never of the event that started the workflow, so events that arrive in any order give the same answer.
 //
-//	fixes-main label                                  success  (the way out: a pull request that fixes main)
-//	newest push to main completed and not a success   failure
-//	newest scheduled / by-hand run failed for 24 h+   failure
-//	newest push to main still running                 pending
-//	otherwise                                         success
+// headRuns are the push runs of ci.yml for the head commit of main (empty: the CI of the head has not started yet);
+// periodic are the recent scheduled and by-hand runs of ci.yml on main.
 //
-// A failure of a scheduled run younger than 24 hours does not stop anything. A failure of the push to main always does.
-// A run that is cancelled or skipped is passed over.
-func Decide(now time.Time, runs []Run, labels []string) Result {
+//	fixes-main label                                       success  (the way out: a pull request that fixes main)
+//	CI of the head of main completed, not a success        failure
+//	CI of the head of main was cancelled                   pending  (nothing says main is green; re-run it, or a newer push replaces it)
+//	scheduled / by-hand run failed for 24 hours or more    failure
+//	CI of the head of main not started, queued, running    pending
+//	CI of the head of main succeeded                       success
+//
+// A failure of a scheduled run younger than 24 hours does not stop anything. A failure of the head of main always does.
+func Decide(now time.Time, headRuns, periodic []Run, labels []string) Result {
 	for _, l := range labels {
 		if l == FixesMainLabel {
 			return Result{State: "success", Description: limit("fixes-main: main の CI が失敗していても、この PR は止めない")}
 		}
 	}
-	push, havePush := latestPush(runs)
-	if havePush && push.done() && push.Conclusion != "success" {
-		p := push
+	head, haveHead := newestHeadRun(headRuns)
+	if haveHead && head.done() && head.Conclusion != "success" && head.Conclusion != "cancelled" {
+		p := head
 		return Result{
-			State: "failure", TargetURL: push.URL, Failing: &p,
-			Description: limit(fmt.Sprintf("main の CI が失敗。main を直すか、直す PR に %s のラベルを付ける%s", FixesMainLabel, jobs(push))),
+			State: "failure", TargetURL: head.URL, Failing: &p,
+			Description: limit(fmt.Sprintf("main の CI が失敗。main を直すか、直す PR に %s のラベルを付ける%s", FixesMainLabel, jobs(head))),
 		}
 	}
-	if since, newest, ok := periodicFailure(runs); ok && now.Sub(since) >= StaleAfter {
+	if since, newest, ok := periodicFailure(periodic); ok && now.Sub(since) >= StaleAfter {
 		n := newest
 		return Result{
 			State: "failure", TargetURL: newest.URL, Failing: &n,
 			Description: limit(fmt.Sprintf("定期の CI が失敗して 24 時間たった。直すか、直す PR に %s のラベルを付ける%s", FixesMainLabel, jobs(newest))),
 		}
 	}
-	if havePush && !push.done() {
-		return Result{State: "pending", TargetURL: push.URL, Description: limit("main の CI を実行中。終わるまで待つ")}
+	switch {
+	case !haveHead:
+		return Result{State: "pending", Description: limit("main の先頭のコミットの CI がまだ始まっていない。始まって終わるまで待つ")}
+	case head.done() && head.Conclusion == "cancelled":
+		return Result{State: "pending", TargetURL: head.URL, Description: limit("main の先頭のコミットの CI が取り消された。再実行するか、新しい push を待つ")}
+	case !head.done():
+		return Result{State: "pending", TargetURL: head.URL, Description: limit("main の CI を実行中。終わるまで待つ")}
 	}
 	return Result{State: "success", Description: limit("main の CI は成功")}
 }

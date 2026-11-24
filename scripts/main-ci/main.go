@@ -30,25 +30,46 @@ type apiRun struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
-func listRuns(repo string) ([]Run, error) {
+func toRuns(out []byte) ([]Run, error) {
+	var body struct {
+		Runs []apiRun `json:"workflow_runs"`
+	}
+	if err := json.Unmarshal(out, &body); err != nil {
+		return nil, err
+	}
 	var runs []Run
-	// One listing per event: the schedule runs once a week, so they would not be in the newest runs of a busy main.
-	for _, ev := range []string{"push", "schedule", "workflow_dispatch"} {
-		out, err := gh("api", fmt.Sprintf("repos/%s/actions/workflows/ci.yml/runs?branch=main&event=%s&per_page=30", repo, ev))
-		if err != nil {
-			return nil, err
-		}
-		var body struct {
-			Runs []apiRun `json:"workflow_runs"`
-		}
-		if err := json.Unmarshal(out, &body); err != nil {
-			return nil, err
-		}
-		for _, r := range body.Runs {
-			runs = append(runs, Run{ID: r.ID, Event: r.Event, Branch: r.Branch, Status: r.Status, Conclusion: r.Conclusion, URL: r.URL, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt})
-		}
+	for _, r := range body.Runs {
+		runs = append(runs, Run{ID: r.ID, Event: r.Event, Branch: r.Branch, Status: r.Status, Conclusion: r.Conclusion, URL: r.URL, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt})
 	}
 	return runs, nil
+}
+
+// readState reads, from the API now, the push runs of ci.yml for the head commit of main and the recent scheduled / by-hand runs.
+func readState(repo string) (headRuns, periodic []Run, err error) {
+	sha, err := gh("api", fmt.Sprintf("repos/%s/commits/main", repo), "--jq", ".sha")
+	if err != nil {
+		return nil, nil, err
+	}
+	head := strings.TrimSpace(string(sha))
+	out, err := gh("api", fmt.Sprintf("repos/%s/actions/workflows/ci.yml/runs?head_sha=%s&event=push&per_page=30", repo, head))
+	if err != nil {
+		return nil, nil, err
+	}
+	if headRuns, err = toRuns(out); err != nil {
+		return nil, nil, err
+	}
+	for _, ev := range []string{"schedule", "workflow_dispatch"} {
+		out, err := gh("api", fmt.Sprintf("repos/%s/actions/workflows/ci.yml/runs?branch=main&event=%s&per_page=30", repo, ev))
+		if err != nil {
+			return nil, nil, err
+		}
+		rs, err := toRuns(out)
+		if err != nil {
+			return nil, nil, err
+		}
+		periodic = append(periodic, rs...)
+	}
+	return headRuns, periodic, nil
 }
 
 // failedJobs gives the names of the jobs of a run that did not succeed (`ci-ok` is the sum of the others, so it is left out).
@@ -94,7 +115,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "GITHUB_REPOSITORY is not set")
 		os.Exit(2)
 	}
-	runs, err := listRuns(repo)
+	headRuns, periodic, err := readState(repo)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "list runs:", err)
 		os.Exit(1)
@@ -122,17 +143,19 @@ func main() {
 			for _, l := range p.Labels {
 				labels = append(labels, l.Name)
 			}
-			res := Decide(now, runs, labels)
+			res := Decide(now, headRuns, periodic, labels)
 			if res.Failing != nil && !filled[res.Failing.ID] {
 				// Look up the failed jobs once, then decide again with the names in the description.
-				for i := range runs {
-					if runs[i].ID == res.Failing.ID {
-						runs[i].FailedJobs = failedJobs(repo, res.Failing.ID)
+				for _, rs := range [][]Run{headRuns, periodic} {
+					for i := range rs {
+						if rs[i].ID == res.Failing.ID {
+							rs[i].FailedJobs = failedJobs(repo, res.Failing.ID)
+						}
 					}
 				}
 				filled[res.Failing.ID] = true
 			}
-			res = Decide(now, runs, labels)
+			res = Decide(now, headRuns, periodic, labels)
 			args := []string{"api", "-X", "POST", fmt.Sprintf("repos/%s/statuses/%s", repo, p.Head.SHA),
 				"-f", "state=" + res.State, "-f", "context=main-ci", "-f", "description=" + res.Description}
 			if res.TargetURL != "" {

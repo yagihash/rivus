@@ -11,7 +11,7 @@ name: main-ci
 on:
   workflow_run:
     workflows: [CI]
-    types: [completed]
+    types: [requested, completed] # a start (pending) and an end, a re-run included
     branches: [main]
   pull_request:
     types: [opened, synchronize, reopened, labeled, unlabeled]
