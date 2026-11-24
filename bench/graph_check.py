@@ -3,9 +3,11 @@
 
   graph_check.py -name NAME -base-bin B -head-bin H -graphcheck-bin G -out DIR (-dir D [-rules F] [-flags "..."] | -target T)
                   [-base-workers N -head-workers M]   (the self-check: the same binary as base and head, run with N and M workers)
+                  [-lang dart -base-extractor CMD -head-extractor CMD]   (a Dart directory: the command of the extractor of each side)
 
 A change for memory or cost must not change what the analysis builds (docs/WORKFLOW.md). On the same code, each version gives:
   IR         `rivus debug extract -all`            (compared by accept.Compare, the comparison of the acceptance test)
+             Dart: the output of the extractor of that side, the command that `rivus index` and `rivus analyze` run (-base-extractor, -head-extractor)
   edges      `rivus index` (the graph file)        (every edge of the call graph with its call site, kind and number of candidates)
   summaries  RIVUS_INTERNAL_SUMMARY_DUMP of `rivus analyze` (one line for each function: the hash of the whole summary)
   findings   the `findings` and `uncertainties` of the same `rivus analyze` (the set: the order of the array does not count)
@@ -17,14 +19,18 @@ dump (one from before this check) leaves "summaries" as NOT COMPARED; it is not 
 
 -dir: a directory (the benchmarks of the tree, a synthetic one, a clone); -target: a target of bench/deps-targets.json (memos), fetched
 and run like the pass line (the process tree is watched against the memory cap of the target; the heavy-work lock is held for each run).
-Go only. Exit status: 0 everything compared is the same (and summaries were compared); 1 a difference; 2 a run failed; 3 same, but a
-part was not compared. Standard library only.
+Go and Dart (-lang dart, with -dir; a target of bench/deps-targets.json is Go). Rust is not covered. Exit status: 0 everything compared is the
+same (and summaries were compared); 1 a difference; 2 a run failed; 3 same, but a part was not compared. Standard library only.
+A run of `rivus analyze` that ends with exit code 4 (the analysis is not complete: the pass limit or the timeout; zoo-dart has cells that stop by the
+pass limit on purpose) is compared as far as it goes, and the line "convergence: NOT CONVERGED" makes the exit status 3 whatever the other lines say
+(a difference still gives 1): a result that stopped is not a pass.
 """
 import argparse, collections, hashlib, json, os, shlex, subprocess, sys, tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import deps_bench as db  # noqa: E402
+from heavylock import HeavyLockTimeout  # noqa: E402
 
 DUMP_ENV = "RIVUS_INTERNAL_SUMMARY_DUMP"
 
@@ -35,30 +41,47 @@ def patterns_of(flags, loose=False):
     return [f for f in flags if (not f.startswith("-") if loose else f.startswith("./"))]
 
 
-def run_side(side, binary, src, rules, flags, env_base, work, limit_s, cap, lock_reason, loose=False, workers=""):
-    """Runs extract, index and analyze of one version. Returns (files, error)."""
+def run_side(side, binary, src, rules, flags, env_base, work, limit_s, cap, lock_reason, loose=False, workers="", extractor=""):
+    """Runs extract, index and analyze of one version. Returns (files, error, incomplete): incomplete is True when analyze ended with exit code 4.
+    extractor: the command of the Dart extractor of this version (empty: Go)."""
     pats = patterns_of(flags, loose)
     files = {"ir": os.path.join(work, side + ".ir.jsonl"), "db": os.path.join(work, side + ".graph.db"),
              "dump": os.path.join(work, side + ".summaries.txt"), "report": os.path.join(work, side + ".report.json")}
     rules_args = ["-rules", rules] if rules else []
     if workers:  # -workers N: the same result with any number of them (the self-check: the hash does not hold the order of the work)
         flags = ["-workers", workers] + flags  # before the packages: the flags stop at the first one
-    steps = [
-        ("extract", [binary, "debug", "extract", "-all", "-C", src] + pats, files["ir"], {}),
-        ("index", [binary, "index", "-C", src, "-graph", files["db"]] + rules_args + flags, os.path.join(work, side + ".index.out"), {}),
-        ("analyze", [binary, "analyze", "-C", src] + rules_args + flags, files["report"], {DUMP_ENV: files["dump"]}),
-    ]
+    if extractor:  # Dart: the IR is the output of the extractor (the way compare.sh makes it); index and analyze run the same command
+        steps = [
+            ("extract", shlex.split(extractor) + [src], files["ir"], {}),
+            ("index", [binary, "index", "-lang", "dart", "-C", src, "-graph", files["db"]] + rules_args + flags, os.path.join(work, side + ".index.out"), {"RIVUS_DART_EXTRACTOR": extractor}),
+            ("analyze", [binary, "analyze", "-lang", "dart", "-C", src] + rules_args + flags, files["report"], {DUMP_ENV: files["dump"], "RIVUS_DART_EXTRACTOR": extractor}),
+        ]
+    else:
+        steps = [
+            ("extract", [binary, "debug", "extract", "-all", "-C", src] + pats, files["ir"], {}),
+            ("index", [binary, "index", "-C", src, "-graph", files["db"]] + rules_args + flags, os.path.join(work, side + ".index.out"), {}),
+            ("analyze", [binary, "analyze", "-C", src] + rules_args + flags, files["report"], {DUMP_ENV: files["dump"]}),
+        ]
+    incomplete = False
     for name, cmd, out, extra in steps:
         env = {k: v for k, v in env_base.items() if k != DUMP_ENV}
         env.update(extra)
-        with db.heavy_lock("graph_check %s %s" % (side, name)):
-            m = db.run_watched(cmd, src, env, limit_s, cap, os.path.join(work, "%s.%s.err" % (side, name)), out)
+        try:
+            with db.heavy_lock("graph_check %s %s" % (side, name)):
+                try:
+                    m = db.run_watched(cmd, src, env, limit_s, cap, os.path.join(work, "%s.%s.err" % (side, name)), out)
+                except OSError as e:  # the command does not exist (a Dart extractor that is not there)
+                    return files, "%s %s could not start (%s)" % (side, name, e), incomplete
+        except HeavyLockTimeout as e:  # the machine is busy: not run (exit 2 with a line), not a traceback
+            return files, "%s %s did not run: %s" % (side, name, e), incomplete
         if m["why"]:
-            return files, "%s %s stopped (%s)" % (side, name, m["why"])
+            return files, "%s %s stopped (%s)" % (side, name, m["why"]), incomplete
         ok = (0, db.EXIT_INCOMPLETE) if name == "analyze" else (0,)
         if m["rc"] not in ok:
-            return files, "%s %s failed (exit code %s; %s)" % (side, name, m["rc"], os.path.join(work, "%s.%s.err" % (side, name)))
-    return files, None
+            return files, "%s %s failed (exit code %s; %s)" % (side, name, m["rc"], os.path.join(work, "%s.%s.err" % (side, name))), incomplete
+        if name == "analyze" and m["rc"] == db.EXIT_INCOMPLETE:
+            incomplete = True
+    return files, None, incomplete
 
 
 def canon_items(path, key):
@@ -115,7 +138,15 @@ def worse(status, rc):
     return rc if rank[rc] > rank[status] else status
 
 
-def compare(a, base, head):
+def convergence_line(base_incomplete, head_incomplete):
+    """The line for a run that stopped (exit code 4), or (None, 0). rc 3: a result that stopped is not a pass."""
+    who = " and ".join(n for n, f in (("base", base_incomplete), ("head", head_incomplete)) if f)
+    if not who:
+        return None, 0
+    return "convergence: NOT CONVERGED (analyze of %s ended with exit code 4: the analysis is not complete; the lines above compare what it had when it stopped)" % who, 3
+
+
+def compare(a, base, head, incomplete=(False, False)):
     lines, status = [], 0  # status: 0 same, 1 different, 2 failed, 3 not all compared
     for kind, key in (("ir", "ir"), ("edges", "db")):
         out, rc = graphcheck(a.graphcheck_bin, kind, base[key], head[key])
@@ -139,6 +170,10 @@ def compare(a, base, head):
         lines.append(line)
         if not same:
             status = worse(status, 1 if "DIFFERENT" in line else 2)
+    line, rc = convergence_line(*incomplete)
+    if line:
+        lines.append(line)
+        status = worse(status, rc)
     return lines, status
 
 
@@ -153,6 +188,9 @@ def main():
     ap.add_argument("-rules", default="")
     ap.add_argument("-flags", default="")
     ap.add_argument("-target")
+    ap.add_argument("-lang", default="go", choices=("go", "dart"), help="the language of -dir (a Rust project is not covered)")
+    ap.add_argument("-base-extractor", default="", help="-lang dart: the command of the Dart extractor of the base version (e.g. 'dart run /path/extractor/dart/bin/rivus_dart.dart')")
+    ap.add_argument("-head-extractor", default="")
     ap.add_argument("-base-workers", default="", help="-workers of the base run (the self-check: the same binary twice with 1 and 8)")
     ap.add_argument("-head-workers", default="")
     ap.add_argument("-limit", type=float, default=3600, help="seconds for one run")
@@ -160,6 +198,8 @@ def main():
     a = ap.parse_args()
     if bool(a.dir) == bool(a.target):
         ap.error("exactly one of -dir and -target")
+    if a.lang == "dart" and (not a.dir or not a.base_extractor or not a.head_extractor):
+        ap.error("-lang dart needs -dir, -base-extractor and -head-extractor")
     os.makedirs(a.out, exist_ok=True)
     env = dict(os.environ)
     with tempfile.TemporaryDirectory(prefix="graphcheck-") as work:
@@ -177,19 +217,21 @@ def main():
             cap = int((a.cap or t["mem_cap_gb"]) * db.GB)
         else:
             src, rules, flags = os.path.abspath(a.dir), os.path.abspath(a.rules) if a.rules else "", shlex.split(a.flags)
-            if not patterns_of(flags, True):
+            if a.lang == "go" and not patterns_of(flags, True):
                 flags = flags + ["./..."]
             cap = int((a.cap or 8) * db.GB)
-        sides = {}
+        sides, incomplete = {}, []
         for side, binary in (("base", a.base_bin), ("head", a.head_bin)):
-            files, err = run_side(side, os.path.abspath(binary), src, rules, flags, env, work, a.limit, cap, a.name, loose=bool(a.dir), workers=a.base_workers if side == "base" else a.head_workers)
+            files, err, inc = run_side(side, os.path.abspath(binary), src, rules, flags, env, work, a.limit, cap, a.name, loose=bool(a.dir), workers=a.base_workers if side == "base" else a.head_workers,
+                                       extractor=(a.base_extractor if side == "base" else a.head_extractor) if a.lang == "dart" else "")
+            incomplete.append(inc)
             if err:
                 line = "%s: NOT RUN (%s)" % (a.name, err)
                 print(line)
                 open(os.path.join(a.out, "graphcheck-%s.txt" % a.name), "w").write(line + "\n")
                 return 2
             sides[side] = files
-        lines, status = compare(a, sides["base"], sides["head"])
+        lines, status = compare(a, sides["base"], sides["head"], tuple(incomplete))
     text = "\n".join("%s %s" % (a.name, l.replace("\n", "\n  ")) for l in lines) + "\n"
     print(text, end="")
     open(os.path.join(a.out, "graphcheck-%s.txt" % a.name), "w").write(text)
