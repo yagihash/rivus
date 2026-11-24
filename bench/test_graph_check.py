@@ -44,6 +44,45 @@ class Items(unittest.TestCase):
         self.assertEqual(g.worse(0, 0), 0)
 
 
+class Convergence(unittest.TestCase):
+    def test_line_and_status(self):
+        self.assertEqual(g.convergence_line(False, False), (None, 0))
+        line, rc = g.convergence_line(False, True)
+        self.assertEqual(rc, 3)
+        self.assertIn("NOT CONVERGED (analyze of head ended with exit code 4", line)
+        self.assertIn("analyze of base and head", g.convergence_line(True, True)[0])
+        self.assertEqual(g.worse(g.worse(0, 3), 1), 1)  # a difference stays a difference
+
+
+class DartSteps(unittest.TestCase):
+    """run_side with a Dart extractor: the IR is the output of the extractor, index and analyze get -lang dart and the same command in
+    RIVUS_DART_EXTRACTOR, and an analyze that ends with exit code 4 is told (not an error)."""
+
+    def test_dart_commands_and_exit_code_4(self):
+        os.environ["RIVUS_HEAVY_LOCK_HELD"] = "1"  # no lock in a test
+        with tempfile.TemporaryDirectory() as d:
+            fake = os.path.join(d, "rivus")
+            log = os.path.join(d, "log")
+            open(fake, "w").write("#!/bin/sh\necho \"$@ EXT=$RIVUS_DART_EXTRACTOR\" >> %s\nif [ \"$1\" = analyze ]; then echo '{}'; : > \"$RIVUS_INTERNAL_SUMMARY_DUMP\"; exit 4; fi\n" % log)
+            os.chmod(fake, 0o755)
+            ext = os.path.join(d, "ext")
+            open(ext, "w").write("#!/bin/sh\necho '{\"ir\":1}'\n")
+            os.chmod(ext, 0o755)
+            src = os.path.join(d, "src")
+            os.mkdir(src)
+            files, err, inc = g.run_side("base", fake, src, "", [], dict(os.environ), d, 60, 1 << 33, "t", loose=True, extractor=ext + " --flag")
+            self.assertIsNone(err)
+            self.assertTrue(inc)
+            self.assertEqual(open(files["ir"]).read().strip(), '{"ir":1}')
+            lines = open(log).read().splitlines()
+            self.assertEqual(len(lines), 2, lines)  # index and analyze (the extractor is not the fake rivus)
+            for l in lines:
+                self.assertIn("-lang dart -C " + src, l)
+                self.assertTrue(l.endswith("EXT=" + ext + " --flag"), l)
+            files, err, inc = g.run_side("head", fake, src, "", [], dict(os.environ), d, 60, 1 << 33, "t", loose=True, extractor=os.path.join(d, "missing"))
+            self.assertIn("extract could not start", err)
+
+
 class WorkersSelfCheck(unittest.TestCase):
     """The same binary with 1 and 8 workers gives the same IR, edges, summaries and findings: the hash of the summaries does not hold the order of the work."""
 
