@@ -311,7 +311,7 @@ func wholeResult(t *testing.T, res *Result) string {
 		t.Fatal(err)
 	}
 	for _, k := range []string{"reanalyses", "passes", "adds_total", "adds_max_single_run", "adds_max_function_total", "adds_per_function",
-		"duration_ms", "dep_spent_ms", "own_spent_ms", "pass_changes", "summary_steps"} {
+		"scc_restarts", "duration_ms", "dep_spent_ms", "own_spent_ms", "pass_changes", "summary_steps"} {
 		delete(st, k)
 	}
 	sb, _ := json.Marshal(st)
@@ -357,26 +357,30 @@ func TestCoarseSolvedAgainWithProjectFunctions(t *testing.T) {
 	}
 }
 
-// Hit in a later pass (the component has written to the global state by then), it is solved again at the end of the
-// level: the summaries are above those of the run from the start (more flows than there are, never fewer).
-func TestCoarseLaterPassIsAbove(t *testing.T) {
+// Hit in a later pass (the component has written to the global state by then), the whole analysis is started again
+// with the component at depth 0 from the start: the answer is the one of the run from the start (the summaries, the
+// global state, the findings, the uncertainties, the stats but the work that was done), and the record says so.
+func TestCoarseLaterPassStartsAgain(t *testing.T) {
 	isDep := func(id string) bool {
 		return isF(id) && !strings.HasSuffix(id, ".f04") && !strings.HasSuffix(id, ".f08") && !strings.HasSuffix(id, ".f01")
 	}
-	start, _ := runCoarse(t, isDep, func(o *Options) { o.SCCCoarsenAtRound = -1 })
-	e, res := runCoarse(t, isDep, func(o *Options) { o.SCCCoarsenAtRound = 9; o.MaxPasses = 40 })
-	if len(e.coarseList) != 1 || e.coarseList[0].pass < 2 {
-		t.Skipf("the component was not hit in a later pass (%d moves)", len(e.coarseList))
+	start, sres := runCoarse(t, isDep, func(o *Options) { o.SCCCoarsenAtRound = -1 })
+	e, res := runCoarse(t, isDep, func(o *Options) { o.SCCCoarsenAtRound = 9 })
+	if len(e.coarseList) != 1 || !e.coarseList[0].restarted || e.coarseList[0].pass < 2 || res.Stats.SCCRestarts != 1 {
+		t.Fatalf("not hit in a later pass: %d moves, restarts %d", len(e.coarseList), res.Stats.SCCRestarts)
 	}
-	if !res.Stats.Converged {
-		t.Error("not converged")
+	if rs := records(res); len(rs) != 1 || !strings.Contains(rs[0].Detail, "started again") {
+		t.Errorf("the record does not say that the analysis was started again: %v", rs)
 	}
 	for id, sum := range byID(start) {
-		got := elemSet(byID(e)[id], false)
-		for k := range elemSet(sum, false) {
-			if !got[k] {
-				t.Errorf("%s: %s of the run from the start is missing", id, k)
-			}
+		if got := byID(e)[id]; got == nil || canon(got) != canon(sum) {
+			t.Errorf("%s differs from the run from the start", id)
 		}
+	}
+	if a, b := globalsDump(start), globalsDump(e); a != b {
+		t.Errorf("the global state differs from the run from the start\n%s\n---\n%s", a, b)
+	}
+	if a, b := wholeResult(t, sres), wholeResult(t, res); a != b {
+		t.Errorf("the result differs from the run from the start\n%s\n---\n%s", a, b)
 	}
 }

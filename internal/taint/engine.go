@@ -175,10 +175,16 @@ type Engine struct {
 	// coarse are the dependency functions whose component was moved to the coarse summary (coarse.go), coarseList the
 	// components in the order they were moved, sccRounds the rounds each large component has had (by its first
 	// function). Under mu.
-	coarse       map[*sg.Func]*coarseSCC
-	pendingReset []*coarseSCC // the components to be solved again; done at the end of the level (applyResets)
-	coarseList   []*coarseSCC
-	sccRounds    map[*sg.Func]int
+	coarse map[*sg.Func]*coarseSCC
+	// marks are the components that went over the budget in a later pass, by their first function: the analysis starts
+	// again with them at depth 0 from the start (restartWanted). restarts counts the starts again, priorReanalyses
+	// the reanalyses of the runs that were thrown away.
+	marks           map[*sg.Func]*coarseSCC
+	restart         bool
+	restarts        int
+	priorReanalyses int
+	coarseList      []*coarseSCC
+	sccRounds       map[*sg.Func]int
 	// iterDumpDir is the directory for the dump of the summaries after each round of a large component
 	// (RIVUS_INTERNAL_SUMMARY_DUMP_EACH_ITER; empty: none). iterDumps are the large components, by their first
 	// function. Both are set before the run and not changed during it.
@@ -287,6 +293,7 @@ func New(p *sg.Program, texts ir.Texts, st *sites.Result, rules *model.Rules, op
 		coarsened:  map[*sg.Func]string{},
 		coarse:     map[*sg.Func]*coarseSCC{},
 		sccRounds:  map[*sg.Func]int{},
+		marks:      map[*sg.Func]*coarseSCC{},
 		globals:    newGlobalStore(),
 		aliasArgs:  aliasArgs,
 	}
@@ -562,7 +569,10 @@ type Stats struct {
 	// there are (the out_limit record, #186).
 	// SCCCoarsened is the number of large components whose dependency functions were moved to the coarse summary
 	// (ADR-124; the scc_coarsened records). A run with a budget off has none.
-	SCCCoarsened      int `json:"scc_coarsened,omitempty"`
+	SCCCoarsened int `json:"scc_coarsened,omitempty"`
+	// SCCRestarts is how many times the whole analysis was started again because a component went over its budget in a
+	// later pass (ADR-124).
+	SCCRestarts       int `json:"scc_restarts,omitempty"`
 	OutWidenedFuncs   int `json:"out_widened_funcs,omitempty"`
 	OutWidenedOutputs int `json:"out_widened_outputs,omitempty"`
 	// The work of the analysis, counted in the elements put into the sets (the same count as Budget): always in the
@@ -642,6 +652,21 @@ type NumericStopCount struct {
 // summaries stop changing.
 func (e *Engine) Run() *Result {
 	start := time.Now()
+	for {
+		res := e.runOnce(start)
+		if res != nil {
+			res.Stats.DurationMilli = time.Since(start).Milliseconds()
+			res.Stats.SCCRestarts = e.restarts
+			res.Stats.Reanalyses += e.priorReanalyses
+			return res
+		}
+		e.resetForRestart() // a component went over the budget in a later pass: all again, with it at depth 0 from the start
+	}
+}
+
+// runOnce is one run of the analysis. It returns nil when a large component went over its budget in a later pass (it
+// is marked, and the caller starts the whole analysis again: coarse.go).
+func (e *Engine) runOnce(start time.Time) *Result {
 	e.reach = e.prog.Reachable()
 	e.reachCB = e.prog.ReachableWithCallbacks()
 	fns := e.prog.Funcs
@@ -820,6 +845,10 @@ func (e *Engine) Run() *Result {
 				}
 			})
 			e.commitGlobals()
+			if e.restartWanted() {
+				e.priorReanalyses += int(reanalyses.Load())
+				return nil
+			}
 		}
 		sort.Strings(changedNow)
 		lastChanged = len(changedNow)
@@ -1008,7 +1037,6 @@ func (e *Engine) commitGlobals() {
 		}
 	}
 	e.pendingGlobals, e.pendingReaders = e.pendingGlobals[:0], e.pendingReaders[:0]
-	e.applyResets()
 }
 
 // lessGlobalWrite orders the writes to the global state: by cell (the name; the cells

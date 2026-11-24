@@ -3,6 +3,7 @@ package taint
 import (
 	"sort"
 	"strconv"
+	"time"
 
 	"github.com/yagihash/rivus/internal/sg"
 )
@@ -34,6 +35,7 @@ type coarseSCC struct {
 	budget      int
 	round, pass int // the round of the component (counted over the passes) and the pass
 	packages    []string
+	restarted   bool // found in a later pass: the whole analysis was started again with it at depth 0 from the start
 }
 
 // coarseOf is the coarse component the function is in, or nil.
@@ -78,8 +80,9 @@ func depsOf(scc []*sg.Func) []*sg.Func {
 // written nothing to the global state yet (what a level writes waits for its end), so what it worked out is thrown
 // away here, and the caller starts its rounds again (inline: true): the run is the one that had the dependency
 // functions at depth 0 from the start. In a later pass it has written to the global state, which other components
-// of the level read at the same time: the caller stops the rounds of this pass, and the summaries and what the
-// component wrote are cleared at the end of the level (applyResets), the rounds start again in the next pass.
+// of the level read at the same time: the component is marked, the caller stops its rounds, and at the end of the
+// level the whole analysis is started again (Run) with the marked components at depth 0 from the start. The marks
+// only grow (a marked component does not go over again), so the starts again are at most the number of components.
 func (e *Engine) coarsenStep(scc []*sg.Func, pass int) (moved, inline bool) {
 	if e.opts.SCCCoarsen <= 0 && e.opts.SCCCoarsenAtRound == 0 {
 		return false, false
@@ -132,7 +135,10 @@ func (e *Engine) coarsenStep(scc []*sg.Func, pass int) (moved, inline bool) {
 		e.pendingReaders = kr
 		return true, true
 	}
-	e.pendingReset = append(e.pendingReset, c)
+	// a later pass: the component has written to the global state, and other components read it: the whole analysis is
+	// started again with it marked (it is at depth 0 from the start then: the answer is the one of such a run)
+	e.marks[scc[0]] = c
+	e.restart = true
 	return true, false
 }
 
@@ -161,27 +167,20 @@ func (e *Engine) moveToCoarse(scc, deps []*sg.Func, cause string, deep, round, p
 // coarsenFirst is for the tests (SCCCoarsenAtRound below 0): the component goes to depth 0 before its first round, so
 // nothing is thrown away.
 func (e *Engine) coarsenFirst(scc []*sg.Func) {
-	if e.opts.SCCCoarsenAtRound >= 0 {
+	e.mu.RLock()
+	mark := e.marks[scc[0]]
+	e.mu.RUnlock()
+	if e.opts.SCCCoarsenAtRound >= 0 && mark == nil {
 		return
 	}
 	if deps := depsOf(scc); len(deps) > 0 && e.coarseOf(deps[0]) == nil {
+		if mark != nil {
+			c := e.moveToCoarse(scc, deps, mark.cause, mark.deep, mark.round, mark.pass)
+			c.restarted = true
+			return
+		}
 		e.moveToCoarse(scc, deps, "forced", 0, 0, 0)
 	}
-}
-
-// applyResets throws away what the components that were moved to depth 0 in a later pass had worked out (see
-// coarsenStep), and what they wrote to the global state (an element that another function wrote stays). It runs at
-// the end of a level, with mu held, when no function is being analysed.
-func (e *Engine) applyResets() {
-	for _, c := range e.pendingReset {
-		e.discard(c)
-		ids := map[string]bool{}
-		for _, fn := range c.members {
-			ids[e.funcID(fn)] = true
-		}
-		e.globals.forget(ids, c.members)
-	}
-	e.pendingReset = e.pendingReset[:0]
 }
 
 // discard restores the engine state that the analysis of the functions of the component wrote (commit, compute):
@@ -235,41 +234,54 @@ func (e *Engine) discard(c *coarseSCC) {
 	e.heldMu.Unlock()
 }
 
-// forget takes away what only the given functions wrote to the global state, and the marks that they read it.
-func (g *globalStore) forget(writers map[string]bool, fns []*sg.Func) {
-	for v, pm := range g.writerFns {
-		for path, em := range pm {
-			for el, list := range em {
-				keep := list[:0:0]
-				for _, w := range list {
-					if !writers[w] {
-						keep = append(keep, w)
-					}
-				}
-				if len(keep) == len(list) {
-					continue
-				}
-				if len(keep) > 0 {
-					em[el] = keep
-					continue
-				}
-				delete(em, el)
-				delete(g.cells[v][path], el)
-				delete(g.writers[v][path], el)
-			}
-		}
-	}
-	for _, m := range g.readers_ {
-		for _, fn := range fns {
-			delete(m, fn)
-		}
-	}
+// restartWanted says whether a component went over its budget in a later pass in this run.
+func (e *Engine) restartWanted() bool {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.restart
+}
+
+// resetForRestart brings the engine to the state it had before the first run, with the marks kept: every state
+// that the analysis writes (the summaries, the states, the global state, the records, the diagnostics).
+func (e *Engine) resetForRestart() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.restart = false
+	e.restarts++
+	e.summaries = map[*sg.Func]*Summary{}
+	e.states = map[*sg.Func]*state{}
+	e.degraded = map[*sg.Func]uint8{}
+	e.spent = map[*sg.Func]time.Duration{}
+	e.addsTotal = map[*sg.Func]int64{}
+	e.addsMaxRun = 0
+	e.guardLimit = map[*sg.Func]bool{}
+	e.coarsened = map[*sg.Func]string{}
+	e.coarse = map[*sg.Func]*coarseSCC{}
+	e.coarseList = nil
+	e.sccRounds = map[*sg.Func]int{}
+	e.globals = newGlobalStore()
+	e.pendingGlobals, e.pendingReaders = nil, nil
+	e.notConverged, e.notConvergedSet = nil, nil
+	e.suppressions = nil
+	e.pass, e.passChanges, e.seenEver, e.traced, e.pkgs = 0, nil, nil, nil, nil
+	e.unmodeled = unmodeledCount{}
+	e.identityStores.Range(func(k, _ any) bool { e.identityStores.Delete(k); return true })
+	e.heldMu.Lock()
+	e.heldNothing = nil
+	e.heldMu.Unlock()
 }
 
 // sccCoarsenedDetail is the note on a hop that applied the summary of a dependency function of a component that was
 // solved again at depth 0: the flow from here on may exist only because of that (more flows than there are, never
 // fewer).
 const sccCoarsenedDetail = "scc_coarsened: the value went through a function of a dependency in a large group of functions that call each other, which was solved again with the access paths of the dependency functions cut at depth 0 to keep the analysis finite: the flow from here may exist only because of that (more flows than there are, never fewer)"
+
+func restartedPhrase(c *coarseSCC) string {
+	if c.restarted {
+		return "; found in a later pass, so the whole analysis was started again with it at depth 0 from the start"
+	}
+	return ""
+}
 
 // coarseRecords are the records of the components that were solved again at depth 0, one each, in the order of the
 // first function: where (the functions, the packages), what was over, the count, the round.
@@ -286,7 +298,7 @@ func (e *Engine) coarseRecords() []*Uncertainty {
 		d := "scc_coarsened: a group of " + strconv.Itoa(c.size) + " functions that call each other (" + strconv.Itoa(len(c.funcs)) +
 			" of the dependencies, in " + strconv.Itoa(len(c.packages)) + " packages) was solved again from the start, once, with the access paths of its dependency functions cut at depth 0 (" +
 			c.cause + ": " + strconv.Itoa(c.deep) + " keys of param outputs deeper than one step, budget " + strconv.Itoa(c.budget) +
-			", after round " + strconv.Itoa(c.round) + " of pass " + strconv.Itoa(c.pass) + "): what is told apart below the first step of a parameter is not told apart there (more flows than there are, never fewer)"
+			", after round " + strconv.Itoa(c.round) + " of pass " + strconv.Itoa(c.pass) + ")" + restartedPhrase(c) + ": what is told apart below the first step of a parameter is not told apart there (more flows than there are, never fewer)"
 		u := newUncertainty(KindDepthLimit, d, "")
 		u.Candidates = ids
 		out = append(out, u)
