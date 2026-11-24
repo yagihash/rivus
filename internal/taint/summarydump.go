@@ -193,6 +193,45 @@ func (e *Engine) dumpRound(scc []*sg.Func, pass, analysed int, changed map[*sg.F
 		sums[i] = s.sum
 	}
 	fmt.Fprintf(&b, "# outkeys %s\n", topOutputTails(sums, 20))
+	paths := map[string]int{}
+	owners := map[string]map[string]int{}
+	for _, s := range snaps {
+		for _, o := range s.sum.Outputs {
+			if o.Kind != "param" {
+				continue
+			}
+			k := "param" + strconv.Itoa(o.Index) + o.Path
+			paths[k]++
+			if owners[k] == nil {
+				owners[k] = map[string]int{}
+			}
+			owners[k][e.funcID(s.fn)]++
+		}
+	}
+	pk := make([]string, 0, len(paths))
+	for k := range paths {
+		pk = append(pk, k)
+	}
+	sort.Slice(pk, func(i, j int) bool {
+		if paths[pk[i]] != paths[pk[j]] {
+			return paths[pk[i]] > paths[pk[j]]
+		}
+		return pk[i] < pk[j]
+	})
+	if len(pk) > 40 {
+		pk = pk[:40]
+	}
+	for _, k := range pk {
+		ids := make([]string, 0, len(owners[k]))
+		for id := range owners[k] {
+			ids = append(ids, id)
+		}
+		sort.Strings(ids)
+		if len(ids) > 3 {
+			ids = ids[:3]
+		}
+		fmt.Fprintf(&b, "# outpath %q *%d funcs=%d e.g. %s\n", k, paths[k], len(owners[k]), strings.Join(ids, " ; "))
+	}
 	for _, r := range rows {
 		b.WriteString(r[1])
 		b.WriteByte('\n')
