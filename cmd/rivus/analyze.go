@@ -258,6 +258,16 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	opts.PassStatsTop = o.passStatsTop
 	opts.PassStatsSort = o.passStatsSort
 	opts.TraceElement = o.traceElement
+	// Internal, to measure N of the large components (ADR-124; no flag, not in -h): "n" has the components with n functions or
+	// more solved with their dependency functions at depth 0, "n:deps" counts the dependency functions in them. Unset: none.
+	if v := os.Getenv("RIVUS_INTERNAL_SCC_COARSEN_N"); v != "" {
+		num, mode, _ := strings.Cut(strings.TrimSpace(v), ":")
+		n, err := strconv.Atoi(num)
+		if err != nil || n < 0 || (mode != "" && mode != "deps") {
+			return nil, fmt.Errorf("RIVUS_INTERNAL_SCC_COARSEN_N: want n or n:deps (got %q)", v)
+		}
+		opts.SCCCoarsenN, opts.SCCCoarsenDeps = n, mode == "deps"
+	}
 	if o.verbose {
 		opts.SlowThreshold = 300 * time.Millisecond
 		opts.SlowFunc = func(fn string, d, cpu time.Duration, outputs, roots int) {

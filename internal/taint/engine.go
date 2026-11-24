@@ -71,6 +71,12 @@ type Options struct {
 	PassStatsSort string
 	SlowFunc      func(fn string, d, cpu time.Duration, outputs, roots int)
 	SlowThreshold time.Duration
+	// SCCCoarsenN: a strongly connected component of N functions or more that has functions of the dependencies is solved
+	// with those at access path depth 0 from the start (ADR-124). Zero (the default): none. SCCCoarsenDeps: N counts the
+	// functions of the dependencies in the component, not all of its functions. Internal: no flag
+	// (RIVUS_INTERNAL_SCC_COARSEN_N in cmd/rivus).
+	SCCCoarsenN    int
+	SCCCoarsenDeps bool
 }
 
 // DefaultOptions are the defaults.
@@ -161,6 +167,10 @@ type Engine struct {
 	// k, or the cell of a parameter was merged into the whole of it: the cells are
 	// coarser than the code (more than the truth, never less).
 	coarsened map[*sg.Func]string
+	// coarse are the dependency functions that are solved at depth 0 (coarse.go), coarseList the components they are in.
+	// Both are made before the run and not changed during it.
+	coarse     map[*sg.Func]*coarseSCC
+	coarseList []*coarseSCC
 	// iterDumpDir is the directory for the dump of the summaries after each round of a large component
 	// (RIVUS_INTERNAL_SUMMARY_DUMP_EACH_ITER; empty: none). iterDumps are the large components, by their first
 	// function. Both are set before the run and not changed during it.
@@ -267,6 +277,7 @@ func New(p *sg.Program, texts ir.Texts, st *sites.Result, rules *model.Rules, op
 		addsTotal:  map[*sg.Func]int64{},
 		guardLimit: map[*sg.Func]bool{},
 		coarsened:  map[*sg.Func]string{},
+		coarse:     map[*sg.Func]*coarseSCC{},
 		globals:    newGlobalStore(),
 		aliasArgs:  aliasArgs,
 	}
@@ -538,6 +549,9 @@ type Stats struct {
 	// OutWidenedFuncs and OutWidenedOutputs: the functions whose final summary has an output that was widened
 	// (more than 24 elements, the parts of a parameter merged into the whole of it), and how many such outputs
 	// there are (the out_limit record, #186).
+	// SCCCoarsened is the number of components whose dependency functions are solved at depth 0 because the component
+	// is large (ADR-124; the scc_coarsened records). A run with the setting off has none.
+	SCCCoarsened      int `json:"scc_coarsened,omitempty"`
 	OutWidenedFuncs   int `json:"out_widened_funcs,omitempty"`
 	OutWidenedOutputs int `json:"out_widened_outputs,omitempty"`
 	// The work of the analysis, counted in the elements put into the sets (the same count as Budget): always in the
@@ -648,6 +662,7 @@ func (e *Engine) Run() *Result {
 	}
 	sccs, callers := order(fns, callees)
 	levels := levelsOf(sccs, callees)
+	e.coarsenBySize(sccs)
 	st0 := Stats{Levels: len(levels)}
 	for _, lv := range levels {
 		if len(lv) > st0.WidestLevel {
@@ -812,6 +827,7 @@ func (e *Engine) Run() *Result {
 	sort.Strings(e.notConverged)
 	st.NotConverged = e.notConverged
 	st.PassChanges = e.passChanges
+	st.SCCCoarsened = len(e.coarseList)
 	for _, sum := range e.summaries {
 		n, steps := 0, 0
 		for _, o := range sum.Outputs {
@@ -1034,7 +1050,7 @@ type fnResult struct {
 // it reads the summaries of the callees and the global state as they are.
 func (e *Engine) compute(fn *sg.Func) *fnResult {
 	s := &state{
-		eng: e, fn: fn,
+		eng: e, fn: fn, coarse: e.coarse[fn] != nil,
 		cells:       map[Root]map[string]Set{},
 		paramRoot:   map[Root]int{},
 		findings:    map[findingKey]*rawFinding{},
@@ -1052,6 +1068,9 @@ func (e *Engine) compute(fn *sg.Func) *fnResult {
 	took := time.Since(began)
 	// the summary is joined with the one of the earlier visits
 	sum := joinSummaries(e.summaryOf(fn), s.summarize())
+	if c := e.coarse[fn]; c != nil {
+		sum.Coarse = c
+	}
 	// Too many guards matter only where taint is told apart by them: where
 	// something is sanitized, or a source's own label is returned.
 	if s.guardOverflow && sanitizes(sum) {
@@ -1479,6 +1498,8 @@ func (e *Engine) collect(st Stats) *Result {
 	if u, _, _ := e.outLimitRecord(); u != nil {
 		res.Uncertainties = append(res.Uncertainties, u)
 	}
+	// the large components whose dependency functions are solved at depth 0 (ADR-124): one record each
+	res.Uncertainties = append(res.Uncertainties, e.coarseRecords()...)
 	// where the data of a source became a number or a bool: one record for each source site
 	if stops := e.numericStopRecords(); len(stops) > 0 {
 		res.Uncertainties = append(res.Uncertainties, stops...)
