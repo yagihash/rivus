@@ -227,6 +227,10 @@ type state struct {
 	copyOf    map[Loc][]Loc // a cell that holds a copy of a struct -> the cells it was copied from
 	locSet    map[*sg.Value]map[Loc]bool
 	locCache  map[*sg.Value][]Loc
+	// the function values seeded in this function (funccells.go)
+	funcSeeded map[*sg.Value]bool
+	// the closures made in this function, by the function they are (funccells.go)
+	closureMk map[string]*sg.Instr
 	locsFinal bool // locCache may be filled: the fixed point of the locations is reached
 
 	branches        *[]*sg.Block

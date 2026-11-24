@@ -94,6 +94,8 @@ type Engine struct {
 	dispatch sync.Map // *sg.Instr -> map[*sg.Func][]Guard
 	// valueGuards is the same for the calls of function values (valueGuards).
 	valueGuards sync.Map // *sg.Instr -> map[string][]Guard
+	// cellCalls is, for the calls of function values that read functions from a cell (funccells.go), the functions: *sg.Instr -> *cellCands
+	cellCalls sync.Map
 
 	// implsIndex are the implementations of the trait methods that the program has, by the last name of the
 	// trait and the method (callrows.go, methodImpls)
@@ -615,7 +617,7 @@ func (e *Engine) Run() *Result {
 	e.reach = e.prog.Reachable()
 	e.reachCB = e.prog.ReachableWithCallbacks()
 	fns := e.prog.Funcs
-	callees := func(ci *sg.Instr) []*sg.Func {
+	base := func(ci *sg.Instr) []*sg.Func {
 		if ci.Op == ir.OpMakeClosure {
 			// a closure that is not only called where it is made has its summary applied at the
 			// place it is made (C-7): the function that makes it depends on it
@@ -645,6 +647,19 @@ func (e *Engine) Run() *Result {
 			return cb
 		}
 		return append(append([]*sg.Func(nil), ci.CandidateFns...), cb...)
+	}
+	// the functions that the function values of the code of the project name (funccells.go): the call that reads them
+	// from a cell needs their summaries, so the function that makes them is analysed after them
+	refs := funcRefs(fns)
+	callees := func(ci *sg.Instr) []*sg.Func {
+		if ci.Op != ir.OpCall && ci.Op != ir.OpMakeClosure {
+			return refs[ci]
+		}
+		out := base(ci)
+		if r := refs[ci]; len(r) > 0 {
+			out = append(out[:len(out):len(out)], r...)
+		}
+		return out
 	}
 	sccs, callers := order(fns, callees)
 	levels := levelsOf(sccs, callees)
@@ -922,9 +937,6 @@ func levelsOf(sccs [][]*sg.Func, callees func(*sg.Instr) []*sg.Func) [][][]*sg.F
 		for _, fn := range scc {
 			for _, b := range fn.Blocks {
 				for _, in := range b.Instrs {
-					if in.Op != ir.OpCall && in.Op != ir.OpMakeClosure {
-						continue
-					}
 					for _, c := range callees(in) {
 						if j, ok := of[c]; ok && j != i && level[j]+1 > level[i] {
 							level[i] = level[j] + 1
@@ -1182,9 +1194,6 @@ func order(fns []*sg.Func, callees func(*sg.Instr) []*sg.Func) ([][]*sg.Func, ma
 		seen := map[*sg.Func]bool{}
 		for _, b := range fn.Blocks {
 			for _, in := range b.Instrs {
-				if in.Op != ir.OpCall && in.Op != ir.OpMakeClosure {
-					continue
-				}
 				for _, c := range callees(in) {
 					if inSet[c] && !seen[c] {
 						seen[c] = true

@@ -9,7 +9,7 @@ void register() {
 }
 
 void vuln() { // @vuln
-  final v = src('dyn-func-map-vuln'); // @source(dyn-func-map-vuln) @miss(unresolved_callee) @ref(FUNC-VALUE-MEMORY,PARITY)
+  final v = src('dyn-func-map-vuln'); // @source(dyn-func-map-vuln)
   final m = <String, void Function(String)>{
     'cmd': (x) {
       sinkCmd(x); // @sink(dyn-func-map-vuln)
@@ -29,10 +29,10 @@ void fixed() { // @fixed
 }
 
 void decoy() { // @decoy
-  final v = src('dyn-func-map-decoy'); // @source(dyn-func-map-decoy) @miss(unresolved_callee) @ref(FUNC-VALUE-MEMORY,PARITY)
+  final v = src('dyn-func-map-decoy'); // @source(dyn-func-map-decoy)
   final m = <String, void Function(String)>{
     'cmd': (x) {
-      sinkCmd(x); // @sink(none) @nosink(dyn-func-map-decoy)
+      sinkCmd(x); // @sink(none) @fp @nosink(dyn-func-map-decoy) @fp @ref(#210)
     },
     'sql': (x) {
       sinkSql(x); // @sink(dyn-func-map-decoy)

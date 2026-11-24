@@ -102,6 +102,11 @@ func (e *Engine) summarySizes() *SummarySizes {
 				globals[o.Global] += len(o.Elems)
 			}
 			for _, oe := range o.Elems {
+				if oe.E.Kind == Real && oe.E.label == funcLabelID {
+					// a function value (funccells.go) is not taint: it is not a source that reaches
+					s.ByElement["func"]++
+					continue
+				}
 				if oe.E.Kind == Real {
 					s.ByElement["real"]++
 					if _, ok := seen[oe.E.origin]; !ok {

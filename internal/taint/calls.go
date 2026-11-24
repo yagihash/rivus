@@ -108,6 +108,10 @@ func (s *state) callSig(cc *callCtx) int {
 	for _, b := range s.callBindings(cc) {
 		add(b)
 	}
+	// the value that is called is read for the function values it holds (funccells.go)
+	if s.funcCellCall(cc.in) {
+		add(cc.in.Args[0])
+	}
 	return sum
 }
 
@@ -221,6 +225,8 @@ func (s *state) callBody(cc *callCtx) {
 		s.valueCandidates(cc)
 		return
 	}
+	// the function values that the cell of the called value holds are called, besides what follows (funccells.go)
+	s.applyFuncCells(cc)
 	rules := s.eng.rules
 	// a package whose body is not read: what it may call back is applied where the model does not say it
 	s.replacedCallbacks(cc)

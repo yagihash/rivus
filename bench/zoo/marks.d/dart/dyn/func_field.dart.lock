@@ -1,4 +1,2 @@
-dart	dyn/func_field.dart	miss	@source(dyn-func-field-decoy) @miss(unmodeled_library_call,unresolved_callee) @ref(FUNC-VALUE-MEMORY,PARITY)	void decoy() { @decoy
-dart	dyn/func_field.dart	miss	@source(dyn-func-field-vuln) @miss(unmodeled_library_call,unresolved_callee) @ref(FUNC-VALUE-MEMORY,PARITY)	void vuln() { @vuln
 dart	dyn/func_field.dart	sink-none	@sink(none)	void fixed() { @fixed
 dart	dyn/func_field.dart	sink-none	@sink(none) @nosink(dyn-func-field-decoy)	void decoy() { @decoy
