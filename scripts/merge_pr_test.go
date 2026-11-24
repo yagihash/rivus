@@ -10,6 +10,13 @@ import (
 
 // runMerge runs scripts/merge-pr.sh 7 with a fake `gh`: `pr view` gives a clean PR, `run list` prints runs (exit runsCode),
 // and `pr merge` leaves a marker file. It returns the output, the error, and whether the merge was called.
+// The files `gh pr diff --name-only` prints, and the guardrail list the script reads (testGuardList "" = a copy of the real
+// .github/guardrail-paths; "-" = no list file; "dir" = a directory where the file should be; else the content). Tests set and restore them.
+var (
+	testChanged   = "a.go"
+	testGuardList = ""
+)
+
 const okChecks = `[{"name":"build","bucket":"pass"},{"name":"ci-ok","bucket":"pass"}]`
 
 func runMerge(t *testing.T, runs string, runsCode int, env ...string) (string, error, bool) {
@@ -36,6 +43,10 @@ func runMergePR(t *testing.T, commits string, zooCode int, checks, runs string, 
 	script := `#!/bin/bash
 case "$1 $2" in
 "repo view") echo o/r;;
+"pr diff") cat <<'EOF3'
+` + testChanged + `
+EOF3
+;;
 "pr view") cat <<'EOF2'
 ` + pr + `
 EOF2
@@ -63,7 +74,24 @@ esac
 	if err != nil {
 		t.Fatal(err)
 	}
-	sdir := t.TempDir()
+	root := t.TempDir()
+	sdir := filepath.Join(root, "scripts")
+	os.MkdirAll(sdir, 0o755)
+	os.MkdirAll(filepath.Join(root, ".github"), 0o755)
+	list := filepath.Join(root, ".github", "guardrail-paths")
+	switch testGuardList {
+	case "":
+		real, err := os.ReadFile("../.github/guardrail-paths")
+		if err != nil {
+			t.Fatal(err)
+		}
+		os.WriteFile(list, real, 0o644)
+	case "-":
+	case "dir":
+		os.MkdirAll(list, 0o755)
+	default:
+		os.WriteFile(list, []byte(testGuardList), 0o644)
+	}
 	sh := filepath.Join(sdir, "merge-pr.sh")
 	os.WriteFile(sh, src, 0o755)
 	os.WriteFile(filepath.Join(sdir, "zoo-loosened-check.sh"), []byte("#!/bin/bash\necho zoo check says no\nexit "+string(rune('0'+zooCode))+"\n"), 0o755)
@@ -170,6 +198,71 @@ func TestMergeGuardZooLoosened(t *testing.T) {
 		}
 		if !strings.Contains(out, c.want) {
 			t.Errorf("%s: output lacks %q:\n%s", c.name, c.want, out)
+		}
+	}
+}
+
+const refused = "この PR はガードレールの部品を変えるので、ユーザーのマージ"
+
+func withGuard(t *testing.T, changed, list string) {
+	t.Helper()
+	oc, ol := testChanged, testGuardList
+	testChanged, testGuardList = changed, list
+	t.Cleanup(func() { testChanged, testGuardList = oc, ol })
+}
+
+var okRuns = "[" + run("completed", "success", "aaa", "https://x/ok") + "]"
+
+// Each part the user keeps has a pattern in the list, and a PR that changes a file of that part is refused (one part at a time).
+func TestMergeGuardrailPaths(t *testing.T) {
+	parts := []struct{ pattern, file string }{
+		{".github/workflows/", ".github/workflows/ci.yml"},
+		{".githooks/", ".githooks/pre-push"},
+		{".claude/hooks/", ".claude/hooks/x.sh"},
+		{".claude/settings*", ".claude/settings.json"},
+		{".claude/settings*", ".claude/settings.local.json"},
+		{".claude/prompts/", ".claude/prompts/p.md"},
+		{".regomark/", ".regomark/policy/wording.rego"},
+		{".github/ghmint/", ".github/ghmint/a.rego"},
+		{".github/rulesets/", ".github/rulesets/main.json"},
+		{"scripts/merge-pr.sh", "scripts/merge-pr.sh"},
+		{"scripts/zoo-loosened-check.sh", "scripts/zoo-loosened-check.sh"},
+		{"scripts/main-ci*", "scripts/main-ci.sh"},
+		{".github/guardrail-paths", ".github/guardrail-paths"},
+	}
+	real, err := os.ReadFile("../.github/guardrail-paths")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range parts {
+		if !strings.Contains("\n"+string(real), "\n"+p.pattern+"\n") {
+			t.Errorf("the list lacks %q", p.pattern)
+		}
+		withGuard(t, "a.go\n"+p.file+"\n", "")
+		out, err, merged := runMerge(t, okRuns, 0)
+		if err == nil || merged || !strings.Contains(out, refused) || !strings.Contains(out, p.file) {
+			t.Errorf("%s: err = %v, merged = %v\n%s", p.file, err, merged, out)
+		}
+	}
+}
+
+func TestMergeGuardrailPathsOutside(t *testing.T) {
+	for _, f := range []string{"a.go", "docs/WORKFLOW.md", "scripts/shard.sh", ".github/release.yml", ".claude/work/QUEUE.md", "github/workflows/x.yml", "x/.githooks/y"} {
+		withGuard(t, f, "")
+		out, err, merged := runMerge(t, okRuns, 0)
+		if err != nil || !merged {
+			t.Errorf("%s: err = %v, merged = %v\n%s", f, err, merged, out)
+		}
+	}
+}
+
+// A missing, unreadable, empty or comment-only list refuses every PR; so does a changed-file list that cannot be read.
+func TestMergeGuardrailListFailsSafe(t *testing.T) {
+	for name, list := range map[string]string{"missing": "-", "unreadable": "dir", "empty": "\n", "comments only": "# x\n"} {
+		withGuard(t, "a.go", list)
+		out, err, merged := runMerge(t, okRuns, 0)
+		if err == nil || merged || !strings.Contains(out, "guardrail list") {
+			t.Errorf("%s: err = %v, merged = %v\n%s", name, err, merged, out)
 		}
 	}
 }
