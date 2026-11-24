@@ -73,7 +73,7 @@ func TestAddAndItsLookAheadsAgree(t *testing.T) {
 			// state is what add would have left
 			s := fresh()
 			adds, changed := s.adds, s.changed
-			nothing := s.addsNothing([]Loc{l}, sc.e, from, true)
+			nothing := s.addsNothing([]Loc{l}, sc.e, from, true, true)
 			exists := s.plainExists(l, sc.e, from, true)
 			if nothing && (a.adds != adds || a.changed != changed || a.truncated != s.truncated || a.widened != s.widened) {
 				t.Errorf("addsNothing says nothing to add, but add changed the state (adds %v, flags %v %v against %v %v)", a.adds != adds, a.truncated, a.widened, s.truncated, s.widened)

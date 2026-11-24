@@ -1016,12 +1016,27 @@ func (s *state) sameChainGuards(old *why, nf ref, hasNf bool) bool {
 	return !oo && !no && sameGuards(og, ng)
 }
 
+// sameChainAsAdd reports whether add of a plain hop that came from nf, to the cell at l, would leave the guards of the hop old
+// as they are: the comparison that add makes (it starts from the cell l, which sameChainGuards does not).
+func (s *state) sameChainAsAdd(l Loc, e Elem, old *why, nf ref, hasNf bool) bool {
+	var nfp *ref
+	if hasNf {
+		nfp = &nf
+	}
+	if old.unguarded() || sameFrom(old.from, nfp) {
+		return true
+	}
+	og, oo := s.guardsOfChain(l, e)
+	ng, no := s.guardsOfChainFrom(&why{from: nfp}, ref{l, e})
+	return !oo && !no && sameGuards(og, ng)
+}
+
 // addsNothing reports whether adding the element, with a plain reason (no
 // guards, no summary applied), to every one of the locations would change
 // nothing at all: it is there already with a plain reason, and the path and the
 // cell are as they would be left (add also records that a path was cut short and
 // that a cell was widened, which is why those are not skipped).
-func (s *state) addsNothing(dsts []Loc, e Elem, from ref, hasFrom bool) bool {
+func (s *state) addsNothing(dsts []Loc, e Elem, from ref, hasFrom, cutToo bool) bool {
 	if len(dsts) == 0 {
 		return false
 	}
@@ -1031,11 +1046,25 @@ func (s *state) addsNothing(dsts []Loc, e Elem, from ref, hasFrom bool) bool {
 		if t.numeric {
 			continue // add leaves it out
 		}
+		// a cut or widened target is left to add, unless the caller says that the hop has nothing that add compares
+		// besides what is looked at here (cutToo): the guards of the call that the caller puts on the hop are not
+		cut := t.trunc || t.widened
+		if cut && !cutToo {
+			return false
+		}
 		if t.set == nil {
 			return false
 		}
 		old, ok := t.set[t.e]
-		if !ok || old == nil || !old.plain() || !s.sameChainGuards(old, from, hasFrom) {
+		if !ok || old == nil || !old.plain() {
+			return false
+		}
+		if cut {
+			// the guards are compared the way add compares them, from the cell it puts the element into
+			if !s.sameChainAsAdd(t.loc, t.e, old, from, hasFrom) {
+				return false
+			}
+		} else if !s.sameChainGuards(old, from, hasFrom) {
 			return false
 		}
 		// add records that a path was cut and that a cell was widened, and puts nothing else (the notes of the

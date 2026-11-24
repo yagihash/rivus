@@ -604,7 +604,7 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 				if x.From != nil {
 					nf = ref{x.From.Cell, x.From.Orig}
 				}
-				if len(oe.Guards) == 0 && s.addsNothing(dsts, x.E, nf, x.From != nil) {
+				if len(oe.Guards) == 0 && s.addsNothing(dsts, x.E, nf, x.From != nil, len(extra) == 0) {
 					continue
 				}
 				var w *why
