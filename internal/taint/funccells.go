@@ -98,7 +98,7 @@ func (s *state) closureBindings(fn *sg.Func) []*sg.Value {
 
 // applyFuncCells applies the summary of each function that the cell of the called value holds, besides what the call
 // does without them: the call stays one that nothing resolved (the value may be a function that is not in the cell).
-// More than ir.ValueCandidateMost functions are not followed (the cell is folded into the call as it was), and the call says so.
+// More than ir.ValueCandidateMost functions are all followed too (the result does not depend on the order of the iteration), and the call says so.
 func (s *state) applyFuncCells(cc *callCtx) {
 	ci := cc.in
 	if !s.funcCellCall(ci) {
@@ -109,8 +109,10 @@ func (s *state) applyFuncCells(cc *callCtx) {
 		return
 	}
 	if len(ids) > ir.ValueCandidateMost {
-		s.newNote(ci, KindDepthLimit, "candidate_limit: the cell of the function value holds "+itoa(len(ids))+" functions, more than the "+itoa(ir.ValueCandidateMost)+" that rivus keeps; none is followed (rivus' limit, not the code's)", "")
-		return
+		// A flow that was added while the cell held fewer cannot be taken back, so the result would depend on the order of
+		// the iteration if the cell were folded: every function of the cell is followed (the same whatever the order), and
+		// the call says that there are more than rivus keeps for a call (ADR-118, condition ii)
+		s.newNote(ci, KindDepthLimit, "candidate_limit: the cell of the function value holds "+itoa(len(ids))+" functions, more than the "+itoa(ir.ValueCandidateMost)+" that rivus keeps for a call; all of them are followed here, because a flow added while the cell held fewer cannot be taken back (rivus' limit, not the code's)", "")
 	}
 	s.eng.noteCellCands(ci, ids)
 	n := s.newNote(ci, KindUnresolvedCallee, "func_cells: the functions that were put in the cell this value is read from are followed ("+itoa(len(ids))+

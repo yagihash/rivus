@@ -14,8 +14,9 @@ import (
 // top-level variable or a list and called through it is followed: the summary of each function that the cell holds is
 // applied at the call, and the call says that the candidates were added (unresolved_callee, func_cells), also on the
 // finding that goes through it. The cell is told by its root: a function put in the object of one allocation is not called
-// through the object of another. A closure that is given to a sink is no finding. More than 32 functions in a cell are not
-// followed, and the call says so (candidate_limit).
+// through the object of another. A closure that is given to a sink is no finding. More than 32 functions in a cell are all
+// followed (a flow that was added while the cell held fewer cannot be taken back, so folding would make the result depend on
+// the order of the iteration), and the call says so (candidate_limit). The result is the same with one worker and with many.
 func TestDartFuncCells(t *testing.T) {
 	t.Parallel()
 	dart := os.Getenv("RIVUS_DART")
@@ -75,12 +76,21 @@ void many() {
 	if out, err := get.CombinedOutput(); err != nil {
 		t.Fatalf("dart pub get: %v\n%s", err, out)
 	}
-	cmd := exec.Command(binary, "analyze", "-rules", "rules.yaml", "./...")
-	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "RIVUS_DART_EXTRACTOR="+dart+" run "+filepath.Join(extractor, "bin", "rivus_dart.dart"))
-	out, err := cmd.Output()
-	if err != nil {
-		t.Fatalf("analyze: %v", err)
+	run := func(workers string) []byte {
+		cmd := exec.Command(binary, "analyze", "-workers", workers, "-rules", "rules.yaml", "./...")
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), "RIVUS_DART_EXTRACTOR="+dart+" run "+filepath.Join(extractor, "bin", "rivus_dart.dart"))
+		out, err := cmd.Output()
+		if err != nil {
+			t.Fatalf("analyze: %v", err)
+		}
+		return out
+	}
+	out := run("0")
+	for _, w := range []string{"1", "8"} {
+		if other := run(w); !sameReport(t, out, other) {
+			t.Errorf("-workers %s gives another result than the default", w)
+		}
 	}
 	var r struct {
 		Findings []struct {
@@ -113,12 +123,12 @@ void many() {
 			t.Errorf("%s: the finding goes through a function value that was found in a cell, and does not say so (%v)", fn, f.Uncertainties)
 		}
 	}
-	for _, want := range []string{"field", "map", "global", "list", "tearOff"} {
+	for _, want := range []string{"field", "map", "global", "list", "tearOff", "many"} {
 		if !found[want] {
 			t.Errorf("no finding from %s (have %v)", want, found)
 		}
 	}
-	for _, not := range []string{"otherInstance", "otherField", "closureToSink", "many"} {
+	for _, not := range []string{"otherInstance", "otherField", "closureToSink"} {
 		if found[not] {
 			t.Errorf("finding from %s: it must stay quiet", not)
 		}
@@ -130,6 +140,22 @@ void many() {
 		}
 	}
 	if !limit {
-		t.Errorf("many: a cell with more than 32 functions is not followed, and the call does not say it (candidate_limit)")
+		t.Errorf("many: a cell with more than 32 functions: the call does not say it (candidate_limit)")
 	}
+}
+
+// sameReport says whether two reports hold the same findings and uncertainties, in the same order.
+func sameReport(t *testing.T, a, b []byte) bool {
+	t.Helper()
+	pick := func(x []byte) string {
+		var r struct {
+			Findings      json.RawMessage `json:"findings"`
+			Uncertainties json.RawMessage `json:"uncertainties"`
+		}
+		if err := json.Unmarshal(x, &r); err != nil {
+			t.Fatal(err)
+		}
+		return string(r.Findings) + string(r.Uncertainties)
+	}
+	return pick(a) == pick(b)
 }
