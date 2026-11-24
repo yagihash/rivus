@@ -277,7 +277,7 @@ func (r *resolver) resolve(fn *ir.Func, bi, ii int, in *ir.Instr) {
 	found := map[ir.FuncID]*found{}
 	r.cut = false
 	r.partial = nil
-	r.funcsOf(fn, root, fn, found, map[seenKey]bool{}, 0, -1)
+	r.funcsOf(fn, root, fn, found, map[funcsKey]bool{}, 0, -1, nil)
 	if len(found) > most {
 		// the functions are known, rivus leaves them out: not "the callee is not known"
 		in.Callee.ValueLimit, in.Callee.ValueFound = ir.ValueCandidateLimit, len(found)
@@ -319,6 +319,7 @@ func (r *resolver) resolve(fn *ir.Func, bi, ii int, in *ir.Instr) {
 		f := found[ir.FuncID(id)]
 		c := r.candOf(ir.FuncID(id), f.via)
 		c.Bind = f.bind
+		c.Returned = f.returned && f.bind == nil
 		in.Callee.ValueCands = append(in.Callee.ValueCands, c)
 	}
 }
@@ -417,8 +418,9 @@ func (r *resolver) directFunc(f *ir.Func, bi, ii int) ir.FuncID {
 }
 
 type found struct {
-	via  int
-	bind *ir.Binding
+	via      int
+	returned bool // reached as the value that a called function returned
+	bind     *ir.Binding
 }
 
 type seenKey struct {
@@ -449,6 +451,7 @@ const (
 	refParam
 	refFrom
 	refCaptured
+	refCall // the result of a call: what the called function returns
 )
 
 func (r *resolver) classify(f *ir.Func, form *irssa.Form, ref irssa.Ref) (refKind, *ir.Instr, []irssa.Ref) {
@@ -464,6 +467,8 @@ func (r *resolver) classify(f *ir.Func, form *irssa.Form, ref irssa.Ref) (refKin
 		switch in.Op {
 		case ir.OpMakeClosure:
 			return refClosure, in, nil
+		case ir.OpCall:
+			return refCall, in, nil
 		case ir.OpParam:
 			if in.Index < declared(f) {
 				return refParam, in, nil
@@ -518,14 +523,31 @@ func (r *resolver) onlyParam(fn *ir.Func, form *irssa.Form, root irssa.Ref) int 
 	return param
 }
 
+// enteredCall is a call whose returned value the walk is following into the called function: a parameter that the walk
+// reaches there is the argument of this call, not of every caller of the function.
+type enteredCall struct {
+	callee ir.FuncID
+	site   callSite
+}
+
+// funcsKey is what funcsOf has seen: the same value reached through another call is another walk.
+type funcsKey struct {
+	seenKey
+	via callSite
+}
+
 // funcsOf collects the functions that reach a value. via is the parameter of
-// home that the walk has gone through (-1 before it has).
-func (r *resolver) funcsOf(f *ir.Func, ref irssa.Ref, home *ir.Func, out map[ir.FuncID]*found, seen map[seenKey]bool, depth, via int) {
+// home that the walk has gone through (-1 before it has). entered are the calls
+// whose returned value the walk follows, the latest last.
+func (r *resolver) funcsOf(f *ir.Func, ref irssa.Ref, home *ir.Func, out map[ir.FuncID]*found, seen map[funcsKey]bool, depth, via int, entered []enteredCall) {
 	if depth > maxDepth {
 		r.cut = true
 		return
 	}
-	key := seenKey{f, ref}
+	key := funcsKey{seenKey: seenKey{f, ref}}
+	if n := len(entered); n > 0 {
+		key.via = entered[n-1].site
+	}
 	if seen[key] {
 		return
 	}
@@ -551,12 +573,15 @@ func (r *resolver) funcsOf(f *ir.Func, ref irssa.Ref, home *ir.Func, out map[ir.
 		// The values it captured go with it when the closure is made in the
 		// function that calls it (they are values of that function); from
 		// another function they are not at hand.
+		if len(entered) > 0 {
+			cur.returned = true
+		}
 		if f == home && len(in.Args) > 0 && cur.bind == nil {
 			cur.bind = &ir.Binding{Block: ref.Block, Instr: ref.Index}
 		}
 	case refFrom:
 		for _, a := range from {
-			r.funcsOf(f, a, home, out, seen, depth, via)
+			r.funcsOf(f, a, home, out, seen, depth, via, entered)
 		}
 	case refCaptured:
 		// a variable that the closure took from the function that made it: the value that the make_closure was given
@@ -574,13 +599,23 @@ func (r *resolver) funcsOf(f *ir.Func, ref irssa.Ref, home *ir.Func, out map[ir.
 				r.notePartial(ir.ValueWhyNoForm)
 				continue
 			}
-			r.funcsOf(mfn, mf.Operand(m.b, m.i, k), home, out, seen, depth+1, via)
+			r.funcsOf(mfn, mf.Operand(m.b, m.i, k), home, out, seen, depth+1, via, nil)
 		}
+	case refCall:
+		r.funcsOfCall(f, ref, in, home, out, seen, depth, via, entered)
 	case refParam:
 		if depth == 0 && f == home {
 			via = in.Index
 		}
-		for _, c := range r.callersOf(f.ID) {
+		callers := r.callersOf(f.ID)
+		if n := len(entered); n > 0 && entered[n-1].callee == f.ID {
+			// the walk came into f through one call: the parameter is what that call passes
+			callers = []callSite{entered[n-1].site}
+			entered = entered[:n-1]
+		} else {
+			entered = nil
+		}
+		for _, c := range callers {
 			cfn := r.fn(c.ref)
 			cin := &cfn.Blocks[c.b].Instrs[c.i]
 			off := 0
@@ -597,7 +632,53 @@ func (r *resolver) funcsOf(f *ir.Func, ref irssa.Ref, home *ir.Func, out map[ir.
 				r.notePartial(ir.ValueWhyNoForm)
 				continue
 			}
-			r.funcsOf(cfn, cf.Operand(c.b, c.i, k), home, out, seen, depth+1, via)
+			r.funcsOf(cfn, cf.Operand(c.b, c.i, k), home, out, seen, depth+1, via, entered)
+		}
+	}
+}
+
+// funcsOfCall follows the result of the call in (made in f) into the functions it calls, to what they return. The
+// function that the call reaches is known (a static call, or the candidates of a dynamic one), so what the walk finds
+// is what that call returns, and a parameter that it reaches is what this call passes. A call of a function value has no
+// callee that is known here, and what it returns is not followed.
+func (r *resolver) funcsOfCall(f *ir.Func, at irssa.Ref, in *ir.Instr, home *ir.Func, out map[ir.FuncID]*found, seen map[funcsKey]bool, depth, via int, entered []enteredCall) {
+	var ids []ir.FuncID
+	switch in.Callee.Kind {
+	case ir.CalleeStatic:
+		if in.Callee.Func != "" {
+			ids = []ir.FuncID{in.Callee.Func}
+		}
+	case ir.CalleeDynamic:
+		ids = in.Callee.Candidates
+	}
+	if len(ids) == 0 {
+		r.notePartial(ir.ValueWhyUntraced)
+		return
+	}
+	fref, ok := r.src.Lookup(f.ID)
+	if !ok {
+		r.notePartial(ir.ValueWhyUntraced)
+		return
+	}
+	site := callSite{ref: fref, b: at.Block, i: at.Index}
+	for _, id := range ids {
+		g, _ := ir.Get(r.src, id)
+		if g == nil {
+			r.notePartial(ir.ValueWhyUntraced)
+			continue
+		}
+		gform := r.form(g)
+		if gform == nil {
+			r.notePartial(ir.ValueWhyNoForm)
+			continue
+		}
+		next := append(append([]enteredCall(nil), entered...), enteredCall{callee: id, site: site})
+		for bi := range g.Blocks {
+			t := g.Blocks[bi].Term
+			if t.Kind != ir.TermReturn || len(t.Values) == 0 {
+				continue
+			}
+			r.funcsOf(g, gform.Operand(bi, len(g.Blocks[bi].Instrs), 0), home, out, seen, depth+1, via, next)
 		}
 	}
 }
