@@ -28,3 +28,7 @@ __pycache__/
 # a built binary of bench/model-diff at the root (go build ./bench/model-diff puts it here), and editor/sed backups
 /model-diff
 *.bak
+
+# the archives scripts/build-release-archives.sh makes (the staging directory and the output)
+/build/
+/dist/

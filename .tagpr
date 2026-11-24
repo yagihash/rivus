@@ -4,10 +4,11 @@
 # versionFile:   版を書いたファイルは持たない（版は、ビルドのときに -ldflags "-X main.versionStamp=..." で入れる）ので "-"。
 # vPrefix:       タグは v0.0.1 の形（Homebrew の formula の url が、この形を前提にしている）。
 # changelog:     リリース PR の中で CHANGELOG.md を更新する（マージされた PR の題から作る）。
-# release:       タグと一緒に GitHub Release を作る。
+# release:       タグと一緒に GitHub Release を draft で作る。バイナリを載せて公開するのは tagpr.yml の release-binaries
+#                （immutable releases なので、公開した後はアセットを足せない）。
 [tagpr]
 	releaseBranch = main
 	versionFile = -
 	vPrefix = true
 	changelog = true
-	release = true
+	release = draft
