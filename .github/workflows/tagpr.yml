@@ -149,7 +149,7 @@ jobs:
             if gh release verify "$TAG"; then exit 0; fi
             sleep 10
           done
-          echo "the release attestation of ${TAG} could not be verified (the Release is already published; use "Re-run failed jobs" to retry only this check: a run by workflow_dispatch stops in tagpr)" >&2
+          echo "the release attestation of ${TAG} could not be verified (the Release is already published; use 'Re-run failed jobs' to retry only this check: a run by workflow_dispatch stops in tagpr)" >&2
           exit 1
 
   # タグが打たれたときだけ、tap の formula の url と sha256 を書き換える。
