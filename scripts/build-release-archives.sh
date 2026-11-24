@@ -32,6 +32,8 @@ mkdir -p dist
 #   restricted: GPL, LGPL, AGPL など（強いコピーレフト）
 #   reciprocal: MPL, EPL, CDDL など（弱いコピーレフト。変更したファイルの公開を求める）
 #   forbidden:  ライセンスがない・利用を制限するもの（CC-BY-NC など）
+#   unknown:    分類できないもの（コピーレフトかどうか分からないので、通さない）。中身を確かめて問題がなければ、
+#               そのパッケージを go-licenses check の --ignore に足す（例外がこのファイルの差分として残る）
 # go-licenses は、ターゲットの GOOS/GOARCH でビルドできるものを調べる。ツール自体は、ホストの向きで入れる。
 # renovate: datasource=go depName=github.com/google/go-licenses/v2
 go_licenses_version=v2.0.1
@@ -43,7 +45,7 @@ for target in linux/amd64 linux/arm64 darwin/arm64; do
   export GOOS="${target%/*}" GOARCH="${target#*/}" CGO_ENABLED=0
   name="rivus_${ver}_${GOOS}_${GOARCH}"
   work="build/${name}"
-  "${tools}/go-licenses" check ./cmd/rivus --disallowed_types=forbidden,restricted,reciprocal
+  "${tools}/go-licenses" check ./cmd/rivus --disallowed_types=forbidden,restricted,reciprocal,unknown
   mkdir -p "${work}/THIRD_PARTY_LICENSES/go"
   go build -trimpath -ldflags "-s -X main.versionStamp=${ver}" -o "${work}/rivus" ./cmd/rivus
   cp LICENSE "${work}/LICENSE"
