@@ -31,8 +31,8 @@ var Current = Extractor{Name: "goir", Run: func(dir string, patterns []string, o
 	if len(patterns) == 0 {
 		patterns = []string{"./..."}
 	}
-	p, err := gossa.Load(dir, patterns, gossa.Options{
-		Tests: o.Tests, NaiveForm: true, WithLifted: true, Deps: !o.NoDeps, DepDirs: o.DepDirs,
+	p, err := goir.Load(dir, patterns, gossa.Options{
+		Tests: o.Tests, Deps: !o.NoDeps, DepDirs: o.DepDirs,
 		ReplacedPackage: o.ReplacedPackage, ReplacedFunc: o.ReplacedFunc,
 	})
 	if err != nil {

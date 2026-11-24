@@ -25,12 +25,10 @@ type Graph interface {
 	Callees(ci ssa.CallInstruction) []*ssa.Function
 }
 
-// BuildGo builds the call graph of a Go program: the class hierarchy
+// BuildGoOn builds the call graph of a go/ssa program: the class hierarchy
 // analysis gives a sound but coarse graph, which variable type analysis then
-// narrows down.
-func BuildGo(p *gossa.Program) Graph { return BuildGoOn(p.SSA) }
-
-// BuildGoOn builds the call graph of a go/ssa program.
+// narrows down. The extraction asks it of the lifted program only
+// (goir.LiftedTable).
 func BuildGoOn(prog *ssa.Program) Graph {
 	initial := cha.CallGraph(prog)
 	funcs := ssautil.AllFunctions(prog)

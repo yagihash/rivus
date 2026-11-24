@@ -122,7 +122,7 @@ func goZooIR(t *testing.T, visit func(dir string, p *ir.Program)) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		prog, err := gossa.Load(dir, []string{"./..."}, gossa.Options{NaiveForm: true})
+		prog, err := goir.Load(dir, []string{"./..."}, gossa.Options{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -135,7 +135,7 @@ func goZooIR(t *testing.T, visit func(dir string, p *ir.Program)) {
 	// the packages of the zoo (bench/zoo-go-pkg/<package>, zoo_pkg_test.go): a cell hits the row of an external package by calling
 	// the skeleton, so the functions of the skeleton count here (they are a dependency of that package, not of the zoo)
 	for _, dir := range zooPkgDirs(t, "go") {
-		prog, err := gossa.Load(dir, []string{"./..."}, gossa.Options{NaiveForm: true})
+		prog, err := goir.Load(dir, []string{"./..."}, gossa.Options{})
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -14,7 +14,7 @@ import (
 
 func extract(t *testing.T, patterns ...string) *ir.Program {
 	t.Helper()
-	p, err := gossa.Load(testutil.Testdata(), patterns, gossa.Options{NaiveForm: true})
+	p, err := Load(testutil.Testdata(), patterns, gossa.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +197,7 @@ func TestRangesAssertsAndCalls(t *testing.T) {
 }
 
 func TestImplementationsRecord(t *testing.T) {
-	p, err := gossa.Load(testutil.Testdata(), []string{"./cases/impl"}, gossa.Options{NaiveForm: true})
+	p, err := Load(testutil.Testdata(), []string{"./cases/impl"}, gossa.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,7 +216,7 @@ func TestImplementationsRecord(t *testing.T) {
 	if sym == "" {
 		t.Skip("no dynamic call in the impl case")
 	}
-	out, err := Extract(p, Options{Implementations: []string{sym}})
+	out, err := Extract(p, Options{NoCandidates: true, Implementations: []string{sym}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -238,7 +238,7 @@ func TestTextsOfRelocatedFiles(t *testing.T) {
 	write("sink.go", "package reloc\n\nfunc Sink(s string) {}\n")
 	write("line.go", "package reloc\n\n//line gram.y:100\nfunc FromLine(a string) {\n\tSink(a)\n}\n")
 	write("cgo.go", "package reloc\n\n/*\nstatic int one(void) { return 1; }\n*/\nimport \"C\"\n\nfunc FromCgo(a string) {\n\t_ = C.one()\n\tSink(a)\n}\n")
-	p, err := gossa.Load(dir, []string{"."}, gossa.Options{})
+	p, err := Load(dir, []string{"."}, gossa.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}

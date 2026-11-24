@@ -228,7 +228,7 @@ Phase 2 の実施記録、実装メモ、移行の戦略、実測は、[history/
 | スニペット・式テキスト | AST から切り出す（`text.go`） | 命令の `Pos`、呼び出しの引数ごとの `Pos`、`branch` の `CondPos`。**言語ごとの `ir.Texts` が位置から切り出す**（IR 自体はテキストを運ばない。2.3 で修正。下の実装メモ） |
 | 指紋 | シンボル、関数、出現順、式テキスト、本体テキスト | すべて `Pos` とシンボルから作れる。コアに置く |
 | 実装列挙 | `Implementations(symbol)`（`match: implementations`） | Go では `gossa` が答える。ストリームには、インタフェースメソッドごとの `implementations` レコードの形がある（2.7.7） |
-| コールグラフ | `callgraph.BuildGo`（CHA → VTA） | **extractor 側**。結果は `call` の `dynamic(candidates)` として IR に埋める。コアは IR だけから SCC を作る。関数値の呼び出しの候補は、コアの `internal/valuecalls` が IR の上で足す（13 節） |
+| コールグラフ | `callgraph.BuildGoOn`（CHA → VTA。lifted な SSA の上で、`goir.LiftedTable`） | **extractor 側**。結果は `call` の `dynamic(candidates)` として IR に埋める。コアは IR だけから SCC を作る。関数値の呼び出しの候補は、コアの `internal/valuecalls` が IR の上で足す（13 節） |
 | `defer` / `recover` | `ssabuild` の `Roots`（recover 後のブロック） | `defer` フラグのエッジと、`roots` を持つ関数（2.5） |
 
 

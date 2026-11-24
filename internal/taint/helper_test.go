@@ -25,7 +25,7 @@ type loaded struct {
 
 func loadIR(t testing.TB, dir string, patterns ...string) *loaded {
 	t.Helper()
-	p, err := gossa.Load(dir, patterns, gossa.Options{NaiveForm: true, WithLifted: true})
+	p, err := goir.Load(dir, patterns, gossa.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -149,7 +149,7 @@ func TestEnumerateCallsOfFunctionValues(t *testing.T) {
 		t.Errorf("a value that cannot hold a sink is not a site: %+v", s)
 	}
 	// the sites are the same when the call graph is there
-	p, err := gossa.Load(testutil.Testdata(), []string{"./cases/funcsink"}, gossa.Options{NaiveForm: true})
+	p, err := goir.Load(testutil.Testdata(), []string{"./cases/funcsink"}, gossa.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}

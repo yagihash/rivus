@@ -12,7 +12,7 @@ import (
 
 func form(t *testing.T, name string) *Form {
 	t.Helper()
-	p, err := gossa.Load(testutil.Testdata(), []string{"./cases/irshape"}, gossa.Options{NaiveForm: true})
+	p, err := goir.Load(testutil.Testdata(), []string{"./cases/irshape"}, gossa.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
