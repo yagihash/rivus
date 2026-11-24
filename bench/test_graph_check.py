@@ -83,6 +83,26 @@ class DartSteps(unittest.TestCase):
             self.assertIn("extract could not start", err)
 
 
+class LockTimeout(unittest.TestCase):
+    def test_busy_machine_is_not_run(self):
+        import contextlib
+        from heavylock import HeavyLockTimeout
+
+        @contextlib.contextmanager
+        def busy(reason):
+            raise HeavyLockTimeout("gave up")
+            yield
+
+        old = g.db.heavy_lock
+        g.db.heavy_lock = busy
+        try:
+            with tempfile.TemporaryDirectory() as d:
+                files, err, inc = g.run_side("base", "/nonexistent", d, "", [], {}, d, 60, 1 << 33, "t", loose=True)
+        finally:
+            g.db.heavy_lock = old
+        self.assertIn("did not run: gave up", err)
+
+
 class WorkersSelfCheck(unittest.TestCase):
     """The same binary with 1 and 8 workers gives the same IR, edges, summaries and findings: the hash of the summaries does not hold the order of the work."""
 

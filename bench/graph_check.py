@@ -30,6 +30,7 @@ import argparse, collections, hashlib, json, os, shlex, subprocess, sys, tempfil
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import deps_bench as db  # noqa: E402
+from heavylock import HeavyLockTimeout  # noqa: E402
 
 DUMP_ENV = "RIVUS_INTERNAL_SUMMARY_DUMP"
 
@@ -65,11 +66,14 @@ def run_side(side, binary, src, rules, flags, env_base, work, limit_s, cap, lock
     for name, cmd, out, extra in steps:
         env = {k: v for k, v in env_base.items() if k != DUMP_ENV}
         env.update(extra)
-        with db.heavy_lock("graph_check %s %s" % (side, name)):
-            try:
-                m = db.run_watched(cmd, src, env, limit_s, cap, os.path.join(work, "%s.%s.err" % (side, name)), out)
-            except OSError as e:  # the command does not exist (a Dart extractor that is not there)
-                return files, "%s %s could not start (%s)" % (side, name, e), incomplete
+        try:
+            with db.heavy_lock("graph_check %s %s" % (side, name)):
+                try:
+                    m = db.run_watched(cmd, src, env, limit_s, cap, os.path.join(work, "%s.%s.err" % (side, name)), out)
+                except OSError as e:  # the command does not exist (a Dart extractor that is not there)
+                    return files, "%s %s could not start (%s)" % (side, name, e), incomplete
+        except HeavyLockTimeout as e:  # the machine is busy: not run (exit 2 with a line), not a traceback
+            return files, "%s %s did not run: %s" % (side, name, e), incomplete
         if m["why"]:
             return files, "%s %s stopped (%s)" % (side, name, m["why"]), incomplete
         ok = (0, db.EXIT_INCOMPLETE) if name == "analyze" else (0,)
