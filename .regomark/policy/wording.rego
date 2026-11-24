@@ -67,7 +67,7 @@ terms := [
 	{"pattern": `段ごと`, "use": "フェーズごと / ステップごと（処理の区切りならフェーズ、経路の 1 つならステップ）"},
 	{"pattern": `つなぎの(注記|対策)`, "use": "`numeric_stop` の uncertainty / 暫定の対策"},
 	# 用語のルール（docs/GLOSSARY.md の「uncertainty」）。普通の意味の注釈、脚注、補足は、その語で書く。
-	{"pattern": `注記`, "use": "uncertainty（不確実性。結果に付く印）、経路のステップに付く印は「ステップの uncertainty」、暫定のもの(char_read_in_callee)は「numeric_stop の uncertainty」。普通の意味の注釈、脚注、補足は、その語で書く"},
+	{"pattern": `注記`, "use": "uncertainty（不確実性。結果に付くマーク）、経路のステップに付くものは「ステップの uncertainty」、暫定のもの(char_read_in_callee)は「numeric_stop の uncertainty」。普通の意味の注釈、脚注、補足は、その語で書く"},
 	{"pattern": `持ち上げ(あり|なし)`, "use": "lifted な SSA(φ あり)/ `NaiveForm` の SSA（go/ssa の lifted form）"},
 	{"pattern": `(読み込み|ヒープ|メモリ|要約)の山|山を(下げ|作|高く|低く)|山の高さ`, "word": "山", "use": "ピーク（読み込みのフェーズのピーク、ライブヒープのピーク）。メモリ以外の意味の「山」は使ってよい"},
 	{"pattern": `[0-9]+ ?段(深|の深|まで|以上|以内|より上|より先|のパス|のヘルパー|で切れ|ずつ|だけ|短|粗|早|区別|たどっ)|何段`, "word": "N 段（深さ）", "use": "N 階層（アクセスパス、構造体の深さ。「2 段階」「1 段目」「2 段構え」は使ってよい）"},
