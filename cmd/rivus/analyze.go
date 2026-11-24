@@ -266,22 +266,16 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	opts.PassStatsTop = o.passStatsTop
 	opts.PassStatsSort = o.passStatsSort
 	opts.TraceElement = o.traceElement
-	// Internal, for the budget of a large component (ADR-124; no flag, not in -h): n is the budget of the keys of the
-	// param outputs deeper than one step in the dependency functions of a large component (0: none); over it, the component is
-	// solved again from the start with its dependency functions at depth 0, RIVUS_INTERNAL_SCC_COARSEN_AT_ROUND
-	// (the build tag coarseforce only: the binary that is shipped does not read it) is the round from which the tests move a component whatever the counts are. Both off: the analysis is as it was.
-	if v := os.Getenv("RIVUS_INTERNAL_SCC_COARSEN_BUDGET"); v != "" {
-		n, err := strconv.Atoi(strings.TrimSpace(v))
-		if err != nil || n < 0 {
-			return nil, fmt.Errorf("RIVUS_INTERNAL_SCC_COARSEN_BUDGET: want a number (got %q)", v)
+	// Internal, to measure N of the large components (ADR-124; no flag, not in -h): "n" has the components with n functions or
+	// more solved with their dependency functions at depth 0, "n:deps" counts the dependency functions in them. Unset: none.
+	if v := os.Getenv("RIVUS_INTERNAL_SCC_COARSEN_N"); v != "" {
+		num, mode, _ := strings.Cut(strings.TrimSpace(v), ":")
+		n, err := strconv.Atoi(num)
+		if err != nil || n < 0 || (mode != "" && mode != "deps") {
+			return nil, fmt.Errorf("RIVUS_INTERNAL_SCC_COARSEN_N: want n or n:deps (got %q)", v)
 		}
-		opts.SCCCoarsen = n
+		opts.SCCCoarsenN, opts.SCCCoarsenDeps = n, mode == "deps"
 	}
-	n, err := forcedCoarseRound()
-	if err != nil {
-		return nil, err
-	}
-	opts.SCCCoarsenAtRound = n
 	if o.verbose {
 		opts.SlowThreshold = 300 * time.Millisecond
 		opts.SlowFunc = func(fn string, d, cpu time.Duration, outputs, roots int) {

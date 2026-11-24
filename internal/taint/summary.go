@@ -76,8 +76,8 @@ type Summary struct {
 	// char_read_in_callee). Internal, like LimitedParams: in signature(), not in the result or the index. Empty with
 	// -numeric-taint (nothing stops).
 	CharStopped []CharStop
-	// Coarse is set when the summary was made coarser because its component went over the budget and was solved again at depth 0 (coarse.go, ADR-124).
-	// Internal: not in signature(), the result or the index.
+	// Coarse is set on the summary of a dependency function that is solved at depth 0 because its component is large
+	// (coarse.go, ADR-124). Internal: not in signature(), the result or the index.
 	Coarse *coarseSCC
 	Sig    string
 }

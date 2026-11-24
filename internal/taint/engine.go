@@ -75,11 +75,12 @@ type Options struct {
 	FuncValues    bool
 	SlowFunc      func(fn string, d, cpu time.Duration, outputs, roots int)
 	SlowThreshold time.Duration
-	// SCCCoarsen is the budget of a large strongly connected component (ADR-124): over it, the dependency functions of
-	// the component move once to a coarser summary. Zero (the default): never. SCCCoarsenAtRound is for the tests:
-	// from that round of a large component on, it moves whatever the counts are (0: not used).
-	SCCCoarsen        SCCCoarsenBudget // the keys of the param outputs deeper than one step (ADR-124)
-	SCCCoarsenAtRound int              // below 0: before the first round
+	// SCCCoarsenN: a strongly connected component of N functions or more that has functions of the dependencies is solved
+	// with those at access path depth 0 from the start (ADR-124). Zero (the default): none. SCCCoarsenDeps: N counts the
+	// functions of the dependencies in the component, not all of its functions. Internal: no flag
+	// (RIVUS_INTERNAL_SCC_COARSEN_N in cmd/rivus).
+	SCCCoarsenN    int
+	SCCCoarsenDeps bool
 }
 
 // DefaultOptions are the defaults.
@@ -172,19 +173,10 @@ type Engine struct {
 	// k, or the cell of a parameter was merged into the whole of it: the cells are
 	// coarser than the code (more than the truth, never less).
 	coarsened map[*sg.Func]string
-	// coarse are the dependency functions whose component was moved to the coarse summary (coarse.go), coarseList the
-	// components in the order they were moved, sccRounds the rounds each large component has had (by its first
-	// function). Under mu.
-	coarse map[*sg.Func]*coarseSCC
-	// marks are the components that went over the budget in a later pass, by their first function: the analysis starts
-	// again with them at depth 0 from the start (restartWanted). restarts counts the starts again, priorReanalyses
-	// the reanalyses of the runs that were thrown away.
-	marks           map[*sg.Func]*coarseSCC
-	restart         bool
-	restarts        int
-	priorReanalyses int
-	coarseList      []*coarseSCC
-	sccRounds       map[*sg.Func]int
+	// coarse are the dependency functions that are solved at depth 0 (coarse.go), coarseList the components they are in.
+	// Both are made before the run and not changed during it.
+	coarse     map[*sg.Func]*coarseSCC
+	coarseList []*coarseSCC
 	// iterDumpDir is the directory for the dump of the summaries after each round of a large component
 	// (RIVUS_INTERNAL_SUMMARY_DUMP_EACH_ITER; empty: none). iterDumps are the large components, by their first
 	// function. Both are set before the run and not changed during it.
@@ -292,8 +284,6 @@ func New(p *sg.Program, texts ir.Texts, st *sites.Result, rules *model.Rules, op
 		guardLimit: map[*sg.Func]bool{},
 		coarsened:  map[*sg.Func]string{},
 		coarse:     map[*sg.Func]*coarseSCC{},
-		sccRounds:  map[*sg.Func]int{},
-		marks:      map[*sg.Func]*coarseSCC{},
 		globals:    newGlobalStore(),
 		aliasArgs:  aliasArgs,
 	}
@@ -567,12 +557,9 @@ type Stats struct {
 	// OutWidenedFuncs and OutWidenedOutputs: the functions whose final summary has an output that was widened
 	// (more than 24 elements, the parts of a parameter merged into the whole of it), and how many such outputs
 	// there are (the out_limit record, #186).
-	// SCCCoarsened is the number of large components whose dependency functions were moved to the coarse summary
-	// (ADR-124; the scc_coarsened records). A run with a budget off has none.
-	SCCCoarsened int `json:"scc_coarsened,omitempty"`
-	// SCCRestarts is how many times the whole analysis was started again because a component went over its budget in a
-	// later pass (ADR-124).
-	SCCRestarts       int `json:"scc_restarts,omitempty"`
+	// SCCCoarsened is the number of components whose dependency functions are solved at depth 0 because the component
+	// is large (ADR-124; the scc_coarsened records). A run with the setting off has none.
+	SCCCoarsened      int `json:"scc_coarsened,omitempty"`
 	OutWidenedFuncs   int `json:"out_widened_funcs,omitempty"`
 	OutWidenedOutputs int `json:"out_widened_outputs,omitempty"`
 	// The work of the analysis, counted in the elements put into the sets (the same count as Budget): always in the
@@ -652,21 +639,6 @@ type NumericStopCount struct {
 // summaries stop changing.
 func (e *Engine) Run() *Result {
 	start := time.Now()
-	for {
-		res := e.runOnce(start)
-		if res != nil {
-			res.Stats.DurationMilli = time.Since(start).Milliseconds()
-			res.Stats.SCCRestarts = e.restarts
-			res.Stats.Reanalyses += e.priorReanalyses
-			return res
-		}
-		e.resetForRestart() // a component went over the budget in a later pass: all again, with it at depth 0 from the start
-	}
-}
-
-// runOnce is one run of the analysis. It returns nil when a large component went over its budget in a later pass (it
-// is marked, and the caller starts the whole analysis again: coarse.go).
-func (e *Engine) runOnce(start time.Time) *Result {
 	e.reach = e.prog.Reachable()
 	e.reachCB = e.prog.ReachableWithCallbacks()
 	fns := e.prog.Funcs
@@ -703,6 +675,7 @@ func (e *Engine) runOnce(start time.Time) *Result {
 	}
 	sccs, callers := order(fns, callees)
 	levels := levelsOf(sccs, callees)
+	e.coarsenBySize(sccs)
 	st0 := Stats{Levels: len(levels)}
 	for _, lv := range levels {
 		if len(lv) > st0.WidestLevel {
@@ -757,7 +730,6 @@ func (e *Engine) runOnce(start time.Time) *Result {
 					// in the order of the component after the round.
 					// This is so for any number of workers (with one, the round runs one
 					// function after the other): the output does not depend on -workers (#96).
-					e.coarsenFirst(scc)
 					for iter := 0; iter < 8; iter++ {
 						var todo []*sg.Func
 						for _, fn := range scc {
@@ -803,16 +775,8 @@ func (e *Engine) runOnce(start time.Time) *Result {
 								changedMu.Unlock()
 							}
 						}
-						// after the commits: what the budget counts is what the round left
 						if roundChanged != nil {
 							e.dumpRound(scc, pass+1, len(todo), roundChanged)
-						}
-						if moved, inline := e.coarsenStep(scc, pass+1); moved {
-							if !inline {
-								return // solved again from the start at depth 0, from the next pass (applyResets)
-							}
-							iter = -1 // solved again from the start at depth 0, now
-							continue
 						}
 						if !progress {
 							break
@@ -845,10 +809,6 @@ func (e *Engine) runOnce(start time.Time) *Result {
 				}
 			})
 			e.commitGlobals()
-			if e.restartWanted() {
-				e.priorReanalyses += int(reanalyses.Load())
-				return nil
-			}
 		}
 		sort.Strings(changedNow)
 		lastChanged = len(changedNow)
@@ -1103,7 +1063,7 @@ type fnResult struct {
 // it reads the summaries of the callees and the global state as they are.
 func (e *Engine) compute(fn *sg.Func) *fnResult {
 	s := &state{
-		eng: e, fn: fn, coarse: e.coarseOf(fn) != nil,
+		eng: e, fn: fn, coarse: e.coarse[fn] != nil,
 		cells:       map[Root]map[string]Set{},
 		paramRoot:   map[Root]int{},
 		findings:    map[findingKey]*rawFinding{},
@@ -1121,7 +1081,7 @@ func (e *Engine) compute(fn *sg.Func) *fnResult {
 	took := time.Since(began)
 	// the summary is joined with the one of the earlier visits
 	sum := joinSummaries(e.summaryOf(fn), s.summarize())
-	if c := e.coarseOf(fn); c != nil {
+	if c := e.coarse[fn]; c != nil {
 		sum.Coarse = c
 	}
 	// Too many guards matter only where taint is told apart by them: where
@@ -1551,7 +1511,7 @@ func (e *Engine) collect(st Stats) *Result {
 	if u, _, _ := e.outLimitRecord(); u != nil {
 		res.Uncertainties = append(res.Uncertainties, u)
 	}
-	// the large components whose dependency functions were moved to the coarse summary (ADR-124): one record each
+	// the large components whose dependency functions are solved at depth 0 (ADR-124): one record each
 	res.Uncertainties = append(res.Uncertainties, e.coarseRecords()...)
 	// where the data of a source became a number or a bool: one record for each source site
 	if stops := e.numericStopRecords(); len(stops) > 0 {

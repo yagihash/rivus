@@ -17,6 +17,11 @@ import (
 // runCoarse analyses testdata/scccoarse (one component of 12 functions, with global variables and writes below two
 // steps of a parameter) with the functions for which dep says so taken as functions of a dependency.
 func runCoarse(t *testing.T, dep func(id string) bool, mod func(*Options)) (*Engine, *Result) {
+	return runCoarsePre(t, dep, mod, nil)
+}
+
+// runCoarsePre is runCoarse with pre called on the engine before the run.
+func runCoarsePre(t *testing.T, dep func(id string) bool, mod func(*Options), pre func(*Engine)) (*Engine, *Result) {
 	t.Helper()
 	dir := filepath.Join(testutil.Testdata(), "..", "scccoarse")
 	sets, err := builtin.Load()
@@ -45,6 +50,9 @@ func runCoarse(t *testing.T, dep func(id string) bool, mod func(*Options)) (*Eng
 		mod(&opts)
 	}
 	e := l.engine(l.sites(rules), rules, opts)
+	if pre != nil {
+		pre(e)
+	}
 	return e, e.Run()
 }
 
@@ -123,160 +131,6 @@ func records(res *Result) []*Uncertainty {
 	return out
 }
 
-// With the budget off, nothing is moved and the output has no record of it.
-func TestCoarseBudgetOffChangesNothing(t *testing.T) {
-	e, res := runCoarse(t, isF, nil)
-	if len(e.coarseList) != 0 || res.Stats.SCCCoarsened != 0 || len(records(res)) != 0 {
-		t.Fatalf("coarsened with no budget")
-	}
-	for fn, sum := range e.summaries {
-		if sum.Coarse != nil {
-			t.Fatalf("%s is coarse", fn.ID)
-		}
-	}
-}
-
-// Over the budget, the component is moved once, only its dependency functions, and the record says why.
-func TestCoarseOverBudgetMovesOnce(t *testing.T) {
-	isDep := func(id string) bool { return isF(id) && !strings.HasSuffix(id, ".f02") }
-	e, res := runCoarse(t, isDep, func(o *Options) { o.SCCCoarsen = 1 })
-	if len(e.coarseList) != 1 || res.Stats.SCCCoarsened != 1 {
-		t.Fatalf("moved %d times, want once", len(e.coarseList))
-	}
-	c := e.coarseList[0]
-	if c.size != 12 || len(c.funcs) != 11 || c.round < 1 || c.cause != "deep_param_keys" {
-		t.Errorf("the record: size %d, deps %d, round %d, cause %q", c.size, len(c.funcs), c.round, c.cause)
-	}
-	rs := records(res)
-	if len(rs) != 1 || rs[0].Kind != KindDepthLimit || rs[0].AttributableTo != AttributableRivus || len(rs[0].Candidates) != 11 {
-		t.Fatalf("the records: %v", rs)
-	}
-	for fn, sum := range e.summaries {
-		if !isF(fn.ID) {
-			continue
-		}
-		if (sum.Coarse != nil) != (e.coarseOf(fn) != nil) || (sum.Coarse != nil && !fn.Dep) {
-			t.Errorf("%s: dependency %v, coarse %v", fn.ID, fn.Dep, sum.Coarse != nil)
-		}
-		if sum.Coarse != nil {
-			// not undone: nothing is deeper than the first step in a dependency function
-			for _, o := range sum.Outputs {
-				if o.Kind == OutParam && pathDepth(o.Path) >= 1 {
-					t.Errorf("%s: a path %q is left", fn.ID, o.Path)
-				}
-			}
-		}
-	}
-}
-
-// -workers 1 and the default give the same summaries, the same records and the same stats, with the move.
-func TestCoarseSameForAnyWorkers(t *testing.T) {
-	var first, firstRec string
-	for _, w := range []int{1, 2, 0} {
-		e, res := runCoarse(t, isF, func(o *Options) { o.SCCCoarsen = 2; o.Workers = w })
-		rs := records(res)
-		if len(rs) != 1 {
-			t.Fatalf("workers %d: %d records", w, len(rs))
-		}
-		d, r := dumpOf(t, e), rs[0].Detail+strings.Join(rs[0].Candidates, ",")
-		if first == "" {
-			first, firstRec = d, r
-		} else if d != first || r != firstRec {
-			t.Fatalf("workers %d differ", w)
-		}
-	}
-}
-
-// Solved again from the start, the summaries (elements and guards) are the ones of a run that had the dependency
-// functions at depth 0 from the start (before the first round), whatever the round the budget was hit at. They contain
-// those of the run that was not moved, with the paths cut.
-func TestCoarseSolvedAgainIsFromStart(t *testing.T) {
-	plain, _ := runCoarse(t, isF, nil)
-	start, _ := runCoarse(t, isF, func(o *Options) { o.SCCCoarsenAtRound = -1 })
-	if len(start.coarseList) != 1 {
-		t.Fatal("not moved at the start")
-	}
-	want := map[string]string{}
-	for id, sum := range byID(start) {
-		want[id] = canon(sum)
-	}
-	for id, sum := range byID(plain) {
-		if !isF(id) {
-			continue
-		}
-		got := elemSet(byID(start)[id], false)
-		for k := range elemSet(sum, true) {
-			if !got[k] {
-				t.Errorf("%s: %s of the run at depth 2 is not in the run at depth 0", id, k)
-			}
-		}
-	}
-	for _, round := range []int{1, 2, 3, 5} {
-		e, _ := runCoarse(t, isF, func(o *Options) { o.SCCCoarsenAtRound = round })
-		if len(e.coarseList) != 1 {
-			t.Fatalf("round %d: moved %d times", round, len(e.coarseList))
-		}
-		got := byID(e)
-		if len(got) != len(want) {
-			t.Errorf("round %d: %d summaries, want %d", round, len(got), len(want))
-		}
-		for id, sig := range want {
-			if got[id] == nil || canon(got[id]) != sig {
-				t.Errorf("round %d: %s is not the summary of the run from the start", round, id)
-			}
-		}
-	}
-	// by the budget (a count, not a forced round)
-	e, _ := runCoarse(t, isF, func(o *Options) { o.SCCCoarsen = 2 })
-	for id, sig := range want {
-		if byID(e)[id] == nil || canon(byID(e)[id]) != sig {
-			t.Errorf("budget: %s is not the summary of the run from the start", id)
-		}
-	}
-}
-
-// The functions of the project in the component keep their depth: they are not at depth 0.
-func TestCoarseProjectFunctionsKeepTheirDepth(t *testing.T) {
-	isDep := func(id string) bool {
-		return isF(id) && !strings.HasSuffix(id, ".f05") && !strings.HasSuffix(id, ".f11")
-	}
-	e, _ := runCoarse(t, isDep, func(o *Options) { o.SCCCoarsenAtRound = 1 })
-	if len(e.coarseList) != 1 {
-		t.Fatal("not moved")
-	}
-	deep := false
-	for fn, sum := range e.summaries {
-		if fn.Dep || !isF(fn.ID) {
-			continue
-		}
-		for _, o := range sum.Outputs {
-			deep = deep || pathDepth(o.Path) >= 1
-		}
-	}
-	if !deep {
-		t.Error("the functions of the project have no path below the first step (f05 and f11 write to t.next.next)")
-	}
-}
-
-// A hop of a call of a coarse summary has the note, so the flow through it is told to be coarser than the code.
-func TestCoarseNoteOnHops(t *testing.T) {
-	e, _ := runCoarse(t, func(id string) bool {
-		return isF(id) && !strings.HasSuffix(id, ".f00") && !strings.HasSuffix(id, ".f01")
-	}, func(o *Options) { o.SCCCoarsenAtRound = -1 })
-	found := false
-	for _, sum := range byID(e) {
-		if sum.Coarse != nil {
-			continue
-		}
-		if txt, _, _ := summaryText(sum); strings.Contains(txt, "scc_coarsened:") {
-			found = true
-		}
-	}
-	if !found {
-		t.Error("no summary of a function of the project has the note on a hop")
-	}
-}
-
 // globalsDump is the global state: for each variable, path and element, the functions that wrote it.
 func globalsDump(e *Engine) string {
 	var l []string
@@ -311,7 +165,7 @@ func wholeResult(t *testing.T, res *Result) string {
 		t.Fatal(err)
 	}
 	for _, k := range []string{"reanalyses", "passes", "adds_total", "adds_max_single_run", "adds_max_function_total", "adds_per_function",
-		"scc_restarts", "duration_ms", "dep_spent_ms", "own_spent_ms", "pass_changes", "summary_steps"} {
+		"scc_coarsened", "duration_ms", "dep_spent_ms", "own_spent_ms", "pass_changes", "summary_steps"} {
 		delete(st, k)
 	}
 	sb, _ := json.Marshal(st)
@@ -326,61 +180,181 @@ func wholeResult(t *testing.T, res *Result) string {
 	return string(sb) + "\n" + string(fb) + "\n" + string(ub)
 }
 
-// With functions of the project in the component (they write to the global variables, and keep their depth), and a
-// function outside it that reads them, solved again is still the run from the start: the summaries, the global state,
-// the findings, the uncertainties and the stats (but the work that was done).
-func TestCoarseSolvedAgainWithProjectFunctions(t *testing.T) {
-	isDep := func(id string) bool {
-		return isF(id) && !strings.HasSuffix(id, ".f04") && !strings.HasSuffix(id, ".f08") && !strings.HasSuffix(id, ".f01")
-	}
-	start, sres := runCoarse(t, isDep, func(o *Options) { o.SCCCoarsenAtRound = -1 })
-	if len(sres.Findings) == 0 || !strings.Contains(globalsDump(start), "scc.G") {
-		t.Logf("findings %d, globals %q", len(sres.Findings), globalsDump(start))
-		t.Fatal("the program has no findings or no global state: the test shows nothing")
-	}
-	for _, round := range []int{1, 3} {
-		e, res := runCoarse(t, isDep, func(o *Options) { o.SCCCoarsenAtRound = round })
-		if len(e.coarseList) != 1 {
-			t.Fatalf("round %d: not moved", round)
+// The components of testdata/scccoarse: f02 to f13 call each other (12 functions); f00, f01 and main are outside it.
+func inSCC(id string) bool {
+	for _, n := range []string{"f02", "f03", "f04", "f05", "f06", "f07", "f08", "f09", "f10", "f11", "f12", "f13"} {
+		if strings.HasSuffix(id, "."+n) {
+			return true
 		}
-		for id, sum := range byID(start) {
-			if got := byID(e)[id]; got == nil || canon(got) != canon(sum) {
-				t.Errorf("round %d: %s differs from the run from the start", round, id)
+	}
+	return false
+}
+
+// mixed: f04 and f08 (in the component) and f01 (outside) are functions of the project, the rest is a dependency.
+func mixed(id string) bool {
+	return isF(id) && !strings.HasSuffix(id, ".f04") && !strings.HasSuffix(id, ".f08") && !strings.HasSuffix(id, ".f01")
+}
+
+// With the setting off, or a component smaller than N, nothing is solved at depth 0 and the output has no record of it.
+func TestCoarseOffChangesNothing(t *testing.T) {
+	plain, pres := runCoarse(t, isF, nil)
+	for _, n := range []int{0, 13} {
+		e, res := runCoarse(t, isF, func(o *Options) { o.SCCCoarsenN = n })
+		if len(e.coarseList) != 0 || res.Stats.SCCCoarsened != 0 || len(records(res)) != 0 {
+			t.Fatalf("N=%d: coarsened", n)
+		}
+		if wholeResult(t, pres) != wholeResult(t, res) || globalsDump(plain) != globalsDump(e) {
+			t.Errorf("N=%d: the result is not the one of the run with the setting off", n)
+		}
+		for id, sum := range byID(plain) {
+			if canon(byID(e)[id]) != canon(sum) {
+				t.Errorf("N=%d: %s differs", n, id)
 			}
-		}
-		if a, b := globalsDump(start), globalsDump(e); a != b {
-			t.Errorf("round %d: the global state differs from the run from the start\n%s\n---\n%s", round, a, b)
-		}
-		if a, b := wholeResult(t, sres), wholeResult(t, res); a != b {
-			t.Errorf("round %d: the result differs from the run from the start\n%s\n---\n%s", round, a, b)
 		}
 	}
 }
 
-// Hit in a later pass (the component has written to the global state by then), the whole analysis is started again
-// with the component at depth 0 from the start: the answer is the one of the run from the start (the summaries, the
-// global state, the findings, the uncertainties, the stats but the work that was done), and the record says so.
-func TestCoarseLaterPassStartsAgain(t *testing.T) {
-	isDep := func(id string) bool {
-		return isF(id) && !strings.HasSuffix(id, ".f04") && !strings.HasSuffix(id, ".f08") && !strings.HasSuffix(id, ".f01")
+// A component of N functions or more is solved at depth 0: only its dependency functions, once, and the record says
+// how large it is. What it works out contains what the run at depth 2 has, with the paths cut.
+func TestCoarseLargeComponent(t *testing.T) {
+	plain, _ := runCoarse(t, isF, nil)
+	e, res := runCoarse(t, isF, func(o *Options) { o.SCCCoarsenN = 12 })
+	if len(e.coarseList) != 1 || res.Stats.SCCCoarsened != 1 {
+		t.Fatalf("%d components, want 1", len(e.coarseList))
 	}
-	start, sres := runCoarse(t, isDep, func(o *Options) { o.SCCCoarsenAtRound = -1 })
-	e, res := runCoarse(t, isDep, func(o *Options) { o.SCCCoarsenAtRound = 9 })
-	if len(e.coarseList) != 1 || !e.coarseList[0].restarted || e.coarseList[0].pass < 2 || res.Stats.SCCRestarts != 1 {
-		t.Fatalf("not hit in a later pass: %d moves, restarts %d", len(e.coarseList), res.Stats.SCCRestarts)
+	c := e.coarseList[0]
+	if c.size != 12 || len(c.funcs) != 12 {
+		t.Errorf("the component: %d functions, %d dependency functions", c.size, len(c.funcs))
 	}
-	if rs := records(res); len(rs) != 1 || !strings.Contains(rs[0].Detail, "started again") {
-		t.Errorf("the record does not say that the analysis was started again: %v", rs)
+	rs := records(res)
+	if len(rs) != 1 || rs[0].Kind != KindDepthLimit || rs[0].AttributableTo != AttributableRivus || len(rs[0].Candidates) != 12 {
+		t.Fatalf("the records: %v", rs)
 	}
-	for id, sum := range byID(start) {
-		if got := byID(e)[id]; got == nil || canon(got) != canon(sum) {
-			t.Errorf("%s differs from the run from the start", id)
+	for fn, sum := range e.summaries {
+		if !isF(fn.ID) {
+			continue
+		}
+		if (sum.Coarse != nil) != inSCC(fn.ID) {
+			t.Errorf("%s: coarse %v, in the component %v (f00 and f01 are dependencies outside it)", fn.ID, sum.Coarse != nil, inSCC(fn.ID))
+		}
+		if sum.Coarse == nil {
+			continue
+		}
+		for _, o := range sum.Outputs {
+			if o.Kind == OutParam && pathDepth(o.Path) >= 1 {
+				t.Errorf("%s: a path %q is left", fn.ID, o.Path)
+			}
+		}
+		got := elemSet(sum, false)
+		for k := range elemSet(byID(plain)[fn.ID], true) {
+			if !got[k] {
+				t.Errorf("%s: %s of the run at depth 2 is not in the run at depth 0", fn.ID, k)
+			}
 		}
 	}
-	if a, b := globalsDump(start), globalsDump(e); a != b {
-		t.Errorf("the global state differs from the run from the start\n%s\n---\n%s", a, b)
+}
+
+// N counts the functions of the component, or (SCCCoarsenDeps) only the dependency functions in it.
+func TestCoarseWhatIsCounted(t *testing.T) {
+	cases := []struct {
+		n    int
+		deps bool
+		want int
+	}{{12, false, 1}, {13, false, 0}, {10, true, 1}, {11, true, 0}}
+	for _, c := range cases {
+		e, _ := runCoarse(t, mixed, func(o *Options) { o.SCCCoarsenN = c.n; o.SCCCoarsenDeps = c.deps })
+		if len(e.coarseList) != c.want {
+			t.Errorf("N=%d deps=%v: %d components, want %d", c.n, c.deps, len(e.coarseList), c.want)
+		}
 	}
-	if a, b := wholeResult(t, sres), wholeResult(t, res); a != b {
-		t.Errorf("the result differs from the run from the start\n%s\n---\n%s", a, b)
+}
+
+// The answer is the one of a run in which the dependency functions of that component have access paths at depth 0 and
+// nothing else does: the summaries, the global state, the findings, the uncertainties and the stats (but the work
+// that was done). With functions of the project in the component that write to the global variables, and a function
+// outside it that reads them.
+func TestCoarseIsDepthZeroForThoseFunctions(t *testing.T) {
+	ref, rres := runCoarsePre(t, mixed, nil, func(e *Engine) {
+		c := &coarseSCC{}
+		for _, fn := range e.prog.Funcs {
+			if fn.Dep && inSCC(fn.ID) {
+				e.coarse[fn] = c
+			}
+		}
+	})
+	if len(rres.Findings) == 0 || !strings.Contains(globalsDump(ref), "scc.G") {
+		t.Fatalf("the program has no findings or no global state: the test shows nothing")
+	}
+	e, res := runCoarse(t, mixed, func(o *Options) { o.SCCCoarsenN = 12 })
+	if len(e.coarseList) != 1 {
+		t.Fatal("not solved at depth 0")
+	}
+	for id, sum := range byID(ref) {
+		if got := byID(e)[id]; got == nil || canon(got) != canon(sum) {
+			t.Errorf("%s differs from the run with those functions at depth 0", id)
+		}
+	}
+	if a, b := globalsDump(ref), globalsDump(e); a != b {
+		t.Errorf("the global state differs\n%s\n---\n%s", a, b)
+	}
+	if a, b := wholeResult(t, rres), wholeResult(t, res); a != b {
+		t.Errorf("the result differs\n%s\n---\n%s", a, b)
+	}
+}
+
+// -workers 1 and the default give the same summaries, the same records and the same stats.
+func TestCoarseSameForAnyWorkers(t *testing.T) {
+	var first, firstRec string
+	for _, w := range []int{1, 2, 0} {
+		e, res := runCoarse(t, isF, func(o *Options) { o.SCCCoarsenN = 12; o.Workers = w })
+		rs := records(res)
+		if len(rs) != 1 {
+			t.Fatalf("workers %d: %d records", w, len(rs))
+		}
+		d, r := dumpOf(t, e), rs[0].Detail+strings.Join(rs[0].Candidates, ",")
+		if first == "" {
+			first, firstRec = d, r
+		} else if d != first || r != firstRec {
+			t.Fatalf("workers %d differ", w)
+		}
+	}
+}
+
+// The functions of the project in the component keep their depth.
+func TestCoarseProjectFunctionsKeepTheirDepth(t *testing.T) {
+	// f05 and f11 write to t.next.next: as functions of the project they keep the paths below the first step
+	e, _ := runCoarse(t, func(id string) bool {
+		return isF(id) && !strings.HasSuffix(id, ".f05") && !strings.HasSuffix(id, ".f11")
+	}, func(o *Options) { o.SCCCoarsenN = 12 })
+	deep := false
+	for fn, sum := range e.summaries {
+		if fn.Dep || !isF(fn.ID) {
+			continue
+		}
+		for _, o := range sum.Outputs {
+			deep = deep || pathDepth(o.Path) >= 1
+		}
+	}
+	if !deep {
+		t.Error("the functions of the project have no path below the first step")
+	}
+}
+
+// A hop of a call of a coarse summary has the note, so the flow through it is told to be coarser than the code.
+func TestCoarseNoteOnHops(t *testing.T) {
+	e, _ := runCoarse(t, func(id string) bool {
+		return isF(id) && !strings.HasSuffix(id, ".f00") && !strings.HasSuffix(id, ".f01")
+	}, func(o *Options) { o.SCCCoarsenN = 12 })
+	found := false
+	for _, sum := range byID(e) {
+		if sum.Coarse != nil {
+			continue
+		}
+		if txt, _, _ := summaryText(sum); strings.Contains(txt, "scc_coarsened:") {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("no summary of a function of the project has the note on a hop")
 	}
 }
