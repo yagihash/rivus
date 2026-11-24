@@ -17,7 +17,7 @@
 |---|---|---|---|
 | `Navigator.pushNamed`(zoo の `zoo_flutter`) | `nav.routes['/detail'] = (settings) {...}` | `routes[name]!(RouteSettings(...))` | 登録: `field_load routes` → `index_store`(キー付き)。呼び出し: `field_load routes` → `index_load` → `call(value)` |
 | `Router.call`(zoo の `shelf_router` の骨組み) | `router.get('/item/<id>', (Request r) {...})` → `add` → `_routes.add((route, handler))` | `for (final (route, handler) in _routes) ... handler(req)` | 登録: `field_load _routes` → `alloc record` + `field_store $1/$2` → `List.add`。呼び出し: `field_load _routes` → `iter.start/next` → `field_load $2` → `call(value)` |
-| `Router.call`(実物の shelf_router 1.1.5。`~/.pub-cache` の版で、`rivus index` を実行して確認) | `Router.get` → `add` → `Trie.add` → `RouterEntry(...)` 工場 → `RouterEntry._`(`this._handler` の初期化つき引数)。入れ物は `Trie` の節の `routes` リストと、エントリのフィールド `_handler` | `Router.call` → `route.invoke(...)` → `RouterEntry.invoke` の中の `_handler(request)`(`router_entry.dart` の 136 行と 146 行)。どちらも `kind: value`、候補 0 件 | ユーザーの関数から、`_handler` への書き込みまで、**引数の中継が 5 つ**(`get` → `add` → `Trie.add` → 工場 → `_`)。`maxDepth`(3)を超える |
+| `Router.call`(実物の shelf_router 1.1.5。`~/.pub-cache` のバージョンで、`rivus index` を実行して確認) | `Router.get` → `add` → `Trie.add` → `RouterEntry(...)` 工場 → `RouterEntry._`(`this._handler` の初期化つき引数)。入れ物は `Trie` の節の `routes` リストと、エントリのフィールド `_handler` | `Router.call` → `route.invoke(...)` → `RouterEntry.invoke` の中の `_handler(request)`(`router_entry.dart` の 136 行と 146 行)。どちらも `kind: value`、候補 0 件 | ユーザーの関数から、`_handler` への書き込みまで、**引数の中継が 5 つ**(`get` → `add` → `Trie.add` → 工場 → `_`)。`maxDepth`(3)を超える |
 
 実物の shelf_router は、`bench/dart-corpus` と `bench/dart-services` の依存にある。ここで実行して確かめたのは、zoo と、実物の 1.1.5 だけを置いた小さい試し(`router.get('/a/<id>', h1)` と、関数リテラルの登録)。dart-services の本体は、重い実行になるので、実行していない。`@Route.get` の生成コードは、`router.add('GET', r'/x', service.method)` の形(インスタンスメソッドの tear-off を渡す)で、登録の側が変わるだけ。呼ぶ側は同じ。
 
@@ -28,7 +28,7 @@
 **A. モデルで言う(新しい行の種類。登録の呼び出しの関数を、呼ぶ側の関数のエッジの先にする)**
 - 今の書式では書けない(#196 の追記 3、`MODELING.md`)。`calls:` は、その呼び出しの中で呼ばれる関数だけ。モデルの行はグラフのエッジを作らず、エッジには呼び出し点がいる。
 - 足すなら、行の種類(`registers:` と呼ぶ側の関数)、Go / Rust / Dart の読み込み、ADR、`bench/model-diff` の扱い、が要る。フレームワークごとに手で書く行になる。
-- 依存の**本体は既定で読んでいる**ので、入れ物と呼び出しはコードに見えている。モデルで言うと、読める情報を、手で二重に言うことになる。実物の shelf_router では、呼ぶ点は `Router.call` でなく `RouterEntry.invoke` の中なので、行がフレームワークの内部の名前を持つことになり、版が変わると壊れる(`verified_versions` の範囲を広く取れない)。
+- 依存の**本体は既定で読んでいる**ので、入れ物と呼び出しはコードに見えている。モデルで言うと、読める情報を、手で二重に言うことになる。実物の shelf_router では、呼ぶ点は `Router.call` でなく `RouterEntry.invoke` の中なので、行がフレームワークの内部の名前を持つことになり、バージョンが変わると壊れる(`verified_versions` の範囲を広く取れない)。
 - 向く所: 本体を読まない依存(`-no-deps`、`body_replaced_packages`)。ここは、今は `unmodeled_library_call` が付く。
 - 結論: **主な道にはしない**。
 
@@ -47,7 +47,7 @@
 
 **B を、#99 の根 D の実装の一部として行う。E だけを先に切り出さない**(登録表の形は、D の `clos/stored`、`dyn/func_map`、`dyn/func_field` と同じ仕組みで、E だけの規則はない)。段階:
 
-1. **フィールド + 入れ物の書き込みの索引**(IR の読みを 1 回。書き込む関数を読むので、extractor が「入れ物のフィールドに関数値を書く関数」に印を付けるか、`ir.Walk` で全部読むか、は、メモリのコストで決める。Rust の `indexFields` と同じ位置づけ)と、呼び出し点の持ち主の追跡。`internal/valuecalls` に約 400〜600 行とテスト。zoo の骨組みの `Router.call` 3 件と `pushNamed` 3 件、ほか D の約 20 件が対象。
+1. **フィールド + 入れ物の書き込みの索引**(IR を 1 回読む。書き込む関数を読むので、extractor が「入れ物のフィールドに関数値を書く関数」にマークを付けるか、`ir.Walk` で全部読むか、は、メモリのコストで決める。Rust の `indexFields` と同じ位置づけ)と、呼び出し点の持ち主の追跡。`internal/valuecalls` に約 400〜600 行とテスト。zoo の骨組みの `Router.call` 3 件と `pushNamed` 3 件、ほか D の約 20 件が対象。
 2. 実物の shelf_router 用に、書き込みの側の深さ。
 3. Flutter の `routes` の受け渡し(入れ物の alloc までさかのぼる)。
 
