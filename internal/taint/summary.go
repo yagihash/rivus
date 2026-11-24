@@ -76,7 +76,10 @@ type Summary struct {
 	// char_read_in_callee). Internal, like LimitedParams: in signature(), not in the result or the index. Empty with
 	// -numeric-taint (nothing stops).
 	CharStopped []CharStop
-	Sig         string
+	// Coarse is set when the summary was made coarser because its component went over the budget (coarse.go, ADR-124).
+	// Internal: not in signature(), the result or the index.
+	Coarse *coarseSCC
+	Sig    string
 }
 
 // CharStop is one entry of Summary.CharStopped.
@@ -389,6 +392,10 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 	sum := s.eng.summaryOf(fn)
 	if sum == nil {
 		return // not analysed yet; a later round picks it up
+	}
+	if sum.Coarse != nil {
+		// every hop of this call has the note (made once, shared like the notes of a call)
+		notes = appendNote(notes, s.pathNote(KindDepthLimit, sccCoarsenedDetail, cc.in.Pos))
 	}
 	argv := append(cc.argv(), bindings...)
 	// A callee may take optional parameters that the call leaves out (an

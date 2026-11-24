@@ -75,6 +75,11 @@ type Options struct {
 	FuncValues    bool
 	SlowFunc      func(fn string, d, cpu time.Duration, outputs, roots int)
 	SlowThreshold time.Duration
+	// SCCCoarsen is the budget of a large strongly connected component (ADR-124): over it, the dependency functions of
+	// the component move once to a coarser summary. Zero (the default): never. SCCCoarsenAtRound is for the tests:
+	// from that round of a large component on, it moves whatever the counts are (0: not used).
+	SCCCoarsen        SCCCoarsenBudget
+	SCCCoarsenAtRound int // below 0: before the first round
 }
 
 // DefaultOptions are the defaults.
@@ -167,6 +172,12 @@ type Engine struct {
 	// k, or the cell of a parameter was merged into the whole of it: the cells are
 	// coarser than the code (more than the truth, never less).
 	coarsened map[*sg.Func]string
+	// coarse are the dependency functions whose component was moved to the coarse summary (coarse.go), coarseList the
+	// components in the order they were moved, sccRounds the rounds each large component has had (by its first
+	// function). Under mu.
+	coarse     map[*sg.Func]*coarseSCC
+	coarseList []*coarseSCC
+	sccRounds  map[*sg.Func]int
 	// iterDumpDir is the directory for the dump of the summaries after each round of a large component
 	// (RIVUS_INTERNAL_SUMMARY_DUMP_EACH_ITER; empty: none). iterDumps are the large components, by their first
 	// function. Both are set before the run and not changed during it.
@@ -273,6 +284,8 @@ func New(p *sg.Program, texts ir.Texts, st *sites.Result, rules *model.Rules, op
 		addsTotal:  map[*sg.Func]int64{},
 		guardLimit: map[*sg.Func]bool{},
 		coarsened:  map[*sg.Func]string{},
+		coarse:     map[*sg.Func]*coarseSCC{},
+		sccRounds:  map[*sg.Func]int{},
 		globals:    newGlobalStore(),
 		aliasArgs:  aliasArgs,
 	}
@@ -546,6 +559,9 @@ type Stats struct {
 	// OutWidenedFuncs and OutWidenedOutputs: the functions whose final summary has an output that was widened
 	// (more than 24 elements, the parts of a parameter merged into the whole of it), and how many such outputs
 	// there are (the out_limit record, #186).
+	// SCCCoarsened is the number of large components whose dependency functions were moved to the coarse summary
+	// (ADR-124; the scc_coarsened records). A run with a budget off has none.
+	SCCCoarsened      int `json:"scc_coarsened,omitempty"`
 	OutWidenedFuncs   int `json:"out_widened_funcs,omitempty"`
 	OutWidenedOutputs int `json:"out_widened_outputs,omitempty"`
 	// The work of the analysis, counted in the elements put into the sets (the same count as Budget): always in the
@@ -715,6 +731,7 @@ func (e *Engine) Run() *Result {
 					// in the order of the component after the round.
 					// This is so for any number of workers (with one, the round runs one
 					// function after the other): the output does not depend on -workers (#96).
+					e.coarsenFirst(scc)
 					for iter := 0; iter < 8; iter++ {
 						var todo []*sg.Func
 						for _, fn := range scc {
@@ -759,6 +776,10 @@ func (e *Engine) Run() *Result {
 								changedNow = append(changedNow, e.funcID(fn))
 								changedMu.Unlock()
 							}
+						}
+						// after the commits: what the budget counts is what the round left
+						if e.coarsenStep(scc, callers, pass+1) {
+							progress = true
 						}
 						if roundChanged != nil {
 							e.dumpRound(scc, pass+1, len(todo), roundChanged)
@@ -825,6 +846,7 @@ func (e *Engine) Run() *Result {
 	sort.Strings(e.notConverged)
 	st.NotConverged = e.notConverged
 	st.PassChanges = e.passChanges
+	st.SCCCoarsened = len(e.coarseList)
 	for _, sum := range e.summaries {
 		n, steps := 0, 0
 		for _, o := range sum.Outputs {
@@ -1047,7 +1069,7 @@ type fnResult struct {
 // it reads the summaries of the callees and the global state as they are.
 func (e *Engine) compute(fn *sg.Func) *fnResult {
 	s := &state{
-		eng: e, fn: fn,
+		eng: e, fn: fn, coarse: e.coarseOf(fn) != nil,
 		cells:       map[Root]map[string]Set{},
 		paramRoot:   map[Root]int{},
 		findings:    map[findingKey]*rawFinding{},
@@ -1065,6 +1087,9 @@ func (e *Engine) compute(fn *sg.Func) *fnResult {
 	took := time.Since(began)
 	// the summary is joined with the one of the earlier visits
 	sum := joinSummaries(e.summaryOf(fn), s.summarize())
+	if c := e.coarseOf(fn); c != nil {
+		sum = foldSummary(sum, c)
+	}
 	// Too many guards matter only where taint is told apart by them: where
 	// something is sanitized, or a source's own label is returned.
 	if s.guardOverflow && sanitizes(sum) {
@@ -1492,6 +1517,8 @@ func (e *Engine) collect(st Stats) *Result {
 	if u, _, _ := e.outLimitRecord(); u != nil {
 		res.Uncertainties = append(res.Uncertainties, u)
 	}
+	// the large components whose dependency functions were moved to the coarse summary (ADR-124): one record each
+	res.Uncertainties = append(res.Uncertainties, e.coarseRecords()...)
 	// where the data of a source became a number or a bool: one record for each source site
 	if stops := e.numericStopRecords(); len(stops) > 0 {
 		res.Uncertainties = append(res.Uncertainties, stops...)
