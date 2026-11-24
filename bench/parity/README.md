@@ -1,6 +1,6 @@
 # parity: 言語間の差の表(B-52、段階 1)
 
-組み込みのモデルの整備の状況を、「割合 1 つ」でなく、**量・需要・正しさ・当たっているか**の 4 つの数に分け、Go・Dart・Rust の列に実数と割合で並べる。結果は [`TABLE.md`](TABLE.md)(コミットする表)、一致しなかった行の一覧は [`DEAD.md`](DEAD.md)。**コア(`internal/`)は変えない**: モデルは `internal/model/builtin` を読み、IR は小さな自前のデコーダで読む。
+組み込みのモデルの整備の状況を、「割合 1 つ」でなく、**量・需要・正しさ・当たっているか**の 4 つの数に分け、Go・Dart・Rust の列に実数と割合で並べる。結果の表(`TABLE.md`)と、一致しなかった行の一覧(`DEAD.md`)は、**コミットしない**(必要なときに作り、出力先は既定で `-work` のディレクトリ)。言語間の差(PARITY)の進み具合は、zoo のマーク(`@na`、`@todo(PARITY)`)と、`bench/zoo` のゲート(`TestZoo*` の出力の `parity marks:` の行)で見る。**コア(`internal/`)は変えない**: モデルは `internal/model/builtin` を読み、IR は小さな自前のデコーダで読む。
 
 ## 4 つの数
 
@@ -65,7 +65,7 @@ IR の呼び出し先の名前(`callee.symbol`、関数の名前)と、モデル
 
 **規則**: 新しい機能の PR は、この表の行を足すか直す。Go だけで入れるときは、ほかの言語の課題の番号を書く。
 
-## 表の更新の手順
+## 表の作り方(必要なときだけ。コミットしない)
 
 入力は、(1) 各言語の IR(`bench/parity/collect.sh`)、(2) 実コードの解析の要約(`rivus analyze -pass-stats`、`ANALYZE=1`)、(3) zoo のテストの出力(任意)。
 
@@ -85,13 +85,13 @@ go test ./cmd/rivus -run 'TestZooPureGo|TestZooGo$|TestZooDart$|TestZooRust$' -v
   | grep -E '^[[:space:]]+zoo[a-z_]*test.go:[0-9]+: |^(--- |ok|FAIL)' \
   | sed -E 's/^[[:space:]]+zoo[a-z_]*test.go:[0-9]+: //' > $WORK/zoo-lines.txt   # RIVUS_DART を付ける
 
-# 3. 表を作る(go/types で標準ライブラリを読むので 10 秒ほど)
-go run ./bench/parity report -work $WORK/out -table bench/parity/TABLE.md -dead bench/parity/DEAD.md -zoo $WORK/zoo-lines.txt
+# 3. 表を作る(go/types で標準ライブラリを読むので 10 秒ほど)。出力は $WORK/out/TABLE.md と DEAD.md(-table、-dead で変えられる。リポジトリの中なら Git の管理外に)
+go run ./bench/parity report -work $WORK/out -zoo $WORK/zoo-lines.txt
 ```
 
-`TABLE.md` と `DEAD.md` は**手で直さない**。組み込みのモデル(`internal/model/builtin/*.yaml`)、extractor、読む入力を変えたら作り直し、コミットメッセージに、前の表からの差(一致しない行の数、(B) の割合)を書く。`-no-gotypes` は (A) と Go の形の型からの判定を省く(速い確認用)。`go test ./bench/parity`(`-short` で標準ライブラリの読み込みを省く)が、形・名前・IR の解釈・一致の判定の単体テスト。
+`TABLE.md` と `DEAD.md` は道具が作るもので、コミットしない。組み込みのモデル(`internal/model/builtin/*.yaml`)、extractor、読む入力を変えて、量・需要・死んだ行の数を見たいときに作る。`-no-gotypes` は (A) と Go の形の型からの判定を省く(速い確認用)。`go test ./bench/parity`(`-short` で標準ライブラリの読み込みを省く)が、形・名前・IR の解釈・一致の判定の単体テスト。
 
-## 入力(`TABLE.md` の 6 に書く)
+## 入力(作った `TABLE.md` の 6 に書かれる)
 
 | 入力 | 何 | バージョン |
 | --- | --- | --- |

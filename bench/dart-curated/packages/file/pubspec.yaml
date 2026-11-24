@@ -1,0 +1,5 @@
+name: file
+description: "Stands for package:file: ForwardingFileSystemEntity.path forwards to a dart:io entity, as in the real package (file 7.0.1, lib/src/forwarding/forwarding_file_system_entity.dart). Only the shape of that forwarding is kept."
+publish_to: none
+environment:
+  sdk: ^3.10.0

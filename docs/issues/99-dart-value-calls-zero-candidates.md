@@ -45,7 +45,7 @@ zoo の Dart を実行して観測した呼び出しと、グラフのエッジ�
 
 ## 追記(2026-11-24。`-resolve-func-values` を消した。根 D と I)
 
-`-resolve-func-values`(候補 0 件の値の呼び出しに、関数値のパスで候補を補う実験)は、コスト(合格基準の 4 対象が全部 FAIL。エンジンを余分に 1 回走らせる)のために消した([DESIGN-callouts.md](../DESIGN-callouts.md) 5.6)。それが補っていた Dart の `no_edge` は、観測した呼び出しとの照合(方法 B。`bench/zoo-dart/observed/README.md`)で、そのまま `no_edge` として見え続ける。**偽の edge は足していない**。**uncertainty のない見逃しは増えない**: 候補 0 件の値の呼び出しには、通常のパスの `unresolved_callee` が付く。
+`-resolve-func-values`(候補 0 件の値の呼び出しに、関数値のパスで候補を補う実験)は、コスト(合格基準の 4 対象が全部 FAIL。エンジンを余分に 1 回実行する)のために消した([DESIGN-callouts.md](../DESIGN-callouts.md) 5.6)。それが補っていた Dart の `no_edge` は、観測した呼び出しとの照合(方法 B。`bench/zoo-dart/observed/README.md`)で、そのまま `no_edge` として見え続ける。**偽の edge は足していない**。**uncertainty のない見逃しは増えない**: 候補 0 件の値の呼び出しには、通常のパスの `unresolved_callee` が付く。
 
 件数の区別: 根 D の 20 件のうち、フラグで消えたのは 17 件(残りの `clos/partial-callers` 3 件は、フラグでも消えなかった)。だから、フラグが補っていた `no_edge` は 37 件、根の課題に載る件数の合計は 40 件。
 

@@ -359,8 +359,8 @@ rivus の出力の `largest_scc_packages` は、パッケージごとの関数�
 | `rivus index`(グラフだけ) | 55.9 秒 | 1.02 GB | グラフのファイル 3.3 MB(3,790 関数、9,043 呼び出し、18,784 エッジ) |
 | `rivus index -taint -o <file>` | 88.6 秒 | 1.10 GB | グラフ 3.3 MB + JSON のインデックス 479 KB(finding 3、不確実性 550) |
 
-- 負荷が低かった時の別の測定(同じ変種): `analyze` 18.1〜20.2 秒、`index -o <file>` 23.1〜23.5 秒(`-o` は解析まで走らせる)。どちらの時も、`index` は `analyze` より 1.2〜1.3 倍遅い。
-- 違い: `analyze` は、extractor の出力を読んで解析するだけ。`index` は、同じ extractor と IR の読み込みに加えて、呼び出しグラフを作って書く(`rivus graph` が使う)。`-taint` は、その上で解析も走らせ、結果のインデックスも書く。つまり、**`index` は `analyze` より安くない**。インデックスは、1 回作って、`graph` / `query` で何度も引くためのもの。
+- 負荷が低かった時の別の測定(同じ変種): `analyze` 18.1〜20.2 秒、`index -o <file>` 23.1〜23.5 秒(`-o` は解析まで実行する)。どちらの時も、`index` は `analyze` より 1.2〜1.3 倍遅い。
+- 違い: `analyze` は、extractor の出力を読んで解析するだけ。`index` は、同じ extractor と IR の読み込みに加えて、呼び出しグラフを作って書く(`rivus graph` が使う)。`-taint` は、その上で解析も実行し、結果のインデックスも書く。つまり、**`index` は `analyze` より安くない**。インデックスは、1 回作って、`graph` / `query` で何度も引くためのもの。
 - この対象では、`index`(グラフだけ)と `index -taint` の差は解析の分(`duration_ms` で 1.7 秒ほど。上の表は負荷で広がった)。グラフ側の時間も、大半は extractor。
 
 ### 10.7 モデルで切る提案(コードは書いていない)
@@ -380,7 +380,7 @@ rivus の出力の `largest_scc_packages` は、パッケージごとの関数�
 
 ### 10.8 見つけた rivus の不具合と注意
 
-- `rivus index -o <file>` は、`-taint` を付けなくても、解析まで走らせる(`-o implies it` と `-h` に書いてある。意図どおり)。グラフだけの時間を測るには、`-o` を付けない。
+- `rivus index -o <file>` は、`-taint` を付けなくても、解析まで実行する(`-o implies it` と `-h` に書いてある。意図どおり)。グラフだけの時間を測るには、`-o` を付けない。
 - `.dart_tool/package_config.json` が無い(`dart pub get` をしていない)プロジェクトは、終了コード 0、finding 0 で終わり、`uncertainties` に `missing_source` が出るだけ(6 節と同じ。この測定でも、最初の 1 回で踏んだ)。
 - `stats.timed_out` は、時間切れでないときは出力に無い(キーが存在しない)。収束の記録では、「無い = 時間切れなし」と読んだ。
 

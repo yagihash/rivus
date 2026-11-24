@@ -171,6 +171,17 @@
   "customManagers": [
     {
       "customType": "regex",
+      "description": "Tool versions installed by a script or a run step, marked with a `# renovate: datasource=... depName=...` comment above `name=vX.Y.Z` (ghalint and actionlint in the jobs ghalint and actionlint of ci.yml, go-licenses in scripts/build-release-archives.sh)",
+      "managerFilePatterns": [
+        "/^\\.github\\/workflows\\/ci\\.yml$/",
+        "/^scripts\\/build-release-archives\\.sh$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\n\\s*\\w+=(?<currentValue>\\S+)"
+      ]
+    },
+    {
+      "customType": "regex",
       "description": "Dart SDK version of setup-dart in ci.yml",
       "managerFilePatterns": [
         "/^\\.github/workflows/ci\\.yml$/"

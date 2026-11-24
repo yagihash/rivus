@@ -3,7 +3,9 @@
 //
 //	parity scan   -lang go|dart|rust -name N [-real] -ir FILE -out corpus-N.json
 //	parity digest -lang L -name N -in result.json -out digest-N.json
-//	parity report -work DIR -table TABLE.md -dead DEAD.md [-zoo zoo-lines.txt]
+//	parity report -work DIR [-table FILE] [-dead FILE] [-zoo zoo-lines.txt]
+//
+// The table and the list of the dead rows are not committed: the default is TABLE.md and DEAD.md in the -work directory.
 //
 // It reads the model through internal/model/builtin and the IR through its own small decoder; it does not touch the
 // core.
@@ -79,12 +81,18 @@ func cmdDigest(args []string) error {
 func cmdReport(args []string) error {
 	fs := flag.NewFlagSet("report", flag.ExitOnError)
 	work := fs.String("work", "", "directory with corpus-*.json and digest-*.json")
-	table := fs.String("table", "TABLE.md", "the table")
-	dead := fs.String("dead", "DEAD.md", "the list of the rows no IR hits")
+	table := fs.String("table", "", "the table (default: TABLE.md in the -work directory; not committed)")
+	dead := fs.String("dead", "", "the list of the rows no IR hits (default: DEAD.md in the -work directory; not committed)")
 	zoo := fs.String("zoo", "", "a file with the lines of the zoo tests (go test -v)")
 	noGo := fs.Bool("no-gotypes", false, "do not load the types of the Go standard library")
 	fs.Parse(args)
 
+	if *table == "" {
+		*table = filepath.Join(*work, "TABLE.md")
+	}
+	if *dead == "" {
+		*dead = filepath.Join(*work, "DEAD.md")
+	}
 	rows, err := LoadRows()
 	if err != nil {
 		return err

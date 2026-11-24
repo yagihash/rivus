@@ -13,6 +13,6 @@
 
 ## 修正の中身
 
-`extractor/dart/dart_test.yaml` の `paths` で、実行するテストを `test/smoke_test.dart` だけにした(`dart_test.yaml` には、パスを除く設定がなく、glob も使えない。一覧にするしかない)。extractor 自身のテストはそれまで 1 本もなかった(Go のテストが走らせていた)ので、`test/smoke_test.dart`(見本を読んで、JSON Lines が出ること)を足した。見本は動かさない(参照が `cmd/rivus`、CI、`scripts/dev-setup.sh`、ADR に多い)。
+`extractor/dart/dart_test.yaml` の `paths` で、実行するテストを `test/smoke_test.dart` だけにした(`dart_test.yaml` には、パスを除く設定がなく、glob も使えない。一覧にするしかない)。extractor 自身のテストはそれまで 1 本もなかった(Go のテストが実行していた)ので、`test/smoke_test.dart`(見本を読んで、JSON Lines が出ること)を足した。見本は動かさない(参照が `cmd/rivus`、CI、`scripts/dev-setup.sh`、ADR に多い)。
 
 CI は `dart analyze lib bin` と Go のテストだけで、extractor の `dart test` を実行していない。回すかは、PR の本文で提案した。

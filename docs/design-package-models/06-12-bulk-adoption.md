@@ -48,7 +48,7 @@ adopt_rules:
 4. 残りを、手の行と同じ形の行にする(`symbol`、`args` または `field`、`category`、`origin: generated`、`decision: <id>`)。2 つの決めが同じ位置を取ったときは、先に書いた決めが勝ち、後の決めは警告(終了コード 70 と同じ扱いにするかは、**要確認**)。
 5. `<lang>-<package>.gen.yaml` に、決めの順、その中で symbol の辞書順で書く。先頭に `generator: model-author@<バージョン>`、`input: <パッケージ>@<バージョン>`、`rules: <規則の表のハッシュ>`、`decisions: <adopt_rules の内容のハッシュ>`。
 
-**決定性、べき等**: 出力は、(決めの内容、手の行、`rejected:`、パッケージのバージョン、規則の表)だけで決まる(時刻と乱数なし)。同じ入力で 2 回走らせると、同じバイト列(テストで確認)。手の行を足すと、その symbol の生成の行が消える(差分に出る)。
+**決定性、べき等**: 出力は、(決めの内容、手の行、`rejected:`、パッケージのバージョン、規則の表)だけで決まる(時刻と乱数なし)。同じ入力で 2 回実行すると、同じバイト列(テストで確認)。手の行を足すと、その symbol の生成の行が消える(差分に出る)。
 
 **バージョンが変わったとき**: 新しい API が決めに合うと、行が増え、`covers` を超える。**`covers` より増えたときは、終了コード 70(未決)で止まり**、増えた symbol の一覧を作業ファイルに書く。人が見て、`covers` を直す(外すものは `rejected:` に足す)。減ったときは警告だけ(API が消えた)。ファイルの差分(`.gen.yaml` の追加と削除)で、何が sink になったかが、PR で見える。`verified_versions` は、今までどおり手で(`-write-verified`)。
 
@@ -67,7 +67,7 @@ adopt_rules:
 
 **今の動き(コードで確認)**: カテゴリを選ぶ仕組みは、今ない。`rivus analyze` のフラグ(`cmd/rivus/analyze.go` の 92〜129 行)に、カテゴリの選択はない。`category`(と、`categories`)は、finding と site に付く文字列で(`internal/taint/engine.go` の finding、`internal/sites/sites.go`)、**組み込みの全部の sink が、既定で有効**。`resource_name` も同じ。source にラベルがあり、sink は(ラベルを書かない限り)どのラベルにも反応する(`model.go` の `Sink` と `Source.Labels`。AGENT-GUIDE の 39〜44 行は、`jq` で `.category` を見て分ける作法)。見たいカテゴリの選択は、利用者が結果を絞ること(`jq`)で、解析の側ではない。**だから、sink が 57 から数百に増えると、`resource_name` の finding は、そのまま既定の出力に増える**。カテゴリを選べるようにする(例: `-categories`)ことは、この設計の外で、決めるのはユーザー(open question 1)。
 
-**測定の案(今は走らせない。Go の解析だけ。新しい取得は、MODEL-QUEUE の中のパッケージだけ)**:
+**測定の案(今は実行しない。Go の解析だけ。新しい取得は、MODEL-QUEUE の中のパッケージだけ)**:
 
 1. 合成の小さいサーバを `bench/go-synth` の形で作る(3.1 の AWS S3 の例と同じ)。go-github v93 を使い、`r.URL.Query().Get(..)` の値を、(a) 手の行がある 56 の sink、(b) 生成で増える兄弟のメソッド、(c) ID や数値の引数(sink にならないはず)に渡す。期待の finding を `expected/` に書き、`score.py` で採点する。目的: 増えた行が、何を出すか(真の検出か、無関係か)を、小さい形で見る。
 2. 実在の対象は、`bench/` にある対象のうち、`go.sum` に go-github があるものだけ(今、`bench/` の中に go-github を使う対象は見つからない。`bench/zoo-go-pkg/go_github` だけ。実在の対象が要るときは、取得の前にユーザーに聞く。方針)。

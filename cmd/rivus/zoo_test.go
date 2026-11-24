@@ -301,7 +301,7 @@ func zooParityMarks(src string) (na, todo map[string]string) {
 	return
 }
 
-// zooParityLine logs the count of the cells that the language lacks, in two kinds, for bench/parity (the table
+// zooParityLine logs the count of the cells that the language lacks, in two kinds, for bench/parity (the tool
 // reads this line): "zoo-<lang>: parity marks: @na N [names] | @todo N [names]".
 func zooParityLine(t testing.TB, lang string, na, todo []string) {
 	t.Helper()

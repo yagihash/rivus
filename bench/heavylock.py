@@ -23,12 +23,53 @@ one holds it.
 import contextlib
 import fcntl
 import os
+import subprocess
 import sys
 import time
 
 HELD = "RIVUS_HEAVY_LOCK_HELD"
 DEFAULT_WAIT_S = 1800.0
 EXIT_TIMEOUT = 75
+
+
+BUSY_PCT = 20.0
+BUSY_TOP = 5
+
+
+def busy_processes(min_pct=BUSY_PCT, top=BUSY_TOP):
+    """The command names (no arguments, no path) of the processes above min_pct of one CPU, the top ones first. [] when ps fails.
+    The lock does not stop a run that does not take it (a build, another session), so a quiet run needs this record."""
+    try:
+        out = subprocess.run(["ps", "-axo", "pcpu=,comm="], capture_output=True, text=True, timeout=10).stdout
+    except (OSError, subprocess.SubprocessError):
+        return []
+    rows = []
+    for l in out.splitlines():
+        a, _, comm = l.strip().partition(" ")
+        try:
+            pct = float(a)
+        except ValueError:
+            continue
+        if pct >= min_pct and comm.strip():
+            rows.append((pct, os.path.basename(comm.strip())))
+    rows.sort(key=lambda x: -x[0])
+    return [n for _, n in rows[:top]]
+
+
+def snapshot():
+    """The load average (1, 5, 15 minutes) and the busy processes now."""
+    try:
+        load = os.getloadavg()
+    except OSError:
+        load = ()
+    return {"load": load, "busy": busy_processes()}
+
+
+def format_snapshots(start, end):
+    """One text for the settings column: the load at the start and at the end, and the busy processes of both (names only)."""
+    f = lambda sn: "/".join("%.2f" % x for x in sn["load"]) or "-"
+    g = lambda sn: ",".join(sn["busy"]) or "none"
+    return "load start %s end %s (1/5/15 min); busy(>=%d%% cpu) start: %s end: %s" % (f(start), f(end), BUSY_PCT, g(start), g(end))
 
 
 class HeavyLockTimeout(Exception):
