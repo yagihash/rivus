@@ -186,3 +186,22 @@ test_hashiru_replacements_and_other_words_pass if {
 		not denied("paragraph", text)
 	}
 }
+
+test_susume_noun_is_denied if {
+	denied("paragraph", "この案が勧めです")
+	denied("paragraph", "相談役の勧めに従う")
+	denied("paragraph", "お勧めの設定")
+	denied("list", "勧め、として書く")
+	denied("table", "勧め")
+}
+
+test_susume_message_names_the_replacement if {
+	some m in wording.deny with input as doc("paragraph", "強い勧めがある")
+	contains(m.message, "推奨")
+}
+
+test_susume_verb_forms_pass if {
+	every text in ["この設定は勧めない", "使うよう勧めた", "確認を勧めて進める", "導入を勧める", "推奨する", "`勧め` の例"] {
+		not denied("paragraph", text)
+	}
+}
