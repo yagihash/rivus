@@ -171,7 +171,7 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Tool versions installed by a script or a run step, marked with a `# renovate: datasource=... depName=...` comment above `name=vX.Y.Z` (ghalint and actionlint in the job actions-lint of ci.yml, go-licenses in scripts/build-release-archives.sh)",
+      "description": "Tool versions installed by a script or a run step, marked with a `# renovate: datasource=... depName=...` comment above `name=vX.Y.Z` (ghalint and actionlint in the jobs ghalint and actionlint of ci.yml, go-licenses in scripts/build-release-archives.sh)",
       "managerFilePatterns": [
         "/^\\.github\\/workflows\\/ci\\.yml$/",
         "/^scripts\\/build-release-archives\\.sh$/"

@@ -718,10 +718,11 @@ jobs:
           cache: false
       - run: scripts/build-release-archives.sh 0.0.0-check
 
-  # The lint of the workflows (it was the workflow ghalint.yml, with two checks of its own that a ruleset had to require): ghalint (`run` and `act`) and
-  # actionlint, one after the other in one job. It runs when a workflow or a local action changed (the filter `workflows`), and on a push to main, the
-  # weekly run and a run by hand; a skipped job passes in `ci-ok`. Both tools are downloaded from the release and checked with their attestation.
-  actions-lint:
+  # The lint of the workflows (it was the workflow ghalint.yml). Two jobs, named `ghalint` and `actionlint` as the checks that the ruleset
+  # required before, so that the ruleset is met with or without them in its list; `ci-ok` has both in `needs`. They run when a workflow or a
+  # local action changed (the filter `workflows`), and on a push to main, the weekly run and a run by hand; a skipped job passes in `ci-ok`.
+  # Both tools are downloaded from the release and checked with their attestation.
+  ghalint:
     needs: changes
     if: needs.changes.outputs.workflows == 'true'
     runs-on: ubuntu-latest
@@ -748,6 +749,29 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
+      - name: Run ghalint run
+        run: ./ghalint run
+
+      - name: Run ghalint act
+        if: ${{ !cancelled() }}
+        run: ./ghalint act
+
+
+  actionlint:
+    needs: changes
+    if: needs.changes.outputs.workflows == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      attestations: read # `gh attestation verify`
+    steps:
+      - uses: cicd-sensor/cicd-sensor-action@6511eb44c91d71b2b93d71193b1bf2cb18352f66 # v0.0.38
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
       - name: Install actionlint
         run: |
           # renovate: datasource=github-releases depName=rhysd/actionlint
@@ -758,25 +782,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
-      # Each check runs even when the one before it failed, so that one red run shows all of them.
-      - name: Run ghalint run
-        run: ./ghalint run
-
-      - name: Run ghalint act
-        if: ${{ !cancelled() }}
-        run: ./ghalint act
-
       - name: Run actionlint
-        if: ${{ !cancelled() }}
         run: |
           ./actionlint \
             -ignore 'label "ubuntu-26.04-arm" is unknown'
+
 
   # The one check that a ruleset requires. Every job above is in `needs`: it fails when one of them failed or was cancelled, and passes
   # when they passed or were skipped (nothing that a test reads changed). A job added above has to be added here.
   ci-ok:
     if: always()
-    needs: [changes, go-packages, docs-tests, test, gcp-exec, sandbox, model-diff, model-diff-changed, graph-check, release-build, actions-lint]
+    needs: [changes, go-packages, docs-tests, test, gcp-exec, sandbox, model-diff, model-diff-changed, graph-check, release-build, ghalint, actionlint]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
