@@ -21,6 +21,20 @@ class Items(unittest.TestCase):
             self.assertIn("DIFFERENT (only in the first: 1, only in the second: 1)", line)
             self.assertFalse(g.compare_items("findings", a, os.path.join(d, "none"))[1])
 
+    def test_order_only_differs(self):
+        with tempfile.TemporaryDirectory() as d:
+            a = self.write(d, "a", [{"x": 1, "y": [1, 2]}, {"x": 2}])
+            b = self.write(d, "b", [{"x": 2}, {"x": 1, "y": [1, 2]}])  # only the order
+            k = os.path.join(d, "k")
+            json.dump({"findings": [{"y": [1, 2], "x": 1}, {"x": 2}], "uncertainties": []}, open(k, "w"))  # only the order of the keys
+            self.assertTrue(g.compare_items("findings", a, b)[1])  # the set: same
+            line, same = g.compare_order("findings", a, b)
+            self.assertFalse(same)
+            self.assertTrue(line.startswith("findings-order: DIFFERENT (2 in the first, 2 in the second"), line)
+            self.assertTrue(g.compare_order("findings", a, k)[1])
+            self.assertTrue(g.compare_order("uncertainties", a, b)[0].startswith("uncertainties-order: same (0"))
+            self.assertFalse(g.compare_order("findings", a, os.path.join(d, "none"))[1])
+
     def test_worse(self):
         self.assertEqual(g.worse(0, 3), 3)
         self.assertEqual(g.worse(3, 1), 1)
@@ -46,7 +60,7 @@ class WorkersSelfCheck(unittest.TestCase):
                                 "-base-bin", os.path.join(d, "rivus"), "-head-bin", os.path.join(d, "rivus"), "-graphcheck-bin", os.path.join(d, "graphcheck"),
                                 "-base-workers", "1", "-head-workers", "8", "-out", d], capture_output=True, text=True)
             self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
-            self.assertEqual(p.stdout.count(": same"), 5, p.stdout)
+            self.assertEqual(p.stdout.count(": same"), 7, p.stdout)
 
 
 if __name__ == "__main__":

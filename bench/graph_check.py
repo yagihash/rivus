@@ -8,7 +8,10 @@ A change for memory or cost must not change what the analysis builds (docs/WORKF
   IR         `rivus debug extract -all`            (compared by accept.Compare, the comparison of the acceptance test)
   edges      `rivus index` (the graph file)        (every edge of the call graph with its call site, kind and number of candidates)
   summaries  RIVUS_INTERNAL_SUMMARY_DUMP of `rivus analyze` (one line for each function: the hash of the whole summary)
-  findings   the `findings` and `uncertainties` of the same `rivus analyze`
+  findings   the `findings` and `uncertainties` of the same `rivus analyze` (the set: the order of the array does not count)
+  findings-order, uncertainties-order
+             the same two arrays in the order of the output (SHA-256 of the array with the keys of each object sorted and nothing else
+             changed: the steps of a path and the sentence of an uncertainty are in it). A change of the order is a change for the user.
 and prints one line for each: "same" or "DIFFERENT" with how many and the first few function IDs. A version that does not write the
 dump (one from before this check) leaves "summaries" as NOT COMPARED; it is not a pass.
 
@@ -17,7 +20,7 @@ and run like the pass line (the process tree is watched against the memory cap o
 Go only. Exit status: 0 everything compared is the same (and summaries were compared); 1 a difference; 2 a run failed; 3 same, but a
 part was not compared. Standard library only.
 """
-import argparse, collections, json, os, shlex, subprocess, sys, tempfile
+import argparse, collections, hashlib, json, os, shlex, subprocess, sys, tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -77,6 +80,28 @@ def compare_items(what, a, b):
     return "%s: DIFFERENT (only in the first: %d, only in the second: %d)" % (what, sum((ca - cb).values()), sum((cb - ca).values())), False
 
 
+def order_hash(path, key):
+    """SHA-256 of the array `key` of the report with the order of the array kept and only the keys of each object sorted."""
+    try:
+        rep = json.load(open(path))
+    except (OSError, ValueError) as e:
+        return None, None, str(e)
+    items = rep.get(key) or []
+    return hashlib.sha256(json.dumps(items, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest(), len(items), None
+
+
+def compare_order(what, a, b):
+    """The array in the order of the output: the same hash or not. Returns (line, same)."""
+    ha, na, ea = order_hash(a, what)
+    hb, nb, eb = order_hash(b, what)
+    name = what + "-order"
+    if ha is None or hb is None:
+        return "%s: NOT RUN (%s)" % (name, ea or eb), False
+    if ha == hb:
+        return "%s: same (%d, sha256 %s)" % (name, na, ha[:12]), True
+    return "%s: DIFFERENT (%d in the first, %d in the second; sha256 %s and %s)" % (name, na, nb, ha[:12], hb[:12]), False
+
+
 def graphcheck(gc, kind, a, b):
     p = subprocess.run([gc, kind, a, b], capture_output=True, text=True)
     if p.returncode not in (0, 1):
@@ -106,6 +131,11 @@ def compare(a, base, head):
         status = worse(status, rc)
     for what in ("findings", "uncertainties"):
         line, same = compare_items(what, base["report"], head["report"])
+        lines.append(line)
+        if not same:
+            status = worse(status, 1 if "DIFFERENT" in line else 2)
+    for what in ("findings", "uncertainties"):
+        line, same = compare_order(what, base["report"], head["report"])
         lines.append(line)
         if not same:
             status = worse(status, 1 if "DIFFERENT" in line else 2)
