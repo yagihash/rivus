@@ -1,5 +1,49 @@
 # Changelog
 
+## [v0.0.15](https://github.com/yagihash/rivus/compare/v0.0.14...v0.0.15) - 2026-11-24
+
+### Features
+- irspill: ディスクの Source(DiskSource)と、Go の Emit を足す(B1a。まだ繋がない) by @yagihash in https://github.com/yagihash/rivus/pull/413
+- perf: Go の IR を Put 経由でディスクに書く(B1b。内部の切り替えあり) by @yagihash in https://github.com/yagihash/rivus/pull/414
+- bench: 合格基準の A と C を測る道具に対応する(memos-4gib、gitea、検出 score) by @yagihash in https://github.com/yagihash/rivus/pull/418
+- bench: --cost-check で memos-4gib も見られるようにし、古い passline-ledger を消す by @yagihash in https://github.com/yagihash/rivus/pull/419
+- bench: compare.sh --graph-check で、前後のグラフの表現の同一を見る by @yagihash in https://github.com/yagihash/rivus/pull/421
+- perf: Dart と Rust の IR を 1 行ずつ Put する(B2。内部の切り替えあり) by @yagihash in https://github.com/yagihash/rivus/pull/422
+- perf: IR の読む回数を減らし、valuecalls の保持に上限をつける(B3) by @yagihash in https://github.com/yagihash/rivus/pull/427
+- ci: bench のテストを PR のジョブに足し、graph-check を定期の実行に足す by @yagihash in https://github.com/yagihash/rivus/pull/429
+- perf: IR をディスクに書いて読む形を既定にする(B4) by @yagihash in https://github.com/yagihash/rivus/pull/430
+- taint: SCC の反復ごとに要約のダンプを書く内部の口を足す by @yagihash in https://github.com/yagihash/rivus/pull/433
+- bench: dart_services の依存の版を、pubspec.lock で固定する by @yagihash in https://github.com/yagihash/rivus/pull/435
+- taint: 大きな SCC の計算済みの state を、commit のあとに手放す(A が通る) by @yagihash in https://github.com/yagihash/rivus/pull/436
+- taint: SCC の反復ごとのダンプに、出力のキー別の内訳を足す by @yagihash in https://github.com/yagihash/rivus/pull/440
+- taint: SCC の反復ごとのダンプに、出力の完全なパスの上位を足す by @yagihash in https://github.com/yagihash/rivus/pull/442
+- goir: Extract の経路を 1 つにする(lifted を使わない経路を消す。課題 #201) by @yagihash in https://github.com/yagihash/rivus/pull/452
+- ci: Dart の extractor のテスト(dart test)を CI で回す by @yagihash in https://github.com/yagihash/rivus/pull/464
+- bench: --graph-check に findings と uncertainties の順序のままの比較を足す by @yagihash in https://github.com/yagihash/rivus/pull/472
+- taint: -resolve-func-values と関数値の別の通しを消す by @yagihash in https://github.com/yagihash/rivus/pull/469
+- bench: --graph-check を Dart に広げる(収束しない対象は NOT CONVERGED、#211) by @yagihash in https://github.com/yagihash/rivus/pull/473
+- taint: 大きい SCC は、依存の関数を最初から深さ 0 で解く入口(ADR-124、#187) by @yagihash in https://github.com/yagihash/rivus/pull/470
+- bench: 時間を測る実行に負荷とプロセスを記録し、判定は 3 回の中央値にする by @yagihash in https://github.com/yagihash/rivus/pull/480
+### Bug Fixes
+- test: Rust のテストが、共有の場所に CARGO_HOME を作らないようにする by @yagihash in https://github.com/yagihash/rivus/pull/423
+- goir: debug extract の IR の `$bound` の候補を、解析と同じにして揺れをなくす by @yagihash in https://github.com/yagihash/rivus/pull/425
+- merge-pr.sh: チェックが全部終わって失敗が無いこと(ci-ok が pass)を確かめる by @yagihash in https://github.com/yagihash/rivus/pull/439
+- dart: getter の呼びの候補に、同名の setter の本体を入れない by @yagihash in https://github.com/yagihash/rivus/pull/446
+- dart: 演算子のメンバ名の鍵を壊さない(== は空の鍵、<= は <、[]= は [] に混ざっていた) by @yagihash in https://github.com/yagihash/rivus/pull/448
+- dart: super.x と super の演算子、添字を静的な呼びにする by @yagihash in https://github.com/yagihash/rivus/pull/449
+- bench: 観測した呼び出しの照合(Dart)の誤判定 3 つを直す(no_edge 92 → 80) by @yagihash in https://github.com/yagihash/rivus/pull/451
+- dart: 継承した実装(mixin、上位クラス)への interface 呼び出しの候補を足す by @yagihash in https://github.com/yagihash/rivus/pull/453
+- merge-pr.sh: 承認の日付つきの Zoo-Loosened の PR は、CI が通っていれば開発者がマージできる by @yagihash in https://github.com/yagihash/rivus/pull/455
+- cmd: extractor のコマンドの値を、空白を含むパスと引用符で分ける(課題 #200) by @yagihash in https://github.com/yagihash/rivus/pull/459
+- dart: extractor の dart test が test/sample を拾わないようにする(課題 #204) by @yagihash in https://github.com/yagihash/rivus/pull/463
+- valuecalls: 返したクロージャを呼ぶ形を呼び出しごとにたどる(Dart、#78) by @yagihash in https://github.com/yagihash/rivus/pull/465
+- valuecalls: コールバックのコールバックの呼び出しをもう一度解決する(Dart、#81) by @yagihash in https://github.com/yagihash/rivus/pull/466
+- valuecalls: 代入し直した変数のセルの load をたどる(Dart、根 I) by @yagihash in https://github.com/yagihash/rivus/pull/471
+- model: path/filepath.Walk のコールバックに root を 3 つの引数とも渡す(model-diff の MISS) by @yagihash in https://github.com/yagihash/rivus/pull/485
+- model: dart:io の FileSystemEntity.path を足す(package:file の委譲で流れが注記なしで消える、#213) by @yagihash in https://github.com/yagihash/rivus/pull/486
+- model: net/url.URL.Port の MISS に non-payload の miss-reviewed を付ける by @yagihash in https://github.com/yagihash/rivus/pull/487
+- bench: graph-check に -func-timeout 24h を付け、時計に依存する実行を LOAD DEPENDENT と示す by @yagihash in https://github.com/yagihash/rivus/pull/492
+
 ## [v0.0.14](https://github.com/yagihash/rivus/compare/v0.0.13...v0.0.14) - 2026-11-23
 
 ### Features

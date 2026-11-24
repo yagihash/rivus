@@ -28,7 +28,7 @@ func TestDogfood(t *testing.T) {
 	for _, v := range []struct {
 		goos, flows string
 		capture     int
-	}{{"linux", "testdata/dogfood-flows.txt", 37}, {"darwin", "testdata/dogfood-flows-darwin.txt", 37}} {
+	}{{"linux", "testdata/dogfood-flows.txt", 65}, {"darwin", "testdata/dogfood-flows-darwin.txt", 65}} {
 		t.Run(v.goos, func(t *testing.T) { checkDogfood(t, v.goos, v.flows, v.capture) })
 	}
 }
