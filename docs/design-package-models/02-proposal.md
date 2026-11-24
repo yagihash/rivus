@@ -7,7 +7,7 @@
 | --- | --- | --- |
 | Go | SSA の本体を作ること(`go/ssa` の `Build` は関数ごと / パッケージごとに呼べ、`buildInOrder` が既にパッケージごとに `skip` を持つ)、IR にすること(`WithLifted` の 2 つ目の SSA も)。`Load` が `packages.Load` のあと、宣言のあるパッケージの `Syntax` と `TypesInfo` を捨てれば、`ssautil.AllPackages` は本体のない関数だけを作る(下の試作) | `go/packages` は、`NeedDeps` で全部のパッケージを、ソースから型検査する。パッケージごとに `NeedSyntax` を切り替えられない。型検査を省くには、宣言のあるパッケージを、エクスポートデータ(`go list -export`、ビルドが要る)で読む別の読み込みが要る。ただし、この合成での `packages.Load` は、キャッシュがあるとき 0.6〜1.0 秒で、全体の 2.5〜3 秒の一部なので、いまは割に合わない |
 | Dart | 宣言のあるパッケージのファイルの `getResolvedUnit`(関数の本体の解決)と、IR への下ろし(`_Lower`)。そのパッケージの `import` をたどらない(推移的な依存を読まない)こと(下の試作) | analyzer が、宣言と型のために、ライブラリの要素モデル(`LibraryElement`)を作ること。プロジェクトのコードが、宣言のあるパッケージの型を使うので、その公開の宣言とシグネチャは要る。本体の解決は要らない |
-| Rust | 宣言のあるクレートの `extract`(MIR を IR に下ろして JSON にする。`main.rs` の `driver`。`--crate-name` で、そのクレートと分かる)を飛ばすこと | `cargo check` が、依存のクレートも全部コンパイルする(型の解決のため。`RUSTC_WRAPPER` のドライバは、各クレートで `rustc` の代わりに走る)。これは省けない。今回は測っていない(サンドボックスと固定の nightly が要る) |
+| Rust | 宣言のあるクレートの `extract`(MIR を IR に下ろして JSON にする。`main.rs` の `driver`。`--crate-name` で、そのクレートと分かる)を飛ばすこと | `cargo check` が、依存のクレートも全部コンパイルする(型の解決のため。`RUSTC_WRAPPER` のドライバは、各クレートで `rustc` の代わりに実行される)。これは省けない。今回は測っていない(サンドボックスと固定の nightly が要る) |
 
 3. **宣言のあるパッケージの関数への呼び出し**は、行があればモデル、なければ `unmodeled_library_call`(そのパッケージに限った `-no-deps` と同じ扱い。ADR-092 の 4)。uncertainty が付くので、サイレントにならない。
 4. **出力**: `summary` に、本体を読まなかったパッケージの一覧と、その理由(どのモデルのファイルの宣言か)。ADR-092 の 5、と、「依存の中の sink は探していない」の項目(ブランチ `feat/dependency-sites-note` で進行中。`summary` の同じ場所)と、同じ場所に出す。

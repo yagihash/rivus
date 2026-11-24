@@ -339,7 +339,7 @@ cmd/rivus/                CLI（sites / analyze / query / index / graph / resolv
 internal/
   ir/                     IR の型定義、JSON Lines の読み書き、検証、ダンプ、ir.Texts
   irssa/                  IR の SSA 形（ssabuild をつなぐ。昇格、φ、到達定義）
-  sg/                     SSA グラフ（値・命令・ブロック・支配木）。エンジンが走る面
+  sg/                     SSA グラフ（値・命令・ブロック・支配木）。エンジンが実行される面
   ssabuild/               CFG → SSA（dominator tree、dominance frontier、φ 挿入）。言語非依存
   ssacheck/               ssabuild の検証（go/ssa の lifting、独立な到達定義との比較）。テストのみ
   frontend/gossa/         go/packages → go/ssa。go/ssa に触れるコードはここと goir だけ
@@ -465,7 +465,7 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 | `numeric_stop` | rivus | source のデータが数値や bool になり、それ以降は追わない（既定。`-numeric-taint` で追う）。source の種類（シンボルとラベル）ごとに 1 件で、最初の場所と、起きた関数の一覧（10 件まで）を持つ。サマリを通って止まる分（呼び出し先の中の、引数の記号的なデータの止まり）は、この 1 件には入らない。そのうち、文字の読み出し（`isCharRead`）で止まった分は、`Summary.CharStopped`（引数の番号と、止まった関数。同じ番号に複数あれば関数 ID が最小のもの。`signature()` に入り、結果には出ない）に持ち、呼び出し元が自分の引数を渡していれば番号を引き継ぎ、本物の汚染（source のデータ）を渡した呼び出しに限り、`detail: char_read_in_callee: <関数名>` の `numeric_stop` を、全体の不確実性の一覧に、呼び出し元と呼び出し先の組ごとに 1 件（場所は組の中で最小のもの）出す。呼び出し先が、数値と bool 以外の型の戻り値か書き込める引数（文字列以外の引数）を持つときだけ記録する（型だけで決まる。bool だけを返す検査の関数は、`-numeric-taint` を付けても流れが増えないので、記録しない）（流れは運ばない。`-numeric-taint` のときは止めないので空）。文字の読み出し以外の止まりは、今も記録されない |
 | `unsupported_construct` | rivus | extractor が下げられなかった構文（IR の `unsupported`）。その場所で何が起きるかは、解析に入っていない。`missing_source` ではない（対象のコードが足りないのではなく、rivus が読めなかった） |
 | `container_element_imprecision` | rivus | 結論に影響した場合のみ記録（ノイズ防止） |
-| `depth_limit` | rivus | 打ち切り。detail が理由を示す（`guard_limit`、`candidate_limit`、`caller_depth_limit`、`func_timeout`、`path_limit`、`out_limit` など）。例外: detail が `path_steps_omitted:` のものは、**解析の打ち切りではなく、表示の省略**（流れは見た。200 ステップを超える経路の、真ん中のステップを見せていない。省いたステップの不確実性・モデル・到達性は finding に入っている）。ただし、source までさかのぼる途中の打ち切り（`the path was followed back for ...`）は、その先のステップを見ていない |
+| `depth_limit` | rivus | 打ち切り。detail が理由を示す（`guard_limit`、`candidate_limit`、`caller_depth_limit`、`func_timeout`、`path_limit`、`out_limit`、`scc_coarsened` など）。例外: detail が `path_steps_omitted:` のものは、**解析の打ち切りではなく、表示の省略**（流れは見た。200 ステップを超える経路の、真ん中のステップを見せていない。省いたステップの不確実性・モデル・到達性は finding に入っている）。ただし、source までさかのぼる途中の打ち切り（`the path was followed back for ...`）は、その先のステップを見ていない |
 | `access_path_truncated` | rivus | 経路の**このステップ**で、値が深さの上限(`-k`。依存の関数は `-dep-k`)で切ったアクセスパスを通った(切ったセルに入れたステップ、切ったパスで読んだステップ)。切った所より下は「まるごと汚染」として扱うので、ここから先の流れは、切ったために出ているだけかもしれない(多めに出る側。見逃しにはならない)。要素の同一性には入れず、ステップ(why)に付ける(`pointer_alias` と同じ形)。使った深さは `summary.access_path_depth`(`{project, dependency}`、いつも出る)。切ったが値がそこを通らない finding には付かない。付かない場合: ポインタの位置のパスを切る所(`locs.go`。ループで伸びるパスの打ち切り)は uncertainty を付けない。プログラム全体の記録は、`depth_limit` の `path_limit:` |
 | `char_transform` | rivus | 経路の**このステップ**で、文字列の 1 文字を読んだ値(IR の `CharRead`)か、それに由来のマーク(`Elem` の `char`)が付いた値が、数や bool の場所に入った(`-char-taint` のときだけ。ステップに付け、要素の同一性にはマークが入る)。マークは、`CharRead` の命令の結果に付き、コピー、定数との算術、byte・rune・char への変換、文字列・スライスへの書き込みと要約を通る。落ちる所: 比較、`len`、別の数の型への変換(`int(c)`)、モデルや本体のない呼び出しが、文字列から作る数。表を文字で引く `t[c]` は、引いた値に文字のマークが付く。フラグ off では出ない。種類を 1 つ足した(ADR-008 の扱いは未決) |
 | `recursion_approximation` | rivus | |

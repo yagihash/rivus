@@ -204,7 +204,10 @@ type found struct {
 
 // state is the analysis state of one function.
 type state struct {
-	eng *Engine
+	// coarse: the function is a dependency function of a component that was moved to the coarse summary (coarse.go): its
+	// access paths are cut at depth 0.
+	coarse bool
+	eng    *Engine
 	// useIndex: the instructions that use a value of this function (made when needed: callrows.go)
 	useIndex map[*sg.Value][]*sg.Instr
 	// sinkNotes are the uncertainties of the sink being checked (a sink behind an interface).
@@ -293,6 +296,9 @@ type state struct {
 // k is the access path depth of this function: Options.DepK in a function of a dependency (when it is set), Options.K in
 // the others.
 func (s *state) k() int {
+	if s.coarse {
+		return 0
+	}
 	if s.fn != nil && s.fn.Dep && s.eng.opts.DepK > 0 {
 		return s.eng.opts.DepK
 	}

@@ -65,6 +65,93 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ steps.token.outputs.token || github.token }}
 
+  # タグが打たれたときだけ、Go のバイナリ（linux/amd64, linux/arm64, darwin/arm64）をビルドして、tagpr が draft で作った
+  # Release に載せてから公開する。Dart と Rust の extractor は載せない（使う側でビルドする）。
+  # immutable releases なので、公開した後はアセットを足せない・差し替えられない。だから、全部のアセットを draft に載せてから、
+  # 最後に 1 回だけ公開する。途中で失敗したら、Release は draft のまま残るので、直してこのジョブを実行し直す
+  # （Actions の画面の "Re-run failed jobs"。前の実行の tagpr ジョブの出力（タグ）を使って、このジョブだけが動く）。
+  # 公開した後（release attestation の確認だけが失敗した場合）に実行し直したときは、ビルドも来歴の作成もしない
+  # （公開済みのアセットは変えられないので、作り直しても、公開されたものと別の物になるだけ）。確認だけをやり直す。
+  # workflow_dispatch で実行し直すのは、draft のうちだけ。公開した後は、tagpr が既存の Release（draft=false）と
+  # 設定（release = draft）の違いでエラーにするので、tagpr ジョブで止まり、このジョブまで来ない。
+  # 検証できるものは 2 つ:
+  #   - ビルド来歴（actions/attest-build-provenance）: このリポジトリのこのワークフローが、このコミットからビルドした
+  #       gh attestation verify rivus_X.Y.Z_linux_amd64.tar.gz --repo yagihash/rivus --signer-workflow yagihash/rivus/.github/workflows/tagpr.yml
+  #   - release attestation（immutable releases が公開時に自動で作る）: このファイルが、そのタグの Release のアセットと同じ
+  #       gh release verify-asset vX.Y.Z rivus_X.Y.Z_linux_amd64.tar.gz --repo yagihash/rivus
+  # ビルドの手順は scripts/build-release-archives.sh にある（PR では ci.yml の release-build が、同じものを動かす）。
+  release-binaries:
+    needs: tagpr
+    if: needs.tagpr.outputs.tag != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # draft の Release へのアップロードと公開
+      id-token: write # ビルド来歴の署名（Sigstore）
+      attestations: write # ビルド来歴の保存
+    steps:
+      - id: state
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.tagpr.outputs.tag }}
+        run: |
+          set -euo pipefail
+          echo "draft=$(gh release view "$TAG" --json isDraft --jq .isDraft)" >> "$GITHUB_OUTPUT"
+      - if: steps.state.outputs.draft == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ needs.tagpr.outputs.tag }}
+          persist-credentials: false
+      - if: steps.state.outputs.draft == 'true'
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Build
+        if: steps.state.outputs.draft == 'true'
+        env:
+          TAG: ${{ needs.tagpr.outputs.tag }}
+        run: scripts/build-release-archives.sh "${TAG#v}"
+      - name: Attest build provenance
+        if: steps.state.outputs.draft == 'true'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*_checksums.txt
+      # --clobber は、draft のまま失敗した実行のやり直し用。
+      - name: Upload to the draft and publish
+        if: steps.state.outputs.draft == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.tagpr.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG" dist/*.tar.gz dist/*_checksums.txt --clobber
+          gh release edit "$TAG" --draft=false
+      # release attestation は公開のときに作られる。すぐには見えないことがあるので、少し待ちながら確かめる。
+      # 公開済みの Release で実行したときは、アセットが揃っていること（tar.gz が 3 つとチェックサム）も確かめる。
+      - name: Verify the release attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.tagpr.outputs.tag }}
+        run: |
+          set -euo pipefail
+          n=$(gh release view "$TAG" --json assets --jq '[.assets[].name | select(endswith(".tar.gz") or endswith("_checksums.txt"))] | length')
+          if [ "$n" -ne 4 ]; then
+            echo "the Release of ${TAG} has ${n} of the 4 expected assets (3 archives and the checksums)" >&2
+            exit 1
+          fi
+          for _ in 1 2 3 4 5 6; do
+            if gh release verify "$TAG"; then exit 0; fi
+            sleep 10
+          done
+          echo "the release attestation of ${TAG} could not be verified (the Release is already published; use 'Re-run failed jobs' to retry only this check: a run by workflow_dispatch stops in tagpr)" >&2
+          exit 1
+
   # タグが打たれたときだけ、tap の formula の url と sha256 を書き換える。
   # トークンは homebrew-tap だけに書けるもの（ghmint の homebrew-tap/.github/ghmint/bump-from-rivus.rego）。
   # Contents API で書くので、コミットは Verified になる。
