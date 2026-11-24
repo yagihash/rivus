@@ -66,7 +66,7 @@ func main() {
 * 検証の基準: **今の finding の経路が 1 件も変わらない**。その場で呼ぶだけのクロージャは、適用しないので、経路が変わらない。引数で値を渡す形(`runArg(a, func(s){…})`)は、キャプチャに依る効果が無ければ、適用しても何も足さない。**変わりうるのは、「キャプチャもあり、候補としても束縛つきで解決されている」形**(`home` の中の関数値の呼び出しの候補になっていて、かつ、別の使い方もある)。その件数を、前後の差分で数える。
 * `cap-seen`(その場で呼び、かつ、渡す): 渡す使い方があるので、適用する。finding は `(origin, sink)` で 1 件にまとまる(`recordFinding` の `findingKey`、`engine.collect` の `merged[k]`)。代表の経路は、ステップ数の少ないほう(`<` なので、同じ長さなら先に記録したほう)。`make_closure` の経路は、ヘルパーを通らないので、たいてい短く、代表になる(経路が変わりうるのは、この形)。`mergeParamSources` は、source が param の finding だけの別の併合で、関係しない。
 
-### (4) 不確実性の注記
+### (4) uncertainty
 
 呼ぶところが見えないクロージャに、キャプチャの値を適用したことを、不確実性で残す。
 
@@ -119,7 +119,7 @@ func main() {
 | `internal/taint/transfer.go:236` の switch | `case ir.OpMakeClosure:` を足し、`s.captured(in)` を呼ぶ |
 | `internal/taint/calls.go`(新しい関数 `captured`) | `in.Args` が空、使われ方が「直接の呼び出しだけ」、クロージャの `sg.Func` が無い(`ByID`)、要約に FreeVar 由来が無い、のどれかなら何もしない。それ以外は、`callCtx{in: in, args: Params 数の KUndef, roots: nil, sym: ""}` で `applySummary(cc, fn, in.Args, notes, nil)`。`notes` は、(4)の不確実性 |
 | `internal/taint/engine.go`(依存) | 要約の依存のエッジ(クロージャ → home)を足す(上の(8)の再解析のエッジ) |
-| `internal/taint/summary.go:283-286` | **不確実性を出す(任意ではない)**。束縛が無い非 home の呼び出しで、FreeVars を `KUndef` で埋めるときに、不確実性を出す。C-7 のあとも、Rust(最初のバージョンの対象外)と、戻り値(上の(1))で、埋める場面が残る。何も報告せずに埋める場所を残さない。文面は `assumed_call` ではなく、**「このクロージャがキャプチャした値は、ここでは分からない」**(DART-15 の不確実性の注記の修正)。**C-2 の項目 2(別のエージェント a6ede9c0341ce3c28 が実装中)と同じ**なので、重複させない(C-2 が入ってから、C-7 は、その注記の上に載る) |
+| `internal/taint/summary.go:283-286` | **不確実性を出す(任意ではない)**。束縛が無い非 home の呼び出しで、FreeVars を `KUndef` で埋めるときに、不確実性を出す。C-7 のあとも、Rust(最初のバージョンの対象外)と、戻り値(上の(1))で、埋める場面が残る。何も報告せずに埋める場所を残さない。文面は `assumed_call` ではなく、**「このクロージャがキャプチャした値は、ここでは分からない」**(DART-15 の uncertainty の修正)。**C-2 の項目 2(別のエージェント a6ede9c0341ce3c28 が実装中)と同じ**なので、重複させない(C-2 が入ってから、C-7 は、その uncertainty の上に載る) |
 | `internal/valuecalls/valuecalls.go:319` | **変えない**。`ExactClosures`(案 2)は、ここではなく `sg.ExactFuncs`(`sg/build.go:393`)の拡張 |
 | `internal/graphdb/write.go:261` | **変えない**(`refs` の `closure` は、構造の層。taint の変更と無関係) |
 | `docs/adr/` | ADR(次の空き番号のファイル)。ADR-045 の限界(「パラメータ由来の候補は、呼び出し側ごと」の下の、束縛が home でだけ付く点)に、「キャプチャした値は C-7 が適用する」と追記 |
@@ -168,7 +168,7 @@ func main() {
 | `cap-handler` | クロージャのパラメータが source で、キャプチャした変数に書き、別のクロージャが sink(登録されるハンドラの形) | `@miss(silent)`。C-1(ADR-048、623b620)は main にマージされている。それでも見つからない: C-7 の後に、この書き込みが「関数がした書き込み」として残るか(C-1 と C-7 の両方の受け入れ)を、実装で確かめる |
 | `cap-seen` | その場で呼び、かつ、渡す(`f(); run(f)`) | 見つかる(1 件)。C-7 の後も 1 件(`(origin, sink)` でまとまる)。使われ方の条件で、適用する側 |
 | `cap-funccall` | キャプチャした値が関数で、クロージャがそれを、呼び出し元の値で呼ぶ(PARAM-CALL) | `@miss(silent)`。C-7 では**直らないはず**(キャプチャした関数 `g` の呼び出しは、候補が解決されない)。Dart は `relay-c-a/b`(既存) |
-| `cap-result` | クロージャがキャプチャした値を**返し**、ヘルパーが返す(`produce(func() string { return a })`。`WithTx2` の型) | `@miss(silent)`。C-7 のあとは **`@miss(assumed_call)`**(結果は適用しない。不確実性の注記が付く)。次の段階で直る |
+| `cap-result` | クロージャがキャプチャした値を**返し**、ヘルパーが返す(`produce(func() string { return a })`。`WithTx2` の型) | `@miss(silent)`。C-7 のあとは **`@miss(assumed_call)`**(結果は適用しない。uncertainty が付く)。次の段階で直る |
 | `cap-sanitized` | クロージャが、キャプチャした値を sink の前にサニタイズする | `@sink(none)` で検出されない(C-7 の後も) |
 | `tx_capture`、`tx_capture_plain`(既存、`gitea/routers/tx.go`) | `db.WithTx` | `@miss(dynamic_dispatch)`、`@miss(silent)` |
 
@@ -212,7 +212,7 @@ func main() {
 
 ## 決めてほしいこと(実装に入る前に)
 
-advisor の意見を反映して決めた点: 飛ばす条件は**使われ方**(候補に依らない)、throw は適用しないが不確実性の注記に含める、注記は新しい kind `assumed_call`(ADR-008 の追記)、Rust は条件つき(渡すだけの形が見つからないことを確かめた: 次の段階に入れる)。残り:
+advisor の意見を反映して決めた点: 飛ばす条件は**使われ方**(候補に依らない)、throw は適用しないが uncertainty に含める、uncertainty は新しい kind `assumed_call`(ADR-008 の追記)、Rust は条件つき(渡すだけの形が見つからないことを確かめた: 次の段階に入れる)。残り:
 
 1. **規則の採用**: 「見えないクロージャは、作った場所で適用する(呼ばれるものとして扱う)」。1 度も呼ばれないクロージャが過検出になる(`cap-never`、`never_called`)ことを、限界として受け入れるか。受け入れるなら、その 2 つを `@fp` にする。
 2. **kind の名前**: `assumed_call`(案)でよいか。
@@ -223,7 +223,7 @@ advisor の意見を反映して決めた点: 飛ばす条件は**使われ方**
 
 ## 次の段階(C-7 の最初のバージョンのあと): キャプチャの値に依る結果を、クロージャの値に持たせる
 
-最初のバージョンは、結果(`OutResult`)を適用しない(不確実性の注記は出す)。次の段階: **`make_closure` の場所で、クロージャの要約の `OutResult`(キャプチャの値で具体化したもの)を、クロージャの値の、決まったパス(たとえば `/()`: 「呼ぶと、これが返る」)のセルに置く。関数値の呼び出しは、呼ぶ値の `/()` を、結果に流す。** 値(クロージャ)は、引数、フィールド、return を、ふつうの汚染と同じに運ばれるので、**ヘルパー越し、フィールド越し、返されたクロージャの呼び出しに、仕組みを足さずに届く**。案 2 を待たずに、RET-CLOSURE(`holder-a/b`、`curry`、`getter-fn`)と `WithTx2`、`map` / `then` の型が直る見込み。クロージャの値ごとに別のセルなので、交差は起きない。
+最初のバージョンは、結果(`OutResult`)を適用しない(uncertainty は出す)。次の段階: **`make_closure` の場所で、クロージャの要約の `OutResult`(キャプチャの値で具体化したもの)を、クロージャの値の、決まったパス(たとえば `/()`: 「呼ぶと、これが返る」)のセルに置く。関数値の呼び出しは、呼ぶ値の `/()` を、結果に流す。** 値(クロージャ)は、引数、フィールド、return を、ふつうの汚染と同じに運ばれるので、**ヘルパー越し、フィールド越し、返されたクロージャの呼び出しに、仕組みを足さずに届く**。案 2 を待たずに、RET-CLOSURE(`holder-a/b`、`curry`、`getter-fn`)と `WithTx2`、`map` / `then` の型が直る見込み。クロージャの値ごとに別のセルなので、交差は起きない。
 
 * `/()` のパスの規則: 呼び出し側(`call` の関数値の呼び出し)が、候補が決まらなくても、呼ぶ値のセルを読む。関数値のセルに汚染が付くのは、`make_closure` だけ。
 * **ユーザーの判断が必要**(新しいパスの規則を、汚染のモデルに足す)ので、**C-7 の最初のバージョンが入ってから、`cap-result` ほかの `@miss(assumed_call)` の数字と一緒に上げる**。
@@ -369,7 +369,7 @@ Rust の抽出器(`extractor/rust/src/main.rs` の `merge`)は、クレートご
 * **形**: `alloc`(`InstrInfo.Env` が型 `{closure@file:l:c: l:c}`)で環境を作り、キャプチャした値を `field_store`(field `"0"`, `"1"` …。可変のキャプチャは、変数へのポインタ)で入れる。クロージャの関数は、パラメータが 1 つ(その環境、`recv: true`)で、`field_load` で取り出す。`sg.Program.EnvClosures[alloc の命令]` が、そのクロージャの関数(型の位置が、関数の位置と、ちょうど 1 つ一致するとき)を引く。
 * **適用する**: `captured` の相当を、`EnvClosures` にある `alloc` に足す。`applySummary(cc, closureFn, nil, notes, nil)`、`argv = [環境の値]`(束縛ではなく、Params の 1 つ目。`make_closure` と違い、キャプチャした値は環境のセルの中にあって、クロージャの関数は `field_load` で読む)。`Params` は環境 1 つだけなので、呼び出しの引数(宣言した引数)は要約の中で、環境と別のパラメータとして出る(その分は `KUndef`)。環境の `field_store` が `alloc` の後に来るが、解析は流れに依らない(セルの和)ので、順序は問題にならない見込み(**確かめていない**)。
 * **使われ方(飛ばす条件)**: `alloc` の結果(環境の値)の使われ方を、同じ表(`sg` の使用箇所)で見る。呼び出し(`Fn::call` の dynamic 呼び出し)の位置、または、`field_store` / `field_load` だけなら、ホーム関数内の直接の呼び出し。`field_store`(環境への書き込み)は、環境を作る側の使い方なので、**数えない**(`make_closure` には無い、Rust 固有の例外)。環境の値が、引数、`store`、`return`、別の `alloc` の `field_store` の値に入るなら、適用する。
-* **不確実性の注記**: 同じ `assumed_call`(`attributable_to: mixed`)。
+* **uncertainty**: 同じ `assumed_call`(`attributable_to: mixed`)。
 * **効く範囲(`rust-curated/src/callbacks.rs`)**: 渡すだけの形の 3 件(`spawned` = `std::thread::spawn`、`boxed` = `Box<dyn Fn>` をフィールドに入れて別の関数が呼ぶ、`retained` = `Vec::retain`)。読む側(`run(|| sink(&a))`)は `Fn::call` の候補で今も見つかる(XTALK の過検出つき。`run-a/b` は `@fp`)。書く側(`write-a/b`、`push-list` など 7 件、ENV-PTR)は、環境のフィールドのポインタが、指す先と別名にならない(`locs.go:215`、`transfer.go:148`)ことが原因で、**`alloc` で適用しても直らない**。ENV-PTR の修正が先(ADR-072 で直した。書く側 7 件のうち、`write-a`、`write-b`、`write-param`、`push-list`、`late`、`for-each-cap` が見つかる。環境のフィールドは、クロージャの名前で呼ぶので、候補どうしが環境のセルを混ぜない)。
-* **気をつけること**: 型 `{closure@file:l:c}` が、マクロで複数の場所に書かれるクロージャは、`EnvClosures` が引けない(ちょうど 1 つ一致のときだけ引く)。そのクロージャは、今と同じく、何も報告せずに失われる。`assumed_call` ではなく、引けなかったことの不確実性の注記が必要(次の段階で決める)。`thread::spawn` と `retain` のクロージャは、`Fn::call` の候補にもなり、他のソースが誤って届く(`@noisy` 8 と 3)ことは、この変更で直らない(XTALK)。
+* **気をつけること**: 型 `{closure@file:l:c}` が、マクロで複数の場所に書かれるクロージャは、`EnvClosures` が引けない(ちょうど 1 つ一致のときだけ引く)。そのクロージャは、今と同じく、何も報告せずに失われる。`assumed_call` ではなく、引けなかったことの uncertainty が必要(次の段階で決める)。`thread::spawn` と `retain` のクロージャは、`Fn::call` の候補にもなり、他のソースが誤って届く(`@noisy` 8 と 3)ことは、この変更で直らない(XTALK)。
 * **受け入れ(次の段階)**: `callbacks.rs` の渡すだけの 3 件が見つかる。`cap-run` 相当の「その場で呼ぶ」クロージャで、finding が増えず、`assumed_call` も出ない。`parseable` で、追加の finding を分類する。

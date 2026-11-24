@@ -301,7 +301,7 @@ K が、ヘルパー H を呼ぶとき、H の `CallOut` ごとに:
 **第 1 歩(実装した)**: `analyze -func-values <file>` が、**同じエンジンのコードを、合成の site で、もう 1 回実行する**(時間が約 2 倍。出力と finding は、フラグの有無で同一。`TestFuncValuesDart` が確かめる)。関数値を作る所(`make_closure`、関数への参照)は、合成の source(ラベル `FUNC`、出所 `fn:<関数の ID>`。依存の関数の中で作るものはシードにしない)。値の呼び出しは、`FuncValueSites` が足す合成の sink(呼ばれる値を読む)。`Param` 要素は、**要約の `Sinks` で、呼び出し点ごとに具体化される**(既存のパラメータの具体化と同じ方法。別の「運ぶ道具」は作っていない)。出力は、値の呼び出しごとの表(`carried`: 要素が示す呼び出し先、`valuecalls` / `extractor`: 今ある候補)。**数字(zoo-dart と dart-curated)**: 候補 0 件の 30 件 → 30 件、21 件 → 20 件に候補が付く。今ある候補は、**42 / 42 と 51 / 51 が、すべて含まれる**(試行と同じ。試行の外付けの束縛は、呼び出し点ごとの要約の具体化で置き換わった)。集合の大きさの中央値は 1。最大は 36(`helper-overflow-many`: 1 つの関数の中の呼び出しに、34 の呼び出し元のクロージャが集まる。呼び出し点が 1 つなので、表は呼び出し元を足し合わせる。呼び出しの経路ごとには分かれている)。Go は 39 / 47、残りは `sync.Once` の中、フィールド / コンテナの区別、`$bound`。
 
 **第 2 歩の形(案。第 1 歩の数字と一緒に見る)**: 「今の候補が 0 件の値の呼び出しにだけ、`Func` 要素の候補を使う」ので、関数値のパスは、**汚染のパスの前に実行され**、その候補で値の呼び出しを解いてから、汚染のパスに入る順になる。
-1. **繰り返し**: 関数値のパスの中で候補が増えると、新しく解けた呼び出しを通って、さらに関数値が運ばれる(コールバックのコールバック)。**候補が増えなくなるまで繰り返す**。回数の上限(案: 4)を置き、上限に達したら、その呼び出しに `depth_limit`(不確実性の注記)。
+1. **繰り返し**: 関数値のパスの中で候補が増えると、新しく解けた呼び出しを通って、さらに関数値が運ばれる(コールバックのコールバック)。**候補が増えなくなるまで繰り返す**。回数の上限(案: 4)を置き、上限に達したら、その呼び出しに `depth_limit`(uncertainty)。
 2. **初期値**: 関数値のパスが使う「値の呼び出しの候補」の初期値は、今の `valuecalls` と extractor の候補。0 件の呼び出しだけが、繰り返しで増える(候補のある呼び出しは変えない)。
 3. **要約の共有**: 関数値のパスと汚染のパスで、要約を共有するか。共有しないなら、要約を 2 組持つ(メモリは、試行の数字の「要素数 +1〜6%」の 2 倍弱。gcp の自分のコードだけ運ぶバージョンは +0%)。共有するなら、`FUNC` ラベルの要素が、汚染のパスの要約に混ざる(要約の大きさ、収束への影響を測る)。第 2 歩の最初のバージョンは、**共有しない**(結果を壊す範囲を狭く保つ)案。
 4. **否定のフィクスチャ**: 候補に入ってはいけない関数が入らない(デコイが検出されないまま)ことを、zoo のセルごとに。
@@ -323,9 +323,9 @@ K が、ヘルパー H を呼ぶとき、H の `CallOut` ごとに:
 - 今の規則(調べた結果): `pure` のモデルは、何も流さない(関数値の要素は結果にも引数にも行かず捨てられる)。`flows` が言わない引数も捨てられる。`drops: ["*"]` の sanitizer は、`FUNC` も落とす。`holds: nothing` のグローバルへの書き込みは、保存されない。数値と bool の停止は、ラベルを見ず、根の型で止めるので、関数値の根は通常止まらない。モデルのない呼び出しは、全引数が全結果に写る。
 - エンジンに `FUNC` だけの例外は足さない。数える: 関数値のパスで、「関数値の要素を持つ値が、モデルのある呼び出しの引数になり、モデルがその引数から結果やコールバックへの流れを言わない」呼び出しを、シンボルごとに数える(`applyModel` の propagators のループのあとに、数えるだけの処理を足す)。診断の表に 1 列(`dropped_at_model`)として出す。多いシンボルは、モデルの課題(`calls:` や `flows` の不足)として一覧にする(`sync.Once` はこの形に近い)。
 
-**FV-3 繰り返しの上限と、不確実性の注記の付け先**
+**FV-3 繰り返しの上限と、uncertainty の付け先**
 - 繰り返し: 候補が増えなくなるまで。**上限 4 は仮の値**で、zoo と curated で、何回で止まるかを測ってから決める(診断の表に回数の分布を出す)。
-- 上限に達したとき: 全体の注記にしない。**最後の回でも候補が増えた値の呼び出し**に、`depth_limit`(詳細に `func_values_rounds`)を付ける(その呼び出し点と、その関数)。
+- 上限に達したとき: 全体の uncertainty にしない。**最後の回でも候補が増えた値の呼び出し**に、`depth_limit`(詳細に `func_values_rounds`)を付ける(その呼び出し点と、その関数)。
 - 候補は増える向きだけ(単調)。減る回があれば不具合として、テストで失敗させる(`TestFuncValuesMonotone`)。
 - コスト: 1 回の実行は、エンジンの丸 1 回(回数 + 1 倍)。`Run` の途中結果を再利用する仕組みは、今はない(`taint.New` は毎回、要約と状態を新しく作る。共有するのは `sg.Program`、sites、rules)。まず作らない。代わりに、**関数値のパスを丸ごとスキップする条件**を置く: **読んだ関数の全部(依存を含む)に、候補が 0 件の値の呼び出しがないとき**(`FuncValueSites` の結果だけで判定できる。今の `FuncValueSites` は、読んだ全部の関数を数えるので、条件を足す必要はない)。候補を使うのは候補 0 件の呼び出しだけなので、この条件のとき、結果は変わらない(理屈とテスト)。依存の中に候補 0 件の値の呼び出しがある対象(gcp など)では、スキップされず、コストが増える。gcp での時間は、実装のあとに測る(試行では、自分のコードだけ運ぶバージョンで、要素数は +0%)。
 
@@ -336,16 +336,16 @@ K が、ヘルパー H を呼ぶとき、H の `CallOut` ごとに:
 
 **否定のフィクスチャ(追加の確認 2)**: (a) 関数値が届かない値の呼び出しに、候補が付かない(`@sink(none)`)。(b) 同じ型の別の関数値(デコイ)が、型が同じというだけでは、候補にならない(zoo のデコイのセルを、セルごとに)。(c) 依存の中で作られた関数値が、シードにならない(コストの測定を守る)。
 
-**上限(追加の確認 3)**: 補った候補にも、今の上限(`ir.ValueCandidateMost` = 32)を同じに適用する。32 を超えるときは、既存の呼び出しと同じに、どの候補も採らず、`candidate_limit` の不確実性の注記を付ける(補った呼び出しでも、同じ文言と同じ種類)。
+**上限(追加の確認 3)**: 補った候補にも、今の上限(`ir.ValueCandidateMost` = 32)を同じに適用する。32 を超えるときは、既存の呼び出しと同じに、どの候補も採らず、`candidate_limit` の uncertainty を付ける(補った呼び出しでも、同じ文言と同じ種類)。
 
-**機械で読めるフィールド(相談役の追加の確認、FV-4 の条件)**: 候補を補った呼び出しは、不確実性の注記(`unresolved_callee`)を残したうえで、「関数値の解析で候補を補った。候補は自分のコードで作られた関数だけ」が分かるフィールドを持つ(フィールド名は、実装のときに、既存のフィールドに合わせて決める)。この注記が残る間、`graph path` の `exhaustive` は false のまま(今の判定を緩めない)。
+**機械で読めるフィールド(相談役の追加の確認、FV-4 の条件)**: 候補を補った呼び出しは、uncertainty(`unresolved_callee`)を残したうえで、「関数値の解析で候補を補った。候補は自分のコードで作られた関数だけ」が分かるフィールドを持つ(フィールド名は、実装のときに、既存のフィールドに合わせて決める)。この uncertainty が残る間、`graph path` の `exhaustive` は false のまま(今の判定を緩めない)。
 
-**範囲(第 2 歩の範囲)**: 最初のバージョンはフラグ `-resolve-func-values` の既定 off で入れる。ただし、off のまま置かない。zoo と curated の finding の差分を分類し(増えた finding が正しい経路か、増えた不確実性の注記の数、候補の数の分布)、**既定を on にする PR までを第 2 歩の範囲**とする。ROADMAP 1 節の表は、フラグ off の値と on の値を並べる(今回、フラグ off の値は取り直して直した)。
+**範囲(第 2 歩の範囲)**: 最初のバージョンはフラグ `-resolve-func-values` の既定 off で入れる。ただし、off のまま置かない。zoo と curated の finding の差分を分類し(増えた finding が正しい経路か、増えた uncertainty の数、候補の数の分布)、**既定を on にする PR までを第 2 歩の範囲**とする。ROADMAP 1 節の表は、フラグ off の値と on の値を並べる(今回、フラグ off の値は取り直して直した)。
 
 **FV-4 「今の候補が 0 件の呼び出しにだけ使う」の境目**
 - 候補が 1 件以上あるが、足りない呼び出し(zoo-go の、フィールドやコンテナの区別の形)は、第 2 歩では変わらない。その数は、観測との照合(本当の呼び出し先が、今の候補に入っていない呼び出し点の数)が指標。第 2 歩のあとに残るものとして、この数を、第 2 歩の報告に出す(今は未測定)。
 - `unresolved_callee` を**消してよい条件**: 関数値の要素が、その値の出所を全部たどれたとき。具体的には、(1) 値の呼び出しに届いた要素に、未解決の `Param` が残っていない(`Summary.Sinks` の `SinkReach` で見える)、(2) その呼び出しを含む関数が、上限に丸められて(`coarsened`)いない、(3) 値の流れの途中に、モデルのない依存の関数の呼び出しがない。(3) は、今の要素に「依存から来た」マークがなく、判定できない。
-- そのため、**第 2 歩の最初のバージョンは、`unresolved_callee` を消さない**。候補が付いた呼び出しには、注記を残したまま、「候補は、自分のコードで作られた関数だけ」と詳細に書く。消す条件は、(3) の判定(要素に `via_unmodeled` のマークを付ける案)を入れてから、別の段階で決める。
+- そのため、**第 2 歩の最初のバージョンは、`unresolved_callee` を消さない**。候補が付いた呼び出しには、uncertainty を残したまま、「候補は、自分のコードで作られた関数だけ」と詳細に書く。消す条件は、(3) の判定(要素に `via_unmodeled` のマークを付ける案)を入れてから、別の段階で決める。
 
 **FV-5 シードの網羅の表(関数値を作る構文)**
 
@@ -370,11 +370,11 @@ K が、ヘルパー H を呼ぶとき、H の `CallOut` ごとに:
 - **順序**(`taint.ResolveFuncValues`): ① `FuncValueSites` で、読んだ全部の関数(依存を含む)の値の呼び出しを数え、候補 0 件(`TestZeroCandidateCalls` と同じ定義)のものを選ぶ。1 件もなければ、関数値のパスを丸ごとスキップする(候補を使うのは候補 0 件の呼び出しだけなので、結果は変わらない)。② 関数値のパス(`Options.FuncValues` の別の `Engine`)を実行し、候補 0 件の呼び出しごとに `carried` を読む。③ 増えた分を、その呼び出しにだけ書く(`sg.Program.SetValueCandidates`: `Callee.ValueCands`、`Instr.Candidates`、`Instr.CandidateFns`。`sg` は作り直さない。`Callee` は `ir` と `sg` で同じポインタなので、IR にも見える)。④ 候補が増えなくなるまで ②③ を繰り返す。⑤ 通常のテイントのパス(フラグ off の `Engine`)を実行する。
 - **繰り返しの上限**: `taint.FuncValueRounds`(定数、仮の値 4。測って決める)。**測った回数**: `rounds` は、候補が増えた回 + 増えないと確認する最後の 1 回。zoo-dart と dart-curated と rust-curated とフィクスチャは 2(1 回目で全部増え、2 回目で増えない)、go-curated と zoo-rust は 1(補う候補がない)、zoo-go は 0(スキップ)。**4 回に達した呼び出しは、まだない**(どの対象でも、候補が増えるのは 1 回目だけ)。コールバックのコールバックが 2 回目に増える形は、この対象には出ていない。上限は、そういう対象が出てから決める。
 - **単調**: 回をまたいで、候補は増える向きだけ。減った回があれば、前の候補を残し(合併)、`stats.func_values.monotone_violations` に数える(不具合のマーク。0 のときはフィールドが出ない)。`taint.CheckMonotone` が検査で、`TestFuncValuesMonotone` が、減ったときに検出することを固定する。
-- **上限**: 補った候補が `ir.ValueCandidateMost`(32)を超える呼び出しは、どの候補も採らず、既存の呼び出しと同じ `ValueLimit = candidate_limit`(`candidate_limit` の不確実性の注記)。`stats.func_values.candidate_limit_calls` に数える。繰り返しの上限に達したとき、**最後の回でも候補が増えた呼び出し**に、`Callee.ValueRoundsLimit` を立て、`depth_limit`(詳細が `func_values_rounds:`)の注記をその呼び出しに付ける(全体の注記にはしない。`TestResolveFuncValuesRoundsLimit`)。
-- **`unresolved_callee` は消さない**: 候補を補った呼び出しは `Callee.ValueSupplemented` を持ち、`unresolved_callee` の注記を、詳細が `func_values_supplemented:` で始まる文言で残す(「関数値の解析で候補を補った。候補は自分のコードで作られた関数だけで、ほかの関数も呼ばれうる」。`candidates` に補った関数の ID)。`calls.go` の `len(fns)==0` の分岐の外(`callBody` と `valueCandidates` の、`ValuePartial` の注記の隣)で出す。
+- **上限**: 補った候補が `ir.ValueCandidateMost`(32)を超える呼び出しは、どの候補も採らず、既存の呼び出しと同じ `ValueLimit = candidate_limit`(`candidate_limit` の uncertainty)。`stats.func_values.candidate_limit_calls` に数える。繰り返しの上限に達したとき、**最後の回でも候補が増えた呼び出し**に、`Callee.ValueRoundsLimit` を立て、`depth_limit`(詳細が `func_values_rounds:`)の uncertainty をその呼び出しに付ける(全体の uncertainty にはしない。`TestResolveFuncValuesRoundsLimit`)。
+- **`unresolved_callee` は消さない**: 候補を補った呼び出しは `Callee.ValueSupplemented` を持ち、`unresolved_callee` の uncertainty を、詳細が `func_values_supplemented:` で始まる文言で残す(「関数値の解析で候補を補った。候補は自分のコードで作られた関数だけで、ほかの関数も呼ばれうる」。`candidates` に補った関数の ID)。`calls.go` の `len(fns)==0` の分岐の外(`callBody` と `valueCandidates` の、`ValuePartial` の uncertainty の隣)で出す。
 - **索引とグラフ(`rivus index`、`graph`)**: フラグ on の `index` は、`afterRead` の前(グラフを作った直後)に `ResolveFuncValues` を走らせ、補った候補を持つグラフを索引に書く(`-taint` つきでも走るのは 1 回。あとの通常のパスは、補ったグラフを使う)。補ったエッジは、既存の動的なエッジ(`kind: value`、`candidates`)として入る。補った呼び出しの `callsites` の行は、`meta` の `func_values_supplemented`(JSON の配列)に記録する。表は変えないので、**スキーマバージョンは上げない**(フラグ off の索引は、この行がなく、前と同じ)。`callers` / `callees` のエッジ、`dispatchers` の呼び出し点、`path` のステップと経路に、`supplemented: true`(経路には `supplemented_calls`)が付く。**キー**: `flags.resolve-func-values` を、フラグ on のときだけキーの設定に入れる(on と off は別の索引。`graph info -C` と `graph ... -C` は、食い違いを `stale_reasons` に出して警告する。off の索引のキーは前と同じ)。
 - **`graph path` の `exhaustive`**: 補った呼び出しを通る間は、緩めない。経路が見つかったとき、補った呼び出しを通る経路が 1 本でもあれば `exhaustive: false`(補った候補は、その解析が見つけたものであり、呼び出しが届く全部ではない。ほかの経路がありうる)。経路なしのとき、補った呼び出しは、候補のない呼び出しと同じに `not_exhaustive_because.unresolved_calls` に数える(例には `candidates from -resolve-func-values` と書く)。`TestIndexHoldsTheEdgesThatGotCandidates` が固定する(以前の `TestNoPathStaysNotExhaustiveThroughACallThatGotCandidates` は、補ったエッジが索引に入らない前提だったので置き換えた)。
-- **`-timeout`**: 全体の上限は、関数値のパスの全部の回と、そのあとの通常のパスを合わせた時間。**関数値のパスは補助なので、通常のパスの時間を食いつぶさない**: 全部の回が使えるのは `-timeout` の一部(`taint.FuncValuesBudget` = 半分。テストで動かせるよう変数にしてある)までで、各回は、その一部の残りを受け取る。一部を使い切って終わった回は、時間切れの回と同じに使わない(`timed_out`)。通常のパスには、少なくとも残りの半分(`-timeout` の半分以上)が必ず渡る。以前は、関数値のパスが `-timeout` を使い切ると、通常のパスに `max(残り, 1ns)` しか渡らず、フラグ off で終わる対象が、フラグ on でほぼ何も解析できずに時間切れになりえた(`TestResolveFuncValuesBudgetKeepsTheTimeOfTheTaintAnalysis` が固定する)。`-timeout` を指定しない(0。既定)ときは、どちらも上限なし。各回は、残り時間を `Options.Timeout` として受け取る(各回に全体の上限を別々に与えない)。通常のパスにも、残りを渡す。**時間切れで終わった回の候補は使わない**(全部ではない候補は、見逃しを隠す。それまでの終わった回の候補は残す)。`stats.func_values.timed_out: true` が残り、候補を持つ呼び出しは `func_values_rounds` の注記(回が途中で止まった)を持つ。以前は、各回が上限を別々に持ち(最悪で回数 + 1 倍)、時間切れの回の候補も使い、その事実はどこにも残らなかった。`-func-timeout`(1 つの関数の上限)で切れた関数は、通常のパスと同じ扱いで、`stats` の `func_timeouts` に出る(回の候補は使う。時計に依存する結果という点は、通常のパスと同じ)。`TestResolveFuncValuesTimeout`、`TestResolveFuncValuesRoundsShareTheLimit`。
+- **`-timeout`**: 全体の上限は、関数値のパスの全部の回と、そのあとの通常のパスを合わせた時間。**関数値のパスは補助なので、通常のパスの時間を食いつぶさない**: 全部の回が使えるのは `-timeout` の一部(`taint.FuncValuesBudget` = 半分。テストで動かせるよう変数にしてある)までで、各回は、その一部の残りを受け取る。一部を使い切って終わった回は、時間切れの回と同じに使わない(`timed_out`)。通常のパスには、少なくとも残りの半分(`-timeout` の半分以上)が必ず渡る。以前は、関数値のパスが `-timeout` を使い切ると、通常のパスに `max(残り, 1ns)` しか渡らず、フラグ off で終わる対象が、フラグ on でほぼ何も解析できずに時間切れになりえた(`TestResolveFuncValuesBudgetKeepsTheTimeOfTheTaintAnalysis` が固定する)。`-timeout` を指定しない(0。既定)ときは、どちらも上限なし。各回は、残り時間を `Options.Timeout` として受け取る(各回に全体の上限を別々に与えない)。通常のパスにも、残りを渡す。**時間切れで終わった回の候補は使わない**(全部ではない候補は、見逃しを隠す。それまでの終わった回の候補は残す)。`stats.func_values.timed_out: true` が残り、候補を持つ呼び出しは `func_values_rounds` の uncertainty(回が途中で止まった)を持つ。以前は、各回が上限を別々に持ち(最悪で回数 + 1 倍)、時間切れの回の候補も使い、その事実はどこにも残らなかった。`-func-timeout`(1 つの関数の上限)で切れた関数は、通常のパスと同じ扱いで、`stats` の `func_timeouts` に出る(回の候補は使う。時計に依存する結果という点は、通常のパスと同じ)。`TestResolveFuncValuesTimeout`、`TestResolveFuncValuesRoundsShareTheLimit`。
 - **シード**: 今のまま(自分のコードで作る関数値だけ。`TestResolveFuncValuesFixture` の `negDep` が、依存の中で作った関数値がシードにならないことを固定する)。補う呼び出しは、依存の本体の中のものを含む。
 - **FV-2 の計測**: 関数値のパスで、関数値の要素を持つ値が、モデルのある呼び出しの引数になり、モデルの流れ(`flows`、`calls` の行、sanitizer)がその引数を読まないとき、シンボルごとに数える(`applyModel` の propagators のあと。エンジンに `FUNC` だけの例外はない)。`-func-values` の表の列 `dropped_at_model`(その呼び出しを含む関数で落ちたシンボル)と、stderr のシンボルごとの上位。
 - **指標**(`stats.func_values`: `zero_candidate_calls_before`、`zero_candidate_calls_after`、`supplemented_calls`、`rounds`、`skipped`。フラグ on の対象を、フラグ off と並べた値):
@@ -388,9 +388,9 @@ K が、ヘルパー H を呼ぶとき、H の `CallOut` ごとに:
 | zoo-rust | 3 → 3 | 0 | 1 | 174 → 174 |
 | rust-curated | 3 → 1 | 2 | 2 | 280 → 280 |
 
-  増えた finding の経路は、どれも、補った呼び出しを通る(差の各行が、`func_values_supplemented:` の注記をその経路に持つこと。`TestResolveFuncValuesDart`)。増えた finding が正しい経路かどうかの分類は、PR (2) の作業。
+  増えた finding の経路は、どれも、補った呼び出しを通る(差の各行が、`func_values_supplemented:` の uncertainty をその経路に持つこと。`TestResolveFuncValuesDart`)。増えた finding が正しい経路かどうかの分類は、PR (2) の作業。
 - **テスト**: `testdata/dart/funcvalues`(Dart の小さなパッケージ。`regen.sh` で `testdata/ir/funcvalues.jsonl` を作る)の、肯定(`pos`、`pos2`: 2 つの値の呼び出しに候補が付き、finding が出る)と否定(`runNone`: 関数値が届かない / デコイ、`runDep`: 依存の中で作った関数値、`exec` に渡したクロージャ、`keep`: pure のモデル)。Go は、Go のコールグラフが関数値の呼び出しのほぼ全部を解くため、候補 0 件の呼び出しが、zoo-go で 0、go-curated で 1(`atomic.Value` の中の関数)しかない。Go のテストは、「差がない(on = off)」ことを測る。Dart と Rust は `RIVUS_DART` / `RIVUS_RUST`(`skipOrFail`)。
-- **実装しなかったもの**: 補った候補を、サイトの列挙(`sites.Enumerate`)に戻すこと(ルールが、補った候補の関数を指定する形。列挙は IR を読み、グラフを作るときに IR を捨てるので、ここでは戻さない)。候補に本体がない関数(外部の関数への参照)の呼び出しでは、補った注記が出ない(`external` の分岐の注記だけが出る)。
+- **実装しなかったもの**: 補った候補を、サイトの列挙(`sites.Enumerate`)に戻すこと(ルールが、補った候補の関数を指定する形。列挙は IR を読み、グラフを作るときに IR を捨てるので、ここでは戻さない)。候補に本体がない関数(外部の関数への参照)の呼び出しでは、補った uncertainty が出ない(`external` の分岐の uncertainty だけが出る)。
 
 ## 6. 段階と、各段階の受け入れ
 
