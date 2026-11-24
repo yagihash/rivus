@@ -4,7 +4,12 @@
 # The checks are the rules the user set (2026-11-23): the PR is open, not a draft, into main, CLEAN (every required check passed),
 # and none of the exceptions the user keeps for themself holds: a release PR (`tagpr-from-*`), a PR whose body says the user merges,
 # a PR that changes .claude/settings*, .claude/prompts/, .github/ghmint/, a ruleset file, or this script
-# (the guard itself), or a PR with a `Zoo-Loosened:` line. Anything else is refused with the reason, and nothing is merged.
+# (the guard itself). Anything else is refused with the reason, and nothing is merged.
+# A `Zoo-Loosened:` line (2026-11-24, the user chose "B"): a PR whose commits (origin/main..the head) have such lines is let through
+# only if EVERY line has the form `Zoo-Loosened: <reason>。ユーザーの承認: YYYY-MM-DD` with a real date that is not in the future, and
+# scripts/zoo-loosened-check.sh passes for the range (as well as CI). One line that says "まだ" or has another form refuses it.
+# The approval stays the user's: the date is written by the developer only when the advisor relayed the user's approval;
+# never write a date that was not relayed.
 # Also: every check of the PR must be finished and not failed (`gh pr checks --json name,bucket`: each bucket is pass or skipping;
 # pending, fail, cancel stop it), because CLEAN alone let a PR through while `ci-ok` was still pending (#435). The check `ci-ok` must be
 # there and pass: with no `ci-ok` (or no check at all, or gh cannot be asked) nothing shows that CI ran, so that refuses too.
@@ -15,9 +20,9 @@ set -euo pipefail
 n="${1:?usage: scripts/merge-pr.sh <pull request number>}"
 case "$n" in ''|*[!0-9]*) echo "merge: the argument must be a pull request number" >&2; exit 2;; esac
 repo=$(gh repo view --json nameWithOwner -q .nameWithOwner)
-json=$(gh pr view "$n" --repo "$repo" --json state,isDraft,baseRefName,headRefName,mergeStateStatus,body,files,commits)
+json=$(gh pr view "$n" --repo "$repo" --json state,isDraft,baseRefName,headRefName,headRefOid,mergeStateStatus,body,files,commits)
 bad=$(printf '%s' "$json" | python3 -c '
-import sys,json,re
+import sys,json,re,datetime
 d=json.load(sys.stdin)
 bad=[]
 if d["state"]!="OPEN": bad.append("not open: "+d["state"])
@@ -30,11 +35,31 @@ for f in d.get("files",[]):
     p=f["path"]
     if re.match(r"\.claude/(settings|prompts/)",p) or p.startswith(".github/ghmint/") or "ruleset" in p.lower() or p in ("scripts/merge-pr.sh",):
         bad.append("exception file: "+p)
+ok=re.compile(r"^Zoo-Loosened: .+ユーザーの承認: (\d{4})-(\d{2})-(\d{2})\s*$")
 for c in d.get("commits",[]):
-    if "Zoo-Loosened:" in (c.get("messageBody") or ""): bad.append("Zoo-Loosened line")
+    for l in ((c.get("messageHeadline") or "")+"\n"+(c.get("messageBody") or "")).splitlines():
+        if "Zoo-Loosened:" not in l: continue
+        m=ok.match(l)
+        try:
+            day=datetime.date(int(m.group(1)),int(m.group(2)),int(m.group(3)))
+            if day>datetime.date.today(): raise ValueError
+        except Exception:
+            bad.append("Zoo-Loosened line without a valid approval date: "+l.strip()[:80])
 print("; ".join(bad))
 ')
 if [ -n "$bad" ]; then echo "merge: PR #$n is not merged by the developer: $bad" >&2; exit 1; fi
+zoo=$(printf '%s' "$json" | python3 -c '
+import sys,json
+d=json.load(sys.stdin)
+print(sum(("Zoo-Loosened:" in (c.get("messageHeadline") or "")+"\n"+(c.get("messageBody") or "")) for c in d.get("commits",[])))
+')
+if [ "$zoo" != 0 ]; then
+  headref=$(printf '%s' "$json" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d["headRefName"]); print(d["headRefOid"])')
+  zref=$(printf '%s' "$headref" | sed -n 1p); zoid=$(printf '%s' "$headref" | sed -n 2p)
+  if ! git fetch -q origin main "$zref" 2>/dev/null || ! zout=$(bash "${BASH_SOURCE[0]%/*}/zoo-loosened-check.sh" origin/main "$zoid" 2>&1); then
+    echo "merge: PR #$n is not merged by the developer: scripts/zoo-loosened-check.sh does not pass for the range: ${zout:-cannot fetch}" >&2; exit 1
+  fi
+fi
 checks=$(gh pr checks "$n" --repo "$repo" --json name,bucket 2>/dev/null) || true  # exits non-zero for pending / failed checks; the JSON on stdout is what counts
 badchecks=$(printf '%s' "$checks" | python3 -c '
 import sys,json
