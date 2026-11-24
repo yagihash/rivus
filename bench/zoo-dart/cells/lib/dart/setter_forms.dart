@@ -19,10 +19,8 @@ void register() {
 
 class Cls0 {
   String data = '';
-  String? _x;
 
   set x(String s) {
-    _x = s;
     sinkCmd(data); // @sink(dart-setter-forms-vuln)
   }
 }
@@ -71,10 +69,8 @@ void vuln3() { // @vuln
 
 class Cls3 {
   String data = '';
-  String? _x;
 
   set x(String s) {
-    _x = s;
     sinkCmd(data); // @sink(dart-setter-forms-vuln4)
   }
 }
@@ -87,10 +83,8 @@ void vuln4() { // @vuln
 
 class Cls4 {
   String data = '';
-  String? _x;
 
   set x(String s) {
-    _x = s;
     sinkCmd(data); // @sink(dart-setter-forms-vuln5)
   }
 
@@ -107,10 +101,8 @@ void vuln5() { // @vuln
 
 class Cls5 {
   String data = '';
-  String? _x;
 
   set x(String s) {
-    _x = s;
     sinkCmd(data); // @sink(dart-setter-forms-vuln6)
   }
 
@@ -127,10 +119,8 @@ void vuln6() { // @vuln
 
 class Cls6 {
   String data = '';
-  String? _x;
 
   set x(String s) {
-    _x = s;
     sinkCmd(data); // @sink(dart-setter-forms-vuln7)
   }
 }
@@ -149,10 +139,8 @@ void vuln7() { // @vuln
 
 class Cls7 {
   String data = '';
-  String? _x;
 
   set x(String s) {
-    _x = s;
     sinkCmd(data); // @sink(dart-setter-forms-vuln8)
   }
 }
@@ -171,10 +159,8 @@ void vuln8() { // @vuln
 
 class ClsFixed {
   String data = '';
-  String? _x;
 
   set x(String s) {
-    _x = s;
     sinkCmd(data); // @sink(none)
   }
 }
@@ -187,10 +173,8 @@ void fixed() { // @fixed
 
 class ClsDecoy {
   String data = '';
-  String? _x;
 
   set x(String s) {
-    _x = s;
     sinkCmd(data); // @sink(none) @nosink(dart-setter-forms-decoy)
   }
 }
