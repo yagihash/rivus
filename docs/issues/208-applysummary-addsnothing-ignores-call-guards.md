@@ -13,7 +13,7 @@
 
 ## 確かめたこと
 
-- `addsNothing` は、既にある hop が plain(guards も callee guards も call も無い)で、`sameChainGuards`(新しい hop の出どころまでの鎖の guards が同じ)のときだけ true を返す。`extra` で hop が guarded でも、既にあるのが plain でなければ飛ばさない。
+- `addsNothing` は、既にある hop が plain(guards も callee guards も call も無い)で、`sameChainGuards`(新しい hop の出所までの鎖の guards が同じ)のときだけ true を返す。`extra` で hop が guarded でも、既にあるのが plain でなければ飛ばさない。
 - 飛ばすのは、既に plain な hop があり、鎖の guards が同じ U のとき。新しい到達は U かつ extra なので、和は U。飛ばして U のままにするのが正しい。`add` の `markUnguarded` は、U を捨てて無条件にする(保守的すぎる)。
 - U が空のとき(普通)は、`markUnguarded` しても鎖の guards は空のままで、結果は同じ。
 - `copyLoc`、`put` も、`plainExists` で guards を見ずに飛ばす。`extra` を見ない形は、既存の流儀と同じ。
