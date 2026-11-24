@@ -244,3 +244,10 @@ func (s *state) funcIntoDependency(cc *callCtx, withBody []*sg.Func, modelled bo
 	}
 	return s.newNote(cc.in, KindFuncValueIntoDependency, "func_value_into_dependency: a function of the project is passed to a function of a dependency that has no `calls:` model; where the dependency calls it is not followed (the summary of a dependency does not carry function values out). A `calls:` row for the function says what it calls back", cc.sym)
 }
+
+// fvNote is the note func_value_into_dependency of one function of a dependency, over all the places that call it.
+type fvNote struct {
+	note  *Uncertainty
+	funcs map[string]bool
+	sites map[string]bool
+}

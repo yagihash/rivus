@@ -1377,6 +1377,7 @@ func (e *Engine) collect(st Stats) *Result {
 
 	seenU := map[string]bool{}
 	charNotes := map[string]*Uncertainty{} // char_read_in_callee: one for each (caller, callee)
+	fvNotes := map[string]*fvNote{}        // func_value_into_dependency: one for each callee (funccells.go)
 	for _, fn := range fnList {
 		s := e.states[fn]
 		keys := make([]findingKey, 0, len(s.findings))
@@ -1431,6 +1432,29 @@ func (e *Engine) collect(st Stats) *Result {
 				continue
 			}
 			key := u.Kind + "|" + u.Symbol + "|" + u.Func + "|" + posKey(u.pos)
+			if u.Kind == KindFuncValueIntoDependency {
+				// one for each function of the dependency (the places are many: a generated message registers its fields with
+				// the same few functions): the first place is the note, and the detail says how many there are. The note
+				// of each place stays on the findings that go through it (the hops).
+				k := u.Symbol
+				if k == "" {
+					k = "|" + u.Func
+				}
+				n := fvNotes[k]
+				if n == nil {
+					cp := *u
+					n = &fvNote{note: &cp, funcs: map[string]bool{}, sites: map[string]bool{}}
+					fvNotes[k] = n
+				}
+				if !n.sites[key] {
+					n.sites[key] = true
+					n.funcs[u.Func] = true
+					if posBefore(u.pos, n.note.pos) {
+						n.note.pos, n.note.Func = u.pos, u.Func
+					}
+				}
+				continue
+			}
 			if seenU[key] {
 				continue
 			}
@@ -1438,6 +1462,17 @@ func (e *Engine) collect(st Stats) *Result {
 			e.fill(u)
 			res.Uncertainties = append(res.Uncertainties, u)
 		}
+	}
+	fvKeys := make([]string, 0, len(fvNotes))
+	for k := range fvNotes {
+		fvKeys = append(fvKeys, k)
+	}
+	sort.Strings(fvKeys)
+	for _, k := range fvKeys {
+		n := fvNotes[k]
+		n.note.Detail += " [" + itoa(len(n.sites)) + " places in " + itoa(len(n.funcs)) + " functions of the project; the place here is the first]"
+		e.fill(n.note)
+		res.Uncertainties = append(res.Uncertainties, n.note)
 	}
 	charKeys := make([]string, 0, len(charNotes))
 	for k := range charNotes {
