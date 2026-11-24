@@ -77,7 +77,7 @@ jobs:
   #       gh attestation verify rivus_X.Y.Z_linux_amd64.tar.gz --repo yagihash/rivus --signer-workflow yagihash/rivus/.github/workflows/tagpr.yml
   #   - release attestation（immutable releases が公開時に自動で作る）: このファイルが、そのタグの Release のアセットと同じ
   #       gh release verify-asset vX.Y.Z rivus_X.Y.Z_linux_amd64.tar.gz --repo yagihash/rivus
-  # ビルドの手順は scripts/build-release-archives.sh にある（PR では release-build-check.yml が、同じものを動かす）。
+  # ビルドの手順は scripts/build-release-archives.sh にある（PR では ci.yml の release-build が、同じものを動かす）。
   release-binaries:
     needs: tagpr
     if: needs.tagpr.outputs.tag != ''

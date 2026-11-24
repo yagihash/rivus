@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# リリース用のアーカイブを dist/ に作る（tagpr.yml の release-binaries と、PR の release-build-check.yml が使う）。
+# リリース用のアーカイブを dist/ に作る（tagpr.yml の release-binaries と、PR の ci.yml の release-build が使う）。
 #
 # 使い方: scripts/build-release-archives.sh <版（v なし。例: 1.2.3）>
 #

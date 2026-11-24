@@ -680,11 +680,29 @@ jobs:
         # no other work runs on this machine, so the guard that waits for a quiet one is off
         run: bench/compare.sh --graph-check go-std10,zoo-go,go-curated --graph-workers 1,8 --no-guard HEAD HEAD
 
+  # The archives of a release (tagpr.yml, job `release-binaries`) are built only when a tag is made. Build them here as well, in every run, so that what
+  # would stop a release stops the pull request first: a linked dependency with a copyleft or forbidden license (`go-licenses check`: restricted,
+  # reciprocal, forbidden), or a module without a license file. It does not read `changes`: the dependencies depend on go.mod, and a wrong list must not hide them.
+  release-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - run: scripts/build-release-archives.sh 0.0.0-check
+
   # The one check that a ruleset requires. Every job above is in `needs`: it fails when one of them failed or was cancelled, and passes
   # when they passed or were skipped (nothing that a test reads changed). A job added above has to be added here.
   ci-ok:
     if: always()
-    needs: [changes, go-packages, docs-tests, test, gcp-exec, sandbox, model-diff, model-diff-changed, graph-check]
+    needs: [changes, go-packages, docs-tests, test, gcp-exec, sandbox, model-diff, model-diff-changed, graph-check, release-build]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
