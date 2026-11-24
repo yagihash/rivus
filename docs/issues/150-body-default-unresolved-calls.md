@@ -18,4 +18,4 @@
 - 解決できないインターフェース呼び出し(上の `io.Copy` など。`crypto/rand.Int`、`rsa` と `ecdsa` と `ed25519` の `GenerateKey` の reader のエラー)。
 - flows の行がない標準ライブラリの関数の呼び出し(本体のない `syscall` を通る `(*os.File).Write` のデータ、`os.ReadFile` を通る `tls.LoadX509KeyPair` のパスから証明書への流れ、`net/smtp.Client` の `c.cmd`)。
 
-どちらも、本体の流れではなく、近似による見かけの流れで、モデルに足すと誤検出が増える。注記は、`# model-diff: miss-reviewed <symbol>@<位置> body-default ... #150` で残している。解決できる呼び出しを解決するか、flows の行がない関数の既定を「結果へ流さない」にすると、この種類の注記は要らなくなる。
+どちらも、本体の流れではなく、近似による見かけの流れで、モデルに足すと誤検出が増える。uncertainty は、`# model-diff: miss-reviewed <symbol>@<位置> body-default ... #150` で残している。解決できる呼び出しを解決するか、flows の行がない関数の既定を「結果へ流さない」にすると、この種類の uncertainty は要らなくなる。

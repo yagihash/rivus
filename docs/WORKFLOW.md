@@ -13,4 +13,4 @@
   - マージ済み(または閉じた)PR のブランチへの push は、`.githooks/pre-push` が止める(有効にするのは `make setup`。意図した push は `RIVUS_ALLOW_PUSH_TO_MERGED=1`)。`daily-stats` の `orphan remote branches: N` が 0 でなければ、取り込むか消す。
   - `make merge PR=<n>`(`scripts/merge-pr.sh`)は、main の最新の `ci.yml`(push)が失敗しているとマージしない。main の CI を直す PR だけ `RIVUS_MERGE_FIXES_MAIN=1`。PR は `-short` なので、重いテストは main でしか実行されない。限界: 失敗するコミットの CI が実行中の間は、その前の成功を見て通る。
   - 既定で off の機能の一覧は、コードとテストが持つ。規則は([PRINCIPLES.md](PRINCIPLES.md) 7 節の「既定で off の機能(フラグ)の持ち方」、`cmd/rivus/flagsides.go`)。
-- **相談役が読む PR**は、(i) 解析の結果を変える PR、(ii) 出力の項目・注記と不確実性の種類・`summary`・終了コードを変える PR だけ。結果が同一であることを数字で示した PR、道具、文書は読まない。マージは開発者が行う(`ci-ok` のあと、マージコミット)。
+- **相談役が読む PR**は、(i) 解析の結果を変える PR、(ii) 出力の項目・uncertainty と不確実性の種類・`summary`・終了コードを変える PR だけ。結果が同一であることを数字で示した PR、道具、文書は読まない。マージは開発者が行う(`ci-ok` のあと、マージコミット)。

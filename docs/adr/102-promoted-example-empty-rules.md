@@ -5,7 +5,7 @@
 - 状態の詳細: gin: `bench/compare.sh` ほかが名指しで使う。参照がなければ消す
 - 要旨: 前後の比較を保つ
 
-**背景:** ADR-101 は、昇格した `examples/rules/` のファイルを消す、と決めた。昇格の調査(Go の gin)で、消すと壊れる参照が見つかった: `bench/compare.sh` と `bench/parity/collect.sh` と `bench/README.md` が、`go-gin.yaml` を名指しで使っている(`compare.sh` は、ファイルがなければ gin の 2 つのベンチを飛ばす)。`compare.sh` は各側の木を読むので、古い側は例のファイルのまま、新しい側は組み込みになり、前後の比較が残る。一方、Rust の `rust-actix-web.yaml` は、`cmd/rivus/notbuiltin.go` とそのテスト、`bench/parseable/rules.yaml` などに参照がある(こちらは、組み込みになると注記が出なくなるので、参照の側を直す)。
+**背景:** ADR-101 は、昇格した `examples/rules/` のファイルを消す、と決めた。昇格の調査(Go の gin)で、消すと壊れる参照が見つかった: `bench/compare.sh` と `bench/parity/collect.sh` と `bench/README.md` が、`go-gin.yaml` を名指しで使っている(`compare.sh` は、ファイルがなければ gin の 2 つのベンチを飛ばす)。`compare.sh` は各側の木を読むので、古い側は例のファイルのまま、新しい側は組み込みになり、前後の比較が残る。一方、Rust の `rust-actix-web.yaml` は、`cmd/rivus/notbuiltin.go` とそのテスト、`bench/parseable/rules.yaml` などに参照がある(こちらは、組み込みになると uncertainty が出なくなるので、参照の側を直す)。
 
 **決めたこと:**
 1. 昇格した例のファイルは、**リポジトリの中に、ファイルを名指しで使う参照が残る場合は、中身が空のルール(「組み込みになった。`internal/model/builtin/<ファイル>`」のコメントだけ)として残す**。参照がなければ、消す(ADR-101 のとおり)。

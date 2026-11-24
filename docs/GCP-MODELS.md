@@ -59,7 +59,7 @@ Google Cloud は、何を「外からの入力」と数えるかが製品ごと�
 | P9 | Pull の形: `SubscriberClient.Pull`(v1)、`SubscriptionAdminClient.Pull`(v2)の結果(`ReceivedMessages[].Message`)、`StreamingPull().Recv()` | **source**、`queue_message` | `call_result`(結果が source)。`param_type` や `kind: field` は使えない | `pubsubpb.PubsubMessage` は送る側(`PublishRequest.Messages`)でも組み立てる型で、型やフィールドで source にすると、送る側が全部検出される。**未確認**(YAML のステップで、ケースを足す) |
 | P10 | `Publish` の生成されたクライアント: `PublishRequest.Messages[].Data` | sink にしない | 行なし | P7 と同じ |
 | P11 | 管理: `CreateSubscription` / `ModifyPushConfig` / `UpdateSubscription` の `PushConfig.PushEndpoint`(v1 の手書きは `SubscriptionConfig.PushConfig.Endpoint`) | **sink**、`ssrf`(基盤が、その URL に、メッセージを送る。攻撃者の URL に流れる) | `parts`(`pubsubpb.Subscription` と `ModifyPushConfigRequest` の `PushConfig.PushEndpoint`。v1 と v2 で別のシンボル) | 低い優先。メンテナの使い方では少ない。**未確認** |
-| P12 | **依存の中の時間**(grpc と gax の `invoke`) | source でも sink でもない。**コストの行** | なし(**モデルで依存の中を切らない**。ただし、ADR-092 の条件(コストの測定の記録、本体を読んだ結果との照合の検査、`calls:`、注記つきの保守的な扱い、切ったことの表示)を満たせば、切ってよい。今は、パッケージごとに切る仕組みも、照合の検査もない) | Spanner と BigQuery の `bench/gcp`: 42〜45 秒、3.4〜4.1 GB、時間の 99.7% が依存。grpc が 10.5 秒(2,259 回の再解析)、gax の `invoke` が 356ms。Pub/Sub を足したときの数字は、別のエージェントが測る。**速くする作業は、結果が同一であること**(`pure` を、実行で確かめずに足して、依存の本体を飛ばさない) |
+| P12 | **依存の中の時間**(grpc と gax の `invoke`) | source でも sink でもない。**コストの行** | なし(**モデルで依存の中を切らない**。ただし、ADR-092 の条件(コストの測定の記録、本体を読んだ結果との照合の検査、`calls:`、uncertainty つきの保守的な扱い、切ったことの表示)を満たせば、切ってよい。今は、パッケージごとに切る仕組みも、照合の検査もない) | Spanner と BigQuery の `bench/gcp`: 42〜45 秒、3.4〜4.1 GB、時間の 99.7% が依存。grpc が 10.5 秒(2,259 回の再解析)、gax の `invoke` が 356ms。Pub/Sub を足したときの数字は、別のエージェントが測る。**速くする作業は、結果が同一であること**(`pure` を、実行で確かめずに足して、依存の本体を飛ばさない) |
 
 **P1 の `calls:` の行(原因が分かった。確かめた)。** `Receive` の `calls:` 行を `fn: arg1`、`with: [recv]` と書くと、実際の Pub/Sub(v1、v2)で一致しなかった。**原因は、エンジンでもシンボルでもなく、行の書き方**: `with` は、コールバックの**パラメータを先頭から順に**埋める。コールバックは `func(ctx context.Context, m *Message)` で、`[recv]` は第 1 パラメータの `ctx` に入り、`m` には何も入らない。小さい自前のライブラリのコールバックは、パラメータが 1 つだったので一致した。`with: [arg0, recv]`(`arg0` は `ctx`)と書くと、v1 の `Subscription.Receive`、v2 の `Subscriber.Receive` ともに一致する(確認: テスト用のプロジェクトで、コールバックの中の `exec.Command("sh", "-c", string(m.Data))` と `m.Attributes[...]` に finding が出て、送る側の関数 `send(m *Message)` の `m.Data` には出ない = `param_type` のノイズがない)。モデルと本体は、`calls:` の行がある関数では、**モデルが勝ち**、依存の本体は読まれない(`Receive` の本体のゴルーチンやチャネルは関係しない)。組み込みの `calls:` の行(Go、Dart、Rust)は、どれもコールバックのパラメータが 1 つか、`with` が全部を埋めており、同じ書き間違いはない。**YAML のステップで、`calls:` に乗り換える**(判断 B)。テスト: `testdata/go/cases/callbacks` の `SecondParameter`、`FirstParameterDecoy`。
 
@@ -182,7 +182,7 @@ ID トークンの検証と、復号したクレーム。ラベルを決める(�
 
 ### 8.5 `flows` で本体を切る行は、足さなかった
 
-`docs/DESIGN-deps-cost.md` の 10 節と 12 節の測定のとおり、Google Cloud のパッケージは解析のコストを増やさず(`googleapis` と `gcloud` の `spent_ms` は合わせて 28 ms)、`largest_scc` も大きくしない。ADR-092 の条件 1(コストの測定)が満たされないので、本体を切る行は足さない。sink だけの行は、本体を読むので、読んだ場合との照合が要らず(finding の集合が同じ: 12 節)、`dependency_body_unread` の注記も付かない。
+`docs/DESIGN-deps-cost.md` の 10 節と 12 節の測定のとおり、Google Cloud のパッケージは解析のコストを増やさず(`googleapis` と `gcloud` の `spent_ms` は合わせて 28 ms)、`largest_scc` も大きくしない。ADR-092 の条件 1(コストの測定)が満たされないので、本体を切る行は足さない。sink だけの行は、本体を読むので、読んだ場合との照合が要らず(finding の集合が同じ: 12 節)、`dependency_body_unread` の uncertainty も付かない。
 
 ### 8.6 誤検出が多そうなもの(sink にしていない)と、出るもの
 
@@ -190,5 +190,5 @@ ID トークンの検証と、復号したクレーム。ラベルを決める(�
 - `PublishRequest` の本文、`Topic.publish` の本文: 8.2。
 - ACL の `entity` / `role`: 8.1。権限の付与で、カテゴリが別。
 - `projectId`(Datastore、BigQuery、Pub/Sub の第 1 引数の一部): 設定の値で、利用者の入力であることが少ない。
-- **出てしまう誤検出**: `ProjectsResource.runQuery` で、定数の GQL に、入力を `namedBindings` で渡す形(束縛。安全)が、`gqlQuery` 全体が汚染されるため、`field_imprecision`(`whole_value`)つきで報告される(`bench/dart-gcp` の `RunGqlFixed`)。注記があるので、判定役が見る。名前つき引数の構築では、フィールドごとの区別が今は付かない(Map の要素を区別しない)。
+- **出てしまう誤検出**: `ProjectsResource.runQuery` で、定数の GQL に、入力を `namedBindings` で渡す形(束縛。安全)が、`gqlQuery` 全体が汚染されるため、`field_imprecision`(`whole_value`)つきで報告される(`bench/dart-gcp` の `RunGqlFixed`)。uncertainty があるので、判定役が見る。名前つき引数の構築では、フィールドごとの区別が今は付かない(Map の要素を区別しない)。
 

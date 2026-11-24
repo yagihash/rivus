@@ -37,13 +37,13 @@
 
 | 対象 | 実行 | load(extractor + IR) | 解析(`duration_ms`) | wall | 関数(コアが読む) | finding | 備考 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `dart-grpc` | 既定 | 18.8 秒 | 0.31 秒 | 19.3 秒 | 2,409 | 3 | `dep_spent_ms` 907、`own_spent_ms` 43。注記の合計 293 |
-| `dart-grpc` | `-no-deps` | 6.7 秒 | 0.01 秒 | 6.7 秒 | 307 | 3 | 注記 379 |
-| `dart-grpc` | 試作: `grpc` を宣言 | 11.6 秒 | 0.07 秒 | 11.7 秒 | 1,034 | 3 | 注記 300。`grpc` が import する `http2`、`protobuf` なども、ほかから届かなければ読まない |
-| `dart-gcp` | 既定 | 50.6 秒 | 1.37 秒 | 52.3 秒 | 4,593 | 19 | `dep_spent_ms` 5,207、`own_spent_ms` 142。注記 738 |
-| `dart-gcp` | `-no-deps` | 9.4 秒 | 0.01 秒 | 9.5 秒 | 570 | 19 | 注記 974 |
-| `dart-gcp` | 試作: `googleapis` を宣言 | 22.3 秒 | 0.75 秒 | 23.1 秒 | 3,433 | 19 | 注記 787 |
-| `dart-gcp` | 試作: `googleapis`、`googleapis_auth`、`gcloud`、`google_cloud_storage`、`google_cloud_protobuf`、`google_cloud_rpc` を宣言 | 25.0 秒 | 0.30 秒 | 25.4 秒 | 2,669 | 19 | 注記 833 |
+| `dart-grpc` | 既定 | 18.8 秒 | 0.31 秒 | 19.3 秒 | 2,409 | 3 | `dep_spent_ms` 907、`own_spent_ms` 43。uncertainty の合計 293 |
+| `dart-grpc` | `-no-deps` | 6.7 秒 | 0.01 秒 | 6.7 秒 | 307 | 3 | uncertainty 379 |
+| `dart-grpc` | 試作: `grpc` を宣言 | 11.6 秒 | 0.07 秒 | 11.7 秒 | 1,034 | 3 | uncertainty 300。`grpc` が import する `http2`、`protobuf` なども、ほかから届かなければ読まない |
+| `dart-gcp` | 既定 | 50.6 秒 | 1.37 秒 | 52.3 秒 | 4,593 | 19 | `dep_spent_ms` 5,207、`own_spent_ms` 142。uncertainty 738 |
+| `dart-gcp` | `-no-deps` | 9.4 秒 | 0.01 秒 | 9.5 秒 | 570 | 19 | uncertainty 974 |
+| `dart-gcp` | 試作: `googleapis` を宣言 | 22.3 秒 | 0.75 秒 | 23.1 秒 | 3,433 | 19 | uncertainty 787 |
+| `dart-gcp` | 試作: `googleapis`、`googleapis_auth`、`gcloud`、`google_cloud_storage`、`google_cloud_protobuf`、`google_cloud_rpc` を宣言 | 25.0 秒 | 0.30 秒 | 25.4 秒 | 2,669 | 19 | uncertainty 833 |
 
 - 試作は、extractor のコピーで、`visit`(import をたどる処理)が、宣言のあるパッケージのライブラリを見たら、そのファイルを追加せず、import もたどらないようにしたもの(環境変数で指定。リポジトリには入っていない)。finding は全部同じ件数。
 - **Dart は、extractor が時間の大半(既定で 9 割以上)。** 宣言を extractor に渡す段階 (b) で、`dart-gcp` の load が 50.6 秒 → 22〜25 秒に減った(`-no-deps` の 9.4 秒が下限)。**これは試作の数字で、実装(7a 節)の実測は 14.6 → 10.7 秒、最大 RSS 1.59 → 1.23 GB(`dart-grpc` はほぼ同じ)。ライブラリの要素の構築が残り、試作のように `import` をたどらない版は、結果が変わるので入れなかった。**2 番目の宣言(6 パッケージ)で load が増えたのは、負荷のぶれの範囲(2 つの実行は別の時刻)。解析側だけ(段階 (a))では、解析 1.4 秒しか減らず、extractor の時間は変わらない。

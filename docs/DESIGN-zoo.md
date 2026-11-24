@@ -82,7 +82,7 @@ Z<tag>.SH[;|$]  Z<tag>.SQL[']  Z<tag>.HTML[<>&]  Z<tag>.PATH[../]
 | --- | --- | --- | --- |
 | `carry(encode)` | hex、base64、URL エスケープ、引用、大文字・小文字、切り出し、置換、書式 | **出るべき**。出なければ `@miss`(`@sink` と同じ扱い) | `@carry(tag, encode)` |
 | `carry(digest)` | ハッシュ、HMAC | **方針の行**。今の rivus の動き(出る / 出ない)を注釈に固定する | `@carry(tag, digest)`(出ないなら、その行に `@nosink(tag)` を併記して固定) |
-| `carry(numeric)` | 長さ、`Atoi`、比較の結果 | **出ないべき + `numeric_stop` の不確実性の注記** | `@carry(tag, numeric)` |
+| `carry(numeric)` | 長さ、`Atoi`、比較の結果 | **出ないべき + `numeric_stop` の uncertainty** | `@carry(tag, numeric)` |
 
 どの種類も、**今の rivus の出方を注釈に固定する**(`encode` は出るのが正で、出なければ ratchet つきの `@miss`)。方針の行(digest)も、変わったら「真理の変更の一覧」(§3.9)に出る。**採点の外に置くものを作らない**。見出しの数字には carry の内訳を足す(§6.3)。
 
@@ -220,7 +220,7 @@ pub fn case(id: &'static str, f: fn());                // 登録(明示的な一
    - **`@sink(none)` は、ケースの全部の枝を実行したときだけ正解**。実行は 1 本の経路の証人で、「届かなかった」は「その実行では届かなかった」でしかない。だから照合の条件に、**ケースのコード(`cells/`)の文のカバレッジが 100%** を入れる(Go は `-cover` と `-coverprofile`、Dart は `--coverage`、Rust は `-C instrument-coverage`。段階 1 は Go と Dart)。実行されない文があるケースは落とす(`@manual` を除く)。枝のある形(`guard/one-branch`、`allowlist-early-return`、`ctl/type-switch`、`select`)は、**ケースが両方の枝を自分で通る**(条件を変えて 2 回呼ぶ)。観測は「どれかの実行で届いた」を reached とする。
    - **非決定な形**(goroutine の順、map の走査順)は、variant 0 を数回(5 回)実行して、観測が同じことを見る。違えば `@manual`。
    - 各セルは、`@vuln`(または役割なしの本体)、`@fixed`、`@decoy` の 3 つを持つ。`@cell` の名前が表と対応する。表 F にない `@cell` と、`@cell` のない表 F の行は、落ちる。
-4. そのあと、rivus を `rules.yaml` で実行し、`checkAnnotated` の既存の検査(出る・出ない・`@miss` / `@fp` の両側検査、不確実性の注記の検査)を行う。**失敗したセルは、そのセルだけで解析し直して**(`./cells/<family>/<shape>/...`)、「単独では成功 / 失敗」をログに出す(全体の中での混ざりと、そのセルの誤りを分けるため)。
+4. そのあと、rivus を `rules.yaml` で実行し、`checkAnnotated` の既存の検査(出る・出ない・`@miss` / `@fp` の両側検査、uncertainty の検査)を行う。**失敗したセルは、そのセルだけで解析し直して**(`./cells/<family>/<shape>/...`)、「単独では成功 / 失敗」をログに出す(全体の中での混ざりと、そのセルの誤りを分けるため)。
 
 ### 3.7 `@miss` の書き方(zoo の追加)
 
@@ -228,9 +228,9 @@ pub fn case(id: &'static str, f: fn());                // 登録(明示的な一
 x := Src("a") // @source(a) @miss(silent) @ref(R-03)
 ```
 
-- `@miss(silent)` と `@miss(<kind>)` は curated と同じ(§不確実性の注記)。zoo は、`@ref(...)` を必ず要求する。
-- **`@miss(norule)`**: **範囲の中の API**(標準ライブラリとデファクトのライブラリ、§4.3a)に、モデルがなくて経路が出ないもの。エンジンが不確実性の注記を出しようがないので、`silent` とは別のフィールドで数える。`@ref(CWE-78,gosec:G204)` のように、外の一覧の見出しを付ける。**範囲の外の API(プロジェクト固有のラッパー、特定の CVE のためのルール)は、`@miss` ではない**(ケースにそのルールを与える。ルールはテストの入力)。それでも経路が出ないときだけ、`@miss`。
-- 表の列に出す数(§6.3 の見出し)は、`silent` / 注記あり / `norule` の 3 つ。
+- `@miss(silent)` と `@miss(<kind>)` は curated と同じ(§uncertainty)。zoo は、`@ref(...)` を必ず要求する。
+- **`@miss(norule)`**: **範囲の中の API**(標準ライブラリとデファクトのライブラリ、§4.3a)に、モデルがなくて経路が出ないもの。エンジンが uncertainty を出しようがないので、`silent` とは別のフィールドで数える。`@ref(CWE-78,gosec:G204)` のように、外の一覧の見出しを付ける。**範囲の外の API(プロジェクト固有のラッパー、特定の CVE のためのルール)は、`@miss` ではない**(ケースにそのルールを与える。ルールはテストの入力)。それでも経路が出ないときだけ、`@miss`。
+- 表の列に出す数(§6.3 の見出し)は、`silent` / uncertainty あり / `norule` の 3 つ。
 
 ### 3.8 手の注釈 `@manual(理由)`
 
@@ -424,12 +424,12 @@ zoo-go: マス 78 / ケース 234 | 出る 61 / 78 | @miss 17(痕跡あり 6、�
 
 - **セル**: 3 ケースそろったセルの数。
 - **出る**: 脆弱なケースのうち、rivus が出したもの(`@miss` でないもの)。
-- **`@miss`**: 注記あり(`@miss(<kind>)`)、何も報告していない(`@miss(silent)`)、ルールなし(`@miss(norule)`。**範囲の中の API、つまり標準ライブラリとデファクトのライブラリだけ**。範囲の外の API は数えない)の内訳。
+- **`@miss`**: uncertainty あり(`@miss(<kind>)`)、何も報告していない(`@miss(silent)`)、ルールなし(`@miss(norule)`。**範囲の中の API、つまり標準ライブラリとデファクトのライブラリだけ**。範囲の外の API は数えない)の内訳。
 - **デコイで誤って出る**: デコイの `@sink(none)` の行を、rivus が報告した数(`@fp`)。修正済みのケースの分は別に数える。
 - **手の注釈**: `@manual` の数と割合。
 - **実行と注釈の不一致**: **常に 0**。0 でなければ、CI が失敗する。
 
-- **carry の内訳**: 種類(encode / digest / numeric)ごとに、期待どおりだった数。encode は「出る」に、numeric は「出ない」(+ `numeric_stop` の不確実性の注記)に、それぞれ数える。**採点の外に置かない**。
+- **carry の内訳**: 種類(encode / digest / numeric)ごとに、期待どおりだった数。encode は「出る」に、numeric は「出ない」(+ `numeric_stop` の uncertainty)に、それぞれ数える。**採点の外に置かない**。
 - **実行されない文**: ケースのコードのカバレッジの欠け(常に 0)。
 
 表 S と wild は別の行(件数、`@miss` の内訳、skip の件数)。

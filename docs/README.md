@@ -32,7 +32,7 @@
 | 文書 | 内容 |
 |---|---|
 | [adr/](adr/README.md) | 設計判断の記録(ADR)。1 件 1 ファイル。決めた時点の記録で、書き換えない。一覧は `make docs-gen WHAT=adr` |
-| [DECISIONS.md](DECISIONS.md)、[ADR-INDEX.md](ADR-INDEX.md) | ADR の案内(書き方、状態の意味、注記)。ADR を足すときは触らない |
+| [DECISIONS.md](DECISIONS.md)、[ADR-INDEX.md](ADR-INDEX.md) | ADR の案内(書き方、状態の意味、uncertainty)。ADR を足すときは触らない |
 
 ### 使い方と、書き方
 

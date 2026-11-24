@@ -9,9 +9,9 @@
 
 > **この文書について（リポジトリ追加時のメモ）**
 > 初期ブリーフの原文を、経緯を残すためにそのまま置いている。
-> レビュー（[QUESTIONS.md](QUESTIONS.md)）で内容が変わった箇所には、`> 【改訂注記】` の引用ブロックを添えた。
-> 注記のある節は、現在は [ARCHITECTURE.md](../ARCHITECTURE.md) と [DECISIONS.md](../DECISIONS.md) が優先する。
-> 注記が付いているのは 5.3、5.5、6.1、7.1、7.2、7.4 の 6 か所。
+> レビュー（[QUESTIONS.md](QUESTIONS.md)）で内容が変わった箇所には、`> 【改訂の注釈】` の引用ブロックを添えた。
+> uncertainty のある節は、現在は [ARCHITECTURE.md](../ARCHITECTURE.md) と [DECISIONS.md](../DECISIONS.md) が優先する。
+> uncertainty が付いているのは 5.3、5.5、6.1、7.1、7.2、7.4 の 6 か所。
 
 ---
 
@@ -173,7 +173,7 @@ taint 解析に必要な情報は、コンパイラ IR よりずっと少ない�
 `async` / `await` と例外は、**CFG のエッジとして表現**すれば追加の命令種別は不要。
 命令セットは15種類程度に収まるはず。
 
-> 【改訂注記】命令セットは 15 種類程度では収まらず、**26 種**とした
+> 【改訂の注釈】命令セットは 15 種類程度では収まらず、**26 種**とした
 > （`branch` の条件保持、クロージャ、型アサーション、グローバル変数などを追加。`slice` は `copy` の `view` フラグで表す）。
 > `go` / `defer` / `await` は新しい命令にせず `call` のフラグで表す。
 > イテレータは extractor が脱糖する。IR は **φ なしの CFG ＋ 書き換え可能ローカル変数**とする。
@@ -221,7 +221,7 @@ Rust が外部依存になるのは原理的な制約。proc-macro の展開に�
 純 Go の wasm ランタイム wazero は WasmGC 未対応のため、現時点では不可。
 **後から置き換えられる設計にはしておく。**
 
-> 【改訂注記】**Dart も Rust と同じ外部ツールチェイン依存とする。**
+> 【改訂の注釈】**Dart も Rust と同じ外部ツールチェイン依存とする。**
 > `dart compile exe` はクロスコンパイルが限定的で、OS/arch ごとの埋め込みには各環境でのビルドが必要なため。
 > `go:embed` は動作確認後の最適化として後から追加できるよう、extractor の在り処を解決する層（`Locator`）を挟む。
 > また Rust は `rustc_public` が nightly 専用のため、**固定した nightly でビルドが通るプロジェクト**が前提になる
@@ -245,7 +245,7 @@ Rust が外部依存になるのは原理的な制約。proc-macro の展開に�
    - 戻り値が source 由来か
 3. 呼び出し側でサマリを展開、不動点まで反復
 
-> 【改訂注記】「IFDS の tabulation の非形式版」は不正確。bottom-up のサマリ方式は
+> 【改訂の注釈】「IFDS の tabulation の非形式版」は不正確。bottom-up のサマリ方式は
 > Sharir & Pnueli (1981) の **functional approach** で、IFDS の tabulation（呼び出し元からのオンデマンド探索）とは別物。
 > 「IFDS の summary edge に相当するものを functional approach で計算する」と表現を統一する。
 > bottom-up を選ぶ理由は、4.2 の「seed なしで sink 側から source を引く」クエリが素直に実現できること。
@@ -294,7 +294,7 @@ LLM が後段にいる前提だと、SMT が得意で LLM が苦手な領域
 
 SARIF に載せる場合、LLM 向けの付加情報は `properties` バッグに入れる。
 
-> 【改訂注記】**「プライベートリポジトリでも SARIF アップロードは GHAS なしで可能」は誤り。**
+> 【改訂の注釈】**「プライベートリポジトリでも SARIF アップロードは GHAS なしで可能」は誤り。**
 > GitHub の code scanning が使えるのは、パブリックリポジトリ、または GitHub Code Security を有効にした
 > 組織のリポジトリに限られる（出典: GitHub Docs "Uploading a SARIF file to GitHub"）。
 > したがって**構造化 JSON を唯一の一級市民**とし、SARIF は副次出力（公開リポジトリ、ローカルのビューワ、
@@ -328,7 +328,7 @@ SARIF に載せる場合、LLM 向けの付加情報は `properties` バッグ�
 - 「どの不確実性がどれだけ誤検知を生んでいるか」を集計でき、
   **rivus のどこに投資すべきかが分かる**。既製 SAST では得られないフィードバックループ
 
-> 【改訂注記】レビューで 4 種を追加し（`ffi_boundary`、`unresolved_callee`、`missing_source`、
+> 【改訂の注釈】レビューで 4 種を追加し（`ffi_boundary`、`unresolved_callee`、`missing_source`、
 > `recursion_approximation`）、各 kind に `attributable_to: target | rivus | mixed` を持たせた。
 > 列挙は閉じた集合とし、追加はスキーマのバージョンを上げて行う。
 > → [DECISIONS.md ADR-008](../DECISIONS.md)、[ARCHITECTURE.md 4.4](../ARCHITECTURE.md)
@@ -377,7 +377,7 @@ LLM が「このケースは常に sanitize される」と判定したら、
 キャッシュのキーは **関数のシグネチャ + ボディのハッシュ**。
 コードが変わったら再判定される。
 
-> 【改訂注記】LLM の出力を**モデル**（関数 1 つの振る舞い。再利用する）と**判定**（検出結果 1 件の評価。再利用しない）に分ける。
+> 【改訂の注釈】LLM の出力を**モデル**（関数 1 つの振る舞い。再利用する）と**判定**（検出結果 1 件の評価。再利用しない）に分ける。
 > キャッシュキーは「関数のボディのハッシュ ＋ 直接呼び出している関数のモデル ID の集合」とし、
 > モデルには `origin: builtin | human | llm` を必須にする。`--deterministic-only` で `origin: llm` を無視して実行できる。
 > → [DECISIONS.md ADR-010](../DECISIONS.md)

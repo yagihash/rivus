@@ -42,7 +42,7 @@ snk(q.name)                  // 期待: src → snk   実際: 出ない(黙っ�
 `o := With(src()); o(q)` と書いても落ちる(実験)。
 
 ## `@miss`
-`bench/dart-curated`: `holder-a` `holder-b` `curry` `getter-fn`(注記あり: `unresolved_callee` が sink の行)。`bench/go-curated`: `options`(**何も報告しなかった**。ヘルパーの `o(q)` に `dynamic_dispatch` だけ)。`bench/MISSES.md` の型 `RET-CLOSURE`(5 件)。
+`bench/dart-curated`: `holder-a` `holder-b` `curry` `getter-fn`(uncertainty あり: `unresolved_callee` が sink の行)。`bench/go-curated`: `options`(**何も報告しなかった**。ヘルパーの `o(q)` に `dynamic_dispatch` だけ)。`bench/MISSES.md` の型 `RET-CLOSURE`(5 件)。
 
 ## 落ちる場所の推定
 * Dart: `internal/valuecalls/valuecalls.go` の `classify`: 呼び出しの結果は `refOther`(候補が付かない)。

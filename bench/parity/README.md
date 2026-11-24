@@ -49,7 +49,7 @@ IR の呼び出し先の名前(`callee.symbol`、関数の名前)と、モデル
 | `summary.numeric_stops.char_reads`(文字の取り出しで止まった数。#185) | ✓(byte・rune の型、定数でない添字の文字列の添字) | ✓(`codeUnitAt`、`codeUnits`・`runes` の繰り返しと添字。**コールバックに渡る要素(`runes.map((r) => ...)`)は数えない**) | 一部(`bytes()`・`chars()`・`char_indices()` の繰り返し、`as_bytes()[i]`、`char` 型。**それ以外の Rust の byte の取り出し(取り出した `Vec<u8>` の添字、関数に渡った `u8` など)は数えない(#185)**) |
 | `named:` の sink の選択 | 不要(名前つき引数がない) | ✓ | 不要(名前つき引数がない) |
 | `verified_versions`(読み込みと `rivus models versions`) | ✓ | ✓ | ✓ |
-| `summary.unverified_versions`(確認していないバージョンの注記) | ✓ | ✓(`pubspec.lock`。#162) | ✓(`Cargo.lock`。この PR) |
+| `summary.unverified_versions`(確認していないバージョンの uncertainty) | ✓ | ✓(`pubspec.lock`。#162) | ✓(`Cargo.lock`。この PR) |
 | `analyze` のカテゴリの絞り込み(`-categories`、`-skip-categories`、`summary.categories_excluded`) | ✓ | ✓ | ✓ |
 | path の major を `/v*` と書く(ADR-110) | ✓ | 不要(path に major がない) | 不要(path に major がない) |
 | zoo で骨組みを依存として読む | ✓(骨組みが独立の module) | ✓(依存として。#231) | ✓(`exclude = ["skel"]`) |
@@ -57,7 +57,7 @@ IR の呼び出し先の名前(`callee.symbol`、関数の名前)と、モデル
 | 変換できない関数を飛ばして読み続ける(`fn_skipped`。ADR-109) | 要確認(パニックの報告なし。要るかを見る) | 要確認(同左) | ✓ |
 | zoo の外部パッケージのセルの置き場 | `bench/zoo-go-pkg/<名前>/` | `bench/zoo-dart/cells/packages/<名前>/` | `bench/zoo-rust-pkg/<名前>/` |
 | `adopt_rules:` の書式とローダー(一括採用の段階 1。ADR-113)。言語を問わない書式 | ✓ | ✓ | ✓ |
-| ポインタ越しの書き込みの別名による近似(`ptrAlias`)と、それを通った finding の `pointer_alias` の注記 | ✗(まだ有効にしない) | ✗(同左) | ✓(`HasEnv` の言語。注記はこの PR) |
+| ポインタ越しの書き込みの別名による近似(`ptrAlias`)と、それを通った finding の `pointer_alias` の uncertainty | ✗(まだ有効にしない) | ✗(同左) | ✓(`HasEnv` の言語。uncertainty はこの PR) |
 | `make model` のステップ 1(枠、候補、検証、差分テスト。設計 6.11) | PR #233(レビュー中) | ✓(`LANG=dart`。dio で実演。骨組みはステップ 2 で) | ✗ |
 | クラウドで作れる | ✓ | ✓ | ✗(extractor がサンドボックスを要る) |
 | ベンチの合格基準(`make bench-passline`、1 行の PASS/FAIL。`bench/deps_bench.py`) | ✓(memos。時間、メモリ、収束、CVE-2025-65799 の検出) | 未定(dart_services と cocoon の合格基準は、あとで決める。今は INFO の行だけ) | ✗(まだない) |

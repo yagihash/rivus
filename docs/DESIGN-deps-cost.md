@@ -86,7 +86,7 @@ IR の関数の数は `rivus_dart` の出力の `kind: func` を、`package:<名
 | 関数 / `largest_scc` / `levels` | 2,396 / 195 / 32 | 294 / 1 / 8 |
 | finding | 3(vuln 3 件) | 3(同じ 3 件) |
 | fixed の誤検出 | 0 | 0 |
-| 不確実性の注記の合計 | 273 | 365 |
+| uncertainty の合計 | 273 | 365 |
 | `dynamic_dispatch`(実装が分からない) | 7 | 151 |
 | `dynamic_dispatch`(インターフェースの呼び出し) | 202 | 58 |
 | `unmodeled_library_call` | 9 | 103 |
@@ -94,12 +94,12 @@ IR の関数の数は `rivus_dart` の出力の `kind: func` を、`package:<名
 | `numeric_stop`(int / bool のフィールド) | 3 | 3 |
 | `assumed_call` / `depth_limit` | 2 / 1 | 1 / 1 |
 | `dependency_body_unread` | 1 | 0 |
-| finding の経路についた注記(3 件とも) | 各 4 | 各 2 |
+| finding の経路についた uncertainty(3 件とも) | 各 4 | 各 2 |
 | 確信(confidence) | 3 件とも `requires_review` | 同じ |
 
 - 7 メソッドのどれも、入口(`Service` を継承したクラスのメソッド)として一致する(`rivus sites` で確認。`_Pre` は除外される)。`Files.Write`(クライアントストリーム)も、確認のため一時的に `File(r.path)` に変えると、依存込みと `-no-deps` の両方で finding が出た(確認後に戻した)。
-- vuln の経路は、`-no-deps` でも出る。リクエストのフィールドの読み出し(`request.path` = 生成された getter が `$_getSZ(0)` を呼ぶ)は、本体を読まなくても汚染を保つ。`$_getSZ` はモデルも本体も無い呼び出しで、既定(レシーバと引数が結果へ流れる、`unmodeled_library_call`)が働くため。経路の注記は `dynamic_dispatch`(「実装が分からない」)。
-- 差(依存の本体を読んで得ている情報)は、finding には出ない。出るのは注記の種類と数(`unmodeled_library_call` +94、実装が分からない呼び出し +144)と、確信の根拠だけ。この対象では、`grpc` / `protobuf` / `http2` を、本体を読まずモデルで扱う、ことは、finding の面では支障がない。
+- vuln の経路は、`-no-deps` でも出る。リクエストのフィールドの読み出し(`request.path` = 生成された getter が `$_getSZ(0)` を呼ぶ)は、本体を読まなくても汚染を保つ。`$_getSZ` はモデルも本体も無い呼び出しで、既定(レシーバと引数が結果へ流れる、`unmodeled_library_call`)が働くため。経路の uncertainty は `dynamic_dispatch`(「実装が分からない」)。
+- 差(依存の本体を読んで得ている情報)は、finding には出ない。出るのは uncertainty の種類と数(`unmodeled_library_call` +94、実装が分からない呼び出し +144)と、確信の根拠だけ。この対象では、`grpc` / `protobuf` / `http2` を、本体を読まずモデルで扱う、ことは、finding の面では支障がない。
 
 ### 3.1 見逃す形: メッセージへの書き込みのあとの読み出し
 
@@ -114,7 +114,7 @@ IR の関数の数は `rivus_dart` の出力の `kind: func` を、`package:<名
 | B `Msg12(text: request.name)`(コンストラクタ) | 見逃す | 見逃す |
 | 同じ形を、普通のクラスの getter と setter(`Box`)で | 出る(F) | 出る |
 
-- 依存込みでも見逃す。注記は `dynamic_dispatch` と `unresolved_callee`(setter と getter の同名による余分な候補)だけで、見逃しの原因を指す注記はない。つまり、依存の本体を読んでも、`$_setString` から先でフィールドが書かれる流れが失われる(原因は、`_fieldSet` の中の汎用のコンテナの経路と思われるが、読みきっていない)。
+- 依存込みでも見逃す。uncertainty は `dynamic_dispatch` と `unresolved_callee`(setter と getter の同名による余分な候補)だけで、見逃しの原因を指す uncertainty はない。つまり、依存の本体を読んでも、`$_setString` から先でフィールドが書かれる流れが失われる(原因は、`_fieldSet` の中の汎用のコンテナの経路と思われるが、読みきっていない)。
 - `-no-deps` の側は、`$_setString` が本体もモデルもない呼び出しで、既定では引数がレシーバへ書かれない(結果へだけ流れる)ため。
 
 つまり「リクエストのフィールドを読む」は両方で保たれるが、「メッセージのフィールドに書いて、読む」は、依存込みでも保たれない。
@@ -188,7 +188,7 @@ propagators:
 2. **モデルだけの縮小版**(精度を落としてよいなら): 上の 3 行 + `$_setInt64` などを足す。往復は戻るが、メッセージ全体が汚染される。上の測定のとおり誤検出が出るので、勧めない。
 3. `BuilderInfo` の構築、`create` / `createEmptyInstance` / `getDefault`、`fromBuffer` / `mergeFromBuffer` の本体は、読まなくてよい(`dart-grpc.yaml` の隣に、`fromBuffer`: `arg0 → result` と `writeToBuffer`: `recv → result` のモデルを置く案)。今回の測定では、これらを読んでも finding は変わらない。コストは小さいので、案 1 のあと、必要が出たら。
 
-フィールドごとに保てない場合の不確実性の注記: 案 2 を採るなら、往復の流れにつく注記として、`field_imprecision` に近い注記(「この型のフィールドは区別していない」)を出すのが妥当(注記の名前と出し方は、この文書では決めない)。
+フィールドごとに保てない場合の uncertainty: 案 2 を採るなら、往復の流れにつく uncertainty として、`field_imprecision` に近い uncertainty(「この型のフィールドは区別していない」)を出すのが妥当(uncertainty の名前と出し方は、この文書では決めない)。
 
 ## 6. (d) 利用者への案内
 
@@ -202,7 +202,7 @@ propagators:
 - 標準エラー: `rivus: extracting dart: ...` の 1 行だけ。読まれなかったことは出ない。
 - 出力の JSON: `uncertainties` に `missing_source`(`attributable_to: target`)が 1 件。文は `a dependency outside the project, the pub cache and the SDKs is not read (what package_config.json points to is not trusted): --allow-deps-under <mono のディレクトリ> reads it`。**`-allow-deps-under` を案内する 1 文は、ここにある**(`extract.dart` の `loadError`、`_advisedDir` が親ディレクトリを示す)。
 - `summary.unread` は `null`(この種類は `unread: true` が付かない)。`summary.program.by_kind` には、`missing_source` が数に入る。finding は、依存の側の経路が読めないので、一部が消える(この測定では 5 → 3)。
-- 見落としやすい点: 標準エラーに何も出ない。出力の JSON の注記だけを読む人は少ない。
+- 見落としやすい点: 標準エラーに何も出ない。出力の JSON の uncertainty だけを読む人は少ない。
 
 足す案(実装はしていない):
 
@@ -216,7 +216,7 @@ propagators:
 | --- | --- | --- |
 | `package:analyzer`、`package:_fe_analyzer_shared`(と、利用者のテイントに関係しない巨大なもの) | 本体を読まない指定(今は仕組みがない) | `bench/dart-corpus` で 29,496 関数、全体の 57%。別の対象で、最大の SCC の主因らしい(推測)。ADR-092 の 1〜3 の条件を満たす測定が要る(この合成サーバには出ないので、`dart_services` 型の対象で、読む場合と切る場合を比べる)。`analyzer` は、利用者のビジターを呼ぶ(`RecursiveAstVisitor` など)ので、`calls:` の行が要る(条件 3) |
 | 生成された protobuf のアクセサ(`$_getSZ` ほか) | extractor の扱い(5 節の案 1)と、`PbList` / `PbMap` の `flows` | 本体なしでも往復とフィールドごとの区別が付く。モデルだけでは、誤検出が出る |
-| `protobuf` の `fromBuffer` / `writeToBuffer` / `mergeFromBuffer` | `flows` | 5 節の案 3。コストでなく、注記を減らすため |
+| `protobuf` の `fromBuffer` / `writeToBuffer` / `mergeFromBuffer` | `flows` | 5 節の案 3。コストでなく、uncertainty を減らすため |
 | `grpc`、`http2` | 今は切らない | この合成サーバで、依存の分は全部で 0.5 秒。入口は、`Service` を継承したクラスのメソッドから出るので、本体を読まなくても出る。切るなら、`ServiceMethod` に渡したハンドラを `calls:` で書く必要(ライブラリが利用者のコードを呼ぶ) |
 | `dart:*` | 今のまま | — |
 
@@ -290,7 +290,7 @@ rivus analyze -lang dart -C /tmp/out/mono/app -allow-deps-under /tmp/out/mono -p
 | 行 0 の wall / 解析した関数 / finding | 19.2 秒(2 回目)/ 2,409 / 3 | 9.0 秒 / 307 / 3 |
 | 行 3 の wall / 解析した関数 / finding | 20.2 秒(2 回目)/ 3,638 / 3 | 12.1 秒 / 489 / 3 |
 | 行 5 の wall / 解析した関数 | (上の表)29.8 秒 / 4,493 | 16.2 秒 / 525 |
-| 行 3 の不確実性の注記(`unmodeled_library_call`) | 13 | 180 |
+| 行 3 の uncertainty(`unmodeled_library_call`) | 13 | 180 |
 
 ### 10.3 時間とメモリは、どこで使われるか
 
@@ -375,7 +375,7 @@ rivus の出力の `largest_scc_packages` は、パッケージごとの関数�
 
 - **1 位が、最小で効果が大きい**(行を足すだけで、検出が 3 → 12)。2 位、3 位は、いまの数字では、Google Cloud のパッケージには要らない。
 - 切る必要が出るのは、Google Cloud のパッケージではない。`dart_services` で 12,130 関数の SCC を作るのは、1 節のとおり `analyzer` 系で、Google Cloud ではない(この測定で、Google Cloud の依存は、SCC に入る関数が 1 割未満。生成された `googleapis` の関数は 0)。`dart_services` 型の終わらない解析を再現するには、`analyzer` を含む合成の対象が要る。
-- (iii) の ADR-092 の条件(測定の記録、読んだ場合との照合、`calls:`、保守的な注記、`summary` に読まなかったパッケージの一覧)は、7 節の最小の仕組みの案のまま。`googleapis_auth` を切る場合は、認証のクライアントが利用者の `http.Client` を呼び返すかどうかを調べて、必要なら `calls:` の行を書く(調べていない)。
+- (iii) の ADR-092 の条件(測定の記録、読んだ場合との照合、`calls:`、保守的な uncertainty、`summary` に読まなかったパッケージの一覧)は、7 節の最小の仕組みの案のまま。`googleapis_auth` を切る場合は、認証のクライアントが利用者の `http.Client` を呼び返すかどうかを調べて、必要なら `calls:` の行を書く(調べていない)。
 - (i) の注意: `gcloud` の `Bucket` / `Storage` / `PubSub` は抽象クラス(インターフェース)で、実装は `_BucketImpl` など。インターフェースの記号(`package:gcloud/storage.dart#Bucket.read`)で行を書くと、呼び出しの候補になる実装の側(`_BucketImpl.read`)でも一致し、finding が 2 件になる(重複)。どちらか 1 つの書き方に決める必要がある。名前つき引数(`kind:`)を指す書き方は、`MODELING.md` で確認できなかった。
 
 ### 10.8 見つけた rivus の不具合と注意
@@ -402,10 +402,10 @@ RIVUS_DART=dart RIVUS_DART_EXTRACTOR="dart run <worktree>/extractor/dart/bin/riv
 
 足りる部分と、足りない部分がある。
 
-- **足りる部分。** インターフェースのメソッド(`Client.send`)に、`flows` の行(モデル)があると、その呼び出し(動的な呼び出し)の候補のうち、**依存のパッケージにある実装(`IOClient.send`、`RetryClient.send`、`googleapis_auth` の認証つきクライアント)の本体は読まれない**。`internal/taint/calls.go` の `callBody` は、モデルがあって呼び出しが動的なとき、候補のうち自分のコードの本体だけを読み、依存の候補には `dependency_body_unread` の注記を付ける(ADR-075)。自分のコードの実装(`BaseClient` を継承した自前のクラスなど)は、今までどおり読まれる。**sink だけの行は、モデルに数えられない**(`HasModel` は `flows` / `pure` / `calls` などがある行だけ)ので、本体は読まれる。
-- **足りない部分 1: 便利なメソッド(`get`、`post`、...)。** `BaseClient.get` などは、本体が `send` を呼ぶ(`this.send`)。`Client.get` にモデルを書くと、この呼び出しは読まれず、自分のコードの `send`(自前の `BaseClient` の継承クラス)に、値が届かなくなる(ADR-092 の条件 2 の(b)「境界の呼び出しのエッジ」が減る)。公開の合成の例(11.3)で、このモデルを書いて測ると、読んだ場合にある 2 件の finding(`get` の URL → 自前の `send` の `_inner.send(request)`)が消えた。`dependency_body_unread` の注記は出るが、finding は減る。Rust の `calls: [{method: ...}]`(MODELING 3 節)が、これを書くためのもので、**Dart では、まだ動かない**(`methodImpls` は Rust の `<T as Trait>::method` の ID だけを探す)。
-- **足りない部分 2: 依存の実装に渡した関数(`RetryClient(when:, onRetry:)`)。** コンストラクタで渡して、あとで `send` の中から呼ばれる。`calls:` の「登録してあとで呼ぶ」の形は、今の書式では書けない(ADR-092 の条件 3 の「書式の課題」)。`dependency_body_unread` の注記だけが出る。
-- **足りない部分 3: 動的な呼び出しの数、SCC、`functions`。** モデルは、解析の中身(要約の計算)を省くだけで、呼び出しのグラフは変えない。このため、`dynamic_dispatch` の注記、`stats.functions`、`largest_scc` は、モデルの有無で変わらない(11.3)。「動的な呼び出しがまとめて消える」のではなく、**候補の本体の要約の計算が省かれる**。
+- **足りる部分。** インターフェースのメソッド(`Client.send`)に、`flows` の行(モデル)があると、その呼び出し(動的な呼び出し)の候補のうち、**依存のパッケージにある実装(`IOClient.send`、`RetryClient.send`、`googleapis_auth` の認証つきクライアント)の本体は読まれない**。`internal/taint/calls.go` の `callBody` は、モデルがあって呼び出しが動的なとき、候補のうち自分のコードの本体だけを読み、依存の候補には `dependency_body_unread` の uncertainty を付ける(ADR-075)。自分のコードの実装(`BaseClient` を継承した自前のクラスなど)は、今までどおり読まれる。**sink だけの行は、モデルに数えられない**(`HasModel` は `flows` / `pure` / `calls` などがある行だけ)ので、本体は読まれる。
+- **足りない部分 1: 便利なメソッド(`get`、`post`、...)。** `BaseClient.get` などは、本体が `send` を呼ぶ(`this.send`)。`Client.get` にモデルを書くと、この呼び出しは読まれず、自分のコードの `send`(自前の `BaseClient` の継承クラス)に、値が届かなくなる(ADR-092 の条件 2 の(b)「境界の呼び出しのエッジ」が減る)。公開の合成の例(11.3)で、このモデルを書いて測ると、読んだ場合にある 2 件の finding(`get` の URL → 自前の `send` の `_inner.send(request)`)が消えた。`dependency_body_unread` の uncertainty は出るが、finding は減る。Rust の `calls: [{method: ...}]`(MODELING 3 節)が、これを書くためのもので、**Dart では、まだ動かない**(`methodImpls` は Rust の `<T as Trait>::method` の ID だけを探す)。
+- **足りない部分 2: 依存の実装に渡した関数(`RetryClient(when:, onRetry:)`)。** コンストラクタで渡して、あとで `send` の中から呼ばれる。`calls:` の「登録してあとで呼ぶ」の形は、今の書式では書けない(ADR-092 の条件 3 の「書式の課題」)。`dependency_body_unread` の uncertainty だけが出る。
+- **足りない部分 3: 動的な呼び出しの数、SCC、`functions`。** モデルは、解析の中身(要約の計算)を省くだけで、呼び出しのグラフは変えない。このため、`dynamic_dispatch` の uncertainty、`stats.functions`、`largest_scc` は、モデルの有無で変わらない(11.3)。「動的な呼び出しがまとめて消える」のではなく、**候補の本体の要約の計算が省かれる**。
 
 そのため、モデルは次の形にした。
 
@@ -422,8 +422,8 @@ ADR-092 の条件 1(依存が時間の 9 割以上、または数 GB)は、パ�
 | 基準 | 状態 |
 | --- | --- |
 | (i) 公開の対象で、本体を読んだ場合と finding の集合が同じ | 11.3: `bench/dart-gcp`、`bench/dart-grpc`、合成 3 で、同じ集合 |
-| (ii) 読まなかった本体に注記 | `dependency_body_unread`(合成 3 で 2 件、`bench/dart-gcp` で 3 件) |
-| ADR-092 の 3(`calls:`) | 書けない形が残る(上の「足りない部分 2」)。注記で示す |
+| (ii) 読まなかった本体に uncertainty | `dependency_body_unread`(合成 3 で 2 件、`bench/dart-gcp` で 3 件) |
+| ADR-092 の 3(`calls:`) | 書けない形が残る(上の「足りない部分 2」)。uncertainty で示す |
 | ADR-092 の 5(`summary` に一覧) | まだない(11.4 の 2) |
 
 ### 11.2a 具体的な型の変数からの呼び出しと、finding の重複
@@ -453,7 +453,7 @@ ADR-092 の条件 1(依存が時間の 9 割以上、または数 GB)は、パ�
 ### 11.4 次の案(まだ書いていない)
 
 1. **Dart の `calls: [{method: ...}]`。** `Client.get` などの便利なメソッドにも `flows` を書き、`send` を呼ぶことを `method: send` で書く。実装は、自分のコードの関数のうち、メソッド名が `send` で、レシーバの型が `Client` の部分型のもの(`type` レコードの `extends:` / `implements:`)を探して、`with` で呼ぶ(`applyMethodRow` の Dart 版。Rust の `methodImpls` は ID の形が違う)。約 100 行の見込み。これができれば、便利なメソッドも切れる。
-2. **`summary` に、モデルで切ったパッケージの一覧**(ADR-092 の 5)。今は、注記が呼び出しごとにあるだけ。
+2. **`summary` に、モデルで切ったパッケージの一覧**(ADR-092 の 5)。今は、uncertainty が呼び出しごとにあるだけ。
 3. **コンストラクタで渡した関数を、あとで呼ぶ形**(`RetryClient(when:)`)の書式。
 ## 12. Google Cloud の Dart のクライアントの組み込みモデル(`dart-gcp.yaml`)の測定
 
@@ -471,14 +471,14 @@ ADR-092 の条件 1(依存が時間の 9 割以上、または数 GB)は、パ�
 
 ### 12.2 モデルあり / なし
 
-| 対象 | モデル | 解析した関数 | `largest_scc` | `summary_elems` | 解析 `duration_ms` | `dynamic_dispatch` の注記 | 注記の合計 | wall | 最大 RSS | finding |
+| 対象 | モデル | 解析した関数 | `largest_scc` | `summary_elems` | 解析 `duration_ms` | `dynamic_dispatch` の uncertainty | uncertainty の合計 | wall | 最大 RSS | finding |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | `bench/dart-gcp` | なし | 4,593 | 263 | 25,248 | 1,089 | 601 | 733 | 19.3 秒 | 1.64 GB | 3 |
 | `bench/dart-gcp` | あり | 4,593 | 263 | 25,248 | 1,503 | 601 | 734 | 20.5 秒 | 1.64 GB | 19 |
 | `bench/dart-grpc` | なし | 2,409 | 195 | 5,471 | 150 | 213 | - | 12.4 秒 | 1.15 GB | 3 |
 | `bench/dart-grpc` | あり | 2,409 | 195 | 5,471 | 113 | 213 | - | 11.2 秒 | 1.15 GB | 3 |
 
-- 解析のコスト(関数の数、`summary_elems`、`dynamic_dispatch`)は同じ。sink の行だけなので、本体の読み方は変わらない。注記の合計が +1 なのは、下の誤検出の `field_imprecision`。
+- 解析のコスト(関数の数、`summary_elems`、`dynamic_dispatch`)は同じ。sink の行だけなので、本体の読み方は変わらない。uncertainty の合計が +1 なのは、下の誤検出の `field_imprecision`。
 - `bench/dart-grpc` は、finding が同じ 3 件(Google Cloud を使わないので、行は一致しない)。
 
 ### 12.3 a / b の検出と、既知の見逃し

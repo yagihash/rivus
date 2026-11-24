@@ -33,11 +33,11 @@
 **決定の 3 は、次に置き換える。** 関数ごとの打ち切り(1 関数の時計 `-func-timeout`: `stats.func_timeouts`。作業量の上限: `stats.budget_exhausted`)が起きた実行は、収束していても、完全でない解析として、終了コード 4 で終わる。理由は `summary.incomplete_reasons` に、`func_timeout` と `budget` として、分けて出る(終了コードは 1 つのまま。決定の 1)。`summary.incomplete`、`query` と `resolve` の最上位の `incomplete`、`incomplete_reasons` は、同じ `report.IncompleteReasons` で決まるので、そのまま効く。
 
 **理由:**
-- 基準は「計算機に依るか」ではなく、「流れを落としたか」である。打ち切った関数の要約は流れを欠く(注記の文面も「its summary may miss flows」)。その関数を通る問い合わせが「届く source はない」と答えても、探し尽くした答えではない。作業量の上限は、同じ計算機なら同じ所で止まるが、流れを落とすことは変わらない。
+- 基準は「計算機に依るか」ではなく、「流れを落としたか」である。打ち切った関数の要約は流れを欠く(uncertainty の文面も「its summary may miss flows」)。その関数を通る問い合わせが「届く source はない」と答えても、探し尽くした答えではない。作業量の上限は、同じ計算機なら同じ所で止まるが、流れを落とすことは変わらない。
 - #195(時間切れの index への問い合わせで、完全でないことが出なかった)と同じ型である。`stats` と `depth_limit` には出ていたが、`stats` を読まない呼び出し側には届かなかった。
 - 毎回 4 になる対象があれば、それは正しい知らせで、直すのは打ち切りの側(止める所を粗くする、時計を作業量の規則に置き換える。ADR-118 の表)である。
 
-**打ち切った関数の一覧:** 関数ごとに 1 件の `depth_limit` の注記(`func` に関数、`detail` の先頭が `func_timeout:` か `budget:`)が、トップレベルの `uncertainties` と、その関数を通る finding の `uncertainties` に出る。`candidates` に一覧を持つのは、`out_limit`(#332)と `path_limit` の注記で、これは別の記録である。
+**打ち切った関数の一覧:** 関数ごとに 1 件の `depth_limit` の uncertainty(`func` に関数、`detail` の先頭が `func_timeout:` か `budget:`)が、トップレベルの `uncertainties` と、その関数を通る finding の `uncertainties` に出る。`candidates` に一覧を持つのは、`out_limit`(#332)と `path_limit` の uncertainty で、これは別の記録である。
 
 **根拠:** 外部の設計者の返事 `2026-11-23-pending-decisions-reply.md`(問 1: 両方入れる)。ユーザーの決定(2026-11-23): 「architect に同意」。
 

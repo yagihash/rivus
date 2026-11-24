@@ -1,11 +1,11 @@
-# 確認していないバージョンへの適用の注記(`summary.unverified_versions`)が、Dart と Rust に出ない
+# 確認していないバージョンへの適用の uncertainty(`summary.unverified_versions`)が、Dart と Rust に出ない
 
 - 状態: **closed**(Dart と Rust を直した。`pubspec.lock` と `Cargo.lock` を、コア側で読む。守るもの: `cmd/rivus/lockversions_test.go`)
 - 種類: 機能(モデルの鮮度。設計 6.10)
 - 言語: Dart、Rust
 - ROADMAP の節: -
 - 守るもの: `cmd/rivus/lockversions_test.go`(`TestUnverifiedVersionsDartLock`、`TestUnverifiedVersionsCargoLock`)
-- 題: 確認していないバージョンへの適用の注記(`summary.unverified_versions`)が、Dart と Rust に出ない(直した: `pubspec.lock`、`Cargo.lock` から取る)
+- 題: 確認していないバージョンへの適用の uncertainty(`summary.unverified_versions`)が、Dart と Rust に出ない(直した: `pubspec.lock`、`Cargo.lock` から取る)
 
 優先度: 低め(Go は出る。Dart と Rust のモデルの `verified_versions` は、Go より少ない)。
 

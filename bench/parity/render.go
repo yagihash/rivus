@@ -73,7 +73,7 @@ func render(tablePath, deadPath string, rows []Row, mi *ModelIndex, corpora []*C
 	// ---- the corpora
 	b = &secRead
 	w("## 6. 読んだもの\n\n")
-	t := &mdTable{head: []string{"言語", "入力(IR)", "実コード", "関数", "呼び先の名前(種類)", "注記"}}
+	t := &mdTable{head: []string{"言語", "入力(IR)", "実コード", "関数", "呼び先の名前(種類)", "uncertainty"}}
 	for _, l := range langs {
 		for _, c := range by[l] {
 			real := "いいえ(fixture)"
