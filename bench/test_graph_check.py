@@ -58,6 +58,20 @@ class Convergence(unittest.TestCase):
         self.assertEqual(g.worse(4, 2), 2)
 
 
+class CiGraphCheck(unittest.TestCase):
+    """The weekly CI accepts exit 4 for zoo-go only (docs/issues/217): each target is its own call."""
+
+    def test_only_zoo_go_may_end_with_4(self):
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        text = open(os.path.join(root, ".github", "workflows", "ci.yml")).read()
+        calls = [l.strip() for l in text.splitlines() if l.strip().startswith("bench/compare.sh --graph-check")]
+        self.assertEqual(len(calls), 3, calls)
+        self.assertFalse(any("," in c.split("--graph-check ")[1].split()[0] for c in calls), "a target list in one call")
+        for c in calls:
+            target = c.split("--graph-check ")[1].split()[0]
+            self.assertEqual("|| rc=$?" in c, target == "zoo-go", c)
+
+
 class DartSteps(unittest.TestCase):
     """run_side with a Dart extractor: the IR is the output of the extractor, index and analyze get -lang dart and the same command in
     RIVUS_DART_EXTRACTOR, and an analyze that ends with exit code 4 is told (not an error)."""

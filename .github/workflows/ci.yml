@@ -694,13 +694,19 @@ jobs:
             bench/*/go.sum
       - name: Check that the graph does not depend on the number of workers
         # no other work runs on this machine, so the guard that waits for a quiet one is off
-        # exit 4 is "the same everywhere, and only an analysis did not converge" (zoo-go has cells that stop by the pass limit on purpose): the job passes.
-        # 1 (a difference), 2 (a run failed) and 3 (a part was not compared) fail it.
+        # Each target is its own call: only zoo-go may end with exit 4 ("the same everywhere, and only an analysis did not converge": it has cells that stop by the
+        # pass limit on purpose, docs/issues/217). go-std10 and go-curated must end with 0, so one that stops converging later still fails the job.
+        # 1 (a difference), 2 (a run failed) and 3 (a part was not compared) fail it for every target.
         run: |
+          bench/compare.sh --graph-check go-std10 --graph-workers 1,8 --no-guard HEAD HEAD
           rc=0
-          bench/compare.sh --graph-check go-std10,zoo-go,go-curated --graph-workers 1,8 --no-guard HEAD HEAD || rc=$?
-          if [ "$rc" = 4 ]; then echo "::notice::graph check: same, and an analysis did not converge (exit 4, accepted)"; exit 0; fi
-          exit "$rc"
+          bench/compare.sh --graph-check zoo-go --graph-workers 1,8 --no-guard HEAD HEAD || rc=$?
+          if [ "$rc" = 4 ]; then
+            echo "::notice::graph check of zoo-go: same, and an analysis did not converge (exit 4, accepted for zoo-go only: docs/issues/217)"
+          elif [ "$rc" != 0 ]; then
+            exit "$rc"
+          fi
+          bench/compare.sh --graph-check go-curated --graph-workers 1,8 --no-guard HEAD HEAD
 
   # The archives of a release (tagpr.yml, job `release-binaries`) are built only when a tag is made. Build them here as well, so that what would stop a
   # release stops the pull request first: a linked dependency with a copyleft or forbidden license (`go-licenses check`: restricted, reciprocal,
