@@ -1,6 +1,6 @@
 # #205 道具・ベンチ: `bench/parity/TABLE.md`(言語どうしの機能の差の表)が古い。作り直す手順が重く、検査の対象にもなっていない
 
-- 状態: **open**
+- 状態: **closed**(この PR。(b) 表をやめる)
 - 種類: 道具・ベンチ
 - 言語: 全
 - ROADMAP の節: 0
@@ -58,3 +58,9 @@
 - 大きさ: 小。コードの変更はほぼなし(記述の修正が 6 か所ほどと、ファイルの削除)。半日以内。
 
 **推薦: (b)**。作り直しが重く(IR を集める)、軽く作れる部分は、すでにテストの出力とゲートにある。(a) は、同じ情報の写しを、共有の 1 ファイルに増やし、コンフリクトの元になる。量・需要の数は、これからも必要なら、道具を残して、そのときに作る(コミットしない)。(b) を先に直してから、量・需要の数を表で見る必要がまた出たら、そのときに (a) を考える。実装は、案を読んでから(状態は `open` のまま)。
+
+## 結果(この PR。(b) を実装した)
+
+- `bench/parity/TABLE.md` と `DEAD.md` を削除した。コミットする表は無い。PARITY の情報の置き場は、zoo のマーク(`@na`、`@todo(PARITY)`)と `bench/zoo` のゲート(`TestZoo*` の出力の `parity marks:` の行)。
+- 参照元(`docs/DESIGN-zoo.md`、`docs/PRINCIPLES.md`、`docs/design-package-models/06-11-model-authoring-script.md`、`bench/README.md`、`bench/parity/README.md`、コードのコメント)を直した。`.github/workflows/ci.yml` に参照は無く、変更は要らない。
+- 道具 `go run ./bench/parity report` は残した。出力先の既定は、`-work` のディレクトリの `TABLE.md` と `DEAD.md`(リポジトリの外。`-table`、`-dead` で変えられる)。量・需要・死んだ行の数は、必要なときに作る。`dead-allow` と `.dead-allow` は、そのまま。

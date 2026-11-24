@@ -602,7 +602,7 @@ propagators:
     pure: true
   - symbol: path/filepath.Walk
     pure: true
-    calls: [{fn: arg1, with: [arg0]}]
+    calls: [{fn: arg1, with: [arg0, arg0, arg0]}]
   - symbol: (*go/ast.CallExpr).Pos
     pure: true
   - symbol: (*go/ast.CallExpr).End

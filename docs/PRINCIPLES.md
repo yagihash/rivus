@@ -115,7 +115,7 @@ rivus の設計の判断は、ここに書いた原則に沿う。ほかの文�
   - `valuecalls/narrow.go:46`（Rust の `Fn::call` のシンボル）
 - **ルールの書式:** 書き間違いを弾く検証はある。ただし書式のバージョンは無く（`ruleset: name@N` はルールセットのバージョン）、README は「書式は変わる」と書く。安定の約束は、まだ文書になっていない。
 - **MODELING.md:** `pure` / `approximate` / `calls:` / `parts` / 「行は一致しなければならない」の節は実装と合っている。基本の `flows` / `sources` / `sanitizers`、`globals` / `holds`（ADR-056）、`.content`（ADR-082）などの節は、まだ無い。
-- **構文の多様さの精度:** Dart と Rust は Go より見逃しが多い。数字は `bench/zoo/README.md`、`bench/MISSES.md`、`bench/parity/` にある。
+- **構文の多様さの精度:** Dart と Rust は Go より見逃しが多い。数字は `bench/zoo/README.md`、`bench/MISSES.md`、zoo のマーク(`@na`、`@todo(PARITY)`)と `TestZoo*` の出力にある。
 
 ---
 
