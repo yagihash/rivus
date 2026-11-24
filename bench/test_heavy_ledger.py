@@ -8,6 +8,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import deps_bench as d
 import heavy_ledger as h
+import heavylock as hl
 
 NEW = {"summary": {"memory_limit_bytes": 8 * 1024 ** 3, "memory_limit_source": "default", "memory_peak_bytes": 6 * 1024 ** 3,
                    "live_heap_max_bytes": 4 * 1024 ** 3, "gc_cpu_fraction": 0.12, "incomplete_reasons": []},
@@ -17,6 +18,32 @@ OLD = {"summary": {"incomplete_reasons": ["timeout"]}, "stats": {"converged": Fa
 
 def args(path, no_ledger=False):
     return argparse.Namespace(ledger=path, no_ledger=no_ledger)
+
+
+class Note(unittest.TestCase):
+    def test_format_has_load_and_names_only(self):
+        a = {"load": (1.5, 2.0, 3.0), "busy": []}
+        b = {"load": (4.0, 2.5, 3.1), "busy": ["go", "dart"]}
+        n = hl.format_snapshots(a, b)
+        self.assertIn("start 1.50/2.00/3.00 end 4.00/2.50/3.10", n)
+        self.assertIn("start: none end: go,dart", n)
+
+    def test_busy_names_without_path_top5(self):
+        out = "\n".join(["%d.0 /usr/bin/p%d" % (30 + i, i) for i in range(7)] + ["5.0 /bin/idle", "x bad"])
+        orig = hl.subprocess.run
+        hl.subprocess.run = lambda *a, **k: subprocess.CompletedProcess(a, 0, out, "")
+        try:
+            r = hl.busy_processes()
+        finally:
+            hl.subprocess.run = orig
+        self.assertEqual(r, ["p6", "p5", "p4", "p3", "p2"])
+
+    def test_median_run(self):
+        mk = lambda w, c: {"wall": w, "cpu": w, "peak": w * 2, "converged": c, "why": "", "note": "n"}
+        r = d.median_run([mk(527, True), mk(300, True), mk(310, True)])
+        self.assertEqual((r["wall"], r["peak"], r["converged"]), (310, 620, True))
+        self.assertFalse(d.median_run([mk(1, True), mk(2, False), mk(3, True)])["converged"])
+        self.assertIn("run 3:", d.median_run([mk(1, True), mk(2, True), mk(3, True)])["note"])
 
 
 class Writer(unittest.TestCase):
@@ -141,7 +168,8 @@ class PasslineRun(unittest.TestCase):
                 d.prepare = orig
                 del os.environ["RIVUS_HEAVY_LOCK"], os.environ["BENCH_OUT"]
             self.assertTrue(line.startswith("PASS fake "))
-            self.assertEqual((row["kind"], row["result"], row["settings"], row["target_commit"], row["findings"]), ("passline", "PASS", "default", "c0ffee", 2))
+            self.assertEqual((row["kind"], row["result"], row["target_commit"], row["findings"]), ("passline", "PASS", "c0ffee", 2))
+            self.assertTrue(row["settings"].startswith("default; load start "))
             p = os.path.join(w, "l.tsv")
             d.add_to_ledger(row, args(p), "abc1234")
             self.assertEqual(len(open(p).read().splitlines()[1].split("\t")), len(h.COLUMNS))

@@ -48,13 +48,14 @@ import os
 import re
 import shutil
 import signal
+import statistics
 import subprocess
 import sys
 import tempfile
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from heavylock import heavy_lock  # one lock for the heavy runs of the whole machine (bench/heavylock.py)
+from heavylock import heavy_lock, snapshot, format_snapshots  # one lock for the heavy runs of the whole machine (bench/heavylock.py)
 import heavy_ledger  # the one ledger of the heavy measurements (bench/heavy_ledger.py)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -85,7 +86,9 @@ def measure(name, rivus, timeout, work):
     outp, errp = os.path.join(work, name + ".out.json"), os.path.join(work, name + ".err")
     with heavy_lock("deps_bench " + name):
         load = os.getloadavg()[0]
+        sn0 = snapshot()
         m = run_watched(cmd, ROOT, env, timeout + GRACE, int(DEPS_CAP_GB * GB), errp, outp)
+        note = format_snapshots(sn0, snapshot())
     err = open(errp, errors="replace").read()
     rep = None
     if not m["why"]:
@@ -95,7 +98,7 @@ def measure(name, rivus, timeout, work):
             rep = None
     st = rep.get("stats", {}) if isinstance(rep, dict) else {}
     converged = bool(st.get("converged", True)) if rep is not None else False
-    row = {"target": name, "target_commit": "in-tree", "kind": "deps", "settings": "default (-timeout %ds)" % timeout,
+    row = {"target": name, "target_commit": "in-tree", "kind": "deps", "settings": "default (-timeout %ds); %s" % (timeout, note),
            "wall_s": "%.1f" % m["wall"], "cpu_s": "%.1f" % m["cpu"], "peak_tree_gb": "%.2f" % (m["b"] / GB),
            "converged": converged if rep is not None else None, "exit_code": m["rc"], "load_start": "%.2f" % load}
     row.update({k: v for k, v in heavy_ledger.report_columns(rep).items() if v is not None})
@@ -415,7 +418,9 @@ def analyze_once(rivus, t, src, env, limit_s, cap_bytes, work, tag):
     outp, errp = os.path.join(work, tag + ".out.json"), os.path.join(work, tag + ".err")
     with heavy_lock("deps_bench analyze " + tag):
         load = os.getloadavg()[0]
+        sn0 = snapshot()
         m = run_watched(cmd, ROOT, env, limit_s, cap_bytes, errp, outp)
+        note = format_snapshots(sn0, snapshot())
     rc, why, wall, peak = m["rc"], m["why"], m["wall"], m["b"]
     rep, converged = None, False
     if not why and rc in (0, EXIT_INCOMPLETE):  # 4: the report is written, but the analysis is not complete (timeout, not converged); converged below says it
@@ -427,10 +432,26 @@ def analyze_once(rivus, t, src, env, limit_s, cap_bytes, work, tag):
             converged = bool(st.get("converged", False)) and not st.get("timed_out", False) and not st.get("load_dependent", False)
         except (OSError, ValueError):
             rep = None
-    return {"wall": wall, "peak": peak, "converged": converged, "why": why, "report": rep, "peak_how": "tree-sum", "peak_a": m["a"], "cpu": m["cpu"], "big": m["big"], "big_rss": m["big_rss"], "at_s": m["at_s"], "rc": rc, "load": load}
+    return {"wall": wall, "peak": peak, "converged": converged, "why": why, "report": rep, "peak_how": "tree-sum", "peak_a": m["a"], "cpu": m["cpu"], "big": m["big"], "big_rss": m["big_rss"], "at_s": m["at_s"], "rc": rc, "load": load, "note": note}
 
 
-def passline(name, t, rivus, cache, outdir, limit_s, cap_gb):
+def median_run(runs):
+    """One run for n runs of the same target: the run of the median wall time, with the median wall, cpu and peak; converged only when all did.
+    The notes (load, busy processes) of every run are kept."""
+    if len(runs) == 1:
+        return runs[0]
+    by = sorted(runs, key=lambda r: r["wall"])
+    r = dict(by[(len(by) - 1) // 2])
+    for k in ("wall", "cpu", "peak"):
+        r[k] = statistics.median(x[k] for x in runs)
+    r["converged"] = all(x["converged"] for x in runs)
+    r["why"] = next((x["why"] for x in runs if x["why"]), "")
+    r["note"] = " | ".join("run %d: %s" % (i + 1, x["note"]) for i, x in enumerate(runs))
+    r["walls"] = [x["wall"] for x in runs]
+    return r
+
+
+def passline(name, t, rivus, cache, outdir, limit_s, cap_gb, repeat=1):
     with tempfile.TemporaryDirectory(prefix="passline-") as work:
         env = dict(os.environ)
         cap = int(cap_gb * GB)
@@ -450,7 +471,7 @@ def passline(name, t, rivus, cache, outdir, limit_s, cap_gb):
                 shutil.copy(os.path.join(work, tag + ".out.json"), os.path.join(outdir, "%s-%s.json" % (name, tag)))
             return r
 
-        main = run(t.get("commit", ""), "pin")
+        main = median_run([run(t.get("commit", ""), "pin" if i == 0 else "pin%d" % (i + 1)) for i in range(max(1, repeat))])
         detected, quiet, d, through, located, score = None, None, t.get("detect"), None, None, None
         if d and d.get("mode") == "score":  # per published vulnerability, by place; the count n/N only (no finding count, list, path or place anywhere)
             truth = json.load(open(os.path.join(ROOT, d["truth"])))["sites"]
@@ -491,7 +512,9 @@ def passline(name, t, rivus, cache, outdir, limit_s, cap_gb):
             result = ("PASS" if passed else "FAIL") if decided else "INFO"
         extra = [a for a in t.get("args", [])] + (["-limit %g" % limit_s] if limit_s != t["time_limit_s"] else []) + (["-cap %g" % cap_gb] if cap_gb != t["mem_cap_gb"] else [])
         extra += ["%s=%s" % (k, v) for k, v in sorted(env.items()) if k == "GOMEMLIMIT" or (k.startswith("RIVUS_") and k not in ("RIVUS_HEAVY_LOCK_HELD", "RIVUS_HEAVY_LOCK"))]
-        row = {"target": name, "target_commit": t.get("commit") or "in-tree", "kind": "passline", "settings": " ".join(extra) or "default",
+        if repeat > 1:
+            extra.append("repeat %d (median)" % repeat)
+        row = {"target": name, "target_commit": t.get("commit") or "in-tree", "kind": "passline", "settings": "%s; %s" % (" ".join(extra) or "default", main["note"]),
                "wall_s": "%.1f" % main["wall"], "cpu_s": "%.1f" % main["cpu"], "peak_tree_gb": "%.2f" % (main["peak"] / GB),
                "converged": main["converged"], "detected": detected if score is None else "%s/%d" % ("-" if score[0] is None else score[0], score[1]), "quiet_after_fix": quiet, "exit_code": main["rc"],
                "load_start": "%.2f" % main["load"], "result": result}
@@ -524,7 +547,7 @@ def run_passline(names, a):
             subprocess.run(["go", "build", "-o", rivus, "./cmd/rivus"], cwd=ROOT, check=True)
         for name in names:
             t = targets[name]
-            line, row = passline(name, t, rivus, cache, outdir, a.limit or t["time_limit_s"], a.cap or t["mem_cap_gb"])
+            line, row = passline(name, t, rivus, cache, outdir, a.limit or t["time_limit_s"], a.cap or t["mem_cap_gb"], a.repeat)
             print(line, flush=True)
             add_to_ledger(row, a, commit)
 
@@ -537,6 +560,7 @@ def main():
     ap.add_argument("-no-ledger", action="store_true", help="do not add a row (a binary with a measurement patch; a run that is not used as a number)")
     ap.add_argument("-limit", type=float, default=0, help="pass line: the time limit in seconds (default: the one of the target)")
     ap.add_argument("-cap", type=float, default=0, help="pass line: the memory cap in GB (default: the one of the target)")
+    ap.add_argument("-repeat", "--repeat", type=int, default=1, help="pass line: run each target n times; the median of the time, the CPU and the peak goes to the verdict (converged: all runs). The decision of D is the median of 3 on a quiet machine")
     ap.add_argument("benches", nargs="*", default=list(BENCHES))
     a = ap.parse_args()
     targets = json.load(open(TARGETS_FILE))
