@@ -141,4 +141,4 @@ for step in "$@"; do
     *) echo "unknown step $step" >&2; exit 2 ;;
   esac
 done
-echo "inputs are in $WORK/out; then: $PARITY report -work $WORK/out -table bench/parity/TABLE.md -dead bench/parity/DEAD.md"
+echo "inputs are in $WORK/out; then: $PARITY report -work $WORK/out "

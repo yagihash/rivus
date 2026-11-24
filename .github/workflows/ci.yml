@@ -59,6 +59,7 @@ jobs:
       rust: ${{ steps.decide.outputs.rust }}
       docs: ${{ steps.decide.outputs.docs }}
       models: ${{ steps.decide.outputs.models }}
+      release: ${{ steps.decide.outputs.release }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -146,6 +147,13 @@ jobs:
             docs:
               - 'docs/**'
               - '**/*.md'
+            release:
+              - 'go.mod'
+              - 'go.sum'
+              - 'scripts/build-release-archives.sh'
+              - 'LICENSE'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/tagpr.yml'
             isolation:
               - 'internal/sandbox/**'
               - 'cmd/rivus/isolate*.go'
@@ -164,21 +172,22 @@ jobs:
           FILTER_RUST: ${{ steps.paths.outputs.rust }}
           FILTER_DOCS: ${{ steps.paths.outputs.docs }}
           FILTER_MODELS: ${{ steps.paths.outputs.models }}
+          FILTER_RELEASE: ${{ steps.paths.outputs.release }}
         run: |
           case "$EVENT_NAME" in
             pull_request)
               if [ "$RELEASE_PR" = true ]; then
-                code=true isolation=true dart=true rust=true docs=true models=false
+                code=true isolation=true dart=true rust=true docs=true models=false release=true
               else
-                for v in "$FILTER_CODE" "$FILTER_ISOLATION" "$FILTER_DART" "$FILTER_RUST" "$FILTER_DOCS" "$FILTER_MODELS"; do
+                for v in "$FILTER_CODE" "$FILTER_ISOLATION" "$FILTER_DART" "$FILTER_RUST" "$FILTER_DOCS" "$FILTER_MODELS" "$FILTER_RELEASE"; do
                   case "$v" in
                     true | false) ;;
                     *) echo "the filter of the paths gave '$v', not true or false: nothing is skipped on a guess" >&2; exit 1 ;;
                   esac
                 done
-                code=$FILTER_CODE isolation=$FILTER_ISOLATION dart=$FILTER_DART rust=$FILTER_RUST docs=$FILTER_DOCS models=$FILTER_MODELS
+                code=$FILTER_CODE isolation=$FILTER_ISOLATION dart=$FILTER_DART rust=$FILTER_RUST docs=$FILTER_DOCS models=$FILTER_MODELS release=$FILTER_RELEASE
               fi ;;
-            *) code=true isolation=true dart=true rust=true docs=true models=false ;; # push, schedule, workflow_dispatch (the job `model-diff` below runs the weekly and the manual one)
+            *) code=true isolation=true dart=true rust=true docs=true models=false release=true ;; # push, schedule, workflow_dispatch (the job `model-diff` below runs the weekly and the manual one)
           esac
           {
             echo "code=$code"
@@ -187,6 +196,7 @@ jobs:
             echo "rust=$rust"
             echo "docs=$docs"
             echo "models=$models"
+            echo "release=$release"
           } >> "$GITHUB_OUTPUT"
       # TestDogfood (RIVUS_DOGFOOD=1 in the job `test`): a run by hand always; the weekly run when the code or the models changed since the head of the last
       # successful weekly run (the first run, a head that is gone, and an answer that cannot be read: it runs). The paths are those of the filter `code`
@@ -680,11 +690,33 @@ jobs:
         # no other work runs on this machine, so the guard that waits for a quiet one is off
         run: bench/compare.sh --graph-check go-std10,zoo-go,go-curated --graph-workers 1,8 --no-guard HEAD HEAD
 
+  # The archives of a release (tagpr.yml, job `release-binaries`) are built only when a tag is made. Build them here as well, so that what would stop a
+  # release stops the pull request first: a linked dependency with a copyleft or forbidden license (`go-licenses check`: restricted, reciprocal,
+  # forbidden), or a module without a license file. A pull request runs it when the dependencies (go.mod, go.sum) or the build itself (the script, the
+  # two workflows) changed (the filter `release`); a push to main, the weekly run and a run by hand always run it. The one change that this misses in
+  # a pull request: code that starts to import a package of a module that go.mod already has. The run on main finds it.
+  release-build:
+    needs: changes
+    if: needs.changes.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - run: scripts/build-release-archives.sh 0.0.0-check
+
   # The one check that a ruleset requires. Every job above is in `needs`: it fails when one of them failed or was cancelled, and passes
   # when they passed or were skipped (nothing that a test reads changed). A job added above has to be added here.
   ci-ok:
     if: always()
-    needs: [changes, go-packages, docs-tests, test, gcp-exec, sandbox, model-diff, model-diff-changed, graph-check]
+    needs: [changes, go-packages, docs-tests, test, gcp-exec, sandbox, model-diff, model-diff-changed, graph-check, release-build]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
@@ -695,5 +727,5 @@ jobs:
         run: |
           echo "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
           # `changes` has to have answered: a skipped heavy job is only a pass when it was skipped on an answer
-          echo "$NEEDS" | jq -e '.changes.result == "success" and (.changes.outputs.code | IN("true", "false")) and (.changes.outputs.isolation | IN("true", "false")) and (.changes.outputs.dart | IN("true", "false")) and (.changes.outputs.rust | IN("true", "false")) and (.changes.outputs.docs | IN("true", "false")) and (.changes.outputs.models | IN("true", "false"))' > /dev/null
+          echo "$NEEDS" | jq -e '.changes.result == "success" and (.changes.outputs.code | IN("true", "false")) and (.changes.outputs.isolation | IN("true", "false")) and (.changes.outputs.dart | IN("true", "false")) and (.changes.outputs.rust | IN("true", "false")) and (.changes.outputs.docs | IN("true", "false")) and (.changes.outputs.models | IN("true", "false")) and (.changes.outputs.release | IN("true", "false"))' > /dev/null
           echo "$NEEDS" | jq -e 'all(.[]; .result != "failure" and .result != "cancelled")' > /dev/null

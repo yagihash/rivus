@@ -15,26 +15,43 @@
 cmd/rivus.runAnalyze -> (*cmd/rivus.analyzeOpts).analyze [os.Create]
 cmd/rivus.runAnalyze -> (*cmd/rivus.analyzeOpts).analyze [os.Create]
 cmd/rivus.runAnalyze -> (*cmd/rivus.analyzeOpts).analyze [os.Create]
-cmd/rivus.runAnalyze -> (*cmd/rivus.analyzeOpts).extractRaw [os/exec.Command]
+cmd/rivus.runAnalyze -> (*cmd/rivus.analyzeOpts).extractInto [os/exec.Command]  # the extractor command of -extractor (or -lang) is run: the same flow as extractRaw before the function was renamed
+cmd/rivus.runAnalyze -> (*cmd/rivus.common).loadRules [os.Open]  # the rule files that the flags name (-rules, -rules-dir) are opened to be read: what the flags say reaches the file that rivus reads
+cmd/rivus.runAnalyze -> (*cmd/rivus.common).projectRuleFiles [os.ReadDir]  # the directory of -C is listed to find the rule files of the project: the path of the project is what the flag says
+cmd/rivus.runAnalyze -> cmd/rivus.cargoLockVersions [os.ReadFile]  # Cargo.lock in the directory of -C is read for the versions of the crates (summary.unverified_versions)
+cmd/rivus.runAnalyze -> cmd/rivus.dartLockVersions [os.ReadFile]  # pubspec.lock in the directory of -C is read for the versions of the packages (summary.unverified_versions)
 cmd/rivus.runAnalyze -> cmd/rivus.readIR [os.Open]
+cmd/rivus.runAnalyze -> cmd/rivus.readIRSpill [os.Open]  # the file that holds the IR beside the run is opened to be read back (the spill of ADR-123; the path comes from the flags of the run): the same flow as readIR
 cmd/rivus.runAnalyze -> internal/frontend/gossa.countTestFiles [os.ReadDir]
 cmd/rivus.runAnalyze -> internal/graphdb.hashFile [os.Open]
-cmd/rivus.runExtract -> (*cmd/rivus.analyzeOpts).extractRaw [os/exec.Command]
+cmd/rivus.runAnalyze -> internal/vcs.findGitDir [os.ReadFile]  # the .git file of the project (-C) is read to find the Git directory (a worktree has a file there): the path of the project is what the flag says
+cmd/rivus.runAnalyze -> internal/vcs.readHead [os.ReadFile]  # HEAD, the refs and packed-refs of the Git directory of the project (-C) are read for the commit of the report: the path of the project is what the flag says
+cmd/rivus.runAnalyze -> internal/vcs.readHead [os.ReadFile]  # HEAD, the refs and packed-refs of the Git directory of the project (-C) are read for the commit of the report: the path of the project is what the flag says
+cmd/rivus.runAnalyze -> internal/vcs.readHead [os.ReadFile]  # HEAD, the refs and packed-refs of the Git directory of the project (-C) are read for the commit of the report: the path of the project is what the flag says
+cmd/rivus.runAnalyze -> internal/vcs.readHead [os.ReadFile]  # HEAD, the refs and packed-refs of the Git directory of the project (-C) are read for the commit of the report: the path of the project is what the flag says
+cmd/rivus.runExtract -> (*cmd/rivus.analyzeOpts).extractInto [os/exec.Command]  # the extractor command of -extractor (or -lang) is run: the same flow as extractRaw before the function was renamed
 cmd/rivus.runExtract -> internal/frontend/gossa.countTestFiles [os.ReadDir]
+cmd/rivus.runGraphInfo -> (*cmd/rivus.common).projectRuleFiles [os.ReadDir]  # the directory of -C is listed to find the rule files of the project: the path of the project is what the flag says
 cmd/rivus.runGraphInfo -> (*cmd/rivus.keyCtx).extractorConfig [os.ReadFile]
 cmd/rivus.runGraphInfo -> cmd/rivus.runVersion [os/exec.CommandContext]
 cmd/rivus.runGraphInfo -> internal/graphdb.hashFile [os.Open]
+cmd/rivus.runGraphQuery -> (*cmd/rivus.common).projectRuleFiles [os.ReadDir]  # the directory of -C is listed to find the rule files of the project: the path of the project is what the flag says
 cmd/rivus.runGraphQuery -> (*cmd/rivus.keyCtx).extractorConfig [os.ReadFile]
 cmd/rivus.runGraphQuery -> cmd/rivus.runVersion [os/exec.CommandContext]
 cmd/rivus.runGraphQuery -> internal/graphdb.hashFile [os.Open]
 cmd/rivus.runIndex -> (*cmd/rivus.analyzeOpts).analyze [os.Create]
 cmd/rivus.runIndex -> (*cmd/rivus.analyzeOpts).analyze [os.Create]
 cmd/rivus.runIndex -> (*cmd/rivus.analyzeOpts).analyze [os.Create]
-cmd/rivus.runIndex -> (*cmd/rivus.analyzeOpts).extractRaw [os/exec.Command]
+cmd/rivus.runIndex -> (*cmd/rivus.analyzeOpts).extractInto [os/exec.Command]  # the extractor command of -extractor (or -lang) is run: the same flow as extractRaw before the function was renamed
+cmd/rivus.runIndex -> (*cmd/rivus.common).loadRules [os.Open]  # the rule files that the flags name (-rules, -rules-dir) are opened to be read: what the flags say reaches the file that rivus reads
+cmd/rivus.runIndex -> (*cmd/rivus.common).projectRuleFiles [os.ReadDir]  # the directory of -C is listed to find the rule files of the project: the path of the project is what the flag says
 cmd/rivus.runIndex -> (*cmd/rivus.keyCtx).extractorConfig [os.ReadFile]
 cmd/rivus.runIndex -> (*internal/report.Report).Save [os.MkdirAll]
 cmd/rivus.runIndex -> (*internal/report.Report).Save [os.WriteFile]
+cmd/rivus.runIndex -> cmd/rivus.cargoLockVersions [os.ReadFile]  # Cargo.lock in the directory of -C is read for the versions of the crates (summary.unverified_versions)
+cmd/rivus.runIndex -> cmd/rivus.dartLockVersions [os.ReadFile]  # pubspec.lock in the directory of -C is read for the versions of the packages (summary.unverified_versions)
 cmd/rivus.runIndex -> cmd/rivus.readIR [os.Open]
+cmd/rivus.runIndex -> cmd/rivus.readIRSpill [os.Open]  # the file that holds the IR beside the run is opened to be read back (the spill of ADR-123; the path comes from the flags of the run): the same flow as readIR
 cmd/rivus.runIndex -> cmd/rivus.runVersion [os/exec.CommandContext]
 cmd/rivus.runIndex -> internal/frontend/gossa.countTestFiles [os.ReadDir]
 cmd/rivus.runIndex -> internal/graphdb.Write [os.Chmod]
@@ -43,31 +60,74 @@ cmd/rivus.runIndex -> internal/graphdb.Write [os.MkdirAll]
 cmd/rivus.runIndex -> internal/graphdb.Write [os.Rename]
 cmd/rivus.runIndex -> internal/graphdb.Write$1 [os.Remove]
 cmd/rivus.runIndex -> internal/graphdb.hashFile [os.Open]
+cmd/rivus.runIndex -> internal/vcs.findGitDir [os.ReadFile]  # the .git file of the project (-C) is read to find the Git directory (a worktree has a file there): the path of the project is what the flag says
+cmd/rivus.runIndex -> internal/vcs.readHead [os.ReadFile]  # HEAD, the refs and packed-refs of the Git directory of the project (-C) are read for the commit of the report: the path of the project is what the flag says
+cmd/rivus.runIndex -> internal/vcs.readHead [os.ReadFile]  # HEAD, the refs and packed-refs of the Git directory of the project (-C) are read for the commit of the report: the path of the project is what the flag says
+cmd/rivus.runIndex -> internal/vcs.readHead [os.ReadFile]  # HEAD, the refs and packed-refs of the Git directory of the project (-C) are read for the commit of the report: the path of the project is what the flag says
+cmd/rivus.runIndex -> internal/vcs.readHead [os.ReadFile]  # HEAD, the refs and packed-refs of the Git directory of the project (-C) are read for the commit of the report: the path of the project is what the flag says
 cmd/rivus.runModelsCoverage -> (*cmd/rivus.analyzeOpts).analyze [os.Create]
 cmd/rivus.runModelsCoverage -> (*cmd/rivus.analyzeOpts).analyze [os.Create]
 cmd/rivus.runModelsCoverage -> (*cmd/rivus.analyzeOpts).analyze [os.Create]
-cmd/rivus.runModelsCoverage -> (*cmd/rivus.analyzeOpts).extractRaw [os/exec.Command]
+cmd/rivus.runModelsCoverage -> (*cmd/rivus.analyzeOpts).extractInto [os/exec.Command]  # the extractor command of -extractor (or -lang) is run: the same flow as extractRaw before the function was renamed
+cmd/rivus.runModelsCoverage -> (*cmd/rivus.common).loadRules [os.Open]  # the rule files that the flags name (-rules, -rules-dir) are opened to be read: what the flags say reaches the file that rivus reads
+cmd/rivus.runModelsCoverage -> (*cmd/rivus.common).projectRuleFiles [os.ReadDir]  # the directory of -C is listed to find the rule files of the project: the path of the project is what the flag says
+cmd/rivus.runModelsCoverage -> cmd/rivus.cargoLockVersions [os.ReadFile]  # Cargo.lock in the directory of -C is read for the versions of the crates (summary.unverified_versions)
+cmd/rivus.runModelsCoverage -> cmd/rivus.dartLockVersions [os.ReadFile]  # pubspec.lock in the directory of -C is read for the versions of the packages (summary.unverified_versions)
 cmd/rivus.runModelsCoverage -> cmd/rivus.readIR [os.Open]
+cmd/rivus.runModelsCoverage -> cmd/rivus.readIRSpill [os.Open]  # the file that holds the IR beside the run is opened to be read back (the spill of ADR-123; the path comes from the flags of the run): the same flow as readIR
 cmd/rivus.runModelsCoverage -> internal/frontend/gossa.countTestFiles [os.ReadDir]
 cmd/rivus.runModelsCoverage -> internal/graphdb.hashFile [os.Open]
 cmd/rivus.runModelsCoverage -> internal/report.Load [os.ReadFile]
+cmd/rivus.runModelsCoverage -> internal/vcs.findGitDir [os.ReadFile]  # the .git file of the project (-C) is read to find the Git directory (a worktree has a file there): the path of the project is what the flag says
+cmd/rivus.runModelsCoverage -> internal/vcs.readHead [os.ReadFile]  # HEAD, the refs and packed-refs of the Git directory of the project (-C) are read for the commit of the report: the path of the project is what the flag says
+cmd/rivus.runModelsCoverage -> internal/vcs.readHead [os.ReadFile]  # HEAD, the refs and packed-refs of the Git directory of the project (-C) are read for the commit of the report: the path of the project is what the flag says
+cmd/rivus.runModelsCoverage -> internal/vcs.readHead [os.ReadFile]  # HEAD, the refs and packed-refs of the Git directory of the project (-C) are read for the commit of the report: the path of the project is what the flag says
+cmd/rivus.runModelsCoverage -> internal/vcs.readHead [os.ReadFile]  # HEAD, the refs and packed-refs of the Git directory of the project (-C) are read for the commit of the report: the path of the project is what the flag says
 cmd/rivus.runQuery -> (*cmd/rivus.analyzeOpts).analyze [os.Create]
 cmd/rivus.runQuery -> (*cmd/rivus.analyzeOpts).analyze [os.Create]
 cmd/rivus.runQuery -> (*cmd/rivus.analyzeOpts).analyze [os.Create]
-cmd/rivus.runQuery -> (*cmd/rivus.analyzeOpts).extractRaw [os/exec.Command]
+cmd/rivus.runQuery -> (*cmd/rivus.analyzeOpts).extractInto [os/exec.Command]  # the extractor command of -extractor (or -lang) is run: the same flow as extractRaw before the function was renamed
+cmd/rivus.runQuery -> (*cmd/rivus.common).loadRules [os.Open]  # the rule files that the flags name (-rules, -rules-dir) are opened to be read: what the flags say reaches the file that rivus reads
+cmd/rivus.runQuery -> (*cmd/rivus.common).projectRuleFiles [os.ReadDir]  # the directory of -C is listed to find the rule files of the project: the path of the project is what the flag says
+cmd/rivus.runQuery -> cmd/rivus.cargoLockVersions [os.ReadFile]  # Cargo.lock in the directory of -C is read for the versions of the crates (summary.unverified_versions)
+cmd/rivus.runQuery -> cmd/rivus.dartLockVersions [os.ReadFile]  # pubspec.lock in the directory of -C is read for the versions of the packages (summary.unverified_versions)
 cmd/rivus.runQuery -> cmd/rivus.readIR [os.Open]
+cmd/rivus.runQuery -> cmd/rivus.readIRSpill [os.Open]  # the file that holds the IR beside the run is opened to be read back (the spill of ADR-123; the path comes from the flags of the run): the same flow as readIR
 cmd/rivus.runQuery -> internal/frontend/gossa.countTestFiles [os.ReadDir]
 cmd/rivus.runQuery -> internal/graphdb.hashFile [os.Open]
 cmd/rivus.runQuery -> internal/report.Load [os.ReadFile]
+cmd/rivus.runQuery -> internal/vcs.findGitDir [os.ReadFile]  # the .git file of the project (-C) is read to find the Git directory (a worktree has a file there): the path of the project is what the flag says
+cmd/rivus.runQuery -> internal/vcs.readHead [os.ReadFile]  # HEAD, the refs and packed-refs of the Git directory of the project (-C) are read for the commit of the report: the path of the project is what the flag says
+cmd/rivus.runQuery -> internal/vcs.readHead [os.ReadFile]  # HEAD, the refs and packed-refs of the Git directory of the project (-C) are read for the commit of the report: the path of the project is what the flag says
+cmd/rivus.runQuery -> internal/vcs.readHead [os.ReadFile]  # HEAD, the refs and packed-refs of the Git directory of the project (-C) are read for the commit of the report: the path of the project is what the flag says
+cmd/rivus.runQuery -> internal/vcs.readHead [os.ReadFile]  # HEAD, the refs and packed-refs of the Git directory of the project (-C) are read for the commit of the report: the path of the project is what the flag says
 cmd/rivus.runResolve -> (*cmd/rivus.analyzeOpts).analyze [os.Create]
 cmd/rivus.runResolve -> (*cmd/rivus.analyzeOpts).analyze [os.Create]
 cmd/rivus.runResolve -> (*cmd/rivus.analyzeOpts).analyze [os.Create]
-cmd/rivus.runResolve -> (*cmd/rivus.analyzeOpts).extractRaw [os/exec.Command]
+cmd/rivus.runResolve -> (*cmd/rivus.analyzeOpts).extractInto [os/exec.Command]  # the extractor command of -extractor (or -lang) is run: the same flow as extractRaw before the function was renamed
+cmd/rivus.runResolve -> (*cmd/rivus.common).loadRules [os.Open]  # the rule files that the flags name (-rules, -rules-dir) are opened to be read: what the flags say reaches the file that rivus reads
+cmd/rivus.runResolve -> (*cmd/rivus.common).projectRuleFiles [os.ReadDir]  # the directory of -C is listed to find the rule files of the project: the path of the project is what the flag says
+cmd/rivus.runResolve -> cmd/rivus.cargoLockVersions [os.ReadFile]  # Cargo.lock in the directory of -C is read for the versions of the crates (summary.unverified_versions)
+cmd/rivus.runResolve -> cmd/rivus.dartLockVersions [os.ReadFile]  # pubspec.lock in the directory of -C is read for the versions of the packages (summary.unverified_versions)
 cmd/rivus.runResolve -> cmd/rivus.readIR [os.Open]
+cmd/rivus.runResolve -> cmd/rivus.readIRSpill [os.Open]  # the file that holds the IR beside the run is opened to be read back (the spill of ADR-123; the path comes from the flags of the run): the same flow as readIR
 cmd/rivus.runResolve -> internal/frontend/gossa.countTestFiles [os.ReadDir]
 cmd/rivus.runResolve -> internal/graphdb.hashFile [os.Open]
 cmd/rivus.runResolve -> internal/report.Load [os.ReadFile]
 cmd/rivus.runResolve -> internal/report.ReadBookmarks [os.ReadFile]
-cmd/rivus.runSites -> (*cmd/rivus.analyzeOpts).extractRaw [os/exec.Command]
+cmd/rivus.runResolve -> internal/vcs.findGitDir [os.ReadFile]  # the .git file of the project (-C) is read to find the Git directory (a worktree has a file there): the path of the project is what the flag says
+cmd/rivus.runResolve -> internal/vcs.readHead [os.ReadFile]  # HEAD, the refs and packed-refs of the Git directory of the project (-C) are read for the commit of the report: the path of the project is what the flag says
+cmd/rivus.runResolve -> internal/vcs.readHead [os.ReadFile]  # HEAD, the refs and packed-refs of the Git directory of the project (-C) are read for the commit of the report: the path of the project is what the flag says
+cmd/rivus.runResolve -> internal/vcs.readHead [os.ReadFile]  # HEAD, the refs and packed-refs of the Git directory of the project (-C) are read for the commit of the report: the path of the project is what the flag says
+cmd/rivus.runResolve -> internal/vcs.readHead [os.ReadFile]  # HEAD, the refs and packed-refs of the Git directory of the project (-C) are read for the commit of the report: the path of the project is what the flag says
+cmd/rivus.runSites -> (*cmd/rivus.analyzeOpts).extractInto [os/exec.Command]  # the extractor command of -extractor (or -lang) is run: the same flow as extractRaw before the function was renamed
+cmd/rivus.runSites -> (*cmd/rivus.common).loadRules [os.Open]  # the rule files that the flags name (-rules, -rules-dir) are opened to be read: what the flags say reaches the file that rivus reads
+cmd/rivus.runSites -> (*cmd/rivus.common).projectRuleFiles [os.ReadDir]  # the directory of -C is listed to find the rule files of the project: the path of the project is what the flag says
 cmd/rivus.runSites -> cmd/rivus.readIR [os.Open]
+cmd/rivus.runSites -> cmd/rivus.readIRSpill [os.Open]  # the file that holds the IR beside the run is opened to be read back (the spill of ADR-123; the path comes from the flags of the run): the same flow as readIR
 cmd/rivus.runSites -> internal/frontend/gossa.countTestFiles [os.ReadDir]
+cmd/rivus.runSites -> internal/vcs.findGitDir [os.ReadFile]  # the .git file of the project (-C) is read to find the Git directory (a worktree has a file there): the path of the project is what the flag says
+cmd/rivus.runSites -> internal/vcs.readHead [os.ReadFile]  # HEAD, the refs and packed-refs of the Git directory of the project (-C) are read for the commit of the report: the path of the project is what the flag says
+cmd/rivus.runSites -> internal/vcs.readHead [os.ReadFile]  # HEAD, the refs and packed-refs of the Git directory of the project (-C) are read for the commit of the report: the path of the project is what the flag says
+cmd/rivus.runSites -> internal/vcs.readHead [os.ReadFile]  # HEAD, the refs and packed-refs of the Git directory of the project (-C) are read for the commit of the report: the path of the project is what the flag says
+cmd/rivus.runSites -> internal/vcs.readHead [os.ReadFile]  # HEAD, the refs and packed-refs of the Git directory of the project (-C) are read for the commit of the report: the path of the project is what the flag says

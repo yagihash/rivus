@@ -65,7 +65,7 @@ func render(tablePath, deadPath string, rows []Row, mi *ModelIndex, corpora []*C
 	b = &head
 
 	w("# 言語間の差の表(段階 1)\n\n")
-	w("`go run ./bench/parity report` が作る。手で直さない。手順は [README.md](README.md)。**割合だけでなく実数を並べる**(分母が言語ごとに違う)。\n")
+	w("`go run ./bench/parity report` が作る(コミットしない)。手順は `bench/parity/README.md`。**割合だけでなく実数を並べる**(分母が言語ごとに違う)。\n")
 	w("「モデルがない」は見逃しではない(CORE-K のあと、モデルのない関数は「入ったものは出る」+ `unmodeled_library_call` で運ばれる)。\n")
 	w("**既定の扱い**(`internal/taint/calls.go` の `unmodeled`): 受け手と引数のすべての中身が、結果のすべてに流れる(bool は除く)。**受け手や引数への書き込みは含まない**。コールバックは呼ばれない(CB-LIST)。\n")
 	w("よって効くのは (ii) と (iii)、(iv) と pure(流れを切る)。(i) は、モデルがなくても流れは運ばれる(モデルは不確実性を減らすだけ)。\n\n")
@@ -147,7 +147,7 @@ func render(tablePath, deadPath string, rows []Row, mi *ModelIndex, corpora []*C
 		t.add(s, cell("go"), cell("dart"), cell("rust"))
 	}
 	w("%s\n", t)
-	w("綴りの疑いと別の型の同名メンバの例(モデルの鍵 -> IR にある別の綴り。全部は [DEAD.md](DEAD.md)):\n\n")
+	w("綴りの疑いと別の型の同名メンバの例(モデルの鍵 -> IR にある別の綴り。全部は DEAD.md):\n\n")
 	for _, l := range langs {
 		w("- %s\n", langName[l])
 		k := 0
@@ -407,7 +407,7 @@ func addDemand(a *Demand, d Demand) {
 
 func writeDead(path string, results map[string][]RowResult) error {
 	var b strings.Builder
-	b.WriteString("# どの IR にも当たらなかった組み込みの行\n\n`go run ./bench/parity report` が作る。分け方は TABLE.md の 1。「別の綴り」は、IR にある、末尾が同じ名前(最大 6)。\n\n")
+	b.WriteString("# どの IR にも当たらなかった組み込みの行\n\n`go run ./bench/parity report` が作る。分け方は、同じ道具が作る TABLE.md の 1。「別の綴り」は、IR にある、末尾が同じ名前(最大 6)。\n\n")
 	for _, l := range langs {
 		rs := results[l]
 		b.WriteString("## " + langName[l] + "\n\n")

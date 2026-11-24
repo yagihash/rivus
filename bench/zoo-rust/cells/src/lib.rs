@@ -3,7 +3,7 @@
 //! exec/src/cases.rs (not analysed). The modules are inline, so that this is the only file without a cell.
 //! (`dyns` is the family `dyn` of the design: `dyn` is a keyword.)
 //! Two marks for a cell of the Go zoo that Rust has not (docs/DESIGN-zoo.md, 4.2.5): `@na` is a form that Rust does not have at all,
-//! `@todo` is a form that Rust can have and the cell is not written yet. The parity table counts them apart.
+//! `@todo` is a form that Rust can have and the cell is not written yet. The parity marks line of `TestZooRust` counts them apart.
 //! @na(F/clos/range-func: Go's range over a function (Go 1.23: `for v := range seq`, the iterator calls yield); Rust has no loop that calls a closure for the body: an iterator is driven by `next`, and a `for` over it is a call of `next`)
 //! @na(F/call/regexp-replace: Go's regexp replacement with a function and with a literal replacement; the regex crate is a dependency, and the Rust zoo has none)
 //! @na(F/dyn/iface-assert-ptr-recv: Go's type assertion of `any` to an interface read through a pointer receiver; Rust has neither)
