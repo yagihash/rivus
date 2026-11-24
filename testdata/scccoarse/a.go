@@ -14,7 +14,7 @@ func f00(x string, t *T, k int) string { if k <= 0 { return x }; exec.Command(t.
 func f01(x string, t *T, k int) string { if k <= 0 { return x }; G1 = x; exec.Command(t.a).Run(); return f09(x, t, k-1) }
 func f02(x string, t *T, k int) string { if k <= 0 { return x }; if k%2 == 0 { return f13(x, t, k-1) }; t.b = f07(t.a, t, k-1); return t.b }
 func f03(x string, t *T, k int) string { if k <= 0 { return x }; y := f10(x, t, k-1); return f12(y, t, k-1) }
-func f04(x string, t *T, k int) string { if k <= 0 { return x }; G2 = t.a; y := f08(x, t, k-1); return f07(y, t, k-1) }
+func f04(x string, t *T, k int) string { if k <= 0 { return x }; G2 = t.a + os.Getenv("Z"); y := f08(x, t, k-1); return f07(y, t, k-1) }
 func f05(x string, t *T, k int) string { if k <= 0 { return x }; if t.next != nil && t.next.next != nil { t.next.next.a = x }; y := f03(x, t, k-1); return f11(y, t, k-1) }
 func f06(x string, t *T, k int) string { if k <= 0 { return x }; t.next = &T{a: x}; return f06(t.next.a, t.next, k-1) + f13(x, t, k-1) }
 func f07(x string, t *T, k int) string { if k <= 0 { return x }; if k%2 == 0 { return f05(x, t, k-1) }; t.b = f06(t.a, t, k-1); return t.b }
@@ -24,4 +24,7 @@ func f10(x string, t *T, k int) string { if k <= 0 { return x }; t.a = x; y := f
 func f11(x string, t *T, k int) string { if k <= 0 { return x }; if t.next != nil && t.next.next != nil { t.next.next.b = t.a }; y := f07(x, t, k-1); return f09(y, t, k-1) }
 func f12(x string, t *T, k int) string { if k <= 0 { return x }; t.a = x; y := f09(t.b, t, k-1); return y + f03(x, t.next, k-2) }
 func f13(x string, t *T, k int) string { if k <= 0 { return x }; if k%2 == 0 { return f03(x, t, k-1) }; t.b = f04(t.a, t, k-1); return t.b }
-func main() { t := &T{}; exec.Command(f00(os.Getenv("X"), t, 5)).Run(); exec.Command(f01(os.Getenv("Y"), t, 5)).Run() }
+// reader is outside the component and reads what the component writes to the package variables.
+func reader(t *T) string { exec.Command(G2 + G3).Run(); return G3 + t.a }
+
+func main() { t := &T{}; exec.Command(f00(os.Getenv("X"), t, 5)).Run(); exec.Command(f01(os.Getenv("Y"), t, 5)).Run(); exec.Command(reader(t)).Run() }

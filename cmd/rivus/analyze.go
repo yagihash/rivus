@@ -266,17 +266,16 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	opts.PassStatsTop = o.passStatsTop
 	opts.PassStatsSort = o.passStatsSort
 	opts.TraceElement = o.traceElement
-	// Internal, for the budget of a large component (ADR-124; no flag, not in -h): "a,b" are the budgets of the keys
-	// of the param outputs deeper than one step and of the global outputs (0: none), RIVUS_INTERNAL_SCC_COARSEN_AT_ROUND
+	// Internal, for the budget of a large component (ADR-124; no flag, not in -h): n is the budget of the keys of the
+	// param outputs deeper than one step in the dependency functions of a large component (0: none); over it, the component is
+	// solved again from the start with its dependency functions at depth 0, RIVUS_INTERNAL_SCC_COARSEN_AT_ROUND
 	// (the build tag coarseforce only: the binary that is shipped does not read it) is the round from which the tests move a component whatever the counts are. Both off: the analysis is as it was.
 	if v := os.Getenv("RIVUS_INTERNAL_SCC_COARSEN_BUDGET"); v != "" {
-		a, b, ok := strings.Cut(v, ",")
-		da, e1 := strconv.Atoi(strings.TrimSpace(a))
-		gb, e2 := strconv.Atoi(strings.TrimSpace(b))
-		if !ok || e1 != nil || e2 != nil || da < 0 || gb < 0 {
-			return nil, fmt.Errorf("RIVUS_INTERNAL_SCC_COARSEN_BUDGET: want two numbers, a,b (got %q)", v)
+		n, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil || n < 0 {
+			return nil, fmt.Errorf("RIVUS_INTERNAL_SCC_COARSEN_BUDGET: want a number (got %q)", v)
 		}
-		opts.SCCCoarsen = taint.SCCCoarsenBudget{DeepParamKeys: da, GlobalKeys: gb}
+		opts.SCCCoarsen = n
 	}
 	n, err := forcedCoarseRound()
 	if err != nil {

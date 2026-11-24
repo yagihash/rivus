@@ -10,41 +10,28 @@ import (
 // The budget of a large strongly connected component (ADR-124, #187).
 //
 // After each round of a large component (engine.go: parallelSCC) the engine counts, in the committed summaries of the
-// functions of the dependencies in it, (a) the keys of the param outputs below depth 1 and (b) the keys of the global
-// outputs. When one of them is over its budget, the dependency functions of the component move, once, to a coarser
-// form of the summary (foldSummary): the access paths of the outputs are cut at depth 0, and each function writes what
-// it writes to any global to every global that the component writes. The move is not undone. The functions of the
-// project are not touched.
-//
-// The decision reads counts that do not shrink while the component is solved (keys of the committed summaries; the
-// widening of the elements does not change the number of outputs), at the end of a round, where the summaries are the
-// same for any number of workers. The fold is a closure upwards (it only adds flows; applying it twice gives the same
-// summary), so the summaries after a round at which it is applied are above those of a run that applied it earlier or
-// not at all.
+// functions of the dependencies in it, the keys of the param outputs deeper than one step. When the count is over the
+// budget, the component is solved again from the start, once, with its dependency functions at access path depth 0
+// (the same as -dep-k 0 for them; the functions of the project stay at their depth): what the component had worked
+// out until then is thrown away (its summaries, its findings, what its functions wrote to the global state). The
+// answer is the one of a run that had the dependency functions of the component at depth 0 from the start. It is not
+// undone. The decision reads the committed summaries at the end of a round, so it does not depend on -workers.
 
-// SCCCoarsenBudget is the budget of the keys of one component. A zero is no budget on that count; both zero: no
-// coarsening. Internal: there is no flag (RIVUS_INTERNAL_SCC_COARSEN_BUDGET in cmd/rivus).
-type SCCCoarsenBudget struct {
-	// DeepParamKeys: the outputs of kind param whose path is deeper than one step (two or more), summed over the
-	// dependency functions of the component.
-	DeepParamKeys int
-	// GlobalKeys: the outputs of kind global, summed over the dependency functions of the component.
-	GlobalKeys int
-}
+// SCCCoarsenBudget is the budget of a large component: the keys of the param outputs deeper than one step (two or
+// more), summed over its dependency functions. Zero (the default): no budget. Internal: there is no flag
+// (RIVUS_INTERNAL_SCC_COARSEN_BUDGET in cmd/rivus).
+type SCCCoarsenBudget = int // see Options.SCCCoarsen
 
-func (b SCCCoarsenBudget) on() bool { return b.DeepParamKeys > 0 || b.GlobalKeys > 0 }
-
-// coarseSCC is a component whose dependency functions were moved to the coarse form.
+// coarseSCC is a component whose dependency functions are solved at depth 0.
 type coarseSCC struct {
 	id      string // the first function of the component (the smallest ID)
-	size    int    // the functions of the component, all of them
-	funcs   []*sg.Func
-	globals map[string]*sg.Value // the globals that the dependency functions write, by name
-	names   []string             // the names of globals, sorted
+	size    int
+	members []*sg.Func // all the functions of the component
+	funcs   []*sg.Func // its dependency functions
 	// why it was done
-	cause       string // "deep_param_keys", "global_keys" or "forced"
-	deep, glob  int    // the counts at that round
-	budget      SCCCoarsenBudget
+	cause       string // "deep_param_keys" or "forced"
+	deep        int    // the count at that round
+	budget      int
 	round, pass int // the round of the component (counted over the passes) and the pass
 	packages    []string
 }
@@ -59,69 +46,98 @@ func (e *Engine) coarseOf(fn *sg.Func) *coarseSCC {
 	return e.coarse[fn]
 }
 
-// coarseCounts counts the two quantities of the budget in the committed summaries.
-func (e *Engine) coarseCounts(funcs []*sg.Func) (deep, glob int) {
+// coarseCount counts the param outputs deeper than one step in the committed summaries.
+func (e *Engine) coarseCount(funcs []*sg.Func) int {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
+	n := 0
 	for _, fn := range funcs {
-		sum := e.summaries[fn]
-		if sum == nil {
-			continue
-		}
-		for _, o := range sum.Outputs {
-			switch {
-			case o.Kind == OutParam && pathDepth(o.Path) >= 2:
-				deep++
-			case o.Kind == OutGlobal:
-				glob++
+		if sum := e.summaries[fn]; sum != nil {
+			for _, o := range sum.Outputs {
+				if o.Kind == OutParam && pathDepth(o.Path) >= 2 {
+					n++
+				}
 			}
 		}
 	}
-	return deep, glob
+	return n
 }
 
-// coarsenStep runs at the end of a round of a large component (after the commits). It decides, once, whether the
-// component is moved to the coarse form, and when it is (now or before), brings the summaries of its dependency
-// functions to it. It reports whether a summary changed.
-func (e *Engine) coarsenStep(scc []*sg.Func, callers map[*sg.Func][]*sg.Func, pass int) bool {
-	if !e.opts.SCCCoarsen.on() && e.opts.SCCCoarsenAtRound == 0 {
-		return false
-	}
+func depsOf(scc []*sg.Func) []*sg.Func {
 	var deps []*sg.Func
 	for _, fn := range scc {
 		if fn.Dep {
 			deps = append(deps, fn)
 		}
 	}
-	if len(deps) == 0 {
-		return false
-	}
-	c := e.coarseOf(deps[0])
-	if c == nil {
-		e.mu.Lock()
-		e.sccRounds[scc[0]]++
-		round := e.sccRounds[scc[0]]
-		e.mu.Unlock()
-		deep, glob := e.coarseCounts(deps)
-		b := e.opts.SCCCoarsen
-		cause := ""
-		switch {
-		case b.DeepParamKeys > 0 && deep > b.DeepParamKeys:
-			cause = "deep_param_keys"
-		case b.GlobalKeys > 0 && glob > b.GlobalKeys:
-			cause = "global_keys"
-		case e.opts.SCCCoarsenAtRound > 0 && round >= e.opts.SCCCoarsenAtRound:
-			cause = "forced"
-		default:
-			return false
-		}
-		c = e.moveToCoarse(scc, deps, cause, deep, glob, round, pass)
-	}
-	return e.refold(c, callers)
+	return deps
 }
 
-// moveToCoarse registers the component as coarse: from now on the summaries of its dependency functions are folded.
-func (e *Engine) moveToCoarse(scc, deps []*sg.Func, cause string, deep, glob, round, pass int) *coarseSCC {
+// coarsenStep runs at the end of a round of a large component (after the commits). It decides, once, whether the
+// component goes to depth 0 and is solved again, and reports whether it did now. In the first pass the component has
+// written nothing to the global state yet (what a level writes waits for its end), so what it worked out is thrown
+// away here, and the caller starts its rounds again (inline: true): the run is the one that had the dependency
+// functions at depth 0 from the start. In a later pass it has written to the global state, which other components
+// of the level read at the same time: the caller stops the rounds of this pass, and the summaries and what the
+// component wrote are cleared at the end of the level (applyResets), the rounds start again in the next pass.
+func (e *Engine) coarsenStep(scc []*sg.Func, pass int) (moved, inline bool) {
+	if e.opts.SCCCoarsen <= 0 && e.opts.SCCCoarsenAtRound == 0 {
+		return false, false
+	}
+	deps := depsOf(scc)
+	if len(deps) == 0 || e.coarseOf(deps[0]) != nil {
+		return false, false
+	}
+	e.mu.Lock()
+	e.sccRounds[scc[0]]++
+	round := e.sccRounds[scc[0]]
+	e.mu.Unlock()
+	deep := e.coarseCount(deps)
+	cause := ""
+	switch {
+	case e.opts.SCCCoarsen > 0 && deep > e.opts.SCCCoarsen:
+		cause = "deep_param_keys"
+	case e.opts.SCCCoarsenAtRound > 0 && round >= e.opts.SCCCoarsenAtRound:
+		cause = "forced"
+	default:
+		return false, false
+	}
+	c := e.moveToCoarse(scc, deps, cause, deep, round, pass)
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if pass == 1 {
+		e.discard(c)
+		// what its functions wrote in the rounds that are thrown away waits for the end of the level: it goes too
+		ids := map[string]bool{}
+		for _, fn := range c.members {
+			ids[e.funcID(fn)] = true
+		}
+		keep := e.pendingGlobals[:0]
+		for _, w := range e.pendingGlobals {
+			if !ids[w.fn] {
+				keep = append(keep, w)
+			}
+		}
+		e.pendingGlobals = keep
+		in := map[*sg.Func]bool{}
+		for _, fn := range c.members {
+			in[fn] = true
+		}
+		kr := e.pendingReaders[:0]
+		for _, r := range e.pendingReaders {
+			if !in[r.fn] {
+				kr = append(kr, r)
+			}
+		}
+		e.pendingReaders = kr
+		return true, true
+	}
+	e.pendingReset = append(e.pendingReset, c)
+	return true, false
+}
+
+// moveToCoarse registers the component: from now on the dependency functions of it are solved at depth 0.
+func (e *Engine) moveToCoarse(scc, deps []*sg.Func, cause string, deep, round, pass int) *coarseSCC {
 	pk := map[string]bool{}
 	for _, fn := range deps {
 		pk[UnitOf(fn.ID)] = true
@@ -131,8 +147,8 @@ func (e *Engine) moveToCoarse(scc, deps []*sg.Func, cause string, deep, glob, ro
 		pkgs = append(pkgs, p)
 	}
 	sort.Strings(pkgs)
-	c := &coarseSCC{id: e.funcID(scc[0]), size: len(scc), funcs: deps, cause: cause, deep: deep, glob: glob, budget: e.opts.SCCCoarsen,
-		round: round, pass: pass, packages: pkgs}
+	c := &coarseSCC{id: e.funcID(scc[0]), size: len(scc), members: scc, funcs: deps, cause: cause, deep: deep,
+		budget: e.opts.SCCCoarsen, round: round, pass: pass, packages: pkgs}
 	e.mu.Lock()
 	for _, fn := range deps {
 		e.coarse[fn] = c
@@ -142,190 +158,121 @@ func (e *Engine) moveToCoarse(scc, deps []*sg.Func, cause string, deep, glob, ro
 	return c
 }
 
-// coarsenFirst is for the tests (SCCCoarsenAtRound below 0): the component is moved before its first round.
+// coarsenFirst is for the tests (SCCCoarsenAtRound below 0): the component goes to depth 0 before its first round, so
+// nothing is thrown away.
 func (e *Engine) coarsenFirst(scc []*sg.Func) {
 	if e.opts.SCCCoarsenAtRound >= 0 {
 		return
 	}
-	var deps []*sg.Func
-	for _, fn := range scc {
-		if fn.Dep {
-			deps = append(deps, fn)
-		}
-	}
-	if len(deps) > 0 && e.coarseOf(deps[0]) == nil {
-		e.moveToCoarse(scc, deps, "forced", 0, 0, 0, 0)
+	if deps := depsOf(scc); len(deps) > 0 && e.coarseOf(deps[0]) == nil {
+		e.moveToCoarse(scc, deps, "forced", 0, 0, 0)
 	}
 }
 
-// refold takes the globals that the component writes now, and folds the summary of every dependency function of it.
-func (e *Engine) refold(c *coarseSCC, callers map[*sg.Func][]*sg.Func) bool {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	globals := map[string]*sg.Value{}
-	for _, fn := range c.funcs {
-		if sum := e.summaries[fn]; sum != nil {
-			for _, o := range sum.Outputs {
-				if o.Kind == OutGlobal && o.Global != nil {
-					if _, ok := globals[o.Global.Name]; !ok {
-						globals[o.Global.Name] = o.Global
+// applyResets throws away what the components that were moved to depth 0 in a later pass had worked out (see
+// coarsenStep), and what they wrote to the global state (an element that another function wrote stays). It runs at
+// the end of a level, with mu held, when no function is being analysed.
+func (e *Engine) applyResets() {
+	for _, c := range e.pendingReset {
+		e.discard(c)
+		ids := map[string]bool{}
+		for _, fn := range c.members {
+			ids[e.funcID(fn)] = true
+		}
+		e.globals.forget(ids, c.members)
+	}
+	e.pendingReset = e.pendingReset[:0]
+}
+
+// discard restores the engine state that the analysis of the functions of the component wrote (commit, compute):
+// the summaries, the findings and suppressions (states), the records of the function (coarsened, guardLimit,
+// notConverged, degraded, the work counted: addsTotal, spent), the package variables it wrote that hold nothing
+// (heldNothing), and the closures whose write of a global was left out (identityStores), and marks its functions to
+// be analysed again. What is not undone: the counts of the work done (stats.reanalyses, passes,
+// adds_max_single_run: they say what was done, and the thrown-away rounds were done), the functions outside the
+// component that were marked to be analysed again (they are analysed again, as they would be), and the
+// diagnostics (-pass-stats, TraceElement). With mu held.
+func (e *Engine) discard(c *coarseSCC) {
+	ids := map[string]bool{}
+	for _, fn := range c.members {
+		ids[e.funcID(fn)] = true
+	}
+	for _, fn := range c.members {
+		delete(e.summaries, fn)
+		delete(e.states, fn)
+		delete(e.coarsened, fn)
+		delete(e.guardLimit, fn)
+		delete(e.degraded, fn)
+		delete(e.addsTotal, fn)
+		delete(e.spent, fn)
+		e.dirty[fn] = true
+		for _, b := range fn.Blocks {
+			for _, in := range b.Instrs {
+				e.identityStores.Delete(in)
+			}
+		}
+	}
+	if len(e.notConverged) > 0 {
+		keep := e.notConverged[:0:0]
+		for _, id := range e.notConverged {
+			if ids[id] {
+				delete(e.notConvergedSet, id)
+			} else {
+				keep = append(keep, id)
+			}
+		}
+		e.notConverged = keep
+	}
+	e.heldMu.Lock()
+	for name, fns := range e.heldNothing {
+		for _, fn := range c.members {
+			delete(fns, fn)
+		}
+		if len(fns) == 0 {
+			delete(e.heldNothing, name)
+		}
+	}
+	e.heldMu.Unlock()
+}
+
+// forget takes away what only the given functions wrote to the global state, and the marks that they read it.
+func (g *globalStore) forget(writers map[string]bool, fns []*sg.Func) {
+	for v, pm := range g.writerFns {
+		for path, em := range pm {
+			for el, list := range em {
+				keep := list[:0:0]
+				for _, w := range list {
+					if !writers[w] {
+						keep = append(keep, w)
 					}
 				}
-			}
-		}
-	}
-	c.globals = globals
-	c.names = c.names[:0]
-	for n := range globals {
-		c.names = append(c.names, n)
-	}
-	sort.Strings(c.names)
-	changed := false
-	for _, fn := range c.funcs {
-		sum := e.summaries[fn]
-		if sum == nil {
-			continue
-		}
-		nsum := foldSummary(sum, c)
-		if nsum.Sig == sum.Sig {
-			e.summaries[fn] = nsum
-			continue
-		}
-		e.notePassChange(fn, sum, nsum)
-		e.summaries[fn] = nsum
-		changed = true
-		for _, cl := range callers[fn] {
-			e.dirty[cl] = true
-		}
-		e.dirty[fn] = true
-	}
-	return changed
-}
-
-// foldSummary is the coarse form of the summary of a dependency function of a coarse component: every output has the
-// path "" (an element that stands for a part of a parameter stands for the whole of it), and what the function writes
-// to any global it writes to every global that the component writes (with its own elements, never with those of
-// another function: they speak of the parameters of that one). The result has the elements of the summary and more.
-func foldSummary(sum *Summary, c *coarseSCC) *Summary {
-	type okey struct {
-		kind  string
-		index int
-		glob  string
-	}
-	groups := map[okey]map[Elem]OutElem{}
-	var keys []okey
-	widened := map[okey]bool{}
-	globs := map[string]*sg.Value{}
-	for n, g := range c.globals {
-		globs[n] = g
-	}
-	own := map[Elem]OutElem{}
-	add := func(m map[Elem]OutElem, oe OutElem, self int) {
-		oe.Guards = nil // the conditions are dropped: where two flows with different conditions meet, the fold would otherwise depend on which came first
-		if oe.E.Kind == Param {
-			oe.E = oe.E.WithPath("")
-			if int(oe.E.Param) == self && oe.E.Mods() == "" {
-				return // the parameter's own taint in itself: no flow (summarize leaves it out as well)
-			}
-		}
-		have, ok := m[oe.E]
-		switch {
-		case !ok:
-			m[oe.E] = oe
-		case oe.Steps.len() < have.Steps.len():
-			m[oe.E] = oe
-		}
-	}
-	for _, o := range sum.Outputs {
-		if o.Kind == OutGlobal {
-			if o.Global != nil {
-				if _, ok := globs[o.Global.Name]; !ok {
-					globs[o.Global.Name] = o.Global
+				if len(keep) == len(list) {
+					continue
 				}
+				if len(keep) > 0 {
+					em[el] = keep
+					continue
+				}
+				delete(em, el)
+				delete(g.cells[v][path], el)
+				delete(g.writers[v][path], el)
 			}
-			for _, oe := range o.Elems {
-				add(own, oe, -1)
-			}
-			continue
-		}
-		k := okey{o.Kind, o.Index, ""}
-		m := groups[k]
-		if m == nil {
-			m = map[Elem]OutElem{}
-			groups[k] = m
-			keys = append(keys, k)
-		}
-		if o.Widened {
-			widened[k] = true
-		}
-		for _, oe := range o.Elems {
-			add(m, oe, selfOf(o))
 		}
 	}
-	sort.Slice(keys, func(i, j int) bool {
-		if keys[i].kind != keys[j].kind {
-			return keys[i].kind < keys[j].kind
-		}
-		return keys[i].index < keys[j].index
-	})
-	out := *sum
-	out.Outputs = nil
-	list := func(m map[Elem]OutElem) []OutElem {
-		l := make([]OutElem, 0, len(m))
-		for _, oe := range m {
-			l = append(l, oe)
-		}
-		sort.Slice(l, func(i, j int) bool { return lessElem(l[i].E, l[j].E) })
-		return l
-	}
-	for _, k := range keys {
-		out.Outputs = append(out.Outputs, Output{Kind: k.kind, Index: k.index, Path: "", Elems: list(groups[k]), Widened: widened[k]})
-	}
-	if len(own) > 0 {
-		names := make([]string, 0, len(globs))
-		for n := range globs {
-			names = append(names, n)
-		}
-		sort.Strings(names)
-		shared := list(own) // the same list for every global: it is not changed
-		for _, n := range names {
-			out.Outputs = append(out.Outputs, Output{Kind: OutGlobal, Global: globs[n], Path: "", Elems: shared})
+	for _, m := range g.readers_ {
+		for _, fn := range fns {
+			delete(m, fn)
 		}
 	}
-	// the sinks the function reaches: the element of a sink has its path cut as well (and reads the whole of it)
-	sinks := map[sinkKey]*SinkReach{}
-	var skeys []sinkKey
-	for _, sr := range sum.Sinks {
-		n := *sr
-		n.Guards = nil
-		if n.Elem.Kind == Param && n.Elem.Path() != "" {
-			n.Elem = n.Elem.WithPath("")
-			n.Field = ""
-		}
-		k := sinkKey{n.Elem, n.Site, n.Field, n.Unsure}
-		if have, ok := sinks[k]; ok {
-			sinks[k] = mergeSinkReach(have, &n)
-		} else {
-			sinks[k] = &n
-			skeys = append(skeys, k)
-		}
-	}
-	sort.Slice(skeys, func(i, j int) bool { return lessSinkKey(skeys[i], skeys[j]) })
-	out.Sinks = nil
-	for _, k := range skeys {
-		out.Sinks = append(out.Sinks, sinks[k])
-	}
-	out.Coarse = c
-	out.Sig = out.signature()
-	return &out
 }
 
-// sccCoarsenedDetail is the note on a hop that applied the summary of a dependency function that was moved to the
-// coarse form: the flow from there on may exist only because of that (more flows than there are, never fewer).
-const sccCoarsenedDetail = "scc_coarsened: the value went through a function of a dependency in a large group of functions that call each other, whose summary was made coarser to keep the analysis finite (paths cut at depth 0, what a function writes to a global variable given to every global that the group writes): the flow from here may exist only because of that (more flows than there are, never fewer)"
+// sccCoarsenedDetail is the note on a hop that applied the summary of a dependency function of a component that was
+// solved again at depth 0: the flow from here on may exist only because of that (more flows than there are, never
+// fewer).
+const sccCoarsenedDetail = "scc_coarsened: the value went through a function of a dependency in a large group of functions that call each other, which was solved again with the access paths of the dependency functions cut at depth 0 to keep the analysis finite: the flow from here may exist only because of that (more flows than there are, never fewer)"
 
-// coarseRecords are the records of the components that were moved to the coarse form, one each, in the order of
-// the first function: where (the functions, the packages), which count was over, the counts, the round.
+// coarseRecords are the records of the components that were solved again at depth 0, one each, in the order of the
+// first function: where (the functions, the packages), what was over, the count, the round.
 func (e *Engine) coarseRecords() []*Uncertainty {
 	cs := append([]*coarseSCC(nil), e.coarseList...)
 	sort.Slice(cs, func(i, j int) bool { return cs[i].id < cs[j].id })
@@ -337,22 +284,12 @@ func (e *Engine) coarseRecords() []*Uncertainty {
 		}
 		sort.Strings(ids)
 		d := "scc_coarsened: a group of " + strconv.Itoa(c.size) + " functions that call each other (" + strconv.Itoa(len(c.funcs)) +
-			" of the dependencies, in " + strconv.Itoa(len(c.packages)) + " packages) went over its budget (" + c.cause +
-			": " + strconv.Itoa(c.deep) + " keys of param outputs deeper than one step, " + strconv.Itoa(c.glob) + " keys of global outputs; budget " +
-			strconv.Itoa(c.budget.DeepParamKeys) + " and " + strconv.Itoa(c.budget.GlobalKeys) + ") after round " + strconv.Itoa(c.round) +
-			" (pass " + strconv.Itoa(c.pass) + "); the summaries of its dependency functions were made coarser, once (paths cut at depth 0, " +
-			"what a function writes to a global variable given to every global that the group writes): more flows than there are, never fewer"
+			" of the dependencies, in " + strconv.Itoa(len(c.packages)) + " packages) was solved again from the start, once, with the access paths of its dependency functions cut at depth 0 (" +
+			c.cause + ": " + strconv.Itoa(c.deep) + " keys of param outputs deeper than one step, budget " + strconv.Itoa(c.budget) +
+			", after round " + strconv.Itoa(c.round) + " of pass " + strconv.Itoa(c.pass) + "): what is told apart below the first step of a parameter is not told apart there (more flows than there are, never fewer)"
 		u := newUncertainty(KindDepthLimit, d, "")
 		u.Candidates = ids
 		out = append(out, u)
 	}
 	return out
-}
-
-// selfOf is the parameter whose own taint an element of the output is no flow for (the output of that parameter), or -1.
-func selfOf(o Output) int {
-	if o.Kind == OutParam {
-		return o.Index
-	}
-	return -1
 }

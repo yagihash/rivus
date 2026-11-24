@@ -78,8 +78,8 @@ type Options struct {
 	// SCCCoarsen is the budget of a large strongly connected component (ADR-124): over it, the dependency functions of
 	// the component move once to a coarser summary. Zero (the default): never. SCCCoarsenAtRound is for the tests:
 	// from that round of a large component on, it moves whatever the counts are (0: not used).
-	SCCCoarsen        SCCCoarsenBudget
-	SCCCoarsenAtRound int // below 0: before the first round
+	SCCCoarsen        SCCCoarsenBudget // the keys of the param outputs deeper than one step (ADR-124)
+	SCCCoarsenAtRound int              // below 0: before the first round
 }
 
 // DefaultOptions are the defaults.
@@ -175,9 +175,10 @@ type Engine struct {
 	// coarse are the dependency functions whose component was moved to the coarse summary (coarse.go), coarseList the
 	// components in the order they were moved, sccRounds the rounds each large component has had (by its first
 	// function). Under mu.
-	coarse     map[*sg.Func]*coarseSCC
-	coarseList []*coarseSCC
-	sccRounds  map[*sg.Func]int
+	coarse       map[*sg.Func]*coarseSCC
+	pendingReset []*coarseSCC // the components to be solved again; done at the end of the level (applyResets)
+	coarseList   []*coarseSCC
+	sccRounds    map[*sg.Func]int
 	// iterDumpDir is the directory for the dump of the summaries after each round of a large component
 	// (RIVUS_INTERNAL_SUMMARY_DUMP_EACH_ITER; empty: none). iterDumps are the large components, by their first
 	// function. Both are set before the run and not changed during it.
@@ -778,11 +779,15 @@ func (e *Engine) Run() *Result {
 							}
 						}
 						// after the commits: what the budget counts is what the round left
-						if e.coarsenStep(scc, callers, pass+1) {
-							progress = true
-						}
 						if roundChanged != nil {
 							e.dumpRound(scc, pass+1, len(todo), roundChanged)
+						}
+						if moved, inline := e.coarsenStep(scc, pass+1); moved {
+							if !inline {
+								return // solved again from the start at depth 0, from the next pass (applyResets)
+							}
+							iter = -1 // solved again from the start at depth 0, now
+							continue
 						}
 						if !progress {
 							break
@@ -1003,6 +1008,7 @@ func (e *Engine) commitGlobals() {
 		}
 	}
 	e.pendingGlobals, e.pendingReaders = e.pendingGlobals[:0], e.pendingReaders[:0]
+	e.applyResets()
 }
 
 // lessGlobalWrite orders the writes to the global state: by cell (the name; the cells
@@ -1088,7 +1094,7 @@ func (e *Engine) compute(fn *sg.Func) *fnResult {
 	// the summary is joined with the one of the earlier visits
 	sum := joinSummaries(e.summaryOf(fn), s.summarize())
 	if c := e.coarseOf(fn); c != nil {
-		sum = foldSummary(sum, c)
+		sum.Coarse = c
 	}
 	// Too many guards matter only where taint is told apart by them: where
 	// something is sanitized, or a source's own label is returned.
