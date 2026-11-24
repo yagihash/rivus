@@ -1,20 +1,19 @@
 name: main-ci
 
-# Sets the commit status `main-ci` on the head of every open pull request of this repository, from the result of ci.yml on main.
-# A ruleset can require `main-ci`, so that nothing is merged while main is red (or while the scheduled CI has been red for 24 hours).
-# The rules are in scripts/main-ci/decide.go; the way out is the label `fixes-main` on the pull request that fixes main.
+# Writes the check run `main-ci` on the head of every open pull request of this repository, from the result of ci.yml on main.
+# A ruleset can require `main-ci` (from the app GitHub Actions), so that nothing is merged while main is red (or while the scheduled CI
+# has been red for 24 hours). The rules are in scripts/main-ci/decide.go; the way out is the label `fixes-main` on the pull request that fixes main.
 #
-# Safety: this workflow never runs the code of a pull request. The trigger `pull_request` is used only to re-decide when a pull request
-# opens, gets a push or changes a label; the job checks out the default branch (`main`, never the pull request) and runs the script from there.
-# `pull_request_target` is not used. The token is the GITHUB_TOKEN with `statuses: write`, `pull-requests: read`, `actions: read`.
-# A pull request from a fork is out of scope: its `pull_request` token is read-only (the repository is personal and has no forks in use).
+# Safety: this workflow never runs the code of a pull request, and there is no `pull_request` trigger on purpose: a `pull_request`
+# workflow runs with the definition of the pull request's branch, which a pull request could change to pass the check. `workflow_run`
+# and `schedule` always run the definition on main. A pull request gets its check run when its CI starts (`requested` of ci.yml, any
+# branch: a new pull request, a new push), and again whenever any CI starts or ends; a label change is picked up at the next of those or in the next hour.
+# The job checks out main (never a pull request). `pull_request_target` is not used.
+# Token: GITHUB_TOKEN with `checks: write`, `pull-requests: read`, `actions: read`. A pull request from a fork is out of scope.
 on:
   workflow_run:
     workflows: [CI]
     types: [requested, completed] # a start (pending) and an end, a re-run included
-    branches: [main]
-  pull_request:
-    types: [opened, synchronize, reopened, labeled, unlabeled]
   schedule:
     - cron: "11 * * * *" # every hour: the 24 hours of a scheduled failure pass with the clock, not with an event
   workflow_dispatch:
@@ -32,7 +31,7 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
-      statuses: write
+      checks: write
       pull-requests: read
       actions: read
     steps:

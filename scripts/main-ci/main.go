@@ -1,7 +1,7 @@
-// main-ci sets the commit status `main-ci` on the head of every open pull request of this repository, from the result of ci.yml on main
+// main-ci sets the check run `main-ci` on the head of every open pull request of this repository, from the result of ci.yml on main
 // (.github/workflows/main-ci.yml; the rules are in decide.go). It calls the GitHub API through `gh` and reads GH_TOKEN and
 // GITHUB_REPOSITORY from the environment. It does not read or run the code of any pull request.
-// Pull requests from forks are skipped: the token of a pull_request run cannot write a status there (the repository has no forks in use).
+// Pull requests from forks are skipped: a fork is not in scope (the repository has no forks in use).
 package main
 
 import (
@@ -109,6 +109,37 @@ type pull struct {
 	} `json:"labels"`
 }
 
+// writeCheck creates the check run `main-ci` on a commit (the app that owns it is GitHub Actions: only an app can create a check run,
+// so the ruleset can pin the app and nobody can write the value by hand). A required check is judged by the newest check run of that
+// name, so a new one replaces the old one. It is not created again when the newest one already says the same.
+func writeCheck(repo, sha string, res Result) error {
+	status, conclusion := "completed", res.State
+	if res.State == "pending" {
+		status, conclusion = "in_progress", ""
+	}
+	cur, err := gh("api", fmt.Sprintf("repos/%s/commits/%s/check-runs?check_name=main-ci&per_page=1", repo, sha),
+		"--jq", `.check_runs[0] | "\(.status) \(.conclusion // "") \(.output.title // "")"`)
+	if err == nil && strings.TrimSpace(string(cur)) == strings.TrimSpace(status+" "+conclusion+" "+res.Description) {
+		return nil
+	}
+	body := map[string]any{
+		"name": "main-ci", "head_sha": sha, "status": status,
+		"output": map[string]string{"title": res.Description, "summary": res.Description},
+	}
+	if conclusion != "" {
+		body["conclusion"] = conclusion
+	}
+	if res.TargetURL != "" {
+		body["details_url"] = res.TargetURL
+	}
+	in, _ := json.Marshal(body)
+	cmd := exec.Command("gh", "api", "-X", "POST", fmt.Sprintf("repos/%s/check-runs", repo), "--input", "-")
+	cmd.Stdin = strings.NewReader(string(in))
+	cmd.Stderr = os.Stderr
+	_, err = cmd.Output()
+	return err
+}
+
 func main() {
 	repo := os.Getenv("GITHUB_REPOSITORY")
 	if repo == "" {
@@ -156,13 +187,8 @@ func main() {
 				filled[res.Failing.ID] = true
 			}
 			res = Decide(now, headRuns, periodic, labels)
-			args := []string{"api", "-X", "POST", fmt.Sprintf("repos/%s/statuses/%s", repo, p.Head.SHA),
-				"-f", "state=" + res.State, "-f", "context=main-ci", "-f", "description=" + res.Description}
-			if res.TargetURL != "" {
-				args = append(args, "-f", "target_url="+res.TargetURL)
-			}
-			if _, err := gh(args...); err != nil {
-				fmt.Fprintf(os.Stderr, "#%d: setting the status failed: %v\n", p.Number, err)
+			if err := writeCheck(repo, p.Head.SHA, res); err != nil {
+				fmt.Fprintf(os.Stderr, "#%d: writing the check run failed: %v\n", p.Number, err)
 				failed++
 				continue
 			}
