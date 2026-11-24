@@ -972,9 +972,7 @@ func (e *Engine) Path(from, to string, o Options) (*PathResult, error) {
 		res.Paths = append(res.Paths, out)
 	}
 	res.Certainty = res.Paths[0].Certainty
-	supplemented := false
 	for i := range res.Paths {
-		supplemented = supplemented || res.Paths[i].Supplemented > 0
 		if res.Paths[i].Relation != "calls" {
 			res.Relation = res.Paths[i].Relation
 		}
@@ -989,12 +987,6 @@ func (e *Engine) Path(from, to string, o Options) (*PathResult, error) {
 		res.Listed.Refs = &r
 	}
 	res.Beyond = "not_searched"
-	if supplemented {
-		// The candidates of such a call are what the analysis of the function values found: other candidates, and so
-		// other paths, may exist. The flag does not make the listing exhaustive.
-		res.Exhaustive = false
-		res.Hints = append(res.Hints, "a step with \"supplemented\" is a call of a function value whose candidates the analysis of the function values gave (-resolve-func-values): they are the functions that analysis found, not all that the call may reach, so the listing is not exhaustive")
-	}
 	switch res.Certainty {
 	case "uncertain":
 		res.Hints = append(res.Hints, "no path by the static calls alone: these go through an interface or a function value; \"candidates\" is the number of functions that call may reach")
@@ -1159,7 +1151,7 @@ func (e *Engine) stepOfCall(c *graphdb.CallRow, holder int64) (Step, error) {
 	if err != nil {
 		return Step{}, err
 	}
-	st := Step{Func: f.FID, At: pos(c.File, c.Line, c.Col), Kind: c.Kind, Sites: sites, NoBody: !f.HasBody, Supplemented: c.Supplemented}
+	st := Step{Func: f.FID, At: pos(c.File, c.Line, c.Col), Kind: c.Kind, Sites: sites, NoBody: !f.HasBody}
 	st.AtUnknown = st.At == ""
 	if f.Symbol != f.FID {
 		st.Symbol = f.Symbol
@@ -1229,10 +1221,6 @@ func (e *Engine) pathOut(start int64, edges []graphdb.Edge, prefix []Step, suffi
 			if isHub(ed) {
 				st.Hub = true
 			}
-			st.Supplemented = ed.Supplemented
-			if st.Supplemented {
-				p.Supplemented++
-			}
 			if isRef(ed) {
 				st.RefKind, st.ViaCallee, st.Note, st.AtPrecision = ed.RefKind, ed.Via, refNote, "statement"
 				p.Certainty, p.Relation, p.Note = "reference", "calls+refs", refPathNote
@@ -1252,9 +1240,6 @@ func (e *Engine) pathOut(start int64, edges []graphdb.Edge, prefix []Step, suffi
 	}
 	if len(prefix) > 0 {
 		raise(prefix[0].Kind, prefix[0].Hub)
-		if prefix[0].Supplemented {
-			p.Supplemented++
-		}
 	}
 	for i := range edges {
 		if err := add(cur, &edges[i]); err != nil {
@@ -1266,9 +1251,6 @@ func (e *Engine) pathOut(start int64, edges []graphdb.Edge, prefix []Step, suffi
 	if suffix != nil {
 		p.Steps = append(p.Steps, *suffix)
 		raise(suffix.Kind, suffix.Hub)
-		if suffix.Supplemented {
-			p.Supplemented++
-		}
 	} else if err := add(cur, nil); err != nil {
 		return p, err
 	}
@@ -1321,7 +1303,7 @@ func (e *Engine) notExhaustive(starts, goals []int64, refs bool) (*NotExhaustive
 		return nil, err
 	}
 	ne := &NotExhaustive{Cut: cutF || cutB}
-	ne.UnresolvedCalls.Why = "a call through an interface or a function value in what the start reaches has no candidate, or only the candidates that the analysis of the function values gave (-resolve-func-values, not all that it may reach): the file does not say where it goes"
+	ne.UnresolvedCalls.Why = "a call through an interface or a function value in what the start reaches has no candidate: the file does not say where it goes"
 	total, rows, err := e.db.UnresolvedCallsIn(fwd, 5)
 	if err != nil {
 		return nil, err
@@ -1333,9 +1315,6 @@ func (e *Engine) notExhaustive(starts, goals []int64, refs bool) (*NotExhaustive
 			return nil, err
 		}
 		kind := r.Kind
-		if r.Supplemented {
-			kind += ", candidates from -resolve-func-values"
-		}
 		ne.UnresolvedCalls.Examples = append(ne.UnresolvedCalls.Examples, fmt.Sprintf("%s:%d:%d in %s (%s)", r.File, r.Line, r.Col, f.FID, kind))
 	}
 	ne.OpenFunctions.Why = "a function that reaches the goal may be called by code that was not read: a method (a dependency or the language may call it), or a function named as a value that the search did not reach"
