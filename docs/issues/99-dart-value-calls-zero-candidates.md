@@ -43,6 +43,8 @@ zoo の Dart を実行して観測した呼び出しと、グラフのエッジ�
 
 `-resolve-func-values`(候補 0 件の値の呼び出しに、関数値のパスで候補を補う実験)は、コスト(合格基準の 4 対象が全部 FAIL。エンジンを余分に 1 回走らせる)のために消した([DESIGN-callouts.md](../DESIGN-callouts.md) 5.6)。それが補っていた Dart の `no_edge` は、観測した呼び出しとの照合(方法 B。`bench/zoo-dart/observed/README.md`)で、そのまま `no_edge` として見え続ける。**偽の edge は足していない**。**注記のない見逃しは増えない**: 候補 0 件の値の呼び出しには、通常のパスの `unresolved_callee` が付く。
 
+件数の区別: 根 D の 20 件のうち、フラグで消えたのは 17 件(残りの `clos/partial-callers` 3 件は、フラグでも消えなかった)。だから、フラグが補っていた `no_edge` は 37 件、根の課題に載る件数の合計は 40 件。
+
 **根 D**(zoo-dart の `no_edge` 20 件。候補 0): フィールド・map・リスト・グローバル・コンストラクタ引数に入れた関数値を、あとで呼ぶ。例のセル: `clos/stored` 6、`dyn/func_field` 4、`dyn/func_map` 4、`clos/partial-callers` 3、`clos/capture-write-by-ref` 1、`dart/closure-to-sdk` 1、`dart/tearoff-instance` の `Button.press` 1。直す所: `internal/valuecalls/narrow.go`(origins、field、cell。フィールド・map・リストの書き込みから、それを読む側をたどる)。taint 側の関数値の記憶と同じ根(#79)。大きさ: 大。**偽の edge**: 同じ field や map への書き込みは、どれも候補になるので、キーや field を区別しないと過大(`func-map` の decoy。キーが定数の map の要素は、今の要素の置き場で 1 つの `[]` にまとまる)。区別すれば足さない。
 
 **根 I**(3 件): 先に別の値を入れ、あとで別の値を代入した変数(`var f = first; f = second`、`late` の変数をあとで代入する相互再帰)の関数値。例のセル: `clos/local-fn-from-closure` の `vuln2`、`clos/local-recursion` の `mutual`(`@miss(unresolved_callee)`)。直す所: `internal/valuecalls` の、取り込んだ変数に複数の代入をたどる所(上の追記の「セルに入るもの」)。大きさ: 中。**偽の edge**: 代入が全部候補になるので過大(代入の順序を見ない。クロージャがいつ呼ばれるかが分からないと、安全に絞れない。ROADMAP のキャプチャセルの作業と同じ根)。
