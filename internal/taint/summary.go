@@ -395,7 +395,9 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 	}
 	if sum.Coarse != nil {
 		// every hop of this call has the note (made once, shared like the notes of a call)
-		notes = appendNote(notes, s.pathNote(KindDepthLimit, sccCoarsenedDetail(s.eng.funcID(fn)), cc.in.Pos))
+		n := s.pathNote(KindDepthLimit, sccCoarsenedDetail(s.eng.funcID(fn)), cc.in.Pos)
+		n.CoarsenedSCC = sum.Coarse.info
+		notes = appendNote(notes, n)
 	}
 	argv := append(cc.argv(), bindings...)
 	// A callee may take optional parameters that the call leaves out (an

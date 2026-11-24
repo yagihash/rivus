@@ -91,6 +91,10 @@ type Uncertainty struct {
 	Detail         string   `json:"detail,omitempty"`
 	Symbol         string   `json:"symbol,omitempty"`
 	Candidates     []string `json:"candidates,omitempty"`
+	// CoarsenedSCC is, on the scc_coarsened note of a group that is solved at depth 0 and on each hop that went through
+	// a function of it, which group (ADR-124): so that a reader can tell the findings that went through one without
+	// reading the wording.
+	CoarsenedSCC *CoarsenedSCC `json:"coarsened_scc,omitempty"`
 	// NarrowedFrom is, for a call through Fn::call (Rust) whose candidates were narrowed to the closures that
 	// flow to its receiver, how many candidates there were before. Basis is the assumption the narrowing
 	// rests on, when it rests on one ("closed_world_entry": the program was read as one that starts at its
@@ -264,6 +268,9 @@ type Finding struct {
 	// tell a variable one function sets from one that a hundred do. Output only: it changes
 	// neither the finding nor its path.
 	SharedState []SharedState `json:"shared_state,omitempty"`
+	// ThroughCoarsenedSCC are the IDs (CoarsenedSCC.ID, sorted) of the groups solved at depth 0 that a step of the
+	// path went through (ADR-124). Absent when none: the findings without it come first in the output.
+	ThroughCoarsenedSCC []string `json:"through_coarsened_scc,omitempty"`
 }
 
 // SharedState says who wrote the element of the finding to a shared place, and who reads it.
