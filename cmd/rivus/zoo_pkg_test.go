@@ -19,7 +19,7 @@ import (
 //
 //   - A package is its own program: it is analysed alone (rules: its rules.yaml, and the one of the zoo of the language, for
 //     zoo/mark and zoo-mark) and run alone (the three runs of the zoo). The whole-zoo checks (bench/zoo-go, bench/zoo-rust:
-//     TestFuncValues*, the parity, the pure and callback harnesses ...) never read a package: the code of a skeleton (a
+//     the parity, the pure and callback harnesses ...) never read a package: the code of a skeleton (a
 //     dependency, Func.Dep) is not in what they check. Only TestBuiltinRowsAreHitByTheZoo reads the packages, and it counts the
 //     rows that the zoo hits, dependency or not (a cell hits the row of an external package by calling the skeleton).
 //   - The harness of a package is not in the repository: Go builds it with an overlay (the same cmd/observe as the zoo's, and

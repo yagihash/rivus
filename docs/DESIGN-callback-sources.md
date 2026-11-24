@@ -25,7 +25,7 @@ router.get('/item/<id>', (Request request, String id) async {
 | `param_type` の一致 | 型の文字列の一致(エイリアスは `Canon` でそろえる)。`String` や `int` のような一般の型は、すべての関数の引数に当たるので、指せない。Rust の `axum::extract::Path` は、ジェネリクスの `<T>` を除いた名前で書かれている(`rust-axum.yaml`)。型ベースの Rust の source は、すでに書ける |
 | `calls:` | 「オペランド `fn` を、`with` の値で呼ぶ。結果は `ret`」。呼び出し点で、呼ばれる関数(関数、または、その場で書いたクロージャ 1〜4 個)の要約を、引数を `with` に束縛して適用する。`with` に書けるのは `recv`、`argN`、`none` だけ。**source を書く場所がない**。`calls:` が使われるのは、呼び出し点で行を適用するとき。shelf_router の `Router.get` は、ハンドラを List に入れるだけで、呼ぶのは `call` の中(`Function.apply`)なので、登録の呼び出しに `calls:` を書くと、「登録で呼ばれる」という誤った意味になる |
 | 行のない呼び出し | `assumed_call`(`internal/taint/bodyreplaced.go`、`calls.go` の `captured`): 本体を読まないパッケージに渡された関数値は、他のオペランドを引数に、呼ばれたものとして扱う。これは `ret` を結果に流す推測で、引数に source を足すことはない |
-| 動的な呼び出し | `Function.apply(handler, [req, ...])` は、リストの中身を引数に分けて呼ぶ形で、エンジンは、この対応(リストの 2 番目が 2 番目の引数)を追わない。呼び出し先が分からない値の呼び出しは `unresolved_callee` で、その先は見ない(`-resolve-func-values` が候補を補うのは、自分のコードで作った関数だけ。既定は off)。**この案は、その呼び出しを追わなくてよい**: 引数が source のとき、その値はクロージャの中で始まる |
+| 動的な呼び出し | `Function.apply(handler, [req, ...])` は、リストの中身を引数に分けて呼ぶ形で、エンジンは、この対応(リストの 2 番目が 2 番目の引数)を追わない。呼び出し先が分からない値の呼び出しは `unresolved_callee` で、その先は見ない。**この案は、その呼び出しを追わなくてよい**: 引数が source のとき、その値はクロージャの中で始まる |
 | 入口 | `Func.Entry` は `main` と `init` だけ。入口の宣言は `kind: param`(ARCHITECTURE.md 6 節)。`entrypoints:` の節はない。`-entry` は、この文書の範囲の外 |
 | モデルの読み込み | YAML は `KnownFields(true)`。知らないキーのあるファイルは、古い rivus が読み込みで拒否する |
 | 関連の課題 | #145(`flows` と `sources` に名前つき引数を指す書式がない) |

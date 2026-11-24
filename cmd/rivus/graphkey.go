@@ -128,11 +128,6 @@ func (k *keyCtx) compute() (*keyResult, error) {
 		// something), so that the key of an index made without it is what it was.
 		cfg["flags.char-taint"] = "true"
 	}
-	if o.resolveFuncValues {
-		// the calls that got candidates are edges of the file: an index with the flag is not one without it. Set only when
-		// on, so that the key of an index made without it is what it was.
-		cfg["flags.resolve-func-values"] = "true"
-	}
 	if len(o.bodyReplaced) > 0 {
 		// the packages whose body is not read are not in the file: another list is another file. Set only when named, so
 		// that the key of an index made without it is what it was. (The declarations of the rule files are in the key

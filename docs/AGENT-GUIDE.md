@@ -290,7 +290,6 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `-workers <n>` | 同時に解析する関数の数(0 = CPU の数、1 = 1 つずつ) | `0` | マシンの負荷を下げる。結果は変わらない | |
 | `-numeric-taint` | 数値と真偽値になった値も追う | 追わない | 数値で起きる問題(範囲、ID の指定)を見たいとき | |
 | `-char-taint` | 文字列から 1 文字取り出した値(byte、rune、コードユニット、char)にも汚染を運ぶ。文字と定数の算術、表を文字で引く形(`digits[c>>4]`)、文字列に戻る所まで。長さ、添字、比較の結果、別の数への変換(`int(c)`)、モデルが作る数では止める。`-numeric-taint` が on のときは効かない(標準エラーに 1 行) | 追わない | 1 文字ずつ読んで詰め直す関数(字句解析、大文字化、エスケープ)を通る流れが、見逃しになっているとき。通った finding には `char_transform` の注記が付く(Go のみ。Dart と Rust は extractor が未対応) | |
-| `-resolve-func-values` | 呼び出し先の分からない関数値の呼び出しに、自分のコードで作った関数を候補として補ってから解析する(実験) | off | `unresolved_callee` が多いとき。`index` にも同じ指定が必要 | |
 | `-unsafe-host-exec` | Rust の extractor を、サンドボックスなしで、このマシンで実行する | off | **信頼できるコードだけ**。Linux で Rust を読むとき | ○ |
 | `-dart-extractor <cmd>`、`-rust-extractor <cmd>` | extractor のコマンド | 環境変数 `RIVUS_DART_EXTRACTOR` / `RIVUS_RUST_EXTRACTOR`、次に `rivus-dart` / `rivus-rust` | extractor が PATH にないとき | ○ |
 | `-isolation-env NAME=VALUE` | Rust のビルドに渡す環境変数(繰り返し可) | なし | ビルドスクリプトが設定を必要とするとき | ○ |
@@ -344,7 +343,7 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `-ir <file>` | extractor が書いた IR のファイルを読む(`sites` にもある) | なし |
 | `-isolation-timeout <時間>`、`-isolation-max-output <bytes>` | Rust の抽出の、段階ごとの時間と、出力の大きさの上限 | `30m`、4 GiB |
 | `-no-fetch`、`-allow-fetch-host <host>` | Rust の依存を取得しない / crates.io 以外の取得先を許す | 取得する、crates.io だけ |
-| `-func-values <file>`、`-trace-element <site ID>` | 開発用の診断(関数値の表、汚染がパッケージ変数に入る場所) | なし |
+| `-trace-element <site ID>` | 開発用の診断(汚染がパッケージ変数に入る場所) | なし |
 | `-cpuprofile`、`-memprofile`、`-lockprofile` | 開発用のプロファイル | なし |
 
 ## 5. 出力の読み方
@@ -391,7 +390,7 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 
 | kind | 何が起きたか | どう扱うか |
 |---|---|---|
-| `unresolved_callee` | 関数値やクロージャの呼び出しで、呼び出し先が分からなかった。**その先は見ていない** | その呼び出しに渡る関数をコードで探して、中を読む。`-resolve-func-values` も試す |
+| `unresolved_callee` | 関数値やクロージャの呼び出しで、呼び出し先が分からなかった。**その先は見ていない** | その呼び出しに渡る関数をコードで探して、中を読む |
 | `dynamic_dispatch` | インターフェースや関数値を通る呼び出し。`candidates` の全部に届くと仮定した | 経路が通る実装が、実行時に本当に呼ばれる型かを確認する(`graph impls` / `dispatchers`)。`candidates` が空なら、実装が読んだコードにない |
 | `unmodeled_library_call` | 本体もモデルもない関数を通った。「引数は結果に伝わる」と近似した | その関数の動作を調べる(値を加工して無害にするか、そのまま返すか)。必要ならモデルを書く |
 | `dependency_body_unread` | モデルのあるインターフェースの呼び出しの候補に、依存の本体があったが、読まなかった(Go) | 依存が、自分のコードの実装へ値を渡していないかを確認する |
@@ -449,7 +448,6 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `stats.adds_total`、`adds_max_single_run`、`adds_max_function_total`、`adds_per_function` | 解析の作業量(集合に入った要素の数。`Budget` と同じ数え方)。`adds_total` は全関数の、再解析を含めた合計。`adds_max_single_run` は 1 回の解析の最大(`Budget` と比べる値)。`adds_max_function_total` は関数ごとの合計の最大。`adds_per_function` は、関数ごとの合計で分けた表(`from` 以上 `to` 未満。`to` が 0 は上限なし)で、各行に関数の数 `functions` と `adds` の合計。関数名は出ない。0 でもいつも出る。結果は変えず、上限の値を選ぶための測定の入口 |
 | `stats.tests_skipped` | 読まなかったテストの数(`-tests` で読む) |
 | `stats.functions`、`largest_scc`、`duration_ms` | 解析した関数の数、互いに呼び合う関数の最大のかたまりの大きさ、解析の時間 |
-| `stats.func_values` | `-resolve-func-values` が補った数 |
 
 ### `graph path` の答え
 

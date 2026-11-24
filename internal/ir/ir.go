@@ -496,13 +496,6 @@ type Callee struct {
 	// function that holds the call, that parameter: the callers know which function they passed.
 	CandParam  map[FuncID]int `json:"-"`
 	NarrowFrom string         `json:"-"`
-	// ValueSupplemented is set when the ValueCands were not found by valuecalls but by the analysis of the function values
-	// (-resolve-func-values, docs/DESIGN-callouts.md 5.6): the functions are those that the code of the project makes
-	// (a function made in a dependency is not followed), so the candidates are not known to be all of them. The call keeps
-	// its uncertainty. ValueRoundsLimit is set too when the last round still added candidates (the rounds were cut).
-	// Not in the stream.
-	ValueSupplemented bool `json:"-"`
-	ValueRoundsLimit  bool `json:"-"`
 	// FFI marks a call of a foreign function (an extern "C" function of Rust): the
 	// call leaves the language, and what happens in it is not code that can be read.
 	FFI bool `json:"ffi,omitempty"`
@@ -783,24 +776,6 @@ func (c *Callee) ValueLimitDetail() string {
 		return "caller_depth_limit: the callers that pass the function value were followed 3 calls up and no function was found; the value may be one beyond that (rivus' limit)"
 	}
 	return ""
-}
-
-// ValueSupplementedDetail is the text of the uncertainty of a call whose candidates the analysis of the function values
-// gave (empty when it did not). It starts with the name of the cause, as ValueLimitDetail does.
-func (c *Callee) ValueSupplementedDetail() string {
-	if !c.ValueSupplemented {
-		return ""
-	}
-	return fmt.Sprintf("func_values_supplemented: the %d candidate(s) were found by following the function values that the code of the project makes (-resolve-func-values); functions made in dependencies are not followed, so the candidates are only functions made in the code of the project, and the function value may be others too", len(c.ValueCands))
-}
-
-// ValueRoundsDetail is the text of the uncertainty of a call whose candidates were still growing when the rounds of the
-// analysis of the function values were cut (empty when they were not).
-func (c *Callee) ValueRoundsDetail() string {
-	if !c.ValueRoundsLimit {
-		return ""
-	}
-	return "func_values_rounds: the candidates of the function value were still growing in the last round of the analysis of the function values (-resolve-func-values) that finished, and the rounds stopped there (the limit of the rounds, or the time limit -timeout); more functions may be called (rivus' limit)"
 }
 
 // NarrowStats is what the narrowing of the candidates of the calls of Rust closures did: the calls that were

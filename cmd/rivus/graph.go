@@ -185,9 +185,6 @@ func (o *analyzeOpts) flagValues(patterns []string) map[string]string {
 		"no-project-rules":    fmt.Sprint(o.noProject),
 		"deterministic-only":  fmt.Sprint(o.deterministic),
 	}
-	if o.resolveFuncValues {
-		m["resolve-func-values"] = "true"
-	}
 	if o.charTaint && !o.numeric {
 		m["char-taint"] = "true"
 	}
