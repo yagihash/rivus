@@ -369,7 +369,8 @@ func TestCoarseWordingHasThreeItems(t *testing.T) {
 		"package":              "package " + UnitOf(id),
 		"depth 0 meaning":      "cut at depth 0",
 		"over-approximation":   "more flows than there are, never fewer",
-		"check by reading":     "read " + id,
+		"lost distinction":     "which fields were told apart before the cut",
+		"check by reading":     "read the body of " + id,
 		"check by solving off": sccCoarsenFlagOff,
 	} {
 		if !strings.Contains(d, want) {
@@ -382,7 +383,7 @@ func TestCoarseWordingHasThreeItems(t *testing.T) {
 		t.Fatal("no record")
 	}
 	for _, u := range rs {
-		for _, want := range []string{"cut at depth 0", "more flows than there are, never fewer", "read that function", sccCoarsenFlagOff} {
+		for _, want := range []string{"cut at depth 0", "more flows than there are, never fewer", "which fields were told apart before the cut", "read that function", sccCoarsenFlagOff} {
 			if !strings.Contains(u.Detail, want) {
 				t.Errorf("the record has no %q: %s", want, u.Detail)
 			}

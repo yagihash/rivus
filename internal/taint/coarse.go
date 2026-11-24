@@ -74,15 +74,16 @@ const sccCoarsenFlagOff = "-scc-coarsen 0"
 // sccCoarsenedMeaning is what depth 0 means, for the reader of a finding.
 const sccCoarsenedMeaning = "the dependency functions of this group were solved with access paths cut at depth 0, " +
 	"that is, what is told apart below the first step of a parameter (another field of the same value) is not told apart, " +
-	"so a flow of another field can be mixed in (more flows than there are, never fewer)"
+	"so a flow of another field can be mixed in (more flows than there are, never fewer); " +
+	"which fields were told apart before the cut is not kept in the summary, and is found by reading the body of the function"
 
 // sccCoarsenedDetail is the note on a hop that applied the summary of a dependency function of a component that is
 // solved at depth 0: it names the function and its package (what the step went through), says what depth 0 means, and
 // how to check whether the flow is real.
 func sccCoarsenedDetail(funcID string) string {
 	return "scc_coarsened: this step went through " + funcID + " (package " + UnitOf(funcID) + "), a function of a dependency in a large group of functions that call each other; " +
-		sccCoarsenedMeaning + ". To check: read " + funcID + " in " + UnitOf(funcID) +
-		" and see whether its input reaches its output, or solve with " + sccCoarsenFlagOff + " and see whether this finding remains"
+		sccCoarsenedMeaning + ". To check: read the body of " + funcID + " in " + UnitOf(funcID) +
+		" to see which fields it tells apart, and whether its input reaches its output, or solve with " + sccCoarsenFlagOff + " and see whether this finding remains"
 }
 
 // coarseRecords are the records of the components that are solved at depth 0, one each, in the order of the first
