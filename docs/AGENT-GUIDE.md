@@ -9,7 +9,7 @@ rivus を使って脆弱性を探すエージェントのための文書です�
 ## 1. rivus が答えること、答えないこと
 
 - **答えること**: 外から来た値(source)が危険な処理(sink)に届く**経路**と、その経路で rivus が**確かめられなかったこと**(不確実性)。経路は、関数、ファイル、パッケージをまたいで組み立てます。
-- **答えないこと**: それが脆弱性かどうか。**判定はエージェントが行います。** 経路の各ステップのコードと、不確実性の注記を読んで、サニタイズが十分か、ガードが効いているか、入口に認証があるかを判断します。`confidence` は判定ではありません(5 章)。
+- **答えないこと**: それが脆弱性かどうか。**判定はエージェントが行います。** 経路の各ステップのコードと、uncertainty を読んで、サニタイズが十分か、ガードが効いているか、入口に認証があるかを判断します。`confidence` は判定ではありません(5 章)。
 - **見つけられない種類**: 認可の抜け、ビジネスロジックの誤り、競合状態、暗号の使い方の誤りなど、「値が届くか」で表せないもの。ルールにない source と sink も見えません。
 - **「finding がない」は「安全」ではありません。** 何も報告せずに見逃す形が残っています。読まなかったコード(テスト、ビルドできなかったパッケージ、読まなかった言語)の中も見ていません。[README の「何を報告しないか」](../README.md#何を報告しないか)を読んでください。
 - `rivus graph` が答えるのは**呼び出しの関係**で、データの流れではありません。経路が見つかっても、値がそこを流れるとは限りません。
@@ -32,7 +32,7 @@ rivus graph callers -C <dir> <関数>                  # finding の周辺を調
    - `rivus sites` は、`analyze` と同じ言語の選択(`-lang`、auto: ディレクトリにある言語)で読みます。Dart と Rust のディレクトリでも、箇所が出ます(Rust は、`analyze` と同じ確認があり、読むとビルドが実行されます)。読まなかった言語は、出力の `skipped_languages` に出ます(`summary.unread.skipped_languages` と同じ形)。読める言語がないときは、エラーで止まります。
 3. **`rivus analyze`**: 必ず `-timeout` を付けます。標準出力が JSON、標準エラーが経過と警告です。出力は大きいので、ファイルに保存して `jq` で読みます。
 4. **最初に全体を見る**: `summary.callback_param_unresolved`(`callback_param` のルールがあるのに、ハンドラの関数を特定できなかった登録の呼び出しの数と場所。その関数の引数は source として扱われていないので、finding が 0 件でも、入口を確認できていない場所です)、`stats.converged` が `false`、`stats.timed_out` が `true`、`summary.unread` や `load_errors` がある、のどれかなら、結果は途中のもの、または一部のコードを読んでいないものです(5 章)。
-   - **依存込みで収束しない、または時間切れのとき**(依存の多い対象で起きます。最初の `-timeout` つきの実行で、`timed_out: true` になる): 続けて finding を読む前に、6 章の (h) に進みます。順は、(1) 同じ対象を `-no-deps` で実行して、依存が原因かを切り分ける(`-no-deps` で終わるなら、原因は依存の本体)、(2) `-pass-stats` で、どの依存が重いか(`largest_scc_packages`、`packages_top`)と、注記の集中(`summary_sizes`、`on_findings_top`)を見る、(3) 候補が見つかったら、その依存のメソッドをモデルで切る(ADR-098 の基準。条件は `docs/MODELING.md` の 4a 節)。`-no-deps` の結果は、依存への呼び出しが推測で、依存の中の sink の検出も減る(`summary.dependency_sites` は出ない)ので、報告には `-no-deps` で得たと書き、本番の結果の代わりにはしません。
+   - **依存込みで収束しない、または時間切れのとき**(依存の多い対象で起きます。最初の `-timeout` つきの実行で、`timed_out: true` になる): 続けて finding を読む前に、6 章の (h) に進みます。順は、(1) 同じ対象を `-no-deps` で実行して、依存が原因かを切り分ける(`-no-deps` で終わるなら、原因は依存の本体)、(2) `-pass-stats` で、どの依存が重いか(`largest_scc_packages`、`packages_top`)と、uncertainty の集中(`summary_sizes`、`on_findings_top`)を見る、(3) 候補が見つかったら、その依存のメソッドをモデルで切る(ADR-098 の基準。条件は `docs/MODELING.md` の 4a 節)。`-no-deps` の結果は、依存への呼び出しが推測で、依存の中の sink の検出も減る(`summary.dependency_sites` は出ない)ので、報告には `-no-deps` で得たと書き、本番の結果の代わりにはしません。
    - `summary.dependency_sites` がある結果は、依存の本体を読んでいても、依存の関数の中の source と sink は探していません(ADR-099)。同じ module のパッケージと、`-allow-deps-under` の下の path 依存は、依存ではなくプロジェクトで、探しています(ADR-114)。「finding なし」は、依存の中の危険な処理が無い、という意味ではありません。
    - **カテゴリで絞る**: `-categories a,b` は、そのカテゴリの finding だけを出し、`-skip-categories a,b` は、そのカテゴリを除いた全部を出します(同時には使えません。名前は finding の `category` と同じで、読み込んだルールにない名前はエラーになり、有効な名前が出ます)。解析は同じで、出力の finding の一覧だけが変わります。**外した finding は、何も言わずに消えることはありません**: `summary.categories_excluded` に、外したカテゴリと件数が出ます(`summary.findings` は、出力に残った件数です)。何も外さなかったとき(既定を含む)は、この項目は出ません。`resource_name` のように件数の多いカテゴリを、先に外して読むときに使います。`index` と `graph` は、このフラグを取りません(全部の解析から作ります)。
 5. **finding を 1 件ずつ読む**: 一覧を作り、`paths[0].steps` のコードを、対象のファイルと照らして読みます。
@@ -60,7 +60,7 @@ rivus graph callers -C <dir> <関数>                  # finding の周辺を調
 
 ## 3. コマンド
 
-終了コードは、0 = 成功、1 = エラー、2 = 使い方の誤り(知らないコマンドやフラグ)、3 = Rust だけの対象で、読むことを断った、4 = 完全でない解析(全体の時間切れ、未収束、関数ごとの打ち切り。結果は出ている。`summary.incomplete` が true で、`summary.incomplete_reasons` に `timeout`、`not_converged`、`func_timeout`、`budget`)、130 = 中断です。`analyze`、`index -taint`、`query`、`resolve`、`models coverage` が 4 を返します(保存した index を読むだけのときは 0)。finding があっても、完全なら 0 です。`func_timeout` と `budget` は、その関数の要約が流れを欠くことがある、という意味です。**どの関数かは、トップレベルの `uncertainties` と、その関数を通る finding の `uncertainties` にある `depth_limit` の注記**(`func` に関数、`detail` が `func_timeout:` か `budget:` で始まる。関数ごとに 1 件)を見ます(`out_limit` と `path_limit` は、`candidates` に関数の一覧がある別の注記です)。`stats.func_timeouts` と `stats.budget_exhausted` は件数です。`-h` は、どのコマンドでも 0 で、使い方だけを出します(サブコマンドが必要なコマンドを引数なしで呼ぶと、使い方を出して 2 です)。
+終了コードは、0 = 成功、1 = エラー、2 = 使い方の誤り(知らないコマンドやフラグ)、3 = Rust だけの対象で、読むことを断った、4 = 完全でない解析(全体の時間切れ、未収束、関数ごとの打ち切り。結果は出ている。`summary.incomplete` が true で、`summary.incomplete_reasons` に `timeout`、`not_converged`、`func_timeout`、`budget`)、130 = 中断です。`analyze`、`index -taint`、`query`、`resolve`、`models coverage` が 4 を返します(保存した index を読むだけのときは 0)。finding があっても、完全なら 0 です。`func_timeout` と `budget` は、その関数の要約が流れを欠くことがある、という意味です。**どの関数かは、トップレベルの `uncertainties` と、その関数を通る finding の `uncertainties` にある `depth_limit` の uncertainty**(`func` に関数、`detail` が `func_timeout:` か `budget:` で始まる。関数ごとに 1 件)を見ます(`out_limit` と `path_limit` は、`candidates` に関数の一覧がある別の uncertainty です)。`stats.func_timeouts` と `stats.budget_exhausted` は件数です。`-h` は、どのコマンドでも 0 で、使い方だけを出します(サブコマンドが必要なコマンドを引数なしで呼ぶと、使い方を出して 2 です)。
 
 ### `rivus sites`
 
@@ -289,7 +289,7 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `-v` | 各段階の時間とメモリを、標準エラーに出す | 出さない | どの段階が遅いかを知る | |
 | `-workers <n>` | 同時に解析する関数の数(0 = CPU の数、1 = 1 つずつ) | `0` | マシンの負荷を下げる。結果は変わらない | |
 | `-numeric-taint` | 数値と真偽値になった値も追う | 追わない | 数値で起きる問題(範囲、ID の指定)を見たいとき | |
-| `-char-taint` | 文字列から 1 文字取り出した値(byte、rune、コードユニット、char)にも汚染を運ぶ。文字と定数の算術、表を文字で引く形(`digits[c>>4]`)、文字列に戻る所まで。長さ、添字、比較の結果、別の数への変換(`int(c)`)、モデルが作る数では止める。`-numeric-taint` が on のときは効かない(標準エラーに 1 行) | 追わない | 1 文字ずつ読んで詰め直す関数(字句解析、大文字化、エスケープ)を通る流れが、見逃しになっているとき。通った finding には `char_transform` の注記が付く(Go のみ。Dart と Rust は extractor が未対応) | |
+| `-char-taint` | 文字列から 1 文字取り出した値(byte、rune、コードユニット、char)にも汚染を運ぶ。文字と定数の算術、表を文字で引く形(`digits[c>>4]`)、文字列に戻る所まで。長さ、添字、比較の結果、別の数への変換(`int(c)`)、モデルが作る数では止める。`-numeric-taint` が on のときは効かない(標準エラーに 1 行) | 追わない | 1 文字ずつ読んで詰め直す関数(字句解析、大文字化、エスケープ)を通る流れが、見逃しになっているとき。通った finding には `char_transform` の uncertainty が付く(Go のみ。Dart と Rust は extractor が未対応) | |
 | `-resolve-func-values` | 呼び出し先の分からない関数値の呼び出しに、自分のコードで作った関数を候補として補ってから解析する(実験) | off | `unresolved_callee` が多いとき。`index` にも同じ指定が必要 | |
 | `-unsafe-host-exec` | Rust の extractor を、サンドボックスなしで、このマシンで実行する | off | **信頼できるコードだけ**。Linux で Rust を読むとき | ○ |
 | `-dart-extractor <cmd>`、`-rust-extractor <cmd>` | extractor のコマンド | 環境変数 `RIVUS_DART_EXTRACTOR` / `RIVUS_RUST_EXTRACTOR`、次に `rivus-dart` / `rivus-rust` | extractor が PATH にないとき | ○ |
@@ -339,7 +339,7 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `-max-memory <サイズ>` | メモリの上限(やわらかい。`6GiB`、`6GB`、`512MiB`、バイト数、`off`)。合計が上限に近づくと、GC が強くなる。結果は変わらない。**ライブヒープ(強制 GC のあとの量)より低いと守れず、GC が回り続けて CPU が増える**。`GOMEMLIMIT` より優先。`summary.memory_limit_*` に出る(ADR-121) | `GOMEMLIMIT`、なければ物理メモリ(cgroup があれば小さいほう)の 1/4。小さい計算機は `max(1/4, min(4GiB, 1/2))` |
 | `-max-passes <n>` | 要約が変わるあいだ、プログラム全体を繰り返す回数の上限 | `12` |
 | `-k <n>` | アクセスパス(フィールドのたどり方)の深さの上限 | `3` |
-| `-dep-k <n>` | **依存の関数だけ**のアクセスパスの深さ。既定 2(プロジェクトの関数は `-k`、既定 3)。0 は `-k` と同じ。`-dep-k 3` で、既定が 2 になる前の動作。切った所より下はまるごと汚染として扱うので、深さを下げると finding は減らず、増えることがある。切った所を通った値の流れには、`access_path_truncated` の注記が付く(ADR-119) | `2` |
+| `-dep-k <n>` | **依存の関数だけ**のアクセスパスの深さ。既定 2(プロジェクトの関数は `-k`、既定 3)。0 は `-k` と同じ。`-dep-k 3` で、既定が 2 になる前の動作。切った所より下はまるごと汚染として扱うので、深さを下げると finding は減らず、増えることがある。切った所を通った値の流れには、`access_path_truncated` の uncertainty が付く(ADR-119) | `2` |
 | `-max-implementations <n>` | ルールの `match: implementations` を広げる実装の数の上限(`sites` にもある) | `300` |
 | `-ir <file>` | extractor が書いた IR のファイルを読む(`sites` にもある) | なし |
 | `-isolation-timeout <時間>`、`-isolation-max-output <bytes>` | Rust の抽出の、段階ごとの時間と、出力の大きさの上限 | `30m`、4 GiB |
@@ -375,7 +375,7 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `paths[0].steps[]` | 経路のステップ: `func`、`position`、`snippet`、`desc`(`source: ...`、`call ...`、`store`、`load`、`propagated by ...`、`sink: ...` など)、`notes`(そのステップの不確実性)、`model`(そのステップを決めたモデルと `origin`) |
 | `uncertainties[]` | 経路の上の不確実性の全部。**最初に読む場所** |
 | `confidence` | 経路に不確実性が 1 つもなければ `no_uncertainty_on_path`、あれば `requires_review`。**本物かどうかの判定ではありません**(サニタイズや認証は見ていません) |
-| (注意) | アクセスパスを深さの上限で切った所を、値が通ったステップには、`access_path_truncated` の注記が付きます(切った所より下は、まるごと汚染として扱うので、その先の流れは、切ったために出ているだけかもしれません)。使った深さは `summary.access_path_depth`。ただし、ポインタの位置のパスを切る所(ループで伸びるパスの打ち切り)には付きません |
+| (注意) | アクセスパスを深さの上限で切った所を、値が通ったステップには、`access_path_truncated` の uncertainty が付きます(切った所より下は、まるごと汚染として扱うので、その先の流れは、切ったために出ているだけかもしれません)。使った深さは `summary.access_path_depth`。ただし、ポインタの位置のパスを切る所(ループで伸びるパスの打ち切り)には付きません |
 | `reachability` | 経路の関数が、プログラムの起点から届くか: `from_entry`、`from_framework_callback`、`not_from_entry`。`not_from_entry` は「使われていないコード」の意味ではありません(フレームワークに登録したハンドラなど) |
 | `dispatch_widened`、`dispatch_candidates` | 経路の上で、複数の実装に広げた動的な呼び出しの数と、その候補の最大の数。大きいほど、経路が本物でない可能性が上がります |
 | `other_sources`、`other_sources_count` | 同じ sink に届く、同じ種類のほかの source(最大 5 件。数は全部) |
@@ -411,7 +411,7 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `reflection` | リフレクションや DI で、実行時に決まる | 追えていない。コードを読む |
 | `concurrency` | チャネルやゴルーチンの境界を通った | 送る側と受ける側の対応を、コードで確認する |
 | `ffi_boundary` | cgo、`dart:ffi`、Rust の `extern` を通った | 境界の先は見ていない |
-| `numeric_stop` | 値が数値や真偽値になったので、追うのをやめた。`detail` が `char_read_in_callee: <関数名>` のものは、別の種類: その呼び出しで渡した source のデータが、呼び出し先(依存を含む)の中の `<関数名>` で、1 文字ずつ読まれて数値になり、そこから先は追っていない(流れは運ばず、finding の ID と `confidence` は変わらない。この注記のない見逃しが、注記つきの見逃しになる)。汚染のない値を渡した呼び出しには出ない。呼び出し元と呼び出し先の組ごとに 1 件(場所は組の中で最小のもの)。呼び出し先が数値と bool しか外に出さない関数(名前の検査など)のときは、出ない。全体の `uncertainties` に出て、finding の段には付かない | 数値で起きる問題を見たいときは `-numeric-taint`(この注記も出なくなる)。期待した sink が出ないときは、`<関数名>` の文字の読み出しを見る |
+| `numeric_stop` | 値が数値や真偽値になったので、追うのをやめた。`detail` が `char_read_in_callee: <関数名>` のものは、別の種類: その呼び出しで渡した source のデータが、呼び出し先(依存を含む)の中の `<関数名>` で、1 文字ずつ読まれて数値になり、そこから先は追っていない(流れは運ばず、finding の ID と `confidence` は変わらない。この uncertainty のない見逃しが、uncertainty つきの見逃しになる)。汚染のない値を渡した呼び出しには出ない。呼び出し元と呼び出し先の組ごとに 1 件(場所は組の中で最小のもの)。呼び出し先が数値と bool しか外に出さない関数(名前の検査など)のときは、出ない。全体の `uncertainties` に出て、finding の段には付かない | 数値で起きる問題を見たいときは `-numeric-taint`(この uncertainty も出なくなる)。期待した sink が出ないときは、`<関数名>` の文字の読み出しを見る |
 | `unsupported_construct` | extractor が表せなかった構文。その中の動作は解析に入っていない | その箇所のコードを読む |
 | `model_approximation` | モデルが「近似」と書いた流れを通った | モデルの `approximate` の理由(`detail`)を読んで、この場合に当てはまるかを判断する |
 | `field_imprecision` | sink が引数のフィールドを指定しているが、汚染がそのフィールドにあるとは言えない | 汚染された値が、そのフィールドに入るかをコードで確認する |
@@ -431,7 +431,7 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `summary.unread` | **読んだがビルドできなかったパッケージ**(`packages`、`functions`、`top[]` の `package` と `why`)。その中の関数からは、finding は出ません。Dart で `dart pub get` をしていないときも、ここに出ます。Dart で、許可の外の依存(`-allow-deps-under` で許していない `path:` の依存など)を読まなかったときは `why` が `dependency_not_allowed` で始まり、同じ依存の別バージョンを 2 つのパッケージが使うときは `dependency_not_linked` で始まります(標準エラーにも 1 行出ます) |
 | `summary.unread.skipped_languages` | ディレクトリにあるのに読まなかった言語と理由: `declined`、`no-terminal`、`not-installed`、`no-sandbox` |
 | `summary.callback_param_unresolved` | `callback_param` のルールが指す呼び出しのうち、ハンドラの関数を特定できなかったもの(`count`、`sites[]` の `func`・`position`・`symbol`)。**呼び出しの場所**で、source になるはずだった関数の場所ではない。その関数の引数は source として扱われていない。ルールの行がなければ出ない |
-| `summary.numeric_stops` | 数値や bool の型の値に汚染を載せなかった(既定。`-numeric-taint` で追う)回数を、原因で 2 つに分けたもの。`char_reads`: 文字列・byte 列・rune 列の 1 要素として読んだ値(Go の `s[i]`、`range s`、rune、Dart の `codeUnitAt`)で止まった数(`total`、`functions`、回数の多い 10 関数 `top[]` の `function`・`scope`(`project` か `dependency`)・`count`)。定数の添字の `s[0]` は数えない。**数える形は言語で違い、数えない形は 0 のままで、止まっていないとは限らない**: Go は byte・rune の型と、定数でない添字の文字列の添字。Dart は `codeUnitAt`、`codeUnits`・`runes` の繰り返しと添字(`runes.map((r) => ...)` のコールバックに渡る要素は数えない)。Rust は `bytes()`・`chars()`・`char_indices()` の繰り返し、`as_bytes()[i]`、`char` 型(それ以外の Rust の byte の取り出しは数えない。#185)。`other`: 長さ、添字、カウンタ、数値への変換、比較、モデルが作る数で止まった数(`total`、`functions`。仕様どおりなので、数だけ)。`total` は両方の合計。呼び出し先の要約を作る間と使う間の分も、止まった関数に数える。**常に出る**(0 のときも)。**`char_reads` の関数は、文字を 1 つずつ扱っている(字句解析、1 文字ずつの置換・符号化)ので、期待した sink が出ないときは、まずそこを見る**(流れがそこで切れている可能性がある。課題 #185)。**数は、場所の数ではなく、止めた回数で、関数の中の反復で、同じ場所が複数回入ることがある。大小の比較に使う目安であり、たとえば 407 は 407 か所ではない。時間切れが起きた実行では、数が実行ごとに変わりうる(打ち切られた訪問では、前の値との大きいほうを残す。時間切れが 0 の実行では変わらない)。**`project` の関数があると、標準エラーに `N functions stopped a flow at per-character reads: summary.numeric_stops` が 1 行出る。`numeric_stop` の注記(source ごとに 1 件)とは別の数 |
+| `summary.numeric_stops` | 数値や bool の型の値に汚染を載せなかった(既定。`-numeric-taint` で追う)回数を、原因で 2 つに分けたもの。`char_reads`: 文字列・byte 列・rune 列の 1 要素として読んだ値(Go の `s[i]`、`range s`、rune、Dart の `codeUnitAt`)で止まった数(`total`、`functions`、回数の多い 10 関数 `top[]` の `function`・`scope`(`project` か `dependency`)・`count`)。定数の添字の `s[0]` は数えない。**数える形は言語で違い、数えない形は 0 のままで、止まっていないとは限らない**: Go は byte・rune の型と、定数でない添字の文字列の添字。Dart は `codeUnitAt`、`codeUnits`・`runes` の繰り返しと添字(`runes.map((r) => ...)` のコールバックに渡る要素は数えない)。Rust は `bytes()`・`chars()`・`char_indices()` の繰り返し、`as_bytes()[i]`、`char` 型(それ以外の Rust の byte の取り出しは数えない。#185)。`other`: 長さ、添字、カウンタ、数値への変換、比較、モデルが作る数で止まった数(`total`、`functions`。仕様どおりなので、数だけ)。`total` は両方の合計。呼び出し先の要約を作る間と使う間の分も、止まった関数に数える。**常に出る**(0 のときも)。**`char_reads` の関数は、文字を 1 つずつ扱っている(字句解析、1 文字ずつの置換・符号化)ので、期待した sink が出ないときは、まずそこを見る**(流れがそこで切れている可能性がある。課題 #185)。**数は、場所の数ではなく、止めた回数で、関数の中の反復で、同じ場所が複数回入ることがある。大小の比較に使う目安であり、たとえば 407 は 407 か所ではない。時間切れが起きた実行では、数が実行ごとに変わりうる(打ち切られた訪問では、前の値との大きいほうを残す。時間切れが 0 の実行では変わらない)。**`project` の関数があると、標準エラーに `N functions stopped a flow at per-character reads: summary.numeric_stops` が 1 行出る。`numeric_stop` の uncertainty(source ごとに 1 件)とは別の数 |
 | `summary.skipped_dirs`、`outside_configuration` | 読まなかったディレクトリ、ビルドの条件で外れたファイル |
 | `summary.memory_limit_bytes` / `memory_limit_source` / `memory_limit_note` | その実行のメモリの上限(上限なしのときは `memory_limit_bytes` がない)。出所は `flag`、`env`、`default`、`none`。`note` は、上限がない理由、または `-max-memory` が `GOMEMLIMIT` を上書きしたこと。結果には影響しない |
 | `summary.memory_limit_exceeded` | **メモリの上限が低すぎたか**。実行の間に、Go のランタイムが使っていたメモリ(`memory_peak_bytes`)が上限を **5% 以上超えた**ことがあれば `true`(`peak > limit × 1.05`。やわらかい上限が守れているときも、ピークは上限の近くに張りつくので、ちょうどを境目にしない)。`true` は、上限が、解析のライブヒープ(強制 GC のあとの量)より低く、守れず、GC が回り続けて、時間が増えた可能性が高いことを言う。**`-max-memory` を上げて、再実行する**。やわらかい上限なので、`true` でも結果は完全(`incomplete` とは別)。上限がないとき(`memory_limit_source: none`)は、この項目がない |
@@ -548,7 +548,7 @@ rivus analyze -C <dir> -rules app.yaml -timeout 10m ./... > out.json
 ```
 
 - ハンドラが型で入口を受け取るフレームワーク(gin の `*gin.Context` など)は、`kind: param_type` と `type:` で、その型の引数を source にします。見本は [examples/rules](../examples/rules) にあります。
-- ハンドラを引数に取って登録する関数(ルーターの `router.get('/x/<id>', (Request r, String id) => ...)`)の、ハンドラの引数(`id`)を source にするときは、`kind: callback_param`(`symbol`、`operand`、`from`)を使います。`String` のような一般の型は `param_type` で指せないためです。書き方と、`operand` の数え方(言語ごと)は [MODELING.md 4d 節](MODELING.md)。ハンドラを変数、フィールド、登録のヘルパーの引数として渡す形は引けず、`unresolved_callee` の注記になります。
+- ハンドラを引数に取って登録する関数(ルーターの `router.get('/x/<id>', (Request r, String id) => ...)`)の、ハンドラの引数(`id`)を source にするときは、`kind: callback_param`(`symbol`、`operand`、`from`)を使います。`String` のような一般の型は `param_type` で指せないためです。書き方と、`operand` の数え方(言語ごと)は [MODELING.md 4d 節](MODELING.md)。ハンドラを変数、フィールド、登録のヘルパーの引数として渡す形は引けず、`unresolved_callee` の uncertainty になります。
 - シンボルの書き方は言語ごとに違います(Go は `go/types` の形。Dart と Rust は各 extractor の README)。**シンボルが一致しないルールは、何も報告せずに効きません。** 足したあと、`sites` の件数が増えたことを確認します。
 - 流れを切るルール(sanitizer、`pure: true`)は、誤ると見逃しになります。迷ったら書きません。
 - 書式は [MODELING.md](MODELING.md) と、[README の「ルールとモデル」](../README.md#ルールとモデル)にあります。モデルを足す対象は `rivus models coverage -yaml -top 20` で得ます。
@@ -568,7 +568,7 @@ rivus analyze -C <dir> -rules app.yaml -timeout 10m ./... > out.json
 
 ### (h) 解析が終わらない、重い
 
-**依存は、既定で、浅く読まれます。** 依存の関数の中のフィールドのたどり方(アクセスパス)は、深さ 2 で切ります(プロジェクトの関数は 3)。切った所より下は、まるごと汚染として扱うので、依存の中の隣のフィールドへの流れが、多めに出ることがあります(見逃しにはなりません)。その流れには `access_path_truncated` の注記が付き、使った深さは `summary.access_path_depth` に出ます。AWS SDK のような、リクエストの構造体が深い依存で、解析が終わるようになります。前の動作に戻すには、`-dep-k 3` を付けます(`-dep-k 0` は `-k` と同じ深さ)。それでも終わらないのは、深さではなく、巨大な再帰のかたまり(`package:analyzer` など)が原因のときです(4 以降を参照)。
+**依存は、既定で、浅く読まれます。** 依存の関数の中のフィールドのたどり方(アクセスパス)は、深さ 2 で切ります(プロジェクトの関数は 3)。切った所より下は、まるごと汚染として扱うので、依存の中の隣のフィールドへの流れが、多めに出ることがあります(見逃しにはなりません)。その流れには `access_path_truncated` の uncertainty が付き、使った深さは `summary.access_path_depth` に出ます。AWS SDK のような、リクエストの構造体が深い依存で、解析が終わるようになります。前の動作に戻すには、`-dep-k 3` を付けます(`-dep-k 0` は `-k` と同じ深さ)。それでも終わらないのは、深さではなく、巨大な再帰のかたまり(`package:analyzer` など)が原因のときです(4 以降を参照)。
 
 順番に試します。
 
@@ -590,7 +590,7 @@ rivus analyze -C <dir> -rules app.yaml -timeout 10m ./... > out.json
    - 共有してよいのは、この表(パッケージ名と数字)だけです。コードや経路は共有しません。パッケージ名が非公開のものなら、共有の前に利用者に確認します。
 
 4. **`-no-deps`** で、依存のソースを読まない。軽くなりますが、依存への呼び出しは全部、推測(`unmodeled_library_call`)になり、依存の中を通る流れの精度が落ちます。**原因の切り分けには、3 より先に使ってよい**(`-no-deps` で終わるなら、原因は依存の本体です)。結果を報告するときは、`-no-deps` で得たと書きます。
-5. **モデルで切る。** 3 の表で、少数の依存が重さを決めているとき、または `on_findings_top` に、実装の多いインターフェースのメソッドが、注記を集めているときは、そのメソッドの行を `flows` のモデルにして、実装全体の本体を読まないようにできます(ADR-098。条件: 公開の対象で、本体を読んだ場合と finding の集合が同じ。読まなかった本体は `dependency_body_unread` の注記で示される。[docs/MODELING.md](MODELING.md) の 4a 節)。モデルは、解析のコストだけでなく、依存の中の sink の検出のためにも要ります(ADR-099)。**パッケージ単位で、本体を読まない宣言**(`body_replaced_packages`、または試すための `-body-replaced <パッケージ>`。繰り返せます)は、実装済みです(ADR-100、105)。宣言のあるパッケージの関数は、IR から落とされ、呼び出しは、モデルの行があればモデル、なければ `unmodeled_library_call` です。**解析の時間とメモリが減ります。** Go と Dart の extractor も、そのパッケージの本体を読みません(読み込みの時間の減少は、パッケージの使われ方による。Rust は未実装。`-drop-after-read` で、読んでから落とす実行と比べられます)。 書いたパッケージだけに効き(配下は `パス/...`)、プロジェクトのコードは落ちません。宣言したら、**`-read-declared-bodies` を付けた実行と finding の集合を比べます**(同じであること。違いは、行のない関数だけ)。出力は `summary.body_replaced_packages`(パッケージ、宣言の場所、理由、`functions`(読んで落とした関数の数)または `functions_declared`(extractor が読まなかったパッケージが宣言している数))で、宣言を無効にして本体を読んだ数は `summary.body_replaced_ignored` です。**関数や、利用者が実装するインターフェースを引数に取る API は、`calls:` の行が要ります**(ない関数に関数の値などを渡すと、呼ばれるものとして扱い、`assumed_call` を出します。精度のためには、行を書きます)。組み込みのモデルに宣言を付けるのは、ADR-092 / 098 の条件を満たしたあとです。
+5. **モデルで切る。** 3 の表で、少数の依存が重さを決めているとき、または `on_findings_top` に、実装の多いインターフェースのメソッドが、uncertainty を集めているときは、そのメソッドの行を `flows` のモデルにして、実装全体の本体を読まないようにできます(ADR-098。条件: 公開の対象で、本体を読んだ場合と finding の集合が同じ。読まなかった本体は `dependency_body_unread` の uncertainty で示される。[docs/MODELING.md](MODELING.md) の 4a 節)。モデルは、解析のコストだけでなく、依存の中の sink の検出のためにも要ります(ADR-099)。**パッケージ単位で、本体を読まない宣言**(`body_replaced_packages`、または試すための `-body-replaced <パッケージ>`。繰り返せます)は、実装済みです(ADR-100、105)。宣言のあるパッケージの関数は、IR から落とされ、呼び出しは、モデルの行があればモデル、なければ `unmodeled_library_call` です。**解析の時間とメモリが減ります。** Go と Dart の extractor も、そのパッケージの本体を読みません(読み込みの時間の減少は、パッケージの使われ方による。Rust は未実装。`-drop-after-read` で、読んでから落とす実行と比べられます)。 書いたパッケージだけに効き(配下は `パス/...`)、プロジェクトのコードは落ちません。宣言したら、**`-read-declared-bodies` を付けた実行と finding の集合を比べます**(同じであること。違いは、行のない関数だけ)。出力は `summary.body_replaced_packages`(パッケージ、宣言の場所、理由、`functions`(読んで落とした関数の数)または `functions_declared`(extractor が読まなかったパッケージが宣言している数))で、宣言を無効にして本体を読んだ数は `summary.body_replaced_ignored` です。**関数や、利用者が実装するインターフェースを引数に取る API は、`calls:` の行が要ります**(ない関数に関数の値などを渡すと、呼ばれるものとして扱い、`assumed_call` を出します。精度のためには、行を書きます)。組み込みのモデルに宣言を付けるのは、ADR-092 / 098 の条件を満たしたあとです。
 6. Go は、パッケージの指定で範囲を絞る(`./cmd/server/...`)。絞った外から来る流れは見えません。
 
 時間やメモリを減らすために精度を落とした結果は、落とす前の結果の代わりにはなりません。どのフラグで得た結果かを、必ず報告に書きます。

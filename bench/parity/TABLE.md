@@ -328,7 +328,7 @@ ok  	github.com/yagihash/rivus/cmd/rivus	15.373s
 
 ## 6. 読んだもの
 
-| 言語 | 入力(IR) | 実コード | 関数 | 呼び先の名前(種類) | 注記 |
+| 言語 | 入力(IR) | 実コード | 関数 | 呼び先の名前(種類) | uncertainty |
 | --- | --- | --- | --- | --- | --- |
 | Go | casdoor | はい | 1107 | 1154 | 7b0b426a |
 | Go | gin-vue-admin | はい | 1148 | 944 | 7bc7c3051067 |

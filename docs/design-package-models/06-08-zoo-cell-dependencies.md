@@ -14,8 +14,8 @@
 | finding | 197 | 197(`http_client_get` のセルは、どちらも 2 件。同じ) |
 | コアが読む関数 | 915 | 1,565(依存の 657 関数が増える) |
 | load(extractor + IR) | 6.1 秒 | 7.2 秒 |
-| 注記 | `unmodeled_library_call` 80 | `unmodeled_library_call` 76、`dependency_body_unread` 16(`Client.send` のモデルがあるので、依存の実装を読まない)、`summary.dependency_sites`(`searched: false`、依存の関数 657) |
-- **本物にしたときに変わること**: 依存として読まれる(`Dep`)。`-allow-deps-under` は要らない(pub キャッシュは、常に信頼される。今回のフラグなしの実行で確認)。`summary.dependency_sites` の注記が付く。zoo のテストが、注記の数や種類を比べているなら、期待値が変わる(要確認。`cmd/rivus/zoo_dart_test.go`)。宣言(`body_replaced_packages`)を付けたパッケージは、本体を読まないので、むしろ自然(読み込みが減る)。**行のシンボルが、本物のファイルの構成(`package:http/src/client.dart#Client.send`)と一致するかを、本物で確かめられる**(骨組みは、ファイルのパスまで真似る必要があった)。
+| uncertainty | `unmodeled_library_call` 80 | `unmodeled_library_call` 76、`dependency_body_unread` 16(`Client.send` のモデルがあるので、依存の実装を読まない)、`summary.dependency_sites`(`searched: false`、依存の関数 657) |
+- **本物にしたときに変わること**: 依存として読まれる(`Dep`)。`-allow-deps-under` は要らない(pub キャッシュは、常に信頼される。今回のフラグなしの実行で確認)。`summary.dependency_sites` の uncertainty が付く。zoo のテストが、uncertainty の数や種類を比べているなら、期待値が変わる(要確認。`cmd/rivus/zoo_dart_test.go`)。宣言(`body_replaced_packages`)を付けたパッケージは、本体を読まないので、むしろ自然(読み込みが減る)。**行のシンボルが、本物のファイルの構成(`package:http/src/client.dart#Client.send`)と一致するかを、本物で確かめられる**(骨組みは、ファイルのパスまで真似る必要があった)。
 - **本物の依存の置き方**: セルのパッケージ(`cells/pubspec.yaml`)に足すと、ロックをコミットしないので、推移的な依存が変わりうる。**本物のパッケージごとに、別のディレクトリ(`bench/zoo-dart/real/<パッケージ>/`)に、自分の `pubspec.yaml` と、コミットした `pubspec.lock`** を置けば、PR 同士で conflict しない(別のファイル)。`bench/dart-gcp` が、同じ形(ロックをコミット)で、公開のベンチになっている。
 
 **exec の安全(事実と判断)**: 本物のパッケージの exec は、取得した第三者のコードの実行になる(`dart test`。依存の本物のコードが呼ばれる)。規則「取得したコードは実行しない」と、衝突する。ただし、CI には前例がある: `gcp-exec`(`bench/gcp`)は、Google Cloud の本物のクライアントを、フェイクに向けて実行している(loopback 以外は拒否するテスト)。**クラウドのセッションでは、この規則のため、本物の exec は走らせられない(CI に任せる)。** 判断: 相談役。

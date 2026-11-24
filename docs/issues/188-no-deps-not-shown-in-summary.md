@@ -1,7 +1,7 @@
 # `-no-deps` を使ったことが `summary` に出ない。`-no-deps` と `body_replaced_packages` の、過大近似の向きの確認
 
 - 状態: **open**
-- 種類: 道具・出力(注記が足りない)
+- 種類: 道具・出力(uncertainty が足りない)
 - 言語: 全
 - ROADMAP の節: 2
 - 守るもの: -

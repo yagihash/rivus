@@ -13,9 +13,9 @@ import (
 	"github.com/yagihash/rivus/internal/taint"
 )
 
-// ステップの単位の注記(#186、ADR-118 の追記): 畳まれた出力(24 要素を超えて、パラメータの部分を全体にまとめた出力)の、
-// 全体になった要素を適用したステップに、depth_limit の注記(detail が out_widened: で始まる)が付く。畳んでいない出力には付かない。
-// finding の uncertainties と confidence は、この注記で変わらない。付くステップと付かないステップの集合は、関数の解析の順序にも、
+// ステップの単位の uncertainty(#186、ADR-118 の追記): 畳まれた出力(24 要素を超えて、パラメータの部分を全体にまとめた出力)の、
+// 全体になった要素を適用したステップに、depth_limit の uncertainty(detail が out_widened: で始まる)が付く。畳んでいない出力には付かない。
+// finding の uncertainties と confidence は、この uncertainty で変わらない。付くステップと付かないステップの集合は、関数の解析の順序にも、
 // ワーカーの数にも依らない(ADR-118 の (ii))。
 
 // widenedModule writes a module where Pack returns n fields of one struct (n > 24: the output of Pack is widened) and

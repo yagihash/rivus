@@ -9,7 +9,7 @@
 
 ## 今の状態(2026-11-22 の見直し)
 
-主な形は直った(2026-11-22)。残りは `write-param`(`@miss(depth_limit)`、注記つき)と holder 系の `@miss(unresolved_callee)`。関数値の第 2 歩とキャプチャセルで閉じる見込み。
+主な形は直った(2026-11-22)。残りは `write-param`(`@miss(depth_limit)`、uncertainty つき)と holder 系の `@miss(unresolved_callee)`。関数値の第 2 歩とキャプチャセルで閉じる見込み。
 
 ## 本文(GitHub から移した写し)
 
@@ -39,7 +39,7 @@ Go でも同じ形: `apply(func(q *Q){ q.name = n }, q)`(`n` は source)が失�
 期待: 呼び出し元が渡したクロージャのキャプチャ値が、ヘルパーの中の呼び出しに届く。実際: キャプチャ値が、何も無い値(`KUndef`)として扱われ、流れが消える。
 
 ## `@miss`
-`bench/dart-curated`: `run-a` `run-b` `write-a` `write-b` `write-param` `add-list` `nest-a` `nest-b` `twice-args` `across-cap`(何も報告しなかった)、`builder` `bound-prefix`(弱い注記)。`bench/MISSES.md` の型 `CAP`(Dart 12 件)。
+`bench/dart-curated`: `run-a` `run-b` `write-a` `write-b` `write-param` `add-list` `nest-a` `nest-b` `twice-args` `across-cap`(何も報告しなかった)、`builder` `bound-prefix`(弱い uncertainty)。`bench/MISSES.md` の型 `CAP`(Dart 12 件)。
 
 ## 落ちる場所の推定
 * `internal/valuecalls/valuecalls.go:319` `funcsOf`: 束縛(`make_closure` の引数)を付けるのは、クロージャを作った関数 `home` の中だけ(コメント: 「from another function they are not at hand」)。引数で渡された候補には束縛が付かない。
@@ -61,5 +61,5 @@ ADR-047(案 2)で直る見込み(呼び出し元が、自分が渡したクロ�
 
 ## コメント(GitHub から移した写し)
 
-再開後の確認(2026-11-22): Dart の dart-curated で、run-a / run-b / write-a / write-b など、この Issue の主な形は `@miss` が外れて見つかる。残り: `write-param`(`bench/dart-curated/lib/capture.dart`、`@miss(depth_limit)`、注記つき)と、holder 系の `@miss(unresolved_callee)`。Go の `apply(func(q *Q){ q.name = n }, q)` の形は今回は実行していない。この Issue は、残りの形を指すものとして開けておく。
+再開後の確認(2026-11-22): Dart の dart-curated で、run-a / run-b / write-a / write-b など、この Issue の主な形は `@miss` が外れて見つかる。残り: `write-param`(`bench/dart-curated/lib/capture.dart`、`@miss(depth_limit)`、uncertainty つき)と、holder 系の `@miss(unresolved_callee)`。Go の `apply(func(q *Q){ q.name = n }, q)` の形は今回は実行していない。この Issue は、残りの形を指すものとして開けておく。
 

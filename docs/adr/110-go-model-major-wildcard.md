@@ -2,7 +2,7 @@
 
 - 状態: 有効
 - 関連: DESIGN-package-models.md 6.9、MODEL-RUNBOOK.md 4 節
-- 状態の詳細: 解析の読み込みで major ごとの写しを足す(`Rules.ExpandMajors`)。範囲の外の major の注記は別の変更
+- 状態の詳細: 解析の読み込みで major ごとの写しを足す(`Rules.ExpandMajors`)。範囲の外の major の uncertainty は別の変更
 - 要旨: major ごとにファイルや行を写さない
 
 **背景:** Go の module は、major が 2 以上になると、path に `/vN` を持ち、モデルの行の鍵(シンボル)にも入る。`google/go-github` は major が頻繁に上がり(v84 から v93 まで)、`pgx/v5`、`go-redis/v9`、`jwt/v5` なども、`docs/MODEL-QUEUE.md` にある。major ごとにファイルや行を写すと、行の数、`.dead-allow`、zoo のセルが、major の数だけ増える。
