@@ -1,6 +1,5 @@
-dart	dart/super_mixin_impl.dart	miss	@source(dart-super-mixin-impl-decoy) @miss(dynamic_dispatch,unmodeled_library_call) @ref(R-16)	void decoy() { @decoy
-dart	dart/super_mixin_impl.dart	miss	@source(dart-super-mixin-impl-vuln) @miss(dynamic_dispatch,unmodeled_library_call) @ref(R-16)	void vuln() { @vuln
-dart	dart/super_mixin_impl.dart	miss	@source(dart-super-mixin-impl-vuln2) @miss(dynamic_dispatch,unmodeled_library_call) @ref(R-16)	void vuln2() { @vuln
 dart	dart/super_mixin_impl.dart	na	@na(go: no mixins; the nearest is embedding (dyn/embed)	-
 dart	dart/super_mixin_impl.dart	sink-none	@sink(none)	void vuln2() { @vuln
 dart	dart/super_mixin_impl.dart	sink-none	@sink(none) @nosink(dart-super-mixin-impl-decoy)	void fixed() { @fixed
+dart	dart/super_mixin_impl.dart	sink-none	@sink(none) @nosink(dart-super-mixin-impl-on-constraint)	void withOrder() { @vuln
+dart	dart/super_mixin_impl.dart	sink-none	@sink(none) @nosink(dart-super-mixin-impl-with-order)	void decoy() { @decoy

@@ -72,6 +72,7 @@ class Program {
   final texts = Texts();
   final methods = <String, List<MethodImpl>>{}; // by member name
   final types = <String, Set<String>>{}; // a class -> the types it extends, implements, mixes in
+  final classes = <InterfaceElement>{}; // every class, mixin and enum read, for the members that a class inherits
   final boundDone = <String>{}; // the bound-method functions (a tear-off of an instance method) already written
   final bodies = <String>{}; // the symbols of what has a body here
   /// The constructors that are written out: the ones that have something to do, and the ones that a
@@ -106,12 +107,40 @@ class Program {
     final self = funcId(base);
     if (bodies.contains(self)) out.add(self);
     final name = memberKey(base);
+    final start = receiver ?? base.enclosingElement;
     for (final impl in methods[name] ?? const <MethodImpl>[]) {
-      final start = receiver ?? base.enclosingElement;
       if (start is! InterfaceElement) continue;
       if (impl.cls == start || impl.cls.allSupertypes.any((s) => s.element == start)) out.add(impl.id);
     }
+    // A class that declares no such method and takes it from a mixin or a superclass: it is a subtype of the
+    // receiver's type, and the method it runs is the inherited one (the mixin does not have to be a subtype of it).
+    if (start is InterfaceElement && (methods[name] ?? const <MethodImpl>[]).isNotEmpty) {
+      for (final c in classes) {
+        if (c != start && !c.allSupertypes.any((s) => s.element == start)) continue;
+        final id = inherited(c, name);
+        if (id != null) out.add(id);
+      }
+    }
     return out.toList()..sort();
+  }
+}
+
+extension on Program {
+  /// The body that an instance of [cls] runs for the member [name]: the class's own, else the mixins' (the last one
+  /// first), else the superclass's. An interface that the class only implements gives none.
+  String? inherited(InterfaceElement cls, String name, [Set<InterfaceElement>? seen]) {
+    seen ??= {};
+    if (!seen.add(cls)) return null;
+    for (final impl in methods[name] ?? const <MethodImpl>[]) {
+      if (impl.cls == cls) return impl.id;
+    }
+    for (final m in cls.mixins.reversed) {
+      for (final impl in methods[name] ?? const <MethodImpl>[]) {
+        if (impl.cls == m.element) return impl.id;
+      }
+    }
+    final sup = cls.supertype?.element;
+    return sup == null ? null : inherited(sup, name, seen);
   }
 }
 
