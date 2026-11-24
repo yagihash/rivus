@@ -1,14 +1,10 @@
 name: release-build-check
 
 # リリースのアーカイブ（tagpr.yml の release-binaries が、タグのときだけ作る）が、いま作れることを、PR で確かめる。
-# とくに、依存が増えたときに、ライセンス文のないモジュールがあると、リリースのときに初めて失敗する。それを先に見つける。
+# とくに、依存が増えたときに、ライセンス文のないモジュールや、コピーレフトのライセンスのモジュール（go-licenses check）があると、
+# リリースのときに初めて失敗する。それを先に見つける。すべての PR で動かす（依存は go.mod だけでなく、リリースのビルドの対象にも左右される）。
 on:
   pull_request:
-    paths:
-      - go.mod
-      - go.sum
-      - scripts/build-release-archives.sh
-      - .github/workflows/release-build-check.yml
   workflow_dispatch:
 
 permissions: {}
