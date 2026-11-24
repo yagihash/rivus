@@ -51,6 +51,18 @@ class Graph:
         self.edges = collections.defaultdict(set)  # callsite id -> {to_func}
         for cid, to in self.db.execute('select callsite_id,to_func from edges'):
             self.edges[cid].add(to)
+        # A tear-off of a method (`m$bound`) is a closure that only calls the method. The VM records the method itself,
+        # so a call site that reaches `m$bound` reaches the method one step on (only that one step, only from `$bound`).
+        out = collections.defaultdict(set)
+        for fr, to in self.db.execute('select from_func,to_func from edges'):
+            out[fr].add(to)
+        self.reach = {}  # callsite id -> {to_func} plus what the `$bound` ones call
+        for cid, tos in self.edges.items():
+            more = set()
+            for t in tos:
+                if self.funcs[t][0].endswith('$bound'):
+                    more |= out[t]
+            self.reach[cid] = tos | more
         self.refs = collections.defaultdict(int)  # target func -> number of references
         for (t,) in self.db.execute('select target_func from refs'):
             self.refs[t] += 1
@@ -67,13 +79,22 @@ class Graph:
                 return []
             best = max((c[3], c[4]) for c in cs)
             return [c[0] for c in cs if (c[3], c[4]) == best]
+        if name.startswith('new '):  # a constructor: "new Foo.named" is Foo.named, "new Foo" is Foo.new
+            name = name[4:]
+            if '.' not in name:
+                name += '.new'
         want = uri + '#' + name
         got = [c[0] for c in cands if c[1] == want]
-        if not got and '.' in name:  # a local function: "vuln1.f" in the frame
-            parent, _, local = name.rpartition('.')
-            pre = uri + '#' + parent + '$'
-            # the graph names it like a closure (vuln$1, by where it starts): the nearest one before the frame
-            cs = [c for c in cands if c[1].startswith(pre) and (c[3], c[4]) <= (line, col)]
+        parts = name.split('.')
+        # a local function: "vuln1.f" or "nested.go.again" in the frame. The graph names it like a closure (vuln$1,
+        # nested$1$1, by where it starts): of the ones with that many levels, the nearest one before the frame.
+        for k in range(1, len(parts)):
+            if got:
+                break
+            head = uri + '#' + '.'.join(parts[:k])
+            depth = len(parts) - k
+            cs = [c for c in cands if c[1].startswith(head + '$') and c[1][len(head):].count('$') == depth
+                  and (c[3], c[4]) <= (line, col)]
             if cs:
                 best = max((c[3], c[4]) for c in cs)
                 got = [c[0] for c in cs if (c[3], c[4]) == best]
@@ -129,7 +150,7 @@ def main():
                     status = 'callee_unresolved'
                 elif not site:
                     status = 'no_callsite'
-                elif any(set(ids) & g.edges[s[1]] for s in site):
+                elif any(set(ids) & g.reach.get(s[1], set()) for s in site):
                     status = 'ok'
                 else:
                     status = 'no_edge'
@@ -170,4 +191,5 @@ def main():
                 print(o['kind'], o['from'], '->', o['to'], o['site_kind'], o['site_ncand'], o['cases'][:2])
 
 
-main()
+if __name__ == "__main__":
+    main()
