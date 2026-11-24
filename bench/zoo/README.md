@@ -143,7 +143,7 @@ and the position of such a source is the line of the `@override` of the method).
 | --- | --- | --- |
 | `R-14` | the tear-off of an instance method swaps the receiver and the arguments: the flow is not found (`f = Printer('x').run; f(src())`, `stream.listen(c.onData)`, `Button(onPressed: form.submit)`), and the receiver's value is reported at the sink of the argument | `dart/tearoff-instance` (`vuln`, `vuln2`, `vuln3`, `decoy`) |
 | `R-15` | a variable that a pattern (`var (a, _) = ...`) or a for-in (`for (var x in ...)`) declares is not a cell: a closure that assigns it is not seen | `dart/patterns-record` `vuln4`, `vuln7` (a pattern, an if-case, a switch case and a for-in whose variable is only read are found) |
-| `R-16` | the implementation that comes from a mixin or a superclass of the class is not a candidate of a call through the interface; the interpolation `'$w'` does not call the `toString` (the result carries the whole object) | `dart/super-mixin-impl` (`vuln`, `vuln2`, `decoy`), `dart/interp-tostring` `decoy` |
+| `R-16` | the interpolation `'$w'` does not call the `toString` (the result carries the whole object). (The other half, the implementation that a class takes from a mixin or a superclass and a call through the interface, is fixed: `dart/super-mixin-impl`) | `dart/interp-tostring` `decoy` |
 | `KEYED-MAP` | the keys of a list or a map are not told apart (also a `Map<Object, _>` that a store keeps by provider) | `cont/slice`, `cont/map-key-vs-value`, `state/provider-store` (the decoys) |
 
 ## Rust (`bench/zoo-rust`)

@@ -462,6 +462,7 @@ class _Index extends RecursiveAstVisitor<void> {
   /// subclasses of a framework's class (the services of grpc).
   void _type(InterfaceElement? el) {
     if (el == null) return;
+    prog.classes.add(el);
     final supers = <DartType?>[el.supertype, ...el.interfaces, ...el.mixins];
     if (el is MixinElement) supers.addAll(el.superclassConstraints);
     final out = prog.types[typeId(el.thisType)] ??= {};
