@@ -51,7 +51,7 @@ zoo の Dart を実行して観測した呼び出しと、グラフのエッジ�
 
 **根 D**(zoo-dart の `no_edge` 20 件。候補 0): フィールド・map・リスト・グローバル・コンストラクタ引数に入れた関数値を、あとで呼ぶ。例のセル: `clos/stored` 6、`dyn/func_field` 4、`dyn/func_map` 4、`clos/partial-callers` 3、`clos/capture-write-by-ref` 1、`dart/closure-to-sdk` 1、`dart/tearoff-instance` の `Button.press` 1。直す所: `internal/valuecalls/narrow.go`(origins、field、cell。フィールド・map・リストの書き込みから、それを読む側をたどる)。taint 側の関数値の記憶と同じ根(#79)。大きさ: 大。**偽の edge**: 同じ field や map への書き込みは、どれも候補になるので、キーや field を区別しないと過大(`func-map` の decoy。キーが定数の map の要素は、今の要素の置き場で 1 つの `[]` にまとまる)。区別すれば足さない。
 
-**根 I**(3 件): 先に別の値を入れ、あとで別の値を代入した変数(`var f = first; f = second`、`late` の変数をあとで代入する相互再帰)の関数値。例のセル: `clos/local-fn-from-closure` の `vuln2`、`clos/local-recursion` の `mutual`(`@miss(unresolved_callee)`)。直す所: `internal/valuecalls` の、取り込んだ変数に複数の代入をたどる所(上の追記の「セルに入るもの」)。大きさ: 中。**偽の edge**: 代入が全部候補になるので過大(代入の順序を見ない。クロージャがいつ呼ばれるかが分からないと、安全に絞れない。ROADMAP のキャプチャセルの作業と同じ根)。
+**根 I**(3 件。b2d5afc8 で直った。以下は、直す前の分析として残す): 先に別の値を入れ、あとで別の値を代入した変数(`var f = first; f = second`、`late` の変数をあとで代入する相互再帰)の関数値。例のセル: `clos/local-fn-from-closure` の `vuln2`、`clos/local-recursion` の `mutual`(`@miss(unresolved_callee)`)。直す所: `internal/valuecalls` の、取り込んだ変数に複数の代入をたどる所(上の追記の「セルに入るもの」)。大きさ: 中。**偽の edge**: 代入が全部候補になるので過大(代入の順序を見ない。クロージャがいつ呼ばれるかが分からないと、安全に絞れない。ROADMAP のキャプチャセルの作業と同じ根)。
 
 フラグで補ったときに見つかった過検出の形(map のキーを区別しない、変数の代入の順序を見ない)は、修正の材料として、上の 2 つに書いた。
 

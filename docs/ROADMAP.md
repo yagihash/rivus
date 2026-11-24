@@ -31,7 +31,7 @@
   4. `exhaustive` の判定を 1 か所に集める(今は `internal/graphq/graphq.go` と `path.go` に分かれている)
   5. ベンチの採点の抜け: #92、#93
 - **課題**: #77、#92、#93、#98、#99。
-- **消した(関数値の候補を補う機能 `-resolve-func-values` と、診断 `-func-values`。2026-11-24)**: コスト(合格基準の 4 対象 memos、`memos-4gib`、Gitea、cocoon が、フラグありで全部 FAIL。エンジンを余分に 1 回走らせる)のため、期限を延ばさずに消した([DESIGN-callouts.md](DESIGN-callouts.md) 5.6 節)。フラグが補っていた Dart の `no_edge` 37 件の根 D、E、F、G、I は、課題 #99、#79、#206、#78、#81 に分けた。F と G は `valuecalls` の修正で直った(#465、#466)ので、残るのは D、E、I(#99、#79、#206)。課題 #124(補った候補のサイトの列挙)は、機能とともに wontfix にした。
+- **消した(関数値の候補を補う機能 `-resolve-func-values` と、診断 `-func-values`。2026-11-24)**: コスト(合格基準の 4 対象 memos、`memos-4gib`、Gitea、cocoon が、フラグありで全部 FAIL。エンジンを余分に 1 回走らせる)のため、期限を延ばさずに消した([DESIGN-callouts.md](DESIGN-callouts.md) 5.6 節)。フラグが補っていた Dart の `no_edge` 37 件の根 D、E、F、G、I は、課題 #99、#79、#206、#78、#81 に分けた。F、G、I は `valuecalls` の修正で直った(#465、#466、b2d5afc8)ので、残るのは D、E(#99、#79、#206)。課題 #124(補った候補のサイトの列挙)は、機能とともに wontfix にした。
 - **指標: 候補が 0 件の値の呼び出し**(2026-11-22 に取った表。取り直していない。取り直しは別の作業。`internal/valuecalls` の `TestZeroCandidateCalls`。使い方はそのコメント。数えるのは、extractor も `valuecalls` も候補を付けず、上限にも達しない、関数値の呼び出し)。Dart の値の呼び出しの、候補 0 件を減らす(観測との照合で出た「グラフにないエッジ」、#78、#79、#99 の根)。
 
   | ベンチ | 値の呼び出し | 候補 0 件 | 内訳(呼ばれる値の出所) |
