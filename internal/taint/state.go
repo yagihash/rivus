@@ -1016,19 +1016,16 @@ func (s *state) sameChainGuards(old *why, nf ref, hasNf bool) bool {
 	return !oo && !no && sameGuards(og, ng)
 }
 
-// sameChainAsAdd reports whether add of a plain hop that came from nf, to the cell at l, would leave the guards of the hop old
-// as they are: the comparison that add makes (it starts from the cell l, which sameChainGuards does not).
-func (s *state) sameChainAsAdd(l Loc, e Elem, old *why, nf ref, hasNf bool) bool {
+// sameFromAsAdd reports whether add of a plain hop that came from nf would leave the guards of the hop old as they are
+// without looking at any chain: old is unguarded, or it came from the same place (the two cases where add does not compare
+// the chains). The chains are left to add: what they say depends on when they are asked (guardsOfChain keeps its answer
+// until a hop is marked unguarded), so a look-ahead that asks earlier than add may give another answer.
+func sameFromAsAdd(old *why, nf ref, hasNf bool) bool {
 	var nfp *ref
 	if hasNf {
 		nfp = &nf
 	}
-	if old.unguarded() || sameFrom(old.from, nfp) {
-		return true
-	}
-	og, oo := s.guardsOfChain(l, e)
-	ng, no := s.guardsOfChainFrom(&why{from: nfp}, ref{l, e})
-	return !oo && !no && sameGuards(og, ng)
+	return old.unguarded() || sameFrom(old.from, nfp)
 }
 
 // addsNothing reports whether adding the element, with a plain reason (no
@@ -1060,8 +1057,8 @@ func (s *state) addsNothing(dsts []Loc, e Elem, from ref, hasFrom, cutToo bool) 
 			return false
 		}
 		if cut {
-			// the guards are compared the way add compares them, from the cell it puts the element into
-			if !s.sameChainAsAdd(t.loc, t.e, old, from, hasFrom) {
+			// a cut or widened target: only where add compares nothing but where the hop came from
+			if !sameFromAsAdd(old, from, hasFrom) {
 				return false
 			}
 		} else if !s.sameChainGuards(old, from, hasFrom) {
