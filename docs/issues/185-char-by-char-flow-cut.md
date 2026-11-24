@@ -18,7 +18,7 @@
 
 数値の型の値は汚染を持たない、という既定がある(`numeric_stop`)。1 文字を表す型(Go の `byte` と `rune`、Dart のコードユニット、Rust の `char` と `u8`)は、この既定では数値で、汚染を持てない。文字列の丸ごとの変換と切り出し(`[]rune(s)`、`string(rs[1:])`)は汚染を保つが、1 文字を取り出した値は保てない。
 
-`numeric_stop` の記録は、関数にパラメータ経由でだけデータが来る場合(サマリの経路)を含まない。そのため、この見逃しには注記が付かない。
+`numeric_stop` の記録は、関数にパラメータ経由でだけデータが来る場合(サマリの経路)を含まない。そのため、この見逃しには uncertainty が付かない。
 
 ## zoo で固定した今日の結果
 
@@ -26,9 +26,9 @@
 
 - Go: 10 形のうち、見つかるのは 2(`index` の `string(s[0]) + s[1:]`、`rune-slice` の `[]rune(s)` の丸ごと変換と切り出し)。見つからないのは 8(lexer、replace、case、reverse、hex、base64、append、range-write)で、`@miss(silent)`。
 - Dart: 10 形のうち、見つかるのは 3(`codeUnits` を使う `reverse`、`s[i]` を使う `index`、`runes` の丸ごと変換の `rune-slice`)。見つからないのは 7(`codeUnitAt` と `runes` の要素を読む形、`codeUnits` から始まる hex と base64 も、復号の側で切れる)で、`@miss(silent)`。
-- Rust: 10 形のうち、見つかるのは 4(replace、reverse、index、rune-slice)。見つからないのは 6(lexer、case、hex、base64、append、range-write)。Rust は注記 `unmodeled_library_call` が付くので、`@miss(unmodeled_library_call)`。
+- Rust: 10 形のうち、見つかるのは 4(replace、reverse、index、rune-slice)。見つからないのは 6(lexer、case、hex、base64、append、range-write)。Rust は uncertainty `unmodeled_library_call` が付くので、`@miss(unmodeled_library_call)`。
 
-Rust は、`char` と整数を数値と扱う(extractor の型の分類)ので、Go と同じ原因だと読んで見積もった。セルは、実際の結果を記録した。Rust で付く注記が、この原因の説明になっているかは、確かめていない。
+Rust は、`char` と整数を数値と扱う(extractor の型の分類)ので、Go と同じ原因だと読んで見積もった。セルは、実際の結果を記録した。Rust で付く uncertainty が、この原因の説明になっているかは、確かめていない。
 
 ## 直すときの方針
 
@@ -82,4 +82,4 @@ base64 のセルは、`@miss(silent) @ref(#185)` のままにする(フラグを
 
 ### 変更: 表を文字で引く形も運ぶ(2026-11-24)
 
-前の計画では、表を引く形(`digits[c>>4]`)は運ばない(既知の限界)だった。`-char-taint` の Go の実装で、運ぶ形に変えた。理由: hex の符号化は、文字を表で引いた値だけが出力になり、表の側にはデータがない。引いた値が運ばれなければ、文字を 1 つずつ書き換える符号化(hex、アルファベットの表)の流れが、全部切れる。**多めに出る形**: 文字(またはそれから作った値)を添字にして引く表なら、何でも運ぶ。表が定数のとき(`digits`)は、出力が入力の関数なので正しいが、添字が文字で、表がデータを持つとき(map の値、データの入った配列)も、引いた値に文字のマークが付く。そのステップに `char_transform` の注記が付く(引いた値が数でも、文字列でも)。
+前の計画では、表を引く形(`digits[c>>4]`)は運ばない(既知の限界)だった。`-char-taint` の Go の実装で、運ぶ形に変えた。理由: hex の符号化は、文字を表で引いた値だけが出力になり、表の側にはデータがない。引いた値が運ばれなければ、文字を 1 つずつ書き換える符号化(hex、アルファベットの表)の流れが、全部切れる。**多めに出る形**: 文字(またはそれから作った値)を添字にして引く表なら、何でも運ぶ。表が定数のとき(`digits`)は、出力が入力の関数なので正しいが、添字が文字で、表がデータを持つとき(map の値、データの入った配列)も、引いた値に文字のマークが付く。そのステップに `char_transform` の uncertainty が付く(引いた値が数でも、文字列でも)。

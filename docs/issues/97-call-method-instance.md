@@ -17,5 +17,5 @@ zoo(bench/zoo-dart)の作り直しの前に見つかった見逃し。`call` メ
 
 期待: `r(x)` を `r.call(x)` として扱い、静的に解決する(Dart の言語の規則)。
 
-確認方法: bench/zoo-dart に、脆弱 / 直した / デコイの 3 ケースのセル(`dyn/callable-class` 相当)を足し、今は見逃し(注記あり)として記録、直ったら外す。
+確認方法: bench/zoo-dart に、脆弱 / 直した / デコイの 3 ケースのセル(`dyn/callable-class` 相当)を足し、今は見逃し(uncertainty あり)として記録、直ったら外す。
 

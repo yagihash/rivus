@@ -1,7 +1,7 @@
-# #87 Dart: dynamic なメソッド呼び出しが dart:core#dynamic.invoke のモデルで覆われ、本体の source と sink の見逃し・誤検出が注記なしに起きる
+# #87 Dart: dynamic なメソッド呼び出しが dart:core#dynamic.invoke のモデルで覆われ、本体の source と sink の見逃し・誤検出が uncertainty なしに起きる
 
 - 状態: **partial**
-- 種類: 注記なしの見逃し・誤検出(一部)
+- 種類: uncertainty なしの見逃し・誤検出(一部)
 - 言語: Dart
 - ROADMAP の節: 2
 - 守るもの: `graph` の `exhaustive`(GRAPH-3 まで)
@@ -29,7 +29,7 @@
 
 ## 期待と実際
 期待: `dynamic` のメソッド呼び出しは、候補の本体を読むか、近似であることが不確実性に出る。
-実際: モデルで覆われて不確実性の注記が残らない。サイレントな見逃しと誤検出。
+実際: モデルで覆われて uncertainty が残らない。サイレントな見逃しと誤検出。
 
 ## 影響
 Dart の `dynamic` を使うコード(JSON を扱う部分など)で、何も報告せずに流れが失われる、または混ざる。モデルが正体を隠す型(RUST-14 と同じ型。バックログ C-8 の属性案と関連)。

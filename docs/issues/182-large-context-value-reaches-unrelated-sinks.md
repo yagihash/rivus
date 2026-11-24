@@ -12,9 +12,9 @@
 
 測定(2026-11-23、実プロジェクト 1 つ。場所は書かない): アーカイブの名前を新しく source にしたところ、新しい finding が 87 件増えた。見分けると 12 件が本物の流れ、**75 件がこの形**(エラーを文脈に書く 1 つの流れが、25 の sink に届く。3 つの source で 75)。
 
-## 持っている注記
+## 持っている uncertainty
 
-75 件のすべてに、不確実性の注記がある(`container_element_imprecision` が全件。`dynamic_dispatch` が 78 件中の多く、`unmodeled_library_call` が 76 件、`global_var` が 6 件)。`confidence` は `requires_review`。つまり、注記のない finding ではない。ただし、`container_element_imprecision` は、文脈の中の `Error` が、エラーの並びに足す所に付いていて、原因を言っていない。
+75 件のすべてに、uncertainty がある(`container_element_imprecision` が全件。`dynamic_dispatch` が 78 件中の多く、`unmodeled_library_call` が 76 件、`global_var` が 6 件)。`confidence` は `requires_review`。つまり、uncertainty のない finding ではない。ただし、`container_element_imprecision` は、文脈の中の `Error` が、エラーの並びに足す所に付いていて、原因を言っていない。
 
 ## 場所が分かれない原因の切り分け(今分かっている範囲。新しい調査はしていない)
 
