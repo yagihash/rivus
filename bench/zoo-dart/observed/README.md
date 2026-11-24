@@ -6,6 +6,7 @@
 |---|---|
 | `compare.py` | 記録した stack と、`rivus index` が作ったグラフ(SQLite)を比べ、エッジごとに `ok` / `no_edge` / `no_callsite` / `callee_unresolved` を出す |
 | `instrument.dart` | 方法 B。cells の**コピー**の、全部の関数の先頭に `__rv.rvEnter()` を差す(構文だけ。型は見ない) |
+| `test_compare.py` | `compare.py` の単体テスト(`python3 -m unittest discover -s bench/zoo-dart/observed`。CI では実行しない) |
 | `vs_miss.py` | `@miss` の行ごとに、同じファイルに「グラフにない観測のエッジ」があるかを数える。`--others` で、`@miss` のないファイルのエッジも出す |
 
 記録の側は `bench/zoo-dart/exec/zoo_mark/lib/zoo_mark.dart`(`ZOO_STACKS=1` のときだけ stack を持つ。ふだんの出力は変わらない)と、`exec/test/zoo_test.dart`(`ZOO_STACKS_OUT` に書く)にある。
