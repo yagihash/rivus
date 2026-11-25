@@ -16,8 +16,9 @@ import (
 	"strings"
 )
 
-// SchemaVersion identifies the format of the stream.
-const SchemaVersion = "rivus.ir/0"
+// SchemaVersion identifies the format of the stream. It goes up for every change of its shape, an added field too (an older extractor does not
+// write the new field, and the reader refuses it: #109); TestIRSchemaVersionMatchesShape fails when the shape changes and this does not.
+const SchemaVersion = "rivus.ir/1"
 
 type (
 	// FuncID is the fully qualified name of a function.

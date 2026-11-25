@@ -1,10 +1,10 @@
 //! The neutral IR as the Go side reads it (internal/ir: JSON Lines,
-//! "rivus.ir/0"). Only what the extractor writes is here.
+//! "rivus.ir/1"). Only what the extractor writes is here.
 
 use serde_json::{json, Map, Value};
 use std::collections::{BTreeMap, BTreeSet};
 
-pub const SCHEMA_VERSION: &str = "rivus.ir/0";
+pub const SCHEMA_VERSION: &str = "rivus.ir/1";
 
 /// A position. Rust spans give lines and columns, not byte offsets, so the
 /// offset is a number made of the two (the core only compares offsets of the

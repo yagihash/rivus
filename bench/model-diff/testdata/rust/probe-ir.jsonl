@@ -1,4 +1,4 @@
-{"schema_version":"rivus.ir/0"}
+{"schema_version":"rivus.ir/1"}
 {"func":{"blocks":[{"id":0,"instrs":[{"op":"param"}]}],"dep":true,"id":"actix_web::request::HttpRequest::path","params":[{"name":"self","type":"&actix_web::request::HttpRequest"}]},"kind":"func"}
 {"func":{"blocks":[{"id":0,"instrs":[{"op":"param"}]}],"dep":true,"id":"actix_web::request::HttpRequest::uri","params":[{"name":"self","type":"&actix_web::request::HttpRequest"}]},"kind":"func"}
 {"func":{"blocks":[{"id":0,"instrs":[{"op":"param"}]}],"dep":true,"id":"actix_web::request::HttpRequest::query_string","params":[]},"kind":"func"}

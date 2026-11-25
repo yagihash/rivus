@@ -293,7 +293,7 @@ func readIR(path string) (*loaded, error) {
 	defer f.Close()
 	prog, err := ir.Read(bufio.NewReaderSize(f, 1<<20))
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
+		return nil, fmt.Errorf("%s: %w%s", path, err, rebuildHint("", err))
 	}
 	// an extractor may write the functions of the dependencies (marked dep):
 	// the ones nothing of the project reaches change nothing

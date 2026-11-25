@@ -1,8 +1,8 @@
 // The neutral IR as the Go side reads it (internal/ir: JSON Lines,
-// "rivus.ir/0"). Only what the extractor writes is here.
+// "rivus.ir/1"). Only what the extractor writes is here.
 import 'dart:convert';
 
-const schemaVersion = 'rivus.ir/0';
+const schemaVersion = 'rivus.ir/1';
 
 /// A position: a range in a file. The offset counts UTF-16 code units, the
 /// way Dart counts; the core only compares offsets of the same file.
