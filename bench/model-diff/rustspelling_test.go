@@ -174,3 +174,22 @@ func TestRustDataDirProblem(t *testing.T) {
 		}
 	}
 }
+
+// A typed symbol (`<RECEIVER as Trait>::method`) is not a path that a probe names: of the crate that is checked, it is reported as
+// not probed; of another crate, it is counted with the rows of other crates.
+func TestTypedSymbolIsNotProbed(t *testing.T) {
+	f := filepath.Join(t.TempDir(), "rows.yaml")
+	body := "propagators:\n" +
+		"  - symbol: '<&mut std::vec::Vec as std::iter::IntoIterator>::into_iter'\n    flows: [{from: args, to: result}]\n" +
+		"  - symbol: '<&mut actix_web::Vec as std::iter::IntoIterator>::into_iter'\n    flows: [{from: args, to: result}]\n"
+	if err := os.WriteFile(f, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := LoadRustRows([]string{f}, "actix-web")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows.Probed) != 0 || len(rows.Skipped) != 1 || rows.Other != 1 {
+		t.Errorf("probed %v, skipped %q, other %d: want none probed, one skipped, one of another crate", rows.Probed, rows.Skipped, rows.Other)
+	}
+}

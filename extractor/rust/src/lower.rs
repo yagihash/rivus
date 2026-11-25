@@ -250,6 +250,70 @@ fn clean_symbol(name: &str) -> String {
     out
 }
 
+/// The symbol of a call of `IntoIterator::into_iter` whose receiver is a `&mut` reference or a type named `...Mut`
+/// (`IterMut`, `ValuesMut`): `<&mut std::vec::Vec as std::iter::IntoIterator>::into_iter`. The generic arguments and
+/// the lifetimes of the receiver are left out. Any other receiver (a shared reference, a value) keeps the path of the
+/// trait, and so does every other method (docs/MODELING.md, "typed symbols"). `func` is the name of the resolved
+/// instance, `<RECEIVER as TRAIT>::into_iter`.
+fn typed_symbol(func: &str, def_name: &str) -> Option<String> {
+    if def_name != "std::iter::IntoIterator::into_iter" {
+        return None;
+    }
+    let inner = func.strip_prefix('<')?;
+    // the " as " that is not inside the angle brackets of the receiver
+    let (mut depth, mut at) = (0i32, None);
+    let bytes = inner.as_bytes();
+    for i in 0..bytes.len() {
+        if bytes[i] == b'<' {
+            depth += 1;
+        } else if bytes[i] == b'>' {
+            depth -= 1;
+        }
+        if depth == 0 && inner[i..].starts_with(" as ") {
+            at = Some(i);
+            break;
+        }
+    }
+    let recv = &inner[..at?];
+    let mut text = recv.trim();
+    let by_mut_ref = if let Some(r) = text.strip_prefix('&') {
+        // `&'a mut T`: the lifetime goes
+        let r = r.trim_start();
+        let r = if r.starts_with('\'') { r.split_once(' ').map(|x| x.1).unwrap_or("") } else { r };
+        match r.strip_prefix("mut ") {
+            Some(t) => {
+                text = t.trim();
+                true
+            }
+            None => return None,
+        }
+    } else {
+        false
+    };
+    let shown = if text.starts_with('[') {
+        if text.contains(';') { "[_; _]".to_string() } else { "[_]".to_string() }
+    } else {
+        let mut out = String::new();
+        let mut depth = 0i32;
+        for c in text.chars() {
+            if c == '<' {
+                depth += 1;
+            } else if c == '>' {
+                depth -= 1;
+            } else if depth == 0 {
+                out.push(c);
+            }
+        }
+        clean_symbol(&out)
+    };
+    let last = shown.rsplit("::").next().unwrap_or("");
+    if !by_mut_ref && !(last.len() > 3 && last.ends_with("Mut")) {
+        return None;
+    }
+    let prefix = if by_mut_ref { "&mut " } else { "" };
+    Some(format!("<{}{} as std::iter::IntoIterator>::into_iter", prefix, shown))
+}
+
 /// A type whose fields are the machinery of a pointer, not data.
 fn is_smart_pointer(ty: &Ty) -> bool {
     if let TyKind::RigidTy(RigidTy::Adt(def, _)) = ty.kind() {
@@ -1160,7 +1224,8 @@ impl<'a> Lower<'a> {
                         // a function that has no body here: the core finds it
                         // missing and the models say what it does. One that is not Rust
                         // (extern "C") is a call that leaves the language.
-                        callee = json!({"kind": "static", "func": name, "symbol": def_name});
+                        let symbol = typed_symbol(&name, &def_name).unwrap_or_else(|| def_name.clone());
+                        callee = json!({"kind": "static", "func": name, "symbol": symbol});
                         if !has_rust_abi(def) {
                             callee["ffi"] = json!(true);
                         }
@@ -1647,4 +1712,38 @@ pub fn fns_named_by(body: &Body) -> Vec<String> {
     let mut v = V(Vec::new());
     v.visit_body(body);
     v.0
+}
+
+#[cfg(test)]
+mod typed_symbol_tests {
+    use super::typed_symbol;
+
+    const INTO_ITER: &str = "std::iter::IntoIterator::into_iter";
+
+    fn typed(recv: &str) -> Option<String> {
+        typed_symbol(&format!("<{} as std::iter::IntoIterator>::into_iter", recv), INTO_ITER)
+    }
+
+    #[test]
+    fn a_mut_receiver_has_a_typed_symbol_and_the_others_keep_the_path_of_the_trait() {
+        let t = |s: &str| Some(format!("<{} as std::iter::IntoIterator>::into_iter", s));
+        assert_eq!(typed("&mut std::vec::Vec<zoo::Boxed>"), t("&mut std::vec::Vec"));
+        assert_eq!(typed("&'a mut std::vec::Vec<zoo::Boxed>"), t("&mut std::vec::Vec"));
+        assert_eq!(typed("&mut [zoo::Boxed]"), t("&mut [_]"));
+        assert_eq!(typed("&mut std::collections::VecDeque<u8>"), t("&mut std::collections::VecDeque"));
+        assert_eq!(typed("&mut std::collections::HashMap<K, V>"), t("&mut std::collections::HashMap"));
+        assert_eq!(typed("std::slice::IterMut<'_, zoo::Boxed>"), t("std::slice::IterMut"));
+        assert_eq!(typed("std::collections::hash_map::ValuesMut<'_, K, V>"), t("std::collections::hash_map::ValuesMut"));
+        // a shared reference and a value: the path of the trait
+        assert_eq!(typed("&std::vec::Vec<zoo::Boxed>"), None);
+        assert_eq!(typed("std::vec::Vec<zoo::Boxed>"), None);
+        assert_eq!(typed("std::slice::Iter<'_, zoo::Boxed>"), None);
+    }
+
+    #[test]
+    fn only_into_iter_is_typed() {
+        let f = "<&mut std::vec::Vec<u8> as std::iter::IntoIterator>::into_iter";
+        assert_eq!(typed_symbol(f, "std::iter::Iterator::next"), None);
+        assert_eq!(typed_symbol("std::vec::Vec::len", INTO_ITER), None);
+    }
 }

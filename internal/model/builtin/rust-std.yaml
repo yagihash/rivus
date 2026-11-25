@@ -284,6 +284,10 @@ propagators:
     flows: [{from: args, to: result}]
   - symbol: std::iter::IntoIterator::into_iter
     flows: [{from: args, to: result}]
+  - symbol: '<&mut std::vec::Vec as std::iter::IntoIterator>::into_iter'
+    flows: [{from: args, to: result, alias: true}]
+  - symbol: '<std::slice::IterMut as std::iter::IntoIterator>::into_iter'
+    flows: [{from: args, to: result, alias: true}]
   - symbol: std::iter::FromIterator::from_iter
     flows: [{from: args, to: result}]
   - symbol: std::iter::Extend::extend
