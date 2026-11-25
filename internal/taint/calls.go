@@ -136,7 +136,9 @@ func (s *state) callBody(cc *callCtx) {
 	sitesHere := s.eng.sites.ByIRInstr[sites.IRInstr{Func: s.fn.IR.ID, Block: ci.IRBlock, Instr: ci.IRIndex}]
 	if why, ok := s.eng.sites.UnresolvedCallbacks[sites.IRInstr{Func: s.fn.IR.ID, Block: ci.IRBlock, Instr: ci.IRIndex}]; ok {
 		// a callback_param source names this call, and the function it is given was not found
-		s.newNote(ci, KindUnresolvedCallee, why, cc.sym)
+		if !s.inDep() {
+			s.newNote(ci, KindUnresolvedCallee, why, cc.sym)
+		}
 	}
 	for _, site := range sitesHere {
 		if site.Given != nil && site.Role == sites.RoleSource {
@@ -575,11 +577,19 @@ func (s *state) callees(ci *sg.Instr) ([]callee, []*sg.Value) {
 	return out, nil
 }
 
+// inDep says that this state is of a function of a dependency. What such a function makes as an uncertainty is not
+// in the output (collect skips the states of the dependencies, and keepEarlier only adds what was there), so
+// the state does not hold it: a note that a call site uses on the way of a flow (the return value of newNote) is still
+// made, a note that nobody uses (the call sites that drop the return value) is not made at all, with its detail.
+func (s *state) inDep() bool { return s.fn != nil && s.fn.Dep }
+
 func (s *state) newNote(in *sg.Instr, kind, detail, symbol string) *Uncertainty {
 	u := newUncertainty(kind, detail, symbol)
 	u.Func = s.eng.funcID(s.fn)
 	u.pos = in.Pos
-	s.uncertain = append(s.uncertain, u)
+	if !s.inDep() {
+		s.uncertain = append(s.uncertain, u)
+	}
 	return u
 }
 
