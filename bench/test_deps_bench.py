@@ -327,5 +327,147 @@ class Targets(unittest.TestCase):
             self.assertIn("environment:", s)
 
 
+class RustRoad(unittest.TestCase):
+    """The Rust row (shlex): the refusal of a configuration, the check of the isolation, the lock, the line. No network, no fetch, no build."""
+    class Done:
+        def __init__(self, rc, err=""):
+            self.returncode, self.stderr = rc, err
+
+    def tree(self, files):
+        r = tempfile.mkdtemp()
+        self.addCleanup(lambda: __import__("shutil").rmtree(r, ignore_errors=True))
+        for rel, body in files.items():
+            os.makedirs(os.path.dirname(os.path.join(r, rel)), exist_ok=True)
+            open(os.path.join(r, rel), "w").write(body)
+        return r
+
+    def test_target_row(self):
+        t = json.load(open(d.TARGETS_FILE))["shlex"]
+        self.assertEqual((t["lang"], t["commit"], t["decided"], t["detect"], t["rust_minimal_lock"]), ("rust", "4a0724b0b62ef715467875b040a890ce75a8a829", False, None, True))
+        self.assertEqual(t["repo"], "https://github.com/comex/rust-shlex")
+
+    def test_not_in_the_default_targets(self):
+        mk = open(os.path.join(d.ROOT, "Makefile")).read()
+        line = [l for l in mk.splitlines() if "deps_bench.py" in l and "TARGETS" in l and not l.startswith("#")]
+        self.assertTrue(line)
+        self.assertTrue(all("shlex" not in l for l in line))
+
+    def test_cargo_config_is_refused(self):
+        r = self.tree({"Cargo.toml": "[package]\nname='a'\nversion='1.0.0'\n", ".cargo/config.toml": "[build]\nrustc-wrapper = \"/tmp/x\"\n"})
+        self.assertEqual([p for p, _ in d.rust_refusals(r)], [os.path.join(".cargo", "config.toml")])
+        with self.assertRaises(SystemExit) as c:
+            d.refuse_rust("shlex", r)
+        self.assertIn("rustc-wrapper", str(c.exception))  # what the file says is printed
+        self.assertIn("nothing was built or run", str(c.exception))
+
+    def test_old_config_name_and_toolchain_files_are_refused(self):
+        for name in (".cargo/config", "rust-toolchain", "rust-toolchain.toml", "sub/.cargo/config.toml", "sub/rust-toolchain.toml"):
+            r = self.tree({"Cargo.toml": "", name: "x"})
+            self.assertEqual(len(d.rust_refusals(r)), 1, name)
+
+    def test_clean_tree_and_other_files_pass(self):
+        r = self.tree({"Cargo.toml": "", "src/lib.rs": "", "config.toml": "x", "docs/config": "x", ".git/rust-toolchain": "x"})
+        self.assertEqual(d.rust_refusals(r), [])
+        d.refuse_rust("shlex", r)
+
+    def test_prepare_refuses_before_any_copy_or_tool(self):
+        r = self.tree({"Cargo.toml": "", "rust-toolchain.toml": "[toolchain]\nchannel='stable'\n"})
+        w = tempfile.mkdtemp()
+        self.addCleanup(lambda: __import__("shutil").rmtree(w, ignore_errors=True))
+        with self.assertRaises(SystemExit) as c:
+            d.prepare("shlex", {"lang": "rust"}, r, w, dict(os.environ))
+        self.assertIn("channel", str(c.exception))
+        self.assertEqual(os.listdir(w), [])
+
+    def test_isolation_denied_is_ok(self):
+        calls = []
+        run = lambda cmd, **k: (calls.append(cmd), self.Done(1, "touch: /x: Operation not permitted\n"))[1]
+        with tempfile.TemporaryDirectory() as w:
+            self.assertEqual(d.sandbox_denies_write(w, run), (True, ""))
+        self.assertEqual(calls[0][:2], ["/usr/bin/sandbox-exec", "-p"])
+        self.assertIn("(deny file-write*)", calls[0][2])
+
+    def test_write_not_denied_fails(self):
+        def run(cmd, **k):
+            open(cmd[-1], "w").close()  # the write happened
+            return self.Done(0)
+        with tempfile.TemporaryDirectory() as w:
+            ok, why = d.sandbox_denies_write(w, run)
+            self.assertFalse(ok)
+            self.assertIn("NOT denied", why)
+            self.assertEqual(os.listdir(w), [])  # the probe file is removed
+
+    def test_exit_zero_without_a_file_fails(self):
+        with tempfile.TemporaryDirectory() as w:
+            self.assertFalse(d.sandbox_denies_write(w, lambda cmd, **k: self.Done(0))[0])
+
+    def test_sandbox_that_did_not_run_the_probe_fails(self):
+        with tempfile.TemporaryDirectory() as w:
+            ok, why = d.sandbox_denies_write(w, lambda cmd, **k: self.Done(71, "sandbox_apply: Operation not permitted\n"))
+            self.assertFalse(ok)
+            self.assertIn("did not run the probe", why)
+
+    def test_no_sandbox_exec_fails(self):
+        def run(cmd, **k):
+            raise FileNotFoundError("sandbox-exec")
+        with tempfile.TemporaryDirectory() as w:
+            self.assertFalse(d.sandbox_denies_write(w, run)[0])
+
+    def test_report_isolation_mode(self):
+        self.assertTrue(d.isolation_ok({"summary": {"isolation": {"mode": "sandbox"}}})[0])
+        self.assertFalse(d.isolation_ok({"summary": {"isolation": {"mode": "host"}}})[0])
+        self.assertFalse(d.isolation_ok({"summary": {}})[0])
+        self.assertFalse(d.isolation_ok(None)[0])
+
+    def test_uncertainty_counts_and_the_line(self):
+        rep = {"uncertainties": [{"kind": "unmodeled_library_call"}] * 13}
+        n = d.uncertainty_counts(rep)
+        self.assertEqual(n, {"unmodeled_library_call": 13, "unsupported_construct": 0, "unresolved_callee": 0})
+        self.assertEqual(d.format_uncertainties(n), "uncertainties unmodeled_library_call=13 unresolved_callee=0 unsupported_construct=0")
+        self.assertEqual(d.uncertainty_counts(None), {"unsupported_construct": 0, "unresolved_callee": 0})
+
+    def test_the_line_is_info(self):
+        ok, body = d.judge(0.8, 180, 0.1, 8, True, None)
+        self.assertEqual(d.format_line("shlex", False, ok, body).split()[:2], ["INFO", "shlex"])
+        self.assertIn("detected=n/a", body)
+
+    TOML = '[package]\nname = "shlex"\nversion = "1.3.0"\n\n[features]\nstd = []\ndefault = ["std"]\n'
+
+    def test_minimal_lock_is_only_for_no_dependency(self):
+        self.assertTrue(d.rust_no_dependencies(self.TOML))
+        for extra in ('[dependencies]\nlibc = "0.2"\n', '[dev-dependencies]\nx = "1"\n', '[build-dependencies]\nx = "1"\n',
+                      '[target.\'cfg(unix)\'.dependencies]\nx = "1"\n', "[workspace]\nmembers = []\n"):
+            self.assertFalse(d.rust_no_dependencies(self.TOML + extra), extra)
+        self.assertEqual(d.minimal_lock(self.TOML),
+                         '# This file is automatically @generated by Cargo.\n# It is not intended for manual editing.\nversion = 4\n\n[[package]]\nname = "shlex"\nversion = "1.3.0"\n')
+
+    def test_prepare_writes_the_lock_in_the_copy_only(self):
+        r = self.tree({"Cargo.toml": self.TOML, "src/lib.rs": ""})
+        w = tempfile.mkdtemp()
+        self.addCleanup(lambda: __import__("shutil").rmtree(w, ignore_errors=True))
+        tc = self.tree({"bin/rustc": ""})
+        ex = os.path.join(tc, "ex")
+        open(ex, "w").close()
+        os.chmod(ex, 0o755)
+        old = {k: os.environ.get(k) for k in ("RIVUS_RUST_TOOLCHAIN_DIR", "RIVUS_RUST_EXTRACTOR")}
+        os.environ["RIVUS_RUST_TOOLCHAIN_DIR"], os.environ["RIVUS_RUST_EXTRACTOR"] = tc, ex
+        try:
+            src, env, err = d.prepare("shlex", {"lang": "rust", "rust_minimal_lock": True}, r, w, dict(os.environ))
+        finally:
+            for k, v in old.items():
+                os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
+        self.assertIsNone(err)
+        self.assertTrue(os.path.exists(os.path.join(src, "Cargo.lock")))
+        self.assertFalse(os.path.exists(os.path.join(r, "Cargo.lock")))
+        self.assertEqual((env["RIVUS_RUST_TOOLCHAIN_DIR"], env["RIVUS_RUST_EXTRACTOR"]), (tc, ex))
+
+    def test_prepare_refuses_the_lock_for_a_crate_with_dependencies(self):
+        r = self.tree({"Cargo.toml": self.TOML + '[dependencies]\nlibc = "0.2"\n'})
+        w = tempfile.mkdtemp()
+        self.addCleanup(lambda: __import__("shutil").rmtree(w, ignore_errors=True))
+        _, _, err = d.prepare("shlex", {"lang": "rust", "rust_minimal_lock": True}, r, w, dict(os.environ))
+        self.assertIn("only for a crate with no dependency", err)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -102,6 +102,19 @@
     "detect": null,
     "_doc": "pass line D (user decision, 2026-11-24): converge within 600 s and 8 GB, default flags; detection is n/a (no public vulnerability). The limit of 600 s is for the same reason as Gitea (C): 180 s has no ground. Also a target of the depth experiments"
   },
+  "shlex": {
+    "_doc": "INFO row of Rust (not a pass line, not in the default TARGETS; run it by name: make bench-passline TARGETS=shlex): rust-shlex 1.3.0 (tag 1.3.0), a public crate with no dependency, no build.rs and no proc macro, MIT OR Apache-2.0. It shows that the Rust road (fetch, the build under the sandbox with the pinned nightly, the extractor, the analysis) goes through from one end to the other in this tool, and it records the convergence and the count of each kind of uncertainty (settings of the row). The time and the memory of the row mean nothing (under 1 s; the memory is a few tens of MB to about 130 MB depending on how it is measured, and the 0.25 s sample of the tree can miss the build): do not read them as a result. decided false (INFO), detect none (n/a). The crate has no Cargo.lock, so the tool writes the smallest one (version 4, one [[package]]) in the COPY only; rust_minimal_lock is for a crate with no dependency and the tool refuses it when Cargo.toml names one (cargo generate-lockfile is never run). A .cargo/config(.toml) or a rust-toolchain(.toml) in the tree stops the run. HOME is an empty directory in $BENCH_CACHE; sandbox-exec must deny a write before the run, and summary.isolation.mode must be sandbox after it, else the run is a failure.",
+    "lang": "rust",
+    "repo": "https://github.com/comex/rust-shlex",
+    "commit": "4a0724b0b62ef715467875b040a890ce75a8a829",
+    "subdir": "",
+    "args": [],
+    "time_limit_s": 180,
+    "mem_cap_gb": 8,
+    "decided": false,
+    "rust_minimal_lock": true,
+    "detect": null
+  },
   "smoke": {
     "_doc": "a small local tree (bench/go-curated), to check that the script works end to end; not a target",
     "lang": "go",
