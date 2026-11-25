@@ -47,7 +47,7 @@ type isolationOpts struct {
 	// allowHosts are the hosts (-allow-fetch-host) that the fetch stage may get from although Cargo.lock names them and
 	// they are not among the ones that are allowed without a flag
 	allowHosts []string
-	// env are NAME=VALUE pairs given on the command line (the extract stage only), and read are paths that the build may read
+	// env are NAME=VALUE pairs given on the command line (the extract stage only, not the fetch stage), and read are paths that the build may read
 	// besides the project and its dependencies: the only way something of the host gets in. Nothing is passed on from the environment.
 	env, read []string
 	// verbose prints the DEVELOPER_DIR that the build gets; developerDir is set by the run (nil: none was set) and goes to the summary
@@ -67,12 +67,38 @@ func (o *isolationOpts) err() io.Writer {
 // mountable says whether the directory can be read by the build: it is not the home directory of the user or a directory
 // that holds it (that would hand over what is not the project).
 func mountable(dir string) error {
-	if home, err := os.UserHomeDir(); err == nil && home != "" {
-		if rel, err := filepath.Rel(dir, home); err == nil && !strings.HasPrefix(rel, "..") {
-			return fmt.Errorf("%s is the home directory or holds it: it is not given to the build (name the project directory)", dir)
-		}
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return nil
+	}
+	// compared by the real paths: a link or a relative path does not get round it
+	d, h := realPath(dir), realPath(home)
+	rel, err := filepath.Rel(d, h)
+	if err != nil || rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		// (an error of Rel: the two are not comparable, which is not told apart from "holds it": fail closed)
+		return fmt.Errorf("%s is the home directory or holds it: it is not given to the build (name the project directory)", dir)
 	}
 	return nil
+}
+
+// stageEnv is the environment of a stage: base, and the NAME=VALUE pairs of the user (-isolation-env) in the stage that extracts only. The stage
+// that fetches has a network and needs none of them.
+func stageEnv(base, user []string, fetch bool) []string {
+	if fetch {
+		return base
+	}
+	return append(base, user...)
+}
+
+// realPath is the absolute path with the links resolved (the path as it is when it cannot be).
+func realPath(p string) string {
+	if a, err := filepath.Abs(p); err == nil {
+		p = a
+	}
+	if r, err := filepath.EvalSymlinks(p); err == nil {
+		return r
+	}
+	return p
 }
 
 // projectToolchain is the channel a project asks for in rust-toolchain(.toml), or "".
