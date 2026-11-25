@@ -19,6 +19,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -34,6 +35,7 @@ const helperName = "rivus-sandbox-helper"
 const (
 	fdConfig = 3
 	fdStatus = 4
+	fdNotify = 5 // a socket: the helper sends the descriptor of the notifications over it (or closes it when there is none)
 )
 
 // How the network is allowed.
@@ -52,6 +54,9 @@ type helperConfig struct {
 	ExecFiles, ReadFiles []string
 	Net                  int
 	ProxyPort            int
+	// Notify: the calls that change the attributes of files are handed to the parent (notify.go). The limits are the ones of resources (0: none).
+	Notify             bool
+	NProc, Data, Fsize uint64
 }
 
 func init() {
@@ -94,6 +99,8 @@ func Run(ctx context.Context, s Spec) (*Result, error) {
 		cfg.Net = netProxy
 	}
 	cfg.addBaseline()
+	cfg.Notify = !s.Network
+	cfg.setLimits()
 	data, err := json.Marshal(cfg)
 	if err != nil {
 		return nil, err
@@ -109,19 +116,37 @@ func Run(ctx context.Context, s Spec) (*Result, error) {
 		return nil, err
 	}
 	defer stR.Close()
-	cmd := &exec.Cmd{Path: self, Args: []string{helperName}, ExtraFiles: []*os.File{cfgR, stW}}
+	// the attributes of files are watched when what runs is the code of the project (not the fetch of the dependencies, which writes the CARGO_HOME)
+	pair, err := unix.Socketpair(unix.AF_UNIX, unix.SOCK_STREAM|unix.SOCK_CLOEXEC, 0)
+	if err != nil {
+		return nil, err
+	}
+	childEnd := os.NewFile(uintptr(pair[1]), "notify")
+	cmd := &exec.Cmd{Path: self, Args: []string{helperName}, ExtraFiles: []*os.File{cfgR, stW, childEnd}}
 	// the helper itself needs nothing from the environment; the program gets s.Env from the configuration
 	var msg bytes.Buffer
 	msgDone := make(chan struct{})
+	watcher := newAttrWatcher(cfg.Write)
+	watched := make(chan struct{})
+	finished := make(chan struct{})
 	res, err := supervise(ctx, s, cmd, func() {
+		childEnd.Close() // only the helper holds that end now
+		go func() { watcher.receive(pair[0], finished); close(watched) }()
 		stW.Close() // only the helper holds the write end now (it is closed on exec)
 		go func() { io.Copy(&msg, io.LimitReader(stR, 1<<16)); close(msgDone) }()
 		go func() { cfgW.Write(data); cfgW.Close() }()
 	})
+	close(finished)
 	if err != nil && res == nil {
 		cfgW.Close()
 		stW.Close()
+		childEnd.Close()
+		unix.Close(pair[0])
 		return nil, err
+	}
+	select {
+	case <-watched:
+	case <-time.After(5 * time.Second):
 	}
 	select {
 	case <-msgDone:
@@ -129,6 +154,10 @@ func Run(ctx context.Context, s Spec) (*Result, error) {
 	}
 	if m := strings.TrimSpace(msg.String()); m != "" {
 		return nil, fmt.Errorf("%w: %s", ErrUnavailable, m)
+	}
+	if res != nil {
+		_, res.Warnings = abiPolicy(ABI())
+		res.AttributeChanges = watcher.changes()
 	}
 	return res, err
 }
@@ -211,6 +240,7 @@ func helperMain() {
 	runtime.LockOSThread()
 	unix.CloseOnExec(fdConfig)
 	unix.CloseOnExec(fdStatus)
+	unix.CloseOnExec(fdNotify)
 	var cfg helperConfig
 	cf := os.NewFile(fdConfig, "config")
 	if err := json.NewDecoder(cf).Decode(&cfg); err != nil {
@@ -232,10 +262,24 @@ func closeIn(cfg *helperConfig) error {
 		return fmt.Errorf("no_new_privs: %v", err)
 	}
 	dropCapabilities()
+	cfg.limit()
 	if err := landlock(cfg); err != nil {
 		return err
 	}
-	return seccomp(cfg)
+	fd, err := seccomp(cfg)
+	if err != nil {
+		return err
+	}
+	// the descriptor of the notifications goes to the parent (which watches the calls that change attributes); with none, the socket is closed, and that says so
+	if fd >= 0 {
+		unix.CloseOnExec(fd)
+		if err := unix.Sendmsg(fdNotify, []byte{0}, unix.UnixRights(fd), nil, 0); err != nil {
+			return fmt.Errorf("sending the descriptor of the notifications: %v", err)
+		}
+		unix.Close(fd)
+	}
+	unix.Close(fdNotify)
+	return nil
 }
 
 // dropCapabilities takes every capability away from what is run (it matters when rivus is run as root, or with capabilities: no_new_privs does not
@@ -311,6 +355,9 @@ func landlock(cfg *helperConfig) error {
 	abi := ABI()
 	if abi < 1 {
 		return fmt.Errorf("Landlock is not there: the kernel has none, or it is turned off (it is in the kernel since 5.13; `cat /sys/kernel/security/lsm` should list it)")
+	}
+	if err, _ := abiPolicy(abi); err != nil {
+		return err
 	}
 	if cfg.Net == netProxy && abi < 4 {
 		return fmt.Errorf("the TCP port of the proxy can be the only one to connect to only with Landlock ABI 4 (Linux 6.7); this kernel has ABI %d", abi)
@@ -392,4 +439,81 @@ func addPath(rfd int, p string, access uint64) error {
 		return fmt.Errorf("Landlock: %s: %v", p, errno)
 	}
 	return nil
+}
+
+// abiPolicy says what a Landlock ABI is not enough for. Less than 3 (Linux 6.2) cannot stop `truncate` of the files of the same user, and the run is
+// refused. Less than 6 (Linux 6.12) cannot stop signals to other processes of the same user: the run goes on and the caller says so.
+func abiPolicy(abi int) (error, []string) {
+	if abi >= 1 && abi < 3 {
+		return fmt.Errorf("Landlock ABI %d is too old (Linux 6.2 has ABI 3): without it a program under the sandbox can empty the files of the same user (truncate)", abi), nil
+	}
+	if abi >= 3 && abi < 6 {
+		return nil, []string{fmt.Sprintf("this kernel has Landlock ABI %d (Linux 6.12 has ABI 6): the sandbox cannot stop the program from sending signals to other processes of the same user (kill -9 -1 would reach them)", abi)}
+	}
+	return nil, nil
+}
+
+// setLimits chooses the limits of resources of the program: loose ones, which a build of a large project does not reach and a fork bomb or a program
+// that eats the memory does. (They are limits of the process and of what it starts, not of the machine; the strong ones are the cgroups, which a user
+// cannot count on.)
+func (c *helperConfig) setLimits() {
+	// RLIMIT_NPROC counts the tasks (threads too) of the user, and is checked when this program forks: it is the number that there are now, and room
+	c.NProc = uint64(tasksNow()) + 20000
+	// RLIMIT_DATA counts the memory that the program writes (the heap and the private mappings), not the files that it maps: as much as the machine has
+	c.Data = memTotal()
+	c.Fsize = 32 << 30
+}
+
+// limit sets the limits in the helper (they stay with what it runs). A limit that cannot be raised is not changed.
+func (c *helperConfig) limit() {
+	set := func(res int, v uint64) {
+		if v == 0 {
+			return
+		}
+		var cur unix.Rlimit
+		if unix.Getrlimit(res, &cur) == nil && cur.Max < v {
+			v = cur.Max
+		}
+		unix.Setrlimit(res, &unix.Rlimit{Cur: v, Max: v})
+	}
+	set(unix.RLIMIT_NPROC, c.NProc)
+	set(unix.RLIMIT_DATA, c.Data)
+	set(unix.RLIMIT_FSIZE, c.Fsize)
+	unix.Setrlimit(unix.RLIMIT_CORE, &unix.Rlimit{})
+}
+
+// tasksNow is the number of tasks (processes and threads) of the machine: the last number of the fourth field of /proc/loadavg.
+func tasksNow() int {
+	b, err := os.ReadFile("/proc/loadavg")
+	if err != nil {
+		return 0
+	}
+	f := strings.Fields(string(b))
+	if len(f) < 4 {
+		return 0
+	}
+	_, total, ok := strings.Cut(f[3], "/")
+	if !ok {
+		return 0
+	}
+	n, _ := strconv.Atoi(total)
+	return n
+}
+
+// memTotal is the memory of the machine in bytes (0 when it cannot be read).
+func memTotal() uint64 {
+	b, err := os.ReadFile("/proc/meminfo")
+	if err != nil {
+		return 0
+	}
+	for _, l := range strings.Split(string(b), "\n") {
+		if rest, ok := strings.CutPrefix(l, "MemTotal:"); ok {
+			f := strings.Fields(rest)
+			if len(f) > 0 {
+				kb, _ := strconv.ParseUint(f[0], 10, 64)
+				return kb * 1024
+			}
+		}
+	}
+	return 0
 }

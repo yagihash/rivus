@@ -15,6 +15,8 @@
 5. **Landlock ABI の下限**: 抽出は ABI 1 以上 + seccomp。プロキシのポート指定の取得は ABI 4(Linux 6.7)以上(足りなければ止まる)。他プロセスへのシグナルの scope は ABI 6(6.12)以上で、足りないとき、その分は塞げない。
 6. **CI**: `sandbox-linux`(`ubuntu-latest`、`ubuntu-26.04-arm`、`ubuntu-24.04`、`ubuntu-24.04-arm`)と、root での再実行、`sandbox-e2e`(macOS と Linux)。`RIVUS_SBX_RED=1` で、サンドボックスが作れないランナーは失敗にする。
 
-7. **クラウドのセッションでも、Rust は隔離の下で読める**(この環境で確認)ので、モデル作成の「Rust は CI に任せる」の線は、あらためた(MODEL-RUNBOOK.md の 0 節)。取得したクレートのコードを、隔離なしで実行しない規則は、そのまま。
+7. **Landlock が止めないもの、古いカーネル、資源の上限の扱い(ユーザーの判断、2026-11-25)**: (a) `chmod`、`chown`、`utimes`、`setxattr` の系は、止められない(パスを見分けられず、`chmod` を一律に拒否すると GNU ld が壊れる)ので、受け入れ、seccomp の user notification で親に渡して、作業ディレクトリの外のものだけを、事後に stderr へ出す(呼び出しは通す)。(b) Landlock ABI 3 未満(Linux 6.2 未満)は、`truncate` を止められないので、何も実行せずに止まる。ABI 6 未満(6.12 未満)は、シグナルを止められないので、警告を出して動かす。(c) 資源は、緩い `RLIMIT`(プロセス数、メモリ(`RLIMIT_DATA`)、ファイルの大きさ、core 無し)を足す。cgroup は、利用者が頼れないので使わない。
+8. **root で動かしたとき**: 実行の前に、全 capability を落とす。ユーザー名前空間と `mount` 系は、seccomp で拒否する。
+9. **クラウドのセッションでも、Rust は隔離の下で読める**(この環境で確認)ので、モデル作成の「Rust は CI に任せる」の線は、あらためた(MODEL-RUNBOOK.md の 0 節)。取得したクレートのコードを、隔離なしで実行しない規則は、そのまま。
 
 **帰結:** ADR-093 の、macOS の決定と弱さの一覧は、そのまま。「Linux では、信頼できないコードの Rust の解析ができない」だけが覆る(Landlock のない Linux では、今も止まる)。解析する構成が、実行する OS 向けになる点(`cfg(target_os)`)は、macOS と同じ(課題 #146)。

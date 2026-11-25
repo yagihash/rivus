@@ -384,3 +384,72 @@ func TestSandboxBaselineRunsOnlyTheLoader(t *testing.T) {
 		}
 	}
 }
+
+// The changes of attributes that Landlock does not stop are reported (not refused): the ones outside of the places that may be written, and not
+// the ones inside.
+func TestSandboxReportsAttributeChanges(t *testing.T) {
+	skipWithoutSandbox(t)
+	f := setup(t)
+	victim := filepath.Join(f.outside, "victim")
+	os.WriteFile(victim, []byte("data"), 0o600)
+	inside := filepath.Join(f.work, "mine")
+	os.WriteFile(inside, []byte("data"), 0o600)
+	res, err := Run(context.Background(), Spec{Argv: []string{f.probe, "-attr", victim, "-attr-in", inside}, Dir: f.work, Env: []string{"PATH=/usr/bin:/bin"}, Write: []string{f.work}, Timeout: time.Minute})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.ExitCode != 0 {
+		t.Fatalf("exit %d: %s %s", res.ExitCode, res.Stdout, res.Stderr)
+	}
+	// the calls are let through (it is a report): the file is changed, and the program says that it worked
+	if st, err := os.Stat(victim); err != nil || st.Mode().Perm() != 0o640 {
+		t.Errorf("the call was not let through: %v %v", st, err)
+	}
+	real, _ := filepath.EvalSymlinks(victim)
+	got := strings.Join(res.AttributeChanges, "\n")
+	for _, want := range []string{"chmod " + real, "utimensat " + real} {
+		if !strings.Contains(got, want) && !strings.Contains(got, strings.Replace(want, "chmod", "fchmodat", 1)) {
+			t.Errorf("not reported: %q in\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "mine") {
+		t.Errorf("a change inside the work directory is reported:\n%s", got)
+	}
+}
+
+func TestSandboxABIPolicy(t *testing.T) {
+	for _, c := range []struct {
+		abi   int
+		fatal bool
+		warn  bool
+	}{{1, true, false}, {2, true, false}, {3, false, true}, {5, false, true}, {6, false, false}, {7, false, false}} {
+		err, warn := abiPolicy(c.abi)
+		if (err != nil) != c.fatal || (len(warn) > 0) != c.warn {
+			t.Errorf("ABI %d: err=%v warn=%v", c.abi, err, warn)
+		}
+	}
+}
+
+// The limits of resources are on what runs: loose, and not "unlimited".
+func TestSandboxLimitsOfResources(t *testing.T) {
+	skipWithoutSandbox(t)
+	res, err := Run(context.Background(), Spec{Argv: []string{"/bin/bash", "-c", "echo core=$(ulimit -c) procs=$(ulimit -u) data=$(ulimit -d) file=$(ulimit -f)"}, Dir: "/", Env: []string{"PATH=/usr/bin:/bin"}, Timeout: time.Minute})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := strings.TrimSpace(string(res.Stdout))
+	t.Log(out)
+	if !strings.Contains(out, "core=0") {
+		t.Errorf("core files are not off: %s", out)
+	}
+	for _, k := range []string{"procs=", "data=", "file="} {
+		i := strings.Index(out, k)
+		if i < 0 {
+			t.Fatalf("no %s in %q", k, out)
+		}
+		v := strings.Fields(out[i+len(k):])
+		if len(v) == 0 || v[0] == "unlimited" || strings.HasPrefix(v[0], "core=") || strings.Contains(v[0], "=") {
+			t.Errorf("%s is not limited: %s", k, out)
+		}
+	}
+}

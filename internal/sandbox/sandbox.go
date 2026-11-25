@@ -68,6 +68,11 @@ type Result struct {
 	// outside the group it started: the way of finding one that is not a mistake was tried and it killed other processes of the
 	// user). The caller says so to the user. A process that is left is still under the sandbox.
 	MayHaveLeftProcesses bool
+	// Warnings are things that the caller says to the user about this run (a kernel that cannot close something, for example).
+	Warnings []string
+	// AttributeChanges are the files outside the places that the run may write, whose mode, owner, times or extended attributes the program
+	// changed (Linux: Landlock does not stop that, so it is reported after the fact: "chmod /home/u/.ssh/id_rsa"). More than a few hundred are cut.
+	AttributeChanges []string
 }
 
 // real resolves the symbolic links of a path: the sandbox matches the real path (/tmp is /private/tmp).

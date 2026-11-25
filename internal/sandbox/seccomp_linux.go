@@ -67,8 +67,9 @@ var deniedCalls = []uint32{
 // cloneNewFlags are the flags of clone that make a new namespace (CLONE_NEWNS, NEWCGROUP, NEWUTS, NEWIPC, NEWUSER, NEWPID, NEWNET, NEWTIME).
 const cloneNewFlags = 0x7e020080
 
-// filter makes the program for the network of the run.
-func filter(net int) ([]unix.SockFilter, error) {
+// filter makes the program for the network of the run. With notify, the calls that change the attributes of a file (attrCalls) are handed to the
+// process that started the run, which looks at them and lets them through (notify.go).
+func filter(net int, notify bool) ([]unix.SockFilter, error) {
 	arch := seccompArch()
 	if arch == 0 {
 		return nil, fmt.Errorf("seccomp: this architecture is not one that the sandbox knows (x86-64 and arm64 are)")
@@ -87,6 +88,11 @@ func filter(net int) ([]unix.SockFilter, error) {
 	}
 	for _, nr := range deniedCalls {
 		p = append(p, ins(bpfJeq, 0, 1, nr), deny)
+	}
+	if notify {
+		for _, c := range attrCalls {
+			p = append(p, ins(bpfJeq, 0, 1, c.nr), ins(bpfRet, 0, 0, unix.SECCOMP_RET_USER_NOTIF))
+		}
 	}
 	// clone3 is told that it is not there (the C library goes back to clone, which has its flags in a register that can be looked at: clone3
 	// has them in a structure in memory, which a filter cannot read); clone with a flag that makes a namespace is refused
@@ -125,14 +131,23 @@ func filter(net int) ([]unix.SockFilter, error) {
 	return p, nil
 }
 
-func seccomp(cfg *helperConfig) error {
-	f, err := filter(cfg.Net)
+// seccomp installs the filter. With cfg.Notify it returns the file descriptor of the notifications (-1 otherwise).
+func seccomp(cfg *helperConfig) (int, error) {
+	f, err := filter(cfg.Net, cfg.Notify)
 	if err != nil {
-		return err
+		return -1, err
 	}
 	prog := unix.SockFprog{Len: uint16(len(f)), Filter: &f[0]}
-	if _, _, errno := unix.Syscall(unix.SYS_SECCOMP, unix.SECCOMP_SET_MODE_FILTER, 0, uintptr(unsafe.Pointer(&prog))); errno != 0 {
-		return fmt.Errorf("seccomp: %v", errno)
+	flags := uintptr(0)
+	if cfg.Notify {
+		flags = unix.SECCOMP_FILTER_FLAG_NEW_LISTENER
 	}
-	return nil
+	r, _, errno := unix.Syscall(unix.SYS_SECCOMP, unix.SECCOMP_SET_MODE_FILTER, flags, uintptr(unsafe.Pointer(&prog)))
+	if errno != 0 {
+		return -1, fmt.Errorf("seccomp: %v", errno)
+	}
+	if cfg.Notify {
+		return int(r), nil
+	}
+	return -1, nil
 }

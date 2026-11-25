@@ -28,6 +28,8 @@ var (
 	udp    = flag.String("udp", "", "host:port of a UDP listener of the test")
 	prog   = flag.String("exec", "", "a program that is not allowed to be run")
 	only   = flag.String("only", "", "run only this check")
+	attr   = flag.String("attr", "", "a file outside of the places that may be written: its mode and its times are changed (Landlock does not stop that; the parent reports it)")
+	attrIn = flag.String("attr-in", "", "a file in the work directory: its mode is changed (not reported)")
 )
 
 func report(name string, escaped bool, how string) {
@@ -43,6 +45,13 @@ func report(name string, escaped bool, how string) {
 
 func main() {
 	flag.Parse()
+	if *attr != "" {
+		fmt.Println("attr-chmod", os.Chmod(*attr, 0o640))
+		fmt.Println("attr-utimes", os.Chtimes(*attr, time.Unix(1, 0), time.Unix(1, 0)))
+	}
+	if *attrIn != "" {
+		fmt.Println("attr-in-chmod", os.Chmod(*attrIn, 0o640))
+	}
 	if *canary != "" {
 		b, err := os.ReadFile(*canary)
 		report("read-secret", err == nil, fmt.Sprint(err, len(b)))
