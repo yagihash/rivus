@@ -238,9 +238,9 @@ propagators:
   - symbol: std::result::Result::as_ref
     flows: [{from: args, to: result}]
   - symbol: std::ops::Index::index
-    flows: [{from: args, to: result}]
+    flows: [{from: args, to: result, alias: true}]
   - symbol: std::ops::IndexMut::index_mut
-    flows: [{from: args, to: result}]
+    flows: [{from: args, to: result, alias: true}]
   - symbol: std::ops::Try::branch
     flows: [{from: args, to: result}]
   - symbol: std::ops::FromResidual::from_residual
