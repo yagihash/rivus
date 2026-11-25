@@ -114,6 +114,6 @@
 - 2026-11-25、65095f1c、#537: Summary: extractor; ExtractorCheck: lang, path, schema, source_hash, expected_hash, match, detail
 - 2026-11-25、7d921ca8、#490: Uncertainty: coarsened_scc; CoarsenedSCC: id, packages, packages_count, functions; CoarsenedFunctions: group, dependencies; Finding: through_coarsened_scc
 
-**同じ作りに広げる候補(この ADR では、`rivus.result` だけを固定する。課題 #222):** 次のスキーマも、同じ「キーと型と値のハッシュを表に固定し、変わったらバージョンを上げる」にできる。`rivus.query/1`(`internal/report/query.go`)、`rivus.sites/1`(`cmd/rivus/sites.go`)、`rivus.resolve/1`(`internal/report/resolve.go`)、`rivus.coverage/0`(`internal/report/coverage.go`。`/0` のまま)、`rivus.graph`(`internal/graphdb`。名前 `rivus.graph/1` と、整数のバージョン 2 の 2 つがある)。これらは、`rivus.result` の型を共有する部分があり(`rivus.query` は `Finding` を含む)、`rivus.result` の形が変わると、これらの出力も変わる。バージョンを揃えるか、別々に上げるかは、広げるときに決める。
+**同じ作りに広げる候補(この ADR では、`rivus.result` だけを固定する。課題 #223):** 次のスキーマも、同じ「キーと型と値のハッシュを表に固定し、変わったらバージョンを上げる」にできる。`rivus.query/1`(`internal/report/query.go`)、`rivus.sites/1`(`cmd/rivus/sites.go`)、`rivus.resolve/1`(`internal/report/resolve.go`)、`rivus.coverage/0`(`internal/report/coverage.go`。`/0` のまま)、`rivus.graph`(`internal/graphdb`。名前 `rivus.graph/1` と、整数のバージョン 2 の 2 つがある)。これらは、`rivus.result` の型を共有する部分があり(`rivus.query` は `Finding` を含む)、`rivus.result` の形が変わると、これらの出力も変わる。バージョンを揃えるか、別々に上げるかは、広げるときに決める。
 
 **帰結:** 結果が変わる(`schema_version` が `rivus.result/2` になる。ほかは同じ)。形を変える PR は、`SchemaVersion` と `resultShapes` の 2 か所を直す(テストの失敗メッセージが、そのまま写せる行を出す)。`kind` の一覧の表(ARCHITECTURE 4.4)と、定数との照合は、次の作業(完了条件 A(2))。

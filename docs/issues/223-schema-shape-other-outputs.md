@@ -1,4 +1,4 @@
-# #222 `rivus.query`、`sites`、`resolve`、`coverage`、`graph` のスキーマに、`rivus.result` と同じ形の固定とバージョンの規則を広げる
+# #223 `rivus.query`、`sites`、`resolve`、`coverage`、`graph` のスキーマに、`rivus.result` と同じ形の固定とバージョンの規則を広げる
 
 - 状態: **open**
 - 優先度: 低
