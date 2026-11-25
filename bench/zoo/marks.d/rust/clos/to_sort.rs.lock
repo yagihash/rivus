@@ -1,0 +1,4 @@
+rust	clos/to_sort.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	clos/to_sort.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	clos/to_sort.rs	sink-none	@sink(none) @nosink(clos-to-sort-decoy)	fn decoy() { @decoy
+rust	clos/to_sort.rs	sink-none	@sink(none) @nosink(clos-to-sort-decoy)	fn decoy() { @decoy
