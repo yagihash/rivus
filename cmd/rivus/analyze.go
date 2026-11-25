@@ -481,6 +481,9 @@ func (o *analyzeOpts) read(patterns []string, rules *model.Rules, phase func(str
 	if err != nil {
 		return nil, err
 	}
+	if err := o.checkInputPaths(langs, patterns); err != nil {
+		return nil, err
+	}
 	if len(langs) != 1 || langs[0] != langGo {
 		l, err := o.loadLangs(langs, patterns, rules)
 		if err != nil {
@@ -491,6 +494,9 @@ func (o *analyzeOpts) read(patterns []string, rules *model.Rules, phase func(str
 	}
 	l, err := o.loadGo(patterns, rules, o.maxImpl)
 	if err != nil {
+		return nil, o.withProjectHint(err)
+	}
+	if err := o.emptyError(langs, map[string]int{langGo: l.gossa.TargetFiles}, l.gossa.TestFilesSkipped, patterns, loadMessages(l)); err != nil {
 		return nil, err
 	}
 	phase("ir")
