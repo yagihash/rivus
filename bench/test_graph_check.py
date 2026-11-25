@@ -169,7 +169,7 @@ class RustTarget(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             env = dict(os.environ)
             for mode, rc, want in (("sandbox", 0, None), ("sandbox", 4, None), ("host", 0, "isolation_failed: base side: summary.isolation.mode is 'host'"), (None, 0, "isolation_failed: base side")):
-                summary = '{"summary":{"isolation":{"mode":"%s"}}}' % mode if mode else '{"summary":{}}'
+                summary = '{"summary":{"isolation":{"mode":"%s"},"extractor":[{"lang":"rust","match":"yes"}]}}' % mode if mode else '{"summary":{"extractor":[{"lang":"rust","match":"yes"}]}}'
                 rivus = self.fake(d, "rivus", "echo '%s'\nexit %d\n" % (summary, rc))
                 err = g.attest_isolation("base", rivus, "/ext", d, "", [], env, d, 60, 1 << 33)
                 if want is None:
@@ -229,6 +229,72 @@ class RustTarget(unittest.TestCase):
             self.assertTrue(lines[-1].startswith("convergence: NOT CONVERGED (analyze of base and head"))
             lines, status = g.compare(A, side, side, (True, True), pre[:1] + [("ir-repro: DIFFERENT (x)", 1)])
             self.assertEqual(status, 1)  # a difference wins over the convergence
+
+
+def ext_summary(lang, match):
+    return json.dumps({"summary": {"isolation": {"mode": "sandbox"}, "extractor": [{"lang": lang, "path": "/x/ext", "match": match, "source_hash": "a" * 64, "expected_hash": "b" * 64}]}})
+
+
+class ExtractorMatch(unittest.TestCase):
+    """Each side must have its binary and its extractor of the same source (summary.extractor.match "yes", ADR-126). The hash of base and head
+    being different (a change of the extractor) is not looked at: only that each side matches itself. No extractor is run: reports as data."""
+
+    def setUp(self):
+        os.environ["RIVUS_HEAVY_LOCK_HELD"] = "1"
+
+    def report(self, d, lang, match):
+        p = os.path.join(d, "r.json")
+        open(p, "w").write(ext_summary(lang, match))
+        return p
+
+    def test_yes_passes_for_both_languages(self):
+        with tempfile.TemporaryDirectory() as d:
+            for lang in ("rust", "dart"):
+                self.assertIsNone(g.extractor_error("base", self.report(d, lang, "yes"), lang))
+
+    def test_go_has_nothing_to_check(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertIsNone(g.extractor_error("base", self.report(d, "go", "yes"), "go"))
+
+    def test_each_state_is_not_run_with_the_side_and_the_reason(self):
+        with tempfile.TemporaryDirectory() as d:
+            for state in ("no", "unknown_binary", "unknown_extractor", "unchecked"):
+                err = g.extractor_error("head", self.report(d, "dart", state), "dart")
+                self.assertTrue(err.startswith("extractor_mismatch(%s): head side: " % state), err)
+                self.assertIn("/x/ext", err)
+
+    def test_an_unreadable_report_is_not_run(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertIn("extractor_mismatch", g.extractor_error("base", os.path.join(d, "none"), "rust"))
+
+    def test_attest_runs_the_check_for_rust(self):
+        with tempfile.TemporaryDirectory() as d:
+            for state in ("no", "unknown_binary", "unknown_extractor", "unchecked"):
+                p = os.path.join(d, "rivus")
+                open(p, "w").write("#!/bin/sh\necho '%s'\n" % ext_summary("rust", state))
+                os.chmod(p, 0o755)
+                err = g.attest_isolation("base", p, "/ext", d, "", [], dict(os.environ), d, 60, 1 << 33)
+                self.assertTrue(err.startswith("extractor_mismatch(%s): base side: " % state), err)
+
+    def test_a_dart_side_that_does_not_match_is_not_run(self):
+        """main: the exit status is 2 with a NOT RUN line, after the run of the side."""
+        with tempfile.TemporaryDirectory() as d:
+            rivus = os.path.join(d, "rivus")
+            open(rivus, "w").write("#!/bin/sh\nif [ \"$1\" = analyze ]; then echo '%s'; : > \"$RIVUS_INTERNAL_SUMMARY_DUMP\"; fi\n" % ext_summary("dart", "no"))
+            os.chmod(rivus, 0o755)
+            ext = os.path.join(d, "ext")
+            open(ext, "w").write("#!/bin/sh\necho '{\"ir\":1}'\n")
+            os.chmod(ext, 0o755)
+            src = os.path.join(d, "src")
+            os.mkdir(src)
+            old = sys.argv
+            sys.argv = ["graph_check.py", "-name", "zoo-dart", "-lang", "dart", "-dir", src, "-out", d, "-base-bin", rivus, "-head-bin", rivus, "-base-extractor", ext, "-head-extractor", ext, "-graphcheck-bin", "x"]
+            try:
+                rc = g.main()
+            finally:
+                sys.argv = old
+            self.assertEqual(rc, 2)
+            self.assertIn("zoo-dart: NOT RUN (extractor_mismatch(no): base side: ", open(os.path.join(d, "graphcheck-zoo-dart.txt")).read())
 
 
 class ClockLine(unittest.TestCase):
