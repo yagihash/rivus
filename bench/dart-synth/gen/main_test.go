@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/yagihash/rivus/bench/synthplan"
@@ -27,7 +28,7 @@ func gen(p synthplan.Params) map[string]string { return Render(synthplan.Build(p
 
 // The same parameters write the same code, every time.
 func TestDeterministic(t *testing.T) {
-	for _, size := range []string{"S", "M"} {
+	for _, size := range []string{"S", "M", "F"} {
 		if digest(gen(synthplan.Sizes[size])) != digest(gen(synthplan.Sizes[size])) {
 			t.Errorf("size %s: two runs wrote different code", size)
 		}
@@ -54,5 +55,22 @@ func TestSnapshot(t *testing.T) {
 	t.Logf("digest of S: %s", got)
 	if got != snapshotS {
 		t.Errorf("the code of S changed: digest %s", got)
+	}
+}
+
+// Size F gives closures of the project to a dependency package, which is written under .dart_tool and named in
+// package_config.json; the others do not have one.
+func TestSizeFHasDependency(t *testing.T) {
+	f := gen(synthplan.Sizes["F"])
+	for _, p := range []string{".dart_tool/dep/lib/dep.dart", ".dart_tool/dep/pubspec.yaml"} {
+		if f[p] == "" {
+			t.Errorf("size F: no %s", p)
+		}
+	}
+	if !strings.Contains(f["lib/m3.dart"], "dep.d") || !strings.Contains(f[".dart_tool/package_config.json"], `"dep"`) {
+		t.Error("size F: the code does not call the dependency")
+	}
+	if s := gen(synthplan.Sizes["S"]); s[".dart_tool/dep/lib/dep.dart"] != "" || strings.Contains(s[".dart_tool/package_config.json"], `"dep"`) {
+		t.Error("size S has a dependency")
 	}
 }
