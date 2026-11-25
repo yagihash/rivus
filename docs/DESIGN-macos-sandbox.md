@@ -134,7 +134,7 @@
 - **SBX-1 DNS**: ネットワークを拒否しても、名前解決のデーモンへの mach の問い合わせを許すと、問い合わせるホスト名にデータを載せて外へ出せる。**抽出も取得も、名前解決のサービスを許さない**。取得は、プロキシに `CONNECT ホスト名` を送る形で、cargo と git が自分で名前を解決しないことを測る。
 - **SBX-2 設定の書き込み**: `cfprefsd` 経由の `defaults write`(あとで効く仕掛け)、`crontab`、LaunchAgents、シェルの rc を、名指しで試す。
 - **SBX-3 UNIX ドメインソケット**: ssh-agent(`/private/tmp/com.apple.launchd.*/Listeners`)、`docker.sock`、ほかのエージェント。どの規則で止まるかを 1 行。
-- **SBX-4 端末**: 子は `Setsid`(制御端末なし)、標準入力は `/dev/null`、`/dev/tty` を拒否。子の標準エラーを端末に流すときは、制御文字を除去する。
+- **SBX-4 端末**: 子は `Setsid`(制御端末なし)、標準入力は `/dev/null`、`/dev/tty` を拒否。子の標準エラーを端末に流すときは、制御文字を除去する(**実装済み**: `cmd/rivus/termsafe.go` の `sanitizeForTerminal`。ESC を含む C0、DEL、C1、不正な UTF-8 を `\xNN` の可視の形にし、LF と tab は残す。通す所: `cmd/rivus/isolate_sandbox_darwin.go` と `isolate_sandbox_linux.go` の `sandboxResult`(端末への書き出しとエラーの末尾)、`extractorcheck.go` の `tailOf`、`lang.go` の extractor の失敗の文、`extract.go` の読み込みの誤り。テスト: `termsafe_test.go`、`isolate_stderr_test.go`、`isolate_sandbox_darwin_test.go` の `TestSandboxChildStderrHasNoControlCharacter`)。
 - **SBX-5 名前が見える範囲**: 中身の読み取りだけでなく、`ls ~`、`stat ~/.ssh/…`、`ls /Users`、`/Volumes`、`/Applications`。対象の親と兄弟(隣のリポジトリ)、外を指すシンボリックリンク。`~/.cargo`、`~/.gitconfig`、`~/.netrc`、`~/.config/gh` は名指し。**7 節の 3 は、「何が見えるか」の一覧にしてから、ユーザーに聞く**(「秘密ではない」を、こちらで決めない)。
 - **SBX-6 後始末**: 目印の環境変数のほかの見つけ方(実行ファイルのパスと起動時刻、サンドボックスの下かどうかを外から調べる手段、子孫の一覧を取り続ける)を、1 回調べる。完全でないなら、**残ったプロセスがある、または確かめられなかった、を、出力と stderr に書く**(必ず報告する)。
 - **SBX-7 構成**: Linux のコンテナから macOS のホストに移ると、`cfg(target_os)` と `build.rs` の分岐で、**読むコードが変わる**。「解析するのは macOS 向けの構成」と書き、**出力に、対象の構成(target triple)を出す**。Linux 向けにしかない分岐は、範囲の外になる(見逃しの向きの変化)。`--target` を指定して型検査だけする方法が取れるかを、調べる。

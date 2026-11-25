@@ -495,7 +495,7 @@ func (o *analyzeOpts) extractInto(lang string, w io.Writer) ([]byte, error) {
 		out, err = cmd.Output()
 	}
 	if err != nil {
-		return nil, fmt.Errorf("the %s extractor failed: %v\n%s", lang, err, strings.TrimSpace(stderr.String()))
+		return nil, fmt.Errorf("the %s extractor failed: %v\n%s", lang, err, sanitizeForTerminal([]byte(strings.TrimSpace(stderr.String())))) // SBX-4
 	}
 	return out, nil
 }
