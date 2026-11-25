@@ -2,7 +2,9 @@ name: main-ci
 
 # Writes the check run `main-ci` on the head of every open pull request of this repository, from the result of ci.yml on main.
 # A ruleset can require `main-ci` (from the app GitHub Actions), so that nothing is merged while main is red (or while the scheduled CI
-# has been red for 24 hours). The rules are in scripts/main-ci/decide.go; the way out is the label `fixes-main` on the pull request that fixes main.
+# has been red for 24 hours). It does not wait for a CI that is still running: if the newest completed push CI on main has not failed
+# (a cancelled one is passed over), the check is success at once; when a running CI ends in a failure, its `completed` event turns the check to failure.
+# The rules are in scripts/main-ci/decide.go; the way out is the label `fixes-main` on the pull request that fixes main.
 #
 # Safety: this workflow never runs the code of a pull request, and there is no `pull_request` trigger on purpose: a `pull_request`
 # workflow runs with the definition of the pull request's branch, which a pull request could change to pass the check. `workflow_run`
@@ -13,7 +15,7 @@ name: main-ci
 on:
   workflow_run:
     workflows: [CI]
-    types: [requested, completed] # a start (pending) and an end, a re-run included
+    types: [requested, completed] # a start (a new pull request gets its check) and an end (a failure turns it red), a re-run included
   schedule:
     - cron: "11 * * * *" # every hour: the 24 hours of a scheduled failure pass with the clock, not with an event
   workflow_dispatch:
