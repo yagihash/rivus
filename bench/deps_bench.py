@@ -194,13 +194,13 @@ def detected_located(n):
 
 def through_counts(truth, rep):
     """Position level (the same scoring as `bench/score.py --through`): a labelled "vuln" site (file, line) counts when a
-    finding of its category has a path with a `call ...` step at that position (kinds that differ do not count).
-    Returns (tp, n). Counts only."""
+    finding of its category has a path with a `call ...` step or the final `sink: ...` step at that position (the labelled
+    call is a helper on the path, or the sink itself; kinds that differ do not count). Returns (tp, n). Counts only."""
     call_steps = {}
     for f in (rep or {}).get("findings", []):
         for pa in f.get("paths") or []:
             for st in pa.get("steps", []):
-                if st.get("desc", "").startswith("call "):
+                if st.get("desc", "").startswith(("call ", "sink: ")):
                     q = st["position"]
                     call_steps.setdefault((q["file"], q["line"]), set()).add(f["category"])
     sites = [t for t in truth if "file" in t and t.get("label") == "vuln"]

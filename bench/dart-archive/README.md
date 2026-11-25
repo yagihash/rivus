@@ -20,6 +20,16 @@ link with the stored target). The line is INFO until it is decided.
   (`ArchiveFile.nameOfLinkedFile`) reach `File.new` and `Link.new` in `extract_archive_to_disk.dart` and the file streams. They are
   not quiet after the fix: rivus does not read a guard (`isWithin`, `_isValidSymLink`) as a sanitizer, so the fixed version reports
   as much (recorded; not part of the line).
-- The labelled flow itself (the stored name as the **target** of `Link.create`) is not found: `dart:io#Link.create` has no sink for
-  the target argument (the builtin rows have `Link.new`, the path of the link). So `detected=no`, `through_tp=0/2`. The missing piece is a
-  builtin sink row for the target of `Link.create` / `createSync`; the zoo needs a cell for it.
+- The labelled flow itself (the stored name as the **target** of `Link.create`) was not found: `dart:io#Link.create` had no sink for
+  the target argument (the builtin rows had `Link.new`, the path of the link). So `detected=no`, `through_tp=0/2`.
+
+## After the sink rows of `Link.create` / `Link.createSync` (2026-11-25)
+
+- `internal/model/builtin/dart-io.yaml` has the target (argument 0) of both methods as `path_traversal` sinks; the zoo cell is
+  `dart/io-link-create-target` (dart:io cannot be recorded by the run, so the cell gives the same value to `sinkPath` on the line).
+- `detected=yes`, `through_tp=2/2`, 11 s, converged (still INFO). The finding ends at the labelled call itself (its last step is
+  `sink: dart:io#Link.create`, not a `call` step), so `through_counts` of `bench/deps_bench.py` counts a `sink:` step at the
+  labelled place as well as a `call` step.
+- At 3.3.8 the same sites are still reported (the guard is not read as a sanitizer, as above). A finding there carries no
+  uncertainty that points at the added check; `numeric_stop` entries that name `_isWithinOrEquals` (the check) are in the report,
+  but they are not attached to the findings. Not part of the line.

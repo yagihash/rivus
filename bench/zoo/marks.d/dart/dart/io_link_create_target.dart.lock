@@ -1,0 +1,3 @@
+dart	dart/io_link_create_target.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	dart/io_link_create_target.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	dart/io_link_create_target.dart	sink-none	@sink(none) @nosink(dart-io-link-create-target-decoy)	Future<void> decoy() async { @decoy

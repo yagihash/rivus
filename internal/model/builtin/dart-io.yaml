@@ -123,6 +123,15 @@ sinks:
     args: [0]
     category: path_traversal
     accepts: [user_input]
+  # the target a link points to (the path of the link itself is Link.new)
+  - symbol: dart:io#Link.create
+    args: [0]
+    category: path_traversal
+    accepts: [user_input]
+  - symbol: dart:io#Link.createSync
+    args: [0]
+    category: path_traversal
+    accepts: [user_input]
   # SSRF: outgoing requests to attacker controlled URLs
   - symbol: dart:io#HttpClient.getUrl
     args: [0]
