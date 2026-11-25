@@ -1,0 +1,10 @@
+rust	clos/to_lib_ref.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	clos/to_lib_ref.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	clos/to_lib_ref.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	clos/to_lib_ref.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	clos/to_lib_ref.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	clos/to_lib_ref.rs	sink-none	@sink(none) @nosink(clos-to-lib-ref-decoy)	fn decoy() { @decoy
+rust	clos/to_lib_ref.rs	sink-none	@sink(none) @nosink(clos-to-lib-ref-decoy)	fn decoy() { @decoy
+rust	clos/to_lib_ref.rs	sink-none	@sink(none) @nosink(clos-to-lib-ref-decoy)	fn decoy() { @decoy
+rust	clos/to_lib_ref.rs	sink-none	@sink(none) @nosink(clos-to-lib-ref-decoy)	fn decoy() { @decoy
+rust	clos/to_lib_ref.rs	sink-none	@sink(none) @nosink(clos-to-lib-ref-decoy)	fn decoy() { @decoy

@@ -17,6 +17,9 @@ sinks:
   - symbol: zoo/mark.SinkCmd
     args: [0]
     category: command_injection
+  - symbol: zoo/mark.SinkCmdB
+    args: [0]
+    category: command_injection
   - symbol: zoo/mark.SinkCmdBytes
     args: [0]
     category: command_injection

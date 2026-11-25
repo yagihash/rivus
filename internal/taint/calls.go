@@ -139,6 +139,22 @@ func (s *state) callBody(cc *callCtx) {
 		s.newNote(ci, KindUnresolvedCallee, why, cc.sym)
 	}
 	for _, site := range sitesHere {
+		if site.GivenWith != nil {
+			// a sink of the function that the call is given and the library calls: it reads what the row fills its parameters with
+			x := *cc
+			x.sym, x.recv = site.Symbol, nil
+			ops := cc.argv()
+			x.args = make([]*sg.Value, len(site.GivenWith))
+			for k, o := range site.GivenWith {
+				if o >= 0 && o < len(ops) {
+					x.args[k] = ops[o]
+				} else {
+					x.args[k] = &sg.Value{Kind: sg.KUndef}
+				}
+			}
+			s.checkSink(&x, site)
+			continue
+		}
 		// a site on a call of a function value is for one of the functions it may reach
 		sc := cc
 		if site.Callee != "" && ci.Callee.Kind == ir.CalleeDynamic {

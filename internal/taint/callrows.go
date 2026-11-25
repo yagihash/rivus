@@ -79,15 +79,12 @@ func (r callRowRef) row() model.CallRow { return r.p.Calls[r.i] }
 
 // callRowsOf are the rows of calls of the models of the symbol, with the propagator that has each.
 func (e *Engine) callRowsOf(sym string) []callRowRef {
-	if e.rules == nil || sym == "" || !e.rules.Calls[sym] {
+	if e.rules == nil {
 		return nil
 	}
 	var out []callRowRef
-	for _, p := range e.rules.Propagators[sym] {
-		p := p
-		for i := range p.Calls {
-			out = append(out, callRowRef{&p, i})
-		}
+	for _, r := range e.rules.CallRowsOf(sym) {
+		out = append(out, callRowRef{r.Prop, r.Index})
 	}
 	return out
 }

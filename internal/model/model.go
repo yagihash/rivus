@@ -1606,6 +1606,72 @@ func (r *Rules) HoldsNothing(symbol string) bool { return r != nil && r.GlobalsH
 // method is read as well as the model applied (a set with read_impls).
 func (r *Rules) ReadsImpls(symbol string) bool { return r.ReadImpls[symbol] }
 
+// CallRowAt is a row of calls of a model: the propagator that has it, and its place in the propagator.
+type CallRowAt struct {
+	Prop  *Propagator
+	Index int
+}
+
+// Row is the row.
+func (c CallRowAt) Row() CallRow { return c.Prop.Calls[c.Index] }
+
+// CallRowsOf are the rows of calls of the models of the symbol, in the order of the models.
+func (r *Rules) CallRowsOf(symbol string) []CallRowAt {
+	if r == nil || symbol == "" || !r.Calls[symbol] {
+		return nil
+	}
+	var out []CallRowAt
+	for i := range r.Propagators[symbol] {
+		p := &r.Propagators[symbol][i]
+		for j := range p.Calls {
+			out = append(out, CallRowAt{p, j})
+		}
+	}
+	return out
+}
+
+// Operand is the place that the selector names among the operands of a call, as the instruction lists them
+// (the receiver first when the call has one), or -1 when it names none (a result, every argument, a receiver the
+// call does not have).
+func (s Selector) Operand(hasRecv bool) int {
+	switch {
+	case s.Kind == SelRecv && hasRecv:
+		return 0
+	case s.Kind == SelArg && !s.All:
+		if hasRecv {
+			return s.Index + 1
+		}
+		return s.Index
+	}
+	return -1
+}
+
+// FnOperand is the place among the operands of the call of the function that the row says is called, or -1
+// (a row that names a method, or a selector that is not an operand).
+func (c CallRow) FnOperand(hasRecv bool) int {
+	if c.Method != "" {
+		return -1
+	}
+	sel, err := ParseSelector(c.Fn)
+	if err != nil {
+		return -1
+	}
+	return sel.Operand(hasRecv)
+}
+
+// WithOperands are, for each parameter of the function that the row calls, the place among the operands of the call
+// of what fills it, or -1 when it fills none.
+func (c CallRow) WithOperands(hasRecv bool) []int {
+	out := make([]int, len(c.With))
+	for k, t := range c.With {
+		out[k] = -1
+		if sel, err := ParseSelector(t); err == nil {
+			out[k] = sel.Operand(hasRecv)
+		}
+	}
+	return out
+}
+
 // HasModel reports whether the symbol has a sanitizer or propagator model,
 // which replaces the analysis of the function body.
 func (r *Rules) HasModel(symbol string) bool {

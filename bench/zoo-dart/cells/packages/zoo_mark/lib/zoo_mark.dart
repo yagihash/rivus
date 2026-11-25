@@ -63,6 +63,10 @@ String typed(String tag) => tag;
 
 /// The sinks of each class. They record what they got and execute nothing.
 void sinkCmd(String s) {}
+
+/// sinkCmd for a place that takes a function with a result of bool (the function of Iterable.where).
+bool sinkCmdB(String s) => false;
+
 void sinkCmdBytes(List<int> b) {}
 void sinkSql(String s) {}
 void sinkHtml(String s) {}

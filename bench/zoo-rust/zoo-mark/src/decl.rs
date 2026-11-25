@@ -30,6 +30,11 @@ pub fn sink_cmd(_s: &str) {}
 /// A sink that takes the string (ownership moves in).
 #[track_caller]
 pub fn sink_cmd_own(_s: String) {}
+/// A sink that takes the string and gives a `Result` (the function of `Result::and_then`).
+#[track_caller]
+pub fn sink_cmd_res(_s: String) -> Result<(), String> {
+    Ok(())
+}
 #[track_caller]
 pub fn sink_cmd_bytes(_b: &[u8]) {}
 #[track_caller]

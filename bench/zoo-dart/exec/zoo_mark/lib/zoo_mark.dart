@@ -177,6 +177,10 @@ class In {
 }
 
 void sinkCmd(String s) => _record(classCmd, '', [s]);
+bool sinkCmdB(String s) {
+  _record(classCmd, '', [s]);
+  return false;
+}
 void sinkCmdBytes(List<int> b) => _record(classCmd, '', [utf8.decode(b, allowMalformed: true)]);
 void sinkSql(String s) => _record(classSql, '', [s]);
 void sinkHtml(String s) => _record(classHtml, '', [s]);

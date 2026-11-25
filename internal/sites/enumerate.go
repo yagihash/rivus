@@ -82,6 +82,7 @@ func Enumerate(irsrc ir.Source, texts ir.Texts, rules *model.Rules) *Result {
 			order++
 			raw = append(raw, s)
 		}
+		var rowCalls []rowCall
 		declared := 0
 		for _, p := range fn.Params {
 			if !p.Captured {
@@ -165,6 +166,9 @@ func Enumerate(irsrc ir.Source, texts ir.Texts, rules *model.Rules) *Result {
 					if srcs := rules.CallSources[sym]; len(srcs) > 0 {
 						add(&Site{Role: RoleSource, Kind: model.KindCallResult, Symbol: sym, Labels: labelsOf(srcs), IR: at, Src: srcs, irpos: in.Pos})
 					}
+					if len(rules.Sinks) > 0 && rules.Calls[sym] {
+						rowCalls = append(rowCalls, rowCall{at: at, in: in, sym: sym})
+					}
 					ownSinks := sinksAt(fn, in, in.Callee.Kind == ir.CalleeDynamic || (in.Callee.Kind == ir.CalleeStatic && in.Callee.Recv), rules.Sinks[sym], canon, known, sym)
 					for _, sinks := range byCategory(ownSinks) {
 						add(&Site{Role: RoleSink, Kind: "call", Symbol: sym, Category: sinks[0].Category, Categories: categoriesOf(sinks), Labels: acceptsOf(sinks), IR: at, Sink: sinks, irpos: in.Pos})
@@ -218,6 +222,12 @@ func Enumerate(irsrc ir.Source, texts ir.Texts, rules *model.Rules) *Result {
 						add(&Site{Role: RoleSource, Kind: model.KindField, Symbol: key, Labels: labelsOf(srcs), IR: at, Src: srcs, irpos: pos})
 					}
 				}
+			}
+		}
+		// the sinks of the functions that the calls are given (after the other sites, to see which the call has)
+		for _, rc := range rowCalls {
+			for _, st := range givenSinks(irsrc, fn, rc, rules, canon, known, raw) {
+				add(st)
 			}
 		}
 		if len(raw) == 0 {
@@ -294,17 +304,23 @@ func (res *Result) finishIR(fn *ir.Func, texts ir.Texts, raw []*Site) {
 		expr := texts.Expr(s.irpos)
 		exprHash := fingerprint.Hash(expr)
 
-		okey := s.Role + "|" + s.Symbol
+		// a sink of a function that a call is given is counted apart: the ordinals of the sites that the function had
+		// do not move for it
+		sym := s.Symbol
+		if s.GivenWith != nil {
+			sym += "|given"
+		}
+		okey := s.Role + "|" + sym
 		ordinals[okey]++
 		ord := ordinals[okey]
 		ikey := okey + "|" + exprHash
 		identical[ikey]++
 		iord := identical[ikey]
 
-		structural := fingerprint.Hash(s.Func, s.Role, s.Symbol, itoa(ord))
+		structural := fingerprint.Hash(s.Func, s.Role, sym, itoa(ord))
 		s.Fingerprint = map[string]string{
 			fingerprint.Structural: structural,
-			fingerprint.Content:    fingerprint.Hash(s.Func, s.Role, s.Symbol, exprHash, itoa(iord)),
+			fingerprint.Content:    fingerprint.Hash(s.Func, s.Role, sym, exprHash, itoa(iord)),
 			fingerprint.Expr:       exprHash,
 			fingerprint.Body:       body,
 		}
@@ -348,6 +364,22 @@ func literalOnlyIR(form *irssa.Form, s *Site) bool {
 				hasRecv, argStart, recvAt = true, 2, 1
 			}
 		}
+	}
+	if s.GivenWith != nil {
+		// the arguments of the function are what the call gives it: the operands that the row names
+		for i := range s.Sink {
+			if s.Sink[i].HasParts() || s.Sink[i].WholeRecv() {
+				return false
+			}
+		}
+		checked := 0
+		for _, i := range SinkArgs(s.Sink, len(s.GivenWith)) {
+			checked++
+			if i < len(s.GivenWith) && s.GivenWith[i] >= 0 && !isConstantRef(form, form.Operand(at.Block, at.Instr, s.GivenWith[i]), 0) {
+				return false
+			}
+		}
+		return checked > 0
 	}
 	nargs := len(in.Args) - argStart
 	for i := range s.Sink {
@@ -674,6 +706,71 @@ next:
 			}
 		}
 		out = append(out, s)
+	}
+	return out
+}
+
+// rowCall is a call of a function that has rows of calls in its model.
+type rowCall struct {
+	at  *IRRef
+	in  ir.Instr
+	sym string
+}
+
+// givenSinks are the sink sites of a call whose model has a row of calls (the library calls the function it is given)
+// when the function given is one that the rules declare a sink: a function named as a value, not one written at the
+// call. The site is at the call, and the positions of the sink are the parameters of the function, filled as the row
+// says (with). A call that has a site of the same sink at the same place already (the call of the function value that
+// an extractor writes) has no second one.
+func givenSinks(irsrc ir.Source, fn *ir.Func, rc rowCall, rules *model.Rules, canon ir.TypeCanon, known namedNames, have []*Site) []*Site {
+	in := rc.in
+	hasRecv := in.Callee.Kind == ir.CalleeDynamic || (in.Callee.Kind == ir.CalleeStatic && in.Callee.Recv)
+	var form *irssa.Form
+	var out []*Site
+	for _, r := range rules.CallRowsOf(rc.sym) {
+		row := r.Row()
+		fi := row.FnOperand(hasRecv)
+		if fi < 0 || fi >= len(in.Args) || len(row.With) == 0 {
+			continue
+		}
+		if form == nil {
+			if form, _ = irssa.Build(fn); form == nil {
+				return out
+			}
+		}
+		id, _ := functionOf(form, form.Operand(rc.at.Block, rc.at.Instr, fi), 0)
+		if id == "" {
+			continue
+		}
+		csym := string(id)
+		if h, ok := ir.HeadOf(irsrc, id); ok && h.Symbol != "" {
+			csym = h.Symbol
+		}
+		if len(rules.Sinks[csym]) == 0 {
+			continue
+		}
+		with := row.WithOperands(hasRecv)
+		vin := in
+		vin.ArgNames = nil
+		vin.Args = make([]ir.LocalID, len(with))
+		for k, o := range with {
+			vin.Args[k] = in.Args[fi]
+			if o >= 0 && o < len(in.Args) {
+				vin.Args[k] = in.Args[o]
+			} else {
+				with[k] = -1
+			}
+		}
+		for _, sinks := range byCategory(sinksAt(fn, vin, false, rules.Sinks[csym], canon, known, csym)) {
+			dup := false
+			for _, h := range append(append([]*Site(nil), have...), out...) {
+				dup = dup || (h.Role == RoleSink && h.Symbol == csym && h.irpos == in.Pos && h.Category == sinks[0].Category)
+			}
+			if dup {
+				continue
+			}
+			out = append(out, &Site{Role: RoleSink, Kind: "call", Symbol: csym, Category: sinks[0].Category, Categories: categoriesOf(sinks), Labels: acceptsOf(sinks), IR: rc.at, Sink: sinks, irpos: in.Pos, Callee: string(id), GivenWith: with})
+		}
 	}
 	return out
 }

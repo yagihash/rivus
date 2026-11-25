@@ -1,0 +1,10 @@
+dart	clos/to_lib_ref.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	clos/to_lib_ref.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	clos/to_lib_ref.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	clos/to_lib_ref.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	clos/to_lib_ref.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	clos/to_lib_ref.dart	sink-none	@sink(none) @nosink(clos-to-lib-ref-decoy)	Future<void> decoy() async { @decoy
+dart	clos/to_lib_ref.dart	sink-none	@sink(none) @nosink(clos-to-lib-ref-decoy)	Future<void> decoy() async { @decoy
+dart	clos/to_lib_ref.dart	sink-none	@sink(none) @nosink(clos-to-lib-ref-decoy)	Future<void> decoy() async { @decoy
+dart	clos/to_lib_ref.dart	sink-none	@sink(none) @nosink(clos-to-lib-ref-decoy)	Future<void> decoy() async { @decoy
+dart	clos/to_lib_ref.dart	sink-none	@sink(none) @nosink(clos-to-lib-ref-decoy)	Future<void> decoy() async { @decoy
