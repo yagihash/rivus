@@ -1,5 +1,18 @@
 # Changelog
 
+## [v0.0.18](https://github.com/yagihash/rivus/compare/v0.0.17...v0.0.18) - 2026-11-25
+
+### Features
+- bench: rustypaste の truth と detect を足す(CVE-2026-90774、INFO) by @yagihash in https://github.com/yagihash/rivus/pull/524
+- feat: Dart の標準ライブラリと collection の関数値を取る API に calls: を足す(#216) by @yagihash in https://github.com/yagihash/rivus/pull/525
+- feat: extractor のソースのハッシュを、ビルドのときに埋める(ADR-126) by @yagihash in https://github.com/yagihash/rivus/pull/529
+- test: 関数値を受けて呼ぶ API のセルを足す(to_later、to_sort、to_lib_call) by @yagihash in https://github.com/yagihash/rivus/pull/530
+- bench: --graph-check を zoo-rust に広げる(手元、macOS、隔離の下) by @yagihash in https://github.com/yagihash/rivus/pull/533
+- feat: Dart の sort、reduce、fold の関数にリストの要素を渡す(#221) by @yagihash in https://github.com/yagihash/rivus/pull/532
+- ci: Rust の extractor のビルドにソースのハッシュを渡す by @yagihash in https://github.com/yagihash/rivus/pull/531
+### Bug Fixes
+- fix: バージョンの違う extractor の IR を読まずに止める(#109) by @yagihash in https://github.com/yagihash/rivus/pull/527
+
 ## [v0.0.17](https://github.com/yagihash/rivus/compare/v0.0.16...v0.0.17) - 2026-11-25
 
 ### Features
