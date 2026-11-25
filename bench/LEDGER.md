@@ -204,7 +204,7 @@ The difference is against the reference engine `de627ce` on the same inputs: `+a
 
 The goal: rivus analyses a real product with the default flags, in a realistic time and memory, with a meaningful result. One line per target (bench/deps_bench.py; the targets, the pinned commits and the limits are data in bench/deps-targets.json):
 
-`PASS|FAIL memos time=<s>/<limit> mem=<GB>/<cap> converged=<yes|no> finish=<yes|no> detected=<yes|no|n/a> quiet_after_fix=<yes|no|n/a> located=<n>`
+`PASS|PASS(余裕不足)|FAIL memos time=<s>/<limit> mem=<GiB>/<cap> converged=<yes|no> finish=<yes|no> detected=<yes|no|n/a> quiet_after_fix=<yes|no|n/a> located=<n>`
 
 The pass line is two separate conditions, and PASS needs both (decided 2026-11-24). The default flags are used (no `-no-deps`, no `-body-replaced`).
 
@@ -215,7 +215,7 @@ The pass line is two separate conditions, and PASS needs both (decided 2026-11-2
 
 `quiet_after_fix` (no `path_traversal` finding at the fixed commit `5f57f48673e2054f404b2c5b497a8eaa3690591d`) is a separate indicator and is not part of PASS/FAIL: rivus does not yet treat a fix of the kind "validate, then return early" as removing the flow (the declared checks of #169 do not exist yet). The fixed commit is analysed only when the pre-fix commit is detected; otherwise it is `n/a`. For a target with a truth file of the other kind (`through_tp`, dart-pub), `detected` is per vulnerability as below and `quiet_after_fix` is `n/a`. The Dart line is cocoon `app_dart` (below); dart_services (dart-pad `pkgs/dart_services`, `ad668d137e631beeaef3e263054a45696e8d4499`) is a load target, printed as `INFO`.
 
-In the ledger ([heavy-ledger.tsv](heavy-ledger.tsv); `python3 bench/heavy_ledger.py`) the two are separate: `finish` (time, memory, `conv`) and `det`; `result` is PASS when both are yes.
+In the ledger ([heavy-ledger.tsv](heavy-ledger.tsv); `python3 bench/heavy_ledger.py`) the two are separate: `finish` (time, memory, `conv`) and `det`; `result` is PASS when both are yes (PASS-thin when the memory margin is under 0.15 GiB: bench/passline-baseline.md).
 
 **The next form of the "after the fix" condition (decided 2026-11-23, changed 2026-11-24 by ADR-122; not in force yet).** The condition above counts findings of the category, which says nothing about whether the finding went away for the right reason. Once the declared checks of issue #169 exist (a rule file declares a check function with `guards:`, and a finding that passes it is stopped, with a record in `suppressions` that names the rule file and the declaration), the detection condition is run with a rule file that declares the check that the fix added, on both commits: before the fix, with that rule, a finding still appears (the check does not exist yet there); after the fix, with that rule, there is no finding, and `suppressions` names the declaration that stopped it. Without the declaration the finding at the fixed commit stays, which is the evidence that the fix is the check. Until that mechanism exists, the line above is the condition, and a result of "no finding after the fix" (`quiet_after_fix`, where the runner has it) is only recorded, not part of PASS or FAIL.
 

@@ -53,7 +53,7 @@
 ## 3. 依存込みの解析が、実用的な時間で終わること
 
 - **目的**: 実際のプロダクトを、`-no-deps` なしで解析して、終わること。
-- **合格基準**(ユーザーの決定、2026-11-24、2026-11-25): 4 つの行。A は memos を `-max-memory 4GiB` で(対象名 `memos-4gib`)、C は Gitea、D は `dart_services`、Dart の cocoon `app_dart`。memos のメモリ 8 GB の行(B)は、2026-11-25 に外した。A が同じ対象でメモリの上限が厳しいため。各行の対象、固定したコミット、フラグ、時間とメモリの上限は、`bench/deps-targets.json` と [bench/passline-baseline.md](../bench/passline-baseline.md) が正で、ここには写さない。
+- **合格基準**(ユーザーの決定、2026-11-24、2026-11-25): 4 つの行。A は memos を `-max-memory 4GiB` で(対象名 `memos-4gib`)、C は Gitea、D は `dart_services`、Dart の cocoon `app_dart`。memos のメモリ 8 GB の行(B)は、2026-11-25 に外した。A が同じ対象でメモリの上限が厳しいため。各行の対象、固定したコミット、フラグ、時間とメモリの上限は、`bench/deps-targets.json` と [bench/passline-baseline.md](../bench/passline-baseline.md) が正で、ここには写さない。メモリは 3 状態で判定する(余裕 = 上限 − 最大のメモリ、GiB。0.15 GiB 以上で PASS、0 以上 0.15 未満で `PASS(余裕不足)`、0 未満で FAIL。線は動かさず、余裕不足は合格として通す。定義は [bench/passline-baseline.md](../bench/passline-baseline.md))。
   - 判定は、既定のフラグ(`-no-deps` なし、`-body-replaced` を手で書かない)で行う。条件は、終わること(時間、メモリ、収束)と、検出すること(公開済みで修正済みの脆弱性を、位置で判定して検出する。#387)の 2 つで、別に判定する。
   - A の検出は、memos の CVE-2025-65799。修正後のコミットで検出しないこと(`quiet_after_fix`)は別の指標で、合否には入れない(ガードの仕組み #169、ADR-122 ができるまで)。
   - C の検出は、`bench/gitea-cve-truth.json` の脆弱性ごとに位置で判定し、行に参考として出すだけで、合否には入れない。行と台帳には、検出の件数だけを書く(finding の一覧、経路、場所は書かない)。

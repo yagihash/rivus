@@ -2,7 +2,7 @@
 
 The goal: rivus analyses a real product with the default flags, in a realistic time and memory, with a meaningful result. One line per target (bench/deps_bench.py; the targets, the pinned commits and the limits are data in bench/deps-targets.json):
 
-`PASS|FAIL memos-4gib time=<s>/<limit> mem=<GB>/<cap> converged=<yes|no> finish=<yes|no> detected=<yes|no|n/a> quiet_after_fix=<yes|no|n/a> located=<n>`
+`PASS|PASS(余裕不足)|FAIL memos-4gib time=<s>/<limit> mem=<GiB>/<cap> converged=<yes|no> finish=<yes|no> detected=<yes|no|n/a> quiet_after_fix=<yes|no|n/a> located=<n>`
 
 The pass line is two separate conditions, and PASS needs both (decided 2026-11-24). The default flags are used (no `-no-deps`, no `-body-replaced`).
 
@@ -13,9 +13,13 @@ The pass line is two separate conditions, and PASS needs both (decided 2026-11-2
 
 `quiet_after_fix` (no `path_traversal` finding at the fixed commit `5f57f48673e2054f404b2c5b497a8eaa3690591d`) is a separate indicator and is not part of PASS/FAIL: rivus does not yet treat a fix of the kind "validate, then return early" as removing the flow (the declared checks of #169 do not exist yet). The fixed commit is analysed only when the pre-fix commit is detected; otherwise it is `n/a`. For a target with a truth file of the other kind (`through_tp`, dart-pub), `detected` is per vulnerability as below and `quiet_after_fix` is `n/a`. The Dart line is cocoon `app_dart` (below); dart_services (dart-pad `pkgs/dart_services`, `ad668d137e631beeaef3e263054a45696e8d4499`) is a load target, printed as `INFO`.
 
-In the ledger ([heavy-ledger.tsv](heavy-ledger.tsv); `python3 bench/heavy_ledger.py`) the two are separate: `finish` (time, memory, `conv`) and `det`; `result` is PASS when both are yes.
+In the ledger ([heavy-ledger.tsv](heavy-ledger.tsv); `python3 bench/heavy_ledger.py`) the two are separate: `finish` (time, memory, `conv`) and `det`; `result` is PASS when both are yes (or PASS-thin, below).
 
 **The next form of the "after the fix" condition (decided 2026-11-23, changed 2026-11-24 by ADR-122; not in force yet).** The condition above counts findings of the category, which says nothing about whether the finding went away for the right reason. Once the declared checks of issue #169 exist (a rule file declares a check function with `guards:`, and a finding that passes it is stopped, with a record in `suppressions` that names the rule file and the declaration), the detection condition is run with a rule file that declares the check that the fix added, on both commits: before the fix, with that rule, a finding still appears (the check does not exist yet there); after the fix, with that rule, there is no finding, and `suppressions` names the declaration that stopped it. Without the declaration the finding at the fixed commit stays, which is the evidence that the fix is the check. Until that mechanism exists, the line above is the condition, and a result of "no finding after the fix" (`quiet_after_fix`, where the runner has it) is only recorded, not part of PASS or FAIL.
+
+### The memory margin: three states (decided 2026-11-26)
+
+The memory is judged in three states. The margin is the cap of the row (`mem_cap_gb` in `bench/deps-targets.json`, in GiB) minus the peak of the process tree (`peak_tree_gb`, GiB), taken before rounding: **PASS** when the margin is 0.15 GiB or more; **thin** when it is from 0 up to (not including) 0.15 GiB; **FAIL** when it is below 0. The line itself does not move (A is 4.00 GiB; C, D and cocoon are 8 GiB). A thin row still passes (the exit status is the same as for PASS), but the printed line says `PASS(余裕不足)` and the ledger `result` is `PASS-thin` (an ASCII value for tools; the older rows keep `PASS`). The table of `python3 bench/heavy_ledger.py` shows `result` as written, and `--kind` and `--target` are not affected. 0.15 GiB is about 1.5 times the spread of the ten-odd measurements of the same run (0.05 to 0.1 GiB). Two thin rows in a row for one target make the work of widening the margin come first (docs/WORKFLOW.md). The function is `margin_state` in `bench/deps_bench.py`.
 
 ### The two lines of the pass line: A and C (decided 2026-11-24)
 

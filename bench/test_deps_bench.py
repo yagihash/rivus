@@ -55,6 +55,51 @@ class Judge(unittest.TestCase):
         self.assertTrue(d.format_line("dart_services", False, ok, body).startswith("INFO dart_services "))
 
 
+class MarginState(unittest.TestCase):
+    """The memory of the pass line has three states: margin = cap - peak (GiB, before rounding); >= 0.15 PASS, 0 <= margin < 0.15 thin, < 0 FAIL."""
+
+    def test_states(self):
+        self.assertEqual(d.margin_state(3.80, 4), "pass")    # 0.20
+        self.assertEqual(d.margin_state(3.85, 4), "pass")    # 0.15 exactly
+        self.assertEqual(d.margin_state(7.85, 8), "pass")    # 0.15 exactly, with a float that is not exact
+        self.assertEqual(d.margin_state(3.851, 4), "thin")   # 0.149
+        self.assertEqual(d.margin_state(4.0, 4), "thin")     # 0.0 (the cap is inclusive)
+        self.assertEqual(d.margin_state(4.01, 4), "fail")    # -0.01
+        self.assertEqual(d.margin_state(None, 4), "fail")
+
+    def test_judged_before_rounding(self):
+        # prints as 3.85 but is 3.8504: the margin is 0.1496, thin
+        self.assertEqual(d.margin_state(3.8504, 4), "thin")
+        self.assertEqual("%.2f" % 3.8504, "3.85")
+
+    def test_labels(self):
+        self.assertEqual(d.result_labels(True, True, 3.80, 4), ("PASS", "PASS"))
+        self.assertEqual(d.result_labels(True, True, 3.90, 4), ("PASS-thin", "PASS(余裕不足)"))
+        self.assertEqual(d.result_labels(False, True, 4.01, 4), ("FAIL", "FAIL"))
+        self.assertEqual(d.result_labels(False, True, 3.90, 4), ("FAIL", "FAIL"))   # failed for another reason: not thin
+        self.assertEqual(d.result_labels(True, False, 3.90, 4), ("INFO", "INFO"))   # not decided
+
+    def test_line_and_exit_status(self):
+        ok, body = d.judge(100, 180, 3.90, 4, True, True)
+        self.assertTrue(ok)                               # thin is a pass
+        ledger, label = d.result_labels(ok, True, 3.90, 4)
+        self.assertTrue(d.format_line("memos-4gib", True, ok, body, label).startswith("PASS(余裕不足) memos-4gib "))
+        self.assertTrue(d.format_line("memos-4gib", True, ok, body).startswith("PASS memos-4gib "))
+        # the exit status: a thin row is not a failed one (only a row with no usable result is)
+        self.assertFalse(d.row_failed({"result": "PASS-thin"}))
+        self.assertFalse(d.row_failed({"result": "PASS"}))
+        self.assertFalse(d.row_failed({"result": "FAIL"}))
+        self.assertTrue(d.row_failed({"result": "isolation_failed"}))
+        self.assertTrue(d.row_failed(None))
+
+    def test_ledger_reader_takes_the_new_value(self):
+        import heavy_ledger as h
+        out = h.render([{"target": "memos-4gib", "kind": "passline", "wall_s": "10", "peak_tree_gb": "3.90", "converged": "yes", "result": "PASS-thin"},
+                        {"target": "memos-4gib", "kind": "passline", "wall_s": "10", "peak_tree_gb": "3.00", "converged": "yes", "result": "PASS"}])
+        self.assertIn("PASS-thin", out)
+        self.assertEqual([r.split()[-1] for r in out.splitlines()[1:]], ["PASS-thin", "PASS"])
+
+
 class Detection(unittest.TestCase):
     def test_detected_at_prefix_only(self):
         self.assertTrue(d.detection(2))
