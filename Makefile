@@ -92,7 +92,7 @@ model: ## the steps of making the model of a Go or Dart package: PKG=<import pat
 	@# built once and run, not `go run`: `go run` turns the exit status of the program (70, 2) into 1 ("exit status N")
 	@d=$$(mktemp -d) && go build -o "$$d/model-author" ./bench/model-author && "$$d/model-author" -pkg "$(PKG)" $(if $(VERSION),-version "$(VERSION)") -lang $(if $(filter command line,$(origin LANG)),$(LANG),go) $(ARGS); rc=$$?; rm -rf "$$d"; exit $$rc
 
-docs-gen: ## print the tables of the issues and the ADRs (from docs/issues/*.md, docs/adr/*.md); WHAT=issues or WHAT=adr for one; WHAT=passline the rows of the pass line (bench/deps-targets.json); WHAT=kinds the table of the kinds of uncertainty (internal/taint/kinds.go; the table of ARCHITECTURE 4.4); OUT=docs/TABLE.md writes it (ignored by git)
+docs-gen: ## print the tables of the issues and the ADRs (from docs/issues/*.md, docs/adr/*.md); WHAT=issues or WHAT=adr for one; WHAT=passline the rows of the pass line (bench/deps-targets.json); WHAT=kinds the table of the kinds of uncertainty (internal/taint/kinds.go; the tables of ARCHITECTURE 4.4 and AGENT-GUIDE); OUT=docs/TABLE.md writes it (ignored by git)
 	go run ./scripts/docs-gen $(if $(OUT),-o $(OUT)) $(WHAT)
 
 daily-stats: ## count the pull requests merged into main since a date, by what they change: ENGINE/MODEL/EXTRACTOR or TOOLS/CI/DOCS (SINCE=2026-11-20; scripts/daily-stats, docs/WORKFLOW.md)

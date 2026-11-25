@@ -1,7 +1,7 @@
 // docs-gen prints the tables made from the files of docs/issues (the issues) and docs/adr (the ADRs): `make docs-gen`.
 // With the argument `issues` or `adr` it prints that one only (default: both). The argument `passline` prints the rows of the
 // pass line (from bench/deps-targets.json; not in the default). The argument `kinds` prints the table of the kinds of uncertainty (from
-// internal/taint/kinds.go; the table in docs/ARCHITECTURE.md 4.4 is this output; not in the default). With -o <file> it writes there instead
+// internal/taint/kinds.go; the tables in docs/ARCHITECTURE.md 4.4 and docs/AGENT-GUIDE.md are this output; not in the default). With -o <file> it writes there instead
 // (docs/ISSUES-TABLE.md, docs/ADR-TABLE.md and docs/TABLE.md are ignored by git).
 package main
 

@@ -410,7 +410,46 @@ dart extractor /opt/homebrew/bin/rivus-dart  schema rivus.ir/0  (UNKNOWN: its an
 
 不確実性は `kind`、`attributable_to`(原因が対象のコードにあれば `target`、rivus の側にあれば `rivus`、言語の機能に由来するが rivus でも減らせるものは `mixed`)、`detail`、`symbol`、`candidates`、`func`、`position` を持ちます。
 
-| kind | 何が起きたか | どう扱うか |
+`kind`、`attributable_to`、1 文の説明の表は、コードの表(`internal/taint/kinds.go` の `Kinds`)から作る。手で直さない。`make docs-gen WHAT=kinds` の出力と同じでなければ、`TestDocsSync` が落ちる。
+
+<!-- kinds:begin -->
+| kind | attributable_to | 説明 |
+|---|---|---|
+| `config_read` | target | 値が設定から読まれていて、その元は読んだコードの外にある。 |
+| `exported_api_param` | target | ライブラリの公開関数の引数で、値の元は呼び出し側(読んだコードの外)にある。 |
+| `global_var` | target | 値がパッケージの変数から来ていて、書き込み箇所を列挙してある。 |
+| `reflection` | target | リフレクションで、実行時に何が起きるかが決まる。 |
+| `ffi_boundary` | target | 呼び出しが、その言語の外(cgo や他言語の関数)に出る。 |
+| `stored_data_boundary` | target | データストアへの出し入れで、読み戻した値の元は追わない。 |
+| `missing_source` | target | 対象のコードの一部がない(生成コードが未生成、パッケージが読み込めないなど)。 |
+| `dynamic_dispatch` | mixed | 呼び出し先が実行時に決まる(候補が 0 件のときは rivus の限界として rivus になる)。 |
+| `assumed_call` | mixed | 呼ばれる所の見えないクロージャを、作った所で呼ばれたものとして扱った。 |
+| `pointer_alias` | rivus | ポインタ越しの書き込みや読み出しを、別名で近似した所を経路が通る。 |
+| `func_value_into_dependency` | rivus | 自分のコードの関数値が、モデルのない依存の関数に渡され、依存の中でそれが呼ばれる流れは追わない。 |
+| `unresolved_callee` | mixed | 関数値の呼び出し先が実行時に決まり、候補を絞り込めなかった。 |
+| `concurrency` | mixed | 実行順序に依存する所(goroutine、channel、コールバック)で、順序は扱っていない。 |
+| `unmodeled_library_call` | rivus | ライブラリの呼び出しにモデルがなく、汚染がどう通るかを知らない。 |
+| `dependency_body_unread` | rivus | モデルのあるインターフェースの呼び出しの候補に、本体を読んでいない依存の関数があった。 |
+| `project_body_unread` | rivus | プロジェクトの関数の本体を、extractor が読めなかった。 |
+| `model_approximation` | rivus | 流れのモデルが、自分で近似だと宣言している。 |
+| `numeric_stop` | rivus | source のデータが数値や bool になり、そこから先は追わない(既定)。 |
+| `unsupported_construct` | rivus | extractor が下げられなかった構文で、そこで起きることは解析に入っていない。 |
+| `container_element_imprecision` | rivus | コンテナの要素を区別していない(結論に影響した所だけ記録する)。 |
+| `depth_limit` | rivus | 上限や時間で解析を打ち切った(理由は detail に書く)。 |
+| `access_path_truncated` | rivus | 経路が、深さの上限で切ったアクセスパスを通り、切った所より下を丸ごと汚染として扱った。 |
+| `char_transform` | rivus | 文字列から 1 文字を読んだ値(かその派生)が、数や bool の場所に入った(`-char-taint` のとき)。 |
+| `recursion_approximation` | rivus | 再帰のある関数群が固定点に届かず、近似で止めた。 |
+| `field_imprecision` | rivus | フィールドを指定した sink に、そのフィールドにあるとは言えない汚染が届いた。 |
+| `field_unresolved` | rivus | sink が指定したフィールドが、プログラムにない(綴りの誤りなど)ので、sink を全体として扱った。 |
+| `named_unresolved` | rivus | sink が `named:` で指定した引数の名前が、プログラムのどの呼び出しにもないので、呼び出し全体として扱った。 |
+| `global_holds_nothing` | rivus | 何も保持しないとルールが宣言した変数に、汚染を書いた関数がある(変数ごとに 1 件)。 |
+<!-- kinds:end -->
+
+#### kind ごとの読み方と、見たときの動き
+
+上の表の 1 文に収まらない読み方と、見たときの動き。`attributable_to` はここに書かない(上の表が持つ)。
+
+| kind | 何が起きたか(詳しく) | どう扱うか |
 |---|---|---|
 | `unresolved_callee` | 関数値やクロージャの呼び出しで、呼び出し先が分からなかった。**その先は見ていない** | その呼び出しに渡る関数をコードで探して、中を読む |
 | `dynamic_dispatch` | インターフェースや関数値を通る呼び出し。`candidates` の全部に届くと仮定した | 経路が通る実装が、実行時に本当に呼ばれる型かを確認する(`graph impls` / `dispatchers`)。`candidates` が空なら、実装が読んだコードにない |
@@ -425,7 +464,7 @@ dart extractor /opt/homebrew/bin/rivus-dart  schema rivus.ir/0  (UNKNOWN: its an
 | `container_element_imprecision` | コンテナ(スライス、マップ)の要素を区別していない | 汚染された要素と、sink に入る要素が同じかを、コードで確認する |
 | `assumed_call` | 渡したクロージャが、作った場所で呼ばれると仮定した | クロージャが本当に呼ばれるかを確認する |
 | `pointer_alias` | 経路のステップが、ポインタ越しの書き込み(や読み出し)を通る。rivus は、セルが持つポインタを「保存元の変数を指す」と別名で近似していて、実行時に指す先が違えば、その流れはない(今は Rust だけ) | そのステップのコードを読んで、ポインタが本当にその変数を指すか(`&mut` で借りたその変数への書き込みか)を確認する。指さないなら、その finding は偽 |
-| `func_value_into_dependency` | 自分のコードの関数を、`calls:` のモデルのない依存の関数へ渡した。依存の要約は関数値を運ばないので、**依存の中でその関数が呼ばれる流れを追っていない印**(今は Dart だけ)。finding に付くのは、その呼び出しの要約を通る経路だけ。通らない流れの見逃しは finding に出ない(全体の一覧に、依存の関数ごとに 1 件。#216) | その callee(`symbol`)の中に、渡した関数が受け取る値の source → sink があるかを、依存のコードを読んで確かめる。あれば、これは見逃し。`calls:` の行を足すと、この通知は消え、流れも追える |
+| `func_value_into_dependency` | 自分のコードの関数を、`calls:` のモデルのない依存の関数へ渡した。依存の要約は関数値を運ばないので、**依存の中でその関数が呼ばれる流れを追っていない印**(今は Dart だけ)。finding に付くのは、その呼び出しの要約を通る経路だけ。通らない流れの見逃しは finding に出ない(全体の一覧に、依存の関数ごとに 1 件。#216) | その callee(`symbol`)の中に、渡した関数が受け取る値の source → sink があるかを、依存のコードを読んで確かめる。あれば、これは見逃し。`calls:` のエントリを足すと、この通知は消え、流れも追える |
 | `global_var` | パッケージ変数を通った。書き込む関数の全部の値を合わせている | `shared_state` を見て、書き込みと読み出しが同じ実行で起きるかを確認する |
 | `global_holds_nothing` | 読み戻す人がいないと、ルールが宣言する変数(ADR-056)に、汚染を書いた関数を、変数ごとに 1 件記録した。変数の先は追っていない | 宣言が今も正しいか(その変数を、別の経路で読む人がいないか)を確認する |
 | `config_read` | 設定ファイルや環境変数から来た値 | その設定を攻撃者が変えられるかを判断する |
