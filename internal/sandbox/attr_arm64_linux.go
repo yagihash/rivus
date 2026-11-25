@@ -18,4 +18,8 @@ var attrCalls = []attrCall{
 	byPath(unix.SYS_REMOVEXATTR, "removexattr", false),
 	byPath(unix.SYS_LREMOVEXATTR, "lremovexattr", true),
 	byFd(unix.SYS_FREMOVEXATTR, "fremovexattr"),
+	// the newer ones, that Landlock does not mediate either: setxattrat and removexattrat (Linux 6.13: dirfd, path, flags), file_setattr (6.17: dirfd, path, attr, size, flags)
+	byDir(unix.SYS_SETXATTRAT, "setxattrat", 2),
+	byDir(unix.SYS_REMOVEXATTRAT, "removexattrat", 2),
+	byDir(unix.SYS_FILE_SETATTR, "file_setattr", 4),
 }

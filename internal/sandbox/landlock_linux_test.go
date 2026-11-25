@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -806,6 +807,81 @@ func TestSandboxResolve(t *testing.T) {
 	} {
 		if got := resolve(c.path, c.nofollow); got != c.want {
 			t.Errorf("%s: resolve(%q, %v) = %q, want %q", c.name, c.path, c.nofollow, got, c.want)
+		}
+	}
+}
+
+// A limit that the caller has set is never loosened: the new soft and hard limits are the smaller of the sandbox's and the caller's.
+func TestSandboxLimitsAreNeverLoosened(t *testing.T) {
+	const inf = ^uint64(0)
+	for _, c := range []struct {
+		name       string
+		cur        unix.Rlimit
+		v          uint64
+		soft, hard uint64
+	}{
+		{"unlimited", unix.Rlimit{Cur: inf, Max: inf}, 100, 100, 100},
+		{"the soft limit is stricter", unix.Rlimit{Cur: 10, Max: inf}, 100, 10, 100},
+		{"both are stricter", unix.Rlimit{Cur: 10, Max: 50}, 100, 10, 50},
+		{"the hard limit is stricter", unix.Rlimit{Cur: 50, Max: 60}, 100, 50, 60},
+		{"the sandbox is stricter", unix.Rlimit{Cur: 500, Max: 600}, 100, 100, 100},
+	} {
+		got := lowered(c.cur, c.v)
+		if got.Cur != c.soft || got.Max != c.hard {
+			t.Errorf("%s: lowered(%+v, %d) = %+v, want soft %d, hard %d", c.name, c.cur, c.v, got, c.soft, c.hard)
+		}
+	}
+}
+
+// A relative path of the Spec is relative to the directory of the caller, not to the directory of the project (the helper opens the paths after it is in the
+// project's directory).
+func TestSandboxRelativePathsAreRelativeToTheCaller(t *testing.T) {
+	skipWithoutSandbox(t)
+	root, _ := filepath.EvalSymlinks(t.TempDir())
+	os.MkdirAll(filepath.Join(root, "data"), 0o755)
+	os.MkdirAll(filepath.Join(root, "proj", "data"), 0o755) // (another one, with the same name, in the project)
+	os.WriteFile(filepath.Join(root, "data", "f"), []byte("caller"), 0o644)
+	os.WriteFile(filepath.Join(root, "proj", "data", "f"), []byte("project"), 0o644)
+	wd, _ := os.Getwd()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(wd)
+	res, err := Run(context.Background(), Spec{Argv: []string{"/bin/sh", "-c", "cat " + filepath.Join(root, "data", "f")}, Dir: filepath.Join(root, "proj"),
+		Env: []string{"PATH=/usr/bin:/bin"}, Read: []string{"data"}, ExecFiles: []string{"/bin/cat"}, Timeout: time.Minute})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(res.Stdout) != "caller" {
+		t.Errorf("the path 'data' is not the one of the caller: %q %q", res.Stdout, res.Stderr)
+	}
+}
+
+// The calls whose path could not be read are not changes of files: they are said as a warning of their own, and the run that has only those does not
+// say that files outside were changed.
+func TestSandboxUnreadPathsAreAWarningNotAChange(t *testing.T) {
+	w := newAttrWatcher(nil)
+	w.unread = 3
+	if got := w.changes(); len(got) != 0 {
+		t.Errorf("the calls that could not be read are among the changes: %v", got)
+	}
+	got := strings.Join(w.warnings(), "\n")
+	if !strings.Contains(got, "3") || !strings.Contains(got, "could not be checked") {
+		t.Errorf("not said as a warning: %q", got)
+	}
+}
+
+// The calls that Landlock does not mediate and that newer kernels have are watched too.
+func TestSandboxWatchesTheNewerCallsToo(t *testing.T) {
+	have := map[string]bool{}
+	for _, c := range attrCalls {
+		have[c.name] = true
+	}
+	if runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64" {
+		for _, n := range []string{"setxattrat", "removexattrat", "file_setattr"} {
+			if !have[n] {
+				t.Errorf("%s is not watched", n)
+			}
 		}
 	}
 }

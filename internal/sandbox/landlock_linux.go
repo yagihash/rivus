@@ -515,17 +515,34 @@ func (c *helperConfig) setLimits() {
 	c.Fsize = 32 << 30
 }
 
-// limit sets the limits in the helper (they stay with what it runs). A limit that cannot be raised is not changed.
+// lowered is the limit that a program gets: the smaller of the one that the sandbox wants and the one that the caller had, for the soft limit and for the
+// hard limit each. A limit that the caller set is never loosened (a rivus that is run with `ulimit -S -f 1024` keeps its 1 MiB for what it runs).
+func lowered(cur unix.Rlimit, v uint64) unix.Rlimit {
+	out := unix.Rlimit{Cur: v, Max: v}
+	if cur.Cur < out.Cur {
+		out.Cur = cur.Cur
+	}
+	if cur.Max < out.Max {
+		out.Max = cur.Max
+	}
+	if out.Cur > out.Max {
+		out.Cur = out.Max
+	}
+	return out
+}
+
+// limit sets the limits in the helper (they stay with what it runs).
 func (c *helperConfig) limit() {
 	set := func(res int, v uint64) {
 		if v == 0 {
 			return
 		}
 		var cur unix.Rlimit
-		if unix.Getrlimit(res, &cur) == nil && cur.Max < v {
-			v = cur.Max
+		if err := unix.Getrlimit(res, &cur); err != nil {
+			return
 		}
-		unix.Setrlimit(res, &unix.Rlimit{Cur: v, Max: v})
+		l := lowered(cur, v)
+		unix.Setrlimit(res, &l)
 	}
 	set(unix.RLIMIT_NPROC, c.NProc)
 	set(unix.RLIMIT_DATA, c.Data)

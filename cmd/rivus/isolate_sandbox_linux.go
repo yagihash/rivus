@@ -73,7 +73,7 @@ var sandboxPrograms = []string{"/bin/sh", "/bin/bash", "/usr/bin/env", "/usr/bin
 	"/usr/bin/ld", "/usr/bin/ld.bfd", "/usr/bin/ld.gold", "/usr/bin/ld.lld", "/usr/bin/as", "/usr/bin/ar", "/usr/bin/ranlib", "/usr/bin/strip", "/usr/bin/nm", "/usr/bin/objcopy"}
 
 // sandboxExecDirs are the directories (besides the toolchain) that programs are run from: the parts of the C compiler that the driver runs.
-// (A directory that this machine does not have is left out by the sandbox.) /usr/lib is run from by the sandbox itself.
+// (A directory that this machine does not have is left out by the sandbox.) /usr/lib itself is only read (apart from /usr/lib/gcc and the dynamic loader, which are named): the programs that a system keeps there (the Rust coreutils of Ubuntu are in /usr/lib/cargo/bin) are not run.
 var sandboxExecDirs = []string{"/usr/libexec", "/usr/lib/gcc", "/usr/lib64/gcc"}
 
 // sandboxReadDirs are what a build reads besides the project and the dependencies: the headers of the system (the build scripts compile C).

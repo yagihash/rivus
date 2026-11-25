@@ -212,14 +212,19 @@ func (w *attrWatcher) giveUp(why string) {
 	w.lost = fmt.Sprintf("the reading of the calls that change the attributes of files failed (%s) %d times in a row and was given up: from then on those calls of the program (chmod, chown, utimes, setxattr) fail with ENOSYS, and none of them was looked at", why, maxReadFailures)
 }
 
-// warnings are what was not seen.
+// warnings are what was not seen: the calls whose file could not be told (rivus may not read the memory of the program: ptrace of a child that is not allowed),
+// which may or may not have been changes outside, and the reading that was given up. They are not changes of files, and are not listed as such.
 func (w *attrWatcher) warnings() []string {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if w.lost == "" {
-		return nil
+	var out []string
+	if w.unread > 0 {
+		out = append(out, fmt.Sprintf("%d calls of the build that change the attributes of files could not be checked, since the file that they name could not be read (rivus may not read the memory of the program here: ptrace of a child is not allowed); changes outside of the work directory cannot be told from the ones inside", w.unread))
 	}
-	return []string{w.lost}
+	if w.lost != "" {
+		out = append(out, w.lost)
+	}
+	return out
 }
 
 // what pathOf found
@@ -412,9 +417,6 @@ func (w *attrWatcher) changes() []string {
 	out := append([]string(nil), w.list...)
 	if w.cut > 0 {
 		out = append(out, fmt.Sprintf("... and %d more", w.cut))
-	}
-	if w.unread > 0 {
-		out = append(out, fmt.Sprintf("(%d more changes of files whose path could not be read: ptrace of the child is not allowed here)", w.unread))
 	}
 	return out
 }

@@ -77,6 +77,12 @@ type Result struct {
 
 // real resolves the symbolic links of a path: the sandbox matches the real path (/tmp is /private/tmp).
 func real(p string) string {
+	// a relative path is relative to the directory of the caller: the program runs in another one (Spec.Dir), and the paths are opened there
+	if !filepath.IsAbs(p) {
+		if a, err := filepath.Abs(p); err == nil {
+			p = a
+		}
+	}
 	if r, err := filepath.EvalSymlinks(p); err == nil {
 		return r
 	}
