@@ -1,0 +1,5 @@
+dart	clos/to_lib_iter.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	clos/to_lib_iter.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	clos/to_lib_iter.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	clos/to_lib_iter.dart	sink-none	@sink(none) @nosink(clos-to-lib-iter-decoy)	void decoy() { @decoy
+dart	clos/to_lib_iter.dart	sink-none	@sink(none) @nosink(clos-to-lib-iter-decoy)	void decoy() { @decoy
