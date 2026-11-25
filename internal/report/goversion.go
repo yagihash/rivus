@@ -19,21 +19,19 @@ func goMinorOf(v string) (major, minor int, ok bool) {
 }
 
 // CheckGoVersion compares the go lines of the modules that were read (mods, by module path; the target is mainModule) with verified, to the
-// minor. The newest of all the modules decides: a dependency written for a newer Go counts as the target does. A target without a go line is
-// "unknown". Of equal go lines, the target is named, then the smaller module path.
+// minor. The newest of all the modules decides: a dependency written for a newer Go counts as the target does. "unknown" only when no
+// module has a go line that can be read (a target without one and dependencies that are not newer is "yes": nothing newer was read). Of equal go lines, the target is named, then the smaller module path.
 func CheckGoVersion(verified, mainModule string, mods map[string]string) *GoVersion {
 	g := &GoVersion{Target: mods[mainModule], Verified: verified, Match: GoUnknown}
-	if _, _, ok := goMinorOf(g.Target); !ok {
-		return g
-	}
 	vmaj, vmin, ok := goMinorOf(verified)
 	if !ok {
 		return g
 	}
-	g.Match = GoYes
 	newest, newestMaj, newestMin := "", vmaj, vmin
+	readable := false
 	for path, v := range mods {
 		maj, min, ok := goMinorOf(v)
+		readable = readable || ok
 		if !ok || maj < newestMaj || (maj == newestMaj && min <= newestMin) {
 			if ok && newest != "" && maj == newestMaj && min == newestMin && prefer(path, newest, mainModule) {
 				newest = path
@@ -42,6 +40,10 @@ func CheckGoVersion(verified, mainModule string, mods map[string]string) *GoVers
 		}
 		newest, newestMaj, newestMin = path, maj, min
 	}
+	if !readable {
+		return g
+	}
+	g.Match = GoYes
 	if newest != "" {
 		g.Match, g.NewestModule, g.NewestVersion = GoNewer, newest, mods[newest]
 	}

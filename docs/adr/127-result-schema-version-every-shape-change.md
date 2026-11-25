@@ -131,7 +131,7 @@
 - 検証済みの Go は、定数 `gossa.VerifiedGo`(`"1.27"`)の 1 か所。rivus 自身の `go.mod` にある `go` の指定の minor で、`go.mod` を上げて定数を忘れるとテストが落ちる。
 - 比べるのは minor まで(patch まで比べると、toolchain の更新のたびに誤った警告が出る)。
 - **対象のモジュールだけでなく、読んだ依存のモジュールの `go` 行も見る**(`packages.Module.GoVersion`。依存の `go` 行が新しければ、その依存の言語の機能を、rivus は確かめていない)。読んだモジュール全体の最大で決める。最大が対象自身なら、`newest_module` は対象のモジュールパス。同じ値のときは、対象、次に、パスの小さい順。
-- 対象の `go` 行がない(古い `go.mod`、または `go.mod` なし)ときは `unknown`。依存だけが新しいときも、対象に `go` の指定がなければ `unknown`。
+- `unknown` は、どのモジュールにも読める `go` の指定が 1 つもないとき(古い `go.mod`、`go.mod` なし)だけ。対象に `go` の指定がなくても、依存に読めるものがあれば比べる: 依存が新しければ `newer`(`target` は空のまま、`newest_module` と `newest_version` に依存を入れる)、新しくなければ `yes`。対象に `go` の指定がないことと、依存の言語が新しいことは別の事実で、依存のコードも同じように読むため。
 - **止めない**。`newer` のときだけ標準エラーに 1 行を出し、終了コードは変えない。ベンチと合格基準は、`newer` を失敗にしない(記録だけ)。
 - 実際の `go` コマンドは、新しすぎる `go` 行を、`GOTOOLCHAIN=local` では読み込みの失敗にする(auto では新しい toolchain を取りに行く)ので、`newer` を、読み込みを通して確かめるテストは書かない。読み込みの経路(`Program.GoVersions`)と、判定(`CheckGoVersion`)を別々に確かめる。
 - Dart の言語バージョン(`pubspec.yaml` の `environment.sdk`)は次の作業。同じ形で `summary` に足せる。Rust の edition も同様。

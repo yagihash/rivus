@@ -509,7 +509,7 @@ type ExtractorCheck struct {
 const (
 	GoYes     = "yes"     // no module that was read says a go line newer than the verified one
 	GoNewer   = "newer"   // a module says a newer go line: the language may have what this rivus was not checked against
-	GoUnknown = "unknown" // the target has no go line (an old go.mod, or no go.mod): nothing to compare
+	GoUnknown = "unknown" // no module has a go line that can be read (an old go.mod, or no go.mod): nothing to compare
 )
 
 // GoVersion is the comparison of the go lines of the modules that were read with the Go that this rivus was verified with (minor only).
