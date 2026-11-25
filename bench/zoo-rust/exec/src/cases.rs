@@ -28,6 +28,7 @@ pub fn register_all() {
     c::clos::to_own_helper::register();
     c::clos::two_callers::register();
     c::cont::map_key_vs_value::register();
+    c::cont::ptr_index_slice::register();
     c::cont::ptr_type_switch::register();
     c::cont::ptr_value_copy::register();
     c::cont::slice::register();
