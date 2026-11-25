@@ -74,6 +74,9 @@ type whyRare struct {
 	// terms; call tells how to read them from this side.
 	calleeGuards []Guard
 	call         *callInfo
+	// shared: the hops of one call hold this one value (the notes of the call are
+	// all they have). A hop that changes it makes its own first (mk).
+	shared bool
 }
 
 func (w *why) notes() []*Uncertainty {
@@ -127,8 +130,20 @@ func (w *why) plain() bool {
 func (w *why) mk() *whyRare {
 	if w.rare == nil {
 		w.rare = &whyRare{}
+	} else if w.rare.shared {
+		w.rare = w.copyRare()
 	}
 	return w.rare
+}
+
+// copyRare is a copy of what the hop has that few hops have, for the one that changes it. It is nil when there is none.
+func (w *why) copyRare() *whyRare {
+	if w.rare == nil {
+		return nil
+	}
+	r := *w.rare
+	r.shared = false
+	return &r
 }
 
 func (w *why) setNotes(n []*Uncertainty) {
@@ -199,7 +214,9 @@ type state struct {
 	sinkNotes []*Uncertainty
 	fn        *sg.Func
 
-	cells   map[Root]map[string]Set
+	cells map[Root]map[string]Set
+	// expBuf is the room that expandBuf cuts the results of one application of a summary from
+	expBuf  []expanded
 	changed bool
 
 	// limited are the parameters whose value this function calls through a call that is over the candidate limit
@@ -649,17 +666,13 @@ func (s *state) add(l Loc, e Elem, w *why) {
 		}
 		return
 	}
-	if t.charNote {
-		w = s.withCharNote(w)
-	}
 	if t.trunc {
 		s.truncated = true
-		// the hop that put the element into the cell below the cut: the cell stands for everything under it
-		w = s.withCutNote(w, l.Root, t.loc.Path, pathDepth(l.Path), "stored")
 	}
 	if t.widened {
 		s.widened = true
 	}
+	at, fullPath := l, l.Path
 	l, e, set := t.loc, t.e, t.set
 	if old, ok := set[e]; ok {
 		// The element is already here. If it came with other guards, the
@@ -681,6 +694,16 @@ func (s *state) add(l Loc, e Elem, w *why) {
 			}
 		}
 		return
+	}
+	// The notes of the hop are made only when it is kept: an element that is there already (most of the
+	// additions, in a long run) needs none, and they do not change what is compared above (guards, where it
+	// came from).
+	if t.charNote {
+		w = s.withCharNote(w)
+	}
+	if t.trunc {
+		// the hop that put the element into the cell below the cut: the cell stands for everything under it
+		w = s.withCutNote(w, at.Root, t.loc.Path, pathDepth(fullPath), "stored")
 	}
 	set[e] = w
 	s.changed = true
@@ -858,10 +881,7 @@ func (s *state) withCutNote(w *why, root Root, kept string, fullDepth int, verb 
 		return w
 	}
 	c := *w
-	if w.rare != nil {
-		r := *w.rare
-		c.rare = &r
-	}
+	c.rare = w.copyRare()
 	scope := "project"
 	if s.fn.Dep {
 		scope = "dependency"
@@ -888,10 +908,7 @@ func (s *state) withCharNote(w *why) *why {
 		return w
 	}
 	c := *w
-	if w.rare != nil {
-		r := *w.rare
-		c.rare = &r
-	}
+	c.rare = w.copyRare()
 	c.setNotes(appendNote(c.notes(), s.pathNote(KindCharTransform,
 		"a character read out of a text (or a value made of one, by arithmetic with a constant or a conversion to a text) was followed here: "+
 			"the value is taken to be made of the text, which is more than the code may do with it (a comparison or a count of the text, an "+
@@ -1007,29 +1024,65 @@ func (s *state) sameChainGuards(old *why, nf ref, hasNf bool) bool {
 	return !oo && !no && sameGuards(og, ng)
 }
 
+// sameFromAsAdd reports whether add of a plain hop that came from nf would leave the guards of the hop old as they are
+// without looking at any chain: old is unguarded, or it came from the same place (the two cases where add does not compare
+// the chains). The chains are left to add: what they say depends on when they are asked (guardsOfChain keeps its answer
+// until a hop is marked unguarded), so a look-ahead that asks earlier than add may give another answer.
+func sameFromAsAdd(old *why, nf ref, hasNf bool) bool {
+	var nfp *ref
+	if hasNf {
+		nfp = &nf
+	}
+	return old.unguarded() || sameFrom(old.from, nfp)
+}
+
 // addsNothing reports whether adding the element, with a plain reason (no
 // guards, no summary applied), to every one of the locations would change
 // nothing at all: it is there already with a plain reason, and the path and the
 // cell are as they would be left (add also records that a path was cut short and
 // that a cell was widened, which is why those are not skipped).
-func (s *state) addsNothing(dsts []Loc, e Elem, from ref, hasFrom bool) bool {
+func (s *state) addsNothing(dsts []Loc, e Elem, from ref, hasFrom, cutToo bool) bool {
 	if len(dsts) == 0 {
 		return false
 	}
+	var trunc, widened bool
 	for _, l := range dsts {
 		t := s.targetOf(l, e, false)
 		if t.numeric {
 			continue // add leaves it out
 		}
-		// add records that a path was cut and that a cell was widened
-		if t.trunc || t.widened || t.set == nil {
+		// a cut or widened target is left to add, unless the caller says that the hop has nothing that add compares
+		// besides what is looked at here (cutToo): the guards of the call that the caller puts on the hop are not
+		cut := t.trunc || t.widened
+		if cut && !cutToo {
+			return false
+		}
+		if t.set == nil {
 			return false
 		}
 		old, ok := t.set[t.e]
-		if !ok || old == nil || !old.plain() || !s.sameChainGuards(old, from, hasFrom) {
+		if !ok || old == nil || !old.plain() {
 			return false
 		}
+		if cut {
+			// a cut or widened target: only where add compares nothing but where the hop came from
+			if !sameFromAsAdd(old, from, hasFrom) {
+				return false
+			}
+		} else if !s.sameChainGuards(old, from, hasFrom) {
+			return false
+		}
+		// add records that a path was cut and that a cell was widened, and puts nothing else (the notes of the
+		// cut are on a hop that is kept only): it is done here for the ones that are left
+		if t.trunc {
+			trunc = true
+		}
+		if t.widened {
+			widened = true
+		}
 	}
+	s.truncated = s.truncated || trunc
+	s.widened = s.widened || widened
 	return true
 }
 

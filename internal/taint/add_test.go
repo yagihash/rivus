@@ -58,21 +58,27 @@ func TestAddAndItsLookAheadsAgree(t *testing.T) {
 	}
 	for _, sc := range scenes {
 		t.Run(sc.name, func(t *testing.T) {
-			s := &state{eng: &Engine{opts: DefaultOptions()}, cells: map[Root]map[string]Set{}}
 			l := Loc{sc.root, sc.path}
-			sc.setup(s, l)
 			from := ref{Loc{Root{str, -1}, "/src"}, sc.e}
-
-			nothing := s.addsNothing([]Loc{l}, sc.e, from, true)
-			exists := s.plainExists(l, sc.e, from, true)
-
-			adds, trunc, widened, changed := s.adds, s.truncated, s.widened, s.changed
-			s.add(l, sc.e, &why{})
-			unchanged := s.adds == adds && s.truncated == trunc && s.widened == widened && s.changed == changed
-			if nothing && !unchanged {
-				t.Errorf("addsNothing says nothing to add, but add changed the state")
+			fresh := func() *state {
+				s := &state{eng: &Engine{opts: DefaultOptions()}, cells: map[Root]map[string]Set{}}
+				sc.setup(s, l)
+				return s
 			}
-			if exists && s.adds != adds {
+			// what add leaves: the flags it sets, and whether it puts anything
+			a := fresh()
+			a.add(l, sc.e, &why{})
+
+			// addsNothing records the cut and the widening itself, for what it leaves to add: then the
+			// state is what add would have left
+			s := fresh()
+			adds, changed := s.adds, s.changed
+			nothing := s.addsNothing([]Loc{l}, sc.e, from, true, true)
+			exists := s.plainExists(l, sc.e, from, true)
+			if nothing && (a.adds != adds || a.changed != changed || a.truncated != s.truncated || a.widened != s.widened) {
+				t.Errorf("addsNothing says nothing to add, but add changed the state (adds %v, flags %v %v against %v %v)", a.adds != adds, a.truncated, a.widened, s.truncated, s.widened)
+			}
+			if exists && a.adds != adds {
 				t.Errorf("plainExists says the element is there, but add put it")
 			}
 			// the numeric root is the one place where add has something to say that puts nothing

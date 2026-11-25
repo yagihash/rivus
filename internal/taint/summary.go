@@ -332,6 +332,57 @@ func (s *state) expandElem(e Elem, argv []*sg.Value) []expanded {
 	return r
 }
 
+// expandBuf is room for n expanded elements that live until the end of the application of the summary (the memo holds
+// them): cut from one block that is used again for the next call, instead of made for each element.
+func (s *state) expandBuf(n int) []expanded {
+	if s.expandMemo == nil {
+		return make([]expanded, 0, n)
+	}
+	used := len(s.expBuf)
+	if cap(s.expBuf)-used < n {
+		// the old block stays with what holds it; the next one is larger
+		s.expBuf = make([]expanded, 0, max(n, 2*cap(s.expBuf), 256))
+		used = 0
+	}
+	s.expBuf = s.expBuf[:used+n]
+	return s.expBuf[used : used : used+n]
+}
+
+// elemSeen is a set of elements: a list when it is small (most are), a map when it is not.
+type elemSeen struct {
+	list []Elem
+	m    map[Elem]bool
+}
+
+const elemSeenList = 16
+
+func newElemSeen(total int) *elemSeen {
+	if total > elemSeenList {
+		return &elemSeen{m: make(map[Elem]bool, total)}
+	}
+	return &elemSeen{}
+}
+
+func (q *elemSeen) has(e Elem) bool {
+	if q.m != nil {
+		return q.m[e]
+	}
+	for _, x := range q.list {
+		if x == e {
+			return true
+		}
+	}
+	return false
+}
+
+func (q *elemSeen) add(e Elem) {
+	if q.m != nil {
+		q.m[e] = true
+	} else if !q.has(e) {
+		q.list = append(q.list, e)
+	}
+}
+
 // expandParam translates a symbolic element. keepAll: the same element found in several cells is not made
 // one (the cells are told apart by the field that a sink reads: the same element may be in the field in
 // one and beside it in another).
@@ -363,10 +414,10 @@ func (s *state) expandParam(e Elem, argv []*sg.Value, keepAll bool) []expanded {
 	}
 	// What is made lives for the length of one call of a summary: it is made at
 	// its size, not grown.
-	out := make([]expanded, 0, total)
+	out := s.expandBuf(total)
 	// The same element found in several cells is one element: the first
 	// reason stays (a cell keeps the first reason an element got into it).
-	seen := make(map[Elem]bool, total)
+	seen := newElemSeen(total)
 	for fi, found := range founds {
 		for i := range found {
 			f := &found[i]
@@ -374,8 +425,8 @@ func (s *state) expandParam(e Elem, argv []*sg.Value, keepAll bool) []expanded {
 			if f.E.Kind == Real {
 				for _, x := range applyMods(f.E, e.Mods(), s.eng.rules) {
 					x = x.WithChar(x.char || e.char)
-					if !seen[x] || keepAll {
-						seen[x] = true
+					if !seen.has(x) || keepAll {
+						seen.add(x)
 						out = append(out, expanded{E: x, From: f, Enclosing: enclosing, Rel: f.Rel})
 					}
 				}
@@ -383,8 +434,8 @@ func (s *state) expandParam(e Elem, argv []*sg.Value, keepAll bool) []expanded {
 			}
 			x := f.E
 			x = x.WithMods(joinMods(f.E.Mods(), e.Mods())).WithChar(f.E.char || e.char)
-			if !seen[x] || keepAll {
-				seen[x] = true
+			if !seen.has(x) || keepAll {
+				seen.add(x)
 				out = append(out, expanded{E: x, From: f, Enclosing: enclosing, Rel: f.Rel})
 			}
 		}
@@ -401,6 +452,7 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 		defer func() { s.markChar, s.noChar = prevMark, prevNo }()
 	}
 	var widenedNotes []*Uncertainty // notes + out_widened, made on the first element of a widened output
+	var callRare *whyRare           // what the hops of this call that have only its notes share
 	sum := s.eng.summaryOf(fn)
 	if sum == nil {
 		return // not analysed yet; a later round picks it up
@@ -439,7 +491,11 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 	// the pointer's target below "/*" (make_interface), the summary speaks of the target.
 	s.recvBoxed = cc.in.Callee != nil && cc.in.Callee.Kind == ir.CalleeDynamic && cc.recv != nil && !pointerLike(cc.recv) &&
 		len(fn.Params) > 0 && pointerLike(fn.Params[0])
-	defer func() { s.collectMemo, s.expandMemo, s.recvBoxed = nil, nil, false }()
+	defer func() {
+		s.collectMemo, s.expandMemo, s.recvBoxed = nil, nil, false
+		clear(s.expBuf)
+		s.expBuf = s.expBuf[:0]
+	}()
 	for _, i := range sum.Opaque {
 		if i < len(argv) {
 			s.markOpaque(argv[i], cc.in)
@@ -569,7 +625,7 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 				if x.From != nil {
 					nf = ref{x.From.Cell, x.From.Orig}
 				}
-				if len(oe.Guards) == 0 && s.addsNothing(dsts, x.E, nf, x.From != nil) {
+				if len(oe.Guards) == 0 && s.addsNothing(dsts, x.E, nf, x.From != nil, len(extra) == 0) {
 					continue
 				}
 				var w *why
@@ -580,7 +636,15 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 				}
 				w.pos, w.steps = packPos(cc.in.Pos), oe.Steps
 				if len(notes) > 0 {
-					w.setNotes(notes)
+					if len(extra) == 0 && len(oe.Guards) == 0 {
+						// only the notes of the call: the hops of the call share one value (it is copied by the hop that changes it)
+						if callRare == nil {
+							callRare = &whyRare{notes: notes, shared: true}
+						}
+						w.rare = callRare
+					} else {
+						w.setNotes(notes)
+					}
 				}
 				if len(extra) > 0 {
 					w.setGuards(extra)

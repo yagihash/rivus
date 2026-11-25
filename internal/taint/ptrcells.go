@@ -392,10 +392,7 @@ func (s *state) copyLocsAlias(src, dst []Loc, srcAlias, dstAlias map[Loc]bool, k
 // destinations of the write).
 func (s *state) withAliasNote(w *why, pos ir.Pos) *why {
 	c := *w
-	if w.rare != nil {
-		r := *w.rare
-		c.rare = &r
-	}
+	c.rare = w.copyRare()
 	c.setNotes(appendNote(c.notes(), s.aliasNote(pos)))
 	return &c
 }
