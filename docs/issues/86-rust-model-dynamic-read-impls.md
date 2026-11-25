@@ -1,6 +1,7 @@
 # #86 Rust: モデルを適用した動的呼び出しは read_impls でないと実装の本体を読まず、本体の source の見逃しと、捨てる値の誤検出が何も報告せずに起きる
 
-- 状態: **open**
+- 状態: **partial**
+- 残り: `@miss`(`model_body`)は消えた。`@fp`(`model_drop`)が残る。
 - 種類: サイレントな見逃し
 - 言語: Rust
 - ROADMAP の節: 2

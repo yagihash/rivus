@@ -30,4 +30,4 @@ ADR(設計判断の記録)は 1 件 1 ファイル。**一覧の表は、手で�
 
 ADR は、決めた時点の記録。本文は書き換えない。後の ADR が覆すときは、古い ADR の `状態` の行だけを直す。本文の誤りを直した記録が必要なときは、日付と理由を付けた追記の節で足す(いくつかの ADR にその形がある。[ADR-INDEX.md](../ADR-INDEX.md) の uncertainty)。
 
-[DECISIONS.md](../DECISIONS.md) は、この形の案内。
+[DECISIONS.md](../DECISIONS.md) は、[ADR-INDEX.md](../ADR-INDEX.md) への案内だけを持つ。

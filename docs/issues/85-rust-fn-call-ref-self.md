@@ -1,6 +1,7 @@
 # #85 Rust: Fn / FnMut を &self で呼ぶと、レシーバがセルでクロージャ候補にガードが付かず、呼び出し元ごとに絞れない(誤検出)
 
-- 状態: **open**
+- 状態: **partial**
+- 残り: `rust-curated/src/fnself.rs` の `@fp` が、`fn_ref_clean` の 1 か所に残る(本文の 6 か所は、書いたときの数)。
 - 種類: 過検出
 - 言語: Rust
 - ROADMAP の節: 後回し

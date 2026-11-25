@@ -1,6 +1,7 @@
 # #79 Dart / Rust: List やフィールドに持たれたコールバック(エミッタ、リスナー、遅延評価)の中の sink に、値が届かない
 
-- 状態: **open**
+- 状態: **partial**
+- 残り: Dart の zoo は済み(817767e4)。`dart-curated` と `rust-curated` の `@miss`(`emit`、`emit-two`、`across-hub`、`lazy`)が残る。
 - 種類: サイレントな見逃し
 - 言語: Dart / Rust
 - ROADMAP の節: 2
