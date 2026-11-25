@@ -1,0 +1,2 @@
+rust	rust/entry_or_insert.rs	sink-none	@sink(none)	fn decoy() { @decoy
+rust	rust/entry_or_insert.rs	sink-none	@sink(none)	fn fixed() { @fixed

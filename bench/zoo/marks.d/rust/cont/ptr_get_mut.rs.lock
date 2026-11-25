@@ -1,0 +1,2 @@
+rust	cont/ptr_get_mut.rs	sink-none	@sink(none)	fn decoy() { @decoy
+rust	cont/ptr_get_mut.rs	sink-none	@sink(none)	fn fixed() { @fixed
