@@ -12,7 +12,7 @@
 3. extractor は、自分のビルドのときのハッシュを、`--version` で答える。Dart は `rivus_dart rivus.ir/N source=<hash>`(`dart compile exe -DRIVUS_SRC_HASH=<hash>`)、Rust は `--rivus-version` で `rivus-rust rivus.ir/N source=<hash>`(`--rivus-version` は、ドライバーの判定や引数の解釈、cargo より前に、固定の文字列で答える。環境に `RIVUS_RUST_DRIVER` があっても答えは変わらない。`--version` はドライバーが rustc の探りに使うので触らない。`build.rs` が環境変数 `RIVUS_EXTRACTOR_SRC_HASH` を埋める)。`rivus setup rust` / `rivus setup dart` が、`-source` の中身から同じ計算をして渡す。
 4. ハッシュは、IR の先頭行には書かない。形が変わらないので、`schema_version` は `rivus.ir/1` のまま。
 
-**止めるか、記録するかの線(ADR-125 のとおり):** スキーマが違えば止める。ソースのハッシュが違うときは、止めずに記録する(段階 2 以降)。
+**止めるか、記録するかの線(ADR-125 のとおり):** スキーマが違えば止める。ソースのハッシュが違うときは、止めずに記録する。
 
 **読む側(段階 2): 解析の前に、extractor に 1 回だけ聞く。Rust は、対象を読む起動と同じ隔離の下で聞く。例外は作らない。**
 5. Rust と Dart を読む解析の前に(`rivus analyze`、`index` など、`-lang` で選ばれた言語ごとに 1 回)、extractor に、自分のソースのハッシュを聞き、本体の値(`main.rustSourceHash`、`main.dartSourceHash`)と照合する。Go と、`-ir` で読む保存した IR は、聞く相手がない。
@@ -22,6 +22,9 @@
 9. **記録**: `summary.extractor`(言語ごとの `{lang, path, schema, source_hash, expected_hash, match, detail}`。Go だけの解析にはない)と、`yes` 以外のとき標準エラーに警告 1 行(extractor のパスと作り直し方つき)。uncertainty の kind にはしない(ADR-008 の kind は、finding ごとの不確かさ用。これは、解析全体の前提の話)。`summary` の項目を足すだけなので、出力のスキーマのバージョン(`rivus.result/1`)は上げない(ADR-034 の、足すだけの変更の扱い。項目は `omitempty`)。
 10. **`rivus version`**: 第 1 行は今までどおり(スクリプトが読む)。続けて、IR のスキーマのバージョンと、言語ごとの extractor の行(パス、スキーマ、ソースのハッシュ 12 桁、一致か不一致か)。Rust の行は、解析と同じ `rustExtractorVersionSandboxed`(隔離なしの環境では「未確認」。`-unsafe-host-exec` か `RIVUS_UNSAFE_HOST_EXEC=1` のときだけ直接起動)。スキーマが違って止まるときのメッセージ(ADR-125 の `SchemaError`)に、その extractor のパスを足す。
 
-**段階:** 段階 1 は、計算と埋め込み(`--version` / `--rivus-version` の答え)。段階 2 は、上の 5 から 10(読む側の照合、記録、`rivus version`)。ベンチ(`deps_bench.py`、`compare.sh`)での利用は段階 3。
+**段階(すべて済み。課題 #109 は closed):** 段階 1 は、計算と埋め込み(`--version` / `--rivus-version` の答え)。段階 2 は、上の 5 から 10(読む側の照合、記録、`rivus version`)。ベンチ(`deps_bench.py`、`compare.sh`)での利用は段階 3(下の 11)。
+
+**ベンチと合格基準(段階 3、ユーザーの承認 2026-11-25): ここだけは、`yes` 以外を失敗にする。**
+11. `bench/deps_bench.py`(`make bench-passline`)は、Rust と Dart の対象で、解析の報告の `summary.extractor` の `match` を読み、`yes` 以外(`no`、`unknown_binary`、`unknown_extractor`、`unchecked`、`n/a(-ir)`、項目がない場合)を、その実行の失敗にする(`extractor_mismatch(<match>)`、終了コード 1、台帳に行を足さない。状態ごとに作り替え方を出す)。ファイルの更新時刻で見ていた照合(#508)は、これに置き換えた(時刻に依らないので、`git` が使えなくても、rebase で時刻が動いても、誤判定しない)。`deps_bench.py` は、`-rivus` を指さないとき、`make build` と同じ値を付けて本体を作り、Dart の extractor は `dart run -DRIVUS_SRC_HASH=<hash>` で起動する。`compare.sh --graph-check` は、各側の本体を、その側の木の extractor のハッシュを付けて作り、extractor もその側のハッシュで作る。左右でハッシュが違う(extractor を変える PR)のは失敗にせず、各側が自分の extractor と合っていること(`match` が `yes`)を各側で確かめて、合わない側を NOT RUN(終了コード 2)にする。素の `go build` / `go install` の本体は、これまでどおり動く(警告が出るだけ)。失敗にするのはこの 2 つの道具だけで、「`make build` で作る」運用を前提にする。
 
 **帰結:** 解析の結果(IR、finding、uncertainty)は変わらない。出力に `summary.extractor` が足される。古い extractor と違う extractor は、止まらずに、警告と記録が出る。`rivus setup` で作った extractor と、`make build` で作った本体は、同じ計算のハッシュを持つ。

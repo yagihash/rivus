@@ -511,22 +511,6 @@ class RustRoad(unittest.TestCase):
             for k, v in old.items():
                 os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
 
-    def test_stale_extractor_is_refused(self):
-        r = tempfile.mkdtemp()
-        self.addCleanup(lambda: __import__("shutil").rmtree(r, ignore_errors=True))
-        for c in (["git", "init", "-q"], ["git", "config", "user.email", "a@b"], ["git", "config", "user.name", "a"], ["git", "config", "commit.gpgsign", "false"]):
-            subprocess.run(c, cwd=r, check=True)
-        os.makedirs(os.path.join(r, "extractor/rust"))
-        open(os.path.join(r, "extractor/rust/a.rs"), "w").write("x")
-        subprocess.run(["git", "add", "-A"], cwd=r, check=True)
-        subprocess.run(["git", "commit", "-q", "-m", "x"], cwd=r, check=True)
-        ex = os.path.join(r, "ex")
-        open(ex, "w").close()
-        os.utime(ex, (1, 1))  # older than the commit
-        self.assertIn("older than", d.extractor_stale(ex, r))
-        os.utime(ex, None)
-        self.assertEqual(d.extractor_stale(ex, r), "")
-
     def test_failed_run_is_not_an_isolation_failure_and_adds_no_row(self):
         tmp = tempfile.mkdtemp()
         self.addCleanup(lambda: __import__("shutil").rmtree(tmp, ignore_errors=True))
@@ -578,6 +562,83 @@ class RustRoad(unittest.TestCase):
         self.addCleanup(lambda: __import__("shutil").rmtree(w, ignore_errors=True))
         _, _, err = d.prepare("shlex", {"lang": "rust", "rust_minimal_lock": True}, r, w, dict(os.environ))
         self.assertIn("only for a crate with no dependency", err)
+
+
+def ext_report(lang, match, **kw):
+    """The summary.extractor of a report, as rivus writes it (test data; no extractor is run)."""
+    e = {"lang": lang, "path": "/x/ext", "schema": "rivus.ir/1", "source_hash": kw.get("source", "a" * 64), "expected_hash": kw.get("expected", "a" * 64), "match": match}
+    if "detail" in kw:
+        e["detail"] = kw["detail"]
+    if lang is None:
+        del e["lang"]
+    return {"summary": {"extractor": [e]}}
+
+
+class ExtractorMatch(unittest.TestCase):
+    """The extractor check of the pass line: summary.extractor.match must be "yes" (ADR-126); every other state is a failure with its own repair."""
+
+    def test_yes_passes(self):
+        for lang in ("rust", "dart"):
+            self.assertIsNone(d.extractor_failure(ext_report(lang, "yes"), lang))
+
+    def test_go_has_no_extractor(self):
+        self.assertIsNone(d.extractor_failure({"summary": {}}, "go"))
+
+    def test_each_other_state_fails_with_its_repair(self):
+        want = {"no": "make build", "unknown_binary": "make build", "unknown_extractor": "setup rust -source", "unchecked": "isolation"}
+        want["no"] = "setup rust -source"
+        for state, text in want.items():
+            f = d.extractor_failure(ext_report("rust", state, source="b" * 64, detail="why"), "rust")
+            self.assertIsNotNone(f, state)
+            self.assertEqual(f[0], state)
+            self.assertIn(text, f[1], state)
+            self.assertIn("/x/ext", f[1])
+
+    def test_dart_repair_names_dart(self):
+        f = d.extractor_failure(ext_report("dart", "no"), "dart")
+        self.assertIn("setup dart -source", f[1])
+        self.assertNotIn("setup rust", f[1])
+
+    def test_ir_entry_is_a_failure(self):
+        f = d.extractor_failure(ext_report(None, "n/a(-ir)"), "rust")
+        self.assertEqual(f[0], "n/a(-ir)")
+        self.assertIn("-ir", f[1])
+
+    def test_no_entry_is_a_failure(self):
+        for rep in ({"summary": {}}, {}, None, ext_report("dart", "yes")):
+            f = d.extractor_failure(rep, "rust")
+            self.assertEqual(f[0], "missing", rep)
+
+    def test_passline_run_fails_before_the_next_runs_and_adds_no_row(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(lambda: __import__("shutil").rmtree(tmp, ignore_errors=True))
+        t = {"lang": "rust", "repo": "x", "commit": "c", "args": [], "time_limit_s": 100, "mem_cap_gb": 8, "decided": False, "detect": None, "local": "bench/go-curated"}
+        saved = (d.prepare, d.analyze_once, d.shutil.copy)
+        d.prepare = lambda name, t, tree, work, env: (tree, env, None)
+        d.shutil.copy = lambda *a, **k: None  # the report is only kept, not read, from the file
+        try:
+            for state in ("no", "unknown_binary", "unknown_extractor", "unchecked"):
+                rep = ext_report("rust", state)
+                rep["summary"]["isolation"] = {"mode": "sandbox"}
+                d.analyze_once = lambda *a, **k: {"wall": 1.0, "peak": 1024 ** 3, "converged": True, "why": "", "report": rep, "peak_how": "x", "peak_a": 0, "cpu": 1.0, "big": "", "big_rss": 0, "at_s": 0, "rc": 0, "load": 1.0, "note": "n"}
+                line, row = d.passline_run("shlex", t, "rivus", tmp, tmp, 100, 8, 1, tmp)
+                self.assertIsNone(row, state)  # no row: no number is read from it
+                self.assertTrue(line.startswith("FAIL shlex extractor_mismatch(%s):" % state), line)
+            rep = ext_report("rust", "yes")
+            rep["summary"]["isolation"] = {"mode": "sandbox"}
+            line, row = d.passline_run("shlex", t, "rivus", tmp, tmp, 100, 8, 1, tmp)
+            self.assertIsNotNone(row)
+            self.assertEqual(row["result"], "INFO")
+        finally:
+            d.prepare, d.analyze_once, d.shutil.copy = saved
+
+    def test_dart_extractor_command_carries_the_hash(self):
+        old = d.extractor_hash
+        d.extractor_hash = lambda lang: "h" * 64
+        try:
+            self.assertEqual(d.dart_extractor_command(), "dart run -DRIVUS_SRC_HASH=%s %s" % ("h" * 64, os.path.join(d.ROOT, "extractor/dart/bin/rivus_dart.dart")))
+        finally:
+            d.extractor_hash = old
 
 
 if __name__ == "__main__":

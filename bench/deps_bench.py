@@ -92,7 +92,7 @@ def measure(name, rivus, timeout, work):
             return None, "dart pub get --offline failed: " + r.stderr.strip()[-200:]
         src = copy
         env["RIVUS_DART"] = "dart"
-        env["RIVUS_DART_EXTRACTOR"] = "dart run " + os.path.join(ROOT, "extractor/dart/bin/rivus_dart.dart")
+        env["RIVUS_DART_EXTRACTOR"] = dart_extractor_command()
     cmd = [rivus, "analyze", "-lang", lang, "-C", src, "-timeout", "%ds" % timeout]
     outp, errp = os.path.join(work, name + ".out.json"), os.path.join(work, name + ".err")
     with heavy_lock("deps_bench " + name):
@@ -107,6 +107,10 @@ def measure(name, rivus, timeout, work):
             rep = json.load(open(outp))
         except (OSError, ValueError):
             rep = None
+    if rep is not None:  # the extractor and rivus must be of the same source (ADR-126): a failure, no row
+        bad = extractor_failure(rep, lang)
+        if bad:
+            raise SystemExit("deps_bench: %s extractor_mismatch(%s): %s" % (name, bad[0], bad[1]))
     st = rep.get("stats", {}) if isinstance(rep, dict) else {}
     converged = bool(st.get("converged", True)) if rep is not None else False
     row = {"target": name, "target_commit": "in-tree", "kind": "deps", "settings": "default (-timeout %ds); %s" % (timeout, note),
@@ -404,7 +408,7 @@ def prepare(name, t, tree, work, env):
         return None, env, "dart pub get failed: " + r.stderr.strip()[-200:]
     env = dict(env)
     env["RIVUS_DART"] = "dart"
-    env["RIVUS_DART_EXTRACTOR"] = "dart run " + os.path.join(ROOT, "extractor/dart/bin/rivus_dart.dart")
+    env["RIVUS_DART_EXTRACTOR"] = dart_extractor_command()
     return src, env, None
 
 
@@ -535,24 +539,57 @@ def rust_tools():
         raise SystemExit("deps_bench: the pinned toolchain is not at %s (prepare it yourself, or set RIVUS_RUST_TOOLCHAIN_DIR; this tool never runs `rivus setup rust`)" % tc)
     if not os.access(ex, os.X_OK):
         raise SystemExit("deps_bench: the Rust extractor is not at %s (build extractor/rust, or set RIVUS_RUST_EXTRACTOR)" % ex)
-    why = extractor_stale(ex)
-    if why:
-        raise SystemExit("deps_bench: " + why)
     return tc, ex
 
 
-def extractor_stale(ex, root=None):
-    """The extractor is built from another version than this tree when its file is older than the last commit that changed extractor/rust or
-    internal/ir (the IR schema): rivus analyze can then fail with an exit status 1. Returns the reason, or "" when it is not older (or git cannot say)."""
-    root = root or ROOT
-    r = subprocess.run(["git", "log", "-1", "--format=%ct", "--", "extractor/rust", "internal/ir"], cwd=root, capture_output=True, text=True)
-    try:
-        last = int(r.stdout.strip())
-    except ValueError:
-        return ""
-    if os.path.getmtime(ex) < last:
-        return "the Rust extractor %s is older than the last commit of extractor/rust or internal/ir of this tree: build it from this tree (extractor/rust, `cargo build` with the pinned nightly), or set RIVUS_RUST_EXTRACTOR to one that is" % ex
-    return ""
+def extractor_hash(lang):
+    """The hash of the source of the extractor of lang in this tree (`go run ./scripts/extractor-hash`: the value that `make build` gives to rivus)."""
+    r = subprocess.run(["go", "run", "./scripts/extractor-hash", lang], cwd=ROOT, capture_output=True, text=True)
+    if r.returncode != 0:
+        raise SystemExit("deps_bench: go run ./scripts/extractor-hash %s failed: %s" % (lang, r.stderr.strip()[-200:]))
+    return r.stdout.strip()
+
+
+def dart_extractor_command():
+    """The command of the Dart extractor of this tree, with the hash of its source given as a compile-time value (what `rivus setup dart` does for the
+    executable), so that its `--version` says the source it is made from."""
+    return "dart run -DRIVUS_SRC_HASH=%s %s" % (extractor_hash("dart"), os.path.join(ROOT, "extractor/dart/bin/rivus_dart.dart"))
+
+
+def build_rivus(out):
+    """rivus built from this tree like `make build` does: with the hashes of the source of the two extractors (-ldflags -X, ADR-126)."""
+    flags = "-X main.rustSourceHash=%s -X main.dartSourceHash=%s" % (extractor_hash("rust"), extractor_hash("dart"))
+    subprocess.run(["go", "build", "-ldflags", flags, "-o", out, "./cmd/rivus"], cwd=ROOT, check=True)
+
+
+def extractor_failure(report, lang):
+    """The check of the pass line on summary.extractor (ADR-126): the extractor of lang must say it was built from the source this rivus was built with
+    (match "yes"). Returns None when it is, else (state, message): the state is the match, or "missing" (the report has no entry for lang: a rivus
+    older than the check); the message says how to repair it. A target of Go has no extractor to check."""
+    if lang not in ("rust", "dart"):
+        return None
+    entries = ((report or {}).get("summary") or {}).get("extractor") or []
+    mine = [e for e in entries if e.get("lang") == lang]
+    if not mine:
+        if any(e.get("match") == "n/a(-ir)" for e in entries):
+            return "n/a(-ir)", "summary.extractor says the IR was read from a file (-ir); this tool never uses -ir, so the result is not of the extractor"
+        return "missing", "summary.extractor has no entry for the %s extractor (a rivus without the check of ADR-126): build rivus with `make build` from this tree" % lang
+    e = mine[0]
+    state, path, detail = e.get("match", ""), e.get("path", "?"), e.get("detail", "")
+    again = ("`rivus setup rust -source extractor/rust` (or, in extractor/rust, RIVUS_EXTRACTOR_SRC_HASH=$(go run ./scripts/extractor-hash rust) cargo build)" if lang == "rust"
+             else "`rivus setup dart -source extractor/dart` (the command of this tool does it with -DRIVUS_SRC_HASH)")
+    if state == "yes":
+        return None
+    if state == "no":
+        return state, "the %s extractor %s was built from another source than this rivus (extractor %s, rivus %s): build the extractor again from the same commit: %s" % (
+            lang, path, (e.get("source_hash") or "?")[:12], (e.get("expected_hash") or "?")[:12], again)
+    if state == "unknown_binary":
+        return state, "this rivus was built without the hash of the source of the extractors (a plain go build), so the %s extractor %s cannot be checked: build rivus with `make build`" % (lang, path)
+    if state == "unknown_extractor":
+        return state, "the %s extractor %s did not say which source it was built from (%s): build it again: %s" % (lang, path, detail or "no detail", again)
+    if state == "unchecked":
+        return state, "the %s extractor %s was not asked which source it was built from (%s): run it where the isolation is (macOS), or build the extractor again: %s" % (lang, path, detail or "no detail", again)
+    return state or "missing", "summary.extractor.match is %r, not 'yes'" % (state,)
 
 
 def expand_args(args, src, subdir):
@@ -651,6 +688,10 @@ def passline_run(name, t, rivus, cache, outdir, limit_s, cap_gb, repeat=1, home=
             return r
 
         main = median_run([run(t.get("commit", ""), "pin" if i == 0 else "pin%d" % (i + 1)) for i in range(max(1, repeat))])
+        if main["report"] is not None and not main["why"]:  # the extractor and rivus must be of the same source, before any further run (ADR-126)
+            bad = extractor_failure(main["report"], t["lang"])
+            if bad:
+                return "FAIL %s extractor_mismatch(%s): %s (no ledger row; the result is not used)" % (name, bad[0], bad[1]), None
         detected, quiet, d, through, located, score = None, None, t.get("detect"), None, None, None
         if d and d.get("mode") == "score":  # per published vulnerability, by place; the count n/N only (no finding count, list, path or place anywhere)
             truth = json.load(open(os.path.join(ROOT, d["truth"])))["sites"]
@@ -741,7 +782,7 @@ def run_passline(names, a):
         rivus = a.rivus
         if not rivus:
             rivus = os.path.join(bw, "rivus")
-            subprocess.run(["go", "build", "-o", rivus, "./cmd/rivus"], cwd=ROOT, check=True)
+            build_rivus(rivus)
         for name in names:
             t = targets[name]
             line, row = passline(name, t, rivus, cache, outdir, a.limit or t["time_limit_s"], a.cap or t["mem_cap_gb"], a.repeat)
@@ -751,7 +792,7 @@ def run_passline(names, a):
             if row is None or row.get("result") == "isolation_failed":
                 failed.append(name)
     if failed:
-        raise SystemExit("deps_bench: no usable result (the isolation check failed before or after the run, or rivus analyze ended with an error): %s" % ", ".join(failed))
+        raise SystemExit("deps_bench: no usable result (the isolation check failed before or after the run, the extractor does not match this rivus (extractor_mismatch), or rivus analyze ended with an error): %s" % ", ".join(failed))
 
 
 def main():
@@ -775,7 +816,7 @@ def main():
         rivus = a.rivus
         if not rivus:
             rivus = os.path.join(work, "rivus")
-            subprocess.run(["go", "build", "-o", rivus, "./cmd/rivus"], cwd=ROOT, check=True)
+            build_rivus(rivus)
         for name in a.benches:
             row, why = measure(name, rivus, a.timeout, work)
             if row is None:

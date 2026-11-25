@@ -61,7 +61,7 @@ options:
                     (RIVUS_INTERNAL_SUMMARY_DUMP, an internal dump with no flag: the hash of each whole summary), and then the findings and the
                     uncertainties (as sets, and in the order of the output). One line each: same, or DIFFERENT with how many and the first function IDs (bench/graph_check.py). A change for
                     memory or cost has to show "same" (docs/WORKFLOW.md); a difference is a change of the accuracy. A version from before the dump
-                    leaves "summaries" as NOT COMPARED (exit 3). Dart: each side runs the extractor of its own tree on the code of head (the IR line is the output of the extractor); an analysis that stops (exit code 4, as zoo-dart does by the pass limit) is compared as far as it goes and the line "convergence: NOT CONVERGED" gives exit 4 (zoo-go has such cells too). Rust (zoo-rust): macOS only, the extractor of each side runs under the sandbox and never with -unsafe-host-exec; HOME is an empty directory, the toolchain is RIVUS_RUST_TOOLCHAIN_DIR or the pinned nightly under ~/.rustup (`rivus setup rust` is never run), BENCH_RUST_SDKROOT as in bench/deps_bench.py; on another system the target is NOT RUN (exit 2). Exit status: 0 all the same, 1 a difference, 2 a run failed, 3 same but not all compared, 4 same, and only an analysis did not converge
+                    leaves "summaries" as NOT COMPARED (exit 3). Dart and Rust: each side's rivus is built with the hashes of the extractors (-ldflags -X, as `make build` does) and its extractor with the hash of its own source, and the check needs summary.extractor.match "yes" for each side (the hashes of base and head being different is not looked at); a side that does not match is NOT RUN (exit 2) with the reason (ADR-126). Dart: each side runs the extractor of its own tree on the code of head (the IR line is the output of the extractor); an analysis that stops (exit code 4, as zoo-dart does by the pass limit) is compared as far as it goes and the line "convergence: NOT CONVERGED" gives exit 4 (zoo-go has such cells too). Rust (zoo-rust): macOS only, the extractor of each side runs under the sandbox and never with -unsafe-host-exec; HOME is an empty directory, the toolchain is RIVUS_RUST_TOOLCHAIN_DIR or the pinned nightly under ~/.rustup (`rivus setup rust` is never run), BENCH_RUST_SDKROOT as in bench/deps_bench.py; on another system the target is NOT RUN (exit 2). Exit status: 0 all the same, 1 a difference, 2 a run failed, 3 same but not all compared, 4 same, and only an analysis did not converge
   --graph-workers B,H  with --graph-check: run base with -workers B and head with -workers H (the self-check: with the same commit twice and "1,8", the
                     hash of the summaries must not hold the order of the work; the result "does not depend on" the number of workers)
   --dry-run         print what would be done and exit (nothing is created)
@@ -289,7 +289,10 @@ SKIPPED="$RES/skipped.tsv"; : > "$SKIPPED"; : > "$RES/scores.txt"
 skip() { say "NOT RUN $1: $2"; printf '%s\t%s\n' "$1" "$2" >> "$SKIPPED"; }
 
 # --- 1. the two binaries ---
-BIN="$WORK/bin/$PAIR"; mkdir -p "$BIN"
+BIN="$WORK/bin/$PAIR-h"; mkdir -p "$BIN"   # -h: built with the hashes of the extractors (a binary of an older work dir was not)
+# xhash LANG DIR: the hash of the source of the extractor in DIR (the script of THIS tree, so that a base without the script is computed too; ADR-126).
+# "unknown" when it cannot be computed (the directory is not there): the side is then NOT RUN by graph_check.py (unknown_binary / unknown_extractor).
+xhash() { (cd "$ROOT" && go run ./scripts/extractor-hash "$1" "$2") 2>/dev/null || echo unknown; }
 build() { # label sha7 sha
   local label="$1" s7="$2" sha="$3" wt="$WORK/wt/$2"
   [ -x "$BIN/rivus-$label" ] && return 0
@@ -298,7 +301,8 @@ build() { # label sha7 sha
     git -C "$ROOT" worktree add --detach "$wt" "$sha" >&2 || return 1
   fi
   say "building rivus-$label ($s7)"
-  (cd "$wt" && go build -o "$BIN/rivus-$label" ./cmd/rivus) >&2 || return 1
+  # like `make build`: the hashes of the sources of the two extractors of THIS version go in (-ldflags -X); a base that has no such variable ignores them
+  (cd "$wt" && go build -ldflags "-X main.rustSourceHash=$(xhash rust "$wt/extractor/rust") -X main.dartSourceHash=$(xhash dart "$wt/extractor/dart")" -o "$BIN/rivus-$label" ./cmd/rivus) >&2 || return 1
 }
 if ! build base "$B7" "$BASE_SHA" || ! build head "$H7" "$HEAD_SHA"; then
   say "the build failed: nothing was measured"; exit 2
@@ -336,7 +340,7 @@ h16() { shasum -a 256 | cut -c1-16; }
 DRIVER="$WORK/bin/driver/rivus"
 ensure_driver() {
   [ -n "${DRIVER_OK:-}" ] && return 0
-  mkdir -p "$WORK/bin/driver" && (cd "$ROOT" && go build -o "$DRIVER.$$" ./cmd/rivus) >&2 && mv "$DRIVER.$$" "$DRIVER" && DRIVER_OK=1
+  mkdir -p "$WORK/bin/driver" && (cd "$ROOT" && go build -ldflags "-X main.rustSourceHash=$(xhash rust "$ROOT/extractor/rust") -X main.dartSourceHash=$(xhash dart "$ROOT/extractor/dart")" -o "$DRIVER.$$" ./cmd/rivus) >&2 && mv "$DRIVER.$$" "$DRIVER" && DRIVER_OK=1
 }
 side_sha() { if [ "$1" = base ]; then echo "$BASE_SHA"; else echo "$HEAD_SHA"; fi; }
 
@@ -345,12 +349,13 @@ side_sha() { if [ "$1" = base ]; then echo "$BASE_SHA"; else echo "$HEAD_SHA"; f
 rust_extractor() {
   local wt="$1" sha="$2"
   RRTREE="$(tree "$sha" extractor/rust)"; [ -n "$RRTREE" ] || { RRWHY="no extractor/rust in ${sha:0:7}"; return 1; }
-  RR="$WORK/bin/rust-extractor/$RRTREE/rivus-rust"
+  local rh; rh="$(xhash rust "$wt/extractor/rust")"   # given to the build: the extractor says it with --rivus-version, and graph_check.py compares it with the one of this side's rivus
+  RR="$WORK/bin/rust-extractor/$RRTREE-${rh:0:12}/rivus-rust"
   if [ ! -x "$RR" ]; then
     say "building the Rust extractor of ${sha:0:7} (tree ${RRTREE:0:12})"
-    (cd "$wt/extractor/rust" && CARGO_TARGET_DIR="$WORK/cargo-target" python3 "$ROOT/bench/heavylock.py" --reason "compare.sh rust extractor build" -- cargo build --locked) > "$WORK/ir/rust-extractor-$RRTREE.log" 2>&1 \
+    (cd "$wt/extractor/rust" && RIVUS_EXTRACTOR_SRC_HASH="$rh" CARGO_TARGET_DIR="$WORK/cargo-target" python3 "$ROOT/bench/heavylock.py" --reason "compare.sh rust extractor build" -- cargo build --locked) > "$WORK/ir/rust-extractor-$RRTREE.log" 2>&1 \
       || { RRWHY="cargo build --locked failed in ${sha:0:7} (see $WORK/ir/rust-extractor-$RRTREE.log)"; return 1; }
-    mkdir -p "$WORK/bin/rust-extractor/$RRTREE" && cp "$WORK/cargo-target/debug/rivus-rust" "$RR" || { RRWHY="no rivus-rust after cargo build"; return 1; }
+    mkdir -p "$WORK/bin/rust-extractor/$RRTREE-${rh:0:12}" && cp "$WORK/cargo-target/debug/rivus-rust" "$RR" || { RRWHY="no rivus-rust after cargo build"; return 1; }
   fi
 }
 
@@ -600,7 +605,7 @@ if [ -n "$GRAPHCHECK" ]; then
             wt="$WORK/wt/$(side_sha "$w" | cut -c1-7)"
             [ -f "$wt/extractor/dart/bin/rivus_dart.dart" ] || { say "graph check $b: no extractor/dart in $w"; ok=0; break; }
             [ -d "$wt/extractor/dart/.dart_tool" ] || (cd "$wt/extractor/dart" && $dartcmd pub get) > /dev/null 2>&1
-            dartargs+=(-$w-extractor "$dartcmd run $wt/extractor/dart/bin/rivus_dart.dart")
+            dartargs+=(-$w-extractor "$dartcmd run -DRIVUS_SRC_HASH=$(xhash dart "$wt/extractor/dart") $wt/extractor/dart/bin/rivus_dart.dart")
           done
           [ "$ok" = 1 ] || { GC_STATUS=2; continue; }
           dartargs+=(-lang dart)
