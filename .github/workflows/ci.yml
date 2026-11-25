@@ -171,6 +171,8 @@ jobs:
             isolation:
               - 'internal/sandbox/**'
               - 'cmd/rivus/isolate*.go'
+              - 'cmd/rivus/term_*.go'
+              - 'scripts/sandbox-e2e.sh'
               - 'extractor/rust/**'
               - '!extractor/*/README.md'
               - 'go.mod'
@@ -304,6 +306,13 @@ jobs:
           GOARCH: arm64
           CGO_ENABLED: "0"
         run: go vet ./cmd/rivus ./internal/sandbox
+      # The filter of seccomp is made for x86-64 and arm64 only: for another architecture of Linux the package must still build, and Run says that the sandbox is not there
+      - name: Vet the sandbox for an architecture that has no filter
+        if: ${{ !cancelled() }}
+        env:
+          GOARCH: riscv64
+          CGO_ENABLED: "0"
+        run: go vet ./internal/sandbox
       - name: Test the packages other than cmd/rivus
         if: ${{ !cancelled() }}
         run: |
@@ -602,7 +611,7 @@ jobs:
   # of the code).
   #
   # Only the tests that need no toolchain: what the probe cannot do under the sandbox, the ways out that are closed, the limits. The
-  # extraction of Rust under the sandbox (the toolchain, the fetch) is tried on the machine of the developer (RIVUS_SBX_RED=1, RIVUS_SBX_NET=1).
+  # extraction of Rust under the sandbox (the toolchain, the fetch) is the job `sandbox-e2e` below, and on the machine of the developer (RIVUS_SBX_RED=1, RIVUS_SBX_NET=1).
   sandbox:
     needs: changes
     if: needs.changes.outputs.isolation == 'true'
@@ -638,7 +647,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [ubuntu-latest, ubuntu-26.04-arm]
+        # ubuntu-24.04 has Linux 6.8 (Landlock ABI 4): the tests that need a newer kernel say so and skip, and the ones that hold for an older one run there
+        runner: [ubuntu-latest, ubuntu-26.04-arm, ubuntu-24.04, ubuntu-24.04-arm]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     permissions:
@@ -661,6 +671,52 @@ jobs:
         env:
           RIVUS_SBX_RED: "1"
         run: go test -count=1 -timeout 20m -v -run 'TestSandbox' ./internal/sandbox
+      # The runner is not root, and the checks that matter when rivus is run as root (the capabilities that are taken away, a file that cannot be given to another
+      # user) run only for root: the same tests, as root. (The test binary is built here, by the user, and run by root in its directory.)
+      - name: Test the sandbox as root (linux)
+        env:
+          RIVUS_SBX_RED: "1"
+        run: |
+          go test -c -o "$RUNNER_TEMP/sandbox.test" ./internal/sandbox
+          cd internal/sandbox
+          sudo env "PATH=$PATH" "GOTOOLCHAIN=local" "RIVUS_SBX_RED=1" "GOCACHE=$RUNNER_TEMP/gocache-root" "GOMODCACHE=$(go env GOMODCACHE)" \
+            "$RUNNER_TEMP/sandbox.test" -test.count=1 -test.v -test.run 'TestSandbox(ProbeEscapes|ClosesEveryWayOut|Baseline)'
+
+  # The sandbox end to end, on both systems that have one: the pinned nightly, the extractor (rivus setup rust), and a crate with a hostile build script and
+  # a proc macro and build scripts of dependencies, read by `rivus analyze -lang rust` (scripts/sandbox-e2e.sh): the fetch with the network, the extraction
+  # without it, nothing written outside, the isolation said to be "sandbox". The unit tests above need no toolchain; this is the way a user reaches the sandbox.
+  sandbox-e2e:
+    needs: changes
+    if: needs.changes.outputs.isolation == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            bench/*/go.sum
+      - name: Install the pinned nightly
+        working-directory: extractor/rust
+        run: rustup toolchain install
+      - name: Build rivus and the extractor
+        run: |
+          go build -o "$RUNNER_TEMP/rivus" ./cmd/rivus
+          RIVUS_RUST_DATA_DIR="$RUNNER_TEMP/rivus-data" "$RUNNER_TEMP/rivus" setup rust -source extractor/rust -y
+      - name: Read a hostile crate under the sandbox
+        env:
+          RIVUS_RUST_DATA_DIR: ${{ runner.temp }}/rivus-data
+        run: scripts/sandbox-e2e.sh "$RUNNER_TEMP/rivus"
 
   # The differential test of the models (bench/model-diff, docs/MODEL-RUNBOOK.md): a package at a time, its model against its body. Only the
   # weekly run and a run by hand, and it reports without blocking (`continue-on-error`) until it has been run for a while; it is not in a pull request
@@ -894,7 +950,7 @@ jobs:
   # when they passed or were skipped (nothing that a test reads changed). A job added above has to be added here.
   ci-ok:
     if: always()
-    needs: [changes, go-packages, docs-tests, test, gcp-exec, sandbox, sandbox-linux, model-diff, model-diff-changed, graph-check, cost-warn, release-build, ghalint, actionlint]
+    needs: [changes, go-packages, docs-tests, test, gcp-exec, sandbox, sandbox-linux, sandbox-e2e, model-diff, model-diff-changed, graph-check, cost-warn, release-build, ghalint, actionlint]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}

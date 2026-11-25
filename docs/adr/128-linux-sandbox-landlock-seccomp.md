@@ -13,7 +13,7 @@
 3. **抽出の段階のネットワークなしは、seccomp で `socket()` を全拒否にして成り立たせる**(Landlock は TCP しか知らない。seccomp を外すと UDP、UNIX ソケット、`io_uring` が抜けることを確かめた)。`io_uring`、`ptrace`、`process_vm_*`、`pidfd_getfd`、`bpf` などは塞ぐ。`/proc` は許可に入れない。seccomp はアーキテクチャごと(x86-64、arm64)に作り、ほかの ABI の system call は殺す。
 4. **受け入れた弱さ(ユーザーの了承): 取得段階のポート指定は、アドレスまで絞れない**(macOS は `localhost:PORT`)。取得で動くのは信頼する `cargo fetch` だけで、対象のコードは動かない。今の取得は、macOS と同じく、ネットワークを開けている。
 5. **Landlock ABI の下限**: 抽出は ABI 1 以上 + seccomp。プロキシのポート指定の取得は ABI 4(Linux 6.7)以上(足りなければ止まる)。他プロセスへのシグナルの scope は ABI 6(6.12)以上で、足りないとき、その分は塞げない。
-6. **CI**: `sandbox-linux`(`ubuntu-latest` と `ubuntu-26.04-arm`。リポジトリの他のジョブと同じラベル)。`RIVUS_SBX_RED=1` で、サンドボックスが作れないランナーは失敗にする。
+6. **CI**: `sandbox-linux`(`ubuntu-latest`、`ubuntu-26.04-arm`、`ubuntu-24.04`、`ubuntu-24.04-arm`)と、root での再実行、`sandbox-e2e`(macOS と Linux)。`RIVUS_SBX_RED=1` で、サンドボックスが作れないランナーは失敗にする。
 
 7. **クラウドのセッションでも、Rust は隔離の下で読める**(この環境で確認)ので、モデル作成の「Rust は CI に任せる」の線は、あらためた(MODEL-RUNBOOK.md の 0 節)。取得したクレートのコードを、隔離なしで実行しない規則は、そのまま。
 
