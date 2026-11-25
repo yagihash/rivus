@@ -252,7 +252,13 @@ int _readMember(FnLower f, Element? el, int? base, AstNode n, DartType? t, Pos a
       }
       f.emit('make_closure', dsts: [d], args: const [], at: at, more: {'func': funcId(target)});
       return d;
+    case ClassElement() || MixinElement() || EnumElement() || ExtensionTypeElement() || TypeAliasElement() || TypeParameterElement() || Element(kind: ElementKind.DYNAMIC || ElementKind.NEVER):
+    case PrefixElement() || LibraryElement() || LabelElement() || MultiplyDefinedElement():
+      // a type, a namespace or a name that clashes: it carries no value (a local and a parameter are
+      // handled by `_identifier` first)
+      return f.nilConst(at);
     default:
+      f.emit('unsupported', at: at, more: {'reason': 'a member read of an element that is not known: ${target.runtimeType}'});
       return f.nilConst(at);
   }
 }
