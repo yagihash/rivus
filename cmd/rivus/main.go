@@ -127,7 +127,7 @@ var oldIsolationFlags = map[string]string{
 	"container-memory":     "(gone: the sandbox has no limit of memory; docs/rust-isolation.md)",
 	"container-cpus":       "(gone: the sandbox has no limit of CPUs)",
 	"container-pids":       "(gone: the sandbox has no limit of processes)",
-	"rust-image":           "(gone: there is no image; the extractor runs under the sandbox of macOS)",
+	"rust-image":           "(gone: there is no image; the extractor runs under the sandbox of the system: Seatbelt on macOS, Landlock and seccomp on Linux)",
 }
 
 // oldIsolationFlag says, for an argument that names a flag of the container, what it is now.

@@ -69,6 +69,7 @@
 | [DESIGN-deps-cost.md](DESIGN-deps-cost.md) | 依存を含む Dart のプロジェクトの、解析のコストの測定 |
 | [DESIGN-install.md](DESIGN-install.md) | インストールに何が必要か(Homebrew の formula の形) |
 | [DESIGN-macos-sandbox.md](DESIGN-macos-sandbox.md) | Rust の extractor の隔離を、macOS のサンドボックス(Seatbelt)にする |
+| [DESIGN-linux-sandbox.md](DESIGN-linux-sandbox.md) | Rust の extractor の隔離を、Linux のサンドボックス(Landlock + seccomp)にも広げる(試作) |
 | [DESIGN-model-authoring.md](DESIGN-model-authoring.md) | 依存のモデル化を、定型のタスクにする |
 | [DART-MODEL-CANDIDATES.md](DART-MODEL-CANDIDATES.md) | Dart の組み込みモデルにする pub パッケージの候補(公開の指標で選ぶ) |
 

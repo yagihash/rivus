@@ -41,7 +41,7 @@
 
 ## 5. `brew` の Linux
 
-Go と Dart は動く(`go` と Dart SDK が、それぞれ `brew` で入る)。**Rust の信頼できないコードは、隔離の手段がない(macOS のサンドボックスだけ)ので、何も実行せずに止まる**(DESIGN-macos-sandbox.md の 3.7 と 8 節。Linux の隔離は課題 #148)。既知のコードは `-unsafe-host-exec`。formula の `caveats` に、そう書く。
+Go と Dart は動く(`go` と Dart SDK が、それぞれ `brew` で入る)。**Rust の信頼できないコードは、隔離の手段がない(macOS のサンドボックスと、Linux の Landlock だけ)ときは、何も実行せずに止まる**(DESIGN-macos-sandbox.md の 3.7 と 8 節、[DESIGN-linux-sandbox.md](DESIGN-linux-sandbox.md)。Linux の隔離は課題 #148、試作)。既知のコードは `-unsafe-host-exec`。formula の `caveats` に、そう書く。
 
 ## 6. Rust: formula が、インストールの中で、ツールチェインと extractor を作る(**決まった**。ユーザー、2026-11-22。相談役が手元で確かめた)
 

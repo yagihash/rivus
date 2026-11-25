@@ -10,7 +10,7 @@
 - **決めたこと**: Rust の抽出を、Docker のコンテナの代わりに、**macOS のサンドボックス(Seatbelt、`sandbox-exec`)**の下で動かす。**Docker の経路は、CI を含めて丸ごと消す**。対象の環境は macOS(Apple Silicon)。
 - **ユーザーが承知のうえで受け入れたこと**: (1) `sandbox-exec` は、Apple が非推奨にしたまま動いている仕組み。(2) Docker の `--memory` / `--cpus` / `--pids-limit` に相当する**強い**上限がない(時間の上限、プロセスグループごとの kill などで代わりにする)。
 - **上のほかに、Docker より弱くなる所が見つかったら、ユーザーに聞く**(セキュリティの制御の変更。PRINCIPLES 8 節、ADR-064)。7 節に、見つかったものを並べる。
-- Linux: サンドボックスがないので、信頼できないコードの Rust の解析は、**何も実行せずに止まる**。既知のコードは `-unsafe-host-exec`(今もこのとおり。Linux での扱いの論点は 8 節)。
+- Linux(2026-11-25 の追記: Landlock + seccomp を足した。[DESIGN-linux-sandbox.md](DESIGN-linux-sandbox.md)、ADR-128。以下は、そのときの前提): サンドボックスがないので、信頼できないコードの Rust の解析は、**何も実行せずに止まる**。既知のコードは `-unsafe-host-exec`(今もこのとおり。Linux での扱いの論点は 8 節)。
 
 ## 1. 手元で確かめたこと(2026-11-22、macOS 26.7.1、arm64。使い捨ての試行。コードは残していない)
 
@@ -105,7 +105,7 @@
 | OS | 信頼できないコード(既定) | 既知のコード |
 | --- | --- | --- |
 | macOS | サンドボックスの下で動かす | `-unsafe-host-exec` で直接 |
-| Linux | **何も実行せずに止まる**(隔離の手段がないと表示する) | `-unsafe-host-exec` で直接(CI はこれ) |
+| Linux | Landlock + seccomp の下で動かす(ADR-128。Landlock がなければ、**何も実行せずに止まる**) | `-unsafe-host-exec` で直接(CI はこれ) |
 
 サンドボックスが使えないとき(`sandbox-exec` がない、プロファイルが読み込めない)も、**何も実行せずに止まる**。何も報告せずにホストでの実行に切り替えることはしない。ベンチの道具が持つ「ホストで読んでよいパスの許可リスト」は残す。
 
@@ -134,7 +134,7 @@
 - **SBX-1 DNS**: ネットワークを拒否しても、名前解決のデーモンへの mach の問い合わせを許すと、問い合わせるホスト名にデータを載せて外へ出せる。**抽出も取得も、名前解決のサービスを許さない**。取得は、プロキシに `CONNECT ホスト名` を送る形で、cargo と git が自分で名前を解決しないことを測る。
 - **SBX-2 設定の書き込み**: `cfprefsd` 経由の `defaults write`(あとで効く仕掛け)、`crontab`、LaunchAgents、シェルの rc を、名指しで試す。
 - **SBX-3 UNIX ドメインソケット**: ssh-agent(`/private/tmp/com.apple.launchd.*/Listeners`)、`docker.sock`、ほかのエージェント。どの規則で止まるかを 1 行。
-- **SBX-4 端末**: 子は `Setsid`(制御端末なし)、標準入力は `/dev/null`、`/dev/tty` を拒否。子の標準エラーを端末に流すときは、制御文字を除去する。
+- **SBX-4 端末**: 子は `Setsid`(制御端末なし)、標準入力は `/dev/null`、`/dev/tty` を拒否。子の標準エラーを端末に流すときは、制御文字を除去する(**実装済み**: `cmd/rivus/termsafe.go` の `sanitizeForTerminal`。ESC を含む C0、DEL、C1、不正な UTF-8 を `\xNN` の可視の形にし、LF と tab は残す。通す所: `cmd/rivus/isolate_sandbox_darwin.go` と `isolate_sandbox_linux.go` の `sandboxResult`(端末への書き出しとエラーの末尾)、`extractorcheck.go` の `tailOf`、`lang.go` の extractor の失敗の文、`extract.go` の読み込みの誤り。テスト: `termsafe_test.go`、`isolate_stderr_test.go`、`isolate_sandbox_darwin_test.go` の `TestSandboxChildStderrHasNoControlCharacter`)。
 - **SBX-5 名前が見える範囲**: 中身の読み取りだけでなく、`ls ~`、`stat ~/.ssh/…`、`ls /Users`、`/Volumes`、`/Applications`。対象の親と兄弟(隣のリポジトリ)、外を指すシンボリックリンク。`~/.cargo`、`~/.gitconfig`、`~/.netrc`、`~/.config/gh` は名指し。**7 節の 3 は、「何が見えるか」の一覧にしてから、ユーザーに聞く**(「秘密ではない」を、こちらで決めない)。
 - **SBX-6 後始末**: 目印の環境変数のほかの見つけ方(実行ファイルのパスと起動時刻、サンドボックスの下かどうかを外から調べる手段、子孫の一覧を取り続ける)を、1 回調べる。完全でないなら、**残ったプロセスがある、または確かめられなかった、を、出力と stderr に書く**(必ず報告する)。
 - **SBX-7 構成**: Linux のコンテナから macOS のホストに移ると、`cfg(target_os)` と `build.rs` の分岐で、**読むコードが変わる**。「解析するのは macOS 向けの構成」と書き、**出力に、対象の構成(target triple)を出す**。Linux 向けにしかない分岐は、範囲の外になる(見逃しの向きの変化)。`--target` を指定して型検査だけする方法が取れるかを、調べる。
@@ -219,12 +219,14 @@ Linux の隔離の新設(余地は残した。論点は 8 節、課題 #148)、G
 
 ## 8. Linux での Rust の extractor の扱い(論点。課題 #148)
 
+> **追記(2026-11-25): Landlock + seccomp で試作した。[DESIGN-linux-sandbox.md](DESIGN-linux-sandbox.md)。以下は、その前の調査と線の記録。bubblewrap でなく Landlock にした理由は、あちらの 1 節。**
+
 rivus の Rust の extractor は、対象を `cargo check` でビルドするので、対象と依存の `build.rs` と proc macro を実行する。Linux には、隔離の手段がない。
 
 **線(決定。MODEL-RUNBOOK.md の 0 節、MODEL-QUEUE.md): 隔離なしでは、取得したクレートのビルドスクリプトとマクロを実行しない。** 今の動作:
 - `-lang rust` は、サンドボックスがないと何も実行せずに止まる。`-unsafe-host-exec` だけが通る(ADR-093、rust-isolation.md)。auto では読まない(`no-sandbox`)。
 - CI の `rust` ジョブは、このリポジトリのコード(ベンチ、zoo、`extractor/rust/test`)だけを、`-unsafe-host-exec` で読む。取得した第三者のクレートは読まない。
-- クラウドの定期実行のモデル作成(`rivus-model-author`)は、Rust のモデルについて、**モデルは書き、extractor を使う確認は CI に任せる**。取得したクレートを読む差分テストの Rust 版は、隔離のあるジョブに限る。
+- クラウドの定期実行のモデル作成(`rivus-model-author`)は、Rust のモデルについて、**モデルは書き、extractor を使う確認は CI に任せる**(この線は、2026-11-25 に、Landlock + seccomp の隔離がクラウドのセッションで動くと確かめて、あらためた: MODEL-RUNBOOK.md の 0 節、ADR-128)。取得したクレートを読む差分テストの Rust 版は、隔離のあるジョブに限る。
 
 **Linux の隔離の調査**(DESIGN-package-models.md の 6.5 節。実測はしていない):
 - bubblewrap(`bwrap`)が最有力。名前空間でファイルとネットワークを絞れ、取得はネットワークあり、抽出は `--unshare-net` の 2 段階にできる(macOS のプロファイルと同じ形)。

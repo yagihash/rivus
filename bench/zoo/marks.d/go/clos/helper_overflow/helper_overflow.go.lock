@@ -1,0 +1,2 @@
+go	clos/helper_overflow/helper_overflow.go	sink-none	@sink(none)	func fixed() { @fixed
+go	clos/helper_overflow/helper_overflow.go	sink-none	@sink(none) @nosink(clos-helper-overflow-decoy)	func decoy() { @decoy

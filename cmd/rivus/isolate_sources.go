@@ -11,6 +11,9 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
+// The sources are checked before the fetch stage: every Cargo.toml of the project (a symbolic link is refused) and Cargo.lock
+// (read as TOML; one that cannot be read is refused).
+//
 // The only place that the fetch stage gets from without a flag: the registry of crates.io. Where the fetch goes is chosen
 // by Cargo.lock of the project, and the stage has a network. A git dependency is not allowed by default, on any host
 // (github.com included): the repository can name more places that Cargo.lock does not show (the submodules in its
@@ -25,39 +28,28 @@ var cratesIOSources = map[string]bool{
 type lockPackage struct{ name, version, source string }
 
 // lockPackages are the packages of Cargo.lock that have a source, in order, without a repeated (name, version, source).
-func lockPackages(lock string) []lockPackage {
+// Cargo.lock is read as TOML, the way cargo reads it. One that cannot be read is an error (refused): the sources are not known.
+func lockPackages(lock string) ([]lockPackage, error) {
+	var doc struct {
+		Package []struct {
+			Name    string `toml:"name"`
+			Version string `toml:"version"`
+			Source  string `toml:"source"`
+		} `toml:"package"`
+	}
+	if _, err := toml.Decode(lock, &doc); err != nil {
+		return nil, fmt.Errorf("Cargo.lock cannot be read as TOML, so where the dependencies come from is not known: %v", err)
+	}
 	var out []lockPackage
 	seen := map[lockPackage]bool{}
-	var cur lockPackage
-	flush := func() {
-		if cur.source != "" && !seen[cur] {
-			seen[cur] = true
-			out = append(out, cur)
-		}
-		cur = lockPackage{}
-	}
-	for _, l := range strings.Split(lock, "\n") {
-		l = strings.TrimSpace(l)
-		if l == "[[package]]" {
-			flush()
-			continue
-		}
-		k, v, ok := strings.Cut(l, "=")
-		if !ok {
-			continue
-		}
-		v = strings.Trim(strings.TrimSpace(v), "\"'")
-		switch strings.TrimSpace(k) {
-		case "name":
-			cur.name = v
-		case "version":
-			cur.version = v
-		case "source":
-			cur.source = v
+	for _, p := range doc.Package {
+		c := lockPackage{p.Name, p.Version, p.Source}
+		if c.source != "" && !seen[c] {
+			seen[c] = true
+			out = append(out, c)
 		}
 	}
-	flush()
-	return out
+	return out, nil
 }
 
 // sourceHost is the host a source of Cargo.lock is on ("" when it has none).
@@ -94,7 +86,11 @@ func checkFetchSources(lock string, allow []string) error {
 	var refused []string
 	hosts := map[string]bool{}
 	var hostList []string
-	for _, p := range lockPackages(lock) {
+	pkgs, err := lockPackages(lock)
+	if err != nil {
+		return err
+	}
+	for _, p := range pkgs {
 		if cratesIOSources[p.source] {
 			continue
 		}
@@ -129,7 +125,8 @@ func checkFetchSources(lock string, allow []string) error {
 // a dependency, the `registry-index` of a dependency, and the URL that names the source of a [patch] table. They are read
 // from the manifests, not from Cargo.lock, because cargo asks the places a manifest names before it finds that Cargo.lock
 // does not match (`--locked`): a manifest can send the fetch to a place that Cargo.lock never shows. The manifests are
-// parsed as data (nothing is run). A manifest that cannot be parsed is a place that is not known: it is refused.
+// parsed as data (nothing is run). All of them are read, in every directory (target and .git too; the name is compared
+// without regard to case). A manifest that cannot be parsed, or that is a symbolic link, is a place that is not known: it is refused.
 type manifestPlace struct{ desc, url string }
 
 func manifestPlaces(dir string) (places []manifestPlace, err error) {
@@ -138,15 +135,16 @@ func manifestPlaces(dir string) (places []manifestPlace, err error) {
 		if err != nil {
 			return err
 		}
-		if d.IsDir() {
-			if n := d.Name(); path != dir && (n == "target" || n == ".git") {
-				return filepath.SkipDir
-			}
+		if d.IsDir() || !strings.EqualFold(d.Name(), "Cargo.toml") {
 			return nil
 		}
-		if d.Name() == "Cargo.toml" && d.Type().IsRegular() {
-			files = append(files, path)
+		// Every directory is walked (target and .git too): cargo reads a path dependency wherever it is. The name is compared
+		// without regard to case (the file system may not tell the cases apart). A link is refused, not followed.
+		if !d.Type().IsRegular() {
+			rel, _ := filepath.Rel(dir, path)
+			return fmt.Errorf("%s is not a regular file (a symbolic link, for example), so the places it names are not known", rel)
 		}
+		files = append(files, path)
 		return nil
 	})
 	if err != nil {

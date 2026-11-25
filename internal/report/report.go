@@ -476,7 +476,7 @@ type DependencySites struct {
 
 // Isolation is how the code of a project was run to read it.
 type Isolation struct {
-	// Mode is "sandbox" (under the sandbox of macOS: no network while it was built, no files but the project's and the work directory)
+	// Mode is "sandbox" (under the sandbox of the system, Seatbelt or Landlock and seccomp: no network while it was built, no files but the project's and the work directory)
 	// or "host" (-unsafe-host-exec: the build scripts and the macros ran on this machine, with the rights of the user, without isolation).
 	Mode   string `json:"mode"`
 	Detail string `json:"detail"`
