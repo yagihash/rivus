@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Tests of the pass line of bench/deps_bench.py (python3 bench/test_deps_bench.py). Synthetic numbers only; nothing is fetched or analysed."""
-import json, os, sys, tempfile, unittest
+import json, os, subprocess, sys, tempfile, unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -460,6 +460,101 @@ class RustRoad(unittest.TestCase):
         self.assertTrue(os.path.exists(os.path.join(src, "Cargo.lock")))
         self.assertFalse(os.path.exists(os.path.join(r, "Cargo.lock")))
         self.assertEqual((env["RIVUS_RUST_TOOLCHAIN_DIR"], env["RIVUS_RUST_EXTRACTOR"]), (tc, ex))
+
+    def test_rustypaste_row(self):
+        t = json.load(open(d.TARGETS_FILE))["rustypaste"]
+        self.assertEqual((t["lang"], t["commit"], t["decided"], t["detect"], t["repo"]), ("rust", "00292076e47b5f500906a97a1b5c17665270d907", False, None, "https://github.com/orhun/rustypaste"))
+        self.assertNotIn("rust_minimal_lock", t)  # the committed Cargo.lock is used
+        self.assertEqual(t["args"], ["-timeout", "600s"])
+        self.assertEqual(t["mem_cap_gb"], 8)
+        self.assertNotIn("rustypaste", d.BENCHES)  # not in the default targets
+        mk = open(os.path.join(d.ROOT, "Makefile")).read()
+        self.assertNotIn("rustypaste", mk)
+        self.assertEqual(d.format_line("rustypaste", False, True, "x").split()[:2], ["INFO", "rustypaste"])
+
+    def test_committed_lock_is_used_and_never_generated(self):
+        w = tempfile.mkdtemp()
+        self.addCleanup(lambda: __import__("shutil").rmtree(w, ignore_errors=True))
+        tc = self.tree({"bin/rustc": ""})
+        ex = os.path.join(tc, "ex")
+        open(ex, "w").close()
+        os.chmod(ex, 0o755)
+        old = {k: os.environ.get(k) for k in ("RIVUS_RUST_TOOLCHAIN_DIR", "RIVUS_RUST_EXTRACTOR")}
+        os.environ["RIVUS_RUST_TOOLCHAIN_DIR"], os.environ["RIVUS_RUST_EXTRACTOR"] = tc, ex
+        try:
+            lock = '# committed\nversion = 4\n\n[[package]]\nname = "a"\nversion = "1.0.0"\n'
+            r = self.tree({"Cargo.toml": '[package]\nname="a"\nversion="1.0.0"\n[dependencies]\nlibc = "0.2"\n', "Cargo.lock": lock})
+            src, _, err = d.prepare("rustypaste", {"lang": "rust"}, r, w, dict(os.environ))
+            self.assertIsNone(err)
+            self.assertEqual(open(os.path.join(src, "Cargo.lock")).read(), lock)  # as committed, not rewritten
+            r2 = self.tree({"Cargo.toml": '[package]\nname="b"\nversion="1.0.0"\n[dependencies]\nlibc = "0.2"\n'})
+            src2, _, err2 = d.prepare("rustypaste", {"lang": "rust"}, r2, w, dict(os.environ))
+            self.assertIn("no committed Cargo.lock", err2)
+            self.assertFalse(os.path.exists(os.path.join(r2, "Cargo.lock")))  # nothing was generated
+        finally:
+            for k, v in old.items():
+                os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
+
+    def test_stale_extractor_is_refused(self):
+        r = tempfile.mkdtemp()
+        self.addCleanup(lambda: __import__("shutil").rmtree(r, ignore_errors=True))
+        for c in (["git", "init", "-q"], ["git", "config", "user.email", "a@b"], ["git", "config", "user.name", "a"], ["git", "config", "commit.gpgsign", "false"]):
+            subprocess.run(c, cwd=r, check=True)
+        os.makedirs(os.path.join(r, "extractor/rust"))
+        open(os.path.join(r, "extractor/rust/a.rs"), "w").write("x")
+        subprocess.run(["git", "add", "-A"], cwd=r, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "x"], cwd=r, check=True)
+        ex = os.path.join(r, "ex")
+        open(ex, "w").close()
+        os.utime(ex, (1, 1))  # older than the commit
+        self.assertIn("older than", d.extractor_stale(ex, r))
+        os.utime(ex, None)
+        self.assertEqual(d.extractor_stale(ex, r), "")
+
+    def test_failed_run_is_not_an_isolation_failure_and_adds_no_row(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(lambda: __import__("shutil").rmtree(tmp, ignore_errors=True))
+        t = {"lang": "rust", "repo": "x", "commit": "c", "args": [], "time_limit_s": 100, "mem_cap_gb": 8, "decided": False, "detect": None, "local": "bench/go-curated"}
+        saved = (d.prepare, d.analyze_once)
+        d.prepare = lambda name, t, tree, work, env: (tree, env, None)
+        d.analyze_once = lambda *a, **k: {"wall": 91.0, "peak": 6 * 1024 ** 3, "converged": False, "why": "", "report": None, "peak_how": "x", "peak_a": 0, "cpu": 1.0, "big": "", "big_rss": 0, "at_s": 0, "rc": 1, "load": 1.0, "note": "n"}
+        try:
+            line, row = d.passline_run("rustypaste", t, "rivus", tmp, tmp, 100, 8, 1, tmp)
+            t2 = dict(t)
+            d.analyze_once = lambda *a, **k: {"wall": 1.0, "peak": 9 * 1024 ** 3, "converged": False, "why": "memory", "report": None, "peak_how": "x", "peak_a": 0, "cpu": 1.0, "big": "", "big_rss": 0, "at_s": 0, "rc": -9, "load": 1.0, "note": "n"}
+            line2, row2 = d.passline_run("rustypaste", t2, "rivus", tmp, tmp, 100, 8, 1, tmp)
+        finally:
+            d.prepare, d.analyze_once = saved
+        self.assertIsNone(row)
+        self.assertIn("analyze_failed", line)
+        self.assertNotIn("isolation", line)
+        self.assertEqual(row2["result"], "stopped_memory")  # a stop by the watchdog keeps its row, and is not an isolation failure
+        self.assertNotIn("FAILED", row2["settings"])
+
+    def test_sdkroot_from_the_environment(self):
+        self.assertEqual(d.rust_sdkroot_args({}), [])
+        self.assertEqual(d.rust_sdkroot_args({"BENCH_RUST_SDKROOT": ""}), [])
+        self.assertEqual(d.rust_sdkroot_args({"BENCH_RUST_SDKROOT": "/x/MacOSX.sdk"}), ["-isolation-env", "SDKROOT=/x/MacOSX.sdk"])
+        self.assertNotIn("SDKROOT=", open(d.TARGETS_FILE).read())  # never written in the data
+
+    def test_sdkroot_reaches_the_command(self):
+        w = tempfile.mkdtemp()
+        self.addCleanup(lambda: __import__("shutil").rmtree(w, ignore_errors=True))
+        seen = []
+        orig, orig_lock = d.run_watched, d.heavy_lock
+        d.heavy_lock = lambda reason: __import__("contextlib").nullcontext()  # no real lock in a unit test
+        d.run_watched = lambda cmd, *a, **k: (seen.append(cmd), {"rc": 1, "why": "", "wall": 0, "cpu": 0, "a": 0, "b": 0, "big": "", "big_rss": 0, "at_s": 0})[1]
+        try:
+            for sdk in ("/x/sdk", None):
+                env = dict(os.environ)
+                env.pop("BENCH_RUST_SDKROOT", None)
+                if sdk:
+                    env["BENCH_RUST_SDKROOT"] = sdk
+                d.analyze_once("rivus", {"lang": "rust", "args": ["-timeout", "600s"]}, w, env, 10, 10, w, "t")
+        finally:
+            d.run_watched, d.heavy_lock = orig, orig_lock
+        self.assertEqual(seen[0][-2:], ["-isolation-env", "SDKROOT=/x/sdk"])
+        self.assertNotIn("-isolation-env", seen[1])
 
     def test_prepare_refuses_the_lock_for_a_crate_with_dependencies(self):
         r = self.tree({"Cargo.toml": self.TOML + '[dependencies]\nlibc = "0.2"\n'})

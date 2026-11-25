@@ -115,6 +115,18 @@
     "rust_minimal_lock": true,
     "detect": null
   },
+  "rustypaste": {
+    "_doc": "INFO row of Rust (not a pass line, not in the default TARGETS; run it by name: make bench-passline TARGETS=rustypaste): orhun/rustypaste (MIT) at 0029207, the parent of the fix of CVE-2026-90774 (path traversal; fix ac05d55, PR #623). A real application with dependencies (actix); its Cargo.lock is the committed one, used as it is (the tool never runs cargo generate-lockfile and never runs cargo itself: the dependencies are fetched by the fetch stage of rivus under the sandbox). The row records whether the analysis converges, and scc_coarsened / largest_scc_deps (the dependency actix made a component of 7,492 functions before ADR-124), with -timeout 600s of rivus; the watchdog of the tool (time_limit_s, over the build too) and the 8 GB tree-RSS cap stop a run that goes beyond. SDKROOT of the machine: BENCH_RUST_SDKROOT (bench/README.md). decided false (INFO), detect none (n/a) until a truth exists.",
+    "lang": "rust",
+    "repo": "https://github.com/orhun/rustypaste",
+    "commit": "00292076e47b5f500906a97a1b5c17665270d907",
+    "subdir": "",
+    "args": ["-timeout", "600s"],
+    "time_limit_s": 1500,
+    "mem_cap_gb": 8,
+    "decided": false,
+    "detect": null
+  },
   "smoke": {
     "_doc": "a small local tree (bench/go-curated), to check that the script works end to end; not a target",
     "lang": "go",
