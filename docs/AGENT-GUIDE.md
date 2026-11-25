@@ -276,6 +276,8 @@ dart extractor /opt/homebrew/bin/rivus-dart  schema rivus.ir/0  (UNKNOWN: its an
 
 報告に書きます。バージョンが違うと、フラグと出力の形が違うことがあります。extractor の行は、4 つに分かれます(`summary.extractor` の `match` と同じ。対処が違います): `(match)` は一致。`(MISMATCH ...)` は、extractor が、本体と別のソースから作られている(extractor を作り直す: `rivus setup rust|dart -source`)。`(UNKNOWN: this rivus was built without the hash ...)` は、本体が素の `go build` で作られていて、照合できない(本体を `make build` で作り直す)。`(UNKNOWN: ...)` のそれ以外は、extractor が答えない(古い extractor、呼び出しの失敗、時間切れ。理由が書いてある。extractor を作り直す)。見つからない言語は `not found`。Rust の行は、解析と同じ隔離(macOS のサンドボックス)の下で extractor を呼びます(約 20 ms)。隔離のない環境(Linux)では呼ばず、`not checked` と出ます。隔離なしで呼んでよい(自分の extractor)ときは `-unsafe-host-exec`(または `RIVUS_UNSAFE_HOST_EXEC=1`)を付けます。`-rust-extractor`、`-dart-extractor` で、見る extractor を指せます。
 
+**extractor を作る側(自前のスクリプトや CI)は、本体に合うハッシュを、本体に聞けます**: `rivus version -expected-hash rust|dart` は、本体に埋め込まれた期待値(`main.rustSourceHash`、`main.dartSourceHash`)だけを標準出力に出します(Go も、ソースの木も要りません。リリースのバイナリと同じ値です)。素の `go build` の本体(値が `unknown`)では、終了コード 1 で、標準エラーに「`make build` で作る」と出ます。Rust は `RIVUS_EXTRACTOR_SRC_HASH="$(rivus version -expected-hash rust)" cargo install --path extractor/rust --locked`、Dart は `dart compile exe -DRIVUS_SRC_HASH="$(rivus version -expected-hash dart)" bin/rivus_dart.dart -o …` のように渡します。Go が使える環境では、`go run ./scripts/extractor-hash rust|dart` が、ソースの木から同じ計算をします(本体のビルドと同じ木のときだけ、同じ値)。本体に聞く形を使ってください(本体と extractor が、同じ値で合います)。
+
 ### `rivus debug`
 
 調査と開発用のコマンドです。普段は使いません。

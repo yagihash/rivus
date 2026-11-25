@@ -234,3 +234,30 @@ func TestBuiltInHashesStayInTheBinary(t *testing.T) {
 		t.Errorf("rivus version: %v\n%s", err, out)
 	}
 }
+
+// `rivus version -expected-hash <lang>` prints the value that this rivus was built with, and nothing else; a rivus without it fails.
+func TestExpectedHashFlag(t *testing.T) {
+	t.Parallel()
+	const rh, dh = "cccc1111cccc1111cccc1111cccc1111cccc1111cccc1111cccc1111cccc1111", "dddd2222dddd2222dddd2222dddd2222dddd2222dddd2222dddd2222dddd2222"
+	bin := filepath.Join(t.TempDir(), "rivus")
+	if out, err := exec.Command("go", "build", "-ldflags", "-X main.rustSourceHash="+rh+" -X main.dartSourceHash="+dh, "-o", bin, ".").CombinedOutput(); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	for lang, want := range map[string]string{"rust": rh, "dart": dh} {
+		out, err := exec.Command(bin, "version", "-expected-hash", lang).Output()
+		if err != nil || string(out) != want+"\n" {
+			t.Errorf("-expected-hash %s = %q, %v; want %q only", lang, out, err, want)
+		}
+	}
+	// the build of the tests has no hash: exit 1, nothing on the standard output, and how to build it on the standard error
+	cmd := exec.Command(binary, "version", "-expected-hash", "rust")
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if ee, ok := err.(*exec.ExitError); !ok || ee.ExitCode() != 1 || len(out) != 0 || !strings.Contains(stderr.String(), "make build") {
+		t.Errorf("a rivus without the hash: %v, stdout %q, stderr %q; want exit 1, no output, make build", err, out, stderr.String())
+	}
+	if _, err := expectedHashOf("go"); err == nil {
+		t.Error("-expected-hash go: want an error")
+	}
+}

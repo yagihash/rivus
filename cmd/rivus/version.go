@@ -9,6 +9,7 @@ import (
 	"runtime/debug"
 	"strings"
 
+	"github.com/yagihash/rivus/internal/extractorhash"
 	"github.com/yagihash/rivus/internal/ir"
 	"github.com/yagihash/rivus/internal/report"
 )
@@ -52,13 +53,15 @@ func versionString() string {
 }
 
 // versionFlags are the flags of `rivus version`: the same ones that name the extractors in the commands that read code.
-func versionFlags(fs *flag.FlagSet, o *analyzeOpts) {
+func versionFlags(fs *flag.FlagSet, o *analyzeOpts) *string {
+	expected := fs.String("expected-hash", "", "rust or dart: print only the hash of the source of that extractor that this rivus was built with (the value an extractor must have been built with to match), and nothing else; fails (exit 1) when this rivus was built without it (a plain go build: build it with `make build`)")
 	fs.StringVar(&o.dartExtractor, "dart-extractor", "", "command of the Dart extractor (default: $RIVUS_DART_EXTRACTOR, then rivus-dart)")
 	fs.StringVar(&o.rustExtractor, "rust-extractor", "", "command of the Rust extractor (default: $RIVUS_RUST_EXTRACTOR, then rivus-rust)")
 	fs.BoolVar(&o.unsafeHostExec, "unsafe-host-exec", false, "ask the Rust extractor for its version by running it on this machine, without isolation (only where the sandbox of macOS is not there; also RIVUS_UNSAFE_HOST_EXEC=1)")
-	usual(fs, "dart-extractor", "rust-extractor", "unsafe-host-exec")
+	usual(fs, "dart-extractor", "rust-extractor", "unsafe-host-exec", "expected-hash")
 	describe(fs, "unsafe-host-exec", flagInfo{Not: "takes the isolation off (ADR-064); never a default (docs/rust-isolation.md)"})
 	kind(fs, "file", "dart-extractor", "rust-extractor")
+	return expected
 }
 
 // runVersionCommand is `rivus version`: the first line is versionString (what a script reads); then the version of the schema of the IR, and the
@@ -66,10 +69,18 @@ func versionFlags(fs *flag.FlagSet, o *analyzeOpts) {
 func runVersionCommand(args []string) error {
 	fs := flag.NewFlagSet("version", flag.ContinueOnError)
 	o := &analyzeOpts{}
-	versionFlags(fs, o)
+	expected := versionFlags(fs, o)
 	prepareFlags(fs, args)
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if *expected != "" {
+		h, err := expectedHashOf(*expected)
+		if err != nil {
+			return err
+		}
+		fmt.Println(h)
+		return nil
 	}
 	printVersion(os.Stdout, o)
 	return nil
@@ -112,4 +123,17 @@ func orDash(s string) string {
 		return "-"
 	}
 	return s
+}
+
+// expectedHashOf is the hash of the source of the extractor of lang that this rivus was built with (main.rustSourceHash, main.dartSourceHash): what
+// a script that builds the extractor gives to the build (RIVUS_EXTRACTOR_SRC_HASH for cargo, -DRIVUS_SRC_HASH for dart compile exe) so that it matches.
+func expectedHashOf(lang string) (string, error) {
+	if lang != langRust && lang != langDart {
+		return "", fmt.Errorf("-expected-hash: %q is not rust or dart", lang)
+	}
+	h := expectedSourceHash(lang)
+	if h == "" || h == extractorhash.Unknown {
+		return "", fmt.Errorf("this rivus was built without the hash of the source of the %s extractor (a plain go build): build it with `make build` (or use a release)", lang)
+	}
+	return h, nil
 }

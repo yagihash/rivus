@@ -89,7 +89,7 @@ func init() {
 			}},
 		{name: "completion", summary: "print the completion script of a shell (zsh)", sub: completionShells},
 		{name: "version", summary: "print the version, and the source each extractor was built from (also --version)",
-			flags: func(fs *flag.FlagSet) { versionFlags(fs, &analyzeOpts{}) }, run: runVersionCommand},
+			flags: func(fs *flag.FlagSet) { _ = versionFlags(fs, &analyzeOpts{}) }, run: runVersionCommand},
 	}
 }
 
