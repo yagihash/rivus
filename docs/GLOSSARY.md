@@ -673,6 +673,9 @@ GC のあとにも残る、参照されているメモリ。測り方が 2 つ�
 **uncertainty(不確実性)**
 rivus の結果に付く、「ここは確実でない」というマーク。出力の `uncertainties`(finding と `summary`)に出て、`kind`(`depth_limit`、`out_widened`、`numeric_stop` など)で種類を分ける。経路のステップに付くものは「ステップの uncertainty」(`path_steps[].notes`)、暫定のもの(`char_read_in_callee`)は「`numeric_stop` の uncertainty」と書く。日本語では「不確実性」と書いてもよい。出力の名前に合わせた語で、別の名前(注釈、脚注、補足など、普通の意味の語は別)をつけない。
 
+**大きい集まりの安全網(`-scc-coarsen`、`scc_coarsened`、`through_coarsened_scc`)**
+関数が互いに呼び合う集まり(SCC)の中の依存の関数が `-scc-coarsen` の数以上のとき、その依存の関数だけを、最初から、アクセスパスの深さ 0 で解く仕組み(ADR-124。ARCHITECTURE.md 17 節)。解く前に、コールグラフだけで決める。当たった集まりは、`depth_limit` の uncertainty(detail が `scc_coarsened:`)で言い、多めに出る側として読む。その集まりを通った finding には `through_coarsened_scc[]`(集まりの `id`)が付く。
+
 **合格基準(acceptance criteria)**
 合格の対象(memos-4gib、Gitea、dart_services、cocoon)について、時間、メモリ、収束、検出の条件。基準を決めて、数字がそれを満たすかを見る。次の 2 つは別のことで、分けて書く。
 - 基準を厳しくする: 同じ対象で、時間やメモリの条件を下げる、検出の条件を足す

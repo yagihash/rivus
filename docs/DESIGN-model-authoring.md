@@ -1,6 +1,6 @@
 # 設計: 依存のモデル化を、定型のタスクにする
 
-> **状態: 案**(2026-11-22。相談役のレビュー前)。実装はない。1 回目の試行(Google Cloud の Pub/Sub と Functions、Go)を、この型どおりにやりながら、型と道具を直す。そのあとで、Dart で 2 回目。2 回通ったら、スキルとして固める。
+> **状態: 一部実装**。段階 1 と 2 の道具(`make model`)、差分テスト(`make model-diff`)、`verified_versions`、`adopt_rules:`、パッケージ単位の宣言は実装済み。手順は [MODEL-RUNBOOK.md](MODEL-RUNBOOK.md)。利用者向けの実行で確かめる道具(`verify`。段階 3)と照合の道具(`compare`。段階 4)、スキルは、まだない。以下は、設計時の記述。
 
 組み込みの範囲は ADR-097 による(ADR-096 を更新。2026-11-22): (a) Google Cloud(Firebase を含む。範囲の 1 つ目)、(b) 外部のサービスのクライアント(公開の指標の上位。[DART-MODEL-CANDIDATES.md](DART-MODEL-CANDIDATES.md) の 5 節)、(c) 標準ライブラリ、(d) 代わりのないパッケージ、(e) pub の人気の上位(同 4 節)。それ以外は、利用者が、この定型のタスクで作る。
 

@@ -35,7 +35,7 @@ is the peak of the resident set), and stops when two runs of the same binary giv
   binaries first, run them one after the other, 2 or 3 times each). The result (`compare`) must be
   IDENTICAL for a change that is for speed. For a change that is meant to change the result, look at
   every finding that moved and say why in the commit, then `snapshot`.
-* Gitea is not run for a change, and is not in the gate (it is pass-line target C; its numbers are in the ledger). Big real projects are run only when
+* Gitea is pass-line target C: which changes run it is in `docs/WORKFLOW.md`, its numbers are in the ledger, and it is not in the gate of this bench. Big real projects are run only when
   named with `bench/compare.sh --big`, and in the periodic runs of `bench/explore/README.md`. The light tier has the cut-out of Gitea's
   three CVEs (7 packages).
 * Sizes and what the engine took (the build of 2026-11-21, 12 cores, 24 GB, machine otherwise idle):
