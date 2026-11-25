@@ -219,6 +219,8 @@ Linux の隔離の新設(余地は残した。論点は 8 節、課題 #148)、G
 
 ## 8. Linux での Rust の extractor の扱い(論点。課題 #148)
 
+> **追記(2026-11-25): Landlock + seccomp で試作した。[DESIGN-linux-sandbox.md](DESIGN-linux-sandbox.md)。以下は、その前の調査と線の記録。bubblewrap でなく Landlock にした理由は、あちらの 1 節。**
+
 rivus の Rust の extractor は、対象を `cargo check` でビルドするので、対象と依存の `build.rs` と proc macro を実行する。Linux には、隔離の手段がない。
 
 **線(決定。MODEL-RUNBOOK.md の 0 節、MODEL-QUEUE.md): 隔離なしでは、取得したクレートのビルドスクリプトとマクロを実行しない。** 今の動作:

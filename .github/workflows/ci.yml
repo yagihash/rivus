@@ -4,7 +4,7 @@ name: CI
 # the files that changed, against the lists in that job ("a change here runs CI"), and the heavy jobs run only when
 # something that a test reads, a build takes in, or CI itself changed. A job that is skipped passes in `ci-ok`; a job that failed or was
 # cancelled does not. So the number of shards can change without the ruleset. A push to main runs everything.
-# The runner of macOS (the sandbox, docs/DESIGN-macos-sandbox.md) runs when what the isolation is made of changes, and once a week.
+# The runners of macOS and Linux (the sandbox, docs/DESIGN-macos-sandbox.md and docs/DESIGN-linux-sandbox.md) run when what the isolation is made of changes, and once a week.
 # A pull request runs the tests with -short; a push to main, the weekly run and a run by hand run all of them.
 # One test is the exception: TestDogfood (rivus analysing itself, 160-230 s) runs only in the weekly run, and only when the code or the models changed since
 # the last successful weekly run (the step `dogfood` of `changes`), and in a run by hand. Never in a pull request or a push to main (ADR-112).
@@ -628,6 +628,40 @@ jobs:
           RIVUS_SBX_RED: "1"
         run: go test -count=1 -timeout 20m -run 'TestSandbox(Stops|Closes|Time|Output|Environment|Unavailable|Stderr|Program)' ./internal/sandbox
 
+  # The tests of the sandbox of Linux (internal/sandbox, docs/DESIGN-linux-sandbox.md: Landlock and seccomp) on the runners of Linux, x86-64 and arm64
+  # (the filter of seccomp is made for each architecture). Same triggers as the one of macOS. RIVUS_SBX_RED=1: a runner that has no sandbox fails
+  # the job instead of skipping the tests (a skip would show nothing). The tests that need a newer kernel (the port of a connection: Landlock ABI 4) say
+  # so and skip when this kernel is older.
+  sandbox-linux:
+    needs: changes
+    if: needs.changes.outputs.isolation == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            bench/*/go.sum
+      - name: The kernel
+        run: |
+          uname -r
+          cat /sys/kernel/security/lsm || true
+      - name: Test the sandbox
+        env:
+          RIVUS_SBX_RED: "1"
+        run: go test -count=1 -timeout 20m -v -run 'TestSandbox' ./internal/sandbox
+
   # The differential test of the models (bench/model-diff, docs/MODEL-RUNBOOK.md): a package at a time, its model against its body. Only the
   # weekly run and a run by hand, and it reports without blocking (`continue-on-error`) until it has been run for a while; it is not in a pull request
   # (the plan for that: docs/DESIGN-package-models.md, 7). Go and Dart only: a Rust crate is built to be read, and that needs the isolation.
@@ -860,7 +894,7 @@ jobs:
   # when they passed or were skipped (nothing that a test reads changed). A job added above has to be added here.
   ci-ok:
     if: always()
-    needs: [changes, go-packages, docs-tests, test, gcp-exec, sandbox, model-diff, model-diff-changed, graph-check, cost-warn, release-build, ghalint, actionlint]
+    needs: [changes, go-packages, docs-tests, test, gcp-exec, sandbox, sandbox-linux, model-diff, model-diff-changed, graph-check, cost-warn, release-build, ghalint, actionlint]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}

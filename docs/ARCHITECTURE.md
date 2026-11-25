@@ -368,8 +368,9 @@ internal/
   graphdb/                コールグラフを SQLite に保存して読む（12 節）
   graphq/                 保存したグラフへの問い合わせ（callers / callees / path / impls / dispatchers）
   vcs/                    解析したコードのリビジョン
-  sandbox/                macOS のサンドボックス（Seatbelt）の下でプログラムを動かす（15 節）
-    probe/                サンドボックスの試験用。敵対的なビルドスクリプトがしそうなことを 1 つずつ試し、出られたかを答えるコマンド
+  sandbox/                サンドボックスの下でプログラムを動かす。macOS は Seatbelt、Linux は Landlock と seccomp（15 節。docs/DESIGN-linux-sandbox.md）
+    probe/                サンドボックスの試験用（macOS）。敵対的なビルドスクリプトがしそうなことを 1 つずつ試し、出られたかを答えるコマンド
+    probelinux/           同じものの Linux 版
   docsgen/                台帳と ADR、課題から文書の一覧を作る（`scripts/docs-gen`）
   extractorhash/          extractor のソースのハッシュの計算(`scripts/extractor-hash`、`rivus setup`。ADR-126)
   testutil/               testdata ハーネス
