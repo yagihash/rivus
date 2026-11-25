@@ -265,13 +265,16 @@ zsh の補完のスクリプトを標準出力に書きます。解析はせず�
 
 ### `rivus version`
 
-バージョン、コミット、OS とアーキテクチャ、Go のバージョンを 1 行で出します(`rivus --version` も同じ)。
+バージョン、コミット、OS とアーキテクチャ、Go のバージョンを第 1 行に出します(`rivus --version` も同じ)。続けて、IR のスキーマのバージョンと、Rust と Dart の extractor の行(パス、スキーマ、ソースのハッシュの先頭 12 桁、本体の値との照合の結果)を出します。
 
 ```
-rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
+rivus 0.0.18-0.20261125100439-e31e3b607014 (e31e3b607014) darwin/arm64 go1.27.4
+ir schema rivus.ir/1
+rust extractor /Users/me/.../rivus-rust  schema rivus.ir/1  source c61c23a4a906  (match)
+dart extractor /opt/homebrew/bin/rivus-dart  schema rivus.ir/0  (UNKNOWN: its answer has no source= ...; build the extractor again: rivus setup dart -source <extractor/dart of the same commit>)
 ```
 
-報告に書きます。バージョンが違うと、フラグと出力の形が違うことがあります。
+報告に書きます。バージョンが違うと、フラグと出力の形が違うことがあります。extractor の行は、4 つに分かれます(`summary.extractor` の `match` と同じ。対処が違います): `(match)` は一致。`(MISMATCH ...)` は、extractor が、本体と別のソースから作られている(extractor を作り直す: `rivus setup rust|dart -source`)。`(UNKNOWN: this rivus was built without the hash ...)` は、本体が素の `go build` で作られていて、照合できない(本体を `make build` で作り直す)。`(UNKNOWN: ...)` のそれ以外は、extractor が答えない(古い extractor、呼び出しの失敗、時間切れ。理由が書いてある。extractor を作り直す)。見つからない言語は `not found`。Rust の行は、解析と同じ隔離(macOS のサンドボックス)の下で extractor を呼びます(約 20 ms)。隔離のない環境(Linux)では呼ばず、`not checked` と出ます。隔離なしで呼んでよい(自分の extractor)ときは `-unsafe-host-exec`(または `RIVUS_UNSAFE_HOST_EXEC=1`)を付けます。`-rust-extractor`、`-dart-extractor` で、見る extractor を指せます。
 
 ### `rivus debug`
 
@@ -461,6 +464,7 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `summary.categories_excluded` | `-categories` / `-skip-categories` で出力から外した finding の、カテゴリごとの件数(`category`、`findings`。カテゴリの順)。外した分は `summary.findings` と `findings` に入っていない。**外した件数だけを出す**ので、「この件数の finding が、読んでいない所にある」という意味。何も外さなかったとき(フラグなしを含む)は出ない |
 | `summary.unverified_versions` | `verified_versions`(モデルが確認したバージョンの記録)を持つ Go の module(Dart のパッケージ、Rust の crate も同じ)を、記録の範囲の**外**のバージョンで使っている(`package`、`used`、`verified[]`、`source`: `go.mod`)。**モデルの行は、そのまま当たっている**(止めない)。確認していないバージョンに当てたので、その module の API が変わっていれば、行が当たらない、または古い意味のまま。finding が 0 件でも出る。記録のない module は出ない。Dart は `pubspec.lock`、Rust は `Cargo.lock` から同じ形で出す(`source` はそのファイル名。課題 #162) |
 | `summary.isolation` | Rust をどう読んだか: `mode` が `sandbox` か `host`。macOS のサンドボックスで `DEVELOPER_DIR` を渡したときだけ、`developer_dir`(`value` と、`source` が `default`(コマンドラインツール)か `user`(`-isolation-env`))が付く |
+| `summary.extractor` | **この結果を出した extractor が、本体と同じソースから作られたものか**(Rust と Dart を読んだ実行だけ。Go だけの解析にはない)。読む前に、extractor に 1 回だけ、自分のソースのハッシュを聞き(Rust は `--rivus-version`、隔離の下。Dart は `--version`)、本体のビルドに埋めた値と照合した結果。言語ごとに `lang`、`path`(聞いた extractor)、`schema`、`source_hash`(extractor の答え)、`expected_hash`(本体の値)、`match`、`detail`(`yes` 以外の理由)。**`match` は 4 つの状態に、対処が違うので、分かれる**: `yes`(一致)、`no`(両方わかっていて違う: **extractor を作り直す**。結果が、今のソースの extractor のものと違うかもしれない)、`unknown_binary`(本体が素の `go build` で、値が `unknown`: **本体を `make build` で作り直す**。extractor は、問題とは限らない)、`unknown_extractor`(extractor が答えない: `source=` がない古い extractor、`--rivus-version` を知らない、呼び出しの失敗、時間切れ、`source=unknown`。**extractor を作り直す**。`detail` に理由)。このほか、`unchecked`(隔離のない環境で、extractor を呼ばなかった)と、`-ir`(保存した IR を読んだ実行: 1 件だけ、`lang` なし、`match` は `n/a(-ir)`、`source_hash` は `unknown (-ir)`)。**止めずに記録する**: `yes` 以外では、標準エラーにも 1 行(`WARNING`、extractor のパスと作り直し方)が出る。スキーマのバージョン(`rivus.ir/N`)が違うときは別で、読まずに止まる。uncertainty ではない(finding ごとの不確かさではなく、解析全体の前提)。**`yes` でないとき、finding の数や内容が、今のソースの extractor の結果と違うことがあるので、報告に書く**(ADR-126) |
 | `stats.converged` | `false` なら、解析が上限で止まっていて、**結果は途中のもの** |
 | `stats.timed_out` | `true` なら `-timeout` で止まった。フィールドがない(`jq` では `null`)のは、時間切れでないという意味 |
 | `stats.budget_exhausted`、`func_timeouts`、`run_timeouts` | 上限で止めた関数の数(理由ごと)。`budget_exhausted` と `func_timeouts` は 0 でもいつも出る(0 以外なら、終了コード 4 の理由になる) |

@@ -3,15 +3,22 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"github.com/yagihash/rivus/internal/ir"
 )
 
-// `rivus version` is one line that a script (and the test of a formula) can read: "rivus <version> ... <os>/<arch> <go>".
+// The first line of `rivus version` is the one that a script (and the test of a formula) can read: "rivus <version> ... <os>/<arch> <go>". The lines
+// after it are the version of the schema and the extractors (ADR-126).
 func TestVersionIsOneLine(t *testing.T) {
 	t.Parallel()
 	for _, arg := range []string{"version", "--version"} {
-		out := strings.TrimSpace(string(rivus(t, arg)))
-		if strings.Contains(out, "\n") || !strings.HasPrefix(out, "rivus ") || !strings.Contains(out, "/") {
-			t.Errorf("rivus %s = %q: want one line, rivus <version> ... <os>/<arch> <go>", arg, out)
+		lines := strings.Split(strings.TrimSpace(string(rivus(t, arg))), "\n")
+		first := lines[0]
+		if !strings.HasPrefix(first, "rivus ") || !strings.Contains(first, "/") {
+			t.Errorf("rivus %s: first line %q: want rivus <version> ... <os>/<arch> <go>", arg, first)
+		}
+		if len(lines) != 4 || lines[1] != "ir schema "+ir.SchemaVersion || !strings.HasPrefix(lines[2], "rust extractor") || !strings.HasPrefix(lines[3], "dart extractor") {
+			t.Errorf("rivus %s: want the schema and one line for each extractor after the first line, got %q", arg, lines)
 		}
 	}
 	old := versionStamp

@@ -240,6 +240,55 @@ func (o *isolationOpts) extractRustSandboxedTo(ctx context.Context, dir string, 
 	return res.Stdout, nil
 }
 
+// rustExtractorVersionSandboxed asks the extractor which source it was built from (`--rivus-version`), under the same sandbox that reads a project, and
+// returns what it printed (ADR-126). It is a light call of its own, not the extraction with other arguments: the environment is PATH, HOME and TMPDIR
+// and nothing else (RIVUS_RUST_DRIVER is not passed on; the answer does not depend on it), the extractor and the libraries of the toolchain are read,
+// nothing is written, there is no network and no standard input, and the working directory is an empty directory that is removed. It does not wait
+// longer than rustVersionTimeout. An error is returned for the reasons that the answer is not there (errNoIsolation when the sandbox cannot be made).
+func (o *isolationOpts) rustExtractorVersionSandboxed(ctx context.Context) (string, error) {
+	if err := sandbox.Available(); err != nil {
+		return "", fmt.Errorf("%w (%v)", errNoIsolation, err)
+	}
+	tc, err := pinnedToolchainDir()
+	if err != nil {
+		return "", err
+	}
+	extractor, err := o.rustExtractorPath()
+	if err != nil {
+		return "", err
+	}
+	work, err := os.MkdirTemp("", "rivus-version-")
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(work)
+	res, err := sandbox.Run(ctx, sandbox.Spec{
+		Argv:      []string{extractor, "--rivus-version"},
+		Dir:       work,
+		Env:       []string{"PATH=" + filepath.Join(tc, "bin") + ":/usr/bin:/bin", "HOME=" + work, "TMPDIR=" + work},
+		Read:      []string{filepath.Join(tc, "lib"), work}, // (librustc_driver, which the extractor links to)
+		ExecFiles: append([]string{extractor}, o.execExtra...),
+		Timeout:   rustVersionTimeout,
+		MaxOutput: 4096,
+	})
+	if err != nil {
+		if err == sandbox.ErrUnavailable {
+			return "", fmt.Errorf("%w (%v)", errNoIsolation, err)
+		}
+		return "", fmt.Errorf("it could not be run under the sandbox: %v", err)
+	}
+	if res.TimedOut {
+		return "", fmt.Errorf("it did not answer in %v and was stopped", rustVersionTimeout)
+	}
+	if res.OutputTooBig {
+		return "", fmt.Errorf("it wrote more than 4096 bytes and was stopped")
+	}
+	if res.ExitCode != 0 {
+		return "", fmt.Errorf("it failed (exit %d)%s", res.ExitCode, tailOf(string(res.Stderr)))
+	}
+	return string(res.Stdout), nil
+}
+
 // sandboxResult says how a stage ended: what it printed goes to the user, and a stage that failed or was stopped is an error.
 func (o *isolationOpts) sandboxResult(stage string, res *sandbox.Result, err error) error {
 	if err != nil {

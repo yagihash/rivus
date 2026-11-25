@@ -257,6 +257,20 @@ func orGo(others []string) string {
 // extractorCommand is the command of the extractor of a language: the flag,
 // then the environment, then the name the install gives it.
 func (o *analyzeOpts) extractorCommand(lang string) ([]string, error) {
+	if w, ok := o.cmdMemo[lang]; ok {
+		return w, nil
+	}
+	w, err := o.findExtractorCommand(lang)
+	if err == nil {
+		if o.cmdMemo == nil {
+			o.cmdMemo = map[string][]string{}
+		}
+		o.cmdMemo[lang] = w
+	}
+	return w, err
+}
+
+func (o *analyzeOpts) findExtractorCommand(lang string) ([]string, error) {
 	var flagVal, env, name, how string
 	switch lang {
 	case langDart:
@@ -384,7 +398,11 @@ func (o *analyzeOpts) runExtractor(lang string) (*ir.Program, error) {
 	if err != nil {
 		return nil, err
 	}
-	return readExtracted(lang, out)
+	prog, err := readExtracted(lang, out)
+	if err != nil {
+		return nil, o.withExtractorPath(lang, err)
+	}
+	return prog, nil
 }
 
 // runExtractorSpill is runExtractor for the IR on disk (ADR-123): the extractor writes to a pipe, the core decodes a line
@@ -414,7 +432,7 @@ func (o *analyzeOpts) runExtractorSpill(lang string) (*ir.Program, *irspill.Disk
 		return nil, nil, runErr
 	}
 	if r.err != nil {
-		return nil, nil, fmt.Errorf("the %s extractor: %w", lang, r.err)
+		return nil, nil, o.withExtractorPath(lang, fmt.Errorf("the %s extractor: %w%s", lang, r.err, rebuildHint(lang, r.err)))
 	}
 	return r.prog, r.disk, nil
 }
@@ -591,6 +609,7 @@ func (o *analyzeOpts) loadLangs(langs []string, patterns []string, rules *model.
 			goProg, p = l, l.ir
 		} else {
 			var err error
+			o.noteExtractor(lang)
 			if spill {
 				p, disk, err = o.runExtractorSpill(lang)
 			} else {

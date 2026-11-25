@@ -60,7 +60,7 @@ Go と Dart は動く(`go` と Dart SDK が、それぞれ `brew` で入る)。*
 
 ## 6a. バージョンの一致
 
-extractor が自分のバージョンを答え、rivus は合わなければ止まる(課題 #109)。ロジックだけの変更は、extractor のソースのハッシュ(ADR-126)で見分ける: `make build` とリリースのスクリプトが `go run ./scripts/extractor-hash` の値を本体に埋め(`-ldflags -X main.rustSourceHash` / `main.dartSourceHash`)、`rivus setup rust` は `RIVUS_EXTRACTOR_SRC_HASH` で `cargo install` に、`rivus setup dart` は `dart compile exe -DRIVUS_SRC_HASH` で渡し、extractor は `--rivus-version` / `--version` で答える。照合は、今はまだ行わない(段階 2)。formula への反映は別枠。formula では、wrapper が env を固定するので、ずれる余地は小さい。`setup rust` で作る人は、この確認が前提(#109、#119)。
+extractor が自分のバージョンを答え、rivus は合わなければ止まる(課題 #109)。ロジックだけの変更は、extractor のソースのハッシュ(ADR-126)で見分ける: `make build` とリリースのスクリプトが `go run ./scripts/extractor-hash` の値を本体に埋め(`-ldflags -X main.rustSourceHash` / `main.dartSourceHash`)、`rivus setup rust` は `RIVUS_EXTRACTOR_SRC_HASH` で `cargo install` に、`rivus setup dart` は `dart compile exe -DRIVUS_SRC_HASH` で渡し、extractor は `--rivus-version` / `--version` で答える。rivus は、Rust と Dart を読む前に、extractor に 1 回だけ聞いて、本体の値と照合し、止めずに `summary.extractor` と標準エラーの警告に記録する(`rivus version` も同じ。Rust は、対象を読む起動と同じ隔離の下で聞く。隔離のない環境では「未確認」で、`-unsafe-host-exec` のときだけ直接起動)。素の `go build` で作った本体は、値が `unknown` で、警告が出る(`make build` で作る)。formula への反映(formula が、ハッシュを本体と extractor のビルドに渡す)は別枠。formula では、wrapper が env を固定するので、ずれる余地は小さい。`setup rust` で作る人は、この確認が前提(#109、#119)。
 
 ## 7. formula の下書き(このリポジトリの中に置ける。tap を作る前)
 
