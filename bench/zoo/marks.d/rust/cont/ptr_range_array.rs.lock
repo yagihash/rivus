@@ -1,0 +1,3 @@
+rust	cont/ptr_range_array.rs	sink-none	@sink(none)	fn decoy() { @decoy
+rust	cont/ptr_range_array.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	cont/ptr_range_array.rs	sink-none	@sink(none)	fn fixed() { @fixed

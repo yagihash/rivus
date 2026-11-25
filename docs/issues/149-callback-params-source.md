@@ -19,3 +19,5 @@ zoo のセル `F/dart/shelf-router-extra-param`(PR #181 のブランチ。`docs/
 ## 見えるか(uncertainty の場所)
 
 引けなかった登録の呼び出しは、`unresolved_callee`(detail は `callback_param_unresolved:` で始まる)として、**呼び出しのある関数**に付く。source / sink の関数ではない(どの関数が source になるはずだったかは分からない)ので、zoo の `@miss` の分類は `silent` のまま(定義は広げない)。利用者には `summary.callback_param_unresolved`(`count`、`sites[]`)で、finding が 0 件でも見える。`rivus resolve` の `absent_now` で見えるかは、未確認(前後の組の finding が要る。試していない)。
+
+Go でも同じ形(登録のヘルパーの引数として渡す形)を確認した。Go の組み込みのモデルには `callback_param` の行がない(0 件)ので、起きるのは、利用者が `callback_param` の行を自分で書いたときに限られる。

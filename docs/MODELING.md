@@ -562,6 +562,18 @@ trait (`std::iter::Extend::extend`); a type that a library re-exports is written
 serde writes its private module with its version in it. **Read the name from the IR** (`rivus debug extract` for Go;
 `rivus-dart` and `rivus-rust` for the others), do not write it from the source.
 
+**A typed symbol (Rust, `IntoIterator::into_iter` only).** For a call of `std::iter::IntoIterator::into_iter` the extractor writes
+the type of the receiver in the symbol when the receiver is a `&mut` reference or a type whose name ends in `Mut`
+(`IterMut`, `ValuesMut`): `<&mut std::vec::Vec as std::iter::IntoIterator>::into_iter`,
+`<std::slice::IterMut as std::iter::IntoIterator>::into_iter`. The form is `<RECEIVER as std::iter::IntoIterator>::into_iter`;
+the lifetimes and the generic arguments of the receiver are left out, a slice is `&mut [_]` and an array `&mut [_; _]`. The receivers that are not
+`&mut` (a shared reference, a value: `&Vec<T>`, `Vec<T>`) and every other method keep the path of the trait
+(`std::iter::IntoIterator::into_iter`). A call has one symbol: **the row of the trait does not match a call that has a typed
+symbol**, so a typed row is a whole row (it repeats the `flows` of the row of the trait, and adds what it is for). The typed rows
+are not looked at by `bench/model-diff -lang rust` (it reports them as not probed). A built-in model that has a typed row works
+with an extractor that writes typed symbols; with an older one (the source hash of the extractor does not match, ADR-126) the
+typed row never matches and `summary.extractor` says so.
+
 `TestBuiltinRowsAreHitByTheZoo` (`cmd/rivus`) holds every row of the built-in model that names a function to the IR of
 the zoo (`bench/zoo-*`) and the curated targets (`bench/*-curated`): a row has to be hit by a call (or, for an entry point,
 by a function) in it, or be in the `.dead-allow` file next to the model file of the row (`internal/model/builtin/<model file>.dead-allow`, one line `symbol | reason`; the language is the one of the file name) with its reason. **A new row is a failing test until a cell

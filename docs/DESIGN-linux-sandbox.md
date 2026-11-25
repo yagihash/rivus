@@ -20,7 +20,7 @@ Landlock と seccomp は、自分と子にだけ効き、外せない。そこ�
 2. ヘルパーが、`NO_NEW_PRIVS`、Landlock、seccomp の順に自分を閉じ込めて、`execve` で対象のプログラムになる。
 3. `execve` で fd 4 が閉じる(CLOEXEC)。**何も書かれずに閉じたら、閉じ込めは済んでいる**。何か書かれていたら、対象は 1 行も動いていない(`ErrUnavailable` + 理由)。
 
-対象のプログラムの標準エラーの内容を、閉じ込めの成否の判定には使わない(macOS の `Available()` と同じ原則)。
+対象のプログラムの標準エラーの内容を、閉じ込めの成否の判定には使わない(macOS の `Available()` と同じ原則)。端末に流すときは、macOS と同じ `sanitizeForTerminal` を通す(`cmd/rivus/isolate_sandbox_linux.go` の `sandboxResult`。SBX-4)。
 
 ## 3. 何を閉じるか
 

@@ -1,0 +1,2 @@
+go	dart/io_link_create_target/io_link_create_target.go	sink-none	@sink(none)	func fixed() { @fixed
+go	dart/io_link_create_target/io_link_create_target.go	sink-none	@sink(none) @nosink(dart-io-link-create-target-decoy)	func decoy() { @decoy

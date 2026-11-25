@@ -29,6 +29,8 @@ pub fn register_all() {
     c::clos::two_callers::register();
     c::cont::map_key_vs_value::register();
     c::cont::ptr_index_slice::register();
+    c::cont::ptr_range_array::register();
+    c::cont::ptr_range_slice::register();
     c::cont::ptr_type_switch::register();
     c::cont::ptr_value_copy::register();
     c::cont::slice::register();
@@ -92,6 +94,7 @@ pub fn register_all() {
     c::rust::macro_rules::register();
     c::rust::mut_out_param::register();
     c::rust::option_result_chain::register();
+    c::rust::option_unwrap_value::register();
     c::rust::ownership_move::register();
     c::rust::static_lazylock::register();
     c::rust::vec_index_write::register();

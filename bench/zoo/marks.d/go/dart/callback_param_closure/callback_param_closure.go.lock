@@ -1,0 +1,2 @@
+go	dart/callback_param_closure/callback_param_closure.go	sink-none	@sink(none)	func fixed() { @fixed
+go	dart/callback_param_closure/callback_param_closure.go	sink-none	@sink(none) @nosink(dart-callback-param-closure-decoy)	func decoy() { @decoy
