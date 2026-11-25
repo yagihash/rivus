@@ -274,8 +274,14 @@ func TestCoarseWhatIsCounted(t *testing.T) {
 // that was done). With functions of the project in the component that write to the global variables, and a function
 // outside it that reads them.
 func TestCoarseIsDepthZeroForThoseFunctions(t *testing.T) {
+	e, res := runCoarse(t, mixed, func(o *Options) { o.SCCCoarsenN = 12 })
+	if len(e.coarseList) != 1 {
+		t.Fatal("not solved at depth 0")
+	}
+	info := e.coarseList[0].info
 	ref, rres := runCoarsePre(t, mixed, nil, func(e *Engine) {
-		c := &coarseSCC{}
+		// the same group by hand: with its record of the group (what the output tells of it), so that the output is whole
+		c := &coarseSCC{info: info}
 		for _, fn := range e.prog.Funcs {
 			if fn.Dep && inSCC(fn.ID) {
 				e.coarse[fn] = c
@@ -284,10 +290,6 @@ func TestCoarseIsDepthZeroForThoseFunctions(t *testing.T) {
 	})
 	if len(rres.Findings) == 0 || !strings.Contains(globalsDump(ref), "scc.G") {
 		t.Fatalf("the program has no findings or no global state: the test shows nothing")
-	}
-	e, res := runCoarse(t, mixed, func(o *Options) { o.SCCCoarsenN = 12 })
-	if len(e.coarseList) != 1 {
-		t.Fatal("not solved at depth 0")
 	}
 	for id, sum := range byID(ref) {
 		if got := byID(e)[id]; got == nil || canon(got) != canon(sum) {
@@ -391,5 +393,85 @@ func TestCoarseWordingHasThreeItems(t *testing.T) {
 				t.Errorf("the record has no %q: %s", want, u.Detail)
 			}
 		}
+	}
+}
+
+// The output tells the group (CoarsenedSCC) on its record and on each hop, and the finding lists the groups it went
+// through; the findings that went through none come first, in the order they had; with the setting off none of it is there.
+func TestCoarseStructuredOutput(t *testing.T) {
+	dep := func(id string) bool {
+		return isF(id) && !strings.HasSuffix(id, ".f00") && !strings.HasSuffix(id, ".f01")
+	}
+	_, off := runCoarse(t, dep, nil)
+	for _, f := range off.Findings {
+		if len(f.ThroughCoarsenedSCC) != 0 {
+			t.Errorf("setting off: a finding has through_coarsened_scc: %v", f.ThroughCoarsenedSCC)
+		}
+	}
+	if strings.Contains(wholeResult(t, off), "coarsened_scc") {
+		t.Error("setting off: the output has coarsened_scc")
+	}
+	// off: the order is the one of the sink position and ID
+	for i := 1; i < len(off.Findings); i++ {
+		a, b := off.Findings[i-1], off.Findings[i]
+		if a.Sink.Position.File == b.Sink.Position.File && (a.Sink.Position.Offset > b.Sink.Position.Offset ||
+			a.Sink.Position.Offset == b.Sink.Position.Offset && a.ID > b.ID) {
+			t.Fatal("setting off: the findings are not in the order of the sink and the ID")
+		}
+	}
+
+	_, res := runCoarse(t, dep, func(o *Options) { o.SCCCoarsenN = 12 })
+	rs := records(res)
+	if len(rs) != 1 || rs[0].CoarsenedSCC == nil {
+		t.Fatalf("the record has no coarsened_scc: %v", rs)
+	}
+	c := rs[0].CoarsenedSCC
+	if len(c.ID) != 12 || c.Functions.Group != 12 || c.Functions.Dependencies != 12 || c.PackagesCount != len(c.Packages) || len(c.Packages) == 0 {
+		t.Errorf("coarsened_scc: %+v", c)
+	}
+	through, plain := 0, 0
+	seenThrough := false
+	var plainList []*Finding
+	for _, f := range res.Findings {
+		if len(f.ThroughCoarsenedSCC) == 0 {
+			plain++
+			if seenThrough {
+				t.Errorf("a finding without the note comes after one with it: %s", f.ID)
+			}
+			plainList = append(plainList, f)
+			continue
+		}
+		seenThrough = true
+		through++
+		for _, id := range f.ThroughCoarsenedSCC {
+			if id != c.ID {
+				t.Errorf("through_coarsened_scc %q is not the group %q", id, c.ID)
+			}
+		}
+		hop := false
+		for _, p := range f.Paths {
+			for _, st := range p.Steps {
+				for _, n := range st.Notes {
+					if n.CoarsenedSCC != nil && n.CoarsenedSCC.ID == c.ID {
+						hop = true
+					}
+				}
+			}
+		}
+		if !hop {
+			t.Errorf("%s: through_coarsened_scc without a hop that has it", f.ID)
+		}
+	}
+	t.Logf("findings: %d without, %d through a coarsened group", plain, through)
+	// the order inside each side is the order of the sink and the ID
+	for i := 1; i < len(plainList); i++ {
+		a, b := plainList[i-1], plainList[i]
+		if a.Sink.Position.File == b.Sink.Position.File && (a.Sink.Position.Offset > b.Sink.Position.Offset ||
+			a.Sink.Position.Offset == b.Sink.Position.Offset && a.ID > b.ID) {
+			t.Error("the findings without the note are not in the old order")
+		}
+	}
+	if coarsenedID("a") != coarsenedID("a") || coarsenedID("a") == coarsenedID("b") {
+		t.Error("coarsenedID is not a function of its input")
 	}
 }

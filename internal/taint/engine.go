@@ -1606,6 +1606,10 @@ func (e *Engine) collect(st Stats) *Result {
 	res.Findings = e.mergeParamSources(res.Findings)
 	sort.SliceStable(res.Findings, func(i, j int) bool {
 		a, b := res.Findings[i], res.Findings[j]
+		// the findings that went through no group solved at depth 0 come first (ADR-124); inside each, the order is the same
+		if ca, cb := len(a.ThroughCoarsenedSCC) > 0, len(b.ThroughCoarsenedSCC) > 0; ca != cb {
+			return cb
+		}
 		if a.Sink.Position.File != b.Sink.Position.File {
 			return a.Sink.Position.File < b.Sink.Position.File
 		}
@@ -1729,12 +1733,17 @@ func (e *Engine) buildFinding(rf *rawFinding) *Finding {
 	}
 	var allFuncs []string
 	seen := map[string]bool{}
+	throughSeen := map[string]bool{}
 	cuts := 0
 	for i := range agg {
 		st := &agg[i]
 		allFuncs = append(allFuncs, st.Func)
 		for _, n := range st.Notes {
 			e.fill(n)
+			if n.CoarsenedSCC != nil && !throughSeen[n.CoarsenedSCC.ID] {
+				throughSeen[n.CoarsenedSCC.ID] = true
+				f.ThroughCoarsenedSCC = append(f.ThroughCoarsenedSCC, n.CoarsenedSCC.ID)
+			}
 			k := n.Kind + "|" + n.Symbol + "|" + posKey(n.pos)
 			if n.Kind == KindAccessPathTruncated {
 				// each cut is told on its own (where and how deep), up to a cap
@@ -1764,6 +1773,7 @@ func (e *Engine) buildFinding(rf *rawFinding) *Finding {
 		f.Uncertainties = append(f.Uncertainties, newUncertainty(KindAccessPathTruncated, "access_path_truncated: "+itoa(cuts-maxCutNotes)+
 			" more cuts on the path are not listed (the first "+itoa(maxCutNotes)+" are)", ""))
 	}
+	sort.Strings(f.ThroughCoarsenedSCC)
 	f.Paths = []Path{{Steps: steps, OmittedSteps: omitted}}
 	f.PathSteps = len(steps)
 	if omitted > 0 {

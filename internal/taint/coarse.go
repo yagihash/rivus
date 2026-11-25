@@ -1,6 +1,8 @@
 package taint
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"sort"
 	"strconv"
 
@@ -24,6 +26,36 @@ type coarseSCC struct {
 	packages []string
 	n        int
 	counted  string // "functions" or "dependency_functions"
+	info     *CoarsenedSCC
+}
+
+// CoarsenedSCC is the machine-readable form of a group that is solved at depth 0: the same on the note of the group
+// (depth_limit, scc_coarsened) and on each hop that went through one of its dependency functions. A finding lists the
+// ID of each group it went through (Finding.ThroughCoarsenedSCC).
+type CoarsenedSCC struct {
+	// ID is the first 12 hex digits of the SHA-256 of the smallest function ID of the group: the same for the same
+	// code, for any run.
+	ID string `json:"id"`
+	// Packages are the packages of the dependency functions of the group (the first MaxCoarsenedPackages, sorted);
+	// PackagesCount is how many there are in all.
+	Packages      []string           `json:"packages"`
+	PackagesCount int                `json:"packages_count"`
+	Functions     CoarsenedFunctions `json:"functions"`
+}
+
+// CoarsenedFunctions counts the functions of the group: all of them, and the ones of the dependencies (the ones
+// solved at depth 0).
+type CoarsenedFunctions struct {
+	Group        int `json:"group"`
+	Dependencies int `json:"dependencies"`
+}
+
+// MaxCoarsenedPackages is how many package names CoarsenedSCC.Packages lists.
+const MaxCoarsenedPackages = 10
+
+func coarsenedID(smallest string) string {
+	h := sha256.Sum256([]byte(smallest))
+	return hex.EncodeToString(h[:])[:12]
 }
 
 // coarsenBySize marks the dependency functions of the large components. It runs once, before the analysis.
@@ -59,7 +91,19 @@ func (e *Engine) coarsenBySize(sccs [][]*sg.Func) {
 			pkgs = append(pkgs, p)
 		}
 		sort.Strings(pkgs)
-		c := &coarseSCC{id: e.funcID(scc[0]), size: len(scc), funcs: deps, packages: pkgs, n: n, counted: counted}
+		smallest := e.funcID(scc[0])
+		for _, fn := range scc {
+			if id := e.funcID(fn); id < smallest {
+				smallest = id
+			}
+		}
+		listed := pkgs
+		if len(listed) > MaxCoarsenedPackages {
+			listed = listed[:MaxCoarsenedPackages]
+		}
+		c := &coarseSCC{id: smallest, size: len(scc), funcs: deps, packages: pkgs, n: n, counted: counted}
+		c.info = &CoarsenedSCC{ID: coarsenedID(smallest), Packages: append([]string(nil), listed...), PackagesCount: len(pkgs),
+			Functions: CoarsenedFunctions{Group: len(scc), Dependencies: len(deps)}}
 		for _, fn := range deps {
 			e.coarse[fn] = c
 		}
@@ -109,6 +153,7 @@ func (e *Engine) coarseRecords() []*Uncertainty {
 			" " + c.counted + " or more), so " + sccCoarsenedMeaning + ". The dependency functions are in candidates. To check a finding that went through one: " +
 			"read that function in its package (look at: " + sccCoarsenedLook + "), or solve with " + sccCoarsenFlagOff + " and see whether the finding remains"
 		u := newUncertainty(KindDepthLimit, d, "")
+		u.CoarsenedSCC = c.info
 		u.Candidates = ids
 		out = append(out, u)
 	}
