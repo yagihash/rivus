@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/yagihash/rivus/internal/extractorhash"
 )
 
 // dartReal is the command of RIVUS_DART as it was set (before useDartExe puts the wrapper in its place), and dartExePath is the
@@ -86,6 +88,26 @@ func TestDartExeSameIR(t *testing.T) {
 		}
 		if len(fromExe) == 0 {
 			t.Errorf("%s: no IR", target)
+		}
+	}
+}
+
+// The hashes of the source of the extractors are set at build time (-ldflags -X, `make build`); a build without them leaves "unknown", the
+// value that internal/extractorhash names, and the name of the variable is the one that the build gives (a renamed variable would be an
+// -X that sets nothing, without an error).
+func TestSourceHashVariablesAreTheOnesTheBuildSets(t *testing.T) {
+	if rustSourceHash != extractorhash.Unknown || dartSourceHash != extractorhash.Unknown {
+		t.Skip("rivus of this test was built with the hashes")
+	}
+	for _, f := range []string{"../../Makefile", "../../scripts/build-release-archives.sh"} {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, name := range []string{"main.rustSourceHash", "main.dartSourceHash"} {
+			if !strings.Contains(string(b), name) {
+				t.Errorf("%s does not set %s", f, name)
+			}
 		}
 	}
 }

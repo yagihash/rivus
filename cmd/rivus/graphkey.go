@@ -39,6 +39,15 @@ var rivusVersionFn = executableVersion
 // versionStamp is set at build time (-ldflags "-X main.versionStamp=...") by a release.
 var versionStamp string
 
+// rustSourceHash and dartSourceHash are the hashes of the source of the extractors (extractor/rust, extractor/dart) of the tree this rivus was
+// built from: set at build time by `make build` and scripts/build-release-archives.sh (-ldflags "-X main.rustSourceHash=..."; the value is
+// `go run ./scripts/extractor-hash <lang>`, internal/extractorhash). A plain `go build` leaves them "unknown". They are only held here: the
+// first line of the IR of an extractor says which source it was built from (ir.Program.SourceHash) (ADR-126).
+var (
+	rustSourceHash = "unknown"
+	dartSourceHash = "unknown"
+)
+
 var (
 	exeOnce sync.Once
 	exeVer  string

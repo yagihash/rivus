@@ -322,7 +322,7 @@ Go の extractor は、コアと同じプロセスで、`ir.Program` と `ir.Tex
 - Go の `rivus debug extract` は、`-texts` を付けたときだけテキストを出す。`-implementations <シンボル>` は、そのインタフェースメソッドの `implementations` レコードを出す
 
 **モジュール境界:** 複数パッケージ（Dart の melos、Rust の workspace）を 1 回の実行で出し、`Func.Dep` で、解析の対象と依存を分ける。依存は、ソースがあるものだけを出す。
-**バージョン:** ストリームの先頭の `schema_version`（今は `rivus.ir/1`）が違えば、読まずに止める（`internal/ir/stream.go`。メッセージは、extractor を作り直す方法を示す。回避のフラグはない）。ストリームの形（型とフィールド）が変わるときは、足しただけでもバージョンを上げる。古い extractor は、新しく足したものを書かないのに、読む側がそれを知る手段がないからである。形のハッシュを `TestIRSchemaVersionMatchesShape` がバージョンごとに固定し、Rust と Dart の extractor が書くバージョンは `TestExtractorsWriteTheSchemaVersion` が照合する（#109）。Dart の extractor は、自分のバージョンを `--version` で返す（`rivus_dart rivus.ir/1`）。コアは、グラフの鍵に、extractor の実行ファイルのハッシュと、Dart ではこのバージョンを入れる（`cmd/rivus/graphkey.go`）。
+**バージョン:** ストリームの先頭の `schema_version`（今は `rivus.ir/1`）が違えば、読まずに止める（`internal/ir/stream.go`。メッセージは、extractor を作り直す方法を示す。回避のフラグはない）。ストリームの形（型とフィールド）が変わるときは、足しただけでもバージョンを上げる。古い extractor は、新しく足したものを書かないのに、読む側がそれを知る手段がないからである。形のハッシュを `TestIRSchemaVersionMatchesShape` がバージョンごとに固定し、Rust と Dart の extractor が書くバージョンは `TestExtractorsWriteTheSchemaVersion` が照合する（#109）。Dart の extractor は、自分のバージョンとソースのハッシュを `--version` で返す（`rivus_dart rivus.ir/1 source=<ハッシュ>`。Rust は `--rivus-version`。`--version` はドライバーが rustc の探りに使う。ADR-126）。ハッシュは `internal/extractorhash` の 1 か所で計算し（`go run ./scripts/extractor-hash rust|dart`）、IR のストリームには書かない（形が変わらない）。コアは、グラフの鍵に、extractor の実行ファイルのハッシュと、Dart ではこのバージョンを入れる（`cmd/rivus/graphkey.go`）。
 **失敗:** 読めなかったもの（解決できないパッケージ、生成コードがない）は、`load_error` として出す。コアは `missing_source` の不確実性にする。
 **読まなかったもの:** ビルドが出荷しないもの（テスト、example、開発用の依存）を読まなかったときは、`tests_skipped` レコードで示す（ADR-062）。呼び出し元が全部読まれているかは、`caller_marks` と `Func.Private` / `Func.ExternalEntry` で示す（13 節）。
 
@@ -360,6 +360,7 @@ internal/
   sandbox/                macOS のサンドボックス（Seatbelt）の下でプログラムを動かす（15 節）
     probe/                サンドボックスの試験用。敵対的なビルドスクリプトがしそうなことを 1 つずつ試し、出られたかを答えるコマンド
   docsgen/                台帳と ADR、課題から文書の一覧を作る（`scripts/docs-gen`）
+  extractorhash/          extractor のソースのハッシュの計算(`scripts/extractor-hash`、`rivus setup`。ADR-126)
   testutil/               testdata ハーネス
 extractor/                Dart と Rust の extractor（dart/、rust/。それぞれ別言語のプロジェクト）
 testdata/                 マイクロベンチマーク（go/ ほか）

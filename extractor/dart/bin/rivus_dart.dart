@@ -7,7 +7,7 @@ import 'package:rivus_dart/extract.dart';
 
 Future<void> main(List<String> args) async {
   if (args.contains('--version')) {
-    stdout.writeln('rivus_dart rivus.ir/1');
+    stdout.writeln('rivus_dart rivus.ir/1 source=${const String.fromEnvironment('RIVUS_SRC_HASH', defaultValue: 'unknown')}');
     return;
   }
   final deps = !args.contains('--no-deps');

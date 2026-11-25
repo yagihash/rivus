@@ -27,6 +27,10 @@ fi
 rm -rf build dist
 mkdir -p dist
 
+# extractor のソースのハッシュ（本体に埋め込む。計算は internal/extractorhash の 1 か所。ADR-126）。ターゲットの GOOS/GOARCH を設定する前に、ホストで求める。
+rust_hash="$(go run ./scripts/extractor-hash rust)"
+dart_hash="$(go run ./scripts/extractor-hash dart)"
+
 # バイナリにリンクされる依存に、コピーレフトのライセンスのものがあれば、ビルドを止める（ターゲットごとに、リンクされるものは違う）。
 # go-licenses の分類（https://github.com/google/licenseclassifier の category）で、次を禁止する:
 #   restricted: GPL, LGPL, AGPL など（強いコピーレフト）
@@ -47,7 +51,7 @@ for target in linux/amd64 linux/arm64 darwin/arm64; do
   work="build/${name}"
   "${tools}/go-licenses" check ./cmd/rivus --disallowed_types=forbidden,restricted,reciprocal,unknown
   mkdir -p "${work}/THIRD_PARTY_LICENSES/go"
-  go build -trimpath -ldflags "-s -X main.versionStamp=${ver}" -o "${work}/rivus" ./cmd/rivus
+  go build -trimpath -ldflags "-s -X main.versionStamp=${ver} -X main.rustSourceHash=${rust_hash} -X main.dartSourceHash=${dart_hash}" -o "${work}/rivus" ./cmd/rivus
   cp LICENSE "${work}/LICENSE"
   cp "${go_license}" "${work}/THIRD_PARTY_LICENSES/go/LICENSE"
   if [ -f "${goroot}/PATENTS" ]; then cp "${goroot}/PATENTS" "${work}/THIRD_PARTY_LICENSES/go/PATENTS"; fi

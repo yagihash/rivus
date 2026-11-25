@@ -1,18 +1,16 @@
 package main
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
+
+	"github.com/yagihash/rivus/internal/extractorhash"
 )
 
 // The Dart extractor as a compiled executable (`dart compile exe`). `dart run` from source spends 5 s or more of every run on
@@ -20,38 +18,6 @@ import (
 // It is built on purpose by `rivus setup dart`, or on the spot by the tests (dartExeFor), and only from the source of rivus: the commands that read a
 // project never build anything for themselves. Every input that can change what it does is in its key (dartExeKey), so a
 // stale executable is never taken for a current one.
-
-// dartSourceHash is the hash of what the extractor is made of: lib/, bin/, pubspec.yaml and pubspec.lock (the version of the analyzer).
-func dartSourceHash(src string) (string, error) {
-	var files []string
-	for _, d := range []string{"lib", "bin"} {
-		err := filepath.WalkDir(filepath.Join(src, d), func(p string, e fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if !e.IsDir() {
-				files = append(files, p)
-			}
-			return nil
-		})
-		if err != nil {
-			return "", err
-		}
-	}
-	files = append(files, filepath.Join(src, "pubspec.yaml"), filepath.Join(src, "pubspec.lock"))
-	sort.Strings(files)
-	h := sha256.New()
-	for _, f := range files {
-		b, err := os.ReadFile(f)
-		if err != nil {
-			return "", err
-		}
-		rel, _ := filepath.Rel(src, f)
-		fmt.Fprintf(h, "%s\x00%d\x00", filepath.ToSlash(rel), len(b))
-		h.Write(b)
-	}
-	return hex.EncodeToString(h.Sum(nil)), nil
-}
 
 // dartSDKVersion is the version of the Dart SDK of the `dart` that `dartCmd` runs (the first word: found on PATH), read from the
 // `version` file of the SDK.
@@ -72,7 +38,7 @@ func dartSDKVersion(dartCmd string) (string, error) {
 
 // dartExeKey is the name of the directory of an executable: the source, the SDK that compiled it and the system.
 func dartExeKey(src, dartCmd string) (string, error) {
-	h, err := dartSourceHash(src)
+	h, err := extractorhash.Compute("dart", src)
 	if err != nil {
 		return "", err
 	}
@@ -88,10 +54,15 @@ func compileDartExe(src, dartCmd, dir string) (string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
+	hash, err := extractorhash.Compute("dart", src)
+	if err != nil {
+		return "", err
+	}
 	exe := filepath.Join(dir, "rivus-dart")
 	tmp := exe + ".tmp"
 	words := strings.Fields(dartCmd)
-	cmd := exec.Command(words[0], append(append([]string{}, words[1:]...), "compile", "exe", filepath.Join("bin", "rivus_dart.dart"), "-o", tmp)...)
+	// the hash of the source is built in: rivus_dart --version and the first line of the IR say it (ADR-126)
+	cmd := exec.Command(words[0], append(append([]string{}, words[1:]...), "compile", "exe", "-DRIVUS_SRC_HASH="+hash, filepath.Join("bin", "rivus_dart.dart"), "-o", tmp)...)
 	cmd.Dir = src
 	if out, err := cmd.CombinedOutput(); err != nil {
 		os.Remove(tmp)
