@@ -63,6 +63,8 @@ type Result struct {
 	ExitCode int
 	// TimedOut and OutputTooBig say why the program was stopped.
 	TimedOut, OutputTooBig bool
+	// Cancelled says that the context of the caller was cancelled (not its deadline: that is TimedOut) and the program was stopped.
+	Cancelled bool
 	// MayHaveLeftProcesses is always true: a program that starts a process in a session of its own (setsid, a double fork)
 	// leaves the process group that is killed at the end, and nothing here looks for it (rivus does not send a signal to a process
 	// outside the group it started: the way of finding one that is not a mistake was tried and it killed other processes of the
@@ -129,6 +131,9 @@ func (c *capWriter) Write(p []byte) (int, error) {
 	return n, nil
 }
 
+// waitDelay is how long the output of a program that has ended is read while another process holds it open.
+const waitDelay = time.Second
+
 // supervise runs cmd (its path and arguments are the caller's: the program, or the helper that makes the sandbox and then runs the program) in a
 // session and a process group of its own, with the limits of s, and says how it ended. afterStart, when it is not nil, is called once the process
 // has started. Only the group that this run started is killed: nothing is looked for outside it.
@@ -154,6 +159,9 @@ func supervise(ctx context.Context, s Spec, cmd *exec.Cmd, afterStart func()) (*
 	lw := &limitWriter{w: out, left: s.MaxOutput, over: make(chan struct{})}
 	cmd.Stdout = lw
 	cmd.Stderr = &capWriter{w: &stderr, left: 1 << 20}
+	// a process that left the group (setsid) and keeps the output open must not hold Wait for ever: after the program has ended, the
+	// pipes are closed after this time (the output may be cut: Wait says exec.ErrWaitDelay)
+	cmd.WaitDelay = waitDelay
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
@@ -168,9 +176,19 @@ func supervise(ctx context.Context, s Spec, cmd *exec.Cmd, afterStart func()) (*
 	select {
 	case werr = <-done:
 	case <-ctx.Done():
-		res.TimedOut = true
-		syscall.Kill(-pgid, syscall.SIGKILL)
-		werr = <-done
+		select {
+		case werr = <-done:
+			// the program had ended already: its group is not signalled twice, and it is not said to have been stopped
+		default:
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				res.TimedOut = true
+			} else {
+				res.Cancelled = true
+			}
+			// before Wait returns: the leader is not reaped yet (or only just), so that the group id is still ours
+			syscall.Kill(-pgid, syscall.SIGKILL)
+			werr = <-done
+		}
 	case <-lw.over:
 		res.OutputTooBig = true
 		syscall.Kill(-pgid, syscall.SIGKILL)
@@ -182,6 +200,10 @@ func supervise(ctx context.Context, s Spec, cmd *exec.Cmd, afterStart func()) (*
 	res.Stderr = stderr.Bytes()
 	if s.Stdout == nil {
 		res.Stdout = stdout.Bytes()
+	}
+	if errors.Is(werr, exec.ErrWaitDelay) {
+		res.Warnings = append(res.Warnings, "a process that the program started kept its output open after the program ended, and the output was closed: it may be cut")
+		werr = nil
 	}
 	if ee, ok := werr.(*exec.ExitError); ok {
 		res.ExitCode = ee.ExitCode()

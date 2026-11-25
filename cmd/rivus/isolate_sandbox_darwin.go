@@ -155,7 +155,7 @@ func (o *isolationOpts) extractRustSandboxedTo(ctx context.Context, dir string, 
 		}
 	}
 	sdk := sdkRootIn(devDir)
-	env := func(work string) []string {
+	env := func(work string, fetch bool) []string {
 		e := []string{"PATH=" + filepath.Join(tc, "bin") + ":/usr/bin:/bin", "HOME=" + work, "TMPDIR=" + work, "CARGO_HOME=" + cargoHome,
 			"RIVUS_RUST_DIRECT=1", "RUSTUP_TOOLCHAIN=" + pinnedToolchain}
 		if sdk != "" {
@@ -164,7 +164,7 @@ func (o *isolationOpts) extractRustSandboxedTo(ctx context.Context, dir string, 
 		if devSource == "default" {
 			e = append(e, "DEVELOPER_DIR="+devDir)
 		}
-		return append(e, o.env...)
+		return stageEnv(e, o.env, fetch)
 	}
 	common := sandbox.Spec{
 		Exec:      []string{tc, "/Library/Developer/CommandLineTools"},
@@ -205,7 +205,7 @@ func (o *isolationOpts) extractRustSandboxedTo(ctx context.Context, dir string, 
 			}
 			defer os.RemoveAll(work)
 			fmt.Fprintf(o.err(), "rivus: fetching the dependencies (cargo fetch --locked, under the sandbox, with a network; the cargo configuration of the project is not read in this stage) into %s\n", cargoHome)
-			s := fetchSpec(common, tc, dir, work, cargoHome, env(work))
+			s := fetchSpec(common, tc, dir, work, cargoHome, env(work, true))
 			res, err := sandbox.Run(ctx, s)
 			if err := o.sandboxResult("fetch", res, err); err != nil {
 				if plan.hasConfig {
@@ -230,7 +230,7 @@ func (o *isolationOpts) extractRustSandboxedTo(ctx context.Context, dir string, 
 	s := common
 	s.Argv = append([]string{extractor, "--locked", "--offline"}, extractorArgs...)
 	s.Dir = dir
-	s.Env = env(work)
+	s.Env = env(work, false)
 	s.Read = append(append([]string(nil), common.Read...), dir, cargoHome, "/private/etc/ssl")
 	s.ExecFiles = append(append(append([]string(nil), sandboxPrograms...), extractor), o.execExtra...)
 	s.Write = []string{work}
@@ -287,6 +287,9 @@ func (o *isolationOpts) rustExtractorVersionSandboxed(ctx context.Context) (stri
 	if res.TimedOut {
 		return "", fmt.Errorf("it did not answer in %v and was stopped", rustVersionTimeout)
 	}
+	if res.Cancelled {
+		return "", fmt.Errorf("it was stopped (cancelled)")
+	}
 	if res.OutputTooBig {
 		return "", fmt.Errorf("it wrote more than 4096 bytes and was stopped")
 	}
@@ -306,6 +309,9 @@ func (o *isolationOpts) sandboxResult(stage string, res *sandbox.Result, err err
 	}
 	if res.TimedOut {
 		return fmt.Errorf("the %s stage under the sandbox did not finish in %v and was stopped (-isolation-timeout)", stage, o.timeout)
+	}
+	if res.Cancelled {
+		return fmt.Errorf("the %s stage under the sandbox was stopped (cancelled)", stage)
 	}
 	if res.OutputTooBig {
 		return fmt.Errorf("the %s stage under the sandbox wrote more than the output limit and was stopped (-isolation-max-output)", stage)
