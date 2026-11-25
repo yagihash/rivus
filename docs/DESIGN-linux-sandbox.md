@@ -1,6 +1,6 @@
 # 設計: Rust の extractor の隔離を、Linux のサンドボックス(Landlock + seccomp)にも広げる
 
-> **状態: 一部実装(試作。サンドボックスと cargo での閉じ込めは実装・確認した。固定の nightly と extractor での端から端までの確認は、まだ)。** macOS の Seatbelt([DESIGN-macos-sandbox.md](DESIGN-macos-sandbox.md))と同じ形で、Linux に隔離を足す。課題 #148 の 8 節の論点への答え。正はコード(`internal/sandbox/landlock_linux.go`、`seccomp_linux.go`、`cmd/rivus/isolate_sandbox_linux.go`)。
+> **状態: 一部実装(試作。サンドボックス、cargo での閉じ込め、固定の nightly と extractor での端から端まで(取得と抽出)は、実装・確認した。同一性の確認と CI の結果は、まだ)。** macOS の Seatbelt([DESIGN-macos-sandbox.md](DESIGN-macos-sandbox.md))と同じ形で、Linux に隔離を足す。課題 #148 の 8 節の論点への答え。正はコード(`internal/sandbox/landlock_linux.go`、`seccomp_linux.go`、`cmd/rivus/isolate_sandbox_linux.go`)。
 
 決定の記録は [ADR-128](adr/128-linux-sandbox-landlock-seccomp.md)。利用者向けの説明は [rust-isolation.md](rust-isolation.md)。
 
@@ -53,11 +53,13 @@ Landlock と seccomp は、自分と子にだけ効き、外せない。そこ�
 - サンドボックスの下では、全部 `BLOCKED`(`TestSandboxClosesEveryWayOut`)。seccomp を外すと、UDP、UNIX ソケット、`io_uring`、`ptrace` が `ESCAPED` になることを、手で確かめた(Landlock だけでは足りない、という根拠)。
 - プロキシのポートだけに届く、別のポートは届かない(`TestSandboxNetworkProxyOnly`)。
 - 実際の `cargo check` で、`build.rs` が C コンパイラは動かせて、秘密の読み取り、ホームへの書き込み、ネットワーク、`curl` はできない(`TestSandboxBuildScriptIsContained`)。cargo がない環境では飛ばす。
-- CI: `ci.yml` の `sandbox-linux`(`ubuntu-24.04` と `ubuntu-24.04-arm`)。`RIVUS_SBX_RED=1` で、サンドボックスが作れないランナーは、飛ばさずに失敗にする。
+- CI: `ci.yml` の `sandbox-linux`(`ubuntu-latest` と `ubuntu-26.04-arm`)。`RIVUS_SBX_RED=1` で、サンドボックスが作れないランナーは、飛ばさずに失敗にする。
 
 ## 6. まだのもの
 
-- 固定の nightly と extractor を使った、端から端までの抽出(`bench/zoo-rust`、`bench/rust-curated` の同一性の確認)。この試作は、安定版の cargo で、`build.rs` の閉じ込めだけを確かめた。
-- 取得段階(`cargo fetch`)の、実際のネットワークでの確認。
-- ABI 4 未満、ABI 6 未満の実機での確認。arm64 の実行(コードは `GOARCH=arm64` でビルド、vet は通る。実行は CI の `ubuntu-24.04-arm` で初めて分かる)。
+**確認済み(2026-11-25、クラウドのセッション。x86-64、Landlock ABI 7)**: 固定の nightly を `rustup` で取得し(約 1 分)、`rivus setup rust -source extractor/rust -y` で extractor を作り(数秒)、`serde`(proc macro と `build.rs`)、`serde_json`、`shlex` を依存に持つ crate と、悪意のある `build.rs` を持つ crate を、`rivus analyze -lang rust` で読んだ。取得(ネットワークあり。名前解決と TLS を含む)から抽出(ネットワークなし)まで通り、`summary.isolation.mode` は `sandbox`、悪意のある `build.rs` の書き込みは作られなかった。
+
+- `bench/zoo-rust`、`bench/rust-curated` の同一性の確認(Linux で抽出した IR の finding の ID が、macOS のものと、`cfg(target_os)` の違いを除いて一致するか)。
+- CI の `sandbox-linux`(`ubuntu-latest` と `ubuntu-26.04-arm`)の結果。
+- ABI 4 未満、ABI 6 未満の実機での確認。arm64 の実行(コードは `GOARCH=arm64` でビルド、vet は通る。実行は CI の `ubuntu-26.04-arm` で初めて分かる)。
 - `isolate_sandbox_linux.go` は、`isolate_sandbox_darwin.go` の写しに近い。共通の部分(取得の検査、結果の扱い)を、`darwin || linux` のファイルに寄せる整理が要る。

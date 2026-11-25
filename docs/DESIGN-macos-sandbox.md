@@ -226,7 +226,7 @@ rivus の Rust の extractor は、対象を `cargo check` でビルドするの
 **線(決定。MODEL-RUNBOOK.md の 0 節、MODEL-QUEUE.md): 隔離なしでは、取得したクレートのビルドスクリプトとマクロを実行しない。** 今の動作:
 - `-lang rust` は、サンドボックスがないと何も実行せずに止まる。`-unsafe-host-exec` だけが通る(ADR-093、rust-isolation.md)。auto では読まない(`no-sandbox`)。
 - CI の `rust` ジョブは、このリポジトリのコード(ベンチ、zoo、`extractor/rust/test`)だけを、`-unsafe-host-exec` で読む。取得した第三者のクレートは読まない。
-- クラウドの定期実行のモデル作成(`rivus-model-author`)は、Rust のモデルについて、**モデルは書き、extractor を使う確認は CI に任せる**。取得したクレートを読む差分テストの Rust 版は、隔離のあるジョブに限る。
+- クラウドの定期実行のモデル作成(`rivus-model-author`)は、Rust のモデルについて、**モデルは書き、extractor を使う確認は CI に任せる**(この線は、2026-11-25 に、Landlock + seccomp の隔離がクラウドのセッションで動くと確かめて、あらためた: MODEL-RUNBOOK.md の 0 節、ADR-128)。取得したクレートを読む差分テストの Rust 版は、隔離のあるジョブに限る。
 
 **Linux の隔離の調査**(DESIGN-package-models.md の 6.5 節。実測はしていない):
 - bubblewrap(`bwrap`)が最有力。名前空間でファイルとネットワークを絞れ、取得はネットワークあり、抽出は `--unshare-net` の 2 段階にできる(macOS のプロファイルと同じ形)。

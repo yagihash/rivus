@@ -97,7 +97,7 @@
 - **範囲**: ADR-096、097。Google Cloud、外部のサービスのクライアント、標準ライブラリ、代わりのないパッケージ、pub の人気の上位。選ぶ基準は公開の指標だけ([DART-MODEL-CANDIDATES.md](DART-MODEL-CANDIDATES.md))。ADR-063 は決まった(組み込みに入れるかは、フレームワークごとに、その都度、相談役が判断する)。
 - **方針**:
   - 今あるモデルは `internal/model/builtin/`。作る順番は [MODEL-QUEUE.md](MODEL-QUEUE.md)、手順は [MODEL-RUNBOOK.md](MODEL-RUNBOOK.md)、設計は [DESIGN-model-authoring.md](DESIGN-model-authoring.md)。
-  - Rust は、隔離のない環境では、モデルは書き、extractor を使う確認は CI に任せる(#148)。
+  - Rust は、隔離の下(macOS の Seatbelt、Linux の Landlock + seccomp。クラウドのセッションでも動く)でだけ、取得したクレートを読む。隔離が作れない環境では、モデルは書き、extractor を使う確認はしない(#148、ADR-128)。
   - 実行で確かめるステップは、信頼できるコードに対してだけ使う(隔離は作らない。ユーザーの判断、2026-11-22)。
   - sink の行の一括採用(`adopt_rules:`)は、確認の仕組み(3 節の差分テスト)が PR で動いてから使う。新しいパッケージの sink のモデルは、3 節の主な作業のあと。
   - モデルの鮮度(`verified_versions` と、更新の検知。DESIGN-package-models.md の 6.7 節)は、設計案。
