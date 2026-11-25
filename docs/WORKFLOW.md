@@ -14,6 +14,7 @@
   - 1 日の報告の最後に、`make daily-stats SINCE=<日付>` の 1 行(解析・モデル・extractor の PR の数と、それ以外の数)を付ける。
   - マージ済み(または閉じた)PR のブランチへの push は、`.githooks/pre-push` が止める(有効にするのは `make setup`。意図した push は `RIVUS_ALLOW_PUSH_TO_MERGED=1`)。`daily-stats` の `orphan remote branches: N` が 0 でなければ、取り込むか消す。
   - `make merge PR=<n>`(`scripts/merge-pr.sh`)は、main の最新の `ci.yml`(push)が失敗しているとマージしない。main の CI を直す PR だけ `RIVUS_MERGE_FIXES_MAIN=1`。PR は `-short` なので、重いテストは main でしか実行されない。限界: 失敗するコミットの CI が実行中の間は、その前の成功を見て通る。
+  - 定期の CI の失敗で `main-ci`(`.github/workflows/main-ci.yml`、判定は `scripts/main-ci/decide.go`)が失敗になったとき、手動実行(`gh workflow run ci.yml --ref main`、workflow_dispatch)が成功すれば、定期の失敗は解消する(`main-ci` は、定期または手動の、最後に完了した実行が成功なら、失敗の 24 時間のブロックを外す)。定期は毎週月曜 03:17(UTC)だけなので、待つとその日まで続く。
   - **ユーザーがマージする PR**: ガードレールの部品(workflow、hook、`.claude/settings*`、プロンプト、`.regomark/`、ghmint、ruleset、`scripts/merge-pr.sh` など)を変える PR は、`make merge` が断り、ユーザーがマージする。部品の一覧は [`.github/guardrail-paths`](../.github/guardrail-paths)(1 行 1 パターン。そのファイル自身も含む。一覧が無い・読めないときも断る)。
   - 既定で off の機能の一覧は、コードとテストが持つ。規則は([PRINCIPLES.md](PRINCIPLES.md) 7 節の「既定で off の機能(フラグ)の持ち方」、`cmd/rivus/flagsides.go`)。
 - **相談役が読む PR**は、(i) 解析の結果を変える PR、(ii) 出力の項目・uncertainty と不確実性の種類・`summary`・終了コードを変える PR だけ。結果が同一であることを数字で示した PR、道具、文書は読まない。マージは開発者が行う(`ci-ok` のあと、マージコミット)。
