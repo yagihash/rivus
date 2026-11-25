@@ -107,13 +107,36 @@ func exitCode(err error) int {
 	return 1
 }
 
+// The GC percent (ADR-121, the addition of 2026-11-26). The collector keeps less garbage than its default (100): 50. When the memory
+// limit is low, the garbage that 50 leaves is a larger part of what the limit allows, and the soft limit does not work until the
+// heap is near it, so the collector is made stronger the lower the limit is: gogcLow at gogcLowLimit and below, gogcDefault
+// from gogcHighLimit, linear between. Higher limits (a 24 GB machine and more, -max-memory 6GiB and more) are as before.
+const (
+	gogcDefault   = 50
+	gogcLow       = 40 // the value at gogcLowLimit and below (the one number to change)
+	gogcLowLimit  = 4 * gib
+	gogcHighLimit = 6 * gib
+)
+
+// gogcFor is the GC percent for a memory limit in bytes; a limit of 0 (none) gets gogcDefault.
+func gogcFor(limit int64) int {
+	switch {
+	case limit <= 0 || limit >= gogcHighLimit:
+		return gogcDefault
+	case limit <= gogcLowLimit:
+		return gogcLow
+	}
+	span := float64(gogcHighLimit - gogcLowLimit)
+	return gogcLow + int(float64(gogcDefault-gogcLow)*float64(limit-gogcLowLimit)/span+0.5)
+}
+
 // tuneGC makes the collector keep less garbage than its default. The analysis
 // holds a few GB of live data on a large program, and the default (let the heap
 // double before a collection) doubled the peak; half costs almost no time.
-// GOGC set in the environment wins.
+// GOGC set in the environment wins. applyMemoryLimit makes it stronger for a low memory limit (gogcFor).
 func tuneGC() {
 	if os.Getenv("GOGC") == "" {
-		debug.SetGCPercent(50)
+		debug.SetGCPercent(gogcDefault)
 	}
 }
 

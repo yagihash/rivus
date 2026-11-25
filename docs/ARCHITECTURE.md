@@ -849,7 +849,7 @@ Rust の extractor は、対象をビルドする（`cargo check`）ので、対
 
 ピークは、解析ではなく、**読み込みと go/ssa の構築**にある（Go）。次の手で下げている（経緯は [DESIGN-memory.md](DESIGN-memory.md)、ADR-121、ADR-123）。
 
-- **GC の設定（`tuneGC`、`cmd/rivus/main.go`）:** GC の目標を 50% にして（Go の既定は 100%）、ごみを多く持たない。環境変数 `GOGC` があれば、それを優先する。
+- **GC の設定（`tuneGC`、`gogcFor`、`cmd/rivus/main.go`）:** GC の目標を 50% にして（Go の既定は 100%）、ごみを多く持たない。メモリの上限が 6 GiB 未満のときは、上限が低いほど強くする（下限の値は定数 `gogcLow`、その間は線形。ADR-121 の追記 2026-11-26）。環境変数 `GOGC` があれば、それを優先する。
 - **go/ssa の解放:** IR とテキストを作ったあと、go/ssa のプログラムと、読み込んだパッケージを手放す（`ReleaseSSA`、`internal/frontend/gossa/load.go`。呼ぶのは `cmd/rivus/common.go`）。
 - **依存ごとの解放:** 依存のパッケージのソースと型情報は、そのパッケージを構築し終えるたびに手放す（`load.go` の `buildInOrder` のコールバック）。
 - 起点から届く関数だけを IR にする。`-no-deps` は、依存を読まないので、メモリが大きく減る（その分、依存への呼び出しは推測になる）。

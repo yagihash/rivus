@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime/debug"
 	"sort"
 	"strings"
 	"testing"
@@ -210,5 +211,65 @@ func TestMaxMemoryKeepsResult(t *testing.T) {
 	}
 	if !reflect.DeepEqual(a, b) {
 		t.Errorf("the limit changed the result:\n512MiB: %d findings, summary_elems %v\noff: %d findings, summary_elems %v", len(a.ids), a.elems, len(b.ids), b.elems)
+	}
+}
+
+func TestGogcFor(t *testing.T) {
+	mid := func(lim int64) int {
+		return gogcLow + int(float64(gogcDefault-gogcLow)*float64(lim-gogcLowLimit)/float64(gogcHighLimit-gogcLowLimit)+0.5)
+	}
+	for _, c := range []struct {
+		name  string
+		limit int64
+		want  int
+	}{
+		{"none", 0, 50},
+		{"8 GiB", 8 * gib, 50},
+		{"6 GiB (the default of a 24 GiB machine)", 6 * gib, 50},
+		{"6442450944 (the same, in bytes)", 6442450944, 50},
+		{"5 GiB: between, linear", 5 * gib, mid(5 * gib)},
+		{"4 GiB: the constant", 4 * gib, gogcLow},
+		{"2 GiB: the constant", 2 * gib, gogcLow},
+	} {
+		if got := gogcFor(c.limit); got != c.want {
+			t.Errorf("%s: gogcFor = %d, want %d", c.name, got, c.want)
+		}
+	}
+	// the line of the rule: it never goes above 50 and never below the constant, and it does not fall when the limit rises
+	prev := 0
+	for l := int64(1) * gib; l <= 9*gib; l += gib / 8 {
+		g := gogcFor(l)
+		if g < gogcLow || g > gogcDefault || g < prev {
+			t.Fatalf("limit %d: %d (prev %d)", l, g, prev)
+		}
+		prev = g
+	}
+}
+
+// GOGC in the environment wins: applyMemoryLimit does not change the percent then.
+func TestApplyMemoryLimitKeepsGOGCOfTheEnvironment(t *testing.T) {
+	old := debug.SetGCPercent(77)
+	defer debug.SetGCPercent(old)
+	oldLimit := debug.SetMemoryLimit(-1)
+	defer debug.SetMemoryLimit(oldLimit)
+	t.Setenv("GOGC", "77")
+	if _, err := applyMemoryLimit("4GiB"); err != nil {
+		t.Fatal(err)
+	}
+	if got := debug.SetGCPercent(77); got != 77 {
+		t.Errorf("GOGC in the environment: the percent is %d, want 77", got)
+	}
+	t.Setenv("GOGC", "")
+	if _, err := applyMemoryLimit("4GiB"); err != nil {
+		t.Fatal(err)
+	}
+	if got := debug.SetGCPercent(77); got != gogcLow {
+		t.Errorf("no GOGC, limit 4GiB: the percent is %d, want %d", got, gogcLow)
+	}
+	if _, err := applyMemoryLimit("8GiB"); err != nil {
+		t.Fatal(err)
+	}
+	if got := debug.SetGCPercent(77); got != gogcDefault {
+		t.Errorf("no GOGC, limit 8GiB: the percent is %d, want %d", got, gogcDefault)
 	}
 }
