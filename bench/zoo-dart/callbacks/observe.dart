@@ -71,6 +71,63 @@ Future<void> main() async {
     it.forEach((x) { r.see([x]); });
     add('dart:core#Iterable.forEach', recv, r, '');
   }
+  {
+    final r = Rec();
+    final l = <String>['RECV'];
+    l.removeWhere((x) { r.see([x]); return false; });
+    add('dart:core#List.removeWhere', recv, r, l);
+  }
+  {
+    final r = Rec();
+    final l = <String>['RECV'];
+    l.retainWhere((x) { r.see([x]); return true; });
+    add('dart:core#List.retainWhere', recv, r, l);
+  }
+  {
+    final r = Rec();
+    final s = <String>{'RECV'};
+    s.removeWhere((x) { r.see([x]); return false; });
+    add('dart:core#Set.removeWhere', recv, r, s);
+  }
+  {
+    final r = Rec();
+    final s = <String>{'RECV'};
+    s.retainWhere((x) { r.see([x]); return true; });
+    add('dart:core#Set.retainWhere', recv, r, s);
+  }
+  {
+    final r = Rec();
+    final res = <String>['RECV'].indexWhere((x) { r.see([x]); return true; });
+    add('dart:core#List.indexWhere', recv, r, res);
+  }
+  {
+    final r = Rec();
+    final res = <String>['RECV'].lastIndexWhere((x) { r.see([x]); return true; });
+    add('dart:core#List.lastIndexWhere', recv, r, res);
+  }
+  {
+    final r = Rec();
+    final m = <String, String>{'RECV': 'RECV'};
+    m.removeWhere((k, v) { r.see([k, v]); return false; });
+    add('dart:core#Map.removeWhere', recv, r, m);
+  }
+  {
+    final r = Rec();
+    final res = <String, String>{'RECV': 'RECV'}.map((k, v) { r.see([k, v]); return MapEntry('Ж', 'Ж'); });
+    add('dart:core#Map.map', recv, r, res);
+  }
+  {
+    final r = Rec();
+    final Iterable<String> it = Iterable<String>.generate(1, (_) => 'RECV');
+    final res = it.takeWhile((x) { r.see([x]); return true; }).toList();
+    add('dart:core#Iterable.takeWhile', recv, r, res);
+  }
+  {
+    final r = Rec();
+    final Iterable<String> it = Iterable<String>.generate(1, (_) => 'RECV');
+    final res = it.skipWhile((x) { r.see([x]); return false; }).toList();
+    add('dart:core#Iterable.skipWhile', recv, r, res);
+  }
   // a forEach on a List or a Set is written by the extractor as Iterable.forEach (they inherit it), so it is the one row
   {
     final r = Rec();

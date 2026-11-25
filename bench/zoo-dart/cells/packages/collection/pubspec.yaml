@@ -1,0 +1,7 @@
+name: collection
+description: "The skeleton of package:collection that the cells of the Dart zoo need (the real package is not read by rivus here; the harness runs the cells against the real one, see exec/pubspec.yaml): the extension methods that take a function, so that the built-in rows of package:collection are the ones the cells hit."
+publish_to: none
+environment:
+  sdk: ^3.10.0
+# what `exec` resolves this package to (the real collection that `test` depends on; cmd/rivus zoo_dart_gen_test.go writes exec/pubspec.yaml)
+zoo_exec_override: ^1.18.0
