@@ -1,12 +1,14 @@
 # #227 Rust の実行の道具が、`RIVUS_RUST_DATA_DIR` を指していないとき、共有の場所を使わずに止まる
 
-- 状態: **open**
+- 状態: **closed**(`bench/rustenv.py` の `require_rust_data_dir` を、`deps_bench.py`、`graph_check.py`、`bench/model-diff` の Rust の実行から使うようにして直った。`bench/test_rustenv.py` が守る)
 - 優先度: 中
 - 種類: 道具・ベンチ
 - 言語: Rust
 - ROADMAP の節: -
 - 守るもの: 作業者の実行が、ユーザーの共有の場所(`~/Library/Application Support/rivus/`)に何も書かないこと
 - 進める完了条件: -
+
+解決: Rust を動かす道具は、`RIVUS_RUST_DATA_DIR` が指されていない、または共有の場所を指しているとき、`SystemExit` で止まる(HOME を空にしている所は、そのまま通る)。以下は、当時の記録。
 
 ## 何が起きるか
 
