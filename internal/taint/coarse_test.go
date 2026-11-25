@@ -11,6 +11,7 @@ import (
 
 	"github.com/yagihash/rivus/internal/model"
 	"github.com/yagihash/rivus/internal/model/builtin"
+	"github.com/yagihash/rivus/internal/sg"
 	"github.com/yagihash/rivus/internal/testutil"
 )
 
@@ -254,17 +255,42 @@ func TestCoarseLargeComponent(t *testing.T) {
 	}
 }
 
-// N counts the functions of the component, or (SCCCoarsenDeps) only the dependency functions in it.
+// N counts the dependency functions of the component, not its other functions.
 func TestCoarseWhatIsCounted(t *testing.T) {
-	cases := []struct {
-		n    int
-		deps bool
-		want int
-	}{{12, false, 1}, {13, false, 0}, {10, true, 1}, {11, true, 0}}
+	cases := []struct{ n, want int }{{10, 1}, {11, 0}}
 	for _, c := range cases {
-		e, _ := runCoarse(t, mixed, func(o *Options) { o.SCCCoarsenN = c.n; o.SCCCoarsenDeps = c.deps })
+		e, _ := runCoarse(t, mixed, func(o *Options) { o.SCCCoarsenN = c.n }) // 12 functions in the component, 10 of the dependencies
 		if len(e.coarseList) != c.want {
-			t.Errorf("N=%d deps=%v: %d components, want %d", c.n, c.deps, len(e.coarseList), c.want)
+			t.Errorf("N=%d: %d components, want %d", c.n, len(e.coarseList), c.want)
+		}
+	}
+}
+
+// The default is on, from 5500 dependency functions in one component (ADR-124): the largest components of the targets
+// that were measured are below it (cocoon 4,012, which converges at depth 2) or above it (dart-pub 7,550, which does not;
+// dart_services 13,895). The decision is made from the counts alone.
+func TestCoarseDefaultN(t *testing.T) {
+	if DefaultOptions().SCCCoarsenN != 5500 {
+		t.Fatalf("the default is %d", DefaultOptions().SCCCoarsenN)
+	}
+	for _, c := range []struct {
+		name  string
+		deps  int
+		other int // functions of the project in the component: not counted
+		want  bool
+	}{{"gitea", 1188, 2070, false}, {"cocoon", 4012, 0, false}, {"just below", 5499, 9000, false}, {"just at", 5500, 0, true},
+		{"dart-pub", 7550, 0, true}, {"dart_services", 13895, 88, true}, {"no dependency function", 0, 9000, false}} {
+		var scc []*sg.Func
+		for i := 0; i < c.deps; i++ {
+			scc = append(scc, &sg.Func{ID: "dep" + itoa(i), Dep: true})
+		}
+		for i := 0; i < c.other; i++ {
+			scc = append(scc, &sg.Func{ID: "own" + itoa(i)})
+		}
+		e := &Engine{opts: DefaultOptions(), coarse: map[*sg.Func]*coarseSCC{}}
+		most := e.coarsenBySize([][]*sg.Func{scc})
+		if got := len(e.coarseList) == 1; got != c.want || most != c.deps {
+			t.Errorf("%s (%d dependency functions): coarsened %v, want %v (most %d)", c.name, c.deps, got, c.want, most)
 		}
 	}
 }
@@ -274,7 +300,7 @@ func TestCoarseWhatIsCounted(t *testing.T) {
 // that was done). With functions of the project in the component that write to the global variables, and a function
 // outside it that reads them.
 func TestCoarseIsDepthZeroForThoseFunctions(t *testing.T) {
-	e, res := runCoarse(t, mixed, func(o *Options) { o.SCCCoarsenN = 12 })
+	e, res := runCoarse(t, mixed, func(o *Options) { o.SCCCoarsenN = 10 })
 	if len(e.coarseList) != 1 {
 		t.Fatal("not solved at depth 0")
 	}
@@ -327,7 +353,7 @@ func TestCoarseProjectFunctionsKeepTheirDepth(t *testing.T) {
 	// f05 and f11 write to t.next.next: as functions of the project they keep the paths below the first step
 	e, _ := runCoarse(t, func(id string) bool {
 		return isF(id) && !strings.HasSuffix(id, ".f05") && !strings.HasSuffix(id, ".f11")
-	}, func(o *Options) { o.SCCCoarsenN = 12 })
+	}, func(o *Options) { o.SCCCoarsenN = 10 })
 	deep := false
 	for fn, sum := range e.summaries {
 		if fn.Dep || !isF(fn.ID) {
@@ -346,7 +372,7 @@ func TestCoarseProjectFunctionsKeepTheirDepth(t *testing.T) {
 func TestCoarseNoteOnHops(t *testing.T) {
 	e, _ := runCoarse(t, func(id string) bool {
 		return isF(id) && !strings.HasSuffix(id, ".f00") && !strings.HasSuffix(id, ".f01")
-	}, func(o *Options) { o.SCCCoarsenN = 12 })
+	}, func(o *Options) { o.SCCCoarsenN = 10 })
 	found := false
 	for _, sum := range byID(e) {
 		if sum.Coarse != nil {
