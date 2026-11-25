@@ -298,13 +298,14 @@ func (o *isolationOpts) sandboxResult(stage string, res *sandbox.Result, err err
 		return fmt.Errorf("the %s stage under the sandbox wrote more than the output limit and was stopped (-isolation-max-output)", stage)
 	}
 	if len(res.Stderr) > 0 {
-		o.err().Write(res.Stderr)
+		io.WriteString(o.err(), sanitizeForTerminal(res.Stderr)) // SBX-4: no control character of the child reaches the terminal
 	}
 	if res.ExitCode != 0 {
 		tail := strings.TrimSpace(string(res.Stderr))
 		if len(tail) > 4096 {
 			tail = tail[len(tail)-4096:]
 		}
+		tail = sanitizeForTerminal([]byte(tail)) // SBX-4
 		return fmt.Errorf("the %s stage under the sandbox failed (exit %d)\n%s", stage, res.ExitCode, tail)
 	}
 	return nil
