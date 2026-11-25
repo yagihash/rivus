@@ -1,4 +1,2 @@
-dart	dart/callback_param_helper.dart	miss	@source(dart-callback-param-helper-decoy) @miss(silent) @ref(#149)	Future<void> decoy() async { @decoy
-dart	dart/callback_param_helper.dart	miss	@source(dart-callback-param-helper-vuln) @miss(silent) @ref(#149)	Future<void> vuln() async { @vuln
 dart	dart/callback_param_helper.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
 dart	dart/callback_param_helper.dart	sink-none	@sink(none) @nosink(dart-callback-param-helper-decoy)	Future<void> decoy() async { @decoy

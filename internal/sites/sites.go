@@ -72,6 +72,9 @@ type Result struct {
 	ByIRParam map[IRParam][]*Site
 	// ByID finds a site by ID.
 	ByID map[string]*Site
+	// callbackFormReads and callbackFormBuilds count the forms of the callers of a helper that callbackTargets asked for and made (a test
+	// reads them: a function is made once).
+	callbackFormReads, callbackFormBuilds int
 	// UnresolvedCallbacks are the calls of a symbol that a callback_param source names, whose function operand was
 	// not found: the text of the note the analysis makes there (unresolved_callee).
 	UnresolvedCallbacks map[IRInstr]string

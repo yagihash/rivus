@@ -61,6 +61,7 @@ import (
 	_ "zoo/cells/conv/struct_field_opaque"
 	_ "zoo/cells/conv/struct_field_shallow"
 	_ "zoo/cells/conv/unsafe_string"
+	_ "zoo/cells/dart/callback_param_helper"
 	_ "zoo/cells/dyn/fprint_writer_own"
 	_ "zoo/cells/dyn/func_field"
 	_ "zoo/cells/dyn/func_map"
