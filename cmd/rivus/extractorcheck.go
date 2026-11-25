@@ -198,7 +198,7 @@ func tailOf(s string) string {
 	if len(s) > 300 {
 		s = "..." + s[len(s)-300:]
 	}
-	return ": " + s
+	return ": " + sanitizeForTerminal([]byte(s)) // SBX-4
 }
 
 // rebuildCommand is how an extractor of the language is built again.

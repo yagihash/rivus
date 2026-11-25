@@ -6,7 +6,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/yagihash/rivus/internal/sandbox"
 	"golang.org/x/sys/unix"
 )
 
@@ -20,4 +19,4 @@ func stdinIsTerminal() bool {
 	return err == nil
 }
 
-func sandboxUsable() error { return sandbox.Available() }
+func sandboxUsable() error { return sandboxAvailable() }

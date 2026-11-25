@@ -67,7 +67,11 @@ func (s *state) prepareLocs(limit time.Time) bool {
 	total := 0
 	ok := true
 	for ok {
-		changed := s.buildPtrAlias()
+		changed, inTime := s.buildPtrAlias(limit)
+		if !inTime {
+			ok = false
+			break
+		}
 		for _, v := range vals {
 			if time.Now().After(limit) {
 				ok = false

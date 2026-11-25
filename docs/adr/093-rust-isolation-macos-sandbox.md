@@ -1,8 +1,8 @@
 # ADR-093: Rust の extractor の隔離を、Docker から macOS のサンドボックス(Seatbelt)に替える(ユーザーの決定、2026-11-22。ADR-064 を一部覆す)
 
-- 状態: 有効
+- 状態: 一部覆った(→ADR-128)
 - 関連: rust-isolation、PRINCIPLES 8 節
-- 状態の詳細: ユーザーの決定(2026-11-22)。ADR-064 を一部覆す。Linux では止まる(`-unsafe-host-exec`)
+- 状態の詳細: ユーザーの決定(2026-11-22)。ADR-064 を一部覆す。Linux では止まる(`-unsafe-host-exec`)。**Linux は、ADR-128 で、Landlock + seccomp の隔離を足した(Landlock のない Linux では、今も止まる)**
 - 要旨: 承知している弱さと、後回しのハードニングを載せた
 
 **背景:** ADR-064 は、信頼しない Rust の対象を、Docker のコンテナの中で、2 段階(取得 = ネットワークあり、抽出 = ネットワークなし)で読む、と決めた。ユーザーの目的は、`brew install` だけで rivus を使えるようにすること。そのために、Docker への依存をなくす。使い手の環境は macOS(Apple Silicon)。CI は既知のコード(このリポジトリの中のもの、ロックファイルで固定した依存)しか読まず、隔離なしのホストで動いている。Docker が要っていたのは、隔離そのもののテストだけだった。

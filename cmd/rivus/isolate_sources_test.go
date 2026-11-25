@@ -88,7 +88,10 @@ func TestCheckManifestSources(t *testing.T) {
 		{"patch with git", map[string]string{"Cargo.toml": pkg + "[patch.crates-io]\nitoa = { git = \"http://10.0.0.5/x\" }\n"}, nil, "10.0.0.5"},
 		{"registry-index", map[string]string{"Cargo.toml": pkg + "[dependencies]\ng = { version = \"1\", registry-index = \"http://10.0.0.5/\" }\n"}, nil, "registry-index"},
 		{"not TOML", map[string]string{"Cargo.toml": pkg + "[dependencies\n"}, nil, "cannot be read as TOML"},
-		{"build directories are skipped", map[string]string{"Cargo.toml": pkg, "target/x/Cargo.toml": "[dependencies]\ng = { git = \"http://10.0.0.5/x\" }\n"}, nil, ""},
+		{"in target, named by a path dependency", map[string]string{"Cargo.toml": pkg + "[dependencies]\ne = { path = \"target/evil\" }\n", "target/evil/Cargo.toml": pkg + "[dependencies]\ng = { git = \"http://x.example.invalid/y\" }\n"}, nil, "target/evil/Cargo.toml"},
+		{"in .git", map[string]string{"Cargo.toml": pkg + "[dependencies]\ne = { path = \".git/evil\" }\n", ".git/evil/Cargo.toml": pkg + "[dependencies]\ng = { git = \"http://x.example.invalid/y\" }\n"}, nil, ".git/evil/Cargo.toml"},
+		{"name in another case", map[string]string{"Cargo.toml": pkg, "m/cargo.toml": pkg + "[dependencies]\ng = { git = \"http://x.example.invalid/y\" }\n"}, nil, "x.example.invalid"},
+		{"name in upper case", map[string]string{"Cargo.toml": pkg, "m/CARGO.TOML": "[dependencies\n"}, nil, "cannot be read as TOML"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -110,5 +113,47 @@ func TestCheckManifestSources(t *testing.T) {
 				t.Errorf("not refused (or not listed: %q): %v", c.bad, err)
 			}
 		})
+	}
+}
+
+// A Cargo.toml that is a symbolic link is refused: the fetch stage must not depend on where it points.
+func TestCheckManifestSourcesSymlink(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	other := t.TempDir()
+	if err := os.WriteFile(filepath.Join(other, "real.toml"), []byte("[package]\nname = \"t\"\nversion = \"0.1.0\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "m"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(other, "real.toml"), filepath.Join(dir, "m", "Cargo.toml")); err != nil {
+		t.Skip(err)
+	}
+	err := checkManifestSources(dir, nil)
+	if err == nil || !strings.Contains(err.Error(), "symbolic link") {
+		t.Errorf("a Cargo.toml that is a symbolic link is not refused: %v", err)
+	}
+}
+
+func TestLockPackagesAsTOML(t *testing.T) {
+	t.Parallel()
+	const evil = "git+https://attacker.example.invalid/x#0123456789abcdef0123456789abcdef01234567"
+	for name, lock := range map[string]string{
+		"spaces in the header":     "version = 4\n\n[[ package ]]\nname = \"y\"\nversion = \"1.0.0\"\nsource = \"" + evil + "\"\n",
+		"comment after the header": "version = 4\n\n[[package]] # c\nname = \"y\"\nversion = \"1.0.0\"\nsource = \"" + evil + "\"\n",
+		"inline array":             "version = 4\npackage = [ { name = \"y\", version = \"1.0.0\", source = \"" + evil + "\" } ]\n",
+		"single quotes":            "version = 4\n[[package]]\nname = 'y'\nversion = '1.0.0'\nsource = '" + evil + "'\n",
+	} {
+		if err := checkFetchSources(lock, nil); err == nil || !strings.Contains(err.Error(), "attacker.example.invalid") {
+			t.Errorf("%s: not refused: %v", name, err)
+		}
+	}
+	if err := checkFetchSources("version = 4\n[[package\n", nil); err == nil || !strings.Contains(err.Error(), "TOML") {
+		t.Errorf("Cargo.lock that is not TOML is not refused: %v", err)
+	}
+	// crates.io only, with a manifest: no regression
+	if err := checkFetchSources(lockWith("", "registry+https://github.com/rust-lang/crates.io-index"), nil); err != nil {
+		t.Errorf("refused: %v", err)
 	}
 }

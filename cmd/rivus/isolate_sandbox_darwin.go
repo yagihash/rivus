@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -22,6 +23,12 @@ import (
 // The dependencies are fetched into a CARGO_HOME of rivus (not ~/.cargo, which is never read nor written): the fetch writes it, the
 // extraction only reads it. The toolchain is the pinned nightly, run directly (no rustup), prepared outside the sandbox
 // from a trusted source.
+
+// sandboxDesc says which sandbox this system has, for what is said to the user.
+const sandboxDesc = "the sandbox of macOS"
+
+// sandboxAvailable says whether the sandbox can be made here; a test puts its own function in it (to test the system that has none).
+var sandboxAvailable = sandbox.Available
 
 // rustDataDir is where rivus keeps what it prepares for Rust (the dependencies that were fetched).
 // RIVUS_RUST_DATA_DIR names another directory for it (the tests of rivus use it so that they write nothing to the directory of the user).
@@ -107,7 +114,7 @@ func (o *isolationOpts) extractRustSandboxed(ctx context.Context, dir string, ex
 func (o *isolationOpts) extractRustSandboxedTo(ctx context.Context, dir string, extractorArgs []string, w io.Writer) ([]byte, error) {
 	// whether the sandbox can be made is found out here, before any code of the project runs, by rivus itself (a program that does nothing, under the
 	// profile): never from what the project's own programs write to their standard error
-	if err := sandbox.Available(); err != nil {
+	if err := sandboxAvailable(); err != nil {
 		return nil, noSandboxError(err)
 	}
 	if err := mountable(dir); err != nil {
@@ -148,7 +155,7 @@ func (o *isolationOpts) extractRustSandboxedTo(ctx context.Context, dir string, 
 		}
 	}
 	sdk := sdkRootIn(devDir)
-	env := func(work string) []string {
+	env := func(work string, fetch bool) []string {
 		e := []string{"PATH=" + filepath.Join(tc, "bin") + ":/usr/bin:/bin", "HOME=" + work, "TMPDIR=" + work, "CARGO_HOME=" + cargoHome,
 			"RIVUS_RUST_DIRECT=1", "RUSTUP_TOOLCHAIN=" + pinnedToolchain}
 		if sdk != "" {
@@ -157,7 +164,7 @@ func (o *isolationOpts) extractRustSandboxedTo(ctx context.Context, dir string, 
 		if devSource == "default" {
 			e = append(e, "DEVELOPER_DIR="+devDir)
 		}
-		return append(e, o.env...)
+		return stageEnv(e, o.env, fetch)
 	}
 	common := sandbox.Spec{
 		Exec:      []string{tc, "/Library/Developer/CommandLineTools"},
@@ -198,7 +205,7 @@ func (o *isolationOpts) extractRustSandboxedTo(ctx context.Context, dir string, 
 			}
 			defer os.RemoveAll(work)
 			fmt.Fprintf(o.err(), "rivus: fetching the dependencies (cargo fetch --locked, under the sandbox, with a network; the cargo configuration of the project is not read in this stage) into %s\n", cargoHome)
-			s := fetchSpec(common, tc, dir, work, cargoHome, env(work))
+			s := fetchSpec(common, tc, dir, work, cargoHome, env(work, true))
 			res, err := sandbox.Run(ctx, s)
 			if err := o.sandboxResult("fetch", res, err); err != nil {
 				if plan.hasConfig {
@@ -223,7 +230,7 @@ func (o *isolationOpts) extractRustSandboxedTo(ctx context.Context, dir string, 
 	s := common
 	s.Argv = append([]string{extractor, "--locked", "--offline"}, extractorArgs...)
 	s.Dir = dir
-	s.Env = env(work)
+	s.Env = env(work, false)
 	s.Read = append(append([]string(nil), common.Read...), dir, cargoHome, "/private/etc/ssl")
 	s.ExecFiles = append(append(append([]string(nil), sandboxPrograms...), extractor), o.execExtra...)
 	s.Write = []string{work}
@@ -246,7 +253,7 @@ func (o *isolationOpts) extractRustSandboxedTo(ctx context.Context, dir string, 
 // nothing is written, there is no network and no standard input, and the working directory is an empty directory that is removed. It does not wait
 // longer than rustVersionTimeout. An error is returned for the reasons that the answer is not there (errNoIsolation when the sandbox cannot be made).
 func (o *isolationOpts) rustExtractorVersionSandboxed(ctx context.Context) (string, error) {
-	if err := sandbox.Available(); err != nil {
+	if err := sandboxAvailable(); err != nil {
 		return "", fmt.Errorf("%w (%v)", errNoIsolation, err)
 	}
 	tc, err := pinnedToolchainDir()
@@ -272,13 +279,16 @@ func (o *isolationOpts) rustExtractorVersionSandboxed(ctx context.Context) (stri
 		MaxOutput: 4096,
 	})
 	if err != nil {
-		if err == sandbox.ErrUnavailable {
+		if errors.Is(err, sandbox.ErrUnavailable) {
 			return "", fmt.Errorf("%w (%v)", errNoIsolation, err)
 		}
 		return "", fmt.Errorf("it could not be run under the sandbox: %v", err)
 	}
 	if res.TimedOut {
 		return "", fmt.Errorf("it did not answer in %v and was stopped", rustVersionTimeout)
+	}
+	if res.Cancelled {
+		return "", fmt.Errorf("it was stopped (cancelled)")
 	}
 	if res.OutputTooBig {
 		return "", fmt.Errorf("it wrote more than 4096 bytes and was stopped")
@@ -292,7 +302,7 @@ func (o *isolationOpts) rustExtractorVersionSandboxed(ctx context.Context) (stri
 // sandboxResult says how a stage ended: what it printed goes to the user, and a stage that failed or was stopped is an error.
 func (o *isolationOpts) sandboxResult(stage string, res *sandbox.Result, err error) error {
 	if err != nil {
-		if err == sandbox.ErrUnavailable {
+		if errors.Is(err, sandbox.ErrUnavailable) {
 			return noSandboxError(err)
 		}
 		return fmt.Errorf("the %s stage under the sandbox: %v", stage, err)
@@ -300,17 +310,21 @@ func (o *isolationOpts) sandboxResult(stage string, res *sandbox.Result, err err
 	if res.TimedOut {
 		return fmt.Errorf("the %s stage under the sandbox did not finish in %v and was stopped (-isolation-timeout)", stage, o.timeout)
 	}
+	if res.Cancelled {
+		return fmt.Errorf("the %s stage under the sandbox was stopped (cancelled)", stage)
+	}
 	if res.OutputTooBig {
 		return fmt.Errorf("the %s stage under the sandbox wrote more than the output limit and was stopped (-isolation-max-output)", stage)
 	}
 	if len(res.Stderr) > 0 {
-		o.err().Write(res.Stderr)
+		io.WriteString(o.err(), sanitizeForTerminal(res.Stderr)) // SBX-4: no control character of the child reaches the terminal
 	}
 	if res.ExitCode != 0 {
 		tail := strings.TrimSpace(string(res.Stderr))
 		if len(tail) > 4096 {
 			tail = tail[len(tail)-4096:]
 		}
+		tail = sanitizeForTerminal([]byte(tail)) // SBX-4
 		return fmt.Errorf("the %s stage under the sandbox failed (exit %d)\n%s", stage, res.ExitCode, tail)
 	}
 	if res.MayHaveLeftProcesses && stage == "extract" {
