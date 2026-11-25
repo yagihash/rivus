@@ -14,4 +14,4 @@
 
 CI の週次ジョブにする。そのまえに、Dart と Rust の extractor が CI で使えることを確かめる(Rust は、作業ツリーでビルドして `RIVUS_RUST` で指す。共有の場所には書かない)。行をコミットする方法(PR を自動で立てるか、artifact に出して人が写すか)も決める。`.github/workflows/` の変更なので、マージはユーザー。
 
-Go の `no_edge`(`make observed-edges-go`)は、いまは `go vet` で止まって空になる。その直しは、この課題か、別の課題で扱う。
+Go の `no_edge`(`make observed-edges-go`)が `go vet` で止まる件は、#546 で直った。台帳の行には、Go の `no_edge` も入っている。
