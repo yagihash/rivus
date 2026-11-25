@@ -93,6 +93,18 @@ class FixedWork(unittest.TestCase):
             with d.fixed_work(c, "passline-x") as a:
                 self.assertEqual(os.listdir(a), [])
 
+    def test_bad_names_are_refused_and_nothing_is_deleted(self):
+        with tempfile.TemporaryDirectory() as top:
+            cache = os.path.join(top, "cache")
+            os.makedirs(os.path.join(cache, "keep"))
+            open(os.path.join(top, "outside"), "w").close()
+            for bad in ("", ".", "..", "../x", "a/b", "x/../..", "/abs", "a b"):
+                with self.assertRaises(SystemExit, msg=repr(bad)):
+                    with d.fixed_work(cache, bad):
+                        pass
+            self.assertTrue(os.path.isdir(os.path.join(cache, "keep")))
+            self.assertTrue(os.path.exists(os.path.join(top, "outside")))
+
     def test_second_run_of_the_same_name_is_refused(self):
         with tempfile.TemporaryDirectory() as c:
             with d.fixed_work(c, "passline-x"):

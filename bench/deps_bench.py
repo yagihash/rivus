@@ -86,7 +86,11 @@ def fixed_work(cache, name):
     """The work dir of one target: `<cache>/<name>`, the same path in every run. The copy of the target is made in it, and the path is part of the
     function URIs, so the ids of the findings are the same from run to run (a random temporary dir changed them; the comparison of two runs had to
     rename it). It is emptied before and after the run; a lock file beside it refuses a second run of the same name at the same time."""
+    if not re.fullmatch(r"[A-Za-z0-9._-]+", name) or name in (".", ".."):  # the name may come from the command line: it is removed below
+        raise SystemExit("deps_bench: refused a work dir name %r (letters, digits, . _ - only)" % name)
     path = os.path.join(cache, name)
+    if os.path.dirname(os.path.realpath(path)) != os.path.realpath(cache):
+        raise SystemExit("deps_bench: the work dir %s is not directly under %s" % (path, cache))
     with open(path + ".lock", "w") as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
