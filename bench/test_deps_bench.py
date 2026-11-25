@@ -180,6 +180,22 @@ class Location(unittest.TestCase):
         self.assertEqual(sorted(x["fixed_line"] for x in sites if x["role"] == "sink"), [422, 425, 432])
         self.assertEqual([x["line"] for x in sites if x["role"] == "source"], [51])
 
+    def test_rustypaste_row_and_truth(self):
+        t = json.load(open(d.TARGETS_FILE))["rustypaste"]
+        self.assertFalse(t["decided"])   # INFO: not a row of the pass line
+        x = t["detect"]
+        self.assertEqual((x["id"], x["mode"], x["category"]), ("CVE-2026-90774", "location", "path_traversal"))
+        self.assertEqual(x["prefix_commit"], t["commit"])
+        self.assertEqual(len(x["fixed_commit"]), 40)
+        self.assertNotEqual(x["fixed_commit"], x["prefix_commit"])
+        sites = json.load(open(os.path.join(d.ROOT, x["truth"])))["sites"]
+        self.assertEqual([(s["file"], s["line"], s["fixed_line"]) for s in sites if s["role"] == "source"], [("src/server.rs", 324, 324)])
+        self.assertEqual([(s["file"], s["line"], s["fixed_line"]) for s in sites if s["role"] == "sink"], [("src/paste.rs", 240, 241)])
+        # a finding at the two places is detected by the same function as the other targets
+        rep = {"findings": [{"category": "path_traversal", "source": {"position": {"file": "src/server.rs", "line": 324}},
+                             "sink": {"position": {"file": "src/paste.rs", "line": 240}}}]}
+        self.assertTrue(d.detected_located(d.location_counts(sites, rep, "path_traversal")[0]))
+
 
 def finding(src, sink_file, sink_line, cat, funcs):
     return {"category": cat, "source": {"func": src}, "sink": {"position": {"file": sink_file, "line": sink_line}},
@@ -463,7 +479,7 @@ class RustRoad(unittest.TestCase):
 
     def test_rustypaste_row(self):
         t = json.load(open(d.TARGETS_FILE))["rustypaste"]
-        self.assertEqual((t["lang"], t["commit"], t["decided"], t["detect"], t["repo"]), ("rust", "00292076e47b5f500906a97a1b5c17665270d907", False, None, "https://github.com/orhun/rustypaste"))
+        self.assertEqual((t["lang"], t["commit"], t["decided"], t["repo"]), ("rust", "00292076e47b5f500906a97a1b5c17665270d907", False, "https://github.com/orhun/rustypaste"))
         self.assertNotIn("rust_minimal_lock", t)  # the committed Cargo.lock is used
         self.assertEqual(t["args"], ["-timeout", "600s"])
         self.assertEqual(t["mem_cap_gb"], 8)
