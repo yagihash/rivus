@@ -362,6 +362,19 @@ def check_validity(bench, sb, sh, nb, nh):
 
 
 COST_MARK = 0.10  # CPU time or peak memory up by this much or more is marked "!!"
+# G12 (a warning, never a stop): the numbers of the work of the engine that are the same in every run (stats of the report). A rise of WARN_RISE or more is a warning line.
+G12_STATS = ("adds_total", "adds_max_function_total", "passes", "largest_scc")
+G12_RISE = 0.10
+
+
+def g12_warnings(name, sb, sh):
+    """Lines for the G12 stats that rose by G12_RISE or more from base to head (base 0 or a missing number: no line). A warning only."""
+    out = []
+    for k in G12_STATS:
+        b, h = (sb or {}).get(k), (sh or {}).get(k)
+        if isinstance(b, (int, float)) and isinstance(h, (int, float)) and b > 0 and h - b >= G12_RISE * b - 1e-9 and h > b:
+            out.append("G12: %s: %s %s -> %s (%s)" % (name, k, b, h, pct(b, h)))
+    return out
 
 
 def load_now():
@@ -446,7 +459,7 @@ def cost_cell(xb, xh, fmt, incomplete=False):
 def cost_row(name, runs_b, runs_h, sb, sh):
     """One row of the cost table. runs_b / runs_h: the meta of each run of the side (cpu_s, max_rss_mb, wall_s, load_start, load_end),
     in the order they were run; sb / sh: the stats (deterministic: the elements and the steps are the same in every run).
-    Columns: bench, runs, CPU s, peak MB, summary elements, summary steps, mark, wall, load average (first start / last end)."""
+    Columns: bench, runs, CPU s, peak MB, summary elements, summary steps, mark, wall, load average (first start / last end), then the four of G12: adds total, adds max of a function, passes, largest SCC."""
     st = lambda d, k: (d or {}).get(k)
 
     def pair(b, h):
@@ -464,11 +477,11 @@ def cost_row(name, runs_b, runs_h, sb, sh):
             pair(st(sb, "summary_elems"), st(sh, "summary_elems")), pair(st(sb, "summary_steps"), st(sh, "summary_steps")),
             "!! incomplete (%s)" % ", ".join(inc) if inc else ("!!" if marked(cpu_b, cpu_h, rss_b, rss_h) else ""),
             cost_cell(runs_of(runs_b, "wall_s"), runs_of(runs_h, "wall_s"), "%.0f", bool(inc)),
-            "base %s, head %s" % (load(runs_b), load(runs_h))]
+            "base %s, head %s" % (load(runs_b), load(runs_h))] + [pair(st(sb, k), st(sh, k)) for k in G12_STATS]
 
 
-COST_HEADER = ["| bench | runs b/h | CPU s (user+sys; min-max) | peak MB | summary elements | summary steps | !! | wall s | load average (first start/last end) |",
-               "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
+COST_HEADER = ["| bench | runs b/h | CPU s (user+sys; min-max) | peak MB | summary elements | summary steps | !! | wall s | load average (first start/last end) | adds total | adds max of a function | passes | largest SCC |",
+               "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
 
 
 def cost_table(rows):
@@ -478,7 +491,8 @@ def cost_table(rows):
     return ["", "Cost, before -> after, runs ALTERNATING base, head, base, head (CPU time is the main number, wall is load dependent). `!!` = CPU or peak memory "
             "+%d%% or more AND more than the spread between runs of the same version; one run on a side: \"single run: no conclusion\", no mark. "
             "A cached base run is not a sample (another time, another load). `!! incomplete` = a run of that side stopped before it was done "
-            "(exit code 4: timeout or not converged): its time and memory are not those of a finished analysis, so they are not compared." % round(COST_MARK * 100), ""] + COST_HEADER + \
+            "(exit code 4: timeout or not converged): its time and memory are not those of a finished analysis, so they are not compared. "
+            "The four columns of G12 (adds total, adds max of a function, passes, largest SCC) do not depend on the run: a rise of %d%% or more is a `G12:` warning line (a warning only, never a stop)." % (round(COST_MARK * 100), round(G12_RISE * 100)), ""] + COST_HEADER + \
            ["| " + " | ".join(str(c) for c in r) + " |" for r in rows]
 
 
@@ -547,7 +561,7 @@ def report(a):
                 skipped[n] = why
     os.makedirs(os.path.join(a.out, "details"), exist_ok=True)
     rows, alarms, notes, detail_files = [], [], [], []
-    cost_rows = []
+    cost_rows, g12 = [], []
     alarms_invalid, warnings, cached, alarms_noise = [], [], [], []
     not_run = 0
     removed_total = 0
@@ -619,6 +633,8 @@ def report(a):
             "%s%s" % (("%.0f -> %.0f s" % (mb["wall_s"], mh["wall_s"])), "; %s -> %s MB" % (mb["max_rss_mb"], mh["max_rss_mb"])),
         ])
         cost_rows.append(cost_row(bench, cost_runs(a.results, bench, "base", mb), cost_runs(a.results, bench, "head", mh), sb, sh))
+        if conv_b and conv_h:
+            g12 += g12_warnings(bench, sb, sh)
         if status:
             rows[-1][1] += " | " + "; ".join("NOT CONVERGED" if "CONVERGED" in s else s for s in status)
         # details
@@ -662,6 +678,8 @@ def report(a):
         out.append("warning: %s" % w)
     for c in cached:
         out.append("- %s" % c)
+    for w in g12:
+        out.append("warning: %s" % w)
     if alarms_invalid:
         out += ["", "!! The run(s) above are not a valid basis for the comparison (exit status 2): a head that did not finish, or a result "
                 "that shrank to nothing, shows no removed finding because there is nothing left to remove. Find out why before reading the table.", ""]
@@ -710,6 +728,14 @@ def report(a):
     out += ["", "Details (added / removed / changed findings, one per line): `details/<bench>.md`."]
     open(os.path.join(a.out, "summary.md"), "w").write("\n".join(out) + "\n")
     print("\n".join(out))
+    if os.environ.get("GITHUB_ACTIONS") == "true":   # in CI: the warnings of G12 in the log and the summary of the job (the job never fails for them)
+        for w in g12:
+            print("::warning title=G12 cost::%s" % w.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))
+        try:
+            if os.environ.get("GITHUB_STEP_SUMMARY"):
+                open(os.environ["GITHUB_STEP_SUMMARY"], "a").write("\n".join(out) + "\n")
+        except OSError:
+            pass
     return 1 if removed_total else (2 if not_run or alarms_invalid or alarms_noise else 0)
 
 

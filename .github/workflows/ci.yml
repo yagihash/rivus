@@ -61,6 +61,7 @@ jobs:
       models: ${{ steps.decide.outputs.models }}
       release: ${{ steps.decide.outputs.release }}
       workflows: ${{ steps.decide.outputs.workflows }}
+      g12: ${{ steps.decide.outputs.g12 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -158,6 +159,15 @@ jobs:
             workflows:
               - '.github/workflows/**'
               - '.github/actions/**'
+            g12:
+              - 'internal/taint/**'
+              - 'internal/sg/**'
+              - 'internal/ir/**'
+              - 'internal/callgraph/**'
+              - 'extractor/dart/**'
+              - '!extractor/*/README.md'
+              - 'bench/**'
+              - '!bench/**/README.md'
             isolation:
               - 'internal/sandbox/**'
               - 'cmd/rivus/isolate*.go'
@@ -178,21 +188,22 @@ jobs:
           FILTER_MODELS: ${{ steps.paths.outputs.models }}
           FILTER_RELEASE: ${{ steps.paths.outputs.release }}
           FILTER_WORKFLOWS: ${{ steps.paths.outputs.workflows }}
+          FILTER_G12: ${{ steps.paths.outputs.g12 }}
         run: |
           case "$EVENT_NAME" in
             pull_request)
               if [ "$RELEASE_PR" = true ]; then
-                code=true isolation=true dart=true rust=true docs=true models=false release=true workflows=true
+                code=true isolation=true dart=true rust=true docs=true models=false release=true workflows=true g12=false
               else
-                for v in "$FILTER_CODE" "$FILTER_ISOLATION" "$FILTER_DART" "$FILTER_RUST" "$FILTER_DOCS" "$FILTER_MODELS" "$FILTER_RELEASE" "$FILTER_WORKFLOWS"; do
+                for v in "$FILTER_CODE" "$FILTER_ISOLATION" "$FILTER_DART" "$FILTER_RUST" "$FILTER_DOCS" "$FILTER_MODELS" "$FILTER_RELEASE" "$FILTER_WORKFLOWS" "$FILTER_G12"; do
                   case "$v" in
                     true | false) ;;
                     *) echo "the filter of the paths gave '$v', not true or false: nothing is skipped on a guess" >&2; exit 1 ;;
                   esac
                 done
-                code=$FILTER_CODE isolation=$FILTER_ISOLATION dart=$FILTER_DART rust=$FILTER_RUST docs=$FILTER_DOCS models=$FILTER_MODELS release=$FILTER_RELEASE workflows=$FILTER_WORKFLOWS
+                code=$FILTER_CODE isolation=$FILTER_ISOLATION dart=$FILTER_DART rust=$FILTER_RUST docs=$FILTER_DOCS models=$FILTER_MODELS release=$FILTER_RELEASE workflows=$FILTER_WORKFLOWS g12=$FILTER_G12
               fi ;;
-            *) code=true isolation=true dart=true rust=true docs=true models=false release=true workflows=true ;; # push, schedule, workflow_dispatch (the job `model-diff` below runs the weekly and the manual one)
+            *) code=true isolation=true dart=true rust=true docs=true models=false release=true workflows=true g12=false ;; # push, schedule, workflow_dispatch (the job `model-diff` below runs the weekly and the manual one)
           esac
           {
             echo "code=$code"
@@ -203,6 +214,7 @@ jobs:
             echo "models=$models"
             echo "release=$release"
             echo "workflows=$workflows"
+            echo "g12=$g12"
           } >> "$GITHUB_OUTPUT"
       # TestDogfood (RIVUS_DOGFOOD=1 in the job `test`): a run by hand always; the weekly run when the code or the models changed since the head of the last
       # successful weekly run (the first run, a head that is gone, and an answer that cannot be read: it runs). The paths are those of the filter `code`
@@ -708,6 +720,43 @@ jobs:
           fi
           bench/compare.sh --graph-check go-curated --graph-workers 1,8 --no-guard HEAD HEAD
 
+  # G12: a warning for a rise of the cost (bench/compare.sh, bench/README.md "The cost warning"). A pull request that changes the engine or what it is measured on
+  # (the filter `g12`) runs the small targets on the base and on the head and compares `adds_total`, `adds_max_function_total`, `passes` and `largest_scc`; a rise
+  # of 10% or more is a `::warning::` in the log and a line in the summary of the job. It is a warning, not a gate: the job does not fail (continue-on-error, and
+  # the step ignores the exit status of compare.sh), and a failure to measure is a warning too.
+  cost-warn:
+    needs: changes
+    if: needs.changes.outputs.g12 == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    permissions:
+      contents: read
+    env:
+      DART_SDK: 3.13.6
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the base is the first parent of the merge commit that is checked out
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            bench/*/go.sum
+      - uses: dart-lang/setup-dart@2286a0c042b44434fe26d292bbce8d34f7ec662b # v1.8.2
+        with:
+          sdk: ${{ env.DART_SDK }}
+      - name: Compare the cost of the base and the head
+        run: |
+          base=$(git rev-parse HEAD^1)
+          rc=0
+          bench/compare.sh --only go-curated,dart-curated,go-synth-S,dart-synth-S,dart-synth-M,dart-synth-F --cost-rounds 1 --no-guard --no-cache "$base" HEAD || rc=$?
+          if [ "$rc" != 0 ]; then
+            echo "::warning title=G12 cost::compare.sh ended with exit status $rc (1: a finding was removed; 2: a benchmark did not run): read the summary of the job"
+          fi
+
   # The archives of a release (tagpr.yml, job `release-binaries`) are built only when a tag is made. Build them here as well, so that what would stop a
   # release stops the pull request first: a linked dependency with a copyleft or forbidden license (`go-licenses check`: restricted, reciprocal,
   # forbidden), or a module without a license file. A pull request runs it when the dependencies (go.mod, go.sum) or the build itself (the script, the
@@ -804,7 +853,7 @@ jobs:
   # when they passed or were skipped (nothing that a test reads changed). A job added above has to be added here.
   ci-ok:
     if: always()
-    needs: [changes, go-packages, docs-tests, test, gcp-exec, sandbox, model-diff, model-diff-changed, graph-check, release-build, ghalint, actionlint]
+    needs: [changes, go-packages, docs-tests, test, gcp-exec, sandbox, model-diff, model-diff-changed, graph-check, cost-warn, release-build, ghalint, actionlint]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}

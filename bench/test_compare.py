@@ -221,6 +221,19 @@ class Cost(unittest.TestCase):
         self.assertIn("single run: no conclusion", row[2])
         self.assertEqual(row[6], "")
 
+    def test_g12_warns_from_ten_percent(self):
+        w = self.c.g12_warnings
+        self.assertEqual(w("x", {"adds_total": 100, "passes": 1, "largest_scc": 35}, {"adds_total": 110, "passes": 2, "largest_scc": 56}),
+                         ["G12: x: adds_total 100 -> 110 (+10%)", "G12: x: passes 1 -> 2 (+100%)", "G12: x: largest_scc 35 -> 56 (+60%)"])
+        self.assertEqual(w("x", {"adds_total": 100, "adds_max_function_total": 100}, {"adds_total": 109, "adds_max_function_total": 50}), [])   # below 10%, and a fall
+        self.assertEqual(w("x", {"adds_total": 0}, {"adds_total": 5}), [])   # base 0: no ratio
+        self.assertEqual(w("x", {}, {"adds_total": 5}), [])   # a base without the number (an old version)
+
+    def test_g12_columns_are_at_the_end(self):
+        row = self.c.cost_row("x", [], [], {"adds_total": 10, "passes": 1}, {"adds_total": 12, "passes": 2})
+        self.assertEqual(row[-4:], ["10 -> 12 (+20%)", "n/a", "1 -> 2 (+100%)", "n/a"])
+        self.assertEqual(len(row), len(self.c.COST_HEADER[1].split("|")) - 2)
+
     def test_row_with_two_rounds(self):
         mb = [{"cpu_s": 100, "max_rss_mb": 1000, "wall_s": 50, "load_start": 1.5, "load_end": 2.0},
               {"cpu_s": 104, "max_rss_mb": 1010, "wall_s": 52, "load_start": 2.0, "load_end": 2.5}]
