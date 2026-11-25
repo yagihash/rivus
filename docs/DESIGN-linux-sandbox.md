@@ -35,12 +35,17 @@ Landlock と seccomp は、自分と子にだけ効き、外せない。そこ�
 | `io_uring`、`bpf`、`perf_event_open`、`userfaultfd`、`keyctl` | seccomp で拒否(`io_uring` は、フィルタされた system call を通らずに、ソケットを作りファイルを開ける) |
 | 別の ABI の system call | seccomp が、アーキテクチャが違うものと、x86-64 の x32 の番号を、プロセスごと殺す |
 | setuid | `NO_NEW_PRIVS` |
+| root の特権(rivus を root で動かしたとき) | 実行の前に、全 capability を落とす(bounding set を空に、exec で root に特権を戻す規則(`SECBIT_NOROOT`)を止めて固定し、ambient と inheritable を空に)。`NO_NEW_PRIVS` は特権を落とさない。落とさないと、対象は特権のまま動き、他人のファイルの所有者を変えるなどができた(root で動かしたときのテストで見つけた) |
+| ユーザー名前空間、mount、カーネルモジュール | seccomp で `unshare`、`setns`、名前空間を作る `clone`、`mount` 系、`init_module` 系、`kexec`、`reboot` を拒否。`clone3` は `ENOSYS`(C ライブラリは `clone` に戻る)。名前空間の中で root になれると、非特権では届かないカーネルの部分に届く |
 
 ## 4. macOS との違い(弱くなる所と、強くなる所)
 
 - **弱い: 取得段階の接続先。** Landlock はポート番号だけで、アドレスは指定できない(macOS は `localhost:PORT`)。動くのは信頼する `cargo fetch` だけで、`build.rs` やマクロは動かない(取得の前の検査と、設定の除去は macOS と同じ)ので、受け入れた(ユーザーの判断、2026-11-25)。
 - **弱い: ファイルの存在と属性は見える。** Landlock は `stat` を止めない(読む、列挙する、開くは止まる)。
 - **弱い: 「名指しのプログラムだけ実行できる」は、境界ではない。** Landlock の実行の権限は `execve` だけを見る。動的ローダーを直接呼べば(`ld.so /path/prog`)、**読み取りを許した場所**(ライブラリの `/usr/lib`、ツールチェイン)のプログラムは、名指しがなくても動く(実測)。読み取りを許さない場所(`/usr/bin` など)のプログラムは、読めないので動かない。だから、実行の許可は、ファイルとネットワークの境界(秘密が読めない、外へ書けない、ソケットが作れない)に重ねた、もう一段として持つ。ライブラリの置き場所は、読み取りだけを許し、実行は動的ローダーだけに与える(CI の `ubuntu-latest` で、Rust 版の coreutils が `/usr/lib/cargo/bin` にあり、置き場所ごと実行を許していたため、名指しでない `id` が動いた)。
+- **弱い: ファイルの属性の変更は、止められない。** Landlock は、読む・書く・作る・消す・実行する・切り詰めるを止めるが、`chmod`、`chown`、`utimes`、`setxattr` は止めない(実測: 許可していない、同じユーザーのファイルのモードが 777 に変わった。`ptrace` などと違い、seccomp では、パスを見分けられない)。対象のコードは、利用者のファイルのモード(`~/.ssh` の鍵の 600 を 777 にする、など)と時刻を変えられる。中身は読めず、書けない。macOS の Seatbelt は、これを止める。塞ぐには、パスを見る監督役(seccomp の user notification)か、別の LSM が要る。GNU ld は出力のモードを `chmod` で決めるので、`chmod` を一律に拒否すると、リンクが壊れる。
+- **弱い: 古いカーネルでは、ほかにも塞げないものがある。** ABI 3 未満(Linux 6.2 未満)は、`truncate` で、同じユーザーのファイルを空にできる。ABI 6 未満(6.12 未満)は、同じユーザーの、ほかのプロセスにシグナルを送れる(`kill -9 -1` で、利用者のほかのプロセスを止められる)。ABI 6 以上(実測: ABI 7)では、止まる。今は、動かし、警告も出さない。どこで止めるかは決め事(下の 6 節)。
+- **弱い: メモリ、CPU、プロセス数の上限がない**(macOS と同じ。Linux では `RLIMIT_AS` や cgroup で足せる)。フォーク爆弾やメモリの使い切りで、マシンを止められる。
 - **弱い: ユーザー境界がない**(macOS と同じ)。
 - **古いカーネル**: ABI 4 未満では、ポート指定の取得ができない(止まる)。ABI 6 未満では、他プロセスへのシグナルは、塞げない(seccomp では、宛先を見分けられない)。抽出の段階の「ネットワークなし」は、ABI によらず seccomp で成り立つ。
 - **強い: `/proc`(他プロセスの `environ` など)が読めない。** macOS は `kern.procargs2` を拒否できなかった。
@@ -57,6 +62,8 @@ Landlock と seccomp は、自分と子にだけ効き、外せない。そこ�
 - CI: `ci.yml` の `sandbox-linux`(`ubuntu-latest` と `ubuntu-26.04-arm`)。`RIVUS_SBX_RED=1` で、サンドボックスが作れないランナーは、飛ばさずに失敗にする。
 
 ## 6. まだのもの
+
+**決め事**: (a) 古いカーネル(ABI 6 未満)で、抽出を止めるか、警告だけにするか(今は、何も言わず動く)。(b) `chmod` などの属性の変更を、どこまで受け入れるか(今は、受け入れていて、書いてある)。(c) メモリとプロセス数の上限を足すか。
 
 **確認済み(2026-11-25、クラウドのセッション。x86-64、Landlock ABI 7)**: 固定の nightly を `rustup` で取得し(約 1 分)、`rivus setup rust -source extractor/rust -y` で extractor を作り(数秒)、`serde`(proc macro と `build.rs`)、`serde_json`、`shlex` を依存に持つ crate と、悪意のある `build.rs` を持つ crate を、`rivus analyze -lang rust` で読んだ。取得(ネットワークあり。名前解決と TLS を含む)から抽出(ネットワークなし)まで通り、`summary.isolation.mode` は `sandbox`、悪意のある `build.rs` の書き込みは作られなかった。
 

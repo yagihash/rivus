@@ -231,10 +231,29 @@ func closeIn(cfg *helperConfig) error {
 	if err := unix.Prctl(unix.PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0); err != nil {
 		return fmt.Errorf("no_new_privs: %v", err)
 	}
+	dropCapabilities()
 	if err := landlock(cfg); err != nil {
 		return err
 	}
 	return seccomp(cfg)
+}
+
+// dropCapabilities takes every capability away from what is run (it matters when rivus is run as root, or with capabilities: no_new_privs does not
+// take them away, and root gets all of them again at an exec). The bounding set is emptied, the "root has them" rule of exec is turned off (and
+// locked), the ambient and inheritable sets are cleared. Each step is best effort: a process that has no capability has nothing to drop, and
+// the steps that need one (CAP_SETPCAP) are refused for it.
+func dropCapabilities() {
+	unix.Prctl(unix.PR_CAP_AMBIENT, unix.PR_CAP_AMBIENT_CLEAR_ALL, 0, 0, 0)
+	for c := 0; c < 64; c++ {
+		if err := unix.Prctl(unix.PR_CAPBSET_DROP, uintptr(c), 0, 0, 0); err == unix.EINVAL {
+			break // past the last capability that this kernel has
+		}
+	}
+	// SECBIT_NOROOT | SECBIT_NOROOT_LOCKED | SECBIT_NO_CAP_AMBIENT_RAISE | SECBIT_NO_CAP_AMBIENT_RAISE_LOCKED
+	unix.Prctl(unix.PR_SET_SECUREBITS, 0x1|0x2|0x40|0x80, 0, 0, 0)
+	hdr := unix.CapUserHeader{Version: unix.LINUX_CAPABILITY_VERSION_3}
+	var data [2]unix.CapUserData
+	unix.Capset(&hdr, &data[0])
 }
 
 // ----- Landlock -----

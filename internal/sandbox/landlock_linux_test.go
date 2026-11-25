@@ -120,7 +120,7 @@ func (f fixture) args() []string {
 	return a
 }
 
-var allChecks = []string{"read-secret", "write-outside", "tcp", "tcp-other-port", "udp", "unix-socket", "exec-other", "proc-environ", "io-uring", "ptrace"}
+var allChecks = []string{"read-secret", "write-outside", "tcp", "tcp-other-port", "udp", "unix-socket", "exec-other", "proc-environ", "io-uring", "ptrace", "unshare", "clone-newns", "clone3"}
 
 // Without the sandbox the probe gets out of everything that the test set up: otherwise a "blocked" under the sandbox shows nothing.
 func TestSandboxProbeEscapesOnTheHost(t *testing.T) {
@@ -130,7 +130,11 @@ func TestSandboxProbeEscapesOnTheHost(t *testing.T) {
 		t.Fatalf("%v\n%s", err, out)
 	}
 	v := verdicts(t, string(out))
-	for _, c := range []string{"read-secret", "write-outside", "tcp", "tcp-other-port", "udp", "unix-socket", "proc-environ"} {
+	checks := []string{"read-secret", "write-outside", "tcp", "tcp-other-port", "udp", "unix-socket", "proc-environ", "unshare", "clone-newns", "clone3"}
+	if os.Geteuid() == 0 {
+		checks = append(checks, "capabilities", "chown")
+	}
+	for _, c := range checks {
 		if esc, ok := v[c]; !ok || !esc {
 			t.Errorf("%s: on the host the probe must get out, and it did not (%v)\n%s", c, v[c], out)
 		}
@@ -148,7 +152,11 @@ func TestSandboxClosesEveryWayOut(t *testing.T) {
 	}
 	t.Logf("probe under the sandbox:\n%s", res.Stdout)
 	v := verdicts(t, string(res.Stdout))
-	checks := allChecks
+	checks := append([]string(nil), allChecks...)
+	if os.Geteuid() == 0 {
+		// run as root: the capabilities are taken away, and a file cannot be given to another user
+		checks = append(checks, "capabilities", "chown")
+	}
 	if ABI() < 6 {
 		// signals and abstract sockets are scoped from ABI 6 (Linux 6.12): with less, the signal to the parent is possible
 		t.Logf("Landlock ABI %d: the signal to a process outside is not closed", ABI())

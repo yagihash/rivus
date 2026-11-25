@@ -53,7 +53,19 @@ var deniedCalls = []uint32{
 	unix.SYS_KEYCTL, // the keys of the user's session
 	unix.SYS_ADD_KEY,
 	unix.SYS_REQUEST_KEY,
+	// a new user namespace gives a process the rights of root inside it, and with them a lot of the kernel that an unprivileged process cannot reach
+	// (mounts, networks, firewalls): a way into kernel bugs. Nothing that a build runs needs one.
+	unix.SYS_UNSHARE,
+	unix.SYS_SETNS,
+	// what only root can do (the program has no capability: see dropCapabilities; these stay refused if that was not enough)
+	unix.SYS_MOUNT, unix.SYS_UMOUNT2, unix.SYS_PIVOT_ROOT, unix.SYS_CHROOT,
+	unix.SYS_FSOPEN, unix.SYS_FSCONFIG, unix.SYS_FSMOUNT, unix.SYS_MOVE_MOUNT, unix.SYS_MOUNT_SETATTR,
+	unix.SYS_INIT_MODULE, unix.SYS_FINIT_MODULE, unix.SYS_DELETE_MODULE, unix.SYS_KEXEC_LOAD, unix.SYS_KEXEC_FILE_LOAD,
+	unix.SYS_REBOOT, unix.SYS_SWAPON, unix.SYS_SWAPOFF,
 }
+
+// cloneNewFlags are the flags of clone that make a new namespace (CLONE_NEWNS, NEWCGROUP, NEWUTS, NEWIPC, NEWUSER, NEWPID, NEWNET, NEWTIME).
+const cloneNewFlags = 0x7e020080
 
 // filter makes the program for the network of the run.
 func filter(net int) ([]unix.SockFilter, error) {
@@ -76,6 +88,17 @@ func filter(net int) ([]unix.SockFilter, error) {
 	for _, nr := range deniedCalls {
 		p = append(p, ins(bpfJeq, 0, 1, nr), deny)
 	}
+	// clone3 is told that it is not there (the C library goes back to clone, which has its flags in a register that can be looked at: clone3
+	// has them in a structure in memory, which a filter cannot read); clone with a flag that makes a namespace is refused
+	p = append(p,
+		ins(bpfJeq, 0, 1, unix.SYS_CLONE3), ins(bpfRet, 0, 0, unix.SECCOMP_RET_ERRNO|uint32(unix.ENOSYS)),
+		ins(bpfJeq, 0, 4, unix.SYS_CLONE),
+		ins(bpfLdAbs, 0, 0, offArg0),
+		ins(bpfAnd, 0, 0, cloneNewFlags),
+		ins(bpfJeq, 1, 0, 0),
+		deny,
+		ins(bpfLdAbs, 0, 0, offNr), // (the accumulator held the flags)
+	)
 	switch net {
 	case netNone:
 		// no socket of any family: no TCP, no UDP, no raw, no UNIX socket (a UNIX socket of a path is the way to the agents of the user: ssh-agent,

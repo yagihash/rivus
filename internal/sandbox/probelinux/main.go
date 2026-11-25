@@ -98,6 +98,26 @@ func main() {
 	// io_uring (it makes sockets by itself)
 	_, _, errno := unix.Syscall(unix.SYS_IO_URING_SETUP, 1, 0, 0)
 	report("io-uring", errno != unix.EPERM, fmt.Sprint(errno))
+	// a new user namespace: the call is refused before the kernel looks at the arguments, so the arguments that make it fail anyway (the
+	// threads of this process) tell the refusal (EPERM) from the rest
+	_, _, errno = unix.Syscall(unix.SYS_UNSHARE, unix.CLONE_NEWUSER, 0, 0)
+	report("unshare", errno != unix.EPERM, fmt.Sprint(errno))
+	_, _, errno = unix.Syscall6(unix.SYS_CLONE, unix.CLONE_NEWNS|unix.CLONE_THREAD, 0, 0, 0, 0, 0)
+	report("clone-newns", errno != unix.EPERM, fmt.Sprint(errno))
+	// clone3 is said not to be there (ENOSYS); on the host the call with no arguments fails in another way
+	_, _, errno = unix.Syscall(unix.SYS_CLONE3, 0, 0, 0)
+	report("clone3", errno != unix.ENOSYS, fmt.Sprint(errno))
+	// the rights of root (only when this is run as root: for anyone else the file cannot be given away either way)
+	if os.Geteuid() == 0 {
+		var hdr = unix.CapUserHeader{Version: unix.LINUX_CAPABILITY_VERSION_3}
+		var data [2]unix.CapUserData
+		unix.Capget(&hdr, &data[0])
+		report("capabilities", data[0].Permitted|data[1].Permitted|data[0].Effective|data[1].Effective != 0, fmt.Sprintf("%x %x", data[0].Effective, data[1].Effective))
+		if *canary != "" {
+			err := os.Chown(*canary, 12345, 12345)
+			report("chown", err == nil, fmt.Sprint(err))
+		}
+	}
 	// ptrace (a request that does nothing: only the refusal of the call itself is told from the rest)
 	_, _, errno = unix.Syscall6(unix.SYS_PTRACE, 0xffff, 0, 0, 0, 0, 0)
 	report("ptrace", errno != unix.EPERM, fmt.Sprint(errno))
