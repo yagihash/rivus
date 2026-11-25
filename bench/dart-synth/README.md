@@ -42,6 +42,18 @@ the big SCCs of real programs are made: the helper calls every closure, so every
 | `-capture` | of the rest, percent that capture a local (`(x) => f(x + v)`) or write one (`fire(v, (x) { w = f(x); })`) | 40 |
 | `-fan`, `-sinks`, `-sources` | calls of each function; percent of functions with a sink, a source | 3; 6 / 5 / 4; 4 / 3 / 2 |
 
+## Size F: closures given to a dependency
+
+F is for Dart only (`rust-synth` refuses it). 80 percent of the calls give a closure of the project to a function of a
+dependency package (`-deppct`), and the package (`-depfuncs` functions of each of four forms, written under
+`.dart_tool/dep` and named in `package_config.json`, so that it is read as a dependency) calls it or gives it on to other
+functions of the package: `d` takes a function that returns a function and passes it on twice (as it is, and in a
+closure), `w` returns a closure that holds it, `p` returns it as it is, `b` keeps it in the field of an object it returns.
+It is the shape in which a summary of a dependency that carries function values grows (commit 4ac08afc before the fix
+f6f852d1): `summary_elems` is 2.4 times and `adds_max_function_total` 15 times larger than after the fix, and the call says
+`func_value_into_dependency`. `expected/F.json` is the result after the fix. About 1,400 functions; the generation takes
+0.1 s, the extractor 5 s, and `rivus analyze -ir` 1 s.
+
 ## What the engine took (2026-11-21, 12 cores, 24 GB; the build of the commit that adds this)
 
 | size | functions (engine) | largest SCC | time | peak memory | findings / uncertainties |
