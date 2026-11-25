@@ -34,6 +34,9 @@ func skipWithoutSandbox(t *testing.T) {
 // probeBinary builds the probe once (static: it needs nothing of the system, so it runs under the sandbox with no more than its own file).
 func probeBinary(t *testing.T) string {
 	t.Helper()
+	if p := os.Getenv("RIVUS_SBX_PROBE"); p != "" { // a probe that was built before (to run the tests as a user that has no Go)
+		return p
+	}
 	out := filepath.Join(t.TempDir(), "probe")
 	cmd := exec.Command("go", "build", "-o", out, "./probelinux")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
@@ -124,7 +127,7 @@ func (f fixture) args() []string {
 	return a
 }
 
-var allChecks = []string{"read-secret", "write-outside", "tcp", "tcp-other-port", "udp", "unix-socket", "exec-other", "proc-environ", "io-uring", "ptrace", "unshare", "clone-newns", "clone3", "sctp", "mptcp", "sysv-shm", "sysv-msg", "sysv-sem", "posix-mq", "kcmp"}
+var allChecks = []string{"read-secret", "write-outside", "tcp", "tcp-other-port", "udp", "unix-socket", "exec-other", "proc-environ", "io-uring", "ptrace", "unshare", "clone-newns", "clone3", "sctp", "mptcp", "sysv-shm", "sysv-msg", "sysv-sem", "posix-mq", "kcmp", "setxattrat", "removexattrat", "file_setattr"}
 
 // Without the sandbox the probe gets out of everything that the test set up: otherwise a "blocked" under the sandbox shows nothing.
 func TestSandboxProbeEscapesOnTheHost(t *testing.T) {
@@ -160,6 +163,9 @@ func TestSandboxClosesEveryWayOut(t *testing.T) {
 	if os.Geteuid() == 0 {
 		// run as root: the capabilities are taken away, and a file cannot be given to another user
 		checks = append(checks, "capabilities", "chown")
+	}
+	if runtime.GOARCH == "amd64" {
+		checks = append(checks, "utime", "utimes", "futimesat") // (the old forms of utimensat exist on x86-64 only)
 	}
 	if ABI() < 6 {
 		// signals and abstract sockets are scoped from ABI 6 (Linux 6.12): with less, the signal to the parent is possible
@@ -389,38 +395,6 @@ func TestSandboxBaselineRunsOnlyTheLoader(t *testing.T) {
 	}
 }
 
-// The changes of attributes that Landlock does not stop are reported (not refused): the ones outside of the places that may be written, and not
-// the ones inside.
-func TestSandboxReportsAttributeChanges(t *testing.T) {
-	skipWithoutSandbox(t)
-	f := setup(t)
-	victim := filepath.Join(f.outside, "victim")
-	os.WriteFile(victim, []byte("data"), 0o600)
-	inside := filepath.Join(f.work, "mine")
-	os.WriteFile(inside, []byte("data"), 0o600)
-	res, err := Run(context.Background(), Spec{Argv: []string{f.probe, "-attr", victim, "-attr-in", inside}, Dir: f.work, Env: []string{"PATH=/usr/bin:/bin"}, Write: []string{f.work}, Timeout: time.Minute})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if res.ExitCode != 0 {
-		t.Fatalf("exit %d: %s %s", res.ExitCode, res.Stdout, res.Stderr)
-	}
-	// the calls are let through (it is a report): the file is changed, and the program says that it worked
-	if st, err := os.Stat(victim); err != nil || st.Mode().Perm() != 0o640 {
-		t.Errorf("the call was not let through: %v %v", st, err)
-	}
-	real, _ := filepath.EvalSymlinks(victim)
-	got := strings.Join(res.AttributeChanges, "\n")
-	for _, want := range []string{"chmod " + real, "utimensat " + real} {
-		if !strings.Contains(got, want) && !strings.Contains(got, strings.Replace(want, "chmod", "fchmodat", 1)) {
-			t.Errorf("not reported: %q in\n%s", want, got)
-		}
-	}
-	if strings.Contains(got, "mine") {
-		t.Errorf("a change inside the work directory is reported:\n%s", got)
-	}
-}
-
 func TestSandboxABIPolicy(t *testing.T) {
 	for _, c := range []struct {
 		abi   int
@@ -532,38 +506,6 @@ func TestSandboxProgramThatCannotStart(t *testing.T) {
 	}
 }
 
-// The path of a change is the file that the call is about: the link itself for a call that does not follow links (lchown), and the file of the
-// descriptor for an empty path with AT_EMPTY_PATH.
-func TestSandboxReportsTheRightFile(t *testing.T) {
-	skipWithoutSandbox(t)
-	f := setup(t)
-	victim := filepath.Join(f.outside, "victim")
-	os.WriteFile(victim, []byte("data"), 0o600)
-	link := filepath.Join(f.work, "link")
-	if err := os.Symlink(victim, link); err != nil {
-		t.Fatal(err)
-	}
-	readable := filepath.Join(f.outside, "readable")
-	os.WriteFile(readable, []byte("data"), 0o600)
-	res, err := Run(context.Background(), Spec{Argv: []string{f.probe, "-attr-link", link, "-attr-fd", readable}, Dir: f.work, Env: []string{"PATH=/usr/bin:/bin"},
-		Read: []string{f.outside}, Write: []string{f.work}, Timeout: time.Minute})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if res.ExitCode != 0 {
-		t.Fatalf("exit %d: %s %s", res.ExitCode, res.Stdout, res.Stderr)
-	}
-	realVictim, _ := filepath.EvalSymlinks(victim)
-	realReadable, _ := filepath.EvalSymlinks(readable)
-	got := strings.Join(res.AttributeChanges, "\n")
-	if strings.Contains(got, realVictim) {
-		t.Errorf("lchown of a link in the work directory is reported as a change of what it points to:\n%s\n%s", got, res.Stdout)
-	}
-	if !strings.Contains(got, "fchownat "+realReadable) {
-		t.Errorf("fchownat with AT_EMPTY_PATH is not reported as the file of the descriptor (%s):\n%s\n%s", realReadable, got, res.Stdout)
-	}
-}
-
 // The reading of the notifications that fails is tried again, and not for ever: the descriptor is not closed at the first failure (the filter stays in
 // the program, and with nobody holding the descriptor its calls fail with ENOSYS), and it is not kept open for ever either (nothing answers the calls
 // that wait, and the build would wait for its time to be over): after maxReadFailures in a row the reading is given up, and the report says so.
@@ -658,42 +600,6 @@ func TestSandboxFailuresThatAreNotInARowDoNotEndTheReading(t *testing.T) {
 	}
 }
 
-// The path of a change is resolved as the kernel does: `..` after a link is the parent of what the link points to, not of the link. (A path that is
-// cleaned as a string first reads work/link/../victim as work/victim, which is inside, and the change of a file outside is not reported.)
-func TestSandboxReportsTheFileAfterDotDotOfALink(t *testing.T) {
-	skipWithoutSandbox(t)
-	f := setup(t)
-	sub := filepath.Join(f.outside, "sub")
-	os.Mkdir(sub, 0o755)
-	victim := filepath.Join(f.outside, "victim")
-	os.WriteFile(victim, []byte("data"), 0o600)
-	decoy := filepath.Join(f.work, "victim") // what the cleaned string would be
-	os.WriteFile(decoy, []byte("data"), 0o600)
-	if err := os.Symlink(sub, filepath.Join(f.work, "link")); err != nil {
-		t.Fatal(err)
-	}
-	res, err := Run(context.Background(), Spec{Argv: []string{f.probe, "-attr-dotdot", f.work + "/link/../victim"}, Dir: f.work, Env: []string{"PATH=/usr/bin:/bin"},
-		Write: []string{f.work}, Timeout: time.Minute})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if st, err := os.Stat(victim); err != nil || st.Mode().Perm() != 0o640 {
-		t.Fatalf("the call did not reach the file outside (the test does not test what it says): %v %v\n%s", st, err, res.Stdout)
-	}
-	realVictim, _ := filepath.EvalSymlinks(victim)
-	got := strings.Join(res.AttributeChanges, "\n")
-	reported := false
-	for _, l := range res.AttributeChanges {
-		reported = reported || strings.HasSuffix(l, " "+realVictim) // (chmod, fchmodat, fchmodat2: it is the one of the library)
-	}
-	if !reported {
-		t.Errorf("the change of %s is not reported:\n%s", realVictim, got)
-	}
-	if strings.Contains(got, decoy) {
-		t.Errorf("the file that a cleaned string would name (%s) is reported:\n%s", decoy, got)
-	}
-}
-
 // The descriptor of the notifications, received over the socket, is close-on-exec: another process that rivus starts while the run goes on must not
 // get it (it would keep the listener open after the end of the serving, and could answer the notifications).
 func TestSandboxReceivedDescriptorIsCloseOnExec(t *testing.T) {
@@ -723,39 +629,6 @@ func TestSandboxReceivedDescriptorIsCloseOnExec(t *testing.T) {
 	}
 }
 
-// A call on a descriptor that is not a file (a pipe, a socket, a memfd) is not a change of a file: nothing is reported for it, and it is not "a path
-// that could not be read" (which would blame the ptrace of the child, for a call that touched no file).
-func TestSandboxCallsOnDescriptorsThatAreNotFilesAreNotReported(t *testing.T) {
-	var p [2]int
-	if err := unix.Pipe(p[:]); err != nil {
-		t.Fatal(err)
-	}
-	defer unix.Close(p[0])
-	defer unix.Close(p[1])
-	mem, err := unix.MemfdCreate("x", 0)
-	if err != nil {
-		t.Skipf("no memfd: %v", err)
-	}
-	defer unix.Close(mem)
-	w := newAttrWatcher([]string{"/nowhere"})
-	var call attrCall
-	for _, c := range attrCalls {
-		if c.name == "fchmod" {
-			call = c
-		}
-	}
-	for name, fd := range map[string]int{"pipe": p[0], "memfd": mem} {
-		var req notifReq
-		req.data.args[0] = uint64(fd)
-		if _, what := w.pathOf(os.Getpid(), &call, &req); what != pathNone {
-			t.Errorf("%s: the descriptor is taken for %d, not for something that is not a file", name, what)
-		}
-	}
-	if got := w.changes(); len(got) != 0 {
-		t.Errorf("reported: %v", got)
-	}
-}
-
 // What the run may write includes /dev/null (the baseline lets it): a change of its attributes is not a change outside.
 func TestSandboxDevNullIsInside(t *testing.T) {
 	skipWithoutSandbox(t)
@@ -769,45 +642,6 @@ func TestSandboxDevNullIsInside(t *testing.T) {
 	}
 	if got := strings.Join(res.AttributeChanges, "\n"); strings.Contains(got, "/dev/null") {
 		t.Errorf("/dev/null is reported:\n%s", got)
-	}
-}
-
-// resolve is the standard library's EvalSymlinks, with the last name kept for the calls that are about a link itself.
-func TestSandboxResolve(t *testing.T) {
-	root, _ := filepath.EvalSymlinks(t.TempDir())
-	must := func(err error) {
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-	must(os.MkdirAll(filepath.Join(root, "work"), 0o755))
-	must(os.MkdirAll(filepath.Join(root, "outside", "sub"), 0o755))
-	must(os.WriteFile(filepath.Join(root, "outside", "victim"), nil, 0o600))
-	must(os.WriteFile(filepath.Join(root, "work", "victim"), nil, 0o600))
-	must(os.Symlink(filepath.Join(root, "outside", "sub"), filepath.Join(root, "work", "link")))
-	must(os.Symlink(filepath.Join(root, "outside", "victim"), filepath.Join(root, "work", "vlink")))
-	must(os.Symlink("vlink", filepath.Join(root, "work", "vlink2"))) // a link to a link, relative
-	must(os.Symlink("loop", filepath.Join(root, "work", "loop")))
-	outVictim := filepath.Join(root, "outside", "victim")
-	for _, c := range []struct {
-		name     string
-		path     string
-		nofollow bool
-		want     string
-	}{
-		{"dotdot after a link", root + "/work/link/../victim", false, outVictim},
-		{"dot and dotdot", root + "/work/link/./../victim", false, outVictim},
-		{"the directory of a link", root + "/work/link/..", false, filepath.Join(root, "outside")},
-		{"a link is followed", root + "/work/vlink", false, outVictim},
-		{"a link to a link", root + "/work/vlink2", false, outVictim},
-		{"the link itself", root + "/work/vlink", true, filepath.Join(root, "work", "vlink")},
-		{"the link itself after a dotdot of a link", root + "/work/link/../vlink", true, filepath.Join(root, "outside", "vlink")},
-		{"a name that is not there", root + "/work/link/nothing", false, filepath.Join(root, "outside", "sub", "nothing")},
-		{"a loop does not hang", root + "/work/loop", false, filepath.Join(root, "work", "loop")},
-	} {
-		if got := resolve(c.path, c.nofollow); got != c.want {
-			t.Errorf("%s: resolve(%q, %v) = %q, want %q", c.name, c.path, c.nofollow, got, c.want)
-		}
 	}
 }
 
@@ -854,35 +688,6 @@ func TestSandboxRelativePathsAreRelativeToTheCaller(t *testing.T) {
 	}
 	if string(res.Stdout) != "caller" {
 		t.Errorf("the path 'data' is not the one of the caller: %q %q", res.Stdout, res.Stderr)
-	}
-}
-
-// The calls whose path could not be read are not changes of files: they are said as a warning of their own, and the run that has only those does not
-// say that files outside were changed.
-func TestSandboxUnreadPathsAreAWarningNotAChange(t *testing.T) {
-	w := newAttrWatcher(nil)
-	w.unread = 3
-	if got := w.changes(); len(got) != 0 {
-		t.Errorf("the calls that could not be read are among the changes: %v", got)
-	}
-	got := strings.Join(w.warnings(), "\n")
-	if !strings.Contains(got, "3") || !strings.Contains(got, "could not be checked") {
-		t.Errorf("not said as a warning: %q", got)
-	}
-}
-
-// The calls that Landlock does not mediate and that newer kernels have are watched too.
-func TestSandboxWatchesTheNewerCallsToo(t *testing.T) {
-	have := map[string]bool{}
-	for _, c := range attrCalls {
-		have[c.name] = true
-	}
-	if runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64" {
-		for _, n := range []string{"setxattrat", "removexattrat", "file_setattr"} {
-			if !have[n] {
-				t.Errorf("%s is not watched", n)
-			}
-		}
 	}
 }
 

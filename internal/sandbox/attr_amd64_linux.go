@@ -4,28 +4,29 @@ package sandbox
 
 import "golang.org/x/sys/unix"
 
-// attrCalls are the system calls that change the mode, the owner, the times or the extended attributes of a file: Landlock does not stop them.
+// attrCalls are the system calls that change the mode, the owner, the times or the extended attributes of a file, and that rivus does for the program (notify_linux.go):
+// Landlock does not stop them. The forms that a build and the tools that it runs use are here.
 var attrCalls = []attrCall{
-	byPath(unix.SYS_CHMOD, "chmod", false),
-	byFd(unix.SYS_FCHMOD, "fchmod"),
-	byDir(unix.SYS_FCHMODAT, "fchmodat", -1),
-	byDir(unix.SYS_FCHMODAT2, "fchmodat2", 3),
-	byPath(unix.SYS_CHOWN, "chown", false),
-	byPath(unix.SYS_LCHOWN, "lchown", true),
-	byFd(unix.SYS_FCHOWN, "fchown"),
-	byDir(unix.SYS_FCHOWNAT, "fchownat", 4),
-	byPath(unix.SYS_UTIME, "utime", false),
-	byPath(unix.SYS_UTIMES, "utimes", false),
-	byDir(unix.SYS_FUTIMESAT, "futimesat", -1),
-	byDir(unix.SYS_UTIMENSAT, "utimensat", 3),
-	byPath(unix.SYS_SETXATTR, "setxattr", false),
-	byPath(unix.SYS_LSETXATTR, "lsetxattr", true),
-	byFd(unix.SYS_FSETXATTR, "fsetxattr"),
-	byPath(unix.SYS_REMOVEXATTR, "removexattr", false),
-	byPath(unix.SYS_LREMOVEXATTR, "lremovexattr", true),
-	byFd(unix.SYS_FREMOVEXATTR, "fremovexattr"),
-	// the newer ones, that Landlock does not mediate either: setxattrat and removexattrat (Linux 6.13: dirfd, path, flags), file_setattr (6.17: dirfd, path, attr, size, flags)
-	byDir(unix.SYS_SETXATTRAT, "setxattrat", 2),
-	byDir(unix.SYS_REMOVEXATTRAT, "removexattrat", 2),
-	byDir(unix.SYS_FILE_SETATTR, "file_setattr", 4),
+	chmodPath(unix.SYS_CHMOD, "chmod"),
+	chmodFd(unix.SYS_FCHMOD, "fchmod"),
+	chmodAt(unix.SYS_FCHMODAT, "fchmodat", -1),
+	chmodAt(unix.SYS_FCHMODAT2, "fchmodat2", 3),
+	chownPath(unix.SYS_CHOWN, "chown", false),
+	chownPath(unix.SYS_LCHOWN, "lchown", true),
+	chownFd(unix.SYS_FCHOWN, "fchown"),
+	chownAt(unix.SYS_FCHOWNAT, "fchownat"),
+	utimensat(unix.SYS_UTIMENSAT),
+	setxattrPath(unix.SYS_SETXATTR, "setxattr", false),
+	setxattrPath(unix.SYS_LSETXATTR, "lsetxattr", true),
+	setxattrFd(unix.SYS_FSETXATTR, "fsetxattr"),
+	removexattrPath(unix.SYS_REMOVEXATTR, "removexattr", false),
+	removexattrPath(unix.SYS_LREMOVEXATTR, "lremovexattr", true),
+	removexattrFd(unix.SYS_FREMOVEXATTR, "fremovexattr"),
+}
+
+// attrDenied are the other forms (the old ones that the C library does not use any more, and the newest ones): they change attributes and are not done for the program
+// and are refused (EPERM): a form that is done for the program has to be understood to the last argument, and these are not needed by what a build runs.
+var attrDenied = []uint32{
+	unix.SYS_UTIME, unix.SYS_UTIMES, unix.SYS_FUTIMESAT,
+	unix.SYS_SETXATTRAT, unix.SYS_REMOVEXATTRAT, unix.SYS_FILE_SETATTR,
 }

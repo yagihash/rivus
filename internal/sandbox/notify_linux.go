@@ -5,7 +5,7 @@ package sandbox
 import (
 	"fmt"
 	"os"
-	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -15,34 +15,112 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// The calls that change the attributes of a file (attrCalls) are not stopped by Landlock: a program can change the mode of a file of the same user
-// that it may not read or write. They are not refused here either (a linker changes the mode of its output with chmod; a path cannot be looked at by a
-// filter of seccomp), but they are handed to rivus, which looks at the path and reports the ones that are outside of the places that the run may write.
-// The report is after the fact and it is not a guard: what is told is what the program asked for.
+// Landlock does not stop the calls that change the attributes of a file (the mode, the owner, the times, the extended attributes): a program could change the
+// mode of a file of the same user that it may not read or write. A filter of seccomp cannot look at a path, and a call that is refused outright breaks the linker (it
+// sets the mode of its output with chmod). So these calls (attrCalls) are handed to rivus, which does them FOR the program, and only for the files inside of the places
+// that the run may write (the work directory): for a file outside the answer is EPERM, and the refusal is reported.
+//
+// The call is not let through (SECCOMP_USER_NOTIF_FLAG_CONTINUE would make the kernel read the path again from the memory of the program, and another thread of the
+// program can change it between the two reads: the check would be of one file and the change of another; seccomp_unotify(2) says so). What is done is what rivus
+// copied: the path and the other arguments are read once from the memory of the program; the file is opened once (O_PATH), the file that was opened is the one that is
+// checked (its path from /proc/self/fd, not a string that can be read again) and the one that the change is made on. A call on a descriptor takes the descriptor of the
+// program by pidfd_getfd, so that the file cannot be changed under it by a dup2 of another thread.
 
-// attrCall says where the arguments of a system call that changes attributes are (-1: there is none of that kind).
+// attrOp is what a call does to the file.
+type attrOp int
+
+const (
+	opChmod attrOp = iota + 1
+	opChown
+	opUtimes
+	opSetxattr
+	opRemovexattr
+)
+
+// attrCall says what a system call that changes attributes is and where its arguments are (-1: it has none of that kind).
 type attrCall struct {
 	nr       uint32
 	name     string
+	op       attrOp
 	fd       int  // the file descriptor of the file
 	dirfd    int  // the directory that path is relative to
 	path     int  // the path (a string)
 	flags    int  // the flags of the call (AT_SYMLINK_NOFOLLOW, AT_EMPTY_PATH)
 	nofollow bool // the call is about the link itself, not about what it points to (lchown, lsetxattr, lremovexattr)
+	// the arguments of the operation
+	mode, uid, gid, times, xname, value, size, xflags int
+}
+
+func newCall(nr uint32, name string, op attrOp) attrCall {
+	return attrCall{nr: nr, name: name, op: op, fd: -1, dirfd: -1, path: -1, flags: -1, mode: -1, uid: -1, gid: -1, times: -1, xname: -1, value: -1, size: -1, xflags: -1}
 }
 
 // the forms of the calls: by a path (argument 0), by a descriptor (argument 0), and relative to a directory (the descriptor of the directory is argument 0 and the
 // path argument 1; flags is the number of the argument that holds AT_* flags, -1 when there is none)
-func byPath(nr uint32, name string, nofollow bool) attrCall {
-	return attrCall{nr: nr, name: name, fd: -1, dirfd: -1, path: 0, flags: -1, nofollow: nofollow}
+func chmodPath(nr uint32, name string) attrCall {
+	c := newCall(nr, name, opChmod)
+	c.path, c.mode = 0, 1
+	return c
 }
 
-func byFd(nr uint32, name string) attrCall {
-	return attrCall{nr: nr, name: name, fd: 0, dirfd: -1, path: -1, flags: -1}
+func chmodFd(nr uint32, name string) attrCall {
+	c := newCall(nr, name, opChmod)
+	c.fd, c.mode = 0, 1
+	return c
 }
 
-func byDir(nr uint32, name string, flags int) attrCall {
-	return attrCall{nr: nr, name: name, fd: -1, dirfd: 0, path: 1, flags: flags}
+func chmodAt(nr uint32, name string, flags int) attrCall {
+	c := newCall(nr, name, opChmod)
+	c.dirfd, c.path, c.mode, c.flags = 0, 1, 2, flags
+	return c
+}
+
+func chownPath(nr uint32, name string, nofollow bool) attrCall {
+	c := newCall(nr, name, opChown)
+	c.path, c.uid, c.gid, c.nofollow = 0, 1, 2, nofollow
+	return c
+}
+
+func chownFd(nr uint32, name string) attrCall {
+	c := newCall(nr, name, opChown)
+	c.fd, c.uid, c.gid = 0, 1, 2
+	return c
+}
+
+func chownAt(nr uint32, name string) attrCall {
+	c := newCall(nr, name, opChown)
+	c.dirfd, c.path, c.uid, c.gid, c.flags = 0, 1, 2, 3, 4
+	return c
+}
+
+func utimensat(nr uint32) attrCall {
+	c := newCall(nr, "utimensat", opUtimes)
+	c.dirfd, c.path, c.times, c.flags = 0, 1, 2, 3
+	return c
+}
+
+func setxattrPath(nr uint32, name string, nofollow bool) attrCall {
+	c := newCall(nr, name, opSetxattr)
+	c.path, c.xname, c.value, c.size, c.xflags, c.nofollow = 0, 1, 2, 3, 4, nofollow
+	return c
+}
+
+func setxattrFd(nr uint32, name string) attrCall {
+	c := newCall(nr, name, opSetxattr)
+	c.fd, c.xname, c.value, c.size, c.xflags = 0, 1, 2, 3, 4
+	return c
+}
+
+func removexattrPath(nr uint32, name string, nofollow bool) attrCall {
+	c := newCall(nr, name, opRemovexattr)
+	c.path, c.xname, c.nofollow = 0, 1, nofollow
+	return c
+}
+
+func removexattrFd(nr uint32, name string) attrCall {
+	c := newCall(nr, name, opRemovexattr)
+	c.fd, c.xname = 0, 1
+	return c
 }
 
 const (
@@ -52,6 +130,7 @@ const (
 	notifIDValid    = 0x40082102 // SECCOMP_IOCTL_NOTIF_ID_VALID (the same on x86-64 and arm64)
 	maxChangesKept  = 200
 	maxPathLen      = 4096
+	maxXattrValue   = 65536 // XATTR_SIZE_MAX
 	notifPollMillis = 100
 )
 
@@ -71,19 +150,20 @@ type notifReq struct {
 type notifResp struct {
 	id    uint64
 	val   int64
-	errno int32
+	errno int32 // minus the errno of the call; 0 when it worked
 	flags uint32
 }
 
-// attrWatcher reads the notifications of a run and keeps what it saw outside of the places that the run may write.
+// attrWatcher serves the notifications of a run: it does the calls that are inside of the places that the run may write, and refuses the others.
 type attrWatcher struct {
 	inside []string // real paths of the directories that the run may write
 	mu     sync.Mutex
 	seen   map[string]bool
 	list   []string
 	cut    int
-	unread int    // the calls whose path could not be read
+	unread int    // the calls that were refused because the file or the arguments could not be read
 	lost   string // the reading of the notifications was given up
+	noAct  string // the thread that does the calls could not give up its capabilities: nothing is done
 	recv   func(fd int, req *notifReq) unix.Errno
 }
 
@@ -114,13 +194,25 @@ func receiveFd(sock int) (int, bool) {
 }
 
 // receive takes the descriptor of the notifications and serves it until done is closed. The descriptor is closed only after that: see serve.
+//
+// The thread that serves does the calls for the program, and it must be able to do no more than the program: the program has no capability (dropCapabilities), and
+// if rivus is run as root or with capabilities, the thread gives them up first (a capability is a property of a thread: only this one is changed, and it is kept by this
+// goroutine until the end, when the thread ends with it). If it cannot, nothing is done for the program and every call is refused.
 func (w *attrWatcher) receive(sock int, done <-chan struct{}) {
+	runtime.LockOSThread()
 	defer unix.Close(sock)
 	fd, ok := receiveFd(sock)
 	if !ok {
 		return
 	}
 	defer unix.Close(fd)
+	hdr := unix.CapUserHeader{Version: unix.LINUX_CAPABILITY_VERSION_3}
+	var data [2]unix.CapUserData
+	if err := unix.Capset(&hdr, &data[0]); err != nil {
+		w.mu.Lock()
+		w.noAct = "the thread that does the calls of the program could not give up its capabilities (" + err.Error() + ")"
+		w.mu.Unlock()
+	}
 	w.serve(fd, done)
 }
 
@@ -189,10 +281,9 @@ func (w *attrWatcher) serve(fd int, done <-chan struct{}) {
 			continue
 		}
 		failures.ok()
-		w.look(fd, &req)
-		// the call goes on as it was asked (the kernel does it): this is a report, not a guard
-		resp := notifResp{id: req.id, flags: unix.SECCOMP_USER_NOTIF_FLAG_CONTINUE}
-		unix.Syscall(unix.SYS_IOCTL, uintptr(fd), unix.SECCOMP_IOCTL_NOTIF_SEND, uintptr(unsafe.Pointer(&resp)))
+		if resp, send := w.handle(fd, &req); send {
+			unix.Syscall(unix.SYS_IOCTL, uintptr(fd), unix.SECCOMP_IOCTL_NOTIF_SEND, uintptr(unsafe.Pointer(&resp)))
+		}
 	}
 }
 
@@ -209,34 +300,17 @@ func (w *attrWatcher) receiveOne(fd int, req *notifReq) unix.Errno {
 func (w *attrWatcher) giveUp(why string) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	w.lost = fmt.Sprintf("the reading of the calls that change the attributes of files failed (%s) %d times in a row and was given up: from then on those calls of the program (chmod, chown, utimes, setxattr) fail with ENOSYS, and none of them was looked at", why, maxReadFailures)
+	w.lost = fmt.Sprintf("the reading of the calls that change the attributes of files failed (%s) %d times in a row and was given up: from then on those calls of the program (chmod, chown, utimes, setxattr) fail with ENOSYS, and none of them was done or looked at", why, maxReadFailures)
 }
 
-// warnings are what was not seen: the calls whose file could not be told (rivus may not read the memory of the program: ptrace of a child that is not allowed),
-// which may or may not have been changes outside, and the reading that was given up. They are not changes of files, and are not listed as such.
-func (w *attrWatcher) warnings() []string {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	var out []string
-	if w.unread > 0 {
-		out = append(out, fmt.Sprintf("%d calls of the build that change the attributes of files could not be checked, since the file that they name could not be read (rivus may not read the memory of the program here: ptrace of a child is not allowed); changes outside of the work directory cannot be told from the ones inside", w.unread))
-	}
-	if w.lost != "" {
-		out = append(out, w.lost)
-	}
-	return out
-}
-
-// what pathOf found
-const (
-	pathOK         = iota // the path is there
-	pathUnreadable        // the memory of the process could not be read
-	pathNone              // the call is not about a file (an empty path that the kernel refuses)
-)
-
-func (w *attrWatcher) look(fd int, req *notifReq) {
+// handle answers one call. The answer is what the program gets: 0 when the call was done for it, the errno of the call when it failed, EPERM when it was refused
+// (a file outside of the places that may be written, a file or arguments that could not be read, a form of the call that is not done). send is false when
+// the program is gone (nothing is waiting).
+func (w *attrWatcher) handle(fd int, req *notifReq) (notifResp, bool) {
+	resp := notifResp{id: req.id}
+	refuse := func() (notifResp, bool) { resp.errno = -int32(unix.EPERM); return resp, true }
 	if req.data.arch != seccompArch() {
-		return
+		return refuse()
 	}
 	var call *attrCall
 	for i := range attrCalls {
@@ -246,97 +320,39 @@ func (w *attrWatcher) look(fd int, req *notifReq) {
 		}
 	}
 	if call == nil {
-		return
+		return refuse()
 	}
-	path, what := w.pathOf(int(req.pid), call, req)
-	// the process may have gone and its number may be another process now
-	if _, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(fd), notifIDValid, uintptr(unsafe.Pointer(&req.id))); errno != 0 {
-		return
+	w.mu.Lock()
+	noAct := w.noAct
+	w.mu.Unlock()
+	if noAct != "" {
+		w.countUnread()
+		return refuse()
 	}
-	switch what {
-	case pathNone:
-		return
-	case pathUnreadable:
-		w.mu.Lock()
-		w.unread++
-		w.mu.Unlock()
-		return
+	out := w.perform(fd, req, call)
+	if out.gone {
+		return resp, false
 	}
-	if w.isInside(path) {
-		return
+	if out.unread {
+		w.countUnread()
 	}
-	w.add(call.name + " " + path)
+	if out.refused != "" {
+		w.add(out.refused)
+	}
+	resp.errno = -int32(out.errno)
+	return resp, true
 }
 
-// pathOf is the file that the call is about, as the program meant it: a relative path is made from the directory of the program (or of the descriptor
-// that it gave), a call about a link itself (lchown, AT_SYMLINK_NOFOLLOW) names the link and not what it points to, and an empty path with AT_EMPTY_PATH
-// is the descriptor itself. A descriptor that is not a file (a pipe, a socket, a memfd) is nothing to report (pathNone); a path that could not be read is
-// pathUnreadable.
-func (w *attrWatcher) pathOf(pid int, call *attrCall, req *notifReq) (string, int) {
-	arg := func(i int) uint64 { return req.data.args[i] }
-	proc := "/proc/" + strconv.Itoa(pid)
-	// fdPath is the file of a descriptor of the process
-	fdPath := func(fd int) (string, int) {
-		p, err := os.Readlink(proc + "/fd/" + strconv.Itoa(fd))
-		if err != nil {
-			return "", pathUnreadable
-		}
-		if !strings.HasPrefix(p, "/") || strings.HasPrefix(p, "/memfd:") { // pipe:[..], socket:[..], anon_inode:..., a memfd
-			return "", pathNone
-		}
-		return strings.TrimSuffix(p, " (deleted)"), pathOK
-	}
-	if call.fd >= 0 {
-		return fdPath(int(int32(arg(call.fd))))
-	}
-	flags := 0
-	if call.flags >= 0 {
-		flags = int(int32(arg(call.flags)))
-	}
-	nofollow := call.nofollow || flags&atSymlinkNoFoll != 0
-	dirfd := atFDCWD
-	if call.dirfd >= 0 {
-		dirfd = int(int32(arg(call.dirfd)))
-	}
-	if call.path >= 0 && arg(call.path) == 0 && call.dirfd >= 0 {
-		return fdPath(dirfd) // utimensat with no path: the file of the descriptor
-	}
-	raw, ok := readString(pid, arg(call.path))
-	if !ok {
-		return "", pathUnreadable
-	}
-	if raw == "" {
-		if flags&atEmptyPath == 0 {
-			return "", pathNone // the kernel refuses an empty path
-		}
-		// the file of the descriptor itself (or the directory of the program, for AT_FDCWD)
-		if dirfd == atFDCWD {
-			if b, err := os.Readlink(proc + "/cwd"); err == nil {
-				return b, pathOK
-			}
-			return "", pathUnreadable
-		}
-		return fdPath(dirfd)
-	}
-	if strings.HasPrefix(raw, "/") {
-		return resolve(raw, nofollow), pathOK
-	}
-	var base string
-	if dirfd == atFDCWD {
-		b, err := os.Readlink(proc + "/cwd")
-		if err != nil {
-			return "", pathUnreadable
-		}
-		base = b
-	} else {
-		b, what := fdPath(dirfd)
-		if what != pathOK {
-			return "", what
-		}
-		base = b
-	}
-	// (joined as a string: filepath.Join would clean it, and `link/..` would be read as nothing; resolve goes component by component)
-	return resolve(base+"/"+raw, nofollow), pathOK
+func (w *attrWatcher) countUnread() {
+	w.mu.Lock()
+	w.unread++
+	w.mu.Unlock()
+}
+
+// idValid says whether the call is still waiting (the process may have gone, and its number may be another process now).
+func idValid(fd int, id uint64) bool {
+	_, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(fd), notifIDValid, uintptr(unsafe.Pointer(&id)))
+	return errno == 0
 }
 
 // readString reads a string of the memory of a process.
@@ -364,27 +380,22 @@ func readString(pid int, addr uint64) (string, bool) {
 	return "", false
 }
 
-// resolve is the file that the kernel finds for the path, as far as it is there: the links are followed by filepath.EvalSymlinks, which takes ".." from the place that
-// it has reached (so `link/..` is the parent of what the link points to). The path must not be cleaned first (filepath.Clean, filepath.Join and filepath.Dir
-// all do it): `work/link/../victim` would be read as `work/victim`, and a change of a file outside would look like a change inside.
-//
-// With nofollow the last name is not followed (the call is about the link itself): the part before it is resolved and the name is kept. The same is done for a name that is
-// not there (the call fails and changes nothing): the part that is there is resolved.
-func resolve(p string, nofollow bool) string {
-	last := strings.LastIndex(p, "/")
-	head, name := p[:last+1], p[last+1:]
-	plain := last >= 0 && name != "" && name != "." && name != ".."
-	if !nofollow || !plain {
-		if r, err := filepath.EvalSymlinks(p); err == nil {
-			return r
-		}
+// readBytes reads n bytes of the memory of a process.
+func readBytes(pid int, addr uint64, n int) ([]byte, bool) {
+	if n == 0 {
+		return nil, true
 	}
-	if plain {
-		if r, err := filepath.EvalSymlinks(head); err == nil {
-			return filepath.Join(r, name)
-		}
+	f, err := os.Open("/proc/" + strconv.Itoa(pid) + "/mem")
+	if err != nil {
+		return nil, false
 	}
-	return filepath.Clean(p)
+	defer f.Close()
+	buf := make([]byte, n)
+	got, _ := f.ReadAt(buf, int64(addr))
+	if got != n {
+		return nil, false
+	}
+	return buf, true
 }
 
 func (w *attrWatcher) isInside(p string) bool {
@@ -410,13 +421,31 @@ func (w *attrWatcher) add(s string) {
 	w.list = append(w.list, s)
 }
 
-// changes is what was seen (and how much was left out, and what could not be seen).
+// changes are the calls that were refused (a file outside of the places that may be written), and how much was left out.
 func (w *attrWatcher) changes() []string {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	out := append([]string(nil), w.list...)
 	if w.cut > 0 {
 		out = append(out, fmt.Sprintf("... and %d more", w.cut))
+	}
+	return out
+}
+
+// warnings are what could not be done or seen: the calls that were refused because their file could not be told (rivus may not read the memory of the program: ptrace of a
+// child that is not allowed), the thread that could not give up its capabilities, and the reading that was given up. They are not refusals of a file, and are not listed as such.
+func (w *attrWatcher) warnings() []string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	var out []string
+	if w.unread > 0 {
+		out = append(out, fmt.Sprintf("%d calls of the build that change the attributes of files were refused (EPERM), since the file that they name or their arguments could not be read (rivus may not read the memory of the program here: ptrace of a child is not allowed)", w.unread))
+	}
+	if w.noAct != "" {
+		out = append(out, w.noAct+": the calls that change the attributes of files were all refused")
+	}
+	if w.lost != "" {
+		out = append(out, w.lost)
 	}
 	return out
 }

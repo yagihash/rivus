@@ -70,8 +70,8 @@ type Result struct {
 	MayHaveLeftProcesses bool
 	// Warnings are things that the caller says to the user about this run (a kernel that cannot close something, for example).
 	Warnings []string
-	// AttributeChanges are the files outside the places that the run may write, whose mode, owner, times or extended attributes the program
-	// changed (Linux: Landlock does not stop that, so it is reported after the fact: "chmod /home/u/.ssh/id_rsa"). More than a few hundred are cut.
+	// AttributeChanges are the calls that change the mode, owner, times or extended attributes of a file outside the places that the run may write, and that were
+	// refused (Linux: Landlock does not stop them, so rivus does them for the program, and only for the files inside): "chmod /home/u/.ssh/id_rsa". More than a few hundred are cut.
 	AttributeChanges []string
 }
 

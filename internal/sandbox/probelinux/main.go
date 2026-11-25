@@ -50,6 +50,7 @@ func report(name string, escaped bool, how string) {
 
 func main() {
 	flag.Parse()
+	attrExtra()
 	if *attr != "" {
 		fmt.Println("attr-chmod", os.Chmod(*attr, 0o640))
 		fmt.Println("attr-utimes", os.Chtimes(*attr, time.Unix(1, 0), time.Unix(1, 0)))
@@ -159,6 +160,16 @@ func main() {
 		_, _, errno := unix.Syscall(c.nr, c.args[0], c.args[1], c.args[2])
 		report(c.name, errno != unix.EPERM, fmt.Sprint(errno))
 	}
+	// the forms of the calls that change attributes that the sandbox does not do for the program: refused with EPERM (on the host, the arguments make them fail in
+	// another way)
+	for _, c := range []struct {
+		name string
+		nr   uintptr
+	}{{"setxattrat", unix.SYS_SETXATTRAT}, {"removexattrat", unix.SYS_REMOVEXATTRAT}, {"file_setattr", unix.SYS_FILE_SETATTR}} {
+		_, _, errno := unix.Syscall6(c.nr, 0xffffffffffffff9c, 0, 0, 0, 0, 0)
+		report(c.name, errno != unix.EPERM, fmt.Sprint(errno))
+	}
+	legacyAttrChecks()
 	// io_uring (it makes sockets by itself)
 	_, _, errno := unix.Syscall(unix.SYS_IO_URING_SETUP, 1, 0, 0)
 	report("io-uring", errno != unix.EPERM, fmt.Sprint(errno))

@@ -2,5 +2,8 @@
 
 package sandbox
 
-// attrCalls: there is no filter for this architecture (see seccomp_other_linux.go).
-var attrCalls []attrCall
+// attrCalls and attrDenied: there is no filter for this architecture (see seccomp_other_linux.go).
+var (
+	attrCalls  []attrCall
+	attrDenied []uint32
+)

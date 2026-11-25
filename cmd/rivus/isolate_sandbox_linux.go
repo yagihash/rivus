@@ -257,8 +257,7 @@ func (o *isolationOpts) rustExtractorVersionSandboxed(ctx context.Context) (stri
 }
 
 // tellAboutRun says what the run did that the user must hear, whether the stage worked or not: the warnings (a kernel that cannot close something), the files outside of
-// the work directory whose attributes the build changed (the sandbox of Linux cannot stop that, and this is the only place where the user hears of it: a build script
-// that does it and then fails, or runs out of time, did it all the same), and the processes that may have been left.
+// the work directory whose attributes the build tried to change (refused: this is where the user hears of it, and a build script that tries it and then fails, or runs out of time, did try it all the same), and the processes that may have been left.
 func (o *isolationOpts) tellAboutRun(stage string, res *sandbox.Result) {
 	if stage != "extract" || res == nil {
 		return
@@ -267,8 +266,8 @@ func (o *isolationOpts) tellAboutRun(stage string, res *sandbox.Result) {
 		fmt.Fprintf(o.err(), "rivus: warning: %s\n", w)
 	}
 	if len(res.AttributeChanges) > 0 {
-		// Landlock does not stop these, so they were let through and are told here: the files are outside of the work directory of the build
-		fmt.Fprintf(o.err(), "rivus: warning: the build changed the mode, the owner, the times or the attributes of files outside of its work directory (the sandbox of Linux cannot stop that; the calls were let through). Look at them if the project is not one you trust:\n")
+		// Landlock does not stop these, so rivus does them for the build, and only for the files inside of its work directory: these were refused (EPERM)
+		fmt.Fprintf(o.err(), "rivus: warning: the build tried to change the mode, the owner, the times or the attributes of files outside of its work directory, and the sandbox refused (EPERM). Look at them if the project is not one you trust:\n")
 		for _, c := range res.AttributeChanges {
 			fmt.Fprintf(o.err(), "  %s\n", c)
 		}

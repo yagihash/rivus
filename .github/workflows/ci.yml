@@ -717,7 +717,7 @@ jobs:
           go test -c -o "$RUNNER_TEMP/sandbox.test" ./internal/sandbox
           cd internal/sandbox
           sudo env "PATH=$PATH" "GOTOOLCHAIN=local" "RIVUS_SBX_RED=1" "GOCACHE=$RUNNER_TEMP/gocache-root" "GOMODCACHE=$(go env GOMODCACHE)" \
-            "$RUNNER_TEMP/sandbox.test" -test.count=1 -test.v -test.run 'TestSandbox(ProbeEscapes|ClosesEveryWayOut|Baseline)'
+            "$RUNNER_TEMP/sandbox.test" -test.count=1 -test.v -test.run 'TestSandbox(ProbeEscapes|ClosesEveryWayOut|Baseline|AttrAsRoot)'
 
   # The sandbox end to end, on each system that has one (two jobs, so that each runs only for the files of its system): the pinned nightly, the extractor
   # (rivus setup rust), and a crate with a hostile build script and a proc macro and build scripts of dependencies, read by `rivus analyze -lang rust`

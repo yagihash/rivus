@@ -103,6 +103,9 @@ func filter(net int, notify bool) ([]unix.SockFilter, error) {
 		for _, c := range attrCalls {
 			p = append(p, ins(bpfJeq, 0, 1, c.nr), ins(bpfRet, 0, 0, unix.SECCOMP_RET_USER_NOTIF))
 		}
+		for _, nr := range attrDenied {
+			p = append(p, ins(bpfJeq, 0, 1, nr), deny)
+		}
 	}
 	// clone3 is told that it is not there (the C library goes back to clone, which has its flags in a register that can be looked at: clone3
 	// has them in a structure in memory, which a filter cannot read); clone with a flag that makes a namespace is refused
