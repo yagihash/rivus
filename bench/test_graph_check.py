@@ -101,6 +101,136 @@ class DartSteps(unittest.TestCase):
             self.assertIn("extract could not start", err)
 
 
+class RustTarget(unittest.TestCase):
+    """-lang rust (zoo-rust): the extractor runs only under the sandbox of macOS, the isolation is checked each time, an IR is given to index and
+    analyze (-ir), and the IR of the base extractor is made twice. No network and no real extractor: fake programs."""
+
+    def setUp(self):
+        os.environ["RIVUS_HEAVY_LOCK_HELD"] = "1"  # no lock in a test
+
+    def fake(self, d, name, body):
+        p = os.path.join(d, name)
+        open(p, "w").write("#!/bin/sh\n" + body)
+        os.chmod(p, 0o755)
+        return p
+
+    def test_not_run_without_the_sandbox(self):
+        self.assertEqual(g.rust_unavailable("darwin", True), "")
+        self.assertIn("no isolation", g.rust_unavailable("linux", True))
+        self.assertIn("no isolation", g.rust_unavailable("darwin", False))
+        with tempfile.TemporaryDirectory() as d:
+            old, argv = g.rust_unavailable, sys.argv
+            g.rust_unavailable = lambda *a: "this system has no isolation (test)"
+            sys.argv = ["graph_check.py", "-name", "zoo-rust", "-lang", "rust", "-driver", "x", "-base-extractor", "x", "-head-extractor", "x",
+                        "-base-bin", "x", "-head-bin", "x", "-graphcheck-bin", "x", "-dir", d, "-out", d]
+            try:
+                rc = g.main()
+            finally:
+                g.rust_unavailable, sys.argv = old, argv
+            self.assertEqual(rc, 2)  # a run that did not run is 2, never 0 or 3
+            self.assertIn("zoo-rust: NOT RUN (this system has no isolation", open(os.path.join(d, "graphcheck-zoo-rust.txt")).read())
+
+    def test_failed_probe_stops_before_anything_runs(self):
+        class A:
+            base_extractor = head_extractor = driver = base_bin = head_bin = ""
+            limit = 60
+        old = g.db.sandbox_denies_write
+        g.db.sandbox_denies_write = lambda d: (False, "a write under sandbox-exec was NOT denied (the file was made)")
+        try:
+            with tempfile.TemporaryDirectory() as d:
+                why, pre, given, env = g.prepare_rust(A, d, "", [], {"K": "v"}, d, 1 << 33)
+        finally:
+            g.db.sandbox_denies_write = old
+        self.assertTrue(why.startswith("isolation_failed: a write under sandbox-exec was NOT denied"), why)
+        self.assertEqual(given, {})
+
+    def test_rust_env_has_no_way_to_the_host(self):
+        e = g.rust_env({"RIVUS_UNSAFE_HOST_EXEC": "1", "RIVUS_RUST_EXTRACTOR": "/other", g.DUMP_ENV: "/x", "PATH": "/bin", "HOME": "/real"}, "/empty", "/tc")
+        self.assertEqual(e, {"PATH": "/bin", "HOME": "/empty", "RIVUS_RUST_TOOLCHAIN_DIR": "/tc"})
+
+    def test_extract_runs_under_the_sandbox_with_the_given_extractor(self):
+        with tempfile.TemporaryDirectory() as d:
+            log = os.path.join(d, "log")
+            drv = self.fake(d, "driver", "echo \"$@ HOME=$HOME HOST=${RIVUS_UNSAFE_HOST_EXEC-unset}\" >> %s\necho '{\"ir\":1}'\n" % log)
+            env = g.rust_env({"PATH": "/usr/bin:/bin"}, os.path.join(d, "home"), "/tc")
+            out, err = g.extract_rust("base", "1", drv, "/ext/rivus-rust", d, env, d, 60, 1 << 33)
+            self.assertIsNone(err)
+            self.assertEqual(open(out).read().strip(), '{"ir":1}')
+            line = open(log).read()
+            self.assertIn("debug extract -lang rust -C %s -rust-extractor /ext/rivus-rust" % d, line)
+            self.assertNotIn("-unsafe-host-exec", line)
+            self.assertIn("HOME=%s HOST=unset" % os.path.join(d, "home"), line)
+            bad = self.fake(d, "bad", "exit 3\n")
+            self.assertIn("extract failed (exit code 3", g.extract_rust("head", "1", bad, "/e", d, env, d, 60, 1 << 33)[1])
+            empty = self.fake(d, "empty", "exit 0\n")
+            self.assertIn("wrote nothing", g.extract_rust("head", "1", empty, "/e", d, env, d, 60, 1 << 33)[1])
+
+    def test_isolation_is_read_from_the_report_of_each_side(self):
+        with tempfile.TemporaryDirectory() as d:
+            env = dict(os.environ)
+            for mode, rc, want in (("sandbox", 0, None), ("sandbox", 4, None), ("host", 0, "isolation_failed: base side: summary.isolation.mode is 'host'"), (None, 0, "isolation_failed: base side")):
+                summary = '{"summary":{"isolation":{"mode":"%s"}}}' % mode if mode else '{"summary":{}}'
+                rivus = self.fake(d, "rivus", "echo '%s'\nexit %d\n" % (summary, rc))
+                err = g.attest_isolation("base", rivus, "/ext", d, "", [], env, d, 60, 1 << 33)
+                if want is None:
+                    self.assertIsNone(err, (mode, rc))
+                else:
+                    self.assertTrue(err.startswith(want), (mode, err))
+            failing = self.fake(d, "failing", "exit 1\n")
+            self.assertIn("isolation check failed (exit code 1", g.attest_isolation("head", failing, "/ext", d, "", [], env, d, 60, 1 << 33))
+
+    def test_index_and_analyze_read_the_given_ir(self):
+        with tempfile.TemporaryDirectory() as d:
+            log = os.path.join(d, "log")
+            rivus = self.fake(d, "rivus", "echo \"$@\" >> %s\nif [ \"$1\" = analyze ]; then echo '{}'; : > \"$RIVUS_INTERNAL_SUMMARY_DUMP\"; exit 4; fi\n" % log)
+            ir = os.path.join(d, "given.jsonl")
+            open(ir, "w").write("{}\n")
+            files, err, inc = g.run_side("base", rivus, d, "/r.yaml", [], dict(os.environ), d, 60, 1 << 33, "t", loose=True, workers="1", given_ir=ir)
+            self.assertIsNone(err)
+            self.assertTrue(inc)  # exit code 4 is told, not an error (state/global-chain stops by the pass limit on purpose)
+            self.assertEqual(files["ir"], ir)
+            lines = open(log).read().splitlines()
+            self.assertEqual(len(lines), 2, lines)  # no extract step: the IR was made before
+            self.assertTrue(lines[0].startswith("index -ir " + ir + " -C " + d), lines[0])
+            self.assertTrue(lines[1].startswith("analyze -ir " + ir + " -C " + d), lines[1])
+            for l in lines:
+                self.assertNotIn("-lang", l)  # the model is chosen from the IR (checked on zoo-rust)
+                self.assertIn("-workers 1", l)
+
+    def test_ir_repro(self):
+        with tempfile.TemporaryDirectory() as d:
+            a, b, c = (os.path.join(d, n) for n in "abc")
+            open(a, "w").write("x\n"); open(b, "w").write("x\n"); open(c, "w").write("y\n")
+            line, rc = g.repro_line(a, b)
+            self.assertEqual(rc, 0)
+            self.assertTrue(line.startswith("ir-repro: the IR of the base extractor made twice is identical"), line)
+            line, rc = g.repro_line(a, c)
+            self.assertEqual(rc, 1)
+            self.assertTrue(line.startswith("ir-repro: DIFFERENT"), line)
+
+    def test_the_rows_of_a_rust_target(self):
+        """The lines of the isolation and the reproducibility are at the top, a difference of the IR of the two extractors is a row (1), and exit 4 only adds the convergence row."""
+        with tempfile.TemporaryDirectory() as d:
+            gc = self.fake(d, "gc", "echo \"$1: same (3)\"\n")
+            rep = os.path.join(d, "r.json")
+            json.dump({"findings": [], "uncertainties": [], "stats": {}}, open(rep, "w"))
+            dump = os.path.join(d, "dump")
+            open(dump, "w").write("")
+            side = {"ir": "a", "db": "b", "dump": dump, "report": rep}
+
+            class A:
+                graphcheck_bin = gc
+            pre = [("isolation: sandbox (test)", 0), ("ir-repro: the IR of the base extractor made twice is identical (sha256 abc)", 0)]
+            lines, status = g.compare(A, side, side, (True, True), pre)
+            self.assertEqual(lines[:2], [t for t, _ in pre])
+            self.assertEqual([l.split(":")[0] for l in lines[2:6]], ["ir", "edges", "summaries", "findings"])
+            self.assertEqual(sum(1 for l in lines if ": same" in l and not l.startswith(("ir-repro", "isolation"))), 8)  # ir, edges, summaries, findings, uncertainties, 2 orders, scc_coarsened
+            self.assertEqual(status, 4)  # same, and only the convergence is missing: the expected end of zoo-rust
+            self.assertTrue(lines[-1].startswith("convergence: NOT CONVERGED (analyze of base and head"))
+            lines, status = g.compare(A, side, side, (True, True), pre[:1] + [("ir-repro: DIFFERENT (x)", 1)])
+            self.assertEqual(status, 1)  # a difference wins over the convergence
+
+
 class ClockLine(unittest.TestCase):
     """A run that a time limit stopped (stats.load_dependent) is not a pass; the runs of the check get -func-timeout 24h."""
 

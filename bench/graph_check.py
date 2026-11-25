@@ -4,6 +4,7 @@
   graph_check.py -name NAME -base-bin B -head-bin H -graphcheck-bin G -out DIR (-dir D [-rules F] [-flags "..."] | -target T)
                   [-base-workers N -head-workers M]   (the self-check: the same binary as base and head, run with N and M workers)
                   [-lang dart -base-extractor CMD -head-extractor CMD]   (a Dart directory: the command of the extractor of each side)
+                  [-lang rust -driver RIVUS -base-extractor PATH -head-extractor PATH]   (a Rust directory of this repository, macOS only: the isolation makes the IR)
 
 A change for memory or cost must not change what the analysis builds (docs/WORKFLOW.md). On the same code, each version gives:
   IR         `rivus debug extract -all`            (compared by accept.Compare, the comparison of the acceptance test)
@@ -19,12 +20,20 @@ dump (one from before this check) leaves "summaries" as NOT COMPARED; it is not 
 
 -dir: a directory (the benchmarks of the tree, a synthetic one, a clone); -target: a target of bench/deps-targets.json (memos), fetched
 and run like the pass line (the process tree is watched against the memory cap of the target; the heavy-work lock is held for each run).
-Go and Dart (-lang dart, with -dir; a target of bench/deps-targets.json is Go). Rust is not covered. Exit status: 0 everything compared is the
+Go, Dart (-lang dart, with -dir; a target of bench/deps-targets.json is Go) and Rust (-lang rust, with -dir: zoo-rust). Exit status: 0 everything compared is the
 same (and summaries were compared); 1 a difference; 2 a run failed; 3 same, but a part was not compared; 4 same, and the only thing missing is that an analysis did not converge (see below). Standard library only.
 A run of `rivus analyze` that ends with exit code 4 (the analysis is not complete: the pass limit or the timeout; zoo-dart has cells that stop by the
 pass limit on purpose; zoo-go has cells that do not converge too) is compared as far as it goes, and the line "convergence: NOT CONVERGED" makes the exit status 4
 when everything else is the same (a part not compared gives 3, a difference 1, a failed run 2): a result that stopped is not a pass, but a caller that knows
 the target stops can tell it from a part that was not compared. A clock never gives 4 or 3 (clock_line is a line only).
+
+Rust (-lang rust): the extractor reads the project by building it (build scripts and macros run), so it runs only under the sandbox of macOS
+(docs/rust-isolation.md); there is no -unsafe-host-exec here, and on a system without the sandbox the target is NOT RUN. Each side makes its IR
+with the extractor of its own tree (`rivus debug extract -lang rust` of -driver, with an empty HOME and the toolchain that the caller names:
+RIVUS_RUST_TOOLCHAIN_DIR, or the pinned nightly under the real ~/.rustup; `rivus setup rust` is never run), on the same code. Then `rivus index -ir` and
+`rivus analyze -ir` of each side read that IR (they start no extractor). The isolation is checked each time, as bench/deps_bench.py does: before
+anything runs, `sandbox-exec` must deny a write; for each side, one `rivus analyze -lang rust` must report summary.isolation.mode == "sandbox"
+(else the run fails). The IR of the base extractor is made twice and the two must be the same file (the line `ir-repro`; a difference is 1).
 """
 import argparse, collections, hashlib, json, os, shlex, subprocess, sys, tempfile
 
@@ -49,16 +58,23 @@ def patterns_of(flags, loose=False):
 FUNC_TIMEOUT = "24h"
 
 
-def run_side(side, binary, src, rules, flags, env_base, work, limit_s, cap, lock_reason, loose=False, workers="", extractor=""):
+def run_side(side, binary, src, rules, flags, env_base, work, limit_s, cap, lock_reason, loose=False, workers="", extractor="", given_ir=""):
     """Runs extract, index and analyze of one version. Returns (files, error, incomplete): incomplete is True when analyze ended with exit code 4.
-    extractor: the command of the Dart extractor of this version (empty: Go)."""
+    extractor: the command of the Dart extractor of this version (empty: Go).
+    given_ir: an IR that is already made (Rust: under the isolation): there is no extract step, and index and analyze read it with -ir."""
     pats = patterns_of(flags, loose)
     files = {"ir": os.path.join(work, side + ".ir.jsonl"), "db": os.path.join(work, side + ".graph.db"),
              "dump": os.path.join(work, side + ".summaries.txt"), "report": os.path.join(work, side + ".report.json")}
     rules_args = ["-rules", rules] if rules else []
     if workers:  # -workers N: the same result with any number of them (the self-check: the hash does not hold the order of the work)
         flags = ["-workers", workers] + flags  # before the packages: the flags stop at the first one
-    if extractor:  # Dart: the IR is the output of the extractor (the way compare.sh makes it); index and analyze run the same command
+    if given_ir:  # Rust: the IR was made before, by the extractor of this side under the isolation; index and analyze only read it
+        files["ir"] = given_ir
+        steps = [
+            ("index", [binary, "index", "-ir", given_ir, "-C", src, "-graph", files["db"]] + rules_args + flags, os.path.join(work, side + ".index.out"), {}),
+            ("analyze", [binary, "analyze", "-ir", given_ir, "-C", src, "-func-timeout", FUNC_TIMEOUT] + rules_args + flags, files["report"], {DUMP_ENV: files["dump"]}),
+        ]
+    elif extractor:  # Dart: the IR is the output of the extractor (the way compare.sh makes it); index and analyze run the same command
         steps = [
             ("extract", shlex.split(extractor) + [src], files["ir"], {}),
             ("index", [binary, "index", "-lang", "dart", "-C", src, "-graph", files["db"]] + rules_args + flags, os.path.join(work, side + ".index.out"), {"RIVUS_DART_EXTRACTOR": extractor}),
@@ -90,6 +106,102 @@ def run_side(side, binary, src, rules, flags, env_base, work, limit_s, cap, lock
         if name == "analyze" and m["rc"] == db.EXIT_INCOMPLETE:
             incomplete = True
     return files, None, incomplete
+
+
+def rust_unavailable(platform=None, have_sandbox=None):
+    """Why a Rust target cannot run here, or "": the only isolation is the sandbox of macOS (sandbox-exec); nothing else is run."""
+    platform = sys.platform if platform is None else platform
+    have = os.path.exists("/usr/bin/sandbox-exec") if have_sandbox is None else have_sandbox
+    if platform != "darwin" or not have:
+        return "this system has no isolation (the sandbox of macOS), and the extractor of Rust is not run without it"
+    return ""
+
+
+def rust_toolchain(env):
+    """The toolchain directory that the isolated build reads (RIVUS_RUST_TOOLCHAIN_DIR, else the pinned nightly under the REAL ~/.rustup: found
+    before HOME is made empty). Returns (dir, error)."""
+    tc = env.get("RIVUS_RUST_TOOLCHAIN_DIR")
+    if not tc:
+        try:
+            chan = db.tomllib.load(open(os.path.join(db.ROOT, "extractor/rust/rust-toolchain.toml"), "rb"))["toolchain"]["channel"]
+        except (OSError, ValueError, KeyError) as e:
+            return "", "the pinned toolchain is not known (%s)" % e
+        arch = "x86_64" if os.uname().machine == "x86_64" else "aarch64"
+        tc = os.path.join(os.path.expanduser("~"), ".rustup", "toolchains", "%s-%s-apple-darwin" % (chan, arch))
+    if not os.path.isfile(os.path.join(tc, "bin", "rustc")):
+        return "", "the pinned toolchain is not at %s (prepare it yourself, or set RIVUS_RUST_TOOLCHAIN_DIR; this tool never runs `rivus setup rust`)" % tc
+    return tc, ""
+
+
+def rust_env(env, home, toolchain):
+    """The environment of an isolated Rust run: an empty HOME (the data of rivus and its cache go there, not to the shared places), the toolchain,
+    and no way to the host (RIVUS_UNSAFE_HOST_EXEC and RIVUS_RUST_EXTRACTOR, which would name another extractor, are removed)."""
+    e = {k: v for k, v in env.items() if k not in ("RIVUS_UNSAFE_HOST_EXEC", "RIVUS_RUST_EXTRACTOR", DUMP_ENV)}
+    e["HOME"] = home
+    e["RIVUS_RUST_TOOLCHAIN_DIR"] = toolchain
+    return e
+
+
+def extract_rust(side, tag, driver, extractor, src, env, work, limit_s, cap):
+    """`rivus debug extract -lang rust` of the driver, under the sandbox (no -unsafe-host-exec), into <work>/<side>.<tag>.ir.jsonl. Returns (path, error)."""
+    out = os.path.join(work, "%s.%s.ir.jsonl" % (side, tag))
+    err = os.path.join(work, "%s.%s.extract.err" % (side, tag))
+    cmd = [driver, "debug", "extract", "-lang", "rust", "-C", src, "-rust-extractor", extractor] + db.rust_sdkroot_args(env)
+    try:
+        with db.heavy_lock("graph_check %s extract" % side):
+            m = db.run_watched(cmd, src, env, limit_s, cap, err, out)
+    except OSError as e:
+        return out, "%s extract could not start (%s)" % (side, e)
+    except HeavyLockTimeout as e:
+        return out, "%s extract did not run: %s" % (side, e)
+    if m["why"]:
+        return out, "%s extract stopped (%s)" % (side, m["why"])
+    if m["rc"] != 0:
+        return out, "%s extract failed (exit code %s; %s)" % (side, m["rc"], err)
+    if os.path.getsize(out) == 0:
+        return out, "%s extract wrote nothing (%s)" % (side, err)
+    return out, None
+
+
+def attest_isolation(side, binary, extractor, src, rules, flags, env, work, limit_s, cap):
+    """One `rivus analyze -lang rust` of this side (the run that reads the project by itself): summary.isolation.mode must be "sandbox", as deps_bench
+    does after a Rust run. The analysis is not used; exit code 4 (the pass limit) is a normal end. Returns an error text or None."""
+    rep = os.path.join(work, side + ".attest.json")
+    err = os.path.join(work, side + ".attest.err")
+    cmd = [binary, "analyze", "-lang", "rust", "-C", src, "-rust-extractor", extractor, "-func-timeout", FUNC_TIMEOUT] + (["-rules", rules] if rules else []) + db.rust_sdkroot_args(env) + flags
+    try:
+        with db.heavy_lock("graph_check %s isolation check" % side):
+            m = db.run_watched(cmd, src, env, limit_s, cap, err, rep)
+    except OSError as e:
+        return "%s isolation check could not start (%s)" % (side, e)
+    except HeavyLockTimeout as e:
+        return "%s isolation check did not run: %s" % (side, e)
+    if m["why"]:
+        return "%s isolation check stopped (%s)" % (side, m["why"])
+    if m["rc"] not in (0, db.EXIT_INCOMPLETE):
+        return "%s isolation check failed (exit code %s; %s)" % (side, m["rc"], err)
+    try:
+        doc = json.load(open(rep))
+    except (OSError, ValueError) as e:
+        return "%s isolation check: no report (%s)" % (side, e)
+    ok, why = db.isolation_ok(doc)
+    return None if ok else "isolation_failed: %s side: %s" % (side, why)
+
+
+def file_sha(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def repro_line(a, b):
+    """The IR of one extractor made twice: the same bytes or not. Returns (line, status)."""
+    ha, hb = file_sha(a), file_sha(b)
+    if ha == hb:
+        return "ir-repro: the IR of the base extractor made twice is identical (sha256 %s)" % ha[:12], 0
+    return "ir-repro: DIFFERENT (the IR of the base extractor made twice differs: sha256 %s and %s)" % (ha[:12], hb[:12]), 1
 
 
 def canon_items(path, key):
@@ -196,8 +308,12 @@ def clock_line(base_report, head_report):
     return head + "; ".join(parts), 0
 
 
-def compare(a, base, head, incomplete=(False, False)):
-    lines, status = [], 0  # status: 0 same, 1 different, 2 failed, 3 not all compared, 4 same but an analysis did not converge
+def compare(a, base, head, incomplete=(False, False), pre=()):
+    """pre: lines (text, status) that go first (Rust: the isolation and the reproducibility of the IR)."""
+    lines, status = [t for t, _ in pre], 0
+    for _, rc in pre:
+        status = worse(status, rc)
+    # status: 0 same, 1 different, 2 failed, 3 not all compared, 4 same but an analysis did not converge
     for kind, key in (("ir", "ir"), ("edges", "db")):
         out, rc = graphcheck(a.graphcheck_bin, kind, base[key], head[key])
         lines.append(out)
@@ -231,6 +347,51 @@ def compare(a, base, head, incomplete=(False, False)):
     return lines, status
 
 
+def not_run(a, why):
+    line = "%s: NOT RUN (%s)" % (a.name, why)
+    print(line)
+    open(os.path.join(a.out, "graphcheck-%s.txt" % a.name), "w").write(line + "\n")
+    return 2
+
+
+def prepare_rust(a, src, rules, flags, env, work, cap):
+    """Rust: the checks before anything runs, then the IR of each side (made under the sandbox) and the isolation check of each side.
+    Returns (why, pre, given, env): why is "" or the reason that the target did not run; pre are the lines (text, status) for the top; given is {side: IR path};
+    env is the environment of the runs after it (the empty HOME, so that index and analyze write nothing in the shared places either)."""
+    ok, why = db.sandbox_denies_write(work)
+    if not ok:
+        return "isolation_failed: %s (before the run: nothing was built or run)" % why, [], {}, env
+    found = db.rust_refusals(src)
+    if found:
+        return "refused: %s (the build would read the configuration of the target)" % ", ".join(p for p, _ in found), [], {}, env
+    for side, ex in (("base", a.base_extractor), ("head", a.head_extractor)):
+        if not os.access(ex, os.X_OK):
+            return "the Rust extractor of %s is not at %s (compare.sh builds it)" % (side, ex), [], {}, env
+    tc, why = rust_toolchain(env)
+    if why:
+        return why, [], {}, env
+    home = os.path.join(work, "home")  # empty
+    os.makedirs(home)
+    renv = rust_env(env, home, tc)
+    given = {}
+    p1, err = extract_rust("base", "1", a.driver, a.base_extractor, src, renv, work, a.limit, cap)
+    if err:
+        return err, [], {}, env
+    p2, err = extract_rust("base", "2", a.driver, a.base_extractor, src, renv, work, a.limit, cap)
+    if err:
+        return err, [], {}, env
+    given["base"] = p1
+    given["head"], err = extract_rust("head", "1", a.driver, a.head_extractor, src, renv, work, a.limit, cap)
+    if err:
+        return err, [], {}, env
+    for side, binary, ex in (("base", a.base_bin, a.base_extractor), ("head", a.head_bin, a.head_extractor)):
+        err = attest_isolation(side, os.path.abspath(binary), ex, src, rules, flags, renv, work, a.limit, cap)
+        if err:
+            return err, [], {}, env
+    line, rc = repro_line(p1, p2)
+    return "", [("isolation: sandbox (sandbox-exec denied a write before the run; summary.isolation.mode is sandbox for base and head; HOME is an empty directory; no -unsafe-host-exec)", 0), (line, rc)], given, renv
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("-name", required=True)
@@ -242,8 +403,9 @@ def main():
     ap.add_argument("-rules", default="")
     ap.add_argument("-flags", default="")
     ap.add_argument("-target")
-    ap.add_argument("-lang", default="go", choices=("go", "dart"), help="the language of -dir (a Rust project is not covered)")
-    ap.add_argument("-base-extractor", default="", help="-lang dart: the command of the Dart extractor of the base version (e.g. 'dart run /path/extractor/dart/bin/rivus_dart.dart')")
+    ap.add_argument("-lang", default="go", choices=("go", "dart", "rust"), help="the language of -dir")
+    ap.add_argument("-driver", default="", help="-lang rust: the rivus that runs `debug extract -lang rust` under the sandbox (the one of the tree of the script: a base that is older may not have it)")
+    ap.add_argument("-base-extractor", default="", help="-lang dart: the command of the Dart extractor of the base version (e.g. 'dart run /path/extractor/dart/bin/rivus_dart.dart'); -lang rust: the path of the Rust extractor built from the tree of base")
     ap.add_argument("-head-extractor", default="")
     ap.add_argument("-base-workers", default="", help="-workers of the base run (the self-check: the same binary twice with 1 and 8)")
     ap.add_argument("-head-workers", default="")
@@ -252,9 +414,15 @@ def main():
     a = ap.parse_args()
     if bool(a.dir) == bool(a.target):
         ap.error("exactly one of -dir and -target")
-    if a.lang == "dart" and (not a.dir or not a.base_extractor or not a.head_extractor):
-        ap.error("-lang dart needs -dir, -base-extractor and -head-extractor")
+    if a.lang in ("dart", "rust") and (not a.dir or not a.base_extractor or not a.head_extractor):
+        ap.error("-lang %s needs -dir, -base-extractor and -head-extractor" % a.lang)
+    if a.lang == "rust" and not a.driver:
+        ap.error("-lang rust needs -driver")
     os.makedirs(a.out, exist_ok=True)
+    if a.lang == "rust":
+        why = rust_unavailable()
+        if why:
+            return not_run(a, why)
     env = dict(os.environ)
     with tempfile.TemporaryDirectory(prefix="graphcheck-") as work:
         if a.target:
@@ -274,18 +442,20 @@ def main():
             if a.lang == "go" and not patterns_of(flags, True):
                 flags = flags + ["./..."]
             cap = int((a.cap or 8) * db.GB)
-        sides, incomplete = {}, []
+        sides, incomplete, pre, given = {}, [], [], {}
+        if a.lang == "rust":
+            why, pre, given, env = prepare_rust(a, src, rules, flags, env, work, cap)
+            if why:
+                return not_run(a, why)
         for side, binary in (("base", a.base_bin), ("head", a.head_bin)):
             files, err, inc = run_side(side, os.path.abspath(binary), src, rules, flags, env, work, a.limit, cap, a.name, loose=bool(a.dir), workers=a.base_workers if side == "base" else a.head_workers,
-                                       extractor=(a.base_extractor if side == "base" else a.head_extractor) if a.lang == "dart" else "")
+                                       extractor=(a.base_extractor if side == "base" else a.head_extractor) if a.lang == "dart" else "",
+                                       given_ir=given.get(side, ""))
             incomplete.append(inc)
             if err:
-                line = "%s: NOT RUN (%s)" % (a.name, err)
-                print(line)
-                open(os.path.join(a.out, "graphcheck-%s.txt" % a.name), "w").write(line + "\n")
-                return 2
+                return not_run(a, err)
             sides[side] = files
-        lines, status = compare(a, sides["base"], sides["head"], tuple(incomplete))
+        lines, status = compare(a, sides["base"], sides["head"], tuple(incomplete), pre)
     text = "\n".join("%s %s" % (a.name, l.replace("\n", "\n  ")) for l in lines) + "\n"
     print(text, end="")
     open(os.path.join(a.out, "graphcheck-%s.txt" % a.name), "w").write(text)
