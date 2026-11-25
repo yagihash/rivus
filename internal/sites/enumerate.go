@@ -166,7 +166,7 @@ func Enumerate(irsrc ir.Source, texts ir.Texts, rules *model.Rules) *Result {
 					if srcs := rules.CallSources[sym]; len(srcs) > 0 {
 						add(&Site{Role: RoleSource, Kind: model.KindCallResult, Symbol: sym, Labels: labelsOf(srcs), IR: at, Src: srcs, irpos: in.Pos})
 					}
-					if len(rules.Sinks) > 0 && hasFuncOperand(fn, in) {
+					if (len(rules.Sinks) > 0 || len(rules.CallSources) > 0) && hasFuncOperand(fn, in) {
 						rowCalls = append(rowCalls, rowCall{at: at, in: in, sym: sym})
 					}
 					ownSinks := sinksAt(fn, in, in.Callee.Kind == ir.CalleeDynamic || (in.Callee.Kind == ir.CalleeStatic && in.Callee.Recv), rules.Sinks[sym], canon, known, sym)
@@ -734,6 +734,8 @@ type rowCall struct {
 type givenCall struct {
 	fn   int
 	alts [][]int
+	// ret is where the row sends the result of the function (a selector; "" when it sends none)
+	ret string
 	// anyOf: alts has one entry, the operands of which any one fills every parameter (a function that is not read)
 	anyOf bool
 }
@@ -769,9 +771,8 @@ func givenSinks(irsrc ir.Source, fn *ir.Func, rc rowCall, rules *model.Rules, ca
 	var calls []givenCall
 	if rows := rules.CallRowsOf(rc.sym); len(rows) > 0 {
 		for _, r := range rows {
-			if row := r.Row(); len(row.With) > 0 {
-				calls = append(calls, givenCall{fn: row.FnOperand(hasRecv), alts: [][]int{row.WithOperands(hasRecv)}})
-			}
+			row := r.Row()
+			calls = append(calls, givenCall{fn: row.FnOperand(hasRecv), alts: [][]int{row.WithOperands(hasRecv)}, ret: row.Ret})
 		}
 	} else if replacedCall(in, rc.sym, rules) {
 		// each function value that is given is called with the receiver and the other arguments, in order
@@ -812,7 +813,8 @@ func givenSinks(irsrc ir.Source, fn *ir.Func, rc rowCall, rules *model.Rules, ca
 		if h, ok := ir.HeadOf(irsrc, id); ok && h.Symbol != "" {
 			csym = h.Symbol
 		}
-		if len(rules.Sinks[csym]) == 0 {
+		out = append(out, givenSources(rules, in, rc, c, csym, id, have, out)...)
+		if len(rules.Sinks[csym]) == 0 || len(c.alts[0]) == 0 {
 			continue
 		}
 		alts := c.alts
@@ -853,6 +855,31 @@ func givenSinks(irsrc ir.Source, fn *ir.Func, rc rowCall, rules *model.Rules, ca
 		}
 	}
 	return out
+}
+
+// givenSources are the source sites of a call that is given a function that the rules declare a source, when the row of
+// calls sends the result of the function to the result of the call (or an operand): the site is at the call, and what
+// the function returns is put where the row sends it (Site.RetTo). A call that has a site of the same source at the same
+// place already (the call of the function value that an extractor writes) has no second one.
+func givenSources(rules *model.Rules, in ir.Instr, rc rowCall, c givenCall, csym string, id ir.FuncID, have, out []*Site) []*Site {
+	if c.ret == "" || c.anyOf {
+		return nil
+	}
+	var srcs []model.Source
+	for _, src := range rules.CallSources[csym] {
+		if len(src.Out) == 0 {
+			srcs = append(srcs, src)
+		}
+	}
+	if len(srcs) == 0 {
+		return nil
+	}
+	for _, h := range append(append([]*Site(nil), have...), out...) {
+		if h.Role == RoleSource && h.Symbol == csym && h.irpos == in.Pos {
+			return nil
+		}
+	}
+	return []*Site{{Role: RoleSource, Kind: model.KindCallResult, Symbol: csym, Labels: labelsOf(srcs), IR: rc.at, Src: srcs, irpos: in.Pos, Callee: string(id), Given: c.alts, RetTo: c.ret}}
 }
 
 // paramsRead is how many parameters a function is read at by its sinks (the positions they name; all of n when one names none).

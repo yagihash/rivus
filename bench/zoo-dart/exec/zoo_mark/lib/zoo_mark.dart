@@ -114,6 +114,10 @@ void rvEnter([int line = 0, int col = 0]) {
 /// The marker of the tag.
 String src(String tag) => _marker(tag);
 
+/// src for a place that takes a function with a result of bool. It does not record the tag: the cells that use it say
+/// that what it returns is not used.
+bool srcB(String tag) => false;
+
 // (the class In makes its text with this too, and not with src: the analysis must not find a second source
 // in the recording implementation, which is what TestZooMarkIndependentDart holds)
 String _marker(String tag) {

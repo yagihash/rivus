@@ -13,6 +13,7 @@ pub fn register_all() {
     c::clos::relay::register();
     c::clos::returned::register();
     c::clos::stored::register();
+    c::clos::src_ref::register();
     c::clos::to_later::register();
     c::clos::to_lib::register();
     c::clos::to_lib_call::register();

@@ -16,6 +16,9 @@ func Src(tag string) string { return "" }
 // SrcBytes is Src as bytes.
 func SrcBytes(tag string) []byte { return nil }
 
+// SrcB is Src for a place that takes a function with a result of bool (the function of slices.IndexFunc).
+func SrcB(tag string) bool { return false }
+
 // The sinks of each class. They record what they got and execute nothing.
 func SinkCmd(s string) {}
 

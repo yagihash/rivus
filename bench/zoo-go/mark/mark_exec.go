@@ -143,6 +143,10 @@ func appendOnce(l []string, s string) []string {
 	return append(l, s)
 }
 
+// SrcB is Src for a place that takes a function with a result of bool. It does not record the tag: the cells that
+// use it say that what it returns is not used.
+func SrcB(tag string) bool { return false }
+
 // SrcBytes is Src as bytes.
 func SrcBytes(tag string) []byte { return []byte(Src(tag)) }
 

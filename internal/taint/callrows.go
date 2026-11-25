@@ -192,23 +192,7 @@ func (s *state) applyCallRow(cc *callCtx, p *model.Propagator, i int, mref *Mode
 			with[k] = &sg.Value{Kind: sg.KUndef}
 		}
 	}
-	dests := func(t string) []Loc {
-		sel, err := model.ParseSelector(t)
-		if err != nil {
-			return nil
-		}
-		if sel.Kind == model.SelResult {
-			if sel.Index < len(cc.roots) {
-				return []Loc{{cc.roots[sel.Index], ""}}
-			}
-			return nil
-		}
-		v := pick(cc.recv, cc.args, sel)
-		if v == nil {
-			return nil
-		}
-		return append(append([]Loc(nil), s.locs(v)...), s.pointeeOfInterface(v)...)
-	}
+	dests := func(t string) []Loc { return s.callRowDests(cc, t) }
 	background := row.Mode == model.CallModeGo || row.Mode == model.CallModeDefer
 	rd := &redirect{throwSet: row.Throw != "" || background}
 	if row.Ret != "" {
@@ -260,6 +244,25 @@ func (s *state) applyCallRow(cc *callCtx, p *model.Propagator, i int, mref *Mode
 		x := &callCtx{in: cc.in, args: args, roots: cc.roots, sym: cc.sym, rd: rd}
 		s.applySummary(x, fn, bindings, notes, nil)
 	}
+}
+
+// callRowDests are the places that a row of calls names with a selector of the call: the result, or what an operand holds.
+func (s *state) callRowDests(cc *callCtx, t string) []Loc {
+	sel, err := model.ParseSelector(t)
+	if err != nil {
+		return nil
+	}
+	if sel.Kind == model.SelResult {
+		if sel.Index < len(cc.roots) {
+			return []Loc{{cc.roots[sel.Index], ""}}
+		}
+		return nil
+	}
+	v := pick(cc.recv, cc.args, sel)
+	if v == nil {
+		return nil
+	}
+	return append(append([]Loc(nil), s.locs(v)...), s.pointeeOfInterface(v)...)
 }
 
 // applyMethodRow applies a row of calls that names a method (a provided method of a trait of the library calls a

@@ -33,6 +33,7 @@ pub mod clos {
     pub mod partial_callers;
     pub mod relay;
     pub mod returned;
+    pub mod src_ref;
     pub mod stored;
     pub mod to_later;
     pub mod to_lib;

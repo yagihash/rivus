@@ -6,6 +6,8 @@ ruleset: rivus/bench-zoo-go@1
 sources:
   - symbol: zoo/mark.Src
     labels: [user_input]
+  - symbol: zoo/mark.SrcB
+    labels: [user_input]
   - symbol: zoo/mark.SrcBytes
     labels: [user_input]
   # a source that is the type of a parameter: the handler under test takes a mark.In

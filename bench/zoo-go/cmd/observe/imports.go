@@ -18,6 +18,7 @@ import (
 	_ "zoo/cells/clos/range_func"
 	_ "zoo/cells/clos/relay"
 	_ "zoo/cells/clos/returned"
+	_ "zoo/cells/clos/src_ref"
 	_ "zoo/cells/clos/stored"
 	_ "zoo/cells/clos/to_later"
 	_ "zoo/cells/clos/to_lib"

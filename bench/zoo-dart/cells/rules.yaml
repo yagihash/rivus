@@ -6,6 +6,8 @@ ruleset: rivus/bench-zoo-dart@1
 sources:
   - symbol: package:zoo_mark/zoo_mark.dart#src
     labels: [user_input]
+  - symbol: package:zoo_mark/zoo_mark.dart#srcB
+    labels: [user_input]
   # what Flutter gives to an app (the skeleton of packages/zoo_flutter): a field that is read, the parameter of the
   # method that an app overrides, the arguments of a route
   - symbol: package:zoo_flutter/zoo_flutter.dart#TextEditingController.text
