@@ -647,7 +647,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # ubuntu-24.04 has Linux 6.8 (Landlock ABI 4): the tests that need a newer kernel say so and skip, and the ones that hold for an older one run there
+        # every one of these runners has a Linux of the 7.0 series (checked: `uname -r` in the log), so none has an old Landlock; an old kernel is made by the
+        # tests of a test binary (RIVUS_SBX_FAKE_ABI, TestSandboxOldKernels). ubuntu-24.04 differs in the userland (GNU coreutils; ubuntu-latest has the Rust ones, which are
+        # in /usr/lib/cargo/bin: that is how the test of the programs that may be run found a hole)
         runner: [ubuntu-latest, ubuntu-26.04-arm, ubuntu-24.04, ubuntu-24.04-arm]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30

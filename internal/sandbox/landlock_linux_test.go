@@ -4,6 +4,7 @@ package sandbox
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -451,5 +452,43 @@ func TestSandboxLimitsOfResources(t *testing.T) {
 		if len(v) == 0 || v[0] == "unlimited" || strings.HasPrefix(v[0], "core=") || strings.Contains(v[0], "=") {
 			t.Errorf("%s is not limited: %s", k, out)
 		}
+	}
+}
+
+// An old kernel, made on a new one (RIVUS_SBX_FAKE_ABI): the run is refused below ABI 3, goes on with a warning below ABI 6, and what the old kernel
+// cannot close is open (a signal to another process), which is why the warning is there.
+func TestSandboxOldKernels(t *testing.T) {
+	skipWithoutSandbox(t)
+	if ABI() < 6 {
+		t.Skipf("Landlock ABI %d: the signal is open here anyway", ABI())
+	}
+	f := setup(t)
+	run := func(abi string) (*Result, error) {
+		t.Setenv("RIVUS_SBX_FAKE_ABI", abi)
+		return Run(context.Background(), Spec{Argv: []string{f.probe, "-only", "signal-outside"}, Dir: f.work, Env: []string{"PATH=/usr/bin:/bin", "RIVUS_SBX_FAKE_ABI=" + abi}, Write: []string{f.work}, Timeout: time.Minute})
+	}
+	if _, err := run("2"); err == nil || !errors.Is(err, ErrUnavailable) {
+		t.Errorf("ABI 2 was not refused: %v", err)
+	}
+	for _, abi := range []string{"3", "5"} {
+		res, err := run(abi)
+		if err != nil {
+			t.Fatalf("ABI %s: %v", abi, err)
+		}
+		if len(res.Warnings) == 0 {
+			t.Errorf("ABI %s: no warning", abi)
+		}
+		if !verdicts(t, string(res.Stdout))["signal-outside"] {
+			t.Errorf("ABI %s: the signal was stopped, so the kernel is not the old one that the test makes: %s", abi, res.Stdout)
+		}
+	}
+	// the port of a connection is checked from ABI 4 only: with less, a proxy port is refused
+	t.Setenv("RIVUS_SBX_FAKE_ABI", "3")
+	if _, err := Run(context.Background(), Spec{Argv: []string{"/bin/true"}, Dir: "/", Env: []string{"PATH=/usr/bin:/bin", "RIVUS_SBX_FAKE_ABI=3"}, ProxyPort: 8080}); err == nil || !errors.Is(err, ErrUnavailable) {
+		t.Errorf("a proxy port at ABI 3 was not refused: %v", err)
+	}
+	res, err := run("6")
+	if err != nil || len(res.Warnings) != 0 || verdicts(t, string(res.Stdout))["signal-outside"] {
+		t.Errorf("ABI 6: %v %v %s", err, res.Warnings, res.Stdout)
 	}
 }

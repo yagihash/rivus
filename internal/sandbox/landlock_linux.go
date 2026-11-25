@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"testing"
 	"time"
 	"unsafe"
 
@@ -216,13 +217,21 @@ func Available() error {
 	return nil
 }
 
-// ABI says which version of Landlock this kernel has (0: none, or it is turned off).
+// ABI says which version of Landlock this kernel has (0: none, or it is turned off). In a test binary, RIVUS_SBX_FAKE_ABI=N makes it say N when
+// that is less: the sandbox then does not handle the rights that a kernel of that version does not know, which is what an old kernel does (the tests
+// of what an old kernel cannot close run on a new one). A program that is not a test binary does not look at it.
 func ABI() int {
 	v, _, errno := unix.Syscall(unix.SYS_LANDLOCK_CREATE_RULESET, 0, 0, unix.LANDLOCK_CREATE_RULESET_VERSION)
 	if errno != 0 {
 		return 0
 	}
-	return int(v)
+	abi := int(v)
+	if testing.Testing() {
+		if f, err := strconv.Atoi(os.Getenv("RIVUS_SBX_FAKE_ABI")); err == nil && f >= 0 && f < abi {
+			return f
+		}
+	}
+	return abi
 }
 
 // ----- the helper -----
