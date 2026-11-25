@@ -8,6 +8,7 @@
 //! @na(F/call/regexp-replace: Go's regexp replacement with a function and with a literal replacement; the regex crate is a dependency, and the Rust zoo has none)
 //! @na(F/dyn/iface-assert-ptr-recv: Go's type assertion of `any` to an interface read through a pointer receiver; Rust has neither)
 //! @todo(F/dyn/iface-write-passed: PARITY: Go's pointer held in an `io.Writer` interface value that a function writes to (ADR-090); a Rust `&mut dyn Write` passed to a function and read back from the owner can be written)
+//! @todo(F/dart/callback-param-helper: PARITY: a route registered by a helper that is given the handler (`fn mount(r: &mut Router, h: Handler) { r.get("/item/{id}", h) }`); the router skeleton and a `callback_param` row for it are not in the Rust zoo yet, and the cell is not written)
 //! @todo(F/cont/ptr-commaok-assert: PARITY: Go's pointer taken out of an interface by a comma-ok assertion and written through; Rust can write through `&mut T` from `Any::downcast_mut::<T>()` on a `&mut dyn Any` and read the owner back; the cell is not written yet)
 //! @todo(F/cont/ptr-commaok-map: PARITY: Go's pointer taken out of a map by a comma-ok index and written through; Rust can write through the `&mut V` of `if let Some(p) = map.get_mut(..)` and read the map back; the cell is not written yet)
 //! @todo(F/cont/ptr-range-map: PARITY: Go's pointer that is the value of a range over a map and written through; Rust can write through the `&mut V` of `for p in map.values_mut()` and read the map back; the cell is not written yet)
