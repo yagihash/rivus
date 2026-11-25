@@ -1,0 +1,15 @@
+# ガードレールの部品の一覧。ここに当たるファイルを変える PR は、`make merge`(scripts/merge-pr.sh)が断る。ユーザーがマージする。
+# 1 行 1 パターン。`#` から行末まではコメント。末尾が `/` ならそのディレクトリの下すべて、それ以外はファイル名(glob 可)。
+# このファイル自身も含む。このファイルが無い、読めない、パターンが 0 のときも、scripts/merge-pr.sh は断る。
+.github/workflows/
+.githooks/
+.claude/hooks/
+.claude/settings*
+.claude/prompts/
+.regomark/
+.github/ghmint/
+.github/rulesets/
+scripts/merge-pr.sh
+scripts/zoo-loosened-check.sh
+scripts/main-ci*
+.github/guardrail-paths
