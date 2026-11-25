@@ -197,6 +197,21 @@ Rust (`zoo-rust`, by hand on macOS only; the weekly CI does not run it; [issue #
 The names of `deps-targets.json` (memos, memos-4gib, gitea, dart_services) run under the heavy-work lock and the memory cap of the target; gitea is the pass line C (it passes now: see its newest `--kind passline` row of
 `bench/heavy-ledger.tsv`; the numbers are there), so its graph can be compared.
 
+### The extractor must be of the source of the rivus (ADR-126, issue #109)
+
+The tools of the benchmarks and of the pass line stop when the extractor of Rust or Dart is not known to be built from the source that the rivus was built with. They read `summary.extractor.match` of the report (the check that `rivus analyze` makes before it reads a project) and accept `yes` only; this is the one place where a mismatch is a failure (a plain `rivus` only warns). Build the rivus of a benchmark with `make build` (it gives `-ldflags -X main.rustSourceHash=... -X main.dartSourceHash=...`, the values of `go run ./scripts/extractor-hash rust|dart`); a rivus from a plain `go build` or `go install` still works, but these tools stop on it.
+
+| `match` | meaning | what the tool does | repair |
+| --- | --- | --- | --- |
+| `yes` | the same source | goes on | |
+| `no` | the extractor is of another source | `deps_bench.py`: `extractor_mismatch(no)`, exit status 1, no ledger row (the line has no number); `compare.sh --graph-check`: that side is NOT RUN (exit 2) | build the extractor again from the same commit (`rivus setup rust -source extractor/rust`, or `RIVUS_EXTRACTOR_SRC_HASH=$(go run ./scripts/extractor-hash rust) cargo build` in `extractor/rust`) |
+| `unknown_binary` | the rivus has no hash (a plain `go build`) | the same | `make build` |
+| `unknown_extractor` | the extractor did not say (old, built without the hash, no answer) | the same | build the extractor again |
+| `unchecked` | the extractor was not asked (no isolation to run it in) | the same | run on macOS (the sandbox) |
+| `n/a(-ir)` | the IR was read from a file | the same (these tools never use `-ir`) | |
+
+`deps_bench.py` builds its rivus with these values when `-rivus` is not given, and starts the Dart extractor as `dart run -DRIVUS_SRC_HASH=<hash> .../rivus_dart.dart`; the Rust extractor is the one that `RIVUS_RUST_EXTRACTOR` (or `extractor/rust/target/debug/rivus-rust`) names, so build it with the hash. This replaces the check by the time of the file (#508). In `compare.sh --graph-check`, each side's rivus is built with the hashes of the extractors of that side's own tree, and its extractor with the hash of its own source; **the hash of base and of head being different is not a failure** (a PR that changes an extractor), only a side that does not match itself is. The check is made on the `summary.extractor` of the report of each side (Rust: the report of the isolation check; Dart: the analysis). A base that is older than the check has no `summary.extractor` and is NOT RUN for Rust and Dart.
+
 ## The cost warning (G12)
 
 The cost table of `compare.sh` has four columns that do not depend on the run (`adds total`, `adds max of a function`, `passes`, `largest SCC`). A rise of 10% or more from base

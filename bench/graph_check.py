@@ -33,7 +33,8 @@ with the extractor of its own tree (`rivus debug extract -lang rust` of -driver,
 RIVUS_RUST_TOOLCHAIN_DIR, or the pinned nightly under the real ~/.rustup; `rivus setup rust` is never run), on the same code. Then `rivus index -ir` and
 `rivus analyze -ir` of each side read that IR (they start no extractor). The isolation is checked each time, as bench/deps_bench.py does: before
 anything runs, `sandbox-exec` must deny a write; for each side, one `rivus analyze -lang rust` must report summary.isolation.mode == "sandbox"
-(else the run fails). The IR of the base extractor is made twice and the two must be the same file (the line `ir-repro`; a difference is 1).
+(else the run fails). The same run (Rust) and the analyze of each side (Dart) must report summary.extractor.match == "yes" (the binary of that side and its
+extractor are of the same source, ADR-126; the hashes of base and head being different is not looked at): else that side is NOT RUN (exit 2) with the reason. The IR of the base extractor is made twice and the two must be the same file (the line `ir-repro`; a difference is 1).
 """
 import argparse, collections, hashlib, json, os, shlex, subprocess, sys, tempfile
 
@@ -185,7 +186,21 @@ def attest_isolation(side, binary, extractor, src, rules, flags, env, work, limi
     except (OSError, ValueError) as e:
         return "%s isolation check: no report (%s)" % (side, e)
     ok, why = db.isolation_ok(doc)
-    return None if ok else "isolation_failed: %s side: %s" % (side, why)
+    if not ok:
+        return "isolation_failed: %s side: %s" % (side, why)
+    return extractor_error(side, rep, "rust")
+
+
+def extractor_error(side, report_path, lang):
+    """The binary and the extractor of one side must be of the same source: summary.extractor.match of a report of this side is "yes" (ADR-126). The
+    hash of base and head being different (a change of the extractor) is not looked at, only that each side matches itself. Returns an error text
+    (the run is NOT RUN) or None; Go has no extractor."""
+    try:
+        doc = json.load(open(report_path))
+    except (OSError, ValueError) as e:
+        return "extractor_mismatch(missing): %s side: no report to read summary.extractor from (%s)" % (side, e) if lang != "go" else None
+    bad = db.extractor_failure(doc, lang)
+    return None if bad is None else "extractor_mismatch(%s): %s side: %s" % (bad[0], side, bad[1])
 
 
 def file_sha(path):
@@ -389,7 +404,7 @@ def prepare_rust(a, src, rules, flags, env, work, cap):
         if err:
             return err, [], {}, env
     line, rc = repro_line(p1, p2)
-    return "", [("isolation: sandbox (sandbox-exec denied a write before the run; summary.isolation.mode is sandbox for base and head; HOME is an empty directory; no -unsafe-host-exec)", 0), (line, rc)], given, renv
+    return "", [("isolation: sandbox (sandbox-exec denied a write before the run; summary.isolation.mode is sandbox and summary.extractor.match is yes for base and head; HOME is an empty directory; no -unsafe-host-exec)", 0), (line, rc)], given, renv
 
 
 def main():
@@ -454,6 +469,10 @@ def main():
             incomplete.append(inc)
             if err:
                 return not_run(a, err)
+            if a.lang == "dart":  # Rust: checked in prepare_rust (attest_isolation)
+                err = extractor_error(side, files["report"], "dart")
+                if err:
+                    return not_run(a, err)
             sides[side] = files
         lines, status = compare(a, sides["base"], sides["head"], tuple(incomplete), pre)
     text = "\n".join("%s %s" % (a.name, l.replace("\n", "\n  ")) for l in lines) + "\n"
