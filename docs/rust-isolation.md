@@ -34,7 +34,7 @@
 - **Landlock が使えるカーネル**(Linux 5.13 以上で、LSM に `landlock` が入っていること: `cat /sys/kernel/security/lsm`)と、seccomp(x86-64 と arm64 だけ)。外部のプログラム(`bwrap` など)も、非特権のユーザー名前空間も要りません。作れないとき(Landlock がない、seccomp が通らない、コンテナの seccomp が Landlock の system call を塞いでいる)は、**対象を動かす前に、rivus が確認し**、何も実行せずに止まります。
 - 抽出の段階の「ネットワークなし」は、seccomp(ソケットを作らせない)で成り立つので、Landlock のバージョンによりません。**他プロセスへのシグナルを塞ぐのは Linux 6.12 以上**(Landlock ABI 6)、**TCP のポートの制御は 6.7 以上**(ABI 4)です。古いカーネルでは、その分が弱くなります(詳細は [DESIGN-linux-sandbox.md](DESIGN-linux-sandbox.md) の 4 節)。
 - 固定の nightly と extractor は、macOS と同じ手順(`rivus setup rust -source <リポジトリの extractor/rust>`)で用意します。ツールチェインは `~/.rustup/toolchains/<固定の nightly>-<x86_64|aarch64>-unknown-linux-gnu`、extractor と取得した依存の置き場所は `~/.config/rivus/rust`(`RIVUS_RUST_DATA_DIR` で変えられる)。
-- ビルドスクリプトが C をコンパイルするので、C コンパイラとリンカ(`cc`、`ld`、`as`、`ar`)とヘッダ(`/usr/include`)がシステムにあること。実行を許すのは、名指しの一覧(`cc`、`gcc`、`ld`、`as`、`ar`、`/bin/sh` など)と、C コンパイラの内部のプログラムの置き場所(`/usr/lib/gcc`、`/usr/libexec`)だけで、`curl`、`ssh`、`python` などは実行できません。
+- ビルドスクリプトが C をコンパイルするので、C コンパイラとリンカ(`cc`、`ld`、`as`、`ar`)とヘッダ(`/usr/include`)がシステムにあること。実行を許すのは、名指しの一覧(`cc`、`gcc`、`ld`、`as`、`ar`、`/bin/sh` など)と、動的ローダーと、C コンパイラの内部のプログラムの置き場所(`/usr/lib/gcc`、`/usr/libexec`)だけで、`curl`、`ssh`、`python` などは、普通には実行できません。ただし、これは境界ではありません(Landlock は `execve` しか見ないので、動的ローダーを直接呼べば、読み取りを許した場所のプログラムは動く)。境界は、ファイルの読み書きとネットワークです。
 - 対象の上の(祖先の)`.cargo/config.toml` と、`Cargo.lock` の要件は、macOS と同じです。
 
 ## 2 段階

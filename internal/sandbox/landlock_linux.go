@@ -135,10 +135,13 @@ func Run(ctx context.Context, s Spec) (*Result, error) {
 
 // addBaseline adds what every program needs to start on Linux, with its reason beside it.
 func (c *helperConfig) addBaseline() {
-	// the dynamic loader and the libraries of the system: every dynamically linked program starts with them
+	// the libraries of the system: every dynamically linked program reads them. They are READ, not run from: a program may be run only when it is named
+	// (the programs of a system can be under /usr/lib too: the Rust coreutils of Ubuntu are in /usr/lib/cargo/bin).
 	for _, d := range []string{"/lib", "/lib64", "/usr/lib", "/usr/lib64"} {
-		c.Exec = append(c.Exec, real(d))
+		c.Read = append(c.Read, real(d))
 	}
+	// the dynamic loader is the one thing that the kernel runs for every dynamically linked program: it is run by its path, and only it
+	c.ExecFiles = append(c.ExecFiles, loaders()...)
 	// /dev/null and the sources of random numbers: the programs write to the one and read from the others
 	c.Write = append(c.Write, "/dev/null")
 	c.ReadFiles = append(c.ReadFiles, "/dev/zero", "/dev/urandom", "/dev/random", "/etc/ld.so.cache")
@@ -151,6 +154,18 @@ func (c *helperConfig) addBaseline() {
 			c.Read = append(c.Read, real(d))
 		}
 	}
+}
+
+// loaders are the dynamic loaders of the system (real paths).
+func loaders() []string {
+	var out []string
+	for _, g := range []string{"/lib64/ld-linux-*.so.*", "/lib/ld-linux-*.so.*", "/lib/*/ld-linux-*.so.*", "/usr/lib/*/ld-linux-*.so.*", "/usr/lib64/ld-linux-*.so.*", "/lib/ld-musl-*.so.*", "/usr/lib/ld-musl-*.so.*"} {
+		ms, _ := filepath.Glob(g)
+		for _, m := range ms {
+			out = append(out, real(m))
+		}
+	}
+	return out
 }
 
 // Available says whether the sandbox can be made on this machine: Landlock and seccomp are there and accept what a run asks for (a

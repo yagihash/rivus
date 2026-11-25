@@ -354,3 +354,25 @@ func listenAddr(t *testing.T) string {
 	_, a := listen(t)
 	return a
 }
+
+// The baseline does not let anything be run from the directories of the libraries (the programs of a system can be there: the Rust coreutils of
+// Ubuntu are in /usr/lib/cargo/bin), and the dynamic loader is run by its path.
+func TestSandboxBaselineRunsOnlyTheLoader(t *testing.T) {
+	var c helperConfig
+	c.addBaseline()
+	if len(c.Exec) != 0 {
+		t.Errorf("the baseline runs programs from directories: %v", c.Exec)
+	}
+	if len(loaders()) == 0 {
+		t.Skip("no dynamic loader found on this system")
+	}
+	for _, l := range loaders() {
+		found := false
+		for _, f := range c.ExecFiles {
+			found = found || f == l
+		}
+		if !found {
+			t.Errorf("the loader %s is not allowed to run", l)
+		}
+	}
+}
