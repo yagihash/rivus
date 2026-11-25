@@ -1,11 +1,11 @@
 # #221 Dart: `List.sort` の比較関数と `Iterable.reduce` の関数に、リストの要素が渡らない(`calls` の行が無い)
 
-- 状態: **closed**(`dart-core.yaml` の `List.sort`、`Iterable.reduce`、`Iterable.fold` の行に `calls` を足して解消。セル `clos/to-sort`、`clos/to-lib-call` が守る)
+- 状態: **closed**(`dart-core.yaml` の `List.sort`、`Iterable.reduce`、`Iterable.fold` の行に `calls` を足して解消。セル `clos/to-sort` が守る)
 - 優先度: 中
 - 種類: サイレントな見逃し
 - 言語: Dart
 - ROADMAP の節: -
-- 守るもの: zoo-dart `clos/to-sort`(`vuln`、`vuln2`)、`clos/to-lib-call`(`vuln2`)。実行との照合は `bench/zoo-dart/callbacks/observe.dart`
+- 守るもの: zoo-dart `clos/to-sort`(`vuln`、`vuln2`、`vuln3`)。実行との照合は `bench/zoo-dart/callbacks/observe.dart`
 - 題: Dart: `List.sort` と `Iterable.reduce` の関数が、要素を引数に受けても、sink に届かない
 
 ## 何が起きるか
@@ -39,12 +39,12 @@ s.sort((a, b) { sinkCmd(a); return a.compareTo(b); });       // 出ない(b も�
 
 ## 直した内容
 
-コミット 540ba342。`dart-core.yaml` の次の 3 つの行に `calls` を足した。
+コミット 540ba342 と、その後の修正(fold のセルを `to_sort` に移した)。`dart-core.yaml` の次の 3 つの行に `calls` を足した。
 
 - `List.sort`: `calls: [{fn: arg0, with: [recv, recv]}]`(比較関数に、リストの要素が 2 つ渡る)。
 - `Iterable.reduce`: `calls: [{fn: arg0, with: [recv, recv], ret: result0}]`(戻り値が、次の累積になる)。
 - `Iterable.fold`: `calls: [{fn: arg1, with: [arg0, recv], ret: result0}]`(初期値と要素が渡る。キャプチャした値は元から出ていたが、要素は渡っていなかった)。
 
-セルは、`bench/zoo-dart/cells/lib/clos/to_sort.dart`(`sort` が `vuln`、`reduce` が `vuln2`、`fixed`、`decoy`。Go の `clos/to-sort`、Rust の同名のセルと同じ名前)と、`to_lib_call.dart` の `vuln2`(fold の要素)と、`fixed`、`decoy` の対応する行。行を戻すと、`vuln` の 3 つが検出されなくなることを確かめた。実行との照合は `callbacks/observe.dart` の 3 つの呼び出し(`TestZooCallbacksDart`)。`marks.d` のロックも足した。
+セルは、`bench/zoo-dart/cells/lib/clos/to_sort.dart`(`sort` が `vuln`、`reduce` が `vuln2`、`fold` の要素が `vuln3`、`fixed`、`decoy`。Go の `clos/to-sort`、Rust の同名のセルと同じ名前)。fold も同じファイルに置いた(既存のセル `to_lib_call` に行を足すと、ゲートが緩めた印と見るため)。行を戻すと、`vuln`、`vuln2`、`vuln3` が検出されなくなることを確かめた。実行との照合は `callbacks/observe.dart` の 3 つの呼び出し(`TestZooCallbacksDart`)。`marks.d` のロックも足した。
 
 `Iterable.singleWhere` と `Iterable.expand` は、同じ形に見えるが、行が無くても、セルの形(要素を受ける関数の中の sink)は、すでに検出される(確かめた)ので、行は足していない。
