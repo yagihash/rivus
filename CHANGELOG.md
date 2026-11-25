@@ -1,5 +1,12 @@
 # Changelog
 
+## [v0.0.19](https://github.com/yagihash/rivus/compare/v0.0.18...v0.0.19) - 2026-11-25
+
+### Features
+- feat: Dart の Iterable.singleWhere と expand に calls: の行を足す by @yagihash in https://github.com/yagihash/rivus/pull/534
+- feat: リリースにソースの tarball を足し、tap の url をそれに替える by @yagihash in https://github.com/yagihash/rivus/pull/536
+- feat: 解析の前に extractor のソースのハッシュを読んで照合し、記録する by @yagihash in https://github.com/yagihash/rivus/pull/537
+
 ## [v0.0.18](https://github.com/yagihash/rivus/compare/v0.0.17...v0.0.18) - 2026-11-25
 
 ### Features
