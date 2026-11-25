@@ -197,7 +197,7 @@ class PasslineRun(unittest.TestCase):
             finally:
                 d.prepare, d.ROOT = orig, root
                 del os.environ["RIVUS_HEAVY_LOCK"], os.environ["BENCH_OUT"]
-            self.assertEqual(line, line.split("detected=")[0] + "detected=1/1 quiet_after_fix=n/a")
+            self.assertEqual(line, line.split("detected=")[0] + "detected=1/1 quiet_after_fix=n/a coarsened=0/0")
             self.assertTrue(line.startswith("PASS fakegitea "))
             self.assertEqual(row["detected"], "1/1")
             self.assertNotIn("findings", row)

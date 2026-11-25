@@ -12,11 +12,11 @@ import (
 // A large strongly connected component is solved with its dependency functions at access path depth 0 (ADR-124, #187).
 //
 // Before the run, after the components are made (references included: the components that the engine solves), every
-// component that has functions of the dependencies, and has N functions or more (Options.SCCCoarsenN; or N functions of
-// the dependencies, with SCCCoarsenDeps), has its dependency functions at depth 0 from the start: the same as -dep-k 0
-// for them, and the functions of the project in it keep their depth. The decision reads the call graph only, so it does
-// not depend on the order of the work, the machine, the load or a time limit; nothing is thrown away, as nothing is
-// decided during the solving. The answer is the one of a run that has those dependency functions at depth 0.
+// component that has Options.SCCCoarsenN functions of the dependencies or more (-scc-coarsen) has them at depth 0 from
+// the start: the same as -dep-k 0 for them, and the functions of the project in it keep their depth. The decision
+// reads the call graph only, so it does not depend on the order of the work, the machine, the load or a time limit;
+// nothing is thrown away, as nothing is decided during the solving. The answer is the one of a run that has those
+// dependency functions at depth 0.
 
 // coarseSCC is a component whose dependency functions are solved at depth 0.
 type coarseSCC struct {
@@ -25,7 +25,7 @@ type coarseSCC struct {
 	funcs    []*sg.Func
 	packages []string
 	n        int
-	counted  string // "functions" or "dependency_functions"
+	counted  string // what N counts: "dependency_functions"
 	info     *CoarsenedSCC
 }
 
@@ -58,16 +58,10 @@ func coarsenedID(smallest string) string {
 	return hex.EncodeToString(h[:])[:12]
 }
 
-// coarsenBySize marks the dependency functions of the large components. It runs once, before the analysis.
-func (e *Engine) coarsenBySize(sccs [][]*sg.Func) {
-	n := e.opts.SCCCoarsenN
-	if n <= 0 {
-		return
-	}
-	counted := "functions"
-	if e.opts.SCCCoarsenDeps {
-		counted = "dependency_functions"
-	}
+// coarsenBySize marks the dependency functions of the large components, and returns the most dependency functions that
+// one component has. It runs once, before the analysis.
+func (e *Engine) coarsenBySize(sccs [][]*sg.Func) int {
+	most := 0
 	for _, scc := range sccs {
 		var deps []*sg.Func
 		for _, fn := range scc {
@@ -75,11 +69,11 @@ func (e *Engine) coarsenBySize(sccs [][]*sg.Func) {
 				deps = append(deps, fn)
 			}
 		}
-		count := len(scc)
-		if e.opts.SCCCoarsenDeps {
-			count = len(deps)
+		if len(deps) > most {
+			most = len(deps)
 		}
-		if len(deps) == 0 || count < n {
+		n := e.opts.SCCCoarsenN
+		if n <= 0 || len(deps) < n {
 			continue
 		}
 		pk := map[string]bool{}
@@ -101,7 +95,7 @@ func (e *Engine) coarsenBySize(sccs [][]*sg.Func) {
 		if len(listed) > MaxCoarsenedPackages {
 			listed = listed[:MaxCoarsenedPackages]
 		}
-		c := &coarseSCC{id: smallest, size: len(scc), funcs: deps, packages: pkgs, n: n, counted: counted}
+		c := &coarseSCC{id: smallest, size: len(scc), funcs: deps, packages: pkgs, n: n, counted: "dependency_functions"}
 		c.info = &CoarsenedSCC{ID: coarsenedID(smallest), Packages: append([]string(nil), listed...), PackagesCount: len(pkgs),
 			Functions: CoarsenedFunctions{Group: len(scc), Dependencies: len(deps)}}
 		for _, fn := range deps {
@@ -109,10 +103,11 @@ func (e *Engine) coarsenBySize(sccs [][]*sg.Func) {
 		}
 		e.coarseList = append(e.coarseList, c)
 	}
+	return most
 }
 
 // sccCoarsenFlagOff is how the wording tells a reader to solve without this: the one place that has the name of the
-// flag (the flag itself comes with the change that turns this on by default; then only this line changes).
+// flag (-scc-coarsen; 0 turns it off).
 const sccCoarsenFlagOff = "-scc-coarsen 0"
 
 // sccCoarsenedMeaning is what depth 0 means, for the reader of a finding.

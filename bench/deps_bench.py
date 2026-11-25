@@ -120,24 +120,29 @@ GB = 1024 ** 3
 EXIT_INCOMPLETE = 4  # rivus: the output is complete as far as it goes, the analysis is not (cmd/rivus exitIncomplete)
 
 
-def judge(time_s, limit_s, mem_gb, cap_gb, converged, detected, through=None, quiet_after_fix=None, located=None, score=None):
+def judge(time_s, limit_s, mem_gb, cap_gb, converged, detected, through=None, quiet_after_fix=None, located=None, score=None, coarsened=None, expect_coarsened=0):
     """The pass line, pure: two separate conditions, both needed. FINISH (time within the limit, memory within the cap,
     converged) and DETECT (`detected`). located: None or the count of findings at the labelled places (information). detected: True / False / None (no pair for this target). through: None or (tp, n), the
     position-level count, printed as information only (it does not decide PASS). quiet_after_fix: True / False /
     None (n/a); printed, and NOT part of PASS/FAIL. score: None or (n, N), the vulnerabilities detected by place (detect.mode
-    score), printed as `detected=<n>/<N>` only, never part of PASS/FAIL. Returns (passed, line_body)."""
+    score), printed as `detected=<n>/<N>` only, never part of PASS/FAIL. coarsened: None or stats.scc_coarsened (the components
+    whose dependency functions are solved at depth 0: -scc-coarsen, ADR-124); it must be expect_coarsened (0 for a target that is not meant
+    to be hit), or the line fails: a target that comes to be hit changes its answer without being said. Returns (passed, line_body)."""
     ok_time = time_s is not None and time_s <= limit_s
     ok_mem = mem_gb is not None and mem_gb <= cap_gb
     if score is not None:
         detected = None  # the count is printed (below) but is not part of the verdict
     ok_det = detected is not False  # None (n/a) does not count against
     finish = bool(ok_time and ok_mem and converged)
-    passed = bool(finish and ok_det)
+    ok_coarse = coarsened is None or coarsened == expect_coarsened
+    passed = bool(finish and ok_det and ok_coarse)
     yn = lambda v: "n/a" if v is None else ("yes" if v else "no")
     body = "time=%s/%s mem=%s/%s converged=%s finish=%s detected=%s quiet_after_fix=%s" % (
         "%.0f" % time_s if time_s is not None else "-", "%g" % limit_s,
         "%.2f" % mem_gb if mem_gb is not None else "-", "%g" % cap_gb,
         "yes" if converged else "no", yn(finish), yn(detected) if score is None else "%s/%d" % ("-" if score[0] is None else score[0], score[1]), yn(quiet_after_fix))
+    if coarsened is not None:
+        body += " coarsened=%d/%d" % (coarsened, expect_coarsened)
     if located is not None:
         body += " located=%d" % located
     if through is not None:
@@ -504,7 +509,8 @@ def passline(name, t, rivus, cache, outdir, limit_s, cap_gb, repeat=1):
                 fixed_n = cnt(run(d["fixed_commit"], "fixed"))
                 quiet = quiet_after_fix(fixed_n)
             print("deps_bench: %s %s findings of %s: pre-fix %s, fixed %s" % (name, d["id"], d["category"], cnt(pre), fixed_n), file=sys.stderr)
-        passed, body = judge(main["wall"], limit_s, main["peak"] / GB, cap_gb, main["converged"], detected, through, quiet, located, score)
+        coarsened = ((main["report"] or {}).get("stats") or {}).get("scc_coarsened", 0) if main["report"] is not None else None
+        passed, body = judge(main["wall"], limit_s, main["peak"] / GB, cap_gb, main["converged"], detected, through, quiet, located, score, coarsened, t.get("expect_coarsened", 0))
         decided = t.get("decided", False)
         if main["why"]:
             result = "stopped_" + main["why"]

@@ -1,4 +1,4 @@
-date	rivus_commit	target	target_commit	kind	settings	wall_s	cpu_s	peak_tree_gb	memory_limit_bytes	memory_limit_source	memory_peak_bytes	live_heap_max_bytes	gc_cpu_fraction	converged	detected	quiet_after_fix	findings	func_timeouts	budget_exhausted	exit_code	incomplete_reasons	load_start	result
+date	rivus_commit	target	target_commit	kind	settings	wall_s	cpu_s	peak_tree_gb	memory_limit_bytes	memory_limit_source	memory_peak_bytes	live_heap_max_bytes	gc_cpu_fraction	converged	detected	quiet_after_fix	findings	func_timeouts	budget_exhausted	exit_code	incomplete_reasons	load_start	result	largest_scc_deps	scc_coarsened
 2026-11-23	6bee840	go-s3	in-tree	deps	default (-timeout 600s); old measure: peak of the main process only, see heavy-ledger.md	686.6								no			1						timeout
 2026-11-23	6bee840	gcp	in-tree	deps	default (-timeout 600s); old measure: peak of the main process only, see heavy-ledger.md	70.7								yes			27						finished
 2026-11-23	6bee840	dart-gcp	in-tree	deps	default (-timeout 600s); old measure: peak of the main process only, see heavy-ledger.md	44.4								yes			19						finished

@@ -154,6 +154,27 @@ def convergence_line(base_incomplete, head_incomplete):
     return "convergence: NOT CONVERGED (analyze of %s ended with exit code 4: the analysis is not complete; the lines above compare what it had when it stopped)" % who, 4
 
 
+def coarsened(path):
+    """stats.scc_coarsened of a report (0 when it has none), or None when the report cannot be read."""
+    try:
+        return int((json.load(open(path)).get("stats") or {}).get("scc_coarsened", 0))
+    except (OSError, ValueError, TypeError):
+        return None
+
+
+def coarsen_line(base_n, head_n):
+    """The line for the number of components whose dependency functions are solved at depth 0 (-scc-coarsen, ADR-124). A target
+    that is not meant to be hit has 0 on both sides (same). A target that is hit has a difference of the kind the line says: it is
+    classified, not a regression. Returns (line, status); status 0 when both are 0 or equal, else 1."""
+    if base_n is None or head_n is None:
+        return "scc_coarsened: NOT COMPARED (a report cannot be read)", 3
+    if base_n == head_n == 0:
+        return "scc_coarsened: same (0: no component is large)", 0
+    if base_n == head_n:
+        return "scc_coarsened: same (%d)" % head_n, 0
+    return "scc_coarsened: DIFFERENT (base %d, head %d: the components that are solved at depth 0 changed; the differences of this target are classified, not a regression)" % (base_n, head_n), 1
+
+
 def clock_line(base_report, head_report):
     """The signal of the clock, apart from the comparison (it never changes the exit status): for each run, how many functions a time
     limit stopped (stats.func_timeouts, run_timeouts, timed_out) and which (the func_timeout and run_timeout uncertainties name them; the
@@ -199,6 +220,9 @@ def compare(a, base, head, incomplete=(False, False)):
         lines.append(line)
         if not same:
             status = worse(status, 1 if "DIFFERENT" in line else 2)
+    line, rc = coarsen_line(coarsened(base["report"]), coarsened(head["report"]))
+    lines.append(line)
+    status = worse(status, rc)
     lines.append(clock_line(base["report"], head["report"])[0])
     line, rc = convergence_line(*incomplete)
     if line:

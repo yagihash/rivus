@@ -29,7 +29,7 @@ LEDGER = os.path.join(ROOT, "bench", "heavy-ledger.tsv")
 COLUMNS = ["date", "rivus_commit", "target", "target_commit", "kind", "settings", "wall_s", "cpu_s", "peak_tree_gb",
            "memory_limit_bytes", "memory_limit_source", "memory_peak_bytes", "live_heap_max_bytes", "gc_cpu_fraction",
            "converged", "detected", "quiet_after_fix", "findings", "func_timeouts", "budget_exhausted", "exit_code",
-           "incomplete_reasons", "load_start", "result"]
+           "incomplete_reasons", "load_start", "result", "largest_scc_deps", "scc_coarsened"]
 GB = 1024 ** 3
 
 
@@ -91,6 +91,10 @@ def report_columns(rep):
         "findings": len(rep["findings"]) if isinstance(rep.get("findings"), list) else None,
         "func_timeouts": st.get("func_timeouts", 0) if "converged" in st else None,
         "budget_exhausted": st.get("budget_exhausted", 0) if "converged" in st else None,
+        # the most dependency functions in one component, and how many components were solved at depth 0 (-scc-coarsen,
+        # ADR-124): recorded each time, so that a target that comes near the default or is hit shows in the ledger
+        "largest_scc_deps": st.get("largest_scc_deps", 0) if "converged" in st else None,
+        "scc_coarsened": st.get("scc_coarsened", 0) if "converged" in st else None,
     }
     r = s.get("incomplete_reasons")
     out["incomplete_reasons"] = ",".join(r) if isinstance(r, list) else None
@@ -149,7 +153,7 @@ def render(rows):
         targets = {}
     # finish (time, memory, convergence) and det (the detection) are two separate conditions; the pass line needs both
     head = ["date", "rivus", "target", "kind", "settings", "wall_s", "cpu_s", "tree_gb", "limit_gb", "peak_gb",
-            "margin_gb", "live_margin_gb", "gc", "conv", "finish", "det", "quiet", "find", "exit", "result"]
+            "margin_gb", "live_margin_gb", "gc", "conv", "finish", "det", "quiet", "find", "scc_deps", "coarsened", "exit", "result"]
     table = [head]
     for r in rows:
         m_peak, m_live = margins(r)
@@ -164,7 +168,7 @@ def render(rows):
         v = lambda k: r.get(k) or "-"
         table.append([v("date"), v("rivus_commit"), v("target"), v("kind"), v("settings"), v("wall_s"), v("cpu_s"),
                       v("peak_tree_gb"), lim, peak, _gb(m_peak), _gb(m_live), v("gc_cpu_fraction"), v("converged"),
-                      finished(r, targets) if r.get("kind") == "passline" else "-", v("detected"), v("quiet_after_fix"), v("findings"), v("exit_code"), v("result")])
+                      finished(r, targets) if r.get("kind") == "passline" else "-", v("detected"), v("quiet_after_fix"), v("findings"), v("largest_scc_deps"), v("scc_coarsened"), v("exit_code"), v("result")])
     w = [max(len(row[i]) for row in table) for i in range(len(head))]
     return "\n".join("  ".join(c.ljust(w[i]) for i, c in enumerate(row)).rstrip() for row in table)
 

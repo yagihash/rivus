@@ -123,6 +123,8 @@ func (k *keyCtx) compute() (*keyResult, error) {
 	// the depth the dependencies were read at (the effective one: the default is 2, but not deeper than -k): an index made
 	// at another depth, or by a version that had no such depth, is not this one
 	cfg["flags.dep-k"] = strconv.Itoa(o.depDepth())
+	// the size from which the dependency functions of a component are read at depth 0 (ADR-124)
+	cfg["flags.scc-coarsen"] = strconv.Itoa(o.sccCoarsen)
 	if o.charTaint && !o.numeric {
 		// the elements of an index made with it carry the mark: not one made without it. Set only when on (and when it does
 		// something), so that the key of an index made without it is what it was.
