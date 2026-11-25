@@ -447,7 +447,7 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 型は `internal/taint/result.go`（`Uncertainty`）。`kind` の定数と `attributable_to` の割り当て（`attributable()`）も、そこにある。
 `Uncertainty` の主なフィールド: `kind`、`attributable_to`、`detail`、`symbol`、`candidates`（`dynamic_dispatch` の候補）、`narrowed_from` と `basis`（13 節）、`func`、`position`、`snippet`。
 
-`kind` は、`rivus.result/1` のまま足されてきた（ADR-008 の「閉じた集合。追加はバージョンを上げる」は運用で逆。ADR-043 の追記、[ADR-008](adr/008-uncertainty-closed-kinds.md) のヘッダを参照）。この表が、コードの定数と合う一覧。
+`kind` は、`rivus.result/1` の期間に、バージョンを上げずに足されてきた（その一覧は [ADR-127](adr/127-result-schema-version-every-shape-change.md)）。ADR-008 の「追加はバージョンを上げる」に戻し、今は `kind` を足すと `rivus.result/N` が上がる（`TestResultSchemaVersionMatchesShape` が上げ忘れを落とす。ADR-127）。この表が、コードの定数と合う一覧。
 
 #### kind ごとの `attributable_to`
 
@@ -492,7 +492,7 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 
 ### 4.5 出力
 
-型は `internal/taint/result.go`（`Finding`、`Path`、`Step`、`ModelRef`、`Suppression`）と `internal/report/report.go`（`Report`）。結果のバージョンは `rivus.result/1`。
+型は `internal/taint/result.go`（`Finding`、`Path`、`Step`、`ModelRef`、`Suppression`）と `internal/report/report.go`（`Report`）。結果のバージョンは `rivus.result/2`。形（キーと型、`kind` と `attributable_to` の値）が変わるときは、足しただけでも上げる。上げる所は、`internal/report/report.go` の `SchemaVersion` と、`internal/report/schema_shape_test.go` の表 `resultShapes` の 2 か所（ADR-127）。
 
 `Finding` の主なフィールド（JSON の名前）:
 

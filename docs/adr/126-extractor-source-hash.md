@@ -1,7 +1,8 @@
 # ADR-126: extractor のソースのハッシュを、ビルドのときに埋め、extractor の `--version` で答える(2026-11-25)
 
-- 状態: 有効
+- 状態: 一部覆った(→ADR-127)
 - 関連: ADR-125、ARCHITECTURE 2.7、DESIGN-install、#109
+- 状態の詳細: 9 項の「`summary` に足すだけなので `rivus.result/1` は上げない」は ADR-127(足しただけでも上げる)
 - 要旨: IR の形が同じでロジックだけが違う extractor を見分けるため、extractor のソースのハッシュを、本体と extractor の両方のビルドに埋める
 
 **背景:** ADR-125 のスキーマのバージョンは、IR の形が変わったときだけ上がる。extractor のロジックだけを直した変更(形は同じ)では、古い extractor が検査を通り、結果が違うのに何も言われない。
@@ -28,3 +29,5 @@
 11. `bench/deps_bench.py`(`make bench-passline`)は、Rust と Dart の対象で、解析の報告の `summary.extractor` の `match` を読み、`yes` 以外(`no`、`unknown_binary`、`unknown_extractor`、`unchecked`、`n/a(-ir)`、項目がない場合)を、その実行の失敗にする(`extractor_mismatch(<match>)`、終了コード 1、台帳に行を足さない。状態ごとに作り替え方を出す)。ファイルの更新時刻で見ていた照合(#508)は、これに置き換えた(時刻に依らないので、`git` が使えなくても、rebase で時刻が動いても、誤判定しない)。`deps_bench.py` は、`-rivus` を指さないとき、`make build` と同じ値を付けて本体を作り、Dart の extractor は `dart run -DRIVUS_SRC_HASH=<hash>` で起動する。`compare.sh --graph-check` は、各側の本体を、その側の木の extractor のハッシュを付けて作り、extractor もその側のハッシュで作る。左右でハッシュが違う(extractor を変える PR)のは失敗にせず、各側が自分の extractor と合っていること(`match` が `yes`)を各側で確かめて、合わない側を NOT RUN(終了コード 2)にする。素の `go build` / `go install` の本体は、これまでどおり動く(警告が出るだけ)。失敗にするのはこの 2 つの道具だけで、「`make build` で作る」運用を前提にする。
 
 **帰結:** 解析の結果(IR、finding、uncertainty)は変わらない。出力に `summary.extractor` が足される。古い extractor と違う extractor は、止まらずに、警告と記録が出る。`rivus setup` で作った extractor と、`make build` で作った本体は、同じ計算のハッシュを持つ。
+
+**追記(ADR-127、2026-11-25):** 9 項の、`summary.extractor` を足すだけなので `rivus.result` のバージョンは上げない、は改めた。出力のスキーマは、足しただけでも上げる(`rivus.result/2`)。ほかの項は有効。

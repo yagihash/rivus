@@ -369,7 +369,7 @@ dart extractor /opt/homebrew/bin/rivus-dart  schema rivus.ir/0  (UNKNOWN: its an
 
 ## 5. 出力の読み方
 
-`analyze` の出力(`schema_version: "rivus.result/1"`)の、いちばん上のフィールドです。
+`analyze` の出力(`schema_version: "rivus.result/2"`)の、いちばん上のフィールドです。形(キーと型、`kind` と `attributable_to` の値)が変わると、足しただけでも、番号が上がります(ADR-127)。`rivus.result/1` と書いてある結果は、番号を上げる運用の前に書かれたもので、`kind` とフィールドが、書いた時点の rivus によって違います。
 
 | フィールド | 中身 |
 |---|---|
