@@ -205,3 +205,25 @@ test_susume_verb_forms_pass if {
 		not denied("paragraph", text)
 	}
 }
+
+test_michi_way_is_denied if {
+	denied("paragraph", "Rust の道では動かない")
+	denied("paragraph", "deps_bench の道が違う")
+	denied("paragraph", "この道で確認する")
+	denied("paragraph", "source から sink への道を示す")
+	denied("paragraph", "別の道(経由)を使う")
+	denied("list", "道の選び方")
+	denied("table", "別の道を使う")
+}
+
+test_michi_message_names_the_replacement if {
+	some m in wording.deny with input as doc("paragraph", "Rust の道で動かす")
+	contains(m.message, "手順")
+	contains(m.message, "流れ")
+}
+
+test_michi_compounds_pass if {
+	every text in ["道具を使う", "歩道の話", "北海道の例", "道路の話", "道理に合う", "報道の記事", "神道", "武道の話", "書道の道具", "茶道の作法", "道徳の話", "道場で学ぶ", "鉄道の例", "水道の話", "街道を行く", "国道の番号", "`道` の例", "経路を示す"] {
+		not denied("paragraph", text)
+	}
+}
