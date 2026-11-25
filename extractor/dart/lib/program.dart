@@ -236,6 +236,7 @@ class UnitInfo {
           end = x.end;
         case TopLevelVariableDeclaration():
           end = x.end;
+        // default-ok: only the text that is shown: the walk goes up to the next node that has a text
         default:
           continue;
       }
@@ -262,6 +263,7 @@ class UnitInfo {
           if (p is ForParts && p.condition != null) return raw(p.condition!);
         case ConditionalExpression():
           return raw(x.condition);
+        // default-ok: only the text that is shown: a node that is not a condition has none
         default:
       }
     }

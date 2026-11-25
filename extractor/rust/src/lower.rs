@@ -195,10 +195,13 @@ fn class_of(ty: &Ty) -> &'static str {
                 | "std::collections::HashSet" | "std::collections::hash::set::HashSet" | "std::collections::VecDeque"
                 | "std::collections::BTreeMap" | "std::collections::BTreeSet" | "alloc::collections::vec_deque::VecDeque" => "container",
                 "std::boxed::Box" | "alloc::boxed::Box" | "std::rc::Rc" | "std::sync::Arc" | "alloc::rc::Rc" | "alloc::sync::Arc" => "pointer",
+                // default-ok: not a syntax kind: the class of a type: what the rules do not ask about is `other`
                 _ => "struct",
             },
+            // default-ok: not a syntax kind: the class of a type: what the rules do not ask about is `other`
             _ => "other",
         },
+        // default-ok: not a syntax kind: the class of a type: what the rules do not ask about is `other`
         _ => "other",
     }
 }
@@ -228,6 +231,7 @@ fn clean_symbol(name: &str) -> String {
                             break;
                         }
                     }
+                    // default-ok: not a syntax kind: a scan of the characters of a symbol
                     _ => {}
                 }
                 j += 1;
@@ -264,6 +268,7 @@ pub fn type_id(ty: &Ty) -> String {
         TyKind::RigidTy(RigidTy::Adt(def, _)) => clean_symbol(&def.name()),
         TyKind::RigidTy(RigidTy::Ref(_, t, m)) => format!("&{}{}", if matches!(m, Mutability::Mut) { "mut " } else { "" }, type_id(&t)),
         TyKind::RigidTy(RigidTy::RawPtr(t, _)) => format!("*{}", type_id(&t)),
+        // default-ok: not a syntax kind: the name of a type: a type that is not listed is written as the compiler prints it
         _ => format!("{}", ty),
     }
 }
@@ -304,6 +309,7 @@ pub fn closure_key(ty: &Ty) -> String {
                 type_id(ty)
             }
         }
+        // default-ok: not a syntax kind: the key of a closure type: the other types are named as a type
         _ => type_id(ty),
     }
 }
@@ -465,6 +471,7 @@ impl<'a> Lower<'a> {
                 if let StatementKind::Assign(_, rv) = &st.kind {
                     let place = match rv {
                         Rvalue::Ref(_, _, p) | Rvalue::AddressOf(_, p) | Rvalue::Reborrow(_, _, p) => Some(p),
+                        // default-ok: the rvalues that take no address do not put a local in a cell
                         _ => None,
                     };
                     if let Some(p) = place {
@@ -618,8 +625,10 @@ impl<'a> Lower<'a> {
                     TyKind::RigidTy(RigidTy::Ref(_, t, _)) | TyKind::RigidTy(RigidTy::RawPtr(t, _)) => t,
                     TyKind::RigidTy(RigidTy::Adt(_, args)) => match args.0.first() {
                         Some(GenericArgKind::Type(t)) => *t,
+                        // default-ok: not a syntax kind: the type of the place after a dereference: a type that is not listed stays as it is
                         _ => w.ty,
                     },
+                    // default-ok: not a syntax kind: the type of the place after a dereference: a type that is not listed stays as it is
                     _ => w.ty,
                 };
                 w.cur = Cur::Ptr(ptr);
@@ -692,6 +701,7 @@ impl<'a> Lower<'a> {
         self.into_array(w, pos);
         let elem = match w.ty.kind() {
             TyKind::RigidTy(RigidTy::Array(t, _)) | TyKind::RigidTy(RigidTy::Slice(t)) => t,
+            // default-ok: not a syntax kind: the type of an element: a type that is not listed stays as it is
             _ => w.ty,
         };
         match w.cur {
@@ -882,6 +892,7 @@ impl<'a> Lower<'a> {
                         self.emit("copy", &[d], &[v], pos, json!({}));
                         d
                     }
+                    // default-ok: not a syntax kind: the destination is the local that holds the value, or none
                     _ => v,
                 }
             }
@@ -892,6 +903,7 @@ impl<'a> Lower<'a> {
                         self.emit("copy", &[d], &[v], pos, json!({}));
                         d
                     }
+                    // default-ok: not a syntax kind: the destination is the local that holds the value, or none
                     _ => v,
                 }
             }
@@ -902,6 +914,7 @@ impl<'a> Lower<'a> {
                         self.emit("copy", &[d], &[v], pos, json!({}));
                         d
                     }
+                    // default-ok: not a syntax kind: the destination is the local that holds the value, or none
                     _ => v,
                 }
             }
@@ -946,6 +959,7 @@ impl<'a> Lower<'a> {
                         },
                         AggregateKind::Closure(def, _) => closure_field(*def, i),
                         AggregateKind::Coroutine(def, _) => coroutine_field(*def, i),
+                        // default-ok: not a syntax kind: the name of a field of an aggregate: the other kinds number them
                         _ => i.to_string(),
                     };
                     if matches!(kind, AggregateKind::Array(_)) {
@@ -1123,11 +1137,13 @@ impl<'a> Lower<'a> {
                 };
                 match inst {
                     // a call through a trait object: whichever impl the object has
+                    // default-ok: a guarded arm of the call through a trait object: the arms below take the other cases and say what the callee is
                     _ if virtual_call && fn_keys.is_some() => {
                         // `f: &dyn Fn(String)`: the callee is a closure (its body is not an impl of the trait)
                         let cands = self.closure_candidates(&fn_keys.clone().unwrap_or_default());
                         callee = json!({"kind": "dynamic", "symbol": def_name, "candidates": cands});
                     }
+                    // default-ok: a guarded arm of the call through a trait object: the arms below take the other cases and say what the callee is
                     _ if virtual_call => {
                         let cands = self.candidates(&def_name);
                         // by_trait: the merge adds the impls of the other crates of the workspace (and removes the mark)
@@ -1275,6 +1291,7 @@ impl<'a> Lower<'a> {
             "std::option::Option::map" | "std::option::Option::and_then" | "std::option::Option::filter" | "std::option::Option::inspect" | "std::option::Option::is_some_and" => Held::Field("Some.0"),
             "std::result::Result::map" | "std::result::Result::and_then" | "std::result::Result::inspect" => Held::Field("Ok.0"),
             "std::result::Result::map_err" | "std::result::Result::inspect_err" | "std::result::Result::unwrap_or_else" => Held::Field("Err.0"),
+            // default-ok: not a syntax kind: a table of the methods of std that call a closure: a method that is not in it is an ordinary call
             _ => return None,
         };
         if args.len() < 2 || vals.len() < 2 {
@@ -1428,6 +1445,7 @@ pub fn is_closure_body(body: &Body) -> bool {
     let Some(first) = body.arg_locals().first() else { return false };
     let t = match first.ty.kind() {
         TyKind::RigidTy(RigidTy::Ref(_, inner, _)) => inner,
+        // default-ok: not a syntax kind: the type of the first parameter
         _ => first.ty,
     };
     matches!(t.kind(), TyKind::RigidTy(RigidTy::Closure(..)))
@@ -1442,6 +1460,7 @@ fn static_of(ty: &Ty, alloc: &Allocation) -> Option<String> {
     let (_, prov) = alloc.provenance.ptrs.first()?;
     match rustc_public::mir::alloc::GlobalAlloc::from(prov.0) {
         rustc_public::mir::alloc::GlobalAlloc::Static(def) => Some(def.name()),
+        // default-ok: not a syntax kind: an allocation that is not a static is not a static
         _ => None,
     }
 }
@@ -1515,6 +1534,7 @@ fn has_open_const(a: &GenericArgKind) -> bool {
     match a {
         GenericArgKind::Const(c) => !matches!(c.kind(), TyConstKind::Value(..) | TyConstKind::ZSTValue(..)),
         GenericArgKind::Type(t) => ty_has_open_const(t),
+        // default-ok: not a syntax kind: a predicate over generic arguments: a lifetime has no const
         _ => false,
     }
 }
@@ -1526,6 +1546,7 @@ fn ty_has_open_const(t: &Ty) -> bool {
         TyKind::RigidTy(RigidTy::Array(inner, len)) => !matches!(len.kind(), TyConstKind::Value(..) | TyConstKind::ZSTValue(..)) || ty_has_open_const(&inner),
         TyKind::RigidTy(RigidTy::Adt(_, args)) => args.0.iter().any(has_open_const),
         TyKind::RigidTy(RigidTy::Ref(_, inner, _)) | TyKind::RigidTy(RigidTy::Slice(inner)) => ty_has_open_const(&inner),
+        // default-ok: not a syntax kind: a predicate over types: a type that is not listed has no const argument
         _ => false,
     }
 }

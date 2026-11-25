@@ -145,6 +145,7 @@ fn strip_file(v: &mut Value, file: &str, top: bool) {
             }
         }
         Value::Array(a) => a.iter_mut().for_each(|x| strip_file(x, file, false)),
+        // default-ok: not a syntax kind: a JSON value that is not an object or an array has no file to strip
         _ => {}
     }
 }
