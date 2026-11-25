@@ -168,6 +168,20 @@ How to run each is in the README of the target where there is one (`dart-pub/`, 
 this file for the Go ones). "Not recorded" is a gap to be filled the next time someone has the
 checkout: write the commit here when it is known.
 
+## The ledger of maturity
+
+`make maturity-ledger` (once a week, by hand; `DRY=1` only prints) adds **one row per language** (go, dart, rust) to `bench/maturity-ledger.tsv`: `date`, `rivus_commit`, `lang`, `todo`, `todo_marked`, `miss`, `no_edge`, `call_mismatch` (`bench/maturity_ledger.py`; the tests: `python3 bench/test_maturity_ledger.py`). A row with the same date, commit and language is not added twice. The script only adds rows; the commit is made by a person, and a number in a document points to a row, not the other way. An input that cannot be had leaves its cell empty and the reason goes to standard error: an empty cell is not a zero. The Dart and Rust zoo tests need `RIVUS_DART` (default `dart`) and `RIVUS_RUST`; when `RIVUS_RUST` is not set, the extractor is built in `extractor/rust/target` of the tree (the shared install is never written, `rivus setup rust` is never run). Inputs: `todo` is the `@todo` of the "parity marks" line, `todo_marked` is the count of `@todo(F/..: PARITY: ..)` marks in `bench/zoo-dart/na.txt`, `bench/zoo-rust/cells/src/lib.rs` and the Go zoo (the expression of `zooParityTodoRe`; the explanation in `na.txt` is not a mark), and `miss` the `@miss` of the "cells" line of `go test ./cmd/rivus -run 'TestZoo(Go|Dart|Rust)$' -v`; `no_edge` of Go is `make observed-edges-go`, of Dart `bench/zoo-dart/observed/compare.py` (Rust has none); `call_mismatch` is empty for every language until the check of the call counts exists (B(3) of `docs/ROADMAP.md`).
+
+**What a number does not show** (read a 0 or an empty cell as "not seen", never as "no problem"):
+
+- `todo`: the number of cells that the language does not have, whether or not a cell carries a mark (the direction is against the reference language: Dart and Rust against the Go zoo, Go against the cells Dart has); 0 says that no pattern is left without a cell, it is no proof that rivus handles a pattern, and a pattern that has no cell is not counted.
+- `todo_marked`: the part of `todo` that is declared with a reason by `@todo(PARITY)`; the difference from `todo` is the cells that nobody has classified yet.
+- `miss`: 0 is about the cells that the zoo has; a shape that the zoo does not have is not counted.
+- `no_edge`: the observed calls whose edge the graph lacks; a call that the run did not make is not counted (and the Go and Dart tools run different zoos, so the two numbers are not compared with each other). A Go `no_edge` of 0 means that nothing was missed in what the run observed (the calls of the zoo cells); the calls outside that range (`outside`: the harness, other modules) are not counted, and whether the Dart count covers the same range has not been checked.
+- `call_mismatch`: while it is empty, the places where rivus dropped a call and reported nothing are not looked at.
+
+A weekly CI job is [issue #222](../docs/issues/222-maturity-ledger-weekly-ci.md).
+
 ## The ledger of the heavy runs
 
 `make bench-passline` and `make bench-deps` add **one row per run** to `bench/heavy-ledger.tsv`, whatever the result (the columns: the top of `bench/heavy_ledger.py`; notes: `bench/heavy-ledger.md`). Only the tools write it (one `O_APPEND` write under a lock on the file, so two runs at the same time keep their lines whole); a number in a PR or a document points to a row (date and commit) and is not copied. `NO_LEDGER=1` adds no row (a binary with a measurement patch, or a run that is not used as a number). The JSON of a result stays in `$BENCH_OUT` (default `.claude/work/bench-out/`, git-ignored; the ledger holds numbers only). A binary without `summary.memory_*` or `gc_cpu_fraction` gives empty cells, not an error.
