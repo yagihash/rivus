@@ -46,6 +46,13 @@ type Site struct {
 	// call may reach several, and each is a site of its own).
 	Callee string `json:"-"`
 
+	// Given is set for a sink site that a call makes of a function that it is given and calls (the function named as a
+	// value, which the rules declare a sink: the call is where the site is, Callee is the function). Each entry is one
+	// way that the call fills the parameters of the function: for each parameter, the place among the operands of the
+	// call of what fills it (-1: nothing). A row of calls has one way; a function that is not read has one for each
+	// operand that it may be called with.
+	Given [][]int `json:"-"`
+
 	Sink  []model.Sink   `json:"-"`
 	Src   []model.Source `json:"-"`
 	irpos ir.Pos

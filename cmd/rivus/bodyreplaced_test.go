@@ -692,3 +692,32 @@ func TestDartExtractorBodyReplaced(t *testing.T) {
 		t.Errorf("body_not_read: %q", noBody)
 	}
 }
+
+// A function that the rules declare a sink, given as a value to a function of a declared package (which has no row of
+// calls and is taken to call it), is a sink at the call.
+func TestBodyReplacedFunctionGivenIsASinkAtTheCall(t *testing.T) {
+	t.Parallel()
+	app := bodyReplacedProjectCopy(t)
+	main := filepath.Join(app, "main.go")
+	b, err := os.ReadFile(main)
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := strings.Replace(string(b), "\t\tthird.Exec(q)\n", "\t\tthird.Exec(q)\n\t\tthird.Each(q, sinkRef)\n", 1) +
+		"\nfunc sinkRef(s string) string { return s }\n"
+	write(t, main, src)
+	declared := brRules(t, app, "decl.yaml", `ruleset: t@1`+brDeclare)
+	with := brRules(t, app, "decl-sink.yaml", `ruleset: t@1`+brDeclare+`
+sinks:
+  - symbol: example.com/app.sinkRef
+    args: [0]
+    category: command_injection
+`)
+	count := func(r *brReport) int { return strings.Count(string(r.raw), "app.sinkRef") }
+	if n := count(brAnalyzeFresh(t, app, "-rules", declared)); n != 0 {
+		t.Fatalf("a function that is no sink is in the report: %d", n)
+	}
+	if n := count(brAnalyzeFresh(t, app, "-rules", with)); n == 0 {
+		t.Fatal("the function that the rules declare a sink, given to a function of a declared package, is no sink at the call")
+	}
+}

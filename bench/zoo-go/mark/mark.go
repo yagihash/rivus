@@ -17,7 +17,11 @@ func Src(tag string) string { return "" }
 func SrcBytes(tag string) []byte { return nil }
 
 // The sinks of each class. They record what they got and execute nothing.
-func SinkCmd(s string)        {}
+func SinkCmd(s string) {}
+
+// SinkCmdB is SinkCmd for a place that takes a function with a result of bool (the function of slices.IndexFunc).
+func SinkCmdB(s string) bool { return false }
+
 func SinkCmdBytes(b []byte)   {}
 func SinkSQL(s string)        {}
 func SinkHTML(s string)       {}

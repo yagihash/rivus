@@ -150,6 +150,7 @@ func SrcBytes(tag string) []byte { return []byte(Src(tag)) }
 func NewIn(tag string) In { return In{v: Src(tag)} }
 
 func SinkCmd(s string)        { record(Cmd, "", []string{s}) }
+func SinkCmdB(s string) bool  { record(Cmd, "", []string{s}); return false }
 func SinkCmdBytes(b []byte)   { record(Cmd, "", []string{string(b)}) }
 func SinkSQL(s string)        { record(SQL, "", []string{s}) }
 func SinkHTML(s string)       { record(HTML, "", []string{s}) }

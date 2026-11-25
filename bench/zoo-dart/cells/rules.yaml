@@ -43,6 +43,9 @@ sinks:
   - symbol: package:zoo_mark/zoo_mark.dart#sinkCmd
     args: [0]
     category: command_injection
+  - symbol: package:zoo_mark/zoo_mark.dart#sinkCmdB
+    args: [0]
+    category: command_injection
   - symbol: package:zoo_mark/zoo_mark.dart#sinkCmdBytes
     args: [0]
     category: command_injection

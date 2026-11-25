@@ -159,6 +159,16 @@ pub fn sink_cmd_own(s: String) {
     record(CLASS_CMD, "", &[s], Location::caller());
 }
 #[track_caller]
+pub fn sink_cmd_key(s: &mut String) -> i32 {
+    record(CLASS_CMD, "", &[s.clone()], Location::caller());
+    0
+}
+#[track_caller]
+pub fn sink_cmd_res(s: String) -> Result<(), String> {
+    record(CLASS_CMD, "", &[s], Location::caller());
+    Ok(())
+}
+#[track_caller]
 pub fn sink_cmd_bytes(b: &[u8]) {
     record(CLASS_CMD, "", &[String::from_utf8_lossy(b).into_owned()], Location::caller());
 }
@@ -228,14 +238,29 @@ pub fn clean_resource(s: &str) -> String {
     clean(CLASS_CMD, s)
 }
 
-/// The place of the call of the sink, as a path from the root of the zoo: `cells/src/...`.
+/// The place of the call of the sink, as a path from the root of the zoo: `cells/src/...`. A sink that is named as a
+/// value and given to a function of the library is called by the library: the place is then the first frame of the
+/// stack that is in the cells (the call that gave it).
 fn place(loc: &Location) -> (String, u32) {
     let f = loc.file().replace('\\', "/");
-    let file = match f.rfind("cells/src/") {
-        Some(i) => f[i..].to_string(),
-        None => f,
-    };
-    (file, loc.line())
+    match f.rfind("cells/src/") {
+        Some(i) => (f[i..].to_string(), loc.line()),
+        None => in_cells().unwrap_or((f, loc.line())),
+    }
+}
+
+fn in_cells() -> Option<(String, u32)> {
+    let bt = std::backtrace::Backtrace::force_capture().to_string();
+    for l in bt.lines() {
+        let Some(rest) = l.trim().strip_prefix("at ") else { continue };
+        let rest = rest.replace('\\', "/");
+        let Some(i) = rest.rfind("cells/src/") else { continue };
+        let mut parts = rest[i..].split(':');
+        let file = parts.next()?.to_string();
+        let line = parts.next()?.parse().ok()?;
+        return Some((file, line));
+    }
+    None
 }
 
 fn record(class: &'static str, base: &str, strs: &[String], loc: &Location) {

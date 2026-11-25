@@ -82,6 +82,7 @@ func Enumerate(irsrc ir.Source, texts ir.Texts, rules *model.Rules) *Result {
 			order++
 			raw = append(raw, s)
 		}
+		var rowCalls []rowCall
 		declared := 0
 		for _, p := range fn.Params {
 			if !p.Captured {
@@ -165,6 +166,9 @@ func Enumerate(irsrc ir.Source, texts ir.Texts, rules *model.Rules) *Result {
 					if srcs := rules.CallSources[sym]; len(srcs) > 0 {
 						add(&Site{Role: RoleSource, Kind: model.KindCallResult, Symbol: sym, Labels: labelsOf(srcs), IR: at, Src: srcs, irpos: in.Pos})
 					}
+					if len(rules.Sinks) > 0 && hasFuncOperand(fn, in) {
+						rowCalls = append(rowCalls, rowCall{at: at, in: in, sym: sym})
+					}
 					ownSinks := sinksAt(fn, in, in.Callee.Kind == ir.CalleeDynamic || (in.Callee.Kind == ir.CalleeStatic && in.Callee.Recv), rules.Sinks[sym], canon, known, sym)
 					for _, sinks := range byCategory(ownSinks) {
 						add(&Site{Role: RoleSink, Kind: "call", Symbol: sym, Category: sinks[0].Category, Categories: categoriesOf(sinks), Labels: acceptsOf(sinks), IR: at, Sink: sinks, irpos: in.Pos})
@@ -218,6 +222,12 @@ func Enumerate(irsrc ir.Source, texts ir.Texts, rules *model.Rules) *Result {
 						add(&Site{Role: RoleSource, Kind: model.KindField, Symbol: key, Labels: labelsOf(srcs), IR: at, Src: srcs, irpos: pos})
 					}
 				}
+			}
+		}
+		// the sinks of the functions that the calls are given (after the other sites, to see which the call has)
+		for _, rc := range rowCalls {
+			for _, st := range givenSinks(irsrc, fn, rc, rules, canon, known, raw) {
+				add(st)
 			}
 		}
 		if len(raw) == 0 {
@@ -294,17 +304,23 @@ func (res *Result) finishIR(fn *ir.Func, texts ir.Texts, raw []*Site) {
 		expr := texts.Expr(s.irpos)
 		exprHash := fingerprint.Hash(expr)
 
-		okey := s.Role + "|" + s.Symbol
+		// a sink of a function that a call is given is counted apart: the ordinals of the sites that the function had
+		// do not move for it
+		sym := s.Symbol
+		if s.Given != nil {
+			sym += "|given"
+		}
+		okey := s.Role + "|" + sym
 		ordinals[okey]++
 		ord := ordinals[okey]
 		ikey := okey + "|" + exprHash
 		identical[ikey]++
 		iord := identical[ikey]
 
-		structural := fingerprint.Hash(s.Func, s.Role, s.Symbol, itoa(ord))
+		structural := fingerprint.Hash(s.Func, s.Role, sym, itoa(ord))
 		s.Fingerprint = map[string]string{
 			fingerprint.Structural: structural,
-			fingerprint.Content:    fingerprint.Hash(s.Func, s.Role, s.Symbol, exprHash, itoa(iord)),
+			fingerprint.Content:    fingerprint.Hash(s.Func, s.Role, sym, exprHash, itoa(iord)),
 			fingerprint.Expr:       exprHash,
 			fingerprint.Body:       body,
 		}
@@ -348,6 +364,24 @@ func literalOnlyIR(form *irssa.Form, s *Site) bool {
 				hasRecv, argStart, recvAt = true, 2, 1
 			}
 		}
+	}
+	if s.Given != nil {
+		// the arguments of the function are what the call gives it: the operands that the call fills them with
+		for i := range s.Sink {
+			if s.Sink[i].HasParts() || s.Sink[i].WholeRecv() {
+				return false
+			}
+		}
+		checked := 0
+		for _, with := range s.Given {
+			for _, i := range SinkArgs(s.Sink, len(with)) {
+				checked++
+				if i < len(with) && with[i] >= 0 && !isConstantRef(form, form.Operand(at.Block, at.Instr, with[i]), 0) {
+					return false
+				}
+			}
+		}
+		return checked > 0
 	}
 	nargs := len(in.Args) - argStart
 	for i := range s.Sink {
@@ -676,4 +710,221 @@ next:
 		out = append(out, s)
 	}
 	return out
+}
+
+// hasFuncOperand says that an operand of the call is a function (a value of the class func).
+func hasFuncOperand(fn *ir.Func, in ir.Instr) bool {
+	for _, a := range in.Args {
+		if int(a) < len(fn.Locals) && fn.Locals[a].Class == ir.ClassFunc {
+			return true
+		}
+	}
+	return false
+}
+
+// rowCall is a call of a function that may call a function it is given.
+type rowCall struct {
+	at  *IRRef
+	in  ir.Instr
+	sym string
+}
+
+// givenCall is a function that a call is given and calls: the place of it among the operands, and the ways that the
+// call fills its parameters (Site.Given).
+type givenCall struct {
+	fn   int
+	alts [][]int
+	// anyOf: alts has one entry, the operands of which any one fills every parameter (a function that is not read)
+	anyOf bool
+}
+
+// givenSinks are the sink sites of a call that is given a function that it calls (a row of calls of the model, or what
+// the engine takes for a function that has no row: a package whose body is not read, a function without body and model)
+// when the function given is one that the rules declare a sink: a function named as a value, not one written at the
+// call. The site is at the call, and the positions of the sink are the parameters of the function, filled as the call
+// fills them. A call that has a site of the same sink at the same place already (the call of the function value that
+// an extractor writes) has no second one. The rows are the ones that taint/callrows.go applies (model.Rules.CallRowsOf,
+// CallRow.FnOperand, CallRow.WithOperands); for a function without a row, replaced and noModel say what
+// taint/bodyreplaced.go and taint/unmodeledcb.go say.
+func givenSinks(irsrc ir.Source, fn *ir.Func, rc rowCall, rules *model.Rules, canon ir.TypeCanon, known namedNames, have []*Site) []*Site {
+	in := rc.in
+	hasRecv := in.Callee.Kind == ir.CalleeDynamic || (in.Callee.Kind == ir.CalleeStatic && in.Callee.Recv)
+	off := 0
+	if hasRecv {
+		off = 1
+	}
+	var form *irssa.Form
+	functionAt := func(i int) ir.FuncID {
+		if i < 0 || i >= len(in.Args) {
+			return ""
+		}
+		if form == nil {
+			if form, _ = irssa.Build(fn); form == nil {
+				return ""
+			}
+		}
+		id, _ := functionOf(form, form.Operand(rc.at.Block, rc.at.Instr, i), 0)
+		return id
+	}
+	var calls []givenCall
+	if rows := rules.CallRowsOf(rc.sym); len(rows) > 0 {
+		for _, r := range rows {
+			if row := r.Row(); len(row.With) > 0 {
+				calls = append(calls, givenCall{fn: row.FnOperand(hasRecv), alts: [][]int{row.WithOperands(hasRecv)}})
+			}
+		}
+	} else if replacedCall(in, rc.sym, rules) {
+		// each function value that is given is called with the receiver and the other arguments, in order
+		for i := off; i < len(in.Args); i++ {
+			with := make([]int, 0, len(in.Args))
+			if hasRecv {
+				with = append(with, 0)
+			}
+			for j := off; j < len(in.Args); j++ {
+				if j != i {
+					with = append(with, j)
+				}
+			}
+			calls = append(calls, givenCall{fn: i, alts: [][]int{with}})
+		}
+	} else if noModelCall(irsrc, in, rc.sym, rules) {
+		// each function value that is given is called, with any one of the other operands in every parameter
+		for i := off; i < len(in.Args); i++ {
+			var others []int
+			for j := off; j < len(in.Args); j++ {
+				if j != i {
+					others = append(others, j)
+				}
+			}
+			if hasRecv {
+				others = append(others, 0)
+			}
+			calls = append(calls, givenCall{fn: i, alts: [][]int{others}, anyOf: true})
+		}
+	}
+	var out []*Site
+	for _, c := range calls {
+		id := functionAt(c.fn)
+		if id == "" {
+			continue
+		}
+		csym := string(id)
+		if h, ok := ir.HeadOf(irsrc, id); ok && h.Symbol != "" {
+			csym = h.Symbol
+		}
+		if len(rules.Sinks[csym]) == 0 {
+			continue
+		}
+		alts := c.alts
+		if c.anyOf {
+			alts = anyOperand(c.alts[0], paramsRead(rules.Sinks[csym], len(c.alts[0])))
+		}
+		var given [][]int
+		for _, with := range alts {
+			with = append([]int(nil), with...)
+			for k, o := range with {
+				if o < 0 || o >= len(in.Args) {
+					with[k] = -1
+				}
+			}
+			given = append(given, with)
+		}
+		if len(given) == 0 {
+			continue
+		}
+		vin := in
+		vin.ArgNames = nil
+		vin.Args = make([]ir.LocalID, len(given[0]))
+		for k, o := range given[0] {
+			vin.Args[k] = in.Args[c.fn]
+			if o >= 0 {
+				vin.Args[k] = in.Args[o]
+			}
+		}
+		for _, sinks := range byCategory(sinksAt(fn, vin, false, rules.Sinks[csym], canon, known, csym)) {
+			dup := false
+			for _, h := range append(append([]*Site(nil), have...), out...) {
+				dup = dup || (h.Role == RoleSink && h.Symbol == csym && h.irpos == in.Pos && h.Category == sinks[0].Category)
+			}
+			if dup {
+				continue
+			}
+			out = append(out, &Site{Role: RoleSink, Kind: "call", Symbol: csym, Category: sinks[0].Category, Categories: categoriesOf(sinks), Labels: acceptsOf(sinks), IR: rc.at, Sink: sinks, irpos: in.Pos, Callee: string(id), Given: given})
+		}
+	}
+	return out
+}
+
+// paramsRead is how many parameters a function is read at by its sinks (the positions they name; all of n when one names none).
+func paramsRead(sinks []model.Sink, n int) int {
+	k := 1
+	for _, s := range sinks {
+		if len(s.Args) == 0 && len(s.Parts) == 0 {
+			return max(n, k)
+		}
+		for _, a := range s.Args {
+			k = max(k, a+1)
+		}
+		for _, p := range s.Parts {
+			if p.Arg != nil {
+				k = max(k, *p.Arg+1)
+			}
+		}
+	}
+	return k
+}
+
+// anyOperand are the ways that any one of the operands fills every one of n parameters.
+func anyOperand(operands []int, n int) [][]int {
+	var out [][]int
+	for _, o := range operands {
+		with := make([]int, n)
+		for k := range with {
+			with[k] = o
+		}
+		out = append(out, with)
+	}
+	return out
+}
+
+// replacedCall says that the call is of a function of a package that the rules declare read-through-the-model (its body
+// is not read: bodyreplaced.go) and whose model has no row of calls.
+func replacedCall(in ir.Instr, sym string, rules *model.Rules) bool {
+	if !rules.HasDeclared() || rules.Calls[sym] {
+		return false
+	}
+	id := string(in.Callee.Func)
+	if in.Callee.Kind != ir.CalleeStatic || id == "" {
+		id = sym
+	}
+	return id != "" && rules.ReplacedBody(model.UnitOf(id))
+}
+
+// noModelCall says that the call is of a function that has no body in the program and no model (unmodeledcb.go: a
+// function of the standard library, or of a dependency that is not read), and that stays an unmodeled call.
+func noModelCall(irsrc ir.Source, in ir.Instr, sym string, rules *model.Rules) bool {
+	c := in.Callee
+	if c.FFI || sym == "" || rules.HasModel(sym) || len(rules.CallSources[sym]) > 0 {
+		return false
+	}
+	if c.Kind == ir.CalleeStatic && c.Func == "" && strings.HasPrefix(sym, "builtin.") {
+		return false
+	}
+	if c.Kind != ir.CalleeStatic || c.Func == "" {
+		return c.Kind == ir.CalleeDynamic && len(c.Candidates) == 0
+	}
+	id := string(c.Func)
+	if _, ok := irsrc.Lookup(c.Func); ok {
+		return false
+	}
+	if strings.HasPrefix(id, "C.") || strings.Contains(id, "._Cfunc_") || strings.Contains(id, "._Cgo_") ||
+		strings.HasPrefix(sym, "reflect.") || strings.HasPrefix(sym, "(reflect.") || strings.HasPrefix(sym, "(*reflect.") {
+		return false
+	}
+	for _, f := range irsrc.Header().FnSkipped {
+		if f.Func == id || f.Func == sym {
+			return false
+		}
+	}
+	return !rules.ReplacedBody(model.UnitOf(id))
 }

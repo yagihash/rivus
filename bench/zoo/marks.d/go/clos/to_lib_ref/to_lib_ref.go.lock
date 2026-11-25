@@ -1,0 +1,6 @@
+go	clos/to_lib_ref/to_lib_ref.go	sink-none	@sink(none)	func fixed() { @fixed
+go	clos/to_lib_ref/to_lib_ref.go	sink-none	@sink(none)	func fixed() { @fixed
+go	clos/to_lib_ref/to_lib_ref.go	sink-none	@sink(none)	func fixed() { @fixed
+go	clos/to_lib_ref/to_lib_ref.go	sink-none	@sink(none) @nosink(clos-to-lib-ref-decoy)	func decoy() { @decoy
+go	clos/to_lib_ref/to_lib_ref.go	sink-none	@sink(none) @nosink(clos-to-lib-ref-decoy)	func decoy() { @decoy
+go	clos/to_lib_ref/to_lib_ref.go	sink-none	@sink(none) @nosink(clos-to-lib-ref-decoy)	func decoy() { @decoy
