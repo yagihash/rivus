@@ -9,6 +9,8 @@ pub fn register_all() {
     c::call::direct_in::register();
     c::call::multiret::register();
     c::clos::inline::register();
+    c::clos::local_fn_from_closure::register();
+    c::clos::local_recursion::register();
     c::clos::partial_callers::register();
     c::clos::relay::register();
     c::clos::returned::register();

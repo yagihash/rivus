@@ -1,0 +1,2 @@
+rust	clos/local_fn_from_closure.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	clos/local_fn_from_closure.rs	sink-none	@sink(none) @nosink(clos-local-fn-from-closure-decoy)	fn decoy() { @decoy
