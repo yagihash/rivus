@@ -198,6 +198,7 @@ The cost table of `compare.sh` has four columns that do not depend on the run (`
 to head is a line `warning: G12: ...` in `summary.md`, and in GitHub Actions a `::warning::` (never a stop). The job `cost-warn` of `ci.yml` runs it in a pull request that changes
 `internal/taint`, `internal/sg`, `internal/ir`, `internal/callgraph`, `extractor/dart` or `bench`: `go-curated`, `dart-curated`, `go-synth-S` and `dart-synth-S`, `-M`, `-F`
 (each of these runs takes a few seconds; F needs the Dart SDK). `dart-synth-*` is made by the generator of the tree of head, for both sides. WORKFLOW.md has the rule.
+In a pull request that changes the generators (`bench/**`), a warning on go-synth may come from the difference of the generators (each side uses the generator of its own version), so suspect that first when you read it.
 
 ## One lock for the heavy runs
 
