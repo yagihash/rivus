@@ -189,14 +189,14 @@ func TestSinkOfFunctionGivenToACallRow(t *testing.T) {
 	const sink = "example.com/cases/cases/givensink.Sink"
 	for _, fn := range []string{"givensink.Direct", "givensink.Variable"} {
 		s := find(res, fn, RoleSink, sink, 1)
-		if s == nil || s.GivenWith == nil || len(s.GivenWith) != 1 || s.GivenWith[0] != 0 {
+		if s == nil || s.Given == nil || len(s.Given) != 1 || len(s.Given[0]) != 1 || s.Given[0][0] != 0 {
 			t.Fatalf("%s: the call that gives the sink has no site that reads its operand 0: %+v", fn, s)
 		}
 		if s.Callee != sink {
 			t.Errorf("%s: callee = %q", fn, s.Callee)
 		}
 	}
-	if s := find(res, "givensink.Closure$1", RoleSink, sink, 1); s == nil || s.GivenWith != nil {
+	if s := find(res, "givensink.Closure$1", RoleSink, sink, 1); s == nil || s.Given != nil {
 		t.Errorf("the call in the closure is a sink of its own: %+v", s)
 	}
 	if s := find(res, "givensink.Closure", RoleSink, sink, 1); s != nil {
@@ -213,7 +213,7 @@ func TestSinkOfFunctionGivenIsCountedApart(t *testing.T) {
 	var direct, given *Site
 	for _, s := range res.Sites {
 		if strings.HasSuffix(s.Func, "givensink.Mixed") && s.Role == RoleSink && s.Symbol == sink {
-			if s.GivenWith != nil {
+			if s.Given != nil {
 				given = s
 			} else {
 				direct = s
@@ -223,15 +223,16 @@ func TestSinkOfFunctionGivenIsCountedApart(t *testing.T) {
 	if direct == nil || given == nil || direct.ID == given.ID {
 		t.Fatalf("Mixed has the sink of the call and the sink of the call that gives it, with ids of their own: %+v %+v", direct, given)
 	}
-	// without the rows, the call has the one site it had: its id is the same
-	plain := callbackRules(t, `
-sinks:
-  - symbol: example.com/cases/cases/givensink.Sink
-    args: [0]
-    category: command_injection
-`)
-	before := find(enumerateGo(t, testutil.Testdata(), []string{"./cases/givensink"}, plain), "givensink.Mixed", RoleSink, sink, 1)
-	if before == nil || before.ID != direct.ID {
-		t.Errorf("the id of the call of the sink moved: %+v, now %s", before, direct.ID)
+	// the call of the sink is the first of its kind in the function, as it was before the call that gives it was a site
+	if want := "s1:" + fingerprint.Hash(direct.Func, RoleSink, sink, "1")[:20]; direct.ID != want {
+		t.Errorf("the id of the call of the sink moved: %s, want %s", direct.ID, want)
+	}
+}
+
+func TestSinkOfFunctionGivenToAFunctionWithoutARow(t *testing.T) {
+	res := givenSinkResult(t)
+	s := find(res, "givensink.NoRow", RoleSink, "example.com/cases/cases/givensink.Sink", 1)
+	if s == nil || len(s.Given) == 0 {
+		t.Fatalf("the call of a function that has no body and no model, given the sink, has no site: %+v", s)
 	}
 }

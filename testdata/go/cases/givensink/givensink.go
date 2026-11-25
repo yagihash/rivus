@@ -32,3 +32,8 @@ func Mixed(xs []string, s string) {
 	slices.IndexFunc(xs, Sink)
 	Sink(s)
 }
+
+// NoRow gives the function to a function of the library that has no row of calls.
+func NoRow(xs []string) {
+	slices.DeleteFunc(xs, Sink)
+}

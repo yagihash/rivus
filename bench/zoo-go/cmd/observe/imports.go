@@ -26,6 +26,7 @@ import (
 	_ "zoo/cells/clos/to_lib_ref"
 	_ "zoo/cells/clos/to_lib_where"
 	_ "zoo/cells/clos/to_nomodel"
+	_ "zoo/cells/clos/to_nomodel_ref"
 	_ "zoo/cells/clos/to_own_helper"
 	_ "zoo/cells/clos/to_sort"
 	_ "zoo/cells/clos/two_callers"

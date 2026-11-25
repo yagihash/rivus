@@ -159,6 +159,11 @@ pub fn sink_cmd_own(s: String) {
     record(CLASS_CMD, "", &[s], Location::caller());
 }
 #[track_caller]
+pub fn sink_cmd_key(s: &mut String) -> i32 {
+    record(CLASS_CMD, "", &[s.clone()], Location::caller());
+    0
+}
+#[track_caller]
 pub fn sink_cmd_res(s: String) -> Result<(), String> {
     record(CLASS_CMD, "", &[s], Location::caller());
     Ok(())
