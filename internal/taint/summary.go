@@ -158,6 +158,10 @@ func (s *state) summarize() *Summary {
 				if cm[p][e] == nil {
 					continue // read from the global store, not produced here
 				}
+				if s.fn.Dep && isFuncElem(e) {
+					// the function values of the project are not carried through the summaries of dependencies (funccells.go)
+					continue
+				}
 				gs, over := s.guardsOfChain(Loc{r, p}, e)
 				if over {
 					s.guardOverflow = true
@@ -217,7 +221,15 @@ const outWidenedDetail = "out_widened: the value was taken from an output of the
 // widen returns the elements, and whether it merged any: false when there are maxOutElems or fewer, or when no two
 // elements stood for parts of the same parameter.
 func widen(elems []OutElem) ([]OutElem, bool) {
-	if len(elems) <= maxOutElems {
+	// the function values (funccells.go) are not parts of a parameter: they are not counted, or they would make the
+	// elements that stand for the parts of a parameter be merged where nothing of the parameter grew
+	n := 0
+	for _, oe := range elems {
+		if !isFuncElem(oe.E) {
+			n++
+		}
+	}
+	if n <= maxOutElems {
 		return elems, false
 	}
 	type key struct {
@@ -447,7 +459,9 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 	}
 	if sum.Coarse != nil {
 		// every hop of this call has the note (made once, shared like the notes of a call)
-		notes = appendNote(notes, s.pathNote(KindDepthLimit, sccCoarsenedDetail, cc.in.Pos))
+		n := s.pathNote(KindDepthLimit, sccCoarsenedDetail(s.eng.funcID(fn)), cc.in.Pos)
+		n.CoarsenedSCC = sum.Coarse.info
+		notes = appendNote(notes, n)
 	}
 	argv := append(cc.argv(), bindings...)
 	// A callee may take optional parameters that the call leaves out (an

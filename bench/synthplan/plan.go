@@ -28,12 +28,16 @@ type Params struct {
 	Fan        int   // calls of each function
 	SinkPct    int   // percent of functions that pass a value to the sink
 	SrcPct     int   // percent of functions that read the source
+	DepPct     int   // Dart only: percent of the calls that give a closure of the project to a function of a dependency package (which gives it on to other functions of the package); 0: none
+	DepFuncs   int   // Dart only: functions of the dependency package (a chain of DepFuncs levels, each passing its argument on to two lower ones)
 }
 
-// Sizes S, M and L: seconds, tens of seconds, minutes (to be seen in the README of each).
+// Sizes S, M and L (F is for Dart only): seconds, tens of seconds, minutes (to be seen in the README of each).
 var Sizes = map[string]Params{
 	"S": {Seed: 1, Mods: 5, Funcs: 100, Depth: 10, SCCs: []int{4, 3}, ClosurePct: 30, RelayPct: 30, FieldPct: 25, CapturePct: 40, Fan: 3, SinkPct: 6, SrcPct: 4},
 	"M": {Seed: 1, Mods: 12, Funcs: 300, Depth: 20, SCCs: []int{10, 6, 5, 4}, ClosurePct: 30, RelayPct: 30, FieldPct: 25, CapturePct: 40, Fan: 3, SinkPct: 5, SrcPct: 3},
+	// F: the closures of the project given to a dependency (bench/dart-synth/README.md); Dart only
+	"F": {Seed: 1, Mods: 8, Funcs: 200, Depth: 10, SCCs: []int{4, 3}, ClosurePct: 20, RelayPct: 30, FieldPct: 25, CapturePct: 40, Fan: 3, SinkPct: 6, SrcPct: 4, DepPct: 80, DepFuncs: 48},
 	"L": {Seed: 1, Mods: 20, Funcs: 600, Depth: 30, SCCs: []int{16, 10, 8, 6, 5, 4}, ClosurePct: 30, RelayPct: 30, FieldPct: 25, CapturePct: 40, Fan: 3, SinkPct: 4, SrcPct: 2},
 }
 
@@ -57,21 +61,24 @@ func (r *rng) pct(p int) bool { return r.n(100) < p }
 
 // Kinds of a statement.
 const (
-	Call   = iota // v = f(v)
-	Via           // v = helperDirect(v, closure that calls f)
-	Relay         // the same through a helper that gives the closure to a second helper
-	Hold          // the closure also reads a local variable of the caller (a capture)
-	Field         // the closure is kept in a field of an object, and called by its method
-	Write         // the closure writes a local variable of the caller, and the caller reads it
-	Source        // v += source()
-	Sink          // sink(v)
-	Back          // a guarded call of the next member of the ring (never made at run time)
+	Call    = iota // v = f(v)
+	Via            // v = helperDirect(v, closure that calls f)
+	Relay          // the same through a helper that gives the closure to a second helper
+	Hold           // the closure also reads a local variable of the caller (a capture)
+	Field          // the closure is kept in a field of an object, and called by its method
+	Write          // the closure writes a local variable of the caller, and the caller reads it
+	Source         // v += source()
+	Sink           // sink(v)
+	DepRun         // v = dep.dN(v, closure that calls f): the dependency calls the closure, after giving it on to other functions of the package (Dart only)
+	DepWrap        // v = dep.wN(closure that calls f)(v): the dependency returns a closure that holds the one it was given (Dart only)
+	Back           // a guarded call of the next member of the ring (never made at run time)
 )
 
 // Stmt is one statement of a function.
 type Stmt struct {
 	Kind   int
 	Target int // the function called (not for Source and Sink)
+	Dep    int // DepRun, DepWrap: the function of the dependency package
 }
 
 // Func is a function of the plan: its name is "f" and the ID.
@@ -145,6 +152,14 @@ func Build(p Params) *Plan {
 		}
 		for c := 0; c < fan; c++ {
 			kind := Call
+			if p.DepPct > 0 && p.DepFuncs > 0 && r.pct(p.DepPct) { // no draw when it is off: the plans of S, M and L stay as they were
+				kind = DepRun
+				if r.pct(30) {
+					kind = DepWrap
+				}
+				f.Stmts = append(f.Stmts, Stmt{Kind: kind, Target: below(f.Level), Dep: r.n(p.DepFuncs)})
+				continue
+			}
 			if r.pct(p.ClosurePct) {
 				kind = Via
 				switch {
@@ -231,6 +246,8 @@ func Main(name string, render func(*Plan) map[string]string) {
 	fan := flag.Int("fan", -1, "calls of each function")
 	sinks := flag.Int("sinks", -1, "percent of functions with a sink")
 	sources := flag.Int("sources", -1, "percent of functions with a source")
+	deppct := flag.Int("deppct", -1, "Dart only: percent of the calls that give a closure to a dependency")
+	depfuncs := flag.Int("depfuncs", -1, "Dart only: functions of the dependency package")
 	flag.Parse()
 	p, ok := Sizes[*size]
 	if !ok {
@@ -255,6 +272,8 @@ func Main(name string, render func(*Plan) map[string]string) {
 	set(&p.Fan, *fan)
 	set(&p.SinkPct, *sinks)
 	set(&p.SrcPct, *sources)
+	set(&p.DepPct, *deppct)
+	set(&p.DepFuncs, *depfuncs)
 	if *sccs != "" {
 		p.SCCs = nil
 		if *sccs != "-" {

@@ -1,0 +1,20 @@
+{
+  "findings": 110,
+  "ids_sha256": "47d62d6337f6e046f6850d3a454c1873072dadae5fa4de246539aa402829e2ff",
+  "stats": {
+    "converged": true,
+    "functions": 1369,
+    "largest_scc": 1117,
+    "levels": 50,
+    "passes": 10
+  },
+  "uncertainties": 650,
+  "uncertainties_sha256": "9fd9db9f410ce1250b68a6813d21e6214e18cf755095968ce4b79a017790b33e",
+  "uncertainty_kinds": {
+    "assumed_call": 344,
+    "depth_limit": 89,
+    "dynamic_dispatch": 43,
+    "func_value_into_dependency": 92,
+    "unresolved_callee": 82
+  }
+}

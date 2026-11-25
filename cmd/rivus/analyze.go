@@ -25,13 +25,14 @@ import (
 // analyzeOpts are the flags common to the commands that run the analysis.
 type analyzeOpts struct {
 	common
-	k        int
-	depK     int
-	depKSet  bool // -dep-k was given
-	verbose  bool
-	cpuProf  string
-	lockProf string
-	memProf  string
+	k          int
+	depK       int
+	depKSet    bool // -dep-k was given
+	sccCoarsen int  // -scc-coarsen
+	verbose    bool
+	cpuProf    string
+	lockProf   string
+	memProf    string
 	// the diagnostics (ADR-061)
 	passStats     bool
 	passStatsTop  int
@@ -148,6 +149,7 @@ func (o *analyzeOpts) register(fs *flag.FlagSet) {
 	fs.IntVar(&o.k, "k", taint.DefaultOptions().K, "maximum access path depth")
 	o.depK = taint.DefaultOptions().DepK
 	fs.Var((*depKValue)(o), "dep-k", "`n` maximum access path depth in the functions of the dependencies (default 2, but not deeper than -k when -dep-k is not given; 0: the same as -k; -dep-k 3 is the depth before the default was 2). A smaller depth makes the analysis of heavy dependencies cheaper and adds flows (a path that is cut stands for everything below it: access_path_truncated)")
+	fs.IntVar(&o.sccCoarsen, "scc-coarsen", taint.DefaultSCCCoarsen, "`n` functions of the dependencies in one group of functions that call each other (a strongly connected component of the call graph) from which they are solved with access paths cut at depth 0, from the start (default 5500; 0: never). It keeps a very large group of dependencies from not finishing, and adds flows in it (scc_coarsened, depth_limit; ADR-124). It decides by the call graph only: the same on any machine")
 	fs.IntVar(&o.workers, "workers", 0, "functions analysed at the same time (0: one per CPU; 1: one at a time). The result does not depend on it")
 	fs.BoolVar(&o.numeric, "numeric-taint", false, "follow taint through numbers and bools (by default it stops there: they cannot carry an injection)")
 	fs.BoolVar(&o.charTaint, "char-taint", false, "follow taint through one character read out of a text (a byte, a rune, a code unit), the arithmetic of it with a constant, and back into a text; a length, an index, a comparison and a number made of the character still stop. Findings that go through it carry the char_transform note. Does nothing with -numeric-taint. Off by default")
@@ -173,12 +175,13 @@ func (o *analyzeOpts) register(fs *flag.FlagSet) {
 	fs.StringVar(&o.cpuProf, "cpuprofile", "", "write a CPU profile of the taint phase to this file (development)")
 	usual(fs, "workers", "numeric-taint", "char-taint", "v", "timeout", "max-memory")
 	describe(fs, "dep-k", flagInfo{Not: "tuning; the default is 2 (ADR-119)"})
+	describe(fs, "scc-coarsen", flagInfo{Not: "tuning; the default is 5500 dependency functions in one component (ADR-124)"})
 	describe(fs, "v", flagInfo{Not: "output"})
 	describe(fs, "numeric-taint", flagInfo{ChangesResult: true, Added: "2026-11-18", AddedBy: "a7cd15f8 (numbers and bools stop by default; this follows them)",
 		KeepOff: "off is the design: a number or a bool cannot carry an injection, and following them costs time and findings; the flag is for a check, not a step to a default"})
 	describe(fs, "char-taint", flagInfo{ChangesResult: true, Added: "2026-11-24", AddedBy: "#389",
 		Condition: "the bench cells for the missed findings pass in each language; the arithmetic of a character with a constant is carried; every pass line (the 8 GB memos row, A, C and D) passes with the flags as they will be the default, so the flag cannot become the default until D passes, and D is FAIL now; every finding that grows has char_transform on the step that causes it; time, peak and findings are measured on memos and the three dependency benches (memory room alone does not decide). The bench cells (the run with the flag, and the negative cells) must be in before the user is asked. Who decides: the user"})
-	diagnostic(fs, "k", "dep-k", "max-implementations", "max-passes", "func-timeout", "ir", "pass-stats", "pass-stats-top", "pass-stats-sort", "trace-element", "memprofile", "lockprofile", "cpuprofile")
+	diagnostic(fs, "k", "dep-k", "scc-coarsen", "max-implementations", "max-passes", "func-timeout", "ir", "pass-stats", "pass-stats-top", "pass-stats-sort", "trace-element", "memprofile", "lockprofile", "cpuprofile")
 	kind(fs, "enum:pass-stats-sort", "pass-stats-sort")
 	kind(fs, "file", "ir", "memprofile", "lockprofile", "cpuprofile")
 }
@@ -258,16 +261,7 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	opts.PassStatsTop = o.passStatsTop
 	opts.PassStatsSort = o.passStatsSort
 	opts.TraceElement = o.traceElement
-	// Internal, to measure N of the large components (ADR-124; no flag, not in -h): "n" has the components with n functions or
-	// more solved with their dependency functions at depth 0, "n:deps" counts the dependency functions in them. Unset: none.
-	if v := os.Getenv("RIVUS_INTERNAL_SCC_COARSEN_N"); v != "" {
-		num, mode, _ := strings.Cut(strings.TrimSpace(v), ":")
-		n, err := strconv.Atoi(num)
-		if err != nil || n < 0 || (mode != "" && mode != "deps") {
-			return nil, fmt.Errorf("RIVUS_INTERNAL_SCC_COARSEN_N: want n or n:deps (got %q)", v)
-		}
-		opts.SCCCoarsenN, opts.SCCCoarsenDeps = n, mode == "deps"
-	}
+	opts.SCCCoarsenN = o.sccCoarsen
 	if o.verbose {
 		opts.SlowThreshold = 300 * time.Millisecond
 		opts.SlowFunc = func(fn string, d, cpu time.Duration, outputs, roots int) {
@@ -275,14 +269,12 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 			fmt.Fprintf(os.Stderr, "rivus: slow function %s: %v (cpu %v, %d outputs, %d roots)\n", fn, d.Round(time.Millisecond), cpu.Round(time.Millisecond), outputs, roots)
 		}
 	}
-	if o.afterRead != nil {
+	if o.afterRead != nil && o.structureOnly {
 		if err := o.afterRead(l, rules, st, graph, bodies); err != nil {
 			return nil, err
 		}
 		phase("graphdb")
-		if o.structureOnly {
-			return nil, nil
-		}
+		return nil, nil
 	}
 	var res *taint.Result
 	if o.cpuProf != "" {
@@ -313,6 +305,17 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 		eng.SetIterationDump(d)
 	}
 	res = eng.Run()
+	if o.afterRead != nil {
+		// With the taint layer the graph is written after the analysis: the functions that the analysis found in the cells that a
+		// call of a function value reads (docs/issues/210) are candidates of the call, and edges of the graph
+		for in, ids := range eng.FuncCellCandidates() {
+			graph.SetCellCandidates(in, ids)
+		}
+		if err := o.afterRead(l, rules, st, graph, bodies); err != nil {
+			return nil, err
+		}
+		phase("graphdb")
+	}
 	// Internal, for bench/compare.sh --graph-check: the summaries of every function, one line each (no flag, not in -h)
 	if p := os.Getenv("RIVUS_INTERNAL_SUMMARY_DUMP"); p != "" {
 		if f, err := os.Create(p); err != nil {

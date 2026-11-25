@@ -71,17 +71,18 @@ type Options struct {
 	PassStatsSort string
 	SlowFunc      func(fn string, d, cpu time.Duration, outputs, roots int)
 	SlowThreshold time.Duration
-	// SCCCoarsenN: a strongly connected component of N functions or more that has functions of the dependencies is solved
-	// with those at access path depth 0 from the start (ADR-124). Zero (the default): none. SCCCoarsenDeps: N counts the
-	// functions of the dependencies in the component, not all of its functions. Internal: no flag
-	// (RIVUS_INTERNAL_SCC_COARSEN_N in cmd/rivus).
-	SCCCoarsenN    int
-	SCCCoarsenDeps bool
+	// SCCCoarsenN (-scc-coarsen): a strongly connected component with N functions of the dependencies or more has them
+	// solved at access path depth 0 from the start (ADR-124). Zero: none.
+	SCCCoarsenN int
 }
+
+// DefaultSCCCoarsen is the default of -scc-coarsen: the number of dependency functions in one component from which they are
+// solved at depth 0 (ADR-124: above what converges at depth 2, below what does not).
+const DefaultSCCCoarsen = 5500
 
 // DefaultOptions are the defaults.
 func DefaultOptions() Options {
-	return Options{K: 3, DepK: 2, MaxPasses: 12, Budget: 400000, FuncTimeout: 30 * time.Second, PassStatsTop: 20}
+	return Options{K: 3, DepK: 2, SCCCoarsenN: DefaultSCCCoarsen, MaxPasses: 12, Budget: 400000, FuncTimeout: 30 * time.Second, PassStatsTop: 20}
 }
 
 // Engine runs the whole-program analysis.
@@ -100,6 +101,8 @@ type Engine struct {
 	dispatch sync.Map // *sg.Instr -> map[*sg.Func][]Guard
 	// valueGuards is the same for the calls of function values (valueGuards).
 	valueGuards sync.Map // *sg.Instr -> map[string][]Guard
+	// cellCalls is, for the calls of function values that read functions from a cell (funccells.go), the functions: *sg.Instr -> *cellCands
+	cellCalls sync.Map
 
 	// implsIndex are the implementations of the trait methods that the program has, by the last name of the
 	// trait and the method (callrows.go, methodImpls)
@@ -493,13 +496,15 @@ type Stats struct {
 	// The shape of the call graph: the levels of components, the size of the
 	// largest component (functions that call each other, analysed one after the
 	// other) and the most components in one level.
-	Levels        int      `json:"levels,omitempty"`
-	LargestSCC    int      `json:"largest_scc,omitempty"`
-	WidestLevel   int      `json:"widest_level,omitempty"`
-	DepSpentMilli int64    `json:"dep_spent_ms,omitempty"`
-	OwnSpentMilli int64    `json:"own_spent_ms,omitempty"`
-	NotConverged  []string `json:"not_converged,omitempty"`
-	TimedOut      bool     `json:"timed_out,omitempty"`
+	Levels     int `json:"levels,omitempty"`
+	LargestSCC int `json:"largest_scc,omitempty"`
+	// LargestSCCDeps is the most functions of the dependencies that one component has (what -scc-coarsen is compared with).
+	LargestSCCDeps int      `json:"largest_scc_deps,omitempty"`
+	WidestLevel    int      `json:"widest_level,omitempty"`
+	DepSpentMilli  int64    `json:"dep_spent_ms,omitempty"`
+	OwnSpentMilli  int64    `json:"own_spent_ms,omitempty"`
+	NotConverged   []string `json:"not_converged,omitempty"`
+	TimedOut       bool     `json:"timed_out,omitempty"`
 	// TestsSkipped is what was not read because the build does not ship it (ADR-062); absent when nothing was left out.
 	TestsSkipped *ir.TestsSkipped `json:"tests_skipped,omitempty"`
 	// DroppedGlobals are the package variables that a rule says hold nothing (ADR-056), and the number of functions
@@ -629,7 +634,7 @@ func (e *Engine) Run() *Result {
 	e.reach = e.prog.Reachable()
 	e.reachCB = e.prog.ReachableWithCallbacks()
 	fns := e.prog.Funcs
-	callees := func(ci *sg.Instr) []*sg.Func {
+	base := func(ci *sg.Instr) []*sg.Func {
 		if ci.Op == ir.OpMakeClosure {
 			// a closure that is not only called where it is made has its summary applied at the
 			// place it is made (C-7): the function that makes it depends on it
@@ -660,10 +665,22 @@ func (e *Engine) Run() *Result {
 		}
 		return append(append([]*sg.Func(nil), ci.CandidateFns...), cb...)
 	}
+	// the functions that the function values of the code of the project name (funccells.go): the call that reads them
+	// from a cell needs their summaries, so the function that makes them is analysed after them
+	refs := funcRefs(fns)
+	callees := func(ci *sg.Instr) []*sg.Func {
+		if ci.Op != ir.OpCall && ci.Op != ir.OpMakeClosure {
+			return refs[ci]
+		}
+		out := base(ci)
+		if r := refs[ci]; len(r) > 0 {
+			out = append(out[:len(out):len(out)], r...)
+		}
+		return out
+	}
 	sccs, callers := order(fns, callees)
 	levels := levelsOf(sccs, callees)
-	e.coarsenBySize(sccs)
-	st0 := Stats{Levels: len(levels)}
+	st0 := Stats{Levels: len(levels), LargestSCCDeps: e.coarsenBySize(sccs)}
 	for _, lv := range levels {
 		if len(lv) > st0.WidestLevel {
 			st0.WidestLevel = len(lv)
@@ -938,9 +955,6 @@ func levelsOf(sccs [][]*sg.Func, callees func(*sg.Instr) []*sg.Func) [][][]*sg.F
 		for _, fn := range scc {
 			for _, b := range fn.Blocks {
 				for _, in := range b.Instrs {
-					if in.Op != ir.OpCall && in.Op != ir.OpMakeClosure {
-						continue
-					}
 					for _, c := range callees(in) {
 						if j, ok := of[c]; ok && j != i && level[j]+1 > level[i] {
 							level[i] = level[j] + 1
@@ -1201,9 +1215,6 @@ func order(fns []*sg.Func, callees func(*sg.Instr) []*sg.Func) ([][]*sg.Func, ma
 		seen := map[*sg.Func]bool{}
 		for _, b := range fn.Blocks {
 			for _, in := range b.Instrs {
-				if in.Op != ir.OpCall && in.Op != ir.OpMakeClosure {
-					continue
-				}
 				for _, c := range callees(in) {
 					if inSet[c] && !seen[c] {
 						seen[c] = true
@@ -1387,6 +1398,7 @@ func (e *Engine) collect(st Stats) *Result {
 
 	seenU := map[string]bool{}
 	charNotes := map[string]*Uncertainty{} // char_read_in_callee: one for each (caller, callee)
+	fvNotes := map[string]*fvNote{}        // func_value_into_dependency: one for each callee (funccells.go)
 	for _, fn := range fnList {
 		s := e.states[fn]
 		keys := make([]findingKey, 0, len(s.findings))
@@ -1441,6 +1453,29 @@ func (e *Engine) collect(st Stats) *Result {
 				continue
 			}
 			key := u.Kind + "|" + u.Symbol + "|" + u.Func + "|" + posKey(u.pos)
+			if u.Kind == KindFuncValueIntoDependency {
+				// one for each function of the dependency (the places are many: a generated message registers its fields with
+				// the same few functions): the first place is the note, and the detail says how many there are. The note
+				// of each place stays on the findings that go through it (the hops).
+				k := u.Symbol
+				if k == "" {
+					k = "|" + u.Func
+				}
+				n := fvNotes[k]
+				if n == nil {
+					cp := *u
+					n = &fvNote{note: &cp, funcs: map[string]bool{}, sites: map[string]bool{}}
+					fvNotes[k] = n
+				}
+				if !n.sites[key] {
+					n.sites[key] = true
+					n.funcs[u.Func] = true
+					if posBefore(u.pos, n.note.pos) {
+						n.note.pos, n.note.Func = u.pos, u.Func
+					}
+				}
+				continue
+			}
 			if seenU[key] {
 				continue
 			}
@@ -1448,6 +1483,17 @@ func (e *Engine) collect(st Stats) *Result {
 			e.fill(u)
 			res.Uncertainties = append(res.Uncertainties, u)
 		}
+	}
+	fvKeys := make([]string, 0, len(fvNotes))
+	for k := range fvNotes {
+		fvKeys = append(fvKeys, k)
+	}
+	sort.Strings(fvKeys)
+	for _, k := range fvKeys {
+		n := fvNotes[k]
+		n.note.Detail += " [" + itoa(len(n.sites)) + " places in " + itoa(len(n.funcs)) + " functions of the project; the place here is the first]"
+		e.fill(n.note)
+		res.Uncertainties = append(res.Uncertainties, n.note)
 	}
 	charKeys := make([]string, 0, len(charNotes))
 	for k := range charNotes {
@@ -1562,6 +1608,10 @@ func (e *Engine) collect(st Stats) *Result {
 	res.Findings = e.mergeParamSources(res.Findings)
 	sort.SliceStable(res.Findings, func(i, j int) bool {
 		a, b := res.Findings[i], res.Findings[j]
+		// the findings that went through no group solved at depth 0 come first (ADR-124); inside each, the order is the same
+		if ca, cb := len(a.ThroughCoarsenedSCC) > 0, len(b.ThroughCoarsenedSCC) > 0; ca != cb {
+			return cb
+		}
 		if a.Sink.Position.File != b.Sink.Position.File {
 			return a.Sink.Position.File < b.Sink.Position.File
 		}
@@ -1685,12 +1735,17 @@ func (e *Engine) buildFinding(rf *rawFinding) *Finding {
 	}
 	var allFuncs []string
 	seen := map[string]bool{}
+	throughSeen := map[string]bool{}
 	cuts := 0
 	for i := range agg {
 		st := &agg[i]
 		allFuncs = append(allFuncs, st.Func)
 		for _, n := range st.Notes {
 			e.fill(n)
+			if n.CoarsenedSCC != nil && !throughSeen[n.CoarsenedSCC.ID] {
+				throughSeen[n.CoarsenedSCC.ID] = true
+				f.ThroughCoarsenedSCC = append(f.ThroughCoarsenedSCC, n.CoarsenedSCC.ID)
+			}
 			k := n.Kind + "|" + n.Symbol + "|" + posKey(n.pos)
 			if n.Kind == KindAccessPathTruncated {
 				// each cut is told on its own (where and how deep), up to a cap
@@ -1720,6 +1775,7 @@ func (e *Engine) buildFinding(rf *rawFinding) *Finding {
 		f.Uncertainties = append(f.Uncertainties, newUncertainty(KindAccessPathTruncated, "access_path_truncated: "+itoa(cuts-maxCutNotes)+
 			" more cuts on the path are not listed (the first "+itoa(maxCutNotes)+" are)", ""))
 	}
+	sort.Strings(f.ThroughCoarsenedSCC)
 	f.Paths = []Path{{Steps: steps, OmittedSteps: omitted}}
 	f.PathSteps = len(steps)
 	if omitted > 0 {

@@ -1,0 +1,50 @@
+name: main-ci
+
+# Writes the check run `main-ci` on the head of every open pull request of this repository, from the result of ci.yml on main.
+# A ruleset can require `main-ci` (from the app GitHub Actions), so that nothing is merged while main is red (or while the scheduled CI
+# has been red for 24 hours). The rules are in scripts/main-ci/decide.go; the way out is the label `fixes-main` on the pull request that fixes main.
+#
+# Safety: this workflow never runs the code of a pull request, and there is no `pull_request` trigger on purpose: a `pull_request`
+# workflow runs with the definition of the pull request's branch, which a pull request could change to pass the check. `workflow_run`
+# and `schedule` always run the definition on main. A pull request gets its check run when its CI starts (`requested` of ci.yml, any
+# branch: a new pull request, a new push), and again whenever any CI starts or ends; a label change is picked up at the next of those or in the next hour.
+# The job checks out main (never a pull request). `pull_request_target` is not used.
+# Token: GITHUB_TOKEN with `checks: write`, `pull-requests: read`, `actions: read`. A pull request from a fork is out of scope.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [requested, completed] # a start (pending) and an end, a re-run included
+  schedule:
+    - cron: "11 * * * *" # every hour: the 24 hours of a scheduled failure pass with the clock, not with an event
+  workflow_dispatch:
+
+permissions: {}
+
+# The job decides again for every open pull request, so a newer run makes an older one useless.
+concurrency:
+  group: main-ci
+  cancel-in-progress: true
+
+jobs:
+  main-ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }} # never the pull request
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Set main-ci on the open pull requests
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: go run ./scripts/main-ci

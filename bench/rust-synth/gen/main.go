@@ -45,6 +45,9 @@ pub fn fire(s: String, mut f: impl FnMut(String)) {
 
 // Render writes the plan as a Rust crate.
 func Render(pl *synthplan.Plan) map[string]string {
+	if pl.P.DepPct > 0 {
+		panic("rust-synth: -size F (closures given to a dependency) is for Dart only")
+	}
 	files := map[string]string{
 		"Cargo.toml": "[package]\nname = \"synth\"\nversion = \"0.0.0\"\nedition = \"2021\"\n\n[workspace]\n",
 		"rules.yaml": `ruleset: rivus/bench-rust-synth@1
