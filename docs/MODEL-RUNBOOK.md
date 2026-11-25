@@ -9,7 +9,7 @@
 ## 0. 環境
 
 - `make setup` 済み。`go`、`dart`(3.13.6)、`regomark` が PATH にある。`RIVUS_DART=dart`、`GOMODCACHE`、`PUB_CACHE` は環境変数で設定済み。Dart の extractor は、`rivus setup dart -source extractor/dart` でコンパイルしておくと、起動が速い(README)。
-- **クラウドのセッションでは、Rust は、いまは CI に任せる(ローカルは下の表)。** rivus の Rust extractor は、読むときに `build.rs` と proc macro を実行する(隔離の下でだけ許される)。この環境には、Rust の nightly も、Linux の隔離もない(`make setup` は対象外。理由と案: [DESIGN-package-models.md](DESIGN-package-models.md) 6.5)。**隔離が動かないので、Rust のパッケージは、「モデルは書くが、extractor を使う確認は CI に任せる」形にする。取得したクレートのコードを、隔離なしで実行しない**(`cargo check`、`cargo build`、`cargo test`、`rivus-rust`、`-unsafe-host-exec` を、取得したクレートに対して使わない)。モデルの YAML は Go のテスト(`internal/model/builtin`)で確認し、zoo のセルは、自前のスタブ(`path:`、第三者のコードなし)で作って、CI の `rust` ジョブに確認させる。差分テストの Rust 版は、隔離が入るまで「未実施」と書く。CI が失敗したときは、ログを読んで修正して push し直す。手元で試せないので、Go と Dart のパッケージを先に取る。
+- **クラウドのセッションでは、Rust は、いまは CI に任せる(ローカルは下の表)。** rivus の Rust extractor は、読むときに `build.rs` と proc macro を実行する(隔離の下でだけ許される。Linux の隔離は Landlock + seccomp の試作が入ったが(ADR-128)、クラウドのセッションのカーネルで動くかは未確認なので、方針は変えない)。この環境には、Rust の nightly も、Linux の隔離もない(`make setup` は対象外。理由と案: [DESIGN-package-models.md](DESIGN-package-models.md) 6.5)。**隔離が動かないので、Rust のパッケージは、「モデルは書くが、extractor を使う確認は CI に任せる」形にする。取得したクレートのコードを、隔離なしで実行しない**(`cargo check`、`cargo build`、`cargo test`、`rivus-rust`、`-unsafe-host-exec` を、取得したクレートに対して使わない)。モデルの YAML は Go のテスト(`internal/model/builtin`)で確認し、zoo のセルは、自前のスタブ(`path:`、第三者のコードなし)で作って、CI の `rust` ジョブに確認させる。差分テストの Rust 版は、隔離が入るまで「未実施」と書く。CI が失敗したときは、ログを読んで修正して push し直す。手元で試せないので、Go と Dart のパッケージを先に取る。
 **取得と実行の範囲(ユーザーが承認した上限。2026-11-23)**: 指示文に書かれていなくても、この範囲が上限になる。これより広いことは、先にユーザーに確認する。クラウドのセッションと、ローカルのサブエージェントは、確認が要る場面では、止まって、理由を書いて終わる。
 
 | 行為 | 認められているか | 条件 |

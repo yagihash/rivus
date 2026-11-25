@@ -14,7 +14,7 @@
 
 - **目的**: 解析の対象(攻撃者が制御しうる)が、rivus を動かすホストに何もさせないこと。
 - **方針**:
-  - Rust の信頼しないコードは、macOS のサンドボックス(Seatbelt)の下だけで読む(ADR-093。[rust-isolation.md](rust-isolation.md)、[DESIGN-macos-sandbox.md](DESIGN-macos-sandbox.md))。Linux には隔離がなく、既定では何も実行せずに止まる(`-unsafe-host-exec` だけ)。
+  - Rust の信頼しないコードは、macOS のサンドボックス(Seatbelt)と、Linux の Landlock + seccomp(試作。[DESIGN-linux-sandbox.md](DESIGN-linux-sandbox.md))の下だけで読む(ADR-093。[rust-isolation.md](rust-isolation.md)、[DESIGN-macos-sandbox.md](DESIGN-macos-sandbox.md))。どちらもないとき(Landlock のない Linux など)は、既定では何も実行せずに止まる(`-unsafe-host-exec` だけ)。
   - 隔離なしでは、取得したクレートのビルドスクリプトとマクロを実行しない。クラウドのモデル作成では、Rust を扱わない(#148)。
   - 取得元の既定は crates.io だけ。
   - ユーザーの判断(2026-11-22): 取得のフェーズのネットワークの絞り込み([DESIGN-fetch-network.md](DESIGN-fetch-network.md)、#110)と、Go / Dart の隔離は、しばらくやらない。帰結として、Go / Dart の隔離ができるまで、新しい第三者のパッケージをまとめて解析・実行しない(観測との照合は、zoo と自前の curated だけで進める)。Rust の第三者のコードは、サンドボックスの中だけ。

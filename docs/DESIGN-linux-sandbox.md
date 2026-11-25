@@ -2,6 +2,8 @@
 
 > **状態: 一部実装(試作。サンドボックスと cargo での閉じ込めは実装・確認した。固定の nightly と extractor での端から端までの確認は、まだ)。** macOS の Seatbelt([DESIGN-macos-sandbox.md](DESIGN-macos-sandbox.md))と同じ形で、Linux に隔離を足す。課題 #148 の 8 節の論点への答え。正はコード(`internal/sandbox/landlock_linux.go`、`seccomp_linux.go`、`cmd/rivus/isolate_sandbox_linux.go`)。
 
+決定の記録は [ADR-128](adr/128-linux-sandbox-landlock-seccomp.md)。利用者向けの説明は [rust-isolation.md](rust-isolation.md)。
+
 ## 1. 何を使うか
 
 Landlock(ファイルと TCP のポート)+ seccomp(ソケット全般と、Landlock を迂回する system call)+ `NO_NEW_PRIVS`。bubblewrap は使わない。
@@ -58,6 +60,4 @@ Landlock と seccomp は、自分と子にだけ効き、外せない。そこ�
 - 固定の nightly と extractor を使った、端から端までの抽出(`bench/zoo-rust`、`bench/rust-curated` の同一性の確認)。この試作は、安定版の cargo で、`build.rs` の閉じ込めだけを確かめた。
 - 取得段階(`cargo fetch`)の、実際のネットワークでの確認。
 - ABI 4 未満、ABI 6 未満の実機での確認。arm64 の実行(コードは `GOARCH=arm64` でビルド、vet は通る。実行は CI の `ubuntu-24.04-arm` で初めて分かる)。
-- `README.md`、`docs/rust-isolation.md` の「Linux では止まる」の記述と、対話の文言(「macOS のサンドボックス」)の更新。
 - `isolate_sandbox_linux.go` は、`isolate_sandbox_darwin.go` の写しに近い。共通の部分(取得の検査、結果の扱い)を、`darwin || linux` のファイルに寄せる整理が要る。
-- ADR。

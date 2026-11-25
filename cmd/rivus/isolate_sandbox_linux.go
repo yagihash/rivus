@@ -22,6 +22,9 @@ import (
 // extraction only reads it. The toolchain is the pinned nightly, run directly (no rustup), prepared outside the sandbox
 // from a trusted source.
 
+// sandboxDesc says which sandbox this system has, for what is said to the user.
+const sandboxDesc = "the sandbox of Linux (Landlock and seccomp)"
+
 // rustDataDir is where rivus keeps what it prepares for Rust (the dependencies that were fetched).
 // RIVUS_RUST_DATA_DIR names another directory for it (the tests of rivus use it so that they write nothing to the directory of the user).
 func rustDataDir() (string, error) {
