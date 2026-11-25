@@ -46,6 +46,9 @@ options:
                     time, not cached (default 2: every benchmark runs 4 times in all, 2 per side; 1 = single runs: the table then says "single run:
                     no conclusion" and marks nothing). The `!!` mark needs a change of 10% or more that is larger than the spread between the runs
                     of the same side. Also the number of rounds of --cost-check
+  (G12, a warning only: the cost table has the columns adds total, adds max of a function, passes and largest SCC, which do not depend on the run; a rise of
+                    10% or more from base to head is a `warning: G12: ...` line in summary.md, and in GitHub Actions a `::warning::`. It never changes the exit status.
+                    The pull-request job runs `--only go-curated,dart-curated,go-synth-S,dart-synth-S,dart-synth-M,dart-synth-F --cost-rounds 1 --no-guard`.)
   --cost-check NAME one more target NAME (`memos`, or `memos-4gib`, the line A: `-max-memory 4GiB`, watchdog 4 GB) of bench/deps-targets.json, --cost-rounds alternating rounds (2: about 10 minutes or more) with the default flags, cost numbers
                     only (CPU time, peak memory of the process tree, summary elements and steps, load average; no finding comparison). The
                     tree comes from the bench cache ($BENCH_CACHE, fetch only, never run); the run has its own process group and the memory
@@ -71,7 +74,7 @@ Go; the sha256 of the IR for Dart and Rust), rules (their content) and arguments
 (timed_out, func_timeouts, budget_exhausted) or that did not converge is not kept; a dirty tree is not cached; the material of the
 key is kept with the result and compared when it is read. summary.md says "base: cached <date>".
 
-benchmarks (in this order): go-curated dart-curated rust-curated go-synth-S gogs-9a9388ac
+benchmarks (in this order): go-curated dart-curated rust-curated go-synth-S dart-synth-S dart-synth-M dart-synth-F gogs-9a9388ac
 gogs-48946299 gin-vue-admin go-test-bench parseable dart-pub gophish casdoor gitea-cut
 Each side is analysed with the inputs of ITS OWN version: the fixtures, the rules, the synth generator and
 the extractor are taken from wt/<sha7> (the worktree of that commit). The IR is cached per version, with a key made of
@@ -135,7 +138,7 @@ RES="$OUT/raw"
 # gin-vue-admin 21 s and 5.3 GB, go-test-bench 4 s, parseable 3 s, dart-pub 2 s); the heavy one is a --big target.
 is_heavy() { local kv; for kv in $BIGS; do [ "${kv%%=*}" = "$1" ] && return 0; done; return 1; }
 big_names() { local kv; for kv in $BIGS; do printf '%s ' "${kv%%=*}"; done; }
-BENCHES="go-curated dart-curated rust-curated go-synth-S"
+BENCHES="go-curated dart-curated rust-curated go-synth-S dart-synth-S dart-synth-M dart-synth-F"   # the last three: the Dart synthetic sizes (bench/dart-synth), small; with go-synth-S and the curated ones they are the targets of the G12 warning (below)
 grep -q "^    go-scale)" "${BASH_SOURCE[0]}" && BENCHES="$BENCHES go-scale"   # a pseudo-project of scale, added by another change
 grep -q "^    zoo-go)" "${BASH_SOURCE[0]}" && BENCHES="$BENCHES zoo-go"   # the zoo of Go: cases with answers that a run backs (bench/zoo/README.md)
 grep -q "^    zoo-dart)" "${BASH_SOURCE[0]}" && BENCHES="$BENCHES zoo-dart"   # the zoo of Dart: the same
@@ -163,6 +166,7 @@ spec() {
     dart-curated)  KIND=dart; DIR="$R/bench/dart-curated"; RULES="$DIR/rules.yaml" ;;
     zoo-dart)      KIND=dart; DIR="$R/bench/zoo-dart/cells"; RULES="$DIR/rules.yaml" ;;   # the zoo of Dart: the cells and the declarations of zoo_mark; the harness (bench/zoo-dart/exec) is not read
     rust-curated)  KIND=rust; DIR="$R/bench/rust-curated"; RULES="$DIR/rules.yaml" ;;
+    dart-synth-[SMLF]) KIND=dart; DIR="$WORK/synth/dart-${1#dart-synth-}"; RULES="$DIR/rules.yaml" ;;   # DIR is made per generator in setup(): the generator of this script's tree, for both sides
     zoo-rust)      KIND=rust; DIR="$R/bench/zoo-rust"; RULES="$DIR/rules.yaml" ;;   # the zoo of Rust: the cells and the declarations of zoo-mark (no dependency); the harness (bench/zoo-rust/exec) is a workspace of its own and is not read
     go-synth-S)    KIND=synth; DIR="$WORK/synth/S"; RULES="$DIR/rules.yaml" ;;   # DIR is made per version in setup()
     go-std10)      DIR="$(go env GOROOT)/src" ;;   # the standard library, the 10 packages of the acceptance test (internal/frontend/goir/accept_test.go stdPatterns); for --graph-check
@@ -342,6 +346,14 @@ setup() { # name side: makes the copy and the IR of that version; sets DIR, RULE
   if [ "$FIXED" = 1 ]; then sha="$(git -C "$ROOT" rev-parse HEAD)"; wt="$ROOT"; fi   # the inputs of this tree; s7 stays the engine's (the record of the run)
   spec "$b" "$wt" || { skip "$b" "unknown benchmark"; return 1; }
   PROV_INPUT="-"
+    if [ "${b#dart-synth-}" != "$b" ]; then   # the same code for both sides: the generator of this script's tree (as go-scale); no pub get, the generator writes package_config.json
+      tgt="$(wtree bench/dart-synth/gen)$(wtree bench/synthplan)"; key="$(printf '%s' "$tgt" | h16)"
+      DIR="$WORK/synth/dart-${b#dart-synth-}-$key"; RULES="$DIR/rules.yaml"; PROV_INPUT="dart-synth -size ${b#dart-synth-} (generator $key)"
+      if [ ! -f "$DIR/rules.yaml" ]; then
+        /bin/rm -rf "$DIR"; mkdir -p "$WORK/synth"
+        (cd "$ROOT" && go run ./bench/dart-synth/gen -size "${b#dart-synth-}" -out "$DIR") >&2 || { /bin/rm -rf "$DIR"; skip "$b" "the dart-synth generator failed"; return 1; }
+      fi
+    fi
   case "$b" in
     go-curated|dart-curated|rust-curated|zoo-go|zoo-dart|zoo-rust)
       tgt="$(tree "$sha" "bench/$b")"
@@ -387,11 +399,11 @@ setup() { # name side: makes the copy and the IR of that version; sets DIR, RULE
     dart)
       mkdir -p "$WORK/ir"
       local dartcmd="${RIVUS_DART:-dart}" nodeps="--no-deps" extdir="$wt/extractor/dart"
-      case "$b" in dart-curated|zoo-dart) nodeps="" ;; esac
+      case "$b" in dart-curated|zoo-dart|dart-synth-*) nodeps="" ;; esac   # the F package of dart-synth is read as a dependency
       [ -d "$extdir" ] || { skip "$b" "no extractor/dart in $w ($s7)"; return 1; }
       # the pubspec.yaml of the Dart zoo is generated and not committed (a version before that has it committed)
       if [ "$b" = zoo-dart ] && [ ! -f "$DIR/pubspec.yaml" ]; then (cd "$wt" && make zoo-dart-gen) > /dev/null 2>&1; fi
-      (cd "$DIR" && $dartcmd pub get) > /dev/null 2>&1 || { skip "$b" "dart pub get failed (RIVUS_DART=$dartcmd)"; return 1; }
+      [ "${b#dart-synth-}" != "$b" ] || (cd "$DIR" && $dartcmd pub get) > /dev/null 2>&1 || { skip "$b" "dart pub get failed (RIVUS_DART=$dartcmd)"; return 1; }
       [ -d "$extdir/.dart_tool" ] || (cd "$extdir" && $dartcmd pub get) > /dev/null 2>&1
       ext="$(tree "$sha" extractor/dart)"; extkey="dart ${ext:0:12}"
       key="$(printf '%s|%s|%s|%s|%s' "$b" "$ext" "$dartcmd" "$tgt" "$nodeps" | h16)"

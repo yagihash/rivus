@@ -192,6 +192,14 @@ Dart (`dart-curated`, `zoo-dart`; [issue #211](../docs/issues/211-graph-check-da
 The names of `deps-targets.json` (memos, memos-4gib, gitea, dart_services) run under the heavy-work lock and the memory cap of the target; gitea is the pass line C (it passes now: see its newest `--kind passline` row of
 `bench/heavy-ledger.tsv`; the numbers are there), so its graph can be compared.
 
+## The cost warning (G12)
+
+The cost table of `compare.sh` has four columns that do not depend on the run (`adds total`, `adds max of a function`, `passes`, `largest SCC`). A rise of 10% or more from base
+to head is a line `warning: G12: ...` in `summary.md`, and in GitHub Actions a `::warning::` (never a stop). The job `cost-warn` of `ci.yml` runs it in a pull request that changes
+`internal/taint`, `internal/sg`, `internal/ir`, `internal/callgraph`, `extractor/dart` or `bench`: `go-curated`, `dart-curated`, `go-synth-S` and `dart-synth-S`, `-M`, `-F`
+(each of these runs takes a few seconds; F needs the Dart SDK). `dart-synth-*` is made by the generator of the tree of head, for both sides. WORKFLOW.md has the rule.
+In a pull request that changes the generators (`bench/**`), a warning on go-synth may come from the difference of the generators (each side uses the generator of its own version), so suspect that first when you read it.
+
 ## One lock for the heavy runs
 
 The tools that run an analysis of several GB (`make bench-passline`, `make bench-deps`, `bench/compare.sh --cost-check`,
