@@ -108,9 +108,11 @@ class ParseTest(unittest.TestCase):
 @unittest.skipUnless(os.environ.get("CALLCHECK_E2E"), "CALLCHECK_E2E=1 runs the real extractor (about 1 minute; needs `dart` and `dart pub get` in extractor/dart and bench/dart-curated)")
 class RealExtractorTest(unittest.TestCase):
     """The check of the check, for real: a copy of the extractor that leaves out the calls of one form (a call of a function
-    value) must make the tool report mismatches on bench/dart-curated, and the extractor of the tree must give none."""
+    value) (a call of a function value; `new C(x)`) must make the tool report mismatches on bench/dart-curated, and the extractor of the tree must give none."""
 
-    def test_dropped_form_is_found(self):
+    def check_dropped(self, case, kind):
+        """The extractor of the tree gives no mismatch; a copy of it (made here, in a temporary directory: the source of the extractor is not touched)
+        whose lowering of `case` is replaced by a nil constant gives some, and some of the kind `kind`."""
         import shutil, tempfile
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         curated = os.path.join(root, "bench", "dart-curated")
@@ -119,15 +121,23 @@ class RealExtractorTest(unittest.TestCase):
             shutil.copytree(os.path.join(root, "extractor", "dart"), cp)
             path = os.path.join(cp, "lib", "exprs.dart")
             src = open(path).read()
-            old = "    case FunctionExpressionInvocation():\n      return _functionInvocation(f, e);"
-            self.assertIn(old, src)
-            open(path, "w").write(src.replace(old, "    case FunctionExpressionInvocation():\n      return f.nilConst(f.pos(e));"))
+            old = "    case %s():\n      return " % case
+            i = src.index(old)
+            j = src.index(";", i)  # the statement of this case: `return _x(f, e);`
+            self.assertNotIn("case ", src[i + len(old):j])
+            open(path, "w").write(src[:i + len(old)] + "f.nilConst(f.pos(e))" + src[j:])
             syntax = c.parse_syntax(c.run_syntax(curated))
             good = c.compare(syntax, *c.parse_ir(c.run_extractor(curated, os.path.join(root, "extractor", "dart"))))
             bad = c.compare(syntax, *c.parse_ir(c.run_extractor(curated, cp)))
         self.assertEqual(good["call_mismatch"], 0)
         self.assertGreater(bad["call_mismatch"], 0)
-        self.assertIn("function_expression", {m["kind"] for m in bad["mismatches"]})
+        self.assertIn(kind, {m["kind"] for m in bad["mismatches"]})
+
+    def test_dropped_function_expression_invocation_is_found(self):
+        self.check_dropped("FunctionExpressionInvocation", "function_expression")
+
+    def test_dropped_instance_creation_is_found(self):
+        self.check_dropped("InstanceCreationExpression", "creation")
 
 
 if __name__ == "__main__":

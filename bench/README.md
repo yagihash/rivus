@@ -184,7 +184,7 @@ checkout: write the commit here when it is known.
   - A cascade (`a..f(1)..g(2)`) is counted section by section, each at its own `(`, so it needs no allowance; a difference that is allowed is named in `ALLOW` of `callcheck.py` with a reason, and none is allowed now.
   - The position is the offset of the `(` that opens the argument list, the same token on both sides (the definition is at the top of `callcheck.py`); a call counts as found when the IR has a `call` at that offset in that file, so an IR with the position moved shows as dropped.
   - `call_unsupported`: the written calls that are only reported by an `unsupported` (said, not dropped); it is a count of calls, `call_mismatch` is a count of functions.
-  - The check of the check: `CALLCHECK_E2E=1 python3 bench/test_dart_callcheck.py` runs the real extractor, and a copy of it that leaves out one form of call (a call of a function value) must give mismatches on `bench/dart-curated`; with no such test, "0" could mean that the tool sees nothing.
+  - The check of the check: `CALLCHECK_E2E=1 python3 bench/test_dart_callcheck.py` runs the real extractor, and a copy of it (made in a temporary directory; the source of the extractor is not touched) that leaves out one form of call must give mismatches on `bench/dart-curated`, one test for a call of a function value (`FunctionExpressionInvocation`) and one for `new C(x)` (`InstanceCreationExpression`); with no such test, "0" could mean that the tool sees nothing.
 
 A weekly CI job is [issue #222](../docs/issues/222-maturity-ledger-weekly-ci.md).
 
@@ -195,6 +195,8 @@ A weekly CI job is [issue #222](../docs/issues/222-maturity-ledger-weekly-ci.md)
 ```sh
 python3 bench/heavy_ledger.py [--kind passline|deps] [--target memos] [--last N]   # read only; prints the margin (limit - peak, limit - live heap)
 ```
+
+The copy of a Dart or Rust target is made in `$BENCH_CACHE/passline-<name>` (`deps-<name>` for the dependency benches): the same path in every run, emptied before and after it, so the function URIs and the ids of the findings of two runs of one commit are the same (a random temporary directory changed them, and a comparison of two runs had to rename it). A second run of the same name at the same time is refused (a lock file beside the directory).
 
 How to measure and what a line means: [`passline-baseline.md`](passline-baseline.md). The light benches: [`LEDGER.md`](LEDGER.md) (unchanged).
 
