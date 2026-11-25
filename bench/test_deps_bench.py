@@ -236,8 +236,27 @@ class Targets(unittest.TestCase):
     def test_makefile_default_targets_and_gitea_by_choice(self):
         mk = open(os.path.join(d.ROOT, "Makefile")).read()
         line = [l for l in mk.splitlines() if l.startswith("\tpython3 bench/deps_bench.py") and "TARGETS" in l][0]
-        self.assertIn("memos memos-4gib", line)
+        self.assertIn("memos-4gib cocoon", line)
+        self.assertNotIn("memos memos-4gib", line)   # the memos 8 GB row left the pass line (2026-11-25)
         self.assertNotIn("gitea", line)
+
+    def test_a_carries_the_detection_of_the_removed_b_row(self):
+        # B (memos, 8 GB) was removed from the pass line on 2026-11-25: A (memos-4gib) holds the memory and the time (stricter)
+        # and the same detect, and the detection is part of A's verdict
+        t = json.load(open(d.TARGETS_FILE))
+        a, b = t["memos-4gib"], t["memos"]
+        self.assertEqual((a["repo"], a["commit"], a["subdir"]), (b["repo"], b["commit"], b["subdir"]))
+        self.assertLess(a["mem_cap_gb"], b["mem_cap_gb"])
+        self.assertLessEqual(a["time_limit_s"], b["time_limit_s"])
+        self.assertEqual(a["detect"], b["detect"])
+        for k in ("id", "mode", "truth", "category", "prefix_commit", "fixed_commit"):
+            self.assertTrue(a["detect"].get(k), k)
+        self.assertTrue(a["decided"])
+        cap, lim = a["mem_cap_gb"], a["time_limit_s"]
+        self.assertTrue(d.judge(100, lim, cap - 0.5, cap, True, True)[0])
+        self.assertFalse(d.judge(100, lim, cap - 0.5, cap, True, False)[0])   # not detected: A fails
+        self.assertFalse(d.judge(100, lim, cap - 0.5, cap, False, True)[0])   # detected, not converged: A fails
+        self.assertTrue(d.judge(100, lim, cap - 0.5, cap, True, True, None, False)[0])  # quiet_after_fix is not in the verdict
 
     def test_rivus_is_not_given_a_timeout(self):
         # the time limit is the watchdog's; a rivus that stopped itself at the limit would look like "not converged"
