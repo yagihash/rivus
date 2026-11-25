@@ -36,6 +36,14 @@ class Parse(unittest.TestCase):
     def test_todo(self):
         self.assertEqual(m.parse_todo(ZOO), {"dart": 13, "go": 45, "rust": 0})
 
+    def test_marked_counts_marks_not_the_explanation(self):
+        na = ("@todo(F/<family>/<shape>: PARITY: reason) is a form that Dart can have\n"
+              "@na(F/dyn/a: x)\n@todo(F/clos/b: PARITY: later (maybe))\n")
+        self.assertEqual(m.count_todo_marked(na), 1)
+        self.assertEqual(m.count_todo_marked("@todo(F/a/x: PARITY: one)\n@todo(F/a/y: PARITY: two)\n@todo(F/a/y: PARITY: two)"), 2)
+        self.assertEqual(m.count_todo_marked("@todo(F/a/x: later)"), 0)  # not a PARITY mark
+        self.assertEqual(m.count_todo_marked(""), 0)
+
     def test_miss_reads_the_cells_line_only(self):
         self.assertEqual(m.parse_miss(ZOO), {"dart": 56, "rust": 28, "go": 14})
 
@@ -54,13 +62,13 @@ class Parse(unittest.TestCase):
 
 
 class Rows(unittest.TestCase):
-    VALUES = {"go": {"todo": 45, "miss": 14, "no_edge": 7}, "dart": {"todo": 13, "miss": 56, "no_edge": None}, "rust": {"todo": 0, "miss": 28}}
+    VALUES = {"go": {"todo": 45, "todo_marked": 0, "miss": 14, "no_edge": 7}, "dart": {"todo": 13, "todo_marked": 0, "miss": 56, "no_edge": None}, "rust": {"todo": 14, "todo_marked": 14, "miss": 28}}
 
     def test_empty_is_empty_not_zero(self):
         rows = m.make_rows("2026-11-25", "abcd1234", self.VALUES)
-        self.assertEqual(rows[0], ["2026-11-25", "abcd1234", "go", "45", "14", "7", ""])
-        self.assertEqual(rows[1][5], "")
-        self.assertEqual(rows[2], ["2026-11-25", "abcd1234", "rust", "0", "28", "", ""])
+        self.assertEqual(rows[0], ["2026-11-25", "abcd1234", "go", "45", "0", "14", "7", ""])
+        self.assertEqual(rows[1][6], "")
+        self.assertEqual(rows[2], ["2026-11-25", "abcd1234", "rust", "14", "14", "28", "", ""])
 
     def test_append_once(self):
         rows = m.make_rows("2026-11-25", "abcd1234", self.VALUES)
@@ -73,7 +81,7 @@ class Rows(unittest.TestCase):
             lines = open(p).read().splitlines()
             self.assertEqual(lines[0], "\t".join(m.COLUMNS))
             self.assertEqual(len(lines), 7)
-            self.assertTrue(all(len(l.split("\t")) == 7 for l in lines))
+            self.assertTrue(all(len(l.split("\t")) == 8 for l in lines))
 
 
 if __name__ == "__main__":

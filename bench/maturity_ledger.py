@@ -3,7 +3,7 @@
 
   python3 bench/maturity_ledger.py [--dry-run] [--no-edges] [--ledger FILE]      (make maturity-ledger)
 
-todo, miss: the zoo test of each language (`go test ./cmd/rivus -run 'TestZoo(Go|Dart|Rust)$' -v`).
+todo, miss: the zoo test of each language; todo_marked: the @todo(F/..: PARITY: ..) marks in the sources (na.txt, lib.rs, the Go zoo) (`go test ./cmd/rivus -run 'TestZoo(Go|Dart|Rust)$' -v`).
 no_edge: Go: `go run ./bench/observed-edges run -zoo bench/zoo-go`; Dart: bench/zoo-dart/observed/compare.py (needs `dart`).
 call_mismatch: empty until the check of the call counts exists (docs/ROADMAP.md, B(3)).
 An input that cannot be had leaves its column empty, and the reason goes to standard error: an empty cell is not a zero.
@@ -14,11 +14,15 @@ import argparse, datetime, os, re, shutil, subprocess, sys, tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LEDGER = os.path.join(ROOT, "bench", "maturity-ledger.tsv")
-COLUMNS = ["date", "rivus_commit", "lang", "todo", "miss", "no_edge", "call_mismatch"]
+COLUMNS = ["date", "rivus_commit", "lang", "todo", "todo_marked", "miss", "no_edge", "call_mismatch"]
 LANGS = ["go", "dart", "rust"]
 
 MARKS_RE = re.compile(r"zoo-(go|dart|rust): parity marks: @na (\d+) \[([^\]]*)\] \| @todo (\d+) \[([^\]]*)\]")
 MISS_RE = re.compile(r"zoo-(go|dart|rust): cells \d+ / cases \d+ \| found \d+ / \d+ \| @miss (\d+) \(trace \d+, silent \d+, no rule \d+\)")
+# the same expression as zooParityTodoRe in cmd/rivus/zoo_test.go: a mark names a cell (F/<family>/<shape>), so the
+# explanation "@todo(F/<family>/<shape>: PARITY: reason)" in bench/zoo-dart/na.txt is not a mark
+TODO_MARK_RE = re.compile(r"@todo\((F/[a-z0-9/-]+):\s*PARITY:\s*([^)]+)\)")
+MARK_FILES = {"go": ["bench/zoo-go"], "dart": ["bench/zoo-dart/na.txt"], "rust": ["bench/zoo-rust/cells/src/lib.rs"]}
 NO_EDGE_RE = re.compile(r"^\s*no_edge\s+(\d+)\s*$", re.M)
 COMPARE_RE = re.compile(r"^\w+\s+no_edge\s+(\d+)\s*$", re.M)
 
@@ -26,6 +30,11 @@ COMPARE_RE = re.compile(r"^\w+\s+no_edge\s+(\d+)\s*$", re.M)
 def parse_todo(text):
     """{lang: @todo count} from the "parity marks" lines of the zoo tests."""
     return {m.group(1): int(m.group(4)) for m in MARKS_RE.finditer(text)}
+
+
+def count_todo_marked(text):
+    """The cells that the text declares with @todo(F/..: PARITY: ..) (a name once), not the ones that have no mark."""
+    return len({m.group(1) for m in TODO_MARK_RE.finditer(text)})
 
 
 def parse_miss(text):
@@ -137,6 +146,21 @@ def collect_zoo(env, values):
             warn("%s: no '@miss' line: miss left empty" % lang)
 
 
+def collect_marked(values):
+    for lang, paths in MARK_FILES.items():
+        names, seen = 0, False
+        for rel in paths:
+            full = os.path.join(ROOT, rel)
+            files = [full] if os.path.isfile(full) else [os.path.join(d, f) for d, _, fs in os.walk(full) for f in fs if f.endswith((".go", ".txt"))]
+            for f in files:
+                seen = True
+                names += count_todo_marked(open(f, errors="replace").read())
+        if seen:
+            values[lang]["todo_marked"] = names
+        else:
+            warn("%s: no file to read the @todo marks from: todo_marked left empty" % lang)
+
+
 def collect_go_edges(env, values):
     r = run(["go", "run", "./bench/observed-edges", "run", "-zoo", "bench/zoo-go"], env=env)
     n = parse_no_edge_go(r.stdout)
@@ -193,6 +217,7 @@ def main(argv=None):
     date = datetime.date.today().isoformat()
     values = {l: {} for l in LANGS}
     collect_zoo(env, values)
+    collect_marked(values)
     if not a.no_edges:
         collect_go_edges(env, values)
         collect_dart_edges(env, values)
