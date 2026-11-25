@@ -169,7 +169,12 @@ jobs:
       deployment: false
     permissions:
       id-token: write
+      contents: read # scripts/rewrite-formula.sh を取り出す
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ needs.tagpr.outputs.tag }}
+          persist-credentials: false
       - id: token
         uses: yagihash/ghmint-action@be57533eef7f69550d06f0c93eede5589158281a # v1.0.0
         with:
@@ -186,12 +191,7 @@ jobs:
           url="https://github.com/yagihash/rivus/releases/download/${TAG}/rivus_${TAG#v}_source.tar.gz"
           sha=$(curl -fsSL "$url" | sha256sum | cut -d' ' -f1)
           blob=$(gh api "repos/${repo}/contents/${path}" --jq .sha)
-          gh api "repos/${repo}/contents/${path}" --jq .content | base64 -d \
-            | sed -E "s|^  url \".*\"|  url \"${url}\"|; s|^  sha256 \".*\"|  sha256 \"${sha}\"|" > rivus.rb
-          if ! grep -qF "url \"${url}\"" rivus.rb || ! grep -qF "sha256 \"${sha}\"" rivus.rb; then
-            echo "the formula has no url or sha256 line to rewrite" >&2
-            exit 1
-          fi
+          gh api "repos/${repo}/contents/${path}" --jq .content | base64 -d | scripts/rewrite-formula.sh "$url" "$sha" > rivus.rb
           gh api -X PUT "repos/${repo}/contents/${path}" \
             -f message="rivus ${TAG#v}" \
             -f content="$(base64 -w0 rivus.rb)" \

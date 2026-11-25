@@ -100,3 +100,62 @@ func TestSourceTarballReproducible(t *testing.T) {
 		}
 	}
 }
+
+const formulaSample = `class Rivus < Formula
+  desc "Cross-file taint analysis query engine for Go, Dart and Rust"
+  homepage "https://github.com/yagihash/rivus"
+  url "https://github.com/yagihash/rivus/archive/refs/tags/v0.0.18.tar.gz"
+  sha256 "5524eebaa9b6cc60f03f409c6298e04895fc621f8ed34d268417dd0b9e9f45c5"
+  license "Apache-2.0"
+  head "https://github.com/yagihash/rivus.git", branch: "main"
+
+  def install
+    resource_url = "https://example.com/x.tar.gz"
+    system "go", "build"
+  end
+end
+`
+
+func rewriteFormula(t *testing.T, in, url, sha string) (string, error) {
+	t.Helper()
+	cmd := exec.Command("bash", filepath.Join(repoRoot(t), "scripts", "rewrite-formula.sh"), url, sha)
+	cmd.Stdin = strings.NewReader(in)
+	out, err := cmd.Output()
+	return string(out), err
+}
+
+// bump-tap rewrites only the url and sha256 lines of the formula, to the release asset.
+func TestRewriteFormula(t *testing.T) {
+	url := "https://github.com/yagihash/rivus/releases/download/v0.0.19/rivus_0.0.19_source.tar.gz"
+	sha := strings.Repeat("ab", 32)
+	got, err := rewriteFormula(t, formulaSample, url, sha)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := strings.NewReplacer(
+		"https://github.com/yagihash/rivus/archive/refs/tags/v0.0.18.tar.gz", url,
+		"5524eebaa9b6cc60f03f409c6298e04895fc621f8ed34d268417dd0b9e9f45c5", sha,
+	).Replace(formulaSample)
+	if got != want {
+		t.Errorf("got:\n%s\nwant:\n%s", got, want)
+	}
+	// running it again on its own output changes nothing
+	again, err := rewriteFormula(t, got, url, sha)
+	if err != nil || again != got {
+		t.Errorf("not idempotent: %v", err)
+	}
+}
+
+func TestRewriteFormulaFailures(t *testing.T) {
+	url := "https://example.com/a.tar.gz"
+	sha := strings.Repeat("0", 64)
+	if _, err := rewriteFormula(t, strings.Replace(formulaSample, "  sha256", "  # sha256", 1), url, sha); err == nil {
+		t.Error("a formula without a sha256 line did not fail")
+	}
+	if _, err := rewriteFormula(t, strings.Replace(formulaSample, `  url "`, `  # url "`, 1), url, sha); err == nil {
+		t.Error("a formula without a url line did not fail")
+	}
+	if _, err := rewriteFormula(t, formulaSample, "https://example.com/a|b", sha); err == nil {
+		t.Error("a url with | did not fail")
+	}
+}
