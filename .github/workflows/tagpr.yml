@@ -79,6 +79,9 @@ jobs:
   #       gh attestation verify rivus_X.Y.Z_linux_amd64.tar.gz --repo yagihash/rivus --signer-workflow yagihash/rivus/.github/workflows/tagpr.yml
   #   - release attestation（immutable releases が公開時に自動で作る）: このファイルが、そのタグの Release のアセットと同じ
   #       gh release verify-asset vX.Y.Z rivus_X.Y.Z_linux_amd64.tar.gz --repo yagihash/rivus
+  # ソースの tarball（rivus_X.Y.Z_source.tar.gz。tap の formula が使う）も、同じ 2 つで検証できる（attest の対象は dist/*.tar.gz に入る）
+  #       gh attestation verify rivus_X.Y.Z_source.tar.gz --repo yagihash/rivus --signer-workflow yagihash/rivus/.github/workflows/tagpr.yml
+  #       gh release verify-asset vX.Y.Z rivus_X.Y.Z_source.tar.gz --repo yagihash/rivus
   # ビルドの手順は scripts/build-release-archives.sh にある（PR では ci.yml の release-build が、同じものを動かす）。
   release-binaries:
     needs: tagpr
@@ -112,7 +115,7 @@ jobs:
         if: steps.state.outputs.draft == 'true'
         env:
           TAG: ${{ needs.tagpr.outputs.tag }}
-        run: scripts/build-release-archives.sh "${TAG#v}"
+        run: scripts/build-release-archives.sh "${TAG#v}" "refs/tags/${TAG}"
       - name: Attest build provenance
         if: steps.state.outputs.draft == 'true'
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
@@ -132,7 +135,7 @@ jobs:
           gh release upload "$TAG" dist/*.tar.gz dist/*_checksums.txt --clobber
           gh release edit "$TAG" --draft=false
       # release attestation は公開のときに作られる。すぐには見えないことがあるので、少し待ちながら確かめる。
-      # 公開済みの Release で実行したときは、アセットが揃っていること（tar.gz が 3 つとチェックサム）も確かめる。
+      # 公開済みの Release で実行したときは、アセットが揃っていること（tar.gz が 4 つ（バイナリ 3 つとソース 1 つ）とチェックサム）も確かめる。
       - name: Verify the release attestation
         env:
           GH_TOKEN: ${{ github.token }}
@@ -141,8 +144,8 @@ jobs:
         run: |
           set -euo pipefail
           n=$(gh release view "$TAG" --json assets --jq '[.assets[].name | select(endswith(".tar.gz") or endswith("_checksums.txt"))] | length')
-          if [ "$n" -ne 4 ]; then
-            echo "the Release of ${TAG} has ${n} of the 4 expected assets (3 archives and the checksums)" >&2
+          if [ "$n" -ne 5 ]; then
+            echo "the Release of ${TAG} has ${n} of the 5 expected assets (3 binary archives, the source tarball and the checksums)" >&2
             exit 1
           fi
           for _ in 1 2 3 4 5 6; do
@@ -152,11 +155,12 @@ jobs:
           echo "the release attestation of ${TAG} could not be verified (the Release is already published; use 'Re-run failed jobs' to retry only this check: a run by workflow_dispatch stops in tagpr)" >&2
           exit 1
 
-  # タグが打たれたときだけ、tap の formula の url と sha256 を書き換える。
+  # タグが打たれたときだけ、tap の formula の url と sha256 を書き換える。url は、Release のソースの tarball（GitHub が自動で作る
+  # archive/refs/tags/ のものは、sha256 が変わらないことが保証されない）。release-binaries が公開した後に動く（needs）。
   # トークンは homebrew-tap だけに書けるもの（ghmint の homebrew-tap/.github/ghmint/bump-from-rivus.rego）。
   # Contents API で書くので、コミットは Verified になる。
   bump-tap:
-    needs: tagpr
+    needs: [tagpr, release-binaries]
     if: needs.tagpr.outputs.tag != ''
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -179,7 +183,7 @@ jobs:
           set -euo pipefail
           repo=yagihash/homebrew-tap
           path=Formula/rivus.rb
-          url="https://github.com/yagihash/rivus/archive/refs/tags/${TAG}.tar.gz"
+          url="https://github.com/yagihash/rivus/releases/download/${TAG}/rivus_${TAG#v}_source.tar.gz"
           sha=$(curl -fsSL "$url" | sha256sum | cut -d' ' -f1)
           blob=$(gh api "repos/${repo}/contents/${path}" --jq .sha)
           gh api "repos/${repo}/contents/${path}" --jq .content | base64 -d \
