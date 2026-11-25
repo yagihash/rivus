@@ -350,6 +350,7 @@ fn cli() -> ExitCode {
             // the crates that a model declares: their bodies are not read (the crate name, with `-` or `_`: cargo reads them alike)
             "--body-replaced" => match args.next() {
                 Some(c) if !c.is_empty() => body_replaced.push(c),
+                // default-ok: not a syntax kind: argument parsing
                 _ => {
                     eprintln!("rivus-rust: --body-replaced needs the name of a crate");
                     return ExitCode::from(2);
@@ -358,6 +359,7 @@ fn cli() -> ExitCode {
             // what the isolated run asks (docs/rust-isolation.md): the lock file is not written, and nothing is fetched
             "--locked" => cargo_flags.push("--locked"),
             "--offline" => cargo_flags.push("--offline"),
+            // default-ok: not a syntax kind: argument parsing
             _ => dir = Some(a),
         }
     }
@@ -402,6 +404,7 @@ fn cli() -> ExitCode {
         let lib = format!("{}/lib", sysroot);
         match std::env::var(var) {
             Ok(old) if !old.is_empty() => format!("{}:{}", lib, old),
+            // default-ok: not a syntax kind: the environment variable is not set
             _ => lib,
         }
     };
