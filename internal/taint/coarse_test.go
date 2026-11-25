@@ -358,3 +358,38 @@ func TestCoarseNoteOnHops(t *testing.T) {
 		t.Error("no summary of a function of the project has the note on a hop")
 	}
 }
+
+// The wording has the three things a reader needs to tell a real flow from an over-approximation: which function of
+// which package the step went through, what depth 0 means, and how to check.
+func TestCoarseWordingHasThreeItems(t *testing.T) {
+	id := "example.com/dep/pkg.F"
+	d := sccCoarsenedDetail(id)
+	for name, want := range map[string]string{
+		"function name":           id,
+		"package":                 "package " + UnitOf(id),
+		"depth 0 meaning":         "cut at depth 0",
+		"over-approximation":      "more flows than there are, never fewer",
+		"lost distinction":        "which fields were told apart before the cut",
+		"check by reading":        "read the body of " + id,
+		"look at branches":        "conditions of branches",
+		"look at function values": "where a function value is passed",
+		"look at fields":          "which fields are written and which are read",
+		"check by solving off":    sccCoarsenFlagOff,
+	} {
+		if !strings.Contains(d, want) {
+			t.Errorf("the note on a hop has no %s (%q): %s", name, want, d)
+		}
+	}
+	_, res := runCoarse(t, isF, func(o *Options) { o.SCCCoarsenN = 12 })
+	rs := records(res)
+	if len(rs) == 0 {
+		t.Fatal("no record")
+	}
+	for _, u := range rs {
+		for _, want := range []string{"cut at depth 0", "more flows than there are, never fewer", "which fields were told apart before the cut", "read that function", sccCoarsenFlagOff} {
+			if !strings.Contains(u.Detail, want) {
+				t.Errorf("the record has no %q: %s", want, u.Detail)
+			}
+		}
+	}
+}
