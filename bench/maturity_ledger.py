@@ -5,8 +5,9 @@
 
 todo, miss: the zoo test of each language; todo_marked: the @todo(F/..: PARITY: ..) marks in the sources (na.txt, lib.rs, the Go zoo) (`go test ./cmd/rivus -run 'TestZoo(Go|Dart|Rust)$' -v`).
 no_edge: Go: `go run ./bench/observed-edges run -zoo bench/zoo-go`; Dart: bench/zoo-dart/observed/compare.py (needs `dart`).
-call_mismatch, call_unsupported: Dart only: bench/dart-callcheck/callcheck.py on bench/zoo-dart/cells (the functions with a call that the source writes
-and the IR has neither as a `call` nor as an `unsupported`; the calls that only an `unsupported` reports). Go and Rust: empty (no such check yet).
+call_mismatch, call_unsupported, call_dead: Dart: bench/dart-callcheck/callcheck.py on bench/zoo-dart/cells; Go: bench/go-callcheck/callcheck.py on bench/zoo-go
+(the functions with a call that the source writes and the IR has neither as a `call` nor as an `unsupported`; the calls that only an `unsupported` reports;
+Go only: the calls that go/ssa does not keep, for a reason that the source states: not reachable, or in a function literal assigned to `_`). Rust: empty (no such check yet).
 An input that cannot be had leaves its column empty, and the reason goes to standard error: an empty cell is not a zero.
 What a number does not show is in bench/README.md (the section "The ledger of maturity").
 The script only adds rows. The commit is made by a person. Standard library only.
@@ -15,7 +16,7 @@ import argparse, datetime, os, re, shutil, subprocess, sys, tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LEDGER = os.path.join(ROOT, "bench", "maturity-ledger.tsv")
-COLUMNS = ["date", "rivus_commit", "lang", "cells", "na", "todo", "todo_marked", "miss", "no_edge", "calls_observed", "call_mismatch", "call_unsupported"]
+COLUMNS = ["date", "rivus_commit", "lang", "cells", "na", "todo", "todo_marked", "miss", "no_edge", "calls_observed", "call_mismatch", "call_unsupported", "call_dead"]
 LANGS = ["go", "dart", "rust"]
 
 MARKS_RE = re.compile(r"zoo-(go|dart|rust): parity marks: @na (\d+) \[([^\]]*)\] \| @todo (\d+) \[([^\]]*)\]")
@@ -31,6 +32,8 @@ NO_EDGE_RE = re.compile(r"^\s*no_edge\s+(\d+)\s*$", re.M)
 COMPARE_RE = re.compile(r"^\w+\s+no_edge\s+(\d+)\s*$", re.M)
 CALL_MISMATCH_RE = re.compile(r"^call_mismatch\s+(\d+)\s*$", re.M)
 CALL_UNSUPPORTED_RE = re.compile(r"^call_unsupported\s+(\d+)\s*$", re.M)
+CALL_DEAD_RE = re.compile(r"^call_dead\s+(\d+)\s*$", re.M)
+GO_CALLCHECK_DIR = "bench/zoo-go"  # the range of the Go no_edge check (the same cells)
 
 
 def parse_todo(text):
@@ -86,6 +89,12 @@ def parse_call_check(text):
     """(call_mismatch, call_unsupported) from the summary of bench/dart-callcheck/callcheck.py; None for a number it does not have."""
     a, b = CALL_MISMATCH_RE.search(text), CALL_UNSUPPORTED_RE.search(text)
     return (int(a.group(1)) if a else None, int(b.group(1)) if b else None)
+
+
+def parse_call_dead(text):
+    """call_dead from the summary of bench/go-callcheck/callcheck.py (the Dart tool has none), or None."""
+    m = CALL_DEAD_RE.search(text)
+    return int(m.group(1)) if m else None
 
 
 def make_rows(date, commit, values):
@@ -272,6 +281,21 @@ def collect_call_check(env, values):
     values["dart"]["call_mismatch"], values["dart"]["call_unsupported"] = mismatch, unsupported
 
 
+def collect_call_check_go(env, values):
+    """bench/go-callcheck/callcheck.py on GO_CALLCHECK_DIR (the tool runs `go run` and `go build` itself)."""
+    r = run([sys.executable, ROOT + "/bench/go-callcheck/callcheck.py", ROOT + "/" + GO_CALLCHECK_DIR], env=env)
+    if r.returncode != 0:
+        tail = (r.stdout + r.stderr).strip().splitlines()
+        warn("go: callcheck.py failed (exit %d: %s); call_mismatch, call_unsupported and call_dead left empty" % (r.returncode, tail[-1] if tail else ""))
+        return
+    mismatch, unsupported = parse_call_check(r.stdout)
+    dead = parse_call_dead(r.stdout)
+    if mismatch is None or dead is None:
+        warn("go: callcheck.py gave no summary; call_mismatch, call_unsupported and call_dead left empty")
+        return
+    values["go"]["call_mismatch"], values["go"]["call_unsupported"], values["go"]["call_dead"] = mismatch, unsupported, dead
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--dry-run", action="store_true", help="print the rows, add nothing")
@@ -291,6 +315,7 @@ def main(argv=None):
         collect_go_edges(env, values)
         collect_dart_edges(env, values)
         collect_call_check(env, values)
+        collect_call_check_go(env, values)
     rows = make_rows(date, commit, values)
     text = open(a.ledger).read() if os.path.exists(a.ledger) else ""
     fresh = new_rows(rows, text)
