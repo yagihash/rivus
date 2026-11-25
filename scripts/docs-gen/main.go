@@ -1,5 +1,6 @@
 // docs-gen prints the tables made from the files of docs/issues (the issues) and docs/adr (the ADRs): `make docs-gen`.
-// With the argument `issues` or `adr` it prints that one only (default: both). With -o <file> it writes there instead
+// With the argument `issues` or `adr` it prints that one only (default: both). The argument `passline` prints the rows of the
+// pass line (from bench/deps-targets.json; not in the default). With -o <file> it writes there instead
 // (docs/ISSUES-TABLE.md, docs/ADR-TABLE.md and docs/TABLE.md are ignored by git).
 package main
 
@@ -14,11 +15,12 @@ import (
 func main() {
 	issuesDir := flag.String("dir", "docs/issues", "the directory of the issue files")
 	adrDir := flag.String("adr", "docs/adr", "the directory of the ADR files")
+	targets := flag.String("targets", "bench/deps-targets.json", "the targets of the pass line (for passline)")
 	out := flag.String("o", "", "write here instead of stdout")
 	flag.Parse()
 	what := flag.Arg(0)
-	if what != "" && what != "issues" && what != "adr" || flag.NArg() > 1 {
-		fmt.Fprintln(os.Stderr, "usage: docs-gen [-o file] [issues|adr]")
+	if what != "" && what != "issues" && what != "adr" && what != "passline" || flag.NArg() > 1 {
+		fmt.Fprintln(os.Stderr, "usage: docs-gen [-o file] [issues|adr|passline]")
 		os.Exit(2)
 	}
 	var errs []error
@@ -35,6 +37,13 @@ func main() {
 			t += "\n"
 		}
 		t += docsgen.AdrTable(adrs)
+	}
+	if what == "passline" {
+		rows, err := docsgen.LoadPassLine(*targets)
+		if err != nil {
+			errs = append(errs, err)
+		}
+		t = docsgen.PassLineTable(rows)
 	}
 	for _, e := range errs {
 		fmt.Fprintln(os.Stderr, "docs-gen:", e)

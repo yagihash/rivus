@@ -35,8 +35,8 @@ test: ## every test, with the Dart and Rust extractors (what CI runs on main)
 	go vet ./...
 	RIVUS_DART="$(RIVUS_DART)" RIVUS_RUST="$(RIVUS_RUST)" RIVUS_REQUIRE_DART=1 RIVUS_REQUIRE_RUST=1 go test -count=1 -timeout 40m ./...
 
-test-docs: ## only the tests that read the documents (links, docs/issues, docs/adr, the ADR references, no executables or files over 1 MB); CI runs it for a change of documents only
-	go test ./cmd/rivus -run '^(TestDocLinks|TestIssuesFiles|TestAdrFiles|TestAdrReferences|TestNoBinariesOrLargeFiles)$$' -count=1
+test-docs: ## only the tests that read the documents (links, docs/issues, docs/adr, the ADR references, the tables that copy the code (TestDocsSync), no executables or files over 1 MB); CI runs it for a change of documents only
+	go test ./cmd/rivus -run '^(TestDocLinks|TestIssuesFiles|TestAdrFiles|TestAdrReferences|TestNoBinariesOrLargeFiles|TestDocsSync)$$' -count=1
 
 zoo-loosened: ## check that what the commits change in the zoo marks (bench/zoo/marks.d, against the merge base) is not a loosening without a "Zoo-Loosened:" line (BASE=<commit> HEAD=<commit>)
 	@[ -n "$(BASE)" ] && [ -n "$(HEAD)" ] || { echo "usage: make zoo-loosened BASE=<commit> HEAD=<commit>"; exit 1; }
@@ -88,7 +88,7 @@ model: ## the steps of making the model of a Go or Dart package: PKG=<import pat
 	@# built once and run, not `go run`: `go run` turns the exit status of the program (70, 2) into 1 ("exit status N")
 	@d=$$(mktemp -d) && go build -o "$$d/model-author" ./bench/model-author && "$$d/model-author" -pkg "$(PKG)" $(if $(VERSION),-version "$(VERSION)") -lang $(if $(filter command line,$(origin LANG)),$(LANG),go) $(ARGS); rc=$$?; rm -rf "$$d"; exit $$rc
 
-docs-gen: ## print the tables of the issues and the ADRs (from docs/issues/*.md, docs/adr/*.md); WHAT=issues or WHAT=adr for one; OUT=docs/TABLE.md writes it (ignored by git)
+docs-gen: ## print the tables of the issues and the ADRs (from docs/issues/*.md, docs/adr/*.md); WHAT=issues or WHAT=adr for one; WHAT=passline the rows of the pass line (bench/deps-targets.json); OUT=docs/TABLE.md writes it (ignored by git)
 	go run ./scripts/docs-gen $(if $(OUT),-o $(OUT)) $(WHAT)
 
 daily-stats: ## count the pull requests merged into main since a date, by what they change: ENGINE/MODEL/EXTRACTOR or TOOLS/CI/DOCS (SINCE=2026-11-20; scripts/daily-stats, docs/WORKFLOW.md)
