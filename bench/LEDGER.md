@@ -264,7 +264,6 @@ These rows were measured before the ledger existed (by hand, with the engine of 
 | memos CVE-2025-65799, pre-fix and fixed | 1d7efb15, 5f57f486 | default, cap 8 GB | cut by the cap at 49 s and 31 s | > 8 GB | no | - | - |
 | memos CVE-2025-65799, pre-fix and fixed | 1d7efb15, 5f57f486 | `-body-replaced` of the aws SDK (informational) | 30 s and 23 s | 3.7 GB and 3.6 GB | yes | - | 0 and 0 (`path_traversal`; not detected at the pre-fix commit) |
 
-So today's line for memos is `FAIL memos time=67/180 mem=>8/8 converged=no detected=no quiet_after_fix=n/a` (cut by the cap; not detected at the pre-fix commit with the default flags and the builtin models).
 
 ### The cocoon line (numbers only; engine of that day)
 
@@ -272,7 +271,6 @@ So today's line for memos is `FAIL memos time=67/180 mem=>8/8 converged=no detec
 |---|---|---|---|---|---|---|---|---|
 | cocoon app_dart | ae9eb1be | default, 10m | 101 s | 1.78 GB | 128 s CPU | converged (4 passes) | 16.5k functions (14.3k deps) | 14 findings (ssrf 9, resource_name 4, sql_injection 1) |
 
-Today's line for cocoon: `PASS cocoon time=101/180 mem=1.78/8 converged=yes detected=n/a`.
 
 ### Peak memory (numbers only)
 

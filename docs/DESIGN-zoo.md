@@ -1,6 +1,6 @@
 # 設計: zoo(意図的に脆弱性を作り込んだベンチ)と wild(実世界の脆弱性を育てるベンチ)
 
-> **状態: 一部実装**(確認: 2026-11-22、9c26a39)
+> **状態: 一部実装**
 > - 実装済み: 段階 1〜4(`bench/zoo`、`bench/zoo-go`、`bench/zoo-dart`、`bench/zoo-rust`、`TestZoo*`)。
 > - 未完: 段階 5(組み合わせ)と表 S の全体。`wild` は Go の 3 件のみで、`TestWildStagesInZoo` は無い。
 > - 注意: `@cell(` を含むファイルは Go 51、Dart 55、Rust 69(設計の見積りは Go 80 弱)。zoo 専用の ADR は無い。

@@ -17,7 +17,7 @@ In the ledger ([heavy-ledger.tsv](heavy-ledger.tsv); `python3 bench/heavy_ledger
 
 **The next form of the "after the fix" condition (decided 2026-11-23, changed 2026-11-24 by ADR-122; not in force yet).** The condition above counts findings of the category, which says nothing about whether the finding went away for the right reason. Once the declared checks of issue #169 exist (a rule file declares a check function with `guards:`, and a finding that passes it is stopped, with a record in `suppressions` that names the rule file and the declaration), the detection condition is run with a rule file that declares the check that the fix added, on both commits: before the fix, with that rule, a finding still appears (the check does not exist yet there); after the fix, with that rule, there is no finding, and `suppressions` names the declaration that stopped it. Without the declaration the finding at the fixed commit stays, which is the evidence that the fix is the check. Until that mechanism exists, the line above is the condition, and a result of "no finding after the fix" (`quiet_after_fix`, where the runner has it) is only recorded, not part of PASS or FAIL.
 
-### The two lines of the pass line: A and C (decided 2026-11-24; both not measured yet)
+### The two lines of the pass line: A and C (decided 2026-11-24)
 
 The user decided that the pass line is two lines, A and C, for different reasons (each was heavy for a different reason). The memos 8 GB line is not part of the pass line any more (the user decided on 2026-11-25, a decision that reduces the pass line): A is the same target with a stricter memory limit (4 GiB against 8 GB), so the memory and the time of the 8 GB line are contained in A; the detection (`detect`, including `quiet_after_fix`) is the same in both rows of `bench/deps-targets.json`, so A carries it (it was already there; nothing was moved). The target `memos` itself stays (`graph-check`, `--cost-check`); only its row of the pass line is removed, and the past rows of the ledger are not rewritten. Where the text above says "memos" with 180 s and the places of the truth file, it is read as the `memos-4gib` row. The earlier decision "Gitea is not used for the pass line" (2026-11-21) is replaced by this one: Gitea is fetched and run as a target of the pass line. Periodic runs and exploration on it are a separate decision. The result of each is in the ledger (`python3 bench/heavy_ledger.py --kind passline --target <name>`); no number is copied here.
 
@@ -32,7 +32,7 @@ The detection of C is per published vulnerability of [gitea-cve-truth.json](gite
 
 The Dart target of the pass line is flutter/cocoon `app_dart` (`ae9eb1beaf765d644cc85dde38def030c80b4b7d`). Launch: cwd = `app_dart`, `-allow-deps-under <cocoon>/packages`, `dart pub get` only, the Flutter member of the root workspace removed in the copy (all in `bench/deps_bench.py`; data in `bench/deps-targets.json`). The line is the same as for memos (default flags, within 180 s and 8 GB, converged). `detected=n/a`: the project has no public security advisory, so no pre-fix / fixed pair. dart_services is pass line D (below; also a target of the depth experiments).
 
-Pass line D: dart_services (user decision, 2026-11-24; dart-lang/dart-pad `pkgs/dart_services` at `ad668d137e631beeaef3e263054a45696e8d4499`, default flags). Conditions: converged, tree-total peak within 8 GB, time within 600 s (the same reason as Gitea in C: the 180 s had no ground). `detected=n/a` (no public vulnerability; not part of PASS/FAIL). `decided` is true. It takes up to 10 minutes, so it is not in the default of `make bench-passline`; select it with `TARGETS=dart_services`. Its preparation stays inside the approved bounded run (a pinned commit; git clone and checkout only; `dart pub get` of the pinned tree, as for cocoon; the code of the target is never run; one run of up to 10 minutes). The versions of the dependencies are pinned in the repository: `bench/dart-services/pubspec.lock` is the `pubspec.lock` resolved on 2026-11-22 (dart-pad has no committed lock at that commit), and `prepare` copies it to the root of the tree before `dart pub get`, so a pub.dev update does not move the result of D. `dart pub get` is not `--offline` in `prepare` of `bench/deps_bench.py`: it fetches the packages named by the pinned tree from the package registry, or reads the existing cache. The result now is FAIL: the `dart_services` row of the ledger with `stopped_memory` (stopped by the 8 GB watch; `python3 bench/heavy_ledger.py --target dart_services --last 1`). The cause is that the summaries in the huge SCC do not converge (#126 fixed only the deadline). The next work is the first measurement per iteration inside the SCC (`RIVUS_INTERNAL_SUMMARY_DUMP`). A one-time investigation run may use a larger cap (10 GB); that value is not the pass line. See `docs/ROADMAP.md` section 3.
+Pass line D: dart_services (user decision, 2026-11-24; dart-lang/dart-pad `pkgs/dart_services` at `ad668d137e631beeaef3e263054a45696e8d4499`, default flags). Conditions: converged, tree-total peak within 8 GB, time within 600 s (the same reason as Gitea in C: the 180 s had no ground). `detected=n/a` (no public vulnerability; not part of PASS/FAIL). `decided` is true. It takes up to 10 minutes, so it is not in the default of `make bench-passline`; select it with `TARGETS=dart_services`. Its preparation stays inside the approved bounded run (a pinned commit; git clone and checkout only; `dart pub get` of the pinned tree, as for cocoon; the code of the target is never run; one run of up to 10 minutes). The versions of the dependencies are pinned in the repository: `bench/dart-services/pubspec.lock` is the `pubspec.lock` resolved on 2026-11-22 (dart-pad has no committed lock at that commit), and `prepare` copies it to the root of the tree before `dart pub get`, so a pub.dev update does not move the result of D. `dart pub get` is not `--offline` in `prepare` of `bench/deps_bench.py`: it fetches the packages named by the pinned tree from the package registry, or reads the existing cache. The result is the newest `dart_services` row of the ledger (`python3 bench/heavy_ledger.py --target dart_services --last 1`); it is not copied here. A one-time investigation run may use a larger cap (10 GB); that value is not the pass line. See `docs/ROADMAP.md` section 3.
 
 ### Detection: the line is per vulnerability, the detail is per position
 
@@ -45,49 +45,3 @@ The memory has two records (`bench/deps_bench.py`). (a) the end-of-run peak of t
 ### Where the numbers are
 
 Every run of `make bench-passline` and `make bench-deps` adds one row to [heavy-ledger.tsv](heavy-ledger.tsv) (the columns, the notes: [heavy-ledger.md](heavy-ledger.md); `python3 bench/heavy_ledger.py` prints it with the margins). A number in a PR or an ADR points to a row (date and commit); it is not copied. `NO_LEDGER=1` adds no row (a binary with a measurement patch, or a run that is not used as a number). `BENCH_OUT` (default `.claude/work/bench-out/`, git-ignored) holds the JSON of the results; the ledger holds numbers only.
-
-## Records before 2026-11-23 (not in the ledger)
-
-These rows were measured before the ledger existed (by hand, with the engine of that day; the commit of rivus is not recorded, and the way of measuring differs from the ledger's). They are kept as they are, numbers only. None was moved to the ledger.
-
-### The starting point (numbers only, a local measurement of the engine of that day)
-
-| target | commit | flags | wall | max memory | converged | functions | findings |
-|---|---|---|---|---|---|---|---|
-| memos | 00fcd170 | default, cap 8 GB | cut by the cap at 67 s | > 8 GB | no | - | - |
-| memos | 00fcd170 | `-timeout 50s` (partial) | 99.5 s (CPU 178 s) | 6.75 GB | no | 40.8k | not meaningful (partial) |
-| memos | 00fcd170 | `-body-replaced` of the aws SDK (NOT the default flags; informational) | 45 s | 6.08 GB | yes | 34.7k | - |
-| dart_services | ad668d13 | default, cap 8 GB | cut by the cap at 189 s | > 8 GB | no | - | - |
-| dart_services | ad668d13 | `-timeout 50s` (partial) | 138 s | 7.98 GB | no | 28.1k | 0 |
-| memos CVE-2025-65799, pre-fix and fixed | 1d7efb15, 5f57f486 | default, cap 8 GB | cut by the cap at 49 s and 31 s | > 8 GB | no | - | - |
-| memos CVE-2025-65799, pre-fix and fixed | 1d7efb15, 5f57f486 | `-body-replaced` of the aws SDK (informational) | 30 s and 23 s | 3.7 GB and 3.6 GB | yes | - | 0 and 0 (`path_traversal`; not detected at the pre-fix commit) |
-
-So today's line for memos is `FAIL memos time=67/180 mem=>8/8 converged=no detected=no quiet_after_fix=n/a` (cut by the cap; not detected at the pre-fix commit with the default flags and the builtin models).
-
-### The cocoon line (numbers only; engine of that day)
-
-| target | commit | flags | wall | max memory | CPU | converged | functions | findings |
-|---|---|---|---|---|---|---|---|---|
-| cocoon app_dart | ae9eb1be | default, 10m | 101 s | 1.78 GB | 128 s CPU | converged (4 passes) | 16.5k functions (14.3k deps) | 14 findings (ssrf 9, resource_name 4, sql_injection 1) |
-
-Today's line for cocoon: `PASS cocoon time=101/180 mem=1.78/8 converged=yes detected=n/a`.
-
-### Peak memory (numbers only)
-
-The rows marked end-of-run were measured with the earlier method (`/usr/bin/time`, the largest single process, = (a) in the naming above). The earlier rows were sampled, on an older engine and a loaded machine.
-
-| commit | setting | peak memory | how measured |
-|---|---|---|---|
-| memos 00fcd170 (the pass-line target) | `-dep-k 2` | 8.27 GB | sampled, loaded machine (earlier) |
-| memos 00fcd170 | `-dep-k 2` | 8.56 GB | sampled, summed RSS of the process group (earlier) |
-| memos 00fcd170 | `-dep-k 1` | 7.2 GB | sampled (earlier) |
-| memos 00fcd170 | `-dep-k 1` | 7.8 GB | sampled, summed RSS of the process group (earlier) |
-| memos 1d7efb15 (the older pre-fix commit of the detection check, NOT the target) | `-dep-k 2` | 5.9 GB | sampled (earlier) |
-| memos 00fcd170 | `-dep-k 2` | 6.35 GB (163 s, converged) | end-of-run peak, 8 GB watchdog, limit 10 min (2026-11-23, engine fb492ef7) |
-| memos 00fcd170 | `-dep-k 1` | 5.49 GB (575 s, converged) | end-of-run peak, 8 GB watchdog, limit 10 min (2026-11-23, engine fb492ef7) |
-
-The 5.9 GB figure belongs to a different commit than the target; do not compare it with the 00fcd170 rows. The two last rows are the first end-of-run peaks of the target (the wall time of the second one was long: a loaded machine, not measured separately).
-
-### The position count of dart-pub
-
-4/9 with `-no-deps` and the builtin models (an earlier local measurement). With the default flags the run did not converge then, so the line was `detected=no` (INFO).

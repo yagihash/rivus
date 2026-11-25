@@ -1,6 +1,6 @@
 # Rust: `async` の中の `Fn::call` の候補を絞る(調べたこと)
 
-> **状態: 実装済み**(確認: 2026-11-22、9c26a39)
+> **状態: 実装済み**
 > - 実装済み: `async` の状態機械のレシーバをたどって `Fn::call` の候補を絞る(ADR-085)。
 > - 未実装: 呼び出し元ごとのガードの案。
 > - 関連: 同じ `Fn::call` の絞り込みが [DESIGN-generics-dispatch.md](DESIGN-generics-dispatch.md)、[DESIGN-capture.md](DESIGN-capture.md) の XTALK の節、ADR-079、081、085 に分かれている。統合して歴史的な文書にまとめる案がある。

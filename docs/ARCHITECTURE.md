@@ -789,14 +789,14 @@ Rust の extractor は、対象をビルドする（`cargo check`）ので、対
 
 ## 16. メモリ
 
-ピークは、解析ではなく、**読み込みと go/ssa の構築**にある（Go）。次の手で下げている（設計と測定は [DESIGN-memory.md](DESIGN-memory.md)）。
+ピークは、解析ではなく、**読み込みと go/ssa の構築**にある（Go）。次の手で下げている（経緯は [DESIGN-memory.md](DESIGN-memory.md)、ADR-121、ADR-123）。
 
 - **GC の設定（`tuneGC`、`cmd/rivus/main.go`）:** GC の目標を 50% にして（Go の既定は 100%）、ごみを多く持たない。環境変数 `GOGC` があれば、それを優先する。
 - **go/ssa の解放:** IR とテキストを作ったあと、go/ssa のプログラムと、読み込んだパッケージを手放す（`ReleaseSSA`、`internal/frontend/gossa/load.go`。呼ぶのは `cmd/rivus/common.go`）。
 - **依存ごとの解放:** 依存のパッケージのソースと型情報は、そのパッケージを構築し終えるたびに手放す（`load.go` の `buildInOrder` のコールバック）。
 - 起点から届く関数だけを IR にする。`-no-deps` は、依存を読まないので、メモリが大きく減る（その分、依存への呼び出しは推測になる）。
 
-測定値（ピーク GB、時間）は、測った日とコミットを付けて DESIGN-memory.md にある。この文書には書かない。未実装の案（段階的な構築など）も DESIGN-memory.md にある。
+測定値（ピーク GB、時間）は、台帳（`bench/heavy-ledger.tsv`）にあり、この文書には書かない。
 
 ---
 

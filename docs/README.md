@@ -2,7 +2,6 @@
 
 読者ごとに、入口の文書を並べる。リポジトリ全体の入口は [../README.md](../README.md)。
 
-- 状態は、2026-11-22、9c26a39 時点の確認。
 - 1 つの話題に、正本の文書は 1 つ。ほかの文書は、要約とリンクだけにする。
 - 「今どうなっているか」は ARCHITECTURE などの文書、「なぜそうなったか」は ADR。ADR は書き換えない。
 
@@ -32,7 +31,7 @@
 | 文書 | 内容 |
 |---|---|
 | [adr/](adr/README.md) | 設計判断の記録(ADR)。1 件 1 ファイル。決めた時点の記録で、書き換えない。一覧は `make docs-gen WHAT=adr` |
-| [DECISIONS.md](DECISIONS.md)、[ADR-INDEX.md](ADR-INDEX.md) | ADR の案内(書き方、状態の意味、uncertainty)。ADR を足すときは触らない |
+| [DECISIONS.md](DECISIONS.md)、[ADR-INDEX.md](ADR-INDEX.md) | ADR の案内(書き方、状態の意味)。ADR を足すときは触らない |
 
 ### 使い方と、書き方
 
@@ -46,27 +45,27 @@
 
 ### 個別の設計
 
-冒頭に「状態」(案 / 一部実装 / 実装済み)がある。実装済みの部分の今の姿は ARCHITECTURE にあり、これらは経緯と、残りの計画を含む。
+状態(案 / 一部実装 / 実装済み)は、各文書の冒頭が正。実装済みの部分の今の姿は ARCHITECTURE にあり、これらは経緯と、残りの計画を含む。
 
-| 文書 | 状態 | 主題 |
-|---|---|---|
-| [DESIGN-graph.md](DESIGN-graph.md) | 実装済み | `rivus graph` と保存するファイル。使い方の正本は GRAPH.md |
-| [DESIGN-zoo.md](DESIGN-zoo.md) | 一部実装 | zoo と wild のベンチ。使い方の正本は `bench/zoo/README.md` |
-| [DESIGN-callouts.md](DESIGN-callouts.md) | 一部実装 | 関数値を通る流れ(関数値の正本) |
-| [DESIGN-callback-sources.md](DESIGN-callback-sources.md) | 案 | 引数として渡された関数の、N 番目以降の引数を source にする書式(shelf_router のハンドラの追加の引数から。#149) |
-| [DESIGN-shared-state.md](DESIGN-shared-state.md) | 一部実装 | グローバルと共有される場所(グローバルの正本) |
-| [DESIGN-capture.md](DESIGN-capture.md) | 一部実装 | クロージャのキャプチャの値 |
-| [DESIGN-package-models.md](DESIGN-package-models.md) | 案 | パッケージ単位の「本体を読まない」宣言(extractor の段階から)と、モデルを書く標準の流れ(生成、差分テスト、宣言)、モデル作成のセッションを並べる準備。本文は節ごとのファイル(`design-package-models/`)。設計メモは節のファイルに足し、新しい節は新しいファイルと一覧に 1 行 |
-| [MODEL-RUNBOOK.md](MODEL-RUNBOOK.md) | 手順書 | 1 パッケージ分の組み込みモデルを作る手順(モデル作成のセッション向け) |
-| [MODEL-QUEUE.md](MODEL-QUEUE.md) | 一覧(決定) | 組み込みモデルを作る順番(3 言語をまたぐ 1 本)と、公開の指標、カバー済みの表 |
-| [DESIGN-field-sinks.md](DESIGN-field-sinks.md) | 一部実装 | 構造体のフィールドを sink にする(`parts`) |
-| [DESIGN-rust-extractor-panic.md](DESIGN-rust-extractor-panic.md) | 実装済み | Rust の extractor が、1 つの関数のパニック(async closure の未実装など)で止まらず、その関数だけ飛ばして続ける。飛ばしたことの見せ方(#160) |
-| [DESIGN-async-dispatch.md](DESIGN-async-dispatch.md) | 実装済み | Rust の `async` の中の `Fn::call` |
-| [DESIGN-generics-dispatch.md](DESIGN-generics-dispatch.md) | 一部実装 | Rust のジェネリクスと `Box<dyn Fn>` |
-| [DESIGN-memory.md](DESIGN-memory.md) | 一部実装 | メモリ(英語) |
-| [DESIGN-fetch-network.md](DESIGN-fetch-network.md) | 案 | 取得のコンテナのネットワークを絞る |
-| [DESIGN-observed-calls.md](DESIGN-observed-calls.md) | 案(Dart の最小の試行あり) | 実行して観測した呼び出しと、グラフの照合(Dart から。Go が続く) |
-| [DART-MODEL-CANDIDATES.md](DART-MODEL-CANDIDATES.md) | 案(決めてもらう資料) | Dart の組み込みモデルにする pub パッケージの候補(公開の指標で選ぶ) |
+| 文書 | 主題 |
+|---|---|
+| [DESIGN-graph.md](DESIGN-graph.md) | `rivus graph` と保存するファイル。使い方の正本は GRAPH.md |
+| [DESIGN-zoo.md](DESIGN-zoo.md) | zoo と wild のベンチ。使い方の正本は `bench/zoo/README.md` |
+| [DESIGN-callouts.md](DESIGN-callouts.md) | 関数値を通る流れ(関数値の正本) |
+| [DESIGN-callback-sources.md](DESIGN-callback-sources.md) | 引数として渡された関数の、N 番目以降の引数を source にする書式(shelf_router のハンドラの追加の引数から。#149) |
+| [DESIGN-shared-state.md](DESIGN-shared-state.md) | グローバルと共有される場所(グローバルの正本) |
+| [DESIGN-capture.md](DESIGN-capture.md) | クロージャのキャプチャの値 |
+| [DESIGN-package-models.md](DESIGN-package-models.md) | パッケージ単位の「本体を読まない」宣言(extractor の段階から)と、モデルを書く標準の流れ(生成、差分テスト、宣言)、モデル作成のセッションを並べる準備。本文は節ごとのファイル(`design-package-models/`)。設計メモは節のファイルに足し、新しい節は新しいファイルと一覧に 1 行 |
+| [MODEL-RUNBOOK.md](MODEL-RUNBOOK.md) | 1 パッケージ分の組み込みモデルを作る手順(モデル作成のセッション向け) |
+| [MODEL-QUEUE.md](MODEL-QUEUE.md) | 組み込みモデルを作る順番(3 言語をまたぐ 1 本)と、公開の指標 |
+| [DESIGN-field-sinks.md](DESIGN-field-sinks.md) | 構造体のフィールドを sink にする(`parts`) |
+| [DESIGN-rust-extractor-panic.md](DESIGN-rust-extractor-panic.md) | Rust の extractor が、1 つの関数のパニック(async closure の未実装など)で止まらず、その関数だけ飛ばして続ける。飛ばしたことの見せ方(#160) |
+| [DESIGN-async-dispatch.md](DESIGN-async-dispatch.md) | Rust の `async` の中の `Fn::call` |
+| [DESIGN-generics-dispatch.md](DESIGN-generics-dispatch.md) | Rust のジェネリクスと `Box<dyn Fn>` |
+| [DESIGN-memory.md](DESIGN-memory.md) | メモリ(英語) |
+| [DESIGN-fetch-network.md](DESIGN-fetch-network.md) | 取得のコンテナのネットワークを絞る |
+| [DESIGN-observed-calls.md](DESIGN-observed-calls.md) | 実行して観測した呼び出しと、グラフの照合(Dart から。Go が続く) |
+| [DART-MODEL-CANDIDATES.md](DART-MODEL-CANDIDATES.md) | Dart の組み込みモデルにする pub パッケージの候補(公開の指標で選ぶ) |
 
 ### 歴史的な文書
 
