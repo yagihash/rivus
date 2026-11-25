@@ -118,6 +118,7 @@ pub mod rust {
     pub mod option_result_chain;
     pub mod ownership_move;
     pub mod static_lazylock;
+    pub mod vec_index_write;
 }
 pub mod san {
     pub mod other_kind;
