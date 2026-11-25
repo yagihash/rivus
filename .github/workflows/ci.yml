@@ -622,7 +622,7 @@ jobs:
           cache-dependency-path: |
             go.sum
             bench/*/go.sum
-      - name: Test the sandbox
+      - name: Test the sandbox (darwin)
         env:
           # the tests make harmless marks outside the sandbox when it does not hold (a name rivus-sbx-<id>, removed after), and say so
           RIVUS_SBX_RED: "1"
@@ -657,7 +657,7 @@ jobs:
         run: |
           uname -r
           cat /sys/kernel/security/lsm || true
-      - name: Test the sandbox
+      - name: Test the sandbox (linux)
         env:
           RIVUS_SBX_RED: "1"
         run: go test -count=1 -timeout 20m -v -run 'TestSandbox' ./internal/sandbox
