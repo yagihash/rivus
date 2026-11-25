@@ -413,6 +413,9 @@ func (d *decoder) u() uint64 {
 	return v
 }
 
+// i reads a signed number that holds a value (a position: the extractor of Rust writes the offset as line * 100000 +
+// column, so it passes 2^32 in a file of 43000 lines). All 64 bits are kept; nothing is checked, because no bound is
+// known for a value.
 func (d *decoder) i() int {
 	v, n := binary.Varint(d.b)
 	if n <= 0 {
@@ -420,12 +423,20 @@ func (d *decoder) i() int {
 		return 0
 	}
 	d.b = d.b[n:]
-	if v > math.MaxInt32*4 || v < -math.MaxInt32*4 {
-		// an offset, a line, a column or a number of a local that does not fit what the writer made
+	return int(v)
+}
+
+// idx reads a signed number that is the place of a local, a block or a parameter: one that does not fit what the
+// writer made (more than 4 * MaxInt32) is corrupt.
+func (d *decoder) idx() int { return d.place(d.i()) }
+
+// place checks a number that is a place.
+func (d *decoder) place(v int) int {
+	if d.err == nil && (v > math.MaxInt32*4 || v < -math.MaxInt32*4) {
 		d.fail("number out of range")
 		return 0
 	}
-	return int(v)
+	return v
 }
 
 func (d *decoder) byte() byte {
@@ -505,7 +516,7 @@ func (d *decoder) ids() []ir.LocalID {
 	}
 	v := make([]ir.LocalID, n)
 	for i := range v {
-		v[i] = ir.LocalID(d.i())
+		v[i] = ir.LocalID(d.idx())
 	}
 	return v
 }
@@ -600,14 +611,14 @@ func (d *decoder) fn() *ir.Func {
 	if n := d.count(); n > 0 {
 		f.Roots = make([]ir.BlockID, n)
 		for i := range f.Roots {
-			f.Roots[i] = ir.BlockID(d.i())
+			f.Roots[i] = ir.BlockID(d.idx())
 		}
 	}
 	if n := d.count(); n > 0 {
 		f.Blocks = make([]ir.Block, n)
 		for bi := range f.Blocks {
 			b := &f.Blocks[bi]
-			b.ID = ir.BlockID(bi + d.i())
+			b.ID = ir.BlockID(d.place(bi + d.i()))
 			if k := d.count(); k > 0 {
 				b.Instrs = make([]ir.Instr, k)
 				for ii := range b.Instrs {
@@ -618,7 +629,7 @@ func (d *decoder) fn() *ir.Func {
 			if k := d.count(); k > 0 {
 				b.Succs = make([]ir.Edge, k)
 				for si := range b.Succs {
-					b.Succs[si].To = ir.BlockID(d.i())
+					b.Succs[si].To = ir.BlockID(d.idx())
 					b.Succs[si].Kind = decEnum[ir.EdgeKind](d, edgeKinds)
 				}
 			}
@@ -631,7 +642,7 @@ func (d *decoder) term(t *ir.Term) {
 	t.Kind = decEnum[ir.TermKind](d, termKinds)
 	m := d.u()
 	if m&1 != 0 {
-		t.Cond = ir.LocalID(d.i())
+		t.Cond = ir.LocalID(d.idx())
 	}
 	if m&2 != 0 {
 		t.CondPos = d.pos()
@@ -681,7 +692,7 @@ func (d *decoder) instr(in *ir.Instr) {
 		in.Operator = d.str()
 	}
 	if m&mIndex != 0 {
-		in.Index = d.i()
+		in.Index = d.idx()
 	}
 	if m&mClass != 0 {
 		in.Class = decEnum[ir.TypeClass](d, classes)
