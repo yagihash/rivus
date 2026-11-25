@@ -1,5 +1,18 @@
 # Changelog
 
+## [v0.0.17](https://github.com/yagihash/rivus/compare/v0.0.16...v0.0.17) - 2026-11-25
+
+### Features
+- model: dart:io の Link.create / createSync の target を sink にする by @yagihash in https://github.com/yagihash/rivus/pull/504
+- bench: Rust の INFO の行(shlex 1.3.0)を合格基準の道具に足す by @yagihash in https://github.com/yagihash/rivus/pull/505
+- ci: main-ci は main の CI を待たず、失敗の記録が無ければ success にする by @yagihash in https://github.com/yagihash/rivus/pull/513
+- bench: rustypaste を INFO の対象として足し、最新の main で測る by @yagihash in https://github.com/yagihash/rivus/pull/508
+- feat: rivus cache list / clean -older-than(課題 #199 の一部) by @yagihash in https://github.com/yagihash/rivus/pull/522
+### Bug Fixes
+- fix: irspill が大きな位置の数を読み戻せず解析が止まるのを直す by @yagihash in https://github.com/yagihash/rivus/pull/515
+- fix: cpos の offset を 64 ビットにし、行 21,475 以降の手順のスニペットを守る by @yagihash in https://github.com/yagihash/rivus/pull/521
+- fix: 読む対象が無いときは、結果を出さず、エラー(1)で終わる by @yagihash in https://github.com/yagihash/rivus/pull/520
+
 ## [v0.0.16](https://github.com/yagihash/rivus/compare/v0.0.15...v0.0.16) - 2026-11-25
 
 ### Features
