@@ -19,8 +19,9 @@ not timed out), `timeout` (stats.timed_out, or the group was killed on the clock
 `oom` (killed by the system or out of memory), `error`.
 
 The pass line (`make bench-passline`; targets in bench/deps-targets.json): one line per target,
-  PASS|FAIL memos time=<s>/<limit> mem=<GB>/<cap> converged=<yes|no> finish=<yes|no> detected=<yes|no|n/a> quiet_after_fix=<yes|no|n/a> [located=<n>]
-with the default flags of rivus. PASS needs two separate conditions: FINISH (`finish`: it ended by itself within the time limit, the
+  PASS|PASS(余裕不足)|FAIL memos time=<s>/<limit> mem=<GiB>/<cap> converged=<yes|no> finish=<yes|no> detected=<yes|no|n/a> quiet_after_fix=<yes|no|n/a> [located=<n>]
+with the default flags of rivus. The memory has three states (margin = cap - peak, GiB, before rounding): PASS (margin >= 0.15), PASS(余裕不足)
+(0 <= margin < 0.15; a pass, the same exit status; `result` PASS-thin in the ledger) and FAIL (margin < 0); the cap does not move. PASS needs two separate conditions: FINISH (`finish`: it ended by itself within the time limit, the
 memory of the child ended at or below the cap (b: the maximum over fine samples of the SAME-TIME SUM of the RSS of the whole process
 tree, the burden the machine receives; a, the end-of-run peak of the main process, is printed beside it; the watchdog stops a run
 early and kills the group of this run only), it converged, with no function stopped on the clock: stats.load_dependent is not set)
@@ -191,8 +192,38 @@ def judge(time_s, limit_s, mem_gb, cap_gb, converged, detected, through=None, qu
     return passed, body
 
 
-def format_line(name, decided, passed, body):
-    return "%s %s %s" % (("PASS" if passed else "FAIL") if decided else "INFO", name, body)
+MARGIN_THIN_GIB = 0.15  # the margin below which a memory pass is "thin": about 1.5 times the spread of ten-odd measurements (0.05 to 0.1 GiB)
+
+
+def margin_state(mem_gb, cap_gb):
+    """The memory of the pass line in three states (the one place that decides it). margin = cap - peak, both in GiB, before any
+    rounding. "pass": margin >= 0.15; "thin": 0 <= margin < 0.15 (still a pass); "fail": margin < 0, or no number. The line itself
+    (the cap) does not move. The rounding of the difference only takes the float noise away (8 - 7.85 is 0.14999999999999947)."""
+    if mem_gb is None:
+        return "fail"
+    margin = round(cap_gb - mem_gb, 9)
+    return "fail" if margin < 0 else ("thin" if margin < MARGIN_THIN_GIB else "pass")
+
+
+def result_labels(passed, decided, mem_gb, cap_gb):
+    """(the value of `result` in the ledger, the word of the printed line). The ledger value is short and ASCII (PASS, PASS-thin,
+    FAIL, INFO); the line says PASS(余裕不足) for a pass with a thin memory margin. A thin pass exits with the same status as PASS."""
+    if not decided:
+        return "INFO", "INFO"
+    if not passed:
+        return "FAIL", "FAIL"
+    if margin_state(mem_gb, cap_gb) == "thin":
+        return "PASS-thin", "PASS(余裕不足)"
+    return "PASS", "PASS"
+
+
+def row_failed(row):
+    """A row that is no usable result (the exit status of the run is 1). FAIL and PASS-thin are results."""
+    return row is None or row.get("result") == "isolation_failed"
+
+
+def format_line(name, decided, passed, body, label=None):
+    return "%s %s %s" % (label or (("PASS" if passed else "FAIL") if decided else "INFO"), name, body)
 
 
 def count_category(rep, category):
@@ -761,6 +792,7 @@ def passline_run(name, t, rivus, cache, outdir, limit_s, cap_gb, repeat=1, home=
             iso_ok, iso_why = isolation_ok(main["report"])
             unc = uncertainty_counts(main["report"])
             body += " " + format_uncertainties(unc) + " isolation=" + ("sandbox" if iso_ok else "FAILED(%s)" % iso_why)
+        label = None
         if main["why"]:
             result = "stopped_" + main["why"]
         elif failed_run:
@@ -768,7 +800,7 @@ def passline_run(name, t, rivus, cache, outdir, limit_s, cap_gb, repeat=1, home=
         elif not iso_ok:
             result = "isolation_failed"
         else:
-            result = ("PASS" if passed else "FAIL") if decided else "INFO"
+            result, label = result_labels(passed, decided, main["peak"] / GB, cap_gb)
         if result == "analyze_failed":  # a failure whose cause is not known adds no row (and no number is read from it)
             return "%s %s analyze_failed: exit status %s after %.0f s (no report; no ledger row; the stderr is kept in the output directory)" % ("INFO" if not decided else "FAIL", name, main["rc"], main["wall"]), None
         extra = [a for a in t.get("args", [])] + (["-limit %g" % limit_s] if limit_s != t["time_limit_s"] else []) + (["-cap %g" % cap_gb] if cap_gb != t["mem_cap_gb"] else [])
@@ -786,7 +818,7 @@ def passline_run(name, t, rivus, cache, outdir, limit_s, cap_gb, repeat=1, home=
         row.update({k: v for k, v in heavy_ledger.report_columns(main["report"]).items() if v is not None})
         if score is not None:
             row.pop("findings", None)  # the count of findings of this target is not written
-        return format_line(name, decided, passed, body), row
+        return format_line(name, decided, passed, body, label if result in ("PASS", "PASS-thin") else None), row
 
 
 def git_commit():
@@ -817,7 +849,7 @@ def run_passline(names, a):
             print(line, flush=True)
             if row is not None:
                 add_to_ledger(row, a, commit)
-            if row is None or row.get("result") == "isolation_failed":
+            if row_failed(row):
                 failed.append(name)
     if failed:
         raise SystemExit("deps_bench: no usable result (the isolation check failed before or after the run, the extractor does not match this rivus (extractor_mismatch), or rivus analyze ended with an error): %s" % ", ".join(failed))
@@ -830,7 +862,7 @@ def main():
     ap.add_argument("-ledger", default=heavy_ledger.LEDGER, help="the ledger (bench/heavy-ledger.tsv)")
     ap.add_argument("-no-ledger", action="store_true", help="do not add a row (a binary with a measurement patch; a run that is not used as a number)")
     ap.add_argument("-limit", type=float, default=0, help="pass line: the time limit in seconds (default: the one of the target)")
-    ap.add_argument("-cap", type=float, default=0, help="pass line: the memory cap in GB (default: the one of the target)")
+    ap.add_argument("-cap", type=float, default=0, help="pass line: the memory cap in GiB (default: the one of the target)")
     ap.add_argument("-repeat", "--repeat", type=int, default=1, help="pass line: run each target n times; the median of the time, the CPU and the peak goes to the verdict (converged: all runs). The decision of D is the median of 3 on a quiet machine")
     ap.add_argument("benches", nargs="*", default=list(BENCHES))
     a = ap.parse_args()

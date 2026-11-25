@@ -2,6 +2,7 @@ package taint
 
 import (
 	"sort"
+	"time"
 
 	"github.com/yagihash/rivus/internal/ir"
 	"github.com/yagihash/rivus/internal/sg"
@@ -126,13 +127,18 @@ func (s *state) addCopy(dst, src Loc) bool {
 	return true
 }
 
+// aliasCheckEvery is how many steps of the loops of buildPtrAlias pass between two looks at the clock.
+const aliasCheckEvery = 4096
+
 // buildPtrAlias adds what the stores say to ptrAlias, from the locations known now. It reports whether
-// something was added (prepareLocs goes on until nothing is).
-func (s *state) buildPtrAlias() bool {
+// something was added (prepareLocs goes on until nothing is), and whether it was done before limit: the
+// loops count their steps and look at the clock now and then, like the rest of the function's analysis
+// (-timeout, -func-timeout).
+func (s *state) buildPtrAlias(limit time.Time) (changed, inTime bool) {
 	if len(s.ptrStores) == 0 && len(s.valStores) == 0 {
-		return false
+		return false, true
 	}
-	changed := false
+	steps := 0
 	for _, in := range s.valStores {
 		// a value that is not a pointer is stored whole (a struct, a closure's environment): what is
 		// written through a pointer inside the copy is written through the pointer inside the original
@@ -142,6 +148,9 @@ func (s *state) buildPtrAlias() bool {
 		}
 		for _, d := range s.slotsOf(in) {
 			for _, src := range srcs {
+				if steps++; steps%aliasCheckEvery == 0 && time.Now().After(limit) {
+					return changed, false
+				}
 				if s.addCopy(d, src) {
 					changed = true
 				}
@@ -155,6 +164,9 @@ func (s *state) buildPtrAlias() bool {
 		}
 		for _, slot := range s.slotsOf(in) {
 			for _, t := range targets {
+				if steps++; steps%aliasCheckEvery == 0 && time.Now().After(limit) {
+					return changed, false
+				}
 				if s.addAlias(slot, t) {
 					changed = true
 				}
@@ -172,6 +184,9 @@ func (s *state) buildPtrAlias() bool {
 			var dsts []Loc
 			for _, src := range srcs {
 				for slot, ts := range s.ptrAlias {
+					if steps++; steps%aliasCheckEvery == 0 && time.Now().After(limit) {
+						return changed, false
+					}
 					if slot.Root != src.Root || !pathHasPrefix(slot.Path, src.Path) {
 						continue
 					}
@@ -181,6 +196,9 @@ func (s *state) buildPtrAlias() bool {
 					for _, d := range dsts {
 						nk := Loc{d.Root, d.Path + slot.Path[len(src.Path):]}
 						for t := range ts {
+							if steps++; steps%aliasCheckEvery == 0 && time.Now().After(limit) {
+								return changed, false
+							}
 							if s.addAlias(nk, t) {
 								grew = true
 							}
@@ -194,7 +212,7 @@ func (s *state) buildPtrAlias() bool {
 		}
 		changed = true
 	}
-	return changed
+	return changed, true
 }
 
 // pointees are the locations that the pointers held in these cells point to.

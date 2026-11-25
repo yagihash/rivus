@@ -82,3 +82,73 @@ func TestRustDataDirOfTheTestsIsNotTheUsers(t *testing.T) {
 		t.Errorf("rustDataDir() = %s: the tests write to the directory of the user", got)
 	}
 }
+
+// mountable compares the real paths: a link to the home directory, a relative path, and a link to a directory that holds it are not given to the build.
+func TestMountableComparesRealPaths(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	home := filepath.Join(root, "users", "u")
+	proj := filepath.Join(root, "elsewhere", "proj")
+	for _, d := range []string{home, proj} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	linkHome := filepath.Join(root, "linkhome")
+	linkUsers := filepath.Join(root, "linkusers")
+	if err := os.Symlink(home, linkHome); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Dir(home), linkUsers); err != nil {
+		t.Fatal(err)
+	}
+	// HOME is given through a link, the directory by its real path (and the other way round)
+	homeViaLink := filepath.Join(root, "linkusers", "u")
+	t.Setenv("HOME", homeViaLink)
+	for name, dir := range map[string]string{"real path of home": home, "link to home": linkHome, "link to a parent": linkUsers, "parent": filepath.Dir(home)} {
+		if err := mountable(dir); err == nil {
+			t.Errorf("%s: mounted", name)
+		}
+	}
+	t.Setenv("HOME", home)
+	if err := mountable(homeViaLink); err == nil {
+		t.Error("home through a link: mounted")
+	}
+	// a relative path
+	t.Chdir(filepath.Dir(home))
+	for _, rel := range []string{"u", ".", "../users/u"} {
+		if err := mountable(rel); err == nil {
+			t.Errorf("relative %q: mounted", rel)
+		}
+	}
+	if err := mountable(proj); err != nil {
+		t.Errorf("a project outside the home: %v", err)
+	}
+	if err := mountable(filepath.Join(home, "proj")); err != nil {
+		t.Errorf("a project inside the home is a subdirectory, it is not the home or above: %v", err)
+	}
+	t.Chdir(filepath.Dir(proj))
+	if err := mountable("proj"); err != nil {
+		t.Errorf("relative project: %v", err)
+	}
+	// a name that begins with two dots is not "outside"
+	t.Setenv("HOME", filepath.Join(root, "..odd"))
+	if err := mountable(proj); err != nil {
+		t.Errorf("project: %v", err)
+	}
+}
+
+// The stage that fetches has a network: the values of -isolation-env are given to the stage that extracts only.
+func TestStageEnvKeepsUserEnvOutOfTheFetch(t *testing.T) {
+	t.Parallel()
+	base := []string{"PATH=/usr/bin", "HOME=/w"}
+	user := []string{"HTTPS_PROXY=http://x", "LOCAL_ASSETS_PATH=/a"}
+	if got := stageEnv(append([]string(nil), base...), user, true); strings.Join(got, " ") != strings.Join(base, " ") {
+		t.Errorf("fetch: %v", got)
+	}
+	if got := stageEnv(append([]string(nil), base...), user, false); strings.Join(got, " ") != "PATH=/usr/bin HOME=/w HTTPS_PROXY=http://x LOCAL_ASSETS_PATH=/a" {
+		t.Errorf("extract: %v", got)
+	}
+}

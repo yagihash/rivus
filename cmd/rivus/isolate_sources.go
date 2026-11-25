@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/url"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -11,6 +12,9 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
+// The sources are checked before the fetch stage: every Cargo.toml of the project (a symbolic link is refused) and Cargo.lock
+// (read as TOML; one that cannot be read is refused). A link to a directory outside the project and a path dependency that leaves it are refused.
+//
 // The only place that the fetch stage gets from without a flag: the registry of crates.io. Where the fetch goes is chosen
 // by Cargo.lock of the project, and the stage has a network. A git dependency is not allowed by default, on any host
 // (github.com included): the repository can name more places that Cargo.lock does not show (the submodules in its
@@ -25,39 +29,28 @@ var cratesIOSources = map[string]bool{
 type lockPackage struct{ name, version, source string }
 
 // lockPackages are the packages of Cargo.lock that have a source, in order, without a repeated (name, version, source).
-func lockPackages(lock string) []lockPackage {
+// Cargo.lock is read as TOML, the way cargo reads it. One that cannot be read is an error (refused): the sources are not known.
+func lockPackages(lock string) ([]lockPackage, error) {
+	var doc struct {
+		Package []struct {
+			Name    string `toml:"name"`
+			Version string `toml:"version"`
+			Source  string `toml:"source"`
+		} `toml:"package"`
+	}
+	if _, err := toml.Decode(lock, &doc); err != nil {
+		return nil, fmt.Errorf("Cargo.lock cannot be read as TOML, so where the dependencies come from is not known: %v", err)
+	}
 	var out []lockPackage
 	seen := map[lockPackage]bool{}
-	var cur lockPackage
-	flush := func() {
-		if cur.source != "" && !seen[cur] {
-			seen[cur] = true
-			out = append(out, cur)
-		}
-		cur = lockPackage{}
-	}
-	for _, l := range strings.Split(lock, "\n") {
-		l = strings.TrimSpace(l)
-		if l == "[[package]]" {
-			flush()
-			continue
-		}
-		k, v, ok := strings.Cut(l, "=")
-		if !ok {
-			continue
-		}
-		v = strings.Trim(strings.TrimSpace(v), "\"'")
-		switch strings.TrimSpace(k) {
-		case "name":
-			cur.name = v
-		case "version":
-			cur.version = v
-		case "source":
-			cur.source = v
+	for _, p := range doc.Package {
+		c := lockPackage{p.Name, p.Version, p.Source}
+		if c.source != "" && !seen[c] {
+			seen[c] = true
+			out = append(out, c)
 		}
 	}
-	flush()
-	return out
+	return out, nil
 }
 
 // sourceHost is the host a source of Cargo.lock is on ("" when it has none).
@@ -94,7 +87,11 @@ func checkFetchSources(lock string, allow []string) error {
 	var refused []string
 	hosts := map[string]bool{}
 	var hostList []string
-	for _, p := range lockPackages(lock) {
+	pkgs, err := lockPackages(lock)
+	if err != nil {
+		return err
+	}
+	for _, p := range pkgs {
 		if cratesIOSources[p.source] {
 			continue
 		}
@@ -129,24 +126,43 @@ func checkFetchSources(lock string, allow []string) error {
 // a dependency, the `registry-index` of a dependency, and the URL that names the source of a [patch] table. They are read
 // from the manifests, not from Cargo.lock, because cargo asks the places a manifest names before it finds that Cargo.lock
 // does not match (`--locked`): a manifest can send the fetch to a place that Cargo.lock never shows. The manifests are
-// parsed as data (nothing is run). A manifest that cannot be parsed is a place that is not known: it is refused.
+// parsed as data (nothing is run). All of them are read, in every directory (target and .git too; the name is compared
+// without regard to case). A manifest that cannot be parsed, or that is a symbolic link, is a place that is not known: it is refused. So is a
+// symbolic link to a directory outside the project, and a path dependency that leaves the project (one that stays inside is walked).
 type manifestPlace struct{ desc, url string }
 
 func manifestPlaces(dir string) (places []manifestPlace, err error) {
+	root, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return nil, err
+	}
 	var files []string
 	err = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if d.IsDir() {
-			if n := d.Name(); path != dir && (n == "target" || n == ".git") {
-				return filepath.SkipDir
+		if d.Type()&fs.ModeSymlink != 0 && !strings.EqualFold(d.Name(), "Cargo.toml") {
+			// A link to a directory is not followed by the walk, but cargo follows it. One that points inside the project is
+			// walked at the place it points to; one that points outside is refused. (A link that points nowhere is no place.)
+			if real, err := filepath.EvalSymlinks(path); err == nil {
+				if fi, err := os.Stat(real); err == nil && fi.IsDir() && !within(root, real) {
+					rel, _ := filepath.Rel(dir, path)
+					return fmt.Errorf("%s is a symbolic link to a directory outside the project (%s). The sandbox reads the project directory only, and the manifests there are not known. "+
+						"Point -C at a directory that holds both, or move the directory into the project", rel, real)
+				}
 			}
 			return nil
 		}
-		if d.Name() == "Cargo.toml" && d.Type().IsRegular() {
-			files = append(files, path)
+		if d.IsDir() || !strings.EqualFold(d.Name(), "Cargo.toml") {
+			return nil
 		}
+		// Every directory is walked (target and .git too): cargo reads a path dependency wherever it is. The name is compared
+		// without regard to case (the file system may not tell the cases apart). A link is refused, not followed.
+		if !d.Type().IsRegular() {
+			rel, _ := filepath.Rel(dir, path)
+			return fmt.Errorf("%s is not a regular file (a symbolic link, for example), so the places it names are not known", rel)
+		}
+		files = append(files, path)
 		return nil
 	})
 	if err != nil {
@@ -160,8 +176,62 @@ func manifestPlaces(dir string) (places []manifestPlace, err error) {
 			return nil, fmt.Errorf("%s cannot be read as TOML, so the places it names are not known: %v", rel, err)
 		}
 		places = collectPlaces(places, doc, "", rel)
+		for _, p := range collectPathDeps(nil, doc, "") {
+			if strings.ContainsAny(p, "*?[") { // a glob of the members: its fixed part is what is checked
+				p = filepath.Dir(p[:strings.IndexAny(p, "*?[")] + "x")
+			}
+			real, err := filepath.EvalSymlinks(filepath.Join(filepath.Dir(f), p))
+			if err != nil {
+				continue // it does not exist: cargo finds nothing there
+			}
+			if !within(root, real) {
+				return nil, fmt.Errorf("%s: path = %q leaves the project (%s). The sandbox reads the project directory only, so cargo cannot read it, and the manifests there are not known. "+
+					"Point -C at the root of the workspace that holds both, or put the crate inside the project (-unsafe-host-exec reads it without the sandbox: only for code you trust)", rel, p, real)
+			}
+		}
 	}
 	return places, nil
+}
+
+// within says whether the (resolved) path p is root or inside it.
+func within(root, p string) bool {
+	r, err := filepath.Rel(root, p)
+	return err == nil && r != ".." && !strings.HasPrefix(r, ".."+string(filepath.Separator))
+}
+
+// collectPathDeps adds to paths the directories that the table v (at path) names for cargo to read: the `path` of a
+// dependency (in any table of dependencies, [patch] and [replace]) and the members of a workspace.
+func collectPathDeps(paths []string, v any, path string) []string {
+	t, ok := v.(map[string]any)
+	if !ok {
+		if arr, ok := v.([]map[string]any); ok {
+			for _, e := range arr {
+				paths = collectPathDeps(paths, e, path)
+			}
+		}
+		return paths
+	}
+	inDeps := strings.HasPrefix(path, "patch") || strings.HasPrefix(path, "replace") ||
+		strings.Contains(path, "dependencies")
+	for k, e := range t {
+		if path == "package.metadata" || path == "workspace.metadata" {
+			return paths
+		}
+		switch {
+		case k == "path" && inDeps && isString(e):
+			paths = append(paths, e.(string))
+		case path == "workspace" && (k == "members" || k == "exclude"):
+			if arr, ok := e.([]any); ok {
+				for _, m := range arr {
+					if ms, ok := m.(string); ok && k == "members" {
+						paths = append(paths, ms)
+					}
+				}
+			}
+		}
+		paths = collectPathDeps(paths, e, strings.TrimPrefix(path+"."+k, "."))
+	}
+	return paths
 }
 
 // collectPlaces adds to places the places that the table v (at path, of the manifest rel) names, and those of the tables inside.

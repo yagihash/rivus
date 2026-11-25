@@ -231,3 +231,29 @@ path = "src/main.rs"
 		}
 	}
 }
+
+// SBX-4: a child that writes a terminal control sequence to its standard error, under the sandbox, and the stage that reports it.
+func TestSandboxChildStderrHasNoControlCharacter(t *testing.T) {
+	if _, err := exec.LookPath("sandbox-exec"); err != nil {
+		t.Skip("no sandbox-exec")
+	}
+	for _, code := range []string{"0", "1"} {
+		res, err := sandbox.Run(context.Background(), sandbox.Spec{
+			Argv: []string{"/bin/sh", "-c", `printf '\033]52;c;AAAA\007\033[2J\r' >&2; exit ` + code},
+			Dir:  "/", Env: []string{"PATH=/usr/bin:/bin"}, Exec: []string{"/bin", "/usr/bin"}, Timeout: time.Minute,
+		})
+		if err != nil {
+			t.Skipf("the sandbox is not available: %v", err)
+		}
+		var buf bytes.Buffer
+		o := &isolationOpts{stderr: &buf, timeout: time.Minute}
+		rerr := o.sandboxResult("extract", res, nil)
+		all := buf.String()
+		if rerr != nil {
+			all += rerr.Error()
+		}
+		if strings.ContainsAny(all, "\x1b\x07\r") || !strings.Contains(all, `\x1b`) {
+			t.Errorf("exit %s: %q", code, all)
+		}
+	}
+}

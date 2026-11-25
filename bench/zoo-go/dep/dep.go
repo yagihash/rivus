@@ -12,3 +12,21 @@ func Wrap(w io.Writer) io.Writer { return &wrapper{w: w} }
 type wrapper struct{ w io.Writer }
 
 func (x *wrapper) Write(p []byte) (int, error) { return x.w.Write(p) }
+
+// Request is the request that a Router hands to a handler.
+type Request struct{ Path string }
+
+// Router is the skeleton of a router for the cells (the shape of the routers of the web frameworks): a handler is registered with a
+// route, and Serve calls it with the request and the segment that the route captures (/item/{id}: the text of id).
+type Router struct {
+	routes map[string]func(*Request, string)
+}
+
+// NewRouter makes a Router.
+func NewRouter() *Router { return &Router{routes: map[string]func(*Request, string){}} }
+
+// Get registers the handler of the route.
+func (r *Router) Get(route string, h func(*Request, string)) { r.routes[route] = h }
+
+// Serve calls the handler of the route with the request and the segment of the path.
+func (r *Router) Serve(route string, req *Request, segment string) { r.routes[route](req, segment) }

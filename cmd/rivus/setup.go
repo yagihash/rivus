@@ -39,8 +39,8 @@ func runSetupRust(argv []string) error {
 		return err
 	}
 	source, yes := c.source, c.yes
-	if runtime.GOOS != "darwin" {
-		return fmt.Errorf("rivus setup rust prepares the extraction under the sandbox of macOS, which this system does not have: a Rust project that you trust is read with -unsafe-host-exec, with rivus-rust that you built yourself (extractor/rust/README.md)")
+	if runtime.GOOS != "darwin" && runtime.GOOS != "linux" {
+		return fmt.Errorf("rivus setup rust prepares the extraction under the sandbox of macOS or Linux, which this system does not have: a Rust project that you trust is read with -unsafe-host-exec, with rivus-rust that you built yourself (extractor/rust/README.md)")
 	}
 	data, err := rustDataDir()
 	if err != nil {

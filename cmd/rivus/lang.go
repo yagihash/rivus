@@ -195,7 +195,7 @@ func (o *analyzeOpts) autoRust(others []string) (bool, error) {
 	}
 	if !term() {
 		if alone {
-			return false, fmt.Errorf("%s holds a Rust project (Cargo.toml), and reading it builds it: its build scripts and proc macros run (under the sandbox of macOS). There is no terminal to ask, so say it: -lang rust or -yes", o.dir)
+			return false, fmt.Errorf("%s holds a Rust project (Cargo.toml), and reading it builds it: its build scripts and proc macros run (under "+sandboxDesc+"). There is no terminal to ask, so say it: -lang rust or -yes", o.dir)
 		}
 		leave(whyNoTerminal, "because reading it builds it (build scripts and proc macros run) and there is no terminal to ask; -lang "+hint+" or -yes reads it")
 		return false, nil
@@ -226,11 +226,11 @@ func (o *analyzeOpts) rustInstalled() error {
 func (o *analyzeOpts) askRust(others []string) bool {
 	fmt.Fprintf(os.Stderr, `rivus: %s holds a Rust project (Cargo.toml).
   Reading it builds it: the build scripts and the proc macros of the project (and of its dependencies) run.
-  They run under the sandbox of macOS: no network while it is built, nothing written outside the project, its dependencies and the work directory.
+  They run under %s: no network while it is built, nothing written outside the project, its dependencies and the work directory.
   The dependencies are fetched from crates.io.
   Not to be asked: -lang rust (or -yes). Not to read it: name the languages, as -lang %s.
   The answer makes a different index: with Rust and without are not the same index.
-Read the Rust project? [Y/n] `, o.dir, orGo(others))
+Read the Rust project? [Y/n] `, o.dir, sandboxDesc, orGo(others))
 	in := o.confirmIn
 	if in == nil {
 		in = os.Stdin
@@ -445,7 +445,7 @@ func (o *analyzeOpts) extractRaw(lang string) ([]byte, error) {
 // extractInto is extractRaw; with w, the stream goes to w as the extractor writes it and nothing is returned.
 func (o *analyzeOpts) extractInto(lang string, w io.Writer) ([]byte, error) {
 	if lang == langRust && !o.hostExec() {
-		o.rustIsolation = &report.Isolation{Mode: "sandbox", Detail: "the build scripts and the macros of the project ran under the sandbox of macOS: no network while it was built (the fetch stage has one, and runs no code of the project), no files but the project, its dependencies and a work directory"}
+		o.rustIsolation = &report.Isolation{Mode: "sandbox", Detail: "the build scripts and the macros of the project ran under " + sandboxDesc + ": no network while it was built (the fetch stage has one, and runs no code of the project), no files but the project, its dependencies and a work directory"}
 		return o.rawRustIsolated(w)
 	}
 	if lang == langRust {
@@ -495,7 +495,7 @@ func (o *analyzeOpts) extractInto(lang string, w io.Writer) ([]byte, error) {
 		out, err = cmd.Output()
 	}
 	if err != nil {
-		return nil, fmt.Errorf("the %s extractor failed: %v\n%s", lang, err, strings.TrimSpace(stderr.String()))
+		return nil, fmt.Errorf("the %s extractor failed: %v\n%s", lang, err, sanitizeForTerminal([]byte(strings.TrimSpace(stderr.String())))) // SBX-4
 	}
 	return out, nil
 }
@@ -515,7 +515,7 @@ func (o *analyzeOpts) hostExec() bool {
 	return o.unsafeHostExec || os.Getenv("RIVUS_UNSAFE_HOST_EXEC") == "1"
 }
 
-// rawRustIsolated reads a Rust project under the sandbox of macOS (ADR-093); on another system nothing is run.
+// rawRustIsolated reads a Rust project under the sandbox of the system (ADR-093); on another system nothing is run.
 func (o *analyzeOpts) rawRustIsolated(w io.Writer) ([]byte, error) {
 	dir, err := filepath.Abs(o.dir)
 	if err != nil {

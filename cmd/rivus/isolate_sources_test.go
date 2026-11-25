@@ -88,7 +88,10 @@ func TestCheckManifestSources(t *testing.T) {
 		{"patch with git", map[string]string{"Cargo.toml": pkg + "[patch.crates-io]\nitoa = { git = \"http://10.0.0.5/x\" }\n"}, nil, "10.0.0.5"},
 		{"registry-index", map[string]string{"Cargo.toml": pkg + "[dependencies]\ng = { version = \"1\", registry-index = \"http://10.0.0.5/\" }\n"}, nil, "registry-index"},
 		{"not TOML", map[string]string{"Cargo.toml": pkg + "[dependencies\n"}, nil, "cannot be read as TOML"},
-		{"build directories are skipped", map[string]string{"Cargo.toml": pkg, "target/x/Cargo.toml": "[dependencies]\ng = { git = \"http://10.0.0.5/x\" }\n"}, nil, ""},
+		{"in target, named by a path dependency", map[string]string{"Cargo.toml": pkg + "[dependencies]\ne = { path = \"target/evil\" }\n", "target/evil/Cargo.toml": pkg + "[dependencies]\ng = { git = \"http://x.example.invalid/y\" }\n"}, nil, "target/evil/Cargo.toml"},
+		{"in .git", map[string]string{"Cargo.toml": pkg + "[dependencies]\ne = { path = \".git/evil\" }\n", ".git/evil/Cargo.toml": pkg + "[dependencies]\ng = { git = \"http://x.example.invalid/y\" }\n"}, nil, ".git/evil/Cargo.toml"},
+		{"name in another case", map[string]string{"Cargo.toml": pkg, "m/cargo.toml": pkg + "[dependencies]\ng = { git = \"http://x.example.invalid/y\" }\n"}, nil, "x.example.invalid"},
+		{"name in upper case", map[string]string{"Cargo.toml": pkg, "m/CARGO.TOML": "[dependencies\n"}, nil, "cannot be read as TOML"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -103,6 +106,116 @@ func TestCheckManifestSources(t *testing.T) {
 				}
 			}
 			err := checkManifestSources(dir, c.allow)
+			switch {
+			case c.bad == "" && err != nil:
+				t.Errorf("refused: %v", err)
+			case c.bad != "" && (err == nil || !strings.Contains(err.Error(), c.bad)):
+				t.Errorf("not refused (or not listed: %q): %v", c.bad, err)
+			}
+		})
+	}
+}
+
+// A Cargo.toml that is a symbolic link is refused: the fetch stage must not depend on where it points.
+func TestCheckManifestSourcesSymlink(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	other := t.TempDir()
+	if err := os.WriteFile(filepath.Join(other, "real.toml"), []byte("[package]\nname = \"t\"\nversion = \"0.1.0\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "m"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(other, "real.toml"), filepath.Join(dir, "m", "Cargo.toml")); err != nil {
+		t.Skip(err)
+	}
+	err := checkManifestSources(dir, nil)
+	if err == nil || !strings.Contains(err.Error(), "symbolic link") {
+		t.Errorf("a Cargo.toml that is a symbolic link is not refused: %v", err)
+	}
+}
+
+func TestLockPackagesAsTOML(t *testing.T) {
+	t.Parallel()
+	const evil = "git+https://attacker.example.invalid/x#0123456789abcdef0123456789abcdef01234567"
+	for name, lock := range map[string]string{
+		"spaces in the header":     "version = 4\n\n[[ package ]]\nname = \"y\"\nversion = \"1.0.0\"\nsource = \"" + evil + "\"\n",
+		"comment after the header": "version = 4\n\n[[package]] # c\nname = \"y\"\nversion = \"1.0.0\"\nsource = \"" + evil + "\"\n",
+		"inline array":             "version = 4\npackage = [ { name = \"y\", version = \"1.0.0\", source = \"" + evil + "\" } ]\n",
+		"single quotes":            "version = 4\n[[package]]\nname = 'y'\nversion = '1.0.0'\nsource = '" + evil + "'\n",
+	} {
+		if err := checkFetchSources(lock, nil); err == nil || !strings.Contains(err.Error(), "attacker.example.invalid") {
+			t.Errorf("%s: not refused: %v", name, err)
+		}
+	}
+	if err := checkFetchSources("version = 4\n[[package\n", nil); err == nil || !strings.Contains(err.Error(), "TOML") {
+		t.Errorf("Cargo.lock that is not TOML is not refused: %v", err)
+	}
+	// crates.io only, with a manifest: no regression
+	if err := checkFetchSources(lockWith("", "registry+https://github.com/rust-lang/crates.io-index"), nil); err != nil {
+		t.Errorf("refused: %v", err)
+	}
+}
+
+// Symbolic links to directories: cargo reads a path dependency through them. A link that leaves the project is refused,
+// one that stays inside is allowed (what it points to is walked). A path dependency that leaves the project is refused too.
+func TestCheckManifestSourcesLinks(t *testing.T) {
+	t.Parallel()
+	const pkg = "[package]\nname = \"t\"\nversion = \"0.1.0\"\nedition = \"2021\"\n"
+	const evil = pkg + "[dependencies]\ng = { git = \"http://x.example.invalid/y\" }\n"
+	cases := []struct {
+		name  string
+		files map[string]string // a name ending in "->X" is a link to X (relative to the project; "OUT/..." is outside)
+		links map[string]string
+		bad   string
+	}{
+		{"link to outside, path through it", map[string]string{"Cargo.toml": pkg + "[dependencies]\ne = { path = \"link/evil\" }\n", "OUT/evil/Cargo.toml": evil}, map[string]string{"link": "OUT"}, "link"},
+		{"link to outside, not named", map[string]string{"Cargo.toml": pkg, "OUT/Cargo.toml": evil}, map[string]string{"docs": "OUT"}, "docs"},
+		{"link to inside", map[string]string{"Cargo.toml": pkg + "[dependencies]\ne = { path = \"link/evil\" }\n", "real/evil/Cargo.toml": evil}, map[string]string{"link": "real"}, "real/evil/Cargo.toml"},
+		{"link to inside, clean", map[string]string{"Cargo.toml": pkg, "real/doc.md": "x"}, map[string]string{"docs": "real"}, ""},
+		{"link to a link to outside", map[string]string{"Cargo.toml": pkg, "OUT/evil/Cargo.toml": evil}, map[string]string{"a": "b", "b": "OUT"}, "a"},
+		{"link to the parent (a loop)", map[string]string{"Cargo.toml": pkg, "m/x.txt": "x"}, map[string]string{"m/up": "."}, ""},
+		{"link to itself in the project (a loop)", map[string]string{"Cargo.toml": pkg, "m/x.txt": "x"}, map[string]string{"m/self": "m"}, ""},
+		{"path dependency outside", map[string]string{"Cargo.toml": pkg + "[dependencies]\ne = { path = \"../OUT\" }\n"}, nil, "../OUT"},
+		{"path dependency in the workspace members", map[string]string{"Cargo.toml": "[workspace]\nmembers = [\"../OUT\"]\n"}, nil, "../OUT"},
+		{"path dependency in a patch", map[string]string{"Cargo.toml": pkg + "[patch.crates-io]\nitoa = { path = \"../OUT\" }\n"}, nil, "../OUT"},
+		{"path dependency inside", map[string]string{"Cargo.toml": pkg + "[dependencies]\ne = { path = \"m\" }\n", "m/Cargo.toml": pkg}, nil, ""},
+		{"glob member inside", map[string]string{"Cargo.toml": "[workspace]\nmembers = [\"crates/*\"]\n", "crates/a/Cargo.toml": pkg}, nil, ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			root := t.TempDir()
+			dir := filepath.Join(root, "proj")
+			out := filepath.Join(root, "OUT")
+			for f, body := range c.files {
+				p := filepath.Join(dir, f)
+				if strings.HasPrefix(f, "OUT/") {
+					p = filepath.Join(root, f)
+				}
+				if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.MkdirAll(out, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			for l, to := range c.links {
+				dst := filepath.Join(dir, to)
+				if to == "OUT" {
+					dst = out
+				}
+				if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, l)), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(dst, filepath.Join(dir, l)); err != nil {
+					t.Skip(err)
+				}
+			}
+			err := checkManifestSources(dir, nil)
 			switch {
 			case c.bad == "" && err != nil:
 				t.Errorf("refused: %v", err)

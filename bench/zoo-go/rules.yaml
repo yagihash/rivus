@@ -14,6 +14,12 @@ sources:
   - kind: param_type
     type: zoo/mark.In
     labels: [user_input]
+  # the function that is given to the router: the segment of the path that the router hands to it is user input
+  - kind: callback_param
+    symbol: (*zoodep.Router).Get
+    operand: 1
+    from: 1
+    labels: [user_input]
 
 sinks:
   - symbol: zoo/mark.SinkCmd

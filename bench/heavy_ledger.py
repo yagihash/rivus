@@ -10,7 +10,7 @@ Read it (read only):
 
 The pass line is two separate conditions, both needed: it finishes (`finish`: time within the limit, memory within the cap,
 `conv` converged; computed from the limits of bench/deps-targets.json) and it detects (`det`: by place, see
-bench/passline-baseline.md). `result` is PASS when both hold.
+bench/passline-baseline.md). `result` is PASS when both hold; PASS-thin when they hold and the memory margin is under 0.15 GiB (bench/passline-baseline.md).
 
 The margin is not a column. The table computes it: memory_limit_bytes - memory_peak_bytes, and, when the run recorded
 it, memory_limit_bytes - live_heap_max_bytes (live_margin_gb). live_heap_max_bytes is the largest amount that the GC marked

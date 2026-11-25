@@ -4,7 +4,8 @@ name: CI
 # the files that changed, against the lists in that job ("a change here runs CI"), and the heavy jobs run only when
 # something that a test reads, a build takes in, or CI itself changed. A job that is skipped passes in `ci-ok`; a job that failed or was
 # cancelled does not. So the number of shards can change without the ruleset. A push to main runs everything.
-# The runner of macOS (the sandbox, docs/DESIGN-macos-sandbox.md) runs when what the isolation is made of changes, and once a week.
+# The runners of macOS and Linux (the sandbox, docs/DESIGN-macos-sandbox.md and docs/DESIGN-linux-sandbox.md) run when what the isolation is made of changes (the files of that
+# system, and the files that both use), and once a week.
 # A pull request runs the tests with -short; a push to main, the weekly run and a run by hand run all of them.
 # One test is the exception: TestDogfood (rivus analysing itself, 160-230 s) runs only in the weekly run, and only when the code or the models changed since
 # the last successful weekly run (the step `dogfood` of `changes`), and in a run by hand. Never in a pull request or a push to main (ADR-112).
@@ -54,7 +55,8 @@ jobs:
     outputs:
       dogfood: ${{ steps.dogfood.outputs.dogfood }}
       code: ${{ steps.decide.outputs.code }}
-      isolation: ${{ steps.decide.outputs.isolation }}
+      isolation_darwin: ${{ steps.decide.outputs.isolation_darwin }}
+      isolation_linux: ${{ steps.decide.outputs.isolation_linux }}
       dart: ${{ steps.decide.outputs.dart }}
       rust: ${{ steps.decide.outputs.rust }}
       docs: ${{ steps.decide.outputs.docs }}
@@ -168,20 +170,47 @@ jobs:
               - '!extractor/*/README.md'
               - 'bench/**'
               - '!bench/**/README.md'
-            isolation:
+            # What the isolation is made of. The jobs of each system run for the files of that system and for the files that both use (a pull request that only
+            # touches the Linux files does not start the runner of macOS, and the other way round); a push to main, the weekly run and a run by hand run both.
+            isolation_common:
               - 'internal/sandbox/**'
+              - '!internal/sandbox/*darwin*'
+              - '!internal/sandbox/*linux*'
+              - '!internal/sandbox/probe/**'
+              - '!internal/sandbox/probelinux/**'
               - 'cmd/rivus/isolate*.go'
+              - 'cmd/rivus/term_*.go'
+              - '!cmd/rivus/*darwin*.go'
+              - '!cmd/rivus/*linux*.go'
+              - '!cmd/rivus/isolate_devdir*.go'
+              # what decides whether to read under the sandbox, where it keeps its files, and what is said about it
+              - 'cmd/rivus/lang.go'
+              - 'cmd/rivus/setup.go'
+              - 'cmd/rivus/datadir_other.go'
+              - 'internal/report/**'
               - 'extractor/rust/**'
               - '!extractor/*/README.md'
+              - 'scripts/sandbox-e2e.sh'
               - 'go.mod'
               - 'go.sum'
               - '.github/workflows/ci.yml'
+            isolation_darwin:
+              - 'internal/sandbox/*darwin*'
+              - 'internal/sandbox/probe/**'
+              - 'cmd/rivus/*darwin*.go'
+              - 'cmd/rivus/isolate_devdir*.go'
+            isolation_linux:
+              - 'internal/sandbox/*linux*'
+              - 'internal/sandbox/probelinux/**'
+              - 'cmd/rivus/*linux*.go'
       - id: decide
         env:
           EVENT_NAME: ${{ github.event_name }}
           RELEASE_PR: ${{ github.event_name == 'pull_request' && startsWith(github.head_ref, 'tagpr-from-') && 'true' || 'false' }}
           FILTER_CODE: ${{ steps.paths.outputs.code }}
-          FILTER_ISOLATION: ${{ steps.paths.outputs.isolation }}
+          FILTER_ISO_COMMON: ${{ steps.paths.outputs.isolation_common }}
+          FILTER_ISO_DARWIN: ${{ steps.paths.outputs.isolation_darwin }}
+          FILTER_ISO_LINUX: ${{ steps.paths.outputs.isolation_linux }}
           FILTER_DART: ${{ steps.paths.outputs.dart }}
           FILTER_RUST: ${{ steps.paths.outputs.rust }}
           FILTER_DOCS: ${{ steps.paths.outputs.docs }}
@@ -193,21 +222,25 @@ jobs:
           case "$EVENT_NAME" in
             pull_request)
               if [ "$RELEASE_PR" = true ]; then
-                code=true isolation=true dart=true rust=true docs=true models=false release=true workflows=true g12=false
+                code=true isolation_darwin=true isolation_linux=true dart=true rust=true docs=true models=false release=true workflows=true g12=false
               else
-                for v in "$FILTER_CODE" "$FILTER_ISOLATION" "$FILTER_DART" "$FILTER_RUST" "$FILTER_DOCS" "$FILTER_MODELS" "$FILTER_RELEASE" "$FILTER_WORKFLOWS" "$FILTER_G12"; do
+                for v in "$FILTER_CODE" "$FILTER_ISO_COMMON" "$FILTER_ISO_DARWIN" "$FILTER_ISO_LINUX" "$FILTER_DART" "$FILTER_RUST" "$FILTER_DOCS" "$FILTER_MODELS" "$FILTER_RELEASE" "$FILTER_WORKFLOWS" "$FILTER_G12"; do
                   case "$v" in
                     true | false) ;;
                     *) echo "the filter of the paths gave '$v', not true or false: nothing is skipped on a guess" >&2; exit 1 ;;
                   esac
                 done
-                code=$FILTER_CODE isolation=$FILTER_ISOLATION dart=$FILTER_DART rust=$FILTER_RUST docs=$FILTER_DOCS models=$FILTER_MODELS release=$FILTER_RELEASE workflows=$FILTER_WORKFLOWS g12=$FILTER_G12
+                isolation_darwin=false isolation_linux=false
+                if [ "$FILTER_ISO_COMMON" = true ] || [ "$FILTER_ISO_DARWIN" = true ]; then isolation_darwin=true; fi
+                if [ "$FILTER_ISO_COMMON" = true ] || [ "$FILTER_ISO_LINUX" = true ]; then isolation_linux=true; fi
+                code=$FILTER_CODE dart=$FILTER_DART rust=$FILTER_RUST docs=$FILTER_DOCS models=$FILTER_MODELS release=$FILTER_RELEASE workflows=$FILTER_WORKFLOWS g12=$FILTER_G12
               fi ;;
-            *) code=true isolation=true dart=true rust=true docs=true models=false release=true workflows=true g12=false ;; # push, schedule, workflow_dispatch (the job `model-diff` below runs the weekly and the manual one)
+            *) code=true isolation_darwin=true isolation_linux=true dart=true rust=true docs=true models=false release=true workflows=true g12=false ;; # push, schedule, workflow_dispatch (the job `model-diff` below runs the weekly and the manual one)
           esac
           {
             echo "code=$code"
-            echo "isolation=$isolation"
+            echo "isolation_darwin=$isolation_darwin"
+            echo "isolation_linux=$isolation_linux"
             echo "dart=$dart"
             echo "rust=$rust"
             echo "docs=$docs"
@@ -304,6 +337,17 @@ jobs:
           GOARCH: arm64
           CGO_ENABLED: "0"
         run: go vet ./cmd/rivus ./internal/sandbox
+      # The filter of seccomp is made for x86-64 and arm64 only: for another architecture of Linux the package must still build (the helper then says that the
+      # sandbox cannot be made, and nothing is run), so that the rest of rivus builds there
+      - name: Vet the sandbox for the architectures that have no filter
+        if: ${{ !cancelled() }}
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          for arch in 386 arm riscv64 ppc64le s390x loong64 mips64le; do
+            echo "== $arch"
+            GOARCH=$arch go vet ./internal/sandbox
+          done
       - name: Test the packages other than cmd/rivus
         if: ${{ !cancelled() }}
         run: |
@@ -602,10 +646,10 @@ jobs:
   # of the code).
   #
   # Only the tests that need no toolchain: what the probe cannot do under the sandbox, the ways out that are closed, the limits. The
-  # extraction of Rust under the sandbox (the toolchain, the fetch) is tried on the machine of the developer (RIVUS_SBX_RED=1, RIVUS_SBX_NET=1).
+  # extraction of Rust under the sandbox (the toolchain, the fetch) are the jobs `sandbox-e2e-linux` and `sandbox-e2e-darwin` below, and on the machine of the developer (RIVUS_SBX_RED=1, RIVUS_SBX_NET=1).
   sandbox:
     needs: changes
-    if: needs.changes.outputs.isolation == 'true'
+    if: needs.changes.outputs.isolation_darwin == 'true'
     runs-on: macos-latest
     timeout-minutes: 30
     permissions:
@@ -622,11 +666,120 @@ jobs:
           cache-dependency-path: |
             go.sum
             bench/*/go.sum
-      - name: Test the sandbox
+      - name: Test the sandbox (darwin)
         env:
           # the tests make harmless marks outside the sandbox when it does not hold (a name rivus-sbx-<id>, removed after), and say so
           RIVUS_SBX_RED: "1"
         run: go test -count=1 -timeout 20m -run 'TestSandbox(Stops|Closes|Time|Output|Environment|Unavailable|Stderr|Program)' ./internal/sandbox
+
+  # The tests of the sandbox of Linux (internal/sandbox, docs/DESIGN-linux-sandbox.md: Landlock and seccomp) on the runners of Linux, x86-64 and arm64
+  # (the filter of seccomp is made for each architecture). Same triggers as the one of macOS. RIVUS_SBX_RED=1: a runner that has no sandbox fails
+  # the job instead of skipping the tests (a skip would show nothing). The tests that need a newer kernel (the port of a connection: Landlock ABI 4) say
+  # so and skip when this kernel is older.
+  sandbox-linux:
+    needs: changes
+    if: needs.changes.outputs.isolation_linux == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        # every one of these runners has a Linux of the 7.0 series (checked: `uname -r` in the log), so none has an old Landlock; an old kernel is made by the
+        # tests of a test binary (RIVUS_SBX_FAKE_ABI, TestSandboxOldKernels). ubuntu-24.04 differs in the userland (GNU coreutils; ubuntu-latest has the Rust ones, which are
+        # in /usr/lib/cargo/bin: that is how the test of the programs that may be run found a hole)
+        runner: [ubuntu-latest, ubuntu-26.04-arm, ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            bench/*/go.sum
+      - name: The kernel
+        run: |
+          uname -r
+          cat /sys/kernel/security/lsm || true
+      - name: Test the sandbox (linux)
+        env:
+          RIVUS_SBX_RED: "1"
+        run: go test -count=1 -timeout 20m -v -run 'TestSandbox' ./internal/sandbox
+      # The runner is not root, and the checks that matter when rivus is run as root (the capabilities that are taken away, a file that cannot be given to another
+      # user) run only for root: the same tests, as root. (The test binary is built here, by the user, and run by root in its directory.)
+      - name: Test the sandbox as root (linux)
+        env:
+          RIVUS_SBX_RED: "1"
+        run: |
+          go test -c -o "$RUNNER_TEMP/sandbox.test" ./internal/sandbox
+          cd internal/sandbox
+          sudo env "PATH=$PATH" "GOTOOLCHAIN=local" "RIVUS_SBX_RED=1" "GOCACHE=$RUNNER_TEMP/gocache-root" "GOMODCACHE=$(go env GOMODCACHE)" \
+            "$RUNNER_TEMP/sandbox.test" -test.count=1 -test.v -test.run 'TestSandbox(ProbeEscapes|ClosesEveryWayOut|Baseline|AttrAsRoot)'
+
+  # The sandbox end to end, on each system that has one (two jobs, so that each runs only for the files of its system): the pinned nightly, the extractor
+  # (rivus setup rust), and a crate with a hostile build script and a proc macro and build scripts of dependencies, read by `rivus analyze -lang rust`
+  # (scripts/sandbox-e2e.sh): the fetch with the network, the extraction without it, nothing written outside, the isolation said to be "sandbox". The unit
+  # tests above need no toolchain; this is the way a user reaches the sandbox.
+  sandbox-e2e-linux:
+    needs: changes
+    if: needs.changes.outputs.isolation_linux == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            bench/*/go.sum
+      - name: Install the pinned nightly
+        working-directory: extractor/rust
+        run: rustup toolchain install
+      - name: Build rivus and the extractor
+        run: |
+          go build -o "$RUNNER_TEMP/rivus" ./cmd/rivus
+          RIVUS_RUST_DATA_DIR="$RUNNER_TEMP/rivus-data" "$RUNNER_TEMP/rivus" setup rust -source extractor/rust -y
+      - name: Read a hostile crate under the sandbox
+        env:
+          RIVUS_RUST_DATA_DIR: ${{ runner.temp }}/rivus-data
+        run: scripts/sandbox-e2e.sh "$RUNNER_TEMP/rivus"
+
+  sandbox-e2e-darwin:
+    needs: changes
+    if: needs.changes.outputs.isolation_darwin == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            bench/*/go.sum
+      - name: Install the pinned nightly
+        working-directory: extractor/rust
+        run: rustup toolchain install
+      - name: Build rivus and the extractor
+        run: |
+          go build -o "$RUNNER_TEMP/rivus" ./cmd/rivus
+          RIVUS_RUST_DATA_DIR="$RUNNER_TEMP/rivus-data" "$RUNNER_TEMP/rivus" setup rust -source extractor/rust -y
+      - name: Read a hostile crate under the sandbox
+        env:
+          RIVUS_RUST_DATA_DIR: ${{ runner.temp }}/rivus-data
+        run: scripts/sandbox-e2e.sh "$RUNNER_TEMP/rivus"
 
   # The differential test of the models (bench/model-diff, docs/MODEL-RUNBOOK.md): a package at a time, its model against its body. Only the
   # weekly run and a run by hand, and it reports without blocking (`continue-on-error`) until it has been run for a while; it is not in a pull request
@@ -860,7 +1013,7 @@ jobs:
   # when they passed or were skipped (nothing that a test reads changed). A job added above has to be added here.
   ci-ok:
     if: always()
-    needs: [changes, go-packages, docs-tests, test, gcp-exec, sandbox, model-diff, model-diff-changed, graph-check, cost-warn, release-build, ghalint, actionlint]
+    needs: [changes, go-packages, docs-tests, test, gcp-exec, sandbox, sandbox-linux, sandbox-e2e-linux, sandbox-e2e-darwin, model-diff, model-diff-changed, graph-check, cost-warn, release-build, ghalint, actionlint]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
@@ -871,5 +1024,5 @@ jobs:
         run: |
           echo "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
           # `changes` has to have answered: a skipped heavy job is only a pass when it was skipped on an answer
-          echo "$NEEDS" | jq -e '.changes.result == "success" and (.changes.outputs.code | IN("true", "false")) and (.changes.outputs.isolation | IN("true", "false")) and (.changes.outputs.dart | IN("true", "false")) and (.changes.outputs.rust | IN("true", "false")) and (.changes.outputs.docs | IN("true", "false")) and (.changes.outputs.models | IN("true", "false")) and (.changes.outputs.release | IN("true", "false")) and (.changes.outputs.workflows | IN("true", "false"))' > /dev/null
+          echo "$NEEDS" | jq -e '.changes.result == "success" and (.changes.outputs.code | IN("true", "false")) and (.changes.outputs.isolation_darwin | IN("true", "false")) and (.changes.outputs.isolation_linux | IN("true", "false")) and (.changes.outputs.dart | IN("true", "false")) and (.changes.outputs.rust | IN("true", "false")) and (.changes.outputs.docs | IN("true", "false")) and (.changes.outputs.models | IN("true", "false")) and (.changes.outputs.release | IN("true", "false")) and (.changes.outputs.workflows | IN("true", "false"))' > /dev/null
           echo "$NEEDS" | jq -e 'all(.[]; .result != "failure" and .result != "cancelled")' > /dev/null
