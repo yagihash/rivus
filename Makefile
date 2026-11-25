@@ -66,6 +66,9 @@ go-warm: ## compile the dependencies of every module of the bench into the build
 observed-edges-go: ## run the Go zoo in an instrumented copy and list the calls that happened and the graph of rivus index does not have (a few seconds; the work is in a temporary directory; ARGS=-v lists the over-approximation rows; docs/DESIGN-observed-calls.md)
 	go run ./bench/observed-edges run -zoo bench/zoo-go $(ARGS)
 
+maturity-ledger: ## local, once a week: add one row per language (go, dart, rust) to bench/maturity-ledger.tsv (@todo and @miss of the zoo tests; no_edge of Go and Dart; the extractor of Rust is built in the tree, never the shared one); the commit is made by a person; DRY=1 only prints (bench/maturity_ledger.py, bench/README.md)
+	python3 bench/maturity_ledger.py $(if $(DRY),--dry-run)
+
 zoo-dart-gen: ## write bench/zoo-dart/exec/lib/cases.dart and the two pubspec.yaml of the Dart zoo (generated, not committed) from the directories of the cells and of the skeleton packages
 	go test ./cmd/rivus -run '^TestZooDartGenerate$$' -count=1 -update
 
