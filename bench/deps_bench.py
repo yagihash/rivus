@@ -35,6 +35,16 @@ vulnerability) counts per vulnerability: detected when at least one finding pass
 function, sink position, functions on the path; the field `vuln` groups the entries) and prints `detected=<n>/<N>` only: the count is not
 part of PASS/FAIL (reference only), and neither the line nor the ledger row carries a count of findings, a list, a path or a place.
 A target that is not decided yet is printed as INFO, not PASS/FAIL.
+A Rust target (`lang` rust; shlex is the one now) is an INFO row that shows that the road (fetch, the build under the sandbox, the extractor, the analysis)
+goes through from one end to the other inside this tool; it is not a pass line (not in the default `TARGETS`; name it: `make bench-passline TARGETS=shlex`).
+What the tool does for it (the same refusal and checks every time): (1) the fetch is `git clone` and checkout only; a `.cargo/config(.toml)` or a
+`rust-toolchain(.toml)` anywhere in the tree stops the run before anything is built (what it says is printed); (2) `HOME` is an empty directory made
+inside $BENCH_CACHE (the data of rivus for Rust goes under `$HOME/Library/Application Support/rivus`, so nothing is written in the shared places), and the
+toolchain and the extractor that were built and set before are only read (`RIVUS_RUST_TOOLCHAIN_DIR`, `RIVUS_RUST_EXTRACTOR`, or the pinned nightly of
+`extractor/rust/rust-toolchain.toml` under the real `~/.rustup` and `extractor/rust/target/debug/rivus-rust`; `rivus setup rust` is never run);
+(3) before the run, `sandbox-exec` must deny a write, and after it `summary.isolation.mode` must be `sandbox`: if either is not so the run is a failure (the
+line says `isolation_failed`, the exit status is 1; a failure before the run adds no row). The time and the memory of such a row are recorded and mean
+nothing (a small crate; the sampled sum of the tree can miss a build that lasts under a second); the row's `settings` hold the count of every kind of uncertainty (with `unsupported_construct` and `unresolved_callee` always, even 0).
 The time limit is kept by the watchdog (a kill of the group of this run at the limit: `stopped_time`); `rivus analyze` is not given `-timeout`
 (its default is 0, no limit; a rivus that stopped itself at the limit would look like a run that did not converge), unless the `args` of the target say so.
 Sources are fetched into $BENCH_CACHE (default ~/.cache/rivus-bench/), outside this tree; the output of the runs
@@ -53,6 +63,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import tomllib
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from heavylock import heavy_lock, snapshot, format_snapshots  # one lock for the heavy runs of the whole machine (bench/heavylock.py)
@@ -364,6 +375,21 @@ def prepare(name, t, tree, work, env):
         if r.returncode != 0:
             return None, env, "go mod download failed: " + r.stderr.strip()[-200:]
         return src, env, None
+    if t["lang"] == "rust":
+        refuse_rust(name, tree)  # before the copy, before anything is built
+        copy = os.path.join(work, os.path.basename(tree))
+        if not os.path.isdir(copy):
+            shutil.copytree(tree, copy, ignore=shutil.ignore_patterns(".git"))
+        src = os.path.join(copy, t.get("subdir", ""))
+        lock = os.path.join(src, "Cargo.lock")
+        if t.get("rust_minimal_lock") and not os.path.exists(lock):  # a crate with no dependency and no Cargo.lock: the smallest lock, written in the COPY only
+            body = open(os.path.join(src, "Cargo.toml")).read()
+            if not rust_no_dependencies(body):
+                return None, env, "rust_minimal_lock is only for a crate with no dependency, and %s names some" % name
+            open(lock, "w").write(minimal_lock(body))
+        env = dict(env)
+        env["RIVUS_RUST_TOOLCHAIN_DIR"], env["RIVUS_RUST_EXTRACTOR"] = rust_tools()
+        return src, env, None
     copy = os.path.join(work, os.path.basename(tree))
     if not os.path.isdir(copy):
         shutil.copytree(tree, copy, ignore=shutil.ignore_patterns(".git"))
@@ -408,6 +434,106 @@ def remove_flutter_members(root):
                 in_ws = False
         out.append(l)
     open(path, "w").write("\n".join(out))
+
+
+RUST_CONFIG_FILES = ("rust-toolchain", "rust-toolchain.toml")
+RUST_DEP_TABLES = ("dependencies", "dev-dependencies", "build-dependencies")
+
+
+def rust_refusals(tree):
+    """The files of a fetched Rust tree that stop the run: a `.cargo/config(.toml)` (a rustc-wrapper, a linker, a runner are programs that cargo
+    runs) or a `rust-toolchain(.toml)` (another toolchain) at any depth. Returns [(path relative to tree, first 400 characters of it)]. Read only."""
+    found = []
+    for dp, dns, fns in os.walk(tree):
+        dns[:] = [x for x in dns if x != ".git"]
+        names = [f for f in fns if f in RUST_CONFIG_FILES]
+        if os.path.basename(dp) == ".cargo":
+            names += [f for f in fns if f in ("config", "config.toml")]
+        for f in names:
+            path = os.path.join(dp, f)
+            try:
+                body = open(path, errors="replace").read(400)
+            except OSError as e:
+                body = "(not readable: %s)" % e
+            found.append((os.path.relpath(path, tree), body))
+    return sorted(found)
+
+
+def refuse_rust(name, tree):
+    """Raises SystemExit, saying what the files hold, when rust_refusals finds any. Nothing was built or run."""
+    found = rust_refusals(tree)
+    if found:
+        raise SystemExit("deps_bench: %s: refused, nothing was built or run (the build would read the configuration of the target):\n%s" % (
+            name, "\n".join("  %s: %s" % (p, b.replace("\n", " | ")) for p, b in found)))
+
+
+def rust_no_dependencies(cargo_toml):
+    """True when the Cargo.toml (text) names no dependency of any kind (also under [target.*]) and no workspace."""
+    t = tomllib.loads(cargo_toml)
+    if "workspace" in t:
+        return False
+    if any(t.get(k) for k in RUST_DEP_TABLES):
+        return False
+    return not any(any(v.get(k) for k in RUST_DEP_TABLES) for v in (t.get("target") or {}).values())
+
+
+def minimal_lock(cargo_toml):
+    """The smallest Cargo.lock (version 4, one [[package]]) for a crate with no dependency. Only for such a crate: the caller checks."""
+    pkg = tomllib.loads(cargo_toml)["package"]
+    return '# This file is automatically @generated by Cargo.\n# It is not intended for manual editing.\nversion = 4\n\n[[package]]\nname = "%s"\nversion = "%s"\n' % (pkg["name"], pkg["version"])
+
+
+def sandbox_denies_write(dirpath, run=subprocess.run):
+    """Before a Rust run: `sandbox-exec` with a profile that denies every write must stop a `touch` (it ran and was refused: its own message, no file made).
+    Returns (ok, why). `run` is a parameter only so that the tests need no sandbox."""
+    probe = os.path.join(dirpath, "write-probe-%d" % os.getpid())
+    try:
+        r = run(["/usr/bin/sandbox-exec", "-p", "(version 1)(allow default)(deny file-write*)", "/usr/bin/touch", probe], capture_output=True, text=True)
+    except OSError as e:
+        return False, "sandbox-exec could not be started: %s" % e
+    made = os.path.exists(probe)
+    if made:
+        os.remove(probe)
+        return False, "a write under sandbox-exec was NOT denied (the file was made)"
+    if r.returncode == 0:
+        return False, "sandbox-exec ended 0 with a write that should be denied"
+    if "touch:" not in (r.stderr or "") or "not permitted" not in (r.stderr or ""):
+        return False, "sandbox-exec did not run the probe (%s)" % (r.stderr or "").strip()[-200:]
+    return True, ""
+
+
+def isolation_ok(rep):
+    """After a Rust run: summary.isolation.mode is "sandbox". Returns (ok, why)."""
+    mode = (((rep or {}).get("summary") or {}).get("isolation") or {}).get("mode")
+    return (True, "") if mode == "sandbox" else (False, "summary.isolation.mode is %r, not 'sandbox'" % (mode,))
+
+
+def uncertainty_counts(rep):
+    """{kind: count} of the uncertainties of a report; unsupported_construct and unresolved_callee are always there (0 when none)."""
+    n = {"unsupported_construct": 0, "unresolved_callee": 0}
+    for u in (rep or {}).get("uncertainties") or []:
+        n[u.get("kind", "?")] = n.get(u.get("kind", "?"), 0) + 1
+    return n
+
+
+def format_uncertainties(n):
+    return "uncertainties " + " ".join("%s=%d" % (k, v) for k, v in sorted(n.items()))
+
+
+def rust_tools():
+    """(toolchain dir, extractor) to be only read, found with the REAL home (before HOME is made empty): RIVUS_RUST_TOOLCHAIN_DIR /
+    RIVUS_RUST_EXTRACTOR, else the pinned nightly under ~/.rustup and extractor/rust/target/debug/rivus-rust. Raises SystemExit when one is not there."""
+    tc = os.environ.get("RIVUS_RUST_TOOLCHAIN_DIR")
+    if not tc:
+        chan = tomllib.load(open(os.path.join(ROOT, "extractor/rust/rust-toolchain.toml"), "rb"))["toolchain"]["channel"]
+        arch = "x86_64" if os.uname().machine == "x86_64" else "aarch64"
+        tc = os.path.join(os.path.expanduser("~"), ".rustup", "toolchains", "%s-%s-apple-darwin" % (chan, arch))
+    ex = os.environ.get("RIVUS_RUST_EXTRACTOR") or os.path.join(ROOT, "extractor/rust/target/debug/rivus-rust")
+    if not os.path.isfile(os.path.join(tc, "bin", "rustc")):
+        raise SystemExit("deps_bench: the pinned toolchain is not at %s (prepare it yourself, or set RIVUS_RUST_TOOLCHAIN_DIR; this tool never runs `rivus setup rust`)" % tc)
+    if not os.access(ex, os.X_OK):
+        raise SystemExit("deps_bench: the Rust extractor is not at %s (build extractor/rust, or set RIVUS_RUST_EXTRACTOR)" % ex)
+    return tc, ex
 
 
 def expand_args(args, src, subdir):
@@ -457,8 +583,25 @@ def median_run(runs):
 
 
 def passline(name, t, rivus, cache, outdir, limit_s, cap_gb, repeat=1):
+    """Returns (line, row). A Rust target first needs `sandbox-exec` to deny a write (else (line, None): nothing was built or run, no row) and gets an empty
+    HOME inside the cache, removed at the end; a row whose result is `isolation_failed` is a failure (run_passline: exit status 1)."""
+    if t["lang"] != "rust":
+        return passline_run(name, t, rivus, cache, outdir, limit_s, cap_gb, repeat)
+    ok, why = sandbox_denies_write(cache)
+    if not ok:
+        return "INFO %s isolation_failed: %s (before the run: nothing was built or run)" % (name, why), None
+    home = tempfile.mkdtemp(prefix="home-", dir=cache)
+    try:
+        return passline_run(name, t, rivus, cache, outdir, limit_s, cap_gb, repeat, home)
+    finally:
+        shutil.rmtree(home, ignore_errors=True)
+
+
+def passline_run(name, t, rivus, cache, outdir, limit_s, cap_gb, repeat=1, home=None):
     with tempfile.TemporaryDirectory(prefix="passline-") as work:
         env = dict(os.environ)
+        if home:
+            env["HOME"] = home  # empty: the data of rivus for Rust (os.UserConfigDir) and its cache are made here, not in the shared places
         cap = int(cap_gb * GB)
 
         def tree_for(commit):
@@ -512,14 +655,23 @@ def passline(name, t, rivus, cache, outdir, limit_s, cap_gb, repeat=1):
         coarsened = ((main["report"] or {}).get("stats") or {}).get("scc_coarsened", 0) if main["report"] is not None else None
         passed, body = judge(main["wall"], limit_s, main["peak"] / GB, cap_gb, main["converged"], detected, through, quiet, located, score, coarsened, t.get("expect_coarsened", 0))
         decided = t.get("decided", False)
+        iso_ok, iso_why, unc = True, "", None
+        if t["lang"] == "rust":
+            iso_ok, iso_why = isolation_ok(main["report"])
+            unc = uncertainty_counts(main["report"])
+            body += " " + format_uncertainties(unc) + " isolation=" + ("sandbox" if iso_ok else "FAILED(%s)" % iso_why)
         if main["why"]:
             result = "stopped_" + main["why"]
+        elif not iso_ok:
+            result = "isolation_failed"
         else:
             result = ("PASS" if passed else "FAIL") if decided else "INFO"
         extra = [a for a in t.get("args", [])] + (["-limit %g" % limit_s] if limit_s != t["time_limit_s"] else []) + (["-cap %g" % cap_gb] if cap_gb != t["mem_cap_gb"] else [])
-        extra += ["%s=%s" % (k, v) for k, v in sorted(env.items()) if k == "GOMEMLIMIT" or (k.startswith("RIVUS_") and k not in ("RIVUS_HEAVY_LOCK_HELD", "RIVUS_HEAVY_LOCK"))]
+        extra += ["%s=%s" % (k, v) for k, v in sorted(env.items()) if k == "GOMEMLIMIT" or (k.startswith("RIVUS_") and k not in ("RIVUS_HEAVY_LOCK_HELD", "RIVUS_HEAVY_LOCK", "RIVUS_RUST_TOOLCHAIN_DIR", "RIVUS_RUST_EXTRACTOR"))]  # the two paths of Rust are the paths of this machine: not written
         if repeat > 1:
             extra.append("repeat %d (median)" % repeat)
+        if unc is not None:
+            extra.append("HOME=empty dir in the cache; isolation=%s; %s" % ("sandbox" if iso_ok else "FAILED", format_uncertainties(unc)))
         row = {"target": name, "target_commit": t.get("commit") or "in-tree", "kind": "passline", "settings": "%s; %s" % (" ".join(extra) or "default", main["note"]),
                "wall_s": "%.1f" % main["wall"], "cpu_s": "%.1f" % main["cpu"], "peak_tree_gb": "%.2f" % (main["peak"] / GB),
                "converged": main["converged"], "detected": detected if score is None else "%s/%d" % ("-" if score[0] is None else score[0], score[1]), "quiet_after_fix": quiet, "exit_code": main["rc"],
@@ -546,6 +698,7 @@ def run_passline(names, a):
     targets = json.load(open(TARGETS_FILE))
     cache, outdir = cache_dir(), out_dir()
     commit = git_commit()
+    failed = []
     with tempfile.TemporaryDirectory(prefix="deps-bench-") as bw:
         rivus = a.rivus
         if not rivus:
@@ -555,7 +708,12 @@ def run_passline(names, a):
             t = targets[name]
             line, row = passline(name, t, rivus, cache, outdir, a.limit or t["time_limit_s"], a.cap or t["mem_cap_gb"], a.repeat)
             print(line, flush=True)
-            add_to_ledger(row, a, commit)
+            if row is not None:
+                add_to_ledger(row, a, commit)
+            if row is None or row.get("result") == "isolation_failed":
+                failed.append(name)
+    if failed:
+        raise SystemExit("deps_bench: the isolation check failed: %s" % ", ".join(failed))
 
 
 def main():
