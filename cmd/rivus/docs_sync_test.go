@@ -17,7 +17,7 @@ import (
 // TestDocsSync: the tables of the documents that copy a constant or a list of the code say the same as the code. The
 // code is the source: a document is not edited by hand to follow it where a test can find the difference. The checks:
 //
-//   - the kinds of uncertainty (the Kind constants of internal/taint) are the rows of AGENT-GUIDE (the table of the kinds)
+//   - the kinds of uncertainty (the Kind constants of internal/taint) are the rows of AGENT-GUIDE (the table of the kinds, from taint.Kinds)
 //     and of ARCHITECTURE 4.4 (the table of 4.4 is the output of `make docs-gen WHAT=kinds`, from taint.Kinds);
 //   - the first words of a `depth_limit` detail (the reasons) that the code writes are in the row of AGENT-GUIDE, and the
 //     words that the two documents list exist in the code;
@@ -149,11 +149,23 @@ func TestDocsSync(t *testing.T) {
 	if len(kinds) < 20 {
 		t.Fatalf("the Kind constants of internal/taint: %d found", len(kinds))
 	}
-	same("the kinds, AGENT-GUIDE", "the code", kinds, "the document", firstColumn(section(agent, "### 不確実性の kind")))
+	// AGENT-GUIDE: the table between the markers is the table of the code (taint.Kinds), made by `make docs-gen WHAT=kinds`;
+	// the table below it (how to read a kind, what to do) has a row for each kind of the code and for nothing else
+	agentKinds := strings.Join(section(agent, "### 不確実性の kind"), "\n")
+	const kindsBegin, kindsEnd = "<!-- kinds:begin -->\n", "<!-- kinds:end -->"
+	if i, j := strings.Index(agentKinds, kindsBegin), strings.Index(agentKinds, kindsEnd); i < 0 || j < i {
+		t.Error("AGENT-GUIDE has no table between `<!-- kinds:begin -->` and `<!-- kinds:end -->`")
+	} else if got := agentKinds[i+len(kindsBegin) : j]; got != taint.KindsTable() {
+		t.Errorf("the table of the kinds in AGENT-GUIDE is not the table of the code. Replace what is between the markers with the output of `make docs-gen WHAT=kinds`.\ndocument:\n%s\ncode:\n%s", got, taint.KindsTable())
+	}
+	if i := strings.Index(agentKinds, "#### kind ごとの読み方と、見たときの動き"); i < 0 {
+		t.Error("AGENT-GUIDE has no section `#### kind ごとの読み方と、見たときの動き`")
+	} else {
+		same("the kinds, AGENT-GUIDE", "the code", kinds, "the document", firstColumn(strings.Split(agentKinds[i:], "\n")))
+	}
 	// ARCHITECTURE 4.4: the table between the markers is the table of the code (taint.Kinds), made by `make docs-gen WHAT=kinds`
 	archLines := section(arch, "### 4.4")
 	archKinds := strings.Join(archLines, "\n")
-	const kindsBegin, kindsEnd = "<!-- kinds:begin -->\n", "<!-- kinds:end -->"
 	if i, j := strings.Index(archKinds, kindsBegin), strings.Index(archKinds, kindsEnd); i < 0 || j < i {
 		t.Error("ARCHITECTURE 4.4 has no table between `<!-- kinds:begin -->` and `<!-- kinds:end -->`")
 	} else if got := archKinds[i+len(kindsBegin) : j]; got != taint.KindsTable() {
