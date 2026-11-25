@@ -4,6 +4,7 @@ package sandbox
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -61,7 +62,7 @@ func TestSandboxEnvironmentHoldsOnlyWhatIsGiven(t *testing.T) {
 
 func TestSandboxUnavailableStopsWithoutRunning(t *testing.T) {
 	t.Setenv("PATH", "/nonexistent")
-	if _, err := Run(context.Background(), Spec{Argv: []string{"/usr/bin/true"}}); err != ErrUnavailable {
+	if _, err := Run(context.Background(), Spec{Argv: []string{"/usr/bin/true"}}); !errors.Is(err, ErrUnavailable) {
 		t.Errorf("without sandbox-exec: %v, want ErrUnavailable (nothing is run)", err)
 	}
 }

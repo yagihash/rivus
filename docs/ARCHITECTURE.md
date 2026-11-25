@@ -368,8 +368,9 @@ internal/
   graphdb/                コールグラフを SQLite に保存して読む（12 節）
   graphq/                 保存したグラフへの問い合わせ（callers / callees / path / impls / dispatchers）
   vcs/                    解析したコードのリビジョン
-  sandbox/                macOS のサンドボックス（Seatbelt）の下でプログラムを動かす（15 節）
-    probe/                サンドボックスの試験用。敵対的なビルドスクリプトがしそうなことを 1 つずつ試し、出られたかを答えるコマンド
+  sandbox/                サンドボックスの下でプログラムを動かす。macOS は Seatbelt、Linux は Landlock と seccomp（15 節。docs/DESIGN-linux-sandbox.md）
+    probe/                サンドボックスの試験用（macOS）。敵対的なビルドスクリプトがしそうなことを 1 つずつ試し、出られたかを答えるコマンド
+    probelinux/           同じものの Linux 版
   docsgen/                台帳と ADR、課題から文書の一覧を作る（`scripts/docs-gen`）
   extractorhash/          extractor のソースのハッシュの計算(`scripts/extractor-hash`、`rivus setup`。ADR-126)
   testutil/               testdata ハーネス
@@ -838,7 +839,7 @@ sink は、位置の引数のうち、**どのフィールドが危険か**を�
 
 ## 15. 隔離（信頼できない Rust の読み込み）
 
-Rust の extractor は、対象をビルドする（`cargo check`）ので、対象の `build.rs`、proc macro、`[build-dependencies]` が動く。（`-lang` なしでは、`Cargo.toml` があるとき `[Y/n]` と聞く。端末でないときは `-yes` が必要。読まなかった言語は `summary.unread.skipped_languages` に残る。docs/rust-isolation.md）そこで `rivus analyze -lang rust` と `rivus extract -lang rust` は、**macOS では既定で、OS のサンドボックス（Seatbelt、`sandbox-exec`）の下で動かす**（ADR-093。以前の Docker のコンテナ（ADR-064）の経路は、なくなった）。プロファイルは、既定ですべて拒否し、必要なものだけを許す。2 段階で、取得（ネットワークあり。`cargo fetch --locked` だけ。ビルドしない。対象の `.cargo` の設定は使わない）と、抽出（ネットワークなし。`cargo check --offline --locked`。書けるのは作業ディレクトリだけ）。ホストの環境変数は渡さず、対象と取得したものは読み取り専用で、IR は標準出力でだけ返す。時間の上限と、プロセスグループごとの kill がある（メモリ・CPU・プロセス数の強い上限はない）。**Linux には隔離の手段がないので、既定では何も実行せずに止まる。**ホストで直接動かすのは、`-unsafe-host-exec`（信頼できるコードだけ）。コードは `cmd/rivus/isolate.go`、`isolate_fetch.go`、`isolate_sandbox_darwin.go`、`internal/sandbox/`、`lang.go`。詳しくは [rust-isolation.md](rust-isolation.md)。ルールは、解析対象の `.rivus/rules` からも読まれる（`-no-project-rules` で外せ、消せる量は `project_rules` が出す）。Go と Dart の extractor は、サンドボックスの下では動かさない。macOS のサンドボックスでは、`-isolation-env` に `DEVELOPER_DIR` がなく、コマンドラインツールがあるとき、ビルドの `DEVELOPER_DIR` をそこに向ける（Xcode.app は読ませないため。`summary.isolation.developer_dir`。`cmd/rivus/isolate_devdir.go`）。
+Rust の extractor は、対象をビルドする（`cargo check`）ので、対象の `build.rs`、proc macro、`[build-dependencies]` が動く。（`-lang` なしでは、`Cargo.toml` があるとき `[Y/n]` と聞く。端末でないときは `-yes` が必要。読まなかった言語は `summary.unread.skipped_languages` に残る。docs/rust-isolation.md）そこで `rivus analyze -lang rust` と `rivus extract -lang rust` は、**macOS では既定で、OS のサンドボックス（Seatbelt、`sandbox-exec`）の下で動かす。Linux でも、Landlock があれば、Landlock と seccomp の下で、同じ 2 段階で動かす（試作。docs/DESIGN-linux-sandbox.md）**（ADR-093。以前の Docker のコンテナ（ADR-064）の経路は、なくなった）。プロファイルは、既定ですべて拒否し、必要なものだけを許す。2 段階で、取得（ネットワークあり。`cargo fetch --locked` だけ。ビルドしない。対象の `.cargo` の設定は使わない）と、抽出（ネットワークなし。`cargo check --offline --locked`。書けるのは作業ディレクトリだけ）。ホストの環境変数は渡さず、対象と取得したものは読み取り専用で、IR は標準出力でだけ返す。時間の上限と、プロセスグループごとの kill がある（メモリ・CPU・プロセス数の強い上限はない）。**サンドボックスが作れないとき（Landlock のない Linux など）は、既定では何も実行せずに止まる。**ホストで直接動かすのは、`-unsafe-host-exec`（信頼できるコードだけ）。コードは `cmd/rivus/isolate.go`、`isolate_fetch.go`、`isolate_sandbox_darwin.go`、`isolate_sandbox_linux.go`、`internal/sandbox/`、`lang.go`。詳しくは [rust-isolation.md](rust-isolation.md)。ルールは、解析対象の `.rivus/rules` からも読まれる（`-no-project-rules` で外せ、消せる量は `project_rules` が出す）。Go と Dart の extractor は、サンドボックスの下では動かさない。macOS のサンドボックスでは、`-isolation-env` に `DEVELOPER_DIR` がなく、コマンドラインツールがあるとき、ビルドの `DEVELOPER_DIR` をそこに向ける（Xcode.app は読ませないため。`summary.isolation.developer_dir`。`cmd/rivus/isolate_devdir.go`）。
 
 ## 16. メモリ
 
