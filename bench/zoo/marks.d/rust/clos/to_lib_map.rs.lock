@@ -1,0 +1,2 @@
+rust	clos/to_lib_map.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	clos/to_lib_map.rs	sink-none	@sink(none) @nosink(clos-to-lib-map-decoy)	fn decoy() { @decoy

@@ -11,14 +11,11 @@
 //! @todo(F/cont/ptr-commaok-assert: PARITY: Go's pointer taken out of an interface by a comma-ok assertion and written through; Rust can write through `&mut T` from `Any::downcast_mut::<T>()` on a `&mut dyn Any` and read the owner back; the cell is not written yet)
 //! @todo(F/cont/ptr-commaok-map: PARITY: Go's pointer taken out of a map by a comma-ok index and written through; Rust can write through the `&mut V` of `if let Some(p) = map.get_mut(..)` and read the map back; the cell is not written yet)
 //! @todo(F/cont/ptr-range-map: PARITY: Go's pointer that is the value of a range over a map and written through; Rust can write through the `&mut V` of `for p in map.values_mut()` and read the map back; the cell is not written yet)
-//! @todo(F/cont/ptr-type-switch: PARITY: Go's pointer bound by a type switch and written through; Rust can write through the `&mut T` bound by a `match` on a `&mut enum` and read the owner back; the cell is not written yet)
 //! @todo(F/cont/ptr-index-slice: PARITY: Go's pointer that is an element of a slice and written through; Rust can write through the `&mut T` of `v.get_mut(i)` on a `Vec<T>` and read the vector back; the cell is not written yet)
 //! @todo(F/cont/ptr-range-slice: PARITY: Go's pointer that is the value of a range over a slice and written through; Rust can write through the `&mut T` of `for p in v.iter_mut()` and read the vector back; the cell is not written yet)
-//! @todo(F/cont/ptr-value-copy: PARITY: Go's copy of a value (not a pointer) taken by an assertion or a range is not an alias of the original; Rust can write to a `Copy` value that was copied out of a container and read the container back; the cell is not written yet)
 //! @todo(F/conv/char-decode-rune: PARITY: Go's buffer type that reads the text with `utf8.DecodeRuneInString` in a loop, appends `byte(r)` to a `[]byte` field and gives the text back by slicing; Rust can read `char_indices()` or `chars()`, push `c as u8` to a `Vec<u8>` field and slice it back; the cell is not written yet)
 //! @todo(F/conv/char-range-append: PARITY: Go's range loop over the text that appends `byte(r)` to a `[]byte` converted back whole; Rust can loop over `chars()` and push `c as u8` to a `Vec<u8>`, then `String::from_utf8`; the cell is not written yet)
 //! @todo(F/clos/to-lib-where: PARITY: a closure given to a function of the standard library that tests the elements of a collection (Go: slices.IndexFunc, ContainsFunc, DeleteFunc); Rust has `Vec::retain`, `Iterator::position`, `any` and the like; the cell is not written yet)
-//! @todo(F/clos/to-lib-map: PARITY: a closure given to a function of the standard library that tests the entries of a map (Go: maps.DeleteFunc); Rust has `HashMap::retain`; the cell is not written yet)
 pub mod call {
     pub mod depth3;
     pub mod direct;
@@ -38,6 +35,7 @@ pub mod clos {
     pub mod to_later;
     pub mod to_lib;
     pub mod to_lib_call;
+    pub mod to_lib_map;
     pub mod to_lib_ref;
     pub mod to_nomodel;
     pub mod to_nomodel_ref;
@@ -47,6 +45,8 @@ pub mod clos {
 }
 pub mod cont {
     pub mod map_key_vs_value;
+    pub mod ptr_type_switch;
+    pub mod ptr_value_copy;
     pub mod slice;
     pub mod struct_whole_to_sink;
 }
