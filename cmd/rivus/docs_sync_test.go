@@ -14,7 +14,7 @@ import (
 )
 
 // TestDocsSync: the tables of the documents that copy a constant or a list of the code say the same as the code. The
-// code is the source: a document is not edited by hand to follow it where a test can find the difference. The five checks:
+// code is the source: a document is not edited by hand to follow it where a test can find the difference. The checks:
 //
 //   - the kinds of uncertainty (the Kind constants of internal/taint) are the rows of AGENT-GUIDE (the table of the kinds)
 //     and of ARCHITECTURE 4.4;
@@ -23,6 +23,10 @@ import (
 //   - the flags of `analyze` in AGENT-GUIDE section 4: the usual flags are the same set as the code's; a flag of the table
 //     of the diagnostic flags is one of the code, with its default value;
 //   - the keys of a rule file in MODELING.md section 6 are the `yaml:` keys of internal/model/model.go;
+//   - the DESIGN-*.md files are all in docs/README.md, and the state at the head of each is one of the three of README
+//     (案 / 一部実装 / 実装済み);
+//   - the directories of internal/ (with a Go file) and of cmd/ are in the list of the packages of ARCHITECTURE 3, and the
+//     internal/ paths of the list exist;
 //   - the rows of the pass line (`pass_line` of bench/deps-targets.json, `make docs-gen WHAT=passline`) are named in
 //     bench/passline-baseline.md, and the table is not copied there.
 func TestDocsSync(t *testing.T) {
@@ -323,5 +327,82 @@ func TestDocsSync(t *testing.T) {
 	}
 	if !strings.Contains(baseline, "docs-gen WHAT=passline") {
 		t.Error("bench/passline-baseline.md does not point to `make docs-gen WHAT=passline`")
+	}
+
+	// 6. the DESIGN documents: each is in docs/README.md, and its state is one of the three
+	readme := read("docs", "README.md")
+	designs, _ := filepath.Glob(filepath.Join(root, "docs", "DESIGN-*.md"))
+	if len(designs) < 10 {
+		t.Fatalf("docs/DESIGN-*.md: %d found", len(designs))
+	}
+	stateRe := regexp.MustCompile(`(?:状態|Status):\s*\**\s*(案|一部実装|実装済み)`)
+	for _, d := range designs {
+		name := filepath.Base(d)
+		if !strings.Contains(readme, "]("+name+")") {
+			t.Errorf("docs/README.md does not list docs/%s", name)
+		}
+		lines := strings.Split(read("docs", name), "\n")
+		if len(lines) > 12 {
+			lines = lines[:12]
+		}
+		if !stateRe.MatchString(strings.Join(lines, "\n")) {
+			t.Errorf("docs/%s: no state (案 / 一部実装 / 実装済み, after `状態:`) in the first lines", name)
+		}
+	}
+
+	// 7. the directories of the code are in the list of the packages (ARCHITECTURE 3)
+	listedDirs := map[string]bool{}
+	inInternal := false
+	topRe := regexp.MustCompile(`^(\S+)/(\s|$)`)
+	subRe := regexp.MustCompile(`^( {2}| {4})(\S+)/(\s|$)`)
+	top := ""
+	for _, l := range section(arch, "## 3.") {
+		if m := topRe.FindStringSubmatch(l); m != nil {
+			inInternal = m[1] == "internal"
+			if strings.HasPrefix(m[1], "cmd/") {
+				listedDirs[m[1]] = true
+			}
+			continue
+		}
+		if m := subRe.FindStringSubmatch(l); m != nil && inInternal {
+			if len(m[1]) == 2 {
+				top = m[2]
+				listedDirs["internal/"+top] = true
+			} else if top != "" {
+				listedDirs["internal/"+top+"/"+m[2]] = true
+			}
+		}
+	}
+	hasGo := map[string]bool{}
+	for _, base := range []string{"internal", "cmd"} {
+		err := filepath.WalkDir(filepath.Join(root, base), func(p string, e os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if e.IsDir() {
+				if e.Name() == "testdata" {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if strings.HasSuffix(p, ".go") {
+				rel, _ := filepath.Rel(root, filepath.Dir(p))
+				hasGo[filepath.ToSlash(rel)] = true
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	for d := range hasGo {
+		if !listedDirs[d] {
+			t.Errorf("ARCHITECTURE 3 does not list the directory %s (it has Go files)", d)
+		}
+	}
+	for d := range listedDirs {
+		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(d))); err != nil {
+			t.Errorf("ARCHITECTURE 3 lists %s, and there is no such directory", d)
+		}
 	}
 }

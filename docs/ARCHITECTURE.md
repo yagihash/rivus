@@ -358,6 +358,7 @@ internal/
   graphq/                 保存したグラフへの問い合わせ（callers / callees / path / impls / dispatchers）
   vcs/                    解析したコードのリビジョン
   sandbox/                macOS のサンドボックス（Seatbelt）の下でプログラムを動かす（15 節）
+    probe/                サンドボックスの試験用。敵対的なビルドスクリプトがしそうなことを 1 つずつ試し、出られたかを答えるコマンド
   docsgen/                台帳と ADR、課題から文書の一覧を作る（`scripts/docs-gen`）
   testutil/               testdata ハーネス
 extractor/                Dart と Rust の extractor（dart/、rust/。それぞれ別言語のプロジェクト）

@@ -1,6 +1,6 @@
 # Memory: where it goes, and the designs to bring it down
 
-> **Status: implemented in part; the ADRs and ARCHITECTURE are the reference** (the designs that were here are removed)
+> **Status: 一部実装 (implemented in part); the ADRs and ARCHITECTURE are the reference** (the designs that were here are removed)
 
 On Go with the dependencies read (the default; `-no-deps` leaves them out), **the peak is in loading and in building go/ssa**, not in the analysis. Numbers are not written here: the ledger (`bench/heavy-ledger.tsv`) holds them.
 
