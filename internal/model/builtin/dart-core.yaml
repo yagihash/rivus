@@ -160,6 +160,7 @@ propagators:
     calls: [{fn: arg0, with: [recv]}]
   - symbol: dart:core#Iterable.singleWhere
     flows: [{from: recv, to: result}]
+    calls: [{fn: arg0, with: [recv]}]
   - symbol: dart:core#Iterable.whereType
     flows: [{from: recv, to: result}]
   - symbol: dart:core#Iterable.iterator
@@ -284,6 +285,7 @@ propagators:
     calls: [{fn: arg0, with: [recv], ret: result0}]
   - symbol: dart:core#Iterable.expand
     flows: [{from: recv, to: result}, {from: args, to: result}]
+    calls: [{fn: arg0, with: [recv], ret: result0}]
   - symbol: dart:core#Iterable.fold
     flows: [{from: recv, to: result}, {from: args, to: result}]
     calls: [{fn: arg1, with: [arg0, recv], ret: result0}]

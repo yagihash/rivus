@@ -50,6 +50,18 @@ Future<void> main() async {
   {
     final r = Rec();
     final Iterable<String> it = Iterable<String>.generate(1, (_) => 'RECV');
+    final res = it.singleWhere((x) { r.see([x]); return true; });
+    add('dart:core#Iterable.singleWhere', recv, r, res);
+  }
+  {
+    final r = Rec();
+    final Iterable<String> it = Iterable<String>.generate(1, (_) => 'RECV');
+    final res = it.expand((x) { r.see([x]); return <String>['Ж']; }).toList();
+    add('dart:core#Iterable.expand', recv, r, res);
+  }
+  {
+    final r = Rec();
+    final Iterable<String> it = Iterable<String>.generate(1, (_) => 'RECV');
     final res = it.lastWhere((x) { r.see([x]); return true; });
     add('dart:core#Iterable.lastWhere', recv, r, res);
   }
