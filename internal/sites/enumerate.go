@@ -860,7 +860,8 @@ func givenSinks(irsrc ir.Source, fn *ir.Func, rc rowCall, rules *model.Rules, ca
 // givenSources are the source sites of a call that is given a function that the rules declare a source, when the row of
 // calls sends the result of the function to the result of the call (or an operand): the site is at the call, and what
 // the function returns is put where the row sends it (Site.RetTo). A call that has a site of the same source at the same
-// place already (the call of the function value that an extractor writes) has no second one.
+// place already has no second one. (The call of the function value that the Dart extractor writes for `map` and `then` has a
+// source site of its own at the same place, and puts what the function returns nowhere: it is not the same site.)
 func givenSources(rules *model.Rules, in ir.Instr, rc rowCall, c givenCall, csym string, id ir.FuncID, have, out []*Site) []*Site {
 	if c.ret == "" || c.anyOf {
 		return nil
@@ -875,7 +876,7 @@ func givenSources(rules *model.Rules, in ir.Instr, rc rowCall, c givenCall, csym
 		return nil
 	}
 	for _, h := range append(append([]*Site(nil), have...), out...) {
-		if h.Role == RoleSource && h.Symbol == csym && h.irpos == in.Pos {
+		if h.Role == RoleSource && h.Symbol == csym && h.irpos == in.Pos && h.Given != nil && h.RetTo == c.ret {
 			return nil
 		}
 	}

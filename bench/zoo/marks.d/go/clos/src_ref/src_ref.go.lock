@@ -1,0 +1,4 @@
+go	clos/src_ref/src_ref.go	sink-none	@sink(none)	func fixed() { @fixed
+go	clos/src_ref/src_ref.go	sink-none	@sink(none)	func fixed() { @fixed
+go	clos/src_ref/src_ref.go	sink-none	@sink(none) @nosink(clos-src-ref-decoy)	func decoy() { @decoy
+go	clos/src_ref/src_ref.go	sink-none	@sink(none) @nosink(clos-src-ref-decoy)	func decoy() { @decoy
