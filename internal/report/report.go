@@ -198,6 +198,9 @@ type Summary struct {
 	// Isolation says how a Rust project was read: reading it runs the build scripts and the macros of the project. Absent when no Rust
 	// project was read (Go and Dart are not built).
 	Isolation *Isolation `json:"isolation,omitempty"`
+	// Extractor says which source each extractor that ran was built from, and whether that is the source this rivus was built with (ADR-126):
+	// one entry for each of Dart and Rust, in the order they were read. A run from -ir has one entry, with Match "n/a(-ir)". Absent for Go only.
+	Extractor []ExtractorCheck `json:"extractor,omitempty"`
 	// BodyReplacedPackages are the packages of the dependencies whose body was not read because a model declares that it
 	// stands for it (body_replaced_packages of a rule file, or -body-replaced): a call of their functions is the model
 	// when it has a row for the function, and unmodeled_library_call when it has none; code inside them is not
@@ -476,6 +479,27 @@ type Isolation struct {
 	Detail string `json:"detail"`
 	// DeveloperDir is the DEVELOPER_DIR that the build got under the sandbox (macOS); absent when none was set.
 	DeveloperDir *DeveloperDir `json:"developer_dir,omitempty"`
+}
+
+// ExtractorCheck is the answer of an extractor to "which source were you built from?", read once before the analysis, and the comparison with the
+// value this rivus was built with. It never stops the run: a different source gives a result that may differ, and is recorded (ADR-126).
+type ExtractorCheck struct {
+	// Lang is "rust" or "dart"; absent in the entry of -ir (a stored stream has no extractor to ask).
+	Lang string `json:"lang,omitempty"`
+	// Path is the extractor that was asked (absolute).
+	Path string `json:"path,omitempty"`
+	// Schema is the version of the IR that the extractor says it writes.
+	Schema string `json:"schema,omitempty"`
+	// SourceHash is the hash of the source the extractor was built from ("unknown": it was built without it, or it did not answer).
+	SourceHash string `json:"source_hash,omitempty"`
+	// ExpectedHash is the hash of the source of the extractor that this rivus was built with ("unknown": a plain go build).
+	ExpectedHash string `json:"expected_hash,omitempty"`
+	// Match is "yes" (both known and equal), "no" (both known and different: build the extractor again), "unknown_binary" (this rivus was built
+	// without its hash: build rivus with make build), "unknown_extractor" (the extractor did not say: an old one, a failed or timed out call, or
+	// built without the hash: build it again), "unchecked" (it was not asked: no isolation to run it in), or "n/a(-ir)".
+	Match string `json:"match"`
+	// Detail says why for every Match but "yes".
+	Detail string `json:"detail,omitempty"`
 }
 
 // DeveloperDir is the developer directory of the build: Source is "user" (-isolation-env) or "default" (the Command Line Tools,

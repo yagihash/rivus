@@ -9,7 +9,7 @@ import (
 // flagCommands are the commands that have flags (the list that the tests of the flags and of -h go through).
 var flagCommands = [][]string{
 	{"analyze"}, {"index"}, {"query"}, {"resolve"}, {"sites"}, {"models", "coverage"}, {"models", "versions"}, {"setup", "rust"}, {"setup", "dart"}, {"cache", "clean"}, {"debug", "extract"},
-	{"graph", "info"}, {"graph", "callers"}, {"graph", "callees"}, {"graph", "path"}, {"graph", "impls"}, {"graph", "dispatchers"},
+	{"graph", "info"}, {"graph", "callers"}, {"graph", "callees"}, {"graph", "path"}, {"graph", "impls"}, {"graph", "dispatchers"}, {"version"},
 }
 
 // -h of every command ends with 0 and prints no error; a command that needs a command under it ends with 2 when it is given none.
