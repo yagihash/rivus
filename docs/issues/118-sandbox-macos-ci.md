@@ -1,6 +1,6 @@
 # #118 macOS の CI のワークフロー(ツールチェインを入れて抽出まで)と、macOS の TestDogfood
 
-- 状態: **partial**(後回しのハードニング。ADR-093。抽出までの確認は `sandbox-e2e` ジョブで入れた。macOS の `TestDogfood` は、まだ)
+- 状態: **partial**(後回しのハードニング。ADR-093。抽出までの確認は `sandbox-e2e-darwin` ジョブ(と Linux の `sandbox-e2e-linux`)で入れた。macOS の `TestDogfood` は、まだ)
 - 種類: CI
 - 言語: Rust
 - ROADMAP の節: 0
@@ -18,6 +18,6 @@
 
 ## 経緯
 
-- 2026-11-25: `ci.yml` の `sandbox-e2e` ジョブ(`scripts/sandbox-e2e.sh`。macOS と Linux)で、固定の nightly と extractor を用意し、悪意のある crate を、サンドボックスの下で、取得から抽出まで読むようにした(Linux の隔離の追加: ADR-128 と一緒に)。`RIVUS_SBX_NET=1` の取得のテストと、macOS の `TestDogfood` は、まだ。
+- 2026-11-25: `ci.yml` の `sandbox-e2e-darwin` と `sandbox-e2e-linux` ジョブ(`scripts/sandbox-e2e.sh`)で、固定の nightly と extractor を用意し、悪意のある crate を、サンドボックスの下で、取得から抽出まで読むようにした(Linux の隔離の追加: ADR-128 と一緒に)。`RIVUS_SBX_NET=1` の取得のテストと、macOS の `TestDogfood` は、まだ。
 
 - 2026-11-22: macOS のサンドボックスへの切り替え(ADR-093)で、ユーザーが「切り替えを先に、ハードニングは後」と決めた分として、課題に上げた。
