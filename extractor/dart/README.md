@@ -113,7 +113,7 @@ file_content]`, so that the label a sanitizer adds does not make it fire.
 - **Streams**: what a generator (`async*`, `sync*`) yields is collected in its result, so
   `await for` and `for` over a call of it see the values. A stream passed through a
   `StreamController` is modeled (`dart-async.yaml`); `Stream.listen`, `Future.then` and the
-  callbacks of `Iterable` (`forEach`, `map`, `where`, ...) are called with what the receiver holds.
+  callbacks of `Iterable` (`forEach`, `map`, `where`, ...) are called with what the receiver holds by the `calls:` rows of the models (`dart-core.yaml`, `dart-async.yaml`), not by the extractor.
 - **Named parameters** of an override that adds one the base does not have may shift
   the others (by name, the usual case lines up).
 - **Dependencies** are read by default (`--no-deps` leaves them out; `dart:*` is not read): calls into a
