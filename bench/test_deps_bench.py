@@ -586,6 +586,7 @@ class RustRoad(unittest.TestCase):
             for sdk in ("/x/sdk", None):
                 env = dict(os.environ)
                 env.pop("BENCH_RUST_SDKROOT", None)
+                env["RIVUS_RUST_DATA_DIR"] = os.path.join(w, "rust-data")  # outside the shared place (bench/rustenv.py)
                 if sdk:
                     env["BENCH_RUST_SDKROOT"] = sdk
                 d.analyze_once("rivus", {"lang": "rust", "args": ["-timeout", "600s"]}, w, env, 10, 10, w, "t")

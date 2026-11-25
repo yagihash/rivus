@@ -69,6 +69,7 @@ import tomllib
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from heavylock import heavy_lock, snapshot, format_snapshots  # one lock for the heavy runs of the whole machine (bench/heavylock.py)
+import rustenv  # the data of rivus for Rust is not the shared place (bench/rustenv.py)
 import heavy_ledger  # the one ledger of the heavy measurements (bench/heavy_ledger.py)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -633,6 +634,8 @@ def rust_sdkroot_args(env):
 def analyze_once(rivus, t, src, env, limit_s, cap_bytes, work, tag):
     """One run with the default flags (t["args"]). Returns dict: wall, cpu, peak (= b, the whole process tree: the
     memory of the verdict), peak_a (the main process), peak_how, big, converged, why, report."""
+    if t["lang"] == "rust":
+        rustenv.require_rust_data_dir(env, "deps_bench")
     cmd = [rivus, "analyze", "-lang", t["lang"], "-C", src] + expand_args(t.get("args", []), src, t.get("subdir", "")) + (rust_sdkroot_args(env) if t["lang"] == "rust" else [])
     outp, errp = os.path.join(work, tag + ".out.json"), os.path.join(work, tag + ".err")
     with heavy_lock("deps_bench analyze " + tag):

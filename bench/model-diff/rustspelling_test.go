@@ -148,3 +148,29 @@ func TestSkipReason(t *testing.T) {
 		t.Error("no extractor must be a skip")
 	}
 }
+
+func TestRustDataDirProblem(t *testing.T) {
+	home := t.TempDir()
+	shared := filepath.Join(home, "Library", "Application Support", "rivus")
+	if err := os.MkdirAll(shared, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	env := func(m map[string]string) func(string) string { return func(k string) string { return m[k] } }
+	tmp := t.TempDir()
+	for _, c := range []struct {
+		name string
+		env  map[string]string
+		stop bool
+	}{
+		{"not set, real home", map[string]string{"HOME": home}, true},
+		{"not set, no home", map[string]string{}, true},
+		{"the shared place", map[string]string{"RIVUS_RUST_DATA_DIR": filepath.Join(shared, "rust")}, true},
+		{"outside", map[string]string{"HOME": home, "RIVUS_RUST_DATA_DIR": filepath.Join(tmp, "data")}, false},
+		{"empty home, not set", map[string]string{"HOME": tmp}, false},
+		{"same prefix", map[string]string{"RIVUS_RUST_DATA_DIR": shared + "-other"}, false},
+	} {
+		if got := rustDataDirProblem(env(c.env), home, "darwin") != ""; got != c.stop {
+			t.Errorf("%s: stop = %v, want %v", c.name, got, c.stop)
+		}
+	}
+}

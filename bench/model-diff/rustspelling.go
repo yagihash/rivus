@@ -482,11 +482,52 @@ func listedInQueue(repo, pkg string) bool {
 	return bytes.Contains(data, []byte(pkg)) || bytes.Contains(data, []byte(strings.ReplaceAll(pkg, "_", "-")))
 }
 
+// rustDataDirProblem says why a run of Rust with this environment would use the shared place of the user ("" if it would not): RIVUS_RUST_DATA_DIR
+// is not set, or it points under <real home>/Library/Application Support/rivus (darwin; <real home>/.config/rivus elsewhere). The same rule as
+// bench/rustenv.py (issue #227): a worker's run writes nothing there. get reads the environment.
+func rustDataDirProblem(get func(string) string, realHome, goos string) string {
+	sub := []string{".config", "rivus"}
+	if goos == "darwin" {
+		sub = []string{"Library", "Application Support", "rivus"}
+	}
+	var real func(p string) string // symlinks resolved as far as the path exists (like os.path.realpath)
+	real = func(p string) string {
+		p = filepath.Clean(p)
+		if r, err := filepath.EvalSymlinks(p); err == nil {
+			return r
+		}
+		if d := filepath.Dir(p); d != p {
+			return filepath.Join(real(d), filepath.Base(p))
+		}
+		return p
+	}
+	shared := real(filepath.Join(append([]string{realHome}, sub...)...))
+	eff := get("RIVUS_RUST_DATA_DIR")
+	if eff == "" {
+		home := get("HOME")
+		if home == "" {
+			home = realHome
+		}
+		eff = filepath.Join(append([]string{home}, append(sub, "rust")...)...)
+	}
+	path := real(eff)
+	if path == shared || strings.HasPrefix(path, shared+string(filepath.Separator)) {
+		return "a run of Rust would use the shared place of rivus (" + path + "), which it writes (cargo fetch, the built extractor); point it outside: RIVUS_RUST_DATA_DIR=~/tmp/<dir>"
+	}
+	return ""
+}
+
 func realRustMain(o RustOptions) int {
 	say := func(f string, a ...any) { fmt.Fprintf(os.Stdout, f+"\n", a...) }
 	if reason := SkipReason(o.Extractor); reason != "" {
 		say("SKIPPED (exit %d): %s", exitRustSkipped, reason)
 		return exitRustSkipped
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		if why := rustDataDirProblem(os.Getenv, home, runtime.GOOS); why != "" {
+			fmt.Fprintln(os.Stderr, "model-diff:", why)
+			return exitRustUsage
+		}
 	}
 	if !listedInQueue(o.Repo, o.Pkg) {
 		fmt.Fprintf(os.Stderr, "model-diff: %s is not in docs/MODEL-QUEUE.md: only the listed public crates are fetched without asking\n", o.Pkg)
