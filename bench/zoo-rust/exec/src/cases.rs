@@ -19,6 +19,7 @@ pub fn register_all() {
     c::clos::to_later::register();
     c::clos::to_lib::register();
     c::clos::to_lib_call::register();
+    c::clos::to_lib_map::register();
     c::clos::to_lib_ref::register();
     c::clos::to_sort::register();
     c::clos::to_nomodel::register();
@@ -27,6 +28,8 @@ pub fn register_all() {
     c::clos::to_own_helper::register();
     c::clos::two_callers::register();
     c::cont::map_key_vs_value::register();
+    c::cont::ptr_type_switch::register();
+    c::cont::ptr_value_copy::register();
     c::cont::slice::register();
     c::cont::struct_whole_to_sink::register();
     c::conv::buffer_writestring::register();
