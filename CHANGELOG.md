@@ -1,5 +1,23 @@
 # Changelog
 
+## [v0.0.16](https://github.com/yagihash/rivus/compare/v0.0.15...v0.0.16) - 2026-11-25
+
+### Features
+- ci: Actions の lint(ghalint、actionlint)を ci.yml のジョブにして ci-ok に入れる by @yagihash in https://github.com/yagihash/rivus/pull/496
+- taint: 関数値を FUNC の要素で運ぶ(Dart、#210 段階 1) by @yagihash in https://github.com/yagihash/rivus/pull/475
+- scripts: 断るパスの一覧を .github/guardrail-paths に集め、merge-pr.sh が読む by @yagihash in https://github.com/yagihash/rivus/pull/489
+- ci: main の CI の結果を PR の commit status(main-ci)にする by @yagihash in https://github.com/yagihash/rivus/pull/488
+- taint: scc_coarsened の文言に、通った依存の関数、深さ 0 の意味、確かめ方を入れる by @yagihash in https://github.com/yagihash/rivus/pull/481
+- taint: 粗く解いた SCC の構造化した項目と、finding の through_coarsened_scc を足す by @yagihash in https://github.com/yagihash/rivus/pull/490
+- taint: 巨大な SCC の安全網を既定で有効にする(-scc-coarsen、既定 5,500、ADR-124) by @yagihash in https://github.com/yagihash/rivus/pull/491
+- bench: dart-synth にサイズ F(依存へ関数値を渡す形)を足す by @yagihash in https://github.com/yagihash/rivus/pull/501
+- taint: applySummary の割り当てを減らす(結果は変えない) by @yagihash in https://github.com/yagihash/rivus/pull/474
+- bench: コストの退行の警告(G12)を compare.sh と PR の CI に足す by @yagihash in https://github.com/yagihash/rivus/pull/502
+### Bug Fixes
+- taint: クロージャが捕まえた引数への書き込みを、Go でも要約に出す(TestDogfood の流れの喪失) by @yagihash in https://github.com/yagihash/rivus/pull/494
+- cmd/rivus: sidesOf のグローバルな map を mutex で守る(TestOffByDefaultFlags の競合) by @yagihash in https://github.com/yagihash/rivus/pull/497
+- bench: graph-check の収束しないだけの場合を終了コード 4 にし、zoo-go だけ CI で許す by @yagihash in https://github.com/yagihash/rivus/pull/498
+
 ## [v0.0.15](https://github.com/yagihash/rivus/compare/v0.0.14...v0.0.15) - 2026-11-24
 
 ### Features
