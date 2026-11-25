@@ -71,14 +71,22 @@ class Parse(unittest.TestCase):
         self.assertIsNone(m.parse_no_edge_dart("Traceback"))
 
 
+class CallCheck(unittest.TestCase):
+    def test_summary(self):
+        out = "syntax_calls 3535\nfound 3530\ncall_unsupported 2\nallowed none\ncall_mismatch 0\n"
+        self.assertEqual(m.parse_call_check(out), (0, 2))
+        self.assertEqual(m.parse_call_check("Traceback"), (None, None))
+
+
 class Rows(unittest.TestCase):
-    VALUES = {"go": {"cells": 89, "na": 22, "todo": 45, "todo_marked": 0, "miss": 14, "no_edge": 7, "calls_observed": 819}, "dart": {"todo": 13, "todo_marked": 0, "miss": 56, "no_edge": None}, "rust": {"todo": 14, "todo_marked": 14, "miss": 28}}
+    VALUES = {"go": {"cells": 89, "na": 22, "todo": 45, "todo_marked": 0, "miss": 14, "no_edge": 7, "calls_observed": 819}, "dart": {"todo": 13, "todo_marked": 0, "miss": 56, "no_edge": None, "call_mismatch": 0, "call_unsupported": 2}, "rust": {"todo": 14, "todo_marked": 14, "miss": 28}}
 
     def test_empty_is_empty_not_zero(self):
         rows = m.make_rows("2026-11-25", "abcd1234", self.VALUES)
-        self.assertEqual(rows[0], ["2026-11-25", "abcd1234", "go", "89", "22", "45", "0", "14", "7", "819", ""])
+        self.assertEqual(rows[0], ["2026-11-25", "abcd1234", "go", "89", "22", "45", "0", "14", "7", "819", "", ""])
         self.assertEqual(rows[1][8], "")
-        self.assertEqual(rows[2], ["2026-11-25", "abcd1234", "rust", "", "", "14", "14", "28", "", "", ""])
+        self.assertEqual(rows[1][10:], ["0", "2"])  # a zero that was measured is written; an empty cell was not measured
+        self.assertEqual(rows[2], ["2026-11-25", "abcd1234", "rust", "", "", "14", "14", "28", "", "", "", ""])
 
     def test_append_once(self):
         rows = m.make_rows("2026-11-25", "abcd1234", self.VALUES)
@@ -91,7 +99,7 @@ class Rows(unittest.TestCase):
             lines = open(p).read().splitlines()
             self.assertEqual(lines[0], "\t".join(m.COLUMNS))
             self.assertEqual(len(lines), 7)
-            self.assertTrue(all(len(l.split("\t")) == 11 for l in lines))
+            self.assertTrue(all(len(l.split("\t")) == 12 for l in lines))
 
 
 if __name__ == "__main__":
