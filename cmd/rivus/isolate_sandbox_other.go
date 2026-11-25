@@ -18,4 +18,9 @@ func (o *isolationOpts) extractRustSandboxedTo(ctx context.Context, dir string, 
 	return o.extractRustSandboxed(ctx, dir, extractorArgs)
 }
 
+// rustExtractorVersionSandboxed: there is nothing to run the extractor in, so it is not run (the version is then "unchecked").
+func (o *isolationOpts) rustExtractorVersionSandboxed(ctx context.Context) (string, error) {
+	return "", errNoIsolation
+}
+
 func sdkRoot() string { return "" }

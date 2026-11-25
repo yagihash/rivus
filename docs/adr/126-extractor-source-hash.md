@@ -14,6 +14,14 @@
 
 **止めるか、記録するかの線(ADR-125 のとおり):** スキーマが違えば止める。ソースのハッシュが違うときは、止めずに記録する(段階 2 以降)。
 
-**段階:** 段階 1(この ADR の変更)は、計算と埋め込みだけ。rivus は、extractor の `--version` をまだ呼ばず、照合も警告も `summary` への記録もしない。Rust の解析での取り方(解析のたびに extractor が書くファイルにするか、`rivus version` が隔離の外で `--rivus-version` を呼ぶか)は、段階 2 で決める(extractor の作業用ディレクトリは終了で消えるので、そのままでは rivus が読めない)。対象のビルドが書き換えうる経路は、IR そのものと同じ範囲に限る。段階 2 は、読む前に extractor の `--version` を 1 回呼んで本体のハッシュと照合し、警告と `summary.extractor` に出す。`--version` の呼び出しは、隔離の外で extractor を動かすことになるので、例外として、ユーザーの承認を待つ。
+**読む側(段階 2): 解析の前に、extractor に 1 回だけ聞く。Rust は、対象を読む起動と同じ隔離の下で聞く。例外は作らない。**
+5. Rust と Dart を読む解析の前に(`rivus analyze`、`index` など、`-lang` で選ばれた言語ごとに 1 回)、extractor に、自分のソースのハッシュを聞き、本体の値(`main.rustSourceHash`、`main.dartSourceHash`)と照合する。Go と、`-ir` で読む保存した IR は、聞く相手がない。
+6. **Dart**: 実行ファイルの `--version` を、そのまま呼ぶ(Dart の extractor は、もともと隔離なしで動く。`graphkey.go` の `--version` の先例と同じ)。標準入力なし、20 秒で打ち切る(`dart run` で起動するコマンドは、起動が遅い)。
+7. **Rust**: `--rivus-version` を、対象を読む起動と同じ仕組み(同じサンドボックスのプロファイル、環境を固定して組み立てる起動)で、1 回呼ぶ(`rustExtractorVersionSandboxed`)。ただし、対象のディレクトリ、cargo の置き場、取得、書き込み、ネットワークは、どれも要らないので、与えない。環境は `PATH`、`HOME`、`TMPDIR` だけ(`RIVUS_RUST_DRIVER` などは渡さない。`--rivus-version` は `main()` の先頭で固定の文字列を返すので、環境に影響されない)。読み取りはツールチェインの `lib`(`librustc_driver` にリンクされているため)と extractor だけ。作業ディレクトリは、空の一時ディレクトリ(`--rivus-version` という名前のファイルを、古い extractor がディレクトリ名として拾わないため)。標準入力なし、5 秒で打ち切る。`-unsafe-host-exec` のときだけ、利用者が隔離なしを選んでいるので、同じ引数と環境で直接起動する。**隔離のない環境(Linux で `-unsafe-host-exec` なし)では、呼ばない**。「未確認(この環境には隔離がない)」とする(その環境では、解析も、隔離なしには何も実行せずに止まる)。ADR-093 の「Rust の extractor は、隔離の下でしか動かさない」は、そのまま守られる(この呼び出しも隔離の下)ので、ADR-093 に例外を足さない。
+8. **照合の結果は 4 つ(と、聞けなかった 2 つ)に分け、止めずに記録する**: `yes`(一致)、`no`(両方わかっていて違う)、`unknown_binary`(本体が `unknown`。素の `go build`)、`unknown_extractor`(extractor が答えない。古い extractor の `source=` なし、`--rivus-version` を知らず終了コード 2、`source=unknown`、呼び出しの失敗、打ち切り。理由を文で書く)、`unchecked`(隔離がなく、聞かなかった)、`n/a(-ir)`(保存した IR。1 件だけ、ハッシュなし)。対処が違うため、分ける: `no` と `unknown_extractor` は extractor を作り直す(`rivus setup rust|dart -source`)、`unknown_binary` は本体を `make build` で作り直す。本体と extractor の両方が不明のときは、本体の側を先に出す。
+9. **記録**: `summary.extractor`(言語ごとの `{lang, path, schema, source_hash, expected_hash, match, detail}`。Go だけの解析にはない)と、`yes` 以外のとき標準エラーに警告 1 行(extractor のパスと作り直し方つき)。uncertainty の kind にはしない(ADR-008 の kind は、finding ごとの不確かさ用。これは、解析全体の前提の話)。`summary` の項目を足すだけなので、出力のスキーマのバージョン(`rivus.result/1`)は上げない(ADR-034 の、足すだけの変更の扱い。項目は `omitempty`)。
+10. **`rivus version`**: 第 1 行は今までどおり(スクリプトが読む)。続けて、IR のスキーマのバージョンと、言語ごとの extractor の行(パス、スキーマ、ソースのハッシュ 12 桁、一致か不一致か)。Rust の行は、解析と同じ `rustExtractorVersionSandboxed`(隔離なしの環境では「未確認」。`-unsafe-host-exec` か `RIVUS_UNSAFE_HOST_EXEC=1` のときだけ直接起動)。スキーマが違って止まるときのメッセージ(ADR-125 の `SchemaError`)に、その extractor のパスを足す。
 
-**帰結:** 結果は変わらない(古い extractor は、段階 1 では止まらない)。`rivus setup` で作った extractor と、`make build` で作った本体は、同じ計算のハッシュを持つ。
+**段階:** 段階 1 は、計算と埋め込み(`--version` / `--rivus-version` の答え)。段階 2 は、上の 5 から 10(読む側の照合、記録、`rivus version`)。ベンチ(`deps_bench.py`、`compare.sh`)での利用は段階 3。
+
+**帰結:** 解析の結果(IR、finding、uncertainty)は変わらない。出力に `summary.extractor` が足される。古い extractor と違う extractor は、止まらずに、警告と記録が出る。`rivus setup` で作った extractor と、`make build` で作った本体は、同じ計算のハッシュを持つ。

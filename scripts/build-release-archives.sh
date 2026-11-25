@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 # リリース用のアーカイブを dist/ に作る（tagpr.yml の release-binaries と、PR の ci.yml の release-build が使う）。
 #
-# 使い方: scripts/build-release-archives.sh <版（v なし。例: 1.2.3）>
+# 使い方: scripts/build-release-archives.sh <版（v なし。例: 1.2.3）> [<ref>]
+#         scripts/build-release-archives.sh --source-only <版> [<ref>]
+# <ref> は、ソースの tarball を作る Git の ref（既定は HEAD。リリースでは、タグ v<版> を渡す）。
+# --source-only は、ソースの tarball だけを dist/ に作る（バイナリのビルドと go-licenses は動かさない。テスト用）。
+#
+# ソースの tarball（rivus_<版>_source.tar.gz）は、tap の formula の url と sha256 に使う。GitHub が自動で作る
+# archive/refs/tags/<タグ>.tar.gz は、sha256 が変わらないことが保証されていない。`git archive` の出力は ref のコミットで決まり、
+# gzip -n はヘッダに時刻とファイル名を入れないので、同じ ref から同じ sha256 になる。トップのディレクトリは rivus-<版>/。
 #
 # どのターゲットも cgo を使わない（modernc.org/sqlite は純 Go）。静的リンクで、1 台からまとめてクロスビルドする。
 # 各アーカイブには、rivus の LICENSE と、そのターゲットのバイナリにリンクされたもののライセンス文を入れる
@@ -11,7 +18,33 @@
 # ライセンス文が見つからないモジュールがあれば、失敗にする（黙って載せずに出すのを避ける）。
 set -euo pipefail
 
-ver="${1:?usage: build-release-archives.sh <version without v>}"
+source_only=0
+if [ "${1:-}" = "--source-only" ]; then
+  source_only=1
+  shift
+fi
+ver="${1:?usage: build-release-archives.sh [--source-only] <version without v> [<ref>]}"
+ref="${2:-HEAD}"
+
+# ソースの tarball を dist/ に作る。2 回作って、同一であることを確かめる（違えば失敗）。
+build_source_tarball() {
+  local out="dist/rivus_${ver}_source.tar.gz" again
+  mkdir -p dist
+  git archive --format=tar "--prefix=rivus-${ver}/" "${ref}" | gzip -n > "${out}"
+  again="$(git archive --format=tar "--prefix=rivus-${ver}/" "${ref}" | gzip -n | sha256sum | cut -d' ' -f1)"
+  if [ "$(sha256sum "${out}" | cut -d' ' -f1)" != "${again}" ]; then
+    echo "the source tarball of ${ref} is not reproducible" >&2
+    return 1
+  fi
+}
+
+if [ "${source_only}" -eq 1 ]; then
+  rm -rf dist
+  build_source_tarball
+  (cd dist && sha256sum ./*.tar.gz)
+  exit 0
+fi
+
 goroot="$(go env GOROOT)"
 
 # 公式の配布物は $GOROOT/LICENSE を持つ。Homebrew の Go は、LICENSE を libexec（= GOROOT）の 1 つ上に置く。
@@ -75,6 +108,8 @@ for target in linux/amd64 linux/arm64 darwin/arm64; do
     done
   tar -C build -czf "dist/${name}.tar.gz" "${name}"
 done
+
+build_source_tarball
 
 (cd dist && sha256sum ./*.tar.gz > "rivus_${ver}_checksums.txt")
 cat dist/*_checksums.txt

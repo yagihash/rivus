@@ -43,7 +43,11 @@ type analyzeOpts struct {
 	lockLangs []string
 	// rustIsolation is how the Rust project was read (set when it was); it goes to the summary
 	rustIsolation *report.Isolation
-	timeout       time.Duration
+	// extractorChecks are the answers of the extractors that ran, before they read (summary.extractor); cmdMemo are the commands of the extractors
+	// that were found (asked once: the Dart one says on the standard error why a compiled executable is not used)
+	extractorChecks []report.ExtractorCheck
+	cmdMemo         map[string][]string
+	timeout         time.Duration
 	// funcTimeout bounds the analysis of one function.
 	funcTimeout time.Duration
 	passes      int
@@ -365,6 +369,7 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	rep := report.Build(packages, l.loadErrors(), st, res, rules)
 	rep.Summary.CategoriesExcluded = excluded
 	rep.Summary.Isolation = o.rustIsolation
+	rep.Summary.Extractor = o.extractorSummary()
 	rep.Summary.MemoryLimitBytes = o.memLimit.Bytes
 	rep.Summary.MemoryLimitSource = o.memLimit.Source
 	rep.Summary.MemoryLimitNote = o.memLimit.Note
