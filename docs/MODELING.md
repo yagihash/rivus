@@ -561,7 +561,7 @@ serde writes its private module with its version in it. **Read the name from the
 the type of the receiver in the symbol when the receiver is a `&mut` reference or a type whose name ends in `Mut`
 (`IterMut`, `ValuesMut`): `<&mut std::vec::Vec as std::iter::IntoIterator>::into_iter`,
 `<std::slice::IterMut as std::iter::IntoIterator>::into_iter`. The form is `<RECEIVER as std::iter::IntoIterator>::into_iter`;
-the lifetimes and the generic arguments of the receiver are left out, and a slice is `&mut [_]`. The receivers that are not
+the lifetimes and the generic arguments of the receiver are left out, a slice is `&mut [_]` and an array `&mut [_; _]`. The receivers that are not
 `&mut` (a shared reference, a value: `&Vec<T>`, `Vec<T>`) and every other method keep the path of the trait
 (`std::iter::IntoIterator::into_iter`). A call has one symbol: **the row of the trait does not match a call that has a typed
 symbol**, so a typed row is a whole row (it repeats the `flows` of the row of the trait, and adds what it is for). The typed rows

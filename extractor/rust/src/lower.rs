@@ -250,6 +250,32 @@ fn clean_symbol(name: &str) -> String {
     out
 }
 
+/// The receiver in the name of the resolved instance of `IntoIterator::into_iter`: `<RECEIVER as TRAIT>::into_iter`, or, for
+/// the impls of the standard library that name the impl block (`&mut [T]`, `&mut [T; N]`),
+/// `path::<impl std::iter::IntoIterator for RECEIVER>::into_iter`.
+fn into_iter_receiver(func: &str) -> Option<&str> {
+    const IMPL: &str = "<impl std::iter::IntoIterator for ";
+    if let Some(at) = func.find(IMPL) {
+        let rest = &func[at + IMPL.len()..];
+        return rest.strip_suffix(">::into_iter").map(str::trim);
+    }
+    let inner = func.strip_prefix('<')?;
+    // the " as " that is not inside the angle brackets of the receiver
+    let mut depth = 0i32;
+    let bytes = inner.as_bytes();
+    for i in 0..bytes.len() {
+        if bytes[i] == b'<' {
+            depth += 1;
+        } else if bytes[i] == b'>' {
+            depth -= 1;
+        }
+        if depth == 0 && inner[i..].starts_with(" as ") {
+            return Some(inner[..i].trim());
+        }
+    }
+    None
+}
+
 /// The symbol of a call of `IntoIterator::into_iter` whose receiver is a `&mut` reference or a type named `...Mut`
 /// (`IterMut`, `ValuesMut`): `<&mut std::vec::Vec as std::iter::IntoIterator>::into_iter`. The generic arguments and
 /// the lifetimes of the receiver are left out. Any other receiver (a shared reference, a value) keeps the path of the
@@ -259,23 +285,8 @@ fn typed_symbol(func: &str, def_name: &str) -> Option<String> {
     if def_name != "std::iter::IntoIterator::into_iter" {
         return None;
     }
-    let inner = func.strip_prefix('<')?;
-    // the " as " that is not inside the angle brackets of the receiver
-    let (mut depth, mut at) = (0i32, None);
-    let bytes = inner.as_bytes();
-    for i in 0..bytes.len() {
-        if bytes[i] == b'<' {
-            depth += 1;
-        } else if bytes[i] == b'>' {
-            depth -= 1;
-        }
-        if depth == 0 && inner[i..].starts_with(" as ") {
-            at = Some(i);
-            break;
-        }
-    }
-    let recv = &inner[..at?];
-    let mut text = recv.trim();
+    let recv = into_iter_receiver(func)?;
+    let mut text = recv;
     let by_mut_ref = if let Some(r) = text.strip_prefix('&') {
         // `&'a mut T`: the lifetime goes
         let r = r.trim_start();
@@ -1735,9 +1746,28 @@ mod typed_symbol_tests {
         assert_eq!(typed("std::slice::IterMut<'_, zoo::Boxed>"), t("std::slice::IterMut"));
         assert_eq!(typed("std::collections::hash_map::ValuesMut<'_, K, V>"), t("std::collections::hash_map::ValuesMut"));
         // a shared reference and a value: the path of the trait
+        assert_eq!(typed("&mut [zoo::Boxed; 1]"), t("&mut [_; _]"));
         assert_eq!(typed("&std::vec::Vec<zoo::Boxed>"), None);
+        assert_eq!(typed("&[zoo::Boxed]"), None);
+        assert_eq!(typed("&[zoo::Boxed; 1]"), None);
+        assert_eq!(typed("&'a [zoo::Boxed]"), None);
         assert_eq!(typed("std::vec::Vec<zoo::Boxed>"), None);
         assert_eq!(typed("std::slice::Iter<'_, zoo::Boxed>"), None);
+    }
+
+    // the impls of the standard library that name the impl block, not the receiver first
+    #[test]
+    fn a_slice_and_an_array_are_read_from_the_name_of_the_impl_block() {
+        let imp = |p: &str, r: &str| typed_symbol(&format!("{}::<impl std::iter::IntoIterator for {}>::into_iter", p, r), INTO_ITER);
+        let t = |s: &str| Some(format!("<{} as std::iter::IntoIterator>::into_iter", s));
+        assert_eq!(imp("core::slice::iter", "&mut [zoo::Boxed]"), t("&mut [_]"));
+        assert_eq!(imp("std::array", "&mut [zoo::Boxed; 1]"), t("&mut [_; _]"));
+        assert_eq!(imp("core::slice::iter", "&'a mut [zoo::Boxed]"), t("&mut [_]"));
+        // a shared reference keeps the path of the trait, in this form too
+        assert_eq!(imp("core::slice::iter", "&[zoo::Boxed]"), None);
+        assert_eq!(imp("std::array", "&[zoo::Boxed; 1]"), None);
+        assert_eq!(imp("std::array", "[zoo::Boxed; 1]"), None);
+        assert_eq!(imp("core::slice::iter", "&'a [zoo::Boxed]"), None);
     }
 
     #[test]

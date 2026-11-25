@@ -44,6 +44,7 @@ pub mod clos {
 pub mod cont {
     pub mod map_key_vs_value;
     pub mod ptr_index_slice;
+    pub mod ptr_range_array;
     pub mod ptr_range_slice;
     pub mod ptr_type_switch;
     pub mod ptr_value_copy;
