@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/url"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -12,7 +13,7 @@ import (
 )
 
 // The sources are checked before the fetch stage: every Cargo.toml of the project (a symbolic link is refused) and Cargo.lock
-// (read as TOML; one that cannot be read is refused).
+// (read as TOML; one that cannot be read is refused). A link to a directory outside the project and a path dependency that leaves it are refused.
 //
 // The only place that the fetch stage gets from without a flag: the registry of crates.io. Where the fetch goes is chosen
 // by Cargo.lock of the project, and the stage has a network. A git dependency is not allowed by default, on any host
@@ -126,14 +127,30 @@ func checkFetchSources(lock string, allow []string) error {
 // from the manifests, not from Cargo.lock, because cargo asks the places a manifest names before it finds that Cargo.lock
 // does not match (`--locked`): a manifest can send the fetch to a place that Cargo.lock never shows. The manifests are
 // parsed as data (nothing is run). All of them are read, in every directory (target and .git too; the name is compared
-// without regard to case). A manifest that cannot be parsed, or that is a symbolic link, is a place that is not known: it is refused.
+// without regard to case). A manifest that cannot be parsed, or that is a symbolic link, is a place that is not known: it is refused. So is a
+// symbolic link to a directory outside the project, and a path dependency that leaves the project (one that stays inside is walked).
 type manifestPlace struct{ desc, url string }
 
 func manifestPlaces(dir string) (places []manifestPlace, err error) {
+	root, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return nil, err
+	}
 	var files []string
 	err = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
+		}
+		if d.Type()&fs.ModeSymlink != 0 && !strings.EqualFold(d.Name(), "Cargo.toml") {
+			// A link to a directory is not followed by the walk, but cargo follows it. One that points inside the project is
+			// walked at the place it points to; one that points outside is refused. (A link that points nowhere is no place.)
+			if real, err := filepath.EvalSymlinks(path); err == nil {
+				if fi, err := os.Stat(real); err == nil && fi.IsDir() && !within(root, real) {
+					rel, _ := filepath.Rel(dir, path)
+					return fmt.Errorf("%s is a symbolic link to a directory outside the project (%s), so the manifests in it are not known", rel, real)
+				}
+			}
+			return nil
 		}
 		if d.IsDir() || !strings.EqualFold(d.Name(), "Cargo.toml") {
 			return nil
@@ -158,8 +175,61 @@ func manifestPlaces(dir string) (places []manifestPlace, err error) {
 			return nil, fmt.Errorf("%s cannot be read as TOML, so the places it names are not known: %v", rel, err)
 		}
 		places = collectPlaces(places, doc, "", rel)
+		for _, p := range collectPathDeps(nil, doc, "") {
+			if strings.ContainsAny(p, "*?[") { // a glob of the members: its fixed part is what is checked
+				p = filepath.Dir(p[:strings.IndexAny(p, "*?[")] + "x")
+			}
+			real, err := filepath.EvalSymlinks(filepath.Join(filepath.Dir(f), p))
+			if err != nil {
+				continue // it does not exist: cargo finds nothing there
+			}
+			if !within(root, real) {
+				return nil, fmt.Errorf("%s: path = %q leaves the project (%s), so the manifests there are not known", rel, p, real)
+			}
+		}
 	}
 	return places, nil
+}
+
+// within says whether the (resolved) path p is root or inside it.
+func within(root, p string) bool {
+	r, err := filepath.Rel(root, p)
+	return err == nil && r != ".." && !strings.HasPrefix(r, ".."+string(filepath.Separator))
+}
+
+// collectPathDeps adds to paths the directories that the table v (at path) names for cargo to read: the `path` of a
+// dependency (in any table of dependencies, [patch] and [replace]) and the members of a workspace.
+func collectPathDeps(paths []string, v any, path string) []string {
+	t, ok := v.(map[string]any)
+	if !ok {
+		if arr, ok := v.([]map[string]any); ok {
+			for _, e := range arr {
+				paths = collectPathDeps(paths, e, path)
+			}
+		}
+		return paths
+	}
+	inDeps := strings.HasPrefix(path, "patch") || strings.HasPrefix(path, "replace") ||
+		strings.Contains(path, "dependencies")
+	for k, e := range t {
+		if path == "package.metadata" || path == "workspace.metadata" {
+			return paths
+		}
+		switch {
+		case k == "path" && inDeps && isString(e):
+			paths = append(paths, e.(string))
+		case path == "workspace" && (k == "members" || k == "exclude"):
+			if arr, ok := e.([]any); ok {
+				for _, m := range arr {
+					if ms, ok := m.(string); ok && k == "members" {
+						paths = append(paths, ms)
+					}
+				}
+			}
+		}
+		paths = collectPathDeps(paths, e, strings.TrimPrefix(path+"."+k, "."))
+	}
+	return paths
 }
 
 // collectPlaces adds to places the places that the table v (at path, of the manifest rel) names, and those of the tables inside.
