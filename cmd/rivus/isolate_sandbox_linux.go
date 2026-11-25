@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -38,24 +39,31 @@ func rustDataDir() (string, error) {
 	return filepath.Join(base, "rivus", "rust"), nil
 }
 
-// pinnedToolchainDir is the directory of the pinned nightly: RIVUS_RUST_TOOLCHAIN_DIR, or the one that rustup made.
+// pinnedToolchainDir is the directory of the pinned nightly: RIVUS_RUST_TOOLCHAIN_DIR, or the one that rustup made (in RUSTUP_HOME, or ~/.rustup; for the
+// architecture of this machine, and whichever C library rustup chose: gnu or musl).
 func pinnedToolchainDir() (string, error) {
 	if d := os.Getenv("RIVUS_RUST_TOOLCHAIN_DIR"); d != "" {
 		return d, nil
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
+	rustup := os.Getenv("RUSTUP_HOME")
+	if rustup == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		rustup = filepath.Join(home, ".rustup")
 	}
-	arch := "x86_64"
-	if runtime.GOARCH == "arm64" {
-		arch = "aarch64"
+	arch := map[string]string{"amd64": "x86_64", "arm64": "aarch64"}[runtime.GOARCH]
+	if arch == "" {
+		return "", fmt.Errorf("the sandbox of Linux is made for x86-64 and arm64 only (this is %s)", runtime.GOARCH)
 	}
-	d := filepath.Join(home, ".rustup", "toolchains", pinnedToolchain+"-"+arch+"-unknown-linux-gnu")
-	if _, err := os.Stat(filepath.Join(d, "bin", "rustc")); err != nil {
-		return "", fmt.Errorf("the pinned toolchain %s is not there (looked in %s): prepare it with `rustup toolchain install %s --profile minimal -c rustc-dev -c llvm-tools -c rust-src` (it is downloaded from the Rust project, outside the sandbox, and never from the code that is read), or name the directory with RIVUS_RUST_TOOLCHAIN_DIR", pinnedToolchain, d, pinnedToolchain)
+	ms, _ := filepath.Glob(filepath.Join(rustup, "toolchains", pinnedToolchain+"-"+arch+"-unknown-linux-*"))
+	for _, d := range ms {
+		if _, err := os.Stat(filepath.Join(d, "bin", "rustc")); err == nil {
+			return d, nil
+		}
 	}
-	return d, nil
+	return "", fmt.Errorf("the pinned toolchain %s is not there (looked for %s in %s): prepare it with `rustup toolchain install %s --profile minimal -c rustc-dev -c llvm-tools -c rust-src` (it is downloaded from the Rust project, outside the sandbox, and never from the code that is read), or name the directory with RIVUS_RUST_TOOLCHAIN_DIR", pinnedToolchain, pinnedToolchain+"-"+arch+"-unknown-linux-*", filepath.Join(rustup, "toolchains"), pinnedToolchain)
 }
 
 // sandboxPrograms are the programs that a build may run, each by its path (not the directories /usr/bin and /bin: curl, ssh, python ...
@@ -231,7 +239,7 @@ func (o *isolationOpts) rustExtractorVersionSandboxed(ctx context.Context) (stri
 		MaxOutput: 4096,
 	})
 	if err != nil {
-		if err == sandbox.ErrUnavailable {
+		if errors.Is(err, sandbox.ErrUnavailable) {
 			return "", fmt.Errorf("%w (%v)", errNoIsolation, err)
 		}
 		return "", fmt.Errorf("it could not be run under the sandbox: %v", err)
@@ -251,7 +259,7 @@ func (o *isolationOpts) rustExtractorVersionSandboxed(ctx context.Context) (stri
 // sandboxResult says how a stage ended: what it printed goes to the user, and a stage that failed or was stopped is an error.
 func (o *isolationOpts) sandboxResult(stage string, res *sandbox.Result, err error) error {
 	if err != nil {
-		if err == sandbox.ErrUnavailable {
+		if errors.Is(err, sandbox.ErrUnavailable) {
 			return noSandboxError(err)
 		}
 		return fmt.Errorf("the %s stage under the sandbox: %v", stage, err)

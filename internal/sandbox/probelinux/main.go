@@ -30,6 +30,8 @@ var (
 	only   = flag.String("only", "", "run only this check")
 	attr   = flag.String("attr", "", "a file outside of the places that may be written: its mode and its times are changed (Landlock does not stop that; the parent reports it)")
 	attrIn = flag.String("attr-in", "", "a file in the work directory: its mode is changed (not reported)")
+	attrLn = flag.String("attr-link", "", "a symbolic link in the work directory that points outside: lchown of the link itself (the link is inside: not reported; what it points to is not touched)")
+	attrFd = flag.String("attr-fd", "", "a file that may be read and not written: it is opened, and fchownat with AT_EMPTY_PATH is made on the descriptor (reported, with the path of the file)")
 )
 
 func report(name string, escaped bool, how string) {
@@ -48,6 +50,18 @@ func main() {
 	if *attr != "" {
 		fmt.Println("attr-chmod", os.Chmod(*attr, 0o640))
 		fmt.Println("attr-utimes", os.Chtimes(*attr, time.Unix(1, 0), time.Unix(1, 0)))
+	}
+	if *attrLn != "" {
+		fmt.Println("attr-link-lchown", os.Lchown(*attrLn, os.Getuid(), os.Getgid()))
+	}
+	if *attrFd != "" {
+		f, err := os.Open(*attrFd)
+		if err != nil {
+			fmt.Println("attr-fd-open", err)
+		} else {
+			fmt.Println("attr-fd-fchownat", unix.Fchownat(int(f.Fd()), "", os.Getuid(), os.Getgid(), unix.AT_EMPTY_PATH))
+			f.Close()
+		}
 	}
 	if *attrIn != "" {
 		fmt.Println("attr-in-chmod", os.Chmod(*attrIn, 0o640))

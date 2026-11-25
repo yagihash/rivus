@@ -12,7 +12,7 @@
 2. **作り方: rivus 自身をヘルパーとして再実行し、そこで自分を閉じ込めてから対象を exec する。** 閉じ込めの成否は、専用のパイプで受け取る(対象の標準エラーは判定に使わない)。作れなければ、何も実行せずに止まる(ホストでの実行に切り替えない)。
 3. **抽出の段階のネットワークなしは、seccomp で `socket()` を全拒否にして成り立たせる**(Landlock は TCP しか知らない。seccomp を外すと UDP、UNIX ソケット、`io_uring` が抜けることを確かめた)。`io_uring`、`ptrace`、`process_vm_*`、`pidfd_getfd`、`bpf` などは塞ぐ。`/proc` は許可に入れない。seccomp はアーキテクチャごと(x86-64、arm64)に作り、ほかの ABI の system call は殺す。
 4. **受け入れた弱さ(ユーザーの了承): 取得段階のポート指定は、アドレスまで絞れない**(macOS は `localhost:PORT`)。取得で動くのは信頼する `cargo fetch` だけで、対象のコードは動かない。今の取得は、macOS と同じく、ネットワークを開けている。
-5. **Landlock ABI の下限**: 抽出は ABI 1 以上 + seccomp。プロキシのポート指定の取得は ABI 4(Linux 6.7)以上(足りなければ止まる)。他プロセスへのシグナルの scope は ABI 6(6.12)以上で、足りないとき、その分は塞げない。
+5. **Landlock ABI の下限**: 抽出は ABI 3(Linux 6.2)以上 + seccomp(ABI 3 未満は `truncate` を止められないので、止まる。下の 7)。プロキシのポート指定の取得は ABI 4(Linux 6.7)以上(足りなければ止まる)。他プロセスへのシグナルの scope は ABI 6(6.12)以上で、足りないとき、その分は塞げない。
 6. **CI**: `sandbox-linux`(`ubuntu-latest`、`ubuntu-26.04-arm`、`ubuntu-24.04`、`ubuntu-24.04-arm`。どれも Linux 7.0 系なので、古いカーネルは、テストのバイナリで Landlock の ABI を下げて作る)と、root での再実行、`sandbox-e2e-linux` と `sandbox-e2e-darwin`。macOS のジョブと Linux のジョブは、PR では、変更したファイルによって、それぞれ必要なときだけ動く(共通のファイルは両方)。`RIVUS_SBX_RED=1` で、サンドボックスが作れないランナーは失敗にする。
 
 7. **Landlock が止めないもの、古いカーネル、資源の上限の扱い(ユーザーの判断、2026-11-25)**: (a) `chmod`、`chown`、`utimes`、`setxattr` の系は、止められない(パスを見分けられず、`chmod` を一律に拒否すると GNU ld が壊れる)ので、受け入れ、seccomp の user notification で親に渡して、作業ディレクトリの外のものだけを、事後に stderr へ出す(呼び出しは通す)。(b) Landlock ABI 3 未満(Linux 6.2 未満)は、`truncate` を止められないので、何も実行せずに止まる。ABI 6 未満(6.12 未満)は、シグナルを止められないので、警告を出して動かす。(c) 資源は、緩い `RLIMIT`(プロセス数、メモリ(`RLIMIT_DATA`)、ファイルの大きさ、core 無し)を足す。cgroup は、利用者が頼れないので使わない。

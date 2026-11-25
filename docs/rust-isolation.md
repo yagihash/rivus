@@ -36,6 +36,7 @@
 - 固定の nightly と extractor は、macOS と同じ手順(`rivus setup rust -source <リポジトリの extractor/rust>`)で用意します。ツールチェインは `~/.rustup/toolchains/<固定の nightly>-<x86_64|aarch64>-unknown-linux-gnu`、extractor と取得した依存の置き場所は `~/.config/rivus/rust`(`RIVUS_RUST_DATA_DIR` で変えられる)。
 - ビルドスクリプトが C をコンパイルするので、C コンパイラとリンカ(`cc`、`ld`、`as`、`ar`)とヘッダ(`/usr/include`)がシステムにあること。実行を許すのは、名指しの一覧(`cc`、`gcc`、`ld`、`as`、`ar`、`/bin/sh` など)と、動的ローダーと、C コンパイラの内部のプログラムの置き場所(`/usr/lib/gcc`、`/usr/libexec`)だけで、`curl`、`ssh`、`python` などは、普通には実行できません。ただし、これは境界ではありません(Landlock は `execve` しか見ないので、動的ローダーを直接呼べば、読み取りを許した場所のプログラムは動く)。境界は、ファイルの読み書きとネットワークです。
 - 対象の上の(祖先の)`.cargo/config.toml` と、`Cargo.lock` の要件は、macOS と同じです。
+- 起動できなかったときの言い方は 3 通りです。**サンドボックスが作れない**(Landlock がない、seccomp が通らない、ABI 3 未満): `-unsafe-host-exec` の案内が出ます。**指定した経路が使えない**(`-isolation-read` などで指した場所が、上の階層に入れなくて開けない): 経路を示して止まります(`-unsafe-host-exec` の話ではありません。存在しない経路は、今までどおり黙って外します)。**対象のプログラムが起動できない**(extractor がない、実行権がない): その旨を言います。
 
 ## 2 段階
 

@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 // The tests of the sandbox of Linux (docs/DESIGN-linux-sandbox.md): each line of what is closed has a test that shows that it holds, and the
@@ -369,15 +371,15 @@ func listenAddr(t *testing.T) string {
 func TestSandboxBaselineRunsOnlyTheLoader(t *testing.T) {
 	var c helperConfig
 	c.addBaseline()
-	if len(c.Exec) != 0 {
-		t.Errorf("the baseline runs programs from directories: %v", c.Exec)
+	if len(c.Exec) != 0 || len(c.SoftExecFiles) != len(loaders()) {
+		t.Errorf("the baseline runs programs from directories, or something besides the loaders: %v %v", c.Exec, c.SoftExecFiles)
 	}
 	if len(loaders()) == 0 {
 		t.Skip("no dynamic loader found on this system")
 	}
 	for _, l := range loaders() {
 		found := false
-		for _, f := range c.ExecFiles {
+		for _, f := range c.SoftExecFiles {
 			found = found || f == l
 		}
 		if !found {
@@ -490,5 +492,106 @@ func TestSandboxOldKernels(t *testing.T) {
 	res, err := run("6")
 	if err != nil || len(res.Warnings) != 0 || verdicts(t, string(res.Stdout))["signal-outside"] {
 		t.Errorf("ABI 6: %v %v %s", err, res.Warnings, res.Stdout)
+	}
+}
+
+// A path that the caller named and that cannot be opened (a directory above it that this user may not enter) is an error that says so: it is not
+// left out in silence (the program would meet "permission denied" with nothing to say that the sandbox left it out), and it is not "the sandbox is not
+// there" (-unsafe-host-exec is not the answer to it). Root can open everything: the test is for anyone else.
+func TestSandboxUnusablePathIsSaid(t *testing.T) {
+	skipWithoutSandbox(t)
+	if os.Geteuid() == 0 {
+		t.Skip("root can open any path")
+	}
+	root := t.TempDir()
+	locked := filepath.Join(root, "locked")
+	os.MkdirAll(filepath.Join(locked, "inner"), 0o755)
+	os.Chmod(locked, 0)
+	t.Cleanup(func() { os.Chmod(locked, 0o755) })
+	_, err := Run(context.Background(), Spec{Argv: []string{"/bin/true"}, Dir: "/", Env: []string{"PATH=/usr/bin:/bin"}, Read: []string{filepath.Join(locked, "inner")}, Timeout: time.Minute})
+	if err == nil || errors.Is(err, ErrUnavailable) || !strings.Contains(err.Error(), "inner") {
+		t.Errorf("want an error that names the path and is not ErrUnavailable: %v", err)
+	}
+	// a path that is not there is left out, as before
+	if _, err := Run(context.Background(), Spec{Argv: []string{"/bin/true"}, Dir: "/", Env: []string{"PATH=/usr/bin:/bin"}, Read: []string{filepath.Join(root, "not-there")}, Timeout: time.Minute}); err != nil {
+		t.Errorf("a path that is not there was an error: %v", err)
+	}
+}
+
+// A program that cannot be started is not "the sandbox is not available": the sandbox was made (the answer of the helper is told apart).
+func TestSandboxProgramThatCannotStart(t *testing.T) {
+	skipWithoutSandbox(t)
+	_, err := Run(context.Background(), Spec{Argv: []string{"/nonexistent/program"}, Dir: "/", Env: []string{"PATH=/usr/bin:/bin"}, Timeout: time.Minute})
+	if err == nil || errors.Is(err, ErrUnavailable) || !strings.Contains(err.Error(), "could not be started") {
+		t.Errorf("want an error that says that the program could not be started, and is not ErrUnavailable: %v", err)
+	}
+	// an error that wraps ErrUnavailable is found by errors.Is (the callers compare with it)
+	if err := helperFailure("unavailable: no Landlock"); !errors.Is(err, ErrUnavailable) {
+		t.Errorf("not ErrUnavailable: %v", err)
+	}
+}
+
+// The path of a change is the file that the call is about: the link itself for a call that does not follow links (lchown), and the file of the
+// descriptor for an empty path with AT_EMPTY_PATH.
+func TestSandboxReportsTheRightFile(t *testing.T) {
+	skipWithoutSandbox(t)
+	f := setup(t)
+	victim := filepath.Join(f.outside, "victim")
+	os.WriteFile(victim, []byte("data"), 0o600)
+	link := filepath.Join(f.work, "link")
+	if err := os.Symlink(victim, link); err != nil {
+		t.Fatal(err)
+	}
+	readable := filepath.Join(f.outside, "readable")
+	os.WriteFile(readable, []byte("data"), 0o600)
+	res, err := Run(context.Background(), Spec{Argv: []string{f.probe, "-attr-link", link, "-attr-fd", readable}, Dir: f.work, Env: []string{"PATH=/usr/bin:/bin"},
+		Read: []string{f.outside}, Write: []string{f.work}, Timeout: time.Minute})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.ExitCode != 0 {
+		t.Fatalf("exit %d: %s %s", res.ExitCode, res.Stdout, res.Stderr)
+	}
+	realVictim, _ := filepath.EvalSymlinks(victim)
+	realReadable, _ := filepath.EvalSymlinks(readable)
+	got := strings.Join(res.AttributeChanges, "\n")
+	if strings.Contains(got, realVictim) {
+		t.Errorf("lchown of a link in the work directory is reported as a change of what it points to:\n%s\n%s", got, res.Stdout)
+	}
+	if !strings.Contains(got, "fchownat "+realReadable) {
+		t.Errorf("fchownat with AT_EMPTY_PATH is not reported as the file of the descriptor (%s):\n%s\n%s", realReadable, got, res.Stdout)
+	}
+}
+
+// The reading of the notifications that fails does not end the serving: the descriptor stays open as long as the program runs (the filter stays in the
+// program, and with nobody holding the descriptor its calls fail with ENOSYS), and the failure is told in the report.
+func TestSandboxNotificationsStayServedAfterAFailure(t *testing.T) {
+	var p [2]int
+	if err := unix.Pipe(p[:]); err != nil {
+		t.Fatal(err)
+	}
+	defer unix.Close(p[0])
+	defer unix.Close(p[1])
+	unix.Write(p[1], []byte("x")) // readable, and not a descriptor of notifications: the receive fails (ENOTTY)
+	w := newAttrWatcher(nil)
+	done := make(chan struct{})
+	returned := make(chan struct{})
+	go func() { w.serve(p[0], done); close(returned) }()
+	select {
+	case <-returned:
+		t.Fatal("serve ended at a failure of reading: the descriptor would be closed while the program runs")
+	case <-time.After(300 * time.Millisecond):
+	}
+	if _, err := unix.FcntlInt(uintptr(p[0]), unix.F_GETFD, 0); err != nil {
+		t.Errorf("the descriptor was closed: %v", err)
+	}
+	close(done)
+	select {
+	case <-returned:
+	case <-time.After(2 * time.Second):
+		t.Fatal("serve did not end with the run")
+	}
+	if got := strings.Join(w.changes(), "\n"); !strings.Contains(got, "receive") {
+		t.Errorf("the failure is not in the report: %q", got)
 	}
 }

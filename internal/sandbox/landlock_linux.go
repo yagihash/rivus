@@ -53,8 +53,12 @@ type helperConfig struct {
 	Argv, Env            []string
 	Read, Exec, Write    []string
 	ExecFiles, ReadFiles []string
-	Net                  int
-	ProxyPort            int
+	// what the system may or may not have (the loaders, /dev, the files of name resolution): a path that cannot be opened is left out, with no word. The
+	// paths above are the ones that the caller named: one that is not there is left out (the caller names places that a system may not have), but one that
+	// cannot be opened for another reason is an error, and is said.
+	SoftRead, SoftWrite, SoftExecFiles, SoftReadFiles []string
+	Net                                               int
+	ProxyPort                                         int
 	// Notify: the calls that change the attributes of files are handed to the parent (notify.go). The limits are the ones of resources (0: none).
 	Notify             bool
 	NProc, Data, Fsize uint64
@@ -132,6 +136,7 @@ func Run(ctx context.Context, s Spec) (*Result, error) {
 	finished := make(chan struct{})
 	res, err := supervise(ctx, s, cmd, func() {
 		childEnd.Close() // only the helper holds that end now
+		cfgR.Close()     // and the read end of the configuration: when the helper is gone before it has read it, the write below ends with an error instead of waiting for ever
 		go func() { watcher.receive(pair[0], finished); close(watched) }()
 		stW.Close() // only the helper holds the write end now (it is closed on exec)
 		go func() { io.Copy(&msg, io.LimitReader(stR, 1<<16)); close(msgDone) }()
@@ -154,7 +159,7 @@ func Run(ctx context.Context, s Spec) (*Result, error) {
 	case <-time.After(5 * time.Second):
 	}
 	if m := strings.TrimSpace(msg.String()); m != "" {
-		return nil, fmt.Errorf("%w: %s", ErrUnavailable, m)
+		return nil, helperFailure(m)
 	}
 	if res != nil {
 		_, res.Warnings = abiPolicy(ABI())
@@ -163,25 +168,40 @@ func Run(ctx context.Context, s Spec) (*Result, error) {
 	return res, err
 }
 
+// helperFailure turns what the helper said into an error: only "the sandbox could not be made" is ErrUnavailable (the caller says that nothing was run
+// because there is no sandbox, and points to -unsafe-host-exec); the other two are not that.
+func helperFailure(m string) error {
+	kind, why, _ := strings.Cut(m, ": ")
+	switch kind {
+	case failUnavailable:
+		return fmt.Errorf("%w: %s", ErrUnavailable, why)
+	case failPath:
+		return fmt.Errorf("the sandbox was not given a usable path (nothing was run): %s", why)
+	case failExec:
+		return fmt.Errorf("the program could not be started under the sandbox: %s", why)
+	}
+	return fmt.Errorf("%w: %s", ErrUnavailable, m)
+}
+
 // addBaseline adds what every program needs to start on Linux, with its reason beside it.
 func (c *helperConfig) addBaseline() {
 	// the libraries of the system: every dynamically linked program reads them. They are READ, not run from: a program may be run only when it is named
 	// (the programs of a system can be under /usr/lib too: the Rust coreutils of Ubuntu are in /usr/lib/cargo/bin).
 	for _, d := range []string{"/lib", "/lib64", "/usr/lib", "/usr/lib64"} {
-		c.Read = append(c.Read, real(d))
+		c.SoftRead = append(c.SoftRead, real(d))
 	}
 	// the dynamic loader is the one thing that the kernel runs for every dynamically linked program: it is run by its path, and only it
-	c.ExecFiles = append(c.ExecFiles, loaders()...)
+	c.SoftExecFiles = append(c.SoftExecFiles, loaders()...)
 	// /dev/null and the sources of random numbers: the programs write to the one and read from the others
-	c.Write = append(c.Write, "/dev/null")
-	c.ReadFiles = append(c.ReadFiles, "/dev/zero", "/dev/urandom", "/dev/random", "/etc/ld.so.cache")
+	c.SoftWrite = append(c.SoftWrite, "/dev/null")
+	c.SoftReadFiles = append(c.SoftReadFiles, "/dev/zero", "/dev/urandom", "/dev/random", "/etc/ld.so.cache")
 	if c.Net == netOpen {
 		// name resolution and TLS of the fetch stage
 		for _, f := range []string{"/etc/resolv.conf", "/etc/hosts", "/etc/nsswitch.conf", "/etc/host.conf", "/etc/gai.conf"} {
-			c.ReadFiles = append(c.ReadFiles, real(f))
+			c.SoftReadFiles = append(c.SoftReadFiles, real(f))
 		}
 		for _, d := range []string{"/etc/ssl", "/etc/ca-certificates", "/etc/pki", "/usr/share/ca-certificates"} {
-			c.Read = append(c.Read, real(d))
+			c.SoftRead = append(c.SoftRead, real(d))
 		}
 	}
 }
@@ -236,10 +256,17 @@ func ABI() int {
 
 // ----- the helper -----
 
-// fail says why the sandbox could not be made, on the status pipe, and ends. Nothing of the project has run.
-func fail(format string, a ...any) {
+// The way that the helper says it did not run the program (on the status pipe; nothing at all is the answer "it did"): the kind, a colon, a reason.
+const (
+	failUnavailable = "unavailable" // the sandbox could not be made: nothing was run
+	failPath        = "path"        // a path that the caller named could not be used: nothing was run
+	failExec        = "exec"        // the sandbox was made and the program could not be started (it is not there, it may not be run)
+)
+
+// fail says why the program was not run, on the status pipe, and ends. Nothing of the project has run.
+func fail(kind, format string, a ...any) {
 	st := os.NewFile(fdStatus, "status")
-	fmt.Fprintf(st, format, a...)
+	fmt.Fprintf(st, kind+": "+format, a...)
 	st.Close()
 	os.Exit(125)
 }
@@ -253,15 +280,18 @@ func helperMain() {
 	var cfg helperConfig
 	cf := os.NewFile(fdConfig, "config")
 	if err := json.NewDecoder(cf).Decode(&cfg); err != nil {
-		fail("reading what the sandbox is to allow: %v", err)
+		fail(failUnavailable, "reading what the sandbox is to allow: %v", err)
 	}
 	cf.Close()
 	if err := closeIn(&cfg); err != nil {
-		fail("%v", err)
+		if pe, ok := err.(*pathError); ok {
+			fail(failPath, "%v", pe)
+		}
+		fail(failUnavailable, "%v", err)
 	}
 	// from here on, the program is what runs; the status pipe is closed by the exec (it was made CLOEXEC), which is the answer "all well"
 	if err := syscall.Exec(cfg.Path, cfg.Argv, cfg.Env); err != nil {
-		fail("exec %s: %v", cfg.Path, err)
+		fail(failExec, "%s: %v", cfg.Path, err)
 	}
 }
 
@@ -386,29 +416,29 @@ func landlock(cfg *helperConfig) error {
 	}
 	defer unix.Close(int(rfd))
 	handled := at.fs
-	add := func(paths []string, access uint64) error {
+	add := func(paths []string, access uint64, soft bool) error {
 		for _, p := range paths {
-			if err := addPath(int(rfd), p, access&handled); err != nil {
+			if err := addPath(int(rfd), p, access&handled, soft); err != nil {
 				return err
 			}
 		}
 		return nil
 	}
-	if err := add(cfg.Read, fsRead); err != nil {
-		return err
-	}
-	if err := add(cfg.Exec, fsExec); err != nil {
-		return err
-	}
-	if err := add(cfg.ExecFiles, fsExec); err != nil {
-		return err
-	}
-	if err := add(cfg.ReadFiles, fsRead); err != nil {
-		return err
-	}
-	// the working directory of the run: written, and programs run from it (the build scripts and the proc macros that the build makes there)
-	if err := add(cfg.Write, fsWrite); err != nil {
-		return err
+	for _, r := range []struct {
+		paths  []string
+		access uint64
+		soft   bool
+	}{
+		{cfg.Read, fsRead, false}, {cfg.SoftRead, fsRead, true},
+		{cfg.Exec, fsExec, false},
+		{cfg.ExecFiles, fsExec, false}, {cfg.SoftExecFiles, fsExec, true},
+		{cfg.ReadFiles, fsRead, false}, {cfg.SoftReadFiles, fsRead, true},
+		// the working directory of the run: written, and programs run from it (the build scripts and the proc macros that the build makes there)
+		{cfg.Write, fsWrite, false}, {cfg.SoftWrite, fsWrite, true},
+	} {
+		if err := add(r.paths, r.access, r.soft); err != nil {
+			return err
+		}
 	}
 	if cfg.Net == netProxy {
 		np := netPort{allowed: unix.LANDLOCK_ACCESS_NET_CONNECT_TCP, port: uint64(cfg.ProxyPort)}
@@ -422,23 +452,25 @@ func landlock(cfg *helperConfig) error {
 	return nil
 }
 
-// addPath gives the rights to the path and what is below it. A path that is not there is left out (the caller names the places that a
-// system may or may not have): what is not allowed is denied.
-func addPath(rfd int, p string, access uint64) error {
+// addPath gives the rights to the path and what is below it. A path that is not there is left out (the caller names places that a system may or may not
+// have): what is not allowed is denied. A path that is there and cannot be opened (a directory above it that this user may not enter) is an error, and the
+// caller hears of it, since the program would meet it as "permission denied" from the build, with nothing to say that it was left out here; only the paths
+// that are soft (the ones of the system, that the caller did not name) are left out in that case too.
+func addPath(rfd int, p string, access uint64, soft bool) error {
 	if access == 0 {
 		return nil
 	}
 	fd, err := unix.Open(p, unix.O_PATH|unix.O_CLOEXEC, 0)
 	if err != nil {
-		if err == unix.ENOENT || err == unix.ENOTDIR || err == unix.EACCES {
+		if err == unix.ENOENT || err == unix.ENOTDIR || (soft && err == unix.EACCES) {
 			return nil
 		}
-		return fmt.Errorf("Landlock: %s: %v", p, err)
+		return &pathError{fmt.Sprintf("%s cannot be opened to be allowed: %v", p, err)}
 	}
 	defer unix.Close(fd)
 	var st unix.Stat_t
 	if err := unix.Fstat(fd, &st); err != nil {
-		return fmt.Errorf("Landlock: %s: %v", p, err)
+		return &pathError{fmt.Sprintf("%s: %v", p, err)}
 	}
 	if st.Mode&unix.S_IFMT != unix.S_IFDIR {
 		access &^= fsDirOnly
@@ -449,6 +481,11 @@ func addPath(rfd int, p string, access uint64) error {
 	}
 	return nil
 }
+
+// pathError is a path that the caller named and that the helper could not use: the sandbox is there, and the request is what is wrong.
+type pathError struct{ msg string }
+
+func (e *pathError) Error() string { return e.msg }
 
 // abiPolicy says what a Landlock ABI is not enough for. Less than 3 (Linux 6.2) cannot stop `truncate` of the files of the same user, and the run is
 // refused. Less than 6 (Linux 6.12) cannot stop signals to other processes of the same user: the run goes on and the caller says so.

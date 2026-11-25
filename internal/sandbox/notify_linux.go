@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/unix"
@@ -21,15 +22,33 @@ import (
 
 // attrCall says where the arguments of a system call that changes attributes are (-1: there is none of that kind).
 type attrCall struct {
-	nr    uint32
-	name  string
-	fd    int // the file descriptor of the file
-	dirfd int // the directory that path is relative to
-	path  int // the path (a string)
+	nr       uint32
+	name     string
+	fd       int  // the file descriptor of the file
+	dirfd    int  // the directory that path is relative to
+	path     int  // the path (a string)
+	flags    int  // the flags of the call (AT_SYMLINK_NOFOLLOW, AT_EMPTY_PATH)
+	nofollow bool // the call is about the link itself, not about what it points to (lchown, lsetxattr, lremovexattr)
+}
+
+// the forms of the calls: by a path (argument 0), by a descriptor (argument 0), and relative to a directory (the descriptor of the directory is argument 0 and the
+// path argument 1; flags is the number of the argument that holds AT_* flags, -1 when there is none)
+func byPath(nr uint32, name string, nofollow bool) attrCall {
+	return attrCall{nr: nr, name: name, fd: -1, dirfd: -1, path: 0, flags: -1, nofollow: nofollow}
+}
+
+func byFd(nr uint32, name string) attrCall {
+	return attrCall{nr: nr, name: name, fd: 0, dirfd: -1, path: -1, flags: -1}
+}
+
+func byDir(nr uint32, name string, flags int) attrCall {
+	return attrCall{nr: nr, name: name, fd: -1, dirfd: 0, path: 1, flags: flags}
 }
 
 const (
 	atFDCWD         = -100
+	atSymlinkNoFoll = 0x100
+	atEmptyPath     = 0x1000
 	notifIDValid    = 0x40082102 // SECCOMP_IOCTL_NOTIF_ID_VALID (the same on x86-64 and arm64)
 	maxChangesKept  = 200
 	maxPathLen      = 4096
@@ -63,7 +82,8 @@ type attrWatcher struct {
 	seen   map[string]bool
 	list   []string
 	cut    int
-	unread int // the calls whose path could not be read
+	unread int      // the calls whose path could not be read
+	lost   []string // the reading of the notifications failed (the calls were let through, unseen)
 }
 
 func newAttrWatcher(write []string) *attrWatcher {
@@ -71,7 +91,7 @@ func newAttrWatcher(write []string) *attrWatcher {
 }
 
 // receive reads the descriptor of the notifications that the helper sends over the socket (it sends nothing and closes it when there is none), and
-// serves it until done is closed.
+// serves it until done is closed. The descriptor is closed only after that: see serve.
 func (w *attrWatcher) receive(sock int, done <-chan struct{}) {
 	defer unix.Close(sock)
 	buf := make([]byte, 1)
@@ -93,7 +113,20 @@ func (w *attrWatcher) receive(sock int, done <-chan struct{}) {
 	w.serve(fd, done)
 }
 
+// serve answers the notifications until done is closed. The descriptor must stay open as long as the program runs: the filter stays in the program, and
+// once nobody holds the descriptor, every call that the filter hands over fails with ENOSYS (the chmod of the linker, and the build breaks, as an error of
+// the project). So a failure of reading is not an end: it is told in the report, and the loop goes on. Only the end of the run, or no process left that
+// has the filter (POLLHUP), ends it.
 func (w *attrWatcher) serve(fd int, done <-chan struct{}) {
+	failures := 0
+	pause := func() bool { // false: the run is over
+		select {
+		case <-done:
+			return false
+		case <-time.After(10 * time.Millisecond):
+			return true
+		}
+	}
 	for {
 		select {
 		case <-done:
@@ -106,7 +139,11 @@ func (w *attrWatcher) serve(fd int, done <-chan struct{}) {
 			continue
 		}
 		if err != nil {
-			return
+			w.lose(&failures, "poll: "+err.Error())
+			if !pause() {
+				return
+			}
+			continue
 		}
 		if n == 0 {
 			continue
@@ -116,10 +153,14 @@ func (w *attrWatcher) serve(fd int, done <-chan struct{}) {
 		}
 		var req notifReq
 		if _, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(fd), unix.SECCOMP_IOCTL_NOTIF_RECV, uintptr(unsafe.Pointer(&req))); errno != 0 {
-			if errno == unix.EINTR || errno == unix.ENOENT {
+			if errno == unix.EINTR || errno == unix.ENOENT { // the process went away before the call was read
 				continue
 			}
-			return
+			w.lose(&failures, "receive: "+errno.Error())
+			if !pause() {
+				return
+			}
+			continue
 		}
 		w.look(fd, &req)
 		// the call goes on as it was asked (the kernel does it): this is a report, not a guard
@@ -127,6 +168,23 @@ func (w *attrWatcher) serve(fd int, done <-chan struct{}) {
 		unix.Syscall(unix.SYS_IOCTL, uintptr(fd), unix.SECCOMP_IOCTL_NOTIF_SEND, uintptr(unsafe.Pointer(&resp)))
 	}
 }
+
+// lose notes that the reading failed (once for a run of failures: the loop tries again, and the report does not fill up).
+func (w *attrWatcher) lose(failures *int, why string) {
+	*failures++
+	if *failures == 1 {
+		w.mu.Lock()
+		w.lost = append(w.lost, why)
+		w.mu.Unlock()
+	}
+}
+
+// what pathOf found
+const (
+	pathOK         = iota // the path is there
+	pathUnreadable        // the memory of the process could not be read
+	pathNone              // the call is not about a file (an empty path that the kernel refuses)
+)
 
 func (w *attrWatcher) look(fd int, req *notifReq) {
 	if req.data.arch != seccompArch() {
@@ -142,13 +200,15 @@ func (w *attrWatcher) look(fd int, req *notifReq) {
 	if call == nil {
 		return
 	}
-	pid := int(req.pid)
-	path, ok := w.pathOf(pid, call, req)
+	path, what := w.pathOf(int(req.pid), call, req)
 	// the process may have gone and its number may be another process now
 	if _, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(fd), notifIDValid, uintptr(unsafe.Pointer(&req.id))); errno != 0 {
 		return
 	}
-	if !ok {
+	switch what {
+	case pathNone:
+		return
+	case pathUnreadable:
 		w.mu.Lock()
 		w.unread++
 		w.mu.Unlock()
@@ -160,8 +220,10 @@ func (w *attrWatcher) look(fd int, req *notifReq) {
 	w.add(call.name + " " + path)
 }
 
-// pathOf is the path that the call is about, as the program meant it (relative paths are made from the directory of the program).
-func (w *attrWatcher) pathOf(pid int, call *attrCall, req *notifReq) (string, bool) {
+// pathOf is the file that the call is about, as the program meant it: a relative path is made from the directory of the program (or of the descriptor
+// that it gave), a call about a link itself (lchown, AT_SYMLINK_NOFOLLOW) names the link and not what it points to, and an empty path with AT_EMPTY_PATH
+// is the descriptor itself.
+func (w *attrWatcher) pathOf(pid int, call *attrCall, req *notifReq) (string, int) {
 	arg := func(i int) uint64 { return req.data.args[i] }
 	fdPath := func(fd int) (string, bool) {
 		p, err := os.Readlink("/proc/" + strconv.Itoa(pid) + "/fd/" + strconv.Itoa(fd))
@@ -171,37 +233,65 @@ func (w *attrWatcher) pathOf(pid int, call *attrCall, req *notifReq) (string, bo
 		return strings.TrimSuffix(p, " (deleted)"), true
 	}
 	if call.fd >= 0 {
-		return fdPath(int(int32(arg(call.fd))))
+		if p, ok := fdPath(int(int32(arg(call.fd)))); ok {
+			return p, pathOK
+		}
+		return "", pathUnreadable
 	}
-	if call.path >= 0 && arg(call.path) == 0 && call.dirfd >= 0 {
-		return fdPath(int(int32(arg(call.dirfd)))) // utimensat with no path: the file of the descriptor
+	flags := 0
+	if call.flags >= 0 {
+		flags = int(int32(arg(call.flags)))
 	}
-	raw, ok := readString(pid, arg(call.path))
-	if !ok {
-		return "", false
-	}
-	if strings.HasPrefix(raw, "/") {
-		return resolveLoose(raw), true
-	}
-	base := ""
+	nofollow := call.nofollow || flags&atSymlinkNoFoll != 0
 	dirfd := atFDCWD
 	if call.dirfd >= 0 {
 		dirfd = int(int32(arg(call.dirfd)))
 	}
+	if call.path >= 0 && arg(call.path) == 0 && call.dirfd >= 0 {
+		// utimensat with no path: the file of the descriptor
+		if p, ok := fdPath(dirfd); ok {
+			return p, pathOK
+		}
+		return "", pathUnreadable
+	}
+	raw, ok := readString(pid, arg(call.path))
+	if !ok {
+		return "", pathUnreadable
+	}
+	if raw == "" {
+		if flags&atEmptyPath == 0 {
+			return "", pathNone // the kernel refuses an empty path
+		}
+		// the file of the descriptor itself (or the directory of the program, for AT_FDCWD)
+		if dirfd == atFDCWD {
+			if b, err := os.Readlink("/proc/" + strconv.Itoa(pid) + "/cwd"); err == nil {
+				return b, pathOK
+			}
+			return "", pathUnreadable
+		}
+		if p, ok := fdPath(dirfd); ok {
+			return p, pathOK
+		}
+		return "", pathUnreadable
+	}
+	if strings.HasPrefix(raw, "/") {
+		return resolve(raw, nofollow), pathOK
+	}
+	base := ""
 	if dirfd == atFDCWD {
 		b, err := os.Readlink("/proc/" + strconv.Itoa(pid) + "/cwd")
 		if err != nil {
-			return "", false
+			return "", pathUnreadable
 		}
 		base = b
 	} else {
 		b, ok := fdPath(dirfd)
 		if !ok {
-			return "", false
+			return "", pathUnreadable
 		}
 		base = b
 	}
-	return resolveLoose(filepath.Join(base, raw)), true
+	return resolve(filepath.Join(base, raw), nofollow), pathOK
 }
 
 // readString reads a string of the memory of a process.
@@ -213,7 +303,7 @@ func readString(pid int, addr uint64) (string, bool) {
 	defer f.Close()
 	var out []byte
 	for len(out) < maxPathLen {
-		// up to the end of the page: a string that ends in the page before an unmapped one is read whole
+		// up to the end of a block of 256 bytes: a string that ends before an unmapped page is read whole
 		n := 256 - int(addr%256)
 		buf := make([]byte, n)
 		got, err := f.ReadAt(buf, int64(addr))
@@ -229,9 +319,16 @@ func readString(pid int, addr uint64) (string, bool) {
 	return "", false
 }
 
-// resolveLoose makes the path absolute and without symbolic links as far as it exists.
-func resolveLoose(p string) string {
+// resolve makes the path absolute and without symbolic links as far as it exists. With nofollow the last part is not followed (the call is about the
+// link itself): the directory of it is resolved and the name is kept.
+func resolve(p string, nofollow bool) string {
 	p = filepath.Clean(p)
+	if nofollow {
+		if r, err := filepath.EvalSymlinks(filepath.Dir(p)); err == nil {
+			return filepath.Join(r, filepath.Base(p))
+		}
+		return p
+	}
 	if r, err := filepath.EvalSymlinks(p); err == nil {
 		return r
 	}
@@ -264,7 +361,7 @@ func (w *attrWatcher) add(s string) {
 	w.list = append(w.list, s)
 }
 
-// changes is what was seen (and how much was left out).
+// changes is what was seen (and how much was left out, and what could not be seen).
 func (w *attrWatcher) changes() []string {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -274,6 +371,9 @@ func (w *attrWatcher) changes() []string {
 	}
 	if w.unread > 0 {
 		out = append(out, fmt.Sprintf("(%d calls whose path could not be read: ptrace of the child is not allowed here)", w.unread))
+	}
+	if len(w.lost) > 0 {
+		out = append(out, "(the reading of the calls failed, and the calls after it were let through without being looked at: "+strings.Join(w.lost, "; ")+")")
 	}
 	return out
 }

@@ -78,8 +78,6 @@ type argList []string
 
 func (a *argList) param(k, v string) { *a = append(*a, "-D", k+"="+v) }
 
-// waitFor waits for the command and says how it ended.
-
 // Run runs the program under the sandbox and waits for it.
 func Run(ctx context.Context, s Spec) (*Result, error) {
 	if len(s.Argv) == 0 || !filepath.IsAbs(s.Argv[0]) {
@@ -87,7 +85,7 @@ func Run(ctx context.Context, s Spec) (*Result, error) {
 	}
 	exe, err := exec.LookPath("sandbox-exec")
 	if err != nil {
-		return nil, ErrUnavailable
+		return nil, fmt.Errorf("%w: sandbox-exec is not there", ErrUnavailable)
 	}
 	dir, err := os.MkdirTemp("", "rivus-sandbox-")
 	if err != nil {

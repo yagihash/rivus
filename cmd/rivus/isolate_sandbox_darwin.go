@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -275,7 +276,7 @@ func (o *isolationOpts) rustExtractorVersionSandboxed(ctx context.Context) (stri
 		MaxOutput: 4096,
 	})
 	if err != nil {
-		if err == sandbox.ErrUnavailable {
+		if errors.Is(err, sandbox.ErrUnavailable) {
 			return "", fmt.Errorf("%w (%v)", errNoIsolation, err)
 		}
 		return "", fmt.Errorf("it could not be run under the sandbox: %v", err)
@@ -295,7 +296,7 @@ func (o *isolationOpts) rustExtractorVersionSandboxed(ctx context.Context) (stri
 // sandboxResult says how a stage ended: what it printed goes to the user, and a stage that failed or was stopped is an error.
 func (o *isolationOpts) sandboxResult(stage string, res *sandbox.Result, err error) error {
 	if err != nil {
-		if err == sandbox.ErrUnavailable {
+		if errors.Is(err, sandbox.ErrUnavailable) {
 			return noSandboxError(err)
 		}
 		return fmt.Errorf("the %s stage under the sandbox: %v", stage, err)
