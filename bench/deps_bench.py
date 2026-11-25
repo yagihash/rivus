@@ -387,6 +387,8 @@ def prepare(name, t, tree, work, env):
             if not rust_no_dependencies(body):
                 return None, env, "rust_minimal_lock is only for a crate with no dependency, and %s names some" % name
             open(lock, "w").write(minimal_lock(body))
+        elif not os.path.exists(lock):  # a crate with dependencies: the Cargo.lock that is committed, as it is; this tool never makes one (no `cargo generate-lockfile`)
+            return None, env, "%s has no committed Cargo.lock (this tool does not generate one)" % name
         env = dict(env)
         env["RIVUS_RUST_TOOLCHAIN_DIR"], env["RIVUS_RUST_EXTRACTOR"] = rust_tools()
         return src, env, None
@@ -542,10 +544,17 @@ def expand_args(args, src, subdir):
     return [a.replace("{root}", root) for a in args]
 
 
+def rust_sdkroot_args(env):
+    """`-isolation-env SDKROOT=<path>` for the build of a Rust target, when BENCH_RUST_SDKROOT is set (the SDK of this machine; the CLT `MacOSX27.0.sdk`
+    cannot link here, docs/DESIGN-install.md). Not set (or empty): nothing is passed. The path is never written in the repository."""
+    v = (env.get("BENCH_RUST_SDKROOT") or "").strip()
+    return ["-isolation-env", "SDKROOT=" + v] if v else []
+
+
 def analyze_once(rivus, t, src, env, limit_s, cap_bytes, work, tag):
     """One run with the default flags (t["args"]). Returns dict: wall, cpu, peak (= b, the whole process tree: the
     memory of the verdict), peak_a (the main process), peak_how, big, converged, why, report."""
-    cmd = [rivus, "analyze", "-lang", t["lang"], "-C", src] + expand_args(t.get("args", []), src, t.get("subdir", ""))
+    cmd = [rivus, "analyze", "-lang", t["lang"], "-C", src] + expand_args(t.get("args", []), src, t.get("subdir", "")) + (rust_sdkroot_args(env) if t["lang"] == "rust" else [])
     outp, errp = os.path.join(work, tag + ".out.json"), os.path.join(work, tag + ".err")
     with heavy_lock("deps_bench analyze " + tag):
         load = os.getloadavg()[0]
@@ -615,6 +624,11 @@ def passline_run(name, t, rivus, cache, outdir, limit_s, cap_gb, repeat=1, home=
             if err:
                 raise SystemExit("deps_bench: %s: %s" % (name, err))
             r = analyze_once(rivus, t, src, e, limit_s, cap, work, tag)
+            if r["rc"] not in (0, EXIT_INCOMPLETE) and not r["why"]:  # the run ended by itself with an error: its last lines of stderr are kept (they are lost with the work dir otherwise)
+                errp = os.path.join(work, tag + ".err")
+                if os.path.exists(errp):
+                    shutil.copy(errp, os.path.join(outdir, "%s-%s.err" % (name, tag)))
+                    print("deps_bench: %s exited with status %s; stderr kept in %s-%s.err (last lines: %s)" % (name, r["rc"], name, tag, open(errp, errors="replace").read()[-400:].replace("\n", " | ")), file=sys.stderr)
             if r["report"] is not None:  # the report goes to the untracked dir; counts are read from it
                 shutil.copy(os.path.join(work, tag + ".out.json"), os.path.join(outdir, "%s-%s.json" % (name, tag)))
             return r
@@ -668,6 +682,8 @@ def passline_run(name, t, rivus, cache, outdir, limit_s, cap_gb, repeat=1, home=
             result = ("PASS" if passed else "FAIL") if decided else "INFO"
         extra = [a for a in t.get("args", [])] + (["-limit %g" % limit_s] if limit_s != t["time_limit_s"] else []) + (["-cap %g" % cap_gb] if cap_gb != t["mem_cap_gb"] else [])
         extra += ["%s=%s" % (k, v) for k, v in sorted(env.items()) if k == "GOMEMLIMIT" or (k.startswith("RIVUS_") and k not in ("RIVUS_HEAVY_LOCK_HELD", "RIVUS_HEAVY_LOCK", "RIVUS_RUST_TOOLCHAIN_DIR", "RIVUS_RUST_EXTRACTOR"))]  # the two paths of Rust are the paths of this machine: not written
+        if t["lang"] == "rust" and rust_sdkroot_args(env):
+            extra.append("SDKROOT given (BENCH_RUST_SDKROOT)")
         if repeat > 1:
             extra.append("repeat %d (median)" % repeat)
         if unc is not None:

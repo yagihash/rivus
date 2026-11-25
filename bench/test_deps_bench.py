@@ -461,6 +461,65 @@ class RustRoad(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(r, "Cargo.lock")))
         self.assertEqual((env["RIVUS_RUST_TOOLCHAIN_DIR"], env["RIVUS_RUST_EXTRACTOR"]), (tc, ex))
 
+    def test_rustypaste_row(self):
+        t = json.load(open(d.TARGETS_FILE))["rustypaste"]
+        self.assertEqual((t["lang"], t["commit"], t["decided"], t["detect"], t["repo"]), ("rust", "00292076e47b5f500906a97a1b5c17665270d907", False, None, "https://github.com/orhun/rustypaste"))
+        self.assertNotIn("rust_minimal_lock", t)  # the committed Cargo.lock is used
+        self.assertEqual(t["args"], ["-timeout", "600s"])
+        self.assertEqual(t["mem_cap_gb"], 8)
+        self.assertNotIn("rustypaste", d.BENCHES)  # not in the default targets
+        mk = open(os.path.join(d.ROOT, "Makefile")).read()
+        self.assertNotIn("rustypaste", mk)
+        self.assertEqual(d.format_line("rustypaste", False, True, "x").split()[:2], ["INFO", "rustypaste"])
+
+    def test_committed_lock_is_used_and_never_generated(self):
+        w = tempfile.mkdtemp()
+        self.addCleanup(lambda: __import__("shutil").rmtree(w, ignore_errors=True))
+        tc = self.tree({"bin/rustc": ""})
+        ex = os.path.join(tc, "ex")
+        open(ex, "w").close()
+        os.chmod(ex, 0o755)
+        old = {k: os.environ.get(k) for k in ("RIVUS_RUST_TOOLCHAIN_DIR", "RIVUS_RUST_EXTRACTOR")}
+        os.environ["RIVUS_RUST_TOOLCHAIN_DIR"], os.environ["RIVUS_RUST_EXTRACTOR"] = tc, ex
+        try:
+            lock = '# committed\nversion = 4\n\n[[package]]\nname = "a"\nversion = "1.0.0"\n'
+            r = self.tree({"Cargo.toml": '[package]\nname="a"\nversion="1.0.0"\n[dependencies]\nlibc = "0.2"\n', "Cargo.lock": lock})
+            src, _, err = d.prepare("rustypaste", {"lang": "rust"}, r, w, dict(os.environ))
+            self.assertIsNone(err)
+            self.assertEqual(open(os.path.join(src, "Cargo.lock")).read(), lock)  # as committed, not rewritten
+            r2 = self.tree({"Cargo.toml": '[package]\nname="b"\nversion="1.0.0"\n[dependencies]\nlibc = "0.2"\n'})
+            src2, _, err2 = d.prepare("rustypaste", {"lang": "rust"}, r2, w, dict(os.environ))
+            self.assertIn("no committed Cargo.lock", err2)
+            self.assertFalse(os.path.exists(os.path.join(r2, "Cargo.lock")))  # nothing was generated
+        finally:
+            for k, v in old.items():
+                os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
+
+    def test_sdkroot_from_the_environment(self):
+        self.assertEqual(d.rust_sdkroot_args({}), [])
+        self.assertEqual(d.rust_sdkroot_args({"BENCH_RUST_SDKROOT": ""}), [])
+        self.assertEqual(d.rust_sdkroot_args({"BENCH_RUST_SDKROOT": "/x/MacOSX.sdk"}), ["-isolation-env", "SDKROOT=/x/MacOSX.sdk"])
+        self.assertNotIn("SDKROOT=", open(d.TARGETS_FILE).read())  # never written in the data
+
+    def test_sdkroot_reaches_the_command(self):
+        w = tempfile.mkdtemp()
+        self.addCleanup(lambda: __import__("shutil").rmtree(w, ignore_errors=True))
+        seen = []
+        orig, orig_lock = d.run_watched, d.heavy_lock
+        d.heavy_lock = lambda reason: __import__("contextlib").nullcontext()  # no real lock in a unit test
+        d.run_watched = lambda cmd, *a, **k: (seen.append(cmd), {"rc": 1, "why": "", "wall": 0, "cpu": 0, "a": 0, "b": 0, "big": "", "big_rss": 0, "at_s": 0})[1]
+        try:
+            for sdk in ("/x/sdk", None):
+                env = dict(os.environ)
+                env.pop("BENCH_RUST_SDKROOT", None)
+                if sdk:
+                    env["BENCH_RUST_SDKROOT"] = sdk
+                d.analyze_once("rivus", {"lang": "rust", "args": ["-timeout", "600s"]}, w, env, 10, 10, w, "t")
+        finally:
+            d.run_watched, d.heavy_lock = orig, orig_lock
+        self.assertEqual(seen[0][-2:], ["-isolation-env", "SDKROOT=/x/sdk"])
+        self.assertNotIn("-isolation-env", seen[1])
+
     def test_prepare_refuses_the_lock_for_a_crate_with_dependencies(self):
         r = self.tree({"Cargo.toml": self.TOML + '[dependencies]\nlibc = "0.2"\n'})
         w = tempfile.mkdtemp()
