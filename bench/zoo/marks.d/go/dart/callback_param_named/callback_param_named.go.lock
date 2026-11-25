@@ -1,0 +1,2 @@
+go	dart/callback_param_named/callback_param_named.go	sink-none	@sink(none)	func vuln() { @vuln
+go	dart/callback_param_named/callback_param_named.go	sink-none	@sink(none) @nosink(dart-callback-param-named-decoy)	func decoy() { @decoy
