@@ -130,6 +130,7 @@ called, with what, and where its result goes; rivus then reads the callback at t
       mode: call            # call (default); go and defer: it runs on its own, what it returns is not read
 ```
 
+* **A source that is given to a row.** A function that the rules declare a source, named as a value and given to the `fn` of a row that has a `ret`, makes a source at the call: what it returns is put where `ret` says. The position and the snippet of the finding's source are the line of the call that gives it, not a line of the function (a source that is called directly is at its call).
 * **`with` fills the parameters of the callback from the first, in order.** For a callback of `func(ctx, m)`, `with: [recv]` puts
   the receiver in `ctx` and leaves `m` with nothing, and the flow you meant is silently lost (the usual mistake of a model written
   with an AI). To fill a later parameter, write the entries by number: `with: [{param: 1, from: recv}]` (`from: none` leaves a

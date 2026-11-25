@@ -19,6 +19,11 @@ pub fn src(_tag: &str) -> String {
     String::new()
 }
 
+/// Source for a place that takes a function with a result of bool (the function of `Iterator::any`).
+pub fn src_b(_s: String) -> bool {
+    false
+}
+
 /// Source: the marker as bytes.
 pub fn src_bytes(_tag: &str) -> Vec<u8> {
     Vec::new()

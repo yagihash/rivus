@@ -56,6 +56,9 @@ class HttpRequest {
 /// The marker of the tag (a source).
 String src(String tag) => '';
 
+/// src for a place that takes a function with a result of bool (the function of Iterable.any).
+bool srcB(String tag) => false;
+
 /// What the user gives to the framework in a case (the text typed, the arguments of a route, the message of a
 /// channel): the marker of the tag at run time, and **not a source** of rules.yaml: the source of such a cell is
 /// the API of the framework (a field that is read, the parameter of a method that an app overrides).

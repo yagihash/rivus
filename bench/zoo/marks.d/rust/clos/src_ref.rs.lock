@@ -1,0 +1,4 @@
+rust	clos/src_ref.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	clos/src_ref.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	clos/src_ref.rs	sink-none	@sink(none) @nosink(clos-src-ref-decoy)	fn decoy() { @decoy
+rust	clos/src_ref.rs	sink-none	@sink(none) @nosink(clos-src-ref-decoy)	fn decoy() { @decoy

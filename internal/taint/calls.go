@@ -139,6 +139,15 @@ func (s *state) callBody(cc *callCtx) {
 		s.newNote(ci, KindUnresolvedCallee, why, cc.sym)
 	}
 	for _, site := range sitesHere {
+		if site.Given != nil && site.Role == sites.RoleSource {
+			// a source that the call is given and calls: what the function returns is put where the row sends it
+			for _, d := range s.callRowDests(cc, site.RetTo) {
+				for _, l := range site.Labels {
+					s.add(d, RealElem(l, site.ID), s.origin(ci.Pos, "source: "+site.Symbol))
+				}
+			}
+			continue
+		}
 		if site.Given != nil {
 			// a sink of the function that the call is given and calls: it reads what the call fills its parameters with
 			ops := cc.argv()

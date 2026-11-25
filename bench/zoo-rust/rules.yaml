@@ -6,6 +6,8 @@ ruleset: rivus/bench-zoo-rust@1
 sources:
   - symbol: zoo_mark::src
     labels: [user_input]
+  - symbol: zoo_mark::src_b
+    labels: [user_input]
   - symbol: zoo_mark::src_bytes
     labels: [user_input]
   # a source that is the type of a parameter: the handler under test takes an In

@@ -236,3 +236,52 @@ func TestSinkOfFunctionGivenToAFunctionWithoutARow(t *testing.T) {
 		t.Fatalf("the call of a function that has no body and no model, given the sink, has no site: %+v", s)
 	}
 }
+
+func givenSourceResult(t *testing.T) *Result {
+	t.Helper()
+	rules := callbackRules(t, `
+sources:
+  - symbol: example.com/cases/cases/givensource.Src
+    labels: [user_input]
+  - symbol: example.com/cases/cases/givensource.SrcB
+    labels: [user_input]
+propagators:
+  - symbol: (*regexp.Regexp).ReplaceAllStringFunc
+    calls: [{fn: arg1, with: [arg0], ret: result0}]
+  - symbol: slices.IndexFunc
+    pure: true
+    calls: [{fn: arg1, with: [arg0]}]
+`)
+	return enumerateGo(t, testutil.Testdata(), []string{"./cases/givensource"}, rules)
+}
+
+func TestSourceOfFunctionGivenToACallRow(t *testing.T) {
+	res := givenSourceResult(t)
+	const src = "example.com/cases/cases/givensource.Src"
+	for _, fn := range []string{"givensource.Direct", "givensource.Variable"} {
+		s := find(res, fn, RoleSource, src, 1)
+		if s == nil || s.Given == nil || s.RetTo != "result0" || s.Callee != src {
+			t.Fatalf("%s: the call that gives the source has no site that puts its result in result0: %+v", fn, s)
+		}
+	}
+	// written as a closure: the call in it is the source, once, and the call of the library has none
+	if s := find(res, "givensource.Closure$1", RoleSource, src, 1); s == nil || s.Given != nil {
+		t.Errorf("the call in the closure is a source of its own: %+v", s)
+	}
+	for _, fn := range []string{"givensource.Closure", "givensource.NotSource", "givensource.NoResult"} {
+		for _, s := range res.Sites {
+			if strings.HasSuffix(s.Func, fn) && s.Role == RoleSource {
+				t.Errorf("%s has a source site: %+v", fn, s)
+			}
+		}
+	}
+	n := 0
+	for _, s := range res.Sites {
+		if s.Role == RoleSource && s.Symbol == src {
+			n++
+		}
+	}
+	if n != 3 {
+		t.Errorf("sources of Src: %d, want 3 (two that are given, one in a closure)", n)
+	}
+}

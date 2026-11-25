@@ -53,6 +53,10 @@ type Site struct {
 	// operand that it may be called with.
 	Given [][]int `json:"-"`
 
+	// RetTo is, for a source site that has Given, the place that the call puts what the function returns in (the selector
+	// of the `ret` of the row: result0, an operand).
+	RetTo string `json:"-"`
+
 	Sink  []model.Sink   `json:"-"`
 	Src   []model.Source `json:"-"`
 	irpos ir.Pos

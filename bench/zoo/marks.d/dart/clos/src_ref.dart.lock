@@ -1,0 +1,4 @@
+dart	clos/src_ref.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	clos/src_ref.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	clos/src_ref.dart	sink-none	@sink(none) @nosink(clos-src-ref-decoy)	Future<void> decoy() async { @decoy
+dart	clos/src_ref.dart	sink-none	@sink(none) @nosink(clos-src-ref-decoy)	Future<void> decoy() async { @decoy

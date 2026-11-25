@@ -146,6 +146,11 @@ pub fn src(tag: &str) -> String {
     marker(tag)
 }
 
+/// `src_b` does not record the tag: the cells that use it say that what it returns is not used.
+pub fn src_b(_s: String) -> bool {
+    false
+}
+
 pub fn src_bytes(tag: &str) -> Vec<u8> {
     marker(tag).into_bytes()
 }
