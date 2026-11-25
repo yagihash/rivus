@@ -1,0 +1,2 @@
+go	clos/to_lib_map/to_lib_map.go	sink-none	@sink(none)	func fixed() { @fixed
+go	clos/to_lib_map/to_lib_map.go	sink-none	@sink(none) @nosink(clos-to-lib-map-decoy)	func decoy() { @decoy

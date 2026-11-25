@@ -1,7 +1,0 @@
-dart	dart/sdk_callback_map.dart	na	@na(go: a Go map has no member that takes a function; the loop over it is plain code)	-
-dart	dart/sdk_callback_map.dart	sink-none	@sink(none)	void fixed() { @fixed
-dart	dart/sdk_callback_map.dart	sink-none	@sink(none)	void fixed() { @fixed
-dart	dart/sdk_callback_map.dart	sink-none	@sink(none)	void fixed() { @fixed
-dart	dart/sdk_callback_map.dart	sink-none	@sink(none) @nosink(dart-sdk-callback-map-decoy)	void decoy() { @decoy
-dart	dart/sdk_callback_map.dart	sink-none	@sink(none) @nosink(dart-sdk-callback-map-decoy)	void decoy() { @decoy
-dart	dart/sdk_callback_map.dart	sink-none	@sink(none) @nosink(dart-sdk-callback-map-decoy-result)	void decoy() { @decoy

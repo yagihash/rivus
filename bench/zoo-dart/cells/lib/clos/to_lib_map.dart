@@ -1,12 +1,11 @@
-// @cell(F/dart/sdk-callback-map)
+// @cell(F/clos/to-lib-map)
 // @shape: a function that is handed to Map.map and Map.removeWhere is called with the key and the value: what the map holds reaches the sink in the function, and what the function of Map.map returns is what the new map holds (not what the old one held)
-// @na(go: a Go map has no member that takes a function; the loop over it is plain code)
 import 'package:zoo_mark/zoo_mark.dart';
 
 void register() {
-  zooCase('F/dart/sdk-callback-map/vuln', vuln);
-  zooCase('F/dart/sdk-callback-map/fixed', fixed);
-  zooCase('F/dart/sdk-callback-map/decoy', decoy);
+  zooCase('F/clos/to-lib-map/vuln', vuln);
+  zooCase('F/clos/to-lib-map/fixed', fixed);
+  zooCase('F/clos/to-lib-map/decoy', decoy);
 }
 
 void vuln() { // @vuln

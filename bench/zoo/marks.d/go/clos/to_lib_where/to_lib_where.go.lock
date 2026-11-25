@@ -1,0 +1,6 @@
+go	clos/to_lib_where/to_lib_where.go	sink-none	@sink(none)	func fixed() { @fixed
+go	clos/to_lib_where/to_lib_where.go	sink-none	@sink(none)	func fixed() { @fixed
+go	clos/to_lib_where/to_lib_where.go	sink-none	@sink(none)	func fixed() { @fixed
+go	clos/to_lib_where/to_lib_where.go	sink-none	@sink(none) @nosink(clos-to-lib-where-decoy)	func decoy() { @decoy
+go	clos/to_lib_where/to_lib_where.go	sink-none	@sink(none) @nosink(clos-to-lib-where-decoy)	func decoy() { @decoy
+go	clos/to_lib_where/to_lib_where.go	sink-none	@sink(none) @nosink(clos-to-lib-where-decoy)	func decoy() { @decoy

@@ -20,6 +20,8 @@ import (
 	_ "zoo/cells/clos/returned"
 	_ "zoo/cells/clos/stored"
 	_ "zoo/cells/clos/to_lib"
+	_ "zoo/cells/clos/to_lib_map"
+	_ "zoo/cells/clos/to_lib_where"
 	_ "zoo/cells/clos/to_nomodel"
 	_ "zoo/cells/clos/to_own_helper"
 	_ "zoo/cells/clos/two_callers"

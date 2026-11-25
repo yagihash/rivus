@@ -1,12 +1,11 @@
-// @cell(F/dart/sdk-callback-where)
+// @cell(F/clos/to-lib-where)
 // @shape: a function that is handed to a function of the core library that tests the elements of the receiver (removeWhere, retainWhere, indexWhere, takeWhile and the like) is called with an element: what the list holds reaches the sink in the function. A function that uses a value that is not an element is not a finding
-// @na(go: a Go function that is handed to the standard library has its cells in F/clos and the callbacks of the standard library; Go has no member that tests the elements of a collection)
 import 'package:zoo_mark/zoo_mark.dart';
 
 void register() {
-  zooCase('F/dart/sdk-callback-where/vuln', vuln);
-  zooCase('F/dart/sdk-callback-where/fixed', fixed);
-  zooCase('F/dart/sdk-callback-where/decoy', decoy);
+  zooCase('F/clos/to-lib-where/vuln', vuln);
+  zooCase('F/clos/to-lib-where/fixed', fixed);
+  zooCase('F/clos/to-lib-where/decoy', decoy);
 }
 
 void vuln() { // @vuln

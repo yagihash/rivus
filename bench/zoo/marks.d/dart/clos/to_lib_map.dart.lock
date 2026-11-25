@@ -1,0 +1,6 @@
+dart	clos/to_lib_map.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	clos/to_lib_map.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	clos/to_lib_map.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	clos/to_lib_map.dart	sink-none	@sink(none) @nosink(dart-sdk-callback-map-decoy)	void decoy() { @decoy
+dart	clos/to_lib_map.dart	sink-none	@sink(none) @nosink(dart-sdk-callback-map-decoy)	void decoy() { @decoy
+dart	clos/to_lib_map.dart	sink-none	@sink(none) @nosink(dart-sdk-callback-map-decoy-result)	void decoy() { @decoy
