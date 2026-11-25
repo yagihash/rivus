@@ -257,3 +257,16 @@ func (o *analyzeOpts) withExtractorPath(lang string, err error) error {
 	}
 	return fmt.Errorf("%w [the extractor that wrote it: %s]", err, words[0])
 }
+
+// goVersionWarning is the one line on the standard error for a module that is written for a newer Go than this rivus was verified with ("" for
+// any other answer). It does not stop the run (ADR-127).
+func goVersionWarning(g *report.GoVersion, mainModule string) string {
+	if g == nil || g.Match != report.GoNewer {
+		return ""
+	}
+	who := "the module " + g.NewestModule
+	if g.NewestModule == mainModule {
+		who = "the analysed module " + g.NewestModule
+	}
+	return fmt.Sprintf("rivus: WARNING: %s says go %s, newer than go %s that this rivus was verified with: the language may have what rivus was not checked against, and the result may be incomplete (summary.go_version)", who, g.NewestVersion, g.Verified)
+}

@@ -111,6 +111,11 @@ type Program struct {
 	// directory, a replacement by another module.
 	ModuleVersions map[string]string
 
+	// MainModule is the module path of the main module ("" when there is no go.mod), and GoVersions the go line of every loaded module that has
+	// one, by module path (the dependencies too): the Go language that the code was written for (ADR-127).
+	MainModule string
+	GoVersions map[string]string
+
 	// OwnPkgs are the packages that were loaded from source, as opposed to
 	// their dependencies.
 	OwnPkgs []*ssa.Package
@@ -276,6 +281,7 @@ func Load(dir string, patterns []string, opts Options) (*Program, error) {
 	}
 	p.Inputs = collectInputs(pkgs)
 	p.ModuleVersions = moduleVersions(pkgs)
+	p.MainModule, p.GoVersions = goVersions(pkgs)
 	if !opts.Tests {
 		p.TestFilesSkipped = countTestFiles(pkgs)
 	}

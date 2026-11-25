@@ -23,7 +23,7 @@ import (
 )
 
 // SchemaVersion identifies the format of Report.
-const SchemaVersion = "rivus.result/2"
+const SchemaVersion = "rivus.result/3"
 
 // Report is the result of an analysis.
 type Report struct {
@@ -201,6 +201,9 @@ type Summary struct {
 	// Extractor says which source each extractor that ran was built from, and whether that is the source this rivus was built with (ADR-126):
 	// one entry for each of Dart and Rust, in the order they were read. A run from -ir has one entry, with Match "n/a(-ir)". Absent for Go only.
 	Extractor []ExtractorCheck `json:"extractor,omitempty"`
+	// GoVersion says whether the Go modules that were read are written for a newer Go than this rivus was verified with (ADR-127). Absent
+	// when no Go module was read. It never stops the run.
+	GoVersion *GoVersion `json:"go_version,omitempty"`
 	// BodyReplacedPackages are the packages of the dependencies whose body was not read because a model declares that it
 	// stands for it (body_replaced_packages of a rule file, or -body-replaced): a call of their functions is the model
 	// when it has a row for the function, and unmodeled_library_call when it has none; code inside them is not
@@ -500,6 +503,27 @@ type ExtractorCheck struct {
 	Match string `json:"match"`
 	// Detail says why for every Match but "yes".
 	Detail string `json:"detail,omitempty"`
+}
+
+// The values of GoVersion.Match.
+const (
+	GoYes     = "yes"     // no module that was read says a go line newer than the verified one
+	GoNewer   = "newer"   // a module says a newer go line: the language may have what this rivus was not checked against
+	GoUnknown = "unknown" // no module has a go line that can be read (an old go.mod, or no go.mod): nothing to compare
+)
+
+// GoVersion is the comparison of the go lines of the modules that were read with the Go that this rivus was verified with (minor only).
+type GoVersion struct {
+	// Target is the go line of the module that was analysed (absent when it has none).
+	Target string `json:"target,omitempty"`
+	// Verified is the minor of the Go that this rivus was verified with.
+	Verified string `json:"verified"`
+	// Match is "yes", "newer" or "unknown" (GoYes, GoNewer, GoUnknown).
+	Match string `json:"match"`
+	// NewestModule and NewestVersion are the module that has the newest go line, and that line, when Match is "newer" (the target itself, when it
+	// is the newest).
+	NewestModule  string `json:"newest_module,omitempty"`
+	NewestVersion string `json:"newest_version,omitempty"`
 }
 
 // DeveloperDir is the developer directory of the build: Source is "user" (-isolation-env) or "default" (the Command Line Tools,

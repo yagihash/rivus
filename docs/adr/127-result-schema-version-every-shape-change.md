@@ -117,3 +117,21 @@
 **同じ作りに広げる候補(この ADR では、`rivus.result` だけを固定する。課題 #223):** 次のスキーマも、同じ「キーと型と値のハッシュを表に固定し、変わったらバージョンを上げる」にできる。`rivus.query/1`(`internal/report/query.go`)、`rivus.sites/1`(`cmd/rivus/sites.go`)、`rivus.resolve/1`(`internal/report/resolve.go`)、`rivus.coverage/0`(`internal/report/coverage.go`。`/0` のまま)、`rivus.graph`(`internal/graphdb`。名前 `rivus.graph/1` と、整数のバージョン 2 の 2 つがある)。これらは、`rivus.result` の型を共有する部分があり(`rivus.query` は `Finding` を含む)、`rivus.result` の形が変わると、これらの出力も変わる。バージョンを揃えるか、別々に上げるかは、広げるときに決める。
 
 **帰結:** 結果が変わる(`schema_version` が `rivus.result/2` になる。ほかは同じ)。形を変える PR は、`SchemaVersion` と `resultShapes` の 2 か所を直す(テストの失敗メッセージが、そのまま写せる行を出す)。`kind` の一覧の表(ARCHITECTURE 4.4)と、定数との照合は、次の作業(完了条件 A(2))。
+
+**追記(2026-11-25、`rivus.result/3`): 値が決まった文字列の列挙の扱い、`interface` 型のフィールド、`summary.go_version`**
+
+*1. 列挙の扱い。* 上の決定は、ハッシュに入れる列挙を `Kind*` と `Attributable*` の 2 つだけにしていた。結果の中の、値が決まった文字列を、`internal/report` から届く型のすべてについて調べ、次のように分けた。`schema_shape_test.go` の表 `resultEnums` が、(a) の定数の取り方(ファイルと、定数の名前の前置き)で、1 行足せば、その列挙が形に入る。
+- (a) ハッシュに入れる(値の追加は、利用者のスクリプトにとって新しい分岐が要る変更で、形の変更に当たる): `finding.confidence`(`Confidence*`、2 値)、`reachability`(`Reach*`、3 値)、`conditional_nodes[].kind`(`Cond*`、2 値)、`summary.incomplete_reasons` の値(`Reason*`、5 値)、`summary.extractor[].match`(`cmd/rivus/extractorcheck.go` の `match*`、6 値)、`summary.go_version.match`(`Go*`、3 値)。これで、ハッシュは `kind`、`attributable_to` と合わせて 8 つの列挙の値を持つ。
+- (b) 固定しない(値が定数でなく、ほかのパッケージの定数や、文中のリテラルで、今のテストの取り方では読めない。値の追加は、バージョンを上げずに起こり得る。**迷って(b)にしたもの。判断を仰ぐ**): `role`(`ModelRef`、`Site`、`Expansion`: `source` / `sink` / `sanitizer` / `propagator`)、`ModelRef.origin`、`Site.kind`、`SharedPlace.kind`(`global`)、`numeric_stops` の `scope`(`project` / `dependency`)、`summary.isolation.mode`(`sandbox` / `host`)、`developer_dir.source`(`user` / `default`)、`memory_limit_source`、`Uncertainty.basis`(`closed_world_entry`)、`certainty`、`terminal_kind`、`operands[].class`(`ir.TypeClass`。IR の側のハッシュ(ADR-125)には入っている)、`extractor[].lang`(`rust` / `dart`)。利用者は、これらの値の一覧が閉じているとは、まだ思ってはいけない。
+- 列挙ではないもの: `category` と `labels` と `categories`(ルールのファイルで決まる名前で、データ)、`why` と `reason` と `detail`(文面)、`target.revision` などの値。上の「固定しないもの」と同じ。
+
+*2. `interface` 型のフィールド。* 今の結果の型には、`interface`(`any`)型のフィールドがない。足すときは、その中身の形は、ハッシュに入らない(reflect が型の名前までしか分からない)。固定しない範囲として、中身を利用者が決まった形と思ってはいけない。足す PR は、この ADR にその旨を追記し、中身の形を別に固定するかを決める。
+
+*3. `summary.go_version`(`rivus.result/3`)。* 課題 #109 の「古いものが何も報告せずに読まれる」の仲間で、こちらは、読む対象のコードの言語が、rivus を確かめた Go より新しいとき。`summary` に `go_version`(`target`、`verified`、`match`、`newest_module`、`newest_version`)を足し、`rivus.result/3` に上げる。
+- 検証済みの Go は、定数 `gossa.VerifiedGo`(`"1.27"`)の 1 か所。rivus 自身の `go.mod` にある `go` の指定の minor で、`go.mod` を上げて定数を忘れるとテストが落ちる。
+- 比べるのは minor まで(patch まで比べると、toolchain の更新のたびに誤った警告が出る)。
+- **対象のモジュールだけでなく、読んだ依存のモジュールの `go` 行も見る**(`packages.Module.GoVersion`。依存の `go` 行が新しければ、その依存の言語の機能を、rivus は確かめていない)。読んだモジュール全体の最大で決める。最大が対象自身なら、`newest_module` は対象のモジュールパス。同じ値のときは、対象、次に、パスの小さい順。
+- `unknown` は、どのモジュールにも読める `go` の指定が 1 つもないとき(古い `go.mod`、`go.mod` なし)だけ。対象に `go` の指定がなくても、依存に読めるものがあれば比べる: 依存が新しければ `newer`(`target` は空のまま、`newest_module` と `newest_version` に依存を入れる)、新しくなければ `yes`。対象に `go` の指定がないことと、依存の言語が新しいことは別の事実で、依存のコードも同じように読むため。
+- **止めない**。`newer` のときだけ標準エラーに 1 行を出し、終了コードは変えない。ベンチと合格基準は、`newer` を失敗にしない(記録だけ)。
+- 実際の `go` コマンドは、新しすぎる `go` 行を、`GOTOOLCHAIN=local` では読み込みの失敗にする(auto では新しい toolchain を取りに行く)ので、`newer` を、読み込みを通して確かめるテストは書かない。読み込みの経路(`Program.GoVersions`)と、判定(`CheckGoVersion`)を別々に確かめる。
+- Dart の言語バージョン(`pubspec.yaml` の `environment.sdk`)は次の作業。同じ形で `summary` に足せる。Rust の edition も同様。
