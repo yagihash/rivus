@@ -176,15 +176,18 @@ func (w *why) setCallee(g []Guard, c *callInfo) {
 
 func (w *why) markUnguarded() { w.mk().unguarded = true }
 
-// cpos is a position (ir.Pos) in 20 bytes: the file is the number of its name
-// in the table of strings.
+// cpos is a position (ir.Pos) in 24 bytes: the file is the number of its name
+// in the table of strings. The offset is 64 bits wide: the Rust extractor makes
+// it as line*100000+col, which does not fit in 32 bits from about the 21,475th
+// line, and a cut offset no longer finds the text of the step in the file.
 type cpos struct {
-	file                      strID
-	offset, length, line, col int32
+	offset            int64
+	file              strID
+	length, line, col int32
 }
 
 func packPos(p ir.Pos) cpos {
-	return cpos{intern(p.File), int32(p.Offset), int32(p.Length), int32(p.Line), int32(p.Col)}
+	return cpos{int64(p.Offset), intern(p.File), int32(p.Length), int32(p.Line), int32(p.Col)}
 }
 
 func (c cpos) pos() ir.Pos {
