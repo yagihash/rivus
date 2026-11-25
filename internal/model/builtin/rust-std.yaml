@@ -171,7 +171,7 @@ propagators:
   - symbol: std::path::PathBuf::push
     flows: [{from: args, to: result}]
   - symbol: std::option::Option::unwrap
-    flows: [{from: args, to: result}]
+    flows: [{from: args, to: result, alias: true}]
   - symbol: std::option::Option::expect
     flows: [{from: args, to: result}]
   - symbol: std::option::Option::unwrap_or
@@ -197,7 +197,7 @@ propagators:
   - symbol: std::option::Option::as_deref
     flows: [{from: args, to: result}]
   - symbol: std::option::Option::as_mut
-    flows: [{from: args, to: result}]
+    flows: [{from: args, to: result, alias: true}]
   - symbol: std::option::Option::cloned
     flows: [{from: args, to: result}]
   - symbol: std::option::Option::copied
@@ -246,7 +246,7 @@ propagators:
   - symbol: std::ops::FromResidual::from_residual
     flows: [{from: args, to: result}]
   - symbol: std::iter::Iterator::next
-    flows: [{from: args, to: result}]
+    flows: [{from: args, to: result, alias: true}]
   - symbol: std::iter::Iterator::nth
     flows: [{from: args, to: result}]
   - symbol: std::iter::Iterator::last
@@ -400,7 +400,7 @@ propagators:
   - symbol: std::vec::from_elem
     flows: [{from: args, to: result}]
   - symbol: std::slice::iter_mut
-    flows: [{from: args, to: result}]
+    flows: [{from: args, to: result, alias: true}]
   - symbol: std::vec::Vec::as_slice
     flows: [{from: args, to: result}]
   - symbol: std::vec::Vec::as_mut_slice

@@ -116,6 +116,7 @@ pub mod rust {
     pub mod macro_rules;
     pub mod mut_out_param;
     pub mod option_result_chain;
+    pub mod option_unwrap_value;
     pub mod ownership_move;
     pub mod static_lazylock;
     pub mod vec_index_write;
