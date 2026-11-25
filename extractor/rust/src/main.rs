@@ -100,7 +100,18 @@ fn unpredictable() -> u64 {
     nanos ^ ((&b as *const _ as usize) as u64).rotate_left(17)
 }
 
+/// The hash of the source of this extractor (internal/extractorhash), given to the build in RIVUS_EXTRACTOR_SRC_HASH (`rivus setup rust` does;
+/// build.rs reads it); "unknown" for a build without it.
+const SOURCE_HASH: &str = env!("RIVUS_EXTRACTOR_SRC_HASH");
+
 fn main() -> ExitCode {
+    // Asked on purpose, by rivus and the tests: the schema of the IR and the hash of the source this extractor was built from (ADR-126). It is
+    // answered first and from constants, before the driver mode (`--version` is the driver's: cargo asks it for the compiler's, so it is not
+    // used) and before anything of the arguments, cargo or the target is touched: RIVUS_RUST_DRIVER in the environment does not matter.
+    if std::env::args().nth(1).as_deref() == Some("--rivus-version") {
+        println!("rivus-rust {} source={}", irjson::SCHEMA_VERSION, SOURCE_HASH);
+        return ExitCode::SUCCESS;
+    }
     if std::env::var_os("RIVUS_RUST_DRIVER").is_some() {
         return driver();
     }

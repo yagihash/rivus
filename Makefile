@@ -20,7 +20,8 @@ setup: ## install Go and Dart if they are missing, and run dart pub get (Linux; 
 	git config core.hooksPath .githooks
 	bash scripts/dev-setup.sh
 
-build: ## build every package
+build: ## build rivus (./rivus) with the hashes of the source of the extractors built in (a plain `go build` leaves them "unknown", ADR-126), and every package
+	go build -ldflags "-X main.rustSourceHash=$$(go run ./scripts/extractor-hash rust) -X main.dartSourceHash=$$(go run ./scripts/extractor-hash dart)" -o rivus ./cmd/rivus
 	go build ./...
 
 check: ## before a push (about a minute): build, gofmt, go vet, the short tests (TestDogfood is skipped without RIVUS_DOGFOOD=1)
@@ -31,7 +32,7 @@ check: ## before a push (about a minute): build, gofmt, go vet, the short tests 
 
 test: ## every test, with the Dart and Rust extractors (what CI runs on main)
 	@command -v "$(firstword $(RIVUS_DART))" >/dev/null || { echo "make test: no dart ($(RIVUS_DART))"; exit 1; }
-	@[ -x "$(RIVUS_RUST)" ] || { echo "make test: no Rust extractor at $(RIVUS_RUST) (cd extractor/rust && cargo build)"; exit 1; }
+	@[ -x "$(RIVUS_RUST)" ] || { echo "make test: no Rust extractor at $(RIVUS_RUST) (in extractor/rust: RIVUS_EXTRACTOR_SRC_HASH=$$(go run ./scripts/extractor-hash rust) cargo build)"; exit 1; }
 	go vet ./...
 	RIVUS_DART="$(RIVUS_DART)" RIVUS_RUST="$(RIVUS_RUST)" RIVUS_REQUIRE_DART=1 RIVUS_REQUIRE_RUST=1 go test -count=1 -timeout 40m ./...
 

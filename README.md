@@ -97,8 +97,10 @@ rivus version
 **ソースからビルドする**(Go 1.27 以降):
 
 ```sh
-go build -o rivus ./cmd/rivus
+make build
 ```
+
+`make build` は、extractor のソースのハッシュを本体に埋めて、`./rivus` を作ります(素の `go build` でも動きますが、ハッシュは `unknown` になります。[ADR-126](docs/adr/126-extractor-source-hash.md))。
 
 Dart と Rust を読むには、それぞれの extractor が必要です(下の「言語ごとの準備」)。開発用のコマンドは「開発」にあります。
 

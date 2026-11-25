@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/yagihash/rivus/internal/extractorhash"
 )
 
 // rivus setup rust: prepares what the extraction of Rust needs, outside the sandbox, from trusted sources: the pinned toolchain (from the Rust
@@ -75,11 +77,15 @@ func runSetupRust(argv []string) error {
 	}
 	src, _ = filepath.Abs(src)
 	root := filepath.Join(data, "extractor")
+	hash, err := extractorhash.Compute("rust", src)
+	if err != nil {
+		return fmt.Errorf("the hash of the source of the extractor: %v", err)
+	}
 	fmt.Fprintf(os.Stderr, "rivus: building the extractor from %s into %s (cargo install --locked)\n", src, root)
 	cmd := exec.Command(filepath.Join(tc, "bin", "cargo"), "install", "--path", src, "--locked", "--root", root, "--force")
 	// what cargo needs and nothing else of this environment (not the variables that a repository you are in could have set up)
 	home, _ := os.UserHomeDir()
-	cmd.Env = []string{"PATH=" + filepath.Join(tc, "bin") + ":/usr/bin:/bin", "HOME=" + home, "RUSTUP_TOOLCHAIN=" + pinnedToolchain, "TMPDIR=" + os.TempDir()}
+	cmd.Env = []string{"PATH=" + filepath.Join(tc, "bin") + ":/usr/bin:/bin", "HOME=" + home, "RUSTUP_TOOLCHAIN=" + pinnedToolchain, "TMPDIR=" + os.TempDir(), "RIVUS_EXTRACTOR_SRC_HASH=" + hash}
 	if sdk := sdkRoot(); sdk != "" {
 		cmd.Env = append(cmd.Env, "SDKROOT="+sdk)
 	}

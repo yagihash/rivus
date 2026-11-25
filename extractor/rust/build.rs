@@ -14,5 +14,9 @@ fn main() {
         .expect("a channel in rust-toolchain.toml");
     println!("cargo:rustc-env=RIVUS_TOOLCHAIN={}", channel);
     println!("cargo:rerun-if-changed=rust-toolchain.toml");
+    // the hash of the source (internal/extractorhash), told by `rivus setup rust`; a plain `cargo build` has none
+    let hash = std::env::var("RIVUS_EXTRACTOR_SRC_HASH").ok().filter(|h| !h.is_empty()).unwrap_or_else(|| "unknown".into());
+    println!("cargo:rustc-env=RIVUS_EXTRACTOR_SRC_HASH={}", hash);
+    println!("cargo:rerun-if-env-changed=RIVUS_EXTRACTOR_SRC_HASH");
     println!("cargo:rerun-if-changed=build.rs");
 }
