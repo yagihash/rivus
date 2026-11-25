@@ -128,6 +128,22 @@ Future<void> main() async {
     final res = it.skipWhile((x) { r.see([x]); return false; }).toList();
     add('dart:core#Iterable.skipWhile', recv, r, res);
   }
+  {
+    final r = Rec();
+    final l = <String>['RECV', 'RECV'];
+    l.sort((a, b) { r.see([a, b]); return 0; });
+    add('dart:core#List.sort', recv, r, l);
+  }
+  {
+    final r = Rec();
+    final res = <String>['RECV', 'RECV'].reduce((a, b) { r.see([a, b]); return 'Ж'; });
+    add('dart:core#Iterable.reduce', recv, r, res);
+  }
+  {
+    final r = Rec();
+    final res = <String>['RECV'].fold<String>('INIT', (a, b) { r.see([a, b]); return 'Ж'; });
+    add('dart:core#Iterable.fold', {'arg0': 'INIT', 'recv': 'RECV'}, r, res);
+  }
   // a forEach on a List or a Set is written by the extractor as Iterable.forEach (they inherit it), so it is the one row
   {
     final r = Rec();

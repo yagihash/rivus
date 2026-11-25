@@ -286,8 +286,10 @@ propagators:
     flows: [{from: recv, to: result}, {from: args, to: result}]
   - symbol: dart:core#Iterable.fold
     flows: [{from: recv, to: result}, {from: args, to: result}]
+    calls: [{fn: arg1, with: [arg0, recv], ret: result0}]
   - symbol: dart:core#Iterable.reduce
     flows: [{from: recv, to: result}, {from: args, to: result}]
+    calls: [{fn: arg0, with: [recv, recv], ret: result0}]
   - symbol: dart:core#Iterable.any
     flows: [{from: recv, to: result}]
     calls: [{fn: arg0, with: [recv]}]
@@ -331,6 +333,7 @@ propagators:
     calls: [{fn: arg0, with: [recv]}]
   - symbol: dart:core#List.sort
     flows: [{from: recv, to: result}, {from: args, to: result}]
+    calls: [{fn: arg0, with: [recv, recv]}]
   - symbol: dart:collection#Queue.removeFirst
     flows: [{from: recv, to: result}, {from: args, to: result}]
   - symbol: dart:collection#Queue.removeLast

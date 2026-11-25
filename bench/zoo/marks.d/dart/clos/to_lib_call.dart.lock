@@ -1,2 +1,4 @@
 dart	clos/to_lib_call.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	clos/to_lib_call.dart	sink-none	@sink(none)	void fixed() { @fixed
+dart	clos/to_lib_call.dart	sink-none	@sink(none) @nosink(clos-to-lib-call-decoy)	void decoy() { @decoy
 dart	clos/to_lib_call.dart	sink-none	@sink(none) @nosink(clos-to-lib-call-decoy)	void decoy() { @decoy
