@@ -19,7 +19,7 @@ func (e *SchemaError) Error() string {
 	if got == "" {
 		got = "(none)"
 	}
-	return fmt.Sprintf("ir: the stream is of schema %s, and this rivus reads %s: the extractor that wrote it is older or newer than rivus; build it again from the same source as rivus", got, SchemaVersion)
+	return fmt.Sprintf("ir: the stream is of schema %s, and this rivus reads %s: the extractor that wrote it is older or newer than rivus; build it again from the same source as rivus (a saved IR file, read with -ir, is written again with the extractor)", got, SchemaVersion)
 }
 
 type header struct {

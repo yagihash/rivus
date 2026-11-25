@@ -23,7 +23,7 @@ func TestStaleExtractorStreamStops(t *testing.T) {
 	if err := os.WriteFile(p, []byte(stale), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := readIR(p); err == nil || !strings.Contains(err.Error(), "older or newer") {
-		t.Errorf("-ir: %v", err)
+	if _, err := readIR(p); err == nil || !strings.Contains(err.Error(), "older or newer") || !strings.Contains(err.Error(), "saved IR file") {
+		t.Errorf("-ir (the message names a saved IR file): %v", err)
 	}
 }

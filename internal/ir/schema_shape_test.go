@@ -4,10 +4,14 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"reflect"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -19,7 +23,7 @@ import (
 // fixtures that hold a stream, and add the new hash to this table (the failure message prints it). Do not replace the hash of a version
 // that was released.
 var schemaShapes = map[string]string{
-	"rivus.ir/1": "1b2ecc0963a4f95158fd1a488b81b077cfd700f5440d246c71cf0408e7b58753",
+	"rivus.ir/1": "161646c54971d05b4ec68eb1fc35cd605d4aca0f7a7d8ce8a3cb6c026d7f7fa7",
 }
 
 // shapeOf describes, for every type that the stream reaches from a record, the fields that are written to the JSON: the name of the key and the
@@ -58,6 +62,11 @@ func shapeOf() string {
 	}
 	walk(reflect.TypeOf(header{}))
 	walk(reflect.TypeOf(record{}))
+	enums, err := enumValues()
+	if err != nil {
+		panic(err)
+	}
+	lines = append(lines, enums...)
 	sort.Strings(lines)
 	sum := sha256.Sum256([]byte(strings.Join(lines, "\n")))
 	return hex.EncodeToString(sum[:])
@@ -102,6 +111,77 @@ func TestReadStopsAtAnOlderExtractor(t *testing.T) {
 	for _, w := range []string{"rivus.ir/0", SchemaVersion, "older"} {
 		if !strings.Contains(err.Error(), w) {
 			t.Errorf("the message does not say %q: %v", w, err)
+		}
+	}
+}
+
+// stringEnums are the string types of ir.go whose constants are the values of the stream (the kinds of the instructions, the edges, ...): a
+// value added to one is a change of the shape, and an extractor that is older never writes it. A string type of ir.go that is in neither list
+// fails the test, so that a new enumeration cannot stay out of the hash.
+var (
+	stringEnums    = []string{"TypeClass", "EdgeKind", "TermKind", "Op", "ConstKind", "StepKind", "CalleeKind"}
+	notEnumStrings = []string{"FuncID", "TypeID"}
+)
+
+// enumValues lists "Type=value" for the constants of the enumerations of ir.go, and fails for a string type that is not in the lists above.
+func enumValues() ([]string, error) {
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "ir.go", nil, 0)
+	if err != nil {
+		return nil, err
+	}
+	known := map[string]bool{}
+	for _, n := range append(append([]string{}, stringEnums...), notEnumStrings...) {
+		known[n] = true
+	}
+	isEnum := map[string]bool{}
+	for _, n := range stringEnums {
+		isEnum[n] = true
+	}
+	var out []string
+	for _, d := range f.Decls {
+		g, ok := d.(*ast.GenDecl)
+		if !ok {
+			continue
+		}
+		for _, sp := range g.Specs {
+			switch sp := sp.(type) {
+			case *ast.TypeSpec:
+				if id, ok := sp.Type.(*ast.Ident); ok && id.Name == "string" && !known[sp.Name.Name] {
+					return nil, fmt.Errorf("ir.go: the string type %s is in neither stringEnums nor notEnumStrings (schema_shape_test.go)", sp.Name.Name)
+				}
+			case *ast.ValueSpec:
+				id, ok := sp.Type.(*ast.Ident)
+				if g.Tok != token.CONST || !ok || !isEnum[id.Name] {
+					continue
+				}
+				for i, v := range sp.Values {
+					lit, ok := v.(*ast.BasicLit)
+					if !ok || lit.Kind != token.STRING {
+						return nil, fmt.Errorf("ir.go: %s is not a string literal", sp.Names[i].Name)
+					}
+					u, _ := strconv.Unquote(lit.Value)
+					out = append(out, "enum "+id.Name+"="+u)
+				}
+			}
+		}
+	}
+	// the type specs inside "type ( ... )" are visited too (Decls hold the group), so the list above is complete
+	return out, nil
+}
+
+func TestEnumListCoversIR(t *testing.T) {
+	vals, err := enumValues()
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{}
+	for _, v := range vals {
+		seen[strings.SplitN(strings.TrimPrefix(v, "enum "), "=", 2)[0]] = true
+	}
+	for _, n := range stringEnums {
+		if !seen[n] {
+			t.Errorf("%s has no constants in ir.go", n)
 		}
 	}
 }

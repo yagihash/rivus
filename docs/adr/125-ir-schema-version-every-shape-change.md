@@ -12,6 +12,13 @@
 3. 上げ忘れを、テストで防ぐ。`TestIRSchemaVersionMatchesShape` が、`internal/ir` の型の形のハッシュをバージョンごとに固定する。`TestExtractorsWriteTheSchemaVersion` が、extractor が書くバージョンを照合する。
 4. 今のバージョンを `rivus.ir/1` に上げた。
 
+**止めるか、続けて記録するかの線:**
+- 止める: 続けると、何が欠けたかを rivus 自身が言えないとき(スキーマが違う、対象が 0 件)。
+- 続けて、記録する: 何が違うかを rivus が言えるとき(extractor のソースのハッシュが違う、粗く解いた、時計で打ち切った)。
+- 止め方の質: 終了コードで理由が分かる。メッセージに作り直し方がある。
+
+形のハッシュには、`ir.go` の文字列の列挙(`Op`、`EdgeKind`、`TermKind` など)の定数の値も入れる。命令の種類を足すと、ハッシュが変わる。列挙の型の一覧はテストに明示し、一覧にない文字列の型が `ir.go` に出ると、テストが落ちる。
+
 **覆すもの:** ADR-044、ADR-062、ADR-073 の「足すだけで `schema_version` は変えない」(その決定の、バージョンの扱いの部分だけ)。ほかの決定は有効。
 
 **帰結:** 結果が変わる。バージョンの違う extractor は、エラーで止まる。`rivus setup rust` / `rivus setup dart` で作り直す。形を変える PR は、バージョンの 4 か所(`ir.go`、`irjson.rs`、`irjson.dart`、`rivus_dart.dart`)とフィクスチャの先頭行を直す。残り: `summary` に extractor のバージョンを出すこと(#109)。
