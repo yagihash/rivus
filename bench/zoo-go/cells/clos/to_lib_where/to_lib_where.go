@@ -20,7 +20,7 @@ func vuln() { // @vuln
 	{
 		t := mark.Src("clos-to-lib-where-vuln-indexfunc") // @source(clos-to-lib-where-vuln-indexfunc)
 		l := []string{t}
-		slices.IndexFunc(l, func(e string) bool {
+		_ = slices.IndexFunc(l, func(e string) bool {
 			mark.SinkCmd(e) // @sink(clos-to-lib-where-vuln-indexfunc)
 			return true
 		})
@@ -28,7 +28,7 @@ func vuln() { // @vuln
 	{
 		t := mark.Src("clos-to-lib-where-vuln-containsfunc") // @source(clos-to-lib-where-vuln-containsfunc)
 		l := []string{t}
-		slices.ContainsFunc(l, func(e string) bool {
+		_ = slices.ContainsFunc(l, func(e string) bool {
 			mark.SinkCmd(e) // @sink(clos-to-lib-where-vuln-containsfunc)
 			return true
 		})
@@ -36,7 +36,7 @@ func vuln() { // @vuln
 	{
 		t := mark.Src("clos-to-lib-where-vuln-deletefunc") // @source(clos-to-lib-where-vuln-deletefunc)
 		l := []string{t}
-		slices.DeleteFunc(l, func(e string) bool {
+		_ = slices.DeleteFunc(l, func(e string) bool {
 			mark.SinkCmd(e) // @sink(clos-to-lib-where-vuln-deletefunc)
 			return false
 		})
@@ -45,15 +45,15 @@ func vuln() { // @vuln
 
 func fixed() { // @fixed
 	l := []string{mark.CleanCmd(mark.Src("clos-to-lib-where-fixed"))}
-	slices.IndexFunc(l, func(e string) bool {
+	_ = slices.IndexFunc(l, func(e string) bool {
 		mark.SinkCmd(e) // @sink(none)
 		return true
 	})
-	slices.ContainsFunc(l, func(e string) bool {
+	_ = slices.ContainsFunc(l, func(e string) bool {
 		mark.SinkCmd(e) // @sink(none)
 		return true
 	})
-	slices.DeleteFunc(l, func(e string) bool {
+	_ = slices.DeleteFunc(l, func(e string) bool {
 		mark.SinkCmd(e) // @sink(none)
 		return false
 	})
@@ -62,15 +62,15 @@ func fixed() { // @fixed
 func decoy() { // @decoy
 	t := mark.Src("clos-to-lib-where-decoy") // @source(clos-to-lib-where-decoy)
 	l := []string{"constant"}
-	slices.IndexFunc(l, func(e string) bool {
+	_ = slices.IndexFunc(l, func(e string) bool {
 		mark.SinkCmd(e) // @sink(none) @nosink(clos-to-lib-where-decoy)
 		return true
 	})
-	slices.ContainsFunc(l, func(e string) bool {
+	_ = slices.ContainsFunc(l, func(e string) bool {
 		mark.SinkCmd(e) // @sink(none) @nosink(clos-to-lib-where-decoy)
 		return true
 	})
-	slices.DeleteFunc(l, func(e string) bool {
+	_ = slices.DeleteFunc(l, func(e string) bool {
 		mark.SinkCmd(e) // @sink(none) @nosink(clos-to-lib-where-decoy)
 		return false
 	})
