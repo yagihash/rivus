@@ -110,7 +110,7 @@ test_name_and_value_collisions_pass if {
 
 test_merge_conflict_in_code_is_not_checked if {
 	not denied("code", "main と衝突した")
-	not denied("paragraph", "`衝突を解消` の行")
+	not denied("paragraph", "`衝突を解消` の例")
 }
 
 test_a_sentence_without_conflict_word_passes if {
@@ -162,7 +162,7 @@ test_chuuki_is_denied if {
 }
 
 test_chuuki_replacements_pass if {
-	every text in ["uncertainty を出す", "不確実性を出す", "ステップの uncertainty が付く", "脚注を付ける", "注釈を足す", "補足を書く", "`注記` の行"] {
+	every text in ["uncertainty を出す", "不確実性を出す", "ステップの uncertainty が付く", "脚注を付ける", "注釈を足す", "補足を書く", "`注記` の例"] {
 		not denied("paragraph", text)
 	}
 }
@@ -224,6 +224,18 @@ test_michi_message_names_the_replacement if {
 
 test_michi_compounds_pass if {
 	every text in ["道具を使う", "歩道の話", "北海道の例", "道路の話", "道理に合う", "報道の記事", "神道", "武道の話", "書道の道具", "茶道の作法", "道徳の話", "道場で学ぶ", "鉄道の例", "水道の話", "街道を行く", "国道の番号", "`道` の例", "経路を示す"] {
+		not denied("paragraph", text)
+	}
+}
+
+test_gyou_as_entry_is_denied if {
+	every text in ["合格基準の行を足す", "台帳の行は古い", "calls の行が要る", "新しい行を追加する", "規則の行で宣言する", "表の行に書く", "モデルの行、または", "ルールの行を消す", "sink の行"] {
+		denied("paragraph", text)
+	}
+}
+
+test_gyou_counts_and_compounds_pass if {
+	every text in ["3 行目を直す", "1 行だけ足す", "行番号を出す", "行数を数える", "実行を止める", "並行して動かす", "処理を行う", "銀行の例", "進行中の作業", "5 行を足す", "`の行` の例", "行列の積", "出力を 20 行に切る"] {
 		not denied("paragraph", text)
 	}
 }
