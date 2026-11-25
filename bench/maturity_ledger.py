@@ -5,7 +5,8 @@
 
 todo, miss: the zoo test of each language; todo_marked: the @todo(F/..: PARITY: ..) marks in the sources (na.txt, lib.rs, the Go zoo) (`go test ./cmd/rivus -run 'TestZoo(Go|Dart|Rust)$' -v`).
 no_edge: Go: `go run ./bench/observed-edges run -zoo bench/zoo-go`; Dart: bench/zoo-dart/observed/compare.py (needs `dart`).
-call_mismatch: empty until the check of the call counts exists (docs/ROADMAP.md, B(3)).
+call_mismatch, call_unsupported: Dart only: bench/dart-callcheck/callcheck.py on bench/zoo-dart/cells (the functions with a call that the source writes
+and the IR has neither as a `call` nor as an `unsupported`; the calls that only an `unsupported` reports). Go and Rust: empty (no such check yet).
 An input that cannot be had leaves its column empty, and the reason goes to standard error: an empty cell is not a zero.
 What a number does not show is in bench/README.md (the section "The ledger of maturity").
 The script only adds rows. The commit is made by a person. Standard library only.
@@ -14,7 +15,7 @@ import argparse, datetime, os, re, shutil, subprocess, sys, tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LEDGER = os.path.join(ROOT, "bench", "maturity-ledger.tsv")
-COLUMNS = ["date", "rivus_commit", "lang", "cells", "na", "todo", "todo_marked", "miss", "no_edge", "calls_observed", "call_mismatch"]
+COLUMNS = ["date", "rivus_commit", "lang", "cells", "na", "todo", "todo_marked", "miss", "no_edge", "calls_observed", "call_mismatch", "call_unsupported"]
 LANGS = ["go", "dart", "rust"]
 
 MARKS_RE = re.compile(r"zoo-(go|dart|rust): parity marks: @na (\d+) \[([^\]]*)\] \| @todo (\d+) \[([^\]]*)\]")
@@ -28,6 +29,8 @@ GO_COMPARED_RE = re.compile(r"^\s*(ok|no_edge|no_callsite|id_unmapped)\s+(\d+)\s
 DART_CALL_RE = re.compile(r"^call\s+\w+\s+(\d+)\s*$", re.M)
 NO_EDGE_RE = re.compile(r"^\s*no_edge\s+(\d+)\s*$", re.M)
 COMPARE_RE = re.compile(r"^\w+\s+no_edge\s+(\d+)\s*$", re.M)
+CALL_MISMATCH_RE = re.compile(r"^call_mismatch\s+(\d+)\s*$", re.M)
+CALL_UNSUPPORTED_RE = re.compile(r"^call_unsupported\s+(\d+)\s*$", re.M)
 
 
 def parse_todo(text):
@@ -77,6 +80,12 @@ def parse_no_edge_dart(text):
     """The count of `no_edge` in the summary of bench/zoo-dart/observed/compare.py (lines "call  no_edge  N"), or None."""
     ms = COMPARE_RE.findall(text)
     return sum(int(x) for x in ms) if ms else (0 if "distinct observed edges" in text else None)
+
+
+def parse_call_check(text):
+    """(call_mismatch, call_unsupported) from the summary of bench/dart-callcheck/callcheck.py; None for a number it does not have."""
+    a, b = CALL_MISMATCH_RE.search(text), CALL_UNSUPPORTED_RE.search(text)
+    return (int(a.group(1)) if a else None, int(b.group(1)) if b else None)
 
 
 def make_rows(date, commit, values):
@@ -237,10 +246,36 @@ def collect_dart_edges(env, values):
             values["dart"]["calls_observed"] = parse_calls_dart(r.stdout)
 
 
+def collect_call_check(env, values):
+    """bench/dart-callcheck/callcheck.py on bench/zoo-dart/cells (the generated files of the cells, and `dart pub get`, as for no_edge)."""
+    dart = shutil.which(env.get("RIVUS_DART", "dart"))
+    if not dart:
+        warn("dart: no `dart` command; call_mismatch and call_unsupported left empty")
+        return
+    steps = [
+        (["go", "test", "./cmd/rivus", "-run", "^TestZooDartGenerate$", "-count=1", "-update"], ROOT),
+        ([dart, "pub", "get"], ROOT + "/extractor/dart"),
+        ([dart, "pub", "get"], ROOT + "/bench/zoo-dart/cells"),
+        ([dart, "pub", "get"], ROOT + "/bench/dart-callcheck"),
+        ([sys.executable, ROOT + "/bench/dart-callcheck/callcheck.py", ROOT + "/bench/zoo-dart/cells"], ROOT),
+    ]
+    for cmd, cwd in steps:
+        r = run(cmd, env=env, cwd=cwd)
+        if r.returncode != 0:
+            tail = (r.stdout + r.stderr).strip().splitlines()
+            warn("dart: `%s` failed (exit %d: %s); call_mismatch and call_unsupported left empty" % (" ".join(cmd[:3]), r.returncode, tail[-1] if tail else ""))
+            return
+    mismatch, unsupported = parse_call_check(r.stdout)
+    if mismatch is None:
+        warn("dart: callcheck.py gave no summary; call_mismatch and call_unsupported left empty")
+        return
+    values["dart"]["call_mismatch"], values["dart"]["call_unsupported"] = mismatch, unsupported
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--dry-run", action="store_true", help="print the rows, add nothing")
-    ap.add_argument("--no-edges", action="store_true", help="leave no_edge empty (the zoo tests only)")
+    ap.add_argument("--no-edges", action="store_true", help="leave no_edge and the call check empty (the zoo tests only)")
     ap.add_argument("--ledger", default=LEDGER)
     a = ap.parse_args(argv)
     env = dict(os.environ)
@@ -255,6 +290,7 @@ def main(argv=None):
     if not a.no_edges:
         collect_go_edges(env, values)
         collect_dart_edges(env, values)
+        collect_call_check(env, values)
     rows = make_rows(date, commit, values)
     text = open(a.ledger).read() if os.path.exists(a.ledger) else ""
     fresh = new_rows(rows, text)

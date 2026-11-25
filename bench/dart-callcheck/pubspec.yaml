@@ -1,0 +1,8 @@
+name: rivus_callcheck
+description: "The syntax side of the check of call positions (bench/dart-callcheck/callcheck.py): the calls that the Dart source writes, as positions."
+publish_to: none
+environment:
+  sdk: ^3.8.0
+dependencies:
+  analyzer: ^14.7.0
+  path: ^1.9.1

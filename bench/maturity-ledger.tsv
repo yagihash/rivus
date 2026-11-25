@@ -1,7 +1,10 @@
-date	rivus_commit	lang	cells	na	todo	todo_marked	miss	no_edge	calls_observed	call_mismatch
-2026-11-25	12d4e03c	go			45	0	14	0		
-2026-11-25	12d4e03c	dart			13	0	56	64		
-2026-11-25	12d4e03c	rust			14	14	28			
-2026-11-25	9296dc83	go	89	22	45	0	14	0	336	
-2026-11-25	9296dc83	dart	139	4	13	0	56	64	526	
-2026-11-25	9296dc83	rust	92	3	14	14	28			
+date	rivus_commit	lang	cells	na	todo	todo_marked	miss	no_edge	calls_observed	call_mismatch	call_unsupported
+2026-11-25	12d4e03c	go			45	0	14	0			
+2026-11-25	12d4e03c	dart			13	0	56	64			
+2026-11-25	12d4e03c	rust			14	14	28				
+2026-11-25	9296dc83	go	89	22	45	0	14	0	336		
+2026-11-25	9296dc83	dart	139	4	13	0	56	64	526		
+2026-11-25	9296dc83	rust	92	3	14	14	28				
+2026-11-25	411ff404	go	89	22	45	0	14	0	336		
+2026-11-25	411ff404	dart	139	4	13	0	56	64	526	0	0
+2026-11-25	411ff404	rust	92	3	14	14	28				
