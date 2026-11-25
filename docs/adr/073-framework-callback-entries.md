@@ -1,6 +1,7 @@
 # ADR-073: フレームワークが呼ぶメソッド(依存の型のメソッドの上書き)を、入口の集合に足す。`reachability` に `from_framework_callback` を足す
 
-- 状態: 有効
+- 状態: 一部覆った(→ADR-125)
+- 状態の詳細: 「足すだけで `schema_version` は変えない」は、ADR-125 が覆した。ほかは有効
 - 関連: README
 - 要旨: `from_framework_callback`
 
