@@ -147,7 +147,8 @@ func manifestPlaces(dir string) (places []manifestPlace, err error) {
 			if real, err := filepath.EvalSymlinks(path); err == nil {
 				if fi, err := os.Stat(real); err == nil && fi.IsDir() && !within(root, real) {
 					rel, _ := filepath.Rel(dir, path)
-					return fmt.Errorf("%s is a symbolic link to a directory outside the project (%s), so the manifests in it are not known", rel, real)
+					return fmt.Errorf("%s is a symbolic link to a directory outside the project (%s). The sandbox reads the project directory only, and the manifests there are not known. "+
+						"Point -C at a directory that holds both, or move the directory into the project", rel, real)
 				}
 			}
 			return nil
@@ -184,7 +185,8 @@ func manifestPlaces(dir string) (places []manifestPlace, err error) {
 				continue // it does not exist: cargo finds nothing there
 			}
 			if !within(root, real) {
-				return nil, fmt.Errorf("%s: path = %q leaves the project (%s), so the manifests there are not known", rel, p, real)
+				return nil, fmt.Errorf("%s: path = %q leaves the project (%s). The sandbox reads the project directory only, so cargo cannot read it, and the manifests there are not known. "+
+					"Point -C at the root of the workspace that holds both, or put the crate inside the project (-unsafe-host-exec reads it without the sandbox: only for code you trust)", rel, p, real)
 			}
 		}
 	}
