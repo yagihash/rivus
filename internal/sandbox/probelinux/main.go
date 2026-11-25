@@ -31,6 +31,7 @@ var (
 	attr   = flag.String("attr", "", "a file outside of the places that may be written: its mode and its times are changed (Landlock does not stop that; the parent reports it)")
 	attrIn = flag.String("attr-in", "", "a file in the work directory: its mode is changed (not reported)")
 	attrLn = flag.String("attr-link", "", "a symbolic link in the work directory that points outside: lchown of the link itself (the link is inside: not reported; what it points to is not touched)")
+	inhFd  = flag.Int("inherited-fd", -1, "a file descriptor that the test left open in the process that started the probe (not close-on-exec): is it still here?")
 	attrDD = flag.String("attr-dotdot", "", "a path, as it is written (not cleaned), whose mode is changed: dir/link/../file, where link points to another directory")
 	attrNl = flag.Bool("attr-null", false, "the mode of /dev/null is changed (a place that the run may write)")
 	attrFd = flag.String("attr-fd", "", "a file that may be read and not written: it is opened, and fchownat with AT_EMPTY_PATH is made on the descriptor (reported, with the path of the file)")
@@ -77,6 +78,10 @@ func main() {
 	if *canary != "" {
 		b, err := os.ReadFile(*canary)
 		report("read-secret", err == nil, fmt.Sprint(err, len(b)))
+	}
+	if *inhFd >= 0 {
+		_, err := unix.FcntlInt(uintptr(*inhFd), unix.F_GETFD, 0)
+		report("inherited-fd", err == nil, fmt.Sprint(err))
 	}
 	if *dir != "" {
 		f, err := os.Create(*dir + "/rivus-sbx-probe")
@@ -136,6 +141,23 @@ func main() {
 			unix.Close(fd)
 		}
 		report(pr.name, err != unix.EPERM, fmt.Sprint(err))
+	}
+	// the IPC of the system that is not mediated by Landlock and is shared with the other processes of the user (the IPC namespace is the host's): SysV
+	// shared memory, message queues and semaphores, POSIX message queues, kcmp. Arguments that fail at once on the host (no such key, no name, no such process)
+	// tell the refusal (EPERM) from the rest, and create nothing.
+	for _, c := range []struct {
+		name string
+		nr   uintptr
+		args [3]uintptr
+	}{
+		{"sysv-shm", unix.SYS_SHMGET, [3]uintptr{0x7fff0001, 0, 0}},
+		{"sysv-msg", unix.SYS_MSGGET, [3]uintptr{0x7fff0002, 0, 0}},
+		{"sysv-sem", unix.SYS_SEMGET, [3]uintptr{0x7fff0003, 0, 0}},
+		{"posix-mq", unix.SYS_MQ_OPEN, [3]uintptr{0, 0, 0}},
+		{"kcmp", unix.SYS_KCMP, [3]uintptr{0, 0, 0}},
+	} {
+		_, _, errno := unix.Syscall(c.nr, c.args[0], c.args[1], c.args[2])
+		report(c.name, errno != unix.EPERM, fmt.Sprint(errno))
 	}
 	// io_uring (it makes sockets by itself)
 	_, _, errno := unix.Syscall(unix.SYS_IO_URING_SETUP, 1, 0, 0)

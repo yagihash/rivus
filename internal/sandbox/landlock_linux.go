@@ -294,6 +294,10 @@ func helperMain() {
 		}
 		fail(failUnavailable, "%v", err)
 	}
+	// What the process that started rivus left open is not for the program: Landlock and seccomp do not stop the use of a descriptor that is already open (a
+	// socket, a file opened for writing). The descriptors from 6 on are marked close-on-exec (not closed: the runtime of this helper has some of its own, which it still
+	// uses until the exec). 0, 1 and 2 are the program's; 3, 4 and 5 are ours and are close-on-exec already.
+	unix.CloseRange(6, ^uint(0), unix.CLOSE_RANGE_CLOEXEC)
 	// from here on, the program is what runs; the status pipe is closed by the exec (it was made CLOEXEC), which is the answer "all well"
 	if err := syscall.Exec(cfg.Path, cfg.Argv, cfg.Env); err != nil {
 		fail(failExec, "%s: %v", cfg.Path, err)

@@ -124,7 +124,7 @@ func (f fixture) args() []string {
 	return a
 }
 
-var allChecks = []string{"read-secret", "write-outside", "tcp", "tcp-other-port", "udp", "unix-socket", "exec-other", "proc-environ", "io-uring", "ptrace", "unshare", "clone-newns", "clone3", "sctp", "mptcp"}
+var allChecks = []string{"read-secret", "write-outside", "tcp", "tcp-other-port", "udp", "unix-socket", "exec-other", "proc-environ", "io-uring", "ptrace", "unshare", "clone-newns", "clone3", "sctp", "mptcp", "sysv-shm", "sysv-msg", "sysv-sem", "posix-mq", "kcmp"}
 
 // Without the sandbox the probe gets out of everything that the test set up: otherwise a "blocked" under the sandbox shows nothing.
 func TestSandboxProbeEscapesOnTheHost(t *testing.T) {
@@ -883,5 +883,32 @@ func TestSandboxWatchesTheNewerCallsToo(t *testing.T) {
 				t.Errorf("%s is not watched", n)
 			}
 		}
+	}
+}
+
+// A descriptor that the process which started rivus left open (not close-on-exec) is not passed to the program: Landlock and seccomp do not stop the use of
+// a descriptor that is already open (a socket, a file opened for writing), so it must not be there.
+func TestSandboxInheritedDescriptorsAreNotPassedOn(t *testing.T) {
+	skipWithoutSandbox(t)
+	f := setup(t)
+	var p [2]int
+	if err := unix.Pipe(p[:]); err != nil { // (flags 0: not close-on-exec)
+		t.Fatal(err)
+	}
+	defer unix.Close(p[0])
+	defer unix.Close(p[1])
+	arg := []string{f.probe, "-only", "inherited-fd", "-inherited-fd", fmt.Sprint(p[1])}
+	// without the sandbox the probe has it (the descriptor does leak: the test shows something)
+	out, err := exec.Command(arg[0], arg[1:]...).CombinedOutput()
+	if err != nil || !verdicts(t, string(out))["inherited-fd"] {
+		t.Fatalf("on the host the probe does not see the descriptor (the test does not test what it says): %v %s", err, out)
+	}
+	res, err := Run(context.Background(), Spec{Argv: arg, Dir: f.work, Env: []string{"PATH=/usr/bin:/bin"}, Write: []string{f.work}, Timeout: time.Minute})
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := verdicts(t, string(res.Stdout))
+	if esc, ok := v["inherited-fd"]; !ok || esc {
+		t.Errorf("the descriptor %d is passed on to the program: %v\n%s", p[1], v, res.Stdout)
 	}
 }

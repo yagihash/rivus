@@ -55,6 +55,14 @@ var deniedCalls = []uint32{
 	unix.SYS_KEYCTL, // the keys of the user's session
 	unix.SYS_ADD_KEY,
 	unix.SYS_REQUEST_KEY,
+	// the IPC that the system shares among the processes of a user and that Landlock does not mediate (the IPC namespace is the host's, and a namespace cannot be made:
+	// see below): SysV shared memory, message queues and semaphores (a segment of another process of the same user, such as the buffers of an X11 client, can be
+	// attached, read and written), POSIX message queues, and kcmp (what two processes share). A build needs none of them.
+	unix.SYS_SHMGET, unix.SYS_SHMAT, unix.SYS_SHMCTL, unix.SYS_SHMDT,
+	unix.SYS_MSGGET, unix.SYS_MSGSND, unix.SYS_MSGRCV, unix.SYS_MSGCTL,
+	unix.SYS_SEMGET, unix.SYS_SEMOP, unix.SYS_SEMTIMEDOP, unix.SYS_SEMCTL,
+	unix.SYS_MQ_OPEN, unix.SYS_MQ_UNLINK, unix.SYS_MQ_TIMEDSEND, unix.SYS_MQ_TIMEDRECEIVE, unix.SYS_MQ_NOTIFY, unix.SYS_MQ_GETSETATTR,
+	unix.SYS_KCMP,
 	// a new user namespace gives a process the rights of root inside it, and with them a lot of the kernel that an unprivileged process cannot reach
 	// (mounts, networks, firewalls): a way into kernel bugs. Nothing that a build runs needs one.
 	unix.SYS_UNSHARE,
