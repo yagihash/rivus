@@ -1,0 +1,24 @@
+{
+ "target": "https://github.com/orhun/rustypaste at 00292076e47b5f500906a97a1b5c17665270d907 (the pre-fix commit of CVE-2026-90774, a path traversal in the upload; fixed by PR #623, ac05d552596af4a8429d80f30d11f67117ce02c8)",
+ "how": "Read from the public fix (git diff of the two commits; src/paste.rs and src/util.rs). The fix builds the path of the stored file again with util::safe_path_join when the file name comes from the request header, so the path stays inside the upload directory. source: the request that the handler `upload` receives (the position of the function in server.rs: the line of its attribute, as the finding reports it). sink: the call that creates the file at that path in Paste::store_file. `line` is the line at the pre-fix commit; `fixed_line` is the same place at the fixed commit (one line further: the fix adds one line before it). Position only, the same way as the truth of bench/memos; used by detect.mode location of bench/deps_bench.py: detected when at least one finding of the category has its source at a source site AND its sink at a sink site (position of the finding: file, line).",
+ "sites": [
+  {
+   "role": "source",
+   "file": "src/server.rs",
+   "line": 324,
+   "fixed_line": 324,
+   "category": "path_traversal",
+   "func": "upload",
+   "note": "the request of the upload handler (actix_web::HttpRequest), which carries the header that gives the file name"
+  },
+  {
+   "role": "sink",
+   "file": "src/paste.rs",
+   "line": 240,
+   "fixed_line": 241,
+   "category": "path_traversal",
+   "call": "std::fs::File::create",
+   "note": "creates the file at the path that is built from the file name"
+  }
+ ]
+}
