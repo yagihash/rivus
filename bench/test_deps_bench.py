@@ -117,6 +117,11 @@ class Through(unittest.TestCase):
         r["findings"][0]["paths"][0]["steps"][0]["desc"] = "sink: dart:io#Link.create"
         self.assertEqual(d.through_counts(self.truth, r), (1, 2))
 
+    def test_sink_step_of_another_category_not_counted(self):
+        r = self.rep("ssrf", 1)
+        r["findings"][0]["paths"][0]["steps"][0]["desc"] = "sink: dart:io#Link.create"
+        self.assertEqual(d.through_counts(self.truth, r), (0, 2))
+
     def test_kind_mismatch_not_counted(self):
         self.assertEqual(d.through_counts(self.truth, self.rep("ssrf", 1)), (0, 2))
 
