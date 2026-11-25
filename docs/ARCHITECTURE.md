@@ -451,36 +451,71 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 
 #### kind ごとの `attributable_to`
 
-| kind | attributable_to | 備考 |
+`kind` と `attributable_to` と 1 文の説明の表は、コードの表(`internal/taint/kinds.go` の `Kinds`)から作る。手で直さない。`make docs-gen WHAT=kinds` の出力と同じでなければ、`TestDocsSync` が落ちる。
+
+<!-- kinds:begin -->
+| kind | attributable_to | 説明 |
 |---|---|---|
-| `config_read` | target | |
-| `exported_api_param` | target | ライブラリの公開関数の引数が、外から来る値 |
-| `global_var` | target | 書き込み箇所は列挙する |
-| `reflection` | target | |
-| `ffi_boundary` | target | |
-| `stored_data_boundary` | target | データストアに出し入れする呼び出し。その先は追わない |
-| `missing_source` | target | ワークフロー前提（`go generate` / `build_runner` 未実行）に由来 |
-| `dynamic_dispatch` | 候補 1 件以上: mixed／候補 0 件: rivus | 言語機能として呼び出し先が決まらないが、候補の絞り込み精度（VTA など）は rivus の改善余地がある。候補が 0 件なのは、実装が読み込んだコードの外にあるときで、モデルを書けば減る（rivus）。detail が `expansion_limit` のものは、`match: implementations` の展開を上限で止めた記録（5.4） |
-| `assumed_call` | mixed | 呼ばれるところが見えないクロージャ（渡す、保存する、返す）を、作った場所で、呼ばれるものとして適用した（キャプチャした値を、クロージャの要約に適用する。ADR-059）。付くのは、要約がキャプチャした値に依る効果を持つクロージャだけ。throw と結果は適用せず、そのとき detail に書く。1 度も呼ばれないクロージャの流れも、finding になりうる（過検出） |
-| `pointer_alias` | rivus | 経路が、ポインタ越しの書き込み(読み出し)を、別名(`ptrAlias`、`copyOf`。`internal/taint/ptrcells.go`)で近似した所を通る。別名は、実行時にポインタが指す先より広いことがあり、流れが実在しないことがある。付くのは、別名が作った書き込み・読み出しのステップ(ホップ)を通った finding だけ。今は Rust だけ(`HasEnv`) |
-| `func_value_into_dependency` | rivus | 自分のコードの呼び出しが、`calls:` のモデルのない依存の関数(本体を読む)へ、自分のコードの関数値を渡した。依存の関数の要約は、関数値(`FUNC` の要素。`internal/taint/funccells.go`)を出力に運ばないので、依存の中でそれが呼ばれる流れは追わない(運ぶと、実プロジェクトの測定で要約の要素が 47 倍になった)。`calls:` の行を書けば減る(`unmodeled_library_call` と同じ)。付くのは、その呼び出しの要約を適用した経路を通る finding(経路の各場所に 1 件ずつ)と、全体の一覧(依存の関数ごとに 1 件。最初の場所を持ち、場所の数と関数の数を detail に書く)。本体を読まない宣言のパッケージ(ADR-100)の呼び出しには付かない(呼ばれるものとして扱う: `assumed_call`)。今は Dart だけ |
-| `unresolved_callee` | mixed | 関数値は実行時に決まるが、生成箇所を追う型フロー解析で候補を絞れる |
-| `concurrency` | mixed | 実行順序に依存するが、channel を単純なキューとしてモデル化すれば追える範囲が広がる |
-| `unmodeled_library_call` | rivus | モデルを書けば減る |
-| `dependency_body_unread` | rivus | モデルのあるインターフェースのメソッドの動的な呼び出しで、候補に本体のある依存の関数（プロジェクトの外）があったが、読まなかった（ADR-075）。依存が値を包んで渡した先の、自前の実装の中の sink は、たどっていない。`dynamic_dispatch` と並べて付き、候補に、読まなかった依存の関数を並べる |
-| `project_body_unread` | rivus | プロジェクトの関数の呼び出しで、extractor がその関数の本体を読めなかった（Rust: `rustc_public` が async closure を変換できず、関数を飛ばした。`fn_skipped`、`summary.functions_skipped`。ADR-109）。関数の中で値がどうなるかは、たどっていない。依存の関数は、`dependency_body_unread`（`detail` に理由）。モデルの行があれば、行が使われ、uncertainty は付かない |
-| `model_approximation` | rivus | 流れのモデルが、自分で「近似」と宣言している（`approximate` の文）。モデルの限界（ADR-067） |
-| `numeric_stop` | rivus | source のデータが数値や bool になり、それ以降は追わない（既定。`-numeric-taint` で追う）。source の種類（シンボルとラベル）ごとに 1 件で、最初の場所と、起きた関数の一覧（10 件まで）を持つ。サマリを通って止まる分（呼び出し先の中の、引数の記号的なデータの止まり）は、この 1 件には入らない。そのうち、文字の読み出し（`isCharRead`）で止まった分は、`Summary.CharStopped`（引数の番号と、止まった関数。同じ番号に複数あれば関数 ID が最小のもの。`signature()` に入り、結果には出ない）に持ち、呼び出し元が自分の引数を渡していれば番号を引き継ぎ、本物の汚染（source のデータ）を渡した呼び出しに限り、`detail: char_read_in_callee: <関数名>` の `numeric_stop` を、全体の不確実性の一覧に、呼び出し元と呼び出し先の組ごとに 1 件（場所は組の中で最小のもの）出す。呼び出し先が、数値と bool 以外の型の戻り値か書き込める引数（文字列以外の引数）を持つときだけ記録する（型だけで決まる。bool だけを返す検査の関数は、`-numeric-taint` を付けても流れが増えないので、記録しない）（流れは運ばない。`-numeric-taint` のときは止めないので空）。文字の読み出し以外の止まりは、今も記録されない |
-| `unsupported_construct` | rivus | extractor が下げられなかった構文（IR の `unsupported`）。その場所で何が起きるかは、解析に入っていない。`missing_source` ではない（対象のコードが足りないのではなく、rivus が読めなかった） |
-| `container_element_imprecision` | rivus | 結論に影響した場合のみ記録（ノイズ防止） |
-| `depth_limit` | rivus | 打ち切り。detail が理由を示す（`guard_limit`、`candidate_limit`、`caller_depth_limit`、`func_timeout`、`path_limit`、`out_limit`、`scc_coarsened` など）。例外: detail が `path_steps_omitted:` のものは、**解析の打ち切りではなく、表示の省略**（流れは見た。200 ステップを超える経路の、真ん中のステップを見せていない。省いたステップの不確実性・モデル・到達性は finding に入っている）。ただし、source までさかのぼる途中の打ち切り（`the path was followed back for ...`）は、その先のステップを見ていない |
-| `access_path_truncated` | rivus | 経路の**このステップ**で、値が深さの上限(`-k`。依存の関数は `-dep-k`)で切ったアクセスパスを通った(切ったセルに入れたステップ、切ったパスで読んだステップ)。切った所より下は「まるごと汚染」として扱うので、ここから先の流れは、切ったために出ているだけかもしれない(多めに出る側。見逃しにはならない)。要素の同一性には入れず、ステップ(why)に付ける(`pointer_alias` と同じ形)。使った深さは `summary.access_path_depth`(`{project, dependency}`、いつも出る)。切ったが値がそこを通らない finding には付かない。付かない場合: ポインタの位置のパスを切る所(`locs.go`。ループで伸びるパスの打ち切り)は uncertainty を付けない。プログラム全体の記録は、`depth_limit` の `path_limit:` |
-| `char_transform` | rivus | 経路の**このステップ**で、文字列の 1 文字を読んだ値(IR の `CharRead`)か、それに由来のマーク(`Elem` の `char`)が付いた値が、数や bool の場所に入った(`-char-taint` のときだけ。ステップに付け、要素の同一性にはマークが入る)。マークは、`CharRead` の命令の結果に付き、コピー、定数との算術、byte・rune・char への変換、文字列・スライスへの書き込みと要約を通る。落ちる所: 比較、`len`、別の数の型への変換(`int(c)`)、モデルや本体のない呼び出しが、文字列から作る数。表を文字で引く `t[c]` は、引いた値に文字のマークが付く。フラグ off では出ない。種類を 1 つ足した(ADR-008 の扱いは未決) |
-| `recursion_approximation` | rivus | |
-| `field_imprecision` | rivus | フィールドを指定する sink に、そのフィールドにあるとは言えない汚染が届いた（14 節）。detail は `whole_value`、`path_limit`、`element`、`opaque_callee` |
-| `field_unresolved` | rivus | sink が指定したフィールドが、プログラムにない（綴りの誤りなど）。sink を全体として扱った（14 節） |
-| `named_unresolved` | rivus | sink が `named:` で指定した引数の名前が、プログラムのその関数の呼び出しのどれにもない（綴りの誤りなど）。sink を呼び出し全体として扱った（`docs/MODELING.md` 4a-1 節） |
-| `global_holds_nothing` | rivus | 読み戻す人がいないとルールが宣言する変数（ADR-056）に、汚染を書いた関数を、変数ごとに 1 件記録する（`internal/taint/heldnothing.go`） |
+| `config_read` | target | 値が設定から読まれていて、その元は読んだコードの外にある。 |
+| `exported_api_param` | target | ライブラリの公開関数の引数で、値の元は呼び出し側(読んだコードの外)にある。 |
+| `global_var` | target | 値がパッケージの変数から来ていて、書き込み箇所を列挙してある。 |
+| `reflection` | target | リフレクションで、実行時に何が起きるかが決まる。 |
+| `ffi_boundary` | target | 呼び出しが、その言語の外(cgo や他言語の関数)に出る。 |
+| `stored_data_boundary` | target | データストアへの出し入れで、読み戻した値の元は追わない。 |
+| `missing_source` | target | 対象のコードの一部がない(生成コードが未生成、パッケージが読み込めないなど)。 |
+| `dynamic_dispatch` | mixed | 呼び出し先が実行時に決まる(候補が 0 件のときは rivus の限界として rivus になる)。 |
+| `assumed_call` | mixed | 呼ばれる所の見えないクロージャを、作った所で呼ばれたものとして扱った。 |
+| `pointer_alias` | rivus | ポインタ越しの書き込みや読み出しを、別名で近似した所を経路が通る。 |
+| `func_value_into_dependency` | rivus | 自分のコードの関数値が、モデルのない依存の関数に渡され、依存の中でそれが呼ばれる流れは追わない。 |
+| `unresolved_callee` | mixed | 関数値の呼び出し先が実行時に決まり、候補を絞り込めなかった。 |
+| `concurrency` | mixed | 実行順序に依存する所(goroutine、channel、コールバック)で、順序は扱っていない。 |
+| `unmodeled_library_call` | rivus | ライブラリの呼び出しにモデルがなく、汚染がどう通るかを知らない。 |
+| `dependency_body_unread` | rivus | モデルのあるインターフェースの呼び出しの候補に、本体を読んでいない依存の関数があった。 |
+| `project_body_unread` | rivus | プロジェクトの関数の本体を、extractor が読めなかった。 |
+| `model_approximation` | rivus | 流れのモデルが、自分で近似だと宣言している。 |
+| `numeric_stop` | rivus | source のデータが数値や bool になり、そこから先は追わない(既定)。 |
+| `unsupported_construct` | rivus | extractor が下げられなかった構文で、そこで起きることは解析に入っていない。 |
+| `container_element_imprecision` | rivus | コンテナの要素を区別していない(結論に影響した所だけ記録する)。 |
+| `depth_limit` | rivus | 上限や時間で解析を打ち切った(理由は detail に書く)。 |
+| `access_path_truncated` | rivus | 経路が、深さの上限で切ったアクセスパスを通り、切った所より下を丸ごと汚染として扱った。 |
+| `char_transform` | rivus | 文字列から 1 文字を読んだ値(かその派生)が、数や bool の場所に入った(`-char-taint` のとき)。 |
+| `recursion_approximation` | rivus | 再帰のある関数群が固定点に届かず、近似で止めた。 |
+| `field_imprecision` | rivus | フィールドを指定した sink に、そのフィールドにあるとは言えない汚染が届いた。 |
+| `field_unresolved` | rivus | sink が指定したフィールドが、プログラムにない(綴りの誤りなど)ので、sink を全体として扱った。 |
+| `named_unresolved` | rivus | sink が `named:` で指定した引数の名前が、プログラムのどの呼び出しにもないので、呼び出し全体として扱った。 |
+| `global_holds_nothing` | rivus | 何も保持しないとルールが宣言した変数に、汚染を書いた関数がある(変数ごとに 1 件)。 |
+<!-- kinds:end -->
+
+#### kind ごとの補足
+
+表の 1 文に収まらない、kind ごとの読み方(付く条件、付かない条件、detail の値など)。`attributable_to` はここに書かない(上の表が持つ)。
+
+| kind | 補足 |
+|---|---|
+| `exported_api_param` | ライブラリの公開関数の引数が、外から来る値 |
+| `global_var` | 書き込み箇所は列挙する |
+| `stored_data_boundary` | データストアに出し入れする呼び出し。その先は追わない |
+| `missing_source` | ワークフロー前提（`go generate` / `build_runner` 未実行）に由来 |
+| `dynamic_dispatch` | 候補が 1 件以上なら `mixed`、0 件なら `rivus`。言語機能として呼び出し先が決まらないが、候補の絞り込み精度（VTA など）は rivus の改善余地がある。候補が 0 件なのは、実装が読み込んだコードの外にあるときで、モデルを書けば減る（rivus）。detail が `expansion_limit` のものは、`match: implementations` の展開を上限で止めた記録（5.4） |
+| `assumed_call` | 呼ばれるところが見えないクロージャ（渡す、保存する、返す）を、作った場所で、呼ばれるものとして適用した（キャプチャした値を、クロージャの要約に適用する。ADR-059）。付くのは、要約がキャプチャした値に依る効果を持つクロージャだけ。throw と結果は適用せず、そのとき detail に書く。1 度も呼ばれないクロージャの流れも、finding になりうる（過検出） |
+| `pointer_alias` | 経路が、ポインタ越しの書き込み(読み出し)を、別名(`ptrAlias`、`copyOf`。`internal/taint/ptrcells.go`)で近似した所を通る。別名は、実行時にポインタが指す先より広いことがあり、流れが実在しないことがある。付くのは、別名が作った書き込み・読み出しのステップ(ホップ)を通った finding だけ。今は Rust だけ(`HasEnv`) |
+| `func_value_into_dependency` | 自分のコードの呼び出しが、`calls:` のモデルのない依存の関数(本体を読む)へ、自分のコードの関数値を渡した。依存の関数の要約は、関数値(`FUNC` の要素。`internal/taint/funccells.go`)を出力に運ばないので、依存の中でそれが呼ばれる流れは追わない(運ぶと、実プロジェクトの測定で要約の要素が 47 倍になった)。`calls:` の行を書けば減る(`unmodeled_library_call` と同じ)。付くのは、その呼び出しの要約を適用した経路を通る finding(経路の各場所に 1 件ずつ)と、全体の一覧(依存の関数ごとに 1 件。最初の場所を持ち、場所の数と関数の数を detail に書く)。本体を読まない宣言のパッケージ(ADR-100)の呼び出しには付かない(呼ばれるものとして扱う: `assumed_call`)。今は Dart だけ |
+| `unresolved_callee` | 関数値は実行時に決まるが、生成箇所を追う型フロー解析で候補を絞れる |
+| `concurrency` | 実行順序に依存するが、channel を単純なキューとしてモデル化すれば追える範囲が広がる |
+| `unmodeled_library_call` | モデルを書けば減る |
+| `dependency_body_unread` | モデルのあるインターフェースのメソッドの動的な呼び出しで、候補に本体のある依存の関数（プロジェクトの外）があったが、読まなかった（ADR-075）。依存が値を包んで渡した先の、自前の実装の中の sink は、たどっていない。`dynamic_dispatch` と並べて付き、候補に、読まなかった依存の関数を並べる |
+| `project_body_unread` | プロジェクトの関数の呼び出しで、extractor がその関数の本体を読めなかった（Rust: `rustc_public` が async closure を変換できず、関数を飛ばした。`fn_skipped`、`summary.functions_skipped`。ADR-109）。関数の中で値がどうなるかは、たどっていない。依存の関数は、`dependency_body_unread`（`detail` に理由）。モデルの行があれば、行が使われ、uncertainty は付かない |
+| `model_approximation` | 流れのモデルが、自分で「近似」と宣言している（`approximate` の文）。モデルの限界（ADR-067） |
+| `numeric_stop` | source のデータが数値や bool になり、それ以降は追わない（既定。`-numeric-taint` で追う）。source の種類（シンボルとラベル）ごとに 1 件で、最初の場所と、起きた関数の一覧（10 件まで）を持つ。サマリを通って止まる分（呼び出し先の中の、引数の記号的なデータの止まり）は、この 1 件には入らない。そのうち、文字の読み出し（`isCharRead`）で止まった分は、`Summary.CharStopped`（引数の番号と、止まった関数。同じ番号に複数あれば関数 ID が最小のもの。`signature()` に入り、結果には出ない）に持ち、呼び出し元が自分の引数を渡していれば番号を引き継ぎ、本物の汚染（source のデータ）を渡した呼び出しに限り、`detail: char_read_in_callee: <関数名>` の `numeric_stop` を、全体の不確実性の一覧に、呼び出し元と呼び出し先の組ごとに 1 件（場所は組の中で最小のもの）出す。呼び出し先が、数値と bool 以外の型の戻り値か書き込める引数（文字列以外の引数）を持つときだけ記録する（型だけで決まる。bool だけを返す検査の関数は、`-numeric-taint` を付けても流れが増えないので、記録しない）（流れは運ばない。`-numeric-taint` のときは止めないので空）。文字の読み出し以外の止まりは、今も記録されない |
+| `unsupported_construct` | extractor が下げられなかった構文（IR の `unsupported`）。その場所で何が起きるかは、解析に入っていない。`missing_source` ではない（対象のコードが足りないのではなく、rivus が読めなかった） |
+| `container_element_imprecision` | 結論に影響した場合のみ記録（ノイズ防止） |
+| `depth_limit` | 打ち切り。detail が理由を示す（`guard_limit`、`candidate_limit`、`caller_depth_limit`、`func_timeout`、`path_limit`、`out_limit`、`scc_coarsened` など）。例外: detail が `path_steps_omitted:` のものは、**解析の打ち切りではなく、表示の省略**（流れは見た。200 ステップを超える経路の、真ん中のステップを見せていない。省いたステップの不確実性・モデル・到達性は finding に入っている）。ただし、source までさかのぼる途中の打ち切り（`the path was followed back for ...`）は、その先のステップを見ていない |
+| `access_path_truncated` | 経路の**このステップ**で、値が深さの上限(`-k`。依存の関数は `-dep-k`)で切ったアクセスパスを通った(切ったセルに入れたステップ、切ったパスで読んだステップ)。切った所より下は「まるごと汚染」として扱うので、ここから先の流れは、切ったために出ているだけかもしれない(多めに出る側。見逃しにはならない)。要素の同一性には入れず、ステップ(why)に付ける(`pointer_alias` と同じ形)。使った深さは `summary.access_path_depth`(`{project, dependency}`、いつも出る)。切ったが値がそこを通らない finding には付かない。付かない場合: ポインタの位置のパスを切る所(`locs.go`。ループで伸びるパスの打ち切り)は uncertainty を付けない。プログラム全体の記録は、`depth_limit` の `path_limit:` |
+| `char_transform` | 経路の**このステップ**で、文字列の 1 文字を読んだ値(IR の `CharRead`)か、それに由来のマーク(`Elem` の `char`)が付いた値が、数や bool の場所に入った(`-char-taint` のときだけ。ステップに付け、要素の同一性にはマークが入る)。マークは、`CharRead` の命令の結果に付き、コピー、定数との算術、byte・rune・char への変換、文字列・スライスへの書き込みと要約を通る。落ちる所: 比較、`len`、別の数の型への変換(`int(c)`)、モデルや本体のない呼び出しが、文字列から作る数。表を文字で引く `t[c]` は、引いた値に文字のマークが付く。フラグ off では出ない。種類を 1 つ足した(ADR-008 の扱いは未決) |
+| `field_imprecision` | フィールドを指定する sink に、そのフィールドにあるとは言えない汚染が届いた（14 節）。detail は `whole_value`、`path_limit`、`element`、`opaque_callee` |
+| `field_unresolved` | sink が指定したフィールドが、プログラムにない（綴りの誤りなど）。sink を全体として扱った（14 節） |
+| `named_unresolved` | sink が `named:` で指定した引数の名前が、プログラムのその関数の呼び出しのどれにもない（綴りの誤りなど）。sink を呼び出し全体として扱った（`docs/MODELING.md` 4a-1 節） |
+| `global_holds_nothing` | 読み戻す人がいないとルールが宣言する変数（ADR-056）に、汚染を書いた関数を、変数ごとに 1 件記録する（`internal/taint/heldnothing.go`） |
 
 `summary.numeric_stops` は、数値と bool のルール(これらの型の値は汚染を持たない)が、汚染を捨てた回数を、関数ごとに、原因で分けて数える。`numeric_stop` の uncertainty が source ごとの 1 件で、関数の中の止まりも、サマリの中の止まりも記録しないのを補う。数えるのは、`add` が数値・bool の場所へ要素を入れようとして捨てたときと、`pure` や結果に届かない `flows` のモデルが、汚染のある引数から数値・bool の結果を作ったとき。原因は 2 つ。`char_reads`: 捨て先の値が、文字列や byte 列・rune 列の 1 要素の取り出し(型が byte・rune・char、添字が定数でない文字列の添字、`codeUnitAt` など)のとき。引数の記号的な要素も数える(文字列が引数だから)。`other`: それ以外(長さ、添字、カウンタ、変換、比較、モデルが作る数)。こちらは source の実の要素だけを数える(引数の記号的な要素はどこにでもあり、数が大きくなるだけで意味がない)。サマリを作る解析と、呼び出し先のサマリを呼び出し元に当てるときの分は、止まりが起きた関数に数える。要素の大きさは変えず、状態に整数 2 つを持つだけで、関数の最後の完全な解析の値を使う。出力は `total`、`char_reads`(`total`、`functions`、回数の多い 10 関数: `function`、`scope`、`count`)、`other`(`total`、`functions`)で、常に出る。読み方: `char_reads` の関数は、文字を 1 つずつ扱っている(字句解析や構文解析、1 文字ずつの置換・符号化)。期待した sink が `-no-deps` では出るのに依存を読むと消えるときは、依存の中のそのような関数が `char_reads` の上位にないかを見る。`other` は仕様どおりの止まりで、見るのは数だけ。数える形は言語ごとに決めている(型だけでなく、取り出す操作で見る): Go は byte・rune の型と、定数でない添字の文字列の添字。Dart は `codeUnitAt` の結果、`s.codeUnits` と `s.runes` の繰り返しの要素と添字の取り出し。Rust は `bytes()`・`chars()`・`char_indices()` の `Iterator::next` の要素、`as_bytes()[i]`、`char` 型。**数えない形**(0 のままで、止まっていないとは限らない): Dart のコールバックに渡る要素(`runes.map((r) => ...)`)、Rust の上の形以外の byte の取り出し(#185)。定数の添字(`s[0]`)は、どの言語でも数えない。
 
@@ -492,7 +527,7 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 
 ### 4.5 出力
 
-型は `internal/taint/result.go`（`Finding`、`Path`、`Step`、`ModelRef`、`Suppression`）と `internal/report/report.go`（`Report`）。結果のバージョンは `rivus.result/3`。形（キーと型、`kind` と `attributable_to` の値）が変わるときは、足しただけでも上げる。上げる所は、`internal/report/report.go` の `SchemaVersion` と、`internal/report/schema_shape_test.go` の表 `resultShapes` の 2 か所（ADR-127）。
+型は `internal/taint/result.go`（`Finding`、`Path`、`Step`、`ModelRef`、`Suppression`）と `internal/report/report.go`（`Report`）。結果のバージョンは `rivus.result/4`。形（キーと型、`kind` と `attributable_to` の値）が変わるときは、足しただけでも上げる。上げる所は、`internal/report/report.go` の `SchemaVersion` と、`internal/report/schema_shape_test.go` の表 `resultShapes` の 2 か所（ADR-127）。
 
 `Finding` の主なフィールド（JSON の名前）:
 

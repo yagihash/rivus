@@ -1818,7 +1818,7 @@ func (e *Engine) buildFinding(rf *rawFinding) *Finding {
 		}
 	}
 	for _, s := range src.Src {
-		addModel(*modelRef(src.Symbol, "source", s.Provenance))
+		addModel(*modelRef(src.Symbol, model.RoleSource, s.Provenance))
 	}
 	for _, st := range agg {
 		if st.Model != nil {
@@ -1826,7 +1826,7 @@ func (e *Engine) buildFinding(rf *rawFinding) *Finding {
 		}
 	}
 	for _, k := range rf.site.Sink {
-		addModel(*modelRef(rf.site.Symbol, "sink", k.Provenance))
+		addModel(*modelRef(rf.site.Symbol, model.RoleSink, k.Provenance))
 	}
 
 	// a model decided by an LLM that cut another way from this source, in a function of this path: the finding

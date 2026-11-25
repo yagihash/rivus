@@ -11,13 +11,14 @@ import (
 	"time"
 
 	"github.com/yagihash/rivus/internal/docsgen"
+	"github.com/yagihash/rivus/internal/taint"
 )
 
 // TestDocsSync: the tables of the documents that copy a constant or a list of the code say the same as the code. The
 // code is the source: a document is not edited by hand to follow it where a test can find the difference. The checks:
 //
 //   - the kinds of uncertainty (the Kind constants of internal/taint) are the rows of AGENT-GUIDE (the table of the kinds)
-//     and of ARCHITECTURE 4.4;
+//     and of ARCHITECTURE 4.4 (the table of 4.4 is the output of `make docs-gen WHAT=kinds`, from taint.Kinds);
 //   - the first words of a `depth_limit` detail (the reasons) that the code writes are in the row of AGENT-GUIDE, and the
 //     words that the two documents list exist in the code;
 //   - the flags of `analyze` in AGENT-GUIDE section 4: the usual flags are the same set as the code's; a flag of the table
@@ -149,7 +150,26 @@ func TestDocsSync(t *testing.T) {
 		t.Fatalf("the Kind constants of internal/taint: %d found", len(kinds))
 	}
 	same("the kinds, AGENT-GUIDE", "the code", kinds, "the document", firstColumn(section(agent, "### 不確実性の kind")))
-	same("the kinds, ARCHITECTURE 4.4", "the code", kinds, "the document", firstColumn(section(arch, "### 4.4")))
+	// ARCHITECTURE 4.4: the table between the markers is the table of the code (taint.Kinds), made by `make docs-gen WHAT=kinds`
+	archLines := section(arch, "### 4.4")
+	archKinds := strings.Join(archLines, "\n")
+	const kindsBegin, kindsEnd = "<!-- kinds:begin -->\n", "<!-- kinds:end -->"
+	if i, j := strings.Index(archKinds, kindsBegin), strings.Index(archKinds, kindsEnd); i < 0 || j < i {
+		t.Error("ARCHITECTURE 4.4 has no table between `<!-- kinds:begin -->` and `<!-- kinds:end -->`")
+	} else if got := archKinds[i+len(kindsBegin) : j]; got != taint.KindsTable() {
+		t.Errorf("the table of the kinds in ARCHITECTURE 4.4 is not the table of the code. Replace what is between the markers with the output of `make docs-gen WHAT=kinds`.\ndocument:\n%s\ncode:\n%s", got, taint.KindsTable())
+	}
+	// the notes below it are about kinds of the code
+	if i := strings.Index(archKinds, "#### kind ごとの補足"); i < 0 {
+		t.Error("ARCHITECTURE 4.4 has no section `#### kind ごとの補足`")
+	} else {
+		notes := firstColumn(strings.Split(archKinds[i:], "\n"))
+		for k := range notes {
+			if !kinds[k] {
+				t.Errorf("the notes of ARCHITECTURE 4.4 are for %q, which is not a kind of the code", k)
+			}
+		}
+	}
 
 	// 2. the reasons of depth_limit
 	src := goSources("taint", "ir", "report")

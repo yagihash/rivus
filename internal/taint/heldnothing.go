@@ -6,11 +6,6 @@ import (
 	"github.com/yagihash/rivus/internal/sg"
 )
 
-// KindGlobalHoldsNothing marks a package variable that a rule says holds nothing (ADR-056): what the
-// functions listed wrote to it is not followed. Attributable to rivus: it is a decision of the model, and a
-// rule file takes it back (holds: everything).
-const KindGlobalHoldsNothing = "global_holds_nothing"
-
 // DroppedGlobal is a package variable that holds nothing, and the number of functions that wrote to it.
 type DroppedGlobal struct {
 	Symbol    string `json:"symbol"`

@@ -68,24 +68,26 @@ const (
 	KindNamedUnresolved = "named_unresolved"
 	// KindPointerAlias marks a hop that goes through a write (or a read) via a pointer that is held in a cell, which
 	// rivus approximates by aliasing (ptrAlias, ptrcells.go): the flow may not exist.
-	KindPointerAlias   = "pointer_alias"
-	AttributableTarget = "target"
-	AttributableRivus  = "rivus"
-	AttributableMixed  = "mixed"
-	maxPathSteps       = 200
+	KindPointerAlias = "pointer_alias"
+	// KindGlobalHoldsNothing marks a package variable that a rule says holds nothing (ADR-056): what the
+	// functions listed wrote to it is not followed. Attributable to rivus: it is a decision of the model, and a
+	// rule file takes it back (holds: everything).
+	KindGlobalHoldsNothing = "global_holds_nothing"
+	AttributableTarget     = "target"
+	AttributableRivus      = "rivus"
+	AttributableMixed      = "mixed"
+	maxPathSteps           = 200
 )
 
-// attributable gives the attributable_to value of each kind
-// (docs/ARCHITECTURE.md section 4.4).
+// attributable gives the attributable_to value of a kind: the one of its row in Kinds (kinds.go). A kind that is not
+// in the table is the rivus' (TestKindsTableCoversConstants fails for a Kind constant that has no row).
 func attributable(kind string) string {
-	switch kind {
-	case KindDynamicDispatch, KindUnresolvedCallee, KindConcurrency, KindAssumedCall:
-		return AttributableMixed
-	case KindMissingSource, KindReflection, KindFFIBoundary, KindGlobalVar, KindConfigRead, KindExportedAPIParam, KindStoredDataBoundary:
-		return AttributableTarget
-	default:
-		return AttributableRivus
+	for _, k := range Kinds {
+		if k.Kind == kind {
+			return k.Attributable
+		}
 	}
+	return AttributableRivus
 }
 
 // Uncertainty records a place where rivus could not know, and why.
@@ -142,7 +144,7 @@ func newUncertainty(kind, detail, symbol string) *Uncertainty {
 // (ADR-010).
 type ModelRef struct {
 	Symbol       string `json:"symbol"`
-	Role         string `json:"role"` // source, sink, sanitizer or propagator
+	Role         string `json:"role"` // model.RoleSource, RoleSink, RoleSanitizer or RolePropagator
 	Origin       string `json:"origin"`
 	DecidedAt    string `json:"decided_at,omitempty"`
 	ModelVersion string `json:"model_version,omitempty"`

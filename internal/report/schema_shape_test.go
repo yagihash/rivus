@@ -26,6 +26,7 @@ import (
 var resultShapes = map[string]string{
 	"rivus.result/2": "615e46909f944ce9521908ce6a6a6bdcd1befbee027e28ca59ef759d23cdfc9c",
 	"rivus.result/3": "cca52e17fe7a7fe820adabfeb4a99059f67f0553f940d16dec0e14c514c218da",
+	"rivus.result/4": "9036c751e7b5aa8d9449e893f3927134a8340b5888728f2e61ad8c82e23d6fa2",
 }
 
 // resultShape describes, for every type that the result reaches from a Report, the keys that are written to the JSON and their types, and the
@@ -110,6 +111,9 @@ var resultEnums = []enumSource{
 	{"report.go", "Reason", "summary.incomplete_reasons "},
 	{"report.go", "Go", "summary.go_version.match "},
 	{"../../cmd/rivus/extractorcheck.go", "match", "summary.extractor.match "},
+	{"../model/model.go", "Role", "model.role "},
+	{"../sites/sites.go", "Role", "sites.role "},
+	{"../model/model.go", "Origin", "model.origin "},
 }
 
 // enumValues lists "label value" for the constants of resultEnums: the kinds of the uncertainties (Kind...), the values of attributable_to
@@ -185,7 +189,8 @@ func TestResultShapeCoversKinds(t *testing.T) {
 	}
 	// the numbers that the files have today: a constant that is added to one of these enumerations is a change of the shape, and the table above says so
 	if count["kind"] < 20 || count["attributable_to"] != 3 || count["confidence"] != 2 || count["reachability"] != 3 || count["conditional_node.kind"] != 2 ||
-		count["summary.incomplete_reasons"] != 5 || count["summary.go_version.match"] != 3 || count["summary.extractor.match"] != 6 {
+		count["summary.incomplete_reasons"] != 5 || count["summary.go_version.match"] != 3 || count["summary.extractor.match"] != 6 ||
+		count["model.role"] != 4 || count["sites.role"] != 2 || count["model.origin"] != 4 {
 		t.Errorf("the constants of the enumerations were not read as expected: %v", count)
 	}
 }

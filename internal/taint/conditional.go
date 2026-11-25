@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/yagihash/rivus/internal/ir"
+	"github.com/yagihash/rivus/internal/model"
 	"github.com/yagihash/rivus/internal/sg"
 )
 
@@ -66,7 +67,7 @@ func (e *Engine) outcomesOf(g Guard) map[bool]map[string]bool {
 func describe(oe OutElem) string {
 	var by string
 	oe.Steps.eachRec(func(st *stepRec) bool {
-		if st.Model != nil && st.Model.Role == "sanitizer" {
+		if st.Model != nil && st.Model.Role == model.RoleSanitizer {
 			by = st.Model.Symbol
 			return false
 		}
