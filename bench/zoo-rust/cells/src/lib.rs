@@ -9,7 +9,6 @@
 //! @na(F/dyn/iface-assert-ptr-recv: Go's type assertion of `any` to an interface read through a pointer receiver; Rust has neither)
 //! @todo(F/dyn/iface-write-passed: PARITY: Go's pointer held in an `io.Writer` interface value that a function writes to (ADR-090); a Rust `&mut dyn Write` passed to a function and read back from the owner can be written)
 //! @todo(F/cont/ptr-commaok-assert: PARITY: Go's pointer taken out of an interface by a comma-ok assertion and written through; Rust can write through `&mut T` from `Any::downcast_mut::<T>()` on a `&mut dyn Any` and read the owner back; the cell is not written yet)
-//! @todo(F/cont/ptr-range-map: PARITY: Go's pointer that is the value of a range over a map and written through; Rust can write through the `&mut V` of `for p in map.values_mut()` and read the map back; the cell is not written yet)
 //! @todo(F/conv/char-decode-rune: PARITY: Go's buffer type that reads the text with `utf8.DecodeRuneInString` in a loop, appends `byte(r)` to a `[]byte` field and gives the text back by slicing; Rust can read `char_indices()` or `chars()`, push `c as u8` to a `Vec<u8>` field and slice it back; the cell is not written yet)
 //! @todo(F/conv/char-range-append: PARITY: Go's range loop over the text that appends `byte(r)` to a `[]byte` converted back whole; Rust can loop over `chars()` and push `c as u8` to a `Vec<u8>`, then `String::from_utf8`; the cell is not written yet)
 //! @todo(F/clos/to-lib-where: PARITY: a closure given to a function of the standard library that tests the elements of a collection (Go: slices.IndexFunc, ContainsFunc, DeleteFunc); Rust has `Vec::retain`, `Iterator::position`, `any` and the like; the cell is not written yet)
@@ -44,6 +43,8 @@ pub mod cont {
     pub mod map_key_vs_value;
     pub mod ptr_commaok_map;
     pub mod ptr_get_mut;
+    pub mod ptr_range_deque;
+    pub mod ptr_range_map;
     pub mod ptr_index_slice;
     pub mod ptr_range_array;
     pub mod ptr_range_slice;
