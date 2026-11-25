@@ -36,7 +36,7 @@ func TestRustExtractorSaysItsSourceHash(t *testing.T) {
 	}
 	got := strings.TrimSpace(string(out))
 	if strings.HasSuffix(got, " source=unknown") {
-		t.Skip("this rivus-rust was built without RIVUS_EXTRACTOR_SRC_HASH (make test builds it with the hash: see the Makefile)")
+		t.Skip("source=unknown のため skip: CI の Rust の extractor のビルドが、ハッシュを渡していない(ci.yml の変更を待つ。手元は RIVUS_EXTRACTOR_SRC_HASH=$(go run ./scripts/extractor-hash rust) を付けて cargo build する)")
 	}
 	if want := wantVersionLine(t, "rust", "rivus-rust"); got != want {
 		t.Errorf("rivus-rust --rivus-version = %q, want %q (build it again with RIVUS_EXTRACTOR_SRC_HASH=$(go run ./scripts/extractor-hash rust))", got, want)
