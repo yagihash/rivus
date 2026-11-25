@@ -256,8 +256,33 @@ func (o *isolationOpts) rustExtractorVersionSandboxed(ctx context.Context) (stri
 	return string(res.Stdout), nil
 }
 
-// sandboxResult says how a stage ended: what it printed goes to the user, and a stage that failed or was stopped is an error.
+// tellAboutRun says what the run did that the user must hear, whether the stage worked or not: the warnings (a kernel that cannot close something), the files outside of
+// the work directory whose attributes the build changed (the sandbox of Linux cannot stop that, and this is the only place where the user hears of it: a build script
+// that does it and then fails, or runs out of time, did it all the same), and the processes that may have been left.
+func (o *isolationOpts) tellAboutRun(stage string, res *sandbox.Result) {
+	if stage != "extract" || res == nil {
+		return
+	}
+	for _, w := range res.Warnings {
+		fmt.Fprintf(o.err(), "rivus: warning: %s\n", w)
+	}
+	if len(res.AttributeChanges) > 0 {
+		// Landlock does not stop these, so they were let through and are told here: the files are outside of the work directory of the build
+		fmt.Fprintf(o.err(), "rivus: warning: the build changed the mode, the owner, the times or the attributes of files outside of its work directory (the sandbox of Linux cannot stop that; the calls were let through). Look at them if the project is not one you trust:\n")
+		for _, c := range res.AttributeChanges {
+			fmt.Fprintf(o.err(), "  %s\n", c)
+		}
+	}
+	if res.MayHaveLeftProcesses {
+		// said once, not hidden: a build script can start a process in a session of its own, which the end of the run does not reach
+		fmt.Fprintf(o.err(), "rivus: a build script may have left a process behind (a program that starts one in a session of its own is not stopped by the end of the run; it stays under the sandbox, with no files and no network). Look with `ps` if the project is not one you trust.\n")
+	}
+}
+
+// sandboxResult says how a stage ended: what it printed goes to the user, and a stage that failed or was stopped is an error. What the run did that the user must hear is
+// said first (tellAboutRun), so that it is said when the stage failed too.
 func (o *isolationOpts) sandboxResult(stage string, res *sandbox.Result, err error) error {
+	o.tellAboutRun(stage, res)
 	if err != nil {
 		if errors.Is(err, sandbox.ErrUnavailable) {
 			return noSandboxError(err)
@@ -279,22 +304,6 @@ func (o *isolationOpts) sandboxResult(stage string, res *sandbox.Result, err err
 			tail = tail[len(tail)-4096:]
 		}
 		return fmt.Errorf("the %s stage under the sandbox failed (exit %d)\n%s", stage, res.ExitCode, tail)
-	}
-	if stage == "extract" {
-		for _, w := range res.Warnings {
-			fmt.Fprintf(o.err(), "rivus: warning: %s\n", w)
-		}
-		if len(res.AttributeChanges) > 0 {
-			// Landlock does not stop these, so they were let through and are told here: the files are outside of the work directory of the build
-			fmt.Fprintf(o.err(), "rivus: warning: the build changed the mode, the owner, the times or the attributes of files outside of its work directory (the sandbox of Linux cannot stop that; the calls were let through). Look at them if the project is not one you trust:\n")
-			for _, c := range res.AttributeChanges {
-				fmt.Fprintf(o.err(), "  %s\n", c)
-			}
-		}
-	}
-	if res.MayHaveLeftProcesses && stage == "extract" {
-		// said once, not hidden: a build script can start a process in a session of its own, which the end of the run does not reach
-		fmt.Fprintf(o.err(), "rivus: a build script may have left a process behind (a program that starts one in a session of its own is not stopped by the end of the run; it stays under the sandbox, with no files and no network). Look with `ps` if the project is not one you trust.\n")
 	}
 	return nil
 }

@@ -123,7 +123,7 @@ func (f fixture) args() []string {
 	return a
 }
 
-var allChecks = []string{"read-secret", "write-outside", "tcp", "tcp-other-port", "udp", "unix-socket", "exec-other", "proc-environ", "io-uring", "ptrace", "unshare", "clone-newns", "clone3"}
+var allChecks = []string{"read-secret", "write-outside", "tcp", "tcp-other-port", "udp", "unix-socket", "exec-other", "proc-environ", "io-uring", "ptrace", "unshare", "clone-newns", "clone3", "sctp", "mptcp"}
 
 // Without the sandbox the probe gets out of everything that the test set up: otherwise a "blocked" under the sandbox shows nothing.
 func TestSandboxProbeEscapesOnTheHost(t *testing.T) {
@@ -241,7 +241,7 @@ func TestSandboxNetworkProxyOnly(t *testing.T) {
 	if !v["tcp"] {
 		t.Errorf("the port of the proxy cannot be reached\n%s", res.Stdout)
 	}
-	for _, c := range []string{"tcp-other-port", "udp", "unix-socket", "read-secret", "write-outside"} {
+	for _, c := range []string{"tcp-other-port", "udp", "unix-socket", "read-secret", "write-outside", "sctp", "mptcp"} {
 		if esc, ok := v[c]; !ok || esc {
 			t.Errorf("%s: %v\n%s", c, v[c], res.Stdout)
 		}
@@ -654,5 +654,119 @@ func TestSandboxFailuresThatAreNotInARowDoNotEndTheReading(t *testing.T) {
 	<-returned
 	if got := w.warnings(); len(got) != 0 {
 		t.Errorf("the reading was given up: %v", got)
+	}
+}
+
+// The path of a change is resolved as the kernel does: `..` after a link is the parent of what the link points to, not of the link. (A path that is
+// cleaned as a string first reads work/link/../victim as work/victim, which is inside, and the change of a file outside is not reported.)
+func TestSandboxReportsTheFileAfterDotDotOfALink(t *testing.T) {
+	skipWithoutSandbox(t)
+	f := setup(t)
+	sub := filepath.Join(f.outside, "sub")
+	os.Mkdir(sub, 0o755)
+	victim := filepath.Join(f.outside, "victim")
+	os.WriteFile(victim, []byte("data"), 0o600)
+	decoy := filepath.Join(f.work, "victim") // what the cleaned string would be
+	os.WriteFile(decoy, []byte("data"), 0o600)
+	if err := os.Symlink(sub, filepath.Join(f.work, "link")); err != nil {
+		t.Fatal(err)
+	}
+	res, err := Run(context.Background(), Spec{Argv: []string{f.probe, "-attr-dotdot", f.work + "/link/../victim"}, Dir: f.work, Env: []string{"PATH=/usr/bin:/bin"},
+		Write: []string{f.work}, Timeout: time.Minute})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st, err := os.Stat(victim); err != nil || st.Mode().Perm() != 0o640 {
+		t.Fatalf("the call did not reach the file outside (the test does not test what it says): %v %v\n%s", st, err, res.Stdout)
+	}
+	realVictim, _ := filepath.EvalSymlinks(victim)
+	got := strings.Join(res.AttributeChanges, "\n")
+	reported := false
+	for _, l := range res.AttributeChanges {
+		reported = reported || strings.HasSuffix(l, " "+realVictim) // (chmod, fchmodat, fchmodat2: it is the one of the library)
+	}
+	if !reported {
+		t.Errorf("the change of %s is not reported:\n%s", realVictim, got)
+	}
+	if strings.Contains(got, decoy) {
+		t.Errorf("the file that a cleaned string would name (%s) is reported:\n%s", decoy, got)
+	}
+}
+
+// The descriptor of the notifications, received over the socket, is close-on-exec: another process that rivus starts while the run goes on must not
+// get it (it would keep the listener open after the end of the serving, and could answer the notifications).
+func TestSandboxReceivedDescriptorIsCloseOnExec(t *testing.T) {
+	pair, err := unix.Socketpair(unix.AF_UNIX, unix.SOCK_STREAM|unix.SOCK_CLOEXEC, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unix.Close(pair[0])
+	defer unix.Close(pair[1])
+	var p [2]int
+	if err := unix.Pipe(p[:]); err != nil { // (without O_CLOEXEC)
+		t.Fatal(err)
+	}
+	defer unix.Close(p[0])
+	defer unix.Close(p[1])
+	if err := unix.Sendmsg(pair[1], []byte{0}, unix.UnixRights(p[0]), nil, 0); err != nil {
+		t.Fatal(err)
+	}
+	fd, ok := receiveFd(pair[0])
+	if !ok {
+		t.Fatal("no descriptor")
+	}
+	defer unix.Close(fd)
+	flags, err := unix.FcntlInt(uintptr(fd), unix.F_GETFD, 0)
+	if err != nil || flags&unix.FD_CLOEXEC == 0 {
+		t.Errorf("the descriptor is not close-on-exec: %v %v", flags, err)
+	}
+}
+
+// A call on a descriptor that is not a file (a pipe, a socket, a memfd) is not a change of a file: nothing is reported for it, and it is not "a path
+// that could not be read" (which would blame the ptrace of the child, for a call that touched no file).
+func TestSandboxCallsOnDescriptorsThatAreNotFilesAreNotReported(t *testing.T) {
+	var p [2]int
+	if err := unix.Pipe(p[:]); err != nil {
+		t.Fatal(err)
+	}
+	defer unix.Close(p[0])
+	defer unix.Close(p[1])
+	mem, err := unix.MemfdCreate("x", 0)
+	if err != nil {
+		t.Skipf("no memfd: %v", err)
+	}
+	defer unix.Close(mem)
+	w := newAttrWatcher([]string{"/nowhere"})
+	var call attrCall
+	for _, c := range attrCalls {
+		if c.name == "fchmod" {
+			call = c
+		}
+	}
+	for name, fd := range map[string]int{"pipe": p[0], "memfd": mem} {
+		var req notifReq
+		req.data.args[0] = uint64(fd)
+		if _, what := w.pathOf(os.Getpid(), &call, &req); what != pathNone {
+			t.Errorf("%s: the descriptor is taken for %d, not for something that is not a file", name, what)
+		}
+	}
+	if got := w.changes(); len(got) != 0 {
+		t.Errorf("reported: %v", got)
+	}
+}
+
+// What the run may write includes /dev/null (the baseline lets it): a change of its attributes is not a change outside.
+func TestSandboxDevNullIsInside(t *testing.T) {
+	skipWithoutSandbox(t)
+	f := setup(t)
+	res, err := Run(context.Background(), Spec{Argv: []string{f.probe, "-attr-null"}, Dir: f.work, Env: []string{"PATH=/usr/bin:/bin"}, Write: []string{f.work}, Timeout: time.Minute})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(res.Stdout), "attr-null-chmod") {
+		t.Fatalf("the probe did not try: %s", res.Stdout)
+	}
+	if got := strings.Join(res.AttributeChanges, "\n"); strings.Contains(got, "/dev/null") {
+		t.Errorf("/dev/null is reported:\n%s", got)
 	}
 }

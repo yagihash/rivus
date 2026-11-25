@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux && (amd64 || arm64)
 
 package sandbox
 
@@ -26,10 +26,12 @@ const (
 	offArch = 4  // seccomp_data.arch
 	offArg0 = 16 // seccomp_data.args[0] (the low word: little endian, which both architectures are)
 	offArg1 = 24
+	offArg2 = 32
 
 	afInet     = 2
 	afInet6    = 10
 	sockStream = 1
+	ipprotoTCP = 6
 )
 
 var retEPERM = uint32(unix.SECCOMP_RET_ERRNO | uint32(unix.EPERM))
@@ -111,9 +113,10 @@ func filter(net int, notify bool) ([]unix.SockFilter, error) {
 		// the Docker socket). socketpair stays: it makes two ends that are joined, and no path.
 		p = append(p, ins(bpfJeq, 0, 1, unix.SYS_SOCKET), deny)
 	case netProxy:
-		// only a TCP socket of IPv4 or IPv6 (Landlock then lets it connect to the one port): no UDP, no raw, no UNIX socket.
+		// only a TCP socket of IPv4 or IPv6 (Landlock then lets it connect to the one port): no UDP, no raw, no UNIX socket. And the protocol is the default
+		// one (0) or TCP: a stream socket of another protocol (SCTP, MPTCP) is not covered by the rule of the port, which knows TCP only.
 		p = append(p,
-			ins(bpfJeq, 0, 8, unix.SYS_SOCKET),
+			ins(bpfJeq, 0, 12, unix.SYS_SOCKET),
 			ins(bpfLdAbs, 0, 0, offArg0),
 			ins(bpfJeq, 2, 0, afInet), // -> load the type
 			ins(bpfJeq, 1, 0, afInet6),
@@ -122,8 +125,12 @@ func filter(net int, notify bool) ([]unix.SockFilter, error) {
 			ins(bpfAnd, 0, 0, 0xf), // the type, without SOCK_NONBLOCK and SOCK_CLOEXEC
 			ins(bpfJeq, 1, 0, sockStream),
 			deny,
+			ins(bpfLdAbs, 0, 0, offArg2),
+			ins(bpfJeq, 2, 0, 0),
+			ins(bpfJeq, 1, 0, ipprotoTCP),
+			deny,
 		)
-		// (the test of the call jumps over the 8 instructions that follow it when the call is another one)
+		// (the test of the call jumps over the 12 instructions that follow it when the call is another one)
 	case netOpen:
 		// the fetch stage: the sockets are open
 	}

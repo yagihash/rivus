@@ -91,25 +91,35 @@ func newAttrWatcher(write []string) *attrWatcher {
 	return &attrWatcher{inside: write, seen: map[string]bool{}}
 }
 
-// receive reads the descriptor of the notifications that the helper sends over the socket (it sends nothing and closes it when there is none), and
-// serves it until done is closed. The descriptor is closed only after that: see serve.
-func (w *attrWatcher) receive(sock int, done <-chan struct{}) {
-	defer unix.Close(sock)
+// receiveFd reads the descriptor of the notifications that the helper sends over the socket (it sends nothing and closes it when there is none). The
+// descriptor is close-on-exec from the moment that it is received (MSG_CMSG_CLOEXEC): rivus starts other processes while a run goes on, and none of them may
+// get it (it would keep the listener open after the serving, and could answer the notifications).
+func receiveFd(sock int) (int, bool) {
 	buf := make([]byte, 1)
 	oob := make([]byte, unix.CmsgSpace(4))
-	n, oobn, _, _, err := unix.Recvmsg(sock, buf, oob, 0)
+	n, oobn, _, _, err := unix.Recvmsg(sock, buf, oob, unix.MSG_CMSG_CLOEXEC)
 	if err != nil || (n == 0 && oobn == 0) {
-		return
+		return -1, false
 	}
 	msgs, err := unix.ParseSocketControlMessage(oob[:oobn])
 	if err != nil || len(msgs) == 0 {
-		return
+		return -1, false
 	}
 	fds, err := unix.ParseUnixRights(&msgs[0])
 	if err != nil || len(fds) == 0 {
+		return -1, false
+	}
+	unix.CloseOnExec(fds[0])
+	return fds[0], true
+}
+
+// receive takes the descriptor of the notifications and serves it until done is closed. The descriptor is closed only after that: see serve.
+func (w *attrWatcher) receive(sock int, done <-chan struct{}) {
+	defer unix.Close(sock)
+	fd, ok := receiveFd(sock)
+	if !ok {
 		return
 	}
-	fd := fds[0]
 	defer unix.Close(fd)
 	w.serve(fd, done)
 }
@@ -255,21 +265,24 @@ func (w *attrWatcher) look(fd int, req *notifReq) {
 
 // pathOf is the file that the call is about, as the program meant it: a relative path is made from the directory of the program (or of the descriptor
 // that it gave), a call about a link itself (lchown, AT_SYMLINK_NOFOLLOW) names the link and not what it points to, and an empty path with AT_EMPTY_PATH
-// is the descriptor itself.
+// is the descriptor itself. A descriptor that is not a file (a pipe, a socket, a memfd) is nothing to report (pathNone); a path that could not be read is
+// pathUnreadable.
 func (w *attrWatcher) pathOf(pid int, call *attrCall, req *notifReq) (string, int) {
 	arg := func(i int) uint64 { return req.data.args[i] }
-	fdPath := func(fd int) (string, bool) {
-		p, err := os.Readlink("/proc/" + strconv.Itoa(pid) + "/fd/" + strconv.Itoa(fd))
-		if err != nil || !strings.HasPrefix(p, "/") {
-			return "", false // a pipe, a socket, and so on
+	proc := "/proc/" + strconv.Itoa(pid)
+	// fdPath is the file of a descriptor of the process
+	fdPath := func(fd int) (string, int) {
+		p, err := os.Readlink(proc + "/fd/" + strconv.Itoa(fd))
+		if err != nil {
+			return "", pathUnreadable
 		}
-		return strings.TrimSuffix(p, " (deleted)"), true
+		if !strings.HasPrefix(p, "/") || strings.HasPrefix(p, "/memfd:") { // pipe:[..], socket:[..], anon_inode:..., a memfd
+			return "", pathNone
+		}
+		return strings.TrimSuffix(p, " (deleted)"), pathOK
 	}
 	if call.fd >= 0 {
-		if p, ok := fdPath(int(int32(arg(call.fd)))); ok {
-			return p, pathOK
-		}
-		return "", pathUnreadable
+		return fdPath(int(int32(arg(call.fd))))
 	}
 	flags := 0
 	if call.flags >= 0 {
@@ -281,11 +294,7 @@ func (w *attrWatcher) pathOf(pid int, call *attrCall, req *notifReq) (string, in
 		dirfd = int(int32(arg(call.dirfd)))
 	}
 	if call.path >= 0 && arg(call.path) == 0 && call.dirfd >= 0 {
-		// utimensat with no path: the file of the descriptor
-		if p, ok := fdPath(dirfd); ok {
-			return p, pathOK
-		}
-		return "", pathUnreadable
+		return fdPath(dirfd) // utimensat with no path: the file of the descriptor
 	}
 	raw, ok := readString(pid, arg(call.path))
 	if !ok {
@@ -297,34 +306,32 @@ func (w *attrWatcher) pathOf(pid int, call *attrCall, req *notifReq) (string, in
 		}
 		// the file of the descriptor itself (or the directory of the program, for AT_FDCWD)
 		if dirfd == atFDCWD {
-			if b, err := os.Readlink("/proc/" + strconv.Itoa(pid) + "/cwd"); err == nil {
+			if b, err := os.Readlink(proc + "/cwd"); err == nil {
 				return b, pathOK
 			}
 			return "", pathUnreadable
 		}
-		if p, ok := fdPath(dirfd); ok {
-			return p, pathOK
-		}
-		return "", pathUnreadable
+		return fdPath(dirfd)
 	}
 	if strings.HasPrefix(raw, "/") {
 		return resolve(raw, nofollow), pathOK
 	}
-	base := ""
+	var base string
 	if dirfd == atFDCWD {
-		b, err := os.Readlink("/proc/" + strconv.Itoa(pid) + "/cwd")
+		b, err := os.Readlink(proc + "/cwd")
 		if err != nil {
 			return "", pathUnreadable
 		}
 		base = b
 	} else {
-		b, ok := fdPath(dirfd)
-		if !ok {
-			return "", pathUnreadable
+		b, what := fdPath(dirfd)
+		if what != pathOK {
+			return "", what
 		}
 		base = b
 	}
-	return resolve(filepath.Join(base, raw), nofollow), pathOK
+	// (joined as a string: filepath.Join would clean it, and `link/..` would be read as nothing; resolve goes component by component)
+	return resolve(base+"/"+raw, nofollow), pathOK
 }
 
 // readString reads a string of the memory of a process.
@@ -352,23 +359,53 @@ func readString(pid int, addr uint64) (string, bool) {
 	return "", false
 }
 
-// resolve makes the path absolute and without symbolic links as far as it exists. With nofollow the last part is not followed (the call is about the
-// link itself): the directory of it is resolved and the name is kept.
-func resolve(p string, nofollow bool) string {
-	p = filepath.Clean(p)
-	if nofollow {
-		if r, err := filepath.EvalSymlinks(filepath.Dir(p)); err == nil {
-			return filepath.Join(r, filepath.Base(p))
+// splitPath is the names of a path, with the empty ones and "." left out (".." stays: what it means depends on the links before it).
+func splitPath(p string) []string {
+	var out []string
+	for _, c := range strings.Split(p, "/") {
+		if c != "" && c != "." {
+			out = append(out, c)
 		}
-		return p
 	}
-	if r, err := filepath.EvalSymlinks(p); err == nil {
-		return r
+	return out
+}
+
+// resolve is the file that the kernel finds for the path: it goes through the names one at a time, follows the links that it meets, and takes ".." from the
+// place that it has reached (so `link/..` is the parent of what the link points to, and not the directory that holds the link: a path that is cleaned as a
+// string first is read wrong, and a change of a file outside would look like a change inside). With nofollow the last name is not followed (the call is about the
+// link itself). A name that is not there ends it: the rest is added as it is (the call fails, and changes nothing).
+func resolve(p string, nofollow bool) string {
+	const maxLinks = 40
+	links := 0
+	cur := "/"
+	rest := splitPath(p)
+	for len(rest) > 0 {
+		c := rest[0]
+		rest = rest[1:]
+		if c == ".." {
+			cur = filepath.Dir(cur) // cur has no link in it: its parent is the parent
+			continue
+		}
+		next := filepath.Join(cur, c)
+		fi, err := os.Lstat(next)
+		if err != nil {
+			return filepath.Join(append([]string{next}, rest...)...)
+		}
+		if fi.Mode()&os.ModeSymlink != 0 && !(len(rest) == 0 && nofollow) {
+			links++
+			target, err := os.Readlink(next)
+			if links > maxLinks || err != nil {
+				return next
+			}
+			if strings.HasPrefix(target, "/") {
+				cur = "/"
+			}
+			rest = append(splitPath(target), rest...)
+			continue
+		}
+		cur = next
 	}
-	if r, err := filepath.EvalSymlinks(filepath.Dir(p)); err == nil {
-		return filepath.Join(r, filepath.Base(p))
-	}
-	return p
+	return cur
 }
 
 func (w *attrWatcher) isInside(p string) bool {

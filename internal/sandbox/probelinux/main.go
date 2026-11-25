@@ -31,6 +31,8 @@ var (
 	attr   = flag.String("attr", "", "a file outside of the places that may be written: its mode and its times are changed (Landlock does not stop that; the parent reports it)")
 	attrIn = flag.String("attr-in", "", "a file in the work directory: its mode is changed (not reported)")
 	attrLn = flag.String("attr-link", "", "a symbolic link in the work directory that points outside: lchown of the link itself (the link is inside: not reported; what it points to is not touched)")
+	attrDD = flag.String("attr-dotdot", "", "a path, as it is written (not cleaned), whose mode is changed: dir/link/../file, where link points to another directory")
+	attrNl = flag.Bool("attr-null", false, "the mode of /dev/null is changed (a place that the run may write)")
 	attrFd = flag.String("attr-fd", "", "a file that may be read and not written: it is opened, and fchownat with AT_EMPTY_PATH is made on the descriptor (reported, with the path of the file)")
 )
 
@@ -50,6 +52,12 @@ func main() {
 	if *attr != "" {
 		fmt.Println("attr-chmod", os.Chmod(*attr, 0o640))
 		fmt.Println("attr-utimes", os.Chtimes(*attr, time.Unix(1, 0), time.Unix(1, 0)))
+	}
+	if *attrDD != "" {
+		fmt.Println("attr-dotdot-chmod", os.Chmod(*attrDD, 0o640))
+	}
+	if *attrNl {
+		fmt.Println("attr-null-chmod", os.Chmod("/dev/null", 0o666))
 	}
 	if *attrLn != "" {
 		fmt.Println("attr-link-lchown", os.Lchown(*attrLn, os.Getuid(), os.Getgid()))
@@ -118,6 +126,17 @@ func main() {
 	// a signal to a process outside
 	err = syscall.Kill(os.Getppid(), 0)
 	report("signal-outside", err == nil, fmt.Sprint(err))
+	// the sockets of TCP-like protocols that the port rule of Landlock does not cover (it knows TCP only): SCTP and MPTCP
+	for _, pr := range []struct {
+		name  string
+		proto int
+	}{{"sctp", 132}, {"mptcp", 262}} {
+		fd, err := unix.Socket(unix.AF_INET, unix.SOCK_STREAM, pr.proto)
+		if err == nil {
+			unix.Close(fd)
+		}
+		report(pr.name, err != unix.EPERM, fmt.Sprint(err))
+	}
 	// io_uring (it makes sockets by itself)
 	_, _, errno := unix.Syscall(unix.SYS_IO_URING_SETUP, 1, 0, 0)
 	report("io-uring", errno != unix.EPERM, fmt.Sprint(errno))

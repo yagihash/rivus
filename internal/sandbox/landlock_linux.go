@@ -124,6 +124,8 @@ func Run(ctx context.Context, s Spec) (*Result, error) {
 	// the attributes of files are watched when what runs is the code of the project (not the fetch of the dependencies, which writes the CARGO_HOME)
 	pair, err := unix.Socketpair(unix.AF_UNIX, unix.SOCK_STREAM|unix.SOCK_CLOEXEC, 0)
 	if err != nil {
+		cfgW.Close()
+		stW.Close()
 		return nil, err
 	}
 	childEnd := os.NewFile(uintptr(pair[1]), "notify")
@@ -131,7 +133,8 @@ func Run(ctx context.Context, s Spec) (*Result, error) {
 	// the helper itself needs nothing from the environment; the program gets s.Env from the configuration
 	var msg bytes.Buffer
 	msgDone := make(chan struct{})
-	watcher := newAttrWatcher(cfg.Write)
+	// the places that the run may write: its work directories and what the baseline lets it write (/dev/null)
+	watcher := newAttrWatcher(append(append([]string(nil), cfg.Write...), cfg.SoftWrite...))
 	watched := make(chan struct{})
 	finished := make(chan struct{})
 	res, err := supervise(ctx, s, cmd, func() {
@@ -154,12 +157,13 @@ func Run(ctx context.Context, s Spec) (*Result, error) {
 	case <-watched:
 	case <-time.After(5 * time.Second):
 	}
+	// (msg is read only when the copy is over: after the time, the goroutine may still be writing to it, and nothing was said)
 	select {
 	case <-msgDone:
+		if m := strings.TrimSpace(msg.String()); m != "" {
+			return nil, helperFailure(m)
+		}
 	case <-time.After(5 * time.Second):
-	}
-	if m := strings.TrimSpace(msg.String()); m != "" {
-		return nil, helperFailure(m)
 	}
 	if res != nil {
 		_, res.Warnings = abiPolicy(ABI())

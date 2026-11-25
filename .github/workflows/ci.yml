@@ -337,13 +337,17 @@ jobs:
           GOARCH: arm64
           CGO_ENABLED: "0"
         run: go vet ./cmd/rivus ./internal/sandbox
-      # The filter of seccomp is made for x86-64 and arm64 only: for another architecture of Linux the package must still build, and Run says that the sandbox is not there
-      - name: Vet the sandbox for an architecture that has no filter
+      # The filter of seccomp is made for x86-64 and arm64 only: for another architecture of Linux the package must still build (the helper then says that the
+      # sandbox cannot be made, and nothing is run), so that the rest of rivus builds there
+      - name: Vet the sandbox for the architectures that have no filter
         if: ${{ !cancelled() }}
         env:
-          GOARCH: riscv64
           CGO_ENABLED: "0"
-        run: go vet ./internal/sandbox
+        run: |
+          for arch in 386 arm riscv64 ppc64le s390x loong64 mips64le; do
+            echo "== $arch"
+            GOARCH=$arch go vet ./internal/sandbox
+          done
       - name: Test the packages other than cmd/rivus
         if: ${{ !cancelled() }}
         run: |
