@@ -167,7 +167,7 @@ class RustTarget(unittest.TestCase):
 
     def test_isolation_is_read_from_the_report_of_each_side(self):
         with tempfile.TemporaryDirectory() as d:
-            env = dict(os.environ)
+            env = dict(os.environ, RIVUS_RUST_DATA_DIR=os.path.join(d, "rust-data"))  # outside the shared place (bench/rustenv.py)
             for mode, rc, want in (("sandbox", 0, None), ("sandbox", 4, None), ("host", 0, "isolation_failed: base side: summary.isolation.mode is 'host'"), (None, 0, "isolation_failed: base side")):
                 summary = '{"summary":{"isolation":{"mode":"%s"},"extractor":[{"lang":"rust","match":"yes"}]}}' % mode if mode else '{"summary":{"extractor":[{"lang":"rust","match":"yes"}]}}'
                 rivus = self.fake(d, "rivus", "echo '%s'\nexit %d\n" % (summary, rc))
@@ -273,7 +273,7 @@ class ExtractorMatch(unittest.TestCase):
                 p = os.path.join(d, "rivus")
                 open(p, "w").write("#!/bin/sh\necho '%s'\n" % ext_summary("rust", state))
                 os.chmod(p, 0o755)
-                err = g.attest_isolation("base", p, "/ext", d, "", [], dict(os.environ), d, 60, 1 << 33)
+                err = g.attest_isolation("base", p, "/ext", d, "", [], dict(os.environ, RIVUS_RUST_DATA_DIR=os.path.join(d, "rust-data")), d, 60, 1 << 33)
                 self.assertTrue(err.startswith("extractor_mismatch(%s): base side: " % state), err)
 
     def test_a_dart_side_that_does_not_match_is_not_run(self):

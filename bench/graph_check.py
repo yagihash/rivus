@@ -42,6 +42,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import deps_bench as db  # noqa: E402
 from heavylock import HeavyLockTimeout  # noqa: E402
+import rustenv  # noqa: E402
 
 DUMP_ENV = "RIVUS_INTERNAL_SUMMARY_DUMP"
 
@@ -145,6 +146,7 @@ def rust_env(env, home, toolchain):
 
 def extract_rust(side, tag, driver, extractor, src, env, work, limit_s, cap):
     """`rivus debug extract -lang rust` of the driver, under the sandbox (no -unsafe-host-exec), into <work>/<side>.<tag>.ir.jsonl. Returns (path, error)."""
+    rustenv.require_rust_data_dir(env, "graph_check")
     out = os.path.join(work, "%s.%s.ir.jsonl" % (side, tag))
     err = os.path.join(work, "%s.%s.extract.err" % (side, tag))
     cmd = [driver, "debug", "extract", "-lang", "rust", "-C", src, "-rust-extractor", extractor] + db.rust_sdkroot_args(env)
@@ -167,6 +169,7 @@ def extract_rust(side, tag, driver, extractor, src, env, work, limit_s, cap):
 def attest_isolation(side, binary, extractor, src, rules, flags, env, work, limit_s, cap):
     """One `rivus analyze -lang rust` of this side (the run that reads the project by itself): summary.isolation.mode must be "sandbox", as deps_bench
     does after a Rust run. The analysis is not used; exit code 4 (the pass limit) is a normal end. Returns an error text or None."""
+    rustenv.require_rust_data_dir(env, "graph_check")
     rep = os.path.join(work, side + ".attest.json")
     err = os.path.join(work, side + ".attest.err")
     cmd = [binary, "analyze", "-lang", "rust", "-C", src, "-rust-extractor", extractor, "-func-timeout", FUNC_TIMEOUT] + (["-rules", rules] if rules else []) + db.rust_sdkroot_args(env) + flags
