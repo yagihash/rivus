@@ -76,6 +76,12 @@ func init() {
 				{name: "dart", summary: "compile the Dart extractor (a start in a fraction of a second, instead of 5 s or more with dart run)",
 					flags: func(fs *flag.FlagSet) { setupDartFlags(fs) }, run: runSetupDart},
 			}},
+		{name: "cache", usual: true, summary: "list and remove the places of the dependencies of Rust that rivus fetched",
+			sub: []*command{
+				{name: "list", summary: "the places (path, size, last used)", run: runCacheList},
+				{name: "clean", summary: "list, and after a question remove, the places last used more than -older-than days ago",
+					flags: func(fs *flag.FlagSet) { cacheCleanFlags(fs) }, run: runCacheClean},
+			}},
 		{name: "debug", summary: "commands for investigation and development; not for everyday use",
 			sub: []*command{
 				{name: "extract", summary: "write the neutral IR of the code (JSON Lines, or -text to read it)", args: "packages",
