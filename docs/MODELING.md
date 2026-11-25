@@ -2,10 +2,10 @@
 
 A guide for whoever writes a model (a rule file that says what a function without a body does with taint), by hand or with
 an AI. The sections below cover `pure`, `approximate`, `calls`, `parts`, `named`, and the rule that a row has to be hit.
-Not written yet: the basic shapes of `flows`, `sources`, `sinks` and `sanitizers`; `globals` with `holds` (ADR-056);
-`.content` (ADR-082); `read_impls`, `self_first` and `alias`. Until they are, read the built-in rule sets in
-`internal/model/builtin` and the loader in `internal/model/model.go` (it rejects what it does not know), and the
-examples in `examples/rules`. The principles behind the models are in [PRINCIPLES.md](PRINCIPLES.md) (section 3).
+The keys that the sections do not cover are in the last section ("Keys of a rule file"), one line each. The basic shapes of
+`flows`, `sources`, `sinks` and `sanitizers` are not written as a guide: read the built-in rule sets in `internal/model/builtin`,
+the loader in `internal/model/model.go` (it rejects what it does not know), and the examples in `examples/rules`.
+The principles behind the models are in [PRINCIPLES.md](PRINCIPLES.md) (section 3).
 
 ## 0. A row replaces what the analysis does by itself
 
@@ -566,3 +566,37 @@ this: a real project does not use every API, and a row it does not use is not wr
 a run cannot check (an API that needs a server, a device, a network, or a library the zoo has no dependency on); the lines
 marked `debt` are the rows of the standard library that no cell calls yet: they only go down, and none is added for a new
 row. The test fails on a line for a row that does not exist, and on one that is in the file of another model file than the row's (so a pull request that adds a model file adds its `.dead-allow` file, and touches no shared list). A line for a row that is hit now is only logged: what hits it can be the code of a dependency of a cell, and a model pull request must not have to edit the `.dead-allow` of other models. The clean-up of such lines is a run of its own with `RIVUS_DEAD_ALLOW_STRICT=1`, where it fails.
+
+## 6. Keys of a rule file
+
+A reference, one line for a key; the loader in `internal/model/model.go` (the `yaml:` tags, with the comment of each field) is the
+source, and it rejects a key it does not know.
+
+**Top level of a file**
+
+| Key | What it is |
+|---|---|
+| `ruleset`, `origin` | The name of the set; the origin (`builtin`, `human`, `llm`, `generated`) of the rows that do not say their own |
+| `read_impls` | The propagators of the set are for methods of traits that the project also implements: the model says what the code outside does, and the project's own implementations are read as well (Rust) |
+| `self_first` | The positions of the rows count every operand of a call, the receiver first (`arg0`) (Rust) |
+| `sources`, `sinks`, `sanitizers`, `propagators` | The rows |
+| `globals` | What a package variable holds for the code that reads it (`holds`; ADR-056) |
+| `config_reads` | Functions that read configuration (files, environment, flags): a value traced back to one stops there, with `config_read` |
+| `body_replaced_packages`, `verified_versions`, `rejected`, `deferred`, `adopt_rules` | Declarations and records (sections 4a, 4c, 4c-1, 4c-2). Only `body_replaced_packages` changes the analysis |
+| `generator`, `input`, `rules`, `decisions` | The header of a file of generated rows. Records only |
+
+**A row** (any of `sources`, `sinks`, `sanitizers`, `propagators`)
+
+| Key | What it is |
+|---|---|
+| `origin`, `decided_at`, `rationale`, `model_version`, `decision` | Provenance. A row of `origin: llm` needs `decided_at`, `rationale` and `model_version` (the model that decided). `decision` is the id of the `adopt_rules` decision that a generated row comes from |
+| `symbol`, `match` | The function; `match: implementations` expands an interface method over its implementations (`max_implementations` bounds it; a sanitizer needs `allow_sanitizer_expansion`; ARCHITECTURE.md 5.4) |
+| `labels`, `accepts` | A source or a sanitizer puts labels on a value; a sink with `accepts` reacts only to those labels |
+| `category` | The category of a sink (section 4b) |
+| `when_arg_type` | A sink applies only when the argument `arg` has one of `types` as its static type (`fmt.Fprint` to a `ResponseWriter`, not to `os.Stderr`) |
+| `kind` of a source | `call_result`, `param_type`, `field`, `param` (an entry point: `params`, `recv`), `callback_param` (section 4d) |
+| `out` of a source | Argument positions that the call fills by writing through the pointer (`rows.Scan(&x)`) |
+| `marker`, `marker_call` | `kind: param` with `match: implementations` and no symbol: the interfaces that have a method of this name (a glob) have their other methods declared as entry points. `marker_call` is a function whose call says the generated code should exist (`grpc.NewServer`); when it is called and no interface has the marker, the report says the generated code is probably missing |
+| `extends`, `with_param_type`, `exclude_methods` | The same for a language with a class hierarchy in the IR (Dart): the methods of the subtypes of `extends` that take a parameter of type `with_param_type` are entry points; `exclude_methods` (globs) leaves out the wrappers the generated code makes |
+| `flows`, `pure`, `calls`, `boundary` | What a function without a body does (sections 0 to 3). `boundary: stored_data` records a call that moves data to or from a store that rivus does not follow |
+| `neutralises`, `adds`, `drops` | What a sanitizer is safe for (section 4b-1) |

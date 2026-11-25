@@ -63,8 +63,13 @@
 | [DESIGN-async-dispatch.md](DESIGN-async-dispatch.md) | Rust の `async` の中の `Fn::call` |
 | [DESIGN-generics-dispatch.md](DESIGN-generics-dispatch.md) | Rust のジェネリクスと `Box<dyn Fn>` |
 | [DESIGN-memory.md](DESIGN-memory.md) | メモリ(英語) |
-| [DESIGN-fetch-network.md](DESIGN-fetch-network.md) | 取得のコンテナのネットワークを絞る |
+| [DESIGN-fetch-network.md](DESIGN-fetch-network.md) | 取得のサンドボックスから出られる先(ネットワーク)を絞る |
 | [DESIGN-observed-calls.md](DESIGN-observed-calls.md) | 実行して観測した呼び出しと、グラフの照合(Dart から。Go が続く) |
+| [DESIGN-agent-interface.md](DESIGN-agent-interface.md) | エージェントへの渡し方(スキルと MCP) |
+| [DESIGN-deps-cost.md](DESIGN-deps-cost.md) | 依存を含む Dart のプロジェクトの、解析のコストの測定 |
+| [DESIGN-install.md](DESIGN-install.md) | インストールに何が必要か(Homebrew の formula の形) |
+| [DESIGN-macos-sandbox.md](DESIGN-macos-sandbox.md) | Rust の extractor の隔離を、macOS のサンドボックス(Seatbelt)にする |
+| [DESIGN-model-authoring.md](DESIGN-model-authoring.md) | 依存のモデル化を、定型のタスクにする |
 | [DART-MODEL-CANDIDATES.md](DART-MODEL-CANDIDATES.md) | Dart の組み込みモデルにする pub パッケージの候補(公開の指標で選ぶ) |
 
 ### 歴史的な文書

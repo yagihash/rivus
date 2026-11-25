@@ -1,6 +1,6 @@
 # 設計: 引数として渡された関数の引数を source にする(callback params)
 
-> **状態: 段階 1(b)は実装済み(ADR-106)。以下は実装前の案**。コードは変えていない。ADR はまだ書かない(推奨が決まってから)。課題は [#149](issues/149-callback-params-source.md)。
+> **状態: 一部実装**。段階 1(b)の `callback_param` は実装済み(ADR-106)。段階 2 と 3 は案のまま。以下は、実装前の比較と推奨(設計時の記述)。課題は [#149](issues/149-callback-params-source.md)。
 > 利用者向けの書式の正本は [MODELING.md](MODELING.md)。この文書は、書式を足す前の比較と推奨。
 
 ## 1. 問題
