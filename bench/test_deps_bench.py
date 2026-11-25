@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Tests of the pass line of bench/deps_bench.py (python3 bench/test_deps_bench.py). Synthetic numbers only; nothing is fetched or analysed."""
-import json, os, sys, tempfile, unittest
+import json, os, subprocess, sys, tempfile, unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -494,6 +494,42 @@ class RustRoad(unittest.TestCase):
         finally:
             for k, v in old.items():
                 os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
+
+    def test_stale_extractor_is_refused(self):
+        r = tempfile.mkdtemp()
+        self.addCleanup(lambda: __import__("shutil").rmtree(r, ignore_errors=True))
+        for c in (["git", "init", "-q"], ["git", "config", "user.email", "a@b"], ["git", "config", "user.name", "a"], ["git", "config", "commit.gpgsign", "false"]):
+            subprocess.run(c, cwd=r, check=True)
+        os.makedirs(os.path.join(r, "extractor/rust"))
+        open(os.path.join(r, "extractor/rust/a.rs"), "w").write("x")
+        subprocess.run(["git", "add", "-A"], cwd=r, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "x"], cwd=r, check=True)
+        ex = os.path.join(r, "ex")
+        open(ex, "w").close()
+        os.utime(ex, (1, 1))  # older than the commit
+        self.assertIn("older than", d.extractor_stale(ex, r))
+        os.utime(ex, None)
+        self.assertEqual(d.extractor_stale(ex, r), "")
+
+    def test_failed_run_is_not_an_isolation_failure_and_adds_no_row(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(lambda: __import__("shutil").rmtree(tmp, ignore_errors=True))
+        t = {"lang": "rust", "repo": "x", "commit": "c", "args": [], "time_limit_s": 100, "mem_cap_gb": 8, "decided": False, "detect": None, "local": "bench/go-curated"}
+        saved = (d.prepare, d.analyze_once)
+        d.prepare = lambda name, t, tree, work, env: (tree, env, None)
+        d.analyze_once = lambda *a, **k: {"wall": 91.0, "peak": 6 * 1024 ** 3, "converged": False, "why": "", "report": None, "peak_how": "x", "peak_a": 0, "cpu": 1.0, "big": "", "big_rss": 0, "at_s": 0, "rc": 1, "load": 1.0, "note": "n"}
+        try:
+            line, row = d.passline_run("rustypaste", t, "rivus", tmp, tmp, 100, 8, 1, tmp)
+            t2 = dict(t)
+            d.analyze_once = lambda *a, **k: {"wall": 1.0, "peak": 9 * 1024 ** 3, "converged": False, "why": "memory", "report": None, "peak_how": "x", "peak_a": 0, "cpu": 1.0, "big": "", "big_rss": 0, "at_s": 0, "rc": -9, "load": 1.0, "note": "n"}
+            line2, row2 = d.passline_run("rustypaste", t2, "rivus", tmp, tmp, 100, 8, 1, tmp)
+        finally:
+            d.prepare, d.analyze_once = saved
+        self.assertIsNone(row)
+        self.assertIn("analyze_failed", line)
+        self.assertNotIn("isolation", line)
+        self.assertEqual(row2["result"], "stopped_memory")  # a stop by the watchdog keeps its row, and is not an isolation failure
+        self.assertNotIn("FAILED", row2["settings"])
 
     def test_sdkroot_from_the_environment(self):
         self.assertEqual(d.rust_sdkroot_args({}), [])

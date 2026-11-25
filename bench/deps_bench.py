@@ -43,7 +43,7 @@ inside $BENCH_CACHE (the data of rivus for Rust goes under `$HOME/Library/Applic
 toolchain and the extractor that were built and set before are only read (`RIVUS_RUST_TOOLCHAIN_DIR`, `RIVUS_RUST_EXTRACTOR`, or the pinned nightly of
 `extractor/rust/rust-toolchain.toml` under the real `~/.rustup` and `extractor/rust/target/debug/rivus-rust`; `rivus setup rust` is never run);
 (3) before the run, `sandbox-exec` must deny a write, and after it `summary.isolation.mode` must be `sandbox`: if either is not so the run is a failure (the
-line says `isolation_failed`, the exit status is 1; a failure before the run adds no row). The time and the memory of such a row are recorded and mean
+line says `isolation_failed`, the exit status is 1; a failure before the run adds no row; `rivus analyze` ending by itself with an error is `analyze_failed`: no report, no row, exit status 1). The time and the memory of such a row are recorded and mean
 nothing (a small crate; the sampled sum of the tree can miss a build that lasts under a second); the row's `settings` hold the count of every kind of uncertainty (with `unsupported_construct` and `unresolved_callee` always, even 0).
 The time limit is kept by the watchdog (a kill of the group of this run at the limit: `stopped_time`); `rivus analyze` is not given `-timeout`
 (its default is 0, no limit; a rivus that stopped itself at the limit would look like a run that did not converge), unless the `args` of the target say so.
@@ -535,7 +535,24 @@ def rust_tools():
         raise SystemExit("deps_bench: the pinned toolchain is not at %s (prepare it yourself, or set RIVUS_RUST_TOOLCHAIN_DIR; this tool never runs `rivus setup rust`)" % tc)
     if not os.access(ex, os.X_OK):
         raise SystemExit("deps_bench: the Rust extractor is not at %s (build extractor/rust, or set RIVUS_RUST_EXTRACTOR)" % ex)
+    why = extractor_stale(ex)
+    if why:
+        raise SystemExit("deps_bench: " + why)
     return tc, ex
+
+
+def extractor_stale(ex, root=None):
+    """The extractor is built from another version than this tree when its file is older than the last commit that changed extractor/rust or
+    internal/ir (the IR schema): rivus analyze can then fail with an exit status 1. Returns the reason, or "" when it is not older (or git cannot say)."""
+    root = root or ROOT
+    r = subprocess.run(["git", "log", "-1", "--format=%ct", "--", "extractor/rust", "internal/ir"], cwd=root, capture_output=True, text=True)
+    try:
+        last = int(r.stdout.strip())
+    except ValueError:
+        return ""
+    if os.path.getmtime(ex) < last:
+        return "the Rust extractor %s is older than the last commit of extractor/rust or internal/ir of this tree: build it from this tree (extractor/rust, `cargo build` with the pinned nightly), or set RIVUS_RUST_EXTRACTOR to one that is" % ex
+    return ""
 
 
 def expand_args(args, src, subdir):
@@ -670,16 +687,21 @@ def passline_run(name, t, rivus, cache, outdir, limit_s, cap_gb, repeat=1, home=
         passed, body = judge(main["wall"], limit_s, main["peak"] / GB, cap_gb, main["converged"], detected, through, quiet, located, score, coarsened, t.get("expect_coarsened", 0))
         decided = t.get("decided", False)
         iso_ok, iso_why, unc = True, "", None
-        if t["lang"] == "rust":
+        failed_run = main["rc"] not in (0, EXIT_INCOMPLETE) and not main["why"]  # rivus ended by itself with an error: no report, nothing to read
+        if t["lang"] == "rust" and not failed_run and not main["why"]:
             iso_ok, iso_why = isolation_ok(main["report"])
             unc = uncertainty_counts(main["report"])
             body += " " + format_uncertainties(unc) + " isolation=" + ("sandbox" if iso_ok else "FAILED(%s)" % iso_why)
         if main["why"]:
             result = "stopped_" + main["why"]
+        elif failed_run:
+            result = "analyze_failed"
         elif not iso_ok:
             result = "isolation_failed"
         else:
             result = ("PASS" if passed else "FAIL") if decided else "INFO"
+        if result == "analyze_failed":  # a failure whose cause is not known adds no row (and no number is read from it)
+            return "%s %s analyze_failed: exit status %s after %.0f s (no report; no ledger row; the stderr is kept in the output directory)" % ("INFO" if not decided else "FAIL", name, main["rc"], main["wall"]), None
         extra = [a for a in t.get("args", [])] + (["-limit %g" % limit_s] if limit_s != t["time_limit_s"] else []) + (["-cap %g" % cap_gb] if cap_gb != t["mem_cap_gb"] else [])
         extra += ["%s=%s" % (k, v) for k, v in sorted(env.items()) if k == "GOMEMLIMIT" or (k.startswith("RIVUS_") and k not in ("RIVUS_HEAVY_LOCK_HELD", "RIVUS_HEAVY_LOCK", "RIVUS_RUST_TOOLCHAIN_DIR", "RIVUS_RUST_EXTRACTOR"))]  # the two paths of Rust are the paths of this machine: not written
         if t["lang"] == "rust" and rust_sdkroot_args(env):
@@ -729,7 +751,7 @@ def run_passline(names, a):
             if row is None or row.get("result") == "isolation_failed":
                 failed.append(name)
     if failed:
-        raise SystemExit("deps_bench: the isolation check failed: %s" % ", ".join(failed))
+        raise SystemExit("deps_bench: no usable result (the isolation check failed before or after the run, or rivus analyze ended with an error): %s" % ", ".join(failed))
 
 
 def main():
