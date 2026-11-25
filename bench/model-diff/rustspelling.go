@@ -77,6 +77,16 @@ func LoadRustRows(files []string, pkg string) (*RustRows, error) {
 		if sym == "" {
 			return
 		}
+		if strings.HasPrefix(sym, "<") {
+			// a typed symbol (docs/MODELING.md): `<RECEIVER as Trait>::method`, not a path that a probe can name
+			recv, _, _ := strings.Cut(sym[1:], " as ")
+			if strings.HasPrefix(strings.TrimPrefix(recv, "&mut "), crate+"::") {
+				out.Skipped = append(out.Skipped, fmt.Sprintf("%s (%s): a typed symbol is not probed", sym, where))
+			} else {
+				out.Other++
+			}
+			return
+		}
 		if !strings.HasPrefix(strings.TrimLeft(sym, "&"), crate+"::") && !strings.HasPrefix(strings.TrimPrefix(strings.TrimLeft(sym, "&"), "mut "), crate+"::") {
 			out.Other++
 			return
