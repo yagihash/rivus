@@ -77,5 +77,5 @@
 
 - N 未満で、深さ 2 で収束しない SCC は、守られない(今の測定では、そういう対象はない。出たら N を下げる)。
 - プロジェクトの関数だけの SCC、プロジェクトと依存が混ざる SCC のプロジェクトの関数は、粗くしない。深さ 0 の要素が、プロジェクトの関数の出力の数を増やすかは、測っていない。#187 の残りの項目。
-- dart_services と dart-pub が、粗くしたあとに収束するか、finding がどう変わるかは、この ADR では測っていない(別の測定)。
+- dart_services と dart-pub が粗くしたあとに収束するかは、測った(2026-11-25、既定のフラグ、N = 5,500、静かな状態、`bench/heavy-ledger.tsv`)。dart_services は 3 回の中央値で 400 秒、tree-RSS 最大 6.05 GB、8 パスで収束、`scc_coarsened` 1、`largest_scc_deps` 13,897(合格基準 D は 600 秒、8 GB)。dart-pub は 119 秒、4.64 GB、9 パスで収束。安全網なしの深さ 2 は、dart_services で収束せず、finding が取れない。finding は、dart_services で 21 件、`-scc-coarsen 1` でも id が同じ。dart-pub の件数と、ほかの対象の差は、測っていない。
 - Dart の zoo の再帰のセルでの確認は、していない(そのセルは、プロジェクトの関数だけで、依存の関数がない)。確認は、依存の関数のマークを付けた小さい対象(`testdata/scccoarse`)で行った。
