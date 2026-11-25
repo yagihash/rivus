@@ -121,13 +121,19 @@ const sccCoarsenedMeaning = "the dependency functions of this group were solved 
 	"so a flow of another field can be mixed in (more flows than there are, never fewer); " +
 	"which fields were told apart before the cut is not kept in the summary, and is found by reading the body of the function"
 
+// sccCoarsenedLook is the list of what to look at to tell a real flow from a mixed one.
+const sccCoarsenedLook = "the conditions of branches (a type test such as `is`, or an `if`, in the dependency), " +
+	"where a function value is passed (which argument its caller gives it, and what), " +
+	"and which fields are written and which are read"
+
 // sccCoarsenedDetail is the note on a hop that applied the summary of a dependency function of a component that is
 // solved at depth 0: it names the function and its package (what the step went through), says what depth 0 means, and
 // how to check whether the flow is real.
 func sccCoarsenedDetail(funcID string) string {
 	return "scc_coarsened: this step went through " + funcID + " (package " + UnitOf(funcID) + "), a function of a dependency in a large group of functions that call each other; " +
 		sccCoarsenedMeaning + ". To check: read the body of " + funcID + " in " + UnitOf(funcID) +
-		" to see which fields it tells apart, and whether its input reaches its output, or solve with " + sccCoarsenFlagOff + " and see whether this finding remains"
+		" to see which fields it tells apart, and whether its input reaches its output. What to look at: " + sccCoarsenedLook +
+		". Or solve with " + sccCoarsenFlagOff + " and see whether this finding remains"
 }
 
 // coarseRecords are the records of the components that are solved at depth 0, one each, in the order of the first
@@ -145,7 +151,7 @@ func (e *Engine) coarseRecords() []*Uncertainty {
 		d := "scc_coarsened: a group of " + strconv.Itoa(c.size) + " functions that call each other (" + strconv.Itoa(len(c.funcs)) +
 			" of the dependencies, in " + strconv.Itoa(len(c.packages)) + " packages) is large (" + strconv.Itoa(c.n) +
 			" " + c.counted + " or more), so " + sccCoarsenedMeaning + ". The dependency functions are in candidates. To check a finding that went through one: " +
-			"read that function in its package, or solve with " + sccCoarsenFlagOff + " and see whether the finding remains"
+			"read that function in its package (look at: " + sccCoarsenedLook + "), or solve with " + sccCoarsenFlagOff + " and see whether the finding remains"
 		u := newUncertainty(KindDepthLimit, d, "")
 		u.CoarsenedSCC = c.info
 		u.Candidates = ids

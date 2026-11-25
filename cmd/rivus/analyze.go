@@ -275,14 +275,12 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 			fmt.Fprintf(os.Stderr, "rivus: slow function %s: %v (cpu %v, %d outputs, %d roots)\n", fn, d.Round(time.Millisecond), cpu.Round(time.Millisecond), outputs, roots)
 		}
 	}
-	if o.afterRead != nil {
+	if o.afterRead != nil && o.structureOnly {
 		if err := o.afterRead(l, rules, st, graph, bodies); err != nil {
 			return nil, err
 		}
 		phase("graphdb")
-		if o.structureOnly {
-			return nil, nil
-		}
+		return nil, nil
 	}
 	var res *taint.Result
 	if o.cpuProf != "" {
@@ -313,6 +311,17 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 		eng.SetIterationDump(d)
 	}
 	res = eng.Run()
+	if o.afterRead != nil {
+		// With the taint layer the graph is written after the analysis: the functions that the analysis found in the cells that a
+		// call of a function value reads (docs/issues/210) are candidates of the call, and edges of the graph
+		for in, ids := range eng.FuncCellCandidates() {
+			graph.SetCellCandidates(in, ids)
+		}
+		if err := o.afterRead(l, rules, st, graph, bodies); err != nil {
+			return nil, err
+		}
+		phase("graphdb")
+	}
 	// Internal, for bench/compare.sh --graph-check: the summaries of every function, one line each (no flag, not in -h)
 	if p := os.Getenv("RIVUS_INTERNAL_SUMMARY_DUMP"); p != "" {
 		if f, err := os.Create(p); err != nil {

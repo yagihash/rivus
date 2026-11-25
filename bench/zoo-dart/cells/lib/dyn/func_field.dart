@@ -14,7 +14,7 @@ class Handlers {
 }
 
 void vuln() { // @vuln
-  final v = src('dyn-func-field-vuln'); // @source(dyn-func-field-vuln) @miss(unmodeled_library_call,unresolved_callee) @ref(FUNC-VALUE-MEMORY,PARITY)
+  final v = src('dyn-func-field-vuln'); // @source(dyn-func-field-vuln)
   final h = Handlers();
   h.cmd = (x) {
     sinkCmd(x); // @sink(dyn-func-field-vuln)
@@ -32,7 +32,7 @@ void fixed() { // @fixed
 }
 
 void decoy() { // @decoy
-  final v = src('dyn-func-field-decoy'); // @source(dyn-func-field-decoy) @miss(unmodeled_library_call,unresolved_callee) @ref(FUNC-VALUE-MEMORY,PARITY)
+  final v = src('dyn-func-field-decoy'); // @source(dyn-func-field-decoy)
   final h = Handlers();
   h.cmd = (x) {
     sinkCmd(x); // @sink(none) @nosink(dyn-func-field-decoy)

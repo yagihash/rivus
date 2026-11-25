@@ -609,3 +609,23 @@ func (p *Program) infoOf(in *ir.Instr) *InstrInfo {
 	p.infos[k] = info
 	return info
 }
+
+// SetCellCandidates gives a call of a function value that had no candidate the functions that the taint analysis read
+// from the cell of the called value (internal/taint, docs/issues/210). It is for the graph that is written after the
+// analysis; the analysis does not read it again. The candidates are not bound to a closure (Bind is nil) and none is
+// chosen by a parameter (Param -1).
+func (p *Program) SetCellCandidates(in *Instr, ids []string) {
+	c := in.Callee
+	if c == nil || c.Kind != ir.CalleeValue || len(in.Candidates) > 0 || len(c.ValueCands) > 0 {
+		return
+	}
+	for _, id := range ids {
+		vc := ir.ValueCand{ID: ir.FuncID(id), Symbol: id, Param: -1, Recv: strings.HasPrefix(id, "(")}
+		if f := p.ByID[id]; f != nil {
+			vc.Symbol, vc.Recv = f.Symbol, f.Recv
+			in.CandidateFns = append(in.CandidateFns, f)
+		}
+		c.ValueCands = append(c.ValueCands, vc)
+		in.Candidates = append(in.Candidates, vc.ID)
+	}
+}

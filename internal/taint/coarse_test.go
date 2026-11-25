@@ -367,13 +367,16 @@ func TestCoarseWordingHasThreeItems(t *testing.T) {
 	id := "example.com/dep/pkg.F"
 	d := sccCoarsenedDetail(id)
 	for name, want := range map[string]string{
-		"function name":        id,
-		"package":              "package " + UnitOf(id),
-		"depth 0 meaning":      "cut at depth 0",
-		"over-approximation":   "more flows than there are, never fewer",
-		"lost distinction":     "which fields were told apart before the cut",
-		"check by reading":     "read the body of " + id,
-		"check by solving off": sccCoarsenFlagOff,
+		"function name":           id,
+		"package":                 "package " + UnitOf(id),
+		"depth 0 meaning":         "cut at depth 0",
+		"over-approximation":      "more flows than there are, never fewer",
+		"lost distinction":        "which fields were told apart before the cut",
+		"check by reading":        "read the body of " + id,
+		"look at branches":        "conditions of branches",
+		"look at function values": "where a function value is passed",
+		"look at fields":          "which fields are written and which are read",
+		"check by solving off":    sccCoarsenFlagOff,
 	} {
 		if !strings.Contains(d, want) {
 			t.Errorf("the note on a hop has no %s (%q): %s", name, want, d)

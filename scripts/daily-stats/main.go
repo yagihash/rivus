@@ -134,6 +134,17 @@ func countParityTodos(bench, lang, ext string) int {
 	return len(cells)
 }
 
+// fixesMainCount counts the pull requests merged since a date that carry the label `fixes-main` (the way past the status `main-ci`,
+// .github/workflows/main-ci.yml). A failure of gh is a warning, and the line is skipped.
+func fixesMainCount(since string) {
+	out, err := exec.Command("gh", "pr", "list", "--state", "merged", "--label", "fixes-main", "--search", "merged:>="+since, "--limit", "1000", "--json", "number", "--jq", "length").Output()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "fixes-main: skipped (gh pr list):", err)
+		return
+	}
+	fmt.Printf("fixes-main merges: %s\n", strings.TrimSpace(string(out)))
+}
+
 func main() {
 	since := flag.String("since", "", "count the merges since this date (git --since: 2026-11-20, \"3 days ago\")")
 	ref := flag.String("ref", "origin/main", "the branch to read")
@@ -162,5 +173,6 @@ func main() {
 	}
 	fmt.Printf("daily-stats since %s (%s): ENGINE/MODEL/EXTRACTOR %d, TOOLS/CI/DOCS %d\n", *since, *ref, engine, other)
 	fmt.Printf("zoo PARITY todo: rust %d, dart %d, go %d\n", countParityTodos("bench", "rust", ".rs"), countParityTodos("bench", "dart", ".dart"), countParityTodos("bench", "go", ".go"))
+	fixesMainCount(*since)
 	orphanReport(*ref)
 }

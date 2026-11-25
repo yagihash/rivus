@@ -3,8 +3,9 @@
 #   make merge PR=<number>
 # The checks are the rules the user set (2026-11-23): the PR is open, not a draft, into main, CLEAN (every required check passed),
 # and none of the exceptions the user keeps for themself holds: a release PR (`tagpr-from-*`), a PR whose body says the user merges,
-# a PR that changes .claude/settings*, .claude/prompts/, .github/ghmint/, a ruleset file, or this script
-# (the guard itself). Anything else is refused with the reason, and nothing is merged.
+# or a PR that changes a file the list .github/guardrail-paths names (the parts of the guardrail, that list included; 2026-11-25).
+# The list is read from the checkout this script is in; if it is missing, unreadable or has no pattern, or if the changed files
+# (`gh pr diff --name-only`) cannot be listed, the PR is refused. Anything else is refused with the reason, and nothing is merged.
 # A `Zoo-Loosened:` line (2026-11-24, the user chose "B"): a PR whose commits (origin/main..the head) have such lines is let through
 # only if EVERY line has the form `Zoo-Loosened: <reason>。ユーザーの承認: YYYY-MM-DD` with a real date that is not in the future, and
 # scripts/zoo-loosened-check.sh passes for the range (as well as CI). One line that says "まだ" or has another form refuses it.
@@ -20,9 +21,14 @@ set -euo pipefail
 n="${1:?usage: scripts/merge-pr.sh <pull request number>}"
 case "$n" in ''|*[!0-9]*) echo "merge: the argument must be a pull request number" >&2; exit 2;; esac
 repo=$(gh repo view --json nameWithOwner -q .nameWithOwner)
-json=$(gh pr view "$n" --repo "$repo" --json state,isDraft,baseRefName,headRefName,headRefOid,mergeStateStatus,body,files,commits)
-bad=$(printf '%s' "$json" | python3 -c '
-import sys,json,re,datetime
+json=$(gh pr view "$n" --repo "$repo" --json state,isDraft,baseRefName,headRefName,headRefOid,mergeStateStatus,body,commits)
+sdir="${BASH_SOURCE[0]%/*}"; [ "$sdir" != "${BASH_SOURCE[0]}" ] || sdir=.
+paths_file="$sdir/../.github/guardrail-paths"
+if ! changed=$(gh pr diff "$n" --repo "$repo" --name-only 2>/dev/null); then
+  echo "merge: PR #$n is not merged by the developer: cannot list the changed files. Nothing is merged." >&2; exit 1
+fi
+bad=$(printf '%s' "$json" | GUARDRAIL_PATHS="$paths_file" CHANGED="$changed" python3 -c '
+import sys,json,re,datetime,os,fnmatch
 d=json.load(sys.stdin)
 bad=[]
 if d["state"]!="OPEN": bad.append("not open: "+d["state"])
@@ -31,10 +37,20 @@ if d["baseRefName"]!="main": bad.append("base is not main")
 if d["mergeStateStatus"]!="CLEAN": bad.append("not CLEAN: "+d["mergeStateStatus"])
 if d["headRefName"].startswith("tagpr-from-"): bad.append("release PR (the user merges it)")
 if "ユーザーがマージする" in (d.get("body") or ""): bad.append("the PR says the user merges")
-for f in d.get("files",[]):
-    p=f["path"]
-    if re.match(r"\.claude/(settings|prompts/)",p) or p.startswith(".github/ghmint/") or "ruleset" in p.lower() or p in ("scripts/merge-pr.sh",):
-        bad.append("exception file: "+p)
+pats=[]
+try:
+    for line in open(os.environ["GUARDRAIL_PATHS"],encoding="utf-8"):
+        line=line.split("#",1)[0].strip()
+        if line: pats.append(line)
+except Exception as e:
+    bad.append("cannot read the guardrail list .github/guardrail-paths ("+type(e).__name__+")")
+else:
+    if not pats: bad.append("the guardrail list .github/guardrail-paths has no pattern")
+hits=[]
+for p in os.environ["CHANGED"].splitlines():
+    p=p.strip()
+    if p and any((p.startswith(g) if g.endswith("/") else fnmatch.fnmatchcase(p,g)) for g in pats): hits.append(p)
+if hits: bad.append("この PR はガードレールの部品を変えるので、ユーザーのマージ: "+", ".join(hits))
 ok=re.compile(r"^Zoo-Loosened: .+ユーザーの承認: (\d{4})-(\d{2})-(\d{2})\s*$")
 for c in d.get("commits",[]):
     for l in ((c.get("messageHeadline") or "")+"\n"+(c.get("messageBody") or "")).splitlines():

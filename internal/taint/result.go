@@ -52,6 +52,10 @@ const (
 	// to another function, stored, returned): what it captured is applied at the place it was made,
 	// as if it were called (C-7, ADR-059).
 	KindAssumedCall = "assumed_call"
+	// KindFuncValueIntoDependency marks a call of a function of a dependency (a body that is read, no `calls:` model) that is
+	// given a function value of the project: the function values are not carried out of the summaries of dependencies, so
+	// what the dependency calls back is not followed (funccells.go). A `calls:` model removes it, like an unmodeled call.
+	KindFuncValueIntoDependency = "func_value_into_dependency"
 	// KindFieldImprecision marks a sink that names a part of its value (a field below the argument) and was
 	// reached by taint that is not known to be in that part: the value is tainted as a whole, the path was
 	// cut, an element of a container, or the value went through a function that is not read. The detail

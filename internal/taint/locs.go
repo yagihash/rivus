@@ -111,6 +111,16 @@ const maxLocPositions = 5_000_000
 func (s *state) locs(v *sg.Value) []Loc {
 	switch v.Kind {
 	case sg.KFunc:
+		if s.funcCellsOn() {
+			if !s.funcSeeded[v] {
+				if s.funcSeeded == nil {
+					s.funcSeeded = map[*sg.Value]bool{}
+				}
+				s.funcSeeded[v] = true
+				s.seedFunc(Loc{own(v), ""}, string(v.FuncID), ir.Pos{}, "function value: function")
+			}
+			return []Loc{{own(v), ""}}
+		}
 		return nil
 	case sg.KConst, sg.KUndef:
 		return nil

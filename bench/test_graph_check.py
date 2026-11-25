@@ -48,10 +48,28 @@ class Convergence(unittest.TestCase):
     def test_line_and_status(self):
         self.assertEqual(g.convergence_line(False, False), (None, 0))
         line, rc = g.convergence_line(False, True)
-        self.assertEqual(rc, 3)
+        self.assertEqual(rc, 4)
         self.assertIn("NOT CONVERGED (analyze of head ended with exit code 4", line)
         self.assertIn("analyze of base and head", g.convergence_line(True, True)[0])
-        self.assertEqual(g.worse(g.worse(0, 3), 1), 1)  # a difference stays a difference
+        self.assertEqual(g.worse(g.worse(0, 4), 1), 1)  # a difference stays a difference
+        self.assertEqual(g.worse(0, 4), 4)
+        self.assertEqual(g.worse(4, 3), 3)  # a part not compared is not hidden by the convergence
+        self.assertEqual(g.worse(3, 4), 3)
+        self.assertEqual(g.worse(4, 2), 2)
+
+
+class CiGraphCheck(unittest.TestCase):
+    """The weekly CI accepts exit 4 for zoo-go only (docs/issues/217): each target is its own call."""
+
+    def test_only_zoo_go_may_end_with_4(self):
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        text = open(os.path.join(root, ".github", "workflows", "ci.yml")).read()
+        calls = [l.strip() for l in text.splitlines() if l.strip().startswith("bench/compare.sh --graph-check")]
+        self.assertEqual(len(calls), 3, calls)
+        self.assertFalse(any("," in c.split("--graph-check ")[1].split()[0] for c in calls), "a target list in one call")
+        for c in calls:
+            target = c.split("--graph-check ")[1].split()[0]
+            self.assertEqual("|| rc=$?" in c, target == "zoo-go", c)
 
 
 class DartSteps(unittest.TestCase):
