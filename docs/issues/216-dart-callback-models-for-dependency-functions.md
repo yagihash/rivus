@@ -1,6 +1,7 @@
 # #216 Dart: 関数値を渡す依存の関数に `calls:` のモデルがなく、依存の中で呼ばれる流れを追っていない(#210 段階 1)
 
-- 状態: **open**
+- 状態: **partial**
+- 補足(状態): **部分的に解決**(2026-11-25)。標準ライブラリ(`dart:core`: `Map.map`、`Map.removeWhere`、`List.removeWhere`、`List.retainWhere`、`List.indexWhere`、`List.lastIndexWhere`、`Set.removeWhere`、`Set.retainWhere`、`Iterable.takeWhile`、`Iterable.skipWhile`)と、`package:collection` の `firstWhereOrNull`、`lastWhereOrNull`、`singleWhereOrNull`、`whereNot`、`none` に `calls:` を足した(`dart-core.yaml`、`dart-collection.yaml`。標準ライブラリは `TestZooCallbacksDart`、`collection` は zoo のセル `F/dart/sdk-callback-*`、`F/dart/collection-where-or-null`)。残り: `protobuf` の生成コードの登録(汚染を運ばない形)、`retry`、`json_annotation`、`collection` の添字つきの形(`forEachIndexed`、`mapIndexed`、`whereIndexed` ほか)と `forEachWhile`、`Iterable.expand` と `List.sort` の `calls:`
 - 種類: サイレントな見逃し(通知は全体の一覧だけ。finding には、その呼び出しを通る経路にだけ付く)
 - 言語: Dart
 - ROADMAP の節: 3

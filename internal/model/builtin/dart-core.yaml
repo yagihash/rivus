@@ -296,6 +296,39 @@ propagators:
     calls: [{fn: arg0, with: [recv]}]
   - symbol: dart:core#List.map
     calls: [{fn: arg0, with: [recv], ret: result0}]
+  # a function that is given and called with what the receiver holds (docs/issues/216): the test of removeWhere and the like
+  # gets an element (a map: the key and the value), and the call changes the receiver or returns a number, so there is
+  # nothing to carry to the result except what the row says. A List and a Set are the receiver of their own members.
+  - symbol: dart:core#List.removeWhere
+    pure: true
+    calls: [{fn: arg0, with: [recv]}]
+  - symbol: dart:core#List.retainWhere
+    pure: true
+    calls: [{fn: arg0, with: [recv]}]
+  - symbol: dart:core#Set.removeWhere
+    pure: true
+    calls: [{fn: arg0, with: [recv]}]
+  - symbol: dart:core#Set.retainWhere
+    pure: true
+    calls: [{fn: arg0, with: [recv]}]
+  - symbol: dart:core#List.indexWhere
+    pure: true
+    calls: [{fn: arg0, with: [recv]}]
+  - symbol: dart:core#List.lastIndexWhere
+    pure: true
+    calls: [{fn: arg0, with: [recv]}]
+  - symbol: dart:core#Map.removeWhere
+    pure: true
+    calls: [{fn: arg0, with: [recv, recv]}]
+  # the new map is made of what the function returns (a MapEntry made from the key and the value)
+  - symbol: dart:core#Map.map
+    calls: [{fn: arg0, with: [recv, recv], ret: result0}]
+  - symbol: dart:core#Iterable.takeWhile
+    flows: [{from: recv, to: result}]
+    calls: [{fn: arg0, with: [recv]}]
+  - symbol: dart:core#Iterable.skipWhile
+    flows: [{from: recv, to: result}]
+    calls: [{fn: arg0, with: [recv]}]
   - symbol: dart:core#List.sort
     flows: [{from: recv, to: result}, {from: args, to: result}]
   - symbol: dart:collection#Queue.removeFirst

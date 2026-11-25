@@ -1,0 +1,32 @@
+# package:collection: the extension methods that take a function and call it with the elements of the receiver
+# (`firstWhereOrNull` and the like, docs/issues/216). The standard library has the same rows in dart-core.yaml.
+#
+# Checked against collection 1.19.1 (range >=1.18.0 <2.0.0), 2026-11-25, by reading the published source. Hand written rows.
+# Each row says `checked_by: cell`: the code of a package is not run by a harness, and the cells of the zoo
+# (bench/zoo-dart/cells/lib/dart/collection_where_or_null.dart) hold it (docs/MODELING.md, section 3).
+#
+# Not modelled yet (the same shape, with the index as a first parameter that carries nothing): `forEachIndexed`, `mapIndexed`,
+# `whereIndexed`, `whereNotIndexed`, `firstWhereIndexedOrNull` and the like, `forEachWhile`, `splitBefore` and the like.
+ruleset: rivus/dart/collection@1
+verified_versions:
+  - package: collection
+    versions: ">=1.18.0 <2.0.0"
+    checked_with: 1.19.1
+    checked: 2026-11-25
+
+propagators:
+  - symbol: package:collection/src/iterable_extensions.dart#IterableExtension.firstWhereOrNull
+    flows: [{from: recv, to: result}]
+    calls: [{fn: arg0, with: [recv], checked_by: cell}]
+  - symbol: package:collection/src/iterable_extensions.dart#IterableExtension.lastWhereOrNull
+    flows: [{from: recv, to: result}]
+    calls: [{fn: arg0, with: [recv], checked_by: cell}]
+  - symbol: package:collection/src/iterable_extensions.dart#IterableExtension.singleWhereOrNull
+    flows: [{from: recv, to: result}]
+    calls: [{fn: arg0, with: [recv], checked_by: cell}]
+  - symbol: package:collection/src/iterable_extensions.dart#IterableExtension.whereNot
+    flows: [{from: recv, to: result}]
+    calls: [{fn: arg0, with: [recv], checked_by: cell}]
+  - symbol: package:collection/src/iterable_extensions.dart#IterableExtension.none
+    pure: true
+    calls: [{fn: arg0, with: [recv], checked_by: cell}]
