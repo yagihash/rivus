@@ -319,7 +319,7 @@ propagators:
   - symbol: std::collections::HashMap::iter
     flows: [{from: args, to: result}]
   - symbol: std::collections::HashMap::entry
-    flows: [{from: args, to: result}]
+    flows: [{from: args, to: result, alias: true}]
   - symbol: std::collections::HashMap::new
     flows: [{from: args, to: result}]
   - symbol: std::slice::iter
@@ -409,6 +409,18 @@ propagators:
     flows: [{from: args, to: result}]
   - symbol: std::slice::iter_mut
     flows: [{from: args, to: result, alias: true}]
+  - symbol: std::slice::get_mut
+    flows: [{from: args, to: result, alias: true}]
+  - symbol: std::slice::first_mut
+    flows: [{from: args, to: result, alias: true}]
+  - symbol: std::slice::last_mut
+    flows: [{from: args, to: result, alias: true}]
+  - symbol: std::collections::HashMap::get_mut
+    flows: [{from: args, to: result, alias: true}]
+  - symbol: std::collections::hash_map::Entry::or_insert
+    flows: [{from: args, to: result, alias: true}, {from: arg1, to: arg0}]
+  - symbol: std::collections::hash_map::Entry::or_insert_with
+    flows: [{from: args, to: result, alias: true}, {from: arg1, to: arg0}]
   - symbol: std::vec::Vec::as_slice
     flows: [{from: args, to: result}]
   - symbol: std::vec::Vec::as_mut_slice
