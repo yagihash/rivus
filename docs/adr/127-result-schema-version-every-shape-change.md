@@ -135,3 +135,10 @@
 - **止めない**。`newer` のときだけ標準エラーに 1 行を出し、終了コードは変えない。ベンチと合格基準は、`newer` を失敗にしない(記録だけ)。
 - 実際の `go` コマンドは、新しすぎる `go` 行を、`GOTOOLCHAIN=local` では読み込みの失敗にする(auto では新しい toolchain を取りに行く)ので、`newer` を、読み込みを通して確かめるテストは書かない。読み込みの経路(`Program.GoVersions`)と、判定(`CheckGoVersion`)を別々に確かめる。
 - Dart の言語バージョン(`pubspec.yaml` の `environment.sdk`)は次の作業。同じ形で `summary` に足せる。Rust の edition も同様。
+
+**追記(2026-11-25、`rivus.result/4`): kind の一覧の表、`role` と `origin` を列挙に入れる**
+
+*1. kind の一覧の表(完了条件 A(2))。* kind ごとの `attributable_to` と 1 文の説明を、コードの 1 か所(`internal/taint/kinds.go` の `Kinds`)に持つ。`attributable()` はその表を引く(各 kind を作る所で `attributable_to` を手で書かない。表と違う値を付けると、`TestAttributableNotAssignedByHand` が落ちる)。`Kind*` の定数に表の項目がないと `TestKindsTableCoversConstants` が落ちる。ARCHITECTURE 4.4 の表は、`make docs-gen WHAT=kinds` の出力で、違えば `TestDocsSync` が落ちる。表で値が 2 つになる kind は `dynamic_dispatch` だけ(候補が 0 件のとき、calls.go で `rivus`。表の値は `mixed` で、その旨を説明に書く)。結果は変わらない。
+- `KindGlobalHoldsNothing` の定数は、`heldnothing.go` にあり、ハッシュの取り方(`result.go` の `Kind*`)から外れていた。`result.go` に移した。これで、この kind がハッシュに入る(値は変わらない)。
+
+*2. 列挙に入れたもの(上の (b) から)。* `role` と `ModelRef.origin`。取り方を構文木で読めるように、`role` の値を `internal/model/model.go` の定数 `RoleSource`、`RoleSink`、`RoleSanitizer`、`RolePropagator` にまとめた(それまでは、taint と model の文中のリテラル)。`ModelRef.role` と `Expansion.role` はこの 4 値、`Site.role` は `internal/sites/sites.go` の `RoleSource`、`RoleSink`(2 値)、`ModelRef.origin` は `model.go` の `Origin*`(4 値)。`resultEnums` に 3 項目を足した。値は変えていない。ハッシュが変わるので、`rivus.result/4` に上げた(`rivus.result/3` のハッシュは消さない)。ほかの (b)(`Site.kind`、`SharedPlace.kind` など)は、上のとおり固定しない。

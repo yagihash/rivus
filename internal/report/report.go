@@ -23,7 +23,7 @@ import (
 )
 
 // SchemaVersion identifies the format of Report.
-const SchemaVersion = "rivus.result/3"
+const SchemaVersion = "rivus.result/4"
 
 // Report is the result of an analysis.
 type Report struct {

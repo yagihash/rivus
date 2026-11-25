@@ -49,7 +49,7 @@ type CallResolver interface {
 // Expansion records what happened to one rule with match: implementations.
 type Expansion struct {
 	Symbol string `json:"symbol"`
-	Role   string `json:"role"` // source, sink, sanitizer, propagator
+	Role   string `json:"role"` // RoleSource, RoleSink, RoleSanitizer or RolePropagator
 	// Count is the number of implementations found.
 	Count int `json:"count"`
 	Max   int `json:"max"`
@@ -100,12 +100,12 @@ func (r *Rules) Expand(res Resolver, defaultMax int) []Expansion {
 				}
 				marked := mr.MarkedMethods(s.Marker)
 				if cr, ok := res.(CallResolver); ok && len(marked) == 0 && s.MarkerCall != "" && cr.CallsFunction(s.MarkerCall) {
-					out = append(out, Expansion{Symbol: s.Marker, Role: "source", Missing: true,
+					out = append(out, Expansion{Symbol: s.Marker, Role: RoleSource, Missing: true,
 						Note: fmt.Sprintf("the program calls %s, but no interface has a method matching %q: the code generated from the service definitions (protoc) has to exist before the analysis (a service generated without the marker is declared in the rules of the project)", s.MarkerCall, s.Marker)})
 				}
 				for _, m := range marked {
 					m, s := m, s
-					expand("source", m.Symbol, s.MaxImplementations, func(c string) {
+					expand(RoleSource, m.Symbol, s.MaxImplementations, func(c string) {
 						cp := s
 						cp.Symbol, cp.Match, cp.Marker, cp.Params = c, MatchExact, "", m.Params
 						r.ParamFuncs[c] = append(r.ParamFuncs[c], cp)
@@ -115,7 +115,7 @@ func (r *Rules) Expand(res Resolver, defaultMax int) []Expansion {
 			}
 			if s.Match == MatchImplementations && (s.Kind == KindCallResult || s.Kind == KindParam) {
 				s := s
-				expand("source", s.Symbol, s.MaxImplementations, func(c string) {
+				expand(RoleSource, s.Symbol, s.MaxImplementations, func(c string) {
 					cp := s
 					cp.Symbol, cp.Match = c, MatchExact
 					if s.Kind == KindParam {
@@ -129,7 +129,7 @@ func (r *Rules) Expand(res Resolver, defaultMax int) []Expansion {
 		for _, s := range rs.Sinks {
 			if s.Match == MatchImplementations {
 				s := s
-				expand("sink", s.Symbol, s.MaxImplementations, func(c string) {
+				expand(RoleSink, s.Symbol, s.MaxImplementations, func(c string) {
 					cp := s
 					cp.Symbol, cp.Match = c, MatchExact
 					r.Sinks[c] = append(r.Sinks[c], cp)
@@ -139,7 +139,7 @@ func (r *Rules) Expand(res Resolver, defaultMax int) []Expansion {
 		for _, s := range rs.Sanitizers {
 			if s.Match == MatchImplementations {
 				s := s
-				expand("sanitizer", s.Symbol, s.MaxImplementations, func(c string) {
+				expand(RoleSanitizer, s.Symbol, s.MaxImplementations, func(c string) {
 					cp := s
 					cp.Symbol, cp.Match = c, MatchExact
 					r.Sanitizers[c] = append(r.Sanitizers[c], cp)
@@ -149,7 +149,7 @@ func (r *Rules) Expand(res Resolver, defaultMax int) []Expansion {
 		for _, p := range rs.Propagators {
 			if p.Match == MatchImplementations {
 				p := p
-				expand("propagator", p.Symbol, p.MaxImplementations, func(c string) {
+				expand(RolePropagator, p.Symbol, p.MaxImplementations, func(c string) {
 					cp := p
 					cp.Symbol, cp.Match = c, MatchExact
 					r.Propagators[c] = append(r.Propagators[c], cp)
@@ -196,7 +196,7 @@ func (r *Rules) ExpandSubtypes(res SubtypeResolver) []Expansion {
 				}
 			}
 			if kept == 0 && s.MarkerCall != "" && res.CallsFunction(s.MarkerCall) {
-				out = append(out, Expansion{Symbol: s.Extends, Role: "source", Missing: true,
+				out = append(out, Expansion{Symbol: s.Extends, Role: RoleSource, Missing: true,
 					Note: fmt.Sprintf("the program calls %s, but no subtype of %s has a method that takes a %s: the code generated from the service definitions (protoc) has to exist before the analysis (a service whose handlers are written otherwise is declared in the rules of the project)", s.MarkerCall, s.Extends, s.WithParamType)})
 			}
 			for _, m := range found {
@@ -208,7 +208,7 @@ func (r *Rules) ExpandSubtypes(res SubtypeResolver) []Expansion {
 				cp.Match = MatchExact
 				r.ParamFuncs[m.Symbol] = append(r.ParamFuncs[m.Symbol], cp)
 			}
-			out = append(out, Expansion{Symbol: s.Extends, Role: "source", Count: kept})
+			out = append(out, Expansion{Symbol: s.Extends, Role: RoleSource, Count: kept})
 		}
 	}
 	return out

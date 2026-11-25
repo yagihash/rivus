@@ -874,24 +874,24 @@ func (s *state) applyModel(cc *callCtx) {
 			}
 		}
 		o := op{drops: san.Drops, adds: san.Adds, scoped: san.Neutralises != nil}
-		s.applyFlows(cc, flows, &o, "sanitized by "+cc.sym, modelRef(cc.sym, "sanitizer", san.Provenance))
+		s.applyFlows(cc, flows, &o, "sanitized by "+cc.sym, modelRef(cc.sym, model.RoleSanitizer, san.Provenance))
 	}
 	for _, p := range rules.Propagators[cc.sym] {
 		p := p
 		if p.Boundary != "" {
 			s.newNote(cc.in, KindStoredDataBoundary, "data moves between the code and a data store here; what is read back is not followed unless a source rule says what comes from it", cc.sym)
 		}
-		s.suppressedByCut(cc, &p, modelRef(cc.sym, "propagator", p.Provenance))
+		s.suppressedByCut(cc, &p, modelRef(cc.sym, model.RolePropagator, p.Provenance))
 		if p.Pure {
 			// nothing flows: that is the model. When what comes out is a number or a bool, and what went
 			// in came from a source, this is where the input becomes a number: said, where it happens
 			s.noteNumericStopOfPure(cc)
 		} else if len(p.Flows) > 0 {
-			s.applyFlows(cc, p.Flows, nil, "", modelRef(cc.sym, "propagator", p.Provenance))
+			s.applyFlows(cc, p.Flows, nil, "", modelRef(cc.sym, model.RolePropagator, p.Provenance))
 			s.noteNumericStopOfUncovered(cc, p.Flows)
 		}
 		for i := range p.Calls {
-			s.applyCallRow(cc, &p, i, modelRef(cc.sym, "propagator", p.Provenance))
+			s.applyCallRow(cc, &p, i, modelRef(cc.sym, model.RolePropagator, p.Provenance))
 		}
 	}
 }

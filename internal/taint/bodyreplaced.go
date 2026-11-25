@@ -93,7 +93,7 @@ func (s *state) replacedCallbacks(cc *callCtx) {
 		return
 	}
 	for _, r := range e.replacedRows(ci) {
-		s.applyCallRow(cc, r.p, 0, modelRef(cc.sym, "propagator", model.Provenance{Origin: model.OriginBuiltin}))
+		s.applyCallRow(cc, r.p, 0, modelRef(cc.sym, model.RolePropagator, model.Provenance{Origin: model.OriginBuiltin}))
 	}
 	ops := cc.argv()
 	for i, v := range ops {

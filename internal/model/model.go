@@ -44,6 +44,15 @@ const (
 	MatchImplementations = "implementations" // an interface method: expands to its implementations
 )
 
+// Roles of a rule, as ModelRef.role and Expansion.role say them in the result: what the rule makes of the place it matches. They are in the
+// shape of the result (internal/report/schema_shape_test.go). The roles of a site (sites.RoleSource, sites.RoleSink) are the first two.
+const (
+	RoleSource     = "source"
+	RoleSink       = "sink"
+	RoleSanitizer  = "sanitizer"
+	RolePropagator = "propagator"
+)
+
 // Origins of a model (ADR-010): who decided that a rule is right.
 const (
 	OriginBuiltin = "builtin"
