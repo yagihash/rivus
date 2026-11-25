@@ -27,6 +27,7 @@ const (
 	offArg0 = 16 // seccomp_data.args[0] (the low word: little endian, which both architectures are)
 	offArg1 = 24
 	offArg2 = 32
+	offArg3 = 40
 
 	afInet     = 2
 	afInet6    = 10
@@ -120,6 +121,30 @@ func ownOnlyRule(nr uint32, eqs []argEq) []unix.SockFilter {
 	return append(out, ins(bpfRet, 0, 0, retEPERM), ins(bpfLdAbs, 0, 0, offNr))
 }
 
+// maskRule is the block of the filter of one call whose argument (masked) is compared with a value: when the call is another one, the block is skipped;
+// with allowEqual the call goes on only when it is equal and is refused otherwise, and without it the call is refused when it is equal.
+// (The accumulator holds the number of the call when the block ends.)
+func maskRule(nr uint32, off, mask, val uint32, allowEqual bool) []unix.SockFilter {
+	jt, jf := uint8(0), uint8(1)
+	if allowEqual {
+		jt, jf = 1, 0
+	}
+	return []unix.SockFilter{
+		ins(bpfJeq, 0, 4, nr),
+		ins(bpfLdAbs, 0, 0, off),
+		ins(bpfAnd, 0, 0, mask),
+		ins(bpfJeq, jt, jf, val),
+		ins(bpfRet, 0, 0, retEPERM),
+		ins(bpfLdAbs, 0, 0, offNr),
+	}
+}
+
+// the commands of ioctl that set the flags of an inode (chattr, the project id, nodump, noatime ...): they work on a descriptor opened for reading, Landlock does
+// not mediate the ioctls of a regular file, and they are attribute changes that the supervisor does not see (like file_setattr, which is refused).
+var inodeFlagIoctls = []uint32{0x40086602 /* FS_IOC_SETFLAGS */, 0x40046602 /* FS_IOC32_SETFLAGS */, 0x401c5820 /* FS_IOC_FSSETXATTR */}
+
+const msgFastopen = 0x20000000
+
 // filter makes the program for the network of the run. With notify, the calls that change the attributes of a file (attrCalls) are handed to the
 // process that started the run, which looks at them and lets them through (notify.go).
 func filter(net int, notify bool) ([]unix.SockFilter, error) {
@@ -164,10 +189,18 @@ func filter(net int, notify bool) ([]unix.SockFilter, error) {
 	for _, r := range ownOnly {
 		p = append(p, ownOnlyRule(r.nr, r.args)...)
 	}
+	for _, c := range inodeFlagIoctls {
+		p = append(p, maskRule(unix.SYS_IOCTL, offArg1, 0xffffffff, c, false)...)
+	}
+	if net != netOpen {
+		// socketpair makes two ends that are joined and no path, when it is a stream or a seqpacket: a datagram end can send to, and bind, any address
+		// mask 0xb: SOCK_STREAM (1) and SOCK_SEQPACKET (5), which Rust's std uses; both are connected ends that cannot be sent elsewhere
+		p = append(p, maskRule(unix.SYS_SOCKETPAIR, offArg1, 0xb, sockStream, true)...)
+	}
 	switch net {
 	case netNone:
 		// no socket of any family: no TCP, no UDP, no raw, no UNIX socket (a UNIX socket of a path is the way to the agents of the user: ssh-agent,
-		// the Docker socket). socketpair stays: it makes two ends that are joined, and no path.
+		// the Docker socket). socketpair stays, for streams only (above).
 		p = append(p, ins(bpfJeq, 0, 1, unix.SYS_SOCKET), deny)
 	case netProxy:
 		// only a TCP socket of IPv4 or IPv6 (Landlock then lets it connect to the one port): no UDP, no raw, no UNIX socket. And the protocol is the default
@@ -188,6 +221,10 @@ func filter(net int, notify bool) ([]unix.SockFilter, error) {
 			deny,
 		)
 		// (the test of the call jumps over the 12 instructions that follow it when the call is another one)
+		// TCP Fast Open: sendto, sendmsg and sendmmsg with MSG_FASTOPEN connect on their own, without the call that the rule of the port of Landlock looks at
+		p = append(p, maskRule(unix.SYS_SENDTO, offArg3, msgFastopen, 0, true)...)
+		p = append(p, maskRule(unix.SYS_SENDMSG, offArg2, msgFastopen, 0, true)...)
+		p = append(p, maskRule(unix.SYS_SENDMMSG, offArg3, msgFastopen, 0, true)...)
 	case netOpen:
 		// the fetch stage: the sockets are open
 	}

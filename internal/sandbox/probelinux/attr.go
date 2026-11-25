@@ -128,6 +128,15 @@ func attrEverything(dir string) {
 	} else {
 		say("futimens", nil)
 	}
+	{ // times of NULL: "now" (touch)
+		b, _ := unix.BytePtrFromString(f)
+		_, _, e := unix.Syscall6(unix.SYS_UTIMENSAT, ^uintptr(99), uintptr(unsafe.Pointer(b)), 0, 0, 0, 0) // AT_FDCWD
+		if e != 0 {
+			say("utimensat-null-times", e)
+		} else {
+			say("utimensat-null-times", nil)
+		}
+	}
 	say("utimensat-omit", unix.UtimesNanoAt(unix.AT_FDCWD, f, []unix.Timespec{{Nsec: unix.UTIME_OMIT}, t2}, 0))
 	say("utimensat-nofollow-link", unix.UtimesNanoAt(unix.AT_FDCWD, l, []unix.Timespec{t1, t1}, unix.AT_SYMLINK_NOFOLLOW))
 	say("utimensat-empty-path", unix.UtimesNanoAt(int(fd.Fd()), "", []unix.Timespec{t1, t1}, unix.AT_EMPTY_PATH))

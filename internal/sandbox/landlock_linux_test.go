@@ -127,7 +127,7 @@ func (f fixture) args() []string {
 	return a
 }
 
-var allChecks = []string{"read-secret", "write-outside", "tcp", "tcp-other-port", "udp", "unix-socket", "exec-other", "proc-environ", "io-uring", "ptrace", "unshare", "clone-newns", "clone3", "sctp", "mptcp", "sysv-shm", "sysv-msg", "sysv-sem", "posix-mq", "kcmp", "setxattrat", "removexattrat", "file_setattr"}
+var allChecks = []string{"read-secret", "write-outside", "tcp", "tcp-other-port", "udp", "unix-socket", "exec-other", "proc-environ", "io-uring", "ptrace", "unshare", "clone-newns", "clone3", "sctp", "mptcp", "sysv-shm", "sysv-msg", "sysv-sem", "posix-mq", "kcmp", "socketpair-dgram", "ioctl-setflags", "ioctl-fssetxattr", "setxattrat", "removexattrat", "file_setattr"}
 
 // Without the sandbox the probe gets out of everything that the test set up: otherwise a "blocked" under the sandbox shows nothing.
 func TestSandboxProbeEscapesOnTheHost(t *testing.T) {
@@ -248,7 +248,7 @@ func TestSandboxNetworkProxyOnly(t *testing.T) {
 	if !v["tcp"] {
 		t.Errorf("the port of the proxy cannot be reached\n%s", res.Stdout)
 	}
-	for _, c := range []string{"tcp-other-port", "udp", "unix-socket", "read-secret", "write-outside", "sctp", "mptcp"} {
+	for _, c := range []string{"tcp-other-port", "udp", "unix-socket", "read-secret", "write-outside", "sctp", "mptcp", "socketpair-dgram", "ioctl-setflags", "tcp-fastopen"} {
 		if esc, ok := v[c]; !ok || esc {
 			t.Errorf("%s: %v\n%s", c, v[c], res.Stdout)
 		}

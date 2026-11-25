@@ -33,6 +33,7 @@ Landlock と seccomp は、自分と子にだけ効き、外せない。そこ�
 | 他プロセスへのシグナル、abstract UNIX ソケット | Landlock の scope(ABI 6、Linux 6.12 以上) |
 | 他プロセスのメモリ・fd・環境 | seccomp で `ptrace`、`process_vm_*`、`pidfd_getfd` を拒否。`/proc` は許可に入れない |
 | `io_uring`、`bpf`、`perf_event_open`、`userfaultfd`、`keyctl` | seccomp で拒否(`io_uring` は、フィルタされた system call を通らずに、ソケットを作りファイルを開ける) |
+| データグラムの `socketpair`、`ioctl`(`FS_IOC_SETFLAGS`、`FS_IOC_FSSETXATTR`)、`MSG_FASTOPEN` つきの送信(プロキシのポートの指定のとき) | seccomp で拒否。`socketpair` は、つながった端だけ(STREAM と SEQPACKET。Rust の標準ライブラリが使う)。データグラムの端は任意のアドレスへ送れる。inode のフラグの `ioctl` は、読み取りで開いた fd で効き、Landlock が止めない属性の変更。TCP Fast Open の送信は、Landlock のポートの規則が見る `connect` を通らずに接続する |
 | 別の ABI の system call | seccomp が、アーキテクチャが違うものと、x86-64 の x32 の番号を、プロセスごと殺す |
 | SysV の共有メモリ・メッセージキュー・セマフォ、POSIX メッセージキュー、`kcmp` | seccomp で拒否。IPC の名前空間はホストのもので(名前空間は作らせない)、Landlock も止めないので、同じユーザーの他のプロセス(X11 クライアントの共有メモリなど)のものを、接続して読み書きできてしまう |
 | 起動した側が開けたままにした fd | 6 番以降を close-on-exec にする(`close_range`。できなければ、何も実行せずに止まる)。Landlock と seccomp は、すでに開いている fd の使用を止めない |

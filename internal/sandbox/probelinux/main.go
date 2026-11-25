@@ -170,6 +170,24 @@ func main() {
 		report(c.name, errno != unix.EPERM, fmt.Sprint(errno))
 	}
 	legacyAttrChecks()
+	// a datagram socketpair (two joined ends, but a datagram end can send to any address), the flags of an inode (ioctl on a descriptor that is not open: on the host it
+	// fails with EBADF, so the refusal is told from the rest), TCP Fast Open (a send with the flag connects on its own: only refused when the network is the proxy's port)
+	if fds, err := unix.Socketpair(unix.AF_UNIX, unix.SOCK_DGRAM, 0); err == nil {
+		unix.Close(fds[0])
+		unix.Close(fds[1])
+		report("socketpair-dgram", true, "")
+	} else {
+		report("socketpair-dgram", err != unix.EPERM, fmt.Sprint(err))
+	}
+	for _, c := range []struct {
+		name string
+		cmd  uintptr
+	}{{"ioctl-setflags", 0x40086602}, {"ioctl-fssetxattr", 0x401c5820}} {
+		_, _, errno := unix.Syscall(unix.SYS_IOCTL, ^uintptr(0), c.cmd, 0)
+		report(c.name, errno != unix.EPERM, fmt.Sprint(errno))
+	}
+	_, _, errno0 := unix.Syscall6(unix.SYS_SENDTO, ^uintptr(0), 0, 0, 0x20000000, 0, 0)
+	report("tcp-fastopen", errno0 != unix.EPERM, fmt.Sprint(errno0))
 	// io_uring (it makes sockets by itself)
 	_, _, errno := unix.Syscall(unix.SYS_IO_URING_SETUP, 1, 0, 0)
 	report("io-uring", errno != unix.EPERM, fmt.Sprint(errno))
