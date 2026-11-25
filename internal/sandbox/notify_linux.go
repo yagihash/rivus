@@ -82,8 +82,9 @@ type attrWatcher struct {
 	seen   map[string]bool
 	list   []string
 	cut    int
-	unread int      // the calls whose path could not be read
-	lost   []string // the reading of the notifications failed (the calls were let through, unseen)
+	unread int    // the calls whose path could not be read
+	lost   string // the reading of the notifications was given up
+	recv   func(fd int, req *notifReq) unix.Errno
 }
 
 func newAttrWatcher(write []string) *attrWatcher {
@@ -113,13 +114,30 @@ func (w *attrWatcher) receive(sock int, done <-chan struct{}) {
 	w.serve(fd, done)
 }
 
-// serve answers the notifications until done is closed. The descriptor must stay open as long as the program runs: the filter stays in the program, and
-// once nobody holds the descriptor, every call that the filter hands over fails with ENOSYS (the chmod of the linker, and the build breaks, as an error of
-// the project). So a failure of reading is not an end: it is told in the report, and the loop goes on. Only the end of the run, or no process left that
-// has the filter (POLLHUP), ends it.
+// maxReadFailures is how many reads in a row may fail before the reading is given up (the loop waits 10 ms between two of them).
+const maxReadFailures = 20
+
+// streak counts the failures in a row: a read that works begins the count again.
+type streak struct{ n int }
+
+func (s *streak) fail() (giveUp bool) { s.n++; return s.n >= maxReadFailures }
+func (s *streak) ok()                 { s.n = 0 }
+
+// serve answers the notifications until done is closed.
+//
+// A failure of reading is tried again, a number of times in a row (maxReadFailures): the descriptor must not be closed at the first one, because the filter
+// stays in the program, and once nobody holds the descriptor every call that it hands over fails with ENOSYS. But it cannot be tried for ever either: while it
+// fails nothing answers the calls that are waiting, and the program (the linker, with its chmod) waits with them until the run is over by its time. So after
+// that many failures in a row the reading is given up, the descriptor is closed (by the caller, when serve returns), the waiting calls and the ones to come fail
+// with ENOSYS at once, and the report says so.
 func (w *attrWatcher) serve(fd int, done <-chan struct{}) {
-	failures := 0
-	pause := func() bool { // false: the run is over
+	var failures streak
+	// retry says whether the loop goes on after a failure: not when the run is over, and not when there have been too many in a row
+	retry := func(why string) bool {
+		if failures.fail() {
+			w.giveUp(why)
+			return false
+		}
 		select {
 		case <-done:
 			return false
@@ -139,8 +157,7 @@ func (w *attrWatcher) serve(fd int, done <-chan struct{}) {
 			continue
 		}
 		if err != nil {
-			w.lose(&failures, "poll: "+err.Error())
-			if !pause() {
+			if !retry("poll: " + err.Error()) {
 				return
 			}
 			continue
@@ -152,16 +169,16 @@ func (w *attrWatcher) serve(fd int, done <-chan struct{}) {
 			return
 		}
 		var req notifReq
-		if _, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(fd), unix.SECCOMP_IOCTL_NOTIF_RECV, uintptr(unsafe.Pointer(&req))); errno != 0 {
+		if errno := w.receiveOne(fd, &req); errno != 0 {
 			if errno == unix.EINTR || errno == unix.ENOENT { // the process went away before the call was read
 				continue
 			}
-			w.lose(&failures, "receive: "+errno.Error())
-			if !pause() {
+			if !retry("receive: " + errno.Error()) {
 				return
 			}
 			continue
 		}
+		failures.ok()
 		w.look(fd, &req)
 		// the call goes on as it was asked (the kernel does it): this is a report, not a guard
 		resp := notifResp{id: req.id, flags: unix.SECCOMP_USER_NOTIF_FLAG_CONTINUE}
@@ -169,14 +186,30 @@ func (w *attrWatcher) serve(fd int, done <-chan struct{}) {
 	}
 }
 
-// lose notes that the reading failed (once for a run of failures: the loop tries again, and the report does not fill up).
-func (w *attrWatcher) lose(failures *int, why string) {
-	*failures++
-	if *failures == 1 {
-		w.mu.Lock()
-		w.lost = append(w.lost, why)
-		w.mu.Unlock()
+// receiveOne reads one notification (a test puts its own function in w.recv).
+func (w *attrWatcher) receiveOne(fd int, req *notifReq) unix.Errno {
+	if w.recv != nil {
+		return w.recv(fd, req)
 	}
+	_, _, errno := unix.Syscall(unix.SYS_IOCTL, uintptr(fd), unix.SECCOMP_IOCTL_NOTIF_RECV, uintptr(unsafe.Pointer(req)))
+	return errno
+}
+
+// giveUp notes that the reading was given up (it goes to the warnings: it is not a change of a file).
+func (w *attrWatcher) giveUp(why string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.lost = fmt.Sprintf("the reading of the calls that change the attributes of files failed (%s) %d times in a row and was given up: from then on those calls of the program (chmod, chown, utimes, setxattr) fail with ENOSYS, and none of them was looked at", why, maxReadFailures)
+}
+
+// warnings are what was not seen.
+func (w *attrWatcher) warnings() []string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.lost == "" {
+		return nil
+	}
+	return []string{w.lost}
 }
 
 // what pathOf found
@@ -370,10 +403,7 @@ func (w *attrWatcher) changes() []string {
 		out = append(out, fmt.Sprintf("... and %d more", w.cut))
 	}
 	if w.unread > 0 {
-		out = append(out, fmt.Sprintf("(%d calls whose path could not be read: ptrace of the child is not allowed here)", w.unread))
-	}
-	if len(w.lost) > 0 {
-		out = append(out, "(the reading of the calls failed, and the calls after it were let through without being looked at: "+strings.Join(w.lost, "; ")+")")
+		out = append(out, fmt.Sprintf("(%d more changes of files whose path could not be read: ptrace of the child is not allowed here)", w.unread))
 	}
 	return out
 }

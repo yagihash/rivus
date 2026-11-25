@@ -163,6 +163,7 @@ func Run(ctx context.Context, s Spec) (*Result, error) {
 	}
 	if res != nil {
 		_, res.Warnings = abiPolicy(ABI())
+		res.Warnings = append(res.Warnings, watcher.warnings()...)
 		res.AttributeChanges = watcher.changes()
 	}
 	return res, err

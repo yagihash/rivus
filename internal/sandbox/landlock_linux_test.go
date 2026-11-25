@@ -563,35 +563,96 @@ func TestSandboxReportsTheRightFile(t *testing.T) {
 	}
 }
 
-// The reading of the notifications that fails does not end the serving: the descriptor stays open as long as the program runs (the filter stays in the
-// program, and with nobody holding the descriptor its calls fail with ENOSYS), and the failure is told in the report.
-func TestSandboxNotificationsStayServedAfterAFailure(t *testing.T) {
+// The reading of the notifications that fails is tried again, and not for ever: the descriptor is not closed at the first failure (the filter stays in
+// the program, and with nobody holding the descriptor its calls fail with ENOSYS), and it is not kept open for ever either (nothing answers the calls
+// that wait, and the build would wait for its time to be over): after maxReadFailures in a row the reading is given up, and the report says so.
+func TestSandboxNotificationsAreTriedAgainThenGivenUp(t *testing.T) {
 	var p [2]int
 	if err := unix.Pipe(p[:]); err != nil {
 		t.Fatal(err)
 	}
 	defer unix.Close(p[0])
 	defer unix.Close(p[1])
-	unix.Write(p[1], []byte("x")) // readable, and not a descriptor of notifications: the receive fails (ENOTTY)
+	unix.Write(p[1], []byte("x")) // readable, and not a descriptor of notifications: every receive fails (ENOTTY)
 	w := newAttrWatcher(nil)
-	done := make(chan struct{})
+	done := make(chan struct{}) // (never closed: the run goes on)
 	returned := make(chan struct{})
 	go func() { w.serve(p[0], done); close(returned) }()
 	select {
 	case <-returned:
-		t.Fatal("serve ended at a failure of reading: the descriptor would be closed while the program runs")
-	case <-time.After(300 * time.Millisecond):
+		t.Fatal("the reading was given up at the first failures")
+	case <-time.After(60 * time.Millisecond):
 	}
-	if _, err := unix.FcntlInt(uintptr(p[0]), unix.F_GETFD, 0); err != nil {
-		t.Errorf("the descriptor was closed: %v", err)
-	}
-	close(done)
 	select {
 	case <-returned:
-	case <-time.After(2 * time.Second):
-		t.Fatal("serve did not end with the run")
+	case <-time.After(3 * time.Second):
+		t.Fatal("the reading was never given up: the calls that wait would wait for the end of the run")
 	}
-	if got := strings.Join(w.changes(), "\n"); !strings.Contains(got, "receive") {
-		t.Errorf("the failure is not in the report: %q", got)
+	got := strings.Join(w.warnings(), "\n")
+	for _, want := range []string{"receive", "given up", "ENOSYS"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("%q is not in the warning: %q", want, got)
+		}
+	}
+	if strings.Contains(strings.Join(w.changes(), "\n"), "given up") {
+		t.Error("the failure is among the changes of files")
+	}
+}
+
+// The failures that count are the ones in a row: a read that works begins the count again.
+func TestSandboxFailuresInARow(t *testing.T) {
+	var s streak
+	for round := 0; round < 3; round++ {
+		for i := 0; i < maxReadFailures-1; i++ {
+			if s.fail() {
+				t.Fatalf("given up after %d failures in round %d", i+1, round)
+			}
+		}
+		s.ok()
+	}
+	for i := 0; i < maxReadFailures-1; i++ {
+		s.fail()
+	}
+	if !s.fail() {
+		t.Errorf("not given up after %d failures in a row", maxReadFailures)
+	}
+}
+
+// A read that works begins the count again: failures that are many in all, and never maxReadFailures in a row, do not end the reading.
+func TestSandboxFailuresThatAreNotInARowDoNotEndTheReading(t *testing.T) {
+	var p [2]int
+	if err := unix.Pipe(p[:]); err != nil {
+		t.Fatal(err)
+	}
+	defer unix.Close(p[0])
+	defer unix.Close(p[1])
+	unix.Write(p[1], []byte("x")) // always readable
+	w := newAttrWatcher(nil)
+	calls := make(chan struct{}, 1000)
+	k := 0
+	w.recv = func(fd int, req *notifReq) unix.Errno {
+		k++
+		calls <- struct{}{}
+		if k%maxReadFailures == 0 {
+			return 0 // one that works (a number that no call of attrCalls has: it is looked at and nothing is found)
+		}
+		return unix.ENOTTY
+	}
+	done := make(chan struct{})
+	returned := make(chan struct{})
+	go func() { w.serve(p[0], done); close(returned) }()
+	for i := 0; i < 5*maxReadFailures; i++ { // five rounds of failures, each one short of the limit
+		select {
+		case <-calls:
+		case <-returned:
+			t.Fatalf("the reading ended after %d calls, with no more than %d failures in a row", i, maxReadFailures-1)
+		case <-time.After(5 * time.Second):
+			t.Fatal("no progress")
+		}
+	}
+	close(done)
+	<-returned
+	if got := w.warnings(); len(got) != 0 {
+		t.Errorf("the reading was given up: %v", got)
 	}
 }
