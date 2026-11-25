@@ -564,14 +564,23 @@ func (o *analyzeOpts) loadLangs(langs []string, patterns []string, rules *model.
 	var srcs []ir.Source
 	spill := o.irSpill
 	var otherDisks []*irspill.DiskSource
+	counts := map[string]int{}
+	testFilesSkipped := 0
+	var loadErrs []string
 	for _, lang := range langs {
 		var p *ir.Program
 		var disk *irspill.DiskSource
+		if err := o.checkLangInput(lang); err != nil {
+			return nil, err
+		}
 		if lang == langGo {
 			l, err := o.loadGo(patterns, rules, o.maxImpl)
 			if err != nil {
-				return nil, err
+				return nil, o.withProjectHint(err)
 			}
+			counts[langGo] = l.gossa.TargetFiles
+			testFilesSkipped = l.gossa.TestFilesSkipped
+			loadErrs = loadMessages(l)
 			if len(langs) > 1 {
 				if l.src != nil {
 					goir.AddTextsOf(l.texts.(*goir.Texts), l.src)
@@ -603,6 +612,7 @@ func (o *analyzeOpts) loadLangs(langs []string, patterns []string, rules *model.
 		}
 		if lang != langGo {
 			o.lockLangs = append(o.lockLangs, lang)
+			counts[lang] = len(p.Files) + countFilesUnder(o.dir, sourceSuffix[lang], 1)
 		}
 		if spill {
 			if lang == langGo {
@@ -627,6 +637,9 @@ func (o *analyzeOpts) loadLangs(langs []string, patterns []string, rules *model.
 		// (a program of several languages is not read as a closed world: what the other language calls is not said)
 		merged.CallerMarks = len(langs) == 1 && p.CallerMarks
 		merged.Files = append(merged.Files, p.Files...)
+	}
+	if err := o.emptyError(langs, counts, testFilesSkipped, patterns, loadErrs); err != nil {
+		return nil, err
 	}
 	if len(merged.Funcs) == 0 && len(srcs) == 0 && goProg == nil {
 		return nil, fmt.Errorf("nothing to analyse: no extractor produced code (languages: %s)", strings.Join(langs, ", "))

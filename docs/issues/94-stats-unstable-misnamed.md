@@ -1,10 +1,10 @@
 # #94 stats.unstable が、1 回で収束した解析でも 10 件並ぶ(名前と中身が合わない)
 
-- 状態: **open**
+- 状態: **closed**
 - 種類: 道具・ベンチ
 - 言語: 全
 - ROADMAP の節: 後回し
-- 守るもの: -
+- 守るもの: `internal/taint/limits_test.go`
 - GitHub: #94(移行前の番号は同じ。2026-11-21 に開いた。移行時の状態: OPEN)
 
 ## 本文(GitHub から移した写し)
@@ -26,3 +26,6 @@
 
 別セッションのレビューの識別子: BENCH-5
 
+## 直した内容
+
+2d4a5133(ADR-054)。`stats.unstable` は、解析が収束しなかったときだけ入る(`internal/taint/engine.go` の `if !st.Converged`)。収束した解析は、最後のパスで変わった関数があっても空になる。名前は変えず、意味を合わせた。

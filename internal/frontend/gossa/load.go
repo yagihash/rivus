@@ -80,6 +80,10 @@ type Program struct {
 	Initial []*packages.Package
 	// PkgPaths are the import paths of Initial (which ReleaseSSA lets go of).
 	PkgPaths []string
+	// TargetFiles is the number of Go files of the packages that were asked for (not their dependencies); with Options.Tests
+	// the files of the tests are in it. 0 means there was nothing to read: no package matched, or the packages hold no
+	// file that the options and the build constraints let in.
+	TargetFiles int
 
 	// Funcs lists every function that has a body, sorted by FuncID.
 	Funcs []*ssa.Function
@@ -264,6 +268,11 @@ func Load(dir string, patterns []string, opts Options) (*Program, error) {
 	}
 	for _, pkg := range pkgs {
 		p.PkgPaths = append(p.PkgPaths, pkg.PkgPath)
+		n := len(pkg.GoFiles)
+		if len(pkg.CompiledGoFiles) > n {
+			n = len(pkg.CompiledGoFiles)
+		}
+		p.TargetFiles += n
 	}
 	p.Inputs = collectInputs(pkgs)
 	p.ModuleVersions = moduleVersions(pkgs)

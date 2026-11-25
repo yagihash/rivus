@@ -60,7 +60,7 @@ rivus graph callers -C <dir> <関数>                  # finding の周辺を調
 
 ## 3. コマンド
 
-終了コードは、0 = 成功、1 = エラー、2 = 使い方の誤り(知らないコマンドやフラグ)、3 = Rust だけの対象で、読むことを断った、4 = 完全でない解析(全体の時間切れ、未収束、関数ごとの打ち切り。結果は出ている。`summary.incomplete` が true で、`summary.incomplete_reasons` に `timeout`、`not_converged`、`func_timeout`、`budget`)、130 = 中断です。`analyze`、`index -taint`、`query`、`resolve`、`models coverage` が 4 を返します(保存した index を読むだけのときは 0)。finding があっても、完全なら 0 です。`func_timeout` と `budget` は、その関数の要約が流れを欠くことがある、という意味です。**どの関数かは、トップレベルの `uncertainties` と、その関数を通る finding の `uncertainties` にある `depth_limit` の uncertainty**(`func` に関数、`detail` が `func_timeout:` か `budget:` で始まる。関数ごとに 1 件)を見ます(`out_limit` と `path_limit` は、`candidates` に関数の一覧がある別の uncertainty です)。`stats.func_timeouts` と `stats.budget_exhausted` は件数です。`-h` は、どのコマンドでも 0 で、使い方だけを出します(サブコマンドが必要なコマンドを引数なしで呼ぶと、使い方を出して 2 です)。
+終了コードは、0 = 成功、1 = エラー、2 = 使い方の誤り(知らないコマンドやフラグ)、3 = Rust だけの対象で、読むことを断った、4 = 完全でない解析(全体の時間切れ、未収束、関数ごとの打ち切り。結果は出ている。`summary.incomplete` が true で、`summary.incomplete_reasons` に `timeout`、`not_converged`、`func_timeout`、`budget`)、130 = 中断です。`analyze`、`index -taint`、`query`、`resolve`、`models coverage` が 4 を返します(保存した index を読むだけのときは 0)。finding があっても、完全なら 0 です。`func_timeout` と `budget` は、その関数の要約が流れを欠くことがある、という意味です。**どの関数かは、トップレベルの `uncertainties` と、その関数を通る finding の `uncertainties` にある `depth_limit` の uncertainty**(`func` に関数、`detail` が `func_timeout:` か `budget:` で始まる。関数ごとに 1 件)を見ます(`out_limit` と `path_limit` は、`candidates` に関数の一覧がある別の uncertainty です)。`stats.func_timeouts` と `stats.budget_exhausted` は件数です。**読む対象が無いときは、エラー(1)で、結果は出しません**(存在しないパス、`go.mod` だけで `.go` が無い、`pubspec.yaml` だけで `.dart` が無い、`Cargo.toml` が無い、Go でテストのファイルだけ(`-tests` を示す)など)。「何も出ない」は「安全」ではないからです。ファイルが 1 つ以上あれば、関数が 0(型だけ、コメントだけ)でも成功です。Go、Dart、Rust のどの目印も無い対象は、「見つからない」と言い、`package.json` など別の言語の目印があれば、それも言います(読むのは Go、Dart、Rust だけです)。`-h` は、どのコマンドでも 0 で、使い方だけを出します(サブコマンドが必要なコマンドを引数なしで呼ぶと、使い方を出して 2 です)。
 
 ### `rivus sites`
 
@@ -245,6 +245,15 @@ Rust を読むための、固定した nightly のツールチェーンと extra
 - **フラグ**: `-source <dir>`(必須。rivus のリポジトリの `extractor/rust`)、`-y`(ダウンロードの前に聞かない)。
 - **落とし穴**: ツールチェーン(約 1 GB)のダウンロードと、extractor のビルドを、**サンドボックスの外で**行います。利用者に頼まれたときだけ実行してください。`-source` に、解析の対象のディレクトリを指定してはいけません。
 
+### `rivus cache list` / `rivus cache clean`
+
+Rust のサンドボックスが、依存の取得先として作る置き場(`~/Library/Application Support/rivus/rust` の直下の `rivus-cargo-<16 桁の 16 進>`。`RIVUS_RUST_DATA_DIR` で変えられる)を、一覧して、古いものを消します。置き場は、`Cargo.lock` などが変わるたびに別のものができ、自動では消えません。
+
+- **`list`**: 置き場ごとに、パス、大きさ(合計バイト)、最後に使った日(置き場の中の最新の更新時刻)を表で出します。置き場がなければ、探した場所を書くだけで、エラーにしません。
+- **`clean -older-than <日数>`**: 最後に使った日が、その日数より古い置き場を一覧します。**既定では消しません**。端末で動かしたときは、一覧のあとに確認を聞き、`-yes` では聞かずに消します。端末でなければ(パイプ、スクリプト)、`-yes` がない限り、一覧だけです。`-older-than` がない、または負の値は、エラーです。
+- **消さないもの**: 名前が `rivus-cargo-` と 16 桁の 16 進でないもの(`extractor/` など)、シンボリックリンク、実パスが `RIVUS_RUST_DATA_DIR` の下でないもの。最後の更新が 1 時間以内の置き場は、使用中とみなして飛ばします(rivus は取得と抽出の間、置き場にロックを持たないので、更新時刻だけが手がかりです)。
+- **落とし穴**: 消した置き場は、次にその依存の Rust を読むときに、ネットワークでもう一度取得します(1 つが 1 GB を超えることもあります)。利用者に頼まれたときだけ `-yes` を付けてください。
+
 ### `rivus completion zsh`
 
 zsh の補完のスクリプトを標準出力に書きます。解析はせず、extractor もネットワークも使いません。コマンド、サブコマンド、フラグ、決まった値(`-lang`、`-detail`、`-role` など)の一覧は、rivus 自身の表から作られるので、コマンドやフラグが増えても、同じコマンドで作り直すだけで追従します。
@@ -316,6 +325,7 @@ rivus 0.0.4-0.20261122105721-36c03c7a8012 (36c03c7a8012) darwin/arm64 go1.27.4
 | `models coverage` | `-top <n>` | 上位 n 件だけ | `0`(全部) |
 | `models coverage` | `-yaml` | 埋めるためのルールファイルを出す | JSON |
 | `setup rust` | `-source <dir>`、`-y` | extractor のソース(必須)、聞かずにダウンロードする | なし |
+| `cache clean` | `-older-than <日数>`、`-yes` | この日数より古い置き場を対象にする(必須)、聞かずに消す | なし、消さない(一覧と確認) |
 | `graph`(全部) | `-graph <file>` / `-C <dir>` | 読むファイル / そのディレクトリのキャッシュ(照合もする) | どちらかが必須 |
 | `graph`(全部) | `--pretty` | JSON を整形する | 1 行 |
 | `graph callers`、`callees` | `--depth <n>` | 何階層先まで | `1`(最大 6) |

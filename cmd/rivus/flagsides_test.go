@@ -8,7 +8,7 @@ import (
 
 // flagCommands are the commands that have flags (the list that the tests of the flags and of -h go through).
 var flagCommands = [][]string{
-	{"analyze"}, {"index"}, {"query"}, {"resolve"}, {"sites"}, {"models", "coverage"}, {"models", "versions"}, {"setup", "rust"}, {"setup", "dart"}, {"debug", "extract"},
+	{"analyze"}, {"index"}, {"query"}, {"resolve"}, {"sites"}, {"models", "coverage"}, {"models", "versions"}, {"setup", "rust"}, {"setup", "dart"}, {"cache", "clean"}, {"debug", "extract"},
 	{"graph", "info"}, {"graph", "callers"}, {"graph", "callees"}, {"graph", "path"}, {"graph", "impls"}, {"graph", "dispatchers"},
 }
 
@@ -27,7 +27,7 @@ func TestHelpExitsZeroEverywhere(t *testing.T) {
 			}
 		}
 	}
-	for _, c := range [][]string{{"models"}, {"setup"}, {"graph"}, {"debug"}} {
+	for _, c := range [][]string{{"models"}, {"setup"}, {"cache"}, {"graph"}, {"debug"}} {
 		out, err := exec.Command(binary, c...).CombinedOutput()
 		if ee, ok := err.(*exec.ExitError); !ok || ee.ExitCode() != 2 || !strings.Contains(string(out), "Usage") {
 			t.Errorf("rivus %s: %v, %s", c[0], err, out)
