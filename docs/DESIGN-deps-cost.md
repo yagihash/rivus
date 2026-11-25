@@ -4,7 +4,7 @@
 - 依存の本体を読む実行のコストは、対象によっては大きい(この文書の 1 節の `dart_services` 型の対象。合成の gRPC サーバでは小さい)。
 - 実装の多いインターフェースのメソッドを、委譲のクリーク全体のモデルで切る基準(ADR-098)は、11 節の測定で決まり、`package:http` の `Client.send` に入っている。
 - 依存の中の source と sink は探さない(ADR-099)。このため、モデルは、コストだけでなく検出のためにも要る(10.7 節の 1 位)。
-- 7 節の `unread_packages`(パッケージ単位で本体を読まない指定)と、extractor に出力させない指定は、**まだない。設計中**([`docs/DESIGN-package-models.md`](DESIGN-package-models.md)。段階 0 と 2 を実装中。extractor に渡す段階は、まだ決まっていない)。7 節と 10.7 節の 3 位は、その案の記録として読む。
+- 7 節の `unread_packages`(パッケージ単位で本体を読まない指定)は、その名前のキーは作らず、`body_replaced_packages`(ADR-100。`-body-replaced` も)として実装済み。extractor に本体を読ませない段階は、Go と Dart が ADR-105、Rust は IR を小さくするだけで extractor の時間とメモリは減らない(経緯は [`docs/DESIGN-package-models.md`](DESIGN-package-models.md))。7 節と 10.7 節の 3 位は、その案を決める前の記録として読む。
 - 組み込みモデルの範囲は ADR-096、097 で広がった(README)。
 - 依存の重い対象(Go の S3 の合成、`bench/gcp`、`bench/dart-gcp`)の今の数字と、エンジン側のコストの試したこと・次に試すことは、[ROADMAP.md](ROADMAP.md) の 3 節。数字は `make bench-deps` で取り、台帳 `bench/heavy-ledger.tsv` に並ぶ。
 

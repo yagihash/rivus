@@ -1,10 +1,10 @@
 # #92 ベンチの採点が、見逃しが何も報告していないかと、経路に source の関数が出ることを見ない
 
-- 状態: **open**
+- 状態: **closed**
 - 種類: 道具・ベンチ
 - 言語: 全
 - ROADMAP の節: 1
-- 守るもの: -
+- 守るもの: `cmd/rivus/bench_curated_test.go`、`cmd/rivus/offsource_test.go`
 - GitHub: #92(移行前の番号は同じ。2026-11-21 に開いた。移行時の状態: OPEN)
 
 ## 本文(GitHub から移した写し)
@@ -25,3 +25,6 @@ CORE-B の issue、#76
 
 別セッションのレビューの識別子: BENCH-1、BENCH-2
 
+## 直した内容
+
+038b2c0e(BENCH-1 / BENCH-2)。`@miss` を `@miss(silent)`(何も報告していない)と `@miss(<kind>)`(その kind の不確実性が出ている)に分け、テストが両側から確かめる(uncertainty が付いたら、改善として落ちる)。経路に source の関数が出ない finding の数は、`offSourcePath`(`offsource_test.go`)で数え、`TestDogfood`、3 つの curated、`paramshare` のサンプルで上限として固定した。e6317bfb が、サイレントな見逃しの割合を curated のテストのログに出す。`other_sources` は経路のステップを持たないので、BENCH-2 の対象にしていない。

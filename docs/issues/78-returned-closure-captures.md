@@ -1,6 +1,7 @@
 # #78 Dart / Go: 関数が返したクロージャを呼ぶと、キャプチャした値と中の source が落ちる(カリー化、ファクトリ、functional options)
 
-- 状態: **open**
+- 状態: **partial**
+- 残り: グラフのエッジは直した(8342170f、4b9b2a0a(#465))。流れの `@miss` が、`dart-curated` の `holder-a` / `holder-b` と `curry`、`go-curated` の `options` に残る。
 - 種類: サイレントな見逃し
 - 言語: Dart / Go
 - ROADMAP の節: 2
