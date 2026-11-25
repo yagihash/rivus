@@ -56,6 +56,8 @@ Go と Dart は動く(`go` と Dart SDK が、それぞれ `brew` で入る)。*
 - **必要なもの**: Xcode CLT(`cc` とリンカ)。ディスク約 1.1 GB。インストールの間のネットワーク(static.rust-lang.org と crates.io)。
 - **`rivus setup rust -source <extractor/rust>`** は、Homebrew を使わない人(リポジトリから作る人)の手段として残す。置き場所は、利用者のデータのディレクトリ(`~/Library/Application Support/rivus/`)。
 
+- **`rivus cache list` と `rivus cache clean -older-than <日数>`**(課題 #199)は、サンドボックスの CARGO_HOME の置き場(`rustDataDir()` の直下の `rivus-cargo-<ハッシュ>`)を、一覧して、古いものを消す。既定は一覧だけで、消すのは確認のあとか `-yes`。使用中の確認は、最後の更新が 1 時間以内かどうか。
+
 ## 6a. バージョンの一致
 
 extractor が自分のバージョンを答え、rivus は合わなければ止まる(課題 #109)。formula では、wrapper が env を固定するので、ずれる余地は小さい。`setup rust` で作る人は、この確認が前提(#109、#119)。
