@@ -8,7 +8,7 @@
 
 パッケージ単位の宣言(段階 2)の最初の適用先は、`dart-http`、Dart と Go の Google Cloud。`bench/go-s3` は、仕組みの効果を示すベンチで、AWS SDK の組み込みモデルを本格的に作るのは後回し。
 
-**Rust の行の注意(2 行)。** rivus の Rust extractor は、読むときに `build.rs` と proc macro を実行する(隔離の下でだけ許される)。隔離が動かない環境では、Rust は「モデルは書くが、extractor を使う確認は CI に任せる」にして、取得したクレートのコードを、隔離なしで実行しない(線の詳細は MODEL-RUNBOOK.md の 0 節)。
+**Rust の行の注意(2 行)。** rivus の Rust extractor は、読むときに `build.rs` と proc macro を実行する(隔離の下でだけ許される)。隔離は、macOS(Seatbelt)と Linux(Landlock + seccomp。クラウドのセッションでも動く: ADR-128)にある。隔離が作れない環境では、Rust は「モデルは書くが、extractor を使う確認はしない」にして、取得したクレートのコードを、隔離なしで実行しない(線の詳細は MODEL-RUNBOOK.md の 0 節)。
 
 ## 0. 取り方(セッションが最初に読む)
 

@@ -14,7 +14,7 @@ import (
 )
 
 // Reading a Rust project builds it: cargo runs its build scripts and its proc macros. For code that is not trusted
-// that runs under the sandbox of macOS (internal/sandbox, ADR-093, docs/rust-isolation.md), in two stages:
+// that runs under the sandbox of the system (macOS: Seatbelt; Linux: Landlock and seccomp; internal/sandbox, ADR-093, docs/rust-isolation.md, docs/DESIGN-linux-sandbox.md), in two stages:
 //
 //  1. fetch (network): `cargo fetch --locked` puts the sources of the dependencies in a CARGO_HOME of rivus. cargo does not build in
 //     this stage, so no build.rs and no proc macro runs. But cargo reads the cargo configuration it finds, and the
@@ -26,7 +26,7 @@ import (
 //     and what is written goes to a work directory that is removed after.
 //
 // Both stages run under the profile of internal/sandbox (everything denied, what is needed allowed) with an environment that holds
-// nothing of the host. The sandbox is made in isolate_sandbox_darwin.go; on another system nothing is run (isolate_sandbox_other.go).
+// nothing of the host. The sandbox is made in isolate_sandbox_darwin.go and isolate_sandbox_linux.go; on another system nothing is run (isolate_sandbox_other.go).
 
 // pinnedToolchain is the nightly the extractor is pinned to (extractor/rust/rust-toolchain.toml).
 const pinnedToolchain = "nightly-2026-11-15"

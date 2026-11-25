@@ -14,8 +14,8 @@
 
 - **目的**: 解析の対象(攻撃者が制御しうる)が、rivus を動かすホストに何もさせないこと。
 - **方針**:
-  - Rust の信頼しないコードは、macOS のサンドボックス(Seatbelt)の下だけで読む(ADR-093。[rust-isolation.md](rust-isolation.md)、[DESIGN-macos-sandbox.md](DESIGN-macos-sandbox.md))。Linux には隔離がなく、既定では何も実行せずに止まる(`-unsafe-host-exec` だけ)。
-  - 隔離なしでは、取得したクレートのビルドスクリプトとマクロを実行しない。クラウドのモデル作成では、Rust を扱わない(#148)。
+  - Rust の信頼しないコードは、macOS のサンドボックス(Seatbelt)と、Linux の Landlock + seccomp(試作。[DESIGN-linux-sandbox.md](DESIGN-linux-sandbox.md))の下だけで読む(ADR-093。[rust-isolation.md](rust-isolation.md)、[DESIGN-macos-sandbox.md](DESIGN-macos-sandbox.md))。どちらもないとき(Landlock のない Linux など)は、既定では何も実行せずに止まる(`-unsafe-host-exec` だけ)。
+  - 隔離なしでは、取得したクレートのビルドスクリプトとマクロを実行しない。クラウドのモデル作成では、隔離の下(Linux の Landlock + seccomp が、クラウドのセッションで動く)でだけ、Rust を扱う。隔離が作れない環境では、扱わない(#148、ADR-128、MODEL-RUNBOOK.md の 0 節)。
   - 取得元の既定は crates.io だけ。
   - ユーザーの判断(2026-11-22): 取得のフェーズのネットワークの絞り込み([DESIGN-fetch-network.md](DESIGN-fetch-network.md)、#110)と、Go / Dart の隔離は、しばらくやらない。帰結として、Go / Dart の隔離ができるまで、新しい第三者のパッケージをまとめて解析・実行しない(観測との照合は、zoo と自前の curated だけで進める)。Rust の第三者のコードは、サンドボックスの中だけ。
   - あとで隔離を足すときの最初の対象(相談役の判断、2026-11-22): モデル化のタスクの、実行で確かめる手順(`DESIGN-model-authoring.md`)。着手の時期は未定。今は、信頼できるコードにだけ使う、と知らせるに留める。
@@ -97,7 +97,7 @@
 - **範囲**: ADR-096、097。Google Cloud、外部のサービスのクライアント、標準ライブラリ、代わりのないパッケージ、pub の人気の上位。選ぶ基準は公開の指標だけ([DART-MODEL-CANDIDATES.md](DART-MODEL-CANDIDATES.md))。ADR-063 は決まった(組み込みに入れるかは、フレームワークごとに、その都度、相談役が判断する)。
 - **方針**:
   - 今あるモデルは `internal/model/builtin/`。作る順番は [MODEL-QUEUE.md](MODEL-QUEUE.md)、手順は [MODEL-RUNBOOK.md](MODEL-RUNBOOK.md)、設計は [DESIGN-model-authoring.md](DESIGN-model-authoring.md)。
-  - Rust は、隔離のない環境では、モデルは書き、extractor を使う確認は CI に任せる(#148)。
+  - Rust は、隔離の下(macOS の Seatbelt、Linux の Landlock + seccomp。クラウドのセッションでも動く)でだけ、取得したクレートを読む。隔離が作れない環境では、モデルは書き、extractor を使う確認はしない(#148、ADR-128)。
   - 実行で確かめるステップは、信頼できるコードに対してだけ使う(隔離は作らない。ユーザーの判断、2026-11-22)。
   - sink の行の一括採用(`adopt_rules:`)は、確認の仕組み(3 節の差分テスト)が PR で動いてから使う。新しいパッケージの sink のモデルは、3 節の主な作業のあと。
   - モデルの鮮度(`verified_versions` と、更新の検知。DESIGN-package-models.md の 6.7 節)は、設計案。
