@@ -1,7 +1,8 @@
 # ADR-034: モデルの運用機能（ステップ 1.11）
 
-- 状態: 有効
+- 状態: 一部覆った(→ADR-127)
 - 関連: MODELING, README
+- 状態の詳細: 「出力の足すだけの変更はバージョンを上げない」の `rivus.result` の部分は ADR-127(足しただけでも上げる)
 - 要旨: `models coverage`、`pure`、`origin`、`--deterministic-only`。複数経路は見送り
 
 - **状況:** 不確実性の大半（`rivus` に帰属する 74〜93%）は、モデルを書けば減る（ADR-032）。そのための道具と、LLM が書いたモデルを監査できる仕組みが必要（ADR-010）。
@@ -31,3 +32,4 @@
   `models coverage` のテンプレートは `propagator` の仮置きのみで、sanitizer や sink のテンプレートは出さない
 - **帰結:** ルールを書く人（と、書かせる LLM）は、`models coverage` で優先順位を決め、`-yaml` のテンプレートから始め、`origin` を付け、`--deterministic-only` で影響を確かめられる
 
+**追記(ADR-127、2026-11-25):** 出力のスキーマ `rivus.result` は、足すだけの変更でも、バージョンを上げる(`kind` の追加も同じ)。上の「足すだけの変更の扱い」のうち、`rivus.result` の部分は、これで改めた。本文は、決めた時点のまま。
