@@ -44,18 +44,13 @@ func toRuns(out []byte) ([]Run, error) {
 	return runs, nil
 }
 
-// readState reads, from the API now, the push runs of ci.yml for the head commit of main and the recent scheduled / by-hand runs.
-func readState(repo string) (headRuns, periodic []Run, err error) {
-	sha, err := gh("api", fmt.Sprintf("repos/%s/commits/main", repo), "--jq", ".sha")
+// readState reads, from the API now, the recent push runs of ci.yml on main and the recent scheduled / by-hand runs.
+func readState(repo string) (pushRuns, periodic []Run, err error) {
+	out, err := gh("api", fmt.Sprintf("repos/%s/actions/workflows/ci.yml/runs?branch=main&event=push&per_page=30", repo))
 	if err != nil {
 		return nil, nil, err
 	}
-	head := strings.TrimSpace(string(sha))
-	out, err := gh("api", fmt.Sprintf("repos/%s/actions/workflows/ci.yml/runs?head_sha=%s&event=push&per_page=30", repo, head))
-	if err != nil {
-		return nil, nil, err
-	}
-	if headRuns, err = toRuns(out); err != nil {
+	if pushRuns, err = toRuns(out); err != nil {
 		return nil, nil, err
 	}
 	for _, ev := range []string{"schedule", "workflow_dispatch"} {
@@ -69,7 +64,7 @@ func readState(repo string) (headRuns, periodic []Run, err error) {
 		}
 		periodic = append(periodic, rs...)
 	}
-	return headRuns, periodic, nil
+	return pushRuns, periodic, nil
 }
 
 // failedJobs gives the names of the jobs of a run that did not succeed (`ci-ok` is the sum of the others, so it is left out).
@@ -114,9 +109,6 @@ type pull struct {
 // name, so a new one replaces the old one. It is not created again when the newest one already says the same.
 func writeCheck(repo, sha string, res Result) error {
 	status, conclusion := "completed", res.State
-	if res.State == "pending" {
-		status, conclusion = "in_progress", ""
-	}
 	cur, err := gh("api", fmt.Sprintf("repos/%s/commits/%s/check-runs?check_name=main-ci&per_page=1", repo, sha),
 		"--jq", `.check_runs[0] | "\(.status) \(.conclusion // "") \(.output.title // "")"`)
 	if err == nil && strings.TrimSpace(string(cur)) == strings.TrimSpace(status+" "+conclusion+" "+res.Description) {
@@ -126,9 +118,7 @@ func writeCheck(repo, sha string, res Result) error {
 		"name": "main-ci", "head_sha": sha, "status": status,
 		"output": map[string]string{"title": res.Description, "summary": res.Description},
 	}
-	if conclusion != "" {
-		body["conclusion"] = conclusion
-	}
+	body["conclusion"] = conclusion
 	if res.TargetURL != "" {
 		body["details_url"] = res.TargetURL
 	}
@@ -146,7 +136,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "GITHUB_REPOSITORY is not set")
 		os.Exit(2)
 	}
-	headRuns, periodic, err := readState(repo)
+	pushRuns, periodic, err := readState(repo)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "list runs:", err)
 		os.Exit(1)
@@ -174,10 +164,10 @@ func main() {
 			for _, l := range p.Labels {
 				labels = append(labels, l.Name)
 			}
-			res := Decide(now, headRuns, periodic, labels)
+			res := Decide(now, pushRuns, periodic, labels)
 			if res.Failing != nil && !filled[res.Failing.ID] {
 				// Look up the failed jobs once, then decide again with the names in the description.
-				for _, rs := range [][]Run{headRuns, periodic} {
+				for _, rs := range [][]Run{pushRuns, periodic} {
 					for i := range rs {
 						if rs[i].ID == res.Failing.ID {
 							rs[i].FailedJobs = failedJobs(repo, res.Failing.ID)
@@ -186,7 +176,7 @@ func main() {
 				}
 				filled[res.Failing.ID] = true
 			}
-			res = Decide(now, headRuns, periodic, labels)
+			res = Decide(now, pushRuns, periodic, labels)
 			if err := writeCheck(repo, p.Head.SHA, res); err != nil {
 				fmt.Fprintf(os.Stderr, "#%d: writing the check run failed: %v\n", p.Number, err)
 				failed++
