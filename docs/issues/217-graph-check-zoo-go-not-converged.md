@@ -14,6 +14,8 @@
 
 zoo-go には、パス上限で止まるセル(`state/global_chain`)が意図して入っている。`rivus analyze` はそのセルで終了コード 4(解析が完全でない)になるので、`bench/compare.sh --graph-check zoo-go ...` は、7 行がすべて `same` でも `convergence: NOT CONVERGED` の行が付き、終了コード 4 で終わる(0 にならない)。
 
+zoo-dart と zoo-rust も同じ形になる。zoo-rust には、パス上限で止まるセル(`state/global-chain`。13 と 30 の static の鎖、`@miss(recursion_approximation)`)が意図して入っている(`cmd/rivus/zoo_rust_test.go` は `allowUnconverged: true`)ので、`bench/compare.sh --graph-check zoo-rust ...` も、7 行がすべて `same` でも終了コード 4 で終わる。zoo-rust の `--graph-check` は手元(macOS、隔離の下)だけで、定期 CI の `graph-check` ジョブには入れていない(`.github/workflows/` は変えていない)。
+
 定期 CI の `graph-check` ジョブは、zoo-go の呼び出しだけ 4 を許す(`::notice::` を出す)。go-std10 と go-curated は 0 だけを合格にする。これは検査を緩める変更で、緩めた範囲は zoo-go の 4 だけ。
 
 ## 限界

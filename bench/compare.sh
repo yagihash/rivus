@@ -53,7 +53,7 @@ options:
                     only (CPU time, peak memory of the process tree, summary elements and steps, load average; no finding comparison). The
                     tree comes from the bench cache ($BENCH_CACHE, fetch only, never run); the run has its own process group and the memory
                     cap of the target (8 GB; 4 GB for memos-4gib) as the watchdog of bench/deps_bench.py. It takes minutes: for engine pull requests only; off by default
-  --graph-check LIST  the graph check, ALONE (the benchmarks above are not run): LIST is the names, separated by commas, of Go benchmarks and Dart benchmarks (dart-curated, zoo-dart; Rust is not covered; go-curated, zoo-go,
+  --graph-check LIST  the graph check, ALONE (the benchmarks above are not run): LIST is the names, separated by commas, of Go benchmarks and Dart benchmarks (dart-curated, zoo-dart), and zoo-rust (macOS only; see below; go-curated, zoo-go,
                     go-synth-S, go-scale, gogs-*, ... any of the names of --only; and go-std10: the standard library, the 10 packages of the acceptance test, which have shapes that the zoo and curated lack) and of the targets of bench/deps-targets.json (memos, memos-4gib,
                     gitea: fetched from the bench cache, never run; their process tree is watched against the memory cap of the target, and the heavy-work
                     lock is held for each run). For each name, base and head are run on the SAME code, and what they build is compared: the IR
@@ -61,7 +61,7 @@ options:
                     (RIVUS_INTERNAL_SUMMARY_DUMP, an internal dump with no flag: the hash of each whole summary), and then the findings and the
                     uncertainties (as sets, and in the order of the output). One line each: same, or DIFFERENT with how many and the first function IDs (bench/graph_check.py). A change for
                     memory or cost has to show "same" (docs/WORKFLOW.md); a difference is a change of the accuracy. A version from before the dump
-                    leaves "summaries" as NOT COMPARED (exit 3). Dart: each side runs the extractor of its own tree on the code of head (the IR line is the output of the extractor); an analysis that stops (exit code 4, as zoo-dart does by the pass limit) is compared as far as it goes and the line "convergence: NOT CONVERGED" gives exit 4 (zoo-go has such cells too). Exit status: 0 all the same, 1 a difference, 2 a run failed, 3 same but not all compared, 4 same, and only an analysis did not converge
+                    leaves "summaries" as NOT COMPARED (exit 3). Dart: each side runs the extractor of its own tree on the code of head (the IR line is the output of the extractor); an analysis that stops (exit code 4, as zoo-dart does by the pass limit) is compared as far as it goes and the line "convergence: NOT CONVERGED" gives exit 4 (zoo-go has such cells too). Rust (zoo-rust): macOS only, the extractor of each side runs under the sandbox and never with -unsafe-host-exec; HOME is an empty directory, the toolchain is RIVUS_RUST_TOOLCHAIN_DIR or the pinned nightly under ~/.rustup (`rivus setup rust` is never run), BENCH_RUST_SDKROOT as in bench/deps_bench.py; on another system the target is NOT RUN (exit 2). Exit status: 0 all the same, 1 a difference, 2 a run failed, 3 same but not all compared, 4 same, and only an analysis did not converge
   --graph-workers B,H  with --graph-check: run base with -workers B and head with -workers H (the self-check: with the same commit twice and "1,8", the
                     hash of the summaries must not hold the order of the work; the result "does not depend on" the number of workers)
   --dry-run         print what would be done and exit (nothing is created)
@@ -340,6 +340,20 @@ ensure_driver() {
 }
 side_sha() { if [ "$1" = base ]; then echo "$BASE_SHA"; else echo "$HEAD_SHA"; fi; }
 
+# rust_extractor WT SHA: builds the Rust extractor of one version (one binary per extractor tree; the cargo target dir is shared, so the dependencies
+# are built once; the heavy-work lock is held for the build). Sets RR (the binary) and RRTREE (the hash of extractor/rust); returns 1, with RRWHY, when it cannot.
+rust_extractor() {
+  local wt="$1" sha="$2"
+  RRTREE="$(tree "$sha" extractor/rust)"; [ -n "$RRTREE" ] || { RRWHY="no extractor/rust in ${sha:0:7}"; return 1; }
+  RR="$WORK/bin/rust-extractor/$RRTREE/rivus-rust"
+  if [ ! -x "$RR" ]; then
+    say "building the Rust extractor of ${sha:0:7} (tree ${RRTREE:0:12})"
+    (cd "$wt/extractor/rust" && CARGO_TARGET_DIR="$WORK/cargo-target" python3 "$ROOT/bench/heavylock.py" --reason "compare.sh rust extractor build" -- cargo build --locked) > "$WORK/ir/rust-extractor-$RRTREE.log" 2>&1 \
+      || { RRWHY="cargo build --locked failed in ${sha:0:7} (see $WORK/ir/rust-extractor-$RRTREE.log)"; return 1; }
+    mkdir -p "$WORK/bin/rust-extractor/$RRTREE" && cp "$WORK/cargo-target/debug/rivus-rust" "$RR" || { RRWHY="no rivus-rust after cargo build"; return 1; }
+  fi
+}
+
 setup() { # name side: makes the copy and the IR of that version; sets DIR, RULES, IR (empty for Go); returns non-zero (and records why) if it cannot
   local b="$1" w="$2" sha s7 wt top tgt="" ext="" extkey="-" key irsha="-" rr
   sha="$(side_sha "$w")"; s7="${sha:0:7}"; wt="$WORK/wt/$s7"; IR=""
@@ -422,26 +436,14 @@ setup() { # name side: makes the copy and the IR of that version; sets DIR, RULE
           rr="$RIVUS_RUST"; [ -x "$rr" ] || { skip "$b" "RIVUS_RUST=$rr is not executable"; return 1; }
           ext="bin-$(shasum -a 256 "$rr" | h16)"
         else
-          ext="$(tree "$sha" extractor/rust)"; [ -n "$ext" ] || { skip "$b" "no extractor/rust in $w ($s7)"; return 1; }
-          rr="$WORK/bin/rust-extractor/$ext/rivus-rust"
-          if [ ! -x "$rr" ]; then   # one binary per extractor tree; the cargo target dir is shared, so the dependencies are built once
-            say "building the Rust extractor of $w ($s7, tree ${ext:0:12})"
-            (cd "$wt/extractor/rust" && CARGO_TARGET_DIR="$WORK/cargo-target" cargo build --locked) > "$WORK/ir/rust-extractor-$ext.log" 2>&1 \
-              || { skip "$b" "cargo build --locked failed in $w ($s7) (see $WORK/ir/rust-extractor-$ext.log)"; return 1; }
-            mkdir -p "$WORK/bin/rust-extractor/$ext" && cp "$WORK/cargo-target/debug/rivus-rust" "$rr" || { skip "$b" "no rivus-rust after cargo build"; return 1; }
-          fi
+          rust_extractor "$wt" "$sha" || { skip "$b" "$RRWHY ($w)"; return 1; }
+          ext="$RRTREE"; rr="$RR"
         fi
         extkey="rust ${ext:0:12}"
       else   # someone else's code: under the sandbox, or nothing
         sandbox_ok || { skip "$b" "$NO_SANDBOX_MSG"; return 1; }
-        ext="$(tree "$sha" extractor/rust)"; [ -n "$ext" ] || { skip "$b" "no extractor/rust in $w ($s7)"; return 1; }
-        rr="$WORK/bin/rust-extractor/$ext/rivus-rust"   # the extractor of THIS version: one binary per extractor tree
-        if [ ! -x "$rr" ]; then
-          say "building the Rust extractor of $w ($s7, tree ${ext:0:12})"
-          (cd "$wt/extractor/rust" && CARGO_TARGET_DIR="$WORK/cargo-target" cargo build --locked) > "$WORK/ir/rust-extractor-$ext.log" 2>&1 \
-            || { skip "$b" "cargo build --locked failed in $w ($s7) (see $WORK/ir/rust-extractor-$ext.log)"; return 1; }
-          mkdir -p "$WORK/bin/rust-extractor/$ext" && cp "$WORK/cargo-target/debug/rivus-rust" "$rr" || { skip "$b" "no rivus-rust after cargo build"; return 1; }
-        fi
+        rust_extractor "$wt" "$sha" || { skip "$b" "$RRWHY ($w)"; return 1; }   # the extractor of THIS version
+        ext="$RRTREE"; rr="$RR"
         ensure_driver || { skip "$b" "go build of the rivus that drives the sandbox failed"; return 1; }
         extkey="rust-sandbox ${ext:0:12}"
       fi
@@ -565,7 +567,31 @@ if [ -n "$GRAPHCHECK" ]; then
       memos|memos-4gib|gitea)
         python3 "$ROOT/bench/graph_check.py" -name "$b" -target "$b" -base-bin "$BIN/rivus-base" -head-bin "$BIN/rivus-head" -graphcheck-bin "$BIN/graphcheck" -out "$OUT" ${GRAPHWORKERS:+-base-workers "${GRAPHWORKERS%%,*}" -head-workers "${GRAPHWORKERS##*,}"} ;;
       *)
-        spec "$b" >/dev/null 2>&1 && [ "$KIND" != rust ] || { say "graph check $b: not a Go or Dart benchmark (Rust is not covered), or an unknown name"; GC_STATUS=2; continue; }
+        spec "$b" >/dev/null 2>&1 || { say "graph check $b: an unknown name"; GC_STATUS=2; continue; }
+        if [ "$KIND" = rust ]; then   # the extractor of each side runs under the sandbox of macOS, on the code of head (graph_check.py makes the IR and checks the isolation)
+          [ "$FIXED" = 1 ] && { say "graph check $b: --fixed-inputs is not for the graph check"; GC_STATUS=2; continue; }
+          if [ "$(uname -s)" != Darwin ] || ! sandbox_ok; then   # nothing is built: the extractor of Rust is not run without the isolation
+            line="$b: NOT RUN (this system has no isolation (the sandbox of macOS), and the extractor of Rust is not run without it)"
+            echo "$line"; echo "$line" > "$OUT/graphcheck-$b.txt"; GC_STATUS=2; continue
+          fi
+          mkdir -p "$WORK/ir"
+          hwt="$WORK/wt/$(side_sha head | cut -c1-7)"
+          spec "$b" "$hwt"
+          [ -d "$DIR" ] || { say "graph check $b: no $DIR in head"; GC_STATUS=2; continue; }
+          ensure_driver || { say "graph check $b: go build of the rivus that drives the sandbox failed"; GC_STATUS=2; continue; }
+          ok=1; rustargs=()
+          for w in base head; do
+            rust_extractor "$WORK/wt/$(side_sha "$w" | cut -c1-7)" "$(side_sha "$w")" || { say "graph check $b: $RRWHY ($w)"; ok=0; break; }
+            rustargs+=(-$w-extractor "$RR")
+          done
+          [ "$ok" = 1 ] || { GC_STATUS=2; continue; }
+          gargs=("${rustargs[@]}" -lang rust -driver "$DRIVER" ${GRAPHWORKERS:+-base-workers "${GRAPHWORKERS%%,*}" -head-workers "${GRAPHWORKERS##*,}"} -name "$b" -base-bin "$BIN/rivus-base" -head-bin "$BIN/rivus-head" -graphcheck-bin "$BIN/graphcheck" -out "$OUT" -dir "$DIR")
+          [ -n "$RULES" ] && gargs+=(-rules "$RULES")
+          python3 "$ROOT/bench/graph_check.py" "${gargs[@]}"
+          rc=$?
+          case "$rc" in 0) ;; 1) GC_STATUS=1 ;; 3) { [ "$GC_STATUS" = 0 ] || [ "$GC_STATUS" = 4 ]; } && GC_STATUS=3 ;; 4) [ "$GC_STATUS" = 0 ] && GC_STATUS=4 ;; *) GC_STATUS=2 ;; esac
+          continue
+        fi
         dartargs=()
         if [ "$KIND" = dart ]; then   # the extractor is a part of each version: base and head each run their own on the SAME code (the one of head)
           [ "$FIXED" = 1 ] && { say "graph check $b: --fixed-inputs is not for the graph check"; GC_STATUS=2; continue; }
