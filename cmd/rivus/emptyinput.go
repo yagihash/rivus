@@ -26,8 +26,9 @@ var otherProjects = []struct{ file, what string }{
 	{"Gemfile", "Ruby"},
 }
 
-// sourceSuffix is the name of a source file of the languages that an extractor reads. The files are counted on disk, not in the IR: a
-// file of types and comments leaves no function and may leave no position in it, and it is a file that was read.
+// sourceSuffix is the name of a source file of the languages that an extractor reads. The files are counted on disk as well as in the IR
+// (the files its positions name): a file of types and comments leaves no function and may leave no position in it, and it is a file that
+// was read.
 var sourceSuffix = map[string]string{langDart: ".dart", langRust: ".rs"}
 
 // supported is what rivus reads, for the message.
@@ -102,7 +103,8 @@ func containsGo(langs []string) bool {
 
 // checkLangInput is the check that needs no reading: the marker a language needs is there.
 func (o *analyzeOpts) checkLangInput(lang string) error {
-	if lang == langRust {
+	// (an extractor that is named is not the real one: a test, or a tool that reads what rivus does not build)
+	if lang == langRust && o.rustExtractor == "" && os.Getenv("RIVUS_RUST_EXTRACTOR") == "" {
 		if _, err := os.Stat(filepath.Join(o.dir, "Cargo.toml")); err != nil {
 			return fmt.Errorf("no Cargo.toml in %s: a Rust project is a directory with a Cargo.toml (-lang rust looked for one and found none)", o.dir)
 		}

@@ -612,7 +612,7 @@ func (o *analyzeOpts) loadLangs(langs []string, patterns []string, rules *model.
 		}
 		if lang != langGo {
 			o.lockLangs = append(o.lockLangs, lang)
-			counts[lang] = countFilesUnder(o.dir, sourceSuffix[lang], 1)
+			counts[lang] = len(p.Files) + countFilesUnder(o.dir, sourceSuffix[lang], 1)
 		}
 		if spill {
 			if lang == langGo {
