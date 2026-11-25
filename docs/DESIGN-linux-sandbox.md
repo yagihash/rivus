@@ -35,9 +35,10 @@ Landlock と seccomp は、自分と子にだけ効き、外せない。そこ�
 | `io_uring`、`bpf`、`perf_event_open`、`userfaultfd`、`keyctl` | seccomp で拒否(`io_uring` は、フィルタされた system call を通らずに、ソケットを作りファイルを開ける) |
 | 別の ABI の system call | seccomp が、アーキテクチャが違うものと、x86-64 の x32 の番号を、プロセスごと殺す |
 | SysV の共有メモリ・メッセージキュー・セマフォ、POSIX メッセージキュー、`kcmp` | seccomp で拒否。IPC の名前空間はホストのもので(名前空間は作らせない)、Landlock も止めないので、同じユーザーの他のプロセス(X11 クライアントの共有メモリなど)のものを、接続して読み書きできてしまう |
-| 起動した側が開けたままにした fd | 6 番以降を close-on-exec にする(`close_range`)。Landlock と seccomp は、すでに開いている fd の使用を止めない |
+| 起動した側が開けたままにした fd | 6 番以降を close-on-exec にする(`close_range`。できなければ、何も実行せずに止まる)。Landlock と seccomp は、すでに開いている fd の使用を止めない |
+| ユーザーの他のプロセスの上限・優先度・CPU・メモリの置き場所(`prlimit64`、`setpriority`、`ioprio_set`、`sched_set*`、`migrate_pages`、`move_pages`、`process_madvise`) | seccomp で、自分(引数の 0)以外は `EPERM`(`process_*` は全部拒否)。Landlock が止めるのはシグナルだけで、同じユーザーのプロセスには、これらが通り、たとえば他のプロセスの `RLIMIT_NOFILE` を 3 に下げられた(実測)。引数の自分の番号(`getpid()` の値)も、フィルタには自分と分からないので、拒否する(0 を使う) |
 | setuid | `NO_NEW_PRIVS` |
-| root の特権(rivus を root で動かしたとき) | 実行の前に、全 capability を落とす(bounding set を空に、exec で root に特権を戻す規則(`SECBIT_NOROOT`)を止めて固定し、ambient と inheritable を空に)。`NO_NEW_PRIVS` は特権を落とさない。落とさないと、対象は特権のまま動き、他人のファイルの所有者を変えるなどができた(root で動かしたときのテストで見つけた) |
+| root の特権(rivus を root で動かしたとき) | 実行の前に、全 capability を落とし、**落とせたか確かめて**、落とせなければ(root で、`CAP_SETPCAP` がないコンテナ)、何も実行せずに止まる。上限(`RLIMIT`)も、設定できなければ止まる。落とす内容は(bounding set を空に、exec で root に特権を戻す規則(`SECBIT_NOROOT`)を止めて固定し、ambient と inheritable を空に)。`NO_NEW_PRIVS` は特権を落とさない。落とさないと、対象は特権のまま動き、他人のファイルの所有者を変えるなどができた(root で動かしたときのテストで見つけた) |
 | ユーザー名前空間、mount、カーネルモジュール | seccomp で `unshare`、`setns`、名前空間を作る `clone`、`mount` 系、`init_module` 系、`kexec`、`reboot` を拒否。`clone3` は `ENOSYS`(C ライブラリは `clone` に戻る)。名前空間の中で root になれると、非特権では届かないカーネルの部分に届く |
 
 ## 4. macOS との違い(弱くなる所と、強くなる所)
@@ -50,6 +51,7 @@ Landlock と seccomp は、自分と子にだけ効き、外せない。そこ�
   - **ファイルは、一度だけ開く**(`O_PATH`。fd を使う形は `pidfd_getfd` で、そのときの開いたファイルを取る)。**検査するのは、開いたファイルのパス**(`/proc/self/fd/N` の `readlink`。読み直せる文字列ではない)で、変更も、そのファイルに対して行う。作業ディレクトリの外のファイルは、`EPERM` を返し(何も変更しない)、報告に出す。
   - **パスの解決は、カーネルがする**(`openat` の `O_PATH`。`..` もリンクも、カーネルの解釈どおり)。`/proc/self/…` と `/dev/fd/…` は、rivus ではなく、対象のものとして読み替える。
   - **代行するスレッドは、capability を持たない**(rivus を root か capability つきで動かすと、対象と同じになるよう、先にスレッドの capability を捨てる。スレッドごとの性質なので、このスレッドだけ。捨てられなければ、すべて拒否する)。対象より多くのことを、代わりにしないため(root で、他のユーザーに渡す、など)。
+  - **`/dev/null` は、作業用ディレクトリの外**(ベースラインで書けるが、ホストのデバイス): 属性の変更は拒否する。rivus を root で動かしたとき、代行すると、ホストの `/dev/null` のモードを変えられ、ほかのユーザーが開けなくなる。
   - **代行する形**は、`chmod`、`fchmod`、`fchmodat`、`fchmodat2`、`chown`(`lchown`、`fchown`、`fchownat`)、`utimensat`(`futimens` を含む)、`setxattr`(`lsetxattr`、`fsetxattr`)、`removexattr`(`lremovexattr`、`fremovexattr`)。リンクそのもの(`lchown`、`AT_SYMLINK_NOFOLLOW`)と `AT_EMPTY_PATH` も扱う。リンクの `chmod` は `EOPNOTSUPP`、リンクの `user.*` は `EPERM`(カーネルと同じ)。**ほかの形は、`EPERM` で拒否する**: 古い `utime`、`utimes`、`futimesat`(x86-64 だけ)、新しい `setxattrat`、`removexattrat`(Linux 6.13)、`file_setattr`(6.17)。ビルドに要らない形を、引数の最後まで理解して代行するより、拒否する方が確実なため。
   - **検査できなかった呼び出しは、拒否する**(対象のメモリが読めない: `ptrace` が許されない環境、たとえば Yama の `ptrace_scope` が 2 以上)。件数を警告に出す。**そういう環境では、リンカの `chmod` も拒否されるので、ビルドが失敗する**(安全な側の失敗)。
   - 読み取りが失敗したときは、連続して 20 回(10 ミリ秒の間隔)までやり直す(読めたら数え直す)。1 回目で記述子を閉じると、フィルタは対象に残るので、以降の呼び出しが `ENOSYS` で失敗する。かといって、無制限に待つと、応答を待つ呼び出しが止まり、実行は時間の上限まで終わらない。上限に達したら、記述子を閉じ(待っている呼び出しと以降の呼び出しは、すぐ `ENOSYS` で失敗する)、警告に出す。

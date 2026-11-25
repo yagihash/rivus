@@ -133,8 +133,9 @@ func Run(ctx context.Context, s Spec) (*Result, error) {
 	// the helper itself needs nothing from the environment; the program gets s.Env from the configuration
 	var msg bytes.Buffer
 	msgDone := make(chan struct{})
-	// the places that the run may write: its work directories and what the baseline lets it write (/dev/null)
-	watcher := newAttrWatcher(append(append([]string(nil), cfg.Write...), cfg.SoftWrite...))
+	// the places where a change of attributes is done for the program: its work directories, and only them. Not /dev/null, which the baseline lets it write: that is a
+	// device of the host, and when rivus is run as root the mode of it could be changed (and every other user of the machine would fail to open it)
+	watcher := newAttrWatcher(cfg.Write)
 	watched := make(chan struct{})
 	finished := make(chan struct{})
 	res, err := supervise(ctx, s, cmd, func() {
@@ -297,7 +298,9 @@ func helperMain() {
 	// What the process that started rivus left open is not for the program: Landlock and seccomp do not stop the use of a descriptor that is already open (a
 	// socket, a file opened for writing). The descriptors from 6 on are marked close-on-exec (not closed: the runtime of this helper has some of its own, which it still
 	// uses until the exec). 0, 1 and 2 are the program's; 3, 4 and 5 are ours and are close-on-exec already.
-	unix.CloseRange(6, ^uint(0), unix.CLOSE_RANGE_CLOEXEC)
+	if err := unix.CloseRange(6, ^uint(0), unix.CLOSE_RANGE_CLOEXEC); err != nil {
+		fail(failUnavailable, "the descriptors that the process which started rivus left open cannot be marked close-on-exec (close_range: %v)", err)
+	}
 	// from here on, the program is what runs; the status pipe is closed by the exec (it was made CLOEXEC), which is the answer "all well"
 	if err := syscall.Exec(cfg.Path, cfg.Argv, cfg.Env); err != nil {
 		fail(failExec, "%s: %v", cfg.Path, err)
@@ -309,8 +312,12 @@ func closeIn(cfg *helperConfig) error {
 	if err := unix.Prctl(unix.PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0); err != nil {
 		return fmt.Errorf("no_new_privs: %v", err)
 	}
-	dropCapabilities()
-	cfg.limit()
+	if err := dropCapabilities(); err != nil {
+		return err
+	}
+	if err := cfg.limit(); err != nil {
+		return err
+	}
 	if err := landlock(cfg); err != nil {
 		return err
 	}
@@ -332,20 +339,59 @@ func closeIn(cfg *helperConfig) error {
 
 // dropCapabilities takes every capability away from what is run (it matters when rivus is run as root, or with capabilities: no_new_privs does not
 // take them away, and root gets all of them again at an exec). The bounding set is emptied, the "root has them" rule of exec is turned off (and
-// locked), the ambient and inheritable sets are cleared. Each step is best effort: a process that has no capability has nothing to drop, and
-// the steps that need one (CAP_SETPCAP) are refused for it.
-func dropCapabilities() {
+// locked), the ambient and inheritable sets are cleared. A process that has no capability has nothing to drop, and the steps that need one (CAP_SETPCAP) are
+// refused for it: so the steps are tried, and then it is LOOKED AT whether the program will have capabilities (capabilityProblem), and if it will the run does not
+// begin (rivus run as root in a container whose root has no CAP_SETPCAP: the program would get the bounding set of the container at the exec).
+func dropCapabilities() error {
 	unix.Prctl(unix.PR_CAP_AMBIENT, unix.PR_CAP_AMBIENT_CLEAR_ALL, 0, 0, 0)
+	last := 0
 	for c := 0; c < 64; c++ {
 		if err := unix.Prctl(unix.PR_CAPBSET_DROP, uintptr(c), 0, 0, 0); err == unix.EINVAL {
 			break // past the last capability that this kernel has
 		}
+		last = c
 	}
 	// SECBIT_NOROOT | SECBIT_NOROOT_LOCKED | SECBIT_NO_CAP_AMBIENT_RAISE | SECBIT_NO_CAP_AMBIENT_RAISE_LOCKED
 	unix.Prctl(unix.PR_SET_SECUREBITS, 0x1|0x2|0x40|0x80, 0, 0, 0)
 	hdr := unix.CapUserHeader{Version: unix.LINUX_CAPABILITY_VERSION_3}
 	var data [2]unix.CapUserData
-	unix.Capset(&hdr, &data[0])
+	if err := unix.Capset(&hdr, &data[0]); err != nil {
+		return fmt.Errorf("capabilities cannot be taken away (capset: %v)", err)
+	}
+	// what the program will have: look
+	var got [2]unix.CapUserData
+	hdr = unix.CapUserHeader{Version: unix.LINUX_CAPABILITY_VERSION_3}
+	if err := unix.Capget(&hdr, &got[0]); err != nil || got != data {
+		return fmt.Errorf("capabilities were not taken away (capget: %v, %+v)", err, got)
+	}
+	ruid, euid, suid := os.Getuid(), os.Geteuid(), -1
+	if b, err := os.ReadFile("/proc/self/status"); err == nil { // the saved user: the third number of "Uid:"
+		for _, l := range strings.Split(string(b), "\n") {
+			if f := strings.Fields(l); len(f) >= 4 && f[0] == "Uid:" {
+				suid, _ = strconv.Atoi(f[3])
+			}
+		}
+	}
+	secbits, _ := unix.PrctlRetInt(unix.PR_GET_SECUREBITS, 0, 0, 0, 0)
+	left := false
+	for c := 0; c <= last; c++ {
+		if v, err := unix.PrctlRetInt(unix.PR_CAPBSET_READ, uintptr(c), 0, 0, 0); err == nil && v == 1 {
+			left = true
+		}
+	}
+	if why := capabilityProblem(ruid == 0 || euid == 0 || suid == 0, secbits, left); why != "" {
+		return fmt.Errorf("%s", why)
+	}
+	return nil
+}
+
+// capabilityProblem says why a program that is run would have capabilities, or "". A process that is not root gets none at an exec (no_new_privs, and the ambient
+// set is clear). Root gets the whole bounding set, unless the rule of root (SECBIT_NOROOT) is off; and the bounding set is what is left of it.
+func capabilityProblem(root bool, secbits int, boundingLeft bool) string {
+	if root && secbits&0x1 == 0 && boundingLeft {
+		return "capabilities cannot be taken away: rivus is run as root, and this process may neither empty the bounding set nor turn off the rule of root at an exec (it has no CAP_SETPCAP), so the program would get capabilities. Run rivus as a user that is not root, or with CAP_SETPCAP"
+	}
+	return ""
 }
 
 // ----- Landlock -----
@@ -535,23 +581,35 @@ func lowered(cur unix.Rlimit, v uint64) unix.Rlimit {
 	return out
 }
 
-// limit sets the limits in the helper (they stay with what it runs).
-func (c *helperConfig) limit() {
-	set := func(res int, v uint64) {
+// limit sets the limits in the helper (they stay with what it runs). A limit that cannot be set is an error: the program would have none.
+func (c *helperConfig) limit() error {
+	set := func(res int, name string, v uint64) error {
 		if v == 0 {
-			return
+			return nil
 		}
 		var cur unix.Rlimit
 		if err := unix.Getrlimit(res, &cur); err != nil {
-			return
+			return fmt.Errorf("the limit %s cannot be read: %v", name, err)
 		}
 		l := lowered(cur, v)
-		unix.Setrlimit(res, &l)
+		if err := unix.Setrlimit(res, &l); err != nil {
+			return fmt.Errorf("the limit %s cannot be set: %v", name, err)
+		}
+		return nil
 	}
-	set(unix.RLIMIT_NPROC, c.NProc)
-	set(unix.RLIMIT_DATA, c.Data)
-	set(unix.RLIMIT_FSIZE, c.Fsize)
-	unix.Setrlimit(unix.RLIMIT_CORE, &unix.Rlimit{})
+	for _, r := range []struct {
+		res  int
+		name string
+		v    uint64
+	}{{unix.RLIMIT_NPROC, "NPROC", c.NProc}, {unix.RLIMIT_DATA, "DATA", c.Data}, {unix.RLIMIT_FSIZE, "FSIZE", c.Fsize}} {
+		if err := set(r.res, r.name, r.v); err != nil {
+			return err
+		}
+	}
+	if err := unix.Setrlimit(unix.RLIMIT_CORE, &unix.Rlimit{}); err != nil {
+		return fmt.Errorf("the limit CORE cannot be set: %v", err)
+	}
+	return nil
 }
 
 // tasksNow is the number of tasks (processes and threads) of the machine: the last number of the fourth field of /proc/loadavg.

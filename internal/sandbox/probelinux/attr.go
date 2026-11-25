@@ -41,6 +41,7 @@ func errnoOf(err error) string {
 func say(name string, err error) { fmt.Printf("%s: %s\n", name, errnoOf(err)) }
 
 func attrExtra() {
+	othersExtra()
 	if *attrAll != "" {
 		attrEverything(*attrAll)
 	}

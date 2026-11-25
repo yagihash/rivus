@@ -629,10 +629,21 @@ func TestSandboxReceivedDescriptorIsCloseOnExec(t *testing.T) {
 	}
 }
 
-// What the run may write includes /dev/null (the baseline lets it): a change of its attributes is not a change outside.
-func TestSandboxDevNullIsInside(t *testing.T) {
+// /dev/null may be written (the baseline), and its attributes are the host's: a change of them is refused (EPERM) and reported. (Run as root, the mode of the device of
+// the host could be changed otherwise, and every other user of the machine would fail to open it.)
+func TestSandboxDevNullAttributesAreNotChanged(t *testing.T) {
 	skipWithoutSandbox(t)
 	f := setup(t)
+	st, err := os.Stat("/dev/null")
+	if err != nil {
+		t.Skip("no /dev/null")
+	}
+	before := st.Mode()
+	t.Cleanup(func() { // (the test must not leave the device changed, if it fails)
+		if now, err := os.Stat("/dev/null"); err == nil && now.Mode() != before {
+			os.Chmod("/dev/null", before.Perm())
+		}
+	})
 	res, err := Run(context.Background(), Spec{Argv: []string{f.probe, "-attr-null"}, Dir: f.work, Env: []string{"PATH=/usr/bin:/bin"}, Write: []string{f.work}, Timeout: time.Minute})
 	if err != nil {
 		t.Fatal(err)
@@ -640,8 +651,11 @@ func TestSandboxDevNullIsInside(t *testing.T) {
 	if !strings.Contains(string(res.Stdout), "attr-null-chmod") {
 		t.Fatalf("the probe did not try: %s", res.Stdout)
 	}
-	if got := strings.Join(res.AttributeChanges, "\n"); strings.Contains(got, "/dev/null") {
-		t.Errorf("/dev/null is reported:\n%s", got)
+	if now, _ := os.Stat("/dev/null"); now.Mode() != before {
+		t.Errorf("the mode of /dev/null was changed: %v -> %v", before, now.Mode())
+	}
+	if !strings.Contains(strings.Join(res.AttributeChanges, "\n"), "/dev/null") {
+		t.Errorf("the refusal is not reported: %v", res.AttributeChanges)
 	}
 }
 
@@ -715,5 +729,25 @@ func TestSandboxInheritedDescriptorsAreNotPassedOn(t *testing.T) {
 	v := verdicts(t, string(res.Stdout))
 	if esc, ok := v["inherited-fd"]; !ok || esc {
 		t.Errorf("the descriptor %d is passed on to the program: %v\n%s", p[1], v, res.Stdout)
+	}
+}
+
+// The run does not begin when the program would have capabilities: root that cannot take them away (no CAP_SETPCAP) gets the bounding set at the exec.
+func TestSandboxCapabilityProblem(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		root    bool
+		secbits int
+		left    bool
+		problem bool
+	}{
+		{"not root, nothing done", false, 0, true, false}, // no_new_privs and an empty ambient set: no capability at an exec
+		{"root, the bounding set emptied", true, 0, false, false},
+		{"root, the rule of root turned off", true, 0x1, true, false},
+		{"root, neither (no CAP_SETPCAP)", true, 0, true, true},
+	} {
+		if got := capabilityProblem(c.root, c.secbits, c.left); (got != "") != c.problem {
+			t.Errorf("%s: %q", c.name, got)
+		}
 	}
 }

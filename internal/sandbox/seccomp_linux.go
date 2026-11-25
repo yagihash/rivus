@@ -63,6 +63,8 @@ var deniedCalls = []uint32{
 	unix.SYS_SEMGET, unix.SYS_SEMOP, unix.SYS_SEMTIMEDOP, unix.SYS_SEMCTL,
 	unix.SYS_MQ_OPEN, unix.SYS_MQ_UNLINK, unix.SYS_MQ_TIMEDSEND, unix.SYS_MQ_TIMEDRECEIVE, unix.SYS_MQ_NOTIFY, unix.SYS_MQ_GETSETATTR,
 	unix.SYS_KCMP,
+	// the memory of another process, by its pidfd (they need rights that a user has over its own processes)
+	unix.SYS_PROCESS_MADVISE, unix.SYS_PROCESS_MRELEASE,
 	// a new user namespace gives a process the rights of root inside it, and with them a lot of the kernel that an unprivileged process cannot reach
 	// (mounts, networks, firewalls): a way into kernel bugs. Nothing that a build runs needs one.
 	unix.SYS_UNSHARE,
@@ -76,6 +78,47 @@ var deniedCalls = []uint32{
 
 // cloneNewFlags are the flags of clone that make a new namespace (CLONE_NEWNS, NEWCGROUP, NEWUTS, NEWIPC, NEWUSER, NEWPID, NEWNET, NEWTIME).
 const cloneNewFlags = 0x7e020080
+
+// argEq is a condition on an argument of a call (the low 32 bits: the kernel takes these arguments as int).
+type argEq struct{ off, val uint32 }
+
+// ownOnly are the calls that change something of a PROCESS (a limit, the priority, the cpus, the scheduler, the memory policy) and that take the process as an argument:
+// a user may do them to every process of its own, and Landlock mediates only the signals. The program may do them to itself (0 is the caller), and to nobody else: with
+// another number of a process, or "all the processes of the user" (PRIO_USER, IOPRIO_WHO_USER), the answer is EPERM. (A build that runs with a limit of its own, nice or
+// taskset, does it to itself.)
+var ownOnly = []struct {
+	nr   uint32
+	args []argEq
+}{
+	{unix.SYS_PRLIMIT64, []argEq{{offArg0, 0}}},
+	{unix.SYS_SETPRIORITY, []argEq{{offArg0, 0 /* PRIO_PROCESS */}, {offArg1, 0}}},
+	{unix.SYS_IOPRIO_SET, []argEq{{offArg0, 1 /* IOPRIO_WHO_PROCESS */}, {offArg1, 0}}},
+	{unix.SYS_SCHED_SETAFFINITY, []argEq{{offArg0, 0}}},
+	{unix.SYS_SCHED_SETSCHEDULER, []argEq{{offArg0, 0}}},
+	{unix.SYS_SCHED_SETPARAM, []argEq{{offArg0, 0}}},
+	{unix.SYS_SCHED_SETATTR, []argEq{{offArg0, 0}}},
+	{unix.SYS_MIGRATE_PAGES, []argEq{{offArg0, 0}}},
+	{unix.SYS_MOVE_PAGES, []argEq{{offArg0, 0}}},
+}
+
+// ownOnlyRule is the block of the filter of one of those calls: when the call is another one, the block is skipped; when every argument is the value, the call goes on;
+// otherwise it is refused. (The accumulator holds the number of the call when the block begins and when it ends.)
+func ownOnlyRule(nr uint32, eqs []argEq) []unix.SockFilter {
+	k := len(eqs)
+	n := 2*k + 3 // the test of the call, k pairs (load, compare), the refusal, the load of the number again
+	deny := 2*k + 1
+	out := []unix.SockFilter{ins(bpfJeq, 0, uint8(n-1), nr)}
+	for i, e := range eqs {
+		out = append(out, ins(bpfLdAbs, 0, 0, e.off))
+		at := 2*i + 2
+		if i == k-1 {
+			out = append(out, ins(bpfJeq, 1, 0, e.val)) // the last one: when it is the value, the refusal is jumped over
+		} else {
+			out = append(out, ins(bpfJeq, 0, uint8(deny-(at+1)), e.val)) // when it is not the value: to the refusal
+		}
+	}
+	return append(out, ins(bpfRet, 0, 0, retEPERM), ins(bpfLdAbs, 0, 0, offNr))
+}
 
 // filter makes the program for the network of the run. With notify, the calls that change the attributes of a file (attrCalls) are handed to the
 // process that started the run, which looks at them and lets them through (notify.go).
@@ -118,6 +161,9 @@ func filter(net int, notify bool) ([]unix.SockFilter, error) {
 		deny,
 		ins(bpfLdAbs, 0, 0, offNr), // (the accumulator held the flags)
 	)
+	for _, r := range ownOnly {
+		p = append(p, ownOnlyRule(r.nr, r.args)...)
+	}
 	switch net {
 	case netNone:
 		// no socket of any family: no TCP, no UDP, no raw, no UNIX socket (a UNIX socket of a path is the way to the agents of the user: ssh-agent,
