@@ -48,3 +48,5 @@
 
 **追記（Rust の extractor は、テストを既定で読まない）:** `cargo check` から `--all-targets` を外した。ライブラリと実行ファイルだけがコンパイルされるので、`#[cfg(test)]`、`tests/`、`examples/`、`benches/` は、**ビルドの対象にならない**（名前や場所で見分けるのではなく、確実に入らない）。`rivus-rust --include-tests [dir]` で、`--all-targets` に戻せる。agent-browser では、関数の約 16%（34,097 のうち約 5,600）がテストのモジュールだった。含めたときも、含めないときも、利用者が前提を取り違えないように、README に書いた。Dart（`lib/` だけを読む）と Go（パッケージの読み込みの設定）は、別の話で、今回は変えていない。
 
+
+**追記（`IntoIterator::into_iter` の型つきの `symbol`）:** 受け手が `&mut` の参照、または型名が `Mut` で終わる型（`IterMut`、`ValuesMut`）のとき、extractor は `<&mut std::vec::Vec as std::iter::IntoIterator>::into_iter` の形の `symbol` を書く。ほかの受け手と、ほかのメソッドは、今までのトレイトのパスのまま。IR の形は変わらない（`symbol` は文字列）ので、`rivus.ir/1` のまま。モデルの一致は `symbol` の完全一致なので、型つきの `symbol` の呼び出しに、トレイトのパスの項目は一致しない。型つきの項目に、トレイトの項目の `flows` を写して alias を足す。型つきの `symbol` を書かない古い extractor では、型つきの項目が一致しない（元の状態に戻る）。extractor のソースのハッシュの不一致（ADR-126、`summary.extractor.match`）が、これを知らせる。書き方は `docs/MODELING.md`。
