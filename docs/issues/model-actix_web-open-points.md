@@ -1,5 +1,11 @@
 # actix-web: sink とセルの確認が、いまのモデルに入っていない
 
+- 状態: **open**
+- 種類: サイレントな見逃し
+- 言語: Rust
+- ROADMAP の節: 6
+- 守るもの: -
+
 ## 何が見逃されるか(または、何が誤って報告されるか)
 
 次は、`internal/model/builtin/rust-actix-web.yaml` にまだ行がなく、見逃される(サイレント)。

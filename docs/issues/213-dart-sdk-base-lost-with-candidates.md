@@ -1,6 +1,6 @@
 # #213 Dart: 依存を読むと、`dart:io` の `FileSystemEntity.path` を通る流れが、uncertainty なしで消える
 
-- 状態: **open**(原因 (a) は `fix/dart-fsentity-path-model` で直す。原因 (b) は設計メモのみ)
+- 状態: **partial**(原因 (a) は PR #486 で直った。`dart:io#FileSystemEntity.path` のモデルがあり、`bench/dart-curated` のセルが守る。原因 (b) は設計メモのみで、実装していない)
 - 優先度: 1 位(uncertainty のない見逃し)
 - 種類: サイレントな見逃し
 - 言語: Dart(依存を読む実行。`-no-deps` では出る)

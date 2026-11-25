@@ -174,16 +174,6 @@ xml、yaml、crypto は後回しのまま。流れだけのモデルで前に出
 | Google Cloud: `google_cloud_storage` | 進行中 | 3476、DL 29k |
 | `grpc` | 部分的に済み(`dart-grpc.yaml`) | 504、DL 0.7M |
 
-## 9. カバー済みの確認
+## 9. カバー済みのもの
 
-`internal/model/builtin/dart-*.yaml` を読み、`package:` で始まる参照を数えた(2026-11-22)。
-
-| パッケージ | ファイル | `package:` の参照数 | 範囲 |
-|---|---|---|---|
-| shelf | `dart-packages.yaml`(140 行) | 15 | `Request` を source に(`param_type`)、`Request` の getter と `read/readAsString` の flow。`Response` と `Handler` は無し |
-| http | `dart-packages.yaml` | 21 | `Response.body/bodyBytes/headers`、`StreamedResponse.stream` の flow。`get/post/put/delete/head/patch/read` と `Client.get/post/send` の sink |
-| sqflite_common | `dart-packages.yaml` | 10(`sqflite` が 1) | `rawQuery/rawInsert/rawUpdate/rawDelete/execute` の sink(`SqfliteDatabaseMixin` と `DatabaseExecutor`) |
-| grpc | `dart-grpc.yaml`(32 行) | 6 | サーバ側のハンドラを入口に(`Service` の継承と `ServiceCall`)、`ServiceCall.clientMetadata`、`ClientChannel.new` |
-| path | `dart-path.yaml`(34 行) | 13 | パスの操作の flow |
-
-`dart-io.yaml`(169 行)、`dart-core.yaml`(337 行)、`dart-async.yaml`(140 行)、`dart-misc.yaml`(173 行)、`dart-pure.yaml`(96 行)、`dart-config.yaml`(13 行)は標準ライブラリ(`dart:*`)で、パッケージの参照は無い。したがって、4 節から 7 節の表のうち shelf、sqflite、http、grpc 以外は「なし」。
+今ある Dart の組み込みモデルは `internal/model/builtin/dart-*.yaml` が正で、この文書には写さない。

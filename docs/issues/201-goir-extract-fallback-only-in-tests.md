@@ -1,6 +1,6 @@
 # #201 `goir.Extract` の、lifted を使わない経路(`callgraph.BuildGo` の fallback)が、テストからだけ使われて残っている
 
-- 状態: **open**
+- 状態: **closed**(PR #452 で、経路を 1 つにした。lifted の表が無いと `Extract` はエラーを返す。fallback の呼び出しは消えた)
 - 種類: 道具(テストと本番の経路の違い)
 - 言語: Go
 - ROADMAP の節: -

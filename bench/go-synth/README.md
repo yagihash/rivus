@@ -35,7 +35,7 @@ is the peak of the resident set), and stops when two runs of the same binary giv
   binaries first, run them one after the other, 2 or 3 times each). The result (`compare`) must be
   IDENTICAL for a change that is for speed. For a change that is meant to change the result, look at
   every finding that moved and say why in the commit, then `snapshot`.
-* Gitea (350,000 lines, 10 to 16 minutes, 5 to 10 GB) is not run for a change, and is not in the gate. Big real projects are run only when
+* Gitea is not run for a change, and is not in the gate (it is pass-line target C; its numbers are in the ledger). Big real projects are run only when
   named with `bench/compare.sh --big`, and in the periodic runs of `bench/explore/README.md`. The light tier has the cut-out of Gitea's
   three CVEs (7 packages).
 * Sizes and what the engine took (the build of 2026-11-21, 12 cores, 24 GB, machine otherwise idle):
@@ -46,7 +46,7 @@ is the peak of the resident set), and stops when two runs of the same binary giv
   | M | 459 | 12 | 28.4 to 28.5 s (3 runs) | 807 to 818 MB | 113 / 87 |
   | L | 911 | 17 | 127 to 128 s (3 runs) | 3.2 GB | 176 / 174 |
 
-  For a comparison, Gitea has 61,655 functions and takes 6 to 16 minutes and 5 to 15 GB (ADR-046), so
+  For a comparison, Gitea has far more functions (the numbers of the time are in ADR-046), so
   these are small in functions but not in cost per function: the time per function is high on this
   shape (fields, SCCs, callbacks).
 * The time moves with the load of the machine. The same binary on M took 28.5 s when idle (spread
