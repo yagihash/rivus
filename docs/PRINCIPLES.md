@@ -239,8 +239,8 @@ rivus の設計の判断は、ここに書いた原則に沿う。ほかの文�
 
 **コード:**
 
-- 隔離: `internal/sandbox`（macOS のサンドボックス。既定ですべて拒否し、必要なものだけ許す。ネットワークは取得の段階だけ）、`cmd/rivus/isolate_sandbox_darwin.go`（Rust の取得と抽出の 2 段階）、`isolate_fetch.go`（取得の段階で対象の設定を読まず、取得元を検査）
-- サンドボックスが作れなければ、Linux では、何も実行せず止まる: `cmd/rivus/isolate_sandbox_darwin.go`、`isolate_sandbox_other.go`。隔離の下か、ホストでかは、`summary.isolation` に出る
+- 隔離: `internal/sandbox`（macOS は Seatbelt、Linux は Landlock と seccomp。既定ですべて拒否し、必要なものだけ許す。ネットワークは取得の段階だけ）、`cmd/rivus/isolate_sandbox_darwin.go`（Rust の取得と抽出の 2 段階）、`isolate_fetch.go`（取得の段階で対象の設定を読まず、取得元を検査）
+- サンドボックスが作れなければ(Landlock のない Linux、macOS と Linux 以外)、何も実行せず止まる: `cmd/rivus/isolate_sandbox_darwin.go`、`isolate_sandbox_linux.go`、`isolate_sandbox_other.go`。隔離の下か、ホストでかは、`summary.isolation` に出る
 - git の HEAD を直接読む: `internal/vcs`
 - IR をメモリの外に出す部品: `internal/irspill`(解析の流れの既定で使う。ADR-123)。`TMPDIR` に 0600 で作ってすぐ名前を消したファイルだけに書く(強制終了でも残らない。共有の場所と対象のディレクトリには書かない)。書く量に上限があり、書けなければメモリに持つ。**文字列の定数(ソースにある秘密の文字列を含む)がこのファイルに入る**。読むのは同じ実行の中の rivus だけ
 - 対象内のルール: `.rivus/rules` は既定で読み、`-no-project-rules` で止める。symlink は拒否する。出力に、対象内ルールが消せる量を出す（`internal/report/report.go` の `ProjectRules`）
@@ -248,7 +248,7 @@ rivus の設計の判断は、ここに書いた原則に沿う。ほかの文�
 
 **現状と、まだ届いていない所**
 
-- **隔離が既定なのは、Rust だけ:** Go と Dart に隔離は無い。README が明記している。Rust の隔離は、macOS のサンドボックス(ADR-093)。メモリ・CPU・プロセス数の強い上限がなく、ユーザー境界もない。承知している弱さの一覧は、[rust-isolation.md](rust-isolation.md)。Linux では、信頼できないコードの Rust は読めない(止まる)。
+- **隔離が既定なのは、Rust だけ:** Go と Dart に隔離は無い。README が明記している。Rust の隔離は、macOS のサンドボックス(ADR-093)と、Linux の Landlock と seccomp(試作。[DESIGN-linux-sandbox.md](DESIGN-linux-sandbox.md))。メモリ・CPU・プロセス数の強い上限がなく、ユーザー境界もない。承知している弱さの一覧は、[rust-isolation.md](rust-isolation.md)。Landlock のない Linux では、信頼できないコードの Rust は読めない(止まる)。
 - **auto で Rust を読むかは、聞く:** 端末でない実行(`claude -p`、CI)は、`-yes` か `-lang rust` がないと Rust を読まない(読まなかったことは `skipped_languages` に残る)。聞いた答えで別の index になる。`callers` / `dispatchers` の答えは、`skipped_languages` をまだ言わない(#123)。
 - **取得の段階のネットワーク:** 開いたまま(宛先の許可リストがない)。`DESIGN-fetch-network.md` は案のまま(コンテナなしで実装する案は、後回しの課題)。
 - **制御を外したことが、出力に出ない:** `-unsafe-host-exec`、`-allow-fetch-host`、`-allow-deps-under` を使ったことは、出力に記録されない。警告が出るかは、確認した範囲では見つからなかった。

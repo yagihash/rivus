@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -22,6 +23,12 @@ import (
 // The dependencies are fetched into a CARGO_HOME of rivus (not ~/.cargo, which is never read nor written): the fetch writes it, the
 // extraction only reads it. The toolchain is the pinned nightly, run directly (no rustup), prepared outside the sandbox
 // from a trusted source.
+
+// sandboxDesc says which sandbox this system has, for what is said to the user.
+const sandboxDesc = "the sandbox of macOS"
+
+// sandboxAvailable says whether the sandbox can be made here; a test puts its own function in it (to test the system that has none).
+var sandboxAvailable = sandbox.Available
 
 // rustDataDir is where rivus keeps what it prepares for Rust (the dependencies that were fetched).
 // RIVUS_RUST_DATA_DIR names another directory for it (the tests of rivus use it so that they write nothing to the directory of the user).
@@ -107,7 +114,7 @@ func (o *isolationOpts) extractRustSandboxed(ctx context.Context, dir string, ex
 func (o *isolationOpts) extractRustSandboxedTo(ctx context.Context, dir string, extractorArgs []string, w io.Writer) ([]byte, error) {
 	// whether the sandbox can be made is found out here, before any code of the project runs, by rivus itself (a program that does nothing, under the
 	// profile): never from what the project's own programs write to their standard error
-	if err := sandbox.Available(); err != nil {
+	if err := sandboxAvailable(); err != nil {
 		return nil, noSandboxError(err)
 	}
 	if err := mountable(dir); err != nil {
@@ -246,7 +253,7 @@ func (o *isolationOpts) extractRustSandboxedTo(ctx context.Context, dir string, 
 // nothing is written, there is no network and no standard input, and the working directory is an empty directory that is removed. It does not wait
 // longer than rustVersionTimeout. An error is returned for the reasons that the answer is not there (errNoIsolation when the sandbox cannot be made).
 func (o *isolationOpts) rustExtractorVersionSandboxed(ctx context.Context) (string, error) {
-	if err := sandbox.Available(); err != nil {
+	if err := sandboxAvailable(); err != nil {
 		return "", fmt.Errorf("%w (%v)", errNoIsolation, err)
 	}
 	tc, err := pinnedToolchainDir()
@@ -272,7 +279,7 @@ func (o *isolationOpts) rustExtractorVersionSandboxed(ctx context.Context) (stri
 		MaxOutput: 4096,
 	})
 	if err != nil {
-		if err == sandbox.ErrUnavailable {
+		if errors.Is(err, sandbox.ErrUnavailable) {
 			return "", fmt.Errorf("%w (%v)", errNoIsolation, err)
 		}
 		return "", fmt.Errorf("it could not be run under the sandbox: %v", err)
@@ -292,7 +299,7 @@ func (o *isolationOpts) rustExtractorVersionSandboxed(ctx context.Context) (stri
 // sandboxResult says how a stage ended: what it printed goes to the user, and a stage that failed or was stopped is an error.
 func (o *isolationOpts) sandboxResult(stage string, res *sandbox.Result, err error) error {
 	if err != nil {
-		if err == sandbox.ErrUnavailable {
+		if errors.Is(err, sandbox.ErrUnavailable) {
 			return noSandboxError(err)
 		}
 		return fmt.Errorf("the %s stage under the sandbox: %v", stage, err)

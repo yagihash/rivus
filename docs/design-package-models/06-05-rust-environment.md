@@ -1,5 +1,7 @@
 ### 6.5 Rust の環境(調査と案。実装はしない)
 
+> **追記(2026-11-25): 下の 2(Linux の隔離)は、bubblewrap でなく Landlock + seccomp で入り(ADR-128、[DESIGN-linux-sandbox.md](../DESIGN-linux-sandbox.md))、クラウドのセッションで動くことを確かめた(非特権のユーザー名前空間は要らない)。5 の「CI に任せる」と、末尾の推奨は、それより前の記録。今の運用は MODEL-RUNBOOK.md の 0 節。`make setup-rust` は、まだない。**
+
 状況: `make setup`(`scripts/dev-setup.sh`)は、Go と Dart だけを入れる(「Rust は対象外」)。Rust のモデルを作って確認するには、Rust の extractor が動く必要がある。調べたことと、見積もり(**この環境では入れて測っていない**。数字は、ドキュメントと CI の設定からの見積もり)。
 
 1. **Linux でのビルドの手順と時間**: CI の `rust` ジョブと同じ。`rustup toolchain install`(`extractor/rust/rust-toolchain.toml` の `channel`、`minimal` + `rustc-dev`、`llvm-tools`、`rust-src`。取得は約 1 GB: `docs/rust-isolation.md`)、`cargo build --locked`(`rustc_private` にリンクする extractor のビルド)。時間は、回線とマシンしだいで、nightly の取得に 1〜数分、ビルドに数分(CI の `timeout-minutes` は 60)と見込む。実測は、段階の最初に取る。

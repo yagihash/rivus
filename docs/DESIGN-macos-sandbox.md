@@ -10,7 +10,7 @@
 - **決めたこと**: Rust の抽出を、Docker のコンテナの代わりに、**macOS のサンドボックス(Seatbelt、`sandbox-exec`)**の下で動かす。**Docker の経路は、CI を含めて丸ごと消す**。対象の環境は macOS(Apple Silicon)。
 - **ユーザーが承知のうえで受け入れたこと**: (1) `sandbox-exec` は、Apple が非推奨にしたまま動いている仕組み。(2) Docker の `--memory` / `--cpus` / `--pids-limit` に相当する**強い**上限がない(時間の上限、プロセスグループごとの kill などで代わりにする)。
 - **上のほかに、Docker より弱くなる所が見つかったら、ユーザーに聞く**(セキュリティの制御の変更。PRINCIPLES 8 節、ADR-064)。7 節に、見つかったものを並べる。
-- Linux: サンドボックスがないので、信頼できないコードの Rust の解析は、**何も実行せずに止まる**。既知のコードは `-unsafe-host-exec`(今もこのとおり。Linux での扱いの論点は 8 節)。
+- Linux(2026-11-25 の追記: Landlock + seccomp を足した。[DESIGN-linux-sandbox.md](DESIGN-linux-sandbox.md)、ADR-128。以下は、そのときの前提): サンドボックスがないので、信頼できないコードの Rust の解析は、**何も実行せずに止まる**。既知のコードは `-unsafe-host-exec`(今もこのとおり。Linux での扱いの論点は 8 節)。
 
 ## 1. 手元で確かめたこと(2026-11-22、macOS 26.7.1、arm64。使い捨ての試行。コードは残していない)
 
@@ -105,7 +105,7 @@
 | OS | 信頼できないコード(既定) | 既知のコード |
 | --- | --- | --- |
 | macOS | サンドボックスの下で動かす | `-unsafe-host-exec` で直接 |
-| Linux | **何も実行せずに止まる**(隔離の手段がないと表示する) | `-unsafe-host-exec` で直接(CI はこれ) |
+| Linux | Landlock + seccomp の下で動かす(ADR-128。Landlock がなければ、**何も実行せずに止まる**) | `-unsafe-host-exec` で直接(CI はこれ) |
 
 サンドボックスが使えないとき(`sandbox-exec` がない、プロファイルが読み込めない)も、**何も実行せずに止まる**。何も報告せずにホストでの実行に切り替えることはしない。ベンチの道具が持つ「ホストで読んでよいパスの許可リスト」は残す。
 
@@ -219,12 +219,14 @@ Linux の隔離の新設(余地は残した。論点は 8 節、課題 #148)、G
 
 ## 8. Linux での Rust の extractor の扱い(論点。課題 #148)
 
+> **追記(2026-11-25): Landlock + seccomp で試作した。[DESIGN-linux-sandbox.md](DESIGN-linux-sandbox.md)。以下は、その前の調査と線の記録。bubblewrap でなく Landlock にした理由は、あちらの 1 節。**
+
 rivus の Rust の extractor は、対象を `cargo check` でビルドするので、対象と依存の `build.rs` と proc macro を実行する。Linux には、隔離の手段がない。
 
 **線(決定。MODEL-RUNBOOK.md の 0 節、MODEL-QUEUE.md): 隔離なしでは、取得したクレートのビルドスクリプトとマクロを実行しない。** 今の動作:
 - `-lang rust` は、サンドボックスがないと何も実行せずに止まる。`-unsafe-host-exec` だけが通る(ADR-093、rust-isolation.md)。auto では読まない(`no-sandbox`)。
 - CI の `rust` ジョブは、このリポジトリのコード(ベンチ、zoo、`extractor/rust/test`)だけを、`-unsafe-host-exec` で読む。取得した第三者のクレートは読まない。
-- クラウドの定期実行のモデル作成(`rivus-model-author`)は、Rust のモデルについて、**モデルは書き、extractor を使う確認は CI に任せる**。取得したクレートを読む差分テストの Rust 版は、隔離のあるジョブに限る。
+- クラウドの定期実行のモデル作成(`rivus-model-author`)は、Rust のモデルについて、**モデルは書き、extractor を使う確認は CI に任せる**(この線は、2026-11-25 に、Landlock + seccomp の隔離がクラウドのセッションで動くと確かめて、あらためた: MODEL-RUNBOOK.md の 0 節、ADR-128)。取得したクレートを読む差分テストの Rust 版は、隔離のあるジョブに限る。
 
 **Linux の隔離の調査**(DESIGN-package-models.md の 6.5 節。実測はしていない):
 - bubblewrap(`bwrap`)が最有力。名前空間でファイルとネットワークを絞れ、取得はネットワークあり、抽出は `--unshare-net` の 2 段階にできる(macOS のプロファイルと同じ形)。
