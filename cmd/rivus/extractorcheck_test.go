@@ -261,3 +261,18 @@ func TestExpectedHashFlag(t *testing.T) {
 		t.Error("-expected-hash go: want an error")
 	}
 }
+
+func TestGoVersionWarning(t *testing.T) {
+	if w := goVersionWarning(report.CheckGoVersion("1.27", "example.com/app", map[string]string{"example.com/app": "1.27"}), "example.com/app"); w != "" {
+		t.Errorf("a match gives no warning: %q", w)
+	}
+	if w := goVersionWarning(report.CheckGoVersion("1.27", "", nil), ""); w != "" {
+		t.Errorf("unknown gives no warning: %q", w)
+	}
+	w := goVersionWarning(report.CheckGoVersion("1.27", "example.com/app", map[string]string{"example.com/app": "1.27", "example.com/dep": "1.99.1"}), "example.com/app")
+	for _, want := range []string{"rivus: WARNING: ", "example.com/dep", "go 1.99.1", "go 1.27", "(summary.go_version)"} {
+		if !strings.Contains(w, want) {
+			t.Errorf("%q is not in %q", want, w)
+		}
+	}
+}

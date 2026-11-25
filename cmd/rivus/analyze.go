@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/yagihash/rivus/internal/frontend/gossa"
 	"github.com/yagihash/rivus/internal/graphdb"
 	"github.com/yagihash/rivus/internal/ir"
 	"github.com/yagihash/rivus/internal/model"
@@ -395,6 +396,10 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 	rep.Summary.DepDirs = sortedUnique(o.depDirs)
 	if l.gossa != nil {
 		rep.Summary.UnverifiedVersions = rules.UnverifiedVersions(l.gossa.ModuleVersions, "go.mod")
+		rep.Summary.GoVersion = report.CheckGoVersion(gossa.VerifiedGo, l.gossa.MainModule, l.gossa.GoVersions)
+		if w := goVersionWarning(rep.Summary.GoVersion, l.gossa.MainModule); w != "" {
+			fmt.Fprintln(os.Stderr, w)
+		}
 	}
 	rep.Summary.UnverifiedVersions = append(rep.Summary.UnverifiedVersions, o.unverifiedFromLocks(rules)...)
 	sort.SliceStable(rep.Summary.UnverifiedVersions, func(i, j int) bool {

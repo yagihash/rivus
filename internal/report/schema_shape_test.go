@@ -15,9 +15,9 @@ import (
 	"testing"
 )
 
-// resultShapes is the hash of the shape of the result (the names and the types of the keys that the JSON carries, the values of the kinds of
-// the uncertainties and the values of attributable_to) for each version of the schema. The version goes up for every change of the shape, a
-// key or a kind that is added too: a reader that was written for an older version does not look for what is new, and nothing in the result
+// resultShapes is the hash of the shape of the result (the names and the types of the keys that the JSON carries, the values of the enumerations in
+// resultEnums: kind, attributable_to, confidence and so on) for each version of the schema. The version goes up for every change of the shape, a
+// key, a kind or a value that is added too: a reader that was written for an older version does not look for what is new, and nothing in the result
 // says so (ADR-127, as ADR-125 for the IR). To change the shape: raise SchemaVersion in internal/report/report.go and add a row with the new
 // hash to this table (the failure message prints the hash). Do not replace the hash of a version that was released.
 //
@@ -25,6 +25,7 @@ import (
 // texts (the content, not the shape).
 var resultShapes = map[string]string{
 	"rivus.result/2": "615e46909f944ce9521908ce6a6a6bdcd1befbee027e28ca59ef759d23cdfc9c",
+	"rivus.result/3": "cca52e17fe7a7fe820adabfeb4a99059f67f0553f940d16dec0e14c514c218da",
 }
 
 // resultShape describes, for every type that the result reaches from a Report, the keys that are written to the JSON and their types, and the
@@ -92,42 +93,62 @@ func shapeLines() ([]string, error) {
 	return lines, nil
 }
 
-// enumValues lists "name=value" for the constants of internal/taint/result.go that are values of the result: the kinds of the uncertainties
-// (Kind...) and the values of attributable_to (Attributable...). It fails for a constant of these names that is not a string literal.
+// enumSource is a file and the constants of it that are values of the result: the ones whose name begins with Prefix. Label says whose values.
+type enumSource struct {
+	File, Prefix, Label string
+}
+
+// resultEnums are the enumerations of the result that the shape holds, with the constants that name their values. A value that is added is
+// a change of the shape (a reader branches on the value; ADR-127). The enumerations that are not here are listed in ADR-127 (the addendum of
+// the enumerations): a string whose values are not constants, or are texts.
+var resultEnums = []enumSource{
+	{"../taint/result.go", "Kind", "kind "},
+	{"../taint/result.go", "Attributable", "attributable_to "},
+	{"../taint/result.go", "Confidence", "confidence "},
+	{"../taint/result.go", "Reach", "reachability "},
+	{"../taint/result.go", "Cond", "conditional_node.kind "},
+	{"report.go", "Reason", "summary.incomplete_reasons "},
+	{"report.go", "Go", "summary.go_version.match "},
+	{"../../cmd/rivus/extractorcheck.go", "match", "summary.extractor.match "},
+}
+
+// enumValues lists "label value" for the constants of resultEnums: the kinds of the uncertainties (Kind...), the values of attributable_to
+// (Attributable...), of confidence, of reachability, of the kind of a conditional node, of the reasons of incomplete, of
+// summary.go_version.match and of summary.extractor.match. It fails for a constant of these names that is not a string literal.
 func enumValues() ([]string, error) {
-	const file = "../taint/result.go"
-	f, err := parser.ParseFile(token.NewFileSet(), file, nil, 0)
-	if err != nil {
-		return nil, err
-	}
 	var out []string
-	for _, d := range f.Decls {
-		g, ok := d.(*ast.GenDecl)
-		if !ok || g.Tok != token.CONST {
-			continue
+	for _, src := range resultEnums {
+		f, err := parser.ParseFile(token.NewFileSet(), src.File, nil, 0)
+		if err != nil {
+			return nil, err
 		}
-		for _, sp := range g.Specs {
-			vs := sp.(*ast.ValueSpec)
-			for i, n := range vs.Names {
-				var prefix string
-				switch {
-				case strings.HasPrefix(n.Name, "Kind"):
-					prefix = "kind "
-				case strings.HasPrefix(n.Name, "Attributable"):
-					prefix = "attributable_to "
-				default:
-					continue
-				}
-				if i >= len(vs.Values) {
-					return nil, fmt.Errorf("%s: %s has no value", file, n.Name)
-				}
-				lit, ok := vs.Values[i].(*ast.BasicLit)
-				if !ok || lit.Kind != token.STRING {
-					return nil, fmt.Errorf("%s: %s is not a string literal", file, n.Name)
-				}
-				u, _ := strconv.Unquote(lit.Value)
-				out = append(out, prefix+u)
+		var n int
+		for _, d := range f.Decls {
+			g, ok := d.(*ast.GenDecl)
+			if !ok || g.Tok != token.CONST {
+				continue
 			}
+			for _, sp := range g.Specs {
+				vs := sp.(*ast.ValueSpec)
+				for i, name := range vs.Names {
+					if !strings.HasPrefix(name.Name, src.Prefix) {
+						continue
+					}
+					if i >= len(vs.Values) {
+						return nil, fmt.Errorf("%s: %s has no value", src.File, name.Name)
+					}
+					lit, ok := vs.Values[i].(*ast.BasicLit)
+					if !ok || lit.Kind != token.STRING {
+						return nil, fmt.Errorf("%s: %s is not a string literal", src.File, name.Name)
+					}
+					u, _ := strconv.Unquote(lit.Value)
+					out = append(out, src.Label+u)
+					n++
+				}
+			}
+		}
+		if n == 0 {
+			return nil, fmt.Errorf("%s: no constant begins with %s", src.File, src.Prefix)
 		}
 	}
 	return out, nil
@@ -158,15 +179,13 @@ func TestResultShapeCoversKinds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var kinds, attrs int
+	count := map[string]int{}
 	for _, v := range vals {
-		if strings.HasPrefix(v, "kind ") {
-			kinds++
-		} else {
-			attrs++
-		}
+		count[strings.SplitN(v, " ", 2)[0]]++
 	}
-	if kinds < 20 || attrs != 3 {
-		t.Errorf("the constants of result.go were not read as expected: %d kinds, %d attributable_to values", kinds, attrs)
+	// the numbers that the files have today: a constant that is added to one of these enumerations is a change of the shape, and the table above says so
+	if count["kind"] < 20 || count["attributable_to"] != 3 || count["confidence"] != 2 || count["reachability"] != 3 || count["conditional_node.kind"] != 2 ||
+		count["summary.incomplete_reasons"] != 5 || count["summary.go_version.match"] != 3 || count["summary.extractor.match"] != 6 {
+		t.Errorf("the constants of the enumerations were not read as expected: %v", count)
 	}
 }
