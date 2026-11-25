@@ -1,0 +1,5 @@
+go	clos/to_later/to_later.go	sink-none	@sink(none)	func fixed() { @fixed
+go	clos/to_later/to_later.go	sink-none	@sink(none)	func fixed() { @fixed
+go	clos/to_later/to_later.go	sink-none	@sink(none) @nosink(clos-to-later-decoy)	func decoy() { @decoy
+go	clos/to_later/to_later.go	sink-none	@sink(none) @nosink(clos-to-later-decoy)	func decoy() { @decoy
+go	clos/to_later/to_later.go	sink-none	@sink(none) @nosink(clos-to-later-decoy)	func decoy() { @decoy

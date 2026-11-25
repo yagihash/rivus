@@ -1,0 +1,5 @@
+dart	clos/to_later.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	clos/to_later.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
+dart	clos/to_later.dart	sink-none	@sink(none) @nosink(clos-to-later-decoy)	Future<void> decoy() async { @decoy
+dart	clos/to_later.dart	sink-none	@sink(none) @nosink(clos-to-later-decoy)	Future<void> decoy() async { @decoy
+dart	clos/to_later.dart	sink-none	@sink(none) @nosink(clos-to-later-decoy)	Future<void> decoy() async { @decoy

@@ -34,9 +34,12 @@ pub mod clos {
     pub mod relay;
     pub mod returned;
     pub mod stored;
+    pub mod to_later;
     pub mod to_lib;
+    pub mod to_lib_call;
     pub mod to_nomodel;
     pub mod to_own_helper;
+    pub mod to_sort;
     pub mod two_callers;
 }
 pub mod cont {

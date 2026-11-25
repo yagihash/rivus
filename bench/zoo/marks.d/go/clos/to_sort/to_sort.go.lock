@@ -1,0 +1,4 @@
+go	clos/to_sort/to_sort.go	sink-none	@sink(none)	func fixed() { @fixed
+go	clos/to_sort/to_sort.go	sink-none	@sink(none)	func fixed() { @fixed
+go	clos/to_sort/to_sort.go	sink-none	@sink(none) @nosink(clos-to-sort-decoy)	func decoy() { @decoy
+go	clos/to_sort/to_sort.go	sink-none	@sink(none) @nosink(clos-to-sort-decoy)	func decoy() { @decoy
