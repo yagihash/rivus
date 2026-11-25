@@ -498,10 +498,15 @@ jobs:
         with:
           path: ~/.rustup/toolchains
           key: ${{ steps.rustup.outputs.cache-primary-key }}
+      # build.rs puts the hash of the source of the extractor (ADR-126) into `--rivus-version`; without it the build says `source=unknown` and
+      # TestRustExtractorSaysItsSourceHash skips. Go is set up above in this job.
       - name: Build the Rust extractor
         if: needs.changes.outputs.rust == 'true'
-        working-directory: extractor/rust
-        run: cargo build --locked
+        run: |
+          RIVUS_EXTRACTOR_SRC_HASH="$(go run ./scripts/extractor-hash rust)"
+          export RIVUS_EXTRACTOR_SRC_HASH
+          cd extractor/rust
+          cargo build --locked
       # The checks that are not tests of cmd/rivus run once, in one shard (shard 2: the lightest of a pull request, after the first).
       - name: Analyze the Dart extractor
         if: needs.changes.outputs.dart == 'true' && matrix.shard == 2
