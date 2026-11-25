@@ -77,6 +77,32 @@ class Detection(unittest.TestCase):
         self.assertEqual(d.count_category({}, "path_traversal"), 0)
 
 
+class FixedWork(unittest.TestCase):
+    def test_same_path_every_run_and_emptied(self):
+        with tempfile.TemporaryDirectory() as c:
+            with d.fixed_work(c, "passline-x") as a:
+                open(os.path.join(a, "left"), "w").close()
+            self.assertFalse(os.path.exists(a))
+            with d.fixed_work(c, "passline-x") as b:
+                self.assertEqual(os.listdir(b), [])
+            self.assertEqual(a, b)
+
+    def test_stale_leftover_is_removed_before_the_run(self):
+        with tempfile.TemporaryDirectory() as c:
+            os.makedirs(os.path.join(c, "passline-x", "old"))
+            with d.fixed_work(c, "passline-x") as a:
+                self.assertEqual(os.listdir(a), [])
+
+    def test_second_run_of_the_same_name_is_refused(self):
+        with tempfile.TemporaryDirectory() as c:
+            with d.fixed_work(c, "passline-x"):
+                with self.assertRaises(SystemExit):
+                    with d.fixed_work(c, "passline-x"):
+                        pass
+                with d.fixed_work(c, "passline-y"):  # another name is free
+                    pass
+
+
 class Peak(unittest.TestCase):
     GB = 1024 ** 3
 

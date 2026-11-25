@@ -52,7 +52,9 @@ goes to $BENCH_OUT (default .claude/work/bench-out/, git-ignored; the ledger hol
 Nothing of a target is run.
 """
 import argparse
+import contextlib
 import datetime
+import fcntl
 import json
 import os
 import re
@@ -77,6 +79,25 @@ BENCHES = {
 }
 DEPS_CAP_GB = 20  # the watchdog of the dependency benches: protects the machine; it is not a line
 GRACE = 120
+
+
+@contextlib.contextmanager
+def fixed_work(cache, name):
+    """The work dir of one target: `<cache>/<name>`, the same path in every run. The copy of the target is made in it, and the path is part of the
+    function URIs, so the ids of the findings are the same from run to run (a random temporary dir changed them; the comparison of two runs had to
+    rename it). It is emptied before and after the run; a lock file beside it refuses a second run of the same name at the same time."""
+    path = os.path.join(cache, name)
+    with open(path + ".lock", "w") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            raise SystemExit("deps_bench: %s is in use by another run (lock %s.lock)" % (path, path))
+        shutil.rmtree(path, ignore_errors=True)
+        os.makedirs(path)
+        try:
+            yield path
+        finally:
+            shutil.rmtree(path, ignore_errors=True)
 
 
 def measure(name, rivus, timeout, work):
@@ -661,7 +682,7 @@ def passline(name, t, rivus, cache, outdir, limit_s, cap_gb, repeat=1):
 
 
 def passline_run(name, t, rivus, cache, outdir, limit_s, cap_gb, repeat=1, home=None):
-    with tempfile.TemporaryDirectory(prefix="passline-") as work:
+    with fixed_work(cache, "passline-" + name) as work:
         env = dict(os.environ)
         if home:
             env["HOME"] = home  # empty: the data of rivus for Rust (os.UserConfigDir) and its cache are made here, not in the shared places
@@ -818,7 +839,8 @@ def main():
             rivus = os.path.join(work, "rivus")
             build_rivus(rivus)
         for name in a.benches:
-            row, why = measure(name, rivus, a.timeout, work)
+            with fixed_work(cache_dir(), "deps-" + name) as w:  # the copy of a Dart target is made here: the same path every run
+                row, why = measure(name, rivus, a.timeout, w)
             if row is None:
                 print("deps_bench: %s skipped: %s" % (name, why), file=sys.stderr)
                 continue
