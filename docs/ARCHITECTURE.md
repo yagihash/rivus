@@ -199,7 +199,7 @@ call dst? callee args flags
 
 ### 2.6 ストリーム形式
 
-JSON Lines。**先頭行は必ず `{"schema_version": "rivus.ir/0"}`**。以降は 1 行 1 レコードで、`kind` が種類を示す。種類は `func`（関数）、`implementations`、`global`、`type`、`type_alias`、`text`、`call_text`、`func_text`、`load_error`、`tests_skipped`、`caller_marks`、`body_not_read`（`internal/ir/stream.go`）。
+JSON Lines。**先頭行は必ず `{"schema_version": "rivus.ir/1"}`**。以降は 1 行 1 レコードで、`kind` が種類を示す。種類は `func`（関数）、`implementations`、`global`、`type`、`type_alias`、`text`、`call_text`、`func_text`、`load_error`、`tests_skipped`、`caller_marks`、`body_not_read`（`internal/ir/stream.go`）。
 `rivus debug extract` で、Go の IR を単独で出せる。`-text` で人間向けの形、`-func` で関数を絞り、`-all` で依存も出す。`-implementations`、`-texts`、`-check` もある（`cmd/rivus/extract.go`）。
 `-lang rust` は、Rust の extractor が出すストリームをそのまま出す（macOS では既定で OS のサンドボックスの下で動かす。15 節）。`-lang` は `go` か `rust` で、Dart の extractor は `rivus debug extract` からは呼べない（`rivus-dart` を直接動かす）。
 人間が読んで検証できることを一級の要件とする。
@@ -322,7 +322,7 @@ Go の extractor は、コアと同じプロセスで、`ir.Program` と `ir.Tex
 - Go の `rivus debug extract` は、`-texts` を付けたときだけテキストを出す。`-implementations <シンボル>` は、そのインタフェースメソッドの `implementations` レコードを出す
 
 **モジュール境界:** 複数パッケージ（Dart の melos、Rust の workspace）を 1 回の実行で出し、`Func.Dep` で、解析の対象と依存を分ける。依存は、ソースがあるものだけを出す。
-**バージョン:** ストリームの先頭の `schema_version`（今は `rivus.ir/0`）が違えば、読まずに止める（`internal/ir/stream.go`）。Dart の extractor は、自分のバージョンを `--version` で返す（`rivus_dart rivus.ir/0`）。コアは、グラフの鍵に、extractor の実行ファイルのハッシュと、Dart ではこのバージョンを入れる（`cmd/rivus/graphkey.go`）。
+**バージョン:** ストリームの先頭の `schema_version`（今は `rivus.ir/1`）が違えば、読まずに止める（`internal/ir/stream.go`。メッセージは、extractor を作り直す方法を示す。回避のフラグはない）。ストリームの形（型とフィールド）が変わるときは、足しただけでもバージョンを上げる。古い extractor は、新しく足したものを書かないのに、読む側がそれを知る手段がないからである。形のハッシュを `TestIRSchemaVersionMatchesShape` がバージョンごとに固定し、Rust と Dart の extractor が書くバージョンは `TestExtractorsWriteTheSchemaVersion` が照合する（#109）。Dart の extractor は、自分のバージョンを `--version` で返す（`rivus_dart rivus.ir/1`）。コアは、グラフの鍵に、extractor の実行ファイルのハッシュと、Dart ではこのバージョンを入れる（`cmd/rivus/graphkey.go`）。
 **失敗:** 読めなかったもの（解決できないパッケージ、生成コードがない）は、`load_error` として出す。コアは `missing_source` の不確実性にする。
 **読まなかったもの:** ビルドが出荷しないもの（テスト、example、開発用の依存）を読まなかったときは、`tests_skipped` レコードで示す（ADR-062）。呼び出し元が全部読まれているかは、`caller_marks` と `Func.Private` / `Func.ExternalEntry` で示す（13 節）。
 
@@ -411,7 +411,7 @@ Rust と Dart の extractor は、同じ `ir` を出せば、コアを変えず�
 - `Program`: `Funcs`、`Impls`、`Types`（上位の型）、`Globals`、`TypeAliases`、テキスト（`Texts`、`CallTexts`、`FuncTexts`）、`LoadErrors`、`CallerMarks`、`TestsSkipped`
 - `Func`: `ID`、`Params`（`Class`、`Captured`）、`Results`、`Locals`、`Blocks`（先頭が entry）、`Roots`、`Pos`、`File`。マークとして `Exported`、`Entry`、`Init`、`Symbol`、`Recv`、`Dep`、`Private`、`ExternalEntry`、`Overrides`
 - `Block`: `Instrs`、`Term`（`Kind`、`Cond`、`CondPos`、`Values`）、`Succs`（種別つきのエッジ）
-- `Instr`: `Op`、`Dsts`（呼び出しは戻り値の数だけ）、`Args`、`Const`、`Operator`、`Field`、`Path`、`Global`、`Func`、`View`、`Folded`、`Keyed`、`CharRead`（結果が文字列の 1 要素 = byte、rune、コードユニット、char の 1 つである命令の目印。`index_load`、`field_load`、`call` に付く。JSON は `char_read`。足しただけで、`schema_version` は `rivus.ir/0` のまま。付けない extractor の出力は、そのまま読める。付いていない命令は、この目印では何も言わない）、`Callee`、`Go` / `Defer` / `Await`、`Reason`、`Pos`、`AddrPos`、`ArgPos`、`ArgNames`（名前つき引数の名前。`Args` と並ぶ。Dart だけが付ける。足しただけで、`schema_version` は `rivus.ir/0` のまま。読む側は、ないものとして扱う。`named:` の sink が使う）
+- `Instr`: `Op`、`Dsts`（呼び出しは戻り値の数だけ）、`Args`、`Const`、`Operator`、`Field`、`Path`、`Global`、`Func`、`View`、`Folded`、`Keyed`、`CharRead`（結果が文字列の 1 要素 = byte、rune、コードユニット、char の 1 つである命令の目印。`index_load`、`field_load`、`call` に付く。JSON は `char_read`。`schema_version` を `rivus.ir/1` に上げた(足しただけでも上げる。下の「バージョン」)。付いていない命令は、この目印では何も言わない）、`Callee`、`Go` / `Defer` / `Await`、`Reason`、`Pos`、`AddrPos`、`ArgPos`、`ArgNames`（名前つき引数の名前。`Args` と並ぶ。Dart だけが付ける。`schema_version` を上げる対象である。`named:` の sink が使う）
 - `Callee`: `Kind`（`static` / `dynamic` / `value`）、`Func`、`Symbol`、`Recv`、`Candidates`、`FFI`。ストリームには載らず、コアが埋めるもの: `ValueCands`、`ValueLimit` など（13 節）
 - `Pos` は `File`、`Offset`、`Length`、`Line`、`Col`
 

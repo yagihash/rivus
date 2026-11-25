@@ -244,6 +244,7 @@ Rust を読むための、固定した nightly のツールチェーンと extra
 - **いつ使うか**: ソースからビルドした rivus で、Rust を読む前に 1 回。Homebrew でインストールした rivus では不要です。
 - **フラグ**: `-source <dir>`(必須。rivus のリポジトリの `extractor/rust`)、`-y`(ダウンロードの前に聞かない)。
 - **落とし穴**: ツールチェーン(約 1 GB)のダウンロードと、extractor のビルドを、**サンドボックスの外で**行います。利用者に頼まれたときだけ実行してください。`-source` に、解析の対象のディレクトリを指定してはいけません。
+- **版の照合**: extractor が出す IR のバージョン(`rivus.ir/N`)が rivus と違えば、rivus は読まずに止まり(終了コード 1)、作り直し方を示します。今まで読めた古い extractor が、エラーになります。`rivus setup rust` / `rivus setup dart` で取り直してください。回避のフラグはありません(#109)。
 
 ### `rivus cache list` / `rivus cache clean`
 

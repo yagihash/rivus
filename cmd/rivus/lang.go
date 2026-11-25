@@ -485,7 +485,7 @@ func (o *analyzeOpts) extractInto(lang string, w io.Writer) ([]byte, error) {
 func readExtracted(lang string, out []byte) (*ir.Program, error) {
 	prog, err := ir.Read(bufio.NewReaderSize(bytes.NewReader(out), 1<<20))
 	if err != nil {
-		return nil, fmt.Errorf("the %s extractor: %w", lang, err)
+		return nil, fmt.Errorf("the %s extractor: %w%s", lang, err, rebuildHint(lang, err))
 	}
 	prog.Files = prog.SourceFiles()
 	prog.PruneDeps()
@@ -667,4 +667,19 @@ func (o *analyzeOpts) loadLangs(langs []string, patterns []string, rules *model.
 func fileExists(p string) bool {
 	fi, err := os.Stat(p)
 	return err == nil && !fi.IsDir()
+}
+
+// rebuildHint says how to get an extractor of the version of this rivus, when the stream was refused for its schema (#109).
+func rebuildHint(lang string, err error) string {
+	var se *ir.SchemaError
+	if !errors.As(err, &se) {
+		return ""
+	}
+	switch lang {
+	case "rust":
+		return " (`rivus setup rust` builds the extractor of this rivus again; with RIVUS_RUST set, build extractor/rust of the same commit)"
+	case "dart":
+		return " (`rivus setup dart` builds the extractor of this rivus again; with RIVUS_DART set, use extractor/dart of the same commit)"
+	}
+	return " (write the stream again with the extractor of this rivus)"
 }

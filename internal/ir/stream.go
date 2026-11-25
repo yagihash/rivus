@@ -10,6 +10,18 @@ import (
 // The stream is JSON Lines. The first line is {"schema_version": ...}; then
 // one line per function, and one line per implementations record.
 
+// SchemaError is the stream of an extractor whose version of the schema is not the one of this reader: the extractor is older, or newer, than
+// rivus. The stream is not read: an older extractor does not write what the reader now expects, and nothing in the result would say so.
+type SchemaError struct{ Got string }
+
+func (e *SchemaError) Error() string {
+	got := e.Got
+	if got == "" {
+		got = "(none)"
+	}
+	return fmt.Sprintf("ir: the stream is of schema %s, and this rivus reads %s: the extractor that wrote it is older or newer than rivus; build it again from the same source as rivus (a saved IR file, read with -ir, is written again with the extractor)", got, SchemaVersion)
+}
+
 type header struct {
 	SchemaVersion string `json:"schema_version"`
 }
@@ -202,7 +214,7 @@ func decodeFuncs(r io.Reader, fn func(*Func) error) (*Program, error) {
 		return nil, fmt.Errorf("ir: no header: %w", err)
 	}
 	if h.SchemaVersion != SchemaVersion {
-		return nil, fmt.Errorf("ir: unsupported schema %q (want %q)", h.SchemaVersion, SchemaVersion)
+		return nil, &SchemaError{Got: h.SchemaVersion}
 	}
 	p := &Program{}
 	for n := 2; ; n++ {

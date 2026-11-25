@@ -36,7 +36,7 @@ func TestLoadRows(t *testing.T) {
 }
 
 func TestScanIR(t *testing.T) {
-	ir := `{"schema_version":"rivus.ir/0"}
+	ir := `{"schema_version":"rivus.ir/1"}
 {"kind":"func","func":{"id":"p.F","symbol":"p.F","file":"a.go","blocks":[{"instrs":[{"op":"call","callee":{"kind":"static","func":"p.G","symbol":"p.G"}},{"op":"call","callee":{"kind":"static","func":"strings.Join","symbol":"strings.Join"}},{"op":"call","callee":{"kind":"static","symbol":"builtin.len"}},{"op":"call","callee":{"kind":"dynamic","symbol":"(io.Writer).Write","candidates":["x.W.Write"]}}]}]}}
 {"kind":"func","func":{"id":"p.G","symbol":"p.G","file":"a_test.go","blocks":[{"instrs":[{"op":"call","callee":{"kind":"static","func":"strings.Join","symbol":"strings.Join"}}]}]}}
 `
