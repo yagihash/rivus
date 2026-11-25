@@ -281,7 +281,16 @@ func TestSandboxAttrArgumentsThatCannotBeReadAreRefused(t *testing.T) {
 	var req notifReq
 	req.pid = uint32(os.Getpid())
 	req.data.arch = seccompArch()
-	call := attrCalls[0]
+	// a form that reads a path (fchmodat is on both architectures; the first of the table is a call on a descriptor on arm64, which has no path to read)
+	var call attrCall
+	for _, c := range attrCalls {
+		if c.name == "fchmodat" {
+			call = c
+		}
+	}
+	if call.name == "" {
+		t.Fatal("fchmodat is not in the table")
+	}
 	req.data.nr = int32(call.nr)
 	for i := range req.data.args {
 		req.data.args[i] = 1 // an address that is not mapped
@@ -322,5 +331,33 @@ func TestSandboxAttrTables(t *testing.T) {
 		if len(attrCalls) > 0 && !have[n] {
 			t.Errorf("%s is not among the calls that are done for the program", n)
 		}
+	}
+}
+
+// A call on a descriptor that the program does not have gets the answer of the kernel (EBADF): it is the program's mistake, not a refusal and not a thing that could not
+// be read (fchmod is on both architectures).
+func TestSandboxAttrOnADescriptorThatIsNotOpen(t *testing.T) {
+	var call attrCall
+	for _, c := range attrCalls {
+		if c.name == "fchmod" {
+			call = c
+		}
+	}
+	if call.name == "" {
+		t.Skip("no fchmod in the table")
+	}
+	w := newAttrWatcher([]string{"/nowhere"})
+	var req notifReq
+	req.pid = uint32(os.Getpid())
+	req.data.arch = seccompArch()
+	req.data.nr = int32(call.nr)
+	req.data.args[0] = 9999 // not open
+	req.data.args[1] = 0o600
+	resp, send := w.handle(-1, &req)
+	if !send || resp.errno != -int32(unix.EBADF) {
+		t.Errorf("not answered EBADF: %+v %v", resp, send)
+	}
+	if len(w.changes()) != 0 || len(w.warnings()) != 0 {
+		t.Errorf("reported: %v %v", w.changes(), w.warnings())
 	}
 }
