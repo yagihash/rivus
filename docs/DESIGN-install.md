@@ -77,4 +77,4 @@ formula の中身(`depends_on`、`caveats`、`test do`)は、先にこのリポ�
 
 ## 9. 決まったこと
 
-配り方は (i)(formula がソースからビルドする)。tap は `yagihash/homebrew-tap`。リリースのタグが打たれると、`bump-tap` のジョブが `url` と `sha256` を書き換える。Dart の extractor は、実行時に `dart`(Dart SDK は formula の依存)を使う。
+配り方は (i)(formula がソースからビルドする)。tap は `yagihash/homebrew-tap`。リリースのタグが打たれると、`bump-tap` のジョブが `url` と `sha256` を書き換える。`url` は、Release のアセット `rivus_<版>_source.tar.gz`(`git archive` を `gzip -n` に通した、同じタグから同じ sha256 になる tarball。トップのディレクトリは `rivus-<版>/`)。GitHub が自動で作る `archive/refs/tags/` のアーカイブは、sha256 が変わらないことが保証されないため、使わない。ソースの tarball にも、バイナリと同じビルド来歴の attestation と release attestation が付く。`bump-tap` は、`release-binaries`(アセットの公開)のあとに動く。Dart の extractor は、実行時に `dart`(Dart SDK は formula の依存)を使う。

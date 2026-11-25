@@ -784,7 +784,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - run: scripts/build-release-archives.sh 0.0.0-check
+      - run: scripts/build-release-archives.sh 0.0.0-check HEAD
 
   # The lint of the workflows (it was the workflow ghalint.yml). Two jobs, named `ghalint` and `actionlint` as the checks that the ruleset
   # required before, so that the ruleset is met with or without them in its list; `ci-ok` has both in `needs`. They run when a workflow or a
