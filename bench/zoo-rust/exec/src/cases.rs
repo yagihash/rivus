@@ -92,6 +92,7 @@ pub fn register_all() {
     c::rust::macro_rules::register();
     c::rust::mut_out_param::register();
     c::rust::option_result_chain::register();
+    c::rust::option_unwrap_value::register();
     c::rust::ownership_move::register();
     c::rust::static_lazylock::register();
     c::rust::vec_index_write::register();

@@ -23,6 +23,8 @@ fails the day rivus agrees, and the mark is to be removed). **Never change an an
 
 ## Adding a cell
 
+A PR that adds a cell in one language runs `TestZoo*` of all three languages (Go, Dart and Rust, with `RIVUS_DART` and `RIVUS_RUST` set), not only the one it touches: each of them checks that a cell of another language is either present, or said to be `@na` / `@todo(...: PARITY: ...)` (a cell added to Go that the Rust zoo does not say anything about fails `TestZooRust`).
+
 1. `cells/<family>/<shape>/<shape>.go`, package `<shape>` (underscores), with in the package comment
    `@cell(F/<family>/<shape>)` and `@shape: <the shape in one line>`. Add the package to `cmd/observe/imports.go`.
 2. Three cases, registered in `init` with `mark.Case("F/<family>/<shape>/vuln" | "fixed" | "decoy", fn)`; the function

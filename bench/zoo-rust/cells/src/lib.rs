@@ -15,6 +15,10 @@
 //! @todo(F/conv/char-decode-rune: PARITY: Go's buffer type that reads the text with `utf8.DecodeRuneInString` in a loop, appends `byte(r)` to a `[]byte` field and gives the text back by slicing; Rust can read `char_indices()` or `chars()`, push `c as u8` to a `Vec<u8>` field and slice it back; the cell is not written yet)
 //! @todo(F/conv/char-range-append: PARITY: Go's range loop over the text that appends `byte(r)` to a `[]byte` converted back whole; Rust can loop over `chars()` and push `c as u8` to a `Vec<u8>`, then `String::from_utf8`; the cell is not written yet)
 //! @todo(F/clos/to-lib-where: PARITY: a closure given to a function of the standard library that tests the elements of a collection (Go: slices.IndexFunc, ContainsFunc, DeleteFunc); Rust has `Vec::retain`, `Iterator::position`, `any` and the like; the cell is not written yet)
+//! @todo(F/clos/helper-overflow: PARITY: Go's ten different closures given to one helper that calls its function argument (more than eight candidates); Rust can pass ten closures to one `fn` that takes `impl Fn(String) -> String`; the cell is not written yet)
+//! @todo(F/dart/callback-param-closure: PARITY: Go's function literal given to a router at the place of the route, whose second argument is user input (callback_param of the rules); Rust can register a closure with a router skeleton; the cell is not written yet)
+//! @todo(F/dart/callback-param-named: PARITY: Go's named function and a variable that holds a function written once, given to a router; Rust can register a `fn` item and a closure variable with a router skeleton; the cell is not written yet)
+//! @todo(F/dart/io-link-create-target: PARITY: Go's target of a symbolic link (`os.Symlink`) is a path sink; Rust has `std::os::unix::fs::symlink`; the cell is not written yet)
 pub mod call {
     pub mod depth3;
     pub mod direct;
@@ -116,6 +120,7 @@ pub mod rust {
     pub mod macro_rules;
     pub mod mut_out_param;
     pub mod option_result_chain;
+    pub mod option_unwrap_value;
     pub mod ownership_move;
     pub mod static_lazylock;
     pub mod vec_index_write;
