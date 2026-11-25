@@ -338,12 +338,14 @@ Go モジュール `github.com/yagihash/rivus`。依存は標準ライブラリ 
 cmd/rivus/                CLI（sites / analyze / query / index / graph / resolve / extract / models）
 internal/
   ir/                     IR の型定義、JSON Lines の読み書き、検証、ダンプ、ir.Texts
+  irspill/                関数の IR をメモリの外（名前のない一時ファイル）に置く記録の形と置き場（2.7.1 の `ir.Source`、ADR-123）
   irssa/                  IR の SSA 形（ssabuild をつなぐ。昇格、φ、到達定義）
   sg/                     SSA グラフ（値・命令・ブロック・支配木）。エンジンが実行される面
   ssabuild/               CFG → SSA（dominator tree、dominance frontier、φ 挿入）。言語非依存
   ssacheck/               ssabuild の検証（go/ssa の lifting、独立な到達定義との比較）。テストのみ
   frontend/gossa/         go/packages → go/ssa。go/ssa に触れるコードはここと goir だけ
   frontend/goir/          Go extractor（NaiveForm → IR）と、Go の ir.Texts
+  frontend/accept/        別の Go extractor が、今のもの（goir）と同じ結果を返すことを確かめるテスト
   callgraph/              Go 用: CHA → VTA（Go の extractor が使う）
   valuecalls/             関数値の呼び出しの候補を、IR の上で決める（13 節）
   model/                  YAML ルールの読み込み、シンボル照合（exact / implementations）、実装の展開
@@ -355,6 +357,8 @@ internal/
   graphdb/                コールグラフを SQLite に保存して読む（12 節）
   graphq/                 保存したグラフへの問い合わせ（callers / callees / path / impls / dispatchers）
   vcs/                    解析したコードのリビジョン
+  sandbox/                macOS のサンドボックス（Seatbelt）の下でプログラムを動かす（15 節）
+  docsgen/                台帳と ADR、課題から文書の一覧を作る（`scripts/docs-gen`）
   testutil/               testdata ハーネス
 extractor/                Dart と Rust の extractor（dart/、rust/。それぞれ別言語のプロジェクト）
 testdata/                 マイクロベンチマーク（go/ ほか）
@@ -789,14 +793,22 @@ Rust の extractor は、対象をビルドする（`cargo check`）ので、対
 
 ## 16. メモリ
 
-ピークは、解析ではなく、**読み込みと go/ssa の構築**にある（Go）。次の手で下げている（設計と測定は [DESIGN-memory.md](DESIGN-memory.md)）。
+ピークは、解析ではなく、**読み込みと go/ssa の構築**にある（Go）。次の手で下げている（経緯は [DESIGN-memory.md](DESIGN-memory.md)、ADR-121、ADR-123）。
 
 - **GC の設定（`tuneGC`、`cmd/rivus/main.go`）:** GC の目標を 50% にして（Go の既定は 100%）、ごみを多く持たない。環境変数 `GOGC` があれば、それを優先する。
 - **go/ssa の解放:** IR とテキストを作ったあと、go/ssa のプログラムと、読み込んだパッケージを手放す（`ReleaseSSA`、`internal/frontend/gossa/load.go`。呼ぶのは `cmd/rivus/common.go`）。
 - **依存ごとの解放:** 依存のパッケージのソースと型情報は、そのパッケージを構築し終えるたびに手放す（`load.go` の `buildInOrder` のコールバック）。
 - 起点から届く関数だけを IR にする。`-no-deps` は、依存を読まないので、メモリが大きく減る（その分、依存への呼び出しは推測になる）。
 
-測定値（ピーク GB、時間）は、測った日とコミットを付けて DESIGN-memory.md にある。この文書には書かない。未実装の案（段階的な構築など）も DESIGN-memory.md にある。
+測定値（ピーク GB、時間）は、台帳（`bench/heavy-ledger.tsv`）にあり、この文書には書かない。
+
+## 17. 大きい SCC の安全網（ADR-124）
+
+関数が互いに呼び合う集まり（エンジンが解く SCC。参照のエッジを含む）の中の**依存の関数の数**が `-scc-coarsen`（既定の値は `taint.DefaultSCCCoarsen`。0 で無効）以上なら、その集まりの依存の関数だけを、最初から、アクセスパスの深さ 0（`-dep-k 0` と同じ）で解く（`internal/taint/coarse.go` の `coarsenBySize`）。プロジェクトの関数は深さを変えない。判定は、SCC 分解の直後、解く前に、コールグラフの構造だけで決める。時計もメモリも解いている途中の量も見ないので、計算機に依らず、同じ入力なら同じ結果になる。
+
+- 出力: 集まりごとに `depth_limit` の uncertainty（detail は `scc_coarsened:`。`coarsened_scc` に `id` とパッケージ）。深さ 0 の要約を適用したステップにも同じ種類のステップの uncertainty。この集まりを通った finding に `through_coarsened_scc[]`（集まりの `id`。付かない finding が先に並ぶ）。`stats.scc_coarsened`（集まりの数）と `stats.largest_scc_deps`（1 つの集まりが持つ依存の関数の最大）。
+- 読み方: 粗く解いた側は、過大近似（多めに出る側）。付いた finding は、依存の中の流れが本物かを、その関数の本体を読んで確かめる（[AGENT-GUIDE.md](AGENT-GUIDE.md)）。
+- 経緯、値の選び方、限界は ADR-124。
 
 ---
 

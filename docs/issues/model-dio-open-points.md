@@ -1,5 +1,11 @@
 # dio のモデルの、あとで対話的に見る 3 点
 
+- 状態: **open**
+- 種類: サイレントな見逃し
+- 言語: Dart
+- ROADMAP の節: 6
+- 守るもの: -
+
 ## 何が見逃されるか
 
 (a) `BaseOptions(baseUrl: ...)` と、`RequestOptions` / `Options` の名前つき引数(`baseUrl`、`path`、`data` など)は sink にしていない。`named:` で書けるので、モデルに足す候補。

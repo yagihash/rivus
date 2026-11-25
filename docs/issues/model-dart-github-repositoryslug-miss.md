@@ -1,5 +1,11 @@
 # Dart の github: RepositorySlug を fromJson で作る、または owner と name に代入すると、サービスのメソッドへの流れが見逃される
 
+- 状態: **open**
+- 種類: サイレントな見逃し
+- 言語: Dart
+- ROADMAP の節: 6
+- 守るもの: -
+
 ## 何が見逃されるか
 
 `package:github` の `RepositorySlug`(`/repos/<owner>/<name>/...` の owner と name を持つ型)は、利用者の値が入ると、別のリポジトリを指せる(カテゴリ `resource_name`)。今の `internal/model/builtin/dart-github.yaml` は、スラッグを**作る場所**にだけ sink の行がある(`RepositorySlug.new` の引数 0 と 1、`RepositorySlug.full` の引数 0)。そのため、次の 2 つの作り方は、サービスのメソッドに渡しても見つからない。

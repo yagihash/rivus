@@ -181,56 +181,9 @@
 - macaron(`examples/rules/go-macaron.yaml`)。例のまま残す。
 - `examples/rules/go-database-sql.yaml`(DB から読んだ値を source にする規則)。既定で有効にすると finding が増える種類なので、組み込みにするかは別に判断する。例のまま。
 
-## 4. カバー済みの表(既存の組み込み)
+## 4. カバー済みのもの
 
-数え方: `internal/model/builtin/*.yaml` で、`symbol`、`type`、`extends`、`marker_call`、`with_param_type` の項目を、パッケージごとに数えた(2026-11-23。概数。1 項目 = 1 行)。標準ライブラリの行は省いた。
-
-### Dart
-
-| パッケージ | ファイル | 行数 | 範囲 |
-|---|---|---|---|
-| http | `dart-http.yaml` | 41 | `get/post/put/delete/head/patch/read`、`Client.*`、`Response` の流れ |
-| shelf | `dart-packages.yaml` | 14 | `Request` が source と、getter、`read` の流れ。`Response` と `Handler` は無し |
-| sqflite_common | `dart-packages.yaml` | 10 | `rawQuery/rawInsert/rawUpdate/rawDelete/execute` の sink |
-| grpc | `dart-grpc.yaml` | 5 | サーバ側のハンドラが入口、`ServiceCall.clientMetadata`、`ClientChannel.new` |
-| path | `dart-path.yaml` | 12 | パスの操作の流れ |
-| googleapis | `dart-gcp.yaml` | 35 | Google Cloud の API |
-| gcloud | `dart-gcp.yaml` | 20 | Google Cloud |
-| google_cloud_storage | `dart-gcp.yaml` | 15 | Google Cloud |
-
-`dart-io.yaml`、`dart-core.yaml`、`dart-async.yaml`、`dart-misc.yaml`、`dart-pure.yaml`、`dart-config.yaml` は標準ライブラリ(`dart:*`)。
-
-### Go
-
-| パッケージ | ファイル | 行数 | 範囲 |
-|---|---|---|---|
-| google.golang.org/grpc | `go-grpc.yaml` | 8 | サーバ側のハンドラが入口、metadata |
-| cloud.google.com/go/spanner | `go-gcp.yaml` | 16 | `Query` などの sink、`Row` の流れ |
-| cloud.google.com/go/bigquery | `go-gcp.yaml` | 3 | 呼び出しの sink |
-| net/http(標準) | `go-net-http.yaml`、`go-stdlib-more.yaml` | 33、22 | `*http.Request` が source、`Header` の流れ |
-| database/sql(標準) | `go-stdlib.yaml`、`go-stdlib-more.yaml` | 14、22 | SQL の sink |
-
-外部のパッケージは、grpc と Spanner と BigQuery だけ。gin、macaron、`database/sql` の「読んだ値を source にする」規則は `examples/rules/` にある。
-
-### Rust
-
-| クレート | ファイル | 行数 | 範囲 |
-|---|---|---|---|
-| tonic | `rust-grpc.yaml` | 45 | サーバのハンドラの `Request<T>` が source |
-| axum | `rust-axum.yaml` | 9 | extractor(`Query`、`Path`、`Json`、`Form` など) |
-| hyper | `rust-web.yaml` | 1 | `Request` |
-| rocket | `rust-web.yaml` | 2 | `Request` |
-| warp | `rust-web.yaml` | 1 | `Query` |
-| tide、rouille | `rust-web.yaml` | 1、2 | `Request` |
-| http、url | `rust-http.yaml` | 15、7 | `Request`、`Uri`、`Url` の流れ |
-| reqwest | `rust-std.yaml` | 6 | HTTP の呼び出し |
-| ureq | `rust-std.yaml` | 2 | HTTP の呼び出し |
-| sqlx | `rust-std.yaml` | 3 | `query`、`query_as`、`query_scalar` の sink |
-| tracing | `rust-misc.yaml` | 1 | `event` |
-| serde_json、serde | `rust-serde_json.yaml`、`rust-misc.yaml` | 8 と 15、8 | 流れ |
-| tokio | `rust-grpc.yaml`、`rust-misc.yaml` | 7 と 26 | 非同期の流れ |
-
-actix-web は組み込みになく、`examples/rules/rust-actix-web.yaml`(58 行)にある。
+今ある組み込みモデルは `internal/model/builtin/` が正で、この文書には写さない(`ls internal/model/builtin/`)。
 
 ## 5. 指標の取得
 
