@@ -51,6 +51,16 @@ class Parse(unittest.TestCase):
         self.assertEqual(m.parse_todo("ok"), {})
         self.assertEqual(m.parse_miss(""), {})
 
+    def test_denominators(self):
+        self.assertEqual(m.parse_cells(ZOO), {"dart": 139, "rust": 92, "go": 89})
+        self.assertEqual(m.parse_na(ZOO), {"dart": 4, "go": 22, "rust": 0})
+
+    def test_calls_compared(self):
+        self.assertEqual(m.parse_calls_go(GO_EDGES + "  id_unmapped  2\n  outside      50\n    outside: harness 40\n"), 812 + 7 + 0 + 2)
+        self.assertIsNone(m.parse_calls_go("nothing"))
+        self.assertEqual(m.parse_calls_dart(DART_EDGES), 3 + 64 + 400)
+        self.assertIsNone(m.parse_calls_dart("Traceback"))
+
     def test_go_edges(self):
         self.assertEqual(m.parse_no_edge_go(GO_EDGES), 7)
         self.assertIsNone(m.parse_no_edge_go("observed-edges: the instrumented copy does not pass go vet"))
@@ -62,13 +72,13 @@ class Parse(unittest.TestCase):
 
 
 class Rows(unittest.TestCase):
-    VALUES = {"go": {"todo": 45, "todo_marked": 0, "miss": 14, "no_edge": 7}, "dart": {"todo": 13, "todo_marked": 0, "miss": 56, "no_edge": None}, "rust": {"todo": 14, "todo_marked": 14, "miss": 28}}
+    VALUES = {"go": {"cells": 89, "na": 22, "todo": 45, "todo_marked": 0, "miss": 14, "no_edge": 7, "calls_observed": 819}, "dart": {"todo": 13, "todo_marked": 0, "miss": 56, "no_edge": None}, "rust": {"todo": 14, "todo_marked": 14, "miss": 28}}
 
     def test_empty_is_empty_not_zero(self):
         rows = m.make_rows("2026-11-25", "abcd1234", self.VALUES)
-        self.assertEqual(rows[0], ["2026-11-25", "abcd1234", "go", "45", "0", "14", "7", ""])
-        self.assertEqual(rows[1][6], "")
-        self.assertEqual(rows[2], ["2026-11-25", "abcd1234", "rust", "14", "14", "28", "", ""])
+        self.assertEqual(rows[0], ["2026-11-25", "abcd1234", "go", "89", "22", "45", "0", "14", "7", "819", ""])
+        self.assertEqual(rows[1][8], "")
+        self.assertEqual(rows[2], ["2026-11-25", "abcd1234", "rust", "", "", "14", "14", "28", "", "", ""])
 
     def test_append_once(self):
         rows = m.make_rows("2026-11-25", "abcd1234", self.VALUES)
@@ -81,7 +91,7 @@ class Rows(unittest.TestCase):
             lines = open(p).read().splitlines()
             self.assertEqual(lines[0], "\t".join(m.COLUMNS))
             self.assertEqual(len(lines), 7)
-            self.assertTrue(all(len(l.split("\t")) == 8 for l in lines))
+            self.assertTrue(all(len(l.split("\t")) == 11 for l in lines))
 
 
 if __name__ == "__main__":
