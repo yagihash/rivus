@@ -1,6 +1,7 @@
 {
   "_doc": "Targets of the pass line (bench/deps_bench.py, `make bench-passline`). Data only. repo + commit: fetched into $BENCH_CACHE (default ~/.cache/rivus-bench/), never into this tree; the code of a target is never run (git clone/checkout, `go mod download`, `dart pub get`). args: the flags of `rivus analyze` besides -lang and -C (the default flags; `{root}` is the root of the fetched tree, for -allow-deps-under). time_limit_s / mem_cap_gb: the pass line. decided: false = the line is printed as INFO (the limits are not decided yet). detect: per vulnerability. mode location (memos): detected when a finding of the category has its source and its sink at the labelled positions of the truth file (bench/memos), at the pre-fix commit; quiet_after_fix is the count of the category at the fixed commit. mode through: see dart-pub.",
   "memos": {
+    "_doc": "Not a row of the pass line since 2026-11-25 (user decision: A, memos-4gib, is the same target with a stricter memory limit, so it contains the memory and the time of this row, and carries the same detect). The target stays for graph-check and --cost-check; run it by name only for reference.",
     "lang": "go",
     "repo": "https://github.com/usememos/memos",
     "commit": "00fcd170281a75fc0e95ec4f2f54f43d32fe81bd",
@@ -19,7 +20,7 @@
     }
   },
   "memos-4gib": {
-    "_doc": "Pass line A, the second row: the same as memos with `-max-memory 4GiB`, the default limit of a machine with 16 GB of physical memory (ADR-121): the same conditions as that machine. Time 180 s, peak of the process tree within 4 GiB, converged, detected (the same places as memos).",
+    "_doc": "Pass line A: the same as memos with `-max-memory 4GiB`, the default limit of a machine with 16 GB of physical memory (ADR-121): the same conditions as that machine. Time 180 s, peak of the process tree within 4 GiB, converged, detected (the same places as memos).",
     "lang": "go",
     "repo": "https://github.com/usememos/memos",
     "commit": "00fcd170281a75fc0e95ec4f2f54f43d32fe81bd",
