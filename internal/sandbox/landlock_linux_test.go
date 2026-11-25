@@ -770,3 +770,42 @@ func TestSandboxDevNullIsInside(t *testing.T) {
 		t.Errorf("/dev/null is reported:\n%s", got)
 	}
 }
+
+// resolve is the standard library's EvalSymlinks, with the last name kept for the calls that are about a link itself.
+func TestSandboxResolve(t *testing.T) {
+	root, _ := filepath.EvalSymlinks(t.TempDir())
+	must := func(err error) {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	must(os.MkdirAll(filepath.Join(root, "work"), 0o755))
+	must(os.MkdirAll(filepath.Join(root, "outside", "sub"), 0o755))
+	must(os.WriteFile(filepath.Join(root, "outside", "victim"), nil, 0o600))
+	must(os.WriteFile(filepath.Join(root, "work", "victim"), nil, 0o600))
+	must(os.Symlink(filepath.Join(root, "outside", "sub"), filepath.Join(root, "work", "link")))
+	must(os.Symlink(filepath.Join(root, "outside", "victim"), filepath.Join(root, "work", "vlink")))
+	must(os.Symlink("vlink", filepath.Join(root, "work", "vlink2"))) // a link to a link, relative
+	must(os.Symlink("loop", filepath.Join(root, "work", "loop")))
+	outVictim := filepath.Join(root, "outside", "victim")
+	for _, c := range []struct {
+		name     string
+		path     string
+		nofollow bool
+		want     string
+	}{
+		{"dotdot after a link", root + "/work/link/../victim", false, outVictim},
+		{"dot and dotdot", root + "/work/link/./../victim", false, outVictim},
+		{"the directory of a link", root + "/work/link/..", false, filepath.Join(root, "outside")},
+		{"a link is followed", root + "/work/vlink", false, outVictim},
+		{"a link to a link", root + "/work/vlink2", false, outVictim},
+		{"the link itself", root + "/work/vlink", true, filepath.Join(root, "work", "vlink")},
+		{"the link itself after a dotdot of a link", root + "/work/link/../vlink", true, filepath.Join(root, "outside", "vlink")},
+		{"a name that is not there", root + "/work/link/nothing", false, filepath.Join(root, "outside", "sub", "nothing")},
+		{"a loop does not hang", root + "/work/loop", false, filepath.Join(root, "work", "loop")},
+	} {
+		if got := resolve(c.path, c.nofollow); got != c.want {
+			t.Errorf("%s: resolve(%q, %v) = %q, want %q", c.name, c.path, c.nofollow, got, c.want)
+		}
+	}
+}

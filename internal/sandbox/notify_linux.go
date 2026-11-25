@@ -359,53 +359,27 @@ func readString(pid int, addr uint64) (string, bool) {
 	return "", false
 }
 
-// splitPath is the names of a path, with the empty ones and "." left out (".." stays: what it means depends on the links before it).
-func splitPath(p string) []string {
-	var out []string
-	for _, c := range strings.Split(p, "/") {
-		if c != "" && c != "." {
-			out = append(out, c)
-		}
-	}
-	return out
-}
-
-// resolve is the file that the kernel finds for the path: it goes through the names one at a time, follows the links that it meets, and takes ".." from the
-// place that it has reached (so `link/..` is the parent of what the link points to, and not the directory that holds the link: a path that is cleaned as a
-// string first is read wrong, and a change of a file outside would look like a change inside). With nofollow the last name is not followed (the call is about the
-// link itself). A name that is not there ends it: the rest is added as it is (the call fails, and changes nothing).
+// resolve is the file that the kernel finds for the path, as far as it is there: the links are followed by filepath.EvalSymlinks, which takes ".." from the place that
+// it has reached (so `link/..` is the parent of what the link points to). The path must not be cleaned first (filepath.Clean, filepath.Join and filepath.Dir
+// all do it): `work/link/../victim` would be read as `work/victim`, and a change of a file outside would look like a change inside.
+//
+// With nofollow the last name is not followed (the call is about the link itself): the part before it is resolved and the name is kept. The same is done for a name that is
+// not there (the call fails and changes nothing): the part that is there is resolved.
 func resolve(p string, nofollow bool) string {
-	const maxLinks = 40
-	links := 0
-	cur := "/"
-	rest := splitPath(p)
-	for len(rest) > 0 {
-		c := rest[0]
-		rest = rest[1:]
-		if c == ".." {
-			cur = filepath.Dir(cur) // cur has no link in it: its parent is the parent
-			continue
+	last := strings.LastIndex(p, "/")
+	head, name := p[:last+1], p[last+1:]
+	plain := last >= 0 && name != "" && name != "." && name != ".."
+	if !nofollow || !plain {
+		if r, err := filepath.EvalSymlinks(p); err == nil {
+			return r
 		}
-		next := filepath.Join(cur, c)
-		fi, err := os.Lstat(next)
-		if err != nil {
-			return filepath.Join(append([]string{next}, rest...)...)
-		}
-		if fi.Mode()&os.ModeSymlink != 0 && !(len(rest) == 0 && nofollow) {
-			links++
-			target, err := os.Readlink(next)
-			if links > maxLinks || err != nil {
-				return next
-			}
-			if strings.HasPrefix(target, "/") {
-				cur = "/"
-			}
-			rest = append(splitPath(target), rest...)
-			continue
-		}
-		cur = next
 	}
-	return cur
+	if plain {
+		if r, err := filepath.EvalSymlinks(head); err == nil {
+			return filepath.Join(r, name)
+		}
+	}
+	return filepath.Clean(p)
 }
 
 func (w *attrWatcher) isInside(p string) bool {
