@@ -9,3 +9,6 @@ date	rivus_commit	lang	cells	na	todo	todo_marked	miss	no_edge	calls_observed	cal
 2026-11-25	411ff404	dart	139	4	13	0	56	64	526	0	0				
 2026-11-25	411ff404	rust	92	3	14	14	28								
 2026-11-26	433ca373	dart	139	4	13	0	55	62	526	0	0				
+2026-11-27	5b08c8d5	go	105	22	15	15	16	0	484	0	0	0	14		
+2026-11-27	5b08c8d5	dart	139	5	12	5	55	62	526	0	0		0		
+2026-11-27	5b08c8d5	rust	127	3	2	2	32						0	9	0
