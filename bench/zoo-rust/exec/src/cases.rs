@@ -27,6 +27,8 @@ pub fn register_all() {
     c::clos::to_nomodel_ref::register();
     c::clos::capture_write_by_ref::register();
     c::clos::helper_overflow::register();
+    c::clos::callback_of_callback::register();
+    c::clos::wrapped_by_dependency::register();
     c::clos::to_own_helper::register();
     c::clos::two_callers::register();
     c::cont::map_key_vs_value::register();

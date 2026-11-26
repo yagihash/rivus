@@ -1,0 +1,4 @@
+rust	clos/wrapped_by_dependency.rs	miss	@source(clos-wrapped-by-dependency-decoy) @miss(unmodeled_library_call) @ref(#78)	fn decoy() { @decoy
+rust	clos/wrapped_by_dependency.rs	miss	@source(clos-wrapped-by-dependency-vuln) @miss(unmodeled_library_call) @ref(#78,PARITY)	fn vuln() { @vuln
+rust	clos/wrapped_by_dependency.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	clos/wrapped_by_dependency.rs	sink-none	@sink(none) @nosink(clos-wrapped-by-dependency-decoy)	fn decoy() { @decoy
