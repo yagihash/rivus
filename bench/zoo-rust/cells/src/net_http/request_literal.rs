@@ -9,7 +9,7 @@ pub fn register() {
 }
 
 fn vuln() { // @vuln
-    let v = m::src("net-http-request-literal-vuln"); // @source(net-http-request-literal-vuln) @miss(silent) @ref(#232)
+    let v = m::src("net-http-request-literal-vuln"); // @source(net-http-request-literal-vuln) @miss(silent) @ref(#238)
     let c = reqwest::blocking::Client::new();
     let u = reqwest::Url::parse(&format!("http://example.invalid/?q={v}")).unwrap();
     let _ = c.execute(reqwest::Request::new(reqwest::Method::GET, u)); // @sink(net-http-request-literal-vuln)
