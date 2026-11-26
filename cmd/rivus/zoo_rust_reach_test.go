@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -49,8 +50,8 @@ func TestZooRustReach(t *testing.T) {
 		}
 		f.Close()
 	}
-	if len(wants) != 8 {
-		t.Fatalf("the app has %d sinks with an expectation, want 8", len(wants))
+	if len(wants) != 9 {
+		t.Fatalf("the app has %d sinks with an expectation, want 9", len(wants))
 	}
 
 	// the app reads zoo-mark at ../zoo-rust/zoo-mark: the copy keeps the two directories side by side
@@ -68,8 +69,15 @@ func TestZooRustReach(t *testing.T) {
 	os.RemoveAll(filepath.Join(app, "target"))
 	os.RemoveAll(filepath.Join(mark, "target"))
 
+	stream := zooRustStream(t, app)
+	// the internal marks of the trait of a call and of an impl (traitdef.rs) are removed by the merge of the extractor
+	for _, mark := range []string{"impl_trait_def", "by_trait_def"} {
+		if bytes.Contains(stream, []byte(mark)) {
+			t.Errorf("the stream has the internal mark %s", mark)
+		}
+	}
 	irFile := filepath.Join(t.TempDir(), "app.jsonl")
-	if err := os.WriteFile(irFile, zooRustStream(t, app), 0o644); err != nil {
+	if err := os.WriteFile(irFile, stream, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	cmd := exec.Command(binary, "analyze", "-ir", irFile, "-rules", filepath.Join(src, "rules.yaml"))

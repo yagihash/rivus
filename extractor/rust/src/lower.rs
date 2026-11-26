@@ -22,7 +22,7 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 /// What lowering needs of the whole crate.
-pub struct Ctx {
+pub struct Ctx<'tcx> {
     pub root: String,
     pub files: HashMap<String, Rc<Vec<String>>>,
     pub texts: Texts,
@@ -37,11 +37,14 @@ pub struct Ctx {
     /// The functions that a promoted constant names, by the item that holds it and its number (`&helper`,
     /// `&[helper as fn(..)]`): a constant is lowered to a `nil`, and the functions in it are used as values all the same.
     pub promoted: HashMap<(String, u32), Vec<String>>,
+    /// The trait (the crate and the path where it is defined, `traitdef.rs`) that a method called through a trait belongs to: the
+    /// mark `by_trait_def` of the call. `None` when it cannot be told (the call then has no mark: the names of the traits are compared).
+    pub callee_trait: Box<dyn Fn(rustc_public::ty::FnDef) -> Option<String> + 'tcx>,
 }
 
-impl Ctx {
-    pub fn new(root: String, bodies: HashSet<String>) -> Ctx {
-        Ctx { root, files: HashMap::new(), texts: Texts::default(), bodies, closures: HashMap::new(), traits: HashMap::new(), promoted: HashMap::new() }
+impl<'tcx> Ctx<'tcx> {
+    pub fn new(root: String, bodies: HashSet<String>) -> Ctx<'tcx> {
+        Ctx { callee_trait: Box::new(|_| None), root, files: HashMap::new(), texts: Texts::default(), bodies, closures: HashMap::new(), traits: HashMap::new(), promoted: HashMap::new() }
     }
 
     fn lines(&mut self, path: &str) -> Rc<Vec<String>> {
@@ -429,8 +432,8 @@ struct Walk {
     by_value: bool,
 }
 
-pub struct Lower<'a> {
-    pub cx: &'a mut Ctx,
+pub struct Lower<'a, 'tcx> {
+    pub cx: &'a mut Ctx<'tcx>,
     body: &'a Body,
     f: Func,
     cur: usize,
@@ -439,8 +442,8 @@ pub struct Lower<'a> {
     span: Span,
 }
 
-impl<'a> Lower<'a> {
-    pub fn lower(cx: &'a mut Ctx, id: String, body: &'a Body, item_span: Span) -> Func {
+impl<'a, 'tcx> Lower<'a, 'tcx> {
+    pub fn lower(cx: &'a mut Ctx<'tcx>, id: String, body: &'a Body, item_span: Span) -> Func {
         let pos = cx.pos(&item_span);
         let mut l = Lower {
             cx,
@@ -1239,8 +1242,12 @@ impl<'a> Lower<'a> {
                     // default-ok: a guarded arm of the call through a trait object: the arms below take the other cases and say what the callee is
                     _ if virtual_call => {
                         let cands = self.candidates(&def_name);
-                        // by_trait: the merge adds the impls of the other crates of the workspace (and removes the mark)
+                        // by_trait: the merge adds the impls of the other crates of the workspace (and removes the mark). by_trait_def: where the
+                        // trait is defined (the crate and the path), which the merge compares with the trait of each impl, and removes too
                         callee = json!({"kind": "dynamic", "symbol": def_name, "candidates": cands, "by_trait": true});
+                        if let Some(t) = (self.cx.callee_trait)(def) {
+                            callee["by_trait_def"] = json!(t);
+                        }
                     }
                     // the body is the one of the definition the call resolves to. The trait's method of the same
                     // name is not it: an impl that overrides a default body is not the default
@@ -1282,6 +1289,9 @@ impl<'a> Lower<'a> {
                         callee = json!({"kind": "dynamic", "symbol": def_name, "candidates": cands});
                         if !is_fn {
                             callee["by_trait"] = json!(true);
+                            if let Some(t) = (self.cx.callee_trait)(def) {
+                                callee["by_trait_def"] = json!(t);
+                            }
                         }
                     }
                 }

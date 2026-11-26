@@ -29,6 +29,12 @@ func TestRustReachesWhatTheFrameworkRuns(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the extractor failed: %v", err)
 	}
+	// the internal marks of the trait of a call and of an impl (traitdef.rs) are read and removed by the merge of the extractor
+	for _, mark := range []string{"impl_trait_def", "by_trait_def"} {
+		if bytes.Contains(stream, []byte(mark)) {
+			t.Errorf("the stream has the internal mark %s", mark)
+		}
+	}
 	prog, err := ir.Read(bytes.NewReader(stream))
 	if err != nil {
 		t.Fatal(err)

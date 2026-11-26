@@ -16,6 +16,7 @@ extern crate rustc_public;
 
 mod irjson;
 mod lower;
+mod traitdef;
 
 use rustc_public::CrateDef;
 use serde_json::{json, Value};
@@ -197,6 +198,8 @@ fn extract(tcx: rustc_middle::ty::TyCtxt<'_>, root: &str, dep: bool, open_crate:
     }
     let bodies: HashSet<String> = items.iter().map(|i| i.name()).collect();
     let mut cx = lower::Ctx::new(root.to_string(), bodies);
+    // where the trait of a call through a trait is defined (traitdef.rs, the one place that asks the compiler's own API)
+    cx.callee_trait = Box::new(move |def| traitdef::trait_path_of_callee(tcx, def));
     // what the crate holds that is not read, said at the end (a load error that names the function)
     let mut unread: Vec<(String, String)> = Vec::new();
     // the functions whose body could not be converted (a panic of the conversion that was caught): name, why
@@ -278,6 +281,10 @@ fn extract(tcx: rustc_middle::ty::TyCtxt<'_>, root: &str, dep: bool, open_crate:
         }
         if !dep && entry.as_deref() == Some(name.as_str()) {
             j["entry"] = json!(true);
+        }
+        // an impl of a trait says where the trait is defined: an internal mark, which link_across_crates reads and removes
+        if let Some(t) = traitdef::trait_path_of_impl(tcx, item) {
+            j[IMPL_TRAIT_MARK] = json!(t);
         }
         // what can be called from outside the program as it is read (a symbol that another program links:
         // `#[no_mangle]`, `#[export_name]`, `extern "C"`, anything of a crate built as a library of C), and
@@ -770,6 +777,58 @@ fn merge(files: Vec<PathBuf>) {
     }
 }
 
+/// The internal marks of the trait that a function or a call is of, by where the trait is defined (`traitdef.rs`). The
+/// one on a function (an impl of a trait) is at the top of its record; the one on a call is in its `callee`, next to
+/// `by_trait`. `link_across_crates` reads and removes them: they are not fields of the stream that is written (the
+/// reader of the core stops on a field that it does not know).
+const IMPL_TRAIT_MARK: &str = "impl_trait_def";
+const CALL_TRAIT_MARK: &str = "by_trait_def";
+
+/// Where the first string field `key` is in a line of JSON: the range of the field (with one comma next to it) and its value.
+/// The line is not parsed: the field is searched by its text, which cannot be inside a string of the line (a quote in a
+/// string is written `\"`, so the text `"key":"` does not occur in one).
+fn find_mark(line: &str, key: &str) -> Option<(usize, usize, String)> {
+    let pat = format!("\"{}\":\"", key);
+    let start = line.find(&pat)?;
+    let value_start = start + pat.len() - 1;
+    let bytes = line.as_bytes();
+    let mut i = value_start + 1;
+    while i < bytes.len() && bytes[i] != b'"' {
+        i += if bytes[i] == b'\\' { 2 } else { 1 };
+    }
+    if i >= bytes.len() {
+        return None;
+    }
+    let value: String = serde_json::from_str(&line[value_start..=i]).ok()?;
+    let end = i + 1;
+    Some(if line[..start].ends_with(',') {
+        (start - 1, end, value)
+    } else if line[end..].starts_with(',') {
+        (start, end + 1, value)
+    } else {
+        (start, end, value)
+    })
+}
+
+/// The line without any field `key`.
+fn strip_marks(line: &str, key: &str) -> String {
+    let mut out = line.to_string();
+    while let Some((a, b, _)) = find_mark(&out, key) {
+        out.replace_range(a..b, "");
+    }
+    out
+}
+
+/// Whether the impl `name` (`<T as path::Trait>::method`) is of the trait that the call names. When the call says where its trait is
+/// defined and the impl says where its trait is, those are compared (the same crate and path, whatever name each of them uses for
+/// the trait); when either could not be told, the names are compared as before (`same_trait`).
+fn impl_is_of_trait(called_def: Option<&str>, impl_def: Option<&str>, name: &str, suffix: &str, trait_path: &str) -> bool {
+    if let (Some(c), Some(i)) = (called_def, impl_def) {
+        return c == i;
+    }
+    lower::impl_of_trait(name, suffix).map_or(false, |t| lower::same_trait(t, trait_path))
+}
+
 /// The calls through a trait (`dyn Trait`, a type parameter) and the drops of values of another crate, which
 /// one crate cannot resolve: it knows the impls of its own functions only. Here every crate is in, so the
 /// candidates are the impls of the whole program, and the marks the lowering left are removed.
@@ -780,6 +839,15 @@ fn link_across_crates(funcs: &mut std::collections::BTreeMap<String, String>, un
     const DROP_TAIL: &str = " as std::ops::Drop>::drop";
     // the names of the functions that are read and of the ones that are not (in one order: the first impl of a drop is the same
     // with and without the crate being read)
+    // where the trait of each impl is defined (the mark on the function, removed here from every line, one that cannot be read too).
+    // The line is searched by its text, as `by_trait` and `drop_of` are: the lines of the functions are not parsed for this
+    let mut impl_def: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    for (id, line) in funcs.iter_mut() {
+        if let Some((a, b, v)) = find_mark(line, IMPL_TRAIT_MARK) {
+            line.replace_range(a..b, "");
+            impl_def.insert(id.clone(), v);
+        }
+    }
     let mut all: Vec<&String> = funcs.keys().chain(unread.iter()).collect();
     all.sort();
     all.dedup();
@@ -801,6 +869,8 @@ fn link_across_crates(funcs: &mut std::collections::BTreeMap<String, String>, un
             continue;
         }
         let Ok(mut v) = serde_json::from_str::<Value>(line) else {
+            // the line stays as it is (reported as unread), without the marks of its calls: they are not fields of the stream
+            *line = strip_marks(line, CALL_TRAIT_MARK);
             unlinked.push(json!({"kind": "load_error", "load_error": {"package": id, "message": "the calls through a trait and the drops of this function could not be linked across the crates: its stream line is not readable", "unread": true, "func": id}}).to_string());
             continue;
         };
@@ -809,13 +879,14 @@ fn link_across_crates(funcs: &mut std::collections::BTreeMap<String, String>, un
             let Some(instrs) = b["instrs"].as_array_mut() else { continue };
             for in_ in instrs {
                 let Some(callee) = in_.get_mut("callee").and_then(|c| c.as_object_mut()) else { continue };
+                let called_def = callee.remove(CALL_TRAIT_MARK).and_then(|d| d.as_str().map(String::from));
                 if callee.remove("by_trait").is_some() {
                     let sym = callee.get("symbol").and_then(|s| s.as_str()).unwrap_or("").to_string();
                     let mut cands: Vec<String> = callee.get("candidates").and_then(|c| c.as_array()).map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect()).unwrap_or_default();
                     if let Some((trait_path, method)) = sym.rsplit_once("::") {
                         let suffix = format!(">::{}", method);
                         for n in by_method.get(method).map(|v| v.as_slice()).unwrap_or(&[]) {
-                            if lower::impl_of_trait(n, &suffix).map_or(false, |t| lower::same_trait(t, trait_path)) {
+                            if impl_is_of_trait(called_def.as_deref(), impl_def.get(n).map(|s| s.as_str()), n, &suffix, trait_path) {
                                 cands.push(n.clone());
                             }
                         }
@@ -954,5 +1025,90 @@ mod tests {
         let m = compile_failure_message("exit status: 101", "mine", &[("0.1.0".into(), true)], true);
         assert!(m.contains("the code has to compile"), "{m}");
         assert!(!m.contains("-no-deps"), "{m}");
+    }
+
+    // the marks of the trait that a function or a call is of (traitdef.rs): read from the text of a line, and removed from it
+    #[test]
+    fn a_mark_is_found_in_the_text_of_a_line_and_removed_with_one_comma() {
+        let line = r#"{"func":{"blocks":[],"id":"<A as t::Tr>::m","impl_trait_def":"zoo_web::service::Tr","pos":{}}}"#;
+        let (a, b, v) = find_mark(line, IMPL_TRAIT_MARK).unwrap();
+        assert_eq!(v, "zoo_web::service::Tr");
+        let mut out = line.to_string();
+        out.replace_range(a..b, "");
+        assert_eq!(out, r#"{"func":{"blocks":[],"id":"<A as t::Tr>::m","pos":{}}}"#);
+        // the last field of the object, and the first
+        assert_eq!(strip_marks(r#"{"a":1,"impl_trait_def":"x::T"}"#, IMPL_TRAIT_MARK), r#"{"a":1}"#);
+        assert_eq!(strip_marks(r#"{"impl_trait_def":"x::T","a":1}"#, IMPL_TRAIT_MARK), r#"{"a":1}"#);
+        // every one of a line (a call each), and none in a string that has the text in it
+        assert_eq!(strip_marks(r#"{"c":[{"by_trait_def":"a::T","k":1},{"k":2,"by_trait_def":"b::T"}]}"#, CALL_TRAIT_MARK), r#"{"c":[{"k":1},{"k":2}]}"#);
+        let quoted = r#"{"s":"\"impl_trait_def\":\"x\""}"#;
+        assert!(find_mark(quoted, IMPL_TRAIT_MARK).is_none(), "{quoted}");
+        assert!(find_mark(r#"{"a":1}"#, IMPL_TRAIT_MARK).is_none());
+        // a line that is cut inside the value has no mark
+        assert!(find_mark(r#"{"impl_trait_def":"x::T"#, IMPL_TRAIT_MARK).is_none());
+    }
+
+    // the marks decide when both are there; when either is not, the names are compared as before (same_trait)
+    #[test]
+    fn a_trait_is_told_by_where_it_is_defined_and_by_its_name_when_that_is_not_known() {
+        let (suffix, called) = (">::register", "zoo_web::service::Tr");
+        let imp = "<h as zoo_web::dev::Tr>::register";
+        // a re-export in the middle: the names differ, the definition is one
+        assert!(!lower::same_trait("zoo_web::dev::Tr", called));
+        assert!(impl_is_of_trait(Some("zoo_web::service::Tr"), Some("zoo_web::service::Tr"), imp, suffix, called));
+        // the same name, another definition
+        assert!(!impl_is_of_trait(Some("zoo_web::service::Tr"), Some("app::other::Tr"), "<l as zoo_web::service::Tr>::register", suffix, called));
+        // a mark that could not be made on either side: the names (the root re-export of ADR-058 and the traits told apart by their path)
+        assert!(!impl_is_of_trait(None, Some("zoo_web::service::Tr"), imp, suffix, called));
+        assert!(!impl_is_of_trait(Some("zoo_web::service::Tr"), None, imp, suffix, called));
+        assert!(impl_is_of_trait(None, None, "<S as parseable::handlers::http::modal::ParseableServer>::init", ">::init", "parseable::ParseableServer"));
+        assert!(impl_is_of_trait(Some("parseable::ParseableServer"), None, "<S as parseable::handlers::http::modal::ParseableServer>::init", ">::init", "parseable::ParseableServer"));
+        assert!(!impl_is_of_trait(None, None, "<S as app::http::Server>::run", ">::run", "app::Handler::run"));
+    }
+
+    // link_across_crates: the impls whose mark is the call's get into the candidates, a lookalike does not, one with no mark is taken by
+    // its name, and no mark is left in any line
+    #[test]
+    fn linking_compares_the_marks_and_leaves_none() {
+        let call = |sym: &str, mark: Option<&str>| {
+            let mut callee = json!({"kind": "dynamic", "symbol": sym, "candidates": [], "by_trait": true});
+            if let Some(m) = mark {
+                callee["by_trait_def"] = json!(m);
+            }
+            json!({"func": {"id": "caller", "blocks": [{"instrs": [{"op": "call", "callee": callee}]}]}}).to_string()
+        };
+        let imp = |id: &str, mark: Option<&str>| {
+            let mut f = json!({"id": id, "blocks": []});
+            if let Some(m) = mark {
+                f["impl_trait_def"] = json!(m);
+            }
+            json!({"func": f}).to_string()
+        };
+        let mut funcs = std::collections::BTreeMap::new();
+        funcs.insert("caller".to_string(), call("zoo_web::service::Tr::register", Some("zoo_web::service::Tr")));
+        funcs.insert("<h as zoo_web::dev::Tr>::register".to_string(), imp("<h as zoo_web::dev::Tr>::register", Some("zoo_web::service::Tr")));
+        funcs.insert("<l as app::other::Tr>::register".to_string(), imp("<l as app::other::Tr>::register", Some("app::other::Tr")));
+        // no mark: the names are compared, and the names of these two are not the call's
+        funcs.insert("<n as zoo_web::dev::Tr>::register".to_string(), imp("<n as zoo_web::dev::Tr>::register", None));
+        funcs.insert("<m as zoo_web::service::Tr>::register".to_string(), imp("<m as zoo_web::service::Tr>::register", None));
+        // a call with no mark: the names (a root re-export is the same trait)
+        funcs.insert("caller2".to_string(), call("zoo_web::Tr::register", None).replace("caller", "caller2"));
+        funcs.insert("<r as zoo_web::service::Tr>::register".to_string(), imp("<r as zoo_web::service::Tr>::register", Some("zoo_web::service::Tr")));
+        // a line that cannot be read keeps nothing of the marks
+        funcs.insert("<broken as t::T>::x".to_string(), r#"{"func":{"by_trait":true,"callee":{"by_trait_def":"a::T"},"id":"<broken as t::T>::x","impl_trait_def":"a::T""#.to_string());
+        let unlinked = link_across_crates(&mut funcs, vec![]);
+        assert_eq!(unlinked.len(), 1);
+        for (id, line) in &funcs {
+            assert!(!line.contains("impl_trait_def") && !line.contains("by_trait_def"), "{id}: {line}");
+        }
+        let cands = |id: &str| -> Vec<String> {
+            let v: Value = serde_json::from_str(&funcs[id]).unwrap();
+            v["func"]["blocks"][0]["instrs"][0]["callee"]["candidates"].as_array().unwrap().iter().map(|c| c.as_str().unwrap().to_string()).collect()
+        };
+        assert_eq!(cands("caller"), vec!["<h as zoo_web::dev::Tr>::register", "<m as zoo_web::service::Tr>::register", "<r as zoo_web::service::Tr>::register"]);
+        // (m has no mark and its name is the call's: by name; n has no mark and another name: left out, as before)
+        // the root path (zoo_web::Tr) is the same trait as the other two paths, by name
+        assert_eq!(cands("caller2").len(), 4);
+        assert!(!cands("caller2").iter().any(|c| c.contains("app::other")));
     }
 }
