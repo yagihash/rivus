@@ -338,7 +338,7 @@ class Location(unittest.TestCase):
 
     def test_rustypaste_row_and_truth(self):
         t = json.load(open(d.TARGETS_FILE))["rustypaste"]
-        self.assertFalse(t["decided"])   # INFO: not a row of the pass line
+        self.assertTrue(t["decided"])   # a row of the pass line (2026-11-26); the detection is for reference, not in the verdict
         x = t["detect"]
         self.assertEqual((x["id"], x["mode"], x["category"]), ("CVE-2026-90774", "location", "path_traversal"))
         self.assertEqual(x["prefix_commit"], t["commit"])
@@ -635,14 +635,32 @@ class RustRoad(unittest.TestCase):
 
     def test_rustypaste_row(self):
         t = json.load(open(d.TARGETS_FILE))["rustypaste"]
-        self.assertEqual((t["lang"], t["commit"], t["decided"], t["repo"]), ("rust", "00292076e47b5f500906a97a1b5c17665270d907", False, "https://github.com/orhun/rustypaste"))
+        self.assertEqual((t["lang"], t["commit"], t["decided"], t["repo"]), ("rust", "00292076e47b5f500906a97a1b5c17665270d907", True, "https://github.com/orhun/rustypaste"))
         self.assertNotIn("rust_minimal_lock", t)  # the committed Cargo.lock is used
         self.assertEqual(t["args"], ["-timeout", "600s"])
         self.assertEqual(t["mem_cap_gb"], 8)
         self.assertNotIn("rustypaste", d.BENCHES)  # not in the default targets
         mk = open(os.path.join(d.ROOT, "Makefile")).read()
         self.assertNotIn("rustypaste", mk)
-        self.assertEqual(d.format_line("rustypaste", False, True, "x").split()[:2], ["INFO", "rustypaste"])
+        self.assertEqual(d.format_line("rustypaste", False, True, "x").split()[:2], ["INFO", "rustypaste"])  # a row that is not decided is still INFO
+        self.assertEqual(d.format_line("rustypaste", True, True, "x").split()[:2], ["PASS", "rustypaste"])
+        self.assertEqual(t["pass_line"], "rustypaste")
+        self.assertEqual(t["time_limit_s"], 150)  # about 1.5 times the measured wall (fetch + build + analysis), bench/passline-baseline.md
+        self.assertEqual(t["expect_coarsened"], 1)  # actix makes a component over the safety net (ADR-124): known, not a verdict
+        self.assertEqual(d.result_labels(True, True, 5.0, 8), ("PASS", "PASS"))
+        self.assertEqual(d.result_labels(True, True, 7.9, 8), ("PASS-thin", "PASS(余裕不足)"))  # 8 - 7.9 < 0.15
+        self.assertEqual(d.result_labels(False, True, 8.1, 8)[0], "FAIL")
+        self.assertEqual(d.margin_state(5.0, t["mem_cap_gb"]), "pass")
+        self.assertEqual(d.margin_state(7.9, t["mem_cap_gb"]), "thin")
+        self.assertEqual(d.margin_state(8.01, t["mem_cap_gb"]), "fail")
+        # the detection is for reference: a run that converged within the limits passes without it
+        ok, _ = d.judge(95.0, t["time_limit_s"], 5.0, t["mem_cap_gb"], True, False, None, None, 0, None, 1, t["expect_coarsened"], t["detect_in_verdict"])
+        self.assertTrue(ok)
+        self.assertFalse(d.judge(95.0, t["time_limit_s"], 5.0, t["mem_cap_gb"], True, False, None, None, 0, None, 1, t["expect_coarsened"])[0])  # the default: detection decides
+        ok, _ = d.judge(95.0, t["time_limit_s"], 5.0, t["mem_cap_gb"], False, True, None, None, 1, None, 1, t["expect_coarsened"], t["detect_in_verdict"])
+        self.assertFalse(ok)
+        ok, _ = d.judge(95.0, t["time_limit_s"], 5.0, t["mem_cap_gb"], True, True, None, None, 1, None, 0, t["expect_coarsened"], t["detect_in_verdict"])
+        self.assertFalse(ok)  # the coarsening changed: the answer changed without being said
 
     def test_committed_lock_is_used_and_never_generated(self):
         w = tempfile.mkdtemp()

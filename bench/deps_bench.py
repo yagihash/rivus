@@ -6,7 +6,7 @@ measurements, bench/heavy-ledger.tsv (bench/heavy_ledger.py: the columns, the wr
 heavy; not in CI): `make bench-deps`.
 
   bench/deps_bench.py [-timeout 600] [-rivus PATH] [-ledger FILE] [-no-ledger] [bench ...]
-  bench/deps_bench.py [-limit S] [-cap GB] [-ledger FILE] [-no-ledger] memos dart_services   (the pass line, below; dart_services is pass line D: 600 s, 8 GB, converge; takes 10 minutes, select it with TARGETS)
+  bench/deps_bench.py [-limit S] [-cap GiB] [-ledger FILE] [-no-ledger] memos dart_services   (the pass line, below; dart_services is pass line D: 600 s, 8 GiB, converge; takes 10 minutes, select it with TARGETS)
 
 The benches: go-s3 (bench/go-s3), gcp (bench/gcp), dart-gcp (bench/dart-gcp, run in a copy: `dart pub get
 --offline`; the packages are read, never run). There is no Rust bench with its dependencies ready, so none is run.
@@ -38,8 +38,8 @@ vulnerability) counts per vulnerability: detected when at least one finding pass
 function, sink position, functions on the path; the field `vuln` groups the entries) and prints `detected=<n>/<N>` only: the count is not
 part of PASS/FAIL (reference only), and neither the line nor the ledger row carries a count of findings, a list, a path or a place.
 A target that is not decided yet is printed as INFO, not PASS/FAIL.
-A Rust target (`lang` rust; shlex is the one now) is an INFO row that shows that the road (fetch, the build under the sandbox, the extractor, the analysis)
-goes through from one end to the other inside this tool; it is not a pass line (not in the default `TARGETS`; name it: `make bench-passline TARGETS=shlex`).
+A Rust target (`lang` rust; shlex is an INFO row; rustypaste is a pass line row since 2026-11-26) shows that the road (fetch, the build under the sandbox, the extractor, the analysis)
+goes through from one end to the other inside this tool; shlex is not a pass line (not in the default `TARGETS`; name it: `make bench-passline TARGETS=shlex`; rustypaste the same: `TARGETS=rustypaste`).
 What the tool does for it (the same refusal and checks every time): (1) the fetch is `git clone` and checkout only; a `.cargo/config(.toml)` or a
 `rust-toolchain(.toml)` anywhere in the tree stops the run before anything is built (what it says is printed); (2) `HOME` is an empty directory made
 inside $BENCH_CACHE (the data of rivus for Rust goes under `$HOME/Library/Application Support/rivus`, so nothing is written in the shared places), and the
@@ -165,19 +165,20 @@ GB = 1024 ** 3
 EXIT_INCOMPLETE = 4  # rivus: the output is complete as far as it goes, the analysis is not (cmd/rivus exitIncomplete)
 
 
-def judge(time_s, limit_s, mem_gb, cap_gb, converged, detected, through=None, quiet_after_fix=None, located=None, score=None, coarsened=None, expect_coarsened=0):
+def judge(time_s, limit_s, mem_gb, cap_gb, converged, detected, through=None, quiet_after_fix=None, located=None, score=None, coarsened=None, expect_coarsened=0, detect_decides=True):
     """The pass line, pure: two separate conditions, both needed. FINISH (time within the limit, memory within the cap,
     converged) and DETECT (`detected`). located: None or the count of findings at the labelled places (information). detected: True / False / None (no pair for this target). through: None or (tp, n), the
     position-level count, printed as information only (it does not decide PASS). quiet_after_fix: True / False /
     None (n/a); printed, and NOT part of PASS/FAIL. score: None or (n, N), the vulnerabilities detected by place (detect.mode
     score), printed as `detected=<n>/<N>` only, never part of PASS/FAIL. coarsened: None or stats.scc_coarsened (the components
     whose dependency functions are solved at depth 0: -scc-coarsen, ADR-124); it must be expect_coarsened (0 for a target that is not meant
-    to be hit), or the line fails: a target that comes to be hit changes its answer without being said. Returns (passed, line_body)."""
+    to be hit), or the line fails: a target that comes to be hit changes its answer without being said. detect_decides: False (`detect_in_verdict`
+    false in the data: rustypaste, 2026-11-26) prints `detected` but does not let it decide. Returns (passed, line_body)."""
     ok_time = time_s is not None and time_s <= limit_s
     ok_mem = mem_gb is not None and mem_gb <= cap_gb
     if score is not None:
         detected = None  # the count is printed (below) but is not part of the verdict
-    ok_det = detected is not False  # None (n/a) does not count against
+    ok_det = detected is not False or not detect_decides  # None (n/a) does not count against
     finish = bool(ok_time and ok_mem and converged)
     ok_coarse = coarsened is None or coarsened == expect_coarsened
     passed = bool(finish and ok_det and ok_coarse)
@@ -872,7 +873,7 @@ def passline_run(name, t, rivus, cache, outdir, limit_s, cap_gb, repeat=1, home=
                 quiet = quiet_after_fix(fixed_n)
             print("deps_bench: %s %s findings of %s: pre-fix %s, fixed %s" % (name, d["id"], d["category"], cnt(pre), fixed_n), file=sys.stderr)
         coarsened = ((main["report"] or {}).get("stats") or {}).get("scc_coarsened", 0) if main["report"] is not None else None
-        passed, body = judge(main["wall"], limit_s, main["peak"] / GB, cap_gb, main["converged"], detected, through, quiet, located, score, coarsened, t.get("expect_coarsened", 0))
+        passed, body = judge(main["wall"], limit_s, main["peak"] / GB, cap_gb, main["converged"], detected, through, quiet, located, score, coarsened, t.get("expect_coarsened", 0), t.get("detect_in_verdict", True))
         decided = t.get("decided", False)
         iso_ok, iso_why, unc = True, "", None
         failed_run = main["rc"] not in (0, EXIT_INCOMPLETE) and not main["why"]  # rivus ended by itself with an error: no report, nothing to read
