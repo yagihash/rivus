@@ -39,11 +39,7 @@ rivus: the analysis is incomplete (not_converged): the result is a part of what 
 
 ## 完了条件
 
-次のどちらか。
-
-1. `zooRustAlone` と `zooDartAlone` が、`zooSplit` と同じ基準(`recursion_approximation` の `@miss` を持つセル)で `allowUnconverged: true, programWide: true` を渡す(Go の `zoo_iso_test.go:103` と同じ)。`ZOO_ALONE=1` の実行で `alone/state/global-chain` が通る。
-2. 単独の実行では、そのセルを対象から外す、と決めて、`bench/zoo/README.md` の `ZOO_ALONE` の説明(68 行目)に書く。
-
+`zooRustAlone` と `zooDartAlone` が、`zooSplit` と同じ基準(`recursion_approximation` の `@miss` を持つセル)で `allowUnconverged: true, programWide: true` を渡す(Go の `zoo_iso_test.go:103` と同じ形)。`ZOO_ALONE=1` の実行で `alone/state/global-chain` が通る。単独の実行でそのセルを対象から外す案は、診断の網羅が減るので選ばない。実装は優先度が低いので、他の作業のあとの空いたときに行う。
 どちらでも、鎖が 12 周で止まること自体(`@miss` と ADR 120)は変えない。
 
 ## 限界
