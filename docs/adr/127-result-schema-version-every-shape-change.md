@@ -142,3 +142,12 @@
 - `KindGlobalHoldsNothing` の定数は、`heldnothing.go` にあり、ハッシュの取り方(`result.go` の `Kind*`)から外れていた。`result.go` に移した。これで、この kind がハッシュに入る(値は変わらない)。
 
 *2. 列挙に入れたもの(上の (b) から)。* `role` と `ModelRef.origin`。取り方を構文木で読めるように、`role` の値を `internal/model/model.go` の定数 `RoleSource`、`RoleSink`、`RoleSanitizer`、`RolePropagator` にまとめた(それまでは、taint と model の文中のリテラル)。`ModelRef.role` と `Expansion.role` はこの 4 値、`Site.role` は `internal/sites/sites.go` の `RoleSource`、`RoleSink`(2 値)、`ModelRef.origin` は `model.go` の `Origin*`(4 値)。`resultEnums` に 3 項目を足した。値は変えていない。ハッシュが変わるので、`rivus.result/4` に上げた(`rivus.result/3` のハッシュは消さない)。ほかの (b)(`Site.kind`、`SharedPlace.kind` など)は、上のとおり固定しない。
+
+**追記(2026-11-26、`rivus.result/5`): `summary.dart_version`**
+
+`summary.go_version`(`rivus.result/3`)の Dart の分。課題 B(1) の残り。`summary` に `dart_version`(`target`、`minimum`、`verified`、`match`)を足し、`rivus.result/5` に上げる。`rivus.result/4` のハッシュは消さない。
+- 検証済みの Dart は、定数 `VerifiedDart`(`cmd/rivus/dartversion.go`、`"3.13"`)の 1 か所。CI の `DART_SDK`(extractor とベンチを動かす SDK)の minor で、ずれるとテストが落ちる。比べるのは minor まで。
+- 比べるのは、`pubspec.yaml` の `environment.sdk` が許す**最も低い SDK**(`minimum`)。Dart の言語バージョンは、この下限で決まる(上限は言語を決めない)。`^3.0.0` も `>=3.0.0 <4.0.0` も 3.0.0。`>=` の項が複数あれば高いほう。下限が検証済みより新しければ `newer`、新しくなければ `yes`、下限がない(`any`、`<4.0.0` だけ、`sdk` なし、`pubspec.yaml` なし、読めない)なら `unknown`。
+- **対象のパッケージ(`-C` の `pubspec.yaml`)だけを読む**。`go_version` は、ローダーが読んだ依存のモジュールの `go` 行も渡すので、いちばん新しいもので決めたが、Dart の依存は、`pubspec.lock` に `sdk` の制約がなく、依存の `pubspec.yaml` を pub のキャッシュから読む経路が rivus にまだない。そのため `newest_module` と `newest_version` に当たる欄は持たない。依存を読むかは、判断を仰ぐ(次の作業)。モノレポで `-C` にない子のパッケージの `pubspec.yaml` も読まない(`pubspec.lock` の読みと同じ範囲)。
+- **止めない**。`newer` のときだけ標準エラーに 1 行。終了コードは変えない。ベンチと合格基準は、`newer` を失敗にしない。
+- `match` の値は、`resultEnums` の行(`Dart*`、3 値)で、ハッシュに入る。Rust の edition は、同じ形で次に足せる。

@@ -89,3 +89,4 @@ zoo-dart のグラフ(d31c657c)で、`clos/helper-overflow-many` の落ちたエ
 
 - **`exhaustive: true` で落ちたエッジを隠すことは、この形では起きない**(落ちた呼び出しは候補 0 の値の呼び出しとして、`unresolved_calls` に数えられる)。新しい課題は不要。
 - 出力に `depth_limit` と `candidate_limit` の語は出ない(出力を検索して 0 件)。理由の文は「候補がない。ファイルは行き先を言わない」で、**rivus の上限(32)で切った**ことと、コードの側の原因(未知の呼び先)を区別しない。`analyze` の uncertainty(`candidate_limit: ... more than the 32 that rivus keeps`)のほうが、原因を言っている。区別するかは、判断が要る(提案、未着手)。
+- 案(未着手。優先度は低い): `rivus graph` の `unresolved_calls` に、「rivus の上限で切った」と「未知の呼び先」の別を出す。説明の質の話で、`rivus analyze` の uncertainty が原因を言っている。再開のとき見つかるように書く。
