@@ -401,6 +401,16 @@ func (o *analyzeOpts) analyze(patterns []string, extra ...*model.RuleSet) (*repo
 			fmt.Fprintln(os.Stderr, w)
 		}
 	}
+	if o.readDart() {
+		d, err := dartVersionOf(o.dir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "rivus: the sdk constraint of the Dart package is not compared with the Dart this rivus was verified with: %v\n", err)
+		}
+		rep.Summary.DartVersion = d
+		if w := dartVersionWarning(d); w != "" {
+			fmt.Fprintln(os.Stderr, w)
+		}
+	}
 	rep.Summary.UnverifiedVersions = append(rep.Summary.UnverifiedVersions, o.unverifiedFromLocks(rules)...)
 	sort.SliceStable(rep.Summary.UnverifiedVersions, func(i, j int) bool {
 		return rep.Summary.UnverifiedVersions[i].Package < rep.Summary.UnverifiedVersions[j].Package
