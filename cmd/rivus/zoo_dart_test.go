@@ -480,6 +480,13 @@ func zooParityDart(t *testing.T, lines []zooLine, cells []*zooCell) {
 		}
 	}
 	zooParityLine(t, "zoo-dart", naNames, todoNames, nil, nil)
+	markedDart := 0
+	for _, n := range todoNames {
+		if _, ok := todo["F/"+n]; ok {
+			markedDart++
+		}
+	}
+	t.Logf("zoo-dart: @todo %d, marked in na.txt %d, not classified %d", len(todoNames), markedDart, len(todoNames)-markedDart)
 	// the other direction: the cells that Dart has and Go does not (@na(go: reason): no such form in Go; @elsewhere(go: where):
 	// measured in another place; a common form
 	// that zoo-go has not written yet is "not yet")
