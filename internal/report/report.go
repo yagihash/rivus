@@ -23,7 +23,7 @@ import (
 )
 
 // SchemaVersion identifies the format of Report.
-const SchemaVersion = "rivus.result/4"
+const SchemaVersion = "rivus.result/5"
 
 // Report is the result of an analysis.
 type Report struct {
@@ -204,6 +204,9 @@ type Summary struct {
 	// GoVersion says whether the Go modules that were read are written for a newer Go than this rivus was verified with (ADR-127). Absent
 	// when no Go module was read. It never stops the run.
 	GoVersion *GoVersion `json:"go_version,omitempty"`
+	// DartVersion says whether the Dart package that was read needs a newer Dart than this rivus was verified with (the sdk constraint of
+	// its pubspec.yaml, ADR-127). Absent when no Dart package was read. It never stops the run.
+	DartVersion *DartVersion `json:"dart_version,omitempty"`
 	// BodyReplacedPackages are the packages of the dependencies whose body was not read because a model declares that it
 	// stands for it (body_replaced_packages of a rule file, or -body-replaced): a call of their functions is the model
 	// when it has a row for the function, and unmodeled_library_call when it has none; code inside them is not
@@ -524,6 +527,25 @@ type GoVersion struct {
 	// is the newest).
 	NewestModule  string `json:"newest_module,omitempty"`
 	NewestVersion string `json:"newest_version,omitempty"`
+}
+
+// The values of DartVersion.Match.
+const (
+	DartYes     = "yes"     // the lowest SDK that the constraint allows is not newer than the verified one
+	DartNewer   = "newer"   // it is newer: the language may have what this rivus was not checked against
+	DartUnknown = "unknown" // no pubspec.yaml, no sdk constraint, or one without a lower bound: nothing to compare
+)
+
+// DartVersion is the comparison of the sdk constraint of the Dart package that was read with the Dart that this rivus was verified with (minor only).
+type DartVersion struct {
+	// Target is the sdk constraint of the pubspec.yaml of the analysed package, as written (absent when it has none).
+	Target string `json:"target,omitempty"`
+	// Minimum is the lowest SDK that Target allows, the language version of the package (absent when Target has no lower bound).
+	Minimum string `json:"minimum,omitempty"`
+	// Verified is the minor of the Dart SDK that the extractor of this rivus was verified with.
+	Verified string `json:"verified"`
+	// Match is "yes", "newer" or "unknown" (DartYes, DartNewer, DartUnknown).
+	Match string `json:"match"`
 }
 
 // DeveloperDir is the developer directory of the build: Source is "user" (-isolation-env) or "default" (the Command Line Tools,
