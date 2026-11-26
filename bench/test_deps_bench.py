@@ -160,6 +160,79 @@ class FixedWork(unittest.TestCase):
                     pass
 
 
+FP_JSON = json.dumps({"unit": "byte", "processes": [{"name": "rivus", "pid": 10, "footprint": 3000}, {"name": "ext", "pid": 11, "footprint": 5000}], "total footprint": 7500})
+
+
+class FootprintBasis(unittest.TestCase):
+    """The memory of the pass line is the footprint on macOS (2026-11-26) and the RSS elsewhere."""
+    def test_parse_footprint_json(self):
+        self.assertEqual(d.parse_footprint_json(FP_JSON), (7500, "ext", 5000))
+        self.assertEqual(d.parse_footprint_json(json.dumps({"total footprint": 5, "processes": []})), (5, "", 0))
+
+    def test_broken_footprint_json_is_none(self):
+        for bad in ("", "not json", "[]", "{}", '{"total footprint": "x"}', '{"total footprint": -1}', '{"total footprint": true}', '{"processes": []}'):
+            self.assertIsNone(d.parse_footprint_json(bad), bad)
+
+    def test_basis_by_platform_and_tool(self):
+        from unittest import mock
+        with mock.patch.object(sys, "platform", "darwin"), mock.patch.object(d.shutil, "which", return_value="/usr/bin/footprint"):
+            self.assertEqual(d.mem_basis(), "footprint")
+        with mock.patch.object(sys, "platform", "darwin"), mock.patch.object(d.shutil, "which", return_value=None):
+            self.assertEqual(d.mem_basis(), "rss")
+        with mock.patch.object(sys, "platform", "linux"), mock.patch.object(d.shutil, "which", return_value="/usr/bin/footprint"):
+            self.assertEqual(d.mem_basis(), "rss")
+        with mock.patch.object(sys, "platform", "linux"), mock.patch.object(d.shutil, "which", return_value=None):
+            self.assertEqual(d.mem_basis(), "rss")
+
+    def run_fake(self, basis, sampler, cap=8 * 1024 ** 3):
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as w, mock.patch.object(d, "mem_basis", return_value=basis), mock.patch.object(d, "footprint_tree", side_effect=sampler):
+            return d.run_watched([sys.executable, "-c", "import time; time.sleep(1.0)"], w, dict(os.environ), 30, cap,
+                                 os.path.join(w, "e"), os.path.join(w, "o"), interval=0.05)
+
+    def test_footprint_run_takes_the_footprint(self):
+        m = self.run_fake("footprint", lambda pids, tmp: ("ok", (4 * 1024 ** 3, "big", 3 * 1024 ** 3)))
+        self.assertEqual(m["basis"], "footprint")
+        self.assertEqual((m["b"], m["b_fp"]), (4 * 1024 ** 3, 4 * 1024 ** 3))
+        self.assertGreater(m["b_rss"], 0)
+        self.assertEqual(m["big"], "big")
+
+    def test_failed_footprint_makes_the_whole_run_rss(self):
+        m = self.run_fake("footprint", lambda pids, tmp: ("fail", None))
+        self.assertEqual(m["basis"], "rss")
+        self.assertEqual(m["b"], m["b_rss"])
+        self.assertEqual(m["b_fp"], 0)
+        self.assertGreater(m["b"], 0)
+
+    def test_failure_after_good_samples_does_not_mix(self):
+        n = []
+        def sampler(pids, tmp):
+            n.append(1)
+            return ("ok", (9 * 1024 ** 3, "big", 1)) if len(n) < 3 else ("fail", None)
+        m = self.run_fake("footprint", sampler, cap=100 * 1024 ** 3)
+        self.assertEqual(m["basis"], "rss")  # the footprint numbers of the first samples are not kept
+        self.assertEqual((m["b"], m["b_fp"]), (m["b_rss"], 0))
+
+    def test_race_samples_are_dropped_not_counted_as_failure(self):
+        seq = iter([("race", None)] * 6 + [("ok", (1000, "x", 1000))] * 100)
+        m = self.run_fake("footprint", lambda pids, tmp: next(seq))
+        self.assertEqual((m["basis"], m["b"]), ("footprint", 1000))
+
+    def test_rss_basis_never_calls_footprint(self):
+        def boom(pids, tmp):
+            raise AssertionError("footprint called")
+        m = self.run_fake("rss", boom)
+        self.assertEqual((m["basis"], m["b_fp"]), ("rss", 0))
+        self.assertEqual(m["b"], m["b_rss"])
+
+    def test_kill_follows_the_basis(self):
+        # the footprint is under the cap while the RSS would be over it: not killed. The reverse: killed on the footprint.
+        m = self.run_fake("footprint", lambda pids, tmp: ("ok", (10, "x", 10)), cap=100 * 1024 * 1024)
+        self.assertEqual(m["why"], "")
+        m = self.run_fake("footprint", lambda pids, tmp: ("ok", (200 * 1024 * 1024, "x", 1)), cap=100 * 1024 * 1024)
+        self.assertEqual(m["why"], "memory")
+
+
 class Peak(unittest.TestCase):
     GB = 1024 ** 3
 
@@ -600,11 +673,11 @@ class RustRoad(unittest.TestCase):
         t = {"lang": "rust", "repo": "x", "commit": "c", "args": [], "time_limit_s": 100, "mem_cap_gb": 8, "decided": False, "detect": None, "local": "bench/go-curated"}
         saved = (d.prepare, d.analyze_once)
         d.prepare = lambda name, t, tree, work, env: (tree, env, None)
-        d.analyze_once = lambda *a, **k: {"wall": 91.0, "peak": 6 * 1024 ** 3, "converged": False, "why": "", "report": None, "peak_how": "x", "peak_a": 0, "cpu": 1.0, "big": "", "big_rss": 0, "at_s": 0, "rc": 1, "load": 1.0, "note": "n"}
+        d.analyze_once = lambda *a, **k: {"wall": 91.0, "peak": 6 * 1024 ** 3, "converged": False, "why": "", "report": None, "peak_how": "x", "peak_rss": 0, "basis": "rss", "peak_a": 0, "cpu": 1.0, "big": "", "big_rss": 0, "at_s": 0, "rc": 1, "load": 1.0, "note": "n"}
         try:
             line, row = d.passline_run("rustypaste", t, "rivus", tmp, tmp, 100, 8, 1, tmp)
             t2 = dict(t)
-            d.analyze_once = lambda *a, **k: {"wall": 1.0, "peak": 9 * 1024 ** 3, "converged": False, "why": "memory", "report": None, "peak_how": "x", "peak_a": 0, "cpu": 1.0, "big": "", "big_rss": 0, "at_s": 0, "rc": -9, "load": 1.0, "note": "n"}
+            d.analyze_once = lambda *a, **k: {"wall": 1.0, "peak": 9 * 1024 ** 3, "converged": False, "why": "memory", "report": None, "peak_how": "x", "peak_rss": 0, "basis": "rss", "peak_a": 0, "cpu": 1.0, "big": "", "big_rss": 0, "at_s": 0, "rc": -9, "load": 1.0, "note": "n"}
             line2, row2 = d.passline_run("rustypaste", t2, "rivus", tmp, tmp, 100, 8, 1, tmp)
         finally:
             d.prepare, d.analyze_once = saved
@@ -626,7 +699,7 @@ class RustRoad(unittest.TestCase):
         seen = []
         orig, orig_lock = d.run_watched, d.heavy_lock
         d.heavy_lock = lambda reason: __import__("contextlib").nullcontext()  # no real lock in a unit test
-        d.run_watched = lambda cmd, *a, **k: (seen.append(cmd), {"rc": 1, "why": "", "wall": 0, "cpu": 0, "a": 0, "b": 0, "big": "", "big_rss": 0, "at_s": 0})[1]
+        d.run_watched = lambda cmd, *a, **k: (seen.append(cmd), {"rc": 1, "why": "", "wall": 0, "cpu": 0, "a": 0, "b": 0, "b_rss": 0, "b_fp": 0, "basis": "rss", "big": "", "big_rss": 0, "at_s": 0})[1]
         try:
             for sdk in ("/x/sdk", None):
                 env = dict(os.environ)
@@ -704,7 +777,7 @@ class ExtractorMatch(unittest.TestCase):
             for state in ("no", "unknown_binary", "unknown_extractor", "unchecked"):
                 rep = ext_report("rust", state)
                 rep["summary"]["isolation"] = {"mode": "sandbox"}
-                d.analyze_once = lambda *a, **k: {"wall": 1.0, "peak": 1024 ** 3, "converged": True, "why": "", "report": rep, "peak_how": "x", "peak_a": 0, "cpu": 1.0, "big": "", "big_rss": 0, "at_s": 0, "rc": 0, "load": 1.0, "note": "n"}
+                d.analyze_once = lambda *a, **k: {"wall": 1.0, "peak": 1024 ** 3, "converged": True, "why": "", "report": rep, "peak_how": "x", "peak_rss": 0, "basis": "rss", "peak_a": 0, "cpu": 1.0, "big": "", "big_rss": 0, "at_s": 0, "rc": 0, "load": 1.0, "note": "n"}
                 line, row = d.passline_run("shlex", t, "rivus", tmp, tmp, 100, 8, 1, tmp)
                 self.assertIsNone(row, state)  # no row: no number is read from it
                 self.assertTrue(line.startswith("FAIL shlex extractor_mismatch(%s):" % state), line)

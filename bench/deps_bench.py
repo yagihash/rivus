@@ -12,7 +12,7 @@ The benches: go-s3 (bench/go-s3), gcp (bench/gcp), dart-gcp (bench/dart-gcp, run
 --offline`; the packages are read, never run). There is no Rust bench with its dependencies ready, so none is run.
 
 The dependency benches (kind `deps`) run under the same watchdog as the pass line (the sampled memory of the whole
-process tree; the cap is 20 GB, only to protect the machine, not a line), with `-timeout` of rivus (it reports what it
+process tree, the footprint on macOS; the cap is 20 GiB, only to protect the machine, not a line), with `-timeout` of rivus (it reports what it
 found; stats.timed_out) and, if rivus does not stop 120 s after that, a kill of the process group of this run only
 (it is started in its own session; nothing outside it is signalled). `result`: `finished` (the run converged and was
 not timed out), `timeout` (stats.timed_out, or the group was killed on the clock), `stopped_memory` (the watchdog),
@@ -22,9 +22,11 @@ The pass line (`make bench-passline`; targets in bench/deps-targets.json): one l
   PASS|PASS(余裕不足)|FAIL memos time=<s>/<limit> mem=<GiB>/<cap> converged=<yes|no> finish=<yes|no> detected=<yes|no|n/a> quiet_after_fix=<yes|no|n/a> [located=<n>]
 with the default flags of rivus. The memory has three states (margin = cap - peak, GiB, before rounding): PASS (margin >= 0.15), PASS(余裕不足)
 (0 <= margin < 0.15; a pass, the same exit status; `result` PASS-thin in the ledger) and FAIL (margin < 0); the cap does not move. PASS needs two separate conditions: FINISH (`finish`: it ended by itself within the time limit, the
-memory of the child ended at or below the cap (b: the maximum over fine samples of the SAME-TIME SUM of the RSS of the whole process
-tree, the burden the machine receives; a, the end-of-run peak of the main process, is printed beside it; the watchdog stops a run
-early and kills the group of this run only), it converged, with no function stopped on the clock: stats.load_dependent is not set)
+memory of the child ended at or below the cap (b: the maximum over fine samples of the SAME-TIME SUM, over the whole process tree, of
+the macOS `footprint` (from 2026-11-26; `mem_basis=footprint`; sampled every 0.5 s), or of the RSS where `footprint` is not there (Linux) or
+could not be read in a run (`mem_basis=rss`; every 0.25 s; the whole run, never a mix); the RSS sum is kept beside it as `peak_tree_gb`, for
+reference; a, the end-of-run peak of the main process, is printed beside it; the watchdog stops a run early, on the same number as the verdict,
+and kills the group of this run only), it converged, with no function stopped on the clock: stats.load_dependent is not set)
 and DETECT (`detected`, by place: at the PRE-FIX commit at least one finding of the category has its source and its sink at the
 labelled places of the truth file, bench/memos/truth-*.json, `detect.mode` "location"; builtin models; `located=<n>` is the count of
 such findings; n/a when the target has no pair).
@@ -141,7 +143,8 @@ def measure(name, rivus, timeout, work):
     st = rep.get("stats", {}) if isinstance(rep, dict) else {}
     converged = bool(st.get("converged", True)) if rep is not None else False
     row = {"target": name, "target_commit": "in-tree", "kind": "deps", "settings": "default (-timeout %ds); %s" % (timeout, note),
-           "wall_s": "%.1f" % m["wall"], "cpu_s": "%.1f" % m["cpu"], "peak_tree_gb": "%.2f" % (m["b"] / GB),
+           "wall_s": "%.1f" % m["wall"], "cpu_s": "%.1f" % m["cpu"], "peak_tree_gb": "%.2f" % (m["b_rss"] / GB),
+           "peak_footprint_gb": "%.2f" % (m["b_fp"] / GB) if m["basis"] == "footprint" else None, "mem_basis": m["basis"],
            "converged": converged if rep is not None else None, "exit_code": m["rc"], "load_start": "%.2f" % load}
     row.update({k: v for k, v in heavy_ledger.report_columns(rep).items() if v is not None})
     if m["why"] == "memory":
@@ -347,43 +350,125 @@ def maxrss_bytes(ru):
     return int(ru.ru_maxrss) * (1 if sys.platform == "darwin" else 1024)
 
 
-def run_watched(cmd, cwd, env, limit_s, cap_bytes, errpath, outpath, interval=0.25):
-    """Run cmd in its own session. Two records of memory, and a WATCHDOG that is not a record:
-      a = the end-of-run peak of the main process (ru_maxrss of wait4: the largest single process of its subtree);
-      b = the maximum over fine samples (every `interval` s) of the SAME-TIME SUM of the RSS of the whole process tree
-          (shared pages can be counted twice); `big` names the biggest process of the tree at that moment, and `at_s` when.
-    The watchdog kills the group (only) when the wall time is over limit_s or the sum b is over cap_bytes.
-    Returns a dict: rc, why ("" / "time" / "memory"), wall, cpu, a, b, big, big_rss, at_s."""
+FOOTPRINT_FAILS = 3  # this many failed calls of `footprint` in a row (not a vanished pid): the run goes back to RSS as a whole
+
+
+def mem_basis():
+    """What the memory of the pass line is measured in: "footprint" (macOS `footprint`, the physical footprint of the process, as of
+    2026-11-26: the RSS of macOS counts the pages that Go gave back with MADV_FREE_REUSABLE and the RSS peak of one target moves
+    by 0.5 GiB between equal runs) or "rss" (`ps`; Linux, or no `footprint`)."""
+    return "footprint" if sys.platform == "darwin" and shutil.which("footprint") else "rss"
+
+
+def parse_footprint_json(text):
+    """(total, name of the biggest process, its footprint), all bytes, from the JSON of `footprint -j`; None for anything broken.
+    total is `total footprint` (the sum over the processes asked for, shared pages counted once)."""
+    try:
+        j = json.loads(text)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(j, dict):
+        return None
+    tot = j.get("total footprint")
+    if not isinstance(tot, int) or isinstance(tot, bool) or tot < 0:
+        return None
+    big, big_fp = "", 0
+    for p in j.get("processes") or []:
+        fp = p.get("footprint") if isinstance(p, dict) else None
+        if isinstance(fp, int) and not isinstance(fp, bool) and fp > big_fp:
+            big, big_fp = str(p.get("name", "")), fp
+    return tot, big, big_fp
+
+
+def footprint_tree(pids, tmpfile):
+    """One call of `footprint -j FILE -p PID ...` for the processes of the tree. Returns ("ok", parse_footprint_json) , ("race", None)
+    when a pid had gone (rc 66: this sample is dropped), or ("fail", None). Nothing is signalled; the target is not paused."""
+    try:
+        r = subprocess.run(["footprint", "-j", tmpfile] + [a for p in pids for a in ("-p", str(p))], capture_output=True, timeout=20)
+    except (OSError, subprocess.SubprocessError):
+        return "fail", None
+    if r.returncode == 66:
+        return "race", None
+    if r.returncode != 0:
+        return "fail", None
+    try:
+        got = parse_footprint_json(open(tmpfile, errors="replace").read())
+    except OSError:
+        got = None
+    return ("ok", got) if got else ("fail", None)
+
+
+def run_watched(cmd, cwd, env, limit_s, cap_bytes, errpath, outpath, interval=None):
+    """Run cmd in its own session. Records of memory, and a WATCHDOG that is not a record:
+      a = the end-of-run peak of the main process (ru_maxrss of wait4: the largest single process of its subtree; RSS-like);
+      b_rss = the maximum over fine samples of the SAME-TIME SUM of the RSS of the whole process tree (`ps`; shared pages can be counted twice);
+      b_fp = the same for the footprint (macOS `footprint` of the processes that `ps` found, one call per sample; 0 when not used);
+      b = the number of the verdict: b_fp when basis is "footprint", else b_rss. basis is "footprint" on macOS when `footprint` works; if it
+          fails FOOTPRINT_FAILS times in a row the whole run is RSS (basis "rss"), never a mix. A vanished pid (rc 66) drops that sample only.
+      `big` names the biggest process of the tree at that moment (in the basis), big_rss its bytes, and `at_s` when.
+    interval: 0.5 s when the basis is the footprint, 0.25 s for the RSS (ps only is cheap).
+    The watchdog kills the group (only) when the wall time is over limit_s or b is over cap_bytes (the footprint when that is the basis:
+    the kill and the verdict use one number).
+    Returns a dict: rc, why ("" / "time" / "memory"), wall, cpu, a, b, b_rss, b_fp, basis, big, big_rss, at_s."""
     with open(outpath, "wb") as out, open(errpath, "wb") as err:
         p = subprocess.Popen(cmd, cwd=cwd, env=env, stdout=out, stderr=err, start_new_session=True)
     t0 = time.time()
     pgid = p.pid
-    b, big, big_rss, at_s, why = 0, "", 0, 0.0, ""
+    basis = mem_basis()
+    if interval is None:
+        interval = 0.5 if basis == "footprint" else 0.25
+    fp_tmp = None
+    if basis == "footprint":
+        fd, fp_tmp = tempfile.mkstemp(prefix="footprint-", suffix=".json")
+        os.close(fd)
+    b_rss, b_fp, why = 0, 0, ""
+    big_r, big_f = ("", 0, 0.0), ("", 0, 0.0)  # (name, bytes, at_s) of the biggest process at the time of each maximum
+    fails = 0
     rc, ru = None, None
-    while True:
-        wp, status, ru_ = os.wait4(p.pid, os.WNOHANG)
-        if wp:
-            rc, ru = os.waitstatus_to_exitcode(status), ru_
-            break
-        rows = tree_rows(p.pid, pgid)
-        tot = sum(r[1] for r in rows)
-        if tot > b:
-            top = max(rows, key=lambda r: r[1])
-            b, big, big_rss, at_s = tot, top[2], top[1], time.time() - t0
-        if b > cap_bytes:
-            why = "memory"
-        elif time.time() - t0 > limit_s:
-            why = "time"
-        if why:
-            if os.getpgid(p.pid) != p.pid or p.pid == os.getpgrp():
-                raise SystemExit("deps_bench: refusing to kill process group %d (not the run's own)" % pgid)
-            os.killpg(pgid, signal.SIGKILL)
-            _, status, ru = os.wait4(p.pid, 0)
-            rc = os.waitstatus_to_exitcode(status)
-            break
-        time.sleep(interval)
+    try:
+        while True:
+            wp, status, ru_ = os.wait4(p.pid, os.WNOHANG)
+            if wp:
+                rc, ru = os.waitstatus_to_exitcode(status), ru_
+                break
+            rows = tree_rows(p.pid, pgid)
+            tot = sum(r[1] for r in rows)
+            if tot > b_rss:
+                top = max(rows, key=lambda r: r[1])
+                b_rss, big_r = tot, (top[2], top[1], time.time() - t0)
+            if basis == "footprint" and rows:
+                state, got = footprint_tree([r[0] for r in rows], fp_tmp)
+                if state == "ok":
+                    fails = 0
+                    if got[0] > b_fp:
+                        b_fp, big_f = got[0], (got[1], got[2], time.time() - t0)
+                elif state == "fail":
+                    fails += 1
+                    if fails >= FOOTPRINT_FAILS:
+                        basis, b_fp, big_f = "rss", 0, ("", 0, 0.0)  # the whole run in RSS: nothing of the footprint is kept
+            b = b_fp if basis == "footprint" else b_rss
+            if b > cap_bytes:
+                why = "memory"
+            elif time.time() - t0 > limit_s:
+                why = "time"
+            if why:
+                if os.getpgid(p.pid) != p.pid or p.pid == os.getpgrp():
+                    raise SystemExit("deps_bench: refusing to kill process group %d (not the run's own)" % pgid)
+                os.killpg(pgid, signal.SIGKILL)
+                _, status, ru = os.wait4(p.pid, 0)
+                rc = os.waitstatus_to_exitcode(status)
+                break
+            time.sleep(interval)
+    finally:
+        if fp_tmp:
+            with contextlib.suppress(OSError):
+                os.unlink(fp_tmp)
+    if basis == "footprint" and b_fp == 0:
+        basis = "rss"  # no sample of the footprint was read (a run that ended before the first one): RSS, said so
+    big = big_f if basis == "footprint" else big_r
     return {"rc": rc, "why": why, "wall": time.time() - t0, "cpu": ru.ru_utime + ru.ru_stime,
-            "a": maxrss_bytes(ru), "b": b, "big": big, "big_rss": big_rss, "at_s": at_s}
+            "a": maxrss_bytes(ru), "b": b_fp if basis == "footprint" else b_rss, "b_rss": b_rss, "b_fp": b_fp if basis == "footprint" else 0,
+            "basis": basis, "big": big[0], "big_rss": big[1], "at_s": big[2]}
 
 
 def git(*args, cwd=None):
@@ -674,7 +759,7 @@ def analyze_once(rivus, t, src, env, limit_s, cap_bytes, work, tag):
         sn0 = snapshot()
         m = run_watched(cmd, ROOT, env, limit_s, cap_bytes, errp, outp)
         note = format_snapshots(sn0, snapshot())
-    rc, why, wall, peak = m["rc"], m["why"], m["wall"], m["b"]
+    rc, why, wall, peak = m["rc"], m["why"], m["wall"], m["b"]  # b: the footprint on macOS, the RSS sum otherwise (m["basis"])
     rep, converged = None, False
     if not why and rc in (0, EXIT_INCOMPLETE):  # 4: the report is written, but the analysis is not complete (timeout, not converged); converged below says it
         try:
@@ -685,7 +770,7 @@ def analyze_once(rivus, t, src, env, limit_s, cap_bytes, work, tag):
             converged = bool(st.get("converged", False)) and not st.get("timed_out", False) and not st.get("load_dependent", False)
         except (OSError, ValueError):
             rep = None
-    return {"wall": wall, "peak": peak, "converged": converged, "why": why, "report": rep, "peak_how": "tree-sum", "peak_a": m["a"], "cpu": m["cpu"], "big": m["big"], "big_rss": m["big_rss"], "at_s": m["at_s"], "rc": rc, "load": load, "note": note}
+    return {"wall": wall, "peak": peak, "converged": converged, "why": why, "report": rep, "peak_how": "tree-sum-" + m["basis"], "peak_rss": m["b_rss"], "basis": m["basis"], "peak_a": m["a"], "cpu": m["cpu"], "big": m["big"], "big_rss": m["big_rss"], "at_s": m["at_s"], "rc": rc, "load": load, "note": note}
 
 
 def median_run(runs):
@@ -695,7 +780,10 @@ def median_run(runs):
         return runs[0]
     by = sorted(runs, key=lambda r: r["wall"])
     r = dict(by[(len(by) - 1) // 2])
-    for k in ("wall", "cpu", "peak"):
+    if len({x["basis"] for x in runs}) > 1:  # one run fell back to RSS: no mix, all runs are taken in RSS
+        runs = [dict(x, peak=x["peak_rss"], basis="rss") for x in runs]
+        r["basis"] = "rss"
+    for k in ("wall", "cpu", "peak", "peak_rss"):
         r[k] = statistics.median(x[k] for x in runs)
     r["converged"] = all(x["converged"] for x in runs)
     r["why"] = next((x["why"] for x in runs if x["why"]), "")
@@ -812,7 +900,8 @@ def passline_run(name, t, rivus, cache, outdir, limit_s, cap_gb, repeat=1, home=
         if unc is not None:
             extra.append("HOME=empty dir in the cache; isolation=%s; %s" % ("sandbox" if iso_ok else "FAILED", format_uncertainties(unc)))
         row = {"target": name, "target_commit": t.get("commit") or "in-tree", "kind": "passline", "settings": "%s; %s" % (" ".join(extra) or "default", main["note"]),
-               "wall_s": "%.1f" % main["wall"], "cpu_s": "%.1f" % main["cpu"], "peak_tree_gb": "%.2f" % (main["peak"] / GB),
+               "wall_s": "%.1f" % main["wall"], "cpu_s": "%.1f" % main["cpu"], "peak_tree_gb": "%.2f" % (main["peak_rss"] / GB),
+               "peak_footprint_gb": "%.2f" % (main["peak"] / GB) if main["basis"] == "footprint" else None, "mem_basis": main["basis"],
                "converged": main["converged"], "detected": detected if score is None else "%s/%d" % ("-" if score[0] is None else score[0], score[1]), "quiet_after_fix": quiet, "exit_code": main["rc"],
                "load_start": "%.2f" % main["load"], "result": result}
         row.update({k: v for k, v in heavy_ledger.report_columns(main["report"]).items() if v is not None})
@@ -884,7 +973,7 @@ def main():
                 print("deps_bench: %s skipped: %s" % (name, why), file=sys.stderr)
                 continue
             add_to_ledger(row, a, commit)
-            print("%s %s wall=%ss tree=%sGB result=%s" % (name, row["kind"], row["wall_s"], row["peak_tree_gb"], row["result"]), flush=True)
+            print("%s %s wall=%ss mem=%sGiB(%s) result=%s" % (name, row["kind"], row["wall_s"], row.get("peak_footprint_gb") or row["peak_tree_gb"], row.get("mem_basis") or "rss", row["result"]), flush=True)
 
 
 if __name__ == "__main__":

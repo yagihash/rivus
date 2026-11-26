@@ -39,7 +39,7 @@ class Note(unittest.TestCase):
         self.assertEqual(r, ["p6", "p5", "p4", "p3", "p2"])
 
     def test_median_run(self):
-        mk = lambda w, c: {"wall": w, "cpu": w, "peak": w * 2, "converged": c, "why": "", "note": "n"}
+        mk = lambda w, c: {"wall": w, "cpu": w, "peak": w * 2, "peak_rss": w * 2, "basis": "rss", "converged": c, "why": "", "note": "n"}
         r = d.median_run([mk(527, True), mk(300, True), mk(310, True)])
         self.assertEqual((r["wall"], r["peak"], r["converged"]), (310, 620, True))
         self.assertFalse(d.median_run([mk(1, True), mk(2, False), mk(3, True)])["converged"])
@@ -206,6 +206,13 @@ class PasslineRun(unittest.TestCase):
             self.assertEqual(len(open(p).read().splitlines()[1].split("\t")), len(h.COLUMNS))
 
 
+class MedianBasis(unittest.TestCase):
+    def test_runs_of_two_bases_are_all_taken_in_rss(self):
+        mk = lambda w, peak, rss, b: {"wall": w, "cpu": w, "peak": peak, "peak_rss": rss, "basis": b, "converged": True, "why": "", "note": "n"}
+        r = d.median_run([mk(10, 6, 7, "footprint"), mk(11, 7, 7.5, "rss"), mk(12, 6, 7.2, "footprint")])
+        self.assertEqual((r["basis"], r["peak"]), ("rss", 7.2))
+
+
 class Finished(unittest.TestCase):
     T = {"memos": {"time_limit_s": 180, "mem_cap_gb": 8}}
 
@@ -220,6 +227,53 @@ class Finished(unittest.TestCase):
         self.assertEqual(h.finished(self.row(peak_tree_gb="8.1"), self.T), "no")
         self.assertEqual(h.finished(self.row(converged="no"), self.T), "no")
         self.assertEqual(h.finished(self.row(target="other"), self.T), "-")
+
+    def test_verdict_is_the_footprint_when_the_row_has_one(self):
+        # a row of 2026-11-26 or later: the footprint is the number of the pass line, the RSS beside it is a reference
+        r = self.row(peak_tree_gb="8.1", peak_footprint_gb="7.9", mem_basis="footprint")
+        self.assertEqual(h.verdict_gb(r), 7.9)
+        self.assertEqual(h.finished(r, self.T), "yes")
+        self.assertEqual(h.finished(self.row(peak_tree_gb="7.0", peak_footprint_gb="8.1", mem_basis="footprint"), self.T), "no")
+
+    def test_old_row_has_no_new_column(self):
+        r = self.row(peak_tree_gb="6.5")  # the keys of the new columns are not there at all
+        self.assertEqual(h.verdict_gb(r), 6.5)
+        self.assertEqual(h.finished(self.row(peak_tree_gb="8.1"), self.T), "no")
+        self.assertEqual(h.finished(self.row(peak_footprint_gb="", mem_basis=""), self.T), "yes")  # empty cells of an old row
+
+    def test_rss_basis_row_uses_the_rss(self):
+        # a run where footprint could not be read, or Linux: the RSS is the verdict, even if a stray footprint cell is there
+        self.assertEqual(h.verdict_gb(self.row(peak_tree_gb="8.1", peak_footprint_gb="", mem_basis="rss")), 8.1)
+        self.assertEqual(h.finished(self.row(peak_tree_gb="8.1", peak_footprint_gb="", mem_basis="rss"), self.T), "no")
+        self.assertEqual(h.verdict_gb(self.row(peak_tree_gb="8.1", peak_footprint_gb="5.0", mem_basis="rss")), 8.1)
+
+    def test_no_number_is_none(self):
+        self.assertIsNone(h.verdict_gb({"peak_tree_gb": "x"}))
+        self.assertIsNone(h.verdict_gb({}))
+        self.assertEqual(h.finished({"target": "memos", "wall_s": "5", "converged": "yes"}, self.T), "-")
+
+
+class MixedLedger(unittest.TestCase):
+    def test_old_short_rows_and_new_rows_in_one_file(self):
+        with tempfile.TemporaryDirectory() as w:
+            p = os.path.join(w, "l.tsv")
+            old = h.COLUMNS[:h.COLUMNS.index("scc_coarsened") + 1]  # the 26 columns before 2026-11-26
+            self.assertEqual(old, h.COLUMNS[:26])
+            with open(p, "w") as f:
+                f.write("\t".join(h.COLUMNS) + "\n")  # the header of today (new columns at the end)
+                f.write("\t".join(["2026-11-25", "abc", "memos", "in-tree", "passline", "x", "50", "9", "6.10"]) + "\n")  # an old, short row
+                row = {c: "" for c in h.COLUMNS}
+                row.update(target="memos", wall_s="50", peak_tree_gb="6.60", peak_footprint_gb="6.01", mem_basis="footprint")
+                f.write("\t".join(row[c] for c in h.COLUMNS) + "\n")
+            rows = h.read_rows(p)
+            self.assertEqual(len(rows), 2)
+            self.assertEqual((rows[0]["peak_footprint_gb"], rows[0]["mem_basis"]), ("", ""))
+            self.assertEqual((rows[1]["peak_footprint_gb"], rows[1]["mem_basis"]), ("6.01", "footprint"))
+            self.assertEqual([h.verdict_gb(r) for r in rows], [6.10, 6.01])
+            self.assertIn("fp_gb", h.render(rows))
+
+    def test_new_columns_are_last(self):
+        self.assertEqual(h.COLUMNS[-3:], ["scc_coarsened", "peak_footprint_gb", "mem_basis"])
 
 if __name__ == "__main__":
     unittest.main()

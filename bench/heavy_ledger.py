@@ -9,7 +9,7 @@ Read it (read only):
   python3 bench/heavy_ledger.py [--kind passline|deps|once] [--target memos] [--last N] [--ledger FILE]
 
 The pass line is two separate conditions, both needed: it finishes (`finish`: time within the limit, memory within the cap,
-`conv` converged; computed from the limits of bench/deps-targets.json) and it detects (`det`: by place, see
+`conv` converged; the memory is `peak_footprint_gb` when the row has it and `mem_basis` is footprint (macOS, from 2026-11-26), else `peak_tree_gb`; computed from the limits of bench/deps-targets.json) and it detects (`det`: by place, see
 bench/passline-baseline.md). `result` is PASS when both hold; PASS-thin when they hold and the memory margin is under 0.15 GiB (bench/passline-baseline.md).
 
 The margin is not a column. The table computes it: memory_limit_bytes - memory_peak_bytes, and, when the run recorded
@@ -29,7 +29,8 @@ LEDGER = os.path.join(ROOT, "bench", "heavy-ledger.tsv")
 COLUMNS = ["date", "rivus_commit", "target", "target_commit", "kind", "settings", "wall_s", "cpu_s", "peak_tree_gb",
            "memory_limit_bytes", "memory_limit_source", "memory_peak_bytes", "live_heap_max_bytes", "gc_cpu_fraction",
            "converged", "detected", "quiet_after_fix", "findings", "func_timeouts", "budget_exhausted", "exit_code",
-           "incomplete_reasons", "load_start", "result", "largest_scc_deps", "scc_coarsened"]
+           "incomplete_reasons", "load_start", "result", "largest_scc_deps", "scc_coarsened",
+           "peak_footprint_gb", "mem_basis"]  # the last two: 2026-11-26 (the pass-line memory is the footprint on macOS; bench/heavy-ledger.md)
 GB = 1024 ** 3
 
 
@@ -135,12 +136,29 @@ def _gb(b):
     return "-" if b is None else "%.2f" % (b / GB)
 
 
+def _float(v):
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def verdict_gb(r):
+    """The memory of the pass line of a row, GiB. A row of 2026-11-26 or later whose `mem_basis` is footprint: `peak_footprint_gb`.
+    Any other row (older, with no new column; or `mem_basis` rss: Linux, or `footprint` could not be read): `peak_tree_gb`, the sum
+    of the RSS of the tree. None when the number is not there."""
+    fp = _float(r.get("peak_footprint_gb"))
+    if fp is not None and r.get("mem_basis") == "footprint":
+        return fp
+    return _float(r.get("peak_tree_gb"))
+
+
 def finished(r, targets):
     """The condition "finishes" of the pass line (time within the limit, memory within the cap, converged), apart from the
     detection. targets: the data of bench/deps-targets.json (the limits). "-" when the row has no limits to compare with."""
     t = targets.get(r.get("target", ""))
     try:
-        ok_t, ok_m = float(r["wall_s"]) <= t["time_limit_s"], float(r["peak_tree_gb"]) <= t["mem_cap_gb"]
+        ok_t, ok_m = float(r["wall_s"]) <= t["time_limit_s"], verdict_gb(r) <= t["mem_cap_gb"]
     except (KeyError, ValueError, TypeError):
         return "-"
     return "yes" if ok_t and ok_m and r.get("converged") in ("True", "true", "yes", True) else "no"
@@ -152,7 +170,7 @@ def render(rows):
     except (OSError, ValueError):
         targets = {}
     # finish (time, memory, convergence) and det (the detection) are two separate conditions; the pass line needs both
-    head = ["date", "rivus", "target", "kind", "settings", "wall_s", "cpu_s", "tree_gb", "limit_gb", "peak_gb",
+    head = ["date", "rivus", "target", "kind", "settings", "wall_s", "cpu_s", "tree_gb", "fp_gb", "limit_gb", "peak_gb",
             "margin_gb", "live_margin_gb", "gc", "conv", "finish", "det", "quiet", "find", "scc_deps", "coarsened", "exit", "result"]
     table = [head]
     for r in rows:
@@ -167,7 +185,7 @@ def render(rows):
             peak = "-"
         v = lambda k: r.get(k) or "-"
         table.append([v("date"), v("rivus_commit"), v("target"), v("kind"), v("settings"), v("wall_s"), v("cpu_s"),
-                      v("peak_tree_gb"), lim, peak, _gb(m_peak), _gb(m_live), v("gc_cpu_fraction"), v("converged"),
+                      v("peak_tree_gb"), v("peak_footprint_gb"), lim, peak, _gb(m_peak), _gb(m_live), v("gc_cpu_fraction"), v("converged"),
                       finished(r, targets) if r.get("kind") == "passline" else "-", v("detected"), v("quiet_after_fix"), v("findings"), v("largest_scc_deps"), v("scc_coarsened"), v("exit_code"), v("result")])
     w = [max(len(row[i]) for row in table) for i in range(len(head))]
     return "\n".join("  ".join(c.ljust(w[i]) for i, c in enumerate(row)).rstrip() for row in table)
