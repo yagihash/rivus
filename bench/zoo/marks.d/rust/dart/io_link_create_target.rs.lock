@@ -1,0 +1,2 @@
+rust	dart/io_link_create_target.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	dart/io_link_create_target.rs	sink-none	@sink(none) @nosink(dart-io-link-create-target-decoy)	fn decoy() { @decoy

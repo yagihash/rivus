@@ -9,11 +9,8 @@
 //! @na(F/dyn/iface-assert-ptr-recv: Go's type assertion of `any` to an interface read through a pointer receiver; Rust has neither)
 //! @todo(F/dyn/iface-write-passed: PARITY: Go's pointer held in an `io.Writer` interface value that a function writes to (ADR-090); a Rust `&mut dyn Write` passed to a function and read back from the owner can be written)
 //! @todo(F/dart/callback-param-helper: PARITY: a route registered by a helper that is given the handler (`fn mount(r: &mut Router, h: Handler) { r.get("/item/{id}", h) }`); the router skeleton and a `callback_param` row for it are not in the Rust zoo yet, and the cell is not written)
-//! @todo(F/cont/ptr-commaok-assert: PARITY: Go's pointer taken out of an interface by a comma-ok assertion and written through; Rust can write through `&mut T` from `Any::downcast_mut::<T>()` on a `&mut dyn Any` and read the owner back; the cell is not written yet)
-//! @todo(F/clos/to-lib-where: PARITY: a closure given to a function of the standard library that tests the elements of a collection (Go: slices.IndexFunc, ContainsFunc, DeleteFunc); Rust has `Vec::retain`, `Iterator::position`, `any` and the like; the cell is not written yet)
 //! @todo(F/dart/callback-param-closure: PARITY: Go's function literal given to a router at the place of the route, whose second argument is user input (callback_param of the rules); Rust can register a closure with a router skeleton; the cell is not written yet)
 //! @todo(F/dart/callback-param-named: PARITY: Go's named function and a variable that holds a function written once, given to a router; Rust can register a `fn` item and a closure variable with a router skeleton; the cell is not written yet)
-//! @todo(F/dart/io-link-create-target: PARITY: Go's target of a symbolic link (`os.Symlink`) is a path sink; Rust has `std::os::unix::fs::symlink`; the cell is not written yet)
 pub mod call {
     pub mod depth3;
     pub mod direct;
@@ -36,6 +33,7 @@ pub mod clos {
     pub mod to_lib_call;
     pub mod to_lib_map;
     pub mod to_lib_ref;
+    pub mod to_lib_where;
     pub mod to_nomodel;
     pub mod to_nomodel_ref;
     pub mod to_own_helper;
@@ -44,6 +42,7 @@ pub mod clos {
 }
 pub mod cont {
     pub mod map_key_vs_value;
+    pub mod ptr_commaok_assert;
     pub mod ptr_commaok_map;
     pub mod ptr_get_mut;
     pub mod ptr_range_deque;
@@ -77,6 +76,9 @@ pub mod conv {
     pub mod struct_field_deep;
     pub mod struct_field_opaque;
     pub mod struct_field_shallow;
+}
+pub mod dart {
+    pub mod io_link_create_target;
 }
 pub mod dyns {
     pub mod func_field;
