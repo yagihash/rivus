@@ -16,3 +16,6 @@ Read by TestZooDart (the parity line). Two marks (docs/DESIGN-zoo.md, 4.2.5): @n
 @todo(F/cont/ptr-range-map: PARITY: Dart で未測定: Map の values を for-in で取り、そのフィールドに書いて、Map から読み直す形で書ける)
 @todo(F/cont/ptr-type-switch: PARITY: Dart で未測定: Dart 3 の switch のパターン(case Box p)で書ける)
 @todo(F/conv/char-range-append: PARITY: Dart で未測定: s.runes を for-in で読み、List<int> に add して String.fromCharCodes で戻す形で書ける)
+@todo(F/cont/ptr-commaok-assert: PARITY: Dart で未測定: Object の変数に入れた Box を、is で調べて(if (x is Box p))取り出し、そのフィールドに書いて、x as Box で読み直す形で書ける)
+@todo(F/cont/ptr-commaok-map: PARITY: Dart で未測定: Map<String, Box> の [] で Box? を取り、そのフィールドに書いて、Map の [] から読み直す形で書ける)
+@todo(F/conv/char-decode-rune: PARITY: Dart で未測定: s.runes を for-in で 1 文字ずつ読み、List<int> に add して、sublist と String.fromCharCodes で戻す形で書ける)
