@@ -522,12 +522,17 @@ sources:
 * The function is found **where the call is made**: a function written there (a closure, a function literal), a function that is
   named there (a top-level function, a method value), or a local that holds one of them, also through copies and conversions. Then
   its parameters are a source, as those of a `kind: param` row are, and the flow in it is found by the analysis as any other.
-* A function that is not found where the call is made (a parameter of the function that registers, a field, an element, a
+* When the function is a **parameter of the function that registers** (a helper: `func mount(r *Router, h Handler) { r.Get("/x", h) }`),
+  the callers of the helper are followed: what each of them passes there is the function (up to three calls up, through helpers of helpers,
+  and through a call of a function value). Each function that is found is marked, and the one that is written at a caller is not mixed up with
+  the one at another caller. A helper that calls itself ends the walk at the second visit. The helper is marked as the registering one for every
+  function it is given, also on a branch that does not register.
+* A function that is not found (a parameter whose caller passes a variable of two functions or a field, or has no caller that is known, or is more than three calls up; an element, a
   result of a call, a variable that two functions are stored in) is **not followed**, and the call says so: an `unresolved_callee`
   uncertainty at the call (in the function that makes it, which is the helper when a helper registers). The parameters of such a function are not
   a source: the flow is missed, with the note. The detail of the note starts with `callback_param_unresolved:` (so that it is not taken for any other
   `unresolved_callee`), and `summary.callback_param_unresolved` has `count` and `sites[]` (`func`, `position`, `symbol`: the call, not the function
-  that would have been the source, which is not known), also when there is no finding at all. Write the row for the call that has the function literal (the helper's own callers are not followed).
+  that would have been the source, which is not known), also when there is no finding at all.
 * `from` and `to` are positions among the parameters that the function declares (a captured value is not one; a method
   value's receiver is not one). Named parameters are not counted: positions only (#145).
 * **`operand` is counted the way the `calls:` rows of the same file count**, so that one model file does not have two ways:

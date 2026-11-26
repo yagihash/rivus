@@ -1,5 +1,5 @@
 // @cell(F/dart/callback-param-helper)
-// @shape: the route is registered by a helper that is given the function: which function the router is given is not known at the call that the rule names (a parameter of the helper), so the parameters are not marked; the note (unresolved_callee) is in the helper, which is neither the function of the source nor the one of the sink
+// @shape: the route is registered by a helper that is given the function: the function is what the callers of the helper pass, so the parameters of the one that is written at the call of the helper are marked (a function that is not one at the call, such as a variable of two functions, is said by the note in the helper)
 import 'package:zoo_mark/zoo_mark.dart';
 import 'package:zoo_router/zoo_router.dart';
 
@@ -15,7 +15,7 @@ void mount(ZooRouter router, Function handler) {
 
 Future<void> vuln() async { // @vuln
   final router = ZooRouter();
-  mount(router, (ZooRequest request, String id) async { // @source(dart-callback-param-helper-vuln) @miss(silent) @ref(#149)
+  mount(router, (ZooRequest request, String id) async { // @source(dart-callback-param-helper-vuln)
     sinkCmd(id); // @sink(dart-callback-param-helper-vuln)
     return null;
   });
@@ -33,7 +33,7 @@ Future<void> fixed() async { // @fixed
 
 Future<void> decoy() async { // @decoy
   final router = ZooRouter();
-  mount(router, (ZooRequest request, String id) async { // @source(dart-callback-param-helper-decoy) @miss(silent) @ref(#149)
+  mount(router, (ZooRequest request, String id) async { // @source(dart-callback-param-helper-decoy)
     sinkCmd(request.path); // @sink(none) @nosink(dart-callback-param-helper-decoy)
     sinkSql(id); // @sink(dart-callback-param-helper-decoy)
     return null;

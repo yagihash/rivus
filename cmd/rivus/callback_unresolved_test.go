@@ -31,15 +31,15 @@ func TestCallbackParamUnresolvedInSummaryGo(t *testing.T) {
 	var rep report.Report
 	rivusJSON(t, &rep, "analyze", "-rules", rules, "./cases/cbparam")
 	c := rep.Summary.CallbackParamUnresolved
-	if c == nil || c.Count != 2 || len(c.Sites) != 2 {
-		t.Fatalf("want the 2 calls (Registers, Chosen): %+v", c)
+	if c == nil || c.Count != 3 || len(c.Sites) != 3 {
+		t.Fatalf("want the 3 calls (Registers, which no call reaches; Chosen; chosenHelper, which one caller gives a variable of two functions): %+v", c)
 	}
 	for i, s := range c.Sites {
 		if !strings.HasSuffix(s.Symbol, "cbparam.Route") || s.Position.Line == 0 || s.Func == "" {
 			t.Errorf("site %d: %+v", i, s)
 		}
 	}
-	if !strings.HasSuffix(c.Sites[0].Func, "cbparam.Registers") || !strings.HasSuffix(c.Sites[1].Func, "cbparam.Chosen") {
+	if !strings.HasSuffix(c.Sites[0].Func, "cbparam.Registers") || !strings.HasSuffix(c.Sites[1].Func, "cbparam.Chosen") || !strings.HasSuffix(c.Sites[2].Func, "cbparam.chosenHelper") {
 		t.Errorf("not sorted by place: %+v", c.Sites)
 	}
 	n := 0
@@ -48,7 +48,7 @@ func TestCallbackParamUnresolvedInSummaryGo(t *testing.T) {
 			n++
 		}
 	}
-	if n != 2 {
+	if n != 3 {
 		t.Errorf("the notes: %d", n)
 	}
 	var none report.Report

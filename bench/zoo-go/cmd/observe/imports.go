@@ -63,6 +63,7 @@ import (
 	_ "zoo/cells/conv/struct_field_shallow"
 	_ "zoo/cells/conv/unsafe_string"
 	_ "zoo/cells/dart/callback_param_closure"
+	_ "zoo/cells/dart/callback_param_helper"
 	_ "zoo/cells/dart/callback_param_named"
 	_ "zoo/cells/dart/io_link_create_target"
 	_ "zoo/cells/dyn/fprint_writer_own"
