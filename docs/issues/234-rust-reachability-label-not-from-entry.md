@@ -53,6 +53,14 @@ Rust の実対象で、finding が全部 `reachability: not_from_entry` にな�
 
 entry は `curated::main` の 1 つで、`main` に callee が 0 個。own 510 のうち、main から届くのは main 自身の 1 つ(粗い BFS)。281 件の source は、`curated::...` の別の関数。
 
+PR #620(`feat/rust-trait-identity-by-def-path`。extractor が trait の同一性を「クレート名 + 定義パス」で比べる)の測定(2026-11-27)で、**281 件の `not_from_entry` は、#620 で変わらなかった**(graph-check で finding の JSON 全体が `same`、`reachability` も同じ)。この対象の `not_from_entry` は別の原因で、`curated::main` の IR に callee が 0 個(上の BFS のとおり)。#620 では直らない。**次に調べる対象**。この課題は close にしない。
+
+rustypaste は、#620 で `from_entry` になった(12 件)。ただし #620 は未マージで、これは「#620 がマージされたら」の条件つき。
+
+ヘッダの「守るもの」の行(`@miss` の 3 つ)は、#620 がマージされたら直す(#620 の中で `@miss` を外したため。この PR では直さない)。
+
+同じ測定で、dyn 呼びの candidates が約 9 倍に増えた。課題 #236。
+
 ## Gitea(Go)の `not_from_entry` 17 件(事実)
 
 出典は `gitea-pin.json`(359 件、`from_entry` 342、`not_from_entry` 17。17 件とも `reachability_note` が付く)と、pin のソース(95ba37d9)の `git grep`(2026-11-26)。
