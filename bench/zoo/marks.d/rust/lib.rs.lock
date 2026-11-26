@@ -12,3 +12,4 @@ rust	lib.rs	todo-parity	@todo(F/dart/dio-post: PARITY: Go's value in the URL of 
 rust	lib.rs	todo-parity	@todo(F/dart/http-client-get: PARITY: Go's value in the URL of Client.Get; Rust で未測定: reqwest::blocking::Client::get)	-
 rust	lib.rs	todo-parity	@todo(F/dart/http-ioclient-send: PARITY: Go's value in the request that Client.Do of a variable of the concrete type sends; Rust で未測定: reqwest::blocking::Client::execute)	-
 rust	lib.rs	todo-parity	@todo(F/dyn/iface-write-passed: PARITY: Go's pointer held in an `io.Writer` interface value that a function writes to (ADR-090); a Rust `&mut dyn Write` passed to a function and read back from the owner can be written)	-
+rust	lib.rs	todo-parity	@todo(F/net-http/request-literal: PARITY: Go's request made as a struct literal with the URL object in the field URL, which Client.Do sends, while the sink of the model is the argument of NewRequest; Rust で未測定: reqwest::Request::new with a Url)	-

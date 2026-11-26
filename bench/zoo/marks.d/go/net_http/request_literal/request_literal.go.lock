@@ -1,0 +1,3 @@
+go	net_http/request_literal/request_literal.go	miss	@source(net-http-request-literal-vuln) @miss(silent) @ref(#232)	func vuln() { @vuln
+go	net_http/request_literal/request_literal.go	sink-none	@sink(none)	func fixed() { @fixed
+go	net_http/request_literal/request_literal.go	sink-none	@sink(none) @nosink(net-http-request-literal-decoy)	func decoy() { @decoy
