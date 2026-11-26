@@ -121,11 +121,16 @@ func functionOf(form *irssa.Form, r irssa.Ref, depth int, closures func() *ir.Cl
 		}
 		return functionOf(form, form.Operand(r.Block, r.Index, 0), depth+1, closures)
 	case ir.OpAlloc:
-		// Rust: a closure is not a make_closure but an alloc of the type of its environment; the function is the one at the place
-		// that the type names (ir.ClosureIndex). Not asked for by a caller that has no index (closures is nil).
-		if closures != nil && ir.IsEnvType(string(in.Type)) {
-			if f := closures().Lookup(string(in.Type)); f != nil {
-				return f.ID, ""
+		// Rust: a closure is not a make_closure but an alloc of the type of its environment; the function is the one that the alloc
+		// says, else the one at the place that the type names (ir.ClosureIndex.FuncOf). A caller that has no index (closures is nil)
+		// takes the one that the alloc says.
+		if ir.IsEnvType(string(in.Type)) {
+			var ix *ir.ClosureIndex
+			if closures != nil {
+				ix = closures()
+			}
+			if id := ix.FuncOf(string(in.Type), in.Func); id != "" {
+				return id, ""
 			}
 		}
 		return "", "not known"

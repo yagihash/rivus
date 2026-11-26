@@ -38,7 +38,7 @@ fn leak(id: &str) {
 
 macro_rules! route {
     ($r:expr, $path:expr) => {
-        $r.get($path, |_req: &Request, id: &str| { // @source(rust-macro-closure-twice-vuln2) @miss(unmodeled_library_call) @ref(#233)
+        $r.get($path, |_req: &Request, id: &str| { // @source(rust-macro-closure-twice-vuln2)
             leak(id);
         })
     };
