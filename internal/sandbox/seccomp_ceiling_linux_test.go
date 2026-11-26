@@ -61,7 +61,7 @@ func runFilter(t *testing.T, prog []unix.SockFilter, arch, nr uint32, args [6]ui
 
 // Without the rule of the ceiling a call above it is not in the list and ends in the "allow" at the end of the filter: this test fails then (the verdict is
 // SECCOMP_RET_ALLOW and not ENOSYS), for every network.
-func TestSeccompCallsAboveTheCeilingAreNotThere(t *testing.T) {
+func TestSandboxSeccompCallsAboveTheCeilingAreNotThere(t *testing.T) {
 	enosys := uint32(unix.SECCOMP_RET_ERRNO | uint32(unix.ENOSYS))
 	for _, n := range []struct {
 		name   string
@@ -95,7 +95,7 @@ func TestSeccompCallsAboveTheCeilingAreNotThere(t *testing.T) {
 
 // The ceiling is the highest number that golang.org/x/sys/unix knows. When x/sys is updated and knows a newer call, the filter does not: this test fails, so that
 // the new calls are read (do they open a way that the filter closes in the others? then they go in deniedCalls) before the ceiling is raised.
-func TestSeccompCeilingCoversXSys(t *testing.T) {
+func TestSandboxSeccompCeilingCoversXSys(t *testing.T) {
 	out, err := exec.Command("go", "list", "-f", "{{.Dir}}", "golang.org/x/sys/unix").Output()
 	if err != nil {
 		t.Skipf("no go to find golang.org/x/sys/unix: %v", err)
