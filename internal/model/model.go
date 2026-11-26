@@ -130,6 +130,8 @@ type RuleSet struct {
 	// (<dir>/.rivus/rules): it is part of the code being analysed, and says what that code wants
 	// to have said about itself. The report counts what such a file removes (yagihash/rivus #57).
 	Project bool `yaml:"-"`
+	// SourcesSinksLeftOut is true for a copy made by WithoutSourcesSinks: the report names such a set so.
+	SourcesSinksLeftOut bool `yaml:"-"`
 }
 
 // Source introduces taint.
@@ -786,6 +788,15 @@ func (p Provenance) validate(what string) error {
 		return nil
 	}
 	return fmt.Errorf("%s: unknown origin %q (want %s, %s, %s or %s)", what, p.Origin, OriginBuiltin, OriginHuman, OriginLLM, OriginGenerated)
+}
+
+// WithoutSourcesSinks returns a copy of the rule set without its sources and its sinks: the sections that decide what is
+// checked. The others (sanitizers, propagators, globals and so on) are the same, shared with rs, which is not changed.
+func (rs *RuleSet) WithoutSourcesSinks() *RuleSet {
+	out := *rs
+	out.Sources, out.Sinks = nil, nil
+	out.SourcesSinksLeftOut = true
+	return &out
 }
 
 // WithoutOrigin returns a copy of the rule set without the rules of the

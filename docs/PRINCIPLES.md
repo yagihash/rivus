@@ -208,7 +208,7 @@ rivus の設計の判断は、ここに書いた原則に沿う。ほかの文�
 - 結果を変える機能は、フラグの後ろに置き、フラグが off のとき出力が今と同一であること(テストで確認する)。
 - フラグが増えたら、新しいフラグを足す前に、既存のものを整理する(既定にする、消す、残す理由を `flagInfo` に書く)。足した日から長く動かないものも同じ。
 - 規模のために精度を落とす機能をフラグにするときは、[ADR-118](adr/118-scale-mechanisms-three-conditions.md) の 3 条件を、その ADR に書く。
-- 機能に数えないもの: 診断と調整(`diagnostic`)、解析の範囲(`-tests`、`-lang`)、隔離を外す指定(`-unsafe-host-exec`)、試すための指定(`-body-replaced`、`-read-declared-bodies`)、既定で働く機能を止める指定(`-no-deps`、`-no-builtin-rules`、`-no-project-rules`、`-deterministic-only`、`-no-fetch`)。これらは `Not` に何かを書く。
+- 機能に数えないもの: 診断と調整(`diagnostic`)、解析の範囲(`-tests`、`-lang`)、隔離を外す指定(`-unsafe-host-exec`)、試すための指定(`-body-replaced`、`-read-declared-bodies`)、既定で働く機能を止める指定(`-no-deps`、`-no-builtin-rules`、`-no-builtin-sources-sinks`、`-no-project-rules`、`-deterministic-only`、`-no-fetch`)。これらは `Not` に何かを書く。
 - 内部の切り替え(IR をディスクに出す仕組みなど)は、利用者向けのフラグを足さない。切り替えが要る間は環境変数かテストの中で行い、`-h` に出さない。済んだら消す(IR をディスクに出す切り替えは、既定になって消えた。失敗の注入は、ビルドタグ `irspillfault` のバイナリだけが読む)。
 
 **根拠の ADR:** 027、043、046、055、057（仮説の履歴を ADR に残す）、061、066、084〜090（「確かめたこと」の節）

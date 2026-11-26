@@ -170,6 +170,7 @@ sanitizer は特定ラベルだけを除去し、sink は特定ラベルにの�
 **モデル（model）** ★
 ソースを解析できない外部ライブラリの振る舞いを、手書きで記述したもの。
 「`strings.Join` は引数の汚染を戻り値に伝播する」など。
+モデルは、主に `propagators` と `calls` の項目(`sanitizers` を含めてもよい)。`sources` と `sinks` は、モデルではなく、何を検査するかを決めるルール(10 節)。
 **SAST の検出品質の大半は、エンジンの賢さではなくこのモデルの網羅性で決まる。**
 rivus では「モデル」と「判定（verdict）」を厳密に区別する（10 節参照）。
 
@@ -528,6 +529,18 @@ kind ごとの割り当ては ARCHITECTURE.md を参照。
 
 ## 10. rivus 固有の用語
 
+**ルールのファイル（rule file）**
+`sources`、`sinks`、`sanitizers`、`propagators`、`calls` などの節を持つ YAML。
+組み込みのものは `internal/model/builtin/` にあり、利用者は `-rules` と `.rivus/rules/` で足す。
+
+**ルール（rule）**
+ルールのファイルに書く項目の総称。どの節の項目も、ルール。
+
+**`sources` と `sinks`**
+何を入力とみなし、どこを危険な箇所とみなすかを決める項目。モデルではなく、何を検査するかを決めるルール。
+組み込みの `sources` と `sinks` だけを外す指定が、`-no-builtin-sources-sinks`。
+`-no-builtin-rules` はルールのファイルを丸ごと外すので、モデルも失われる。
+
 **モデル（model）と判定（verdict）**
 - モデル: 関数 1 つの振る舞いの記述。再利用する。YAML のモデル設定ファイルに保存する
 - 判定: 検出結果 1 件（経路全体）についての「無害 / 有害」の評価。再利用しない。検出結果の注釈にのみ残す
@@ -535,11 +548,11 @@ kind ごとの割り当ては ARCHITECTURE.md を参照。
 LLM の出力はこの 2 種類に分け、混ぜない。
 
 **`origin`**
-モデルの出所。`builtin` / `human` / `llm`。`llm` の場合は `decided_at`、`rationale`、
+ルールの出所。`builtin` / `human` / `llm`。`llm` の場合は `decided_at`、`rationale`、
 `model_version`（判定した LLM）を必須とする。
 
 **`--deterministic-only`**
-`origin: llm` のモデルをすべて無視して実行されるフラグ。
+`origin: llm` のルールをすべて無視して実行されるフラグ。
 これにより「rivus 単体は決定論的」と断定できる。
 
 **ガード（guard）**

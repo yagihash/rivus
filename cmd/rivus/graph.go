@@ -186,6 +186,9 @@ func (o *analyzeOpts) flagValues(patterns []string) map[string]string {
 		"no-project-rules":    fmt.Sprint(o.noProject),
 		"deterministic-only":  fmt.Sprint(o.deterministic),
 	}
+	if o.noBuiltinSS {
+		m["no-builtin-sources-sinks"] = "true"
+	}
 	if o.charTaint && !o.numeric {
 		m["char-taint"] = "true"
 	}

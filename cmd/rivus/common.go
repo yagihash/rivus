@@ -41,6 +41,9 @@ type common struct {
 	dirSet    bool
 	rules     multiFlag
 	noBuiltin bool
+	// noBuiltinSS leaves out the sources and the sinks of the built-in rules; the other sections (propagators, sanitizers and
+	// so on) are read. -no-builtin-rules, which leaves out all of them, wins.
+	noBuiltinSS bool
 	// noProject leaves out the rules found in the analysed directory.
 	noProject bool
 	tests     bool
@@ -80,6 +83,7 @@ func (c *common) register(fs *flag.FlagSet) {
 	})
 	fs.Var(&c.rules, "rules", "additional rule file (repeatable)")
 	fs.BoolVar(&c.noBuiltin, "no-builtin-rules", false, "do not load the built-in rules")
+	fs.BoolVar(&c.noBuiltinSS, "no-builtin-sources-sinks", false, "do not load the sources and the sinks of the built-in rules, so that only the ones of your own rule files are checked; the other sections of the built-in rules (propagators, sanitizers and so on) are still read. Without the sinks, -categories knows only the categories of your sinks; the built-in sanitizers drop the labels of the built-in sources (user_input and so on), so a source of yours with another label needs a sanitizer of yours. -no-builtin-rules, if given too, wins")
 	fs.BoolVar(&c.noProject, "no-project-rules", false, "do not load the rules found in <dir>/.rivus/rules/*.yaml")
 	fs.BoolVar(&c.tests, "tests", false, "also read what the build does not ship: tests (Go: _test.go files; Dart: test/ and the dependencies declared for development only; Rust: tests, examples, benches and [dev-dependencies])")
 	fs.BoolVar(&c.noDeps, "no-deps", false, "do not read the source of the dependencies (which is done by default, except for the standard library, so that calls into them are followed instead of guessed): lighter (about a sixth of the memory), and every call into a dependency is a guess")
@@ -89,10 +93,10 @@ func (c *common) register(fs *flag.FlagSet) {
 	fs.Var(&c.bodyReplaced, "body-replaced", "PACKAGE: do not read the body of this package of the dependencies; the models stand for it (a call of its functions is the model's row, or unmodeled_library_call when there is none). The import path of a Go package, package:name of a Dart package, a Rust crate; the package named and no other, `PATH/...` for it and what is under it. For a try: the rule files declare it with body_replaced_packages, with the reason (repeatable; docs/MODELING.md)")
 	fs.BoolVar(&c.dropAfterRead, "drop-after-read", false, "read the packages that are declared as the extractors do without the declaration, and leave their functions out of the program afterwards (the result is the same as when the extractor does not read them; it takes more time and memory; to compare the two) (development)")
 	fs.BoolVar(&c.readDeclared, "read-declared-bodies", false, "read the body of the packages that the rule files and -body-replaced declare, as if there were no declaration: to compare the result with the one that leaves them out (summary.body_replaced_ignored says how many were left out)")
-	usual(fs, "C", "rules", "no-builtin-rules", "no-project-rules", "tests", "no-deps", "allow-deps-under", "dep-dir", "deterministic-only", "body-replaced", "read-declared-bodies")
+	usual(fs, "C", "rules", "no-builtin-rules", "no-builtin-sources-sinks", "no-project-rules", "tests", "no-deps", "allow-deps-under", "dep-dir", "deterministic-only", "body-replaced", "read-declared-bodies")
 	diagnostic(fs, "drop-after-read")
 	stop := "stops a function that is on by default"
-	for _, n := range []string{"no-builtin-rules", "no-project-rules", "no-deps", "deterministic-only"} {
+	for _, n := range []string{"no-builtin-rules", "no-builtin-sources-sinks", "no-project-rules", "no-deps", "deterministic-only"} {
 		describe(fs, n, flagInfo{Not: stop})
 	}
 	describe(fs, "tests", flagInfo{Not: "the range of the analysis"})
@@ -129,6 +133,12 @@ func (c *common) loadRules(extra ...*model.RuleSet) (*model.Rules, error) {
 		b, err := builtin.Load()
 		if err != nil {
 			return nil, err
+		}
+		if c.noBuiltinSS {
+			for i, rs := range b {
+				b[i] = rs.WithoutSourcesSinks()
+			}
+			fmt.Fprintln(os.Stderr, "rivus: the sources and the sinks of the built-in rules are not loaded (-no-builtin-sources-sinks); the other sections are")
 		}
 		sets = append(sets, b...)
 	}

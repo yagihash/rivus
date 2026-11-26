@@ -134,6 +134,11 @@ func (k *keyCtx) compute() (*keyResult, error) {
 	cfg["flags.dep-k"] = strconv.Itoa(o.depDepth())
 	// the size from which the dependency functions of a component are read at depth 0 (ADR-124)
 	cfg["flags.scc-coarsen"] = strconv.Itoa(o.sccCoarsen)
+	if o.noBuiltinSS {
+		// the built-in sources and sinks are left out: another file. Set only when on, so that the key of an index made
+		// without it is what it was. (The hash of the built-in rules, below, is of their files, left out or not.)
+		cfg["flags.no-builtin-sources-sinks"] = "true"
+	}
 	if o.charTaint && !o.numeric {
 		// the elements of an index made with it carry the mark: not one made without it. Set only when on (and when it does
 		// something), so that the key of an index made without it is what it was.
