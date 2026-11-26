@@ -409,6 +409,14 @@ A sink has a `category`: what kind of harm the value does there. It is a free st
 
 A new category is made when no other one fits (not for a new library). It is added to this table, and to the decision of the product (`docs/GCP-MODELS.md`, judgement E, for `resource_name`). One symbol has one category (#140).
 
+### Checking only your own sources and sinks: `-no-builtin-sources-sinks`
+
+`-no-builtin-sources-sinks` leaves out the built-in `sources` and `sinks` (what is checked), and reads the rest of the built-in files (`propagators`, `sanitizers`, `calls` and so on). With your own `-rules` file it checks one problem whose source and sink you know, and the flows through the libraries are still followed. `-no-builtin-rules`, if given too, wins: it leaves out the whole built-in files.
+
+- `-categories` knows the categories of the sinks that are loaded, so a built-in name (`sql_injection`) is an unknown category unless a sink of yours has it.
+- The built-in `sanitizers` drop the labels of the built-in sources (`user_input`). A source of yours with another label is not dropped by them: write your own `sanitizers` for that label.
+- The report names the built-in rule sets as `<name> (sources and sinks left out)` in `rules`, and rivus says it once on stderr.
+
 ## 4b-1. A sanitizer says which kind of sink it is safe for: `neutralises`
 
 A sanitizer row drops a label (`drops`) and gives the value another (`adds`). A sanitizer is safe for **one kind of sink**, not for all: an HTML escape makes a value safe in HTML, and the same value is still a command, a path or a query for the sink that is one. `neutralises` names the categories (section 4b) of the sinks that the value is safe for. A sink of another category still reacts to the value, which now has the label of `adds`:

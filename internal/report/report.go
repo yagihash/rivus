@@ -864,6 +864,9 @@ func Build(packages []string, loadErrors []ir.LoadError, st *sites.Result, res *
 		if name == "" {
 			name = rs.Origin
 		}
+		if rs.SourcesSinksLeftOut {
+			name += " (sources and sinks left out)"
+		}
 		r.Rules = append(r.Rules, name)
 	}
 	// The arrays of the output are arrays when they are empty, so that a reader

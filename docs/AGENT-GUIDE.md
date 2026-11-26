@@ -28,7 +28,7 @@ rivus graph callers -C <dir> <関数>                  # finding の周辺を調
 ```
 
 1. **`rivus version`**: 報告にバージョンを書きます。
-2. **`rivus sites`**: source と sink のルールが一致する箇所を数えます。**source が 0 件なら、ルールが足りません**(フレームワークの入口が、組み込みのルールにない)。そのまま `analyze` しても finding は出ません。6 章の (f) でルールを足します。
+2. **`rivus sites`**: source と sink のルールが一致する箇所を数えます。**source が 0 件なら、ルールが足りません**(フレームワークの入口が、組み込みのルールにない)。`-no-builtin-sources-sinks` を付けると、組み込みの source は数えないので、自分の `-rules` の source だけが出ます。そのまま `analyze` しても finding は出ません。6 章の (f) でルールを足します。
    - `rivus sites` は、`analyze` と同じ言語の選択(`-lang`、auto: ディレクトリにある言語)で読みます。Dart と Rust のディレクトリでも、箇所が出ます(Rust は、`analyze` と同じ確認があり、読むとビルドが実行されます)。読まなかった言語は、出力の `skipped_languages` に出ます(`summary.unread.skipped_languages` と同じ形)。読める言語がないときは、エラーで止まります。
 3. **`rivus analyze`**: 必ず `-timeout` を付けます。標準出力が JSON、標準エラーが経過と警告です。出力は大きいので、ファイルに保存して `jq` で読みます。
 4. **最初に全体を見る**: `summary.callback_param_unresolved`(`callback_param` のルールがあるのに、ハンドラの関数を特定できなかった登録の呼び出しの数と場所。その関数の引数は source として扱われていないので、finding が 0 件でも、入口を確認できていない場所です)、`stats.converged` が `false`、`stats.timed_out` が `true`、`summary.unread` や `load_errors` がある、のどれかなら、結果は途中のもの、または一部のコードを読んでいないものです(5 章)。
@@ -294,6 +294,7 @@ dart extractor /opt/homebrew/bin/rivus-dart  schema rivus.ir/0  (UNKNOWN: its an
 | `-rules <file>` | ルールファイルを足す(繰り返し可) | なし | フレームワークの入口や、固有の sink を足す | ○ |
 | `-no-project-rules` | 対象の `.rivus/rules/*.yaml` を読まない | 読む | **信頼できない対象** | ○ |
 | `-no-builtin-rules` | 組み込みのルールを読まない | 読む | 自分のルールだけの効果を見る | ○ |
+| `-no-builtin-sources-sinks` | 組み込みのルールのうち、`sources` と `sinks`(何を検査するか)を読まない。モデル(`propagators`、`sanitizers` など)は読む。`-no-builtin-rules` はルールのファイルを丸ごと外すので、モデルも失われる(同時に付けると `-no-builtin-rules` が勝つ) | 読む | source と sink がはっきりしている特定の問題だけを、自分の `-rules` で調べる。**注意:** `-categories` の名前は、自分の sink がそのカテゴリを持たない限り「未知」のエラーになる。組み込みの `sanitizers` は組み込みの source のラベル名(`user_input` など)で書いてあるので、自分の source が別のラベル名なら効かない(自分の `sanitizers` を書く) | ○ |
 | `-deterministic-only` | LLM が決めたルール(`origin: llm`)を無視する | 使う | LLM 由来のモデルに依らない結果が必要なとき | ○ |
 | `-no-deps` | 依存のソースを読まない | 読む | 重いとき。メモリは約 6 分の 1 になるが、依存への呼び出しは全部、推測になる | ○ |
 | `-tests` | テストのコードも読む(Go の `_test.go`、Dart と Rust のテスト) | 読まない | テストの中の流れも見たいとき | ○ |

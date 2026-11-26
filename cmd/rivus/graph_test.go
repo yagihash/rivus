@@ -167,6 +167,7 @@ func TestGraphIndexIsFreshUntilSomethingChanges(t *testing.T) {
 		{name: "-max-implementations", args: []string{"-max-implementations", "7"}},
 		{name: "-lang (another language is read too)", args: []string{"-lang", "go,dart"}},
 		{name: "-no-builtin-rules", args: []string{"-no-builtin-rules"}},
+		{name: "-no-builtin-sources-sinks", args: []string{"-no-builtin-sources-sinks"}},
 		{name: "-deterministic-only", args: []string{"-deterministic-only"}},
 		{name: "the packages", pkgs: "./nothing"},
 		{name: "GOFLAGS (the build tags)", env: []string{"GOFLAGS=-tags=never"}},
