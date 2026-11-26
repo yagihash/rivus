@@ -8,7 +8,7 @@
 **背景:** ADR-093 は、Rust の隔離を macOS の Seatbelt にし、Linux では「何も実行せずに止まる」とした(使い手が macOS だったため)。Linux の隔離は課題 #148 に残り、DESIGN-macos-sandbox の 8 節は bubblewrap を最有力としていた。bubblewrap は、外部のプログラムと非特権のユーザー名前空間に頼るが、Ubuntu 24.04 の AppArmor の制限やコンテナの中では、後者が塞がれていることが多い。
 
 **決めたこと:**
-1. **Linux の隔離は、Landlock(ファイルと TCP のポート)+ seccomp(ソケット全般と、Landlock を迂回する system call)+ `NO_NEW_PRIVS`。** 外部のプログラムも、ユーザー名前空間も要らない。`internal/sandbox` の `Spec` を、macOS と同じ形で写す。
+1. **Linux の隔離は、Landlock(ファイルと TCP のポート)+ seccomp(ソケット全般と、Landlock を迂回する system call)+ `NO_NEW_PRIVS`。** 外部のプログラムも、ユーザー名前空間も要らない。`internal/sandbox` の `Spec` を、macOS と同じ形で写す。 項目ごとに同等の隔離を与えるが、構造は macOS と違う(Seatbelt は 1 つのプロファイル、Landlock + seccomp はファイルと TCP のポートを Landlock、ソケットと system call を seccomp が受け持つ)。
 2. **作り方: rivus 自身をヘルパーとして再実行し、そこで自分を閉じ込めてから対象を exec する。** 閉じ込めの成否は、専用のパイプで受け取る(対象の標準エラーは判定に使わない)。作れなければ、何も実行せずに止まる(ホストでの実行に切り替えない)。
 3. **抽出の段階のネットワークなしは、seccomp で `socket()` を全拒否にして成り立たせる**(Landlock は TCP しか知らない。seccomp を外すと UDP、UNIX ソケット、`io_uring` が抜けることを確かめた)。`io_uring`、`ptrace`、`process_vm_*`、`pidfd_getfd`、`bpf` などは塞ぐ。`/proc` は許可に入れない。seccomp はアーキテクチャごと(x86-64、arm64)に作り、ほかの ABI の system call は殺す。
 4. **受け入れた弱さ(ユーザーの了承): 取得段階のポート指定は、アドレスまで絞れない**(macOS は `localhost:PORT`)。取得で動くのは信頼する `cargo fetch` だけで、対象のコードは動かない。今の取得は、macOS と同じく、ネットワークを開けている。

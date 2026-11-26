@@ -49,7 +49,7 @@
 
 ## サンドボックスの制限
 
-以下は macOS(プロファイル: `internal/sandbox/seatbelt_darwin.go`)の表です。Linux(`internal/sandbox/landlock_linux.go`、`seccomp_linux.go`)は、同じ許可(読み取りは対象・依存・ツールチェイン・作業ディレクトリ・システムのライブラリ、書き込みは作業ディレクトリだけ、環境変数・時間・出力の上限は同じ)を Landlock のルールで作り、ネットワークは seccomp で `socket()` を全拒否にし(TCP も UDP も UNIX ソケットも)、`ptrace`・`process_vm_*`・`io_uring` などを塞ぎ、`/proc` を許可に入れません。Linux との違いは [DESIGN-linux-sandbox.md](DESIGN-linux-sandbox.md) の 4 節です。
+以下は macOS(プロファイル: `internal/sandbox/seatbelt_darwin.go`)の表です。Linux(`internal/sandbox/landlock_linux.go`、`seccomp_linux.go`)は、同じ許可(読み取りは対象・依存・ツールチェイン・作業ディレクトリ・システムのライブラリ、書き込みは作業ディレクトリだけ、環境変数・時間・出力の上限は同じ)を Landlock のルールで作り、ネットワークは seccomp で `socket()` を全拒否にし(TCP も UDP も UNIX ソケットも)、`ptrace`・`process_vm_*`・`io_uring` などを塞ぎ、`/proc` を許可に入れません。項目ごとに同等の隔離を与えますが、構造は違います(macOS は 1 つのプロファイル、Linux は Landlock と seccomp の組み合わせ)。違いは [DESIGN-linux-sandbox.md](DESIGN-linux-sandbox.md) の 4 節です。`memfd_create` は拒否していません(パスのないメモリ上のファイルが作れます)。
 
 macOS のプロファイルは、**既定ですべて拒否し、必要なものだけを、1 行ずつ理由つきで許します**。
 
@@ -84,7 +84,7 @@ macOS のプロファイルは、**既定ですべて拒否し、必要なもの
 - **プロセスグループを抜けるプロセス**(`setsid`、二重フォーク)は、実行の終わりに止められません(サンドボックスの下のまま。ファイルとネットワークには触れません)。残ったかもしれないことは、報告するだけです(rivus は、自分が起動したグループの外のプロセスに、シグナルを送りません)。
 - **取得の段階のネットワークは、絞っていません**(宛先の許可リスト、解決したアドレスの検査がない)。リダイレクトとサブモジュールで、許した取得元が別の宛先へ向けられます。Docker の既定の bridge と同じ(今より弱くはならない)。
 - **解析する構成が、実行する OS 向けになります**: `cfg(target_os)` で分かれるコードは、macOS では macOS の側、Linux では Linux の側を読みます(Docker では Linux の側でした)。同じ対象でも、OS によって、読む関数が変わります(出力に target triple を出すこと: 課題 #146)。
-- **Linux の隔離は試作です**(ADR-093 は macOS の決定で、Linux は [DESIGN-linux-sandbox.md](DESIGN-linux-sandbox.md))。取得の段階のネットワークは、Linux でも絞っていません。Landlock は、ポート番号までしか絞れず(アドレスは指定できない)、ファイルの存在と属性(`stat`)は見えます。ユーザー境界がないのは、macOS と同じです。Landlock は、ファイルのモード・所有者・時刻・拡張属性の変更(`chmod`、`chown`、`utimes`、`setxattr` の系)を止めないので、これらの呼び出しは、seccomp の通知で rivus に渡し、**rivus が代わりに実行します**(作業ディレクトリの中のファイルだけ。外のファイルは `EPERM` で拒否し、実行の終わりに stderr に出します: `rivus: warning: the build tried to change ... outside of its work directory`)。対象の別のスレッドがパスを書き換えても、検査したファイルと、変更されるファイルは、同じです。`ptrace` が許されない環境(Yama の `ptrace_scope` が 2 以上など)では、対象のメモリが読めず、これらの呼び出しはすべて拒否されるので(リンカの `chmod` も)、Rust のビルドが失敗します。古いカーネルでは、Linux 6.2 未満は何も実行せずに止まり、6.12 未満は、同じユーザーのほかのプロセスにシグナルを送れるので、警告を出して動かします。メモリ・プロセス数・ファイルの大きさには、緩い `RLIMIT` があります(強い上限ではありません)。
+- **Linux の隔離は試作です**(ADR-093 は macOS の決定で、Linux は [DESIGN-linux-sandbox.md](DESIGN-linux-sandbox.md))。取得の段階のネットワークは、Linux でも絞っていません(サンドボックスには、プロキシのポートだけに絞る形がありますが、取得の段階は、今は、それを使っていません)。Landlock は、ポート番号までしか絞れず(アドレスは指定できない)、ファイルの存在と属性(`stat`)は見えます。ユーザー境界がないのは、macOS と同じです。Landlock は、ファイルのモード・所有者・時刻・拡張属性の変更(`chmod`、`chown`、`utimes`、`setxattr` の系)を止めないので、これらの呼び出しは、seccomp の通知で rivus に渡し、**rivus が代わりに実行します**(作業ディレクトリの中のファイルだけ。外のファイルは `EPERM` で拒否し、実行の終わりに stderr に出します: `rivus: warning: the build tried to change ... outside of its work directory`)。対象の別のスレッドがパスを書き換えても、検査したファイルと、変更されるファイルは、同じです。`ptrace` が許されない環境(Yama の `ptrace_scope` が 2 以上など)では、対象のメモリが読めず、これらの呼び出しはすべて拒否されるので(リンカの `chmod` も)、Rust のビルドが失敗します。古いカーネルでは、Linux 6.2 未満は何も実行せずに止まり、6.12 未満は、同じユーザーのほかのプロセスにシグナルを送れるので、警告を出して動かします。メモリ・プロセス数・ファイルの大きさには、緩い `RLIMIT` があります(強い上限ではありません)。
 - **対象のビルドは、結果を書き換えられます。** 作業ディレクトリの IR の断片は、対象のビルドから見えるので、解析結果(finding を消す、偽の関数を足す)を、好きにできます。**隔離が守るのは、マシンと秘密で、結果の正しさではありません**(信頼できないコードの findings は、信頼できないものとして扱う)。
 - **R-21 は、直りません。** 対象の `.cargo/config.toml` の `[env]` で、IR の断片の場所を変えて、IR を空にできます(安全の問題ではなく、結果の正しさの問題)。
 - **対象が大きいと、時間もメモリも、そのまま使います**(上限がない)。
