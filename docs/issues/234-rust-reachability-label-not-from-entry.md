@@ -51,13 +51,36 @@ Rust の実対象で、finding が全部 `reachability: not_from_entry` にな�
 
 ## rust-curated
 
-entry は `curated::main` の 1 つで、`main` に callee が 0 個。own 510 のうち、main から届くのは main 自身の 1 つ(粗い BFS)。281 件の source は、`curated::...` の別の関数。
+調べ終わった。**原因は extractor ではなく、対象の `main` が空だから**。
 
-PR #620(`feat/rust-trait-identity-by-def-path`。extractor が trait の同一性を「クレート名 + 定義パス」で比べる)の測定(2026-11-27)で、**281 件の `not_from_entry` は、#620 で変わらなかった**(graph-check で finding の JSON 全体が `same`、`reachability` も同じ)。この対象の `not_from_entry` は別の原因で、`curated::main` の IR に callee が 0 個(上の BFS のとおり)。#620 では直らない。**次に調べる対象**。この課題は close にしない。
+- `bench/rust-curated/src/main.rs:4` は `fn main() {}` のみ。`#[tokio::main]`、async、マクロ、spawn、loop は無い。`main.rs` のコメントは「`main` があれば closed world として読む(`closed_world_entry`)」と言っている(意図)。
+- 15 モジュールは `src/lib.rs:1-16` が `pub mod` で持つ。bin の `main` は lib の関数を呼ばない。
+- IR(`rust-curated.ir.jsonl`、2026-11-27 に読んだもの): `curated::main` は `entry: true`、`exported: true`、`private: true`、`file: src/main.rs`、pos 4:1。ブロックは 1 つ(`const`(nil)と `copy`、terminator は `return`)で、callee は 0 個。`"entry":true` は IR 全体で 1 個。ソースが空の関数を、そのまま IR にしている(`Terminator::Call`、async、マクロ展開の取りこぼしではない)。
+- entry の決まり方: `extractor/rust/src/main.rs:248`(`rustc_public::entry_fn()` の名前)と `:277-279`(`!dep` かつ名前が一致する関数に `entry: true`)。
+- `entry: true` が 1 個あるので、`reach()`(`internal/sg/sg.go`)は「起点がある」とみなす。ライブラリ扱い(Exported かつ !Dep を全部 root)にならない。lib の関数 281 件の finding は、`main` から届かない、つまり `not_from_entry`。**エンジンの規則どおりの、正しい出力**。
+- 比較: rustypaste の `#[actix_web::main] async fn main` は、展開された結果(`actix_web::rt::System::new`、`{async block}` の alloc 2 回、`rustypaste::main::{closure#0}` の static 呼び、`SystemRunner::block_on`)が callee として IR に出ている。
+
+判断(advisor、2026-11-27):
+
+- rust-curated の `not_from_entry` は、規則どおりの正しい出力として、そのままにする。curated はモデルの検証用で、`main` が空なのは意図。
+- `main` に呼び出しを足す案(ベンチ側)は進めない。closed world の結果と 281 件の finding の真偽が動く恐れがあり、得るものが小さい。
+- エンジン側で「`bin` と `lib` が同居する crate で、lib の `pub` 関数も root に入れる」案は、課題に立てない。`main` が lib を呼ぶ形なら、lib の関数は `main` から届く(規則どおり)。届かない形は、フレームワークへの登録(この課題の `register` の edge)で、#620 で直した種類。実対象で、`main` が lib を呼ばないのに lib が解析対象にある形が見つかったとき、課題にする(今は見つかっていない)。
+- 台帳の `reach_miss`(`bench/maturity_ledger.py` の列。別の PR で足す)の数え方は、rust-curated を含めない。到達性を測るのは `zoo-rust-app` と実対象だけ。
+
+PR #620(`feat/rust-trait-identity-by-def-path`。extractor が trait の同一性を「クレート名 + 定義パス」で比べる)の測定(2026-11-27)でも、281 件の `not_from_entry` は変わらなかった(graph-check で finding の JSON 全体が `same`)。上の原因(空の `main`)と合っている。
 
 rustypaste は、#620 でマージ済み(2026-11-27)。finding 12 件が全部 `not_from_entry` から `from_entry` になった。測定の表は #620 の本文を指す。ヘッダの「守るもの」の行は、#620 で `@miss` を外した状態に直した。
 
 同じ測定で、dyn 呼びの candidates が約 9 倍に増えた。課題 #236。
+
+## 未確認の点
+
+この課題は open のまま。次の点が残っている。
+
+- tokio と axum の `main` の形
+- `web::scope("").service(...)` 経由の形(zoo は `ServiceConfig::service` を直接 6 回呼ぶ形にした)
+- `ServiceConfig::service` が `ServiceFactoryWrapper` 経由の dyn 呼びで `register` を呼ぶ形(zoo は `factory.register(..)` を直接呼ぶ形)
+- parseable の ADR-058 の確認(sandbox の下では取れない)
 
 ## Gitea(Go)の `not_from_entry` 17 件(事実)
 
