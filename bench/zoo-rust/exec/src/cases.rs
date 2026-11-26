@@ -30,6 +30,8 @@ pub fn register_all() {
     c::cont::map_key_vs_value::register();
     c::cont::ptr_commaok_map::register();
     c::cont::ptr_get_mut::register();
+    c::cont::ptr_range_deque::register();
+    c::cont::ptr_range_map::register();
     c::cont::ptr_index_slice::register();
     c::cont::ptr_range_array::register();
     c::cont::ptr_range_slice::register();

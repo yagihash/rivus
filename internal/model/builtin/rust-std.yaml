@@ -292,6 +292,16 @@ propagators:
     flows: [{from: args, to: result, alias: true}]
   - symbol: '<std::slice::IterMut as std::iter::IntoIterator>::into_iter'
     flows: [{from: args, to: result, alias: true}]
+  - symbol: '<std::collections::hash_map::ValuesMut as std::iter::IntoIterator>::into_iter'
+    flows: [{from: args, to: result, alias: true}]
+  - symbol: '<std::collections::hash_map::IterMut as std::iter::IntoIterator>::into_iter'
+    flows: [{from: args, to: result, alias: true}]
+  - symbol: '<std::collections::vec_deque::IterMut as std::iter::IntoIterator>::into_iter'
+    flows: [{from: args, to: result, alias: true}]
+  - symbol: '<&mut std::collections::HashMap as std::iter::IntoIterator>::into_iter'
+    flows: [{from: args, to: result, alias: true}]
+  - symbol: '<&mut std::collections::VecDeque as std::iter::IntoIterator>::into_iter'
+    flows: [{from: args, to: result, alias: true}]
   - symbol: std::iter::FromIterator::from_iter
     flows: [{from: args, to: result}]
   - symbol: std::iter::Extend::extend
@@ -408,6 +418,12 @@ propagators:
   - symbol: std::vec::from_elem
     flows: [{from: args, to: result}]
   - symbol: std::slice::iter_mut
+    flows: [{from: args, to: result, alias: true}]
+  - symbol: std::collections::HashMap::values_mut
+    flows: [{from: args, to: result, alias: true}]
+  - symbol: std::collections::HashMap::iter_mut
+    flows: [{from: args, to: result, alias: true}]
+  - symbol: std::collections::VecDeque::iter_mut
     flows: [{from: args, to: result, alias: true}]
   - symbol: std::slice::get_mut
     flows: [{from: args, to: result, alias: true}]
