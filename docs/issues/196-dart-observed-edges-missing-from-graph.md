@@ -74,5 +74,18 @@
 
 ## 追記(2026-11-26。C 36 件の uncertainty、`compare.py` の列の合わせ)
 
-- **C 36 件(`clos/helper-overflow-many`)は、出力が言っている**(すること 4 は、この課題に含まれ、確かめた)。`rivus analyze -lang dart` を zoo の cells に実行すると、`helper_overflow_many.dart` に `depth_limit` の uncertainty が 37 件ある。1 件は `transform` の `f(s)`(44 行 59 列。観測した `no_edge` の呼び出し元と同じ位置。`candidate_limit: ... 36 functions, more than the 32`)、36 件は `transform(a, (x) {...})` の呼び出し 1 件ずつ(`vuln`、`vuln2`、... の 48 行 12 列など。`what is passed as argument 1 ... none of them is followed`)。付く先は、呼び出し元とヘルパーの関数で、グラフのエッジには付かない(`rivus graph` の出力に出るかは、確かめていない)。新しい課題は要らない。
+- **C 36 件(`clos/helper-overflow-many`)は、出力が言っている**(すること 4 は、この課題に含まれ、確かめた)。`rivus analyze -lang dart` を zoo の cells に実行すると、`helper_overflow_many.dart` に `depth_limit` の uncertainty が 37 件ある。1 件は `transform` の `f(s)`(44 行 59 列。観測した `no_edge` の呼び出し元と同じ位置。`candidate_limit: ... 36 functions, more than the 32`)、36 件は `transform(a, (x) {...})` の呼び出し 1 件ずつ(`vuln`、`vuln2`、... の 48 行 12 列など。`what is passed as argument 1 ... none of them is followed`)。付く先は、呼び出し元とヘルパーの関数で、グラフのエッジには付かない(`rivus graph` の出力は、次の項)。新しい課題は要らない。
 - 照合の誤りを直した(`dart/operator-index-split` の `[]=` 2 件。`no_edge` 64 → 62。`no_callsite` は 28 → 15)。詳細は `bench/zoo-dart/observed/README.md`。
+
+## 追記(2026-11-26。C 36 件を `rivus graph path` で聞いた)
+
+zoo-dart のグラフ(d31c657c)で、`clos/helper-overflow-many` の落ちたエッジ(`transform` の `f(s)`、44 行 59 列。候補 0)を通る経路を聞いた。
+
+| 問い合わせ | 結果 |
+|---|---|
+| `path --from transform --to vuln$1`(クロージャ) | `reachable: false`、**`exhaustive: false`**。`not_exhaustive_because.unresolved_calls`(total 1)の例に `lib/clos/helper_overflow_many.dart:44:59 in ...#transform (value)` |
+| `path --from vuln --to zoo_mark#sinkCmd --no-refs`、`--from transform` 同じ | どちらも `reachable: false`、`exhaustive: false`。同じ `unresolved_calls` の例 |
+| `path --from vuln --to vuln$1`(参照を含む) | `reachable: true`、`certainty: reference`(クロージャを引数に渡した行 48:12 の参照)、`exhaustive: true`(経路が見つかった問いで、見逃しの問いではない) |
+
+- **`exhaustive: true` で落ちたエッジを隠すことは、この形では起きない**(落ちた呼び出しは候補 0 の値の呼び出しとして、`unresolved_calls` に数えられる)。新しい課題は不要。
+- 出力に `depth_limit` と `candidate_limit` の語は出ない(出力を検索して 0 件)。理由の文は「候補がない。ファイルは行き先を言わない」で、**rivus の上限(32)で切った**ことと、コードの側の原因(未知の呼び先)を区別しない。`analyze` の uncertainty(`candidate_limit: ... more than the 32 that rivus keeps`)のほうが、原因を言っている。区別するかは、判断が要る(提案、未着手)。
