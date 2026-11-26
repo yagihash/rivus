@@ -4,7 +4,7 @@
 - 種類: サイレントな見逃し
 - 言語: Dart
 - ROADMAP の節: -
-- 守るもの: zoo `F/cont/ptr-for-in`(Dart)
+- 守るもの: zoo `F/cont/ptr-range-slice`(Dart)
 
 ## 何が起きるか
 
