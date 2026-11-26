@@ -1,0 +1,2 @@
+go	dart/http_ioclient_send/http_ioclient_send.go	sink-none	@sink(none)	func fixed() { @fixed
+go	dart/http_ioclient_send/http_ioclient_send.go	sink-none	@sink(none) @nosink(dart-http-ioclient-send-decoy)	func decoy() { @decoy

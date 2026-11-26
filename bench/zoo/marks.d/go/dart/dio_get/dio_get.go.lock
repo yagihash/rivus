@@ -1,0 +1,2 @@
+go	dart/dio_get/dio_get.go	sink-none	@sink(none)	func fixed() { @fixed
+go	dart/dio_get/dio_get.go	sink-none	@sink(none) @nosink(dart-dio-get-decoy)	func decoy() { @decoy

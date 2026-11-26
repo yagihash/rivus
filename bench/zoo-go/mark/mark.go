@@ -7,6 +7,8 @@
 // rules.yaml. The recording is in mark_exec.go (build tag zooexec).
 package mark
 
+import "net/http"
+
 // NewIn makes the In of a tag.
 func NewIn(tag string) In { return In{} }
 
@@ -37,6 +39,9 @@ func CleanSQL(s string) string  { return "" }
 func CleanHTML(s string) string { return "" }
 func CleanPath(s string) string { return "" }
 
+// CleanURL is the sanitizer of the URL sinks (ssrf, open_redirect).
+func CleanURL(s string) string { return "" }
+
 // CleanResource is the sanitizer for the name of a cloud resource (a bucket, an object): the zoo has no judgement for that kind of sink, so
 // it does what CleanCmd does when it runs, and the rules say that it neutralises resource_name.
 func CleanResource(s string) string { return "" }
@@ -56,3 +61,10 @@ func SinkTask(r *CreateTask) {}
 // Opaque is a function that the analysis has no body and no model of (the declaration has no body: opaque.s
 // makes that legal): it moves the "body" parameter of a statement to its SQL (mark_exec.go does so).
 func Opaque(s *Stmt)
+
+// Transport is the transport of the clients of the cells that send a request (net/http): it makes no connection, and
+// the run records the URL of the request as a sink (SinkAny) at the line of the call that sent it.
+type Transport struct{}
+
+// RoundTrip is the body that the analysis reads: empty (the meaning of the sink is in rules.yaml and the run).
+func (Transport) RoundTrip(*http.Request) (*http.Response, error) { return nil, nil }

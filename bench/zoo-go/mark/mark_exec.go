@@ -3,6 +3,8 @@
 package mark
 
 import (
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -221,6 +223,10 @@ func CleanSQL(s string) string  { return clean(SQL, s) }
 func CleanHTML(s string) string { return clean(HTML, s) }
 func CleanPath(s string) string { return clean(Path, s) }
 
+// CleanURL is the sanitizer of the URL sinks (ssrf, open_redirect): the zoo has no class of its own for them, so it
+// replaces the characters of every class (the run judges a URL sink by the dangers of the four classes).
+func CleanURL(s string) string { return CleanPath(CleanHTML(CleanSQL(CleanCmd(s)))) }
+
 // CleanResource: see mark.go.
 func CleanResource(s string) string { return clean(Cmd, s) }
 
@@ -369,4 +375,15 @@ func Opaque(s *Stmt) {
 	if b, ok := s.Params["body"]; ok {
 		s.SQL = b
 	}
+}
+
+// Transport is the transport of the clients of the cells that send a request (net/http): it makes no connection, and
+// the URL of the request is recorded as a sink at the line of the call (Do, Get, Post) that sent it (record looks for
+// the first frame of cells/ in the stack).
+type Transport struct{}
+
+// RoundTrip records the URL and answers 200 with an empty body.
+func (Transport) RoundTrip(r *http.Request) (*http.Response, error) {
+	SinkAny(r.URL.String())
+	return &http.Response{StatusCode: 200, Status: "200 OK", Proto: "HTTP/1.1", ProtoMajor: 1, ProtoMinor: 1, Header: http.Header{}, Body: io.NopCloser(http.NoBody), Request: r}, nil
 }

@@ -1,0 +1,2 @@
+go	dart/dio_download_savepath/dio_download_savepath.go	sink-none	@sink(none)	func fixed() { @fixed
+go	dart/dio_download_savepath/dio_download_savepath.go	sink-none	@sink(none) @nosink(dart-dio-download-savepath-decoy)	func decoy() { @decoy

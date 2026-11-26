@@ -76,6 +76,10 @@ sanitizers:
     drops: [user_input]
     adds: [cleaned_path]
     neutralises: [path_traversal]
+  - symbol: zoo/mark.CleanURL
+    drops: [user_input]
+    adds: [cleaned_url]
+    neutralises: [ssrf, open_redirect]
   - symbol: zoo/mark.CleanResource
     drops: [user_input]
     adds: [cleaned_resource]

@@ -3,13 +3,6 @@ Read by TestZooDart (the parity line "zoo-go: parity marks"; zooGoMarkErrors). N
 A mark @todo(F/<family>/<shape>: PARITY: reason) is a form that Go can have and the cell is not written yet. The reason has no ")" (the pattern is [^)]+): "Go で未測定: <package>".
 A Dart cell with no mark here is "not classified" (the second line of the test log).
 
-@todo(F/dart/dio-get: PARITY: Go で未測定: net/http)
-@todo(F/dart/dio-geturi: PARITY: Go で未測定: net/http)
-@todo(F/dart/dio-post: PARITY: Go で未測定: net/http)
-@todo(F/dart/dio-download-savepath: PARITY: Go で未測定: net/http, os)
-@todo(F/dart/dio-multipartfile-path: PARITY: Go で未測定: net/http, os)
-@todo(F/dart/http-client-get: PARITY: Go で未測定: net/http)
-@todo(F/dart/http-ioclient-send: PARITY: Go で未測定: net/http)
 @todo(F/dart/gcloud-datastore-query-kind: PARITY: Go で未測定: cloud.google.com/go/datastore)
 @todo(F/dart/googleapis-datastore-run-query: PARITY: Go で未測定: cloud.google.com/go/datastore)
 @todo(F/dart/gcloud-pubsub-lookup-topic: PARITY: Go で未測定: cloud.google.com/go/pubsub)

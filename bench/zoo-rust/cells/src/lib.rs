@@ -11,6 +11,13 @@
 //! @todo(F/clos/callback-of-callback: PARITY: Go's closure that takes a function as its parameter and calls it (`g(a)`: the callback of a callback); a Rust closure `|g: &dyn Fn(String) -> String| g(a)` passed to a helper is the same form)
 //! @todo(F/clos/helper-overflow-many: PARITY: Go's thirty-four different closures passed to one helper that calls its function argument (more candidates than the 32 of ADR-050); Rust closures passed to a helper are the same form, and `helper_overflow.rs` has ten)
 //! @todo(F/clos/wrapped-by-dependency: PARITY: Go's function of the project given to a dependency (zoodep.WrapFn) that returns a closure calling it, which the project calls; a Rust closure passed to a function of the dependency crate that returns a closure is the same form)
+//! @todo(F/dart/dio-download-savepath: PARITY: Go's value that goes into the path of the file that a downloaded body is written to by os.OpenFile after Client.Get; Rust で未測定: reqwest と std::fs::File::create)
+//! @todo(F/dart/dio-get: PARITY: Go's value in the URL of http.Get; Rust で未測定: reqwest::blocking::get)
+//! @todo(F/dart/dio-geturi: PARITY: Go's value in the URL object made by url.Parse that http.NewRequest takes and Client.Do sends; Rust で未測定: reqwest::Url::parse と Client::get)
+//! @todo(F/dart/dio-multipartfile-path: PARITY: Go's value in the path of the file that os.Open reads to be a part of a multipart body; Rust で未測定: reqwest::multipart::Form::file と std::fs::File::open)
+//! @todo(F/dart/dio-post: PARITY: Go's value in the URL of http.Post; Rust で未測定: reqwest::blocking::Client::post)
+//! @todo(F/dart/http-client-get: PARITY: Go's value in the URL of Client.Get; Rust で未測定: reqwest::blocking::Client::get)
+//! @todo(F/dart/http-ioclient-send: PARITY: Go's value in the request that Client.Do of a variable of the concrete type sends; Rust で未測定: reqwest::blocking::Client::execute)
 pub mod call {
     pub mod depth3;
     pub mod direct;
