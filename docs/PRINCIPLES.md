@@ -89,18 +89,18 @@ rivus の設計の判断は、ここに書いた原則に沿う。ほかの文�
 **原則**
 
 - 呼び出しの関係とデータの流れを、言語の多様な書き方にわたって取りこぼさないことが、rivus の価値の中心。
-- 組み込みのモデルの範囲は、Google Cloud(範囲の 1 つ目)、外部のサービスのクライアント(公開の指標の上位)、標準ライブラリ、代わりのないパッケージ、pub の人気の上位(ADR-096、097)。依存を API の境界のモデルにするのは、解析のコストを下げるためと、依存の中の sink を検出するため(依存の関数の中では source と sink を探さないので、sink のモデルは検出に要る。ADR-099)。特定の利用者に特化したモデルは、rivus の外で作り、ルールとして差し込む。
+- 組み込みのルールのファイルの範囲は、Google Cloud(範囲の 1 つ目)、外部のサービスのクライアント(公開の指標の上位)、標準ライブラリ、代わりのないパッケージ、pub の人気の上位(ADR-096、097)。依存を API の境界のモデルにするのは、解析のコストを下げるためと、依存の中の sink を検出するため(依存の関数の中では source と sink を探さないので、`sinks` は検出に要る。ADR-099)。特定の利用者に特化したモデルは、rivus の外で作り、ルールとして差し込む。
 - 知識が rivus のコード（extractor やコア）に埋まっていて、ルールの YAML から足せない状態は、直すべき問題として扱う。
 - ルールの書式の安定と、書き間違いをはっきり弾く検証は、外から差し込む人のための約束。
-- モデルの種類で扱いを分ける。
-  - source / sink（何が危険か）は、コードからは分からない知識。
+- ルールの種類で扱いを分ける。
+  - `sources` と `sinks`（何が危険か）は、コードからは分からない知識。
   - 流れのモデル（`flows`、`pure`、`calls:`）は、本体を読む代わりの近似。増やすほど本体を読まない場所が増える。後者は、必要が測定で示されたものに絞る(本体がない、収束しない、ライブラリが利用者のコードを呼ぶ、**解析に著しくコストがかかる**。最後のものは、パッケージ全体なら ADR-092 の条件を満たしたもの、実装の多いインターフェースのメソッドなら ADR-098 の基準を満たしたものだけ。パッケージ単位の宣言は ADR-100。extractor が、宣言のあるパッケージを読まない段階は進行中)。詳しくは [MODELING.md](MODELING.md)。
 
 **根拠の ADR:** 002、003、015、016、044、063、066、067、071、074、086、092。096、097、098、099(範囲と、切る基準と、依存の中のサイト)。077 は Google Cloud のモデルの始まりで、ADR-097 で範囲の 1 つ目になった。
 
 **コード:**
 
-- モデル: `internal/model/builtin/*.yaml`、`internal/model/model.go`（`RuleSet` の `Sources` / `Sinks` / `Sanitizers` / `Propagators` / `Globals` / `ConfigReads`。propagator が `flows` / `pure` / `calls` を持つ）
+- ルールのファイル: `internal/model/builtin/*.yaml`、`internal/model/model.go`（`RuleSet` の `Sources` / `Sinks` / `Sanitizers` / `Propagators` / `Globals` / `ConfigReads`。propagator が `flows` / `pure` / `calls` を持つ）
 - 外から差し込む例: `examples/rules/`
 - 組み込みから外したフレームワークを使っているとき stderr に 1 行出す: `cmd/rivus/notbuiltin.go`
 - 書き間違いの検証: `model.Parse` の `KnownFields(true)`、外部ファイルの `origin: builtin` の拒否、`origin: llm` の必須フィールド
@@ -162,7 +162,7 @@ rivus の設計の判断は、ここに書いた原則に沿う。ほかの文�
 **原則**
 
 - rivus 単体の出力は決定論的。結果を変える隠れた設定を持たない。
-- LLM の判定から作ったモデルは `origin: llm` として区別し、`--deterministic-only` で外せる。
+- LLM の判定から作ったルールは `origin: llm` として区別し、`--deterministic-only` で外せる。
 
 **根拠の ADR:** 010、034、043（追記: 非決定の 3 つの原因を直した）、054、061
 

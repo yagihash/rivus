@@ -1,6 +1,6 @@
 # #237 文書で「モデル」と「ルール」の使い方が、定義とずれている所を、節の名前に直す
 
-- 状態: **open**
+- 状態: **partial**(用語は直した。`docs/MODELING.md` の題が未決で残る)
 - 優先度: 低
 - 種類: 文書の用語の整合
 - 言語: 全
@@ -41,6 +41,24 @@
 - 「モデル」が `sources` や `sinks` を含む所を、節の名前(「`sources` と `sinks`」、「`propagators` など」)に直す。
 - `docs/MODELING.md` の題「Writing models」は、`sources` / `sinks` も書き方を説明する文書なので、題の言い直し(「Writing rules and models」など)が要るかを、ユーザーと決める。**未決**。
 - 直す範囲は、上の 7 か所から始め、`grep` で同じ使い方を拾い直す(行番号は動く)。
+
+## 直した所と残した所(事実。2026-11-27、`origin/main`(1b849ef6)の実物で)
+
+直した所:
+
+- `docs/PRINCIPLES.md:92`: 「組み込みのモデルの範囲」→「組み込みのルールのファイルの範囲」。「sink のモデルは検出に要る」→「`sinks` は検出に要る」。
+- `docs/PRINCIPLES.md:95`: 「モデルの種類で扱いを分ける」→「ルールの種類で扱いを分ける」。
+- `docs/PRINCIPLES.md:96`: 「source / sink（何が危険か）」→「`sources` と `sinks`（何が危険か）」。
+- `docs/PRINCIPLES.md:103`: 「モデル: `internal/model/builtin/*.yaml`、...」→「ルールのファイル: ...」。
+- `docs/PRINCIPLES.md:165`: 「LLM の判定から作ったモデルは `origin: llm`」→「...作ったルールは `origin: llm`」。
+- `docs/MODELING.md:209`: 「a sink model is needed for detection」→「a `sinks` row is needed for detection」。
+- `docs/MODELING.md:354`: 「So a model is needed for detection as well as for cost」→「So a `sinks` row is needed for detection as well as for cost」。
+
+残した所:
+
+- `docs/MODELING.md:1` の題「Writing models for rivus」と、3 行目の「a model (a rule file that ...)」。題が未決(上の「進め方」)なので、触らなかった。題を直さないと、本文の「model」の使い方と題がずれる所が残る。
+- `docs/MODELING.md:212` の節の題「A sink that is one field of an argument: `parts`」。「model」の語を使っていない(sink の話)ので、直す所がなかった。
+- `docs/PRINCIPLES.md:92` の「特定の利用者に特化したモデル」。`propagators` など、本体を読まない関数の振る舞いを指すので、定義に合う。
 
 ## 別の課題(触れるだけ)
 
