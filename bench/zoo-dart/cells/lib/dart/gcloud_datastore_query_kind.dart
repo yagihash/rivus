@@ -1,4 +1,5 @@
 // @cell(F/dart/gcloud-datastore-query-kind)
+// Go side: not measured yet (no Go model or cell of datastore); not a form that Go lacks. Counted as a Go todo by TestZooDart (no mark)
 // @shape: a value is the kind of a Query (a named argument of its constructor) that Datastore.query of package:gcloud (a skeleton of it) runs: a name that a row of the built-in model cannot point to
 import 'package:gcloud/datastore.dart' as ds;
 import 'package:zoo_mark/zoo_mark.dart';

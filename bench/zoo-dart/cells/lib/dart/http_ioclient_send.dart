@@ -1,4 +1,5 @@
 // @cell(F/dart/http-ioclient-send)
+// Go side: not measured yet (zoo-go-pkg has net_http but no cell of this form; the Go model is go-net-http.yaml); not a form that Go lacks. Counted as a Go todo by TestZooDart (no mark)
 // @shape: a value goes into the request that is sent by a variable typed IOClient (a class of package:http, a skeleton of it), not by the interface Client
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';

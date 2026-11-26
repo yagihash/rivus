@@ -1,4 +1,5 @@
 // @cell(F/dart/googleapis-datastore-run-query)
+// Go side: not measured yet (no Go cell of this form in zoo-go-pkg or bench/gcp); not a form that Go lacks. Counted as a Go todo by TestZooDart (no mark)
 // @shape: a value is the text of the GqlQuery that ProjectsResource.runQuery of package:googleapis (a skeleton of it) runs: the sql_injection sink of the built-in rows (the field gqlQuery.queryString); the bindings of a GqlQuery are values that the service binds
 import 'package:googleapis/datastore/v1.dart' as ds;
 import 'package:zoo_mark/zoo_mark.dart';

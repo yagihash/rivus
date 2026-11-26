@@ -1,2 +1,3 @@
+dart	dart/github_file_text.dart	na	@na(go: the model of package:github, a Dart package; the Go side is measured in zoo-go-pkg (go_github)	-
 dart	dart/github_file_text.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
 dart	dart/github_file_text.dart	sink-none	@sink(none) @nosink(dart-github-file-text-decoy)	Future<void> decoy() async { @decoy

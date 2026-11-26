@@ -1,4 +1,5 @@
 // @cell(F/dart/googleapis-auth-impersonate)
+// Go side: not measured yet (no Go cell of this form in zoo-go-pkg or bench/gcp); not a form that Go lacks. Counted as a Go todo by TestZooDart (no mark)
 // @shape: a value goes into targetServiceAccount of clientViaServiceAccountImpersonation of package:googleapis_auth (a skeleton of it): the resource_name sink of the built-in rows
 import 'package:googleapis_auth/auth_io.dart';
 import 'package:zoo_mark/zoo_mark.dart';

@@ -1,4 +1,5 @@
 // @cell(F/dart/shelf-response-body)
+// @na(go: the model of package:shelf, a Dart package; the Go side is measured in zoo-go-pkg (gin, a web framework: its cells are bind and query), not by a cell of the same name)
 // @shape: a value from the Request goes into the body of a Response of package:shelf (a skeleton of it): the xss sink of the built-in rows; the body is read back to record it (the harness runs the real shelf, which records nothing itself)
 import 'package:shelf/shelf.dart';
 import 'package:zoo_mark/zoo_mark.dart';

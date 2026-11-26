@@ -1,4 +1,5 @@
 // @cell(F/dart/http-client-get)
+// Go side: not measured yet (zoo-go-pkg has net_http but no cell of this form; the Go model is go-net-http.yaml); not a form that Go lacks. Counted as a Go todo by TestZooDart (no mark)
 // @shape: a value goes into the URL of Client.get of package:http (a skeleton of it): the SSRF sink of the built-in rows
 import 'package:http/http.dart' as http;
 import 'package:zoo_mark/zoo_mark.dart';

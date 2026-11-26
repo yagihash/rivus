@@ -1,4 +1,5 @@
 // @cell(F/dart/googleapis-bigquery-table-patch-materialized-view)
+// Go side: not measured yet (no Go cell of this form in zoo-go-pkg or bench/gcp); not a form that Go lacks. Counted as a Go todo by TestZooDart (no mark)
 // @shape: a value is the SQL that TablesResource.patch of package:googleapis (a skeleton of it) takes in the field `materializedView.query` of its object argument: the sql_injection sink of the built-in rows
 import 'package:googleapis/bigquery/v2.dart' as bq;
 import 'package:zoo_mark/zoo_mark.dart';

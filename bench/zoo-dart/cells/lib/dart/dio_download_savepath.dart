@@ -1,4 +1,5 @@
 // @cell(F/dart/dio-download-savepath)
+// Go side: not measured yet (zoo-go-pkg has net_http but no cell of this form; the Go model is go-net-http.yaml); not a form that Go lacks. Counted as a Go todo by TestZooDart (no mark)
 // @shape: a value goes into the place that Dio.download of package:dio (a skeleton of it) writes the file to: the path traversal sink of the built-in rows
 import 'package:dio/dio.dart';
 import 'package:zoo_mark/zoo_mark.dart';

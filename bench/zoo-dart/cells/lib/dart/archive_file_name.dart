@@ -1,4 +1,5 @@
 // @cell(F/dart/archive-file-name)
+// @na(go: the model of package:archive, a Dart package; the Go side is measured in zoo-go-pkg (archive: archive/tar and archive/zip), not by a cell of the same name)
 // @shape: the name of an entry of an archive (and the target of a link) is written by whoever made the archive, so it is a source of package:archive (a skeleton of it): the entry point of zip slip. A name that went through the path sanitizer is not a finding, and a field that is not a name (the size, the comment) is not a source
 import 'package:archive/archive.dart';
 import 'package:zoo_mark/zoo_mark.dart';

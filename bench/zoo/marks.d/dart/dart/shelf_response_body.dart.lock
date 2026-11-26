@@ -1,2 +1,3 @@
+dart	dart/shelf_response_body.dart	na	@na(go: the model of package:shelf, a Dart package; the Go side is measured in zoo-go-pkg (gin, a web framework: its cells are bind and query)	-
 dart	dart/shelf_response_body.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
 dart	dart/shelf_response_body.dart	sink-none	@sink(none) @nosink(dart-shelf-response-body-decoy)	Future<void> decoy() async { @decoy

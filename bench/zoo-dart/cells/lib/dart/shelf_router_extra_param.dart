@@ -1,4 +1,5 @@
 // @cell(F/dart/shelf-router-extra-param)
+// @na(go: the model of package:shelf, a Dart package; the Go side is measured in zoo-go-pkg (gin, a web framework: its cells are bind and query), not by a cell of the same name)
 // @shape: the handler of Router.get takes the captured segment as a String parameter after the Request (shelf_router passes it): the text is user input, and the built-in callback_param rows of shelf_router say so
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';

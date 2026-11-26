@@ -1,4 +1,5 @@
 // @cell(F/dart/gcloud-pubsub-lookup-topic)
+// Go side: not measured yet (no Go model or cell of pubsub); not a form that Go lacks. Counted as a Go todo by TestZooDart (no mark)
 // @shape: a value is the name of the topic that PubSub.lookupTopic of package:gcloud (a skeleton of it) looks up: the resource_name sink of the built-in rows
 import 'package:gcloud/pubsub.dart' as pubsub;
 import 'package:zoo_mark/zoo_mark.dart';

@@ -1,2 +1,3 @@
+dart	dart/googleapis_bigquery_query.dart	na	@na(go: the model of package:googleapis, a Dart package; the Go side is measured in bench/gcp (bigquery: Client.Query of go-gcp.yaml)	-
 dart	dart/googleapis_bigquery_query.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
 dart	dart/googleapis_bigquery_query.dart	sink-none	@sink(none) @nosink(dart-googleapis-bigquery-query-decoy)	Future<void> decoy() async { @decoy
