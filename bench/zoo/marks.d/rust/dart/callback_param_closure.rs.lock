@@ -1,0 +1,2 @@
+rust	dart/callback_param_closure.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	dart/callback_param_closure.rs	sink-none	@sink(none) @nosink(dart-callback-param-closure-decoy)	fn decoy() { @decoy

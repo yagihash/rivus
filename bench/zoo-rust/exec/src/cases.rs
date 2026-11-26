@@ -62,6 +62,9 @@ pub fn register_all() {
     c::conv::struct_field_deep::register();
     c::conv::struct_field_opaque::register();
     c::conv::struct_field_shallow::register();
+    c::dart::callback_param_closure::register();
+    c::dart::callback_param_helper::register();
+    c::dart::callback_param_named::register();
     c::dart::io_link_create_target::register();
     c::dyns::func_field::register();
     c::dyns::func_map::register();
