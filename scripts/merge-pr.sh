@@ -13,7 +13,8 @@
 # never write a date that was not relayed.
 # Also: every check of the PR must be finished and not failed (`gh pr checks --json name,bucket`: each bucket is pass or skipping;
 # pending, fail, cancel stop it), because CLEAN alone let a PR through while `ci-ok` was still pending (#435). The check `ci-ok` must be
-# there and pass: with no `ci-ok` (or no check at all, or gh cannot be asked) nothing shows that CI ran, so that refuses too.
+# there and pass, and so must `main-ci` (the check run of .github/workflows/main-ci.yml: main is not red, G1): without it nothing shows that main was
+# looked at, and a PR that does not have the check yet is waited for, not merged. With no `ci-ok` (or no check at all, or gh cannot be asked) nothing shows that CI ran, so that refuses too.
 # Also: the latest finished `ci.yml` run on main (event push) must not have failed (PRs run -short, so the heavy tests run only on main).
 # A run still in progress is skipped (the latest finished one counts). If gh cannot be asked, that refuses too.
 # A PR that fixes main's CI is let through with RIVUS_MERGE_FIXES_MAIN=1; the output then says so, with the run URL.
@@ -87,6 +88,7 @@ except Exception:
 notdone=["%s (%s)"%(c.get("name"),c.get("bucket")) for c in cs if c.get("bucket") not in ("pass","skipping")]
 if notdone: print("checks not finished or failed: "+", ".join(notdone)); sys.exit()
 if not any(c.get("name")=="ci-ok" and c.get("bucket")=="pass" for c in cs): print("no passing ci-ok check")
+if not any(c.get("name")=="main-ci" and c.get("bucket")=="pass" for c in cs): print("no passing main-ci check (main-ci.yml writes it on the PR when a CI starts, and it can take a few minutes: wait, or run `gh workflow run main-ci.yml`, then try again)")
 ' 2>/dev/null) || badchecks="cannot read the checks of the PR"
 if [ -n "$badchecks" ]; then echo "merge: PR #$n is not merged by the developer: $badchecks. Nothing is merged." >&2; exit 1; fi
 fixes="${RIVUS_MERGE_FIXES_MAIN:-}"
