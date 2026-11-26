@@ -34,7 +34,7 @@ fn vuln() { // @vuln
 
 macro_rules! route {
     ($r:expr, $path:expr) => {
-        $r.get($path, |_req: &Request, id: &str| { // @source(rust-macro-closure-twice-vuln2) @miss(unmodeled_library_call) @ref(#232)
+        $r.get($path, |_req: &Request, id: &str| { // @source(rust-macro-closure-twice-vuln2) @miss(unmodeled_library_call) @ref(#233)
             m::sink_cmd(id); // @sink(rust-macro-closure-twice-vuln2)
         })
     };
