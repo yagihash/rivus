@@ -34,6 +34,7 @@ import (
 	_ "zoo/cells/clos/to_own_helper"
 	_ "zoo/cells/clos/to_sort"
 	_ "zoo/cells/clos/two_callers"
+	_ "zoo/cells/clos/wrapped_by_dependency"
 	_ "zoo/cells/cont/map_key_vs_value"
 	_ "zoo/cells/cont/ptr_commaok_assert"
 	_ "zoo/cells/cont/ptr_commaok_map"
