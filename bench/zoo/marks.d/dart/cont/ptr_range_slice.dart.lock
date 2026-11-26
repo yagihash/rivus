@@ -1,0 +1,4 @@
+dart	cont/ptr_range_slice.dart	miss	@source(cont-ptr-range-slice-decoy) @miss(silent) @ref(#172,PARITY)	void decoy() { @decoy
+dart	cont/ptr_range_slice.dart	miss	@source(cont-ptr-range-slice-vuln) @miss(silent) @ref(#172,PARITY)	void vuln() { @vuln
+dart	cont/ptr_range_slice.dart	sink-none	@sink(none)	void decoy() { @decoy
+dart	cont/ptr_range_slice.dart	sink-none	@sink(none)	void fixed() { @fixed

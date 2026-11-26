@@ -1,4 +1,0 @@
-dart	cont/ptr_for_in.dart	miss	@source(cont-ptr-for-in-decoy) @miss(silent) @ref(#172)	void decoy() { @decoy
-dart	cont/ptr_for_in.dart	miss	@source(cont-ptr-for-in-vuln) @miss(silent) @ref(#172)	void vuln() { @vuln
-dart	cont/ptr_for_in.dart	sink-none	@sink(none)	void decoy() { @decoy
-dart	cont/ptr_for_in.dart	sink-none	@sink(none)	void fixed() { @fixed
