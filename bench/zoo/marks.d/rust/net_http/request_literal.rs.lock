@@ -1,0 +1,3 @@
+rust	net_http/request_literal.rs	miss	@source(net-http-request-literal-vuln) @miss(silent) @ref(#232)	fn vuln() { @vuln
+rust	net_http/request_literal.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	net_http/request_literal.rs	sink-none	@sink(none) @nosink(net-http-request-literal-decoy)	fn decoy() { @decoy

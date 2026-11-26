@@ -1,0 +1,2 @@
+rust	dart/dio_get.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	dart/dio_get.rs	sink-none	@sink(none) @nosink(dart-dio-get-decoy)	fn decoy() { @decoy
