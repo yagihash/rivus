@@ -15,6 +15,11 @@ func TestSanitizeForTerminal(t *testing.T) {
 		{"invalid utf-8", "a\xff\xfeb\xc3", `a\xff\xfeb\xc3`},
 		{"newline and tab stay", "a\n\tb\n", "a\n\tb\n"},
 		{"ascii and japanese unchanged", "error: 失敗しました (exit 1)\n", "error: 失敗しました (exit 1)\n"},
+		{"bidi override", "a\u202eb", `a\u202eb`},
+		{"bidi isolate and mark", "\u2066a\u2069\u200e\u200f", `\u2066a\u2069\u200e\u200f`},
+		{"bidi embedding range", "\u202a\u202b\u202c\u202d", `\u202a\u202b\u202c\u202d`},
+		{"zero width", "a\u200b\u200c\u200db\ufeff", `a\u200b\u200c\u200db\ufeff`},
+		{"neighbours of the ranges stay", "\u200a\u2010\u2029\u202f\u2065\u206a\ufefe\uff00", "\u200a\u2010\u2029\u202f\u2065\u206a\ufefe\uff00"},
 		{"empty", "", ""},
 	} {
 		if got := sanitizeForTerminal([]byte(c.in)); got != c.want {
