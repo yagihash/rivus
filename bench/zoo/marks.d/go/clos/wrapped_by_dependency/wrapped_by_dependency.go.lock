@@ -1,0 +1,4 @@
+go	clos/wrapped_by_dependency/wrapped_by_dependency.go	fp	@sink(none) @fp @nosink(clos-wrapped-by-dependency-decoy) @fp @ref(#78)	func decoy() { @decoy
+go	clos/wrapped_by_dependency/wrapped_by_dependency.go	fp	@sink(none) @fp @ref(#78)	func fixed() { @fixed
+go	clos/wrapped_by_dependency/wrapped_by_dependency.go	sink-none	@sink(none) @fp @nosink(clos-wrapped-by-dependency-decoy) @fp @ref(#78)	func decoy() { @decoy
+go	clos/wrapped_by_dependency/wrapped_by_dependency.go	sink-none	@sink(none) @fp @ref(#78)	func fixed() { @fixed

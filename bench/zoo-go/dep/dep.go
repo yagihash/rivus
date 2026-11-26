@@ -13,6 +13,9 @@ type wrapper struct{ w io.Writer }
 
 func (x *wrapper) Write(p []byte) (int, error) { return x.w.Write(p) }
 
+// WrapFn returns a function that calls f (the shape of the middleware of the web frameworks: the closure that the dependency makes holds the function it was given).
+func WrapFn(f func(string) string) func(string) string { return func(s string) string { return f(s) } }
+
 // Request is the request that a Router hands to a handler.
 type Request struct{ Path string }
 
