@@ -97,7 +97,7 @@ func callbackTargets(irsrc ir.Source, rules *model.Rules, res *Result) map[ir.Fu
 }
 
 // functionOf follows a value to the function that makes it, through copies and conversions that keep it whole.
-func functionOf(form *irssa.Form, r irssa.Ref, depth int) (ir.FuncID, string) {
+func functionOf(form *irssa.Form, r irssa.Ref, depth int, closures func() *ir.ClosureIndex) (ir.FuncID, string) {
 	if depth > 8 {
 		return "", "not known (a long chain of copies)"
 	}
@@ -119,7 +119,16 @@ func functionOf(form *irssa.Form, r irssa.Ref, depth int) (ir.FuncID, string) {
 		if in.View || len(in.Args) != 1 {
 			return "", "not known"
 		}
-		return functionOf(form, form.Operand(r.Block, r.Index, 0), depth+1)
+		return functionOf(form, form.Operand(r.Block, r.Index, 0), depth+1, closures)
+	case ir.OpAlloc:
+		// Rust: a closure is not a make_closure but an alloc of the type of its environment; the function is the one at the place
+		// that the type names (ir.ClosureIndex). Not asked for by a caller that has no index (closures is nil).
+		if closures != nil && ir.IsEnvType(string(in.Type)) {
+			if f := closures().Lookup(string(in.Type)); f != nil {
+				return f.ID, ""
+			}
+		}
+		return "", "not known"
 	case ir.OpParam:
 		// followed to what the callers pass (callerWalk.functionsOf); here only when that is not asked
 		return "", "a parameter of the function that makes the call (a helper that registers what it is given)"
@@ -190,6 +199,15 @@ type callerWalk struct {
 	res   *Result
 	sited ir.Sited
 	forms map[ir.FuncID]*readFunc
+	ix    *ir.ClosureIndex
+}
+
+// closureIndex is the index of the closures of the program (Rust), made when the first closure is met.
+func (w *callerWalk) closureIndex() *ir.ClosureIndex {
+	if w.ix == nil {
+		w.ix = ir.NewClosureIndexOf(w.src)
+	}
+	return w.ix
 }
 
 // funcOf is the function that the caller at c is, with its form: made once while it is kept.
@@ -255,7 +273,7 @@ func (w *callerWalk) functionsOf(fn *ir.Func, form *irssa.Form, r irssa.Ref, dep
 			return ids, why
 		}
 	}
-	id, why := functionOf(form, r, 0)
+	id, why := functionOf(form, r, 0, w.closureIndex)
 	if id == "" {
 		return nil, why
 	}

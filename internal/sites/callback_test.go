@@ -236,3 +236,46 @@ func TestCallbackFormCacheBuildsOnce(t *testing.T) {
 		t.Errorf("every read built a form (%d): the cache is not used", res.callbackFormReads)
 	}
 }
+
+// rustClosureIR is the IR of Rust as the extractor writes it for a closure that captures nothing and is given to a method: the
+// closure is not a make_closure but an alloc of the type of its environment, converted to a function pointer; the function of the
+// closure is the one at the place that the type names (internal/ir/env.go).
+const rustClosureIR = `{"schema_version":"rivus.ir/1"}
+{"kind":"func","func":{"id":"zoo::reg","symbol":"zoo::reg","file":"src/c.rs","pos":{"line":3,"col":1},"exported":true,"roots":[0],
+ "locals":[{"class":"pointer"},{"class":"pointer"},{"class":"string"},{"class":"func"},{"class":"func"}],
+ "blocks":[{"id":0,"instrs":[
+  {"op":"alloc","dsts":[0],"type":"zoo_dep::Router","class":"struct","pos":{"line":4,"col":5}},
+  {"op":"const","dsts":[2],"const":{"kind":"nil"},"pos":{"line":5,"col":5}},
+  {"op":"alloc","dsts":[3],"type":"{closure@src/c.rs:5:20: 5:40}","class":"func","pos":{"line":5,"col":20}},
+  {"op":"convert","operator":"convert","dsts":[4],"args":[3],"type":"fn(&Request, &str)","pos":{"line":5,"col":20}},
+  {"op":"call","dsts":[1],"args":[0,2,4],"callee":{"kind":"static","func":"zoo_dep::Router::get","symbol":"zoo_dep::Router::get"},"pos":{"line":5,"col":5}}],
+  "term":{"kind":"return"}}]}}
+{"kind":"func","func":{"id":"zoo::reg::{closure#0}","symbol":"zoo::reg::{closure#0}","file":"src/c.rs","pos":{"line":5,"col":20},
+ "params":[{"class":"pointer","name":"req"},{"class":"string","name":"id"}],
+ "locals":[{"class":"pointer","name":"req"},{"class":"string","name":"id"}],
+ "blocks":[{"id":0,"instrs":[{"op":"param","dsts":[0],"index":0,"pos":{"line":5,"col":21}},{"op":"param","dsts":[1],"index":1,"pos":{"line":5,"col":26}}],"term":{"kind":"return"}}]}}
+`
+
+// A closure that is given to a method with a callback_param row: its parameters after the first are a source, as those of a named function are.
+func TestCallbackParamRustClosure(t *testing.T) {
+	prog, err := ir.Read(strings.NewReader(rustClosureIR))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rules := callbackRules(t, `
+sources:
+  - kind: callback_param
+    symbol: zoo_dep::Router::get
+    operand: 2
+    from: 1
+    labels: [user_input]
+`)
+	res := Enumerate(ir.MemSource(prog), ir.NewStreamTexts(prog), rules)
+	got := strings.Join(callbackSitesOf(res), " ")
+	if !strings.Contains(" "+got+" ", " zoo::reg::{closure#0}:1 ") {
+		t.Errorf("the closure that is given to the router is not marked: %q (notes %v)", got, callbackNotes(res))
+	}
+	if strings.Contains(got, ":0") {
+		t.Errorf("the request is marked: %q", got)
+	}
+}

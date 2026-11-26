@@ -765,7 +765,7 @@ func givenSinks(irsrc ir.Source, fn *ir.Func, rc rowCall, rules *model.Rules, ca
 				return ""
 			}
 		}
-		id, _ := functionOf(form, form.Operand(rc.at.Block, rc.at.Instr, i), 0)
+		id, _ := functionOf(form, form.Operand(rc.at.Block, rc.at.Instr, i), 0, nil)
 		return id
 	}
 	var calls []givenCall
