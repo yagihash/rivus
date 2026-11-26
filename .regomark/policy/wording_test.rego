@@ -239,3 +239,15 @@ test_gyou_counts_and_compounds_pass if {
 		not denied("paragraph", text)
 	}
 }
+
+test_kaku_as_center_is_denied if {
+	every text in ["判定の核", "核だけで読める", "支配関係を核にする", "隔離の核を読む", "核は 1 つ", "その核、", "核。"] {
+		denied("paragraph", text)
+	}
+}
+
+test_kaku_compounds_pass if {
+	every text in ["中核の機能", "結核の話", "核心を突く", "核兵器の話", "核融合の例", "原子核", "地核", "`核` の例"] {
+		not denied("paragraph", text)
+	}
+}
