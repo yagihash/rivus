@@ -38,7 +38,7 @@ const (
 
 // The highest number of a system call that the lists below were made with (the highest SYS_* of golang.org/x/sys/unix of the architecture, at the time they were
 // reviewed). The filter is a list of what is refused, so a call that is newer than the list (io_uring was one) would be let through by default: a number above
-// the ceiling is told that the call is not there (ENOSYS), as clone3 is. When golang.org/x/sys moves the highest number up, TestSeccompCeilingCoversXSys fails:
+// the ceiling is told that the call is not there (ENOSYS), as clone3 is. When golang.org/x/sys moves the highest number up, TestSandboxSeccompCeilingCoversXSys fails:
 // the new calls are to be read, put in deniedCalls or in the other lists when they need it, and the ceiling is raised.
 const (
 	seccompMaxNrAmd64 = 471 // SYS_RSEQ_SLICE_YIELD
