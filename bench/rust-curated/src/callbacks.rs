@@ -92,7 +92,7 @@ pub fn boxed() {
 
 // (iii) a function of the standard library that has no model: `Vec::retain` calls the closure
 pub fn retained() {
-    let a = source(); // @source(retained) @miss(silent)
+    let a = source(); // @source(retained)
     let mut v: Vec<i128> = vec![1, 2];
     v.retain(|_x| {
         sink(&a); // @sink(retained)
