@@ -1,0 +1,2 @@
+go	dart/dio_geturi/dio_geturi.go	sink-none	@sink(none)	func fixed() { @fixed
+go	dart/dio_geturi/dio_geturi.go	sink-none	@sink(none) @nosink(dart-dio-geturi-decoy)	func decoy() { @decoy

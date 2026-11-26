@@ -1,0 +1,2 @@
+go	dart/dio_multipartfile_path/dio_multipartfile_path.go	sink-none	@sink(none)	func fixed() { @fixed
+go	dart/dio_multipartfile_path/dio_multipartfile_path.go	sink-none	@sink(none) @nosink(dart-dio-multipartfile-path-decoy)	func decoy() { @decoy

@@ -5,9 +5,9 @@ import (
 	"testing"
 )
 
-// TestZooGoNaMarks holds the checks of bench/zoo-go/na.txt (zooGoMarkErrors) without the Dart SDK: TestZooDart skips
+// TestZooGoParityTodoMarks holds the checks of bench/zoo-go/parity-todo.txt (zooGoMarkErrors) without the Dart SDK: TestZooDart skips
 // without it.
-func TestZooGoNaMarks(t *testing.T) {
+func TestZooGoParityTodoMarks(t *testing.T) {
 	dart := map[string]*zooCell{
 		"F/a/both":   {name: "F/a/both"},
 		"F/a/dartna": {name: "F/a/dartna", na: []string{"go: no such form"}},
