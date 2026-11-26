@@ -1,5 +1,33 @@
 # Changelog
 
+## [v0.0.20](https://github.com/yagihash/rivus/compare/v0.0.19...v0.0.20) - 2026-11-26
+
+### Features
+- feat: ベンチと合格基準で extractor のハッシュが yes でないと失敗にする by @yagihash in https://github.com/yagihash/rivus/pull/539
+- bench: Go の呼び出しの位置を IR と比べる道具(B(3) の Go の分) by @yagihash in https://github.com/yagihash/rivus/pull/564
+- 合格基準のメモリの判定を 3 状態にする(PASS、余裕不足、FAIL) by @yagihash in https://github.com/yagihash/rivus/pull/572
+- bench: Go のセルを 4 件足す(Dart にあって Go にない形) by @yagihash in https://github.com/yagihash/rivus/pull/568
+- Rust の zoo: helper-overflow と conv の 2 セルを足す(PARITY 3 件) by @yagihash in https://github.com/yagihash/rivus/pull/585
+- Rust のモデル 3 行と zoo の 3 セル(downcast_mut、retain、symlink) by @yagihash in https://github.com/yagihash/rivus/pull/587
+- feat: summary.dart_version: 新しい Dart の sdk 指定を知らせる(result/5) by @yagihash in https://github.com/yagihash/rivus/pull/592
+- Rust の zoo に callback_param のセル 3 つとルールを足す by @yagihash in https://github.com/yagihash/rivus/pull/598
+- zoo: Dart の ptr-for-in を ptr-range-slice に改名し PARITY を付ける by @yagihash in https://github.com/yagihash/rivus/pull/601
+- zoo: Dart のパッケージ 16 セルと range-func の @na(承認済み) by @yagihash in https://github.com/yagihash/rivus/pull/600
+- Rust: 環境の alloc にクロージャの関数の ID を出し、コアは ID を先に引く(#233) by @yagihash in https://github.com/yagihash/rivus/pull/610
+- feat: 組み込みの sources と sinks だけを外す -no-builtin-sources-sinks を足す by @yagihash in https://github.com/yagihash/rivus/pull/621
+### Bug Fixes
+- fix: sink の site を、calls: の行に渡された関数参照から作る by @yagihash in https://github.com/yagihash/rivus/pull/538
+- 子の stderr の制御文字を除去する(SBX-4) by @yagihash in https://github.com/yagihash/rivus/pull/565
+- sandbox の待ち方を堅くする(WaitDelay、取り消しの区別、mountable、取得段階の環境) by @yagihash in https://github.com/yagihash/rivus/pull/566
+- 取得元の検査を、全ての Cargo.toml に当てる(Cargo.lock も TOML として読む) by @yagihash in https://github.com/yagihash/rivus/pull/567
+- 取得元の検査: 外を指すシンボリックリンクのディレクトリと、外へ出る path 依存を拒否 by @yagihash in https://github.com/yagihash/rivus/pull/575
+- seccomp: 拒否リストの番号に上限を置き、超える call は ENOSYS by @yagihash in https://github.com/yagihash/rivus/pull/579
+- sandbox: 外の inode を内へ持ち込む link / rename のプローブ by @yagihash in https://github.com/yagihash/rivus/pull/580
+- sanitizeForTerminal: 双方向の制御文字とゼロ幅の文字を可視にする by @yagihash in https://github.com/yagihash/rivus/pull/581
+- sites: Rust のクロージャを callback_param の関数として引く(#231) by @yagihash in https://github.com/yagihash/rivus/pull/596
+- fix: merge-pr.sh が main-ci の check を名指しで要求する(G1) by @yagihash in https://github.com/yagihash/rivus/pull/595
+- test: TestThreadCPU を負荷に左右されない形にする(#220) by @yagihash in https://github.com/yagihash/rivus/pull/602
+
 ## [v0.0.19](https://github.com/yagihash/rivus/compare/v0.0.18...v0.0.19) - 2026-11-25
 
 ### Features
