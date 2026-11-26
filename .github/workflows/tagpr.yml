@@ -170,11 +170,31 @@ jobs:
     permissions:
       id-token: write
       contents: read # scripts/rewrite-formula.sh を取り出す
+      attestations: read # `gh attestation verify`
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: refs/tags/${{ needs.tagpr.outputs.tag }}
           persist-credentials: false
+      # formula に書く tarball を、書き換える前に検証する（利用者の環境では検証しない。brew のビルドには gh のログインがないため）。
+      #   - ビルド来歴: このリポジトリの tagpr.yml が作った
+      #   - release attestation: そのタグの Release のアセットと同じ
+      # どちらかが失敗したら、formula は書き換えない。検証した、そのファイルから sha256 を求める。
+      - name: Verify the source tarball
+        id: tarball
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.tagpr.outputs.tag }}
+        run: |
+          set -euo pipefail
+          name="rivus_${TAG#v}_source.tar.gz"
+          mkdir -p "$RUNNER_TEMP/source"
+          gh release download "$TAG" --pattern "$name" --dir "$RUNNER_TEMP/source"
+          gh attestation verify "$RUNNER_TEMP/source/$name" --repo "$GH_REPO" \
+            --signer-workflow "${GH_REPO}/.github/workflows/tagpr.yml"
+          gh release verify-asset "$TAG" "$RUNNER_TEMP/source/$name" --repo "$GH_REPO"
+          echo "path=$RUNNER_TEMP/source/$name" >> "$GITHUB_OUTPUT"
       - id: token
         uses: yagihash/ghmint-action@be57533eef7f69550d06f0c93eede5589158281a # v1.0.0
         with:
@@ -184,12 +204,13 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.token.outputs.token }}
           TAG: ${{ needs.tagpr.outputs.tag }}
+          TARBALL: ${{ steps.tarball.outputs.path }}
         run: |
           set -euo pipefail
           repo=yagihash/homebrew-tap
           path=Formula/rivus.rb
           url="https://github.com/yagihash/rivus/releases/download/${TAG}/rivus_${TAG#v}_source.tar.gz"
-          sha=$(curl -fsSL "$url" | sha256sum | cut -d' ' -f1)
+          sha=$(sha256sum "$TARBALL" | cut -d' ' -f1)
           blob=$(gh api "repos/${repo}/contents/${path}" --jq .sha)
           gh api "repos/${repo}/contents/${path}" --jq .content | base64 -d | scripts/rewrite-formula.sh "$url" "$sha" > rivus.rb
           gh api -X PUT "repos/${repo}/contents/${path}" \
