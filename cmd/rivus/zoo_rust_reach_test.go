@@ -21,7 +21,7 @@ import (
 // The comment of each sink in the app says what its finding must have, as in the Dart app (TestDartFrameworkCallbacks):
 //
 //	// from_entry                  not not_from_entry: from_entry, or from_framework_callback (whichever way a fix finds the handlers)
-//	// from_entry @miss(reach)     the same expectation, and the engine says not_from_entry today: a ratchet, as every @miss (it
+//	// from_entry @miss(not_from_entry)     the same expectation, and the engine says not_from_entry today: a ratchet, as every @miss (it
 //	                               fails when the finding is not not_from_entry any more: remove the @miss in the same commit)
 //	// not_from_entry              the contrast: nothing registers the code, and the label must say so
 func TestZooRustReach(t *testing.T) {
@@ -35,7 +35,7 @@ func TestZooRustReach(t *testing.T) {
 		miss  bool
 	}
 	wants := map[string]want{}
-	re := regexp.MustCompile(`sink_cmd\(.*// (from_entry|from_framework_callback|not_from_entry)( @miss\(reach\))?`)
+	re := regexp.MustCompile(`sink_cmd\(.*// (from_entry|from_framework_callback|not_from_entry)( @miss\(not_from_entry\))?`)
 	for _, name := range []string{"main.rs", "server.rs"} {
 		f, err := os.Open(filepath.Join(src, "app", "src", name))
 		if err != nil {
@@ -133,7 +133,7 @@ func TestZooRustReach(t *testing.T) {
 		case w.miss:
 			miss++
 			if g != taint.ReachNotFromEntry {
-				t.Errorf("%s: reachability %q: the engine finds the handler now, remove @miss(reach) in the same commit", k, g)
+				t.Errorf("%s: reachability %q: the engine finds the handler now, remove @miss(not_from_entry) in the same commit", k, g)
 			}
 		case g != taint.ReachFromEntry && g != taint.ReachFromFrameworkCallback:
 			t.Errorf("%s: reachability %q, want from_entry or from_framework_callback", k, g)

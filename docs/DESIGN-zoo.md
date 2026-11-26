@@ -251,7 +251,7 @@ x := Src("a") // @source(a) @miss(silent) @ref(R-03)
 期待は、新しいマークを足さず、sink に付けたコメントに書く(Dart のアプリと同じ形)。
 
 - `// from_entry`: `not_from_entry` でない(`from_entry` か `from_framework_callback`。修正の形に依らない)。
-- `// from_entry @miss(reach) @ref(#N)`: 期待は同じで、エンジンが今 `not_from_entry` を出している。ratchet は `@miss` と同じ: `not_from_entry` でなくなったら、テストが落ちるので、同じコミットで `@miss(reach)` を外す。`@miss(reach)` は `marks.d` に入る(`bench/zoo/marks.d/rust/app/`)。
+- `// from_entry @miss(not_from_entry) @ref(#N)`: 期待は同じで、エンジンが今 `not_from_entry` を出している。ratchet は `@miss` と同じ: `not_from_entry` でなくなったら、テストが落ちるので、同じコミットで `@miss(not_from_entry)` を外す。`@miss(not_from_entry)` は `marks.d` に入る(`bench/zoo/marks.d/rust/app/`)。
 - `// not_from_entry`: 対照。誰にも登録されないコードで、`not_from_entry` が正。全部が `from_entry` になる退行を見逃さないために置く。
 
 テストは `zoo-rust-app: reach cells N | miss M | contrast ok` を出す。`miss 0` は、実対象の `not_from_entry`(#234)の解消の必要条件で、十分条件ではない(実対象の finding には、zoo の形にない理由で `not_from_entry` のものがありうる)。

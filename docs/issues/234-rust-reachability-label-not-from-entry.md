@@ -5,7 +5,7 @@
 - 種類: 取りこぼしに近い(`reachability` で絞り込む利用者から見ると、finding が出ていないのと同じ)
 - 言語: Rust
 - ROADMAP の節: B / C
-- 守るもの: zoo-rust-app(`bench/zoo-rust-app`、`TestZooRustReach`。再現するセルは `// from_entry @miss(reach)` の 3 つ)
+- 守るもの: zoo-rust-app(`bench/zoo-rust-app`、`TestZooRustReach`。再現するセルは `// from_entry @miss(not_from_entry)` の 3 つ)
 - 進める完了条件: -
 
 ## 何が起きるか(事実)
@@ -66,5 +66,5 @@ entry は `curated::main` の 1 つで、`main` に callee が 0 個。own 510 �
 原因は、この課題では決めていない(上の BFS は事実の記録)。順は次のとおり。
 
 1. 先に、zoo で到達性を測る仕組み。今の zoo-rust は entry を持たないので、`main` を持つ別のアプリ `bench/zoo-rust-app` を足した(`TestZooRustReach`。rustypaste と同じ形で、`not_from_entry` になることを再現する。ハンドラの `<X as HttpServiceFactory>::register` を指す edge が無く、trait が再 export の形のとき)。
-   `zoo-rust-app` の期待は「`not_from_entry` でない」で、修正の形に依らない。直ったら `@miss(reach)` を外す。
+   `zoo-rust-app` の期待は「`not_from_entry` でない」で、修正の形に依らない。直ったら `@miss(not_from_entry)` を外す。
 2. 直す形は、その次。エンジンの変更になる見込みで、設計者への相談の候補。

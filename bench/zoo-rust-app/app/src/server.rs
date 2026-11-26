@@ -46,7 +46,7 @@ impl HttpServiceFactory for serve {
     fn register(self, config: &mut AppService) {
         fn serve() {
             let file = src("app-serve");
-            sink_cmd(&file); // from_entry @miss(reach) @ref(#234)
+            sink_cmd(&file); // from_entry @miss(not_from_entry) @ref(#234)
         }
         config.register_resource(web::to(serve));
     }
@@ -57,7 +57,7 @@ impl HttpServiceFactory for upload {
     fn register(self, config: &mut AppService) {
         fn upload() {
             let file = src("app-upload");
-            sink_cmd(&file); // from_entry @miss(reach) @ref(#234)
+            sink_cmd(&file); // from_entry @miss(not_from_entry) @ref(#234)
         }
         config.register_resource(web::to(upload));
     }
@@ -68,7 +68,7 @@ impl HttpServiceFactory for delete {
     fn register(self, config: &mut AppService) {
         fn delete() {
             let file = src("app-delete");
-            sink_cmd(&file); // from_entry @miss(reach) @ref(#234)
+            sink_cmd(&file); // from_entry @miss(not_from_entry) @ref(#234)
         }
         config.register_resource(web::to(delete));
     }
