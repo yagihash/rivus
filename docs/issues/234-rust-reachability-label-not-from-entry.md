@@ -5,7 +5,7 @@
 - 種類: 取りこぼしに近い(`reachability` で絞り込む利用者から見ると、finding が出ていないのと同じ)
 - 言語: Rust
 - ROADMAP の節: B / C
-- 守るもの: zoo-rust-app(`bench/zoo-rust-app`、`TestZooRustReach`。再現するセルは `// from_entry @miss(not_from_entry)` の 3 つ)
+- 守るもの: zoo `bench/zoo-rust-app`(再 export の 3 つのハンドラ `serve` / `upload` / `delete` は `from_entry` の期待で、`@miss` は外した。対照の `lookalike` と `unused` は `not_from_entry`、過大近似の `orphan` は `from_entry`、`hooked` は `from_entry`)と、`cmd/rivus/zoo_rust_reach_test.go`
 - 進める完了条件: -
 
 ## 何が起きるか(事実)
@@ -55,9 +55,7 @@ entry は `curated::main` の 1 つで、`main` に callee が 0 個。own 510 �
 
 PR #620(`feat/rust-trait-identity-by-def-path`。extractor が trait の同一性を「クレート名 + 定義パス」で比べる)の測定(2026-11-27)で、**281 件の `not_from_entry` は、#620 で変わらなかった**(graph-check で finding の JSON 全体が `same`、`reachability` も同じ)。この対象の `not_from_entry` は別の原因で、`curated::main` の IR に callee が 0 個(上の BFS のとおり)。#620 では直らない。**次に調べる対象**。この課題は close にしない。
 
-rustypaste は、#620 で `from_entry` になった(12 件)。ただし #620 は未マージで、これは「#620 がマージされたら」の条件つき。
-
-ヘッダの「守るもの」の行(`@miss` の 3 つ)は、#620 がマージされたら直す(#620 の中で `@miss` を外したため。この PR では直さない)。
+rustypaste は、#620 でマージ済み(2026-11-27)。finding 12 件が全部 `not_from_entry` から `from_entry` になった。測定の表は #620 の本文を指す。ヘッダの「守るもの」の行は、#620 で `@miss` を外した状態に直した。
 
 同じ測定で、dyn 呼びの candidates が約 9 倍に増えた。課題 #236。
 
