@@ -28,6 +28,7 @@ var resultShapes = map[string]string{
 	"rivus.result/3": "cca52e17fe7a7fe820adabfeb4a99059f67f0553f940d16dec0e14c514c218da",
 	"rivus.result/4": "9036c751e7b5aa8d9449e893f3927134a8340b5888728f2e61ad8c82e23d6fa2",
 	"rivus.result/5": "b23fca971b5847edc3c837f563887d8b33a1a9771c9699f94c6b7295c071f069",
+	"rivus.result/6": "7832a643ed1850ed5981b5a3f9d08493a8668f0da23665235010e51a15e4bb10",
 }
 
 // resultShape describes, for every type that the result reaches from a Report, the keys that are written to the JSON and their types, and the

@@ -101,6 +101,8 @@ type Engine struct {
 	dispatch sync.Map // *sg.Instr -> map[*sg.Func][]Guard
 	// valueGuards is the same for the calls of function values (valueGuards).
 	valueGuards sync.Map // *sg.Instr -> map[string][]Guard
+	// applied is, for each call through an interface, a trait or a function value, the candidates that were applied (noteApplied).
+	applied sync.Map // *sg.Instr -> *appliedSet
 	// cellCalls is, for the calls of function values that read functions from a cell (funccells.go), the functions: *sg.Instr -> *cellCands
 	cellCalls sync.Map
 
@@ -617,6 +619,12 @@ type Result struct {
 	// NumericStops is, for each function where a value that would carry taint was dropped because it is a number or a
 	// bool, how many times (summary.numeric_stops). Not in the output of the engine: the report makes it.
 	NumericStops []NumericStopCount `json:"-"`
+	// ValueCandidates is how many candidates the calls of function values have, in the IR (summary.value_candidates): by
+	// the bucket of the number the call was found with. DispatchApplied is how many candidates the analysis applied, over the
+	// calls through an interface, a trait or a function value (summary.dispatch_candidates_applied). Not in the output of
+	// the engine: the report makes them.
+	ValueCandidates map[string]int `json:"-"`
+	DispatchApplied int            `json:"-"`
 }
 
 // NumericStopCount is the number of times the numeric and bool rule dropped taint in one function.
@@ -1540,6 +1548,8 @@ func (e *Engine) collect(st Stats) *Result {
 		}
 	}
 	sort.Slice(res.NumericStops, func(i, j int) bool { return res.NumericStops[i].Func < res.NumericStops[j].Func })
+	res.ValueCandidates = e.valueCandidateCounts()
+	res.DispatchApplied = e.dispatchApplied()
 	// the functions whose summary has an output that was widened: one record, with the list
 	if u, _, _ := e.outLimitRecord(); u != nil {
 		res.Uncertainties = append(res.Uncertainties, u)

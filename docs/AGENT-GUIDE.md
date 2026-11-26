@@ -370,7 +370,7 @@ dart extractor /opt/homebrew/bin/rivus-dart  schema rivus.ir/0  (UNKNOWN: its an
 
 ## 5. 出力の読み方
 
-`analyze` の出力(`schema_version: "rivus.result/5"`)の、いちばん上のフィールドです。形(キーと型、`kind` と `attributable_to` の値)が変わると、足しただけでも、番号が上がります(ADR-127)。`rivus.result/1` と書いてある結果は、番号を上げる運用の前に書かれたもので、`kind` とフィールドが、書いた時点の rivus によって違います。
+`analyze` の出力(`schema_version: "rivus.result/6"`)の、いちばん上のフィールドです。形(キーと型、`kind` と `attributable_to` の値)が変わると、足しただけでも、番号が上がります(ADR-127)。`rivus.result/1` と書いてある結果は、番号を上げる運用の前に書かれたもので、`kind` とフィールドが、書いた時点の rivus によって違います。
 
 | フィールド | 中身 |
 |---|---|
@@ -495,6 +495,8 @@ dart extractor /opt/homebrew/bin/rivus-dart  schema rivus.ir/0  (UNKNOWN: its an
 | `summary.unread.skipped_languages` | ディレクトリにあるのに読まなかった言語と理由: `declined`、`no-terminal`、`not-installed`、`no-sandbox` |
 | `summary.callback_param_unresolved` | `callback_param` のルールが指す呼び出しのうち、ハンドラの関数を特定できなかったもの(`count`、`sites[]` の `func`・`position`・`symbol`)。**呼び出しの場所**で、source になるはずだった関数の場所ではない。その関数の引数は source として扱われていない。ルールの行がなければ出ない |
 | `summary.numeric_stops` | 数値や bool の型の値に汚染を載せなかった(既定。`-numeric-taint` で追う)回数を、原因で 2 つに分けたもの。`char_reads`: 文字列・byte 列・rune 列の 1 要素として読んだ値(Go の `s[i]`、`range s`、rune、Dart の `codeUnitAt`)で止まった数(`total`、`functions`、回数の多い 10 関数 `top[]` の `function`・`scope`(`project` か `dependency`)・`count`)。定数の添字の `s[0]` は数えない。**数える形は言語で違い、数えない形は 0 のままで、止まっていないとは限らない**: Go は byte・rune の型と、定数でない添字の文字列の添字。Dart は `codeUnitAt`、`codeUnits`・`runes` の繰り返しと添字(`runes.map((r) => ...)` のコールバックに渡る要素は数えない)。Rust は `bytes()`・`chars()`・`char_indices()` の繰り返し、`as_bytes()[i]`、`char` 型(それ以外の Rust の byte の取り出しは数えない。#185)。`other`: 長さ、添字、カウンタ、数値への変換、比較、モデルが作る数で止まった数(`total`、`functions`。仕様どおりなので、数だけ)。`total` は両方の合計。呼び出し先の要約を作る間と使う間の分も、止まった関数に数える。**常に出る**(0 のときも)。**`char_reads` の関数は、文字を 1 つずつ扱っている(字句解析、1 文字ずつの置換・符号化)ので、期待した sink が出ないときは、まずそこを見る**(流れがそこで切れている可能性がある。課題 #185)。**数は、場所の数ではなく、止めた回数で、関数の中の反復で、同じ場所が複数回入ることがある。大小の比較に使う目安であり、たとえば 407 は 407 か所ではない。時間切れが起きた実行では、数が実行ごとに変わりうる(打ち切られた訪問では、前の値との大きいほうを残す。時間切れが 0 の実行では変わらない)。**`project` の関数があると、標準エラーに `N functions stopped a flow at per-character reads: summary.numeric_stops` が 1 行出る。`numeric_stop` の uncertainty(source ごとに 1 件)とは別の数 |
+| `summary.value_candidates` | 関数値の呼び(`f(x)` の `f` が関数の値)を、IR で見つかった関数の数で数えたもの。区切りは `0`、`1`、`2-5`、`6-20`、`21-32`、`33+`(出るのは、数のある区切りだけ)。**`33+` は、32 を超える関数が値に届くので、rivus が解決しない(その呼びの候補を追わない)呼びの数**(ADR-050)。`summary.dispatch_candidates` と同じ形だが、数えるものが違う: こちらは IR の呼び出し箇所を 1 回ずつ数え、実行によらない。`partial` の呼びは、見つかった数で数える(`rivus.result/6`) |
+| `summary.dispatch_candidates_applied` | interface、trait、関数値を通る呼びで、解析が実際に適用した候補の数(呼びと候補の組を 1 回ずつ。再解析の回数や並び順で変わらない)。IR の候補の合計(`dispatch_candidates`)ではない: モデルのある呼びで、依存の本体を適用しない分、本体のない候補、どの関数からも届かない呼びは数えない。解析が払ったコストの目安(`rivus.result/6`) |
 | `summary.skipped_dirs`、`outside_configuration` | 読まなかったディレクトリ、ビルドの条件で外れたファイル |
 | `summary.memory_limit_bytes` / `memory_limit_source` / `memory_limit_note` | その実行のメモリの上限(上限なしのときは `memory_limit_bytes` がない)。出所は `flag`、`env`、`default`、`none`。`note` は、上限がない理由、または `-max-memory` が `GOMEMLIMIT` を上書きしたこと。結果には影響しない |
 | `summary.memory_limit_exceeded` | **メモリの上限が低すぎたか**。実行の間に、Go のランタイムが使っていたメモリ(`memory_peak_bytes`)が上限を **5% 以上超えた**ことがあれば `true`(`peak > limit × 1.05`。やわらかい上限が守れているときも、ピークは上限の近くに張りつくので、ちょうどを境目にしない)。`true` は、上限が、解析のライブヒープ(強制 GC のあとの量)より低く、守れず、GC が回り続けて、時間が増えた可能性が高いことを言う。**`-max-memory` を上げて、再実行する**。やわらかい上限なので、`true` でも結果は完全(`incomplete` とは別)。上限がないとき(`memory_limit_source: none`)は、この項目がない |

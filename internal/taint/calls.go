@@ -337,10 +337,13 @@ func (s *state) callBody(cc *callCtx) {
 	if n := s.funcIntoDependency(cc, withBody, modelled); n != nil {
 		notes = append(notes[:len(notes):len(notes)], n)
 	}
-	for _, fn := range withBody {
+	for i, fn := range withBody {
 		b := bindings
 		if cb, ok := ci.CandidateBindings[fn]; ok {
 			b = cb
+		}
+		if dispatch != nil && s.eng.summaryOf(fn) != nil {
+			s.eng.noteApplied(ci, i, len(withBody))
 		}
 		s.applySummary(cc, fn, b, notes, which[fn])
 	}
@@ -423,9 +426,10 @@ func (s *state) valueCandidates(cc *callCtx) {
 	}
 	guards := s.valueGuards(ci)
 	var external []string
-	for _, c := range cands {
+	for i, c := range cands {
 		cx := s.valueCtx(cc, c)
 		if cx.sym != "" && rules.HasModel(cx.sym) {
+			s.eng.noteApplied(ci, i, len(cands))
 			s.applyModel(cx)
 			continue
 		}
@@ -433,6 +437,9 @@ func (s *state) valueCandidates(cc *callCtx) {
 			b := []*sg.Value(nil)
 			if cb, ok := ci.CandidateBindings[fn]; ok {
 				b = cb
+			}
+			if s.eng.summaryOf(fn) != nil {
+				s.eng.noteApplied(ci, i, len(cands))
 			}
 			s.applySummary(cx, fn, b, notes, guards[string(c.ID)])
 			continue
