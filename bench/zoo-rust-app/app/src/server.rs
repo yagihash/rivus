@@ -46,7 +46,7 @@ impl HttpServiceFactory for serve {
     fn register(self, config: &mut AppService) {
         fn serve() {
             let file = src("app-serve");
-            sink_cmd(&file); // from_entry @miss(not_from_entry) @ref(#234)
+            sink_cmd(&file); // from_entry
         }
         config.register_resource(web::to(serve));
     }
@@ -57,7 +57,7 @@ impl HttpServiceFactory for upload {
     fn register(self, config: &mut AppService) {
         fn upload() {
             let file = src("app-upload");
-            sink_cmd(&file); // from_entry @miss(not_from_entry) @ref(#234)
+            sink_cmd(&file); // from_entry
         }
         config.register_resource(web::to(upload));
     }
@@ -68,20 +68,21 @@ impl HttpServiceFactory for delete {
     fn register(self, config: &mut AppService) {
         fn delete() {
             let file = src("app-delete");
-            sink_cmd(&file); // from_entry @miss(not_from_entry) @ref(#234)
+            sink_cmd(&file); // from_entry
         }
         config.register_resource(web::to(delete));
     }
 }
 
-// a handler that no route registers: nothing that main reaches gives it to the config, and no framework is told of it, so its finding stays
-// not_from_entry (the contrast: if every finding here becomes from_entry, the label means nothing)
+// a handler that no route registers. `ServiceConfig::service<F: HttpServiceFactory>` calls `register` on a type parameter, and the
+// candidates of a call through a type parameter are all the impls of the trait (the rule of every call through a trait: a dyn call, a call of
+// `Fn::call`), so an impl that nothing registers is reached too: an over-approximation, the side that misses less. Its finding is from_entry.
 pub struct orphan;
 impl HttpServiceFactory for orphan {
     fn register(self, config: &mut AppService) {
         fn orphan() {
             let file = src("app-orphan");
-            sink_cmd(&file); // not_from_entry
+            sink_cmd(&file); // from_entry
         }
         config.register_resource(web::to(orphan));
     }
@@ -110,7 +111,7 @@ pub mod other {
     }
 
     // a dyn call of another trait of the module (the same method name), which main reaches: it gives the callee the impls of its own trait
-    // and no handler of `zoo_web`, so the handlers keep the findings that they have, and `orphan` (above) stays not_from_entry
+    // and no handler of `zoo_web`, so it gives no impl of another trait a caller
     pub trait Hook {
         fn register(&self);
     }
@@ -124,5 +125,18 @@ pub mod other {
 
     pub fn run_hook(hook: &dyn Hook) {
         hook.register();
+    }
+
+    // the contrast of a trait that nothing calls: no dyn call, no call through a type parameter, and nothing registers it, so no call
+    // can reach its impl, and its finding stays not_from_entry (if every finding here becomes from_entry, the label means nothing)
+    pub trait Unused {
+        fn run(&self);
+    }
+
+    pub struct unused;
+    impl Unused for unused {
+        fn run(&self) {
+            sink_cmd(&src("app-unused")); // not_from_entry
+        }
     }
 }

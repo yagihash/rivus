@@ -252,7 +252,7 @@ x := Src("a") // @source(a) @miss(silent) @ref(R-03)
 
 - `// from_entry`: `not_from_entry` でない(`from_entry` か `from_framework_callback`。修正の形に依らない)。
 - `// from_entry @miss(not_from_entry) @ref(#N)`: 期待は同じで、エンジンが今 `not_from_entry` を出している。ratchet は `@miss` と同じ: `not_from_entry` でなくなったら、テストが落ちるので、同じコミットで `@miss(not_from_entry)` を外す。`@miss(not_from_entry)` は `marks.d` に入る(`bench/zoo/marks.d/rust/app/`)。
-- `// not_from_entry`: 対照。誰にも登録されないコードで、`not_from_entry` が正。全部が `from_entry` になる退行を見逃さないために置く。対照は 2 つ: `orphan`(どの route にも登録されないハンドラ)と `lookalike`(同じアプリの別モジュール `other` にある、同名・同メソッドの別 trait `HttpServiceFactory` の impl。trait を定義パスで比べる修正が、`zoo_web` の trait と取り違えないことを見る)。`other::hooked` は、同じモジュールの別 trait の dyn 呼びを main が通る `// from_entry` で、その dyn 呼びが `orphan` に呼び元を与えないことを見る。
+- `// not_from_entry`: 対照。誰にも登録されないコードで、`not_from_entry` が正。全部が `from_entry` になる退行を見逃さないために置く。対照は 2 つ: `other::unused`(どこからも dyn 呼びにも型パラメータ越しの呼びにも使われない trait `Unused` の impl)と `lookalike`(同じアプリの別モジュール `other` にある、同名・同メソッドの別 trait `HttpServiceFactory` の impl。trait を定義パスで比べる修正が、`zoo_web` の trait と取り違えないことを見る)。`other::hooked` は、同じモジュールの別 trait の dyn 呼びを main が通る `// from_entry` で、その dyn 呼びが別の trait の impl に呼び元を与えないことを見る。`orphan`(どの route にも登録されないハンドラ)は `// from_entry`: `ServiceConfig::service<F>` の型パラメータ越しの `register` の candidates は、その trait の全 impl(ほかの dyn 呼びや `Fn::call` と同じ規則)なので、登録されない impl にも届く。見逃しより安全な側の過大近似で、別の課題で扱う。
 
 テストは `zoo-rust-app: reach cells N | miss M | contrast ok` を出す。`miss 0` は、実対象の `not_from_entry`(#234)の解消の必要条件で、十分条件ではない(実対象の finding には、zoo の形にない理由で `not_from_entry` のものがありうる)。
 
