@@ -1,7 +1,7 @@
 // Package helper_overflow_many is a cell of the zoo.
 //
 // @cell(F/clos/helper-overflow-many)
-// @shape: thirty-four different closures are passed to one helper that calls its function argument, the same 34 closures as the Dart cell: Go writes this form as it is (a func literal passed to `transform`); the 32 of ADR-050 is the limit of the Dart value candidates, and Go takes the candidates from the call graph, so all 34 flows are found (no @miss, unlike Dart's @miss(depth_limit) @ref(#77))
+// @shape: thirty-four different closures are passed to one helper that calls its function argument, the same 34 closures as the Dart cell: Go writes this form as it is (a func literal passed to `transform`); the 32 of ADR-050 is the limit of the Dart value candidates, and Go takes the candidates from the call graph, so all 34 flows are found (the Dart cell records a depth_limit miss in issue 77; the Go cell records none)
 package helper_overflow_many
 
 import (
