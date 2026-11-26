@@ -24,7 +24,7 @@ func TestZooGreps(t *testing.T) {
 				return nil
 			}
 			if info.IsDir() {
-				if info.Name() == ".dart_tool" || info.Name() == "target" { // what pub and cargo write (absolute paths of this machine), not committed
+				if info.Name() == ".dart_tool" || info.Name() == "target" || info.Name() == "__pycache__" { // what pub, cargo and python write (absolute paths of this machine), not committed (.gitignore)
 					return filepath.SkipDir
 				}
 				return nil
