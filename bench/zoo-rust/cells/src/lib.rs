@@ -8,9 +8,7 @@
 //! @na(F/call/regexp-replace: Go's regexp replacement with a function and with a literal replacement; the regex crate is a dependency, and the Rust zoo has none)
 //! @na(F/dyn/iface-assert-ptr-recv: Go's type assertion of `any` to an interface read through a pointer receiver; Rust has neither)
 //! @todo(F/dyn/iface-write-passed: PARITY: Go's pointer held in an `io.Writer` interface value that a function writes to (ADR-090); a Rust `&mut dyn Write` passed to a function and read back from the owner can be written)
-//! @todo(F/clos/callback-of-callback: PARITY: Go's closure that takes a function as its parameter and calls it (`g(a)`: the callback of a callback); a Rust closure `|g: &dyn Fn(String) -> String| g(a)` passed to a helper is the same form)
 //! @todo(F/clos/helper-overflow-many: PARITY: Go's thirty-four different closures passed to one helper that calls its function argument (more candidates than the 32 of ADR-050); Rust closures passed to a helper are the same form, and `helper_overflow.rs` has ten)
-//! @todo(F/clos/wrapped-by-dependency: PARITY: Go's function of the project given to a dependency (zoodep.WrapFn) that returns a closure calling it, which the project calls; a Rust closure passed to a function of the dependency crate that returns a closure is the same form)
 //! @todo(F/dart/dio-download-savepath: PARITY: Go's value that goes into the path of the file that a downloaded body is written to by os.OpenFile after Client.Get; Rust で未測定: reqwest と std::fs::File::create)
 //! @todo(F/dart/dio-get: PARITY: Go's value in the URL of http.Get; Rust で未測定: reqwest::blocking::get)
 //! @todo(F/dart/dio-geturi: PARITY: Go's value in the URL object made by url.Parse that http.NewRequest takes and Client.Do sends; Rust で未測定: reqwest::Url::parse と Client::get)
@@ -26,6 +24,7 @@ pub mod call {
     pub mod multiret;
 }
 pub mod clos {
+    pub mod callback_of_callback;
     pub mod capture_write_by_ref;
     pub mod helper_overflow;
     pub mod inline;
@@ -47,6 +46,7 @@ pub mod clos {
     pub mod to_own_helper;
     pub mod to_sort;
     pub mod two_callers;
+    pub mod wrapped_by_dependency;
 }
 pub mod cont {
     pub mod map_key_vs_value;

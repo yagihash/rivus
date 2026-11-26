@@ -26,6 +26,12 @@ pub fn opaque(s: &mut zoo_mark::Stmt) {
     }
 }
 
+/// Returns a closure that calls `f` (the shape of the middleware of the web frameworks: the closure that the dependency makes holds the
+/// function it was given).
+pub fn wrap_fn<F: Fn(String) -> String>(f: F) -> impl Fn(String) -> String {
+    move |s| f(s)
+}
+
 /// The request that a `Router` hands to a handler.
 pub struct Request {
     pub path: String,

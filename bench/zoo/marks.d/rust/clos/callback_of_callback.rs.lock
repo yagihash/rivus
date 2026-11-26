@@ -1,0 +1,2 @@
+rust	clos/callback_of_callback.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	clos/callback_of_callback.rs	sink-none	@sink(none) @nosink(clos-callback-of-callback-decoy)	fn decoy() { @decoy
