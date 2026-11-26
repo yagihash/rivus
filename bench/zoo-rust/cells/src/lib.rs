@@ -133,6 +133,7 @@ pub mod rust {
     pub mod dyn_vs_mono;
     pub mod from_into;
     pub mod iterator_chain;
+    pub mod macro_closure_twice;
     pub mod macro_rules;
     pub mod mut_out_param;
     pub mod option_result_chain;

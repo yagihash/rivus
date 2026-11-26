@@ -104,6 +104,7 @@ pub fn register_all() {
     c::rust::dyn_vs_mono::register();
     c::rust::from_into::register();
     c::rust::iterator_chain::register();
+    c::rust::macro_closure_twice::register();
     c::rust::macro_rules::register();
     c::rust::mut_out_param::register();
     c::rust::option_result_chain::register();
