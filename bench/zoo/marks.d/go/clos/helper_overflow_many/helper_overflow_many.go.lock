@@ -1,0 +1,3 @@
+go	clos/helper_overflow_many/helper_overflow_many.go	miss	@shape @miss @miss(depth_limit) @ref(#77)	-
+go	clos/helper_overflow_many/helper_overflow_many.go	sink-none	@sink(none)	func fixed() { @fixed
+go	clos/helper_overflow_many/helper_overflow_many.go	sink-none	@sink(none) @nosink(clos-helper-overflow-many-decoy)	func decoy() { @decoy

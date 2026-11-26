@@ -9,6 +9,7 @@
 //! @na(F/dyn/iface-assert-ptr-recv: Go's type assertion of `any` to an interface read through a pointer receiver; Rust has neither)
 //! @todo(F/dyn/iface-write-passed: PARITY: Go's pointer held in an `io.Writer` interface value that a function writes to (ADR-090); a Rust `&mut dyn Write` passed to a function and read back from the owner can be written)
 //! @todo(F/clos/callback-of-callback: PARITY: Go's closure that takes a function as its parameter and calls it (`g(a)`: the callback of a callback); a Rust closure `|g: &dyn Fn(String) -> String| g(a)` passed to a helper is the same form)
+//! @todo(F/clos/helper-overflow-many: PARITY: Go's thirty-four different closures passed to one helper that calls its function argument (more candidates than the 32 of ADR-050); Rust closures passed to a helper are the same form, and `helper_overflow.rs` has ten)
 pub mod call {
     pub mod depth3;
     pub mod direct;

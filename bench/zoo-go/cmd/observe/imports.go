@@ -13,6 +13,7 @@ import (
 	_ "zoo/cells/clos/callback_of_callback"
 	_ "zoo/cells/clos/capture_write_by_ref"
 	_ "zoo/cells/clos/helper_overflow"
+	_ "zoo/cells/clos/helper_overflow_many"
 	_ "zoo/cells/clos/inline"
 	_ "zoo/cells/clos/local_fn_from_closure"
 	_ "zoo/cells/clos/local_recursion"
