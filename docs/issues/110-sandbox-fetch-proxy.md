@@ -19,3 +19,7 @@
 ## 経緯
 
 - 2026-11-22: macOS のサンドボックスへの切り替え(ADR-093)で、ユーザーが「切り替えを先に、ハードニングは後」と決めた分として、課題に上げた。
+
+## 追記(2026-11-26。今のコード)
+
+`ProxyPort`(`internal/sandbox/sandbox.go`。Seatbelt と Landlock の実装があり、テストは `landlock_linux_test.go`)は、`sandbox` パッケージにあるが、取得の段階(`cmd/rivus/isolate_sandbox_darwin.go` と `isolate_sandbox_linux.go` の `fetchSpec`)は `Network = true` で動かしていて、`ProxyPort` を使っていない(`cmd/` に `ProxyPort` の使用はない)。宛先の絞り込みに移すときの前提。
