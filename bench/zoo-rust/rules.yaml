@@ -10,6 +10,13 @@ sources:
     labels: [user_input]
   - symbol: zoo_mark::src_bytes
     labels: [user_input]
+  # the function that is given to the router: the segment of the path that the router hands to it (the parameter after the request) is
+  # user input (callback_param: the function is found where the route is registered; operand 0 is the receiver, 1 the route, 2 the handler)
+  - kind: callback_param
+    symbol: zoo_dep::Router::get
+    operand: 2
+    from: 1
+    labels: [user_input]
   # a source that is the type of a parameter: the handler under test takes an In
   - kind: param_type
     type: zoo_mark::In

@@ -25,3 +25,37 @@ pub fn opaque(s: &mut zoo_mark::Stmt) {
         s.sql = b.clone();
     }
 }
+
+/// The request that a `Router` hands to a handler.
+pub struct Request {
+    pub path: String,
+}
+
+/// A handler of a route: it takes the request and the segment that the route captures.
+pub type Handler = fn(&Request, &str);
+
+/// The skeleton of a router for the cells (the shape of the routers of the web frameworks): a handler is registered with a route, and
+/// `serve` calls it with the request and the segment that the route captures (`/item/{id}`: the text of `id`).
+pub struct Router {
+    routes: Vec<(String, Handler)>,
+}
+
+impl Router {
+    pub fn new() -> Router {
+        Router { routes: Vec::new() }
+    }
+
+    /// Registers the handler of the route.
+    pub fn get(&mut self, route: &str, h: Handler) {
+        self.routes.push((route.to_string(), h));
+    }
+
+    /// Calls the handler of the route with the request and the segment of the path.
+    pub fn serve(&self, route: &str, req: &Request, segment: &str) {
+        for (r, h) in &self.routes {
+            if r == route {
+                h(req, segment);
+            }
+        }
+    }
+}
