@@ -71,3 +71,8 @@
 - **書ける**: コールバックを**引数で渡して、その呼び出しの中で呼ばれる**関数(`fn: argN`)。登録のときに、登録の行で呼ばれたものとして扱う。`shelf_router` の `Router.get` は、今、`calls:` でなく `callback_param`(ハンドラの引数を source にする行)で足りている(流れは zoo のセルで検出)。
 - **書けない**: 渡したときでなく、**あとで別の関数(`Router.call`、`Navigator.pushNamed`)が、レシーバが持つ関数を呼ぶ**形。MODELING.md の 2 つ目の基準の説明に、「コンストラクタに渡して、あとで呼ばれる関数(`RetryClient(when:)`)は、`calls:` では、まだ書けない」とある。`calls:` の行は、呼び出し先の関数を持たないので、グラフのエッジにもならない(モデルの行は、グラフのエッジを作らない)。
 - つまり、書式が足りない。足すなら、「登録の行が持つ関数を、別の関数のエッジとして足す」形になる。エッジだけの欠落(流れは検出されている)なので、優先度は低い。
+
+## 追記(2026-11-26。C 36 件の uncertainty、`compare.py` の列の合わせ)
+
+- **C 36 件(`clos/helper-overflow-many`)は、出力が言っている**(すること 4 は、この課題に含まれ、確かめた)。`rivus analyze -lang dart` を zoo の cells に実行すると、`helper_overflow_many.dart` に `depth_limit` の uncertainty が 37 件ある。1 件は `transform` の `f(s)`(44 行 59 列。観測した `no_edge` の呼び出し元と同じ位置。`candidate_limit: ... 36 functions, more than the 32`)、36 件は `transform(a, (x) {...})` の呼び出し 1 件ずつ(`vuln`、`vuln2`、... の 48 行 12 列など。`what is passed as argument 1 ... none of them is followed`)。付く先は、呼び出し元とヘルパーの関数で、グラフのエッジには付かない(`rivus graph` の出力に出るかは、確かめていない)。新しい課題は要らない。
+- 照合の誤りを直した(`dart/operator-index-split` の `[]=` 2 件。`no_edge` 64 → 62。`no_callsite` は 28 → 15)。詳細は `bench/zoo-dart/observed/README.md`。

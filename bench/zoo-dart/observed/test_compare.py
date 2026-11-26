@@ -90,5 +90,37 @@ class Names(unittest.TestCase):
         self.assertEqual(self.g.callee('nested.zzz.q', U, 5, 1), [])
 
 
+class Operators(unittest.TestCase):
+    def setUp(self):
+        # `b[0] = b[0]` on line 27: the graph has the `[]=` site at column 3 (the start of `b`) and the `[]` site at
+        # column 10; the VM reports the `[]=` at column 4.
+        self.g = graph(
+            [(1, 'vuln', 25, 1), (2, 'Box.[]', 10, 3), (3, 'Box.[]=', 12, 3), (4, 'Box.run', 14, 3)],
+            [(1, 1, 27, 3), (2, 1, 27, 10), (3, 1, 28, 3)],
+            [(1, 3), (2, 2), (3, 4)])
+
+    def test_operator_found_left_of_the_frame_column(self):
+        self.assertEqual(self.g.callsite(U, 27, 4), [(10, 2, 'value', 1)])  # the plain lookup takes the other call
+        self.assertEqual(self.g.operator_sites(U, 27, 4, [3], 'Box.[]='), [(3, 1, 'value', 1)])
+
+    def test_the_other_operator_is_not_taken(self):
+        self.assertEqual(self.g.operator_sites(U, 27, 4, [2], 'Box.[]'), [])  # `[]` is reached from column 10, right of the frame
+
+    def test_a_plain_method_is_never_matched_to_the_left(self):
+        self.assertEqual(self.g.operator_sites(U, 28, 9, [4], 'Box.run'), [])
+
+    def test_setter_named_by_the_frame(self):
+        # the graph names a setter `Box.x`, the VM `Box.x=`
+        g = graph([(1, 'f', 1, 1), (2, 'Box.x', 5, 3)], [(1, 1, 9, 5)], [(1, 2)])
+        self.assertEqual(g.operator_sites(U, 9, 7, [2], 'Box.x='), [(5, 1, 'value', 1)])
+        self.assertEqual(g.operator_sites(U, 9, 7, [2], 'Box.x'), [])
+
+    def test_is_operator_callee(self):
+        for s in ('Box.[]', 'Box.[]=', 'Cls1.x=', 'A.==', 'A.+'):
+            self.assertTrue(compare.is_operator_callee(s), s)
+        for s in ('Box.run', 'Foo.new', 'vuln$1'):
+            self.assertFalse(compare.is_operator_callee(s), s)
+
+
 if __name__ == '__main__':
     unittest.main()

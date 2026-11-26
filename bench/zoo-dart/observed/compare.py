@@ -106,6 +106,16 @@ class Graph:
         line, col = (int(x) for x in at.split(':'))
         return [c[0] for c in self.by_uri.get(uri, []) if (c[3], c[4]) == (line, col)]
 
+    def operator_sites(self, uri, line, col, ids, name):
+        """The sites of the line that start left of the frame's column and whose edges reach one of `ids`, when the
+        callee is an operator or a setter (`name` is the name in the frame: the graph names a setter `C.x`, the VM `C.x=`). The VM says where the operator is (`b[0] = v`: the `[`), the graph where
+        the expression starts (the `b`), so the nearest site on or after the column is another call (the `[]` of the
+        right side). The callee decides, and only for an operator callee, so that another call is never taken for
+        this one."""
+        if not (is_operator_callee(name) or any(is_operator_callee(self.funcs[i][1]) for i in ids)):
+            return []
+        return [s for s in self.sites.get((uri, line), []) if s[0] < col and set(ids) & self.reach.get(s[1], set())]
+
     def callsite(self, uri, line, col):
         """The call sites of the line from the column of the frame on (the VM says where the name starts, the graph
         where the arguments start)."""
@@ -116,6 +126,15 @@ class Graph:
             return []
         best = min(s[0] for s in cs)
         return [s for s in cs if s[0] == best]
+
+
+OPERATOR = re.compile(r'(\[\]=?|[^\w.$]+|\w+=)$')
+
+
+def is_operator_callee(sym):
+    """A callee that the VM reports at the operator (`[`, `=`), where the graph puts the site at the start of the
+    receiver: `[]`, `[]=`, a setter `x=`, a binary operator. (`==`, `<=` and so on are operators too.)"""
+    return bool(OPERATOR.search(sym.split('#', 1)[-1].rsplit('.', 1)[-1]))
 
 
 def main():
@@ -148,12 +167,15 @@ def main():
                     continue
                 if not ids:
                     status = 'callee_unresolved'
-                elif not site:
-                    status = 'no_callsite'
-                elif any(set(ids) & g.reach.get(s[1], set()) for s in site):
-                    status = 'ok'
                 else:
-                    status = 'no_edge'
+                    if not any(set(ids) & g.reach.get(s[1], set()) for s in site):
+                        site = g.operator_sites(nxt[1], nxt[2], nxt[3], ids, callee[0]) or site
+                    if not site:
+                        status = 'no_callsite'
+                    elif any(set(ids) & g.reach.get(s[1], set()) for s in site):
+                        status = 'ok'
+                    else:
+                        status = 'no_edge'
                 info = {'status': status, 'from': '%s %s:%d:%d' % (nxt[0], nxt[1], nxt[2], nxt[3]), 'to': cname,
                         'site_kind': sorted({s[2] for s in site}), 'site_ncand': [s[3] for s in site], 'cases': {row['case']}}
                 seen[key] = info
