@@ -1,11 +1,11 @@
 # #239 Rust: 34 個のクロージャを 1 つのヘルパーに渡すと、候補が広がり、セルの別のケースの sink に source が混ざる(`unexpected flow` 約 1100 件)
 
-- 状態: **open**
+- 状態: **closed**(直った。原因は、Rust の絞り込み `decide` が出所の数の上限 32 を超えると絞らないことだった。上限を `ir.NarrowOriginMost`(1024)に分けた。ADR-050 の追記)
 - 優先度: 中
 - 種類: 過検出(誤った流れ)
 - 言語: Rust(Go は 34 件とも正しい。Dart は 34 件とも見逃す: #77)
 - ROADMAP の節: B / C
-- 守るもの: -(Rust のセルは、まだ無い。`bench/zoo-rust/cells/src/lib.rs` の `@todo(F/clos/helper-overflow-many: PARITY ...)` が、この課題を指す)
+- 守るもの: zoo `F/clos/helper-overflow-many`(Rust のセル。`@todo` は外した)
 - 進める完了条件: -
 
 ## 何が起きるか(事実)

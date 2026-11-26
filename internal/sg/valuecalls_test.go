@@ -266,11 +266,11 @@ func TestValueCallWithMoreThanEightCandidatesIsLeftUnresolved(t *testing.T) {
 		}
 		return candidatesOf(t, funcs...)
 	}
-	if got := build(ir.ValueCandidateMost); len(got["apply"]) != ir.ValueCandidateMost {
-		t.Errorf("%d candidates are kept: %v", ir.ValueCandidateMost, got["apply"])
+	if got := build(ir.ValueEnumerateMost); len(got["apply"]) != ir.ValueEnumerateMost {
+		t.Errorf("%d candidates are kept: %v", ir.ValueEnumerateMost, got["apply"])
 	}
-	if got := build(ir.ValueCandidateMost + 1); len(got["apply"]) != 0 {
-		t.Errorf("%d are too many to say: %v", ir.ValueCandidateMost+1, got["apply"])
+	if got := build(ir.ValueEnumerateMost + 1); len(got["apply"]) != 0 {
+		t.Errorf("%d are too many to say: %v", ir.ValueEnumerateMost+1, got["apply"])
 	}
 }
 

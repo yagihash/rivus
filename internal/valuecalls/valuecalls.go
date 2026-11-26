@@ -28,8 +28,9 @@ import (
 )
 
 // most is the number of candidates beyond which a call is left unresolved: a
-// value that many functions flow to says little.
-const most = ir.ValueCandidateMost
+// value that many functions flow to says little. (The narrowing of Rust's Fn::call has its own limit,
+// ir.NarrowOriginMost.)
+const most = ir.ValueEnumerateMost
 
 // maxDepth is how many calls up the arguments are followed.
 const maxDepth = 3

@@ -103,7 +103,7 @@ func (s *state) closureBindings(fn *sg.Func) []*sg.Value {
 
 // applyFuncCells applies the summary of each function that the cell of the called value holds, besides what the call
 // does without them: the call stays one that nothing resolved (the value may be a function that is not in the cell).
-// More than ir.ValueCandidateMost functions are all followed too (the result does not depend on the order of the iteration), and the call says so.
+// More than ir.ValueEnumerateMost functions are all followed too (the result does not depend on the order of the iteration), and the call says so.
 func (s *state) applyFuncCells(cc *callCtx) {
 	ci := cc.in
 	if !s.funcCellCall(ci) {
@@ -113,11 +113,11 @@ func (s *state) applyFuncCells(cc *callCtx) {
 	if len(ids) == 0 {
 		return
 	}
-	if len(ids) > ir.ValueCandidateMost {
+	if len(ids) > ir.ValueEnumerateMost {
 		// A flow that was added while the cell held fewer cannot be taken back, so the result would depend on the order of
 		// the iteration if the cell were folded: every function of the cell is followed (the same whatever the order), and
 		// the call says that there are more than rivus keeps for a call (ADR-118, condition ii)
-		s.newNote(ci, KindDepthLimit, "candidate_limit: the cell of the function value holds "+itoa(len(ids))+" functions, more than the "+itoa(ir.ValueCandidateMost)+" that rivus keeps for a call; all of them are followed here, because a flow added while the cell held fewer cannot be taken back (rivus' limit, not the code's)", "")
+		s.newNote(ci, KindDepthLimit, "candidate_limit: the cell of the function value holds "+itoa(len(ids))+" functions, more than the "+itoa(ir.ValueEnumerateMost)+" that rivus keeps for a call; all of them are followed here, because a flow added while the cell held fewer cannot be taken back (rivus' limit, not the code's)", "")
 	}
 	s.eng.noteCellCands(ci, ids)
 	n := s.newNote(ci, KindUnresolvedCallee, "func_cells: the functions that were put in the cell this value is read from are followed ("+itoa(len(ids))+
@@ -187,13 +187,13 @@ func (e *Engine) noteCellCands(ci *sg.Instr, ids []string) {
 }
 
 // FuncCellCandidates are the functions that the calls of function values read from a cell (sorted), after Run: the
-// candidates of the call, for the graph of "rivus index -taint". A call that was given more than ir.ValueCandidateMost
+// candidates of the call, for the graph of "rivus index -taint". A call that was given more than ir.ValueEnumerateMost
 // is left out.
 func (e *Engine) FuncCellCandidates() map[*sg.Instr][]string {
 	out := map[*sg.Instr][]string{}
 	e.cellCalls.Range(func(k, v any) bool {
 		c := v.(*cellCands)
-		if len(c.ids) > ir.ValueCandidateMost {
+		if len(c.ids) > ir.ValueEnumerateMost {
 			return true
 		}
 		ids := make([]string, 0, len(c.ids))
