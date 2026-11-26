@@ -21,6 +21,7 @@ pub fn register_all() {
     c::clos::to_lib_call::register();
     c::clos::to_lib_map::register();
     c::clos::to_lib_ref::register();
+    c::clos::to_lib_where::register();
     c::clos::to_sort::register();
     c::clos::to_nomodel::register();
     c::clos::to_nomodel_ref::register();
@@ -29,6 +30,7 @@ pub fn register_all() {
     c::clos::to_own_helper::register();
     c::clos::two_callers::register();
     c::cont::map_key_vs_value::register();
+    c::cont::ptr_commaok_assert::register();
     c::cont::ptr_commaok_map::register();
     c::cont::ptr_get_mut::register();
     c::cont::ptr_range_deque::register();
@@ -60,6 +62,7 @@ pub fn register_all() {
     c::conv::struct_field_deep::register();
     c::conv::struct_field_opaque::register();
     c::conv::struct_field_shallow::register();
+    c::dart::io_link_create_target::register();
     c::dyns::func_field::register();
     c::dyns::func_map::register();
     c::dyns::generics_ptr::register();

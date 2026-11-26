@@ -181,6 +181,14 @@ fn main() {
         r.borrow_mut().see(&[x.clone()]);
         false
     }));
+    case!("std::vec::Vec::retain", RECV, |r| {
+        let mut v = vec![s("RECV")];
+        v.retain(|x| {
+            r.borrow_mut().see(&[x.clone()]);
+            true
+        });
+        v
+    });
     case!("std::iter::Iterator::all", RECV, |r| vec![s("RECV")].into_iter().all(|x| {
         r.borrow_mut().see(&[x.clone()]);
         true

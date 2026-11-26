@@ -433,6 +433,8 @@ propagators:
     flows: [{from: args, to: result, alias: true}]
   - symbol: std::collections::HashMap::get_mut
     flows: [{from: args, to: result, alias: true}]
+  - symbol: "<(dyn std::any::Any + 'static)>::downcast_mut"
+    flows: [{from: args, to: result, alias: true}]
   - symbol: std::collections::hash_map::Entry::or_insert
     flows: [{from: args, to: result, alias: true}, {from: arg1, to: arg0}]
   - symbol: std::collections::hash_map::Entry::or_insert_with
@@ -485,6 +487,8 @@ propagators:
     calls: [{fn: arg1, with: [arg0]}]
   - symbol: std::iter::Iterator::any
     flows: [{from: args, to: result}]
+    calls: [{fn: arg1, with: [arg0]}]
+  - symbol: std::vec::Vec::retain
     calls: [{fn: arg1, with: [arg0]}]
   - symbol: std::iter::Iterator::all
     flows: [{from: args, to: result}]
@@ -604,6 +608,10 @@ sinks:
     accepts: [user_input]
   - symbol: std::fs::OpenOptions::open
     args: [1]
+    category: path_traversal
+    accepts: [user_input]
+  - symbol: std::os::unix::fs::symlink
+    args: [0, 1]
     category: path_traversal
     accepts: [user_input]
   - symbol: std::net::TcpStream::connect
