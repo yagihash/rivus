@@ -1,0 +1,2 @@
+rust	clos/helper_overflow.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	clos/helper_overflow.rs	sink-none	@sink(none) @nosink(clos-helper-overflow-decoy)	fn decoy() { @decoy
