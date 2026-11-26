@@ -23,3 +23,5 @@ zoo のセル `F/rust/macro-closure-twice` の extractor の出力で確かめ�
 ## 直した内容
 
 環境の `alloc` に、そのクロージャの関数の ID を `Instr.Func` で出す(extractor: 何も捕捉しないクロージャの定数の経路と、`Aggregate` の経路。本体が読まれているクロージャだけ)。コアは `ir.ClosureIndex.FuncOf` を 1 つの入口にして、ID があって、その関数がプログラムにあればそれ、なければ従来どおり型から `Lookup` する(`sg` の `linkEnvClosures`、`sites` の `functionOf`、`valuecalls` の `narrow`)。IR の版は `rivus.ir/1` のまま(形は変わらない)。zoo の `vuln2` の `@miss` を外した。
+
+安全網として、`ir.ClosureIndex.Lookup` は同じ位置の関数の件数も返し、ID でも引けないときの `callback_param_unresolved` の理由は、2 個以上なら `one of N closures written at the same place (a macro)` と出る(0 個は従来の `not known`)。状態は closed のまま。

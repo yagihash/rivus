@@ -89,19 +89,21 @@ func NewClosureIndexOf(src Source) *ClosureIndex {
 	return ix
 }
 
-// Lookup is the function of the closure whose environment has this type: exactly one function at the
-// place (a macro that writes the closure in many places is not matched). nil if there is none or many.
-func (ix *ClosureIndex) Lookup(env string) *Func {
+// Lookup is the functions of the closures whose environment has this type: n is how many functions are at the place that the type
+// names (0 if the type is not one of an environment, or the program has none there), and f is the function when n is 1, else nil.
+// A macro that writes the closure in many places makes many functions at one place (n >= 2), which the type cannot tell apart.
+func (ix *ClosureIndex) Lookup(env string) (f *Func, n int) {
 	m := envType.FindStringSubmatch(env)
 	if m == nil {
-		return nil
+		return nil, 0
 	}
 	line, _ := strconv.Atoi(m[2])
 	col, _ := strconv.Atoi(m[3])
-	if fs := ix.at[closureAt{m[1], line, col}]; len(fs) == 1 {
-		return fs[0]
+	fs := ix.at[closureAt{m[1], line, col}]
+	if len(fs) == 1 {
+		return fs[0], 1
 	}
-	return nil
+	return nil, len(fs)
 }
 
 // FuncOf is the ID of the function of the closure that an alloc of an environment is the value of: the function that the alloc
@@ -118,7 +120,7 @@ func (ix *ClosureIndex) FuncOf(env string, fn FuncID) FuncID {
 	if ix == nil {
 		return ""
 	}
-	if f := ix.Lookup(env); f != nil {
+	if f, _ := ix.Lookup(env); f != nil {
 		return f.ID
 	}
 	return ""

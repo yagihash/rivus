@@ -75,3 +75,50 @@ sources:
 		}
 	}
 }
+
+// The reason of the note: two closures at one place that the ID does not tell apart say how many there are; a closure that the
+// program does not have at all keeps the plain reason. With the ID, nothing is noted.
+func TestCallbackParamRustClosureTwiceReason(t *testing.T) {
+	rules := callbackRules(t, `
+sources:
+  - kind: callback_param
+    symbol: zoo_dep::Router::get
+    operand: 2
+    from: 1
+    labels: [user_input]
+`)
+	notes := func(src string, a, b string) []string {
+		prog, err := ir.Read(strings.NewReader(fmt.Sprintf(src, a, b)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		res := Enumerate(ir.MemSource(prog), ir.NewStreamTexts(prog), rules)
+		var out []string
+		for _, n := range res.UnresolvedCallbacks {
+			out = append(out, n)
+		}
+		return out
+	}
+	const want = "one of 2 closures written at the same place (a macro)"
+	got := notes(rustClosureTwiceIR, "", "")
+	if len(got) != 2 {
+		t.Fatalf("want 2 notes: %v", got)
+	}
+	for _, n := range got {
+		if !strings.Contains(n, want) {
+			t.Errorf("the reason is not %q: %q", want, n)
+		}
+	}
+	if got := notes(rustClosureTwiceIR, "zoo::v::{closure#0}", "zoo::v::{closure#1}"); len(got) != 0 {
+		t.Errorf("the closures are found by their IDs, but noted: %v", got)
+	}
+	// The type names a place where the program has no function: the reason stays as it was.
+	none := strings.ReplaceAll(rustClosureTwiceIR, `"pos":{"line":5,"col":20},
+ "params"`, `"pos":{"line":50,"col":20},
+ "params"`)
+	for _, n := range notes(none, "", "") {
+		if strings.Contains(n, "closures written at the same place") || !strings.Contains(n, "not known") {
+			t.Errorf("no function at the place: the reason changed: %q", n)
+		}
+	}
+}
