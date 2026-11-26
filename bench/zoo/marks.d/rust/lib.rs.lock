@@ -1,4 +1,5 @@
 rust	lib.rs	na	@na(F/call/regexp-replace: Go's regexp replacement with a function and with a literal replacement; the regex crate is a dependency, and the Rust zoo has none)	-
 rust	lib.rs	na	@na(F/clos/range-func: Go's range over a function (Go 1.23: `for v := range seq`, the iterator calls yield); Rust has no loop that calls a closure for the body: an iterator is driven by `next`, and a `for` over it is a call of `next`)	-
 rust	lib.rs	na	@na(F/dyn/iface-assert-ptr-recv: Go's type assertion of `any` to an interface read through a pointer receiver; Rust has neither)	-
+rust	lib.rs	todo-parity	@todo(F/clos/callback-of-callback: PARITY: Go's closure that takes a function as its parameter and calls it (`g(a)`: the callback of a callback); a Rust closure `|g: &dyn Fn(String) -> String| g(a)` passed to a helper is the same form)	-
 rust	lib.rs	todo-parity	@todo(F/dyn/iface-write-passed: PARITY: Go's pointer held in an `io.Writer` interface value that a function writes to (ADR-090); a Rust `&mut dyn Write` passed to a function and read back from the owner can be written)	-
