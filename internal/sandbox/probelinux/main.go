@@ -34,6 +34,7 @@ var (
 	inhFd  = flag.Int("inherited-fd", -1, "a file descriptor that the test left open in the process that started the probe (not close-on-exec): is it still here?")
 	attrDD = flag.String("attr-dotdot", "", "a path, as it is written (not cleaned), whose mode is changed: dir/link/../file, where link points to another directory")
 	attrNl = flag.Bool("attr-null", false, "the mode of /dev/null is changed (a place that the run may write)")
+	ceil   = flag.Int("ceiling", 0, "the highest number of a system call that the filter knows: the call above it is made (the sandbox answers ENOSYS)")
 	attrFd = flag.String("attr-fd", "", "a file that may be read and not written: it is opened, and fchownat with AT_EMPTY_PATH is made on the descriptor (reported, with the path of the file)")
 )
 
@@ -188,6 +189,11 @@ func main() {
 	}
 	_, _, errno0 := unix.Syscall6(unix.SYS_SENDTO, ^uintptr(0), 0, 0, 0x20000000, 0, 0)
 	report("tcp-fastopen", errno0 != unix.EPERM, fmt.Sprint(errno0))
+	// a system call above the highest that the filter knows (ENOSYS: on the host a kernel without such a call says the same, so this is told as BLOCKED only)
+	if *ceil > 0 {
+		_, _, e := unix.Syscall(uintptr(*ceil+1), 0, 0, 0)
+		report("above-ceiling", e != unix.ENOSYS, fmt.Sprint(e))
+	}
 	// io_uring (it makes sockets by itself)
 	_, _, errno := unix.Syscall(unix.SYS_IO_URING_SETUP, 1, 0, 0)
 	report("io-uring", errno != unix.EPERM, fmt.Sprint(errno))
