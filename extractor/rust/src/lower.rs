@@ -480,6 +480,18 @@ impl<'a> Lower<'a> {
         self.emit("unsupported", &[], &[], pos, json!({"reason": reason}));
     }
 
+    /// The fields of the `alloc` of the environment of the closure `def`: its type and class, and `func`, the ID of the function of
+    /// the closure (the type names only the place where the closure is written, and a macro that writes a closure many times at
+    /// one place makes many functions there). A closure whose body is not in the stream (not read, or skipped) has no function to
+    /// name, so `func` is left out and the reader tells it by the type.
+    fn closure_alloc(&self, def: rustc_public::ty::ClosureDef, ty: &Ty, class: &str) -> Value {
+        let mut m = json!({"type": type_id(ty), "class": class});
+        if let Some(id) = closure_func(&self.cx.bodies, def) {
+            m["func"] = json!(id);
+        }
+        m
+    }
+
     fn emit(&mut self, op: &str, dsts: &[usize], args: &[usize], pos: &Pos, extra: Value) {
         let mut m = Map::new();
         m.insert("op".into(), json!(op));
@@ -918,8 +930,9 @@ impl<'a> Lower<'a> {
             return d;
         }
         // a closure that captures nothing: a value of its own type, with no fields
-        if let TyKind::RigidTy(RigidTy::Closure(..)) = ty.kind() {
-            self.emit("alloc", &[d], &[], pos, json!({"type": type_id(&ty), "class": class_of(&ty)}));
+        if let TyKind::RigidTy(RigidTy::Closure(def, _)) = ty.kind() {
+            let extra = self.closure_alloc(def, &ty, class_of(&ty));
+            self.emit("alloc", &[d], &[], pos, extra);
             return d;
         }
         // a reference to a static: the address of the one variable every
@@ -1021,7 +1034,12 @@ impl<'a> Lower<'a> {
                 let vals: Vec<usize> = ops.iter().map(|o| self.operand(o, pos)).collect();
                 let d = out(self);
                 let cls = ty.as_ref().map(class_of).unwrap_or("struct");
-                self.emit("alloc", &[d], &[], pos, json!({"type": ty.as_ref().map(type_id).unwrap_or_default(), "class": cls}));
+                let extra = match (kind, ty.as_ref()) {
+                    (AggregateKind::Closure(def, _), Some(t)) => self.closure_alloc(*def, t, cls),
+                    // default-ok: not a syntax kind: only a closure says the function of its environment: the other kinds are an alloc of a type
+                    _ => json!({"type": ty.as_ref().map(type_id).unwrap_or_default(), "class": cls}),
+                };
+                self.emit("alloc", &[d], &[], pos, extra);
                 for (i, v) in vals.iter().enumerate() {
                     let name = match kind {
                         AggregateKind::Adt(_, vi, _, _, active) => match ty.as_ref() {
@@ -1464,6 +1482,13 @@ impl<'a> Lower<'a> {
 /// names: it has no `/`, which the paths of the analysis use) and the number of the field.
 pub(crate) fn closure_field(def: rustc_public::ty::ClosureDef, i: usize) -> String {
     format!("{}.{}", def.name(), i)
+}
+
+/// The ID of the function of the closure `def`, if its body is in the stream (`bodies`: the names of the functions that are lowered): the
+/// name that `closure_field` and the calls of the closure use, and the ID of its function (`main.rs`: the name of its `CrateItem`).
+pub(crate) fn closure_func(bodies: &HashSet<String>, def: rustc_public::ty::ClosureDef) -> Option<String> {
+    let name = def.name();
+    bodies.contains(&name).then_some(name)
 }
 
 /// The name of the upvar `i` of the coroutine `def` (an `async` block, or the future of an `async fn`): like a

@@ -139,8 +139,8 @@ func linkedCrates(src ir.Source) map[string]bool {
 					visit(in.Func)
 				}
 				if in.Op == ir.OpAlloc && ir.IsEnvType(string(in.Type)) {
-					if cl := idx.Lookup(string(in.Type)); cl != nil {
-						visit(cl.ID)
+					if id := idx.FuncOf(string(in.Type), in.Func); id != "" {
+						visit(id)
 					}
 				}
 				if in.Op != ir.OpCall || in.Callee == nil {
@@ -398,12 +398,12 @@ func (t *trace) origins(f *ir.Func, ref irssa.Ref, depth int) {
 		t.add(in.Func)
 	case ir.OpAlloc:
 		if ir.IsEnvType(string(in.Type)) {
-			cl := t.n.idx.Lookup(string(in.Type))
-			if cl == nil {
+			id := t.n.idx.FuncOf(string(in.Type), in.Func)
+			if id == "" {
 				t.stop(notUnknown)
 				return
 			}
-			t.add(cl.ID)
+			t.add(id)
 			return
 		}
 		t.cell(f, form, ref, depth)

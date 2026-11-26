@@ -535,7 +535,8 @@ type Instr struct {
 	// Global is the variable of a global_load, a global_store, or an addr_of
 	// that takes the address of a global (no argument then).
 	Global string `json:"global,omitempty"`
-	// Func is the function of a make_closure.
+	// Func is the function of a make_closure; of an alloc of the environment of a closure (Rust), the function of that closure
+	// (when its body is read). ir.Targets takes it as an edge in both.
 	Func FuncID `json:"func,omitempty"`
 	// View marks a copy that shares memory with its source (a slice of an
 	// array): the elements are the same elements.

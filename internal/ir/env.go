@@ -42,7 +42,8 @@ func IsClosureID(id string) bool { return strings.Contains(id, "{closure#") }
 // of an environment is the value of (the graph of the analysis and the narrowing of the candidates of a
 // call of a closure use it).
 type ClosureIndex struct {
-	at map[closureAt][]*Func
+	at   map[closureAt][]*Func
+	byID map[FuncID]bool
 }
 
 type closureAt struct {
@@ -52,11 +53,12 @@ type closureAt struct {
 
 // NewClosureIndex indexes the closures among the functions.
 func NewClosureIndex(funcs []*Func) *ClosureIndex {
-	ix := &ClosureIndex{at: map[closureAt][]*Func{}}
+	ix := &ClosureIndex{at: map[closureAt][]*Func{}, byID: map[FuncID]bool{}}
 	for _, f := range funcs {
 		if f == nil || !IsClosureID(string(f.ID)) {
 			continue
 		}
+		ix.byID[f.ID] = true
 		file := f.Pos.File
 		if file == "" {
 			file = f.File
@@ -69,12 +71,13 @@ func NewClosureIndex(funcs []*Func) *ClosureIndex {
 
 // NewClosureIndexOf is NewClosureIndex over the functions of a Source: only the closures are read.
 func NewClosureIndexOf(src Source) *ClosureIndex {
-	ix := &ClosureIndex{at: map[closureAt][]*Func{}}
+	ix := &ClosureIndex{at: map[closureAt][]*Func{}, byID: map[FuncID]bool{}}
 	for i, n := 0, src.Len(); i < n; i++ {
 		h := src.Head(i)
 		if h.Gone || !IsClosureID(string(h.ID)) {
 			continue
 		}
+		ix.byID[h.ID] = true
 		f := Must(src, Ref{ID: h.ID, Seq: i})
 		file := f.Pos.File
 		if file == "" {
@@ -99,4 +102,24 @@ func (ix *ClosureIndex) Lookup(env string) *Func {
 		return fs[0]
 	}
 	return nil
+}
+
+// FuncOf is the ID of the function of the closure that an alloc of an environment is the value of: the function that the alloc
+// says (Instr.Func: the extractor writes the ID of the closure there), if the program has it; else the one at the place that the
+// type names (Lookup). "" if neither. This is the one entry that says which function an alloc of an environment is the value of.
+// The type names a place, and a macro that writes a closure many times at one place makes many functions there, which the type
+// cannot tell apart; the ID can. An alloc that has no ID (an old extractor, or a closure whose body is not read) is told by its type.
+// A nil index cannot say whether the program has the function: the ID is taken as it is (as the Func of a make_closure is), and an
+// alloc that has none is not told by its type.
+func (ix *ClosureIndex) FuncOf(env string, fn FuncID) FuncID {
+	if fn != "" && (ix == nil || ix.byID[fn]) {
+		return fn
+	}
+	if ix == nil {
+		return ""
+	}
+	if f := ix.Lookup(env); f != nil {
+		return f.ID
+	}
+	return ""
 }

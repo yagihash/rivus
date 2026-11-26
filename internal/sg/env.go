@@ -3,8 +3,8 @@ package sg
 import "github.com/yagihash/rivus/internal/ir"
 
 // linkEnvClosures finds the function of each closure that is made as the alloc of its environment
-// (Rust: a closure that captured values is not a make_closure). The type of the environment says
-// where the closure is written, and the function of the closure is at that place (ir.ClosureIndex:
+// (Rust: a closure that captured values is not a make_closure). The alloc says the function of its closure
+// (Instr.Func); without it, the type of the environment says where the closure is written, and the function is at that place (ir.ClosureIndex:
 // the one rule, shared with the narrowing of the candidates of Fn::call).
 func (p *Program) linkEnvClosures() {
 	var index *ir.ClosureIndex
@@ -24,11 +24,11 @@ func (p *Program) linkEnvClosures() {
 					}
 					index = ir.NewClosureIndex(irs)
 				}
-				if f := index.Lookup(in.IR.Env); f != nil {
+				if id := index.FuncOf(in.IR.Env, in.IR.Func); id != "" {
 					if p.EnvClosures == nil {
 						p.EnvClosures = map[*Instr]*Func{}
 					}
-					p.EnvClosures[in] = p.ByID[string(f.ID)]
+					p.EnvClosures[in] = p.ByID[string(id)]
 				}
 			}
 		}
