@@ -18,7 +18,7 @@ Rust の実対象で、finding が全部 `reachability: not_from_entry` にな�
 | rust-curated | 0 | 0 | 281 |
 | zoo-rust | 292 | 0 | 0 |
 | memos(Go) | 182 | 0 | 0 |
-| Gitea(Go) | 342 | 0 | 17 |
+| Gitea(Go) | 342 | 0 | 17(全部テスト用ヘルパーが sink。下の「Gitea(Go)の `not_from_entry` 17 件」) |
 | cocoon(Dart) | 56 | 0 | 0 |
 | dart_services(Dart) | 22 | 0 | 0 |
 
@@ -26,7 +26,7 @@ Rust の実対象で、finding が全部 `reachability: not_from_entry` にな�
 
 - zoo-rust の IR に、entry の関数は 0 個。起点が無いので、`reach()` は「Exported かつ !Dep の関数を全部 root にする」ライブラリ扱いになり、その結果が `from_entry` になっている。**実対象の到達性を測っていない**。
 - cocoon と dart_services は「ある時点の出力」で、最新の main での再測定はしていない。
-- Gitea の `not_from_entry` 17 件は、中身を確かめていない(Go でも起きているかどうかは未確認)。
+- Gitea の `not_from_entry` 17 件は、中身を見た(下の「Gitea(Go)の `not_from_entry` 17 件」)。Rust の形(ハンドラ登録が切れる)とは別の形。
 
 `reachability` で絞り込む利用者(エージェントを含む)から見ると、実対象の Rust の finding が全部「entry から届かない」と読める。
 
@@ -53,8 +53,30 @@ Rust の実対象で、finding が全部 `reachability: not_from_entry` にな�
 
 entry は `curated::main` の 1 つで、`main` に callee が 0 個。own 510 のうち、main から届くのは main 自身の 1 つ(粗い BFS)。281 件の source は、`curated::...` の別の関数。
 
+## Gitea(Go)の `not_from_entry` 17 件(事実)
+
+出典は `gitea-pin.json`(359 件、`from_entry` 342、`not_from_entry` 17。17 件とも `reachability_note` が付く)と、pin のソース(95ba37d9)の `git grep`(2026-11-26)。
+
+- 17 件の source は全部 `modules/httplib.getRequestScheme`(`modules/httplib/url.go:47`)。
+- sink は 3 つの関数だけ。
+  - `models/migrations/base.deleteDB`: 10 件(path_traversal 1、sql_injection 9、path の関数 33)。
+  - `tests.InitTest`: 6 件(sql_injection、path の関数 33)。
+  - `models/unittest.DumpQueryResult`: 1 件(sql_injection、path の関数 47)。
+- sink の位置は `models/migrations/base/tests.go`、`tests/test_utils.go`、`models/unittest/unit_tests.go` の 3 ファイルだけ。
+- 3 つの sink 関数の呼び元:
+  - `deleteDB`: `PrepareTestEnv`(`tests.go:139,153`。`_test.go` から使われる)だけ。
+  - `tests.InitTest`: `tests/integration/integration_test.go:90` だけ。
+  - `DumpQueryResult`: 定義のほかに呼び元なし。
+- `from_entry` の finding に、sink がテストヘルパーのものは 0 件。
+- source の `getRequestScheme` と、path の入口 `routers/install.SubmitInstall`(`install.Routes()` の `r.Post("/", ..., SubmitInstall)` で登録されたハンドラ。`cmd/web.go:150` から呼ばれる)は reach にある(同じ関数が `from_entry` の finding の source と path に入っているため)。つまり Go では、ハンドラ登録の形(`web.Route`)は reach に入っている。
+- 見つかった形は「テスト用ヘルパーが sink で、呼び元がテストだけ」の 17/17。ハンドラ登録が切れた件、interface の dyn 呼びが切れた件、`init`、goroutine、reflect、`go:generate`、別の `main` は 0 件。
+- 読み(推定): この `not_from_entry` は、ラベルとして正しい(entry から届かないテストヘルパーの sink)と読める。
+- **未確認**: `reach` の集合そのもの。Gitea 分のグラフファイルが無く、`rivus graph` を使えなかった。「3 つの sink 関数が `reach` に無い」は、呼び元がテストだけ、という読みからの推定。
+- **未確認**: `DumpQueryResult` の path の後半(`db.InitEngine`、`setting.DBConnStr` など)が `reach` にあるか。
+
 ## 関連
 
+- Gitea(Go)の 17 件は、Rust の形(ハンドラ登録が切れる)とは別で、テスト用ヘルパーが sink の形(上の節)。この課題の対象は Rust のまま
 - ADR-052(`not_from_entry`)
 - ADR-058(Rust の parseable で、finding 159 件の 100% が `not_from_entry` だった過去の記録。dyn の候補が空だったことと、環境 `alloc` の closure の 2 点を直した)
 - ADR-073(`from_framework_callback`。一部は ADR-125 に覆われた)、ADR-125
