@@ -22,6 +22,7 @@ cmd/rivus.runAnalyze -> cmd/rivus.projectToolchain [os.ReadFile]  # the toolchai
 cmd/rivus.runAnalyze -> cmd/rivus.projectToolchain [os.ReadFile]  # the toolchain file of the project (-C) is read to choose the toolchain of the run: ADR-093
 cmd/rivus.runAnalyze -> cmd/rivus.readIR [os.Open]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
 cmd/rivus.runAnalyze -> cmd/rivus.readIRSpill [os.Open]  # the file that holds the IR beside the run is opened to be read back (the spill of ADR-123; the path comes from the flags of the run): the same flow as readIR
+cmd/rivus.runAnalyze -> cmd/rivus.runExtractorVersion [os/exec.CommandContext]  # the extractor command of -extractor (or -lang) is run with its version flag, to read the hash of its source before the analysis (ADR-126): what the flag names is what runs
 cmd/rivus.runAnalyze -> internal/frontend/gossa.countTestFiles [os.ReadDir]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
 cmd/rivus.runAnalyze -> internal/graphdb.hashFile [os.Open]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
 cmd/rivus.runAnalyze -> internal/sandbox.Run [os/exec.Command]  # the project, the extractor and the paths that the flags name are what the sandbox runs and prepares (the run of a build under the sandbox: docs/DESIGN-macos-sandbox.md)
@@ -70,6 +71,7 @@ cmd/rivus.runIndex -> cmd/rivus.projectToolchain [os.ReadFile]  # the toolchain 
 cmd/rivus.runIndex -> cmd/rivus.projectToolchain [os.ReadFile]  # the toolchain file of the project (-C) is read to choose the toolchain of the run: ADR-093
 cmd/rivus.runIndex -> cmd/rivus.readIR [os.Open]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
 cmd/rivus.runIndex -> cmd/rivus.readIRSpill [os.Open]  # the file that holds the IR beside the run is opened to be read back (the spill of ADR-123; the path comes from the flags of the run): the same flow as readIR
+cmd/rivus.runIndex -> cmd/rivus.runExtractorVersion [os/exec.CommandContext]  # the extractor command of -extractor (or -lang) is run with its version flag, to read the hash of its source before the analysis (ADR-126): what the flag names is what runs
 cmd/rivus.runIndex -> cmd/rivus.runVersion [os/exec.CommandContext]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
 cmd/rivus.runIndex -> internal/frontend/gossa.countTestFiles [os.ReadDir]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
 cmd/rivus.runIndex -> internal/graphdb.Write [os.Chmod]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
@@ -102,6 +104,7 @@ cmd/rivus.runModelsCoverage -> cmd/rivus.projectToolchain [os.ReadFile]  # the t
 cmd/rivus.runModelsCoverage -> cmd/rivus.projectToolchain [os.ReadFile]  # the toolchain file of the project (-C) is read to choose the toolchain of the run: ADR-093
 cmd/rivus.runModelsCoverage -> cmd/rivus.readIR [os.Open]
 cmd/rivus.runModelsCoverage -> cmd/rivus.readIRSpill [os.Open]  # the file that holds the IR beside the run is opened to be read back (the spill of ADR-123; the path comes from the flags of the run): the same flow as readIR
+cmd/rivus.runModelsCoverage -> cmd/rivus.runExtractorVersion [os/exec.CommandContext]  # the extractor command of -extractor (or -lang) is run with its version flag, to read the hash of its source before the analysis (ADR-126): what the flag names is what runs
 cmd/rivus.runModelsCoverage -> internal/frontend/gossa.countTestFiles [os.ReadDir]
 cmd/rivus.runModelsCoverage -> internal/graphdb.hashFile [os.Open]
 cmd/rivus.runModelsCoverage -> internal/report.Load [os.ReadFile]
@@ -129,6 +132,7 @@ cmd/rivus.runQuery -> cmd/rivus.projectToolchain [os.ReadFile]  # the toolchain 
 cmd/rivus.runQuery -> cmd/rivus.projectToolchain [os.ReadFile]  # the toolchain file of the project (-C) is read to choose the toolchain of the run: ADR-093
 cmd/rivus.runQuery -> cmd/rivus.readIR [os.Open]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
 cmd/rivus.runQuery -> cmd/rivus.readIRSpill [os.Open]  # the file that holds the IR beside the run is opened to be read back (the spill of ADR-123; the path comes from the flags of the run): the same flow as readIR
+cmd/rivus.runQuery -> cmd/rivus.runExtractorVersion [os/exec.CommandContext]  # the extractor command of -extractor (or -lang) is run with its version flag, to read the hash of its source before the analysis (ADR-126): what the flag names is what runs
 cmd/rivus.runQuery -> internal/frontend/gossa.countTestFiles [os.ReadDir]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
 cmd/rivus.runQuery -> internal/graphdb.hashFile [os.Open]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
 cmd/rivus.runQuery -> internal/report.Load [os.ReadFile]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
@@ -156,6 +160,7 @@ cmd/rivus.runResolve -> cmd/rivus.projectToolchain [os.ReadFile]  # the toolchai
 cmd/rivus.runResolve -> cmd/rivus.projectToolchain [os.ReadFile]  # the toolchain file of the project (-C) is read to choose the toolchain of the run: ADR-093
 cmd/rivus.runResolve -> cmd/rivus.readIR [os.Open]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
 cmd/rivus.runResolve -> cmd/rivus.readIRSpill [os.Open]  # the file that holds the IR beside the run is opened to be read back (the spill of ADR-123; the path comes from the flags of the run): the same flow as readIR
+cmd/rivus.runResolve -> cmd/rivus.runExtractorVersion [os/exec.CommandContext]  # the extractor command of -extractor (or -lang) is run with its version flag, to read the hash of its source before the analysis (ADR-126): what the flag names is what runs
 cmd/rivus.runResolve -> internal/frontend/gossa.countTestFiles [os.ReadDir]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
 cmd/rivus.runResolve -> internal/graphdb.hashFile [os.Open]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
 cmd/rivus.runResolve -> internal/report.Load [os.ReadFile]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
@@ -179,6 +184,7 @@ cmd/rivus.runSites -> cmd/rivus.projectToolchain [os.ReadFile]  # the toolchain 
 cmd/rivus.runSites -> cmd/rivus.projectToolchain [os.ReadFile]  # the toolchain file of the project (-C) is read to choose the toolchain of the run: ADR-093
 cmd/rivus.runSites -> cmd/rivus.readIR [os.Open]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
 cmd/rivus.runSites -> cmd/rivus.readIRSpill [os.Open]  # the file that holds the IR beside the run is opened to be read back (the spill of ADR-123; the path comes from the flags of the run): the same flow as readIR
+cmd/rivus.runSites -> cmd/rivus.runExtractorVersion [os/exec.CommandContext]  # the extractor command of -extractor (or -lang) is run with its version flag, to read the hash of its source before the analysis (ADR-126): what the flag names is what runs
 cmd/rivus.runSites -> internal/frontend/gossa.countTestFiles [os.ReadDir]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
 cmd/rivus.runSites -> internal/sandbox.Run [os/exec.Command]  # the project, the extractor and the paths that the flags name are what the sandbox runs and prepares (the run of a build under the sandbox: docs/DESIGN-macos-sandbox.md)
 cmd/rivus.runSites -> internal/vcs.findGitDir [os.ReadFile]  # the .git file of the project (-C) is read to find the Git directory (a worktree has a file there): the path of the project is what the flag says
