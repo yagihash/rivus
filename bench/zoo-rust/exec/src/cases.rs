@@ -25,6 +25,7 @@ pub fn register_all() {
     c::clos::to_nomodel::register();
     c::clos::to_nomodel_ref::register();
     c::clos::capture_write_by_ref::register();
+    c::clos::helper_overflow::register();
     c::clos::to_own_helper::register();
     c::clos::two_callers::register();
     c::cont::map_key_vs_value::register();
@@ -44,9 +45,11 @@ pub fn register_all() {
     c::conv::char_append::register();
     c::conv::char_base64::register();
     c::conv::char_case::register();
+    c::conv::char_decode_rune::register();
     c::conv::char_hex::register();
     c::conv::char_index::register();
     c::conv::char_lexer::register();
+    c::conv::char_range_append::register();
     c::conv::char_range_write::register();
     c::conv::char_replace::register();
     c::conv::char_reverse::register();
