@@ -17,7 +17,7 @@ cmd/rivus.runAnalyze -> cmd/rivus.cargoVolume [os.ReadFile]  # the Cargo.lock an
 cmd/rivus.runAnalyze -> cmd/rivus.cargoVolume [os.ReadFile]  # the Cargo.lock and the configuration of the project (-C) are read to decide the volumes of the sandbox: ADR-093
 cmd/rivus.runAnalyze -> cmd/rivus.dartLockVersions [os.ReadFile]  # pubspec.lock in the directory of -C is read for the versions of the packages (summary.unverified_versions)
 cmd/rivus.runAnalyze -> cmd/rivus.dartSDKConstraint [os.ReadFile]  # pubspec.yaml in the directory of -C is read for the sdk constraint (summary.dart_version)
-cmd/rivus.runAnalyze -> cmd/rivus.dropConfigOfCargoHome [os.RemoveAll]  # the configuration that the project (-C, -isolation-read) put in the Cargo home of the run is removed before the sandbox starts: ADR-093
+cmd/rivus.runAnalyze -> cmd/rivus.dropConfigOfCargoHome [os.RemoveAll]  # the entries of the Cargo home of the run whose name begins with config or credentials are removed before the sandbox starts, a directory with what is in it; the Cargo home is under RIVUS_RUST_DATA_DIR (a variable the user sets), and -C only goes into the name of its last element: ADR-093
 cmd/rivus.runAnalyze -> cmd/rivus.planFetch [os.ReadFile]  # Cargo.lock of the project (-C) is read to plan the fetch of the crates: ADR-093
 cmd/rivus.runAnalyze -> cmd/rivus.projectToolchain [os.ReadFile]  # the toolchain file of the project (-C) is read to choose the toolchain of the run: ADR-093
 cmd/rivus.runAnalyze -> cmd/rivus.projectToolchain [os.ReadFile]  # the toolchain file of the project (-C) is read to choose the toolchain of the run: ADR-093
@@ -37,7 +37,7 @@ cmd/rivus.runExtract -> (*cmd/rivus.isolationOpts).extractRustSandboxedTo [os.Mk
 cmd/rivus.runExtract -> (*cmd/rivus.isolationOpts).extractRustSandboxedTo [os.ReadFile]  # the files of the project (-C) that the isolation reads to decide what to give the sandbox: ADR-093, the same group as isolate.go
 cmd/rivus.runExtract -> cmd/rivus.cargoVolume [os.ReadFile]  # the project, the extractor and the paths that the flags name are what the sandbox runs and prepares (the run of a build under the sandbox: docs/DESIGN-macos-sandbox.md)
 cmd/rivus.runExtract -> cmd/rivus.cargoVolume [os.ReadFile]  # the project, the extractor and the paths that the flags name are what the sandbox runs and prepares (the run of a build under the sandbox: docs/DESIGN-macos-sandbox.md)
-cmd/rivus.runExtract -> cmd/rivus.dropConfigOfCargoHome [os.RemoveAll]  # the project, the extractor and the paths that the flags name are what the sandbox runs and prepares (the run of a build under the sandbox: docs/DESIGN-macos-sandbox.md)
+cmd/rivus.runExtract -> cmd/rivus.dropConfigOfCargoHome [os.RemoveAll]  # the entries of the Cargo home of the run whose name begins with config or credentials are removed before the sandbox starts, a directory with what is in it; the Cargo home is under RIVUS_RUST_DATA_DIR (a variable the user sets), and -C only goes into the name of its last element: ADR-093
 cmd/rivus.runExtract -> cmd/rivus.planFetch [os.ReadFile]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
 cmd/rivus.runExtract -> cmd/rivus.projectToolchain [os.ReadFile]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
 cmd/rivus.runExtract -> cmd/rivus.projectToolchain [os.ReadFile]  # the same kind of flow as in the Linux view: what a flag names reaches a file or a program of the command that uses it
@@ -67,7 +67,7 @@ cmd/rivus.runIndex -> cmd/rivus.cargoVolume [os.ReadFile]  # the Cargo.lock and 
 cmd/rivus.runIndex -> cmd/rivus.cargoVolume [os.ReadFile]  # the Cargo.lock and the configuration of the project (-C) are read to decide the volumes of the sandbox: ADR-093
 cmd/rivus.runIndex -> cmd/rivus.dartLockVersions [os.ReadFile]  # pubspec.lock in the directory of -C is read for the versions of the packages (summary.unverified_versions)
 cmd/rivus.runIndex -> cmd/rivus.dartSDKConstraint [os.ReadFile]  # pubspec.yaml in the directory of -C is read for the sdk constraint (summary.dart_version)
-cmd/rivus.runIndex -> cmd/rivus.dropConfigOfCargoHome [os.RemoveAll]  # the configuration that the project (-C, -isolation-read) put in the Cargo home of the run is removed before the sandbox starts: ADR-093
+cmd/rivus.runIndex -> cmd/rivus.dropConfigOfCargoHome [os.RemoveAll]  # the entries of the Cargo home of the run whose name begins with config or credentials are removed before the sandbox starts, a directory with what is in it; the Cargo home is under RIVUS_RUST_DATA_DIR (a variable the user sets), and -C only goes into the name of its last element: ADR-093
 cmd/rivus.runIndex -> cmd/rivus.planFetch [os.ReadFile]  # Cargo.lock of the project (-C) is read to plan the fetch of the crates: ADR-093
 cmd/rivus.runIndex -> cmd/rivus.projectToolchain [os.ReadFile]  # the toolchain file of the project (-C) is read to choose the toolchain of the run: ADR-093
 cmd/rivus.runIndex -> cmd/rivus.projectToolchain [os.ReadFile]  # the toolchain file of the project (-C) is read to choose the toolchain of the run: ADR-093
@@ -101,7 +101,7 @@ cmd/rivus.runModelsCoverage -> cmd/rivus.cargoVolume [os.ReadFile]  # the Cargo.
 cmd/rivus.runModelsCoverage -> cmd/rivus.cargoVolume [os.ReadFile]  # the Cargo.lock and the configuration of the project (-C) are read to decide the volumes of the sandbox: ADR-093
 cmd/rivus.runModelsCoverage -> cmd/rivus.dartLockVersions [os.ReadFile]  # pubspec.lock in the directory of -C is read for the versions of the packages (summary.unverified_versions)
 cmd/rivus.runModelsCoverage -> cmd/rivus.dartSDKConstraint [os.ReadFile]  # pubspec.yaml in the directory of -C is read for the sdk constraint (summary.dart_version)
-cmd/rivus.runModelsCoverage -> cmd/rivus.dropConfigOfCargoHome [os.RemoveAll]  # the configuration that the project (-C, -isolation-read) put in the Cargo home of the run is removed before the sandbox starts: ADR-093
+cmd/rivus.runModelsCoverage -> cmd/rivus.dropConfigOfCargoHome [os.RemoveAll]  # the entries of the Cargo home of the run whose name begins with config or credentials are removed before the sandbox starts, a directory with what is in it; the Cargo home is under RIVUS_RUST_DATA_DIR (a variable the user sets), and -C only goes into the name of its last element: ADR-093
 cmd/rivus.runModelsCoverage -> cmd/rivus.planFetch [os.ReadFile]  # Cargo.lock of the project (-C) is read to plan the fetch of the crates: ADR-093
 cmd/rivus.runModelsCoverage -> cmd/rivus.projectToolchain [os.ReadFile]  # the toolchain file of the project (-C) is read to choose the toolchain of the run: ADR-093
 cmd/rivus.runModelsCoverage -> cmd/rivus.projectToolchain [os.ReadFile]  # the toolchain file of the project (-C) is read to choose the toolchain of the run: ADR-093
@@ -130,7 +130,7 @@ cmd/rivus.runQuery -> cmd/rivus.cargoVolume [os.ReadFile]  # the Cargo.lock and 
 cmd/rivus.runQuery -> cmd/rivus.cargoVolume [os.ReadFile]  # the Cargo.lock and the configuration of the project (-C) are read to decide the volumes of the sandbox: ADR-093
 cmd/rivus.runQuery -> cmd/rivus.dartLockVersions [os.ReadFile]  # pubspec.lock in the directory of -C is read for the versions of the packages (summary.unverified_versions)
 cmd/rivus.runQuery -> cmd/rivus.dartSDKConstraint [os.ReadFile]  # pubspec.yaml in the directory of -C is read for the sdk constraint (summary.dart_version)
-cmd/rivus.runQuery -> cmd/rivus.dropConfigOfCargoHome [os.RemoveAll]  # the configuration that the project (-C, -isolation-read) put in the Cargo home of the run is removed before the sandbox starts: ADR-093
+cmd/rivus.runQuery -> cmd/rivus.dropConfigOfCargoHome [os.RemoveAll]  # the entries of the Cargo home of the run whose name begins with config or credentials are removed before the sandbox starts, a directory with what is in it; the Cargo home is under RIVUS_RUST_DATA_DIR (a variable the user sets), and -C only goes into the name of its last element: ADR-093
 cmd/rivus.runQuery -> cmd/rivus.planFetch [os.ReadFile]  # Cargo.lock of the project (-C) is read to plan the fetch of the crates: ADR-093
 cmd/rivus.runQuery -> cmd/rivus.projectToolchain [os.ReadFile]  # the toolchain file of the project (-C) is read to choose the toolchain of the run: ADR-093
 cmd/rivus.runQuery -> cmd/rivus.projectToolchain [os.ReadFile]  # the toolchain file of the project (-C) is read to choose the toolchain of the run: ADR-093
@@ -159,7 +159,7 @@ cmd/rivus.runResolve -> cmd/rivus.cargoVolume [os.ReadFile]  # the Cargo.lock an
 cmd/rivus.runResolve -> cmd/rivus.cargoVolume [os.ReadFile]  # the Cargo.lock and the configuration of the project (-C) are read to decide the volumes of the sandbox: ADR-093
 cmd/rivus.runResolve -> cmd/rivus.dartLockVersions [os.ReadFile]  # pubspec.lock in the directory of -C is read for the versions of the packages (summary.unverified_versions)
 cmd/rivus.runResolve -> cmd/rivus.dartSDKConstraint [os.ReadFile]  # pubspec.yaml in the directory of -C is read for the sdk constraint (summary.dart_version)
-cmd/rivus.runResolve -> cmd/rivus.dropConfigOfCargoHome [os.RemoveAll]  # the configuration that the project (-C, -isolation-read) put in the Cargo home of the run is removed before the sandbox starts: ADR-093
+cmd/rivus.runResolve -> cmd/rivus.dropConfigOfCargoHome [os.RemoveAll]  # the entries of the Cargo home of the run whose name begins with config or credentials are removed before the sandbox starts, a directory with what is in it; the Cargo home is under RIVUS_RUST_DATA_DIR (a variable the user sets), and -C only goes into the name of its last element: ADR-093
 cmd/rivus.runResolve -> cmd/rivus.planFetch [os.ReadFile]  # Cargo.lock of the project (-C) is read to plan the fetch of the crates: ADR-093
 cmd/rivus.runResolve -> cmd/rivus.projectToolchain [os.ReadFile]  # the toolchain file of the project (-C) is read to choose the toolchain of the run: ADR-093
 cmd/rivus.runResolve -> cmd/rivus.projectToolchain [os.ReadFile]  # the toolchain file of the project (-C) is read to choose the toolchain of the run: ADR-093
@@ -183,7 +183,7 @@ cmd/rivus.runSites -> (*cmd/rivus.isolationOpts).extractRustSandboxedTo [os.Mkdi
 cmd/rivus.runSites -> (*cmd/rivus.isolationOpts).extractRustSandboxedTo [os.ReadFile]  # the files of the project (-C) that the isolation reads to decide what to give the sandbox: ADR-093, the same group as isolate.go
 cmd/rivus.runSites -> cmd/rivus.cargoVolume [os.ReadFile]  # the Cargo.lock and the configuration of the project (-C) are read to decide the volumes of the sandbox: ADR-093
 cmd/rivus.runSites -> cmd/rivus.cargoVolume [os.ReadFile]  # the Cargo.lock and the configuration of the project (-C) are read to decide the volumes of the sandbox: ADR-093
-cmd/rivus.runSites -> cmd/rivus.dropConfigOfCargoHome [os.RemoveAll]  # the configuration that the project (-C, -isolation-read) put in the Cargo home of the run is removed before the sandbox starts: ADR-093
+cmd/rivus.runSites -> cmd/rivus.dropConfigOfCargoHome [os.RemoveAll]  # the entries of the Cargo home of the run whose name begins with config or credentials are removed before the sandbox starts, a directory with what is in it; the Cargo home is under RIVUS_RUST_DATA_DIR (a variable the user sets), and -C only goes into the name of its last element: ADR-093
 cmd/rivus.runSites -> cmd/rivus.planFetch [os.ReadFile]  # Cargo.lock of the project (-C) is read to plan the fetch of the crates: ADR-093
 cmd/rivus.runSites -> cmd/rivus.projectToolchain [os.ReadFile]  # the toolchain file of the project (-C) is read to choose the toolchain of the run: ADR-093
 cmd/rivus.runSites -> cmd/rivus.projectToolchain [os.ReadFile]  # the toolchain file of the project (-C) is read to choose the toolchain of the run: ADR-093
