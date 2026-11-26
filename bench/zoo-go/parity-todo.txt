@@ -16,3 +16,5 @@ A Dart cell with no mark here is "not classified" (the second line of the test l
 @todo(F/dart/googleapis-bigquery-table-patch-materialized-view: PARITY: Go で未測定: cloud.google.com/go/bigquery)
 @todo(F/dart/googleapis-bigquery-table-update-view: PARITY: Go で未測定: cloud.google.com/go/bigquery)
 @todo(F/clos/to-lib-iter: PARITY: Go で未測定: slices.IndexFunc などで書けるが、どれを使うかは後)
+@todo(F/dart/shelf-response-body: PARITY: Go で未測定: gin の Response)
+@todo(F/dart/shelf-response-redirect: PARITY: Go で未測定: gin の Response)
