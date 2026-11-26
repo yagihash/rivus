@@ -14,7 +14,7 @@ python3 bench/scale-growth/scale_growth.py [-scales 1,2,4] [-profile mixed|ops|f
 
 It builds `rivus` and `gen` from this tree into a temporary directory (or uses `-rivus`), makes each target under the
 temporary directory, takes the heavy-run lock (`bench/heavylock.py`) for each run, and watches the run with the same
-watchdog as `bench/deps_bench.py` (`run_watched`: the sum of RSS of the process tree above `-cap-gb`, default 8 GB, or the
+watchdog as `bench/deps_bench.py` (`run_watched`: the memory of the process tree (the footprint on macOS, the sum of RSS elsewhere: `mem_basis`) above `-cap-gb`, default 8 GB, or the
 wall time above `-limit`, kills this run's own process group). The table goes to standard output; the JSON goes to
 `$BENCH_OUT/scale-growth-<profile>.json` (with the commit and the load average).
 
