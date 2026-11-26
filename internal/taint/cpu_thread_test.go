@@ -21,12 +21,17 @@ func TestThreadCPU(t *testing.T) {
 	if c1-c0 > 20*time.Millisecond {
 		t.Errorf("sleeping used %v of CPU", c1-c0)
 	}
+	// Spin until the thread's own clock has moved by 10 ms. The wall time that takes depends on the
+	// load of the machine, so the wall limit is only a guard against a clock that never moves.
 	x := 0
-	for end := time.Now().Add(30 * time.Millisecond); time.Now().Before(end); {
-		x++
+	var c2 time.Duration
+	for end := time.Now().Add(60 * time.Second); time.Now().Before(end); x++ {
+		c2, _ = threadCPU()
+		if c2-c1 >= 10*time.Millisecond {
+			break
+		}
 	}
-	c2, _ := threadCPU()
 	if c2-c1 < 10*time.Millisecond {
-		t.Errorf("30 ms of work used %v of CPU (%d)", c2-c1, x)
+		t.Errorf("the thread CPU clock did not move by 10 ms in 60 s of work (%v, %d)", c2-c1, x)
 	}
 }
