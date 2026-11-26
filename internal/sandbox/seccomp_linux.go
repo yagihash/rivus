@@ -19,6 +19,7 @@ const (
 	bpfLdAbs = 0x20 // BPF_LD | BPF_W | BPF_ABS
 	bpfJeq   = 0x15 // BPF_JMP | BPF_JEQ | BPF_K
 	bpfJge   = 0x35 // BPF_JMP | BPF_JGE | BPF_K
+	bpfJgt   = 0x25 // BPF_JMP | BPF_JGT | BPF_K
 	bpfAnd   = 0x54 // BPF_ALU | BPF_AND | BPF_K
 	bpfRet   = 0x06 // BPF_RET | BPF_K
 
@@ -33,6 +34,15 @@ const (
 	afInet6    = 10
 	sockStream = 1
 	ipprotoTCP = 6
+)
+
+// The highest number of a system call that the lists below were made with (the highest SYS_* of golang.org/x/sys/unix of the architecture, at the time they were
+// reviewed). The filter is a list of what is refused, so a call that is newer than the list (io_uring was one) would be let through by default: a number above
+// the ceiling is told that the call is not there (ENOSYS), as clone3 is. When golang.org/x/sys moves the highest number up, TestSeccompCeilingCoversXSys fails:
+// the new calls are to be read, put in deniedCalls or in the other lists when they need it, and the ceiling is raised.
+const (
+	seccompMaxNrAmd64 = 471 // SYS_RSEQ_SLICE_YIELD
+	seccompMaxNrArm64 = 471 // SYS_RSEQ_SLICE_YIELD
 )
 
 var retEPERM = uint32(unix.SECCOMP_RET_ERRNO | uint32(unix.EPERM))
@@ -164,6 +174,8 @@ func filter(net int, notify bool) ([]unix.SockFilter, error) {
 	if x32 := seccompX32Bit(); x32 != 0 {
 		p = append(p, ins(bpfJge, 0, 1, x32), kill)
 	}
+	// a number above the ceiling: the call is not there (the x32 numbers are above it too, and were killed before)
+	p = append(p, ins(bpfJgt, 0, 1, seccompMaxNr()), ins(bpfRet, 0, 0, unix.SECCOMP_RET_ERRNO|uint32(unix.ENOSYS)))
 	for _, nr := range deniedCalls {
 		p = append(p, ins(bpfJeq, 0, 1, nr), deny)
 	}
