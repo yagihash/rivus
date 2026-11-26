@@ -1,0 +1,25 @@
+The cells of the Dart zoo that the Go zoo has no cell of, and that Go can have: the Go side of the parity marks (the cells that Dart has and the form does not exist in Go are @na(go: reason) in the Dart cell).
+Read by TestZooDart (the parity line "zoo-go: parity marks"; zooGoMarkErrors). Not locked (bench/zoo/marks.d reads only the cells), and a PARITY @todo needs no approval (docs/DESIGN-zoo.md, 4.2.5).
+A mark @todo(F/<family>/<shape>: PARITY: reason) is a form that Go can have and the cell is not written yet. The reason has no ")" (the pattern is [^)]+): "Go で未測定: <package>".
+A Dart cell with no mark here is "not classified" (the second line of the test log).
+
+@todo(F/dart/dio-get: PARITY: Go で未測定: net/http)
+@todo(F/dart/dio-geturi: PARITY: Go で未測定: net/http)
+@todo(F/dart/dio-post: PARITY: Go で未測定: net/http)
+@todo(F/dart/dio-download-savepath: PARITY: Go で未測定: net/http, os)
+@todo(F/dart/dio-multipartfile-path: PARITY: Go で未測定: net/http, os)
+@todo(F/dart/http-client-get: PARITY: Go で未測定: net/http)
+@todo(F/dart/http-ioclient-send: PARITY: Go で未測定: net/http)
+@todo(F/dart/gcloud-datastore-query-kind: PARITY: Go で未測定: cloud.google.com/go/datastore)
+@todo(F/dart/googleapis-datastore-run-query: PARITY: Go で未測定: cloud.google.com/go/datastore)
+@todo(F/dart/gcloud-pubsub-lookup-topic: PARITY: Go で未測定: cloud.google.com/go/pubsub)
+@todo(F/dart/googleapis-pubsub-subscription-name: PARITY: Go で未測定: cloud.google.com/go/pubsub)
+@todo(F/dart/googleapis-auth-email: PARITY: Go で未測定: golang.org/x/oauth2/google)
+@todo(F/dart/googleapis-auth-impersonate: PARITY: Go で未測定: google.golang.org/api/impersonate)
+@todo(F/dart/googleapis-auth-json: PARITY: Go で未測定: golang.org/x/oauth2/google)
+@todo(F/dart/googleapis-bigquery-routine-insert-body: PARITY: Go で未測定: cloud.google.com/go/bigquery)
+@todo(F/dart/googleapis-bigquery-routine-update-body: PARITY: Go で未測定: cloud.google.com/go/bigquery)
+@todo(F/dart/googleapis-bigquery-table-insert-view: PARITY: Go で未測定: cloud.google.com/go/bigquery)
+@todo(F/dart/googleapis-bigquery-table-patch-materialized-view: PARITY: Go で未測定: cloud.google.com/go/bigquery)
+@todo(F/dart/googleapis-bigquery-table-update-view: PARITY: Go で未測定: cloud.google.com/go/bigquery)
+@todo(F/clos/to-lib-iter: PARITY: Go で未測定: slices.IndexFunc などで書けるが、どれを使うかは後)
