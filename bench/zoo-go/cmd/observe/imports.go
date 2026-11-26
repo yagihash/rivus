@@ -10,6 +10,7 @@ import (
 	_ "zoo/cells/call/direct_in"
 	_ "zoo/cells/call/multiret"
 	_ "zoo/cells/call/regexp_replace"
+	_ "zoo/cells/clos/callback_of_callback"
 	_ "zoo/cells/clos/capture_write_by_ref"
 	_ "zoo/cells/clos/helper_overflow"
 	_ "zoo/cells/clos/inline"

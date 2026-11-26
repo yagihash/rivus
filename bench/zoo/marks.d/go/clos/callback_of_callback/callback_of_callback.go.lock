@@ -1,0 +1,4 @@
+go	clos/callback_of_callback/callback_of_callback.go	miss	@source(clos-callback-of-callback-decoy) @miss(assumed_call,depth_limit) @ref(#81)	func decoy() { @decoy
+go	clos/callback_of_callback/callback_of_callback.go	miss	@source(clos-callback-of-callback-vuln) @miss(assumed_call,depth_limit) @ref(#81)	func vuln() { @vuln
+go	clos/callback_of_callback/callback_of_callback.go	sink-none	@sink(none)	func fixed() { @fixed
+go	clos/callback_of_callback/callback_of_callback.go	sink-none	@sink(none) @nosink(clos-callback-of-callback-decoy)	func decoy() { @decoy
