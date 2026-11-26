@@ -36,3 +36,37 @@ func TestClosureIndexFuncOf(t *testing.T) {
 		t.Errorf("no index, no ID: %q", got)
 	}
 }
+
+// Lookup: how many functions are at the place that the type names (0, 1, or many), and the function only when there is one.
+func TestClosureIndexLookupCount(t *testing.T) {
+	at := func(id string, line int) *Func {
+		return &Func{ID: FuncID(id), File: "src/c.rs", Pos: Pos{File: "src/c.rs", Line: line, Col: 20}}
+	}
+	ix := NewClosureIndex([]*Func{at("a::{closure#0}", 5), at("a::{closure#1}", 5), at("a::{closure#2}", 5), at("b::{closure#0}", 9)})
+	for _, c := range []struct {
+		name, env string
+		wantN     int
+		wantID    FuncID
+	}{
+		{"none at the place", "{closure@src/c.rs:7:20: 7:40}", 0, ""},
+		{"one", "{closure@src/c.rs:9:20: 9:40}", 1, "b::{closure#0}"},
+		{"three", "{closure@src/c.rs:5:20: 5:40}", 3, ""},
+		{"not a type of an environment", "Foo", 0, ""},
+	} {
+		f, n := ix.Lookup(c.env)
+		if n != c.wantN {
+			t.Errorf("%s: n = %d, want %d", c.name, n, c.wantN)
+		}
+		var id FuncID
+		if f != nil {
+			id = f.ID
+		}
+		if id != c.wantID {
+			t.Errorf("%s: function %q, want %q", c.name, id, c.wantID)
+		}
+		// FuncOf without an ID is the function of Lookup when there is one, else none.
+		if got := ix.FuncOf(c.env, ""); got != c.wantID {
+			t.Errorf("%s: FuncOf = %q, want %q", c.name, got, c.wantID)
+		}
+	}
+}

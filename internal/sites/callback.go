@@ -132,6 +132,11 @@ func functionOf(form *irssa.Form, r irssa.Ref, depth int, closures func() *ir.Cl
 			if id := ix.FuncOf(string(in.Type), in.Func); id != "" {
 				return id, ""
 			}
+			if ix != nil {
+				if _, n := ix.Lookup(string(in.Type)); n >= 2 {
+					return "", fmt.Sprintf("one of %d closures written at the same place (a macro)", n)
+				}
+			}
 		}
 		return "", "not known"
 	case ir.OpParam:
