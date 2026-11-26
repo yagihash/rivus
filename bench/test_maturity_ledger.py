@@ -61,6 +61,15 @@ class Parse(unittest.TestCase):
         self.assertEqual(m.parse_elsewhere("zoo-go: parity marks: @na 1 [a] | @todo 2 [b c]"), {})
         self.assertEqual(m.parse_todo(ZOO)["go"], 45)  # the fields before it are read as before
 
+    def test_reach(self):
+        log = "    zoo_rust_reach_test.go:157: zoo-rust-app: reach cells 9 | miss 0 | contrast ok\n"
+        self.assertEqual(m.parse_reach(ZOO + log), (9, 0))
+        self.assertEqual(m.parse_reach("zoo-rust-app: reach cells 12 | miss 3 | contrast ok"), (12, 3))
+
+    def test_reach_empty_when_contrast_failed_or_no_line(self):
+        self.assertIsNone(m.parse_reach("zoo-rust-app: reach cells 9 | miss 0 | contrast FAILED 1 / 2"))
+        self.assertIsNone(m.parse_reach(ZOO))
+
     def test_calls_compared(self):
         self.assertEqual(m.parse_calls_go(GO_EDGES + "  id_unmapped  2\n  outside      50\n    outside: harness 40\n"), 812 + 7 + 0 + 2)
         self.assertIsNone(m.parse_calls_go("nothing"))
@@ -91,14 +100,14 @@ class CallCheck(unittest.TestCase):
 
 
 class Rows(unittest.TestCase):
-    VALUES = {"go": {"cells": 89, "na": 22, "todo": 45, "todo_marked": 0, "miss": 14, "no_edge": 7, "calls_observed": 819, "call_mismatch": 0, "call_unsupported": 0, "call_dead": 3, "elsewhere": 16}, "dart": {"todo": 13, "todo_marked": 0, "miss": 56, "no_edge": None, "call_mismatch": 0, "call_unsupported": 2}, "rust": {"todo": 14, "todo_marked": 14, "miss": 28}}
+    VALUES = {"go": {"cells": 89, "na": 22, "todo": 45, "todo_marked": 0, "miss": 14, "no_edge": 7, "calls_observed": 819, "call_mismatch": 0, "call_unsupported": 0, "call_dead": 3, "elsewhere": 16}, "dart": {"todo": 13, "todo_marked": 0, "miss": 56, "no_edge": None, "call_mismatch": 0, "call_unsupported": 2}, "rust": {"todo": 14, "todo_marked": 14, "miss": 28, "reach_total": 9, "reach_miss": 0}}
 
     def test_empty_is_empty_not_zero(self):
         rows = m.make_rows("2026-11-25", "abcd1234", self.VALUES)
-        self.assertEqual(rows[0], ["2026-11-25", "abcd1234", "go", "89", "22", "45", "0", "14", "7", "819", "0", "0", "3", "16"])
+        self.assertEqual(rows[0], ["2026-11-25", "abcd1234", "go", "89", "22", "45", "0", "14", "7", "819", "0", "0", "3", "16", "", ""])
         self.assertEqual(rows[1][8], "")
-        self.assertEqual(rows[1][10:], ["0", "2", "", ""])  # a zero that was measured is written; an empty cell was not measured
-        self.assertEqual(rows[2], ["2026-11-25", "abcd1234", "rust", "", "", "14", "14", "28", "", "", "", "", "", ""])
+        self.assertEqual(rows[1][10:], ["0", "2", "", "", "", ""])  # a zero that was measured is written; an empty cell was not measured
+        self.assertEqual(rows[2], ["2026-11-25", "abcd1234", "rust", "", "", "14", "14", "28", "", "", "", "", "", "", "9", "0"])
 
     def test_append_once(self):
         rows = m.make_rows("2026-11-25", "abcd1234", self.VALUES)
@@ -111,10 +120,18 @@ class Rows(unittest.TestCase):
             lines = open(p).read().splitlines()
             self.assertEqual(lines[0], "\t".join(m.COLUMNS))
             self.assertEqual(len(lines), 7)
-            self.assertTrue(all(len(l.split("\t")) == 14 for l in lines))
+            self.assertTrue(all(len(l.split("\t")) == len(m.COLUMNS) for l in lines))
 
 
 class Committed(unittest.TestCase):
+    def test_reach_columns_are_last_and_old_rows_are_empty(self):
+        lines = [l.split("\t") for l in open(m.LEDGER).read().splitlines()]
+        self.assertEqual(lines[0][-3:], ["elsewhere", "reach_total", "reach_miss"])
+        self.assertEqual(lines[0][:14], m.COLUMNS[:14])
+        self.assertTrue(all(r[14:] == ["", ""] for r in lines[1:]))
+        self.assertTrue(all(r[2] in m.LANGS for r in lines[1:]))
+
+
     def test_every_row_has_every_column(self):
         # a column that is added is empty in the rows before it (not missing): the header and every row have the same width
         lines = open(m.LEDGER).read().splitlines()

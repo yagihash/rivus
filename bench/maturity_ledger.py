@@ -3,12 +3,14 @@
 
   python3 bench/maturity_ledger.py [--dry-run] [--no-edges] [--ledger FILE]      (make maturity-ledger)
 
-todo, miss: the zoo test of each language; todo_marked: the @todo(F/..: PARITY: ..) marks in the sources (na.txt, lib.rs, the Go zoo) (`go test ./cmd/rivus -run 'TestZoo(Go|Dart|Rust)$' -v`).
+todo, miss: the zoo test of each language; todo_marked: the @todo(F/..: PARITY: ..) marks in the sources (na.txt, lib.rs, the Go zoo) (`go test ./cmd/rivus -run 'TestZoo(Go|Dart|Rust|RustReach)$' -v`).
 no_edge: Go: `go run ./bench/observed-edges run -zoo bench/zoo-go`; Dart: bench/zoo-dart/observed/compare.py (needs `dart`).
 call_mismatch, call_unsupported, call_dead: Dart: bench/dart-callcheck/callcheck.py on bench/zoo-dart/cells; Go: bench/go-callcheck/callcheck.py on bench/zoo-go
 (the functions with a call that the source writes and the IR has neither as a `call` nor as an `unsupported`; the calls that only an `unsupported` reports;
 Go only: the calls that go/ssa does not keep, for a reason that the source states: not reachable, or in a function literal assigned to `_`). Rust: empty (no such check yet).
 na: the forms that the language does not have (@na, "no such form"); elsewhere: the Dart cells whose Go form is measured in another place (@elsewhere(go: ..), 2026-11-26; empty in the rows before it, and in a line of a test that has no such field). todo - todo_marked is the "not classified" of Go.
+reach_total, reach_miss (Rust only; empty for Go and Dart, and in the rows before 2026-11-27): the "zoo-rust-app: reach cells N | miss M | contrast ok" line of TestZooRustReach. reach_total is the cells that measure reachability (the contrast cells too); reach_miss is the cells that
+should be from_entry and come out not_from_entry (@miss(not_from_entry)). It does not count rust-curated (its `main` is empty, so not_from_entry is the right output there). 0 is necessary, not sufficient, for the not_from_entry of a real target to be gone.
 An input that cannot be had leaves its column empty, and the reason goes to standard error: an empty cell is not a zero.
 What a number does not show is in bench/README.md (the section "The ledger of maturity").
 The script only adds rows. The commit is made by a person. Standard library only.
@@ -17,7 +19,7 @@ import argparse, datetime, os, re, shutil, subprocess, sys, tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LEDGER = os.path.join(ROOT, "bench", "maturity-ledger.tsv")
-COLUMNS = ["date", "rivus_commit", "lang", "cells", "na", "todo", "todo_marked", "miss", "no_edge", "calls_observed", "call_mismatch", "call_unsupported", "call_dead", "elsewhere"]
+COLUMNS = ["date", "rivus_commit", "lang", "cells", "na", "todo", "todo_marked", "miss", "no_edge", "calls_observed", "call_mismatch", "call_unsupported", "call_dead", "elsewhere", "reach_total", "reach_miss"]
 LANGS = ["go", "dart", "rust"]
 
 # the groups: 1 language, 2 @na, 3 its names, 4 @todo, 5 its names, 6 @elsewhere (a line written before the mark existed has none), 7 its names
@@ -27,6 +29,8 @@ MISS_RE = re.compile(r"zoo-(go|dart|rust): cells \d+ / cases \d+ \| found \d+ / 
 # explanation "@todo(F/<family>/<shape>: PARITY: reason)" in bench/zoo-dart/na.txt is not a mark
 TODO_MARK_RE = re.compile(r"@todo\((F/[a-z0-9/-]+):\s*PARITY:\s*([^)]+)\)")
 MARK_FILES = {"go": ["bench/zoo-go"], "dart": ["bench/zoo-dart/na.txt"], "rust": ["bench/zoo-rust/cells/src/lib.rs"]}
+# TestZooRustReach (cmd/rivus/zoo_rust_reach_test.go): "contrast ok", or "contrast FAILED n / m" (then the numbers are not read)
+REACH_RE = re.compile(r"zoo-rust-app: reach cells (\d+) \| miss (\d+) \| contrast (ok|FAILED[^\n]*)")
 CELLS_RE = re.compile(r"zoo-(go|dart|rust): cells (\d+) / cases \d+ \| found")
 GO_COMPARED_RE = re.compile(r"^\s*(ok|no_edge|no_callsite|id_unmapped)\s+(\d+)\s*$", re.M)
 DART_CALL_RE = re.compile(r"^call\s+\w+\s+(\d+)\s*$", re.M)
@@ -61,6 +65,14 @@ def parse_elsewhere(text):
 def parse_cells(text):
     """{lang: the number of cells of the zoo} from the "cells N / cases M | found" lines."""
     return {m.group(1): int(m.group(2)) for m in CELLS_RE.finditer(text)}
+
+
+def parse_reach(text):
+    """(reach_total, reach_miss) from the "zoo-rust-app: reach cells N | miss M | contrast ok" line, or None (no line, or the contrast failed)."""
+    ms = list(REACH_RE.finditer(text))
+    if not ms or ms[-1].group(3) != "ok":
+        return None
+    return int(ms[-1].group(1)), int(ms[-1].group(2))
 
 
 def parse_calls_go(text):
@@ -182,7 +194,7 @@ def collect_zoo(env, values):
         env["RIVUS_RUST"] = rust
     else:
         warn("rust: no extractor (set RIVUS_RUST, or install cargo); the Rust zoo is skipped")
-    r = run(["go", "test", "-p", "2", "./cmd/rivus", "-run", r"TestZoo(Go|Dart|Rust)$", "-v", "-count=1", "-timeout", "30m"], env=env)
+    r = run(["go", "test", "-p", "2", "./cmd/rivus", "-run", r"TestZoo(Go|Dart|Rust|RustReach)$", "-v", "-count=1", "-timeout", "30m"], env=env)
     out = r.stdout + r.stderr
     if r.returncode != 0:
         warn("the zoo tests failed (exit %d); the numbers below are what the lines gave" % r.returncode)
@@ -201,6 +213,13 @@ def collect_zoo(env, values):
             values[lang]["miss"] = miss[lang]
         else:
             warn("%s: no '@miss' line: miss left empty" % lang)
+    reach = parse_reach(out)
+    if reach:
+        values["rust"]["reach_total"], values["rust"]["reach_miss"] = reach
+    elif "zoo-rust-app: reach cells" in out:
+        warn("rust: the contrast of TestZooRustReach failed; reach_total and reach_miss left empty")
+    else:
+        warn("rust: no 'reach cells' line (TestZooRustReach did not run?): reach_total and reach_miss left empty")
 
 
 def collect_marked(values):
