@@ -10,7 +10,7 @@
 
 ## 何が起きるか(事実)
 
-PR #620(`feat/rust-trait-identity-by-def-path`。extractor が trait の同一性を「クレート名 + 定義パス」で比べる)の測定(2026-11-27)。#620 は未マージ。対象は rustypaste(`bench/deps_bench.py -no-ledger`、`pass_line: rustypaste`、150 秒、8 GiB の footprint)。
+PR #620(`feat/rust-trait-identity-by-def-path`。extractor が trait の同一性を「クレート名 + 定義パス」で比べる)の測定(2026-11-27)。#620 は MERGED(2026-11-26)。対象は rustypaste(`bench/deps_bench.py -no-ledger`、`pass_line: rustypaste`、150 秒、8 GiB の footprint)。
 
 - `dynamic_dispatch` の 176 件は、場所が同じで、候補の数が変わった。候補 0 だった 113 件のうち 84 件が、候補ありに変わった。
 - **候補の合計は 284 → 2497(約 9 倍)**。
