@@ -52,6 +52,7 @@ func report(name string, escaped bool, how string) {
 func main() {
 	flag.Parse()
 	attrExtra()
+	linkChecks()
 	if *attr != "" {
 		fmt.Println("attr-chmod", os.Chmod(*attr, 0o640))
 		fmt.Println("attr-utimes", os.Chtimes(*attr, time.Unix(1, 0), time.Unix(1, 0)))
