@@ -30,7 +30,7 @@
 
 - 到達性のラベルでは、「届くかもしれない」と言う側に外れる。見逃しより安全。
 - finding の数や uncertainty では、登録されない impl の中の sink に、偽の流れが届く恐れがある。**実対象で起きるかは未測定**。
-- rustypaste も同じ形(`ServiceConfig::service<F>`)なので、登録されない impl があれば同じ過大近似になるはず。**未測定**(PR `feat/rust-trait-identity-by-def-path` の測定で、finding と uncertainty の前後を見る)。
+- rustypaste も同じ形(`ServiceConfig::service<F>`)なので、登録されない impl があれば同じ過大近似になるはず。**未測定**(PR `feat/rust-trait-identity-by-def-path`(#620、MERGED 2026-11-26)の測定は #236 にあるが、finding の前後は書いていない)。
 
 ## 進め方(案。原因の断定ではない)
 
