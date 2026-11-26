@@ -9,7 +9,7 @@ import maturity_ledger as m
 ZOO = """=== RUN   TestZooDart
     zoo_dart_test.go:291: zoo-dart: cells 139 / cases 525 | found 215 / 271 | @miss 56 (trace 44, silent 12, no rule 0) | fixed reported wrongly 3 | decoys reported wrongly 13 / 139 (with the trace container_element_imprecision 5, without 11) | carry map[] | manual 3 (0.6%) | run and annotation disagree 0 | statements not run 0
     zoo_dart_test.go:292: zoo-dart: parity marks: @na 4 [dyn/a dyn/b] | @todo 13 [call/x clos/y]
-    zoo_dart_test.go:292: zoo-go: parity marks: @na 22 [dart/a] | @todo 45 [a b c]
+    zoo_dart_test.go:292: zoo-go: parity marks: @na 22 [dart/a] | @todo 45 [a b c] | @elsewhere 16 [dart/x dart/y] | elsewhere-miss 0 []
 --- PASS: TestZooDart (8.87s)
 === RUN   TestZooRust
     zoo_rust_test.go:374: zoo-rust: cells 92 / cases 310 | found 108 / 136 | @miss 28 (trace 27, silent 1, no rule 0) | fixed reported wrongly 4
@@ -55,6 +55,12 @@ class Parse(unittest.TestCase):
         self.assertEqual(m.parse_cells(ZOO), {"dart": 139, "rust": 92, "go": 89})
         self.assertEqual(m.parse_na(ZOO), {"dart": 4, "go": 22, "rust": 0})
 
+    def test_elsewhere(self):
+        # only the line that has the field gives a number: an empty cell is not a zero
+        self.assertEqual(m.parse_elsewhere(ZOO), {"go": 16})
+        self.assertEqual(m.parse_elsewhere("zoo-go: parity marks: @na 1 [a] | @todo 2 [b c]"), {})
+        self.assertEqual(m.parse_todo(ZOO)["go"], 45)  # the fields before it are read as before
+
     def test_calls_compared(self):
         self.assertEqual(m.parse_calls_go(GO_EDGES + "  id_unmapped  2\n  outside      50\n    outside: harness 40\n"), 812 + 7 + 0 + 2)
         self.assertIsNone(m.parse_calls_go("nothing"))
@@ -85,14 +91,14 @@ class CallCheck(unittest.TestCase):
 
 
 class Rows(unittest.TestCase):
-    VALUES = {"go": {"cells": 89, "na": 22, "todo": 45, "todo_marked": 0, "miss": 14, "no_edge": 7, "calls_observed": 819, "call_mismatch": 0, "call_unsupported": 0, "call_dead": 3}, "dart": {"todo": 13, "todo_marked": 0, "miss": 56, "no_edge": None, "call_mismatch": 0, "call_unsupported": 2}, "rust": {"todo": 14, "todo_marked": 14, "miss": 28}}
+    VALUES = {"go": {"cells": 89, "na": 22, "todo": 45, "todo_marked": 0, "miss": 14, "no_edge": 7, "calls_observed": 819, "call_mismatch": 0, "call_unsupported": 0, "call_dead": 3, "elsewhere": 16}, "dart": {"todo": 13, "todo_marked": 0, "miss": 56, "no_edge": None, "call_mismatch": 0, "call_unsupported": 2}, "rust": {"todo": 14, "todo_marked": 14, "miss": 28}}
 
     def test_empty_is_empty_not_zero(self):
         rows = m.make_rows("2026-11-25", "abcd1234", self.VALUES)
-        self.assertEqual(rows[0], ["2026-11-25", "abcd1234", "go", "89", "22", "45", "0", "14", "7", "819", "0", "0", "3"])
+        self.assertEqual(rows[0], ["2026-11-25", "abcd1234", "go", "89", "22", "45", "0", "14", "7", "819", "0", "0", "3", "16"])
         self.assertEqual(rows[1][8], "")
-        self.assertEqual(rows[1][10:], ["0", "2", ""])  # a zero that was measured is written; an empty cell was not measured
-        self.assertEqual(rows[2], ["2026-11-25", "abcd1234", "rust", "", "", "14", "14", "28", "", "", "", "", ""])
+        self.assertEqual(rows[1][10:], ["0", "2", "", ""])  # a zero that was measured is written; an empty cell was not measured
+        self.assertEqual(rows[2], ["2026-11-25", "abcd1234", "rust", "", "", "14", "14", "28", "", "", "", "", "", ""])
 
     def test_append_once(self):
         rows = m.make_rows("2026-11-25", "abcd1234", self.VALUES)
@@ -105,7 +111,15 @@ class Rows(unittest.TestCase):
             lines = open(p).read().splitlines()
             self.assertEqual(lines[0], "\t".join(m.COLUMNS))
             self.assertEqual(len(lines), 7)
-            self.assertTrue(all(len(l.split("\t")) == 13 for l in lines))
+            self.assertTrue(all(len(l.split("\t")) == 14 for l in lines))
+
+
+class Committed(unittest.TestCase):
+    def test_every_row_has_every_column(self):
+        # a column that is added is empty in the rows before it (not missing): the header and every row have the same width
+        lines = open(m.LEDGER).read().splitlines()
+        self.assertEqual(lines[0], "\t".join(m.COLUMNS))
+        self.assertTrue(all(len(l.split("\t")) == len(m.COLUMNS) for l in lines))
 
 
 if __name__ == "__main__":

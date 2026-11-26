@@ -1,5 +1,5 @@
 // @cell(F/dart/github-slug-assign)
-// @na(go: the model of package:github, a Dart package; the Go side is measured in zoo-go-pkg (go_github), not by a cell of the same name)
+// @elsewhere(go: F/pkg/go-github/repos)
 // @shape: a value is assigned to the owner field of a RepositorySlug after it is made (package:github, a skeleton of it) and the slug goes into a service call: the sink rows are on RepositorySlug.new and .full, not on the field
 import 'package:github/github.dart';
 import 'package:zoo_mark/zoo_mark.dart';

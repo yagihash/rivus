@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-// The marks that loosen the truth of the zoo (docs/ROADMAP.md, section 1): @miss, @fp, @noisy, @na, @todo, @manual
+// The marks that loosen the truth of the zoo (docs/ROADMAP.md, section 1): @miss, @fp, @noisy, @na, @elsewhere, @todo, @manual
 // and @sink(none) of the three zoos are listed in bench/zoo/marks.d, one file for a cell file
 // (bench/zoo/marks.d/<lang>/<path of the cell file>.lock: so that two pull requests that add cells do not touch the same file),
 // one row for a mark of a line:
@@ -30,7 +30,7 @@ const zooMarksDirPath = "bench/zoo/marks.d"
 var (
 	zooMarksRoleRe  = regexp.MustCompile(`@(vuln|fixed|decoy)\b`)
 	zooMarksTokenRe = regexp.MustCompile(`@[a-z]+(?:\([^)]*\))?`)
-	zooMarksKinds   = map[string]string{"@miss": "miss", "@fp": "fp", "@noisy": "noisy", "@na": "na", "@todo": "todo", "@manual": "manual"}
+	zooMarksKinds   = map[string]string{"@miss": "miss", "@fp": "fp", "@noisy": "noisy", "@na": "na", "@elsewhere": "elsewhere", "@todo": "todo", "@manual": "manual"}
 )
 
 // zooMarksRows reads the sources of the three zoos under bench (bench/zoo-go/cells, ...) and returns the sorted rows.

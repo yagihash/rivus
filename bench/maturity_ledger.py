@@ -8,6 +8,7 @@ no_edge: Go: `go run ./bench/observed-edges run -zoo bench/zoo-go`; Dart: bench/
 call_mismatch, call_unsupported, call_dead: Dart: bench/dart-callcheck/callcheck.py on bench/zoo-dart/cells; Go: bench/go-callcheck/callcheck.py on bench/zoo-go
 (the functions with a call that the source writes and the IR has neither as a `call` nor as an `unsupported`; the calls that only an `unsupported` reports;
 Go only: the calls that go/ssa does not keep, for a reason that the source states: not reachable, or in a function literal assigned to `_`). Rust: empty (no such check yet).
+na: the forms that the language does not have (@na, "no such form"); elsewhere: the Dart cells whose Go form is measured in another place (@elsewhere(go: ..), 2026-11-26; empty in the rows before it, and in a line of a test that has no such field). todo - todo_marked is the "not classified" of Go.
 An input that cannot be had leaves its column empty, and the reason goes to standard error: an empty cell is not a zero.
 What a number does not show is in bench/README.md (the section "The ledger of maturity").
 The script only adds rows. The commit is made by a person. Standard library only.
@@ -16,10 +17,11 @@ import argparse, datetime, os, re, shutil, subprocess, sys, tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LEDGER = os.path.join(ROOT, "bench", "maturity-ledger.tsv")
-COLUMNS = ["date", "rivus_commit", "lang", "cells", "na", "todo", "todo_marked", "miss", "no_edge", "calls_observed", "call_mismatch", "call_unsupported", "call_dead"]
+COLUMNS = ["date", "rivus_commit", "lang", "cells", "na", "todo", "todo_marked", "miss", "no_edge", "calls_observed", "call_mismatch", "call_unsupported", "call_dead", "elsewhere"]
 LANGS = ["go", "dart", "rust"]
 
-MARKS_RE = re.compile(r"zoo-(go|dart|rust): parity marks: @na (\d+) \[([^\]]*)\] \| @todo (\d+) \[([^\]]*)\]")
+# the groups: 1 language, 2 @na, 3 its names, 4 @todo, 5 its names, 6 @elsewhere (a line written before the mark existed has none), 7 its names
+MARKS_RE = re.compile(r"zoo-(go|dart|rust): parity marks: @na (\d+) \[([^\]]*)\] \| @todo (\d+) \[([^\]]*)\](?: \| @elsewhere (\d+) \[([^\]]*)\])?")
 MISS_RE = re.compile(r"zoo-(go|dart|rust): cells \d+ / cases \d+ \| found \d+ / \d+ \| @miss (\d+) \(trace \d+, silent \d+, no rule \d+\)")
 # the same expression as zooParityTodoRe in cmd/rivus/zoo_test.go: a mark names a cell (F/<family>/<shape>), so the
 # explanation "@todo(F/<family>/<shape>: PARITY: reason)" in bench/zoo-dart/na.txt is not a mark
@@ -49,6 +51,11 @@ def count_todo_marked(text):
 def parse_na(text):
     """{lang: @na count} from the same "parity marks" lines."""
     return {m.group(1): int(m.group(2)) for m in MARKS_RE.finditer(text)}
+
+
+def parse_elsewhere(text):
+    """{lang: @elsewhere count} from the same "parity marks" lines (a line without the field gives nothing)."""
+    return {m.group(1): int(m.group(6)) for m in MARKS_RE.finditer(text) if m.group(6) is not None}
 
 
 def parse_cells(text):
@@ -179,9 +186,9 @@ def collect_zoo(env, values):
     out = r.stdout + r.stderr
     if r.returncode != 0:
         warn("the zoo tests failed (exit %d); the numbers below are what the lines gave" % r.returncode)
-    todo, miss, na, cells = parse_todo(out), parse_miss(out), parse_na(out), parse_cells(out)
+    todo, miss, na, cells, elsewhere = parse_todo(out), parse_miss(out), parse_na(out), parse_cells(out), parse_elsewhere(out)
     for lang in LANGS:
-        for col, d in (("cells", cells), ("na", na)):
+        for col, d in (("cells", cells), ("na", na), ("elsewhere", elsewhere)):
             if lang in d:
                 values[lang][col] = d[lang]
             else:

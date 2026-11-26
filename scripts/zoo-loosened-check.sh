@@ -7,7 +7,7 @@
 # the cell; a lock file holds the rows of one cell, and its path is bench/zoo/marks.d/<lang>/<file>.lock (checked here).
 # What needs "Zoo-Loosened: <reason>。ユーザーの承認: YYYY-MM-DD" in the message of a commit of the range:
 #   - a row added to a cell that the lock already has (a mark added to an existing cell, or a mark of it changed),
-#   - a row of a new cell of a kind other than @sink(none), @miss and @fp (@noisy, @na, @todo, @manual).
+#   - a row of a new cell of a kind other than @sink(none), @miss and @fp (@noisy, @na, @elsewhere, @todo, @manual).
 #   - the marks that a Rust file writes outside its cells (`//! @na(...)` at the top of bench/zoo-rust/cells/src/lib.rs, lock
 #     rust/lib.rs.lock) are rows too, so that they are in the same two cases.
 # A row of a new lock file whose text is already in the source file of the merge base (the lock is written for the first time
@@ -176,7 +176,7 @@ while IFS=$'\t' read -r lang file kind ann _; do
   fi
   case "$kind" in
     sink-none) ;;
-    noisy | na | todo | manual)
+    noisy | na | elsewhere | todo | manual)
       if in_old_source "$lang" "$file" "$ann"; then
         continue
       fi

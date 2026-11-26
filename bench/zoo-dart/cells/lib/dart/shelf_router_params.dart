@@ -1,5 +1,5 @@
 // @cell(F/dart/shelf-router-params)
-// @na(go: the model of package:shelf, a Dart package; the Go side is measured in zoo-go-pkg (gin, a web framework: its cells are bind and query), not by a cell of the same name)
+// @elsewhere(go: F/pkg/gin/query)
 // @shape: a handler registered with Router.get of package:shelf_router (a skeleton of it) reads a path parameter with Request.params: the Request is the source of the built-in rows
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';

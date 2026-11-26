@@ -378,45 +378,58 @@ func TestZooMarkIndependentDart(t *testing.T) {
 	t.Logf("zoo-dart: %d findings, the same with the implementation of zoo_mark and the registration of the cases", len(plain))
 }
 
+// zooVulnMisses counts the @miss of the vulnerable cases of a cell (and the @ref of them).
+func zooVulnMisses(lines []zooLine, c *zooCell) (miss int, refs [][]string) {
+	for _, l := range lines {
+		if !(l.file == c.dir || strings.HasPrefix(l.file, c.dir+"/")) {
+			continue
+		}
+		for _, tag := range l.sourceTags {
+			if m := zooTagRole.FindStringSubmatch(tag); m == nil || m[1] != "vuln" {
+				continue
+			}
+			if l.hasMiss {
+				miss++
+				refs = append(refs, l.refs)
+			}
+		}
+	}
+	return
+}
+
 // zooParityDart compares the cells of the Dart zoo with the ones of the Go zoo (the common forms have the same name,
 // docs/DESIGN-zoo.md 4.2.2): a common cell in which Go finds the flow and Dart has a @miss says @ref(..., PARITY);
-// a Dart cell that Go does not have says why in @na(go: reason); a Go cell that Dart does not have is in
+// a Dart cell that Go does not have says why in @na(go: reason) (no such form in Go) or says where Go measures it in
+// @elsewhere(go: <a cell of zoo-go-pkg or a case of bench/gcp>), which is checked to be there; a Go cell that Dart does not have is in
 // bench/zoo-dart/na.txt (@na(F/<family>/<shape>: reason), a form that Dart has no counterpart of) or is still to be
 // written (stage 3), which is logged.
 func zooParityDart(t *testing.T, lines []zooLine, cells []*zooCell) {
 	t.Helper()
 	goLines, goCells := zooScan(t, zooRoot(t))
-	vulnMisses := func(lines []zooLine, c *zooCell) (miss int, refs [][]string) {
-		for _, l := range lines {
-			if !(l.file == c.dir || strings.HasPrefix(l.file, c.dir+"/")) {
-				continue
-			}
-			for _, tag := range l.sourceTags {
-				if m := zooTagRole.FindStringSubmatch(tag); m == nil || m[1] != "vuln" {
-					continue
-				}
-				if l.hasMiss {
-					miss++
-					refs = append(refs, l.refs)
-				}
-			}
-		}
-		return
-	}
+	vulnMisses := zooVulnMisses
 	goCell := map[string]*zooCell{}
 	for _, c := range goCells {
 		goCell[c.name] = c
 	}
 	common, parity, onlyDart, onlyDartPending := 0, 0, 0, 0
-	var goNa, goTodo []string // the cells that only Dart has: Go's side of the parity marks
+	var goNa, goTodo, goElsewhere, goElsewhereMiss []string // the cells that only Dart has: Go's side of the parity marks
+	targets := zooElsewhereTargets(t)
 	dartHas := map[string]bool{}
 	dartCell := map[string]*zooCell{}
 	for _, c := range cells {
 		dartHas[c.name] = true
 		dartCell[c.name] = c
 		gc := goCell[c.name]
+		for _, e := range zooElsewhereErrors(c, targets, gc != nil) {
+			t.Error(e)
+		}
 		if gc == nil {
-			if len(c.na) == 0 {
+			if len(c.elsewhere) > 0 {
+				goElsewhere = append(goElsewhere, strings.TrimPrefix(c.name, "F/"))
+				if ref, ok := zooElsewhereRef(c); ok && targets[ref] {
+					goElsewhereMiss = append(goElsewhereMiss, strings.TrimPrefix(c.name, "F/"))
+				}
+			} else if len(c.na) == 0 {
 				t.Logf("%s: a common form, and zoo-go has no cell of this name yet", c.name)
 				onlyDartPending++
 				goTodo = append(goTodo, strings.TrimPrefix(c.name, "F/"))
@@ -466,10 +479,11 @@ func zooParityDart(t *testing.T, lines []zooLine, cells []*zooCell) {
 			todoNames = append(todoNames, strings.TrimPrefix(c.name, "F/"))
 		}
 	}
-	zooParityLine(t, "zoo-dart", naNames, todoNames)
-	// the other direction: the cells that Dart has and Go does not (@na(go: reason): no such form in Go; a common form
+	zooParityLine(t, "zoo-dart", naNames, todoNames, nil, nil)
+	// the other direction: the cells that Dart has and Go does not (@na(go: reason): no such form in Go; @elsewhere(go: where):
+	// measured in another place; a common form
 	// that zoo-go has not written yet is "not yet")
-	zooParityLine(t, "zoo-go", goNa, goTodo)
+	zooParityLine(t, "zoo-go", goNa, goTodo, goElsewhere, goElsewhereMiss)
 	// bench/zoo-go/parity-todo.txt: the marked part of goTodo (the names are counted once, in goTodo)
 	gnb, err := os.ReadFile(filepath.Join(zooRoot(t), "parity-todo.txt"))
 	if err != nil {
@@ -484,6 +498,8 @@ func zooParityDart(t *testing.T, lines []zooLine, cells []*zooCell) {
 		t.Error(e)
 	}
 	t.Logf("zoo-go: @todo %d, marked in parity-todo.txt %d, not classified %d", len(goTodo), len(marked), len(goTodo)-len(marked))
+	// the five classes of the cells that Dart has, against Go (they add up to the cells of the Dart zoo)
+	t.Logf("zoo-go: parity classes: common %d | @na %d | @elsewhere %d | @todo %d | not classified %d | the cells of the Dart zoo %d", common, len(goNa), len(goElsewhere), len(marked), len(goTodo)-len(marked), len(cells))
 	t.Logf("zoo-dart: common cells %d | found in zoo-go and not in Dart %d (@ref(PARITY)) | only in Dart: %d with @na(go: reason), %d common and not yet in zoo-go | cells of zoo-go that Dart has no counterpart of (na.txt) %d, not written yet (stage 3) %d", common, parity, onlyDart, onlyDartPending, notApplicable, notYet)
 }
 
@@ -506,6 +522,8 @@ func zooGoMarkErrors(src string, dart map[string]*zooCell, goHas map[string]bool
 			errs = append(errs, fmt.Sprintf("%s: @todo in zoo-go/parity-todo.txt, and the Dart zoo has no cell of this name", n))
 		case len(c.na) > 0:
 			errs = append(errs, fmt.Sprintf("%s: @todo in zoo-go/parity-todo.txt, and the Dart cell has @na(%s)", n, c.na[0]))
+		case len(c.elsewhere) > 0:
+			errs = append(errs, fmt.Sprintf("%s: @todo in zoo-go/parity-todo.txt, and the Dart cell has @elsewhere(%s)", n, c.elsewhere[0]))
 		case goHas[n]:
 			errs = append(errs, fmt.Sprintf("%s: @todo in zoo-go/parity-todo.txt, and zoo-go has a cell of this name", n))
 		}

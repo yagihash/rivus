@@ -1,5 +1,5 @@
 // @cell(F/dart/github-getcontents-path)
-// @na(go: the model of package:github, a Dart package; the Go side is measured in zoo-go-pkg (go_github), not by a cell of the same name)
+// @elsewhere(go: F/pkg/go-github/repos)
 // @shape: a value goes into the path of RepositoriesService.getContents of package:github (a skeleton of it): the resource_name sink of the built-in rows
 import 'package:github/github.dart';
 import 'package:zoo_mark/zoo_mark.dart';

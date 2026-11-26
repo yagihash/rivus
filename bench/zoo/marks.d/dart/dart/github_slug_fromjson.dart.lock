@@ -1,4 +1,4 @@
+dart	dart/github_slug_fromjson.dart	elsewhere	@elsewhere(go: F/pkg/go-github/repos)	-
 dart	dart/github_slug_fromjson.dart	miss	@source(dart-github-slug-fromjson-vuln) @miss(unmodeled_library_call) @ref(model-dart-github-repositoryslug-miss)	Future<void> vuln() async { @vuln
-dart	dart/github_slug_fromjson.dart	na	@na(go: the model of package:github, a Dart package; the Go side is measured in zoo-go-pkg (go_github)	-
 dart	dart/github_slug_fromjson.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
 dart	dart/github_slug_fromjson.dart	sink-none	@sink(none) @nosink(dart-github-slug-fromjson-decoy)	Future<void> decoy() async { @decoy

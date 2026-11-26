@@ -1,3 +1,3 @@
-dart	dart/gcloud_storage_read.dart	na	@na(go: the model of package:gcloud, a Dart package; the Go side is measured in zoo-go-pkg (storage)	-
+dart	dart/gcloud_storage_read.dart	elsewhere	@elsewhere(go: F/pkg/storage/names)	-
 dart	dart/gcloud_storage_read.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
 dart	dart/gcloud_storage_read.dart	sink-none	@sink(none) @nosink(dart-gcloud-storage-read-decoy)	Future<void> decoy() async { @decoy

@@ -1,4 +1,4 @@
-dart	dart/archive_file_name.dart	na	@na(go: the model of package:archive, a Dart package; the Go side is measured in zoo-go-pkg (archive: archive/tar and archive/zip)	-
+dart	dart/archive_file_name.dart	elsewhere	@elsewhere(go: F/pkg/archive/entry)	-
 dart	dart/archive_file_name.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
 dart	dart/archive_file_name.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
 dart	dart/archive_file_name.dart	sink-none	@sink(none) @nosink(dart-archive-file-name-decoy)	Future<void> decoy() async { @decoy
