@@ -1,0 +1,12 @@
+# Rules of the app of the Rust zoo: the functions of the crate zoo-mark, as in the cells (bench/zoo-rust/rules.yaml). The built-in
+# rules are in force as always.
+ruleset: rivus/bench-zoo-rust-app@1
+
+sources:
+  - symbol: zoo_mark::src
+    labels: [user_input]
+
+sinks:
+  - symbol: zoo_mark::sink_cmd
+    args: [0]
+    category: command_injection

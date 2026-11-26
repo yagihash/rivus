@@ -182,6 +182,16 @@ New names (not from a review) say what the zoo saw; the cause is not investigate
 | `CAP`, `STD-MODEL`, `ASYNC` | `thread::spawn` and the closure it takes; `mpsc::channel` has no model; an `async` block / `.await` | `rust/arc-mutex`, `rust/channel`, `rust/async-await` |
 | `ENV-PTR` (fixed, ADR-072) | a closure that writes through a captured `&mut` (`FnMut`, `for_each`): the pointer in the field of the environment is the variable, and the fields of the environment are named for their closure, so that a call that cannot tell which closure it runs does not mix the closures (`@noisy` and `@fp` of the family `clos` and `rust/closure-fnonce` are gone). What is left in `clos/capture-write-by-ref` is not this: `vuln3` (the variable of a loop: `FUNC-VALUE-MEMORY`), `vuln5` (`Once::call_once` reading a variable written later) | `rust/closure-fnmut`, `rust/iterator-chain` `vuln2`, `clos/capture-write-by-ref` |
 
+## Reachability: the app of the Rust zoo (`bench/zoo-rust-app`)
+
+The cells of the three zoos have no `main`: their `from_entry` is the reading of a library (every exported function of the code that was read is a root), and it does not measure whether a program reaches its handlers. `bench/zoo-rust-app` has a `main` (a workspace of its own, so that the cells of `bench/zoo-rust` and their findings do not change): `main` builds an `HttpServer` with a closure, the closure configures an `App` with a function, and the function registers handlers that implement a trait of the framework (`zoo_web`, a skeleton in the shape of actix-web; the trait is re-exported in `dev`). `TestZooRustReach` (`RIVUS_RUST`) reads the comment of each `sink_cmd` line of `app/src/*.rs`, as `TestDartFrameworkCallbacks` does for the Dart app, and compares it with the `reachability` of the finding:
+
+* `// from_entry`: the finding is not `not_from_entry` (`from_entry` or `from_framework_callback`: it holds whichever way the handlers come to be found).
+* `// from_entry @miss(not_from_entry) @ref(#234)`: the same expectation, and the engine says `not_from_entry` today. A ratchet: when it does not, the test fails, and the `@miss(not_from_entry)` goes in the same commit. These rows are in `marks.d/rust/app/`.
+* `// not_from_entry`: the contrast, code that nothing registers. It must stay `not_from_entry`, or the label tells nothing.
+
+The test logs `zoo-rust-app: reach cells N | miss M | contrast ok`. `miss 0` is necessary for #234 on the real targets and not sufficient. There is no new mark: the comments above are read by the test, and only the `@miss(not_from_entry)` is a mark of the lock.
+
 ## Closure and global cells (all three languages)
 
 Cells for the two ways a flow loses who wrote it and who reads it: through a package variable, and through a function value.

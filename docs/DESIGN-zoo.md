@@ -242,6 +242,20 @@ x := Src("a") // @source(a) @miss(silent) @ref(R-03)
 
 **「ケースを弱くしてテストを通す」を監視する**: 既存のセルのコードを変え、かつ `@miss` / `@fp` が減るコミットは、「形の変更」として一覧の**先頭**に出す。`internal/` と既存の `cells/` を**同時に**変えるコミットも同じ。そのために、**各セルは、形を 1 行で表す説明**(`@shape: インターフェース越しのポインタレシーバのフィールドを読む`)を持つ。形の変更は、説明が変わらないか、変わった理由が書かれていること、をレビューで見る。
 
+### 3.10 到達性(entry を持つ別のアプリ)
+
+3 つの zoo のセルは `main` を持たないライブラリで、finding の `reachability` は「ライブラリ扱い」(`Exported` かつ依存でない関数を全部 root にする)で決まる。zoo-rust の finding が `from_entry` でも、それは実対象の到達性(`main` から、フレームワークに登録したハンドラまで届くか)を測っていない。`main` を 1 つ足すと、その zoo の全セルの root が変わり、閉じた世界の絞り込み(`closed_world_entry`)も入って、到達性以外の finding も変わりうる。だから、既存の zoo には足さない。
+
+到達性は、`main` を持つ**別の zoo のアプリ**で測る。Dart は `bench/zoo-dart/app`(`TestDartFrameworkCallbacks`)、Rust は `bench/zoo-rust-app`(`TestZooRustReach`)。後者は専用の workspace で、actix-web の形の骨組み(`zoo_web`: `HttpServer::new`、`App::configure`、`ServiceConfig::service`、trait `HttpServiceFactory` とタプルの impl。trait は `dev` で再 export)と、rustypaste と同じ形のハンドラ(`main` → `HttpServer::new(closure)` → `App::configure(関数)` → `service` → `<ハンドラ as HttpServiceFactory>::register`)を持つ。既存の zoo-rust の IR、finding、ロックには触れない。
+
+期待は、新しいマークを足さず、sink に付けたコメントに書く(Dart のアプリと同じ形)。
+
+- `// from_entry`: `not_from_entry` でない(`from_entry` か `from_framework_callback`。修正の形に依らない)。
+- `// from_entry @miss(not_from_entry) @ref(#N)`: 期待は同じで、エンジンが今 `not_from_entry` を出している。ratchet は `@miss` と同じ: `not_from_entry` でなくなったら、テストが落ちるので、同じコミットで `@miss(not_from_entry)` を外す。`@miss(not_from_entry)` は `marks.d` に入る(`bench/zoo/marks.d/rust/app/`)。
+- `// not_from_entry`: 対照。誰にも登録されないコードで、`not_from_entry` が正。全部が `from_entry` になる退行を見逃さないために置く。
+
+テストは `zoo-rust-app: reach cells N | miss M | contrast ok` を出す。`miss 0` は、実対象の `not_from_entry`(#234)の解消の必要条件で、十分条件ではない(実対象の finding には、zoo の形にない理由で `not_from_entry` のものがありうる)。
+
 ## 4. セルと表
 
 ### 4.1 1 セル = 3 ケース

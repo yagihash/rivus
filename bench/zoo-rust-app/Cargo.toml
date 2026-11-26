@@ -1,0 +1,8 @@
+# The app of the Rust zoo, for the entry points that a framework calls (docs/DESIGN-zoo.md, "Reachability"). A workspace of its own:
+# the cells of bench/zoo-rust have no main, and one main there would change what rivus finds in all of them. Here main is there, and
+# the framework is a skeleton in zoo_web/ (the shape of actix-web: a server, an App that is configured with a function, a
+# trait that the handlers implement). Nothing is fetched: every dependency is a path.
+[workspace]
+resolver = "2"
+members = ["app"]
+exclude = ["zoo_web"]

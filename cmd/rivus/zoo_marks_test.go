@@ -39,6 +39,8 @@ func zooMarksRows(bench string) ([]string, error) {
 		{"go", "zoo-go/cells", ".go", ""},
 		{"dart", "zoo-dart/cells/lib", ".dart", ""},
 		{"rust", "zoo-rust/cells/src", ".rs", ""},
+		// the app of the Rust zoo (bench/zoo-rust-app, the reachability cells): the lock of app/src/server.rs is marks.d/rust/app/server.rs.lock
+		{"rust", "zoo-rust-app/app/src", ".rs", "app/"},
 	}
 	// the packages of the zoo (bench/zoo-go-pkg/<package>, bench/zoo-rust-pkg/<package>): found by the directories; the file of a
 	// cell is pkg/<package>/<file>, so that its lock is bench/zoo/marks.d/<lang>/pkg/<package>/<file>.lock
@@ -235,7 +237,7 @@ func TestZooMarksRowsTool(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	for _, d := range []string{"zoo-dart/cells/lib", "zoo-rust/cells/src"} {
+	for _, d := range []string{"zoo-dart/cells/lib", "zoo-rust/cells/src", "zoo-rust-app/app/src"} {
 		if err := os.MkdirAll(filepath.Join(bench, d), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -585,7 +587,7 @@ func TestZooLoosenedCheck(t *testing.T) {
 // there needs no line (a cell that another language has and this one has not yet: the user, 2026-11-23); the rest needs it.
 func TestZooMarksRowsHeader(t *testing.T) {
 	bench := t.TempDir()
-	for _, d := range []string{"zoo-go/cells", "zoo-dart/cells/lib", "zoo-rust/cells/src"} {
+	for _, d := range []string{"zoo-go/cells", "zoo-dart/cells/lib", "zoo-rust/cells/src", "zoo-rust-app/app/src"} {
 		if err := os.MkdirAll(filepath.Join(bench, d), 0o755); err != nil {
 			t.Fatal(err)
 		}
