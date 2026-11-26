@@ -17,7 +17,7 @@ var (
 	testGuardList = ""
 )
 
-const okChecks = `[{"name":"build","bucket":"pass"},{"name":"ci-ok","bucket":"pass"}]`
+const okChecks = `[{"name":"build","bucket":"pass"},{"name":"ci-ok","bucket":"pass"},{"name":"main-ci","bucket":"pass"}]`
 
 func runMerge(t *testing.T, runs string, runsCode int, env ...string) (string, error, bool) {
 	return runMergeChecks(t, okChecks, runs, runsCode, env...)
@@ -148,7 +148,7 @@ func TestMergeGuardChecks(t *testing.T) {
 		merged bool
 		want   string
 	}{
-		{"pass and skipping", `[{"name":"a","bucket":"pass"},{"name":"b","bucket":"skipping"},{"name":"ci-ok","bucket":"pass"}]`, true, "merging"},
+		{"pass and skipping", `[{"name":"a","bucket":"pass"},{"name":"b","bucket":"skipping"},{"name":"ci-ok","bucket":"pass"},{"name":"main-ci","bucket":"pass"}]`, true, "merging"},
 		{"one pending", `[{"name":"a","bucket":"pending"},{"name":"ci-ok","bucket":"pass"}]`, false, "a (pending)"},
 		{"one fail", `[{"name":"a","bucket":"fail"},{"name":"ci-ok","bucket":"pass"}]`, false, "a (fail)"},
 		{"one cancel", `[{"name":"a","bucket":"cancel"},{"name":"ci-ok","bucket":"pass"}]`, false, "a (cancel)"},
@@ -157,6 +157,12 @@ func TestMergeGuardChecks(t *testing.T) {
 		{"ci-ok skipping", `[{"name":"ci-ok","bucket":"skipping"}]`, false, "no passing ci-ok"},
 		{"no checks", `[]`, false, "no passing ci-ok"},
 		{"unreadable", ``, false, "cannot read the checks"},
+		// main-ci is required by name: the check run that main-ci.yml writes on the head of the PR (G1). Absent, it is not "all passed": the workflow may not have started yet.
+		{"main-ci pass", `[{"name":"ci-ok","bucket":"pass"},{"name":"main-ci","bucket":"pass"}]`, true, "merging"},
+		{"main-ci fail", `[{"name":"ci-ok","bucket":"pass"},{"name":"main-ci","bucket":"fail"}]`, false, "main-ci (fail)"},
+		{"main-ci pending", `[{"name":"ci-ok","bucket":"pass"},{"name":"main-ci","bucket":"pending"}]`, false, "main-ci (pending)"},
+		{"main-ci missing", `[{"name":"a","bucket":"pass"},{"name":"ci-ok","bucket":"pass"}]`, false, "no passing main-ci"},
+		{"main-ci skipping", `[{"name":"ci-ok","bucket":"pass"},{"name":"main-ci","bucket":"skipping"}]`, false, "no passing main-ci"},
 	}
 	for _, c := range cases {
 		out, err, merged := runMergeChecks(t, c.checks, ok, 0)
