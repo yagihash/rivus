@@ -15,8 +15,8 @@
 //! @todo(F/dart/dio-get: PARITY: Go's value in the URL of http.Get; Rust で未測定: reqwest::blocking::get)
 //! @todo(F/dart/dio-geturi: PARITY: Go's value in the URL object made by url.Parse that http.NewRequest takes and Client.Do sends; Rust で未測定: reqwest::Url::parse と Client::get)
 //! @todo(F/dart/dio-multipartfile-path: PARITY: Go's value in the path of the file that os.Open reads to be a part of a multipart body; Rust で未測定: reqwest::multipart::Form::file と std::fs::File::open)
-//! @todo(F/net-http/request-literal: PARITY: Go's request made as a struct literal with the URL object in the field URL, which Client.Do sends (the sink of the model is the argument of NewRequest); Rust で未測定: reqwest::Request::new with a Url)
-//! @todo(F/dart/dio-post: PARITY:Go's value in the URL of http.Post; Rust で未測定: reqwest::blocking::Client::post)
+//! @todo(F/net-http/request-literal: PARITY: Go's request made as a struct literal with the URL object in the field URL, which Client.Do sends, while the sink of the model is the argument of NewRequest; Rust で未測定: reqwest::Request::new with a Url)
+//! @todo(F/dart/dio-post: PARITY: Go's value in the URL of http.Post; Rust で未測定: reqwest::blocking::Client::post)
 //! @todo(F/dart/http-client-get: PARITY: Go's value in the URL of Client.Get; Rust で未測定: reqwest::blocking::Client::get)
 //! @todo(F/dart/http-ioclient-send: PARITY: Go's value in the request that Client.Do of a variable of the concrete type sends; Rust で未測定: reqwest::blocking::Client::execute)
 pub mod call {
