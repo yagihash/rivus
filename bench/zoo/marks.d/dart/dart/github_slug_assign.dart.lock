@@ -1,4 +1,4 @@
+dart	dart/github_slug_assign.dart	elsewhere	@elsewhere(go: F/pkg/go-github/repos)	-
 dart	dart/github_slug_assign.dart	miss	@source(dart-github-slug-assign-vuln) @miss(unmodeled_library_call) @ref(model-dart-github-repositoryslug-miss)	Future<void> vuln() async { @vuln
-dart	dart/github_slug_assign.dart	na	@na(go: the model of package:github, a Dart package; the Go side is measured in zoo-go-pkg (go_github)	-
 dart	dart/github_slug_assign.dart	sink-none	@sink(none)	Future<void> fixed() async { @fixed
 dart	dart/github_slug_assign.dart	sink-none	@sink(none) @nosink(dart-github-slug-assign-decoy)	Future<void> decoy() async { @decoy

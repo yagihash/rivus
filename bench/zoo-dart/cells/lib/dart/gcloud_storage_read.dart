@@ -1,5 +1,5 @@
 // @cell(F/dart/gcloud-storage-read)
-// @na(go: the model of package:gcloud, a Dart package; the Go side is measured in zoo-go-pkg (storage), not by a cell of the same name)
+// @elsewhere(go: F/pkg/storage/names)
 // @shape: a value is the name of an object that Bucket.read of package:gcloud (a skeleton of it) reads: the resource_name sink of the built-in rows
 import 'package:gcloud/storage.dart' as gcs;
 import 'package:zoo_mark/zoo_mark.dart';

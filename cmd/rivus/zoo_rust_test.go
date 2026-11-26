@@ -420,7 +420,7 @@ func zooParity(t *testing.T, rust []zooLine, rustCells []*zooCell) {
 			t.Errorf("%s is a cell of the Go zoo: the Rust zoo has it, or says @na(%s: the reason) (the form does not exist in Rust) or @todo(%s: PARITY: the reason) (it can be written, not yet) in cells/src/lib.rs", c.name, c.name, c.name)
 		}
 	}
-	zooParityLine(t, "zoo-rust", naNames, todoNames)
+	zooParityLine(t, "zoo-rust", naNames, todoNames, nil, nil)
 	goMiss := map[string]bool{}
 	goTags := map[string]bool{}
 	goTagsAll := map[string]bool{} // every tag of the Go zoo (a source tag)

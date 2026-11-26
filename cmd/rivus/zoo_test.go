@@ -282,6 +282,9 @@ var (
 	zooMissRe   = regexp.MustCompile(`@miss(?:\(([a-z_,]+)\))?`)
 	zooFpRe     = regexp.MustCompile(`@fp\b`)
 	zooNaRe     = regexp.MustCompile(`@na\(([^)]+)\)`)
+	// @elsewhere(go: <where>): the form exists in the other language and is measured in another place (a cell of
+	// zoo-go-pkg, a case of bench/gcp), not by a cell of the same name. The reason has no ")" (as @na).
+	zooElsewhereRe = regexp.MustCompile(`@elsewhere\(([^)]+)\)`)
 	// the marks of a Go cell that the other language does not have (docs/DESIGN-zoo.md, "@na and @todo"):
 	// @na(F/<family>/<shape>: why), the form does not exist in the language; @todo(F/<family>/<shape>: PARITY: why), the
 	// form can be written and the cell is not written yet. Both pass the parity check; the table counts them apart.
@@ -301,13 +304,18 @@ func zooParityMarks(src string) (na, todo map[string]string) {
 	return
 }
 
-// zooParityLine logs the count of the cells that the language lacks, in two kinds, for bench/parity (the tool
-// reads this line): "zoo-<lang>: parity marks: @na N [names] | @todo N [names]".
-func zooParityLine(t testing.TB, lang string, na, todo []string) {
+// zooParityLine logs the count of the cells that the language lacks, in kinds, for bench/parity and
+// bench/maturity_ledger.py (the tools read this line):
+// "zoo-<lang>: parity marks: @na N [names] | @todo N [names] | @elsewhere N [names] | elsewhere-miss N [names]".
+// @na is the form that does not exist in the language; @elsewhere is a form that is measured in another place;
+// elsewhere-miss is the part of @elsewhere whose other place has a @miss (not found there either).
+func zooParityLine(t testing.TB, lang string, na, todo, elsewhere, elsewhereMiss []string) {
 	t.Helper()
 	sort.Strings(na)
 	sort.Strings(todo)
-	t.Logf("%s: parity marks: @na %d [%s] | @todo %d [%s]", lang, len(na), strings.Join(na, " "), len(todo), strings.Join(todo, " "))
+	sort.Strings(elsewhere)
+	sort.Strings(elsewhereMiss)
+	t.Logf("%s: parity marks: @na %d [%s] | @todo %d [%s] | @elsewhere %d [%s] | elsewhere-miss %d [%s]", lang, len(na), strings.Join(na, " "), len(todo), strings.Join(todo, " "), len(elsewhere), strings.Join(elsewhere, " "), len(elsewhereMiss), strings.Join(elsewhereMiss, " "))
 }
 
 // zooLine is what the annotations of one line say.
@@ -333,6 +341,8 @@ type zooCell struct {
 	roles  map[string]int
 	manual int
 	na     []string // @na(reason): the form does not exist in the other language, and why
+	// @elsewhere(go: <where>): the form is measured in another place of the other language
+	elsewhere []string
 }
 
 // zooScan reads the cells of the Go zoo: the annotated lines and the cells (a cell is a directory).
@@ -428,6 +438,11 @@ func zooScanIn(t testing.TB, dir, sub, ext string, unit func(rel string) string)
 			for _, m := range zooNaRe.FindAllStringSubmatch(text, -1) {
 				for _, c := range byDir[d] {
 					c.na = append(c.na, m[1])
+				}
+			}
+			for _, m := range zooElsewhereRe.FindAllStringSubmatch(text, -1) {
+				for _, c := range byDir[d] {
+					c.elsewhere = append(c.elsewhere, m[1])
 				}
 			}
 			if len(zl.sinks)+len(zl.nosinks)+len(zl.carries)+len(zl.sourceTags) > 0 || zl.manual != "" || zl.hasMiss || zl.hasFp {
