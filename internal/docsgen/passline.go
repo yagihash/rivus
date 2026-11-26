@@ -74,7 +74,7 @@ func PassLineTable(rows []PassLineRow) string {
 		if len(r.Args) > 0 {
 			flags = "`" + strings.Join(r.Args, " ") + "`"
 		}
-		fmt.Fprintf(&b, "| %s | `%s` | %s | `%s` | %s | %g 秒 | %g GB |\n", r.Line, r.Target, r.Lang, c, flags, r.TimeS, r.MemGB)
+		fmt.Fprintf(&b, "| %s | `%s` | %s | `%s` | %s | %g 秒 | %g GiB |\n", r.Line, r.Target, r.Lang, c, flags, r.TimeS, r.MemGB)
 	}
 	return b.String()
 }
