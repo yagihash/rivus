@@ -68,6 +68,14 @@ pub fn register_all() {
     c::dart::callback_param_helper::register();
     c::dart::callback_param_named::register();
     c::dart::io_link_create_target::register();
+    c::dart::dio_download_savepath::register();
+    c::dart::dio_get::register();
+    c::dart::dio_geturi::register();
+    c::dart::dio_multipartfile_path::register();
+    c::dart::dio_post::register();
+    c::dart::http_client_get::register();
+    c::dart::http_ioclient_send::register();
+    c::net_http::request_literal::register();
     c::dyns::func_field::register();
     c::dyns::func_map::register();
     c::dyns::generics_ptr::register();

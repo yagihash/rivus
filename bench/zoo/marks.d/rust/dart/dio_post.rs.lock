@@ -1,0 +1,2 @@
+rust	dart/dio_post.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	dart/dio_post.rs	sink-none	@sink(none) @nosink(dart-dio-post-decoy)	fn decoy() { @decoy

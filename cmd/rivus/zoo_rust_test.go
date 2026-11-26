@@ -279,7 +279,7 @@ func zooRustStream(t *testing.T, dir string) []byte {
 func zooRustCopy(t *testing.T, root string) string {
 	t.Helper()
 	dst := t.TempDir()
-	for _, f := range []string{"Cargo.toml", "Cargo.lock", "rules.yaml", "zoo-mark", "cells", "dep"} {
+	for _, f := range []string{"Cargo.toml", "Cargo.lock", "rules.yaml", "zoo-mark", "cells", "dep", "reqwest"} {
 		if out, err := exec.Command("cp", "-R", filepath.Join(root, f), filepath.Join(dst, f)).CombinedOutput(); err != nil {
 			t.Fatalf("cp %s: %v\n%s", f, err, out)
 		}

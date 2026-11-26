@@ -1,0 +1,11 @@
+# Stands for the `reqwest` crate in the zoo: the zoo has no registry (docs/DESIGN-zoo.md), so this crate has the name and the paths of the items that the
+# cells use (`reqwest::blocking::get`, `reqwest::blocking::Client::post`, ...) and sends nothing. It is a crate of its own, outside the workspace
+# (a path dependency of the cells, like `zoo-dep`), so that its bodies are those of a dependency.
+[package]
+name = "reqwest"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+zoo-mark = { path = "../zoo-mark" }

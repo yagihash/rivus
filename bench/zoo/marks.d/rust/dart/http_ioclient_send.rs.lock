@@ -1,0 +1,2 @@
+rust	dart/http_ioclient_send.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	dart/http_ioclient_send.rs	sink-none	@sink(none) @nosink(dart-http-ioclient-send-decoy)	fn decoy() { @decoy

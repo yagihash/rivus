@@ -1,0 +1,2 @@
+rust	dart/http_client_get.rs	sink-none	@sink(none)	fn fixed() { @fixed
+rust	dart/http_client_get.rs	sink-none	@sink(none) @nosink(dart-http-client-get-decoy)	fn decoy() { @decoy
