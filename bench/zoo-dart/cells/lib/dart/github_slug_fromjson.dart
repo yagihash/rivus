@@ -1,4 +1,5 @@
 // @cell(F/dart/github-slug-fromjson)
+// @na(go: the model of package:github, a Dart package; the Go side is measured in zoo-go-pkg (go_github), not by a cell of the same name)
 // @shape: a value goes into the owner of a RepositorySlug that is made by RepositorySlug.fromJson (package:github, a skeleton of it) and the slug goes into a service call: the sink rows are on RepositorySlug.new and .full, not on fromJson
 import 'package:github/github.dart';
 import 'package:zoo_mark/zoo_mark.dart';

@@ -6,3 +6,4 @@ Read by TestZooDart (the parity line). Two marks (docs/DESIGN-zoo.md, 4.2.5): @n
 @na(F/dyn/iface-ptr-recv-write: the same)
 @na(F/dyn/iface-write-passed: a Go pointer held in an io.Writer interface value; a Dart object is always a reference)
 @na(F/dyn/generics-ptr: a Go pointer type argument; Dart's generics are reified and have no pointer receivers)
+@na(F/clos/range-func: Go's range over a function (for v := range seq, the iterator calls yield); Dart's for-in drives Iterator.moveNext, and no loop calls the body as a closure (Iterable.forEach(f) takes a closure the other way round, a different cell))

@@ -1,4 +1,5 @@
 // @cell(F/dart/dio-multipartfile-path)
+// Go side: not measured yet (zoo-go-pkg has net_http but no cell of this form; the Go model is go-net-http.yaml); not a form that Go lacks. Counted as a Go todo by TestZooDart (no mark)
 // @shape: a value goes into the path that MultipartFile.fromFile and fromFileSync of package:dio (a skeleton of it) read the file from: the path traversal sinks of the built-in rows
 import 'package:dio/dio.dart';
 import 'package:zoo_mark/zoo_mark.dart';

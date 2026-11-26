@@ -1,4 +1,5 @@
 // @cell(F/dart/googleapis-bigquery-query)
+// @na(go: the model of package:googleapis, a Dart package; the Go side is measured in bench/gcp (bigquery: Client.Query of go-gcp.yaml), not by a cell of the same name)
 // @shape: a value is the text of the QueryRequest that JobsResource.query of package:googleapis (a skeleton of it) runs: the sql_injection sink of the built-in rows (the field `query` of the request)
 import 'package:googleapis/bigquery/v2.dart' as bq;
 import 'package:zoo_mark/zoo_mark.dart';

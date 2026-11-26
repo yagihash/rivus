@@ -1,4 +1,5 @@
 // @cell(F/dart/googleapis-pubsub-subscription-name)
+// Go side: not measured yet (no Go cell of this form in zoo-go-pkg or bench/gcp); not a form that Go lacks. Counted as a Go todo by TestZooDart (no mark)
 // @shape: a value is the name of the subscription of ProjectsSubscriptionsResource.modifyPushConfig of package:googleapis (a skeleton of it), a call whose row of the built-in model is the push endpoint only (one category for one symbol)
 import 'package:googleapis/pubsub/v1.dart' as pubsub;
 import 'package:zoo_mark/zoo_mark.dart';

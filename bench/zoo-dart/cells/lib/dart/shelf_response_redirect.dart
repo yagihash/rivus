@@ -1,4 +1,5 @@
 // @cell(F/dart/shelf-response-redirect)
+// @na(go: the model of package:shelf, a Dart package; the Go side is measured in zoo-go-pkg (gin, a web framework: its cells are bind and query), not by a cell of the same name)
 // @shape: a value from the Request goes into the location of Response.found of package:shelf (a skeleton of it): the open_redirect sink of the built-in rows; the location is read back from the headers to record it (the harness runs the real shelf)
 import 'package:shelf/shelf.dart';
 import 'package:zoo_mark/zoo_mark.dart';

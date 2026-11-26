@@ -1,4 +1,5 @@
 // @cell(F/dart/github-file-content)
+// @na(go: the model of package:github, a Dart package; the Go side is measured in zoo-go-pkg (go_github), not by a cell of the same name)
 // @shape: a value that a user of GitHub wrote is read with GitHubFile.content of package:github (a skeleton of it): the field source of the built-in rows
 import 'package:github/github.dart';
 import 'package:zoo_mark/zoo_mark.dart';
