@@ -49,8 +49,8 @@ func TestZooRustReach(t *testing.T) {
 		}
 		f.Close()
 	}
-	if len(wants) != 6 {
-		t.Fatalf("the app has %d sinks with an expectation, want 6", len(wants))
+	if len(wants) != 8 {
+		t.Fatalf("the app has %d sinks with an expectation, want 8", len(wants))
 	}
 
 	// the app reads zoo-mark at ../zoo-rust/zoo-mark: the copy keeps the two directories side by side

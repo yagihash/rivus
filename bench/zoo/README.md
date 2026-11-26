@@ -188,7 +188,7 @@ The cells of the three zoos have no `main`: their `from_entry` is the reading of
 
 * `// from_entry`: the finding is not `not_from_entry` (`from_entry` or `from_framework_callback`: it holds whichever way the handlers come to be found).
 * `// from_entry @miss(not_from_entry) @ref(#234)`: the same expectation, and the engine says `not_from_entry` today. A ratchet: when it does not, the test fails, and the `@miss(not_from_entry)` goes in the same commit. These rows are in `marks.d/rust/app/`.
-* `// not_from_entry`: the contrast, code that nothing registers. It must stay `not_from_entry`, or the label tells nothing.
+* `// not_from_entry`: the contrast, code that nothing registers. It must stay `not_from_entry`, or the label tells nothing. There are two: `orphan` (a handler that no route registers) and `lookalike` (a type that implements a trait of the same name, `other::HttpServiceFactory`, in another module of the app: a fix that compares traits must not take it for the trait of `zoo_web`). `other::hooked` is a `// from_entry` that main reaches through a dyn call of another trait of that module: the dyn call must not give `orphan` a caller.
 
 The test logs `zoo-rust-app: reach cells N | miss M | contrast ok`. `miss 0` is necessary for #234 on the real targets and not sufficient. There is no new mark: the comments above are read by the test, and only the `@miss(not_from_entry)` is a mark of the lock.
 

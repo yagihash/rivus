@@ -86,3 +86,43 @@ impl HttpServiceFactory for orphan {
         config.register_resource(web::to(orphan));
     }
 }
+
+// the contrast of a trait of the same name: a module of the app has a trait `HttpServiceFactory` with the same method as the one of
+// `zoo_web::service`, and a type that implements it. It is another trait (another definition path), and nothing registers the type,
+// so its finding stays not_from_entry: if the two traits are taken for one, the registered handlers would give it a caller
+pub mod other {
+    use zoo_mark::{sink_cmd, src};
+    use zoo_web::dev::AppService;
+
+    pub trait HttpServiceFactory {
+        fn register(self, config: &mut AppService);
+    }
+
+    pub struct lookalike;
+    impl HttpServiceFactory for lookalike {
+        fn register(self, _config: &mut AppService) {
+            fn lookalike() {
+                let file = src("app-lookalike");
+                sink_cmd(&file); // not_from_entry
+            }
+            lookalike();
+        }
+    }
+
+    // a dyn call of another trait of the module (the same method name), which main reaches: it gives the callee the impls of its own trait
+    // and no handler of `zoo_web`, so the handlers keep the findings that they have, and `orphan` (above) stays not_from_entry
+    pub trait Hook {
+        fn register(&self);
+    }
+
+    pub struct hooked;
+    impl Hook for hooked {
+        fn register(&self) {
+            sink_cmd(&src("app-hooked")); // from_entry
+        }
+    }
+
+    pub fn run_hook(hook: &dyn Hook) {
+        hook.register();
+    }
+}

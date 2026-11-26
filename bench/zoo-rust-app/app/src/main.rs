@@ -11,6 +11,7 @@ use zoo_web::{App, HttpServer};
 fn main() -> std::io::Result<()> {
     sink_cmd(&src("app-main")); // from_entry
     helper();
+    server::other::run_hook(&server::other::hooked);
     // the shape of the real target: the factory is a closure, the app is configured with a function item
     let http_server = HttpServer::new(move || App::new().configure(server::configure_routes)).bind("127.0.0.1:8000")?;
     http_server.run()
