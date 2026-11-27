@@ -1,5 +1,11 @@
 # Changelog
 
+## [v0.0.21](https://github.com/yagihash/rivus/compare/v0.0.20...v0.0.21) - 2026-11-27
+
+### Features
+- Rust: Fn::call の絞り込みの出所の上限を 1024 にし、Dart の列挙の上限と分ける(#239) by @yagihash in https://github.com/yagihash/rivus/pull/641
+- summary: value_candidates と dispatch_candidates_applied を足す(rivus.result/6) by @yagihash in https://github.com/yagihash/rivus/pull/642
+
 ## [v0.0.20](https://github.com/yagihash/rivus/compare/v0.0.19...v0.0.20) - 2026-11-26
 
 ### Features
