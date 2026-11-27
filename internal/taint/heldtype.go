@@ -25,6 +25,12 @@ func heldType(v *sg.Value) string {
 	if root == nil || root.Func == nil {
 		return ""
 	}
+	// the content may be written from outside this function's stores (`mem::replace(&mut b, ..)`, `mem::swap`, a
+	// function that assigns through the `&mut` it is given): unless every use of the object is a store into it or a
+	// read of it as a writer, it is not known
+	if !onlyRead(root.Func, root, 4, true) {
+		return ""
+	}
 	held := ""
 	for _, b := range root.Func.Blocks {
 		for _, in := range b.Instrs {
@@ -38,7 +44,64 @@ func heldType(v *sg.Value) string {
 			held = t
 		}
 	}
+	if strings.Contains(held, "dyn ") {
+		return ""
+	}
 	return held
+}
+
+// onlyRead reports whether every use, in fn, of the value root (and of its copies and conversions) leaves what it holds
+// as it is: it is called as a writer (`w.write_all(p)`), passed to a function of the program that does the same
+// (depth levels down), or, when own is set (root is the object made in fn), stored into. A use that may write
+// something else into it, or keep it (a call without a body, a store of the object itself, a φ, a return) is
+// not that: "when in doubt, it is not known".
+func onlyRead(fn *sg.Func, root *sg.Value, depth int, own bool) bool {
+	alias := map[*sg.Value]bool{root: true}
+	for changed := true; changed; {
+		changed = false
+		for _, b := range fn.Blocks {
+			for _, in := range b.Instrs {
+				if (in.Op == ir.OpCopy || in.Op == ir.OpConvert) && len(in.Args) == 1 && len(in.Dsts) == 1 && alias[in.Args[0]] && !alias[in.Dsts[0]] {
+					alias[in.Dsts[0]] = true
+					changed = true
+				}
+			}
+		}
+	}
+	for _, b := range fn.Blocks {
+		for _, in := range b.Instrs {
+			for k, a := range in.Args {
+				if !alias[a] {
+					continue
+				}
+				switch in.Op {
+				case ir.OpCopy, ir.OpConvert:
+				case ir.OpStore:
+					if !(own && k == 0) {
+						return false
+					}
+				case ir.OpCall:
+					if !callOnlyReads(in, k, depth) {
+						return false
+					}
+				default:
+					return false
+				}
+			}
+		}
+	}
+	return true
+}
+
+// callOnlyReads: the call uses its operand k as a writer and does not change what it holds.
+func callOnlyReads(in *sg.Instr, k, depth int) bool {
+	if in.Callee != nil && k == 0 && (strings.HasPrefix(in.Callee.Symbol, "std::io::Write::") || strings.HasPrefix(in.Callee.Symbol, "std::fmt::Write::")) {
+		return true
+	}
+	if in.Static != nil && depth > 0 && k < len(in.Static.Params) {
+		return onlyRead(in.Static, in.Static.Params[k], depth-1, false)
+	}
+	return false
 }
 
 // allocRoot is the object made right there (an alloc) that a value is a copy of, or nil.
