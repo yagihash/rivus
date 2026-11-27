@@ -141,6 +141,9 @@ func applyMemoryLimit(flag string) (memoryLimit, error) {
 	if m.set {
 		if m.Bytes > 0 {
 			debug.SetMemoryLimit(m.Bytes)
+			if os.Getenv("GOGC") == "" {
+				debug.SetGCPercent(gogcFor(m.Bytes))
+			}
 		} else {
 			debug.SetMemoryLimit(math.MaxInt64)
 		}
