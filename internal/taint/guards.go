@@ -82,6 +82,23 @@ func (d *dispatchSpec) excludes(c string) bool {
 			return true
 		}
 	}
+	return stdLeafType(c)
+}
+
+// stdLeafType: the type is one of the standard library that writes by itself and holds no writer (a `Vec<u8>`, a `File`):
+// the implementations of the program are of other types. A type that may delegate to what it holds (`Box<W>`, `Rc`, `Arc`,
+// `RefCell`, `Mutex`, `BufWriter`, ...: the type arguments are not in the type) is not excluded, nor is one that is not
+// listed: when in doubt the flow stays (#242 is the same question for a receiver that is seen to be of one).
+func stdLeafType(t string) bool {
+	if !isStdType(t) {
+		return false
+	}
+	name := baseType(withoutGenerics(t))
+	name = name[strings.LastIndex(name, "::")+2:]
+	switch name {
+	case "Vec", "String", "VecDeque", "File", "Stdout", "Stderr", "StdoutLock", "StderrLock", "Sink", "Cursor", "TcpStream", "ChildStdin":
+		return true
+	}
 	return false
 }
 
@@ -102,6 +119,11 @@ func concreteType(v *sg.Value) string {
 			return concreteType(v.Instr.Args[0])
 		}
 		return ""
+	}
+	if v.Instr.Op == ir.OpConvert && strings.Contains(string(v.Type), "dyn ") && len(v.Instr.Args) == 1 {
+		// a conversion to a trait object of Rust (`&mut b` as `&mut dyn Write`): what it was made of, which
+		// the receivers of a method row are read by too
+		return receiverType(v.Instr.Args[0])
 	}
 	if v.Instr.Op != ir.OpConvert || v.Instr.IR == nil || v.Instr.IR.Operator != "make_interface" {
 		return ""

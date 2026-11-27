@@ -290,10 +290,13 @@ func (s *state) applyMethodRow(cc *callCtx, row model.CallRow) {
 			impls = same
 		} else if isStdType(t) {
 			// a type of the standard library (a `Vec<u8>`, a `String`) has its own method: the project's
-			// implementations are of other types
+			// implementations are of other types (a wrapper that holds one, `Box<ShellWriter>`, is #242)
 			return
 		}
 	}
+	// A receiver that is a parameter of this function (a `&mut dyn Write` given to it): which implementation it is
+	// is for the callers to say, each by what it passed (dispatchGuards says the same of a call through an interface).
+	guards := s.methodRowGuards(cc, ops[0], impls)
 	with := make([]*sg.Value, 1, 1+len(row.With))
 	with[0] = ops[0]
 	for _, t := range row.With {
@@ -327,8 +330,25 @@ func (s *state) applyMethodRow(cc *callCtx, row model.CallRow) {
 			}
 		}
 		x := &callCtx{in: cc.in, args: args, roots: cc.roots, sym: cc.sym}
-		s.applySummary(x, fn, nil, notes, nil)
+		s.applySummary(x, fn, nil, notes, guards[fn])
 	}
+}
+
+// methodRowKey keys the guards of the method row of a call (the call has its own, dispatchGuards, apart).
+type methodRowKey struct{ in *sg.Instr }
+
+// methodRowGuards are the guards of the implementations that applyMethodRow applies, when the receiver is a parameter of the
+// function: the flow through an implementation is real only if the caller's value has that type.
+func (s *state) methodRowGuards(cc *callCtx, recv *sg.Value, impls []*sg.Func) map[*sg.Func][]Guard {
+	if recv == nil || recv.Kind != sg.KParam || len(impls) == 0 {
+		return nil
+	}
+	if m, ok := s.eng.dispatch.Load(methodRowKey{cc.in}); ok {
+		return m.(map[*sg.Func][]Guard)
+	}
+	out := s.makeDispatchGuards(cc, recv, impls, false)
+	s.eng.dispatch.Store(methodRowKey{cc.in}, out)
+	return out
 }
 
 // receiverType is the type of the object that a receiver was made of right there: the type of the first value, through
