@@ -22,3 +22,7 @@ zoo のセル `F/dyn/stdlib-writer-boxed`(Rust だけのセル。vuln と decoy 
 ## 直す方向の案
 
 std の型なら、その型の std の実装のモデルに任せる。プロジェクトの impl が包みの中にありうるなら(`Box`、`Rc`、`Arc`、`&mut`、`RefCell` などの型引数にプロジェクトの型があるとき)、全候補のまま(絞らない)にする。
+
+## 試したこと(2026-11-27、#225 の修正のとき)
+
+`Box`、`Rc`、`Arc`、`RefCell`、`Mutex`、`BufWriter` などのラッパーのときは、全候補のままにする変更を試した。抽出器の型は型引数を落とす(`std::boxed::Box`。`Box<ShellWriter>` と `Box<FixedWriter>` が区別できない)ので、`stdlib-writer-boxed` の `@miss` 2 件は見つかるようになるが、同じプロジェクトの `impl Write` 全部に流れ、期待外の流れが約 21 件増える(boxed、own、own_static のセルの sink)。既存セルのマークの変更が要るので入れていない。絞るには、型引数を抽出器が残すか(`Box::<ShellWriter>::new` の呼び出し先の ID には型が出ている)、Box の中身を値の流れでたどる必要がある。

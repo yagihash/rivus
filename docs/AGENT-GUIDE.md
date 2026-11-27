@@ -702,7 +702,6 @@ rivus analyze -C <dir> -rules app.yaml -timeout 10m ./... > out.json
 | Dart | #209 | open | 文字列で引く登録表(`Router.call`、`Navigator.pushNamed`)が呼ぶ関数が、グラフのエッジにならない。登録した関数の中の流れは見つかる |
 | Dart | #210 | partial | フィールドや入れ物に入れた関数値の呼び出し(`unresolved_callee`)は、先を見ない。見逃しの側 |
 | Dart | #77 | partial | 同じヘルパーに渡すクロージャが多いと(上限を超えると)、コールバックの中の流れを落とす。`depth_limit`(`candidate_limit`)が付く。見逃しの側 |
-| Rust | #225 | open | `write!` の `write_fmt` が、プロジェクトの全 `impl Write` に飛ぶ。誤った報告の側 |
 | Rust | #235 | open | 型パラメータ越しの呼び(`F: Trait`)の候補が、その trait の全 impl になり、登録されない impl も届くと読む。誤った報告の側 |
 | Rust | #234 | open | 実際の対象(rustypaste など)で、`reachability` が全部 `not_from_entry` になる。確かめてあるのは zoo の actix の形で、ほかのフレームワークは未確認 |
 | Go | #173 | open | map のキーと、チャネルで渡したポインタ経由の書き込みが、元の値から読むと見つからない。見逃しの側 |
