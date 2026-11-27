@@ -25,9 +25,12 @@ func (e *Engine) noteApplied(ci *sg.Instr, i, n int) {
 	}
 	a := v.(*appliedSet)
 	a.mu.Lock()
-	if w := i / 64; w < len(a.bits) {
-		a.bits[w] |= 1 << (uint(i) % 64)
+	// the list of a call does not change during a run (ci.Candidates and Callee.ValueCands are set before it), but
+	// the set grows to the place instead of leaving a candidate out, whatever n was when it was made
+	for w := i / 64; w >= len(a.bits); {
+		a.bits = append(a.bits, 0)
 	}
+	a.bits[i/64] |= 1 << (uint(i) % 64)
 	a.mu.Unlock()
 }
 

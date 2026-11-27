@@ -9,6 +9,7 @@ import (
 
 	"github.com/yagihash/rivus/internal/ir"
 	"github.com/yagihash/rivus/internal/model"
+	"github.com/yagihash/rivus/internal/sg"
 )
 
 // runGo analyses a module of one file. dep says which functions are taken as functions of a dependency.
@@ -141,5 +142,19 @@ func TestDispatchCandidatesAppliedAndValueCandidatesAreTheSameEveryTime(t *testi
 				t.Fatalf("workers %d, run %d: applied %d %v, first run %d %v", w, i, got.DispatchApplied, got.ValueCandidates, first.DispatchApplied, first.ValueCandidates)
 			}
 		}
+	}
+}
+
+// A candidate whose place is past the size the set was made with is counted, not left out.
+func TestNoteAppliedGrowsToThePlaceOfTheCandidate(t *testing.T) {
+	e := &Engine{}
+	ci := &sg.Instr{}
+	e.noteApplied(ci, 0, 2)
+	e.noteApplied(ci, 1, 2)
+	e.noteApplied(ci, 1, 2) // again: once
+	e.noteApplied(ci, 70, 100)
+	e.noteApplied(ci, 200, 3) // a larger list than the one it was made with
+	if got := e.dispatchApplied(); got != 4 {
+		t.Errorf("applied %d, want 4", got)
 	}
 }
