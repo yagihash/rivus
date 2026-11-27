@@ -97,6 +97,7 @@ pub fn register_all() {
     c::dyns::sink_in_method_iface::register();
     c::dyns::through_dependency::register();
     c::dyns::fprint_writer_own::register();
+    c::dyns::iface_write_passed::register();
     c::dyns::stdlib_writer_boxed::register();
     c::dyns::stdlib_writer_own::register();
     c::dyns::stdlib_writer_own_static::register();

@@ -509,16 +509,17 @@ func (s *state) dispatchGuards(cc *callCtx, fns []*sg.Func) map[*sg.Func][]Guard
 	if m, ok := s.eng.dispatch.Load(cc.in); ok {
 		return m.(map[*sg.Func][]Guard)
 	}
-	out := s.makeDispatchGuards(cc, fns)
+	out := s.makeDispatchGuards(cc, recv, fns, true)
 	s.eng.dispatch.Store(cc.in, out)
 	return out
 }
 
-func (s *state) makeDispatchGuards(cc *callCtx, fns []*sg.Func) map[*sg.Func][]Guard {
-	recv := cc.recv
+// makeDispatchGuards makes the guards of the candidates fns of a call whose receiver recv is a parameter. A method of a
+// trait of Rust is not marked as one that has a receiver (needRecv is false for it: its first parameter is the receiver).
+func (s *state) makeDispatchGuards(cc *callCtx, recv *sg.Value, fns []*sg.Func, needRecv bool) map[*sg.Func][]Guard {
 	var all []string
 	for _, fn := range fns {
-		if !fn.Recv || len(fn.Params) == 0 {
+		if (needRecv && !fn.Recv) || len(fn.Params) == 0 {
 			return nil // a candidate that does not say what it is a method of: no guard
 		}
 		all = append(all, string(fn.Params[0].Type))

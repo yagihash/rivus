@@ -7,7 +7,6 @@
 //! @na(F/clos/range-func: Go's range over a function (Go 1.23: `for v := range seq`, the iterator calls yield); Rust has no loop that calls a closure for the body: an iterator is driven by `next`, and a `for` over it is a call of `next`)
 //! @na(F/call/regexp-replace: Go's regexp replacement with a function and with a literal replacement; the regex crate is a dependency, and the Rust zoo has none)
 //! @na(F/dyn/iface-assert-ptr-recv: Go's type assertion of `any` to an interface read through a pointer receiver; Rust has neither)
-//! @todo(F/dyn/iface-write-passed: PARITY: Go's pointer held in an `io.Writer` interface value that a function writes to (ADR-090); a Rust `&mut dyn Write` passed to a function and read back from the owner can be written; the cell is not written, because rivus reports the 3 sources of its 3 cases at 6 lines of other cells (`stdlib_writer_own.rs` and `stdlib_writer_own_static.rs`: 4 sink lines of their tags and 2 lines that must stay quiet; 12 unexpected flows), which cannot be marked in the new cell: the marks would be added to lines of existing cells; the cause is an estimate: `write!` calls `write_fmt`, whose `calls: write` spreads to every `impl Write` of the project; issue #225)
 pub mod call {
     pub mod depth3;
     pub mod direct;
@@ -114,6 +113,7 @@ pub mod dyns {
     pub mod sink_in_method_iface;
     pub mod through_dependency;
     pub mod fprint_writer_own;
+    pub mod iface_write_passed;
     pub mod stdlib_writer_boxed;
     pub mod stdlib_writer_own;
     pub mod stdlib_writer_own_static;

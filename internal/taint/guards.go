@@ -82,7 +82,9 @@ func (d *dispatchSpec) excludes(c string) bool {
 			return true
 		}
 	}
-	return false
+	// a type of the standard library has its own method: the implementations of the program are of other types
+	// (applyMethodRow says the same of a receiver that is seen to be of one)
+	return isStdType(c)
 }
 
 // concreteType is the type of the value an interface value was made of, when
@@ -102,6 +104,11 @@ func concreteType(v *sg.Value) string {
 			return concreteType(v.Instr.Args[0])
 		}
 		return ""
+	}
+	if v.Instr.Op == ir.OpConvert && strings.Contains(string(v.Type), "dyn ") && len(v.Instr.Args) == 1 {
+		// a conversion to a trait object of Rust (`&mut b` as `&mut dyn Write`): what it was made of, which
+		// the receivers of a method row are read by too
+		return receiverType(v.Instr.Args[0])
 	}
 	if v.Instr.Op != ir.OpConvert || v.Instr.IR == nil || v.Instr.IR.Operator != "make_interface" {
 		return ""
