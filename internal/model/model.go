@@ -1226,6 +1226,9 @@ func (p *Propagator) validateCalls(what string) error {
 		if c.CheckedBy != p.Calls[0].CheckedBy {
 			return fmt.Errorf("%s.checked_by: the rows of one function say the same (the first row says %q)", w, p.Calls[0].CheckedBy)
 		}
+		if c.Params != nil && *c.Params < 0 {
+			return fmt.Errorf("%s.params: %d (the number of parameters of the callback: 0 or more)", w, *c.Params)
+		}
 		switch c.Mode {
 		case "", CallModeCall, CallModeGo, CallModeDefer:
 		default:

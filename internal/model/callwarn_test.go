@@ -104,3 +104,11 @@ propagators:
 		t.Fatalf("warnings = %q, want one, for a.Zero (1 entry, 0 parameters)", got)
 	}
 }
+
+// A negative `params` is an error at the load, like the other mistakes of the format.
+func TestCallParamsNegativeIsAnError(t *testing.T) {
+	_, err := Parse(strings.NewReader("ruleset: t\npropagators:\n  - symbol: a.F\n    calls: [{fn: arg0, params: -1, with: [recv]}]\n"), "test")
+	if err == nil || !strings.Contains(err.Error(), "params") {
+		t.Fatalf("err = %v, want an error about params", err)
+	}
+}
