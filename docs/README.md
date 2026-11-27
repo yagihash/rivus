@@ -40,6 +40,8 @@
 | [AGENT-GUIDE.md](AGENT-GUIDE.md) | AI エージェント向けの利用ガイド(コマンド、フラグ、出力の読み方、ユースケース別の手順) |
 | [GRAPH.md](GRAPH.md) | `rivus index` と `rivus graph` |
 | [MODELING.md](MODELING.md) | ルールとモデルの書式(英語) |
+| [HARDCODED-APIS.md](HARDCODED-APIS.md) | コードに埋まった API の一覧と、処置(YAML に移す / 課題 / 移さない)。完了条件 D(1) |
+| [YAML-LIMITS.md](YAML-LIMITS.md) | ルールの YAML で表現できないことの一覧。完了条件 D(3) |
 | [GCP-MODELS.md](GCP-MODELS.md) | Google Cloud のモデルの、製品ごとの表 |
 | [rust-isolation.md](rust-isolation.md) | 信頼しない Rust を隔離して読む |
 
