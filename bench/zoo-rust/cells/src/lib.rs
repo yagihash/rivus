@@ -114,6 +114,7 @@ pub mod dyns {
     pub mod through_dependency;
     pub mod fprint_writer_own;
     pub mod iface_write_passed;
+    pub mod iface_box_passed;
     pub mod stdlib_writer_boxed;
     pub mod stdlib_writer_own;
     pub mod stdlib_writer_own_static;
