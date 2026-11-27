@@ -288,9 +288,11 @@ func (s *state) applyMethodRow(cc *callCtx, row model.CallRow) {
 		}
 		if len(same) > 0 {
 			impls = same
-		} else if isStdType(t) {
-			// a type of the standard library (a `Vec<u8>`, a `String`) has its own method: the project's
-			// implementations are of other types (a wrapper that holds one, `Box<ShellWriter>`, is #242)
+		} else if stdLeafType(t) {
+			// a type of the standard library that writes by itself (a `Vec<u8>`, a `String`) has its own method: the
+			// project's implementations are of other types. A wrapper that hands the call to what it holds (a
+			// `Box<W>`, an `Rc`) may have one of them inside: when what it holds is not seen (heldType), all of them
+			// stay (#242)
 			return
 		}
 	}
@@ -357,6 +359,12 @@ func (s *state) methodRowGuards(cc *callCtx, recv *sg.Value, impls []*sg.Func) m
 func receiverType(v *sg.Value) string {
 	for i := 0; i < 8 && v != nil; i++ {
 		if t := string(v.Type); t != "" && !strings.Contains(t, "dyn ") {
+			if isStdType(t) && !stdLeafType(t) {
+				// a wrapper (a `Box<W>`) hands a call to what it holds: the type that it holds, when it is seen
+				if h := heldType(v); h != "" {
+					return h
+				}
+			}
 			return t
 		}
 		if v.Kind != sg.KResult || v.Instr == nil || len(v.Instr.Args) != 1 {

@@ -24,7 +24,7 @@ impl Write for ShellWriter {
 fn vuln() { // @vuln
     let mut b = Box::new(ShellWriter);
     let out: &mut dyn Write = &mut b;
-    out.write_all(&m::src_bytes("dyn-stdlib-writer-boxed-vuln")).unwrap(); // @source(dyn-stdlib-writer-boxed-vuln) @miss(dynamic_dispatch,unmodeled_library_call) @ref(#242)
+    out.write_all(&m::src_bytes("dyn-stdlib-writer-boxed-vuln")).unwrap(); // @source(dyn-stdlib-writer-boxed-vuln)
     out.flush().unwrap();
 }
 
@@ -78,6 +78,6 @@ fn decoy() { // @decoy
     let loud: &mut dyn Write = &mut l;
     quiet.write_all(b"constant").unwrap();
     quiet.flush().unwrap();
-    loud.write_all(&m::src_bytes("dyn-stdlib-writer-boxed-decoy")).unwrap(); // @source(dyn-stdlib-writer-boxed-decoy) @miss(dynamic_dispatch,unmodeled_library_call) @ref(#242)
+    loud.write_all(&m::src_bytes("dyn-stdlib-writer-boxed-decoy")).unwrap(); // @source(dyn-stdlib-writer-boxed-decoy)
     loud.flush().unwrap();
 }
