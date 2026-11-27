@@ -32,3 +32,4 @@ __pycache__/
 # the archives scripts/build-release-archives.sh makes (the staging directory and the output)
 /build/
 /dist/
+/bench/rust-callcheck/syntax/target/
