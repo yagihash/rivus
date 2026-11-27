@@ -702,7 +702,6 @@ rivus analyze -C <dir> -rules app.yaml -timeout 10m ./... > out.json
 | Dart | #77 | partial | 同じヘルパーに渡すクロージャが多いと(上限を超えると)、コールバックの中の流れを落とす。`depth_limit`(`candidate_limit`)が付く。見逃しの側 |
 | Rust | #225 | open | `write!` の `write_fmt` が、プロジェクトの全 `impl Write` に飛ぶ。誤った報告の側 |
 | Rust | #235 | open | 型パラメータ越しの呼び(`F: Trait`)の候補が、その trait の全 impl になり、登録されない impl も届くと読む。誤った報告の側 |
-| Rust | #239 | open | 1 つのヘルパーに渡すクロージャが多いと、候補が広がり、別のクロージャの中の sink に届く。誤った報告の側 |
 | Rust | #234 | open | 実際の対象(rustypaste など)で、`reachability` が全部 `not_from_entry` になる。確かめてあるのは zoo の actix の形で、ほかのフレームワークは未確認 |
 | Go | #173 | open | map のキーと、チャネルで渡したポインタ経由の書き込みが、元の値から読むと見つからない。見逃しの側 |
 | Go | #179 | open | 埋め込み構造体の昇格を通すと、フィールドの区別が失われる(`kind: field` の source の別のフィールドも報告される) |
