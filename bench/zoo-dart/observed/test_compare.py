@@ -1,4 +1,4 @@
-"""Unit tests of compare.py (python3 -m unittest discover -s bench/zoo-dart/observed). Not run by CI."""
+"""Unit tests of compare.py (python3 bench/zoo-dart/observed/test_compare.py). Run by CI (the job go-packages)."""
 import importlib.util
 import os
 import sqlite3
