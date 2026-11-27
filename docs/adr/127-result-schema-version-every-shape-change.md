@@ -154,4 +154,4 @@
 
 **追記(2026-11-27、`rivus.result/6`): `summary.value_candidates`、`summary.dispatch_candidates_applied`**
 
-候補の数を、変更の前後で比べるための常設の数。`summary` に足し、`rivus.result/6` に上げる(`rivus.result/5` のハッシュは消さない。`guards:`(#169)用に予約していた `/6` は、保留中のため、こちらが使った)。`value_candidates` は、関数値の呼びを、IR で見つかった関数の数(`0`、`1`、`2-5`、`6-20`、`21-32`、`33+`)で数える(`33+` は、`ir.ValueCandidateMost` を超えて、解決されない呼び)。`dispatch_candidates_applied` は、interface、trait、関数値を通る呼びで、解析が実際に適用した候補の数(IR の候補の合計ではない)。
+候補の数を、変更の前後で比べるための常設の数。`summary` に足し、`rivus.result/6` に上げる(`rivus.result/5` のハッシュは消さない。`guards:`(#169)用に予約していた `/6` は、保留中のため、こちらが使った)。`value_candidates` は、関数値の呼びを、IR で見つかった関数の数(`0`、`1`、`2-5`、`6-20`、`21-32`、`33+`)で数える(`33+` は、`ir.ValueEnumerateMost` を超えて、解決されない呼び)。`dispatch_candidates_applied` は、interface、trait、関数値を通る呼びで、解析が実際に適用した候補の数(IR の候補の合計ではない)。

@@ -50,12 +50,12 @@ func valueCallModule(n int) string {
 }
 
 // summary.value_candidates: the calls of function values by how many functions were found. The edge is at
-// ir.ValueCandidateMost: 32 functions are followed, 33 are left out, and the count says which.
+// ir.ValueEnumerateMost: 32 functions are followed, 33 are left out, and the count says which.
 func TestValueCandidatesCountsTheCallsOverTheLimit(t *testing.T) {
 	for _, tc := range []struct {
 		n    int
 		want string
-	}{{ir.ValueCandidateMost, "21-32"}, {ir.ValueCandidateMost + 1, "33+"}, {5, "2-5"}, {1, "1"}} {
+	}{{ir.ValueEnumerateMost, "21-32"}, {ir.ValueEnumerateMost + 1, "33+"}, {5, "2-5"}, {1, "1"}} {
 		res := runGo(t, valueCallModule(tc.n), emptyRules(), nil, 1)
 		if got := res.ValueCandidates[tc.want]; got != 1 {
 			t.Errorf("%d functions flow to the call: %v, want one call in %q", tc.n, res.ValueCandidates, tc.want)

@@ -456,7 +456,7 @@ func (e *Engine) dispatchCandidates() *DispatchCandidates {
 }
 
 // ValueCandidateBuckets are the buckets of summary.value_candidates, in the order of the numbers. The edge is at
-// ir.ValueCandidateMost (32): a call that was found with 33 or more is the one that rivus leaves unresolved (ADR-050).
+// ir.ValueEnumerateMost (32): a call that was found with 33 or more is the one that rivus leaves unresolved (ADR-050).
 var ValueCandidateBuckets = []string{"0", "1", "2-5", "6-20", "21-32", "33+"}
 
 // ValueCandidateBucket is the bucket of a call of a function value that was found with n functions.
@@ -470,7 +470,7 @@ func ValueCandidateBucket(n int) string {
 		return "2-5"
 	case n <= 20:
 		return "6-20"
-	case n <= ir.ValueCandidateMost:
+	case n <= ir.ValueEnumerateMost:
 		return "21-32"
 	}
 	return "33+"
@@ -478,7 +478,7 @@ func ValueCandidateBucket(n int) string {
 
 // valueCandidateCounts counts the calls of function values (the call sites of the code, once each) by how many
 // functions were found for the value: the candidates when there are some, or, when rivus left them out (more than
-// ir.ValueCandidateMost, or only a part of the callers was followed), the number that was found. The IR, not the
+// ir.ValueEnumerateMost, or only a part of the callers was followed), the number that was found. The IR, not the
 // analysis: the same for every run.
 func (e *Engine) valueCandidateCounts() map[string]int {
 	out := map[string]int{}
