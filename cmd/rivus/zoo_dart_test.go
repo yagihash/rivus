@@ -253,13 +253,15 @@ func zooDartCopy(t *testing.T, root string, cells []*zooCell) string {
 
 // zooDartAlone analyses each cell by itself, as a subtest (green alone and red in the whole is a mix with the
 // others; red alone is the cell).
-func zooDartAlone(t *testing.T, root string, cells []*zooCell) {
+func zooDartAlone(t *testing.T, root string, lines []zooLine, cells []*zooCell) {
 	t.Helper()
 	for _, c := range cells {
 		c := c
 		t.Run("alone/"+strings.TrimPrefix(c.name, "F/"), func(t *testing.T) {
 			one := zooDartCopy(t, root, []*zooCell{c})
-			checkCuratedIR(t, one, zooDartStream(t, one), ".dart")
+			// the cell that tests the pass limit stops by it by itself, as in the whole zoo (see zooSplit)
+			_, rec := zooSplit(lines, []*zooCell{c})
+			checkCuratedIROpts(t, one, zooDartStream(t, one), ".dart", annotOpts{allowUnconverged: len(rec) > 0, programWide: len(rec) > 0})
 		})
 	}
 }
@@ -286,7 +288,7 @@ func TestZooDart(t *testing.T) {
 		t.Log("the zoo failed as a whole: ZOO_ALONE=1 analyses each cell alone (green alone: mixed up with the others; red alone: the cell; the Dart extractor takes about 10 s for each)")
 	}
 	if os.Getenv("ZOO_ALONE") == "1" { // asked for: the extractor runs once for each cell
-		zooDartAlone(t, root, cells)
+		zooDartAlone(t, root, lines, cells)
 	}
 	zooHeadline(t, "zoo-dart", lines, cells, obs, c)
 	zooParityDart(t, lines, cells)
