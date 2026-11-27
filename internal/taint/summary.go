@@ -540,7 +540,7 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 		}
 		// what is passed at the parameter i is called there through a call that has more candidates than rivus keeps: the
 		// caller is told, whatever the argument looks like (a closure, a variable, a value that holds one)
-		s.newNote(cc.in, KindDepthLimit, "candidate_limit: what is passed as "+paramPhrase(fn, i)+" of "+s.eng.funcID(fn)+" is called there through a value that more than "+itoa(ir.ValueCandidateMost)+" functions may reach; none of them is followed (rivus' limit, not the code's)", s.eng.funcID(fn))
+		s.newNote(cc.in, KindDepthLimit, "candidate_limit: what is passed as "+paramPhrase(fn, i)+" of "+s.eng.funcID(fn)+" is called there through a value that more than "+itoa(ir.ValueEnumerateMost)+" functions may reach; none of them is followed (rivus' limit, not the code's)", s.eng.funcID(fn))
 		// and a function that passes its own parameter on passes the limit on to its callers
 		if a := argv[i]; a != nil && a.Kind == sg.KParam && a.Func == s.fn {
 			if s.limited == nil {

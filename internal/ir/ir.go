@@ -752,9 +752,15 @@ func (s fileSet) list() []string {
 // The reasons of Callee.ValueLimit.
 const (
 	ValueCandidateLimit = "candidate_limit"
-	// ValueCandidateMost is the number of candidates beyond which a call of a function value is left unresolved (ADR-050;
-	// 8 until 2026-11-22, then 32: measured, and the cost did not change on the benches).
-	ValueCandidateMost    = 32
+	// ValueEnumerateMost is the number of candidates beyond which the enumeration of a call of a function value (Dart,
+	// internal/valuecalls) leaves the call unresolved (ADR-050; 8 until 2026-11-22, then 32: measured, and the cost did
+	// not change on the benches).
+	ValueEnumerateMost = 32
+	// NarrowOriginMost is the number of functions beyond which the narrowing of Rust's Fn::call by the origin of the
+	// receiver (internal/valuecalls/narrow.go, decide) does not narrow: the call keeps every candidate. It limits the work
+	// of walking the origins, not the candidates; a larger value narrows more, so the edges are fewer. At 32 the 34
+	// closures passed to one helper were not narrowed (ADR-050).
+	NarrowOriginMost      = 1024
 	ValueCallerDepthLimit = "caller_depth_limit"
 	// ValuePartial: some functions were found (they are ValueCands) but not every caller's value
 	// could be followed, so the candidates are not known to be all of them.
@@ -774,7 +780,7 @@ const (
 func (c *Callee) ValueLimitDetail() string {
 	switch c.ValueLimit {
 	case ValueCandidateLimit:
-		return fmt.Sprintf("candidate_limit: the function value may be any of %d functions, more than the %d that rivus keeps; none is followed (the functions are known: this is rivus' limit, not the code's)", c.ValueFound, ValueCandidateMost)
+		return fmt.Sprintf("candidate_limit: the function value may be any of %d functions, more than the %d that rivus keeps; none is followed (the functions are known: this is rivus' limit, not the code's)", c.ValueFound, ValueEnumerateMost)
 	case ValuePartial:
 		return fmt.Sprintf("partial: the callers that pass the function value were followed only in part (%s); %d functions were found and are followed, others may be called (rivus' limit: the candidates are not known to be all of them)", strings.Join(c.ValueWhy, ", "), c.ValueFound)
 	case ValueCallerDepthLimit:

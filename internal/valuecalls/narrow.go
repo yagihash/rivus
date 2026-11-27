@@ -8,7 +8,7 @@ package valuecalls
 // receiver). A narrowing can only lose a flow, never invent one, so the walk gives up, and the call keeps every
 // candidate it had, at the first thing it cannot follow: an instruction it has no rule for, a field of a
 // struct, a result of a call, a global, a trait object; a parameter whose callers are not all known; a
-// limit (more than `most` functions, deeper than `maxDepth` calls). What is followed:
+// limit (more than ir.NarrowOriginMost functions, deeper than `maxDepth` calls). What is followed:
 //
 //   - the alloc of the environment of a closure (the function at the place its type names, ir.ClosureIndex) and
 //     a make_closure: the function;
@@ -299,7 +299,7 @@ func (n *narrower) decide(c *callSite, in *ir.Instr) (*narrowing, string) {
 	if t.fail != "" {
 		return nil, t.fail
 	}
-	if len(t.found) > most {
+	if len(t.found) > ir.NarrowOriginMost {
 		return nil, notLimit
 	}
 	// a function item (not a closure) is not among the candidates of Fn::call: when the walk finds one that the
