@@ -1,6 +1,6 @@
 # #240 zoo の `ZOO_ALONE=1` が、周回の上限で止まるセル `state/global-chain` を exit 4 で失敗させる(Rust。Dart も同じ形)
 
-- 状態: **open**
+- 状態: **closed**
 - 優先度: 低
 - 種類: 道具・ベンチ
 - 言語: Rust(Dart も同じ書き方。Go は直してある)
@@ -9,6 +9,10 @@
 - 進める完了条件: -
 
 関連: #217(`--graph-check` の zoo の 4)、docs/adr/120-incomplete-analysis-exit-code.md(zoo の鎖は 4 で終わるのが正しい)。
+
+## 今の状態(2026-11-27)
+
+直した: `zooRustAlone` と `zooDartAlone` が `zooSplit` で `recursion_approximation` の `@miss` を持つセルを見分け、そのセルだけ `allowUnconverged: true, programWide: true` で解析する(Go の `zooAlone` と同じ形)。テストコードだけで、エンジンは変えていない。
 
 ## 何が起きるか(事実)
 

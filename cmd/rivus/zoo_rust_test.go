@@ -326,13 +326,15 @@ func zooRustCopyCells(t *testing.T, root string, cells []*zooCell) string {
 
 // zooRustAlone analyses each cell by itself, as a subtest (green alone and red in the whole is a mix with the
 // others; red alone is the cell).
-func zooRustAlone(t *testing.T, root string, cells []*zooCell) {
+func zooRustAlone(t *testing.T, root string, lines []zooLine, cells []*zooCell) {
 	t.Helper()
 	for _, c := range cells {
 		c := c
 		t.Run("alone/"+strings.TrimPrefix(c.name, "F/"), func(t *testing.T) {
 			one := zooRustCopyCells(t, root, []*zooCell{c})
-			checkCuratedIR(t, one, zooRustStream(t, one), ".rs")
+			// the cell that tests the pass limit stops by it by itself, as in the whole zoo (see zooSplit)
+			_, rec := zooSplit(lines, []*zooCell{c})
+			checkCuratedIROpts(t, one, zooRustStream(t, one), ".rs", annotOpts{allowUnconverged: len(rec) > 0, programWide: len(rec) > 0})
 		})
 	}
 }
@@ -369,7 +371,7 @@ func TestZooRust(t *testing.T) {
 		t.Log("the zoo failed as a whole: ZOO_ALONE=1 analyses each cell alone (green alone: mixed up with the others; red alone: the cell)")
 	}
 	if os.Getenv("ZOO_ALONE") == "1" { // asked for: the extractor runs once for each cell
-		zooRustAlone(t, root, cells)
+		zooRustAlone(t, root, lines, cells)
 	}
 	zooHeadline(t, "zoo-rust", lines, cells, obs, c)
 	logSilentMisses(t, "zoo-rust", c)
