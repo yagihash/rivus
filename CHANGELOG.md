@@ -1,5 +1,7 @@
 # Changelog
 
+## [v0.0.23](https://github.com/yagihash/rivus/compare/v0.0.22...v0.0.23) - 2026-11-27
+
 ## [v0.0.22](https://github.com/yagihash/rivus/compare/v0.0.21...v0.0.22) - 2026-11-27
 
 ### Bug Fixes
