@@ -179,7 +179,9 @@ func (s *state) applyCallRow(cc *callCtx, p *model.Propagator, i int, mref *Mode
 		if len(derived) == 0 {
 			// nothing stands for the row (it carries nothing, or the flows of the model say it): the function that was
 			// given is still not followed, and that is said
-			s.newNote(cc.in, KindUnresolvedCallee, "the function given to "+cc.sym+" is not known here: what it does with what the library hands it is not followed", cc.sym)
+			if !s.inDep() {
+				s.newNote(cc.in, KindUnresolvedCallee, "the function given to "+cc.sym+" is not known here: what it does with what the library hands it is not followed", cc.sym)
+			}
 		}
 		return
 	}
