@@ -3,47 +3,50 @@
 # given is not one that rivus can tell (a parameter, read from memory), the flows that `calls` stand for
 # are used, and each use is an assumed_call. What the rows say is held to what the functions do by
 # TestZooCallbacksGo (bench/zoo-go/callbacks).
+#
+# `params` is the number of parameters of the callback (0: it has none), for the warning of a `with` that does
+# not fit it (CallWarnings). TestCallbackParamsKnown holds it to the signature in go/types.
 ruleset: rivus/go/callbacks@1
 
 propagators:
   - symbol: (*sync.Once).Do
     pure: true
-    calls: [{fn: arg0}]
+    calls: [{fn: arg0, params: 0}]
   - symbol: sort.Slice
     pure: true
-    calls: [{fn: arg1}]
+    calls: [{fn: arg1, params: 2}]
   - symbol: sort.SliceStable
     pure: true
-    calls: [{fn: arg1}]
+    calls: [{fn: arg1, params: 2}]
   - symbol: sort.Search
     pure: true
-    calls: [{fn: arg1}]
+    calls: [{fn: arg1, params: 1}]
   - symbol: slices.SortFunc
     pure: true
-    calls: [{fn: arg1, with: [arg0, arg0]}]
+    calls: [{fn: arg1, params: 2, with: [arg0, arg0]}]
   - symbol: slices.SortStableFunc
     pure: true
-    calls: [{fn: arg1, with: [arg0, arg0]}]
+    calls: [{fn: arg1, params: 2, with: [arg0, arg0]}]
   - symbol: slices.IndexFunc
     pure: true
-    calls: [{fn: arg1, with: [arg0]}]
+    calls: [{fn: arg1, params: 1, with: [arg0]}]
   - symbol: slices.ContainsFunc
     pure: true
-    calls: [{fn: arg1, with: [arg0]}]
+    calls: [{fn: arg1, params: 1, with: [arg0]}]
   - symbol: strings.IndexFunc
     pure: true
-    calls: [{fn: arg1, with: [arg0]}]
+    calls: [{fn: arg1, params: 1, with: [arg0]}]
   - symbol: os.Expand
     flows: [{from: arg0, to: result0}]
     calls: [{fn: arg1, with: [arg0], ret: result0}]
   - symbol: strings.Map
-    calls: [{fn: arg0, with: [arg1], ret: result0}]
+    calls: [{fn: arg0, params: 1, with: [arg1], ret: result0}]
   - symbol: strings.TrimFunc
     flows: [{from: arg0, to: result0}]
-    calls: [{fn: arg1, with: [arg0]}]
+    calls: [{fn: arg1, params: 1, with: [arg0]}]
   - symbol: strings.FieldsFunc
     flows: [{from: arg0, to: result0}]
-    calls: [{fn: arg1, with: [arg0]}]
+    calls: [{fn: arg1, params: 1, with: [arg0]}]
   # the match is given to the function, and what it returns is put in place of the match
   - symbol: (*regexp.Regexp).ReplaceAllStringFunc
     flows: [{from: arg0, to: result0}]

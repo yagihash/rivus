@@ -467,8 +467,9 @@ type CallRow struct {
 	// a row for a callback of (ctx, m) can fill m alone: `[{param: 1, from: recv}]`.
 	With WithList `yaml:"with"`
 	// Params is the number of parameters of the callback, when the row says it (optional): the load then
-	// warns of a `with` that does not fill them (CallWarnings).
-	Params int            `yaml:"params"`
+	// warns of a `with` that does not fill them (CallWarnings). nil is "not written"; `params: 0` is written and
+	// means a callback with no parameters (`(*sync.Once).Do`), so any `with` is warned of.
+	Params *int           `yaml:"params"`
 	Ret    string         `yaml:"ret"`
 	Throw  string         `yaml:"throw"`
 	Writes map[int]string `yaml:"writes"`
@@ -1224,6 +1225,9 @@ func (p *Propagator) validateCalls(what string) error {
 		}
 		if c.CheckedBy != p.Calls[0].CheckedBy {
 			return fmt.Errorf("%s.checked_by: the rows of one function say the same (the first row says %q)", w, p.Calls[0].CheckedBy)
+		}
+		if c.Params != nil && *c.Params < 0 {
+			return fmt.Errorf("%s.params: %d (the number of parameters of the callback: 0 or more)", w, *c.Params)
 		}
 		switch c.Mode {
 		case "", CallModeCall, CallModeGo, CallModeDefer:
