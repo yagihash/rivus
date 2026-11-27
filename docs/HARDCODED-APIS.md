@@ -20,7 +20,7 @@
 
 | # | 場所 | 中身(件数) | 何に使うか | 処置 |
 |---|---|---|---|---|
-| H1 | `internal/model/callwarn.go:11` `knownCallbackParams` | Go の標準ライブラリで、コールバックを受ける関数と、その引数の数(12): `(*sync.Once).Do`、`sort.Slice`、`sort.SliceStable`、`sort.Search`、`slices.SortFunc`、`slices.SortStableFunc`、`slices.IndexFunc`、`slices.ContainsFunc`、`strings.IndexFunc`、`strings.Map`、`strings.TrimFunc`、`strings.FieldsFunc` | `calls:` のエントリの `with` の数が、コールバックの引数の数と合うかの助言(`CallWarnings`)。結果は助言で、解析は変わらない | **移す**。同じ関数の `calls:` は `go-callbacks.yaml` にあり、エントリの `params`(`internal/model/model.go:471`)でコールバックの引数の数を書ける。12 件に `params` を書いて表を消す。`TestCallbackParamsKnown`(`internal/model/callwarn_test.go:87`)は、YAML の値を go/types の署名と比べる形に変える。課題 #243 |
+| H1 | (移した)`internal/model/callwarn.go` の `knownCallbackParams` | Go の標準ライブラリで、コールバックを受ける関数と、その引数の数(12): `(*sync.Once).Do`、`sort.Slice`、`sort.SliceStable`、`sort.Search`、`slices.SortFunc`、`slices.SortStableFunc`、`slices.IndexFunc`、`slices.ContainsFunc`、`strings.IndexFunc`、`strings.Map`、`strings.TrimFunc`、`strings.FieldsFunc` | `calls:` のエントリの `with` の数が、コールバックの引数の数と合うかの助言(`CallWarnings`)。結果は助言で、解析は変わらない | **移した**(課題 #243、closed)。12 件に `params` を `go-callbacks.yaml` に書き、表を消した。`(*sync.Once).Do` の 0 を書くため、`CallRow.Params` を `*int` にした(`params: 0` は引数のないコールバック。書いていない行は検査しない)。`TestCallbackParamsKnown`(`internal/model/builtin/callbackparams_test.go`)は、YAML の値を go/types の署名と比べる |
 | H2 | `internal/taint/guards.go:92-101` `stdLeafType` | Rust の標準ライブラリで、ほかの書き込み先を持たない型の名前(12): `Vec`、`String`、`VecDeque`、`File`、`Stdout`、`Stderr`、`StdoutLock`、`StderrLock`、`Sink`、`Cursor`、`TcpStream`、`ChildStdin` | `dyn Write` のような呼び出しの候補から、この型を外す(`dispatchSpec.excludes`、`guards.go:76`)。外すと、プロジェクトの `impl Write` の本体を読まない | **課題**。今の書式に、「この型は書き込み先を持たない」と宣言する場所がない(推測: ルールのファイルに型の宣言の節を足す案)。課題 #244 |
 | H3 | `internal/taint/calls.go:1148-1150` `contentOnly` | 書き込み先が `bytes.Buffer` か `strings.Builder` のときだけ、書き込みを中身だけに限る(2)。Rust は `isStdType` の全部 | `flows` の `to: recv` で、書き込みが入れ物の全体に届くか、中身だけかを決める(ADR-082) | **課題**(H2 と同じ課題 #244)。書き込み先の型の性質の宣言になる |
 | H4 | `internal/taint/callrows.go:564` `isStdType`、`:467` `sameTraitPath` | 標準ライブラリの名前の接頭辞(`std::`、`alloc::`、`core::`、`&std::`、`&mut std::` など 9) | Rust の標準ライブラリの型か、トレイトの同一性か | **移さない**。名前の空間の規則で、API の表ではない。同じ規則が extractor にもある(`extractor/rust/src/lower.rs:219`、`:1525`)ので、3 か所の食い違いに注意(推測: 今は一致している) |
@@ -68,7 +68,7 @@
 
 | 処置 | 項目 | 件数 |
 |---|---|---|
-| 移す(YAML に、書式の変更なしで) | H1 | 1 |
+| 移した(YAML に。H1 は #243 で、`params` を 0 でも書けるように 1 点だけ直した) | H1 | 1 |
 | 課題(書式か仕組みが要る) | H2、H3(#244)、H10、H15(#245)、H6(#185、既存) | 5 |
 | 移さない(言語や IR の約束、設定。理由つき) | H4、H5、H7、H8、H9、H11、H12、H13、H14、H16、H17、H18、H19 | 13 |
 | 合計 | | 19 |
@@ -77,5 +77,5 @@
 
 ### 前のコードとの関係(参考)
 
-- モデルのファイルは、`.dead-allow` と `TestBuiltinRowsAreHitByTheZoo` で、zoo のセルとの一致を確認している。この文書の表の項目には、その確認がない。H1 は、移すと、その対象になる。
+- モデルのファイルは、`.dead-allow` と `TestBuiltinRowsAreHitByTheZoo` で、zoo のセルとの一致を確認している。この文書の表の項目には、その確認がない。H1 は、移したので、その対象になる(`params` を足した行は、もとからある `calls:` の行)。
 - `internal/model/builtin` の `calls:` は、`go-callbacks.yaml` 15 件、`rust-std.yaml` 24 件、`dart-core.yaml` 24 件、`dart-async.yaml` 8 件など。コールバックを呼ぶ API の表の大半は、すでに YAML にある。表に残ったのは、**レシーバが持つ要素を、コールバックの引数にする**形だけ(H10、H15)。

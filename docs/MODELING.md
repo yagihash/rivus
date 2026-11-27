@@ -136,8 +136,9 @@ called, with what, and where its result goes; rivus then reads the callback at t
   with an AI). To fill a later parameter, write the entries by number: `with: [{param: 1, from: recv}]` (`from: none` leaves a
   parameter empty on purpose; write every entry one way, not both). The load **warns** (stderr, `rivus: warning: ...`) of a `with` whose
   number of entries is not the number of parameters of the callback, when it can tell that number: the row says it with `params: 2`,
-  or the function is one of the standard library of Go that the built-in rows already know (`sort.Slice`, `strings.Map`, ...). Where
+  or the built-in row of the function of the standard library of Go says it (`sort.Slice`, `strings.Map`, ...). Where
   it cannot tell, nothing is said: write `params` (or the named form) in a row for a callback that has more than one parameter.
+  `params: 0` is a callback with no parameters (`(*sync.Once).Do`): any `with` is then warned of; a row that does not write `params` is not checked.
 
   ```yaml
   - symbol: example.com/lib.Subscribe       # func Subscribe(handler func(ctx context.Context, m *Message))

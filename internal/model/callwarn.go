@@ -5,28 +5,10 @@ import (
 	"strings"
 )
 
-// knownCallbackParams are the numbers of parameters of the callbacks of functions of the Go standard library
-// that a row of calls may name: "symbol/fn" (fn as the row writes it) -> parameters. TestCallbackParamsKnown
-// holds the table to the signatures of the standard library (go/types).
-var knownCallbackParams = map[string]int{
-	"(*sync.Once).Do/arg0":       0,
-	"sort.Slice/arg1":            2,
-	"sort.SliceStable/arg1":      2,
-	"sort.Search/arg1":           1,
-	"slices.SortFunc/arg1":       2,
-	"slices.SortStableFunc/arg1": 2,
-	"slices.IndexFunc/arg1":      1,
-	"slices.ContainsFunc/arg1":   1,
-	"strings.IndexFunc/arg1":     1,
-	"strings.Map/arg0":           1,
-	"strings.TrimFunc/arg1":      1,
-	"strings.FieldsFunc/arg1":    1,
-}
-
 // CallWarnings are the rows of calls whose `with` does not fit the callback: `with` fills the parameters of the
 // callback from the first, so a callback of (ctx, m) given `with: [recv]` gets the receiver in ctx and nothing in
-// m, and the flow is silently lost. The number of parameters is known from the row (`params`) or, for the standard
-// library of Go, from the table above; a row whose callback is not known is not checked (write the entries by
+// m, and the flow is silently lost. The number of parameters is known from the row (`params`, which the built-in rows of the standard library of Go
+// write; TestCallbackParamsKnown holds them to go/types); a row that does not say it is not checked (write the entries by
 // number, `{param: 1, from: recv}`, to say which parameter is meant). The result is advice, not an error.
 func (r *Rules) CallWarnings() []string {
 	var out []string
@@ -36,13 +18,10 @@ func (r *Rules) CallWarnings() []string {
 				if c.Fn == "" || len(c.With) == 0 {
 					continue
 				}
-				n, known := c.Params, c.Params > 0
-				if !known {
-					n, known = knownCallbackParams[p.Symbol+"/"+c.Fn]
-				}
-				if !known {
+				if c.Params == nil {
 					continue
 				}
+				n := *c.Params
 				gap := false
 				for _, w := range c.With {
 					gap = gap || w == ""
