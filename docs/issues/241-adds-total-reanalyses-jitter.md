@@ -38,3 +38,29 @@ rustypaste を `bench/deps_bench.py -no-ledger`、`bench/heavylock.py` の直列
 ## 限界
 
 出力が変わる揺れではないので、利用者には見えない。ただし、作業量の `stats` を使う測定(`bench/deps_bench.py`、`-no-ledger` なしの台帳)で、同じ入力の差を「変更の効果」と読み違える。また原因が、順序に依る再解析の増減なら、要約の到達に時間が関わる別の揺れの入口かもしれない(見当で、確かめていない)。
+
+## 追記(2026-11-27): `summary.dispatch_candidates_applied` は揺れない
+
+#642(`rivus.result/6`)の `summary.dispatch_candidates_applied` は、この揺れとは別の数で、揺れない。事実だけを書く。
+
+- dart-pub: `-workers 1`、`-workers 8`(各 2 回)、既定、`-pass-stats` ありの run のすべてで 288156。
+- rustypaste: 2 回とも 357303。
+- `value_candidates` も、全回で同じ。dart-pub は `{0: 449, 1: 199, 2-5: 108, 6-20: 56, 21-32: 6, 33+: 15}`。
+- 前後(`e5275f92` と #646 を載せた木)で、finding(30 件)の ID 列のハッシュ `9653068dd46983ef` と、uncertainty(7579 件)の順序つきハッシュ `b8d5b3a18a0daf7a` は同じ。
+
+理由(コードを読んで確認した。実験で確かめたのは上の数が同じことだけ): 呼びの候補の数は、`Run()` の前に決まる。
+
+- dispatch の候補は、`internal/taint/calls.go` の `withBody`(295〜299 行)が `ci.Candidates` から作る(`callees` は 566〜575 行)。
+- `ci.Candidates` の書き込みは `internal/sg/build.go:104`、`:435` と、`internal/valuecalls/valuecalls.go` の 262〜323 行(`Resolve`)、`internal/valuecalls/narrow.go:246`。値の候補は `valuecalls.Resolve` が `Run()` の前に決める。
+- `SetCellCandidates`(`cmd/rivus/analyze.go:317`)は `Run()` の後。
+- 反復で増える cell の候補(`internal/taint/funccells.go` の `applyFuncCells`)は、数えない。
+
+したがって `adds_total` と `reanalyses` の揺れ(この課題の主題)とは別の数で、この課題の原因の手がかりにはならない。
+
+## 訂正(2026-11-27): #642 の本文の「`dispatch_candidates` と桁が違う」
+
+#642 の本文にあった「`dispatch_candidates` と桁が違う」は、`summary.dispatch_candidates` が uncertainty を数えている点では正しい。ただし、IR の候補の合計との比較としては成り立たない。
+
+dart-pub の `-pass-stats` の `stats.dispatch_candidates`(呼びの数)は `{one: 38369, two_to_8: 14245, 9_to_16: 1979, over_16: 1966, none: 8101, largest: 357}`。区切りの下限と上限で足した IR の候補の合計は、およそ 118,092〜885,000 件の間になる。applied の 288156 はこの範囲の中で、桁は違わない。
+
+IR の候補の合計そのものは、未計算。
