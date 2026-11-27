@@ -18,6 +18,8 @@ type appliedSet struct {
 // noteApplied records that the summary (or the model) of candidate i of n of the call ci was applied.
 // Only the calls that go through an interface, a trait or a function value are recorded (ADR-127,
 // summary.dispatch_candidates_applied).
+// Invariant: the number of candidates of a call is fixed before Run(); the candidates that a cell gains while
+// the iteration runs are not counted.
 func (e *Engine) noteApplied(ci *sg.Instr, i, n int) {
 	v, ok := e.applied.Load(ci)
 	if !ok {
