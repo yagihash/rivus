@@ -82,9 +82,24 @@ func (d *dispatchSpec) excludes(c string) bool {
 			return true
 		}
 	}
-	// a type of the standard library has its own method: the implementations of the program are of other types
-	// (applyMethodRow says the same of a receiver that is seen to be of one)
-	return isStdType(c)
+	return stdLeafType(c)
+}
+
+// stdLeafType: the type is one of the standard library that writes by itself and holds no writer (a `Vec<u8>`, a `File`):
+// the implementations of the program are of other types. A type that may delegate to what it holds (`Box<W>`, `Rc`, `Arc`,
+// `RefCell`, `Mutex`, `BufWriter`, ...: the type arguments are not in the type) is not excluded, nor is one that is not
+// listed: when in doubt the flow stays (#242 is the same question for a receiver that is seen to be of one).
+func stdLeafType(t string) bool {
+	if !isStdType(t) {
+		return false
+	}
+	name := baseType(withoutGenerics(t))
+	name = name[strings.LastIndex(name, "::")+2:]
+	switch name {
+	case "Vec", "String", "VecDeque", "File", "Stdout", "Stderr", "StdoutLock", "StderrLock", "Sink", "Cursor", "TcpStream", "ChildStdin":
+		return true
+	}
+	return false
 }
 
 // concreteType is the type of the value an interface value was made of, when
