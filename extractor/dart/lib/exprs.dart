@@ -444,62 +444,7 @@ int _methodInvocation(FnLower f, MethodInvocation e) {
   }
   final (args, nodes) = _arguments(f, el, e.argumentList);
   final result = _call(f, el, base, args, e.staticType, e, at, argList: e.argumentList, slots: nodes);
-  // an API that calls the function it is given with what the receiver holds
-  final mode = _callbackMode(el);
-  if (mode != null && base != null && args.isNotEmpty) _callWhatTheReceiverHolds(f, mode, base, args[0], at);
   return result;
-}
-
-/// The functions of the platform that call the function they are given (the first argument)
-/// with a value the receiver holds: nothing in the code says so, and the models only
-/// move taint from arguments to results, so the extractor makes the call.
-String? _callbackMode(ExecutableElement m) {
-  final cls = m.enclosingElement;
-  if (cls is! InterfaceElement) return null;
-  final owner = '${libraryUri(cls)}#${cls.name}';
-  switch ('$owner.${m.name}') {
-    case 'dart:async#Future.then':
-      return 'value';
-    case 'dart:async#Stream.listen':
-    case 'dart:async#Stream.forEach':
-    case 'dart:core#Iterable.forEach':
-    case 'dart:core#Iterable.map':
-    case 'dart:core#Iterable.where':
-    case 'dart:core#Iterable.any':
-    case 'dart:core#Iterable.every':
-    case 'dart:core#Iterable.expand':
-    case 'dart:core#Iterable.firstWhere':
-    case 'dart:core#Iterable.singleWhere':
-    case 'dart:core#Iterable.lastWhere':
-    case 'dart:core#Iterable.takeWhile':
-    case 'dart:core#Iterable.skipWhile':
-      return 'element';
-  }
-  return null;
-}
-
-/// `receiver.api(callback)`: the call that the platform makes, of the callback with what
-/// the receiver holds (the value of a future, an element of a stream or a collection).
-void _callWhatTheReceiverHolds(FnLower f, String mode, int receiver, int callback, Pos at) {
-  var arg = receiver;
-  if (mode == 'element') {
-    final it = f.tmp(null);
-    f.emit('call', dsts: [it], args: [receiver], at: at, more: {
-      'callee': {'kind': 'static', 'symbol': 'iter.start'}
-    });
-    final ok = f.local('', null);
-    final k = f.local('', null);
-    final v = f.local('', null);
-    f.out.locals[ok] = Local('', 'dart:core#bool', 'bool');
-    f.emit('call', dsts: [ok, k, v], args: [it], at: at, more: {
-      'callee': {'kind': 'static', 'symbol': 'iter.next'}
-    });
-    arg = v;
-  }
-  final d = f.tmp(null);
-  f.emit('call', dsts: [d], args: [callback, arg], at: at, more: {
-    'callee': {'kind': 'value'}
-  });
 }
 
 /// `.make(3)`: a static method (or a constructor) of the type the context asks for.
