@@ -23,7 +23,7 @@ import (
 )
 
 // SchemaVersion identifies the format of Report.
-const SchemaVersion = "rivus.result/5"
+const SchemaVersion = "rivus.result/6"
 
 // Report is the result of an analysis.
 type Report struct {
@@ -134,6 +134,15 @@ type Summary struct {
 	// no candidate needs a model; many candidates call for a more precise
 	// call graph.
 	DispatchCandidates map[string]int `json:"dispatch_candidates"`
+	// ValueCandidates tells how many functions were found for the value of the calls of function values (0, 1, 2-5, 6-20,
+	// 21-32, 33+; the call sites of the code, once each, from the IR). 33+ is the calls that rivus leaves unresolved because more
+	// than 32 functions flow to the value (ADR-050): their candidates are not followed. The same for every run.
+	ValueCandidates map[string]int `json:"value_candidates"`
+	// DispatchCandidatesApplied is how many candidates the analysis applied (the summary of the function, or the model), over
+	// the calls through an interface, a trait or a function value: each (call, candidate) once, the ones that were not
+	// applied not counted (the functions of a dependency of a call that has a model, a candidate with no body). It is the
+	// cost that the analysis paid, not the candidates of the IR (those are dispatch_candidates).
+	DispatchCandidatesApplied int `json:"dispatch_candidates_applied"`
 	// DispatchNarrowed counts the calls through Fn::call (Rust) whose candidates were narrowed to the
 	// closures that flow to the receiver: how many, and the candidates they had before and after (summed).
 	// The numbers of DispatchCandidates are those after. Absent when none was narrowed.
@@ -888,6 +897,11 @@ func Build(packages []string, loadErrors []ir.LoadError, st *sites.Result, res *
 	r.Summary.Incomplete = len(r.Summary.IncompleteReasons) > 0
 	r.Summary.CallbackParamUnresolved = callbackParamUnresolved(r.Uncertainties)
 	r.Summary.NumericStops = numericStopsOf(res.NumericStops)
+	r.Summary.ValueCandidates = res.ValueCandidates
+	if r.Summary.ValueCandidates == nil {
+		r.Summary.ValueCandidates = map[string]int{}
+	}
+	r.Summary.DispatchCandidatesApplied = res.DispatchApplied
 	if st.DependencyFunctions > 0 {
 		r.Summary.DependencySites = &DependencySites{DependencyFunctions: st.DependencyFunctions}
 	}

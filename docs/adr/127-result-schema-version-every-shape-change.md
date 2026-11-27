@@ -151,3 +151,7 @@
 - **対象のパッケージ(`-C` の `pubspec.yaml`)だけを読む**。`go_version` は、ローダーが読んだ依存のモジュールの `go` 行も渡すので、いちばん新しいもので決めたが、Dart の依存は、`pubspec.lock` に `sdk` の制約がなく、依存の `pubspec.yaml` を pub のキャッシュから読む経路が rivus にまだない。そのため `newest_module` と `newest_version` に当たる欄は持たない。依存を読むかは、判断を仰ぐ(次の作業)。モノレポで `-C` にない子のパッケージの `pubspec.yaml` も読まない(`pubspec.lock` の読みと同じ範囲)。
 - **止めない**。`newer` のときだけ標準エラーに 1 行。終了コードは変えない。ベンチと合格基準は、`newer` を失敗にしない。
 - `match` の値は、`resultEnums` の行(`Dart*`、3 値)で、ハッシュに入る。Rust の edition は、同じ形で次に足せる。
+
+**追記(2026-11-27、`rivus.result/6`): `summary.value_candidates`、`summary.dispatch_candidates_applied`**
+
+候補の数を、変更の前後で比べるための常設の数。`summary` に足し、`rivus.result/6` に上げる(`rivus.result/5` のハッシュは消さない。`guards:`(#169)用に予約していた `/6` は、保留中のため、こちらが使った)。`value_candidates` は、関数値の呼びを、IR で見つかった関数の数(`0`、`1`、`2-5`、`6-20`、`21-32`、`33+`)で数える(`33+` は、`ir.ValueCandidateMost` を超えて、解決されない呼び)。`dispatch_candidates_applied` は、interface、trait、関数値を通る呼びで、解析が実際に適用した候補の数(IR の候補の合計ではない)。

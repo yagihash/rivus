@@ -79,7 +79,7 @@ rivus の設計の判断は、ここに書いた原則に沿う。ほかの文�
 - **200 ステップを超える経路の切り詰め:** 記録している（`omitted_steps`、`path_steps_omitted:`。1 節に同じ）。
 - **流れを止めるモデルの記録が、一部だけ:** 記録するのは、`origin: llm` の sanitizer の抑制、`builtin` 以外の `pure` と結果に届かない `flows`(#138)、`numeric_stop`、`global_holds_nothing`、`approximate`。`builtin` の `pure` と `flows`、`builtin` や人が書いた sanitizer の停止は、出力に残らない。ADR-010 の文面（「抑制した・伝播させたを必ず記録する」）のほうが、実装より広い。
 - **`numeric_stop`:** サマリを通って止まる分は記録しない。ADR-043 の追記が自己申告している。
-- **`kind` の追加と、スキーマのバージョン:** ADR-008 は「追加はスキーマのバージョンを上げる」と書いたが、`rivus.result/1` の間は、`assumed_call`、`model_approximation`、`field_imprecision`、`numeric_stop` などを、上げずに足していた（ADR-043 の追記）。ADR-127 で、ADR-008 のとおりに決めた: 形（キーと型、`kind` と `attributable_to` の値）が変わるときは、足しただけでも上げる（今は `rivus.result/5`）。上げ忘れは `TestResultSchemaVersionMatchesShape` が落とす。`rivus.query`、`sites`、`resolve`、`coverage`、`graph` には、まだ広げていない（#223）。
+- **`kind` の追加と、スキーマのバージョン:** ADR-008 は「追加はスキーマのバージョンを上げる」と書いたが、`rivus.result/1` の間は、`assumed_call`、`model_approximation`、`field_imprecision`、`numeric_stop` などを、上げずに足していた（ADR-043 の追記）。ADR-127 で、ADR-008 のとおりに決めた: 形（キーと型、`kind` と `attributable_to` の値）が変わるときは、足しただけでも上げる（今は `rivus.result/6`）。上げ忘れは `TestResultSchemaVersionMatchesShape` が落とす。`rivus.query`、`sites`、`resolve`、`coverage`、`graph` には、まだ広げていない（#223）。
 - **ADR-079 の訂正:** 「全部たどれたときだけ絞る」が守られていなかった 6 件が、訂正として記録されている。
 
 ---

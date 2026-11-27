@@ -454,3 +454,47 @@ func (e *Engine) dispatchCandidates() *DispatchCandidates {
 	}
 	return d
 }
+
+// ValueCandidateBuckets are the buckets of summary.value_candidates, in the order of the numbers. The edge is at
+// ir.ValueCandidateMost (32): a call that was found with 33 or more is the one that rivus leaves unresolved (ADR-050).
+var ValueCandidateBuckets = []string{"0", "1", "2-5", "6-20", "21-32", "33+"}
+
+// ValueCandidateBucket is the bucket of a call of a function value that was found with n functions.
+func ValueCandidateBucket(n int) string {
+	switch {
+	case n == 0:
+		return "0"
+	case n == 1:
+		return "1"
+	case n <= 5:
+		return "2-5"
+	case n <= 20:
+		return "6-20"
+	case n <= ir.ValueCandidateMost:
+		return "21-32"
+	}
+	return "33+"
+}
+
+// valueCandidateCounts counts the calls of function values (the call sites of the code, once each) by how many
+// functions were found for the value: the candidates when there are some, or, when rivus left them out (more than
+// ir.ValueCandidateMost, or only a part of the callers was followed), the number that was found. The IR, not the
+// analysis: the same for every run.
+func (e *Engine) valueCandidateCounts() map[string]int {
+	out := map[string]int{}
+	for _, fn := range e.prog.Funcs {
+		for _, b := range fn.Blocks {
+			for _, in := range b.Instrs {
+				if in.Callee == nil || in.Callee.Kind != ir.CalleeValue || in.StaticID != "" {
+					continue
+				}
+				n := len(in.Callee.ValueCands)
+				if (in.Callee.ValueLimit == ir.ValueCandidateLimit || in.Callee.ValueLimit == ir.ValuePartial) && in.Callee.ValueFound > n {
+					n = in.Callee.ValueFound
+				}
+				out[ValueCandidateBucket(n)]++
+			}
+		}
+	}
+	return out
+}
