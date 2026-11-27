@@ -759,7 +759,7 @@ const (
 	// NarrowOriginMost is the number of functions beyond which the narrowing of Rust's Fn::call by the origin of the
 	// receiver (internal/valuecalls/narrow.go, decide) does not narrow: the call keeps every candidate. It limits the work
 	// of walking the origins, not the candidates; a larger value narrows more, so the edges are fewer. At 32 the 34
-	// closures of the zoo cell F/clos/helper-overflow-many were not narrowed (ADR-050).
+	// closures passed to one helper were not narrowed (ADR-050).
 	NarrowOriginMost      = 1024
 	ValueCallerDepthLimit = "caller_depth_limit"
 	// ValuePartial: some functions were found (they are ValueCands) but not every caller's value
