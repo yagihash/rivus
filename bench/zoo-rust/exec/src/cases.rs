@@ -79,6 +79,7 @@ pub fn register_all() {
     c::net_http::request_literal::register();
     c::dyns::func_field::register();
     c::dyns::func_map::register();
+    c::dyns::generic_impl_concrete::register();
     c::dyns::generics_ptr::register();
     c::dyns::global_iface::register();
     c::dyns::http_middleware_chain::register();
@@ -96,6 +97,7 @@ pub fn register_all() {
     c::dyns::sink_in_method_iface::register();
     c::dyns::through_dependency::register();
     c::dyns::fprint_writer_own::register();
+    c::dyns::stdlib_writer_boxed::register();
     c::dyns::stdlib_writer_own::register();
     c::dyns::stdlib_writer_own_static::register();
     c::dyns::xtalk_n_by_m::register();

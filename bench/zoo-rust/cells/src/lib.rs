@@ -96,6 +96,7 @@ pub mod net_http {
 pub mod dyns {
     pub mod func_field;
     pub mod func_map;
+    pub mod generic_impl_concrete;
     pub mod generics_ptr;
     pub mod global_iface;
     pub mod http_middleware_chain;
@@ -113,6 +114,7 @@ pub mod dyns {
     pub mod sink_in_method_iface;
     pub mod through_dependency;
     pub mod fprint_writer_own;
+    pub mod stdlib_writer_boxed;
     pub mod stdlib_writer_own;
     pub mod stdlib_writer_own_static;
     pub mod xtalk_n_by_m;
