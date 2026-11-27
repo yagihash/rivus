@@ -29,7 +29,7 @@ import (
 // nothing of the host. The sandbox is made in isolate_sandbox_darwin.go and isolate_sandbox_linux.go; on another system nothing is run (isolate_sandbox_other.go).
 
 // pinnedToolchain is the nightly the extractor is pinned to (extractor/rust/rust-toolchain.toml).
-const pinnedToolchain = "nightly-2026-11-15"
+const pinnedToolchain = "nightly-2026-11-26"
 
 // hostileMarker is a file in a test project that is hostile on purpose: it is never run on this machine.
 const hostileMarker = ".rivus-hostile"

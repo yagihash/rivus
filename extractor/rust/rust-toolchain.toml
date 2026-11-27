@@ -1,6 +1,6 @@
 # rustc_public (the stable interface of the compiler's MIR) is nightly only: the
 # extractor is pinned to one nightly, and moves with it on purpose.
 [toolchain]
-channel = "nightly-2026-11-15"
+channel = "nightly-2026-11-26"
 profile = "minimal"
 components = ["rustc-dev", "llvm-tools", "rust-src"]

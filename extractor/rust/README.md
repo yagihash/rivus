@@ -4,8 +4,8 @@
 analysis engine `rivus` itself is a Go program, <https://github.com/yagihash/rivus>.)
 
 ```sh
-rustup toolchain install nightly-2026-11-15 --profile minimal -c rustc-dev -c llvm-tools -c rust-src
-cargo +nightly-2026-11-15 install rivus     # the command: rivus-rust
+rustup toolchain install nightly-2026-11-26 --profile minimal -c rustc-dev -c llvm-tools -c rust-src
+cargo +nightly-2026-11-26 install rivus     # the command: rivus-rust
 ```
 
 # The Rust extractor of rivus
