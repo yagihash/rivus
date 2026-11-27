@@ -1,0 +1,18 @@
+[package]
+name = "rust-callcheck-syntax"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "The syntax side of bench/rust-callcheck/callcheck.py: the calls that the Rust source writes (syn, no build)."
+
+[[bin]]
+name = "syntax_calls"
+path = "src/main.rs"
+
+[dependencies]
+syn = { version = "=2.0.117", default-features = false, features = ["full", "visit", "parsing", "printing", "clone-impls", "proc-macro"] }
+proc-macro2 = { version = "1", features = ["span-locations"] }
+quote = "1"
+
+# a workspace of its own: bench/rust-curated and the others are not members of it, and it is not a member of theirs
+[workspace]
