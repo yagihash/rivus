@@ -1,5 +1,10 @@
 # Changelog
 
+## [v0.0.22](https://github.com/yagihash/rivus/compare/v0.0.21...v0.0.22) - 2026-11-27
+
+### Bug Fixes
+- taint: Rust のラッパー(Box など)の中身の型で impl を絞る(#242) by @yagihash in https://github.com/yagihash/rivus/pull/657
+
 ## [v0.0.21](https://github.com/yagihash/rivus/compare/v0.0.20...v0.0.21) - 2026-11-27
 
 ### Features
