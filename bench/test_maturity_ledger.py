@@ -124,12 +124,21 @@ class Rows(unittest.TestCase):
 
 
 class Committed(unittest.TestCase):
+    # reach_total and reach_miss were added on 2026-11-27 (b41c43bd), Rust only (see the docstring of bench/maturity_ledger.py).
+    # A row dated before it has both empty; from it on, a Rust row has two integers and a Go or Dart row has both empty.
+    REACH_FROM = "2026-11-27"
+
     def test_reach_columns_are_last_and_old_rows_are_empty(self):
         lines = [l.split("\t") for l in open(m.LEDGER).read().splitlines()]
         self.assertEqual(lines[0][-3:], ["elsewhere", "reach_total", "reach_miss"])
         self.assertEqual(lines[0][:14], m.COLUMNS[:14])
-        self.assertTrue(all(r[14:] == ["", ""] for r in lines[1:]))
         self.assertTrue(all(r[2] in m.LANGS for r in lines[1:]))
+        for r in lines[1:]:
+            with self.subTest(row=r[:3]):
+                if r[0] < self.REACH_FROM or r[2] != "rust":
+                    self.assertEqual(r[14:], ["", ""])
+                else:
+                    self.assertTrue(all(c.isdigit() for c in r[14:]), r[14:])
 
 
     def test_every_row_has_every_column(self):
