@@ -43,7 +43,10 @@ func main() {
 		return
 	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "rivus: %v\n", err)
+		var ue *usageError
+		if !errors.As(err, &ue) {
+			fmt.Fprintf(os.Stderr, "rivus: %v\n", err) // (a bad flag was said by the flag package, with the usage)
+		}
 		os.Exit(exitCode(err))
 	}
 }
@@ -78,6 +81,26 @@ func checkSubcommand(command string, args []string, usage string, known ...strin
 // the same code (report.IncompleteReasons), not another code.
 const exitIncomplete = 4
 
+// exitUsage is the exit code of a usage error or a bad flag.
+const exitUsage = 2
+
+// usageError is a flag that the command did not take (not defined, or a bad value). The flag package has said what is wrong and
+// printed the usage already, so main does not say it again; the exit code is exitUsage, as for the commands that exit by themselves.
+type usageError struct{ err error }
+
+func (e *usageError) Error() string { return e.err.Error() }
+func (e *usageError) Unwrap() error { return e.err }
+
+// parseFlags is fs.Parse for a command that parses its own flags (ContinueOnError): a flag that is not taken is a usageError. -h
+// (flag.ErrHelp) is not one: it is not an error.
+func parseFlags(fs *flag.FlagSet, args []string) error {
+	err := fs.Parse(args)
+	if err == nil || errors.Is(err, flag.ErrHelp) {
+		return err
+	}
+	return &usageError{err}
+}
+
 // incompleteError is what a command returns after it has written its output of an analysis that is not complete.
 type incompleteError struct{ reasons []string }
 
@@ -96,6 +119,10 @@ func incomplete(rep *report.Report) error {
 // exitCode is the exit code of a run that ended with err: exitIncomplete for an analysis that did not finish, exitDeclined for a Rust
 // project that was declined and was all there was, and 1 otherwise.
 func exitCode(err error) int {
+	var ue *usageError
+	if errors.As(err, &ue) {
+		return exitUsage
+	}
 	var d *declinedError
 	if errors.As(err, &d) {
 		return exitDeclined

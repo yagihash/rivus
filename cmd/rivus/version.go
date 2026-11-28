@@ -71,7 +71,7 @@ func runVersionCommand(args []string) error {
 	o := &analyzeOpts{}
 	expected := versionFlags(fs, o)
 	prepareFlags(fs, args)
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return err
 	}
 	if *expected != "" {
