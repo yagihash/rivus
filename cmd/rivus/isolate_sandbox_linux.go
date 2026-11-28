@@ -271,16 +271,8 @@ func (o *isolationOpts) tellAboutRun(stage string, res *sandbox.Result) {
 	if stage != "extract" || res == nil {
 		return
 	}
-	for _, w := range res.Warnings {
-		fmt.Fprintf(o.err(), "rivus: warning: %s\n", w)
-	}
-	if len(res.AttributeChanges) > 0 {
-		// Landlock does not stop these, so rivus does them for the build, and only for the files inside of its work directory: these were refused (EPERM)
-		fmt.Fprintf(o.err(), "rivus: warning: the build tried to change the mode, the owner, the times or the attributes of files outside of its work directory, and the sandbox refused (EPERM). Look at them if the project is not one you trust:\n")
-		for _, c := range res.AttributeChanges {
-			fmt.Fprintf(o.err(), "  %s\n", c)
-		}
-	}
+	sayWarnings(o.err(), res.Warnings)
+	sayAttributeChanges(o.err(), res.AttributeChanges) // SBX-4: the paths are of the project's choice
 	if res.MayHaveLeftProcesses {
 		// said once, not hidden: a build script can start a process in a session of its own, which the end of the run does not reach
 		fmt.Fprintf(o.err(), "rivus: a build script may have left a process behind (a program that starts one in a session of its own is not stopped by the end of the run; it stays under the sandbox, with no files and no network). Look with `ps` if the project is not one you trust.\n")

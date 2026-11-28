@@ -20,7 +20,7 @@ func main() {
 		os.Exit(2)
 	}
 	if err := oldIsolationFlag(os.Args[2:]); err != nil {
-		fmt.Fprintf(os.Stderr, "rivus: %v\n", err)
+		fmt.Fprint(os.Stderr, errorLine(err))
 		os.Exit(2)
 	}
 	name := os.Args[1]
@@ -45,7 +45,7 @@ func main() {
 	if err != nil {
 		var ue *usageError
 		if !errors.As(err, &ue) {
-			fmt.Fprintf(os.Stderr, "rivus: %v\n", err) // (a bad flag was said by the flag package, with the usage)
+			fmt.Fprint(os.Stderr, errorLine(err)) // (a bad flag was said by the flag package, with the usage). SBX-4: the text of the project goes through sanitizeForTerminal
 		}
 		os.Exit(exitCode(err))
 	}
