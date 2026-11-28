@@ -672,8 +672,9 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 				}
 				w.pos, w.steps = packPos(cc.in.Pos), oe.Steps
 				if len(notes) > 0 {
-					if len(extra) == 0 && len(oe.Guards) == 0 {
-						// only the notes of the call: the hops of the call share one value (it is copied by the hop that changes it)
+					if len(extra) == 0 && len(oe.Guards) == 0 && !x.Unguarded {
+						// only the notes of the call: the hops of the call share one value (it is copied by the hop that changes it).
+						// Not for a hop that was marked unguarded: the shared value has no such mark, and would replace it
 						if callRare == nil {
 							callRare = &whyRare{notes: notes, shared: true}
 						}
