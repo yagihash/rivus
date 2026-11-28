@@ -28,6 +28,11 @@ paths_file="$sdir/../.github/guardrail-paths"
 if ! changed=$(gh pr diff "$n" --repo "$repo" --name-only 2>/dev/null); then
   echo "merge: PR #$n is not merged by the developer: cannot list the changed files. Nothing is merged." >&2; exit 1
 fi
+# `gh pr diff --name-only` names a renamed file by its new path only: the old path (a file of the guardrail moved away) is in previous_filename
+if ! previous=$(gh api "repos/$repo/pulls/$n/files" --paginate --jq '.[] | .previous_filename // empty' 2>/dev/null); then
+  echo "merge: PR #$n is not merged by the developer: cannot list the files that were renamed. Nothing is merged." >&2; exit 1
+fi
+changed="$changed"$'\n'"$previous"
 bad=$(printf '%s' "$json" | GUARDRAIL_PATHS="$paths_file" CHANGED="$changed" python3 -c '
 import sys,json,re,datetime,os,fnmatch
 d=json.load(sys.stdin)
