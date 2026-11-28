@@ -855,7 +855,7 @@ func (e *Engine) Path(from, to string, o Options) (*PathResult, error) {
 					res.Limits = append(res.Limits, strconv.Itoa(u.SkippedDirs)+" director(ies) of the project were not read because of where they are (hidden, or build at the top): code in them is outside the range of the answer")
 				}
 			}
-			if e.db.Meta("flags.tests") == "false" {
+			if e.testsNotRead() {
 				res.Limits = append(res.Limits, "the code of the tests was not read (the index was made without -tests): a call from it is outside the range of the answer")
 			}
 		}
@@ -1388,6 +1388,20 @@ func (e *Engine) notExhaustive(starts, goals []int64, refs bool) (*NotExhaustive
 		return nil, nil
 	}
 	return ne, nil
+}
+
+// testsNotRead is true when the index was made without -tests (the record "flags" of the file, a JSON object of the flags as the
+// command line gave them): the code of the tests is not in it. The record that is not there, or cannot be read, says nothing.
+func (e *Engine) testsNotRead() bool {
+	raw := e.db.Meta("flags")
+	if raw == "" {
+		return false
+	}
+	var flags map[string]string
+	if json.Unmarshal([]byte(raw), &flags) != nil {
+		return false
+	}
+	return flags["tests"] == "false"
 }
 
 // buildConfigLine says which configuration the index stands for: a file that the build constraints (Go), cfg and
