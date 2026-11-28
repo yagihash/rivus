@@ -772,6 +772,10 @@ fn merge(files: Vec<PathBuf>) {
             json!({"kind": "load_error", "load_error": {"package": "(crates in two versions)", "message": format!("{} functions have a name that two crates share and they differ; only the first 20 are named", total)}})
         );
     }
+    // The records are alone (the reader takes each by its kind): they are written in the order of their text, not in the
+    // order of the fragments. A package with a library and a binary of one name has two fragments of that name, and which
+    // comes first is by the number of the process (and `999` is after `1000`), so the stream would differ from run to run.
+    rest.sort();
     for l in rest {
         println!("{}", l);
     }
