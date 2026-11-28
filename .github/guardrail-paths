@@ -13,4 +13,11 @@ scripts/merge-pr.sh
 scripts/zoo-loosened-check.sh
 scripts/main-ci*
 .github/guardrail-paths
-Makefile  # `merge:` が scripts/merge-pr.sh を呼ぶ。書き換えると、チェックを通らずにマージできる
+# `merge:` が scripts/merge-pr.sh を呼ぶ。書き換えると、チェックを通らずにマージできる
+Makefile
+# リリースの権限(tap への書き込みの ghmint トークン、来歴の署名、GitHub Release)の手順の中で動くスクリプトと設定
+scripts/rewrite-formula.sh
+scripts/build-release-archives.sh
+.tagpr
+# automerge の設定(何がチェックなしで入るか)
+renovate.json
