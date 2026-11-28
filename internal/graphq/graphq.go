@@ -21,6 +21,9 @@ const (
 	// MaxDepth is the deepest callers / callees search.
 	MaxDepth     = 6
 	DefaultLimit = 50
+	// MaxLimit is the largest --limit: a value above it is taken as this (the search asks for one more than the limit, and
+	// an int that is as large as can be overflowed to the smallest). No program has so many edges or paths.
+	MaxLimit = 1<<31 - 1
 	// ExpandCandidates: a dynamic call with at most this many candidates is
 	// followed by callees; a call with more is a frontier.
 	ExpandCandidates = 3
@@ -523,6 +526,9 @@ func (o *Options) normalize(def int) (clamped bool) {
 	}
 	if o.Limit <= 0 {
 		o.Limit = def
+	}
+	if o.Limit > MaxLimit {
+		o.Limit = MaxLimit
 	}
 	return
 }

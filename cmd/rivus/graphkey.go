@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -447,7 +448,10 @@ func runVersion(argv ...string) string {
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	var buf bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &buf, &buf
-	if err := cmd.Run(); err != nil {
+	// CommandContext stops only the process that was started: a child that keeps the output open (a shell wrapper that starts a process
+	// and ends) would hold Run until it ends. After the command has ended, the output is read for a second at most.
+	cmd.WaitDelay = time.Second
+	if err := cmd.Run(); err != nil && !errors.Is(err, exec.ErrWaitDelay) { // (ErrWaitDelay: the command ended well; the output may be cut)
 		return "unavailable: " + strings.TrimSpace(buf.String())
 	}
 	return strings.TrimSpace(buf.String())

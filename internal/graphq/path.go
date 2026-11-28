@@ -726,6 +726,9 @@ func (e *Engine) Path(from, to string, o Options) (*PathResult, error) {
 	if o.Limit <= 0 {
 		o.Limit = DefaultPaths
 	}
+	if o.Limit > MaxLimit {
+		o.Limit = MaxLimit
+	}
 	res := &PathResult{Common: e.common("path", o), Paths: []Path{}, Searched: []string{}}
 	var src *Target
 	var entries *graphdb.Entries

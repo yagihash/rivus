@@ -11,9 +11,11 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -98,11 +100,37 @@ type limitWriter struct {
 	over chan struct{}
 	n    int64
 	done bool
+
+	mu     sync.Mutex
+	err    error         // the first error of w: the output could not be kept
+	failed chan struct{} // closed at the first error of w (supervise stops the program: one that ignores SIGPIPE would go on)
+}
+
+// writeErr is the first error that the writer that keeps the output gave (nil: none).
+func (l *limitWriter) writeErr() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.err
+}
+
+// write passes p on to the writer, and keeps its error: os/exec stops the copy at the first one, the program ends by SIGPIPE and Wait says how it
+// ended, not why, so the error would be lost.
+func (l *limitWriter) write(p []byte) (int, error) {
+	n, err := l.w.Write(p)
+	if err != nil {
+		l.mu.Lock()
+		if l.err == nil {
+			l.err = err
+			close(l.failed)
+		}
+		l.mu.Unlock()
+	}
+	return n, err
 }
 
 func (l *limitWriter) Write(p []byte) (int, error) {
 	if l.left == 0 {
-		return l.w.Write(p)
+		return l.write(p)
 	}
 	if l.n+int64(len(p)) > l.left {
 		if !l.done {
@@ -112,7 +140,7 @@ func (l *limitWriter) Write(p []byte) (int, error) {
 		return len(p), nil
 	}
 	l.n += int64(len(p))
-	return l.w.Write(p)
+	return l.write(p)
 }
 
 // capWriter keeps at most left bytes of what is written.
@@ -156,7 +184,7 @@ func supervise(ctx context.Context, s Spec, cmd *exec.Cmd, afterStart func()) (*
 	if s.Stdout != nil {
 		out = s.Stdout
 	}
-	lw := &limitWriter{w: out, left: s.MaxOutput, over: make(chan struct{})}
+	lw := &limitWriter{w: out, left: s.MaxOutput, over: make(chan struct{}), failed: make(chan struct{})}
 	cmd.Stdout = lw
 	cmd.Stderr = &capWriter{w: &stderr, left: 1 << 20}
 	// a process that left the group (setsid) and keeps the output open must not hold Wait for ever: after the program has ended, the
@@ -193,10 +221,19 @@ func supervise(ctx context.Context, s Spec, cmd *exec.Cmd, afterStart func()) (*
 		res.OutputTooBig = true
 		syscall.Kill(-pgid, syscall.SIGKILL)
 		werr = <-done
+	case <-lw.failed:
+		syscall.Kill(-pgid, syscall.SIGKILL)
+		werr = <-done
 	}
 	// what is left of the group is killed whatever the way the program ended.
 	syscall.Kill(-pgid, syscall.SIGKILL)
 	res.MayHaveLeftProcesses = true
+	// The output was over the limit, also when the program ended at the same moment (select took the end): the output is cut, and is said so.
+	select {
+	case <-lw.over:
+		res.OutputTooBig = true
+	default:
+	}
 	res.Stderr = stderr.Bytes()
 	if s.Stdout == nil {
 		res.Stdout = stdout.Bytes()
@@ -204,6 +241,10 @@ func supervise(ctx context.Context, s Spec, cmd *exec.Cmd, afterStart func()) (*
 	if errors.Is(werr, exec.ErrWaitDelay) {
 		res.Warnings = append(res.Warnings, "a process that the program started kept its output open after the program ended, and the output was closed: it may be cut")
 		werr = nil
+	}
+	if err := lw.writeErr(); err != nil {
+		// the output could not be kept (a spill that is full): the program ended by SIGPIPE or was stopped, and what it wrote is cut
+		return res, fmt.Errorf("sandbox: the output of the program could not be written: %w", err)
 	}
 	if ee, ok := werr.(*exec.ExitError); ok {
 		res.ExitCode = ee.ExitCode()

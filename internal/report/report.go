@@ -962,7 +962,28 @@ func (r *Report) Save(path string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o644)
+	// The report holds snippets of the source: it is private (0600), and it is written to a file beside it that is moved into place
+	// when it is complete (as the graph file is), so that a run that stops half way does not leave half of a JSON as the report.
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	name := tmp.Name()
+	_, werr := tmp.Write(data)
+	cerr := tmp.Close()
+	if werr == nil {
+		werr = cerr
+	}
+	if werr == nil {
+		werr = os.Chmod(name, 0o600)
+	}
+	if werr == nil {
+		werr = os.Rename(name, path)
+	}
+	if werr != nil {
+		os.Remove(name)
+	}
+	return werr
 }
 
 // Load reads a saved report.

@@ -3,8 +3,10 @@ package main
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -92,6 +94,31 @@ func checkRead(read []string) error {
 		}
 		if err := mountable(p); err != nil {
 			return fmt.Errorf("-isolation-read: %v", err)
+		}
+	}
+	return nil
+}
+
+// dropConfigOfCargoHome removes the cargo configuration and the credentials that an earlier run could have left in the CARGO_HOME: cargo
+// reads $CARGO_HOME/config.toml in the stage that has a network. The names are looked at in the directory (a prefix of the name), not by a
+// pattern: a [ * or ? in the path of CARGO_HOME made filepath.Glob fail or match other files, and the files stayed. A directory that cannot be
+// read is an error, not "nothing there" (a directory that is not there yet is nothing).
+func dropConfigOfCargoHome(cargoHome string, w interface{ Write([]byte) (int, error) }) error {
+	ents, err := os.ReadDir(cargoHome)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("the cargo configuration that an earlier run left in %s cannot be looked for: %v", cargoHome, err)
+	}
+	for _, e := range ents {
+		if !strings.HasPrefix(e.Name(), "config") && !strings.HasPrefix(e.Name(), "credentials") {
+			continue
+		}
+		m := filepath.Join(cargoHome, e.Name())
+		fmt.Fprintf(w, "rivus: %s is removed (cargo would read it in the stage that has a network)\n", m)
+		if err := os.RemoveAll(m); err != nil {
+			return err
 		}
 	}
 	return nil
