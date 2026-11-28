@@ -112,7 +112,8 @@ type BodyNotRead struct {
 }
 
 // FnSkipped is a function whose body the extractor could not read: the compiler's interface stopped on it (Rust:
-// rustc_public panics on an async closure), so the function is not in the program, and the extractor read the others
+// rustc_public panics on an async closure; Dart: the analyzer answered otherwise than the extractor was written for), so the function
+// is not in the program, and the extractor read the others
 // (docs/DESIGN-rust-extractor-panic.md). A call of it is followed as a call to a function with no body.
 type FnSkipped struct {
 	// Unit is the unit of the function (Rust: the crate).

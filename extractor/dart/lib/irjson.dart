@@ -153,6 +153,12 @@ class StreamOut {
         'kind': 'body_not_read',
         'body_not_read': {'unit': unit, 'functions': functions}
       });
+  /// A function whose body the extractor could not read (the same record as the Rust extractor's): the core follows a call of it as a
+  /// call to a function with no body, and says that the body was there. [unit] is `package:name` (or the file), [why] is one line.
+  void fnSkipped(String unit, String func, String why, {bool dependency = false}) => _line({
+        'kind': 'fn_skipped',
+        'fn_skipped': {'unit': unit, 'func': func, if (dependency) 'dependency': true, 'why': why}
+      });
   /// [unread]: the file is in the result on a tree that is not what its text says (the core lists it in summary.unread).
   /// [func]: the function that holds what the message says (the findings that go through it carry the message).
   void loadError(String package, String message, {bool unread = false, String? func}) => _line(
