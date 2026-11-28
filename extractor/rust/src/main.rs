@@ -39,13 +39,26 @@ fn plus() -> Vec<String> {
 /// It is read from rust-toolchain.toml by build.rs: the nightly is written in that one place.
 const TOOLCHAIN: &str = env!("RIVUS_TOOLCHAIN");
 
-/// Whether rustc is asked to compile the build script of a package: cargo names its crate `build_script_<name>`
-/// (`build_script_build` for build.rs, and the name of the file for `build = "codegen.rs"`).
+/// Whether rustc is asked to compile the build script of a package: cargo names its crate `build_script_<the name of its file>`
+/// (`build_script_build` for build.rs, `build_script_codegen` for `build = "codegen.rs"`; `_` where the file has `-`) and gives it
+/// `--crate-type bin`. A crate of the workspace that only starts with the same words (a binary `build_script_runner`, a library
+/// `build_script_build`) is code of the project: the name has to be the one that the source file gives.
 fn is_build_script(args: &[String]) -> bool {
-    // a build script is a program: a crate that only starts with the name (a library `build_script_utils` of the workspace) is not one
     let is_bin = args.windows(2).any(|w| w[0] == "--crate-type" && w[1] == "bin") || args.iter().any(|a| a == "--crate-type=bin");
-    (is_bin && args.windows(2).any(|w| w[0] == "--crate-name" && w[1].starts_with("build_script_")))
-        || args.iter().any(|a| a == "build_script_build" || a == "build_script_main")
+    let name = args
+        .windows(2)
+        .find(|w| w[0] == "--crate-name")
+        .map(|w| w[1].as_str())
+        .or_else(|| args.iter().find_map(|a| a.strip_prefix("--crate-name=")));
+    // the source file is the one argument of rustc that ends with .rs (cargo gives it before the other options)
+    let source = args.iter().find(|a| a.ends_with(".rs"));
+    match (is_bin, name, source) {
+        (true, Some(name), Some(source)) => {
+            let stem = Path::new(source).file_stem().map(|s| s.to_string_lossy().replace('-', "_")).unwrap_or_default();
+            !stem.is_empty() && name == format!("build_script_{}", stem)
+        }
+        _ => false,
+    }
 }
 
 /// A directory that only this process can use: made exclusively (making it fails when the name exists, whoever
@@ -1001,6 +1014,33 @@ mod tests {
         assert!(is_build_script(&args(&["rustc", "--crate-name", "build_script_build", "build.rs", "--crate-type=bin"])));
         assert!(!is_build_script(&args(&["rustc", "--crate-name", "build_script_utils", "src/lib.rs", "--crate-type", "lib"])));
         assert!(!is_build_script(&args(&["rustc", "--crate-name", "build_script_utils", "src/lib.rs", "--crate-type", "rlib"])));
+    }
+
+    // cargo names the crate of a build script `build_script_<the name of its file>` and gives it `--crate-type bin`; the crate of a package or a
+    // target of the workspace has the name that was written in its Cargo.toml: a program that only starts with the same words is code of the
+    // project (it was not read, and nothing said so)
+    #[test]
+    fn a_program_or_a_library_that_is_named_like_a_build_script_is_not_one() {
+        // an ordinary binary of the workspace
+        assert!(!is_build_script(&args(&["rustc", "--crate-name", "build_script_runner", "src/main.rs", "--crate-type", "bin"])));
+        // a library whose name is exactly the name of the build script (the words alone were enough before)
+        assert!(!is_build_script(&args(&["rustc", "--crate-name", "build_script_build", "src/lib.rs", "--crate-type", "lib"])));
+        assert!(!is_build_script(&args(&["rustc", "--crate-name", "build_script_main", "src/lib.rs", "--crate-type", "rlib"])));
+        // a binary under src/bin whose file name is not the one the name says
+        assert!(!is_build_script(&args(&["rustc", "--crate-name", "build_script_x", "src/bin/build_script_x.rs", "--crate-type", "bin"])));
+    }
+
+    #[test]
+    fn a_build_script_is_found_by_the_name_that_its_file_gives_it() {
+        assert!(is_build_script(&args(&["rustc", "--crate-name", "build_script_build", "--edition=2021", "build.rs", "--crate-type", "bin"])));
+        assert!(is_build_script(&args(&["rustc", "--crate-name=build_script_build", "build.rs", "--crate-type=bin"])));
+        // `build = "build/main.rs"`
+        assert!(is_build_script(&args(&["rustc", "--crate-name", "build_script_main", "build/main.rs", "--crate-type", "bin"])));
+        // the name of a crate has `_` where the file has `-`
+        assert!(is_build_script(&args(&["rustc", "--crate-name", "build_script_build_gen", "build-gen.rs", "--crate-type", "bin"])));
+        // no source file, or no name: not one
+        assert!(!is_build_script(&args(&["rustc", "--crate-name", "build_script_build", "--crate-type", "bin"])));
+        assert!(!is_build_script(&args(&["rustc", "build.rs", "--crate-type", "bin"])));
     }
 
     #[test]
