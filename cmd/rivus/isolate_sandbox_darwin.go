@@ -309,9 +309,7 @@ func (o *isolationOpts) tellAboutRun(stage string, res *sandbox.Result) {
 	if stage != "extract" || res == nil {
 		return
 	}
-	for _, w := range res.Warnings {
-		fmt.Fprintf(o.err(), "rivus: warning: %s\n", w)
-	}
+	sayWarnings(o.err(), res.Warnings)
 	if res.MayHaveLeftProcesses {
 		// said once, not hidden: a build script can start a process in a session of its own, which the end of the run does not reach
 		fmt.Fprintf(o.err(), "rivus: a build script may have left a process behind (a program that starts one in a session of its own is not stopped by the end of the run; it stays under the sandbox, with no files and no network). Look with `ps` if the project is not one you trust.\n")

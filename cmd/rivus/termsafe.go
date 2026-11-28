@@ -2,9 +2,37 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"strings"
 	"unicode/utf8"
 )
+
+// errorLine is the line that rivus says for an error that ends a command. The text of the error can hold what the project decides (a file name that
+// a build script touched, a package name and a source in Cargo.lock, a path, the message of a package that does not load), so it goes through
+// sanitizeForTerminal (SBX-4) as the output of a child does.
+func errorLine(err error) string {
+	return "rivus: " + sanitizeForTerminal([]byte(err.Error())) + "\n"
+}
+
+// sayAttributeChanges says the changes of the mode, the owner, the times or the attributes of files that the build tried and the sandbox refused. The
+// names are the real paths of files that the project may hold, and they are of the project's choice: they are made safe for the terminal.
+func sayAttributeChanges(w io.Writer, changes []string) {
+	if len(changes) == 0 {
+		return
+	}
+	// Landlock does not stop these, so rivus does them for the build, and only for the files inside of its work directory: these were refused (EPERM)
+	fmt.Fprintf(w, "rivus: warning: the build tried to change the mode, the owner, the times or the attributes of files outside of its work directory, and the sandbox refused (EPERM). Look at them if the project is not one you trust:\n")
+	for _, c := range changes {
+		fmt.Fprintf(w, "  %s\n", sanitizeForTerminal([]byte(c)))
+	}
+}
+
+// sayWarnings says the warnings of a run of the sandbox, one line each (they can hold a path).
+func sayWarnings(w io.Writer, warnings []string) {
+	for _, s := range warnings {
+		fmt.Fprintf(w, "rivus: warning: %s\n", sanitizeForTerminal([]byte(s)))
+	}
+}
 
 // sanitizeForTerminal is what a child (a build script, cargo, an extractor) wrote, made safe to show on the terminal of the user (SBX-4,
 // docs/DESIGN-macos-sandbox.md): every byte that is not shown as text becomes `\xNN` (the byte in 2 hexadecimal digits), so that no control sequence
