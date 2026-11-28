@@ -916,11 +916,16 @@ func (rs *RuleSet) validate() error {
 	if err := rs.validateAdoptRules(); err != nil {
 		return err
 	}
-	checkMatch := func(m, what string) error {
+	checkMatch := func(m, sym, what string) error {
 		switch m {
 		case "", MatchExact:
 			return nil
 		case MatchImplementations:
+			// the implementations are found for the symbol as it is written, and /v* is not a package that is loaded: the rows for the majors of
+			// the module are written one by one (ADR-110 does not give this a meaning)
+			if HasMajorWildcard(sym) {
+				return fmt.Errorf("%s: match: implementations does not take /v* in the symbol %q (write the symbol with the major of the module)", what, sym)
+			}
 			return nil
 		}
 		return fmt.Errorf("%s: unknown match %q", what, m)
@@ -934,7 +939,7 @@ func (rs *RuleSet) validate() error {
 		if err := s.Provenance.validate(what); err != nil {
 			return err
 		}
-		if err := checkMatch(s.Match, what); err != nil {
+		if err := checkMatch(s.Match, s.Symbol, what); err != nil {
 			return err
 		}
 		if len(s.Labels) == 0 {
@@ -1032,7 +1037,7 @@ func (rs *RuleSet) validate() error {
 		if err := checkSymbol(s.Symbol, what); err != nil {
 			return err
 		}
-		if err := checkMatch(s.Match, what); err != nil {
+		if err := checkMatch(s.Match, s.Symbol, what); err != nil {
 			return err
 		}
 		for _, a := range s.Args {
@@ -1095,7 +1100,7 @@ func (rs *RuleSet) validate() error {
 				}
 			}
 		}
-		if err := checkMatch(s.Match, what); err != nil {
+		if err := checkMatch(s.Match, s.Symbol, what); err != nil {
 			return err
 		}
 		if s.Match == MatchImplementations && !s.AllowSanitizerExpansion {
@@ -1147,7 +1152,7 @@ func (rs *RuleSet) validate() error {
 		if p.Boundary != "" && p.Boundary != BoundaryStoredData {
 			return fmt.Errorf("%s: unknown boundary %q (stored_data)", what, p.Boundary)
 		}
-		if err := checkMatch(p.Match, what); err != nil {
+		if err := checkMatch(p.Match, p.Symbol, what); err != nil {
 			return err
 		}
 		if err := validateFlows(p.Flows, what); err != nil {
