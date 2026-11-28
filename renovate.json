@@ -23,17 +23,6 @@
       ]
     },
     {
-      "description": "Automerge Go module minor/patch updates",
-      "matchManagers": [
-        "gomod"
-      ],
-      "matchUpdateTypes": [
-        "minor",
-        "patch"
-      ],
-      "automerge": true
-    },
-    {
       "description": "The go directive of go.mod is the floor of the toolchain: never automerge",
       "matchManagers": [
         "gomod"
@@ -51,33 +40,11 @@
       "rangeStrategy": "update-lockfile"
     },
     {
-      "description": "Automerge Rust crate minor/patch updates",
-      "matchManagers": [
-        "cargo"
-      ],
-      "matchUpdateTypes": [
-        "minor",
-        "patch"
-      ],
-      "automerge": true
-    },
-    {
       "description": "Dart (extractor/dart): bump the constraints in pubspec.yaml together with pubspec.lock",
       "matchManagers": [
         "pub"
       ],
       "rangeStrategy": "bump"
-    },
-    {
-      "description": "Automerge Dart package minor/patch updates",
-      "matchManagers": [
-        "pub"
-      ],
-      "matchUpdateTypes": [
-        "minor",
-        "patch"
-      ],
-      "automerge": true
     },
     {
       "description": "The Dart SDK of CI moves with package:analyzer: never automerge",
@@ -115,9 +82,8 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Tool versions installed by a script or a run step, marked with a `# renovate: datasource=... depName=...` comment above `name=vX.Y.Z` (ghalint and actionlint in the jobs ghalint and actionlint of ci.yml, go-licenses in scripts/build-release-archives.sh)",
+      "description": "Tool versions in scripts/build-release-archives.sh, marked with a `# renovate: datasource=... depName=...` comment above `name=vX.Y.Z` (go-licenses). The same in ci.yml is covered by the shared preset",
       "managerFilePatterns": [
-        "/^\\.github\\/workflows\\/ci\\.yml$/",
         "/^scripts\\/build-release-archives\\.sh$/"
       ],
       "matchStrings": [
