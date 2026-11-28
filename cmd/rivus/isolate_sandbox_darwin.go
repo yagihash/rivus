@@ -302,8 +302,26 @@ func (o *isolationOpts) rustExtractorVersionSandboxed(ctx context.Context) (stri
 	return string(res.Stdout), nil
 }
 
-// sandboxResult says how a stage ended: what it printed goes to the user, and a stage that failed or was stopped is an error.
+// tellAboutRun says what the run did that the user must hear, whether the stage worked or not: the warnings, and the processes that may
+// have been left. A build script that starts a process in a session of its own and then fails, or runs out of time, is the one that the
+// user should look at, so this is said before the stage is judged (as the same function on Linux does).
+func (o *isolationOpts) tellAboutRun(stage string, res *sandbox.Result) {
+	if stage != "extract" || res == nil {
+		return
+	}
+	for _, w := range res.Warnings {
+		fmt.Fprintf(o.err(), "rivus: warning: %s\n", w)
+	}
+	if res.MayHaveLeftProcesses {
+		// said once, not hidden: a build script can start a process in a session of its own, which the end of the run does not reach
+		fmt.Fprintf(o.err(), "rivus: a build script may have left a process behind (a program that starts one in a session of its own is not stopped by the end of the run; it stays under the sandbox, with no files and no network). Look with `ps` if the project is not one you trust.\n")
+	}
+}
+
+// sandboxResult says how a stage ended: what it printed goes to the user, and a stage that failed or was stopped is an error. What the run
+// did that the user must hear is said first (tellAboutRun), so that it is said when the stage failed too.
 func (o *isolationOpts) sandboxResult(stage string, res *sandbox.Result, err error) error {
+	o.tellAboutRun(stage, res)
 	if err != nil {
 		if errors.Is(err, sandbox.ErrUnavailable) {
 			return noSandboxError(err)
@@ -329,10 +347,6 @@ func (o *isolationOpts) sandboxResult(stage string, res *sandbox.Result, err err
 		}
 		tail = sanitizeForTerminal([]byte(tail)) // SBX-4
 		return fmt.Errorf("the %s stage under the sandbox failed (exit %d)\n%s", stage, res.ExitCode, tail)
-	}
-	if res.MayHaveLeftProcesses && stage == "extract" {
-		// said once, not hidden: a build script can start a process in a session of its own, which the end of the run does not reach
-		fmt.Fprintf(o.err(), "rivus: a build script may have left a process behind (a program that starts one in a session of its own is not stopped by the end of the run; it stays under the sandbox, with no files and no network). Look with `ps` if the project is not one you trust.\n")
 	}
 	return nil
 }

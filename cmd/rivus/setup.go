@@ -35,7 +35,7 @@ func runSetupRust(argv []string) error {
 	fs := flag.NewFlagSet("setup rust", flag.ContinueOnError)
 	c := setupRustFlags(fs)
 	prepareFlags(fs, argv)
-	if err := fs.Parse(argv); err != nil {
+	if err := parseFlags(fs, argv); err != nil {
 		return err
 	}
 	source, yes := c.source, c.yes

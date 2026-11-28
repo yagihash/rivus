@@ -54,6 +54,15 @@ func TestDropConfigOfCargoHomeWithMetacharactersInThePath(t *testing.T) {
 	}
 }
 
+// With no HOME nothing says that the directory does not hold the home directory: it is refused, not let through (not parallel: the
+// environment is changed).
+func TestMountableWithoutHome(t *testing.T) {
+	t.Setenv("HOME", "")
+	if err := mountable(t.TempDir()); err == nil {
+		t.Error("with no HOME the check that keeps the home directory away is off, and the directory was let through")
+	}
+}
+
 func TestCheckRead(t *testing.T) {
 	t.Parallel()
 	if err := checkRead([]string{t.TempDir()}); err != nil {

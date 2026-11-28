@@ -117,7 +117,7 @@ func printCachePlaces(w io.Writer, root string, ps []cachePlace) {
 		return
 	}
 	tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(tw, "PATH\tSIZE\tBYTES\tLAST USED")
+	fmt.Fprintln(tw, "PATH\tSIZE\tBYTES\tLAST WRITTEN")
 	for _, p := range ps {
 		fmt.Fprintf(tw, "%s\t%s\t%d\t%s\n", p.Path, humanSize(p.Size), p.Size, p.Last.Format("2006-01-02"))
 	}
@@ -136,7 +136,7 @@ func cacheList(root string, w io.Writer) error {
 // maxOlderThanDays is the most that -older-than takes (100 years).
 const maxOlderThanDays = 36500
 
-// cacheClean lists the places that were last used more than days days before now. It removes them only when yes is set (no question), or when ask is
+// cacheClean lists the places that were last written (the newest modification time inside) more than days days before now. It removes them only when yes is set (no question), or when ask is
 // not nil and the user answers yes; with neither it only lists. A place that was written within inUseWithin is left.
 func cacheClean(root string, days int, now time.Time, yes bool, ask func(prompt string) bool, w io.Writer) error {
 	// time.Duration is 64 bits of nanoseconds (about 106000 days): more would overflow to a cut in the future, and every place would be "old"
@@ -159,13 +159,13 @@ func cacheClean(root string, days int, now time.Time, yes bool, ask func(prompt 
 		}
 	}
 	if len(old) == 0 {
-		fmt.Fprintf(w, "nothing last used more than %d days ago in %s\n", days, root)
+		fmt.Fprintf(w, "nothing last written more than %d days ago in %s\n", days, root)
 		return nil
 	}
 	printCachePlaces(w, root, old)
 	if !yes {
 		if ask == nil {
-			fmt.Fprintf(w, "nothing was removed: these are the places that -yes would remove (last used more than %d days ago)\n", days)
+			fmt.Fprintf(w, "nothing was removed: these are the places that -yes would remove (last written more than %d days ago)\n", days)
 			return nil
 		}
 		if !ask(fmt.Sprintf("remove these %d places? [y/N] ", len(old))) {
@@ -218,7 +218,7 @@ type cacheCleanCmd struct {
 
 func cacheCleanFlags(fs *flag.FlagSet) *cacheCleanCmd {
 	c := &cacheCleanCmd{}
-	c.olderThan = fs.Int("older-than", -1, "remove the places that were last used more than this many days ago (required, 0 to 36500). Without -yes the places are listed, and on a terminal you are asked before they are removed")
+	c.olderThan = fs.Int("older-than", -1, "remove the places that were last written more than this many days ago (required, 0 to 36500). The date is the newest modification time inside a place: a run that only reads it (the same Cargo.lock fetches nothing new) does not move it, so a place that you use every day can be old here, and rivus cannot tell that one is in use except by a write within the last hour. Without -yes the places are listed, and on a terminal you are asked before they are removed")
 	c.yes = fs.Bool("yes", false, "remove without asking")
 	usual(fs, "older-than", "yes")
 	return c
@@ -227,7 +227,7 @@ func cacheCleanFlags(fs *flag.FlagSet) *cacheCleanCmd {
 func runCacheList(argv []string) error {
 	fs := flag.NewFlagSet("cache list", flag.ContinueOnError)
 	prepareFlags(fs, argv)
-	if err := fs.Parse(argv); err != nil {
+	if err := parseFlags(fs, argv); err != nil {
 		return err
 	}
 	root, err := rustDataDir()
@@ -241,7 +241,7 @@ func runCacheClean(argv []string) error {
 	fs := flag.NewFlagSet("cache clean", flag.ContinueOnError)
 	c := cacheCleanFlags(fs)
 	prepareFlags(fs, argv)
-	if err := fs.Parse(argv); err != nil {
+	if err := parseFlags(fs, argv); err != nil {
 		return err
 	}
 	given := false

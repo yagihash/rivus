@@ -92,12 +92,12 @@
     },
     {
       "customType": "regex",
-      "description": "Dart SDK version of setup-dart in ci.yml",
+      "description": "Dart SDK version in ci.yml: `sdk:` of setup-dart (the model-diff job) and `DART_SDK:` of the jobs that hold it in an env (test, cost-warn). All of them move together (one branch). scripts/dev-setup.sh holds the pin with its checksums too: it checks that it agrees with ci.yml and fails when it does not, so that the bump of the checksums is not forgotten",
       "managerFilePatterns": [
         "/^\\.github/workflows/ci\\.yml$/"
       ],
       "matchStrings": [
-        "sdk: (?<currentValue>\\d+\\.\\d+\\.\\d+)"
+        "(?:sdk|DART_SDK): (?<currentValue>\\d+\\.\\d+\\.\\d+)"
       ],
       "depNameTemplate": "dart",
       "datasourceTemplate": "dart-version",

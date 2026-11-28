@@ -27,7 +27,7 @@ func runCompletionZsh(args []string) error {
 func runCompletion(name string, args []string, write func(w io.Writer, cmds []*command) error) error {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	prepareFlags(fs, args)
-	if err := fs.Parse(args); err != nil {
+	if err := parseFlags(fs, args); err != nil {
 		return err
 	}
 	if fs.NArg() > 0 {

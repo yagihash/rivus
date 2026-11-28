@@ -71,7 +71,9 @@ func (o *isolationOpts) err() io.Writer {
 func mountable(dir string) error {
 	home, err := os.UserHomeDir()
 	if err != nil || home == "" {
-		return nil
+		// fail closed: when the home directory is not known (HOME is not set: launchd, cron), nothing says that this directory does not
+		// hold it, and the check that keeps the home directory away from the build would be off
+		return fmt.Errorf("the home directory of the user is not known (HOME is not set), so it cannot be checked that %s does not hold it: set HOME", dir)
 	}
 	// compared by the real paths: a link or a relative path does not get round it
 	d, h := realPath(dir), realPath(home)
