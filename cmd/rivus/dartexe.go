@@ -59,7 +59,19 @@ func compileDartExe(src, dartCmd, dir string) (string, error) {
 		return "", err
 	}
 	exe := filepath.Join(dir, "rivus-dart")
-	tmp := exe + ".tmp"
+	// a name of its own for each compile: two compiles into the same directory (two processes, two tests) must not write one file, nor
+	// remove what the other is writing
+	f, err := os.CreateTemp(dir, "rivus-dart.tmp-*")
+	if err != nil {
+		return "", err
+	}
+	tmp := f.Name()
+	f.Close()
+	// (CreateTemp makes it 0600: dart writes into it, and it is the program in the end)
+	if err := os.Chmod(tmp, 0o755); err != nil {
+		os.Remove(tmp)
+		return "", err
+	}
 	words := strings.Fields(dartCmd)
 	// the hash of the source is built in: rivus_dart --version and the first line of the IR say it (ADR-126)
 	cmd := exec.Command(words[0], append(append([]string{}, words[1:]...), "compile", "exe", "-DRIVUS_SRC_HASH="+hash, filepath.Join("bin", "rivus_dart.dart"), "-o", tmp)...)

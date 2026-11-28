@@ -92,6 +92,43 @@ func TestDartExeSameIR(t *testing.T) {
 	}
 }
 
+// Two compiles into the same directory (two processes, or two tests) do not share the file that is written: before, both wrote
+// rivus-dart.tmp, and the one that failed removed what the other was writing, whose rename then failed (or, with the timing of the other
+// order, a half-written program was moved into place). A fake `dart` stands for the compiler: the first call fails after it has written its
+// output, the second goes on for longer and succeeds.
+func TestCompileDartExeTwiceAtOnce(t *testing.T) {
+	work := t.TempDir()
+	fake := filepath.Join(work, "dart")
+	script := "#!/bin/sh\nfor a; do out=$a; done\necho built > \"$out\"\nif mkdir \"" + filepath.Join(work, "first") + "\" 2>/dev/null; then sleep 0.2; exit 1; fi\nsleep 0.6\nexit 0\n"
+	if err := os.WriteFile(fake, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	src, _ := filepath.Abs("../../extractor/dart")
+	dir := filepath.Join(work, "exe")
+	errs := make(chan error, 2)
+	for i := 0; i < 2; i++ {
+		go func() {
+			_, err := compileDartExe(src, fake, dir)
+			errs <- err
+		}()
+	}
+	ok := 0
+	for i := 0; i < 2; i++ {
+		if err := <-errs; err == nil {
+			ok++
+		}
+	}
+	if ok != 1 {
+		t.Fatalf("%d of the 2 compiles succeeded, want the second one (the first fails): they share a file", ok)
+	}
+	if b, err := os.ReadFile(filepath.Join(dir, "rivus-dart")); err != nil || strings.TrimSpace(string(b)) != "built" {
+		t.Errorf("the executable: %q %v", b, err)
+	}
+	if ents, _ := os.ReadDir(dir); len(ents) != 1 {
+		t.Errorf("files are left in %s: %v", dir, ents)
+	}
+}
+
 // The hashes of the source of the extractors are set at build time (-ldflags -X, `make build`); a build without them leaves "unknown", the
 // value that internal/extractorhash names, and the name of the variable is the one that the build gives (a renamed variable would be an
 // -X that sets nothing, without an error).
