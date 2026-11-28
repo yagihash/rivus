@@ -141,7 +141,7 @@ func runSetupDart(argv []string) error {
 	fs := flag.NewFlagSet("setup dart", flag.ContinueOnError)
 	c := setupDartFlags(fs)
 	prepareFlags(fs, argv)
-	if err := fs.Parse(argv); err != nil {
+	if err := parseFlags(fs, argv); err != nil {
 		return err
 	}
 	if *c.source == "" {

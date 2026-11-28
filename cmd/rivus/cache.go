@@ -227,7 +227,7 @@ func cacheCleanFlags(fs *flag.FlagSet) *cacheCleanCmd {
 func runCacheList(argv []string) error {
 	fs := flag.NewFlagSet("cache list", flag.ContinueOnError)
 	prepareFlags(fs, argv)
-	if err := fs.Parse(argv); err != nil {
+	if err := parseFlags(fs, argv); err != nil {
 		return err
 	}
 	root, err := rustDataDir()
@@ -241,7 +241,7 @@ func runCacheClean(argv []string) error {
 	fs := flag.NewFlagSet("cache clean", flag.ContinueOnError)
 	c := cacheCleanFlags(fs)
 	prepareFlags(fs, argv)
-	if err := fs.Parse(argv); err != nil {
+	if err := parseFlags(fs, argv); err != nil {
 		return err
 	}
 	given := false
