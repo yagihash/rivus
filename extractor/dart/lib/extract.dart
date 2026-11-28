@@ -62,7 +62,7 @@ Future<void> extract(String root, StringSink sink,
   }
   // the directories of the project with code that is not read because of where they are (said at the end)
   final skippedDirs = <String>{};
-  for (final e in Directory(root).listSync(recursive: true, followLinks: false)) {
+  for (final e in _walk(root, out)) {
     if (e is! File || !e.path.endsWith('.dart')) continue;
     if (inDepDir(e.path)) continue; // read as a dependency, when the code imports it (below)
     if (_skipped(root, e.path)) {
@@ -1118,11 +1118,36 @@ bool _isNonProduction(String root, String path, Map<String, bool> pkgCache) {
   }
 }
 
+/// Every file and directory under [root] (the links are not followed). A directory that cannot be read (no permission, or it
+/// went away) does not stop the walk: it is said as a load error (when [out] is given: the first walk says it, the later ones
+/// pass null) and what is under it is not read. (`listSync(recursive: true)` throws at the first one and nothing is written.)
+List<FileSystemEntity> _walk(String root, StreamOut? out) {
+  final found = <FileSystemEntity>[];
+  void visit(Directory dir) {
+    final List<FileSystemEntity> entries;
+    try {
+      entries = dir.listSync(followLinks: false);
+    } on FileSystemException catch (err) {
+      out?.loadError(p.relative(dir.path, from: root),
+          'the directory could not be read (${err.osError?.message ?? err.message}): the Dart files under it are not read',
+          unread: true);
+      return;
+    }
+    for (final e in entries) {
+      found.add(e);
+      if (e is Directory) visit(e);
+    }
+  }
+
+  visit(Directory(root));
+  return found;
+}
+
 /// The packages that the pubspec.yaml files under [root] declare under dev_dependencies and not under
 /// dependencies (nor as a package of the project itself).
 Set<String> _devOnlyDependencies(String root, StreamOut out) {
   final dev = <String>{}, prod = <String>{}, own = <String>{};
-  for (final e in Directory(root).listSync(recursive: true, followLinks: false)) {
+  for (final e in _walk(root, null)) {
     if (e is! File || p.basename(e.path) != 'pubspec.yaml' || _skipped(root, e.path)) continue;
     try {
       final y = loadYaml(e.readAsStringSync());
@@ -1216,7 +1241,7 @@ void _missingPackageConfigs(String root, StreamOut out) {
     }
   }
 
-  for (final e in Directory(root).listSync(recursive: true, followLinks: false)) {
+  for (final e in _walk(root, null)) {
     if (e is! File || p.basename(e.path) != 'pubspec.yaml' || _skipped(root, e.path)) continue;
     final dir = p.dirname(e.path);
     final rel = p.relative(dir, from: root);
