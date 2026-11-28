@@ -205,8 +205,11 @@ func TestCacheRootIsALinkStillChecksRealPaths(t *testing.T) {
 func TestCacheCleanNegativeDays(t *testing.T) {
 	root := t.TempDir()
 	p := place(t, root, nameA, 10, 90*day)
-	if err := cacheClean(root, -1, time.Now(), true, nil, &bytes.Buffer{}); err == nil {
-		t.Fatal("a negative number of days is an error")
+	// too many days overflow the duration of the cut: 200000 days gave a cut in the future, and every place was removed
+	for _, days := range []int{-1, maxOlderThanDays + 1, 200000} {
+		if err := cacheClean(root, days, time.Now(), true, nil, &bytes.Buffer{}); err == nil {
+			t.Fatalf("%d days is an error", days)
+		}
 	}
 	if !exists(p) {
 		t.Fatal("removed on an error")

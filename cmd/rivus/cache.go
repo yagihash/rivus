@@ -133,11 +133,15 @@ func cacheList(root string, w io.Writer) error {
 	return nil
 }
 
+// maxOlderThanDays is the most that -older-than takes (100 years).
+const maxOlderThanDays = 36500
+
 // cacheClean lists the places that were last used more than days days before now. It removes them only when yes is set (no question), or when ask is
 // not nil and the user answers yes; with neither it only lists. A place that was written within inUseWithin is left.
 func cacheClean(root string, days int, now time.Time, yes bool, ask func(prompt string) bool, w io.Writer) error {
-	if days < 0 {
-		return fmt.Errorf("-older-than is a number of days, 0 or more (got %d)", days)
+	// time.Duration is 64 bits of nanoseconds (about 106000 days): more would overflow to a cut in the future, and every place would be "old"
+	if days < 0 || days > maxOlderThanDays {
+		return fmt.Errorf("-older-than is a number of days, 0 to %d (got %d)", maxOlderThanDays, days)
 	}
 	ps, err := cachePlaces(root)
 	if err != nil {
@@ -214,7 +218,7 @@ type cacheCleanCmd struct {
 
 func cacheCleanFlags(fs *flag.FlagSet) *cacheCleanCmd {
 	c := &cacheCleanCmd{}
-	c.olderThan = fs.Int("older-than", -1, "remove the places that were last used more than this many days ago (required, 0 or more). Without -yes the places are listed, and on a terminal you are asked before they are removed")
+	c.olderThan = fs.Int("older-than", -1, "remove the places that were last used more than this many days ago (required, 0 to 36500). Without -yes the places are listed, and on a terminal you are asked before they are removed")
 	c.yes = fs.Bool("yes", false, "remove without asking")
 	usual(fs, "older-than", "yes")
 	return c
