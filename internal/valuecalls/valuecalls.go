@@ -254,6 +254,10 @@ func (r *resolver) candOf(id ir.FuncID, via int) ir.ValueCand {
 func (r *resolver) resolve(fn *ir.Func, bi, ii int, in *ir.Instr) {
 	form := r.form(fn)
 	if form == nil {
+		// the function has no SSA form, so the value that is called cannot be followed: not "the call reaches no function"
+		// (funcsOf says the same where its walk meets such a function)
+		in.Callee.ValueLimit, in.Callee.ValueFound = ir.ValuePartial, 0
+		in.Callee.ValueWhy = []string{ir.ValueWhyNoForm}
 		return
 	}
 	root := form.Operand(bi, ii, 0)
