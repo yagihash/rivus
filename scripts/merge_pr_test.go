@@ -239,6 +239,11 @@ func TestMergeGuardrailPaths(t *testing.T) {
 		{"scripts/zoo-loosened-check.sh", "scripts/zoo-loosened-check.sh"},
 		{"scripts/main-ci*", "scripts/main-ci.sh"},
 		{".github/guardrail-paths", ".github/guardrail-paths"},
+		{"Makefile", "Makefile"},
+		{"scripts/rewrite-formula.sh", "scripts/rewrite-formula.sh"},
+		{"scripts/build-release-archives.sh", "scripts/build-release-archives.sh"},
+		{".tagpr", ".tagpr"},
+		{"renovate.json", "renovate.json"},
 	}
 	real, err := os.ReadFile("../.github/guardrail-paths")
 	if err != nil {
