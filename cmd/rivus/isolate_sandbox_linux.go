@@ -325,20 +325,6 @@ func noSandboxError(why error) error {
 	return fmt.Errorf("the extractor of Rust runs the build scripts and the macros of the project, and it is run under the sandbox of Linux (Landlock and seccomp) so that they cannot reach the files and the network of this machine; it cannot be made here (%v), so nothing was run. If the code is yours or you trust it, -unsafe-host-exec runs it directly on this machine, without any isolation (the build scripts of the project run here, with your rights)", why)
 }
 
-// dropConfigOfCargoHome removes the cargo configuration and the credentials that an earlier run could have left in the CARGO_HOME: cargo
-// reads $CARGO_HOME/config.toml in the stage that has a network.
-func dropConfigOfCargoHome(cargoHome string, w interface{ Write([]byte) (int, error) }) error {
-	ms, _ := filepath.Glob(filepath.Join(cargoHome, "config*"))
-	cs, _ := filepath.Glob(filepath.Join(cargoHome, "credentials*"))
-	for _, m := range append(ms, cs...) {
-		fmt.Fprintf(w, "rivus: %s is removed (cargo would read it in the stage that has a network)\n", m)
-		if err := os.RemoveAll(m); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // rustExtractorPath is the path of the extractor (-rust-extractor, RIVUS_RUST_EXTRACTOR, or rivus-rust on PATH).
 func (o *isolationOpts) rustExtractorPath() (string, error) {
 	if len(o.extractor) == 0 {
