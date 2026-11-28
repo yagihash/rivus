@@ -83,15 +83,70 @@ jobs:
   #       gh attestation verify rivus_X.Y.Z_source.tar.gz --repo yagihash/rivus --signer-workflow yagihash/rivus/.github/workflows/tagpr.yml
   #       gh release verify-asset vX.Y.Z rivus_X.Y.Z_source.tar.gz --repo yagihash/rivus
   # ビルドの手順は scripts/build-release-archives.sh にある（PR では ci.yml の release-build が、同じものを動かす）。
-  release-binaries:
+  #
+  # 3 つのジョブに分けてある。権限を、必要なジョブだけに付けるため:
+  #   - release-build: ビルド（go install と scripts/build-release-archives.sh。外のコードを動かす）。contents: read だけ。
+  #       Sigstore の署名（id-token）も、Release への書き込みも、ここにはない。ビルドのツールが乗っ取られても、
+  #       このリポジトリの名義で署名を取れず、Release を書き換えられない（ビルドの成果物は、これまでどおり、作れてしまう）。
+  #   - release-attest: ビルド来歴の署名と保存（id-token と attestations）。外のコードは動かさない（成果物を取って、attest の action だけ）。
+  #   - release-binaries: Release へのアップロードと公開（contents: write）と、release attestation の確認。bump-tap は、このジョブを待つ。
+  # 「やり直し」は、失敗したジョブだけを動かす。成果物（dist）は、同じ実行の artifact として残る。
+  release-build:
     needs: tagpr
     if: needs.tagpr.outputs.tag != ''
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
-      contents: write # draft の Release へのアップロードと公開
+      contents: read # タグのチェックアウト
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ needs.tagpr.outputs.tag }}
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Build
+        env:
+          TAG: ${{ needs.tagpr.outputs.tag }}
+        run: scripts/build-release-archives.sh "${TAG#v}" "refs/tags/${TAG}"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-dist
+          path: |
+            dist/*.tar.gz
+            dist/*_checksums.txt
+          if-no-files-found: error
+          retention-days: 7
+
+  release-attest:
+    needs: [tagpr, release-build]
+    if: needs.tagpr.outputs.tag != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
       id-token: write # ビルド来歴の署名（Sigstore）
       attestations: write # ビルド来歴の保存
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-dist
+          path: dist
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*_checksums.txt
+
+  release-binaries:
+    needs: [tagpr, release-attest]
+    if: needs.tagpr.outputs.tag != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # draft の Release へのアップロードと公開
     steps:
       - id: state
         env:
@@ -102,27 +157,10 @@ jobs:
           set -euo pipefail
           echo "draft=$(gh release view "$TAG" --json isDraft --jq .isDraft)" >> "$GITHUB_OUTPUT"
       - if: steps.state.outputs.draft == 'true'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          ref: refs/tags/${{ needs.tagpr.outputs.tag }}
-          persist-credentials: false
-      - if: steps.state.outputs.draft == 'true'
-        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
-        with:
-          go-version-file: go.mod
-          cache: false
-      - name: Build
-        if: steps.state.outputs.draft == 'true'
-        env:
-          TAG: ${{ needs.tagpr.outputs.tag }}
-        run: scripts/build-release-archives.sh "${TAG#v}" "refs/tags/${TAG}"
-      - name: Attest build provenance
-        if: steps.state.outputs.draft == 'true'
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        with:
-          subject-path: |
-            dist/*.tar.gz
-            dist/*_checksums.txt
+          name: release-dist
+          path: dist
       # --clobber は、draft のまま失敗した実行のやり直し用。
       - name: Upload to the draft and publish
         if: steps.state.outputs.draft == 'true'
