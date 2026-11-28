@@ -434,3 +434,24 @@ func TestPathWithTheLargestLimit(t *testing.T) {
 		t.Fatalf("reachable = %v, %d paths: %+v", r.Reachable, len(r.Paths), r)
 	}
 }
+
+// A read that fails while --only-impl asks about a call site is not "the site has no candidate of the type": the answer is not
+// remembered (the next edge asks again), and the answer says that the filter could not be applied. Before, the error was dropped and
+// the call site was counted as "left alone" for the rest of the search.
+func TestOnlyImplSaysWhenTheDatabaseCannotBeRead(t *testing.T) {
+	e := build(t, withCands([]fnDef{
+		{"S", []call{{"s.go", 1, 1, "dyn", "io.Writer.Write", []string{"(*bytes.Buffer).Write", "(*os.File).Write"}}}},
+		{"(*bytes.Buffer).Write", nil},
+		{"(*os.File).Write", nil},
+	}))
+	passed, warnings, remembered := graphq.OnlyImplAfterClose(e, []string{"bytes.Buffer"})
+	if !passed {
+		t.Error("an edge is kept when the filter cannot tell")
+	}
+	if remembered != 0 {
+		t.Errorf("%d answers remembered from a failed read", remembered)
+	}
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "--only-impl") {
+		t.Errorf("warnings: %v", warnings)
+	}
+}

@@ -28,15 +28,27 @@ func parseInterspersed(fs *flag.FlagSet, args []string) ([]string, error) {
 	}
 }
 
+// storedFlagNames are the flags that a graph file records (flagValues) and that a question with -C takes from it. A name that is not
+// here is never taken from a file. Add a name here when flagValues learns one (TestStoredFlagNamesCoverFlagValues fails otherwise).
+var storedFlagNames = map[string]bool{
+	"lang": true, "tests": true, "no-deps": true, "k": true, "dep-k": true, "scc-coarsen": true, "numeric-taint": true,
+	"max-implementations": true, "no-builtin-rules": true, "no-project-rules": true, "deterministic-only": true,
+	"no-builtin-sources-sinks": true, "char-taint": true, "body-replaced": true, "read-declared-bodies": true, "rules": true,
+}
+
 // adoptStoredFlags sets the analysis flags the person did not give to what the
 // file was made with, so that "-C" holds the source against the settings the
 // file has (a file made with -tests is not stale for a question without it). An explicit -rules wins over
 // the record.
+//
+// Only the flags that flagValues writes are adopted (storedFlagNames). The file is an input that cannot be trusted (-graph may name a
+// file that someone else made): a record that names -dart-extractor, -rust-extractor, -unsafe-host-exec or -isolation-read would make
+// rivus run a program of the file's choosing, or hand the build more than the person gave.
 func adoptStoredFlags(fs *flag.FlagSet, stored map[string]string) {
 	given := map[string]bool{}
 	fs.Visit(func(f *flag.Flag) { given[f.Name] = true })
 	for name, v := range stored {
-		if name == "patterns" || name == "allow-deps-under" || name == "dep-dir" || given[name] {
+		if name == "patterns" || name == "allow-deps-under" || name == "dep-dir" || given[name] || !storedFlagNames[name] {
 			continue
 		}
 		if name == "rules" || name == "body-replaced" {

@@ -56,19 +56,35 @@ type implFilter struct {
 	narrow    int
 	left      int
 	described string
+	// failed is set when a read of the database failed: the answer of that call is not remembered, and the answer of the query says so (once)
+	failed bool
+	nfail  int
+}
+
+// fail says that a read failed. The filter keeps the edge then (it cannot tell), and does not remember what it could not read.
+func (f *implFilter) fail(err error) {
+	f.nfail++
+	if f.failed {
+		return
+	}
+	f.failed = true
+	f.c.Warnings = append(f.c.Warnings, fmt.Sprintf("--only-impl %s: a read of the graph file failed (%v); the call sites that it could not read are not narrowed", strings.Join(f.types, ", "), err))
 }
 
 func (f *implFilter) names(id int64) bool {
 	if v, ok := f.method[id]; ok {
 		return v
 	}
+	fn, err := f.e.fn(id)
+	if err != nil {
+		f.fail(err)
+		return false
+	}
 	v := false
-	if fn, err := f.e.fn(id); err == nil {
-		for _, t := range f.types {
-			if receiverNames(fn.Symbol, t) {
-				v = true
-				break
-			}
+	for _, t := range f.types {
+		if receiverNames(fn.Symbol, t) {
+			v = true
+			break
 		}
 	}
 	f.method[id] = v
@@ -80,14 +96,20 @@ func (f *implFilter) narrows(callsite int64) bool {
 	if v, ok := f.site[callsite]; ok {
 		return v
 	}
-	v := false
-	if edges, err := f.e.db.EdgesOfCallSite(callsite); err == nil {
-		for i := range edges {
-			if f.names(edges[i].To) {
-				v = true
-				break
-			}
+	edges, err := f.e.db.EdgesOfCallSite(callsite)
+	if err != nil {
+		f.fail(err)
+		return false
+	}
+	v, before := false, f.nfail
+	for i := range edges {
+		if f.names(edges[i].To) {
+			v = true
+			break
 		}
+	}
+	if f.nfail != before {
+		return false // a candidate could not be read: the site is not counted, and asked again
 	}
 	f.site[callsite] = v
 	if v {

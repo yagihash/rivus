@@ -43,8 +43,9 @@ case "$GO_VERSION" in
 esac
 # the minor version of go.mod (1.27 of 1.27.4): what go_ok compares with
 want_minor=$(echo "$want_go" | cut -d. -f1,2)
-# ci.yml names the Dart SDK in `DART_SDK:` of the jobs (setup-dart reads it as `sdk: ${{ env.DART_SDK }}`); every one has to be the pin
-ci_dart=$(awk '$1 == "DART_SDK:" { print $2 }' .github/workflows/ci.yml | sort -u)
+# ci.yml names the Dart SDK in `DART_SDK:` of the jobs (setup-dart reads it as `sdk: ${{ env.DART_SDK }}`) and in a `sdk: X.Y.Z` of
+# setup-dart itself (the job model-diff); every one has to be the pin
+ci_dart=$(awk '$1 == "DART_SDK:" || ($1 == "sdk:" && $2 ~ /^[0-9]/) { print $2 }' .github/workflows/ci.yml | sort -u)
 [ "$ci_dart" = "$DART_VERSION" ] || { echo "dev-setup: ci.yml uses Dart $(echo $ci_dart) but DART_VERSION is $DART_VERSION: update the pin and its checksums"; exit 1; }
 
 tmp=$(mktemp -d)
@@ -58,8 +59,9 @@ download() {
 
 # --- Go ---
 # What is there counts when it is the minor version of go.mod (1.27) and not older than GO_VERSION (a newer patch is kept).
-# With GOTOOLCHAIN=auto (the default) an older go fetches the toolchain that go.mod names (1.27.0, checked by the Go checksum
-# database), which is older than the pin, so the pinned archive is installed then.
+# With GOTOOLCHAIN=auto (the default) an older go fetches the toolchain that go.mod names (go.mod says go 1.27.4: with the patch,
+# checked by the Go checksum database), so what `go version` then says is that one, and it counts when it is not older than the
+# pin; a go older than the minor of go.mod, or none, gets the pinned archive.
 go_ok() {
   local v
   v=$(go version 2>/dev/null | awk '{ sub(/^go/, "", $3); print $3 }')
