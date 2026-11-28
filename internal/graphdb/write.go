@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -163,7 +164,19 @@ type writer struct {
 }
 
 func write(path string, in *Input) (*Counts, error) {
-	db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(path)+"?_pragma=journal_mode(OFF)&_pragma=synchronous(OFF)&_pragma=locking_mode(EXCLUSIVE)&_pragma=temp_store(MEMORY)")
+	// the path goes into a URI (as Open does): a # ? or % in a directory name would cut it or be read as an escape, and the data would
+	// go to another file while the empty one that is here is moved into place
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+	u := url.URL{Scheme: "file", Path: filepath.ToSlash(abs)}
+	q := url.Values{}
+	for _, p := range []string{"journal_mode(OFF)", "synchronous(OFF)", "locking_mode(EXCLUSIVE)", "temp_store(MEMORY)"} {
+		q.Add("_pragma", p)
+	}
+	u.RawQuery = q.Encode()
+	db, err := sql.Open("sqlite", u.String())
 	if err != nil {
 		return nil, err
 	}
