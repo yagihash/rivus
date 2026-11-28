@@ -957,11 +957,9 @@ jobs:
           cache: false
       - run: scripts/build-release-archives.sh 0.0.0-check HEAD
 
-  # The lint of the workflows (it was the workflow ghalint.yml). Two jobs, named `ghalint` and `actionlint` as the checks that the ruleset
-  # required before, so that the ruleset is met with or without them in its list; `ci-ok` has both in `needs`. They run when a workflow or a
-  # local action changed (the filter `workflows`), and on a push to main, the weekly run and a run by hand; a skipped job passes in `ci-ok`.
-  # Both tools are downloaded from the release and checked with their attestation.
-  ghalint:
+  # The lint of the workflows and the local actions (ghalint and jactionlint, in `yagihash/actions/check-actions-security`). It runs when a
+  # workflow or a local action changed (the filter `workflows`); a skipped job passes in `ci-ok`.
+  check-actions-security:
     needs: changes
     if: needs.changes.outputs.workflows == 'true'
     runs-on: ubuntu-latest
@@ -976,62 +974,13 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install ghalint
-        run: |
-          # renovate: datasource=github-releases depName=suzuki-shunsuke/ghalint
-          version=v1.5.6
-          gh release download -R suzuki-shunsuke/ghalint "${version}" -p "ghalint_${version#v}_linux_amd64.tar.gz"
-          gh attestation verify "ghalint_${version#v}_linux_amd64.tar.gz" \
-            -R suzuki-shunsuke/ghalint \
-            --signer-workflow suzuki-shunsuke/go-release-workflow/.github/workflows/release.yaml
-          tar xzf "ghalint_${version#v}_linux_amd64.tar.gz" ghalint
-        env:
-          GH_TOKEN: ${{ github.token }}
-
-      - name: Run ghalint run
-        run: ./ghalint run
-
-      - name: Run ghalint act
-        if: ${{ !cancelled() }}
-        run: ./ghalint act
-
-
-  actionlint:
-    needs: changes
-    if: needs.changes.outputs.workflows == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: read
-      attestations: read # `gh attestation verify`
-    steps:
-      - uses: cicd-sensor/cicd-sensor-action@6511eb44c91d71b2b93d71193b1bf2cb18352f66 # v0.0.38
-
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Install actionlint
-        run: |
-          # renovate: datasource=github-releases depName=rhysd/actionlint
-          version=v1.7.12
-          gh release download -R rhysd/actionlint "${version}" -p "actionlint_${version#v}_linux_amd64.tar.gz"
-          gh attestation verify "actionlint_${version#v}_linux_amd64.tar.gz" --repo rhysd/actionlint
-          tar xzf "actionlint_${version#v}_linux_amd64.tar.gz" actionlint
-        env:
-          GH_TOKEN: ${{ github.token }}
-
-      - name: Run actionlint
-        run: |
-          ./actionlint \
-            -ignore 'label "ubuntu-26.04-arm" is unknown'
-
+      - uses: yagihash/actions/check-actions-security@9f208d1c7c8bdccc9fb897307a18b15375ee5000 # v0.2.0
 
   # The one check that a ruleset requires. Every job above is in `needs`: it fails when one of them failed or was cancelled, and passes
   # when they passed or were skipped (nothing that a test reads changed). A job added above has to be added here.
   ci-ok:
     if: always()
-    needs: [changes, go-packages, docs-tests, test, gcp-exec, sandbox, sandbox-linux, sandbox-e2e-linux, sandbox-e2e-darwin, model-diff, model-diff-changed, graph-check, cost-warn, release-build, ghalint, actionlint]
+    needs: [changes, go-packages, docs-tests, test, gcp-exec, sandbox, sandbox-linux, sandbox-e2e-linux, sandbox-e2e-darwin, model-diff, model-diff-changed, graph-check, cost-warn, release-build, check-actions-security]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
