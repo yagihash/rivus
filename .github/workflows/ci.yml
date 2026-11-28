@@ -31,9 +31,10 @@ env:
 # one (even without cancel-in-progress), so a push to main in a group of the branch would lose the run of the commit before it when
 # merges follow one another. The tests that run only on main (`TestDeterministic*`, the ones that -short skips) must run to the end for every commit.
 # To find which commit broke what, use the run of each commit. The weekly run has a group of its own (it is the run that has TestDogfood), and
-# so does every run by hand. (The group of a pull request is its branch; the others are made of the commit or the id of the run.)
+# so does every run by hand. (The group of a pull request is its number; the others are made of the commit or the id of the run. Not the name of the
+# branch: the name of a branch of a fork is the same as one of this repository, and its run would cancel the run of the branch here.)
 concurrency:
-  group: ci-${{ github.event_name == 'pull_request' && github.head_ref || github.event_name == 'schedule' && 'schedule' || github.event_name == 'push' && format('main-{0}', github.sha) || format('run-{0}', github.run_id) }}
+  group: ci-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.event_name == 'schedule' && 'schedule' || github.event_name == 'push' && format('main-{0}', github.sha) || format('run-{0}', github.run_id) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
