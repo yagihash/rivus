@@ -92,61 +92,54 @@ func TestDartExeSameIR(t *testing.T) {
 	}
 }
 
-// Two compiles into the same directory (two processes, or two tests) do not share the file that is written: before, both wrote
-// rivus-dart.tmp, and the one that failed removed what the other was writing, whose rename then failed. A fake `dart` stands for the
-// compiler. The two calls wait for each other by files (not by the time): the first writes its output and fails only once the second has
-// written its output, and the second ends well only once the first is failing. (The fake is read by /bin/sh, not run: a script that has just
-// been written and is run at once can fail with "text file busy" on Linux, when another process is forked at the same time.)
-func TestCompileDartExeTwiceAtOnce(t *testing.T) {
+// Each compile writes a file of its own (os.CreateTemp), not rivus-dart.tmp that two compiles share: before, the one that failed
+// removed what the other was writing, whose rename then failed (or a half-written program was moved into place). A fake `dart` stands
+// for the compiler: it records the file it was told to write (-o), and writes it. The compiles are one after the other: what is checked is
+// the name, not the timing (a test of the timing was not stable on the CI).
+func TestCompileDartExeWritesAFileOfItsOwn(t *testing.T) {
 	work := t.TempDir()
 	fake := filepath.Join(work, "fake-dart.sh")
-	script := `D='` + work + `'
-for a; do out=$a; done
-wait_for() { n=0; while [ ! -e "$1" ] && [ "$n" -lt 400 ]; do sleep 0.05; n=$((n + 1)); done; }
-echo built > "$out"
-if mkdir "$D/first" 2>/dev/null; then
-  : > "$D/first_wrote"
-  wait_for "$D/second_wrote"
-  : > "$D/first_failing"
-  exit 1
-fi
-: > "$D/second_wrote"
-wait_for "$D/first_failing"
-sleep 0.3  # a moment for the first compile to end and clean up: it only widens the window in which the shared file failed; the check does not need it
-exit 0
-`
+	log := filepath.Join(work, "outs")
+	script := "for a; do out=$a; done\necho \"$out\" >> '" + log + "'\necho built > \"$out\"\n"
 	if err := os.WriteFile(fake, []byte(script), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	src, _ := filepath.Abs("../../extractor/dart")
 	dir := filepath.Join(work, "exe")
-	errs := make(chan error, 2)
 	for i := 0; i < 2; i++ {
-		go func() {
-			_, err := compileDartExe(src, "/bin/sh "+fake, dir)
-			errs <- err
-		}()
-	}
-	var got []error
-	ok := 0
-	for i := 0; i < 2; i++ {
-		if err := <-errs; err == nil {
-			ok++
-		} else {
-			got = append(got, err)
+		if _, err := compileDartExe(src, "/bin/sh "+fake, dir); err != nil {
+			t.Fatal(err)
 		}
 	}
-	if ok != 1 {
-		t.Fatalf("%d of the 2 compiles succeeded, want the second one (the first fails): %v", ok, got)
+	b, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(got[0].Error(), "dart compile exe") {
-		t.Errorf("the one that failed did not fail in the compile: %v", got[0])
+	outs := strings.Fields(string(b))
+	if len(outs) != 2 || outs[0] == outs[1] {
+		t.Errorf("the two compiles were told to write %v: they share a file", outs)
+	}
+	for _, o := range outs {
+		if filepath.Base(o) == "rivus-dart.tmp" {
+			t.Errorf("the fixed name rivus-dart.tmp is back: %s", o)
+		}
 	}
 	if b, err := os.ReadFile(filepath.Join(dir, "rivus-dart")); err != nil || strings.TrimSpace(string(b)) != "built" {
 		t.Errorf("the executable: %q %v", b, err)
 	}
 	if ents, _ := os.ReadDir(dir); len(ents) != 1 {
 		t.Errorf("files are left in %s: %v", dir, ents)
+	}
+	// a compile that fails leaves nothing behind either
+	if err := os.WriteFile(fake, []byte("exit 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dir2 := filepath.Join(work, "exe2")
+	if _, err := compileDartExe(src, "/bin/sh "+fake, dir2); err == nil {
+		t.Error("a failed compile is an error")
+	}
+	if ents, _ := os.ReadDir(dir2); len(ents) != 0 {
+		t.Errorf("files are left after a failed compile: %v", ents)
 	}
 }
 
