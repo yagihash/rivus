@@ -312,6 +312,9 @@ type expanded struct {
 	// matches (fieldsink.go).
 	Enclosing bool
 	Rel       string
+	// Unguarded: the same element was found in another cell too, and the guards of the two chains differ: the guards of
+	// the chain of From do not describe it (the element is there under either condition).
+	Unguarded bool
 }
 
 // expandElem translates an element of a callee summary using the actual
@@ -348,38 +351,45 @@ func (s *state) expandBuf(n int) []expanded {
 	return s.expBuf[used : used : used+n]
 }
 
-// elemSeen is a set of elements: a list when it is small (most are), a map when it is not.
+// elemSeen is a set of elements, each with the place of what was made of it in the list of the expansion: a list when
+// it is small (most are), a map when it is not.
 type elemSeen struct {
 	list []Elem
-	m    map[Elem]bool
+	pos  []int
+	m    map[Elem]int
 }
 
 const elemSeenList = 16
 
 func newElemSeen(total int) *elemSeen {
 	if total > elemSeenList {
-		return &elemSeen{m: make(map[Elem]bool, total)}
+		return &elemSeen{m: make(map[Elem]int, total)}
 	}
 	return &elemSeen{}
 }
 
-func (q *elemSeen) has(e Elem) bool {
+// at is the place of the element in the expansion, or -1.
+func (q *elemSeen) at(e Elem) int {
 	if q.m != nil {
-		return q.m[e]
+		if i, ok := q.m[e]; ok {
+			return i
+		}
+		return -1
 	}
-	for _, x := range q.list {
+	for k, x := range q.list {
 		if x == e {
-			return true
+			return q.pos[k]
 		}
 	}
-	return false
+	return -1
 }
 
-func (q *elemSeen) add(e Elem) {
+func (q *elemSeen) add(e Elem, at int) {
 	if q.m != nil {
-		q.m[e] = true
-	} else if !q.has(e) {
+		q.m[e] = at
+	} else if q.at(e) < 0 {
 		q.list = append(q.list, e)
+		q.pos = append(q.pos, at)
 	}
 }
 
@@ -425,22 +435,41 @@ func (s *state) expandParam(e Elem, argv []*sg.Value, keepAll bool) []expanded {
 			if f.E.Kind == Real {
 				for _, x := range applyMods(f.E, e.Mods(), s.eng.rules) {
 					x = x.WithChar(x.char || e.char)
-					if !seen.has(x) || keepAll {
-						seen.add(x)
+					if k := seen.at(x); k < 0 || keepAll {
+						seen.add(x, len(out))
 						out = append(out, expanded{E: x, From: f, Enclosing: enclosing, Rel: f.Rel})
+					} else {
+						s.dropOtherGuards(&out[k], f)
 					}
 				}
 				continue
 			}
 			x := f.E
 			x = x.WithMods(joinMods(f.E.Mods(), e.Mods())).WithChar(f.E.char || e.char)
-			if !seen.has(x) || keepAll {
-				seen.add(x)
+			if k := seen.at(x); k < 0 || keepAll {
+				seen.add(x, len(out))
 				out = append(out, expanded{E: x, From: f, Enclosing: enclosing, Rel: f.Rel})
+			} else {
+				s.dropOtherGuards(&out[k], f)
 			}
 		}
 	}
 	return out
+}
+
+// dropOtherGuards is for an element that was found in a second cell (the first is kept, with its reason): when the chain
+// of that cell has other guards, the guards of the chain that is kept do not describe the element. The same is done
+// where an element comes to a cell with other guards (add).
+func (s *state) dropOtherGuards(kept *expanded, f *found) {
+	k := kept.From
+	if kept.Unguarded || k == nil || (k.Cell == f.Cell && k.Orig == f.Orig) {
+		return
+	}
+	og, oo := s.guardsOfChain(k.Cell, k.Orig)
+	ng, no := s.guardsOfChain(f.Cell, f.Orig)
+	if oo || no || !sameGuards(og, ng) {
+		kept.Unguarded = true
+	}
 }
 
 // applySummary applies the summary of a callee at a call site.
@@ -629,7 +658,7 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 				if x.From != nil {
 					nf = ref{x.From.Cell, x.From.Orig}
 				}
-				if len(oe.Guards) == 0 && s.addsNothing(dsts, x.E, nf, x.From != nil, len(extra) == 0) {
+				if len(oe.Guards) == 0 && !x.Unguarded && s.addsNothing(dsts, x.E, nf, x.From != nil, len(extra) == 0) {
 					continue
 				}
 				var w *why
@@ -637,6 +666,9 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 					w = newWhyFrom(s.fn, desc, x.From.Cell, x.From.Orig)
 				} else {
 					w = &why{fn: s.fn, desc: desc}
+				}
+				if x.Unguarded {
+					w.markUnguarded()
 				}
 				w.pos, w.steps = packPos(cc.in.Pos), oe.Steps
 				if len(notes) > 0 {
@@ -746,7 +778,7 @@ func (s *state) applySummary(cc *callCtx, fn *sg.Func, bindings []*sg.Value, not
 			steps = cat(cat(steps, leaf(call)), sr.Steps)
 			var chain []Guard
 			var over bool
-			if x.From != nil {
+			if x.From != nil && !x.Unguarded {
 				chain, over = s.guardsOfChain(x.From.Cell, x.From.Orig)
 			}
 			var gs []Guard

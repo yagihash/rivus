@@ -303,6 +303,9 @@ func TestImplementations(t *testing.T) { checkCase(t, "impl") }
 
 func TestFunctionValues(t *testing.T) { checkCase(t, "funcvalue") }
 
+// The same element found in two cells of the caller, one of them behind a guard: the guard does not stay.
+func TestGuardOfElementInTwoCells(t *testing.T) { checkCase(t, "guarddup") }
+
 // The rules apply to the function a call of a function value reaches: yagihash/rivus #54.
 func TestFunctionValueSinks(t *testing.T) { checkCase(t, "funcsink") }
 
