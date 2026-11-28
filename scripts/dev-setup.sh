@@ -41,8 +41,11 @@ case "$GO_VERSION" in
   "$want_go" | "$want_go".*) ;;
   *) echo "dev-setup: go.mod says go $want_go but GO_VERSION is $GO_VERSION: update the pin and its checksums"; exit 1 ;;
 esac
-ci_dart=$(awk '/dart-lang\/setup-dart/ { f = 1 } f && $1 == "sdk:" { print $2; exit }' .github/workflows/ci.yml)
-[ "$ci_dart" = "$DART_VERSION" ] || { echo "dev-setup: ci.yml uses Dart $ci_dart but DART_VERSION is $DART_VERSION: update the pin and its checksums"; exit 1; }
+# the minor version of go.mod (1.27 of 1.27.4): what go_ok compares with
+want_minor=$(echo "$want_go" | cut -d. -f1,2)
+# ci.yml names the Dart SDK in `DART_SDK:` of the jobs (setup-dart reads it as `sdk: ${{ env.DART_SDK }}`); every one has to be the pin
+ci_dart=$(awk '$1 == "DART_SDK:" { print $2 }' .github/workflows/ci.yml | sort -u)
+[ "$ci_dart" = "$DART_VERSION" ] || { echo "dev-setup: ci.yml uses Dart $(echo $ci_dart) but DART_VERSION is $DART_VERSION: update the pin and its checksums"; exit 1; }
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
@@ -61,7 +64,7 @@ go_ok() {
   local v
   v=$(go version 2>/dev/null | awk '{ sub(/^go/, "", $3); print $3 }')
   [ -n "$v" ] || return 1
-  case "$v" in "$want_go".*) ;; *) return 1 ;; esac
+  case "$v" in "$want_minor".*) ;; *) return 1 ;; esac
   [ "${v##*.}" -ge "${GO_VERSION##*.}" ] 2>/dev/null
 }
 if ! go_ok; then
