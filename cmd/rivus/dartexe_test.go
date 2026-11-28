@@ -92,6 +92,57 @@ func TestDartExeSameIR(t *testing.T) {
 	}
 }
 
+// Each compile writes a file of its own (os.CreateTemp), not rivus-dart.tmp that two compiles share: before, the one that failed
+// removed what the other was writing, whose rename then failed (or a half-written program was moved into place). A fake `dart` stands
+// for the compiler: it records the file it was told to write (-o), and writes it. The compiles are one after the other: what is checked is
+// the name, not the timing (a test of the timing was not stable on the CI).
+func TestCompileDartExeWritesAFileOfItsOwn(t *testing.T) {
+	work := t.TempDir()
+	fake := filepath.Join(work, "fake-dart.sh")
+	log := filepath.Join(work, "outs")
+	script := "for a; do out=$a; done\necho \"$out\" >> '" + log + "'\necho built > \"$out\"\n"
+	if err := os.WriteFile(fake, []byte(script), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	src, _ := filepath.Abs("../../extractor/dart")
+	dir := filepath.Join(work, "exe")
+	for i := 0; i < 2; i++ {
+		if _, err := compileDartExe(src, "/bin/sh "+fake, dir); err != nil {
+			t.Fatal(err)
+		}
+	}
+	b, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outs := strings.Fields(string(b))
+	if len(outs) != 2 || outs[0] == outs[1] {
+		t.Errorf("the two compiles were told to write %v: they share a file", outs)
+	}
+	for _, o := range outs {
+		if filepath.Base(o) == "rivus-dart.tmp" {
+			t.Errorf("the fixed name rivus-dart.tmp is back: %s", o)
+		}
+	}
+	if b, err := os.ReadFile(filepath.Join(dir, "rivus-dart")); err != nil || strings.TrimSpace(string(b)) != "built" {
+		t.Errorf("the executable: %q %v", b, err)
+	}
+	if ents, _ := os.ReadDir(dir); len(ents) != 1 {
+		t.Errorf("files are left in %s: %v", dir, ents)
+	}
+	// a compile that fails leaves nothing behind either
+	if err := os.WriteFile(fake, []byte("exit 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dir2 := filepath.Join(work, "exe2")
+	if _, err := compileDartExe(src, "/bin/sh "+fake, dir2); err == nil {
+		t.Error("a failed compile is an error")
+	}
+	if ents, _ := os.ReadDir(dir2); len(ents) != 0 {
+		t.Errorf("files are left after a failed compile: %v", ents)
+	}
+}
+
 // The hashes of the source of the extractors are set at build time (-ldflags -X, `make build`); a build without them leaves "unknown", the
 // value that internal/extractorhash names, and the name of the variable is the one that the build gives (a renamed variable would be an
 // -X that sets nothing, without an error).
