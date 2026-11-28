@@ -220,6 +220,10 @@ func (m *memSource) Each(fn func(ref Ref, f *Func) error) error {
 
 func (m *memSource) Drop(ref Ref) {
 	if ref.Seq >= 0 && ref.Seq < len(m.p.Funcs) {
+		// the index of Lookup, if it was built, does not keep the number of a function that is gone (a Func of it is an error)
+		if f := m.p.Funcs[ref.Seq]; f != nil && m.last != nil && m.last[f.ID] == ref.Seq {
+			delete(m.last, f.ID)
+		}
 		m.p.Funcs[ref.Seq] = nil
 	}
 }

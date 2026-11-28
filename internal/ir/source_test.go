@@ -72,6 +72,24 @@ func TestMemSourceDropAndRelease(t *testing.T) {
 	}
 }
 
+// Lookup does not give the number of a function that was dropped (as DiskSource does): Get of it would panic.
+func TestMemSourceLookupAfterDrop(t *testing.T) {
+	src := MemSource(memProgram())
+	ref, ok := src.Lookup("b.G") // builds the index
+	if !ok {
+		t.Fatal("b.G is there")
+	}
+	src.Drop(ref)
+	if r, ok := src.Lookup("b.G"); ok {
+		t.Fatalf("Lookup gives %+v for a function that was dropped", r)
+	}
+	last, _ := src.Lookup("a.F")
+	src.Drop(last)
+	if r, ok := src.Lookup("a.F"); ok {
+		t.Fatalf("Lookup gives %+v for the last a.F, which was dropped", r)
+	}
+}
+
 func TestMustPanicsWithReadError(t *testing.T) {
 	defer func() {
 		var re *ReadError
