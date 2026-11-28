@@ -42,6 +42,14 @@ propagators:
 		`with: [{param: 0, from: recv, extra: 1}]`,
 		`with: [{param: -1, from: recv}]`,
 		`with: recv`,
+		// from is a position or none: a list or a mapping, and an empty value, were read as none (the parameter left empty, with no word)
+		`with: [{param: 0, from: [recv]}]`,
+		`with: [{param: 0, from: {a: b}}]`,
+		`with: [{param: 0, from: }]`,
+		`with: [{param: 0, from: ""}]`,
+		// a parameter given twice is found also when the first gave none (it left "" in the list)
+		`with: [{param: 0, from: none}, {param: 0, from: recv}]`,
+		`with: [{param: 0, from: none}, {param: 0, from: none}]`,
 	} {
 		_, err := Parse(strings.NewReader("ruleset: t\npropagators:\n  - symbol: a.F\n    calls: [{fn: arg0, "+bad+"}]\n"), "test")
 		if err == nil {
