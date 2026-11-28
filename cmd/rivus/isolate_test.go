@@ -22,6 +22,38 @@ func TestMountable(t *testing.T) {
 	}
 }
 
+// The cargo configuration and the credentials in the CARGO_HOME are removed also when the path of the CARGO_HOME has [ * or ? in it: they made
+// filepath.Glob fail (or match other files), the error was dropped, and the files stayed for the stage that has a network.
+func TestDropConfigOfCargoHomeWithMetacharactersInThePath(t *testing.T) {
+	for _, name := range []string{"plain", "x[y", "a*b", "q?r"} {
+		home := filepath.Join(t.TempDir(), name)
+		if err := os.MkdirAll(filepath.Join(home, "registry"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		for _, f := range []string{"config.toml", "config", "credentials.toml", "credentials"} {
+			if err := os.WriteFile(filepath.Join(home, f), []byte("x"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		var said strings.Builder
+		if err := dropConfigOfCargoHome(home, &said); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		for _, f := range []string{"config.toml", "config", "credentials.toml", "credentials"} {
+			if _, err := os.Lstat(filepath.Join(home, f)); err == nil {
+				t.Errorf("%s: %s is still there", name, f)
+			}
+		}
+		if _, err := os.Lstat(filepath.Join(home, "registry")); err != nil {
+			t.Errorf("%s: the registry is removed: %v", name, err)
+		}
+	}
+	// a CARGO_HOME that is not there yet is nothing
+	if err := dropConfigOfCargoHome(filepath.Join(t.TempDir(), "none"), &strings.Builder{}); err != nil {
+		t.Errorf("not there: %v", err)
+	}
+}
+
 // With no HOME nothing says that the directory does not hold the home directory: it is refused, not let through (not parallel: the
 // environment is changed).
 func TestMountableWithoutHome(t *testing.T) {
