@@ -832,14 +832,20 @@ class _Lower extends RecursiveAstVisitor<void> {
 
   /// A function that cannot be lowered (a null that the code did not expect, an analyzer that answers
   /// otherwise than the extractor was written for) is said in the stream, and costs that function only:
-  /// not the whole package (ADR-007: what could not be expressed is recorded, not dropped).
+  /// not the whole package (ADR-007: what could not be expressed is recorded, not dropped). It is said as `fn_skipped`
+  /// (as the Rust extractor does), so that a call of it is followed as a call to a function that had a body; the reason is
+  /// one line. The stack trace holds the paths of this machine: it goes to the standard error, not into the stream.
   void _guarded(String id, void Function() lower) {
     try {
       if (prog.failIn != null && id.contains(prog.failIn!)) throw StateError('injected failure in $id');
       lower();
     } catch (e, st) {
-      final where = st.toString().split('\n').take(3).join(' | ');
-      prog.out.loadError(id, 'the function could not be read by the extractor and is left out: $e ($where)');
+      final why = e.toString().replaceAll(RegExp(r'\s+'), ' ').trim();
+      stderr.writeln('rivus_dart: skipped $id: $why (${st.toString().split('\n').take(3).join(' | ')})');
+      final cut = id.indexOf('/');
+      final unitName = id.startsWith('package:') && cut > 0 ? id.substring(0, cut) : unit.file;
+      prog.out.fnSkipped(unitName, id, 'the function could not be read by the extractor and is left out: ${why.length > 300 ? '${why.substring(0, 300)}...' : why}',
+          dependency: unit.dep);
     }
   }
 

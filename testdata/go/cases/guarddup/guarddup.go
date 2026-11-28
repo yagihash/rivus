@@ -32,3 +32,32 @@ func CallerTrue() {
 	r := inner(true)
 	lib.Sink(r.B) // @sink(x)
 }
+
+// The same through an interface method: a call that goes to an implementation has the notes of the dispatch (the call is not
+// exact), and the hop of the call that gets the element must still be the one that is not guarded.
+type ider interface{ id(s S) S }
+
+type impl struct{}
+
+func (impl) id(s S) S { return s }
+
+func innerDyn(flag bool, d ider) S {
+	var s S
+	s.B = get()
+	a := ""
+	if flag {
+		a = get()
+	}
+	s.A = a
+	return d.id(s)
+}
+
+func CallerDyn() {
+	r := innerDyn(false, impl{})
+	lib.Sink(r.B) // @sink(x)
+}
+
+func CallerDynTrue() {
+	r := innerDyn(true, impl{})
+	lib.Sink(r.B) // @sink(x)
+}

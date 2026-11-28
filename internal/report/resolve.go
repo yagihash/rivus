@@ -88,9 +88,13 @@ func validate(list []*Bookmark) error {
 		if b.IsFinding() {
 			// the source and the sink of a finding are found by their fingerprints, as the sites are: with none, the answer would be
 			// "not found" (the code was read, and the place is not there), which nothing was found out of
-			for role, s := range map[string]*Bookmark{"source": b.Source, "sink": b.Sink} {
-				if len(s.Fingerprint) == 0 {
-					return fmt.Errorf("bookmark %s: its %s has no fingerprint: pass the finding exactly as rivus printed it", b.ID, role)
+			// (in this order: the error is the same on every run)
+			for _, r := range []struct {
+				role string
+				site *Bookmark
+			}{{"source", b.Source}, {"sink", b.Sink}} {
+				if len(r.site.Fingerprint) == 0 {
+					return fmt.Errorf("bookmark %s: its %s has no fingerprint: pass the finding exactly as rivus printed it", b.ID, r.role)
 				}
 			}
 		}

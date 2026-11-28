@@ -19,6 +19,8 @@ var (
 	testPrevious  = ""
 	testAPIFails  = false
 	testGuardList = ""
+	// testCheckoutList is the list that the checkout holds (a branch that removed a line of it): "" is a copy of the real one.
+	testCheckoutList = ""
 )
 
 // lastMergeArgs is what the fake `gh pr merge` of the last runMergePR was given.
@@ -47,7 +49,7 @@ func runMergeChecks(t *testing.T, checks, runs string, runsCode int, env ...stri
 func runMergePR(t *testing.T, commits string, zooCode int, checks, runs string, runsCode int, env ...string) (string, error, bool) {
 	t.Helper()
 	bin := t.TempDir()
-	for _, tool := range []string{"bash", "python3", "cat", "cut", "touch", "env", "sed"} {
+	for _, tool := range []string{"bash", "python3", "cat", "cut", "touch", "env", "sed", "mktemp", "rm"} {
 		if p, err := exec.LookPath(tool); err == nil {
 			os.Symlink(p, filepath.Join(bin, tool))
 		}
@@ -86,9 +88,6 @@ esac
 	if err := os.WriteFile(filepath.Join(bin, "gh"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(bin, "git"), []byte("#!/bin/bash\nexit 0\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
 	src, err := os.ReadFile("merge-pr.sh")
 	if err != nil {
 		t.Fatal(err)
@@ -97,19 +96,34 @@ esac
 	sdir := filepath.Join(root, "scripts")
 	os.MkdirAll(sdir, 0o755)
 	os.MkdirAll(filepath.Join(root, ".github"), 0o755)
-	list := filepath.Join(root, ".github", "guardrail-paths")
+	// the list of origin/main (what the script reads: testGuardList), and the list of the checkout (what it must NOT read: testCheckoutList,
+	// else a copy of the real one)
+	list := filepath.Join(root, "origin-main-guardrail-paths")
+	checkout := filepath.Join(root, ".github", "guardrail-paths")
+	real, err := os.ReadFile("../.github/guardrail-paths")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if testCheckoutList != "" {
+		os.WriteFile(checkout, []byte(testCheckoutList), 0o644)
+	} else {
+		os.WriteFile(checkout, real, 0o644)
+	}
 	switch testGuardList {
 	case "":
-		real, err := os.ReadFile("../.github/guardrail-paths")
-		if err != nil {
-			t.Fatal(err)
-		}
 		os.WriteFile(list, real, 0o644)
 	case "-":
 	case "dir":
 		os.MkdirAll(list, 0o755)
 	default:
 		os.WriteFile(list, []byte(testGuardList), 0o644)
+	}
+	// the fake of the version control tool: `show origin/main:.github/guardrail-paths` gives the list of origin/main (the file of the root made
+	// above; when it is not a file the call fails, as when origin/main has none); every other call succeeds. The list of the checkout is not
+	// what the script reads.
+	fake := "#!/bin/bash\nfor a; do if [ \"$a\" = show ]; then cat '" + list + "'; exit; fi; done\nexit 0\n"
+	if err := os.WriteFile(filepath.Join(bin, "git"), []byte(fake), 0o755); err != nil {
+		t.Fatal(err)
 	}
 	sh := filepath.Join(sdir, "merge-pr.sh")
 	os.WriteFile(sh, src, 0o755)
@@ -327,5 +341,18 @@ func TestMergeGuardrailRenamedAway(t *testing.T) {
 	out, err, merged = runMerge(t, okRuns, 0)
 	if err == nil || merged || !strings.Contains(out, "renamed") {
 		t.Errorf("the list of renames cannot be read: err = %v, merged = %v\n%s", err, merged, out)
+	}
+}
+
+// The list of the guardrail is the one of origin/main, not the one of the checkout: a branch that removes a line of the list, and is checked out
+// when `make merge` runs, must not be checked against the list without that line.
+func TestMergeGuardrailListIsOfOriginMain(t *testing.T) {
+	oc, ol, ok := testChanged, testGuardList, testCheckoutList
+	t.Cleanup(func() { testChanged, testGuardList, testCheckoutList = oc, ol, ok })
+	// the checkout's list has lost every line (a PR that changes scripts/merge-pr.sh and the list); origin/main still has them
+	testChanged, testGuardList, testCheckoutList = "scripts/merge-pr.sh\n.github/guardrail-paths\n", "", "# nothing here\nREADME.md\n"
+	out, err, merged := runMerge(t, okRuns, 0)
+	if err == nil || merged || !strings.Contains(out, refused) || !strings.Contains(out, "scripts/merge-pr.sh") {
+		t.Errorf("the list of the checkout was read: err = %v, merged = %v\n%s", err, merged, out)
 	}
 }

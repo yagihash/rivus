@@ -271,7 +271,7 @@ func TestDartPathPackagesUnderAllowedDirectoryAreTheProject(t *testing.T) {
 }
 
 // A function that cannot be lowered costs that function, not the package: it is said in the stream
-// (a load_error), and the rest is written (yagihash/rivus #37). RIVUS_DART_FAIL_IN makes one fail, as
+// (an fn_skipped, as the Rust extractor says it), and the rest is written (yagihash/rivus #37). RIVUS_DART_FAIL_IN makes one fail, as
 // an input that the extractor does not expect would.
 func TestDartExtractorLeavesOutAFunctionThatFails(t *testing.T) {
 	t.Parallel()
@@ -303,13 +303,22 @@ func TestDartExtractorLeavesOutAFunctionThatFails(t *testing.T) {
 		}
 		others++
 	}
-	for _, e := range prog.LoadErrors {
-		if strings.HasSuffix(e.Package, "review_issues.dart#hiddenDirectory") && strings.Contains(e.Message, "left out") {
+	for _, e := range prog.FnSkipped {
+		if strings.HasSuffix(e.Func, "review_issues.dart#hiddenDirectory") && strings.Contains(e.Why, "left out") {
 			failed++
+			// one line, and no stack trace (it holds the paths of this machine)
+			if strings.ContainsAny(e.Why, "\n|") || strings.Contains(e.Why, "#0") {
+				t.Errorf("the reason is not one line, or holds a stack trace: %q", e.Why)
+			}
 		}
 	}
 	if failed != 1 {
-		t.Errorf("%d load_errors for the function that failed, want 1: %+v", failed, prog.LoadErrors)
+		t.Errorf("%d fn_skipped for the function that failed, want 1: %+v", failed, prog.FnSkipped)
+	}
+	for _, e := range prog.LoadErrors {
+		if strings.HasSuffix(e.Package, "review_issues.dart#hiddenDirectory") {
+			t.Errorf("the function is said as a load_error too: %+v", e)
+		}
 	}
 	if others < 100 {
 		t.Errorf("only %d functions were written: the rest of the package is lost", others)

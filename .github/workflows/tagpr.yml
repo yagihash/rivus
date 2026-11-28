@@ -7,8 +7,14 @@ on:
 
 permissions: {}
 
+# 同時に動くのは 1 つ。待てるのは 1 つだけで、新しい実行が来ると、待っていた実行は捨てられる。だから、リリース PR のマージの push
+# （マージコミットのメッセージが "Merge pull request #N from <owner>/tagpr-from-<版>"）は、自分だけの group（コミットの SHA）で動かす。
+# 同じ group に入れると、続けてマージされた別の PR の実行に置き換えられて捨てられ、タグが打たれない（tagpr は、チェックアウトした
+# コミットがリリース PR のマージのときだけ、タグを打つ。あとの実行では、そのマージは HEAD でなくなっている）。
+# 別の方法（squash、rebase）でマージしたときは、メッセージに名前が出ないので、今までどおり同じ group になる。
+# workflow_dispatch は head_commit が無いので、同じ group。
 concurrency:
-  group: tagpr
+  group: tagpr-${{ contains(github.event.head_commit.message, '/tagpr-from-') && github.sha || 'main' }}
   cancel-in-progress: false
 
 jobs:
