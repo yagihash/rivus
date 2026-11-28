@@ -19,20 +19,29 @@ Future<void> main(List<String> args) async {
   // --dep-dir DIR (repeatable): a directory of the project (relative to the root, or absolute) whose files are read as dependencies
   final depDirs = <String>[];
   final rest = <String>[];
+  // An option that takes a value and is the last argument has none, and an option that is not known is not a directory:
+  // both stop with the status 2 (the usage), not read as the directory to analyse.
+  Never usage(String why) {
+    stderr.writeln('rivus_dart: $why');
+    stderr.writeln('usage: rivus_dart [--no-deps] [--include-tests] [--allow-deps-under DIR]... [--dep-dir DIR]... [--body-replaced PACKAGE]... [directory]');
+    exit(2);
+  }
+
   for (var i = 0; i < args.length; i++) {
     if (args[i] == '--no-deps' || args[i] == '--include-tests') continue;
-    if (args[i] == '--allow-deps-under' && i + 1 < args.length) {
-      allow.add(args[++i]);
+    if (args[i] == '--allow-deps-under' || args[i] == '--dep-dir' || args[i] == '--body-replaced') {
+      if (i + 1 >= args.length) usage('${args[i]} needs a value');
+      final v = args[++i];
+      if (args[i - 1] == '--allow-deps-under') {
+        allow.add(v);
+      } else if (args[i - 1] == '--dep-dir') {
+        depDirs.add(v);
+      } else {
+        replaced.add(v);
+      }
       continue;
     }
-    if (args[i] == '--dep-dir' && i + 1 < args.length) {
-      depDirs.add(args[++i]);
-      continue;
-    }
-    if (args[i] == '--body-replaced' && i + 1 < args.length) {
-      replaced.add(args[++i]);
-      continue;
-    }
+    if (args[i].startsWith('--')) usage('unknown option ${args[i]}');
     rest.add(args[i]);
   }
   final root = rest.isEmpty ? '.' : rest.first;
