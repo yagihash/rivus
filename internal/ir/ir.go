@@ -258,8 +258,11 @@ type Func struct {
 	Roots []BlockID `json:"roots,omitempty"`
 	Pos   Pos       `json:"pos,omitempty"`
 	// File is the file the positions of the function are in, unless one
-	// says otherwise: a position without a file has this one. It keeps the
-	// stream small (a path is most of a position).
+	// says otherwise: a position that says where (an offset, a line, a column
+	// or a length) and has no file has this one. It keeps the stream small (a
+	// path is most of a position). A position that has only a file is read as
+	// it is; a writer that gives a position with numbers and no file in a
+	// function that has a file gets it back with the file of the function.
 	File     string `json:"file,omitempty"`
 	Exported bool   `json:"exported,omitempty"`
 	// Entry marks where the program starts: main, and the initialisation of a
