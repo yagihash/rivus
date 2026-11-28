@@ -467,7 +467,10 @@ func (s *state) guardsOfChainFrom(w *why, start ref) (gs []Guard, overflow bool)
 			break
 		}
 		if w.unguarded() {
-			return nil, false
+			// The guards of the hops before this one (further from the element) do not describe it: it came here by
+			// other ways too. The guards that were collected so far (nearer to the element) are of the hops that it
+			// must go through, and they hold.
+			break
 		}
 		if len(w.guards()) > 0 {
 			lists = append(lists, w.guards())
