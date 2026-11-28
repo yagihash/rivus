@@ -192,6 +192,32 @@ propagators:
 	}
 }
 
+// A global that an LLM decided holds nothing is left out too: with it, the run is not the deterministic one (a read of the variable
+// would give no taint) and the count of the rules left out is short.
+func TestWithoutOriginLeavesTheLLMGlobalsOut(t *testing.T) {
+	rs, err := Parse(strings.NewReader(`
+globals:
+  - symbol: os.Stdout
+    holds: nothing
+  - symbol: os.Stderr
+    holds: nothing
+    origin: llm
+    decided_at: d
+    rationale: r
+    model_version: m
+`), "x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := WithoutOrigin(OriginLLM, rs)
+	if r.IgnoredModels != 1 {
+		t.Errorf("ignored = %d, want 1", r.IgnoredModels)
+	}
+	if !r.GlobalsHoldNothing["os.Stdout"] || r.GlobalsHoldNothing["os.Stderr"] {
+		t.Errorf("only the global decided by an LLM must be gone: %v", r.GlobalsHoldNothing)
+	}
+}
+
 // A trailing `---`, or one before the rules, is not a second document of rules.
 func TestParseEmptyExtraDocuments(t *testing.T) {
 	for name, src := range map[string]string{
