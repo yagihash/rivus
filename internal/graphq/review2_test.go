@@ -142,3 +142,28 @@ func TestRefStepPositionPrecision(t *testing.T) {
 		t.Errorf("%+v", st)
 	}
 }
+
+// A place at a column where no call begins is moved to the call that began before it. With --include-builtin the builtin calls are calls too: the
+// one that began last is taken, a builtin included (before, a builtin was never taken, and the call before it was, without a word).
+func TestPositionBetweenCallsTakesTheLastCallThatBeganBuiltinIncluded(t *testing.T) {
+	e := build(t, []fnDef{
+		{"S", []call{{"s.go", 3, 1, "", "B", nil}, {"s.go", 3, 5, "builtin", "len", nil}}},
+		{"B", nil},
+	})
+	// column 7: no call begins there; `len` (column 5) began last
+	r, err := e.Callees("s.go:3:7", graphq.Options{IncludeBuiltin: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.CallSite == nil || r.CallSite.At != "s.go:3:5" {
+		t.Errorf("with --include-builtin the call that began last is the builtin at column 5: %+v", r.CallSite)
+	}
+	// without it the builtin is not a call that the answer has: the one before it is taken
+	r, err = e.Callees("s.go:3:7", graphq.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.CallSite == nil || r.CallSite.At != "s.go:3:1" {
+		t.Errorf("without --include-builtin the call at column 1 is taken: %+v", r.CallSite)
+	}
+}

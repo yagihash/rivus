@@ -140,7 +140,7 @@ func (e *Engine) resolvePos(spec, file string, line, col int, includeBuiltin boo
 	}
 	note := ""
 	if col > 0 && len(rows) == 0 {
-		if rows, err = e.db.CallRowsBefore(file, line, col); err != nil {
+		if rows, err = e.db.CallRowsBefore(file, line, col, includeBuiltin); err != nil {
 			return nil, err
 		}
 		if len(rows) > 0 {
