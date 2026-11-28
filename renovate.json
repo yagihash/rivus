@@ -1,31 +1,8 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended",
-    ":dependencyDashboard",
-    ":semanticCommits",
-    ":timezone(Asia/Tokyo)",
-    "helpers:pinGitHubActionDigestsToSemver",
-    "mergeConfidence:all-badges"
+    "github>yagihash/renovate-config"
   ],
-  "labels": [
-    "dependencies"
-  ],
-  "reviewers": [
-    "yagihash"
-  ],
-  "schedule": [
-    "after 8pm on friday"
-  ],
-  "prHourlyLimit": 0,
-  "automerge": true,
-  "automergeType": "pr",
-  "platformAutomerge": true,
-  "rangeStrategy": "pin",
-  "minimumReleaseAge": "7 days",
-  "internalChecksFilter": "strict",
-  "prCreation": "not-pending",
-  "osvVulnerabilityAlerts": true,
   "ignorePaths": [
     "**/node_modules/**",
     "bench/**",
@@ -33,40 +10,7 @@
     "extractor/*/test/**",
     ".claude/**"
   ],
-  "lockFileMaintenance": {
-    "enabled": true,
-    "schedule": [
-      "after 8pm on friday"
-    ]
-  },
   "packageRules": [
-    {
-      "description": "Never automerge major updates",
-      "matchUpdateTypes": [
-        "major"
-      ],
-      "automerge": false
-    },
-    {
-      "description": "Pin GitHub Actions to commit SHA for security",
-      "matchManagers": [
-        "github-actions"
-      ],
-      "pinDigests": true
-    },
-    {
-      "description": "Group and automerge GitHub Actions digest/minor/patch updates",
-      "groupName": "GitHub Actions",
-      "matchManagers": [
-        "github-actions"
-      ],
-      "matchUpdateTypes": [
-        "minor",
-        "patch",
-        "digest"
-      ],
-      "automerge": true
-    },
     {
       "description": "Group golang.org/x/* updates together",
       "groupName": "golang.org/x packages",
@@ -77,17 +21,6 @@
       "matchPackageNames": [
         "golang.org/x{/,}**"
       ]
-    },
-    {
-      "description": "Automerge Go module minor/patch updates",
-      "matchManagers": [
-        "gomod"
-      ],
-      "matchUpdateTypes": [
-        "minor",
-        "patch"
-      ],
-      "automerge": true
     },
     {
       "description": "The go directive of go.mod is the floor of the toolchain: never automerge",
@@ -107,33 +40,11 @@
       "rangeStrategy": "update-lockfile"
     },
     {
-      "description": "Automerge Rust crate minor/patch updates",
-      "matchManagers": [
-        "cargo"
-      ],
-      "matchUpdateTypes": [
-        "minor",
-        "patch"
-      ],
-      "automerge": true
-    },
-    {
       "description": "Dart (extractor/dart): bump the constraints in pubspec.yaml together with pubspec.lock",
       "matchManagers": [
         "pub"
       ],
       "rangeStrategy": "bump"
-    },
-    {
-      "description": "Automerge Dart package minor/patch updates",
-      "matchManagers": [
-        "pub"
-      ],
-      "matchUpdateTypes": [
-        "minor",
-        "patch"
-      ],
-      "automerge": true
     },
     {
       "description": "The Dart SDK of CI moves with package:analyzer: never automerge",
@@ -171,9 +82,8 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Tool versions installed by a script or a run step, marked with a `# renovate: datasource=... depName=...` comment above `name=vX.Y.Z` (ghalint and actionlint in the jobs ghalint and actionlint of ci.yml, go-licenses in scripts/build-release-archives.sh)",
+      "description": "Tool versions in scripts/build-release-archives.sh, marked with a `# renovate: datasource=... depName=...` comment above `name=vX.Y.Z` (go-licenses). The same in ci.yml is covered by the shared preset",
       "managerFilePatterns": [
-        "/^\\.github\\/workflows\\/ci\\.yml$/",
         "/^scripts\\/build-release-archives\\.sh$/"
       ],
       "matchStrings": [
@@ -214,16 +124,6 @@
       "versioningTemplate": "regex:^(?<major>\\d{4})-(?<minor>\\d{2})-(?<patch>\\d{2})$"
     }
   ],
-  "vulnerabilityAlerts": {
-    "labels": [
-      "security"
-    ],
-    "automerge": true,
-    "minimumReleaseAge": null,
-    "schedule": [
-      "at any time"
-    ]
-  },
   "customDatasources": {
     "rust-nightly": {
       "description": "The date of the newest Rust nightly: one line, e.g. 2026-11-23 (one release for Renovate)",
