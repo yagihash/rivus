@@ -42,7 +42,9 @@ const TOOLCHAIN: &str = env!("RIVUS_TOOLCHAIN");
 /// Whether rustc is asked to compile the build script of a package: cargo names its crate `build_script_<name>`
 /// (`build_script_build` for build.rs, and the name of the file for `build = "codegen.rs"`).
 fn is_build_script(args: &[String]) -> bool {
-    args.windows(2).any(|w| w[0] == "--crate-name" && w[1].starts_with("build_script_"))
+    // a build script is a program: a crate that only starts with the name (a library `build_script_utils` of the workspace) is not one
+    let is_bin = args.windows(2).any(|w| w[0] == "--crate-type" && w[1] == "bin") || args.iter().any(|a| a == "--crate-type=bin");
+    (is_bin && args.windows(2).any(|w| w[0] == "--crate-name" && w[1].starts_with("build_script_")))
         || args.iter().any(|a| a == "build_script_build" || a == "build_script_main")
 }
 
@@ -976,9 +978,19 @@ mod tests {
 
     #[test]
     fn a_build_script_of_any_name_is_one() {
-        assert!(is_build_script(&args(&["rustc", "--crate-name", "build_script_build", "build.rs"])));
-        assert!(is_build_script(&args(&["rustc", "--crate-name", "build_script_codegen", "codegen.rs"])));
+        // (cargo gives `--crate-type bin` to the build script of any name: `build = "codegen.rs"` gives `--crate-name build_script_codegen`)
+        assert!(is_build_script(&args(&["rustc", "--crate-name", "build_script_build", "build.rs", "--crate-type", "bin"])));
+        assert!(is_build_script(&args(&["rustc", "--crate-name", "build_script_codegen", "codegen.rs", "--crate-type", "bin"])));
         assert!(!is_build_script(&args(&["rustc", "--crate-name", "mylib", "src/lib.rs"])));
+    }
+
+    // a library of the workspace that is named like a build script is code of the program (it was not read, and nothing said so)
+    #[test]
+    fn a_crate_that_is_named_like_a_build_script_and_is_not_a_program_is_not_one() {
+        assert!(is_build_script(&args(&["rustc", "--crate-name", "build_script_build", "build.rs", "--crate-type", "bin"])));
+        assert!(is_build_script(&args(&["rustc", "--crate-name", "build_script_build", "build.rs", "--crate-type=bin"])));
+        assert!(!is_build_script(&args(&["rustc", "--crate-name", "build_script_utils", "src/lib.rs", "--crate-type", "lib"])));
+        assert!(!is_build_script(&args(&["rustc", "--crate-name", "build_script_utils", "src/lib.rs", "--crate-type", "rlib"])));
     }
 
     #[test]
