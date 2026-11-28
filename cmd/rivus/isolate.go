@@ -81,6 +81,20 @@ func mountable(dir string) error {
 	return nil
 }
 
+// checkRead checks the paths of -isolation-read: the build may read them, so none is empty (an empty path is the current directory,
+// which may be the home directory) and none is the home directory of the user or a directory that holds it.
+func checkRead(read []string) error {
+	for _, p := range read {
+		if strings.TrimSpace(p) == "" {
+			return fmt.Errorf("-isolation-read: an empty path (the variable that it comes from may be unset); it would mean the current directory")
+		}
+		if err := mountable(p); err != nil {
+			return fmt.Errorf("-isolation-read: %v", err)
+		}
+	}
+	return nil
+}
+
 // stageEnv is the environment of a stage: base, and the NAME=VALUE pairs of the user (-isolation-env) in the stage that extracts only. The stage
 // that fetches has a network and needs none of them.
 func stageEnv(base, user []string, fetch bool) []string {

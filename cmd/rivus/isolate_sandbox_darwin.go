@@ -120,6 +120,9 @@ func (o *isolationOpts) extractRustSandboxedTo(ctx context.Context, dir string, 
 	if err := mountable(dir); err != nil {
 		return nil, err
 	}
+	if err := checkRead(o.read); err != nil {
+		return nil, err
+	}
 	volume, err := cargoVolume(dir) // the name of the set of dependencies (the hash of Cargo.lock and the configuration)
 	if err != nil {
 		return nil, err

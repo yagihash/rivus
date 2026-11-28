@@ -22,6 +22,28 @@ func TestMountable(t *testing.T) {
 	}
 }
 
+func TestCheckRead(t *testing.T) {
+	t.Parallel()
+	if err := checkRead([]string{t.TempDir()}); err != nil {
+		t.Errorf("a directory outside the home directory: %v", err)
+	}
+	if err := checkRead(nil); err != nil {
+		t.Errorf("none: %v", err)
+	}
+	for _, bad := range []string{"", "  "} {
+		if err := checkRead([]string{t.TempDir(), bad}); err == nil {
+			t.Errorf("%q (an unset variable) is the current directory, and was let through", bad)
+		}
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		for _, p := range []string{home, filepath.Dir(home)} {
+			if err := checkRead([]string{p}); err == nil {
+				t.Errorf("%s holds what is not the project, and was let through", p)
+			}
+		}
+	}
+}
+
 func TestProjectToolchain(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
