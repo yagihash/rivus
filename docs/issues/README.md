@@ -5,7 +5,7 @@
 ## 見方
 
 - 一覧: `make docs-gen WHAT=issues`(標準出力。`WHAT` なしは ADR の表も出る)。ファイルに書くなら `make docs-gen WHAT=issues OUT=docs/ISSUES-TABLE.md`(`.gitignore` の対象)。
-- 開いているか閉じたかは、ファイルのヘッダの `状態` で決まる。**閉じても、ファイルは動かさない**(`docs/issues/<番号>-*.md` を、zoo の `@ref(#N)`、ゲート、ほかの文書のリンクが指すため)。ヘッダの `状態` を `closed` に変えるだけ。
+- 開いているか閉じたかは、ファイルのヘッダの `状態` で決まる(一覧の「閉じたもの」は `closed` と `wontfix`。`open`、`partial`、`deferred` は「開いているもの」)。**閉じても、ファイルは動かさない**(`docs/issues/<番号>-*.md` を、zoo の `@ref(#N)`、ゲート、ほかの文書のリンクが指すため)。ヘッダの `状態` を `closed` に変えるだけ。
 
 ## 足し方
 

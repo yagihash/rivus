@@ -118,7 +118,7 @@ func cell(s string) string {
 	return strings.ReplaceAll(s, "|", `\|`)
 }
 
-// Table renders the issues as Markdown (links are relative to docs/): the open ones, then the closed ones.
+// Table renders the issues as Markdown (links are relative to docs/): the open ones, then the closed ones (closed and wontfix).
 func Table(issues []Issue) string {
 	var b strings.Builder
 	b.WriteString("<!-- 生成物(`make docs-gen`)。課題のファイル(docs/issues/)のヘッダから作る。コミットしない -->\n\n# 課題の一覧\n\n")
@@ -130,7 +130,8 @@ func Table(issues []Issue) string {
 		}
 		b.WriteString("| 番号 | 題 | 種類 | 言語 | ROADMAP の節 | 状態 | 守るもの |\n| --- | --- | --- | --- | --- | --- | --- |\n")
 		for _, is := range issues {
-			if (is.State == "closed") != closed {
+			// wontfix is finished as closed is (nothing is left to do); deferred is not (it waits, and stays in the open ones)
+			if (is.State == "closed" || is.State == "wontfix") != closed {
 				continue
 			}
 			fmt.Fprintf(&b, "| [#%d](issues/%s) | %s | %s | %s | %s | %s | %s |\n", is.Number, is.File, cell(is.Title),
