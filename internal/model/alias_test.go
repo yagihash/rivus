@@ -103,3 +103,24 @@ func TestSymbolWithASpaceAroundItIsRejected(t *testing.T) {
 		t.Fatalf("a symbol with a space around it is accepted: %v", err)
 	}
 }
+
+// config_reads and globals take the same check of the symbol as the other sections (a space around it, and /v* in the wrong form): a symbol
+// that no call has is a rule that does nothing, without a word.
+func TestConfigReadsAndGlobalsSymbolsAreChecked(t *testing.T) {
+	const prov = "    origin: human\n    decided_at: 2026-11-28\n    rationale: x\n"
+	for _, c := range []struct{ name, text, want string }{
+		{"config_reads space", "config_reads:\n  - symbol: \" os.Getenv\"\n", "space around"},
+		{"globals space", "globals:\n  - symbol: \" a.B \"\n    holds: nothing\n" + prov, "space around"},
+		{"config_reads /v* twice", "config_reads:\n  - symbol: \"x.org/m/v*/p/v*.F\"\n", "more than once"},
+		{"globals /v*x", "globals:\n  - symbol: \"x.org/m/v*x/p.V\"\n    holds: nothing\n" + prov, "whole path element"},
+	} {
+		_, err := parseSet(t, "ruleset: t@1\n"+c.text)
+		if err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: err = %v, want %q", c.name, err, c.want)
+		}
+	}
+	// a right /v* and a plain symbol are let through
+	if _, err := parseSet(t, "ruleset: t@1\nconfig_reads:\n  - symbol: \"x.org/m/v*/p.F\"\n  - symbol: os.Getenv\n"); err != nil {
+		t.Errorf("a right symbol: %v", err)
+	}
+}

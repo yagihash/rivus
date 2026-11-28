@@ -1128,6 +1128,9 @@ func (rs *RuleSet) validate() error {
 		if c.Symbol == "" {
 			return fmt.Errorf("config_reads[%d]: symbol is required", i)
 		}
+		if err := checkSymbol(c.Symbol, fmt.Sprintf("config_reads[%d]", i)); err != nil {
+			return err
+		}
 	}
 	aliased := map[string]bool{}
 	for i, g := range rs.Globals {
@@ -1137,6 +1140,9 @@ func (rs *RuleSet) validate() error {
 		}
 		if g.Symbol == "" {
 			return fmt.Errorf("%s: symbol is required", what)
+		}
+		if err := checkSymbol(g.Symbol, what); err != nil {
+			return err
 		}
 		if g.Holds != HoldsNothing && g.Holds != HoldsEverything {
 			return fmt.Errorf("%s: holds is %q (want %s or %s)", what, g.Holds, HoldsNothing, HoldsEverything)
