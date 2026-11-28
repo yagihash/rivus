@@ -167,7 +167,9 @@ func Run(ctx context.Context, s Spec) (*Result, error) {
 	case <-time.After(5 * time.Second):
 	}
 	if res != nil {
-		_, res.Warnings = abiPolicy(ABI())
+		// (appended: supervise has put its own warnings there, such as the output that was closed while another process held it open)
+		_, abiWarnings := abiPolicy(ABI())
+		res.Warnings = append(res.Warnings, abiWarnings...)
 		res.Warnings = append(res.Warnings, watcher.warnings()...)
 		res.AttributeChanges = watcher.changes()
 	}
