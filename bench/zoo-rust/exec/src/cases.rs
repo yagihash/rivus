@@ -104,6 +104,7 @@ pub fn register_all() {
     c::dyns::stdlib_writer_own_static::register();
     c::dyns::xtalk_n_by_m::register();
     c::guard::one_branch::register();
+    c::guard::reapply_loop::register();
     c::guard::sanitize_before::register();
     c::rust::arc_mutex::register();
     c::rust::assoc_fn::register();

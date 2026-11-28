@@ -1,0 +1,2 @@
+go	guard/reapply_loop/reapply_loop.go	sink-none	@sink(none)	func vuln() { @vuln
+go	guard/reapply_loop/reapply_loop.go	sink-none	@sink(none) @nosink(guard-reapply-loop-decoy)	func decoy() { @decoy

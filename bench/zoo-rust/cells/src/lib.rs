@@ -122,6 +122,7 @@ pub mod dyns {
 }
 pub mod guard {
     pub mod one_branch;
+    pub mod reapply_loop;
     pub mod sanitize_before;
 }
 pub mod rust {

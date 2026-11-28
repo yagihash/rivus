@@ -100,6 +100,7 @@ import (
 	_ "zoo/cells/dyn/through_dependency"
 	_ "zoo/cells/dyn/xtalk_n_by_m"
 	_ "zoo/cells/guard/one_branch"
+	_ "zoo/cells/guard/reapply_loop"
 	_ "zoo/cells/guard/sanitize_before"
 	_ "zoo/cells/net_http/request_literal"
 	_ "zoo/cells/san/other_kind"
