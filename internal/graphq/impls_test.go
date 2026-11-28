@@ -241,3 +241,29 @@ func TestImplsAndDispatchersJSON(t *testing.T) {
 		}
 	}
 }
+
+// Calls with the same number of candidates are listed by place, the line and the column as numbers: before, the places were compared as text,
+// and line 10 came before line 9 (and --limit cut the list at a place that is not the first in the file).
+func TestDispatchersAreOrderedByPlaceAsNumbers(t *testing.T) {
+	e := build(t, []fnDef{
+		{"P", []call{
+			{"p.go", 10, 5, "dyn", "app.I.M", []string{"X.M"}},
+			{"p.go", 9, 5, "dyn", "app.I.M", []string{"X.M"}},
+			{"p.go", 9, 12, "dyn", "app.I.M", []string{"X.M"}},
+			{"p.go", 9, 4, "dyn", "app.I.M", []string{"X.M"}},
+		}},
+		{"X.M", nil},
+	})
+	r, err := e.Dispatchers("X.M", graphq.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, s := range r.CallSites {
+		got = append(got, s.At)
+	}
+	want := []string{"p.go:9:4", "p.go:9:5", "p.go:9:12", "p.go:10:5"}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("the places in order: %v, want %v", got, want)
+	}
+}
