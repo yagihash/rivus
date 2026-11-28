@@ -446,6 +446,10 @@ fn cli() -> ExitCode {
         .env("RIVUS_BODY_REPLACED", body_replaced.join("\n"))
         .env("DYLD_FALLBACK_LIBRARY_PATH", with_lib("DYLD_FALLBACK_LIBRARY_PATH"))
         .env("LD_LIBRARY_PATH", with_lib("LD_LIBRARY_PATH"))
+        // The standard output of this process is the stream of the IR, and cargo passes on what the code of the project prints while it
+        // is compiled (a `println!` in a proc macro runs in the compiler, whose output cargo forwards): it goes to the standard error,
+        // so that a line that is not ours never gets into the stream.
+        .stdout(std::process::Stdio::from(std::io::stderr()))
         .stderr(std::process::Stdio::piped());
     let status = run_tee_stderr(&mut cmd);
     match status {
