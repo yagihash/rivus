@@ -804,7 +804,7 @@ func (rs *RuleSet) WithoutSourcesSinks() *RuleSet {
 // given origin, and the number of rules left out.
 func (rs *RuleSet) WithoutOrigin(origin string) (*RuleSet, int) {
 	out := *rs
-	out.Sources, out.Sinks, out.Sanitizers, out.Propagators = nil, nil, nil, nil
+	out.Sources, out.Sinks, out.Sanitizers, out.Propagators, out.Globals = nil, nil, nil, nil, nil
 	n := 0
 	for _, r := range rs.Sources {
 		if r.Origin == origin {
@@ -832,6 +832,13 @@ func (rs *RuleSet) WithoutOrigin(origin string) (*RuleSet, int) {
 			n++
 		} else {
 			out.Propagators = append(out.Propagators, r)
+		}
+	}
+	for _, r := range rs.Globals {
+		if r.Origin == origin {
+			n++
+		} else {
+			out.Globals = append(out.Globals, r)
 		}
 	}
 	return &out, n
