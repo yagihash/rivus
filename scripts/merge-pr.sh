@@ -128,4 +128,7 @@ FAIL)
   fi;;
 esac
 echo "merge: PR #$n of $repo: open, not draft, CLEAN, all checks finished, into main, no exception: merging with a merge commit"
-gh pr merge "$n" --repo "$repo" --merge
+# merge only the commit that was looked at above (the checks, the files, the guardrail list were read for headRefOid): a push after that is refused by GitHub
+head_oid=$(printf '%s' "$json" | python3 -c 'import sys,json; print(json.load(sys.stdin)["headRefOid"])' 2>/dev/null) || head_oid=""
+[ -n "$head_oid" ] || { echo "merge: cannot read the head commit of PR #$n. Nothing is merged." >&2; exit 1; }
+gh pr merge "$n" --repo "$repo" --merge --match-head-commit "$head_oid"

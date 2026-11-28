@@ -13,3 +13,4 @@ scripts/merge-pr.sh
 scripts/zoo-loosened-check.sh
 scripts/main-ci*
 .github/guardrail-paths
+Makefile  # `merge:` が scripts/merge-pr.sh を呼ぶ。書き換えると、チェックを通らずにマージできる
