@@ -57,6 +57,29 @@ func TestCacheListSizeAndDate(t *testing.T) {
 	}
 }
 
+// The date is the time of the last write into the place (the newest modification time). A run that only reads the place (the extract stage
+// reads CARGO_HOME, and a fetch with the same Cargo.lock writes nothing) does not move it: the column must not say "used".
+func TestCacheListSaysLastWritten(t *testing.T) {
+	root := t.TempDir()
+	place(t, root, nameA, 10, 10*day)
+	var out bytes.Buffer
+	if err := cacheList(root, &out); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	if !strings.Contains(got, "LAST WRITTEN") || strings.Contains(strings.ToLower(got), "last used") {
+		t.Errorf("the column is the time of the last write, and is named so:\n%s", got)
+	}
+	// the clean says the same, and that it does not know whether a place is used
+	out.Reset()
+	if err := cacheClean(root, 5, time.Now(), false, nil, &out); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(strings.ToLower(out.String()), "last used") || !strings.Contains(out.String(), "last written") {
+		t.Errorf("clean says used for what is the time of the last write:\n%s", out.String())
+	}
+}
+
 func TestCacheListNoRoot(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "none")
 	var out bytes.Buffer
