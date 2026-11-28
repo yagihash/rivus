@@ -124,6 +124,15 @@ func dropConfigOfCargoHome(cargoHome string, w interface{ Write([]byte) (int, er
 	return nil
 }
 
+// removeWork removes the work directory of a stage. The program that ran in it can have made a directory that cannot be written
+// (`mkdir d; touch d/f; chmod 500 d`), where os.RemoveAll fails and the directory stays: it is given the write right first (removePlace, as `rivus cache
+// clean` does), and a failure is said, not dropped.
+func removeWork(work string, w io.Writer) {
+	if err := removePlace(work); err != nil {
+		fmt.Fprintf(w, "rivus: could not remove the work directory %s: %v\n", work, err)
+	}
+}
+
 // stageEnv is the environment of a stage: base, and the NAME=VALUE pairs of the user (-isolation-env) in the stage that extracts only. The stage
 // that fetches has a network and needs none of them.
 func stageEnv(base, user []string, fetch bool) []string {
