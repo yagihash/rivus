@@ -88,13 +88,36 @@ func hashFile(path string) (string, int64, time.Time, error) {
 	h := sha256.New()
 	switch {
 	case fi.Mode()&os.ModeSymlink != 0:
-		// a link is its target's name: what it leads to is read through its own path if the load did
+		// a link is its target's name and, when it leads to a file, the content of the file: the load reads the file through its
+		// own path, and the listing of the tree does not follow links, so that nothing else holds the content (a file outside
+		// the tree). A link to a directory is the name only (it is not walked here).
 		t, err := os.Readlink(path)
 		if err != nil {
 			return "", 0, time.Time{}, err
 		}
 		io.WriteString(h, "link:"+t)
-		return hex.EncodeToString(h.Sum(nil)), int64(len(t)), fi.ModTime(), nil
+		size, mod := int64(len(t)), fi.ModTime()
+		switch ti, err := os.Stat(path); {
+		case err != nil:
+			io.WriteString(h, "\x00unreachable")
+		case ti.Mode().IsRegular():
+			f, err := os.Open(path)
+			if err != nil {
+				io.WriteString(h, "\x00unreadable")
+				break
+			}
+			defer f.Close()
+			io.WriteString(h, "\x00content:")
+			n, err := io.Copy(h, f)
+			if err != nil {
+				return "", 0, time.Time{}, err
+			}
+			size += n
+			if ti.ModTime().After(mod) {
+				mod = ti.ModTime()
+			}
+		}
+		return hex.EncodeToString(h.Sum(nil)), size, mod, nil
 	case !fi.Mode().IsRegular():
 		return "", 0, time.Time{}, fmt.Errorf("%s: not a regular file", path)
 	}
