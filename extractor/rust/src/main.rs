@@ -57,6 +57,7 @@ fn is_build_script(args: &[String]) -> bool {
             let stem = Path::new(source).file_stem().map(|s| s.to_string_lossy().replace('-', "_")).unwrap_or_default();
             !stem.is_empty() && name == format!("build_script_{}", stem)
         }
+        // default-ok: not a syntax kind: the arguments of rustc (no crate type, no name or no source file: not a build script)
         _ => false,
     }
 }
