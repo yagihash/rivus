@@ -1,5 +1,10 @@
 # Changelog
 
+## [v0.0.24](https://github.com/yagihash/rivus/compare/v0.0.23...v0.0.24) - 2026-11-28
+
+### Bug Fixes
+- bump-tap の ghmint の policy を bump-tap にする by @yagihash in https://github.com/yagihash/rivus/pull/702
+
 ## [v0.0.23](https://github.com/yagihash/rivus/compare/v0.0.22...v0.0.23) - 2026-11-27
 
 ## [v0.0.22](https://github.com/yagihash/rivus/compare/v0.0.21...v0.0.22) - 2026-11-27
