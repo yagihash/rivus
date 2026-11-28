@@ -1,0 +1,2 @@
+dart	guard/reapply_loop.dart	sink-none	@sink(none)	void vuln() { @vuln
+dart	guard/reapply_loop.dart	sink-none	@sink(none) @nosink(guard-reapply-loop-decoy)	void decoy() { @decoy
