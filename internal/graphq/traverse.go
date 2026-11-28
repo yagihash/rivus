@@ -247,7 +247,7 @@ func (e *Engine) Callers(target string, o Options) (*CallersResult, error) {
 			if s.mask != t.full {
 				continue
 			}
-			if has, err := e.hasIn(s.id, o.Refs); err != nil {
+			if has, err := e.anyIn(s.id, &o); err != nil {
 				return nil, err
 			} else if has {
 				g.Truncated.BeyondDepth++
@@ -416,6 +416,9 @@ func (e *Engine) Callees(target string, o Options) (*CalleesResult, error) {
 				return nil, err
 			}
 			for k := range stop {
+				if !o.passCall(&stop[k]) {
+					continue // a call that --avoid or --avoid-call cuts is not a call that the answer stopped at
+				}
 				stopped = true
 				res.FrontierTotal++
 				if len(res.Frontier) >= MaxFrontier {
@@ -445,7 +448,7 @@ func (e *Engine) Callees(target string, o Options) (*CalleesResult, error) {
 			if s.mask != t.full {
 				continue
 			}
-			if has, err := e.hasOut(s.id, o.Refs); err != nil {
+			if has, err := e.anyOut(s.id, &o); err != nil {
 				return nil, err
 			} else if has {
 				g.Truncated.BeyondDepth++

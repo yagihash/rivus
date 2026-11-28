@@ -311,11 +311,17 @@ func (d *DB) CallRowsAt(file string, line, col int) ([]CallRow, error) {
 }
 
 // CallRowsBefore reads the call sites that start on the line at the last column
-// that is not after col (the innermost call that has begun at that point).
-func (d *DB) CallRowsBefore(file string, line, col int) ([]CallRow, error) {
+// that is not after col (the innermost call that has begun at that point). The
+// builtin calls are calls only with includeBuiltin (--include-builtin): without
+// it they are not looked at, and the call before them is the one.
+func (d *DB) CallRowsBefore(file string, line, col int, includeBuiltin bool) ([]CallRow, error) {
+	skip := ` AND c.kind != 'builtin'`
+	skip2 := ` AND c2.kind != 'builtin'`
+	if includeBuiltin {
+		skip, skip2 = "", ""
+	}
 	return d.callRows(`SELECT `+callCols+` `+callJoin+` WHERE fl.path = ? AND c.line = ? AND c.col = (
-		SELECT max(c2.col) FROM callsites c2 JOIN files f2 ON f2.id = c2.file_id WHERE f2.path = ? AND c2.line = ? AND c2.col <= ? AND c2.kind != 'builtin')
-		AND c.kind != 'builtin' ORDER BY c.id`, file, line, file, line, col)
+		SELECT max(c2.col) FROM callsites c2 JOIN files f2 ON f2.id = c2.file_id WHERE f2.path = ? AND c2.line = ? AND c2.col <= ?`+skip2+`)`+skip+` ORDER BY c.id`, file, line, file, line, col)
 }
 
 // HubRef is a dynamic call site with many candidates.

@@ -164,8 +164,20 @@ func (m *memSource) siteIndex() *SiteIndex {
 
 func (m *memSource) gone(seq int) bool { return m.p.Funcs[seq] == nil }
 
-func (m *memSource) CallersOf(id FuncID) []CallSite { return m.siteIndex().Callers(id, m.gone) }
-func (m *memSource) MakersOf(id FuncID) []CallSite  { return m.siteIndex().Makers(id, m.gone) }
+// CallersOf and MakersOf: after Release the functions are not there (m.p.Funcs is nil, and the index was let go of), and there are none.
+func (m *memSource) CallersOf(id FuncID) []CallSite {
+	if m.p.Funcs == nil {
+		return nil
+	}
+	return m.siteIndex().Callers(id, m.gone)
+}
+
+func (m *memSource) MakersOf(id FuncID) []CallSite {
+	if m.p.Funcs == nil {
+		return nil
+	}
+	return m.siteIndex().Makers(id, m.gone)
+}
 
 func (m *memSource) Header() *Program { return m.p }
 

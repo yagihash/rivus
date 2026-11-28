@@ -104,6 +104,9 @@ func (o *isolationOpts) extractRustSandboxedTo(ctx context.Context, dir string, 
 	if err := checkRead(o.read); err != nil {
 		return nil, err
 	}
+	if err := checkIsolationEnv(o.env); err != nil {
+		return nil, err
+	}
 	volume, err := cargoVolume(dir) // the name of the set of dependencies (the hash of Cargo.lock and the configuration)
 	if err != nil {
 		return nil, err
@@ -169,7 +172,7 @@ func (o *isolationOpts) extractRustSandboxedTo(ctx context.Context, dir string, 
 			if err != nil {
 				return nil, err
 			}
-			defer os.RemoveAll(work)
+			defer removeWork(work, o.err())
 			fmt.Fprintf(o.err(), "rivus: fetching the dependencies (cargo fetch --locked, under the sandbox, with a network; the cargo configuration of the project is not read in this stage) into %s\n", cargoHome)
 			s := fetchSpec(common, tc, dir, work, cargoHome, env(work, true))
 			res, err := sandbox.Run(ctx, s)
@@ -192,7 +195,7 @@ func (o *isolationOpts) extractRustSandboxedTo(ctx context.Context, dir string, 
 	if err != nil {
 		return nil, err
 	}
-	defer os.RemoveAll(work)
+	defer removeWork(work, o.err())
 	s := common
 	s.Argv = append([]string{extractor, "--locked", "--offline"}, extractorArgs...)
 	s.Dir = dir
@@ -234,7 +237,7 @@ func (o *isolationOpts) rustExtractorVersionSandboxed(ctx context.Context) (stri
 	if err != nil {
 		return "", err
 	}
-	defer os.RemoveAll(work)
+	defer removeWork(work, o.err())
 	res, err := sandbox.Run(ctx, sandbox.Spec{
 		Argv:      []string{extractor, "--rivus-version"},
 		Dir:       work,
@@ -271,16 +274,8 @@ func (o *isolationOpts) tellAboutRun(stage string, res *sandbox.Result) {
 	if stage != "extract" || res == nil {
 		return
 	}
-	for _, w := range res.Warnings {
-		fmt.Fprintf(o.err(), "rivus: warning: %s\n", w)
-	}
-	if len(res.AttributeChanges) > 0 {
-		// Landlock does not stop these, so rivus does them for the build, and only for the files inside of its work directory: these were refused (EPERM)
-		fmt.Fprintf(o.err(), "rivus: warning: the build tried to change the mode, the owner, the times or the attributes of files outside of its work directory, and the sandbox refused (EPERM). Look at them if the project is not one you trust:\n")
-		for _, c := range res.AttributeChanges {
-			fmt.Fprintf(o.err(), "  %s\n", c)
-		}
-	}
+	sayWarnings(o.err(), res.Warnings)
+	sayAttributeChanges(o.err(), res.AttributeChanges) // SBX-4: the paths are of the project's choice
 	if res.MayHaveLeftProcesses {
 		// said once, not hidden: a build script can start a process in a session of its own, which the end of the run does not reach
 		fmt.Fprintf(o.err(), "rivus: a build script may have left a process behind (a program that starts one in a session of its own is not stopped by the end of the run; it stays under the sandbox, with no files and no network). Look with `ps` if the project is not one you trust.\n")

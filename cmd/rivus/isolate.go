@@ -124,13 +124,76 @@ func dropConfigOfCargoHome(cargoHome string, w interface{ Write([]byte) (int, er
 	return nil
 }
 
+// removeWork removes the work directory of a stage. The program that ran in it can have made a directory that cannot be written
+// (`mkdir d; touch d/f; chmod 500 d`), where os.RemoveAll fails and the directory stays: it is given the write right first (removePlace, as `rivus cache
+// clean` does), and a failure is said, not dropped.
+func removeWork(work string, w io.Writer) {
+	if err := removePlace(work); err != nil {
+		fmt.Fprintf(w, "rivus: could not remove the work directory %s: %v\n", work, err)
+	}
+}
+
 // stageEnv is the environment of a stage: base, and the NAME=VALUE pairs of the user (-isolation-env) in the stage that extracts only. The stage
 // that fetches has a network and needs none of them.
+//
+// Each name is there once, so that the build sees the same on every system (a name twice: Linux took the first, by getenv, and macOS the last, after
+// the dedup of os/exec). A name of the user takes the place of one of rivus (DEVELOPER_DIR and SDKROOT, which rivus also sets by itself on macOS:
+// docs/rust-isolation.md says that a DEVELOPER_DIR that is given is used as it is); the names that keep the build to the sandbox are refused before
+// (checkIsolationEnv). The user's own repeats are decided by the last.
 func stageEnv(base, user []string, fetch bool) []string {
 	if fetch {
 		return base
 	}
-	return append(base, user...)
+	last := map[string]int{}
+	for i, e := range user {
+		name, _, _ := strings.Cut(e, "=")
+		last[name] = i
+	}
+	out := make([]string, 0, len(base)+len(user))
+	for _, e := range base {
+		name, _, _ := strings.Cut(e, "=")
+		if _, mine := last[name]; !mine {
+			out = append(out, e)
+		}
+	}
+	for i, e := range user {
+		name, _, _ := strings.Cut(e, "=")
+		if last[name] == i {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// isolationEnvReserved are the names that rivus sets for the build under the sandbox, and that -isolation-env does not change: the work directory is the
+// only place that can be written (HOME, TMPDIR), the dependencies are read from the CARGO_HOME of rivus, and the toolchain is the pinned one (PATH,
+// RUSTUP_TOOLCHAIN, RIVUS_RUST_DIRECT: the driver of the extractor).
+var isolationEnvReserved = map[string]bool{
+	"PATH": true, "HOME": true, "TMPDIR": true, "CARGO_HOME": true, "RIVUS_RUST_DIRECT": true, "RUSTUP_TOOLCHAIN": true,
+}
+
+// checkIsolationEnv checks the values of -isolation-env before anything is run: NAME=VALUE (a name of letters, digits and underscores that does not
+// start with a digit; the value can be empty or hold =), and not a name that rivus sets itself.
+func checkIsolationEnv(env []string) error {
+	for _, e := range env {
+		name, _, ok := strings.Cut(e, "=")
+		if !ok || name == "" {
+			return fmt.Errorf("-isolation-env %q: it is NAME=VALUE", sanitizeForTerminal([]byte(e)))
+		}
+		for i, r := range name {
+			if r == '_' || (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (i > 0 && r >= '0' && r <= '9') {
+				continue
+			}
+			return fmt.Errorf("-isolation-env %q: the name has letters, digits and _ only, and does not start with a digit", sanitizeForTerminal([]byte(e)))
+		}
+		if strings.ContainsRune(e, 0) {
+			return fmt.Errorf("-isolation-env %q: a NUL cannot be in an environment variable", sanitizeForTerminal([]byte(e)))
+		}
+		if isolationEnvReserved[name] {
+			return fmt.Errorf("-isolation-env %s: rivus sets it for the build under the sandbox (the work directory, the dependencies and the toolchain are chosen by it), so it cannot be changed", name)
+		}
+	}
+	return nil
 }
 
 // realPath is the absolute path with the links resolved (the path as it is when it cannot be).

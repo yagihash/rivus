@@ -82,6 +82,9 @@ type Options struct {
 	NoRefs bool
 
 	via [][]int64
+	// call says whether a call (a call site, not an edge of it: it may have no candidate, or too many) is kept by the filters that name a call or
+	// a function (--avoid, --avoid-call). It is made by prepare; nil: all are kept.
+	call func(*graphdb.CallRow) bool
 }
 
 // Common is what every answer says.
@@ -534,6 +537,48 @@ func (o *Options) normalize(def int) (clamped bool) {
 }
 
 func (o *Options) pass(ed *graphdb.Edge) bool { return o.Edge == nil || o.Edge(ed) }
+
+// passCall is pass for a call site that has no edges to test (the frontier: a dynamic call with more candidates than are followed, or none).
+func (o *Options) passCall(c *graphdb.CallRow) bool { return o.call == nil || o.call(c) }
+
+// anyOut says whether the function has an edge (a call, and with refs a reference) that the filters keep: what "calls more than is shown" means
+// when filters narrow the answer. Without a filter the count of the file answers (no edges are read).
+func (e *Engine) anyOut(id int64, o *Options) (bool, error) {
+	if o.Edge == nil {
+		return e.hasOut(id, o.Refs)
+	}
+	f := graphdb.AllEdges
+	f.Refs = o.Refs
+	edges, err := e.db.OutEdges(id, f)
+	if err != nil {
+		return false, err
+	}
+	for i := range edges {
+		if o.pass(&edges[i]) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// anyIn is anyOut for the callers.
+func (e *Engine) anyIn(id int64, o *Options) (bool, error) {
+	if o.Edge == nil {
+		return e.hasIn(id, o.Refs)
+	}
+	f := graphdb.AllEdges
+	f.Refs = o.Refs
+	edges, err := e.db.InEdges(id, f)
+	if err != nil {
+		return false, err
+	}
+	for i := range edges {
+		if o.pass(&edges[i]) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
 
 func sortedKeys[V any](m map[string]V) []string {
 	out := make([]string, 0, len(m))

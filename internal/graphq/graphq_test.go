@@ -46,6 +46,9 @@ var testUnread = &graphdb.Unread{}
 var testBrokenUnread bool
 var testKeyConfig map[string]string
 
+// the analysis flags the next build records (meta "flags"; nil: none)
+var testFlags map[string]string
+
 // the program the last build made, for the tests that compare it with sg.Program.Reachable
 var lastProgram *sg.Program
 
@@ -128,14 +131,14 @@ func build(t *testing.T, fns []fnDef, ss ...*sites.Site) *graphq.Engine {
 		p.Funcs = append(p.Funcs, fn)
 	}
 	entryIDs, exportedIDs = nil, nil
-	defer func() { testUnread, testKeyConfig, testBrokenUnread = &graphdb.Unread{}, nil, false }()
+	defer func() { testUnread, testKeyConfig, testFlags, testBrokenUnread = &graphdb.Unread{}, nil, nil, false }()
 	g, err := sg.Build(ir.MemSource(p))
 	if err != nil {
 		t.Fatal(err)
 	}
 	lastProgram = g
 	path := filepath.Join(t.TempDir(), "g.db")
-	_, err = graphdb.Write(path, &graphdb.Input{Graph: g, Sites: ss, Meta: graphdb.Meta{RivusVersion: "t", CreatedAt: time.Now(), SourceHash: "h", Dir: "/proj", Unread: testUnread, KeyConfig: testKeyConfig}})
+	_, err = graphdb.Write(path, &graphdb.Input{Graph: g, Sites: ss, Meta: graphdb.Meta{RivusVersion: "t", CreatedAt: time.Now(), SourceHash: "h", Dir: "/proj", Unread: testUnread, KeyConfig: testKeyConfig, Flags: testFlags}})
 	if err != nil {
 		t.Fatal(err)
 	}

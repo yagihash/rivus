@@ -394,6 +394,9 @@ func (d *DiskSource) gone(seq int) bool { return d.heads[seq].Gone }
 func (d *DiskSource) CallersOf(id ir.FuncID) []ir.CallSite {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	if d.closed {
+		return nil // released: the functions are not there, and the index was let go of
+	}
 	return d.sites.Callers(id, d.gone)
 }
 
@@ -401,6 +404,9 @@ func (d *DiskSource) CallersOf(id ir.FuncID) []ir.CallSite {
 func (d *DiskSource) MakersOf(id ir.FuncID) []ir.CallSite {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	if d.closed {
+		return nil // released: the functions are not there, and the index was let go of
+	}
 	return d.sites.Makers(id, d.gone)
 }
 

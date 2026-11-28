@@ -24,11 +24,15 @@ build: ## build rivus (./rivus) with the hashes of the source of the extractors 
 	go build -ldflags "-X main.rustSourceHash=$$(go run ./scripts/extractor-hash rust) -X main.dartSourceHash=$$(go run ./scripts/extractor-hash dart)" -o rivus ./cmd/rivus
 	go build ./...
 
-check: ## before a push (about a minute): build, gofmt, go vet, the short tests (TestDogfood is skipped without RIVUS_DOGFOOD=1)
+# how many test packages, and how many parallel tests in a package, `make check` runs at once (not all the cores: several sessions run it on one
+# machine, and the heavy-run lock of bench/heavylock.py does not cover it; five at once took the load to 60 on 12 cores). `make check CHECK_P=12` for the speed.
+CHECK_P ?= 3
+
+check: ## before a push (about a minute): build, gofmt, go vet, the short tests (TestDogfood is skipped without RIVUS_DOGFOOD=1; CHECK_P=<n> packages and tests at once, 3 by default)
 	go build ./...
 	@bad="$$(gofmt -l cmd internal bench)"; if [ -n "$$bad" ]; then echo "gofmt: not formatted:"; echo "$$bad"; exit 1; fi
 	go vet ./...
-	go test -short -count=1 ./...
+	go test -short -count=1 -p $(CHECK_P) -parallel $(CHECK_P) ./...
 
 test: ## every test, with the Dart and Rust extractors (what CI runs on main)
 	@command -v "$(firstword $(RIVUS_DART))" >/dev/null || { echo "make test: no dart ($(RIVUS_DART))"; exit 1; }

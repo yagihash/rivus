@@ -535,7 +535,10 @@ func (o *analyzeOpts) rawRustIsolated(w io.Writer) ([]byte, error) {
 	}
 	args = append(args, o.bodyReplacedArgs(langRust)...)
 	args = append(args, dir)
-	out, err := iso.extractRustSandboxedTo(context.Background(), dir, args, w)
+	// a signal that ends rivus stops the build under the sandbox too (it is in a session of its own: sigctx.go)
+	ctx, stop := notifyContext(context.Background())
+	defer stop()
+	out, err := iso.extractRustSandboxedTo(ctx, dir, args, w)
 	if o.rustIsolation != nil {
 		o.rustIsolation.DeveloperDir = iso.developerDir
 	}

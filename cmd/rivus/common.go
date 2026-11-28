@@ -166,8 +166,21 @@ func (c *common) loadRules(extra ...*model.RuleSet) (*model.Rules, error) {
 				return nil, fmt.Errorf("%s: a project rule file is a symbolic link, and is not read (-no-project-rules leaves the project's rules out)", path)
 			}
 		}
-		f, err := os.Open(path)
-		if err != nil {
+		var f *os.File
+		var err error
+		if project[path] {
+			// Only a regular file: a named pipe that the project brings would make the open wait for a writer for ever (no -timeout runs yet), and a
+			// device or a socket is not a rule file. O_NONBLOCK makes the open of a pipe return, so that the kind of the file is looked at on the file
+			// that was opened (nothing can be put in its place between the look and the read). It does nothing to a regular file.
+			f, err = os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+			if err != nil {
+				return nil, err
+			}
+			if fi, serr := f.Stat(); serr != nil || !fi.Mode().IsRegular() {
+				f.Close()
+				return nil, fmt.Errorf("%s: a project rule file is not a regular file (a pipe, a device or a socket), and is not read (-no-project-rules leaves the project's rules out)", path)
+			}
+		} else if f, err = os.Open(path); err != nil {
 			return nil, err
 		}
 		rs, err := model.Parse(f, path)

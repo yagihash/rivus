@@ -362,6 +362,9 @@ func (e *Engine) Dispatchers(target string, o Options) (*DispatchersResult, erro
 	type site struct {
 		DispatchSite
 		id int64
+		// the place as numbers: the text "p.go:10:5" is before "p.go:9:5"
+		file      string
+		line, col int
 	}
 	var all []site
 	seen := map[int64]bool{}
@@ -389,7 +392,7 @@ func (e *Engine) Dispatchers(target string, o Options) (*DispatchersResult, erro
 			if err != nil {
 				return nil, err
 			}
-			all = append(all, site{DispatchSite{At: pos(ed.File, ed.Line, ed.Col), In: from.FID, Kind: ed.Kind, Candidates: ed.NCand, Callee: ed.Callee, Sites: sites}, ed.CallSite})
+			all = append(all, site{DispatchSite{At: pos(ed.File, ed.Line, ed.Col), In: from.FID, Kind: ed.Kind, Candidates: ed.NCand, Callee: ed.Callee, Sites: sites}, ed.CallSite, ed.File, ed.Line, ed.Col})
 		}
 	}
 	// the calls that name the function most closely first: few candidates, then by place
@@ -397,7 +400,17 @@ func (e *Engine) Dispatchers(target string, o Options) (*DispatchersResult, erro
 		if all[i].Candidates != all[j].Candidates {
 			return all[i].Candidates < all[j].Candidates
 		}
-		return all[i].At < all[j].At
+		a, b := &all[i], &all[j]
+		if a.file != b.file {
+			return a.file < b.file
+		}
+		if a.line != b.line {
+			return a.line < b.line
+		}
+		if a.col != b.col {
+			return a.col < b.col
+		}
+		return a.id < b.id // (the same place: the order of the file, the same on every run)
 	})
 	res.CallSitesTotal = len(all)
 	byCallee := map[string]int{}

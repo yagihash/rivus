@@ -157,6 +157,7 @@ func (k *keyCtx) compute() (*keyResult, error) {
 	if len(o.depDirs) > 0 {
 		cfg["flags.dep-dir"] = strings.Join(sortedUnique(o.depDirs), "\n")
 	}
+	isolationConfig(cfg, o.isolationEnv, o.isolationRead)
 	allow := append([]string(nil), o.allowDepsUnder...)
 	sort.Strings(allow)
 	cfg["flags.allow-deps-under"] = strings.Join(allow, "\n")
@@ -470,6 +471,26 @@ func realAbs(p string) (string, error) {
 }
 
 // sortedUnique is the list sorted, without repeats.
+// isolationConfig puts the settings of the isolation of the Rust build (-isolation-env, -isolation-read) in the key: a variable such as RUSTFLAGS
+// or CARGO_FEATURE_* changes the code that is compiled (a cfg), and a file that the build may read changes what a build script makes, so an
+// index made with other settings is not this one. They are set only when given, so that the key of an index made without them is what it was.
+// The value of a variable can be secret (a build script that needs a token) and the key is written into the graph file: the name is kept and the
+// value is its hash.
+func isolationConfig(cfg map[string]string, env, read []string) {
+	if len(env) > 0 {
+		hashed := make([]string, 0, len(env))
+		for _, e := range env {
+			name, value, _ := strings.Cut(e, "=")
+			sum := sha256.Sum256([]byte(value))
+			hashed = append(hashed, name+"="+hex.EncodeToString(sum[:8]))
+		}
+		cfg["flags.isolation-env"] = strings.Join(sortedUnique(hashed), "\n")
+	}
+	if len(read) > 0 {
+		cfg["flags.isolation-read"] = strings.Join(sortedUnique(read), "\n")
+	}
+}
+
 func sortedUnique(in []string) []string {
 	out := append([]string(nil), in...)
 	sort.Strings(out)

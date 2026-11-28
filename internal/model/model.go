@@ -494,6 +494,7 @@ func (w *WithList) UnmarshalYAML(n *yaml.Node) error {
 		return fmt.Errorf("line %d: with is a list of positions (recv, argN) or of {param: N, from: position}", n.Line)
 	}
 	var out []string
+	given := map[int]bool{} // the parameters that an entry gave (a from: none leaves "" in out, so out alone cannot tell)
 	named, plain := false, false
 	for _, e := range n.Content {
 		switch e.Kind {
@@ -515,6 +516,10 @@ func (w *WithList) UnmarshalYAML(n *yaml.Node) error {
 						return fmt.Errorf("line %d: with.param is the number of the parameter of the callback, from 0", v.Line)
 					}
 				case "from":
+					// a position, or none: a list or a mapping, and an empty value (`from:` alone), are not "leave the parameter empty"
+					if v.Kind != yaml.ScalarNode || v.Value == "" {
+						return fmt.Errorf("line %d: with.from is a position (recv, argN) or none", v.Line)
+					}
 					seenFrom = true
 					from = v.Value
 					if from == "none" {
@@ -530,9 +535,10 @@ func (w *WithList) UnmarshalYAML(n *yaml.Node) error {
 			for len(out) <= param {
 				out = append(out, "")
 			}
-			if out[param] != "" {
+			if given[param] {
 				return fmt.Errorf("line %d: with: parameter %d is given twice", e.Line, param)
 			}
+			given[param] = true
 			out[param] = from
 		default:
 			return fmt.Errorf("line %d: a with entry is a position or {param: N, from: position}", e.Line)
@@ -622,8 +628,12 @@ func ParseSelector(s string) (Selector, error) {
 	}
 	for _, p := range []struct{ prefix, kind string }{{"arg", SelArg}, {"result", SelResult}} {
 		if rest, ok := strings.CutPrefix(s, p.prefix); ok {
+			// the digits of a number and nothing else: strconv.Atoi takes a sign and leading zeros (arg+1 and arg01 were arg1)
+			if rest == "" || (len(rest) > 1 && rest[0] == '0') || strings.Trim(rest, "0123456789") != "" {
+				break
+			}
 			n, err := strconv.Atoi(rest)
-			if err != nil || n < 0 {
+			if err != nil {
 				break
 			}
 			return Selector{Kind: p.kind, Index: n}, nil
@@ -1122,6 +1132,9 @@ func (rs *RuleSet) validate() error {
 		if c.Symbol == "" {
 			return fmt.Errorf("config_reads[%d]: symbol is required", i)
 		}
+		if err := checkSymbol(c.Symbol, fmt.Sprintf("config_reads[%d]", i)); err != nil {
+			return err
+		}
 	}
 	aliased := map[string]bool{}
 	for i, g := range rs.Globals {
@@ -1131,6 +1144,9 @@ func (rs *RuleSet) validate() error {
 		}
 		if g.Symbol == "" {
 			return fmt.Errorf("%s: symbol is required", what)
+		}
+		if err := checkSymbol(g.Symbol, what); err != nil {
+			return err
 		}
 		if g.Holds != HoldsNothing && g.Holds != HoldsEverything {
 			return fmt.Errorf("%s: holds is %q (want %s or %s)", what, g.Holds, HoldsNothing, HoldsEverything)

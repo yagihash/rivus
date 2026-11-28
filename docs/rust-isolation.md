@@ -67,7 +67,7 @@ macOS のプロファイルは、**既定ですべて拒否し、必要なもの
 
 **`DEVELOPER_DIR`**: ビルドスクリプトのリンクは `xcrun` を動かし、サンドボックスは Xcode.app を読ませません。そこで、`-isolation-env` に `DEVELOPER_DIR` がなく、`/Library/Developer/CommandLineTools` があるときは、`DEVELOPER_DIR` をそこに向けます(`-v` で出し、`summary.isolation.developer_dir` に残る。サンドボックスの読めるパスは広げない)。`-isolation-env DEVELOPER_DIR=...` を渡したときは、そのまま使います。コマンドラインツールがなく、`xcode-select -p` が Xcode.app のときは、実行の前に、原因と修正の方法(`xcode-select --install`、または読めるパスの `DEVELOPER_DIR`)を言って止まります。
 
-**ビルドに設定を足す**(parseable の `build.rs` は、UI をネットワークから取るので、隔離では失敗します): `-isolation-env NAME=VALUE`(ビルドに渡す環境変数。ホストのものは引き継がない)と、`-isolation-read PATH`(ビルドが読める追加のパス)。空のパス(変数が未設定のとき)、ホームディレクトリ、それを含むディレクトリは、エラーで止まります。
+**ビルドに設定を足す**(parseable の `build.rs` は、UI をネットワークから取るので、隔離では失敗します): `-isolation-env NAME=VALUE`(ビルドに渡す環境変数。ホストのものは引き継がない)。NAME は英数字と `_` だけで、数字では始めません。`PATH`、`HOME`、`TMPDIR`、`CARGO_HOME`、`RIVUS_RUST_DIRECT`、`RUSTUP_TOOLCHAIN` は rivus が決めるので、変えられません(エラーで止まります)。`DEVELOPER_DIR` と `SDKROOT` は、渡した値が使われます。同じ名前を何回か渡したときは、最後のものですと、`-isolation-read PATH`(ビルドが読める追加のパス)。空のパス(変数が未設定のとき)、ホームディレクトリ、それを含むディレクトリは、エラーで止まります。
 
 ## 信頼できるコードを、速く読む(ホストで直接)
 
