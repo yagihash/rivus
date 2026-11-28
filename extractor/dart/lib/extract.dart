@@ -174,7 +174,7 @@ Future<void> extract(String root, StringSink sink,
       // Where a dependency is, is said by the package_config.json of the project, which is not trusted: it can
       // point anywhere. What is read is under the project, the pub cache, the SDKs, or what is asked for.
       if (!p.isWithin(root, path) && !trusted.any((r) => p.equals(r, path) || p.isWithin(r, path))) {
-        refused.putIfAbsent(_packageDir(path), () => path);
+        refused.putIfAbsent(packageDirOfFile(path), () => path);
         continue;
       }
       final context = (p.isWithin(root, path) ? _contextOf(collection, path) : null) ?? importedIn[path] ?? collection.contexts.first;
@@ -186,7 +186,7 @@ Future<void> extract(String root, StringSink sink,
       }
       if (!p.isWithin(root, path)) {
         final uri = r.libraryElement.uri;
-        final dir = _packageDir(path);
+        final dir = packageDirOfFile(path);
         // A file of a dependency that is not named by a package: URI cannot be matched with the calls to it (they are
         // named by package: URIs): it is not analysed, and that is said (once for a package).
         if (uri.scheme == 'file') {
@@ -366,8 +366,15 @@ const _depNotLinked = 'dependency_not_linked';
 /// The start of the message about a dependency that is outside the places that are trusted (the project, the pub cache, the SDKs, --allow-deps-under): it is not read.
 const _depNotAllowed = 'dependency_not_allowed';
 
-/// The directory of the package a file is in: the one above its `lib` (or else the file's own).
-String _packageDir(String path) {
+/// The directory of the package a file is in: the closest directory above it that holds a pubspec.yaml. Without one (a tree that
+/// has none), the one above the last `lib` in the path (or else the file's own directory): a directory that is named `lib`
+/// inside the `lib` of a package (`pkg/lib/src/lib/x.dart`) makes the package `pkg/lib/src` by that rule, and the package is
+/// then read as two (`dependency_not_linked`, for a file of the same package).
+String packageDirOfFile(String path) {
+  for (var d = p.dirname(path);; d = p.dirname(d)) {
+    if (File(p.join(d, 'pubspec.yaml')).existsSync()) return d;
+    if (p.dirname(d) == d) break;
+  }
   final parts = p.split(path);
   final i = parts.lastIndexOf('lib');
   return i > 0 ? p.joinAll(parts.sublist(0, i)) : p.dirname(path);
