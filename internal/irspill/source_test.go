@@ -532,3 +532,20 @@ func TestIRSpillSourceTablesAreTheMemorySource(t *testing.T) {
 		}
 	}
 }
+
+// After Release the functions are not there: the sites of calls are asked for, and the answer is that there are none (the other methods
+// say that the source was released). Before, CallersOf and MakersOf went through the index that Release had set to nil.
+func TestIRSpillSourceCallersAfterRelease(t *testing.T) {
+	f := &ir.Func{ID: "f", Locals: []ir.Local{{}}, Blocks: []ir.Block{{ID: 0, Term: ir.Term{Kind: ir.TermReturn}}}}
+	d := FromProgram(New(0, nil), &ir.Program{Funcs: []*ir.Func{f}}, SourceOptions{})
+	d.Release()
+	if got := d.CallersOf("g"); len(got) != 0 {
+		t.Errorf("CallersOf after Release = %v", got)
+	}
+	if got := d.MakersOf("g"); len(got) != 0 {
+		t.Errorf("MakersOf after Release = %v", got)
+	}
+	if _, err := d.Func(ir.Ref{ID: "f", Seq: 0}); err == nil {
+		t.Error("Func after Release is an error")
+	}
+}

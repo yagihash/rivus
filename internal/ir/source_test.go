@@ -101,3 +101,21 @@ func TestMustPanicsWithReadError(t *testing.T) {
 	}()
 	Must(MemSource(memProgram()), Ref{ID: "x", Seq: 5})
 }
+
+// The same for the source in memory when the index of sites was made before Release (it was set to nil, and CallersOf went through it).
+func TestMemSourceCallersAfterRelease(t *testing.T) {
+	f := &Func{ID: "f", Locals: []Local{{}}, Blocks: []Block{{ID: 0, Term: Term{Kind: TermReturn}}}}
+	src := MemSource(&Program{Funcs: []*Func{f}})
+	sited, ok := src.(Sited)
+	if !ok {
+		t.Skip("the memory source has no sites")
+	}
+	_ = sited.CallersOf("g") // makes the index
+	src.Release()
+	if got := sited.CallersOf("g"); len(got) != 0 {
+		t.Errorf("CallersOf after Release = %v", got)
+	}
+	if got := sited.MakersOf("g"); len(got) != 0 {
+		t.Errorf("MakersOf after Release = %v", got)
+	}
+}
