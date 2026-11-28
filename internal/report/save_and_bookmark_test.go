@@ -3,6 +3,7 @@ package report
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -53,5 +54,12 @@ func TestReadBookmarksRefusesAFindingWhoseSiteHasNoFingerprint(t *testing.T) {
 	}
 	if err := read(`{"id":"f","source":{"id":"s1","fingerprint":{"content":"a"}},"sink":{"id":"s2","fingerprint":{"content":"b"}}}`); err != nil {
 		t.Errorf("a finding with a fingerprint on each: %v", err)
+	}
+	// with neither, the error names the source, every time (before, the two were looked at in the order of a map, and it was the source or the sink)
+	for i := 0; i < 50; i++ {
+		err := read(`{"id":"f","source":{"id":"s1"},"sink":{"id":"s2"}}`)
+		if err == nil || !strings.Contains(err.Error(), "its source has no fingerprint") {
+			t.Fatalf("the error of a finding with no fingerprint on either: %v", err)
+		}
 	}
 }
