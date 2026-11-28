@@ -17,6 +17,9 @@ var (
 	testGuardList = ""
 )
 
+// lastMergeArgs is what the fake `gh pr merge` of the last runMergePR was given.
+var lastMergeArgs string
+
 const okChecks = `[{"name":"build","bucket":"pass"},{"name":"ci-ok","bucket":"pass"},{"name":"main-ci","bucket":"pass"}]`
 
 func runMerge(t *testing.T, runs string, runsCode int, env ...string) (string, error, bool) {
@@ -61,7 +64,7 @@ exit ` + string(rune('0'+runsCode)) + `
 EOF2
 exit 8
 ;;
-"pr merge") touch ` + marker + `;;
+"pr merge") echo "$@" > ` + marker + `;;
 esac
 `
 	if err := os.WriteFile(filepath.Join(bin, "gh"), []byte(script), 0o755); err != nil {
@@ -98,7 +101,8 @@ esac
 	cmd := exec.Command("bash", sh, "7")
 	cmd.Env = append([]string{"PATH=" + bin}, env...)
 	out, err := cmd.CombinedOutput()
-	_, statErr := os.Stat(marker)
+	args, statErr := os.ReadFile(marker)
+	lastMergeArgs = strings.TrimSpace(string(args))
 	return string(out), err, statErr == nil
 }
 
@@ -270,5 +274,16 @@ func TestMergeGuardrailListFailsSafe(t *testing.T) {
 		if err == nil || merged || !strings.Contains(out, "guardrail list") {
 			t.Errorf("%s: err = %v, merged = %v\n%s", name, err, merged, out)
 		}
+	}
+}
+
+// The merge is for the commit that was looked at (headRefOid of the PR JSON): a push after the checks is refused by GitHub.
+func TestMergeMatchesHeadCommit(t *testing.T) {
+	ok := run("completed", "success", "aaa", "https://x/ok")
+	if out, err, merged := runMerge(t, "["+ok+"]", 0); err != nil || !merged {
+		t.Fatalf("not merged: %v\n%s", err, out)
+	}
+	if !strings.Contains(lastMergeArgs, "--match-head-commit abc") {
+		t.Errorf("gh pr merge was given %q: --match-head-commit with the head commit of the PR is missing", lastMergeArgs)
 	}
 }
