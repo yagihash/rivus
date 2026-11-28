@@ -2,6 +2,7 @@ package graphq_test
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"testing"
 
@@ -415,5 +416,21 @@ func TestEntryTargetFactsCountCallers(t *testing.T) {
 	r, err := e.Path("", "Helper", graphq.Options{FromEntry: true})
 	if err != nil || r.Reachable || r.Exhaustive || !r.EdgesExhausted || len(r.TargetFacts) != 1 || r.TargetFacts[0].StaticCallSites != 2 {
 		t.Errorf("%v %+v", err, r)
+	}
+}
+
+// A --limit as large as an int can be is "all": the search asks for one path more than the limit, and that sum overflowed to the
+// smallest int, so that no path was listed and the answer said that none was found.
+func TestPathWithTheLargestLimit(t *testing.T) {
+	e := build(t, []fnDef{
+		{"A", []call{{"a.go", 1, 1, "", "B", nil}}},
+		{"B", nil},
+	})
+	r, err := e.Path("A", "B", graphq.Options{Limit: math.MaxInt})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !r.Reachable || len(r.Paths) != 1 {
+		t.Fatalf("reachable = %v, %d paths: %+v", r.Reachable, len(r.Paths), r)
 	}
 }
