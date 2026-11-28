@@ -55,7 +55,10 @@ func LoadPassLine(file string) ([]PassLineRow, error) {
 		if a != b {
 			return a
 		}
-		return out[i].Line < out[j].Line
+		if out[i].Line != out[j].Line {
+			return out[i].Line < out[j].Line
+		}
+		return out[i].Target < out[j].Target // the file is read into a map: targets of one line come in the order of their names
 	})
 	return out, nil
 }

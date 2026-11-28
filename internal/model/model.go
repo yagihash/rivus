@@ -1295,12 +1295,18 @@ func validateFlows(flows []Flow, what string) error {
 // argument 0 for the languages that pass it first).
 //
 // A function that two models give different arguments is an error, and the map has the first
-// of them (the others are not lost with it: a rule that is wrong costs its own symbol only).
+// of them by the name of the symbol (the others are not lost with it: a rule that is wrong costs its own symbol only).
 func (r *Rules) AliasArgs() (map[string]int, error) {
 	out := map[string]int{}
 	var err0 error
-	for sym, ps := range r.Propagators {
-		for _, p := range ps {
+	// in the order of the symbols: the error is for the first symbol by name, the same in every run
+	syms := make([]string, 0, len(r.Propagators))
+	for sym := range r.Propagators {
+		syms = append(syms, sym)
+	}
+	sort.Strings(syms)
+	for _, sym := range syms {
+		for _, p := range r.Propagators[sym] {
 			for _, f := range p.Flows {
 				if !f.Alias {
 					continue
