@@ -89,6 +89,32 @@ sources:
 	}
 }
 
+// match: implementations finds the implementations of the symbol as it is written, and a path with /v* is no package of the program:
+// the combination is refused where the rules are read (it used to be accepted, and it expanded to no row).
+func TestMajorWildcardWithImplementations(t *testing.T) {
+	for name, body := range map[string]string{
+		"sink":       "sinks:\n  - symbol: (x.org/m/v*/pkg.I).M\n    match: implementations\n    args: [0]\n    category: c\n",
+		"sanitizer":  "sanitizers:\n  - symbol: (x.org/m/v*/pkg.I).M\n    match: implementations\n    drops: [l]\n",
+		"propagator": "propagators:\n  - symbol: (x.org/m/v*/pkg.I).M\n    match: implementations\n    pure: true\n",
+		"source":     "sources:\n  - kind: call_result\n    symbol: (x.org/m/v*/pkg.I).M\n    match: implementations\n    labels: [l]\n",
+	} {
+		if _, err := Parse(strings.NewReader("ruleset: t@1\n"+body), "t.yaml"); err == nil || !strings.Contains(err.Error(), "implementations") {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	// the rows for one major, and /v* with the exact match, are still fine
+	for name, body := range map[string]string{
+		"major":       "sinks:\n  - symbol: (x.org/m/v2/pkg.I).M\n    match: implementations\n    args: [0]\n    category: c\n",
+		"wildcard":    "sinks:\n  - symbol: x.org/m/v*/pkg.F\n    args: [0]\n    category: c\n",
+		"exact+v*":    "sinks:\n  - symbol: (x.org/m/v*/pkg.I).M\n    match: exact\n    args: [0]\n    category: c\n",
+		"no wildcard": "sinks:\n  - symbol: (x.org/m/pkg.I).M\n    match: implementations\n    args: [0]\n    category: c\n",
+	} {
+		if _, err := Parse(strings.NewReader("ruleset: t@1\n"+body), "t.yaml"); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}
+
 func TestExpandMajors(t *testing.T) {
 	rs, err := Parse(strings.NewReader(`ruleset: t@1
 sinks:

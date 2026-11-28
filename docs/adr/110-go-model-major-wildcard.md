@@ -14,5 +14,5 @@
 4. **`verified_versions` は、`package: <module>/v*`、`versions` は、実際に差分テストを通した範囲**(その major だけ)。差分テストは、`-version` で major を決める。範囲の外の major が解析の対象のとき、`summary` に出すこと(設計 6.7 の 3)は、別の変更。
 5. 設計は DESIGN-package-models.md 6.9、手順書は MODEL-RUNBOOK.md 4 節の末尾。
 
-**しないこと(この ADR では):** `body_replaced_packages` の `package` の `/v*`、Dart と Rust の同様の書式、path のほかの形(`gopkg.in/x.v3`、`aws-sdk-go-v2` のように、`/vN` の要素でない major の表し方)。
+**しないこと(この ADR では):** `match: implementations` のルールのシンボルの `/v*`(実装は、書かれたシンボルのままで探すので、`/v*` では見つからない。モデルの読み込みで失敗する。major ごとに具体的なシンボルで書く。2026-11-28 に決めた)、`body_replaced_packages` の `package` の `/v*`、Dart と Rust の同様の書式、path のほかの形(`gopkg.in/x.v3`、`aws-sdk-go-v2` のように、`/vN` の要素でない major の表し方)。
 
