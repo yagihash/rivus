@@ -309,6 +309,9 @@ func TestGuardOfElementInTwoCells(t *testing.T) { checkCase(t, "guarddup") }
 // The guards that are decided after a hop that is not guarded still hold (a call that is applied again in a loop).
 func TestGuardsBeyondAnUnguardedHop(t *testing.T) { checkCase(t, "guardreapply") }
 
+// The shapes close to it: a join with a guard on one way only, two hops that are marked, a guard in the loop.
+func TestGuardsNearAnUnguardedHop(t *testing.T) { checkCase(t, "guardnear") }
+
 // The rules apply to the function a call of a function value reaches: yagihash/rivus #54.
 func TestFunctionValueSinks(t *testing.T) { checkCase(t, "funcsink") }
 
