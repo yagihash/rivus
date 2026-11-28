@@ -221,9 +221,15 @@ fn extract(tcx: rustc_middle::ty::TyCtxt<'_>, root: &str, dep: bool, open_crate:
         }
         let owner = rustc_public::rustc_internal::stable(did).name();
         for (i, b) in promoted.iter_enumerated() {
-            let fns = lower::fns_named_by(&rustc_public::rustc_internal::stable(b));
-            if !fns.is_empty() {
-                cx.promoted.insert((owner.clone(), i.as_u32()), fns);
+            // the conversion to stable MIR can panic (`unimplemented!` of an async closure): that is a function that is not read, not
+            // a crate that is gone (the queries are done, so a caught panic is safe: see `guarded`)
+            match guarded(|| lower::fns_named_by(&rustc_public::rustc_internal::stable(b))) {
+                Ok(fns) => {
+                    if !fns.is_empty() {
+                        cx.promoted.insert((owner.clone(), i.as_u32()), fns);
+                    }
+                }
+                Err(why) => unread.push((owner.clone(), format!("a constant of this function could not be converted ({}): the functions that it names as values are not read", why))),
             }
         }
     }
