@@ -702,7 +702,7 @@ func uncovered(sinks, own []model.Sink) []model.Sink {
 next:
 	for _, s := range sinks {
 		for _, o := range own {
-			if o.Category == s.Category && o.Recv == s.Recv && o.Field == s.Field && o.WhenArgType == s.WhenArgType &&
+			if o.Category == s.Category && o.Recv == s.Recv && o.Field == s.Field && reflect.DeepEqual(o.WhenArgType, s.WhenArgType) &&
 				reflect.DeepEqual(o.Args, s.Args) && reflect.DeepEqual(o.Accepts, s.Accepts) && reflect.DeepEqual(o.Parts, s.Parts) {
 				continue next
 			}
