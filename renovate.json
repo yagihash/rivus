@@ -1,31 +1,8 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended",
-    ":dependencyDashboard",
-    ":semanticCommits",
-    ":timezone(Asia/Tokyo)",
-    "helpers:pinGitHubActionDigestsToSemver",
-    "mergeConfidence:all-badges"
+    "github>yagihash/renovate-config"
   ],
-  "labels": [
-    "dependencies"
-  ],
-  "reviewers": [
-    "yagihash"
-  ],
-  "schedule": [
-    "after 8pm on friday"
-  ],
-  "prHourlyLimit": 0,
-  "automerge": true,
-  "automergeType": "pr",
-  "platformAutomerge": true,
-  "rangeStrategy": "pin",
-  "minimumReleaseAge": "7 days",
-  "internalChecksFilter": "strict",
-  "prCreation": "not-pending",
-  "osvVulnerabilityAlerts": true,
   "ignorePaths": [
     "**/node_modules/**",
     "bench/**",
@@ -33,40 +10,7 @@
     "extractor/*/test/**",
     ".claude/**"
   ],
-  "lockFileMaintenance": {
-    "enabled": true,
-    "schedule": [
-      "after 8pm on friday"
-    ]
-  },
   "packageRules": [
-    {
-      "description": "Never automerge major updates",
-      "matchUpdateTypes": [
-        "major"
-      ],
-      "automerge": false
-    },
-    {
-      "description": "Pin GitHub Actions to commit SHA for security",
-      "matchManagers": [
-        "github-actions"
-      ],
-      "pinDigests": true
-    },
-    {
-      "description": "Group and automerge GitHub Actions digest/minor/patch updates",
-      "groupName": "GitHub Actions",
-      "matchManagers": [
-        "github-actions"
-      ],
-      "matchUpdateTypes": [
-        "minor",
-        "patch",
-        "digest"
-      ],
-      "automerge": true
-    },
     {
       "description": "Group golang.org/x/* updates together",
       "groupName": "golang.org/x packages",
@@ -214,16 +158,6 @@
       "versioningTemplate": "regex:^(?<major>\\d{4})-(?<minor>\\d{2})-(?<patch>\\d{2})$"
     }
   ],
-  "vulnerabilityAlerts": {
-    "labels": [
-      "security"
-    ],
-    "automerge": true,
-    "minimumReleaseAge": null,
-    "schedule": [
-      "at any time"
-    ]
-  },
   "customDatasources": {
     "rust-nightly": {
       "description": "The date of the newest Rust nightly: one line, e.g. 2026-11-23 (one release for Renovate)",
