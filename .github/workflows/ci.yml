@@ -1039,4 +1039,13 @@ jobs:
         with:
           needs: ${{ toJSON(needs) }}
           filter-job: changes
-          filter-outputs: code isolation_darwin isolation_linux dart rust docs models release workflows
+          filter-outputs: |
+            code
+            isolation_darwin
+            isolation_linux
+            dart
+            rust
+            docs
+            models
+            release
+            workflows
