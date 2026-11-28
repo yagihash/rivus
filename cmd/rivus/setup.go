@@ -83,6 +83,9 @@ func runSetupRust(argv []string) error {
 	}
 	fmt.Fprintf(os.Stderr, "rivus: building the extractor from %s into %s (cargo install --locked)\n", src, root)
 	cmd := exec.Command(filepath.Join(tc, "bin", "cargo"), "install", "--path", src, "--locked", "--root", root, "--force")
+	// cargo reads .cargo/config.toml of the directory it runs in and of its parents (a rustc-wrapper or a linker in it runs here,
+	// outside the sandbox): run it in the source of rivus, not in the directory that the user is in (it may be a project that is read)
+	cmd.Dir = src
 	// what cargo needs and nothing else of this environment (not the variables that a repository you are in could have set up)
 	home, _ := os.UserHomeDir()
 	cmd.Env = []string{"PATH=" + filepath.Join(tc, "bin") + ":/usr/bin:/bin", "HOME=" + home, "RUSTUP_TOOLCHAIN=" + pinnedToolchain, "TMPDIR=" + os.TempDir(), "RIVUS_EXTRACTOR_SRC_HASH=" + hash}
