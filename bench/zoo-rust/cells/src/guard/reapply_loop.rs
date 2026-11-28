@@ -51,6 +51,6 @@ fn fixed() { // @fixed
 // skip is true on the line of the command: the function gives back "" there, and the value reaches the other line only
 fn decoy() { // @decoy
     let v = m::src("guard-reapply-loop-decoy"); // @source(guard-reapply-loop-decoy)
-    m::sink_cmd(&looped(true, &v)); // @sink(none) @fp @nosink(guard-reapply-loop-decoy) @fp @ref(PARITY)
+    m::sink_cmd(&looped(true, &v)); // @sink(none) @fp @nosink(guard-reapply-loop-decoy) @fp @ref(#247,PARITY)
     m::sink_sql(&looped(false, &v)); // @sink(guard-reapply-loop-decoy)
 }
