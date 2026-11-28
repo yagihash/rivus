@@ -13,7 +13,11 @@ import (
 // The files `gh pr diff --name-only` prints, and the guardrail list the script reads (testGuardList "" = a copy of the real
 // .github/guardrail-paths; "-" = no list file; "dir" = a directory where the file should be; else the content). Tests set and restore them.
 var (
-	testChanged   = "a.go"
+	testChanged = "a.go"
+	// testPrevious are the old paths of the renamed files that the API of the files of a pull request gives (previous_filename), and
+	// testAPIFails makes that call fail.
+	testPrevious  = ""
+	testAPIFails  = false
 	testGuardList = ""
 )
 
@@ -21,6 +25,13 @@ var (
 var lastMergeArgs string
 
 const okChecks = `[{"name":"build","bucket":"pass"},{"name":"ci-ok","bucket":"pass"},{"name":"main-ci","bucket":"pass"}]`
+
+func apiFails() string {
+	if testAPIFails {
+		return "1"
+	}
+	return "0"
+}
 
 func runMerge(t *testing.T, runs string, runsCode int, env ...string) (string, error, bool) {
 	return runMergeChecks(t, okChecks, runs, runsCode, env...)
@@ -49,6 +60,11 @@ case "$1 $2" in
 "pr diff") cat <<'EOF3'
 ` + testChanged + `
 EOF3
+;;
+"api repos/o/r/pulls/7/files") if [ ` + apiFails() + ` = 1 ]; then exit 1; fi
+cat <<'EOF4'
+` + testPrevious + `
+EOF4
 ;;
 "pr view") cat <<'EOF2'
 ` + pr + `
@@ -290,5 +306,26 @@ func TestMergeMatchesHeadCommit(t *testing.T) {
 	}
 	if !strings.Contains(lastMergeArgs, "--match-head-commit abc") {
 		t.Errorf("gh pr merge was given %q: --match-head-commit with the head commit of the PR is missing", lastMergeArgs)
+	}
+}
+
+// A file of the guardrail that is renamed is not in `gh pr diff --name-only` by its old path (only the new one is): the old path is read
+// from previous_filename, and when that cannot be read nothing is merged.
+func TestMergeGuardrailRenamedAway(t *testing.T) {
+	oc, op, of := testChanged, testPrevious, testAPIFails
+	t.Cleanup(func() { testChanged, testPrevious, testAPIFails = oc, op, of })
+	testChanged, testPrevious = "scripts/x.sh", "scripts/merge-pr.sh"
+	out, err, merged := runMerge(t, okRuns, 0)
+	if err == nil || merged || !strings.Contains(out, refused) || !strings.Contains(out, "scripts/merge-pr.sh") {
+		t.Errorf("a guardrail file moved away: err = %v, merged = %v\n%s", err, merged, out)
+	}
+	testChanged, testPrevious = "a.go", ""
+	if out, err, merged := runMerge(t, okRuns, 0); err != nil || !merged {
+		t.Errorf("no rename: err = %v, merged = %v\n%s", err, merged, out)
+	}
+	testAPIFails = true
+	out, err, merged = runMerge(t, okRuns, 0)
+	if err == nil || merged || !strings.Contains(out, "renamed") {
+		t.Errorf("the list of renames cannot be read: err = %v, merged = %v\n%s", err, merged, out)
 	}
 }
