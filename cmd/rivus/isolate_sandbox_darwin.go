@@ -206,7 +206,7 @@ func (o *isolationOpts) extractRustSandboxedTo(ctx context.Context, dir string, 
 			if err != nil {
 				return nil, err
 			}
-			defer os.RemoveAll(work)
+			defer removeWork(work, o.err())
 			fmt.Fprintf(o.err(), "rivus: fetching the dependencies (cargo fetch --locked, under the sandbox, with a network; the cargo configuration of the project is not read in this stage) into %s\n", cargoHome)
 			s := fetchSpec(common, tc, dir, work, cargoHome, env(work, true))
 			res, err := sandbox.Run(ctx, s)
@@ -229,7 +229,7 @@ func (o *isolationOpts) extractRustSandboxedTo(ctx context.Context, dir string, 
 	if err != nil {
 		return nil, err
 	}
-	defer os.RemoveAll(work)
+	defer removeWork(work, o.err())
 	s := common
 	s.Argv = append([]string{extractor, "--locked", "--offline"}, extractorArgs...)
 	s.Dir = dir
@@ -271,7 +271,7 @@ func (o *isolationOpts) rustExtractorVersionSandboxed(ctx context.Context) (stri
 	if err != nil {
 		return "", err
 	}
-	defer os.RemoveAll(work)
+	defer removeWork(work, o.err())
 	res, err := sandbox.Run(ctx, sandbox.Spec{
 		Argv:      []string{extractor, "--rivus-version"},
 		Dir:       work,
