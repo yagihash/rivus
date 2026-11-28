@@ -455,3 +455,49 @@ func TestOnlyImplSaysWhenTheDatabaseCannotBeRead(t *testing.T) {
 		t.Errorf("warnings: %v", warnings)
 	}
 }
+
+// --avoid-call and --avoid cut a call; what the answer counts besides the edges (the frontier of the dynamic calls it stopped at, and the functions at
+// the last depth that "have more beyond it") is the same calls: before, those two counted them without the filters, so a call that was cut was still
+// listed as "stopped at" and the hint said that --depth goes further.
+func TestFiltersApplyToTheFrontierAndToWhatIsBeyondTheDepth(t *testing.T) {
+	cands := []string{"I1", "I2", "I3", "I4", "I5"} // more than ExpandCandidates: the call is not followed, it is a frontier
+	fns := withCands([]fnDef{
+		{"F", []call{{"f.go", 7, 3, "dyn", "J.N", cands}}},
+		{"S", []call{{"s.go", 1, 1, "", "A", nil}}},
+		{"A", []call{{"a.go", 2, 1, "", "B", nil}}},
+		{"B", nil},
+	})
+	e := build(t, fns)
+
+	r, err := e.Callees("F", graphq.Options{})
+	if err != nil || r.FrontierTotal != 1 {
+		t.Fatalf("without a filter the dynamic call is the frontier: %v %+v", err, r.Frontier)
+	}
+	r, err = e.Callees("F", graphq.Options{AvoidCall: []string{"f.go:7:3"}})
+	if err != nil || r.FrontierTotal != 0 || len(r.Frontier) != 0 || anyHas(r.Hints, "stopped at") {
+		t.Errorf("--avoid-call cut the call, and it is still a frontier: %v total=%d %+v hints=%v", err, r.FrontierTotal, r.Frontier, r.Hints)
+	}
+	r, err = e.Callees("F", graphq.Options{Avoid: []string{"F"}})
+	if err != nil || r.FrontierTotal != 0 {
+		t.Errorf("--avoid F: no call from it, and the frontier lists one: %v total=%d", err, r.FrontierTotal)
+	}
+
+	// S -> A -> B: at depth 1 A is the last level, and it calls B
+	r, err = e.Callees("S", graphq.Options{Depth: 1})
+	if err != nil || r.Truncated.BeyondDepth != 1 {
+		t.Fatalf("without a filter A has a call beyond the depth: %v %+v", err, r.Truncated)
+	}
+	r, err = e.Callees("S", graphq.Options{Depth: 1, Avoid: []string{"B"}})
+	if err != nil || r.Truncated.BeyondDepth != 0 || anyHas(r.Hints, "--depth 2 goes further") {
+		t.Errorf("--avoid B cuts the only call of A: nothing is beyond the depth: %v %+v hints=%v", err, r.Truncated, r.Hints)
+	}
+	// the same for the callers: B <- A <- S
+	c, err := e.Callers("B", graphq.Options{Depth: 1})
+	if err != nil || c.Truncated.BeyondDepth != 1 {
+		t.Fatalf("without a filter A has a caller beyond the depth: %v %+v", err, c.Truncated)
+	}
+	c, err = e.Callers("B", graphq.Options{Depth: 1, Avoid: []string{"S"}})
+	if err != nil || c.Truncated.BeyondDepth != 0 {
+		t.Errorf("--avoid S cuts the only caller of A: %v %+v", err, c.Truncated)
+	}
+}

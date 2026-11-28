@@ -227,6 +227,7 @@ func (e *Engine) prepare(o *Options, c *Common) error {
 		impl = &implFilter{e: e, types: o.OnlyImpl, c: c, idx: len(c.Filters), method: map[int64]bool{}, site: map[int64]bool{}}
 		c.Filters = append(c.Filters, impl.text())
 	}
+	o.call = func(c *graphdb.CallRow) bool { return !avoid[c.Func] && !avoidCall[c.ID] }
 	base := o.Edge
 	o.Edge = func(ed *graphdb.Edge) bool {
 		if base != nil && !base(ed) {
