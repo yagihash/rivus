@@ -20,6 +20,24 @@ func TestUncoveredDropsTheSinkThatTheInterfaceSaysTheSameOf(t *testing.T) {
 	}
 }
 
+// when_arg_type is a pointer, and two rows give two pointers: the same condition is the same, whatever the pointers are
+// (it was compared by the pointers, so that the sink of the implementation was never covered, and a call had two sites).
+func TestUncoveredComparesTheConditionOfTheTypeByValue(t *testing.T) {
+	cond := func() *model.ArgTypeCond { return &model.ArgTypeCond{Arg: 0, Types: []string{"net/http.Request"}} }
+	own := []model.Sink{{Symbol: "I.m", Args: []int{0}, Category: "ssrf", WhenArgType: cond()}}
+	same := model.Sink{Symbol: "C.m", Args: []int{0}, Category: "ssrf", WhenArgType: cond()}
+	if got := uncovered([]model.Sink{same}, own); len(got) != 0 {
+		t.Fatalf("the same condition of two rows is not covered: %+v", got)
+	}
+	other := model.Sink{Symbol: "C.m", Args: []int{0}, Category: "ssrf", WhenArgType: &model.ArgTypeCond{Arg: 0, Types: []string{"os.File"}}}
+	if got := uncovered([]model.Sink{other}, own); len(got) != 1 {
+		t.Fatalf("another condition stays: %+v", got)
+	}
+	if got := uncovered([]model.Sink{{Symbol: "C.m", Args: []int{0}, Category: "ssrf"}}, own); len(got) != 1 {
+		t.Fatalf("a sink with no condition is not the one with a condition: %+v", got)
+	}
+}
+
 func TestResolveNamedFindsTheParameterByItsName(t *testing.T) {
 	// a call of a method: the receiver, a positional argument, then the named ones by name
 	in := ir.Instr{Op: ir.OpCall, Args: []ir.LocalID{0, 1, 2, 3}, ArgNames: []string{"", "", "kind", "limit"}}
