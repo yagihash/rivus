@@ -260,6 +260,30 @@ func TestNoPathSaysThatFilesOutsideTheBuildConfigurationAreOutsideTheRange(t *te
 	}
 }
 
+// An index made without -tests does not hold the code of the tests: a call from it is outside the range of "no path", and the limits say so.
+// (The flag is in the record "flags" of the file, as the writer makes it; before, the reader looked for a key "flags.tests" that is not there.)
+func TestNoPathSaysThatTheTestsWereNotRead(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		flags map[string]string
+		said  bool
+	}{
+		{"without -tests", map[string]string{"lang": "go", "tests": "false"}, true},
+		{"with -tests", map[string]string{"lang": "go", "tests": "true"}, false},
+		{"no record of the flags", nil, false},
+	} {
+		testFlags = c.flags
+		e := build(t, unreadFixture())
+		r, err := e.Path("S", "T", graphq.Options{})
+		if err != nil || r.Reachable {
+			t.Fatalf("%s: %v reachable=%v", c.name, err, r.Reachable)
+		}
+		if got := strings.Contains(strings.Join(r.Limits, " "), "the code of the tests was not read"); got != c.said {
+			t.Errorf("%s: the limits say it = %v, want %v: %v", c.name, got, c.said, r.Limits)
+		}
+	}
+}
+
 // A record of the unread code that cannot be read is not "nothing was left out": the answer is not exhaustive, and says why
 // (the record of the skipped languages is in the same place, so it is not known either).
 func TestNoPathIsNotExhaustiveWhenTheRecordOfUnreadCodeCannotBeRead(t *testing.T) {
