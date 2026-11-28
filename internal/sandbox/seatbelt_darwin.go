@@ -83,6 +83,12 @@ func Run(ctx context.Context, s Spec) (*Result, error) {
 	if len(s.Argv) == 0 || !filepath.IsAbs(s.Argv[0]) {
 		return nil, fmt.Errorf("sandbox: the program must be an absolute path: %v", s.Argv)
 	}
+	// the home directory is denied for reading by name (profile): when it is not known, real("") would be the current directory, the
+	// deny would be for the wrong place, and the home directory would be as readable as the allowed paths say. Nothing is run then.
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return nil, fmt.Errorf("sandbox: the home directory of the user is not known (HOME is not set), so it cannot be kept out of the sandbox: %v", err)
+	}
 	exe, err := exec.LookPath("sandbox-exec")
 	if err != nil {
 		return nil, fmt.Errorf("%w: sandbox-exec is not there", ErrUnavailable)
@@ -100,7 +106,6 @@ func Run(ctx context.Context, s Spec) (*Result, error) {
 		return nil, err
 	}
 	args := argList{"-f", pf}
-	home, _ := os.UserHomeDir()
 	args.param("HOME", real(home))
 	for i, d := range s.Read {
 		args.param(fmt.Sprintf("R%d", i), real(d))
