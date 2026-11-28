@@ -21,7 +21,8 @@ func TestParseSelector(t *testing.T) {
 			t.Errorf("ParseSelector(%q) = %+v, %v; want %+v", in, got, err, want)
 		}
 	}
-	for _, in := range []string{"", "arg", "arg-1", "argx", "res", "receiver"} {
+	// strconv.Atoi took a sign and leading zeros: arg+1 and arg01 were read as arg1, result+0 as result0 (a misspelling that went through)
+	for _, in := range []string{"", "arg", "arg-1", "argx", "res", "receiver", "arg+1", "arg01", "arg00", "result+0", "result01", "arg 1", "arg1 ", "arg１"} {
 		if _, err := ParseSelector(in); err == nil {
 			t.Errorf("ParseSelector(%q) succeeded", in)
 		}

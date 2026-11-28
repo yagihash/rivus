@@ -622,8 +622,12 @@ func ParseSelector(s string) (Selector, error) {
 	}
 	for _, p := range []struct{ prefix, kind string }{{"arg", SelArg}, {"result", SelResult}} {
 		if rest, ok := strings.CutPrefix(s, p.prefix); ok {
+			// the digits of a number and nothing else: strconv.Atoi takes a sign and leading zeros (arg+1 and arg01 were arg1)
+			if rest == "" || (len(rest) > 1 && rest[0] == '0') || strings.Trim(rest, "0123456789") != "" {
+				break
+			}
 			n, err := strconv.Atoi(rest)
-			if err != nil || n < 0 {
+			if err != nil {
 				break
 			}
 			return Selector{Kind: p.kind, Index: n}, nil
