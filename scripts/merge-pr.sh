@@ -24,7 +24,11 @@ case "$n" in ''|*[!0-9]*) echo "merge: the argument must be a pull request numbe
 repo=$(gh repo view --json nameWithOwner -q .nameWithOwner)
 json=$(gh pr view "$n" --repo "$repo" --json state,isDraft,baseRefName,headRefName,headRefOid,mergeStateStatus,body,commits)
 sdir="${BASH_SOURCE[0]%/*}"; [ "$sdir" != "${BASH_SOURCE[0]}" ] || sdir=.
-paths_file="$sdir/../.github/guardrail-paths"
+# The list of the guardrail is read from origin/main, not from the checkout: a branch that removes a line of the list (and is checked out here)
+# would be checked against the list without that line. When it cannot be read, the path is one that does not exist: the check below refuses.
+paths_file=$(mktemp "${TMPDIR:-/tmp}/rivus-guardrail-paths.XXXXXX") || { echo "merge: cannot make a temporary file. Nothing is merged." >&2; exit 1; }
+trap 'rm -f "$paths_file"' EXIT
+if git -C "$sdir/.." fetch -q origin main 2>/dev/null && git -C "$sdir/.." show origin/main:.github/guardrail-paths > "$paths_file" 2>/dev/null; then :; else rm -f "$paths_file"; fi   # (a path that is not there: the check below says "cannot read the guardrail list")
 if ! changed=$(gh pr diff "$n" --repo "$repo" --name-only 2>/dev/null); then
   echo "merge: PR #$n is not merged by the developer: cannot list the changed files. Nothing is merged." >&2; exit 1
 fi
