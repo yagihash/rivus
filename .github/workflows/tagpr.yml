@@ -157,7 +157,7 @@ jobs:
 
   # タグが打たれたときだけ、tap の formula の url と sha256 を書き換える。url は、Release のソースの tarball（GitHub が自動で作る
   # archive/refs/tags/ のものは、sha256 が変わらないことが保証されない）。release-binaries が公開した後に動く（needs）。
-  # トークンは homebrew-tap だけに書けるもの（ghmint の homebrew-tap/.github/ghmint/bump-from-rivus.rego）。
+  # トークンは homebrew-tap だけに書けるもの（ghmint の homebrew-tap/.github/ghmint/bump-tap.rego）。
   # Contents API で書くので、コミットは Verified になる。
   bump-tap:
     needs: [tagpr, release-binaries]
@@ -199,7 +199,7 @@ jobs:
         uses: yagihash/ghmint-action@be57533eef7f69550d06f0c93eede5589158281a # v1.0.0
         with:
           scope: yagihash/homebrew-tap
-          policy: bump-from-rivus
+          policy: bump-tap
       - name: Update the formula
         env:
           GH_TOKEN: ${{ steps.token.outputs.token }}
