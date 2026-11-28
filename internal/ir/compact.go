@@ -24,17 +24,34 @@ func (fn *Func) eachPos(f func(*Pos)) {
 	}
 }
 
+// hasPlace reports whether the position says where (an offset, a line, a column or a length), not only which file.
+func (p *Pos) hasPlace() bool { return p.Offset != 0 || p.Line != 0 || p.Col != 0 || p.Length != 0 }
+
 // compact leaves the file of the function out of its positions, and returns
-// what restores them.
+// what restores them. What is read back has to be what went in (expand puts the
+// file into a position that says where and has no file), so:
+//   - a position that has only a file stays as it is (it would come back as a
+//     position that is not set);
+//   - a function with a position that says where and has no file is not
+//     compacted at all (it would come back with the file of the function).
 func (fn *Func) compact() (restore func()) {
 	if fn.File != "" || fn.Pos.File == "" {
 		return func() {}
 	}
 	file := fn.Pos.File
+	lossy := false
+	fn.eachPos(func(p *Pos) {
+		if p.File == "" && p.hasPlace() {
+			lossy = true
+		}
+	})
+	if lossy {
+		return func() {}
+	}
 	fn.File = file
 	var blanked []*Pos
 	fn.eachPos(func(p *Pos) {
-		if p.File == file {
+		if p.File == file && p.hasPlace() {
 			p.File = ""
 			blanked = append(blanked, p)
 		}
@@ -54,7 +71,7 @@ func (fn *Func) expand() {
 		return
 	}
 	fn.eachPos(func(p *Pos) {
-		if p.File == "" && (p.Offset != 0 || p.Line != 0 || p.Col != 0 || p.Length != 0) {
+		if p.File == "" && p.hasPlace() {
 			p.File = fn.File
 		}
 	})
