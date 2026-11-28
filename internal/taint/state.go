@@ -682,6 +682,8 @@ func (s *state) add(l Loc, e Elem, w *why) {
 		// guards recorded for it do not describe it any more.
 		if old != nil && w != nil {
 			differ := !(sameGuards(old.guards(), w.guards()) && sameGuards(old.calleeGuards(), w.calleeGuards()) && old.call() == w.call())
+			// (a reason that is unguarded from the start: the element came by two cells that have other guards, expandParam)
+			differ = differ || (w.unguarded() && !old.unguarded())
 			// The guards of a hop are not all: a φ or a return up the chain
 			// may hold others. If the two come from different places, the
 			// guards of the whole chains are compared.
